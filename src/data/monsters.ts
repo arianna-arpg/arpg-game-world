@@ -20313,6 +20313,42 @@ export const MONSTERS: Record<string, MonsterDef> = {
       behavior: { castArc: 0.6, reaction: [0.3, 0.6] },
     },
   },
+
+  // === THE UNDERGROWTH KIN (batch 21.5 — the deepening coda) ================
+  // The root lattice's own residents (pack rows in data/tilesets.ts
+  // 'undergrowth'; the sleeper law rides the kit in data/massifs.ts; looks
+  // clone the rockgrub family in data/looks.ts).
+
+  // THE MOLE CRICKET — the bore-mason: the thing that actually CHEWED these
+  // avenues, met mid-roam between the runs it keeps. Plated like its grub
+  // kin, quick over its own floor, spade-limbs that land like tools.
+  mole_cricket: {
+    id: 'mole_cricket', name: 'Mole Cricket',
+    color: '#8a6a48', shape: 'oval', radius: 15, material: 'chitin', look: 'mole_cricket',
+    // The coda's def, one amendment: heavy_strike costs 4 mana and the
+    // affordability net (probe_anatomy) rightly refuses a 0-pool kit — the
+    // mason carries a small worker's pool instead.
+    base: { life: 130, moveSpeed: 120, accuracy: 100, armor: 35, poise: 20, mana: 20, manaRegen: 2 },
+    skills: ['heavy_strike', 'claw'], xp: 24,
+    scaleVariance: [0.9, 1.15],
+    detection: 0.9,
+    brain: { type: 'basic' },
+  },
+
+  // THE SAP SLEEPER — the tapper: sealed over its root-tap, sap-drunk,
+  // DORMANT until its own first chip (the rime_sleeper pair recipe at pack
+  // grain — the sleep IS the opening phase, by the first-chip-wake law).
+  // Woken, it keens the gallery onto you; displaced, it walks back to the
+  // tap (the sentry law's post).
+  sap_sleeper: {
+    id: 'sap_sleeper', name: 'Sap Sleeper',
+    color: '#a89058', shape: 'oval', radius: 16, material: 'chitin', look: 'sap_sleeper',
+    tag: 'sap_sleeper', post: true,
+    base: { life: 170, moveSpeed: 95, accuracy: 95, armor: 40, poise: 30, mana: 60, manaRegen: 5 },
+    skills: ['keening_shriek', 'claw'], xp: 30,
+    detection: 1.1,
+    brain: { type: 'basic', perception: { alertShout: 520 } },
+  },
 };
 
 // ---------------------------------------------------------------------------

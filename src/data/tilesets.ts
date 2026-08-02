@@ -6284,6 +6284,23 @@ export const TILESETS: Record<string, TilesetDef> = {
       // open onto country).
       massifCoverage: { byDepth: [[0.22, 0.28], [0.28, 0.34]] },
       massifLaneW: { byDepth: [84, 70] },
+      // THE ROOT LATTICE (engine/massif.ts layRootLattice — the batch-21.5
+      // deepening): the floor WOVEN. Connected runs link bole to bole and
+      // gall to gall, spur from every body into the floor, and cross the
+      // bores as walk-over feeder cords — the "interwoven network" the
+      // barrenness measurement showed the country lacked (~30 dress bodies
+      // per screen against the stalkwood's ~360). Heavy collars where runs
+      // leave a body; pale hairs and etiolated blades for fuzz. The press
+      // below rides the two scalar dials: the heart weaves tighter and
+      // carries longer collars than the rim.
+      rootLattice: {
+        fuzz: [
+          { kind: 'root_hair', weight: 3, radius: [8, 13] },
+          { kind: 'pale_blade', weight: 1, radius: [14, 20] },
+        ],
+      },
+      rootLatticeDensity: { byDepth: [0.9, 1.4] },
+      rootLatticeHeavyFrac: { byDepth: [0.16, 0.28] },
     },
     nameFirst: ['Undergrowth', 'Deeproot', 'Tangleroot', 'Rootvault', 'Blindloam', 'Galled', 'Sunless', 'Understem', 'Burrowed', 'Old Root'],
     nameSecond: ['Bores', 'Avenues', 'Warrens', 'Galleries', 'Runs', 'Hollows', 'Tangle', 'Country', 'Dark', 'Understory'],
@@ -6394,6 +6411,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'mushroomling', weight: 1, presence: { to: 12, fadeOut: 6 } },
         { id: 'spore_drifter', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'glow_moth', weight: 1 },
+        // The deepening's kin (batch 21.5): the bore-mason met mid-roam, and
+        // the tapper sealed at its root — the sleeper law at pack grain
+        // (mole_cricket + sap_sleeper, data/monsters.ts).
+        { id: 'mole_cricket', weight: 1.5, presence: { from: 4, fadeIn: 2 } },
+        { id: 'sap_sleeper', weight: 0.8, presence: { from: 7, fadeIn: 3 } },
       ],
     },
     spawnerId: 'grub_clutch',

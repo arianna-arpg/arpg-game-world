@@ -9256,6 +9256,30 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#ff8a3a', params: { spread: 0.3, dist: 0.52, size: 0.09 } },
     ],
   },
+
+  // --- The undergrowth kin (batch 21.5 — the rockgrub family, deepened) -----
+  /** THE MOLE CRICKET: the bore-mason — a digger's plated barrel behind
+   *  spade forelimbs, the thing that actually chewed these avenues. */
+  mole_cricket: {
+    parts: [
+      { kind: 'blob', scale: 0.95, role: 'bone', params: { irr: 0.16, seed: 101 } },
+      { kind: 'scutes', scale: 0.88 },
+      { kind: 'claws', params: { len: 0.62, talons: 2 } },
+      { kind: 'mandibles', scale: 0.7 },
+      { kind: 'eyes', color: '#d8c8a0', params: { spread: 0.34, dist: 0.6, size: 0.07 } },
+    ],
+  },
+  /** THE SAP SLEEPER: the tapper — an amber-fat body sealed over its
+   *  root-tap, grip-rootlets under it, mouthparts sunk in the sweet. */
+  sap_sleeper: {
+    parts: [
+      { kind: 'roots', scale: 0.8, params: { n: 5 } },
+      { kind: 'blob', scale: 0.98, role: 'bone', params: { irr: 0.1, seed: 103 } },
+      { kind: 'scutes', scale: 0.8 },
+      { kind: 'mandibles', scale: 0.9 },
+      { kind: 'eyes', color: '#e8d8a8', params: { spread: 0.26, dist: 0.58, size: 0.06 } },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

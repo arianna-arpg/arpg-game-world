@@ -52,7 +52,7 @@ import { GridWalkField } from '../world/gridWalk';
 import { patronFaction } from '../world/biomes';
 import { regionKind } from '../world/regions';
 import {
-  ensureGrid, layoutParam, registerLayout, scatterDecoration,
+  COHERENCE_CFG, doodadRuleOf, ensureGrid, layoutParam, registerLayout, scatterDecoration,
   type DoodadKind, type GenCtx,
 } from './levelgen';
 import { GEN_CELL, Mask, band, bearingNoise, disc, paintRegion, radial, wanderPath } from './genkit';
@@ -1378,6 +1378,314 @@ export function boreMassifTunnels(ctx: GenCtx, def: ZoneDef, grid: GridWalkField
     packSplit: layoutParam(def, 'tierPackSplit', 0.15),
   } : undefined;
 }
+
+// --- THE ROOT LATTICE --------------------------------------------------------
+// The floor WOVEN, as one registered dressing pass: connected, overlapping
+// polyline root RUNS walked between and around the zone's mass bodies — the
+// "huge interwoven network" read a scatter of singletons can never buy. A run
+// is one wandered polyline (the ridge shape's wanderPath grammar at dress
+// scale) laid in a THREE-TIER LADDER:
+//   HEAVY   taproot runs — true blocking bodies (parapet-class knuckles
+//           wearing oblong hit surfaces along the run's own bearing), laid
+//           ONLY in the collars where a run leaves a body, and only where
+//           the standing laws allow (see below);
+//   FEEDER  roots — LOW, walkable-over ground cords (the boulder_rubble
+//           walk-over class): they carry the line ACROSS lanes and open
+//           weave, so the floor reads woven while movement never strangles;
+//   FUZZ    root-hairs and weeds sprouted alongside — pure dress.
+// Runs LINK neighbor bodies (bole to bole, gall to gall), SPUR from each
+// body out into open floor (wall to floor, ending in a hair splay), and
+// free CROSS runs thread the weave so lines visibly overlap and cross.
+//
+// THE LAWS (the coherence fabric, held by construction):
+//   · the guaranteed weave is never walled — a HEAVY disc keeps every OTHER
+//     body's lane ring (bound + laneW × hugLane, the skirt dress law), the
+//     full portal clear, all reservations, any live traveled way, and one
+//     open flank (the pinch guard) — and where any law refuses, the run
+//     DEGRADES to feeder rather than gapping: connection is the guarantee,
+//     blocking is a privilege;
+//   · every disc stands on live walkable ground and out of forbidden liquid
+//     (runs stop at water — roots do not swim);
+//   · absent == identical: the pass is gated on the `rootLattice`
+//     layoutParam — no spec, zero draws, byte-identical zones; density and
+//     the heavy collar ride their own byDepth-able scalar dials
+//     (`rootLatticeDensity`, `rootLatticeHeavyFrac` — the press idiom);
+//   · parameterized by construction (THE ROOTED WEB's coming under-zones
+//     inherit this as their interior language): kinds, radii, cadence and
+//     fuzz rows are all spec rows, the defaults live in ROOT_LATTICE_CFG,
+//     and layRootLattice is exported for any recipe to call with its own
+//     anchor bodies.
+// Registered as an ordinary massif post; runs under the doodad-navigability
+// belt like every dress lane. Probe: balance/probe_massif.ts RIG Q.
+
+/** The lattice's per-zone spec (the `rootLattice` layoutParam). Every field
+ *  optional — ROOT_LATTICE_CFG carries the reference dials. */
+export interface RootLatticeSpec {
+  /** Neighbor links per body (fractional part = chance of one more). */
+  links?: number;
+  /** Per-body outward spur runs (band). */
+  spurs?: [number, number];
+  /** Free-floor cross runs per zone (band) — the deliberate overlappers. */
+  cross?: [number, number];
+  /** March step between laid discs (px). */
+  step?: number;
+  /** Polyline wander amplitude (px). */
+  wobble?: number;
+  /** Worn kinds + radius bands per tier (the ROOTED WEB reskin seam). */
+  heavyKind?: DoodadKind;
+  feederKind?: DoodadKind;
+  heavyR?: [number, number];
+  feederR?: [number, number];
+  /** Fuzz rows sprouted alongside discs (weighted; MassDressRow shape). */
+  fuzz?: MassDressRow[];
+  fuzzChance?: number;
+}
+
+/** Reference dials — every one overridable per zone via RootLatticeSpec (or
+ *  the two scalar layoutParams for the byDepth-able press dials). */
+export const ROOT_LATTICE_CFG = {
+  links: 1.6,
+  spurs: [1, 2] as [number, number],
+  cross: [2, 4] as [number, number],
+  step: 30,
+  wobble: 24,
+  /** Heavy collar as a fraction of a linked run's length at EACH body end
+   *  (the `rootLatticeHeavyFrac` layoutParam outranks it; 0 = no heavy). */
+  heavyFrac: 0.22,
+  heavyR: [14, 20] as [number, number],
+  feederR: [9, 14] as [number, number],
+  fuzz: [{ kind: 'root_hair' as DoodadKind, weight: 1, radius: [8, 13] as [number, number] }],
+  fuzzChance: 0.55,
+  /** Heavy keeps every OTHER body's ring at bound + laneW × this (the skirt
+   *  dress law's own multiplier — the weave stays honest to the px). */
+  hugLane: 0.8,
+  /** Heavy needs one open flank at discR + this (the pinch guard: a knuckle
+   *  never corks a healed breach or pairs with a wall to close a lane). */
+  sideClear: 44,
+  /** Rim-to-rim reach a link may span (px) — networks are LOCAL, never a
+   *  chord across the whole country. */
+  linkReach: 760,
+  /** Spur length as a fraction band of the body's bound. */
+  spurLen: [0.5, 1.05] as [number, number],
+  /** Cross-run chord band (px). */
+  crossLen: [420, 860] as [number, number],
+  /** Ground the lattice never stands in (roots do not swim). */
+  wet: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'] as DoodadKind[],
+  /** Disc budget per zone — bounds pathological dials, generation cost stays
+   *  flat (the placeTries doctrine at dress scale). */
+  maxDiscs: 1400,
+} as const;
+
+/**
+ * Lay the root lattice over a carved zone. Exported for composition (the
+ * carveMassifs precedent): any recipe may call it with its own anchor list —
+ * an empty `masses` still weaves the floor with cross runs. Dial-gated:
+ * absent `rootLattice` layoutParam = zero draws, byte-identical zone.
+ */
+export function layRootLattice(ctx: GenCtx, def: ZoneDef, grid: GridWalkField, masses: CarvedMass[]): void {
+  const spec = layoutParam<RootLatticeSpec | undefined>(def, 'rootLattice', undefined);
+  if (!spec || ctx.lite) return;
+  const { rng, arena } = ctx;
+  const C = ROOT_LATTICE_CFG;
+  const density = Math.max(0, layoutParam<number>(def, 'rootLatticeDensity', 1));
+  const heavyFrac = Math.min(0.45, Math.max(0,
+    layoutParam<number>(def, 'rootLatticeHeavyFrac', C.heavyFrac)));
+  const laneW = layoutParam<number>(def, 'massifLaneW', MASSIF_CFG.laneW);
+  const portalClear = layoutParam<number>(def, 'massifPortalClear', MASSIF_CFG.portalClear);
+  const portals = [ctx.entry, ...ctx.exits];
+  const step = spec.step ?? C.step;
+  const wobble = spec.wobble ?? C.wobble;
+  const heavyKind = spec.heavyKind ?? 'taproot_run';
+  const feederKind = spec.feederKind ?? 'feeder_root';
+  const heavyR = spec.heavyR ?? C.heavyR;
+  const feederR = spec.feederR ?? C.feederR;
+  const fuzz = spec.fuzz ?? C.fuzz;
+  const fuzzChance = spec.fuzzChance ?? C.fuzzChance;
+
+  // The standing ground the lattice must respect, gathered once: forbidden
+  // liquids (the habitat law's inverse) and live traveled ways (the clearway
+  // law — a blocking knuckle never stands on pavement; feeder crossing a way
+  // is the interwoven read and stays legal, walk-over on walk-over).
+  const wet = ctx.doodads.filter(d => C.wet.includes(d.kind));
+  const ways = ctx.doodads.filter(d => !d.wild && doodadRuleOf(d.kind).clearway);
+  const wetAt = (x: number, y: number, r: number): boolean =>
+    wet.some(w => Math.hypot(w.pos.x - x, w.pos.y - y) < w.radius + r);
+
+  let budget = C.maxDiscs;
+
+  // Every heavy disc laid this pass — the CROSS-RUN pinch law reads it: two
+  // collars from different runs must never close a lane between them (the
+  // navigability belt would catch the seal, but a law the belt has to
+  // enforce is a law the pass failed to keep).
+  const laidHeavy: Vec2[] = [];
+
+  const heavyOk = (x: number, y: number, r: number, own: CarvedMass | null, brg: number, prior: number): boolean => {
+    if (portals.some(p => Math.hypot(p.x - x, p.y - y) < portalClear)) return false;
+    for (const m of masses) {
+      if (m === own) continue;
+      if (Math.hypot(m.at.x - x, m.at.y - y) < m.bound + laneW * C.hugLane) return false;
+    }
+    if (resHits(ctx, x, y, r + 6)) return false;
+    if (ways.some(w => Math.hypot(w.pos.x - x, w.pos.y - y) < w.radius + r + COHERENCE_CFG.clearwayPad)) return false;
+    // THE CROSS-RUN PINCH LAW: keep clear of every PRIOR run's knuckles —
+    // two collars converging from different runs must never close a lane
+    // between them. The current run's own chain (indices ≥ prior) is one
+    // body and exempts itself; its curls stay honest via the flank guard.
+    const excl = r * 2 + C.sideClear;
+    for (let i = 0; i < prior; i++) {
+      const h = laidHeavy[i];
+      if (Math.hypot(h.x - x, h.y - y) < excl) return false;
+    }
+    // THE PINCH GUARD: one flank must stay open ground.
+    const px = Math.cos(brg + Math.PI / 2), py = Math.sin(brg + Math.PI / 2);
+    const reach = r + C.sideClear;
+    return grid.isWalkable(x + px * reach, y + py * reach)
+      || grid.isWalkable(x - px * reach, y - py * reach);
+  };
+
+  /** March one wandered run, laying tiered discs. collarA/collarB = the
+   *  heavy fraction at each end (0 = feeder the whole way); ownA/ownB = the
+   *  end bodies a collar may hug (every other body keeps its lane ring). */
+  const layRun = (
+    from: Vec2, to: Vec2,
+    ownA: CarvedMass | null, ownB: CarvedMass | null,
+    collarA: number, collarB: number,
+  ): void => {
+    const pts = wanderPath(rng, from, to, { step: Math.max(90, step * 3), wobble, bowFrac: 0.12 });
+    let total = 0;
+    for (let k = 0; k < pts.length - 1; k++) {
+      total += Math.hypot(pts[k + 1].x - pts[k].x, pts[k + 1].y - pts[k].y);
+    }
+    if (total < step) return;
+    let arc = 0;
+    const laidStart = laidHeavy.length; // knuckles before this run — the pinch law's fence
+    for (let k = 0; k < pts.length - 1; k++) {
+      const a = pts[k], b = pts[k + 1];
+      const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+      const brg = Math.atan2(b.y - a.y, b.x - a.x);
+      const steps = Math.max(1, Math.ceil(segLen / step));
+      for (let s = 1; s <= steps; s++) {
+        if (budget <= 0) return;
+        const t = s / steps;
+        const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
+        const tt = (arc + segLen * t) / total;
+        if (x < 20 || y < 20 || x > arena.w - 20 || y > arena.h - 20) continue;
+        if (!grid.isWalkable(x, y)) continue;
+        if (wetAt(x, y, feederR[0])) continue;
+        const nearA = tt < 0.5;
+        const collar = nearA ? collarA : collarB;
+        const inCollar = collar > 0 && (nearA ? tt < collar : 1 - tt < collar);
+        let kind = feederKind, band = feederR;
+        if (inCollar && heavyOk(x, y, heavyR[1], nearA ? ownA : ownB, brg, laidStart)) {
+          kind = heavyKind; band = heavyR;
+        }
+        const r = rng.range(band[0], band[1]);
+        ctx.doodads.push({
+          pos: vec(x, y), radius: r, kind,
+          rot: brg + rng.range(-0.3, 0.3),
+        });
+        budget--;
+        if (kind === heavyKind) laidHeavy.push(vec(x, y));
+        // FUZZ alongside: hairs and weeds off the run's shoulder.
+        if (fuzz.length && rng.chance(fuzzChance)) {
+          const side = rng.chance(0.5) ? 1 : -1;
+          const off = r + rng.range(4, 18);
+          const fx = x + Math.cos(brg + Math.PI / 2) * side * off;
+          const fy = y + Math.sin(brg + Math.PI / 2) * side * off;
+          const row = pickWeighted(rng, fuzz);
+          const fr = rng.range(row.radius[0], row.radius[1]);
+          if (grid.isWalkable(fx, fy) && !wetAt(fx, fy, fr * 0.6) && budget > 0) {
+            ctx.doodads.push({
+              pos: vec(fx, fy), radius: fr, kind: row.kind,
+              rot: rng.range(0, Math.PI * 2),
+            });
+            budget--;
+          }
+        }
+      }
+      arc += segLen;
+    }
+  };
+
+  // --- LINKS: each body roots toward its nearest neighbors ------------------
+  const linksWant = (spec.links ?? C.links) * density;
+  const linked = new Set<string>();
+  for (let i = 0; i < masses.length; i++) {
+    const A = masses[i];
+    let want = Math.floor(linksWant) + (rng.chance(Math.max(0, linksWant % 1)) ? 1 : 0);
+    if (want <= 0) continue;
+    const order = masses
+      .map((m, j) => ({ j, d: Math.hypot(m.at.x - A.at.x, m.at.y - A.at.y) }))
+      .filter(o => o.j !== i)
+      .sort((a, b) => a.d - b.d);
+    for (const o of order) {
+      if (want <= 0) break;
+      const B = masses[o.j];
+      // Rim reach, not center reach (a big-bound body can be rim-near while
+      // center-far, so no early break off the center sort).
+      if (o.d - A.bound - B.bound > C.linkReach) continue;
+      const key = i < o.j ? `${i}:${o.j}` : `${o.j}:${i}`;
+      // An already-laid pair still counts as this body's link — the network
+      // is degree, not duplicate rope.
+      if (!linked.has(key)) {
+        linked.add(key);
+        const dx = (B.at.x - A.at.x) / o.d, dy = (B.at.y - A.at.y) / o.d;
+        layRun(
+          vec(A.at.x + dx * A.r * 0.55, A.at.y + dy * A.r * 0.55),
+          vec(B.at.x - dx * B.r * 0.55, B.at.y - dy * B.r * 0.55),
+          A, B, heavyFrac, heavyFrac);
+      }
+      want--;
+    }
+  }
+
+  // --- SPURS: wall to floor — each body grips the ground around it ----------
+  const spurBand = spec.spurs ?? C.spurs;
+  for (const m of masses) {
+    const n = Math.round(rng.int(spurBand[0], spurBand[1]) * density);
+    for (let s = 0; s < n; s++) {
+      const a = rng.range(0, Math.PI * 2);
+      const len = m.bound * rng.range(C.spurLen[0], C.spurLen[1]) + laneW * 0.5;
+      const tip = vec(m.at.x + Math.cos(a) * (m.bound + len), m.at.y + Math.sin(a) * (m.bound + len));
+      layRun(vec(m.at.x + Math.cos(a) * m.r * 0.55, m.at.y + Math.sin(a) * m.r * 0.55),
+        tip, m, null, heavyFrac, 0);
+      // The splay: the spur ends in a grip of hairs, not a stump.
+      if (fuzz.length) {
+        const k = rng.int(2, 4);
+        for (let h = 0; h < k && budget > 0; h++) {
+          const ha = a + rng.range(-1.1, 1.1);
+          const hd = rng.range(8, 30);
+          const hx = tip.x + Math.cos(ha) * hd, hy = tip.y + Math.sin(ha) * hd;
+          const row = pickWeighted(rng, fuzz);
+          const hr = rng.range(row.radius[0], row.radius[1]);
+          if (!grid.isWalkable(hx, hy) || wetAt(hx, hy, hr * 0.6)) continue;
+          ctx.doodads.push({
+            pos: vec(hx, hy), radius: hr, kind: row.kind,
+            rot: rng.range(0, Math.PI * 2),
+          });
+          budget--;
+        }
+      }
+    }
+  }
+
+  // --- CROSS RUNS: the free weave — lines laid to be crossed ----------------
+  const crossBand = spec.cross ?? C.cross;
+  const crosses = Math.round(rng.int(crossBand[0], crossBand[1]) * density);
+  for (let c = 0; c < crosses; c++) {
+    const p0 = grid.snapToWalkable(vec(
+      rng.range(arena.w * 0.1, arena.w * 0.9),
+      rng.range(arena.h * 0.1, arena.h * 0.9)));
+    const a = rng.range(0, Math.PI * 2);
+    const len = rng.range(C.crossLen[0], C.crossLen[1]);
+    const p1 = vec(
+      Math.max(40, Math.min(arena.w - 40, p0.x + Math.cos(a) * len)),
+      Math.max(40, Math.min(arena.h - 40, p0.y + Math.sin(a) * len)));
+    layRun(p0, p1, null, null, 0, 0);
+  }
+}
+
+registerMassifPost(layRootLattice);
 
 /** MASSIF — wide-open country studded with large impassable bodies: the
  *  mixture archetype (see the module header). ensureGrid + carveMassifs +

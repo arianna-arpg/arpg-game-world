@@ -82,6 +82,32 @@
 //      authored values exactly (edge zones stay recognizable), portalClear
 //      flat by law, and the weave/exit guarantees holding at the heart's
 //      densest roll (forced geo 1).
+//   Q. THE ROOT LATTICE (batch 21.5 — the deepening): the registered massif
+//      post that WEAVES the floor — tier statics (heavy parapet + oblong
+//      surface, feeder walk-over, hair fuzz), absent == identical (a spec-less
+//      def lays zero lattice kinds; only the undergrowth authors the dials),
+//      minted-ground laws (runs CHAINED not scattered, bodies visibly rooted,
+//      every disc on live walkable ground, heavy keeping the second-nearest
+//      body's lane ring + the portal clear, doodad-aware reachability to
+//      every exit and POI), extreme dials (density 3 / collar 0.45: the
+//      weave and the reachability hold, the budget bounds the pour,
+//      same-seed determinism), and THE PRESS (heart lays more lattice — and
+//      more heavy — than the rim across the sweep).
+//   R. THE MOUNTAIN HEARTH (batch 21.5 — the highland family): the ember
+//      crystal that makes "hearth to hearth" literal — THE ONE-NUMBER LAW
+//      (rule.warms == the drawn light radius: what glows is what warms is,
+//      under a Gloaming, what feeds), THE STEADY-WELL LAW (a lightwell row
+//      with feed and NO pool/burst — the commission's re-use word at the
+//      light grain), the hearthglow status shape (beneficial, powerInert,
+//      the windchillWard mod, a real traverse window), the carrier CENSUS
+//      (exactly the six mountain faces, one common row each, appended LAST,
+//      count never above one — absent == identical everywhere else), THE
+//      EMBED LAW on minted ground (every placed crystal on walkable floor
+//      within the seat band of standing NON-VOID rock, across massif AND
+//      rooms recipes; a refused zone goes honestly without), and the world
+//      loop end-to-end (open air banks chill → touching the crystal stamps
+//      hearthglow through the contact grammar → the carried ward reads as
+//      warmth, banks nothing, sheds the stacks → expiry re-arms the cold).
 //   P. THE UNDERGROWTH — THE COUNTRY BELOW (batch 20): the garden's underdark
 //      as the first massif country minted below the world — the tileset's
 //      statics (massif coupling, sheltered sky, the named-door law: no
@@ -111,12 +137,13 @@ import '../src/data/compositions';
 
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
-import { generateLayout, hasLayout, layoutParam, type GenCtx, type GeneratedLayout } from '../src/engine/levelgen';
+import { bodyRadiusOf, doodadRuleOf, generateLayout, hasLayout, layoutParam, type GenCtx, type GeneratedLayout } from '../src/engine/levelgen';
 import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
 import {
   carveMassifs, massKindIds, massKindOf, massShapeIds, MASSIF_CFG,
-  registerTenantKind, tenantKindIds, type MassAnchorRow, type TenantRow,
+  registerTenantKind, ROOT_LATTICE_CFG, tenantKindIds,
+  type MassAnchorRow, type RootLatticeSpec, type TenantRow,
 } from '../src/engine/massif';
 import { TILESETS } from '../src/data/tilesets';
 import { SIDEZONES } from '../src/data/sidezones';
@@ -1865,6 +1892,456 @@ function bareCtx(seed: number): GenCtx {
     }
     note(`P: ${pPois} gall interiors over ${pRuns} mints; press rim ${rimBodies} → heart ${heartBodies} bodies/${SEEDS} seeds`);
   }
+}
+
+// --- Rig Q: THE ROOT LATTICE (batch 21.5 — the deepening) --------------------
+// The registered massif post that weaves the floor (engine/massif.ts
+// layRootLattice): tier statics, absent == identical, the minted-ground laws,
+// the extreme-dial regime, and the press. Doodad-aware reachability mirrors
+// the navigability belt's own grain (bodyRadiusOf + 12 disc marks), so the
+// rig asserts exactly what the belt guarantees.
+{
+  const LK = ['taproot_run', 'feeder_root', 'root_hair'];
+  // Q1 — tier statics: the ladder's contracts.
+  const heavy = doodadRuleOf('taproot_run');
+  if (heavy.overlap !== 'solid' || !heavy.blocksMove || heavy.blocksShot || heavy.blocksSight) {
+    fail('Q: taproot_run must be a PARAPET body (blocksMove alone — duel across the knuckle)');
+  }
+  if (!heavy.surface || heavy.surface.orient !== 'rot' || !(heavy.surface.hw > 1) || !(heavy.surface.hh < 1)) {
+    fail('Q: taproot_run must wear an oblong hit surface along its own bearing (drawn == tested)');
+  }
+  const feeder = doodadRuleOf('feeder_root');
+  if (feeder.overlap !== 'ground' || !feeder.walkOnly || feeder.blocksMove) {
+    fail('Q: feeder_root must be the walk-over ground class (the boulder_rubble law)');
+  }
+  const hair = doodadRuleOf('root_hair');
+  if (hair.overlap !== 'ground' || !hair.walkOnly || !hair.spin) {
+    fail('Q: root_hair must be spun walk-over fuzz');
+  }
+  const ugts = TILESETS.undergrowth;
+  const ugp = (ugts?.layoutParams ?? {}) as Record<string, unknown>;
+  const spec = ugp.rootLattice as RootLatticeSpec | undefined;
+  if (!spec) fail('Q: the undergrowth must author the rootLattice spec (the deepening is gone)');
+  const dRamp = ugp.rootLatticeDensity as { byDepth?: [number, number] } | undefined;
+  const hRamp = ugp.rootLatticeHeavyFrac as { byDepth?: [number, number] } | undefined;
+  if (!dRamp?.byDepth || !(dRamp.byDepth[1] > dRamp.byDepth[0])) {
+    fail('Q: rootLatticeDensity must ramp UP toward the heart (the press below)');
+  }
+  if (!hRamp?.byDepth || !(hRamp.byDepth[1] > hRamp.byDepth[0])) {
+    fail('Q: rootLatticeHeavyFrac must ramp UP toward the heart');
+  }
+  for (const [tid, t] of Object.entries(TILESETS)) {
+    if (tid === 'undergrowth') continue;
+    if ((t.layoutParams as Record<string, unknown> | undefined)?.rootLattice
+      || (t.variants ?? []).some(v => (v.layoutParams as Record<string, unknown> | undefined)?.rootLattice)) {
+      fail(`Q: tileset '${tid}' authors rootLattice — the debut is the undergrowth's alone (widen deliberately, with its own rig sweep)`);
+    }
+  }
+
+  // Q2 — absent == identical: a spec-less massif def lays ZERO lattice kinds
+  // (the pass exits before a single draw), twice-identically.
+  {
+    const seed = seedAt(3) ^ 0x400f;
+    const a = gen(defOf('massif_q_bare', []), seed);
+    const b = gen(defOf('massif_q_bare', []), seed);
+    if (a.doodads.some(d => LK.includes(d.kind))) fail('Q: a rootLattice-less def laid lattice kinds');
+    if (JSON.stringify(a.doodads) !== JSON.stringify(b.doodads)) fail('Q: bare def not deterministic');
+  }
+
+  // The shared minted-ground harness: the undergrowth's own merged def (the
+  // rig P fieldDef idiom) at authored/forced dials.
+  const W = Math.round((ugts.sizeW[0] + ugts.sizeW[1]) / 2), H2 = Math.round((ugts.sizeH[0] + ugts.sizeH[1]) / 2);
+  const qEntry = vec(140, H2 / 2);
+  const qExits = [vec(W - 140, H2 / 2)];
+  const qDef = (geo: number | undefined, over?: Record<string, unknown>): ZoneDef => ({
+    id: 'massif_q', name: 'QA root lattice', level: 7, size: { w: W, h: H2 },
+    theme: ugts.theme as ZoneDef['theme'],
+    layout: [...(ugts.common ?? []), ...ugts.layout],
+    layoutType: 'massif',
+    layoutParams: { ...(ugts.layoutParams as Record<string, unknown>), ...over },
+    biome: ugts.biome,
+    ...(geo !== undefined ? { geo: { biomeDepth: geo } } : {}),
+    objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+  });
+  const qGen = (def: ZoneDef, seed: number): GeneratedLayout =>
+    generateLayout({ ...def, seed }, { w: W, h: H2 }, new Rng(seed), qEntry, qExits);
+
+  /** Doodad-aware reachability at the navigability belt's own grain: BFS over
+   *  open cells with blocking-doodad discs (bodyRadiusOf + 12) marked shut —
+   *  every exit and POI must arrive CLEAN (the belt's promise, asserted). */
+  const doodadReach = (out: GeneratedLayout, tag: string, seed: number): void => {
+    const grid = out.walk;
+    if (!(grid instanceof GridWalkField)) { fail(`Q${tag}: seed ${seed} no grid`); return; }
+    const cs = 30;
+    const cols = Math.ceil(W / cs), rows = Math.ceil(H2 / cs);
+    const shut = new Uint8Array(cols * rows);
+    for (let gy = 0; gy < rows; gy++) {
+      for (let gx = 0; gx < cols; gx++) {
+        if (!grid.isWalkable((gx + 0.5) * cs, (gy + 0.5) * cs)) shut[gy * cols + gx] = 1;
+      }
+    }
+    for (const d of out.doodads) {
+      if (!doodadRuleOf(d.kind).blocksMove || d.kind === 'door') continue;
+      const rr = bodyRadiusOf(d) + 12;
+      for (let gy = Math.max(0, Math.floor((d.pos.y - rr) / cs)); gy <= Math.min(rows - 1, Math.floor((d.pos.y + rr) / cs)); gy++) {
+        for (let gx = Math.max(0, Math.floor((d.pos.x - rr) / cs)); gx <= Math.min(cols - 1, Math.floor((d.pos.x + rr) / cs)); gx++) {
+          const nx = Math.max(gx * cs, Math.min(d.pos.x, (gx + 1) * cs));
+          const ny = Math.max(gy * cs, Math.min(d.pos.y, (gy + 1) * cs));
+          if ((nx - d.pos.x) ** 2 + (ny - d.pos.y) ** 2 <= rr * rr) shut[gy * cols + gx] = 1;
+        }
+      }
+    }
+    const cellOf = (p: { x: number; y: number }): number => {
+      const s = grid.snapToWalkable(vec(p.x, p.y));
+      return Math.min(rows - 1, Math.max(0, Math.floor(s.y / cs))) * cols
+        + Math.min(cols - 1, Math.max(0, Math.floor(s.x / cs)));
+    };
+    let start = cellOf(qEntry);
+    if (shut[start]) {
+      // The entry's own cell may sit under a rim mark — take the nearest open.
+      outer: for (let ring = 1; ring <= 5; ring++) {
+        for (let dy = -ring; dy <= ring; dy++) for (let dx = -ring; dx <= ring; dx++) {
+          const gx = (start % cols) + dx, gy = Math.floor(start / cols) + dy;
+          if (gx < 0 || gy < 0 || gx >= cols || gy >= rows || shut[gy * cols + gx]) continue;
+          start = gy * cols + gx; break outer;
+        }
+      }
+    }
+    const seen = new Uint8Array(cols * rows);
+    const bq: number[] = [start]; seen[start] = 1;
+    for (let head = 0; head < bq.length; head++) {
+      const c = bq[head];
+      const cx = c % cols, cy = Math.floor(c / cols);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const nx = cx + dx, ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const nc = ny * cols + nx;
+        if (shut[nc] || seen[nc]) continue;
+        seen[nc] = 1; bq.push(nc);
+      }
+    }
+    const arrive = (p: { x: number; y: number }, what: string): void => {
+      // POIs may sit inside garrison scatter — accept any open seen cell
+      // within one lane of the point (the belt clears a PATH to it, not the
+      // exact center cell).
+      const s = grid.snapToWalkable(vec(p.x, p.y));
+      const reach = 90;
+      for (let gy = Math.max(0, Math.floor((s.y - reach) / cs)); gy <= Math.min(rows - 1, Math.floor((s.y + reach) / cs)); gy++) {
+        for (let gx = Math.max(0, Math.floor((s.x - reach) / cs)); gx <= Math.min(cols - 1, Math.floor((s.x + reach) / cs)); gx++) {
+          if (seen[gy * cols + gx]) return;
+        }
+      }
+      fail(`Q${tag}: seed ${seed} ${what} ${Math.round(p.x)},${Math.round(p.y)} sealed behind blocking dress`);
+    };
+    for (const e of qExits) arrive(e, 'exit');
+    for (const poi of out.pois) arrive(poi, 'POI');
+  };
+
+  // Q3 — minted ground at the authored dials.
+  let latticeSeen = 0, heavySeen = 0;
+  const q3Runs = Math.min(SEEDS, 6);
+  for (let s = 0; s < q3Runs; s++) {
+    const seed = seedAt(s) ^ 0x400f;
+    const out = qGen(qDef(0.7), seed);
+    const st = gridStats(out);
+    if (!st) { fail(`Q: seed ${seed} no grid`); continue; }
+    if (st.comps !== 1) fail(`Q: seed ${seed} split the weave (${st.comps} comps) — the lattice must never touch the grid`);
+    const lat = out.doodads.filter(d => LK.includes(d.kind));
+    const runs = out.doodads.filter(d => d.kind === 'taproot_run' || d.kind === 'feeder_root');
+    const heavies = out.doodads.filter(d => d.kind === 'taproot_run');
+    latticeSeen += lat.length; heavySeen += heavies.length;
+    // Every lattice disc stands on live walkable ground (all three tiers).
+    for (const d of lat) {
+      if (!st.grid.isWalkable(d.pos.x, d.pos.y)) {
+        fail(`Q: seed ${seed} ${d.kind} at ${Math.round(d.pos.x)},${Math.round(d.pos.y)} stands in a wall`);
+        break;
+      }
+    }
+    // CHAINED, not scattered: run discs keep neighbors at the march grain.
+    if (runs.length > 30) {
+      const step = (((qDef(0.7).layoutParams as Record<string, unknown>).rootLattice as RootLatticeSpec).step ?? ROOT_LATTICE_CFG.step);
+      const reach = step * 2.6;
+      let chained = 0;
+      for (const d of runs) {
+        if (runs.some(o => o !== d
+          && Math.abs(o.pos.x - d.pos.x) < reach && Math.abs(o.pos.y - d.pos.y) < reach
+          && Math.hypot(o.pos.x - d.pos.x, o.pos.y - d.pos.y) < reach)) chained++;
+      }
+      if (chained / runs.length < 0.92) {
+        fail(`Q: seed ${seed} only ${(chained / runs.length * 100).toFixed(0)}% of run discs are chained — a scatter of singletons is not a network`);
+      }
+    }
+    // THE HEAVY LAWS, re-derived off the minted grid (GeneratedLayout carries
+    // no mass list — deliberately; the laws are assertable structurally):
+    // collars HUG bodies (a heavy disc stands near wall mass), and no heavy
+    // disc is ever CORKED (the pinch guard's post-hoc form — some ring
+    // bearing at flank reach stays open ground; a knuckle sealed on every
+    // side is exactly what the guard exists to refuse). Portal clear direct.
+    const pclear = layoutParam<number>(qDef(0.7), 'massifPortalClear', MASSIF_CFG.portalClear);
+    let hugged = 0;
+    for (const d of heavies) {
+      for (const p of [qEntry, ...qExits]) {
+        if (Math.hypot(p.x - d.pos.x, p.y - d.pos.y) < pclear) {
+          fail(`Q: seed ${seed} heavy run inside the portal clear`);
+        }
+      }
+      let wallNear = false, openFlank = false;
+      const reach = d.radius + ROOT_LATTICE_CFG.sideClear;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        if (!wallNear && !st.grid.isWalkable(d.pos.x + Math.cos(a) * 130, d.pos.y + Math.sin(a) * 130)) wallNear = true;
+        if (!openFlank && st.grid.isWalkable(d.pos.x + Math.cos(a) * reach, d.pos.y + Math.sin(a) * reach)) openFlank = true;
+      }
+      if (wallNear) hugged++;
+      if (!openFlank) fail(`Q: seed ${seed} heavy run at ${Math.round(d.pos.x)},${Math.round(d.pos.y)} is corked on every side`);
+    }
+    if (heavies.length >= 10 && hugged / heavies.length < 0.5) {
+      fail(`Q: seed ${seed} only ${hugged}/${heavies.length} heavy discs hug wall mass — the collars are not collars`);
+    }
+    doodadReach(out, '3', seed);
+  }
+  if (!latticeSeen) fail('Q: pressure — no seed ever laid the lattice (dead rig)');
+  if (!heavySeen) fail('Q: pressure — the heavy tier never laid (the collars are dead)');
+
+  // Q4 — the extreme regime: density 3 + collar 0.45. Structure holds, the
+  // budget bounds the pour, determinism holds.
+  for (let s = 0; s < 3; s++) {
+    const seed = seedAt(s) ^ 0x51ab;
+    const over = { rootLatticeDensity: 3, rootLatticeHeavyFrac: 0.45 };
+    const out = qGen(qDef(1, over), seed);
+    const st = gridStats(out);
+    if (!st) { fail(`Q4: seed ${seed} no grid`); continue; }
+    if (st.comps !== 1) fail(`Q4: seed ${seed} split the weave at extreme dials`);
+    const lat = out.doodads.filter(d => LK.includes(d.kind));
+    if (lat.length > ROOT_LATTICE_CFG.maxDiscs) {
+      fail(`Q4: seed ${seed} ${lat.length} lattice discs — the budget did not bound the pour`);
+    }
+    doodadReach(out, '4', seed);
+    const again = qGen(qDef(1, over), seed);
+    if (JSON.stringify(out.doodads) !== JSON.stringify(again.doodads)) {
+      fail(`Q4: seed ${seed} not deterministic at extreme dials`);
+    }
+  }
+
+  // Q5 — THE PRESS: the heart lays more lattice, and more heavy, than the rim.
+  let rimLat = 0, heartLat = 0, rimHeavy = 0, heartHeavy = 0;
+  for (let s = 0; s < q3Runs; s++) {
+    const seed = seedAt(s) ^ 0x9e21;
+    const rim = qGen(qDef(0), seed).doodads;
+    const heart = qGen(qDef(1), seed).doodads;
+    rimLat += rim.filter(d => LK.includes(d.kind)).length;
+    heartLat += heart.filter(d => LK.includes(d.kind)).length;
+    rimHeavy += rim.filter(d => d.kind === 'taproot_run').length;
+    heartHeavy += heart.filter(d => d.kind === 'taproot_run').length;
+  }
+  if (!(heartLat > rimLat)) fail(`Q5: the press never engaged — heart ${heartLat} vs rim ${rimLat} lattice discs`);
+  if (!(heartHeavy > rimHeavy)) fail(`Q5: the collar press never engaged — heart ${heartHeavy} vs rim ${rimHeavy} heavy discs`);
+  note(`Q: ${latticeSeen} lattice discs (${heavySeen} heavy) over ${q3Runs} mints; press ${rimLat}→${heartLat} lattice, ${rimHeavy}→${heartHeavy} heavy`);
+}
+
+// --- Rig R: THE MOUNTAIN HEARTH (batch 21.5 — the highland family) ------------
+// Block-local imports (the massifs.ts kit's own discipline this batch: two
+// concurrent sessions extend this file, and a block-local import can never
+// collide with the sibling's hunks; ES imports hoist, so the module behaves
+// identically). data/lightwells joins the side-effect set — the well row the
+// rig pins registers there.
+import '../src/data/lightwells';
+import { STATUS_DEFS } from '../src/engine/status';
+import { lightwellOf } from '../src/engine/lightwells';
+import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
+// (doodadRuleOf arrives aliased so this block stays self-contained whatever
+// the sibling rig's own imports do — the concurrent-landing discipline.)
+import { doodadRuleOf as hearthRuleOf, type Doodad } from '../src/engine/levelgen';
+import { HEARTH_CFG } from '../src/data/massifs';
+import { makeSimWorld } from '../src/sim/arena';
+
+// R1 — statics: THE ONE-NUMBER LAW, the steady well, the ward status.
+{
+  const rule = hearthRuleOf('hearth_crystal');
+  if (!rule || rule.overlap !== 'solid' || !rule.blocksMove) {
+    fail('R: hearth_crystal must be a solid body you press a hand to');
+  }
+  if (rule.blocksShot || rule.blocksSight) fail('R: the crystal is knee-high — shots and sight sail over it');
+  const vis = DOODAD_VISUALS['hearth_crystal'];
+  if (!vis?.light) {
+    fail('R: the crystal must carry a light row (lightReach reads it — the glow IS the well)');
+  } else {
+    if (vis.light.radius < 0) fail('R: the light radius must be ABSOLUTE (a ×radius multiple would let body size skew the warm ring)');
+    if (vis.light.radius !== HEARTH_CFG.warmReach) {
+      fail(`R: THE ONE NUMBER broke — light radius ${vis.light.radius} != HEARTH_CFG.warmReach ${HEARTH_CFG.warmReach}`);
+    }
+  }
+  if (rule?.warms !== HEARTH_CFG.warmReach) fail(`R: rule.warms ${String(rule?.warms)} != HEARTH_CFG.warmReach ${HEARTH_CFG.warmReach}`);
+  if (rule?.contact?.status?.id !== 'hearthglow') fail('R: the touch must stamp hearthglow (the contact grammar is the ritual)');
+  if (rule?.contact?.hit || rule?.contact?.impulse) fail('R: the hearth blesses — no hit, no shove');
+  const well = lightwellOf('hearth_crystal');
+  if (!well) {
+    fail('R: hearth_crystal must be a registered lightwell (the Gloaming integration)');
+  } else {
+    if (!(well.feed && well.feed > 0)) fail('R: the well must FEED (a residence row, the campfire class)');
+    if (well.pool !== undefined || well.burst) fail('R: THE STEADY-WELL LAW — no pool, no burst: the crystal is never one-time');
+  }
+  const st = STATUS_DEFS['hearthglow'];
+  if (!st) {
+    fail('R: hearthglow missing from STATUS_DEFS');
+  } else {
+    if (!st.beneficial) fail('R: hearthglow must be beneficial (cleanses skip it)');
+    if (!st.powerInert) fail('R: hearthglow is a binary ward — powerInert (you cannot be warmer than warm)');
+    if (!(st.duration >= 45)) fail(`R: hearthglow duration ${st.duration} — the traverse needs a real window (>= 45s)`);
+    const ward = st.mods?.find(m => m.stat === 'windchillWard');
+    if (!ward || !(ward.value > 0)) fail('R: hearthglow must grant windchillWard > 0 (the one ward lane updateWindchill reads)');
+  }
+  note('R1 ok: one number, steady well, ward status');
+}
+
+// R2 — the carrier census: exactly the six mountain faces, and on every
+// carrier the hearth is a LAYOUT-TAIL row on the base AND on each variant
+// (never a common row: commons PREPEND at the worldgen merge and re-roll
+// every prior draw of the whole face — the fuse-warn class that briefly
+// broke probe_mountain's carom + linger-door pins mid-development; a tail
+// append preserves the family's existing mints byte-for-byte). Count never
+// above one per row (hearth-to-hearth needs DISTANCE — density is the
+// [0,1] vs [1,1] dial, never a second row). Any other face carrying the
+// kind breaks absent == identical.
+{
+  const CARRIERS = ['foothills', 'highland', 'overpass', 'snowcrown', 'stonecrown', 'pinnacle'];
+  const found: string[] = [];
+  const isHearth = (r: StampSpec): boolean => r.kind === 'hearth_crystal';
+  for (const [id, ts] of Object.entries(TILESETS)) {
+    const lanes: { name: string; rows: StampSpec[] }[] = [
+      { name: 'layout', rows: ts.layout },
+      ...(ts.variants ?? []).map(v => ({ name: `variant '${v.name}'`, rows: v.layout ?? [] })),
+    ];
+    const total = [...(ts.common ?? []), ...lanes.flatMap(l => l.rows)].filter(isHearth).length;
+    if (!total) continue;
+    found.push(id);
+    if (!CARRIERS.includes(id)) { fail(`R: unauthored face '${id}' carries the hearth (absent == identical broken)`); continue; }
+    if ((ts.common ?? []).some(isHearth)) fail(`R: '${id}' carries the hearth in common[] — commons PREPEND and re-roll the face (layout-tail only)`);
+    for (const lane of lanes) {
+      const mine = lane.rows.filter(isHearth);
+      if (mine.length !== 1) { fail(`R: '${id}' ${lane.name} carries ${mine.length} hearth rows (exactly one, at the tail)`); continue; }
+      if (lane.rows[lane.rows.length - 1] !== mine[0]) fail(`R: '${id}' ${lane.name} hearth row must be the LAST row (the append-by-history law)`);
+      if ((mine[0].count ? mine[0].count[1] : 0) > 1) fail(`R: '${id}' ${lane.name} hearth count ${JSON.stringify(mine[0].count)} — never more than one attempt per zone`);
+    }
+  }
+  for (const id of CARRIERS) if (!found.includes(id)) fail(`R: mountain face '${id}' carries no hearth row`);
+  note(`R2 ok: carriers exactly [${found.join(', ')}] — layout-tail on base + every variant`);
+}
+
+// R3 — THE EMBED LAW on minted ground: across massif faces (snowcrown,
+// stonecrown, foothills) AND the pass's rooms-maze, every placed crystal
+// stands on walkable floor within the seat band of standing NON-VOID rock —
+// re-derived here straight off the minted grid (never through the kit's own
+// field: the pin must not trust the code it tests). A refused zone goes
+// honestly without; the guaranteed-attempt face must still place often
+// enough that the route exists (the dead-rig floor).
+{
+  const FACES: { id: string; layoutType: string }[] = [
+    { id: 'snowcrown', layoutType: 'massif' },
+    { id: 'stonecrown', layoutType: 'massif' },
+    { id: 'foothills', layoutType: 'massif' },
+    { id: 'highland', layoutType: 'rooms' },
+  ];
+  // THE LENS TRAP (measured 2026-08-02): a coarse lattice clipped to the
+  // seat circle undersamples the band's outer RIM — the thin lens between
+  // ~45px and the band edge, exactly where legal seats stand (body radius +
+  // wall standoff). Probe FINE (5px) with a small slack over the band: the
+  // kit's own 30px-stride field only ever UNDER-accepts (lattice distance
+  // >= true distance), so every accepted seat has true rock within the
+  // band and a 5px sweep cannot miss the cell that carries it.
+  const seatR = HEARTH_CFG.seatReach * HEARTH_CFG.seatBand + 6;
+  let placedTotal = 0;
+  let snowZones = 0, snowPlaced = 0;
+  const R_RUNS = Math.min(SEEDS, 10);
+  for (const face of FACES) {
+    const ts = TILESETS[face.id];
+    if (!ts) { fail(`R: tileset '${face.id}' missing`); continue; }
+    const rows = [...(ts.common ?? []), ...ts.layout];
+    for (let s = 0; s < R_RUNS; s++) {
+      const seed = seedAt(s) ^ 0x8ea7;
+      const def = defOf(`hearth_r_${face.id}`, rows, {
+        layoutType: face.layoutType as ZoneDef['layoutType'],
+        layoutParams: ts.layoutParams as Record<string, unknown>,
+      });
+      const out = gen(def, seed);
+      const st = gridStats(out);
+      if (!st) { fail(`R: ${face.id} seed ${seed} minted no grid`); continue; }
+      const hearths = out.doodads.filter(d => d.kind === 'hearth_crystal');
+      if (face.id === 'snowcrown') { snowZones++; if (hearths.length) snowPlaced++; }
+      for (const d of hearths) {
+        placedTotal++;
+        if (!st.grid.isWalkable(d.pos.x, d.pos.y)) {
+          fail(`R: ${face.id} seed ${seed}: crystal at ${Math.round(d.pos.x)},${Math.round(d.pos.y)} stands on unwalkable ground`);
+        }
+        let embedded = false;
+        for (let py = d.pos.y - seatR; py <= d.pos.y + seatR && !embedded; py += 5) {
+          for (let px = d.pos.x - seatR; px <= d.pos.x + seatR; px += 5) {
+            if (px < 0 || py < 0 || px >= arena.w || py >= arena.h) continue;
+            if (Math.hypot(px - d.pos.x, py - d.pos.y) > seatR) continue;
+            if (st.grid.isWalkable(px, py)) continue;
+            const rk = regionKind(st.grid.regionAt(px, py));
+            if (rk && !rk.walkable && !rk.blocks) continue; // void-like: air, not stone
+            embedded = true; break;
+          }
+        }
+        if (!embedded) {
+          fail(`R: ${face.id} seed ${seed}: crystal at ${Math.round(d.pos.x)},${Math.round(d.pos.y)} stands free of rock (the embed law broke)`);
+        }
+      }
+    }
+  }
+  if (!placedTotal) fail('R: no crystal ever placed across the sweep (dead rig — the stamp never seats)');
+  if (snowZones && snowPlaced / snowZones < 0.6) {
+    fail(`R: snowcrown placed a hearth in only ${snowPlaced}/${snowZones} zones — the [1,1] face must carry the route (measured ~93% at casts 4; below 0.6 means the cast budget or the band regressed)`);
+  }
+  // Determinism: the stamp's retry cast draws through the layout stream only.
+  const dSeed = seedAt(3) ^ 0x8ea7;
+  const ts = TILESETS.snowcrown;
+  const dDef = defOf('hearth_r_det', [...(ts.common ?? []), ...ts.layout], { layoutParams: ts.layoutParams as Record<string, unknown> });
+  const a1 = gen(dDef, dSeed), a2 = gen(dDef, dSeed);
+  if (JSON.stringify(a1.doodads) !== JSON.stringify(a2.doodads)) fail('R: same-seed snowcrown mints differ (the hearth stamp broke determinism)');
+  note(`R3 ok: ${placedTotal} crystals embedded over ${R_RUNS * FACES.length} mints; snowcrown ${snowPlaced}/${snowZones}`);
+}
+
+// R4 — the world loop end-to-end: open air banks chill on the ordinary
+// ladder; PRESSING the crystal stamps hearthglow through the contact
+// grammar; the carried ward reads as warmth with the crystal gone (banks
+// nothing, sheds on the dwindle clock); expiry re-arms the cold — the
+// re-use law's honest other half (the walk back is the price).
+{
+  const w = makeSimWorld('warrior', 0x8ea127);
+  const hero = w.player;
+  w.zone.theme.windchill = 1;
+  const DT = 1 / 30;
+  const tick = (sec: number): void => { for (let t = 0; t < sec; t += DT) w.update(DT); };
+  const stacksOf = (): number => hero.statuses.find(s => s.id === 'chill')?.stacks ?? 0;
+  tick(12);
+  if (stacksOf() < 1) fail('R: open air banked no chill in 12s at windchill 1 (the cold lane is dead — rig premise broke)');
+  const d = { pos: vec(hero.pos.x + hero.radius + 6, hero.pos.y), radius: 15, kind: 'hearth_crystal' } as Doodad;
+  w.doodads.push(d);
+  w.markDoodadsChanged(d);
+  w.collectContactHazards();
+  tick(1);
+  if (!hero.statuses.some(s => s.id === 'hearthglow')) fail('R: pressing the crystal never stamped hearthglow (the contact grant is dead)');
+  d.gone = true;
+  w.collectContactHazards();
+  const before = stacksOf();
+  if (before < 1) fail('R: premise — no stacks left to shed at the warded walk-away (retune the bank window)');
+  tick(6);
+  if (!(stacksOf() < before)) fail(`R: warded stacks never shed (${before} -> ${stacksOf()}) — the ward must be WARMTH, not a freeze-frame`);
+  if (stacksOf() > 0) tick(4);
+  const hg = hero.statuses.find(s => s.id === 'hearthglow');
+  if (!hg) {
+    fail('R: hearthglow vanished early (duration must outlast the rig\'s 24s walk)');
+  } else {
+    hg.remaining = 0.01;
+  }
+  tick(1);
+  if (hero.statuses.some(s => s.id === 'hearthglow')) fail('R: hearthglow refused to expire');
+  const shed = stacksOf();
+  tick(10);
+  if (!(stacksOf() > shed)) fail('R: after expiry the cold never re-armed (the ward became immunity — the walk back must have a reason)');
+  note('R4 ok: banks -> touch grants -> ward warms -> expiry re-arms');
 }
 
 if (fails) {

@@ -24,6 +24,9 @@ import { bearingNoise, disc, radial } from '../engine/genkit';
 // to its callers' homes, and worldgen never imports this file back).
 import { registerSidezone } from './sidezones';
 import { mintCave } from '../engine/worldgen';
+// The undergrowth kit's sleeper law (the rime_sleeper recipe in garden
+// tongue — data→engine/ai is the lairs.ts precedent, cycle-free).
+import { registerDormantTag, registerRouseRule } from '../engine/ai';
 
 // THE HEDGE — bocage: grown boundary lines and block-plots (D2's Act-1 fields
 // read). Ridge-heavy so hedges run in LINES you walk along hunting the end;
@@ -968,3 +971,180 @@ registerSidezone({
   ledgerOnEnter: 'undergrowth_entered',
   mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'undergrowth', { rollVariant: true }),
 });
+
+// =============================================================================
+// THE MOUNTAIN HEARTH (batch 21.5 — the highland family, data/tilesets.ts):
+// the snowcrown's own identity line — "the windchill is the whole
+// conversation: hearth to hearth" — made LITERAL. An ember crystal set into
+// the mountain-side's standing rock: dwell at it and its ring WARMS you (the
+// windchill loop's standing mercy, DoodadRule.warms — the waystation fire's
+// exact lane); TOUCH it and you carry the warmth away (the contact grammar
+// stamps `hearthglow`, whose windchillWard stat reads as warmth wherever you
+// stand — World.updateWindchill's one open ward lane); and under a biting
+// Gloaming the same glow is a registered LIGHTWELL (data/lightwells.ts — the
+// campfire class: weak but steady, drawn == tested through lightReach).
+// FOUR standing fabrics, zero new machinery — the fixture is the composition.
+//
+// THE RE-USE LAW (the commission's explicit word): never one-time. The
+// crystal never pools, never dims, never dies — when the glow falls off, the
+// walk back IS the price. So the traverse becomes a ROUTE decision: sparse
+// enough that you plan hearth to hearth, findable by its own light.
+//
+// THE EMBED LAW (drawn == sited): a hearth stands only against STANDING
+// ROCK — the stamp refuses open ground through the `cragside` field below,
+// which reads the walk grid's own truth (blocked, non-void cells; a gorge
+// lip is air, not stone — no crystal ever beckons a body toward a pitfall).
+// On massif faces that means the tor/bluff bones; in the pass's rooms-maze,
+// the corridor walls; on the pinnacle, the benches' own cliff faces. One
+// predicate, every recipe the family runs.
+//
+// (Imports live AT the kit block, deliberately: batch 21.5 runs two
+// concurrent sessions in this file, and a block-local import can never
+// collide with the sibling's head-of-file hunks. ES imports hoist — the
+// module behaves identically.)
+// =============================================================================
+import { registerGenField, type GenCtx } from '../engine/levelgen';
+import { GEN_CELL } from '../engine/genkit';
+import { regionKind } from '../world/regions';
+
+/** The hearth kit's dials — one home, probe-pinned (probe_massif rig Q). */
+export const HEARTH_CFG = {
+  /** How far the embed probe hunts standing rock (px). */
+  seatReach: 110,
+  /** Accepted fraction of seatReach between seat and rock (≤ ~55 px). */
+  seatBand: 0.5,
+  /** The warm ring AND the drawn glow — DoodadRule.warms and the visual
+   *  light radius are this ONE number (rig Q pins them equal: what you see
+   *  lit is exactly what warms and, under the Gloaming, what feeds). */
+  warmReach: 120,
+  /** Crystal body radius band. */
+  radius: [13, 17] as [number, number],
+  /** Contact re-grant grace while pressed to the crystal (sec). */
+  graspIcd: 1.5,
+  /** 26-dart findSpot casts before a zone honestly goes without (the fringe
+   *  band is narrow — measured ~37% per cast on the crown; four casts carry
+   *  the [1, 1] faces past ~4 zones in 5 without loosening the band). */
+  casts: 4,
+};
+
+/** CRAGSIDE — proximity to standing rock as an open WHERE field: 0 touching
+ *  a blocked NON-VOID cell, 1 at `reach` (default HEARTH_CFG.seatReach) or
+ *  beyond — the shore field's shape, read off the walk grid instead of the
+ *  doodad list. Void-like regions (!walkable && !blocks — a gorge, open sky)
+ *  are AIR, never stone, and out-of-arena ground is a bound, not a mountain.
+ *  Zones with no walk grid read 1 everywhere, so a max-band row simply never
+ *  sites (the WHERE contract — no rock, no embedding). Registered so any
+ *  row or composition may band on it; the hearth stamp is the first tenant. */
+function cragsideField(ctx: GenCtx, params: Record<string, unknown>): (x: number, y: number) => number {
+  const reach = typeof params.reach === 'number' ? Math.max(GEN_CELL, params.reach) : HEARTH_CFG.seatReach;
+  const walk = ctx.walk;
+  if (!walk) return () => 1;
+  const aw = ctx.arena.w, ah = ctx.arena.h;
+  return (x, y) => {
+    let best = reach;
+    for (let py = y - reach; py <= y + reach; py += GEN_CELL) {
+      for (let px = x - reach; px <= x + reach; px += GEN_CELL) {
+        if (px < 0 || py < 0 || px >= aw || py >= ah) continue;
+        if (walk.isWalkable(px, py)) continue;
+        const rk = walk.regionAt ? regionKind(walk.regionAt(px, py)) : undefined;
+        if (rk && !rk.walkable && !rk.blocks) continue; // void-like: air, not stone
+        const d = Math.hypot(px - x, py - y);
+        if (d < best) {
+          best = d;
+          if (best <= GEN_CELL * 0.5) return 0;
+        }
+      }
+    }
+    return best / reach;
+  };
+}
+registerGenField('cragside', cragsideField);
+
+// THE HEARTH CRYSTAL — the fixture itself. Solid (a body you press a hand
+// to), arrow-high-not-eye-high (shots and sight sail over — it GLOWS, it
+// never shadows), WARMS at the one shared reach, and its contact row IS the
+// ritual: brushing the crystal stamps hearthglow through the standing
+// payload grammar (a bumper that blesses — the rider that never left home,
+// carrying an ember instead of a blade). Dormant bodies and overflying
+// wings are spared by the grammar's own defaults; kin that press it warm
+// themselves harmlessly (the mountain's one bargain was always for
+// everyone on the pass).
+registerDoodadRule('hearth_crystal', {
+  overlap: 'solid', blocksMove: true, blocksShot: false, blocksSight: false,
+  spacing: 46,
+  warms: HEARTH_CFG.warmReach,
+  contact: { status: { id: 'hearthglow' }, icdSec: HEARTH_CFG.graspIcd },
+});
+
+// The stamp: stampSingle wearing the kit's own default WHERE band — the
+// EMBED LAW lives in the stamp, not in six copies of a tileset row, so a
+// bare `{ kind: 'hearth_crystal', count: [1, 1] }` is already embedded-by-
+// construction (a row's own authored `where` still outranks it — the
+// fieldGate save/restore is stamp()'s exact transient discipline). The
+// fringe band is a NARROW target (the crown's sparse bodies wear skirt
+// clutter), so a missed 26-dart cast is recast up to `casts` times — the
+// band stays tight (the commission's word is EMBEDDED) and the stamp
+// spends darts instead of honesty. A zone that still refuses goes without:
+// the route decision breathes, and the waystation compositions remain the
+// family's other fire.
+const hearthSingle = stampSingle('hearth_crystal', HEARTH_CFG.radius);
+registerStamp('hearth_crystal', (ctx, spec) => {
+  const prev = ctx.fieldGate;
+  try {
+    ctx.fieldGate = prev ?? { sample: cragsideField(ctx, {}), min: 0, max: HEARTH_CFG.seatBand };
+    const before = ctx.doodads.length;
+    for (let cast = 0; cast < HEARTH_CFG.casts && ctx.doodads.length === before; cast++) {
+      hearthSingle(ctx, spec);
+    }
+  } finally {
+    ctx.fieldGate = prev;
+  }
+});
+
+// =============================================================================
+// THE UNDERGROWTH KIT ADDITIONS (batch 21.5 — the deepening) — THE ROOT
+// LATTICE's worn kinds + the kit's sleeper law. The lattice pass itself is
+// engine (engine/massif.ts layRootLattice, the registered massif post); the
+// three kinds below are its reference tier ladder, dialed on by the
+// tileset's `rootLattice` layoutParams. Painters in data/doodadVisuals.ts
+// (`=== THE ROOT LATTICE KIT`).
+// =============================================================================
+
+// THE TAPROOT RUN — the lattice's HEAVY tier: a root knuckle thick enough to
+// stop a body, low enough to see and shoot over (the strangler_root parapet
+// posture, elongated). Its true surface is the OBLONG it draws — a capsule
+// along the run's own bearing (the hit-surface fabric; drawn == tested), so
+// the run blocks as the rope you see, never as a fat invisible disc eating
+// the lane beside it. Laid ONLY by the lattice's collar law — never a
+// scatter row, so no stamp registers.
+registerDoodadRule('taproot_run', {
+  overlap: 'solid', blocksMove: true, blocksShot: false, blocksSight: false,
+  spacing: 24,
+  surface: { hw: 1.4, hh: 0.55, orient: 'rot' },
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
+});
+
+// THE FEEDER ROOT — the lattice's LOW tier: a walk-over ground cord (the
+// boulder_rubble class) that carries the network ACROSS lanes and open
+// weave. The floor reads woven; the feet never argue.
+registerDoodadRule('feeder_root', {
+  overlap: 'ground', walkOnly: true,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
+});
+
+// THE ROOT HAIR — the fuzz tier: fine feeder-hairs and pale weed sprouted
+// along the runs and splayed at spur tips. Pure dress, spun per piece.
+registerDoodadRule('root_hair', {
+  overlap: 'ground', walkOnly: true, spin: true, fuel: 'kindling',
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
+});
+
+// THE SAP SLEEPER's dormancy (the rime_sleeper pair recipe, pack grain):
+// each tapper stands sealed at its root until ITS first chip — the sleep is
+// the opening phase (the first-chip-wake law), and radius 0 wakes it alone,
+// so a gallery of sleepers is a series of choices, not one alarm.
+registerDormantTag('sap_sleeper'); // no reset row — a woken tapper stays woken
+registerRouseRule('sap_sleeper', () => ({
+  woundFrac: 1, radius: 0,
+  toast: 'The sap-drunk thing unseals its eyes.', color: '#c8b078', size: 11,
+}));

@@ -9007,6 +9007,162 @@ const culvertStair: GroupPainter = (env, group) => {
   }
 };
 
+// --- THE ROOT LATTICE KIT (engine/massif.ts layRootLattice's tier ladder) ----
+
+/** THE TAPROOT RUN — the lattice's heavy tier: an elongated root knuckle
+ *  along the run's own bearing. The drawn capsule IS the hit surface
+ *  (DoodadRule.surface hw 1.4 / hh 0.55 of the radius — keep them in
+ *  agreement): a knobbed rope of wood, bark-grained, lit along its crest,
+ *  moss-flecked on the shade side. Time-free (bakeWhole 'static'). */
+const rootRun: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { bark?: ColorSpec; moss?: ColorSpec; pale?: ColorSpec };
+  const { ctx, theme } = env;
+  const bark = resolveColor(p.bark, theme, '#4a3a24');
+  const moss = resolveColor(p.moss, theme, shade(bark, -0.18));
+  const pale = resolveColor(p.pale, theme, shade(bark, 0.3));
+  for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 31) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    const L = o.radius * 1.4, W = o.radius * 0.55;
+    // The rope: a rounded capsule, then knuckle bulges strung along it so
+    // adjacent segments merge into one knobbed run instead of a hose.
+    ctx.fillStyle = bark;
+    ctx.beginPath();
+    ctx.roundRect(-L, -W, L * 2, W * 2, W);
+    ctx.fill();
+    const knots = 2 + (seed % 2);
+    for (let i = 0; i < knots; i++) {
+      const kx = (hash01(i, seed + 3) * 2 - 1) * L * 0.7;
+      const kr = W * (0.85 + hash01(i, seed + 7) * 0.5);
+      ctx.fillStyle = shade(bark, hash01(i, seed + 11) * 0.12 - 0.04);
+      ctx.beginPath();
+      ctx.arc(kx, (hash01(i, seed + 13) - 0.5) * W * 0.5, kr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Shade keel + lit crest: a body you read as ROUND at a glance.
+    ctx.strokeStyle = withAlpha(shade(bark, -0.42), 0.85);
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(-L * 0.9, W * 0.62);
+    ctx.quadraticCurveTo(0, W * 0.95, L * 0.9, W * 0.62);
+    ctx.stroke();
+    ctx.strokeStyle = withAlpha(pale, 0.7);
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-L * 0.82, -W * 0.5);
+    ctx.quadraticCurveTo(0, -W * 0.85, L * 0.82, -W * 0.5);
+    ctx.stroke();
+    // Bark grain along the run.
+    ctx.strokeStyle = withAlpha(shade(bark, -0.28), 0.55);
+    ctx.lineWidth = 1;
+    for (const f of [-0.15, 0.28]) {
+      ctx.beginPath();
+      ctx.moveTo(-L * 0.75, W * f);
+      ctx.quadraticCurveTo(0, W * (f + 0.18), L * 0.75, W * f);
+      ctx.stroke();
+    }
+    // Moss on the shade flank of older runs.
+    if (hash01(1, seed + 17) < 0.5) {
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = moss;
+      ctx.beginPath();
+      ctx.ellipse((hash01(2, seed + 19) - 0.5) * L, W * 0.3, L * 0.28, W * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+};
+
+/** THE FEEDER ROOT — the lattice's low tier: a half-buried walk-over cord.
+ *  A soil-shadow understroke, the cord itself, one lit ridge — flat enough
+ *  to read as floor relief, oriented so chained discs run as one line. */
+const rootCord: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { bark?: ColorSpec; shadow?: ColorSpec };
+  const { ctx, theme } = env;
+  const bark = resolveColor(p.bark, theme, '#3e321f');
+  const soil = resolveColor(p.shadow, theme, shade(bark, -0.4));
+  ctx.lineCap = 'round';
+  for (const o of group) {
+    const seed = ((o.pos.x * 7 + o.pos.y * 23) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    const L = o.radius * 1.55, W = o.radius * 0.42;
+    // Soil shadow: the ground taking the cord.
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = soil;
+    ctx.beginPath();
+    ctx.roundRect(-L, -W * 0.7 + 1.6, L * 2, W * 1.8, W);
+    ctx.fill();
+    // The cord, bowed a touch so runs read grown, not drafted.
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = shade(bark, hash01(1, seed) * 0.1 - 0.05);
+    ctx.beginPath();
+    ctx.roundRect(-L, -W, L * 2, W * 1.7, W);
+    ctx.fill();
+    // The lit ridge.
+    ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = shade(bark, 0.32);
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(-L * 0.8, -W * 0.35);
+    ctx.quadraticCurveTo(0, -W * 0.7, L * 0.8, -W * 0.35);
+    ctx.stroke();
+    // Side rootlets, sparse.
+    if (hash01(2, seed + 5) < 0.6) {
+      ctx.strokeStyle = withAlpha(shade(bark, -0.15), 0.7);
+      ctx.lineWidth = 1;
+      const a = hash01(3, seed + 9) < 0.5 ? 1 : -1;
+      ctx.beginPath();
+      ctx.moveTo(L * (hash01(4, seed + 13) - 0.5), W * 0.4 * a);
+      ctx.quadraticCurveTo(L * 0.3, W * 1.6 * a, L * 0.55, W * 2.3 * a);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+};
+
+/** THE ROOT HAIR — the fuzz tier: a splay of fine feeder-hairs, pale for
+ *  want of sun, with a nodule or two where the hair meets the loam. */
+const rootHairs: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec; pale?: ColorSpec };
+  const { ctx, theme } = env;
+  const base = resolveColor(p.color, theme, '#584a30');
+  const pale = resolveColor(p.pale, theme, shade(base, 0.42));
+  ctx.lineCap = 'round';
+  for (const o of group) {
+    const seed = ((o.pos.x * 19 + o.pos.y * 11) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    const hairs = 4 + (seed % 3);
+    for (let i = 0; i < hairs; i++) {
+      const a = (i / hairs) * Math.PI * 2 + hash01(i, seed) * 0.8;
+      const len = o.radius * (0.75 + hash01(i, seed + 5) * 0.5);
+      const bow = (hash01(i, seed + 9) - 0.5) * len * 0.8;
+      ctx.strokeStyle = withAlpha(i % 2 ? pale : base, 0.8);
+      ctx.lineWidth = 1 + hash01(i, seed + 13) * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(
+        Math.cos(a) * len * 0.5 + Math.cos(a + Math.PI / 2) * bow,
+        Math.sin(a) * len * 0.5 + Math.sin(a + Math.PI / 2) * bow,
+        Math.cos(a) * len, Math.sin(a) * len);
+      ctx.stroke();
+    }
+    // Nodules at the heart.
+    ctx.fillStyle = withAlpha(shade(base, -0.2), 0.85);
+    ctx.beginPath();
+    ctx.arc(0, 0, Math.max(1.6, o.radius * 0.16), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+};
+
 export const PAINTERS: Record<string, GroupPainter> = {
   wheatStalk, windmillTower, chimneyStack, hideRack, targetButt, sewerGrate, lightShaft, culvertStair,
   trackGroove, shearDisc, rimeFlail, bumperDome, rollingStone, floorPlate, dartBolt,
@@ -9029,6 +9185,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   pyre, hangingCage, warBanner, hellforge,
   gateArch, tortureRack, buttressRoot, wallFronds, vineCoil,
   kennelHut, feedTrough, tetherPost,
+  rootRun, rootCord, rootHairs,
 };
 
 // --- CANOPY CROWN PAINTERS (drawn ABOVE actors, proximity-faded) -------------

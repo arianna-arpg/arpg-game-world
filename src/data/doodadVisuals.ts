@@ -3208,4 +3208,43 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { stalk: '#8c9a74' },
     canopy: { painter: 'wheatTops', params: { head: '#a8b48c', tassel: '#c8d0ac', tall: 1.2 } },
   },
+
+  // === THE ROOT LATTICE KIT (batch 21.5 — the undergrowth deepening) ========
+  // The lattice pass's tier ladder (engine/massif.ts layRootLattice; kinds +
+  // rules in data/massifs.ts). Three purpose-built painters (render/vis/
+  // painters.ts): the heavy run's drawn capsule IS its oblong hit surface
+  // (hw 1.4 / hh 0.55 — keep rule and painter in agreement), the feeder
+  // cord beds into the floor as walk-over relief, the hairs splay pale.
+  taproot_run: {
+    // No longShadow, deliberately: a knee-high knuckle throws no evening
+    // spear, and a run is a HUNDRED bodies — the long-shadow pass would be
+    // the single dearest stroke in the country (perf-measured 2026-08-02).
+    painter: 'rootRun', order: 49, shadow: 0.3, bakeWhole: 'static',
+    params: { bark: '#4a3a24', moss: '#3d5226', pale: '#8a7a54' },
+  },
+  feeder_root: {
+    painter: 'rootCord', order: 38, bakeWhole: 'static',
+    blend: { strength: 0.24, feather: 12, color: '#32281a' },
+    params: { bark: '#3e321f', shadow: '#1a1209' },
+  },
+  root_hair: {
+    painter: 'rootHairs', order: 39, bakeWhole: 'static',
+    params: { color: '#584a30', pale: '#96865c' },
+  },
+
+  // === THE MOUNTAIN HEARTH KIT (batch 21.5 — the highland family) ===========
+  // One kind (rule + stamp + siting in data/massifs.ts, the well row in
+  // data/lightwells.ts): the ember crystal is the charged_crystal's shard
+  // painter re-dressed in fire — mountain-set base, molten core glow, low
+  // well-convention flicker. THE ONE NUMBER: the light radius is ABSOLUTE
+  // and equals the rule's warms reach (probe_massif rig Q pins them equal),
+  // so the drawn pool of glow is exactly the ground that warms you — and,
+  // under a biting Gloaming, exactly the ground that feeds the lamp
+  // (lightReach reads THIS row). Burns steady day and night on purpose (no
+  // radiance lerp): an ember set in stone does not care what the sky does.
+  hearth_crystal: {
+    painter: 'shard', order: 53, bakeWhole: 'static', shadow: 0.5, longShadow: 0.7,
+    params: { points: 5, color: '#8a4a2c', material: 'crystal', coreGlow: { color: '#ffc06a' } },
+    light: { radius: 120, color: '#ffb45e', intensity: 0.6, flicker: 3 },
+  },
 };

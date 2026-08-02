@@ -375,6 +375,31 @@ here so nobody hunts a phantom.
   settled belt's recipes via exported `carveMassifs`.
 - **Retrofits**: `grove` bocage, `grave` sacked acres, `tundra` scoured fells.
 
+## THE ROOT LATTICE (batch 21.5 — the floor woven)
+
+`layRootLattice` (a registered massif post) lays CONNECTED, overlapping
+polyline root runs through a carved country — the answer to the
+undergrowth's measured barrenness (~30 dress bodies per screen against its
+sister face's ~360 before the pass; ~170 after, movement untouched). Runs
+LINK neighbor bodies rim-to-rim, SPUR from each body into open floor
+(ending in hair splays), and free CROSS runs thread the weave so lines
+visibly overlap. Each run is one wandered polyline laid in a three-tier
+ladder: HEAVY taproot collars where a run leaves a body (parapet-class
+knuckles wearing oblong hit surfaces along their own bearing — drawn ==
+tested), FEEDER walk-over ground cords carrying the line across lanes
+(movement never strangles by construction), and FUZZ (root hairs, pale
+weeds) alongside. The laws: a heavy disc keeps every other body's lane
+ring, the full portal clear, reservations, live traveled ways, one open
+flank (the pinch guard) and every prior run's knuckles (the cross-run
+pinch law) — and where any law refuses, the run DEGRADES to feeder rather
+than gapping. Dial-gated: the `rootLattice` layoutParam (spec: kinds,
+radii, cadence, fuzz rows — the ROOTED WEB's reskin seam) plus two
+byDepth-able scalars `rootLatticeDensity` / `rootLatticeHeavyFrac` (the
+press idiom); absent = zero draws, byte-identical zones. Defaults in
+`ROOT_LATTICE_CFG`; the undergrowth is the debut wearer; the reference
+kinds (`taproot_run` / `feeder_root` / `root_hair`) ride the undergrowth
+kit in `data/massifs.ts`.
+
 ## Growing it
 
 - New mass kind = one `registerMassKind` in data (region + shapes + dressing
@@ -383,6 +408,9 @@ here so nobody hunts a phantom.
   block texture = one region row. New OCCUPANT = one `registerTenantKind`
   (compose the core handlers via `tenantKindOf` before writing machinery —
   held_stock is the reference).
+- `layRootLattice(ctx, def, grid, masses)` is exported — a non-massif recipe
+  weaves its own floor by calling it with its own anchor bodies (an empty
+  list still lays the cross-run weave).
 - A zone re-tunes ANY kind per pool row (`over`) — mint a sibling kind only
   when the identity is genuinely new, not for a chance tweak.
 - `carveMassifs(ctx, def)` and `healMassifWeave(ctx, grid, laneW,
@@ -414,5 +442,12 @@ COUNTRY BELOW (the tileset's statics incl. the named-door law, the
 taproot_gate seam on every garden surface face + the sidezone's mint
 contract, the three nest_wall kinds with THE DIVIDEND row pinned exactly,
 minted ground under the weave/exit/POI laws, and the press-below ramps'
-exact ends with heart carves outnumbering rim carves). `npm run genqa`
+exact ends with heart carves outnumbering rim carves), Q the root lattice
+(tier statics incl. the oblong surface, absent == identical + the
+undergrowth-only debut sweep, chained-not-scattered runs on minted ground,
+every disc on walkable floor, heavy hugging wall mass with no corked
+knuckle and the portal clear held, doodad-aware reachability to every exit
+and POI at the navigability belt's own grain, the extreme-dial regime
+bounded + deterministic, and the press engaging on both lattice count and
+heavy count). `npm run genqa`
 sweeps every tileland face beside the downs under the standard invariants.
