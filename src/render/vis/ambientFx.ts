@@ -12,7 +12,7 @@ import { dayCycle } from '../../world/daynight';
 import { hash01, withAlpha } from './color';
 
 export interface AmbientFxSpec {
-  kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift' | 'overclouds' | 'fireflies';
+  kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift' | 'overclouds' | 'fireflies' | 'seedDrift';
   /** 0..1 strength (default 1). */
   intensity?: number;
   color?: string;
@@ -38,7 +38,77 @@ export function drawAmbientFx(ctx: CanvasRenderingContext2D, spec: AmbientFxSpec
     case 'sandDrift': return sandDrift(ctx, w, h, t, k, spec.color ?? '#d8c090');
     case 'overclouds': return overclouds(ctx, w, h, t, k, spec.color ?? '#ffffff', camX, camY);
     case 'fireflies': return fireflies(ctx, w, h, t, k, spec.color ?? '#d8f078');
+    case 'seedDrift': return seedDrift(ctx, w, h, t, k, spec.color ?? '#e8e6d4', camX, camY);
   }
+}
+
+/** SEED DRIFT — the giant dandelions letting go (the undergrowth's own
+ *  weather, indoors): big tufted seeds riding the draft in slow slanted
+ *  lanes, each a pale pappus fan over a hanging achene point. One gentle
+ *  PARALLAX deck (the overclouds idiom): panning slides the drift a hair
+ *  faster than the ground — the seeds hang in the air, never on it; cam-less
+ *  callers degrade to pure screen drift. Every several seconds a RELEASE
+ *  window lets a loose cluster go and it crosses the view together (the
+ *  spores-puff idiom). Deterministic from (i, t) like every ambient — zero
+ *  particle state, no gradients. */
+function seedDrift(ctx: CanvasRenderingContext2D, w: number, h: number,
+  t: number, k: number, color: string, camX: number, camY: number): void {
+  ctx.save();
+  const par = 1.12;
+  const wrap = (v: number, span: number): number => ((v % span) + span) % span;
+  const spanX = w + 80, spanY = h + 80;
+  const drawSeed = (x: number, y: number, s: number, lean: number, alpha: number): void => {
+    // The pappus fan atop the hanging achene — a splay of filaments and one
+    // stem stroke below; a tiny hot cap where they meet sells the tuft.
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    const a = -Math.PI / 2 + lean;
+    ctx.beginPath();
+    for (let f = 0; f < 6; f++) {
+      const fa = a + (f / 5 - 0.5) * 1.5;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + Math.cos(fa) * s, y + Math.sin(fa) * s);
+    }
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - Math.cos(a) * s * 0.7, y - Math.sin(a) * s * 0.7);
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, 1, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  // The standing drift: lazy lanes on one shared slant, swaying as they go.
+  const n = Math.round(13 * k);
+  for (let i = 0; i < n; i++) {
+    const lane = hash01(i, 5);
+    const drift = 16 + lane * 22 + hash01(i, 7) * 10;
+    const x = wrap(hash01(i, 11) * spanX + t * drift - camX * par, spanX) - 40;
+    const y = wrap(hash01(i, 13) * spanY + t * (4 + lane * 7)
+      + Math.sin(t * (0.5 + lane * 0.6) + i * 2.1) * 26 - camY * par, spanY) - 40;
+    const s = 2.6 + hash01(i, 17) * 2.6;
+    const lean = Math.sin(t * (0.7 + lane) + i) * 0.25;
+    drawSeed(x, y, s, lean, (0.16 + 0.18 * lane) * k);
+  }
+  // THE RELEASE: a clock somewhere lets go — a loose cluster crossing
+  // together, spreading as it ages, then nothing until the next appointment.
+  const PERIOD = 11;
+  const win = Math.floor(t / PERIOD);
+  const age = (t - win * PERIOD) / PERIOD;
+  if (age < 0.5 && hash01(win, 23) < 0.7) {
+    const bx = hash01(win, 29) * w * 0.7 + w * 0.15 + age * 170;
+    const by = hash01(win, 31) * h * 0.6 + h * 0.15 - age * 40;
+    const burst = 6 + (win % 4);
+    for (let i = 0; i < burst; i++) {
+      const x = bx + (hash01(i, win) - 0.5) * 150 * (0.3 + age);
+      const y = by + (hash01(i, win + 7) - 0.5) * 90 * (0.3 + age)
+        + Math.sin(t * 1.3 + i * 2) * 8;
+      const s = 2 + hash01(i, win + 11) * 2.2;
+      drawSeed(x, y, s, Math.sin(t + i) * 0.3, 0.3 * k * (1 - age / 0.5));
+    }
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
 /** FIREFLIES — the wood's night writing: drifting sparks that FLASH in slow

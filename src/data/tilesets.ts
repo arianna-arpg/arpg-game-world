@@ -5610,6 +5610,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'cave', count: [0, 1] },
       { kind: 'haven_stone', count: [0, 1] },
     ],
+    // Every plot keeps a door to its own dark (the sewer_grate law): the
+    // taproot gate dwells DOWN into THE UNDERGROWTH (data/massifs.ts kit).
+    // The rim barely opens — the doors thicken toward the country's heart.
+    common: [
+      { kind: 'taproot_gate', count: [0, 1] },
+    ],
     variants: [
       // The deadheaded rows: the cutting the Tender never finished — crowns
       // taken, pods left, petals drifted deep over everything.
@@ -5759,6 +5765,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'cave', count: [0, 1] },
       { kind: 'haven_stone', count: [0, 1] },
     ],
+    // The heart's floor is riddled: every stalkwood keeps a taproot gate
+    // down into THE UNDERGROWTH (the sewer_grate law; kit in data/massifs.ts).
+    common: [
+      { kind: 'taproot_gate', count: [1, 1] },
+    ],
     variants: [
       // The bolted acre: everything went to SEED — sun discs crowd the roof,
       // pods hang heavy, the floor is husks and spent gold.
@@ -5889,6 +5900,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'cave', count: [0, 1] },
       { kind: 'haven_stone', count: [0, 1] },
     ],
+    // The beds are shored over the same dark: a taproot gate under the
+    // boards where the rows meet THE UNDERGROWTH (kit in data/massifs.ts).
+    common: [
+      { kind: 'taproot_gate', count: [0, 1] },
+    ],
     variants: [
       // The potting yard: the work-corner — pots by the hundredweight,
       // stacked, cracked, and colonized.
@@ -5987,6 +6003,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rocks', count: [1, 3], radius: [14, 24] },
       { kind: 'cave', count: [1, 2] },
       { kind: 'haven_stone', count: [0, 1] },
+    ],
+    // The margin opens widest: the compost country was always more door
+    // than floor — taproot gates down into THE UNDERGROWTH on every heap
+    // line (the sewer_grate law; kit in data/massifs.ts).
+    common: [
+      { kind: 'taproot_gate', count: [1, 2] },
     ],
     variants: [
       // The wet rot: the margin gone to soup — bog pools, slick trails,
@@ -6222,6 +6244,163 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [
       { kind: 'clear', weight: 3 },
       { kind: 'spawners', weight: 2 },
+      { kind: 'escape', weight: 1 },
+    ],
+  },
+
+  // THE UNDERGROWTH — the garden's underdark: THE COUNTRY BELOW the country.
+  // Nobody built it — it was CHEWED: bored by what breeds down there, tamped
+  // by the colony, roofed by the plot's own floor. Where the sewerworks
+  // answers the city with rooms and corridors, this answers the garden with
+  // a whole MASSIF country sunk one story down — the first sunless open
+  // country: winding avenues bored between taproot knuckles thick as keeps,
+  // under a solid sky (sheltered by authorship AND derivation — no weather
+  // reaches it; the canopy shafts and the giant dandelions' pale clocks are
+  // the only lamps). Reached ONLY through its own doors (taproot_gate common
+  // rows on every garden surface face — the sewer_grate law; deliberately NO
+  // caveFace claim, the named-door precedent), and it deepens as the garden
+  // above deepens: geo inherits down the ladder, so the byDepth dials below
+  // stage rim bores open and heart bores tight.
+  // THE NURSERY LAW: every fight down here happens beside a cradle — courts
+  // are brood galls, stock is clutches, the tide is the aphid herd at the
+  // root-sap, and the ask leans spawners. The surface shows the plot's kin;
+  // the undergrowth is where they come from. Kinds in data/massifs.ts.
+  undergrowth: {
+    id: 'undergrowth', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    biome: 'garden',
+    forceLayout: 'massif',
+    layoutParams: {
+      massifMasses: [
+        { kind: 'taproot_bole', weight: 3 },
+        { kind: 'brood_gall', weight: 0.9 },
+        { kind: 'burst_gall', weight: 0.7 },
+      ],
+      massifSizeR: [120, 220],
+      // THE PRESS BELOW (the needles' depth-graded law, sunk a story): the
+      // rim's bores stay open avenues; the heart crowds — more root on
+      // tighter lanes. laneW's heart end (70) stays above the bocage face's
+      // production-proven 64 floor; portal clears never ramp (doors always
+      // open onto country).
+      massifCoverage: { byDepth: [[0.22, 0.28], [0.28, 0.34]] },
+      massifLaneW: { byDepth: [84, 70] },
+    },
+    nameFirst: ['Undergrowth', 'Deeproot', 'Tangleroot', 'Rootvault', 'Blindloam', 'Galled', 'Sunless', 'Understem', 'Burrowed', 'Old Root'],
+    nameSecond: ['Bores', 'Avenues', 'Warrens', 'Galleries', 'Runs', 'Hollows', 'Tangle', 'Country', 'Dark', 'Understory'],
+    theme: {
+      ambientDark: 0.46,
+      // The close, occluded read: the tunnels press the eye the way the
+      // stalkwood's grass presses the body (the sight-veil dials, tightened).
+      sightVeil: { mul: 1.18, regionMul: 1.05, doodadMul: 1.2 },
+      ground: {
+        palette: ['#141007', '#1d180a', '#27200e', '#312a13', '#3b3318'], bias: 0.5, alpha: 0.55,
+        coast: { reach: 70, shift: -0.3 },
+      },
+      fog: { banks: [0, 1], kinds: [{ id: 'mist' }] },
+      // The dandelions letting go — the country's own weather, indoors.
+      ambientFx: [{ kind: 'seedDrift', intensity: 0.55 }],
+      // THE HERD AT THE ROOT-SAP: the colony's aphids graze the taproots
+      // (root-farming is the tender's real husbandry — the formicary pours
+      // the same herd one story down).
+      lite: {
+        swarms: [{
+          monsterId: 'wool_aphid', pockets: [2, 4], size: [14, 26], chance: 0.85,
+          announce: 'the herd stirs among the roots…', announceColor: '#b8d8a0',
+        }],
+      },
+      floor: '#0f0b05', grid: '#171208', border: '#4c3e24',
+      obstacle: '#33261a', obstacleEdge: '#5c4830', accent: '#e8e4c8',
+      wall: '#33261a', mud: '#20160c', water: '#173a42',
+      tree: '#4a5a2c', grass: '#6a7a4c',
+    },
+    sizeW: [2200, 3000], sizeH: [1600, 2200], ellipseChance: 0.2,
+    layout: [
+      { kind: 'strangler_root', count: [3, 6] },
+      { kind: 'pale_blade', count: [3, 6] },
+      { kind: 'giant_dandelion', count: [1, 3] },
+      { kind: 'canopy_shaft', count: [1, 2] },
+      { kind: 'leaf_mulch', count: [2, 5] },
+      { kind: 'toadstool', count: [1, 3] },
+      { kind: 'seed_pod', count: [1, 3] },
+      { kind: 'egg_clutch', count: [0, 2] },
+      { kind: 'web', count: [0, 2] },
+      { kind: 'rocks', count: [1, 3], radius: [14, 24] },
+      { kind: 'water', count: [0, 1] },
+    ],
+    variants: [
+      // The brood galleries: the nursery face — the galls crowd, the
+      // clutches carpet, and the colony answers for more of its rings.
+      {
+        name: 'the brood galleries',
+        layout: [
+          { kind: 'strangler_root', count: [2, 5] },
+          { kind: 'pale_blade', count: [2, 4] },
+          { kind: 'egg_clutch', count: [2, 4] },
+          { kind: 'comb_wax', count: [1, 3] },
+          { kind: 'web', count: [1, 3] },
+          { kind: 'leaf_mulch', count: [2, 4] },
+          { kind: 'canopy_shaft', count: [0, 1] },
+          { kind: 'giant_dandelion', count: [0, 2] },
+          { kind: 'rocks', count: [1, 2], radius: [14, 22] },
+        ],
+        layoutParams: {
+          massifMasses: [
+            { kind: 'taproot_bole', weight: 2 },
+            { kind: 'brood_gall', weight: 1.8 },
+            { kind: 'burst_gall', weight: 0.8 },
+          ],
+        },
+      },
+      // The seeding dark: the clocks let go all at once — pale drift on
+      // every draft, the floor gone silver with grounded tufts.
+      {
+        name: 'the seeding dark',
+        layout: [
+          { kind: 'giant_dandelion', count: [3, 6] },
+          { kind: 'pale_blade', count: [4, 7] },
+          { kind: 'strangler_root', count: [2, 4] },
+          { kind: 'petal_drift', count: [2, 4] },
+          { kind: 'canopy_shaft', count: [1, 2] },
+          { kind: 'leaf_mulch', count: [1, 3] },
+          { kind: 'seed_pod', count: [2, 4] },
+          { kind: 'rocks', count: [1, 2], radius: [14, 22] },
+        ],
+        theme: { ambientFx: [{ kind: 'seedDrift', intensity: 1 }] },
+      },
+    ],
+    scenery: [{ monster: 'ant_trail', count: [1, 2] }],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      // The breeding dark's own census: the colony tunnels through, the
+      // grubs ARE the country, the weavers string the bores, and the mantid
+      // school's bar-watch pair hunts where the school breeds (the pairs
+      // stay together by law — the readers' twin discipline).
+      table: [
+        { id: 'formic_worker', weight: 2.5, presence: { to: 18, fadeOut: 9 } },
+        { id: 'formic_soldier', weight: 1.5 },
+        { id: 'formic_tender', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'rockgrub', weight: 2, presence: { to: 16, fadeOut: 8 } },
+        { id: 'giant_maggot', weight: 1.5, presence: { to: 14, fadeOut: 7 } },
+        { id: 'maggot_queen', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'orb_weaver', weight: 1.5 },
+        { id: 'widow_matron', weight: 1, presence: { from: 10, fadeIn: 4 } },
+        { id: 'banded_slug', weight: 1.5 },
+        { id: 'garden_snail', weight: 1 },
+        { id: 'mantid_augur', weight: 1.2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'mantid_penitent', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'emerald_mantis', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'bombardier_beetle', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'pillbug_redoubt', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'mushroomling', weight: 1, presence: { to: 12, fadeOut: 6 } },
+        { id: 'spore_drifter', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'glow_moth', weight: 1 },
+      ],
+    },
+    spawnerId: 'grub_clutch',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 2.5 },
+      { kind: 'bounty', weight: 1.5 },
       { kind: 'escape', weight: 1 },
     ],
   },

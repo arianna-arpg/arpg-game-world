@@ -19,6 +19,11 @@
 import { registerMassKind, registerMassShape, registerTenantKind, tenantKindOf } from '../engine/massif';
 import { registerDoodadRule, registerStamp, stampSingle } from '../engine/levelgen';
 import { bearingNoise, disc, radial } from '../engine/genkit';
+// THE UNDERGROWTH kit's door (the wane_arch pattern completed locally: rule,
+// stamp, kinds AND the mint all one kit — the sidezone registry is indifferent
+// to its callers' homes, and worldgen never imports this file back).
+import { registerSidezone } from './sidezones';
+import { mintCave } from '../engine/worldgen';
 
 // THE HEDGE — bocage: grown boundary lines and block-plots (D2's Act-1 fields
 // read). Ridge-heavy so hedges run in LINES you walk along hunting the end;
@@ -799,4 +804,167 @@ registerMassKind({
   ],
   crestChance: 0.14,
   crestSpacing: 110,
+});
+
+// =============================================================================
+// THE UNDERGROWTH (data/tilesets.ts 'undergrowth') — the garden's underdark:
+// THE COUNTRY BELOW the country. Nobody BUILT it — it was CHEWED: bored by
+// what breeds down there, tamped by the colony, roofed by the plot's own
+// floor. The garden shrinks you; the undergrowth buries you. Where the
+// sewerworks answers the city with rooms and corridors, the undergrowth
+// answers the garden with a whole MASSIF country sunk one story down — the
+// first sunless open country: winding avenues carved through standing root
+// bodies under a solid sky, reached only through its own floor-doors, and
+// deepening as the garden above deepens (geo inherits down the ladder, so
+// the byDepth dials stage rim bores open and heart bores tight).
+// THE NURSERY LAW (the one law no other country obeys): every fight down
+// here happens beside a cradle — the courts are brood galls, the stock is
+// clutches, the tide is the herd at the root-sap. The surface faces show
+// the plot's kin; the undergrowth is where they come from.
+// All three kinds stand on 'nest_wall' (the formicary's worked earth — the
+// same understratum, one soil): silhouettes + dress carry the difference,
+// the mesa/sand_court precedent in loam.
+// =============================================================================
+
+// THE TAPROOT GATE — the undergrowth's floor-door on the garden's surface
+// faces (the sewer_grate law in garden tongue): a bore under a root knuckle,
+// dwelled DOWN into the minted country. Wide spacing on purpose — one or two
+// doors per plot, never a burrow carpet. The mint rides the sidezone
+// registration at the foot of this kit.
+registerDoodadRule('taproot_gate', { overlap: 'trigger', spacing: 420 });
+registerStamp('taproot_gate', stampSingle('taproot_gate', [16, 20]));
+
+// THE GIANT DANDELION — the undergrowth's lantern flora: a seed-clock head
+// on a pale stalk, grown toward whatever gap in the ceiling let it. The
+// bloom_stalk body contract exactly (trunk collision, bloom veil group —
+// walking under the clock fades it); its pale glow is a LIGHT-layer row and
+// the country's seedDrift ambient is its weather (render/vis/ambientFx.ts).
+registerDoodadRule('giant_dandelion', {
+  overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30,
+  occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.24, veil: { group: 'bloom' },
+  mutable: true, fuel: 'kindling',
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
+});
+registerStamp('giant_dandelion', stampSingle('giant_dandelion', [44, 60]));
+
+// THE CANOPY SHAFT — the grate-light law under the garden: a stray beam
+// fallen the whole way down through root and loam, the undergrowth's one
+// honest daylight (inert art + a light pool; the sewer light_shaft's exact
+// contract in leaf-filtered tones).
+registerDoodadRule('canopy_shaft', { overlap: 'inert', spacing: 320 });
+registerStamp('canopy_shaft', stampSingle('canopy_shaft', [18, 24]));
+
+// THE PALE BLADE — wildgrass gone etiolated: blade-grass that grew DOWN
+// here, ghost-pale for want of sun. The crop law's walk-through veil cover
+// in the dark's own colors (wildgrass_blade's exact contract).
+registerDoodadRule('pale_blade', {
+  overlap: 'inert', blocksMove: false, blocksShot: false, blocksSight: true,
+  spacing: 20, walkOnly: true, spin: true,
+  occlude: { pad: 10, alpha: 0.32 },
+  veil: { group: 'wildgrass', standStatus: 'canopied' },
+  fuel: 'kindling',
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
+});
+registerStamp('pale_blade', stampSingle('pale_blade', [26, 40]));
+
+// THE TAPROOT BOLE — the tunnel bones: root knuckles thick as keeps, the
+// bodies the winding avenues are bored BETWEEN. High lobe on purpose — this
+// is geology that GREW. Roots and pale grass bank the feet; more root rides
+// the crowns (the ceiling's fingers, seen from below).
+registerMassKind({
+  id: 'taproot_bole',
+  region: 'nest_wall',
+  shapes: [{ shape: 'blob', weight: 2.5 }, { shape: 'chain', weight: 2 }, { shape: 'ridge', weight: 1 }],
+  lobe: 0.28,
+  skirt: [
+    { kind: 'strangler_root', weight: 3, radius: [14, 22] },
+    { kind: 'leaf_mulch', weight: 2, radius: [14, 24] },
+    { kind: 'pale_blade', weight: 1.5, radius: [22, 32] },
+    { kind: 'toadstool', weight: 1, radius: [10, 16] },
+  ],
+  skirtChance: 0.36,
+  skirtSpacing: 52,
+  crest: [
+    { kind: 'strangler_root', weight: 2, radius: [14, 22] },
+    { kind: 'toadstool', weight: 1, radius: [10, 16] },
+  ],
+  crestChance: 0.18,
+  crestSpacing: 92,
+});
+
+// THE BROOD GALL — the court, and THE NURSERY LAW made a room: a hollowed
+// root-gall (real botany — a gall is a chamber an insect grew on purpose)
+// whose ring the kin breed inside. TENANTS: stock dominant (the clutch is
+// the read), the colony answering at about one gall in five (garrison 12 +
+// held 8 — the patron default speaks 'formic'), a larder cache where the
+// brood was carried off, and THE DIVIDEND — the mantid school's own court
+// seated below its home country (data/lairs.ts 'scythe_court': the abbess
+// convenes where the school BREEDS; the den-key lane, the kilnhoard's
+// grammar). Vacancy stays a whisper: an empty cradle is the exception that
+// proves the law.
+registerMassKind({
+  id: 'brood_gall',
+  region: 'nest_wall',
+  shapes: [{ shape: 'court', weight: 1 }],
+  lobe: 0.2,
+  ringInner: 0.62,
+  mouths: [1, 2],
+  inner: [
+    { kind: 'egg_clutch', weight: 2.5, radius: [11, 16] },
+    { kind: 'comb_wax', weight: 1.5, radius: [12, 18] },
+    { kind: 'seed_pod', weight: 1, radius: [12, 17] },
+    { kind: 'leaf_mulch', weight: 1, radius: [14, 22] },
+  ],
+  innerChance: 0.6,
+  innerSpacing: 54,
+  tenants: [
+    { kind: 'stock', weight: 40 },
+    { kind: 'garrison', weight: 12 },
+    { kind: 'held_stock', weight: 8 },
+    { kind: 'cache', weight: 14, rows: [
+      { kind: 'seed_pod', weight: 2, radius: [12, 17] },
+      { kind: 'clay_pots', weight: 1, radius: [10, 14] },
+    ] },
+    { kind: 'lair_mouth', weight: 3, params: { den: 'scythe_court' } },
+    { kind: 'vacant', weight: 23 },
+  ],
+  skirt: [
+    { kind: 'strangler_root', weight: 2, radius: [14, 22] },
+    { kind: 'leaf_mulch', weight: 2, radius: [14, 24] },
+    { kind: 'web', weight: 1, radius: [14, 22] },
+  ],
+  skirtChance: 0.3,
+  skirtSpacing: 56,
+});
+
+// THE BURST GALL — the hatched ring (the fallen_court law, hatched): a gall
+// whose brood already LEFT, its wall a crescent with the open chord for a
+// mouth. Free partial cover on the crossing, and the country's memento:
+// this is what a cradle becomes when what slept in it wakes. No interior,
+// no tenant — the husks and silk where the wall gave out.
+registerMassKind({
+  id: 'burst_gall',
+  region: 'nest_wall',
+  shapes: [{ shape: 'crescent', weight: 1 }],
+  lobe: 0.22,
+  skirt: [
+    { kind: 'leaf_mulch', weight: 2, radius: [14, 24] },
+    { kind: 'web', weight: 1.5, radius: [14, 22] },
+    { kind: 'seed_pod', weight: 1, radius: [12, 17] },
+  ],
+  skirtChance: 0.3,
+});
+
+// --- THE UNDERGROWTH DOOR (the sewerworks seam in garden tongue) --------------
+// A taproot gate dwells DOWN into the minted undergrowth: every gate keeps
+// its own bore forever (position-hash seed), each mint rolls its own face,
+// and 'undergrowth_entered' is the underdark's GATEWAY SEAM (the
+// sewers_entered pattern) for future packages, unlock doors and bounty
+// lines. The canonical sidezone home is data/sidezones.ts; the kit seats
+// its door HERE so rule, stamp, kinds and mint land as one block.
+registerSidezone({
+  kind: 'taproot_gate',
+  dwell: 0.7,
+  ledgerOnEnter: 'undergrowth_entered',
+  mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'undergrowth', { rollVariant: true }),
 });

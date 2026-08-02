@@ -82,6 +82,16 @@
 //      authored values exactly (edge zones stay recognizable), portalClear
 //      flat by law, and the weave/exit guarantees holding at the heart's
 //      densest roll (forced geo 1).
+//   P. THE UNDERGROWTH — THE COUNTRY BELOW (batch 20): the garden's underdark
+//      as the first massif country minted below the world — the tileset's
+//      statics (massif coupling, sheltered sky, the named-door law: no
+//      caveFace claim, ever), the taproot_gate seam on every garden surface
+//      face + the sidezone's mint (tileset/sky/anchor/geo/level/variant/
+//      packs-by-reference, deterministic), the three nest_wall kinds with
+//      THE DIVIDEND ({ den: 'scythe_court' } at weight 3, one gall in five
+//      manned, stock dominant, vacancy a whisper), minted ground under the
+//      weave/exit/POI laws, and THE PRESS BELOW (byDepth ends exact, heart
+//      carves outnumbering rim carves).
 //
 // Rigs carry pressure detection: a rig that never actually stressed its law
 // exits 1 rather than passing green.
@@ -109,6 +119,8 @@ import {
   registerTenantKind, tenantKindIds, type MassAnchorRow, type TenantRow,
 } from '../src/engine/massif';
 import { TILESETS } from '../src/data/tilesets';
+import { SIDEZONES } from '../src/data/sidezones';
+import { skyOf } from '../src/data/zones';
 import { BIOME_FIELD_BANDS, BIOMES, patronFaction } from '../src/world/biomes';
 import { climateEnvelope } from '../src/world/climate';
 import { presenceMul } from '../src/engine/presence';
@@ -1673,6 +1685,185 @@ function bareCtx(seed: number): GenCtx {
       if (!masses.length) fail(`O: seed ${seed} refused the anchor AND the field — the refusal starved coverage`);
     }
     note(`O: heart ${crowned}/${SEEDS} crowned (avg ${(others / SEEDS).toFixed(1)} coverage bodies), rim ${rimCrowned}/${SEEDS}`);
+  }
+}
+
+// --- Rig P: THE UNDERGROWTH — THE COUNTRY BELOW (batch 20) ---------------------
+// The garden's underdark: the first massif country minted BELOW the world
+// (the sewerworks seam in garden tongue — a named door, never a caveFace
+// claim). The rig pins: P1 the tileset's statics (massif coupling, sheltered
+// sky, the named-door law, both variants, the byDepth press with laneW's
+// heart end above the bocage floor and portal clears flat); P2 the seam —
+// every garden surface face carries the taproot_gate common row (mulchreach
+// guaranteed, the rim allowed to breathe), and the registered sidezone mints
+// tileset 'undergrowth' sheltered/garden-anchored/geo-inheriting/stepped/
+// deterministic with packs stamped BY REFERENCE (the face-oracle contract);
+// P3 the kinds — all three on nest_wall (one soil, the mesa/sand_court
+// precedent), the gall court-shaped, the burst gall the crescent memento,
+// and THE DIVIDEND: the brood_gall table stands at 100 with the mantid
+// school's own court seated below its home country ({ den: 'scythe_court' }
+// at weight 3), the colony answering at ONE GALL IN FIVE, stock dominant,
+// vacancy a whisper; P4 minted ground under the weave/exit/POI laws +
+// same-seed determinism; P5 THE PRESS BELOW — the ramps' authored ends read
+// exactly at forced rim/heart geo, and heart carves stand more bodies than
+// rim carves across the sweep. NOTE: this probe's registry world
+// deliberately omits data/lairs (rig O's law), so the dividend's tenant
+// draws degrade to a warn here — the den-door RESOLUTION half lives in the
+// arena-booted proofs and the probe_lairs coda row.
+{
+  const ts = TILESETS.undergrowth;
+  if (!ts) fail('P: undergrowth tileset missing');
+  else if (ts.forceLayout !== 'massif') fail(`P: undergrowth forceLayout '${ts.forceLayout}' — the massif coupling is gone`);
+  else {
+    // P1 — the tileset's statics.
+    if (ts.sky !== 'sheltered') fail('P: the undergrowth must author sky sheltered (no weather under the plot)');
+    if (ts.frontier !== false) fail('P: the undergrowth is minted ground — frontier must be false');
+    if (ts.perfProbe !== true) fail('P: the undergrowth must opt into the perf sweep (the sewerworks precedent)');
+    if (ts.biome !== 'garden') fail(`P: biome '${ts.biome}' — the underdark hangs beneath the garden`);
+    if (ts.caveFace) fail('P: the undergrowth claims the cave-face pool — the named-door law (sewerworks mirror) is broken');
+    if ((ts.variants?.length ?? 0) < 2) fail('P: the undergrowth must field both authored variants');
+    const vNames = (ts.variants ?? []).map(v => v.name);
+    for (const want of ['the brood galleries', 'the seeding dark']) {
+      if (!vNames.includes(want)) fail(`P: variant '${want}' missing`);
+    }
+    const P = ts.layoutParams as Record<string, unknown>;
+    const cov = P.massifCoverage as { byDepth?: [number, number][] } | undefined;
+    const lane = P.massifLaneW as { byDepth?: [number, number] } | undefined;
+    if (!cov || !('byDepth' in cov)) fail('P: massifCoverage carries no byDepth ramp — the press below is gone');
+    if (!lane || !('byDepth' in lane)) fail('P: massifLaneW carries no byDepth ramp — the press below is gone');
+    if (lane?.byDepth && lane.byDepth[1] < 64) fail(`P: laneW heart end ${lane.byDepth[1]} under the bocage face's production floor (64)`);
+    if (P.massifPortalClear !== undefined) fail('P: massifPortalClear must never ramp or retune — doors always open onto country');
+
+    // P2 — the seam: the door on every surface face, the sidezone's mint.
+    const FACES: [string, number][] = [['petalfields', 0], ['stalkwood', 1], ['tendersrows', 0], ['mulchreach', 1]];
+    for (const [face, floor] of FACES) {
+      const f = TILESETS[face];
+      const row = (f?.common ?? []).find(r => r.kind === 'taproot_gate');
+      if (!row) { fail(`P: ${face} carries no taproot_gate common row (the sewer_grate law)`); continue; }
+      if (row.count[0] !== floor) fail(`P: ${face} gate floor ${row.count[0]} (want ${floor})`);
+      if (row.count[1] < 1) fail(`P: ${face} can never roll a gate`);
+    }
+    const mulch = (TILESETS.mulchreach?.common ?? []).find(r => r.kind === 'taproot_gate');
+    if (mulch && mulch.count[1] < 2) fail('P: the margin must open widest (mulchreach top < 2)');
+    const sz = SIDEZONES['taproot_gate'];
+    if (!sz) fail('P: sidezone taproot_gate unregistered — the door leads nowhere');
+    else {
+      if (sz.ledgerOnEnter !== 'undergrowth_entered') fail(`P: gateway seam ledger '${sz.ledgerOnEnter}'`);
+      const parent: ZoneDef = {
+        id: 'massif_p_parent', name: 'QA plot', level: 6, size: { w: 2600, h: 1900 },
+        theme: THEME, layout: [], objective: { kind: 'clear' }, exits: [], map: { x: 3, y: 4 },
+        biome: 'garden', geo: { biomeDepth: 0.7 },
+      };
+      const mctx = { parent, seed: 616101, id: 'massif_p_mint', pos: { x: 400, y: 400 }, playerLevel: 6, pkgActive: () => false };
+      const m1 = sz.mint(mctx), m2 = sz.mint(mctx);
+      if (JSON.stringify(m1) !== JSON.stringify(m2)) fail('P: the mint is not deterministic');
+      if (m1.tileset !== 'undergrowth') fail(`P: mint wears tileset '${m1.tileset}'`);
+      if (m1.layoutType !== 'massif') fail(`P: mint layoutType '${m1.layoutType}'`);
+      if (skyOf(m1) !== 'sheltered') fail(`P: mint sky '${skyOf(m1)}'`);
+      if (m1.anchor !== 'garden') fail(`P: mint anchor '${m1.anchor}'`);
+      if (m1.caveDepth !== 1) fail(`P: mint caveDepth ${m1.caveDepth}`);
+      if (JSON.stringify(m1.geo) !== JSON.stringify(parent.geo)) fail('P: geo did not inherit down the ladder');
+      if (m1.variantName === undefined || !vNames.includes(m1.variantName)) {
+        fail(`P: rollVariant mint wears '${m1.variantName}' — must wear one authored face`);
+      }
+      if (m1.packs !== ts.packs) fail('P: packs not stamped by reference (the face-oracle contract)');
+    }
+
+    // P3 — the kinds + THE DIVIDEND.
+    for (const k of ['taproot_bole', 'brood_gall', 'burst_gall']) {
+      if (!massKindIds().includes(k)) { fail(`P: mass kind '${k}' missing`); continue; }
+      if (massKindOf(k).region !== 'nest_wall') fail(`P: '${k}' region '${massKindOf(k).region}' — one soil, nest_wall (the mesa/sand_court precedent)`);
+    }
+    const nest = regionKind('nest_wall');
+    if (!nest || nest.walkable || !nest.blocks || !nest.blocksShot || !nest.blocksSight) {
+      fail('P: nest_wall must be a TRUE WALL (blocks + blocksShot + blocksSight)');
+    }
+    const gall = massKindOf('brood_gall');
+    if (!gall.shapes.every(s => s.shape === 'court')) fail('P: the brood gall must be court-shaped (the cradle is a room)');
+    if (!gall.ringInner || !gall.mouths) fail('P: the brood gall must author its ring (ringInner + mouths)');
+    const burst = massKindOf('burst_gall');
+    if (!burst.shapes.every(s => s.shape === 'crescent')) fail('P: the burst gall must be the crescent memento (the fallen_court law, hatched)');
+    if (burst.tenants?.length || burst.poiInterior === true) fail('P: the burst gall keeps no tenant and no interior — the brood already left');
+    const tt = gall.tenants ?? [];
+    if (tt.reduce((a, r) => a + r.weight, 0) !== 100) fail('P: the gall tenant table must stand at total 100');
+    const div = tt.find(t => t.kind === 'lair_mouth');
+    if (!div || div.weight !== 3 || (div.params as { den?: string } | undefined)?.den !== 'scythe_court') {
+      fail("P: THE DIVIDEND row must stand exactly { kind: 'lair_mouth', weight: 3, params: { den: 'scythe_court' } }");
+    }
+    const wOf = (k: string): number => tt.find(t => t.kind === k)?.weight ?? 0;
+    const manned = wOf('garrison') + wOf('held_stock');
+    if (manned !== 20) fail(`P: the colony must answer at ONE GALL IN FIVE (garrison+held ${manned}, want 20)`);
+    const stock = wOf('stock');
+    if (!tt.every(t => t.kind === 'stock' || wOf(t.kind) <= stock)) fail('P: stock must stay the dominant read (the nursery law)');
+    const vac = wOf('vacant');
+    if (!vac) fail('P: the gall table must keep vacancy (an empty cradle proves the law)');
+    if (vac >= stock) fail('P: vacancy must stay a whisper, never the theme');
+
+    // P4 — minted ground: the weave/exit/POI laws + determinism, on the
+    // shipped face at mid-country geo (the rig O fieldDef idiom).
+    const W = Math.round((ts.sizeW[0] + ts.sizeW[1]) / 2), H2 = Math.round((ts.sizeH[0] + ts.sizeH[1]) / 2);
+    const pEntry = vec(140, H2 / 2);
+    const pExits = [vec(W - 140, H2 / 2)];
+    const fieldDef = (geo: number | undefined): ZoneDef => ({
+      id: 'massif_p', name: 'QA undergrowth', level: 7, size: { w: W, h: H2 },
+      theme: ts.theme as ZoneDef['theme'],
+      layout: [...(ts.common ?? []), ...ts.layout],
+      layoutType: 'massif',
+      layoutParams: ts.layoutParams as Record<string, unknown>,
+      biome: ts.biome,
+      ...(geo !== undefined ? { geo: { biomeDepth: geo } } : {}),
+      objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+    });
+    const pGen = (def: ZoneDef, seed: number): GeneratedLayout =>
+      generateLayout({ ...def, seed }, { w: W, h: H2 }, new Rng(seed), pEntry, pExits);
+    let pPois = 0, pMass = 0;
+    const pRuns = Math.min(SEEDS, 8);
+    for (let s = 0; s < pRuns; s++) {
+      const seed = seedAt(s) ^ 0xd16d;
+      const out = pGen(fieldDef(0.7), seed);
+      const st = gridStats(out);
+      if (!st) { fail(`P: seed ${seed} no grid`); continue; }
+      if (st.comps !== 1) fail(`P: seed ${seed} split the weave (${st.comps} comps)`);
+      if (st.wallFrac >= 0.06) pMass++;
+      for (const e of pExits) if (!st.grid.reachable(pEntry, e)) fail(`P: seed ${seed} exit unreachable`);
+      for (const poi of out.pois) {
+        pPois++;
+        const q = st.grid.isWalkable(poi.x, poi.y) ? poi : st.grid.snapToWalkable(vec(poi.x, poi.y));
+        if (!st.grid.reachable(pEntry, q)) fail(`P: seed ${seed} gall interior ${Math.round(poi.x)},${Math.round(poi.y)} unreachable`);
+      }
+    }
+    if (!pMass) fail('P: pressure — no seed ever painted meaningful root mass (dead rig)');
+    if (!pPois) fail('P: pressure — no gall interior ever minted across the sweep (the cradle never seats)');
+    const pd = seedAt(2) ^ 0xd16d;
+    const pa = pGen(fieldDef(0.7), pd), pb = pGen(fieldDef(0.7), pd);
+    if (JSON.stringify(pa.doodads) !== JSON.stringify(pb.doodads)) fail('P: doodads differ across same-seed runs');
+
+    // P5 — THE PRESS BELOW: the ramps' authored ends read exactly at forced
+    // geo (rig L owns the lerp math; the ENDS are this country's contract),
+    // and the heart stands more bodies than the rim across the sweep.
+    const covRim = layoutParam<[number, number]>(fieldDef(0), 'massifCoverage', MASSIF_CFG.coverage);
+    const covHeart = layoutParam<[number, number]>(fieldDef(1), 'massifCoverage', MASSIF_CFG.coverage);
+    if (JSON.stringify(covRim) !== JSON.stringify([0.22, 0.28])) fail(`P: rim coverage ${JSON.stringify(covRim)} (authored [0.22,0.28])`);
+    if (JSON.stringify(covHeart) !== JSON.stringify([0.28, 0.34])) fail(`P: heart coverage ${JSON.stringify(covHeart)} (authored [0.28,0.34])`);
+    const laneRim = layoutParam<number>(fieldDef(0), 'massifLaneW', MASSIF_CFG.laneW);
+    const laneHeart = layoutParam<number>(fieldDef(1), 'massifLaneW', MASSIF_CFG.laneW);
+    if (laneRim !== 84) fail(`P: rim laneW ${laneRim} (authored 84)`);
+    if (laneHeart !== 70) fail(`P: heart laneW ${laneHeart} (authored 70)`);
+    let rimBodies = 0, heartBodies = 0;
+    for (let s = 0; s < SEEDS; s++) {
+      const seed = seedAt(s) ^ 0xbe10;
+      const ctx = (): GenCtx => ({
+        rng: new Rng(seed), arena: { w: W, h: H2 }, entry: pEntry, exits: pExits, seed,
+        doodads: [], pois: [], camps: [], breakables: [], npcs: [],
+        garrisons: [], caveSeeds: [], reserved: [],
+      });
+      rimBodies += carveMassifs(ctx(), { ...fieldDef(0), seed }).length;
+      heartBodies += carveMassifs(ctx(), { ...fieldDef(1), seed }).length;
+    }
+    if (!(heartBodies > rimBodies)) {
+      fail(`P: the press below never engaged — heart carved ${heartBodies} bodies vs rim ${rimBodies} over ${SEEDS} seeds`);
+    }
+    note(`P: ${pPois} gall interiors over ${pRuns} mints; press rim ${rimBodies} → heart ${heartBodies} bodies/${SEEDS} seeds`);
   }
 }
 

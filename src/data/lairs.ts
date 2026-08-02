@@ -1161,7 +1161,11 @@ registerLair({
   id: 'scythe_court',
   landmark: 'bower_gate_site',
   seat: {
-    biomes: ['jungle'],
+    // The school claims its HOME country's surface too (2026-08-02, the
+    // undergrowth pass's coda): jungle keeps the wave-eight seat, garden
+    // gains the mantid halls above the brood that breeds them below (the
+    // undergrowth's court dividend covers the BELOW half).
+    biomes: ['jungle', 'garden'],
     place: 'surface',
     level: { from: 8, fadeIn: 3 },
     chance: 0.15,

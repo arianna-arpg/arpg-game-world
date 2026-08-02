@@ -341,6 +341,35 @@ here so nobody hunts a phantom.
   stratum (world/biomes.ts carries the measured numbers). Probe rig J
   censuses all of it; the tomb_dove's urn-roost (`WILDLIFE.courtland`) is
   the quiet-ring tell.
+- **THE UNDERGROWTH** (`undergrowth`, biome `garden` — batch 20): the
+  garden's underdark, and the fabric's first country minted BELOW the world
+  — the sewerworks seam in garden tongue. Nobody built it; it was CHEWED.
+  Every garden surface face carries a `taproot_gate` common row (the
+  sewer_grate law: mulchreach guaranteed [1,2], the petalfields rim breathes
+  [0,1]); the gate's sidezone (registered beside its kit in
+  `data/massifs.ts`) mints the tileset via `mintCave` — `forceLayout:
+  'massif'` branches before the cave-layout roll, so the whole recipe runs
+  one story down, sheltered by authorship AND derivation, deepening with
+  the country above it (geo inherits down the ladder; `massifCoverage`/
+  `massifLaneW` ride byDepth ramps — THE PRESS BELOW, rim bores open at
+  84, heart bores tight at 70, above the bocage floor). Deliberately NO
+  `caveFace` claim: the rootways stay the strata pool's wild half, the
+  undergrowth is reached only through its own doors (the named-door
+  precedent, mirrored exactly). THE NURSERY LAW is the country's identity —
+  every fight happens beside a cradle: three kinds on `nest_wall` (one
+  soil — the mesa/sand_court one-region precedent), `taproot_bole` gnarled
+  tunnel bones, `brood_gall` the court whose ring the kin breed inside
+  (tenants: stock 40 dominant, the colony answering at ONE GALL IN FIVE —
+  garrison 12 + held 8, patron `formic` — cache 14, vacancy 23 a whisper,
+  and THE DIVIDEND: `{ kind: 'lair_mouth', weight: 3, params: { den:
+  'scythe_court' } }` — the mantid school's court seated below its home
+  country, the batch-19 homed-kin table's strongest live candidate landed),
+  and `burst_gall` the hatched crescent memento (the fallen_court law,
+  hatched). Dress carries the scale inversion: `giant_dandelion` lantern
+  flora (trunk + pale bloomCrown seed-clock, soft light, the `seedDrift`
+  ambient — the country's own weather, indoors), `canopy_shaft` stray
+  daylight (the grate-light law), `pale_blade` etiolated wildgrass (the
+  crop law's veil in ghost tones), the aphid herd poured at the root-sap.
 - **Highlands** (`foothills`/`snowcrown`/`stonecrown`), **tendersrows**
   (garden planter beds), **aether_bastion** + the seraph-city faces, and the
   settled belt's recipes via exported `carveMassifs`.
@@ -378,5 +407,12 @@ full layout bytes, the ramp's minted direction), M the per-biome table
 (`over.tenants` replaces a kind's OWN authored table; absent keeps it),
 N the needles press (butte-only pool on every face, ramp shapes + resolved
 ends on the shipped rows, count-press direction, the tightened lane
-engaged, weave/exits whole at the heart's densest roll). `npm run genqa`
+engaged, weave/exits whole at the heart's densest roll), O the colossal
+anchor lane on the shipped wyrmfields rows (heart crowns every seed,
+territorial law, per-row max, graceful refusal), P the undergrowth — THE
+COUNTRY BELOW (the tileset's statics incl. the named-door law, the
+taproot_gate seam on every garden surface face + the sidezone's mint
+contract, the three nest_wall kinds with THE DIVIDEND row pinned exactly,
+minted ground under the weave/exit/POI laws, and the press-below ramps'
+exact ends with heart carves outnumbering rim carves). `npm run genqa`
 sweeps every tileland face beside the downs under the standard invariants.

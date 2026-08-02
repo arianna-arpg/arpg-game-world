@@ -3174,4 +3174,38 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     canopy: { painter: 'bloomCrown', params: { petal: '#e8c86a', petal2: '#f0e0a0', heart: '#5c4a22', petals: 7 } },
     light: { radius: -1.6, color: '#ffe8a0', intensity: 0.12 },
   },
+
+  // === THE UNDERGROWTH KIT (batch 20 — the garden's underdark) ==============
+  // Kinds + rules in data/massifs.ts, the country in data/tilesets.ts
+  // 'undergrowth'. Every painter an existing one re-dressed (the
+  // doodadVisuals doctrine): the door rides the parameterized caveMouth in
+  // root and loam, the dandelion is the garden trio's trunk+bloomCrown
+  // fabric wearing the seed-clock (a two-row pale starburst IS the clock
+  // from above), the shaft is the sewer grate-light in leaf-filtered tones,
+  // and the pale blade is wildgrass gone etiolated.
+  taproot_gate: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#3a2c1a', edge: '#6a5234', material: 'wood',
+      glow: '#c8b060', throat: '#0c0804', vines: { color: '#4a3a24' },
+      label: 'the Undergrowth',
+    },
+    light: { radius: -2, color: '#c8b060', intensity: 0.26, flicker: 2.2 },
+  },
+  giant_dandelion: {
+    painter: 'trunk', order: 52, shadow: 0.5, longShadow: 1.2, bakeWhole: 'static',
+    params: { color: '#8a9a6c', scale: 0.24, roots: 3 },
+    canopy: { painter: 'bloomCrown', params: { petal: '#eceadc', petal2: '#d8d6c4', heart: '#c8bd92', petals: 18, rows: 2 } },
+    light: { radius: -1.6, color: '#f0eedd', intensity: 0.14 },
+  },
+  canopy_shaft: {
+    painter: 'lightShaft', order: 58,
+    light: { radius: -2.2, color: '#d8e8b0', intensity: 0.38 },
+  },
+  pale_blade: {
+    painter: 'wheatStalk', order: 47, bakeWhole: 'static',
+    blend: { strength: 0.3, feather: 18, color: '#5c6650' },
+    params: { stalk: '#8c9a74' },
+    canopy: { painter: 'wheatTops', params: { head: '#a8b48c', tassel: '#c8d0ac', tall: 1.2 } },
+  },
 };
