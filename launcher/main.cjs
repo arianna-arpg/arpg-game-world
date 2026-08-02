@@ -46,6 +46,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { startGameServer } = require('./server.cjs');
+const { createDeadman, skipVerdict } = require('./perfdeadman.cjs');
 
 // ------------------------------------------------------------------- config
 
@@ -688,7 +689,7 @@ async function ensureServer() {
   return started.url;
 }
 
-/** @param {{ show?: boolean }} [opts] */
+/** @param {{ show?: boolean, perfBeat?: boolean }} [opts] */
 function createGameWindow(opts) {
   const fullscreen = resolveFullscreen();
   const w = new BrowserWindow({
@@ -699,7 +700,12 @@ function createGameWindow(opts) {
     backgroundColor: '#0a0a0e',
     title: cfg.game.title,
     fullscreen,
-    webPreferences: { devTools: !!cfg.window.devtools },
+    webPreferences: {
+      devTools: !!cfg.window.devtools,
+      // perfBeat: the perf harness alone loads the deadman's beat bridge
+      // (perf-preload.cjs → window.__perfBeat). Play/smoke stay preload-free.
+      ...(opts?.perfBeat ? { preload: path.join(__dirname, 'perf-preload.cjs') } : {}),
+    },
   });
   if (cfg.window.maximized && !fullscreen && opts?.show !== false) w.maximize();
   w.webContents.on('did-finish-load', () => {
@@ -877,13 +883,24 @@ async function smoke() {
  *  pacing; a hidden window throttles rAF and lies), run the in-page perf
  *  sweep (src/dev/perf.ts) over the tileset matrix, gate the numbers against
  *  balance/perf.config.json, write a report, exit 0 / 2 (budget breached) /
- *  1 (harness error) — the genqa contract for frame cost. Budgets are DATA:
+ *  1 (harness error) / 3 (THE DIRTY-TREE GUARD refused to rebuild — see
+ *  below) — the genqa contract for frame cost. Budgets are DATA:
  *  each zone is judged RELATIVE to the same run's town control (so the
  *  verdict travels across machines) plus generous absolute backstops.
  *  A 'hold'-class skipped row GATES like a breach (the skip gate below —
  *  overrides[<id>].allowSkip is the committed waiver); the town control is
  *  re-sampled at sweep END (the aged control) so run-age growth prints
- *  beside the zones instead of wearing their names. */
+ *  beside the zones instead of wearing their names.
+ *  THE DEADMAN (2026-08-02, launcher/perfdeadman.cjs): the sampler beats
+ *  `perf:beat` every second through the perf-only preload, carrying each
+ *  completed row; beat silence past deadman.silenceSec (45) runs the
+ *  two-stage verdict (liveness probe first — a healthy renderer with rotted
+ *  beat wiring DISARMS the deadman, never dies; then in-process CDP
+ *  pause-stacks: JS-hot histogram or 'native, pause never landed'), kills
+ *  the wedged run, writes the PARTIAL report from the banked rows with a
+ *  'wedge'-class skip row, and exits 2 (forensics runs exit 1 — a wedge is
+ *  an incomplete run there, never a gate verdict). Two 2026-08-01 verdict
+ *  sweeps died as 19-minute silent freezes; a wedge is now a named row. */
 async function perfMode() {
   /** @param {number} ms */
   const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -902,10 +919,49 @@ async function perfMode() {
     // controlSickMs guard below catches it, this PREVENTS it). Released by
     // process exit.
     powerSaveBlocker.start('prevent-display-sleep');
+    // ---- THE DIRTY-TREE GUARD (2026-08-02): `npm run perf` measures dist/
+    // and ensureBuilt silently REBUILDS it whenever the stamp drifted. On a
+    // tree several sessions edit concurrently, that rebuild bakes whatever
+    // half-edited state the tree holds at boot — the 2026-08-01 triad's 4th
+    // run measured exactly such a phantom build and died inconclusive by
+    // construction. A perf run may REBUILD only from a CLEAN tree: stale
+    // stamp + dirty tree = print the offending status and exit 3 (distinct
+    // from 0 ok / 1 invalid / 2 breach) unless --allow-dirty acknowledges a
+    // deliberate WIP measurement. A FRESH stamp never rebuilds and always
+    // proceeds — the stamp digests the dirty content itself, so a matching
+    // dist IS the current bytes, measured knowingly (the clean-bundle
+    // protocol builds exactly this way) — but a dirty tree still prints its
+    // warning so the report reads honestly. Every report stamps the digest
+    // it measured (report.json dist.*).
+    const allowDirty = flagValue('--allow-dirty') !== null;
+    const stampNow = await buildStamp(); // null = not a git repo (dist-exists fallback)
+    const stampHave = fs.existsSync(STAMP) ? fs.readFileSync(STAMP, 'utf-8') : null;
+    const distFresh = fs.existsSync(path.join(DIST, 'index.html')) && stampNow !== null && stampHave === stampNow;
+    const porcelain = stampNow !== null ? (await git(['status', '--porcelain'])).out.replace(/\s+$/, '') : '';
+    const treeDirty = porcelain.trim().length > 0;
+    if (!distFresh && treeDirty && !allowDirty) {
+      console.log('PERF REFUSED: dist/ is stale and the tree is DIRTY — a rebuild would measure');
+      console.log('half-edited state (the concurrent-session trap). Offending status:');
+      for (const line of porcelain.split('\n')) console.log('  ' + line);
+      console.log('Commit/stash the tree (or land the batch), or pass --allow-dirty to');
+      console.log('measure the WIP bytes deliberately. Exit 3.');
+      gameServer?.close();
+      app.exit(3);
+      return;
+    }
+    if (treeDirty) {
+      console.log(`PERF: tree is DIRTY (${porcelain.split('\n').length} paths)` +
+        (distFresh ? ' — dist stamp matches these exact bytes; measuring them knowingly.'
+          : ' — rebuilding WIP bytes under --allow-dirty; the verdict travels no further than this tree.'));
+    }
     const built = await ensureBuilt(); // a stale dist would measure old code
     if (!built.ok) throw new Error('build failed');
+    // The digest actually measured — .build-head as ensureBuilt left it.
+    const distStamp = fs.existsSync(STAMP) ? fs.readFileSync(STAMP, 'utf-8') : null;
+    console.log(`PERF: dist stamp ${distStamp ? distStamp.slice(0, 20) + '…' : '(none — not a repo)'}` +
+      ` rebuilt=${!distFresh} treeDirty=${treeDirty}${allowDirty ? ' allowDirty' : ''}`);
     const url = await ensureServer();
-    gameWin = createGameWindow({ show: true });
+    gameWin = createGameWindow({ show: true, perfBeat: true });
     gameWin.webContents.setBackgroundThrottling(false);
     // WINDOW POLICY: the gate needs a compositing surface, not the user's
     // attention. CalculateNativeWinOcclusion is disabled for perf runs (see
@@ -989,9 +1045,101 @@ async function perfMode() {
       (opts.filter ? `, filter '${opts.filter}'` : '') +
       (opts.weather !== undefined ? `, weather pinned '${opts.weather || 'clear'}'` : '') +
       (opts.ablate ? `, ablate [${opts.ablate.join(',')}]` : '') + `)…`);
-    /** @type {any} */
-    const report = await gameWin.webContents.executeJavaScript(
+    // ---- THE DEADMAN (launcher/perfdeadman.cjs — module doc has the whole
+    // story): the sampler beats perf:beat ~1/s through the perf-only
+    // preload, each completed row riding its beat — so the launcher can
+    // finally print PROGRESS during the 10-19min sweep (the old table
+    // printed only at END; a wedged run left a 0-byte output file), and a
+    // killed run still yields the rows it banked. Dials default here; an
+    // optional `deadman` object in perf.config.json overrides any of them
+    // (documented in _docHarnessShield — no committed values needed).
+    const wc = gameWin.webContents;
+    const dm = budgets.deadman ?? {};
+    /** @type {{ rows: any[], skipped: any[], control: any, controlEnd: any }} */
+    const banked = { rows: [], skipped: [], control: null, controlEnd: null };
+    const deadman = createDeadman({
+      silenceMs: (dm.silenceSec ?? 45) * 1000,
+      checkMs: (dm.checkSec ?? 5) * 1000,
+      probeTimeoutMs: (dm.probeTimeoutSec ?? 2) * 1000,
+      probeCount: dm.probeCount ?? 3,
+      pauseDeadlineMs: (dm.pauseDeadlineSec ?? 10) * 1000,
+      stackCount: dm.stackCount ?? 10,
+      stackGapMs: dm.stackGapMs ?? 300,
+    }, {
+      now: () => Date.now(),
+      log: (line) => console.log('PERF DEADMAN: ' + line),
+      evalAlive: (timeoutMs) => new Promise(res => {
+        let settled = false;
+        const t = setTimeout(() => { if (!settled) { settled = true; res(false); } }, timeoutMs);
+        wc.executeJavaScript('1+1', true).then(
+          () => { if (!settled) { settled = true; clearTimeout(t); res(true); } },
+          () => { if (!settled) { settled = true; clearTimeout(t); res(false); } });
+      }),
+      cdpAttach: () => { wc.debugger.attach('1.3'); },
+      cdpSend: (method) => { wc.debugger.sendCommand(method).catch(() => { /* wedged threads never ack */ }); },
+      cdpOn: (cb) => { wc.debugger.on('message', (_e, method, params) => cb(method, params)); },
+      cdpDetach: () => { wc.debugger.detach(); },
+      setTimeout: (fn, ms) => setTimeout(fn, ms),
+      clearTimeout: (h) => clearTimeout(h),
+      setInterval: (fn, ms) => setInterval(fn, ms),
+      clearInterval: (h) => clearInterval(h),
+    });
+    ipcMain.on('perf:beat', (e, payload) => {
+      if (!gameWin || e.sender !== gameWin.webContents) return;
+      deadman.beat(payload);
+      if (!payload) return;
+      if (payload.at === 'row' && payload.row) {
+        banked.rows.push(payload.row);
+        console.log(`PERF: [${banked.rows.length}] ${payload.tileset} — '${payload.row.zone}' ` +
+          `gap50 ${payload.row.gapP50} gapMax ${payload.row.gapMax} h40 ${payload.row.hitch40}`);
+      } else if (payload.at === 'control' && payload.row) {
+        banked.control = payload.row;
+        console.log(`PERF: control '${payload.row.zone}' gap50 ${payload.row.gapP50}`);
+      } else if (payload.at === 'aged') {
+        banked.controlEnd = payload.row ?? null;
+      } else if (payload.at === 'skip' && payload.skip) {
+        banked.skipped.push(payload.skip);
+        console.log(`PERF: skipped ${payload.skip.id} [${payload.skip.class}]`);
+      }
+    });
+    const sweepP = wc.executeJavaScript(
       `window.__game.perfSweep(${JSON.stringify(opts)})`, true);
+    /** @type {any} */
+    const outcome = await Promise.race([
+      sweepP.then((r) => ({ kind: 'done', report: r }), (err) => ({ kind: 'err', err })),
+      deadman.promise.then((w) => ({ kind: 'wedge', wedge: w })),
+    ]);
+    deadman.disarm();
+    if (outcome.kind === 'err') throw outcome.err;
+    /** @type {any} */
+    let wedge = null;
+    /** @type {any} */
+    let report;
+    if (outcome.kind === 'wedge') {
+      wedge = outcome.wedge;
+      // The wedge becomes a NAMED, attributed row: the seat holding the
+      // window when beats stopped wears it (the wedge lives in world-state
+      // interaction, not any zone's own content — the row names the seat,
+      // the note carries the stacks' verdict).
+      const holder = wedge.lastBeat && wedge.lastBeat.tileset ? String(wedge.lastBeat.tileset) : '(unknown)';
+      const at = wedge.lastBeat && wedge.lastBeat.at ? String(wedge.lastBeat.at) : '(none)';
+      console.log(`PERF DEADMAN: verdict ${wedge.face} — ${wedge.note}`);
+      console.log(`PERF DEADMAN: killing the wedged run; partial report from ${banked.rows.length} banked rows.`);
+      report = {
+        control: banked.control, controlEnd: banked.controlEnd,
+        zones: banked.rows,
+        skipped: [...banked.skipped, {
+          id: holder, class: 'wedge',
+          note: `${wedge.note} — last beat '${at}' ${Math.round(wedge.silentMs / 1000)}s before the probe`,
+        }],
+        canvas: { w: 0, h: 0 }, dpr: 0,
+        sampleSeconds: opts.seconds, matrix: [],
+        weather: opts.weather ?? '', ablate: opts.ablate ?? [],
+      };
+      try { gameWin.destroy(); } catch { /* already dying */ }
+    } else {
+      report = outcome.report;
+    }
 
     // ---- the gate: relative-to-town caps + absolute backstops, all data ----
     const rel = budgets.relative ?? {};
@@ -1010,17 +1158,26 @@ async function perfMode() {
     // stayed ≤40ms (stalls no frame's own work explains). Read as a
     // triangle: taskMx ≈ gapMax convicts the frame's JS; ltW big with
     // taskMx small convicts the space BETWEEN frames; off40 counts how
-    // often that happened.
+    // often that happened. slab (2026-08-02, THE PHASE LEDGER in
+    // src/main.ts) NAMES the frame's worst single slab (name:ms over
+    // pre/head/sim/ren/tail): 'pre' = vsync→callback overhang (a foreign
+    // task wearing the frame's name — the taskMx coarse-anchor
+    // disambiguator), 'head' = pad/pointer/couch before the sim bracket,
+    // 'tail' = the post-perfPush net+hostTail carry (≤1 frame late by
+    // position). A gapMax ≈ taskMx row with sim99/ren99 tiny now
+    // self-attributes instead of needing a hand bisect.
     /** @param {any} z @param {string} name */
     const row = (z, name) =>
       `${name.padEnd(16)} ${String(z.gapP50).padStart(6)} ${String(z.gapP95).padStart(6)} ${String(z.gapP99).padStart(6)}` +
       ` ${String(z.gapMax).padStart(7)} ${String(z.hitch40).padStart(3)} ${String(z.entryWorstGap).padStart(7)}` +
       ` ${String(z.simP99).padStart(6)} ${String(z.renP99).padStart(6)}` +
       ` ${String(z.taskMax ?? 0).padStart(7)} ${String(z.ltCount ?? 0).padStart(3)} ${String(z.ltWorst ?? 0).padStart(6)} ${String(z.offTask40 ?? 0).padStart(5)}` +
+      ` ${(z.slabName ? `${z.slabName}:${z.slabMs}` : '-').padStart(10)}` +
       ` ${String(z.snowBakes ?? 0).padStart(5)} ${String(z.groundBakes ?? 0).padStart(5)} ${String(z.snowCover ?? 0).padStart(5)}` +
       `  ${z.zone}`; // zone names already carry their variant
-    lines.push('tileset           gap50  gap95  gap99  gapMax h40   entry  sim99  ren99  taskMx  lt    ltW off40  snB   grB  cover  zone');
-    lines.push(row(ctl, '(town ctl)'));
+    lines.push('tileset           gap50  gap95  gap99  gapMax h40   entry  sim99  ren99  taskMx  lt    ltW off40       slab   snB   grB  cover  zone');
+    if (ctl) lines.push(row(ctl, '(town ctl)'));
+    else lines.push('(town ctl): never completed — the run wedged before the control row; caps not judged');
     for (const z of report.zones) {
       lines.push(row(z, z.tileset));
       // Per-tileset overrides (budgets.overrides[id]) merge over the shared
@@ -1032,15 +1189,19 @@ async function perfMode() {
       // CONTROL FLOOR (relative.controlFloorMs): a fast town roll (4.2ms
       // vsync-off pacing vs the usual 8.3) used to HALVE every cap — the
       // control normalizes the MACHINE; it must not gamble the headroom.
-      // Control percentiles below the floor read as the floor.
-      const floorMs = relZ.controlFloorMs ?? 0;
-      const ctl50 = Math.max(ctl.gapP50, floorMs), ctl99 = Math.max(ctl.gapP99, floorMs);
-      const town50 = ctl50 === ctl.gapP50 ? `${ctl.gapP50}` : `${ctl50} floored from ${ctl.gapP50}`;
-      const town99 = ctl99 === ctl.gapP99 ? `${ctl.gapP99}` : `${ctl99} floored from ${ctl.gapP99}`;
-      const capP50 = ctl50 * (relZ.gapP50Mul ?? 99) + (relZ.slackMs ?? 0);
-      const capP99 = ctl99 * (relZ.gapP99Mul ?? 99) + (relZ.slackMs ?? 0);
-      if (z.gapP50 > capP50) breaches.push(`${z.tileset}: gapP50 ${z.gapP50}ms > cap ${capP50.toFixed(1)} (town ${town50} x${relZ.gapP50Mul} +${relZ.slackMs})`);
-      if (z.gapP99 > capP99) breaches.push(`${z.tileset}: gapP99 ${z.gapP99}ms > cap ${capP99.toFixed(1)} (town ${town99} x${relZ.gapP99Mul} +${relZ.slackMs})`);
+      // Control percentiles below the floor read as the floor. (Relative
+      // caps need the control; a wedge-partial report without one still
+      // judges every banked row's ABSOLUTE backstops below.)
+      if (ctl) {
+        const floorMs = relZ.controlFloorMs ?? 0;
+        const ctl50 = Math.max(ctl.gapP50, floorMs), ctl99 = Math.max(ctl.gapP99, floorMs);
+        const town50 = ctl50 === ctl.gapP50 ? `${ctl.gapP50}` : `${ctl50} floored from ${ctl.gapP50}`;
+        const town99 = ctl99 === ctl.gapP99 ? `${ctl.gapP99}` : `${ctl99} floored from ${ctl.gapP99}`;
+        const capP50 = ctl50 * (relZ.gapP50Mul ?? 99) + (relZ.slackMs ?? 0);
+        const capP99 = ctl99 * (relZ.gapP99Mul ?? 99) + (relZ.slackMs ?? 0);
+        if (z.gapP50 > capP50) breaches.push(`${z.tileset}: gapP50 ${z.gapP50}ms > cap ${capP50.toFixed(1)} (town ${town50} x${relZ.gapP50Mul} +${relZ.slackMs})`);
+        if (z.gapP99 > capP99) breaches.push(`${z.tileset}: gapP99 ${z.gapP99}ms > cap ${capP99.toFixed(1)} (town ${town99} x${relZ.gapP99Mul} +${relZ.slackMs})`);
+      }
       if (absZ.gapMaxMs != null && z.gapMax > absZ.gapMaxMs) breaches.push(`${z.tileset}: gapMax ${z.gapMax}ms > ${absZ.gapMaxMs}`);
       // Hitch rates carry a GRACE COUNT (absolute.hitchGraceCount): a short
       // window quantizes rate brutally (8s can only express 0 or ≥7.5/min),
@@ -1064,14 +1225,15 @@ async function perfMode() {
     // from seat medians; every report now carries it). A sick aged town
     // does NOT invalidate the run: the START control cut the caps, and
     // controlSickMs already judged it — this pair just names what grew.
-    if (report.controlEnd) {
+    if (report.controlEnd && ctl) {
       const b = report.controlEnd;
       lines.push(row(b, '(town aged)'));
       lines.push(`aged control (start vs end of sweep): gapP50 ${ctl.gapP50} vs ${b.gapP50}, ` +
         `gapP99 ${ctl.gapP99} vs ${b.gapP99}, gapMax ${ctl.gapMax} vs ${b.gapMax}, ` +
         `h40 ${ctl.hitch40} vs ${b.hitch40}, taskMx ${ctl.taskMax ?? 0} vs ${b.taskMax ?? 0}, ` +
-        `lt ${ctl.ltCount ?? 0}/${ctl.ltWorst ?? 0} vs ${b.ltCount ?? 0}/${b.ltWorst ?? 0} — ` +
-        `growth here is run age, not the zones`);
+        `lt ${ctl.ltCount ?? 0}/${ctl.ltWorst ?? 0} vs ${b.ltCount ?? 0}/${b.ltWorst ?? 0}, ` +
+        `slab ${ctl.slabName || '-'}:${ctl.slabMs ?? 0} vs ${b.slabName || '-'}:${b.slabMs ?? 0} — ` +
+        `growth here is run age, not the zones (the aged slab NAMES it)`);
     } else if (report.controlEnd === null) {
       lines.push('(town aged): could not hold its window — aged-control evidence missing this run');
     }
@@ -1087,36 +1249,62 @@ async function perfMode() {
     // reads, not a silence. The waiver rides the breach machinery's own
     // committed per-tileset registry: overrides[<id>].allowSkip
     // acknowledges a deliberately unholdable row (carry a _todo + fresh
-    // evidence, like any override row).
+    // evidence, like any override row). Routing lives in ONE exported
+    // table — skipVerdict (launcher/perfdeadman.cjs), shared with the
+    // fragment sim so gate and sim can never drift — which also carries
+    // the 2026-08-02 'wedge' class: the deadman's row ALWAYS gates, no
+    // waiver exists (a wedge is a bug it caught, never a committed fact).
     const skipRows = Array.isArray(report.skipped) ? report.skipped : [];
-    /** @param {any} s */
-    const skipWaived = (s) => !!(((budgets.overrides ?? {})[s.id] ?? {}).allowSkip);
     for (const s of skipRows) {
-      if (s.class === 'hold' && !skipWaived(s)) {
-        breaches.push(`${s.id}: UNMEASURED — ${s.note} (a hold skip gates; overrides['${s.id}'].allowSkip is the committed waiver)`);
-      }
+      const v = skipVerdict(s, budgets.overrides);
+      if (v !== 'gates') continue;
+      breaches.push(s.class === 'wedge'
+        ? `${s.id}: WEDGED mid-sweep — ${s.note} (the deadman killed a hung run; a wedge always gates, no waiver)`
+        : `${s.id}: UNMEASURED — ${s.note} (a hold skip gates; overrides['${s.id}'].allowSkip is the committed waiver)`);
     }
     if (skipRows.length) {
-      lines.push('skipped: ' + skipRows.map((/** @type {any} */ s) =>
-        `${s.id} [${s.class}${s.class === 'hold' ? (skipWaived(s) ? ', waived' : ', GATES') : ''}] ${s.note}`).join('; '));
+      lines.push('skipped: ' + skipRows.map((/** @type {any} */ s) => {
+        const v = skipVerdict(s, budgets.overrides);
+        return `${s.id} [${s.class}${v === 'waived' ? ', waived' : v === 'gates' ? ', GATES' : ''}] ${s.note}`;
+      }).join('; '));
     }
     console.log(lines.join('\n'));
     console.log(`canvas ${report.canvas.w}x${report.canvas.h} @dpr ${report.dpr}`);
 
     // ---- report files (balance/reports is gitignored, like every gate) ----
+    // Every report carries the DIST DIGEST it measured (the dirty-tree
+    // guard's other half — when two runs disagree, dist.stamp says whether
+    // they measured the same bytes) and, on a deadman kill, the full wedge
+    // forensics (pause stacks with line:col — bundle-archaeology fuel).
     const stampStr = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
     const dir = path.join(BASE, 'balance', 'reports', 'perf_' + stampStr);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify({ budgets, opts, report, breaches }, null, 2));
+    const dist = { stamp: distStamp, treeDirty, allowDirty, rebuilt: !distFresh };
+    fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify({ budgets, opts, dist, report, breaches, wedge }, null, 2));
     fs.writeFileSync(path.join(dir, 'report.md'), [
       '# perf ' + stampStr, '',
+      `dist ${distStamp ? distStamp.slice(0, 20) + '…' : '(no stamp)'}${treeDirty ? ' — TREE DIRTY at measure time' : ''}`, '',
       ...(forensics ? [`FORENSICS RUN (weather '${opts.weather ?? '(natural)'}', ablate [${(opts.ablate ?? []).join(',')}]) — gate informative only.`, ''] : []),
+      ...(wedge ? [`## WEDGE`, `The deadman killed a hung run (${wedge.face} face): ${wedge.note}`,
+        `${wedge.stacks.length} pause stacks in report.json; rows below are the PARTIAL sweep the beats banked.`, ''] : []),
       '```', ...lines, '```', '',
       breaches.length ? '## BREACHES\n' + breaches.map(b => '- ' + b).join('\n') : 'No budget breached.',
     ].join('\n'));
     console.log('report -> ' + dir);
 
-    if (errors.length) throw new Error(errors.join('; '));
+    // A deadman kill destroys the renderer — the 'renderer gone' that
+    // follows is OUR kill, not a run error; the wedge verdict already
+    // carries the truth, so only a NON-wedge run may throw on errors.
+    if (!wedge && errors.length) throw new Error(errors.join('; '));
+    if (wedge) {
+      console.log(forensics
+        ? 'PERF WEDGED (forensics run — exit 1, the run never completed):'
+        : 'PERF WEDGED — the deadman killed a hung run; the wedge row gates:');
+      for (const b of breaches) console.log('  - ' + b);
+      gameServer?.close();
+      app.exit(forensics ? 1 : 2);
+      return;
+    }
     // CONTROL SANITY: the town is the run's meter stick — when IT hitches
     // (an occluded window throttled to 1Hz reads exactly ~1000ms gaps; a
     // loaded machine drags it to 30+), every relative cap it feeds is
@@ -1126,7 +1314,7 @@ async function perfMode() {
     // 2026-07-15: a covered gate window read town 1000.2 and 'breached'
     // jungle's absolute caps — the environment, wearing a zone's name.)
     const sickMs = Number(budgets.controlSickMs ?? 40);
-    if (ctl.gapP50 > sickMs) {
+    if (ctl && ctl.gapP50 > sickMs) {
       console.log(`PERF RUN INVALID: town control gapP50 ${ctl.gapP50}ms > controlSickMs ${sickMs} — ` +
         `the control cannot judge anything. Likely an occluded/covered game window ` +
         `(1Hz rAF throttle reads ~1000ms gaps) or a loaded machine; report kept for forensics.`);

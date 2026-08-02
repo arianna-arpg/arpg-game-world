@@ -122,6 +122,15 @@ export interface PerfZoneStats {
    *  but bracket-honest: a big ltWorst with a small taskMax convicts the
    *  space BETWEEN frames. -1 = this runtime lacks 'longtask'. */
   ltCount: number; ltWorst: number;
+  /** THE PHASE LEDGER's window-worst slab (src/main.ts): the NAME of the
+   *  frame's single worst section over 'pre' (vsync→callback overhang —
+   *  the taskMax coarse-anchor disambiguator: a foreign task wearing the
+   *  frame's name lands HERE), 'head' (pad/pointer/couch before the sim
+   *  bracket), 'sim'/'ren' (the standing brackets), 'tail' (post-perfPush
+   *  net + hostTail, carried ≤1 frame late by position) — plus its ms.
+   *  A gapMax ≈ taskMax row with sim99/ren99 tiny self-attributes here.
+   *  '' = no slab marked (an empty window). */
+  slabName: string; slabMs: number;
 }
 
 /** One row the sweep could not measure — and WHY, as data the gate can
@@ -130,10 +139,17 @@ export interface PerfZoneStats {
  *  refused layout) are mint-machinery refusals and stay report-only;
  *  'hold' (the walker stood in the zone and could not keep one clean
  *  window pair in HOLD_ATTEMPTS tries) GATES like a breach — a shipping
- *  zone that cannot be measured is a verdict to read, not a silence. */
+ *  zone that cannot be measured is a verdict to read, not a silence.
+ *  'wedge' (2026-08-02) is minted LAUNCHER-SIDE by the perf deadman
+ *  (launcher/perfdeadman.cjs) — a renderer wedged inside one endless
+ *  World.update cannot report its own death, so the watchdog names the
+ *  seat that held the window when the beats stopped and files this row
+ *  into the partial report; it ALWAYS gates, no waiver exists. The union
+ *  lives here so the report vocabulary has one home; the sampler itself
+ *  never produces it. */
 export interface PerfSkipRow {
   id: string;
-  class: 'unmintable' | 'load-fallback' | 'hold';
+  class: 'unmintable' | 'load-fallback' | 'hold' | 'wedge';
   note: string;
 }
 
@@ -202,13 +218,17 @@ function mintSeedFor(base: number, id: string): number {
   return (base + (h >>> 0)) >>> 0;
 }
 
-type FrameDump = { gap: number[]; sim: number[]; ren: number[] };
+type FrameDump = {
+  gap: number[]; sim: number[]; ren: number[];
+  phase: { name: string; ms: number };
+};
 
 function reduceFrames(f: FrameDump, entryWorstGap: number, meta: {
   tileset: string; zone: string; variant: string | null; layout: string;
   doodads: number; actors: number; lite: number;
   snowBakes: number; groundBakes: number; snowCover: number;
   taskMax: number; offTask40: number; ltCount: number; ltWorst: number;
+  slabName: string; slabMs: number;
 }): PerfZoneStats {
   const gap = [...f.gap].sort((a, b) => a - b);
   const sim = [...f.sim].sort((a, b) => a - b);
@@ -234,6 +254,33 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   const raf = (): Promise<number> => new Promise(r => requestAnimationFrame(r));
   const sampleMs = (opts.seconds ?? 6) * 1000;
   const settleMs = (opts.settleSeconds ?? 1.5) * 1000;
+
+  // THE DEADMAN BEAT (launcher/perfdeadman.cjs): under the desktop perf
+  // harness the perf-only preload (launcher/perf-preload.cjs) exposes
+  // window.__perfBeat → ipc 'perf:beat', and the launcher's watchdog reads
+  // the pulse — beats silent past its dial mean the renderer's main thread
+  // is WEDGED (one endless World.update starves rAF, saves and stdout all
+  // at once; two 2026-08-01 verdict sweeps died as 19-minute silent
+  // freezes). Boundary beats also CARRY each completed row, so a killed
+  // run still yields a partial report and the launcher can print live
+  // progress. In dev-browser play the bridge doesn't exist and every call
+  // no-ops. beatWalk pulses ~1/s from the walk loop's continuation — after
+  // the frame-task mark, beside the whisker work, so its sub-ms cost bills
+  // the sampler, never the game's own frame.
+  const beatFn = (window as unknown as { __perfBeat?: (p: unknown) => void }).__perfBeat;
+  let beatTileset = '(sweep)';
+  let beatWalkAt = 0;
+  const beat = (at: string, extra?: Record<string, unknown>): void => {
+    if (!beatFn) return;
+    try { beatFn({ at, tileset: beatTileset, t: Math.round(performance.now()), ...extra }); }
+    catch { /* beat-wire rot must never fail a measurement */ }
+  };
+  const beatWalk = (): void => {
+    const nw = performance.now();
+    if (nw - beatWalkAt < 1000) return;
+    beatWalkAt = nw;
+    beat('walk');
+  };
 
   // THE LONGTASK LEDGER: one PerformanceObserver for the whole sweep, its
   // counts windowed per zone at the steady boundaries. Long Tasks catch
@@ -273,6 +320,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
 
   // A fresh probe run through the REAL start path (menus dismissed).
   g.devStartRun(opts.classId);
+  beat('start');
 
   // THE GATE PINS SCALE 1 (render/renderScale.ts): the sweep judges the
   // authored render bill — an auto-governor stepping the buffer down mid-
@@ -376,6 +424,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       prevTask = taskEnd - now;
       if (prevTask > taskMax) taskMax = prevTask;
       prev = now;
+      beatWalk(); // the deadman's ~1/s pulse (sampler-side, post-mark)
       dir += WALK_TURN_RATE * Math.min(gap, WALK_DT_CLAMP_MS) / 1000;
       if (g.world().zone.id !== homeZid) return { worst, held: false, taskMax, offTask40 };
     }
@@ -403,6 +452,8 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   // cannot hold one clean window pair in HOLD_ATTEMPTS tries returns null
   // and skips — measured never trumps honest.
   const sampleCurrentZone = async (tilesetId: string): Promise<PerfZoneStats | null> => {
+    beatTileset = tilesetId; // the deadman's holder: who owns the window now
+    beat('sample');
     const homeZid = g.world().zone.id;
     // Worst entry gap across ALL attempts: the first attempt carries the
     // mint's true load burst — a retry's cheaper re-entry must not launder
@@ -446,7 +497,8 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       if (!steady.held) { if (!returnHome()) break; continue; }
       ltDrain(); // pending in-window entries, folded before the snapshot
       const zw2 = g.world();
-      return reduceFrames(g.perfFrames(false), entryWorst, {
+      const dump = g.perfFrames(false); // rings + the PHASE LEDGER's window slab
+      return reduceFrames(dump, entryWorst, {
         tileset: tilesetId, zone: zw2.zone.name,
         variant: zw2.zone.variantName ?? null,
         layout: zw2.zone.layoutType ?? 'plains',
@@ -457,6 +509,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
         taskMax: +steady.taskMax.toFixed(1), offTask40: steady.offTask40,
         ltCount: ltObs ? ltLedger.count : -1,
         ltWorst: ltObs ? +ltLedger.worst.toFixed(1) : -1,
+        slabName: dump.phase.name, slabMs: +dump.phase.ms.toFixed(1),
       });
     }
     return null;
@@ -470,6 +523,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   pinWeather();
   const control = await sampleCurrentZone('(town)');
   if (!control) throw new Error('perfSweep: the town control could not hold its window — sweep aborted');
+  beat('control', { row: control });
 
   // THE MATRIX: frontier-eligible tilesets first (registry order — their
   // mint-seed indices are calibration state and must not shift), then the
@@ -497,6 +551,10 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   for (const id of matrix) {
     const idx = fullMatrix.indexOf(id);
     const pin = opts.mintPins?.[id] ?? opts.mintPins?.['*'];
+    // Name the holder BEFORE the synchronous mint: a wedge inside the mint
+    // path itself then wears the right tileset in the deadman's row.
+    beatTileset = id;
+    beat('mint');
     const zid = g.world().devMintTileset(id, PERF_SPREAD_BASE + idx, 8, {
       ...(pin?.seed !== undefined ? { seed: pin.seed }
         : opts.mintSeed !== undefined ? { seed: mintSeedFor(opts.mintSeed, id) } : {}),
@@ -504,7 +562,9 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       ...(pin?.layout ? { layoutType: pin.layout } : {}),
     });
     if (!zid) {
-      skipped.push({ id, class: 'unmintable', note: 'the registry has no such tileset' });
+      const skip: PerfSkipRow = { id, class: 'unmintable', note: 'the registry has no such tileset' };
+      skipped.push(skip);
+      beat('skip', { skip });
       continue;
     }
     if (g.world().zone.id !== zid) {
@@ -512,7 +572,9 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       // refused layout): without this guard the row samples whatever zone
       // the walker is still standing in and wears its numbers as a pass —
       // snowcrown wore the TOWN's row (2026-07-19).
-      skipped.push({ id, class: 'load-fallback', note: `load fell back to '${g.world().zone.name}'` });
+      const skip: PerfSkipRow = { id, class: 'load-fallback', note: `load fell back to '${g.world().zone.name}'` };
+      skipped.push(skip);
+      beat('skip', { skip });
       continue;
     }
     pinWeather(); // re-pin on the fresh zone's own node
@@ -525,10 +587,13 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       // like a breach (launcher/main.cjs skip gate; the committed waiver
       // for a deliberately unholdable row is overrides[<id>].allowSkip in
       // balance/perf.config.json — the 2026-08-01 ratified policy).
-      skipped.push({ id, class: 'hold', note: `walker could not hold the zone in ${HOLD_ATTEMPTS} attempts` });
+      const skip: PerfSkipRow = { id, class: 'hold', note: `walker could not hold the zone in ${HOLD_ATTEMPTS} attempts` };
+      skipped.push(skip);
+      beat('skip', { skip });
       continue;
     }
     zones.push(stats);
+    beat('row', { row: stats });
   }
 
   // THE AGED CONTROL: the same town, the same window pair, at the sweep's
@@ -540,6 +605,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   g.world().devTravelTo(START_ZONE);
   pinWeather();
   const controlEnd = await sampleCurrentZone('(town aged)');
+  beat('aged', { row: controlEnd });
 
   g.fakePad(null);
   setVisAblate([]);

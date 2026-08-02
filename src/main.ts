@@ -520,7 +520,11 @@ declare global {
       fakePad: (p: FakePad | null) => void;
       step: (frames?: number, dtMs?: number) => void;
       devStartRun: (classId?: string) => string;
-      perfFrames: (reset?: boolean) => { gap: number[]; sim: number[]; ren: number[] };
+      perfFrames: (reset?: boolean) => {
+        gap: number[]; sim: number[]; ren: number[];
+        /** THE PHASE LEDGER's window-worst slab (name over pre/head/sim/ren/tail). */
+        phase: { name: string; ms: number };
+      };
       perfSweep: (opts?: PerfSweepOpts) => Promise<PerfSweepReport>;
       devPanel: () => void;
       crash: () => {
@@ -577,12 +581,17 @@ window.__game = {
   // how the perf sweep separates a zone's entry burst from its steady state.
   perfFrames: (reset = false) => {
     const n = perfCount, start = (perfIdx - n + PERF_RING) % PERF_RING;
-    const out = { gap: new Array<number>(n), sim: new Array<number>(n), ren: new Array<number>(n) };
+    const out = {
+      gap: new Array<number>(n), sim: new Array<number>(n), ren: new Array<number>(n),
+      // THE PHASE LEDGER's window-worst slab rides the same reset boundary
+      // as the rings, so a sweep window's slab is that window's alone.
+      phase: { name: phaseWorstName, ms: phaseWorstMs },
+    };
     for (let i = 0; i < n; i++) {
       const k = (start + i) % PERF_RING;
       out.gap[i] = perfGap[k]; out.sim[i] = perfSim[k]; out.ren[i] = perfRen[k];
     }
-    if (reset) { perfIdx = 0; perfCount = 0; }
+    if (reset) { perfIdx = 0; perfCount = 0; phaseWorstName = ''; phaseWorstMs = 0; }
     return out;
   },
   perfSweep: (opts?: PerfSweepOpts) => perfSweep(opts),
@@ -1261,6 +1270,36 @@ function perfPush(gap: number, sim: number, ren: number): void {
   perfGap[perfIdx] = gap; perfSim[perfIdx] = sim; perfRen[perfIdx] = ren;
   perfIdx = (perfIdx + 1) % PERF_RING;
   if (perfCount < PERF_RING) perfCount++;
+  phaseMark('sim', sim); phaseMark('ren', ren); // the bracketed slabs join the ledger
+}
+
+// THE PHASE LEDGER (perf attribution, 2026-08-02): coarse wall-clock marks
+// around the frame's major slabs, folded to ONE window-worst (name, ms) that
+// perfFrames ships beside the rings — so a perf-sweep row whose gapMax ≈
+// taskMx with sim99/ren99 both tiny (the 2026-08-01 verdict sweep's
+// metropolis 367ms task, sim 8 / ren 6: a giant slab inside the frame task
+// but outside BOTH engine brackets) SELF-ATTRIBUTES instead of needing a
+// hand bisect. The slabs and their anchors:
+//   'pre'  — rAF timestamp → tick-callback entry. The ONLY mark anchored on
+//            the vsync timestamp (deliberately the same anchor as the
+//            sampler's coarse taskMax): a foreign task (GC, timer, idle
+//            autosave) overhanging the tick delays the whole callback batch
+//            and wears the frame's name in taskMax — this mark measures
+//            exactly that overhang, disambiguating the coarse-anchor trap.
+//            (step()-driven synthetic frames mint a bogus 'pre'; the ledger
+//            is only read by the perf sweep, which drives real rAF.)
+//   'head' — tick entry → the sim bracket (pad poll, pointer, couch tick).
+//   'sim'/'ren' — the standing brackets, folded at perfPush (same frame).
+//   'tail' — post-perfPush → end of the host branch (net broadcast +
+//            hostTail). A tail slab CANNOT flush before its own frame's
+//            perfPush by position (hostTail runs after it), so it CARRIES
+//            to the NEXT tick's fold — ≤1 frame late, and a window's last
+//            tail lands in the gap after it closes. Coarse by design.
+// Cost: three performance.now() calls + compares per frame; always on, like
+// the rings themselves.
+let phaseWorstName = '', phaseWorstMs = 0, phasePendTail = 0;
+function phaseMark(name: string, ms: number): void {
+  if (ms > phaseWorstMs) { phaseWorstName = name; phaseWorstMs = ms; }
 }
 
 // --- THE RENDER-SCALE GOVERNOR (render/renderScale.ts; Settings.renderScale) --
@@ -1316,6 +1355,9 @@ function tick(now: number): void {
     throw new Error('?crashtest — deliberate crash-trap drill from the rAF loop');
   }
   const frameGapMs = now - last; // true frame pacing, BEFORE the dt clamp
+  const tickT0 = performance.now(); // PHASE LEDGER anchor: callback start
+  phaseMark('pre', tickT0 - now); // vsync→callback overhang (a foreign task)
+  phaseMark('tail', phasePendTail); phasePendTail = 0; // last frame's tail, carried
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
 
@@ -1375,6 +1417,7 @@ function tick(now: number): void {
     if (net.isHost) {
       // ---- HOST (and single-player / local co-op): run the one real sim. ----
       const perfSimT0 = performance.now();
+      phaseMark('head', perfSimT0 - tickT0); // input/pad/pointer/couch slab
       // 1. Local UI (pause menu, panels) — never gameplay intent. The couch
       //    guests' panel toggles ride their own pads right behind.
       handleLocalPanels();
@@ -1480,6 +1523,7 @@ function tick(now: number): void {
       const perfRenT0 = performance.now();
       renderer.render(world);
       perfPush(frameGapMs, perfRenT0 - perfSimT0, performance.now() - perfRenT0);
+      const perfTailT0 = performance.now(); // PHASE LEDGER: the tail starts here
 
       // Broadcast to connected clients. Gated on a REAL wire (never LocalTransport),
       // so single-player AND local co-op (a stand-in ally is a LocalTransport peer)
@@ -1509,6 +1553,7 @@ function tick(now: number): void {
       }
 
       hostTail(dt);
+      phasePendTail = performance.now() - perfTailT0; // flushes at the NEXT tick's fold
     } else {
       // ---- CLIENT: run NO sim. Send local input, render the host's snapshot. ----
       handleLocalPanels();
