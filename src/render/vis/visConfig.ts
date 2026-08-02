@@ -55,6 +55,36 @@ export const VIS_CFG = {
     waneRate: 2.4,
   },
 
+  /** THE HIT FLASH (vis/hitFlash.ts) — the landed blow's read on the struck
+   *  body. The damage funnel stamps Actor.hitFlash in seconds, GRADED by
+   *  what landed (0.10 block-chip / 0.12 ply chip / 0.15 wound); DoT ticks
+   *  never stamp (the knock law's discrimination). Duration therefore lives
+   *  in the ENGINE stamps — these dials shape how the remainder draws. */
+  hitFlash: {
+    /** 'fill' washes the body silhouette white over its normal look;
+     *  'outline' draws a white rim where the dark outline usually sits. */
+    mode: 'fill' as 'fill' | 'outline',
+    /** Peak overlay alpha at a full wound stamp (1 would be the retired
+     *  hard white swap; composition wants the body still readable). */
+    alpha: 0.62,
+    /** Ramp reference, ms: drawn alpha = alpha × min(1, stampSec/(ms/1000)).
+     *  Shorter chip/ply stamps enter the ramp lower — grazes read dimmer
+     *  than wounds by construction. */
+    ms: 120,
+    /** 'outline' rim thickness (world px — the body.outlineWidth register). */
+    outlinePx: 1.7,
+    /** Fill implementation. 'bake' = the cached white-silhouette sprite
+     *  (the tell fabric's pre-bake idiom; the measured winner on a crowded
+     *  zone). 'composite' = per-draw source-in whiten through ONE reused
+     *  scratch canvas — the measured alternative, kept as a lever. Neither
+     *  path allocates per frame. */
+    impl: 'bake' as 'bake' | 'composite',
+    /** The LOCAL pain read: heroes (kind 'player') flash a touch dimmer
+     *  with a longer tail, so your own body never strobes you in a crowd
+     *  while still landing the "I was struck" beat. */
+    player: { alpha: 0.5, ms: 150 },
+  },
+
   /** THE COLOR DRIFT (colorDrift.ts): drift-bound looks morph their base
    *  color through a registered palette. */
   colorDrift: {

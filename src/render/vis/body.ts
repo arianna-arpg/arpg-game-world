@@ -380,7 +380,7 @@ function strSeed(s: string): number {
   return (h >>> 0) % 100000;
 }
 
-function bodyKey(look: BodyLook): string {
+export function bodyKey(look: BodyLook): string {
   const tack = look.extraParts?.length ? JSON.stringify(look.extraParts) : '';
   return `${look.shape}|${look.radius.toFixed(1)}|${look.color}|${look.material ?? ''}|${look.outline ?? ''}|${look.look ?? ''}|${tack}`;
 }

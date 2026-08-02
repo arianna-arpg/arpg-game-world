@@ -61,7 +61,8 @@ import { FACTIONS, MONSTERS } from '../data/monsters';
 import { PACK_CFG, packLinks, type LinkStyleOf, type PackLink } from '../engine/pack';
 import { hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
-import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, drawPartSpecs, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
+import { adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, drawPartSpecs, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
+import { drawAdornHitFlash, drawBodyHitFlash, hitFlashAlphaOf } from './vis/hitFlash';
 import { TELL_CFG, tellDressOf } from '../engine/tells';
 import { drawWatchSense, drawWatchTrails } from './vis/watchLayer';
 import { driftColor } from './vis/colorDrift';
@@ -4406,7 +4407,9 @@ export class Renderer {
       extraParts: a.extraParts,
     };
     const half = spriteHalf(a.radius);
-    const flash = a.hitFlash > 0;
+    // THE HIT FLASH (vis/hitFlash.ts): the landed blow's composed overlay,
+    // resolved ONCE per body per frame — a silent body pays one field read.
+    const flashA = hitFlashAlphaOf(a);
     const lookDef = lookOf(a.look);
     // THE COLOR DRIFT (vis/colorDrift.ts): a look whose color is weather —
     // the base morphs through its registered palette on the world clock
@@ -4420,7 +4423,9 @@ export class Renderer {
     const rot = lookDef || shapeIsOriented(a.shape) ? a.facing : 0;
     // SURFACE MIRROR (RegionKind.surfaceMirror — ice today): a faded, flipped
     // ghost of the body beneath it — the frozen sheet reflects its crossers.
-    if (regionKind(a.groundKind)?.surfaceMirror && !flash) {
+    // (The mirror reflects the CALM base look even mid-flash — the overlay
+    // language keeps the body drawn, so the old flash skip is retired.)
+    if (regionKind(a.groundKind)?.surfaceMirror) {
       ctx.save();
       ctx.translate(0, a.radius * 1.85);
       ctx.scale(1, -0.8);
@@ -4485,22 +4490,27 @@ export class Renderer {
       }
     }
     if (rot !== 0) ctx.rotate(rot);
-    ctx.drawImage(flash ? bodyFlashSprite(look) : bodySprite(look), -half, -half);
+    ctx.drawImage(bodySprite(look), -half, -half);
+    // THE HIT FLASH rides the body's own pose — a white wash or rim OVER
+    // the bake, never a swap: tints, live parts and worn gauges keep
+    // speaking beneath it, and baseAlpha already folds every fade lane.
+    if (flashA > 0) drawBodyHitFlash(ctx, look, baseAlpha * flashA);
     // Animated look parts (wisps, flames) ride in the same facing space.
-    if (lookDef?.live && !flash) drawLiveParts(ctx, look, lookDef, world.time);
+    if (lookDef?.live) drawLiveParts(ctx, look, lookDef, world.time);
     if (rot !== 0) ctx.rotate(-rot);
     // THE WORN GAUGES (tell dress parts): live meters in facing space —
     // the adorn law (a gauge tracks the snout on every body, look or
     // legacy). Values already live in each instance's params (`fill`).
-    if (tdress?.parts && !flash) {
+    if (tdress?.parts) {
       ctx.rotate(a.facing);
       drawPartSpecs(ctx, look, tdress.parts, world.time);
       ctx.rotate(-a.facing);
     }
-    const adornImg = flash ? adornFlashSprite(look) : adornSprite(look);
+    const adornImg = adornSprite(look);
     if (adornImg) {
       ctx.rotate(a.facing);
       ctx.drawImage(adornImg, -half, -half);
+      if (flashA > 0) drawAdornHitFlash(ctx, look, baseAlpha * flashA);
       ctx.rotate(-a.facing);
     }
     ctx.restore();
