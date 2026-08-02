@@ -20,7 +20,7 @@ import type { CurveKind } from './curves';
 import type { ConjureGrant } from './flux';
 import type { ChronoSpec } from './timeflow';
 import type { ThrongSourceRow, ThrongSpec } from './throng';
-import type { GrabSpec } from './grab';
+import type { GrabHandoffSpec, GrabSpec } from './grab';
 import type { PossessSpec, ShiftSpec } from './possess';
 import type { PartSpec } from '../render/vis/parts';
 
@@ -3329,8 +3329,14 @@ export interface GrabSeizeEffect { type: 'grabSeize'; grab: GrabSpec; }
  *  the thrown body itself on release (the send-off blow); the impulse
  *  scales with the caster's shoveAuthority inside pushActor as ever.
  *  Gate the carrying skill with `gate: { holding: true }` so the press
- *  refuses honestly when nothing is held. */
-export interface GrabThrowEffect { type: 'grabThrow'; impulse: number; damageMult?: number; }
+ *  refuses honestly when nothing is held. `handoff` is THE FRIENDLY CATCH
+ *  (engine/grab.ts GrabHandoffSpec): offer the catch to an eligible kin
+ *  holder first — the pair re-points and REELS, no flight, no send-off
+ *  blow — falling back to the ordinary launch when none stands. */
+export interface GrabThrowEffect {
+  type: 'grabThrow'; impulse: number; damageMult?: number;
+  handoff?: GrabHandoffSpec;
+}
 
 /** Leaves a lingering damage zone at the impact point (Expunge's cloud). */
 export interface SpawnZoneEffect {

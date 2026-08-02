@@ -9,12 +9,16 @@
 // spit-at-foe), THE THROW (pair release, authored push, wall-kill credit,
 // re-seize grace), the Takedown combo measure riding the grab/throw tags,
 // policy tiers + per-def overrides + the mass gate, the gore-stakes
-// minSpeed contact row, and determinism.
+// minSpeed contact row, determinism, and THE FRIENDLY CATCH (the hand-off:
+// atomic pair re-point + reel, struggle carried, mass-law refusal + empty-
+// field fallbacks to the ordinary launch, mid-reel sever + receiver-death
+// releases, the press path through the grabThrow effect's handoff field).
 // Run: npx tsx balance/probe_grab.ts
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
+import { makeSkillInstance } from '../src/engine/skills';
 import { SKILLS } from '../src/data/skills';
 import { MONSTERS } from '../src/data/monsters';
 import { LOOKS } from '../src/data/looks';
@@ -433,6 +437,184 @@ const tick = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
   };
   const a = script(0x5eed), b = script(0x5eed);
   check('determinism: the same seed writes the same throw', a === b, a);
+}
+
+// --- 8) THE FRIENDLY CATCH: the hand-off ------------------------------------
+// The throw grammar's handoff field passes the catch to a kin holder: the
+// pair re-points ATOMICALLY (no release, no flight, no grace) and the
+// ordinary slave step reels the body across — held every frame of the pass.
+{
+  const w = makeSimWorld('summoner', 0x9a08);
+  const p = w.player;
+  p.pos = w.clampPos(vec(w.arena.w / 2, w.arena.h / 2), p.radius);
+  const m = w.createMonster('yoke_mauler', Math.max(3, p.level), 'enemy');
+  const g = w.createMonster('gorge_gulper', Math.max(4, p.level), 'enemy');
+  // The receiver sits PERPENDICULAR to the thrower so the reel lane is
+  // clear: a body parked dead-center in the lane shoulder-locks the
+  // crossing (the separation pass's third-party law re-arms against the
+  // reel every frame — a passive obstacle marches glued at ~1/5 speed;
+  // live brains break the lock, frozen probe brains never would).
+  const place = (): void => {
+    m.pos = vec(p.pos.x + 55, p.pos.y);       // nearest — the mauler seizes
+    g.pos = vec(p.pos.x, p.pos.y - 225);      // in range of m (~232 < 260), lane clear
+  };
+  place();
+  w.actors.push(m, g);
+  const gulpFx = SKILLS.gulp.effects.find(f => f.type === 'grabSeize');
+  const gulpSpec = gulpFx?.type === 'grabSeize' ? gulpFx.grab : { verb: 'swallow' as const };
+
+  // Pure law: the handoffFrom mask waives exactly the two rungs the pass
+  // makes moot — the victim's current binding and the swallow's conceal —
+  // and answers every other rung with the receiver's own numbers.
+  check('handoff staging: the mauler pins me', w.devGrabSeizeMe('pin') && m.gripping?.id === p.id);
+  check('law: mid-hold the plain read refuses (already held)',
+    grabRefusal(g, p, gulpSpec, 0) === 'already held');
+  check('law: the handoffFrom mask makes the receiver eligible',
+    grabRefusal(g, p, gulpSpec, 0, m.gripping!) === null);
+  // The conceal reads the hold's own record, not the live flag: a mid-
+  // swallow catch (untargetable NOW, targetable before the first seize)
+  // passes the masked read; a body that was untargetable BEFORE any hand
+  // touched it stays refused however it is currently held.
+  p.untargetable = true; // a live swallow's conceal
+  const maskedClear = grabRefusal(g, p, gulpSpec, 0, m.gripping!);
+  m.gripping!.wasUntargetable = true; // as if the FIRST seize found no purchase either
+  const maskedVeiled = grabRefusal(g, p, gulpSpec, 0, m.gripping!);
+  m.gripping!.wasUntargetable = false;
+  p.untargetable = false;
+  check('law: the conceal reads through wasUntargetable (the pre-seize truth)',
+    maskedClear === null && maskedVeiled === 'no purchase');
+
+  // THE PASS (the patience chokepoint): bank struggle, temper the live
+  // hold's spec (a COPY — the registry object is shared), end patience.
+  m.gripping!.struggle = 0.37;
+  m.gripping!.spec = { ...m.gripping!.spec, throw: { impulse: 480, handoff: {} } };
+  m.gripping!.until = w.time;
+  tick(w, 0.05);
+  check('the pass: the pair re-pointed to the receiver ATOMICALLY',
+    p.heldBy === g.id && g.gripping?.id === p.id && !m.gripping);
+  check('THE CARRY LAW: banked struggle rides the pass untouched',
+    g.gripping!.struggle >= 0.37 && g.gripping!.struggle < 0.42,
+    `carried ${g.gripping!.struggle.toFixed(3)}`);
+  check('the receiver holds with its OWN art (gulp — verb, marker, conceal)',
+    g.gripping!.verb === 'swallow' && g.gripping!.skillId === 'gulp'
+    // (truthy read, not === true — the checker narrowed the field to the
+    // literal false we staged above and cannot see the sweep re-flag it)
+    && p.statuses.some(s => s.id === 'swallowed') && !!p.untargetable);
+  check('no flight, no grace: a pass is not a release',
+    p.push == null && p.grabProofUntil === 0);
+  check('the sever accumulator starts FRESH on the new body',
+    g.gripping!.severed === 0);
+
+  // THE REEL: held every frame of the crossing, converging on the one
+  // resolver's seat (drawn == held — the wire's own read rides the same
+  // pair, so the gb meter re-labels and keeps its fraction seamlessly).
+  tick(w, 0.1);
+  const seat = { x: 0, y: 0 };
+  grabSeatPos(g, p, g.gripping!, seat);
+  check('mid-reel: still held, still crossing (no teleport)',
+    p.heldBy === g.id && dist(p.pos, seat) > 40,
+    `gap ${dist(p.pos, seat).toFixed(0)}`);
+  tick(w, 0.8);
+  grabSeatPos(g, p, g.gripping!, seat);
+  const cSeat = w.clampPos(vec(seat.x, seat.y), p.radius);
+  check('the reel converges on grabSeatPos (drawn == held)',
+    p.heldBy === g.id && dist(p.pos, cSeat) < 2, `off by ${dist(p.pos, cSeat).toFixed(2)}`);
+
+  // MID-TRANSFER SEVER: the ladder keeps working while the body crosses —
+  // a receiver wounded past severFrac mid-reel drops the catch where the
+  // reel left it (grace stamped; never dragged on to the seat).
+  w.devGrabClearAll();
+  p.grabProofUntil = 0;
+  place();
+  check('re-pin for the mid-reel sever', w.devGrabSeizeMe('pin') && m.gripping?.id === p.id);
+  m.gripping!.spec = { ...m.gripping!.spec, throw: { impulse: 480, handoff: {} } };
+  m.gripping!.until = w.time;
+  tick(w, 0.05);
+  check('...passed and reeling', p.heldBy === g.id);
+  g.gripping!.severed = 1; // allies tore the NEW holder open mid-crossing
+  const preSeat = { x: 0, y: 0 };
+  grabSeatPos(g, p, g.gripping!, preSeat);
+  tick(w, 0.05);
+  check('mid-reel SEVER releases through the standing ladder',
+    p.heldBy === undefined && !g.gripping && p.grabProofUntil > w.time);
+  check('...freed where the reel left it, conceal restored',
+    dist(p.pos, preSeat) > 40 && p.untargetable === false);
+
+  // A DYING RECEIVER mid-reel: the pair dies with either body — the sweep
+  // frees the catch; an unowned in-between state never exists.
+  p.grabProofUntil = 0;
+  place();
+  check('re-pin for the dying receiver', w.devGrabSeizeMe('pin') && m.gripping?.id === p.id);
+  m.gripping!.spec = { ...m.gripping!.spec, throw: { impulse: 480, handoff: {} } };
+  m.gripping!.until = w.time;
+  tick(w, 0.05);
+  check('...passed and reeling again', p.heldBy === g.id);
+  w.kill(g, true);
+  tick(w, 0.1);
+  check('the receiver DIES mid-reel: freed, restored, marker stripped',
+    p.heldBy === undefined && p.untargetable === false
+    && !p.statuses.some(s => s.id === 'swallowed'));
+}
+
+// --- 9) The friendly catch: fallbacks + the press path ----------------------
+{
+  const w = makeSimWorld('summoner', 0x9a09);
+  const p = w.player;
+  p.pos = w.clampPos(vec(w.arena.w / 2, w.arena.h / 2), p.radius);
+  const m = w.createMonster('yoke_mauler', Math.max(3, p.level), 'enemy');
+  const g = w.createMonster('gorge_gulper', Math.max(4, p.level), 'enemy');
+  m.pos = vec(p.pos.x + 55, p.pos.y);
+  g.pos = vec(p.pos.x, p.pos.y - 225); // perpendicular — the reel lane stays clear
+  w.actors.push(m, g);
+  const gulpFx = SKILLS.gulp.effects.find(f => f.type === 'grabSeize');
+  const gulpSpec = gulpFx?.type === 'grabSeize' ? gulpFx.grab : { verb: 'swallow' as const };
+
+  // MASS-LAW REFUSAL → FALLBACK: the receiver stands in range but cannot
+  // hold the catch — the throw falls back to the ordinary authored launch.
+  // The weight is sized to refuse the GULPER (past its anatomy ceiling)
+  // while leaving the launch a real flight: a mountain's push would decay
+  // under the sweep's 40-speed floor before the assert could see it.
+  check('fallback staging: pinned light', w.devGrabSeizeMe('pin') && m.gripping?.id === p.id);
+  p.sheet.setSource('probe',
+    [mod('weight', 'flat', g.effectiveWeight() * GRAB_CFG.eligibility.maxRatio + 4)]);
+  check('law: the in-range receiver is MASS-refused under the mask',
+    grabRefusal(g, p, gulpSpec, 0, m.gripping!) === 'far too heavy');
+  m.gripping!.spec = { ...m.gripping!.spec, throw: { impulse: 480, handoff: {} } };
+  m.gripping!.until = w.time;
+  tick(w, 0.05);
+  check('mass-law refusal falls back to the ORDINARY launch (authored)',
+    p.heldBy === undefined && !m.gripping && !g.gripping
+    && p.push != null && p.push.caster === m && p.grabProofUntil > w.time);
+  p.sheet.setSource('probe', []);
+
+  // EMPTY FIELD → FALLBACK: no receiver in range at all.
+  p.grabProofUntil = 0;
+  g.pos = vec(p.pos.x, p.pos.y - 900); // far beyond handoff range
+  m.pos = vec(p.pos.x + 55, p.pos.y);
+  check('re-pin on an empty field', w.devGrabSeizeMe('pin') && m.gripping?.id === p.id);
+  m.gripping!.spec = { ...m.gripping!.spec, throw: { impulse: 480, handoff: {} } };
+  m.gripping!.until = w.time;
+  tick(w, 0.05);
+  check('no receiver in range: the throw launches exactly as ever',
+    p.heldBy === undefined && !g.gripping
+    && p.push != null && p.push.caster === m);
+
+  // THE PRESS PATH: the grabThrow EFFECT's handoff field through the one
+  // pipeline — the mauler presses a handoff-tempered toss and the catch
+  // changes hands instead of flying.
+  p.grabProofUntil = 0;
+  g.pos = vec(p.pos.x, p.pos.y - 225); // back in range, lane still clear
+  m.pos = vec(p.pos.x + 55, p.pos.y);
+  check('re-pin for the press', w.devGrabSeizeMe('pin') && m.gripping?.id === p.id);
+  const tossFx = SKILLS.mauler_toss.effects.find(f => f.type === 'grabThrow');
+  check('press staging: the toss row stands', tossFx?.type === 'grabThrow');
+  if (tossFx?.type === 'grabThrow') {
+    const probeToss = { ...SKILLS.mauler_toss, effects: [{ ...tossFx, handoff: {} }] };
+    const pressed = w.useSkill(m, makeSkillInstance(probeToss, 1), vec(p.pos.x + 400, p.pos.y));
+    tick(w, 0.8); // through the toss's cast bar; the resolve runs the pass
+    check('the press passes the catch (fx.handoff through the one pipeline)',
+      pressed && p.heldBy === g.id && g.gripping?.id === p.id && !m.gripping);
+  }
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

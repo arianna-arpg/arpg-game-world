@@ -180,7 +180,7 @@ import {
 import {
   GRAB_CFG, GRAB_MARKER, GRAB_VERB_LABEL, grabHolderMove, grabHoldBounds,
   grabRefusal, grabSeatPos, LEDGER_SEIZED, struggleRate,
-  type GrabSpec, type GrabThrowSpec, type GrabVerb,
+  type GrabHandoffSpec, type GrabSpec, type GrabThrowSpec, type GrabVerb,
 } from './grab';
 import {
   POSSESS_CFG, possessPowerFactor, possessRefusal, riderRefusal,
@@ -26475,9 +26475,12 @@ export class World {
         continue;
       }
       if (this.time >= hold.until) {
-        // Patience ends at the HOLDER's choosing: a throw-spec spits the
-        // catch (the gulper aims it at your allies), else a plain drop.
+        // Patience ends at the HOLDER's choosing: a handoff-tempered throw
+        // offers the catch to kin FIRST (THE FRIENDLY CATCH — grabHandoff),
+        // then a throw-spec spits it (the gulper aims it at your allies),
+        // else a plain drop.
         const t = hold.spec.throw;
+        if (t?.handoff && this.grabHandoff(a, v, t.handoff)) continue;
         if (t) this.grabThrowRelease(a, t.impulse, this.grabSpitDir(a, v, t));
         else this.grabRelease(a);
         continue;
@@ -26590,6 +26593,100 @@ export class World {
       if (best) return angleTo(a.pos, best.pos);
     }
     return a.facing;
+  }
+
+  /** THE FRIENDLY CATCH (the hand-off): pass the current catch to an
+   *  eligible KIN holder instead of launching it. The receiver must stand
+   *  within the spec's range, in sight, awake, with FREE HANDS, and hold
+   *  the mass law with its OWN grab art — the first grabSeize row in its
+   *  kit supplies the receiving verb and spec (the gulper receives by
+   *  swallowing, the mauler by pinning; a body with no grab art cannot
+   *  catch), its own gripPower folds at the gate, and the victim's policy
+   *  tier answers exactly like a fresh seize (grabRefusal's handoffFrom
+   *  read). THE TRANSFER is atomic: the pair re-points in one step — no
+   *  release, no pushActor flight, no grace stamp — and the ordinary
+   *  slave step REELS the body to the new seat at reelSpeed, so it is
+   *  drawn == held through every frame of the pass and an unowned
+   *  "in flight between holders" state never exists by construction:
+   *  mid-reel the pair is ordinary, so ally sever, hard-CC, shove
+   *  releases, struggle, reflex flasks and a DYING RECEIVER all resolve
+   *  through the standing ladder (a dead receiver drops the catch where
+   *  the reel left it, grace stamped; the old holder's death after the
+   *  pass moves nothing — it owns nothing). THE CARRY LAW: the struggle
+   *  meter rides the pass untouched — a juggle chain can never zero the
+   *  victim's banked escape, which is the anti-infinite-hold guarantee
+   *  precisely BECAUSE no release means no grace. Sever starts fresh
+   *  (holder-scoped: allies must wound the NEW body), patience re-rolls
+   *  (the receiver's own hold length), the bearing carries (the ride
+   *  reads stable), and wasUntargetable carries the FIRST seize's truth
+   *  so the final release restores honestly across any chain. No
+   *  send-off blow — the receiving verb's own payload is the punishment.
+   *  Returns false with the hold UNTOUCHED when no receiver qualifies —
+   *  the caller falls back to the ordinary launch (absent == identical). */
+  private grabHandoff(from: Actor, v: Actor, hs: GrabHandoffSpec): boolean {
+    const hold = from.gripping;
+    if (!hold || hold.id !== v.id || v.dead) return false;
+    const range = hs.range ?? GRAB_CFG.handoff.range;
+    let best: Actor | null = null, bestInst: SkillInstance | null = null,
+      bestSpec: GrabSpec | null = null, bd = range;
+    for (const r of this.actors) {
+      if (r === from || r === v || r.dead) continue;
+      // Kin hands, foe catch: the receiver stands with the thrower and
+      // against the victim (faction-honest — minion courts qualify).
+      if (this.hostileTo(from, r) || !this.hostileTo(r, v)) continue;
+      if (isDormant(r) || r.passive || r.untargetable) continue; // a sleeper catches nothing
+      const dd = dist(from.pos, r.pos);
+      if (dd >= bd) continue;
+      let rInst: SkillInstance | null = null, rSpec: GrabSpec | null = null;
+      for (const s of r.skills) {
+        const f = s?.def.effects.find(e => e.type === 'grabSeize');
+        if (f?.type === 'grabSeize') { rInst = s; rSpec = f.grab; break; }
+      }
+      if (!rInst || !rSpec) continue;              // receiving IS holding — no art, no catch
+      const grip = r.sheet.get('gripPower', skillContextTags(rInst.def), instanceMods(rInst));
+      if (grabRefusal(r, v, rSpec, grip, hold)) continue;
+      if (!this.lineOfSight(from.pos, r.pos)) continue; // no blind passes through masonry
+      bd = dd; best = r; bestInst = rInst; bestSpec = rSpec;
+    }
+    if (!best || !bestInst || !bestSpec) return false;
+    // THE TRANSFER — search then commit; nothing above mutated. The verb
+    // may CHANGE hands (drag → swallow): strip the old markers NOW (the
+    // no-ghost-pip law), settle the conceal per the new verb, and let the
+    // fresh statusAt beat re-stamp marker + rideStatus next sweep frame.
+    const nv = bestSpec.verb;
+    if (hold.verb === 'swallow' && nv !== 'swallow') {
+      v.untargetable = hold.wasUntargetable ?? false; // stepping OUT of the gullet's conceal
+    }
+    for (let i = v.statuses.length - 1; i >= 0; i--) {
+      const id = v.statuses[i].id;
+      if (id === 'seized' || id === 'swallowed') {
+        v.statuses.splice(i, 1);
+        v.sheet.removeSource('status:' + id);
+      }
+    }
+    from.gripping = undefined;
+    const bounds = grabHoldBounds(bestSpec);
+    best.gripping = {
+      id: v.id, verb: nv, spec: bestSpec,
+      until: this.time + rand(bounds[0], bounds[1]),
+      skillId: bestInst.def.id,
+      struggle: hold.struggle,   // THE CARRY LAW — banked escape rides the pass
+      severed: 0,                // holder-scoped: wounds must land on the NEW body
+      statusAt: this.time, dotAcc: 0,
+      bearing: hold.bearing,
+      wasUntargetable: hold.wasUntargetable,
+    };
+    v.heldBy = best.id;
+    if (nv === 'swallow') v.untargetable = true;
+    v.applyStatus(GRAB_MARKER[nv], 0, 1, 'grab');
+    best.aiTargetId = v.id;      // the catch IS the fight (the seize's own law)
+    this.text(vec(v.pos.x, v.pos.y - 14),
+      'passed — ' + GRAB_VERB_LABEL[nv] + '!', '#d8a06a', 13);
+    this.flashes.push({
+      pos: vec(best.pos.x, best.pos.y), radius: best.radius + v.radius + 10,
+      color: '#d8a06a', life: 0.2, maxLife: 0.2,
+    });
+    return true;
   }
 
   /** THE THROW: release the current hold as a directed impulse with the
@@ -29894,9 +29991,15 @@ export class World {
       // THE THROW (the grab fabric): release the current catch toward the
       // aim — the holding gate already refused an empty-handed press, so
       // a missing hold here (a race, a monster's optimism) is just quiet.
+      // A handoff-tempered throw offers the catch to kin FIRST (THE
+      // FRIENDLY CATCH — grabHandoff); only when no eligible receiver
+      // stands does the press fall back to the ordinary launch.
       if (fx.type === 'grabThrow' && caster.gripping) {
-        const dir = dist(aim, caster.pos) > 4 ? angleTo(caster.pos, aim) : caster.facing;
-        this.grabThrowRelease(caster, fx.impulse, dir, inst, fx.damageMult);
+        const hv = fx.handoff ? this.actorById(caster.gripping.id) : undefined;
+        if (!(fx.handoff && hv && this.grabHandoff(caster, hv, fx.handoff))) {
+          const dir = dist(aim, caster.pos) > 4 ? angleTo(caster.pos, aim) : caster.facing;
+          this.grabThrowRelease(caster, fx.impulse, dir, inst, fx.damageMult);
+        }
       }
       // THE RETURN (the possession seam): end the caster's current
       // embodiment, seat home — the Relinquish / Return to Flesh press,

@@ -64,6 +64,24 @@ import type { Actor } from './actor';
 /** The grab verbs — presets over one state pair (see header). */
 export type GrabVerb = 'carry' | 'drag' | 'pin' | 'swallow';
 
+/** THE FRIENDLY CATCH — a throw tempered to HAND the catch to kin instead
+ *  of launching it (the wrestling tag-in; the wrangler feeds the gulper).
+ *  Pure data on the throw grammar: a receiver must stand in range with a
+ *  FREE GRIP and its own grab art (the first grabSeize row in its kit —
+ *  the hand-off holds with the RECEIVER's verb), pass the mass law with
+ *  its own gripPower, and honor policy tiers exactly like a fresh seize.
+ *  The victim's pair re-points ATOMICALLY (no release, no pushActor
+ *  flight, no grace) and the ordinary slave step REELS it to the new seat
+ *  at reelSpeed — drawn == held through every frame of the pass. THE
+ *  CARRY LAW: the struggle meter rides the pass untouched, so a juggle
+ *  chain can never zero the victim's banked escape. Absent the spec, the
+ *  throw launches exactly as before (absent == identical). */
+export interface GrabHandoffSpec {
+  /** Receiver search reach, thrower-centered (world units; default
+   *  GRAB_CFG.handoff.range). The reel crosses the gap afterward. */
+  range?: number;
+}
+
 /** A throw-release: the hold ends as a directed impulse through pushActor
  *  (the holder is the caster — authority, impact wounds, pit credit all
  *  fold in from the mass fabric). */
@@ -76,6 +94,10 @@ export interface GrabThrowSpec {
    *  'away' = out from its own body (default). Player throws aim at the
    *  cursor through the grabThrow skill effect instead. */
   spitAt?: 'foe' | 'away';
+  /** THE FRIENDLY CATCH: offer the catch to an eligible kin holder FIRST;
+   *  only when none stands does the spit/launch above fire (the fallback
+   *  is the ordinary throw, byte-identical to a spec without this). */
+  handoff?: GrabHandoffSpec;
 }
 
 /** A grab temper — carried by a SkillEffect (grabSeize), so any skill in
@@ -252,6 +274,14 @@ export const GRAB_CFG = {
   throw: {
     impulse: 520,
   },
+
+  /** THE FRIENDLY CATCH defaults (GrabHandoffSpec overrides per row). */
+  handoff: {
+    /** Receiver search reach, thrower-centered (world units) — a short
+     *  lob to a packmate, not a cross-screen zip; the reel (reelSpeed)
+     *  carries the body over the gap afterward. */
+    range: 260,
+  },
 } as const;
 
 /** Verb → the marker status the victim wears (engine/status.ts rows —
@@ -288,17 +318,26 @@ export function grabPolicyOf(victim: Actor): number {
 /** May `holder` seize `victim` under `spec` right now? Returns null when
  *  eligible, else the refusal reason (probe- and failNote-friendly).
  *  PURE body/mass/policy law — the world adds its own gates it can test
- *  cheaply in the dispatch (distance, dormancy, grace, team). */
+ *  cheaply in the dispatch (distance, dormancy, grace, team).
+ *  `handoffFrom` marks a FRIENDLY-CATCH eligibility read (the receiver's
+ *  side of a hand-off): the victim is mid-hold in that very pair, so
+ *  'already held' is the premise rather than a refusal, and a swallow's
+ *  own conceal reads through the hold's wasUntargetable (the pre-seize
+ *  truth) instead of the live flag — every OTHER rung answers identically,
+ *  with the receiver's own hands, mass and the victim's policy. */
 export function grabRefusal(
   holder: Actor, victim: Actor, spec: GrabSpec, gripPower: number,
+  handoffFrom?: GripHold,
 ): string | null {
+  const passing = handoffFrom !== undefined && handoffFrom.id === victim.id;
   if (holder.dead || victim.dead) return 'dead';
   if (holder.gripping) return 'hands full';
-  if (victim.heldBy !== undefined) return 'already held';
+  if (victim.heldBy !== undefined && !passing) return 'already held';
   if (victim.gripping) return 'it is holding';   // no grab-chains: sever first
   if (holder.heldBy !== undefined) return 'held fast';
   if (holder.clingTo) return 'riding';           // a latched rider has no free hands
-  if (victim.untargetable || victim.passive || victim.invulnerable) return 'no purchase';
+  const veiled = passing ? (handoffFrom.wasUntargetable ?? false) : victim.untargetable;
+  if (veiled || victim.passive || victim.invulnerable) return 'no purchase';
   if (victim.construct || victim.anchored) return 'rooted fast';
   if (victim.leap || holder.leap) return 'mid-air';
   if (!!victim.flying !== !!holder.flying) return 'out of reach';

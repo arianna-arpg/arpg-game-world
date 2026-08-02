@@ -45,8 +45,8 @@ scope to exactly their half of the art (`iron_grip` / `trebuchet_arm`).
 `GrabSpec` rides a `grabSeize` skill effect — any skill in the one pipeline
 can seize; player grapples and monster maws are the same row. Axes:
 `holdSec`, `breakMult`, `severFrac`, `ratio`, `pad`, `rideStatus`, `dot` +
-`leech` + `burstHurt` (swallow), `throw` (`impulse`, `spitAt: 'foe'|'away'`),
-`haul` (AI hint), `holderMove`.
+`leech` + `burstHurt` (swallow), `throw` (`impulse`, `spitAt: 'foe'|'away'`,
+`handoff` — the friendly catch, below), `haul` (AI hint), `holderMove`.
 
 ## The mass law (engine/mass.ts is the basis — never duplicated)
 
@@ -77,6 +77,54 @@ thirst-gate idiom).
 
 Breaking OUT of a swallow wounds the holder (`burstHurt` of its max life,
 victim-credited). Every release stamps `grabProofUntil` (anti-chain grace).
+
+## The friendly catch (hand-offs)
+
+`GrabHandoffSpec` on EITHER throw grammar — `GrabSpec.throw.handoff` (the
+patience-end release) or the `grabThrow` effect's `handoff` (the deliberate
+press) — makes the throw offer the catch to KIN first: the wrestling
+tag-in, the wrangler feeding the gulper. One dial: `range` (default
+`GRAB_CFG.handoff.range`, thrower-centered).
+
+- **The receiver qualifies like a fresh seize**: kin to the thrower,
+  hostile to the victim, awake, in sight, FREE HANDS, and it must hold the
+  mass law with its OWN grab art — the first `grabSeize` row in its kit
+  supplies the receiving verb/spec (the gulper receives by SWALLOWING),
+  its own `gripPower` folds at the gate, and policy tiers +
+  `MonsterDef.grabbable` answer as ever (`grabRefusal`'s `handoffFrom`
+  read waives only the two rungs the pass makes moot: the victim's
+  current binding, and a swallow's conceal — read through
+  `wasUntargetable`, the pre-seize truth). No art, no catch.
+- **The transfer is atomic** — the pair re-points in one step (no release,
+  no pushActor flight, no grace stamp) and the ordinary slave step REELS
+  the body to the new seat at `reelSpeed`: drawn == held through every
+  frame of the pass, so an unowned "in flight between holders" state
+  never exists. Mid-reel the pair is ordinary — struggle, ally sever
+  (against the NEW body), hard-CC, shove releases and reflex flasks all
+  keep working, and a receiver that DIES mid-reel drops the catch where
+  the reel left it through the standing sweep (the old holder's death
+  after the pass moves nothing — it owns nothing).
+- **THE CARRY LAW**: the struggle meter rides the pass untouched — the
+  anti-infinite-hold guarantee for juggle chains, precisely BECAUSE no
+  release means no grace. Sever starts fresh (holder-scoped), patience
+  re-rolls (the receiver's own `holdSec`), the bearing carries, and
+  `wasUntargetable` carries the FIRST seize's truth across any chain so
+  the final release restores honestly. No send-off blow (`damageMult` is
+  the launch's, never the pass's) — the receiving verb's own payload is
+  the punishment.
+- **The fallback is the ordinary throw**: no eligible receiver in range →
+  the spit/launch fires exactly as authored; a spec without `handoff` is
+  byte-identical to before the fabric grew the field.
+- Co-op ships nothing new: the `gb` held-meter wire derives off the live
+  pair per snapshot, so a hand-off re-labels the verb and keeps the
+  carried fraction seamlessly.
+
+Known seam (measured, deliberate): the reel presses THROUGH third bodies
+via the crowd-shoulder pass, which re-arms each frame — against a body
+parked dead-center in the lane (frozen AI) the crossing marches glued at
+~1/5 reel speed until a brain moves it. Live play breaks the lock; the
+separation pass's third-party law stands untouched (its float order is
+baseline-gated).
 
 ## Policy is data
 
@@ -138,5 +186,6 @@ refuse (`'rooted fast'`) while anchored HOLDERS hold fine (the maw bloom).
   already verb-agnostic; a terrain-anchored `heldBy` is the noted rider.
 - **Misdirection-by-carry** (hauling drops/objects) — carry over a
   non-actor payload; noted on the latch's seam list first.
-- **Throw-at-ally** (the wrestling tag-in / tossing the goblin to your
-  minions) — `spitAt` already aims; a friendly-catch rule is data away.
+- ~~**Throw-at-ally**~~ — LANDED as THE FRIENDLY CATCH (`handoff`, above);
+  the remaining growth is authoring content that wears it (a wrangler →
+  gulper feed pair, a player tag-in gem).
