@@ -12575,17 +12575,19 @@ export class World {
     //   - 'durance_toll' IS relation-less, and the stamp is load-bearing —
     //     the tithe-gate's crew has no diplomacy, so a zone's warring natives
     //     can never pick a fight with it while it sleeps.
-    //   - 'bandit' is NOT. It is a full baseline faction with real shipped
-    //     wars ('freehold|bandit' and 'compact|bandit' in data/monsters.ts,
-    //     both kept — see THE BANDIT RULING there), so this stamp does not
-    //     make the surface gate safe on its own. Three other things do:
-    //     dormancy, the WAR_PAIRS reserve gate keeping the doorless Compact
-    //     off the board, and the freehold roster fielding no unprovoked
-    //     aggressor — measured and written up in the holdfast header
-    //     (packages/defs/holdfast.ts, "what keeps a sleeping gate safe").
+    //   - 'roadwarden_toll' (2026-08-01, the bandit ruling's third act) is
+    //     relation-less like the durance gate, and the stamp is equally
+    //     load-bearing: the surface camp sleeps OUTSIDE the war ledger, so
+    //     even an awake armed neutral (the croft warden) never reads it as
+    //     a target. The crew swaps to its TRUE COLORS ('bandit', with all
+    //     its shipped wars — 'freehold|bandit' and 'compact|bandit' both
+    //     KEPT, see THE BANDIT RULING in data/monsters.ts) on the rouse:
+    //     GuardianSpec.rousedFactionId → ai.ts registerDormantColors,
+    //     reconciled at updateAI's dormancy fork. Full story in the
+    //     holdfast header (packages/defs/holdfast.ts).
     //     Note dormancy is NOT a targeting shield: acquireTarget filters
-    //     dead/untargetable/downed/passive/invisible, never dormant, so an
-    //     awake hostile does hunt a sleeping neutral.
+    //     dead/untargetable/downed/passive/invisible, never dormant — the
+    //     relation-less calm faction is what closes that door.
     keeper.faction = g.factionId;
     keeper.pos = this.clampPos(vec(standC.x + tx * rand(-20, 20) + inward.x * rand(0, 24),
       standC.y + ty * rand(-20, 20) + inward.y * rand(0, 24)), keeper.radius);

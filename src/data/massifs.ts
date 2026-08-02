@@ -770,7 +770,14 @@ registerMassKind({
   mouths: [1, 1],
   mouthScale: 1.25,
   tenants: [
-    { kind: 'lair_mouth', weight: 40, params: { den: 'kilnhoard' } },
+    // THE WAKING CLOCK (batch 19): the den mass SPLITS — 15 of the 40 den
+    // draws carry the caldera_wake occurrence (same door, same den, plus a
+    // foreordained nightfall die that wakes the landlord below). Paying
+    // from vacant would RAISE the total den rate and retune the face; the
+    // split keeps dens at exactly 40% and no caldera ever confesses which
+    // kind it drew.
+    { kind: 'lair_mouth', weight: 25, params: { den: 'kilnhoard' } },
+    { kind: 'occurrence', weight: 15, params: { id: 'caldera_wake', den: 'kilnhoard' } },
     { kind: 'cache', weight: 22, count: [4, 7], rows: [
       { kind: 'kiln_urn', weight: 3, radius: [12, 16] },
       { kind: 'clay_pots', weight: 1, radius: [10, 14] },
