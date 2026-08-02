@@ -504,8 +504,8 @@ export class Actor {
    *  whether this body's sense fan DRAWS — 'show' forces the classic
    *  stealth-cone read, 'hide' strips the fan UI (the body's tells still
    *  speak). Content stamps it after minting (the aiPost spawner-stamp
-   *  idiom); absent = the kind's WatchSpec.fan, else the standing law
-   *  (wild show, owned hide). Never changes what a drawn fan SAYS. */
+   *  idiom); absent = the kind's WatchSpec.fan, else THE FAN DEFAULT
+   *  (hidden — engine/watch.ts). Never changes what a drawn fan SAYS. */
   watchFan?: WatchFanMode;
   /** Banked suspicion + its feed clock (the lazy-decay pair — always read
    *  through watchValueOf, never raw; decay is earned in the read). */

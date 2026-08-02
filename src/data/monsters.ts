@@ -2435,10 +2435,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // THE SENTRY (PerceptionSpec showcase): a keen but NARROW gaze — wider
     // blind flanks reward the sneak — that CALLS THE WATCH when it spots
     // you, and investigates your last position when you slip away. The
-    // watch fabric (engine/watch.ts) finally makes those numbers VISIBLE:
-    // the cone draws, and its unprovoked lock climbs a fast ladder (a
-    // sniper's read is quick — the gate teaches, it doesn't coddle).
-    watch: { riseSec: 1.2 },
+    // watch fabric (engine/watch.ts) makes the LADDER visible — the glow
+    // tell climbs, the head turns, the lock shouts — but the cone itself
+    // stays sheathed (THE FAN DEFAULT, the user's named case 2026-08-02:
+    // a generic undead sniper is not stealth content; the drawn veil
+    // belongs to authored sentries).
+    watch: { riseSec: 1.2, fan: 'hide' },
     tells: [
       { source: 'watch', channel: { kind: 'glow', color: '#e8d080', max: 0.4 } },
     ],
@@ -2470,7 +2472,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // THE CARRIED LAMP: the grave-light is the identity — the cone you
     // skirt is the lantern it swings (wick-green: the dead's fire is cold).
     light: { radius: -9, color: '#8fd8a8', intensity: 0.5, flicker: 1.2 },
-    watch: { sweep: { arcDeg: 150, sec: 6.5 }, riseSec: 1.8, searchSec: 7.5 },
+    // FAN KEPT: the swept lantern-cone IS the lair's ask — skirt the beam.
+    watch: { sweep: { arcDeg: 150, sec: 6.5 }, riseSec: 1.8, searchSec: 7.5, fan: 'show' },
     brain: {
       type: 'basic',
       perception: { arcDeg: 70, rearMul: 0.2, alertShout: 420, memory: 6 },
@@ -2497,7 +2500,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     heft: 1.5,
     post: true, // the heap is the post: it re-settles where it was authored
     vision: { arcDeg: 130, rearMul: 0.5 }, // waking, its EARS are the sense
-    watch: { sleep: true, riseSec: 3.2, decaySec: 9 },
+    // FAN KEPT: the drawn hearing ring is the rim you creep — the drowse's
+    // whole counterplay, invisible without it.
+    watch: { sleep: true, riseSec: 3.2, decaySec: 9, fan: 'show' },
     brain: { type: 'basic' },
     tells: [
       // Shut eyes that OPEN as the ladder climbs (alpha rides the meter —
@@ -2529,7 +2534,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     packSize: [2, 3],
     post: true, // kennelled: the nose drifts home between hunts — and qualifies for aide duty (the watch_post body law)
     vision: { arcDeg: 80, rearMul: 0.6 },
-    watch: { scent: { range: 130, maxAge: 16 }, riseSec: 1.3, decaySec: 5 },
+    // FAN SHEATHED: the hound's read is the TRAIL (prints + nose-line stay
+    // drawn) — a sight-fan on a near-blind nose overstates the eye it
+    // barely has.
+    watch: { scent: { range: 130, maxAge: 16 }, riseSec: 1.3, decaySec: 5, fan: 'hide' },
     brain: { type: 'basic' },
     tells: [
       { source: 'watch', channel: { kind: 'lean', amp: 1 } }, // NOSE-DOWN
@@ -10290,7 +10298,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // THE CARRIED LAMP: hearth-gold where the barrow's wick burns cold — the
     // cone you skirt is the light he swings.
     light: { radius: -8, color: '#ffd890', intensity: 0.45, flicker: 2 },
-    watch: { sweep: { arcDeg: 140, sec: 6 }, riseSec: 1.6, searchSec: 7 },
+    // FAN KEPT: the lantern's swept cone is the yard's ask — the drawn fan
+    // you skirt (the def comment above IS the argument).
+    watch: { sweep: { arcDeg: 140, sec: 6 }, riseSec: 1.6, searchSec: 7, fan: 'show' },
     brain: {
       type: 'basic',
       perception: { arcDeg: 80, rearMul: 0.25, alertShout: 400, memory: 5 },
@@ -14850,7 +14860,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // The gilded face catches the light — a dim ember-glow marks the post
     // toward dusk (the carried-lamp lever; the fan stays the daytime tell).
     light: { radius: -8, color: '#e8c060', intensity: 0.4, flicker: 0.6 },
-    watch: { sweep: { arcDeg: 130, sec: 7 }, riseSec: 1.6, searchSec: 7 },
+    // FAN KEPT: "read the fans before you cross" — the threshold rhythm's
+    // legibility instrument, worn in the open on purpose.
+    watch: { sweep: { arcDeg: 130, sec: 7 }, riseSec: 1.6, searchSec: 7, fan: 'show' },
     temper: 'territorial',
     brain: {
       type: 'basic',
@@ -18982,7 +18994,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'beast', tags: ['beast'],
     detection: 1.4, drops: 0,
     tells: HUNGER_LEAN,
-    watch: { sleep: true, riseSec: 3.0, decaySec: 9 },
+    // FAN SHEATHED: house ambience, not a stealth ask — the cat's drama is
+    // with the rats, and a drawn ring on a mouser is UI noise.
+    watch: { sleep: true, riseSec: 3.0, decaySec: 9, fan: 'hide' },
     scaleVariance: [0.9, 1.15],
     brain: {
       type: 'basic',
@@ -19627,7 +19641,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 260, loot: 'lair_hoard',
     faction: 'jotun', tags: ['beast'],
     vision: { arcDeg: 80, rearMul: 0.6 }, // the nose is the sense, not the eye
-    watch: { scent: { range: 190, maxAge: 22 }, riseSec: 1.2, decaySec: 6 },
+    // FAN SHEATHED: the hunt reads as TRAIL + snort/lean tells — the poor
+    // eye is the point, and a boss wearing a stealth cone is clutter, not
+    // counterplay.
+    watch: { scent: { range: 190, maxAge: 22 }, riseSec: 1.2, decaySec: 6, fan: 'hide' },
     tells: [
       // The hunt reads: a rising snort-glow as the ladder climbs, and the
       // head goes DOWN when he has the line (the hound's honest posture).
@@ -19663,7 +19680,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'wyrmkin',
     post: true, // the hoard is the post — it re-coils where it was authored
     vision: { arcDeg: 120, rearMul: 0.55 },
-    watch: { sleep: true, riseSec: 3.4, decaySec: 8.5 },
+    // FAN KEPT: "the hearing ring is the whole game of robbing it" — the
+    // rim must draw or the heist is a guess.
+    watch: { sleep: true, riseSec: 3.4, decaySec: 8.5, fan: 'show' },
     reserves: [{
       id: 'ember', label: 'Ember', pool: 5,
       // Both fire verbs are PRICED (the cast gate refuses a spent furnace —

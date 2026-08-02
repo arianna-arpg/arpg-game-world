@@ -106,7 +106,7 @@ MONSTERS.probe_watch_eye = {
   radius: 12, base: { life: 400, moveSpeed: 140, accuracy: 100, mana: 0 },
   skills: [], xp: 1, faction: 'undead',
   post: true,
-  watch: {},
+  watch: { fan: 'show' }, // the drawn-fan instrument declares its verdict (the census law)
   brain: { type: 'basic', perception: { arcDeg: 90, rearMul: 0.3 } },
 };
 MONSTERS.probe_watch_body = {
@@ -153,7 +153,7 @@ MONSTERS.probe_din_striker = {
     && SUPPORTS.ringing_report?.requiresMechanisms?.includes('strikes') === true);
   const bad = validateWatch({
     shirker: { watch: { cone: false } },
-    negRise: { watch: { riseSec: -1 } },
+    negRise: { watch: { riseSec: -1, fan: 'hide' } },
   });
   check('weave: validateWatch names the shirker and the bad dial',
     bad.length === 2 && bad[0].includes('ILLEGIBLE'));
@@ -283,37 +283,60 @@ MONSTERS.probe_din_striker = {
 
 // --- 4b) THE FAN-VISIBILITY LEVER (gates WHETHER a fan draws, never what it says) -
 {
-  // The pure resolution ladder: per-entity stamp > kind posture > the
-  // standing law (wild show, owned hide). Both directions authorable at
-  // both grains.
+  // The pure resolution ladder: per-entity stamp > kind posture > THE FAN
+  // DEFAULT (the user's ruling, 2026-08-02): HIDDEN, wild and owned alike —
+  // a drawn cone is authored stealth information, never ambient UI. Both
+  // directions stay authorable at both grains.
   const wild = {} as { owner?: unknown; watchFan?: 'show' | 'hide' };
   const owned = { owner: { id: 1 } } as typeof wild;
-  check('fan: the standing law — wild watchers SHOW (the readability contract)',
-    watchFanVisible(wild, {}) === true);
-  check('fan: the standing law — owned bodies HIDE (the summoner-crew mud)',
-    watchFanVisible(owned, {}) === false);
-  check('fan: the kind posture flips either way (WatchSpec.fan)',
-    watchFanVisible(owned, { fan: 'show' }) === true
+  check('fan: THE FAN DEFAULT — an unauthored watcher keeps its cone sheathed (wild and owned alike)',
+    watchFanVisible(wild, {}) === false && watchFanVisible(owned, {}) === false);
+  check('fan: the kind posture opts in, or spells the default out (WatchSpec.fan, both directions)',
+    watchFanVisible(wild, { fan: 'show' }) === true
+    && watchFanVisible(owned, { fan: 'show' }) === true
     && watchFanVisible(wild, { fan: 'hide' }) === false);
   check('fan: the per-entity stamp wins over the kind posture, both directions',
     watchFanVisible({ ...owned, watchFan: 'show' }, { fan: 'hide' }) === true
     && watchFanVisible({ ...wild, watchFan: 'hide' }, { fan: 'show' }) === false);
   check('fan: the dev flood ships OFF (QA chrome, never a shipped default)',
     WATCH_FAN_DEV.all === false);
+  // THE CENSUS LAW (validateWatch — the HUNGER_LEAN precedent on the fan
+  // lane): an unauthored verdict is a NAMED fault, an explicit 'hide'
+  // needs no tell row (the ladder's own tells are the standing
+  // legibility), and cone:false keeps its harder law.
   const faults = validateWatch({
-    stripped: { watch: { fan: 'hide' } },
-    strippedLegible: { watch: { fan: 'hide' }, tells: [{ source: 'watch' }] },
-    forced: { watch: { fan: 'show' } },
+    bare: { watch: {} },
+    hidden: { watch: { fan: 'hide' } },
+    shown: { watch: { fan: 'show' } },
+    silenced: { watch: { cone: false } },
+    silencedLegible: { watch: { cone: false }, tells: [{ source: 'watch' }] },
   });
-  check('fan: fan:\'hide\' without a watch tell is ILLEGIBLE; with one (or fan:\'show\') clean',
-    faults.length === 1 && faults[0].startsWith('stripped:'),
+  check('fan census: the unauthored row + the tell-less cone:false are the only faults (hide/show/tell\'d-silence clean)',
+    faults.length === 2
+    && faults.some(f => f.startsWith('bare:') && f.includes('fan verdict'))
+    && faults.some(f => f.startsWith('silenced:') && f.includes('ILLEGIBLE')),
     faults.join(' | '));
+  // THE SHIPPED CENSUS: every watch-bearing def has picked a side (rig 0's
+  // validateWatch(MONSTERS) already gates this — the named walk keeps the
+  // pin legible and prints the shirkers), and the chip's two flagship
+  // verdicts can never silently flip back.
+  const shirkers = Object.keys(MONSTERS).filter(id => {
+    const w = MONSTERS[id]?.watch;
+    return !!w && w.cone !== false && w.fan === undefined;
+  });
+  check('fan census: every shipped watcher carries an explicit fan verdict (no silent cones, ever again)',
+    shirkers.length === 0, shirkers.join(', '));
+  check('fan census: the named verdicts hold (skeleton_archer sheathed — the user\'s case; the barrow lantern kept)',
+    MONSTERS.skeleton_archer.watch?.fan === 'hide'
+    && MONSTERS.barrow_watchman.watch?.fan === 'show');
 
-  // THE LIVE CREW (the diagnosis pinned): a player-owned skeleton_archer
-  // runs the SAME scan (senses stamped — the mechanism that painted the
-  // mud), resolves HIDDEN by the standing law, and its geometry stays the
-  // scan's own stamps (the lever never touches what a fan would say). The
-  // wild sentry beside it resolves SHOWN — today's read exactly.
+  // THE LIVE READ (the user's named regression, pinned): a wild
+  // skeleton_archer runs the SAME scan (senses stamped — drawn==tested is
+  // about the SCAN and is untouched), resolves SHEATHED by its authored
+  // fan:'hide', and its geometry is still the scan's own stamps (the
+  // lever never touches what a fan would say). The barrow lantern beside
+  // it resolves SHOWN (fan:'show' — the cone IS the design), and a
+  // player-owned crew body stays hidden as it always was.
   const w = world(0xfa11);
   const crew = spawn(w, 'skeleton_archer', 6, 'player');
   crew.owner = w.player;
@@ -321,35 +344,42 @@ MONSTERS.probe_din_striker = {
   const sentry = spawn(w, 'skeleton_archer', 6);
   sentry.pos = vec(1400, 900);
   sentry.aiAnchor = vec(1400, 900);
+  const lantern = spawn(w, 'barrow_watchman', 6);
+  lantern.pos = vec(1000, 1400);
+  lantern.aiAnchor = vec(1000, 1400);
   tick(w, 0.4);
-  check('fan live: the owned crew ran the scan (senses stamped — the mud\'s mechanism)',
-    crew.senseDetect > 0 && !!crew.watch);
-  check('fan live: the crew resolves HIDDEN, the wild sentry SHOWN (one law, no id lists)',
-    watchFanVisible(crew, crew.watch!) === false
-    && watchFanVisible(sentry, sentry.watch!) === true);
-  check('fan live: hidden ≠ zeroed — the crew\'s fan geometry is still its stamped truth',
-    watchFanRadius(w, crew, 0, 1, false) > 0);
-  crew.watchFan = 'show';
-  check('fan live: one data field flips the body (the classic cone read, forced)',
-    watchFanVisible(crew, crew.watch!) === true);
-  crew.watchFan = undefined;
-  sentry.watchFan = 'hide';
-  check('fan live: the same field strips a wild watcher (true-stealth authoring)',
-    watchFanVisible(sentry, sentry.watch!) === false);
+  check('fan live: every body ran the scan (senses stamped — the lever never touches the ladder)',
+    crew.senseDetect > 0 && sentry.senseDetect > 0 && lantern.senseDetect > 0);
+  check('fan live: the generic sniper keeps its cone sheathed, wild AND owned (the user\'s named case)',
+    watchFanVisible(sentry, sentry.watch!) === false
+    && watchFanVisible(crew, crew.watch!) === false);
+  check('fan live: the lantern sentinel still shows (fan:\'show\' — authored stealth content)',
+    watchFanVisible(lantern, lantern.watch!) === true);
+  check('fan live: sheathed ≠ zeroed — the hidden fan\'s geometry is still its stamped truth',
+    watchFanRadius(w, sentry, 0, 1, false) > 0);
+  sentry.watchFan = 'show';
+  check('fan live: one data field flips a body (the classic cone read, forced per-entity)',
+    watchFanVisible(sentry, sentry.watch!) === true);
   sentry.watchFan = undefined;
+  lantern.watchFan = 'hide';
+  check('fan live: the same field sheathes an authored-show watcher (both directions, per body)',
+    watchFanVisible(lantern, lantern.watch!) === false);
+  lantern.watchFan = undefined;
 
-  // The wire: the client rebuilds owner from the mn flag (a shared stand-in)
-  // and the posture from its own registry — the standing law folds the SAME
-  // verdicts client-side, nothing new on the wire.
+  // The wire: the client rebuilds the posture from its own registry — THE
+  // FAN DEFAULT folds the SAME verdicts client-side, nothing new on the
+  // wire.
   const snap = serializeSnapshot(w, 1);
   const w2 = makeSimWorld('warrior', 0xfa12);
   applySnapshot(w2, snap);
   const cCrew = w2.actors[snap.actors.findIndex(x => x.id === crew.id)];
   const cSentry = w2.actors[snap.actors.findIndex(x => x.id === sentry.id)];
-  check('fan wire: the client resolves crew hidden / sentry shown from its own adopt',
-    !!cCrew?.watch && !!cSentry?.watch
+  const cLantern = w2.actors[snap.actors.findIndex(x => x.id === lantern.id)];
+  check('fan wire: the client resolves sniper (wild AND crew) sheathed / lantern shown from its own adopt',
+    !!cCrew?.watch && !!cSentry?.watch && !!cLantern?.watch
     && watchFanVisible(cCrew, cCrew.watch) === false
-    && watchFanVisible(cSentry, cSentry.watch) === true);
+    && watchFanVisible(cSentry, cSentry.watch) === false
+    && watchFanVisible(cLantern, cLantern.watch) === true);
 }
 
 // --- 5) THE LADDER END TO END (sentinel: climb, callout, decay, stand-down) -----

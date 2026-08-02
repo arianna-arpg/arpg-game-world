@@ -1,12 +1,17 @@
 // --- THE WATCH FABRIC's drawn read (engine/watch.ts) -------------------------
 //
 // A watcher's attention is a LADDER; this layer is where the ladder becomes
-// SPACE. Each un-locked watcher paints its sense field on the ground: a fan
-// whose radius at every bearing is the reach the perception scan itself
-// would test there — the front cone at full reach, the rear-hearing ring
-// behind it, an alerted mind's full circle — with every ray clipped by the
-// SAME sight raycast (World.sightClipD → castRay 'sight' + the elevation
-// law) that decides whether the watcher can see at all.
+// SPACE — for the watchers AUTHORED to show it. THE FAN DEFAULT
+// (engine/watch.ts watchFanVisible, 2026-08-02): a drawn cone is stealth
+// content's read (fan:'show' — the lantern sweep you skirt, the drowser's
+// rim you creep), never ambient UI, so generic kin keep theirs sheathed
+// and the ladder's own tells carry their read. Each SHOWN un-locked
+// watcher paints its sense field on the ground: a fan whose radius at
+// every bearing is the reach the perception scan itself would test there —
+// the front cone at full reach, the rear-hearing ring behind it, an
+// alerted mind's full circle — with every ray clipped by the SAME sight
+// raycast (World.sightClipD → castRay 'sight' + the elevation law) that
+// decides whether the watcher can see at all.
 //
 // DRAWN == TESTED, by construction:
 //  - the geometry reads the actor's STAMPED sense scalars (Actor.sense* —

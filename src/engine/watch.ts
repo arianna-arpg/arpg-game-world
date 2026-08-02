@@ -25,9 +25,15 @@
 //    drawn cone, the client wire and the probes read the stamps and the
 //    fan clips with the SAME castRay LoS itself marches. The cone you see
 //    is the cone that judges you — never an approximation.
-//  - LEGIBLE OR NOTHING. If a body can detect you, the means must show:
-//    validateWatch refuses a watcher with no drawn cone AND no watch-
-//    sourced tell row (the census names shirkers).
+//  - LEGIBLE OR NOTHING. If a body can detect you, the means must show —
+//    the ladder's own tells are the standing read (the head-turn, the
+//    investigate walk, the shout), watch-sourced tell rows deepen it, and
+//    a cone:false structural silence with no tell row is refused outright.
+//  - THE FAN DEFAULT (2026-08-02). The drawn cone polygon is AUTHORED
+//    stealth information (fan:'show' — the lantern you skirt, the rim you
+//    creep), never ambient UI: unauthored fans stay sheathed, and the
+//    validateWatch census refuses a watch row that has not picked a side
+//    (fan:'show' | fan:'hide' | cone:false — the census names shirkers).
 //  - LADDERS DECAY. Back off mid-climb and the meter drains after a grace —
 //    watchable, learnable, reversible below the lock.
 //  - SIDE CHANNELS CAP. Noise (World.noiseAt) and scent (the trail fabric)
@@ -166,21 +172,26 @@ export interface WatchSpec {
    *  the ladder only to the search rung — the chase ends when its own
    *  senses finally meet you. */
   scent?: { range?: number; maxAge?: number };
-  /** Draw the sense read (the cone / the sleeper's hearing ring). Default
-   *  true — the legibility law. `false` is legal ONLY when the def wears
-   *  a watch-sourced tell row instead (validateWatch enforces it). This is
-   *  the KIND's hard silence — never drawn, not even per-entity; for the
-   *  overridable visibility POSTURE see `fan` + watchFanVisible. */
+  /** The sense read's STRUCTURAL gate (the cone / the sleeper's hearing
+   *  ring). Default true = drawable — whether it then actually draws is
+   *  the fan posture's call below. `false` is the KIND's hard silence —
+   *  never drawn, not even a per-entity 'show' stamp surfaces it — and is
+   *  legal ONLY when the def wears a watch-sourced tell row instead
+   *  (validateWatch enforces it: a structural silence must speak some
+   *  other way). */
   cone?: boolean;
-  /** THE FAN-VISIBILITY POSTURE (watchFanVisible): this kind's DEFAULT for
-   *  whether its sense fan draws — 'show' forces the fan even on owned
-   *  bodies (the classic stealth-cone read), 'hide' strips the fan UI so
-   *  the body alone speaks (true-stealth content — the tell fabric's
-   *  lean/eye channels still must: validateWatch holds 'hide' to the same
-   *  legibility law as cone:false). Absent = the standing law (wild bodies
-   *  show, owned bodies hide). A per-entity stamp (Actor.watchFan — the
-   *  aiPost spawner-stamp idiom) overrides this either way; unlike
-   *  cone:false this is a posture, not a structural silence. */
+  /** THE FAN-VISIBILITY POSTURE (watchFanVisible): this kind's verdict for
+   *  whether its sense fan draws — 'show' opts the cone IN (authored
+   *  stealth reads: the lantern sweep you skirt, the drowser's hearing
+   *  rim you creep; forces the fan even on owned bodies), 'hide' keeps it
+   *  sheathed (the suspicion ladder's own tells — the head-turn, the
+   *  investigate walk, the shout, any watch-sourced tell rows — carry the
+   *  read). Absent = THE FAN DEFAULT (2026-08-02): HIDDEN — a drawn cone
+   *  is authored information, never ambient UI, and validateWatch's
+   *  census asks every shipped watcher to pick a side explicitly. A
+   *  per-entity stamp (Actor.watchFan — the aiPost spawner-stamp idiom)
+   *  overrides this either way; unlike cone:false this is a posture, not
+   *  a structural silence. */
   fan?: WatchFanMode;
 }
 
@@ -190,9 +201,8 @@ export interface WatchSpec {
 export type WatchFanMode = 'show' | 'hide';
 
 /** The fan-visibility body view (structural — Actor satisfies it; probes
- *  hand-build it). `owner` is any truthy ownership ref (minions). */
+ *  hand-build it). */
 export interface FanBody {
-  owner?: unknown;
   watchFan?: WatchFanMode;
 }
 
@@ -203,19 +213,23 @@ export interface FanBody {
  *   1. the per-entity stamp (Actor.watchFan — spawner rows, landmark
  *      spawns, content scripts stamp it; both directions authorable),
  *   2. the kind's authored posture (WatchSpec.fan),
- *   3. the standing law: WILD watchers show (the watch fabric's
- *      readability contract — the fan is the watcher's honest tell);
- *      OWNED bodies hide (a summoner's crew: the drawn reach folds vs the
- *      LOCAL HERO — an ally's anti-hero fold is tested against nothing,
- *      so its fan is mud, not information).
+ *   3. THE FAN DEFAULT (the user's ruling, 2026-08-02): HIDDEN. A drawn
+ *      cone is AUTHORED stealth information — the lantern you skirt, the
+ *      hearing rim you creep — and a generic watcher showing its own
+ *      sight veil reads as a puzzle where none exists (the skeleton-
+ *      archer confusion this default retires). A hidden fan is never a
+ *      blind one: the ladder's own tells (the head-turn, the investigate
+ *      walk, the shout) plus watch-sourced tell rows carry the read.
+ *      Owned crews stay hidden for the older reason too — a crew fan
+ *      folds vs the LOCAL HERO, so an ally's cone is mud, not
+ *      information.
  *  The dev flood (render/vis/watchLayer.ts WATCH_FAN_DEV) bypasses this
  *  entirely — the debugging read shows every fan. Pure leaf; co-op safe
- *  (the client resolves from its own registry + the owner it already
- *  adopted). */
+ *  (the client resolves from its own registry). */
 export function watchFanVisible(a: FanBody, w: WatchSpec): boolean {
   if (a.watchFan) return a.watchFan === 'show';
   if (w.fan) return w.fan === 'show';
-  return !a.owner;
+  return false;
 }
 
 /** The ladder's rungs (watchRungOf): 0 unaware · 1 stirring · 2 searching ·
@@ -364,9 +378,14 @@ export function trailNext(
 
 // --- integrity ---------------------------------------------------------------
 
-/** Walk a def registry: every watch row must be LEGIBLE (a drawn cone, or
- *  a tell row reading the watch source — never punish invisibly), sleep/
- *  scent/sweep dials sane. Returns human-readable faults (probe food). */
+/** Walk a def registry: every watch row must be LEGIBLE and DELIBERATE —
+ *  a cone:false structural silence still needs a watch-sourced tell row
+ *  (never punish invisibly; that silence admits no stamp), and every
+ *  drawable watcher must author its fan verdict explicitly (THE FAN
+ *  DEFAULT hides unauthored cones, so an absent verdict is a design
+ *  decision made silently — the census names it; the HUNGER_LEAN census
+ *  precedent). Sleep/scent/sweep dials sane. Returns human-readable
+ *  faults (probe food). */
 export function validateWatch(defs: Record<string, {
   watch?: WatchSpec;
   tells?: { source: string }[];
@@ -382,8 +401,8 @@ export function validateWatch(defs: Record<string, {
     if (w.cone === false && !tellRead) {
       bad.push(`${id}: watch with cone:false and no watch-sourced tell row — an ILLEGIBLE watcher (the law: if it can detect you, the means must show)`);
     }
-    if (w.fan === 'hide' && !tellRead) {
-      bad.push(`${id}: watch with fan:'hide' and no watch-sourced tell row — an ILLEGIBLE watcher (the fan lever strips the UI; the body must still speak)`);
+    if (w.cone !== false && w.fan === undefined) {
+      bad.push(`${id}: watch with no fan verdict — THE FAN DEFAULT hides every unauthored cone; declare fan:'show' (the cone IS the design) or fan:'hide' (the ladder's own tells carry the read) so the choice is deliberate`);
     }
     if (w.riseSec !== undefined && w.riseSec <= 0) bad.push(`${id}: riseSec must be > 0`);
     if (w.decaySec !== undefined && w.decaySec <= 0) bad.push(`${id}: decaySec must be > 0`);

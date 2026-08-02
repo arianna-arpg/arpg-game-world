@@ -3,8 +3,8 @@
 // (WATCH_FAN_DEV.all) draws EVERY stamped sense fan — enemy sentries, owned
 // crews, cone:false kinds, even locked watchers — the debugging read for
 // actual sight radii; the roster below lists every live watch-bearing body
-// with its resolved fan verdict (and WHY: stamp / kind posture / standing
-// law) plus per-body stamp verbs, so the per-entity grain (Actor.watchFan)
+// with its resolved fan verdict (and WHY: stamp / kind posture / THE FAN
+// DEFAULT) plus per-body stamp verbs, so the per-entity grain (Actor.watchFan)
 // is exercised without authoring content. The lever gates only WHETHER a
 // fan draws — geometry is always the scan's own stamps (engine/watch.ts
 // watchFanVisible; render/vis/watchLayer.ts).
@@ -22,7 +22,7 @@ function verdictOf(a: Actor): string {
   const vis = watchFanVisible(a, a.watch) ? 'SHOWN' : 'hidden';
   const why = a.watchFan ? `stamp:${a.watchFan}`
     : a.watch.fan ? `kind:${a.watch.fan}`
-      : a.owner ? 'law:owned' : 'law:wild';
+      : 'law:hide'; // THE FAN DEFAULT — unauthored fans stay sheathed
   return `${vis} (${why})`;
 }
 
