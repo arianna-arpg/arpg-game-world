@@ -163,7 +163,7 @@ import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField } from './fog';
 import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, crestPoint, type FrontConsumeRow } from './creep';
 import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackArcFrac, trackDone, trackPending, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
 import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
-import { bootOccSites, driveOccSites, OCC_CFG, reviveOccSite, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
+import { bootOccSites, driveOccSites, OCC_CFG, reviveOccSite, seedOccClockMarks, wakeRousedResidents, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
 import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun } from './puzzles';
 import {
@@ -5444,6 +5444,16 @@ export class World {
     // transient population, never memory-captured twice.
     this.occs = bootOccSites(def.id, memory?.occSprung);
     for (const s of this.occs) if (s.state === 'sprung') reviveOccSite(this.occHost(), s);
+    // THE WORLD-CLOCK WAKE (engine/occurrences.ts): seed every armed clock
+    // site's watermark from this ground's own leave-stamp — the first driven
+    // frame settles the windows the absence spanned, exact arithmetic, no
+    // world sweep — then wake any dormant-tagged resident a sprung
+    // rouseResident occurrence names: this zone's own sites, or the parent
+    // ring's when this ground is its den (the caveDepth-gated exit peek).
+    // Pure reads over standing sprung state; with no rouse row, no-ops.
+    seedOccClockMarks(this.occs, memory?.savedAt, this.time);
+    wakeRousedResidents(this.occHost(), def, this.occs,
+      zid => this.zoneMemory.get(zid)?.occSprung, this.actors);
     // WAVES REMEMBERED: a left assault resumes where it stood — the counter and
     // the mid-wave survivors both ride Zone Memory (exits no longer seal on
     // waves, so an open road must never reset the gauntlet). A completed arena

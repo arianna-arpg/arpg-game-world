@@ -21,7 +21,22 @@
 //      new body mints at (the live read is the anchor),
 //   G) the trigger grammar pure — proximity fires on approach, disturb on
 //      the ping ring, the dwell bank HOLDS while the hero steps away, the
-//      fixture clock pours to its cap and stops, an unknown trigger sleeps.
+//      fixture clock pours to its cap and stops, an unknown trigger sleeps,
+//   H) THE WORLD-CLOCK WAKE's window arithmetic, pure — entry edges are
+//      inclusive-exact, contiguous windows enter once per day at their
+//      leading edge, the wrap is a real edge, and the per-window dice are
+//      FOREORDAINED (replay identically; vary across windows and seeds),
+//   I) the clock driver — self-arms at first sight, springs across a live
+//      edge, and a seeded watermark settles a whole absence in one frame
+//      (the lazy law); seedOccClockMarks touches only armed clock sites,
+//   J/K) the rouse live — fresh ground is LATENT (no retroactive nights), a
+//      boot the ground has not yet witnessed sprung wakes nothing (THE
+//      PARENT WITNESS LAW), the caldera-wake ring is byte-identical to a
+//      plain kilnhoard ring, the resolver's den lane is exact (parent peek
+//      gated on caveDepth; unsprung memory and surface neighbours sleep),
+//      and the debut end-to-end: the parent's night springs while you are
+//      away and the Urnfather boots AWAKE — walking — on the next den load,
+//      while an unfound parent degrades to the sleeping side.
 //
 // Run: npx tsx balance/probe_occurrences.ts
 // ---------------------------------------------------------------------------
@@ -29,11 +44,15 @@
 import { bootSimEngine, makeSimWorld, SIM_ARENA_ID } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import '../src/data/occurrences'; // seat-proof explicitly (the settled-import law)
+import '../src/data/lairs'; // the den face: the lair_mouth tenant + the kilnhoard kit (the settled-import law)
 import {
-  driveOccSites, mintedOccurrencesOf, occAftermathKinds,
+  clockWindowsHit, driveOccSites, mintedOccurrencesOf, occAftermathKinds,
   OCC_CFG, occTriggerKinds, OCCURRENCES, registerOccurrence,
-  type OccHost, type OccSite,
+  seedOccClockMarks, wakeRousedResidents,
+  type OccHost, type OccSite, type OccTriggerSpec, type RousedWakeBody,
 } from '../src/engine/occurrences';
+import { DORMANT_TAGS, isDormant, registerDormantTag } from '../src/engine/ai';
+import { DAY_LENGTH, type DayPhase } from '../src/world/daynight';
 import { MONSTERS } from '../src/data/monsters';
 import { doodadRuleOf, generateLayout, type GenCtx } from '../src/engine/levelgen';
 import { carveMassifs } from '../src/engine/massif';
@@ -268,7 +287,7 @@ const LIVE = 'probe_occ_live';
   };
   const site = (id: string): OccSite => ({
     def: OCCURRENCES[id], x: 0, y: 0, floorR: 100, seed: 7,
-    state: 'armed', bank: 0, told: false, cracked: false, pourAt: 0,
+    state: 'armed', bank: 0, told: false, cracked: false, pourAt: 0, clockMark: 0,
   });
   registerOccurrence({
     id: 'probe_occ_prox', trigger: { kind: 'proximity', radius: 100 }, spring: {},
@@ -333,6 +352,241 @@ const LIVE = 'probe_occ_live';
     sleeper.state === 'armed');
   check('grammar: a spring with no dress and no wave plants nothing and pours nothing beyond the fixture',
     plants === 0);
+}
+
+// --- H) THE WORLD-CLOCK WAKE — the window arithmetic, pure --------------------
+{
+  const NIGHT = 0.50 * DAY_LENGTH; // the wheel's night edge
+  const DUSK = 0.40 * DAY_LENGTH;
+  const DAWN = 0.90 * DAY_LENGTH;
+  const spec = (phases: DayPhase[], chance: number): OccTriggerSpec => ({ kind: 'clock', phases, chance });
+  const night1 = spec(['night'], 1);
+  check('clock math: the entry edge is inclusive-exact — (from, to] takes the edge, excludes from, finds the next day',
+    clockWindowsHit(night1, 7, NIGHT - 1, NIGHT)
+    && !clockWindowsHit(night1, 7, NIGHT, NIGHT + 5)
+    && !clockWindowsHit(night1, 7, NIGHT + 1, DAY_LENGTH - 1)
+    && clockWindowsHit(night1, 7, NIGHT + 1, DAY_LENGTH + NIGHT + 1));
+  check('clock math: chance 0 never fires; an empty or inverted range never fires',
+    !clockWindowsHit(spec(['night'], 0), 7, 0, DAY_LENGTH * 10)
+    && !clockWindowsHit(night1, 7, NIGHT, NIGHT)
+    && !clockWindowsHit(night1, 7, NIGHT + 5, NIGHT - 5));
+  check('clock math: a contiguous window (dusk+night) enters ONCE per day, at its leading edge',
+    !clockWindowsHit(spec(['dusk', 'night'], 1), 7, DUSK + 4, NIGHT + 1)
+    && clockWindowsHit(spec(['dusk', 'night'], 1), 7, DUSK - 4, DUSK + 1)
+    && clockWindowsHit(night1, 7, DUSK + 4, NIGHT + 1));
+  check('clock math: the wrap is a real edge — day begins where dawn ends, and a dawn+day run enters at dawn',
+    clockWindowsHit(spec(['day'], 1), 7, DAY_LENGTH - 1, DAY_LENGTH + 1)
+    && !clockWindowsHit(spec(['dawn', 'day'], 1), 7, DAY_LENGTH - 1, DAY_LENGTH + 1)
+    && clockWindowsHit(spec(['dawn', 'day'], 1), 7, DAWN - 1, DAWN + 1));
+  {
+    const half = spec(['night'], 0.5);
+    const verdicts = (seed: number): string => Array.from({ length: 40 }, (_, k) =>
+      clockWindowsHit(half, seed, NIGHT + k * DAY_LENGTH - 1, NIGHT + k * DAY_LENGTH) ? '1' : '0').join('');
+    const a1 = verdicts(0xabc);
+    const a2 = verdicts(0xabc);
+    const b = verdicts(0xdef1);
+    check('clock math: THE FOREORDAINED TENET — per-window dice replay identically, vary across windows and seeds',
+      a1 === a2 && a1.includes('1') && a1.includes('0') && a1 !== b,
+      `a=${a1.slice(0, 16)}… b=${b.slice(0, 16)}…`);
+  }
+}
+
+// --- I) the clock driver: self-arm, the live edge, the lazy watermark ---------
+{
+  let tNow = 60; // mid-day
+  const host: OccHost = {
+    timeOf: () => tNow, zoneLevel: () => 10, heroDist: () => 9999,
+    disturbedNear: () => false, dice: (a) => a, diceInt: (a) => a, plant: () => {},
+    pour: () => 0, tagCount: () => 0, announce: () => {}, rumble: () => {}, flash: () => {},
+  };
+  registerOccurrence({ id: 'probe_occ_clock', trigger: { kind: 'clock', phases: ['night'], chance: 1 }, spring: {} });
+  registerOccurrence({ id: 'probe_occ_clock0', trigger: { kind: 'clock', phases: ['night'], chance: 0 }, spring: {} });
+  const site = (id: string): OccSite => ({
+    def: OCCURRENCES[id], x: 0, y: 0, floorR: 100, seed: 7,
+    state: 'armed', bank: 0, told: false, cracked: false, pourAt: 0, clockMark: 0,
+  });
+  const live = site('probe_occ_clock');
+  const dud0 = site('probe_occ_clock0');
+  driveOccSites(host, [live, dud0], DT);
+  const armedAtNoon = live.state === 'armed' && live.clockMark === 60;
+  tNow = 119;
+  driveOccSites(host, [live, dud0], DT);
+  const armedBefore = live.state === 'armed';
+  tNow = 121;
+  driveOccSites(host, [live, dud0], DT);
+  check('clock driver: self-arms at first sight (no retroactive fire), holds to the edge, springs across it',
+    armedAtNoon && armedBefore && live.state === 'sprung');
+  check('clock driver: the chance-0 twin crosses the same night unmoved', dud0.state === 'armed');
+  const lazy = site('probe_occ_clock');
+  lazy.clockMark = 10; // "left at t=10" — the absence spans the night edge
+  tNow = 130;
+  driveOccSites(host, [lazy], DT);
+  check('clock driver: a seeded watermark settles the whole absence in ONE frame (the lazy law)',
+    lazy.state === 'sprung');
+  const s1 = site('probe_occ_clock');
+  const s2 = site('probe_occ_clock');
+  s2.state = 'sprung';
+  const s3 = site('probe_occ_fix'); // a dwell trigger — not the clock's to seed
+  seedOccClockMarks([s1, s2, s3], 50, 200);
+  const seeded = s1.clockMark === 50 && s2.clockMark === 0 && s3.clockMark === 0;
+  const f1 = site('probe_occ_clock');
+  seedOccClockMarks([f1], undefined, 200);
+  const f2 = site('probe_occ_clock');
+  seedOccClockMarks([f2], 300, 200);
+  check('clock seeding: the leave-stamp is honored; fresh ground and clock-skew seed at NOW; sprung and foreign sites stay untouched',
+    seeded && f1.clockMark === 200 && f2.clockMark === 200);
+}
+
+// --- J/K) THE ROUSE live: the witness law, the den lane, the debut ------------
+{
+  registerDormantTag('probe_wake_sleeper');
+  MONSTERS['probe_wake_husk'] = {
+    ...MONSTERS['abyssal_crawler'], id: 'probe_wake_husk',
+    name: 'Probe Wake Husk', tag: 'probe_wake_sleeper',
+  };
+  registerOccurrence({
+    id: 'probe_wake_self', face: 'cache',
+    trigger: { kind: 'clock', phases: ['night'], chance: 1 },
+    spring: {
+      text: 'probe: the ground wakes',
+      dress: [{ kind: 'abyss_crack', radius: [10, 12], count: [2, 2], ring: [12, 30] }],
+    },
+    aftermath: { kind: 'rouseResident', params: { tag: 'probe_wake_sleeper', wakeText: 'probe: they walk' } },
+  });
+  registerOccurrence({
+    id: 'probe_caldera_wake', face: 'lair_mouth',
+    trigger: { kind: 'clock', phases: ['night'], chance: 1 },
+    spring: { text: 'probe: the mountain exhales', shake: 6 },
+    aftermath: { kind: 'rouseResident', params: { tag: 'kiln_sleeper', wakeText: 'probe: the wyrm walks' } },
+  });
+
+  // K0) the REAL debut def's contract — the shape the massifs row will name.
+  const CW = OCCURRENCES.caldera_wake;
+  const rp = CW?.aftermath?.params as { tag?: string } | undefined;
+  check('caldera wake: registered — a nightfall clock at a small foreordained chance, the den door as its face',
+    !!CW && CW.trigger.kind === 'clock' && (CW.trigger.phases ?? []).includes('night')
+    && (CW.trigger.chance ?? 1) > 0 && (CW.trigger.chance ?? 1) < 0.25 && CW.face === 'lair_mouth',
+    `chance ${CW?.trigger.chance}`);
+  check("caldera wake: the rouse names the Urnfather's own dormant tag",
+    CW?.aftermath?.kind === 'rouseResident' && rp?.tag === 'kiln_sleeper'
+    && MONSTERS.urnfather?.tag === 'kiln_sleeper' && DORMANT_TAGS.has('kiln_sleeper'));
+
+  // K1) THE PARITY at the colossal grain: an occurrence ring wearing the den
+  // face is byte-identical to a plain den ring — same maw, same spoor, and
+  // no caldera ever confesses whether its mountain keeps a waking clock.
+  {
+    let ok = true, detail = '', mouths = 0, minted = 0;
+    for (let s = 0; s < 2 && ok; s++) {
+      const seed = (2000003 * (s + 1) + 29) ^ 0x0cc2;
+      const zid = `occ_denpar_${s}`; // per-seed ids — the stale-bundle law
+      const plain = gen(occZone(zid, courtRows([{ kind: 'lair_mouth', weight: 1, params: { den: 'kilnhoard' } }]), seed), seed);
+      if (mintedOccurrencesOf(zid).length) { ok = false; detail = 'the plain den mint recorded a trigger'; break; }
+      const wake = gen(occZone(zid, courtRows([{ kind: 'occurrence', weight: 1, params: { id: 'caldera_wake', den: 'kilnhoard' } }]), seed), seed);
+      if (JSON.stringify(plain.doodads) !== JSON.stringify(wake.doodads)) { ok = false; detail = `seed ${seed}: the wake row moved the dress`; break; }
+      if (kbitsOf(plain) !== kbitsOf(wake)) { ok = false; detail = `seed ${seed}: the wake row moved the grid`; break; }
+      if (JSON.stringify(plain.pois) !== JSON.stringify(wake.pois)) { ok = false; detail = `seed ${seed}: the wake row moved the POIs`; break; }
+      mouths += wake.doodads.filter(d => d.kind === 'kiln_maw').length;
+      minted += mintedOccurrencesOf(zid).length;
+    }
+    check('den parity: a caldera-wake ring is BYTE-IDENTICAL to a plain kilnhoard ring',
+      ok && mouths >= 1 && minted >= 1, detail || `${mouths} maws, ${minted} triggers over the sweep`);
+  }
+
+  // K2) the resolver's den lane, pure: a sprung parent wakes the tag once
+  // and floats the wakeText once; unsprung memory, an unfound parent, and a
+  // surface neighbour (no caveDepth) all leave the sleeper asleep.
+  {
+    let floats = 0;
+    const host: OccHost = {
+      timeOf: () => 0, zoneLevel: () => 10, heroDist: () => 9999,
+      disturbedNear: () => false, dice: (a) => a, diceInt: (a) => a, plant: () => {},
+      pour: () => 0, tagCount: () => 0, announce: () => { floats++; }, rumble: () => {}, flash: () => {},
+    };
+    const pid = 'occ_denpar_1'; // the K1 sweep's last mint — its bundle stands
+    const mkBody = (): RousedWakeBody => ({ tag: 'kiln_sleeper', dead: false, aiAwakened: false, pos: { x: 1, y: 2 } });
+    const allSprung = (zid: string): number[] | undefined =>
+      zid === pid ? mintedOccurrencesOf(pid).map(() => 1) : undefined;
+    const den = { id: 'probe_den_unit', caveDepth: 1, exits: [{ to: pid }] };
+    const b1 = mkBody();
+    const woke = wakeRousedResidents(host, den, [], allSprung, [b1]);
+    const b2 = mkBody();
+    const wokeUnsprung = wakeRousedResidents(host, den, [], () => undefined, [b2]);
+    const b3 = mkBody();
+    const wokeSurface = wakeRousedResidents(host, { id: 'probe_surface_unit', exits: [{ to: pid }] }, [], allSprung, [b3]);
+    const b4 = mkBody();
+    const wokeLost = wakeRousedResidents(host, { id: 'probe_lost_unit', caveDepth: 1, exits: [{ to: 'probe_never_land' }] }, [], allSprung, [b4]);
+    check('den resolver: the parent peek wakes the tag and floats once; unsprung / surface / unfound all sleep',
+      woke === 1 && b1.aiAwakened && floats === 1
+      && wokeUnsprung === 0 && !b2.aiAwakened
+      && wokeSurface === 0 && !b3.aiAwakened
+      && wokeLost === 0 && !b4.aiAwakened,
+      `woke ${woke}, floats ${floats}`);
+  }
+
+  // J + K3/K4) the live dance — one nightfall serves every stage.
+  const w2 = makeSimWorld('warrior', 4242);
+  w2.player.sheet.setBase('detectability', 0);
+  const zmap = (w2 as unknown as { zoneMap: Record<string, ZoneDef> }).zoneMap;
+  const hop = (id: string): void => {
+    w2.caveReturn = null;
+    (w2 as unknown as { caveStack: unknown[] }).caveStack = [];
+    w2.loadZone(id);
+  };
+  const J1 = 'probe_occ_wake_self';
+  zmap[J1] = occZone(J1, courtRows([{ kind: 'occurrence', weight: 1, params: { id: 'probe_wake_self' } }]), 0x77a1, {
+    packs: { count: [3, 3], size: [2, 2], table: [{ id: 'probe_wake_husk', weight: 1 }] },
+  });
+  const P2 = 'probe_occ_wake_parent';
+  zmap[P2] = occZone(P2, courtRows([{ kind: 'occurrence', weight: 1, params: { id: 'probe_caldera_wake', den: 'kilnhoard' } }]), 0x77b2);
+  const D2 = 'probe_occ_wake_den';
+  zmap[D2] = occZone(D2, courtRows(), 0x77c3, {
+    caveDepth: 1, exits: [{ to: P2, side: 's' }], objective: { kind: 'boss', id: 'urnfather' },
+  });
+  const D4 = 'probe_occ_wake_lost_den';
+  // The unfound parent: a zone that EXISTS on the map but was never
+  // generated this session — no minted bundle, no memory (the honest
+  // degrade case; a dangling id would crash loadZone's portal placement
+  // and can never occur under real worldgen).
+  const P4 = 'probe_occ_wake_unvisited';
+  zmap[P4] = occZone(P4, courtRows(), 0x77e5);
+  zmap[D4] = occZone(D4, courtRows(), 0x77d4, {
+    caveDepth: 1, exits: [{ to: P4, side: 's' }], objective: { kind: 'boss', id: 'urnfather' },
+  });
+  const husks = (): typeof w2.actors => w2.actors.filter(a => !a.dead && a.tag === 'probe_wake_sleeper');
+  const wyrm = (): typeof w2.actors[number] | undefined =>
+    w2.actors.find(a => !a.dead && a.tag === 'kiln_sleeper');
+  const cracks = (): number => w2.doodads.filter(d => d.kind === 'abyss_crack').length;
+
+  hop(J1);
+  check('wake live: fresh ground meets the sleepers — latent until found, no retroactive nights',
+    husks().length >= 1 && husks().every(a => isDormant(a)), `${husks().length} husks dormant`);
+  tickSec(w2, 2);
+  hop(P2);
+  tickSec(w2, 2);
+  hop(D2);
+  check('wake live: the den before the clock — the Urnfather sleeps on his hoard',
+    !!wyrm() && isDormant(wyrm()!) && !wyrm()!.aiAwakened);
+  tickSec(w2, 2);
+  hop(SIM_ARENA_ID);
+  while (w2.time <= 0.5 * DAY_LENGTH + 2) w2.update(DT); // the absence spans nightfall
+  hop(J1);
+  check('wake live: THE WITNESS LAW — the boot the ground springs on still meets sleepers (the wake lands next boot)',
+    husks().length >= 1 && husks().every(a => isDormant(a)) && cracks() === 0);
+  tickSec(w2, 2); // frame 1 settles the absence: every armed site springs
+  const j1Sites = mintedOccurrencesOf(J1).length;
+  check('wake live: the away nightfall springs at arrival (every court seat, its seeded wound standing)',
+    j1Sites >= 1 && cracks() === j1Sites * 2, `${cracks()} cracks over ${j1Sites} sites`);
+  hop(P2); // leaves J1 (sprung now remembered); P2's own boot settles ITS absence
+  tickSec(w2, 2);
+  hop(J1);
+  check('wake live: the return boot wakes the named sleepers — walking, no longer dormant',
+    husks().length >= 1 && husks().every(a => a.aiAwakened && !isDormant(a)), `${husks().length} awake`);
+  hop(D2);
+  check('wake live: THE DEBUT — the parent sprang while you were below and away; the Urnfather boots AWAKE',
+    !!wyrm() && wyrm()!.aiAwakened && !isDormant(wyrm()!));
+  hop(D4);
+  check('wake live: an unfound parent degrades to the sleeping side — never a wrongly-woken landlord',
+    !!wyrm() && isDormant(wyrm()!) && !wyrm()!.aiAwakened);
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');

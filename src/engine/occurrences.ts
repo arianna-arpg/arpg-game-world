@@ -52,6 +52,38 @@
 // this.zone.level at spawn time, and the Quickening surges exactly that
 // field for its window (probe rig F pins the read).
 //
+// THE WORLD-CLOCK WAKE (the colossal charter's second lane): the 'clock'
+// trigger fires when the day wheel ENTERS an authored phase window — each
+// window-entry rolls ONE foreordained die (hash of site seed × window
+// serial, THE FOREORDAINED TENET applied to time: the night the mountain
+// wakes is already written, and a reload replays the identical verdict).
+// The trigger needs no player presence to be HONEST about elapsed time:
+// driveOccSites runs on the live zone only, so the site keeps a
+// checked-up-to WATERMARK (OccSite.clockMark) and the first driven frame
+// after a zone boot settles every window the absence spanned — the lazy
+// form, seedOccClockMarks seeding the watermark from Zone Memory's own
+// savedAt. "It happened while you were away" is thereby EXACT arithmetic,
+// never a live sweep: an unwatched zone burns nothing (the transience
+// doctrine's grain — events borrow the world; an empty country needs no
+// ticking clock), and determinism makes the deferred evaluation
+// byte-equal to one that had watched all along. Beyond the memory TTL the
+// ground forgets like all ground — the standing law, unchanged.
+//
+// THE ROUSE (aftermath 'rouseResident'): a sprung clock spot names a
+// DORMANT TAG whose bearers boot AWAKE — the sleeping landlord walked
+// while you were away. No new persisted state exists ANYWHERE in this
+// lane: the rouse truth DERIVES from the sprung flag Zone Memory already
+// carries (occSprung — one truth, nothing to drift), and
+// wakeRousedResidents resolves it at zone boot for the zone's own sites
+// AND — when the booting zone is a cave — for the parent ring its sole
+// exit hangs off (the den lane: the caldera's clock wakes the wyrm one
+// door down). THE PARENT WITNESS LAW: every road into a den passes
+// through its parent, so the parent's sprung state is always fresh at den
+// boot; a rouse the parent has not yet witnessed sprung wakes nothing —
+// degrade is always toward the SLEEPING side, never a wrongly-woken one.
+// Resolution is ZONE grain (roused tags, not sites): the colossal anchor
+// law's territorial exclusion makes that exact for every colossal kind.
+//
 // THE DRESS DETERMINISM LAW: telegraph and spring dress each draw from a
 // position-hash seeded stream (site.seed — the pitfall fabric's
 // position-hash idiom), never the world dice — so the re-entry replant is
@@ -67,6 +99,7 @@
 import type { GenCtx, DoodadKind } from './levelgen';
 import { registerTenantKind, tenantKindOf, type TenantRow } from './massif';
 import type { PresenceSpec } from './presence';
+import { DAY_LENGTH, PHASE_WHEEL, type DayPhase } from '../world/daynight';
 import { Rng } from '../core/rng';
 
 /** Framework dials (the MASSIF_CFG idiom — reference numbers, never magic
@@ -94,6 +127,17 @@ export const OCC_CFG = {
     cap: 6,
     radius: [40, 110] as [number, number],
     levelBonus: 0,
+  },
+  /** 'clock' trigger defaults (THE WORLD-CLOCK WAKE): the phase window the
+   *  wheel must ENTER, and the per-entry foreordained chance. Nightfall at
+   *  chance 1 — authored rows dial the rarity down. */
+  clock: {
+    phases: ['night'] as readonly DayPhase[],
+    chance: 1,
+    /** Watermark scan ceiling (window-entries per drive) — real ranges are
+     *  TTL-bounded to a couple of cycles; this only guards a pathological
+     *  range from a runaway loop (the trailing windows win). */
+    scanCap: 64,
   },
   /** Dress-stream salts (fork identity — fixed, the TENANT_SALT law). */
   telegraphSalt: 0x7e11a3,
@@ -141,6 +185,14 @@ export interface OccTriggerSpec {
   radius?: number;
   /** Banked seconds to spring (banked kinds; default OCC_CFG.dwellSec). */
   sec?: number;
+  /** 'clock' kind: the day-wheel window whose ENTRY rolls the die. The
+   *  clock-pure subset of the RadianceCond grammar on purpose — weather and
+   *  radiance are live zone reads no arithmetic can reconstruct for elapsed
+   *  time, so the world-clock lane speaks phases alone. */
+  phases?: readonly DayPhase[];
+  /** 'clock' kind: per-window-entry chance, foreordained per (site, window
+   *  serial) — the same night always rolls the same verdict. Default 1. */
+  chance?: number;
 }
 
 /** THE TELEGRAPH (banked triggers only — see the header law). */
@@ -162,6 +214,17 @@ export interface OccSpringSpec {
   text?: string;
   shake?: number;
   flash?: { radius: number; color?: string };
+}
+
+/** 'rouseResident' aftermath params (THE WORLD-CLOCK WAKE's stamp-free
+ *  half): `tag` names the dormant species that boots awake — the row names
+ *  the rouse, the fabric never knows the wyrm. `notice` murmurs at the spot
+ *  on every revive (the standing "it is awake" word on re-arrival);
+ *  `wakeText` floats once at the first woken body when a boot wakes it. */
+export interface RouseResidentParams {
+  tag: string;
+  notice?: string;
+  wakeText?: string;
 }
 
 /** THE AFTERMATH row — `kind` names a registered aftermath. `pour` is the
@@ -312,6 +375,11 @@ export interface OccSite {
   cracked: boolean;
   /** The fixture clock (0 = unarmed — the rift pour's arm-on-first-beat). */
   pourAt: number;
+  /** THE WORLD-CLOCK WAKE watermark: world time this site's clock trigger
+   *  has settled windows up to (0 = unarmed; the driver self-arms at its
+   *  first frame, and seedOccClockMarks seeds it from Zone Memory's savedAt
+   *  so the absence's windows resolve lazily at arrival). */
+  clockMark: number;
   dud?: boolean;
 }
 
@@ -343,10 +411,23 @@ export function bootOccSites(zoneId: string, sprung?: number[]): OccSite[] {
       def, x: row.x, y: row.y, floorR: row.floorR,
       seed: (hashStr(`${zoneId}:occ:${i}`) ^ Math.imul(i + 1, 0x9e3779b1)) >>> 0,
       state: def && sprung?.[i] ? 'sprung' : 'armed',
-      bank: 0, told: false, cracked: false, pourAt: 0,
+      bank: 0, told: false, cracked: false, pourAt: 0, clockMark: 0,
       ...(def ? {} : { dud: true }),
     };
   });
+}
+
+/** Seed every armed clock site's watermark at zone boot: `leftAt` = when the
+ *  player last LEFT this zone (Zone Memory's savedAt), so the first driven
+ *  frame settles exactly the windows the absence spanned. Fresh ground (no
+ *  memory) seeds at `now` — a first visit meets the sleeper; the world's
+ *  clock only counts against ground already found (the haunting's latency,
+ *  the dormancy-until-found template). */
+export function seedOccClockMarks(sites: readonly OccSite[], leftAt: number | undefined, now: number): void {
+  for (const s of sites) {
+    if (s.dud || s.state !== 'armed' || s.def?.trigger.kind !== 'clock') continue;
+    s.clockMark = leftAt !== undefined && leftAt > 0 && leftAt < now ? leftAt : now;
+  }
 }
 
 // --- The dress law ------------------------------------------------------------
@@ -474,6 +555,81 @@ registerOccTrigger('proximity', (host, site, spec) =>
 registerOccTrigger('disturb', (host, site, spec) =>
   host.disturbedNear(site.x, site.y, spec.radius ?? OCC_CFG.radius));
 
+// --- THE WORLD-CLOCK WAKE: the window arithmetic ------------------------------
+
+/** The authored window's ENTRY fractions on the day wheel: one entry per
+ *  phase whose PREDECESSOR is outside the set, so a contiguous run (dusk +
+ *  night) counts once per day at its leading edge and the wrap (dawn → day)
+ *  is a real edge like any other. Degenerate sets — empty, or the whole
+ *  wheel — have no entries and never fire (warned at the driver). */
+function clockEntryFractions(phases: readonly DayPhase[]): number[] {
+  const entries: number[] = [];
+  for (let i = 0; i < PHASE_WHEEL.length; i++) {
+    if (!phases.includes(PHASE_WHEEL[i].phase)) continue;
+    const prev = PHASE_WHEEL[(i + PHASE_WHEEL.length - 1) % PHASE_WHEEL.length].phase;
+    if (phases.includes(prev)) continue;
+    entries.push(i === 0 ? 0 : PHASE_WHEEL[i - 1].until);
+  }
+  return entries;
+}
+
+/** One foreordained die per (site seed, day serial, entry index) — a
+ *  murmur-style finisher, hash-MIXED on every axis (THE LADDER-CORRELATION
+ *  law: arithmetic seed families sample correlated streams; mixing breaks
+ *  the family). Pure: the same night always answers the same. */
+function clockRoll(seed: number, day: number, entryIdx: number): number {
+  let h = (seed ^ Math.imul(day + 1, 2654435761) ^ Math.imul(entryIdx + 1, 0x9e3779b9)) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 2246822507) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0;
+  return h / 4294967296;
+}
+
+/** Did any authored window ENTRY inside (from, to] win its die? Pure over
+ *  the day wheel — this is the whole lazy law: an absence's verdict is the
+ *  same arithmetic a live watcher would have run, evaluated at arrival.
+ *  Exported for the probe (the rig pins the arithmetic, not the tuning). */
+export function clockWindowsHit(spec: OccTriggerSpec, seed: number, from: number, to: number): boolean {
+  if (!(to > from)) return false;
+  const phases = spec.phases ?? OCC_CFG.clock.phases;
+  const chance = spec.chance ?? OCC_CFG.clock.chance;
+  if (chance <= 0) return false;
+  const entries = clockEntryFractions(phases);
+  for (let ei = 0; ei < entries.length; ei++) {
+    const e = entries[ei];
+    // Day serials k with from < (k + e) × DAY_LENGTH ≤ to, trailing-capped.
+    const kMax = Math.floor(to / DAY_LENGTH - e);
+    let kMin = Math.max(0, Math.floor(from / DAY_LENGTH - e) + 1);
+    if (kMax - kMin + 1 > OCC_CFG.clock.scanCap) kMin = kMax - OCC_CFG.clock.scanCap + 1;
+    for (let k = kMin; k <= kMax; k++) {
+      if (clockRoll(seed, k, ei) < chance) return true;
+    }
+  }
+  return false;
+}
+
+// CLOCK — the world-clock window (THE WORLD-CLOCK WAKE, the colossal
+// charter's second lane): fires when the day wheel enters the authored
+// window AND that window's foreordained die wins. The watermark makes the
+// driver its own lazy evaluator — the first frame after a boot settles the
+// whole absence (seedOccClockMarks seeds it from Zone Memory), and a live
+// stand simply settles frame by frame. Self-arms when unseeded (a bare
+// probe world counts only windows it lives through). No telegraph, by the
+// plate school's honesty: a clock strike is not creepable ground.
+registerOccTrigger('clock', (host, site, spec) => {
+  const now = host.timeOf();
+  const phases = spec.phases ?? OCC_CFG.clock.phases;
+  if (!clockEntryFractions(phases).length) {
+    warnOnce(`clock:${site.def?.id}`,
+      `occurrence '${site.def?.id}' clock window [${phases.join(',')}] has no entry edge — it can never fire`);
+    return false;
+  }
+  if (!(site.clockMark > 0)) { site.clockMark = now; return false; }
+  const from = site.clockMark;
+  site.clockMark = now;
+  return clockWindowsHit(spec, site.seed, from, now);
+});
+
 // --- Core aftermath: THE FIXTURE ----------------------------------------------
 
 // The breached spot keeps pouring on the clock — the rift-pour grammar
@@ -504,6 +660,95 @@ registerOccAftermath('fixture', {
     }
   },
 });
+
+// --- THE ROUSE: aftermath 'rouseResident' + the boot-wake resolver ------------
+
+// THE STAMP-FREE LAW: this aftermath persists NOTHING of its own — the
+// rouse truth IS the sprung flag Zone Memory already carries (occSprung),
+// so there is no second field to drift, sanitize, or forget out of step.
+// establish() only SPEAKS: the revive path murmurs the standing notice at
+// the spot ("it is awake" on every re-arrival — the one deliberate
+// exception to the revive-is-history silence, because a woken landlord is
+// standing news); the spring path says nothing here (spring.text already
+// carried the event). The waking itself happens at zone boot, below.
+registerOccAftermath('rouseResident', {
+  establish(host, site, revive) {
+    const def = site.def;
+    const p = def?.aftermath?.params as RouseResidentParams | undefined;
+    if (!p?.tag) {
+      warnOnce(`rouse:${def?.id}`,
+        `occurrence '${def?.id}' rouseResident names no params.tag — the rouse wakes nothing`);
+      return;
+    }
+    if (revive && p.notice) host.announce(site.x, site.y, p.notice, def!.accent ?? OCC_CFG.accent);
+  },
+});
+
+/** The booting zone as the wake resolver needs it — structural on purpose
+ *  (ZoneDef satisfies it; importing the data shelf here would cycle). */
+export interface RousedWakeZone {
+  id: string;
+  caveDepth?: number;
+  exits: ReadonlyArray<{ to: string }>;
+}
+
+/** A body the wake may touch — structural over Actor. */
+export interface RousedWakeBody {
+  tag?: string;
+  dead: boolean;
+  aiAwakened: boolean;
+  pos: { x: number; y: number };
+}
+
+/** THE BOOT WAKE (the consumer's one engine call): collect every roused
+ *  dormant tag this ground answers for — its OWN sprung rouseResident
+ *  sites (the live booted view), and, when the ground is a cave, the
+ *  PARENT ring its exits hang off (the den lane: minted rows × the
+ *  parent's remembered sprung flags — THE PARENT WITNESS LAW makes that
+ *  state always fresh, and the caveDepth gate keeps surface neighbours
+ *  from ever reading each other's memory). Matching bearers wake
+ *  (aiAwakened — the rouse latch, tag left standing so kin identity,
+ *  rouse rules and faction reads all survive), the first woken body
+ *  floats the row's wakeText. Returns how many woke; every miss — no
+ *  sites, unfound parent, unregistered def — degrades to SLEEP. */
+export function wakeRousedResidents(
+  host: OccHost,
+  zone: RousedWakeZone,
+  selfSites: readonly OccSite[],
+  sprungOf: (zoneId: string) => readonly number[] | undefined,
+  actors: readonly RousedWakeBody[],
+): number {
+  const rows: Array<{ p: RouseResidentParams; accent: string }> = [];
+  const collect = (def: OccurrenceDef | undefined, sprung: boolean): void => {
+    if (!sprung || def?.aftermath?.kind !== 'rouseResident') return;
+    const p = def.aftermath.params as RouseResidentParams | undefined;
+    if (p?.tag && !rows.some(r => r.p.tag === p.tag)) {
+      rows.push({ p, accent: def.accent ?? OCC_CFG.accent });
+    }
+  };
+  for (const s of selfSites) collect(s.def, s.state === 'sprung');
+  if ((zone.caveDepth ?? 0) > 0) {
+    for (const ex of zone.exits) {
+      const minted = mintedOccurrencesOf(ex.to);
+      if (!minted.length) continue;
+      const sprung = sprungOf(ex.to);
+      minted.forEach((row, i) => collect(OCCURRENCES[row.id], !!sprung?.[i]));
+    }
+  }
+  if (!rows.length) return 0;
+  let woke = 0;
+  for (const { p, accent } of rows) {
+    let first: RousedWakeBody | undefined;
+    for (const a of actors) {
+      if (a.dead || a.tag !== p.tag || a.aiAwakened) continue;
+      a.aiAwakened = true;
+      first ??= a;
+      woke++;
+    }
+    if (first && p.wakeText) host.announce(first.pos.x, first.pos.y, p.wakeText, accent);
+  }
+  return woke;
+}
 
 // --- THE TENANT REGISTRANT ----------------------------------------------------
 
