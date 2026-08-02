@@ -600,6 +600,193 @@ void (async (): Promise<void> => {
     check('G10b: the refreshed bytes moved and == a forced full re-derive (vacuous)', true);
   }
 
+  // === RIG H — THE MEMORY MEMO (batch 20): the zone-memory section under the
+  // zones lane's discipline, keyed on THE REPLACE-ONLY LAW (rows cache by
+  // OBJECT IDENTITY — the 2026-08-02 writer audit proved stored rows are
+  // built fresh, replaced/deleted whole, never mutated in place). Pins: the
+  // identity-locked accessor, quiet-beat row reuse (0 derives, cached row
+  // objects shared by identity, the LIVE row fresh every beat), memo bytes ==
+  // a forced full re-derive through every drivable event class (quiet,
+  // capture-on-leave, enemy state change, TTL expiry, the age-bucket
+  // backstop, the campfire clear), the derivation counter's one-row
+  // precision, THE ROUSE LATCH round trip (aiAwakened — capture → splice →
+  // adopt → restore; the wake pass's standing gap), and the puzzlesDone
+  // writer fix (captured, schema'd, adopt-read — but never written until
+  // now). =====================================================================
+  console.log('--- RIG H: the memory memo (replace-only rows, rouse latch, splice seam) ---');
+  const mDerives = (): number => worldG.memorySaveRowDerives;
+  const memJsonOf = (ws: { memory?: unknown[] }): string | null =>
+    worldG.memorySaveJson(ws.memory);
+  const forcedMemJson = (): string | null => {
+    worldG.invalidateZonesSaveMemo(); // drops every layer, zones AND memory
+    return memJsonOf(worldG.serializeWorldState());
+  };
+  // H0 — fixture + the identity lock: lived-in memory rows exist (visitG left
+  // five remembered zones behind + the live capture underfoot), the accessor
+  // serves the LAST serialize's array and refuses any other.
+  const wsH1 = worldG.serializeWorldState();
+  const memH1 = wsH1.memory ?? [];
+  const jH1 = memJsonOf(wsH1);
+  check('H0a: lived-in fixture — stored rows + the live capture ride the section',
+    memH1.length >= 4, `${memH1.length} rows`);
+  check('H0b: the accessor is identity-locked (its own array yes, any other null)',
+    !!jH1 && worldG.memorySaveJson([]) === null && worldG.memorySaveJson(undefined) === null);
+  // H1 — the quiet beat: zero stored derives, cached row OBJECTS reused by
+  // identity (the allocation win), the live row fresh every beat (its savedAt
+  // is the serialize clock), bytes stable.
+  const dH1 = mDerives();
+  const wsH2 = worldG.serializeWorldState();
+  const memH2 = wsH2.memory ?? [];
+  const jH2 = memJsonOf(wsH2);
+  check('H1a: a quiet beat derives zero stored rows', mDerives() === dH1,
+    `${mDerives() - dH1} derives`);
+  check('H1b: quiet beats share stored row objects by identity; the live row is fresh',
+    memH1.length === memH2.length && memH1.length >= 2
+    && memH1[0] === memH2[0]
+    && memH1[memH1.length - 1] !== memH2[memH2.length - 1]);
+  check('H1c: quiet-beat bytes are stable', !!jH1 && jH1 === jH2);
+  // H2 — the forced lane: invalidate → every stored row re-derives fresh →
+  // byte-identical section (cache-of-truth), and the counter counts honestly.
+  const dH2 = mDerives();
+  const jH2f = forcedMemJson();
+  check('H2a: the memo lane == a forced full re-derive, byte for byte', !!jH2f && jH2 === jH2f);
+  check('H2b: the forced beat derives exactly the stored rows',
+    mDerives() - dH2 === memH2.length - 1, `${mDerives() - dH2}/${memH2.length - 1}`);
+  // H3 — THE CAPTURE CLASS (leave = replace-whole): moving zones captures the
+  // left zone (one NEW row identity) and supersedes the entered zone's stored
+  // row with the live capture — exactly one derive, bytes == forced.
+  worldG.loadZone(visitG[0]);
+  const dH3 = mDerives();
+  const jH3 = memJsonOf(worldG.serializeWorldState());
+  const h3d = mDerives() - dH3;
+  check('H3a: the leave-capture re-derives exactly the recaptured row', h3d === 1, `${h3d} rows`);
+  check('H3b: the capture-beat bytes == a forced full re-derive', !!jH3 && jH3 === forcedMemJson());
+  // H4 — THE ENEMY-STATE CLASS + THE ROUSE LATCH: wound a survivor, rouse one
+  // tagged body (aiAwakened — the damage-wake lane's latch), leave. The
+  // recapture is ONE row; its bytes carry the halved life, the latch, and —
+  // via the live zone's puzzle ledger below — the puzzlesDone writer fix.
+  const eWound = worldG.actors.find(a =>
+    !a.dead && a.team === 'enemy' && a.fromZoneGen && !!a.defId && !a.doorId);
+  const eRoused = worldG.actors.find(a =>
+    !a.dead && a.team === 'enemy' && a.fromZoneGen && !!a.defId && !a.doorId && a !== eWound);
+  const eCalm = worldG.actors.find(a =>
+    !a.dead && a.team === 'enemy' && a.fromZoneGen && !!a.defId && !a.doorId
+    && a !== eWound && a !== eRoused);
+  check('H4-fixture: three zone-gen survivors stand in the live zone',
+    !!eWound && !!eRoused && !!eCalm,
+    `${worldG.actors.filter(a => !a.dead && a.team === 'enemy' && a.fromZoneGen).length} bodies`);
+  let woundedLife = 0;
+  if (eWound && eRoused && eCalm) {
+    eWound.life = woundedLife = Math.max(1, eWound.life * 0.5);
+    eRoused.tag = 'probe_roused';
+    eRoused.aiAwakened = true;
+    eCalm.tag = 'probe_calm'; // latch deliberately left false
+  }
+  worldG.loadZone(visitG[1]); // captures visitG[0] with the manufactured state
+  const dH4 = mDerives();
+  const wsH4 = worldG.serializeWorldState();
+  const jH4 = memJsonOf(wsH4);
+  const h4d = mDerives() - dH4;
+  const rowH4 = (wsH4.memory ?? []).find(r => r.zoneId === visitG[0]);
+  check('H4a: the enemy-state recapture re-derives exactly one row', h4d === 1, `${h4d} rows`);
+  check('H4b: the recaptured row carries the wound, the latch, and its absence',
+    !!rowH4 && rowH4.enemies.some(e => Math.abs(e.life - woundedLife) < 0.01)
+    && rowH4.enemies.some(e => e.tag === 'probe_roused' && e.aiAwakened === 1)
+    && rowH4.enemies.some(e => e.tag === 'probe_calm' && e.aiAwakened === undefined));
+  check('H4c: the latch is IN the section bytes', !!jH4 && jH4.includes('"aiAwakened":1'));
+  check('H4d: the enemy-state bytes == a forced full re-derive', !!jH4 && jH4 === forcedMemJson());
+  // H5 — THE RESTORE LANE (same session, within TTL): re-entry re-materializes
+  // the roused body AWAKE and the calm one asleep — the latch half of the wake
+  // pass's standing gap (the memo restored the tag but never the waking).
+  worldG.loadZone(visitG[0]);
+  const backRoused = worldG.actors.find(a => a.tag === 'probe_roused' && !a.dead);
+  const backCalm = worldG.actors.find(a => a.tag === 'probe_calm' && !a.dead);
+  check('H5: re-entry restores the rouse latch — woken stays woken, calm stays calm',
+    !!backRoused && backRoused.aiAwakened === true
+    && !!backCalm && backCalm.aiAwakened === false);
+  // H6 — THE FULL BYTE LANE: solved-puzzle ledger manufactured in the LIVE
+  // zone (the snapshot reads it directly), then capture → memo row → the
+  // SECOND SPLICE SEAM → parse → sanitize → adopt → restore, all through the
+  // real written body. Byte parity with both memos hot is the money check.
+  (worldG as unknown as { puzzles: { id: string; done: boolean }[] }).puzzles
+    .push({ id: 'probe_riddle', done: true });
+  const saveH = serializeCharacter(worldG);
+  const bodyH = characterBody(worldG, saveH);
+  check('H6a: characterBody == plain stringify with BOTH memos hot', bodyH === JSON.stringify(saveH));
+  check('H6b: the written bytes carry the latch AND the puzzlesDone writer fix',
+    bodyH.includes('"aiAwakened":1') && bodyH.includes('probe_riddle'));
+  check('H6c: no memory-sentinel remnant in the written body', !bodyH.includes('__msplice_'));
+  const parsedH = JSON.parse(bodyH) as CharacterSave;
+  const mfH = reconcileManifest(parsedH.expedition, accountG, 999);
+  const worldH = new World(accountG, Object.freeze(mfH));
+  worldH.createPlayer(CLASSES.find(c => c.id === parsedH.classId) ?? CLASSES[0],
+    { charId: parsedH.charId });
+  const appliedH = applySavedCharacter(worldH, parsedH);
+  const adoptedH = !!parsedH.world && worldH.adoptWorldState(parsedH.world);
+  check('H6d: the spliced body stands back up whole', appliedH && adoptedH);
+  worldH.resumeSpawn('exact', parsedH.world?.player);
+  const adoptRoused = worldH.actors.find(a => a.tag === 'probe_roused' && !a.dead);
+  const adoptCalm = worldH.actors.find(a => a.tag === 'probe_calm' && !a.dead);
+  check('H6e: the adopted wake restores the latch through the full byte lane',
+    worldH.zone.id === visitG[0]
+    && !!adoptRoused && adoptRoused.aiAwakened === true
+    && !!adoptCalm && adoptCalm.aiAwakened === false,
+    `zone=${worldH.zone.id}`);
+  const adoptMemo = (worldH as unknown as {
+    zoneMemory: Map<string, { puzzlesDone?: string[] }>;
+  }).zoneMemory.get(visitG[0]);
+  check('H6f: puzzlesDone survives the round trip (the writer fix)',
+    !!adoptMemo?.puzzlesDone?.includes('probe_riddle'));
+  // H7 — THE TTL CLASS: age every stored memory past the 600s TTL (the world
+  // clock only ever advances). Expiry is a MEMBERSHIP delta, not a derive —
+  // rows drop from the walk without paying the serializer.
+  (worldG as unknown as { time: number }).time += 601; // past ZONE_MEMORY_TTL (600)
+  const dH7 = mDerives();
+  const wsH7 = worldG.serializeWorldState();
+  const jH7 = memJsonOf(wsH7);
+  check('H7a: TTL expiry drops every stored row (the live capture alone rides)',
+    (wsH7.memory ?? []).length === 1, `${(wsH7.memory ?? []).length} rows`);
+  check('H7b: expiry derives nothing — membership is not derivation',
+    mDerives() === dH7, `${mDerives() - dH7} derives`);
+  check('H7c: the post-expiry bytes == a forced full re-derive', !!jH7 && jH7 === forcedMemJson());
+  // H8 — THE AGE-BUCKET BACKSTOP + THE CAMPFIRE: regrow two rows, cross the
+  // shared zonesMemoMaxAgeSec boundary WITHOUT expiring them (599 < TTL) —
+  // every stored row must re-derive (the insurance window against a future
+  // in-place writer) — then the campfire's clear() empties membership whole.
+  worldG.loadZone(visitG[1]);
+  worldG.loadZone(visitG[2]);
+  worldG.serializeWorldState(); // cache the regrown rows
+  const dH8 = mDerives();
+  (worldG as unknown as { time: number }).time += 599; // bucket flips; rows stay TTL-fresh
+  const wsH8 = worldG.serializeWorldState();
+  const jH8 = memJsonOf(wsH8);
+  const storedH8 = (wsH8.memory ?? []).length - 1;
+  check('H8a: the age-bucket flip re-derives every stored row (the backstop)',
+    storedH8 >= 1 && mDerives() - dH8 === storedH8, `${mDerives() - dH8}/${storedH8}`);
+  check('H8b: the bucket-flip bytes == a forced full re-derive', !!jH8 && jH8 === forcedMemJson());
+  worldG.refreshZones(); // the campfire: zoneMemory.clear()
+  const wsH8c = worldG.serializeWorldState();
+  check('H8c: the campfire clear empties the section to the live capture alone',
+    (wsH8c.memory ?? []).length === 1
+    && memJsonOf(wsH8c) === forcedMemJson());
+  // H9 — THE SEAM ITSELF (the B3 idiom): a recognizable valid json handed to
+  // the accessor must land VERBATIM in the body — proof the second splice
+  // consumes the memo seam and not coincidentally-equal bytes — while the
+  // zones splice rides the SAME body (the double-splice application path).
+  const markerM = '["__probe_msplice_marker__"]';
+  const wgm = worldG as unknown as { memorySaveJson: (a: unknown) => string | null };
+  const realMemJson = wgm.memorySaveJson;
+  wgm.memorySaveJson = () => markerM;
+  const splicedM = characterBody(worldG, serializeCharacter(worldG));
+  wgm.memorySaveJson = realMemJson;
+  const parsedM = ((): unknown => {
+    try { return (JSON.parse(splicedM) as { world?: { memory?: unknown } }).world?.memory; }
+    catch { return null; }
+  })();
+  check('H9: the memory splice lane consumes the memo seam verbatim beside the zones splice',
+    splicedM.includes('__probe_msplice_marker__')
+    && JSON.stringify(parsedM) === markerM);
+
   finish();
 })();
 

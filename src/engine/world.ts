@@ -2027,6 +2027,12 @@ interface ZoneEnemyMemo {
   name?: string;
   /** THE TIER FABRIC: the layer it stood on — a deck body returns to its deck. */
   tier?: number;
+  /** THE ROUSE LATCH at capture (Actor.aiAwakened — only ever set on TAGGED
+   *  bodies): a damage-woken sleeping landlord left alive must NOT re-sleep
+   *  on re-entry within the TTL — the tag alone restores dormancy, this
+   *  restores the waking. (The clock-wake lane needs no field: its rouse
+   *  truth derives from occSprung — stamp-free by design.) */
+  aiAwakened?: 1;
 }
 
 /** What a left zone remembers, per run, for ZONE_MEMORY_TTL game-seconds: the
@@ -14841,6 +14847,7 @@ export class World {
         defId: a.defId, level: a.level, x: a.pos.x, y: a.pos.y,
         life: a.life, faction: a.faction, rarity: a.rarity, tag: a.tag,
         name: a.name, ...(a.tier ? { tier: a.tier } : {}),
+        ...(a.aiAwakened ? { aiAwakened: 1 as const } : {}),
       });
     }
     // Structure-door states (id → open/broken): the doodads carry the live state;
@@ -14939,6 +14946,7 @@ export class World {
       if (e.name) m.name = e.name; // the exact remembered name, never a re-roll
       if (e.tag) m.tag = e.tag;
       if (e.tier) m.tier = e.tier; // the tier fabric: a deck body returns to its deck
+      if (e.aiAwakened) m.aiAwakened = true; // the rouse latch — woken stays woken
       m.fromZoneGen = true;
       m.pos = this.clampPos(vec(e.x, e.y), m.radius, undefined, { mover: m });
       m.fillResources();
@@ -15002,10 +15010,57 @@ export class World {
    *  5% of the tree. Null until serializeWorldState has run. */
   zonesSaveJson(): string | null { return this.zonesSaveMemo?.json ?? null; }
 
-  /** Drop the zones memo — BOTH layers — the DURABLE quit path calls this
-   *  first, so the final write of a session is always built fresh (exact
-   *  resume owes nothing to either memo's key). */
-  invalidateZonesSaveMemo(): void { this.zonesSaveMemo = null; this.zonesRowMemo = null; }
+  /** Drop the save memos — the zones layers AND the memory layers — the
+   *  DURABLE quit path calls this first, so the final write of a session is
+   *  always built fresh (exact resume owes nothing to any memo's key). */
+  invalidateZonesSaveMemo(): void {
+    this.zonesSaveMemo = null; this.zonesRowMemo = null;
+    this.memorySaveMemo = null; this.memoryRowMemo = null;
+  }
+
+  /** THE MEMORY SAVE MEMO — the zone-memory section under the zones lane's
+   *  discipline, keyed on THE REPLACE-ONLY LAW (writer audit, 2026-08-01): a
+   *  stored ZoneMemory row is created fresh by exactly two builders
+   *  (zoneMemorySnapshot at capture, adoptWorldState's rebuild), replaced or
+   *  deleted WHOLE, and never mutated in place or aliased into live state —
+   *  every boot consumer value-reads (charges copy at `charges?.[i] ?? 0`
+   *  grain, the procession rider copies onto the cart, occSprung is read by
+   *  index). A row's OBJECT IDENTITY is therefore an exact fold of its
+   *  bytes — strictly stronger than a field enumeration, since a future
+   *  ZoneMemory field arrives via the builders and re-keys by construction,
+   *  where an enumeration would silently omit it. Only a future IN-PLACE
+   *  writer could lie to identity; the shared age bucket (the zones lane's
+   *  own insurance window, WORLDSTATE_CFG.zonesMemoMaxAgeSec) bounds that to
+   *  a crash-only stale row, and the durable quit path bypasses both memos
+   *  entirely. THE LIVE ROW (the zone underfoot) is fresh by construction —
+   *  its savedAt IS the serialize clock — so it re-derives every beat and is
+   *  never cached; membership (TTL expiry, kept-set, campfire, quickening
+   *  refresh, adoption) re-walks every beat, so the section is exactly as
+   *  sensitive as the rows plus the walk. CACHE-OF-TRUTH: a row's json is
+   *  only ever the one row serializer's output (memoRowOf below), and the
+   *  section json is the join of row jsons (≡ JSON.stringify(array) for
+   *  plain JSON data — the zones lane's proven law). */
+  private memorySaveMemo: { arr: SavedZoneMemory[]; json: string } | null = null;
+  private memoryRowMemo: {
+    ageBucket: number;
+    rows: Map<string, { src: ZoneMemory; saved: SavedZoneMemory; json: string }>;
+  } | null = null;
+
+  /** Instrumentation (dev/probe only — never read by game logic): count of
+   *  fresh STORED-row derivations since boot. The live row is fresh by
+   *  construction and deliberately uncounted, so a quiet beat pins at 0
+   *  anywhere. probe_persistence RIG H pins invalidation precision on it. */
+  memorySaveRowDerives = 0;
+
+  /** The memoized memory section's own JSON, identity-locked to the array it
+   *  describes: characterBody splices it into the save body verbatim (the
+   *  zones sentinel lane's shape) only when handed the EXACT array the last
+   *  serializeWorldState built — a stale save object can never wear fresh
+   *  bytes. Null until serializeWorldState has run. */
+  memorySaveJson(arr: unknown): string | null {
+    return this.memorySaveMemo && this.memorySaveMemo.arr === arr
+      ? this.memorySaveMemo.json : null;
+  }
 
   /** THE ONE PER-ZONE SIGNAL FOLD — every MUTABLE ZoneDef signal the save
    *  carries, for ONE zone: map coords EXACT (the settling drifts them by
@@ -15131,8 +15186,12 @@ export class World {
     // sanctioned cave_ namespace — cave ids are stable per mouth, so a side
     // area re-minted next session finds its survivors), topped by a LIVE
     // pure capture of the zone we're standing in.
-    const memory: SavedZoneMemory[] = [];
-    const memoOf = (zoneId: string, m: ZoneMemory): SavedZoneMemory => ({
+    // THE ONE TRUE MEMORY-ROW SERIALIZER — the memo layer below caches only
+    // this lane's output; no second derivation of the same bytes exists.
+    // (puzzlesDone joined 2026-08-02: the capture took it, the schema and
+    // the adopt read it, but this writer dropped it — solved riddles died
+    // with the session. The writer audit's one finding, folded.)
+    const memoRowOf = (zoneId: string, m: ZoneMemory): SavedZoneMemory => ({
       zoneId, seed: m.seed, savedAt: m.savedAt,
       enemies: m.enemies.map(e => ({ ...e })),
       ...(m.doorState ? { doorState: { ...m.doorState } } : {}),
@@ -15147,15 +15206,45 @@ export class World {
       ...(m.altarOffered !== undefined ? { altarOffered: m.altarOffered } : {}),
       ...(m.cullKills !== undefined ? { cullKills: m.cullKills } : {}),
       ...(m.cullNeed !== undefined ? { cullNeed: m.cullNeed } : {}),
+      ...(m.puzzlesDone ? { puzzlesDone: [...m.puzzlesDone] } : {}),
     });
+    // THE ROW GRAIN (memorySaveMemo above): stored rows reuse by OBJECT
+    // IDENTITY under the replace-only law — a recapture (leave), an
+    // adoption, or a campfire/quickening refresh moves identity or
+    // membership; nothing else can move a stored row's bytes. The live row
+    // derives every beat (its savedAt is the serialize clock). The fresh
+    // map REPLACES the old one, so rows whose memories lapsed or lost
+    // their ground drop with membership.
+    const memory: SavedZoneMemory[] = [];
+    const memParts: string[] = [];
+    const prevMemRows = this.memoryRowMemo?.ageBucket === fold.ageBucket
+      ? this.memoryRowMemo.rows : undefined;
+    const memRows = new Map<string, { src: ZoneMemory; saved: SavedZoneMemory; json: string }>();
     for (const [zid, m] of this.zoneMemory) {
       if (zid === this.zone.id) continue; // superseded by the live capture below
       if (!kept.has(zid) && !zid.startsWith('cave_')) continue;
       if (this.time - m.savedAt >= ZONE_MEMORY_TTL) continue; // spent — drop the weight
-      memory.push(memoOf(zid, m));
+      let row = prevMemRows?.get(zid);
+      if (row === undefined || row.src !== m) {
+        this.memorySaveRowDerives++;
+        const saved = memoRowOf(zid, m);
+        row = { src: m, saved, json: JSON.stringify(saved) };
+      }
+      memRows.set(zid, row);
+      memory.push(row.saved);
+      memParts.push(row.json);
     }
     const live = this.zoneMemorySnapshot();
-    if (live) memory.push(memoOf(this.zone.id, live));
+    if (live) {
+      const saved = memoRowOf(this.zone.id, live);
+      memory.push(saved);
+      memParts.push(JSON.stringify(saved));
+    }
+    this.memoryRowMemo = { ageBucket: fold.ageBucket, rows: memRows };
+    // JSON.stringify(array) ≡ '[' + elements' own stringify join ',' + ']'
+    // for plain JSON data — the zones lane's proven law; RIG H pins the
+    // spliced bytes against a memo-less stringify through every event class.
+    this.memorySaveMemo = { arr: memory, json: '[' + memParts.join(',') + ']' };
     // The player's SPOT: the on-graph zone underfoot, or — underground — the
     // ladder's surface anchor at the mouth we'd climb out to. Off-graph
     // pockets with no return (a realm, mid-voyage) resolve to no spot at all:
@@ -15295,6 +15384,7 @@ export class World {
           ...(memo.tag ? { tag: memo.tag } : {}),
           ...(memo.name ? { name: memo.name } : {}),
           ...(memo.tier ? { tier: memo.tier } : {}),
+          ...(memo.aiAwakened ? { aiAwakened: 1 as const } : {}),
         });
       }
       const doorState: Record<string, 'open' | 'broken'> = {};

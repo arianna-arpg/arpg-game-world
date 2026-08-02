@@ -88,7 +88,17 @@ export const WORLDSTATE_CFG = {
    *  rebuild the raise couldn't touch now pays row grain instead of the
    *  whole section. The bound therefore insures only FUTURE unfolded
    *  writers, and a hard crash already loses up to a full 20s beat of
-   *  everything else. */
+   *  everything else.
+   *
+   *  THE MEMORY SECTION rides the SAME bucket (World.memorySaveMemo, batch
+   *  20): its stored rows are cached by OBJECT IDENTITY under the
+   *  replace-only law (the 2026-08-02 writer audit: rows are built fresh by
+   *  exactly two builders, replaced or deleted whole, never mutated in
+   *  place), the zone underfoot re-derives every beat (its savedAt is the
+   *  serialize clock), and this age bound is the identical insurance: only
+   *  a FUTURE in-place row writer could lie to identity, for at most this
+   *  long, on the crash lane only — the durable quit path bypasses every
+   *  memo. One clock, one window, both sections. */
   zonesMemoMaxAgeSec: 600,
 } as const;
 
@@ -116,6 +126,9 @@ export interface SavedEnemyMemo {
   name?: string;
   /** THE TIER FABRIC: the walkable layer it stood on (absent at 0). */
   tier?: number;
+  /** THE ROUSE LATCH (Actor.aiAwakened, tagged bodies only): a damage-woken
+   *  sleeper restored awake — the tag restores dormancy, this the waking. */
+  aiAwakened?: 1;
 }
 
 /** One zone's TTL'd memory (the engine's ZoneMemory, keyed for an array). */

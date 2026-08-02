@@ -397,44 +397,72 @@ function saveSlotFor(world: World): number {
   return entry ? entry.slot : -1;
 }
 
-/** Stringify the save, splicing the world's memoized zones JSON in verbatim —
- *  the final walk then covers the ~5% of the tree that actually changes per
- *  beat instead of re-serializing 663 zone defs (the 20s autosave hitch).
+/** Stringify the save, splicing the world's memoized section JSON in
+ *  verbatim — the zones section (~95% of a lived-in save's bytes) and the
+ *  zone-memory section (its ~2.4ms stringify was the next-largest slice) —
+ *  so the final walk covers only the sliver of the tree that actually
+ *  changes per beat (the 20s autosave hitch).
  *
- *  THE SPLICE RIDES A SENTINEL, NEVER JSON.rawJSON: rawJSON accepts only JSON
+ *  THE SPLICE RIDES SENTINELS, NEVER JSON.rawJSON: rawJSON accepts only JSON
  *  PRIMITIVES — handed the zones ARRAY it throws, and (07-23..07-31) that
  *  throw, swallowed by the writers' quota catch, silently discarded every
  *  character save on every rawJSON-capable runtime (the Immortal-vessel
- *  loss). Instead the zones array serializes as a one-off entropy sentinel
- *  and ONE indexOf/slice swap seats the memoized JSON in its place. The
- *  identity guard (`v === zs`) fires only for the exact array the memo's
- *  JSON describes; the sentinel is minted per call, so no save content can
- *  spoof it; and any anomaly — sentinel absent, or present more than once —
- *  falls back to the plain stringify. Correctness never rides the
- *  optimization (probe_persistence pins byte parity between the two lanes,
- *  and pins rawJSON's array refusal so the old idiom can't return). */
+ *  loss). Instead each spliced array serializes as a one-off entropy
+ *  sentinel and an indexOf/slice swap seats the memoized JSON in its place.
+ *  The memory seam is identity-locked (memorySaveJson hands back bytes only
+ *  for the EXACT array the last serialize built); the sentinels are minted
+ *  per call, so no save content can spoof them; and any anomaly — a
+ *  sentinel absent, or present more than once — falls back WHOLE to the
+ *  plain stringify. Correctness never rides the optimization
+ *  (probe_persistence pins byte parity between the lanes, and pins
+ *  rawJSON's array refusal so the old idiom can't return). */
 export function characterBody(world: World, save: CharacterSave): string {
-  const zonesJson = world.zonesSaveJson();
-  if (zonesJson && save.world) {
-    const zs = save.world.zones;
-    const sentinel = `__zsplice_${Date.now().toString(36)}_${Math.floor(Math.random() * 0xffffffff).toString(36)}__`;
-    // The sentinel is SWAPPED into the save directly rather than minted by a
-    // replacer callback: a replacer de-optimizes the whole stringify (V8
+  const w = save.world;
+  const zonesJson = w ? world.zonesSaveJson() : null;
+  // THE SECOND SEAM (the memory section): the accessor is identity-checked
+  // against the array in THIS save, so a stale save object (built before
+  // the memo's last serialize) can never wear fresher bytes than its own.
+  const memJson = w?.memory ? world.memorySaveJson(w.memory) : null;
+  if (w && (zonesJson || memJson)) {
+    const zs = w.zones;
+    const mem = w.memory;
+    const salt = `${Date.now().toString(36)}_${Math.floor(Math.random() * 0xffffffff).toString(36)}`;
+    const zSentinel = `__zsplice_${salt}__`;
+    const mSentinel = `__msplice_${salt}__`;
+    // The sentinels are SWAPPED into the save directly rather than minted by
+    // a replacer callback: a replacer de-optimizes the whole stringify (V8
     // leaves the fast path — measured ~11ms extra on a 2MB body), and the
-    // swap stringifies byte-identically. The finally restores the array even
-    // when serialization throws, so the loud-failure lane (saveCharacter's
-    // catch) never sees a save left mutated.
+    // swap stringifies byte-identically. The finally restores the arrays
+    // even when serialization throws, so the loud-failure lane
+    // (saveCharacter's catch) never sees a save left mutated.
     let body: string;
     try {
-      (save.world as { zones: unknown }).zones = sentinel;
+      if (zonesJson) (w as { zones: unknown }).zones = zSentinel;
+      if (memJson) (w as { memory: unknown }).memory = mSentinel;
       body = JSON.stringify(save);
     } finally {
-      save.world.zones = zs;
+      if (zonesJson) w.zones = zs;
+      if (memJson) w.memory = mem;
     }
-    const token = JSON.stringify(sentinel); // quoted, exactly as it appears in the body
-    const at = body.indexOf(token);
-    if (at >= 0 && body.indexOf(token, at + token.length) < 0) {
-      return body.slice(0, at) + zonesJson + body.slice(at + token.length);
+    // Verify then apply: every requested splice's token must appear EXACTLY
+    // once, or the whole body falls back to the plain stringify — a partial
+    // splice could seat one section beside a corrupted other. Applied
+    // back-to-front so earlier offsets hold.
+    const splices: { at: number; len: number; json: string }[] = [];
+    let ok = true;
+    for (const s of [
+      ...(zonesJson ? [{ sentinel: zSentinel, json: zonesJson }] : []),
+      ...(memJson ? [{ sentinel: mSentinel, json: memJson }] : []),
+    ]) {
+      const token = JSON.stringify(s.sentinel); // quoted, exactly as it appears in the body
+      const at = body.indexOf(token);
+      if (at < 0 || body.indexOf(token, at + token.length) >= 0) { ok = false; break; }
+      splices.push({ at, len: token.length, json: s.json });
+    }
+    if (ok && splices.length) {
+      splices.sort((a, b) => b.at - a.at);
+      for (const s of splices) body = body.slice(0, s.at) + s.json + body.slice(s.at + s.len);
+      return body;
     }
   }
   return JSON.stringify(save);
