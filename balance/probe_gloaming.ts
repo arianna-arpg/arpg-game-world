@@ -76,6 +76,18 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
       check(`survival '${r.id}' with underflow damage names it`, !!r.underflowText);
     }
   }
+  // THE BREATH VEIL (the survival-vignette lever): breath debuts the spec —
+  // asphyxiation blue engaging below HALF (the user's word, pinned exact),
+  // peak depth a wash and never a blackout, all three colours authored.
+  const bv = b.vignette;
+  check('breath wears the survival veil (blue, below-half engagement, sane depth)',
+    !!bv && bv.startFrac === 0.5 && bv.maxAlpha > 0 && bv.maxAlpha < 0.8
+    && !!bv.mid && !!bv.edge && !!bv.flush);
+  // The veil is a LEVER, not ambience: rows that never asked for one stay
+  // bare — the no-spec path draws nothing (absent == identical). A future
+  // row taking a veil updates this census DELIBERATELY.
+  check('spec-less survival rows stay bare (absent == identical census)',
+    l.vignette === undefined && SURVIVAL_RESOURCES.soul.vignette === undefined);
 }
 
 {

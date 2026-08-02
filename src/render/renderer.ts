@@ -685,7 +685,8 @@ export class Renderer {
 
     this.drawAtmosphere(world);
     this.drawStatusFx();          // status ailment overlays (edge vignettes/frost/stars)
-    this.drawLowLifeGlow(world);  // low-life blood vignette + heartbeat + hit surge
+    this.drawSurvivalVignette(world); // THE SURVIVAL VEIL: per-row meter washes (breath's asphyxiation blue)
+    this.drawLowLifeGlow(world);  // low-life blood vignette + heartbeat + hit surge — over the veil: death keeps the last word
     // THE UI-SCALE SUB-PASS: pure screen-space widgets draw in virtual
     // (uiW×uiH) coords under one ctx.scale, so the player's UI Scale dial
     // grows the whole HUD together (ui/uiScale.ts — the DOM surfaces ride
@@ -1731,6 +1732,79 @@ export class Renderer {
       key: `lowlife|${innerQ}|${flushQ}`, innerFrac: innerQ,
       stops: [[0, `rgba(${mid},0)`], [C.midStop, `rgba(${mid},${C.midAlpha})`], [1, `rgba(${edge},1)`]],
     }, a);
+  }
+
+  /** THE SURVIVAL VEIL's squeeze phase + its own frame clock (the low-life
+   *  heart's construction, never its state — the two pulses are strangers). */
+  private survVeilPhase = 0;
+  private survVeilPrevT = -1;
+
+  /** THE SURVIVAL VEIL (the breath veil's generic home): any
+   *  SURVIVAL_RESOURCES row wearing a `vignette` spec washes the screen in
+   *  its colour as its meter drains — breath's asphyxiation blue debuts it,
+   *  engaging below half breath and closing in toward empty; a spec-less row
+   *  draws NOTHING (absent == identical). Row = identity;
+   *  VIS_CFG.survivalVignette = the shared grammar. The LOCAL hero's meters
+   *  drive the screen (world.player — the low-life seat law, couch guests'
+   *  suffering shows on their bars, not the shared frame), and a HELD meter
+   *  (world.survivalRowVisible — the gloaming's daylock) parks its veil with
+   *  its bar. Screen-anchored by law (`veil.anchor: 'view'` — this happens
+   *  TO the player) on the baked edge-overlay fabric, one blit per active
+   *  row. Distinct from the Gloaming/descent's hero-centred closing eye
+   *  (drawDarknessVignette) by design — that veil is the WORLD's darkness.
+   *  THE LAST-GASP SQUEEZE rides the RENDERER's clock (a chronomancer stops
+   *  the world, not your own suffocation); THE RAMP MADE VISIBLE: an empty
+   *  meter keeps deepening on the very clock its underflow damage ramps on
+   *  (Actor.underflowSince ÷ the row's underflowRampSecs — drawn ==
+   *  suffered). */
+  private drawSurvivalVignette(world: World): void {
+    const p = world.player;
+    if (!p.survival || p.dead) { this.survVeilPrevT = -1; return; }
+    const C = VIS_CFG.survivalVignette;
+    const now = performance.now() / 1000;
+    const dt = this.survVeilPrevT < 0 ? 0 : clamp(now - this.survVeilPrevT, 0, 0.1);
+    this.survVeilPrevT = now;
+    const pulseOn = this.getSettings?.().lowLifePulse ?? true;
+    let squeezing = false;
+    for (const def of Object.values(SURVIVAL_RESOURCES)) {
+      const spec = def.vignette;
+      if (!spec) continue;                               // absent == identical
+      const cur = p.survival.get(def.id);
+      if (cur === undefined || cur >= def.max) continue; // untouched / full
+      if (!world.survivalRowVisible(def.id)) continue;   // held → parked with its bar
+      const frac = clamp(cur / def.max, 0, 1);
+      if (frac >= spec.startFrac) continue;              // above the engagement line
+      const sev = Math.pow(1 - frac / spec.startFrac, C.curve); // 0 at the line … 1 empty
+      const steady = C.alphaFloor + (spec.maxAlpha - C.alphaFloor) * sev;
+      // The squeeze: a smooth swell quickening as the meter runs out.
+      let squeeze = 0;
+      const depth = clamp(1 - frac / C.pulse.startFrac, 0, 1);
+      if (pulseOn && depth > 0) {
+        const period = C.pulse.periodFrom + (C.pulse.periodTo - C.pulse.periodFrom) * depth;
+        this.survVeilPhase = (this.survVeilPhase + dt / period) % 1;
+        squeeze = (1 - Math.cos(this.survVeilPhase * Math.PI * 2)) / 2 * depth;
+        squeezing = true;
+      }
+      // The ramp made visible: how long this meter has run empty, over the
+      // row's own damage-ramp seconds (a rampless row deepens at once).
+      const since = p.underflowSince?.[def.id];
+      const rampT = since === undefined ? 0
+        : def.underflowRampSecs ? clamp((world.time - since) / def.underflowRampSecs, 0, 1) : 1;
+      const a = steady * (1 + C.pulse.alphaBoost * squeeze);
+      if (a <= 0.005) continue;
+      const inner = Math.max(0, C.innerFrom + (C.innerTo - C.innerFrom) * sev
+        - C.pulse.reach * squeeze - C.underflow.reach * rampT);
+      const flush = Math.min(1, C.pulse.flushMix * squeeze + C.underflow.flushMix * rampT);
+      const innerQ = qFrac(inner);
+      const flushQ = qFrac(flush, 0.1);
+      const mid = blendRgb(spec.mid, spec.flush, flushQ);
+      const edge = blendRgb(spec.edge, spec.flush, flushQ * 0.6);
+      drawEdgeOverlay(this.ctx, this.canvas.width, this.canvas.height, {
+        key: `survveil|${def.id}|${innerQ}|${flushQ}`, innerFrac: innerQ,
+        stops: [[0, `rgba(${mid},0)`], [C.midStop, `rgba(${mid},${C.midAlpha})`], [1, `rgba(${edge},1)`]],
+      }, a);
+    }
+    if (!squeezing) this.survVeilPhase = 0; // re-crossing the line leads with a fresh swell
   }
 
   /** THE TIMEFLOW WASH (engine/timeflow.ts): while a hold carrying a hud

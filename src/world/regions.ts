@@ -357,6 +357,33 @@ export interface SurvivalResourceDef {
    *  (default SURVIVAL_EASE_CAP) — a survival clock may be slowed, never
    *  stopped. */
   easeCap?: number;
+  /** THE SURVIVAL VEIL (renderer.drawSurvivalVignette): the screen wash this
+   *  meter wears as it drains — breath's asphyxiation blue is the debut.
+   *  Omit = no veil; a spec-less row draws nothing (absent == identical). */
+  vignette?: SurvivalVignetteSpec;
+}
+
+/** THE SURVIVAL VEIL's row half — IDENTITY only (colours, the engagement
+ *  line, the peak depth). The shared grammar — closing-in geometry, the
+ *  last-gasp squeeze, the underflow deepening — is global in
+ *  VIS_CFG.survivalVignette, so a future warmth meter buys the whole effect
+ *  with one spec here. Screen-anchored BY LAW: like every status overlay it
+ *  happens TO the player (the anchored sky's explicit exemption,
+ *  `veil.anchor: 'view'`) — never a place in the world. */
+export interface SurvivalVignetteSpec {
+  /** The wash's leading band (the colour the screen "turns"). Hex. */
+  mid: string;
+  /** The pooled screen-corner rim — the deep end of the wash. Hex. */
+  edge: string;
+  /** The flush the last-gasp squeeze (and the underflow ramp) lends both —
+   *  breath's pale oxygen-starved cyan. Hex. */
+  flush: string;
+  /** Meter fraction where the veil engages (0.5 = below half). Above it the
+   *  veil draws nothing at all. */
+  startFrac: number;
+  /** Steady alpha at an EMPTY meter — a whisper at startFrac ramps to this;
+   *  the squeeze may briefly press past it. */
+  maxAlpha: number;
 }
 
 /** Default ceiling on stacked drain-ease for any survival meter (rows may
@@ -374,7 +401,13 @@ export function survivalEaseStat(id: string): string { return `survivalEase_${id
 export const SURVIVAL_RESOURCES: Record<string, SurvivalResourceDef> = {
   // Drowning RAMPS: ~5%/s at first, climbing to ~25%/s after 10s under without air —
   // a tightening panic, not a flat tax. Refilling breath (an air pocket) resets it.
-  breath: { id: 'breath', label: 'Breath', max: 12, regen: 5, underflowPctLifePerSec: 0.05, underflowRampTo: 0.25, underflowRampSecs: 10, underflowText: 'drowning!', color: '#6ac0f8' },
+  // THE BREATH VEIL: the screen turns BLUE as air runs out — engaging below half
+  // breath, closing in as the meter empties, squeezing at the last gasp, and
+  // deepening on the drowning ramp's own clock while you stay under.
+  breath: {
+    id: 'breath', label: 'Breath', max: 12, regen: 5, underflowPctLifePerSec: 0.05, underflowRampTo: 0.25, underflowRampSecs: 10, underflowText: 'drowning!', color: '#6ac0f8',
+    vignette: { mid: '#3b96f0', edge: '#0b2d60', flush: '#9adcff', startFrac: 0.5, maxAlpha: 0.62 },
+  },
   // LIGHT — the darkness-survival meter, worn by TWO fabrics. It only ever DRAINS
   // (no passive regen); light SOURCES give it back. In the Descent the dark
   // CONSUMES you at zero (updateDescent resurfaces BEFORE the meter can underflow —
