@@ -63,6 +63,7 @@ import {
 import { buildManifest, reconcileManifest } from '../src/packages/manifest';
 import { resolveResumeSpawn } from '../src/meta/worldstate';
 import { World } from '../src/engine/world';
+import { placeZoneAt } from '../src/engine/worldgen';
 import { zoneKindOf } from '../src/data/zoneKinds';
 
 let failed = 0;
@@ -468,6 +469,136 @@ void (async (): Promise<void> => {
   const saveG = serializeCharacter(worldG);
   check('G5: characterBody == plain stringify at grown-chart scale',
     characterBody(worldG, saveG) === JSON.stringify(saveG));
+
+  // --- THE ROW GRAIN (batch 19): per-zone row memoization under the section
+  // memo. Two instruments: the BYTE PIN (memo lane == forced full re-derive
+  // — invalidateZonesSaveMemo drops BOTH layers, so the forced lane derives
+  // every row fresh) and the DERIVATION COUNTER (World.zonesSaveRowDerives —
+  // the precision pin: a one-zone signal write re-derives exactly ONE row, a
+  // quiet beat exactly ZERO). G9/G10 flip the two writers the 2026-08-01
+  // audit left unfolded (the waypointless-dimension heal, the quickened
+  // key/until in-place refresh) — folded in batch 19, each must invalidate.
+  const derives = (): number => worldG.zonesSaveRowDerives;
+  const forcedJson = (): string | null => {
+    worldG.invalidateZonesSaveMemo();
+    worldG.serializeWorldState();
+    return worldG.zonesSaveJson();
+  };
+  // G6a — an OFF-GRAPH mint's counter move (cave mints bump nextGenId but
+  // never touch the zones section) misses the section key; the row lane must
+  // rebuild the identical bytes from cached rows alone.
+  worldG.serializeWorldState();
+  const preOffJson = worldG.zonesSaveJson();
+  const dOff = derives();
+  (worldG as unknown as { nextGenId: number }).nextGenId++;
+  worldG.serializeWorldState();
+  check('G6a: an off-graph counter move rebuilds from cached rows (0 derives, bytes equal)',
+    derives() === dOff && worldG.zonesSaveJson() === preOffJson,
+    `${derives() - dOff} derives`);
+  // G6 — A MINT MID-RUN through the real placer (placeZoneAt links, notarizes
+  // and SETTLES neighbours — the honest event shape: a new row, rewired and
+  // drifted kin). The mint beat re-derives a strict subset; the bytes equal
+  // a forced full re-derive; the next quiet beat re-derives nothing.
+  const anchorG = Object.values(worldG.zoneMap).find(z =>
+    z.id.startsWith('gen_') && z.caveDepth == null && !z.floating && z.objective.kind !== 'safe');
+  if (anchorG) {
+    const minted = placeZoneAt(
+      { x: anchorG.map.x + 140, y: anchorG.map.y + 90 }, anchorG,
+      worldG.zoneMap, 99101,
+      { id: 'g6_rowmint', tileset: 'crypt', level: 8, seed: 0xabc9, objective: { kind: 'clear' } });
+    worldG.zoneMap[minted.id] = minted;
+    const dMint = derives();
+    worldG.serializeWorldState();
+    const mintJson = worldG.zonesSaveJson();
+    const mintDerives = derives() - dMint;
+    const totalG6 = Object.keys(worldG.zoneMap).length;
+    check('G6b: the minted row is in the bytes', !!mintJson && mintJson.includes('"g6_rowmint"'));
+    check('G6c: the mint beat re-derives a strict subset of rows',
+      mintDerives >= 1 && mintDerives < totalG6, `${mintDerives}/${totalG6} rows`);
+    worldG.serializeWorldState();
+    check('G6d: the post-mint quiet beat re-derives nothing', derives() === dMint + mintDerives);
+    check('G6e: the mint-beat bytes == a forced full re-derive', mintJson === forcedJson());
+  } else {
+    check('G6b: the minted row is in the bytes (no gen_ anchor rolled — vacuous)', true);
+    check('G6c: the mint beat re-derives a strict subset of rows (vacuous)', true);
+    check('G6d: the post-mint quiet beat re-derives nothing (vacuous)', true);
+    check('G6e: the mint-beat bytes == a forced full re-derive (vacuous)', true);
+  }
+  // G7 — INVALIDATION PRECISION under a one-zone signal: the notary stamp
+  // (a fold signal since the memo debuted) re-derives exactly ONE row.
+  const stampG = Object.values(worldG.zoneMap).find(z =>
+    z.exits.some(e => e.to !== '?' && e.notarized === undefined));
+  if (stampG) {
+    const pre = worldG.zonesSaveJson();
+    const d7 = derives();
+    stampG.exits.find(e => e.to !== '?' && e.notarized === undefined)!.notarized = true;
+    worldG.serializeWorldState();
+    const stamped = worldG.zonesSaveJson();
+    check('G7a: a one-zone notary stamp re-derives exactly one row',
+      derives() - d7 === 1, `${derives() - d7} rows`);
+    check('G7b: the stamped bytes moved and == a forced full re-derive',
+      !!stamped && stamped !== pre && stamped === forcedJson());
+  } else {
+    check('G7a: a one-zone notary stamp re-derives exactly one row (vacuous)', true);
+    check('G7b: the stamped bytes moved and == a forced full re-derive (vacuous)', true);
+  }
+  // G8 — THE REWIRE: a '?' promise resolved in place (the chartNeighborsOf
+  // writer class — e.to moves) re-derives only the rewired row.
+  const rewireG = Object.values(worldG.zoneMap).find(z => z.exits.some(e => e.to === '?'));
+  const rewireTo = Object.keys(worldG.zoneMap).find(id => id !== rewireG?.id);
+  if (rewireG && rewireTo) {
+    const pre = worldG.zonesSaveJson();
+    const d8 = derives();
+    rewireG.exits.find(e => e.to === '?')!.to = rewireTo;
+    worldG.serializeWorldState();
+    const rewired = worldG.zonesSaveJson();
+    check('G8a: an exit rewire re-derives exactly the rewired row',
+      derives() - d8 === 1, `${derives() - d8} rows`);
+    check('G8b: the rewired bytes moved and == a forced full re-derive',
+      !!rewired && rewired !== pre && rewired === forcedJson());
+  } else {
+    check('G8a: an exit rewire re-derives exactly the rewired row (no \'?\' left — vacuous)', true);
+    check('G8b: the rewired bytes moved and == a forced full re-derive (vacuous)', true);
+  }
+  // G9 — NEWLY-FOLDED WRITER 1: the waypointless-dimension heal's exact
+  // write (world.ts zone load: def.waypoint = false). The old fold was blind
+  // to it; it must now invalidate — and precisely.
+  const wpG = Object.values(worldG.zoneMap).find(z => z.waypoint === true);
+  if (wpG) {
+    const pre = worldG.zonesSaveJson();
+    const d9 = derives();
+    wpG.waypoint = false;
+    worldG.serializeWorldState();
+    const healed = worldG.zonesSaveJson();
+    check('G9a: the waypoint heal bit re-derives exactly one row',
+      derives() - d9 === 1, `${derives() - d9} rows`);
+    check('G9b: the waypoint-healed bytes moved and == a forced full re-derive',
+      !!healed && healed !== pre && healed === forcedJson());
+  } else {
+    check('G9a: the waypoint heal bit re-derives exactly one row (no waypoint zone — vacuous)', true);
+    check('G9b: the waypoint-healed bytes moved and == a forced full re-derive (vacuous)', true);
+  }
+  // G10 — NEWLY-FOLDED WRITER 2: the quickened key/until IN-PLACE refresh
+  // (presence + level unchanged — the fold's old blind spot). Stamp presence
+  // first (the old law absorbs that beat), then refresh in place.
+  const qkG = Object.values(worldG.zoneMap).find(z => !z.quickened);
+  if (qkG) {
+    qkG.quickened = { key: 'g10_arc', baseLevel: qkG.level, until: worldG.time + 120 };
+    worldG.serializeWorldState(); // the presence flip — folded since the memo debuted
+    const pre = worldG.zonesSaveJson();
+    const d10 = derives();
+    qkG.quickened.key = 'g10_arc_2';
+    qkG.quickened.until += 45;
+    worldG.serializeWorldState();
+    const refreshed = worldG.zonesSaveJson();
+    check('G10a: the quickened in-place key/until refresh re-derives exactly one row',
+      derives() - d10 === 1, `${derives() - d10} rows`);
+    check('G10b: the refreshed bytes moved and == a forced full re-derive',
+      !!refreshed && refreshed !== pre && refreshed === forcedJson());
+  } else {
+    check('G10a: the quickened in-place key/until refresh re-derives exactly one row (vacuous)', true);
+    check('G10b: the refreshed bytes moved and == a forced full re-derive (vacuous)', true);
+  }
 
   finish();
 })();

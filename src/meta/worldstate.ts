@@ -67,22 +67,28 @@ export const WORLDSTATE_CFG = {
   /** THE ZONES SAVE MEMO (World.serializeWorldState): the zones section —
    *  ~95% of a lived-in save's bytes, rebuilt with a per-def JSON round-trip
    *  every 20s autosave (measured 80ms+ hitches by 663 zones) — is memoized
-   *  on a one-pass fold of every MUTABLE def signal (map coords, level,
-   *  veiled/quickened flags, exits incl. rewires, harborhold state, the
-   *  claimed-event set). Deep def fields are mint-once by design; this age
-   *  bound (world-clock seconds) re-derives regardless, so even a signal the
-   *  fold misses can lag a HARD CRASH's save by at most this long — normal
-   *  quits ride the durable path, which bypasses the memo entirely.
+   *  TWO LAYERS deep on one per-zone signal fold (zoneRowFoldKey: exact map
+   *  coords, level, veiled/quickened flags INCLUDING the in-place key/until
+   *  refresh, the waypoint heal bit, exits incl. rewires with per-named-id
+   *  kept-bits, harborhold state, searoutes, the claimed-event set): a quiet
+   *  beat reuses the whole section string, and a beat any mint moves rebuilds
+   *  it by joining cached PER-ZONE rows — only rows whose own signals moved
+   *  pay the round-trip. Deep def fields are mint-once by design; this age
+   *  bound (world-clock seconds) expires both layers regardless, so even a
+   *  signal the fold misses can lag a HARD CRASH's save by at most this
+   *  long — normal quits ride the durable path, which bypasses the memo
+   *  entirely.
    *
    *  600 (was 120): the rebuild is a real frame hitch that GROWS with the
    *  chart (~35ms at 415 zones headless; the 80ms report above), and the
    *  2026-08-01 writer audit found no unfolded post-mint def writer whose
-   *  staleness a resume doesn't already heal: the waypointless-dimension
-   *  strip re-fires at every zone load, and a quickened stamp's in-place
-   *  key/until refresh is re-married from the overlay snapshot (the clock
-   *  authority, serialized fresh outside the memo) by the reconcile sweep.
-   *  The bound therefore insures only FUTURE unfolded writers, and a hard
-   *  crash already loses up to a full 20s beat of everything else. */
+   *  staleness a resume doesn't already heal — its two findings (the
+   *  waypointless-dimension strip, the quickened key/until refresh) have
+   *  since JOINED the fold outright (batch 19), and the exploration-case
+   *  rebuild the raise couldn't touch now pays row grain instead of the
+   *  whole section. The bound therefore insures only FUTURE unfolded
+   *  writers, and a hard crash already loses up to a full 20s beat of
+   *  everything else. */
   zonesMemoMaxAgeSec: 600,
 } as const;
 

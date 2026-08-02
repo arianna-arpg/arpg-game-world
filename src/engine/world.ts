@@ -14972,42 +14972,106 @@ export class World {
    *  round-trip per def); the fold below is one numeric pass. */
   private zonesSaveMemo: { key: string; zones: ZoneDef[]; json: string } | null = null;
 
+  /** THE ROW GRAIN under the section memo: per-zone serialized rows, each
+   *  keyed by that zone's OWN signal fold (zoneRowFoldKey — the same
+   *  enumeration the section key is built from). A beat the section memo
+   *  misses (any mint moves count) rebuilds by reuse-or-derive: only rows
+   *  whose keys moved pay the JSON round-trip; the section json is then a
+   *  join of cached row strings (memcpy-grade). Membership deltas invalidate
+   *  STRUCTURALLY — each named exit/searoute id's kept-bit rides the row key,
+   *  so a scrubbed or freshly-minted id re-keys exactly the rows whose heal
+   *  it changes. THE CACHE-OF-TRUTH DISCIPLINE: a row's json is only ever
+   *  the output of the one row serializer below (clone → strip transients →
+   *  heal → stringify) — no second derivation of the same bytes exists. The
+   *  age bucket expires BOTH layers together (the same insurance window). */
+  private zonesRowMemo: {
+    ageBucket: number;
+    rows: Map<string, { key: string; def: ZoneDef; json: string }>;
+  } | null = null;
+
+  /** Instrumentation (dev/probe only — never read by game logic): count of
+   *  fresh per-zone row derivations since boot. probe_persistence RIG G pins
+   *  invalidation PRECISION on it: a one-zone signal write must move exactly
+   *  one row, a quiet beat exactly zero. */
+  zonesSaveRowDerives = 0;
+
   /** The memoized zones section's own JSON — saveCharacter splices it into
    *  the body verbatim (JSON.rawJSON) so the final stringify walks the other
    *  5% of the tree. Null until serializeWorldState has run. */
   zonesSaveJson(): string | null { return this.zonesSaveMemo?.json ?? null; }
 
-  /** Drop the zones memo — the DURABLE quit path calls this first, so the
-   *  final write of a session is always built fresh (exact resume owes
-   *  nothing to the memo's key). */
-  invalidateZonesSaveMemo(): void { this.zonesSaveMemo = null; }
+  /** Drop the zones memo — BOTH layers — the DURABLE quit path calls this
+   *  first, so the final write of a session is always built fresh (exact
+   *  resume owes nothing to either memo's key). */
+  invalidateZonesSaveMemo(): void { this.zonesSaveMemo = null; this.zonesRowMemo = null; }
 
-  /** One-pass fold of every MUTABLE ZoneDef signal the save carries: map
-   *  coords (the settling drifts them), level + quickened (the surge), the
-   *  visibility flags, exits (mint rewires, '?' resolutions, notary stamps,
-   *  locks), harborhold lifecycle, searoutes, and the claimed-event set that
-   *  decides membership. Deep fields (layout/theme/packs/structures/geo) are
-   *  mint-once by design and deliberately unfolded — the age bucket in the
-   *  key re-derives regardless, bounding any missed signal to a crash-only,
-   *  ≤zonesMemoMaxAgeSec stale zones section. */
-  private zonesSaveFold(claimed: ReadonlySet<string>): string {
+  /** THE ONE PER-ZONE SIGNAL FOLD — every MUTABLE ZoneDef signal the save
+   *  carries, for ONE zone: map coords EXACT (the settling drifts them by
+   *  sub-eighth fractions the old ×8 quantization missed — at row grain the
+   *  drifted row alone re-derives, so exactness is affordable and the bytes
+   *  never lag a settle), level + quickened INCLUDING the in-place key/until
+   *  refresh (the 2026-08-01 audit's second unfolded writer, folded here),
+   *  the visibility flags + the waypointless-dimension heal bit (the audit's
+   *  first, likewise folded), exits (mint rewires, '?' resolutions, notary
+   *  stamps, locks) and searoutes — each named id folded WITH its kept-bit,
+   *  so a membership delta re-keys exactly the rows whose write-time heal it
+   *  changes. Deep fields (layout/theme/packs/structures/geo) are mint-once
+   *  by design and deliberately unfolded — the age bucket expires both memo
+   *  layers regardless, bounding any missed signal to a crash-only,
+   *  ≤zonesMemoMaxAgeSec stale row. Both the row memo and the section key
+   *  are built from THIS fold — one enumeration, no parallel truth. */
+  private zoneRowFoldKey(z: ZoneDef, keptIds: ReadonlySet<string>): string {
     let h = 0x811c9dc5;
     const mix = (n: number): void => { h ^= n | 0; h = Math.imul(h, 0x01000193); };
     const str = (s: string): void => { for (let i = 0; i < s.length; i++) mix(s.charCodeAt(i)); };
-    let count = 0;
+    str(z.id);
+    str(z.map.x + ',' + z.map.y); mix(z.level * 16);
+    mix((z.veiled ? 1 : 0) | (z.quickened !== undefined ? 2 : 0)
+      | (z.concealed ? 4 : 0) | (z.floating ? 8 : 0)
+      | (z.waypoint === undefined ? 0 : z.waypoint ? 16 : 32));
+    if (z.quickened) str(z.quickened.key + ':' + z.quickened.until);
+    for (const e of z.exits) {
+      str(e.to);
+      mix((e.notarized === true ? 1 : 0) | (e.lock ? 2 : 0)
+        | (e.to === '?' || keptIds.has(e.to) ? 4 : 0));
+    }
+    if (z.harborhold) str(JSON.stringify(z.harborhold));
+    if (z.searoutes) {
+      mix(z.searoutes.length);
+      for (const id of z.searoutes) { str(id); mix(keptIds.has(id) ? 1 : 0); }
+    }
+    return (h >>> 0).toString(36);
+  }
+
+  /** The zones-section fold: membership (the TRANSIENCE RULE + the claimed
+   *  set), then one row key per kept zone through zoneRowFoldKey — the
+   *  section key is count + mint counter + a fold OF the row keys + the age
+   *  bucket, so the section memo is exactly as sensitive as the row layer
+   *  it sits over. Returns the pass's working set so serializeWorldState
+   *  never re-walks membership. */
+  private zonesSaveFold(claimed: ReadonlySet<string>): {
+    key: string; ageBucket: number;
+    keptZones: ZoneDef[]; keptIds: Set<string>; rowKeys: string[];
+  } {
+    const keptZones: ZoneDef[] = [];
+    const keptIds = new Set<string>();
     for (const z of Object.values(this.zoneMap)) {
       if (z.eventOwned && !claimed.has(z.id)) continue;
-      count++;
-      str(z.id);
-      mix(z.map.x * 8); mix(z.map.y * 8); mix(z.level * 16);
-      mix((z.veiled ? 1 : 0) | (z.quickened !== undefined ? 2 : 0)
-        | (z.concealed ? 4 : 0) | (z.floating ? 8 : 0));
-      for (const e of z.exits) { str(e.to); mix((e.notarized === true ? 1 : 0) | (e.lock ? 2 : 0)); }
-      if (z.harborhold) str(JSON.stringify(z.harborhold));
-      if (z.searoutes) mix(z.searoutes.length);
+      keptZones.push(z); keptIds.add(z.id);
     }
-    return count + ':' + this.nextGenId + ':' + (h >>> 0).toString(36)
-      + ':' + Math.floor(this.time / WORLDSTATE_CFG.zonesMemoMaxAgeSec);
+    const rowKeys: string[] = new Array(keptZones.length);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < keptZones.length; i++) {
+      const k = this.zoneRowFoldKey(keptZones[i], keptIds);
+      rowKeys[i] = k;
+      for (let j = 0; j < k.length; j++) { h ^= k.charCodeAt(j); h = Math.imul(h, 0x01000193); }
+      h ^= 0x7c; h = Math.imul(h, 0x01000193); // row separator
+    }
+    const ageBucket = Math.floor(this.time / WORLDSTATE_CFG.zonesMemoMaxAgeSec);
+    return {
+      key: keptZones.length + ':' + this.nextGenId + ':' + (h >>> 0).toString(36) + ':' + ageBucket,
+      ageBucket, keptZones, keptIds, rowKeys,
+    };
   }
 
   serializeWorldState(): WorldStateSave {
@@ -15017,30 +15081,50 @@ export class World {
     const claimed = new Set(this.activeQuests.map(q => q.zoneId));
     for (const id of claimedZonesFromBag(overlays)) claimed.add(id);
     let zones: ZoneDef[];
-    const foldKey = this.zonesSaveFold(claimed);
-    if (this.zonesSaveMemo && this.zonesSaveMemo.key === foldKey) {
+    const fold = this.zonesSaveFold(claimed);
+    if (this.zonesSaveMemo && this.zonesSaveMemo.key === fold.key) {
       zones = this.zonesSaveMemo.zones; // byte-identical section — reuse whole
     } else {
+      // THE ROW GRAIN: reuse-or-derive per zone. A mint beat (count moved)
+      // pays the JSON round-trip only for rows whose own fold keys moved —
+      // the new zone, a rewired minter, settled neighbours — and joins the
+      // rest from cache. The fresh map REPLACES the old one, so rows whose
+      // zones left the world (event scrub) drop with their membership.
+      const prev = this.zonesRowMemo?.ageBucket === fold.ageBucket
+        ? this.zonesRowMemo.rows : undefined;
+      const rows = new Map<string, { key: string; def: ZoneDef; json: string }>();
       zones = [];
-      for (const z of Object.values(this.zoneMap)) {
-        // The TRANSIENCE RULE: an unclaimed event zone re-rolls with its event.
-        if (z.eventOwned && !claimed.has(z.id)) continue;
-        const clone = JSON.parse(JSON.stringify(z)) as ZoneDef;
-        delete clone.exitBoundaries; // transient — re-derived every zone load
-        delete clone.exitRoads;      // transient — the road annotation rides the same seam
-        delete clone.exitMelds;      // transient — the meld annotation rides the same seam
-        zones.push(clone);
+      const rowJsons: string[] = new Array(fold.keptZones.length);
+      for (let i = 0; i < fold.keptZones.length; i++) {
+        const z = fold.keptZones[i];
+        let row = prev?.get(z.id);
+        if (row === undefined || row.key !== fold.rowKeys[i]) {
+          // THE ONE TRUE ROW SERIALIZER — the memo layers cache only this
+          // lane's output; no second derivation of the same bytes exists.
+          this.zonesSaveRowDerives++;
+          const clone = JSON.parse(JSON.stringify(z)) as ZoneDef;
+          delete clone.exitBoundaries; // transient — re-derived every zone load
+          delete clone.exitRoads;      // transient — the road annotation rides the same seam
+          delete clone.exitMelds;      // transient — the meld annotation rides the same seam
+          // Heal the roads at WRITE time too (an exit into scrubbed event
+          // ground would otherwise dangle until the next resume's load-side
+          // healing). The kept-bits in the row key make this heal SAFE to
+          // cache: a membership delta re-keys every row that names it.
+          clone.exits = clone.exits.filter(e => e.to === '?' || fold.keptIds.has(e.to));
+          if (clone.searoutes) clone.searoutes = clone.searoutes.filter(id => fold.keptIds.has(id));
+          row = { key: fold.rowKeys[i], def: clone, json: JSON.stringify(clone) };
+        }
+        rows.set(z.id, row);
+        zones.push(row.def);
+        rowJsons[i] = row.json;
       }
-      // Heal the roads at WRITE time too (an exit into scrubbed event ground
-      // would otherwise dangle until the next resume's load-side healing).
-      const healKept = new Set(zones.map(z => z.id));
-      for (const z of zones) {
-        z.exits = z.exits.filter(e => e.to === '?' || healKept.has(e.to));
-        if (z.searoutes) z.searoutes = z.searoutes.filter(id => healKept.has(id));
-      }
-      this.zonesSaveMemo = { key: foldKey, zones, json: JSON.stringify(zones) };
+      this.zonesRowMemo = { ageBucket: fold.ageBucket, rows };
+      // JSON.stringify(array) ≡ '[' + elements' own stringify join ',' + ']'
+      // for plain JSON data — the join IS the old whole-array stringify,
+      // byte for byte (RIG G pins it against a forced full re-derive).
+      this.zonesSaveMemo = { key: fold.key, zones, json: '[' + rowJsons.join(',') + ']' };
     }
-    const kept = new Set(zones.map(z => z.id));
+    const kept = fold.keptIds;
     // Zone memory: every TTL-fresh remembered zone (graph zones + the
     // sanctioned cave_ namespace — cave ids are stable per mouth, so a side
     // area re-minted next session finds its survivors), topped by a LIVE
