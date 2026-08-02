@@ -522,6 +522,48 @@
       "autoPort": false
     },
     {
+      "name": "arpg-dev-qa35",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5237",
+        "--strictPort"
+      ],
+      "port": 5237,
+      "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa36",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5235",
+        "--strictPort"
+      ],
+      "port": 5235,
+      "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa37",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5233",
+        "--strictPort"
+      ],
+      "port": 5233,
+      "autoPort": false
+    },
+    {
       "name": "arpg-site",
       "runtimeExecutable": "npx",
       "runtimeArgs": [
