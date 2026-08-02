@@ -199,6 +199,38 @@ export const SCENE_CFG = {
   /** Drill 'move' goals ignore displacement finer than this per tick (px) —
    *  wall-grind jitter teaches nothing. */
   moveEpsilon: 0.5,
+  /** THE FAR-FIELD DRESS (boundless stages): a boundless arena streams
+   *  GROUND under the walker by construction (tiles + no confine), but the
+   *  authored dress used to stop at the minted heart's rim — walk far
+   *  enough and the world degraded to bare tessellation. The director now
+   *  re-scatters the heart's OWN palette in seeded chunks around the party
+   *  (engine/scenes.ts streamSceneDress): deterministic per chunk
+   *  (position-hashed off the stage seed, so culled ground re-mints
+   *  identically on return — the persistent-geography idiom), thinner than
+   *  the heart (the road's shoulders, never a second heart), seeded
+   *  off-screen and culled far behind. */
+  dressStream: {
+    /** Chunk grain (px) — the seed/cull unit. */
+    chunk: 720,
+    /** Seed chunks within this reach of any player seat (px). */
+    reach: 1600,
+    /** Drop streamed chunks beyond this of every seat (px). */
+    cull: 2600,
+    /** Far-field density as a fraction of the heart's own, per kind. */
+    thin: 0.55,
+    /** Hard cap on streamed pieces per chunk. */
+    maxPerChunk: 12,
+    /** Never seed a chunk whose center is nearer any seat than this (px) —
+     *  fresh terrain always lands off-screen, never pops at the feet. */
+    seedAhead: 760,
+    /** Kinds that never stream even when the heart holds them: masonry and
+     *  other LINE-PATTERNED stamps (hedgerows, structure walls) whose shape
+     *  IS their meaning — re-scattered at random they read as orphan dots,
+     *  not as the country. Structural exclusions (state-carriers, hazards,
+     *  seed-paired, clearways) live in the streamer's own predicate; this
+     *  list is the taste dial for pattern-bound kinds. */
+    skipKinds: ['wall', 'rampart', 'palisade', 'drystone', 'hedgewall', 'parapet', 'window', 'door'],
+  },
 } as const;
 
 // ---------------------------------------------------------------------------

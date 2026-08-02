@@ -45,8 +45,10 @@ import { WAVE_CFG } from '../data/waves';
 import { mintCave } from './worldgen';
 import { makeSkillInstance } from './skills';
 import { SKILLS } from '../data/skills';
+import { doodadRuleOf, type Doodad } from './levelgen';
 import { LEDGER_FLASK_LESSON, type Account } from '../meta/account';
 import { bumpLedger } from '../packages/ledger';
+import { Rng } from '../core/rng';
 import { vec, dist, rand, type Vec2 } from '../core/math';
 
 // ------------------------------------------------------------- the runtime --
@@ -85,6 +87,25 @@ export interface SceneRuntime {
   fadeTarget: number;
   /** Stamp worn by every scene spawn — the sweepable scope. */
   eventKey: string;
+  /** THE FAR-FIELD DRESS (boundless stages): the heart-sampled palette +
+   *  the seeded-chunk ledger. Built at sceneBegin on boundless stages
+   *  only; absent = the streamer is inert (walled stages unchanged). */
+  dress?: SceneDressState;
+}
+
+/** The far-field dress streamer's state (streamSceneDress): what the minted
+ *  heart taught us to scatter, and which chunks already carry it. */
+export interface SceneDressState {
+  /** One row per streamable heart kind: radius band, whether instances
+   *  spin, and the expected pieces per chunk at far-field density. */
+  palette: { kind: Doodad['kind']; rMin: number; rMax: number; rot: boolean; perChunk: number }[];
+  /** Seeded chunks, "cx,cy" → the pieces this chunk put on the ground
+   *  (empty array = seeded-and-blank: the heart's footprint, or a roll
+   *  that placed nothing — either way, never re-rolled while it stands). */
+  chunks: Map<string, Doodad[]>;
+  /** The authored heart's footprint (the minted arena) — its chunks are
+   *  already dressed by generation and stay the streamer's no-go rect. */
+  heart: { w: number; h: number };
 }
 
 /** One registered stage kind. `update` runs every raw-clock tick; return
@@ -172,6 +193,9 @@ export function sceneBegin(w: World, id: string): boolean {
   for (let i = w.actors.length - 1; i >= 0; i--) {
     if (w.actors[i].team !== 'player') w.actors.splice(i, 1);
   }
+  // THE FAR-FIELD DRESS: a boundless stage learns its own heart's palette
+  // so the streamer can keep the country coming past the minted rim.
+  if (def.zone.boundless) w.scene.dress = buildSceneDress(w, z);
   return true;
 }
 
@@ -193,6 +217,122 @@ function sealStageZone(z: ZoneDef, def: SceneDef): void {
   delete z.scenery;
 }
 
+// ----------------------------------------------- the far-field dress stream --
+
+/** THE FAR-FIELD PALETTE: sample the minted heart's own standing dress —
+ *  plain bodies, carpets and scatter only. State-carriers and law-bearing
+ *  kinds never stream: seed-paired mouths (the caveSeeds zip would shear),
+ *  doors/wells/hollow seams (state), effect-carriers and hazard ground (a
+ *  streamed trap is an ambush nobody authored), pit-fallers, spans,
+ *  clearway discs (a road to nowhere), structure surfaces, and portal-clear
+ *  keepers. Density is the heart's own per kind, thinned by the dial — the
+ *  far field reads as the same country's shoulders, never a second heart. */
+function buildSceneDress(w: World, z: ZoneDef): SceneDressState | undefined {
+  const cfg = SCENE_CFG.dressStream;
+  const skip = new Set<string>(cfg.skipKinds);
+  const rows = new Map<string, { n: number; rMin: number; rMax: number; rot: boolean }>();
+  for (const d of w.doodads) {
+    if (d.door || d.well || d.hollow || d.effect || d.keep || d.label || d.fall || d.hitbox) continue;
+    if (skip.has(d.kind)) continue;
+    const rule = doodadRuleOf(d.kind);
+    if (rule.seedPaired || rule.clearway || rule.spans || rule.effect
+      || rule.hazardGround || rule.fall || rule.surface) continue;
+    const e = rows.get(d.kind) ?? { n: 0, rMin: d.radius, rMax: d.radius, rot: false };
+    e.n++;
+    e.rMin = Math.min(e.rMin, d.radius);
+    e.rMax = Math.max(e.rMax, d.radius);
+    if (d.rot !== undefined) e.rot = true;
+    rows.set(d.kind, e);
+  }
+  const heartArea = Math.max(1, z.size.w * z.size.h);
+  const palette = [...rows.entries()].map(([kind, e]) => ({
+    kind: kind as Doodad['kind'], rMin: e.rMin, rMax: e.rMax, rot: e.rot,
+    perChunk: (e.n / heartArea) * cfg.chunk * cfg.chunk * cfg.thin,
+  })).filter(p => p.perChunk > 0.02);
+  return palette.length
+    ? { palette, chunks: new Map(), heart: { w: z.size.w, h: z.size.h } }
+    : undefined;
+}
+
+/** One chunk's pieces — a PURE function of (stage seed, chunk coords), so a
+ *  culled chunk re-mints byte-identically when the walker returns. Spacing
+ *  respects each kind's own rule against this chunk's earlier pieces (no
+ *  retries: a refused roll just thins the field). */
+function seedDressChunk(sc: SceneRuntime, cx: number, cy: number): Doodad[] {
+  const ds = sc.dress!;
+  const cfg = SCENE_CFG.dressStream;
+  const salt = (Math.imul(cx, 0x9e3779b1) ^ Math.imul(cy, 0x85ebca6b) ^ sc.def.zone.seed) >>> 0;
+  const rng = new Rng(salt);
+  const pieces: Doodad[] = [];
+  for (const row of ds.palette) {
+    let n = Math.floor(row.perChunk);
+    if (rng.next() < row.perChunk - n) n++;
+    for (let i = 0; i < n && pieces.length < cfg.maxPerChunk; i++) {
+      const pos = vec((cx + rng.next()) * cfg.chunk, (cy + rng.next()) * cfg.chunk);
+      const radius = rng.range(row.rMin, row.rMax);
+      const gap = (doodadRuleOf(row.kind).spacing ?? 0) + radius;
+      if (pieces.some(q => Math.hypot(q.pos.x - pos.x, q.pos.y - pos.y) < gap + q.radius)) continue;
+      const d: Doodad = { pos, radius, kind: row.kind };
+      if (row.rot) d.rot = rng.range(-0.4, 0.4);
+      pieces.push(d);
+    }
+  }
+  return pieces;
+}
+
+/** THE FAR-FIELD DRESS STREAMER: keep seeded dress chunks alive around
+ *  every seat on a boundless stage. Chunks inside the authored heart mark
+ *  seeded-and-blank (generation already dressed them); fresh chunks seed
+ *  only past the off-screen gap, and chunks far behind every seat drop
+ *  losslessly (same salt → same pieces on return). Scene ground is
+ *  local-by-construction (the prologue predates any remote wire; couch
+ *  seats share this World and see the same doodads). */
+function streamSceneDress(w: World, sc: SceneRuntime): void {
+  const ds = sc.dress;
+  if (!ds) return;
+  const cfg = SCENE_CFG.dressStream;
+  const seats = w.seats.map(s => s.actor.pos);
+  if (!seats.length) return;
+  let changed = false;
+  for (const p of seats) {
+    const cx0 = Math.floor((p.x - cfg.reach) / cfg.chunk), cx1 = Math.floor((p.x + cfg.reach) / cfg.chunk);
+    const cy0 = Math.floor((p.y - cfg.reach) / cfg.chunk), cy1 = Math.floor((p.y + cfg.reach) / cfg.chunk);
+    for (let cy = cy0; cy <= cy1; cy++) {
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const key = `${cx},${cy}`;
+        if (ds.chunks.has(key)) continue;
+        const midX = (cx + 0.5) * cfg.chunk, midY = (cy + 0.5) * cfg.chunk;
+        // The heart's footprint is already dressed — mark and move on.
+        if (midX > -cfg.chunk && midX < ds.heart.w + cfg.chunk
+          && midY > -cfg.chunk && midY < ds.heart.h + cfg.chunk) {
+          ds.chunks.set(key, []);
+          continue;
+        }
+        // Fresh terrain lands off-screen, never at the feet.
+        if (seats.some(s => Math.hypot(s.x - midX, s.y - midY) < cfg.seedAhead)) continue;
+        const pieces = seedDressChunk(sc, cx, cy);
+        ds.chunks.set(key, pieces);
+        if (pieces.length) {
+          w.doodads.push(...pieces);
+          changed = true;
+        }
+      }
+    }
+  }
+  for (const [key, pieces] of ds.chunks) {
+    const [cx, cy] = key.split(',').map(Number);
+    const midX = (cx + 0.5) * cfg.chunk, midY = (cy + 0.5) * cfg.chunk;
+    if (seats.some(s => Math.hypot(s.x - midX, s.y - midY) < cfg.cull)) continue;
+    ds.chunks.delete(key);
+    if (pieces.length) {
+      const drop = new Set(pieces);
+      w.doodads = w.doodads.filter(d => !drop.has(d));
+      changed = true;
+    }
+  }
+  if (changed) w.markDoodadsChanged();
+}
+
 // ------------------------------------------------------------- the driver --
 
 /** The director tick — hooked in World.update on RAW dt, BEFORE the
@@ -207,6 +347,9 @@ export function updateScene(w: World, dt: number): void {
   w.screenFade = sc.fadeTarget > w.screenFade
     ? Math.min(sc.fadeTarget, w.screenFade + SCENE_CFG.fade.up * dt)
     : Math.max(sc.fadeTarget, w.screenFade - SCENE_CFG.fade.down * dt);
+  // The far-field dress rides every director tick while the party stands
+  // on the stage (cheap: a handful of map lookups once the ring is seeded).
+  if (w.zone.id === sc.zoneId) streamSceneDress(w, sc);
   const spec = sc.def.stages[sc.stageIx];
   if (!spec) { endScene(w, sc); return; }
   const h = STAGES[spec.kind];
