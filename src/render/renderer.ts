@@ -731,8 +731,15 @@ export class Renderer {
    *  subtitle ("Goresnap the Bilious" / "Rare Goblin"). Nemeses are skipped —
    *  they wear their own permanent mark. Drawn on the post-fade layer so a
    *  crown never covers the plate of a foe you can see — and CONCEALED foes
-   *  never bid at all: the cursor must not become a canopy probe. */
+   *  never bid at all: the cursor must not become a canopy probe.
+   *  Settings.hoverNameplates 'all' widens the BID, never the laws: every
+   *  def-carrying actor on any team — minions, NPCs, critters, scenery
+   *  bodies — shows the same plate, an unnamed common leading with the def
+   *  name itself (an exactly-duplicate subtitle stays unprinted; the two
+   *  line seats never move). The identification lens: name the entity under
+   *  the cursor, skip the bestiary recall. */
   private drawEliteNameHover(world: World): void {
+    const allMode = (this.getSettings?.().hoverNameplates ?? 'named') === 'all';
     // "The cursor" is wherever aim truly lives: the pad's reticle when the
     // pad owns it, else the mouse — nameplates follow the same point skills do.
     const cur = this.padAim ?? this.toWorld(this.hudMouse);
@@ -740,11 +747,14 @@ export class Renderer {
     let bestReveal = 0;
     let bd = 80;
     for (const a of world.actors) {
-      if (a.dead || a.team !== 'enemy' || a.nemesis || !a.defId) continue;
+      if (a.dead || a.nemesis || !a.defId) continue;
       const def = MONSTERS[a.defId];
-      if (!def || a.name === def.name) continue;
-      const label = a.rarity ? RARITY_DEFS[a.rarity].label : '';
-      if (label && a.name === `${label} ${def.name}`) continue; // tier-prefixed, not minted
+      if (!def) continue;
+      if (!allMode) {
+        if (a.team !== 'enemy' || a.name === def.name) continue;
+        const label = a.rarity ? RARITY_DEFS[a.rarity].label : '';
+        if (label && a.name === `${label} ${def.name}`) continue; // tier-prefixed, not minted
+      }
       const d = Math.hypot(a.pos.x - cur.x, a.pos.y - cur.y) - a.radius;
       if (d >= bd) continue;
       const reveal = this.labelRevealAt(world, a.pos); // hidden foes don't bid
@@ -763,9 +773,14 @@ export class Renderer {
     ctx.fillStyle = tint;
     ctx.font = 'bold 12px Verdana';
     ctx.fillText(best.name, best.pos.x, best.pos.y - best.radius - 20);
-    ctx.globalAlpha = 0.75 * bestReveal;
-    ctx.font = '10px Verdana';
-    ctx.fillText(sub, best.pos.x, best.pos.y - best.radius - 8);
+    // A plate whose identity IS its name has nothing further to say — the
+    // sub seat stays reserved, the duplicate stays unprinted. Unreachable in
+    // 'named' mode by construction (the gate demands a distinct mint).
+    if (sub !== best.name) {
+      ctx.globalAlpha = 0.75 * bestReveal;
+      ctx.font = '10px Verdana';
+      ctx.fillText(sub, best.pos.x, best.pos.y - best.radius - 8);
+    }
     ctx.restore();
   }
 

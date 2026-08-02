@@ -5815,6 +5815,10 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       <div class="rebind-row">
         <span>NPC Talk Typing</span>
         <button id="opt-speechtyping" title="Townsfolk tell their talk-bubble lines glyph by glyph, as if speaking. OFF shows each line whole at once: same words, no wait.">${s.speechTyping ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Hover Nameplates</span>
+        <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies only, the classic elite read. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
       </div>`;
     root.innerHTML = `
       <h1>Options</h1>
@@ -5887,6 +5891,15 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     root.querySelector<HTMLElement>('#opt-speechtyping')?.addEventListener('click', () => {
       const st = this.getSettings();
       st.speechTyping = !st.speechTyping;
+      this.saveSettings();
+      this.renderOptions(root, onBack);
+    });
+    // THE HOVER NAMEPLATE: which bodies bid for the cursor plate — NAMED
+    // (distinct elites only, the classic read) or ALL (every def-carrying
+    // body: the identification lens for diagnosis and nitpick-hunting).
+    root.querySelector<HTMLElement>('#opt-hovernames')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      st.hoverNameplates = st.hoverNameplates === 'all' ? 'named' : 'all';
       this.saveSettings();
       this.renderOptions(root, onBack);
     });

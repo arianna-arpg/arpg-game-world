@@ -106,6 +106,15 @@ export interface Settings {
    *  OFF shows every line whole at once — the master switch over every
    *  per-kind/per-line typing dial (VIS_CFG.speech, MonsterDef.speech). */
   speechTyping: boolean;
+  /** THE HOVER NAMEPLATE (renderer drawEliteNameHover): which bodies bid for
+   *  the D2-style cursor plate. 'named' (default) — distinctly-NAMED enemies
+   *  only, the classic elite read. 'all' — every def-carrying actor on any
+   *  team (monsters, minions, NPCs, critters, scenery bodies): the
+   *  identification lens, so a player or a developer can name the exact
+   *  entity under the cursor without recalling its look. The plate keeps one
+   *  shape — name over def identity + rarity tier — and the nearest-one /
+   *  concealment / nemesis laws hold in both modes. */
+  hoverNameplates: HoverNameplatesMode;
   /** The AIM TICK (the facing/cast-direction pointer on acting bodies):
    *  a style from the registry (render/vis/aimtick.ts — line, dot, …) and
    *  an opacity. 0 hides ticks entirely — see the monster, not the marker. */
@@ -195,6 +204,9 @@ export interface Settings {
 
 export type PoolBarsMode = 'smart' | 'recent' | 'always';
 
+/** Hover-nameplate bid policy — see Settings.hoverNameplates. */
+export type HoverNameplatesMode = 'named' | 'all';
+
 export interface SettingsSave {
   schemaVersion: number;
   keybinds: Record<string, string>;
@@ -207,6 +219,7 @@ export interface SettingsSave {
   gearPickup?: 'vacuum' | 'key';
   castTelegraphs?: boolean;
   speechTyping?: boolean;
+  hoverNameplates?: HoverNameplatesMode;
   aimTick?: Partial<AimTickOptions>;
   poolBars?: PoolBarsMode;
   resumeSpawn?: ResumeSpawn;
@@ -333,6 +346,7 @@ export const makeSettings = (): Settings => ({
   gearPickup: 'vacuum',
   castTelegraphs: true,
   speechTyping: true,
+  hoverNameplates: 'named',
   aimTick: { ...DEFAULT_AIM_TICK },
   poolBars: 'smart',
   resumeSpawn: WORLDSTATE_CFG.resume,
@@ -363,6 +377,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   gearPickup: s.gearPickup,
   castTelegraphs: s.castTelegraphs,
   speechTyping: s.speechTyping,
+  hoverNameplates: s.hoverNameplates,
   aimTick: { ...s.aimTick },
   poolBars: s.poolBars,
   resumeSpawn: s.resumeSpawn,
@@ -431,6 +446,9 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',
     castTelegraphs: s.castTelegraphs ?? true,
     speechTyping: s.speechTyping ?? true,
+    // Unknown values (and pre-dial saves) fall back to the classic read —
+    // the additive-field law: no schema bump, older saves simply lack it.
+    hoverNameplates: s.hoverNameplates === 'all' ? 'all' : 'named',
     // Tick identity: unknown styles (a removed entry) fall back; the alpha
     // re-clamps so a hand-edited save can't smuggle a 500% tick.
     aimTick: {
