@@ -160,6 +160,32 @@ export function registerRouseRule(tag: string, cfg: () => RouseCfg | null): void
   ROUSE_RULES[tag] = cfg;
 }
 
+/** THE TRUE-COLORS LAW — registerDormantTag's second sibling: a dormant
+ *  species whose tag carries a colors row wears its CALM faction while
+ *  un-roused and SWAPS to its true faction the moment the rouse latch sets
+ *  (and back again when NEUTRAL_RESET cools it). The calm id is meant to be
+ *  RELATION-LESS (no RELATIONS rows at all — the durance_toll pattern), so
+ *  every hostileTo read between the sleeping crew and a zone's natives is
+ *  false in BOTH directions by construction: an awake armed neutral (the
+ *  croft warden) can never climb its ladder at a body the war ledger holds
+ *  no verdict on. Roused, the crew stands in its true colors and every
+ *  standing grudge (freehold|bandit) is LIVE again — a warden in sight
+ *  honestly joins that fight, which is the feature, not a bug. The swap is
+ *  the ENTIRE mechanism: no special case anywhere reads "warden" or "camp".
+ *  Reconciled at updateAI's dormancy fork — the one place the latch already
+ *  forks conduct — so colors can never drift from the state they claim. */
+export interface DormantColorsRule { calm: string; roused: string }
+export const DORMANT_COLORS: Record<string, DormantColorsRule> = {};
+export function registerDormantColors(tag: string, rule: DormantColorsRule): void {
+  DORMANT_COLORS[tag] = rule;
+}
+
+/** Wear the colors the latch says (no-op for tags without a row). */
+function wearColors(actor: Actor, roused: boolean): void {
+  const c = actor.tag !== undefined ? DORMANT_COLORS[actor.tag] : undefined;
+  if (c) actor.faction = roused ? c.roused : c.calm;
+}
+
 // --- THE PACK LAYER's condition vocabulary (engine/pack.ts) -----------------
 //
 // registerAICondition has existed as an open seam with NOTHING registered
@@ -426,10 +452,16 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // gale-drift from before it was planted, a shove, a rouse-and-retreat —
   // walks back and re-plants WITHOUT waking: the parley the player finds is
   // the one that was authored, wherever the sky has been in the meantime.
+  // THE TRUE-COLORS LAW rides this same fork (wearColors): a colors-carrying
+  // body wears its relation-less calm faction while it holds here, and its
+  // true faction once roused past — reconciled where the latch already forks
+  // conduct, so the worn faction can never drift from the dormancy it claims.
   if (isDormant(actor)) {
+    wearColors(actor, false);
     updatePostReturn(actor, world, dt);
     return;
   }
+  wearColors(actor, true);
 
   // An armed fuse burns down no matter what else is happening.
   if (actor.fuse !== undefined) {

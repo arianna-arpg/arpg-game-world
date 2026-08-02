@@ -124,7 +124,20 @@ export interface PocketSpec {
  *  (past woundFrac) rouses the whole gang within rouseRadius (so accidental splash
  *  never starts a fight). The keeper is the designated dwell-target you pay. */
 export interface GuardianSpec {
+  /** The faction stamped on the mustered crew (over each body's own def
+   *  faction). Meant to be RELATION-LESS — no RELATIONS rows at all, so a
+   *  zone's natives (and the settled belt's awake armed watch) hold no war
+   *  verdict on a sleeping gate in either direction. See rousedFactionId
+   *  for the crew's true colors. */
   factionId: string;
+  /** THE TRUE COLORS (engine/ai.ts registerDormantColors — wired by the
+   *  defs file's registry loop): the faction this crew SWAPS to while the
+   *  rouse latch holds — refuse the toll with steel and the crew stands in
+   *  its real allegiance, with every standing grudge (freehold|bandit)
+   *  live again until NEUTRAL_RESET cools it back to the calm stamp.
+   *  Omitted = the crew has no other allegiance (the tithe crew's shape:
+   *  its stamped faction IS relation-less and never swaps). */
+  rousedFactionId?: string;
   keeperId: string;
   /** Extra guards posted around the gate (rolled from the faction roster if omitted). */
   rosterIds?: string[];
@@ -200,7 +213,15 @@ export interface HoldfastSurge {
 // --- the BANDIT TOLL-GATE: the surface guardian ---------------------------------
 
 const BANDIT_GUARDIAN: GuardianSpec = {
-  factionId: 'bandit', keeperId: 'bandit_keeper',
+  // THE GUARDIAN FACTION (2026-08-01 — the bandit ruling's third act): the
+  // toll stand wears 'roadwarden_toll', a relation-less faction scoped to
+  // the camp, and swaps to true 'bandit' colors on the rouse — the day the
+  // croft warden shipped (an awake, armed freehold body), the old roster-
+  // accident protection ended, and the holdfast header's own prescription
+  // ("give this gate its own relation-less guardian faction the way the
+  // tithe-gate has one") became this pair of lines.
+  factionId: 'roadwarden_toll', rousedFactionId: 'bandit',
+  keeperId: 'bandit_keeper',
   rosterIds: ['bandit_cutthroat', 'bandit_bruiser'],
   count: [2, 3], neutralTag: 'toll_bandit',
   rouseRadius: 230, woundFrac: 0.66, // only a real wound rouses them — and then the whole gang

@@ -100,6 +100,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_harborwarden.ts', status: 'green', tier: 'fast', why: 'THE HARBORWARDEN vocation + the company lane — the merc levers through meta/mercs.ts and the world runtime' },
   { probe: 'probe_hellwar.ts', status: 'green', tier: 'fast', why: 'THE WAR BELOW\'s rolled TRUCE — the 35% pact published into the stance layer, held to breakAt, then shattered and republished hostile' },
   { probe: 'probe_highcourt.ts', status: 'green', tier: 'fast', why: 'THE HIGH COURT — the per-faction presence ladder (champions / zeniths / apexes) and the registry that indexes it' },
+  { probe: 'probe_holdfast_guardian.ts', status: 'green', tier: 'fast', why: 'THE GUARDIAN FACTION (the bandit ruling\'s third act) — the relation-less roadwarden_toll stamp acquits warden-vs-camp BOTH directions, the rouse swaps true bandit colors, the warden honestly joins the fight, the cool-down + parley + pay lanes hold' },
   { probe: 'probe_holdfast_pocket.ts', status: 'green', tier: 'slow', why: '~30s: THE HOLDFAST POCKET across many seeds — purchased ground behind a toll must be worth the toll and never a death trap' },
   { probe: 'probe_hollows.ts', status: 'green', tier: 'fast', why: 'THE HOLLOWS — pockets generate sealed (non-walkable, seam-zipped) and a reveal carves the way in' },
   { probe: 'probe_infostream.ts', status: 'green', tier: 'fast', why: 'THE INFO STREAM — the notice-channel and float-kind registries, the pickup ledger\'s coalescing per-seat rows and the wire round trip' },

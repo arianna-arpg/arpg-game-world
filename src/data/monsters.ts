@@ -20067,6 +20067,11 @@ const RELATIONS: Record<string, FactionStance> = {
   // watch out — which is the farm-raid drama working, not a pre-wipe. Add an
   // awake, armed freehold body and that changes: give the bandit gate its
   // own relation-less guardian faction then (the durance_toll pattern).
+  // DONE 2026-08-01 (the third act): the toll crew now wears relation-less
+  // 'roadwarden_toll' (packages/defs/holdfast.ts) and swaps to these true
+  // colors on the rouse (GuardianSpec.rousedFactionId → engine/ai.ts
+  // registerDormantColors). This row STAYS — baseline road-gangs, brigands
+  // and ROUSED camps all fight the freeholds through it.
   'freehold|bandit': 'hostile',
   'freehold|chattel': 'hostile',
   'freehold|carven': 'hostile',
