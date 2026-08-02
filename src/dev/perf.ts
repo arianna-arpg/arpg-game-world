@@ -21,6 +21,7 @@
 
 import { TILESETS } from '../data/tilesets';
 import { START_ZONE } from '../data/zones';
+import { FluxPhase } from '../engine/flux';
 import { setVisAblate, VIS_TELEMETRY } from '../render/vis/visConfig';
 import { quantile } from '../sim/metrics';
 
@@ -110,11 +111,17 @@ export interface PerfZoneStats {
    *  inflates the mark (the rAF timestamp is the frame time, not callback
    *  start), so read it beside the longtask ledger, never alone. */
   taskMax: number;
-  /** Steady hitches (>40ms sampler-clock gap) whose OWNING frame task
-   *  stayed ≤40ms — stalls no frame's own work explains: the systemic /
-   *  off-task ledger (run-age GC, deferred idle work, compositor). Kin of
-   *  hitch40 but measured at the sampler's clock, not the ring's — near,
-   *  not a strict subset. */
+  /** Steady hitches (>40ms sampler-clock gap) whose OWNING frame's OWN
+   *  work stayed ≤40ms — stalls no frame's own work explains: the systemic
+   *  / off-task ledger (run-age GC, deferred idle work, compositor). Kin
+   *  of hitch40 but measured at the sampler's clock, not the ring's —
+   *  near, not a strict subset. THE FINE ANCHOR (2026-08-02): the owning
+   *  mark anchors at tick-callback ENTRY (__game.perfTickT0), not the
+   *  vsync timestamp — the coarse anchor let a foreign >40ms overhang
+   *  inflate the frame's mark past 40 and ABSTAIN on exactly the stall it
+   *  existed to count (gloamwood ablA: one 40.3ms pre-overhang stall,
+   *  off40 0). taskMax keeps the coarse anchor deliberately (read beside
+   *  the 'pre' slab); only the abstention test reads fine. */
   offTask40: number;
   /** Long Tasks API ledger over the steady window: main-thread tasks over
    *  50ms (count + worst duration ms), WHATEVER task they were — frame
@@ -131,6 +138,19 @@ export interface PerfZoneStats {
    *  A gapMax ≈ taskMax row with sim99/ren99 tiny self-attributes here.
    *  '' = no slab marked (an empty window). */
   slabName: string; slabMs: number;
+  /** Frames the steady window PUSHED but the ring no longer held when it
+   *  closed (0 = clean). The rings are sized to the window up front
+   *  (perfRingSize — seconds × measured refresh + margin), so any nonzero
+   *  here is a sizing failure worth shouting about: the dropped frames are
+   *  the window's OLDEST, exactly where bakes cluster, and h40/gapMax
+   *  silently undercount (the 2026-08-02 gloamwood base2 lesson). */
+  ringWrap: number;
+  /** THE ENTRY ANNOTATION (2026-08-02): '' or one sentence naming a >500ms
+   *  stall inside the entry window and whether the frame's OWN work explains
+   *  it. A foreign machine-wide freeze landing in the 1.5s entry window
+   *  once minted caul entry=2117 (solo: 63ms, same bytes) and cost a solo
+   *  re-run to acquit — the artifact now documents itself on the row. */
+  entryNote: string;
 }
 
 /** One row the sweep could not measure — and WHY, as data the gate can
@@ -203,6 +223,49 @@ const RETRY_TURN = 2.4;
 const WHISKER_REACH = [72, 36];
 const WHISKER_STEP = 0.35;
 const WHISKER_FAN = 8;
+/** THE RHYTHM WHISKER (galestream 2026-08-02: the walker could not hold the
+ *  gate's flux artery in 3 attempts — three re-mints, three falls to the
+ *  world below). The blind spot was TEMPORAL, not spatial: fallHazardAt
+ *  reads the LIVE grid, but flux ground (engine/flux.ts) is walkable NOW
+ *  and gone LATER on a pure clock — the 6s warmup holds everything solid
+ *  through the settle window and into the steady walk, then the drift
+ *  begins MID-WINDOW (t=6 < 1.5+8) and ~half the pad area evaporates under
+ *  a walker that strolled onto it while every probe honestly read "safe".
+ *  (Gusts are innocent: the first fires at warmup+18..28s, past every gate
+ *  window.) The fix asks the exact question the AI's own x_ride_flux
+ *  steering asks — the pad's phase, which is a PURE FUNCTION of the clock,
+ *  so the probe reads the FUTURE truth at arrival time: a pad must hold
+ *  from arrival through a crossing margin or the ray refuses it, and lane
+ *  ground (raft-run — solid only where a moving carrier stands) is never
+ *  boarded blind. Reading the rhythm IS the zone's design thesis; the
+ *  walker still walks the pads, meets the packs, faults the chunks and
+ *  pays the flux layer's render bill — it just stops stepping onto ground
+ *  that will not outlast the step. */
+const FLUX_WALK_SPEED = 120; // rough hero stride, u/s — probe-eta conversion
+const FLUX_CROSS_SEC = 1.2; // ground must outlast arrival by a crossing
+/** THE ENTRY ANNOTATION threshold: a gap past this inside the entry window
+ *  gets attributed on the row (foreign freeze vs the zone's own load). The
+ *  2026-08-02 full sweep minted caul entry=2117 from a machine-wide ~2s
+ *  freeze (solo re-run: 63ms, same bytes) — the row now names such an
+ *  artifact itself instead of costing the acquittal run. */
+const ENTRY_FOREIGN_MS = 500;
+
+/** One sentence attributing an over-threshold entry stall, '' below it.
+ *  Discrimination rides walkPhase's fine own-task mark: a giant gap whose
+ *  owning frame's OWN work stayed tiny is a foreign (machine/compositor)
+ *  stall wearing the zone's name; own work ≈ the gap is the zone's honest
+ *  load burst; the window's FIRST gap has no seen owner and says so. */
+function entryStallNote(e: { worst: number; worstOwn: number }): string {
+  if (e.worst <= ENTRY_FOREIGN_MS) return '';
+  const gapMs = e.worst.toFixed(0);
+  if (!Number.isFinite(e.worstOwn)) {
+    return `entry gap ${gapMs}ms owned by the window's first frame (own work unseen) — cross-check solo before billing the zone`;
+  }
+  const own = e.worstOwn.toFixed(0);
+  return e.worstOwn <= 50
+    ? `FOREIGN ${gapMs}ms stall in the entry window (own frame task ${own}ms) — a machine-wide freeze, not this zone's bill`
+    : `heavy entry frame: ${gapMs}ms gap, own work ${own}ms`;
+}
 
 /** ID-STABLE mint seed: fold the tileset id (FNV-1a) into mintSeed, so a
  *  row's mint can NEVER re-roll because the registry grew or reordered.
@@ -220,6 +283,7 @@ function mintSeedFor(base: number, id: string): number {
 
 type FrameDump = {
   gap: number[]; sim: number[]; ren: number[];
+  pushed: number;
   phase: { name: string; ms: number };
 };
 
@@ -228,7 +292,7 @@ function reduceFrames(f: FrameDump, entryWorstGap: number, meta: {
   doodads: number; actors: number; lite: number;
   snowBakes: number; groundBakes: number; snowCover: number;
   taskMax: number; offTask40: number; ltCount: number; ltWorst: number;
-  slabName: string; slabMs: number;
+  slabName: string; slabMs: number; entryNote: string;
 }): PerfZoneStats {
   const gap = [...f.gap].sort((a, b) => a - b);
   const sim = [...f.sim].sort((a, b) => a - b);
@@ -245,6 +309,7 @@ function reduceFrames(f: FrameDump, entryWorstGap: number, meta: {
     hitch40: f.gap.filter(g => g > 40).length,
     hitch70: f.gap.filter(g => g > 70).length,
     entryWorstGap: +entryWorstGap.toFixed(1),
+    ringWrap: Math.max(0, f.pushed - f.gap.length),
   };
 }
 
@@ -327,6 +392,21 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   // sample would gate a moving target and flatter every heavy zone.
   g.settings().renderScale = 1;
 
+  // THE RING FIT (2026-08-02): size the main-loop frame rings to THIS
+  // sweep's window before anything samples. The old constant 2048 slots
+  // filled in ~8.5s at 240Hz — a --seconds=12 window WRAPPED, dropping its
+  // OLDEST frames (exactly where bakes cluster) so h40/gapMax silently
+  // undercounted while the sampler-side off40 kept counting (gloamwood
+  // base2: off40 5 vs h40 0 at frames=2048 exact). Sized STATICALLY to a
+  // 400Hz worst case, never to measured pacing: the first fit measured a
+  // boot-time median (12.6ms — the machine still hot from its own rebuild)
+  // and the aged-town window then ran at 7.3ms, wrapping a 2049-slot ring
+  // by 672 frames (perf_20260802183456 — the backstop's first catch, same
+  // hour it was built). Pacing shifts per zone and per run-age; a static
+  // ceiling cannot undersize on any real display and costs ~100KB at 20s.
+  // Every row's ringWrap stays the loud backstop regardless.
+  g.perfRingSize(Math.ceil((sampleMs / 1000) * 400) + 64);
+
   setVisAblate(opts.ablate ?? []);
   /** DETERMINISTIC SKY (opts.weather): silence the random sky, then pin one
    *  plateau-intensity front on the CURRENT zone's node (age mid-life keeps
@@ -362,9 +442,12 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
    *  stayed home; the caller owns the travel back and the restart. */
   const walkPhase = async (ms: number, dir0 = 0.6): Promise<{
     worst: number; held: boolean; taskMax: number; offTask40: number;
+    /** The OWN-work mark of the frame that owned the worst gap — the entry
+     *  annotation's discriminator (foreign freeze vs honest heavy frame). */
+    worstOwn: number;
   }> => {
     const homeZid = g.world().zone.id;
-    let dir = dir0, worst = 0;
+    let dir = dir0, worst = 0, worstOwn = Infinity;
     // THE STALL LEDGER (the 2026-08-01 triad acquittal): the run-global
     // stall lived AFTER perfPush by position — in neither the sim nor the
     // ren bracket — and the meta pass then moved the autosave into idle
@@ -375,8 +458,13 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
     // which makes (performance.now() − rAF timestamp) a coarse mark over
     // the ENTIRE frame task — sim, render, perfPush, and the tail behind
     // it. Captured before the walker's own whisker/steer work, so the
-    // sampler's sub-ms cost bills itself, not the game.
-    let taskMax = 0, offTask40 = 0, prevTask = Infinity;
+    // sampler's sub-ms cost bills itself, not the game. THE FINE ANCHOR
+    // (2026-08-02): the same subtraction from tick-callback ENTRY
+    // (__game.perfTickT0 — stamped by the game's tick, which ran earlier
+    // in THIS frame's batch) is the frame's OWN work with the foreign
+    // vsync→callback overhang excluded; the off40 abstention reads it, so
+    // a foreign >40ms overhang can no longer eat its own evidence.
+    let taskMax = 0, offTask40 = 0, prevTask = Infinity, prevOwn = Infinity;
     let prev = performance.now();
     const t0 = prev;
     while (performance.now() - t0 < ms) {
@@ -395,9 +483,33 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       // static probe can see ground that was held when stepped on.
       const zw = g.world();
       const at = zw.player.pos;
-      const rayFree = (a: number, reach: number): boolean =>
-        !zw.fallHazardAt(zw.player, at.x + Math.cos(a) * reach * 0.5, at.y + Math.sin(a) * reach * 0.5)
-        && !zw.fallHazardAt(zw.player, at.x + Math.cos(a) * reach, at.y + Math.sin(a) * reach);
+      // THE RHYTHM WHISKER (see FLUX_CROSS_SEC): flux ground answers for
+      // its FUTURE, not just its present — a pad must read walkable at
+      // probe-arrival AND still at arrival + the crossing margin (both via
+      // padPhase, the pure clock function the drift itself runs on), and
+      // lane cells refuse always (solid only where a raft happens to
+      // stand; a walker that boards one blind is marooned when it slides).
+      // Non-flux zones take the zw.flux null fast path — zero new work.
+      const fx = zw.flux;
+      const fluxHolds = (x: number, y: number, eta: number): boolean => {
+        if (!fx) return true;
+        if (!fx.ownedAt(x, y)) return true; // stable paint, portal clears, slivers
+        const pad = fx.padAt(x, y);
+        if (!pad) return false; // lane ground — raft-run, never boarded blind
+        const holdsAt = (t: number): boolean => {
+          const s = fx.padPhase(pad, t).s;
+          return s === FluxPhase.Solid || s === FluxPhase.Fraying;
+        };
+        const arrive = fx.clock + eta;
+        return holdsAt(arrive) && holdsAt(arrive + FLUX_CROSS_SEC);
+      };
+      const rayFree = (a: number, reach: number): boolean => {
+        const mx = at.x + Math.cos(a) * reach * 0.5, my = at.y + Math.sin(a) * reach * 0.5;
+        const ex = at.x + Math.cos(a) * reach, ey = at.y + Math.sin(a) * reach;
+        return !zw.fallHazardAt(zw.player, mx, my) && !zw.fallHazardAt(zw.player, ex, ey)
+          && fluxHolds(mx, my, reach * 0.5 / FLUX_WALK_SPEED)
+          && fluxHolds(ex, ey, reach / FLUX_WALK_SPEED);
+      };
       for (const reach of WHISKER_REACH) {
         if (rayFree(dir, reach)) break;
         let turned = false;
@@ -415,20 +527,25 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       const now = await raf();
       const taskEnd = performance.now(); // first thing after the frame's task
       const gap = now - prev;
-      worst = Math.max(worst, gap);
+      if (gap > worst) { worst = gap; worstOwn = prevOwn; }
       // A hitch gap covers the interval SINCE the previous frame — the frame
       // task inside that interval is the PREVIOUS iteration's mark. A >40ms
-      // gap whose owning task stayed ≤40ms is a stall no frame's own work
-      // explains (the first gap of a window abstains: its task is unseen).
-      if (gap > 40 && prevTask <= 40) offTask40++;
+      // gap whose owning frame's OWN work stayed ≤40ms is a stall no frame's
+      // own work explains (the first gap of a window abstains: its task is
+      // unseen). The abstention reads the FINE mark (tick-entry anchored):
+      // the coarse mark folds the vsync→callback overhang in, so a foreign
+      // >40ms task inflated it past 40 and the metric ate its own evidence
+      // (gloamwood ablA, 2026-08-02 — one 40.3ms stall, off40 0).
+      if (gap > 40 && prevOwn <= 40) offTask40++;
       prevTask = taskEnd - now;
+      prevOwn = taskEnd - g.perfTickT0();
       if (prevTask > taskMax) taskMax = prevTask;
       prev = now;
       beatWalk(); // the deadman's ~1/s pulse (sampler-side, post-mark)
       dir += WALK_TURN_RATE * Math.min(gap, WALK_DT_CLAMP_MS) / 1000;
-      if (g.world().zone.id !== homeZid) return { worst, held: false, taskMax, offTask40 };
+      if (g.world().zone.id !== homeZid) return { worst, held: false, taskMax, offTask40, worstOwn };
     }
-    return { worst, held: true, taskMax, offTask40 };
+    return { worst, held: true, taskMax, offTask40, worstOwn };
   };
 
   // THE MID-WALK EXIT + THE RESTART LAW (aether_vesper 2026-07-28: a
@@ -457,8 +574,11 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
     const homeZid = g.world().zone.id;
     // Worst entry gap across ALL attempts: the first attempt carries the
     // mint's true load burst — a retry's cheaper re-entry must not launder
-    // the row's entry-burst verdict.
+    // the row's entry-burst verdict. The annotation follows the worst gap
+    // (the value the gate judges), so the note always explains the number
+    // on the row.
     let entryWorst = 0;
+    let entryNote = '';
     const returnHome = (): boolean => {
       const ok = g.world().devTravelTo(homeZid); // false only off-graph — cannot happen for minted/START zones
       if (ok) pinWeather(); // the pinned front re-parks on the home node
@@ -474,7 +594,10 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       if (opts.lite) zw.devLitePour('vermin_tide', opts.lite);
       const dir0 = 0.6 + attempt * RETRY_TURN;
       const entry = await walkPhase(settleMs, dir0);
-      entryWorst = Math.max(entryWorst, entry.worst);
+      if (entry.worst > entryWorst) {
+        entryWorst = entry.worst;
+        entryNote = entryStallNote(entry);
+      }
       if (!entry.held) { if (!returnHome()) break; continue; }
       // Drain the zone-hop garbage NOW, inside the discarded window: a sweep
       // hops zones at a rate no player ever will, and V8's collection storm
@@ -510,6 +633,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
         ltCount: ltObs ? ltLedger.count : -1,
         ltWorst: ltObs ? +ltLedger.worst.toFixed(1) : -1,
         slabName: dump.phase.name, slabMs: +dump.phase.ms.toFixed(1),
+        entryNote,
       });
     }
     return null;

@@ -522,9 +522,16 @@ declare global {
       devStartRun: (classId?: string) => string;
       perfFrames: (reset?: boolean) => {
         gap: number[]; sim: number[]; ren: number[];
+        /** Pushes since last reset — pushed > gap.length = the ring wrapped. */
+        pushed: number;
         /** THE PHASE LEDGER's window-worst slab (name over pre/head/sim/ren/tail). */
         phase: { name: string; ms: number };
       };
+      /** Size the frame rings to a sweep window (frames; clamped, resets). */
+      perfRingSize: (frames: number) => number;
+      /** performance.now() at the CURRENT frame's tick-callback entry — the
+       *  sweep's fine own-task anchor (vs the coarse vsync-anchored mark). */
+      perfTickT0: () => number;
       perfSweep: (opts?: PerfSweepOpts) => Promise<PerfSweepReport>;
       devPanel: () => void;
       crash: () => {
@@ -580,20 +587,25 @@ window.__game = {
   // (rAF gap = true pacing, sim ms, render ms). reset=true also clears —
   // how the perf sweep separates a zone's entry burst from its steady state.
   perfFrames: (reset = false) => {
-    const n = perfCount, start = (perfIdx - n + PERF_RING) % PERF_RING;
+    const n = perfCount, start = (perfIdx - n + perfRingN) % perfRingN;
     const out = {
       gap: new Array<number>(n), sim: new Array<number>(n), ren: new Array<number>(n),
+      // Pushes since the last reset: pushed > gap.length means the ring
+      // WRAPPED and the window's oldest frames are gone (perfRingSize doc).
+      pushed: perfPushed,
       // THE PHASE LEDGER's window-worst slab rides the same reset boundary
       // as the rings, so a sweep window's slab is that window's alone.
       phase: { name: phaseWorstName, ms: phaseWorstMs },
     };
     for (let i = 0; i < n; i++) {
-      const k = (start + i) % PERF_RING;
+      const k = (start + i) % perfRingN;
       out.gap[i] = perfGap[k]; out.sim[i] = perfSim[k]; out.ren[i] = perfRen[k];
     }
-    if (reset) { perfIdx = 0; perfCount = 0; phaseWorstName = ''; phaseWorstMs = 0; }
+    if (reset) { perfIdx = 0; perfCount = 0; perfPushed = 0; phaseWorstName = ''; phaseWorstMs = 0; }
     return out;
   },
+  perfRingSize,
+  perfTickT0: () => perfTickT0,
   perfSweep: (opts?: PerfSweepOpts) => perfSweep(opts),
   devPanel: () => mountDevPanel(() => world),
   // CRASH TRAP state — the ?crashtest negative control's probe surface (is the
@@ -1262,14 +1274,45 @@ ui.onCouchLeave = () => {
 // percentiles/hitch counts per zone; a future in-game FPS readout reads the
 // same rings.
 const PERF_RING = 2048;
-const perfGap = new Float32Array(PERF_RING);
-const perfSim = new Float32Array(PERF_RING);
-const perfRen = new Float32Array(PERF_RING);
-let perfIdx = 0, perfCount = 0;
+// THE RING FIT (2026-08-02): the rings were a constant 2048 slots, and a
+// 240Hz display fills that in ~8.5s — a --seconds=12 sweep window WRAPPED,
+// silently dropping the window's OLDEST frames (exactly where bakes cluster),
+// so h40/gapMax undercounted while the sampler-side off40 kept counting
+// (gloamwood base2 2026-08-02: off40 5 vs h40 0 at frames=2048 exact). The
+// perf sweep now sizes the rings to its own window via perfRingSize
+// (requested seconds × measured refresh + margin); PERF_RING stays the floor
+// and the play-mode default — normal play never resizes. perfPushed counts
+// every push since the last reset: pushed > stored frames is the wrap
+// detector no sizing mistake can silently defeat.
+let perfRingN = PERF_RING;
+let perfGap = new Float32Array(perfRingN);
+let perfSim = new Float32Array(perfRingN);
+let perfRen = new Float32Array(perfRingN);
+let perfIdx = 0, perfCount = 0, perfPushed = 0;
+/** The sampler's fine own-task anchor (__game.perfTickT0): performance.now()
+ *  at the CURRENT frame's tick-callback entry. The coarse taskMax anchors on
+ *  the vsync timestamp, so a foreign task overhanging the tick wears the
+ *  frame's name — this mark lets the sweep separate the frame's OWN work
+ *  from that overhang (src/dev/perf.ts walkPhase). */
+let perfTickT0 = 0;
+/** Resize the frame rings — the perf harness's one-per-sweep call (normal
+ *  play keeps the default). Clamped to [PERF_RING, 1<<17]; resets the rings. */
+function perfRingSize(frames: number): number {
+  const want = Math.max(PERF_RING, Math.min(1 << 17, Math.ceil(frames) || 0));
+  if (want !== perfRingN) {
+    perfRingN = want;
+    perfGap = new Float32Array(want);
+    perfSim = new Float32Array(want);
+    perfRen = new Float32Array(want);
+  }
+  perfIdx = 0; perfCount = 0; perfPushed = 0;
+  return perfRingN;
+}
 function perfPush(gap: number, sim: number, ren: number): void {
   perfGap[perfIdx] = gap; perfSim[perfIdx] = sim; perfRen[perfIdx] = ren;
-  perfIdx = (perfIdx + 1) % PERF_RING;
-  if (perfCount < PERF_RING) perfCount++;
+  perfIdx = (perfIdx + 1) % perfRingN;
+  if (perfCount < perfRingN) perfCount++;
+  perfPushed++;
   phaseMark('sim', sim); phaseMark('ren', ren); // the bracketed slabs join the ledger
 }
 
@@ -1320,9 +1363,9 @@ function renderScaleTick(nowMs: number): void {
   rsNextEvalAt = nowMs + g.evalSec * 1000;
   const n = Math.min(perfCount, 300);
   if (n < 60) return; // not enough frames to judge yet
-  const start = (perfIdx - n + PERF_RING) % PERF_RING;
+  const start = (perfIdx - n + perfRingN) % perfRingN;
   const gaps: number[] = new Array(n);
-  for (let i = 0; i < n; i++) gaps[i] = perfGap[(start + i) % PERF_RING];
+  for (let i = 0; i < n; i++) gaps[i] = perfGap[(start + i) % perfRingN];
   gaps.sort((a, b) => a - b);
   const p95 = gaps[Math.floor(n * 0.95)];
   if (p95 > g.stepDownP95Ms) { rsHotSec += g.evalSec; rsCoolSec = 0; }
@@ -1356,6 +1399,7 @@ function tick(now: number): void {
   }
   const frameGapMs = now - last; // true frame pacing, BEFORE the dt clamp
   const tickT0 = performance.now(); // PHASE LEDGER anchor: callback start
+  perfTickT0 = tickT0; // the sampler's fine own-task anchor (__game.perfTickT0)
   phaseMark('pre', tickT0 - now); // vsync→callback overhang (a foreign task)
   phaseMark('tail', phasePendTail); phasePendTail = 0; // last frame's tail, carried
   const dt = Math.min(0.05, (now - last) / 1000);

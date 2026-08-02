@@ -904,11 +904,91 @@ async function smoke() {
 async function perfMode() {
   /** @param {number} ms */
   const wait = (ms) => new Promise(r => setTimeout(r, ms));
+  // ---- THE RUN LOCK (2026-08-02): two perf runs sharing one compositor
+  // poison each other's frames — a sibling's townhouse run fully overlapped
+  // a gloamwood solo (two visible game windows compositing at once,
+  // 2026-08-02 05:34), and the day's verdict sweep minted caul entry=2117ms
+  // from a foreign ~2s freeze. The dirty-tree guard gates BYTES; this gates
+  // RUNS: one MACHINE-GLOBAL lockfile (os.tmpdir — worktrees and second
+  // checkouts share the compositor, so they must share the lock), taken
+  // exclusively ('wx') before anything measures. Held by a LIVE pid →
+  // refuse, exit 3 (the refusal lane, beside the dirty tree). A dead
+  // holder's lock is stale and reclaimed loudly; release rides process
+  // 'exit' so every app.exit path in this function lets go — a SIGKILL'd
+  // run leaves the file and the next run's liveness probe reclaims it.
+  const lockPath = path.join(os.tmpdir(), 'hollow-wake-perf.lock');
+  /** Refusal needs BOTH a live pid AND a heartbeat this fresh: electron
+   *  children drain for a minute+ after app.exit (measured 2026-08-02 —
+   *  a finished run's pid stayed 'alive' and refused four honest runs),
+   *  and pids recycle. A live RUN beats ~1/s (perf:beat touches mtime);
+   *  the window is wide enough to cover the beat-less boot+rebuild. */
+  const LOCK_FRESH_MS = 180_000;
+  let lockHeld = false;
+  const releaseRunLock = () => {
+    if (!lockHeld) return;
+    lockHeld = false;
+    try {
+      const cur = readJson(lockPath);
+      if (cur && cur.pid === process.pid) fs.unlinkSync(lockPath);
+    } catch { /* already gone */ }
+  };
+  const heartbeatRunLock = () => {
+    if (!lockHeld) return;
+    try { const now = new Date(); fs.utimesSync(lockPath, now, now); } catch { /* transient */ }
+  };
+  const lockRefused = (() => {
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          fs.writeFileSync(lockPath,
+            JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }), { flag: 'wx' });
+          lockHeld = true;
+          // Belts only: app.exit() SKIPS node 'exit' handlers (measured
+          // 2026-08-02 — the lock survived a clean run); the explicit
+          // releaseRunLock() calls beside every app.exit below are the road.
+          process.on('exit', releaseRunLock);
+          app.on('quit', releaseRunLock);
+          return false; // the lock is ours
+        } catch { /* held — probe the holder below */ }
+        const prev = readJson(lockPath);
+        const pid = prev && typeof prev.pid === 'number' ? prev.pid : null;
+        let alive = false;
+        if (pid !== null && pid !== process.pid) {
+          try { process.kill(pid, 0); alive = true; }
+          catch (e) { alive = /** @type {any} */ (e)?.code === 'EPERM'; }
+        }
+        let beatAgoMs = Infinity;
+        try { beatAgoMs = Date.now() - fs.statSync(lockPath).mtimeMs; } catch { /* vanished — the retry takes it */ }
+        if (alive && beatAgoMs < LOCK_FRESH_MS) {
+          console.log(`PERF REFUSED: another perf run holds this machine (pid ${pid}, started ${prev.startedAt ?? '?'}, ` +
+            `last beat ${Math.round(beatAgoMs / 1000)}s ago).`);
+          console.log('Two runs share one compositor and poison each other\'s frames — sequence them.');
+          console.log(`If that run is truly gone, delete ${lockPath}. Exit 3.`);
+          return true;
+        }
+        const why = pid === null ? 'unreadable'
+          : !alive ? `dead pid ${pid}`
+            : `pid ${pid} alive but silent ${Math.round(beatAgoMs / 1000)}s — a draining zombie or a reused pid`;
+        console.log(`PERF: stale run lock (${why}) — reclaiming.`);
+        try { fs.unlinkSync(lockPath); } catch { /* raced away — retry takes it */ }
+      }
+      console.log('PERF: run-lock contention unresolved after reclaim — proceeding UNLOCKED (loud).');
+      return false;
+    } catch (e) {
+      console.log('PERF: run-lock bookkeeping failed (' + String(e) + ') — proceeding UNLOCKED.');
+      return false;
+    }
+  })();
+  if (lockRefused) {
+    gameServer?.close();
+    app.exit(3);
+    return;
+  }
   const cfgPath = path.join(BASE, 'balance', 'perf.config.json');
   /** @type {any} */
   let budgets;
   try { budgets = JSON.parse(fs.readFileSync(cfgPath, 'utf8')); }
-  catch (e) { console.log('PERF FAILED: cannot read ' + cfgPath + ': ' + String(e)); app.exit(1); return; }
+  catch (e) { console.log('PERF FAILED: cannot read ' + cfgPath + ': ' + String(e)); releaseRunLock(); app.exit(1); return; }
   /** @type {string[]} */
   const errors = [];
   try {
@@ -946,6 +1026,7 @@ async function perfMode() {
       console.log('Commit/stash the tree (or land the batch), or pass --allow-dirty to');
       console.log('measure the WIP bytes deliberately. Exit 3.');
       gameServer?.close();
+      releaseRunLock();
       app.exit(3);
       return;
     }
@@ -956,6 +1037,7 @@ async function perfMode() {
     }
     const built = await ensureBuilt(); // a stale dist would measure old code
     if (!built.ok) throw new Error('build failed');
+    heartbeatRunLock(); // the build was the longest beat-less stretch
     // The digest actually measured — .build-head as ensureBuilt left it.
     const distStamp = fs.existsSync(STAMP) ? fs.readFileSync(STAMP, 'utf-8') : null;
     console.log(`PERF: dist stamp ${distStamp ? distStamp.slice(0, 20) + '…' : '(none — not a repo)'}` +
@@ -1086,6 +1168,7 @@ async function perfMode() {
     });
     ipcMain.on('perf:beat', (e, payload) => {
       if (!gameWin || e.sender !== gameWin.webContents) return;
+      heartbeatRunLock(); // a beating run is a lock nobody may reclaim
       deadman.beat(payload);
       if (!payload) return;
       if (payload.at === 'row' && payload.row) {
@@ -1154,8 +1237,10 @@ async function perfMode() {
     // whole-frame-TASK ms (sim + render + the post-perfPush tail the
     // brackets can't see); lt/ltW = Long Tasks >50ms in the window (count /
     // worst ms; -1 = API unsupported) whoever ran them — frame, idle
-    // autosave, timer, GC; off40 = >40ms gaps whose owning frame task
-    // stayed ≤40ms (stalls no frame's own work explains). Read as a
+    // autosave, timer, GC; off40 = >40ms gaps whose owning frame's OWN
+    // work stayed ≤40ms (stalls no frame's own work explains; since
+    // 2026-08-02 the owning mark anchors at tick-callback entry, so a
+    // foreign vsync-overhang can no longer inflate it into abstention). Read as a
     // triangle: taskMx ≈ gapMax convicts the frame's JS; ltW big with
     // taskMx small convicts the space BETWEEN frames; off40 counts how
     // often that happened. slab (2026-08-02, THE PHASE LEDGER in
@@ -1180,6 +1265,15 @@ async function perfMode() {
     else lines.push('(town ctl): never completed — the run wedged before the control row; caps not judged');
     for (const z of report.zones) {
       lines.push(row(z, z.tileset));
+      // THE ENTRY ANNOTATION (src/dev/perf.ts entryStallNote): a >500ms
+      // stall inside the entry window names itself on the row — FOREIGN
+      // (own frame task tiny: a machine-wide freeze wearing the zone's
+      // name, the caul entry=2117 artifact) vs the zone's own heavy load.
+      // THE RING BACKSTOP: rings are sized to the window up front
+      // (perfRingSize); a nonzero ringWrap means oldest frames dropped and
+      // h40/gapMax undercount — loud, because it can only flatter.
+      if (z.entryNote) lines.push(`  ^ ${z.tileset}: ${z.entryNote}`);
+      if (z.ringWrap > 0) lines.push(`  ^ ${z.tileset}: RING WRAPPED — ${z.ringWrap} oldest frames dropped; h40/gapMax undercount this row`);
       // Per-tileset overrides (budgets.overrides[id]) merge over the shared
       // caps — the explicit, committed registry of known-heavy zones (each
       // entry should carry a _todo note; the gate stays data end to end).
@@ -1215,7 +1309,9 @@ async function perfMode() {
         breaches.push(`${z.tileset}: ${z.hitch70} frames >70ms in ${secs}s (${(z.hitch70 * 60 / secs).toFixed(1)}/min > ${absZ.maxHitch70PerMin}/min, grace ${grace})`);
       }
       if (absZ.entryWorstGapMs != null && z.entryWorstGap > absZ.entryWorstGapMs) {
-        breaches.push(`${z.tileset}: entry burst ${z.entryWorstGap}ms > ${absZ.entryWorstGapMs}`);
+        // The annotation rides the breach line too: a FOREIGN-stamped entry
+        // breach self-documents (rerun solo before believing the zone).
+        breaches.push(`${z.tileset}: entry burst ${z.entryWorstGap}ms > ${absZ.entryWorstGapMs}${z.entryNote ? ' — ' + z.entryNote : ''}`);
       }
     }
     // THE AGED CONTROL (evidence, never a gate): the same town re-sampled
@@ -1302,6 +1398,7 @@ async function perfMode() {
         : 'PERF WEDGED — the deadman killed a hung run; the wedge row gates:');
       for (const b of breaches) console.log('  - ' + b);
       gameServer?.close();
+      releaseRunLock();
       app.exit(forensics ? 1 : 2);
       return;
     }
@@ -1319,6 +1416,7 @@ async function perfMode() {
         `the control cannot judge anything. Likely an occluded/covered game window ` +
         `(1Hz rAF throttle reads ~1000ms gaps) or a loaded machine; report kept for forensics.`);
       gameServer?.close();
+      releaseRunLock();
       app.exit(1);
       return;
     }
@@ -1329,10 +1427,12 @@ async function perfMode() {
       console.log('PERF OK — no budget breached.');
     }
     gameServer?.close();
+    releaseRunLock();
     app.exit(forensics ? 0 : (breaches.length ? 2 : 0));
   } catch (e) {
     console.log('PERF FAILED: ' + String(e));
     gameServer?.close();
+    releaseRunLock();
     app.exit(1);
   }
 }
