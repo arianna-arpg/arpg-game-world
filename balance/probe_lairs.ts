@@ -45,6 +45,8 @@ import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { sidezoneOf } from '../src/data/sidezones';
 import { DORMANT_TAGS, isDormant, ROUSE_RULES, updateAI } from '../src/engine/ai';
 import { CREEPS } from '../src/engine/creep';
+import { COMBO_RULES } from '../src/data/combos';
+import { trackPose, trackRider, type PlacedTrack } from '../src/engine/tracks';
 import { makeSkillInstance, type SkillDef } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
 import { skyOf, type ZoneDef } from '../src/data/zones';
@@ -64,6 +66,8 @@ const LAIR_IDS = [
   'bull_maze', 'wyrm_barrow', 'spinney', 'wellspring',
   // Wave eight — the homed kin (the biomes that had none).
   'scythe_court', 'stamping_ground', 'rimevault', 'hunts_rest', 'tidewomb',
+  // Wave nine — the homed kin continue (the archipelago + hell's marches).
+  'drumshell', 'chainworks',
 ];
 const MOUTHS = [
   'frostmaw_maw', 'hovel_door', 'sphinx_gate',
@@ -72,6 +76,8 @@ const MOUTHS = [
   'scorpion_well',
   // Wave eight — the homed kin's five doors.
   'bower_gate', 'stamping_gap', 'glacier_mouth', 'hunt_gate', 'tide_hollow',
+  // Wave nine — the homed kin's two doors.
+  'drum_burrow', 'windlass_gate',
 ];
 const NATIVES = [
   'yeti', 'yeti_alpha', 'hill_giant', 'mire_hag', 'vault_sphinx',
@@ -79,6 +85,8 @@ const NATIVES = [
   // Wave eight — the homed kin's residents (the courser is half the pair).
   'mantis_abbess', 'great_aurochs', 'rimeclad_elder',
   'hollow_huntsman', 'gloam_courser', 'tideheart_matron',
+  // Wave nine — the homed kin's residents (the drummer is half the pair).
+  'drumclaw_patriarch', 'strand_drummer', 'chainwright',
 ];
 
 // --- RIG A: the registry weave --------------------------------------------------
@@ -1695,6 +1703,233 @@ const step = (secs: number): void => {
       JSON.stringify(a) === JSON.stringify(sz.mint(mctx))
       && a.noDeeper === true && Array.isArray(a.fauna) && a.fauna.length >= 2);
   }
+}
+
+// --- RIG P: WAVE NINE — THE HOMED KIN CONTINUE (archipelago + hell's marches)
+// Two more dens (data/lairs.ts wave nine), the wave-eight bar verbatim: the
+// Drumshell (beach/isle — THE COMBO GRAMMAR: the patriarch's two unmatched
+// claws drum Twin Measures beside a congregation rapping Drumbeat, pips
+// worn, payoffs naming earnable rules) and the Chainworks (steppes — THE
+// TRACK FABRIC's unshown faces: a harrow circuit + a pausing pingpong
+// shuttle, the sweeper grain (push 'along') delivering into speed-gated
+// stake rows, every lane owned by the wright's tag). Both mints ride the
+// Scorpion Well's undefined-tileset lane. The registry/kit/look censuses
+// arrive from rigs A1–A8 via the extended arrays.
+{
+  // P7 — every den resolves whole; residents pay the hoard as marquee asks;
+  // the drummer is the pair's other half (deliberately neither).
+  const DENS9: { id: string; mouth: string; resident: string }[] = [
+    { id: 'drumshell', mouth: 'drum_burrow', resident: 'drumclaw_patriarch' },
+    { id: 'chainworks', mouth: 'windlass_gate', resident: 'chainwright' },
+  ];
+  for (const den of DENS9) {
+    const lair = lairOf(den.id);
+    const lm = lair ? landmarkDefs().find(d => d.id === lair.landmark) : undefined;
+    const mk = (lm?.params as { mouthKind?: string } | undefined)?.mouthKind;
+    check(`P7 den '${den.id}' resolves whole (lair → den_mouth → '${den.mouth}' → sidezone)`,
+      !!lair && lm?.builder === 'den_mouth' && mk === den.mouth && !!sidezoneOf(den.mouth));
+    const res = MONSTERS[den.resident];
+    check(`P7 '${den.resident}' is the den's marquee ask (boss, lair_hoard)`,
+      res?.boss === true && res?.loot === 'lair_hoard');
+  }
+  check('P7 the drummer is the pair\'s other half (full body, never a boss, no hoard)',
+    MONSTERS.strand_drummer?.boss !== true && MONSTERS.strand_drummer?.loot === undefined);
+
+  // P8 — THE FOLD ENVELOPES (pure): the drumshell claims BOTH shores of the
+  // archipelago, the chainworks claims hell's marches, both silent below
+  // their ramps, on foreign ground, and underground (place 'surface').
+  const at = (place: 'cave' | 'surface', biome: string, caveDepth: number | undefined,
+    level: number) => lairLandmarkRolls({ place, biome, caveDepth, level, tileset: 'cavern' });
+  const has = (rolls: { landmark: string }[], lm: string) => rolls.some(r => r.landmark === lm);
+  check('P8 the drumshell claims BOTH shores (beach and isle, one seat row)',
+    has(at('surface', 'beach', undefined, 8), 'drum_burrow_site')
+    && has(at('surface', 'isle', undefined, 8), 'drum_burrow_site'));
+  check('P8 the drumshell is silent below its ramp and on foreign ground',
+    !has(at('surface', 'beach', undefined, 2), 'drum_burrow_site')
+    && !has(at('surface', 'field', undefined, 30), 'drum_burrow_site'));
+  check('P8 the chainworks claims the marches at level 15 and nothing sooner',
+    has(at('surface', 'steppes', undefined, 15), 'windlass_gate_site')
+    && !has(at('surface', 'steppes', undefined, 8), 'windlass_gate_site'));
+  check('P8 the chainworks refuses foreign ground (the field hosts neither)',
+    !has(at('surface', 'field', undefined, 30), 'windlass_gate_site'));
+  check('P8 the two surface dens never seat underground',
+    !has(at('cave', 'beach', 1, 30), 'drum_burrow_site')
+    && !has(at('cave', 'isle', 1, 30), 'drum_burrow_site')
+    && !has(at('cave', 'steppes', 1, 30), 'windlass_gate_site'));
+
+  // P9 — placement through the standing machinery (the C1/C2 law, both):
+  // a chance-1 roll stands exactly one mouth, spoor dresses the apron, the
+  // sweep is deterministic, and a sealed pocket strips the stray door.
+  const SPOOR9: Record<string, { biome: string; lm: string; kinds: string[] }> = {
+    drum_burrow: { biome: 'beach', lm: 'drum_burrow_site', kinds: ['kelp_wrack', 'sea_rock', 'bone_pile'] },
+    windlass_gate: { biome: 'steppes', lm: 'windlass_gate_site', kinds: ['brazier', 'rock', 'bone_pile'] },
+  };
+  for (const [mouth, h] of Object.entries(SPOOR9)) {
+    const def = caveDef({
+      landmarks: [{ landmark: h.lm, chance: 1 }],
+      caveDepth: undefined, anchor: undefined, biome: h.biome,
+    });
+    const out = gen(def, 0x9a19 + Object.keys(SPOOR9).indexOf(mouth));
+    const mouths = out.doodads.filter(d => d.kind === mouth);
+    check(`P9 the ${mouth} stands (one mouth through the landmark loop)`,
+      mouths.length === 1, `${mouths.length} mouths`);
+    const spoor = mouths[0] ? out.doodads.filter(d => h.kinds.includes(d.kind)
+      && Math.hypot(d.pos.x - mouths[0].pos.x, d.pos.y - mouths[0].pos.y) < 160) : [];
+    check(`P9 the ${mouth} apron is spoored (the den reads before the door)`,
+      spoor.length >= 2, `${spoor.length} pieces`);
+  }
+  {
+    const def = caveDef({
+      landmarks: [{ landmark: 'drum_burrow_site', chance: 1 }],
+      caveDepth: undefined, anchor: undefined, biome: 'beach',
+    });
+    const print = (o: GeneratedLayout) => o.doodads.map(d =>
+      `${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`).join('|');
+    check('P9 same seed, same door (wave-nine placement determinism)',
+      print(gen(def, 77190)) === print(gen(def, 77190)));
+    const sealed = gen(caveDef({
+      landmarks: [{ landmark: 'drum_burrow_site', chance: 1 }], noDeeper: true,
+      caveDepth: undefined, anchor: undefined, biome: 'beach',
+    }), 77191);
+    check('P9 a sealed pocket strips the wave-nine door (the noDeeper chokepoint)',
+      sealed.doodads.every(d => d.kind !== 'drum_burrow'));
+  }
+
+  // P10 — THE FABRIC CONTRACTS (static): each den's one argument, pinned on
+  // the data that carries it.
+  const pat = MONSTERS.drumclaw_patriarch;
+  const patRule = COMBO_RULES.twin_measures;
+  const patAttacks = (pat?.skills ?? []).filter(s => SKILLS[s]?.tags?.includes('attack'));
+  check('P10 the Patriarch drums Twin Measures and his claws can CLOSE it (two distinct attack skills — the completability license)',
+    (pat?.mods ?? []).some(m => m.stat === 'combo_twin_measures')
+    && !!patRule?.vary && patRule.vary.n === 2
+    && new Set(patAttacks).size >= 2);
+  const drm = MONSTERS.strand_drummer;
+  check('P10 the congregation raps Drumbeat with a kit that can keep it (an attack to repeat)',
+    (drm?.mods ?? []).some(m => m.stat === 'combo_drumbeat')
+    && !!COMBO_RULES.drumbeat?.repeat
+    && (drm?.skills ?? []).some(s => SKILLS[s]?.tags?.includes('attack')));
+  for (const id of ['drumclaw_patriarch', 'strand_drummer'] as const) {
+    const look = MONSTERS[id]?.look ? LOOKS[MONSTERS[id].look!] : undefined;
+    check(`P10 '${id}' wears the beat pips (the cadenced-kin tell law)`,
+      !!look?.live?.some(s => s.kind === 'beatPips'));
+  }
+  const harrow = trackRider('chain_harrow');
+  check('P10 the harrow is the sweeper (push \'along\' — the carry-you-around grain, licensed)',
+    !!harrow && harrow.payload.push === 'along' && (harrow.payload.impulse ?? 0) > 0);
+  check('P10 the works spare their own crew (the shear disc\'s faction law)',
+    !!harrow?.payload.notFactions?.includes('demon'));
+  const hv = DOODAD_VISUALS['chain_harrow'];
+  const hvp = hv?.params as { beamHw?: number; beamHh?: number } | undefined;
+  check('P10 the drawn harrow IS the tested rect (the agreement contract at den grain)',
+    harrow?.surface.kind === 'rect'
+    && hvp?.beamHw === harrow.surface.hw && hvp?.beamHh === harrow.surface.hh);
+  check('P10 the wright anchors his court (def tag = the lanes\' ownerTag; the ring landmark stands)',
+    MONSTERS.chainwright?.tag === 'chainwright' && hasLandmark('windlass_ring'));
+
+  // P11 — THE LIVE DENS: each mouth mints its country, the resident stands,
+  // and the fabric argument holds in the running world.
+  const liveDen9 = (mouth: string, seed: number): void => {
+    w.player.pos = vec(400, 400);
+    w.enterSidezone({ pos: { x: 400, y: 400 }, seed, kind: mouth });
+  };
+
+  // P11-I: the Drumshell — the congregation keeps time (the probe_combo
+  // fencer proof at den scale: the buff arrives through def mods alone).
+  {
+    liveDen9('drum_burrow', 91901);
+    check('P11 the burrow mints the Drumshell (boss ask, sealed rung)',
+      w.zone.id === `cave_drum_burrow_${homeId}_91901`
+      && String(w.zone.name).includes('Drumshell')
+      && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'drumclaw_patriarch'
+      && w.zone.noDeeper === true, `${w.zone.id} · ${w.zone.name}`);
+    check('P11 the Patriarch holds the hall',
+      (w.actors as Actor[]).some(a => a.defId === 'drumclaw_patriarch'));
+    const drummers = (w.actors as Actor[]).filter(a => a.defId === 'strand_drummer' && !a.dead);
+    check('P11 the congregation is in session (drummers staged)',
+      drummers.length >= 1, `${drummers.length} drummers`);
+    const drummer = drummers[0];
+    if (drummer) {
+      w.player.invulnerable = true;
+      drummer.pos = vec(w.player.pos.x + 70, w.player.pos.y);
+      let drummed = false;
+      const dt = 1 / 30;
+      for (let t = 0; t < 25 && !drummed; t += dt) {
+        for (const a of w.actors) updateAI(a, world, dt);
+        w.update(dt);
+        if (drummer.dead) break;
+        if (drummer.buffs.has('drumbeat')) drummed = true;
+      }
+      check('P11 the drummer closes its measure live (Drumbeat through def mods alone)',
+        drummed, drummed ? '' : `ring=${drummer.castRing?.length ?? 'null'} watch=${drummer.comboWatch}`);
+      check('P11 the drummer woke through its own grammar (the ring is live)',
+        drummer.comboWatch === true && drummer.castRing !== null);
+      w.player.invulnerable = false;
+    }
+    leaveToHome();
+  }
+
+  // P11-II: the Chainworks — the wheel turns (lanes placed, owned, grooved,
+  // the sweeper licensed, the stakes collecting, the pose clockwork-pure).
+  {
+    liveDen9('windlass_gate', 91902);
+    check('P11 the gate mints the Chainworks (boss ask, sealed rung)',
+      String(w.zone.name).includes('Chainworks')
+      && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'chainwright'
+      && w.zone.noDeeper === true);
+    check('P11 the Wright is home', (w.actors as Actor[]).some(a => a.defId === 'chainwright'));
+    const tracks = (w.tracks ?? []) as PlacedTrack[];
+    const circuit = tracks.find(t => t.spec.closed === true && (t.spec.mode ?? 'loop') === 'loop'
+      && t.spec.riders.some(r => r.kind === 'chain_harrow'));
+    const shuttle = tracks.find(t => t.spec.mode === 'pingpong'
+      && (t.spec.pauses?.length ?? 0) >= 2
+      && t.spec.riders.some(r => r.kind === 'chain_harrow'));
+    check('P11 the wheel turns (the harrow circuit AND the pausing shuttle both placed)',
+      !!circuit && !!shuttle, `${tracks.length} lanes`);
+    check('P11 every lane is the wright\'s (ownerTag — the Winter King\'s court law)',
+      tracks.length >= 2 && tracks.every(t => t.spec.ownerTag === 'chainwright'));
+    const dood = (w.doodads ?? []) as { kind: string }[];
+    check('P11 the lanes are carved and the collectors stand (groove + stake rows)',
+      dood.filter(d => d.kind === 'track_groove').length >= 8
+      && dood.filter(d => d.kind === 'gore_stakes').length >= 3,
+      `${dood.filter(d => d.kind === 'track_groove').length} groove, ${dood.filter(d => d.kind === 'gore_stakes').length} stakes`);
+    if (circuit) {
+      const a = trackPose(circuit, 5.0, 0), b = trackPose(circuit, 5.0, 0), c = trackPose(circuit, 6.0, 0);
+      check('P11 the pose is clockwork-pure (two reads one truth; the clock moves the blade)',
+        a.x === b.x && a.y === b.y && (a.x !== c.x || a.y !== c.y));
+    }
+    leaveToHome();
+  }
+
+  // P12 — mint purity, both (the E1 law: byte-equal double-mints — same
+  // mouth, same den, forever; the appended ring row rides the purity).
+  for (const den of DENS9) {
+    const sz = sidezoneOf(den.mouth);
+    if (!sz) { check(`P12 '${den.mouth}' mints (sidezone present)`, false); continue; }
+    const mctx = {
+      parent: caveDef({
+        id: `probe_p12_${den.id}`, caveDepth: undefined, anchor: undefined,
+        biome: den.id === 'drumshell' ? 'beach' : 'steppes',
+      }),
+      seed: 0x9919 + DENS9.indexOf(den), id: `probe_p12_pocket_${den.id}`,
+      pos: { x: 100, y: 100 }, playerLevel: 14, pkgActive: () => false,
+    };
+    const a = sz.mint(mctx);
+    check(`P12 '${den.id}' mints pure and sealed (byte-equal, noDeeper, authored fauna)`,
+      JSON.stringify(a) === JSON.stringify(sz.mint(mctx))
+      && a.noDeeper === true && Array.isArray(a.fauna) && a.fauna.length >= 2);
+  }
+  check('P12 the Chainworks mint carries its wheel (the windlass ring appended at chance 1)',
+    (() => {
+      const sz = sidezoneOf('windlass_gate');
+      if (!sz) return false;
+      const d = sz.mint({
+        parent: caveDef({ id: 'probe_p12_ring', caveDepth: undefined, anchor: undefined, biome: 'steppes' }),
+        seed: 0x9920, id: 'probe_p12_ring_pocket',
+        pos: { x: 100, y: 100 }, playerLevel: 14, pkgActive: () => false,
+      });
+      return (d.landmarks ?? []).some(l => l.landmark === 'windlass_ring' && l.chance === 1);
+    })());
 }
 
 console.log(fails ? `\nprobe_lairs: ${fails} FAILURE(S)` : '\nprobe_lairs: ALL PASS');

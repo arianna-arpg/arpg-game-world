@@ -20240,6 +20240,79 @@ export const MONSTERS: Record<string, MonsterDef> = {
       behavior: { castArc: 0.7, reaction: [0.3, 0.7] },
     },
   },
+
+  // THE HOMED KIN — WAVE NINE of the lair fabric (data/lairs.ts): two more
+  // countries claimed (the archipelago and hell's outer marches), the
+  // wave-eight law verbatim — new residents, one landed fabric per den as
+  // its whole argument, standing verbs only (no new skills were minted).
+  // ==========================================================================
+
+  // THE DRUMCLAW PATRIARCH — the combo grammar given a den (the Drumshell,
+  // beach/isle). The strand's old fiddler drums TWIN MEASURES with the two
+  // claws nature refused to match: the great claw's slam and the small
+  // claw's rap are two DIFFERENT blows back-to-back (vary-by-skill — the
+  // Red Cadence wing's own earnable rule, named in the payoff text over
+  // the duel), and the beat pips over his shell say he keeps time before
+  // he ever proves it. The cadenced-kin law at den scale: watching the
+  // hall IS the tutorial.
+  drumclaw_patriarch: {
+    id: 'drumclaw_patriarch', name: 'Drumclaw Patriarch',
+    color: '#c8845a', shape: 'oval', radius: 20, material: 'chitin', look: 'drumclaw_patriarch',
+    boss: true,
+    base: { life: 320, moveSpeed: 96, accuracy: 106, armor: 48, mana: 30, manaRegen: 3 },
+    mods: [mod('combo_twin_measures', 'flat', 1)],
+    skills: ['heavy_strike', 'claw'],
+    xp: 205, loot: 'lair_hoard',
+    faction: 'beast', tags: ['beast'],
+    detection: 1.0,
+    brain: {
+      type: 'juggernaut', enrage: 0.4,
+      behavior: { castArc: 0.7, reaction: [0.25, 0.6] },
+    },
+  },
+  // His congregation — knee-high fiddlers rapping the OTHER repetition
+  // grammar: the same small claw three times running (Drumbeat — the
+  // battle-cadence notable in a shell). The hall stages the discriminating
+  // pair (the scythe court's staging law): same-beat beside varied-beat,
+  // pips on every body, both payoffs naming rules a build can take.
+  // Deliberately neither boss nor hoard (the courser's pair law).
+  strand_drummer: {
+    id: 'strand_drummer', name: 'Strand Drummer',
+    color: '#d8a06a', shape: 'oval', radius: 10, material: 'chitin', look: 'strand_drummer',
+    base: { life: 26, moveSpeed: 110, accuracy: 88, armor: 22, mana: 0 },
+    mods: [mod('combo_drumbeat', 'flat', 1)],
+    skills: ['claw'],
+    xp: 8,
+    faction: 'beast', tags: ['beast'],
+    scaleVariance: [0.9, 1.15],
+    detection: 0.9,
+    brain: { type: 'basic' },
+  },
+
+  // THE CHAINWRIGHT — the track fabric kept turning (the Chainworks,
+  // steppes). Hell's marches abandoned the works; the wright never stopped
+  // winding them. Every blade in the hall is HIS clockwork (the lanes wear
+  // his ownerTag — the Winter King's court law): the harrow circuit grinds
+  // its carved groove, the shuttle sled rests and runs on its pause
+  // cadence, and the sweeper grain CARRIES a caught body around the route
+  // toward the stake rows that collect what arrives at speed. The wright
+  // himself is only the works' anvil-tender — fight him, and the wheel is
+  // the second opponent.
+  chainwright: {
+    id: 'chainwright', name: 'Chainwright',
+    color: '#8a4a2e', shape: 'octagon', radius: 18, look: 'chainwright',
+    heft: 1.8, boss: true,
+    tag: 'chainwright', post: true, // the wheel IS the post — he keeps his works
+    base: { life: 420, moveSpeed: 90, accuracy: 104, armor: 55, mana: 45, manaRegen: 4, poise: 90 },
+    mods: [mod('fireRes', 'flat', 0.5)],
+    skills: ['heavy_strike', 'ground_slam'],
+    xp: 230, loot: 'lair_hoard',
+    faction: 'demon',
+    brain: {
+      type: 'juggernaut', enrage: 0.4,
+      behavior: { castArc: 0.6, reaction: [0.3, 0.6] },
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------

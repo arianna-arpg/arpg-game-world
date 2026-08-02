@@ -9213,6 +9213,49 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'irisEye', x: 0.32, scale: 0.6, color: '#bfe8e0' },
     ],
   },
+
+  // ============================= THE HOMED KIN, WAVE NINE (the lairs)
+  /** THE DRUMCLAW PATRIARCH: the fiddler's asymmetry at patriarch scale —
+   *  the ordinary pair kept for the rap, and ONE arm grown into a war-drum
+   *  mallet (raptorArms side 1 — the asymmetric-build lane). The beat pips
+   *  are the promise; the claws keep it (twin measures: two different
+   *  blows, back to back). */
+  drumclaw_patriarch: {
+    parts: [
+      { kind: 'carapace', scale: 1.1 },
+      { kind: 'legs', scale: 1.05, params: { n: 6 } },
+      { kind: 'pincers', scale: 0.85 },
+      { kind: 'raptorArms', scale: 1.3, params: { side: 1, len: 1.0, fold: 0.8 } },
+      { kind: 'eyestalks', x: 0.32, scale: 0.85 },
+    ],
+    live: [{ kind: 'beatPips', x: -0.6, color: '#e8906a', scale: 0.95, params: { n: 2 } }],
+  },
+  /** THE STRAND DRUMMER: a knee-high fiddler in the patriarch's exact
+   *  silhouette at a fraction of the scale — the family resemblance is the
+   *  lesson plan (same body, same raised arm, the OTHER grammar: the same
+   *  rap, thrice). */
+  strand_drummer: {
+    parts: [
+      { kind: 'carapace', scale: 0.9 },
+      { kind: 'legs', scale: 0.95, params: { n: 6 } },
+      { kind: 'pincers', scale: 0.8 },
+      { kind: 'raptorArms', scale: 0.9, params: { side: 1, len: 0.8, fold: 0.7 } },
+      { kind: 'eyestalks', scale: 0.75 },
+    ],
+    live: [{ kind: 'beatPips', x: -0.55, color: '#d8a05a', scale: 0.85, params: { n: 3 } }],
+  },
+  /** THE CHAINWRIGHT: hell's anvil-tender — horned, chain-hung, the maul
+   *  shouldered like a verdict. The works behind him are the rest of the
+   *  silhouette (the track fabric supplies the blades). */
+  chainwright: {
+    parts: [
+      { kind: 'pauldrons', scale: 1.1 },
+      { kind: 'chains', rot: 0.4, params: { n: 3 } },
+      { kind: 'horns', x: 0.26, scale: 1.1 },
+      { kind: 'hammer', scale: 1.2 },
+      { kind: 'eyes', color: '#ff8a3a', params: { spread: 0.3, dist: 0.52, size: 0.09 } },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

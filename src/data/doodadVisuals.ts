@@ -2462,6 +2462,37 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -2, color: '#9fe8d8', intensity: 0.28, flicker: 1.8 },
   },
+  // Wave nine — the homed kin's two doors (data/lairs.ts wave nine).
+  // The drummed burrow at the dune lip: sand-pale, shell-ribbed, and if you
+  // stand still you can feel the measure through your boots.
+  drum_burrow: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#b8a274', edge: '#d8c890', material: 'stone',
+      glow: '#e8906a', throat: '#141008', rubble: {},
+      label: 'the Drumshell',
+    },
+    light: { radius: -2, color: '#e8906a', intensity: 0.2, flicker: 2.6 },
+  },
+  // The works gate on hell's marches: iron-ribbed charcoal, chain-hung,
+  // breathing forge heat that never went out.
+  windlass_gate: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#33231c', edge: '#5a3a28', material: 'metal',
+      glow: '#ff8a3a', throat: '#0c0502', rubble: {}, tumble: 1,
+      label: 'the Chainworks',
+    },
+    light: { radius: -2, color: '#ff8a3a', intensity: 0.3, flicker: 2.2 },
+  },
+  // The chain harrow — the Chainworks' lane sled (data/lairs.ts wave nine):
+  // the parametric beam painter as a spiked iron drag-bar, ember-edged. Its
+  // beamHw/beamHh mirror the rider's rect surface EXACTLY (the agreement
+  // contract, validation-pinned — the drawn body IS the tested rect).
+  chain_harrow: {
+    painter: 'rimeFlail', order: 46,
+    params: { beamHw: 30, beamHh: 12, body: '#4a3428', edge: '#ff8a3a' },
+  },
 
   // --- Ritual + event set-pieces -------------------------------------------
   tentacle_field: { painter: 'tentacleField', order: 56 },

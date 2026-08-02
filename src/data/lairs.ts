@@ -26,12 +26,18 @@
 // ---------------------------------------------------------------------------
 
 import { LAIR_CFG, lairOf, registerLair } from '../engine/lairs';
-import { landmarkDefs, registerDoodadRule, registerLandmark, type DoodadKind } from '../engine/levelgen';
+import {
+  landmarkDefs, layTraveledWay, registerDoodadRule, registerLandmark,
+  registerLandmarkBuilder, type DoodadKind,
+} from '../engine/levelgen';
 import { registerDormantTag, registerRouseRule } from '../engine/ai';
 import { registerSidezone, sidezoneOf } from './sidezones';
 import { mintCave } from '../engine/worldgen';
 import { registerTenantKind, tenantKindOf } from '../engine/massif';
 import { registerZoneInfoSource } from '../world/zoneInfo';
+import { linePath, registerTrackRider, ringPath } from '../engine/tracks';
+import { Mask, disc } from '../engine/genkit';
+import { registerGenPin } from '../engine/genPins';
 import { vec } from '../core/math';
 import type { World } from '../engine/world';
 
@@ -1387,5 +1393,236 @@ registerLair({
     place: 'surface',
     level: { from: 6, fadeIn: 2 },
     chance: 0.18,
+  },
+});
+
+// ============================================================================
+// WAVE NINE — THE HOMED KIN continue: two more countries claimed (the
+// archipelago's beach/isle pair and hell's outer marches), the wave-eight
+// law verbatim — new residents (data/monsters.ts), ONE landed fabric per
+// den as its whole argument, and the Scorpion Well's undefined-tileset mint
+// lane (the face rolls from the strata pool under the parent's anchor —
+// zero tileset rows). Garden ground is deferred to wave ten by commission.
+// ============================================================================
+
+// === THE DRUMSHELL (the combo grammar's tide-hall) ===========================
+// Beach/isle surface: a drummed burrow at the dune lip, going down into a
+// shell-chambered hall where the surf keeps time. The law is THE COMBO
+// GRAMMAR (engine/sequence.ts): every body inside DRUMS a rule players can
+// earn — the Patriarch's two unmatched claws close TWIN MEASURES (two
+// different blows back-to-back; the Red Cadence wing's notable), his
+// congregation raps DRUMBEAT (the same blow, thrice; battle cadence), and
+// the beat pips over every shell say who keeps which time before a single
+// measure lands. The discriminating pair staged in one hall (the scythe
+// court's staging law): varied-beat beside same-beat — watching the hall
+// IS the tutorial, and the payoff text over the duel names the rule.
+
+registerDoodadRule('drum_burrow', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'drum_burrow_site', builder: 'den_mouth', size: [190, 260],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'drum_burrow',
+    dress: [
+      { kind: 'kelp_wrack', count: [2, 4], radius: [12, 18] },
+      { kind: 'sea_rock', count: [1, 3], radius: [14, 22] },
+      { kind: 'bone_pile', count: [1, 2], radius: [10, 15] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'drum_burrow',
+  dwell: 0.7,
+  ledgerOnEnter: 'drumshell_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, undefined, {
+      name: 'the Drumshell',
+      objective: { kind: 'boss', id: 'drumclaw_patriarch' },
+      noDeeper: true,
+    });
+    // The drum circle (authored tenancy): the congregation rapping the
+    // OTHER grammar around the patriarch's varied measure, and the shore's
+    // ordinary shells underfoot — the front-guard critter and the skitter
+    // that never learned an instrument.
+    def.fauna = [
+      { id: 'strand_drummer', chance: 1, count: [2, 4] },
+      { id: 'shore_crab', chance: 0.7, count: [2, 4] },
+      { id: 'tide_skitter', chance: 0.4, count: [1, 3] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'drumshell',
+  landmark: 'drum_burrow_site',
+  seat: {
+    biomes: ['beach', 'isle'],
+    place: 'surface',
+    level: { from: 5, fadeIn: 2 },
+    chance: 0.16,
+  },
+});
+
+// === THE CHAINWORKS (the track fabric's turning den) =========================
+// Steppes surface (hell's outer marches — the Underworld's scorched plains
+// of abandoned hellworks): an iron works gate into a hall the legions left
+// and the Chainwright never stopped winding. The law is THE TRACK FABRIC
+// (engine/tracks.ts) — the faces the Glacial Heart doesn't show: a chained
+// HARROW CIRCUIT grinding its carved groove (loop lane, clockwork-pure
+// poses), a shuttle sled resting and running on its pause cadence
+// (pingpong + dwell plateaus), and THE SWEEPER GRAIN (push 'along') that
+// CARRIES a caught body around the route toward the stake rows collecting
+// what arrives at speed (gore_stakes' minSpeed gate — the launch and the
+// collector are one composed argument). Every lane wears the wright's
+// ownerTag (the Winter King's court law): the wheel is his second hand.
+
+// The lane sled: a spiked iron drag-bar on the works' chains. Its rect
+// surface mirrors the chain_harrow visual's beam params EXACTLY (the
+// agreement contract, validation-pinned); the works spare their own crew
+// (notFactions — the shear disc's rimebound law).
+registerTrackRider({
+  id: 'chain_harrow',
+  kind: 'chain_harrow',
+  surface: { kind: 'rect', hw: 30, hh: 12 },
+  orient: 'lane',
+  payload: {
+    hit: { base: 20, perLevel: 6, type: 'physical' },
+    status: { id: 'bleed', chance: 0.5 },
+    impulse: 430,
+    push: 'along',
+    icdSec: 0.8,
+    notFactions: ['demon'],
+  },
+  warnAhead: 150,
+  color: '#ff8a3a',
+});
+
+// The works floor: a builder in the glacial heart's idiom (ordinary
+// TrackSpecs any landmark may author), registered from data — no engine
+// edits. Circuit + shuttle + stakes + hub braziers; every count a param.
+registerLandmarkBuilder('windlass_ring', (b) => {
+  const { rng, r, ctx } = b;
+  const cx = b.center.x, cy = b.center.y;
+  // THE CIRCUIT — the harrow ring on its carved groove.
+  const laneR = r * (b.param('laneFrac', 0.62) as number);
+  const circuitRiders = b.param('circuitRiders', 3) as number;
+  const circuitPts = ringPath(cx, cy, laneR, 28, rng.range(0, Math.PI * 2));
+  (ctx.tracks ??= []).push({
+    path: circuitPts, closed: true, mode: 'loop',
+    speed: b.param('circuitSpeed', 80) as number,
+    riders: Array.from({ length: circuitRiders },
+      (_, i) => ({ kind: 'chain_harrow', phase: i / circuitRiders })),
+    groove: true, ownerTag: 'chainwright',
+  });
+  layTraveledWay(ctx, [...circuitPts, circuitPts[0]],
+    { kind: 'track_groove', band: [13, 17], step: 26, overgrowth: 0 });
+  // THE SHUTTLE — one sled crossing the works on a chord, resting at each
+  // end (the cadence-gate face: pauses are part of the lane's language).
+  const sa = rng.range(0, Math.PI * 2);
+  const off = laneR * 0.38, reach = laneR * 0.82;
+  const px = Math.cos(sa + Math.PI / 2) * off, py = Math.sin(sa + Math.PI / 2) * off;
+  const shuttlePts = linePath(
+    vec(cx + px - Math.cos(sa) * reach, cy + py - Math.sin(sa) * reach),
+    vec(cx + px + Math.cos(sa) * reach, cy + py + Math.sin(sa) * reach));
+  (ctx.tracks ??= []).push({
+    path: shuttlePts, mode: 'pingpong',
+    speed: b.param('shuttleSpeed', 130) as number,
+    pauses: [{ at: 0, sec: 1.2 }, { at: 1, sec: 1.2 }],
+    riders: [{ kind: 'chain_harrow' }],
+    groove: true, ownerTag: 'chainwright',
+  });
+  layTraveledWay(ctx, shuttlePts,
+    { kind: 'track_groove', band: [13, 17], step: 26, overgrowth: 0 });
+  // THE STAKE ROWS — the collectors, seated OUTSIDE the circuit where the
+  // sweeper grain delivers (speed-gated: careful feet pick through free).
+  const stakeN = rng.int(...(b.param('stakes', [4, 6]) as [number, number]));
+  const placed: { x: number; y: number }[] = [];
+  for (let tries = 0; placed.length < stakeN && tries < 80; tries++) {
+    const a = rng.range(0, Math.PI * 2);
+    const rr = rng.range(laneR + 44, Math.max(laneR + 52, r * 0.92));
+    const p = { x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr };
+    if (placed.some(q => Math.hypot(q.x - p.x, q.y - p.y) < 90)) continue;
+    placed.push(p);
+    ctx.doodads.push({ pos: vec(p.x, p.y), radius: rng.range(12, 15), kind: 'gore_stakes', rot: rng.range(0, Math.PI * 2) });
+  }
+  // THE HUB — the wright's forge-light at the eye of the wheel.
+  for (let i = 0, k = rng.int(1, 2); i < k; i++) {
+    const a = rng.range(0, Math.PI * 2), d = rng.range(20, Math.max(24, laneR - 70));
+    ctx.doodads.push({ pos: vec(cx + Math.cos(a) * d, cy + Math.sin(a) * d), radius: 11, kind: 'brazier' });
+  }
+  const floor = Mask.forRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+  disc(floor, cx, cy, r * 0.88);
+  b.interior = floor;
+});
+
+// The ring is named by NO static roll — only the Chainworks mint closure
+// appends it — so the orphan census reads it through an ENGINE PIN (the
+// sanctioned road for references no data row carries), and the call sites
+// below USE the pin (never a literal beside it).
+const WINDLASS_RING = registerGenPin('landmark', 'windlass_ring',
+  'the Chainworks den mint appends its wheel at chance 1 (data/lairs.ts wave nine)');
+
+registerLandmark({
+  id: WINDLASS_RING, builder: 'windlass_ring', size: [210, 270],
+  clearSite: true, poi: true, mustReach: true,
+});
+
+registerDoodadRule('windlass_gate', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'windlass_gate_site', builder: 'den_mouth', size: [190, 260],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'windlass_gate',
+    dress: [
+      { kind: 'brazier', count: [1, 2], radius: [10, 12] },
+      { kind: 'rock', count: [2, 4], radius: [12, 20] },
+      { kind: 'bone_pile', count: [1, 3], radius: [10, 15] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'windlass_gate',
+  dwell: 0.7,
+  ledgerOnEnter: 'chainworks_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, undefined, {
+      // ONE GREAT HALL (the descent's forced-layout precedent): a wheel
+      // needs a floor — 'plains' is the open convex cavern, so the ring's
+      // ground exists on EVERY mint (a rooms-warren's walk lattice starves
+      // the landmark sitter; measured, not guessed). The FACE still rolls
+      // from the strata pool — palette, packs and name stay the country's.
+      layoutType: 'plains',
+      name: 'the Chainworks',
+      objective: { kind: 'boss', id: 'chainwright' },
+      noDeeper: true,
+    });
+    // The works floor is AUTHORED TENANCY at landmark grain: the windlass
+    // ring rolls at chance 1 (appended — the rolled face keeps its own
+    // rows), so every mint of this den turns its wheel.
+    def.landmarks = [...(def.landmarks ?? []), { landmark: WINDLASS_RING, chance: 1 }];
+    // The works' crew (the NEST_FAUNA lesson): the hounds the legions
+    // chained here and the vermin every furnace breeds — all demon-kin,
+    // all spared by their own blades (the payload's notFactions).
+    def.fauna = [
+      { id: 'hellhound', chance: 1, count: [2, 3] },
+      { id: 'imp', chance: 0.8, count: [2, 4] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'chainworks',
+  landmark: 'windlass_gate_site',
+  seat: {
+    biomes: ['steppes'],
+    place: 'surface',
+    level: { from: 12, fadeIn: 3 },
+    chance: 0.16,
   },
 });
