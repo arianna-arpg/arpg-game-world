@@ -1691,13 +1691,13 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
       collapse: { damage: { pctMaxLife: 0.12 } } } },
   gas_pod: { overlap: 'inert', spacing: 26,
     brittle: { on: ['hit', 'touch'], text: 'the pod ruptures!', color: '#9fb95a',
-      fume: { radius: 78, linger: 3.2, dmgMult: 0.8, color: '#9fb95a' } } },
+      fume: { radius: 78, linger: 3.2, dmgMult: 0.8, color: '#9fb95a', fx: 'sporeburst' } } },
   burst_sac: { overlap: 'inert', spacing: 24,
     brittle: { on: ['hit', 'near'], reach: 30, text: 'the sac bursts!', color: '#b08ad8',
-      fume: { radius: 70, linger: 2.8, dmgMult: 0.7, color: '#b08ad8' } } },
+      fume: { radius: 70, linger: 2.8, dmgMult: 0.7, color: '#b08ad8', fx: 'sporeburst' } } },
   puffcap_cluster: { overlap: 'inert', spacing: 18,
     brittle: { on: ['touch', 'hit'], orbChance: 0.12, text: 'puff!', color: '#c8b06a',
-      fume: { radius: 54, linger: 2.0, dmgMult: 0.5, delay: 0.3, color: '#c8b06a' } } },
+      fume: { radius: 54, linger: 2.0, dmgMult: 0.5, delay: 0.3, color: '#c8b06a', fx: 'sporeburst' } } },
   burial_urn: { overlap: 'inert', spacing: 22,
     brittle: { on: ['hit', 'touch'], orbChance: 0.55, gemChance: 0.12, text: 'the urn shatters!', color: '#b8a890',
       spawn: { monster: 'skeleton_warrior', count: [1, 2], chance: 0.22, text: 'the dead wake!' } } },
@@ -1758,7 +1758,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   peat_mound: { overlap: 'solid', blocksMove: true, spacing: 28, forbidOn: ['water', 'lava', 'chasm'] },
   venom_bloom: { overlap: 'inert', spacing: 24,
     brittle: { on: ['hit', 'near'], reach: 32, text: 'the bloom bursts!', color: '#a8d05a',
-      fume: { skillId: 'venom_seep', radius: 62, linger: 3.4, dmgMult: 0.8, color: '#a8d05a' } } },
+      fume: { skillId: 'venom_seep', radius: 62, linger: 3.4, dmgMult: 0.8, color: '#a8d05a', fx: 'sporeburst' } } },
   // The parity-pass wayside kit: ley furniture and one honest hazard. The
   // snare is the trapper's craft left in the world — pure BrittleSpec, the
   // collapse damage billing whoever springs it (rotten_bridge's grammar).
@@ -1910,7 +1910,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3, veil: {},
     forbidOn: ['water', 'lava', 'chasm'],
     brittle: { on: ['hit'], text: 'the stone tree shatters!', color: '#b8b2a4', orbChance: 0.06,
-      fume: { skillId: 'stone_shards', radius: 54, linger: 2.2, tickInterval: 0.4, dmgMult: 0.55, color: '#9a948a' } },
+      fume: { skillId: 'stone_shards', radius: 54, linger: 2.2, tickInterval: 0.4, dmgMult: 0.55, color: '#9a948a', fx: 'shatter' } },
     resonance: {} },
   petrified_elder: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 80,
     occlude: { pad: 14, alpha: 0.25 }, bodyScale: 0.22, veil: {},
@@ -2292,7 +2292,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // pop it at range or wear the belch.
   gas_polyp:    { overlap: 'inert', spacing: 44,
     brittle: { on: ['hit', 'near'], reach: 34, text: 'the polyp belches!', color: '#a8b86a',
-      fume: { radius: 72, linger: 3.0, dmgMult: 0.7, color: '#a8b86a' } } },
+      fume: { radius: 72, linger: 3.0, dmgMult: 0.7, color: '#a8b86a', fx: 'sporeburst' } } },
   villus_bed:   { overlap: 'ground', walkOnly: true },
   gut_knuckle:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 52, forbidOn: ['water', 'lava', 'chasm'] },
   // Burst the eyes and the wall stops watching: a SOLID brittle (the

@@ -165,7 +165,15 @@ export interface NoticeW { text: string; color: string; size: number; ch: string
 /** A pickup-feed row — `s` is the owning seat id; each client lists only its
  *  own seat's rows on its flank. */
 export interface PickupW { s: string; l: string; c: string; n: number; born: number; }
-export interface FlashW { p: Vec2W; radius: number; color: string; life: number; maxLife: number; }
+/** THE EFFECT VOICE ON THE WIRE (the tell-wire idiom): `fx` is a registry
+ *  KIND — the client rebuilds the painter from its OWN effectVoice registry,
+ *  never from shipped draw state — and `bolt`/`meteor` carry the lightning/
+ *  demon-sky flags so those skies stop landing generic on remote seats. All
+ *  three absent (an old host, an unkeyed flash) = the classic ring, byte-
+ *  identical to the pre-wire client. Other flash costumes (beam, haze, arc,
+ *  shapes) remain deliberately unshipped — MVP fidelity, renderer-guarded. */
+export interface FlashW { p: Vec2W; radius: number; color: string; life: number; maxLife: number;
+  fx?: string; bolt?: boolean; meteor?: boolean; }
 /** A death-burst telegraph (coalesce gather → tracking orb). RENDER-ONLY: the client
  *  never simulates these (homing is host-authoritative via nearestSeatPos over the seats);
  *  it just draws the host's state so the remote seat gets the same escape window. Carries
@@ -649,7 +657,8 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind })),
     no: world.notices.map(n => ({ text: n.text, color: n.color, size: n.size, ch: n.channel, born: n.bornAt })),
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
-    flashes: world.flashes.map(f => ({ p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife })),
+    flashes: world.flashes.map(f => ({ p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
+      fx: f.fx, bolt: f.bolt || undefined, meteor: f.meteor || undefined })),
     deathBursts: world.deathBurstsView().map(b => ({
       p: v2(b.pos), ph: (b.phase === 'gather' ? 0 : 1) as 0 | 1, r: b.radius, c: b.color,
       arm: (b.arming ? 1 : 0) as 0 | 1, t: Math.round(b.t * 100) / 100, co: b.coalesce, trail: b.trail.map(v2),
@@ -1028,7 +1037,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k })) as unknown as World['texts'];
   world.notices = (snap.no ?? []).map(n => ({ text: n.text, color: n.color, size: n.size, channel: n.ch, bornAt: n.born }));
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
-  world.flashes = snap.flashes.map(f => ({ pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife })) as unknown as World['flashes'];
+  world.flashes = snap.flashes.map(f => ({ pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
+    fx: f.fx, bolt: f.bolt, meteor: f.meteor })) as unknown as World['flashes'];
   // Render-only telegraph: the client draws these but never advances them (no updateDeathBursts
   // runs client-side). Only the fields drawDeathBursts touches are carried; sim fields are inert.
   // `team` rides tm (THE SPARED RING's read): absent on an old host's wire it stays undefined,

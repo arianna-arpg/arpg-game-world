@@ -1183,6 +1183,40 @@ export const VIS_CFG = {
       /** Flicked flecks per exit. */
       flecks: 6,
     },
+    /** 'comet' — a falling body's landing (icy comet, starfall shard):
+     *  trail + cold bloom + glints, all off the flash's own tint. */
+    comet: {
+      scale: 1.0,
+      /** Sky height (px) the trail plunges from. */
+      height: 460,
+      /** Max sideways lean of the fall line (fraction of height; seeded
+       *  per strike so a shower never rains identical copies). */
+      lean: 0.28,
+      /** Flecks shed along the dissolving trail. */
+      sparks: 6,
+      /** Crystalline ticks radiating from the impact. */
+      glints: 7,
+    },
+    /** 'shatter' — stone breaking (the petrified tree): crack star +
+     *  spinning facet chips + settling dust; no gas, no hot core. */
+    shatter: {
+      scale: 1.0,
+      /** Facet chips per break (seeded — same flight every frame). */
+      chips: 8,
+      /** How far chips sag under gravity (px) across their flight. */
+      droop: 9,
+      /** Peak alpha of the low settling dust breath. */
+      dustAlpha: 0.3,
+    },
+    /** 'plunge' — a small body entering water (the reed frog's dive):
+     *  ripples + thrown droplets, pond-toned, capped tiny. */
+    plunge: {
+      /** Hard cap on the painter's reach (px) — the scramble law: the
+       *  moment's weight is a frog's, whatever the flash stamps. */
+      maxRadius: 22,
+      /** Droplets thrown up by the entry. */
+      drops: 5,
+    },
   },
 } as const;
 

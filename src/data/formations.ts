@@ -759,14 +759,14 @@ registerDoodadRule('powder_keg', {
   overlap: 'inert', spacing: 24,
   brittle: {
     on: ['hit'], text: 'the keg goes up!', color: '#ff8a4a',
-    fume: { skillId: 'infernal_rift', radius: 80, linger: 0.8, dmgMult: 2.2, delay: 0.65, color: '#ff8a4a' },
+    fume: { skillId: 'infernal_rift', radius: 80, linger: 0.8, dmgMult: 2.2, delay: 0.65, color: '#ff8a4a', fx: 'blast' },
   },
 });
 registerDoodadRule('munition_cache', {
   overlap: 'inert', spacing: 26,
   brittle: {
     on: ['hit'], orbChance: 0.3, gemChance: 0.12, text: 'the charges split!', color: '#e8b060',
-    fume: { skillId: 'infernal_rift', radius: 52, linger: 0.6, dmgMult: 1.1, delay: 0.5, color: '#ff9a5a' },
+    fume: { skillId: 'infernal_rift', radius: 52, linger: 0.6, dmgMult: 1.1, delay: 0.5, color: '#ff9a5a', fx: 'blast' },
   },
 });
 registerDoodadRule('shot_stack', {

@@ -237,3 +237,191 @@ registerEffectVoice('scramble', (ctx, f, t) => {
   ctx.stroke();
   ctx.lineCap = 'butt';
 });
+
+// --- THE SECOND WAVE (2026-08-02, the ratified census) ----------------------
+
+/** 'comet' — a falling BODY's landing (the blizzard's icy comet, starfall's
+ *  shard): a streak plunging from the upper sky that burns out top-down once
+ *  the body lands, a cold bright bloom at the impact, and seeded glints
+ *  scattering off it. Entirely tinted from the flash's own color — an ice
+ *  comet lands blue, a star lands pale — where the METEOR flag stays the
+ *  demon storm's own fiery voice and 'bolt' stays the lightning jag; this
+ *  painter is for the skies that FALL rather than strike. No smoke, no
+ *  debris chips (the blast's report), no jag. */
+registerEffectVoice('comet', (ctx, f, t) => {
+  const cfg = VIS_CFG.effectVoice.comet;
+  const seed = flashSeed(f);
+  const k = 1 - t;
+  const R = f.radius * cfg.scale;
+  // The trail: seeded per-strike lean so a shower never reads as copies.
+  const H = cfg.height;
+  const lean = (sv(seed, 0, 10) - 0.5) * 2 * cfg.lean;
+  const sx = f.pos.x + lean * H, sy = f.pos.y - H;
+  // The trail burns out FROM THE TOP as the flash dies — the body has
+  // landed; what lingers is the low end of its path, then nothing.
+  const burn = Math.min(1, k * 1.25);
+  const tx = sx + (f.pos.x - sx) * burn, ty = sy + (f.pos.y - sy) * burn;
+  if (burn < 0.98) {
+    ctx.lineCap = 'round';
+    ctx.globalAlpha = Math.min(1, t * 1.4);
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(f.pos.x, f.pos.y);
+    ctx.strokeStyle = f.color; ctx.lineWidth = 5.5; ctx.stroke();          // tinted wake
+    ctx.strokeStyle = shade(f.color, 0.6); ctx.lineWidth = 2; ctx.stroke(); // bright core
+    // Shed sparks: seeded flecks peeling off the trail line, drifting a
+    // touch off-axis as the wake dissolves.
+    for (let i = 0; i < cfg.sparks; i++) {
+      const along = sv(seed, i, 11);
+      if (along < burn) continue; // that stretch of trail has burnt out
+      const px = sx + (f.pos.x - sx) * along, py = sy + (f.pos.y - sy) * along;
+      const drift = (sv(seed, i, 12) - 0.5) * 26 * k;
+      ctx.fillStyle = withAlpha(shade(f.color, 0.45), t * 0.7);
+      ctx.beginPath();
+      ctx.arc(px + drift, py + k * 10, 1 + 1.6 * sv(seed, i, 13), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.lineCap = 'butt';
+  }
+  // The landing bloom: a cold bright core off the flash's own tint (no warm
+  // hardcode — the tint IS the identity), dying fast like any impact.
+  const coreR = R * (0.4 + 0.6 * Math.min(1, k * 2.2));
+  const g = ctx.createRadialGradient(f.pos.x, f.pos.y, 0, f.pos.x, f.pos.y, Math.max(1, coreR));
+  g.addColorStop(0, withAlpha(shade(f.color, 0.7), t * 0.9));
+  g.addColorStop(0.4, withAlpha(shade(f.color, 0.2), t * 0.6));
+  g.addColorStop(1, withAlpha(f.color, 0));
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(f.pos.x, f.pos.y, Math.max(1, coreR), 0, Math.PI * 2);
+  ctx.fill();
+  // Impact glints: crystalline ticks radiating where it struck.
+  ctx.lineCap = 'round';
+  for (let i = 0; i < cfg.glints; i++) {
+    const ang = sv(seed, i, 14) * Math.PI * 2;
+    const reach = R * (0.45 + 0.75 * sv(seed, i, 15));
+    const ease = 1 - (1 - k) * (1 - k);
+    const d1 = reach * (0.3 + 0.7 * ease);
+    const d0 = Math.max(2, d1 - reach * 0.22);
+    ctx.strokeStyle = withAlpha(shade(f.color, 0.5), t * 0.8);
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(f.pos.x + Math.cos(ang) * d0, f.pos.y + Math.sin(ang) * d0);
+    ctx.lineTo(f.pos.x + Math.cos(ang) * d1, f.pos.y + Math.sin(ang) * d1);
+    ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+});
+
+/** 'shatter' — stone letting go (the petrified tree's shards): a crack-star
+ *  that exists only at the first instant, then angular facet CHIPS spinning
+ *  out flat and drooping under their own weight, over a low settling dust
+ *  breath. No gas veil, no rising motes (spores rise — stone falls), and no
+ *  hot core (nothing here burns): the whole voice is mineral. */
+registerEffectVoice('shatter', (ctx, f, t) => {
+  const cfg = VIS_CFG.effectVoice.shatter;
+  const seed = flashSeed(f);
+  const k = 1 - t;
+  const ease = 1 - (1 - k) * (1 - k);
+  const R = f.radius * cfg.scale;
+  // The crack star: the break itself, gone almost immediately.
+  const crackA = Math.max(0, (t - 0.62) / 0.38);
+  if (crackA > 0.01) {
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = withAlpha(shade(f.color, -0.45), crackA * 0.85);
+    ctx.lineWidth = 1.8;
+    for (let i = 0; i < 5; i++) {
+      const ang = sv(seed, i, 16) * Math.PI * 2;
+      const len = R * (0.25 + 0.35 * sv(seed, i, 17));
+      const midA = ang + (sv(seed, i, 18) - 0.5) * 0.7;
+      ctx.beginPath();
+      ctx.moveTo(f.pos.x, f.pos.y);
+      ctx.lineTo(f.pos.x + Math.cos(midA) * len * 0.55, f.pos.y + Math.sin(midA) * len * 0.55);
+      ctx.lineTo(f.pos.x + Math.cos(ang) * len, f.pos.y + Math.sin(ang) * len);
+      ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  }
+  // The settling dust: one low faint breath at the seat — it stays LOW
+  // (dust off dry stone settles; it never plumes like a spore veil).
+  const dustA = Math.min(t, k) * 2 * cfg.dustAlpha;
+  if (dustA > 0.01) {
+    ctx.strokeStyle = withAlpha(shade(f.color, -0.35), dustA);
+    ctx.lineWidth = Math.max(2, R * 0.16);
+    ctx.beginPath();
+    ctx.arc(f.pos.x, f.pos.y + 3, R * (0.3 + 0.45 * ease), Math.PI * 0.1, Math.PI * 0.9);
+    ctx.stroke();
+  }
+  // The chips: seeded angular facets spinning outward FLAT, each drooping
+  // under gravity as its flight decelerates — stone has weight.
+  for (let i = 0; i < cfg.chips; i++) {
+    const ang = sv(seed, i, 19) * Math.PI * 2;
+    const reach = R * (0.4 + 0.85 * sv(seed, i, 20));
+    const d1 = reach * (0.22 + 0.78 * ease);
+    const cx = f.pos.x + Math.cos(ang) * d1;
+    const cy = f.pos.y + Math.sin(ang) * d1 + cfg.droop * ease * ease * (0.5 + sv(seed, i, 21));
+    const rot = sv(seed, i, 22) * Math.PI * 2 + k * (2 + 3 * sv(seed, i, 23)) * (i % 2 ? 1 : -1);
+    const s = 1.8 + 2.6 * sv(seed, i, 24);
+    // Facet tints off the flash's own stone color — lit face, raw face, shadow face.
+    const facet = i % 3;
+    ctx.fillStyle = withAlpha(
+      facet === 0 ? shade(f.color, 0.3) : facet === 1 ? f.color : shade(f.color, -0.35),
+      t * 0.85);
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(rot) * s * 1.4, cy + Math.sin(rot) * s * 1.4);
+    ctx.lineTo(cx + Math.cos(rot + 2.3) * s, cy + Math.sin(rot + 2.3) * s);
+    ctx.lineTo(cx + Math.cos(rot + 4.4) * s * 0.8, cy + Math.sin(rot + 4.4) * s * 0.8);
+    ctx.closePath();
+    ctx.fill();
+  }
+});
+
+/** 'plunge' — a small body taking to the WATER (the reed frog's dive): ripple
+ *  rings widening from the entry point and a few droplets thrown up that fall
+ *  back in. WATER-TONED by design — the slipAway flash arrives wildlife-gold,
+ *  and like 'scramble' owning its leaf green this voice owns its pond blue
+ *  (the flash tint keeps one seat: the entry glimmer). Hard-capped small: the
+ *  moment's weight is a frog's, whatever radius the flash stamps. */
+registerEffectVoice('plunge', (ctx, f, t) => {
+  const cfg = VIS_CFG.effectVoice.plunge;
+  const seed = flashSeed(f);
+  const k = 1 - t;
+  const ease = 1 - (1 - k) * (1 - k);
+  const R = Math.min(f.radius, cfg.maxRadius); // small and quiet, by law
+  const water = '#6ab8d8';
+  // The entry glimmer: the one seat the stamped tint keeps — a brief soft
+  // wink where the body went under.
+  ctx.fillStyle = withAlpha(shade(f.color, 0.25), t * t * 0.4);
+  ctx.beginPath();
+  ctx.arc(f.pos.x, f.pos.y, Math.max(1, R * 0.3 * t), 0, Math.PI * 2);
+  ctx.fill();
+  // The ripples: staggered rings widening and thinning — the pond closing
+  // over the dive, told twice more as the rings run out.
+  for (let ring = 0; ring < 3; ring++) {
+    const start = ring * 0.22;
+    const e = Math.max(0, (ease - start) / (1 - start));
+    if (e <= 0) continue;
+    const rr = R * (0.22 + 0.78 * e);
+    ctx.strokeStyle = withAlpha(ring % 2 ? shade(water, 0.3) : water, t * (0.6 - ring * 0.14));
+    ctx.lineWidth = Math.max(1, 2.2 - ring * 0.6);
+    ctx.beginPath();
+    ctx.arc(f.pos.x, f.pos.y, rr, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  // The droplets: thrown UP off the entry, arcing over and falling back —
+  // risen water always comes home.
+  for (let i = 0; i < cfg.drops; i++) {
+    const spread = (sv(seed, i, 25) - 0.5) * 1.9;
+    const ang = -Math.PI / 2 + spread;
+    const reach = R * (0.35 + 0.5 * sv(seed, i, 26));
+    const pace = 0.7 + 0.5 * sv(seed, i, 27);
+    const e = Math.min(1, k * pace * 1.6);
+    const dx = Math.cos(ang) * reach * e;
+    const rise = R * (0.7 + 0.5 * sv(seed, i, 28));
+    const dy = Math.sin(ang) * reach * e * 0.4 - rise * (e - e * e) * 2.2; // parabola: up, over, back in
+    ctx.fillStyle = withAlpha(i % 2 ? shade(water, 0.45) : water, t * 0.8);
+    ctx.beginPath();
+    ctx.arc(f.pos.x + dx, f.pos.y + dy, 1.1 + 1.1 * sv(seed, i, 29), 0, Math.PI * 2);
+    ctx.fill();
+  }
+});

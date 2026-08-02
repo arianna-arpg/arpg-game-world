@@ -789,6 +789,7 @@ export const SKILLS: Record<string, SkillDef> = {
       type: 'storm', count: [2, 2], interval: 0.22, areaRadius: 55, hitRadius: 26,
       castRange: 900, occlusion: 'free',
       telegraph: 0.5, lob: { arc: 0.42 },
+      fx: 'blast', // THE EFFECT VOICE: hellshot_volley's family — a mortar bursts
       impactDress: { kind: 'shell_crater', evapAfter: [30, 60], chance: 0.6 },
     },
     effects: [

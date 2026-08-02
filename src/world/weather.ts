@@ -199,7 +199,7 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     radiance: { mul: 0.55 },
     label: 'Blizzard', color: '#9fc8e8', countMul: 1.15,
     factionMul: { rimebound: 1.6, wild: 1.1 },
-    strike: { skillId: 'icy_comet', radius: 80, telegraph: 0.9, ratePerSec: 0.4 },
+    strike: { skillId: 'icy_comet', radius: 80, telegraph: 0.9, ratePerSec: 0.4, fx: 'comet' },
     rampFrac: 0.25, wind: 0.95,
     skyWeight: { day: 0.5, dusk: 0.8, night: 0.9 },
     birthGeo: { temperature: { max: 0.35 } },
@@ -272,7 +272,7 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     radiance: { floor: 0.32 },
     label: 'Starfall', color: '#9ad4e8', countMul: 1.15,
     factionMul: { elemental: 1.4 },
-    strike: { skillId: 'starfall_shard', radius: 70, telegraph: 0.9, ratePerSec: 0.5 },
+    strike: { skillId: 'starfall_shard', radius: 70, telegraph: 0.9, ratePerSec: 0.5, fx: 'comet' },
     rampFrac: 0.35, wind: 0.15,
     skyWeight: { night: 1.1, dusk: 0.3 },
   },
@@ -285,6 +285,9 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     radiance: { mul: 0.8 },
     label: 'Hellsear', color: '#7de84a', countMul: 1.2,
     factionMul: { demon: 1.35 },
+    // No fx key ON PURPOSE (adjudicated 2026-08-02): the hate_eruption jag
+    // stays the derived lightning tear — a sky-TEAR reads okay jagged, unlike
+    // the blizzard/starfall comets above. The census is closed, not forgotten.
     strike: { skillId: 'hate_eruption', radius: 72, telegraph: 0.85, ratePerSec: 0.45 },
     rampFrac: 0.3, wind: 0.3,
     skyWeight: { night: 0.8, dusk: 0.45 },

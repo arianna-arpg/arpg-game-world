@@ -11758,7 +11758,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.15, drops: 0,
     scaleVariance: [0.8, 1.2],
-    refuge: { kind: 'water', text: 'dives!' },
+    refuge: { kind: 'water', text: 'dives!', fx: 'plunge' },
     brain: {
       type: 'basic',
       morale: { skittish: { radius: 130, duration: [1.0, 1.8] } },
