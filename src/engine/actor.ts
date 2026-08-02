@@ -1258,8 +1258,10 @@ export class Actor {
    *  gathers into a spore/orb before detonating, so the player can escape. */
   deathBurst?: DeathBurstDef;
   /** BOLT-HOLE (MonsterDef.refuge): when routed, run FOR the nearest doodad of
-   *  this kind and slip away on arrival (the frog's dive). */
-  refuge?: { kind: string; seek?: number; text?: string };
+   *  this kind and slip away on arrival (the frog's dive). `fx` names the
+   *  exit's EFFECT VOICE (render/vis/effectVoice.ts — the squirrel's
+   *  'scramble' leaf-flick); unset keeps the classic soft flash. */
+  refuge?: { kind: string; seek?: number; text?: string; fx?: string };
   /** THE SQUISH FABRIC (engine/squish.ts): this body dies UNDERFOOT —
    *  normalized spec stamped at spawn from MonsterDef.squish; the tread
    *  sweep and the crowd-separation exemption both read this field. */

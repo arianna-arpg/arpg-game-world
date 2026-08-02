@@ -1075,6 +1075,10 @@ interface Zone {
   /** IMPACT DRESS (ImpactDressSpec): the detonation leaves a drying pock
    *  (runtime doodad + Doodad.evap; capped per zone — BOMBARD_CFG). */
   impactDress?: ImpactDressSpec;
+  /** THE EFFECT VOICE: the fx kind stamped onto this zone's detonation
+   *  flash (StormDelivery.fx / mintHazardCloud opts / WeatherStrike.fx —
+   *  data names the voice; unset keeps the classic derived costume). */
+  fx?: string;
   /** Fired ONCE when this zone explodes (a meteor crater spitting a demon). */
   onImpact?: () => void;
   /** SWEEP semantics (present = active): ids already struck — the zone is a
@@ -1220,6 +1224,13 @@ interface Flash {
    *  scales the wobble (0..1]. The light layer skips haze flashes
    *  (refraction, not emission). */
   haze?: number;
+  /** THE EFFECT VOICE (render/vis/effectVoice.ts): a registered painter
+   *  kind this flash speaks in — 'blast' for a mortar's landing,
+   *  'sporeburst' for a pod's pop, 'scramble' for a critter's exit.
+   *  Unset (or an unregistered kind) falls through to the classic body
+   *  above — the generic ring stays the structural fallback, and 'bolt'
+   *  stays the lightning flags' own voice, never a registry word. */
+  fx?: string;
 }
 
 /** THE APPENDED-BEAT FLATTENER (the kindred rule): further pulse gems'
@@ -11699,10 +11710,13 @@ export class World {
    *  pond, rift-spawn the collapsing veil reclaims). A soft flash + a line
    *  mark the exit; nothing else fires. `color` tints both (the default is
    *  the wildlife gold; the veil passes its own). */
-  slipAway(actor: Actor, text: string, color = '#c8a850'): void {
+  slipAway(actor: Actor, text: string, color = '#c8a850', fx?: string): void {
     const i = this.actors.indexOf(actor);
     if (i >= 0) this.actors.splice(i, 1);
-    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: 60, color, life: 0.5, maxLife: 0.5 });
+    // THE EFFECT VOICE: a refuge row may name its exit's painter (the
+    // squirrel's 'scramble' leaf-flick); every unkeyed departure keeps the
+    // classic soft flash — the honored generic (absent == identical).
+    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: 60, color, life: 0.5, maxLife: 0.5, fx });
     this.text(vec(actor.pos.x, actor.pos.y - 30), text, color, 14);
   }
 
@@ -14647,7 +14661,10 @@ export class World {
    *  cloud rides the normal zone pipeline: ticks, the payload's own exposure
    *  breathe-grace, Foresight telegraphs, co-op snapshots. */
   private mintHazardCloud(at: Vec2, opts: { skillId?: string; radius?: number; linger?: number;
-    tickInterval?: number; dmgMult?: number; delay?: number; color?: string }): void {
+    tickInterval?: number; dmgMult?: number; delay?: number; color?: string;
+    /** THE EFFECT VOICE of the pop (the spore pod's 'sporeburst'); unset
+     *  keeps the classic sky-strike costume (absent == identical). */
+    fx?: string }): void {
     const skill = SKILLS[opts.skillId ?? 'toxic_cloud'] ?? SKILLS['venom_bolt'];
     if (!skill) return;
     if (!this.hazardCaster) {
@@ -14673,6 +14690,7 @@ export class World {
       linger0: cloudLinger,
       tickInterval: opts.tickInterval ?? 0.5, tickTimer: 0,
       shape: 0, facing: 0, dmgMult: opts.dmgMult ?? 0.7, depth: 1, hitAll: true, meteor: false,
+      fx: opts.fx,
       exposure: exp ? { after: exp, dwell: new Map() } : undefined,
       sizeOver: so,
       radius0: so ? cloudR : undefined,
@@ -14683,7 +14701,7 @@ export class World {
    *  not a damage volley). One word into the shared hazard-cloud seam. */
   private effectSporePuff(d: Doodad, eff: DoodadEffect): void {
     if (!chance(eff.chance)) return;
-    this.mintHazardCloud(vec(d.pos.x, d.pos.y), { radius: eff.radius ?? 90 });
+    this.mintHazardCloud(vec(d.pos.x, d.pos.y), { radius: eff.radius ?? 90, fx: eff.fx });
   }
 
   /** Scratch for effectHeatWash's per-firing candidate query. */
@@ -15681,7 +15699,7 @@ export class World {
    *  Roofs shelter from it (Zone.spareRoofed) unless the strike's own data
    *  reaches through (WeatherStrike.throughRoofs — a future ghost-storm's
    *  lever, not a code branch). */
-  private fireStrikeAt(strike: { skillId: string; radius: number; telegraph: number; throughRoofs?: boolean }, at: Vec2): void {
+  private fireStrikeAt(strike: { skillId: string; radius: number; telegraph: number; throughRoofs?: boolean; fx?: string }, at: Vec2): void {
     const skill = SKILLS[strike.skillId];
     if (!skill) return;
     if (!this.stormCaster) {
@@ -15701,6 +15719,10 @@ export class World {
       tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
       dmgMult: 1, depth: 1, hitAll: true, spareDormant: true,
       spareRoofed: !strike.throughRoofs,
+      // THE EFFECT VOICE (WeatherStrike.fx): a non-lightning sky names its
+      // landing; unset keeps the classic derived bolt — storm lightning
+      // and the altar's own bolts never need a key.
+      fx: strike.fx,
     });
   }
 
@@ -29471,6 +29493,8 @@ export class World {
             lobArc: d.lob?.arc,
             delay0: d.lob && !arming ? zDelay : undefined,
             impactDress: d.impactDress,
+            fx: d.fx, // THE EFFECT VOICE: the delivery names its landing
+
             armed: arming || undefined,
             armSeq: arming ? this.sparkSeq++ : undefined,
             exploded: false,
@@ -47280,7 +47304,12 @@ export class World {
             pos: vec(z.pos.x, z.pos.y), radius: z.radius, color: z.color,
             life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing,
             edgeFrac: z.edgeFrac,
-            bolt: z.hitAll && !z.meteor, meteor: z.meteor,
+            // THE EFFECT VOICE: a keyed zone speaks its own painter at the
+            // landing; the bolt stays the DERIVED costume of unkeyed sky
+            // strikes (hitAll) — true lightning never needs a key, and a
+            // keyed mortar never wears the sky's jag (absent == identical).
+            bolt: !z.fx && z.hitAll && !z.meteor, meteor: z.meteor,
+            fx: z.fx,
           });
           z.onImpact?.(); // a meteor crater spits a demon / leaves a corpse
           if (z.impactDress) this.plantImpactDress(z); // the blast pocks the ground (drying)

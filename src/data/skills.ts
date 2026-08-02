@@ -761,6 +761,11 @@ export const SKILLS: Record<string, SkillDef> = {
       type: 'storm', count: [2, 3], interval: 0.28, areaRadius: 85, hitRadius: 30,
       castRange: 4200, occlusion: 'free', // the sky does not ask the walls
       telegraph: 1.1, sky: true, lob: { arc: 0.38 },
+      // fx 'blast' (THE EFFECT VOICE): a mortar bursts, it never strikes as
+      // lightning — the sky posture keeps its laws (hitAll/spareDormant/
+      // spareRoofed untouched), only the landing's costume changes. The
+      // shell_crater pock below is the loved half and stays as it was.
+      fx: 'blast',
       impactDress: { kind: 'shell_crater', evapAfter: [50, 100] },
     },
     effects: [

@@ -86,6 +86,7 @@ import { drawCreepLayer } from './vis/creepLayer';
 import { drawFluxLayer } from './vis/fluxLayer';
 import { drawTrackLanes, drawTrackRiders, drawTrackWarnArcs } from './vis/trackLayer';
 import { drawTrapworkTells } from './vis/trapLayer';
+import { drawEffectVoice } from './vis/effectVoice';
 import { riderSurface as trackRiderSurface, trackPose } from '../engine/tracks';
 import { UnderstoryLayer } from './vis/understory';
 import { cameraModeOf, couchConfineRect, couchFit, placeCamera } from './camera';
@@ -3853,7 +3854,7 @@ export class Renderer {
     }
   }
 
-  private drawFlash(f: { pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number }): void {
+  private drawFlash(f: { pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string }): void {
     const { ctx } = this;
     // A big synchronous sim step (headless probes, background-tab catch-up)
     // can overshoot a flash's life below zero before the prune sweeps it —
@@ -3867,6 +3868,12 @@ export class Renderer {
     if (!Number.isFinite(f.pos.x + f.pos.y + f.radius + f.life + f.maxLife)) return;
     const t = f.maxLife > 0 ? Math.max(0, Math.min(1, f.life / f.maxLife)) : 0;
     if (t <= 0 || f.radius <= 0) return;
+    // THE EFFECT VOICE (render/vis/effectVoice.ts): a keyed flash speaks in
+    // its registered painter — the mortar's 'blast', the pod's 'sporeburst',
+    // the climb's 'scramble' — and returns. An UNREGISTERED kind falls
+    // through to the classic body below (the fallback law: the generic ring
+    // serves every voiceless moment; an unknown kind never renders nothing).
+    if (f.fx && drawEffectVoice(ctx, f.fx, f, t)) { ctx.globalAlpha = 1; return; }
     // Crystal laser: a straight beam from pos along `facing` for `radius` length.
     if (f.beam) {
       const dir = f.facing ?? 0, ex = Math.cos(dir) * f.radius, ey = Math.sin(dir) * f.radius;

@@ -442,6 +442,10 @@ export interface DoodadEffect {
   element?: DamageType;
   /** Presentation tint for the effect's flash/text (defaults per handler). */
   color?: string;
+  /** THE EFFECT VOICE (render/vis/effectVoice.ts): the registered painter
+   *  this effect's pop/landing flash speaks in — the spore pod's
+   *  'sporeburst'. Unset keeps each handler's classic costume. */
+  fx?: string;
   /** Seconds between attempts. */
   interval: number;
   /** Live countdown, managed by the engine tick (omit at authoring). */
@@ -1173,7 +1177,10 @@ export interface BrittleSpec {
    *  zone pipeline (ticks, exposure grace, Foresight telegraphs), so a gas
    *  pod is a pot that says one more word. */
   fume?: { skillId?: string; radius?: number; linger?: number; tickInterval?: number;
-    dmgMult?: number; delay?: number; color?: string };
+    dmgMult?: number; delay?: number; color?: string;
+    /** THE EFFECT VOICE of the pop (mintHazardCloud opts.fx — e.g.
+     *  'sporeburst'); unset keeps the classic costume. */
+    fx?: string };
   /** Break WAKES something: monsters spawned at the wreck — urn ambushes,
    *  hive husks. `chance` gates the whole clutch; `count` rolls per break.
    *  ARRAY form = a weighted POOL: ONE row is drawn by `w` per break (then
@@ -4063,8 +4070,11 @@ function stampSporePod(ctx: GenCtx): void {
   const p = findSpot(ctx, r, true, doodadRule('spore_pod').spacing ?? 0, true, 'spore_pod');
   if (p) ctx.doodads.push({
     pos: p, radius: r, kind: 'spore_pod', rot: ctx.rng.range(0, Math.PI * 2),
+    // fx 'sporeburst' (THE EFFECT VOICE): the pop is a cloud being born,
+    // never the sky-strike bolt the shared hazard seam used to derive.
     effect: { id: 'spore_puff', interval: 5.0, cd: ctx.rng.range(0, 5.0), radius: 95,
-      count: 1, ringRadius: 0, jitter: 0, stagger: 0, blast: 0, chance: 0.6, power: 0 },
+      count: 1, ringRadius: 0, jitter: 0, stagger: 0, blast: 0, chance: 0.6, power: 0,
+      fx: 'sporeburst' },
   });
 }
 

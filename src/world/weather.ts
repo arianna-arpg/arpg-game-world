@@ -53,6 +53,12 @@ export interface WeatherStrike {
    *  The lever for a future kind whose wrath ignores shelter (a haunting
    *  rain, a curse that falls indoors) — data, never a code branch. */
   throughRoofs?: boolean;
+  /** THE EFFECT VOICE (render/vis/effectVoice.ts): the registered painter
+   *  this strike's landing flash speaks in. Unset derives the classic
+   *  lightning bolt — the storm's own voice, which never needs a key;
+   *  the lever exists for the skies that are NOT lightning (a blizzard's
+   *  comet, a starfall's shard) to stop borrowing it. */
+  fx?: string;
 }
 
 /** One kind of ground piece a weather front DRESSES its covered zone with —

@@ -1823,6 +1823,14 @@ export interface StormDelivery {
   lob?: { arc?: number };
   /** Each strike's blast leaves a drying pock (see ImpactDressSpec). */
   impactDress?: ImpactDressSpec;
+  /** THE EFFECT VOICE (render/vis/effectVoice.ts): the registered painter
+   *  each strike's LANDING flash speaks in — 'blast' is the mortar's
+   *  burst (hellshot_volley). Render-only, drawn == tested unchanged.
+   *  Unset keeps the classic costume: sky strikes derive the lightning
+   *  bolt, ordinary storms the generic pop (absent == identical) — so
+   *  true lightning (a levinfall, the weather's own storm_call) never
+   *  needs a key and 'bolt' stays reserved to it. */
+  fx?: string;
 }
 
 export interface DashDelivery {
