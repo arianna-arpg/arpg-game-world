@@ -98,16 +98,62 @@ export interface PerfZoneStats {
   snowBakes: number; groundBakes: number;
   /** World.snowCover when the window closed (was the wash live/moving?). */
   snowCover: number;
+  /** THE FRAME-TASK MARK (steady window): worst whole rAF-TASK ms — frame
+   *  timestamp → the sampler's own continuation, which runs after the
+   *  game's frame callback returned, so the mark covers sim + render AND
+   *  the post-perfPush tail (net broadcast, hostTail) that the sim/ren
+   *  brackets cannot see by position (the 2026-08-01 triad acquittal's
+   *  blind spot). taskMax ≈ gapMax says the stall lived in the frame's own
+   *  JS; taskMax small under a big gapMax says it lived OUTSIDE the frame
+   *  task (idle/timer/GC task — cross-read ltWorst — or the compositor).
+   *  Coarse by construction: a foreign task overhanging the vsync tick
+   *  inflates the mark (the rAF timestamp is the frame time, not callback
+   *  start), so read it beside the longtask ledger, never alone. */
+  taskMax: number;
+  /** Steady hitches (>40ms sampler-clock gap) whose OWNING frame task
+   *  stayed ≤40ms — stalls no frame's own work explains: the systemic /
+   *  off-task ledger (run-age GC, deferred idle work, compositor). Kin of
+   *  hitch40 but measured at the sampler's clock, not the ring's — near,
+   *  not a strict subset. */
+  offTask40: number;
+  /** Long Tasks API ledger over the steady window: main-thread tasks over
+   *  50ms (count + worst duration ms), WHATEVER task they were — frame
+   *  tasks, deferred idle autosaves, timers, GC-as-task. Attribute-free
+   *  but bracket-honest: a big ltWorst with a small taskMax convicts the
+   *  space BETWEEN frames. -1 = this runtime lacks 'longtask'. */
+  ltCount: number; ltWorst: number;
+}
+
+/** One row the sweep could not measure — and WHY, as data the gate can
+ *  route (launcher/main.cjs): 'unmintable' (the registry has no such id)
+ *  and 'load-fallback' (minted but the load fell back — spread collision,
+ *  refused layout) are mint-machinery refusals and stay report-only;
+ *  'hold' (the walker stood in the zone and could not keep one clean
+ *  window pair in HOLD_ATTEMPTS tries) GATES like a breach — a shipping
+ *  zone that cannot be measured is a verdict to read, not a silence. */
+export interface PerfSkipRow {
+  id: string;
+  class: 'unmintable' | 'load-fallback' | 'hold';
+  note: string;
 }
 
 export interface PerfSweepReport {
   control: PerfZoneStats;
+  /** THE AGED CONTROL: the SAME town, re-sampled after the last matrix row
+   *  (the 2026-08-01 acquittal: a run-global stall GROWS with sweep age and
+   *  wears whichever zone holds the window — the growth bracket had to be
+   *  reconstructed by hand from seat medians). start-town vs end-town is
+   *  the run's own aging, machine-independent, printed beside the zones.
+   *  Evidence only — it gates nothing. Null if the aged walk could not
+   *  hold its window (report-only; the START control's throw still guards
+   *  sweep validity). */
+  controlEnd: PerfZoneStats | null;
   zones: PerfZoneStats[];
   canvas: { w: number; h: number };
   dpr: number;
   sampleSeconds: number;
   matrix: string[];
-  skipped: string[];
+  skipped: PerfSkipRow[];
   /** Forensics provenance: the pinned sky ('' = natural) + ablated passes. */
   weather: string;
   ablate: string[];
@@ -162,6 +208,7 @@ function reduceFrames(f: FrameDump, entryWorstGap: number, meta: {
   tileset: string; zone: string; variant: string | null; layout: string;
   doodads: number; actors: number; lite: number;
   snowBakes: number; groundBakes: number; snowCover: number;
+  taskMax: number; offTask40: number; ltCount: number; ltWorst: number;
 }): PerfZoneStats {
   const gap = [...f.gap].sort((a, b) => a - b);
   const sim = [...f.sim].sort((a, b) => a - b);
@@ -187,6 +234,42 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   const raf = (): Promise<number> => new Promise(r => requestAnimationFrame(r));
   const sampleMs = (opts.seconds ?? 6) * 1000;
   const settleMs = (opts.settleSeconds ?? 1.5) * 1000;
+
+  // THE LONGTASK LEDGER: one PerformanceObserver for the whole sweep, its
+  // counts windowed per zone at the steady boundaries. Long Tasks catch
+  // what NO in-frame bracket can: >50ms main-thread tasks whoever ran them
+  // — frame tasks (cross-check taskMax), the idle-deferred autosave, timer
+  // work, GC-as-task. Delivery is async, so window boundaries drain
+  // synchronously via takeRecords(); a task that STARTED before the window
+  // opened but ended inside it lands in-window — coarse and bracket-honest.
+  const ltLedger = { count: 0, worst: 0 };
+  let ltObs: PerformanceObserver | null = null;
+  try {
+    if (PerformanceObserver.supportedEntryTypes?.includes('longtask')) {
+      ltObs = new PerformanceObserver(list => {
+        for (const e of list.getEntries()) {
+          ltLedger.count++;
+          if (e.duration > ltLedger.worst) ltLedger.worst = e.duration;
+        }
+      });
+      ltObs.observe({ entryTypes: ['longtask'] });
+    }
+  } catch { ltObs = null; }
+  /** Fold any not-yet-delivered entries into the ledger, synchronously. */
+  const ltDrain = (): void => {
+    if (!ltObs) return;
+    for (const e of ltObs.takeRecords()) {
+      ltLedger.count++;
+      if (e.duration > ltLedger.worst) ltLedger.worst = e.duration;
+    }
+  };
+  /** Open a window: discard everything observed so far (delivered or
+   *  pending) — the mint/travel/gc debt between windows is nobody's row. */
+  const ltReset = (): void => {
+    if (!ltObs) return;
+    ltObs.takeRecords();
+    ltLedger.count = 0; ltLedger.worst = 0;
+  };
 
   // A fresh probe run through the REAL start path (menus dismissed).
   g.devStartRun(opts.classId);
@@ -229,9 +312,23 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
    *  walker leaves, so no window ever mixes two zones' frames. Returns the
    *  worst rAF gap seen (the entry-burst readout) + whether the walk
    *  stayed home; the caller owns the travel back and the restart. */
-  const walkPhase = async (ms: number, dir0 = 0.6): Promise<{ worst: number; held: boolean }> => {
+  const walkPhase = async (ms: number, dir0 = 0.6): Promise<{
+    worst: number; held: boolean; taskMax: number; offTask40: number;
+  }> => {
     const homeZid = g.world().zone.id;
     let dir = dir0, worst = 0;
+    // THE STALL LEDGER (the 2026-08-01 triad acquittal): the run-global
+    // stall lived AFTER perfPush by position — in neither the sim nor the
+    // ren bracket — and the meta pass then moved the autosave into idle
+    // tasks, where no in-frame bracket can ever see it. Close the seam
+    // POSITIONALLY from the sampler's own seat: this continuation runs
+    // after the game's whole rAF callback (the pump re-arms at its end, so
+    // its callback always precedes our resolver in the frame's batch),
+    // which makes (performance.now() − rAF timestamp) a coarse mark over
+    // the ENTIRE frame task — sim, render, perfPush, and the tail behind
+    // it. Captured before the walker's own whisker/steer work, so the
+    // sampler's sub-ms cost bills itself, not the game.
+    let taskMax = 0, offTask40 = 0, prevTask = Infinity;
     let prev = performance.now();
     const t0 = prev;
     while (performance.now() - t0 < ms) {
@@ -268,13 +365,21 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       }
       g.fakePad({ axes: [Math.cos(dir), Math.sin(dir), 0, 0], buttons: [] });
       const now = await raf();
+      const taskEnd = performance.now(); // first thing after the frame's task
       const gap = now - prev;
       worst = Math.max(worst, gap);
+      // A hitch gap covers the interval SINCE the previous frame — the frame
+      // task inside that interval is the PREVIOUS iteration's mark. A >40ms
+      // gap whose owning task stayed ≤40ms is a stall no frame's own work
+      // explains (the first gap of a window abstains: its task is unseen).
+      if (gap > 40 && prevTask <= 40) offTask40++;
+      prevTask = taskEnd - now;
+      if (prevTask > taskMax) taskMax = prevTask;
       prev = now;
       dir += WALK_TURN_RATE * Math.min(gap, WALK_DT_CLAMP_MS) / 1000;
-      if (g.world().zone.id !== homeZid) return { worst, held: false };
+      if (g.world().zone.id !== homeZid) return { worst, held: false, taskMax, offTask40 };
     }
-    return { worst, held: true };
+    return { worst, held: true, taskMax, offTask40 };
   };
 
   // THE MID-WALK EXIT + THE RESTART LAW (aether_vesper 2026-07-28: a
@@ -327,11 +432,19 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       // (tundra 2026-07-12; gutworks 2026-07-16, clean twice solo). The
       // launcher exposes gc for --perf-test only; normal play never has it.
       (window as unknown as { gc?: () => void }).gc?.();
+      // One discarded frame between the gc and the window: a longtask entry
+      // is minted when its TASK ends, and the gc above runs inside OUR
+      // current task — resetting the ledger in the same task would let our
+      // own window-opening pause deliver INTO the fresh window. The raf
+      // closes our task first; its entry (if any) dies in ltReset's drain.
+      await raf();
+      ltReset();
       g.perfFrames(true); // discard the entry burst; the steady window begins
       VIS_TELEMETRY.snowBakes = 0;
       VIS_TELEMETRY.groundBakes = 0;
       const steady = await walkPhase(sampleMs, dir0);
       if (!steady.held) { if (!returnHome()) break; continue; }
+      ltDrain(); // pending in-window entries, folded before the snapshot
       const zw2 = g.world();
       return reduceFrames(g.perfFrames(false), entryWorst, {
         tileset: tilesetId, zone: zw2.zone.name,
@@ -341,6 +454,9 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
         lite: zw2.lite.liveCount,
         snowBakes: VIS_TELEMETRY.snowBakes, groundBakes: VIS_TELEMETRY.groundBakes,
         snowCover: +zw2.snowCover.toFixed(2),
+        taskMax: +steady.taskMax.toFixed(1), offTask40: steady.offTask40,
+        ltCount: ltObs ? ltLedger.count : -1,
+        ltWorst: ltObs ? +ltLedger.worst.toFixed(1) : -1,
       });
     }
     return null;
@@ -377,7 +493,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   const matrix = fullMatrix.filter(id => !wants.length || wants.some(f => id.includes(f)));
 
   const zones: PerfZoneStats[] = [];
-  const skipped: string[] = [];
+  const skipped: PerfSkipRow[] = [];
   for (const id of matrix) {
     const idx = fullMatrix.indexOf(id);
     const pin = opts.mintPins?.[id] ?? opts.mintPins?.['*'];
@@ -387,13 +503,16 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       ...(pin?.variant ? { variant: pin.variant } : {}),
       ...(pin?.layout ? { layoutType: pin.layout } : {}),
     });
-    if (!zid) { skipped.push(id); continue; }
+    if (!zid) {
+      skipped.push({ id, class: 'unmintable', note: 'the registry has no such tileset' });
+      continue;
+    }
     if (g.world().zone.id !== zid) {
       // The mint minted but the LOAD fell back (spread-coordinate collision,
       // refused layout): without this guard the row samples whatever zone
       // the walker is still standing in and wears its numbers as a pass —
       // snowcrown wore the TOWN's row (2026-07-19).
-      skipped.push(`${id} (load fell back to '${g.world().zone.name}')`);
+      skipped.push({ id, class: 'load-fallback', note: `load fell back to '${g.world().zone.name}'` });
       continue;
     }
     pinWeather(); // re-pin on the fresh zone's own node
@@ -401,19 +520,34 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
     if (!stats) {
       // The walker could not hold one clean window pair in HOLD_ATTEMPTS
       // tries (the restart law above) — a row that did not stay home is not
-      // a measurement of its tileset. Report-only skip, the same lane as an
-      // unmintable id.
-      skipped.push(`${id} (walker could not hold the zone in ${HOLD_ATTEMPTS} attempts)`);
+      // a measurement of its tileset. NOT the unmintable lane: this zone
+      // ships and players will walk it, so the harness GATES a hold skip
+      // like a breach (launcher/main.cjs skip gate; the committed waiver
+      // for a deliberately unholdable row is overrides[<id>].allowSkip in
+      // balance/perf.config.json — the 2026-08-01 ratified policy).
+      skipped.push({ id, class: 'hold', note: `walker could not hold the zone in ${HOLD_ATTEMPTS} attempts` });
       continue;
     }
     zones.push(stats);
   }
+
+  // THE AGED CONTROL: the same town, the same window pair, at the sweep's
+  // END — the pair (control vs controlEnd) brackets what the RUN's age
+  // costs, on the one zone whose bill cannot have changed. The 2026-08-01
+  // acquittal had to reconstruct this bracket by hand from seat medians to
+  // exonerate three zones; now every report carries it. Evidence only —
+  // the launcher prints both rows and their delta, and gates nothing on it.
+  g.world().devTravelTo(START_ZONE);
+  pinWeather();
+  const controlEnd = await sampleCurrentZone('(town aged)');
+
   g.fakePad(null);
   setVisAblate([]);
+  ltObs?.disconnect();
 
   const cv = document.getElementById('game') as HTMLCanvasElement | null;
   return {
-    control, zones,
+    control, controlEnd, zones,
     canvas: { w: cv?.width ?? 0, h: cv?.height ?? 0 },
     dpr: window.devicePixelRatio || 1,
     sampleSeconds: opts.seconds ?? 6,

@@ -879,7 +879,11 @@ async function smoke() {
  *  balance/perf.config.json, write a report, exit 0 / 2 (budget breached) /
  *  1 (harness error) — the genqa contract for frame cost. Budgets are DATA:
  *  each zone is judged RELATIVE to the same run's town control (so the
- *  verdict travels across machines) plus generous absolute backstops. */
+ *  verdict travels across machines) plus generous absolute backstops.
+ *  A 'hold'-class skipped row GATES like a breach (the skip gate below —
+ *  overrides[<id>].allowSkip is the committed waiver); the town control is
+ *  re-sampled at sweep END (the aged control) so run-age growth prints
+ *  beside the zones instead of wearing their names. */
 async function perfMode() {
   /** @param {number} ms */
   const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -953,7 +957,10 @@ async function perfMode() {
     // `--layout=<gen>` / `--seed=<n>` force every swept tileset's face,
     // layout, or whole mint roll — pair with --filter for one zone
     // (src/dev/perf.ts; --seed is the worst-roll HUNT lever for count-roll
-    // tilesets). Any of them makes this a diagnostic run: the gate still
+    // tilesets); `--tilesets=<ids>` replaces the WHOLE matrix (name realm /
+    // boundless rows a normal sweep excludes by registry law — mint seeds
+    // then derive from the override list's own indices, so committed rows
+    // may re-roll). Any of them makes this a diagnostic run: the gate still
     // PRINTS its verdict, but never exits 2 — an ablated zone being fast
     // (or a pinned storm being slow) is the experiment, not a regression.
     const weatherFlag = flagValue('--weather');
@@ -975,7 +982,9 @@ async function perfMode() {
     // only: the claim is the DELTA against a bare run of the same filter.
     const liteFlag = flagValue('--lite');
     if (liteFlag) opts.lite = Number(liteFlag);
-    const forensics = weatherFlag !== null || !!ablateFlag || !!variantFlag || !!layoutFlag || !!seedFlag || !!liteFlag;
+    const tilesetsFlag = flagValue('--tilesets');
+    if (tilesetsFlag) opts.tilesets = tilesetsFlag.split(',').map(s => s.trim()).filter(Boolean);
+    const forensics = weatherFlag !== null || !!ablateFlag || !!variantFlag || !!layoutFlag || !!seedFlag || !!liteFlag || !!tilesetsFlag;
     console.log(`PERF: sweeping tilesets (${opts.seconds}s steady + ${opts.settleSeconds}s entry per zone` +
       (opts.filter ? `, filter '${opts.filter}'` : '') +
       (opts.weather !== undefined ? `, weather pinned '${opts.weather || 'clear'}'` : '') +
@@ -993,14 +1002,24 @@ async function perfMode() {
     const breaches = [];
     /** @type {string[]} */
     const lines = [];
+    // ATTRIBUTION COLUMNS (src/dev/perf.ts, 2026-08-01): taskMx = worst
+    // whole-frame-TASK ms (sim + render + the post-perfPush tail the
+    // brackets can't see); lt/ltW = Long Tasks >50ms in the window (count /
+    // worst ms; -1 = API unsupported) whoever ran them — frame, idle
+    // autosave, timer, GC; off40 = >40ms gaps whose owning frame task
+    // stayed ≤40ms (stalls no frame's own work explains). Read as a
+    // triangle: taskMx ≈ gapMax convicts the frame's JS; ltW big with
+    // taskMx small convicts the space BETWEEN frames; off40 counts how
+    // often that happened.
     /** @param {any} z @param {string} name */
     const row = (z, name) =>
       `${name.padEnd(16)} ${String(z.gapP50).padStart(6)} ${String(z.gapP95).padStart(6)} ${String(z.gapP99).padStart(6)}` +
       ` ${String(z.gapMax).padStart(7)} ${String(z.hitch40).padStart(3)} ${String(z.entryWorstGap).padStart(7)}` +
       ` ${String(z.simP99).padStart(6)} ${String(z.renP99).padStart(6)}` +
+      ` ${String(z.taskMax ?? 0).padStart(7)} ${String(z.ltCount ?? 0).padStart(3)} ${String(z.ltWorst ?? 0).padStart(6)} ${String(z.offTask40 ?? 0).padStart(5)}` +
       ` ${String(z.snowBakes ?? 0).padStart(5)} ${String(z.groundBakes ?? 0).padStart(5)} ${String(z.snowCover ?? 0).padStart(5)}` +
       `  ${z.zone}`; // zone names already carry their variant
-    lines.push('tileset           gap50  gap95  gap99  gapMax h40   entry  sim99  ren99  snB   grB  cover  zone');
+    lines.push('tileset           gap50  gap95  gap99  gapMax h40   entry  sim99  ren99  taskMx  lt    ltW off40  snB   grB  cover  zone');
     lines.push(row(ctl, '(town ctl)'));
     for (const z of report.zones) {
       lines.push(row(z, z.tileset));
@@ -1038,8 +1057,50 @@ async function perfMode() {
         breaches.push(`${z.tileset}: entry burst ${z.entryWorstGap}ms > ${absZ.entryWorstGapMs}`);
       }
     }
+    // THE AGED CONTROL (evidence, never a gate): the same town re-sampled
+    // after the last row. Growth across the pair is the RUN's age — GC over
+    // the accumulated live set, deferred idle work — not any zone's bill
+    // (the 2026-08-01 triad acquittal reconstructed this bracket by hand
+    // from seat medians; every report now carries it). A sick aged town
+    // does NOT invalidate the run: the START control cut the caps, and
+    // controlSickMs already judged it — this pair just names what grew.
+    if (report.controlEnd) {
+      const b = report.controlEnd;
+      lines.push(row(b, '(town aged)'));
+      lines.push(`aged control (start vs end of sweep): gapP50 ${ctl.gapP50} vs ${b.gapP50}, ` +
+        `gapP99 ${ctl.gapP99} vs ${b.gapP99}, gapMax ${ctl.gapMax} vs ${b.gapMax}, ` +
+        `h40 ${ctl.hitch40} vs ${b.hitch40}, taskMx ${ctl.taskMax ?? 0} vs ${b.taskMax ?? 0}, ` +
+        `lt ${ctl.ltCount ?? 0}/${ctl.ltWorst ?? 0} vs ${b.ltCount ?? 0}/${b.ltWorst ?? 0} — ` +
+        `growth here is run age, not the zones`);
+    } else if (report.controlEnd === null) {
+      lines.push('(town aged): could not hold its window — aged-control evidence missing this run');
+    }
+    // ---- THE SKIP GATE (2026-08-01, ratified): a skipped row is a zone
+    // with NO row — coverage silently lost, the exact silence the sweep
+    // exists to prevent. Classes (src/dev/perf.ts PerfSkipRow):
+    // 'unmintable' (the registry refused the id) and 'load-fallback'
+    // (minted but the load fell back) are the mint machinery saying no
+    // before any walker stood — REPORT-ONLY, the deliberate lane. A 'hold'
+    // skip — the walker stood IN the zone and could not keep one clean
+    // window pair in its attempts — GATES like a breach: that zone ships,
+    // players will walk it, and "unmeasurable" must be a verdict someone
+    // reads, not a silence. The waiver rides the breach machinery's own
+    // committed per-tileset registry: overrides[<id>].allowSkip
+    // acknowledges a deliberately unholdable row (carry a _todo + fresh
+    // evidence, like any override row).
+    const skipRows = Array.isArray(report.skipped) ? report.skipped : [];
+    /** @param {any} s */
+    const skipWaived = (s) => !!(((budgets.overrides ?? {})[s.id] ?? {}).allowSkip);
+    for (const s of skipRows) {
+      if (s.class === 'hold' && !skipWaived(s)) {
+        breaches.push(`${s.id}: UNMEASURED — ${s.note} (a hold skip gates; overrides['${s.id}'].allowSkip is the committed waiver)`);
+      }
+    }
+    if (skipRows.length) {
+      lines.push('skipped: ' + skipRows.map((/** @type {any} */ s) =>
+        `${s.id} [${s.class}${s.class === 'hold' ? (skipWaived(s) ? ', waived' : ', GATES') : ''}] ${s.note}`).join('; '));
+    }
     console.log(lines.join('\n'));
-    if (report.skipped?.length) console.log('skipped (unknown/unmintable): ' + report.skipped.join(', '));
     console.log(`canvas ${report.canvas.w}x${report.canvas.h} @dpr ${report.dpr}`);
 
     // ---- report files (balance/reports is gitignored, like every gate) ----
