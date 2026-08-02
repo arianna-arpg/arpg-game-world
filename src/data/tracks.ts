@@ -135,7 +135,12 @@ DOODAD_VISUALS['pale_prow'] = {
 // and hero alike get dribbled to the verge. Circle surface on purpose: the
 // painter's yoke poles overhang the tested disc a touch (drawn a hair
 // LARGER than tested — near-misses land in the walker's favor; the rect
-// dialect's beam contract stays the blades' law).
+// dialect's beam contract stays the blades' law). warnStyle 'traffic' (THE
+// WARN VOICE): the wain's approach band wears the soft costume — faint,
+// thin, never pulsing — so the cart's traveling path can never be mistaken
+// for the ruin boulder's "get out of the way" (the two rode near-twin
+// hay-tan bands before the voice split them). Costume only: the arc's
+// geometry, the dodge-AI's read, and the axle's knock are untouched.
 registerTrackRider({
   id: 'field_wain',
   kind: 'field_wain',
@@ -148,6 +153,7 @@ registerTrackRider({
   },
   warnAhead: 90,
   color: '#c8a865',
+  warnStyle: 'traffic',
 });
 
 // The wain's look: the plagueCart painter re-paletted as a WORKING cart —

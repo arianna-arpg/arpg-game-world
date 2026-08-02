@@ -91,6 +91,7 @@ interface TrackRiderDef {
   orient?: 'lane' | 'radial';   // rect long axis with travel, or across it (a sweep arm)
   spin?: number;                // rad/s — folded into a rect's surface rot
   payload: TrackPayload; warnAhead?: number; color?: string;
+  warnStyle?: 'threat' | 'traffic';  // the telegraph's VOICE (costume only)
 }
 ```
 
@@ -123,6 +124,24 @@ bumper is a rider that never left home (`rime_bumper`: pure fling + slip).
    reversals included — the resolver is pure, so the future is exact), and
    `imminentThreatTo` surfaces the same approach to every dodge-mind. The
    player's eyes and the AI's read are one truth.
+
+   **The two-voice law** (`TrackRiderDef.warnStyle`, resolver `warnVoiceOf`):
+   the telegraph speaks in two registers so urgency stays a *meaningful*
+   signal. `'threat'` — the default, and absent == today's bytes — is the
+   urgent voice: full alpha, full surface-derived width, the pending lane's
+   pulsing RAKE (the boulder's "get out of the way"). `'traffic'` is the
+   soft voice for riders that share the road rather than sweep it: the SAME
+   honest future from the SAME pure resolver, worn faint and thin
+   (`VIS_CFG.trackWarnVoice.traffic` — alpha ×0.35, width ×0.45, dials, no
+   pulse ever, a pending traffic lane rakes flat) — a path notation, not a
+   warning. **Costume only, by law**: geometry, `imminentThreatTo`, the
+   contact sweep and the payload never read the voice — a cart is exactly as
+   dodgeable as before, it just stops shouting like a boulder. The voice is
+   *authored*, never derived from the payload: the wain carries a real
+   (token) `hit` row exactly as the Pale Prow's keel does, so any derivation
+   would be a magnitude threshold — numerology that drifts with zone level.
+   Debut: `field_wain` wears `'traffic'`; every blade, bolt, boulder and the
+   prow keep `'threat'` by absence.
 3. **Drawn == tested**: a rider's painter draws exactly its posed `HitShape`
    (the hitbox truth overlay outlines riders magenta); rect riders'
    painter beam params are validation-pinned to their surface. The steering
@@ -185,7 +204,10 @@ toggling the dial adds lanes without reshaping the country.
 The **field_wain** (`data/tracks.ts`) is the traffic contract in rider form:
 a token typed knock (`hit.base` 5), **no** `minSpeed`, faction-blind, and
 `push: 'along'` with a real impulse — a body in the road is *carried ahead
-of the axle* down the lane, dribbled to the verge, never shredded. Its look
+of the axle* down the lane, dribbled to the verge, never shredded. It wears
+`warnStyle: 'traffic'` (the two-voice law above): its approach band is a
+faint thin path notation, visually severed from the ruin boulder's urgent
+near-twin hay-tan band. Its look
 re-palettes the `plagueCart` painter as a working hay wain (circle surface;
 the yoke poles overhang the tested disc slightly — drawn a hair larger than
 tested, misses in the walker's favor). No farmland face opts in yet:

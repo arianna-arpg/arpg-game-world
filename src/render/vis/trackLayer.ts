@@ -22,10 +22,11 @@
 
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import type { Doodad } from '../../engine/levelgen';
-import { TRACK_CFG, trackArcFrac, trackDone, trackPending, trackPose, type PlacedTrack } from '../../engine/tracks';
+import { TRACK_CFG, trackArcFrac, trackDone, trackPending, trackPose, warnVoiceOf, type PlacedTrack } from '../../engine/tracks';
 import type { World } from '../../engine/world';
 import { withAlpha } from './color';
 import { PAINTERS, type PaintEnv } from './painters';
+import { VIS_CFG } from './visConfig';
 
 /** Retracted (disarmed) or retired (done once-) lanes draw nothing at all —
  *  the trapworks appear/disappear contract: what cannot hurt you is not
@@ -85,11 +86,20 @@ export function drawTrackWarnArcs(ctx: CanvasRenderingContext2D, world: World,
       const r0 = tr.riders[0];
       if (r0 && (r0.def.payload.hit || r0.def.payload.impulse)) {
         const lead = (tr.spec.bornAt ?? 0) - world.time;
-        const pulse = 0.16 + 0.2 * (0.5 + 0.5 * Math.sin(world.time * 11))
-          + 0.16 * Math.max(0, 1 - lead / 1.2);
-        const width = r0.def.surface.kind === 'circle'
+        // THE WARN VOICE (TrackRiderDef.warnStyle): a 'traffic' rider's rake
+        // is the route posted, not the runway rumbling awake — flat faint
+        // alpha (no pulse, no birth flare) at the traffic costume's width.
+        // 'threat' (the default) keeps today's urgent bytes exactly.
+        const soft = warnVoiceOf(r0.def) === 'traffic'
+          ? VIS_CFG.trackWarnVoice.traffic : undefined;
+        const pulse = soft
+          ? 0.34 * soft.alphaScale
+          : 0.16 + 0.2 * (0.5 + 0.5 * Math.sin(world.time * 11))
+            + 0.16 * Math.max(0, 1 - lead / 1.2);
+        const width = (r0.def.surface.kind === 'circle'
           ? r0.def.surface.r * 1.6
-          : Math.min(r0.def.surface.hw, r0.def.surface.hh) * 2.4;
+          : Math.min(r0.def.surface.hw, r0.def.surface.hh) * 2.4)
+          * (soft ? soft.widthScale : 1);
         const pts = tr.arc.pts;
         ctx.save();
         ctx.strokeStyle = withAlpha(r0.def.color ?? '#e8b45a', Math.min(0.5, pulse));
@@ -109,9 +119,17 @@ export function drawTrackWarnArcs(ctx: CanvasRenderingContext2D, world: World,
       if (!p.hit && !p.impulse) continue;
       const warn = r.def.warnAhead ?? TRACK_CFG.warnAhead;
       if (warn <= 0) continue;
-      const width = r.def.surface.kind === 'circle'
+      // THE WARN VOICE: a 'traffic' rider (warnVoiceOf — the wain, never a
+      // blade) strokes the SAME honest future in a soft costume — alpha and
+      // width scaled down by VIS_CFG.trackWarnVoice.traffic, the distance
+      // fade kept so direction still reads. A path notation, not a warning.
+      // 'threat' (the default) multiplies by exactly 1: today's bytes.
+      const soft = warnVoiceOf(r.def) === 'traffic'
+        ? VIS_CFG.trackWarnVoice.traffic : undefined;
+      const width = (r.def.surface.kind === 'circle'
         ? r.def.surface.r * 1.6
-        : Math.min(r.def.surface.hw, r.def.surface.hh) * 2.4;
+        : Math.min(r.def.surface.hw, r.def.surface.hh) * 2.4)
+        * (soft ? soft.widthScale : 1);
       const color = r.def.color ?? '#9fd8ec';
       const aheadSec = warn / speed;
       const steps = 7;
@@ -120,7 +138,7 @@ export function drawTrackWarnArcs(ctx: CanvasRenderingContext2D, world: World,
       let prev = trackPose(tr, world.time, r.phase, r.def);
       for (let k = 1; k <= steps; k++) {
         const pose = trackPose(tr, world.time + (aheadSec * k) / steps, r.phase, r.def);
-        const fade = 0.34 * (1 - (k - 1) / steps);
+        const fade = 0.34 * (1 - (k - 1) / steps) * (soft ? soft.alphaScale : 1);
         ctx.strokeStyle = withAlpha(color, fade);
         ctx.lineWidth = width;
         ctx.beginPath();

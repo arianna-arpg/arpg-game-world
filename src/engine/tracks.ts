@@ -161,6 +161,19 @@ export interface TrackRiderDef {
   warnAhead?: number;
   /** Accent for the warn arc / debug reads (falls back to painter's own). */
   color?: string;
+  /** THE WARN VOICE — which costume the approach telegraph wears (COSTUME
+   *  only: the arc still samples the same pure resolver, and the dodge-AI's
+   *  imminentThreatTo read never changes). 'threat' (the default — absent ==
+   *  today's bytes) is the urgent voice: the boulder's "get out of the way".
+   *  'traffic' is the soft voice: substantially fainter, thinner, never
+   *  pulsing — a path notation for bodies that share the road rather than
+   *  sweep it (the field wain). Rider-grain on purpose: a body speaks the
+   *  same language on every lane it rides, and the telegraph's other dials
+   *  (warnAhead, color) already live here. NOT derived from the payload:
+   *  the wain carries a real (token) hit row exactly like the prow's keel
+   *  does, so only a magic-number magnitude threshold could split them —
+   *  the voice is authored, never guessed. */
+  warnStyle?: 'threat' | 'traffic';
   /** THE DECK LAW: this rider's surface is moving FOOTING, not a hazard —
    *  every grounded body standing on it is CARRIED by the rider's own rigid
    *  step each frame (World.updateCarriers: new pose ∘ old pose⁻¹ applied to
@@ -204,6 +217,13 @@ export function registerTrackRider(def: TrackRiderDef): void {
 
 export function trackRider(id: string): TrackRiderDef | undefined { return TRACK_RIDERS[id]; }
 export function trackRiderIds(): string[] { return Object.keys(TRACK_RIDERS); }
+
+/** THE WARN VOICE resolver — the one fold the track layer (and any future
+ *  reader) speaks a rider's telegraph costume through. Absent = 'threat',
+ *  today's voice, by law. */
+export function warnVoiceOf(def: TrackRiderDef): 'threat' | 'traffic' {
+  return def.warnStyle ?? 'threat';
+}
 
 // --- track specs (authoring) ----------------------------------------------
 

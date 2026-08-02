@@ -1015,6 +1015,114 @@ export const VIS_CFG = {
      *  the ground the inventory panel opens onto. */
     pickup: { rightPad: 14, topFrac: 0.34, rowH: 17, font: 12, maxRows: 10 },
   },
+
+  /** THE WARN VOICE (engine/tracks.ts TrackRiderDef.warnStyle — the track
+   *  telegraph's 'traffic' costume, worn by riders that share the road
+   *  rather than sweep it: the field wain). Scales on the threat arc's own
+   *  surface-derived width and distance-fade curve, so a bigger cart still
+   *  posts a proportionally wider path and the stroke still fades with
+   *  distance (direction stays readable) — it just stops SHOUTING. The
+   *  'threat' voice has no dials on purpose: it is today's bytes, and
+   *  tuning it lives where it always did (the arc literals + rider color).
+   *  The rake pulse is structural, not a dial — a traffic rake never
+   *  pulses (trackLayer.ts). */
+  trackWarnVoice: {
+    traffic: {
+      /** Multiplier on each arc step's fade alpha (threat peak 0.34 →
+       *  traffic peak ≈ 0.12 — "far more transparent", the ruling's word). */
+      alphaScale: 0.35,
+      /** Multiplier on the surface-derived band width (the wain's 38px
+       *  kill-zone band thins to a ~17px wheel-line under its 48px body). */
+      widthScale: 0.45,
+    },
+  },
+
+  /** THE SURVIVAL VEIL (renderer.drawSurvivalVignette): the generic screen
+   *  wash any SURVIVAL_RESOURCES row may wear as its meter drains. The ROW
+   *  carries identity (colours, engagement line, peak depth —
+   *  SurvivalVignetteSpec in world/regions.ts); THIS block is the grammar
+   *  every row shares — the closing-in geometry, the last-gasp squeeze, the
+   *  underflow deepening. Breath debuts it: the screen turns blue as air
+   *  runs out. Screen-anchored BY LAW like every status overlay (the
+   *  anchored sky's explicit exemption, `veil.anchor: 'view'` — asphyxiation
+   *  happens TO the player, not to a place); rides the baked edge-overlay
+   *  fabric like the low-life seep, and draws UNDER the HUD for the same
+   *  reason — the meters must stay readable through the state they warn of.
+   *  (The Gloaming/descent's closing eye — gloamVignette,
+   *  drawDarknessVignette — is a separate hero-centred fabric describing the
+   *  WORLD's darkness; unifying the two is a deliberate future pass.) */
+  survivalVignette: {
+    /** Clear-centre radius (× the screen's short side): where the wash sits
+     *  at the row's startFrac (kissing the corners) → at an empty meter
+     *  (crept well in — the closing-in grammar). */
+    innerFrom: 0.55,
+    innerTo: 0.2,
+    /** Severity exponent over the sub-start range: >1 keeps the first
+     *  stretch a hint and the last third urgent. */
+    curve: 1.25,
+    /** Steady alpha at the engagement line (ramps to the row's maxAlpha). */
+    alphaFloor: 0.05,
+    /** The bright band's position along the gradient run (0 = clear-centre
+     *  edge … 1 = screen corner) and its alpha share of the rim's — HIGH on
+     *  purpose: the band is what makes the screen read as TURNING the row's
+     *  colour (eyeballed against deepsea's own blue-dark water, where a
+     *  timid band vanishes into the biome). */
+    midStop: 0.5,
+    midAlpha: 0.75,
+    /** THE LAST-GASP SQUEEZE: below this meter fraction a slow smooth swell
+     *  presses the veil inward and flushes it (drowning CLENCHES — only
+     *  hearts lub-dub), quickening periodFrom → periodTo as the meter runs
+     *  out. At a full swell: extra alpha (× the steady level), inward press
+     *  (× the screen's short side), colour lerp toward the row's flush.
+     *  Settings.lowLifePulse gates it (the one screen-pulse switch); the
+     *  steady veil is INFORMATION and always draws. */
+    pulse: { startFrac: 0.25, periodFrom: 2.4, periodTo: 1.1, alphaBoost: 0.35, reach: 0.06, flushMix: 0.35 },
+    /** THE DROWNING RAMP MADE VISIBLE: while the meter runs EMPTY the veil
+     *  keeps deepening on the row's OWN underflow-ramp clock
+     *  (Actor.underflowSince → underflowRampSecs — the same ramp the damage
+     *  rides, so drawn == suffered): extra inward press + a rising flush
+     *  lean over the ramp's seconds. Both flushMixes are LEANS by design —
+     *  measured 0.5+ turns the terminal seconds into a pale whiteout that
+     *  reads as fog and drowns the HUD's own words; the dread must stay
+     *  BLUE to the end. */
+    underflow: { reach: 0.1, flushMix: 0.22 },
+  },
+
+  /** THE EFFECT VOICE (render/vis/effectVoice.ts — the kind→painter registry
+   *  for flash moments; `fx` keys on data rows pick a voice, unkeyed rows
+   *  keep the generic ring, 'bolt' stays the lightning flags' own). Each
+   *  debut voice's dials live here so the whole vocabulary retunes without
+   *  touching draw code. */
+  effectVoice: {
+    /** 'blast' — the mortar landing: core-flash + smoke ring + debris. */
+    blast: {
+      /** Painter reach as a fraction of the flash's stamped radius. */
+      scale: 1.15,
+      /** Debris chips per burst (seeded — same chips every frame). */
+      debris: 7,
+      /** Peak alpha of the sooty smoke ring (rises as the flash dies). */
+      smokeAlpha: 0.5,
+    },
+    /** 'sporeburst' — the pod's soft pop: tinted veil + drifting motes. */
+    sporeburst: {
+      scale: 0.85,
+      /** Drifting spore motes per pop. */
+      motes: 9,
+      /** Peak alpha of the central veil (a breath, not a blast). */
+      veilAlpha: 0.34,
+      /** How far motes rise (px) across the drift — spores are light. */
+      lift: 9,
+    },
+    /** 'scramble' — the treed critter's exit: leaf/dust flecks, tiny. */
+    scramble: {
+      /** Hard cap on the painter's reach (px) — slipAway stamps a 60px
+       *  flash; the climb's weight is a squirrel's, so the voice stays
+       *  small no matter what radius the flash arrives wearing. */
+      maxRadius: 26,
+      /** Flicked flecks per exit. */
+      flecks: 6,
+    },
+  },
 } as const;
 
 // --- DEV FORENSICS (perf-harness levers — src/dev/perf.ts) ------------------
