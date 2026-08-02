@@ -22,7 +22,7 @@
 
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import type { Doodad } from '../../engine/levelgen';
-import { TRACK_CFG, trackArcFrac, trackDone, trackPending, trackPose, warnVoiceOf, type PlacedTrack } from '../../engine/tracks';
+import { TRACK_CFG, trackArcFrac, trackDone, trackPending, trackPose, warnBandPoints, warnVoiceOf, type PlacedTrack } from '../../engine/tracks';
 import type { World } from '../../engine/world';
 import { withAlpha } from './color';
 import { PAINTERS, type PaintEnv } from './painters';
@@ -133,19 +133,23 @@ export function drawTrackWarnArcs(ctx: CanvasRenderingContext2D, world: World,
       const color = r.def.color ?? '#9fd8ec';
       const aheadSec = warn / speed;
       const steps = 7;
+      // THE CLIPPED FUTURE (warnBandPoints): the band ends where the ride
+      // does. Sampling straight through a rearm lane's release end drew one
+      // segment from the death point back to the cradle — the whole chute
+      // snapping backward for the final warn window of every release (the
+      // QA rubberband). The sweep and the dodge-AI already skip pending
+      // futures; the band now strokes the same clipped truth.
+      const pts = warnBandPoints(tr, world.time, r.phase, r.def, aheadSec, steps);
       ctx.save();
       ctx.lineCap = 'round';
-      let prev = trackPose(tr, world.time, r.phase, r.def);
-      for (let k = 1; k <= steps; k++) {
-        const pose = trackPose(tr, world.time + (aheadSec * k) / steps, r.phase, r.def);
+      for (let k = 1; k < pts.length; k++) {
         const fade = 0.34 * (1 - (k - 1) / steps) * (soft ? soft.alphaScale : 1);
         ctx.strokeStyle = withAlpha(color, fade);
         ctx.lineWidth = width;
         ctx.beginPath();
-        ctx.moveTo(prev.x, prev.y);
-        ctx.lineTo(pose.x, pose.y);
+        ctx.moveTo(pts[k - 1].x, pts[k - 1].y);
+        ctx.lineTo(pts[k].x, pts[k].y);
         ctx.stroke();
-        prev = pose;
       }
       ctx.restore();
     }

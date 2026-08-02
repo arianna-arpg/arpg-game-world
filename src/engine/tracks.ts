@@ -644,15 +644,44 @@ export function trackArcFrac(tr: PlacedTrack, timeSec: number, phase: number): n
   return arcT.total > 0 ? s / arcT.total : 0;
 }
 
+/** THE DRAWN FUTURE (the warn band's polyline): pose samples ahead of a
+ *  rider, CLIPPED at the ride's end. A rearm lane's re-seat teleports the
+ *  pose back to the cradle the instant its release ends, and a band drawn
+ *  through that wrap strokes one segment from the death point clear back up
+ *  the lane — measured 696px against a 27px honest step, persisting for the
+ *  whole warn window before EVERY release end (the QA "rubberband"). The
+ *  sweep's substep skip and the threat scan's pending skip already read the
+ *  future clipped; this export makes the DRAWN reader speak the same law —
+ *  one truth, now stroked too. A pending PREFIX (pre-birth, cradle rest)
+ *  keeps its parked points: those segments are zero-length (invisible,
+ *  today's bytes) and the next release's stub still lights as its birth
+ *  enters the window. */
+export function warnBandPoints(tr: PlacedTrack, timeSec: number, phase: number,
+  rider: TrackRiderDef | undefined, aheadSec: number, steps: number): TrackPose[] {
+  const pts: TrackPose[] = [];
+  let live = false;
+  for (let k = 0; k <= steps; k++) {
+    const pose = trackPose(tr, timeSec + (aheadSec * k) / steps, phase, rider);
+    if (pose.pending && live) break; // the ride ENDS inside the window — the band stops where the ride does
+    if (!pose.pending) live = true;
+    pts.push(pose);
+  }
+  return pts;
+}
+
 /** A 'once' lane whose single pass has fully run (local time past the far
  *  end) — the cull test World.updateTracks and the probe both read. Pure of
  *  the same clock as trackPose; cyclic lanes are never done, and a REARMED
  *  once-lane cycles forever (its rest windows are pose-level pending). */
 export function trackDone(tr: PlacedTrack, timeSec: number): boolean {
   if (tr.spec.mode !== 'once' || (tr.spec.rearm ?? 0) > 0) return false;
-  // A shattered stone is done the moment its stamina ran out (phase 0 —
-  // plain once-lanes ride unphased; the lint says so).
-  const cap = Math.min(tr.passSec, rideCapOf(tr, 0, 0));
+  // Done when the LAST ride has run: each rider's pose clamps at rideCapOf
+  // of its OWN phase, so the cull waits for the worst rider cap — a phased
+  // stone is never culled mid-roll nor left lingering (measured 0.246s of
+  // early cull at phase 0.5 under the old phase-0 read). Riderless lanes
+  // (unknown-kind fallback) keep the phase-0 read.
+  let cap = tr.riders.length ? 0 : Math.min(tr.passSec, rideCapOf(tr, 0, 0));
+  for (const r of tr.riders) cap = Math.max(cap, Math.min(tr.passSec, rideCapOf(tr, r.phase, 0)));
   return timeSec - (tr.spec.bornAt ?? 0) >= cap;
 }
 
@@ -688,7 +717,7 @@ export function lintTrackSpec(spec: TrackSpec, where: string): string[] {
   if (!spec.path || spec.path.length < minPts) out.push(`${where}: path needs ≥${minPts} points`);
   if ((spec.mode ?? 'loop') === 'loop' && !spec.closed) out.push(`${where}: 'loop' requires closed:true (open lanes pingpong)`);
   if (spec.mode === 'once' && spec.closed) out.push(`${where}: 'once' requires an open lane (closed rings never retire)`);
-  if (spec.mode === 'once' && !spec.rearm && (spec.riders?.length ?? 0) > 1 && spec.riders.some(r => (r.phase ?? 0) !== 0)) {
+  if (spec.mode === 'once' && !spec.rearm && (spec.riders ?? []).some(r => (r.phase ?? 0) !== 0)) {
     out.push(`${where}: 'once' riders share the single pass — phase offsets are dead weight (stagger bornAt across lanes, or rearm the lane)`);
   }
   if (spec.rearm !== undefined) {

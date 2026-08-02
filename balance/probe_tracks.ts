@@ -16,7 +16,8 @@
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { mitigateTyped } from '../src/engine/damage';
-import { placeTrack, trackPose, trackRider, ringPath, linePath, lintTrackSpec, TRACK_CFG, type TrackSpec } from '../src/engine/tracks';
+import { placeTrack, trackPose, trackRider, trackDone, rideCapOf, warnBandPoints, ringPath, linePath, lintTrackSpec, TRACK_CFG, type TrackSpec } from '../src/engine/tracks';
+import { drawTrackWarnArcs } from '../src/render/vis/trackLayer';
 import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { type Doodad } from '../src/engine/levelgen';
 import { serializeZone, applyZone } from '../src/net/snapshot';
@@ -503,6 +504,177 @@ const DT = 1 / 60;
   check('wain: traffic, not a saw (bitten, never shredded)',
     !m.dead && m.life < l0 && m.life > l0 * 0.35,
     `life ${l0.toFixed(0)} → ${m.life.toFixed(0)}`);
+}
+
+// --- 13) THE END-OF-RUN CLAMP: the drawn future ends where the ride does ---
+// (The QA rubberband, named: a rearm lane's release end re-seats the pose at
+// the cradle by the pure law, and the warn band — sampling straight through
+// that wrap — stroked ONE segment from the death point clear back up the
+// lane (measured 696px against a 27px honest step) for the whole warn
+// window of EVERY release: the band visibly snapped backward up the chute.
+// The contact sweep's substep skip and the threat scan's pending skip
+// already read the future CLIPPED; warnBandPoints clips the DRAWN reader to
+// the same law — one truth from one resolver, now stroked too. Beside it:
+// the plain-once terminal CLAMP holds (never wraps), trackDone waits for a
+// phased rider's own stamina cap (the cull can no longer blink a stone out
+// mid-roll — measured 0.246s early at phase 0.5 under the old phase-0
+// read), and the shatter read's rubble pock is TRANSIENT BY CONSTRUCTION:
+// minted with evap, dried and spliced by the evap sweep, dropped whole by
+// any zone re-mint — no save path carries a pock, so a permanent one
+// cannot exist.)
+{
+  // (a) The terminal clamp: far past its pass a plain once-lane PARKS at
+  // the far end — no wrap back toward the cradle, no pending flag (the
+  // cull owns retirement; the pose law owns the parking).
+  const plain = placeTrack({
+    path: linePath(vec(0, 0), vec(600, 0)), mode: 'once', speed: 200,
+    riders: [{ kind: 'ruin_boulder' }],
+  });
+  const parked = trackPose(plain, plain.passSec + 9, 0);
+  check('clamp: a plain once-lane parks at the far end long past its pass (never wraps)',
+    Math.abs(parked.x - 600) < 1e-6 && !parked.pending, `x=${parked.x.toFixed(1)} pending=${!!parked.pending}`);
+
+  // The chute EXACTLY as layBoulderChutes authors it (levelgen.ts): once +
+  // rearm + stamina shatter, boulders in phased file.
+  const total = 820, speed = 225;
+  const chuteSpec: TrackSpec = {
+    path: linePath(vec(300, 500), vec(300 + total, 500)), mode: 'once', speed,
+    rearm: 7,
+    shatter: [Math.round(total / speed * 0.65 * 10) / 10, Math.round(total / speed * 1.25 * 10) / 10],
+    riders: [{ kind: 'ruin_boulder', phase: 0 }, { kind: 'ruin_boulder', phase: 0.5 }],
+    tag: 'probe_chute13',
+  };
+  const chute = placeTrack(chuteSpec);
+  let mid: { phase: number; k: number; cap: number } | null = null;
+  for (let k = 0; k < 40 && !mid; k++) {
+    for (const r of chute.riders) {
+      const cap = rideCapOf(chute, r.phase, k);
+      if (cap < chute.passSec * 0.92) { mid = { phase: r.phase, k, cap }; break; }
+    }
+  }
+  check('clamp: the stamina roll deals mid-lane deaths to test against', !!mid,
+    mid ? `phase ${mid.phase} release ${mid.k} dies at ${mid.cap.toFixed(2)}s of ${chute.passSec.toFixed(2)}s` : 'none in 40 releases');
+  if (mid) {
+    const def = trackRider('ruin_boulder')!;
+    const aheadSec = (def.warnAhead ?? TRACK_CFG.warnAhead) / speed;
+    const stepPx = (aheadSec / 7) * speed;
+    const relStart = mid.k * chute.periodSec - mid.phase * chute.periodSec;
+    const capT = relStart + mid.cap;
+    const death = trackPose(chute, capT - 1e-4, mid.phase);
+    // (b) The band never wraps: a dense clock sweep across the death window
+    // — every drawn segment stays within the honest per-step travel, and
+    // while the death sits inside the window the band's last point HUGS the
+    // death point (retraction, never a snap back up the lane).
+    let worstSeg = 0, retractOk = true, windowSampled = false;
+    for (let i = 0; i <= 300; i++) {
+      const t = capT - aheadSec - 0.1 + i * ((aheadSec + 0.2) / 300);
+      if (t < relStart) continue;
+      const pts = warnBandPoints(chute, t, mid.phase, def, aheadSec, 7);
+      for (let k = 1; k < pts.length; k++) {
+        worstSeg = Math.max(worstSeg, Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
+      }
+      if (t < capT - 1e-3 && t > capT - aheadSec + aheadSec / 7) {
+        windowSampled = true;
+        const last = pts[pts.length - 1];
+        if (Math.hypot(last.x - death.x, last.y - death.y) > stepPx + 1e-6) retractOk = false;
+      }
+    }
+    check('clamp: the warn band NEVER wraps a release end (worst segment ≤ the honest step; was 696px)',
+      worstSeg <= stepPx + 1e-6, `worst ${worstSeg.toFixed(1)}px vs honest ${stepPx.toFixed(1)}px`);
+    check('clamp: the clipped band retracts TO the death point (last point within one step of it)',
+      windowSampled && retractOk);
+    // (b2) Absent == identical: away from any release end the clipped band
+    // IS the naive sampling, pose for pose — the fix costs the honest case
+    // nothing.
+    const tMid = relStart + mid.cap * 0.4;
+    const clipped = warnBandPoints(chute, tMid, mid.phase, def, aheadSec, 7);
+    let same = clipped.length === 8;
+    for (let k = 0; k <= 7 && same; k++) {
+      const naive = trackPose(chute, tMid + (aheadSec * k) / 7, mid.phase, def);
+      same = clipped[k].x === naive.x && clipped[k].y === naive.y && clipped[k].rot === naive.rot;
+    }
+    check('clamp: away from the end the clipped band IS the naive sampling (byte-identical)', same);
+    // (b3) DRAWN == PINNED: the REAL drawTrackWarnArcs on a recording stub —
+    // across the whole death window, no stroked segment (either rider's
+    // band) exceeds the honest step. The layer speaks the clipped law.
+    const wStub = makeSimWorld('warrior', 9299);
+    wStub.player.pos = vec(60, 60);
+    wStub.addTrack(chuteSpec);
+    let worstDrawn = 0;
+    for (let i = 0; i <= 120; i++) {
+      let cur: { x: number; y: number } | null = null;
+      const stub = {
+        lineWidth: 0, strokeStyle: '', lineCap: '', lineJoin: '', globalAlpha: 1,
+        save() {}, restore() {}, beginPath() { cur = null; },
+        moveTo(x: number, y: number) { cur = { x, y }; },
+        lineTo(x: number, y: number) {
+          if (cur) worstDrawn = Math.max(worstDrawn, Math.hypot(x - cur.x, y - cur.y));
+          cur = { x, y };
+        },
+        stroke() {},
+      } as unknown as CanvasRenderingContext2D;
+      wStub.time = capT - aheadSec - 0.05 + i * ((aheadSec + 0.1) / 120);
+      if (wStub.time < 0) continue;
+      drawTrackWarnArcs(stub, wStub, 0, 0, 4000, 4000);
+    }
+    check('clamp: the REAL track layer strokes no wrap segment across the death window (drawn == pinned)',
+      worstDrawn <= stepPx + 1e-6, `worst stroked ${worstDrawn.toFixed(1)}px`);
+  }
+
+  // (c) trackDone waits for the phased rider's OWN cap: the pose clamp and
+  // the cull read the same rideCapOf — a phased stone is never culled
+  // mid-roll (blinked out) nor left lingering past its last ride.
+  const phasedSpec: TrackSpec = {
+    path: linePath(vec(0, 0), vec(900, 0)), mode: 'once', speed: 300,
+    shatter: [1, 2.4], riders: [{ kind: 'ruin_boulder', phase: 0.5 }],
+  };
+  const phased = placeTrack(phasedSpec);
+  const pCap = Math.min(phased.passSec, rideCapOf(phased, 0.5, 0));
+  const still = trackPose(phased, pCap - 0.05, 0.5);
+  check('clamp: trackDone waits for the phased rider\'s own stamina cap (cull == pose clamp)',
+    !trackDone(phased, pCap - 0.05) && trackDone(phased, pCap + 0.001),
+    `cap ${pCap.toFixed(3)}s; done(cap−.05)=${trackDone(phased, pCap - 0.05)} done(cap+.001)=${trackDone(phased, pCap + 0.001)}`);
+  check('clamp: at cull−0.05s the stone still honestly rides (no mid-roll blink-out window)',
+    !still.pending && still.x > 0 && still.x < 900, `x=${still.x.toFixed(0)}`);
+  const gripes13 = lintTrackSpec(phasedSpec, 'probe');
+  check('lint: a SINGLE phased rider on a plain once-lane now gripes (dead weight — the hash-salt trap)',
+    gripes13.some(g => g.includes('dead weight')));
+
+  // (d) THE RUBBLE IS TRANSIENT BY CONSTRUCTION: a shattered release mints
+  // one evap-armed boulder_rubble pock; the evap sweep dries and SPLICES it;
+  // a re-armed lane's next death mints a fresh one; and any zone re-mint
+  // drops runtime rubble whole (loadZone re-derives doodads from the seed —
+  // no save path carries a pock, so a permanent one cannot exist).
+  const w = makeSimWorld('warrior', 9301);
+  w.player.pos = vec(80, 80);
+  const t0 = w.time;
+  w.addTrack({
+    path: linePath(vec(300, 500), vec(900, 500)), mode: 'once', speed: 200,
+    rearm: 7, shatter: [1.2, 1.4], bornAt: t0,
+    riders: [{ kind: 'ruin_boulder' }], tag: 'probe_chute',
+  });
+  for (let i = 0; i < Math.ceil(2.2 / DT); i++) w.update(DT);
+  const pock = w.doodads.find(d => d.kind === 'boulder_rubble');
+  check('rubble: a shattered release leaves ONE drying pock (evap-armed walkable bones)',
+    !!pock && !!pock.evap && w.doodads.filter(d => d.kind === 'boulder_rubble').length === 1,
+    pock ? `r=${pock.radius.toFixed(1)} dwell=${pock.evap?.t.toFixed(1)}s rate=${pock.evap?.rate}` : 'no pock minted');
+  w.setTracksArmed('probe_chute', false); // no further releases — isolate this pock's lifecycle
+  for (let i = 0; i < Math.ceil(30 / DT); i++) w.update(DT);
+  check('rubble: the pock dries and RETIRES through the evap sweep (dwell, contraction, splice)',
+    !w.doodads.some(d => d.kind === 'boulder_rubble'));
+  w.setTracksArmed('probe_chute', true);
+  let pock2 = false;
+  for (let i = 0; i < Math.ceil(14 / DT) && !pock2; i++) {
+    w.update(DT);
+    pock2 = w.doodads.some(d => d.kind === 'boulder_rubble');
+  }
+  check('rubble: a re-armed lane\'s next death mints a FRESH pock (the recurring read, one per death)', pock2);
+  const home13 = w.zone.id;
+  w.zoneMap['probe_hop13'] = { ...w.zoneMap[home13], id: 'probe_hop13', name: 'Probe Hop', seed: 4712, special: false };
+  w.loadZone('probe_hop13');
+  w.loadZone(home13);
+  check('rubble: a zone re-mint drops the pock whole (transient by construction — no save path carries it)',
+    !w.doodads.some(d => d.kind === 'boulder_rubble'));
 }
 
 console.log(failed === 0 ? '\nALL CHECKS PASS' : `\n${failed} CHECK(S) FAILED`);
