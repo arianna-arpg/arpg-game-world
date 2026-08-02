@@ -8184,6 +8184,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       // domed toward the zone's heart).
       { kind: 'rocks', count: [2, 4], radius: [20, 44],
         where: { field: 'elevation', min: 0.62, params: { scale: 640, dome: 0.35 } } },
+      // An ember crystal set in the maze's own walls — the pass windbreaks
+      // generously by construction, so the carried glow is a find here, not
+      // a fixture (the mountain hearth kit, data/massifs.ts; layout-tail).
+      { kind: 'hearth_crystal', count: [0, 1] },
     ],
     packs: {
       count: [6, 9], size: [3, 5],
@@ -8275,6 +8279,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       // reads uphill toward its own heart).
       { kind: 'rocks', count: [2, 4], radius: [20, 44],
         where: { field: 'elevation', min: 0.62, params: { scale: 640, dome: 0.35 } } },
+      // The first hearth crystal of the climb — no cold down here yet, so
+      // the approach TEACHES the ritual with zero stakes (the mountain
+      // hearth kit, data/massifs.ts). LAYOUT-TAIL on every mountain face
+      // (base + variants) by the append-by-history law: a common row would
+      // prepend and re-roll every prior draw of the whole family.
+      { kind: 'hearth_crystal', count: [0, 1] },
     ],
     common: [
       { kind: 'cairn', count: [1, 2] },
@@ -8289,6 +8299,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'scree', count: [1, 2] },
         { kind: 'haven_stone', count: [0, 1] },
         { kind: 'snowdrift', count: [0, 3], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
+        // The hearth rides every face — LAYOUT-TAIL by the append-by-history
+        // law (a common row would prepend and re-roll the whole face).
+        { kind: 'hearth_crystal', count: [0, 1] },
       ], layoutParams: {
         massifMasses: [{ kind: 'tor', weight: 3 }, { kind: 'bluff', weight: 1.2 }],
         massifCoverage: [0.11, 0.16],
@@ -8303,6 +8316,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'gallows', count: [0, 1] },
         { kind: 'formation', count: [0, 1], formation: 'standing_avenue' },
         { kind: 'snowdrift', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
+        { kind: 'hearth_crystal', count: [0, 1] },
       ], layoutParams: {
         massifMasses: [{ kind: 'fold', weight: 2.5 }, { kind: 'tor', weight: 1.5 }, { kind: 'bluff', weight: 1 }],
         massifCoverage: [0.12, 0.17],
@@ -8427,6 +8441,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       // shifts every later row's rng draws (the fuse-warn trap), so it is
       // filed by history, not by theme.
       { kind: 'camp', count: [0, 1] },
+      // The crossing rarely offers mercy: an ember crystal only where true
+      // crag stands (the embed law refuses gorge lips — air is not stone;
+      // the mountain hearth kit, data/massifs.ts). Filed by history.
+      { kind: 'hearth_crystal', count: [0, 1] },
     ],
     common: [
       { kind: 'cairn', count: [1, 2] },
@@ -8444,6 +8462,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'conifers', count: [2, 4] },
         { kind: 'cave', count: [2, 4] },
         { kind: 'snowdrift', count: [0, 3], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
+        { kind: 'hearth_crystal', count: [0, 1] },
       ] },
       // The high shelves: vaster benches, meaner ledges between them.
       { name: 'the high shelves', layout: [
@@ -8454,6 +8473,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'cave', count: [1, 2] },
         { kind: 'stormglass_shard', count: [1, 3] },
         { kind: 'snowdrift', count: [0, 4], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
+        { kind: 'hearth_crystal', count: [0, 1] },
       ], layoutParams: {
         karstPocketR: [190, 300], karstCorridorW: [36, 50], karstGap: [360, 450],
         // Bounces where the rare crag face allows — but the Overpass's own
@@ -8576,6 +8596,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       // The crown's own crags ride the high ground (elevation strata).
       { kind: 'rocks', count: [2, 4], radius: [20, 42],
         where: { field: 'elevation', min: 0.62, params: { scale: 640, dome: 0.35 } } },
+      // THE face of the hearth-to-hearth conversation: every crown zone
+      // ATTEMPTS its ember crystal (the embed law may still refuse — a
+      // zone without a hearth is the route decision biting, and the
+      // waystation compositions remain the other fire). LAYOUT-TAIL on
+      // base + both variants by the append-by-history law.
+      { kind: 'hearth_crystal', count: [1, 1] },
     ],
     common: [
       { kind: 'cairn', count: [1, 3] },
@@ -8589,6 +8615,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'rocks', count: [3, 6], radius: [18, 38] },
         { kind: 'formation', count: [1, 2], formation: 'ice_teeth' },
         { kind: 'haven_stone', count: [0, 1] },
+        { kind: 'hearth_crystal', count: [1, 1] },
       ], theme: { fog: { banks: [2, 3], kinds: [{ id: 'mist' }] } } },
       // The icefall — sheet ice and hanging teeth, the slickest climb.
       { name: 'the icefall', layout: [
@@ -8598,6 +8625,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'rocks', count: [4, 7], radius: [20, 40] },
         { kind: 'formation', count: [1, 2], formation: 'ice_teeth' },
         { kind: 'stormglass_shard', count: [1, 2] },
+        { kind: 'hearth_crystal', count: [1, 1] },
       ] },
     ],
     packs: {
@@ -8686,6 +8714,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Crags crown the HIGH ground here too (the pass's elevation read).
       { kind: 'rocks', count: [2, 4], radius: [20, 44],
         where: { field: 'elevation', min: 0.62, params: { scale: 640, dome: 0.35 } } },
+      // The bald crown's answer to the gale tax — the tribes keep their
+      // ember crystals set in the fell's own bones (layout-tail on base +
+      // both variants, the append-by-history law).
+      { kind: 'hearth_crystal', count: [1, 1] },
     ],
     common: [
       { kind: 'cairn', count: [2, 4] },
@@ -8700,6 +8732,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'camp', count: [1, 2] },
         { kind: 'formation', count: [1, 2], formation: 'standing_avenue' },
         { kind: 'gallows', count: [0, 1] },
+        { kind: 'hearth_crystal', count: [1, 1] },
       ] },
       // Mountain scrub — wind-carded thorn and stunted pine.
       { name: 'thornfell', layout: [
@@ -8709,6 +8742,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'conifers', count: [2, 4] },
         { kind: 'scree', count: [2, 4] },
         { kind: 'formation', count: [0, 1], formation: 'fulgurite_scar' },
+        { kind: 'hearth_crystal', count: [1, 1] },
       ] },
     ],
     packs: {
@@ -8779,6 +8813,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'stormglass_shard', count: [0, 2] },
       { kind: 'formation', count: [0, 1], formation: 'pine_stand' },
       { kind: 'haven_stone', count: [0, 1] },
+      // The base-camp ritual: touch the ember, then race the glow to the
+      // peak (the embed law seats it against the benches' own cliff faces
+      // or the valley skirt's crags — wherever the mountain stands;
+      // layout-tail on base + both variants, the append-by-history law).
+      { kind: 'hearth_crystal', count: [1, 1] },
     ],
     common: [
       { kind: 'cairn', count: [1, 3] },
@@ -8791,6 +8830,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'conifers', count: [1, 2] },
         { kind: 'stormglass_shard', count: [0, 2] },
         { kind: 'haven_stone', count: [0, 1] },
+        { kind: 'hearth_crystal', count: [1, 1] },
       ], layoutParams: { peakArc: 'full', peakLevels: [4, 5] } },
       // The shoulder road: a half-mountain set against one edge — the
       // ascent hugs the face, the skirt wraps the open side.
@@ -8801,6 +8841,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'boulder_field', count: [0, 1] },
         { kind: 'formation', count: [0, 1], formation: 'pine_stand' },
         { kind: 'haven_stone', count: [0, 1] },
+        { kind: 'hearth_crystal', count: [1, 1] },
       ], layoutParams: { peakArc: 'half', peakLevels: [3, 4] } },
     ],
     packs: {

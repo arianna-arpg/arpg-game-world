@@ -42829,9 +42829,13 @@ export class World {
       const a = s.actor;
       if (a.dead || a.downed) continue;
       let t = (this.chillTimers.get(a.id) ?? 0) + dt;
-      // WARMTH, cheapest test first: a roof, then any warms-ruled fire in
-      // reach (the waystation hearth), then the lee of a windbreak.
-      let warmed = this.underRoofAt(a.pos);
+      // WARMTH, cheapest test first: a carried ward (the windchillWard stat
+      // — the mountain hearth's hearthglow ember, or any gear/passive that
+      // grants it; a pure sheet read), then a roof, then any warms-ruled
+      // fire in reach (the waystation hearth), then the lee of a windbreak.
+      // A ward is WARMTH, not immunity: it banks nothing and sheds stacks
+      // on the ordinary dwindle clock below, exactly as beside a fire.
+      let warmed = a.sheet.get('windchillWard') > 0 || this.underRoofAt(a.pos);
       if (!warmed) {
         for (const d of this.doodadsNear(a.pos.x, a.pos.y, WINDCHILL_CFG.warmReach)) {
           if (d.gone || d.felled) continue; // a crushed hearth warms no one (the rampage fabric)

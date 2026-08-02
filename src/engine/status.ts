@@ -1134,6 +1134,23 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     mods: [mod('detectionRange', 'more', -0.45), mod('detectability', 'more', -0.45)],
   },
 
+  // THE MOUNTAIN HEARTH's grant (data/massifs.ts hearth_crystal — the ember
+  // crystal's contact row stamps this on any body that touches it): warmth
+  // you WALK WITH. While it holds, the windchillWard stat reads you as
+  // WARMED wherever you stand (World.updateWindchill) — the mountain cold
+  // banks nothing and any chill you already carry sheds on the ordinary
+  // dwindle clock, exactly as beside a fire. A ward against the WEATHER,
+  // never immunity: the whiteout fog's own grant melts too (warmth is
+  // warmth), but cold HITS and their chills still land full. Generous
+  // duration on purpose — the crown's identity line is "hearth to hearth",
+  // and the walk back to a cooled crystal is the price already paid.
+  // powerInert: a binary ward — you cannot be warmer than warm.
+  hearthglow: {
+    label: 'Hearthglow', color: '#ffb45e', duration: 90, beneficial: true,
+    powerInert: true,
+    mods: [mod('windchillWard', 'flat', 1)],
+  },
+
   // THE GLIMMERKIN's hold (the grove country): a light too interesting to
   // look away from. The held walk as through honey and sometimes press the
   // wrong hand entirely (THE ADDLED HAND — scrambleChance), which is fair

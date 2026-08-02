@@ -657,6 +657,7 @@ const STAT_BLURBS: Record<string, string> = {
   remnantOnCast: 'Chance a direct cast of a school sheds its remnant.',
   mimicWitness: 'Opens WITNESSED capture: studied arts cast near you are banked without your having to take the blow. The value is how far away you can learn from.',
   mimicBank: 'Extra captured arts your mimic repertoire holds at once.',
+  windchillWard: 'While above 0, mountain windchill reads you as WARMED wherever you stand: the cold banks no chill and any you carry sheds as beside a fire. The hearthglow ember is the standing carrier; cold hits still land full.',
   possessDuration: 'Multiplies how long you may ride a possessed body before the seat snaps home.',
   possessPower: 'Lifts the power a borrowed kit casts at: a ridden body swings closer to its own full strength.',
   huskGuard: 'Less damage your vacated body takes while your seat is away wearing another; the trance is warded, never safe.',

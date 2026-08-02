@@ -1496,7 +1496,20 @@ function layBoulderChutes(ctx: GenCtx, def: ZoneDef): void {
     laid++;
     // The runway — worn stone the whole (possibly caroming) length; the
     // clearway sweep keeps it open.
+    const wayStart = ctx.doodads.length;
     layTraveledWay(ctx, pts, { kind: 'track_groove', band: [13, 17], step: 26, overgrowth: 0 });
+    // THE LIP CLIP (2026-08-02): the march walks the CENTERLINE on walkable
+    // cells, but the way-layer's jittered pieces can straddle the lip where
+    // a run dies at the gorge — and a groove needs ground under it (genqa's
+    // floating-over-void invariant; a latent seed-lottery class, surfaced
+    // when the mountain family's hearth tails re-rolled the chute stream).
+    // A pure splice after the roll: no draws, stream-identical — only the
+    // overhanging pieces go, the same lip the cradle seat below already
+    // refuses to back over.
+    for (let i = ctx.doodads.length - 1; i >= wayStart; i--) {
+      const gp = ctx.doodads[i];
+      if (gp.kind === 'track_groove' && overVoid(ctx, gp.pos.x, gp.pos.y)) ctx.doodads.splice(i, 1);
+    }
     // The cradle — a rock BESIDE the head names where the stone comes from.
     // Perpendicular seat: never ON the runway (the clearway sweep would
     // rightly splice it) and never past the lip (the run's head hugs the

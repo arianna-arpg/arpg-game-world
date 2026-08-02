@@ -27,6 +27,14 @@ import { registerDoodadRule } from '../engine/levelgen';
 registerLightwell({ kind: 'campfire', feed: 7 });
 registerLightwell({ kind: 'brazier', feed: 6 });
 registerLightwell({ kind: 'hearth', feed: 8 });
+// The mountain hearth crystal (data/massifs.ts kit): the highland family's
+// ember shrine joins the strong holds — STEADY on purpose (no pool: the
+// commission's re-use law reaches the Gloaming too; the crystal never dims,
+// never dies, and a biting front makes the hearth-to-hearth route a lamp
+// route for free). Its glow, its warm ring and this feed's reach are ONE
+// number (lightReach reads the visual radius; probe_massif rig Q pins it
+// equal to the rule's warms).
+registerLightwell({ kind: 'hearth_crystal', feed: 7 });
 
 // Lamplight — wide, dim, civic: the lit road slows the bleed, it doesn't heal it.
 registerLightwell({ kind: 'lantern_post', feed: 4 });
