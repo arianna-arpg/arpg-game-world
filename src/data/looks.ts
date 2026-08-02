@@ -9131,6 +9131,88 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'runes', scale: 0.95, params: { n: 3 } },
     ],
   },
+
+  // ============================= THE HOMED KIN, WAVE EIGHT (the lairs)
+  /** THE MANTIS ABBESS: the school's whole habit on one frame — scythe-arms
+   *  folded in prayer (the casting tell raises them), the leaf-guard worn
+   *  ready to flare (the bluff's license), antennae that are always
+   *  reading. Wings kept folded: she has never needed to leave. */
+  mantis_abbess: {
+    parts: [
+      { kind: 'shell', scale: 0.95 },
+      { kind: 'mothWings', scale: 0.8, alpha: 0.55 },
+      { kind: 'legs', scale: 1.1, params: { n: 6 } },
+      { kind: 'raptorArms', scale: 1.0, params: { fold: 1.1 } },
+      { kind: 'antennae', x: 0.3, scale: 1.1 },
+      { kind: 'eyeCluster', x: 0.34, scale: 0.7, color: '#d8f0a0' },
+    ],
+  },
+  /** THE GREAT AUROCHS: a wall of shoulder that happens to have legs — the
+   *  hump carries the engine, the horns carry the argument, the winter
+   *  coat carries the north. Breath you can see: the bellows never stop. */
+  great_aurochs: {
+    parts: [
+      { kind: 'torso', scale: 1.15 },
+      { kind: 'hump', x: -0.2, scale: 1.05 },
+      { kind: 'furRuff', scale: 1.0, alpha: 0.9 },
+      { kind: 'mane', scale: 0.9, alpha: 0.85 },
+      { kind: 'snout', x: 0.36, scale: 0.95, params: { ears: false } },
+      { kind: 'horns', x: 0.28, scale: 1.25 },
+      { kind: 'eyes', color: '#d87a3a', params: { spread: 0.36, dist: 0.6, size: 0.08 } },
+    ],
+    live: [{ kind: 'breathPuff', scale: 0.9 }],
+  },
+  /** THE RIMECLAD ELDER: a mountain in a coat of hoarfrost — trunk, tusks,
+   *  and the ice mail the ply tell drops plate by plate (the armorPlates
+   *  row rides the live-part pass; these are the always-on bones). */
+  rimeclad_elder: {
+    parts: [
+      { kind: 'torso', scale: 1.18 },
+      { kind: 'hump', x: -0.24, scale: 1.1 },
+      { kind: 'furRuff', scale: 1.05, alpha: 0.9 },
+      { kind: 'trunkNose', x: 0.4, scale: 1.1 },
+      { kind: 'tusks', x: 0.34, scale: 1.3 },
+      { kind: 'icicles', scale: 0.95, alpha: 0.9 },
+      { kind: 'eyes', color: '#8ed0ec', params: { spread: 0.34, dist: 0.62, size: 0.07 } },
+    ],
+  },
+  /** THE HOLLOW HUNTSMAN: a hood with no face in it, a couched grave-bill,
+   *  and the Hunt's old livery gone to tatters — the saddle is the rest of
+   *  the silhouette (the mount fabric supplies the horse). */
+  hollow_huntsman: {
+    parts: [
+      { kind: 'tatters', scale: 1.0, alpha: 0.9 },
+      { kind: 'pauldrons', scale: 0.95 },
+      { kind: 'hood', scale: 1.0 },
+      { kind: 'trident', x: 0.3, scale: 1.2, alpha: 0.95 },
+      { kind: 'eyes', color: '#9fd8b0', params: { spread: 0.3, dist: 0.5, size: 0.09 } },
+    ],
+  },
+  /** THE GLOAM COURSER: a horse remembered more than resembled — gaunt
+   *  frame, smoke mane, gauze where the flanks thin out. The Hunt's
+   *  stable does not feed them; the dark does. */
+  gloam_courser: {
+    parts: [
+      { kind: 'torso', scale: 1.05 },
+      { kind: 'soulGauze', scale: 0.95, alpha: 0.6 },
+      { kind: 'mane', scale: 1.05, alpha: 0.9 },
+      { kind: 'snout', x: 0.38, scale: 1.0, params: { ears: true } },
+      { kind: 'tail', x: -0.42, scale: 0.9, alpha: 0.85 },
+      { kind: 'eyes', color: '#9fd8b0', params: { spread: 0.28, dist: 0.64, size: 0.08 } },
+    ],
+  },
+  /** THE TIDEHEART MATRON: a chambered shell with a pulse — spiral whorl,
+   *  polyp fringe, and the pale valve-eye that watches the whole womb.
+   *  The tide is her other body; this is just the part you can hit. */
+  tideheart_matron: {
+    parts: [
+      { kind: 'shellSpiral', scale: 1.1 },
+      { kind: 'polyps', scale: 0.95, alpha: 0.9 },
+      { kind: 'lashFringe', scale: 0.9, alpha: 0.8 },
+      { kind: 'gillFrill', x: 0.3, scale: 0.85, alpha: 0.85 },
+      { kind: 'irisEye', x: 0.32, scale: 0.6, color: '#bfe8e0' },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

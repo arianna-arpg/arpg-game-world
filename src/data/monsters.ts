@@ -20004,6 +20004,220 @@ export const MONSTERS: Record<string, MonsterDef> = {
       }],
     },
   },
+
+  // ==========================================================================
+  // THE HOMED KIN — WAVE EIGHT of the lair fabric (data/lairs.ts): five more
+  // natives with front doors, spread across the biomes that had none. Each
+  // resident is NEW (the ratified law) and each den seats ONE landed fabric
+  // as its whole argument; the countries, mouths and seat predicates live
+  // beside the lairs. Standing verbs only — no new skills were minted.
+  // ==========================================================================
+
+  // THE MANTIS ABBESS — the readers' school given a schoolhouse (the Scythe
+  // Court, jungle). The mantid curriculum worn by one body: she FEINTS at
+  // school rate — lawful ONLY because the guard-side flare distinguishes
+  // every bluff (the readable-bluff license the duelist teaches) — her
+  // antennae read YOUR bar back (the augur's forecast), and a commitment
+  // in her reach is answered across the gap (the penitent's spring). The
+  // stat block is deliberately modest; the reading is the fight.
+  mantis_abbess: {
+    id: 'mantis_abbess', name: 'Mantis Abbess',
+    color: '#8ed070', shape: 'kite', radius: 17, material: 'chitin', look: 'mantis_abbess',
+    boss: true,
+    base: { life: 340, moveSpeed: 155, accuracy: 118, evasion: 70, mana: 0, insight: 40 },
+    skills: ['mantis_scythe', 'penitent_lunge', 'claw'],
+    xp: 210, loot: 'lair_hoard',
+    tags: ['beast'],
+    detection: 1.2,
+    tells: [
+      // The duelist's asymmetric build at abbess scale: a true cut raises
+      // the scythe arm with the bar ('casting' reads 0 through any bluff,
+      // BY LAW)...
+      {
+        source: 'casting', steps: 4, portrait: 0.7,
+        channel: {
+          kind: 'part',
+          part: { kind: 'raptorArms', params: { side: 1, len: 1.1, fold: 0.95 } },
+          alpha: [0, 0.95], scale: [0.8, 1.1],
+        },
+      },
+      // ...a BLUFF flares the leaf-guard instead — hold your dodge through
+      // a guard-side flare and punish the drop. The license for the rate.
+      {
+        source: 'feinting', steps: 1, portrait: 0,
+        channel: {
+          kind: 'part',
+          part: { kind: 'shield', role: 'base' },
+          alpha: [0, 0.95], scale: [0.75, 1.1],
+        },
+      },
+      // The augur's dowsing antennae, surging toward what they read: your
+      // own committed hands.
+      {
+        source: 'foecast', band: [0, 0.35], steps: 3, portrait: 0.8,
+        channel: {
+          kind: 'part',
+          part: { kind: 'antennae', scale: 1.3 },
+          alpha: [0.25, 1], scale: [1, 1.3],
+        },
+      },
+    ],
+    brain: {
+      type: 'flanker',
+      behavior: { feint: { chance: 0.4, hold: [0.3, 0.5] }, castArc: 0.8, reaction: [0.2, 0.5] },
+      rules: [{
+        // The penitent's answer worn as a rule: a bar committed at range
+        // springs the abbess across the gap to meet it.
+        when: { targetCasting: 0.3, distUnder: 340 },
+        cooldown: 3,
+        actions: [{ do: 'dash', toward: 'target', speed: 620, duration: 0.3 }],
+      }],
+    },
+  },
+
+  // THE GREAT AUROCHS — the mass fabric grazing (the Stamping Ground,
+  // taiga). A ton of animal wearing the weight laws as its whole argument:
+  // the charge is an avalanche with hooves — bodies it catches are BOWLED
+  // through whatever stands behind them (the bowling lane), a wall ends
+  // the flight the hard way (arrested momentum wounds), and shoving HIM
+  // is a tax few statures can pay (heft — the mass fold's other
+  // direction). Fight him among his own herd and the herd is ammunition;
+  // fight him at a wall and the wall is his.
+  great_aurochs: {
+    id: 'great_aurochs', name: 'Great Aurochs',
+    color: '#7a5c40', shape: 'trapezoid', radius: 26, material: 'fur', look: 'great_aurochs',
+    heft: 2.6, boss: true,
+    base: { life: 430, moveSpeed: 122, accuracy: 100, armor: 42, mana: 45, manaRegen: 4, poise: 130 },
+    mods: [mod('coldRes', 'flat', 0.4)],
+    skills: ['charge', 'gore_rend', 'heavy_strike'],
+    xp: 220, loot: 'lair_hoard',
+    faction: 'beast', tags: ['beast'],
+    vision: { arcDeg: 120, rearMul: 0.5 },
+    brain: {
+      type: 'juggernaut', enrage: 0.4,
+      behavior: { castArc: 0.6, reaction: [0.3, 0.6] },
+      drives: { wrath: { rise: -0.05, onHurt: 0.08 } },
+      rules: [{
+        when: { drive: { id: 'wrath', above: 0.6 } },
+        announce: 'the ground SHAKES: the aurochs commits his whole weight!',
+        use: { skillUse: { cadence: [0.1, 0.25] }, move: { style: 'direct', pace: 1.25 } },
+      }],
+    },
+  },
+
+  // THE RIMECLAD ELDER — the ply fabric frozen solid (the Rimevault,
+  // tundra). A mammoth the glacier kept: its rime mail EATS twelve landed
+  // blows magnitude-blind (one ply per hit, no life moved) before anything
+  // underneath can be wounded — your greatest crit chips exactly one
+  // plate, the same as a thrown stone, so CADENCE beats magnitude at the
+  // door... and the burn beats both (DoTs pierce the mail to the living
+  // pool by the fabric's own law — melt what you cannot chip). It stands
+  // DORMANT in the ice until the first chip (the sphinx's latch: the
+  // glacier, like stone, does not forgive).
+  rimeclad_elder: {
+    id: 'rimeclad_elder', name: 'Rimeclad Elder',
+    color: '#a8c8d8', shape: 'hexagon', radius: 30, material: 'fur', look: 'rimeclad_elder',
+    heft: 2.2, boss: true,
+    tag: 'rime_sleeper', post: true, // frozen where the ice took it; it stands there still
+    plies: { count: 12 },
+    base: { life: 380, moveSpeed: 88, accuracy: 96, armor: 40, mana: 35, manaRegen: 3, poise: 140 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.25)],
+    skills: ['heavy_strike', 'ground_slam'],
+    xp: 240, loot: 'lair_hoard',
+    faction: 'beast', tags: ['beast'],
+    tells: [
+      // THE MAIL IS THE METER (drawn == tested): the ice plates read the
+      // ply fabric's own spent fraction — every chip drops a plate, and a
+      // bare flank means the meat is finally in reach.
+      {
+        source: 'plies', band: [1, 0], portrait: 0.6,
+        channel: {
+          kind: 'part',
+          part: { kind: 'armorPlates', scale: 1.08, color: '#cfe8f4', params: { n: 6 } },
+          count: [0, 6], alpha: [0.5, 1],
+        },
+      },
+    ],
+    brain: {
+      type: 'juggernaut', enrage: 0.35,
+      behavior: { castArc: 0.6, reaction: [0.3, 0.7] },
+    },
+  },
+
+  // THE HOLLOW HUNTSMAN — the mount fabric as a duel (the Hunt's Rest,
+  // gloamwood). True cavalry at den scale: two sovereign bodies stacked.
+  // The huntsman couches a grave-bill from the saddle (reach that arrives
+  // before the steed does), the courser is a full fight underneath him,
+  // and the kill ORDER is the whole strategy — fell the steed and the
+  // unhorsed beat throws him into your window, but the Rest stables a
+  // SPARE and he will whistle it under himself (the remount rule); fell
+  // him first and the courser keeps its own war (onRiderDeath 'fight').
+  hollow_huntsman: {
+    id: 'hollow_huntsman', name: 'Hollow Huntsman',
+    color: '#3a3444', shape: 'pentagon', radius: 13, material: 'cloth', look: 'hollow_huntsman',
+    boss: true,
+    base: { life: 280, moveSpeed: 118, accuracy: 112, evasion: 35, armor: 38, mana: 40, manaRegen: 4 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('coldRes', 'flat', 0.3)],
+    skills: ['couched_lance', 'gore_rend', 'heavy_strike'],
+    xp: 200, loot: 'lair_hoard',
+    faction: 'nightkin',
+    mount: { on: 'gloam_courser' },
+    brain: {
+      type: 'juggernaut', enrage: 0.4,
+      behavior: { castArc: 0.7, reaction: [0.25, 0.6] },
+      rules: [{
+        // The Hunt does not walk: unhorsed, he whistles the next courser.
+        when: { mounted: false }, every: [4, 6], hold: [0.2, 0.3],
+        actions: [{ do: 'mount', within: 480 }],
+      }],
+    },
+  },
+  // His steed — and the den's spare. A full body under the saddle: its own
+  // life, its own teeth, its own war when the saddle empties (the bone
+  // steed's law: the Hunt does not waste horses). The pair is two fights
+  // stacked; the stable makes it three.
+  gloam_courser: {
+    id: 'gloam_courser', name: 'Gloam Courser',
+    color: '#4a4454', shape: 'kite', radius: 15, material: 'fur', look: 'gloam_courser',
+    base: { life: 150, moveSpeed: 205, accuracy: 100, evasion: 30, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['claw'],
+    xp: 30,
+    faction: 'nightkin', tags: ['beast'],
+    mountSlot: {
+      kinds: ['hollow_huntsman'],
+      seats: [{ dx: -0.2, lift: 1.0 }],
+      onRiderDeath: 'fight',
+    },
+    brain: { type: 'basic' },
+  },
+
+  // THE TIDEHEART MATRON — the heart pump made a destination (the
+  // Tidewomb, littoral). The tide in her galleries has a HEARTBEAT: her
+  // creep heart plants the brine skin she sits in, and every dozen-odd
+  // seconds the chambered shell SQUEEZES — a brinesurge rushes the den
+  // at whoever the womb hates (the pump's perception-free bearing),
+  // wading-deep and foam-edged. Skin and waves are BOUND to the body:
+  // still the heart and the whole tide recoils with it.
+  tideheart_matron: {
+    id: 'tideheart_matron', name: 'Tideheart Matron',
+    color: '#3a8a86', shape: 'oval', radius: 24, material: 'chitin', look: 'tideheart_matron',
+    heft: 2.0, boss: true,
+    post: true, // the womb IS the post — she holds her pool
+    base: { life: 400, moveSpeed: 82, accuracy: 98, armor: 45, mana: 30, manaRegen: 3, poise: 110 },
+    mods: [mod('coldRes', 'flat', 0.5), mod('lightningRes', 'flat', -0.25)],
+    skills: ['heavy_strike', 'claw'],
+    xp: 210, loot: 'lair_hoard',
+    faction: 'deep', tags: ['beast'],
+    creepSource: {
+      kind: 'brinesurge', reach: [110, 160], bornFrac: 0.35,
+      cadence: { every: [10, 16], opening: [3, 6], bearing: 'toward' },
+    },
+    brain: {
+      type: 'juggernaut',
+      behavior: { castArc: 0.7, reaction: [0.3, 0.7] },
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------

@@ -44,6 +44,8 @@ import { LOOT_TABLES } from '../src/data/loottables';
 import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { sidezoneOf } from '../src/data/sidezones';
 import { DORMANT_TAGS, isDormant, ROUSE_RULES, updateAI } from '../src/engine/ai';
+import { CREEPS } from '../src/engine/creep';
+import { makeSkillInstance, type SkillDef } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
 import { skyOf, type ZoneDef } from '../src/data/zones';
 import type { Actor } from '../src/engine/actor';
@@ -60,16 +62,23 @@ const LAIR_IDS = [
   'frostmaw', 'giants_cairn', 'hag_hovel', 'riddle_vault',
   // Wave two — lairs of many laws.
   'bull_maze', 'wyrm_barrow', 'spinney', 'wellspring',
+  // Wave eight — the homed kin (the biomes that had none).
+  'scythe_court', 'stamping_ground', 'rimevault', 'hunts_rest', 'tidewomb',
 ];
 const MOUTHS = [
   'frostmaw_maw', 'hovel_door', 'sphinx_gate',
   'maze_gate', 'wyrm_barrow_mouth', 'spinney_bole',
   // Wave six — the ring-tenant lane's default den door (same kit contract).
   'scorpion_well',
+  // Wave eight — the homed kin's five doors.
+  'bower_gate', 'stamping_gap', 'glacier_mouth', 'hunt_gate', 'tide_hollow',
 ];
 const NATIVES = [
   'yeti', 'yeti_alpha', 'hill_giant', 'mire_hag', 'vault_sphinx',
   'maze_bull', 'emberwyrm', 'spinney_matron', 'spinney_broodling', 'river_naiad',
+  // Wave eight — the homed kin's residents (the courser is half the pair).
+  'mantis_abbess', 'great_aurochs', 'rimeclad_elder',
+  'hollow_huntsman', 'gloam_courser', 'tideheart_matron',
 ];
 
 // --- RIG A: the registry weave --------------------------------------------------
@@ -155,8 +164,12 @@ const NATIVES = [
     has(at('surface', 'desert', undefined, 20), 'riddle_vault_gate')
     && has(at('cave', 'desert', 1, 20), 'riddle_vault_gate')
     && !has(at('cave', 'desert', 4, 20), 'riddle_vault_gate'));
-  check('B8 wrong country, no claim (jungle offers nothing)',
-    at('cave', 'jungle', 1, 20).length === 0 && at('surface', 'jungle', undefined, 20).length === 0);
+  // The control biome moved jungle → metropolis in wave eight: jungle joined
+  // the claimed map (the Scythe Court), and a city is the one country no
+  // wild den will ever claim — the law itself (unclaimed ground burns no
+  // rolls) is unchanged.
+  check('B8 wrong country, no claim (the metropolis offers nothing)',
+    at('cave', 'metropolis', 1, 20).length === 0 && at('surface', 'metropolis', undefined, 20).length === 0);
   check('B9 sealed pockets grow no lairs; harbors keep no monsters\' doors',
     at('cave', 'highland', 1, 20, { noDeeper: true }).length === 0
     && at('surface', 'desert', undefined, 20, { port: true }).length === 0);
@@ -1400,6 +1413,287 @@ const step = (secs: number): void => {
     check('N12 the doors stand honest (in the caldera floor, kiln-spoored, on the walk net, never the default well)',
       doors >= 2 && inRing === doors && spoored === doors && reach === doors && wells === 0,
       `${doors} maws over ${n} zones`);
+  }
+}
+
+// --- RIG P: WAVE EIGHT — THE HOMED KIN (the biomes that had none) ------------
+// Five new dens (data/lairs.ts wave eight), each seating ONE landed fabric
+// as its whole argument: the Scythe Court (jungle — THE READERS: feint
+// licensed by worn tells), the Stamping Ground (taiga — THE MASS FABRIC:
+// heft + the charge's bowling lane), the Rimevault (tundra — THE PLY
+// FABRIC: a 12-ply mail, dormant till the first chip), the Hunt's Rest
+// (gloamwood — THE MOUNT FABRIC: true cavalry + the stabled spare), and
+// the Tidewomb (littoral — THE HEART PUMP: creepSource.cadence bound to
+// the body). Every mint rides the Scorpion Well's undefined-tileset lane.
+// The registry/kit/look censuses arrive from rigs A1–A8 via the extended
+// arrays; this rig pins the fold envelopes, placement, the per-den fabric
+// contracts (static + live), and mint purity.
+{
+  // P1 — every den resolves whole (lair → den_mouth landmark → its own
+  // mouth → registered sidezone), and every resident pays the hoard as a
+  // marquee ask (boss + lair_hoard — the courser is the pair's other half,
+  // deliberately neither).
+  const DENS: { id: string; mouth: string; resident: string }[] = [
+    { id: 'scythe_court', mouth: 'bower_gate', resident: 'mantis_abbess' },
+    { id: 'stamping_ground', mouth: 'stamping_gap', resident: 'great_aurochs' },
+    { id: 'rimevault', mouth: 'glacier_mouth', resident: 'rimeclad_elder' },
+    { id: 'hunts_rest', mouth: 'hunt_gate', resident: 'hollow_huntsman' },
+    { id: 'tidewomb', mouth: 'tide_hollow', resident: 'tideheart_matron' },
+  ];
+  for (const den of DENS) {
+    const lair = lairOf(den.id);
+    const lm = lair ? landmarkDefs().find(d => d.id === lair.landmark) : undefined;
+    const mk = (lm?.params as { mouthKind?: string } | undefined)?.mouthKind;
+    check(`P1 den '${den.id}' resolves whole (lair → den_mouth → '${den.mouth}' → sidezone)`,
+      !!lair && lm?.builder === 'den_mouth' && mk === den.mouth && !!sidezoneOf(den.mouth));
+    const res = MONSTERS[den.resident];
+    check(`P1 '${den.resident}' is the den's marquee ask (boss, lair_hoard)`,
+      res?.boss === true && res?.loot === 'lair_hoard');
+  }
+  check('P1 the courser is the pair\'s other half (full body, never a boss, no hoard)',
+    MONSTERS.gloam_courser?.boss !== true && MONSTERS.gloam_courser?.loot === undefined);
+
+  // P2 — THE FOLD ENVELOPES (pure): each seat present on its home biome at
+  // full level, silent below the ramp's floor, silent on foreign ground.
+  // The Rimevault alone claims the ladder too (place 'both'): offered in
+  // the first two caves under tundra, refused by depth 3 (fadeOut 1).
+  const at = (place: 'cave' | 'surface', biome: string, caveDepth: number | undefined,
+    level: number) => lairLandmarkRolls({ place, biome, caveDepth, level, tileset: 'cavern' });
+  const has = (rolls: { landmark: string }[], lm: string) => rolls.some(r => r.landmark === lm);
+  const HOMES: Record<string, { biome: string; full: number; silent: number; lm: string }> = {
+    scythe_court: { biome: 'jungle', full: 11, silent: 4, lm: 'bower_gate_site' },
+    stamping_ground: { biome: 'taiga', full: 9, silent: 2, lm: 'stamping_gap_site' },
+    rimevault: { biome: 'tundra', full: 12, silent: 5, lm: 'glacier_mouth_site' },
+    hunts_rest: { biome: 'gloamwood', full: 13, silent: 6, lm: 'hunt_gate_site' },
+    tidewomb: { biome: 'littoral', full: 8, silent: 3, lm: 'tide_hollow_site' },
+  };
+  for (const [id, h] of Object.entries(HOMES)) {
+    check(`P2 '${id}' claims ${h.biome} at level ${h.full} and nothing sooner`,
+      has(at('surface', h.biome, undefined, h.full), h.lm)
+      && !has(at('surface', h.biome, undefined, h.silent), h.lm));
+    check(`P2 '${id}' refuses foreign ground (the field hosts none of the five)`,
+      !has(at('surface', 'field', undefined, 30), h.lm));
+  }
+  check('P2 the Rimevault claims the ladder too (depths 1–2 under tundra, refused by 3)',
+    has(at('cave', 'tundra', 1, 12), 'glacier_mouth_site')
+    && has(at('cave', 'tundra', 2, 12), 'glacier_mouth_site')
+    && !has(at('cave', 'tundra', 3, 12), 'glacier_mouth_site'));
+  check('P2 the four surface dens never seat underground',
+    (['bower_gate_site', 'stamping_gap_site', 'hunt_gate_site', 'tide_hollow_site'] as const)
+      .every(lm => !has(at('cave', 'jungle', 1, 30), lm) && !has(at('cave', 'taiga', 1, 30), lm)
+        && !has(at('cave', 'gloamwood', 1, 30), lm) && !has(at('cave', 'littoral', 1, 30), lm)));
+
+  // P3 — placement through the standing machinery (the C1/C2 law, all
+  // five): a chance-1 roll stands exactly one mouth, spoor dresses the
+  // apron, and the sweep is deterministic.
+  const SPOOR: Record<string, string[]> = {
+    bower_gate: ['web', 'drained_husk', 'fern'],
+    stamping_gap: ['log', 'rock', 'bone_pile'],
+    glacier_mouth: ['ice_spike', 'icicle_cluster', 'bone_pile'],
+    hunt_gate: ['lantern_post', 'hide_rack', 'bone_pile'],
+    tide_hollow: ['kelp_wrack', 'sea_rock', 'bone_pile'],
+  };
+  for (const [id, h] of Object.entries(HOMES)) {
+    const mouth = DENS.find(d => d.id === id)!.mouth;
+    const def = caveDef({
+      landmarks: [{ landmark: h.lm, chance: 1 }],
+      caveDepth: undefined, anchor: undefined, biome: h.biome,
+    });
+    const out = gen(def, 0x8a17 + Object.keys(HOMES).indexOf(id));
+    const mouths = out.doodads.filter(d => d.kind === mouth);
+    check(`P3 the ${mouth} stands (one mouth through the landmark loop)`,
+      mouths.length === 1, `${mouths.length} mouths`);
+    const kinds = SPOOR[mouth];
+    const spoor = mouths[0] ? out.doodads.filter(d => kinds.includes(d.kind)
+      && Math.hypot(d.pos.x - mouths[0].pos.x, d.pos.y - mouths[0].pos.y) < 160) : [];
+    check(`P3 the ${mouth} apron is spoored (the den reads before the door)`,
+      spoor.length >= 2, `${spoor.length} pieces`);
+  }
+  {
+    const def = caveDef({
+      landmarks: [{ landmark: 'glacier_mouth_site', chance: 1 }],
+      caveDepth: undefined, anchor: undefined, biome: 'tundra',
+    });
+    const print = (o: GeneratedLayout) => o.doodads.map(d =>
+      `${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`).join('|');
+    check('P3 same seed, same door (wave-eight placement determinism)',
+      print(gen(def, 77088)) === print(gen(def, 77088)));
+    const sealed = gen(caveDef({
+      landmarks: [{ landmark: 'tide_hollow_site', chance: 1 }], noDeeper: true,
+      caveDepth: undefined, anchor: undefined, biome: 'littoral',
+    }), 77099);
+    check('P3 a sealed pocket strips the wave-eight door (the noDeeper chokepoint)',
+      sealed.doodads.every(d => d.kind !== 'tide_hollow'));
+  }
+
+  // P4 — THE FABRIC CONTRACTS (static): each den's one argument, pinned on
+  // the def that carries it.
+  const abbess = MONSTERS.mantis_abbess;
+  check('P4 the Abbess feints AT SCHOOL RATE and wears the license (a feinting tell row — the readable-bluff law)',
+    (abbess?.brain?.behavior?.feint?.chance ?? 0) >= 0.3
+    && (abbess?.tells ?? []).some(t => t.source === 'feinting')
+    && (abbess?.tells ?? []).some(t => t.source === 'casting')
+    && (abbess?.tells ?? []).some(t => t.source === 'foecast'));
+  const aur = MONSTERS.great_aurochs;
+  check('P4 the Aurochs IS the mass argument (heft ≥ 2.5, the knockback charge in kit)',
+    (aur?.heft ?? 1) >= 2.5 && (aur?.skills ?? []).includes('charge'));
+  const elder = MONSTERS.rimeclad_elder;
+  check('P4 the Elder wears the mail (12 plies) over a live pool (the DoT-pierce lane stays open)',
+    elder?.plies?.count === 12 && (elder?.base.life ?? 0) > 0);
+  check('P4 the Elder\'s sleep is the sphinx\'s latch (dormant tag + rouse rule, no reset)',
+    elder?.tag === 'rime_sleeper' && DORMANT_TAGS.has('rime_sleeper')
+    && !!ROUSE_RULES.rime_sleeper?.());
+  check('P4 the mail is the meter (a plies-source tell row — drawn == tested)',
+    (elder?.tells ?? []).some(t => t.source === 'plies'));
+  const hm = MONSTERS.hollow_huntsman;
+  const cr = MONSTERS.gloam_courser;
+  check('P4 the pair is true cavalry (mount ↔ mountSlot, the steed fights on riderless)',
+    hm?.mount?.on === 'gloam_courser'
+    && (cr?.mountSlot?.kinds ?? []).includes('hollow_huntsman')
+    && cr?.mountSlot?.onRiderDeath === 'fight');
+  check('P4 the Hunt does not walk (the remount rule on the huntsman\'s brain)',
+    (hm?.brain?.rules ?? []).some(r => (r.actions ?? []).some(a => (a as { do?: string }).do === 'mount')));
+  const tm = MONSTERS.tideheart_matron;
+  const pumped = tm?.creepSource?.cadence?.kind ?? tm?.creepSource?.kind;
+  check('P4 the Matron\'s heart PUMPS a registered marching kind (brinesurge carries front levers)',
+    tm?.creepSource?.kind === 'brinesurge' && !!tm?.creepSource?.cadence
+    && !!pumped && !!CREEPS[pumped]?.front);
+
+  // P5 — THE LIVE DENS: every mouth mints its country (id, name, the boss
+  // ask, sealed), the resident stands, the fauna is home, and each fabric
+  // argument holds in the running world.
+  const slam = {
+    id: 'probe_p_slam', name: 'Probe Slam', noDrop: true, description: '',
+    tags: ['spell'], color: '#fff',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { physical: [500, 500] as [number, number] },
+    delivery: { type: 'melee', range: 120, arcDeg: 180 },
+    effects: [{ type: 'damage' }],
+  } as SkillDef;
+  const liveDen = (mouth: string, seed: number): void => {
+    w.player.pos = vec(400, 400);
+    w.enterSidezone({ pos: { x: 400, y: 400 }, seed, kind: mouth });
+  };
+
+  // P5-I: the Scythe Court — the school assembles around its abbess.
+  {
+    liveDen('bower_gate', 81001);
+    check('P5 the bower mints the Scythe Court (boss ask, sealed rung)',
+      w.zone.id === `cave_bower_gate_${homeId}_81001`
+      && String(w.zone.name).includes('Scythe Court')
+      && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'mantis_abbess'
+      && w.zone.noDeeper === true, `${w.zone.id} · ${w.zone.name}`);
+    check('P5 the Abbess holds the hall', (w.actors as Actor[]).some(a => a.defId === 'mantis_abbess'));
+    const court = (w.actors as Actor[]).filter(a =>
+      a.defId?.startsWith('mantid_') || a.defId === 'emerald_mantis');
+    check('P5 the court is in session (the discriminating pairs staged)',
+      court.length >= 2, `${court.length} readers`);
+    leaveToHome();
+  }
+
+  // P5-II: the Stamping Ground — the herd yards around its bull.
+  {
+    liveDen('stamping_gap', 81002);
+    check('P5 the gap mints the Stamping Ground (boss ask, sealed rung)',
+      String(w.zone.name).includes('Stamping Ground')
+      && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'great_aurochs'
+      && w.zone.noDeeper === true);
+    check('P5 the Aurochs holds the yard', (w.actors as Actor[]).some(a => a.defId === 'great_aurochs'));
+    check('P5 the herd is home (taiga elk — the bowling lane\'s pins)',
+      (w.actors as Actor[]).filter(a => a.defId === 'taiga_elk').length >= 1);
+    leaveToHome();
+  }
+
+  // P5-III: the Rimevault — the mail eats blows, the first chip wakes it.
+  {
+    liveDen('glacier_mouth', 81003);
+    check('P5 the glacier mints the Rimevault (boss ask, sealed rung)',
+      String(w.zone.name).includes('Rimevault')
+      && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'rimeclad_elder'
+      && w.zone.noDeeper === true);
+    const elderA = (w.actors as Actor[]).find(a => a.defId === 'rimeclad_elder');
+    check('P5 the Elder stands frozen (dormant, planted)', !!elderA && isDormant(elderA));
+    if (elderA) {
+      const striker = w.createMonster('zombie', 8, 'player') as Actor;
+      striker.sheet.setSource('probe', [mod('accuracy', 'increased', 1000)]);
+      w.actors.push(striker);
+      striker.pos = vec(elderA.pos.x + 40, elderA.pos.y);
+      const pliesFull = elderA.plies;
+      const lifeFull = elderA.life;
+      const swing = (): void => {
+        striker.useLock = 0; striker.mana = striker.maxMana();
+        w.executeSkill(striker, makeSkillInstance(slam, 1), vec(elderA.pos.x, elderA.pos.y));
+      };
+      swing();
+      check('P5 a 500-damage slam chips exactly ONE plate and moves NO life (magnitude-blind)',
+        elderA.plies === pliesFull - 1 && elderA.life === lifeFull,
+        `plies ${elderA.plies}/${pliesFull}, life ${elderA.life}/${lifeFull}`);
+      check('P5 the first chip THAWS it (the rouse rule answers the landed blow)',
+        elderA.aiAwakened === true && !isDormant(elderA));
+      swing(); swing();
+      check('P5 the mail keeps eating (three chips, life still whole)',
+        elderA.plies === pliesFull - 3 && elderA.life === lifeFull,
+        `plies ${elderA.plies}/${pliesFull}`);
+      striker.dead = true;
+    }
+    leaveToHome();
+  }
+
+  // P5-IV: the Hunt's Rest — the pair arrives stacked, the spare stands by.
+  {
+    liveDen('hunt_gate', 81004);
+    check('P5 the gate mints the Hunt\'s Rest (boss ask, sealed rung)',
+      String(w.zone.name).includes("Hunt's Rest")
+      && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'hollow_huntsman'
+      && w.zone.noDeeper === true);
+    const hmA = (w.actors as Actor[]).find(a => a.defId === 'hollow_huntsman');
+    check('P5 the Huntsman is home', !!hmA);
+    step(1.0); // the lazy pairing sweep saddles him
+    const coursers = (w.actors as Actor[]).filter(a => a.defId === 'gloam_courser' && !a.dead);
+    check('P5 he arrives MOUNTED (the pairing sweep minted his courser beneath him)',
+      !!hmA && hmA.mountId !== undefined && coursers.length >= 1,
+      `mountId ${String(hmA?.mountId)}, ${coursers.length} coursers`);
+    leaveToHome();
+  }
+
+  // P5-V: the Tidewomb — the heart plants its skin and arms the pump clock.
+  {
+    liveDen('tide_hollow', 81005);
+    check('P5 the hollow mints the Tidewomb (boss ask, sealed rung)',
+      String(w.zone.name).includes('Tidewomb')
+      && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'tideheart_matron'
+      && w.zone.noDeeper === true);
+    const tmA = (w.actors as Actor[]).find(a => a.defId === 'tideheart_matron');
+    check('P5 the Matron is home', !!tmA);
+    step(0.2);
+    const field = w.creepEnsure();
+    const bound = tmA && field ? field.sources.filter((s: { boundTo?: Actor }) => s.boundTo === tmA) : [];
+    check('P5 her heart planted the brine skin (a source BOUND to her body)',
+      bound.length >= 1, `${bound.length} bound sources`);
+    check('P5 the pump clock is ARMED (creepPumpAt stamped — the tide has a heartbeat)',
+      tmA?.creepPumpAt !== undefined);
+    check('P5 the womb\'s small lives are home (skitters in the galleries)',
+      (w.actors as Actor[]).filter(a => a.defId === 'tide_skitter').length >= 1);
+    leaveToHome();
+  }
+
+  // P6 — mint purity, all five (the E1 law: byte-equal double-mints — same
+  // mouth, same den, forever).
+  for (const den of DENS) {
+    const sz = sidezoneOf(den.mouth);
+    if (!sz) { check(`P6 '${den.mouth}' mints (sidezone present)`, false); continue; }
+    const mctx = {
+      parent: caveDef({
+        id: `probe_p6_${den.id}`, caveDepth: undefined, anchor: undefined,
+        biome: HOMES[den.id].biome,
+      }),
+      seed: 0x9917 + DENS.indexOf(den), id: `probe_p6_pocket_${den.id}`,
+      pos: { x: 100, y: 100 }, playerLevel: 12, pkgActive: () => false,
+    };
+    const a = sz.mint(mctx);
+    check(`P6 '${den.id}' mints pure and sealed (byte-equal, noDeeper, authored fauna)`,
+      JSON.stringify(a) === JSON.stringify(sz.mint(mctx))
+      && a.noDeeper === true && Array.isArray(a.fauna) && a.fauna.length >= 2);
   }
 }
 

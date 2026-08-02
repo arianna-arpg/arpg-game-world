@@ -1090,3 +1090,302 @@ registerZoneInfoSource((world: World, zoneId: string) => {
     z: -1,
   }];
 });
+
+// ============================================================================
+// WAVE EIGHT — THE HOMED KIN: five more natives with front doors, spread
+// across the biomes that had none (jungle, taiga, tundra, gloamwood,
+// littoral — the coverage census in the pass record). Every resident is NEW
+// (data/monsters.ts, the ratified law), every den seats ONE landed fabric as
+// its whole argument (the gnasher-pen doctrine), and every mint rides the
+// Scorpion Well's lane — NO forced tileset, the face rolls from the strata
+// pool under the parent's anchor, so a burrow beneath each country looks
+// like that country's caves and no tileset row was needed.
+// ============================================================================
+
+// === THE SCYTHE COURT (the readers' schoolhouse) =============================
+// Jungle surface: a silk-hung bower gate into the mantid school's own hall.
+// The law is THE READERS (the mind-layer arc): every body inside telegraphs,
+// half of them lie LAWFULLY (the readable-bluff license — a feint always
+// flares the guard), and the Abbess at the bottom reads YOU back — her
+// antennae ride your cast bar the way your eyes ride her arms. The
+// discriminating pairs are staged in one hall so the lesson is learnable
+// before the final exam asks it.
+
+registerDoodadRule('bower_gate', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'bower_gate_site', builder: 'den_mouth', size: [190, 260],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'bower_gate',
+    dress: [
+      { kind: 'web', count: [2, 4], radius: [12, 18] },
+      { kind: 'drained_husk', count: [1, 3], radius: [12, 16] },
+      { kind: 'fern', count: [1, 2], radius: [12, 18] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'bower_gate',
+  dwell: 0.7,
+  ledgerOnEnter: 'scythe_court_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, undefined, {
+      name: 'the Scythe Court',
+      objective: { kind: 'boss', id: 'mantis_abbess' },
+      noDeeper: true,
+    });
+    // THE COURT IN SESSION (authored tenancy): the school's discriminating
+    // pairs staged in one hall — duelist beside headsman (the bluff and the
+    // body that cannot), augur beside penitent (one trigger, two opposite
+    // answers) — with the first arrival prowling the aisles.
+    def.fauna = [
+      { id: 'mantid_duelist', chance: 1, count: [1, 2] },
+      { id: 'mantid_headsman', chance: 1, count: [1, 2] },
+      { id: 'mantid_augur', chance: 0.8, count: [1, 2] },
+      { id: 'mantid_penitent', chance: 0.8, count: [1, 2] },
+      { id: 'emerald_mantis', chance: 0.6, count: [1, 2] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'scythe_court',
+  landmark: 'bower_gate_site',
+  seat: {
+    biomes: ['jungle'],
+    place: 'surface',
+    level: { from: 8, fadeIn: 3 },
+    chance: 0.15,
+  },
+});
+
+// === THE STAMPING GROUND (the mass fabric's winter yard) =====================
+// Taiga surface: a trampled gap under a windthrow, stamped earth going down
+// to where the herd yards against the cold. The law is THE MASS FABRIC: the
+// Great Aurochs outweighs everything in the hall including the argument —
+// his charge BOWLS bodies through bodies (the bowling lane), the walls end
+// arrested flights the hard way (momentum wounds), and his own herd is
+// ammunition standing around him. Bring your own weight, or borrow his.
+
+registerDoodadRule('stamping_gap', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'stamping_gap_site', builder: 'den_mouth', size: [190, 260],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'stamping_gap',
+    dress: [
+      { kind: 'log', count: [1, 3], radius: [12, 18] },
+      { kind: 'rock', count: [2, 4], radius: [12, 20] },
+      { kind: 'bone_pile', count: [1, 2], radius: [10, 15] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'stamping_gap',
+  dwell: 0.7,
+  ledgerOnEnter: 'stamping_ground_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, undefined, {
+      name: 'the Stamping Ground',
+      objective: { kind: 'boss', id: 'great_aurochs' },
+      noDeeper: true,
+    });
+    // The herd he yards (the NEST_FAUNA lesson): elk in the hollow — the
+    // standing wildlife with its own juvenile law, so the calves flee where
+    // the cows stand, and every one of them is a pin in his bowling lane.
+    def.fauna = [
+      { id: 'taiga_elk', chance: 1, count: [3, 5] },
+      { id: 'snow_hare', chance: 0.5, count: [1, 3] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'stamping_ground',
+  landmark: 'stamping_gap_site',
+  seat: {
+    biomes: ['taiga'],
+    place: 'surface',
+    level: { from: 6, fadeIn: 3 },
+    chance: 0.18,
+  },
+});
+
+// === THE RIMEVAULT (the ply fabric under the ice) ============================
+// Tundra, surface AND the first caves under it (the sphinx's 'both' posture
+// in ice). The law is THE PLY FABRIC: the Rimeclad Elder's mail eats twelve
+// landed blows magnitude-blind — cadence beats magnitude at this door, and
+// the burn beats both (DoTs pierce the mail by the fabric's own law). It
+// stands frozen (dormant, the sphinx's latch) until the first chip; the
+// larder the ice kept stands frozen around it.
+
+registerDormantTag('rime_sleeper'); // no reset row — thawed is thawed
+// The first chip wakes it alone (radius 0 — the glacier kept only one).
+registerRouseRule('rime_sleeper', () => ({
+  woundFrac: 1, radius: 0,
+  toast: 'The ice CRACKS. The mountain under it turns.', color: '#8ed0ec', size: 14,
+}));
+
+registerDoodadRule('glacier_mouth', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'glacier_mouth_site', builder: 'den_mouth', size: [200, 270],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'glacier_mouth',
+    dress: [
+      { kind: 'ice_spike', count: [2, 4], radius: [12, 18] },
+      { kind: 'icicle_cluster', count: [1, 2], radius: [12, 16] },
+      { kind: 'bone_pile', count: [1, 3], radius: [10, 15] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'glacier_mouth',
+  dwell: 0.7,
+  ledgerOnEnter: 'rimevault_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, undefined, {
+      name: 'the Rimevault',
+      objective: { kind: 'boss', id: 'rimeclad_elder' },
+      noDeeper: true,
+    });
+    // What the glacier kept beside it: hares it never ate (the larder law),
+    // and the white wake that moved in under the drifts.
+    def.fauna = [
+      { id: 'snow_hare', chance: 0.8, count: [2, 4] },
+      { id: 'snow_swimmer', chance: 0.4, count: [1, 2] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'rimevault',
+  landmark: 'glacier_mouth_site',
+  seat: {
+    biomes: ['tundra'],
+    place: 'both',
+    strata: { to: 2, fadeOut: 1 },
+    level: { from: 9, fadeIn: 3 },
+    chance: 0.16,
+  },
+});
+
+// === THE HUNT'S REST (the mount fabric's kennel) =============================
+// Gloamwood surface: a trophy-hung gate into the old Hunt's lodge. The law
+// is THE MOUNT FABRIC as a duel — true cavalry at den scale: the Hollow
+// Huntsman and his courser are two sovereign bodies stacked, the kill ORDER
+// is the whole strategy, and the Rest stables a SPARE, so unhorsing him
+// buys a window, not a win (the remount rule — the Hunt does not walk).
+
+registerDoodadRule('hunt_gate', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'hunt_gate_site', builder: 'den_mouth', size: [190, 260],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'hunt_gate',
+    dress: [
+      { kind: 'lantern_post', count: [1, 2], radius: [9, 11] },
+      { kind: 'hide_rack', count: [1, 2], radius: [10, 13] },
+      { kind: 'bone_pile', count: [2, 4], radius: [10, 15] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'hunt_gate',
+  dwell: 0.7,
+  ledgerOnEnter: 'hunts_rest_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, undefined, {
+      name: "the Hunt's Rest",
+      objective: { kind: 'boss', id: 'hollow_huntsman' },
+      noDeeper: true,
+    });
+    // The kennel and the stable (authored tenancy): the Hunt's footmen and
+    // bats — and THE SPARE, a riderless courser saddled in its stall (the
+    // bone steed's law: an unhorsed master whistles the next horse under
+    // himself, so the stable is part of the fight).
+    def.fauna = [
+      { id: 'gloam_courser', chance: 0.8, count: [1, 1] },
+      { id: 'night_hunter', chance: 1, count: [2, 3] },
+      { id: 'crimson_bat', chance: 0.5, count: [2, 3] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'hunts_rest',
+  landmark: 'hunt_gate_site',
+  seat: {
+    biomes: ['gloamwood'],
+    place: 'surface',
+    level: { from: 10, fadeIn: 3 },
+    chance: 0.16,
+  },
+});
+
+// === THE TIDEWOMB (the heart pump's sea cave) ================================
+// Littoral surface: a sea-cave throat at the wrack line, breathing brine.
+// The law is THE HEART PUMP (creepSource.cadence — the vessel-bore lane
+// made a DESTINATION): the tide inside has a heartbeat — the Tideheart
+// Matron's chambered shell squeezes a brinesurge through the galleries
+// every dozen-odd seconds, aimed at whoever the womb hates — and the whole
+// tide is BOUND to her body. Wade the beats, or still the heart.
+
+registerDoodadRule('tide_hollow', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'tide_hollow_site', builder: 'den_mouth', size: [190, 260],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'tide_hollow',
+    dress: [
+      { kind: 'kelp_wrack', count: [2, 4], radius: [12, 18] },
+      { kind: 'sea_rock', count: [1, 3], radius: [14, 24] },
+      { kind: 'bone_pile', count: [1, 2], radius: [10, 15] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'tide_hollow',
+  dwell: 0.7,
+  ledgerOnEnter: 'tidewomb_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, undefined, {
+      name: 'the Tidewomb',
+      objective: { kind: 'boss', id: 'tideheart_matron' },
+      noDeeper: true,
+    });
+    // The womb's small lives (the NEST_FAUNA lesson): skitters in the
+    // galleries and the shore's walking pebbles — none of them mind the
+    // tide; you will.
+    def.fauna = [
+      { id: 'tide_skitter', chance: 1, count: [3, 5] },
+      { id: 'shore_crab', chance: 0.7, count: [2, 4] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'tidewomb',
+  landmark: 'tide_hollow_site',
+  seat: {
+    biomes: ['littoral'],
+    place: 'surface',
+    level: { from: 6, fadeIn: 2 },
+    chance: 0.18,
+  },
+});

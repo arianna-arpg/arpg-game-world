@@ -2411,6 +2411,57 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -2, color: '#c8d060', intensity: 0.26, flicker: 2.4 },
   },
+  // Wave eight — the homed kin's five doors (data/lairs.ts wave eight).
+  // The readers' bower: silk-hung green dark, patient as a folded arm.
+  bower_gate: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#22421a', edge: '#3f6a2c', material: 'wood',
+      glow: '#8ed070', throat: '#060a05', vines: { color: '#c8d8a0' },
+      label: 'the Scythe Court',
+    },
+    light: { radius: -2, color: '#8ed070', intensity: 0.22, flicker: 1.4 },
+  },
+  // The winter yard's gap: stamped earth going down, musk-warm out of the cold.
+  stamping_gap: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#3a3226', edge: '#5c5038', material: 'wood',
+      glow: '#b08a50', throat: '#0a0805', rubble: {},
+      label: 'the Stamping Ground',
+    },
+    light: { radius: -2, color: '#b08a50', intensity: 0.2, flicker: 1.2 },
+  },
+  // The glacier's throat: blue ice with teeth, breathing an older cold.
+  glacier_mouth: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#2a4150', edge: '#487086', material: 'ice',
+      glow: '#8ed0ec', throat: '#04080c', teeth: {},
+      label: 'the Rimevault',
+    },
+    light: { radius: -2, color: '#8ed0ec', intensity: 0.28, flicker: 1.6 },
+  },
+  // The Hunt's gate: trophy-hung timber, witchlight kept for the riders.
+  hunt_gate: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#2e2a20', edge: '#524a38', material: 'wood',
+      glow: '#9fd8b0', throat: '#08070a', rubble: {},
+      label: "the Hunt's Rest",
+    },
+    light: { radius: -2, color: '#9fd8b0', intensity: 0.26, flicker: 2.0 },
+  },
+  // The sea-cave at the wrack line: foam-edged dark with a pulse in it.
+  tide_hollow: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#1e4038', edge: '#3a6c5c', material: 'stone',
+      glow: '#9fe8d8', throat: '#04100c', teeth: {},
+      label: 'the Tidewomb',
+    },
+    light: { radius: -2, color: '#9fe8d8', intensity: 0.28, flicker: 1.8 },
+  },
 
   // --- Ritual + event set-pieces -------------------------------------------
   tentacle_field: { painter: 'tentacleField', order: 56 },
