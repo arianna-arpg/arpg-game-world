@@ -79,10 +79,10 @@ import { LEYLINE_CFG } from '../data/leyline';
 import { RIFT_CFG } from '../data/rifts';
 import { PYRE_CFG } from '../data/pyres';
 import { DIG_CFG } from '../data/digsites';
-import type { ContestSpec } from '../data/objectives';
+import type { ContestRecoupSpec, ContestSpec } from '../data/objectives';
 import { PROCESSION_CFG } from '../data/processions';
 import { BOUNTY_CFG } from '../data/bounties';
-import { CLEAR_CFG, OFFERING_CFG, STRAGGLER_CFG } from '../data/objectives';
+import { CLEAR_CFG, CONTEST_CFG, OFFERING_CFG, STRAGGLER_CFG, pressureRampAt, pressureRampCadence } from '../data/objectives';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
@@ -2117,7 +2117,11 @@ interface ZoneMemory {
 /** One CONTEST-LAW hold fixture (a survey stone, rift seal, pyre bowl, or
  *  burial mound): `charge` is banked seconds toward its finished face;
  *  `pourAt` is the rift family's next-pour clock (idle 0 on the others). */
-interface HoldFixture { pos: Vec2; charge: number; doodad: Doodad; pourAt: number }
+/** One contest-law hold fixture (spire / rift seal / pyre / dig). `recoup`
+ *  is THE RECOUP's owed bank (ghost seconds banked while an ATTENDED stand
+ *  was contested) — transient like `pourAt`, never saved: the debt is a
+ *  live-siege courtesy, not a ledger. */
+interface HoldFixture { pos: Vec2; charge: number; doodad: Doodad; pourAt: number; recoup: number }
 
 /** The live, in-zone runtime of a Conclave RITUAL SITE — the pentagram + its ring
  *  of stationary cultists in the zone the player stands in. The ConclaveField
@@ -3203,7 +3207,7 @@ export class World {
   /** The contest drive's last frame read (the stamp idiom — views re-speak
    *  the exact scalars the drive tested; one row suffices, since a zone
    *  runs exactly one objective). */
-  private holdRead = { contested: false, draining: false };
+  private holdRead = { contested: false, draining: false, recouping: false };
   /** Attune-refusal float throttle (the besieged waypoint's brush). */
   private wpRefusedAt = -1e9;
   /** The zone's live PROCESSION (escort objective): the caravan cart, its
@@ -4601,7 +4605,7 @@ export class World {
     this.occDisturbs.length = 0;
     this.spireReinforceAt = 0;
     this.wpRefusedAt = -1e9;
-    this.holdRead = { contested: false, draining: false };
+    this.holdRead = { contested: false, draining: false, recouping: false };
     this.procession = null; // the escort re-stages below (state rides Zone Memory)
     this.offering = null;   // the hungering altar re-stages below (fed count rides Zone Memory)
     this.cull = null;       // the cull re-stamps below (tally + ask ride Zone Memory)
@@ -5254,7 +5258,7 @@ export class World {
             : (circuit ? BEACON_CFG.kindWay : BEACON_CFG.kind),
         };
         this.doodads.push(spireDoodad);
-        this.spires.push({ pos: vec(pos.x, pos.y), charge, doodad: spireDoodad, pourAt: 0 });
+        this.spires.push({ pos: vec(pos.x, pos.y), charge, doodad: spireDoodad, pourAt: 0, recoup: 0 });
       }
     }
     // THE CONTEST-LAW KIN (rifts / pyres / dig sites): the spire's placement
@@ -5265,7 +5269,7 @@ export class World {
     const placeHolds = (
       count: [number, number], need: number, bodyR: number, clear: number,
       kinds: { open: string; done: string }, charges: number[] | undefined,
-      into: { pos: Vec2; charge: number; doodad: Doodad; pourAt: number }[],
+      into: HoldFixture[],
     ): void => {
       const n = rng.int(count[0], count[1]);
       for (let i = 0; i < n; i++) {
@@ -5277,7 +5281,7 @@ export class World {
           kind: charge >= need ? kinds.done : kinds.open,
         };
         this.doodads.push(d);
-        into.push({ pos: vec(pos.x, pos.y), charge, doodad: d, pourAt: 0 });
+        into.push({ pos: vec(pos.x, pos.y), charge, doodad: d, pourAt: 0, recoup: 0 });
       }
     };
     if (o.kind === 'rifts') {
@@ -40892,7 +40896,7 @@ export class World {
    *  by leg), plus the set's tally and the drive's stamped contest read
    *  (drawn == tested: the chevron speaks the exact scalars the charge
    *  logic ran this frame). */
-  spireView(): { pos: Vec2; frac: number; done: boolean; charged: number; count: number; contested: boolean; draining: boolean } | null {
+  spireView(): { pos: Vec2; frac: number; done: boolean; charged: number; count: number; contested: boolean; draining: boolean; recouping: boolean } | null {
     const o = this.zone.objective;
     if (o.kind !== 'beacon' || !this.spires.length) return null;
     const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
@@ -40901,7 +40905,7 @@ export class World {
     return {
       pos: v.pos, frac: v.frac, done: v.done,
       charged: v.filled, count: v.count,
-      contested: v.contested, draining: v.draining,
+      contested: v.contested, draining: v.draining, recouping: v.recouping,
     };
   }
 
@@ -40910,7 +40914,7 @@ export class World {
    *  drive's stamped contest read (holdRead — the watch fabric's stamp
    *  idiom, so a view can never disagree with the drive about the frame). */
   private holdFixturesView(fixtures: HoldFixture[], need: number):
-    { pos: Vec2; frac: number; done: boolean; filled: number; count: number; contested: boolean; draining: boolean } | null {
+    { pos: Vec2; frac: number; done: boolean; filled: number; count: number; contested: boolean; draining: boolean; recouping: boolean } | null {
     if (!fixtures.length) return null;
     const filled = fixtures.filter(s => s.charge >= need).length;
     let pick = fixtures[0];
@@ -40925,31 +40929,32 @@ export class World {
       frac: need > 0 ? clamp(pick.charge / need, 0, 1) : 1,
       done: this.objectiveDone, filled, count: fixtures.length,
       contested: this.holdRead.contested, draining: this.holdRead.draining,
+      recouping: this.holdRead.recouping,
     };
   }
 
   /** The live RIFT SEALS ('rifts'), for the attention fabric + the HUD. */
-  riftsView(): { pos: Vec2; frac: number; done: boolean; sealed: number; count: number; contested: boolean; draining: boolean } | null {
+  riftsView(): { pos: Vec2; frac: number; done: boolean; sealed: number; count: number; contested: boolean; draining: boolean; recouping: boolean } | null {
     const o = this.zone.objective;
     if (o.kind !== 'rifts') return null;
     const v = this.holdFixturesView(this.rifts, o.sealSec ?? transitDwell('rift', RIFT_CFG.sealSec));
-    return v && { pos: v.pos, frac: v.frac, done: v.done, sealed: v.filled, count: v.count, contested: v.contested, draining: v.draining };
+    return v && { pos: v.pos, frac: v.frac, done: v.done, sealed: v.filled, count: v.count, contested: v.contested, draining: v.draining, recouping: v.recouping };
   }
 
   /** The live PYRES ('pyres'), for the attention fabric + the HUD. */
-  pyresView(): { pos: Vec2; frac: number; done: boolean; lit: number; count: number; contested: boolean; draining: boolean } | null {
+  pyresView(): { pos: Vec2; frac: number; done: boolean; lit: number; count: number; contested: boolean; draining: boolean; recouping: boolean } | null {
     const o = this.zone.objective;
     if (o.kind !== 'pyres') return null;
     const v = this.holdFixturesView(this.pyres, o.kindleSec ?? transitDwell('pyre', PYRE_CFG.kindleSec));
-    return v && { pos: v.pos, frac: v.frac, done: v.done, lit: v.filled, count: v.count, contested: v.contested, draining: v.draining };
+    return v && { pos: v.pos, frac: v.frac, done: v.done, lit: v.filled, count: v.count, contested: v.contested, draining: v.draining, recouping: v.recouping };
   }
 
   /** The live DIG SITES ('unearth'), for the attention fabric + the HUD. */
-  digsView(): { pos: Vec2; frac: number; done: boolean; dug: number; count: number; contested: boolean; draining: boolean } | null {
+  digsView(): { pos: Vec2; frac: number; done: boolean; dug: number; count: number; contested: boolean; draining: boolean; recouping: boolean } | null {
     const o = this.zone.objective;
     if (o.kind !== 'unearth') return null;
     const v = this.holdFixturesView(this.digs, o.digSec ?? transitDwell('digsite', DIG_CFG.digSec));
-    return v && { pos: v.pos, frac: v.frac, done: v.done, dug: v.filled, count: v.count, contested: v.contested, draining: v.draining };
+    return v && { pos: v.pos, frac: v.frac, done: v.done, dug: v.filled, count: v.count, contested: v.contested, draining: v.draining, recouping: v.recouping };
   }
 
   /** THE BESIEGED WAYPOINT's one predicate: is this zone's waypoint severed
@@ -48878,7 +48883,16 @@ export class World {
   private resolveContest(base: ContestSpec): ContestSpec | null {
     const t = this.zone.objective.contest;
     if (t === false) return null;
-    return t ? { ...base, ...t } : base;
+    if (!t) return base;
+    const merged = { ...base, ...t } as ContestSpec;
+    // THE RECOUP deep-merges: a partial override re-dials the kind's own
+    // block (falling back to the shared default); `false` rode the spread
+    // above and waives it whole.
+    if (t.recoup && typeof t.recoup === 'object') {
+      const floor = (base.recoup || CONTEST_CFG.recoup) as ContestRecoupSpec;
+      merged.recoup = { ...floor, ...t.recoup };
+    }
+    return merged;
   }
 
   /** Live counted enemies inside a contest ring — the SAME predicate the
@@ -48909,8 +48923,13 @@ export class World {
     doneKind: string; accent: string; flareColor: string; flareR: number;
     stirText?: string;
     onFill?: (s: HoldFixture) => void;
-  }): { filled: HoldFixture | null; contested: boolean; draining: boolean } {
+  }): { filled: HoldFixture | null; contested: boolean; draining: boolean; recouping: boolean } {
     const holdR = transitRadius(opts.transitKind, opts.holdFallback);
+    // THE RECOUP's live block (CONTEST_CFG default → kind config → zone
+    // tuning): `false` or boost ≤ 1 = waived, nothing banks.
+    const rec = opts.contest && opts.contest.recoup && opts.contest.recoup.boost > 1
+      ? opts.contest.recoup : null;
+    const recCap = rec ? opts.need * rec.capFrac : 0;
     let held: HoldFixture | null = null;
     if (!this.player.dead) {
       let bd = Infinity;
@@ -48923,6 +48942,7 @@ export class World {
     }
     let contested = false;
     let draining = false;
+    let recouping = false;
     let filled: HoldFixture | null = null;
     for (const s of opts.fixtures) {
       if (s.charge >= opts.need) continue;
@@ -48930,17 +48950,37 @@ export class World {
       const pressers = opts.contest ? this.contestPressers(s.pos, opts.contest.radius) : 0;
       if (opts.contest && pressers >= opts.contest.drainAt) {
         // THE SMOTHER: a crowd drains banked work, attended or not.
+        const preSmother = s.charge;
         s.charge = Math.max(0, s.charge - opts.contest.drainPerSec * dt);
+        // THE RECOUP: an ATTENDED smother banks the lost ground — the
+        // stalled second plus the drained share — for the post-clear
+        // sprint. Walking away banks nothing: abandonment keeps its cost.
+        if (rec && s === held) {
+          s.recoup = Math.min(recCap, s.recoup + dt + (preSmother - s.charge) * rec.drainRefund);
+        }
         draining = true;
         continue;
       }
       if (s !== held) continue; // banked, unattended, uncrowded: it keeps
       if (opts.contest && pressers >= opts.contest.stallAt) {
         contested = true; // held ground, but not CLEARED ground — the stall
+        // THE RECOUP's ghost clock: the stand banks the second it would
+        // have built had the ground been clear.
+        if (rec) s.recoup = Math.min(recCap, s.recoup + dt);
         continue;
       }
       const was = s.charge;
-      s.charge = Math.min(opts.need, s.charge + dt);
+      // THE RECOUP repaid: while owed seconds remain the build sprints at
+      // boost× — the bar runs back toward where the uncontested stand
+      // would have put it, never snapping there.
+      let build = dt;
+      if (rec && s.recoup > 0) {
+        const extra = Math.min(s.recoup, dt * (rec.boost - 1));
+        s.recoup -= extra;
+        build += extra;
+        if (extra > 0) recouping = true;
+      }
+      s.charge = Math.min(opts.need, s.charge + build);
       if (was <= 0 && s.charge > 0 && opts.stirText) {
         this.text(vec(s.pos.x, s.pos.y - 40), opts.stirText, opts.accent, 14);
         this.flashes.push({ pos: vec(s.pos.x, s.pos.y), radius: 90, color: opts.accent, life: 0.5, maxLife: 0.5 });
@@ -48957,8 +48997,8 @@ export class World {
     }
     // THE STAMP (the watch fabric's idiom): views re-speak exactly what the
     // drive tested this frame — chevron and charge logic can never disagree.
-    this.holdRead = { contested, draining };
-    return { filled, contested, draining };
+    this.holdRead = { contested, draining, recouping };
+    return { filled, contested, draining, recouping };
   }
 
   /** Pay the zone's one-time bounty and unseal its exits. */
@@ -49407,20 +49447,33 @@ export class World {
    *  grammar — the Marrow-Drawn follow charged ley like bleeding marrow;
    *  an unregistered roster degrades silently to the native table).
    *  Bounded by the live 'spire_drawn' cap — a trickle, never a wave. */
+  /** THE PRESSURE RAMP's read for a trickle lane (spire reinforcements,
+   *  rift pours): the fold over the zone's LIVE level — a Quickened surge
+   *  rides free — unless the lane's config opts out (`levelScale: false`). */
+  private trickleRamp(cfg: { levelScale?: boolean }): number {
+    return cfg.levelScale === false ? 1 : pressureRampAt(this.zone.level);
+  }
+
   private updateSpireReinforce(o: Extract<ObjectiveSpec, { kind: 'beacon' }>): void {
     if (o.reinforce === false) return;
     const cfg = { ...BEACON_CFG.reinforce, ...(o.reinforce ?? {}) };
     const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
     if (!this.spires.some(s => s.charge > 0 && s.charge < need)) return;
+    // THE PRESSURE RAMP: the bleed grows with the zone's live level —
+    // batch + cap scale, the beat tightens on the cadence share. Level-3
+    // ground keeps the two-body trickle; level-50 ground gets a war.
+    const ramp = this.trickleRamp(cfg);
+    const beat = (): number => rand(cfg.every[0], cfg.every[1]) / pressureRampCadence(ramp);
     if (this.spireReinforceAt === 0) {
       // Arm on the first banked second — the first group is never instant.
-      this.spireReinforceAt = this.time + rand(cfg.every[0], cfg.every[1]);
+      this.spireReinforceAt = this.time + beat();
       return;
     }
     if (this.time < this.spireReinforceAt) return;
-    this.spireReinforceAt = this.time + rand(cfg.every[0], cfg.every[1]);
+    this.spireReinforceAt = this.time + beat();
+    const rampCap = Math.max(1, Math.round(cfg.cap * ramp));
     const drawn = this.actors.filter(a => !a.dead && a.tag === 'spire_drawn').length;
-    if (drawn >= cfg.cap) return;
+    if (drawn >= rampCap) return;
     // The pressed stone: the banked-unfinished one nearest the hero.
     let at: Vec2 | null = null;
     let bd = Infinity;
@@ -49442,7 +49495,9 @@ export class World {
       }
     }
     if (!native.length && !mix.length) return;
-    const n = Math.min(randInt(cfg.batch[0], cfg.batch[1]), cfg.cap - drawn);
+    const n = Math.min(
+      randInt(Math.max(1, Math.round(cfg.batch[0] * ramp)), Math.max(1, Math.round(cfg.batch[1] * ramp))),
+      rampCap - drawn);
     for (let i = 0; i < n; i++) {
       const table = mix.length && (!native.length || rand(0, 1) < cfg.mixChance) ? mix : native;
       const type = this.weightedPick(table, this.zone.level);
@@ -49465,19 +49520,25 @@ export class World {
     if (!this.zone.packs) return;
     const need = o.sealSec ?? transitDwell('rift', RIFT_CFG.sealSec);
     const P = RIFT_CFG.pour;
+    // THE PRESSURE RAMP: the pour is a fight at any level — batch + cap
+    // scale with the zone's live level, the beat tightens (data/objectives).
+    const ramp = this.trickleRamp(P);
+    const rampCap = Math.max(1, Math.round(P.cap * ramp));
     let born = this.actors.filter(a => !a.dead && a.tag === 'rift_born').length;
     for (const r of this.rifts) {
       if (r.charge >= need) continue;
       if (r.pourAt === 0) {
         // Arm on first sight — a fresh tear waits one beat before it pours.
-        r.pourAt = this.time + rand(P.every[0], P.every[1]);
+        r.pourAt = this.time + rand(P.every[0], P.every[1]) / pressureRampCadence(ramp);
         continue;
       }
       if (this.time < r.pourAt) continue;
-      r.pourAt = this.time + rand(P.every[0], P.every[1]);
-      if (born >= P.cap) continue;
+      r.pourAt = this.time + rand(P.every[0], P.every[1]) / pressureRampCadence(ramp);
+      if (born >= rampCap) continue;
       const { table } = this.effectiveSpawn(this.zone, this.baseTable(this.zone));
-      const n = Math.min(randInt(P.batch[0], P.batch[1]), P.cap - born);
+      const n = Math.min(
+        randInt(Math.max(1, Math.round(P.batch[0] * ramp)), Math.max(1, Math.round(P.batch[1] * ramp))),
+        rampCap - born);
       for (let i = 0; i < n; i++) {
         const type = this.weightedPick(table, this.zone.level);
         const m = this.createMonster(type, Math.max(1, this.zone.level + P.levelBonus), 'enemy');
@@ -50943,7 +51004,8 @@ export class World {
         // The contest reads on the line itself — the scoreboard never lies
         // about WHY the number stopped (or fell).
         const mark = v.draining ? ' — OVERRUN, the charge drains!'
-          : v.contested ? ' — contested, clear the ground!' : '';
+          : v.contested ? ' — contested, clear the ground!'
+            : v.recouping ? ' — ground cleared, the charge quickens!' : '';
         if (v.count > 1) return `Attune the waystones — ${v.charged}/${v.count}${mark}`;
         return v.frac > 0
           ? `Charge the survey spire — ${Math.round(v.frac * 100)}%${mark}`
@@ -50958,21 +51020,24 @@ export class World {
         const v = this.riftsView();
         if (!v) return 'Seal the seeping rifts';
         const mark = v.draining ? ' — OVERRUN, the seal unravels!'
-          : v.contested ? ' — contested, cut down the pour!' : '';
+          : v.contested ? ' — contested, cut down the pour!'
+            : v.recouping ? ' — ground cleared, the seal quickens!' : '';
         return `Seal the rifts — ${v.sealed}/${v.count}${mark}`;
       }
       case 'pyres': {
         const v = this.pyresView();
         if (!v) return 'Kindle the cold pyres';
         const mark = v.draining ? ' — OVERRUN, the kindling smothers!'
-          : v.contested ? ' — contested, clear the ground!' : '';
+          : v.contested ? ' — contested, clear the ground!'
+            : v.recouping ? ' — ground cleared, the flame quickens!' : '';
         return `Kindle the pyres — ${v.lit}/${v.count} burning${mark}`;
       }
       case 'unearth': {
         const v = this.digsView();
         if (!v) return 'Unearth the buried caches';
         const mark = v.draining ? ' — OVERRUN, the dig collapses!'
-          : v.contested ? ' — contested, see off the mourners!' : '';
+          : v.contested ? ' — contested, see off the mourners!'
+            : v.recouping ? ' — ground cleared, the dig quickens!' : '';
         return `Unearth the caches — ${v.dug}/${v.count} opened${mark}`;
       }
       case 'procession': {

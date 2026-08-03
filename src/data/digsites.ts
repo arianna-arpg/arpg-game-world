@@ -75,7 +75,8 @@ registerAttentionSource((world: World): AttentionPoint[] => {
   if (!v || v.done) return [];
   const label = v.draining ? 'the dig collapses — the graveside is overrun!'
     : v.contested ? 'the graveside is contested — see off the mourners'
-      : v.frac > 0 ? 'the spade bites' : 'an unopened mound';
+      : v.recouping ? 'the dig quickens — lost time repaid'
+        : v.frac > 0 ? 'the spade bites' : 'an unopened mound';
   return [{
     id: 'burial_mound', pos: v.pos, color: DIG_CFG.accent, glyph: DIG_CFG.glyph,
     label, z: 2,

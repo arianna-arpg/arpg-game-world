@@ -94,6 +94,11 @@ export const BEACON_CFG = {
     radius: [320, 460] as [number, number],
     /** Level bonus on arrivals over the zone's own level. */
     levelBonus: 0,
+    /** THE PRESSURE RAMP (data/objectives.ts pressureRampAt over the zone's
+     *  LIVE level): batch + cap scale, `every` tightens on the cadence
+     *  share — the level-50 survey is an operation, not a nuisance. `false`
+     *  keeps the flat low-level trickle at any level. */
+    levelScale: true,
   },
   /** The fixture's doodad kinds (dormant / lit) — looks in doodadVisuals.ts;
    *  the engine swaps dormant → lit at full charge (a pure kind swap, so the
@@ -155,7 +160,8 @@ registerAttentionSource((world: World): AttentionPoint[] => {
   const stone = v.count > 1 ? 'waystone' : 'spire';
   const label = v.draining ? `the ${stone} is overrun — its charge drains!`
     : v.contested ? `the ${stone} is contested — clear the ground`
-      : v.frac > 0 ? `the ${stone} charges` : `a dormant ${stone}`;
+      : v.recouping ? `the ${stone} quickens — lost time repaid`
+        : v.frac > 0 ? `the ${stone} charges` : `a dormant ${stone}`;
   return [{
     id: 'survey_spire', pos: v.pos, color: BEACON_CFG.accent, glyph: '▲',
     label, z: 2,

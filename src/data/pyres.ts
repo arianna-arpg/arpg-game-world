@@ -72,7 +72,8 @@ registerAttentionSource((world: World): AttentionPoint[] => {
   if (!v || v.done) return [];
   const label = v.draining ? 'the kindling smothers — the bowl is overrun!'
     : v.contested ? 'the pyre is contested — clear its ground'
-      : v.frac > 0 ? 'the pyre catches' : 'a cold pyre';
+      : v.recouping ? 'the flame quickens — lost time repaid'
+        : v.frac > 0 ? 'the pyre catches' : 'a cold pyre';
   return [{
     id: 'night_pyre', pos: v.pos, color: PYRE_CFG.accent, glyph: PYRE_CFG.glyph,
     label, z: 2,

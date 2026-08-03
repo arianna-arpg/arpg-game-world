@@ -50,6 +50,10 @@ export const RIFT_CFG = {
     radius: [40, 110] as [number, number],
     /** Level bonus over the zone. */
     levelBonus: 0,
+    /** THE PRESSURE RAMP (data/objectives.ts): batch + cap scale with the
+     *  zone's live level, `every` tightens on the cadence share (`false`
+     *  keeps the flat trickle). */
+    levelScale: true,
   },
   accent: '#c86aff',
   glyph: '⟁',
@@ -78,7 +82,8 @@ registerAttentionSource((world: World): AttentionPoint[] => {
   if (!v || v.done) return [];
   const label = v.draining ? 'the seal unravels — the tear is overrun!'
     : v.contested ? 'the tear is contested — cut down its pour'
-      : v.frac > 0 ? 'the seal takes hold' : 'a seeping tear';
+      : v.recouping ? 'the seal quickens — lost time repaid'
+        : v.frac > 0 ? 'the seal takes hold' : 'a seeping tear';
   return [{
     id: 'rift_tear', pos: v.pos, color: RIFT_CFG.accent, glyph: RIFT_CFG.glyph,
     label, z: 2,

@@ -41,7 +41,10 @@ import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { lightwellOf } from '../src/engine/lightwells';
 import { transitDwell, transitOf } from '../src/data/transit';
 import { placeZoneAt } from '../src/engine/worldgen';
-import { CONTEST_CFG } from '../src/data/objectives';
+import {
+  CONTEST_CFG, PRESSURE_RAMP, pressureRampAt, pressureRampCadence,
+  type ContestRecoupSpec,
+} from '../src/data/objectives';
 import { BEACON_CFG } from '../src/data/beacons';
 import { RIFT_CFG } from '../src/data/rifts';
 import { PYRE_CFG } from '../src/data/pyres';
@@ -436,6 +439,149 @@ withSeededRandom(0x0bec7a, () => {
     step(0.5);
     check('I4 every reachable body felled ⇒ the floor completes, the dweller still ALIVE',
       w.objectiveDone === true && !angler.dead);
+  }
+
+  // --- RIG R: THE RECOUP (contested time is not lost time) -------------------
+  // The perpetual-siege answer: an ATTENDED stand banks the seconds the
+  // contest stole (stall + the attended drain's losses), and cleared ground
+  // repays them as a boost× sprint — never a snap. Walking away banks nothing.
+  {
+    const REC = CONTEST_CFG.recoup as ContestRecoupSpec;
+    check('R1 the shared recoup block is authored sane (boost > 1, cap > 0, refund in [0,1])',
+      !!REC && REC.boost > 1 && REC.capFrac > 0 && REC.drainRefund >= 0 && REC.drainRefund <= 1);
+    for (const [label, c] of [['beacon', BEACON_CFG.contest], ['rifts', RIFT_CFG.contest], ['pyres', PYRE_CFG.contest], ['digs', DIG_CFG.contest]] as const) {
+      check(`R2 '${label}' inherits the recoup spread`, !!c.recoup);
+    }
+    mintWith({ kind: 'beacon' }, 818181, 8);
+    const spire = w.spires[0];
+    const need = transitDwell('beacon', BEACON_CFG.chargeSec);
+    killAllEnemies();
+    w.spireReinforceAt = w.time + 9999; // silence the bleed for the law checks
+    w.player.pos = vec(spire.pos.x + 30, spire.pos.y);
+    step(1);
+    const built = spire.charge;
+    check('R3 an uncontested build banks NO debt (rate stays 1×)',
+      spire.recoup === 0 && built > 0.8 && built < 1.35, `${built.toFixed(2)}, owed ${spire.recoup}`);
+    const z1 = plantFoe(spire.pos.x - 30, spire.pos.y);
+    step(1);
+    check('R4 the STALL banks the ghost second (charge frozen, debt ≈ 1s)',
+      Math.abs(spire.charge - built) < 0.05 && spire.recoup > 0.85 && spire.recoup < 1.2,
+      `owed ${spire.recoup.toFixed(2)}`);
+    const owedAfterStall = spire.recoup;
+    const crowd = [plantFoe(spire.pos.x, spire.pos.y - 40), plantFoe(spire.pos.x, spire.pos.y + 40), plantFoe(spire.pos.x + 44, spire.pos.y)];
+    const beforeDrain = spire.charge;
+    step(1);
+    const drained = beforeDrain - spire.charge;
+    check('R5 an ATTENDED drain banks the stall + the drained share',
+      drained > 0.2 && Math.abs(spire.recoup - (owedAfterStall + 1 + drained * REC.drainRefund)) < 0.12,
+      `drained ${drained.toFixed(2)}, owed ${spire.recoup.toFixed(2)}`);
+    const owed = spire.recoup;
+    for (const m of [z1, ...crowd]) w.kill(m, true);
+    const c0 = spire.charge;
+    step(1);
+    check('R6 cleared ground SPRINTS at boost× while the debt repays (never a snap)',
+      Math.abs((spire.charge - c0) - REC.boost) < 0.15
+      && Math.abs((owed - spire.recoup) - (REC.boost - 1)) < 0.12,
+      `Δ ${(spire.charge - c0).toFixed(2)}/s, owed ${owed.toFixed(2)} → ${spire.recoup.toFixed(2)}`);
+    check('R7 the stamped view + HUD speak the sprint (drawn == tested)',
+      w.spireView()?.recouping === true && String(w.objectiveText()).includes('quickens'));
+    step(Math.max(0.5, spire.recoup / (REC.boost - 1) + 0.3)); // spend the debt down
+    const c1 = spire.charge;
+    step(0.5);
+    check('R8 the debt spent, the build settles back to 1×',
+      spire.recoup < 0.01 && Math.abs((spire.charge - c1) - 0.5) < 0.1
+      && w.spireView()?.recouping === false,
+      `Δ ${((spire.charge - c1) / 0.5).toFixed(2)} per 0.5s, owed ${spire.recoup.toFixed(3)}`);
+    // The abandonment law: an UNATTENDED smother still eats the bank and
+    // banks NO debt — walking away keeps its full cost.
+    killAllEnemies();
+    const s2owed = spire.recoup;
+    spire.charge = 5;
+    w.player.pos = vec(spire.pos.x + 500, spire.pos.y + 400);
+    for (let i = 0; i < 4; i++) plantFoe(spire.pos.x + 20 * i - 30, spire.pos.y + 24);
+    step(1);
+    check('R9 an UNATTENDED smother drains the bank but banks NO debt',
+      spire.charge < 5 - 0.2 && Math.abs(spire.recoup - s2owed) < 0.01,
+      `charge ${spire.charge.toFixed(2)}, owed ${spire.recoup.toFixed(2)}`);
+    // The ceiling: the clamp binds at accrual — one contested tick pulls a
+    // forced overshoot back to need × capFrac.
+    spire.recoup = 1e9;
+    w.player.pos = vec(spire.pos.x + 30, spire.pos.y);
+    step(1 / 30);
+    check('R10 the owed bank CAPS at need × capFrac (the ghost never laps the bar)',
+      spire.recoup <= need * REC.capFrac + 0.01,
+      `${spire.recoup.toFixed(1)} vs ${(need * REC.capFrac).toFixed(1)}`);
+    // The zone tuning: `recoup: false` waives; a partial deep-merges over
+    // the kind's own block (boost re-dialed, the rest defaulted).
+    mintWith({ kind: 'beacon', contest: { recoup: false } }, 828282, 9);
+    const sw = w.spires[0];
+    killAllEnemies();
+    w.spireReinforceAt = w.time + 9999;
+    w.player.pos = vec(sw.pos.x + 30, sw.pos.y);
+    plantFoe(sw.pos.x - 30, sw.pos.y);
+    step(1);
+    check('R11 `recoup: false` waives — a stalled stand banks nothing',
+      sw.recoup === 0 && sw.charge < 0.05, `owed ${sw.recoup}, charge ${sw.charge.toFixed(2)}`);
+    mintWith({ kind: 'beacon', contest: { recoup: { boost: 3 } } }, 838383, 10);
+    const s3 = w.spires[0];
+    killAllEnemies();
+    w.spireReinforceAt = w.time + 9999;
+    w.player.pos = vec(s3.pos.x + 30, s3.pos.y);
+    const f3 = plantFoe(s3.pos.x - 30, s3.pos.y);
+    step(1);
+    w.kill(f3, true);
+    const c3 = s3.charge;
+    step(0.5);
+    check('R12 a PARTIAL recoup override re-dials boost, defaults the rest (3× sprint)',
+      Math.abs((s3.charge - c3) - 0.5 * 3) < 0.12, `Δ ${(s3.charge - c3).toFixed(2)} vs 1.50`);
+  }
+
+  // --- RIG S: THE PRESSURE RAMP (the trickle grows with the zone's level) ----
+  {
+    check('S1 the ramp stands at exactly 1 through the opening levels',
+      pressureRampAt(1) === 1 && pressureRampAt(PRESSURE_RAMP.knots[0][0]) === 1);
+    let mono = true;
+    let prev = 0;
+    for (let lv = 1; lv <= 70; lv++) { const m = pressureRampAt(lv); if (m < prev - 1e-9) mono = false; prev = m; }
+    check('S2 the fold climbs monotonically and flattens past the last knot',
+      mono && pressureRampAt(70) === PRESSURE_RAMP.knots[PRESSURE_RAMP.knots.length - 1][1]);
+    check('S3 level 50 is a WAR, not a nuisance (mul ≥ 2.5); cadence takes its gentler share',
+      pressureRampAt(50) >= 2.5 && pressureRampCadence(1) === 1
+      && Math.abs(pressureRampCadence(3) - (1 + 2 * PRESSURE_RAMP.cadence)) < 1e-9);
+    check('S4 both trickle lanes are enrolled (levelScale), spec-waivable',
+      BEACON_CFG.reinforce.levelScale === true && RIFT_CFG.pour.levelScale === true);
+    // LIVE: the same operation at level 50 outgrows the flat cap…
+    const zid = mintWith({ kind: 'beacon' }, 848484, 11);
+    (w.zoneMap[zid] as ZoneDef).level = 50; // the LIVE read (a Quickened surge's shape)
+    const spire = w.spires[0];
+    killAllEnemies();
+    w.player.pos = vec(spire.pos.x + 420, spire.pos.y + 300);
+    w.spireReinforceAt = 0;
+    const scaledCap = Math.max(1, Math.round(BEACON_CFG.reinforce.cap * pressureRampAt(50)));
+    let peak = 0;
+    for (let i = 0; i < 30; i++) {
+      spire.charge = 3; // keep the operation alive however the crowd drains
+      step(1);
+      peak = Math.max(peak, (w.actors as Actor[]).filter(a => !a.dead && a.tag === 'spire_drawn').length);
+    }
+    check('S5 the level-50 bleed OUTGROWS the flat trickle (batch + cap scale live)',
+      peak > BEACON_CFG.reinforce.cap && peak <= scaledCap,
+      `peak ${peak} vs flat ${BEACON_CFG.reinforce.cap} / scaled ${scaledCap}`);
+    // …and the opt-out keeps the flat trickle at any level.
+    const zid2 = mintWith({ kind: 'beacon', reinforce: { levelScale: false } }, 858585, 12);
+    (w.zoneMap[zid2] as ZoneDef).level = 50;
+    const s2 = w.spires[0];
+    killAllEnemies();
+    w.player.pos = vec(s2.pos.x + 420, s2.pos.y + 300);
+    w.spireReinforceAt = 0;
+    let peak2 = 0;
+    for (let i = 0; i < 32; i++) {
+      s2.charge = 3;
+      step(1);
+      peak2 = Math.max(peak2, (w.actors as Actor[]).filter(a => !a.dead && a.tag === 'spire_drawn').length);
+    }
+    check('S6 `levelScale: false` keeps the flat trickle at any level',
+      peak2 > 0 && peak2 <= BEACON_CFG.reinforce.cap, `peak ${peak2}`);
   }
 });
 

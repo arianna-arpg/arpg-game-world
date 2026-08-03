@@ -70,6 +70,10 @@ export interface ObjectiveTuning {
    *  config. Kinds that hold no ground ignore it. */
   contest?: false | {
     radius?: number; stallAt?: number; drainAt?: number; drainPerSec?: number;
+    /** THE RECOUP re-dialed — any subset deep-merges over the kind's own
+     *  block; `false` waives it for this one zone (contested time simply
+     *  lost — the pre-recoup stand). */
+    recoup?: false | { boost?: number; capFrac?: number; drainRefund?: number };
   };
 }
 
@@ -133,6 +137,9 @@ export type ObjectiveSpec = (
       every?: [number, number]; batch?: [number, number]; cap?: number;
       mixFactions?: readonly string[]; mixChance?: number;
       radius?: [number, number]; levelBonus?: number;
+      /** THE PRESSURE RAMP opt-out: `false` keeps the flat trickle at any
+       *  level (data/objectives.ts PRESSURE_RAMP scales it by default). */
+      levelScale?: boolean;
     };
   }
   /** ESCORT THE CARAVAN: a cart waits DORMANT (immobile, immune) by the gate
