@@ -1145,6 +1145,12 @@ export const SUPPORTS: Record<string, SupportDef> = {
       + ' gains 40% increased bash power instead. Either way the arming line drops by a fifth,'
       + ' so the bash readies sooner; the tic on the guard bar shows it.',
     color: '#c8b088', requiresTags: ['guard'],
+    // THE ANSWERING GATE (2026-08-03, her word): the tag says the theme,
+    // the MECHANISM says the truth — the gem demands a real payout moment
+    // (stance release, charge arrival, leap landing, construct death,
+    // shell drop), so a guard-tagged charge bank (magma_ward) refuses
+    // structurally and re-fits the day its def grows a real release.
+    requiresMechanisms: ['guard'],
     // The graft is read ONLY when the host guard lacks an innate bash
     // (guardBashSpec: innate wins) — the stat mods land either way, which
     // is the whole dual-use contract: no second gem, no duplicate.

@@ -5057,6 +5057,24 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
    *  (the user's stealth ruling — refuse, never contort). */
   displaces: inst => inst.def.delivery.type === 'dash'
     || inst.def.delivery.type === 'blink' || inst.def.delivery.type === 'leap',
+  /** A TRUE GUARD (2026-08-03, her word on the bank): the instance owns a
+   *  MOMENT the answering blow can pay on — the guardBash grammar's five
+   *  payout lanes (world.ts): a held stance's release/break (castMode
+   *  'guard', the same read the boot sweep's guardBash row declares), a
+   *  charge's arrival (dash), a leap's landing, a construct's death/
+   *  expiry (the answering wall breaks), or a toggled shell's drop (an
+   *  aura delivery wearing shellGuard — a shell-less aura has no pool to
+   *  pay). The gate for the answering family: a guard-TAGGED charge bank
+   *  (magma_ward — blocks feed beads; nothing is held, dropped or landed)
+   *  refuses honestly, and the refusal self-lifts the moment the def
+   *  grows a real stance or shell — no gem mints one today, so the lift
+   *  is def-side by construction. */
+  guard: inst =>
+    inst.def.castMode === 'guard'
+    || inst.def.delivery.type === 'dash'
+    || inst.def.delivery.type === 'leap'
+    || inst.def.delivery.type === 'construct'
+    || (inst.def.delivery.type === 'aura' && inst.def.delivery.shellGuard !== undefined),
   /** THE STANDING SURFACE (2026-07-22, the zone-grammar law): the
    *  time-evolution gems — breath (zoneSizeOver), growth (zoneGrow), spin
    *  (aoeSpin), the metronome swing (pendulum), the emitter (zoneEmit) —

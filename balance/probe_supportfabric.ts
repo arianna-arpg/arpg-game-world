@@ -95,6 +95,22 @@ bootSimEngine();
   cInst.sockets[0] = { def: totemGem, level: 1 };
   check('A6 Spirit Totem beside it grants \'totem\' and shatterrite fits — the composition law, tag form',
     supportFitsInst(shatterrite, cInst));
+
+  // THE ANSWERING GATE (2026-08-03, her word on the bank): Answering Wall
+  // demands a TRUE guard — a payout moment for the answering blow — never
+  // the tag alone. The charge bank refuses; every payable lane passes the
+  // mechanism; and the SAME def grown a real stance lifts the refusal
+  // with no gem edit (the self-lifting law, def-side).
+  const wall = SUPPORTS.answering_wall;
+  const bank = SKILLS.magma_ward;
+  check('A7 answering_wall REFUSES the charge bank (guard TAG without a guard MECHANISM)',
+    bank.tags.includes('guard') && !supportFitsInst(wall, makeSkillInstance(bank, 1, 3)));
+  check('A8 every payout lane passes the \'guard\' mechanism (stance, charge, wall, dome, shell)',
+    ['shield_up', 'shield_charge', 'stone_rampart', 'sanctuary', 'rearguard_aegis']
+      .every(id => SUPPORT_MECHANISMS.guard(makeSkillInstance(SKILLS[id], 1, 3))));
+  check('A9 the refusal self-lifts when the def grows a real stance (no gem edit)',
+    supportFitsInst(wall, makeSkillInstance(
+      { ...bank, castMode: 'guard', guard: { arcDeg: 120, shieldLife: 60 } }, 1, 3)));
 }
 
 // === RIG B — the equip-global fold =========================================

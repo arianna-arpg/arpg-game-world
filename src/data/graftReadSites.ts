@@ -179,9 +179,10 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
     deliveries: ['dash', 'leap', 'construct', 'aura'],
     defReads: def => def.castMode === 'guard',
     site: 'guardBashSpec (stance release/break + the answering family: charge arrival, leap landing, construct death/expiry, shell drop)',
-    inertOk: [
-      { support: 'answering_wall', why: `magma_ward alone: guard-TAGGED but a block-fed vent nova — no stance release, charge arrival, landing or shell drop to answer; the gem's stat riders still land (its own dual-use contract)`, since: '2026-07-28' },
-    ],
+    // (answering_wall carries NO inertOk anymore: the 'guard' mechanism
+    //  gate — requiresMechanisms, the golden rule — refuses payless
+    //  guard-tagged hosts STRUCTURALLY at the census. magma_ward's bank
+    //  was the whole breadth; 2026-08-03, her word.)
   },
   // 2026-07-28 — the once-unrowed trio joins with MEASURED reads (the
   // adjudication seam retired the cry-wolf objection that kept them out;

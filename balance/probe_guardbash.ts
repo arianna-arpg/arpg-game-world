@@ -15,9 +15,11 @@
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { applyBuild } from '../src/sim/builds';
 import { MONSTERS } from '../src/data/monsters';
+import { SKILLS } from '../src/data/skills';
+import { SUPPORTS } from '../src/data/supports';
 import { setSimTap } from '../src/engine/tap';
 import { skillDamageBands } from '../src/engine/damage';
-import { instanceMods, skillContextTags } from '../src/engine/skills';
+import { instanceMods, makeSkillInstance, skillContextTags, supportFitsInst } from '../src/engine/skills';
 import type { Actor } from '../src/engine/actor';
 import type { BuildSpec } from '../src/sim/types';
 import type { DamageType } from '../src/engine/stats';
@@ -286,6 +288,20 @@ step(0.1);
   check('shell: the DROPPED shell answers through the grafted bash (Answering Wall)',
     paid > 0 && !p.shellGuard, `paid=${paid.toFixed(1)} shellGone=${!p.shellGuard}`);
   s.dead = true;
+}
+
+// --- 2e) THE ANSWERING GATE (2026-08-03, her word): the gem demands a TRUE
+// guard — a payout moment for the answering blow — so every answering host
+// keeps its socket while the charge bank (guard TAG, no guard MECHANISM)
+// refuses structurally. The census pin beside 0-2d's functional proofs.
+{
+  const fits = (id: string): boolean =>
+    supportFitsInst(SUPPORTS.answering_wall, makeSkillInstance(SKILLS[id]!, 1, 3));
+  check('gate: every answering host keeps its socket (stance/charge/wall/dome/shell)',
+    ['shield_up', 'spiked_bulwark', 'rearguard_aegis', 'shield_charge', 'stone_rampart', 'sanctuary']
+      .every(fits));
+  check('gate: the charge bank refuses (guard tag, no payout moment)',
+    !fits('magma_ward'));
 }
 
 // --- 3) THE BOSS BAR contract ------------------------------------------------
