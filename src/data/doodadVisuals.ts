@@ -3373,4 +3373,30 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -2, color: '#8fe0e8', intensity: 0.22, flicker: 1.4 },
   },
+
+  // === THE MARINE FACES, WAVE TWO (data/formations.ts kit) ==================
+  // The deepsea 'vent field' + 'chasm shelf' variants. Three data entries,
+  // zero new painters (the doodadVisuals doctrine): the smoker is the vent
+  // painter gone basalt — the one warm light in a cold country, ember
+  // breathing under black water; the polyp is the pod painter in
+  // chemosynthetic pallor (the gas_polyp recolor law), lit faintly so the
+  // bank reads before it pops; the needle bank is the shard painter as
+  // black spines with pale lit tips — drawn sharp because it collects
+  // whatever the shoves deliver (fixed palette, the shardgrass lesson: a
+  // danger read never re-dresses).
+  black_smoker: {
+    painter: 'vent', order: 50, longShadow: 0.6,
+    params: { rim: '#181c20', throat: '#07090c', hot: '#ff5a1e', core: '#ffc24a' },
+    light: { radius: -3, color: '#ff8a3a', intensity: 0.5, flicker: 3.5 },
+  },
+  scald_polyp: {
+    painter: 'pod', order: 52, shadow: 0.4,
+    params: { body: '#6e7a66', glow: '#8fd8c8', aspectY: 0.92, glowY: -0.14, glowR: 0.46, pulseRate: 1.6 },
+    light: { radius: -1.8, color: '#8fd8c8', intensity: 0.12, flicker: 1.4 },
+  },
+  needle_coral: {
+    painter: 'shard', order: 51, bakeWhole: 'static', shadow: 0.4,
+    params: { points: 7, color: '#141c20', material: 'stone', edgeGlow: { color: '#7ad8d8', alpha: 0.45 } },
+  },
+
 };

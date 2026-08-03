@@ -1678,3 +1678,88 @@ registerLandmark({
     ambush: { radius: 160, visible: true, pack: 300, announce: 'the geode stirs — its facets are awake!' },
   },
 });
+
+// ======================= THE MARINE FACES, WAVE TWO ==========================
+// The deep sea's hazard kit (deepsea tileset variants 'vent field' + 'chasm
+// shelf' — data/tilesets.ts; looks in doodadVisuals.ts under the same
+// banner). Every consequence rides a standing fabric, faction-blind at the
+// payout: the smoker's eruption crowns are hitAll zones (the lava_orb
+// volley — the ONE handler lava_vent taught), the polyp's exhaled murk is a
+// hazard cloud (hitAll by construction), and the needle bank collects any
+// body ARRIVING at push-speed, whoever launched it (the gore_stakes law).
+// Baiting is the whole design: what the field does to you it does to them.
+
+// THE BLACK SMOKER — a basalt chimney venting on its own clock: the
+// rule-level effect row (the haven_stone idiom) arms every stamped instance
+// with a randomized first cooldown, and the volley crowns AROUND the stack
+// (ringRadius), never across the zone. Numbers run gentler than the surface
+// lava_vent on purpose — everyone in a deepsea arena is SWIMMING, and a
+// dodge window priced for running feet would be a lie down here.
+registerDoodadRule('black_smoker', {
+  overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 140,
+  forbidOn: ['chasm'],
+  habitat: { near: ['water', 'tide_pool', 'brine_sink'] },
+  effect: {
+    id: 'lava_orb', interval: 5.2, radius: 130,
+    count: 5, ringRadius: 130, jitter: 34, stagger: 0.14, blast: 74,
+    chance: 0.6, power: 0,
+  },
+});
+
+// THE SCALD POLYP — a pressure bladder in chemosynthetic pallor (the
+// gas_polyp grammar, sea-dressed): pops to any landed strike or a near
+// press, exhaling a boiling murk that lingers where it burst. Swim the
+// bank with a pack on your tail and the pops bloom into THEIR faces.
+registerDoodadRule('scald_polyp', {
+  overlap: 'inert', spacing: 30,
+  forbidOn: ['chasm'],
+  habitat: { near: ['water', 'tide_pool', 'brine_sink'] },
+  brittle: {
+    on: ['hit', 'near'], reach: 30,
+    text: 'the polyp scalds!', color: '#8fd8c8',
+    fume: { radius: 74, linger: 2.8, dmgMult: 0.75, color: '#8fd8c8', fx: 'sporeburst' },
+  },
+});
+
+// THE NEEDLE CORAL — the shelf's launch collector: walk-through on purpose
+// (the lane between the needles is the duel's geometry), but any body
+// arriving at push-speed — a Heave, a bowling-lane plow, a mauler's toss —
+// is shredded and left bleeding. minSpeed 520 is THE calibrated line above
+// every ordinary combat knockback's brief peak (the gore_stakes contract);
+// the sea spares nobody, so herding the pack through the bank pays.
+registerDoodadRule('needle_coral', {
+  overlap: 'trigger', spacing: 90,
+  forbidOn: ['chasm'],
+  habitat: { near: ['water', 'tide_pool', 'brine_sink'] },
+  contact: {
+    minSpeed: 520,
+    hit: { base: 8, perLevel: 1.0, type: 'physical' },
+    status: { id: 'bleed', chance: 0.7 },
+    icdSec: 0.5,
+  },
+});
+
+// The kit's scatter stamps (a rule is placement LAW, never a placer — bare
+// tileset rows need these; formation pieces place themselves). Bands are
+// the defaults the deepsea rows override.
+registerStamp('black_smoker', stampSingle('black_smoker', [20, 30]));
+registerStamp('scald_polyp', stampSingle('scald_polyp', [10, 15]));
+registerStamp('needle_coral', stampSingle('needle_coral', [14, 22]));
+
+// A SMOKER RANK: chimneys strung down the fissure they grew along, polyps
+// fattened on the mineral wash between — the vent field's composed read
+// (the boulder_train shape, in basalt and steam).
+registerFormation({
+  id: 'smoker_rank', arrange: 'meander', span: [340, 620], step: 64,
+  params: { wobble: 30 },
+  pieces: [
+    // every 2: chimneys pace ~130px apart along the line — eruption crowns
+    // (ring 130) CHAIN down the fissure without stacking whole, and a rank
+    // tops out near the ring radius instead of a wall of fire. Polyps share
+    // the chimney anchors (jitter beds them at the stacks' feet — fattened
+    // on the mineral wash); the rock breaks parity on the third.
+    { kind: 'black_smoker', radius: [18, 28], every: 2, jitter: 14 },
+    { kind: 'scald_polyp', radius: [10, 14], every: 2, jitter: 26 },
+    { kind: 'sea_rock', radius: [18, 30], every: 3, jitter: 24, rot: true },
+  ],
+});

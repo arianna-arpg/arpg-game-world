@@ -8301,8 +8301,10 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     // SUB-BIOME FACES of the deep — the variance allowance the ocean grows
     // on. A thresher kelp forest you can vanish into (layered crowns break
-    // sight both ways), a reef garden, an open drift. Future faces — vent
-    // fields, abyssal shelves — join as rows here, never as code.
+    // sight both ways), a reef garden, an open drift, a black-smoker vent
+    // field erupting on its own clocks, and a rift-torn chasm shelf whose
+    // whole fight is a shove economy. Faces join as rows here, never as
+    // code (wave-two kit rules in data/formations.ts).
     variants: [
       { name: 'kelp forest', layout: [
         { kind: 'cluster', count: [2, 3], cluster: 'kelp_forest' },
@@ -8322,6 +8324,36 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'chasm', count: [0, 1] },
         { kind: 'kelp', count: [2, 4] },
         { kind: 'boulder_field', count: [0, 1] },
+      ] },
+      // THE MAGMATIC VENT FIELD — black-smoker country: basalt chimneys
+      // crown scalding eruptions on their own clocks (the rule-level
+      // lava_orb volley — hitAll zones, so a pack kited across a waking
+      // vent pays the same toll you would), and scald polyps pop to a
+      // strike or a near press, exhaling boiling murk that spares nobody.
+      // Kit rules in data/formations.ts; the face runs warm in a cold
+      // country (ember accent, heat-kissed stone).
+      { name: 'vent field', theme: {
+          accent: '#ff9a5a', obstacle: '#1c2126', obstacleEdge: '#4a3a34',
+        }, layout: [
+        { kind: 'chasm', count: [0, 1] },
+        { kind: 'formation', count: [0, 1], formation: 'smoker_rank' },
+        { kind: 'black_smoker', count: [2, 4], radius: [20, 30] },
+        { kind: 'scald_polyp', count: [6, 10], radius: [10, 15] },
+        { kind: 'sea_rock', count: [2, 4], radius: [26, 46] },
+      ] },
+      // THE ABYSSAL CHASM SHELF — terraces over the drop: ravine rifts
+      // with their guaranteed spans (and the odd rotten shortcut that
+      // creaks, remembers, and gives way), extra trench tear at depth,
+      // and needle-coral banks that collect whatever arrives at
+      // push-speed. The whole face is a shove economy: past the lip is
+      // the swallow (pit credit rides pushActor), into the needles is
+      // the shred — bait the charge, then spend the mass fabric.
+      { name: 'chasm shelf', theme: { ambientDark: 0.42 },
+        layoutParams: { trenchDepthBonus: 6 }, layout: [
+        { kind: 'ravine', count: [1, 2] },
+        { kind: 'chasm', count: [1, 2] },
+        { kind: 'needle_coral', count: [3, 6], radius: [14, 22] },
+        { kind: 'sea_rock', count: [2, 4], radius: [24, 44] },
       ] },
     ],
     // Superseded by common + variants for random mints; kept for authored
