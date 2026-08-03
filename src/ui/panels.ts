@@ -98,6 +98,7 @@ import { isConfigured, PACKAGES } from '../packages/registry';
 import type { ContentPackage } from '../packages/types';
 import { QUEST_CATEGORY_COLORS, type QuestCategory } from '../quests/types';
 import { objectiveRead, objectiveSeals, type ZoneDef } from '../data/zones';
+import { underSpanPolicyOf } from '../data/underspans';
 import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
 import { bindTooltips, hideTooltip, TIP_CFG, type TooltipContent } from './tooltip';
@@ -5097,11 +5098,16 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           stroke="#4a8ac8" stroke-width="2" stroke-dasharray="6 5" stroke-opacity="0.8"/>`;
       }
       // THE UNDER-ROADS (ZoneDef.underways — the rooted web): a spanning
-      // under-zone joins these nodes BELOW the surface — a root-brown DOTTED
-      // stroke, distinct from every surface face (and from the sea lane's
-      // long dash). The veil law holds twice over: a far mouth still veiled
-      // draws nothing, and the key prefix keeps an under-road from
-      // collapsing into a surface road between the same pair.
+      // under-zone joins these nodes BELOW the surface — a DOTTED stroke in
+      // the country's OWN voice (underSpanPolicyOf(z.biome).omen.color, the
+      // omen fabric's exact read: members are same-biome by the pass's law,
+      // so either end names the row) — the garden's warm root-tan, the lych
+      // way's bone-pale. A row without a voice (or no row — a grandfathered
+      // edge) keeps the classic root-brown byte-exact, distinct from every
+      // surface face (and from the sea lane's long dash) either way. The
+      // veil law holds twice over: a far mouth still veiled draws nothing,
+      // and the key prefix keeps an under-road from collapsing into a
+      // surface road between the same pair.
       for (const u of z.underways ?? []) {
         const b = world.zoneMap[u.to];
         if (!b || !inDim(b)) continue;
@@ -5110,8 +5116,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         if (drawn.has(key)) continue;
         drawn.add(key);
         const za = anchorOf(z, b.map), bb = anchorOf(b, z.map);
+        const voice = underSpanPolicyOf(z.biome ?? '')?.omen?.color ?? '#7a5a38';
         edges += `<line x1="${za.x}" y1="${za.y}" x2="${bb.x}" y2="${bb.y}"
-          stroke="#7a5a38" stroke-width="2" stroke-dasharray="2 4" stroke-opacity="0.75"/>`;
+          stroke="${voice}" stroke-width="2" stroke-dasharray="2 4" stroke-opacity="0.75"/>`;
       }
     }
 

@@ -6015,6 +6015,63 @@ registerStamp('brush', (ctx) => stampBlob(ctx, 'brush', [20, 56], [3, 6], false)
 registerStamp('sand', (ctx) => stampBlob(ctx, 'sand', [24, 72], [5, 9], false));
 // Desert heat: shimmering-air patches (sunscorch fields — World.updateHeat).
 registerStamp('heat_shimmer', (ctx, spec) => stampBlob(ctx, 'heat_shimmer', spec.radius ?? [40, 85], [2, 4], false));
+/** THE DOOR GUARANTEE's forced seat (the cave ladder's precedent at the
+ *  generateLayout tail, generalized to the STAMP moment — batch 25): a
+ *  layout row that PROMISES a sidezone door (registered entrance kinds —
+ *  taproot/crypt gates, the vault stairs) must not lose it to a crowded
+ *  floor. stampSingle's 26 tries starve against packed recipes — measured:
+ *  stalkwood (forestCoverDeep 0.85, and the gate rule's 420 solid spacing
+ *  rejects nearly every sample) placed ZERO of its promised [1,1] taproot
+ *  gates across a 10-seed census — and a silently missing door severs
+ *  load-bearing ways (sidezone mouths, the rooted web's ladder). The seat
+ *  is found DRAW-FREE (pure geometry, no rng — the precedent's own
+ *  discipline, so zones whose stamps place naturally stay byte-identical
+ *  by construction): an exhaustive lattice scan takes the farthest
+ *  standing point from the entry that clears the border/portal law
+ *  (clearOf), reserved rects, blocking bodies, and sibling doors (the
+ *  relocate pass's own 90u separation). The rule's SPACING preference is
+ *  deliberately relaxed here — the promise outranks the preference.
+ *  Seating at the stamp (not the tail) keeps ordering whole: the
+ *  under-tier relocate still gets to sink a forced gate onto its story. */
+function doorGuaranteeSeat(ctx: GenCtx, r: number): Vec2 | null {
+  // ONE bucket pass over the doodad list (a packed forest holds thousands —
+  // the naive per-point some() cost real milliseconds per starved mint):
+  // every blocking body is filed into each cell its rejection disc overlaps
+  // (blockers at r+8+radius; sibling doors at the relocate pass's 90u), so
+  // each lattice point consults only its own cell. Still draw-free.
+  const cell = 150;
+  const bc = Math.max(1, Math.ceil(ctx.arena.w / cell));
+  const br = Math.max(1, Math.ceil(ctx.arena.h / cell));
+  const buckets: { x: number; y: number; rr: number }[][] = Array.from({ length: bc * br }, () => []);
+  const put = (x: number, y: number, rr: number): void => {
+    const x0 = Math.max(0, Math.floor((x - rr) / cell)), x1 = Math.min(bc - 1, Math.floor((x + rr) / cell));
+    const y0 = Math.max(0, Math.floor((y - rr) / cell)), y1 = Math.min(br - 1, Math.floor((y + rr) / cell));
+    for (let gy = y0; gy <= y1; gy++) for (let gx = x0; gx <= x1; gx++) buckets[gy * bc + gx].push({ x, y, rr });
+  };
+  for (const d of ctx.doodads) {
+    const blocks = doodadRule(d.kind).blocksMove;
+    const door = isSidezoneEntranceKind(d.kind);
+    if (!blocks && !door) continue;
+    put(d.pos.x, d.pos.y, Math.max(blocks ? r + 8 + d.radius : 0, door ? 90 : 0));
+  }
+  let best: Vec2 | null = null;
+  let bd = -1;
+  const step = 60;
+  for (let y = BORDER + 30; y < ctx.arena.h - BORDER; y += step) {
+    for (let x = BORDER + 30; x < ctx.arena.w - BORDER; x += step) {
+      const p = vec(x, y);
+      if (!clearOf(ctx, p, r, true)) continue;
+      if (inReserved(ctx, p, r)) continue;
+      if (ctx.walk && !ctx.walk.isWalkable(x, y)) continue;
+      const bk = buckets[Math.floor(y / cell) * bc + Math.floor(x / cell)];
+      if (bk.some(b => (p.x - b.x) * (p.x - b.x) + (p.y - b.y) * (p.y - b.y) < b.rr * b.rr)) continue;
+      const d0 = dist(p, ctx.entry);
+      if (d0 > bd) { bd = d0; best = p; }
+    }
+  }
+  return best;
+}
+
 // The doodad kingdom (round 4): singles place like trees; patches blob.
 // Exported: data-side kits (formations.ts, packages) register their own
 // simple scatters through the same helper the base kinds use.
@@ -6022,7 +6079,20 @@ export const stampSingle = (kind: DoodadKind, dflt: [number, number]) =>
   (ctx: GenCtx, spec: StampSpec): void => {
     const r = ctx.rng.range((spec.radius ?? dflt)[0], (spec.radius ?? dflt)[1]);
     const p = findSpot(ctx, r, true, doodadRule(kind).spacing ?? 0, true, kind);
-    if (p) ctx.doodads.push({ pos: p, radius: r, kind, rot: ctx.rng.range(0, Math.PI * 2) });
+    if (p) { ctx.doodads.push({ pos: p, radius: r, kind, rot: ctx.rng.range(0, Math.PI * 2) }); return; }
+    // THE DOOR GUARANTEE (doorGuaranteeSeat above): a starved SIDEZONE door
+    // is forced draw-free onto standing ground and joins mustReach so the
+    // reachability invariant carves to it; scenery kinds keep the classic
+    // silent drop (density texture, not a promise). A zone with no standing
+    // ground anywhere is named LOUD — never a silent missing door again.
+    if (!isSidezoneEntranceKind(kind)) return;
+    const seat = doorGuaranteeSeat(ctx, r);
+    if (!seat) {
+      console.warn(`[stamps] door guarantee: no standing ground anywhere for promised '${kind}' — the door is dropped`);
+      return;
+    }
+    ctx.doodads.push({ pos: seat, radius: r, kind });
+    (ctx.mustReach ??= []).push(seat);
   };
 registerStamp('dead_tree', stampSingle('dead_tree', [14, 26]));
 registerStamp('stump', stampSingle('stump', [9, 15]));

@@ -2372,14 +2372,18 @@ export class World {
    *  `kind` + `seed` are the mouth's mint identity (recorded by enterSidezone —
    *  the exact-resume ladder re-mints the pocket from them; writers that mint
    *  outside the sidezone registry (pitfalls, the Descent, realm arenas) leave
-   *  them absent and their ladders simply never persist). */
-  caveReturn: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string; seed?: number; underSpan?: string } | null = null;
+   *  them absent and their ladders simply never persist). `tier` is the STORY
+   *  the mouth was dwelled from (the arrivalStory law): a taproot gate seated
+   *  down in the root galleries hands the climb-out back its story, so the
+   *  return stands IN the gallery at the door, never on the plot face above
+   *  it. Absent (surface mouths) = the ground story, today's exact bytes. */
+  caveReturn: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string; seed?: number; underSpan?: string; tier?: number } | null = null;
   /** The CAVE LADDER's outer levels (cave-within-cave): entering a deeper cave
    *  pushes the current return here; climbing out pops it back — so a mid-
    *  ladder retreat stands in the outer cave WITH its way home intact (the
    *  single-slot field alone would null out and misread the outer cave as
    *  surface: sealed exits, no zone memory, wrong spawn point). */
-  private caveStack: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string; seed?: number; underSpan?: string }[] = [];
+  private caveStack: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string; seed?: number; underSpan?: string; tier?: number }[] = [];
   /** True just after climbing out of a cave: the player lands AT the mouth, so
    *  suppress re-entry until they step clear of it once (no bouncing back in). */
   private caveExitGrace = false;
@@ -5041,11 +5045,25 @@ export class World {
     // the hero clean through the bedroom wall.
     p.push = null;
     p.dash = null;
+    // THE ARRIVAL STORY (the arrivalStory law, engine/tiers.ts): a zone
+    // arrival lands on the GROUND story — the last zone's layer index means
+    // nothing on this grid. A root-gallery runner stepping through a story-
+    // seated door once carried tier 1 into a cave with no such story: every
+    // clamp refused through the empty tier view (measured live — the
+    // immobile-arrival bug), and the cross-story hit gate refused all combat
+    // besides. Story-seated landings (the climb-out onto a sunken mouth)
+    // re-seat AFTER this load through landPartyAt's own tier opt.
+    p.tier = 0;
+    p.onTierLink = false;
+    p.aiTierGoal = undefined;
     for (const a of this.actors) {
       if (a === p) continue;
       a.dash = null;
       a.casting = null;
       a.push = null;
+      a.tier = 0;
+      a.onTierLink = false;
+      a.aiTierGoal = undefined;
       a.pos = this.clampPos(vec(landing.x + rand(-80, 80), landing.y + rand(-80, 80)), a.radius);
     }
     // THE SPOILS LAW says so at the door (ZoneDef.spoils): ground that mints
@@ -10147,6 +10165,11 @@ export class World {
    *  their own flavor via `opts` (`clamp: false` = open water). */
   landPartyAt(at: Vec2, opts?: {
     spread?: number; band?: readonly [number, number]; clamp?: boolean;
+    /** THE LANDING'S STORY (the arrivalStory law, engine/tiers.ts): a party
+     *  landing seats every body on the GROUND story unless the caller names
+     *  one — only the cave climb-out and the far span crossing land ON a
+     *  story-seated mouth, and they pass its recorded story here. */
+    tier?: number;
   }): void {
     const spread = opts?.spread ?? PARTY_LAND_CFG.spread;
     const band = opts?.band ?? PARTY_LAND_CFG.band;
@@ -10158,6 +10181,11 @@ export class World {
       // here, so nothing leads here (engine/watch.ts).
       a.trail = undefined;
       a.trailIdx = 0;
+      // The story re-seat (arrivalStory): stale layer indices never survive
+      // a landing — the ground under the party is the story the caller says.
+      a.tier = opts?.tier ?? 0;
+      a.onTierLink = false;
+      a.aiTierGoal = undefined;
     };
     const p = this.player;
     put(p, vec(at.x, at.y));
@@ -15527,6 +15555,8 @@ export class World {
                 ...(r.entryFrom !== null ? { entryFrom: r.entryFrom } : {}),
                 kind: r.kind!, seed: r.seed!,
                 ...(r.underSpan ? { underSpan: r.underSpan } : {}),
+                // + the mouth's story (the arrivalStory law — absent = ground)
+                ...(r.tier ? { tier: r.tier } : {}),
               })),
             },
           } : {}),
@@ -15783,7 +15813,8 @@ export class World {
         || !fin(r.x) || !fin(r.y) || !fin(r.seed)
         || typeof r.kind !== 'string' || sidezoneOf(r.kind) === undefined
         || (r.entryFrom !== undefined && typeof r.entryFrom !== 'string')
-        || (r.underSpan !== undefined && typeof r.underSpan !== 'string')) {
+        || (r.underSpan !== undefined && typeof r.underSpan !== 'string')
+        || (r.tier !== undefined && !fin(r.tier))) {
         return bad(`rung ${i} malformed or its kind unregistered`);
       }
       // THE CHAIN LAW: this rung's mouth must re-derive EXACTLY the pocket id
@@ -15805,10 +15836,13 @@ export class World {
         this.applySidezoneFurnish(dest, sz);
         if (sz.levelWith === 'character') dest.level = Math.max(1, this.player.level);
         if (this.caveReturn) this.caveStack.push(this.caveReturn);
+        // The rung's STORY rides the rebuild (the arrivalStory law), so a
+        // post-resume climb-out still lands IN the gallery at the door.
         this.caveReturn = {
           zoneId: r.zoneId, pos: vec(r.x, r.y),
           entryFrom: r.entryFrom ?? null, kind: r.kind, seed: r.seed,
           ...(r.underSpan ? { underSpan: r.underSpan } : {}),
+          ...(r.tier ? { tier: r.tier } : {}),
         };
         this.loadZone(dest.id, r.zoneId); // off-graph — no onNodeCharted, same as the live descent
       }
@@ -41396,7 +41430,10 @@ export class World {
     // home on the ladder stack; climbing out pops it back. kind + seed ride
     // the rung so the exact-resume save can re-mint this exact descent.
     if (this.caveReturn) this.caveStack.push(this.caveReturn);
-    this.caveReturn = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: this.entryFrom, kind: cm.kind, seed: cm.seed, ...(cm.underSpan ? { underSpan: cm.underSpan } : {}) };
+    // The rung remembers the STORY it was dwelled from (the arrivalStory law
+    // — the dwell gate already guaranteed player.tier === the mouth's own
+    // story), so the climb-out lands back IN the gallery at the door.
+    this.caveReturn = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: this.entryFrom, kind: cm.kind, seed: cm.seed, ...(cm.underSpan ? { underSpan: cm.underSpan } : {}), ...(this.player.tier ? { tier: this.player.tier } : {}) };
     this.loadZone(dest.id, this.zone.id); // deliberately NO sim.onNodeCharted — pockets are off-graph
   }
 
@@ -41958,15 +41995,19 @@ export class World {
       this.loadZone(ret.zoneId, ret.entryFrom ?? undefined);
       // INDOOR mouths (the cellar hatch) surface you ON the hatch — a step
       // south would clip through the house wall and clampPos would strand you
-      // OUTSIDE. Open-air mouths keep the classic step off the hole; the
-      // exit grace guards re-descent either way.
+      // OUTSIDE. STORY-SEATED mouths (the arrivalStory law: a taproot gate
+      // down in the root galleries) likewise — a step off the door could
+      // leave the gallery's floor, and the recorded story must stand where
+      // it lands. Open-air ground mouths keep the classic step off the hole;
+      // the exit grace guards re-descent either way.
       const indoors = !!(ret.kind && sidezoneOf(ret.kind)?.indoorsOnly);
-      const stepY = indoors ? 0 : 40;
-      const sc = indoors ? 0.5 : 1;
+      const sunken = (ret.tier ?? 0) >= 1;
+      const stepY = indoors || sunken ? 0 : 40;
+      const sc = indoors || sunken ? 0.5 : 1;
       // THE PARTY-LANDING LAW: seats AND the carried court climb out at the
       // mouth together — loadZone stood them at the generic entry (zone
       // CENTER when entryFrom is null), a county away from their keeper.
-      this.landPartyAt(vec(ret.pos.x, ret.pos.y + stepY), { spread: 50 * sc, band: [0, 50 * sc] });
+      this.landPartyAt(vec(ret.pos.x, ret.pos.y + stepY), { spread: 50 * sc, band: [0, 50 * sc], tier: ret.tier ?? 0 });
       this.caveExitGrace = true; // standing on the mouth — don't re-descend until clear
       return;
     }
@@ -41983,7 +42024,14 @@ export class World {
       bumpLedger(this.ledger, 'rootspan_crossed');
       this.loadZone(e.to);
       const mouth = this.caveEntrances.find(en => en.underSpan === span);
-      if (mouth) this.landPartyAt(vec(mouth.pos.x, mouth.pos.y + 40), { spread: 50, band: [0, 50] });
+      // A story-seated far mouth (mouthTier — none ship today, but the
+      // arrivalStory law holds structurally) lands the party ON it at its
+      // own story; ground mouths keep the classic step + bytes.
+      const mTier = mouth?.mouthTier ?? 0;
+      if (mouth) {
+        this.landPartyAt(vec(mouth.pos.x, mouth.pos.y + (mTier >= 1 ? 0 : 40)),
+          { spread: mTier >= 1 ? 25 : 50, band: mTier >= 1 ? [0, 25] : [0, 50], tier: mTier });
+      }
       this.caveExitGrace = true; // standing on the far mouth — don't re-descend until clear
       return;
     }
@@ -50400,9 +50448,14 @@ export class World {
     // walkResolve/walkSweep read this.walk, so the swap reaches every
     // sample without threading a param through four layers). Restored in
     // the finally. A stale tier beyond the zone's stack clamps to the top.
+    // Gated on zone.tiers (the arrivalStory law's second half): every tier-
+    // region painter stamps def.tiers, so a zone WITHOUT it owns no story
+    // floor anywhere — tierViews[1] there is the EMPTY mask, and swapping to
+    // it froze any body wearing a stale layer index solid. A stale tier in
+    // a storyless zone now walks the base grid instead.
     const moverTier = mvTier;
     let tierSwap: WalkField | null = null;
-    if (moverTier >= 1 && this.tierViews && this.walk) {
+    if (moverTier >= 1 && this.zone.tiers && this.tierViews && this.walk) {
       const view = this.tierViews[Math.min(moverTier, this.tierViews.length - 1)];
       if (view) { tierSwap = this.walk; this.walk = view as unknown as GridWalkField; }
     }

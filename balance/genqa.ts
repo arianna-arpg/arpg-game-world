@@ -81,6 +81,7 @@ import { dimensionDef, dimensionIds } from '../src/world/dimensions';
 import {
   generateLayout, validateStamps, validateCompositions, compositionDefs,
   doodadRuleOf, layoutIds, blocksMovement, normalizeDoodadBound, bodyRadiusOf,
+  isSidezoneEntranceKind,
   type Doodad, type GeneratedLayout,
 } from '../src/engine/levelgen';
 import { shapeBoundR } from '../src/engine/shapes';
@@ -566,6 +567,19 @@ function runCase(name: string, def: ZoneDef): void {
   const exits = [vec(arena.w - 120, arena.h / 2), vec(arena.w / 2, 120)];
   let count = 0;
   const placedKinds = new Set<string>();
+  // THE PROMISED DOOR (the door guarantee — engine/levelgen.ts
+  // doorGuaranteeSeat): a layout row whose kind is a registered SIDEZONE
+  // ENTRANCE and whose count FLOOR is ≥1 promises a load-bearing way (the
+  // rooted web's ladder rides these doors) — the guarantee lane must
+  // deliver the floor on EVERY seed, so a shortfall is a FAIL, never a
+  // warn. Min-0 rows promise nothing statically (their rolled-but-starved
+  // case is the guarantee's runtime business).
+  const doorMins = new Map<string, number>();
+  for (const row of def.layout) {
+    if ((row.count?.[0] ?? 0) >= 1 && isSidezoneEntranceKind(row.kind)) {
+      doorMins.set(row.kind, (doorMins.get(row.kind) ?? 0) + row.count[0]);
+    }
+  }
   const t0 = performance.now();
   for (let s = 0; s < SEEDS; s++) {
     const seed = 1000003 * (s + 1) + 17;
@@ -578,6 +592,10 @@ function runCase(name: string, def: ZoneDef): void {
       }
       count = layout.doodads.length;
       for (const dd of layout.doodads) placedKinds.add(dd.kind);
+      for (const [k, min] of doorMins) {
+        const got = layout.doodads.filter(dd => dd.kind === k).length;
+        if (got < min) fails.push(`${name} seed ${seed}: promised door '${k}' ×${min}, placed ${got}`);
+      }
       checkLayout(`${name} seed ${seed}`, layout, d, arena, entry, exits, fails, warns);
     } catch (e) {
       fails.push(`${name} seed ${seed}: THREW ${(e as Error).message}`);

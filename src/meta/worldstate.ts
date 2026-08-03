@@ -227,6 +227,13 @@ export interface SavedCaveRung {
    *  parent-independent; the restore's chain law verifies through the same
    *  one derivation. Absent on every classic rung. */
   underSpan?: string;
+  /** THE MOUTH'S STORY (the arrivalStory law — engine/tiers.ts, the under-
+   *  tier lanes): the layer index this mouth was dwelled from (a taproot
+   *  gate seated down in the root galleries carries 1, the mouthTier gate's
+   *  own truth), so a post-resume climb-out lands back IN the gallery at
+   *  the door. Absent (every surface mouth + every pre-story save) = the
+   *  ground story — today's exact bytes. */
+  tier?: number;
 }
 
 /** Where the player stood at save, plus how hurt they were (fractions of each

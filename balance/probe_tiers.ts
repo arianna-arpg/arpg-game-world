@@ -37,6 +37,7 @@ import type { Actor } from '../src/engine/actor';
 import { SEG_CFG } from '../src/engine/segments';
 import { mod } from '../src/engine/stats';
 import { makeSimWorld } from '../src/sim/arena';
+import { seedGlobalRandom } from '../src/sim/rng';
 import { generateLayout, hasLayout, type Doodad, type GeneratedLayout } from '../src/engine/levelgen';
 import { castRay, LOS_CFG } from '../src/engine/los';
 import { SightVeil } from '../src/render/vis/sightVeil';
@@ -1059,6 +1060,156 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
   const nb2 = gen('qa_crypts', 'massif', [...dn.layout, { kind: 'crypt_gate', count: [2, 2] } as StampSpec],
     { ...dn.layoutParams, underTier: 'crypts', underTierChance: 1 }, 824009);
   check('N2.10 the crypt tier is byte-deterministic', fpN2(na2.out) === fpN2(nb2.out));
+}
+
+// --- RIG N3: THE ARRIVAL STORY (the arrivalStory law — batch 25) ------------------
+// Arianna's live report (2026-08-03): entering the Undergrowth THROUGH a
+// story-seated taproot gate left her IMMOBILE in the pocket (the stale layer
+// index met the cave's empty tier view at every clamp), and the climb-out
+// stood her on the plot face ABOVE the gallery instead of at the door. The
+// law pinned here, both directions, on REAL minted geometry:
+//   inbound — a zone arrival lands on the GROUND story (tier 0) and a real
+//     step lands (mobility is the symptom, so mobility is the assert);
+//   outbound — the climb-out re-seats the party at the mouth ON the mouth's
+//     own recorded story (caveReturn.tier), standing on story floor, mobile;
+//   the rung — the exact-resume ladder writes + rebuilds the story, so her
+//     literal repro (restart mid-cave, then exit) lands story-true too;
+//   the classic mouth — tier-0 doors keep the classic step-off bytes.
+// Downs twin (crypt gates → the catacombs) walks the same law.
+{
+  seedGlobalRandom(0xa15701);
+  type N3Cm = { pos: { x: number; y: number }; seed: number; kind: string; underSpan?: string; mouthTier?: number };
+  type N3Innards = {
+    enterSidezone(cm: { pos: { x: number; y: number }; seed: number; kind: string; underSpan?: string }): void;
+    travelThrough(e: { to: string; side: 'n' | 's' | 'e' | 'w' }): void;
+    caveEntrances: N3Cm[];
+    walk: { regionAt?(x: number, y: number): string } | null;
+  };
+  const regionAtOf = (w: ReturnType<typeof makeSimWorld>, x: number, y: number): string | undefined =>
+    innardsOf(w).walk?.regionAt?.(x, y);
+  const innardsOf = (w: ReturnType<typeof makeSimWorld>): N3Innards => w as unknown as N3Innards;
+  /** Strip live hostiles so the walk asserts measure the GRID, not a shove. */
+  const clearField = (w: ReturnType<typeof makeSimWorld>): void => {
+    for (const a of w.actors) { if (a.team === 'enemy' && !a.dead) a.dead = true; }
+  };
+  /** Best displacement over four compass walks from `seat` (real moveActor
+   *  steps — the immobility bug refused every one of these). */
+  const bestStep = (w: ReturnType<typeof makeSimWorld>, seat: { x: number; y: number }): number => {
+    let best = 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      w.player.pos.x = seat.x; w.player.pos.y = seat.y;
+      for (let i = 0; i < 6; i++) w.moveActor(w.player, dx, dy, 0.1);
+      best = Math.max(best, Math.hypot(w.player.pos.x - seat.x, w.player.pos.y - seat.y));
+    }
+    w.player.pos.x = seat.x; w.player.pos.y = seat.y;
+    return best;
+  };
+  /** Mint tileset zones on pinned seeds until one carries a SUNK named gate
+   *  (mouthTier 1 — the relocated door on the story's own floor). */
+  const mintWithSunkGate = (
+    w: ReturnType<typeof makeSimWorld>, tileset: string, gate: string, seeds: number[],
+  ): { zoneId: string; cm: N3Cm } | null => {
+    for (let i = 0; i < seeds.length; i++) {
+      const zid = w.devMintTileset(tileset, i, 8, { seed: seeds[i] });
+      if (!zid) continue;
+      const cm = innardsOf(w).caveEntrances.find(en => en.kind === gate && en.mouthTier === 1);
+      if (cm) return { zoneId: zid, cm };
+    }
+    return null;
+  };
+  const walkLane = (label: string, tileset: string, gate: string, seeds: number[]): void => {
+    const w = makeSimWorld('warrior', 0x1157);
+    w.player.invulnerable = true;
+    const found = mintWithSunkGate(w, tileset, gate, seeds);
+    check(`N3.1 ${label}: a mint stands with a SUNK ${gate} (story-seated door)`, !!found);
+    if (!found) return;
+    const inN = innardsOf(w);
+    const gardenId = w.zone.id;
+    const mouthAt = { x: found.cm.pos.x, y: found.cm.pos.y };
+    // The dwell's honest state: standing ON the gate, on ITS story (the
+    // mouthTier gate guarantees this pairing live; the probe reaches the
+    // private seam structurally — the dwell is merely enterSidezone's input).
+    w.player.pos.x = mouthAt.x; w.player.pos.y = mouthAt.y;
+    w.player.tier = 1;
+    inN.enterSidezone(found.cm);
+    check(`N3.2 ${label}: the gate opens a pocket`, w.zone.id.startsWith('cave_'), w.zone.id);
+    const pocketId = w.zone.id;
+    // INBOUND — the arrival story is the GROUND story, and a step LANDS.
+    check(`N3.3 ${label}: the arrival wears the ground story (tier 0)`, w.player.tier === 0, `tier=${w.player.tier}`);
+    clearField(w);
+    const inStep = bestStep(w, { x: w.player.pos.x, y: w.player.pos.y });
+    check(`N3.4 ${label}: the arrival is MOBILE (a real step lands)`, inStep > 15, `step=${inStep.toFixed(1)}px`);
+    check(`N3.5 ${label}: the rung remembers the mouth's story`, w.caveReturn?.tier === 1,
+      `caveReturn.tier=${w.caveReturn?.tier}`);
+    // THE RUNG — the save writes the story; the rebuild restores it (her
+    // literal repro: restart mid-cave, THEN climb out).
+    const save = w.serializeWorldState();
+    const rungs = save.player?.cave?.rungs ?? [];
+    check(`N3.6 ${label}: the written rung carries the story`,
+      rungs.length >= 1 && rungs[rungs.length - 1].tier === 1,
+      `rungs=${JSON.stringify(rungs.map(r => r.tier ?? 0))}`);
+    const w2 = makeSimWorld('warrior', 0x1158);
+    w2.player.invulnerable = true;
+    const adopted = w2.adoptWorldState(save);
+    w2.resumeSpawn('exact', save.player);
+    check(`N3.7 ${label}: the resumed wake stands in the pocket with the rung's story rebuilt`,
+      adopted && w2.zone.id === pocketId && w2.caveReturn?.tier === 1,
+      `zone=${w2.zone.id} tier=${w2.caveReturn?.tier}`);
+    // OUTBOUND on the RESUMED world (the restart repro): climb out, land ON
+    // the mouth wearing ITS story, standing on story floor, mobile.
+    clearField(w2);
+    innardsOf(w2).travelThrough({ to: gardenId, side: 'n' });
+    const p2 = w2.player;
+    const dBack = Math.hypot(p2.pos.x - mouthAt.x, p2.pos.y - mouthAt.y);
+    check(`N3.8 ${label}: the climb-out stands AT the door (no step off a sunken mouth)`,
+      w2.zone.id === gardenId && dBack < 2, `zone=${w2.zone.id} d=${dBack.toFixed(1)}`);
+    const doorDd = w2.doodads.filter(dd => dd.kind === gate)
+      .sort((a2, b2) => Math.hypot(a2.pos.x - mouthAt.x, a2.pos.y - mouthAt.y)
+        - Math.hypot(b2.pos.x - mouthAt.x, b2.pos.y - mouthAt.y))[0];
+    check(`N3.9 ${label}: the return wears the mouth's story on story floor`,
+      p2.tier === 1 && tierFloorAt(regionAtOf(w2, p2.pos.x, p2.pos.y), 1),
+      `tier=${p2.tier} kind=${regionAtOf(w2, p2.pos.x, p2.pos.y)}`
+      + (doorDd ? ` doorDd=${doorDd.pos.x.toFixed(0)},${doorDd.pos.y.toFixed(0)}`
+        + `@${regionAtOf(w2, doorDd.pos.x, doorDd.pos.y)} rowNudge=${Math.hypot(mouthAt.x - doorDd.pos.x, mouthAt.y - doorDd.pos.y).toFixed(1)}px` : ' doorDd=NONE'));
+    clearField(w2);
+    const outStep = bestStep(w2, { x: p2.pos.x, y: p2.pos.y });
+    check(`N3.10 ${label}: the return is MOBILE on its story`, outStep > 15, `step=${outStep.toFixed(1)}px`);
+    // THE CLASSIC MOUTH keeps its bytes: a ground-story door (synthetic,
+    // the F idiom) still steps off the hole on exit, tier 0 throughout.
+    const seat = { x: p2.pos.x, y: p2.pos.y };
+    p2.tier = 0;
+    innardsOf(w2).enterSidezone({ pos: seat, seed: 4242, kind: 'cave_entrance' });
+    const classicPocket = w2.zone.id;
+    check(`N3.11 ${label}: the classic descent still opens (tier 0 rung)`,
+      classicPocket.startsWith('cave_') && (w2.caveReturn?.tier ?? 0) === 0, classicPocket);
+    innardsOf(w2).travelThrough({ to: gardenId, side: 'n' });
+    check(`N3.12 ${label}: the classic climb-out keeps the step off the hole, ground story`,
+      w2.zone.id === gardenId && w2.player.tier === 0
+      && Math.abs(w2.player.pos.y - (seat.y + 40)) < 45 && Math.abs(w2.player.pos.x - seat.x) < 45,
+      `tier=${w2.player.tier} at=${w2.player.pos.x.toFixed(0)},${w2.player.pos.y.toFixed(0)} mouth=${seat.x.toFixed(0)},${seat.y.toFixed(0)}`);
+  };
+  // (petalfields for the WALK: the parkland face rolls sunk gates on early
+  // pinned seeds. The forest face's starvation that once dropped stalkwood's
+  // promised gates entirely is healed by THE DOOR GUARANTEE — levelgen's
+  // doorGuaranteeSeat — pinned as its own census below at N3.13.)
+  walkLane('garden', 'petalfields', 'taproot_gate', [951001, 951002, 951003, 951004, 951005, 951006, 951007, 951008, 951009, 951010]);
+  walkLane('downs', 'downs', 'crypt_gate', [952001, 952002, 952003, 952004, 952005, 952006, 952007, 952008, 952009, 952010, 952011, 952012, 952013, 952014, 952015, 952016]);
+  // THE DOOR GUARANTEE (levelgen doorGuaranteeSeat — the stalkwood heal):
+  // the packed forest face whose 10-seed census once placed ZERO of its
+  // promised common [1,1] taproot gates now stands one on EVERY mint —
+  // same devMint lane, same seed family that measured the starvation.
+  {
+    const w = makeSimWorld('warrior', 0x1159);
+    let stood = 0, tried = 0;
+    for (let i = 0; i < 6; i++) {
+      const zid = w.devMintTileset('stalkwood', i, 8, { seed: 951001 + i });
+      if (!zid) continue;
+      tried++;
+      if (w.doodads.some(d => d.kind === 'taproot_gate')) stood++;
+    }
+    check('N3.13 the door guarantee: every stalkwood mint stands its promised taproot gate',
+      tried >= 4 && stood === tried, `${stood}/${tried}`);
+  }
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);
