@@ -161,19 +161,21 @@ deliberate step.
 ## The skill graft (kind 'graft')
 
 The repeatable charge — the veteran's essence valve. `skill_graft`
-(cost `SKILL_GRAFT_COST`) sits behind the Grand Codex; buying arms
-`Account.skillGraft` and the entry STANDS DOWN while armed (never "owned" —
-`isUnlockOwned` is false by construction, so `applyUnlock`'s verdict is
-"the pour completed", not ownership). At the next run's start
-(`main.ts startPicked`), the pick screen (`showSkillGraftPick`) offers
-every skill the account's drop pool truly holds (`isSkillUnlockedForDrop`,
-`noDrop` excluded — the blue-mage/bestiary discipline); a deliberate
-selection rides into `startGame`, and `World.applySkillGraft` mints the
-plainest cut (`makeSkillGem(def, 1, 'common')`) — learned and barred where
-the young body meets its asks and holds a free seat, packed where it
-cannot; a kit that already knows the skill banks the spare. The charge
-spends as the run begins (before the baseline save); declining keeps it
-armed for a later run.
+(cost `SKILL_GRAFT_COST`) sits behind the Grand Codex; buying takes the
+charge (`Account.skillGraft`) and the entry STANDS DOWN while it is held
+(never "owned" — `isUnlockOwned` is false by construction, so
+`applyUnlock`'s verdict is "the pour completed", not ownership). At the
+next run's start (`main.ts startPicked`), the pick screen
+(`showSkillGraftPick`, live search over the list) offers every skill the
+account's drop pool truly holds (`isSkillUnlockedForDrop`, `noDrop`
+excluded — the blue-mage/bestiary discipline); a deliberate selection
+rides into `startGame`, and `World.applySkillGraft` mints the plainest
+cut (`makeSkillGem(def, 1, 'common')`) — learned and barred where the
+young body meets its asks and holds a free seat, packed where it cannot;
+a kit that already knows the skill banks the spare. THE CHARGE'S LAW
+(Arianna's ruling, 2026-08-03): the charge ARMS AND SPENDS only when a
+run begins with a chosen skill — declining the pick carries it on to a
+later run, untouched (before the baseline save either way).
 
 ## Probe
 

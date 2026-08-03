@@ -354,6 +354,14 @@ export class UI {
   private vaultScroll: Record<string, number> = {};
   /** THE RUN CHRONICLE's remembered ordering (personal-leaderboard axis). */
   private chronicleSort: 'essence' | 'renown' | 'latest' = 'essence';
+  /** THE TREE LENS — the passive tree's live search query (sticky across
+   *  refreshes; matches name + description + granted lines, hits glow,
+   *  the rest dims). */
+  private treeSearch = '';
+  /** Suppresses the trailing synthetic click after a handled pointer press
+   *  on an Unlock card (native mice AND the pad pointer both send one) —
+   *  the keyboard lane is exactly the clicks arriving with no recent press. */
+  private investPointerAt = 0;
   /** THE RUMOR FOLD: the rumor wall's open/closed latch (the satchel idiom —
    *  remembered across re-renders, reopens and shelf flips this session). */
   private vaultRumorsOpen = true;
@@ -1712,7 +1720,7 @@ export class UI {
           if (cred) cred.textContent = String(acc.credits);
         };
         const doneToast = (u: Unlockable): string => u.kind === 'graft'
-          ? `⚔ ${u.label} — ARMED for your next run`
+          ? `⚔ ${u.label} — a charge awaits your next run's start`
           : `✦ ${u.label} — UNLOCKED`;
         // "This pour finished": ownership for the permanent kinds, the armed
         // charge for the repeatable one (which is never owned).
@@ -1744,6 +1752,11 @@ export class UI {
           if (pourTimer || holdTimer) return; // one press at a time
           const u = findU();
           if (!u) return;
+          // Stamp the press: the trailing synthetic click (a native mouse's,
+          // or THE PAD POINTER's — whose Ⓐ speaks real pointerdown/up, so a
+          // held Ⓐ pours natively) is suppressed by this mark; the keyboard
+          // lane is exactly the clicks that arrive with no recent press.
+          this.investPointerAt = performance.now();
           try { btn.setPointerCapture(e.pointerId); } catch { /* capture is best-effort */ }
           let poured = 0;
           let held = false;
@@ -1775,6 +1788,7 @@ export class UI {
           const release = (): void => {
             btn.removeEventListener('pointerup', release);
             btn.removeEventListener('pointercancel', release);
+            this.investPointerAt = performance.now(); // the release's own trailing click stays suppressed
             if (holdTimer) { window.clearTimeout(holdTimer); holdTimer = 0; }
             if (!held) {
               // THE CLICK: unlock outright when the pool covers it; short,
@@ -1789,13 +1803,16 @@ export class UI {
           btn.addEventListener('pointerup', release);
           btn.addEventListener('pointercancel', release);
         });
-        // Keyboard/pad activation (Enter/Space fires click with detail 0;
-        // pointer presses were handled above and are ignored here): the
-        // same click law — outright when covered — and, holdless by
-        // nature, the covered-short press invests EVERYTHING carried (the
-        // pour's own terminal state, reached in one deliberate step).
-        btn.addEventListener('click', e => {
-          if (e.detail !== 0) return;
+        // KEYBOARD activation (Enter/Space): the same click law — outright
+        // when covered — and, holdless by nature, the covered-short press
+        // invests EVERYTHING carried (the pour's own terminal state,
+        // reached in one deliberate step). Pointer-originated clicks —
+        // native mice AND the pad pointer's synthetic trailer — arrive
+        // right after a press this driver already handled, and the stamp
+        // suppresses them (the old `detail` heuristic misread the pad's
+        // detail-0 clicks as keyboard).
+        btn.addEventListener('click', () => {
+          if (performance.now() - this.investPointerAt < 500) return;
           const u = findU();
           if (!u) return;
           if (unlockOutright(u)) return;
@@ -4256,6 +4273,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       ${realmTabs}
       <h2>${activeRealm && this.treeRealm !== MAIN_REALM ? activeRealm.label : 'Passive Tree'} — ${poolChip}${vocChips}
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal">
+          <input id="tree-search" class="tree-search" type="text" placeholder="search nodes…"
+            value="${esc(this.treeSearch)}" title="Matches node names, descriptions, and granted lines — hits glow, the rest dims.">
+          <span id="tree-search-n" class="tree-search-n"></span>
           <span class="tree-zoom-grp">
             <button class="tree-zoom" data-tz="out" title="zoom out">−</button>
             <button class="tree-zoom" data-tz="reset" title="reset zoom">${zPct}%</button>
@@ -4264,6 +4284,16 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
             ? 'EDITOR · scroll to zoom · drag empty space to pan'
             : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span></h2>
       <svg viewBox="${viewBox}" id="tree-svg" style="cursor:grab;touch-action:none">${edges}${circles}</svg>`;
+
+    // THE TREE LENS: typing filters LIVE via class toggles on the standing
+    // circles (never a re-render — the input keeps its focus); a refresh
+    // re-applies the sticky query to the fresh SVG below.
+    const searchEl = this.passiveTree.querySelector<HTMLInputElement>('#tree-search');
+    searchEl?.addEventListener('input', () => {
+      this.treeSearch = searchEl.value;
+      this.applyTreeSearch();
+    });
+    this.applyTreeSearch();
 
     // In EDITOR mode, clicks SELECT nodes (the editor wires that up) — skip the
     // play-mode allocate handler so the two don't fight over the same click.
@@ -4297,6 +4327,38 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.wireTreeControls();
     // Let the DEV passive-tree editor re-attach its handlers to the new SVG.
     this.onTreeRender?.();
+  }
+
+  /** Everything a passive node SAYS, lowercased for THE TREE LENS: its name,
+   *  its description, every granted line (the tooltip's own formatter), its
+   *  attribute grants, and its kind — so "fire", "totem", "keystone" or
+   *  "strength" all find their nodes. */
+  private passiveNodeSearchText(node: PassiveNode): string {
+    const parts: string[] = [node.name, node.description ?? '', node.kind];
+    for (const mo of node.mods ?? []) parts.push(formatModLine(mo, mo.value));
+    for (const k of Object.keys(node.attributes ?? {})) parts.push(k);
+    for (const k of Object.keys(node.attributesPct ?? {})) parts.push(k);
+    if (node.choice) parts.push('choice');
+    return parts.join(' ').toLowerCase();
+  }
+
+  /** Apply THE TREE LENS to the standing SVG: hits glow (`search-hit`), the
+   *  rest dims under the svg-level `tree-searching` class, and the count
+   *  chip speaks. Pure class toggles — cheap enough for every keystroke. */
+  private applyTreeSearch(): void {
+    const svg = this.passiveTree.querySelector<SVGSVGElement>('#tree-svg');
+    if (!svg) return;
+    const q = this.treeSearch.trim().toLowerCase();
+    svg.classList.toggle('tree-searching', q.length > 0);
+    let hits = 0;
+    svg.querySelectorAll<SVGCircleElement>('.tree-node').forEach(el => {
+      const node = PASSIVE_NODES[el.dataset.node ?? ''];
+      const hit = q.length > 0 && !!node && this.passiveNodeSearchText(node).includes(q);
+      el.classList.toggle('search-hit', hit);
+      if (hit) hits++;
+    });
+    const n = this.passiveTree.querySelector<HTMLElement>('#tree-search-n');
+    if (n) n.textContent = q ? `${hits} hit${hits === 1 ? '' : 's'}` : '';
   }
 
   /** Tree viewBox from the fitted node-bounds box + the live zoom/pan, clamping the
@@ -5853,47 +5915,71 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       .filter(s => !s.noDrop && isSkillUnlockedForDrop(acc, s.id))
       .sort((a, b) => a.name.localeCompare(b.name));
     let chosen: string | null = null;
-    const render = (): void => {
-      const cards = skills.map(s => `
+    let query = '';
+    // A skill's searchable voice: name + description (the codex-wide book
+    // needs the filter far more than the young account's dozen).
+    const corpus = new Map(skills.map(s =>
+      [s.id, `${s.name} ${s.description ?? ''}`.toLowerCase()] as const));
+    // STATIC SHELL, LIVE GRID: the head (with the search box) and the foot
+    // render once and keep their focus/listeners; only the grid and the
+    // confirm button's face update — typing never loses the input.
+    this.accountScreen.innerHTML = `
+      <div class="vault-head">
+        <h1>Skill Grafting: Choose the Rider</h1>
+        <div class="acct-head">One unlocked skill joins your class's kit at its plainest cut
+          (level 1, common) — learned where your young hands can hold it, packed where they cannot.
+          The charge spends as this run begins; choose, or carry it on.</div>
+        <div class="acct-head"><input id="graft-search" class="tree-search" type="text"
+            placeholder="search skills…" title="Matches skill names and descriptions.">
+          <span id="graft-search-n" class="tree-search-n"></span></div>
+      </div>
+      <div class="vault-body"><div class="unlock-grid" id="graft-grid"></div></div>
+      <div class="vault-foot acct-btns">
+        <button id="graft-go" disabled>Choose a skill to graft</button>
+        <button id="graft-skip" title="The charge keeps — it only spends when a run begins with a chosen skill.">Begin Without a Graft</button>
+      </div>`;
+    const grid = this.accountScreen.querySelector<HTMLElement>('#graft-grid')!;
+    const goBtn = this.accountScreen.querySelector<HTMLButtonElement>('#graft-go')!;
+    const countEl = this.accountScreen.querySelector<HTMLElement>('#graft-search-n')!;
+    const updateFoot = (): void => {
+      goBtn.disabled = !chosen;
+      goBtn.textContent = chosen
+        ? `Graft ${SKILLS[chosen]?.name ?? chosen} onto this run` : 'Choose a skill to graft';
+    };
+    const updateGrid = (): void => {
+      const q = query.trim().toLowerCase();
+      const shown = q ? skills.filter(s => corpus.get(s.id)!.includes(q)) : skills;
+      countEl.textContent = q ? `${shown.length} of ${skills.length}` : `${skills.length} skills`;
+      grid.innerHTML = shown.length ? shown.map(s => `
         <div class="unlock-card graft-card${chosen === s.id ? ' graft-chosen' : ''}" data-graft-skill="${s.id}"
           title="${esc(s.description ?? s.name)}">
           <div class="ukind" style="color:${s.color ?? 'var(--text-dim)'}">skill</div>
           <div class="uname">${esc(s.name)}</div>
-        </div>`).join('');
-      this.accountScreen.innerHTML = `
-        <div class="vault-head">
-          <h1>Skill Grafting: Choose the Rider</h1>
-          <div class="acct-head">One unlocked skill joins your class's kit at its plainest cut
-            (level 1, common) — learned where your young hands can hold it, packed where they cannot.
-            The armed charge spends as this run begins.</div>
-        </div>
-        <div class="vault-body"><div class="unlock-grid">${cards}</div></div>
-        <div class="vault-foot acct-btns">
-          <button id="graft-go" ${chosen ? '' : 'disabled'}>${chosen
-            ? `Graft ${esc(SKILLS[chosen]?.name ?? chosen)} onto this run` : 'Choose a skill to graft'}</button>
-          <button id="graft-skip" title="The charge stays armed for a later run.">Begin Without a Graft</button>
-        </div>`;
-      this.accountScreen.querySelectorAll<HTMLElement>('[data-graft-skill]').forEach(card => {
+        </div>`).join('')
+        : `<div class="vault-empty">Nothing answers to “${esc(query.trim())}”.</div>`;
+      grid.querySelectorAll<HTMLElement>('[data-graft-skill]').forEach(card => {
         card.addEventListener('click', () => {
           chosen = chosen === card.dataset.graftSkill ? null : card.dataset.graftSkill!;
-          const keep = this.accountScreen.querySelector<HTMLElement>('.vault-body')?.scrollTop ?? 0;
-          render();
-          const body = this.accountScreen.querySelector<HTMLElement>('.vault-body');
-          if (body) body.scrollTop = keep;
+          grid.querySelectorAll<HTMLElement>('.graft-card').forEach(c =>
+            c.classList.toggle('graft-chosen', c.dataset.graftSkill === chosen));
+          updateFoot();
         });
       });
-      document.getElementById('graft-go')!.addEventListener('click', () => {
-        if (!chosen) return;
-        this.accountScreen.classList.add('hidden');
-        onPick(chosen);
-      });
-      document.getElementById('graft-skip')!.addEventListener('click', () => {
-        this.accountScreen.classList.add('hidden');
-        onPick(null);
-      });
     };
-    render();
+    const search = this.accountScreen.querySelector<HTMLInputElement>('#graft-search')!;
+    search.addEventListener('input', () => { query = search.value; updateGrid(); });
+    goBtn.addEventListener('click', () => {
+      if (!chosen) return;
+      this.accountScreen.classList.add('hidden');
+      onPick(chosen);
+    });
+    this.accountScreen.querySelector<HTMLElement>('#graft-skip')!.addEventListener('click', () => {
+      this.accountScreen.classList.add('hidden');
+      onPick(null);
+    });
+    updateGrid();
     this.accountScreen.classList.remove('hidden');
+    search.focus();
   }
 
   // ------------------------------------------------------------ escape menu

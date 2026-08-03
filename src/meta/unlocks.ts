@@ -910,7 +910,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'skill_graft', kind: 'graft', cost: SKILL_GRAFT_COST,
     requiresUnlock: 'feat_unlock_all_gems',
     label: 'Skill Grafting',
-    description: 'Arm a SKILL GRAFT for your next run: at its start, choose any skill your account has unlocked, and its gem — at its plainest cut (level 1, common) — rides in beside your class\'s own kit, learned where your young hands can hold it, packed where they cannot. The charge spends as that run begins; return here to arm another. The shelf never empties: this is where a full Vault keeps growing.',
+    description: 'Buy a SKILL GRAFT charge: at your next run\'s start, choose any skill your account has unlocked, and its gem — at its plainest cut (level 1, common) — rides in beside your class\'s own kit, learned where your young hands can hold it, packed where they cannot. The charge arms and spends only when a run begins with a chosen skill; decline the pick and it simply carries on to a later run. Return here for another once it\'s spent — the shelf never empties: this is where a full Vault keeps growing.',
     payload: {} },
 ];
 

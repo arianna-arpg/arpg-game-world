@@ -578,6 +578,22 @@
       box-shadow: 0 0 12px rgba(200,168,75,0.25);
     }
 
+    /* THE SEARCH LENSES — the tree's and the graft picker's shared input,
+       and the tree's hit/dim treatment (CSS outranks the circles'
+       presentation attributes, so the lens overrides stroke and opacity). */
+    .tree-search {
+      background: #1c1c26; border: 1px solid var(--panel-border); color: #fff;
+      border-radius: 4px; padding: 2px 8px; font-size: 11px; width: 150px;
+      vertical-align: middle;
+    }
+    .tree-search:focus { border-color: var(--gold); outline: none; }
+    .tree-search-n { color: var(--text-dim); font-size: 10px; margin: 0 8px 0 5px; }
+    #tree-svg.tree-searching .tree-node:not(.search-hit) { opacity: 0.22; }
+    #tree-svg .tree-node.search-hit {
+      stroke: #7fd0ff; stroke-width: 3.5px;
+      filter: drop-shadow(0 0 6px rgba(127, 208, 255, 0.9));
+    }
+
     /* Expedition Setup (per-run package configuration) */
     #expedition-setup {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
