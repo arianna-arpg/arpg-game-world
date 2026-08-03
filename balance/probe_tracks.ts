@@ -20,7 +20,7 @@ import { placeTrack, trackPose, trackRider, trackDone, rideCapOf, warnBandPoints
 import { drawTrackWarnArcs } from '../src/render/vis/trackLayer';
 import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { type Doodad } from '../src/engine/levelgen';
-import { serializeZone, applyZone } from '../src/net/snapshot';
+import { serializeZone, applyZone, serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { vec } from '../src/core/math';
 
 let failed = 0;
@@ -675,6 +675,115 @@ const DT = 1 / 60;
   w.loadZone(home13);
   check('rubble: a zone re-mint drops the pock whole (transient by construction — no save path carries it)',
     !w.doodads.some(d => d.kind === 'boulder_rubble'));
+}
+
+// --- 14) THE EVAP WIRE (co-op): drying ground crosses the wire ---------------
+// (The batch-21 deferral landed: host-side evap — rubble pocks, weather dress,
+// creep wakes — shrinks through the REAL sweep, and the 20 Hz snapshot ships
+// the DERIVED radius as position-keyed rows (StateSnapshot.ev, the fell-rows /
+// wells idiom). Clients never run the sweep: a listed row restates radius and
+// MINTS a piece planted after the join, a tracked row's disappearance retires
+// the piece (the host spliced it dry), a mid-dry join adopts current state,
+// and an evap-less wire is byte-identical to the pre-evap wire.)
+{
+  const host = makeSimWorld('warrior', 9401);
+  host.player.pos = vec(80, 80);
+  // A guest seated BEFORE anything dries: its zone list carries no pock, so
+  // the wire's MINT lane is the only road the rubble can arrive by.
+  const guest = makeSimWorld('warrior', 9402);
+  applyZone(guest, serializeZone(host));
+  const guestBase = guest.doodads.length;
+
+  // (a) ABSENT == IDENTICAL: nothing drying ships no field, touches nothing.
+  let snap = serializeSnapshot(host, 1);
+  check('evapwire: nothing drying ships NO rows (absent == the pre-evap wire)', snap.ev === undefined);
+  applySnapshot(guest, snap);
+  check('evapwire: an evap-less snapshot leaves the guest\'s doodads untouched',
+    guest.doodads.length === guestBase);
+
+  // (b) THE MINT LANE: the host shatters a stone through the real lane; the
+  // pock rides the next beat onto a guest whose zone list never carried it.
+  const t14 = host.time;
+  host.addTrack({
+    path: linePath(vec(300, 500), vec(900, 500)), mode: 'once', speed: 200,
+    rearm: 7, shatter: [1.2, 1.4], bornAt: t14,
+    riders: [{ kind: 'ruin_boulder' }], tag: 'probe_evapwire',
+  });
+  for (let i = 0; i < Math.ceil(2.2 / DT); i++) host.update(DT);
+  host.setTracksArmed('probe_evapwire', false); // no further releases — one pock's lifecycle
+  const hp = host.doodads.find(d => d.kind === 'boulder_rubble');
+  const mintR = hp?.radius ?? 0; // the mint-time radius, by VALUE (hp mutates in place as it dries)
+  check('evapwire: the host minted a drying pock to test against', !!hp && !!hp.evap,
+    hp ? `r=${hp.radius.toFixed(1)}` : 'no pock');
+  snap = serializeSnapshot(host, 2);
+  const row0 = snap.ev?.[0];
+  check('evapwire: the drying pock rides the wire as ONE derived row (kind + quantized radius)',
+    snap.ev?.length === 1 && row0?.k === 'boulder_rubble'
+    && Math.abs((row0?.r ?? 0) - (hp?.radius ?? 99)) <= 0.05,
+    `rows=${JSON.stringify(snap.ev ?? []).length}B`);
+  applySnapshot(guest, snap);
+  const gp = guest.doodads.find(d => d.kind === 'boulder_rubble');
+  check('evapwire: a client PRESENT at the mint sees the pock (the wire mints what the zone list never carried)',
+    !!gp && Math.abs(gp.radius - (hp?.radius ?? 99)) <= 0.05);
+  check('evapwire: the minted piece wears NO evap — the guest never runs the sweep', !!gp && !gp.evap);
+
+  // (c) LOCKSTEP + (d) the MID-DRY JOIN: walk the host through dwell and
+  // contraction, shipping a beat every 3rd sim step (~20 Hz); the guest's
+  // drawn radius equals the host's at every beat, and a third seat joining
+  // mid-contraction adopts the CURRENT state through its zone list + rows.
+  let maxDrift = 0, beats = 0;
+  let late: ReturnType<typeof makeSimWorld> | null = null;
+  let lateJoinDrift = -1;
+  for (let i = 0; i < Math.ceil(40 / DT); i++) {
+    host.update(DT);
+    if (i % 3 !== 2) continue;
+    const s = serializeSnapshot(host, 100 + i);
+    applySnapshot(guest, s);
+    if (late) applySnapshot(late, s);
+    const hd = host.doodads.find(d => d.kind === 'boulder_rubble');
+    const gd = guest.doodads.find(d => d.kind === 'boulder_rubble');
+    if (hd && gd) { maxDrift = Math.max(maxDrift, Math.abs(hd.radius - gd.radius)); beats++; }
+    if (!late && hd && hd.radius < mintR - 1) {
+      // Contraction has begun — seat the late joiner NOW, mid-dry.
+      late = makeSimWorld('warrior', 9403);
+      applyZone(late, serializeZone(host));
+      applySnapshot(late, s);
+      const ld = late.doodads.find(d => d.kind === 'boulder_rubble');
+      lateJoinDrift = ld ? Math.abs(ld.radius - hd.radius) : -1;
+    }
+  }
+  check('evapwire: the pock shrinks in LOCKSTEP (guest radius == shipped radius at every beat)',
+    beats >= 4 && maxDrift <= 0.05, `${beats} drying beats, worst drift ${maxDrift.toFixed(3)}u`);
+  check('evapwire: a client joining MID-DRY adopts the current shrunken state',
+    late !== null && lateJoinDrift >= 0 && lateJoinDrift <= 0.05,
+    late ? `join drift ${lateJoinDrift.toFixed(3)}u` : 'contraction window never sampled');
+  // (e) THE RETIRE: the host's sweep spliced the pock; the tracked row's
+  // absence retires it on every seat — no immortal client-side rubble.
+  check('evapwire: the host dried and spliced the pock (the run outlived the dwell)',
+    !host.doodads.some(d => d.kind === 'boulder_rubble'));
+  check('evapwire: the guest retires the pock when its row disappears (the splice crosses)',
+    !guest.doodads.some(d => d.kind === 'boulder_rubble'));
+  check('evapwire: the late joiner dried to retirement in step',
+    late !== null && !late.doodads.some(d => d.kind === 'boulder_rubble'));
+
+  // (f) THE TEMP-GROUND CLASS (the creep-wake family): a shallow pool handed
+  // to evap at expiry crosses the same way — minted shallow on the guest,
+  // dried in lockstep, retired at the splice.
+  host.addTempGround(vec(140, 140), 'water', 34, 0.5, { shallow: true, evaporate: { rate: 9 } });
+  let poolSeen = false, poolShallow = false, poolGone = true;
+  for (let i = 0; i < Math.ceil(9 / DT); i++) {
+    host.update(DT);
+    if (i % 3 !== 2) continue;
+    const s = serializeSnapshot(host, 3000 + i);
+    applySnapshot(guest, s);
+    const gw = guest.doodads.find(d => d.kind === 'water' && Math.abs(d.pos.x - 140) < 2);
+    if (gw) { poolSeen = true; poolShallow = !!gw.shallow; }
+  }
+  poolGone = !guest.doodads.some(d => d.kind === 'water' && Math.abs(d.pos.x - 140) < 2)
+    && !host.doodads.some(d => d.kind === 'water' && Math.abs(d.pos.x - 140) < 2);
+  check('evapwire: a drying temp pool (the creep-wake class) crosses SHALLOW and retires on both seats',
+    poolSeen && poolShallow && poolGone,
+    `seen=${poolSeen} shallow=${poolShallow} gone=${poolGone}`);
 }
 
 console.log(failed === 0 ? '\nALL CHECKS PASS' : `\n${failed} CHECK(S) FAILED`);

@@ -453,7 +453,24 @@ export interface StateSnapshot {
    *  dropped packet self-heals on the next beat. Present only while any
    *  piece lies crushed — the whole-ground common case ships zero bytes. */
   fell?: { x: number; y: number; p: number }[];
+  /** THE EVAPORATING GROUND's drying set (World.updateEvaporation): position-
+   *  keyed rows shipping the host-resolved DERIVED draw scalar — the radius,
+   *  the fabric's one truth — for every doodad mid-dry (rubble pocks, weather
+   *  dress, creep wakes, blast pocks). The wells idiom throughout: this 20 Hz
+   *  reconcile IS the client's drying truth — a listed row restates radius
+   *  (and MINTS a runtime-planted piece the one-shot zone list never carried),
+   *  a TRACKED row's disappearance retires the piece (the host spliced it
+   *  dry), and a dropped packet self-heals on the next beat. Clients never
+   *  run the sweep — they draw what the wire says. Present only while ground
+   *  dries: the whole-ground common case ships zero bytes (absent == the
+   *  pre-evap wire, byte for byte). */
+  ev?: EvapW[];
 }
+
+/** One drying doodad on the wire: position key, current radius (the derived
+ *  draw scalar — quantized host-side by the sweep itself), kind + shallow so
+ *  a client can mint a piece planted after its join (the wells push lane). */
+export interface EvapW { x: number; y: number; r: number; k: string; s?: 1 }
 
 /** One live pooled lightwell: id, kind, pos, doodad radius, power fraction. */
 export interface WellW { i: number; k: string; x: number; y: number; r: number; pf: number; }
@@ -675,6 +692,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       : undefined,
     lt: liteOf(world),
     fell: fellOf(world),
+    ev: evapOf(world),
   };
 }
 
@@ -689,6 +707,27 @@ function fellOf(world: World): { x: number; y: number; p: number }[] | undefined
     (out ??= []).push({
       x: Math.round(d.pos.x), y: Math.round(d.pos.y),
       p: Math.round(fellProgress(d.felled, world.time) * 1000) / 1000,
+    });
+  }
+  return out;
+}
+
+/** THE EVAPORATING GROUND's drying rows (undefined while nothing dries — the
+ *  common case, zero bytes). The radius is resolved HOST-side by the sweep
+ *  (quantized contraction — the fabric's one truth), so guests draw the
+ *  shipped number verbatim and never run the sweep themselves. `k`/`s` ride
+ *  along so a piece planted AFTER a client's join (a rubble pock, a creep
+ *  wake, weather dress) can mint client-side — the zone list only ships once.
+ *  Pooled wells are excluded: they ride the wells channel exclusively (the
+ *  serializeZone precedent — one driver per doodad). */
+function evapOf(world: World): EvapW[] | undefined {
+  let out: EvapW[] | undefined;
+  for (const d of world.doodads) {
+    if (!d.evap || d.gone || d.well) continue;
+    (out ??= []).push({
+      x: Math.round(d.pos.x), y: Math.round(d.pos.y),
+      r: Math.round(d.radius * 10) / 10, k: d.kind,
+      ...(d.shallow ? { s: 1 as const } : {}),
     });
   }
   return out;
@@ -796,6 +835,71 @@ function angLerp(a: number, b: number, t: number): number {
   return a + d * t;
 }
 
+/** CLIENT-SIDE drying ledger (the evap wire): position key → the LOCAL doodad
+ *  mid-dry, per render-only guest world. Wire-scoped state, so it lives here
+ *  rather than on World: a row's first arrival marks the piece TRACKED (adopt
+ *  the standing doodad on the key, else mint it), and a tracked key's
+ *  disappearance is the retire signal — the host's sweep spliced it dry (evap
+ *  is never cancelled: the one `delete d.evap` in the engine is the terminal
+ *  splice). Only ever touches pieces it saw drying, so an evap-less doodad
+ *  can never be retired by absence. Keyed to the applied zone: a hop drops
+ *  the ledger whole (stale keys can never retire a fresh zone's ground). */
+const EVAP_LEDGER = new WeakMap<World, { zone: string | null; byKey: Map<string, Doodad> }>();
+
+/** Converge the client's drying ground on the host's rows (the wells idiom —
+ *  mint/restate/retire; idempotent, self-healing at 20 Hz). A free function,
+ *  not a World method: everything it needs is public (doodads,
+ *  markDoodadsChanged, rebuildClientTerrain), and the sweep itself stays
+ *  host-only — no client doodad ever wears `evap`, so even a ticking guest
+ *  world has an empty evaporation membership by construction. */
+function applyNetEvap(world: World, rows: readonly EvapW[] | undefined): void {
+  let led = EVAP_LEDGER.get(world);
+  if (led && led.zone !== world.appliedZoneId) led = undefined; // zone hopped — old ledger is dead
+  if (!led && !rows?.length) return;                            // nothing drying, nothing tracked
+  if (!led) {
+    led = { zone: world.appliedZoneId, byKey: new Map() };
+    EVAP_LEDGER.set(world, led);
+  }
+  const key = (x: number, y: number): string => `${Math.round(x)},${Math.round(y)}`;
+  const listed = new Set<string>();
+  let membership = false;
+  for (const row of rows ?? []) {
+    const kk = key(row.x, row.y);
+    listed.add(kk);
+    let d = led.byKey.get(kk);
+    if (!d) {
+      // First sight: adopt the standing doodad on the key (a zone-listed
+      // piece handed to evap — weather dress, a shipped pool), else MINT it
+      // (planted after this client's join: rubble, a creep wake).
+      d = world.doodads.find(x => !x.well && x.kind === row.k
+        && Math.abs(x.pos.x - row.x) < 1.5 && Math.abs(x.pos.y - row.y) < 1.5);
+      if (!d) {
+        d = { pos: { x: row.x, y: row.y }, radius: row.r, kind: row.k as Doodad['kind'], ...(row.s ? { shallow: true } : {}) };
+        world.doodads.push(d);
+        membership = true;
+      }
+      led.byKey.set(kk, d);
+    }
+    if (d.radius !== row.r) {
+      d.radius = row.r;
+      world.markDoodadsChanged(d); // in-place radius edit — only this piece's families re-derive
+    }
+  }
+  // The retire half: a TRACKED key gone from the wire means the host's sweep
+  // spliced the piece dry — splice it here too (ground lists re-derive below).
+  for (const [kk, d] of led.byKey) {
+    if (listed.has(kk)) continue;
+    led.byKey.delete(kk);
+    const di = world.doodads.indexOf(d);
+    if (di !== -1) { world.doodads.splice(di, 1); membership = true; }
+  }
+  // Membership moved (a mint or a splice): the bridge/ground collision lists
+  // are derived from the doodad list — re-derive so a minted pool wades and a
+  // retired one stops (the applyZone precedent; family caches ride the
+  // length key and need nothing).
+  if (membership) world.rebuildClientTerrain();
+}
+
 /** Apply a host snapshot onto a render-only client World (no sim runs). Rebuilds
  *  the entity arrays the renderer iterates; re-installs the StatSheet bases the
  *  renderer reads so maxLife()/invisible/detectability/casting work unchanged.
@@ -845,6 +949,9 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // THE RAMPAGE FABRIC's felled set — same idiom, same guard: the guest's
     // ground crushes and regrows exactly where the host's does.
     world.applyNetFell(snap.fell);
+    // THE EVAPORATING GROUND — same idiom, same guard: the guest's drying
+    // pieces shrink and retire exactly where (and as fast as) the host's do.
+    applyNetEvap(world, snap.ev);
   }
   // THE LITE TIER's draw list (engine/lite.ts): the client renders the
   // host's pool verbatim off this mirror — absent truly means empty (the
