@@ -324,12 +324,16 @@ if (first) {
     settle(s.world, 2); // the warden takes its post; the camp sleeps on
     const gdef = HOLDFAST_DEFS.find(d => d.id === s.w.holdfastSite.defId)!;
     const cost = holdfastTollCost(gdef, s.w.zone.level);
-    s.world.account.credits = 500;
+    // THE MORTAL EXCHANGE: the toll drains the paying seat's carried
+    // essence at the strict rates — fund the wallet, assert the exact
+    // mortal-value charge (mortalValueOf is the one appraisal read).
+    s.world.grantEssence(s.world.localSeat, { essence: 'coarse', count: 500 });
+    const worthBefore = s.world.mortalValueOf();
     s.world.player.pos.x = s.keeper.pos.x + 20; s.world.player.pos.y = s.keeper.pos.y;
     const paid = s.world.payHoldfastToll(-1);
     check('E1 the toll pays beside the warden (the lifecycle is untouched)',
-      paid && s.world.account.credits === 500 - cost,
-      `paid=${paid} credits=${s.world.account.credits} cost=${cost}`);
+      paid && s.world.mortalValueOf() === worthBefore - cost,
+      `paid=${paid} worth=${s.world.mortalValueOf()} cost=${cost}`);
     check('E2 the gate opens', !s.w.sim.holdfastField.isLocked(stagedZone!));
     check('E3 the crew never stirred and never changed coat',
       s.crew.every(c => !c.aiAwakened && c.faction === CALM));

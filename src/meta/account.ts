@@ -1,10 +1,17 @@
 // ---------------------------------------------------------------------------
 // ACCOUNT — the META-PROGRESSION layer that outlives any single character.
 //
-// Death is permanent: a character is wiped on death. But the ACCOUNT survives,
-// accruing CREDITS (spent on unlocks) and an account LEVEL (a lifetime-credits
-// milestone). Unlocks gate which classes you may pick, which gems may drop, and
-// which town features are active — turning the run loop into an ARPG-roguelite.
+// Death is permanent: a character is wiped on death. But the ACCOUNT survives.
+// THE RECKONING (the run-end law): the essence a run still CARRIES when it
+// concludes is appraised into Mortal Essence at the strict mortal exchange
+// (data/essences.ts mortalWorth — coarse 1:1 up to pristine 1:5), the unlock
+// screen is the run's immediate epilogue, and whatever is not assigned there
+// is SEALED away to zero — Mortal Essence never crosses between runs. Each
+// run spends its own harvest; partial investments (Account.invested) are the
+// bridge across runs, the account LEVEL (a lifetime-mint milestone) and the
+// RUN CHRONICLE (runRecords — the personal leaderboard) the long memory.
+// Unlocks gate which classes you may pick, which gems may drop, and which
+// town features are active — turning the run loop into an ARPG-roguelite.
 //
 // Pure data + pure functions: the Account is created/loaded in main.ts and
 // injected (by reference) into the World and UI. It is never re-loaded mid-run.
@@ -252,10 +259,83 @@ export const LEDGER_QUESTS_COMPLETED = 'quests_completed';
  *  sanity-check entries without a value import back into the modes registry. */
 export const ROSTER_SLOT_BASE = 10;
 
-/** The display name of the account meta-currency (earned on death, spent in
- *  the Vault). ONE constant — every panel prints through it. The internal
- *  field stays `credits` (save compatibility); the WORLD calls it this. */
+/** The display name of the account meta-currency (minted at the run-end
+ *  RECKONING from the run's carried essence, spent in the Vault, and gone —
+ *  sealed to zero — when the reckoning closes). ONE constant — every panel
+ *  prints through it. The internal field stays `credits` (save
+ *  compatibility); the WORLD calls it this. */
 export const META_CURRENCY_LABEL = 'Mortal Essence';
+
+// --- THE RUN CHRONICLE — the account's own leaderboard -----------------------
+
+export const RUN_RECORD_SCHEMA = 1;
+/** Chronicle capacity. Must stay comfortably above the protected set
+ *  (top-10 harvest + top-10 renown + newest 10) so recordRun always finds a
+ *  droppable row. */
+export const MAX_RUN_RECORDS = 60;
+
+/** One concluded run, as the chronicle remembers it — the personal
+ *  leaderboard's row. Two rankable metrics by design: `essence` is the
+ *  reckoning's mint (the carried wallet appraised at the mortal exchange),
+ *  `renown` the journey score (renownForRun) — how far the run got,
+ *  independent of what its essence was spent on. */
+export interface RunRecord {
+  schema: number;
+  /** Wall-clock ms at the run's end. */
+  at: number;
+  name: string;
+  classId: string;
+  level: number;
+  zones: number;
+  kills: number;
+  /** How the run concluded ('death' | 'forfeit' | 'retire'; open set). */
+  reason: string;
+  /** Mortal Essence minted by THE RECKONING (wallet conversion × stage rate). */
+  essence: number;
+  /** The journey score — kills + zones·10 + level·2 (renownForRun). */
+  renown: number;
+}
+
+/** Append a concluded run to the chronicle, then trim to MAX_RUN_RECORDS.
+ *  THE PROTECTED SET: personal bests are never rotated out — the top ten by
+ *  essence, the top ten by renown, and the newest ten all survive; the
+ *  OLDEST unprotected row is dropped instead. */
+export function recordRun(a: Account, rec: RunRecord): void {
+  a.runRecords.push(rec);
+  while (a.runRecords.length > MAX_RUN_RECORDS) {
+    const prot = new Set<RunRecord>();
+    const top = (key: (r: RunRecord) => number): void => {
+      [...a.runRecords].sort((x, y) => key(y) - key(x)).slice(0, 10).forEach(r => prot.add(r));
+    };
+    top(r => r.essence);
+    top(r => r.renown);
+    a.runRecords.slice(-10).forEach(r => prot.add(r));
+    const idx = a.runRecords.findIndex(r => !prot.has(r));
+    a.runRecords.splice(idx >= 0 ? idx : 0, 1);
+  }
+}
+
+/** Where a run stands in the chronicle: 1-based ranks (strictly-better rows
+ *  count ahead — ties share a rank) among every remembered run. */
+export function runStanding(a: Account, rec: RunRecord): { byEssence: number; byRenown: number; of: number } {
+  let byEssence = 1, byRenown = 1;
+  for (const r of a.runRecords) {
+    if (r === rec) continue;
+    if (r.essence > rec.essence) byEssence++;
+    if (r.renown > rec.renown) byRenown++;
+  }
+  return { byEssence, byRenown, of: Math.max(1, a.runRecords.length) };
+}
+
+/** THE SEAL — close the reckoning: whatever Mortal Essence stands unassigned
+ *  is let go (it never crosses between runs; each run spends its own
+ *  harvest). Lifetime totals and partial unlock investments are untouched.
+ *  Returns what passed, for the closing words. Caller saves. */
+export function sealReckoning(a: Account): number {
+  const passed = a.credits;
+  a.credits = 0;
+  return passed;
+}
 
 /** Per-package run configuration the player last chose (Expedition Setup). */
 export interface PackagePref {
@@ -269,6 +349,14 @@ export interface Account {
   credits: number;
   lifetimeCredits: number;
   level: number;
+  /** PARTIAL UNLOCK INVESTMENTS (unlocks.ts investUnlock): catalog id →
+   *  Mortal Essence poured in so far. Genuine incremental progress — a rung
+   *  too dear for one run's harvest is bought across several; the entry is
+   *  deleted the moment the unlock completes. */
+  invested: Record<string, number>;
+  /** THE RUN CHRONICLE: every concluded run the account remembers (capped,
+   *  personal bests protected — see recordRun). */
+  runRecords: RunRecord[];
   /** THE CLASS POOL: the character-select hand is dealt ONLY from this set
    *  (starters + every purchased class bundle). Also gates the co-op lobby. */
   unlockedClasses: Set<string>;
@@ -320,6 +408,9 @@ export interface AccountSave {
   credits: number;
   lifetimeCredits: number;
   level: number;
+  /** Optional so pre-reckoning saves load with ?? defaults. */
+  invested?: Record<string, number>;
+  runRecords?: RunRecord[];
   unlockedClasses: string[];
   unlockedSkills: string[];
   unlockedSupports: string[];
@@ -342,6 +433,8 @@ export interface AccountSave {
 export function makeAccount(): Account {
   return {
     credits: 0, lifetimeCredits: 0, level: 0,
+    invested: {},
+    runRecords: [],
     unlockedClasses: new Set(STARTER_CLASSES),
     unlockedSkills: new Set(STARTER_SKILLS),
     unlockedSupports: new Set(STARTER_SUPPORTS),
@@ -364,6 +457,8 @@ export function serializeAccount(a: Account): AccountSave {
   return {
     schemaVersion: SCHEMA_VERSION,
     credits: a.credits, lifetimeCredits: a.lifetimeCredits, level: a.level,
+    invested: a.invested,
+    runRecords: a.runRecords,
     unlockedClasses: [...a.unlockedClasses],
     unlockedSkills: [...a.unlockedSkills],
     unlockedSupports: [...a.unlockedSupports],
@@ -397,6 +492,15 @@ export function deserializeAccount(s: AccountSave): Account | null {
     credits: s.credits ?? 0,
     lifetimeCredits: s.lifetimeCredits ?? 0,
     level: s.level ?? 0,
+    // Positive whole numbers only — a malformed entry is dropped, never a wipe.
+    invested: Object.fromEntries(Object.entries(s.invested ?? {})
+      .map(([k, v]) => [k, Math.floor(Number(v))] as const)
+      .filter(([, v]) => Number.isFinite(v) && v > 0)),
+    // Per-RECORD schema stance (the deaths idiom): a chronicle-format change
+    // forgets old runs, never the account.
+    runRecords: (s.runRecords ?? [])
+      .filter(r => r?.schema === RUN_RECORD_SCHEMA && typeof r.at === 'number')
+      .slice(-MAX_RUN_RECORDS),
     unlockedClasses: new Set([...STARTER_CLASSES, ...(s.unlockedClasses ?? [])]),
     unlockedSkills: new Set([...STARTER_SKILLS, ...(s.unlockedSkills ?? [])]),
     unlockedSupports: new Set([...STARTER_SUPPORTS, ...(s.unlockedSupports ?? [])]),
@@ -467,13 +571,23 @@ export const isSupportUnlockedForDrop = (a: Account, id: string): boolean =>
 export const featureEnabled = (a: Account, flag: string): boolean => a.features.has(flag);
 
 // --- progression formulas (pure) --------------------------------------------
-/** Credits earned when a character dies, from how far the run got. */
-export function creditsForDeath(charLevel: number, zonesExplored: number, kills: number): number {
+/** RENOWN — the journey score: how far the run got, as one number. Once the
+ *  Mortal Essence formula (this WAS creditsForDeath), now purely the
+ *  chronicle's second axis: the mint is the wallet conversion
+ *  (data/essences.ts walletMortalValue); renown ranks the run beside it. */
+export function renownForRun(charLevel: number, zonesExplored: number, kills: number): number {
   return Math.floor(kills * 1 + zonesExplored * 10 + charLevel * 2);
 }
+/** The account-level curve's one constant — level N begins at N²·this. */
+const ACCOUNT_LEVEL_DIVISOR = 50;
 /** Account level from lifetime credits — an N²·50 milestone curve. */
 export function accountLevelFor(lifetimeCredits: number): number {
-  return Math.floor(Math.sqrt(Math.max(0, lifetimeCredits) / 50));
+  return Math.floor(Math.sqrt(Math.max(0, lifetimeCredits) / ACCOUNT_LEVEL_DIVISOR));
+}
+/** Lifetime essence at which `level` begins — the curve's exact inverse
+ *  (one constant, both directions; the chronicle's progress bar reads it). */
+export function accountLevelThreshold(level: number): number {
+  return ACCOUNT_LEVEL_DIVISOR * Math.max(0, level) * Math.max(0, level);
 }
 /** Award credits (spendable + lifetime) and recompute account level. */
 export function applyCredits(a: Account, earned: number): void {

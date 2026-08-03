@@ -139,6 +139,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_radiance.ts', status: 'green', tier: 'fast', why: 'RADIANCE / SPANS / COMET LANE — radianceOf is pure and honest (noon 1, midnight ~0, rain dims, shelter flattens) and spans hold on it' },
   { probe: 'probe_rampage.ts', status: 'green', tier: 'fast', why: 'THE RAMPAGE FABRIC + THE SETTLED GROUND — the fell census, the plow, the guaranteed regrowth and roam.venue "ground"' },
   { probe: 'probe_readers.ts', status: 'green', tier: 'fast', why: 'THE READERS (the mantid school) — five stances, the noDrop kit, the molting ground and the READABLE-BLUFF law' },
+  { probe: 'probe_reckoning.ts', status: 'green', tier: 'fast', why: 'THE RECKONING — the strict mortal exchange (change-law wallet spend, value conserved to the unit), the investment lane + applyUnlock compat, the 1-essence first exchange, the seal, and the chronicle\'s protected cap' },
   { probe: 'probe_relief.ts', status: 'green', tier: 'fast', why: 'THE RELIEF FABRIC — elevation and traced rivers pinned structurally, so the foreordained-terrain contract holds by assertion' },
   { probe: 'probe_scenes.ts', status: 'green', tier: 'fast', why: 'THE SCENE FABRIC — the Prologue walked end to end the way a brand-new account lives it (off-graph staging, the covenant, no run save)' },
   { probe: 'probe_seas.ts', status: 'green', tier: 'fast', why: 'THE SEA FABRIC — THE FOREORDAINED TENET: a sea is a pure, entry-invariant function of the seed; plus the landing law' },

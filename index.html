@@ -497,6 +497,80 @@
     .vault-sub { color: var(--text-dim); font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
       margin: 14px 0 6px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 4px; }
 
+    /* THE INVESTMENT LANE — each card's poured-progress bar (rendered even
+       at zero so a live pour can fill it without a re-render) + the pour's
+       held-button glow. */
+    .unlock-card .uinvest {
+      height: 4px; border-radius: 2px; margin: 0 0 5px;
+      background: rgba(255,255,255,0.06); overflow: hidden;
+    }
+    .unlock-card .uinvest i {
+      display: block; height: 100%; background: var(--gold); border-radius: 2px;
+      transition: width 0.12s linear;
+    }
+    .unlock-card button[data-invest]:active:not(:disabled) {
+      background: #4a4468; box-shadow: 0 0 10px rgba(200,168,75,0.35) inset;
+    }
+    /* THE SEAL — the reckoning's closing confirm, and the unlock toast. */
+    .seal-modal {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: rgba(8,8,14,0.75); z-index: 5;
+    }
+    .seal-modal .seal-box {
+      background: var(--panel-bg); border: 1px solid var(--gold); border-radius: 8px;
+      padding: 18px 26px; max-width: 440px; text-align: center;
+    }
+    .seal-modal h2 { color: var(--gold); margin: 0 0 10px; font-size: 17px; }
+    .seal-modal .seal-list { text-align: left; font-size: 12px; margin: 8px 0; max-height: 180px; overflow-y: auto; }
+    .seal-modal .seal-warn { color: #e8b06a; font-size: 12px; margin: 10px 0; }
+    .seal-modal .seal-ok { color: #7fd88f; font-size: 12px; margin: 10px 0; }
+    .seal-modal button.danger { border-color: #d05050; color: #e88a8a; }
+    .vault-toast {
+      position: absolute; top: 72px; left: 50%; transform: translateX(-50%);
+      background: rgba(20,18,30,0.95); border: 1px solid var(--gold); color: var(--gold);
+      border-radius: 6px; padding: 8px 18px; font-size: 13px; font-weight: bold; z-index: 6;
+      animation: vault-toast-in 2.4s ease forwards; pointer-events: none;
+    }
+    @keyframes vault-toast-in {
+      0% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+      12% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      82% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* THE APPRAISAL — the death screen's exchange table. */
+    .reck-table {
+      display: inline-block; margin: 12px auto 4px; padding: 8px 16px; min-width: 380px;
+      border: 1px solid var(--panel-border); border-radius: 6px; background: rgba(255,255,255,0.02);
+      text-align: left;
+    }
+    .reck-head { font-size: 10px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; }
+    .reck-row { display: flex; gap: 10px; font-size: 13px; padding: 2px 0; align-items: baseline; }
+    .reck-row > span:first-child { flex: 1; }
+    .reck-row .reck-x { color: var(--text-dim); font-size: 11px; width: 44px; text-align: right; }
+    .reck-row .reck-v { width: 64px; text-align: right; font-weight: bold; color: var(--gold); }
+    .reck-total { border-top: 1px solid var(--panel-border); margin-top: 4px; padding-top: 5px; }
+    .reck-standing { margin-top: 10px; font-size: 13px; color: #b8c8e8; }
+
+    /* THE CHRONICLE — the personal leaderboard's table + level bar. */
+    .chron-table { text-align: left; font-size: 12px; }
+    .chron-row {
+      display: grid; grid-template-columns: 44px 1fr 48px 72px 72px 84px 84px 70px 84px;
+      gap: 6px; padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: baseline;
+    }
+    .chron-row.chron-head { color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+    .chron-row.chron-latest { background: rgba(200,168,75,0.08); border-left: 2px solid var(--gold); }
+    .chron-rank { color: var(--text-dim); }
+    .chron-cls { color: var(--text-dim); font-size: 10px; margin-left: 4px; }
+    .chron-ess { color: var(--gold); font-weight: bold; text-align: right; }
+    .chron-ren { color: #b8c8e8; text-align: right; }
+    .chron-when, .chron-reason { color: var(--text-dim); font-size: 11px; }
+    .chron-lvlbar {
+      display: inline-block; width: 120px; height: 6px; border-radius: 3px; margin-left: 8px;
+      background: rgba(255,255,255,0.07); overflow: hidden; vertical-align: middle;
+    }
+    .chron-lvlbar i { display: block; height: 100%; background: var(--gold); }
+
     /* Expedition Setup (per-run package configuration) */
     #expedition-setup {
       top: 50%; left: 50%; transform: translate(-50%, -50%);

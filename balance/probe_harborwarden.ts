@@ -159,7 +159,9 @@ const SNAP = (level: number) => ({
       { kind: 'template', refId: 'sellsword', name: 'Second Blade', classId: 'warrior', blurb: 'probe' },
     ],
   };
-  w2.account.credits = 10_000;
+  // Hires charge the carried wallet at the mortal exchange now — fund the
+  // purse, not the account (mortalValueOf is the affordability read).
+  w2.localSeat.meta.essences.coarse += 10_000;
   check('B: a full company refuses the hire at cap', w2.hireMercenary(0) === false && w2.hiredMercs.length === 1);
   w2.player.sheet.setSource('probe_retinue', [mod('mercRetinue', 'flat', 1)]);
   check('B: the keystone stat opens the second contract', w2.mercHireCap() === cap0 + 1

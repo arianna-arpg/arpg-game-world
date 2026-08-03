@@ -66,7 +66,10 @@ import { mountEntityForge } from './dev/entityForge';
 import { mountGlyphForge } from './dev/glyphForge';
 import { loadWorkshopSync, reconcileWorkshopFromDisk } from './meta/workshop';
 import { perfSweep, type PerfSweepOpts, type PerfSweepReport } from './dev/perf';
-import { applyCredits, creditsForDeath, isClassUnlocked, LEDGER_ACCOUNT_DEATHS, type Account } from './meta/account';
+import {
+  applyCredits, isClassUnlocked, LEDGER_ACCOUNT_DEATHS, RUN_RECORD_SCHEMA,
+  recordRun, renownForRun, runStanding, type Account, type RunRecord,
+} from './meta/account';
 import {
   loadAccount, loadAccountAsync, loadSettings, loadSettingsAsync,
   saveAccount, saveAccountDurable, saveSettings, resetAccount,
@@ -1708,14 +1711,33 @@ function hostTail(dt: number): void {
     persistCouchGuests();
     couchReset();
     ui.hideAll();
-    // PERMADEATH: award account credits from how far the run got — at the
-    // dying stage's payout rate (mortal = ×1, byte-identical; a future
-    // reduced-tithe hardcore variant is pure mode data) — persist the
-    // account, and WIPE the character save (the account survives, the run doesn't).
+    // THE RECKONING MINT: the run's carried essence — the local hero plus
+    // every couch vessel (one account, one harvest; mercs and remote guests
+    // never fold) — appraised WHOLE at the strict mortal exchange
+    // (data/essences.ts mortalWorth) × the dying stage's payout rate.
+    // Nothing is scored for distance any more: what the run still HOLDS is
+    // what the reckoning mints, and what it spent along the way was the
+    // price of getting there. Read before the wipe below; the wallets die
+    // with the run either way.
     const stage = world.modeStageDef();
-    const earned = Math.floor(
-      creditsForDeath(world.player.level, world.visited.size, world.kills) * stage.deathPayoutMult);
-    applyCredits(account, earned);
+    const reck = world.reckonRunEssence();
+    applyCredits(account, reck.minted);
+    // THE CHRONICLE: every meta-progressing conclusion is a row on the
+    // account's own leaderboard — the mint on one axis, the journey score
+    // (renownForRun — the old distance formula, kept as pure renown) on the
+    // other. A sealed stage's conclusion stays off the board exactly as it
+    // stays out of the ledger.
+    const renown = renownForRun(world.player.level, world.visited.size, world.kills);
+    let record: RunRecord | null = null;
+    if (stage.metaProgression) {
+      record = {
+        schema: RUN_RECORD_SCHEMA, at: Date.now(),
+        name: world.meta.name, classId: world.meta.classDef.id, level: world.player.level,
+        zones: world.visited.size, kills: world.kills,
+        reason: world.runEndReason, essence: reck.minted, renown,
+      };
+      recordRun(account, record);
+    }
     // PERMANENT progression: fold this run's trigger counters (crowned_killed,
     // …) into the account ledger so package unlocks stick like credits do —
     // unless the dying stage is sealed outside the account loop (mode policy).
@@ -1736,9 +1758,15 @@ function hostTail(dt: number): void {
     clearCharacter();
     ui.setContinueSave(null);   // the run is wiped — no Continue after death
     ui.resetClassRoster();      // the next run deals a fresh class hand
-    // Co-op host KEEPS the live session (onDeathDismiss re-seats clients in the
-    // next run); single-player resets the transport back to local.
-    ui.showDeath(earned, onDeathDismiss);
+    // THE RUN'S EPILOGUE: the death screen reads the appraisal, then leads
+    // STRAIGHT into the reckoning (the Vault as the run's closing prompt) —
+    // the seal there is what finally lands on the main menu. Co-op host
+    // KEEPS the live session (onDeathDismiss re-seats clients in the next
+    // run); single-player resets the transport back to local.
+    ui.showDeath({
+      rows: reck.rows, carried: reck.carried, mult: reck.mult, minted: reck.minted,
+      renown, standing: record ? runStanding(account, record) : null,
+    }, onDeathDismiss);
     // PAUSE the host loop — the run is over, so it must stop ticking + broadcasting
     // the dead world. startGame / startAsClient re-enable it for the next run.
     running = false;

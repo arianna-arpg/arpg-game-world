@@ -200,12 +200,16 @@ seedGlobalRandom(0x40b0);
       check('B: the causeway stays sealed over the ashes',
         !!liveGate && w.isExitLocked(liveGate) === true);
 
-      // THE RESTORATION: exact price, back to besieged.
+      // THE RESTORATION: exact price, back to besieged — paid from the
+      // carried wallet at the mortal exchange (mortalValueOf is the read;
+      // the purse is set to a known exact state so the charge is provable).
       const price = holdRestoreCost(cls, Math.max(1, az.level));
-      w.account.credits = price + 37;
+      const purse = w.localSeat.meta.essences;
+      for (const k of Object.keys(purse)) purse[k as keyof typeof purse] = 0;
+      purse.coarse = price + 37;
       w.buyHoldRestore();
       check('B: the restoration charges EXACT Mortal Essence and re-stands it besieged',
-        hold.state === 'besieged' && w.account.credits === 37 && hold.rebuildAt === undefined);
+        hold.state === 'besieged' && w.mortalValueOf() === 37 && hold.rebuildAt === undefined);
 
       // A WON defense opens the town — and the causeway, and the chart.
       w.beginHoldMuster();
@@ -342,12 +346,15 @@ seedGlobalRandom(0x40b0);
           && w.mercOutpost.offers.every(o => o.kind === 'template'),
           `${w.mercOutpost?.offers.length ?? 0} offers`);
         check('C: no retirement at the port captain', w.canRetireHere() === false);
-        // The hire itself rides the ordinary path + charges credits.
+        // The hire itself rides the ordinary path + charges the carried
+        // wallet at the mortal exchange (purse set exact, charge provable).
         const cost = w.mercOutpost ? w.mercHireCost(w.mercOutpost.offers[0]) : 0;
-        w.account.credits = cost + 11;
+        const hirePurse = w.localSeat.meta.essences;
+        for (const k of Object.keys(hirePurse)) hirePurse[k as keyof typeof hirePurse] = 0;
+        hirePurse.coarse = cost + 11;
         const hired = w.hireMercenary(0);
         check('C: a port hire lands through the one pipeline (exact charge, seat filled)',
-          hired === true && w.account.credits === 11 && w.hiredMercs.length === 1);
+          hired === true && w.mortalValueOf() === 11 && w.hiredMercs.length === 1);
 
         // --- D. the plaza services + the camp + the local tide + the badge ---
         const wAny = w as unknown as {

@@ -26,7 +26,7 @@ import { canPlaceAt, overlappingItems } from '../engine/inventory';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, type ModCompareRow } from '../engine/itemgen';
 import { ITEM_BASES } from '../data/itembases';
-import { ESSENCES, ESSENCE_IDS, skillLevelEssenceCost, type EssenceCost } from '../data/essences';
+import { ESSENCES, ESSENCE_IDS, skillLevelEssenceCost, type EssenceCost, type EssenceId } from '../data/essences';
 import {
   CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseProgress, expertiseRank,
   salvageItemYield, salvageSkillYield, salvageSupportYield,
@@ -71,12 +71,14 @@ import type { Seat, VendorEntry, VendorHoldRow, World } from '../engine/world';
 import { COUCH_CFG, couchMinPads } from '../data/couch';
 import { HOLD_CLASSES } from '../data/harborholds';
 import {
-  featureEnabled, FEATURE, isClassUnlocked, isSkillUnlockedForDrop, isSupportUnlockedForDrop,
-  gemDropKey, META_CURRENCY_LABEL, selectableSlotCount, type Account,
+  accountLevelThreshold, featureEnabled, FEATURE, isClassUnlocked, isSkillUnlockedForDrop,
+  isSupportUnlockedForDrop, gemDropKey, META_CURRENCY_LABEL, selectableSlotCount,
+  sealReckoning, type Account, type RunRecord,
 } from '../meta/account';
 import {
-  allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isClassDiscovered,
-  isUnlockOwned, maxSlotCount, sealedUnlocks, undiscoveredClassUnlocks,
+  allUnlockables, availableUnlocks, classUnlockFor, INVEST_CFG, investedToward,
+  investUnlock, isClassDiscovered, isUnlockOwned, maxSlotCount, remainingCost,
+  sealedUnlocks, undiscoveredClassUnlocks,
   VAULT_KIND_LABELS, vaultKindOrder, vaultSeatOf, vaultShelfCensus, vaultStripVisible,
   type Unlockable,
 } from '../meta/unlocks';
@@ -110,6 +112,19 @@ import { AIM_TICK_STYLES } from '../render/vis/aimtick';
 
 /** Neutral accent for packages that declare no colour of their own. */
 const PKG_FALLBACK_COLOR = '#888';
+
+/** What main.ts hands the death screen: THE RECKONING's appraisal
+ *  (world.reckonRunEssence — the carried wallet read tier by tier at the
+ *  strict mortal exchange), the run's journey score, and its chronicle
+ *  standing (null = a sealed stage's conclusion, off the board). */
+export interface RunReckoning {
+  rows: { id: EssenceId; count: number; worth: number; value: number }[];
+  carried: number;
+  mult: number;
+  minted: number;
+  renown: number;
+  standing: { byEssence: number; byRenown: number; of: number } | null;
+}
 
 /** The bottom keybind strip's one switch — retired by default since the
  *  prologue drill + Waking House tutorial took over teaching the binds
@@ -336,6 +351,8 @@ export class UI {
    *  '' = first open this session: land where there is something to buy. */
   private vaultTab = '';
   private vaultScroll: Record<string, number> = {};
+  /** THE RUN CHRONICLE's remembered ordering (personal-leaderboard axis). */
+  private chronicleSort: 'essence' | 'renown' | 'latest' = 'essence';
   /** THE RUMOR FOLD: the rumor wall's open/closed latch (the satchel idiom —
    *  remembered across re-renders, reopens and shelf flips this session). */
   private vaultRumorsOpen = true;
@@ -1455,6 +1472,21 @@ export class UI {
   showAccountScreen(onClose?: () => void): void {
     this.hideAll(); // close whatever opened it (start menu / class select / …) so it never overlaps
     const acc = this.getAccount();
+    // THE RECKONING VISIT: a Vault opened while ANY Mortal Essence stands is
+    // the run's closing prompt — the seal law arms (leaving requires the
+    // confirm, and sealing lets every unassigned point go: Mortal Essence
+    // never crosses between runs). A Vault opened empty is plain browsing.
+    const creditsAtOpen = acc.credits;
+    let reckoningSealed = false;
+    // What THIS visit poured, for the seal prompt's honest summary.
+    const visitLog = new Map<string, { label: string; put: number; done: boolean }>();
+    const logPour = (u: Unlockable, put: number): void => {
+      if (put <= 0) return;
+      const row = visitLog.get(u.id) ?? { label: u.label, put: 0, done: false };
+      row.put += put;
+      row.done = isUnlockOwned(acc, u);
+      visitLog.set(u.id, row);
+    };
     // The store keeps your place PER AISLE ('_flat' = the young store's one
     // wall): capture the outgoing scroll before anything replaces the body
     // (shelf flips, fold flips and purchases alike — the bought card is
@@ -1487,14 +1519,25 @@ export class UI {
       // COMPACT BY DESIGN: kind, name, price — the description lives in the
       // hover-intent tooltip (the accountScreen bind), so a shelf reads as a
       // shelf, never a wall of text. availableUnlocks() already excludes
-      // owned + un-gated entries, so affordability is a card's only gate.
+      // owned + un-gated entries. THE INVESTMENT LANE: every card wears its
+      // poured-progress bar (persistent across runs) and a HOLD-to-pour
+      // button — partial progress is always real, so nothing on the shelf
+      // is ever out of reach, only further away. The bar is rendered even
+      // at zero so a live pour can fill it without a re-render (the hold
+      // must never lose its button mid-press).
       const cardHtml = (u: Unlockable): string => {
-        const afford = acc.credits >= u.cost;
+        const inv = investedToward(acc, u);
+        const rem = remainingCost(acc, u);
+        const canPour = acc.credits > 0 && rem > 0;
+        const pct = u.cost > 0 ? Math.round((inv / u.cost) * 100) : 0;
         return `
             <div class="unlock-card" data-tip="unlock" data-unlock-id="${u.id}">
               <div class="ukind">${VAULT_KIND_LABELS[u.kind]}${u.reqLevel ? ` · req acct lv ${u.reqLevel}` : ''}</div>
               <div class="uname">${u.label}</div>
-              <button data-unlock="${u.id}" ${afford ? '' : 'disabled'}>Unlock — ${u.cost}</button>
+              <div class="uinvest"><i style="width:${pct}%"></i></div>
+              <button data-invest="${u.id}" ${canPour ? '' : 'disabled'}
+                title="Hold to pour ${META_CURRENCY_LABEL} in; a tap invests ${INVEST_CFG.tapAmount}. Poured essence stays invested across runs.">${
+                inv > 0 ? `Invest — ${rem} more` : `Invest — ${u.cost}`}</button>
             </div>`;
       };
       const ownedCardHtml = (u: Unlockable): string => `
@@ -1614,16 +1657,19 @@ export class UI {
         }
       }
 
+      const reckoning = creditsAtOpen > 0;
       this.accountScreen.innerHTML = `
         <div class="vault-head">
-          <h1>The Vault: Account Unlocks</h1>
+          <h1>${reckoning ? 'The Reckoning: Assign Your Essence' : 'The Vault: Account Unlocks'}</h1>
           <div class="acct-head">Account Level <b>${acc.level}</b> &nbsp;·&nbsp;
-            <b>${acc.credits}</b> ${META_CURRENCY_LABEL} &nbsp;·&nbsp; ${acc.lifetimeCredits} lifetime
-            &nbsp;·&nbsp; <span style="color:var(--text-dim);font-size:11px">rest on a card for its full story</span></div>
+            <b id="vault-cred">${acc.credits}</b> ${META_CURRENCY_LABEL}${reckoning
+              ? ` <span style="color:#e8b06a;font-size:11px">— this run's harvest: what is not assigned does not keep</span>` : ''}
+            &nbsp;·&nbsp; ${acc.lifetimeCredits} lifetime
+            &nbsp;·&nbsp; <span style="color:var(--text-dim);font-size:11px">hold a card's button to invest · rest on it for its full story</span></div>
           ${tabStrip}
         </div>
         <div class="vault-body">${body}</div>
-        <div class="vault-foot acct-btns"><button id="acct-close">Back</button></div>`;
+        <div class="vault-foot acct-btns"><button id="acct-close">${reckoning ? 'Seal &amp; Continue' : 'Back'}</button></div>`;
       const bodyEl = this.accountScreen.querySelector<HTMLElement>('.vault-body');
       if (bodyEl) bodyEl.scrollTop = this.vaultScroll[this.vaultTab || '_flat'] ?? 0;
       this.accountScreen.querySelectorAll<HTMLElement>('[data-vtab]').forEach(btn => {
@@ -1642,19 +1688,140 @@ export class UI {
           render();
         });
       });
-      this.accountScreen.querySelectorAll<HTMLElement>('[data-unlock]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const u = availableUnlocks(acc).find(x => x.id === btn.dataset.unlock);
-          if (u && applyUnlock(acc, u)) { saveShelfScroll(); this.saveAccount(); render(); }
+      // THE POUR — hold-to-invest (INVEST_CFG): pointerdown taps in the
+      // smallest step, then a held button compounds the rate; every tick
+      // writes the button face, the fill bar, and the head's pool INLINE
+      // (never a re-render — the hold must keep its button). Release, a
+      // dry pool, or completion settles the pour: save + re-render (the
+      // completed card re-shelves under Owned).
+      let pourTimer = 0;
+      this.accountScreen.querySelectorAll<HTMLButtonElement>('[data-invest]').forEach(btn => {
+        const id = btn.dataset.invest!;
+        const findU = (): Unlockable | undefined => availableUnlocks(acc).find(x => x.id === id);
+        const updateFaces = (u: Unlockable): void => {
+          btn.textContent = `Invest — ${remainingCost(acc, u)} more`;
+          const bar = btn.parentElement?.querySelector<HTMLElement>('.uinvest i');
+          if (bar && u.cost > 0) bar.style.width = `${Math.round((investedToward(acc, u) / u.cost) * 100)}%`;
+          const cred = document.getElementById('vault-cred');
+          if (cred) cred.textContent = String(acc.credits);
+        };
+        const settle = (poured: boolean, done?: Unlockable): void => {
+          if (pourTimer) { window.clearInterval(pourTimer); pourTimer = 0; }
+          if (!poured) return;
+          saveShelfScroll();
+          this.saveAccount();
+          render();
+          if (done) this.vaultToast(`✦ ${done.label} — UNLOCKED`);
+        };
+        btn.addEventListener('pointerdown', e => {
+          e.preventDefault();
+          if (pourTimer) return; // one pour at a time
+          const u = findU();
+          if (!u) return;
+          try { btn.setPointerCapture(e.pointerId); } catch { /* capture is best-effort */ }
+          let poured = investUnlock(acc, u, INVEST_CFG.tapAmount);
+          logPour(u, poured);
+          if (isUnlockOwned(acc, u)) { settle(true, u); return; }
+          updateFaces(u);
+          let rate = INVEST_CFG.baseRate;
+          let frac = 0;
+          let last = performance.now();
+          pourTimer = window.setInterval(() => {
+            if (!btn.isConnected) { settle(false); return; }
+            const now = performance.now();
+            const dt = (now - last) / 1000;
+            last = now;
+            rate = Math.min(INVEST_CFG.maxRate, rate * Math.pow(INVEST_CFG.accel, dt));
+            frac += rate * dt;
+            const whole = Math.floor(frac);
+            if (whole < 1) return;
+            frac -= whole;
+            const put = investUnlock(acc, u, whole);
+            poured += put;
+            logPour(u, put);
+            if (isUnlockOwned(acc, u)) { settle(poured > 0, u); return; }
+            if (put < whole) { settle(poured > 0); return; } // pool ran dry
+            updateFaces(u);
+          }, INVEST_CFG.tickMs);
+          const release = (): void => {
+            btn.removeEventListener('pointerup', release);
+            btn.removeEventListener('pointercancel', release);
+            if (pourTimer) settle(poured > 0);
+          };
+          btn.addEventListener('pointerup', release);
+          btn.addEventListener('pointercancel', release);
+        });
+        // Keyboard activation (Enter/Space fires click with detail 0):
+        // one deliberate tap per press. Pointer-originated clicks already
+        // poured on pointerdown, so they are ignored here.
+        btn.addEventListener('click', e => {
+          if (e.detail !== 0) return;
+          const u = findU();
+          if (!u) return;
+          const put = investUnlock(acc, u, INVEST_CFG.tapAmount);
+          logPour(u, put);
+          if (put > 0) {
+            saveShelfScroll();
+            this.saveAccount();
+            render();
+            if (isUnlockOwned(acc, u)) this.vaultToast(`✦ ${u.label} — UNLOCKED`);
+          }
         });
       });
       document.getElementById('acct-close')!.addEventListener('click', () => {
-        this.accountScreen.classList.add('hidden');
-        if (onClose) onClose();
+        // THE SEAL LAW: a reckoning visit (opened holding essence) never
+        // just closes — the player confirms their allocation, and sealing
+        // lets whatever stands unassigned go. A browsing visit closes free.
+        if (!reckoning || reckoningSealed) {
+          this.accountScreen.classList.add('hidden');
+          if (onClose) onClose();
+          return;
+        }
+        const spent = [...visitLog.values()];
+        const spentHtml = spent.length
+          ? `<div class="seal-list">${spent.map(r =>
+              `<div>${r.done ? '✦' : '·'} ${esc(r.label)} — ${r.done ? 'UNLOCKED' : `+${r.put} invested`}</div>`).join('')}</div>`
+          : `<div class="seal-list" style="color:var(--text-dim)">Nothing assigned this reckoning.</div>`;
+        const loose = acc.credits;
+        const modal = document.createElement('div');
+        modal.className = 'seal-modal';
+        modal.innerHTML = `
+          <div class="seal-box">
+            <h2>Seal the Reckoning?</h2>
+            ${spentHtml}
+            ${loose > 0
+              ? `<div class="seal-warn"><b>${loose}</b> ${META_CURRENCY_LABEL} remains unassigned.
+                 It does <b>not</b> keep between runs — invest it now, or let it pass.</div>`
+              : `<div class="seal-ok">Every point assigned. The next run starts clean.</div>`}
+            <div class="acct-btns">
+              <button id="seal-back">Keep Assigning</button>
+              <button id="seal-go" class="danger">${loose > 0 ? 'Let It Pass — Seal' : 'Seal &amp; Continue'}</button>
+            </div>
+          </div>`;
+        this.accountScreen.appendChild(modal);
+        modal.querySelector<HTMLElement>('#seal-back')!.addEventListener('click', () => modal.remove());
+        modal.querySelector<HTMLElement>('#seal-go')!.addEventListener('click', () => {
+          reckoningSealed = true;
+          sealReckoning(acc);
+          this.saveAccount();
+          modal.remove();
+          this.accountScreen.classList.add('hidden');
+          if (onClose) onClose();
+        });
       });
     };
     render();
     this.accountScreen.classList.remove('hidden');
+  }
+
+  /** A transient banner over the Vault (an unlock completing mid-pour) —
+   *  self-removing; purely celebratory. */
+  private vaultToast(msg: string): void {
+    const t = document.createElement('div');
+    t.className = 'vault-toast';
+    t.textContent = msg;
+    this.accountScreen.appendChild(t);
+    window.setTimeout(() => t.remove(), 2400);
   }
 
   /** THE VAULT CARD's hover story: the full description the compact card no
@@ -1666,11 +1833,15 @@ export class UI {
     if (!u) return null;
     const acc = this.getAccount();
     const owned = isUnlockOwned(acc, u);
+    const inv = investedToward(acc, u);
     const req = u.reqLevel ? ` · req account level ${u.reqLevel}` : '';
+    const price = owned ? '✓ owned'
+      : inv > 0 ? `${inv}/${u.cost} ${META_CURRENCY_LABEL} invested · ${remainingCost(acc, u)} to go`
+      : `${u.cost} ${META_CURRENCY_LABEL}`;
     return {
       title: u.label,
       description: u.description,
-      meta: `${VAULT_KIND_LABELS[u.kind]}${req} · ${owned ? '✓ owned' : `${u.cost} ${META_CURRENCY_LABEL}`}`,
+      meta: `${VAULT_KIND_LABELS[u.kind]}${req} · ${price}`,
       wide: true,
     };
   }
@@ -4367,7 +4538,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   refreshSail(): void {
     if (!this.sailOpen) return;
     const world = this.getWorld();
-    const acc = this.getAccount();
     const ports = world.sailMenuPorts();
     // Grouped by WATER (the sea fabric): this sea's harbors first under its
     // own name, farther shores after — the harbor thinks in seas now.
@@ -4399,7 +4569,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const hearsayRows = hearsay.length
       ? `<h3 style="margin:12px 0 4px 0">Hearsay at the dock</h3>` + hearsay.map(h => `<div class="skill-entry">
           <div class="desc" style="font-style:italic">“${esc(h.line)}”</div>
-          ${h.canChart ? `<div class="bind-btns"><button data-sail-hearsay="${esc(h.id)}"${acc.credits < h.price ? ' disabled' : ''}>Buy chart · ${h.price}</button></div>` : ''}
+          ${h.canChart ? `<div class="bind-btns"><button data-sail-hearsay="${esc(h.id)}"${world.mortalValueOf() < h.price ? ' disabled' : ''}>Buy chart · ${h.price}</button></div>` : ''}
         </div>`).join('')
       : '';
     const hereSea = world.seaNameOf(world.zone);
@@ -4451,7 +4621,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   refreshHold(): void {
     if (!this.holdOpen) return;
     const world = this.getWorld();
-    const acc = this.getAccount();
     const h = world.holdPanelInfo();
     if (!h) { this.closeHold(); return; }
     const mins = (s: number): string => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -4484,7 +4653,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         ? `<div class="skill-entry"><div class="name">Raise it from the ashes</div>
             <div class="desc">Masons, pitch and pilings, paid now: the walls stand today (besieged still: the defense is yours to make).</div>
             <div class="bind-btns"><button data-hold-restore ${h.canRestore ? '' : 'disabled'}>Restore — ${h.restoreCost} ${META_CURRENCY_LABEL}</button>
-              ${!h.canRestore ? `<span class="tags">you carry ${acc.credits}</span>` : ''}</div>
+              ${!h.canRestore ? `<span class="tags">your essence is worth ${world.mortalValueOf()}</span>` : ''}</div>
           </div>`
         : `<div class="skill-entry"><div class="desc">The town keeps its own peace: walk in. Defended sieges raise its standing; a lost one burns it.</div></div>`;
     this.holdMenu.innerHTML = `<h2>${esc(h.name)} <span class="tags">· ${esc(h.clsLabel)}</span></h2>`
@@ -4569,7 +4738,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const rows = post.offers.length
       ? post.offers.map((o, i) => {
         const cost = world.mercHireCost(o);
-        const afford = acc.credits >= cost;
+        const afford = world.mortalValueOf() >= cost;
         const vet = o.kind === 'retired';
         // THE LIVE-AVAILABILITY GATE (world.mercOfferBlocked): a locked
         // sheet keeps its veteran rows while their retiree rides with
@@ -4589,7 +4758,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <div class="bind-btns"><button data-merc-hire="${i}" ${full || !afford || blocked ? 'disabled' : ''}>
             Hire — ${cost} ${META_CURRENCY_LABEL}</button>
             ${blocked ? `<span class="tags" style="color:#b8a0e0">${esc(blocked)}</span>`
-              : !afford && !full ? `<span class="tags">you carry ${acc.credits}</span>` : ''}</div>
+              : !afford && !full ? `<span class="tags">your essence is worth ${world.mortalValueOf()}</span>` : ''}</div>
         </div>`;
       }).join('')
       : `<div class="skill-entry"><div class="desc">The sign-board hangs empty; every blade this post will ever deal has been taken.</div></div>`;
@@ -4607,9 +4776,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const retire = world.canRetireHere()
       ? `<div class="skill-entry" style="border-top:1px solid #3a3644;margin-top:10px;padding-top:10px">
           <div class="name" style="color:#b8a0e0">Retire from the wake</div>
-          <div class="desc">End this run here, in good order: the run's ${META_CURRENCY_LABEL} banks as ever,
-            no corpse is left and no death is counted, and this character, exactly as built,
-            joins the mercenary roster (${acc.mercRoster.length} retired) for future runs to hire.</div>
+          <div class="desc">End this run here, in good order: your carried essence is appraised into
+            ${META_CURRENCY_LABEL} at the Reckoning, no corpse is left and no death is counted, and this
+            character, exactly as built, joins the mercenary roster (${acc.mercRoster.length} retired)
+            for future runs to hire.</div>
           <div class="bind-btns"><button data-merc-retire>Retire this character</button></div>
         </div>`
       : '';
@@ -5447,56 +5617,81 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   // ------------------------------------------------------------ death screen
 
-  showDeath(creditsEarned: number, onRestart: () => void): void {
+  // What main.ts hands the death screen: the reckoning's appraisal
+  // (world.reckonRunEssence), the journey score, and the chronicle standing
+  // (null = a sealed stage's conclusion, off the board).
+  // Exported as a type so the host flow and this screen can never drift.
+
+  /** The run's epitaph + THE APPRAISAL: what the run still carried, read
+   *  tier by tier through the strict mortal exchange, and where it stands
+   *  in the chronicle. One road out — the Reckoning (the Vault as the
+   *  run's closing prompt); its seal is what finally lands on `onDone`
+   *  (the main menu). */
+  showDeath(reck: RunReckoning, onDone: () => void): void {
     this.hideAll();
     const world = this.getWorld();
     const acc = this.getAccount();
-    // RETIREMENT is the death flow wearing its good clothes: same tithe, same
-    // account banking — but the character walked, and the copy says so.
+    // RETIREMENT is the death flow wearing its good clothes: same appraisal,
+    // same reckoning — but the character walked, and the copy says so.
     const retired = world.runEndReason === 'retire';
     const title = retired ? 'RETIRED FROM THE WAKE' : 'YOU HAVE DIED';
     const deed = retired
       ? `hangs up the blade at ${world.zone.name}, and joins the mercenary roster (${acc.mercRoster.length} retired)`
       : `fell in ${world.zone.name}`;
     const who = world.meta.name !== world.meta.classDef.name ? `${world.meta.name} — ` : '';
+    const rowHtml = (r: { id: EssenceId; count: number; worth: number; value: number }): string => {
+      const e = ESSENCES[r.id];
+      return `<div class="reck-row"><span style="color:${e.color}">${e.glyph} ${r.count} ${e.label}</span>
+        <span class="reck-x">× ${r.worth}</span><span class="reck-v">${r.value}</span></div>`;
+    };
+    const rows = reck.rows.length
+      ? reck.rows.map(rowHtml).join('')
+      : `<div class="reck-row" style="color:var(--text-dim)">no essence carried — spent along the way, or never found</div>`;
+    const multRow = reck.mult !== 1
+      ? `<div class="reck-row"><span style="color:#b8a0e0">the covenant's tithe rate</span>
+          <span class="reck-x">× ${reck.mult}</span><span class="reck-v">${reck.minted}</span></div>`
+      : '';
+    const st = reck.standing;
+    const standingLine = !st ? ''
+      : st.byEssence === 1 && st.of > 1
+        ? `<div class="reck-standing" style="color:var(--gold)">Your richest harvest yet — first of ${st.of} remembered runs.</div>`
+        : st.of > 1
+          ? `<div class="reck-standing">Harvest #${st.byEssence} · Renown #${st.byRenown} — of ${st.of} remembered runs.</div>`
+          : `<div class="reck-standing">The chronicle opens: this run is its first entry.</div>`;
     this.deathScreen.innerHTML = `
       <h1>${title}</h1>
       <div>${who}Level ${world.player.level} ${world.meta.classDef.name}
         &nbsp;·&nbsp; ${deed} &nbsp;·&nbsp;
-        ${world.visited.size} zones explored &nbsp;·&nbsp; ${world.kills} kills</div>
+        ${world.visited.size} zones explored &nbsp;·&nbsp; ${world.kills} kills
+        &nbsp;·&nbsp; Renown ${reck.renown}</div>
       ${retired ? `<div style="margin-top:6px;color:#b8a0e0">Some future run will find them at an outpost, sword-arm for hire.</div>` : ''}
-      <div style="margin:14px 0;color:var(--gold);font-weight:bold">
-        <span id="death-run-ess">+${creditsEarned}</span> ${META_CURRENCY_LABEL} of the run
-        &nbsp;·&nbsp; Account Level ${acc.level} &nbsp;·&nbsp;
-        <span id="death-pool-ess">${acc.credits - creditsEarned}</span> ${META_CURRENCY_LABEL}</div>
-      <button id="unlocks-btn">Unlocks</button>
-      <button id="restart-btn">${retired ? 'Onward' : 'Rise Again'}</button>`;
+      <div class="reck-table">
+        <div class="reck-head">THE APPRAISAL — carried essence, at the mortal exchange</div>
+        ${rows}${multRow}
+        <div class="reck-row reck-total"><span>${META_CURRENCY_LABEL} to assign</span>
+          <span class="reck-x"></span><span class="reck-v" id="death-mint">${reck.minted}</span></div>
+      </div>
+      ${standingLine}
+      <div style="margin-top:6px;color:var(--text-dim);font-size:12px">
+        What you assign at the Reckoning is kept forever; what you leave does not cross to the next run.</div>
+      <button id="reckon-btn">${reck.minted > 0 ? `The Reckoning — assign your ${META_CURRENCY_LABEL}` : retired ? 'Onward' : 'Rise Again'}</button>`;
     this.deathScreen.classList.remove('hidden');
 
-    // THE DUMP: the run's Mortal Essence visibly DRAINS into the account
-    // pool — an eased transfer with a scrambling tail, landing on the exact
-    // banked totals (applyCredits already ran; this is pure theater). The
-    // interval self-heals: it dies the moment its spans leave the DOM.
-    const runEl = document.getElementById('death-run-ess');
-    const poolEl = document.getElementById('death-pool-ess');
-    if (runEl && poolEl && creditsEarned > 0) {
-      const poolStart = acc.credits - creditsEarned;
-      const dur = 1400;
+    // A short count-up on the minted total — the appraisal landing. The
+    // interval self-heals: it dies the moment its span leaves the DOM.
+    const mintEl = document.getElementById('death-mint');
+    if (mintEl && reck.minted > 0) {
+      const dur = 900;
       const start = performance.now();
       const timer = window.setInterval(() => {
-        if (!runEl.isConnected) { window.clearInterval(timer); return; }
+        if (!mintEl.isConnected) { window.clearInterval(timer); return; }
         const t = Math.min(1, (performance.now() - start) / dur);
         const ease = 1 - Math.pow(1 - t, 3);
-        const moved = Math.round(creditsEarned * ease);
-        // A flicker of un-settled digits while essence is mid-flight.
-        const jitter = t < 1 && moved < creditsEarned ? (Math.random() < 0.5 ? 1 : 0) : 0;
-        runEl.textContent = `+${creditsEarned - moved}`;
-        poolEl.textContent = `${poolStart + moved - jitter}`;
+        mintEl.textContent = `${Math.round(reck.minted * ease)}`;
         if (t >= 1) {
           window.clearInterval(timer);
-          runEl.textContent = '+0';
-          poolEl.textContent = `${acc.credits}`;
-          poolEl.animate(
+          mintEl.textContent = `${reck.minted}`;
+          mintEl.animate(
             [{ textShadow: '0 0 18px var(--gold)', color: '#ffe9a8' }, { textShadow: 'none' }],
             { duration: 600 },
           );
@@ -5504,12 +5699,88 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       }, 40);
     }
 
-    document.getElementById('unlocks-btn')!.addEventListener('click',
-      () => this.showAccountScreen(() => this.showDeath(creditsEarned, onRestart)));
-    document.getElementById('restart-btn')!.addEventListener('click', () => {
+    document.getElementById('reckon-btn')!.addEventListener('click', () => {
       this.deathScreen.classList.add('hidden');
-      onRestart();
+      // Minted nothing → there is no reckoning to hold; straight home.
+      // (Legacy banked essence still reckons: credits > 0 arms the seal law.)
+      if (acc.credits > 0) this.showAccountScreen(onDone);
+      else onDone();
     });
+  }
+
+  // --------------------------------------------------------------- chronicle
+
+  /** THE RUN CHRONICLE — the account's own leaderboard (meta/account.ts
+   *  runRecords): every remembered run, rankable by harvest (the reckoning's
+   *  mint), by renown (the journey score), or by date, with the account
+   *  level's progress read beside it. A personal competition: the player
+   *  against every run they have ever finished. Renders into the Vault's
+   *  screen element (one full-screen surface, two faces). */
+  showChronicle(onClose?: () => void): void {
+    this.hideAll();
+    const acc = this.getAccount();
+    const render = (): void => {
+      const sort = this.chronicleSort;
+      const rows = [...acc.runRecords];
+      if (sort === 'essence') rows.sort((a, b) => b.essence - a.essence || b.at - a.at);
+      else if (sort === 'renown') rows.sort((a, b) => b.renown - a.renown || b.at - a.at);
+      else rows.sort((a, b) => b.at - a.at);
+      const latestAt = acc.runRecords.reduce((m, r) => Math.max(m, r.at), 0);
+      // Account-level progress, derived from the curve's own inverse.
+      const prev = accountLevelThreshold(acc.level);
+      const next = accountLevelThreshold(acc.level + 1);
+      const pct = Math.min(100, Math.round(((acc.lifetimeCredits - prev) / Math.max(1, next - prev)) * 100));
+      const reasonFace = (r: RunRecord): string =>
+        r.reason === 'retire' ? '⚑ retired' : r.reason === 'forfeit' ? '↩ ended' : '☠ fell';
+      const rowHtml = (r: RunRecord, i: number): string => {
+        const cls = CLASSES.find(c => c.id === r.classId);
+        const who = r.name && r.name !== (cls?.name ?? '') ? `${esc(r.name)} <span class="chron-cls">${esc(cls?.name ?? r.classId)}</span>` : esc(cls?.name ?? r.classId);
+        return `
+          <div class="chron-row${r.at === latestAt ? ' chron-latest' : ''}">
+            <span class="chron-rank">#${i + 1}</span>
+            <span class="chron-who">${who}</span>
+            <span>L${r.level}</span>
+            <span>${r.zones} zones</span>
+            <span>${r.kills} kills</span>
+            <span class="chron-reason">${reasonFace(r)}</span>
+            <span class="chron-ess" title="${META_CURRENCY_LABEL} minted at the reckoning">${r.essence}</span>
+            <span class="chron-ren" title="Renown — the journey score">${r.renown}</span>
+            <span class="chron-when">${new Date(r.at).toLocaleDateString()}</span>
+          </div>`;
+      };
+      const sortBtn = (id: typeof sort, label: string): string =>
+        `<button data-chron-sort="${id}" class="${sort === id ? 'active' : ''}">${label}</button>`;
+      this.accountScreen.innerHTML = `
+        <div class="vault-head">
+          <h1>The Chronicle: Remembered Runs</h1>
+          <div class="acct-head">Account Level <b>${acc.level}</b>
+            <span class="chron-lvlbar" title="${acc.lifetimeCredits} lifetime ${META_CURRENCY_LABEL} — level ${acc.level + 1} at ${next}"><i style="width:${pct}%"></i></span>
+            &nbsp;·&nbsp; ${acc.lifetimeCredits} lifetime ${META_CURRENCY_LABEL}
+            &nbsp;·&nbsp; ${acc.runRecords.length} run${acc.runRecords.length === 1 ? '' : 's'} remembered</div>
+          <div class="book-tabs vault-tabs">
+            ${sortBtn('essence', 'Best Harvest')}${sortBtn('renown', 'Best Renown')}${sortBtn('latest', 'Latest')}</div>
+        </div>
+        <div class="vault-body">${rows.length
+          ? `<div class="chron-table">
+              <div class="chron-row chron-head"><span>rank</span><span>who</span><span>level</span><span>zones</span>
+                <span>kills</span><span>end</span><span>${META_CURRENCY_LABEL}</span><span>renown</span><span>when</span></div>
+              ${rows.map(rowHtml).join('')}</div>`
+          : `<div class="vault-empty">No runs remembered yet. Conclude one — however it goes — and the chronicle begins.</div>`}
+        </div>
+        <div class="vault-foot acct-btns"><button id="chron-close">Back</button></div>`;
+      this.accountScreen.querySelectorAll<HTMLElement>('[data-chron-sort]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          this.chronicleSort = btn.dataset.chronSort as typeof sort;
+          render();
+        });
+      });
+      document.getElementById('chron-close')!.addEventListener('click', () => {
+        this.accountScreen.classList.add('hidden');
+        if (onClose) onClose();
+      });
+    };
+    render();
+    this.accountScreen.classList.remove('hidden');
   }
 
   // ------------------------------------------------------------ escape menu
@@ -5586,9 +5857,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           this.getWorld().endRun();
           return;
         }
-        if (window.confirm(`End this run and bank your ${META_CURRENCY_LABEL}? Your character will be lost (permadeath).`)) {
+        if (window.confirm(`End this run? Your carried essence is appraised into ${META_CURRENCY_LABEL} at the Reckoning; the character is lost (permadeath).`)) {
           this.hideEscapeMenu();
-          this.getWorld().endRun();   // reuses the death → credits → permadeath flow
+          this.getWorld().endRun();   // reuses the death → reckoning → permadeath flow
         }
       });
       document.getElementById('esc-close')!.addEventListener('click', () => {
@@ -6202,15 +6473,22 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
             title="Release this vessel: the character is permanently discarded">✕</button>
         </div>`;
     }).join('');
+    // A pending reckoning (essence standing on the account — a mid-reckoning
+    // quit, or a pre-seal-law save) surfaces on the Vault button: the seal
+    // law inside the Vault settles it the moment that visit closes.
+    const pending = acc.credits > 0;
     this.startMenu.innerHTML = `
       <h1>${GAME_TITLE.toUpperCase()}</h1>
-      <div class="acct-head">Account Level <b>${acc.level}</b> · <b>${acc.credits}</b> ${META_CURRENCY_LABEL}</div>
+      <div class="acct-head">Account Level <b>${acc.level}</b>${pending
+        ? ` · <b style="color:var(--gold)">${acc.credits}</b> ${META_CURRENCY_LABEL} awaiting the Reckoning` : ''}</div>
       ${h.notice ? `<div class="acct-head" style="color:#e8b06a">${h.notice}</div>` : ''}
       <div class="esc-btns">
         <button id="sm-start">Start New Game</button>
         <button id="sm-continue" ${canContinue ? '' : 'disabled'}>${canContinue ? 'Continue' : 'No Save Found'}</button>
         ${rosterRows}
-        <button id="sm-vault">Vault (Unlocks)</button>
+        <button id="sm-vault"${pending ? ' style="border-color:var(--gold)"' : ''}>${pending
+          ? `Vault — assign ${acc.credits} ${META_CURRENCY_LABEL}!` : 'Vault (Unlocks)'}</button>
+        <button id="sm-chronicle">Chronicle of Runs${acc.runRecords.length ? ` (${acc.runRecords.length})` : ''}</button>
         <button id="sm-keys">Options</button>
         ${h.onCoop ? '<button id="sm-coop">Co-op (Beta)</button>' : ''}
       </div>`;
@@ -6245,6 +6523,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     });
     document.getElementById('sm-vault')!.addEventListener('click', () =>
       this.showAccountScreen(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
+    document.getElementById('sm-chronicle')!.addEventListener('click', () =>
+      this.showChronicle(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
     document.getElementById('sm-keys')!.addEventListener('click', () =>
       this.renderOptions(this.startMenu, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
     this.onStartMenuRender?.();

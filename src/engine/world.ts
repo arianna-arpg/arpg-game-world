@@ -43,7 +43,8 @@ import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory
 import { compileItemMods, itemLevelReq, rebuildItem, rollItem } from './itemgen';
 import {
   ESSENCES, ESSENCE_IDS, ESSENCE_SPILL_CFG, LEDGER_ESSENCE_TOUCHED, rollSpillPacket,
-  skillLevelEssenceCost, spillBudget, VENDOR_ESSENCE_PRICE, VENDOR_ITEM_CFG, VENDOR_SUPPORT_PRICE,
+  skillLevelEssenceCost, spendWalletMortalValue, spillBudget, VENDOR_ESSENCE_PRICE,
+  VENDOR_ITEM_CFG, VENDOR_SUPPORT_PRICE, walletBreakdown, walletMortalValue,
   type EssenceCost, type EssenceId, type EssenceSpillSpec,
 } from '../data/essences';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemInstance } from './items';
@@ -301,7 +302,7 @@ import { chooseEvent, ZONE_EVENT_CFG, type EventContext, type EventReward } from
 import { ActiveZoneEvent } from './zoneEvent';
 import {
   featureEnabled, isSkillUnlockedForDrop, isSupportUnlockedForDrop, FEATURE,
-  STARTER_SKILLS, applyCredits, creditsForDeath, META_CURRENCY_LABEL,
+  STARTER_SKILLS, applyCredits, META_CURRENCY_LABEL,
   LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, CLASS_LEVEL_MILESTONES,
   classLevelLedgerKey, gemDropKey, LEDGER_GEMDROP_TOTAL, LEDGER_VENDOR_BOUGHT,
   LEDGER_CRAFTS_UNLOCKED, LEDGER_LEGENDARY_SKILL_DROP, LEDGER_ZONES_EXPLORED,
@@ -4277,10 +4278,13 @@ export class World {
   private beginModeRespawn(): void {
     if (this.pendingRespawn) return;
     const stage = this.modeStageDef();
-    // 1. THE TITHE: essence for how far the run got, at the stage's rate — the
-    //    Immortal opt-in pays reduced on the crossing and nothing after.
-    const earned = Math.floor(
-      creditsForDeath(this.player.level, this.visited.size, this.kills) * stage.deathPayoutMult);
+    // 1. THE TITHE: the party's carried essence appraised at the mortal
+    //    exchange × the stage's rate (reckonRunEssence — the same fold the
+    //    mortal run end mints by), banked BEFORE the strip takes the
+    //    wallets. The Immortal opt-in pays reduced on the crossing and
+    //    nothing after; the banked essence waits in the account for the
+    //    next reckoning's seal.
+    const earned = this.reckonRunEssence().minted;
     if (earned > 0) applyCredits(this.account, earned);
     this.lastRespawnPayout = earned;
     // 2. THE LEDGER: a stage still inside the account loop banks its run
@@ -12867,20 +12871,18 @@ export class World {
     if (!gdef) return false;
     const u = gdef.unlock;
     if (u.kind === 'pay-currency' && u.currency === 'mortal') {
-      // The Mortal Essence purse is the HOST's account — only the local seat
-      // spends it (a guest's dwell nudges the host to treat, never their purse).
-      if (seat !== this.localSeat) {
-        this.text(seat.actor.pos, "only the expedition's leader can pay the wardens", '#c8b048', 13);
-        return false;
-      }
+      // THE MORTAL EXCHANGE: the toll drains the PAYING seat's carried
+      // essence at the strict rates (mortalValueOf/spendMortalValue) — any
+      // seat may treat from its own wallet now that the purse is the carry,
+      // not the host's account.
       const cost = holdfastTollCost(gdef, this.zone.level);
-      if (this.account.credits < cost) {
-        this.text(seat.actor.pos, `the wardens want ${cost} ${META_CURRENCY_LABEL} — come back richer`, '#d05050', 13);
+      if (this.mortalValueOf(seat) < cost) {
+        this.text(seat.actor.pos,
+          `the wardens want essence worth ${cost} ${META_CURRENCY_LABEL} — come back richer`, '#d05050', 13);
         return false;
       }
-      this.account.credits -= cost;
-      this.accountDirty = true; // the main loop books the account save (merc-hire parity)
-      this.text(keeper.pos, `the wardens take ${cost} ${META_CURRENCY_LABEL}`, gdef.marker?.color ?? '#c8a04a', 14);
+      if (!this.spendMortalValue(seat, cost, 'holdfast:toll')) return false;
+      this.text(keeper.pos, `the wardens take ${cost} ${META_CURRENCY_LABEL} in essence`, gdef.marker?.color ?? '#c8a04a', 14);
       this.openHoldfastExit('the toll is paid — the gate opens!');
       return true;
     }
@@ -19964,6 +19966,58 @@ export class World {
     return (seat.meta.essences[cost.essence] ?? 0) >= cost.count;
   }
 
+  // --- THE MORTAL EXCHANGE (data/essences.ts mortalWorth) --------------------
+  //
+  // "Mortal Essence" mid-run IS the carried wallet, appraised at the strict
+  // exchange: every service priced in Mortal Essence (holdfast tolls, harbor
+  // charts, hold restorations, merc hires) drains the paying seat's essence
+  // at the same rates the run-end RECKONING mints at — one conversion table,
+  // every surface. The account's credits field holds value only between a
+  // run's end and its reckoning's seal, never during play.
+
+  /** A seat's carried essence, appraised in Mortal Essence. */
+  mortalValueOf(seat: Seat = this.localSeat): number {
+    return walletMortalValue(seat.meta.essences);
+  }
+
+  /** Spend `price` Mortal-Essence-worth from a seat's carried essence
+   *  (cheapest tints first, exact change — data/essences.ts). Refuses with a
+   *  throttled note when the whole wallet appraises short. Marks the seat's
+   *  meta dirty for the wire and books the save like every essence spend. */
+  spendMortalValue(seat: Seat, price: number, noteKey: string): boolean {
+    if (!spendWalletMortalValue(seat.meta.essences, price)) {
+      this.failNote(seat.actor, noteKey,
+        `needs essence worth ${price} ${META_CURRENCY_LABEL} — you carry ${this.mortalValueOf(seat)}`);
+      return false;
+    }
+    this.markMetaDirty(seat);
+    if (seat === this.localSeat && !this.clientActionHook) saveCharacter(this);
+    else if (seat.couch) this.couchDirty = true;
+    return true;
+  }
+
+  /** THE RECKONING'S APPRAISAL — the run's carried essence read WHOLE at the
+   *  local character's current stage rate: the local hero plus every couch
+   *  vessel (one account, one harvest — accountSeat's own predicate), mercs
+   *  and remote guests never folded (a remote player's essence belongs to
+   *  their own machine's account and simply dies with the run, as all their
+   *  progression always has). Pure read — the caller mints via applyCredits
+   *  and the strip/wipe takes the wallets afterward. */
+  reckonRunEssence(): {
+    rows: { id: EssenceId; count: number; worth: number; value: number }[];
+    carried: number; mult: number; minted: number;
+  } {
+    const pooled: Partial<Record<EssenceId, number>> = {};
+    for (const s of this.seats) {
+      if (!this.accountSeat(s) || s.merc) continue;
+      for (const id of ESSENCE_IDS) pooled[id] = (pooled[id] ?? 0) + (s.meta.essences[id] ?? 0);
+    }
+    const rows = walletBreakdown(pooled);
+    const carried = walletMortalValue(pooled);
+    const mult = this.modeStageDef().deathPayoutMult;
+    return { rows, carried, mult, minted: Math.floor(carried * mult) };
+  }
+
   /** Spend, or refuse with a throttled note naming what's missing. */
   private spendEssence(seat: Seat, cost: EssenceCost, noteKey: string): boolean {
     if (!this.canAffordEssence(seat, cost)) {
@@ -20824,22 +20878,21 @@ export class World {
   }
 
   /** Buy the CHART of a rumored seat (requestMeta 'harborChart', host-only):
-   *  credits spend, then the seat's surroundings are SURVEYED — the spire's
-   *  own reveal machinery, bought at the dock. The walk (or the sail) out
-   *  there is still yours. */
-  buyHarborChart(omenId: string): void {
+   *  the buying seat's carried essence pays at the mortal exchange, then the
+   *  seat's surroundings are SURVEYED — the spire's own reveal machinery,
+   *  bought at the dock. The walk (or the sail) out there is still yours. */
+  buyHarborChart(omenId: string, seat: Seat = this.localSeat): void {
     const o = collectOmens(this).find(x => x.id === omenId && (x.dimension ?? 'surface') === 'surface');
     const z = o?.zoneId ? this.zoneMap[o.zoneId] : undefined;
     if (!o || !z || this.omenRevealed.has(o.id)) return;
     const H = PORT_CFG.hearsay;
     const price = Math.max(H.chartPriceMin, Math.round(coordDist(o.at, this.zone.map) * H.chartPricePerDist));
-    if (this.account.credits < price) {
+    if (this.mortalValueOf(seat) < price) {
       this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-        `the chart is ${price} ${META_CURRENCY_LABEL} — beyond your purse`, '#e8a050', 14);
+        `the chart is essence worth ${price} ${META_CURRENCY_LABEL} — beyond your carry`, '#e8a050', 14);
       return;
     }
-    this.account.credits -= price;
-    this.accountDirty = true;
+    if (!this.spendMortalValue(seat, price, 'harbor:chart')) return;
     this.omenRevealed.add(o.id);
     this.surveyAround(z, H.chartReveal);
     this.text(vec(this.player.pos.x, this.player.pos.y - 84),
@@ -21281,7 +21334,7 @@ export class World {
       defenses: hold.defenses, falls: hold.falls,
       waves: cls.siege.waves, restoreCost,
       canMuster: hold.state === 'besieged' && !this.holdDefense,
-      canRestore: hold.state === 'fallen' && this.account.credits >= restoreCost,
+      canRestore: hold.state === 'fallen' && this.mortalValueOf() >= restoreCost,
       rebuildLeft: hold.state === 'fallen' && hold.rebuildAt !== undefined ? Math.max(0, hold.rebuildAt - this.time) : 0,
       fallLeft: hold.state === 'besieged' && hold.fallAt !== undefined ? Math.max(0, hold.fallAt - this.time) : 0,
       defenseLive: !!this.holdDefense,
@@ -21533,22 +21586,22 @@ export class World {
   }
 
   /** THE RESTORATION (the 'holdRestore' intent): Mortal Essence buys the
-   *  rebuild forward — masons, pitch and pilings, paid at the wreckage. The
-   *  hold stands back up BESIEGED: the coast's foes crept in while it
-   *  burned, and the defense is still yours to win. */
-  buyHoldRestore(): void {
+   *  rebuild forward — masons, pitch and pilings, paid at the wreckage from
+   *  the paying seat's carried essence (the mortal exchange). The hold
+   *  stands back up BESIEGED: the coast's foes crept in while it burned,
+   *  and the defense is still yours to win. */
+  buyHoldRestore(seat: Seat = this.localSeat): void {
     const def = this.zone;
     const hold = def.harborhold;
     if (!hold || hold.state !== 'fallen') return;
     const cls = holdClassOf(hold);
     const price = holdRestoreCost(cls, Math.max(1, def.level));
-    if (this.account.credits < price) {
+    if (this.mortalValueOf(seat) < price) {
       this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-        `the restoration is ${price} ${META_CURRENCY_LABEL} — beyond your purse`, '#e8a050', 14);
+        `the restoration is essence worth ${price} ${META_CURRENCY_LABEL} — beyond your carry`, '#e8a050', 14);
       return;
     }
-    this.account.credits -= price;
-    this.accountDirty = true;
+    if (!this.spendMortalValue(seat, price, 'hold:restore')) return;
     hold.state = 'besieged';
     hold.rebuildAt = undefined;
     this.refreshHoldDress(def);
@@ -22715,9 +22768,10 @@ export class World {
     return seat;
   }
 
-  /** HIRE from the outpost sheet (UI-driven): pay the essence, field the
-   *  blade, mark a veteran engaged, and strike the offer from the sheet. */
-  hireMercenary(index: number): boolean {
+  /** HIRE from the outpost sheet (UI-driven): pay the essence — the hiring
+   *  seat's carried wallet at the mortal exchange — field the blade, mark a
+   *  veteran engaged, and strike the offer from the sheet. */
+  hireMercenary(index: number, seat: Seat = this.localSeat): boolean {
     const post = this.mercOutpost;
     const offer = post?.offers[index];
     if (!post || !offer) return false;
@@ -22735,9 +22789,9 @@ export class World {
       return false;
     }
     const cost = this.mercHireCost(offer);
-    if (this.account.credits < cost) {
+    if (this.mortalValueOf(seat) < cost) {
       this.text(vec(this.player.pos.x, this.player.pos.y - 30),
-        `The captain wants ${cost} ${META_CURRENCY_LABEL}.`, '#c8b048', 13);
+        `The captain wants essence worth ${cost} ${META_CURRENCY_LABEL}.`, '#c8b048', 13);
       return false;
     }
     const snapshot = offer.kind === 'retired'
@@ -22745,12 +22799,18 @@ export class World {
       : this.templateSnapshot(MERC_TEMPLATE_BY_ID[offer.refId], this.mercTargetLevel());
     if (!snapshot) return false;
     const ref = offer.kind === 'retired' ? { mercId: offer.refId } : { templateId: offer.refId };
-    const seat = this.spawnMercSeat(snapshot, offer.name, ref);
-    if (!seat) return false;
-    this.account.credits -= cost;
+    // Pay first (the wallet was checked this same frame — this cannot
+    // refuse), then field; a refused field hands EXACT change back (the
+    // change law: a coarse refund is value-perfect).
+    if (!this.spendMortalValue(seat, cost, 'merc:hire')) return false;
+    const mercSeat = this.spawnMercSeat(snapshot, offer.name, ref);
+    if (!mercSeat) {
+      this.grantEssence(seat, { essence: 'coarse', count: cost });
+      return false;
+    }
     if (offer.kind === 'retired') engageMerc(this.account, offer.refId, this.meta.charId);
     this.accountDirty = true;
-    this.hiredMercs.push({ seat, name: offer.name, snapshot, ...ref });
+    this.hiredMercs.push({ seat: mercSeat, name: offer.name, snapshot, ...ref });
     this.charDirty = true;   // the contracts ride the character save
     post.offers.splice(index, 1);
     this.text(vec(this.player.pos.x, this.player.pos.y - 34),
@@ -24070,9 +24130,9 @@ export class World {
       case 'dropSkill': this.dropFromInventory(seat, 'skill', action.index); break;
       case 'dropSupport': this.dropFromInventory(seat, 'support', action.index); break;
       case 'caravanTo': this.startCaravan(action.band, seat); break;
-      case 'harborChart': this.buyHarborChart(action.omen); break;
+      case 'harborChart': this.buyHarborChart(action.omen, seat); break;
       case 'holdMuster': this.beginHoldMuster(); break;
-      case 'holdRestore': this.buyHoldRestore(); break;
+      case 'holdRestore': this.buyHoldRestore(seat); break;
       case 'payToll': this.payHoldfastToll(action.index, seat); break;
       case 'vocationQuest': this.acceptVocationQuest(action.questId, seat); break;
       case 'equipItem': this.equipItem(seat, action.uid, action.slot); break;

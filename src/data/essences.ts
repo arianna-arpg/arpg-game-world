@@ -25,16 +25,81 @@ export interface EssenceDef {
   color: string;
   /** Display glyph (HUD chips, costs). */
   glyph: string;
+  /** THE MORTAL EXCHANGE — this essence's worth in Mortal Essence, the ONE
+   *  strict conversion every surface speaks through: the run-end RECKONING
+   *  appraises the carried wallet at these rates, and every in-run service
+   *  priced in Mortal Essence (holdfast tolls, harbor charts, hold
+   *  restorations, merc hires) drains the wallet at the same rates. A new
+   *  essence tier declares its worth here and joins everything at once.
+   *  THE CHANGE LAW: the cheapest tier must be worth exactly 1 so a spend
+   *  that breaks a deep tint can always refund exact change (probe-pinned:
+   *  balance/probe_reckoning.ts). */
+  mortalWorth: number;
 }
 
 export const ESSENCES: Record<EssenceId, EssenceDef> = {
-  coarse:     { id: 'coarse',     label: 'Coarse Essence',     color: '#b8b8b8', glyph: '▪' },
-  glimmering: { id: 'glimmering', label: 'Glimmering Essence', color: '#7a9ae8', glyph: '◆' },
-  brilliant:  { id: 'brilliant',  label: 'Brilliant Essence',  color: '#e8d44a', glyph: '✦' },
-  pristine:   { id: 'pristine',   label: 'Pristine Essence',   color: '#e87a3a', glyph: '★' },
+  coarse:     { id: 'coarse',     label: 'Coarse Essence',     color: '#b8b8b8', glyph: '▪', mortalWorth: 1 },
+  glimmering: { id: 'glimmering', label: 'Glimmering Essence', color: '#7a9ae8', glyph: '◆', mortalWorth: 2 },
+  brilliant:  { id: 'brilliant',  label: 'Brilliant Essence',  color: '#e8d44a', glyph: '✦', mortalWorth: 3 },
+  pristine:   { id: 'pristine',   label: 'Pristine Essence',   color: '#e87a3a', glyph: '★', mortalWorth: 5 },
 };
 
 export const ESSENCE_IDS = Object.keys(ESSENCES) as EssenceId[];
+
+// ---------------------------------------------------- the mortal exchange ---
+
+/** A carried essence wallet, appraised in Mortal Essence — the strict fold
+ *  (count × mortalWorth per tier) both the run-end reckoning and every
+ *  mortal-priced in-run service read. Partial wallets read absent as 0. */
+export function walletMortalValue(w: Partial<Record<EssenceId, number>>): number {
+  let v = 0;
+  for (const id of ESSENCE_IDS) v += Math.max(0, Math.floor(w[id] ?? 0)) * ESSENCES[id].mortalWorth;
+  return v;
+}
+
+/** The wallet's appraisal, tier by tier — what the reckoning screen prints.
+ *  Empty tiers are omitted; rows come cheapest-first (the authored ladder). */
+export function walletBreakdown(
+  w: Partial<Record<EssenceId, number>>,
+): { id: EssenceId; count: number; worth: number; value: number }[] {
+  const rows: { id: EssenceId; count: number; worth: number; value: number }[] = [];
+  for (const id of ESSENCE_IDS) {
+    const count = Math.max(0, Math.floor(w[id] ?? 0));
+    if (count > 0) rows.push({ id, count, worth: ESSENCES[id].mortalWorth, value: count * ESSENCES[id].mortalWorth });
+  }
+  return rows;
+}
+
+/** Spend `price` Mortal-Essence-worth out of a wallet, cheapest tints first,
+ *  breaking at most one deeper tint and refunding the difference in the
+ *  cheapest tier (exact by THE CHANGE LAW — value is conserved to the unit).
+ *  Returns false, wallet untouched, when the whole wallet appraises short.
+ *  Mutates in place on success. */
+export function spendWalletMortalValue(w: Record<EssenceId, number>, price: number): boolean {
+  price = Math.max(0, Math.ceil(price));
+  if (price === 0) return true;
+  if (walletMortalValue(w) < price) return false;
+  // Ascending by worth (robust to registry reordering); change mints into the
+  // cheapest tier, whose worth the change law pins at 1.
+  const tiers = [...ESSENCE_IDS].sort((a, b) => ESSENCES[a].mortalWorth - ESSENCES[b].mortalWorth);
+  const changeTier = tiers[0];
+  let owed = price;
+  for (const id of tiers) {
+    if (owed <= 0) break;
+    const worth = ESSENCES[id].mortalWorth;
+    const have = Math.max(0, Math.floor(w[id] ?? 0));
+    if (have <= 0) continue;
+    const whole = Math.min(have, Math.floor(owed / worth));
+    if (whole > 0) { w[id] = have - whole; owed -= whole * worth; }
+    // A tail smaller than this tier's unit: break ONE unit, refund the rest.
+    if (owed > 0 && (w[id] ?? 0) > 0 && worth > owed) {
+      w[id] = (w[id] ?? 0) - 1;
+      w[changeTier] = (w[changeTier] ?? 0) + (worth - owed);
+      owed = 0;
+    }
+  }
+  return owed <= 0;
+}
 
 /** Item rarity → the essence it salvages into. */
 export const ESSENCE_OF_RARITY: Record<ItemRarity, EssenceId> = {

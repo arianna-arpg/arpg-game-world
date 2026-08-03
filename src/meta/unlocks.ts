@@ -787,8 +787,11 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     moment a line first TOUCHES essence (a Gilded Scamp's spill, most
   //     likely) — the discovery IS the pitch. One purchase, two doors: the
   //     bench (break: rarity essence + craft lore) and Brandt's scrap counter
-  //     (sell: coarse volume by quality). -------------------------------------
-  { id: 'feat_salvage_station', kind: 'feature', cost: 60, reqLevel: 0, reqLedger: LEDGER_ESSENCE_TOUCHED,
+  //     (sell: coarse volume by quality). THE FIRST EXCHANGE: priced at a
+  //     single Mortal Essence, so the run that first touches essence can
+  //     claim it at its own reckoning — the vault's teaching purchase, and
+  //     the trade gate's key, nearly free by design. ------------------------
+  { id: 'feat_salvage_station', kind: 'feature', cost: 1, reqLevel: 0, reqLedger: LEDGER_ESSENCE_TOUCHED,
     label: 'Salvage Station: Town',
     description: 'That strange residue has a name: ESSENCE. A breaker\'s bench is raised in Lastlight; dwell there to BREAK gear and carried gems into their rarity\'s essence (coarse, glimmering, brilliant, pristine), studying every affix broken. The same wisdom teaches Brandt to BUY SCRAP at his counter, paying Coarse Essence by an item\'s overall quality: sell for volume, break for the deep tints and the lore. Spend essence levelling skills, at counters, and crafting studied affixes onto your gear.',
     payload: { flag: FEATURE.SALVAGE_STATION } },
@@ -1296,18 +1299,54 @@ export function vaultStripVisible(a: Account, census: VaultShelfCensus[] = vault
     && (ownedTotal >= VAULT_SHELF_CFG.stripMinOwned || stockTotal >= VAULT_SHELF_CFG.stripMinStock);
 }
 
-/** Spend credits to apply an unlock. Mutates the account; returns false if
- *  unaffordable / already owned / gate unmet. Caller saves. */
-export function applyUnlock(a: Account, u: Unlockable): boolean {
-  // The buy gate is exactly the visibility gate (sequencing, account level,
-  // package tier staggering, or a feature's ledger milestone).
-  if (a.credits < u.cost || isUnlockOwned(a, u) || !isUnlockVisible(a, u)) return false;
-  a.credits -= u.cost;
+// ---------------------------------------------------------------------------
+//  THE INVESTMENT LANE — partial unlocks (the reckoning's own economy).
+//
+//  Mortal Essence never crosses between runs (account.ts sealReckoning), so a
+//  rung dearer than one run's harvest must be buyable ACROSS runs: the player
+//  POURS whatever they hold into any visible unlock (holding the card's
+//  button — INVEST_CFG paces the pour), the poured amount persists on
+//  Account.invested, and the unlock GRANTS the moment its full cost has
+//  accumulated. Nothing is ever wasted; progress is always real. applyUnlock
+//  remains the one-shot face of the same machinery (pour the full remainder),
+//  so every pre-reckoning caller and probe keeps its exact semantics.
+// ---------------------------------------------------------------------------
+
+/** The pour's pacing — how holding an unlock's button drains the pool into
+ *  it. Compounding: cheap rungs land in a beat, the deepest in a few held
+ *  seconds. Pure UI data (the invest math itself is instant); tune freely. */
+export const INVEST_CFG = {
+  /** Units/second the moment the hold starts. */
+  baseRate: 16,
+  /** The rate multiplies by this for each second held (compound ramp). */
+  accel: 2.6,
+  /** Rate ceiling, units/second. */
+  maxRate: 600,
+  /** Pour tick, ms (UI granularity only). */
+  tickMs: 50,
+  /** A bare tap invests this much — the smallest deliberate step. */
+  tapAmount: 1,
+};
+
+/** Mortal Essence already poured into an unlock (0 for untouched entries). */
+export function investedToward(a: Account, u: Unlockable): number {
+  return Math.max(0, Math.floor(a.invested[u.id] ?? 0));
+}
+
+/** What completing this unlock still costs (cost − invested, floored at 0 —
+ *  a catalog retune below an existing investment owes nothing more). */
+export function remainingCost(a: Account, u: Unlockable): number {
+  return Math.max(0, u.cost - investedToward(a, u));
+}
+
+/** GRANT — the ownership switch, reached only through a completed
+ *  investment. A class bundle is SEVERAL unlocks in one: the class enters
+ *  the roll pool, its gems enter the drop pool (Sets dedupe any overlap
+ *  with owned pools) — and realizing the class later opens its vocation
+ *  chain for free. */
+function grantUnlock(a: Account, u: Unlockable): void {
   switch (u.kind) {
     case 'slot':    a.unlockedSlots.add(u.payload.slotCount); break;
-    // A class bundle is SEVERAL unlocks in one: the class enters the roll pool,
-    // its gems enter the drop pool (Sets dedupe any overlap with owned pools) —
-    // and realizing the class later opens its vocation chain for free.
     case 'class':
       a.unlockedClasses.add(u.payload.classId);
       for (const id of u.payload.skillIds) a.unlockedSkills.add(id);
@@ -1318,5 +1357,43 @@ export function applyUnlock(a: Account, u: Unlockable): boolean {
     case 'feature': a.features.add(u.payload.flag); break;
     case 'package': a.packageUnlocks.add(u.payload.tierId ?? u.payload.packageId); break;
   }
-  return true;
+}
+
+/** POUR up to `amount` Mortal Essence into an unlock. Clamped by the pool
+ *  and by what completing still costs; grants (and clears the investment
+ *  entry) the moment the full cost stands. The gate is exactly the
+ *  visibility gate — an invisible or owned entry takes nothing. Returns the
+ *  units actually poured (0 = refused or nothing to pour). Caller saves. */
+export function investUnlock(a: Account, u: Unlockable, amount: number): number {
+  if (isUnlockOwned(a, u) || !isUnlockVisible(a, u)) return 0;
+  const rem = remainingCost(a, u);
+  if (rem === 0) {
+    // A retuned catalog left an investment at/over the new cost: settle it.
+    delete a.invested[u.id];
+    grantUnlock(a, u);
+    return 0;
+  }
+  const put = Math.min(Math.max(0, Math.floor(amount)), Math.max(0, Math.floor(a.credits)), rem);
+  if (put <= 0) return 0;
+  a.credits -= put;
+  const now = investedToward(a, u) + put;
+  if (now >= u.cost) {
+    delete a.invested[u.id];
+    grantUnlock(a, u);
+  } else {
+    a.invested[u.id] = now;
+  }
+  return put;
+}
+
+/** Buy an unlock outright — pour the full remainder in one motion. Mutates
+ *  the account; returns false if unaffordable / already owned / gate unmet.
+ *  Caller saves. (The historical one-click face; the buy gate is exactly
+ *  the visibility gate, and prior partial investments count toward it.) */
+export function applyUnlock(a: Account, u: Unlockable): boolean {
+  if (isUnlockOwned(a, u) || !isUnlockVisible(a, u)) return false;
+  const rem = remainingCost(a, u);
+  if (a.credits < rem) return false;
+  investUnlock(a, u, rem);
+  return isUnlockOwned(a, u);
 }
