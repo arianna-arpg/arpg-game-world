@@ -2745,9 +2745,11 @@ export interface GenCtx {
    *  emitter (worn-path stamp, trails, exit roads) breathes with one lung. */
   overgrowth?: number;
   /** TRANSIENT (onClearway's incremental index): doodads classified so far +
-   *  the way discs among them — the placement gate stays O(ways) per
-   *  candidate in a thousands-of-doodads zone. Never authored. */
-  cwSeen?: { upto: number; ways: Doodad[] };
+   *  the way discs among them, bucketed on the CW_BUCKET lattice with the
+   *  widest disc reach — the placement gate stays O(local way discs) per
+   *  candidate in a thousands-of-doodads zone (the forest canopy sweep paid
+   *  O(ways) per tree against every trail disc). Never authored. */
+  cwSeen?: { upto: number; ways: Doodad[]; buckets: Map<number, Doodad[]>; reach: number };
   /** TRANSIENT: restrict findSpot's sample rect to a sub-area (a dungeon room
    *  being furnished, a composition site's surround). Draw COUNT is unchanged
    *  (2 range draws per try, same as the full arena) — unset = byte-identical
@@ -4735,6 +4737,41 @@ function ensureReachability(ctx: GenCtx): void {
   for (const pc of priorCells) grid.fillRegion(pc.x - 1, pc.y - 1, pc.x + 1, pc.y + 1, pc.kind);
 }
 
+/** A flat int deque (head/tail window over a growable Int32Array) with the
+ *  exact shift/unshift/push semantics of the JS-array deque it replaced —
+ *  without Array.prototype.shift's O(n) slide. The navigability belt runs
+ *  one 0-1 BFS per required point over the whole cell lattice; the slide
+ *  made that quadratic per point. Same op order in = same pop order out. */
+class NavRing {
+  private buf: Int32Array;
+  private head = 0;
+  private tail = 0;
+  constructor(cap: number) {
+    this.buf = new Int32Array(Math.max(16, cap));
+    this.reset();
+  }
+  get size(): number { return this.tail - this.head; }
+  reset(): void { this.head = this.tail = this.buf.length >> 1; }
+  pushBack(v: number): void {
+    if (this.tail === this.buf.length) this.grow();
+    this.buf[this.tail++] = v;
+  }
+  pushFront(v: number): void {
+    if (this.head === 0) this.grow();
+    this.buf[--this.head] = v;
+  }
+  popFront(): number { return this.buf[this.head++]; }
+  private grow(): void {
+    const next = new Int32Array(this.buf.length * 2);
+    const n = this.tail - this.head;
+    const off = (next.length - n) >> 1;
+    next.set(this.buf.subarray(this.head, this.tail), off);
+    this.buf = next;
+    this.head = off;
+    this.tail = off + n;
+  }
+}
+
 /** SOLIDS NEVER SEAL — the doodad-aware belt over ensureReachability's grid
  *  suspenders. The walk grid guarantees carved connectivity, but scattered
  *  SOLID doodads (boulders, trunks, palisade posts) live OFF the grid — a
@@ -4825,14 +4862,25 @@ function ensureDoodadNavigability(ctx: GenCtx): void {
   }
 
   // 0-1 BFS (deque): cost = soft cells crossed; parents rebuild the path.
+  // The scratch trio below is allocated ONCE and reused across every required
+  // point — the per-point Int32Array pair + the O(n) Array.prototype.shift
+  // deque made this belt the DOMINANT cost of a big zone's generateLayout
+  // (~80% on a 5000u soulriver: dozens of required points, each a full-grid
+  // walk with quadratic shifts). NavRing replays the exact shift/unshift/push
+  // order, so every search visits cells in the same sequence and the doomed
+  // set — the pass's one output — is byte-identical.
+  const navCost = new Int32Array(cols * rows);
+  const navParent = new Int32Array(cols * rows);
+  const ring = new NavRing(cols * rows);
   const search = (target: number): number[] | null => {
     if (state[target] === 2) return null;
-    const cost = new Int32Array(cols * rows).fill(-1);
-    const parent = new Int32Array(cols * rows).fill(-1);
-    const deque: number[] = [start];
-    cost[start] = 0;
-    while (deque.length) {
-      const cur = deque.shift()!;
+    navCost.fill(-1);
+    navParent.fill(-1);
+    ring.reset();
+    ring.pushBack(start);
+    navCost[start] = 0;
+    while (ring.size) {
+      const cur = ring.popFront();
       if (cur === target) break;
       const cx = cur % cols, cy = Math.floor(cur / cols);
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
@@ -4840,17 +4888,17 @@ function ensureDoodadNavigability(ctx: GenCtx): void {
         if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
         const ni = ny * cols + nx;
         if (state[ni] === 2) continue;
-        const nc = cost[cur] + (state[ni] === 1 ? 1 : 0);
-        if (cost[ni] !== -1 && cost[ni] <= nc) continue;
-        cost[ni] = nc;
-        parent[ni] = cur;
-        if (state[ni] === 1) deque.push(ni); else deque.unshift(ni);
+        const nc = navCost[cur] + (state[ni] === 1 ? 1 : 0);
+        if (navCost[ni] !== -1 && navCost[ni] <= nc) continue;
+        navCost[ni] = nc;
+        navParent[ni] = cur;
+        if (state[ni] === 1) ring.pushBack(ni); else ring.pushFront(ni);
       }
     }
-    if (cost[target] === -1) return null;
-    if (cost[target] === 0) return []; // already reachable clean
+    if (navCost[target] === -1) return null;
+    if (navCost[target] === 0) return []; // already reachable clean
     const path: number[] = [];
-    for (let at = target; at !== -1 && at !== start; at = parent[at]) {
+    for (let at = target; at !== -1 && at !== start; at = navParent[at]) {
       if (state[at] === 1) path.push(at);
     }
     return path;
@@ -5084,18 +5132,45 @@ function clearwayKinds(): Set<string> {
 export function onClearway(ctx: GenCtx, p: Vec2, bodyR: number): boolean {
   const kinds = clearwayKinds();
   if (!kinds.size) return false;
-  const seen = ctx.cwSeen ??= { upto: 0, ways: [] };
+  const seen = ctx.cwSeen ??= { upto: 0, ways: [] as Doodad[], buckets: new Map<number, Doodad[]>(), reach: 0 };
   const all = ctx.doodads;
   while (seen.upto < all.length) {
     const d = all[seen.upto++];
-    if (kinds.has(d.kind)) seen.ways.push(d);
+    if (kinds.has(d.kind)) {
+      seen.ways.push(d);
+      const cw = doodadRule(d.kind).clearway!;
+      seen.reach = Math.max(seen.reach, d.radius + (cw.pad ?? COHERENCE_CFG.clearwayPad));
+      const k = cwBucketKey(d.pos.x, d.pos.y);
+      const list = seen.buckets.get(k);
+      if (list) list.push(d); else seen.buckets.set(k, [d]);
+    }
   }
-  for (const d of seen.ways) {
-    if (d.wild) continue;
-    const cw = doodadRule(d.kind).clearway!;
-    if (dist(p, d.pos) < bodyR + d.radius + (cw.pad ?? COHERENCE_CFG.clearwayPad)) return true;
+  // Bucketed prune: a disc outside the (bodyR + widest reach) window around
+  // `p` fails the distance test by construction, so only the local buckets
+  // are scanned — the per-disc test below is verbatim, the answer identical.
+  const r = bodyR + seen.reach;
+  const gx0 = Math.floor((p.x - r) / CW_BUCKET), gx1 = Math.floor((p.x + r) / CW_BUCKET);
+  const gy0 = Math.floor((p.y - r) / CW_BUCKET), gy1 = Math.floor((p.y + r) / CW_BUCKET);
+  for (let gy = gy0; gy <= gy1; gy++) {
+    for (let gx = gx0; gx <= gx1; gx++) {
+      const list = seen.buckets.get((gx + 2048) * 4096 + (gy + 2048));
+      if (!list) continue;
+      for (const d of list) {
+        if (d.wild) continue;
+        const cw = doodadRule(d.kind).clearway!;
+        if (dist(p, d.pos) < bodyR + d.radius + (cw.pad ?? COHERENCE_CFG.clearwayPad)) return true;
+      }
+    }
   }
   return false;
+}
+
+/** onClearway's prune lattice (world → CW_BUCKET cells). The +2048 offset
+ *  keeps a disc nosing slightly past the arena rim in range; keys are unique
+ *  within ±2048 cells (±450k world units) of the origin. */
+const CW_BUCKET = 220;
+function cwBucketKey(x: number, y: number): number {
+  return (Math.floor(x / CW_BUCKET) + 2048) * 4096 + (Math.floor(y / CW_BUCKET) + 2048);
 }
 
 /** A DOOR IS TWO THINGS: the doodad the world draws (and blocks/opens with)
@@ -8092,19 +8167,51 @@ function fuseGroundBodies(ctx: GenCtx): void {
     const discs = g.discs;
     const parent = discs.map((_, i) => i);
     const find = (i: number): number => parent[i] === i ? i : (parent[i] = find(parent[i]));
+    const reach = g.gap * 2 * cell;
+    // Bucketed pair prune (the naive double scan was O(n²) dist calls — the
+    // riverland's poured course made it the mint's second-largest cost): any
+    // pair either scan ACTS on lies within 2·maxR + reach, so one lattice at
+    // that pitch holds every candidate in its 3×3 ring. Candidates come back
+    // in ascending index order and the exact tests below are unchanged, so
+    // union/weld state evolves exactly as the full scan's — a pruned pair is
+    // one both scans would have `continue`d without side effects.
+    let fuseMaxR = 0;
+    for (const d of discs) fuseMaxR = Math.max(fuseMaxR, d.radius);
+    const bcell = Math.max(64, fuseMaxR * 2 + reach);
+    const fuseBuckets = new Map<number, number[]>();
     for (let i = 0; i < discs.length; i++) {
-      for (let j = i + 1; j < discs.length; j++) {
+      const k = (Math.floor(discs[i].pos.x / bcell) + 2048) * 4096 + (Math.floor(discs[i].pos.y / bcell) + 2048);
+      const list = fuseBuckets.get(k);
+      if (list) list.push(i); else fuseBuckets.set(k, [i]);
+    }
+    const pairCandidates = (i: number): number[] => {
+      const gx = Math.floor(discs[i].pos.x / bcell), gy = Math.floor(discs[i].pos.y / bcell);
+      const out: number[] = [];
+      for (let yy = gy - 1; yy <= gy + 1; yy++) {
+        for (let xx = gx - 1; xx <= gx + 1; xx++) {
+          const list = fuseBuckets.get((xx + 2048) * 4096 + (yy + 2048));
+          if (list) for (const j of list) if (j > i) out.push(j);
+        }
+      }
+      return out.sort((x, y) => x - y);
+    };
+    for (let i = 0; i < discs.length; i++) {
+      for (const j of pairCandidates(i)) {
         if (dist(discs[i].pos, discs[j].pos) < discs[i].radius + discs[j].radius - 6) {
           const ri = find(i), rj = find(j);
           if (ri !== rj) parent[ri] = rj;
         }
       }
     }
-    const reach = g.gap * 2 * cell;
+    // The weld's seam-cell membership probe was O(all doodads) per cell —
+    // the same answer read from a set of this kind's exact positions (seeded
+    // from every standing doodad of the kind, fed as welds land).
+    const fuseSeen = new Set<string>();
+    for (const d of ctx.doodads) if (d.kind === kind) fuseSeen.add(d.pos.x + ',' + d.pos.y);
     // Deterministic pair scan (index order); union as welds land so a chain
     // A–B–C lays two seams, never a redundant third.
     for (let i = 0; i < discs.length; i++) {
-      for (let j = i + 1; j < discs.length; j++) {
+      for (const j of pairCandidates(i)) {
         const ri = find(i), rj = find(j);
         if (ri === rj) continue;
         const a = discs[i], b = discs[j];
@@ -8122,11 +8229,12 @@ function fuseGroundBodies(ctx: GenCtx): void {
             (Math.floor(py / cell) + 0.5) * cell);
           if (cellGuarded(ctx, c, cr, kind, false)) continue;
           if (floods(c)) continue;
-          if (ctx.doodads.some(d => d.kind === kind && d.pos.x === c.x && d.pos.y === c.y)) { welded = true; continue; }
+          if (fuseSeen.has(c.x + ',' + c.y)) { welded = true; continue; }
           ctx.doodads.push({
             pos: c, radius: cr, kind,
             ...(a.shallow || b.shallow ? { shallow: true } : {}),
           });
+          fuseSeen.add(c.x + ',' + c.y);
           welded = true;
         }
         if (welded) parent[ri] = rj;
