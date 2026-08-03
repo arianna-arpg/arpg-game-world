@@ -465,6 +465,17 @@ export interface StateSnapshot {
    *  dries: the whole-ground common case ships zero bytes (absent == the
    *  pre-evap wire, byte for byte). */
   ev?: EvapW[];
+  /** THE ENTRY FREEZE's mid-visit wire (World.freezeStandingWater): 1 while a
+   *  Deepwinter front holds the host's zone. Join/entry guests already meet
+   *  frozen KINDS on the one-shot zone list (the host materializes before
+   *  serving) — this bit reaches the guest who was STANDING in the zone when
+   *  the marching front swallowed it: the client runs the SAME registry swap
+   *  over its own replicated list (idempotent by the same scan memo, so the
+   *  20 Hz repeat is free). ABSENCE NEVER THAWS — the host has no unfreeze
+   *  pass either; on both sides the only thaw road is the next zone (re)apply
+   *  minting ordinary water (transience by construction). Absent while no
+   *  front holds — the common case ships zero bytes. */
+  dwf?: 1;
 }
 
 /** One drying doodad on the wire: position key, current radius (the derived
@@ -693,6 +704,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     lt: liteOf(world),
     fell: fellOf(world),
     ev: evapOf(world),
+    dwf: world.frostHeld() ? 1 : undefined,
   };
 }
 
@@ -952,6 +964,14 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // THE EVAPORATING GROUND — same idiom, same guard: the guest's drying
     // pieces shrink and retire exactly where (and as fast as) the host's do.
     applyNetEvap(world, snap.ev);
+    // THE ENTRY FREEZE's mid-visit wire — same guard: while the host's front
+    // holds this zone (dwf), run the SAME registry swap the host ran over our
+    // own replicated doodads, so a guest standing in a zone the marching
+    // front just swallowed walks (and predicts) ice, not water. On a true
+    // conversion the wading lists re-derive (the applyNetEvap membership
+    // precedent). Absence reverts nothing — the thaw arrives as the next
+    // zone apply's ordinary re-mint, exactly as it does for the host.
+    if (snap.dwf && world.freezeStandingWater()) world.rebuildClientTerrain();
   }
   // THE LITE TIER's draw list (engine/lite.ts): the client renders the
   // host's pool verbatim off this mirror — absent truly means empty (the

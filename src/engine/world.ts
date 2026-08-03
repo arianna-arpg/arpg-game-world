@@ -16790,6 +16790,75 @@ export class World {
   // Dressing re-applies EVERY entry (cheap, transient); the muster is once
   // per visit. Despawn-on-leave; re-fielded on re-entry while held.
 
+  /** THE ENTRY FREEZE's ONE swap — every standing thawed-liquid doodad becomes
+   *  the frozen kind. TWO callers, one law: the mint-side zone-runtime hook
+   *  (materializeDeepwinter — host and solo) and the co-op wire's client apply
+   *  (the snapshot's `dwf` bit): a guest already STANDING in a zone the
+   *  marching front swallows runs this same swap over its own replicated list,
+   *  so drawn and predicted ground freeze together on both sides of the wire.
+   *    BOTH ENDS RESOLVE THROUGH THE LIQUID REGISTRY (engine/genkit.ts —
+   *  DEEPWINTER_THAWED_LIQUIDS / DEEPWINTER_FROZEN_LIQUID): the same rows the
+   *  mint path names, so no doodad-kind string lives here and a re-registered
+   *  row moves both paths at once.
+   *    THIS IS GAMEPLAY, NOT PAINT. A water doodad carries wading depth (and,
+   *  marked `shallow`, a ford); ice is slippery ground that reports itself
+   *  outright. That is the intent — the pond froze over, so it is walked like
+   *  a frozen pond, and the ford's shallow mark goes with the water it named.
+   *    SCOPE: DOODADS ONLY. `deep_water` is a walk-grid REGION (swim + the
+   *  breath meter), a different truth that never enters this list; the deep
+   *  channel stays open water — the hole in the ice — and the survival meter
+   *  it drives keeps its word.
+   *    TRANSIENCE (docs/engine/transience.md — events BORROW the world, never
+   *  own it): nothing here is written down. ZoneMemory carries seed +
+   *  population + fixture state, never doodads, so re-entry re-mints the
+   *  zone's AUTHORED water from its seed and only a STANDING front re-freezes
+   *  it. When the King falls and the thaw walks the territory home, the mint
+   *  hook early-returns, the wire bit stops shipping, and the water is simply
+   *  there again — no unfreeze pass, and no save can carry the ice.
+   *    Idempotent via the dwIce* scan memo (both callers re-fire relentlessly:
+   *  the hook every frame under a standing front, the wire at the 20 Hz beat).
+   *  Returns whether anything actually converted — the client apply rebuilds
+   *  its predicted-collision lists only on a true swap. */
+  freezeStandingWater(): boolean {
+    const ice = liquidOf(DEEPWINTER_FROZEN_LIQUID).doodad;
+    if (!ice) return false;
+    if (this.dwIceArr === this.doodads && this.dwIceLen === this.doodads.length
+      && this.dwIceRev === this.doodadsRev) return false;
+    const thaws = new Set<string>(DEEPWINTER_THAWED_LIQUIDS
+      .map(id => liquidOf(id).doodad)
+      .filter((k): k is DoodadKind => !!k));
+    thaws.delete(ice); // never swap ice for ice (a row aliased to the frozen kind)
+    const iced: Doodad[] = [];
+    for (const d of this.doodads) if (thaws.has(d.kind)) iced.push(d);
+    // Bump ONLY when something actually changed, and only the FAMILIES the
+    // swap touched (neither kind blocks a foot, so the nav grid never
+    // re-rasterizes for it) — a re-entry onto already-frozen ground finds
+    // nothing and stays perfectly silent. TWICE, though, and deliberately:
+    // family bits are read off d.kind, so the kind we VACATE must be told
+    // before the swap and the kind we ARRIVE AT after it. (Water and ice sit
+    // in exactly the same families today, so the pair is a formality — but
+    // the swap must not quietly depend on that staying true.)
+    if (iced.length) {
+      this.markDoodadsChanged(iced);
+      for (const d of iced) {
+        d.kind = ice;
+        delete d.shallow; // "water only: a ford" — a frozen ford is just ice
+      }
+      this.markDoodadsChanged(iced);
+    }
+    this.dwIceArr = this.doodads;
+    this.dwIceLen = this.doodads.length;
+    this.dwIceRev = this.doodadsRev; // AFTER the bump — our own change is settled
+    return iced.length > 0;
+  }
+
+  /** Does a Deepwinter front hold the zone underfoot? THE MID-VISIT WIRE's
+   *  serialize read (the snapshot's `dwf` bit — see freezeStandingWater).
+   *  Pure and cheap at the 20 Hz beat (frostOn is a map lookup). */
+  frostHeld(): boolean {
+    return !!this.sim.deepwinterField?.frostOn(this.zone.id);
+  }
+
   /** Convert + garrison a frost-held zone: the ice (standing water frozen
    *  over), the dressing (snow/whiteout), the court packs (tag 'deepwinter' —
    *  ambient, never the zone's objective), and the KING (tag 'winter_king' —
@@ -16804,55 +16873,10 @@ export class World {
     // over open, flowing water is the one contradiction the MINT-TIME freeze
     // cannot reach. layoutRecipes' `freezeAt` only shapes ground minted AFTER
     // the front arrived; this hook converts zones that were charted long
-    // before it. So the standing water FREEZES OVER on arrival.
-    //   BOTH ENDS RESOLVE THROUGH THE LIQUID REGISTRY (engine/genkit.ts —
-    // DEEPWINTER_THAWED_LIQUIDS / DEEPWINTER_FROZEN_LIQUID): the same rows the
-    // mint path names, so no doodad-kind string lives here and a re-registered
-    // row moves both paths at once.
-    //   THIS IS GAMEPLAY, NOT PAINT. A water doodad carries wading depth (and,
-    // marked `shallow`, a ford); ice is slippery ground that reports itself
-    // outright. That is the intent — the pond froze over, so it is walked like
-    // a frozen pond, and the ford's shallow mark goes with the water it named.
-    //   SCOPE: DOODADS ONLY. `deep_water` is a walk-grid REGION (swim + the
-    // breath meter), a different truth that never enters this list; the deep
-    // channel stays open water — the hole in the ice — and the survival meter
-    // it drives keeps its word.
-    //   TRANSIENCE (docs/engine/transience.md — events BORROW the world, never
-    // own it): nothing here is written down. ZoneMemory carries seed +
-    // population + fixture state, never doodads, so re-entry re-mints the
-    // zone's AUTHORED water from its seed and only a STANDING front re-freezes
-    // it. When the King falls and the thaw walks the territory home, frostOn()
-    // returns null, this hook early-returns above, and the water is simply
-    // there again — no unfreeze pass, and no save can carry the ice.
-    const ice = liquidOf(DEEPWINTER_FROZEN_LIQUID).doodad;
-    if (ice && (this.dwIceArr !== this.doodads || this.dwIceLen !== this.doodads.length
-      || this.dwIceRev !== this.doodadsRev)) {
-      const thaws = new Set<string>(DEEPWINTER_THAWED_LIQUIDS
-        .map(id => liquidOf(id).doodad)
-        .filter((k): k is DoodadKind => !!k));
-      thaws.delete(ice); // never swap ice for ice (a row aliased to the frozen kind)
-      const iced: Doodad[] = [];
-      for (const d of this.doodads) if (thaws.has(d.kind)) iced.push(d);
-      // Bump ONLY when something actually changed, and only the FAMILIES the
-      // swap touched (neither kind blocks a foot, so the nav grid never
-      // re-rasterizes for it) — a re-entry onto already-frozen ground finds
-      // nothing and stays perfectly silent. TWICE, though, and deliberately:
-      // family bits are read off d.kind, so the kind we VACATE must be told
-      // before the swap and the kind we ARRIVE AT after it. (Water and ice sit
-      // in exactly the same families today, so the pair is a formality — but
-      // the swap must not quietly depend on that staying true.)
-      if (iced.length) {
-        this.markDoodadsChanged(iced);
-        for (const d of iced) {
-          d.kind = ice;
-          delete d.shallow; // "water only: a ford" — a frozen ford is just ice
-        }
-        this.markDoodadsChanged(iced);
-      }
-      this.dwIceArr = this.doodads;
-      this.dwIceLen = this.doodads.length;
-      this.dwIceRev = this.doodadsRev; // AFTER the bump — our own change is settled
-    }
+    // before it. The swap itself (and its whole story — registry resolution,
+    // scope, transience, the scan memo) is freezeStandingWater: ONE
+    // implementation, shared with the co-op wire's client apply.
+    this.freezeStandingWater();
     // CONVERSION DRESSING (idempotent, per entry): the ground wakes deep in
     // snow and HOLDS it (the runtime floor), and the whiteout walks the zone.
     this.snowCover = Math.max(this.snowCover, cfg.snow.cover);

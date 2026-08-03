@@ -9,12 +9,15 @@
 // extents, the snapshot round-trip (+ old zone-hop-era snapshots dropped
 // tolerantly), and the thaw walking the territory home — then conversion's
 // ENGINE half on real minted ground: THE ENTRY FREEZE (standing water frozen
-// over, scoped, idempotent, and borrowed — section H).
+// over, scoped, idempotent, and borrowed — section H) and its MID-VISIT co-op
+// wire (the snapshot's dwf bit freezing a guest already standing there —
+// section I).
 // Run: npx tsx balance/probe_deepwinter.ts
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { liquidOf } from '../src/engine/genkit';
+import { serializeZone, applyZone, serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { DeepwinterField, type DeepwinterSurge } from '../src/packages/overlays/deepwinter';
 import { climateAt } from '../src/world/climate';
 import { biomeAt } from '../src/world/biomes';
@@ -292,6 +295,93 @@ if (field) {
   check('H11 the thaw restores the zone\'s ordinary water, ford for ford',
     count(WATER) === water0 && fords() === fords0 && count(ICE) === ice0,
     `${count(WATER)}/${water0} water, ${fords()}/${fords0} fords, ${count(ICE)}/${ice0} ice`);
+}
+
+// --- I: THE MID-VISIT WIRE — the freeze reaches a guest already standing there -
+//
+// H pinned the HOST's conversion. But co-op guests run no sim: a guest who
+// APPLIED the zone while its water still flowed — then watched the front
+// swallow the node mid-visit — kept wading a pond the host had already frozen,
+// because no snapshot channel restates a standing doodad's KIND. The `dwf` bit
+// closes it: while the front holds the host's zone, the guest runs the SAME
+// registry swap (World.freezeStandingWater) over its own replicated list.
+// These rigs hold the wire to its four promises: it SHIPS only while held, it
+// CONVERTS the guest (drawn AND predicted ground), it is GUARDED (a stale
+// other-zone snapshot freezes nothing) and free at the 20 Hz beat, and
+// ABSENCE NEVER THAWS (the thaw is the next zone apply's ordinary re-mint —
+// the host's own law, wire for wire).
+{
+  const host = makeSimWorld('warrior', 0xd1cf);
+  const WATER = liquidOf('water').doodad as string;
+  const ICE = liquidOf('ice').doodad as string;
+  const zid = host.devMintTileset('marsh', 0, 8, { seed: 909909 });
+
+  // The guest mirrors the zone BEFORE the front arrives — open water standing.
+  const client = makeSimWorld('warrior', 0xc11e);
+  applyZone(client, serializeZone(host));
+  const cCount = (k: string): number => client.doodads.filter(d => d.kind === k).length;
+  const cFords = (): number => client.doodads.filter(d => d.kind === WATER && d.shallow).length;
+  const water0 = cCount(WATER), ice0 = cCount(ICE), fords0 = cFords();
+  check('I1 fixture: the guest mirrors the host\'s OPEN water (the mid-visit premise)',
+    !!zid && client.appliedZoneId === zid && water0 > 0 && fords0 > 0,
+    `${water0} water (${fords0} fords), ${ice0} ice`);
+
+  // The front swallows the node mid-visit; the HOST freezes live (H's path).
+  let held = true;
+  (host.sim as unknown as { deepwinterField: unknown }).deepwinterField = {
+    surge: () => SURGE,
+    frostOn: (id: string) => (held && id === zid
+      ? { intensity: 0.8, isHeart: false, thawing: false, color: SURGE.color, label: 'deep winter' }
+      : null),
+    kingIn: () => null,
+    markDiscovered: () => false,
+  };
+  host.devRematerialize();
+  const snap = serializeSnapshot(host, 1);
+  check('I2 the snapshot carries the frost bit while the front holds the zone',
+    snap.dwf === 1 && snap.zoneId === zid);
+
+  // THE GUARD: a stale snapshot claiming other ground must not freeze ours
+  // (the door-state precedent — the same zone-identity gate).
+  applySnapshot(client, { ...snap, zoneId: 'elsewhere' }, null, 1);
+  check('I3 a stale other-zone snapshot freezes nothing',
+    cCount(WATER) === water0 && cFords() === fords0);
+
+  // THE BEAT: the guest's standing water freezes over, ford and all.
+  applySnapshot(client, snap, null, 1);
+  check('I4 the guest\'s water freezes over on the beat',
+    cCount(WATER) === 0 && cCount(ICE) === ice0 + water0,
+    `${cCount(WATER)} water left, ice ${ice0} → ${cCount(ICE)}`);
+  check('I5 no guest ford survives (the shallow mark went with the water)',
+    cFords() === 0 && !client.doodads.some(d => d.kind === ICE && d.shallow));
+  // GAMEPLAY, NOT PAINT — on the guest too: the foot (prediction's own read)
+  // senses the swapped ground.
+  const icedC = client.doodads.filter(d => d.kind === ICE);
+  const sensedC = icedC.map(d => client.groundAt(d.pos)?.kind);
+  check('I6 the guest\'s foot senses ice, and nowhere still water',
+    sensedC.some(k => k === ICE) && !sensedC.some(k => k === WATER),
+    `${sensedC.filter(k => k === ICE).length}/${icedC.length} sense ice`);
+  const revC = client.doodadRev;
+  applySnapshot(client, snap, null, 1);
+  check('I7 the 20 Hz repeat converts nothing and bumps nothing (the memo holds the beat free)',
+    client.doodadRev === revC && cCount(WATER) === 0);
+
+  // ABSENCE NEVER THAWS: a beat from a thawed host leaves the ice standing —
+  // the host's own law (no unfreeze pass exists on either side of the wire).
+  held = false;
+  const snap2 = serializeSnapshot(host, 2);
+  check('I8 an unheld host ships no frost bit', snap2.dwf === undefined);
+  applySnapshot(client, snap2, null, 1);
+  check('I9 absence reverts nothing — the guest\'s ice stands until the zone re-applies',
+    cCount(ICE) === ice0 + water0 && cCount(WATER) === 0);
+
+  // THE THAW ROAD: the next zone apply re-mints ordinary water (transience —
+  // the guest thaws the way the host does: by meeting the ground anew).
+  host.loadZone(zid!);
+  applyZone(client, serializeZone(host));
+  check('I10 the thaw arrives as the next zone apply — ordinary water, ford for ford',
+    cCount(WATER) === water0 && cFords() === fords0 && cCount(ICE) === ice0,
+    `${cCount(WATER)}/${water0} water, ${cFords()}/${fords0} fords`);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nprobe_deepwinter OK');
