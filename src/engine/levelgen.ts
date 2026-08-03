@@ -6697,6 +6697,14 @@ export interface LandmarkDef {
   poi?: boolean;
   /** Clear pre-existing doodads under the footprint before building. */
   clearSite?: boolean;
+  /** THE AIMED DART — site the footprint on WALKABLE ground (the composition
+   *  anchor snap's landmark sibling): findLandmarkSpot STEPS a void dart to
+   *  the nearest standing ground before the filters judge it (snapToWalkable
+   *  — pure, rng-free, so the draw stream is untouched). Opt in where the
+   *  country is mostly open sky (the wind reaches' ~10% archipelagos starve
+   *  the 18 uniform darts structurally). Unset = byte-identical siting for
+   *  every existing def. */
+  siteWalk?: boolean;
 }
 
 /** What a builder receives: the reserved footprint, the ensured grid, the
@@ -6784,19 +6792,46 @@ export function landmarkDefs(): LandmarkDef[] { return Object.values(LANDMARKS);
 
 /** Site a landmark footprint: portal/entry clearance + reservations + (on a
  *  pre-existing grid) walkable anchor probes. Draws-before-filters. */
-function findLandmarkSpot(ctx: GenCtx, r: number): Vec2 | null {
+function findLandmarkSpot(ctx: GenCtx, r: number, siteWalk?: boolean): Vec2 | null {
   for (let tries = 0; tries < 18; tries++) {
-    const p = vec(
+    let p = vec(
       ctx.rng.range(BORDER + r, Math.max(BORDER + r, ctx.arena.w - BORDER - r)),
       ctx.rng.range(BORDER + r, Math.max(BORDER + r, ctx.arena.h - BORDER - r)));
+    // THE AIMED DART (LandmarkDef.siteWalk — the composition anchor snap's
+    // landmark sibling): on a mostly-void face the uniform dart lands in open
+    // sky nine times in ten and the filters below refuse it — structural
+    // starvation. A declared def STEPS a void dart to the nearest standing
+    // ground first (snapToWalkable — pure and rng-free, so the draw stream is
+    // untouched), then the filters judge the stepped point like any other. A
+    // step that leaves the border inset is refused outright (the footprint
+    // stays fully in-arena — the draw's own clamp semantics). Unset =
+    // byte-identical: no dart moves, every filter reads as today.
+    if (siteWalk && ctx.walk && !ctx.walk.isWalkable(p.x, p.y)) {
+      p = ctx.walk.snapToWalkable(p);
+      const xHi = Math.max(BORDER + r, ctx.arena.w - BORDER - r);
+      const yHi = Math.max(BORDER + r, ctx.arena.h - BORDER - r);
+      if (p.x < BORDER + r || p.x > xHi || p.y < BORDER + r || p.y > yHi) continue;
+    }
     if (!clearOf(ctx, p, r * 0.8, true)) continue;
     if (inReserved(ctx, p, r * 0.8)) continue;
     // Anchor probes run on ANY grid — including a lazily-ensured one a carving
     // recipe (winding/spiral) has since repainted mostly wall: a landmark must
     // never site blind into solid rock (all-ground ensured grids pass free).
+    // Under siteWalk the SITE CONTRACT replaces them — center-on-walk, the
+    // same promise findSpot's walk gate and the composition anchor snap make:
+    // a mostly-void face has no fully-grounded footprint to offer, so the
+    // directional probes would refuse the very rims the step just found and
+    // re-starve the lever (measured: the aimed dart with probes kept placed
+    // exactly as often as the blind one). A declared def's builder paints its
+    // own footprint (the pit precedent); the center test still refuses an
+    // empty-grid snap fallback.
     if (ctx.walk) {
-      const probes = [p, vec(p.x - r * 0.5, p.y), vec(p.x + r * 0.5, p.y), vec(p.x, p.y - r * 0.5), vec(p.x, p.y + r * 0.5)];
-      if (probes.some(q => !ctx.walk!.isWalkable(q.x, q.y))) continue;
+      if (siteWalk) {
+        if (!ctx.walk.isWalkable(p.x, p.y)) continue;
+      } else {
+        const probes = [p, vec(p.x - r * 0.5, p.y), vec(p.x + r * 0.5, p.y), vec(p.x, p.y - r * 0.5), vec(p.x, p.y + r * 0.5)];
+        if (probes.some(q => !ctx.walk!.isWalkable(q.x, q.y))) continue;
+      }
     }
     // Hazard-ground probes (the structure sitter's discipline): a pit straddling
     // an earlier recipe's lava river would bury its own approach.
@@ -6811,7 +6846,7 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
   const builder = LANDMARK_BUILDERS[def.builder];
   if (!builder) { console.warn(`[landmarks] '${def.id}': unknown builder '${def.builder}'`); return; }
   const dia = ctx.rng.range(def.size[0], def.size[1]);
-  const sited = at ?? findLandmarkSpot(ctx, dia / 2);
+  const sited = at ?? findLandmarkSpot(ctx, dia / 2, def.siteWalk);
   if (!sited) return;
   // SNAP the footprint onto the walk lattice (the plan-structure rule): an
   // unsnapped mask origin phase-shifts every painted run one bleed cell in

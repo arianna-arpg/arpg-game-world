@@ -137,7 +137,7 @@ import '../src/data/compositions';
 
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
-import { bodyRadiusOf, doodadRuleOf, generateLayout, hasLayout, layoutParam, type GenCtx, type GeneratedLayout } from '../src/engine/levelgen';
+import { bodyRadiusOf, doodadRuleOf, generateLayout, hasLayout, layoutParam, registerLandmark, registerLandmarkBuilder, type GenCtx, type GeneratedLayout } from '../src/engine/levelgen';
 import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
 import {
@@ -2431,6 +2431,85 @@ import { makeSimWorld } from '../src/sim/arena';
   tick(10);
   if (!(stacksOf() > shed)) fail('R: after expiry the cold never re-armed (the ward became immunity — the walk back must have a reason)');
   note('R4 ok: banks -> touch grants -> ward warms -> expiry re-arms');
+}
+
+// --- Rig S: THE AIMED DART — LandmarkDef.siteWalk on the void faces -----------
+// The landmark sitter's walk-aiming lever, pinned against the live
+// aether_drift face (the ~16%-walkable archipelago whose 18 uniform darts
+// starve structurally — the wave-ten roost measured 8-9/40 as a landmark and
+// went composition). The contract: a siteWalk def SITES (the starvation
+// cure), every sited footprint holds STANDING GROUND (the step's
+// center-on-walk contract at footprint grain — placeLandmark's GEN_CELL
+// quantize may hop the exact center off a rim cell, the footprint never
+// leaves the isle), the blind twin keeps starving on the same seeds (absent
+// stays absent — the byte-identity half is the external A/B sweep; re-run it
+// after touching the sitter), and the aimed mint stays deterministic.
+// Fixed 12-seed ladder — thresholds calibrated to it, --seeds free.
+{
+  const recs: { ground: boolean }[] = [];
+  registerLandmarkBuilder('qa_sitewalk_rec', b => {
+    // Paint NOTHING — the recorded footprint scan is pure siting truth. A
+    // 15px step can never miss a 30px walk cell inside the rect.
+    let ground = false;
+    for (let dy = -b.r; dy <= b.r && !ground; dy += 15) {
+      for (let dx = -b.r; dx <= b.r && !ground; dx += 15) {
+        if (b.grid.isWalkable(b.center.x + dx, b.center.y + dy)) ground = true;
+      }
+    }
+    recs.push({ ground });
+  });
+  registerLandmark({ id: 'qa_sitewalk_aimed', builder: 'qa_sitewalk_rec', size: [150, 200], siteWalk: true });
+  registerLandmark({ id: 'qa_sitewalk_blind', builder: 'qa_sitewalk_rec', size: [150, 200] });
+  const ts = TILESETS['aether_drift'];
+  if (!ts) {
+    fail('S: premise — no aether_drift tileset (re-aim the rig at a living void face)');
+  } else {
+    const sArena = { w: Math.round((ts.sizeW[0] + ts.sizeW[1]) / 2), h: Math.round((ts.sizeH[0] + ts.sizeH[1]) / 2) };
+    const sEntry = vec(120, sArena.h / 2);
+    const sExits = [vec(sArena.w - 120, sArena.h / 2), vec(sArena.w / 2, 120)];
+    const defFor = (lm: string): ZoneDef => ({
+      id: `qa_sitewalk_${lm}`, name: 'QA sitewalk', level: 8,
+      size: { w: sArena.w, h: sArena.h }, theme: ts.theme,
+      layout: [...(ts.common ?? []), ...ts.layout],
+      ...(ts.forceLayout ? { layoutType: ts.forceLayout } : {}),
+      ...(ts.layoutParams ? { layoutParams: ts.layoutParams } : {}),
+      objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+      landmarks: [{ landmark: lm, chance: 1 }],
+    });
+    const genFor = (lm: string, seed: number): GeneratedLayout =>
+      generateLayout({ ...defFor(lm), seed }, sArena, new Rng(seed), sEntry, sExits);
+    // Premise: the face really is mostly void — otherwise the contrast below
+    // proves nothing (the drift growing solid would starve neither lane).
+    const s0 = genFor('qa_sitewalk_blind', seedAt(0));
+    if (s0.walk instanceof GridWalkField) {
+      let open = 0;
+      for (let i = 0; i < s0.walk.mask.length; i++) if (s0.walk.mask[i] === 1) open++;
+      const frac = open / s0.walk.mask.length;
+      if (frac > 0.35) fail(`S: pressure — the drift face walks ${(frac * 100).toFixed(0)}% (no longer mostly void; re-aim the rig)`);
+    } else {
+      fail('S: premise — the drift face minted no walk grid');
+    }
+    const sweep = (lm: string): { placed: number; grounded: number } => {
+      let placed = 0, grounded = 0;
+      for (let s = 0; s < 12; s++) {
+        recs.length = 0;
+        genFor(lm, seedAt(s));
+        if (recs.length) { placed++; if (recs[0].ground) grounded++; }
+      }
+      return { placed, grounded };
+    };
+    const aimed = sweep('qa_sitewalk_aimed');
+    const blind = sweep('qa_sitewalk_blind');
+    if (aimed.placed < 11) fail(`S: the aimed dart sited only ${aimed.placed}/12 on the drift (the starvation cure died)`);
+    if (aimed.grounded !== aimed.placed) fail(`S: ${aimed.placed - aimed.grounded} aimed footprint(s) hold no standing ground (the step's contract broke)`);
+    if (blind.placed >= aimed.placed) fail(`S: the blind twin sited ${blind.placed}/12 vs aimed ${aimed.placed}/12 (the lever moved nothing)`);
+    if (blind.placed > 8) fail(`S: pressure — the blind sitter placed ${blind.placed}/12 (the face no longer starves it; the contrast proves nothing)`);
+    // Determinism: the aimed mint is a pure function of the seed.
+    const d1 = genFor('qa_sitewalk_aimed', seedAt(3));
+    const d2 = genFor('qa_sitewalk_aimed', seedAt(3));
+    if (JSON.stringify(d1.doodads) !== JSON.stringify(d2.doodads)) fail('S: aimed mint NON-DETERMINISTIC on a fixed seed');
+    note(`S ok: aimed ${aimed.placed}/12 (grounded ${aimed.grounded}), blind ${blind.placed}/12`);
+  }
 }
 
 if (fails) {
