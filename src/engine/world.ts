@@ -106,6 +106,7 @@ import { pushOutOfShape, shapeAabbHalf, shapeContains, shapeDistance, type HitSh
 import { projFormNose, projFormTouches } from './projForms';
 import { STRUCTURES } from '../data/structures';
 import { dwellOf, sidezoneOf } from '../data/sidezones';
+import { ROOTWAY_MOUTH_LANDMARK, underSpanPolicyOf } from '../data/underspans';
 import { hollowDef } from '../data/hollows';
 import type { HollowSpec } from './levelgen';
 import { DWELL_CFG, npcDwellReach, transitDwell, transitRadius, transitReach } from '../data/transit';
@@ -2340,8 +2341,16 @@ export class World {
   /** This zone's sidezone mouths (pos + stable seed + entrance KIND — any
    *  doodad kind registered in data/sidezones.ts), rebuilt each loadZone.
    *  `roof` is the indoorsOnly gate's precomputed home structure (a mouth
-   *  never moves, so its roof is resolved once, not rescanned per frame). */
-  private caveEntrances: { pos: Vec2; seed: number; kind: string; roof?: PlacedStructure | null }[] = [];
+   *  never moves, so its roof is resolved once, not rescanned per frame).
+   *  `underSpan` (spanMouth kinds — the rooted web): the span this mouth
+   *  opens, paired at harvest; its seed is then SPAN-keyed, so every
+   *  member's mouth derives the ONE shared pocket.
+   *  `mouthTier` (the under-tier lanes — engine/tiers.ts relocateDeepDoors
+   *  doorTier 'seat'): the STORY the mouth's doodad is stamped to. The
+   *  dwell gate compares it against the player's tier, so a door seated
+   *  down in the root galleries can never ghost-trigger under the feet of
+   *  a surface walker crossing the duct line above it. */
+  private caveEntrances: { pos: Vec2; seed: number; kind: string; roof?: PlacedStructure | null; underSpan?: string; mouthTier?: number }[] = [];
   /** SECRET HOLLOWS in the current zone (layout.hollows — the hollows
    *  fabric) and which have been opened. Opened ids persist through zone
    *  memory (a revealed secret stays revealed) and ride the co-op snapshot
@@ -2355,13 +2364,13 @@ export class World {
    *  the exact-resume ladder re-mints the pocket from them; writers that mint
    *  outside the sidezone registry (pitfalls, the Descent, realm arenas) leave
    *  them absent and their ladders simply never persist). */
-  caveReturn: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string; seed?: number } | null = null;
+  caveReturn: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string; seed?: number; underSpan?: string } | null = null;
   /** The CAVE LADDER's outer levels (cave-within-cave): entering a deeper cave
    *  pushes the current return here; climbing out pops it back — so a mid-
    *  ladder retreat stands in the outer cave WITH its way home intact (the
    *  single-slot field alone would null out and misread the outer cave as
    *  surface: sealed exits, no zone memory, wrong spawn point). */
-  private caveStack: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string; seed?: number }[] = [];
+  private caveStack: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string; seed?: number; underSpan?: string }[] = [];
   /** True just after climbing out of a cave: the player lands AT the mouth, so
    *  suppress re-entry until they step clear of it once (no bouncing back in). */
   private caveExitGrace = false;
@@ -4970,7 +4979,31 @@ export class World {
         seed: hashStr(`${zoneId}:${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`),
         kind: d.kind,
         roof: sz.indoorsOnly ? this.roofedStructureAt(pos) : null,
+        mouthTier: d.tier,
       });
+    }
+    // THE SPAN MOUTHS (the rooted web, data/underspans.ts): pair this zone's
+    // spanMouth doodads with its span MEMBERSHIPS — mouths sorted by
+    // position, spans by id, zipped by ordinal (both orders deterministic per
+    // layout, so the pairing is persistent geography). A paired mouth's seed
+    // re-keys to the SPAN hash — parent-independent, so every member's door
+    // derives the one shared pocket (`cave_<span>`). A surplus mouth stays a
+    // dead gate (opens nothing, warned); a missing mouth leaves the far
+    // arrival landing at the zone's own spawn instead of a doorstep.
+    {
+      const spanIds = [...new Set((def.underways ?? []).map(u => u.span))].sort();
+      if (spanIds.length) {
+        const spanMouths = this.caveEntrances
+          .filter(en => sidezoneOf(en.kind)?.spanMouth)
+          .sort((a, b) => (a.pos.y - b.pos.y) || (a.pos.x - b.pos.x));
+        for (let i = 0; i < spanMouths.length && i < spanIds.length; i++) {
+          spanMouths[i].underSpan = spanIds[i];
+          spanMouths[i].seed = hashStr(spanIds[i]);
+        }
+        if (spanMouths.length < spanIds.length) {
+          console.warn(`[underspans] zone '${zoneId}': ${spanIds.length} span membership(s), only ${spanMouths.length} mouth(s) seated`);
+        }
+      }
     }
     // SECRET HOLLOWS (the hollows fabric): the layout's sealed pockets. Fresh
     // per visit; the remembered opens re-carve just below (after door states),
@@ -8058,7 +8091,119 @@ export class World {
     // (sim.onNodeCharted): surface mints feed the surface systems, hell mints
     // feed hell's own overlay instances. Parallel world-states, one graph.
     this.sim.onNodeCharted(gen, this.simView());
+    // THE ROOTED WEB (data/underspans.ts): an ORGANIC mint in a spanned biome
+    // may seed an under-zone reaching other nodes — rolled on a private
+    // position-hash stream, so unspanned biomes stay byte-identical and the
+    // shared stream never moves. Directed mints (quests, events, soundings'
+    // wire-ins) never pass this path — the story's ground sprouts no roots.
+    this.underSpanPass(gen);
     return gen;
+  }
+
+  // ---------------------------------------------------------------------------
+  // THE SPANNING UNDERGROWTH (the rooted web's zone-graph half — the WEB
+  // region's newest law; docs/engine/worldweb.md, data/underspans.ts).
+  //
+  // A span is ONE under-zone with a mouth in EVERY member node: the seat (the
+  // organic mint that rolled it) plus 1..reach partners — standing UNVISITED
+  // kin nodes adopted into the span, or FRESH veiled mints (soft: born
+  // under-only, the surface web may find them later; or ROOTHELD: kind-sealed
+  // forever, the set-piece — the way onward exists only below). The record is
+  // ZoneDef.underways rows (a full clique, both directions — reachability
+  // through the web is honest for BFS/webHops) and one forced rootway_mouth
+  // landmark per membership. LAWS: rows spend no road budget (countRoads
+  // never sees them), the ring-1 unveil does not cross them (a far mouth
+  // stays veiled until WALKED — the forechart's pregen doctrine), heals
+  // never touch them (a separate list), and the whole decision is a pure
+  // function of (world seed, seat id) — persistent geography.
+  // ---------------------------------------------------------------------------
+  private underSpanPass(seat: ZoneDef): void {
+    const pol = underSpanPolicyOf(seat.biome ?? '');
+    if (!pol) return; // absent == identical: no stream is even created
+    if (seat.underways?.length || seat.field || seat.pocket || seat.floating
+      || seat.concealed || seat.kind || seat.caveDepth != null || seat.special
+      || seat.port || seat.holdAnchor || seat.objective.kind === 'safe') return;
+    const rng = new Rng(hashStr(`ugspan:${this.manifest.seed}:${seat.id}`));
+    if (!rng.chance(pol.chance)) return;
+    const spanId = `ugspan_${seat.id}`;
+    const reach = rng.int(pol.reach[0], pol.reach[1]);
+    const dim = seat.dimension ?? 'surface';
+    // Standing candidates: plain UNVISITED same-biome kin in radius — walked
+    // ground is never mutated (its layout is realized; a new mouth row would
+    // tear the zone-memory pairing). Deterministic order by span-salted hash.
+    const cands = Object.values(this.zoneMap).filter(z =>
+      z.id !== seat.id && (z.dimension ?? 'surface') === dim && z.caveDepth == null
+      && z.biome === seat.biome && !z.field && !z.pocket && !z.floating
+      && !z.concealed && !z.kind && !z.special && !z.port && !z.holdAnchor
+      && z.objective.kind !== 'safe' && !this.visited.has(z.id)
+      && !z.underways?.some(u => u.span === spanId)
+      && Math.hypot(z.map.x - seat.map.x, z.map.y - seat.map.y) <= pol.radius)
+      .sort((a, b) => hashStr(`${spanId}:${a.id}`) - hashStr(`${spanId}:${b.id}`));
+    const members: ZoneDef[] = [seat];
+    for (let i = 0; i < reach; i++) {
+      const fresh = rng.chance(pol.fresh);
+      const sealed = fresh && rng.chance(pol.exitless);
+      // THE DIAL IS HONEST: fresh 0 NEVER mints — an adopt-only slot with no
+      // standing candidate simply goes empty (the first node in a patch
+      // spans nothing; a later mint adopts IT instead). A fresh slot whose
+      // ground hunt misses degrades to adoption.
+      const partner = fresh
+        ? this.mintSpanPartner(seat, spanId, i, rng, pol, sealed) ?? cands.shift() ?? null
+        : cands.shift() ?? null;
+      if (partner) members.push(partner);
+    }
+    if (members.length < 2) return; // no partner seated — the roots stay a rumor
+    // Stamp the CLIQUE both ways + one forced mouth per membership. Arrays
+    // are cloned before the push: a merged landmark list may share the
+    // registry's rows, and a registry is never mutated from here.
+    for (const a of members) {
+      for (const b of members) {
+        if (a.id === b.id) continue;
+        a.underways = [...(a.underways ?? []), { to: b.id, span: spanId }];
+      }
+      a.landmarks = [...(a.landmarks ?? []), { landmark: ROOTWAY_MOUTH_LANDMARK, chance: 1 }];
+    }
+  }
+
+  /** Mint one FRESH span partner: veiled, roadless (the under-way is its only
+   *  connection at birth), frontier-less, weave-less — `sealed` adds the
+   *  rootheld kind (static exits: the surface may NEVER reach it). Ground is
+   *  hunted on the seat's own biome (a few deterministic tries); a miss
+   *  returns null and the span degrades to standing candidates. */
+  private mintSpanPartner(
+    seat: ZoneDef, spanId: string, slot: number, rng: Rng,
+    pol: { radius: number }, sealed: boolean,
+  ): ZoneDef | null {
+    const biomeFor = seat.dimension ? this.dimensionBiomeFor(seat.dimension) : this.biomeFor;
+    const depthFor = seat.dimension ? this.dimensionBiomeDepthFor(seat.dimension) : this.biomeDepthFor;
+    // THE ELBOW-ROOM FLOOR: a fresh partner minted inside the seat's own
+    // frontier ring squats the ground every promise wants — the occupancy
+    // law then consolidates (drops) promise after promise and the country's
+    // organic growth starves (measured: a chance-1/fresh-1 forced regime
+    // froze a world at 23 zones). Partners therefore mint BEYOND the seat
+    // biome's own spacing with margin — under-web reach, never a crowd.
+    const dMin = Math.max(pol.radius * 0.45, biomeSpacing(seat.biome ?? '') * 1.4);
+    const dMax = Math.max(pol.radius, dMin * 1.15);
+    for (let t = 0; t < 6; t++) {
+      const ang = rng.next() * Math.PI * 2;
+      const d = dMin + (dMax - dMin) * rng.next();
+      const c = { x: seat.map.x + Math.cos(ang) * d, y: seat.map.y + Math.sin(ang) * d };
+      if (biomeFor(c) !== seat.biome) continue;
+      const def = placeZoneAt(c, seat, this.zoneMap, this.nextGenId++, {
+        id: `${spanId}_r${slot + 1}`,
+        seed: rng.int(1, 0x7fffffff),
+        biomeFor, levelFor: this.levelFor, biomeDepthFor: depthFor,
+        climateFor: this.climateFor, fieldBiome: true,
+        dimension: seat.dimension,
+        noBackEdge: true, noWeave: true, forceFrontiers: 0,
+        ...(sealed ? { kind: 'rootheld' } : {}),
+      });
+      def.veiled = true; // the far mouth is met as FOUND ground, never shown early
+      this.zoneMap[def.id] = def;
+      this.sim.onNodeCharted(def, this.simView());
+      return def;
+    }
+    return null;
   }
 
   /** A DIMENSION's biome-DEPTH sampler (how deep into its own Voronoi region
@@ -15137,6 +15282,15 @@ export class World {
       mix(z.searoutes.length);
       for (const id of z.searoutes) { str(id); mix(keptIds.has(id) ? 1 : 0); }
     }
+    // Under-roads fold like sea lanes — NOT mint-once: a later span ADOPTS a
+    // standing zone (underways + its mouth roll stamped post-mint), and a
+    // stale memoized row would save the seat's half without the mirror (a
+    // one-way under-road on restore). Folding the rows re-keys exactly when
+    // the write-time heal's inputs change (the searoutes law).
+    if (z.underways) {
+      mix(z.underways.length);
+      for (const u of z.underways) { str(u.to); str(u.span); mix(keptIds.has(u.to) ? 1 : 0); }
+    }
     return (h >>> 0).toString(36);
   }
 
@@ -15209,6 +15363,7 @@ export class World {
           // cache: a membership delta re-keys every row that names it.
           clone.exits = clone.exits.filter(e => e.to === '?' || fold.keptIds.has(e.to));
           if (clone.searoutes) clone.searoutes = clone.searoutes.filter(id => fold.keptIds.has(id));
+          if (clone.underways) clone.underways = clone.underways.filter(u => fold.keptIds.has(u.to));
           row = { key: fold.rowKeys[i], def: clone, json: JSON.stringify(clone) };
         }
         rows.set(z.id, row);
@@ -15338,6 +15493,7 @@ export class World {
                 zoneId: r.zoneId, x: r.pos.x, y: r.pos.y,
                 ...(r.entryFrom !== null ? { entryFrom: r.entryFrom } : {}),
                 kind: r.kind!, seed: r.seed!,
+                ...(r.underSpan ? { underSpan: r.underSpan } : {}),
               })),
             },
           } : {}),
@@ -15593,13 +15749,15 @@ export class World {
       if (!r || typeof r !== 'object' || typeof r.zoneId !== 'string'
         || !fin(r.x) || !fin(r.y) || !fin(r.seed)
         || typeof r.kind !== 'string' || sidezoneOf(r.kind) === undefined
-        || (r.entryFrom !== undefined && typeof r.entryFrom !== 'string')) {
+        || (r.entryFrom !== undefined && typeof r.entryFrom !== 'string')
+        || (r.underSpan !== undefined && typeof r.underSpan !== 'string')) {
         return bad(`rung ${i} malformed or its kind unregistered`);
       }
       // THE CHAIN LAW: this rung's mouth must re-derive EXACTLY the pocket id
       // the next rung (or the saved spot itself) claims — same mouth, same
       // pocket, or the ladder no longer describes this world and stands down.
-      const derived = this.sidezoneIdFor(r.zoneId, r.kind, r.seed);
+      // (A span rung derives the span-keyed pocket — the same one derivation.)
+      const derived = this.sidezoneIdFor(r.zoneId, r.kind, r.seed, r.underSpan);
       const expect = i + 1 < rungs.length ? rungs[i + 1].zoneId : cave.zoneId;
       if (derived !== expect) return bad(`rung ${i} derives '${derived}', save claims '${expect}'`);
     }
@@ -15609,7 +15767,7 @@ export class World {
           throw new Error(`ladder desync: standing in '${this.zone.id}', rung expects '${r.zoneId}'`);
         }
         const sz = sidezoneOf(r.kind)!;
-        const dest = this.mintSidezone({ pos: vec(r.x, r.y), seed: r.seed, kind: r.kind });
+        const dest = this.mintSidezone({ pos: vec(r.x, r.y), seed: r.seed, kind: r.kind, underSpan: r.underSpan });
         if (!dest) throw new Error(`rung '${r.kind}' under '${r.zoneId}' would not mint`);
         this.applySidezoneFurnish(dest, sz);
         if (sz.levelWith === 'character') dest.level = Math.max(1, this.player.level);
@@ -15617,6 +15775,7 @@ export class World {
         this.caveReturn = {
           zoneId: r.zoneId, pos: vec(r.x, r.y),
           entryFrom: r.entryFrom ?? null, kind: r.kind, seed: r.seed,
+          ...(r.underSpan ? { underSpan: r.underSpan } : {}),
         };
         this.loadZone(dest.id, r.zoneId); // off-graph — no onNodeCharted, same as the live descent
       }
@@ -41033,8 +41192,12 @@ export class World {
   /** The pocket id behind a sidezone mouth — ONE derivation for the mint and
    *  the exact-resume ladder restore (which re-derives per saved rung and
    *  demands byte-agreement before it walks). Classic caves keep their
-   *  historical id shape; every other kind prefixes its kind. */
-  private sidezoneIdFor(parentId: string, kind: string, seed: number): string {
+   *  historical id shape; every other kind prefixes its kind. A SPAN mouth
+   *  (the rooted web) keys on the span alone — parent-independent, so every
+   *  member's door derives the ONE shared pocket (cave_ prefix kept: the
+   *  save-side filters treat all pockets alike). */
+  private sidezoneIdFor(parentId: string, kind: string, seed: number, underSpan?: string): string {
+    if (underSpan) return `cave_${underSpan}`;
     return kind === 'cave_entrance'
       ? `cave_${parentId}_${seed}`
       : `cave_${kind}_${parentId}_${seed}`;
@@ -41043,22 +41206,37 @@ export class World {
   /** Mint (or fetch the cached) pocket behind a sidezone mouth — split from
    *  enterSidezone so a TRAVERSAL mouth can size its understory capture off
    *  the minted def BEFORE the crossing's veil hides the parent zone. */
-  private mintSidezone(cm: { pos: Vec2; seed: number; kind: string }): ZoneDef | null {
+  private mintSidezone(cm: { pos: Vec2; seed: number; kind: string; underSpan?: string }): ZoneDef | null {
     const sz = sidezoneOf(cm.kind);
     if (!sz) return null;
-    const id = this.sidezoneIdFor(this.zone.id, cm.kind, cm.seed);
+    if (sz.spanMouth && !cm.underSpan) return null; // a dead gate opens nothing
+    const id = this.sidezoneIdFor(this.zone.id, cm.kind, cm.seed, cm.underSpan);
     if (!this.caveMap[id]) {
+      // THE SPAN (the rooted web): resolve the pocket's identity from the
+      // LIVE graph — members are every zone carrying this span's rows
+      // (sorted: the def must not depend on which mouth minted it), and the
+      // seat is the span's own seeding zone (`ugspan_<seatId>`), the ONE
+      // canonical parent the mint reads level/geo/anchor from.
+      let underSpan: { id: string; members: string[]; seat: ZoneDef } | undefined;
+      if (cm.underSpan) {
+        const members = Object.values(this.zoneMap)
+          .filter(z => z.underways?.some(u => u.span === cm.underSpan))
+          .map(z => z.id).sort();
+        const seatId = cm.underSpan.startsWith('ugspan_') ? cm.underSpan.slice('ugspan_'.length) : cm.underSpan;
+        underSpan = { id: cm.underSpan, members, seat: this.zoneMap[seatId] ?? this.zone };
+      }
       this.caveMap[id] = sz.mint({
         parent: this.zone, seed: cm.seed, id,
         pos: { x: cm.pos.x, y: cm.pos.y },
         playerLevel: this.player.level,
         pkgActive: (pid) => this.sim.packageActive(pid, this.player.level),
+        ...(underSpan ? { underSpan } : {}),
       });
     }
     return this.caveMap[id];
   }
 
-  private enterSidezone(cm: { pos: Vec2; seed: number; kind: string }): void {
+  private enterSidezone(cm: { pos: Vec2; seed: number; kind: string; underSpan?: string }): void {
     const sz = sidezoneOf(cm.kind);
     if (!sz) return;
     const dest = this.mintSidezone(cm);
@@ -41078,7 +41256,7 @@ export class World {
     // home on the ladder stack; climbing out pops it back. kind + seed ride
     // the rung so the exact-resume save can re-mint this exact descent.
     if (this.caveReturn) this.caveStack.push(this.caveReturn);
-    this.caveReturn = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: this.entryFrom, kind: cm.kind, seed: cm.seed };
+    this.caveReturn = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: this.entryFrom, kind: cm.kind, seed: cm.seed, ...(cm.underSpan ? { underSpan: cm.underSpan } : {}) };
     this.loadZone(dest.id, this.zone.id); // deliberately NO sim.onNodeCharted — pockets are off-graph
   }
 
@@ -41650,6 +41828,23 @@ export class World {
       // CENTER when entryFrom is null), a county away from their keeper.
       this.landPartyAt(vec(ret.pos.x, ret.pos.y + stepY), { spread: 50 * sc, band: [0, 50 * sc] });
       this.caveExitGrace = true; // standing on the mouth — don't re-descend until clear
+      return;
+    }
+    // THE FAR MOUTH (the rooted web): standing in a SPAN pocket, an exit
+    // naming a member that is NOT the rung we came down surfaces THERE — the
+    // under-road walked. The surface load itself unwinds the ladder (the
+    // surface-load law inside loadZone), the entry law lifts the arrival's
+    // veil (the loud discovery), the party lands AT the far zone's own span
+    // mouth (harvest-paired on load, deterministic — a missing mouth
+    // degrades to wherever loadZone stood us), and the crossing stamps its
+    // ledger. The classic intercept above already handled the way back.
+    if (this.inCave && this.zone.underSpan && this.zoneMap[e.to]) {
+      const span = this.zone.underSpan;
+      bumpLedger(this.ledger, 'rootspan_crossed');
+      this.loadZone(e.to);
+      const mouth = this.caveEntrances.find(en => en.underSpan === span);
+      if (mouth) this.landPartyAt(vec(mouth.pos.x, mouth.pos.y + 40), { spread: 50, band: [0, 50] });
+      this.caveExitGrace = true; // standing on the far mouth — don't re-descend until clear
       return;
     }
     let dest = e.to;

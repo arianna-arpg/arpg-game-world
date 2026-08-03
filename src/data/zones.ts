@@ -534,6 +534,18 @@ export interface ZoneExitDef {
   notarized?: true;
 }
 
+/** One UNDER-ROAD row (ZoneDef.underways — the rooted web): the far surface
+ *  node this zone's span mouth reaches below ground, and the span (shared
+ *  pocket) that carries the crossing. Deliberately NOT a ZoneExitDef: rows
+ *  live beside `exits` so no portal, budget, weave, heal or unveil law ever
+ *  consults one by accident — every consumer opts in by name. */
+export interface UnderWayDef {
+  /** Far member zone id. */
+  to: string;
+  /** Span id (`ugspan_<seat zone id>`); the pocket is `cave_<span>`. */
+  span: string;
+}
+
 export interface ZoneTheme {
   floor: string;
   grid: string;
@@ -984,6 +996,22 @@ export interface ZoneDef {
   /** Sea routes sailed FROM this port (port zone ids) — map styling + the
    *  Sail menu's memory of established crossings. */
   searoutes?: string[];
+  /** THE UNDER-ROADS (the rooted web, data/underspans.ts): this zone holds a
+   *  mouth of a SPANNING under-zone whose far mouths surface in each `to` —
+   *  a second, subterranean edge list beside `exits` (the searoutes idiom):
+   *  no surface portal derives from a row, no road budget is spent, the
+   *  weave never suppresses a surface twin, and the ring-1 unveil does NOT
+   *  cross it (a far mouth stays veiled until walked). The map draws rows in
+   *  the root stroke; webHops walks them (reachability THROUGH the web —
+   *  the exit-less rootheld node's citizenship). Symmetric: the far zone
+   *  carries the mirror row. `span` names the shared pocket (cave_<span>).
+   *  Stamped by World.underSpanPass at organic mint; persisted with the
+   *  zone; rows to culled zones prune at restore (the searoutes heal). */
+  underways?: UnderWayDef[];
+  /** Set on a minted under-POCKET def itself (off-graph, never saved): the
+   *  span this pocket serves. travelThrough routes an exit toward a member
+   *  that is NOT the entry rung as a FAR-MOUTH crossing — surface there. */
+  underSpan?: string;
   /** THE HARBOR PAIR (the sea fabric's two-zone port law): a HOLD ANCHOR
    *  zone — the mainland holdfast standing over a quay — names the PORT zone
    *  its gate opens onto. The anchor keeps the walls, the siege, and the

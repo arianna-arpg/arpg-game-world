@@ -222,6 +222,11 @@ export interface SavedCaveRung {
   kind: string;
   /** The mouth's stable mint seed. */
   seed: number;
+  /** THE SPAN RUNG (the rooted web, data/underspans.ts): the span this mouth
+   *  opened — the pocket id re-derives from it alone (`cave_<span>`),
+   *  parent-independent; the restore's chain law verifies through the same
+   *  one derivation. Absent on every classic rung. */
+  underSpan?: string;
 }
 
 /** Where the player stood at save, plus how hurt they were (fractions of each
@@ -431,6 +436,15 @@ export function sanitizeWorldZones(
   for (const z of Object.values(out)) {
     z.exits = z.exits.filter(e => e.to === '?' || out[e.to]);
     if (z.searoutes) z.searoutes = z.searoutes.filter(id => out[id]);
+    // Under-roads heal like sea lanes: a row into a culled zone prunes, and
+    // a row whose MIRROR is missing prunes too (a one-way under-road is a
+    // malformed save, never a world state) — the span's pocket re-derives
+    // from whatever members still stand. Mirrored pairs are never dropped,
+    // so the one-pass filter is order-safe.
+    if (z.underways) {
+      z.underways = z.underways.filter(u =>
+        out[u.to]?.underways?.some(v => v.span === u.span && v.to === z.id));
+    }
   }
   return out;
 }

@@ -144,8 +144,11 @@ export function forechartSource(z: ZoneDef, dimension: string, allowFloating = f
 
 /** BFS hop-distance over the zone graph from a set of origin ids — the
  *  shared "how many zones away" read (seat specs, omens, QA). Walks real
- *  exits only ('?' frontiers and cross-dimension edges don't count), capped
- *  at maxHops. Returns id → hops (origins at 0). Pure. */
+ *  exits ('?' frontiers and cross-dimension edges don't count) AND the
+ *  under-roads (ZoneDef.underways — the rooted web: a spanning under-zone
+ *  IS a walkable crossing, so an exit-less rootheld node stays a connected
+ *  graph citizen to every hop-distance read), capped at maxHops. Returns
+ *  id → hops (origins at 0). Pure. */
 export function webHops(
   byId: Record<string, ZoneDef>, fromIds: string[], maxHops: number,
 ): Map<string, number> {
@@ -157,13 +160,18 @@ export function webHops(
     for (const id of wave) {
       const z = byId[id];
       if (!z) continue;
+      const step = (to: string): void => {
+        if (hops.has(to)) return;
+        const n = byId[to];
+        if (!n || (n.dimension ?? 'surface') !== (z.dimension ?? 'surface')) return;
+        hops.set(to, h);
+        next.push(to);
+      };
       for (const e of z.exits) {
-        if (e.to === '?' || e.crossDim || hops.has(e.to)) continue;
-        const n = byId[e.to];
-        if (!n || (n.dimension ?? 'surface') !== (z.dimension ?? 'surface')) continue;
-        hops.set(e.to, h);
-        next.push(e.to);
+        if (e.to === '?' || e.crossDim) continue;
+        step(e.to);
       }
+      for (const u of z.underways ?? []) step(u.to);
     }
     wave = next;
   }

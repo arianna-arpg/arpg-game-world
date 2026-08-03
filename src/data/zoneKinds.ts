@@ -82,6 +82,23 @@ export const ZONE_KINDS: Record<string, ZoneKindDef> = {
     staticExits: true,
     eventQuiet: true, // the quay is a locale, never an event's battleground
   },
+  // THE ROOTHELD NODE (the rooted web, data/underspans.ts): a garden node
+  // the surface never reached — its edge set is empty FOREVER (the sealed-
+  // shores law: the weave, the proximity linker and the frontier gate all
+  // refuse; quest anchors skip it like any static-exits kind). The only way
+  // in is a spanning under-zone's far mouth (ZoneDef.underways carries the
+  // crossing; the map draws the root stroke once both ends are found). Ring
+  // + glyph read root-brown so the discovery names itself at a glance.
+  rootheld: {
+    id: 'rootheld',
+    label: 'Rootheld',
+    subLabel: 'reached only from below',
+    ring: { color: '#7a5a38' },
+    glyph: { char: '↧', color: '#241c10' },
+    labelColor: '#c8a878',
+    keepLevel: true,
+    staticExits: true,
+  },
   // THE INLAND SEA (world/soulriver.ts): every strewn River of Souls wears
   // this — the node reads as WATER on the chart (ship glyph, pale ring,
   // lane-styled roads), the sea-fabric read below ground. The live ferry

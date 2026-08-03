@@ -4812,6 +4812,23 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         edges += `<line x1="${za.x}" y1="${za.y}" x2="${bb.x}" y2="${bb.y}"
           stroke="#4a8ac8" stroke-width="2" stroke-dasharray="6 5" stroke-opacity="0.8"/>`;
       }
+      // THE UNDER-ROADS (ZoneDef.underways — the rooted web): a spanning
+      // under-zone joins these nodes BELOW the surface — a root-brown DOTTED
+      // stroke, distinct from every surface face (and from the sea lane's
+      // long dash). The veil law holds twice over: a far mouth still veiled
+      // draws nothing, and the key prefix keeps an under-road from
+      // collapsing into a surface road between the same pair.
+      for (const u of z.underways ?? []) {
+        const b = world.zoneMap[u.to];
+        if (!b || !inDim(b)) continue;
+        if (!world.visible(z) || !world.visible(b)) continue;
+        const key = 'ug:' + (z.id < u.to ? z.id + '|' + u.to : u.to + '|' + z.id);
+        if (drawn.has(key)) continue;
+        drawn.add(key);
+        const za = anchorOf(z, b.map), bb = anchorOf(b, z.map);
+        edges += `<line x1="${za.x}" y1="${za.y}" x2="${bb.x}" y2="${bb.y}"
+          stroke="#7a5a38" stroke-width="2" stroke-dasharray="2 4" stroke-opacity="0.75"/>`;
+      }
     }
 
     // THE INTERACTIVITY CONTRACT (ui/mapConfig.ts): only zone GEOMETRY answers

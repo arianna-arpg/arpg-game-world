@@ -213,6 +213,44 @@ are hardened four ways:
   reads clearance ZERO (not distance-to-centre) and is walked out by the
   anti-crowd + settle.
 
+## THE UNDER-ROADS (`ZoneDef.underways` — the rooted web's zone-graph half)
+
+The spanning undergrowth (`data/underspans.ts` + `World.underSpanPass`) adds a
+SECOND edge list beside `exits` (the searoutes idiom): an ORGANIC mint in a
+biome carrying an `UnderSpanPolicy` row may seed one shared under-zone (the
+Rootways pocket, `cave_ugspan_<seatId>`) with a mouth in every member node —
+the seat plus 1..reach partners, adopted from standing UNVISITED same-biome
+kin or minted fresh (veiled, roadless; `exitless` rolls the `rootheld` kind:
+static exits — the surface may NEVER reach it, and the only way in is the
+walk below). Laws, each pinned in `balance/probe_ugspan.ts` + webqa §K:
+
+- **A row is not a road**: no surface portal derives from it, `countRoads`
+  never sees it (no budget spend), the weave never suppresses a surface twin,
+  and no heal (`reconcileWebLaws`, the dry-road strip, the footprint sever)
+  ever touches one — every consumer opts in by name (`webHops` walks them;
+  the map draws them in the root-brown dotted stroke, key-prefixed apart from
+  surface roads).
+- **The veil law by construction**: the ring-1 unveil and the veil-invariant
+  sweep iterate `exits` only, so a span's far mouth stays VEILED until walked
+  (the crossing itself unveils by the ordinary entry law — the loud
+  discovery). Fresh partners are born veiled either way (the pregen doctrine:
+  the player meets FOUND ground).
+- **Deterministic geography**: the whole decision rolls on a private
+  `Rng(hash(worldSeed, seatId))` — biomes without a policy row are
+  byte-identical, and the shared stream never moves. The pocket mints from
+  the span's SEAT def (never the entering zone), so it is byte-identical
+  whichever door opened it; the harvest pairs mouths↔spans by sorted ordinal
+  and re-keys the mouth seed to `hash(span)`.
+- **The dial is honest**: `fresh: 0` never mints (adopt-or-skip — the pure
+  link fabric); a fresh partner mints BEYOND `biomeSpacing × 1.4` (THE
+  ELBOW-ROOM FLOOR: partners inside the seat's own frontier ring starve the
+  country's growth through the occupancy law — measured as a 23-zone world
+  freeze at forced dials).
+- **Coverage is policy**: patchy ships (the garden row: chance 0.22, reach
+  [1,2], fresh 0.55, exitless 0.5); everywhere-thin (chance 1, reach [1,1],
+  fresh 0) and one-great-web (chance 1, reach [3,3], wide radius) are dial
+  regimes, both pinned at forced dials in the rig.
+
 ## Probe
 
 `npx tsx balance/probe_webqa.ts` — grows real webs headless (3 seeds × 11

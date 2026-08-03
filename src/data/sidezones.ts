@@ -39,6 +39,12 @@ export interface SidezoneMintCtx {
   playerLevel: number;
   /** Is a content package live on this run (manifest-enabled + start gate)? */
   pkgActive: (pkgId: string) => boolean;
+  /** THE SPAN (spanMouth kinds only — the rooted web, data/underspans.ts):
+   *  the shared pocket's identity. `members` are the surface zone ids the
+   *  pocket exits onto (sorted — the def must not depend on which mouth
+   *  minted it); `seat` is the CANONICAL parent def the mint reads its
+   *  level/geo/anchor from, so every door opens the identical zone. */
+  underSpan?: { id: string; members: string[]; seat: ZoneDef };
 }
 
 export interface SidezoneDef {
@@ -70,6 +76,12 @@ export interface SidezoneDef {
    *  Author only on OPEN-SKY parents: sheltered ground reads a flat
    *  twilight and a phase cond there would never (or always) hold. */
   when?: { cond: RadianceCond; refusal?: string };
+  /** THE SPAN MOUTH (the rooted web, data/underspans.ts): this kind's mouths
+   *  open a SHARED multi-parent pocket. The entrance harvest pairs each
+   *  mouth with one of its zone's span memberships (ZoneDef.underways) and
+   *  stamps a SPAN-KEYED seed, so the pocket id (`cave_<span>`) agrees from
+   *  every parent; a mouth left without a membership opens nothing. */
+  spanMouth?: true;
   /** Build the pocket's ZoneDef. Minted once per entrance (cached in caveMap);
    *  keep it pure — the same ctx must yield the same def. */
   mint: (ctx: SidezoneMintCtx) => ZoneDef;
