@@ -280,11 +280,53 @@ registerStructureGen('compound', (rng, p) => {
   // rather than wall cells; and a PERIMETER gate ('X' at x=0/y=0 by
   // construction) has the WORLD on its outward side, so it owes floor on its
   // inward flank only. Model those three and the census reads clean.
+  //
+  // THE JUNCTION SLIDE (draw-free, 2026-08-03). What the census above could
+  // not see: when a cut's door lands where a PERPENDICULAR cut crosses its
+  // wall, two ops punch ADJACENT cells (or an op's cell was already reopened
+  // by an earlier op's flank notch). placeStructurePlan then merges the
+  // touching cells into ONE logical door spanning two different walls, and
+  // that group's single normal points into the crossing masonry — the apron
+  // pass reports "no walkable apron along either normal" and genqa warns,
+  // though each cell's own mouths are open (the crypt/bat-hollow
+  // dungeon_block standing warns). Doors from different ops must never
+  // touch: an op whose cell is no longer plain wall, or would touch an
+  // existing door, SLIDES along its own wall line — never across a door
+  // cell (beyond it lies a colinear sibling's cut, whose connectivity this
+  // op does not serve), never off the wall, never onto the shell — to the
+  // nearest clean cell. Pure grid reads, zero rng draws.
+  const doorAdjacent = (cx: number, cy: number): boolean =>
+    g.get(cx - 1, cy) === doorChar || g.get(cx + 1, cy) === doorChar
+    || g.get(cx, cy - 1) === doorChar || g.get(cx, cy + 1) === doorChar;
   for (const op of doorOps) {
-    g.set(op.x, op.y, doorChar);
+    const ax = op.vertical ? 0 : 1, ay = op.vertical ? 1 : 0;
+    let dx = op.x, dy = op.y;
+    if (g.get(dx, dy) !== '#' || doorAdjacent(dx, dy)) {
+      slide: for (let d = 1; d < Math.max(w, h); d++) {
+        for (const s of [-1, 1] as const) {
+          const cx = op.x + ax * d * s, cy = op.y + ay * d * s;
+          if (cx < 1 || cx > w - 2 || cy < 1 || cy > h - 2) continue;
+          let onWall = true;
+          for (let t = 1; t < d; t++) {
+            if (g.get(op.x + ax * t * s, op.y + ay * t * s) !== '#') { onWall = false; break; }
+          }
+          if (!onWall || g.get(cx, cy) !== '#' || doorAdjacent(cx, cy)) continue;
+          // The would-be flanks must be reopenable ground ('#' reopens like
+          // any child-sealed flank; floor is already open) — never a legend
+          // special and never out of plan.
+          const fa = g.get(cx + ay, cy + ax), fb = g.get(cx - ay, cy - ax);
+          const reopenable = (c: string): boolean => c === '.' || c === '_' || c === '#';
+          if (!reopenable(fa) || !reopenable(fb)) continue;
+          dx = cx; dy = cy;
+          break slide;
+        }
+      }
+      // Both directions exhausted: punch in place, exactly the old behavior.
+    }
+    g.set(dx, dy, doorChar);
     const flanks = op.vertical
-      ? [[op.x - 1, op.y], [op.x + 1, op.y]] as const
-      : [[op.x, op.y - 1], [op.x, op.y + 1]] as const;
+      ? [[dx - 1, dy], [dx + 1, dy]] as const
+      : [[dx, dy - 1], [dx, dy + 1]] as const;
     for (const [fx, fy] of flanks) if (g.get(fx, fy) === '#') g.set(fx, fy, '.');
   }
 
@@ -297,30 +339,52 @@ registerStructureGen('compound', (rng, p) => {
   }
 
   // Extra interior doors: loops so rooms offer choices, not one hallway.
+  // A loop's wall test reads door chars as "not wall", so an unguarded loop
+  // can punch flush against a standing door and merge with it crosswise —
+  // the same junction pathology the slide above retires. Touching an
+  // existing door skips the punch (draws untouched; loops are extras).
   const loops = roll(rng, p.loops, [1, 3]);
   for (let i = 0; i < loops; i++) {
     const x = 1 + rng.int(0, w - 3), y = 1 + rng.int(0, h - 3);
     const horizWall = g.get(x, y) === '#' && g.get(x - 1, y) !== '#' && g.get(x + 1, y) !== '#';
     const vertWall = g.get(x, y) === '#' && g.get(x, y - 1) !== '#' && g.get(x, y + 1) !== '#';
-    if (horizWall || vertWall) g.set(x, y, doorChar);
+    if ((horizWall || vertWall) && !doorAdjacent(x, y)) g.set(x, y, doorChar);
   }
 
-  // Exterior gates on rolled sides, adjacent to real floor.
+  // Exterior gates on rolled sides, adjacent to real floor. "Real floor"
+  // must exclude a standing DOOR cell too (doorChar passes the old
+  // wall-only test): a gate stacked on an interior door's mouth merges
+  // into one L-group whose room-side ray reads masonry (the choir_hall d5
+  // standing warn). The gate slides a few shell cells to clean footing
+  // instead — pure grid reads, zero extra rng draws.
+  const gateFooting = (c: string): boolean => c !== '#' && c !== doorChar && c !== gateChar;
   const gates = roll(rng, p.gates, [1, 2]);
   for (let i = 0; i < gates; i++) {
     for (let tries = 0; tries < 12; tries++) {
       const side = rng.int(0, 3);
+      let placed = false;
       if (side < 2) {
         const gx = 2 + rng.int(0, w - 5);
         const gy = side === 0 ? 0 : h - 1;
         const iy = side === 0 ? 1 : h - 2;
-        if (g.get(gx, iy) !== '#') { g.set(gx, gy, gateChar); break; }
+        for (const dd of [0, -1, 1, -2, 2, -3, 3]) {
+          const cx = gx + dd;
+          if (cx < 2 || cx > w - 3) continue;
+          if (g.get(cx, gy) !== '#' || !gateFooting(g.get(cx, iy))) continue;
+          g.set(cx, gy, gateChar); placed = true; break;
+        }
       } else {
         const gy = 2 + rng.int(0, h - 5);
         const gx = side === 2 ? 0 : w - 1;
         const ix = side === 2 ? 1 : w - 2;
-        if (g.get(ix, gy) !== '#') { g.set(gx, gy, gateChar); break; }
+        for (const dd of [0, -1, 1, -2, 2, -3, 3]) {
+          const cy = gy + dd;
+          if (cy < 2 || cy > h - 3) continue;
+          if (g.get(gx, cy) !== '#' || !gateFooting(g.get(ix, cy))) continue;
+          g.set(gx, cy, gateChar); placed = true; break;
+        }
       }
+      if (placed) break;
     }
   }
 

@@ -42,7 +42,10 @@
 //   fuse       poured bodies never sit a sliver apart (warn) — contiguity read
 //              off RIM OVERLAP, and a seam another poured ground overlay
 //              covers is not a seam (the cross-kind read fuseGroundBodies'
-//              per-kind weld cannot make)
+//              per-kind weld cannot make); a seam the engine REFUSES is not
+//              a seam either — void-like region cells (the hole read) and
+//              placed structures' reserved bands (the swept approach), both
+//              mirrored from the pour law's own guards
 //
 // Case groups: every tileset (base + variants, with its rolls), every
 // registered layout generator, and every composition FORCED at chance 1.
@@ -84,6 +87,7 @@ import { shapeBoundR } from '../src/engine/shapes';
 import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
 import { TILESETS } from '../src/data/tilesets';
+import { STRUCTURES } from '../src/data/structures';
 import { ZONES, type StampSpec, type ZoneDef } from '../src/data/zones';
 import { MELDS } from '../src/data/melds';
 import { blendFieldIds, composeBlendLayout, hasBlendField } from '../src/engine/blend';
@@ -435,9 +439,29 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
   //    across the seam between two bog bodies keeps that promise — there is no
   //    dry sliver, no guard split and no fuse miss to report. So a gap another
   //    poured ground overlay covers rim-to-rim is not a gap.
+  //  · THE HOLE READ. On a grid layout, a seam standing over a VOID-LIKE
+  //    region cell (!walkable && !blocks — the engine's own overVoid
+  //    definition: a gorge, a cloud void) is a hole in the world, not a dry
+  //    sliver: GROUND REQUIRED (cellGuarded) refuses pour cells there by
+  //    construction, so the two rims can never join and the player reads an
+  //    abyss between banks — the Overpass's drift lips on opposite gorge
+  //    rims. Region grain only: poured hole KINDS (a chasm doodad in the
+  //    seam) keep their verdict above — a hole never bridges, and a doodad
+  //    hole never excuses.
+  //  · THE SWEPT APPROACH. A seam crossing a placed structure's RESERVED
+  //    band (rect + margin — the exact reservation placeStructurePlan
+  //    pushes) is ground the world promised to keep clear: the pour and the
+  //    weld both part around it by the reservation contract (inReserved),
+  //    and the sliver reads as the building's kept approach — the metropolis
+  //    gate façade's dry rim through a riverland pour. Structures only:
+  //    formation/cluster/clearing reservations never reach the layout
+  //    output, so their guard splits still warn (the ice_teeth arcs — see
+  //    the frost_hollow KNOWN-GOOD note in data/compositions.ts).
   //
   // The reported number is the smallest UNBRIDGED cross-body gap, so a bridged
-  // pair can never mask a real split elsewhere in the same zone.
+  // pair can never mask a real split elsewhere in the same zone. Both reads
+  // above mirror engine REFUSALS — ground the fuse could never legally lay —
+  // so a genuine weld regression on open unguarded ground stays loud.
   const FUSE_SLIVER = 25;  // gap (px) under which two bodies read as jammed, not fused
   const FUSE_SAMPLES = 4;  // rim→rim steps a bridge must cover (both ends + 3 inside)
   // The bridge set, gathered once: every poured GROUND overlay in the zone.
@@ -489,6 +513,31 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
       }
       return true;
     };
+    /** THE HOLE READ + THE SWEPT APPROACH (see the seam laws above): does an
+     *  engine refusal own this seam? ANY sample suffices — one refused lattice
+     *  cell still leaves the weld's neighbours rim-overlapping (27px step vs
+     *  63px reach), so a pair that stayed split was severed by a refusal band
+     *  ≥ 2 cells wide, which these samples cannot miss at sub-sliver grain. */
+    const reservedBands = (layout.structures ?? []).map(st => {
+      const margin = STRUCTURES[st.defId]?.margin ?? st.cellSize * 1.5;
+      return {
+        x0: st.rect.x - margin, y0: st.rect.y - margin,
+        x1: st.rect.x + st.rect.w + margin, y1: st.rect.y + st.rect.h + margin,
+      };
+    });
+    const seamRefused = (a: Doodad, b: Doodad, len: number, gap: number): boolean => {
+      const ux = (b.pos.x - a.pos.x) / len, uy = (b.pos.y - a.pos.y) / len;
+      for (let s = 0; s <= FUSE_SAMPLES; s++) {
+        const t = a.radius + gap * (s / FUSE_SAMPLES);
+        const px = a.pos.x + ux * t, py = a.pos.y + uy * t;
+        if (layout.walk instanceof GridWalkField) {
+          const rk = regionKind(layout.walk.regionAt(px, py));
+          if (rk && !rk.walkable && !rk.blocks) return true; // a hole, not a seam
+        }
+        if (reservedBands.some(r => px >= r.x0 && px <= r.x1 && py >= r.y0 && py <= r.y1)) return true;
+      }
+      return false;
+    };
     let minGap = Infinity;
     for (let i = 0; i < discs.length; i++) {
       for (let j = i + 1; j < discs.length; j++) {
@@ -500,6 +549,7 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
         // test — pairs at or above the sliver threshold can never warn.
         if (gap >= FUSE_SLIVER || gap >= minGap) continue;
         if (bridgedAcross(a, b, len, gap)) continue;
+        if (seamRefused(a, b, len, gap)) continue;
         minGap = gap;
       }
     }
