@@ -844,6 +844,13 @@ export const VIS_CFG = {
     shadowAlpha: 0.09,
     /** Snapshot LRU (each up to maxDim² px — release eagerly on evict). */
     maxSnaps: 3,
+    /** THE ENTRY SLICE (2026-08-02): per-frame ms budget for the headless
+     *  aerial PaintJob (mint + paint used to land whole on the entry frame
+     *  of every below-tied zone). At least one step always advances (the
+     *  ground bakeBudgetMs law); the indivisible generateLayout mint rides
+     *  that allowance on its own non-entry frame. The cloud sea stands in
+     *  until the finished aerial swaps in whole. */
+    paintBudgetMs: 3,
   },
 
   /** COLLAPSE FX (the render half of engine/collapse.ts): how crumbling

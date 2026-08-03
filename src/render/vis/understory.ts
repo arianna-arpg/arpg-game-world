@@ -22,6 +22,25 @@
 //     the endless sunlit deck, procedural, drifting. Also the last-resort
 //     fallback (a field/boundless zone below that can't mint headlessly).
 //
+// THE ENTRY SLICE (2026-08-02): the headless capture used to mint AND paint
+// in ONE synchronous pass inside the zone's first draw — the whole aerial
+// billed to the entry frame of every below-tied zone (~80ms of a realm
+// entry's burst on a big below). It now runs as a resumable PaintJob pumped
+// by draw() under VIS_CFG.understory.paintBudgetMs per frame — the ground
+// bake budget's law: at least ONE step always advances, so streaming can
+// never stall. The steps replay the exact command sequence of the old
+// synchronous pass on one persistent ctx (same statements, yields between
+// rows), so the finished snap is pixel-identical — only its cost is spread.
+// The indivisible generateLayout mint is the job's FIRST step: it cannot be
+// sliced (engine code, already `lite`), but it no longer shares a frame
+// with either the entry burst or the paint. THE PARTIAL FACE: while the job
+// builds, the zone draws the CLOUD SEA — already this fabric's authored
+// no-land answer (declines, empty windows) — and the finished aerial swaps
+// in WHOLE; a half-painted canvas is never shown. The LIVE capture stays
+// synchronous by design: it snapshots one consistent world instant during
+// the launch windup (slicing would tear across mutating frames); it rides
+// the same steps at an Infinity budget, so both lanes share one painter.
+//
 // Cloud SHADOWS drift across whichever floor shows. Knobs in
 // VIS_CFG.understory; ablate pass name 'understory'.
 // ---------------------------------------------------------------------------
@@ -36,6 +55,7 @@ import { PORTAL_EDGE_INSET } from '../../engine/worldgen';
 import { exitInside } from '../../world/shape';
 import { GridWalkField } from '../../world/gridWalk';
 import { regionKind } from '../../world/regions';
+import { registerVisCache } from './caches';
 import { mix, shade, valueNoise, withAlpha } from './color';
 import { releaseCanvas } from './sprites';
 import { VIS_ABLATE, VIS_CFG } from './visConfig';
@@ -58,6 +78,30 @@ interface UnderScene {
   structures: readonly { rect?: { x: number; y: number; w: number; h: number } }[];
 }
 
+/** What a PaintJob paints FROM: a live scene (launch capture — already
+ *  materialized) or a def still owing its headless mint (the job's first,
+ *  indivisible step). */
+type PaintSource = { mint: ZoneDef } | { scene: UnderScene };
+
+/** A sliced aerial paint in flight. The generator owns every cursor (its
+ *  locals ARE the resume state) and stashes the finished snap itself; the
+ *  job record exists so the pump can bill frames and an abort can release
+ *  the half-built canvas. One in flight at most (`pending`). */
+interface PaintJob {
+  /** The zone id this aerial will hang under (the stash key). */
+  key: string;
+  /** Dest dims the finished snap draws across (stash args). */
+  dw: number;
+  dh: number;
+  /** Set by the steps once allocated — released on abort, stashed on done. */
+  canvas: HTMLCanvasElement | null;
+  steps: Generator<void>;
+}
+
+/** Doodad arcs painted between budget checks (a now() read per arc would
+ *  bill the meter, not the paint). */
+const PAINT_DOODAD_BATCH = 24;
+
 /** The far-below tint family a doodad kind falls into, resolved against the
  *  BELOW zone's theme — silhouettes, not portraits (haze eats detail). */
 function doodadTint(kind: string, theme: ZoneTheme): { color: string; alpha: number; grow: number } | null {
@@ -79,12 +123,40 @@ export class UnderstoryLayer {
   private snaps = new Map<string, UnderstorySnap>();
   /** Zone ids whose headless mint failed — don't retry every frame. */
   private declined = new Set<string>();
+  /** The one sliced paint in flight (headless lane only — a live capture
+   *  runs its steps whole). Pumped by draw(); dropped at zone boundaries. */
+  private pending: PaintJob | null = null;
+
+  constructor() {
+    // THE CACHE STEWARD: the snaps LRU (up to maxSnaps × maxDim² canvases)
+    // plus the in-flight job's half-built canvas. Zone swaps drop only the
+    // job — a half-painted aerial belongs to the zone the walker just left;
+    // the finished snaps deliberately SURVIVE zone hops (crossing a realm
+    // web back and forth must not re-mint the aerial every crossing). A new
+    // World releases everything: zone ids are minted per run, so a kept
+    // snap could collide with a NEW run's id and hang a stale world's land
+    // under fresh ground.
+    registerVisCache({
+      id: 'understory',
+      count: () => this.snaps.size + (this.pending ? 1 : 0),
+      bytes: () => {
+        let b = this.pending?.canvas ? this.pending.canvas.width * this.pending.canvas.height * 4 : 0;
+        for (const s of this.snaps.values()) b += s.img.width * s.img.height * 4;
+        return b;
+      },
+      onZoneSwap: () => this.dropPendingPaint(),
+      onRunSwap: () => this.releaseAllSnaps(),
+    });
+  }
 
   has(key: string): boolean { return this.snaps.has(key); }
 
   /** Capture the live world's given rect as `key`'s far-below view. Called by
    *  the renderer during a launch windup — the one moment the departure zone
-   *  is still fully materialized (runtime changes and all). */
+   *  is still fully materialized (runtime changes and all). Synchronous by
+   *  design: the snapshot must read ONE consistent world instant (doodads
+   *  evaporate and melt between frames — a sliced live read would tear), so
+   *  the steps run whole under an Infinity budget. */
   capture(world: World, req: TraversalCapture): void {
     const scene: UnderScene = {
       theme: world.zone.theme,
@@ -93,18 +165,27 @@ export class UnderstoryLayer {
       walk: world.walk instanceof GridWalkField ? world.walk : null,
       structures: (world.structures ?? []) as UnderScene['structures'],
     };
-    this.stash(req.key, this.paintScene(scene, req.ox, req.oy, req.w, req.h), req.w, req.h);
+    const job: PaintJob = { key: req.key, dw: req.w, dh: req.h, canvas: null, steps: undefined! };
+    job.steps = this.paintSteps(job, { scene }, req.ox, req.oy, req.w, req.h);
+    this.advancePaint(job, Infinity);
   }
 
-  /** Stand the below-view up WITHOUT a live capture: mint the below zone's
-   *  layout headlessly from its def (deterministic — the same recipe a real
-   *  visit runs) and paint the aerial. Anchored (ZoneDef.below): a 1:1
-   *  window centered on the anchor. Over-tied (World.skyBelowDef): the WHOLE
-   *  below zone, stretched under this one (the Nether-tie view the
-   *  proportional fall agrees with). One-time cost at first draw. */
+  /** Stand the below-view up WITHOUT a live capture: queue a PaintJob that
+   *  mints the below zone's layout headlessly from its def (deterministic —
+   *  the same recipe a real visit runs) and paints the aerial under the
+   *  per-frame budget. Anchored (ZoneDef.below): a 1:1 window centered on
+   *  the anchor. Over-tied (World.skyBelowDef): the WHOLE below zone,
+   *  stretched under this one (the Nether-tie view the proportional fall
+   *  agrees with). The frame that queues never advances — the pump runs
+   *  BEFORE this in draw(), so the entry frame's only cost is the queueing
+   *  itself and the mint lands on a later, unstacked frame. */
   private ensureBelow(world: World): void {
     const zone = world.zone;
     if (this.snaps.has(zone.id) || this.declined.has(zone.id)) return;
+    if (this.pending) {
+      if (this.pending.key === zone.id) return; // already painting this view
+      this.dropPendingPaint(); // a stale job from a hopped-away zone
+    }
     const anchored = zone.below ?? null;
     const belowDef: ZoneDef | null = anchored
       ? world.zoneMap[anchored.zoneId] ?? null
@@ -113,17 +194,16 @@ export class UnderstoryLayer {
     // Field megazones need the live web; boundless zones have no fixed
     // layout — both decline to the cloud sea rather than lie.
     if (belowDef.field || belowDef.boundless) { this.declined.add(zone.id); return; }
-    const scene = this.headlessScene(belowDef);
-    if (!scene) { this.declined.add(zone.id); return; }
-    if (anchored) {
-      this.stash(zone.id, this.paintScene(scene,
+    const job: PaintJob = { key: zone.id, dw: zone.size.w, dh: zone.size.h, canvas: null, steps: undefined! };
+    job.steps = anchored
+      ? this.paintSteps(job, { mint: belowDef },
         anchored.ax - zone.size.w / 2, anchored.ay - zone.size.h / 2,
-        zone.size.w, zone.size.h), zone.size.w, zone.size.h);
-    } else {
-      // Stretch: the whole world-below fills the realm zone's own rect.
-      this.stash(zone.id, this.paintScene(scene, 0, 0, scene.arenaW, scene.arenaH),
-        zone.size.w, zone.size.h);
-    }
+        zone.size.w, zone.size.h)
+      // Stretch: the whole world-below fills the realm zone's own rect
+      // (the below def's own dims — headlessScene sizes its arena from
+      // def.size, so the window is known before the mint runs).
+      : this.paintSteps(job, { mint: belowDef }, 0, 0, belowDef.size.w, belowDef.size.h);
+    this.pending = job;
   }
 
   /** Mint a zone's layout headlessly for painting — the genqa idiom: its own
@@ -175,13 +255,64 @@ export class UnderstoryLayer {
     }
   }
 
-  /** Paint the given window of a scene as a hazed aerial. */
-  private paintScene(scene: UnderScene, ox: number, oy: number, w: number, h: number): HTMLCanvasElement {
+  /** Pump a job: run steps until the budget is spent (ms) or the steps are
+   *  done. At least ONE step always runs — streaming must progress (the
+   *  ground bake budget's law), and the indivisible mint step rides through
+   *  on exactly that allowance. Infinity = run the whole paint now (the
+   *  live-capture lane). Returns true when the job finished. */
+  private advancePaint(job: PaintJob, budgetMs: number): boolean {
+    const t0 = performance.now();
+    do {
+      if (job.steps.next().done) return true;
+    } while (performance.now() - t0 < budgetMs);
+    return false;
+  }
+
+  /** Abort the in-flight job (zone hopped away mid-paint): release the
+   *  half-built canvas and forget it — a re-entry starts over. */
+  private dropPendingPaint(): void {
+    if (!this.pending) return;
+    if (this.pending.canvas) releaseCanvas(this.pending.canvas);
+    this.pending = null;
+  }
+
+  /** Run-boundary release (the steward's 'run' moment): every snap, the
+   *  declined memo and any half-built job — a new World mints new zone ids
+   *  and a kept canvas under a colliding id would show a stale world. */
+  private releaseAllSnaps(): void {
+    for (const s of this.snaps.values()) releaseCanvas(s.img);
+    this.snaps.clear();
+    this.declined.clear();
+    this.dropPendingPaint();
+  }
+
+  /** Paint the given window of a scene as a hazed aerial — the ONE painter,
+   *  as resumable steps. The statements are the old synchronous pass
+   *  verbatim with yields between rows/batches on one persistent ctx, so a
+   *  sliced run and a whole run produce the SAME command sequence — the
+   *  finished canvas is pixel-identical however the frames divide it. Every
+   *  terminal stashes (an empty window stashes its blank canvas, exactly as
+   *  the old pass returned it) except a declined mint, which files the
+   *  decline and leaves no canvas behind. */
+  private *paintSteps(job: PaintJob, source: PaintSource,
+    ox: number, oy: number, w: number, h: number): Generator<void> {
+    // THE MINT STEP (headless lane): one indivisible generateLayout — engine
+    // code, already `lite`; it cannot be sliced, but on the budget lane it
+    // owns a whole frame slice instead of stacking on the entry burst.
+    let scene: UnderScene;
+    if ('mint' in source) {
+      const minted = this.headlessScene(source.mint);
+      if (!minted) { this.declined.add(job.key); return; }
+      scene = minted;
+      yield;
+    } else scene = source.scene;
+
     const CFG = VIS_CFG.understory;
     const scale = Math.min(CFG.scale, CFG.maxDim / Math.max(w, h));
     const c = document.createElement('canvas');
     c.width = Math.max(2, Math.ceil(w * scale));
     c.height = Math.max(2, Math.ceil(h * scale));
+    job.canvas = c;
     const ctx = c.getContext('2d')!;
     const theme = scene.theme;
     ctx.save();
@@ -194,7 +325,11 @@ export class UnderstoryLayer {
     const bx0 = Math.max(ox, 0), by0 = Math.max(oy, 0);
     const bx1 = Math.min(ox + w, scene.arenaW);
     const by1 = Math.min(oy + h, scene.arenaH);
-    if (bx1 <= bx0 || by1 <= by0) { ctx.restore(); return c; }
+    if (bx1 <= bx0 || by1 <= by0) {
+      ctx.restore();
+      this.stash(job.key, c, job.dw, job.dh);
+      return;
+    }
     ctx.beginPath();
     ctx.rect(bx0, by0, bx1 - bx0, by1 - by0);
     ctx.clip();
@@ -202,6 +337,7 @@ export class UnderstoryLayer {
     // The land: base floor + a coarse read of its palette mottle.
     ctx.fillStyle = theme.floor;
     ctx.fillRect(ox, oy, w, h);
+    yield; // setup slice done (canvas alloc + clip + base wash)
     const gs = theme.ground ?? {};
     const pal = gs.palette && gs.palette.length >= 2 ? gs.palette : null;
     const step = 24 / Math.min(1, scale * 4); // coarse cells — an aerial, not a floor
@@ -220,6 +356,7 @@ export class UnderstoryLayer {
         }
         ctx.fillRect(x, y, step + 0.5, step + 0.5);
       }
+      yield; // one mottle row per step — the ctx keeps alpha/transform live
     }
     ctx.globalAlpha = 1;
 
@@ -242,6 +379,7 @@ export class UnderstoryLayer {
           ctx.globalAlpha = def?.visual?.alpha ?? 1;
           ctx.fillRect(gx * cell, gy * cell, cell + 0.5, cell + 0.5);
         }
+        yield; // one region row per step
       }
       ctx.globalAlpha = 1;
     }
@@ -253,6 +391,7 @@ export class UnderstoryLayer {
       ctx.fillStyle = withAlpha(theme.wall ?? theme.obstacle, 0.75);
       ctx.fillRect(r.x, r.y, r.w, r.h);
     }
+    yield;
 
     // Doodads: grounds first (they lie flat), then everything standing.
     const flat: Doodad[] = [], tall: Doodad[] = [];
@@ -261,6 +400,8 @@ export class UnderstoryLayer {
         || d.pos.y + d.radius < by0 || d.pos.y - d.radius > by1) continue;
       (DOODAD_VISUALS[d.kind]?.canopy ? tall : flat).push(d);
     }
+    yield; // the gather is its own slice; the arcs stream in batches below
+    let batch = 0;
     for (const list of [flat, tall]) {
       for (const d of list) {
         const tint = doodadTint(d.kind, theme);
@@ -270,10 +411,12 @@ export class UnderstoryLayer {
         ctx.beginPath();
         ctx.arc(d.pos.x, d.pos.y, d.radius * tint.grow, 0, Math.PI * 2);
         ctx.fill();
+        if (++batch >= PAINT_DOODAD_BATCH) { batch = 0; yield; }
       }
     }
     ctx.globalAlpha = 1;
     ctx.restore();
+    yield;
 
     // The haze of altitude, baked: a cool wash + a drink of the color.
     ctx.globalCompositeOperation = 'saturation';
@@ -282,7 +425,7 @@ export class UnderstoryLayer {
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = withAlpha(CFG.haze, CFG.hazeAlpha);
     ctx.fillRect(0, 0, c.width, c.height);
-    return c;
+    this.stash(job.key, c, job.dw, job.dh);
   }
 
   /** Draw the far-below view across the visible rect (world space, called
@@ -294,13 +437,20 @@ export class UnderstoryLayer {
     const tied = !!zone.below || !!world.skyBelowDef?.();
     if (!tied && zone.theme.understory !== 'cloudsea') return false;
     if (VIS_ABLATE.has('understory')) return false;
+    // THE PAINT PUMP — before ensureBelow, so the frame that QUEUES a job
+    // never also runs its first (indivisible mint) step: the entry frame
+    // only enqueues, and the mint lands on the next frame's slice.
+    if (this.pending) {
+      if (this.pending.key !== zone.id) this.dropPendingPaint();
+      else if (this.advancePaint(this.pending, VIS_CFG.understory.paintBudgetMs)) this.pending = null;
+    }
     if (tied) this.ensureBelow(world);
     const snap = this.snaps.get(zone.id);
     // LRU touch: crossing a wide realm web must evict the LEAST-RECENTLY-SEEN
     // aerial, not the oldest-minted one (insertion order re-minted the zone
     // you bounce between most — a periodic paint hitch for no reason).
     if (snap) { this.snaps.delete(zone.id); this.snaps.set(zone.id, snap); }
-    const sea = !snap; // no land resolved/painted — the endless deck
+    const sea = !snap; // no land resolved/painted (or still painting) — the endless deck
     const CFG = VIS_CFG.understory;
 
     // The open sky behind everything (falls away past the land's window).
