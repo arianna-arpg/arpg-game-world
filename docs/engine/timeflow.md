@@ -87,7 +87,16 @@ status def).
    CC interactions honest.
 4. **Anything else** — `world.timeflow.hold({...})` from a script, an event
    overlay, a boss phase, the console. `World.castChrono` is the reusable
-   bridge when a caster and a ChronoSpec are in hand.
+   bridge when a caster and a ChronoSpec are in hand. The boss-script door
+   on that bridge is DATA: the `{ do: 'chrono' }` AIAction (brain.ts →
+   aiActions.ts) lets any phase onEnter, cadence or rule mint a beat —
+   `world: true` is the phase-reveal held frame (the whole sim hangs, the
+   acting body included, so no cheap hits land in either direction), the
+   default actor scope is the skill-like stop. One hold id per actor
+   (`chrono:script:<id>`) means fast-chained re-fires — a Zone-Memory
+   re-entry replaying every onEnter — REFRESH one beat instead of
+   stacking a staircase. Duration is raw seconds, never
+   effectDuration-scaled: choreography does not stretch with investment.
 
 ## Content shipped on the fabric
 
@@ -98,6 +107,11 @@ status def).
   applies `stasis` (80%) and `temporal_drag` (always).
 - Escape menu hard-pauses solo play; the vocation offer freezes the world
   while you weigh it (delete its `TIME_CFG.surfaces` entry to undo).
+- THE DEVOURED HOUR (the Unmade, `unmade_chronophage`): the chronophage's
+  conjurer and apex phase reveals are `{ do: 'chrono' }` beats — the flood
+  and the final stand each arrive as a brief world-held frame (0.85 s /
+  1.1 s), the time-EATER's identity made mechanical. The script verb's
+  debut consumer of `World.castChrono` beside the skill lane.
 
 ## QA notes
 
@@ -109,5 +123,9 @@ status def).
   { exceptTeam: 'player' } })` freezes every enemy; `release('qa')` resumes.
   Menu probe: open Escape, sample `__game.world().time` twice — it must not
   advance; close, it must.
+- Standing rig: `balance/probe_timeflow.ts` pins BOTH castChrono consumers
+  (the skill door and the script verb), the refresh law, the raw-clock
+  expiry, the Unmade's debut beats through the real FSM, and the honesty
+  census (every authored world beat finite and ≤ 1.5 s).
 - Saves: holds are transient by design (a mid-freeze save resumes unfrozen;
   statuses follow the existing status-persistence rules).

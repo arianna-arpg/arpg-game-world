@@ -404,6 +404,22 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
       remaining: act.duration ?? 0.25,
     };
   },
+
+  // Bend TIME for a beat: mint a timeflow hold through World.castChrono —
+  // the same bridge SkillDef.chrono casts cross, so a scripted held frame
+  // obeys every clock law the fabric documents (raw-second aging, expiry
+  // out of the very clock it stopped). One hold id per ACTOR gives refresh
+  // semantics: a Zone-Memory re-entry's fast-chained onEnters land ONE
+  // held beat, never a stacked staircase. Duration passes RAW by design —
+  // choreography does not stretch with effectDuration the way casts do.
+  chrono: (world, actor, act) => {
+    if (act.do !== 'chrono') return;
+    world.castChrono(actor, {
+      scale: act.scale ?? 0, duration: act.duration,
+      exempt: act.exempt, world: act.world,
+      hud: act.tint ? { tint: act.tint, label: act.label } : undefined,
+    }, `chrono:script:${actor.id}`, act.duration, act.label);
+  },
 };
 
 /** A blast's impact knockback: everyone hostile in the disc is thrown

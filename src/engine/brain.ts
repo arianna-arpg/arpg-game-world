@@ -854,6 +854,16 @@ export type AIAction =
   /** Enter the transient flee-to-exit retreat (the Hunt beast's escape). */
   | { do: 'flee' }
   | { do: 'dash'; toward: 'target' | 'away'; speed?: number; duration?: number }
+  /** Bend TIME for a beat — the script FSM's door onto the timeflow fabric,
+   *  resolved through World.castChrono exactly as SkillDef.chrono casts are
+   *  (docs/engine/timeflow.md). `world: true` holds the WHOLE sim, the
+   *  acting body included — the phase-reveal held frame, cinematic
+   *  territory: no cheap hits land in either direction. Omit it for a
+   *  skill-like actor-scoped stop exempting the actor's circle (`exempt`,
+   *  default 'pack'). `scale` 0 stops (default), a fraction is authored
+   *  slow-motion. `duration` is RAW seconds — a scripted beat never
+   *  stretches with the actor's effectDuration the way its casts do. */
+  | { do: 'chrono'; duration: number; scale?: number; exempt?: 'caster' | 'pack' | 'team' | 'none'; world?: boolean; tint?: string; label?: string }
   // --- ARENA TERRAIN (grid zones only; graceful no-ops elsewhere) ------------
   /** COLLAPSE the floor to a disc around the anchor: outside becomes void,
    *  inside becomes `mode`; a dry dais survives at the anchor; optional

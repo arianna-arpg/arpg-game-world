@@ -7598,6 +7598,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
             { do: 'arenaSink', radius: { frac: 0.60, min: 420 }, mode: 'deep_water', dais: 150, pockets: { count: 6, radius: 140, ringFrac: 0.58 } },
             { do: 'wash', color: '#1f5fa0', intensity: 0.16 },
             { do: 'announce', text: 'The vault FLOODS: the walls close in!', color: '#5aa8d8', size: 18 },
+            // THE DEVOURED HOUR (the castChrono beat, docs/engine/timeflow.md):
+            // the flood's reveal is a HELD frame — world-scoped, so the
+            // chronophage's own jaws hang with yours; no cheap hits land.
+            // Last in the list: the arena re-stages fully, THEN time stops.
+            { do: 'chrono', duration: 0.85, world: true, tint: 'rgba(120,70,190,0.16)', label: 'the hour is devoured' },
           ],
           cadences: [{ every: 3, actions: [{ do: 'shrinkPockets', by: 14, min: 58 }] }],
           goto: [{ to: 'herald', atLifeFrac: 0.40 }],
@@ -7637,6 +7642,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
             { do: 'summon', monster: 'lesser_herald', count: 1, ring: 240, at: 'anchor', tag: 'unmade_add' },
             { do: 'ward', tag: 'unmade_add', announce: 'The ward SHATTERS. Strike it down!' },
             { do: 'wash', color: '#7a2347', intensity: 0.22 },
+            // THE DEVOURED HOUR, spent (the castChrono beat): the final
+            // stand rises inside stopped time — its echoes seated, its ward
+            // lit, and the whole tableau held for one breath before the end.
+            { do: 'chrono', duration: 1.1, world: true, tint: 'rgba(150,60,180,0.20)', label: 'the devoured hour, spent' },
           ],
           cadences: [{ every: 2.2, actions: [{ do: 'push', radius: 250, strength: 150, from: 'anchor' }] }],
           goto: [],
