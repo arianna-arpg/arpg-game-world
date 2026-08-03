@@ -921,6 +921,18 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     when: (_def, sup) => sup.conduit !== undefined,
   },
   {
+    // THE ANSWERING SHELL (guardBash beyond the stance): a toggled
+    // shellGuard aura pays its REMAINING pool as the bash only when the
+    // toggle is pressed OFF mid-episode (deactivateAura → guardBashSpec)
+    // — and no pilot ever un-presses a toggle. Verified vs engine and
+    // pinned deterministically in balance/probe_guardbash.ts (2d: the
+    // dropped rear-guard answers); when an un-pressing pilot ships,
+    // delete this row and the pairing re-enters measurement automatically.
+    note: 'shell-drop bash (guardBash on a toggled shellGuard aura) fires only on toggle-OFF — pilots never un-press',
+    when: (def, sup) => sup.guardBash !== undefined
+      && def.delivery.type === 'aura' && def.delivery.shellGuard !== undefined,
+  },
+  {
     // THE SYMPATHY FAMILY (sympathy_<link> potency stats): echoes replay
     // gains onto KIN — bonded companions, other seats, nearby allies — and
     // the solo probe rigs field none, so every pairing reads byte-identical.
