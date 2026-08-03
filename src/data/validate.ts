@@ -5,7 +5,7 @@
 // skill and just stands there) get a loud console line instead.
 // ---------------------------------------------------------------------------
 
-import { AMBIENT_TAGS, FACTIONS, MATERIAL_NATURE, MONSTERS, RESERVED_KIN, WAVE_TABLE, WILDLIFE } from './monsters';
+import { AMBIENT_TAGS, FACTIONS, FIXTURE_IDS, MATERIAL_NATURE, MONSTERS, RESERVED_KIN, WAVE_TABLE, WILDLIFE } from './monsters';
 import { FACTION_TRAITS } from '../world/traits';
 import { PRESENCE_BANDS, presenceMul, type PresenceSpec } from '../engine/presence';
 import { SKILLS } from './skills';
@@ -423,6 +423,15 @@ export function validateContent(): void {
       if (tu.roll && tu.tones && !tu.tones.length) {
         warn(`monster '${m.id}' tune.roll with an empty tone pool`);
       }
+    }
+    // THE FIXTURE NET (FIXTURE_IDS, data/monsters.ts): every id the engine
+    // mints as standing furniture must still resolve to a real MonsterDef —
+    // a renamed or deleted def under a fixture key is a silent engine break
+    // until some zone tries to stand it up. Keys equal ids by law (one grep
+    // finds the def, the registry, and every mint site).
+    for (const [key, fid] of Object.entries(FIXTURE_IDS)) {
+      if (!MONSTERS[fid]) warn(`fixtures: FIXTURE_IDS.${key} names unknown monster '${fid}'`);
+      else if (key !== fid) warn(`fixtures: FIXTURE_IDS.${key} maps to '${fid}' (keys equal ids by law)`);
     }
     // Puzzle presets: kinds registered, fixture defs real + on the
     // object-actor contract (passive + immortal — a riddle whose nodes die
@@ -2424,7 +2433,7 @@ export function validateContent(): void {
     warn('MERC_CFG.offers: need 1 ≤ min ≤ max');
   }
   if (MERC_CFG.rosterCap < 1) warn('MERC_CFG.rosterCap must be ≥ 1');
-  if (!MONSTERS['merc_captain']) warn('mercs: merc_captain MonsterDef missing (outposts cannot spawn)');
+  if (!MONSTERS[FIXTURE_IDS.merc_captain]) warn('mercs: merc_captain MonsterDef missing (outposts cannot spawn)');
 
   // THE NOMENCLATURE MILL: pools must be speakable, and every named tier must
   // be a real rarity — an empty pool would weld blank compounds silently.

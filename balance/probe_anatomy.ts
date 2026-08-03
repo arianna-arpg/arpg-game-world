@@ -23,7 +23,7 @@
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { updateAI } from '../src/engine/ai';
-import { FACTIONS, HIGH_COURT, MONSTERS, WAVE_TABLE, WILDLIFE } from '../src/data/monsters';
+import { FACTIONS, FIXTURE_IDS, HIGH_COURT, MONSTERS, WAVE_TABLE, WILDLIFE } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { LOOKS } from '../src/data/looks';
@@ -631,6 +631,22 @@ function rigComposite(id: string, dx = 340): Actor {
   check('scenery contract: the garden\'s marching files are the blessed-fauna debut (rows exist + critter-tagged)',
     sceneryRows.some(r => r.monster === 'ant_trail')
     && MONSTERS.ant_trail.tag === 'critter' && AMBIENT_TAGS.has('critter'));
+}
+
+// ================================== THE FIXTURE CENSUS (FIXTURE_IDS)
+// Every monster id the ENGINE mints as standing furniture (world.ts
+// createMonster / config literals — town fixtures, event bodies, hold wards,
+// cache floors) lives in data/monsters.ts FIXTURE_IDS and must resolve to a
+// real def. The validate net warns at boot; this census GATES — a renamed
+// def under a fixture key, or a key drifting from its id (one grep finds
+// def + registry + mint sites only while they match), stops the build here.
+{
+  const missing = Object.entries(FIXTURE_IDS).filter(([, fid]) => !MONSTERS[fid]);
+  check(`fixture census: every FIXTURE_IDS entry resolves to a real MonsterDef (${Object.keys(FIXTURE_IDS).length} fixtures)`,
+    missing.length === 0, missing.map(([k, fid]) => `${k}→'${fid}'`).join(', '));
+  const drifted = Object.entries(FIXTURE_IDS).filter(([k, fid]) => k !== fid);
+  check('fixture census: keys equal ids (the one-grep law)',
+    drifted.length === 0, drifted.map(([k, fid]) => `${k}→'${fid}'`).join(', '));
 }
 
 console.log(failed === 0 ? '\nprobe_anatomy: ALL GREEN' : `\nprobe_anatomy: ${failed} FAILURE(S)`);

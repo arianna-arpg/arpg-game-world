@@ -53,7 +53,7 @@ import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
-import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
+import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, FIXTURE_IDS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { updateScene, sceneInterceptFall, sceneNoteCast, type SceneRuntime } from './scenes';
@@ -764,7 +764,7 @@ export const NAV_CFG = {
  *  registry row ('starfall'); these shape only what GROWS beneath it. */
 const STARFALL_CFG = {
   faction: 'starfall',
-  heartDefId: 'fallen_star',
+  heartDefId: FIXTURE_IDS.fallen_star,
   /** Chance the shower left a standing heart worth breaking. */
   heartChance: 0.6,
   packCount: [2, 3] as [number, number],
@@ -5083,7 +5083,7 @@ export class World {
       const dr = d.door;
       if (!dr || dr.open || dr.broken) continue;
       if (dr.mode !== 'breakable' && dr.mode !== 'both') continue;
-      const c = this.createMonster('door_timber', Math.max(1, def.level), 'enemy');
+      const c = this.createMonster(FIXTURE_IDS.door_timber, Math.max(1, def.level), 'enemy');
       c.pos = vec(d.pos.x, d.pos.y);
       c.doorId = dr.id;
       if (dr.life) c.life = Math.min(dr.life, c.maxLife()); // per-door data may weaken a rotten door
@@ -5565,7 +5565,7 @@ export class World {
       }
       const caches = (rng.chance(0.5) ? 1 : 0) + (rng.chance(0.15) ? 1 : 0);
       for (let i = 0; i < caches; i++) {
-        const c = this.createMonster('gem_cache', def.level, 'enemy');
+        const c = this.createMonster(FIXTURE_IDS.gem_cache, def.level, 'enemy');
         const at = this.interactSpot(pois, rng, 600, INTERACT_PLACE_CFG.portalClear);
         c.pos = this.clampPos(vec(at.x, at.y), c.radius);
         this.actors.push(c);
@@ -5623,7 +5623,7 @@ export class World {
       if (pform.caches) {
         const n = rng.int(pform.caches[0], pform.caches[1]);
         for (let i = 0; i < n; i++) {
-          const c = this.createMonster('gem_cache', def.level, 'enemy');
+          const c = this.createMonster(FIXTURE_IDS.gem_cache, def.level, 'enemy');
           const at = this.interactSpot(pois, rng, 520, INTERACT_PLACE_CFG.portalClear);
           c.pos = this.clampPos(vec(at.x, at.y), c.radius);
           this.actors.push(c);
@@ -5673,15 +5673,15 @@ export class World {
     // effects, ailments, and modifiers. Stands at the training yard the expanded
     // town raised for it (so the fixture + the actor line up).
     if (def.id === START_ZONE && featureEnabled(this.account, FEATURE.TARGET_DUMMY)) {
-      const dummy = this.createMonster('target_dummy', Math.max(1, this.player.level), 'enemy');
+      const dummy = this.createMonster(FIXTURE_IDS.target_dummy, Math.max(1, this.player.level), 'enemy');
       dummy.pos = this.clampPos(vec(TRAINING_YARD.x, TRAINING_YARD.y), dummy.radius);
       this.actors.push(dummy);
       // THE TRAINING RACK: the color-coded siblings stand in a row east of
       // the post — one hard resistance each (watch a conversion change the
       // number) and the heavy brother (watch vs-heavier arm). One unlock
       // raises the whole rack; the sim probes target these same defs.
-      const rack = ['target_dummy_pyre', 'target_dummy_rime', 'target_dummy_storm',
-        'target_dummy_void', 'target_dummy_colossus'];
+      const rack = [FIXTURE_IDS.target_dummy_pyre, FIXTURE_IDS.target_dummy_rime, FIXTURE_IDS.target_dummy_storm,
+        FIXTURE_IDS.target_dummy_void, FIXTURE_IDS.target_dummy_colossus];
       for (let i = 0; i < rack.length; i++) {
         const sib = this.createMonster(rack[i], Math.max(1, this.player.level), 'enemy');
         sib.pos = this.clampPos(
@@ -5694,7 +5694,7 @@ export class World {
       // stub for ricochet banks and unspent-end shrapnel blooms. Same
       // unlock, same defs the sim's range formation targets.
       for (let i = 0; i < 3; i++) {
-        const g = this.createMonster('target_dummy', Math.max(1, this.player.level), 'enemy');
+        const g = this.createMonster(FIXTURE_IDS.target_dummy, Math.max(1, this.player.level), 'enemy');
         g.pos = this.clampPos(
           vec(TRAINING_YARD.x + 340 + 130 * i, TRAINING_YARD.y), g.radius);
         this.actors.push(g);
@@ -5708,7 +5708,7 @@ export class World {
     // Vault feature is bought (townBuild raised his fire; the body and the
     // fixture line up at TRACKER_SITE).
     if (def.id === START_ZONE && featureEnabled(this.account, FEATURE.TRACKER)) {
-      const t = this.createMonster('townsfolk_tracker', 1, 'player');
+      const t = this.createMonster(FIXTURE_IDS.townsfolk_tracker, 1, 'player');
       t.pos = this.clampPos(vec(TRACKER_SITE.x + 26, TRACKER_SITE.y - 20), t.radius);
       this.actors.push(t);
     }
@@ -5720,7 +5720,7 @@ export class World {
     // captain stands in this zone's actors — this one, exactly like the
     // quay boot's.
     if (def.id === START_ZONE && featureEnabled(this.account, FEATURE.MERC_RECRUITER)) {
-      const officer = this.createMonster('merc_captain', 1, 'player');
+      const officer = this.createMonster(FIXTURE_IDS.merc_captain, 1, 'player');
       officer.name = 'the Recruiting Officer';
       officer.pos = this.clampPos(vec(RECRUITER_SITE.x + 24, RECRUITER_SITE.y - 18), officer.radius);
       this.actors.push(officer);
@@ -13527,7 +13527,7 @@ export class World {
     // world's vertical ladder all reach the abyss like any ignition roll.
     if (!roll.chance(df.delverChanceNow() * delverMulAt(def.caveDepth ?? 0))) return;
     const center = this.clampPos(this.farPoint(360, true), 30);
-    const delver = this.createMonster('descent_delver', Math.max(1, def.level), 'enemy');
+    const delver = this.createMonster(FIXTURE_IDS.descent_delver, Math.max(1, def.level), 'enemy');
     delver.tag = 'descent_delver';
     delver.pos = this.clampPos(vec(center.x, center.y), delver.radius);
     this.actors.push(delver);
@@ -16889,7 +16889,7 @@ export class World {
     const lvl = Math.max(1, def.level);
     // THE NESTS: exactly the standing count — a broken warren stays broken.
     for (let i = 0; i < info.nestsRemaining; i++) {
-      const nest = this.createMonster('warren_nest', lvl, 'enemy');
+      const nest = this.createMonster(FIXTURE_IDS.warren_nest, lvl, 'enemy');
       nest.faction = cfg.faction;
       nest.tag = 'warren_nest';
       nest.pos = this.clampPos(this.farPoint(430), nest.radius);
@@ -16970,7 +16970,7 @@ export class World {
       bumpLedger(this.ledger, 'vigil_seen'); // the WAX side only — a convene-only claim never stamps it
       const n = randInt(cfg.shrines[0], cfg.shrines[1]);
       for (let i = 0; i < n; i++) {
-        const shrine = this.createMonster('candle_shrine', lvl, 'enemy');
+        const shrine = this.createMonster(FIXTURE_IDS.candle_shrine, lvl, 'enemy');
         shrine.faction = cfg.waxFaction;
         shrine.tag = 'candle_shrine';
         shrine.pos = this.clampPos(this.farPoint(430), shrine.radius);
@@ -17768,13 +17768,13 @@ export class World {
       if (!live || !live.penAt) { this.droveScene = null; return; }
       const penAt = vec(live.penAt.x, live.penAt.y);
       this.plantDrovePen(penAt, cfg);
-      let reeve = this.actors.find(a => !a.dead && a.defId === 'drove_reeve') ?? null;
-      if (!reeve && MONSTERS.drove_reeve) {
+      let reeve = this.actors.find(a => !a.dead && a.defId === FIXTURE_IDS.drove_reeve) ?? null;
+      if (!reeve && MONSTERS[FIXTURE_IDS.drove_reeve]) {
         const gapDir = this.droveGapDir(penAt);
         const at = this.findFreeSpot(this.clampPos(vec(
           penAt.x + Math.cos(gapDir) * (cfg.penRingR + 30),
           penAt.y + Math.sin(gapDir) * (cfg.penRingR + 30)), 24), 12);
-        const m = this.createMonster('drove_reeve', lvl, 'enemy');
+        const m = this.createMonster(FIXTURE_IDS.drove_reeve, lvl, 'enemy');
         m.pos = at;
         m.postSpec = { hold: true };
         m.aiPost = vec(at.x, at.y);
@@ -21298,7 +21298,7 @@ export class World {
     if (!ps || !gate) return;
     const lvl = Math.max(1, def.level);
     const at = holdGateApron(gate, 96);
-    const ward = this.createMonster('quay_ward', lvl, 'player');
+    const ward = this.createMonster(FIXTURE_IDS.quay_ward, lvl, 'player');
     const target = Math.round(cls.siege.wardLife + cls.siege.wardLifePerLevel * lvl);
     // The pool is the CLASS CURVE exactly: one 'more' source scales whatever
     // the def + level scaler produced onto the target — exact by construction
@@ -21466,7 +21466,7 @@ export class World {
       const lvl = Math.max(1, def.level);
       this.grantXp(Math.round(cls.reward.xpBase + cls.reward.xpPerLevel * lvl));
       for (let i = 0; i < cls.reward.caches; i++) {
-        const c = this.createMonster('harbor_cache', lvl, 'enemy');
+        const c = this.createMonster(FIXTURE_IDS.harbor_cache, lvl, 'enemy');
         c.pos = this.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-50, 50)), c.radius);
         this.actors.push(c);
       }
@@ -22298,7 +22298,7 @@ export class World {
   private placeCaravanReturn(def: ZoneDef): void {
     if (!def.id.startsWith('caravan_band_')) return;
     if (this.actors.some(a => this.hasNpcRole(a, 'caravanner'))) return;
-    const c = this.createMonster('townsfolk_caravanner', 1, 'player');
+    const c = this.createMonster(FIXTURE_IDS.townsfolk_caravanner, 1, 'player');
     c.untargetable = true; // the band's monsters ignore the escort
     c.pos = this.clampPos(vec(this.player.pos.x + 54, this.player.pos.y + 28), c.radius);
     this.actors.push(c);
@@ -22344,10 +22344,10 @@ export class World {
     // whatever the current chance/filter schema says.
     if (this.player.level < cfg.unlockLevel
       && !(this.account.ledger[LEDGER_MERC_OUTPOST_FOUND] ?? 0)) return;
-    if (!MONSTERS['merc_captain']) return;
+    if (!MONSTERS[FIXTURE_IDS.merc_captain]) return;
     const rng = new Rng((this.manifest.seed ^ hashStr(`mercpost_${def.id}`)) >>> 0);
     if (rng.range(0, 1) >= cfg.chance) return;
-    const captain = this.createMonster('merc_captain', Math.max(1, def.level), 'enemy');
+    const captain = this.createMonster(FIXTURE_IDS.merc_captain, Math.max(1, def.level), 'enemy');
     captain.pos = this.findFreeSpot(vec(
       this.arena.w * rng.range(0.25, 0.75),
       this.arena.h * rng.range(0.25, 0.75)), captain.radius);
@@ -44557,7 +44557,7 @@ export class World {
           this.chests.splice(i, 1);
           if (c.mimic) {
             // It was never a chest.
-            const m = this.createMonster('mimic', Math.max(1, this.zone.level), 'enemy');
+            const m = this.createMonster(FIXTURE_IDS.mimic, Math.max(1, this.zone.level), 'enemy');
             m.pos = this.clampPos(vec(c.pos.x, c.pos.y), m.radius);
             this.actors.push(m);
             this.text(vec(c.pos.x, c.pos.y - 20), 'MIMIC!', '#ff5050', 18);

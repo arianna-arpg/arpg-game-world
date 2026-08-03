@@ -1198,6 +1198,41 @@ export const AMBIENT_TAGS = new Set([
   'hold_camp',     // a harborhold's dormant siege-camp watch — texture the MUSTER drafts
 ]);
 
+/** THE WORLD-FIXTURE VOCABULARY — monster ids the ENGINE ITSELF stands up as
+ *  furniture (world.ts createMonster / config sites: town fixtures, event
+ *  bodies, hold wards, cache floors). Data tables may name any monster and
+ *  the validator walks those row by row — but an id HARDCODED in engine code
+ *  is an invisible contract with this file, so each one lives HERE under its
+ *  own name: engine sites read FIXTURE_IDS.<id>, never a bare literal, and
+ *  the validate net (data/validate.ts) + the anatomy probe's fixture census
+ *  keep every entry resolving to a real MonsterDef. Keys EQUAL their ids by
+ *  law — one grep on the id finds the def, this registry, and every mint
+ *  site. (Rosters an engine file merely picks FROM — the breakable ambush
+ *  spills, the soulriver's boarders, the warlord table — are tables, not
+ *  fixtures, and stay named where they are; overlay-carried ids like the
+ *  swarming cfg.cacheId already travel as data.) */
+export const FIXTURE_IDS = {
+  door_timber: 'door_timber',       // the breakable door's bar body (one per still-sealed door)
+  gem_cache: 'gem_cache',           // the lair hoard floor (barrow / roost caches)
+  target_dummy: 'target_dummy',     // the training yard's immortal post + the gauntlet line
+  target_dummy_pyre: 'target_dummy_pyre',         // the rack: the fire wall
+  target_dummy_rime: 'target_dummy_rime',         // the rack: the cold wall
+  target_dummy_storm: 'target_dummy_storm',       // the rack: the lightning wall
+  target_dummy_void: 'target_dummy_void',         // the rack: the chaos wall
+  target_dummy_colossus: 'target_dummy_colossus', // the rack's heavy brother (vs-heavier arms)
+  townsfolk_tracker: 'townsfolk_tracker',         // the Bestiary's keeper at his west-edge fire
+  townsfolk_caravanner: 'townsfolk_caravanner',   // the caravan run's waiting return escort
+  merc_captain: 'merc_captain',     // every officer: wilds camp, quay muster, town recruiter
+  descent_delver: 'descent_delver', // the Descent's shaft-keeper at a surface mouth
+  warren_nest: 'warren_nest',       // the Verminfall's standing nests
+  candle_shrine: 'candle_shrine',   // the Wax Court's snuffable shrines
+  fallen_star: 'fallen_star',       // the Starfall's impact heart (STARFALL_CFG.heartDefId)
+  drove_reeve: 'drove_reeve',       // the spilled fold's reeve at the pen mouth
+  quay_ward: 'quay_ward',           // the harborhold muster's gate ward
+  harbor_cache: 'harbor_cache',     // the opened hold's plunder caches
+  mimic: 'mimic',                   // the chest that was never a chest (the timed-lock spring)
+} as const;
+
 /** One ambient-fauna row: an independent per-zone roll (chance), a band size,
  *  an optional presence envelope / doodad-rim placement hint — and an optional
  *  ARRIVAL LINE (`announce`): floated to the players when the band lands, for
