@@ -1683,7 +1683,11 @@ export class Actor {
   maxLife(): number { return this.sheet.get('life'); }
   maxMana(): number { return this.sheet.get('mana'); }
   maxEs(): number { return this.sheet.get('energyShield'); }
-  maxPoise(): number { return this.sheet.get('poise'); }
+  maxPoise(): number {
+    // The held stance's kit counts (Unyielding Stance's 'guarding' grant).
+    const sc = this.stanceRead();
+    return this.sheet.get('poise', sc?.tags, sc?.extra);
+  }
   maxInsight(): number { return this.sheet.get('insight'); }
   maxEndurance(): number { return this.sheet.get('endurance'); }
 
@@ -1898,6 +1902,18 @@ export class Actor {
   /** Channeling in any form (channels and guard stances both count). */
   isChanneling(): boolean {
     return this.casting?.mode === 'channel' || this.casting?.mode === 'guard';
+  }
+
+  /** The held stance's read context — while a channel/guard holds, its
+   *  instance mods (innate rows, leveling, sockets) join the holder's OWN
+   *  reads at the consuming sites (movement, poise, block, retaliation,
+   *  the damage fold). Def-row grants live on the skill instance, never
+   *  on the sheet, so a bare read cannot see a 'guarding'-scoped mod.
+   *  Null when no stance holds. */
+  stanceRead(): { tags: ReadonlySet<SkillTag>; extra: Modifier[] } | null {
+    if (!this.isChanneling()) return null;
+    const inst = this.casting!.inst;
+    return { tags: skillContextTags(inst.def), extra: instanceMods(inst) };
   }
 
   canAct(): boolean {
@@ -2959,7 +2975,8 @@ export class Actor {
       const maxPoise = this.maxPoise();
       if (maxPoise > 0) {
         this.poiseCalm += dt;
-        const rate = maxPoise * this.sheet.get('poiseRegenPct') * dt;
+        const psc = this.stanceRead();
+        const rate = maxPoise * this.sheet.get('poiseRegenPct', psc?.tags, psc?.extra) * dt;
         if (this.poiseBroken) {
           if (this.poiseDelay > 0) this.poiseDelay -= dt;
           else if (this.poise < maxPoise) {

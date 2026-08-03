@@ -16,6 +16,8 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { applyBuild } from '../src/sim/builds';
 import { MONSTERS } from '../src/data/monsters';
 import { setSimTap } from '../src/engine/tap';
+import { skillDamageBands } from '../src/engine/damage';
+import { instanceMods, skillContextTags } from '../src/engine/skills';
 import type { Actor } from '../src/engine/actor';
 import type { BuildSpec } from '../src/sim/types';
 import type { DamageType } from '../src/engine/stats';
@@ -35,7 +37,11 @@ const spec: BuildSpec = {
     { id: 'spiked_bulwark', level: 3, supports: [{ id: 'answering_wall', level: 1 }] }, // mute wall, TAUGHT
     { id: 'marching_bulwark', level: 3, supports: [{ id: 'hollow_answer', level: 1 }] }, // innate bash, INVERTED
     { id: 'ice_shield', level: 3 },                                                 // cold burst
-    { id: 'defiant_bulwark', level: 3 },                                            // mute wall, bare
+    { id: 'defiant_bulwark', level: 3, supports: [                                  // mute wall + the stance-conditional gems (2c)
+      { id: 'unyielding_stance', level: 1 }, { id: 'shieldwall_doctrine', level: 1 }] },
+    { id: 'runeward', level: 3 },                                                   // the stance broadcast (2c)
+    { id: 'firebolt', level: 1, supports: [{ id: 'guarded_casting', level: 1 }] },
+    { id: 'rearguard_aegis', level: 3, supports: [{ id: 'answering_wall', level: 1 }] }, // the answering shell (2d)
   ],
 };
 const warnings = applyBuild(world, spec, 12);
@@ -134,6 +140,153 @@ const burst = seen.find(a => (a.cold ?? 0) > 0);
 check('ice: the burst landed', iceDmg > 0, `landed ${Math.round(iceDmg)}`);
 check('ice: payload is COLD-typed (tag-derived element)', !!burst && !(burst.physical ?? 0),
   `packet=${JSON.stringify(seen[0] ?? {})}`);
+
+// --- 2b) the spiked wall pricks: innate 'guarding' thorns pay through the block
+// (The defect this pins: instance-innate thorns live in instanceMods, never on
+// the sheet — applyThorns must read them in the held stance's own context, or
+// the spiked wall is a mute Shield Up.)
+const mintStriker = (dx = 38): Actor => {
+  const s = world.createMonster('plains_wolf', 5, 'enemy');
+  s.pos = { x: p.pos.x + dx, y: p.pos.y };
+  s.aiCooldown = 9999;
+  s.sheet.setBase('life', 4000);
+  s.sheet.setBase('lifeRegen', 0);
+  s.life = 4000;
+  world.actors.push(s);
+  return s;
+};
+/** Hold `id` facing a fresh striker, drive one claw into the wall, and return
+ *  the thorns the striker paid for it (measured before the release). */
+const guardedPrick = (id: string): number => {
+  p.cooldowns.clear();
+  p.mana = p.maxMana();
+  p.useLock = 0;
+  const s = mintStriker();
+  world.useSkill(p, skill(id)!, { x: s.pos.x, y: s.pos.y });
+  step(0.1);
+  if (!p.casting || p.casting.mode !== 'guard') return NaN;
+  const before = s.life;
+  world.useSkill(s, s.skills.find(k => k)!, { x: p.pos.x, y: p.pos.y });
+  step(1.2); // claw useTime 0.9 — let the swing resolve into the wall
+  const prick = before - s.life;
+  s.dead = true; // the release bash must not answer a spent prop
+  if (p.casting?.mode === 'guard') { p.casting.held = false; step(0.3); }
+  return prick;
+};
+const prick = guardedPrick('spiked_bulwark');
+check('thorns: the spiked wall pricks its striker through the block (12 + 3/lvl @3)',
+  Math.abs(prick - 18) < 0.75, `prick=${prick.toFixed(1)}`);
+const mute = guardedPrick('shield_up');
+check('thorns: a thornless wall stays mute (the context read leaks nothing)',
+  Math.abs(mute) < 0.5, `prick=${mute.toFixed(1)}`);
+
+// --- 2c) the stance-conditional class: 'guarding'-scoped rows reach their
+// read sites through the held stance's own context (Actor.stanceRead + the
+// damage fold's stance broadcast). Four consuming sites, four families of pin.
+p.sheet.setBase('evasion', 0);     // a rear-strike zero below must mean BLOCK, never evade
+p.sheet.setBase('lifeRegen', 0);   // …and never a regen-masked wound
+p.sheet.setBase('lifeRegenPct', 0);
+p.sheet.setBase('life', 4000);
+p.life = 4000;
+// Clear the stage: sections 1-2's parked props litter the walk lane east of
+// the hero, and a living body shoulders the walker off the measured pace.
+for (const a of world.actors) if (a.team === 'enemy') a.dead = true;
+
+// The marching wall's leveling moveSpeed row moves real feet.
+p.cooldowns.clear(); p.mana = p.maxMana(); p.useLock = 0;
+world.useSkill(p, skill('marching_bulwark')!, { x: p.pos.x + 100, y: p.pos.y });
+step(0.1);
+{
+  const inst = p.casting!.inst;
+  const bare = p.sheet.get('moveSpeed');
+  const ctxSpeed = p.sheet.get('moveSpeed', skillContextTags(inst.def), instanceMods(inst));
+  const x0 = p.pos.x;
+  for (let t = 0; t < 1; t += 1 / 60) { world.update(1 / 60); world.moveActor(p, 1, 0, 1 / 60); }
+  const walked = p.pos.x - x0;
+  check('stance: the marching wall\'s speed row lives (context > bare read)',
+    ctxSpeed > bare + 1, `bare=${bare.toFixed(1)} ctx=${ctxSpeed.toFixed(1)}`);
+  check('stance: walked feet obey the context read (ctx × moveFactor 0.75)',
+    Math.abs(walked - ctxSpeed * 0.75) < 2,
+    `walked=${walked.toFixed(1)} expect=${(ctxSpeed * 0.75).toFixed(1)}`);
+  if (p.casting?.mode === 'guard') { p.casting.held = false; step(0.3); }
+}
+
+// Runeward's blessing reaches a spell fired through the wall (the broadcast:
+// 'guarding'-scoped authored rows only — sockets never cross instances).
+{
+  const fb = skill('firebolt')!;
+  const free = skillDamageBands(p, fb).total.hi;
+  p.cooldowns.clear(); p.mana = p.maxMana(); p.useLock = 0;
+  world.useSkill(p, skill('runeward')!, { x: p.pos.x + 100, y: p.pos.y });
+  step(0.1);
+  const held = skillDamageBands(p, fb).total.hi;
+  check('stance: runeward blesses the guarded cast (+35% spell at L3)',
+    held / free > 1.25 && held / free < 1.45, `ratio=${(held / free).toFixed(3)}`);
+  if (p.casting?.mode === 'guard') { p.casting.held = false; step(0.3); }
+}
+
+// Unyielding Stance's poise stands only while the wall does, and the block
+// gems answer from the same held stance below.
+{
+  check('stance: no wall, no poise (the grant is stance-scoped)',
+    p.maxPoise() === 0, `maxPoise=${p.maxPoise()}`);
+  p.cooldowns.clear(); p.mana = p.maxMana(); p.useLock = 0;
+  world.useSkill(p, skill('defiant_bulwark')!, { x: p.pos.x + 100, y: p.pos.y });
+  step(0.1);
+  const mp = p.maxPoise();
+  check('stance: Unyielding Stance stands +20 poise on the held wall',
+    mp > 15, `maxPoise=${mp.toFixed(1)}`);
+  step(5); // the refill's calm gate — calm accrues only while max > 0
+  p.poise = 0;
+  step(0.6);
+  const rate = mp > 0 ? p.poise / 0.6 / mp : 0;
+  check('stance: …and doubles the recovery (rate/max ≈ 0.5)',
+    Math.abs(rate - 0.5) < 0.06, `rate/max=${rate.toFixed(3)}`);
+}
+
+// Shieldwall Doctrine blocks rear strikes the guard arc never covers.
+{
+  const s = mintStriker(-38); // WEST — behind the eastward wall
+  const rearClaw = s.skills.find(k => k)!;
+  let zeros = 0;
+  for (let i = 0; i < 30; i++) {
+    if (p.casting?.mode !== 'guard') { // a poise break may drop the wall — re-raise
+      p.cooldowns.clear(); p.mana = p.maxMana(); p.useLock = 0;
+      world.useSkill(p, skill('defiant_bulwark')!, { x: p.pos.x + 100, y: p.pos.y });
+      step(0.1);
+    }
+    s.useLock = 0; s.cooldowns.clear(); s.mana = s.maxMana();
+    const before = p.life;
+    if (!world.useSkill(s, rearClaw, { x: p.pos.x, y: p.pos.y })) continue;
+    step(1.2);
+    if (before - p.life <= 0.001) zeros++;
+  }
+  s.dead = true;
+  check('stance: Shieldwall Doctrine blocks rear strikes (≥1 of 30 at 20%)',
+    zeros >= 1, `zeros=${zeros}/30`);
+  if (p.casting?.mode === 'guard') { p.casting.held = false; step(0.3); }
+}
+
+// --- 2d) THE ANSWERING SHELL: a toggled rear-guard's DROP pays its remaining
+// pool through the grafted bash (deactivateAura → guardBashSpec). This is the
+// read the matrix probe can never reach — pilots never un-press a toggle —
+// so the compat.ts blindness row cites THIS pin as the deterministic proof.
+{
+  const s = mintStriker(40); // in FRONT — the drop bash answers along the facing
+  p.cooldowns.clear(); p.mana = p.maxMana(); p.useLock = 0;
+  world.useSkill(p, skill('rearguard_aegis')!, { x: s.pos.x, y: s.pos.y }, true);
+  step(0.6); // useTime 0.4 — let the toggle install the shell
+  check('shell: the toggle wears the rear-guard', !!p.shellGuard,
+    `pool=${p.shellGuard?.pool?.toFixed(0)}`);
+  const before = s.life;
+  p.cooldowns.clear(); p.useLock = 0;
+  world.useSkill(p, skill('rearguard_aegis')!, { x: s.pos.x, y: s.pos.y }, true); // toggle OFF
+  step(0.4);
+  const paid = before - s.life;
+  check('shell: the DROPPED shell answers through the grafted bash (Answering Wall)',
+    paid > 0 && !p.shellGuard, `paid=${paid.toFixed(1)} shellGone=${!p.shellGuard}`);
+  s.dead = true;
+}
 
 // --- 3) THE BOSS BAR contract ------------------------------------------------
 // Far spawn: authored boss, but the fight isn't live — no marquee.

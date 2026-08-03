@@ -21,7 +21,7 @@ import {
 import { DEFENSE_CFG } from './defense';
 import { plyFloorOf } from './plies';
 import type { Actor } from './actor';
-import { instanceMods, skillContextTags, type SkillInstance } from './skills';
+import { instanceInnateMods, instanceMods, skillContextTags, type SkillInstance } from './skills';
 import { STATUS_DEFS, TAUNT_CFG } from './status';
 import { feedWound, stampSegFlash } from './segments';
 import { SIM_TAP } from './tap';
@@ -111,9 +111,23 @@ interface DamageContext {
   effectiveness: number;
 }
 
-function damageContext(inst: SkillInstance): DamageContext {
+function damageContext(caster: Actor, inst: SkillInstance): DamageContext {
+  const extra = instanceMods(inst);
+  // THE STANCE BROADCAST (the Guarded Casting lane): a cast fired through a
+  // HELD GUARD folds the stance's own 'guarding'-scoped authored rows —
+  // runeward's spell blessing lives on its instance, invisible to bare
+  // reads. Scoped rows only: an unscoped innate stays the stance's own
+  // (its bash carries it), and socket mods never cross instances (the
+  // no-second-copy law). A stance rolling its OWN payload already carries
+  // its mods once.
+  const cs = caster.casting;
+  if (cs?.mode === 'guard' && cs.inst !== inst) {
+    for (const m of instanceInnateMods(cs.inst)) {
+      if (m.when === 'guarding') extra.push(m);
+    }
+  }
   return {
-    extra: instanceMods(inst),
+    extra,
     baseTags: skillContextTags(inst.def),
     effectiveness: inst.def.addedEffectiveness ?? 1,
   };
@@ -202,7 +216,7 @@ export function rollSkillDamage(
   flatBonus?: Partial<Record<DamageType, number>>,
 ): DamagePacket {
   const def = inst.def;
-  const ctx = damageContext(inst);
+  const ctx = damageContext(caster, inst);
   const { extra, baseTags } = ctx;
 
   // LUCKY / UNLUCKY rolls: a made lucky roll doubles the dice and keeps
@@ -270,7 +284,7 @@ export function skillDamageBands(
   caster: Actor, inst: SkillInstance,
   flatBonus?: Partial<Record<DamageType, number>>,
 ): SkillDamagePreview {
-  const ctx = damageContext(inst);
+  const ctx = damageContext(caster, inst);
   const loAmounts = foldSkillDamage(caster, inst, ctx, (lo) => lo, flatBonus);
   const hiAmounts = foldSkillDamage(caster, inst, ctx, (_lo, hi) => hi, flatBonus);
   const bands: Partial<Record<DamageType, DamageBand>> = {};
@@ -602,8 +616,12 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // eats a FLAT amount off what still got through (post-mitigation, so
   // value reads in the same currency as the wound it prevents). Defaults
   // (power 1) keep the classic full stop; effects always stay blocked.
-  if (chance(target.sheet.get('blockChance'))) {
-    const stop = target.sheet.get('blockPower');
+  // A held stance's own kit joins the block reads (Actor.stanceRead) —
+  // Shieldwall Doctrine's 'guarding'-scoped chance/value live on the
+  // guard instance, never on the sheet.
+  const bsc = target.stanceRead();
+  if (chance(target.sheet.get('blockChance', bsc?.tags, bsc?.extra))) {
+    const stop = target.sheet.get('blockPower', bsc?.tags, bsc?.extra);
     let leaked = 0;
     if (stop < 0.999) {
       const chip: Partial<Record<DamageType, number>> = {};
@@ -612,7 +630,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
       }
       leaked = Math.max(0, mitigateTyped(target, chip,
         { attacker, tags: packet.tags, extra: packet.extra })
-        - target.sheet.get('blockValue'));
+        - target.sheet.get('blockValue', bsc?.tags, bsc?.extra));
       target.life -= leaked;
       target.hitFlash = 0.1;
       if (leaked > 0 && segHit !== undefined && segHit >= 0) {

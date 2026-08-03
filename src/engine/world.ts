@@ -34389,13 +34389,13 @@ export class World {
    *  guard-gated `channelThorns` (Nettles) — one prick, three sources. */
   private applyThorns(victim: Actor, attacker: Actor, landed = 0): void {
     if (attacker.dead || attacker.invulnerable || attacker === victim) return;
-    let total = victim.sheet.get('thorns')
-      + landed * victim.sheet.get('thornsReflect');
-    if (victim.isChanneling()) {
-      const inst = victim.casting!.inst;
-      total += victim.sheet.get('channelThorns',
-        skillContextTags(inst.def), instanceMods(inst));
-    }
+    // A held stance's own kit joins the read (Actor.stanceRead): the spiked
+    // wall's 'guarding'-scoped thorns live on the skill instance, never on
+    // the sheet — a bare read cannot see them.
+    const sc = victim.stanceRead();
+    let total = victim.sheet.get('thorns', sc?.tags, sc?.extra)
+      + landed * victim.sheet.get('thornsReflect', sc?.tags, sc?.extra);
+    if (sc) total += victim.sheet.get('channelThorns', sc.tags, sc.extra);
     if (total <= 0) return;
     const dealt = total * attacker.sheet.get('damageTaken');
     attacker.life -= dealt;
@@ -50810,7 +50810,10 @@ export class World {
     // SNOW DENSITY: standing cover is heavy going for every walker
     // (SNOW_CFG.slowAtFull at a full blanket). Boats don't wade snow.
     const snowScale = this.sailing ? 1 : 1 - this.snowCover * SNOW_CFG.slowAtFull;
-    const speed = a.sheet.get('moveSpeed') * channelFactor * regionScale * boatScale * windScale * snowScale;
+    // A held stance's own kit joins the read (Actor.stanceRead) — the
+    // marching wall's 'guarding'-scoped speed rows live on the instance.
+    const sc = a.stanceRead();
+    const speed = a.sheet.get('moveSpeed', sc?.tags, sc?.extra) * channelFactor * regionScale * boatScale * windScale * snowScale;
     const traction = clamp(a.sheet.get('traction'), 0.05, 1);
     a.lastMoveAt = this.time;
     a.idleFor = 0; // a deliberate step breaks the 'stationary' stance
