@@ -11316,11 +11316,27 @@ export class World {
     opts?: { seed?: number; variant?: string; layoutType?: string }): string | null {
     if (!TILESETS[tilesetId]) return null;
     const anchor = this.zoneMap[this.zone.id] ?? this.zone;
+    // THE REALM STAMP (2026-08-03): a realm tileset mints IN ITS REALM. The
+    // dimension rides placeZoneAt's own spec lane — anchor pick, weave,
+    // chart halo and the def stamp are all dimension-aware — so the dev/perf
+    // lane's zones wear the same Nether tie (skyBelowDef → the understory's
+    // headless below-paint), dimension sky and realm charting the real path
+    // mints. Un-stamped they minted as SURFACE zones wearing a realm theme,
+    // and that whole tied lane never ran under the perf harness — its cost
+    // invisible to the gate. noBackEdge when the anchor stands on another
+    // plane: the dimension seal refuses the cross-plane road regardless
+    // (worldgen's warning lane) — declare the roadless mint deliberately;
+    // dev travel is loadZone-by-id and needs no road.
+    const realmDim = TILESETS[tilesetId].realm;
     const def = placeZoneAt(
       { x: anchor.map.x + 3 + (spread % 7), y: anchor.map.y + (spread % 5) - 2 },
       anchor, this.zoneMap, this.nextGenId++,
       {
         tileset: tilesetId, level,
+        ...(realmDim ? {
+          dimension: realmDim,
+          ...((anchor.dimension ?? 'surface') !== realmDim ? { noBackEdge: true } : {}),
+        } : {}),
         ...(opts?.seed !== undefined ? { seed: opts.seed } : {}),
         ...(opts?.variant ? { variant: opts.variant } : {}),
         ...(opts?.layoutType ? { layoutType: opts.layoutType } : {}),
