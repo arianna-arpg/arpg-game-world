@@ -3292,4 +3292,49 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       tufts: { color: '#9fd8ff', flower: '#e8f6ff' },
     },
   },
+
+  // === THE HOMED KIN, WAVE TEN (data/lairs.ts) ==============================
+  // Two doors and one banked coal. The doors are the caveMouth painter in
+  // their countries' own dress (the wave-nine idiom); the smolderstone is
+  // the hearth_crystal's shard-in-ember on a lair-owned kind — THE ONE
+  // NUMBER holds here too: the light radius is ABSOLUTE and equals the
+  // rule's warms reach (data/lairs.ts — probe_lairs pins them equal), so
+  // the drawn pool of glow is exactly the ground that warms you.
+  // The sett's split shell: glassy midnight-blue stone, prism light
+  // breathing out of the crack.
+  geode_crack: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#2a3a6a', edge: '#5a7ad0', material: 'crystal',
+      glow: '#9fd8ff', throat: '#060a18', rubble: {},
+      label: 'the Geode Sett',
+    },
+    light: { radius: -2, color: '#9fd8ff', intensity: 0.3, flicker: 1.6 },
+  },
+  // The fold's comb-arch: worked wax over root earth, honey-lit from below.
+  wax_gate: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#8a6a34', edge: '#c89848', material: 'wood',
+      glow: '#e8c060', throat: '#140e04', rubble: {},
+      label: 'the Honeyfold',
+    },
+    light: { radius: -2, color: '#e8c060', intensity: 0.24, flicker: 1.8 },
+  },
+  smolderstone: {
+    painter: 'shard', order: 53, bakeWhole: 'static', shadow: 0.5, longShadow: 0.7,
+    params: { points: 4, color: '#6a3020', material: 'crystal', coreGlow: { color: '#ff9a4a' } },
+    light: { radius: 110, color: '#ff9a4a', intensity: 0.55, flicker: 3 },
+  },
+  // The roost's hollow: a wind-worn nest-mouth in the isle's cloudstuff,
+  // day-blue at the throat — the flock's own sky showing through.
+  roost_hollow: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#bcd4e4', edge: '#e2eef6', material: 'stone',
+      glow: '#8fe0e8', throat: '#4a7a9a', rubble: {},
+      label: 'the Vane Roost',
+    },
+    light: { radius: -2, color: '#8fe0e8', intensity: 0.22, flicker: 1.4 },
+  },
 };

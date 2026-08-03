@@ -10803,6 +10803,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       { composition: 'vane_court', chance: 0.4 },
       { composition: 'chime_gallery', chance: 0.35 },
       { composition: 'choir_ring', chance: 0.15 },
+      // The herd's fortress (data/lairs.ts wave ten): the nest-knoll whose
+      // hollow opens the Vane Roost — the composition lane because the
+      // archipelago starves the landmark sitter (measured; see the block).
+      { composition: 'vane_roost_site', chance: 0.2 },
     ],
   },
 
@@ -11108,6 +11112,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     compositions: [
       { composition: 'vane_court', chance: 0.35 },
       { composition: 'chime_gallery', chance: 0.25 },
+      // The herd's fortress (data/lairs.ts wave ten — the drift's row, on
+      // the racing face too: the stream is still their sky).
+      { composition: 'vane_roost_site', chance: 0.2 },
     ],
   },
 

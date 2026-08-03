@@ -27,9 +27,12 @@ import '../src/data/lairs';
 import { Rng } from '../src/core/rng';
 import { vec, type Vec2 } from '../src/core/math';
 import {
-  doodadRuleOf, generateLayout, hasLandmark, isSidezoneEntranceKind, landmarkDefs,
+  compositionDefs, doodadRuleOf, generateLayout, hasCluster, hasComposition,
+  hasLandmark, isSidezoneEntranceKind, landmarkDefs,
   type GenCtx, type GeneratedLayout,
 } from '../src/engine/levelgen';
+import { STATUS_DEFS } from '../src/engine/status';
+import { SYMPATHY_LINKS } from '../src/engine/sympathy';
 import { carveMassifs, massKindOf, tenantKindIds, type MassPoolRow, type TenantRow } from '../src/engine/massif';
 import { GridWalkField } from '../src/world/gridWalk';
 import { LAIR_CFG, lairLandmarkRolls, lairOf, lairRows } from '../src/engine/lairs';
@@ -68,6 +71,9 @@ const LAIR_IDS = [
   'scythe_court', 'stamping_ground', 'rimevault', 'hunts_rest', 'tidewomb',
   // Wave nine — the homed kin continue (the archipelago + hell's marches).
   'drumshell', 'chainworks',
+  // Wave ten — the freshest ground (the roost is deliberately absent: its
+  // door rides the composition lane, no lair row — the wane-arch family).
+  'geode_sett', 'rimewick_clutch', 'honeyfold',
 ];
 const MOUTHS = [
   'frostmaw_maw', 'hovel_door', 'sphinx_gate',
@@ -78,6 +84,9 @@ const MOUTHS = [
   'bower_gate', 'stamping_gap', 'glacier_mouth', 'hunt_gate', 'tide_hollow',
   // Wave nine — the homed kin's two doors.
   'drum_burrow', 'windlass_gate',
+  // Wave ten — the homed kin's three doors (the knoll's hollow included:
+  // however a registered-sidezone door is planted, it owes the same kit).
+  'geode_crack', 'wax_gate', 'roost_hollow',
 ];
 const NATIVES = [
   'yeti', 'yeti_alpha', 'hill_giant', 'mire_hag', 'vault_sphinx',
@@ -87,6 +96,9 @@ const NATIVES = [
   'hollow_huntsman', 'gloam_courser', 'tideheart_matron',
   // Wave nine — the homed kin's residents (the drummer is half the pair).
   'drumclaw_patriarch', 'strand_drummer', 'chainwright',
+  // Wave ten — the homed kin's residents (courts and alphas both).
+  'prism_brock', 'prismbrock_matriarch', 'rimewick', 'rimewick_matron',
+  'gale_swift', 'stream_shrike', 'replete_foldmother',
 ];
 
 // --- RIG A: the registry weave --------------------------------------------------
@@ -1930,6 +1942,329 @@ const step = (secs: number): void => {
       });
       return (d.landmarks ?? []).some(l => l.landmark === 'windlass_ring' && l.chance === 1);
     })());
+}
+
+// --- RIG P: WAVE TEN — THE HOMED KIN reach the freshest ground ---------------
+// Four claims where the census ran thinnest and the newest fabric work
+// landed, each den ONE landed fabric as its whole argument: the Geode Sett
+// (crystal — THE ATTUNEMENT FABRIC: an open-retuning court around a locked
+// rolled heart, the voices studding the hall), the Rimewick Clutch (the
+// windchill mountain faces — THE SURVIVAL FABRIC's cold half: the one warm
+// ground is the held ground), the Vane Roost (the wind reaches — THE
+// FLOCKING FABRIC: the murmuration, its telegraphed dives, its attackable
+// shape; the door rides the COMPOSITION lane because the archipelago starves
+// the landmark sitter — measured, see data/lairs.ts), and the Honeyfold (the
+// garden's root tier — THE SYMPATHY FABRIC: the matron's draught waters the
+// hall). The registry/kit/look censuses arrive from rigs A1–A8 via the
+// extended arrays.
+{
+  // P13 — the den keys resolve whole; residents pay the hoard as marquee
+  // asks; the pair laws hold on every court body and both in-zone alphas.
+  const DENS10: { id: string; mouth: string; resident: string }[] = [
+    { id: 'geode_sett', mouth: 'geode_crack', resident: 'prismbrock_matriarch' },
+    { id: 'honeyfold', mouth: 'wax_gate', resident: 'replete_foldmother' },
+  ];
+  for (const den of DENS10) {
+    const lair = lairOf(den.id);
+    const lm = lair ? landmarkDefs().find(d => d.id === lair.landmark) : undefined;
+    const mk = (lm?.params as { mouthKind?: string } | undefined)?.mouthKind;
+    check(`P13 den '${den.id}' resolves whole (lair → den_mouth → '${den.mouth}' → sidezone)`,
+      !!lair && lm?.builder === 'den_mouth' && mk === den.mouth && !!sidezoneOf(den.mouth));
+    const res = MONSTERS[den.resident];
+    check(`P13 '${den.resident}' is the den's marquee ask (boss, lair_hoard)`,
+      res?.boss === true && res?.loot === 'lair_hoard');
+  }
+  check('P13 the roost is the composition lane\'s den (no lair row — the wane-arch family)',
+    hasComposition('vane_roost_site') && hasCluster('roost_knoll')
+    && !!sidezoneOf('roost_hollow') && !lairOf('vane_roost'));
+  const roostComp = compositionDefs().find(c => c.id === 'vane_roost_site');
+  check('P13 the knoll anchors on WALKABLE ground (siteWalk — the archipelago\'s own lever)',
+    roostComp?.sites?.some(s => s.siteWalk === true) === true);
+  check('P13 the court bodies are the pairs\' other halves (full bodies, never bosses, no hoard)',
+    (['prism_brock', 'rimewick', 'gale_swift'] as const).every(id =>
+      MONSTERS[id]?.boss !== true && MONSTERS[id]?.bossBar !== true && MONSTERS[id]?.loot === undefined));
+  check('P13 the in-zone alphas wear the hill giant\'s classification (bossBar elite + hoard, never boss)',
+    (['rimewick_matron', 'stream_shrike'] as const).every(id =>
+      MONSTERS[id]?.bossBar === true && !MONSTERS[id]?.boss && MONSTERS[id]?.loot === 'lair_hoard'));
+
+  // P14 — THE FOLD ENVELOPES (pure): the sett claims both grounds of its
+  // country, the fold claims exactly the garden's first cave, the clutch
+  // claims only the measured windchill faces, and the roost claims nothing
+  // through the fold at all (P13 pinned the absent row).
+  const at = (place: 'cave' | 'surface', biome: string, caveDepth: number | undefined,
+    level: number, tileset = 'cavern') =>
+    lairLandmarkRolls({ place, biome, caveDepth, level, tileset });
+  const has = (rolls: { landmark: string }[], lm: string) => rolls.some(r => r.landmark === lm);
+  check('P14 the sett claims the crystal country on BOTH grounds (surface + depths 1-2, refused by 3)',
+    has(at('surface', 'crystal', undefined, 11), 'geode_crack_site')
+    && has(at('cave', 'crystal', 1, 11), 'geode_crack_site')
+    && has(at('cave', 'crystal', 2, 11), 'geode_crack_site')
+    && !has(at('cave', 'crystal', 3, 11), 'geode_crack_site'));
+  check('P14 the sett is silent below its ramp and on foreign ground',
+    !has(at('surface', 'crystal', undefined, 4), 'geode_crack_site')
+    && !has(at('surface', 'field', undefined, 30), 'geode_crack_site'));
+  check('P14 the fold claims the garden\'s FIRST cave full, whispers into the rootways, silent below',
+    has(at('cave', 'garden', 1, 9), 'wax_gate_site')
+    && has(at('cave', 'garden', 2, 9), 'wax_gate_site')
+    && !has(at('cave', 'garden', 3, 9), 'wax_gate_site'));
+  check('P14 the fold never stands on the garden surface or under foreign anchors',
+    !has(at('surface', 'garden', undefined, 30), 'wax_gate_site')
+    && !has(at('cave', 'highland', 1, 30), 'wax_gate_site'));
+  check('P14 the clutch claims the cold faces by ALLOWLIST (snowcrown yes, foothills no, cavern no)',
+    has(at('surface', 'highland', undefined, 10, 'snowcrown'), 'rimewick_clutch')
+    && has(at('surface', 'highland', undefined, 10, 'pinnacle'), 'rimewick_clutch')
+    && !has(at('surface', 'highland', undefined, 10, 'foothills'), 'rimewick_clutch')
+    && !has(at('surface', 'highland', undefined, 10), 'rimewick_clutch'));
+  check('P14 THE ARGUING-GROUND PIN: every allowlisted face carries the windchill dial',
+    (lairOf('rimewick_clutch')?.seat.tilesets ?? []).length >= 4
+    && (lairOf('rimewick_clutch')?.seat.tilesets ?? []).every(t =>
+      ((TILESETS[t]?.theme as { windchill?: number } | undefined)?.windchill ?? 0) > 0));
+
+  // P15 — placement through the standing machinery: mouths stand and are
+  // spoored, the clutch furnishes its ring (ONE stone), the knoll plants
+  // the hollow through the composition lane, the sweep is deterministic,
+  // and a sealed pocket strips ALL THREE doors however they were planted.
+  const SPOOR10: Record<string, { biome: string; lm: string; kinds: string[] }> = {
+    geode_crack: { biome: 'crystal', lm: 'geode_crack_site', kinds: ['crystal_cluster', 'scree', 'bone_pile'] },
+    wax_gate: { biome: 'garden', lm: 'wax_gate_site', kinds: ['comb_wax', 'egg_clutch', 'bone_pile'] },
+  };
+  for (const [mouth, h] of Object.entries(SPOOR10)) {
+    const def = caveDef({
+      landmarks: [{ landmark: h.lm, chance: 1 }],
+      caveDepth: undefined, anchor: undefined, biome: h.biome,
+    });
+    const out = gen(def, 0xa119 + Object.keys(SPOOR10).indexOf(mouth));
+    const mouths = out.doodads.filter(d => d.kind === mouth);
+    check(`P15 the ${mouth} stands (one mouth through the landmark loop)`,
+      mouths.length === 1, `${mouths.length} mouths`);
+    const spoor = mouths[0] ? out.doodads.filter(d => h.kinds.includes(d.kind)
+      && Math.hypot(d.pos.x - mouths[0].pos.x, d.pos.y - mouths[0].pos.y) < 160) : [];
+    check(`P15 the ${mouth} apron is spoored (the den reads before the door)`,
+      spoor.length >= 2, `${spoor.length} pieces`);
+  }
+  {
+    const ring = gen(caveDef({
+      landmarks: [{ landmark: 'rimewick_clutch', chance: 1 }],
+      caveDepth: undefined, anchor: undefined, biome: 'highland',
+    }), 0xa131);
+    check('P15 the clutch furnishes its ring (EXACTLY one smolderstone — the one warm ground)',
+      ring.doodads.filter(d => d.kind === 'smolderstone').length === 1);
+    const wicks = (ring.landmarkSpawns ?? []).filter(s => s.id === 'rimewick' || s.id === 'rimewick_matron');
+    check('P15 the wicks hold the ring (landmark spawns staged interior)',
+      wicks.length >= 5, `${wicks.length} wicks`);
+    const knoll = gen(caveDef({
+      compositions: [{ composition: 'vane_roost_site', chance: 1 }],
+      caveDepth: undefined, anchor: undefined, biome: 'aether_stream',
+    }), 0xa132);
+    check('P15 the knoll plants the hollow (the composition lane\'s door stands)',
+      knoll.doodads.filter(d => d.kind === 'roost_hollow').length === 1
+      && knoll.doodads.some(d => d.kind === 'gale_vane'));
+    const geodeDef = caveDef({
+      landmarks: [{ landmark: 'geode_crack_site', chance: 1 }],
+      caveDepth: undefined, anchor: undefined, biome: 'crystal',
+    });
+    const print = (o: GeneratedLayout) => o.doodads.map(d =>
+      `${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`).join('|');
+    check('P15 same seed, same door (wave-ten placement determinism)',
+      print(gen(geodeDef, 77210)) === print(gen(geodeDef, 77210)));
+    const SEALED10: [string, Partial<ZoneDef>][] = [
+      ['geode_crack', { landmarks: [{ landmark: 'geode_crack_site', chance: 1 }], biome: 'crystal' }],
+      ['wax_gate', { landmarks: [{ landmark: 'wax_gate_site', chance: 1 }], biome: 'garden' }],
+      ['roost_hollow', { compositions: [{ composition: 'vane_roost_site', chance: 1 }], biome: 'aether_stream' }],
+    ];
+    for (const [mouth, over] of SEALED10) {
+      const sealed = gen(caveDef({
+        ...over, noDeeper: true, caveDepth: undefined, anchor: undefined,
+      }), 0xa140);
+      check(`P15 a sealed pocket strips the ${mouth} (the noDeeper chokepoint, every planting lane)`,
+        sealed.doodads.every(d => d.kind !== mouth));
+    }
+  }
+
+  // P16 — THE FABRIC CONTRACTS (static): each den's one argument, pinned on
+  // the data that carries it.
+  check('P16 the brock is the OPEN re-tuner (tune worn, never locked, never rolled)',
+    !!MONSTERS.prism_brock?.tune && MONSTERS.prism_brock.tune.locked !== true
+    && MONSTERS.prism_brock.tune.roll !== true);
+  const mat = MONSTERS.prismbrock_matriarch?.tune;
+  check('P16 the Matriarch is the heart\'s riddle at boss scale (rolled + LOCKED, the three elements)',
+    mat?.roll === true && mat?.locked === true
+    && (mat?.tones?.length ?? 0) === 3 && !mat?.tones?.includes('physical'));
+  const stoneRule = doodadRuleOf('smolderstone');
+  const stoneVis = DOODAD_VISUALS['smolderstone'];
+  check('P16 THE ONE NUMBER on the clutch\'s coal (warms == the drawn light\'s absolute radius)',
+    typeof stoneRule.warms === 'number' && stoneRule.warms === stoneVis?.light?.radius);
+  check('P16 the coal blesses by contact (hearthglow — the carried warmth the windchill loop reads)',
+    (stoneRule.contact?.status as { id?: string } | undefined)?.id === 'hearthglow'
+    && !!STATUS_DEFS.hearthglow
+    && (STATUS_DEFS.hearthglow.mods ?? []).some(m => m.stat === 'windchillWard'));
+  check('P16 the wicks fight in the cold\'s own color (frostbolt in kit, cold-tagged)',
+    (MONSTERS.rimewick?.skills ?? []).includes('frostbolt')
+    && !!SKILLS.frostbolt?.tags?.includes('cold'));
+  const swiftScript = MONSTERS.gale_swift?.brain?.script;
+  const swiftAloft = swiftScript?.find(p => p.id === 'aloft');
+  const swiftFlock = swiftAloft?.use?.behavior?.flock;
+  check('P16 the swift murmurates aloft (the flock lever at full weave on the aloft phase)',
+    !!swiftFlock && (swiftFlock.weave ?? 0) >= 1.5 && swiftFlock.kin === 'faction');
+  check('P16 the wheel\'s structure is attackable (leader death scatters the flock; packSize fields it)',
+    MONSTERS.gale_swift?.brain?.squad?.onLeaderDeath === 'scatter'
+    && (MONSTERS.gale_swift?.packSize?.[0] ?? 0) >= 5);
+  for (const [id, dive] of [['gale_swift', 'locust_dive'], ['stream_shrike', 'condor_stoop']] as const) {
+    const d = SKILLS[dive]?.delivery;
+    check(`P16 the ${id}'s stoop is an honest dive (telegraphed leap in kit)`,
+      (MONSTERS[id]?.skills ?? []).includes(dive)
+      && d?.type === 'leap' && (d as { telegraph?: boolean }).telegraph === true);
+  }
+  check('P16 the Foldmother wears the born link and the link resolves (matrons_draught → pack)',
+    (MONSTERS.replete_foldmother?.sympathy ?? []).includes('matrons_draught')
+    && SYMPATHY_LINKS.matrons_draught?.to.includes('pack'));
+  check('P16 she can DRINK and afford her kit (swig the reflex flask; heavy_strike payable)',
+    (MONSTERS.replete_foldmother?.skills ?? []).includes('swig')
+    && SKILLS.swig?.reflex === true
+    && (SKILLS.heavy_strike?.manaCost ?? 0) <= (MONSTERS.replete_foldmother?.base.mana ?? 0));
+
+  // P17 — THE LIVE DENS: each mouth mints its country, the residents stand,
+  // and the fabric argument holds in the running world.
+  const liveDen10 = (mouth: string, seed: number): void => {
+    w.player.pos = vec(400, 400);
+    w.enterSidezone({ pos: { x: 400, y: 400 }, seed, kind: mouth });
+  };
+  const flyBolt = (boltId: string, target: Actor): void => {
+    w.player.mana = 200;
+    const aim = vec(target.pos.x, target.pos.y);
+    w.useSkill(w.player, makeSkillInstance(SKILLS[boltId] as SkillDef, 1), aim);
+    const dt = 1 / 30;
+    for (let t = 0; t < 3; t += dt) w.update(dt); // flight only — no AI, nothing walks
+  };
+
+  // P17-I: the Geode Sett — the open court re-tunes to the blow and the
+  // wash is faction-blind; the locked heart holds her note.
+  {
+    liveDen10('geode_crack', 91910);
+    check('P17 the crack mints the Geode Sett (boss ask, sealed rung, the grotto face)',
+      String(w.zone.name).includes('Geode Sett')
+      && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'prismbrock_matriarch'
+      && w.zone.noDeeper === true && w.zone.variantName === 'crystal grotto',
+      `${w.zone.name} · ${w.zone.tileset} · ${w.zone.variantName}`);
+    const brocks = (w.actors as Actor[]).filter(a => a.defId === 'prism_brock' && !a.dead);
+    const voices = (w.actors as Actor[]).filter(a => a.defId === 'resonant_crystal');
+    check('P17 the court is home and the voices stand (brocks + resonant pillars staged)',
+      brocks.length >= 3 && voices.length >= 3, `${brocks.length} brocks, ${voices.length} voices`);
+    const brock = brocks[0];
+    const matriarch = (w.actors as Actor[]).find(a => a.defId === 'prismbrock_matriarch');
+    check('P17 the Matriarch holds the heart', !!matriarch);
+    if (brock && matriarch) {
+      w.player.invulnerable = true;
+      brock.pos = vec(w.player.pos.x + 60, w.player.pos.y);
+      flyBolt('firebolt', brock);
+      check('P17 the blow re-tunes the brock (fire tone worn — the crystal takes the color)',
+        brock.tone === 'fire' && brock.statuses.some(s => s.id === 'attuned_fire'), `tone=${brock.tone}`);
+      check('P17 the wash is faction-blind (the pulse attuned the STRIKER too)',
+        (w.player as Actor).statuses.some(s => s.id === 'attuned_fire'));
+      const heldTone = matriarch.tone;
+      check('P17 the heart woke in a rolled elemental note',
+        heldTone === 'fire' || heldTone === 'cold' || heldTone === 'lightning', String(heldTone));
+      matriarch.pos = vec(w.player.pos.x + 60, w.player.pos.y - 30);
+      flyBolt(heldTone === 'fire' ? 'frostbolt' : 'firebolt', matriarch);
+      check('P17 the heart HOLDS its note (locked — the counter-tone blow moves nothing)',
+        matriarch.tone === heldTone, `${String(heldTone)} → ${String(matriarch.tone)}`);
+      w.player.invulnerable = false;
+    }
+    leaveToHome();
+  }
+
+  // P17-II: the Vane Roost — the minted sky is open, the flock's own, and
+  // the murmuration takes the wing.
+  {
+    liveDen10('roost_hollow', 91911);
+    check('P17 the hollow mints the Vane Roost (boss ask, sealed rung, the drift face, OPEN sky)',
+      String(w.zone.name).includes('Vane Roost')
+      && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'stream_shrike'
+      && w.zone.noDeeper === true && w.zone.tileset === 'aether_drift' && w.zone.sky === 'open',
+      `${w.zone.name} · ${w.zone.tileset} · sky=${String(w.zone.sky)}`);
+    check('P17 the roost\'s sky is the flock\'s ALONE (packs override — no galekin hunt inside)',
+      (w.zone.packs?.table ?? []).length > 0
+      && (w.zone.packs.table as { id: string }[]).every(r => r.id === 'gale_swift' || r.id === 'stream_shrike'));
+    const swifts = (w.actors as Actor[]).filter(a => a.defId === 'gale_swift' && !a.dead);
+    check('P17 the murmuration is in residence (the fauna wheel staged)',
+      swifts.length >= 7, `${swifts.length} swifts`);
+    {
+      const dt = 1 / 30;
+      let aloft = 0;
+      for (let t = 0; t < 6 && aloft === 0; t += dt) {
+        for (const a of w.actors) updateAI(a, world, dt);
+        w.update(dt);
+        aloft = swifts.filter(a => !a.dead && (a.flying || a.buffs.has('aloft'))).length;
+      }
+      check('P17 the wheel takes the wing (swifts ALOFT through their own cycle)',
+        aloft >= 1, `${aloft} aloft`);
+    }
+    leaveToHome();
+  }
+
+  // P17-III: the Honeyfold — the matron drinks and the hall drinks with
+  // her (the draught live through def data alone).
+  {
+    liveDen10('wax_gate', 91912);
+    check('P17 the gate mints the Honeyfold (boss ask, sealed rung)',
+      String(w.zone.name).includes('Honeyfold')
+      && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'replete_foldmother'
+      && w.zone.noDeeper === true, `${w.zone.name}`);
+    const mother = (w.actors as Actor[]).find(a => a.defId === 'replete_foldmother' && !a.dead);
+    const tender = (w.actors as Actor[]).find(a => a.defId === 'formic_tender' && !a.dead);
+    check('P17 the wet-nurse is home and the milking crew stands', !!mother && !!tender);
+    if (mother && tender) {
+      w.player.invulnerable = true;
+      mother.pos = vec(w.player.pos.x + 70, w.player.pos.y);
+      tender.pos = vec(mother.pos.x + 60, mother.pos.y);
+      mother.life = mother.maxLife() * 0.5; // past the thirst gate (missing ≥ 20%)
+      tender.life = tender.maxLife() * 0.5;
+      const woundedAt = tender.life;
+      let fed = false;
+      const dt = 1 / 30;
+      for (let t = 0; t < 25 && !fed; t += dt) {
+        for (const a of w.actors) updateAI(a, world, dt);
+        w.update(dt);
+        if (tender.dead || mother.dead) break;
+        if (tender.life > woundedAt + 8) fed = true;
+      }
+      check('P17 the hall drinks as one (her swig watered the tender through the born link)',
+        fed, fed ? '' : `tender ${Math.round(woundedAt)} → ${Math.round(tender.life)}, mother quaffing=${mother.buffs.has('quaffing')}`);
+      w.player.invulnerable = false;
+    }
+    leaveToHome();
+  }
+
+  // P18 — mint purity (the E1 law: byte-equal double-mints — same mouth,
+  // same den, forever), plus each mint's own authored contract.
+  const mintOf = (mouth: string, parentOver: Partial<ZoneDef>, seed: number): ZoneDef | null => {
+    const sz = sidezoneOf(mouth);
+    if (!sz) return null;
+    const mctx = {
+      parent: caveDef({ id: `probe_p18_${mouth}`, caveDepth: undefined, anchor: undefined, ...parentOver }),
+      seed, id: `probe_p18_pocket_${mouth}`,
+      pos: { x: 100, y: 100 }, playerLevel: 12, pkgActive: () => false,
+    };
+    const a = sz.mint(mctx);
+    check(`P18 '${mouth}' mints pure and sealed (byte-equal, noDeeper)`,
+      JSON.stringify(a) === JSON.stringify(sz.mint(mctx)) && a.noDeeper === true);
+    return a;
+  };
+  const sett = mintOf('geode_crack', { biome: 'crystal' }, 0xa219);
+  check('P18 the sett wears the grotto ALWAYS (forced cavern face, the crystal grotto variant, voices authored)',
+    sett?.tileset === 'cavern' && sett?.variantName === 'crystal grotto'
+    && (sett?.scenery ?? []).some(s => s.monster === 'resonant_crystal')
+    && (sett?.fauna ?? []).some(f => f.id === 'prism_brock'));
+  const roost = mintOf('roost_hollow', { biome: 'aether_stream' }, 0xa220);
+  check('P18 the roost is a private open sky (drift face, sky OPEN, all-zephyrid packs, the wheel authored)',
+    roost?.tileset === 'aether_drift' && roost?.sky === 'open'
+    && (roost?.packs?.table ?? []).every(r => r.id === 'gale_swift' || r.id === 'stream_shrike')
+    && (roost?.fauna ?? []).some(f => f.id === 'gale_swift' && f.chance === 1));
+  const fold = mintOf('wax_gate', { biome: 'garden', caveDepth: 1, anchor: 'garden' }, 0xa221);
+  check('P18 the fold mints down the garden ladder (the undefined lane — depth 2 under the anchor, crew authored)',
+    fold?.caveDepth === 2 && fold?.anchor === 'garden'
+    && (fold?.fauna ?? []).some(f => f.id === 'formic_tender')
+    && (fold?.fauna ?? []).some(f => f.id === 'wool_aphid'));
 }
 
 console.log(fails ? `\nprobe_lairs: ${fails} FAILURE(S)` : '\nprobe_lairs: ALL PASS');

@@ -20429,6 +20429,183 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.1,
     brain: { type: 'basic', perception: { alertShout: 520 } },
   },
+
+  // ==========================================================================
+  // THE HOMED KIN — WAVE TEN of the lair fabric (data/lairs.ts): four more
+  // grounds claimed where the den census ran thinnest and the land is
+  // freshest — the crystal country, the windchill mountains, the wind
+  // reaches, and the garden's own root tier. The wave-eight law verbatim:
+  // new residents, ONE landed fabric per den as its whole argument,
+  // standing verbs only (no new skills were minted).
+  // ==========================================================================
+
+  // THE PRISM BROCK — the attunement fabric given a den (the Geode Sett,
+  // crystal country). A badger family that dug INTO the riven country and
+  // came up wearing it: the crystal ridge down each back is TUNABLE
+  // (tune: {} — the open re-tuner), so every landed blow re-colors the
+  // animal and the change PULSES its tone over friend and foe alike. Your
+  // own damage type raises the sett's guard against it — mind what color
+  // you swing, or bring a second one.
+  prism_brock: {
+    id: 'prism_brock', name: 'Prism Brock',
+    color: '#8a9ab8', shape: 'oval', radius: 13, material: 'fur', look: 'prism_brock',
+    base: { life: 88, moveSpeed: 138, accuracy: 98, armor: 25, mana: 0 },
+    skills: ['claw'], xp: 24,
+    faction: 'beast', tags: ['beast'],
+    tune: {},
+    scaleVariance: [0.9, 1.15],
+    detection: 1.0,
+    temper: 'territorial',
+    brain: { type: 'basic', move: { style: 'weave' } },
+  },
+  // THE SETT MATRIARCH — the heart's riddle at boss scale (the chord
+  // heart's own spec shape: roll + locked): she wakes in ONE rolled
+  // elemental note per mint and HOLDS it — her worn attuned status is the
+  // whole tell (nameplate, tint, the conversion that colors her bite), and
+  // no blow of yours ever re-tunes her. The court re-tunes freely around
+  // her locked note; reading which is which is the den's lesson.
+  prismbrock_matriarch: {
+    id: 'prismbrock_matriarch', name: 'Prismbrock Matriarch',
+    color: '#a8b8d8', shape: 'oval', radius: 19, material: 'fur', look: 'prismbrock_matriarch',
+    boss: true,
+    base: { life: 340, moveSpeed: 112, accuracy: 106, armor: 42, poise: 60, mana: 30, manaRegen: 3 },
+    skills: ['heavy_strike', 'claw'],
+    xp: 210, loot: 'lair_hoard',
+    faction: 'beast', tags: ['beast'],
+    tune: { roll: true, locked: true, tones: ['fire', 'cold', 'lightning'] },
+    detection: 1.1,
+    brain: {
+      type: 'juggernaut', enrage: 0.4,
+      behavior: { castArc: 0.7, reaction: [0.25, 0.6] },
+    },
+  },
+
+  // THE RIMEWICK — the windchill fabric given a lair (the Rimewick Clutch,
+  // the cold mountain faces). The snuffwick's mountain kin: a drifting
+  // knot of frost-motes that CROWDS warmth — the clutch camps the one
+  // banked ember on the ring, so the ground that would warm you is exactly
+  // the ground the teeth hold. Chill on every bolt; fire answers the
+  // family best (burnt dark is just dark gone).
+  rimewick: {
+    id: 'rimewick', name: 'Rimewick',
+    color: '#8ab8d0', shape: 'circle', radius: 8, material: 'ethereal', look: 'rimewick',
+    base: { life: 24, moveSpeed: 160, accuracy: 92, evasion: 45, mana: 20, manaRegen: 3 },
+    mods: [mod('coldRes', 'flat', 0.5), mod('fireRes', 'flat', -0.25)],
+    skills: ['frostbolt', 'claw'], xp: 9,
+    faction: 'rimebound',
+    levitates: true,
+    post: true, // the clutch holds its ring — a scattered wick drifts back
+    detection: 0.9,
+    brain: {
+      type: 'swarm',
+      move: { style: 'juke', hookEvery: [0.5, 0.9], hookArc: 0.9 },
+    },
+  },
+  // THE RIMEWICK MATRON — the clutch's banked cold: she keeps the
+  // smolderstone the way a miser keeps a lamp, and her nova is the rim of
+  // her patience. The in-zone alpha law (the hill giant's classification):
+  // a marquee elite on a bossBar, never a boss — the zone's own ask stays
+  // whatever it rolled — and her fall pays the lair hoard.
+  rimewick_matron: {
+    id: 'rimewick_matron', name: 'Rimewick Matron',
+    color: '#a8d0e4', shape: 'circle', radius: 14, material: 'ethereal', look: 'rimewick_matron',
+    bossBar: true,
+    base: { life: 200, moveSpeed: 120, accuracy: 100, evasion: 30, mana: 60, manaRegen: 6 },
+    mods: [mod('coldRes', 'flat', 0.5), mod('fireRes', 'flat', -0.25)],
+    skills: ['frost_nova', 'frostbolt'], xp: 120, loot: 'lair_hoard',
+    faction: 'rimebound',
+    levitates: true,
+    post: true, // she never leaves the stone she starves
+    detection: 1.1,
+    brain: { type: 'strafer' },
+  },
+
+  // THE GALE SWIFT — the flocking fabric given a roost (the Vane Roost,
+  // the wind reaches). The wild sky's own herd (zephyrid — the galekin
+  // stoop on them by standing diplomacy, so the roost is a fortress in
+  // hostile air): aloft they are a boiling murmuration (the flock lever at
+  // full weave), their dives are telegraphed rings, and the wheel's
+  // structure is attackable — the front of the V falls, the flock
+  // scatters.
+  gale_swift: {
+    id: 'gale_swift', name: 'Gale Swift',
+    color: '#c8dce8', shape: 'kite', radius: 8, material: 'fur', look: 'gale_swift',
+    base: { life: 30, moveSpeed: 195, accuracy: 98, evasion: 60, mana: 0 },
+    skills: ['claw', 'locust_dive'], xp: 11,
+    faction: 'zephyrid',
+    detection: 1.2,
+    temper: 'territorial',
+    scaleVariance: [0.85, 1.1],
+    packSize: [7, 11],
+    brain: {
+      type: 'swarm',
+      squad: { onLeaderDeath: 'scatter' },
+      script: wingCycle({
+        dive: 'locust_dive', aloftFor: 6, stoopFor: 1.6, groundFor: 3.2, stoopWithin: 380,
+        air: {
+          move: { style: 'orbit', ring: 200, pace: 1.15, flipEvery: [2.2, 4.0], flipChance: 0.3 },
+          behavior: { flock: { kin: 'faction', radius: 230, cohesion: 1.15, alignment: 1.3, separation: 1, weave: 3.4, erratic: 1.2 } },
+        },
+        ground: {
+          move: { style: 'skitter', dart: [0.26, 0.48], pause: [0.2, 0.4] },
+          behavior: { flock: { kin: 'faction', cohesion: 0.4, alignment: 0.3, separation: 1.2 } },
+        },
+      }),
+    },
+  },
+  // THE STREAM SHRIKE — the roost's tyrant: the heavy of the wheel, whose
+  // stoop is a promised crater and whose grounded recovery is the longest
+  // window the murmuration ever offers. The in-zone alpha law again:
+  // bossBar elite, never a boss, pays the hoard.
+  stream_shrike: {
+    id: 'stream_shrike', name: 'Stream Shrike',
+    color: '#9fc4dc', shape: 'kite', radius: 15, material: 'fur', look: 'stream_shrike',
+    bossBar: true,
+    base: { life: 240, moveSpeed: 200, accuracy: 108, evasion: 50, mana: 0 },
+    skills: ['claw', 'condor_stoop'], xp: 130, loot: 'lair_hoard',
+    faction: 'zephyrid',
+    detection: 1.3,
+    temper: 'territorial',
+    brain: {
+      type: 'juggernaut',
+      script: wingCycle({
+        dive: 'condor_stoop', aloftFor: 7, stoopFor: 1.8, groundFor: 4.2, stoopWithin: 430,
+        air: {
+          move: { style: 'orbit', ring: 250, pace: 0.95, flipEvery: [3, 5], flipChance: 0.25 },
+          behavior: { flock: { kin: 'faction', radius: 230, cohesion: 0.7, alignment: 0.9, separation: 1.1, weave: 1.8, erratic: 0.6 } },
+        },
+        ground: {
+          move: { style: 'direct' },
+        },
+      }),
+    },
+  },
+
+  // THE REPLETE FOLDMOTHER — the sympathy fabric given a den (the
+  // Honeyfold, under the garden). A honeypot-caste matron: the colony's
+  // living cask, her physogastric crop dragged behind her (the worm tail —
+  // hittable the whole way down). Her BORN LINK is the den's law: she
+  // drinks (swig — the enemy flask), and matrons_draught waters every
+  // formic body near her (engine/sympathy.ts). Kill the wet-nurse first,
+  // or fight a hall that drinks as one.
+  replete_foldmother: {
+    id: 'replete_foldmother', name: 'Replete Foldmother',
+    color: '#c89848', shape: 'oval', radius: 18, material: 'chitin', look: 'replete_foldmother',
+    boss: true,
+    base: { life: 360, moveSpeed: 55, accuracy: 104, armor: 40, poise: 60, mana: 30, manaRegen: 3 },
+    sympathy: ['matrons_draught'],
+    skills: ['swig', 'heavy_strike', 'claw'],
+    xp: 200, loot: 'lair_hoard',
+    faction: 'formic',
+    worm: { length: 3, spacing: 18, taper: 0.86 },
+    turnSpeed: 2.2,
+    grabbable: false,
+    detection: 0.9,
+    brain: {
+      type: 'juggernaut', enrage: 0.4,
+      behavior: { castArc: 0.7, reaction: [0.3, 0.6] },
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------

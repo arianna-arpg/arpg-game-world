@@ -27,8 +27,9 @@
 
 import { LAIR_CFG, lairOf, registerLair } from '../engine/lairs';
 import {
-  landmarkDefs, layTraveledWay, registerDoodadRule, registerLandmark,
-  registerLandmarkBuilder, type DoodadKind,
+  landmarkDefs, layTraveledWay, registerCluster, registerComposition,
+  registerDoodadRule, registerLandmark, registerLandmarkBuilder,
+  type DoodadKind,
 } from '../engine/levelgen';
 import { registerDormantTag, registerRouseRule } from '../engine/ai';
 import { registerSidezone, sidezoneOf } from './sidezones';
@@ -1628,5 +1629,307 @@ registerLair({
     place: 'surface',
     level: { from: 12, fadeIn: 3 },
     chance: 0.16,
+  },
+});
+
+// ============================================================================
+// WAVE TEN — THE HOMED KIN reach the freshest ground: four claims where the
+// den census ran thinnest and the newest fabric work landed — the crystal
+// country (THE ATTUNEMENT FABRIC), the windchill mountains (THE SURVIVAL
+// FABRIC's cold half), the wind reaches (THE FLOCKING FABRIC), and the
+// garden's root tier (THE SYMPATHY FABRIC). The wave-eight law verbatim:
+// new residents (data/monsters.ts), one landed fabric per den as its whole
+// argument. Three lanes, each picked by measurement: the sett and the fold
+// MINT (a forced grotto face; the Scorpion Well's undefined lane down the
+// garden ladder), the clutch is an IN-ZONE lair (the cairn's lane — its
+// argument needs the zone's own windchill), and the roost's door rides the
+// COMPOSITION lane (the wind faces starve the landmark sitter — see its
+// block).
+// ============================================================================
+
+// === THE GEODE SETT (the attunement fabric's den) ============================
+// Crystal country, surface and its first caves: a split in the riven shell,
+// badger-dug, going down into a grotto where the country's voices stand
+// thick. The law is THE ATTUNEMENT FABRIC (engine/tuning.ts): the sett's
+// brocks are OPEN re-tuners — every blow you land re-colors them and pulses
+// its tone over friend and foe alike (your own type arms the room against
+// it; the wash that buffs you also feeds the court) — and the Matriarch is
+// the heart's riddle at boss scale: ONE rolled note, locked, worn as her
+// tint. The resonant pillars stud the hall (authored scenery — the crystal
+// surface's own voices, concentrated), so no fight here is ever one color.
+
+registerDoodadRule('geode_crack', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'geode_crack_site', builder: 'den_mouth', size: [190, 260],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'geode_crack',
+    dress: [
+      { kind: 'crystal_cluster', count: [2, 4], radius: [11, 15] },
+      { kind: 'scree', count: [1, 3], radius: [12, 18] },
+      { kind: 'bone_pile', count: [1, 2], radius: [10, 15] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'geode_crack',
+  dwell: 0.7,
+  ledgerOnEnter: 'geode_sett_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, 'cavern', {
+      // THE FORCED FACE (the named-variant lane mintCave carries for
+      // authored gates): the sett is ALWAYS the crystal grotto — the
+      // country's own cave face at its most crystal — because the den's
+      // whole argument is staged on crystal ground. The undefined lane
+      // would deal the mixed crawl five mints in six.
+      variant: 'crystal grotto',
+      name: 'the Geode Sett',
+      objective: { kind: 'boss', id: 'prismbrock_matriarch' },
+      noDeeper: true,
+    });
+    // The court (the NEST_FAUNA lesson): open re-tuners around the locked
+    // heart, and the shards that shatter (the country's own glitter).
+    def.fauna = [
+      { id: 'prism_brock', chance: 1, count: [3, 5] },
+      { id: 'resonant_shardling', chance: 0.6, count: [2, 4] },
+    ];
+    // THE VOICES (the crystal surface's scenery law, concentrated): strike
+    // one with an element and the pulse washes everyone — the fight bends
+    // around them, which is the whole lesson plan.
+    def.scenery = [{ monster: 'resonant_crystal', count: [3, 5] }];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'geode_sett',
+  landmark: 'geode_crack_site',
+  seat: {
+    biomes: ['crystal'],
+    place: 'both',
+    strata: { to: 2, fadeOut: 1 },
+    level: { from: 8, fadeIn: 3 },
+    chance: 0.16,
+  },
+});
+
+// === THE RIMEWICK CLUTCH (the windchill fabric's lair) =======================
+// The in-zone lane (the cairn's law), because the argument IS the zone's own
+// weather: a wind-heaped ring on the cold faces, one banked ember at its
+// heart, and the wicks crowding it — the ground that would warm you is
+// exactly the ground the teeth hold. The rim is the counterplay geometry the
+// fabric already owns: duck behind the ring wall and the lee sheds your
+// stacks (windAt's shelter probe), touch the stone the wicks are starving
+// and carry its glow away (hearthglow — the mountain hearth's law on the
+// clutch's own coal). Seat pinned by ALLOWLIST to the faces that carry the
+// windchill dial: a lair whose argument is the cold never seats where the
+// cold isn't (foothills stays out by design).
+
+// The clutch's banked coal — the hearth_crystal's law on a lair-owned kind
+// (its own name, so the mountain-hearth kit's censuses stay untouched):
+// warms == the visual light's radius (THE ONE NUMBER — what glows is what
+// warms), and brushing it stamps hearthglow through the contact grammar.
+registerDoodadRule('smolderstone', {
+  overlap: 'solid', blocksMove: true, blocksShot: false, blocksSight: false,
+  spacing: 46,
+  warms: 110,
+  contact: { status: { id: 'hearthglow' }, icdSec: 1.5 },
+});
+
+registerLandmark({
+  id: 'rimewick_clutch', builder: 'pit', size: [230, 300],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    rimRegion: 'wall', gapArc: 0.8,
+    inner: [
+      { kind: 'smolderstone', count: [1, 1], radius: [13, 16] },
+      { kind: 'ice_spike', count: [1, 3], radius: [12, 17] },
+      { kind: 'bone_pile', count: [2, 4], radius: [10, 15] },
+    ],
+  },
+  spawns: {
+    table: [
+      { id: 'rimewick', weight: 3 },
+      { id: 'rimewick_matron', weight: 1 },
+    ],
+    count: [5, 8], where: 'interior',
+  },
+});
+
+registerLair({
+  id: 'rimewick_clutch',
+  landmark: 'rimewick_clutch',
+  seat: {
+    biomes: ['highland'],
+    place: 'surface',
+    // THE ARGUING-GROUND ALLOWLIST: faces whose theme carries the windchill
+    // dial (probe-pinned — a face that drops the dial must leave this list
+    // or the lair's argument goes silent under it) AND whose ground seats
+    // the ring (measured 40/40 each; the overpass carries the dial but its
+    // span-riddled floor starved the sitter 6/40 — the pass keeps its cold
+    // to itself).
+    tilesets: ['highland', 'snowcrown', 'stonecrown', 'pinnacle'],
+    level: { from: 7, fadeIn: 3 },
+    chance: 0.2,
+  },
+});
+
+// === THE VANE ROOST (the flocking fabric's den) ==============================
+// The wind reaches (galestream + the Driftways): a nest-knoll on the isles,
+// and through its hollow the flock's OWN sky — a minted open-sky drift
+// pocket where the murmuration wheels. The law is THE FLOCKING FABRIC
+// (BehaviorSpec.flock at full weave): aloft the roost is a boiling shape —
+// pure motion, nothing to reach — its dives are telegraphed rings (the leap
+// lever), the grounded beat after each stoop is the melee window, and the
+// wheel's STRUCTURE is attackable: the front of the V falls and the flock
+// scatters (squad onLeaderDeath). Zephyrid on galekin ground: the sky
+// already hunts them (standing diplomacy), so the roost reads as what it is
+// — the herd's one fortress.
+//
+// THE DOOR RIDES THE COMPOSITION LANE, measured, not preferred: the wind
+// faces are ~10% walkable archipelago, and the landmark sitter's uniform
+// darts starve there (40-seed sweeps: a pit ring sited 12-21/40 across
+// every footprint down to [110,150] — the warren-starved class, terrain
+// grain). Compositions carry the one standing walk-aware anchor
+// (CompositionSite.siteWalk — authored FOR the Driftways' isles), and a
+// cluster is a proven mouth-vehicle (the sunken ruin's gate, the Breach's
+// tear), so the knoll plants the hollow the way the ruin plants its court —
+// and loadZone's entrance sweep adopts any registered-sidezone doodad
+// however it was placed (the tenant lane's own law). No lair row: the
+// composition IS the claim (the wane-arch family), rolled on the two wind
+// faces' own composition tables.
+
+registerDoodadRule('roost_hollow', { overlap: 'trigger', spacing: 60 });
+
+// The knoll: the hollow at heart, a vane and wind-chimes over it, the
+// wheel's leavings ringing the rim (the ring contract: clearing [45,60] →
+// centerpiece rings ≤ 40, litter past 82).
+registerCluster({
+  id: 'roost_knoll',
+  anchor: { radius: 26, kind: 'roost_hollow' },
+  pieces: [
+    { kind: 'roost_hollow', radius: [24, 28], count: [1, 1], ring: [0, 1], centerpiece: true },
+    { kind: 'gale_vane', radius: [11, 14], count: [1, 2], ring: [30, 40], centerpiece: true },
+    { kind: 'bone_pile', radius: [10, 15], count: [2, 4], ring: [84, 130], rot: true },
+    { kind: 'chime_stand', radius: [10, 13], count: [0, 1], ring: [88, 132], rot: true },
+  ],
+  poi: true,
+});
+
+registerComposition({
+  id: 'vane_roost_site',
+  // siteWalk: the wind faces are isles in open air — the knoll needs one
+  // (the vane court's own word for the same ground).
+  sites: [{ id: 'knoll', radius: [110, 150], siteWalk: true }],
+  pre: [{ kind: 'clearing', at: 'knoll', count: [1, 1], radius: [45, 60] }],
+  post: [{ kind: 'cluster', cluster: 'roost_knoll', at: 'knoll', count: [1, 1] }],
+});
+
+registerSidezone({
+  kind: 'roost_hollow',
+  dwell: 0.7,
+  ledgerOnEnter: 'vane_roost_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, 'aether_drift', {
+      // The flock's own sky: a private drift-archipelago pocket (the realm's
+      // standing face — no new tileset), rolled through its variants.
+      rollVariant: true,
+      name: 'the Vane Roost',
+      objective: { kind: 'boss', id: 'stream_shrike' },
+      noDeeper: true,
+    });
+    // THE OPEN-SKY POCKET (the drake roost's law): skyOf honors an explicit
+    // def sky over the cave derivation — the murmuration wheels under real
+    // weather, and the gusts on the isles are not a metaphor.
+    def.sky = 'open';
+    // The wheel, guaranteed (the NEST_FAUNA lesson): a full murmuration in
+    // residence — and the ambient sky is the flock's ALONE (packs override:
+    // the face's galekin packs would hunt the herd out of its own den
+    // before the player ever saw the shape).
+    def.fauna = [
+      { id: 'gale_swift', chance: 1, count: [7, 11] },
+    ];
+    // Light satellite wheels only (def packSize already fields each rolled
+    // pack as a true flock — a generous count here trebled the sky to ~85
+    // bodies, measured; the argument wants ONE readable shape).
+    def.packs = {
+      count: [1, 2], size: [2, 3],
+      table: [
+        { id: 'gale_swift', weight: 4 },
+        { id: 'stream_shrike', weight: 0.5 },
+      ],
+    };
+    return def;
+  },
+});
+
+// === THE HONEYFOLD (the sympathy fabric's den) ===============================
+// The garden's root tier: a waxed comb-arch INSIDE the undergrowth (the
+// seat's cave place + strata band — full at depth 1, whispering into the
+// rootways below), going down to the gallery where the colony milks its
+// herd. The law is THE SYMPATHY FABRIC (engine/sympathy.ts): the Replete
+// Foldmother is the colony's living cask, and her born matrons_draught link
+// is the den's whole tactical text — she drinks, and every formic body near
+// her drinks with her. Kill the wet-nurse first, or fight a hall that
+// drinks as one. The aphid fold stands around the fight (the frostmaw's
+// larder law): the herd is what the gallery is FOR.
+
+registerDoodadRule('wax_gate', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'wax_gate_site', builder: 'den_mouth', size: [180, 250],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'wax_gate',
+    dress: [
+      { kind: 'comb_wax', count: [2, 4], radius: [12, 16] },
+      { kind: 'egg_clutch', count: [1, 2], radius: [11, 15] },
+      { kind: 'bone_pile', count: [1, 2], radius: [10, 15] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'wax_gate',
+  dwell: 0.7,
+  ledgerOnEnter: 'honeyfold_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, undefined, {
+      // The Scorpion Well's lane, one story down: the parent is already the
+      // undergrowth, so the strata pool under the garden anchor deals the
+      // rootways face — the fold's gallery looks like the country below
+      // the country, which is where it is.
+      name: 'the Honeyfold',
+      objective: { kind: 'boss', id: 'replete_foldmother' },
+      noDeeper: true,
+    });
+    // The milking crew and the herd (the NEST_FAUNA lesson): tenders bond
+    // to the fold they keep, soldiers stand the wall, and the aphids ARE
+    // the point of the room — the draught waters the colony, never the
+    // livestock (the link's own faction law, read at the table).
+    def.fauna = [
+      { id: 'formic_tender', chance: 1, count: [2, 3] },
+      { id: 'formic_soldier', chance: 0.6, count: [1, 2] },
+      { id: 'wool_aphid', chance: 0.7, count: [3, 6] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'honeyfold',
+  landmark: 'wax_gate_site',
+  seat: {
+    biomes: ['garden'],
+    place: 'cave',
+    // Full weight in the first cave under the garden (the undergrowth —
+    // the root tier the fold farms), whispering into the rootways at 2
+    // (the frostmaw's ramp law: a hard cliff reads as a bug), silent
+    // below.
+    strata: { from: 1, to: 1, fadeOut: 2 },
+    level: { from: 6, fadeIn: 3 },
+    chance: 0.22,
   },
 });

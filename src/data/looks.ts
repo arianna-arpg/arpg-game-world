@@ -9280,6 +9280,97 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#e8d8a8', params: { spread: 0.26, dist: 0.58, size: 0.06 } },
     ],
   },
+
+  // ============================= THE HOMED KIN, WAVE TEN (the lairs)
+  /** THE PRISM BROCK: a digger's low silhouette under a tunable crystal
+   *  ridge — the badger that moved into the geode. The worn attuned status
+   *  tints the ridge's glow through the ordinary dressing lane, so what
+   *  color the animal IS is always what color it was last struck. */
+  prism_brock: {
+    parts: [
+      { kind: 'torso', scale: 1.0 },
+      { kind: 'furRuff', scale: 1.05 },
+      { kind: 'crystalGrowths', role: 'accent', scale: 0.9, params: { n: 4 } },
+      { kind: 'snout', scale: 0.95 },
+      { kind: 'claws', params: { len: 0.55, talons: 3 } },
+      { kind: 'eyes', color: '#cfe0f8', params: { spread: 0.3, dist: 0.55, size: 0.08 } },
+    ],
+  },
+  /** THE SETT MATRIARCH: the same digger grown into her own vault — the
+   *  ridge a full crown of shards with a gem heart, the locked note's tint
+   *  worn on the glow. Family silhouette at matriarch scale (the strand
+   *  drummer's lesson-plan law). */
+  prismbrock_matriarch: {
+    parts: [
+      { kind: 'torso', scale: 1.1 },
+      { kind: 'furRuff', scale: 1.12 },
+      { kind: 'crystalGrowths', role: 'accent', scale: 1.2, params: { n: 6 } },
+      { kind: 'gem', x: -0.2, scale: 0.5, role: 'glow' },
+      { kind: 'snout', scale: 1.0 },
+      { kind: 'fangs', scale: 0.7 },
+      { kind: 'claws', params: { len: 0.62, talons: 3 } },
+      { kind: 'eyes', color: '#dfe8ff', params: { spread: 0.28, dist: 0.55, size: 0.08 } },
+    ],
+  },
+  /** THE RIMEWICK: the snuffwick's mountain kin — a knot of frost-motes on
+   *  a pale halo, drawn to warmth it does not share. */
+  rimewick: {
+    parts: [
+      { kind: 'disc', scale: 0.62, role: 'dark' },
+      { kind: 'halo', scale: 1.15, alpha: 0.5, color: '#9fd0e8' },
+      { kind: 'eyes', scale: 0.8, role: 'glow', params: { n: 2 } },
+    ],
+    live: [{ kind: 'wisps', scale: 0.8, role: 'dark', params: { n: 3 } }],
+  },
+  /** THE RIMEWICK MATRON: the clutch's banked cold — the same knot grown
+   *  heavy, double-haloed, motes orbiting like a miser's ledger. */
+  rimewick_matron: {
+    parts: [
+      { kind: 'disc', scale: 0.72, role: 'dark' },
+      { kind: 'halo', scale: 1.05, alpha: 0.55, color: '#b8e0f4' },
+      { kind: 'halo', scale: 1.35, alpha: 0.35, color: '#8ac0e0' },
+      { kind: 'eyes', scale: 0.9, role: 'glow', params: { n: 2 } },
+    ],
+    live: [{ kind: 'wisps', scale: 1.0, role: 'dark', params: { n: 4 } }],
+  },
+  /** THE GALE SWIFT: wings first at any distance (the murmuration's
+   *  doctrine) — a sickle of feathers barely wrapped around a body. */
+  gale_swift: {
+    parts: [
+      { kind: 'featherWings', scale: 1.35 },
+      { kind: 'torso', scale: 0.55 },
+      { kind: 'beak', scale: 0.8 },
+      { kind: 'eyes', params: { n: 2, spread: 0.36, dist: 0.34, size: 0.11 } },
+    ],
+    shadowScale: 0.5,
+  },
+  /** THE STREAM SHRIKE: the swift's silhouette with shoulders — the impaler
+   *  of the wheel, plumed like weather that decided to be a bird. */
+  stream_shrike: {
+    parts: [
+      { kind: 'featherWings', scale: 1.5 },
+      { kind: 'torso', scale: 0.68 },
+      { kind: 'beak', scale: 1.1 },
+      { kind: 'plume', x: -0.2, scale: 0.65 },
+      { kind: 'claws', params: { len: 0.5, talons: 3 } },
+      { kind: 'eyes', params: { n: 2, spread: 0.36, dist: 0.34, size: 0.12 } },
+    ],
+    shadowScale: 0.55,
+  },
+  /** THE REPLETE FOLDMOTHER: the colony's living cask — an ant's fore-body
+   *  in front of the amber crop she drags (the worm tail draws the cask's
+   *  chambers), ringed like the vessel she is. */
+  replete_foldmother: {
+    parts: [
+      { kind: 'carapace', scale: 1.0 },
+      { kind: 'armorPlates', scale: 0.75 },
+      { kind: 'segmentRings', params: { n: 4 } },
+      { kind: 'antennae', scale: 0.9 },
+      { kind: 'mandibles', scale: 1.0 },
+      { kind: 'legs', scale: 0.9, params: { n: 6 } },
+      { kind: 'gem', x: -0.35, scale: 0.55, role: 'glow', color: '#e8b860' },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look
