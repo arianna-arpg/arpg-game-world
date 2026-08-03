@@ -25,7 +25,14 @@
 //     stays base-biome under the blight; resolveEpicenter → pall clears,
 //     warp releases + decays to nothing, and the TRANSIENCE RULE drops the
 //     unclaimed epicenter zone from the very next save,
-//   - the warp sweep releases stale demon_ warps (no producer since this pass).
+//   - the warp sweep releases stale demon_ warps (no producer since this pass),
+//   - THE LINGER FOLD (WeatherDef.lingerGeo, birthGeo's lifetime sibling): the
+//     birth ground's climate scales the rolled front lifetime, folded ONCE at
+//     the birth roll with ZERO added draws — absent == out-of-band == unbaked
+//     is byte-identical by construction (the drained-pool A/B pins the whole
+//     stream), in-band scales ONLY the authored kind and EXACTLY (IEEE ===),
+//     eventOnly kinds are structurally exempt + validated against carrying
+//     the row, and every shipped band intersects its birth band (no dead data).
 // Run: npx tsx balance/probe_transience.ts
 // ---------------------------------------------------------------------------
 
@@ -37,7 +44,8 @@ import type { OverlayView } from '../src/world/overlay';
 import type { PackageGate, OverlayBuildCtx } from '../src/packages/types';
 import { BiomeField } from '../src/world/biomeField';
 import { BIOME_FIELD_CFG, biomeAt } from '../src/world/biomes';
-import { WEATHER_DEFS, validateWeather } from '../src/world/weather';
+import { WEATHER_DEFS, WeatherField, lingerMulOf, registerWeather, validateWeather } from '../src/world/weather';
+import { Rng } from '../src/core/rng';
 import { skyGeoOf, skyRawIntensity, WEATHER_FX } from '../src/render/vis/weatherFx';
 import { VIS_CFG } from '../src/render/vis/visConfig';
 import { WEATHER_DRESS_CFG, dressPlanFor } from '../src/engine/weatherDress';
@@ -385,6 +393,138 @@ registerEventFront({ id: 'probe_pin', sample: () => pin });
   const ghost = bf.warpsAt({ x: 0, y: 0 }).find(m => m.id === 'demon_ghost');
   check('F: the sweep releases stale demon_ warps (fading, no producer left)',
     !ghost || ghost.strength < 1, ghost ? `strength ${ghost.strength.toFixed(2)}` : 'gone');
+}
+
+// ------------- H. THE LINGER FOLD: lifetime takes the birth ground's color --
+{
+  // H1 — the pure fold (lingerMulOf), numbers derived from the shipped defs so
+  // a re-tune moves the pins with it: bands that HOLD multiply, everything
+  // else folds exactly 1 (the × 1 = x identity is the absent==identical law).
+  const fog = WEATHER_DEFS.fog, sand = WEATHER_DEFS.sandstorm, bliz = WEATHER_DEFS.blizzard;
+  const wet = fog.lingerGeo!.moisture, hot = fog.lingerGeo!.temperature;
+  check('H: a def without the row folds exactly 1',
+    lingerMulOf(WEATHER_DEFS.storm, { temperature: 0.9, moisture: 0.9 }) === 1);
+  check('H: an unbaked node folds exactly 1 (the tolerance doctrine)',
+    lingerMulOf(fog, undefined) === 1);
+  check('H: axes the node lacks pass neutrally', lingerMulOf(fog, { wildness: 0.9 }) === 1);
+  check('H: a holding band folds its own mul', lingerMulOf(fog, { moisture: wet.min! + 0.2 }) === wet.mul);
+  check('H: band edges are INCLUSIVE (its sibling birthGeo\'s law)',
+    lingerMulOf(fog, { moisture: wet.min! }) === wet.mul
+    && lingerMulOf(bliz, { temperature: bliz.lingerGeo!.temperature.max! }) === bliz.lingerGeo!.temperature.mul);
+  check('H: just outside the band refuses',
+    lingerMulOf(fog, { moisture: wet.min! - 0.001 }) === 1
+    && lingerMulOf(fog, { temperature: hot.min! - 0.001 }) === 1);
+  check('H: multi-axis bands MULTIPLY (the deep erg keeps its grit)',
+    lingerMulOf(sand, { temperature: 0.9, moisture: 0.05 })
+    === sand.lingerGeo!.temperature.mul * sand.lingerGeo!.moisture.mul);
+  check('H: opposing bands compose (hot-marsh fog ≈ neutral)',
+    lingerMulOf(fog, { moisture: 0.8, temperature: 0.8 }) === wet.mul * hot.mul);
+
+  // H2 — registry census: the commissioned identities + structural exemptions.
+  const evLinger = Object.entries(WEATHER_DEFS).filter(([, d]) => d.eventOnly && d.lingerGeo).map(([k]) => k);
+  check('H: NO eventOnly kind carries a linger row (its event owns its clock)',
+    evLinger.length === 0, evLinger.join(','));
+  check('H: fog lingers wet and dies hot (the commissioned identity)',
+    wet.mul > 1 && hot.mul < 1);
+  check('H: the sandstorm is fog\'s INVERSE (heat + drought feed it)',
+    sand.lingerGeo!.temperature.mul > 1 && sand.lingerGeo!.moisture.mul > 1
+    && sand.lingerGeo!.moisture.max !== undefined);
+  check('H: rain stays modest', WEATHER_DEFS.rain.lingerGeo!.moisture.mul > 1
+    && WEATHER_DEFS.rain.lingerGeo!.moisture.mul <= 1.2);
+  check('H: a snow front over the hot south burns off fast',
+    WEATHER_DEFS.snow.lingerGeo!.temperature.mul < 1);
+  let disjoint = 0;
+  for (const [, d] of Object.entries(WEATHER_DEFS)) {
+    for (const [axis, lb] of Object.entries(d.lingerGeo ?? {})) {
+      const bb = d.birthGeo?.[axis];
+      if (!bb) continue;
+      if (Math.max(lb.min ?? -Infinity, bb.min ?? -Infinity)
+        > Math.min(lb.max ?? Infinity, bb.max ?? Infinity)) disjoint++;
+    }
+  }
+  check('H: every shipped linger band INTERSECTS its birth band (no dead rows)', disjoint === 0);
+
+  // H3 — validation refuses the malformed rows (and the dead-data class).
+  registerWeather('probe_bad_ev', {
+    label: 'x', color: '#fff', countMul: 1, factionMul: {}, eventOnly: true,
+    lingerGeo: { temperature: { min: 0.5, mul: 1.2 } },
+  });
+  registerWeather('probe_bad_band', {
+    label: 'x', color: '#fff', countMul: 1, factionMul: {}, skyWeight: { day: 1 },
+    lingerGeo: { temperature: { min: 0.8, max: 0.2, mul: 1.2 } },
+  });
+  registerWeather('probe_bad_mul', {
+    label: 'x', color: '#fff', countMul: 1, factionMul: {}, skyWeight: { day: 1 },
+    lingerGeo: { temperature: { min: 0.5, mul: 0 } },
+  });
+  registerWeather('probe_bad_dead', {
+    label: 'x', color: '#fff', countMul: 1, factionMul: {}, skyWeight: { day: 1 },
+    birthGeo: { temperature: { max: 0.3 } },
+    lingerGeo: { temperature: { min: 0.6, mul: 1.2 } },
+  });
+  const v = validateWeather(() => true, () => true);
+  check('H: eventOnly + lingerGeo REFUSED (dead data dressed as a lever)',
+    v.some(m => m.includes('probe_bad_ev') && m.includes('lingerGeo')));
+  check('H: an inverted linger band is flagged',
+    v.some(m => m.includes('probe_bad_band') && m.includes('inverted')));
+  check('H: a non-positive mul is flagged', v.some(m => m.includes('probe_bad_mul')));
+  check('H: a linger band DISJOINT from its birth band is flagged (could never fire)',
+    v.some(m => m.includes('probe_bad_dead') && m.includes('never overlaps')));
+  for (const k of ['probe_bad_ev', 'probe_bad_band', 'probe_bad_mul', 'probe_bad_dead']) {
+    delete WEATHER_DEFS[k];
+  }
+
+  // H4 — THE DRAINED-POOL A/B: emptying the pool between steps removes the
+  // cap-slot feedback (a longer-lived front otherwise re-times later births —
+  // the feature, not displacement), so the same seed must yield the same
+  // WHOLE byte stream wherever no band holds, and in-band must move ONLY the
+  // authored kind's life, by exactly its mul. The probe kind bands a custom
+  // axis no shipped def reads, so every real kind folds neutral in all arms.
+  registerWeather('probe_linger', {
+    label: 'Probe Linger', color: '#123456', countMul: 1, factionMul: {},
+    skyWeight: { dawn: 50, day: 50, dusk: 50, night: 50 },
+    lingerGeo: { probe_haze: { min: 0.5, mul: 1.4 } },
+  });
+  const births = (climate: Record<string, number> | undefined, strip = false): string[] => {
+    const def = WEATHER_DEFS.probe_linger;
+    const saved = def.lingerGeo;
+    if (strip) delete def.lingerGeo;
+    const field = new WeatherField(new Rng(0xf01d));
+    const node = { id: 'probe_node', map: { x: 0, y: 0 }, geo: climate ? { climate } : undefined } as unknown as ZoneDef;
+    const view = { nodes: [node], time: 0 } as unknown as OverlayView;
+    const out: string[] = [];
+    for (let i = 0; i < 4000; i++) {
+      field.update(0.5, view);
+      for (const f of field.fronts) {
+        out.push(JSON.stringify({ k: f.kind, x: f.pos.x, y: f.pos.y, vx: f.vel.x, vy: f.vel.y, r: f.radius, life: f.life }));
+      }
+      field.fronts.length = 0;
+    }
+    if (strip && saved) def.lingerGeo = saved;
+    return out;
+  };
+  const unbaked = births(undefined);
+  const outBand = births({ probe_haze: 0.2 });
+  const stripped = births({ probe_haze: 0.2 }, true);
+  const inBand = births({ probe_haze: 0.8 });
+  check('H: unbaked == out-of-band == row-stripped (whole streams byte-identical)',
+    unbaked.join('|') === outBand.join('|') && outBand.join('|') === stripped.join('|'),
+    `${unbaked.length}/${outBand.length}/${stripped.length} births`);
+  let exact = 0, bystanders = 0, wrong = 0;
+  for (let i = 0; i < Math.max(inBand.length, outBand.length); i++) {
+    if (i >= inBand.length || i >= outBand.length) { wrong++; continue; }
+    const a = JSON.parse(outBand[i]) as { k: string; x: number; y: number; vx: number; vy: number; r: number; life: number };
+    const b = JSON.parse(inBand[i]) as typeof a;
+    if (a.k !== b.k || a.x !== b.x || a.y !== b.y || a.vx !== b.vx || a.vy !== b.vy || a.r !== b.r) { wrong++; continue; }
+    if (a.k === 'probe_linger') { b.life === a.life * 1.4 ? exact++ : wrong++; }
+    else { b.life === a.life ? bystanders++ : wrong++; }
+  }
+  check('H: in-band scales ONLY the authored kind, EXACTLY (life × mul, IEEE ===)',
+    wrong === 0 && exact >= 20 && bystanders >= 5,
+    `${exact} scaled exact, ${bystanders} bystanders identical, ${wrong} wrong`);
+  delete WEATHER_DEFS.probe_linger;
+  check('H: registry validates clean after the probe kinds leave',
+    validateWeather(() => true, k => !!DOODAD_VISUALS[k]).length === 0);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');

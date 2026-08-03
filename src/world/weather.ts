@@ -135,6 +135,17 @@ export interface WeatherDef {
    *  baking pass neutrally (the tolerance doctrine). No draws added, so
    *  kinds without one keep their exact spawn streams. */
   birthGeo?: Record<string, { min?: number; max?: number }>;
+  /** LINGER GEOGRAPHY — birthGeo's lifetime sibling: climate-axis bands
+   *  that, where the BIRTH node's baked geo holds them, SCALE the front's
+   *  rolled lifetime (fog born over the wet country settles in for hours;
+   *  a snow front over the hot south burns off fast). Every band that
+   *  holds multiplies in, folded ONCE at the birth roll — the front then
+   *  carries its born lifetime wherever it drifts. Reads the same climate
+   *  birthGeo reads with the same tolerance (unbaked node ⇒ neutral) and
+   *  adds NO draws, so a kind without the row keeps its exact spawn
+   *  stream; an eventOnly kind never meets it — its event owns its clock
+   *  (validateWeather refuses the dead row). */
+  lingerGeo?: Record<string, { min?: number; max?: number; mul: number }>;
   /** RADIANCE DIAL: how this front bends the sky's light while it covers a
    *  zone (world/radiance.ts — radiance = clamp01(max(light × mul, floor))).
    *  Omitted = light passes through. `mul` dims: rain greys the noon, a
@@ -153,6 +164,8 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     radiance: { mul: 0.72 },
     label: 'Rain', color: '#4a6a9a', countMul: 1.05, factionMul: { sylvan: 1.3, wild: 1.15 },
     wind: 0.4, skyWeight: { day: 3, dusk: 2, night: 1, dawn: 2 },
+    // Wet country's rains settle in — modest: rain is everyone's sky.
+    lingerGeo: { moisture: { min: 0.55, mul: 1.15 } },
   },
   storm: {
     radiance: { mul: 0.5 },
@@ -167,11 +180,16 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     radiance: { mul: 0.62 },
     label: 'Fog', color: '#9aa0a8', countMul: 1.15, factionMul: { undead: 1.3, gnoll: 1.3 },
     rampFrac: 0.5, wind: 0.12, skyWeight: { day: 2, dusk: 3, night: 2, dawn: 3 },
+    // Fog FEEDS on wet ground and burns off where it's hot — the marsh
+    // keeps its banks for hours, the desert eats them by mid-morning.
+    lingerGeo: { moisture: { min: 0.5, mul: 1.35 }, temperature: { min: 0.62, mul: 0.65 } },
   },
   ashfall: {
     radiance: { mul: 0.75 },
     label: 'Ashfall', color: '#b06a3a', countMul: 1.2, factionMul: { elemental: 1.4, goblin: 1.2 },
     wind: 0.3, skyWeight: { day: 1, dusk: 1 },
+    // Damp air scrubs the ash down early — the cinder sky wants dry country.
+    lingerGeo: { moisture: { min: 0.55, mul: 0.7 } },
   },
   bloodmoon: {
     radiance: { mul: 0.4 },
@@ -187,6 +205,9 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     radiance: { mul: 0.85 },
     label: 'Snowfall', color: '#cfe0f0', countMul: 1.0, factionMul: { wild: 1.2, rimebound: 1.25 },
     wind: 0.45, rampFrac: 0.5, skyWeight: { day: 0.8, dusk: 1, night: 1 },
+    // A snow front over the hot south is a curiosity, not a season (the
+    // GROUND's persistence is the cover fabric's own heat law).
+    lingerGeo: { temperature: { min: 0.62, mul: 0.6 } },
   },
   /** BLIZZARD — snowfall's violent sibling, born only over COLD ground
    *  (birthGeo reads the baked climate — the white wind rises off the
@@ -203,6 +224,8 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     rampFrac: 0.25, wind: 0.95,
     skyWeight: { day: 0.5, dusk: 0.8, night: 0.9 },
     birthGeo: { temperature: { max: 0.35 } },
+    // The deep-freeze belt keeps the white wind (inside the birth band).
+    lingerGeo: { temperature: { max: 0.18, mul: 1.35 } },
   },
   /** SANDSTORM — the desert country's own front, born only over hot dry
    *  ground (birthGeo) and then going where it pleases. Its teeth are the
@@ -216,6 +239,10 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     rampFrac: 0.3, wind: 0.95,
     skyWeight: { day: 1.6, dusk: 1.2 },
     birthGeo: { temperature: { min: 0.55 }, moisture: { max: 0.4 } },
+    // Fog's inverse: the deep erg keeps its grit aloft — bone-dry heat is
+    // the storm's fuel (both bands live inside the birth bands; the rim
+    // of the belt rolls today's modest storms).
+    lingerGeo: { temperature: { min: 0.72, mul: 1.35 }, moisture: { max: 0.18, mul: 1.2 } },
   },
   /** GALE — the dry country's wind made a front of its own: no rain, no
    *  grit, just the SKY LEANING ON YOU. Born over dry ground away from the
@@ -231,6 +258,8 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     radiance: { mul: 0.92 },
     skyWeight: { day: 0.8, dusk: 1, night: 0.6 },
     birthGeo: { moisture: { max: 0.45 }, temperature: { max: 0.6 } },
+    // The heights hold their winds — the mountain faces' standing gales.
+    lingerGeo: { elevation: { min: 0.6, mul: 1.3 } },
   },
   /** PETALFALL — the Garden's own weather: the great blooms letting go at
    *  once, a pink-gold fall of petals drifting the whole sky. Born only
@@ -261,6 +290,8 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     rampFrac: 0.4, wind: 0.15,
     skyWeight: { dusk: 1.2, night: 1.4 },
     birthGeo: { wildness: { min: 0.62 } },
+    // The meat's deep heart bleeds longest (inside the birth band).
+    lingerGeo: { wildness: { min: 0.75, mul: 1.25 } },
   },
   /** STARFALL — the rare night the sky comes down in crystal. Its teeth are
    *  the STRIKE (falling shards through the shared strike machinery), and
@@ -292,6 +323,8 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     rampFrac: 0.3, wind: 0.3,
     skyWeight: { night: 0.8, dusk: 0.45 },
     birthGeo: { wildness: { min: 0.5 } },
+    // The deep wound sears longer (inside the birth band).
+    lingerGeo: { wildness: { min: 0.7, mul: 1.2 } },
   },
   /** DEMON STORM — a Demon Invasion's OWN sky, pinned (never sky-born) over
    *  every zone its storm radius covers (packages/overlays/demonInvasion.ts
@@ -338,6 +371,25 @@ export function registerWeather(id: string, def: WeatherDef): void {
   WEATHER_DEFS[id] = def;
 }
 
+/** THE LINGER FOLD — the birth ground's climate scaling a front's rolled
+ *  lifetime (WeatherDef.lingerGeo). Pure and draw-free: every band the baked
+ *  climate HOLDS multiplies in; axes the node lacks pass neutrally and an
+ *  unbaked node folds 1 (the tolerance doctrine birthGeo established). A def
+ *  without the row returns exactly 1, so its stream is byte-identical by
+ *  construction (x × 1 = x). Exported for the probe's pins. */
+export function lingerMulOf(def: WeatherDef, climate: Record<string, number> | undefined): number {
+  if (!def.lingerGeo || !climate) return 1;
+  let mul = 1;
+  for (const [axis, band] of Object.entries(def.lingerGeo)) {
+    const v = climate[axis];
+    if (v === undefined) continue;
+    if (band.min !== undefined && v < band.min) continue;
+    if (band.max !== undefined && v > band.max) continue;
+    mul *= band.mul;
+  }
+  return mul;
+}
+
 /** BOOT VALIDATION (wired into validateContent beside validateStamps) — the
  *  cross-checks the closed union used to make unnecessary. The caller passes
  *  resolvers so this module stays data-import-free. */
@@ -358,6 +410,33 @@ export function validateWeather(
     }
     if (def.eventOnly && def.skyWeight) {
       bad.push(`weather '${kind}': eventOnly AND skyWeight — an event-pinned front must never be sky-born (drop one)`);
+    }
+    // THE LINGER FOLD's rows (lingerGeo): the fold reads only at sky birth,
+    // so an event-pinned kind carrying one is dead data dressed as a lever
+    // (its event owns its clock) — refused like its skyWeight sibling above.
+    // A band must also be able to HOLD (min ≤ max) and scale by a sane
+    // positive factor, or the row is a silent no-op / a zero-life front.
+    if (def.eventOnly && def.lingerGeo) {
+      bad.push(`weather '${kind}': eventOnly AND lingerGeo — an event-pinned front never rolls a sky lifetime (its event owns its clock; drop the linger row)`);
+    }
+    for (const [axis, band] of Object.entries(def.lingerGeo ?? {})) {
+      if (!Number.isFinite(band.mul) || band.mul <= 0) {
+        bad.push(`weather '${kind}': lingerGeo '${axis}' mul ${band.mul} — must be a finite positive scale`);
+      }
+      if (band.min !== undefined && band.max !== undefined && band.min > band.max) {
+        bad.push(`weather '${kind}': lingerGeo '${axis}' band is inverted (min ${band.min} > max ${band.max})`);
+      }
+      // A linger band on a birth-banded axis must INTERSECT the birth band —
+      // ground the birth gate already refuses can never seed this kind, so a
+      // disjoint band could never fire (the fold reads the BIRTH node only).
+      const bb = def.birthGeo?.[axis];
+      if (bb) {
+        const lo = Math.max(band.min ?? -Infinity, bb.min ?? -Infinity);
+        const hi = Math.min(band.max ?? Infinity, bb.max ?? Infinity);
+        if (lo > hi) {
+          bad.push(`weather '${kind}': lingerGeo '${axis}' band never overlaps birthGeo's — it can never fire (the fold reads the birth node)`);
+        }
+      }
     }
     for (const row of def.dress?.rows ?? []) {
       if (hasDoodad && !hasDoodad(row.doodad)) {
@@ -540,7 +619,12 @@ export class WeatherField implements WorldOverlay {
       radius: this.rng.range(95, 150),
       intensity: 0,
       age: 0,
-      life: this.rng.range(140, 280), // longer-lived fronts = slower-changing sky
+      // Longer-lived fronts = slower-changing sky; THE LINGER FOLD
+      // (lingerGeo) then scales the rolled draw by the birth ground's
+      // climate — same node + tolerance as the birthGeo filter above,
+      // zero added draws, so a kind without the row keeps today's
+      // exact stream (× 1 is byte-identical).
+      life: this.rng.range(140, 280) * lingerMulOf(WEATHER_DEFS[kind], node.geo?.climate),
     });
   }
 }
