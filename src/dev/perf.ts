@@ -19,11 +19,14 @@
 // boundless), so new biomes join the sweep the day they're authored.
 // ---------------------------------------------------------------------------
 
+import { sidezoneOf } from '../data/sidezones';
 import { TILESETS } from '../data/tilesets';
-import { START_ZONE } from '../data/zones';
+import { skyOf, START_ZONE } from '../data/zones';
 import { FluxPhase } from '../engine/flux';
 import { setVisAblate, VIS_TELEMETRY } from '../render/vis/visConfig';
 import { quantile } from '../sim/metrics';
+import { DAY_LENGTH } from '../world/daynight';
+import { radianceCondHeld, type RadianceCond } from '../world/radiance';
 
 export interface PerfSweepOpts {
   /** Steady-state sample window per zone, seconds (default 6). */
@@ -151,6 +154,11 @@ export interface PerfZoneStats {
    *  once minted caul entry=2117 (solo: 63ms, same bytes) and cost a solo
    *  re-run to acquit — the artifact now documents itself on the row. */
   entryNote: string;
+  /** Which hold attempt produced this row (1 = the walker held its first
+   *  window pair; >1 = the restart law spent retries first). The hold-proof
+   *  ledger for the flap class the 2026-08-03 close retired — a row that
+   *  keeps arriving on attempt 3 is a flap the skip gate cannot see. */
+  attempts: number;
 }
 
 /** One row the sweep could not measure — and WHY, as data the gate can
@@ -217,12 +225,16 @@ const RETRY_TURN = 2.4;
 /** THE HAZARD WHISKER's probe horizons (units ahead of the hero), longest
  *  first — a fine chasm maze that rings every long ray still usually opens
  *  a short one down a corridor — and the deflection fan: candidate
- *  headings swing ±WHISKER_STEP × 1..WHISKER_FAN (≈±160°) alternating
- *  sides, so the walker turns as little as needed and can turn around at
- *  a dead end. */
+ *  headings swing ±WHISKER_STEP × 1..WHISKER_FAN (±180° — the FULL circle)
+ *  alternating sides, so the walker turns as little as needed and can turn
+ *  around at a dead end. Full circle since 2026-08-03: the old 8-step fan
+ *  (±160°) left a rear dead-zone — a walker pinned at an isle rim facing
+ *  the void, its only safe ground DIRECTLY BEHIND, rang every ray it could
+ *  see and marched forward off the edge (one of the hold-flap's three
+ *  legs; see THE PATIENT RING in walkPhase for the other exit). */
 const WHISKER_REACH = [72, 36];
 const WHISKER_STEP = 0.35;
-const WHISKER_FAN = 8;
+const WHISKER_FAN = 9;
 /** THE RHYTHM WHISKER (galestream 2026-08-02: the walker could not hold the
  *  gate's flux artery in 3 attempts — three re-mints, three falls to the
  *  world below). The blind spot was TEMPORAL, not spatial: fallHazardAt
@@ -243,6 +255,63 @@ const WHISKER_FAN = 8;
  *  that will not outlast the step. */
 const FLUX_WALK_SPEED = 120; // rough hero stride, u/s — probe-eta conversion
 const FLUX_CROSS_SEC = 1.2; // ground must outlast arrival by a crossing
+/** THE SKY WHISKER (the hold-class close, 2026-08-03: the two committed
+ *  allowSkip waivers — galestream + aether_vesper — traced to arrival-state
+ *  roulette, not the mints: mintSeed pins the same 'Racing Passage' /
+ *  'Midnight Walk' zones solo and at matrix scale, but a full sweep runs
+ *  ~19 minutes ≈ 4.75 of the 240s day wheels, so WHERE a row lands on the
+ *  wheel is the cumulative duration of every prior row — dice a solo run
+ *  never rolls, arriving at its fixed benign phase ~90s after boot). Span
+ *  ground (engine/spans.ts) is the flux blind spot's CONDITIONAL sibling:
+ *  walkable NOW and gone LATER on the SKY's clock. Radiance is a pure
+ *  function of (world time, front kind, shelter), so the probe projects
+ *  the future exactly as padPhase does: span ground must hold its
+ *  RadianceCond at arrival AND arrival + this crossing margin, and FADING
+ *  ground (the 3.2s shimmer a reading player runs off) is never boarded at
+ *  all. Under the gate's pinned sky the projection is exact; a natural-sky
+ *  forensics run projects the current front kind forward — honest at
+ *  whisker horizons. The margin is generous because the sky's clock is
+ *  slow (DAY_LENGTH 240s, light slope ≈0.013/s at the span boundaries): it
+ *  refuses only boundary-adjacent boarding, so the walker keeps to the
+ *  isles through a twilight crossing exactly as a player does — "the
+ *  crossing thins twice a day" is the zone's own design text. */
+const SPAN_CROSS_SEC = 4.5;
+/** THE MEASURED STRIDE (the eta model's honesty): FLUX_WALK_SPEED assumes
+ *  a clear road, but at matrix scale the pack roll rides the LIVE spawn
+ *  stream plus the day wheel's night bias (countMul 1.4) — the same mint
+ *  fields 28..41 actors across sweeps — and a crowd-slowed hero arrives
+ *  LATE on ground the whisker approved for on-time arrival. Etas now
+ *  divide by an EMA of the stride actually being made good (sim-clock
+ *  measured, so hitch pacing — where the flux clock and the hero dilate
+ *  together — never skews it; only true obstruction does), clamped so a
+ *  momentary wall-press can't zero it. */
+const STRIDE_FLOOR = 60; // u/s — half nominal; keeps etas finite and sane
+const STRIDE_EMA = 0.1; // per-frame blend toward the measured stride
+/** THE STREAK DODGE (aether_vesper's second killer, 2026-08-03): the night's
+ *  cometfall lanes (data/creeps.ts — front.speed 235, drag.accel 210) are
+ *  narrow marching sections that streak the VOIDS, and their wake CARRIES
+ *  covered bodies along the bearing — forced displacement, which
+ *  fallHazardAt exempts BY DESIGN, so a comet crossing the walker drags it
+ *  over a void lip no whisker ray ever approved. The creep doctrine's own
+ *  text names the counterplay — "stepping aside is always the cheaper
+ *  answer" — so the walker now does what a player does: any point inside
+ *  the swept corridor of a fast marching front (speed past the threshold;
+ *  slow washes stay walkable weather) within the horizon refuses rays and
+ *  the stand, and a hero already inside the corridor steers PERPENDICULAR
+ *  out of it, fall/flux/span refusals still honored (never dodge into the
+ *  void). Corridor width rides the source's own broad-phase bound — the
+ *  drawn skin IS the hit surface, read conservatively. */
+const STREAK_DODGE_SPEED = 150; // u/s — fronts at least this fast are dodged
+const STREAK_HORIZON_SEC = 2.5; // corridor lookahead when deciding to dodge
+const STREAK_SLACK = 24; // extra corridor half-width beyond the source bound
+/** THE DOOR CLEARANCE (the patient ring's own hazard, 2026-08-03): sidezone
+ *  mouths travel on a DWELL — stand idle inside transitRadius (28 default)
+ *  + reach for dwellOf seconds (wane_arch: 0.7s) and the world politely
+ *  descends you. Running over a mouth never triggers (the dwell demands
+ *  playerIdle), so only the stand-still branch is exposed: the walker never
+ *  PARKS within this clearance of any mouth doodad (cave_entrance or a
+ *  registered sidezone kind); ringed on a mouth it keeps walking instead. */
+const MOUTH_STAND_CLEAR = 64;
 /** THE ENTRY ANNOTATION threshold: a gap past this inside the entry window
  *  gets attributed on the row (foreign freeze vs the zone's own load). The
  *  2026-08-02 full sweep minted caul entry=2117 from a machine-wide ~2s
@@ -292,7 +361,7 @@ function reduceFrames(f: FrameDump, entryWorstGap: number, meta: {
   doodads: number; actors: number; lite: number;
   snowBakes: number; groundBakes: number; snowCover: number;
   taskMax: number; offTask40: number; ltCount: number; ltWorst: number;
-  slabName: string; slabMs: number; entryNote: string;
+  slabName: string; slabMs: number; entryNote: string; attempts: number;
 }): PerfZoneStats {
   const gap = [...f.gap].sort((a, b) => a - b);
   const sim = [...f.sim].sort((a, b) => a - b);
@@ -445,6 +514,12 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
     /** The OWN-work mark of the frame that owned the worst gap — the entry
      *  annotation's discriminator (foreign freeze vs honest heavy frame). */
     worstOwn: number;
+    /** THE EXIT STORY (hold forensics, 2026-08-03): where an unheld walk
+     *  LANDED and when — the difference between a span dying underfoot at a
+     *  wheel crossing, a shove into the void, and a strolled-through door
+     *  is invisible in a bare held:false, and the hold-class close spent a
+     *  full A/B run learning that the hard way. Report-only provenance. */
+    exit?: { atMs: number; zone: string; tileset: string; time: number; snap: string };
   }> => {
     const homeZid = g.world().zone.id;
     let dir = dir0, worst = 0, worstOwn = Infinity;
@@ -465,6 +540,55 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
     // vsync→callback overhang excluded; the off40 abstention reads it, so
     // a foreign >40ms overhang can no longer eat its own evidence.
     let taskMax = 0, offTask40 = 0, prevTask = Infinity, prevOwn = Infinity;
+    // THE SKY WHISKER's ledger (see SPAN_CROSS_SEC): the HOME zone's span
+    // rows keyed by the region kind their cells wear — held kinds carry
+    // their RadianceCond for the future read, fading twins carry the
+    // refuse-always mark (the shimmer IS the leaving telegraph; regionAt
+    // returns the fabric's own paint, so the paint is the state). Built
+    // once per phase: the zone guard aborts the phase the frame the walker
+    // leaves, so the ledger never describes foreign ground for longer than
+    // the guard's own check. Zones without a live span fabric leave it
+    // empty — the probe's null fast path, zero new work.
+    const spanLedger = new Map<string, { when: RadianceCond; dying: boolean }>();
+    {
+      const zw0 = g.world();
+      if (zw0.spans) {
+        for (const s of zw0.zone.theme.spans ?? []) {
+          spanLedger.set(s.region, { when: s.when, dying: false });
+          spanLedger.set(s.fadeRegion ?? `${s.region}_fading`, { when: s.when, dying: true });
+        }
+      }
+    }
+    const sheltered = skyOf(g.world().zone) === 'sheltered';
+    // THE DOOR CLEARANCE's ledger (see MOUTH_STAND_CLEAR): every mouth the
+    // dwell gate could open under an idle stander. Doodads never move; once
+    // per phase is the honest cost.
+    const mouthSpots: { x: number; y: number }[] = [];
+    for (const d of g.world().doodads) {
+      if (d.kind === 'cave_entrance' || sidezoneOf(d.kind)) mouthSpots.push({ x: d.pos.x, y: d.pos.y });
+    }
+    const mouthNear = (x: number, y: number): boolean => {
+      for (const m of mouthSpots) {
+        const dx = x - m.x, dy = y - m.y;
+        if (dx * dx + dy * dy < MOUTH_STAND_CLEAR * MOUTH_STAND_CLEAR) return true;
+      }
+      return false;
+    };
+    // THE MEASURED STRIDE (see STRIDE_FLOOR): the eta denominator, blended
+    // toward the stride actually made good over frames the walker COMMANDED
+    // movement (sim-clock displacement — commanded stand-stills and menu
+    // holds never sample).
+    let strideNow = FLUX_WALK_SPEED;
+    let stridePrev: { x: number; y: number; t: number } | null = null;
+    // THE EXIT SNAPSHOT (hold forensics): the guard fires AFTER the zone
+    // swapped — player pos, actors, creep are already the DESTINATION's —
+    // so the last frame's view of the HOME zone is kept here and the exit
+    // story reads it: where the walker stood, whether a forced push was
+    // live (knockback/drag — the fall probe exempts forced displacement BY
+    // DESIGN, so a shove into the void is invisible to every whisker),
+    // how many bodies crowded it, and the nearest fast streak.
+    let lastSnap = { x: 0, y: 0, push: false, foes: 0, streak: -1 };
+    let pushAgo = Infinity; // sim-seconds since a push was last live
     let prev = performance.now();
     const t0 = prev;
     while (performance.now() - t0 < ms) {
@@ -478,9 +602,11 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       // safe heading before stepping. Honest traversal in gulf country IS
       // walking around the gulfs; only the fake pad was suicidal. On
       // hazard-free ground every probe reads safe at the first ray and the
-      // arc is untouched. Condition-TIMED drops (a span standing down
-      // UNDERFOOT, collapse, flux) stay the zone guard's to catch — no
-      // static probe can see ground that was held when stepped on.
+      // arc is untouched. Clock-TIMED drops are the whiskers' own business
+      // now — flux pads through padPhase (THE RHYTHM WHISKER) and span
+      // ground through the projected sky (THE SKY WHISKER) — leaving only
+      // one-way collapse melt to the zone guard, the single fabric whose
+      // future no pure clock can read.
       const zw = g.world();
       const at = zw.player.pos;
       // THE RHYTHM WHISKER (see FLUX_CROSS_SEC): flux ground answers for
@@ -503,27 +629,148 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
         const arrive = fx.clock + eta;
         return holdsAt(arrive) && holdsAt(arrive + FLUX_CROSS_SEC);
       };
-      const rayFree = (a: number, reach: number): boolean => {
+      // THE SKY WHISKER (see SPAN_CROSS_SEC): span ground answers for its
+      // future exactly as flux pads do — the sky's clock instead of the
+      // drift's. One skyFront read per frame, and only on span ground.
+      const skyKind = spanLedger.size ? (zw.skyFront()?.kind ?? null) : null;
+      const spanHolds = (x: number, y: number, eta: number): boolean => {
+        if (!spanLedger.size) return true;
+        const k = zw.walk?.regionAt?.(x, y);
+        const row = k !== undefined ? spanLedger.get(k) : undefined;
+        if (!row) return true; // permanent ground — the fall probe's business
+        if (row.dying) return false; // fading: never board a failing span
+        const arrive = zw.time + eta;
+        return radianceCondHeld(row.when, arrive, skyKind, sheltered)
+          && radianceCondHeld(row.when, arrive + SPAN_CROSS_SEC, skyKind, sheltered);
+      };
+      // THE STREAK DODGE's threat read (see STREAK_DODGE_SPEED): the first
+      // fast marching front whose swept corridor covers (x,y) within the
+      // horizon — bearing + which side of its line the point sits on, the
+      // exact geometry the perpendicular exit needs. Null = no threat.
+      const streakThreat = (x: number, y: number, horizon: number): { dx: number; dy: number; across: number } | null => {
+        const cf = zw.creep;
+        if (!cf) return null;
+        for (const s of cf.sources) {
+          const fr = s.front;
+          if (!fr) continue;
+          const spd = s.def.front?.speed ?? 0;
+          if (spd < STREAK_DODGE_SPEED) continue;
+          const rx = x - s.pos.x, ry = y - s.pos.y;
+          const along = rx * fr.dx + ry * fr.dy;
+          const across = -rx * fr.dy + ry * fr.dx;
+          const width = s.bound + STREAK_SLACK;
+          if (Math.abs(across) > width) continue;
+          if (along < -width) continue; // the streak already passed this point
+          if (along > spd * horizon + width) continue; // not imminent yet
+          return { dx: fr.dx, dy: fr.dy, across };
+        }
+        return null;
+      };
+      // THE RIM REFUSAL (the hold-class close's true killer, 2026-08-03 —
+      // exit stories perf_20260803021827: all three vesper deaths at x≈15,
+      // foes 0, push none, streak 1745u — the walker pressed the zone's own
+      // WEST RIM): regionAt answers 'wall' OFF-GRID, and walls are not fall
+      // hazards, so a ray pointed past the rim reads BENIGN while the thin
+      // in-grid void band slips between the hero and the 18u mid sample —
+      // then the confine arrests the press against the void edge and the
+      // boundary law ("you cannot lean on the sky", the 0.6s debounce)
+      // resolves the skyfall the whisker never saw. Off-grid samples now
+      // refuse the ray outright: walking into a wall is never progress, and
+      // in rim-void country the off-grid answer was a lie. Costs nothing in
+      // walled zones (the fan deflects along the wall the confine would
+      // have ground against) and closes the rim death spiral in every
+      // aetherial recipe.
+      const inField = (x: number, y: number): boolean =>
+        x >= 0 && y >= 0 && x < zw.arena.w && y < zw.arena.h;
+      const rayFree = (a: number, reach: number, blindToStreaks = false): boolean => {
         const mx = at.x + Math.cos(a) * reach * 0.5, my = at.y + Math.sin(a) * reach * 0.5;
         const ex = at.x + Math.cos(a) * reach, ey = at.y + Math.sin(a) * reach;
-        return !zw.fallHazardAt(zw.player, mx, my) && !zw.fallHazardAt(zw.player, ex, ey)
-          && fluxHolds(mx, my, reach * 0.5 / FLUX_WALK_SPEED)
-          && fluxHolds(ex, ey, reach / FLUX_WALK_SPEED);
+        return inField(mx, my) && inField(ex, ey)
+          && !zw.fallHazardAt(zw.player, mx, my) && !zw.fallHazardAt(zw.player, ex, ey)
+          && fluxHolds(mx, my, reach * 0.5 / strideNow)
+          && fluxHolds(ex, ey, reach / strideNow)
+          && spanHolds(mx, my, reach * 0.5 / strideNow)
+          && spanHolds(ex, ey, reach / strideNow)
+          && (blindToStreaks
+            || (!streakThreat(mx, my, reach * 0.5 / strideNow + 0.8)
+              && !streakThreat(ex, ey, reach / strideNow + 0.8)));
       };
-      for (const reach of WHISKER_REACH) {
-        if (rayFree(dir, reach)) break;
+      // THE STREAK DODGE: already inside an imminent corridor — steer
+      // PERPENDICULAR out (the shortest exit, preferring the side already
+      // held), corridor-blind (crossing the remaining width IS the escape)
+      // but fall/flux/span-honest: never dodge into the void. Overrides the
+      // arc for exactly as long as the corridor covers the hero.
+      let dodged = false;
+      {
+        const threat = streakThreat(at.x, at.y, STREAK_HORIZON_SEC);
+        if (threat) {
+          const side = threat.across >= 0 ? 1 : -1;
+          const outs = [
+            Math.atan2(side * threat.dx, -side * threat.dy),
+            Math.atan2(-side * threat.dx, side * threat.dy),
+          ];
+          outer: for (const base of outs) {
+            for (const off of [0, 0.5, -0.5]) {
+              if (rayFree(base + off, WHISKER_REACH[1], true)) { dir = base + off; dodged = true; break outer; }
+            }
+          }
+        }
+      }
+      let open = false;
+      if (!dodged) for (const reach of WHISKER_REACH) {
+        if (rayFree(dir, reach)) { open = true; break; }
         let turned = false;
         for (let k = 1; k <= WHISKER_FAN && !turned; k++) {
           const off = WHISKER_STEP * k;
           if (rayFree(dir + off, reach)) { dir += off; turned = true; }
           else if (rayFree(dir - off, reach)) { dir -= off; turned = true; }
         }
-        if (turned) break;
-        // Every heading at this reach ends in a drop — fall through to the
-        // shorter horizon; ringed even there, hold course and let the
-        // guard own whatever follows.
+        if (turned) { open = true; break; }
+        // Every heading at this reach ends in refused ground — fall through
+        // to the shorter horizon.
       }
-      g.fakePad({ axes: [Math.cos(dir), Math.sin(dir), 0, 0], buttons: [] });
+      let moving = true;
+      if (!dodged && !open) {
+        // THE PATIENT RING (2026-08-03 — the marooning residual the true-
+        // meters pass named): every heading at every reach refuses. The old
+        // fallback held course and MARCHED into exactly the ground the fan
+        // had just refused — on a dying flux island or a twilight isle rim
+        // that is the fall, and at matrix scale the arrival-state dice roll
+        // it often enough to spend all three attempts (the hold-class flap;
+        // the whole diagnosis lives on SPAN_CROSS_SEC's banner). A reader
+        // of the rhythm STANDS on ground that holds: pads alternate half a
+        // period apart and spans re-rise, so a waiter's ray opens within
+        // seconds — the walker keeps meeting packs and paying the frame
+        // bill where it stands (the fakePad below keeps feeding the real
+        // input path; only the stick is centered). On ground that is itself
+        // dying, standing buys nothing: sprint for any heading that at
+        // least stays out of the void — along the fading span toward its
+        // end is exactly what a player caught mid-crossing does.
+        const ownSafe = fluxHolds(at.x, at.y, 0) && spanHolds(at.x, at.y, 0)
+          && !zw.fallHazardAt(zw.player, at.x, at.y)
+          && !streakThreat(at.x, at.y, STREAK_HORIZON_SEC) // never stand in a comet's path
+          && !mouthNear(at.x, at.y); // never PARK inside a door's dwell disc
+        if (ownSafe) {
+          moving = false; // stand and read the rhythm — re-probed next frame
+        } else {
+          const r = WHISKER_REACH[WHISKER_REACH.length - 1];
+          for (let k = 0; k <= WHISKER_FAN * 2; k++) {
+            const a2 = dir + (k % 2 ? 1 : -1) * WHISKER_STEP * Math.ceil(k / 2);
+            const mx = at.x + Math.cos(a2) * r * 0.5, my = at.y + Math.sin(a2) * r * 0.5;
+            const ex = at.x + Math.cos(a2) * r, ey = at.y + Math.sin(a2) * r;
+            if (inField(mx, my) && inField(ex, ey)
+              && !zw.fallHazardAt(zw.player, mx, my) && !zw.fallHazardAt(zw.player, ex, ey)) {
+              dir = a2;
+              break;
+            }
+          }
+          // Ringed even by void on every side: hold course — nothing can
+          // save this seat, and the guard owns whatever follows.
+        }
+      }
+      g.fakePad(moving
+        ? { axes: [Math.cos(dir), Math.sin(dir), 0, 0], buttons: [] }
+        : { axes: [0, 0, 0, 0], buttons: [] });
       const now = await raf();
       const taskEnd = performance.now(); // first thing after the frame's task
       const gap = now - prev;
@@ -542,8 +789,55 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       if (prevTask > taskMax) taskMax = prevTask;
       prev = now;
       beatWalk(); // the deadman's ~1/s pulse (sampler-side, post-mark)
-      dir += WALK_TURN_RATE * Math.min(gap, WALK_DT_CLAMP_MS) / 1000;
-      if (g.world().zone.id !== homeZid) return { worst, held: false, taskMax, offTask40, worstOwn };
+      // THE MEASURED STRIDE's sample: displacement per SIM second across the
+      // frame that just ran — the pad set above drove it, so `moving` is the
+      // honest gate. Sim-clock division makes hitch pacing a non-event (the
+      // hero AND every fabric clock dilate together under the dt clamp);
+      // only true obstruction — a pack wall, a shoreline press — reads as a
+      // shorter stride, and the whisker's etas lengthen to match.
+      const w2 = g.world();
+      if (moving && stridePrev) {
+        const dtSim = w2.time - stridePrev.t;
+        if (dtSim > 1e-3) {
+          const sp = Math.hypot(w2.player.pos.x - stridePrev.x, w2.player.pos.y - stridePrev.y) / dtSim;
+          strideNow += STRIDE_EMA * (Math.min(FLUX_WALK_SPEED, Math.max(STRIDE_FLOOR, sp)) - strideNow);
+        }
+      }
+      stridePrev = { x: w2.player.pos.x, y: w2.player.pos.y, t: w2.time };
+      if (moving) dir += WALK_TURN_RATE * Math.min(gap, WALK_DT_CLAMP_MS) / 1000;
+      if (w2.zone.id !== homeZid) {
+        return {
+          worst, held: false, taskMax, offTask40, worstOwn,
+          exit: {
+            atMs: performance.now() - t0, zone: w2.zone.name,
+            tileset: w2.zone.tileset ?? '?', time: w2.time,
+            snap: `@(${lastSnap.x},${lastSnap.y}) foes80=${lastSnap.foes}`
+              + ` push=${pushAgo < 9 ? pushAgo.toFixed(1) + 's' : 'no'}`
+              + (lastSnap.streak >= 0 ? ` streak=${lastSnap.streak}u` : ''),
+          },
+        };
+      }
+      // The exit snapshot (still HOME here — the guard above returned if not).
+      {
+        const p2 = w2.player;
+        if (p2.push) pushAgo = 0; else pushAgo += Math.min(gap, 200) / 1000;
+        let foes = 0;
+        for (const m of w2.actors) {
+          if (m === p2 || m.dead) continue;
+          const ddx = m.pos.x - p2.pos.x, ddy = m.pos.y - p2.pos.y;
+          if (ddx * ddx + ddy * ddy <= 80 * 80) foes++;
+        }
+        let streak = -1;
+        const cf2 = w2.creep;
+        if (cf2) {
+          for (const s of cf2.sources) {
+            if (!s.front || (s.def.front?.speed ?? 0) < STREAK_DODGE_SPEED) continue;
+            const d2 = Math.hypot(s.pos.x - p2.pos.x, s.pos.y - p2.pos.y);
+            if (streak < 0 || d2 < streak) streak = Math.round(d2);
+          }
+        }
+        lastSnap = { x: Math.round(p2.pos.x), y: Math.round(p2.pos.y), push: !!p2.push, foes, streak };
+      }
     }
     return { worst, held: true, taskMax, offTask40, worstOwn };
   };
@@ -568,6 +862,9 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   // settle window, exactly like the original entry burst. A row that
   // cannot hold one clean window pair in HOLD_ATTEMPTS tries returns null
   // and skips — measured never trumps honest.
+  // THE EXIT STORIES' hand-off: sampleCurrentZone fills this on a give-up so
+  // the caller's skip row can NAME the three deaths (report provenance only).
+  let lastHoldStories: string[] = [];
   const sampleCurrentZone = async (tilesetId: string): Promise<PerfZoneStats | null> => {
     beatTileset = tilesetId; // the deadman's holder: who owns the window now
     beat('sample');
@@ -579,6 +876,17 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
     // on the row.
     let entryWorst = 0;
     let entryNote = '';
+    // THE EXIT STORIES (hold forensics): one line per unheld phase — where
+    // the walker landed, how deep into the phase, and the day wheel's
+    // position (world.time is the global clock; travel never resets it, so
+    // the exit's own timestamp carries the phase). A hold skip's note now
+    // NAMES its three deaths instead of shrugging.
+    const holdStories: string[] = [];
+    lastHoldStories = holdStories; // visible to the caller's skip row
+    const storyOf = (attempt: number, phase: string, e: { atMs: number; zone: string; tileset: string; time: number; snap: string }): string => {
+      const wheel = (((e.time % DAY_LENGTH) + DAY_LENGTH) % DAY_LENGTH) / DAY_LENGTH;
+      return `a${attempt + 1} ${phase}+${(e.atMs / 1000).toFixed(1)}s -> '${e.zone}' (${e.tileset}) wheel ${wheel.toFixed(2)} ${e.snap}`;
+    };
     const returnHome = (): boolean => {
       const ok = g.world().devTravelTo(homeZid); // false only off-graph — cannot happen for minted/START zones
       if (ok) pinWeather(); // the pinned front re-parks on the home node
@@ -598,7 +906,11 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
         entryWorst = entry.worst;
         entryNote = entryStallNote(entry);
       }
-      if (!entry.held) { if (!returnHome()) break; continue; }
+      if (!entry.held) {
+        if (entry.exit) holdStories.push(storyOf(attempt, 'entry', entry.exit));
+        if (!returnHome()) break;
+        continue;
+      }
       // Drain the zone-hop garbage NOW, inside the discarded window: a sweep
       // hops zones at a rate no player ever will, and V8's collection storm
       // otherwise lands mid-sample on whichever zone holds the window when
@@ -617,7 +929,11 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       VIS_TELEMETRY.snowBakes = 0;
       VIS_TELEMETRY.groundBakes = 0;
       const steady = await walkPhase(sampleMs, dir0);
-      if (!steady.held) { if (!returnHome()) break; continue; }
+      if (!steady.held) {
+        if (steady.exit) holdStories.push(storyOf(attempt, 'steady', steady.exit));
+        if (!returnHome()) break;
+        continue;
+      }
       ltDrain(); // pending in-window entries, folded before the snapshot
       const zw2 = g.world();
       const dump = g.perfFrames(false); // rings + the PHASE LEDGER's window slab
@@ -634,6 +950,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
         ltWorst: ltObs ? +ltLedger.worst.toFixed(1) : -1,
         slabName: dump.phase.name, slabMs: +dump.phase.ms.toFixed(1),
         entryNote,
+        attempts: attempt + 1,
       });
     }
     return null;
@@ -711,7 +1028,11 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       // like a breach (launcher/main.cjs skip gate; the committed waiver
       // for a deliberately unholdable row is overrides[<id>].allowSkip in
       // balance/perf.config.json — the 2026-08-01 ratified policy).
-      const skip: PerfSkipRow = { id, class: 'hold', note: `walker could not hold the zone in ${HOLD_ATTEMPTS} attempts` };
+      const skip: PerfSkipRow = {
+        id, class: 'hold',
+        note: `walker could not hold the zone in ${HOLD_ATTEMPTS} attempts`
+          + (lastHoldStories.length ? ` — ${lastHoldStories.join('; ')}` : ''),
+      };
       skipped.push(skip);
       beat('skip', { skip });
       continue;
