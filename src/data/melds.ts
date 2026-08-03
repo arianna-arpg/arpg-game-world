@@ -382,13 +382,19 @@ registerMeld({
   ],
 });
 
-// THE CRYSTAL'S REACH — the shard country glitters before it endangers:
-// knee-high lattices, a split geode bowl, one tall needle that TOLLS when
-// struck — the singing stone, not yet the burning kind.
+// THE CRYSTAL'S REACH — the shard country COATS before it endangers: the
+// Fields' grass-hemmed edges answered in glass. A sward of walk-through
+// shardgrass runs the band the way the meadow's grass runs its own, a
+// composed shard bed or two rise out of it (the resplendence kit's
+// reusable clustering — data/clusters.ts), and the old solitaires keep
+// their posts: knee-high lattices, a split geode bowl, one tall needle
+// that TOLLS when struck — the singing stone, not yet the burning kind.
 registerMeld({
   id: 'crystal_meld',
   label: 'the light splinters ahead',
   rows: [
+    { kind: 'shardgrass', count: [3, 5] },
+    { kind: 'shard_bed', count: [1, 2] },
     { kind: 'rocks', count: [1, 2], radius: [12, 22] },
     { kind: 'crystal_cluster', count: [0, 2] },
     { kind: 'crystal_spire', count: [0, 1] },

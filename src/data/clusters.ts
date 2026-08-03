@@ -286,3 +286,23 @@ registerCluster({
   ],
   poi: true,
 });
+
+// THE SHARD BED (the crystal resplendence kit, data/formations.ts): the
+// reusable "crystal clustering" — a lattice or two risen from a sward of
+// walk-through shardgrass, a needle and a split geode where the bed grew
+// rich. The crystal country's coating unit: its rim hem, its meld band, and
+// the riven geode's country all lay THIS def — a future face borrows it
+// with one row (`{kind:'cluster', cluster:'shard_bed'}`, or the kind-only
+// alias stamp `shard_bed` where a grammar speaks no cluster field). NO bare
+// 'crystal' pieces — that's the laser hazard, and a bed disc would be a
+// beam-less fake (crystal_run's doctrine).
+registerCluster({
+  id: 'shard_bed',
+  anchor: { radius: 36 },
+  pieces: [
+    { kind: 'crystal_cluster', radius: [13, 19], count: [1, 2], ring: [0, 34], rot: true },
+    { kind: 'shardgrass', radius: [16, 30], count: [3, 5], ring: [10, 92] },
+    { kind: 'crystal_spire', radius: [14, 20], count: [0, 1], ring: [34, 84], rot: true },
+    { kind: 'geode_shell', radius: [14, 18], count: [0, 1], ring: [44, 94], rot: true },
+  ],
+});

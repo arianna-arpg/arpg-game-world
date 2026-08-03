@@ -9720,12 +9720,18 @@ export const TILESETS: Record<string, TilesetDef> = {
   // SPIRES (a tolling needle country — noise is the tax on violence:
   // every struck spire turns the zone's head, the karst resonance fabric
   // wearing glass).
+  // THE RESPLENDENCE (the crystal commission): every face now wears the
+  // CRYSTALLINE HEM — rim-banded shardgrass swards + composed shard beds,
+  // the Fields' grass-coated edges answered in glass (the same kit the
+  // crystal_meld band lays on neighbors) — and the RIVEN GEODE landmark
+  // stands as the country's signature vault (data/formations.ts).
   crystal: {
     id: 'crystal', biome: 'crystal',
     compositions: [
       { composition: 'energist_cache', chance: 0.25 },
       { composition: 'resonance_court', chance: 0.3 },
     ],
+    landmarks: [{ landmark: 'riven_geode', chance: 0.34 }],
     nameFirst: ['Prismatic', 'Shardbound', 'Glittering', 'Faceted', 'Resonant', 'Lucent', 'Refractive', 'Gleaming', 'Crystalline', 'Spectral', 'Glassgrown', 'Iridescent', 'Singing', 'Brilliant', 'Geodebound', 'Glasswrought', 'Sparkling', 'Light-Riven'],
     nameSecond: ['Geode', 'Spires', 'Lattice', 'Vault', 'Reach', 'Hollow', 'Shards', 'Facets', 'Cluster', 'Prism', 'Spindle', 'Fields', 'Cavern', 'Array', 'Bloom', 'Drift'],
     theme: {
@@ -9750,10 +9756,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2200, 3000], sizeH: [1600, 2300], ellipseChance: 0.2,
     // What the country ALWAYS is, whichever face rolls: understory lattice,
-    // surfacing veins, the odd split geode, loose stone between.
+    // the odd split geode, loose stone between. (Veins ride each face's
+    // LAYOUT-TAIL instead — commons prepend, and the vein stamp hunts the
+    // face's standing bodies as hosts: a common vein ran before any host
+    // stood and starved every surface roll veinless — the census D3.)
     common: [
       { kind: 'crystal_cluster', count: [2, 4] },
-      { kind: 'crystal_vein', count: [1, 3] },
       { kind: 'geode_shell', count: [1, 2] },
       { kind: 'rocks', count: [2, 4], radius: [18, 34] },
       { kind: 'scree', count: [1, 2] },
@@ -9765,6 +9773,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'cliff', count: [1, 3] },
       { kind: 'crystal_spire', count: [1, 3] },
       { kind: 'formation', count: [1, 2], formation: 'crystal_run' },
+      // THE CRYSTALLINE HEM + THE LODE (layout-tail on base + every face):
+      // the sward coats the zone's own edges the way the Fields' grass
+      // coats theirs, beds cluster where the hem runs, veins surface at
+      // the feet of the bodies the face just stood.
+      { kind: 'shardgrass', count: [10, 15], where: { field: 'rim', min: 0.06 } },
+      { kind: 'cluster', cluster: 'shard_bed', count: [2, 3], where: { field: 'rim', min: 0.2 } },
+      { kind: 'crystal_vein', count: [1, 3] },
     ],
     variants: [
       // GEODE HOLLOWS — the country closed over its treasure: reef walls
@@ -9778,6 +9793,11 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'geode_shell', count: [2, 4] },
           { kind: 'cliff', count: [2, 4] },
           { kind: 'chasm', count: [0, 1] },
+          // The hem + the lode (the base tail's law; the treasure face
+          // runs the richest veins — the reef teeth are their hosts).
+          { kind: 'shardgrass', count: [9, 14], where: { field: 'rim', min: 0.06 } },
+          { kind: 'cluster', cluster: 'shard_bed', count: [2, 3], where: { field: 'rim', min: 0.2 } },
+          { kind: 'crystal_vein', count: [2, 4] },
         ] },
       // SINGING SPIRES — the needle country: taller, brighter, LOUDER —
       // every strike answered (spire resonance), storm-glass crackling
@@ -9792,6 +9812,11 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'crystal', count: [3, 5] },
           { kind: 'charged_crystal', count: [2, 4] },
           { kind: 'static_bloom', count: [2, 4] },
+          // The hem + the lode (the base tail's law; veins seam the
+          // needles' own feet).
+          { kind: 'shardgrass', count: [9, 14], where: { field: 'rim', min: 0.06 } },
+          { kind: 'cluster', cluster: 'shard_bed', count: [2, 3], where: { field: 'rim', min: 0.2 } },
+          { kind: 'crystal_vein', count: [1, 3] },
         ] },
     ],
     // The ambient VOICES (engine/tuning.ts): strike one with an element and

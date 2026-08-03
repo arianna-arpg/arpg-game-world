@@ -3247,4 +3247,24 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { points: 5, color: '#8a4a2c', material: 'crystal', coreGlow: { color: '#ffc06a' } },
     light: { radius: 120, color: '#ffb45e', intensity: 0.6, flicker: 3 },
   },
+
+  // === THE CRYSTAL RESPLENDENCE KIT (the crystal commission) ================
+  // One kind (rule in data/formations.ts, blob stamp beside 'grass' in
+  // levelgen): the crystalline SWARD — the Fields' grass answered in glass.
+  // The meadow grammar verbatim (liquid painter: ground stain + baked
+  // swaying tufts, chunk-baked, so a whole hem costs what a meadow costs)
+  // in the shard country's fixed palette — FIXED on purpose: a meld band
+  // lays this sward on FOREIGN ground, where a theme token would dress the
+  // crystal's calling card in the neighbor's colors. Tint re-leverage is a
+  // sibling visuals row on the same painter (the icicle_cluster idiom).
+  // No light row: a coating is hundreds of bodies (the share-law lesson) —
+  // the glow belongs to the beds' crystal_cluster pieces, which carry it.
+  shardgrass: {
+    painter: 'liquid', order: 47,
+    blend: { strength: 0.3, feather: 18, color: '#22304a' },
+    params: {
+      core: { color: '#2c3e5e', alpha: 0.2 },
+      tufts: { color: '#9fd8ff', flower: '#e8f6ff' },
+    },
+  },
 };

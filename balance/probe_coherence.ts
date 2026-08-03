@@ -647,6 +647,134 @@ function standingOnWay(layout: GeneratedLayout): Doodad[] {
   }
 }
 
+// --- Rig J: THE CRYSTAL RESPLENDENCE — the hem, the bed, the vein, the geode -
+// The crystal commission's four contracts (kit in data/formations.ts +
+// data/clusters.ts; tileset tails in data/tilesets.ts):
+//   J1 the CRYSTALLINE HEM — rim-banded shardgrass stays in its constant-px
+//      edge band (drawn == banded; blob satellites get a spread margin);
+//   J2 the SHARD BED composes through BOTH grammars — the cluster row and
+//      the kind-only alias stamp (the lane meld rows speak);
+//   J3 the VEIN LAW — a convex vein needs a standing host: hostless rows
+//      starve (the census-D3 mechanism, kept as the pressure control),
+//      rock hosts pay, and crystal_spire alone now pays too (the fix);
+//      every vein stands at a host's flank (drawn == hosted);
+//   J4 the RIVEN GEODE — teeth ring stands, exactly one crack (the door),
+//      and the lode floor pays inside the ring.
+{
+  const RIM_REACH = 260; // the rim field's default reach (data/formations.ts)
+  // J1 — the hem: the crystal tail's own row shape on a bare def.
+  let hemPlaced = 0, hemStrays = 0, hemWet = 0;
+  const hemDef = defOf('qa_coh_crystalhem', [
+    { kind: 'water', count: [2, 3], radius: [40, 70] },
+    { kind: 'shardgrass', count: [10, 14], where: { field: 'rim', min: 0.06 } },
+  ]);
+  for (let s = 0; s < SEEDS; s++) {
+    const layout = gen(hemDef, seedAt(s));
+    const sward = layout.doodads.filter(d => d.kind === 'shardgrass');
+    hemPlaced += sward.length;
+    for (const d of sward) {
+      const edge = Math.min(d.pos.x, arena.w - d.pos.x, d.pos.y, arena.h - d.pos.y);
+      // Band + blob spread: the ANCHOR honors the field gate; satellites
+      // scatter around it (grass-blob grammar), so the coat may bleed a
+      // blob's reach inland — never march to the zone core.
+      if (edge > RIM_REACH * 0.94 + 110) hemStrays++;
+      if (layout.doodads.some(w => w.kind === 'water'
+        && Math.hypot(w.pos.x - d.pos.x, w.pos.y - d.pos.y) < w.radius)) hemWet++;
+    }
+  }
+  if (hemPlaced === 0) fail('J1: RIG DEAD — the rim band coated nothing');
+  else if (hemStrays) fail(`J1: ${hemStrays} sward patch(es) left the hem for the zone core (WHERE band leak)`);
+  else if (hemWet) fail(`J1: ${hemWet} sward patch(es) centered on open water (forbidOn leak)`);
+  else console.log(`rig J1 (crystal hem): ${hemPlaced} sward patches, all in-band, none wet`);
+
+  // J2 — the bed through both grammars (the alias lane is what melds speak).
+  let bedCore = 0, bedSward = 0;
+  const bedDef = defOf('qa_coh_shardbed', [
+    { kind: 'cluster', cluster: 'shard_bed', count: [3, 3] },
+    { kind: 'shard_bed', count: [2, 2] },
+  ]);
+  for (let s = 0; s < SEEDS; s++) {
+    const layout = gen(bedDef, seedAt(s));
+    bedCore += layout.doodads.filter(d => d.kind === 'crystal_cluster').length;
+    bedSward += layout.doodads.filter(d => d.kind === 'shardgrass').length;
+  }
+  if (bedCore === 0) fail('J2: RIG DEAD — shard beds composed no lattice through either grammar');
+  else if (bedSward === 0) fail('J2: shard beds rose without their sward (cluster pieces missing)');
+  else console.log(`rig J2 (shard bed): ${bedCore} lattices + ${bedSward} sward patches across both grammars`);
+
+  // J3 — the vein law. Hostless starves (pressure), rocks pay, spires pay.
+  const veinsOf = (rows: StampSpec[]): number => {
+    let n = 0;
+    for (let s = 0; s < SEEDS; s++) {
+      n += gen(defOf('qa_coh_veins', rows), seedAt(s)).doodads
+        .filter(d => d.kind === 'crystal_vein').length;
+    }
+    return n;
+  };
+  const starved = veinsOf([{ kind: 'crystal_vein', count: [2, 3] }]);
+  const rockFed = veinsOf([
+    { kind: 'rocks', count: [3, 4], radius: [26, 40] },
+    { kind: 'crystal_vein', count: [2, 3] },
+  ]);
+  const spireFed = veinsOf([
+    { kind: 'crystal_spire', count: [3, 4] },
+    { kind: 'crystal_vein', count: [2, 3] },
+  ]);
+  if (starved !== 0) fail(`J3: ${starved} vein(s) surfaced with no host standing (the starvation control broke — what fed them?)`);
+  if (rockFed === 0) fail('J3: rock hosts fed no veins (the boulder flank lane died)');
+  if (spireFed === 0) fail('J3: crystal_spire hosts fed no veins — the census-D3 fix regressed (surface crystal starves veinless again)');
+  // Drawn == hosted: every vein stands at some host's flank.
+  {
+    let orphans = 0;
+    for (let s = 0; s < SEEDS; s++) {
+      const layout = gen(defOf('qa_coh_veinflank', [
+        { kind: 'crystal_spire', count: [3, 4] },
+        { kind: 'crystal_vein', count: [2, 3] },
+      ]), seedAt(s));
+      for (const d of layout.doodads.filter(d => d.kind === 'crystal_vein')) {
+        if (!layout.doodads.some(h => h.kind === 'crystal_spire'
+          && Math.hypot(h.pos.x - d.pos.x, h.pos.y - d.pos.y) <= h.radius + 10 + 0.5)) orphans++;
+      }
+    }
+    if (orphans) fail(`J3: ${orphans} vein(s) standing free of any flank (the host seat drifted)`);
+  }
+  if (starved === 0 && rockFed > 0 && spireFed > 0) {
+    console.log(`rig J3 (vein law): hostless 0, rock-fed ${rockFed}, spire-fed ${spireFed}`);
+  }
+
+  // J4 — the riven geode: teeth, one crack, the paying lode.
+  let geodes = 0;
+  for (let s = 0; s < 8; s++) {
+    const layout = gen(defOf('qa_coh_geode', [
+      { kind: 'landmark', landmark: 'riven_geode', count: [1, 1] },
+    ]), seedAt(s));
+    const teeth = layout.doodads.filter(d => d.kind === 'crystal_spire');
+    if (teeth.length < 10) { fail(`J4 seed ${seedAt(s)}: only ${teeth.length} teeth — no shell stood`); continue; }
+    geodes++;
+    const cx = teeth.reduce((a, d) => a + d.pos.x, 0) / teeth.length;
+    const cy = teeth.reduce((a, d) => a + d.pos.y, 0) / teeth.length;
+    const ringR = teeth.reduce((a, d) => a + Math.hypot(d.pos.x - cx, d.pos.y - cy), 0) / teeth.length;
+    // The crack: the widest angular gap between adjacent teeth must read as
+    // a door (≥ twice the knit step), and only ONE gap that wide may exist.
+    const angs = teeth.map(d => Math.atan2(d.pos.y - cy, d.pos.x - cx)).sort((a, b) => a - b);
+    const meanStep = (Math.PI * 2) / teeth.length;
+    let doors = 0, widest = 0;
+    for (let i = 0; i < angs.length; i++) {
+      const gap = (i + 1 < angs.length ? angs[i + 1] : angs[0] + Math.PI * 2) - angs[i];
+      if (gap > widest) widest = gap;
+      if (gap > Math.max(meanStep * 2.5, 0.45)) doors++;
+    }
+    if (doors === 0) fail(`J4 seed ${seedAt(s)}: the shell sealed — no crack wide enough to walk (widest ${widest.toFixed(2)} rad)`);
+    else if (doors > 2) fail(`J4 seed ${seedAt(s)}: ${doors} crack-wide gaps — the shell reads broken, not riven`);
+    const lode = layout.doodads.filter(d =>
+      (d.kind === 'crystal_vein' || d.kind === 'geode_shell')
+      && Math.hypot(d.pos.x - cx, d.pos.y - cy) < ringR - 10);
+    if (lode.length === 0) fail(`J4 seed ${seedAt(s)}: the vault holds no lode (empty treasure room)`);
+  }
+  if (geodes === 0) fail('J4: RIG DEAD — no seed ever raised the geode');
+  else if (!fails) console.log(`rig J4 (riven geode): ${geodes}/8 shells stood, each with one crack and a paying lode`);
+}
+
 console.log(`\nprobe coherence: ${SEEDS} seeds/rig — ${fails} failure(s)`);
 if (fails) process.exit(1);
 console.log('PROBE COHERENCE OK');

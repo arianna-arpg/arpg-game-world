@@ -1532,3 +1532,149 @@ registerFormation({
     { kind: 'gas_polyp', radius: [10, 13], every: 4, jitter: 18, rot: true },
   ],
 });
+
+// ======================= THE CRYSTAL RESPLENDENCE KIT ========================
+// The shard country's coating + signature grammar (the crystal commission):
+// (1) THE CRYSTALLINE HEM — the Fields' grass-coated edges answered in glass:
+//     a `rim` generation field (constant-px edge band, the strata vocabulary)
+//     under a walk-through crystalline sward kind, `shardgrass`;
+// (2) THE SHARD BED — one reusable "crystal clustering" set-piece (the
+//     ClusterDef lives in data/clusters.ts) re-exposed as a plain STAMP KIND
+//     so every grammar that speaks only kind+count — meld rows above all —
+//     lays the same bed a tileset rolls (the boulder_field precedent);
+// (3) THE RIVEN GEODE — the country's signature artifice: the land IS a geode
+//     field, and the greatest one has split open. A walk-in vault ringed in
+//     singing glass teeth (crystal_spire: see and shoot THROUGH the wall,
+//     never past it on foot — the treasure glitters in plain view), entered
+//     by one crack, floored with the lode (brittle veins + geodes: the mine
+//     that pays the striker), and slept in by the country's own shellbacks.
+// Kinds are open strings (the vesperlands precedent); the sward's blob stamp
+// rides beside 'grass' in levelgen's blob family (stampBlob is deliberately
+// internal); painters in doodadVisuals.ts (`=== THE CRYSTAL RESPLENDENCE`).
+import {
+  registerGenField, registerLandmark, registerLandmarkBuilder,
+  stamp as stampRow,
+} from '../engine/levelgen';
+import { Mask, disc } from '../engine/genkit';
+import { vec as v2 } from '../core/math';
+
+/** 1 flush against the arena's nearest edge → 0 at `reach` px inland
+ *  (default 260): the HEM vocabulary — `{field:'rim', min:0.05}` is an edge
+ *  coating band, `min:0.5` hugs its outer half. CONSTANT-PX by design
+ *  (distance to the nearest side), where 'radial' is rect-PROPORTIONAL — a
+ *  long zone hems evenly instead of growing a fat short-axis verge. */
+registerGenField('rim', (ctx, params) => {
+  const reach = typeof params.reach === 'number' ? params.reach : 260;
+  const w = ctx.arena.w, h = ctx.arena.h;
+  return (x, y) => Math.max(0, 1 - Math.min(x, w - x, y, h - y) / Math.max(1, reach));
+});
+
+// THE SHARDGRASS — the coating itself: a sward of shin-high crystal
+// spikelets, walk-through like the meadow grass it answers. walkOnly keeps
+// the sward off wall mass in grid faces; the forbid list is the crystal
+// family's own (glass doesn't float, soak, or burn — and no `fuel`: this
+// grass carries no kindling). Blob patches merge freely (no spacing), so
+// the hem reads as a COAT, not confetti.
+registerDoodadRule('shardgrass', {
+  overlap: 'ground', walkOnly: true,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+
+// THE SHARD BED as a plain stamp kind: one row = one composed bed. The
+// nested spec inherits the caller's WHERE band (stamp()'s transient
+// fieldGate discipline), so a rim-banded or meld-banded bed keeps to its
+// band; every piece still answers its own placement rule.
+registerStamp('shard_bed', (ctx) =>
+  stampRow(ctx, { kind: 'cluster', cluster: 'shard_bed', count: [1, 1] }));
+
+// THE GEODE RING — the riven geode's shell, a builder in the windlass_ring
+// idiom (registered from data, no engine edits). Glass teeth knitted on a
+// ring (raw pushes, the fence_ring law: a wall is allowed to knit), one
+// crack for a door with two jamb teeth flanking it, the stone matrix
+// shouldering the outside, and the lode floor inside off `inner` rows (the
+// pit builder's dressing grammar). Teeth are crystal_spire bodies: their own
+// kind rule (blocksMove, shot- and sight-transparent, resonance toll) is the
+// whole vault's argument — you SEE the hoard through the wall, you walk the
+// ring to the crack, and every careless swing against the teeth SINGS.
+registerLandmarkBuilder('geode_ring', (b) => {
+  const { rng, r, ctx } = b;
+  const cx = b.center.x, cy = b.center.y;
+  const ringR = r * (b.param('ringFrac', 0.76) as number);
+  const gapAt = rng.range(0, Math.PI * 2);
+  const gapHalf = b.param('gapArc', 0.42) as number;
+  const toothR = b.param('toothRadius', [13, 21]) as [number, number];
+  // The teeth — jittered radii and ring wobble so the shell reads GROWN.
+  const step = ((toothR[0] + toothR[1]) / 2) * 2.05;
+  const n = Math.max(10, Math.round((Math.PI * 2 * ringR) / step));
+  for (let i = 0; i < n; i++) {
+    const ang = (i / n) * Math.PI * 2 + rng.range(-0.05, 0.05);
+    const da = Math.abs(Math.atan2(Math.sin(ang - gapAt), Math.cos(ang - gapAt)));
+    if (da < gapHalf) continue; // the crack stays open
+    const rr = ringR + rng.range(-9, 9);
+    ctx.doodads.push({
+      pos: v2(cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr),
+      radius: rng.range(toothR[0], toothR[1]), kind: 'crystal_spire', rot: ang + Math.PI / 2,
+    });
+  }
+  // The jambs — the crack's two great shoulder teeth (the door reads).
+  for (const s of [-1, 1]) {
+    const ang = gapAt + s * (gapHalf + 0.1);
+    ctx.doodads.push({
+      pos: v2(cx + Math.cos(ang) * ringR, cy + Math.sin(ang) * ringR),
+      radius: rng.range(22, 26), kind: 'crystal_spire', rot: ang + Math.PI / 2,
+    });
+  }
+  // The stone matrix — the shell the lode grew inside, shouldering the
+  // glass from outside (and, in the shard country, host mass for veins).
+  for (let i = 0, k = Math.round(n * 0.45); i < k; i++) {
+    const ang = rng.range(0, Math.PI * 2);
+    const da = Math.abs(Math.atan2(Math.sin(ang - gapAt), Math.cos(ang - gapAt)));
+    if (da < gapHalf + 0.16) continue; // never crowd the door
+    const rr = ringR + rng.range(26, 44);
+    ctx.doodads.push({
+      pos: v2(cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr),
+      radius: rng.range(16, 26), kind: 'rock', rot: rng.range(0, Math.PI * 2),
+    });
+  }
+  // The lode floor — what the vault is FOR (rows, the pit dressing idiom).
+  const inner = b.param('inner', [] as { kind: string; count: [number, number]; radius: [number, number] }[]);
+  for (const row of inner) {
+    for (let i = 0, k = rng.int(row.count[0], row.count[1]); i < k; i++) {
+      const a = rng.range(0, Math.PI * 2), d = rng.range(0, ringR * 0.6);
+      ctx.doodads.push({
+        pos: v2(cx + Math.cos(a) * d, cy + Math.sin(a) * d),
+        radius: rng.range(row.radius[0], row.radius[1]), kind: row.kind, rot: rng.range(0, Math.PI * 2),
+      });
+    }
+  }
+  const floor = Mask.forRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+  disc(floor, cx, cy, ringR * 0.78);
+  b.interior = floor;
+});
+
+// THE RIVEN GEODE — the signature landmark the crystal tileset rolls. The
+// lode floor is the ONE place the country concentrates its brittle wealth
+// (veins crack loose gems by their own kind rule — the vault is a mine),
+// and the sleepers are the tileset's own kin, armed as a visible ambush
+// (the giant's-cairn law: the treasure room wakes when robbed).
+registerLandmark({
+  id: 'riven_geode', builder: 'geode_ring', size: [240, 320],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    inner: [
+      { kind: 'crystal_vein', count: [3, 5], radius: [12, 14] },
+      { kind: 'geode_shell', count: [2, 3], radius: [14, 19] },
+      { kind: 'shardgrass', count: [3, 5], radius: [16, 26] },
+      { kind: 'crystal_cluster', count: [1, 2], radius: [13, 17] },
+    ],
+  },
+  spawns: {
+    table: [
+      { id: 'geode_shellback', weight: 2 },
+      { id: 'prism_creeper', weight: 2 },
+      { id: 'resonant_shardling', weight: 3 },
+    ],
+    count: [3, 5], where: 'interior',
+    ambush: { radius: 160, visible: true, pack: 300, announce: 'the geode stirs — its facets are awake!' },
+  },
+});

@@ -6076,6 +6076,11 @@ registerStamp('icicle_cluster', stampSingle('icicle_cluster', [13, 19]));
 // (spire resonance toll, geode brittle spill) and painters.
 registerStamp('crystal_spire', (ctx, spec) => stampSolid(ctx, 'crystal_spire', spec.radius ?? [16, 26]));
 registerStamp('geode_shell', stampSingle('geode_shell', [15, 22]));
+// The crystalline SWARD (the resplendence kit — rule + consumers in
+// data/formations.ts): walk-through spikelet patches in the grass blob
+// grammar, the shard country's edge coating. Registered here beside its
+// family because stampBlob is deliberately internal.
+registerStamp('shardgrass', (ctx, spec) => stampBlob(ctx, 'shardgrass', spec.radius ?? [14, 40], [3, 6], false));
 // The spelunker kit: cavern furniture (strata fabric). Solids ride the rock
 // grammar; sheets and pools merge as ground; the vein hunts a wall's foot
 // (grid zones) or a standing stone's flank (convex) — the secret_wall
@@ -6109,8 +6114,14 @@ registerStamp('crystal_vein', (ctx) => {
     ctx.doodads.push({ pos: p, radius: 13, kind: 'crystal_vein', rot: ctx.rng.range(0, Math.PI * 2) });
     return;
   }
+  // Convex hosts: crag mass at boulder scale — or a crystal_spire's flank at
+  // the needle's own slimmer gauge (the shard country's standing bodies; its
+  // surface zones starved veinless when only rock-family hosts counted —
+  // the density census D3). Order still rules: a vein row must run AFTER
+  // its hosts' rows (layout-tail; commons prepend).
   const hosts = ctx.doodads.filter(d =>
-    (d.kind === 'cliff' || d.kind === 'rock' || d.kind === 'rock_spire') && d.radius >= 24
+    ((d.kind === 'cliff' || d.kind === 'rock' || d.kind === 'rock_spire') && d.radius >= 24
+      || d.kind === 'crystal_spire' && d.radius >= 15)
     && !inReserved(ctx, d.pos, d.radius));
   if (!hosts.length) return;
   const host = hosts[ctx.rng.int(0, hosts.length - 1)];
