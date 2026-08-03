@@ -4953,6 +4953,7 @@ export class World {
       pos: this.clampPos(vec(d.pos.x, d.pos.y), 28),
       seed: layout.caveSeeds[i] ?? 0,
       kind: 'cave_entrance',
+      mouthTier: d.tier,
     }));
     // REGISTERED SIDEZONE entrances (data/sidezones.ts): any OTHER doodad kind
     // with a SidezoneDef is a dwell-mouth too — the cellar hatch, a package's
@@ -10193,10 +10194,15 @@ export class World {
       ? CAVE_FACE_IDS.find(id => TILESETS[id]?.packs === def.packs) : undefined;
     const spec = face !== undefined ? TILESETS[face]?.caveFace : undefined;
     if (face === undefined || !spec) return undefined;
-    // THE THEMED BYPASS: the face's own biomes map names its country.
+    // THE THEMED BYPASS: the face's own biomes map names its country. A row
+    // may be BANDED (CaveFaceBiomeRow — the caveFaceBiomeW fold's shape);
+    // the bypass reads the row's own weight band-free, since it identifies
+    // the face's home country, not a depth's share (rootways under the
+    // garden stays themed 'garden' at every rung it serves).
     let themed: string | undefined; let best = 0;
     for (const [b, bw] of Object.entries(spec.biomes ?? {})) {
-      if (b !== '*' && bw >= CAVE_POOL_CFG.themedBar && bw > best) { themed = b; best = bw; }
+      const w = typeof bw === 'number' ? bw : bw.w;
+      if (b !== '*' && w >= CAVE_POOL_CFG.themedBar && w > best) { themed = b; best = w; }
     }
     if (themed !== undefined) return WILDLIFE[themed];
     // THE POOL ROLL: claiming rows × strata × anchor affinity, plus the echo.
@@ -40102,8 +40108,14 @@ export class World {
       // precomputed home roof (loadZone) — the indoors gate is two compares.
       const playerRoof = this.caveEntrances.some(c => c.roof !== undefined && c.roof !== null)
         ? this.roofedStructureAt(this.player.pos) : null;
-      const onMouth = (cm: { pos: Vec2; kind: string; roof?: PlacedStructure | null }): boolean =>
+      const onMouth = (cm: { pos: Vec2; kind: string; roof?: PlacedStructure | null; mouthTier?: number }): boolean =>
         dist(this.player.pos, cm.pos) <= transitRadius(`sidezone:${cm.kind}`, 28) + this.player.radius
+        // THE STORY GATE (mouthTier — the under-tier lanes): a mouth dwells
+        // only from ITS OWN story. A taproot gate seated down in the root
+        // galleries never triggers under a surface walker crossing the duct
+        // line above it — and a surface mouth never triggers under a duct
+        // runner passing beneath it (drawn == dwelled, both directions).
+        && (cm.mouthTier ?? 0) === (this.player.tier ?? 0)
         && (!sidezoneOf(cm.kind)?.indoorsOnly || (!!cm.roof && cm.roof === playerRoof))
         // THE CONDITIONED DOOR (SidezoneDef.when — the lair fabric's night
         // barrow): a closed door never starts the dwell. The refusal READ
@@ -48261,6 +48273,7 @@ export class World {
         seed: hashStr(`${this.zone.id}:${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`),
         kind: d.kind,
         roof: null,
+        mouthTier: d.tier,
       });
     }
   }

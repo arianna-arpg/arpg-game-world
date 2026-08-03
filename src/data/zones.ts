@@ -775,6 +775,11 @@ export interface ZoneTiers {
    *  TIER_CFG.packSplit; multi-story zones deal the elevated share across
    *  their levels). */
   packSplit?: number;
+  /** The registered under-tier LANE that carved this layer (engine/tiers.ts
+   *  UNDER_TIER_LANES — 'sewer', 'roots'): relocateDeepDoors reads its spec,
+   *  and the tail pass uses it to tell its own stale stamp from a layer
+   *  another fabric owns. Recipe-carved layers (needles, bores) never set it. */
+  lane?: string;
   /** RIM DUELS (open exposure): cross-tier hostility is ALLOWED — sight and
    *  the region map mediate instead (butte walls block eyes and arrows, so
    *  the fights that happen are the honest ones: across rims and spans).

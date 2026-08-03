@@ -46,6 +46,7 @@ import { massKindOf } from '../src/engine/massif';
 import {
   landingTier, linkFlipTier, linkSpanOf, makeTierView, MAX_TIER,
   resolveTierCrossing, tierElevOf, tierFloorAt, tierFloorOf, tierLinkOf,
+  UNDER_TIER_LANES,
 } from '../src/engine/tiers';
 import { TILESETS } from '../src/data/tilesets';
 import type { StampSpec, ZoneDef } from '../src/data/zones';
@@ -898,6 +899,81 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
     { ...TILESETS.pinnacle.layoutParams }, 717001);
   check('M10 a minted summit stacks taller than the classic pair',
     tierMapTell(pk.def, true)?.floors === 3, `floors=${tierMapTell(pk.def, true)?.floors}`);
+}
+
+// --- RIG N: THE UNDER-TIER LANES + THE ROOT TIER (batch 23 — THE ROOTED WEB) ------
+// The sewer carve generalized into a REGISTERED vocabulary (UNDER_TIER_LANES,
+// engine/tiers.ts) and the garden's debut lane: root galleries sunk beneath
+// the plot's floor, dialed by `underTier`/`underTierChance` at the
+// generateLayout tail (any recipe, no recipe edits — the trapworks-pass
+// idiom), taproot throats as the crossings, and the surface faces' taproot
+// gates pulled down into the galleries STORY-STAMPED (doorTier 'seat' —
+// drawn == dwelled from below; World's mouthTier gate is the runtime half).
+{
+  // N1 the registry: both lanes stand; the roots lane seats the garden door.
+  check('N1 the lane registry', !!UNDER_TIER_LANES.sewer && !!UNDER_TIER_LANES.roots
+    && UNDER_TIER_LANES.roots.deepDoorKinds?.includes('taproot_gate') === true
+    && UNDER_TIER_LANES.roots.doorTier === 'seat'
+    && UNDER_TIER_LANES.sewer.doorTier === undefined);
+  const duct = regionKind('root_duct'), well = regionKind('root_well');
+  check('N2 root_duct: the plot above keeps its face',
+    !!duct && !!duct.walkable && duct.tier === 1 && !duct.visual && !!duct.tierVisual);
+  check('N3 root_well is a CROSSING', !!well?.tierLink && !!well?.walkable && well.tier === 1);
+  // N4-N8 the carve on a real garden face (petalfields' parkland recipe),
+  // chance forced — gates forced too, so the relocation has bodies to seat.
+  const pf = TILESETS.petalfields;
+  let carved = 0, declared = 0, throats = 0, orphans = 0;
+  let sunkGates = 0, sunkOffStory = 0, surfGates = 0;
+  for (const seed of [818001, 818002, 818003, 818004, 818005, 818006]) {
+    const { out, def } = gen('qa_roots', 'parkland',
+      [...pf.layout, { kind: 'taproot_gate', count: [2, 2] } as StampSpec],
+      { ...pf.layoutParams, underTier: 'roots', underTierChance: 1 }, seed);
+    const st = tierStats(out);
+    if (!st || st.tierCells === 0) continue; // the lattice honestly declined (RIG D's tolerance)
+    carved++;
+    orphans += st.orphan;
+    if (def.tiers?.kind === 'under' && def.tiers?.exposure === 'covered'
+      && def.tiers?.lane === 'roots') declared++;
+    throats += out.doodads.filter(d => d.kind === 'taproot_throat').length;
+    const grid = out.walk as GridWalkField;
+    for (const d of out.doodads) {
+      if (d.kind !== 'taproot_gate') continue;
+      if ((d as { tier?: number }).tier === 1) {
+        sunkGates++;
+        // drawn == dwelled: a sunken gate stands on the story's own floor.
+        const k = grid.regionAt(d.pos.x, d.pos.y);
+        if (!(k === 'root_duct' || k === 'root_well')) sunkOffStory++;
+      } else surfGates++;
+    }
+  }
+  check('N4 the root tier carves in most plots', carved >= 4, `${carved}/6`);
+  check('N5 carved plots DECLARE covered/under + the lane', declared === carved, `${declared}/${carved}`);
+  check('N6 every carved plot wears its throats', carved === 0 || throats >= carved * 2, `throats=${throats}`);
+  check('N7 no orphan gallery anywhere', orphans === 0, `orphans=${orphans}`);
+  check('N8 gates SINK story-stamped onto the story\'s own floor',
+    sunkGates >= 1 && sunkOffStory === 0,
+    `sunk=${sunkGates} offStory=${sunkOffStory} surface=${surfGates}`);
+  // N9 absent == identical: a dial-less plot mints flat — no root region, no
+  // tiers stamp (the tail pass reads nothing, draws nothing).
+  {
+    const { underTier: _u, underTierChance: _c, ...flat } = (pf.layoutParams ?? {}) as Record<string, unknown>;
+    const { out, def } = gen('qa_roots_flat', 'parkland', pf.layout, flat, 818001);
+    const st = tierStats(out);
+    check('N9 absent == identical: no dial, no layer',
+      (st?.tierCells ?? 0) === 0 && def.tiers === undefined);
+  }
+  // N10 determinism: same seed, byte-equal furniture AND ground.
+  const fpN = (o: GeneratedLayout): string => {
+    const g = o.walk as GridWalkField;
+    let s = o.doodads.map(d => `${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}:${(d as { tier?: number }).tier ?? 0}`).join('|');
+    for (let gy = 0; gy < g.rows; gy += 2) for (let gx = 0; gx < g.cols; gx += 2) s += g.regionAt(gx * g.cell + 15, gy * g.cell + 15).length;
+    return s;
+  };
+  const na = gen('qa_roots', 'parkland', [...pf.layout, { kind: 'taproot_gate', count: [2, 2] } as StampSpec],
+    { ...pf.layoutParams, underTier: 'roots', underTierChance: 1 }, 818009);
+  const nb = gen('qa_roots', 'parkland', [...pf.layout, { kind: 'taproot_gate', count: [2, 2] } as StampSpec],
+    { ...pf.layoutParams, underTier: 'roots', underTierChance: 1 }, 818009);
+  check('N10 the root tier is byte-deterministic', fpN(na.out) === fpN(nb.out));
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);

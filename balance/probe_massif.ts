@@ -145,7 +145,7 @@ import {
   registerTenantKind, ROOT_LATTICE_CFG, tenantKindIds,
   type MassAnchorRow, type RootLatticeSpec, type TenantRow,
 } from '../src/engine/massif';
-import { TILESETS } from '../src/data/tilesets';
+import { caveFaceBiomeW, TILESETS } from '../src/data/tilesets';
 import { SIDEZONES } from '../src/data/sidezones';
 import { skyOf } from '../src/data/zones';
 import { BIOME_FIELD_BANDS, BIOMES, patronFaction } from '../src/world/biomes';
@@ -1747,7 +1747,39 @@ function bareCtx(seed: number): GenCtx {
     if (ts.frontier !== false) fail('P: the undergrowth is minted ground — frontier must be false');
     if (ts.perfProbe !== true) fail('P: the undergrowth must opt into the perf sweep (the sewerworks precedent)');
     if (ts.biome !== 'garden') fail(`P: biome '${ts.biome}' — the underdark hangs beneath the garden`);
-    if (ts.caveFace) fail('P: the undergrowth claims the cave-face pool — the named-door law (sewerworks mirror) is broken');
+    // THE DEPTH REWIRE (batch 23 — THE ROOTED WEB, Arianna's ruling: "ideally
+    // the Undergrowth nodes would be depth 1, and these would take up Cave
+    // side-zones in the Garden"). The old pin here asserted NO caveFace (the
+    // named-door law); the law is re-authored TIGHTER, not weakened: the
+    // undergrowth claims exactly the garden's shallows — '*' SEALED at 0 (no
+    // other country's ladder can ever roll it; the door discipline every
+    // other biome keeps), zero by depth 2 (the rootways own the deeper
+    // rungs), at the very envelope mass the rootways held (evidence: the
+    // 2026-08-02 census — rootways served 86% of garden depth-1 mints at
+    // 3-19 dress bodies/screen against the undergrowth's 149-195).
+    const cf = ts.caveFace;
+    if (!cf) fail('P: the undergrowth must claim the garden depth-1 pool (the rewire law)');
+    else {
+      if (cf.biomes?.['*'] !== 0) fail("P: the undergrowth's '*' claim must SEAL at 0 — no other country's ladder may roll it");
+      const gw = cf.biomes?.garden;
+      if (typeof gw !== 'number' || gw < 5) fail(`P: the undergrowth's garden claim must dominate the shallows (got ${JSON.stringify(gw)})`);
+      const ugAt = (d: number): number => presenceMul(cf.strata, d) * (caveFaceBiomeW(gw, d) ?? 0);
+      if (!(ugAt(1) > 0)) fail('P: the undergrowth must serve depth 1');
+      if (ugAt(2) !== 0) fail(`P: the undergrowth must vanish by depth 2 (got ${ugAt(2)}) — the rootways own the deeper rungs`);
+      // The ladder's other half (garden → undergrowth@1 → rootways@2+): the
+      // rootways' garden claim is BANDED from depth 2, and its grove + '*'
+      // service stays bare numbers — absent == identical for every other
+      // country's ladder.
+      const rw = TILESETS.rootways.caveFace;
+      const rwAt = (d: number): number => presenceMul(rw?.strata, d) * (caveFaceBiomeW(rw?.biomes?.garden, d) ?? 0);
+      if (rwAt(1) !== 0) fail(`P: the rootways must yield the garden's depth 1 (got ${rwAt(1)})`);
+      if (!(rwAt(2) >= 5)) fail(`P: the rootways must keep the garden's depth 2 (got ${rwAt(2)})`);
+      if (typeof rw?.biomes?.grove !== 'number') fail('P: the rootways grove service must stay a bare number (untouched by the rewire)');
+      // The formalized way deeper: true caves stem WITHIN the undergrowth.
+      if (!(ts.common ?? []).some(r => r.kind === 'cave')) {
+        fail("P: the undergrowth must author its common 'cave' row (the formalized ladder)");
+      }
+    }
     if ((ts.variants?.length ?? 0) < 2) fail('P: the undergrowth must field both authored variants');
     const vNames = (ts.variants ?? []).map(v => v.name);
     for (const want of ['the brood galleries', 'the seeding dark']) {

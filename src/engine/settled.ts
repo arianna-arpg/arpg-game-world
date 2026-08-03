@@ -42,7 +42,7 @@ import {
   type DoodadKind, type GenCtx,
 } from './levelgen';
 import { carveMassifs, registerMassShape } from './massif';
-import { carveSewerTier, relocateGratesIntoDucts } from './tiers';
+import { carveUnderTier, relocateDeepDoors } from './tiers';
 import { bearingNoise, disc, radial, wanderPath } from './genkit';
 
 // --- CONFIG ------------------------------------------------------------------
@@ -642,14 +642,16 @@ function districtLayout(ctx: GenCtx, def: ZoneDef): void {
   for (const e of ctx.exits) {
     if (!grid.reachable(ctx.entry, e)) grid.carveCorridor(ctx.entry.x, ctx.entry.y, e.x, e.y, 34);
   }
-  // THE UNDER-LATTICE (the tier fabric, engine/tiers.ts): faces that dial
-  // `sewerTier` sink a duct web BENEATH their streets and blocks — the same
-  // zone, one layer down (covered exposure; culvert wells are the doors).
-  if (ctx.rng.chance(layoutParam(def, 'sewerTier', 0))) carveSewerTier(ctx, def, grid);
+  // THE UNDER-LATTICE (the under-tier lanes, engine/tiers.ts): faces that
+  // dial `sewerTier` sink the 'sewer' lane's duct web BENEATH their streets
+  // and blocks — the same zone, one layer down (covered exposure; culvert
+  // wells are the doors). Kept mid-recipe: this call's rng seat is a
+  // draw-order compatibility contract (byte-identical metropolis mints).
+  if (ctx.rng.chance(layoutParam(def, 'sewerTier', 0))) carveUnderTier(ctx, def, grid, 'sewer');
   scatterDecoration(ctx, def);
   // The deep door prefers the drains: pull scattered grates INTO the duct
   // web (weighted — a grate left beside a building still reads).
-  relocateGratesIntoDucts(ctx, def, grid);
+  relocateDeepDoors(ctx, def, grid);
 }
 
 registerLayout('district', districtLayout);

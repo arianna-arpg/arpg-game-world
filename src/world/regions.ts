@@ -1214,6 +1214,20 @@ registerRegion({ id: 'culvert_well', walkable: true, blocks: false, label: 'the 
   tier: 1, tierLink: true,
   visual: { fill: '#222824', alpha: 0.95, edge: { color: '#54745c', width: 4 } },
   tierVisual: { fill: '#26302a', edge: '#6a8a70' } });
+// ROOT DUCT: THE ROOT TIER's bored gallery (the 'roots' under-tier lane —
+// engine/tiers.ts, spec in data/massifs.ts): the sewer family in garden
+// tongue. The plot's floor above keeps its own face (no visual); the
+// root-walled tunnel below shows only through the tier veil.
+registerRegion({ id: 'root_duct', walkable: true, blocks: false, label: 'the roots',
+  tier: 1,
+  tierVisual: { fill: '#171106', edge: '#5c4830' } });
+// TAPROOT THROAT: the root tier's crossing — a bore straight down between
+// the garden floor and the root gallery (walkable both tiers, flips on
+// exit). Reads as a dark root-ringed mouth from above.
+registerRegion({ id: 'root_well', walkable: true, blocks: false, label: 'the taproot throat',
+  tier: 1, tierLink: true,
+  visual: { fill: '#241c10', alpha: 0.95, edge: { color: '#5c4830', width: 4 } },
+  tierVisual: { fill: '#2a2212', edge: '#7a6444' } });
 
 // TOR GALLERY: a hollow tor's bored tunnel (the massif-bore lane,
 // engine/tiers.ts boreMassifTunnels): the mass keeps the CRAG's exact

@@ -1379,6 +1379,18 @@ export function registerTrapPass(fn: (ctx: GenCtx, spec: TrapGenSpec, geo: TrapG
   TRAP_PASS = fn;
 }
 
+/** THE UNDER-TIER PASS (engine/tiers.ts registers at eval — same one-way
+ *  seam as the trap pass: tiers.ts value-imports this module, so the carve
+ *  is injected rather than imported). Any recipe dials
+ *  `layoutParams.underTier: '<lane>'` and the finished-grid tail sinks that
+ *  registered lane beneath the zone — no recipe edits. The pass ensures its
+ *  own grid AFTER its chance roll (a convex zone that rolls the layer grows
+ *  one lazily; gridEnsured keeps the portal-clear splice honest below). */
+let UNDER_TIER_PASS: ((ctx: GenCtx, def: ZoneDef) => void) | null = null;
+export function registerUnderTierPass(fn: (ctx: GenCtx, def: ZoneDef) => void): void {
+  UNDER_TIER_PASS = fn;
+}
+
 /** THE BOULDER CHUTES (layoutParams.boulderChutes) — the mountain's rolling
  *  gauntlet, generation-meshed on the FINISHED walkable truth so ANY recipe
  *  can wear it (the overpass ledges, a massif fell, an open pass — one dial,
@@ -4457,6 +4469,14 @@ export function generateLayout(
   // walkable truth, BEFORE the clearway sweep so each runway immediately
   // holds its right-of-way — the gauntlet can never be plugged by scatter.
   layBoulderChutes(ctx, def);
+  // THE UNDER-TIER LANES (layoutParams.underTier — engine/tiers.ts): a zone
+  // that dials a registered lane sinks its covered story HERE, on the
+  // finished walkable truth (any recipe, no recipe edits), before the
+  // sweeps so they judge the final ground.
+  if (!ctx.lite && layoutParam<string | undefined>(def, 'underTier', undefined) !== undefined) {
+    if (UNDER_TIER_PASS) UNDER_TIER_PASS(ctx, def);
+    else console.warn(`[tiers] '${def.id}' authors layoutParams.underTier but no under-tier pass is registered — the dial is dead`);
+  }
   // THE CLEARWAY CONTRACT, GLOBALLY: traveled ways collect their right-of-way
   // after every placement system has spoken — ways yield to molten/void
   // ground, deck the soft wet ground they cross (ford the true bodies), and

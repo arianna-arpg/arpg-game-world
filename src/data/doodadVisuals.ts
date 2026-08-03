@@ -3192,6 +3192,31 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -2, color: '#c8b060', intensity: 0.26, flicker: 2.2 },
   },
+  // THE ROOTWAY GATE (the rooted web, data/underspans.ts) — the SPANNING
+  // door: the taproot bore re-dressed a shade paler with an amber-white
+  // breath, so "this mouth crosses" reads before the first dwell. Same
+  // caveMouth painter, one data entry (the doodadVisuals doctrine).
+  rootway_gate: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#42341e', edge: '#7a6240', material: 'wood',
+      glow: '#e0d090', throat: '#0c0a04', vines: { color: '#5a4a2c' },
+      label: 'the Rootways',
+    },
+    light: { radius: -2, color: '#e0d090', intensity: 0.3, flicker: 1.8 },
+  },
+  // THE TAPROOT THROAT (the root tier — the 'roots' under-tier lane,
+  // data/massifs.ts): the tier CROSSING's prop, not a door — the culvert
+  // stair's role in garden tongue. The gate's bore re-dressed darker, no
+  // glow, no label: you walk down in place, nothing mints. Same caveMouth
+  // painter, one data entry (the doodadVisuals doctrine).
+  taproot_throat: {
+    painter: 'caveMouth', order: 23, bakeWhole: 'static',
+    params: {
+      color: '#241a0e', edge: '#54432a', material: 'wood',
+      throat: '#0c0804', vines: { color: '#4a3a24' },
+    },
+  },
   giant_dandelion: {
     painter: 'trunk', order: 52, shadow: 0.5, longShadow: 1.2, bakeWhole: 'static',
     params: { color: '#8a9a6c', scale: 0.24, roots: 3 },

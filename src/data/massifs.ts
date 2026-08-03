@@ -18,6 +18,10 @@
 
 import { registerMassKind, registerMassShape, registerTenantKind, tenantKindOf } from '../engine/massif';
 import { registerDoodadRule, registerStamp, stampSingle } from '../engine/levelgen';
+// THE ROOT TIER (batch 23 — THE ROOTED WEB): the garden's under-tier lane
+// registers here beside the rest of the undergrowth kit (data→engine/tiers,
+// the same one-way edge as engine/worldgen below).
+import { registerUnderTier } from '../engine/tiers';
 import { bearingNoise, disc, radial } from '../engine/genkit';
 // THE UNDERGROWTH kit's door (the wane_arch pattern completed locally: rule,
 // stamp, kinds AND the mint all one kit — the sidezone registry is indifferent
@@ -970,6 +974,35 @@ registerSidezone({
   dwell: 0.7,
   ledgerOnEnter: 'undergrowth_entered',
   mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'undergrowth', { rollVariant: true }),
+});
+
+// --- THE ROOT TIER (batch 23 — THE ROOTED WEB's in-map under-story) -----------
+// The garden's own under-tier lane (engine/tiers.ts UNDER_TIER_LANES — the
+// sewer web's fabric in garden tongue): root-bored galleries sunk beneath the
+// plot's floor, entered IN PLACE down a taproot throat (the culvert-stair
+// idiom, grown a root mouth), dressed in the landed root-lattice kit's own
+// worn kinds (feeder cords, pale hairs, etiolated blades — the batch-21.5
+// ladder, zero new painters beyond the throat), and CANONICALLY hosting the
+// undergrowth's doors: relocateDeepDoors pulls the surface faces' scattered
+// taproot gates down into the galleries (doorTier 'seat' — the door is
+// STAMPED to the under story, drawn == dwelled from below; the gates the
+// bias leaves standing remain honest surface mouths). Garden surface faces
+// dial it via `underTier: 'roots'` + `underTierChance` (data/tilesets.ts).
+// Roots do not swim: the forbid list keeps every leg out of the wet.
+registerDoodadRule('taproot_throat', { overlap: 'inert', spacing: 40 });
+registerUnderTier('roots', {
+  duct: 'root_duct', well: 'root_well', stairKind: 'taproot_throat',
+  label: 'the roots', packSplit: 0.3,
+  forbid: ['water', 'bog', 'swamp', 'lava', 'chasm', 'ice'],
+  deepDoorKinds: ['taproot_gate'], doorTier: 'seat', portClear: 150,
+  kit: [
+    { kind: 'feeder_root', count: [4, 8], radius: [9, 14] },
+    { kind: 'root_hair', count: [4, 8], radius: [8, 13] },
+    { kind: 'pale_blade', count: [2, 4], radius: [14, 20] },
+    { kind: 'web', count: [1, 3], radius: [16, 28] },
+    { kind: 'egg_clutch', count: [0, 2], radius: [10, 15] },
+    { kind: 'spelunker_pack', count: [0, 1], radius: [10, 13] },
+  ],
 });
 
 // =============================================================================

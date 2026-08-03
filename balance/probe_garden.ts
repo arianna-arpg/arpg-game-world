@@ -27,7 +27,7 @@ import { STATUS_DEFS } from '../src/engine/status';
 import { CREEPS } from '../src/engine/creep';
 import { FOG_BANKS } from '../src/engine/fog';
 import { resolveLiteKind } from '../src/engine/lite';
-import { TILESETS, BIOME_LORE_GAPS, pickTilesetForBiome } from '../src/data/tilesets';
+import { caveFaceBiomeW, TILESETS, BIOME_LORE_GAPS, pickTilesetForBiome } from '../src/data/tilesets';
 import { BIOMES, BIOME_FIELD } from '../src/world/biomes';
 import { FACTION_TRAITS } from '../src/world/traits';
 import { WARLORD_OF } from '../src/world/warlord';
@@ -98,8 +98,15 @@ const step = (w: World, seconds: number): void => {
     `deep ${JSON.stringify(deep)}`);
   check('membership: rootways + formicary never field-mint (frontier:false)',
     TILESETS.rootways.frontier === false && TILESETS.formicary.frontier === false);
-  check('understratum: rootways is a garden-anchored cave face',
-    (TILESETS.rootways.caveFace?.biomes?.garden ?? 0) >= 5);
+  // The rewire (batch 23): the garden claim is a BANDED row now — depth 2+
+  // (the undergrowth took the shallows); the anchor weight itself still
+  // dominates. caveFaceBiomeW is the one fold every reader shares.
+  check('understratum: rootways is a garden-anchored cave face (banded from depth 2)',
+    (caveFaceBiomeW(TILESETS.rootways.caveFace?.biomes?.garden, 2) ?? 0) >= 5
+    && (caveFaceBiomeW(TILESETS.rootways.caveFace?.biomes?.garden, 1) ?? 1) === 0);
+  check('understratum: the undergrowth claims the garden shallows, sealed elsewhere',
+    (caveFaceBiomeW(TILESETS.undergrowth.caveFace?.biomes?.garden, 1) ?? 0) >= 5
+    && TILESETS.undergrowth.caveFace?.biomes?.['*'] === 0);
 }
 
 // --- 3) Doodad contracts ------------------------------------------------------

@@ -50,7 +50,7 @@ import type { ZoneDef, ZoneTiers } from '../data/zones';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, type RegionKind } from '../world/regions';
 import {
-  ensureGrid, layoutParam, registerLayout, scatterDecoration,
+  ensureGrid, layoutParam, registerLayout, registerUnderTierPass, scatterDecoration,
   type GenCtx,
 } from './levelgen';
 import { carveMassifs } from './massif';
@@ -611,21 +611,93 @@ function paintStrip(
   }
 }
 
-// --- THE SEWER UNDER-LATTICE ------------------------------------------------------
-// The covered debut: a duct web sunk UNDER a district's streets and blocks —
-// culvert wells (links) on open ground, corridors repainted per what stands
-// above (open ground → 'sewer_duct': street above, tunnel below; tenement/
-// manor mass → 'sewer_under_wall': the building keeps its wall AND hides a
-// tunnel). Called by the district recipe when `sewerTier` rolls.
+// --- THE UNDER-TIER LANES ---------------------------------------------------------
+// The covered story as a REGISTERED VOCABULARY (the registerLayout/registerStamp
+// idiom): a duct web sunk UNDER a zone's ground — wells (links) on open ground,
+// corridors repainted per what stands above (open ground → the lane's duct:
+// surface above, tunnel below; a mapped mass → its under-wall: the mass keeps
+// its wall AND hides a tunnel). The SEWER lane is the debut (the metropolis
+// drains, draw-for-draw the classic carve); THE ROOT TIER (lane 'roots',
+// data/massifs.ts) is the garden's — THE ROOTED WEB's in-map under-story.
+// TWO invocation seats, one carver: the district recipe calls carveUnderTier
+// mid-recipe (its historical rng seat — the draw order is a compatibility
+// contract), and any OTHER recipe dials `layoutParams.underTier` to have the
+// generateLayout finished-grid tail run the same carve (registerUnderTierPass
+// below — the trapworks-pass idiom; no recipe edits, ever).
 
-const DUCTABLE: Record<string, string> = {
-  tenement_wall: 'sewer_under_wall',
-  manor_wall: 'sewer_under_wall',
-};
+/** One registered under-tier lane — every region/prop/kit choice is data. */
+export interface UnderTierSpec {
+  /** Region painted where a leg crosses open ground (surface above, tunnel
+   *  below — the bridge pair). */
+  duct: string;
+  /** Region painted on each joined well (the crossing — tierLink). */
+  well: string;
+  /** The stair PROP each joined well wears, rotated INTO its tunnel. */
+  stairKind: string;
+  /** Mass regions a leg may bore beneath, and what they repaint to (the
+   *  building keeps its wall and hides a tunnel). Absent = legs route around
+   *  every wall. */
+  underWall?: Record<string, string>;
+  /** Wells rolled per zone (default TIER_CFG.wells). */
+  wells?: [number, number];
+  /** Duct corridor half-width (default TIER_CFG.ductHalfW). */
+  ductHalfW?: number;
+  /** HUD label for the under story ("the drains", "the roots"). */
+  label: string;
+  /** ZoneTiers.packSplit default (layoutParam 'tierPackSplit' outranks). */
+  packSplit?: number;
+  /** The story's OWN generation layer (layoutParam 'tierKit' outranks). */
+  kit?: TierKitRow[];
+  /** Walkable regions a leg must NEVER bore beneath (roots do not swim —
+   *  a pond must keep its floor). Absent = every walkable cell is fair. */
+  forbid?: string[];
+  /** Sidezone-door kinds relocateDeepDoors pulls down into the web. */
+  deepDoorKinds?: string[];
+  /** Relocation chance per door (layoutParam 'grateInDrains' outranks). */
+  deepDoorBias?: number;
+  /** 'seat': a relocated door is STAMPED to the under story (drawn == dwelled
+   *  from below — the root tier's law) and its candidate cells keep
+   *  `portClear` from every portal. 'none' (default): the door keeps its
+   *  surface stamp (the classic street grate reads from above). */
+  doorTier?: 'seat' | 'none';
+  portClear?: number;
+}
 
-export function carveSewerTier(ctx: GenCtx, def: ZoneDef, grid: GridWalkField): void {
+/** The lane registry — an OPEN vocabulary (the registerLayout idiom). */
+export const UNDER_TIER_LANES: Record<string, UnderTierSpec> = {};
+
+export function registerUnderTier(id: string, spec: UnderTierSpec): void {
+  UNDER_TIER_LANES[id] = spec;
+}
+
+// THE SEWER LANE — the debut, registered with the classic constants so the
+// district recipe's re-point is byte-identical (the metropolis A/B contract).
+registerUnderTier('sewer', {
+  duct: 'sewer_duct', well: 'culvert_well', stairKind: 'culvert_stair',
+  underWall: { tenement_wall: 'sewer_under_wall', manor_wall: 'sewer_under_wall' },
+  label: 'the drains', packSplit: 0.3,
+  deepDoorKinds: ['sewer_grate'],
+  // The drains' OWN generation layer: webbier than the street above (the
+  // ceiling harvest), boned, and stocked with what only smugglers carry.
+  kit: [
+    { kind: 'web', count: [4, 8], radius: [16, 30] },
+    { kind: 'bone_pile', count: [2, 4], radius: [10, 16] },
+    { kind: 'rubble', count: [1, 3], radius: [12, 20] },
+    { kind: 'smuggler_cache', count: [1, 2], radius: [10, 13] },
+  ],
+});
+
+export function carveUnderTier(ctx: GenCtx, def: ZoneDef, grid: GridWalkField, lane: string): void {
+  const spec = UNDER_TIER_LANES[lane];
+  if (!spec) {
+    console.warn(`[tiers] '${def.id}' asks under-tier lane '${lane}' but none is registered — the layer is dead`);
+    return;
+  }
+  const underWall = spec.underWall ?? {};
   const cs: number = (grid as unknown as { cell?: number }).cell ?? 30;
-  const nWells = ctx.rng.int(TIER_CFG.wells[0], TIER_CFG.wells[1]);
+  const wellBand = spec.wells ?? TIER_CFG.wells;
+  const ductHalfW = spec.ductHalfW ?? TIER_CFG.ductHalfW;
+  const nWells = ctx.rng.int(wellBand[0], wellBand[1]);
   const wells: Vec2[] = [];
   for (let t = 0; t < 60 && wells.length < nWells; t++) {
     const p = vec(ctx.rng.range(200, ctx.arena.w - 200), ctx.rng.range(200, ctx.arena.h - 200));
@@ -637,10 +709,11 @@ export function carveSewerTier(ctx: GenCtx, def: ZoneDef, grid: GridWalkField): 
   if (wells.length < 2) return; // no lattice, no layer — the zone stays flat
 
   // Connect wells in a chain with L-corridors; a leg only lays where every
-  // cell is duct-able (street ground or tenement/manor mass) — else try the
-  // other elbow, else skip the pair (an orphan duct is worse than none).
+  // cell is duct-able (open ground or a mapped mass) — else try the other
+  // elbow, else skip the pair (an orphan duct is worse than none).
   const ductable = (k: string | undefined): boolean =>
-    !!k && (DUCTABLE[k] !== undefined || !!regionKind(k)?.walkable);
+    !!k && (underWall[k] !== undefined
+      || (!!regionKind(k)?.walkable && !spec.forbid?.includes(k)));
   const legClear = (a: Vec2, b: Vec2): boolean => {
     const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / cs));
     for (let s = 0; s <= steps; s++) {
@@ -654,9 +727,8 @@ export function carveSewerTier(ctx: GenCtx, def: ZoneDef, grid: GridWalkField): 
     for (let s = 0; s <= steps; s++) {
       const x = a.x + (b.x - a.x) * (s / steps), y = a.y + (b.y - a.y) * (s / steps);
       const k = grid.regionAt?.(x, y);
-      const paint = k && DUCTABLE[k] ? DUCTABLE[k] : 'sewer_duct';
-      grid.fillRegion(x - TIER_CFG.ductHalfW, y - TIER_CFG.ductHalfW,
-        x + TIER_CFG.ductHalfW, y + TIER_CFG.ductHalfW, paint);
+      const paint = k && underWall[k] ? underWall[k] : spec.duct;
+      grid.fillRegion(x - ductHalfW, y - ductHalfW, x + ductHalfW, y + ductHalfW, paint);
     }
   };
   let joined = 0;
@@ -681,52 +753,87 @@ export function carveSewerTier(ctx: GenCtx, def: ZoneDef, grid: GridWalkField): 
     const p = wells[i];
     const dir = wellDir.get(i);
     if (dir === undefined) continue; // an unjoined well carves nothing — no lying doors
-    grid.fillRegion(p.x - cs, p.y - cs, p.x + cs, p.y + cs, 'culvert_well');
-    ctx.doodads.push({ pos: vec(p.x, p.y), radius: 16, kind: 'culvert_stair', rot: dir });
+    grid.fillRegion(p.x - cs, p.y - cs, p.x + cs, p.y + cs, spec.well);
+    ctx.doodads.push({ pos: vec(p.x, p.y), radius: 16, kind: spec.stairKind, rot: dir });
   }
   def.tiers = {
-    kind: 'under', exposure: 'covered', label: 'the drains',
-    packSplit: layoutParam(def, 'tierPackSplit', 0.3),
+    kind: 'under', exposure: 'covered', label: spec.label, lane,
+    packSplit: layoutParam(def, 'tierPackSplit', spec.packSplit ?? 0.3),
   };
-  // The drains' OWN generation layer: webbier than the street above (the
-  // ceiling harvest), boned, and stocked with what only smugglers carry.
-  layTierKit(ctx, grid, layoutParam<TierKitRow[]>(def, 'tierKit', [
-    { kind: 'web', count: [4, 8], radius: [16, 30] },
-    { kind: 'bone_pile', count: [2, 4], radius: [10, 16] },
-    { kind: 'rubble', count: [1, 3], radius: [12, 20] },
-    { kind: 'smuggler_cache', count: [1, 2], radius: [10, 13] },
-  ]), k => k === 'sewer_duct' || k === 'sewer_under_wall');
+  // The story's OWN generation layer (the "truly independent, layered zones"
+  // law) — rows from the lane, retunable per zone via 'tierKit'.
+  const underKinds = Object.values(underWall);
+  layTierKit(ctx, grid, layoutParam<TierKitRow[]>(def, 'tierKit', spec.kit ?? []),
+    k => k === spec.duct || (!!k && underKinds.includes(k)));
 }
 
-/** THE DEEP DOOR PREFERS THE DRAINS: after scatter, a tiered district pulls
- *  its sewer grates (the classic Sewerworks mints) down INTO the duct web —
- *  weighted, never absolute (a grate left beside a building still reads).
- *  Under-wall cells are the best seats: the deep door is FOUND from below. */
-export function relocateGratesIntoDucts(ctx: GenCtx, def: ZoneDef, grid: GridWalkField): void {
-  if (!def.tiers || def.tiers.kind !== 'under') return;
+/** THE DEEP DOOR PREFERS THE DRAINS: after scatter, a lane-tiered zone pulls
+ *  its registered sidezone doors (the classic Sewerworks grates; the garden's
+ *  taproot gates) down INTO the duct web — weighted, never absolute (a door
+ *  left on the surface still reads). Under-wall cells are the best seats:
+ *  the deep door is FOUND from below. Lanes with doorTier 'seat' stamp the
+ *  relocated door to the under story (drawn == dwelled from below). */
+export function relocateDeepDoors(ctx: GenCtx, def: ZoneDef, grid: GridWalkField): void {
+  if (!def.tiers || def.tiers.kind !== 'under' || !def.tiers.lane) return;
+  const spec = UNDER_TIER_LANES[def.tiers.lane];
+  const doors = spec?.deepDoorKinds ?? [];
+  if (!spec || !doors.length) return;
+  const underWall = spec.underWall ?? {};
+  const underKinds = Object.values(underWall);
   const cs: number = (grid as unknown as { cell?: number }).cell ?? 30;
-  const inTunnel: Vec2[] = [];
-  const preferred: Vec2[] = [];
+  let inTunnel: Vec2[] = [];
+  let preferred: Vec2[] = [];
   const cols = Math.floor(ctx.arena.w / cs), rows = Math.floor(ctx.arena.h / cs);
   for (let gy = 1; gy < rows - 1; gy++) {
     for (let gx = 1; gx < cols - 1; gx++) {
       const x = gx * cs + cs / 2, y = gy * cs + cs / 2;
       const k = grid.regionAt?.(x, y);
-      if (k === 'sewer_duct') inTunnel.push(vec(x, y));
-      else if (k === 'sewer_under_wall') preferred.push(vec(x, y));
+      if (k === spec.duct) inTunnel.push(vec(x, y));
+      else if (k && underKinds.includes(k)) preferred.push(vec(x, y));
     }
   }
+  // 'seat' lanes keep their sunken doors clear of every portal disc (a
+  // below-story door must never shadow a surface portal's dwell). Filtered
+  // BEFORE any draw so 'none' lanes (the sewer) keep their exact pools.
+  if (spec.doorTier === 'seat') {
+    const clear = spec.portClear ?? 150;
+    const ports = [ctx.entry, ...ctx.exits];
+    const far = (p: Vec2): boolean => ports.every(q => Math.hypot(q.x - p.x, q.y - p.y) >= clear);
+    inTunnel = inTunnel.filter(far);
+    preferred = preferred.filter(far);
+  }
   if (!inTunnel.length && !preferred.length) return;
-  const bias = layoutParam(def, 'grateInDrains', 0.7);
+  const bias = layoutParam(def, 'grateInDrains', spec.deepDoorBias ?? 0.7);
   for (const d of ctx.doodads) {
-    if (d.kind !== 'sewer_grate' || !ctx.rng.chance(bias)) continue;
+    if (!doors.includes(d.kind) || !ctx.rng.chance(bias)) continue;
     const pool = preferred.length && ctx.rng.chance(0.65) ? preferred : (inTunnel.length ? inTunnel : preferred);
     for (let t = 0; t < 12; t++) {
       const p = pool[ctx.rng.int(0, pool.length - 1)];
-      if (ctx.doodads.some(o => o !== d && (o.kind === 'culvert_stair' || o.kind === 'sewer_grate')
+      if (ctx.doodads.some(o => o !== d && (o.kind === spec.stairKind || doors.includes(o.kind))
         && Math.hypot(o.pos.x - p.x, o.pos.y - p.y) < 90)) continue;
       d.pos = vec(p.x, p.y);
+      if (spec.doorTier === 'seat') d.tier = 1;
       break;
     }
   }
 }
+
+// THE TAIL SEAT — any recipe dials `layoutParams.underTier: '<lane>'` (+
+// `underTierChance`, byDepth-able) and the finished-grid tail sinks the lane
+// with no recipe edits (the trapworks-pass idiom; registration lives here
+// because levelgen cannot import this module). Attempt-honest: a stale
+// lane-stamped tiers from a prior generation attempt is cleared before the
+// roll, and a layer another fabric carved (needles, the massif bores, the
+// district's own mid-recipe call) is never touched — one zone, one stack.
+// The grid is ensured only AFTER the chance lands (a convex zone that
+// misses the roll stays convex — zero side effects on a refusal).
+registerUnderTierPass((ctx: GenCtx, def: ZoneDef): void => {
+  const lane = layoutParam<string | undefined>(def, 'underTier', undefined);
+  if (!lane) return;
+  if (def.tiers?.lane !== undefined) def.tiers = undefined;
+  if (def.tiers) return;
+  if (!ctx.rng.chance(layoutParam<number>(def, 'underTierChance', 1))) return;
+  const grid = ensureGrid(ctx);
+  carveUnderTier(ctx, def, grid, lane);
+  relocateDeepDoors(ctx, def, grid);
+});
