@@ -22,6 +22,9 @@
 //     passes / crowding held to sane ceilings (the "messy interlinks" gauge).
 //   THE HEAL (World.reconcileWebLaws): a saved expanse past budget sheds to
 //     it (belt-protected) and re-stamps missing berths.
+//   THE UNDER-ROADS (§K — ZoneDef.underways, the rooted web): organically
+//     grown spans are two-way, policy-bound, budget-free; rootheld ground is
+//     surface-sealed yet reachable THROUGH the web; heals never cut a row.
 //
 // Run: npx tsx balance/probe_webqa.ts [--seeds N] [--rounds N] [--report]
 // ---------------------------------------------------------------------------
@@ -32,6 +35,7 @@ import type { World } from '../src/engine/world';
 import type { ZoneDef, ZoneExitDef } from '../src/data/zones';
 import { HUB_ZONE, START_ZONE } from '../src/data/zones';
 import { MAX_DEGREE, WEB_CFG, connectFloatingZone, countRoads, placeZoneAt, roadBudgetOf, settleWeb } from '../src/engine/worldgen';
+import { underSpanPolicyOf } from '../src/data/underspans';
 import { FIELD_BIOME, FIELD_GEN, fieldCoreRect, fieldRegionAt } from '../src/world/fieldRegion';
 import { biomeAt, biomeSpacing } from '../src/world/biomes';
 import { zoneKindOf } from '../src/data/zoneKinds';
@@ -691,6 +695,74 @@ console.log(`  (info) jungle nodes pressing past the world cap by their own budg
     !!w.zoneMap['quest_undead_south_l5']);
   const total = Object.values(w.zoneMap).filter(z => z.caveDepth == null).length;
   console.log(`  (info) colossal world: ${total} zones standing after the walk`);
+}
+
+// ------------------------------------------------ K. THE ROOTED WEB (underways)
+// The spanning undergrowth's graph laws over ORGANICALLY grown ground (the
+// SHIPPED policy rows — garden only today, so spans appear exactly where the
+// climate grew garden country; zero occurrences leaves the laws vacuously
+// held and says so). The forced-dial regimes and the walked crossing live in
+// balance/probe_ugspan.ts — this section pins the ambient web's honesty:
+// symmetric rows, policy-bound biomes, no budget spend, exit-less rootheld
+// ground sealed on the surface yet BFS-reachable the moment under-roads
+// join the walk, and heals that never touch a row.
+{
+  let rows = 0, oneWay = 0, offPolicy = 0, spannedOver = 0, veiledPartners = 0;
+  const rootheldAll: { w: World; z: ZoneDef }[] = [];
+  for (const { w } of worlds) {
+    for (const z of surfaceZones(w)) {
+      for (const u of z.underways ?? []) {
+        rows++;
+        const far = w.zoneMap[u.to];
+        if (!far?.underways?.some(v => v.span === u.span && v.to === z.id)) oneWay++;
+      }
+      if (z.underways?.length && !underSpanPolicyOf(z.biome ?? '')) offPolicy++;
+      if (z.underways?.length && countRoads(z) > roadBudgetOf(z)) spannedOver++;
+      if (z.id.startsWith('ugspan_') && z.veiled) veiledPartners++;
+      if (z.kind === 'rootheld') rootheldAll.push({ w, z });
+    }
+  }
+  console.log(`  (info) organic spans this sweep: ${rows / 2} under-road(s), ${rootheldAll.length} rootheld node(s), ${veiledPartners} veiled partner(s)`);
+  check('K: under-roads are two-way everywhere', oneWay === 0, `${rows} rows`);
+  check('K: spans stand only on policy biomes', offPolicy === 0, `${offPolicy}`);
+  check('K: spanned ground stays within its road budget (rows spend nothing)', spannedOver === 0);
+  check('K: rootheld ground is surface-sealed (zero exits, static kind)',
+    rootheldAll.every(({ z }) => z.exits.length === 0 && zoneKindOf(z)?.staticExits === true),
+    `${rootheldAll.length} rootheld`);
+  // Reachability THROUGH the web: every rootheld node must be walkable from
+  // town once underways edges join the BFS — and never without them.
+  {
+    const reach = (w: World, withUnder: boolean): Set<string> => {
+      const seen = new Set<string>([START_ZONE]);
+      const queue = [START_ZONE];
+      while (queue.length) {
+        const z = w.zoneMap[queue.pop()!];
+        if (!z) continue;
+        const step = (to: string): void => {
+          if (!seen.has(to) && w.zoneMap[to]) { seen.add(to); queue.push(to); }
+        };
+        for (const e of z.exits) { if (e.to !== '?' && !e.crossDim) step(e.to); }
+        if (withUnder) for (const u of z.underways ?? []) step(u.to);
+      }
+      return seen;
+    };
+    const cache = new Map<World, { with: Set<string>; without: Set<string> }>();
+    const setsOf = (w: World): { with: Set<string>; without: Set<string> } => {
+      if (!cache.has(w)) cache.set(w, { with: reach(w, true), without: reach(w, false) });
+      return cache.get(w)!;
+    };
+    check('K: rootheld nodes are connected citizens THROUGH the web (and only through it)',
+      rootheldAll.every(({ w, z }) => setsOf(w).with.has(z.id) && !setsOf(w).without.has(z.id)));
+  }
+  // The heals leave the under-web alone (reconcileWebLaws ran in F/G above on
+  // two of these worlds already — this is the explicit whole-sweep pin).
+  {
+    const before = worlds.map(({ w }) => surfaceZones(w).reduce((a, z) => a + (z.underways?.length ?? 0), 0));
+    for (const { w } of worlds) w.reconcileWebLaws();
+    const after = worlds.map(({ w }) => surfaceZones(w).reduce((a, z) => a + (z.underways?.length ?? 0), 0));
+    check('K: reconcileWebLaws never cuts an under-road', before.join('/') === after.join('/'),
+      `${before.join('/')} → ${after.join('/')}`);
+  }
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');
