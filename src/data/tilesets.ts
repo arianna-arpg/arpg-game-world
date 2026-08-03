@@ -12787,6 +12787,84 @@ export const TILESETS: Record<string, TilesetDef> = {
   },
 };
 
+// --- THE PLAIN FACES RESTATED (the dead-base-face heal, 2026-08-03) ----------
+// A tileset with a `variants` list rolls ONLY among the variants at every
+// surface mint (worldgen's face pick has no base slot), so the base layout —
+// the country's PLAIN face — silently never minted, and every row wired only
+// into it was dead on the live path (the needles precedent: the butteland
+// pass found the whole country wearing 'the wind gaps' since the day that
+// variant was authored; TilesetDef.common's own doc names the trap). This
+// registry returns each symptomatic country's plain face to the roll as its
+// FIRST named variant, BY REFERENCE — the base layout stays the single
+// source of truth (no copy to drift), the special faces keep their authored
+// identity untouched, and the map's sub-biome chip finally has a name for
+// the country's default read.
+//
+// MEMBERSHIP LAW: only SURFACE-POOLED tilesets (frontier, or realm-pooled)
+// whose base layout carried rows dead at the kind level joined — the cave
+// lane (frontier: false, no realm) keeps its base face live by default
+// (mintCave rolls variants only behind caveFace.variantChance) and den-mint
+// rollVariant pools must not grow a face (the Scorpion Well's odds are
+// authored against the variant list as it stands). Tilesets whose base kinds
+// all survive in variants (jungle, deepsea, the aether family…) lose only
+// the base MIX — restating those is a design choice, not a defect heal, and
+// waits on its own ruling. needles restated textually in the butteland pass.
+// probe_deadface.ts pins the membership law both ways.
+export const PLAIN_FACES: Record<string, string> = {
+  deepwood: 'the old wood',
+  // downs DEFERRED (2026-08-03): a concurrent tiers rig (probe_tiers N3, the
+  // crypt_duct return seam) is mid-debug against the downs face roll — growing
+  // the face list re-rolls its pinned mints under it. Its two dead kinds
+  // (log, the menhir_ring cluster) are adjudicated BY NAME in
+  // probe_deadface's regrow guard; seat 'the open downs' once that rig lands.
+  farmland: 'the patchwork acres',
+  forest: 'the greenwood',
+  gloamwood: 'the dark wood',
+  hallowfield: 'the standing harvest',
+  mournstead: 'the quiet grounds',
+  desert: 'the high desert',
+  sandsea: 'the open sands',
+  saltflat: 'the great pan',
+  hivesands: 'the humming sands',
+  tableland: 'the open tables',
+  courtland: 'the dry courts',
+  mire: 'the old mire',
+  wasteland: 'the riven waste',
+  grindfields: 'the churned fields',
+  siegefront: 'the standing siege',
+  hell_steppes: 'the grey steppes',
+  river_of_flame: 'the black banks',
+  durance: 'the iron rows',
+  crypt: 'the tomb fields',
+  meadow: 'the deep meadow',
+  heartwood: 'the old heart',
+  petalfields: 'the open blooms',
+  stalkwood: 'the standing stalks',
+  tendersrows: 'the tended rows',
+  mulchreach: 'the mulch beds',
+  strand: 'the long strand',
+  brine_flats: 'the brine pans',
+  mangrove_tangle: 'the green tangle',
+  drowned_margin: 'the drowned shelf',
+  foothills: 'the first slopes',
+  overpass: 'the high road',
+  snowcrown: 'the white crown',
+  stonecrown: 'the bare crown',
+  marsh: 'the standing marsh',
+  flesh: 'the raw flats',
+  sanguine: 'the warm channels',
+  gutworks: 'the churning tract',
+  ocular: 'the open gaze',
+  karst_reach: 'the wind gulfs',
+  petrified_weald: 'the still weald',
+  aether_spires: 'the singing spires',
+};
+for (const [id, name] of Object.entries(PLAIN_FACES)) {
+  const t = TILESETS[id];
+  if (!t?.variants?.length) continue; // membership drift is probe_deadface's to catch
+  t.variants = [{ name, layout: t.layout }, ...t.variants];
+}
+
 // --- BIOME → TILESET resolver (the heat-map-authoritative mint) --------------
 // Realm / cave / incursion-only tilesets declare `frontier: false` on their def;
 // the exclusion set is DERIVED, so a new realm tileset opts out with one flag.
