@@ -74,5 +74,8 @@ pass name `'fog'`; knobs in `VIS_CFG.fog`.
 - `FogGrant` can grow damage-over-time fumes (a dps resolver seam is noted
   in `dressOccupants`) — today's grants are pure statuses.
 - Packages may spawn banks directly (`field.spawnBank(def)`) for event fog.
-- Monster fog-seeking: `FogField.nearestBank` is the steering query — an
-  `x_seek_fog` AI action can ride it (registerAIAction), no engine edits.
+- Monster fog-seeking: `FogField.nearestBank` is the steering query — the
+  `x_seek_fog` AI action (data/fog.ts, registerAIAction — no engine edits)
+  rides it: the gloomling's blink back into the murk. Its landed siblings:
+  `x_seek_creep` (data/creeps.ts) over creep hearts, `x_seek_cloud`
+  (data/conjury.ts) over standing conjured puffs.

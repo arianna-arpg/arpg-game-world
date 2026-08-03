@@ -13,7 +13,9 @@
 // idiom), so the whole front reads from one file.
 // ---------------------------------------------------------------------------
 
-import { registerCreep } from '../engine/creep';
+import { angleTo } from '../core/math';
+import { CREEPS, CREEP_CFG, registerCreep } from '../engine/creep';
+import { registerAIAction } from '../engine/aiActions';
 import { registerDoodadRule } from '../engine/levelgen';
 
 /** CAULFLESH — the Caul's own skin: near-black membrane shot with bruise-
@@ -553,3 +555,44 @@ registerDoodadRule('ashfield', { overlap: 'ground', walkOnly: true });
 // convert.fade lane evaporates every pool, so the slope heals itself —
 // runtime stamps only, never authored layouts.
 registerDoodadRule('scree_wake', { overlap: 'ground', walkOnly: true });
+
+// --- CREEP-SEEKING CHOREOGRAPHY ----------------------------------------------
+// x_seek_creep: the claim-walker's homing sense — the seam creep.md always
+// named (`nearestSource` is the steering query), finally landed. A body whose
+// rules carry `{ do: 'x_seek_creep' }` beats SURGES for the nearest live
+// source heart; `kind` narrows the want to one membrane ('sporebed': MY
+// floor, not any floor). The surge is a walk-scale dash, never a blink, ON
+// PURPOSE: a claimer shoved off her mat has to COVER the ground back, so the
+// mass fabric's counterplay ("shove one clear of the mat and it is just a
+// mushroom") stays whole. Already on the sought skin, no field, no live
+// heart, mid-dash, held, or planted — the beat no-ops and the rule simply
+// tries again next window. Dormant bodies never reach here at all: the AI
+// gate holds them before any rule can fire (the sentry law, upstream by
+// construction). Wearers: the bloom matron's off-claim rule, the plague's
+// pox bodies (data/monsters.ts).
+registerAIAction('x_seek_creep', (world, actor, act) => {
+  const field = world.creep; // read-only: a steering want never stands a fabric up
+  if (!field || actor.dash || actor.heldBy || actor.stationary) return;
+  const wantRaw = (act as { kind?: unknown }).kind;
+  const kind = typeof wantRaw === 'string' ? wantRaw : undefined;
+  // Standing on the sought skin already = home. The claim test's own seam:
+  // hitFloor-honest cover, so a breathing rim reads the same here as it
+  // does on the rooted sheet (drawn == tested == sought).
+  const { x, y } = actor.pos;
+  if (kind !== undefined) {
+    const floor = CREEPS[kind]?.hitFloor ?? CREEP_CFG.hitFloor;
+    if (field.coverOf(kind, x, y, actor.radius * 0.5) >= floor) return;
+  } else if (field.onCreep(x, y, actor.radius * 0.5)) {
+    return;
+  }
+  let best: { x: number; y: number } | null = null;
+  let bestD = Infinity;
+  for (const s of field.sources) {
+    if (s.cur < CREEP_CFG.minReach) continue; // nearestSource's own liveness floor
+    if (kind !== undefined && s.def.id !== kind) continue;
+    const dd = (s.pos.x - x) * (s.pos.x - x) + (s.pos.y - y) * (s.pos.y - y);
+    if (dd < bestD) { bestD = dd; best = s.pos; }
+  }
+  if (!best || bestD < 24 * 24) return;
+  actor.dash = { dir: angleTo(actor.pos, best), speed: 170, remaining: 0.45 };
+});

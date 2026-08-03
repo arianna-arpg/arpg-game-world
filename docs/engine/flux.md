@@ -187,5 +187,12 @@ collapse overlay (clouds are GROUND: under doodads and actors); knobs in
 - Monster flux-craft: `FluxField` pads/carriers are open — an
   `x_ride_flux` AI action (seek a standing pad; hop before the fray) rides
   `padPhase` exactly like `x_seek_fog` rides the fog field.
+- Monster cloud-craft: the `x_seek_cloud` AI action (data/conjury.ts)
+  rides the `ConjuredGround.puffs` ledger the dress pass reads — chase the
+  nearest standing puff whose gifts would LAND on the seeker (the zephyrid
+  matron's stormcradle over her flock), step out from under a smother
+  (side filters mirror `dressOccupants` verbatim, so the chase can never
+  disagree with what the cloud does on arrival). The mistwing shrike wears
+  it.
 - Packages may re-tempo a zone's drift by minting variants; event-spawned
   one-shot pads can ride `ConjuredGround` directly.

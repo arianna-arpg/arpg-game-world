@@ -3283,7 +3283,20 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 130, moveSpeed: 115, accuracy: 100, armor: 30, mana: 80, manaRegen: 6, poise: 55 },
     skills: ['rallying_howl', 'war_cry', 'heavy_strike'],
     xp: 40,
-    brain: { type: 'commander' },
+    // THE COMMANDER'S FINGER (x_rally_to_target — registered since the
+    // monster pass, worn by nobody until now): the howl was always seated;
+    // the point was not. With a quarry in reach the chieftain aims his
+    // warband at it on a slow cadence — kin adopt the target outright, a
+    // seeded grudge that fades unless it is fed. distUnder gates the bark:
+    // an idle chieftain in camp points at nobody and says nothing.
+    brain: {
+      type: 'commander',
+      rules: [{
+        when: { distUnder: 700 }, every: [7, 11], hold: [0.1, 0.2],
+        actions: [{ do: 'x_rally_to_target' }],
+        announce: 'the warband answers as one!',
+      }],
+    },
   },
 
   lich_marshal: {
@@ -3791,6 +3804,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
     deathBurst: { mode: 'implode', damageFrac: 0.3, damageType: 'chaos', coalesce: 0.85 },
     // A swollen host reads bigger; a fresh-infected one smaller (cosmetic + stat coupling).
     scaleVariance: [0.85, 1.35], scaleStats: true,
+    // THE GARDEN PULL (x_seek_creep, data/creeps.ts): the host drifts for
+    // the pox its dead grew — the fight walks onto ground that sickens
+    // everyone but the plague. No rot standing, the beat no-ops silently
+    // (type omitted: the default archetype is untouched).
+    brain: { rules: [{ when: {}, every: [5, 8], hold: [0.1, 0.2], actions: [{ do: 'x_seek_creep', kind: 'poxrot' }] }] },
   },
   plague_spitter: {
     id: 'plague_spitter', name: 'Pustule Spitter',
@@ -3811,7 +3829,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['ground_slam', 'toxic_cloud'],
     xp: 30, faction: 'plague', adorn: 'horns',
     detection: 0.85,
-    brain: { type: 'juggernaut', enrage: 0.4 },
+    // THE GARDEN PULL (x_seek_creep): even the husk leans for the rot its
+    // kin grew, on a lazier clock — a juggernaut argues with nothing, but
+    // it would rather rupture on its own garden.
+    brain: {
+      type: 'juggernaut', enrage: 0.4,
+      rules: [{ when: {}, every: [7, 10], hold: [0.1, 0.2], actions: [{ do: 'x_seek_creep', kind: 'poxrot' }] }],
+    },
     // A far bigger rupture than a carrier's — a slow, fat coalesce telegraphs the big chaos burst.
     deathBurst: { mode: 'implode', damageFrac: 0.6, damageType: 'chaos', coalesce: 1.0, radius: 120 },
     scaleVariance: [0.9, 1.5], scaleStats: true,
@@ -14072,7 +14096,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
     flier: true, levitates: true,
     presence: { to: 19, fadeOut: 8 },
     gemBias: ['movement'],
-    brain: { type: 'flanker' },
+    brain: {
+      type: 'flanker',
+      // THE FLOCK'S SKY (x_seek_cloud, data/conjury.ts): between passes it
+      // slips under called weather that would gift it — the matron's
+      // stormcradle laces its bite, the ibis's balm knits its wing — and
+      // steps out from under a smother. No standing vapor, the beat no-ops.
+      rules: [{ when: {}, every: [4, 7], hold: [0.1, 0.2], actions: [{ do: 'x_seek_cloud' }] }],
+    },
   },
 
   /** The lurker: a predator that learned what the aether crystals look like
@@ -19608,9 +19639,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'commander',
       rules: [{
         // Off her own floor she withdraws to it — the claim is a WANT, so
-        // shoving her clear starts a chase she is trying to end.
+        // shoving her clear starts a chase she is trying to end. The seek
+        // beat is the fabric's promised upgrade (docs/engine/reserves.md):
+        // on a slow pulse she SURGES for her own heart — the walk presses
+        // the fight, the surge argues for the floor.
         when: { rooted: false },
         use: { move: { style: 'direct', pace: 1.25 } },
+        cooldown: 2.2,
+        actions: [{ do: 'x_seek_creep', kind: 'sporebed' }],
       }],
     },
   },

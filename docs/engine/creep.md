@@ -266,8 +266,15 @@ carve the layout favors, one lane reaches it.
 - `CreepGrant` is pure statuses today; a dps lane would follow the fog
   fabric's noted resolver seam if a kind ever needs to burn boots directly
   (prefer statuses — StatusDefs already carry dots/slows/auras).
-- Monster creep-seeking: `nearestSource` is the steering query — an
-  `x_seek_creep` AI action can ride it (registerAIAction), no engine edits.
+- Monster creep-seeking: `nearestSource` is the steering query — the
+  `x_seek_creep` AI action (data/creeps.ts, registerAIAction — no engine
+  edits) rides it: a walk-scale surge for the nearest live heart, `kind`-
+  narrowable to one membrane, no-op on the sought skin / with no field /
+  mid-dash / held (and dormant bodies never fire rules at all). Wearers:
+  the bloom matron's off-claim rule (`kind: 'sporebed'` — "get back on my
+  floor" as an authored want, the AICondition.rooted pairing brain.ts
+  documents) and the plague's pox bodies (`kind: 'poxrot'` — the fight
+  dragged onto ground that sickens everyone but them).
 - The Eldritch incursion plants `blightgrowth` at its in-zone event sites
   (the corruption's spatial footprint) and `cleanseAt` rides its collapse
   payoff — see `src/packages/overlays/incursion.ts`.

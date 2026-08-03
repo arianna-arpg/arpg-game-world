@@ -141,6 +141,7 @@ plain stats, so affixes/passives/monster mods can feed the same lanes.
 - Player-side reserves are deliberately NOT built here — the player's
   economy is mana/life/charges; if a vocation ever wants a wind meter it
   should ride THIS fabric, not a new one.
-- `x_seek_creep` (an AI action steering to `nearestSource`) remains the
-  creep fabric's named open seam — the matron's off-claim urgency rule
-  would upgrade to it the day it lands.
+- `x_seek_creep` (the AI action steering to `nearestSource`) LANDED
+  (data/creeps.ts): the matron's off-claim urgency rule now fires it on a
+  slow cooldown — the walk presses the fight, the surge argues for her own
+  floor (`kind: 'sporebed'`).
