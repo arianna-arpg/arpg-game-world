@@ -1962,11 +1962,17 @@ function bareCtx(seed: number): GenCtx {
   if (!hRamp?.byDepth || !(hRamp.byDepth[1] > hRamp.byDepth[0])) {
     fail('Q: rootLatticeHeavyFrac must ramp UP toward the heart');
   }
+  // THE WEARERS (widened deliberately, each with its own rig sweep): the
+  // undergrowth's deepening debut + THE SURFACE DEBUT (batch 23, Arianna's
+  // word — mulchreach's massif lottery roll wears the colony's earth laced
+  // with the weave at surface dials; Q6 below is its sweep). A third wearer
+  // still fails here until it brings its own.
+  const LATTICE_WEARERS = ['undergrowth', 'mulchreach'];
   for (const [tid, t] of Object.entries(TILESETS)) {
-    if (tid === 'undergrowth') continue;
+    if (LATTICE_WEARERS.includes(tid)) continue;
     if ((t.layoutParams as Record<string, unknown> | undefined)?.rootLattice
       || (t.variants ?? []).some(v => (v.layoutParams as Record<string, unknown> | undefined)?.rootLattice)) {
-      fail(`Q: tileset '${tid}' authors rootLattice — the debut is the undergrowth's alone (widen deliberately, with its own rig sweep)`);
+      fail(`Q: tileset '${tid}' authors rootLattice — the weave's wearers are ${LATTICE_WEARERS.join('/')} (widen deliberately, with its own rig sweep)`);
     }
   }
 
@@ -2169,6 +2175,57 @@ function bareCtx(seed: number): GenCtx {
   if (!(heartLat > rimLat)) fail(`Q5: the press never engaged — heart ${heartLat} vs rim ${rimLat} lattice discs`);
   if (!(heartHeavy > rimHeavy)) fail(`Q5: the collar press never engaged — heart ${heartHeavy} vs rim ${rimHeavy} heavy discs`);
   note(`Q: ${latticeSeen} lattice discs (${heavySeen} heavy) over ${q3Runs} mints; press ${rimLat}→${heartLat} lattice, ${rimHeavy}→${heartHeavy} heavy`);
+
+  // Q6 — THE SURFACE DEBUT (batch 23, Arianna's word): the garden lottery's
+  // massif roll on mulchreach wears the colony's OWN earth — the pool carves
+  // nest_wall and never the engine's stone downs, the surface weave lays and
+  // stays deterministic, and the walkable floor holds one component with
+  // every exit served (the roll is a fifth of the margin's mints — it gets
+  // the same law the undergrowth's face does).
+  {
+    const mts = TILESETS.mulchreach;
+    const mp = (mts?.layoutParams ?? {}) as Record<string, unknown>;
+    if (!mp.rootLattice) fail('Q6: mulchreach must author the surface weave (the earthworks ruling is gone)');
+    const rows = (mp.massifMasses ?? []) as { kind: string }[];
+    if (!rows.length || rows.some(r => !['casting_heap', 'midden_ring'].includes(r.kind))) {
+      fail("Q6: mulchreach's massif pool must speak only the colony's earth (casting_heap/midden_ring)");
+    }
+    const MW = Math.round((mts.sizeW[0] + mts.sizeW[1]) / 2), MH = Math.round((mts.sizeH[0] + mts.sizeH[1]) / 2);
+    const mEntry = vec(140, MH / 2);
+    const mExits = [vec(MW - 140, MH / 2)];
+    const mDef: ZoneDef = {
+      id: 'massif_q6', name: 'QA colony earthworks', level: 8, size: { w: MW, h: MH },
+      theme: mts.theme as ZoneDef['theme'],
+      layout: [...(mts.common ?? []), ...mts.layout],
+      layoutType: 'massif',
+      layoutParams: mp,
+      biome: mts.biome,
+      objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+    };
+    for (let s = 0; s < 3; s++) {
+      const seed = seedAt(s) ^ 0x6a11;
+      const out = generateLayout({ ...mDef, seed }, { w: MW, h: MH }, new Rng(seed), mEntry, mExits);
+      const st = gridStats(out);
+      if (!st) { fail(`Q6: seed ${seed} no grid`); continue; }
+      const p = st.grid.pack();
+      const counts: Record<string, number> = {};
+      for (const b of Buffer.from(p.kbits, 'base64')) {
+        const k = p.kinds[b] ?? '?';
+        counts[k] = (counts[k] ?? 0) + 1;
+      }
+      if (!((counts['nest_wall'] ?? 0) > 0)) fail(`Q6: seed ${seed} no worked earth stood`);
+      if ((counts['crag'] ?? 0) + (counts['drystone'] ?? 0) > 0) {
+        fail(`Q6: seed ${seed} the stone downs returned to the compost margin`);
+      }
+      if (!out.doodads.some(d => LK.includes(d.kind))) fail(`Q6: seed ${seed} the surface weave never laid`);
+      if (st.comps !== 1) fail(`Q6: seed ${seed} the weave split (${st.comps} components)`);
+      for (const e of mExits) {
+        if (!st.grid.reachable(mEntry, e)) fail(`Q6: seed ${seed} exit unreachable`);
+      }
+      const again = generateLayout({ ...mDef, seed }, { w: MW, h: MH }, new Rng(seed), mEntry, mExits);
+      if (JSON.stringify(out.doodads) !== JSON.stringify(again.doodads)) fail(`Q6: seed ${seed} not deterministic`);
+    }
+  }
 }
 
 // --- Rig R: THE MOUNTAIN HEARTH (batch 21.5 — the highland family) ------------

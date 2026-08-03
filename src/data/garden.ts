@@ -221,6 +221,83 @@ registerMassKind({
   crestSpacing: 62,
 });
 
+// --- THE COLONY'S EARTHWORKS (massif kinds) -----------------------------------
+// The mulch margin's OWN massif vocabulary (Arianna's word, 2026-08-03): when
+// the margin rolls the biome's massif lottery it must wear turned earth, never
+// the engine's stone downs. Both kinds ride region 'nest_wall' — the worked
+// earth the formicary already bores below — so the surface roll reads as the
+// colony's diggings RISEN: the undergrowth itself, walked in daylight.
+
+// THE CASTING HEAP — the spoil-pile: what the nest carried up, heaped until
+// it stands as country. Blob-and-chain silhouettes (casting-lines where the
+// digging ran), the margin's rot banking the feet, and the heap-tops venting
+// the galleries below — the nest breathes through what it discarded.
+registerMassKind({
+  id: 'casting_heap',
+  region: 'nest_wall',
+  shapes: [{ shape: 'blob', weight: 2.5 }, { shape: 'chain', weight: 2 }, { shape: 'ridge', weight: 1 }],
+  lobe: 0.26, // heaped, not knuckled — poured earth settles round
+  sizeR: [130, 240],
+  skirt: [
+    { kind: 'leaf_mulch', weight: 3, radius: [14, 24] },
+    { kind: 'compost_heap', weight: 1.5, radius: [18, 28] },
+    { kind: 'mud', weight: 1, radius: [12, 18] },
+    { kind: 'toadstool', weight: 1, radius: [10, 16] },
+    { kind: 'seed_pod', weight: 1, radius: [12, 17] },
+  ],
+  skirtChance: 0.4,
+  skirtSpacing: 50,
+  crest: [
+    { kind: 'formic_vent', weight: 2, radius: [9, 13] },
+    { kind: 'toadstool', weight: 1, radius: [10, 16] },
+    { kind: 'wildgrass_blade', weight: 1, radius: [18, 26] },
+  ],
+  crestChance: 0.22,
+  crestSpacing: 80,
+});
+
+// THE MIDDEN RING — the worked ring-court: a casting rampart raised around a
+// tended floor, mouths where the workers pass. The court the colony KEEPS —
+// comb-wax and clutches on the floor, the garrison answering for them (the
+// patron default speaks 'formic', so the ants tend what stands here without
+// a line of wiring). Garrison leads the table — this is the SURFACE working,
+// the brood gall's law inverted: down there the clutch is the read, up here
+// the workers are.
+registerMassKind({
+  id: 'midden_ring',
+  region: 'nest_wall',
+  shapes: [{ shape: 'court', weight: 1 }],
+  lobe: 0.2,
+  ringInner: 0.68,
+  mouths: [1, 2],
+  sizeR: [150, 250],
+  inner: [
+    { kind: 'comb_wax', weight: 2, radius: [12, 18] },
+    { kind: 'egg_clutch', weight: 1.5, radius: [11, 16] },
+    { kind: 'seed_pod', weight: 1, radius: [12, 17] },
+    { kind: 'leaf_mulch', weight: 1, radius: [14, 22] },
+  ],
+  innerChance: 0.6,
+  innerSpacing: 54,
+  tenants: [
+    { kind: 'garrison', weight: 32 },
+    { kind: 'stock', weight: 18 },
+    { kind: 'held_stock', weight: 10 },
+    { kind: 'cache', weight: 12, rows: [
+      { kind: 'seed_pod', weight: 2, radius: [12, 17] },
+      { kind: 'clay_pots', weight: 1, radius: [10, 14] },
+    ] },
+    { kind: 'vacant', weight: 28 },
+  ],
+  skirt: [
+    { kind: 'leaf_mulch', weight: 2, radius: [14, 24] },
+    { kind: 'mud', weight: 1, radius: [12, 18] },
+    { kind: 'compost_heap', weight: 1, radius: [18, 26] },
+  ],
+  skirtChance: 0.32,
+  skirtSpacing: 54,
+});
+
 // --- FORMATIONS ---------------------------------------------------------------
 // A bloom stand: a grove of stalks around one grand disc — the garden's
 // copse, veil-crowned, floor drifted with what the crowns let fall.

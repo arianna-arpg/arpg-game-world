@@ -42,11 +42,28 @@ export interface CaveFaceSpec {
   strata?: LevelEnvelope;
   /** Anchor-biome affinity multipliers; '*' is the any-biome base (default 1).
    *  The anchor is the SURFACE biome the whole ladder hangs beneath (ZoneDef
-   *  .anchor — nested caves inherit it), so provenance survives nesting. */
-  biomes?: Record<string, number>;
+   *  .anchor — nested caves inherit it), so provenance survives nesting.
+   *  A row may be a bare number (every depth) or a BANDED claim
+   *  (CaveFaceBiomeRow — "this face serves THIS anchor only in THIS band"):
+   *  the garden depth rewire's lever, and the axis any future face can use
+   *  to claim one country's shallows without touching its own '*' service. */
+  biomes?: Record<string, number | CaveFaceBiomeRow>;
   /** Chance a face-rolled mint also wears one of the tileset's variants
    *  (default 0 — gates that always roll pass opts.rollVariant instead). */
   variantChance?: number;
+}
+
+/** A per-anchor claim with its own depth band (multiplies the face's global
+ *  strata envelope — both speak). */
+export interface CaveFaceBiomeRow { w: number; strata?: LevelEnvelope }
+
+/** ONE fold for every biomes-row reader (pickCaveFace, World.caveAirFor,
+ *  probes): a bare number holds at every depth; a banded row evaluates its
+ *  own envelope at the mint's depth. undefined = the row is absent (callers
+ *  fall through to '*'). */
+export function caveFaceBiomeW(row: number | CaveFaceBiomeRow | undefined, depth: number): number | undefined {
+  if (row === undefined) return undefined;
+  return typeof row === 'number' ? row : row.w * presenceMul(row.strata, depth);
 }
 
 /** A sub-biome flavour within a tileset: a name tag + a full layout override,
@@ -5570,6 +5587,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'seed_pod', weight: 1, radius: [12, 17] },
         { kind: 'bud_knot', weight: 1, radius: [10, 15] },
       ],
+      // THE ROOT TIER (batch 23 — THE ROOTED WEB): the layer below the plot,
+      // walked down in place (engine/tiers.ts 'roots' lane, data/massifs.ts).
+      // The rim roots thinnest; the chance thickens toward the heart faces.
+      underTier: 'roots', underTierChance: 0.6,
     },
     compositions: [
       { composition: 'skep_yard', chance: 0.25 },
@@ -5726,6 +5747,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       forestCoverEdge: 0.45, forestCoverDeep: 0.85,
       forestClearings: [2, 4],
       overgrowth: [0.08, 0.3],
+      // THE ROOT TIER (batch 23 — THE ROOTED WEB): the heart's floor is
+      // hollow — the root galleries run under most stands.
+      underTier: 'roots', underTierChance: 0.8,
     },
     compositions: [
       { composition: 'formic_earthworks', chance: 0.22 },
@@ -5859,12 +5883,39 @@ export const TILESETS: Record<string, TilesetDef> = {
     id: 'tendersrows', biome: 'garden',
     depthAffinity: { from: 0.25, fadeIn: 0.12, to: 0.8, fadeOut: 0.15 },
     forceLayout: 'massif',
+    // THE GARDEN REDRESS (2026-08-03, Arianna's word): the beds go RARE. At
+    // coverage 0.13-0.19 the face stood 6-7 flower-crowned ramparts and
+    // clamped two-thirds of its blooms to their skirts and crowns (measured
+    // 4.5 scattered flowers/screen against petalfields' 23.5) — the massifs
+    // were EATING the garden. A bed is a monument now, never the acreage;
+    // the flowers live on the open ground below (the overgrowth rows).
     layoutParams: {
       massifMasses: [
         { kind: 'planter_bed', weight: 3 },
-        { kind: 'hedge', weight: 1 },
+        // The estate hedge in the garden's own voice (Arianna's word): bloom
+        // stalks ride the hedgerow where a field hedge carries trees, and
+        // the foot banks in the rows' own flowers — the bocage kind's
+        // grammar, re-dressed at seed scale.
+        { kind: 'hedge', weight: 1, over: {
+          skirt: [
+            { kind: 'flowers', weight: 2, radius: [12, 18] },
+            { kind: 'bud_knot', weight: 1.5, radius: [10, 15] },
+            { kind: 'grass', weight: 2, radius: [14, 24] },
+            { kind: 'petal_drift', weight: 1, radius: [16, 24] },
+          ],
+          crest: [
+            { kind: 'bloom_stalk', weight: 2, radius: [20, 30] },
+            { kind: 'bellflower', weight: 1.5, radius: [16, 24] },
+            { kind: 'wildgrass_blade', weight: 1, radius: [18, 28] },
+          ],
+        } },
       ],
-      massifCoverage: [0.13, 0.19],
+      massifCoverage: [0.03, 0.05],
+      massifMaxMasses: 3,
+      massifSizeR: [150, 260],
+      // THE ROOT TIER (batch 23 — THE ROOTED WEB): the beds are shored over
+      // the same galleries the boards hide (engine/tiers.ts 'roots' lane).
+      underTier: 'roots', underTierChance: 0.7,
     },
     compositions: [
       { composition: 'tenders_rest', chance: 0.3 },
@@ -5890,10 +5941,19 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'clearing', count: [1, 2], radius: [90, 150] },
       { kind: 'formation', count: [1, 2], formation: 'trellis_row' },
       { kind: 'clay_pots', count: [1, 3] },
-      { kind: 'flowers', count: [2, 4] },
-      { kind: 'wildgrass_blade', count: [2, 5] },
+      // THE OVERGROWTH (the redress): the rows' blooms live on the PATHS —
+      // drifts pooling where the noise gathers them, lone bellflower stands
+      // where crest crowns used to clump, the grass closing over the
+      // Tender's tidy lines. Nobody tends it; it shows.
+      { kind: 'bellflower', count: [3, 5] },
+      { kind: 'bud_knot', count: [2, 4] },
+      { kind: 'flowers', count: [10, 14] },
+      { kind: 'flowers', count: [6, 9], where: { field: 'noise', max: 0.45, params: { scale: 380, seed: 5 } } },
+      { kind: 'flowers', count: [5, 8], where: { field: 'noise', max: 0.4, params: { scale: 640, seed: 27 } } },
+      { kind: 'wildgrass_blade', count: [5, 9] },
+      { kind: 'grass', count: [3, 5] },
       { kind: 'seed_pod', count: [1, 3] },
-      { kind: 'petal_drift', count: [1, 3] },
+      { kind: 'petal_drift', count: [5, 8] },
       { kind: 'beehive', count: [0, 1] },
       { kind: 'dew_bead', count: [0, 2] },
       { kind: 'rusted_trowel', count: [0, 1] },
@@ -5916,12 +5976,19 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'formation', count: [1, 1], formation: 'trellis_row' },
           { kind: 'rusted_trowel', count: [0, 1] },
           { kind: 'watering_can', count: [0, 1] },
-          { kind: 'wildgrass_blade', count: [2, 4] },
+          // The overgrowth in the work-corner's voice: weeds threading the
+          // pot stacks, petals drifted against the cracked ware.
+          { kind: 'bellflower', count: [2, 4] },
+          { kind: 'bud_knot', count: [2, 4] },
+          { kind: 'flowers', count: [9, 13] },
+          { kind: 'flowers', count: [5, 8], where: { field: 'noise', max: 0.45, params: { scale: 380, seed: 5 } } },
+          { kind: 'wildgrass_blade', count: [4, 7] },
+          { kind: 'grass', count: [2, 4] },
           { kind: 'seed_pod', count: [1, 3] },
+          { kind: 'petal_drift', count: [6, 10] },
           { kind: 'cave', count: [0, 1] },
           { kind: 'haven_stone', count: [0, 1] },
         ],
-        layoutParams: { massifCoverage: [0.1, 0.15] },
       },
       // The glasshouse rows: bell jars down the beds — kept air, kept
       // blooms, and things grown tall under glass nobody lifted.
@@ -5930,9 +5997,17 @@ export const TILESETS: Record<string, TilesetDef> = {
         layout: [
           { kind: 'clearing', count: [1, 2], radius: [90, 150] },
           { kind: 'bell_jar', count: [1, 3] },
-          { kind: 'bellflower', count: [1, 3] },
+          // The bloomiest face: what the jars kept, the open rows now grow
+          // wild — the overgrowth at full riot.
+          { kind: 'bellflower', count: [3, 6] },
           { kind: 'formation', count: [1, 2], formation: 'trellis_row' },
-          { kind: 'flowers', count: [2, 4] },
+          { kind: 'bud_knot', count: [2, 4] },
+          { kind: 'flowers', count: [10, 14] },
+          { kind: 'flowers', count: [6, 9], where: { field: 'noise', max: 0.45, params: { scale: 380, seed: 5 } } },
+          { kind: 'flowers', count: [5, 8], where: { field: 'noise', max: 0.4, params: { scale: 640, seed: 27 } } },
+          { kind: 'wildgrass_blade', count: [4, 7] },
+          { kind: 'grass', count: [2, 4] },
+          { kind: 'petal_drift', count: [4, 7] },
           { kind: 'dew_bead', count: [1, 3] },
           { kind: 'cave', count: [0, 1] },
           { kind: 'haven_stone', count: [0, 1] },
@@ -5970,6 +6045,24 @@ export const TILESETS: Record<string, TilesetDef> = {
   mulchreach: {
     id: 'mulchreach', biome: 'garden',
     depthAffinity: { from: 0.55, fadeIn: 0.2 },
+    // THE ROOT TIER (batch 23 — THE ROOTED WEB): more ways down than
+    // anywhere else in the plot — the margin's galleries run thickest
+    // (engine/tiers.ts 'roots' lane, data/massifs.ts).
+    layoutParams: {
+      underTier: 'roots', underTierChance: 0.85,
+      // THE COLONY'S EARTHWORKS (2026-08-03, Arianna's word): when the margin
+      // rolls the biome's massif lottery it wears its OWN earth — casting
+      // heaps and worked midden rings (data/garden.ts), never the engine's
+      // stone downs — laced with the undergrowth's root weave at surface
+      // dials, so the roll reads as the formicary risen, not a moor.
+      massifMasses: [
+        { kind: 'casting_heap', weight: 3 },
+        { kind: 'midden_ring', weight: 1 },
+      ],
+      massifCoverage: [0.1, 0.16],
+      rootLattice: { links: 1.2, spurs: [0, 2], cross: [1, 3] },
+      rootLatticeDensity: 0.8,
+    },
     compositions: [
       { composition: 'formic_earthworks', chance: 0.35 },
       { composition: 'tenders_rest', chance: 0.08 },
@@ -6079,7 +6172,16 @@ export const TILESETS: Record<string, TilesetDef> = {
     sky: 'sheltered',
     caveFace: {
       strata: { to: 2, fadeOut: 1, mul: 1.5 },
-      biomes: { garden: 8, grove: 0.5 },
+      // THE DEPTH REWIRE (batch 23 — THE ROOTED WEB): the garden's claim is
+      // BANDED from depth 2 — the plot's own depth-1 mouths now open into
+      // the UNDERGROWTH (its caveFace below), and the rootways are what
+      // true caves stem into WITHIN it (garden → undergrowth@1 →
+      // rootways@2+). Evidence for the rewire (2026-08-02 census): rootways
+      // held 86% of garden depth-1 mints at 3-19 dress bodies/screen — the
+      // empty read — against the undergrowth's 149-195. The grove and the
+      // '*'-default service (meadow and kin at 1) keep their old envelopes
+      // untouched — the band rides ONLY the garden key.
+      biomes: { garden: { w: 8, strata: { from: 2, fadeIn: 1 } }, grove: 0.5 },
       variantChance: 0.45,
     },
     caveLayouts: { plains: 3, winding: 2.5, labyrinth: 1, rooms: 1 },
@@ -6256,11 +6358,18 @@ export const TILESETS: Record<string, TilesetDef> = {
   // country: winding avenues bored between taproot knuckles thick as keeps,
   // under a solid sky (sheltered by authorship AND derivation — no weather
   // reaches it; the canopy shafts and the giant dandelions' pale clocks are
-  // the only lamps). Reached ONLY through its own doors (taproot_gate common
-  // rows on every garden surface face — the sewer_grate law; deliberately NO
-  // caveFace claim, the named-door precedent), and it deepens as the garden
-  // above deepens: geo inherits down the ladder, so the byDepth dials below
-  // stage rim bores open and heart bores tight.
+  // the only lamps). TWO doors in (batch 23 — THE ROOTED WEB's depth
+  // rewire, Arianna's ruling): its own named taproot gates (the sewer_grate
+  // law — now canonically seated down in the ROOT TIER's galleries), AND
+  // the garden's ordinary depth-1 cave mouths — the caveFace below claims
+  // the plot's shallows with the exact envelope mass the rootways held
+  // (w 8 × mul 1.5, depth 1 only, '*' sealed at 0 so no OTHER country's
+  // ladder ever rolls it; the old named-door discipline survives as that
+  // seal). The ladder is thereby FORMALIZED: garden → undergrowth@1 →
+  // rootways/caverns@2+ (the common 'cave' row below + the galleries
+  // band's own deeperChance — the breach-into-underworld avenue), and it
+  // deepens as the garden above deepens: geo inherits down the ladder, so
+  // the byDepth dials below stage rim bores open and heart bores tight.
   // THE NURSERY LAW: every fight down here happens beside a cradle — courts
   // are brood galls, stock is clutches, the tide is the aphid herd at the
   // root-sap, and the ask leans spawners. The surface shows the plot's kin;
@@ -6269,6 +6378,18 @@ export const TILESETS: Record<string, TilesetDef> = {
     id: 'undergrowth', frontier: false, perfProbe: true,
     sky: 'sheltered',
     biome: 'garden',
+    caveFace: {
+      strata: { to: 1, fadeOut: 1, mul: 1.5 },
+      biomes: { garden: 8, '*': 0 },
+      variantChance: 0.45,
+    },
+    // THE WAY DEEPER (the formalized ladder): the country below keeps its
+    // own mouths on — true caves stem WITHIN the undergrowth to depth 2+
+    // (rootways-dominant under the garden anchor), beside the galleries
+    // band's own concealed-mouth roll.
+    common: [
+      { kind: 'cave', count: [0, 1] },
+    ],
     forceLayout: 'massif',
     layoutParams: {
       massifMasses: [
@@ -12567,9 +12688,11 @@ export function pickCaveFace(depth: number, anchorBiome: string | undefined, rng
   if (!c.length) return 'cavern';
   const weights = c.map(id => {
     const f = TILESETS[id].caveFace!;
+    // Anchor row first (banded rows evaluate their own envelope — a 0 is a
+    // real answer, never a fall-through), then the '*' base, then 1.
     const bio = f.biomes
-      ? (anchorBiome !== undefined && f.biomes[anchorBiome] !== undefined
-        ? f.biomes[anchorBiome] : f.biomes['*'] ?? 1)
+      ? (caveFaceBiomeW(anchorBiome !== undefined ? f.biomes[anchorBiome] : undefined, depth)
+        ?? caveFaceBiomeW(f.biomes['*'], depth) ?? 1)
       : 1;
     return presenceMul(f.strata, depth) * bio;
   });
@@ -12636,7 +12759,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   gleamhollow:    { title: 'The Gleamhollow',   blurb: 'A root-den under the vale lit by glowworm silk and cold small fires. Ruled, so the little lights believe, by a sovereign who was never a firefly at all.' },
   petalfields:    { title: 'The Petalfields',   blurb: 'The Garden country\'s first face, walked at seed scale: blossom crowns the size of oaks, drifted petals deep as snow, skeps still humming, and the colony\'s first mounds working the ground beneath it all.' },
   stalkwood:      { title: 'The Stalkwood',     blurb: 'A forest whose trees are flower stalks: petal canopy overhead, blade-grass walls below that part for bodies and stop every eye. The colony\'s forage columns run it; the weavers string it; the mantis waits in it.' },
-  tendersrows:    { title: 'The Tenders\' Rows', blurb: 'The built face of the Garden: planter-bed ramparts over the paths between them, trellises mid-mend, and the Tender\'s dropped tools standing as monuments. Nobody tends it now; the colony and the bloomkin dispute the estate.' },
+  tendersrows:    { title: 'The Tenders\' Rows', blurb: 'The built face of the Garden gone wild: blooms taking back the paths row by row, trellises mid-mend, a rare planter-bed rampart and the Tender\'s dropped tools standing as monuments. Nobody tends it now; the colony and the bloomkin dispute the estate.' },
   mulchreach:     { title: 'The Mulch Margin',  blurb: 'The compost edge where the garden digests itself: rot logs and turned earth, slick trails cooling on the loam, and more ways down than anywhere else in the plot.' },
   rootways:       { title: 'The Rootways',      blurb: 'The garden\'s understratum: burrows bored between taproots thick as towers, worm-galleries, root-swallowed cellars. The unstructured half of the country\'s downstairs; the colony tunnels through it.' },
   formicary:      { title: 'The Formicary',     blurb: 'The colony\'s nest, gallery by descending gallery: brood chambers and fungus gardens, granaries ranked by no keeper\'s logic, wax cell-work over the worked earth, and the Brood Vault at the bottom, where the Matriarch sits.' },
