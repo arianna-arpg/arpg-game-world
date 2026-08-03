@@ -355,6 +355,12 @@ export interface StampRuleOverride {
   spacing?: number;
   /** Replace (not merge) the kind's forbidOn ground list for this stamp only. */
   forbidOn?: string[];
+  /** Site this stamp on WALKABLE grid cells even though its kind's rule
+   *  doesn't demand it (the inverse of ignore:'walk') — a carved winding
+   *  zone pours its pools into the channels instead of the solid rock, so
+   *  the habitat-bound flora that follows has beds it can reach. Grid zones
+   *  only; convex zones have no walk field and are untouched. */
+  walkOnly?: boolean;
 }
 
 /** STRATA gate on a layout entry: the stamp only SITES inside a band of a

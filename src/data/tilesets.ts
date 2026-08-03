@@ -10537,14 +10537,21 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2300, 3200], sizeH: [1700, 2400], ellipseChance: 0,
     forceLayout: 'aether_drift',
+    // THE DRESS BUDGET (density census D1): the drift is a ~10% archipelago
+    // in open sky — at the legacy siting budget the authored rows below
+    // delivered 0-2 pieces each. The dial widens the layout rows' try
+    // count so the scatter finds the isles; counts stay as authored.
+    layoutParams: { dressTryMul: 8 },
     layout: [
+      // Registry spacing on the tall kinds is meadow grain — retuned to the
+      // isles per row (census D1; galestream carries the same overrides).
       { kind: 'cloud_billow', count: [7, 11] },
-      { kind: 'zephyr_totem', count: [3, 6] },
+      { kind: 'zephyr_totem', count: [3, 6], rules: { spacing: 50 } },
       { kind: 'sky_lantern', count: [3, 6] },
-      { kind: 'chime_stand', count: [3, 6] },
-      { kind: 'gale_vane', count: [2, 4] },
+      { kind: 'chime_stand', count: [3, 6], rules: { spacing: 44 } },
+      { kind: 'gale_vane', count: [2, 4], rules: { spacing: 50 } },
       { kind: 'cloud_coral', count: [3, 6] },
-      { kind: 'aether_crystal', count: [2, 5] },
+      { kind: 'aether_crystal', count: [2, 5], rules: { spacing: 28 } },
       { kind: 'flowers', count: [1, 2] },
       // The den door (data/sidezones.ts): a thunderhead's mouth — dwell in
       // and the Storm-Throat mints below. Every face carries the roll
@@ -10560,9 +10567,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         name: 'morning drift',
         layout: [
           { kind: 'cloud_billow', count: [8, 12] },
-          { kind: 'zephyr_totem', count: [3, 5] },
+          { kind: 'zephyr_totem', count: [3, 5], rules: { spacing: 50 } },
           { kind: 'sky_lantern', count: [4, 7] },
-          { kind: 'chime_stand', count: [4, 7] },
+          { kind: 'chime_stand', count: [4, 7], rules: { spacing: 44 } },
           { kind: 'cloud_coral', count: [4, 7] },
           { kind: 'flowers', count: [2, 4] },
           { kind: 'storm_funnel', count: [0, 1] },
@@ -10588,10 +10595,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         name: 'racing gale',
         layout: [
           { kind: 'cloud_billow', count: [6, 10] },
-          { kind: 'zephyr_totem', count: [4, 7] },
-          { kind: 'gale_vane', count: [3, 6] },
-          { kind: 'chime_stand', count: [3, 5] },
-          { kind: 'aether_crystal', count: [3, 6] },
+          { kind: 'zephyr_totem', count: [4, 7], rules: { spacing: 50 } },
+          { kind: 'gale_vane', count: [3, 6], rules: { spacing: 50 } },
+          { kind: 'chime_stand', count: [3, 5], rules: { spacing: 44 } },
+          { kind: 'aether_crystal', count: [3, 6], rules: { spacing: 28 } },
           { kind: 'storm_funnel', count: [0, 1] },
         ],
         theme: {
@@ -10616,10 +10623,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         name: 'shearwind churn',
         layout: [
           { kind: 'cloud_billow', count: [8, 13] },
-          { kind: 'zephyr_totem', count: [4, 6] },
-          { kind: 'gale_vane', count: [3, 5] },
+          { kind: 'zephyr_totem', count: [4, 6], rules: { spacing: 50 } },
+          { kind: 'gale_vane', count: [3, 5], rules: { spacing: 50 } },
           { kind: 'cloud_coral', count: [4, 8] },
-          { kind: 'aether_crystal', count: [4, 7] },
+          { kind: 'aether_crystal', count: [4, 7], rules: { spacing: 28 } },
           { kind: 'storm_funnel', count: [0, 1] },
         ],
         theme: {
@@ -10936,13 +10943,19 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2300, 3200], sizeH: [1700, 2400], ellipseChance: 0,
     forceLayout: 'aether_drift',
+    // THE DRESS BUDGET (density census D1): same archipelago, same starving
+    // rows as the Driftways — the dial widens the siting tries, not the counts.
+    layoutParams: { dressTryMul: 8 },
     layout: [
+      // Registry spacing on the tall kinds (vane 110 / totem 90 / chime 64 /
+      // crystal 60) is meadow grain — on a ~10% archipelago it structurally
+      // squeezed them out (census D1). Row overrides retune to isle grain.
       { kind: 'cloud_billow', count: [6, 10] },
-      { kind: 'gale_vane', count: [4, 7] },
-      { kind: 'zephyr_totem', count: [3, 6] },
-      { kind: 'chime_stand', count: [2, 4] },
+      { kind: 'gale_vane', count: [4, 7], rules: { spacing: 50 } },
+      { kind: 'zephyr_totem', count: [3, 6], rules: { spacing: 50 } },
+      { kind: 'chime_stand', count: [2, 4], rules: { spacing: 44 } },
       { kind: 'cloud_coral', count: [3, 6] },
-      { kind: 'aether_crystal', count: [2, 4] },
+      { kind: 'aether_crystal', count: [2, 4], rules: { spacing: 28 } },
     ],
     common: [
       { kind: 'clearing', count: [1, 2], radius: [80, 120] },
@@ -12343,10 +12356,20 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'water', count: [2, 3] },
       ] },
       // The pale garden: kelp that has never seen the sun and grew anyway.
-      { name: 'the pale garden', layout: [
-        { kind: 'kelp', count: [6, 10] },
+      // THE GROUND-BEFORE CONVENTION (density census D2): the water pours
+      // FIRST so the kelp/coral habitat gate has beds to find — the old
+      // kelp-first order starved the garden to zero on EVERY layout roll.
+      // walkOnly seats the pools in the carved channels on winding rolls (a
+      // pool inside solid rock feeds no garden), and the variant-scoped
+      // dress budget hunts the gut's scarce floor; the base and wreck-line
+      // faces keep their exact legacy draws.
+      // (water + kelp block nothing, so they may lap the winding gut's
+      // reserved artery — a pool in the passage slows, never plugs; coral
+      // blocks and keeps honest reservation respect.)
+      { name: 'the pale garden', layoutParams: { dressTryMul: 6 }, layout: [
+        { kind: 'water', count: [2, 4], rules: { walkOnly: true, ignore: ['reserved'] } },
+        { kind: 'kelp', count: [6, 10], rules: { ignore: ['reserved'] } },
         { kind: 'coral', count: [4, 7], radius: [16, 30] },
-        { kind: 'water', count: [2, 4] },
       ] },
     ],
     packs: {

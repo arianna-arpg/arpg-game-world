@@ -2755,6 +2755,14 @@ export interface GenCtx {
    *  consumer (FormationDef.siteWalk threads it); unset = byte-identical
    *  acceptance for every existing caller. */
   siteWalk?: boolean;
+  /** TRANSIENT: multiply findSpot's try budget (26 × this) — set by
+   *  plainsLayout from layoutParams.dressTryMul while it walks the zone's
+   *  authored layout rows, so a mostly-void archipelago or carved gut hunts
+   *  its scarce standing ground as hard as a meadow's 26 tries hunt a meadow
+   *  (the density census's starvation class: authored rows delivering 0-2
+   *  pieces). Draw SHAPE per try is unchanged; unset = the exact legacy 26
+   *  for every existing zone. */
+  siteTryMul?: number;
   /** MOVING-HAZARD LANES a builder authored (the track fabric): surfaced on
    *  GeneratedLayout.tracks. Builders push via `(ctx.tracks ??= []).push()` —
    *  absent on every trackless layout, zero cost, zero rng. */
@@ -3004,9 +3012,19 @@ function plainsLayout(ctx: GenCtx, def: ZoneDef): void {
   // hazy silhouette can't show — recipes calling scatterDecoration and
   // plains-based zones both skip it here, one gate for both paths.
   if (ctx.lite) return;
-  for (const spec of def.layout) {
-    const n = ctx.rng.int(spec.count[0], spec.count[1]);
-    for (let i = 0; i < n; i++) stamp(ctx, spec);
+  // THE DRESS BUDGET (layoutParams.dressTryMul): scoped to the authored
+  // layout rows only — landmarks, structures and compositions keep their
+  // own budgets. 1 (the default) leaves every existing zone draw-for-draw.
+  const prevMul = ctx.siteTryMul;
+  const mul = layoutParam(def, 'dressTryMul', 1) as number;
+  if (mul !== 1) ctx.siteTryMul = mul;
+  try {
+    for (const spec of def.layout) {
+      const n = ctx.rng.int(spec.count[0], spec.count[1]);
+      for (let i = 0; i < n; i++) stamp(ctx, spec);
+    }
+  } finally {
+    ctx.siteTryMul = prevMul;
   }
 }
 registerLayout('plains', plainsLayout);
@@ -7700,7 +7718,10 @@ function findSpot(
   const sx = ctx.sampleRect?.x ?? 0, sy = ctx.sampleRect?.y ?? 0;
   const sw = ctx.sampleRect?.w ?? ctx.arena.w, sh = ctx.sampleRect?.h ?? ctx.arena.h;
   const rInset = ctx.sampleRect ? Math.max(0, Math.min(r, sw / 2 - 1, sh / 2 - 1)) : inset;
-  for (let tries = 0; tries < 26; tries++) {
+  // THE DRESS BUDGET (ctx.siteTryMul, transient): scarce-ground zones widen
+  // the try count, never the per-try draw shape — unset = the legacy 26.
+  const tryBudget = Math.max(1, Math.round(26 * (ctx.siteTryMul ?? 1)));
+  for (let tries = 0; tries < tryBudget; tries++) {
     const p = vec(
       ctx.rng.range(sx + rInset, sx + sw - rInset),
       ctx.rng.range(sy + rInset, sy + sh - rInset));
@@ -7716,7 +7737,11 @@ function findSpot(
     // ground in grid zones, and out of forbidden pools/pits. Placed AFTER the legacy
     // checks so the rng draw sequence is byte-identical for callers passing no kind.
     if (rule) {
-      if (!ruleIgnored(ctx, 'walk') && ctx.walk && walkGated(kind!) && !ctx.walk.isWalkable(p.x, p.y)) continue;
+      // A row may OPT IN to walkable siting past its kind's own rule
+      // (StampRuleOverride.walkOnly): a carved gut pours its pools into the
+      // channels, not the rock — grid zones only, convex zones unchanged.
+      if (!ruleIgnored(ctx, 'walk') && ctx.walk && (over?.walkOnly || walkGated(kind!))
+        && !ctx.walk.isWalkable(p.x, p.y)) continue;
       // GROUND REQUIRED: nothing stands over open void (cloud_void, chasm)
       // unless its rule opts out — the walk gate covers walkability for
       // solids; this covers FLOATING for the non-walk-gated overlays too.
@@ -7870,7 +7895,10 @@ function cellGuarded(ctx: GenCtx, c: Vec2, cr: number, kind: DoodadKind, hard: b
     if (ctx.exits.some(e => dist(c, e) < cr + exitMargin)) return true;
   }
   if (inReserved(ctx, c, cr)) return true;
-  if (!ruleIgnored(ctx, 'walk') && ctx.walk && walkGated(kind) && !ctx.walk.isWalkable(c.x, c.y)) return true;
+  // A row's walkOnly opt-in (StampRuleOverride) binds the poured CELLS too,
+  // so an opted pour follows its carved channel instead of spilling into rock.
+  if (!ruleIgnored(ctx, 'walk') && ctx.walk && (ctx.ruleOver?.walkOnly || walkGated(kind))
+    && !ctx.walk.isWalkable(c.x, c.y)) return true;
   // GROUND REQUIRED: a poured cell never floats over open void either.
   if (!ruleIgnored(ctx, 'walk') && !doodadRule(kind).voidOk && overVoid(ctx, c.x, c.y)) return true;
   return false;

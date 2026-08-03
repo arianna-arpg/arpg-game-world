@@ -2417,6 +2417,24 @@ function aetherDriftLayout(ctx: GenCtx, def: ZoneDef): void {
     if (l.len < shortest.len) shortest = l;
   }
 
+  // A crossing's reservation protects the VOID-SPANNING run — the only
+  // passage. Inside a standing isle's coast you can simply walk around, so
+  // the swath is clipped to the open-sky stretch (a small mouth pad stays):
+  // center-to-rim reserved channels were eating most of every small isle's
+  // floor, starving the authored dress (density census D1).
+  const reserveCrossing = (pts: Vec2[], halfW: number, a: Isle, b: Isle): void => {
+    const inCoast = (p: Vec2): boolean =>
+      Math.hypot(p.x - a.x, p.y - a.y) < a.r - 26 || Math.hypot(p.x - b.x, p.y - b.y) < b.r - 26;
+    let run: Vec2[] = [];
+    for (const p of pts) {
+      if (inCoast(p)) {
+        if (run.length > 1) reserveArtery(ctx, run, halfW);
+        run = [];
+      } else run.push(p);
+    }
+    if (run.length > 1) reserveArtery(ctx, run, halfW);
+  };
+
   const lanterns: { x: number; y: number }[] = [];
   for (const link of links) {
     const isLane = link === longest ? true : link === shortest ? false
@@ -2429,7 +2447,7 @@ function aetherDriftLayout(ctx: GenCtx, def: ZoneDef): void {
       const halfW = rng.range(laneHalfP[0], laneHalfP[1]);
       band(basin, pts, halfW + rng.range(basinHalfP[0], basinHalfP[1]) * 0.55);
       band(laneM, pts, halfW);
-      reserveArtery(ctx, pts, halfW + 24);
+      reserveCrossing(pts, halfW + 24, link.a, link.b);
       // Dock lanterns flanking each mouth (perpendicular — never in the
       // throat: the span-brazier lesson) and WIDE of the raft's sweep: the
       // stakes are pass-through, but a lantern the raft plows past every
@@ -2455,7 +2473,7 @@ function aetherDriftLayout(ctx: GenCtx, def: ZoneDef): void {
       const pts = wanderPath(rng, { x: link.a.x, y: link.a.y }, { x: link.b.x, y: link.b.y },
         { step: 120, wobble: 24, bowFrac: 0.12 });
       band(basin, pts, rng.range(basinHalfP[0], basinHalfP[1]));
-      reserveArtery(ctx, pts, 70);
+      reserveCrossing(pts, 70, link.a, link.b);
       // Walk the polyline by arc length, dropping pads as we go.
       const cum: number[] = [0];
       for (let k = 1; k < pts.length; k++) {
