@@ -35,7 +35,7 @@ import type { World } from '../src/engine/world';
 import type { ZoneDef, ZoneExitDef } from '../src/data/zones';
 import { HUB_ZONE, START_ZONE } from '../src/data/zones';
 import { MAX_DEGREE, WEB_CFG, connectFloatingZone, countRoads, placeZoneAt, roadBudgetOf, settleWeb } from '../src/engine/worldgen';
-import { underSpanPolicyOf } from '../src/data/underspans';
+import { UNDER_SPANS, underSpanPolicyOf } from '../src/data/underspans';
 import { FIELD_BIOME, FIELD_GEN, fieldCoreRect, fieldRegionAt } from '../src/world/fieldRegion';
 import { biomeAt, biomeSpacing } from '../src/world/biomes';
 import { zoneKindOf } from '../src/data/zoneKinds';
@@ -708,7 +708,11 @@ console.log(`  (info) jungle nodes pressing past the world cap by their own budg
 // join the walk, and heals that never touch a row.
 {
   let rows = 0, oneWay = 0, offPolicy = 0, spannedOver = 0, veiledPartners = 0;
-  const rootheldAll: { w: World; z: ZoneDef }[] = [];
+  // THE HELD KINDS come from the policy rows themselves (batch 24 — the
+  // second country: rootheld, barrowheld, whatever a future row names), so
+  // this sweep can never lag the registry.
+  const heldKinds = new Set(Object.values(UNDER_SPANS).map(p => p.heldKind));
+  const heldAll: { w: World; z: ZoneDef }[] = [];
   for (const { w } of worlds) {
     for (const z of surfaceZones(w)) {
       for (const u of z.underways ?? []) {
@@ -719,17 +723,17 @@ console.log(`  (info) jungle nodes pressing past the world cap by their own budg
       if (z.underways?.length && !underSpanPolicyOf(z.biome ?? '')) offPolicy++;
       if (z.underways?.length && countRoads(z) > roadBudgetOf(z)) spannedOver++;
       if (z.id.startsWith('ugspan_') && z.veiled) veiledPartners++;
-      if (z.kind === 'rootheld') rootheldAll.push({ w, z });
+      if (z.kind && heldKinds.has(z.kind)) heldAll.push({ w, z });
     }
   }
-  console.log(`  (info) organic spans this sweep: ${rows / 2} under-road(s), ${rootheldAll.length} rootheld node(s), ${veiledPartners} veiled partner(s)`);
+  console.log(`  (info) organic spans this sweep: ${rows / 2} under-road(s), ${heldAll.length} held node(s), ${veiledPartners} veiled partner(s)`);
   check('K: under-roads are two-way everywhere', oneWay === 0, `${rows} rows`);
   check('K: spans stand only on policy biomes', offPolicy === 0, `${offPolicy}`);
   check('K: spanned ground stays within its road budget (rows spend nothing)', spannedOver === 0);
-  check('K: rootheld ground is surface-sealed (zero exits, static kind)',
-    rootheldAll.every(({ z }) => z.exits.length === 0 && zoneKindOf(z)?.staticExits === true),
-    `${rootheldAll.length} rootheld`);
-  // Reachability THROUGH the web: every rootheld node must be walkable from
+  check('K: held ground is surface-sealed (zero exits, static kind — every policy heldKind)',
+    heldAll.every(({ z }) => z.exits.length === 0 && zoneKindOf(z)?.staticExits === true),
+    `${heldAll.length} held`);
+  // Reachability THROUGH the web: every held node must be walkable from
   // town once underways edges join the BFS — and never without them.
   {
     const reach = (w: World, withUnder: boolean): Set<string> => {
@@ -751,8 +755,8 @@ console.log(`  (info) jungle nodes pressing past the world cap by their own budg
       if (!cache.has(w)) cache.set(w, { with: reach(w, true), without: reach(w, false) });
       return cache.get(w)!;
     };
-    check('K: rootheld nodes are connected citizens THROUGH the web (and only through it)',
-      rootheldAll.every(({ w, z }) => setsOf(w).with.has(z.id) && !setsOf(w).without.has(z.id)));
+    check('K: held nodes are connected citizens THROUGH the web (and only through it)',
+      heldAll.every(({ w, z }) => setsOf(w).with.has(z.id) && !setsOf(w).without.has(z.id)));
   }
   // The heals leave the under-web alone (reconcileWebLaws ran in F/G above on
   // two of these worlds already — this is the explicit whole-sweep pin).

@@ -39,7 +39,7 @@ import { HUB_ZONE, START_ZONE } from '../src/data/zones';
 import { zoneKindOf, ZONE_KINDS } from '../src/data/zoneKinds';
 import { roadBudgetOf, countRoads } from '../src/engine/worldgen';
 import { BIOMES } from '../src/world/biomes';
-import { UNDER_SPANS, registerUnderSpan } from '../src/data/underspans';
+import { UNDER_SPANS, registerUnderSpan, type UnderSpanPolicy } from '../src/data/underspans';
 import { sanitizeWorldZones } from '../src/meta/worldstate';
 
 let failed = 0;
@@ -52,17 +52,24 @@ bootSimEngine();
 
 // --- helpers -----------------------------------------------------------------
 
+/** The SHIPPED rows, captured before any section wipes the registry — the
+ *  second-country census (section G) reads these. */
+const SHIPPED: Record<string, UnderSpanPolicy> =
+  Object.fromEntries(Object.entries(UNDER_SPANS).map(([k, v]) => [k, { ...v }]));
+
 const wipePolicies = (): void => { for (const k of Object.keys(UNDER_SPANS)) delete UNDER_SPANS[k]; };
 
 /** Register one forced policy row for every real surface-capable biome (the
  *  mechanism is biome-generic; the regimes are proven wherever the seed's
  *  climate happens to grow). 'field'/'ocean' skip — expanses and water never
- *  seat spans by the pass's own predicate anyway. */
+ *  seat spans by the pass's own predicate anyway. Forced rows wear the
+ *  garden's kit (mouth/heldKind ride the policy row since batch 24 — these
+ *  sections pin the DIAL regimes, not the kit; section G pins the kit). */
 const forceAllBiomes = (dials: { chance: number; reach: [number, number]; radius: number; fresh: number; exitless: number }): void => {
   wipePolicies();
   for (const biome of Object.keys(BIOMES)) {
     if (biome === 'field' || biome === 'ocean') continue;
-    registerUnderSpan({ biome, ...dials });
+    registerUnderSpan({ biome, mouth: 'rootway_mouth', heldKind: 'rootheld', ...dials });
   }
 };
 
@@ -114,7 +121,7 @@ console.log('\n=== THE SPANNING UNDERGROWTH QA ===');
   wipePolicies();
   const wA = grow(0x0a11ce, 4);
   wipePolicies();
-  registerUnderSpan({ biome: 'qa_never_biome', chance: 1, reach: [3, 3], radius: 400, fresh: 1, exitless: 1 });
+  registerUnderSpan({ biome: 'qa_never_biome', chance: 1, reach: [3, 3], radius: 400, fresh: 1, exitless: 1, mouth: 'rootway_mouth', heldKind: 'rootheld' });
   const wB = grow(0x0a11ce, 4);
   check('A: unmatched policy rows grow a byte-identical world', fingerprint(wA) === fingerprint(wB),
     `${surfaceZones(wA).length} vs ${surfaceZones(wB).length} zones`);
@@ -336,6 +343,81 @@ console.log('\n=== THE SPANNING UNDERGROWTH QA ===');
             check('F: the pocket def is BYTE-IDENTICAL from either door (the seat-canonical mint)', defFp2 === defFp);
           }
         }
+      }
+    }
+  }
+}
+
+// ------------------------------------------------ G. THE SECOND COUNTRY (batch 24)
+// The rooted web's proof of generality: the DOWNS row (data/catacombs.ts)
+// rides the same registry with its OWN kit — the lych way's mouth landmark,
+// the barrowheld sealed kind, the catacombs pocket face — and the engine
+// carries no country's shape (the mouth stamp and the sealed kind both read
+// the policy row). G1 pins the shipped census + the JUNGLE TEST as
+// inequalities (the second country must read differently BY DIALS); G2/G3
+// grow a downs-only forced world and walk into the pocket.
+{
+  // G1: the shipped registry census — two countries, each its own kit.
+  const g = SHIPPED['garden'], d = SHIPPED['downs'];
+  check('G: shipped rows — garden + downs registered, each with its OWN kit',
+    g?.mouth === 'rootway_mouth' && g?.heldKind === 'rootheld'
+    && d?.mouth === 'lychway_mouth' && d?.heldKind === 'barrowheld'
+    && !!ZONE_KINDS['barrowheld'] && ZONE_KINDS['barrowheld'].staticExits === true);
+  check('G: the jungle test holds BY DIALS (rarer, longer, older, more sealed than the garden)',
+    !!g && !!d && d.chance < g.chance && d.reach[0] >= 2 && d.reach[1] >= g.reach[1]
+    && d.radius > g.radius && d.fresh < g.fresh && d.exitless > g.exitless);
+  check('G: the omen voices are the countries\' own (never one shared murmur)',
+    !!g?.omen && !!d?.omen && g.omen.lines[0] !== d.omen.lines[0] && g.omen.color !== d.omen.color);
+
+  // G2: a downs-only forced world — every span wears the LYCH kit.
+  wipePolicies();
+  registerUnderSpan({
+    biome: 'downs', chance: 1, reach: [2, 2], radius: 420, fresh: 0.5, exitless: 1,
+    mouth: 'lychway_mouth', heldKind: 'barrowheld',
+  });
+  const w = grow(0xd0512, 7);
+  const zones = surfaceZones(w);
+  const spanned = zones.filter(z => z.biome === 'downs' && z.underways?.length);
+  check('G: downs spans seed under the forced regime', spanned.length >= 5, `${spanned.length} spanned`);
+  check('G: every downs member wears the LYCHWAY mouth (never the garden\'s)',
+    spanned.length > 0 && spanned.every(z =>
+      (z.landmarks ?? []).some(l => l.landmark === 'lychway_mouth')
+      && !(z.landmarks ?? []).some(l => l.landmark === 'rootway_mouth')));
+  const held = zones.filter(z => z.kind === 'barrowheld');
+  check('G: sealed partners wear BARROWHELD (zero exits, static kind; rootheld never leaks)',
+    held.length >= 2
+    && held.every(z => z.exits.length === 0 && zoneKindOf(z)?.staticExits === true)
+    && zones.every(z => z.kind !== 'rootheld'), `${held.length} barrowheld`);
+
+  // G3: the walk below — a lych mouth opens the SHARED catacombs pocket.
+  const seat = spanned.find(z => z.id.startsWith('gen_') && !z.veiled) ?? spanned[0];
+  check('G: a seat stands to walk from', !!seat, seat?.id ?? 'NONE');
+  if (seat) {
+    const span = seat.underways![0].span;
+    const pocketId = `cave_${span}`;
+    w.loadZone(seat.id);
+    const priv = w as unknown as {
+      caveEntrances: { pos: { x: number; y: number }; seed: number; kind: string; underSpan?: string }[];
+    };
+    const mouth = priv.caveEntrances.find(en => en.underSpan === span);
+    check('G: the seat seats a harvest-paired lychway mouth (kind = lychway_gate)',
+      !!mouth && mouth.kind === 'lychway_gate',
+      mouth ? mouth.kind : `${priv.caveEntrances.length} entrance(s), none span-paired`);
+    if (mouth) {
+      w.player.invulnerable = true;
+      w.player.untargetable = true;
+      w.player.pos.x = mouth.pos.x; w.player.pos.y = mouth.pos.y;
+      for (let i = 0; i < 40 && w.zone.id !== pocketId; i++) w.update(0.1);
+      check('G: dwelling the lych mouth enters the shared pocket', w.zone.id === pocketId, w.zone.id);
+      if (w.zone.id === pocketId) {
+        const members = Object.values(w.zoneMap).filter(z => z.underways?.some(u => u.span === span)).map(z => z.id).sort();
+        check('G: the pocket is the CATACOMBS (the row\'s own face, objective none forced)',
+          w.zone.tileset === 'catacombs' && w.zone.objective.kind === 'none'
+          && w.zone.underSpan === span && w.zone.exits.length === members.length,
+          `tileset=${w.zone.tileset} exits=${w.zone.exits.length}/${members.length}`);
+        const ledger = (w as unknown as { ledger: Record<string, number> }).ledger;
+        check('G: the lych door stamps its OWN gateway ledger (lychway_entered)',
+          (ledger['lychway_entered'] ?? 0) >= 1);
       }
     }
   }

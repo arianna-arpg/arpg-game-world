@@ -3217,6 +3217,42 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       throat: '#0c0804', vines: { color: '#4a3a24' },
     },
   },
+  // === THE CATACOMBS DOORS (the rooted web's second country, batch 24 —
+  // kit in data/catacombs.ts): the garden trio's grammar in kerbstone. Same
+  // caveMouth painter, three data entries (the doodadVisuals doctrine).
+  // THE CRYPT GATE — the downs' named door DOWN into the minted catacombs
+  // (the taproot_gate's seam): dressed stone, a cold bone-pale breath.
+  crypt_gate: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#3a352a', edge: '#6a6350', material: 'stone',
+      glow: '#c8bfa8', throat: '#0a0806',
+      label: 'the Catacombs',
+    },
+    light: { radius: -2, color: '#c8bfa8', intensity: 0.24, flicker: 2.4 },
+  },
+  // THE LYCHWAY GATE — the SPANNING door (the rootway_gate law): the crypt
+  // gate re-dressed a shade paler with a brighter breath, so "this mouth
+  // crosses" reads before the first dwell.
+  lychway_gate: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#443f30', edge: '#7a705c', material: 'stone',
+      glow: '#e8dcb0', throat: '#0a0806',
+      label: 'the Lych Way',
+    },
+    light: { radius: -2, color: '#e8dcb0', intensity: 0.3, flicker: 1.8 },
+  },
+  // THE CRYPT STAIR (the 'crypts' under-tier lane): the tier CROSSING's
+  // prop, not a door — the culvert stair's role in kerbstone. Darker, no
+  // glow, no label: you walk down in place, nothing mints.
+  crypt_stair: {
+    painter: 'caveMouth', order: 23, bakeWhole: 'static',
+    params: {
+      color: '#1d1812', edge: '#54492f', material: 'stone',
+      throat: '#0a0806',
+    },
+  },
   giant_dandelion: {
     painter: 'trunk', order: 52, shadow: 0.5, longShadow: 1.2, bakeWhole: 'static',
     params: { color: '#8a9a6c', scale: 0.24, roots: 3 },

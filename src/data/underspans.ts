@@ -38,15 +38,22 @@
 import { registerDoodadRule, registerLandmark } from '../engine/levelgen';
 import { mintCave } from '../engine/worldgen';
 import { registerGenPin } from '../engine/genPins';
-import { registerSidezone } from './sidezones';
+import { registerSidezone, type SidezoneMintCtx } from './sidezones';
 import { registerOmenSource } from '../world/omens';
 import type { Omen } from '../world/omens';
+import type { ZoneDef } from './zones';
 
 // --- THE COVERAGE DIALS (per-biome policy rows) --------------------------------
 // The three regimes are DIALS, never code: patchy ships (the garden row);
 // everywhere-thin is chance 1 + reach [1,1]; one-great-web is chance 1 +
 // reach [3,3] + a wide radius (spans chain through shared members). Both
 // extremes are pinned at forced dials in balance/probe_ugspan.ts.
+//
+// THE SECOND COUNTRY (batch 24): a policy row carries its country's WHOLE
+// under-kit — the mouth landmark, the sealed partner's zone kind, the omen
+// voice — so the engine's span pass holds no garden shape anywhere. The
+// garden row below is the debut; the downs' lych ways (data/catacombs.ts)
+// register from their own kit file through the same registry.
 export interface UnderSpanPolicy {
   /** The biome whose ORGANIC mints may seed a span. */
   biome: string;
@@ -60,10 +67,20 @@ export interface UnderSpanPolicy {
   /** P(a partner slot mints FRESH veiled ground rather than adopting a
    *  standing unvisited node) — the "brand new Garden node" lane. */
   fresh: number;
-  /** P(a fresh partner mints ROOTHELD — surface-sealed forever, the
-   *  set-piece; the rest mint soft: born under-only, but the surface web
-   *  may find them as the country densifies). */
+  /** P(a fresh partner mints SEALED (`heldKind`) — surface-locked forever,
+   *  the set-piece; the rest mint soft: born under-only, but the surface
+   *  web may find them as the country densifies). */
   exitless: number;
+  /** The landmark FORCED once per span membership — the country's own
+   *  mouth (a registerGenPin'd id; World.underSpanPass stamps rolls by it,
+   *  never by a constant of its own). */
+  mouth: string;
+  /** The zone KIND a sealed fresh partner wears (a staticExits row in
+   *  data/zoneKinds.ts — rootheld, barrowheld — the discovery's map read). */
+  heldKind: string;
+  /** The whisper voice at a found member while kin stay veiled. Omitted =
+   *  a silent fabric (the crusade's precedent — nothing murmurs). */
+  omen?: { color: string; lines: string[] };
 }
 
 export const UNDER_SPANS: Record<string, UnderSpanPolicy> = {};
@@ -80,7 +97,8 @@ export function underSpanPolicyOf(biome: string): UnderSpanPolicy | undefined {
 // THE GARDEN ROW — patchy found networks (the ratified default): roughly one
 // plot in five knots its roots into a neighbor or two; half the fresh finds
 // are sealed set-pieces. Radius ~2.6× the garden's 58u spacing reaches the
-// second ring without ever spanning a whole country.
+// second ring without ever spanning a whole country. (mouth/heldKind/omen
+// ride the row since batch 24 — the engine carries NO country's shape.)
 registerUnderSpan({
   biome: 'garden',
   chance: 0.22,
@@ -88,6 +106,16 @@ registerUnderSpan({
   radius: 150,
   fresh: 0.55,
   exitless: 0.5,
+  mouth: 'rootway_mouth',
+  heldKind: 'rootheld',
+  omen: {
+    color: '#c8a878',
+    lines: [
+      'the roots here run farther than the paths do…',
+      'something below knots this plot to another…',
+      'the ground hums of a way the surface never held…',
+    ],
+  },
 });
 
 // --- THE ROOTWAY MOUTH ---------------------------------------------------------
@@ -100,7 +128,9 @@ registerDoodadRule('rootway_gate', { overlap: 'trigger', spacing: 300 });
 /** No static row names this landmark — the SPAN PASS forces one roll per
  *  membership at mint time. Pinned (engine/genPins.ts) so THE ORPHAN CENSUS
  *  counts a reference the data can witness (the windlass_ring precedent);
- *  World.underSpanPass stamps rolls by this exported constant. */
+ *  World.underSpanPass stamps rolls by the policy row's `mouth` field — the
+ *  garden row above names this id (batch 24: the engine reads the row, so a
+ *  second country's mouth needs no engine word). */
 export const ROOTWAY_MOUTH_LANDMARK = registerGenPin('landmark', 'rootway_mouth',
   'the rooted web: World.underSpanPass forces one roll per span membership');
 
@@ -125,16 +155,18 @@ registerLandmark({
 // sides dealt round the compass. Objective FORCED to 'none' (the port law):
 // the pocket is a PASSAGE — its danger is ambient, and no objective seal may
 // ever hold the crossing shut.
-registerSidezone({
-  kind: 'rootway_gate',
-  dwell: 0.8,
-  ledgerOnEnter: 'rootway_entered',
-  spanMouth: true,
-  mint: ({ parent, seed, id, underSpan }) => {
+//
+// THE POCKET LAW IS THE FABRIC'S (batch 24): seat-canonical mint, per-member
+// exits, the forced 'none' objective — one exported helper, so a second
+// country's span mouth names only its FACE and its LABEL (data/catacombs.ts
+// rides it verbatim; a row's copy drifting from the law is impossible by
+// construction).
+export function spanPocketMint(face: string, label: string) {
+  return ({ parent, seed, id, underSpan }: SidezoneMintCtx): ZoneDef => {
     const seat = underSpan?.seat ?? parent;
-    const def = mintCave(seat, seed, id, 'undergrowth', {
+    const def = mintCave(seat, seed, id, face, {
       rollVariant: true,
-      objective: { kind: 'none', label: 'the ways below' },
+      objective: { kind: 'none', label },
     });
     if (underSpan) {
       def.underSpan = underSpan.id;
@@ -147,20 +179,33 @@ registerSidezone({
       }));
     }
     return def;
-  },
+  };
+}
+
+registerSidezone({
+  kind: 'rootway_gate',
+  dwell: 0.8,
+  ledgerOnEnter: 'rootway_entered',
+  spanMouth: true,
+  mint: spanPocketMint('undergrowth', 'the ways below'),
 });
 
-// --- THE WHISPERING ROOTS (findability, the omen law) --------------------------
+// --- THE WHISPERING WAYS (findability, the omen law) ---------------------------
 // One whisper per span that still hides a member, seated at a FOUND member's
-// own mouth — the murmur says the roots go somewhere, never where. Whisper
+// own mouth — the murmur says the ways go somewhere, never where. Whisper
 // only, no reveal: the far node's veil lifts exclusively by the walk below
 // (or ordinary surface discovery of a soft partner) — the omen fabric's
-// guarantee without a shortcut through it.
+// guarantee without a shortcut through it. ONE source for every country:
+// the VOICE rides the policy row (members are same-biome by the span pass's
+// own law, so the member's biome names its row) — a rowless or voiceless
+// biome murmurs nothing.
 registerOmenSource((world) => {
   const out: Omen[] = [];
   const done = new Set<string>();
   for (const z of Object.values(world.zoneMap)) {
     if (!z.underways?.length || !world.visible(z)) continue;
+    const voice = underSpanPolicyOf(z.biome ?? '')?.omen;
+    if (!voice) continue;
     for (const w of z.underways) {
       if (done.has(w.span)) continue;
       const far = world.zoneMap[w.to];
@@ -170,12 +215,8 @@ registerOmenSource((world) => {
         id: `ugspan-${w.span}`,
         at: { x: z.map.x, y: z.map.y },
         zoneId: z.id,
-        color: '#c8a878',
-        lines: [
-          'the roots here run farther than the paths do…',
-          'something below knots this plot to another…',
-          'the ground hums of a way the surface never held…',
-        ],
+        color: voice.color,
+        lines: voice.lines,
         whisper: 70,
         age: 0,
       });

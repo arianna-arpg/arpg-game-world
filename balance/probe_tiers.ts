@@ -976,5 +976,90 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
   check('N10 the root tier is byte-deterministic', fpN(na.out) === fpN(nb.out));
 }
 
+// --- RIG N2: THE SECOND LANE (batch 24 — the crypts under the downs) --------------
+// The vocabulary's proof of generality: a THIRD row (sewer/roots/crypts)
+// registered from its own kit file (data/catacombs.ts, loaded via the sim
+// arena's side-effect imports), carving the SAME engine with nothing but
+// different data — bone regions, lych stairs, the downs' named crypt gates
+// sunk story-stamped. Grammar = RIG N's, verbatim, on the downs' own massif
+// recipe (a mint that rolls another fabric's layer first — the massif bores
+// — honestly declines: one zone, one stack; the carve rate absorbs it).
+{
+  check('N2.1 the crypts lane registry (kit-file registration)',
+    !!UNDER_TIER_LANES.crypts
+    && UNDER_TIER_LANES.crypts.deepDoorKinds?.includes('crypt_gate') === true
+    && UNDER_TIER_LANES.crypts.doorTier === 'seat'
+    && UNDER_TIER_LANES.crypts.duct === 'crypt_duct'
+    && UNDER_TIER_LANES.crypts.stairKind === 'crypt_stair');
+  const duct = regionKind('crypt_duct'), well = regionKind('crypt_well');
+  check('N2.2 crypt_duct: the turf above keeps its face',
+    !!duct && !!duct.walkable && duct.tier === 1 && !duct.visual && !!duct.tierVisual);
+  check('N2.3 crypt_well is a CROSSING', !!well?.tierLink && !!well?.walkable && well.tier === 1);
+  const dn = TILESETS.downs;
+  check('N2.4 the downs SHIP the dial (underTier crypts on the base face)',
+    (dn.layoutParams as Record<string, unknown> | undefined)?.underTier === 'crypts');
+  let carved = 0, declared = 0, stairs = 0, orphans = 0;
+  let sunkGates = 0, sunkOffStory = 0, surfGates = 0;
+  for (const seed of [824001, 824002, 824003, 824004, 824005, 824006]) {
+    const { out, def } = gen('qa_crypts', 'massif',
+      [...dn.layout, { kind: 'crypt_gate', count: [2, 2] } as StampSpec],
+      { ...dn.layoutParams, underTier: 'crypts', underTierChance: 1 }, seed);
+    const st = tierStats(out);
+    if (!st || st.tierCells === 0) continue; // another layer stood first, or the lattice declined
+    if (def.tiers?.kind === 'under' && def.tiers?.lane === 'crypts' && def.tiers?.exposure === 'covered') declared++;
+    else continue; // a massif-bore layer is not this rig's business
+    carved++;
+    orphans += st.orphan;
+    stairs += out.doodads.filter(d => d.kind === 'crypt_stair').length;
+    const grid = out.walk as GridWalkField;
+    for (const d of out.doodads) {
+      if (d.kind !== 'crypt_gate') continue;
+      if ((d as { tier?: number }).tier === 1) {
+        sunkGates++;
+        // drawn == dwelled: a sunken gate stands on the story's own floor.
+        const k = grid.regionAt(d.pos.x, d.pos.y);
+        if (!(k === 'crypt_duct' || k === 'crypt_well')) sunkOffStory++;
+      } else surfGates++;
+    }
+  }
+  check('N2.5 the crypts carve under most heaths', carved >= 3, `${carved}/6`);
+  check('N2.6 every carved heath wears its lych stairs', carved === 0 || stairs >= carved * 2, `stairs=${stairs}`);
+  check('N2.7 no orphan gallery anywhere', orphans === 0, `orphans=${orphans}`);
+  check('N2.8 crypt gates SINK story-stamped onto the story\'s own floor',
+    sunkGates >= 1 && sunkOffStory === 0,
+    `sunk=${sunkGates} offStory=${sunkOffStory} surface=${surfGates}`);
+  // absent == identical: strip the SHIPPED dial — the heath mints FLAT (no
+  // crypt region, no lane-tagged tiers stamp).
+  {
+    const { underTier: _u, underTierChance: _c, ...flat } = (dn.layoutParams ?? {}) as Record<string, unknown>;
+    const { out, def } = gen('qa_crypts_flat', 'massif', dn.layout, flat, 824001);
+    const flatCrypt = ((): boolean => {
+      const g = out.walk;
+      if (!(g instanceof GridWalkField)) return false;
+      for (let gy = 0; gy < g.rows; gy++) {
+        for (let gx = 0; gx < g.cols; gx++) {
+          const k = g.regionAt(gx * g.cell + 15, gy * g.cell + 15);
+          if (k === 'crypt_duct' || k === 'crypt_well') return true;
+        }
+      }
+      return false;
+    })();
+    check('N2.9 absent == identical: no dial, no crypt layer',
+      !flatCrypt && def.tiers?.lane !== 'crypts');
+  }
+  // Determinism: same seed, byte-equal furniture AND ground.
+  const fpN2 = (o: GeneratedLayout): string => {
+    const g = o.walk as GridWalkField;
+    let s = o.doodads.map(d => `${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}:${(d as { tier?: number }).tier ?? 0}`).join('|');
+    for (let gy = 0; gy < g.rows; gy += 2) for (let gx = 0; gx < g.cols; gx += 2) s += g.regionAt(gx * g.cell + 15, gy * g.cell + 15).length;
+    return s;
+  };
+  const na2 = gen('qa_crypts', 'massif', [...dn.layout, { kind: 'crypt_gate', count: [2, 2] } as StampSpec],
+    { ...dn.layoutParams, underTier: 'crypts', underTierChance: 1 }, 824009);
+  const nb2 = gen('qa_crypts', 'massif', [...dn.layout, { kind: 'crypt_gate', count: [2, 2] } as StampSpec],
+    { ...dn.layoutParams, underTier: 'crypts', underTierChance: 1 }, 824009);
+  check('N2.10 the crypt tier is byte-deterministic', fpN2(na2.out) === fpN2(nb2.out));
+}
+
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);
 process.exit(fails === 0 ? 0 : 1);

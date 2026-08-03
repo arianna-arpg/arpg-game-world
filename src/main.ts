@@ -31,6 +31,7 @@ import './data/watchposts'; // side-effect: registers the 'watch_post' ring tena
 import './data/occurrences'; // side-effect: registers the 'occurrence' ring tenant + the occurrence shelf (court tables name it)
 import './data/settled'; // side-effect: the settled-belt kit (+ the 'fields'/'district' recipes via engine/settled)
 import './data/garden'; // side-effect: the Garden country kit (kinds, formations, compositions, the nest role pool)
+import './data/catacombs'; // side-effect: the second under-country kit (the crypts lane, the lych way's span row)
 import './data/grove'; // side-effect: the Grove country kit (lantern flora, the hollow way down)
 import './data/warfront'; // side-effect: the Warfront country kit (siege furniture, the war column)
 import './data/compositions'; // side-effect: registers the whole-zone composition bundles

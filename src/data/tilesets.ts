@@ -423,6 +423,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'hedge', weight: 1 },
       ],
       massifCoverage: [0.15, 0.23],
+      // THE CRYPTS (batch 24 — THE ROOTED WEB's second country): bone
+      // galleries under the heath's own floor (engine/tiers.ts 'crypts'
+      // lane, kit in data/catacombs.ts) — the barrow country's downstairs,
+      // walked down in place at a lych stair. Variants re-dial the chance:
+      // the burial face runs thickest, the stone face thinnest.
+      underTier: 'crypts', underTierChance: 0.45,
     },
     layout: [
       { kind: 'grass', count: [5, 8] },
@@ -443,9 +449,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       // END of the array leaves every existing row's rng draws untouched.)
       { kind: 'cluster', count: [0, 1], cluster: 'menhir_ring' },
     ],
-    // Whatever face rolls, the downs always carry their bones' litter.
+    // Whatever face rolls, the downs always carry their bones' litter —
+    // and somewhere, a door in the turf (the crypt gate dwells DOWN into
+    // the minted catacombs; kit in data/catacombs.ts. Appended row: the
+    // existing row's rng draws stay untouched).
     common: [
       { kind: 'bone_pile', count: [0, 2] },
+      { kind: 'crypt_gate', count: [0, 1] },
     ],
     variants: [
       // The stone face: tors and bluffs crowd the heath — cave-mouthed crag
@@ -460,6 +470,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ], layoutParams: {
         massifMasses: [{ kind: 'tor', weight: 4 }, { kind: 'bluff', weight: 2.5 }, { kind: 'fold', weight: 0.6 }],
         massifCoverage: [0.18, 0.26], massifSizeR: [190, 340],
+        underTierChance: 0.3, // raw crag keeps fewer dead
       } },
       // The settled face: folds, hedge-lines and swallowed steadings — the
       // old walked land, its courts still holding what the owners left.
@@ -492,6 +503,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'barrow', weight: 3.5 }, { kind: 'tor', weight: 1 }, { kind: 'fold', weight: 1 },
         ],
         massifCoverage: [0.14, 0.21],
+        underTierChance: 0.8, // the burial face is more crypt than turf
       } },
     ],
     packs: {
@@ -548,6 +560,126 @@ export const TILESETS: Record<string, TilesetDef> = {
       count: [0, 2],
       table: { cache_hollow: 3, ambush_hollow: 2, vein_hollow: 1 },
     },
+  },
+
+  // THE CATACOMBS — the downs' understratum (batch 24 — THE ROOTED WEB's
+  // second country; kit in data/catacombs.ts): kerbed halls and shelf-walls
+  // cut under the barrow country, where the counted dead keep their
+  // processionals. THREE doors in (the undergrowth's pattern, second verse):
+  // the downs' named crypt gates (the sewer_grate law — canonically seated
+  // down in THE CRYPTS' galleries), the lych way's span mouths (the pocket
+  // face every crossing walks), AND the downs' ordinary depth-1 cave mouths —
+  // the caveFace below claims the shallows at a HAUNTING share, deliberately
+  // NOT the garden's replacement law: the garden's whole identity was the
+  // stacked plot (86%, w 8 × mul 1.5), but the downs are heath OVER dead —
+  // most first holes find the halls, and the crag country keeps a real
+  // residual of honest chalk caves ('*' sealed at 0, the marine_trench
+  // discipline: no OTHER country's ladder ever rolls these dead). NOT the
+  // Necropolis: the ossuary is the desert dynasty's candle-lit sanctum;
+  // these are the barrow-folk's cold-kept rows — wights, kerbstones, and
+  // the old kings' cairns, corridor country under a turf lid.
+  catacombs: {
+    id: 'catacombs', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    biome: 'downs',
+    caveFace: {
+      strata: { to: 1, fadeOut: 1 },
+      biomes: { downs: 3.5, '*': 0 },
+      variantChance: 0.45,
+    },
+    // What the halls always ARE, whichever face: the counted dead on their
+    // shelves, their goods in sealed urns — and the way deeper (true caves
+    // stem WITHIN the catacombs to depth 2+, the formalized ladder).
+    common: [
+      { kind: 'cave', count: [0, 1] },
+      { kind: 'bone_pile', count: [3, 6] },
+      { kind: 'burial_urn', count: [2, 4] },
+    ],
+    // Kept halls are BUILT country: grid layouts dominate (corridors and
+    // chambers — the hollows fabric's wall mass comes with them), the open
+    // crawl a minority face.
+    caveLayouts: { rooms: 3, dungeon: 2, plains: 1.5 },
+    hollows: {
+      count: [0, 2],
+      table: { cache_hollow: 3, ambush_hollow: 2, crevice_hollow: 1.2 },
+    },
+    nameFirst: ['Barrowdeep', 'Lychgate', 'Kerbstone', 'Old-King', 'Wightrest', 'Chalkbone', 'Turf-Hidden', 'Cold-Delved', 'Mound-Laid', 'Greybone', 'Under-Moor', 'Hollowhowe', 'Wold-Deep', 'Sexton’s'],
+    nameSecond: ['Catacombs', 'Halls', 'Howes', 'Cists', 'Gallery', 'Processional', 'Vaults', 'Delvings', 'Undercroft', 'Chambers', 'Corpse-Ways', 'Barrows'],
+    theme: {
+      ambientDark: 0.4,
+      fog: { banks: [0, 1], kinds: [{ id: 'grave_mist' }] },
+      // The shelf-dust keeps its own tenants (the ossuary's crawl, colder
+      // and sparser — catacombs is a perfProbe row, the permanent gate).
+      lite: { swarms: [{
+        monsterId: 'grave_mite', pockets: [1, 2], size: [12, 22], chance: 0.6,
+        announce: 'the shelf-dust stirs, and it CRAWLS…', announceColor: '#c8bfa8',
+      }] },
+      // Obstacle = CHALK AND BONE: the generic rock stamps reskin pale, the
+      // kept walls read as kerbstone (zero painter edits, the ossuary trick).
+      floor: '#12100b', grid: '#1b1812', border: '#5a5142',
+      obstacle: '#9a8f74', obstacleEdge: '#6a6350', accent: '#d8cfb0',
+      wall: '#7a705c', mud: '#28221a', chasm: '#070503',
+      ground: {
+        palette: ['#151109', '#1e1911', '#282117', '#332b1f', '#453b2b'],
+        bias: 0.45, alpha: 0.52, speckles: 1.1, strength: 1.05,
+      },
+    },
+    sizeW: [1600, 2200], sizeH: [1200, 1600], ellipseChance: 0.2,
+    layout: [
+      { kind: 'ossuary_niche', count: [3, 5] },
+      { kind: 'tombstone', count: [2, 5] },
+      { kind: 'bone_cairn', count: [1, 3] },
+      { kind: 'standing_stone', count: [1, 2] },
+      { kind: 'rocks', count: [3, 5], radius: [14, 26] },
+      { kind: 'rubble', count: [1, 3] },
+      { kind: 'formation', count: [1, 2], formation: 'reliquary_rows' },
+    ],
+    variants: [
+      // The corridor face: ruled shelf-rows and a colonnade — the dead in
+      // civic order, long lanes, tight cover.
+      { name: 'the processional', layout: [
+        { kind: 'formation', count: [2, 3], formation: 'reliquary_rows' },
+        { kind: 'formation', count: [1, 2], formation: 'ossuary_colonnade' },
+        { kind: 'ossuary_niche', count: [3, 6] },
+        { kind: 'burial_urn', count: [2, 4] },
+        { kind: 'tombstone', count: [1, 3] },
+        { kind: 'rocks', count: [1, 3], radius: [14, 22] },
+      ] },
+      // The howe face: mound-hollows and the old kings' cairns — the downs'
+      // own dead at their oldest, webbed and long unswept.
+      { name: 'the wight sleep', layout: [
+        { kind: 'bone_cairn', count: [3, 5] },
+        { kind: 'tombstone', count: [4, 7] },
+        { kind: 'standing_stone', count: [2, 4] },
+        { kind: 'bone_pile', count: [4, 8] },
+        { kind: 'web', count: [1, 3] },
+        { kind: 'rocks', count: [2, 4], radius: [14, 26] },
+      ] },
+    ],
+    // The downs' OWN dead — the surface table's undead thread, promoted to
+    // the whole census (no taperwights, no liches: those are the Necropolis'
+    // liturgy; these halls keep wights, wardens and what the wights left).
+    packs: {
+      count: [4, 6], size: [3, 5],
+      table: [
+        { id: 'zombie', weight: 3, presence: { to: 18, fadeOut: 9 } },
+        { id: 'skeleton_warrior', weight: 2.5 },
+        { id: 'skeleton_archer', weight: 2 },
+        { id: 'crypt_warden', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'barrow_wight', weight: 2, presence: { from: 9, fadeIn: 4 } },
+        { id: 'vacant_shell', weight: 1.5, presence: { to: 16, fadeOut: 7 } },
+        { id: 'poltergeist', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'hex_weaver', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'bone_serpent', weight: 1, presence: { from: 11, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'bounty', weight: 1.5 },
+      { kind: 'unearth', weight: 2 }, // the halls dig their own dead
+    ],
   },
 
   // THE FARMLAND — the settled belt's worked half (biome 'farmland', the
@@ -6181,7 +6313,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       // empty read — against the undergrowth's 149-195. The grove and the
       // '*'-default service (meadow and kin at 1) keep their old envelopes
       // untouched — the band rides ONLY the garden key.
-      biomes: { garden: { w: 8, strata: { from: 2, fadeIn: 1 } }, grove: 0.5 },
+      // (batch 24, the second under-country: `downs: 0` — the barrow
+      // country's downstairs belongs to its own dead (the catacombs face),
+      // not the garden's worm-runs; the '*'-default service for meadow and
+      // kin stays untouched, bare numbers and all.)
+      biomes: { garden: { w: 8, strata: { from: 2, fadeIn: 1 } }, grove: 0.5, downs: 0 },
       variantChance: 0.45,
     },
     caveLayouts: { plains: 3, winding: 2.5, labyrinth: 1, rooms: 1 },
@@ -12769,6 +12905,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   tendersrows:    { title: 'The Tenders\' Rows', blurb: 'The built face of the Garden gone wild: blooms taking back the paths row by row, trellises mid-mend, a rare planter-bed rampart and the Tender\'s dropped tools standing as monuments. Nobody tends it now; the colony and the bloomkin dispute the estate.' },
   mulchreach:     { title: 'The Mulch Margin',  blurb: 'The compost edge where the garden digests itself: rot logs and turned earth, slick trails cooling on the loam, and more ways down than anywhere else in the plot.' },
   rootways:       { title: 'The Rootways',      blurb: 'The garden\'s understratum: burrows bored between taproots thick as towers, worm-galleries, root-swallowed cellars. The unstructured half of the country\'s downstairs; the colony tunnels through it.' },
+  catacombs:      { title: 'The Catacombs',     blurb: 'The downs\' understratum: kerbed halls and shelf-walls cut under the barrow country, where the counted dead keep their processionals. The lych ways cross it, mound to mound.' },
   formicary:      { title: 'The Formicary',     blurb: 'The colony\'s nest, gallery by descending gallery: brood chambers and fungus gardens, granaries ranked by no keeper\'s logic, wax cell-work over the worked earth, and the Brood Vault at the bottom, where the Matriarch sits.' },
   peninsula:      { title: 'Peninsula',         blurb: 'A near-round isle ringed entirely by water: all shore, nowhere to fall back to but the sea itself.' },
   strand:         { title: 'The Strand',        blurb: 'The littoral country\'s walkable rim: dune-grass, tide pools and the wrack line. The last dry footing before the land starts going under.' },

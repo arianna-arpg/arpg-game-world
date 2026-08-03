@@ -99,6 +99,23 @@ export const ZONE_KINDS: Record<string, ZoneKindDef> = {
     keepLevel: true,
     staticExits: true,
   },
+  // THE BARROWHELD NODE (the rooted web's second country, data/catacombs.ts):
+  // rootheld's law in bone — a downs vault-barrow the surface never opened,
+  // its edge set empty FOREVER; the only way in is the lych way's far mouth.
+  // Same sealed-shores machinery (staticExits does all the refusing), its
+  // OWN read: the ring and label go pale as kerbstone, so a sealed barrow
+  // and a root-swallowed plot never read as the same discovery. The span
+  // pass wears whichever kind its policy row names (UnderSpanPolicy.heldKind).
+  barrowheld: {
+    id: 'barrowheld',
+    label: 'Barrowheld',
+    subLabel: 'reached only from below',
+    ring: { color: '#b3a88c' },
+    glyph: { char: '↧', color: '#241c10' },
+    labelColor: '#d8cfb0',
+    keepLevel: true,
+    staticExits: true,
+  },
   // THE INLAND SEA (world/soulriver.ts): every strewn River of Souls wears
   // this — the node reads as WATER on the chart (ship glyph, pale ring,
   // lane-styled roads), the sea-fabric read below ground. The live ferry

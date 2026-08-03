@@ -29,6 +29,7 @@ import '../data/watchposts';
 import '../data/occurrences'; // the 'occurrence' ring tenant + occurrence defs
 import '../data/settled';
 import '../data/garden';
+import '../data/catacombs';
 import '../data/grove';
 import '../data/warfront';
 import '../data/compositions';

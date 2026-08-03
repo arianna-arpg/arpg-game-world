@@ -106,7 +106,7 @@ import { pushOutOfShape, shapeAabbHalf, shapeContains, shapeDistance, type HitSh
 import { projFormNose, projFormTouches } from './projForms';
 import { STRUCTURES } from '../data/structures';
 import { dwellOf, sidezoneOf } from '../data/sidezones';
-import { ROOTWAY_MOUTH_LANDMARK, underSpanPolicyOf } from '../data/underspans';
+import { underSpanPolicyOf } from '../data/underspans';
 import { hollowDef } from '../data/hollows';
 import type { HollowSpec } from './levelgen';
 import { DWELL_CFG, npcDwellReach, transitDwell, transitRadius, transitReach } from '../data/transit';
@@ -8107,11 +8107,13 @@ export class World {
   // A span is ONE under-zone with a mouth in EVERY member node: the seat (the
   // organic mint that rolled it) plus 1..reach partners — standing UNVISITED
   // kin nodes adopted into the span, or FRESH veiled mints (soft: born
-  // under-only, the surface web may find them later; or ROOTHELD: kind-sealed
-  // forever, the set-piece — the way onward exists only below). The record is
+  // under-only, the surface web may find them later; or HELD: sealed forever
+  // under the policy row's own heldKind (rootheld, barrowheld), the
+  // set-piece — the way onward exists only below). The record is
   // ZoneDef.underways rows (a full clique, both directions — reachability
-  // through the web is honest for BFS/webHops) and one forced rootway_mouth
-  // landmark per membership. LAWS: rows spend no road budget (countRoads
+  // through the web is honest for BFS/webHops) and one forced mouth landmark
+  // (the policy row's own kind — the engine carries NO country's shape) per
+  // membership. LAWS: rows spend no road budget (countRoads
   // never sees them), the ring-1 unveil does not cross them (a far mouth
   // stays veiled until WALKED — the forechart's pregen doctrine), heals
   // never touch them (a separate list), and the whole decision is a pure
@@ -8161,18 +8163,19 @@ export class World {
         if (a.id === b.id) continue;
         a.underways = [...(a.underways ?? []), { to: b.id, span: spanId }];
       }
-      a.landmarks = [...(a.landmarks ?? []), { landmark: ROOTWAY_MOUTH_LANDMARK, chance: 1 }];
+      a.landmarks = [...(a.landmarks ?? []), { landmark: pol.mouth, chance: 1 }];
     }
   }
 
   /** Mint one FRESH span partner: veiled, roadless (the under-way is its only
    *  connection at birth), frontier-less, weave-less — `sealed` adds the
-   *  rootheld kind (static exits: the surface may NEVER reach it). Ground is
-   *  hunted on the seat's own biome (a few deterministic tries); a miss
-   *  returns null and the span degrades to standing candidates. */
+   *  policy row's heldKind (a static-exits kind: the surface may NEVER reach
+   *  it). Ground is hunted on the seat's own biome (a few deterministic
+   *  tries); a miss returns null and the span degrades to standing
+   *  candidates. */
   private mintSpanPartner(
     seat: ZoneDef, spanId: string, slot: number, rng: Rng,
-    pol: { radius: number }, sealed: boolean,
+    pol: { radius: number; heldKind: string }, sealed: boolean,
   ): ZoneDef | null {
     const biomeFor = seat.dimension ? this.dimensionBiomeFor(seat.dimension) : this.biomeFor;
     const depthFor = seat.dimension ? this.dimensionBiomeDepthFor(seat.dimension) : this.biomeDepthFor;
@@ -8196,7 +8199,7 @@ export class World {
         climateFor: this.climateFor, fieldBiome: true,
         dimension: seat.dimension,
         noBackEdge: true, noWeave: true, forceFrontiers: 0,
-        ...(sealed ? { kind: 'rootheld' } : {}),
+        ...(sealed ? { kind: pol.heldKind } : {}),
       });
       def.veiled = true; // the far mouth is met as FOUND ground, never shown early
       this.zoneMap[def.id] = def;

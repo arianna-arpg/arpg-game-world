@@ -65,6 +65,7 @@ import '../src/data/watchposts'; // the 'watch_post' ring-tenant kind (court tab
 import '../src/data/occurrences'; // the 'occurrence' ring-tenant kind + the occurrence defs (court tables name them)
 import '../src/data/settled';
 import '../src/data/garden';
+import '../src/data/catacombs';
 import '../src/data/grove';
 import '../src/data/warfront';
 import '../src/data/compositions';
