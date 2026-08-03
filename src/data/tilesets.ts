@@ -1241,26 +1241,63 @@ export const TILESETS: Record<string, TilesetDef> = {
       massifPlaceTries: { byDepth: [90, 130] },
       massifPortalClear: 260,
       tierPackSplit: 0.45,
+      // The tops wear the country too (the recipe's default kit restated
+      // whole — an override replaces wholesale): summit stone, the gold
+      // sward gone to seed up where the wind combs it, and the odd kit
+      // some climber never came back for.
+      tierKit: [
+        { kind: 'rock', count: [2, 5], radius: [12, 22] },
+        { kind: 'veld_grass', count: [2, 4], radius: [14, 24] },
+        { kind: 'spelunker_pack', count: [0, 2], radius: [10, 13] },
+      ],
     },
-    layout: [
-      { kind: 'rocks', count: [4, 7], radius: [16, 32] },
-      { kind: 'scree', count: [3, 5] },
-      { kind: 'brush', count: [2, 4] },
-      { kind: 'grass', count: [3, 5] },
-      { kind: 'dead_tree', count: [1, 3] },
+    // THE SAVANNAH WARDROBE (planned pass #14b, data/compositions.ts kit):
+    // the dress stops guesting the mountain family — gold sward (veld_grass),
+    // sight-eating tall-grass stands (spear_grass — the crop-veil law worn
+    // wild; the pard's WILDLIFE row seats it by these), lone flat-crowned
+    // camelthorns, sun-baked clay pans and termite-worked spires between the
+    // tables. Bleached snags and tor stones stay — dead wood and old stone
+    // belong to every dry country. The wardrobe rides COMMON (the brittle-kit
+    // lesson, lived: with a variants list every mint rolls a FACE, and rows
+    // wired only into the base layout never mint — the cave mouths and tor
+    // stones below had been dead on the live path since the wind gaps were
+    // authored; common is "what the biome always IS").
+    common: [
+      { kind: 'veld_grass', count: [3, 5] },
+      { kind: 'spear_grass', count: [2, 4] },
+      { kind: 'camelthorn', count: [1, 3] },
+      { kind: 'termite_spire', count: [1, 3] },
+      { kind: 'clay_pan', count: [0, 2] },
       { kind: 'standing_stone', count: [0, 2] },
       { kind: 'cave', count: [0, 1] },
     ],
+    // The base layout: the press face's structure rows (genqa's base case +
+    // the direct-generateLayout consumers walk this; live mints deal the
+    // variants below, which restate it as 'the standing tables').
+    layout: [
+      { kind: 'rocks', count: [4, 7], radius: [16, 32] },
+      { kind: 'scree', count: [2, 4] },
+      { kind: 'dead_tree', count: [1, 2] },
+    ],
     variants: [
+      // The standing tables: the press face AS A ROLLED FACE — no dial
+      // overrides, so the depth-graded ramps above finally mint on the live
+      // path (with only the wind gaps in this list, every needles zone wore
+      // the gaps and the byDepth press never left the bench).
+      { name: 'the standing tables', layout: [
+        { kind: 'rocks', count: [4, 7], radius: [16, 32] },
+        { kind: 'scree', count: [2, 4] },
+        { kind: 'dead_tree', count: [1, 2] },
+      ] },
       // The wind gaps: fewer, grander tables — the spans carry the read.
       // Its FLAT coverage/sizeR beat the base ramps per-key (the variant
       // merge), so the face keeps its sparse grandeur at every depth; the
-      // lane/body-budget ramps still press through inheritance.
+      // lane/body-budget ramps still press through inheritance. Structure
+      // rows only — the wardrobe arrives via common on every face.
       { name: 'the wind gaps', layout: [
         { kind: 'rocks', count: [3, 5], radius: [16, 30] },
         { kind: 'scree', count: [2, 4] },
         { kind: 'dead_tree', count: [2, 4] },
-        { kind: 'grass', count: [2, 4] },
       ], layoutParams: {
         massifMasses: [{ kind: 'butte', weight: 1 }],
         massifCoverage: [0.16, 0.22], massifSizeR: [260, 380],
@@ -1268,15 +1305,27 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     packs: {
       count: [5, 7], size: [3, 5],
+      // The savannah's own war: jackal packs run the low tables (the guested
+      // plains wolf replaced), baboon troops KEEP the rims (post — the tier
+      // split seats them aloft, hurl_debris trades through the rim-duel law),
+      // and the warband's marksmen join as the country deepens — the gnolls
+      // already hold the moot here (data/lairs.ts).
       table: [
         { id: 'crag_condor', weight: 3 },
         { id: 'gnoll_prowler', weight: 2 },
-        { id: 'plains_wolf', weight: 1.5, presence: { to: 12, fadeOut: 5 } },
+        { id: 'mesa_baboon', weight: 2 },
+        { id: 'pan_jackal', weight: 1.5, presence: { to: 14, fadeOut: 6 } },
+        { id: 'gnoll_longshot', weight: 1.2, presence: { from: 4, fadeIn: 3 } },
         { id: 'brute', weight: 1.5, presence: { from: 5, fadeIn: 3 } },
         { id: 'basilisk', weight: 1, presence: { from: 7, fadeIn: 3 } },
         { id: 'stone_sentinel', weight: 1, presence: { from: 10, fadeIn: 5 } },
       ],
     },
+    // The one gathering place: the baked pan in its ring of tall grass —
+    // where the herd waters and the grass watches back.
+    compositions: [
+      { composition: 'grazing_pan', chance: 0.3 },
+    ],
     spawnerId: 'bone_altar',
     objectives: [
       { kind: 'clear', weight: 3 },

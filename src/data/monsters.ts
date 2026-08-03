@@ -1484,12 +1484,17 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'salt_ibex', chance: 0.4, count: [2, 3] },
   ],
   // THE BUTTELAND (the needle country — its own biome since the tier pass):
-  // valley life below, and THE TOP-ONLY FLICKER — a scamp that dens where
-  // only the ramps and spans reach, the butte-top treasure that runs.
+  // the savannah wardrobe (planned pass #14b) — the tables stop guesting the
+  // mountain's elk and the meadow's hare. Valley life is a FOOD CHAIN under
+  // the wide sky: the oryx herd wheels as one body (the flocking fabric on
+  // the ground), the pard hunts it FROM the tall grass (the crop-veil law as
+  // an ambush blind — its row seats it by spear_grass), hyraxes bask on the
+  // rim scree, and THE TOP-ONLY FLICKER keeps the summits. Only the hawk is
+  // still a shared guest (one raptor serves many skies — deliberate).
   butteland: [
-    { id: 'taiga_elk', chance: 0.4, count: [2, 3] },
-    { id: 'meadow_hare', chance: 0.45, count: [2, 3] },
-    { id: 'bloodwing_nest', chance: 0.25, count: [1, 2] },
+    { id: 'veld_oryx', chance: 0.6, count: [4, 6] },
+    { id: 'sun_hyrax', chance: 0.5, count: [2, 4] },
+    { id: 'dust_pard', chance: 0.3, count: [1, 1], near: 'spear_grass' },
     { id: 'gore_hawk', chance: 0.15, count: [1, 1] },
     { id: 'gilded_scamp', chance: 0.35, count: [1, 1], tier: 1,
       announce: 'a golden flicker crosses the tabletops above…' },
@@ -20604,6 +20609,136 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'juggernaut', enrage: 0.4,
       behavior: { castArc: 0.7, reaction: [0.3, 0.6] },
+    },
+  },
+
+  // ==========================================================================
+  // THE BUTTELAND WARDROBE (planned pass #14b) — the savannah's own kin. The
+  // Highlands stood in mountain hand-me-downs (taiga elk, meadow hare, the
+  // mountain's dress); these five are the tables' natives, every one a
+  // standing fabric worn as identity and not one new skill minted. The
+  // country's read: a food chain in the gold grass below, a rim watch above.
+  // ==========================================================================
+
+  // THE VELD ORYX — the flocking fabric on the GROUND: the herd is ONE body.
+  // Grazers that wheel, split around a charge and re-knit behind it (the
+  // murmuration steering at walking pace — low weave, no erratic jink: hooves,
+  // not wings). Skittish is the whole personality; the kite budget makes the
+  // chase fair by rhythm. The pard hunts these for a living.
+  veld_oryx: {
+    id: 'veld_oryx', name: 'Veld Oryx',
+    color: '#b8a074', shape: 'oval', radius: 12, material: 'fur', look: 'veld_oryx',
+    base: { life: 30, moveSpeed: 205, evasion: 65, mana: 0 },
+    mods: [mod('detectability', 'more', -0.5)],
+    skills: [], xp: 2, tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.15, drops: 0,
+    scaleVariance: [0.85, 1.2],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 200, duration: [1.4, 2.4] } },
+      perception: { arcDeg: 330, rearMul: 0.9 },
+      move: { style: 'juke', hookEvery: [0.5, 0.9], hookArc: 0.9 },
+      tempo: { kite: 3.4, windedFor: [1.0, 1.6] },
+      behavior: { flock: { kin: 'def', radius: 240, cohesion: 1.15, alignment: 1.3, separation: 0.95, weave: 1.2, erratic: 0.4 } },
+    },
+  },
+  // THE SUN HYRAX — the rim-scree's basker: a stone until it isn't (the
+  // marmot's freeze-fake held sun-drunk long), then a scramble downslope.
+  // Pure texture; the food chain's small change.
+  sun_hyrax: {
+    id: 'sun_hyrax', name: 'Sun Hyrax',
+    color: '#a08662', shape: 'oval', radius: 8, material: 'fur', look: 'sun_hyrax',
+    base: { life: 12, moveSpeed: 190, evasion: 70, mana: 0 },
+    mods: [mod('detectability', 'more', -0.6)],
+    skills: [], xp: 1, tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.15, drops: 0,
+    scaleVariance: [0.8, 1.2],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 170, duration: [1.4, 2.2] } },
+      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.0, freezeChance: 0.5, freeze: [0.7, 1.4] },
+      tempo: { kite: 2.6, windedFor: [0.9, 1.4] },
+    },
+  },
+  // THE DUST PARD — the apex the grass hides: the lynx's patient grammar at
+  // tableland scale, seated BY the spear grass (its WILDLIFE row's `near`),
+  // so the crop-veil law is its ambush blind — the stand that ate your
+  // sightline is exactly where the leap comes from. Hunts the oryx through
+  // hunger drives whether or not you watch; wears the shared predator lean
+  // (HUNGER_LEAN) so the stalk reads before it costs you.
+  dust_pard: {
+    id: 'dust_pard', name: 'Dust Pard',
+    color: '#c8a25e', shape: 'kite', radius: 13, material: 'fur', look: 'dust_pard',
+    base: { life: 85, moveSpeed: 215, accuracy: 112, evasion: 55, mana: 30, manaRegen: 3 },
+    skills: ['crushing_leap', 'claw'],
+    xp: 30, tag: 'predator',
+    faction: 'beast', tags: ['beast'],
+    detection: 1.5, drops: 0,
+    scaleVariance: [0.9, 1.15],
+    tells: HUNGER_LEAN,
+    ambush: { radius: 40 },
+    brain: {
+      type: 'basic',
+      move: { style: 'lurk' },
+      tempo: { moveFor: [0.9, 1.6], pauseFor: [0.4, 0.9] },
+      drives: { hunger: { rise: 0.012, start: [0.3, 0.7], onKill: -0.85 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.55 } },
+        use: { target: { prey: ['critter'], detectMul: 1.3 }, behavior: { seek: { what: 'prey', pace: 0.5 } } },
+      }],
+    },
+  },
+  // THE MESA BABOON — the rim watch: the sentry fabric worn wild. A troop
+  // that KEEPS ITS STATION (post — shoved off the rim, it climbs back to the
+  // exact stone it held), pelting the valley from the tops through the rim-
+  // duel law: sight referees, the ramp is the argument, and the shove is the
+  // counter-argument the long way down. The tier split seats whole troops
+  // aloft; hurl_debris is the standing thrown-rock verb.
+  mesa_baboon: {
+    id: 'mesa_baboon', name: 'Mesa Baboon',
+    color: '#8a7050', shape: 'kite', radius: 12, material: 'fur', look: 'mesa_baboon',
+    base: { life: 55, moveSpeed: 175, accuracy: 100, evasion: 45, mana: 40, manaRegen: 4 },
+    skills: ['hurl_debris', 'claw'],
+    xp: 24,
+    faction: 'wild',
+    detection: 1.2,
+    temper: 'territorial',
+    post: true,
+    packSize: [2, 4],
+    scaleVariance: [0.9, 1.15],
+    brain: {
+      type: 'skirmish', withdraw: 1.2,
+      squad: { onLeaderDeath: 'scatter' },
+      move: { style: 'holdRange', hold: 300 },
+      behavior: { spacing: 34 },
+    },
+  },
+  // THE PAN JACKAL — the wolf-niche in the country's own coat: a smaller,
+  // quicker pack that runs the herds down through the same muster discipline
+  // (pack brain), hungry by drives like every honest predator here. Replaces
+  // the guested plains wolf on the needles tables.
+  pan_jackal: {
+    id: 'pan_jackal', name: 'Pan Jackal',
+    color: '#a88a58', shape: 'kite', radius: 11, material: 'fur', look: 'pan_jackal',
+    base: { life: 30, moveSpeed: 195, accuracy: 98, evasion: 50, mana: 10, manaRegen: 2 },
+    skills: ['claw', 'rend'],
+    xp: 12, tag: 'predator',
+    faction: 'beast', tags: ['beast'],
+    detection: 1.5, drops: 0,
+    packSize: [3, 5],
+    scaleVariance: [0.9, 1.15],
+    tells: HUNGER_LEAN,
+    brain: {
+      type: 'pack',
+      squad: { onLeaderDeath: 'scatter' },
+      behavior: { spacing: 32 },
+      drives: { hunger: { rise: 0.013, start: [0.4, 0.8], onKill: -0.8, share: 0.5 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.55 } },
+        use: { target: { prey: ['critter'], detectMul: 1.25 }, behavior: { seek: { what: 'prey', pace: 0.55 } } },
+      }],
     },
   },
 };

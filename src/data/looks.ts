@@ -9371,6 +9371,66 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'gem', x: -0.35, scale: 0.55, role: 'glow', color: '#e8b860' },
     ],
   },
+
+  // ======================= THE BUTTELAND WARDROBE (data/monsters.ts) ========
+  // The savannah natives, composed from standing part kinds only.
+
+  /** The veld oryx: scimitar horns over a dun hide — the herd's one flank
+   *  stripe is how you count them when they wheel. */
+  veld_oryx: {
+    parts: [
+      { kind: 'disc', scale: 0.95 },
+      { kind: 'ramHorns', scale: 1.45 },
+      { kind: 'hump', x: -0.2, scale: 0.6, alpha: 0.9 },
+      { kind: 'stripes', role: 'dark', alpha: 0.5, params: { n: 2 } },
+      { kind: 'tail', params: { len: 0.5, tuft: true } },
+    ],
+  },
+  /** The sun hyrax: a warm stone with ears — round, ruffed, mostly asleep. */
+  sun_hyrax: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'furRuff', scale: 0.9, alpha: 0.85 },
+      { kind: 'ears', scale: 0.6 },
+      { kind: 'eyes', color: '#2a201a', params: { spread: 0.4, dist: 0.52, size: 0.09 } },
+    ],
+  },
+  /** The dust pard: spots, whiskers, and the long tail that never hurries —
+   *  the grass does the hiding, the leap does the rest. */
+  dust_pard: {
+    parts: [
+      { kind: 'disc', scale: 0.9 },
+      { kind: 'spots', role: 'dark', params: { n: 6 } },
+      { kind: 'ears', scale: 0.7 },
+      { kind: 'whiskers', scale: 0.9 },
+      { kind: 'tail', params: { len: 1.1, tuft: true } },
+      { kind: 'eyes', color: '#e8b840', params: { spread: 0.38, dist: 0.55, size: 0.09 } },
+    ],
+  },
+  /** The mesa baboon: dog-faced under a standing mane, the kinked tail up
+   *  like a standard — the rim watch in session. */
+  mesa_baboon: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.1, seed: 471 } },
+      { kind: 'furRuff', scale: 1.1 },
+      { kind: 'snout', scale: 0.9 },
+      { kind: 'tail', params: { len: 0.8, tuft: true } },
+      { kind: 'eyes', color: '#c87840', params: { spread: 0.34, dist: 0.5, size: 0.09 } },
+    ],
+  },
+  /** The pan jackal: the fox's grammar gone lean and long-eared — the
+   *  saddle stripe is the pack's uniform. */
+  pan_jackal: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'furRuff', scale: 0.85, alpha: 0.9 },
+      { kind: 'stripes', role: 'dark', alpha: 0.6, params: { n: 1 } },
+      { kind: 'snout', scale: 0.85 },
+      { kind: 'ears', scale: 1.1 },
+      { kind: 'tail', params: { len: 0.9, tuft: true } },
+      { kind: 'eyes', color: '#e0a030', params: { spread: 0.4, dist: 0.55, size: 0.08 } },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

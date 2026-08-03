@@ -3399,4 +3399,42 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { points: 7, color: '#141c20', material: 'stone', edgeGlow: { color: '#7ad8d8', alpha: 0.45 } },
   },
 
+  // === THE BUTTELAND WARDROBE (data/compositions.ts kit) ====================
+  // The savannah's dress on standing painters only — the vocabulary doctrine
+  // end to end. Gold where the mountain wears grey-green: sun-cured sward,
+  // the sight-eating tall grass (pale_blade's stalk grammar in dry straw),
+  // the flat-crowned thorn tree, the cracked waterhole floor, and the
+  // termite-worked columns (the salt pillar re-fired in clay).
+  veld_grass: {
+    painter: 'liquid', order: 47,
+    blend: { strength: 0.34, feather: 20, color: '#6a5c30' },
+    params: {
+      core: { color: '#8a7a3c', alpha: 0.22 },
+      tufts: { color: '#a89448', flower: '#e0c060' },
+    },
+  },
+  spear_grass: {
+    painter: 'wheatStalk', order: 47, bakeWhole: 'static',
+    blend: { strength: 0.3, feather: 18, color: '#6a5c30' },
+    params: { stalk: '#a08c50' },
+    canopy: { painter: 'wheatTops', params: { head: '#c8ac5c', tassel: '#e4d08c', tall: 1.15 } },
+  },
+  camelthorn: {
+    longShadow: 1.0,
+    painter: 'trunk', order: 50, bakeWhole: 'static',
+    params: { scale: 0.26, roots: 4, color: '#4a3826' },
+    canopy: { painter: 'leafCrown', params: { fill: '#66703a' } },
+  },
+  clay_pan: {
+    painter: 'liquid', order: 17,
+    blend: { strength: 0.4, feather: 26, color: '#8a6a42' },
+    params: {
+      core: { color: '#a8845a', alpha: 0.28 },
+      blotch: { color: '#755434' },
+    },
+  },
+  termite_spire: {
+    painter: 'saltPillar', order: 52, shadow: 0.5, longShadow: 1.1,
+    params: { salt: '#9a6b40' },
+  },
 };

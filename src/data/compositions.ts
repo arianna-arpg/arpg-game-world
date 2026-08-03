@@ -27,7 +27,9 @@
 // genqa.ts (the three-way "same game headless" contract).
 // ---------------------------------------------------------------------------
 
-import { registerComposition } from '../engine/levelgen';
+import {
+  registerCluster, registerComposition, registerDoodadRule, registerStamp, stampSingle,
+} from '../engine/levelgen';
 
 // A STONE SANCTUM: an open glade ringed by worked menhirs — a fight arena the
 // composition promises (the clearing keeps the scatter out; the stones keep
@@ -726,4 +728,84 @@ registerComposition({
     // pack when approached or wounded. The warband's camps read by it.
     { kind: 'landmark', landmark: 'gnasher_pen', count: [1, 1] },
   ],
+});
+
+// === THE BUTTELAND WARDROBE (the savannah kit) ===============================
+// The Highlands' own dress — the butte country stops guesting the mountain
+// wardrobe (planned pass #14b). Five kinds, ZERO new painters (the vocabulary
+// doctrine: every look is a standing painter re-dressed in the tableland's
+// gold), registered here beside the composition that stages them so the
+// three-way headless contract (main / sim / genqa) sees one kit.
+//
+//   veld_grass    — the gold sward: the meadow grammar (liquid painter) in
+//                   sun-cured straw. Walk-through ground, burns like grass.
+//   spear_grass   — THE TALL GRASS: the crop-veil law worn wild (wheat's
+//                   exact contract — walk-through, shoot-through,
+//                   sight-eating; its own veil group so a wild stand never
+//                   fuses with a farm's wheat). The pard hunts from it.
+//   camelthorn    — the flat-crowned thorn tree: trunk + leafCrown in dusty
+//                   olive, the conifer rule's walk-under body.
+//   clay_pan      — the sun-baked waterhole floor: a broad cracked-clay
+//                   ground stain (mud's grammar, dried out).
+//   termite_spire — the worked-earth cathedral: the salt pillar's wind-cut
+//                   column re-fired in clay; see over it, never through it
+//                   on foot.
+
+registerDoodadRule('veld_grass', { overlap: 'ground', fuel: 'kindling' });
+registerDoodadRule('spear_grass', {
+  overlap: 'inert', blocksMove: false, blocksShot: false, blocksSight: true,
+  spacing: 20, walkOnly: true, spin: true,
+  occlude: { pad: 10, alpha: 0.32 },
+  veil: { group: 'veld', standStatus: 'canopied' },
+  fuel: 'kindling',
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
+});
+registerDoodadRule('camelthorn', {
+  overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24,
+  occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26, veil: {}, fuel: 'timber',
+});
+registerDoodadRule('clay_pan', {
+  overlap: 'ground', walkOnly: true,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
+});
+registerDoodadRule('termite_spire', {
+  overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 48, bodyScale: 0.7,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
+});
+
+registerStamp('veld_grass', stampSingle('veld_grass', [26, 40]));
+registerStamp('spear_grass', stampSingle('spear_grass', [24, 38]));
+registerStamp('camelthorn', stampSingle('camelthorn', [18, 30]));
+registerStamp('clay_pan', stampSingle('clay_pan', [40, 62]));
+registerStamp('termite_spire', stampSingle('termite_spire', [11, 17]));
+
+// THE PAN COURT: the waterhole huddle — the pan itself at the heart (the
+// centerpiece license: the clearing exists FOR it), the grass banks and the
+// worked spires holding the rim, the predators' leavings between. The herd
+// finds it on its own: wildlife needs no row here (the pard's WILDLIFE row
+// seats it by spear_grass wherever the grass stands, pan or no pan).
+registerCluster({
+  id: 'pan_court',
+  anchor: { radius: 70, kind: 'clay_pan' },
+  pieces: [
+    { kind: 'clay_pan', radius: [46, 60], count: [1, 1], ring: [0, 8], centerpiece: true },
+    { kind: 'spear_grass', radius: [24, 36], count: [2, 4], ring: [64, 130], packed: true, rot: true },
+    { kind: 'veld_grass', radius: [16, 26], count: [2, 4], ring: [60, 140] },
+    { kind: 'termite_spire', radius: [11, 17], count: [2, 4], ring: [80, 150], rot: true },
+    { kind: 'camelthorn', radius: [18, 28], count: [1, 2], ring: [86, 150], rot: true },
+    { kind: 'bone_pile', radius: [10, 14], count: [0, 2], ring: [62, 110], rot: true },
+  ],
+  poi: true,
+});
+
+// THE GRAZING PAN: the tableland's one gathering place as ONE authored idea —
+// a baked pan on swept ground, ringed by the tall grass that makes drinking
+// dangerous. Numeric contract: clearing ≤ 58; solid ring pieces start at 80
+// with radius ≤ 28 (80 − 28 = 52 — solids may kiss the clearing rim but the
+// centerpiece pan keeps the floor), grass bands from 60 out.
+registerComposition({
+  id: 'grazing_pan',
+  sites: [{ id: 'pan', radius: [120, 160] }],
+  pre: [{ kind: 'clearing', at: 'pan', count: [1, 1], radius: [44, 58] }],
+  post: [{ kind: 'cluster', cluster: 'pan_court', at: 'pan', count: [1, 1] }],
 });
