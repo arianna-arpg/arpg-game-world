@@ -127,9 +127,59 @@ directions).
 saves load to clean defaults; malformed entries drop per-record, never a
 wipe — the deaths idiom). Schema version unchanged.
 
+## The tinted services (wave two)
+
+**Tinted holdfast tolls** (`packages/holdfast.ts UnlockSpec.tint`): a gate
+may accept ONE essence and no other — the toll number reads as units of
+that tint ("4× Pristine Essence"), spoken everywhere through
+`holdfastTollLabel` (keeper prompt, refusal, zone-info ask). The pocket
+answers in kind: `PocketSpec.cacheRarity` (per-form-roll override
+available) bakes onto the minted `ZoneDef.cacheRarity`, rides the staked
+chest (`Chest.rarity`), and the lid pays one rolled GEAR piece at exactly
+that rarity on top of the gem pay — the essence↔rarity canon spoken from
+both sides of the gate. Debuts: the **Gilded Toll** (brilliant → rare
+steel, level 10+) and the **Sovereign Toll** (pristine → a guaranteed
+unique, level 20+). The plain bandit/durance gates keep the mixed wallet.
+
+**The veteran's coin** (`MERC_CFG.retiredTint`): a RETIRED blade — a
+player-made character offered back — prices in one fine essence: the ME
+cost converts to units via `essenceUnitsForValue` (ceil, floored at 1) and
+only that tint pays; templates keep the mixed wallet. Refused fields refund
+their own tint exactly. Port restorations stay mixed-wallet (infrastructure
+takes any coin).
+
+## The click/hold seam (invest QoL)
+
+"Unlock" is the button's one word (`INVEST_CFG.holdDelayMs`): a press
+released inside the window is a CLICK — outright unlock when the pool
+covers the remainder, a "hold to invest" pointer when it doesn't; held past
+the window it becomes THE POUR, the quiet investing fallback that also
+serves a short pool. Keyboard/pad activation (detail-0 clicks) mirrors the
+law holdlessly: covered → unlock; short → invest everything carried in one
+deliberate step.
+
+## The skill graft (kind 'graft')
+
+The repeatable charge — the veteran's essence valve. `skill_graft`
+(cost `SKILL_GRAFT_COST`) sits behind the Grand Codex; buying arms
+`Account.skillGraft` and the entry STANDS DOWN while armed (never "owned" —
+`isUnlockOwned` is false by construction, so `applyUnlock`'s verdict is
+"the pour completed", not ownership). At the next run's start
+(`main.ts startPicked`), the pick screen (`showSkillGraftPick`) offers
+every skill the account's drop pool truly holds (`isSkillUnlockedForDrop`,
+`noDrop` excluded — the blue-mage/bestiary discipline); a deliberate
+selection rides into `startGame`, and `World.applySkillGraft` mints the
+plainest cut (`makeSkillGem(def, 1, 'common')`) — learned and barred where
+the young body meets its asks and holds a free seat, packed where it
+cannot; a kit that already knows the skill banks the spare. The charge
+spends as the run begins (before the baseline save); declining keeps it
+armed for a later run.
+
 ## Probe
 
 `balance/probe_reckoning.ts` (fast lane) pins all of it: the change law,
 value conservation, the brief's own 100-coarse + 20-pristine = 200 example,
 invest/applyUnlock compatibility, the 1-essence first exchange, the seal,
-the chronicle's protected cap, and the save round-trip.
+the chronicle's protected cap, the save round-trip — and wave two: the
+tinted gates' enrollment + canon-true caches, the veteran-coin conversion,
+and the graft's full arm → stand-down → consume → re-shelve cycle.

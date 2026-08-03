@@ -23,6 +23,8 @@
 
 import type { ExitRoadSpec } from '../data/zones';
 import type { PostSpec } from '../engine/brain';
+import { ESSENCES, type EssenceId } from '../data/essences';
+import type { ItemRarity } from '../engine/items';
 
 /** HOW a holdfast opens. Implemented: 'pay-currency' (currency 'mortal') and
  *  'pay-gem' (random-take); the rest are typed for the data model (a future
@@ -38,11 +40,19 @@ export interface UnlockSpec {
   payment?: 'random-take';
   /** pay-gem: which loose gem pool to take from (default 'support'). */
   gemKind?: 'support' | 'skill';
-  /** pay-currency: which purse pays. 'mortal' = the ACCOUNT's Mortal Essence
-   *  (the roguelite meta-currency — a true mid-run essence dump); 'offerings'/
-   *  'echoes' typed for future tolls. Toll = cost + costPerLevel × zoneLevel
-   *  (holdfastTollCost — the whole curve is data on the def). */
+  /** pay-currency: which purse pays. 'mortal' = the run's CARRIED ESSENCE at
+   *  the mortal exchange (data/essences.ts — the paying seat's wallet, mixed
+   *  tints at their strict rates); 'offerings'/'echoes' typed for future
+   *  tolls. Toll = cost + costPerLevel × zoneLevel (holdfastTollCost — the
+   *  whole curve is data on the def). */
   currency?: 'mortal' | 'offerings' | 'echoes';
+  /** THE TINTED TOLL (currency 'mortal' only): the wardens accept ONE essence
+   *  and no other — the toll number reads as UNITS OF THAT TINT ("4 Pristine
+   *  Essence"), not mixed wallet value. A tinted gate is a fine-grained ask
+   *  whose pocket answers in kind (PocketSpec.cacheRarity — the essence↔
+   *  rarity canon: brilliant gates guard rare steel, pristine gates guard a
+   *  unique). Absent = the mixed-wallet toll. */
+  tint?: EssenceId;
   cost?: number;
   costPerLevel?: number;
   /** cull-faction (future): slay N of this faction IN this zone to open. */
@@ -61,12 +71,24 @@ export function unlockImplemented(u: UnlockSpec): boolean {
   return false;
 }
 
-/** The Mortal-Essence toll a pay-currency guardian asks at a zone level:
- *  cost + costPerLevel × level, floored at 1. Pure def math — the prompt,
- *  the pay path, and the zone-info panel all price through this one gate. */
+/** The toll a pay-currency guardian asks at a zone level: cost +
+ *  costPerLevel × level, floored at 1. UNITS follow the def: Mortal Essence
+ *  of mixed wallet value, or — under UnlockSpec.tint — units of that one
+ *  essence. Pure def math — the prompt, the pay path, and the zone-info
+ *  panel all price through this one gate. */
 export function holdfastTollCost(def: HoldfastDef, zoneLevel: number): number {
   const u = def.unlock;
   return Math.max(1, Math.round((u.cost ?? 0) + (u.costPerLevel ?? 0) * Math.max(1, zoneLevel)));
+}
+
+/** The toll's spoken price — ONE formatter for the keeper prompt, the
+ *  refusal, and the zone-info ask, so a tinted gate can never be quoted in
+ *  the wrong coin. `mortalLabel` is META_CURRENCY_LABEL (passed in so this
+ *  leaf never imports the meta layer). */
+export function holdfastTollLabel(def: HoldfastDef, zoneLevel: number, mortalLabel: string): string {
+  const n = holdfastTollCost(def, zoneLevel);
+  const tint = def.unlock.tint;
+  return tint ? `${n}× ${ESSENCES[tint].label}` : `${n} ${mortalLabel}`;
 }
 
 export interface RewardSpec {
@@ -88,6 +110,8 @@ export interface PocketFormRoll {
   bounty?: number;
   /** Per-shape feature floors (merged with the form's own and the flat spec's). */
   features?: { kind: string; min: number; max?: number }[];
+  /** Per-shape cache-rarity floor (wins over the flat spec's). */
+  cacheRarity?: ItemRarity;
 }
 
 /** WHAT the earned ground is like — the pocket's mint-time enrichment, all
@@ -118,6 +142,13 @@ export interface PocketSpec {
   /** Force the pocket's tileset (default: the heat-map biome at its coord —
    *  the hidden road grows from its own country). */
   tileset?: string;
+  /** THE THEMED CACHE: the pocket's staked chest also yields one rolled GEAR
+   *  piece AT this rarity (baked onto the minted ZoneDef, read at the chest's
+   *  opening). The tinted-toll answer: a gate that asks Pristine Essence
+   *  guards a UNIQUE under its chest lid — the essence↔rarity canon
+   *  (ESSENCE_OF_RARITY) spoken from the reward side. Absent = the chest's
+   *  ordinary gem pay alone. */
+  cacheRarity?: ItemRarity;
 }
 
 /** WHO holds the gate. The guards are NEUTRAL until provoked — a wounding strike
@@ -293,11 +324,65 @@ export const DURANCE_TITHEGATE: HoldfastDef = {
   marker: { glyph: '⚑', color: '#7de84a' },
 };
 
+// --- THE TINTED TOLLS: gates that name their coin -------------------------------
+//
+// The mixed-wallet toll asks VALUE; a tinted toll asks a SPECIFIC essence and
+// answers in kind — the pocket's staked chest carries gear of the tint's own
+// rarity (the essence↔rarity canon, spoken from both sides of the gate).
+// Same bandit fabric, richer crews' colors on the map: each marker wears its
+// essence's registry color, so the ask reads at map grain before you walk.
+
+/** THE GILDED TOLL — mid-country wardens who take only BRILLIANT essence.
+ *  What they camp over answers the coin: the staked chest holds RARE steel. */
+export const GILDED_TOLLGATE: HoldfastDef = {
+  id: 'gilded_tollgate', name: 'Gilded Toll',
+  gate: 'toll_gate', guardian: BANDIT_GUARDIAN,
+  road: { chance: 0.8, from: 'entry', overgrowth: 0 },
+  unlock: { kind: 'pay-currency', currency: 'mortal', tint: 'brilliant', cost: 3, costPerLevel: 0.5 },
+  reward: { kind: 'open-exit', destLevelDelta: 0 },
+  // Hoard-leaning: a tinted toll buys a strongroom more often than a country.
+  pocket: {
+    forms: [
+      { form: 'hoard', weight: 2 },
+      { form: 'delve', weight: 1, features: [{ kind: 'cave', min: 1 }] },
+    ],
+    bounty: 2.5,
+    cacheRarity: 'rare',
+  },
+  sealedHint: 'the gilded gate takes one coin only: Brilliant Essence, counted out by the point',
+  weight: 1, minLevel: 10, slaughterOpensChance: 0.1,
+  marker: { glyph: '⚑', color: ESSENCES.brilliant.color },
+};
+
+/** THE SOVEREIGN TOLL — deep-country wardens who take only PRISTINE essence.
+ *  The answer under the lid is the canon's crown: a UNIQUE, guaranteed. */
+export const SOVEREIGN_TOLLGATE: HoldfastDef = {
+  id: 'sovereign_tollgate', name: 'Sovereign Toll',
+  gate: 'toll_gate', guardian: BANDIT_GUARDIAN,
+  road: { chance: 0.8, from: 'entry', overgrowth: 0 },
+  unlock: { kind: 'pay-currency', currency: 'mortal', tint: 'pristine', cost: 2, costPerLevel: 0.25 },
+  reward: { kind: 'open-exit', destLevelDelta: 0 },
+  // Nearly always the strongroom — a unique's price buys certainty, not acreage.
+  pocket: {
+    forms: [
+      { form: 'hoard', weight: 3 },
+      { form: 'delve', weight: 1, features: [{ kind: 'cave', min: 1 }] },
+    ],
+    bounty: 3,
+    cacheRarity: 'unique',
+  },
+  sealedHint: 'the sovereign gate weighs only Pristine Essence — and what it guards is one of a kind',
+  weight: 0.6, minLevel: 20, slaughterOpensChance: 0.06,
+  marker: { glyph: '⚑', color: ESSENCES.pristine.color },
+};
+
 /** The guardian registry (the open seam — a Goblin cave-camp, a temple gate, or
  *  a seraphic VIGIL over a sky-geyser pocket (dims:['aetherial'], features:
  *  [{kind:'sky_geyser',min:1}]) are future literals here, each pure data once
  *  its gate row + guardian roster exist). */
-export const HOLDFAST_DEFS: HoldfastDef[] = [BANDIT_TOLLGATE, DURANCE_TITHEGATE];
+export const HOLDFAST_DEFS: HoldfastDef[] = [
+  BANDIT_TOLLGATE, DURANCE_TITHEGATE, GILDED_TOLLGATE, SOVEREIGN_TOLLGATE,
+];
 
 export const HOLDFAST_SURGE: HoldfastSurge = {
   // RARE by design: a holdfast is a find, not furniture — ~1 in 11 uncharted

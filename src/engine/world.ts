@@ -42,12 +42,12 @@ import { evalCurve, type CurveKind } from './curves';
 import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
 import { compileItemMods, itemLevelReq, rebuildItem, rollItem } from './itemgen';
 import {
-  ESSENCES, ESSENCE_IDS, ESSENCE_SPILL_CFG, LEDGER_ESSENCE_TOUCHED, rollSpillPacket,
-  skillLevelEssenceCost, spendWalletMortalValue, spillBudget, VENDOR_ESSENCE_PRICE,
-  VENDOR_ITEM_CFG, VENDOR_SUPPORT_PRICE, walletBreakdown, walletMortalValue,
+  ESSENCES, ESSENCE_IDS, ESSENCE_SPILL_CFG, essenceUnitsForValue, LEDGER_ESSENCE_TOUCHED,
+  rollSpillPacket, skillLevelEssenceCost, spendWalletMortalValue, spillBudget,
+  VENDOR_ESSENCE_PRICE, VENDOR_ITEM_CFG, VENDOR_SUPPORT_PRICE, walletBreakdown, walletMortalValue,
   type EssenceCost, type EssenceId, type EssenceSpillSpec,
 } from '../data/essences';
-import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemInstance } from './items';
+import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemInstance, type ItemRarity } from './items';
 import { DROP_CFG, GEM_DROP_CFG, resolveLootTable, rollVestigeId } from './loot';
 import { epitaphFor, VESTIGES } from '../data/vestiges';
 import { MONSTER_THEMES } from '../data/infrequents';
@@ -264,7 +264,7 @@ import type { SwarmInfo, SwarmingSurge } from '../packages/overlays/swarming';
 import type { BrigandInfo, BrigandSurge } from '../packages/overlays/brigands';
 import type { FractureCapstone, FractureSurge } from '../packages/overlays/fractures';
 import { INCURSION_ARCHETYPES, type IncursionArchetype } from '../packages/overlays/incursion';
-import { holdfastTollCost, type GuardianSpec, type PocketSpec } from '../packages/holdfast';
+import { holdfastTollCost, holdfastTollLabel, type GuardianSpec, type PocketSpec } from '../packages/holdfast';
 import { pocketFormOf, DEFAULT_POCKET_FORM, type PocketFormDef } from '../data/pocketForms';
 import { lordDef } from '../packages/lords';
 import { allEncounterSpecs, allFurnishSpecs, packageSeed } from '../packages/registry';
@@ -360,6 +360,10 @@ export interface Chest {
   /** timed: seconds of standing presence left to pick the lock. */
   lockTime: number;
   maxLock: number;
+  /** THE THEMED CACHE (PocketSpec.cacheRarity → ZoneDef.cacheRarity): the
+   *  lid also yields one rolled GEAR piece at exactly this rarity — a tinted
+   *  toll's promised answer (pristine gate → a unique). Absent = gems only. */
+  rarity?: ItemRarity;
 }
 
 /** An activatable one-shot buff pillar. */
@@ -5640,6 +5644,9 @@ export class World {
           pos: this.clampPos(vec(at.x, at.y), 14),
           kind: pform.chest, mimic: false, opened: false,
           lockTime: pform.chest === 'timed' ? 3 : 0, maxLock: pform.chest === 'timed' ? 3 : 0,
+          // THE THEMED CACHE: a tinted toll's promised gear rarity rides the
+          // staked chest (ZoneDef.cacheRarity, baked at the pocket mint).
+          ...(def.cacheRarity ? { rarity: def.cacheRarity } : {}),
         });
       }
     }
@@ -8458,12 +8465,16 @@ export class World {
    *  tileset layout arrays are shared literals, never mutated. */
   private applyPocketSpec(
     gen: ZoneDef, form: PocketFormDef,
-    roll: { bounty?: number; features?: { kind: string; min: number; max?: number }[] },
+    roll: { bounty?: number; features?: { kind: string; min: number; max?: number }[]; cacheRarity?: ItemRarity },
     pocket: PocketSpec | undefined,
   ): void {
     const bounty = Math.max(form.bounty ?? 0, roll.bounty ?? 0, pocket?.bounty ?? 0);
     if (bounty > 0) gen.bounty = bounty;
     if (form.packDensity !== undefined) gen.packDensity = form.packDensity;
+    // THE THEMED CACHE: the guardian's promised chest rarity rides the minted
+    // def (row override wins) — loadZone's staked chest reads it back.
+    const cr = roll.cacheRarity ?? pocket?.cacheRarity;
+    if (cr) gen.cacheRarity = cr;
     const feats = [...(form.features ?? []), ...(roll.features ?? []), ...(pocket?.features ?? [])];
     if (feats.length) {
       const rows = [...gen.layout];
@@ -12872,17 +12883,30 @@ export class World {
     const u = gdef.unlock;
     if (u.kind === 'pay-currency' && u.currency === 'mortal') {
       // THE MORTAL EXCHANGE: the toll drains the PAYING seat's carried
-      // essence at the strict rates (mortalValueOf/spendMortalValue) — any
-      // seat may treat from its own wallet now that the purse is the carry,
-      // not the host's account.
+      // essence — any seat may treat from its own wallet now that the purse
+      // is the carry, not the host's account. A TINTED gate (UnlockSpec.tint)
+      // accepts ONE essence and no other, counted in that tint's own units;
+      // the plain gate takes mixed wallet value at the strict rates.
       const cost = holdfastTollCost(gdef, this.zone.level);
-      if (this.mortalValueOf(seat) < cost) {
-        this.text(seat.actor.pos,
-          `the wardens want essence worth ${cost} ${META_CURRENCY_LABEL} — come back richer`, '#d05050', 13);
-        return false;
+      const ask = holdfastTollLabel(gdef, this.zone.level, META_CURRENCY_LABEL);
+      if (u.tint) {
+        if ((seat.meta.essences[u.tint] ?? 0) < cost) {
+          this.text(seat.actor.pos,
+            `the wardens take only ${ESSENCES[u.tint].label} — ${ask}, counted out`, '#d05050', 13);
+          return false;
+        }
+        if (!this.spendEssence(seat, { essence: u.tint, count: cost }, 'holdfast:toll')) return false;
+        this.markMetaDirty(seat);
+        if (seat === this.localSeat && !this.clientActionHook) saveCharacter(this);
+      } else {
+        if (this.mortalValueOf(seat) < cost) {
+          this.text(seat.actor.pos,
+            `the wardens want essence worth ${cost} ${META_CURRENCY_LABEL} — come back richer`, '#d05050', 13);
+          return false;
+        }
+        if (!this.spendMortalValue(seat, cost, 'holdfast:toll')) return false;
       }
-      if (!this.spendMortalValue(seat, cost, 'holdfast:toll')) return false;
-      this.text(keeper.pos, `the wardens take ${cost} ${META_CURRENCY_LABEL} in essence`, gdef.marker?.color ?? '#c8a04a', 14);
+      this.text(keeper.pos, `the wardens take ${ask}`, gdef.marker?.color ?? '#c8a04a', 14);
       this.openHoldfastExit('the toll is paid — the gate opens!');
       return true;
     }
@@ -12939,7 +12963,7 @@ export class World {
     const gdef = site ? this.sim.holdfastField?.def(site.defId) : null;
     const u = gdef?.unlock;
     const price = gdef && u?.kind === 'pay-currency' && u.currency === 'mortal'
-      ? `${holdfastTollCost(gdef, this.zone.level)} ${META_CURRENCY_LABEL}`
+      ? holdfastTollLabel(gdef, this.zone.level, META_CURRENCY_LABEL)
       : 'a gem';
     const pitch = site ? this.holdfastPocketPitch(site.zoneId, site.lockId) : null;
     return {
@@ -19835,6 +19859,33 @@ export class World {
     return true;
   }
 
+  /** THE SKILL GRAFT (meta/unlocks.ts kind 'graft' — the armed Vault charge,
+   *  spent as a run begins): mint the chosen skill at its PLAINEST CUT
+   *  (level 1, common — makeSkillGem, the one mint every granted gem
+   *  shares) into the local hero's kit. Learned outright — and bound to the
+   *  first free bar seat — where the young body meets its asks and holds a
+   *  free slot; otherwise the gem waits in the pack, still the run's from
+   *  first breath. A kit that already knows the skill banks the gem as a
+   *  spare (sockets, the font, a trade — a graft is never a dead letter). */
+  applySkillGraft(skillId: string): boolean {
+    const def = SKILLS[skillId];
+    if (!def) return false;
+    const seat = this.localSeat;
+    const m = seat.meta;
+    const gem = makeSkillGem(def, 1, 'common');
+    m.skillInv.push(gem);
+    if (!m.knownSkills.has(skillId) && this.learnSkill(m.skillInv.length - 1, seat)) {
+      const bar = seat.actor.skills;
+      const free = bar.findIndex(s => s === null);
+      if (free >= 0) this.bindSkill(free, skillId, seat);
+    }
+    this.recalcSeat(seat);
+    this.markMetaDirty(seat);
+    this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 30),
+      `${def.name} rides with you — the graft takes`, '#7fe0d8', 14);
+    return true;
+  }
+
   /** THE FIELD DISCIPLINE (engine/skills.ts SWAP_DISCIPLINE_CFG): the reason
    *  loadout surgery refuses RIGHT NOW, or null when the hands are free.
    *  ONE predicate serves the engine gates and the panels' disabled buttons,
@@ -22789,7 +22840,19 @@ export class World {
       return false;
     }
     const cost = this.mercHireCost(offer);
-    if (this.mortalValueOf(seat) < cost) {
+    // THE VETERAN'S COIN (MERC_CFG.retiredTint): a player-made blade is
+    // priced in ONE fine-grained essence — the ME cost converts to units at
+    // the mortal exchange (essenceUnitsForValue) and only that tint pays.
+    // Template sellswords keep the mixed-wallet price.
+    const tint = offer.kind === 'retired' ? MERC_CFG.retiredTint : null;
+    const tintUnits = tint ? essenceUnitsForValue(tint, cost) : 0;
+    if (tint) {
+      if ((seat.meta.essences[tint] ?? 0) < tintUnits) {
+        this.text(vec(this.player.pos.x, this.player.pos.y - 30),
+          `A veteran's contract is inked in ${ESSENCES[tint].label}: ${tintUnits}× wanted.`, '#c8b048', 13);
+        return false;
+      }
+    } else if (this.mortalValueOf(seat) < cost) {
       this.text(vec(this.player.pos.x, this.player.pos.y - 30),
         `The captain wants essence worth ${cost} ${META_CURRENCY_LABEL}.`, '#c8b048', 13);
       return false;
@@ -22800,12 +22863,21 @@ export class World {
     if (!snapshot) return false;
     const ref = offer.kind === 'retired' ? { mercId: offer.refId } : { templateId: offer.refId };
     // Pay first (the wallet was checked this same frame — this cannot
-    // refuse), then field; a refused field hands EXACT change back (the
-    // change law: a coarse refund is value-perfect).
-    if (!this.spendMortalValue(seat, cost, 'merc:hire')) return false;
+    // refuse), then field; a refused field hands EXACT change back — the
+    // tinted lane refunds its own tint, the wallet lane coarse (the change
+    // law makes both value-perfect).
+    if (tint) {
+      if (!this.spendEssence(seat, { essence: tint, count: tintUnits }, 'merc:hire')) return false;
+      this.markMetaDirty(seat);
+      if (seat === this.localSeat && !this.clientActionHook) saveCharacter(this);
+    } else if (!this.spendMortalValue(seat, cost, 'merc:hire')) {
+      return false;
+    }
     const mercSeat = this.spawnMercSeat(snapshot, offer.name, ref);
     if (!mercSeat) {
-      this.grantEssence(seat, { essence: 'coarse', count: cost });
+      this.grantEssence(seat, tint
+        ? { essence: tint, count: tintUnits }
+        : { essence: 'coarse', count: cost });
       return false;
     }
     if (offer.kind === 'retired') engageMerc(this.account, offer.refId, this.meta.charId);
@@ -44595,6 +44667,16 @@ export class World {
     c.opened = true;
     this.dropGemAt(c.pos);
     this.dropGemAt(c.pos);
+    // THE THEMED CACHE (Chest.rarity — a tinted toll's promise): one rolled
+    // GEAR piece at exactly that rarity, on top of the ordinary gem pay.
+    // Spoils-sealed ground still seals it (dropGearAt rides the same law).
+    if (c.rarity) {
+      const item = rollItem({ ilvl: Math.max(1, this.zone.level), rarityWeights: { [c.rarity]: 1 } });
+      if (item) {
+        this.dropGearAt(vec(c.pos.x, c.pos.y + 8), item);
+        this.text(vec(c.pos.x, c.pos.y - 38), `${ITEM_RARITIES[c.rarity].label} spoils!`, ITEM_RARITIES[c.rarity].color, 13);
+      }
+    }
     for (let i = 0; i < 2; i++) {
       this.shedOrb(chance(0.5) ? 'life' : 'mana', c.pos, { scatter: 22, life: 14 });
     }

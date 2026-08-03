@@ -354,6 +354,12 @@ export interface Account {
    *  too dear for one run's harvest is bought across several; the entry is
    *  deleted the moment the unlock completes. */
   invested: Record<string, number>;
+  /** THE SKILL GRAFT (unlocks.ts kind 'graft'): a REPEATABLE charge — armed
+   *  by purchase, spent when a new run BEGINS with a grafted skill chosen
+   *  (main.ts startGame → World.applySkillGraft). While armed, the run-start
+   *  flow offers the pick and the Vault entry stands down; consumed, the
+   *  entry returns to the shelf. One charge at a time by construction. */
+  skillGraft: boolean;
   /** THE RUN CHRONICLE: every concluded run the account remembers (capped,
    *  personal bests protected — see recordRun). */
   runRecords: RunRecord[];
@@ -411,6 +417,7 @@ export interface AccountSave {
   /** Optional so pre-reckoning saves load with ?? defaults. */
   invested?: Record<string, number>;
   runRecords?: RunRecord[];
+  skillGraft?: boolean;
   unlockedClasses: string[];
   unlockedSkills: string[];
   unlockedSupports: string[];
@@ -435,6 +442,7 @@ export function makeAccount(): Account {
     credits: 0, lifetimeCredits: 0, level: 0,
     invested: {},
     runRecords: [],
+    skillGraft: false,
     unlockedClasses: new Set(STARTER_CLASSES),
     unlockedSkills: new Set(STARTER_SKILLS),
     unlockedSupports: new Set(STARTER_SUPPORTS),
@@ -459,6 +467,7 @@ export function serializeAccount(a: Account): AccountSave {
     credits: a.credits, lifetimeCredits: a.lifetimeCredits, level: a.level,
     invested: a.invested,
     runRecords: a.runRecords,
+    skillGraft: a.skillGraft,
     unlockedClasses: [...a.unlockedClasses],
     unlockedSkills: [...a.unlockedSkills],
     unlockedSupports: [...a.unlockedSupports],
@@ -501,6 +510,7 @@ export function deserializeAccount(s: AccountSave): Account | null {
     runRecords: (s.runRecords ?? [])
       .filter(r => r?.schema === RUN_RECORD_SCHEMA && typeof r.at === 'number')
       .slice(-MAX_RUN_RECORDS),
+    skillGraft: s.skillGraft === true,
     unlockedClasses: new Set([...STARTER_CLASSES, ...(s.unlockedClasses ?? [])]),
     unlockedSkills: new Set([...STARTER_SKILLS, ...(s.unlockedSkills ?? [])]),
     unlockedSupports: new Set([...STARTER_SUPPORTS, ...(s.unlockedSupports ?? [])]),

@@ -70,6 +70,14 @@ export function walletBreakdown(
   return rows;
 }
 
+/** How many units of ONE essence cover a Mortal-Essence value — the tinted
+ *  price converter (ceil: a fine-grained ask never rounds itself free).
+ *  Services that demand a SPECIFIC tint (a veteran's contract, any future
+ *  fine-grained fee) price their ME value through this one gate. */
+export function essenceUnitsForValue(id: EssenceId, value: number): number {
+  return Math.max(1, Math.ceil(Math.max(0, value) / ESSENCES[id].mortalWorth));
+}
+
 /** Spend `price` Mortal-Essence-worth out of a wallet, cheapest tints first,
  *  breaking at most one deeper tint and refunding the difference in the
  *  cheapest tier (exact by THE CHANGE LAW — value is conserved to the unit).

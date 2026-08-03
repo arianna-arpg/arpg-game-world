@@ -26,7 +26,7 @@ import { canPlaceAt, overlappingItems } from '../engine/inventory';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, type ModCompareRow } from '../engine/itemgen';
 import { ITEM_BASES } from '../data/itembases';
-import { ESSENCES, ESSENCE_IDS, skillLevelEssenceCost, type EssenceCost, type EssenceId } from '../data/essences';
+import { ESSENCES, ESSENCE_IDS, essenceUnitsForValue, skillLevelEssenceCost, type EssenceCost, type EssenceId } from '../data/essences';
 import {
   CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseProgress, expertiseRank,
   salvageItemYield, salvageSkillYield, salvageSupportYield,
@@ -76,12 +76,13 @@ import {
   sealReckoning, type Account, type RunRecord,
 } from '../meta/account';
 import {
-  allUnlockables, availableUnlocks, classUnlockFor, INVEST_CFG, investedToward,
+  allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, INVEST_CFG, investedToward,
   investUnlock, isClassDiscovered, isUnlockOwned, maxSlotCount, remainingCost,
   sealedUnlocks, undiscoveredClassUnlocks,
   VAULT_KIND_LABELS, vaultKindOrder, vaultSeatOf, vaultShelfCensus, vaultStripVisible,
   type Unlockable,
 } from '../meta/unlocks';
+import { MERC_CFG } from '../meta/mercs';
 import {
   ACTION_IDS, ACTION_LABELS, keyDisplay, PAD_ACTION_IDS, PAD_ACTION_LABELS,
   type ActionId, type PadActionId, type Settings,
@@ -1484,7 +1485,8 @@ export class UI {
       if (put <= 0) return;
       const row = visitLog.get(u.id) ?? { label: u.label, put: 0, done: false };
       row.put += put;
-      row.done = isUnlockOwned(acc, u);
+      // A graft is never "owned" — its completion is the ARMED charge.
+      row.done = isUnlockOwned(acc, u) || (u.kind === 'graft' && acc.skillGraft);
       visitLog.set(u.id, row);
     };
     // The store keeps your place PER AISLE ('_flat' = the young store's one
@@ -1536,8 +1538,8 @@ export class UI {
               <div class="uname">${u.label}</div>
               <div class="uinvest"><i style="width:${pct}%"></i></div>
               <button data-invest="${u.id}" ${canPour ? '' : 'disabled'}
-                title="Hold to pour ${META_CURRENCY_LABEL} in; a tap invests ${INVEST_CFG.tapAmount}. Poured essence stays invested across runs.">${
-                inv > 0 ? `Invest — ${rem} more` : `Invest — ${u.cost}`}</button>
+                title="Click to unlock outright when your essence covers it. Hold to INVEST a piece at a time — invested essence stays across runs, and the unlock completes when the full cost stands.">${
+                inv > 0 ? `Unlock — ${rem} more` : `Unlock — ${u.cost}`}</button>
             </div>`;
       };
       const ownedCardHtml = (u: Unlockable): string => `
@@ -1688,83 +1690,122 @@ export class UI {
           render();
         });
       });
-      // THE POUR — hold-to-invest (INVEST_CFG): pointerdown taps in the
-      // smallest step, then a held button compounds the rate; every tick
-      // writes the button face, the fill bar, and the head's pool INLINE
-      // (never a re-render — the hold must keep its button). Release, a
-      // dry pool, or completion settles the pour: save + re-render (the
-      // completed card re-shelves under Owned).
+      // THE CLICK/HOLD SEAM (INVEST_CFG.holdDelayMs): a press released
+      // inside the window is a CLICK — the outright unlock when the pool
+      // covers the remainder (the typical intent: "Unlock" means unlock);
+      // held past it, the press becomes THE POUR — the quiet investing
+      // fallback that compounds while held and also serves when the pool
+      // falls short. Ticks write the button face, the fill bar, and the
+      // head's pool INLINE (never a re-render — the hold must keep its
+      // button); release, a dry pool, or completion settles: save +
+      // re-render (a completed card re-shelves under Owned).
       let pourTimer = 0;
+      let holdTimer = 0;
       this.accountScreen.querySelectorAll<HTMLButtonElement>('[data-invest]').forEach(btn => {
         const id = btn.dataset.invest!;
         const findU = (): Unlockable | undefined => availableUnlocks(acc).find(x => x.id === id);
         const updateFaces = (u: Unlockable): void => {
-          btn.textContent = `Invest — ${remainingCost(acc, u)} more`;
+          btn.textContent = `Unlock — ${remainingCost(acc, u)} more`;
           const bar = btn.parentElement?.querySelector<HTMLElement>('.uinvest i');
           if (bar && u.cost > 0) bar.style.width = `${Math.round((investedToward(acc, u) / u.cost) * 100)}%`;
           const cred = document.getElementById('vault-cred');
           if (cred) cred.textContent = String(acc.credits);
         };
+        const doneToast = (u: Unlockable): string => u.kind === 'graft'
+          ? `⚔ ${u.label} — ARMED for your next run`
+          : `✦ ${u.label} — UNLOCKED`;
+        // "This pour finished": ownership for the permanent kinds, the armed
+        // charge for the repeatable one (which is never owned).
+        const completed = (u: Unlockable): boolean =>
+          isUnlockOwned(acc, u) || (u.kind === 'graft' && acc.skillGraft);
         const settle = (poured: boolean, done?: Unlockable): void => {
           if (pourTimer) { window.clearInterval(pourTimer); pourTimer = 0; }
           if (!poured) return;
           saveShelfScroll();
           this.saveAccount();
           render();
-          if (done) this.vaultToast(`✦ ${done.label} — UNLOCKED`);
+          if (done) this.vaultToast(doneToast(done));
+        };
+        // The one completion road every input shares: full unlock + log +
+        // settle theater (used by the click, the keyboard, and the pour's
+        // own terminal tick through settle above).
+        const unlockOutright = (u: Unlockable): boolean => {
+          const remBefore = remainingCost(acc, u);
+          if (!applyUnlock(acc, u)) return false;
+          logPour(u, remBefore);
+          saveShelfScroll();
+          this.saveAccount();
+          render();
+          this.vaultToast(doneToast(u));
+          return true;
         };
         btn.addEventListener('pointerdown', e => {
           e.preventDefault();
-          if (pourTimer) return; // one pour at a time
+          if (pourTimer || holdTimer) return; // one press at a time
           const u = findU();
           if (!u) return;
           try { btn.setPointerCapture(e.pointerId); } catch { /* capture is best-effort */ }
-          let poured = investUnlock(acc, u, INVEST_CFG.tapAmount);
-          logPour(u, poured);
-          if (isUnlockOwned(acc, u)) { settle(true, u); return; }
-          updateFaces(u);
-          let rate = INVEST_CFG.baseRate;
-          let frac = 0;
-          let last = performance.now();
-          pourTimer = window.setInterval(() => {
-            if (!btn.isConnected) { settle(false); return; }
-            const now = performance.now();
-            const dt = (now - last) / 1000;
-            last = now;
-            rate = Math.min(INVEST_CFG.maxRate, rate * Math.pow(INVEST_CFG.accel, dt));
-            frac += rate * dt;
-            const whole = Math.floor(frac);
-            if (whole < 1) return;
-            frac -= whole;
-            const put = investUnlock(acc, u, whole);
-            poured += put;
-            logPour(u, put);
-            if (isUnlockOwned(acc, u)) { settle(poured > 0, u); return; }
-            if (put < whole) { settle(poured > 0); return; } // pool ran dry
-            updateFaces(u);
-          }, INVEST_CFG.tickMs);
+          let poured = 0;
+          let held = false;
+          const beginPour = (): void => {
+            holdTimer = 0;
+            held = true;
+            let rate = INVEST_CFG.baseRate;
+            let frac = INVEST_CFG.tapAmount; // the pour opens with the smallest step
+            let last = performance.now();
+            pourTimer = window.setInterval(() => {
+              if (!btn.isConnected) { settle(false); return; }
+              const now = performance.now();
+              const dt = (now - last) / 1000;
+              last = now;
+              rate = Math.min(INVEST_CFG.maxRate, rate * Math.pow(INVEST_CFG.accel, dt));
+              frac += rate * dt;
+              const whole = Math.floor(frac);
+              if (whole < 1) return;
+              frac -= whole;
+              const put = investUnlock(acc, u, whole);
+              poured += put;
+              logPour(u, put);
+              if (completed(u)) { settle(poured > 0, u); return; }
+              if (put < whole) { settle(poured > 0); return; } // pool ran dry
+              updateFaces(u);
+            }, INVEST_CFG.tickMs);
+          };
+          holdTimer = window.setTimeout(beginPour, INVEST_CFG.holdDelayMs);
           const release = (): void => {
             btn.removeEventListener('pointerup', release);
             btn.removeEventListener('pointercancel', release);
+            if (holdTimer) { window.clearTimeout(holdTimer); holdTimer = 0; }
+            if (!held) {
+              // THE CLICK: unlock outright when the pool covers it; short,
+              // point at the hold lane instead of quietly draining.
+              if (!unlockOutright(u)) {
+                this.vaultToast(`${remainingCost(acc, u) - acc.credits} short — hold to invest what you carry`);
+              }
+              return;
+            }
             if (pourTimer) settle(poured > 0);
           };
           btn.addEventListener('pointerup', release);
           btn.addEventListener('pointercancel', release);
         });
-        // Keyboard activation (Enter/Space fires click with detail 0):
-        // one deliberate tap per press. Pointer-originated clicks already
-        // poured on pointerdown, so they are ignored here.
+        // Keyboard/pad activation (Enter/Space fires click with detail 0;
+        // pointer presses were handled above and are ignored here): the
+        // same click law — outright when covered — and, holdless by
+        // nature, the covered-short press invests EVERYTHING carried (the
+        // pour's own terminal state, reached in one deliberate step).
         btn.addEventListener('click', e => {
           if (e.detail !== 0) return;
           const u = findU();
           if (!u) return;
-          const put = investUnlock(acc, u, INVEST_CFG.tapAmount);
+          if (unlockOutright(u)) return;
+          const put = investUnlock(acc, u, Math.min(acc.credits, remainingCost(acc, u)));
           logPour(u, put);
           if (put > 0) {
             saveShelfScroll();
             this.saveAccount();
             render();
-            if (isUnlockOwned(acc, u)) this.vaultToast(`✦ ${u.label} — UNLOCKED`);
+            this.vaultToast(`+${put} invested toward ${u.label}`);
           }
         });
       });
@@ -4738,8 +4779,15 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const rows = post.offers.length
       ? post.offers.map((o, i) => {
         const cost = world.mercHireCost(o);
-        const afford = world.mortalValueOf() >= cost;
         const vet = o.kind === 'retired';
+        // THE VETERAN'S COIN (MERC_CFG.retiredTint): a player-made blade
+        // prices in ONE fine essence, counted at the mortal exchange;
+        // templates take the mixed wallet. Drawn == charged (hireMercenary).
+        const tint = vet ? MERC_CFG.retiredTint : null;
+        const tintUnits = tint ? essenceUnitsForValue(tint, cost) : 0;
+        const afford = tint
+          ? (world.meta.essences[tint] ?? 0) >= tintUnits
+          : world.mortalValueOf() >= cost;
         // THE LIVE-AVAILABILITY GATE (world.mercOfferBlocked): a locked
         // sheet keeps its veteran rows while their retiree rides with
         // another patron — the row shows the same words the hire path
@@ -4756,9 +4804,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <div class="desc">${esc(o.blurb)}</div>
           <div class="desc" style="color:#8a9a8a">Fights at your measure (level ${L}): a blade is fitted to its patron.</div>
           <div class="bind-btns"><button data-merc-hire="${i}" ${full || !afford || blocked ? 'disabled' : ''}>
-            Hire — ${cost} ${META_CURRENCY_LABEL}</button>
+            Hire — ${tint
+              ? `${tintUnits}× <span style="color:${ESSENCES[tint].color}">${ESSENCES[tint].glyph} ${ESSENCES[tint].label}</span>`
+              : `${cost} ${META_CURRENCY_LABEL}`}</button>
             ${blocked ? `<span class="tags" style="color:#b8a0e0">${esc(blocked)}</span>`
-              : !afford && !full ? `<span class="tags">your essence is worth ${world.mortalValueOf()}</span>` : ''}</div>
+              : !afford && !full ? `<span class="tags">${tint
+                ? `you carry ${world.meta.essences[tint] ?? 0}× ${ESSENCES[tint].glyph}`
+                : `your essence is worth ${world.mortalValueOf()}`}</span>` : ''}</div>
         </div>`;
       }).join('')
       : `<div class="skill-entry"><div class="desc">The sign-board hangs empty; every blade this post will ever deal has been taken.</div></div>`;
@@ -5777,6 +5829,67 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       document.getElementById('chron-close')!.addEventListener('click', () => {
         this.accountScreen.classList.add('hidden');
         if (onClose) onClose();
+      });
+    };
+    render();
+    this.accountScreen.classList.remove('hidden');
+  }
+
+  // ------------------------------------------------------------ skill graft
+
+  /** THE SKILL GRAFT PICK (meta/unlocks.ts kind 'graft' — the armed charge):
+   *  the run-start screen where the player chooses ONE unlocked skill to
+   *  ride in beside the class kit at its plainest cut. Selection is
+   *  deliberate and two-step (pick a card, then confirm) — the charge
+   *  spends only when the run actually begins with the choice; beginning
+   *  WITHOUT one keeps the charge armed for a later run. The list reads the
+   *  account's own drop pool (isSkillUnlockedForDrop — the Grand Codex
+   *  opens the whole book), the blue-mage/bestiary lane's discipline:
+   *  you graft only what your line has truly unlocked. */
+  showSkillGraftPick(onPick: (skillId: string | null) => void): void {
+    this.hideAll();
+    const acc = this.getAccount();
+    const skills = SKILL_LIST
+      .filter(s => !s.noDrop && isSkillUnlockedForDrop(acc, s.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    let chosen: string | null = null;
+    const render = (): void => {
+      const cards = skills.map(s => `
+        <div class="unlock-card graft-card${chosen === s.id ? ' graft-chosen' : ''}" data-graft-skill="${s.id}"
+          title="${esc(s.description ?? s.name)}">
+          <div class="ukind" style="color:${s.color ?? 'var(--text-dim)'}">skill</div>
+          <div class="uname">${esc(s.name)}</div>
+        </div>`).join('');
+      this.accountScreen.innerHTML = `
+        <div class="vault-head">
+          <h1>Skill Grafting: Choose the Rider</h1>
+          <div class="acct-head">One unlocked skill joins your class's kit at its plainest cut
+            (level 1, common) — learned where your young hands can hold it, packed where they cannot.
+            The armed charge spends as this run begins.</div>
+        </div>
+        <div class="vault-body"><div class="unlock-grid">${cards}</div></div>
+        <div class="vault-foot acct-btns">
+          <button id="graft-go" ${chosen ? '' : 'disabled'}>${chosen
+            ? `Graft ${esc(SKILLS[chosen]?.name ?? chosen)} onto this run` : 'Choose a skill to graft'}</button>
+          <button id="graft-skip" title="The charge stays armed for a later run.">Begin Without a Graft</button>
+        </div>`;
+      this.accountScreen.querySelectorAll<HTMLElement>('[data-graft-skill]').forEach(card => {
+        card.addEventListener('click', () => {
+          chosen = chosen === card.dataset.graftSkill ? null : card.dataset.graftSkill!;
+          const keep = this.accountScreen.querySelector<HTMLElement>('.vault-body')?.scrollTop ?? 0;
+          render();
+          const body = this.accountScreen.querySelector<HTMLElement>('.vault-body');
+          if (body) body.scrollTop = keep;
+        });
+      });
+      document.getElementById('graft-go')!.addEventListener('click', () => {
+        if (!chosen) return;
+        this.accountScreen.classList.add('hidden');
+        onPick(chosen);
+      });
+      document.getElementById('graft-skip')!.addEventListener('click', () => {
+        this.accountScreen.classList.add('hidden');
+        onPick(null);
       });
     };
     render();

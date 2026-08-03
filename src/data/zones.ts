@@ -15,6 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import type { MonsterRarity } from '../engine/rarity';
+import type { ItemRarity } from '../engine/items';
 import type { PresenceSpec } from '../engine/presence';
 import type { ZoneFogSpec } from '../engine/fog';
 import type { ZoneCreepSpec } from '../engine/creep';
@@ -1148,6 +1149,12 @@ export interface ZoneDef {
    *  ambient-event gate, and by the parley/zone-info pitch. Absent (an older
    *  save, an unregistered id) degrades to the default delve. */
   pocketForm?: string;
+  /** THE THEMED CACHE (packages/holdfast.ts PocketSpec.cacheRarity, baked at
+   *  the pocket mint): the ground's staked chest also yields one rolled GEAR
+   *  piece at exactly this rarity — a tinted toll's promised answer (the
+   *  essence↔rarity canon: a pristine gate guards a unique). Serializes with
+   *  the graph; absent = the chest's ordinary gem pay alone. */
+  cacheRarity?: ItemRarity;
   /** SKY EXPOSURE — does the world's weather reach the ground here? Baked at
    *  mint from TilesetDef.sky / ZoneSpec.sky, or authored on a def directly.
    *  Omitted, skyOf() DERIVES it (off-surface dimensions and cave-ladder

@@ -333,7 +333,10 @@ let deathShown = false;
 let uiRefreshTimer = 0;
 let autosaveTimer = 0;
 
-function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: string, name?: string): void {
+function startGame(
+  classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: string, name?: string,
+  graftSkillId?: string | null,
+): void {
   couchReset(); // a new world seats no ghosts — guests re-join from the menu
   // THE PROLOGUE GATE (engine/scenes.ts), read FIRST — before a roster mode
   // pushes its vessel and muddies the virgin-account test: an account that
@@ -379,6 +382,14 @@ function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: s
   // first breath. No-op until that first graduation — and placed BEFORE
   // persistRun so the baseline snapshot already carries them.
   world.dealVeteranFlasks();
+  // THE SKILL GRAFT (meta/unlocks.ts kind 'graft'): the armed charge spends
+  // HERE — where the run truly begins — before the baseline save, so the
+  // snapshot carries the grafted gem from the first breath. A pick without
+  // a charge (or a charge without a pick) is a no-op by construction.
+  if (graftSkillId && account.skillGraft && world.applySkillGraft(graftSkillId)) {
+    account.skillGraft = false;
+    saveAccount(account);
+  }
   lastSentZone = '';        // force a fresh terrain broadcast for (re)joining clients
   if (COOP_ALLY) spawnCoopAlly();
   // The baseline snapshot — EXCEPT under a due scene: the tutorial is not a
@@ -400,8 +411,17 @@ function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: s
 
 /** Class-select adapter: the picker hands back (class, sworn mode, name);
  *  startGame wants (class, manifest, mode, name). One arrow so no call site
- *  can transpose them. */
-const startPicked = (d: ClassDef, modeId?: string, name?: string): void => startGame(d, undefined, modeId, name);
+ *  can transpose them. THE SKILL GRAFT detour: an armed charge offers its
+ *  pick between the class choice and the world's first breath — the
+ *  deliberate selection rides into startGame and spends there; declining
+ *  keeps the charge armed for a later run. */
+const startPicked = (d: ClassDef, modeId?: string, name?: string): void => {
+  if (account.skillGraft) {
+    ui.showSkillGraftPick(pick => startGame(d, undefined, modeId, name, pick));
+    return;
+  }
+  startGame(d, undefined, modeId, name);
+};
 
 /** THE WAKEFUL WORLD: stand the saved world back up around a freshly-resumed
  *  character — adopt the save's world section (zone graph, discovery, clock,

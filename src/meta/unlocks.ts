@@ -92,7 +92,12 @@ export type Unlockable =
   | (UnlockBase & { kind: 'skill'; payload: { skillIds: string[] } })
   | (UnlockBase & { kind: 'support'; payload: { supportIds: string[] } })
   | (UnlockBase & { kind: 'feature'; requiresFeature?: string; payload: { flag: string } })
-  | (UnlockBase & { kind: 'package'; payload: { packageId: string; tierId?: string } });
+  | (UnlockBase & { kind: 'package'; payload: { packageId: string; tierId?: string } })
+  // THE SKILL GRAFT — the REPEATABLE charge (never owned): buying arms
+  // Account.skillGraft for the NEXT run's start, where the player picks one
+  // unlocked skill to ride the class kit at its plainest cut; the run's
+  // beginning consumes the charge and the entry returns to the shelf.
+  | (UnlockBase & { kind: 'graft'; payload: Record<string, never> });
 
 /** Class SLOTS, data-driven and ordered ascending — the HAND SIZE at character
  *  select (the hand itself is dealt at random from the account's UNLOCKED
@@ -480,6 +485,9 @@ function classBundleEntry(b: ClassBundleDef): Unlockable {
       ...(d ? { hint: d.hint } : {}) },
   };
 }
+
+/** The Skill Graft's per-charge price (data beside its entry; retune freely). */
+export const SKILL_GRAFT_COST = 120;
 
 export const UNLOCK_CATALOG: Unlockable[] = [
   // --- Class slots: a bigger HAND at character select, bought in sequence ----
@@ -892,6 +900,18 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     label: 'Grand Codex: Unlock All Gems',
     description: 'EVERY skill and support gem becomes obtainable (drops, chests, Brandt), including anything added in the future. One deliberate unlock so new content is always reachable. (Classes are unlocked apart; each Class bundle also widens the roll at character select.)',
     payload: { flag: FEATURE.UNLOCK_ALL_GEMS } },
+
+  // --- THE SKILL GRAFT: the veteran's essence valve — a REPEATABLE charge
+  //     behind the Grand Codex (the account's skill pool is what the pick
+  //     reads, and the codex is what makes that pool the whole book). One
+  //     purchase arms ONE run-start pick; beginning that run consumes it and
+  //     the shelf offers it again. Deterministic horizontal agency: the
+  //     skill you want, at its plainest cut, from the first breath. --------
+  { id: 'skill_graft', kind: 'graft', cost: SKILL_GRAFT_COST,
+    requiresUnlock: 'feat_unlock_all_gems',
+    label: 'Skill Grafting',
+    description: 'Arm a SKILL GRAFT for your next run: at its start, choose any skill your account has unlocked, and its gem — at its plainest cut (level 1, common) — rides in beside your class\'s own kit, learned where your young hands can hold it, packed where they cannot. The charge spends as that run begins; return here to arm another. The shelf never empties: this is where a full Vault keeps growing.',
+    payload: {} },
 ];
 
 /** Static catalog by id — the resolution table for `requiresUnlock` ladders. */
@@ -955,6 +975,10 @@ export function isUnlockOwned(a: Account, u: Unlockable): boolean {
     case 'support': return u.payload.supportIds.every(id => a.unlockedSupports.has(id));
     case 'feature': return a.features.has(u.payload.flag);
     case 'package': return a.packageUnlocks.has(u.payload.tierId ?? u.payload.packageId);
+    // A graft is NEVER owned — the repeatable charge's whole identity. Its
+    // armed state hides the entry instead (isUnlockVisible), so the shelf
+    // reads honestly in both phases: buyable, or standing down until spent.
+    case 'graft':   return false;
   }
 }
 
@@ -996,6 +1020,9 @@ export function allUnlockables(): Unlockable[] {
  *  sequencing/level/ledger; package BASE entries on the unlock predicate; package
  *  TIER entries on (base owned + every prior tier owned + this tier's milestone). */
 export function isUnlockVisible(a: Account, u: Unlockable): boolean {
+  // A graft stands down while its charge is ARMED (bought, unspent): the
+  // shelf offers it again only once a run's beginning consumes the charge.
+  if (u.kind === 'graft' && a.skillGraft) return false;
   if (u.kind !== 'package') return staticGateMet(a, u);
   const pkg = PACKAGE_BY_ID[u.payload.packageId];
   if (!pkg) return false;
@@ -1182,8 +1209,8 @@ export const VAULT_TABS: readonly VaultTabDef[] = [
     emptyNote: 'No class purchases are open right now; classes surface through deeds, levels, and hard lessons. The rumors below point at the deeds.',
   },
   {
-    id: 'gems', label: 'Gems', kinds: ['skill', 'support'],
-    blurb: 'Skill and support pools: buy one and its gems join the drop tables (and the town counters) for every character after, forever.',
+    id: 'gems', label: 'Gems', kinds: ['skill', 'support', 'graft'],
+    blurb: 'Skill and support pools: buy one and its gems join the drop tables (and the town counters) for every character after, forever. Skill Grafts arm a chosen gem onto your next run\'s start.',
     emptyNote: 'No gem pools on the shelf right now; some surface with account levels, others only once the world has taught them.',
   },
   {
@@ -1208,6 +1235,7 @@ export const VAULT_TABS: readonly VaultTabDef[] = [
 export const VAULT_KIND_LABELS: Record<UnlockKind, string> = {
   slot: 'Class Slots', class: 'Classes', skill: 'Skill Pools',
   support: 'Support Pools', feature: 'Town & Features', package: 'World Events',
+  graft: 'Skill Grafts',
 };
 
 /** The shelf a kind sits on — its explicit seat first, else the fallback
@@ -1316,7 +1344,7 @@ export function vaultStripVisible(a: Account, census: VaultShelfCensus[] = vault
  *  it. Compounding: cheap rungs land in a beat, the deepest in a few held
  *  seconds. Pure UI data (the invest math itself is instant); tune freely. */
 export const INVEST_CFG = {
-  /** Units/second the moment the hold starts. */
+  /** Units/second the moment the pour starts. */
   baseRate: 16,
   /** The rate multiplies by this for each second held (compound ramp). */
   accel: 2.6,
@@ -1326,6 +1354,12 @@ export const INVEST_CFG = {
   tickMs: 50,
   /** A bare tap invests this much — the smallest deliberate step. */
   tapAmount: 1,
+  /** THE CLICK/HOLD SEAM (ms): a press released inside this window is a
+   *  CLICK — the outright unlock when the pool covers the remainder (the
+   *  typical intent, so "Unlock" stays the button's one word); a press held
+   *  past it becomes the POUR, the quiet investing fallback that also works
+   *  when the pool falls short. */
+  holdDelayMs: 280,
 };
 
 /** Mortal Essence already poured into an unlock (0 for untouched entries). */
@@ -1356,6 +1390,7 @@ function grantUnlock(a: Account, u: Unlockable): void {
     case 'support': for (const id of u.payload.supportIds) a.unlockedSupports.add(id); break;
     case 'feature': a.features.add(u.payload.flag); break;
     case 'package': a.packageUnlocks.add(u.payload.tierId ?? u.payload.packageId); break;
+    case 'graft':   a.skillGraft = true; break;
   }
 }
 
@@ -1389,11 +1424,13 @@ export function investUnlock(a: Account, u: Unlockable, amount: number): number 
 /** Buy an unlock outright — pour the full remainder in one motion. Mutates
  *  the account; returns false if unaffordable / already owned / gate unmet.
  *  Caller saves. (The historical one-click face; the buy gate is exactly
- *  the visibility gate, and prior partial investments count toward it.) */
+ *  the visibility gate, and prior partial investments count toward it.)
+ *  Success = the full remainder poured and the grant fired — NOT ownership,
+ *  which a repeatable kind (the graft) never reports. */
 export function applyUnlock(a: Account, u: Unlockable): boolean {
   if (isUnlockOwned(a, u) || !isUnlockVisible(a, u)) return false;
   const rem = remainingCost(a, u);
   if (a.credits < rem) return false;
-  investUnlock(a, u, rem);
-  return isUnlockOwned(a, u);
+  if (rem === 0) { investUnlock(a, u, 0); return true; } // the settle path granted
+  return investUnlock(a, u, rem) === rem;
 }

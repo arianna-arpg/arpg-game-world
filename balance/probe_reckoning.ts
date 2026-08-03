@@ -24,18 +24,24 @@
 // ---------------------------------------------------------------------------
 
 import {
-  ESSENCES, ESSENCE_IDS, LEDGER_ESSENCE_TOUCHED, spendWalletMortalValue,
-  walletBreakdown, walletMortalValue, type EssenceId,
+  ESSENCES, ESSENCE_IDS, ESSENCE_OF_RARITY, essenceUnitsForValue, LEDGER_ESSENCE_TOUCHED,
+  spendWalletMortalValue, walletBreakdown, walletMortalValue, type EssenceId,
 } from '../src/data/essences';
 import {
-  MAX_RUN_RECORDS, RUN_RECORD_SCHEMA, accountLevelFor, accountLevelThreshold,
+  FEATURE, MAX_RUN_RECORDS, RUN_RECORD_SCHEMA, accountLevelFor, accountLevelThreshold,
   applyCredits, deserializeAccount, makeAccount, recordRun, renownForRun,
   runStanding, sealReckoning, serializeAccount, type RunRecord,
 } from '../src/meta/account';
 import {
-  UNLOCK_CATALOG, applyUnlock, availableUnlocks, investUnlock, investedToward,
-  isUnlockOwned, remainingCost, type Unlockable,
+  SKILL_GRAFT_COST, UNLOCK_CATALOG, applyUnlock, availableUnlocks, investUnlock,
+  investedToward, isUnlockOwned, isUnlockVisible, remainingCost, vaultSeatOf,
+  type Unlockable,
 } from '../src/meta/unlocks';
+import {
+  GILDED_TOLLGATE, HOLDFAST_DEFS, SOVEREIGN_TOLLGATE, holdfastTollCost,
+  holdfastTollLabel, unlockImplemented,
+} from '../src/packages/holdfast';
+import { MERC_CFG } from '../src/meta/mercs';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -232,6 +238,70 @@ const wallet = (w: Partial<Record<EssenceId, number>>): Record<EssenceId, number
   const cleaned = deserializeAccount(JSON.parse(JSON.stringify(dirty)));
   check('save: malformed investment entries are dropped, honest ones kept',
     !!cleaned && cleaned!.invested.good === 5 && Object.keys(cleaned!.invested).length === 1);
+}
+
+// --- I) The tinted tolls -------------------------------------------------------
+{
+  const tinted = HOLDFAST_DEFS.filter(d => d.unlock.tint);
+  check('tolls: the tinted gates are enrolled and implemented (they may roll)',
+    tinted.length >= 2 && tinted.every(d => unlockImplemented(d.unlock)),
+    tinted.map(d => d.id).join(', '));
+  check('tolls: every tinted gate names a real essence and speaks its price in that tint',
+    tinted.every(d => {
+      const t = d.unlock.tint!;
+      if (!ESSENCES[t]) return false;
+      const label = holdfastTollLabel(d, 12, 'MORTAL');
+      return label.includes(ESSENCES[t].label) && label.startsWith(`${holdfastTollCost(d, 12)}×`);
+    }));
+  check('tolls: an untinted gate still quotes the mixed-wallet coin',
+    holdfastTollLabel(HOLDFAST_DEFS[0], 5, 'MORTAL').endsWith('MORTAL'));
+  // THE THEMED ANSWER: each tinted gate's promised cache rarity matches the
+  // essence↔rarity canon (the tint IS the reward's tier, spoken twice).
+  check('tolls: the themed cache honors the essence↔rarity canon (pristine → unique)',
+    tinted.every(d => {
+      const cr = d.pocket?.cacheRarity;
+      return !!cr && ESSENCE_OF_RARITY[cr] === d.unlock.tint;
+    }));
+  check('tolls: the sovereign gate guards a unique; the gilded a rare',
+    SOVEREIGN_TOLLGATE.pocket?.cacheRarity === 'unique' && GILDED_TOLLGATE.pocket?.cacheRarity === 'rare');
+}
+
+// --- J) The veteran's coin -----------------------------------------------------
+{
+  check('mercs: the retired tint is a real essence (or deliberately null)',
+    MERC_CFG.retiredTint === null || !!ESSENCES[MERC_CFG.retiredTint]);
+  check('mercs: unit conversion is exact ceil at the exchange, floored at one',
+    essenceUnitsForValue('brilliant', 90) === Math.ceil(90 / ESSENCES.brilliant.mortalWorth)
+    && essenceUnitsForValue('pristine', 1) === 1
+    && essenceUnitsForValue('coarse', 7) === 7);
+}
+
+// --- K) The skill graft --------------------------------------------------------
+{
+  const a = makeAccount();
+  const graft = UNLOCK_CATALOG.find(u => u.kind === 'graft');
+  check('graft: exactly one graft entry, priced as authored, seated on a real shelf',
+    UNLOCK_CATALOG.filter(u => u.kind === 'graft').length === 1
+    && graft?.cost === SKILL_GRAFT_COST && !!vaultSeatOf('graft').kinds?.includes('graft'));
+  check('graft: hidden until the Grand Codex is owned',
+    !!graft && !isUnlockVisible(a, graft));
+  a.features.add(FEATURE.UNLOCK_ALL_GEMS);
+  check('graft: the codex surfaces it; it is never "owned"',
+    !!graft && isUnlockVisible(a, graft) && !isUnlockOwned(a, graft));
+  applyCredits(a, SKILL_GRAFT_COST);
+  check('graft: buying arms the charge and empties the pool',
+    !!graft && applyUnlock(a, graft) && a.skillGraft === true && a.credits === 0);
+  check('graft: an ARMED charge stands the entry down (no double-arm road)',
+    !!graft && !isUnlockVisible(a, graft) && investUnlock(a, graft, 50) === 0);
+  a.skillGraft = false; // the run began and spent it (main.ts startGame)
+  check('graft: consumption returns the entry to the shelf',
+    !!graft && isUnlockVisible(a, graft));
+  // The armed charge survives the save round-trip.
+  a.skillGraft = true;
+  const back = deserializeAccount(JSON.parse(JSON.stringify(serializeAccount(a))));
+  check('graft: the armed charge survives the save round-trip; legacy saves load unarmed',
+    !!back && back!.skillGraft === true
+    && deserializeAccount(JSON.parse(JSON.stringify((() => { const s = serializeAccount(makeAccount()); delete (s as { skillGraft?: unknown }).skillGraft; return s; })())))!.skillGraft === false);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASSED');

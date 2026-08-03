@@ -50,6 +50,7 @@ import type { Attributes } from '../engine/stats';
 import { PROGRESSION } from '../data/classes';
 import type { VocationSiteFilter } from '../data/vocations';
 import type { Account } from './account';
+import type { EssenceId } from '../data/essences';
 
 export const MERC_SCHEMA = 1;
 
@@ -167,6 +168,12 @@ export const MERC_CFG = {
   hireCostBase: 40,
   hireCostPerLevel: 6,
   retiredCostMult: 1.5,
+  /** THE VETERAN'S COIN: a RETIRED blade (a player-made character offered
+   *  back) is priced in this one fine-grained essence — the ME cost above
+   *  converts to units at the mortal exchange (essenceUnitsForValue, ceil)
+   *  and only that tint pays. Template sellswords keep the mixed-wallet
+   *  price. null = veterans too take the mixed wallet. */
+  retiredTint: 'brilliant' as EssenceId | null,
 
   /** Retainers fielded at once (a future party of blades is this number). */
   maxHired: 1,

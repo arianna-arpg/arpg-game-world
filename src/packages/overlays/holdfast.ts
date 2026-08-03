@@ -26,7 +26,7 @@ import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { NO_BIAS, type MapLayer, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import type { OverlayBuildCtx, PackageGate } from '../types';
-import { holdfastTollCost, unlockImplemented, type HoldfastDef, type HoldfastSurge } from '../holdfast';
+import { holdfastTollLabel, unlockImplemented, type HoldfastDef, type HoldfastSurge } from '../holdfast';
 
 /** FNV-1a string hash (per-zone seed salt; mirrors registry.ts hashId). */
 function hashStr(s: string): number {
@@ -290,7 +290,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   // keeper prompt speaks through): what the ask actually buys.
   const level = world.zoneMap[zoneId]?.level ?? 1;
   const ask = def && def.unlock.kind === 'pay-currency' && def.unlock.currency === 'mortal'
-    ? `the wardens ask ${holdfastTollCost(def, level)} ${META_CURRENCY_LABEL}`
+    ? `the wardens ask ${holdfastTollLabel(def, level, META_CURRENCY_LABEL)}`
     : 'deal with the guardians';
   const pitch = world.holdfastPocketPitch(zoneId, info.lockId);
   return [{
