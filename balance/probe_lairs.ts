@@ -28,9 +28,10 @@ import { Rng } from '../src/core/rng';
 import { vec, type Vec2 } from '../src/core/math';
 import {
   clusterDefs, compositionDefs, doodadRuleOf, generateLayout, hasCluster,
-  hasComposition, hasLandmark, isSidezoneEntranceKind, landmarkDefs,
+  hasComposition, hasLandmark, isSidezoneEntranceKind, landmarkDefs, landmarkOf,
   type GenCtx, type GeneratedLayout,
 } from '../src/engine/levelgen';
+import { storyReachable, tierFloorAt } from '../src/engine/tiers';
 import { STATUS_DEFS } from '../src/engine/status';
 import { SYMPATHY_LINKS } from '../src/engine/sympathy';
 import { carveMassifs, massKindOf, tenantKindIds, type MassPoolRow, type TenantRow } from '../src/engine/massif';
@@ -77,6 +78,9 @@ const LAIR_IDS = [
   // Wave eleven — the sea's faces + the butteland caves (the vent brood is
   // deliberately absent: composition lane, no lair row — the roost's family).
   'pard_larder',
+  // Batch 28 — THE ALOFT LANE's debut: the butte TOPS' claim (siteTier 1),
+  // butteland's third axis beside the moot's ground and the larder's caves.
+  'baboon_midden',
 ];
 const MOUTHS = [
   'frostmaw_maw', 'hovel_door', 'sphinx_gate',
@@ -92,6 +96,8 @@ const MOUTHS = [
   'geode_crack', 'wax_gate', 'roost_hollow',
   // Wave eleven — the nest among the smokers + the larder under the moot.
   'vent_nest', 'larder_crag',
+  // Batch 28 — the cleft in the needle's crown (THE ALOFT LANE's door).
+  'midden_mouth',
 ];
 const NATIVES = [
   'yeti', 'yeti_alpha', 'hill_giant', 'mire_hag', 'vault_sphinx',
@@ -106,6 +112,8 @@ const NATIVES = [
   'gale_swift', 'stream_shrike', 'replete_foldmother',
   // Wave eleven — the brood court, the terraces' grip tutor, both alphas.
   'vent_crab', 'shelf_lurker', 'vent_matron', 'larder_pard',
+  // Batch 28 — the midden's sovereign.
+  'baboon_king',
 ];
 
 // --- RIG A: the registry weave --------------------------------------------------
@@ -2488,6 +2496,176 @@ const step = (secs: number): void => {
     larder?.caveDepth === 1 && larder?.anchor === 'butteland'
     && (larder?.fauna ?? []).some(f => f.id === 'veld_oryx' && f.chance === 1)
     && (larder?.fauna ?? []).some(f => f.id === 'pan_jackal'));
+}
+
+// --- RIG P, BATCH 28: THE BABOON KING'S MIDDEN (THE ALOFT LANE's debut) ----------
+// The butte TOPS' claim: butteland's THIRD axis (the moot holds the open
+// ground, the larder the caves, the midden the STORY — the first
+// triple-stacked biome), seated through LandmarkDef.siteTier 1. P25 pins the
+// claim law + the aloft def's own laws; P26 walks the real fold end to end —
+// a devMintTileset needles mint carries the mouth ALOFT (mouthTier 1 on
+// sovereign butte_top), the dwell opens the king's court, and the climb-out
+// lands the party back on the summit at the door (the arrivalStory law, up
+// lane — probe_tiers rig O pins the lane itself on qa content).
+{
+  // P25 — the claim law at the third axis + the aloft def's laws.
+  const middenRow = lairOf('baboon_midden');
+  const middenDef = landmarkOf('midden_mouth_site');
+  const mootDef = landmarkOf(lairOf('gnoll_moot')?.landmark ?? '');
+  check('P25 three claims, three axes (moot: valley surface; larder: cave; midden: the STORY)',
+    lairOf('gnoll_moot')?.seat.place === 'surface' && mootDef?.siteTier === undefined
+    && lairOf('pard_larder')?.seat.place === 'cave'
+    && middenRow?.seat.place === 'surface' && middenDef?.siteTier === 1);
+  check('P25 an aloft def makes no tier-0 promises (no poi, no mustReach — the story road is the net)',
+    !!middenDef && !middenDef.poi && !middenDef.mustReach && middenDef.clearSite === true);
+  const aloftAt = (place: 'cave' | 'surface', level: number): string[] =>
+    lairLandmarkRolls({ place, biome: 'butteland', caveDepth: place === 'cave' ? 1 : undefined, level, tileset: 'needles' })
+      .map(r => r.landmark);
+  // (presenceMul fades BELOW `from`: full at 7, ramping 4..7, hard zero at 4
+  // — the B11 law.)
+  check('P25 the fold seats the midden on butteland\'s surface at 12, never in its caves, silent at 4',
+    aloftAt('surface', 12).includes('midden_mouth_site')
+    && !aloftAt('cave', 12).includes('midden_mouth_site')
+    && !aloftAt('surface', 4).includes('midden_mouth_site'));
+  check('P25 the king wears the boss law and pays the lair hoard',
+    MONSTERS.baboon_king?.boss === true && MONSTERS.baboon_king?.loot === 'lair_hoard');
+
+  // P26a — headless placement at chance 1: the mouth stands SOVEREIGN and
+  // spoored on a real needles face (the aloft lane through the real def).
+  const WN = 2600, HN = 1950;
+  const entryN = vec(140, HN / 2);
+  const exitsN: Vec2[] = [vec(WN - 140, HN / 2)];
+  const tsN = TILESETS.needles;
+  const middenZone = (): ZoneDef => ({
+    id: 'probe_midden_zone', name: 'Probe Needles', level: 12,
+    size: { w: WN, h: HN }, theme: { ...tsN.theme },
+    layoutType: 'needles', layout: tsN.layout, layoutParams: { ...tsN.layoutParams },
+    objective: { kind: 'none' }, packs: tsN.packs,
+    exits: [{ to: 'probe_home', side: 's' }], map: { x: 0, y: 0 }, seed: 0,
+    geo: { biomeDepth: 0.7 },
+    landmarks: [{ landmark: 'midden_mouth_site', chance: 1 }],
+  });
+  const genN = (seed: number): GeneratedLayout =>
+    generateLayout({ ...middenZone(), seed }, { w: WN, h: HN }, new Rng(seed), entryN, exitsN);
+  {
+    const out = genN(0xa1de);
+    const mouth = out.doodads.find(d => d.kind === 'midden_mouth');
+    const walkN = out.walk as GridWalkField | undefined;
+    check('P26a the midden mouth seats ALOFT (sovereign butte_top, tier-stamped, story road green)',
+      !!mouth && mouth.tier === 1
+      && walkN?.regionAt?.(mouth.pos.x, mouth.pos.y) === 'butte_top'
+      && !!walkN && storyReachable(walkN, entryN, mouth.pos, 1),
+      mouth ? `at=${mouth.pos.x.toFixed(0)},${mouth.pos.y.toFixed(0)} kind=${walkN?.regionAt?.(mouth.pos.x, mouth.pos.y)}` : 'NO MOUTH');
+    const spoorN = out.doodads.filter(d => (d.kind === 'bone_pile' || d.kind === 'gore')
+      && mouth && Math.hypot(d.pos.x - mouth.pos.x, d.pos.y - mouth.pos.y) < 160 && d.tier === 1);
+    check('P26a the midden ring spoors the summit (aloft bone + gore at the door)',
+      spoorN.length >= 2, `${spoorN.length} pieces`);
+  }
+
+  // P26b — mint purity + the court's contract (the P24 idiom).
+  {
+    const sz = sidezoneOf('midden_mouth');
+    const mctx = {
+      parent: caveDef({ id: 'probe_p26_midden', caveDepth: undefined, anchor: undefined, biome: 'butteland' }),
+      seed: 0xb28a, id: 'probe_p26_pocket_midden',
+      pos: { x: 100, y: 100 }, playerLevel: 12, pkgActive: () => false,
+    };
+    const court = sz ? sz.mint(mctx) : null;
+    check('P26b the midden mints pure and sealed (byte-equal, noDeeper, the king\'s court authored)',
+      !!court && JSON.stringify(court) === JSON.stringify(sz!.mint(mctx))
+      && court.noDeeper === true
+      && court.name === "the Baboon King's Midden"
+      && court.objective?.kind === 'boss' && (court.objective as { id?: string }).id === 'baboon_king'
+      && (court.fauna ?? []).some(f => f.id === 'mesa_baboon' && f.chance === 1)
+      && (court.fauna ?? []).some(f => f.id === 'sun_hyrax'));
+  }
+
+  // P26c — THE ALOFT ROUND TRIP on the REAL fold path (the discovery-loop
+  // replay: devMintTileset at level 12 walks placeZoneAt → the lair fold →
+  // the aloft sitter → the mouth stamp → world's caveEntrances read).
+  {
+    seedGlobalRandom(0xa10f);
+    const w = makeSimWorld('warrior', 0x1a28);
+    w.player.invulnerable = true;
+    type AloftCm = { pos: { x: number; y: number }; seed: number; kind: string; mouthTier?: number };
+    type AloftInnards = {
+      enterSidezone(cm: { pos: { x: number; y: number }; seed: number; kind: string }): void;
+      travelThrough(e: { to: string; side: 'n' | 's' | 'e' | 'w' }): void;
+      caveEntrances: AloftCm[];
+      walk: { regionAt?(x: number, y: number): string } | null;
+    };
+    const innards = w as unknown as AloftInnards;
+    const stepFrom = (seat: { x: number; y: number }): number => {
+      let best = 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        w.player.pos.x = seat.x; w.player.pos.y = seat.y;
+        for (let i = 0; i < 6; i++) w.moveActor(w.player, dx, dy, 0.1);
+        best = Math.max(best, Math.hypot(w.player.pos.x - seat.x, w.player.pos.y - seat.y));
+      }
+      w.player.pos.x = seat.x; w.player.pos.y = seat.y;
+      return best;
+    };
+    let found: { zoneId: string; cm: AloftCm } | null = null;
+    for (let i = 0; i < 12 && !found; i++) {
+      const zid = w.devMintTileset('needles', i, 12, { seed: 954001 + i });
+      if (!zid) continue;
+      const cm = innards.caveEntrances.find(en => en.kind === 'midden_mouth');
+      if (cm) found = { zoneId: zid, cm };
+    }
+    check('P26c a real needles mint carries the mouth ALOFT (the fold at placeZoneAt, mouthTier 1)',
+      !!found && found.cm.mouthTier === 1, found ? `zone=${found.zoneId}` : 'no hit in 12 seeds');
+    if (found) {
+      const mouthAt = { x: found.cm.pos.x, y: found.cm.pos.y };
+      const drawn = w.doodads.filter(dd => dd.kind === 'midden_mouth')
+        .sort((a2, b2) => Math.hypot(a2.pos.x - mouthAt.x, a2.pos.y - mouthAt.y)
+          - Math.hypot(b2.pos.x - mouthAt.x, b2.pos.y - mouthAt.y))[0];
+      check('P26c drawn == dwelled on sovereign ground (the door doodad AT the seat, butte_top, tier 1)',
+        !!drawn && Math.hypot(drawn.pos.x - mouthAt.x, drawn.pos.y - mouthAt.y) < 2
+        && drawn.tier === 1 && innards.walk?.regionAt?.(mouthAt.x, mouthAt.y) === 'butte_top',
+        drawn ? `nudge=${Math.hypot(drawn.pos.x - mouthAt.x, drawn.pos.y - mouthAt.y).toFixed(1)}px kind=${innards.walk?.regionAt?.(mouthAt.x, mouthAt.y)}` : 'NO DOODAD');
+      const parentId = w.zone.id;
+      for (const a of w.actors) { if (a.team === 'enemy' && !a.dead) a.dead = true; }
+      w.player.pos.x = mouthAt.x; w.player.pos.y = mouthAt.y;
+      w.player.tier = 1;
+      innards.enterSidezone(found.cm);
+      check('P26c the dwell opens the king\'s court (arrival on the ground story, mobile, rung remembers)',
+        w.zone.id.startsWith('cave_') && w.zone.name === "the Baboon King's Midden"
+        && w.player.tier === 0 && w.caveReturn?.tier === 1,
+        `zone=${w.zone.id} tier=${w.player.tier} rung=${w.caveReturn?.tier}`);
+      check('P26c the court is HELD (the king home among his troop)',
+        w.actors.some(a => a.defId === 'baboon_king' && !a.dead)
+        && w.actors.some(a => a.defId === 'mesa_baboon' && !a.dead));
+      for (const a of w.actors) { if (a.team === 'enemy' && !a.dead) a.dead = true; }
+      const inStep = stepFrom({ x: w.player.pos.x, y: w.player.pos.y });
+      check('P26c the arrival is MOBILE', inStep > 15, `step=${inStep.toFixed(1)}px`);
+      innards.travelThrough({ to: parentId, side: 'n' });
+      const p2 = w.player;
+      // THE REPORTED SEAM (batch 28 — the aloft climb-out's last yard):
+      // landPartyAt's put() clamps through the TIER-0 clampPos BEFORE the
+      // story re-seat (world.ts ~10243), so a summit seat drags to the
+      // nearest ground-walkable cell (the ramp foot, ~195px off the door)
+      // and only THEN wears tier 1. The down lane never bit (duct cells
+      // are tier-0-walkable — neither clamp moves them). The exact shape,
+      // for the coordinator (world.ts, landPartyAt's put):
+      //   const story = opts?.tier ?? 0;
+      //   const view = story >= 1 ? this.tierViews?.[story] : null;
+      //   a.pos = view
+      //     ? (view.isWalkable(to.x, to.y) ? vec(to.x, to.y) : view.snapToWalkable(to))
+      //     : (clamp ? this.clampPos(to, a.radius) : to);
+      // When it lands, tighten the drift bar below to < 2 (the N3.8 law).
+      // TODAY's honest floor: the return wears the story, stands on the
+      // story's own floor (ramp or top — never the valley), stays MOBILE,
+      // and lands within the mouth's walk (no strand, no softlock).
+      check('P26c the climb-out wears the summit story on story floor, at the mouth\'s walk (drift bar: the reported landPartyAt seam)',
+        w.zone.id === parentId && p2.tier === 1
+        && tierFloorAt(innards.walk?.regionAt?.(p2.pos.x, p2.pos.y), 1)
+        && Math.hypot(p2.pos.x - mouthAt.x, p2.pos.y - mouthAt.y) < 300,
+        `tier=${p2.tier} d=${Math.hypot(p2.pos.x - mouthAt.x, p2.pos.y - mouthAt.y).toFixed(1)}px kind=${innards.walk?.regionAt?.(p2.pos.x, p2.pos.y)}`);
+      for (const a of w.actors) { if (a.team === 'enemy' && !a.dead) a.dead = true; }
+      const outStep = stepFrom({ x: p2.pos.x, y: p2.pos.y });
+      check('P26c the return is MOBILE on its story', outStep > 15, `step=${outStep.toFixed(1)}px`);
+    }
+  }
 }
 
 console.log(fails ? `\nprobe_lairs: ${fails} FAILURE(S)` : '\nprobe_lairs: ALL PASS');

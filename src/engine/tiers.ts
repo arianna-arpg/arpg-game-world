@@ -51,8 +51,8 @@ import { GridWalkField } from '../world/gridWalk';
 import { insideBounds } from '../world/shape';
 import { regionKind, type RegionKind } from '../world/regions';
 import {
-  ensureGrid, layoutParam, registerLayout, registerUnderTierPass, scatterDecoration,
-  type GenCtx,
+  ensureGrid, layoutParam, registerLayout, registerTierSiting, registerUnderTierPass,
+  scatterDecoration, type GenCtx,
 } from './levelgen';
 import { carveMassifs } from './massif';
 
@@ -859,4 +859,103 @@ registerUnderTierPass((ctx: GenCtx, def: ZoneDef): void => {
   const grid = ensureGrid(ctx);
   carveUnderTier(ctx, def, grid, lane);
   relocateDeepDoors(ctx, def, grid);
+});
+
+// --- THE STORY ROAD (the aloft lane's reachability oracle) -----------------------
+
+/** Can a ground-story walker at `from` reach `to` standing on story `tier`,
+ *  crossing only the grid's OWN links (ramps, wells, spans)? The layered BFS
+ *  the aloft siter (LandmarkDef.siteTier / CompositionSite.siteTier) gates
+ *  every accepted seat on — a claim on a story must be reachable by the
+ *  story's own ways, ASSERTED, never assumed (a rampless butte is a sky
+ *  island however honest its floor). State is (cell, story): same-story
+ *  steps where tierFloorAt owns the floor, plus the free flip at a link cell
+ *  between the two stories of its span (stepping off resolves the rest —
+ *  resolveTierCrossing's law at siting grain). Pure and draw-free; cost is
+ *  one flood per ACCEPTED aloft dart, bounded by cells × (MAX_TIER + 1). */
+export function storyReachable(grid: GridWalkField, from: Vec2, to: Vec2, tier: number): boolean {
+  const cs = grid.cell, cols = grid.cols, rows = grid.rows;
+  if (cols <= 0 || rows <= 0) return false;
+  const stories = MAX_TIER + 1;
+  const cellOf = (p: Vec2): number => {
+    const gx = Math.min(cols - 1, Math.max(0, Math.floor(p.x / cs)));
+    const gy = Math.min(rows - 1, Math.max(0, Math.floor(p.y / cs)));
+    return gy * cols + gx;
+  };
+  const kindAt = (ci: number): string =>
+    grid.regionAt((ci % cols) * cs + cs / 2, Math.floor(ci / cols) * cs + cs / 2);
+  // Per-kind memo (the makeTierNav floorOf idiom): floor verdict per story +
+  // the link span, resolved once per region kind, not per cell.
+  const floorMemo = new Map<string, number>(); // kind → story bitmask
+  const spanMemo = new Map<string, [number, number] | null>();
+  const floorBits = (k: string): number => {
+    let f = floorMemo.get(k);
+    if (f === undefined) {
+      f = 0;
+      for (let t = 0; t < stories; t++) if (tierFloorAt(k, t)) f |= 1 << t;
+      floorMemo.set(k, f);
+    }
+    return f;
+  };
+  const spanOf = (k: string): [number, number] | null => {
+    let s = spanMemo.get(k);
+    if (s === undefined) {
+      const rk = regionKind(k);
+      s = rk?.tierLink ? linkSpanOf(rk) : null;
+      spanMemo.set(k, s);
+    }
+    return s;
+  };
+  const target = cellOf(to);
+  const start = cellOf(from);
+  const seen = new Uint8Array(cols * rows * stories);
+  const queue: number[] = [];
+  const push = (ci: number, s: number): void => {
+    const key = ci * stories + s;
+    if (seen[key]) return;
+    seen[key] = 1;
+    queue.push(key);
+  };
+  // Seed on the ground story (entries are carved ground); a from-point that
+  // already stands elevated (an in-stack caller) seeds its own floor too.
+  const startBits = floorBits(kindAt(start));
+  if (startBits & 1) push(start, 0);
+  for (let t = 1; t < stories; t++) if (startBits & (1 << t)) push(start, t);
+  if (!queue.length) return false;
+  for (let qi = 0; qi < queue.length; qi++) {
+    const key = queue[qi];
+    const ci = Math.floor(key / stories), s = key % stories;
+    if (ci === target && s === tier) return true;
+    const k = kindAt(ci);
+    // The link flip: a body on a crossing stands on BOTH stories of the span.
+    const span = spanOf(k);
+    if (span) {
+      if (s === span[0]) push(ci, span[1]);
+      else if (s === span[1]) push(ci, span[0]);
+    }
+    // Same-story steps (4-neighbour, row-edge honest).
+    const gx = ci % cols, gy = Math.floor(ci / cols);
+    if (gx > 0 && (floorBits(kindAt(ci - 1)) & (1 << s))) push(ci - 1, s);
+    if (gx < cols - 1 && (floorBits(kindAt(ci + 1)) & (1 << s))) push(ci + 1, s);
+    if (gy > 0 && (floorBits(kindAt(ci - cols)) & (1 << s))) push(ci - cols, s);
+    if (gy < rows - 1 && (floorBits(kindAt(ci + cols)) & (1 << s))) push(ci + cols, s);
+  }
+  return false;
+}
+
+// THE ALOFT SITER'S INSTALLATION (the registerUnderTierPass idiom — levelgen
+// cannot import this module, so the tier truths are injected): the view IS
+// makeTierView (the mover contract's own resolver — drawn == sited through
+// every consumer), the floor IS tierFloorAt, the road IS storyReachable.
+registerTierSiting({
+  view: (grid, tier) => makeTierView(grid, tier),
+  floorAt: (kind, tier) => tierFloorAt(kind, tier),
+  // The story's own ground: an elevated row of exactly this story — never a
+  // crossing (tierLink) and never a shared deck (a walkable row is the
+  // valley's floor too, however high its second face rides).
+  sovereignAt: (kind, tier) => {
+    const rk = kind ? regionKind(kind) : undefined;
+    return !!rk && !rk.tierLink && !rk.walkable && rk.tier === tier;
+  },
+  reaches: (grid, from, to, tier) => storyReachable(grid, from, to, tier),
 });

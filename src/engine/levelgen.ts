@@ -778,8 +778,12 @@ export interface GeneratedLayout {
   pockets?: { x: number; y: number; r: number }[];
   /** Landmark-seeded entities (pit dwellers) — loadZone spawns them with the
    *  base population (memory-captured like every other resident). A row's
-   *  `ambush` arms the instance as a waiting ambusher (the penned herd). */
-  landmarkSpawns?: { id: string; pos: Vec2; ambush?: AmbushSpec }[];
+   *  `ambush` arms the instance as a waiting ambusher (the penned herd).
+   *  `tier` is the STORY an aloft landmark (LandmarkDef.siteTier) sampled the
+   *  seat on — recorded at gen so the materializer can seat the body on its
+   *  own floor (a story-blind spawn on a butte top wears tier 0 and the mover
+   *  contract snaps it off the rim). */
+  landmarkSpawns?: { id: string; pos: Vec2; ambush?: AmbushSpec; tier?: number }[];
   /** SECRET HOLLOWS (the hollows fabric, stampHollows): sealed pockets and
    *  through-wall passages hiding inside the wall mass behind brittle seams.
    *  The world consumes these (World.openHollow) — carve, reveal, memory. */
@@ -1390,6 +1394,37 @@ export function registerTrapPass(fn: (ctx: GenCtx, spec: TrapGenSpec, geo: TrapG
 let UNDER_TIER_PASS: ((ctx: GenCtx, def: ZoneDef) => void) | null = null;
 export function registerUnderTierPass(fn: (ctx: GenCtx, def: ZoneDef) => void): void {
   UNDER_TIER_PASS = fn;
+}
+
+/** THE ALOFT SITER (the siteTier axis — engine/tiers.ts registers at eval,
+ *  the same one-way seam as the passes above): the tier fabric's own truths,
+ *  injected so the landmark sitter and the composition anchors can SEAT a
+ *  claim on an upper story — `view` is makeTierView (the mover contract's
+ *  resolver: drawn == sited), `floorAt` is tierFloorAt, `reaches` is the
+ *  layered story-road BFS (a seat must be walkable from the entry through
+ *  the stack's own links — asserted, never assumed). Absent (a harness that
+ *  never loads the tier fabric): every siteTier declaration stands down
+ *  LOUDLY — the dead-dial law, never a silent valley seat. */
+export interface TierSiteView {
+  isWalkable(x: number, y: number): boolean;
+  snapToWalkable(p: Vec2): Vec2;
+  regionAt?(x: number, y: number): string;
+  cellSize?: number;
+}
+export interface TierSiting {
+  view(grid: { regionAt?(x: number, y: number): string; cell?: number; cellSize?: number }, tier: number): TierSiteView;
+  floorAt(kind: string | undefined, tier: number): boolean;
+  /** Is this region the story's OWN ground — floor for `tier` alone, no
+   *  crossing, no shared deck? The aloft CENTER's law: a dwell seat on a
+   *  ramp or a rope span lies twice (the door rides the very way up, and
+   *  the return would land the party on a thin crossing). Pieces may still
+   *  dress onto spans; only the SEAT is sovereign. */
+  sovereignAt(kind: string | undefined, tier: number): boolean;
+  reaches(grid: GridWalkField, from: Vec2, to: Vec2, tier: number): boolean;
+}
+let TIER_SITING: TierSiting | null = null;
+export function registerTierSiting(s: TierSiting): void {
+  TIER_SITING = s;
 }
 
 /** THE BOULDER CHUTES (layoutParams.boulderChutes) — the mountain's rolling
@@ -2815,8 +2850,9 @@ export interface GenCtx {
   pockets?: { x: number; y: number; r: number }[];
   /** Entities a landmark seeded (pit dwellers), resolved at gen — loadZone
    *  materializes them inside the memory-tagging window (base population).
-   *  Rows may carry an instance ambush arm (the penned herd). */
-  landmarkSpawns?: { id: string; pos: Vec2; ambush?: AmbushSpec }[];
+   *  Rows may carry an instance ambush arm (the penned herd) and an aloft
+   *  row its STORY (`tier` — LandmarkDef.siteTier's sampled seat). */
+  landmarkSpawns?: { id: string; pos: Vec2; ambush?: AmbushSpec; tier?: number }[];
   /** A non-convex generator sets this; generateLayout passes it through to the
    *  returned GeneratedLayout.walk (the Phase-2 walkability seam). */
   walk?: WalkField;
@@ -6807,6 +6843,24 @@ export interface LandmarkDef {
    *  the 18 uniform darts structurally). Unset = byte-identical siting for
    *  every existing def. */
   siteWalk?: boolean;
+  /** THE ALOFT SEAT — site the footprint on an UPPER STORY's floor (the tier
+   *  fabric, engine/tiers.ts): darts aim at cells whose story-`siteTier`
+   *  floor stands (the aimed dart's STORY sibling — snap, then the SITE
+   *  CONTRACT owns the filter: center-on-story at the exact span-quantized
+   *  center placeLandmark will derive, so the built seat IS the judged one),
+   *  the seat obeys THE RIM LAW (insideBounds — a dwell seat beyond the
+   *  ellipse rim is a dead door), and every accepted dart is ASSERTED
+   *  reachable from the entry through the stack's own links (the story-road
+   *  BFS — a rampless butte is refused, never trusted). The builder's pieces
+   *  become the STORY's furniture (stamped `tier`, judged by their own
+   *  floor), its mouth doodads dwell/return through the standing mouthTier +
+   *  caveReturn.tier law, and spawn rows record the story. An aloft def's
+   *  `poi`/`mustReach` never join the tier-0 nets (a valley corridor to a
+   *  summit is a lie — the story road is the guarantee); builders that PAINT
+   *  regions (floorKind pours, structure walls) are not aloft-honest — keep
+   *  to doodad-dressing builders. Takes precedence over siteWalk; ≥1;
+   *  unset = byte-identical siting for every existing def. */
+  siteTier?: number;
 }
 
 /** What a builder receives: the reserved footprint, the ensured grid, the
@@ -6899,7 +6953,21 @@ export function landmarkDefs(): LandmarkDef[] { return Object.values(LANDMARKS);
 
 /** Site a landmark footprint: portal/entry clearance + reservations + (on a
  *  pre-existing grid) walkable anchor probes. Draws-before-filters. */
-function findLandmarkSpot(ctx: GenCtx, r: number, siteWalk?: boolean): Vec2 | null {
+function findLandmarkSpot(ctx: GenCtx, r: number, siteWalk?: boolean, siteTier?: number): Vec2 | null {
+  // THE ALOFT DART (LandmarkDef.siteTier — the aimed dart's STORY sibling):
+  // resolve the story view once. A declared def with no tier fabric or no
+  // grid stands DOWN loudly (the dead-dial law) — never a silent valley seat.
+  let aloftView: TierSiteView | null = null;
+  if (siteTier && siteTier >= 1) {
+    if (!TIER_SITING || !(ctx.walk instanceof GridWalkField)) {
+      if (!unknownStampWarned.has('aloft:landmark')) {
+        unknownStampWarned.add('aloft:landmark');
+        console.warn('[landmarks] siteTier asks an aloft seat but no tier fabric/grid stands — the landmark stands down');
+      }
+      return null;
+    }
+    aloftView = TIER_SITING.view(ctx.walk, siteTier);
+  }
   for (let tries = 0; tries < 18; tries++) {
     let p = vec(
       ctx.rng.range(BORDER + r, Math.max(BORDER + r, ctx.arena.w - BORDER - r)),
@@ -6913,7 +6981,30 @@ function findLandmarkSpot(ctx: GenCtx, r: number, siteWalk?: boolean): Vec2 | nu
     // step that leaves the border inset is refused outright (the footprint
     // stays fully in-arena — the draw's own clamp semantics). Unset =
     // byte-identical: no dart moves, every filter reads as today.
-    if (siteWalk && ctx.walk && !ctx.walk.isWalkable(p.x, p.y)) {
+    if (aloftView) {
+      // The story aim: step a valley/sky dart to the nearest story floor
+      // (the view's snap — pure, rng-free, the mover's own resolver).
+      if (!aloftView.isWalkable(p.x, p.y)) p = aloftView.snapToWalkable(p);
+      // THE QUANTIZE-HOP KILLER: judge the EXACT span-quantized center
+      // placeLandmark will derive (idempotent re-derivation below), so the
+      // accepted seat and the built seat are one point — a mouth a hop off
+      // the story would be a dead door (the 264px crypt-gate class).
+      const span = Math.ceil((r * 2) / GEN_CELL) * GEN_CELL, qr = span / 2;
+      p = vec(
+        Math.round((p.x - qr) / GEN_CELL) * GEN_CELL + qr,
+        Math.round((p.y - qr) / GEN_CELL) * GEN_CELL + qr);
+      // THE SOVEREIGN CENTER: the seat must be the story's OWN ground — a
+      // mouth on a ramp or a rope span would ride the very crossing the
+      // story road needs (and the climb-out would land the party mid-deck).
+      if (!TIER_SITING!.sovereignAt(aloftView.regionAt?.(p.x, p.y), siteTier!)) continue;
+      const xHi = Math.max(BORDER + r, ctx.arena.w - BORDER - r);
+      const yHi = Math.max(BORDER + r, ctx.arena.h - BORDER - r);
+      if (p.x < BORDER + r || p.x > xHi || p.y < BORDER + r || p.y > yHi) continue;
+      // THE RIM LAW: an aloft seat is a DWELL seat (the mouth stands at the
+      // center) — it must survive the mouth clamp unmoved (insideBounds, the
+      // seatInArena margin; rect zones pass free, boundless zones have no rim).
+      if (!insideBounds(p, 28, boundsOf(ctx.arena))) continue;
+    } else if (siteWalk && ctx.walk && !ctx.walk.isWalkable(p.x, p.y)) {
       p = ctx.walk.snapToWalkable(p);
       const xHi = Math.max(BORDER + r, ctx.arena.w - BORDER - r);
       const yHi = Math.max(BORDER + r, ctx.arena.h - BORDER - r);
@@ -6931,8 +7022,10 @@ function findLandmarkSpot(ctx: GenCtx, r: number, siteWalk?: boolean): Vec2 | nu
     // re-starve the lever (measured: the aimed dart with probes kept placed
     // exactly as often as the blind one). A declared def's builder paints its
     // own footprint (the pit precedent); the center test still refuses an
-    // empty-grid snap fallback.
-    if (ctx.walk) {
+    // empty-grid snap fallback. Under siteTier the same contract is the
+    // STORY's (center-on-story, already held at the quantized point above —
+    // the tier-0 probes would refuse every summit by construction).
+    if (ctx.walk && !aloftView) {
       if (siteWalk) {
         if (!ctx.walk.isWalkable(p.x, p.y)) continue;
       } else {
@@ -6944,6 +7037,11 @@ function findLandmarkSpot(ctx: GenCtx, r: number, siteWalk?: boolean): Vec2 | nu
     // an earlier recipe's lava river would bury its own approach.
     const hz = [p, vec(p.x - r * 0.6, p.y), vec(p.x + r * 0.6, p.y), vec(p.x, p.y - r * 0.6), vec(p.x, p.y + r * 0.6)];
     if (hz.some(q => pointOnKinds(ctx, q, hazardGrounds()))) continue;
+    // THE STORY ROAD (aloft, last — one flood per surviving dart): the seat
+    // must be walkable FROM the entry through the stack's own links (ramps,
+    // spans) — asserted, never assumed. A rampless butte is refused here.
+    if (aloftView && siteTier
+      && !TIER_SITING!.reaches(ctx.walk as GridWalkField, ctx.entry, p, siteTier)) continue;
     return p;
   }
   return null;
@@ -6953,7 +7051,7 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
   const builder = LANDMARK_BUILDERS[def.builder];
   if (!builder) { console.warn(`[landmarks] '${def.id}': unknown builder '${def.builder}'`); return; }
   const dia = ctx.rng.range(def.size[0], def.size[1]);
-  const sited = at ?? findLandmarkSpot(ctx, dia / 2, def.siteWalk);
+  const sited = at ?? findLandmarkSpot(ctx, dia / 2, def.siteWalk, def.siteTier);
   if (!sited) return;
   // SNAP the footprint onto the walk lattice (the plan-structure rule): an
   // unsnapped mask origin phase-shifts every painted run one bleed cell in
@@ -6998,19 +7096,40 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
   };
   const preBuild = ctx.doodads.length;
   builder(b);
+  // THE ALOFT SEAT (LandmarkDef.siteTier): the builder's pieces become the
+  // STORY's furniture — every piece it laid on story floor is stamped with
+  // the def's story (mouth doodads then dwell/return through the standing
+  // mouthTier + caveReturn.tier law; collision/draw gates read the stamp).
+  // Runs BEFORE the terrain-wins sweep (splices shift indices). Pieces the
+  // builder threw past the rim onto valley ground keep tier 0 honestly.
+  const aloftTier = def.siteTier && def.siteTier >= 1 ? def.siteTier : undefined;
+  const aloftView = aloftTier && TIER_SITING ? TIER_SITING.view(grid, aloftTier) : null;
+  if (aloftView && aloftTier) {
+    for (let i = preBuild; i < ctx.doodads.length; i++) {
+      const d = ctx.doodads[i];
+      if (d.tier === undefined && aloftView.isWalkable(d.pos.x, d.pos.y)) d.tier = aloftTier;
+    }
+  }
   // TERRAIN WINS: the builder painted rims/walls/gulfs AFTER the base layout's
   // open-ground scatter, so an earlier doodad whose footing is no longer
   // walkable is now embedded in a crater wall or hovering over a gulf — splice
   // it. Builder-placed pieces (rim rocks ON the wall ring, gulf islands) are
   // deliberate and stay: only indices < preBuild are candidates. seedPaired
-  // kinds keep their parallel seed list zipped. Draw-free.
+  // kinds keep their parallel seed list zipped. Draw-free. Under an aloft
+  // seat each piece answers to ITS OWN story's floor (the tier kit's rocks on
+  // the top are honest footing the tier-0 read would lie about); unset =
+  // today's exact judgment.
   // (A builder that POURS engulfing terrain can splice pre-build doodads and
   // shrink the array below preBuild — clamp, or the sweep reads past the end.)
   for (let i = Math.min(preBuild, ctx.doodads.length) - 1; i >= 0; i--) {
     const d = ctx.doodads[i];
     if (d.keep) continue;
     if (Math.abs(d.pos.x - center.x) > r + d.radius || Math.abs(d.pos.y - center.y) > r + d.radius) continue;
-    if (grid.isWalkable(d.pos.x, d.pos.y)) continue;
+    if (aloftView && TIER_SITING
+      ? ((d.tier ?? 0) === 0
+        ? grid.isWalkable(d.pos.x, d.pos.y)
+        : TIER_SITING.floorAt(grid.regionAt(d.pos.x, d.pos.y), d.tier ?? 0))
+      : grid.isWalkable(d.pos.x, d.pos.y)) continue;
     // (Solids over builder-POURED ground are the global sweepForbiddenGround
     // pass's job — one inverse, every producer.)
     if (doodadRule(d.kind).seedPaired) {
@@ -7027,7 +7146,12 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
   // anchor too: an oasis quest spawner sits among the palms, not mid-pool,
   // and an anchor can never strand inside a poured liquid the walk grid
   // doesn't see. Draw-free: pure geometry, row-major tie-break.
-  if (def.poi || def.mustReach) {
+  // ALOFT SEATS NEVER JOIN THE TIER-0 NETS: the grid-walkable snap would seat
+  // the anchor in a rect-corner VALLEY cell (the ditch POI), and the
+  // reachability invariant would then promise a corridor to ground the claim
+  // never stood on — the story-road assert at the dart is the aloft
+  // guarantee, so a declared poi/mustReach simply stands down up there.
+  if ((def.poi || def.mustReach) && !aloftView) {
     let anchor = vec(center.x, center.y);
     if (!b.interior.has(center.x, center.y) || !grid.isWalkable(center.x, center.y)) {
       let bd = Infinity;
@@ -7063,9 +7187,14 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
       }
     } else src = b.interior;
     const cells: Vec2[] = [];
+    // Aloft, the spawn seats are the STORY's floor (the tier-0 read would
+    // keep only the rect-corner valley cells and quietly seat the court in
+    // the ditch); rows record the story so the materializer can seat the
+    // body on its own floor.
     src.forEach((cx, cy) => {
       const c = src.center(cx, cy);
-      if (!ctx.walk || ctx.walk.isWalkable(c.x, c.y)) cells.push(c);
+      if (aloftView ? aloftView.isWalkable(c.x, c.y)
+        : (!ctx.walk || ctx.walk.isWalkable(c.x, c.y))) cells.push(c);
     });
     if (cells.length) {
       // Presence envelopes shape the table at the ZONE's level before the
@@ -7081,6 +7210,7 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
         (ctx.landmarkSpawns ??= []).push({
           id: pick.id, pos: vec(cell.x, cell.y),
           ...(def.spawns.ambush ? { ambush: def.spawns.ambush } : {}),
+          ...(aloftTier ? { tier: aloftTier } : {}),
         });
       }
     }
@@ -7524,6 +7654,18 @@ export interface CompositionSite {
    *  together, over the void. Unset = the exact acceptance (and rng stream) of
    *  today, because the filter lives INSIDE findSpot's try loop. */
   siteWalk?: boolean;
+  /** THE ALOFT SITE (the tier fabric — the landmark siteTier's composition
+   *  sibling): the anchor STEPS to the nearest story-`siteTier` floor once
+   *  the generator has painted one (the anchor snap's story half — sites
+   *  resolve before any grid exists, so the walk gate cannot run inside
+   *  findSpot here), and while this site's entries stamp, the walk truth IS
+   *  the story's floor: every piece gate (walk-gating, void, cluster/
+   *  formation) judges the story, and pieces seated on it are stamped with
+   *  its tier — the bundle becomes the STORY's arrangement. Boot validation
+   *  refuses structure entries (walls would flatten the story) and POI
+   *  clusters (a tier-0 promise) at an aloft site. Takes precedence over
+   *  siteWalk; ≥1; unset = byte-identical. */
+  siteTier?: number;
 }
 
 export interface CompositionDef {
@@ -7602,18 +7744,53 @@ function compositionEligible(def: ZoneDef, c: CompositionDef): boolean {
 /** Stamp one phase's entries, threading each entry's site (if any) through the
  *  ctx.siteAt transient. The count roll mirrors plainsLayout exactly; an entry
  *  whose site failed to resolve stands down AFTER its count draw (the
- *  rolls-before-filters discipline, at bundle scale). */
-function stampCompositionEntries(ctx: GenCtx, entries: StampSpec[] | undefined, sites: Record<string, Vec2>): void {
+ *  rolls-before-filters discipline, at bundle scale).
+ *
+ *  THE ALOFT WINDOW (CompositionSite.siteTier, via `siteDefs`): while an
+ *  aloft site's entry stamps, ctx.walk IS the story's floor view — every
+ *  piece gate in the chain (findSpot's walk gate, cluster/formation
+ *  walk-gating, the void probe's read-through) judges the story instead of
+ *  the valley, and pieces the entry seated on story floor are stamped with
+ *  its tier (the bundle becomes the STORY's arrangement; strays past the rim
+ *  keep tier 0 honestly). A declared story with no tier fabric or no grid
+ *  stands the entry down loudly AFTER its count draw. Entries at ordinary
+ *  sites save/restore the same transients untouched — byte-identical. */
+function stampCompositionEntries(
+  ctx: GenCtx, entries: StampSpec[] | undefined, sites: Record<string, Vec2>,
+  siteDefs?: CompositionSite[],
+): void {
   for (const spec of entries ?? []) {
+    const aloftSite = spec.at ? siteDefs?.find(s => s.id === spec.at) : undefined;
+    const aloftTier = aloftSite?.siteTier && aloftSite.siteTier >= 1 ? aloftSite.siteTier : undefined;
     const n = ctx.rng.int(spec.count[0], spec.count[1]);
     for (let i = 0; i < n; i++) {
       if (spec.at && !sites[spec.at]) continue;
       const prev = ctx.siteAt;
+      const prevWalk = ctx.walk;
+      const from = ctx.doodads.length;
       try {
         ctx.siteAt = spec.at ? sites[spec.at] : undefined;
+        if (aloftTier) {
+          if (!TIER_SITING || !ctx.walk) {
+            if (!unknownStampWarned.has(`aloft:site:${spec.at}`)) {
+              unknownStampWarned.add(`aloft:site:${spec.at}`);
+              console.warn(`[compositions] site '${spec.at}' asks an aloft seat but no tier fabric/grid stands — its entries stand down`);
+            }
+            continue;
+          }
+          ctx.walk = TIER_SITING.view(ctx.walk, aloftTier);
+        }
         stamp(ctx, spec);
       } finally {
         ctx.siteAt = prev;
+        ctx.walk = prevWalk;
+        if (aloftTier && TIER_SITING && prevWalk) {
+          const v = TIER_SITING.view(prevWalk, aloftTier);
+          for (let k = from; k < ctx.doodads.length; k++) {
+            const d = ctx.doodads[k];
+            if (d.tier === undefined && v.isWalkable(d.pos.x, d.pos.y)) d.tier = aloftTier;
+          }
+        }
       }
     }
   }
@@ -7639,7 +7816,7 @@ function planCompositions(ctx: GenCtx, def: ZoneDef): CompositionPlan[] {
     if (!compositionEligible(def, c)) continue;
     const sites = resolveSites(ctx, c);
     const reservedFrom = ctx.reserved.length;
-    stampCompositionEntries(ctx, c.pre, sites);
+    stampCompositionEntries(ctx, c.pre, sites, c.sites);
     plans.push({ def: c, sites, reservedFrom });
   }
   return plans;
@@ -7667,10 +7844,16 @@ function snapWalkSites(ctx: GenCtx, plans: CompositionPlan[]): void {
   if (!walk) return;
   for (const plan of plans) {
     for (const s of plan.def.sites ?? []) {
-      if (!s.siteWalk) continue;
+      // THE ALOFT SITE steps through the STORY's own view (siteTier wins over
+      // siteWalk); a declared story with no tier fabric leaves the site put —
+      // the entry stamp stands the bundle down loudly there.
+      const aloftTier = s.siteTier && s.siteTier >= 1 ? s.siteTier : undefined;
+      if (!s.siteWalk && !aloftTier) continue;
+      const view = aloftTier ? (TIER_SITING ? TIER_SITING.view(walk, aloftTier) : null) : walk;
+      if (!view) continue;
       const p = plan.sites[s.id];
-      if (!p || walk.isWalkable(p.x, p.y)) continue;
-      const q = walk.snapToWalkable(p);
+      if (!p || view.isWalkable(p.x, p.y)) continue;
+      const q = view.snapToWalkable(p);
       // Carry only what this anchor itself swept: a site-anchored clearing
       // reserves a circle centred EXACTLY on the site point, so identity of
       // position is an exact attribution — a sibling site's court in the same
@@ -7685,7 +7868,7 @@ function snapWalkSites(ctx: GenCtx, plans: CompositionPlan[]): void {
 }
 
 function runCompositionPost(ctx: GenCtx, plans: CompositionPlan[]): void {
-  for (const plan of plans) stampCompositionEntries(ctx, plan.def.post, plan.sites);
+  for (const plan of plans) stampCompositionEntries(ctx, plan.def.post, plan.sites, plan.def.sites);
 }
 
 /** Run a list of layout entries through the stamp dispatcher (count rolls
@@ -7720,6 +7903,7 @@ export function validateCompositions(isClimateAxis?: (id: string) => boolean): s
         errs.push(`composition '${c.id}': pre entry '${e.kind}' — pre precedes the layout generator (no walk grid yet); only reservation stamps (clearing) belong there, pieces go in post`);
       }
     }
+    const aloftIds = new Set((c.sites ?? []).filter(s => s.siteTier && s.siteTier >= 1).map(s => s.id));
     for (const [phase, entries] of [['pre', c.pre], ['post', c.post]] as const) {
       for (const e of entries ?? []) {
         if (!e.at) continue;
@@ -7728,6 +7912,19 @@ export function validateCompositions(isClimateAxis?: (id: string) => boolean): s
         // A pinned entry never calls findSpot, so a where band on it is dead
         // data — the SITE carries the band instead (CompositionSite.where).
         if (e.where) errs.push(`composition '${c.id}': ${phase} entry '${e.kind}' carries BOTH at:'${e.at}' and a where band — the band is ignored (put it on the site)`);
+        // THE ALOFT SITE's honesty gates (CompositionSite.siteTier): a
+        // structure RAISES WALLS (region paint — the story would be
+        // flattened into valley masonry), and a POI cluster registers a
+        // TIER-0 promise the reachability net would then carve a valley
+        // corridor toward. Both refused at boot, never silently up there.
+        if (aloftIds.has(e.at)) {
+          if (e.kind === 'structure') {
+            errs.push(`composition '${c.id}': ${phase} entry 'structure' at aloft site '${e.at}' — walls would flatten the story (aloft sites serve doodad vocabularies: clearing/formation/cluster)`);
+          }
+          if (e.kind === 'cluster' && e.cluster && CLUSTERS[e.cluster]?.poi) {
+            errs.push(`composition '${c.id}': ${phase} cluster '${e.cluster}' at aloft site '${e.at}' declares poi — a tier-0 promise no story seat may make`);
+          }
+        }
       }
     }
     for (const key of Object.keys(c.when ?? {})) {

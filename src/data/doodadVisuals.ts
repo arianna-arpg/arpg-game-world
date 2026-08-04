@@ -3472,4 +3472,17 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -1.6, color: '#d8a24a', intensity: 0.14, flicker: 1.2 },
   },
+  // The midden mouth: the cleft in the needle's crown — same painter in the
+  // butte's own sun-baked stone, the dark going DOWN into the table under
+  // your feet (the aloft seat: the door stands on the story it serves, the
+  // bone-and-gore midden ring does the talking around it).
+  midden_mouth: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#57503c', edge: '#a89a72', material: 'stone',
+      glow: '#c8883a', throat: '#0e0a05', rubble: {},
+      label: "the Baboon King's Midden",
+    },
+    light: { radius: -1.6, color: '#c8883a', intensity: 0.12, flicker: 1.4 },
+  },
 };

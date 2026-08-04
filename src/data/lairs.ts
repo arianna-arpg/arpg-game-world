@@ -2077,3 +2077,75 @@ registerLair({
     chance: 0.2,
   },
 });
+
+// === THE BABOON KING'S MIDDEN (the butte TOPS — THE ALOFT LANE's debut) ======
+// THE CLAIM LAW at its third axis: gnoll_moot holds butteland's open ground,
+// the pard's larder holds the caves beneath — the midden takes the STORY the
+// other two never touch: the tops themselves (LandmarkDef.siteTier 1, the
+// aloft seat). The first triple-stacked biome: three claims, three axes, zero
+// collision by construction, all three readable in one zone — the moot in the
+// valley, the mouth on the summit, the larder under both. The rim-duel law at
+// den scale is the whole argument: the ambient troop already posts the rims
+// (mesa_baboon rides the butteland packs; the tier split seats whole troops
+// aloft), the ASCENT is the fight — climb the ramp under thrown stone — and
+// the door you earn opens into the hollowed needle where the king keeps his
+// bone-yard court. The dwell/return round trip is the standing mouthTier +
+// caveReturn.tier law (the mouth doodad wears the story; probe_tiers rig O
+// walks it).
+
+registerDoodadRule('midden_mouth', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'midden_mouth_site', builder: 'den_mouth', size: [180, 250],
+  clearSite: true,
+  // NO poi/mustReach — an aloft seat never joins the tier-0 nets (the story
+  // road assert at the dart is the guarantee; the lane's own law).
+  siteTier: 1,
+  params: {
+    mouthKind: 'midden_mouth',
+    // The midden itself: the troop's refuse ring — cracked bones, old kills,
+    // the summit stone, and the gold sward gone rank around the door.
+    dress: [
+      { kind: 'bone_pile', count: [3, 5], radius: [10, 15] },
+      { kind: 'gore', count: [1, 2], radius: [12, 16] },
+      { kind: 'rock', count: [1, 3], radius: [12, 18] },
+      { kind: 'veld_grass', count: [1, 2], radius: [14, 20] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'midden_mouth',
+  dwell: 0.7,
+  ledgerOnEnter: 'baboon_midden_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, undefined, {
+      // The Scorpion Well's undefined lane: the strata pool under the
+      // butteland anchor deals the country's own cave face — the hollow
+      // inside the needle, entered from its crown.
+      name: "the Baboon King's Midden",
+      objective: { kind: 'boss', id: 'baboon_king' },
+      noDeeper: true,
+    });
+    // The court: the king's own troop holds the hollow, and the snatched
+    // hyraxes that feed it huddle where the bones pile deepest.
+    def.fauna = [
+      { id: 'mesa_baboon', chance: 1, count: [3, 5] },
+      { id: 'sun_hyrax', chance: 0.6, count: [1, 2] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'baboon_midden',
+  landmark: 'midden_mouth_site',
+  seat: {
+    biomes: ['butteland'],
+    place: 'surface',
+    // The king arrives when the troop is worth crowning — a rung above the
+    // moot's 6, a rung under the larder's 8.
+    level: { from: 7, fadeIn: 3 },
+    chance: 0.2,
+  },
+});

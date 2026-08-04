@@ -9544,6 +9544,24 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#f0c050', params: { spread: 0.38, dist: 0.55, size: 0.1 } },
     ],
   },
+  // --- THE MIDDEN (batch 28 — the butte tops' claim) ------------------------
+  /** The Baboon King: the mesa baboon's grammar at throne scale — the doubled
+   *  mane the wind combs on the tops, the dark mantle stripe of the old male,
+   *  the heavy muzzle, and the unimpressed amber stare of whoever owns the
+   *  high ground. */
+  baboon_king: {
+    parts: [
+      { kind: 'blob', scale: 1.05, params: { irr: 0.12, seed: 907 } },
+      { kind: 'furRuff', scale: 1.3 },
+      { kind: 'furRuff', scale: 0.95, alpha: 0.8 },
+      { kind: 'stripes', role: 'dark', alpha: 0.5, params: { n: 2 } },
+      { kind: 'snout', scale: 1.05 },
+      { kind: 'fangJaw', x: 0.38, scale: 0.6 },
+      { kind: 'tail', params: { len: 0.7, tuft: true } },
+      { kind: 'eyes', color: '#e0a030', params: { spread: 0.32, dist: 0.5, size: 0.1 } },
+    ],
+  },
+
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

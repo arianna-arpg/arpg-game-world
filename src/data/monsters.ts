@@ -20944,6 +20944,32 @@ export const MONSTERS: Record<string, MonsterDef> = {
       }],
     },
   },
+  // --- THE MIDDEN (batch 28 — the butte tops' claim, THE ALOFT LANE's debut) --
+  // THE BABOON KING: the troop's sovereign in the hollowed needle — the mesa
+  // baboon's own grammar at throne scale. His argument is the rim-duel law
+  // owned whole: the thrown stone from the high ground (hurl_debris, the
+  // troop's verb), the pounce that closes the ramp (crushing_leap, the
+  // pard's), and the claw for whoever finishes the climb. Territorial like
+  // his troop — the midden is HELD ground, not a hunt (no hunger drives, so
+  // no HUNGER_LEAN by the tells census's own law).
+  baboon_king: {
+    id: 'baboon_king', name: 'the Baboon King',
+    color: '#7a5e40', shape: 'kite', radius: 17, material: 'fur', look: 'baboon_king',
+    boss: true,
+    base: { life: 320, moveSpeed: 180, accuracy: 112, evasion: 55, mana: 40, manaRegen: 4 },
+    skills: ['hurl_debris', 'crushing_leap', 'claw'],
+    xp: 195, loot: 'lair_hoard',
+    faction: 'wild',
+    detection: 1.4,
+    temper: 'territorial',
+    scaleVariance: [0.95, 1.1],
+    brain: {
+      type: 'skirmish', withdraw: 1.1,
+      move: { style: 'holdRange', hold: 260 },
+      tempo: { moveFor: [0.8, 1.4], pauseFor: [0.3, 0.7] },
+    },
+  },
+
 };
 
 // ---------------------------------------------------------------------------

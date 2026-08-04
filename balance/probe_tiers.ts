@@ -38,7 +38,10 @@ import { SEG_CFG } from '../src/engine/segments';
 import { mod } from '../src/engine/stats';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
-import { generateLayout, hasLayout, type Doodad, type GeneratedLayout } from '../src/engine/levelgen';
+import {
+  generateLayout, hasLayout, registerCluster, registerComposition, registerDoodadRule,
+  registerLandmark, validateCompositions, type Doodad, type GeneratedLayout,
+} from '../src/engine/levelgen';
 import { castRay, LOS_CFG } from '../src/engine/los';
 import { SightVeil } from '../src/render/vis/sightVeil';
 import { GridWalkField } from '../src/world/gridWalk';
@@ -46,9 +49,10 @@ import { regionKind } from '../src/world/regions';
 import { massKindOf } from '../src/engine/massif';
 import {
   landingTier, linkFlipTier, linkSpanOf, makeTierView, MAX_TIER,
-  resolveTierCrossing, tierElevOf, tierFloorAt, tierFloorOf, tierLinkOf,
-  UNDER_TIER_LANES,
+  resolveTierCrossing, storyReachable, tierElevOf, tierFloorAt, tierFloorOf,
+  tierLinkOf, UNDER_TIER_LANES,
 } from '../src/engine/tiers';
+import { insideBounds } from '../src/world/shape';
 import { TILESETS } from '../src/data/tilesets';
 import type { StampSpec, ZoneDef } from '../src/data/zones';
 import { tierMapTell } from '../src/ui/panels';
@@ -1256,6 +1260,165 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
     check('N3.13 the door guarantee: every stalkwood mint stands its promised taproot gate',
       tried >= 4 && stood === tried, `${stood}/${tried}`);
   }
+}
+
+// --- RIG O: THE ALOFT SEAT (batch 28 — LandmarkDef.siteTier / CompositionSite.siteTier)
+// THE ALOFT LANE: a claim SEATED on an upper story deliberately. The laws
+// pinned here on probe-local qa_aloft content (the real debut — the baboon
+// king's midden — walks probe_lairs): the aimed story dart with THE
+// QUANTIZE-HOP KILLER (the judged center IS the built center), THE
+// SOVEREIGN CENTER (never a ramp, never a shared deck), THE RIM LAW
+// (ellipse mints keep the dwell seat in-shape), THE STORY ROAD (every seat
+// asserted reachable through the stack's own links), the story stamp on the
+// builder's furniture, THE ALOFT WINDOW for composition entries, the
+// story-less refusal (plains places nothing, loudly), determinism, and the
+// boot-validation refusals (structures + POI clusters at aloft sites).
+// The engine-substrate A/B (absent == byte-identical vs pristine HEAD,
+// 15 tilesets × 5 seeds) was proven worktree-grade at build time — the rig
+// pins the lane's live behavior (the sitewalk rig-S precedent).
+{
+  seedGlobalRandom(0xa10f2);
+  registerDoodadRule('qa_aloft_door', { overlap: 'trigger', spacing: 60 });
+  registerLandmark({
+    id: 'qa_aloft_site', builder: 'den_mouth', size: [180, 250], clearSite: true,
+    siteTier: 1,
+    params: {
+      mouthKind: 'qa_aloft_door',
+      dress: [
+        { kind: 'bone_pile', count: [3, 5], radius: [10, 15] },
+        { kind: 'rock', count: [1, 3], radius: [12, 18] },
+      ],
+    },
+  });
+  registerCluster({
+    id: 'qa_aloft_cairns', anchor: { radius: 26 },
+    pieces: [{ kind: 'cairn', radius: [10, 14], count: [3, 5], ring: [20, 70], rot: true }],
+  });
+  registerComposition({
+    id: 'qa_aloft_court',
+    sites: [{ id: 'perch', radius: [60, 90], siteTier: 1 }],
+    post: [{ kind: 'cluster', cluster: 'qa_aloft_cairns', at: 'perch', count: [1, 1] }],
+  });
+
+  const tsO = TILESETS.needles;
+  const WO = 3600, HO = 2700;
+  const entryO = vec(140, HO / 2);
+  const exitsO = [vec(WO - 140, HO / 2)];
+  const mkAloft = (over: Partial<ZoneDef>): ZoneDef => ({
+    id: 'qa_aloft_zone', name: 'QA Aloft', level: 8,
+    size: { w: WO, h: HO },
+    theme: { ...tsO.theme },
+    layoutType: 'needles',
+    layout: tsO.layout,
+    layoutParams: { ...tsO.layoutParams },
+    objective: { kind: 'none' },
+    packs: tsO.packs,
+    exits: [{ to: 'qa_aloft_home', side: 's' }],
+    map: { x: 0, y: 0 }, seed: 0,
+    geo: { biomeDepth: 0.7 },
+    landmarks: [{ landmark: 'qa_aloft_site', chance: 1 }],
+    ...over,
+  });
+  const genO = (def: ZoneDef, seed: number): GeneratedLayout =>
+    generateLayout({ ...def, seed }, { w: WO, h: HO }, new Rng(seed), entryO, exitsO);
+
+  // O1-O4: the 12-seed forced sweep — placement, sovereign story seats, the
+  // rim, the story road, the stamped ring.
+  let placedO = 0, sovereignO = 0, rimO = 0, reachO = 0, ringO = 0;
+  for (let i = 0; i < 12; i++) {
+    const seed = (0xa10f7 + i * 7919) >>> 0;
+    const out = genO(mkAloft({}), seed);
+    const mouth = out.doodads.find(d => d.kind === 'qa_aloft_door');
+    if (!mouth) continue;
+    placedO++;
+    const walkO = out.walk as GridWalkField | undefined;
+    if (mouth.tier === 1 && walkO?.regionAt
+      && walkO.regionAt(mouth.pos.x, mouth.pos.y) === 'butte_top') sovereignO++;
+    if (insideBounds(mouth.pos, 28, { w: WO, h: HO, shape: 'rect' })) rimO++;
+    if (walkO && storyReachable(walkO, entryO, mouth.pos, 1)) reachO++;
+    const ring = out.doodads.filter(d => (d.kind === 'bone_pile' || d.kind === 'rock')
+      && d.tier === 1 && Math.hypot(d.pos.x - mouth.pos.x, d.pos.y - mouth.pos.y) < 160);
+    if (ring.length >= 2) ringO++;
+  }
+  check('O1 the aloft dart seats the claim (12-seed forced sweep)', placedO >= 11, `${placedO}/12`);
+  check('O2 every seat is a SOVEREIGN story center (butte_top, tier-stamped mouth)',
+    sovereignO === placedO, `${sovereignO}/${placedO}`);
+  check('O3 every seat obeys the rim and the STORY ROAD reaches it from the entry',
+    rimO === placedO && reachO === placedO, `rim=${rimO} road=${reachO} of ${placedO}`);
+  check('O4 the midden ring is the STORY\'s furniture (≥2 aloft-stamped pieces at the door)',
+    ringO >= Math.max(1, placedO - 2), `${ringO}/${placedO}`);
+
+  // O5: the ellipse batch — the rim law bites where the shape does.
+  let placedE = 0, rimE = 0;
+  for (let i = 0; i < 6; i++) {
+    const seed = (0xe111 + i * 7919) >>> 0;
+    const out = genO(mkAloft({ shape: 'ellipse' }), seed);
+    const mouth = out.doodads.find(d => d.kind === 'qa_aloft_door');
+    if (!mouth) continue;
+    placedE++;
+    if (insideBounds(mouth.pos, 28, { w: WO, h: HO, shape: 'ellipse' })) rimE++;
+  }
+  check('O5 ellipse mints keep every aloft dwell seat in-shape', placedE >= 4 && rimE === placedE,
+    `placed=${placedE} rim=${rimE}`);
+
+  // O6: THE ALOFT WINDOW — a composition site on the story: its cluster
+  // pieces gate on the story's floor and wear its stamp.
+  let cairnsAloft = 0, cairnsUnstamped = 0;
+  for (let i = 0; i < 8; i++) {
+    const seed = (0xc0a7 + i * 104729) >>> 0;
+    const out = genO(mkAloft({
+      landmarks: [],
+      compositions: [{ composition: 'qa_aloft_court', chance: 1 }],
+    }), seed);
+    const walkO = out.walk as GridWalkField | undefined;
+    for (const d of out.doodads) {
+      if (d.kind !== 'cairn') continue;
+      const onStory = !!walkO?.regionAt && tierFloorAt(walkO.regionAt(d.pos.x, d.pos.y), 1);
+      if (d.tier === 1 && onStory) cairnsAloft++;
+      else if (onStory && d.tier === undefined) cairnsUnstamped++;
+    }
+  }
+  check('O6 the aloft window stamps the bundle onto the story (cairns aloft, none unstamped)',
+    cairnsAloft >= 6 && cairnsUnstamped === 0, `aloft=${cairnsAloft} unstamped=${cairnsUnstamped}`);
+
+  // O7: the story-less refusal — a plains mint places NOTHING (no valley
+  // fallback), and the same def keeps generating (no crash, exits carved).
+  let refusedOk = true;
+  for (let i = 0; i < 6; i++) {
+    const seed = (0xbee5 + i * 104729) >>> 0;
+    const out = genO(mkAloft({ layoutType: undefined, layoutParams: {} }), seed);
+    if (out.doodads.some(d => d.kind === 'qa_aloft_door')) refusedOk = false;
+  }
+  check('O7 a story-less layout refuses the aloft claim whole (no valley seat, ever)', refusedOk);
+
+  // O8: determinism — same seed, same stack (kind:pos:tier print).
+  {
+    const a = genO(mkAloft({}), 0xd00d);
+    const b = genO(mkAloft({}), 0xd00d);
+    const print = (o: GeneratedLayout): string =>
+      o.doodads.map(d => `${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}:${d.tier ?? 0}`).join('|');
+    check('O8 the aloft seat is deterministic (same seed, same stack)', print(a) === print(b));
+  }
+
+  // O9: the boot-validation refusals — masonry and tier-0 promises never
+  // stand at an aloft site.
+  registerCluster({
+    id: 'qa_aloft_poi_cairns', anchor: { radius: 26 }, poi: true,
+    pieces: [{ kind: 'cairn', radius: [10, 14], count: [1, 2] }],
+  });
+  registerComposition({
+    id: 'qa_aloft_bad',
+    sites: [{ id: 'perch', radius: [60, 90], siteTier: 1 }],
+    post: [
+      { kind: 'structure', structure: 'watchtower', at: 'perch', count: [1, 1] },
+      { kind: 'cluster', cluster: 'qa_aloft_poi_cairns', at: 'perch', count: [1, 1] },
+    ],
+  });
+  const errsO = validateCompositions();
+  check('O9 validation refuses structures + POI clusters at aloft sites',
+    errsO.some(e => e.includes('qa_aloft_bad') && e.includes('flatten the story'))
+    && errsO.some(e => e.includes('qa_aloft_bad') && e.includes('tier-0 promise')),
+    errsO.filter(e => e.includes('qa_aloft_bad')).join(' | ') || '(no errors)');
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);
