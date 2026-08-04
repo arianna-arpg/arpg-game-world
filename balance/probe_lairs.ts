@@ -84,6 +84,9 @@ const LAIR_IDS = [
   // Batch 28 — THE ALOFT LANE's debut: the butte TOPS' claim (siteTier 1),
   // butteland's third axis beside the moot's ground and the larder's caves.
   'baboon_midden',
+  // Batch 30 — THE STORIES GATE's first live ask: the pinnacle crown
+  // (stories 3 at the fold, siteTier 3 at the dart).
+  'sleepless_watch',
 ];
 const MOUTHS = [
   'frostmaw_maw', 'hovel_door', 'sphinx_gate',
@@ -101,6 +104,8 @@ const MOUTHS = [
   'vent_nest', 'larder_crag',
   // Batch 28 — the cleft in the needle's crown (THE ALOFT LANE's door).
   'midden_mouth',
+  // Batch 30 — the door on the pinnacle's third terrace.
+  'horn_gate',
 ];
 const NATIVES = [
   'yeti', 'yeti_alpha', 'hill_giant', 'mire_hag', 'vault_sphinx',
@@ -117,6 +122,8 @@ const NATIVES = [
   'vent_crab', 'shelf_lurker', 'vent_matron', 'larder_pard',
   // Batch 28 — the midden's sovereign.
   'baboon_king',
+  // Batch 30 — the crown's far-seer and his drowsing court.
+  'sleepless_warden', 'horn_thegn',
 ];
 
 // --- RIG A: the registry weave --------------------------------------------------
@@ -2659,6 +2666,199 @@ const step = (secs: number): void => {
       check('P26c the return is MOBILE on its story', outStep > 15, `step=${outStep.toFixed(1)}px`);
     }
   }
+}
+
+// --- RIG S, BATCH 30: THE SLEEPLESS WATCH (the pinnacle crown's claim) --------
+// THE STORIES GATE's first live consumer: `stories: 3` refuses every flat
+// highland face at the fold (the RIG Q law carried by real content), the
+// horn gate seats the third terrace through the aloft dart (siteTier 3 +
+// the first live siteTryMul — probe_tiers O16 pins the placement), and the
+// den behind it is THE WATCH FABRIC AT BOSS GRAIN in its extreme regime:
+// the far-seer's narrow slow beam, the drowsing horn-thegns, and THE HORN
+// (perception.alertShout at bowl reach — his lock stands the court up
+// through the fabric's own ladder-jump). S1 pins the envelope + the family
+// claim law, S2 the sovereign seat, S3 mint purity + the open-sky bowl,
+// S4 the aloft round trip on the real fold, S5 the watch regime's numbers.
+// (Registers BEFORE rig Q: the qa_stories row stays the registry's last
+// write — the probe-local content law.)
+{
+  // S1 — the envelope + THE CLAIM LAW at the family's fifth axis: the cairn
+  // squats the valleys, the frostmaw the caves, the rimewick ring the cold
+  // skirts (tileset-pinned), the roost the deep high heart (interior +
+  // climate), and the watch takes the STORIES none of them read.
+  const watchRow = lairOf('sleepless_watch');
+  const gateDef = landmarkOf('horn_gate_site');
+  check('S1 the claim asks the stories and the def asks the terrace (stories 3 at the fold, siteTier 3 at the dart)',
+    watchRow?.seat.place === 'surface' && watchRow?.seat.stories === 3
+    && gateDef?.siteTier === 3 && gateDef?.siteTryMul === 3
+    && !gateDef?.poi && !gateDef?.mustReach && gateDef?.clearSite === true);
+  const foldHl = (tileset: string, level: number, place: 'cave' | 'surface' = 'surface'): string[] =>
+    lairLandmarkRolls({
+      place, biome: 'highland', caveDepth: place === 'cave' ? 1 : undefined,
+      level, tileset,
+    }).map(r => r.landmark);
+  check('S1 the fold seats the watch on the pinnacle alone (the stories gate live: flat faces refuse, caves refuse, level 6 silent)',
+    foldHl('pinnacle', 16).includes('horn_gate_site')
+    && !foldHl('highland', 16).includes('horn_gate_site')
+    && !foldHl('snowcrown', 16).includes('horn_gate_site')
+    && !foldHl('pinnacle', 16, 'cave').includes('horn_gate_site')
+    && !foldHl('pinnacle', 6).includes('horn_gate_site'));
+  // Two claims, two axes, ONE face: the rimewick ring holds the pinnacle's
+  // valley skirt (its allowlist) while the watch holds the crown — both
+  // fold on the same query, readable in one zone. The roost stays refused
+  // here BY ITS OWN LAW (its row asks interior + climate and this ground
+  // carries no readings — the family's separation, pinned).
+  check('S1 the family separates by axis on the crown face (rimewick beside the watch; the roost asks readings this ground lacks)',
+    foldHl('pinnacle', 16).includes('rimewick_clutch')
+    && !foldHl('pinnacle', 16).includes('roost_crag_site'));
+
+  // S2 — headless placement at chance 1 on the cone face (the batch-30
+  // sweep's generous face: 40/40 placed, all sovereign/rim/road): the mouth
+  // stands SOVEREIGN on peak_terrace_3, tier-stamped, story-road-reached,
+  // with the vigil's spoor dressed to its story.
+  const WP = 3000, HP = 2350;
+  const entryP = vec(140, HP / 2);
+  const exitsP: Vec2[] = [vec(WP - 140, HP / 2)];
+  const tsP = TILESETS.pinnacle;
+  const coneP = { ...tsP.layoutParams, ...tsP.variants![0].layoutParams };
+  const watchZone = (seed: number): ZoneDef => ({
+    id: 'probe_watch_zone', name: 'Probe Pinnacle', level: 16,
+    size: { w: WP, h: HP }, theme: { ...tsP.theme },
+    layoutType: 'switchback', layout: tsP.layout, layoutParams: { ...coneP },
+    objective: { kind: 'none' }, packs: tsP.packs,
+    exits: [{ to: 'probe_home', side: 's' }], map: { x: 0, y: 0 }, seed,
+    geo: { biomeDepth: 0.85 },
+    landmarks: [{ landmark: 'horn_gate_site', chance: 1 }],
+  });
+  {
+    const out = generateLayout(watchZone(0x51ee9), { w: WP, h: HP }, new Rng(0x51ee9), entryP, exitsP);
+    const mouth = out.doodads.find(d => d.kind === 'horn_gate');
+    const walkP = out.walk as GridWalkField | undefined;
+    check('S2 the horn gate seats ALOFT (sovereign peak_terrace_3, tier-stamped, story road green)',
+      !!mouth && mouth.tier === 3
+      && walkP?.regionAt?.(mouth.pos.x, mouth.pos.y) === 'peak_terrace_3'
+      && !!walkP && storyReachable(walkP, entryP, mouth.pos, 3),
+      mouth ? `at=${mouth.pos.x.toFixed(0)},${mouth.pos.y.toFixed(0)} kind=${walkP?.regionAt?.(mouth.pos.x, mouth.pos.y)}` : 'NO MOUTH');
+    const spoorP = out.doodads.filter(d => (d.kind === 'cairn' || d.kind === 'campfire' || d.kind === 'rock')
+      && mouth && Math.hypot(d.pos.x - mouth.pos.x, d.pos.y - mouth.pos.y) < 160 && d.tier === 3);
+    check('S2 the vigil spoors its terrace (waymark cairns + the watch-fire at the door, story-stamped)',
+      spoorP.length >= 2, `${spoorP.length} pieces`);
+  }
+
+  // S3 — mint purity + the den's contract (the P24 idiom): byte-equal,
+  // sealed, the boss ask authored, and THE OPEN-SKY BOWL (the roost's law:
+  // an explicit def sky over the caveDepth derivation — the watch stands
+  // under real weather and real radiance, or the beacon's breathing lies).
+  {
+    const sz = sidezoneOf('horn_gate');
+    const mctx = {
+      parent: caveDef({ id: 'probe_s3_watch', caveDepth: undefined, anchor: undefined, biome: 'highland' }),
+      seed: 0xb30a, id: 'probe_s3_pocket_watch',
+      pos: { x: 100, y: 100 }, playerLevel: 16, pkgActive: () => false,
+    };
+    const bowl = sz ? sz.mint(mctx) : null;
+    check('S3 the watch mints pure and sealed under open sky (byte-equal, noDeeper, the boss ask + the tithe authored)',
+      !!bowl && JSON.stringify(bowl) === JSON.stringify(sz!.mint(mctx))
+      && bowl.noDeeper === true
+      && bowl.name === 'the Sleepless Watch'
+      && bowl.objective?.kind === 'boss' && (bowl.objective as { id?: string }).id === 'sleepless_warden'
+      && bowl.sky === 'open' && skyOf(bowl) === 'open'
+      && (bowl.fauna ?? []).some(f => f.id === 'gem_cache' && f.chance === 1));
+  }
+
+  // S4 — THE ALOFT ROUND TRIP on the REAL fold path at THREE STORIES (the
+  // P26c discovery-loop replay, two terraces higher): devMintTileset walks
+  // placeZoneAt → the stories gate → the aloft sitter → the mouth stamp,
+  // the dwell opens the watch, and the climb-out lands the party back on
+  // the third terrace AT the door (the story-aware landing at its highest
+  // shipped ask — the N3.8 bar).
+  {
+    // The measured configuration verbatim (the batch-30 sweep's fold ladder
+    // ran under exactly these seeds; hits at 954004/954020/954026).
+    seedGlobalRandom(0xa10f);
+    const w = makeSimWorld('warrior', 0x1a28);
+    w.player.invulnerable = true;
+    type WatchCm = { pos: { x: number; y: number }; seed: number; kind: string; mouthTier?: number };
+    type WatchInnards = {
+      enterSidezone(cm: { pos: { x: number; y: number }; seed: number; kind: string }): void;
+      travelThrough(e: { to: string; side: 'n' | 's' | 'e' | 'w' }): void;
+      caveEntrances: WatchCm[];
+      walk: { regionAt?(x: number, y: number): string } | null;
+    };
+    const innards = w as unknown as WatchInnards;
+    const stepFrom = (seat: { x: number; y: number }): number => {
+      let best = 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        w.player.pos.x = seat.x; w.player.pos.y = seat.y;
+        for (let i = 0; i < 6; i++) w.moveActor(w.player, dx, dy, 0.1);
+        best = Math.max(best, Math.hypot(w.player.pos.x - seat.x, w.player.pos.y - seat.y));
+      }
+      w.player.pos.x = seat.x; w.player.pos.y = seat.y;
+      return best;
+    };
+    let found: { zoneId: string; cm: WatchCm } | null = null;
+    for (let i = 0; i < 12 && !found; i++) {
+      const zid = w.devMintTileset('pinnacle', i, 16, { seed: 954001 + i });
+      if (!zid) continue;
+      const cm = innards.caveEntrances.find(en => en.kind === 'horn_gate');
+      if (cm) found = { zoneId: zid, cm };
+    }
+    check('S4 a real pinnacle mint carries the horn gate ALOFT (the fold at placeZoneAt, mouthTier 3)',
+      !!found && found.cm.mouthTier === 3, found ? `zone=${found.zoneId}` : 'no hit in 12 seeds');
+    if (found) {
+      const mouthAt = { x: found.cm.pos.x, y: found.cm.pos.y };
+      const drawn = w.doodads.filter(dd => dd.kind === 'horn_gate')
+        .sort((a2, b2) => Math.hypot(a2.pos.x - mouthAt.x, a2.pos.y - mouthAt.y)
+          - Math.hypot(b2.pos.x - mouthAt.x, b2.pos.y - mouthAt.y))[0];
+      check('S4 drawn == dwelled on sovereign ground (the door doodad AT the seat, peak_terrace_3, tier 3)',
+        !!drawn && Math.hypot(drawn.pos.x - mouthAt.x, drawn.pos.y - mouthAt.y) < 2
+        && drawn.tier === 3 && innards.walk?.regionAt?.(mouthAt.x, mouthAt.y) === 'peak_terrace_3',
+        drawn ? `nudge=${Math.hypot(drawn.pos.x - mouthAt.x, drawn.pos.y - mouthAt.y).toFixed(1)}px kind=${innards.walk?.regionAt?.(mouthAt.x, mouthAt.y)}` : 'NO DOODAD');
+      const parentId = w.zone.id;
+      for (const a of w.actors) { if (a.team === 'enemy' && !a.dead) a.dead = true; }
+      w.player.pos.x = mouthAt.x; w.player.pos.y = mouthAt.y;
+      w.player.tier = 3;
+      innards.enterSidezone(found.cm);
+      check('S4 the dwell opens the watch (arrival on the bowl floor, rung remembers the third terrace)',
+        w.zone.id.startsWith('cave_') && w.zone.name === 'the Sleepless Watch'
+        && w.player.tier === 0 && w.caveReturn?.tier === 3,
+        `zone=${w.zone.id} tier=${w.player.tier} rung=${w.caveReturn?.tier}`);
+      check('S4 the watch is HELD (the far-seer at his beacon, the thegns drowsing on their posts)',
+        w.actors.some(a => a.defId === 'sleepless_warden' && !a.dead)
+        && w.actors.some(a => a.defId === 'horn_thegn' && !a.dead));
+      for (const a of w.actors) { if (a.team === 'enemy' && !a.dead) a.dead = true; }
+      const inStep = stepFrom({ x: w.player.pos.x, y: w.player.pos.y });
+      check('S4 the arrival is MOBILE', inStep > 15, `step=${inStep.toFixed(1)}px`);
+      innards.travelThrough({ to: parentId, side: 'n' });
+      const p2 = w.player;
+      check('S4 the climb-out wears the THIRD story on story floor, AT the mouth (the N3.8 bar at the lane\'s highest shipped ask)',
+        w.zone.id === parentId && p2.tier === 3
+        && tierFloorAt(innards.walk?.regionAt?.(p2.pos.x, p2.pos.y), 3)
+        && Math.hypot(p2.pos.x - mouthAt.x, p2.pos.y - mouthAt.y) < 2,
+        `tier=${p2.tier} d=${Math.hypot(p2.pos.x - mouthAt.x, p2.pos.y - mouthAt.y).toFixed(1)}px kind=${innards.walk?.regionAt?.(p2.pos.x, p2.pos.y)}`);
+      for (const a of w.actors) { if (a.team === 'enemy' && !a.dead) a.dead = true; }
+      const outStep = stepFrom({ x: p2.pos.x, y: p2.pos.y });
+      check('S4 the return is MOBILE on its story', outStep > 15, `step=${outStep.toFixed(1)}px`);
+    }
+  }
+
+  // S5 — THE WATCH REGIME's numbers, pinned as floors: the far-seer's whole
+  // argument is the fabric's extreme regime (detection past the census
+  // ceiling, the narrow slow LIGHTHOUSE beam, THE HORN at bowl reach — his
+  // lock jumps every drowsing thegn's ladder through standing law). A tuning
+  // that silences the horn or widens the beam into a barrow lantern moves
+  // this pin ON PURPOSE, never by drift.
+  const seer = MONSTERS.sleepless_warden;
+  const thegn = MONSTERS.horn_thegn;
+  check('S5 the far-seer wears the extreme regime (boss + hoard + post, sweep ≤70° drawn, detection ≥1.8, the Horn ≥1000)',
+    seer?.boss === true && seer?.loot === 'lair_hoard' && seer?.post === true
+    && (seer?.watch?.sweep?.arcDeg ?? 999) <= 70 && seer?.watch?.fan === 'show'
+    && (seer?.detection ?? 0) >= 1.8
+    && (seer?.brain?.perception?.alertShout ?? 0) >= 1000,
+    `arc=${seer?.watch?.sweep?.arcDeg} detect=${seer?.detection} horn=${seer?.brain?.perception?.alertShout}`);
+  check('S5 the thegns drowse on their posts (the ghoul\'s law in the crown\'s colors, hearing rims drawn)',
+    thegn?.watch?.sleep === true && thegn?.watch?.fan === 'show' && thegn?.post === true
+    && thegn?.faction === 'jotun' && seer?.faction === 'jotun');
 }
 
 // --- RIG Q: THE STORIES GATE (LairSeat.stories — batch 29, the fold's story rung)

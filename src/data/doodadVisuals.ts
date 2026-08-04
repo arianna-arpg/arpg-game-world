@@ -3485,4 +3485,16 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -1.6, color: '#c8883a', intensity: 0.12, flicker: 1.4 },
   },
+  // The horn gate: the door on the pinnacle's third terrace (the aloft seat —
+  // the same crown-cleft painter in the peak's grey stone), the watch-fire's
+  // gold breathing out of the throat: somebody up here is awake.
+  horn_gate: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#4c4a3e', edge: '#8e876a', material: 'stone',
+      glow: '#f0c060', throat: '#0a0906', rubble: {},
+      label: 'the Sleepless Watch',
+    },
+    light: { radius: -1.6, color: '#f0c060', intensity: 0.14, flicker: 1.2 },
+  },
 };

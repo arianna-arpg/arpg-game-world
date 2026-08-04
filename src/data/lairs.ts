@@ -2149,3 +2149,90 @@ registerLair({
     chance: 0.2,
   },
 });
+
+// === THE SLEEPLESS WATCH (the mountain crown — THE STORIES GATE's first ask) =
+// The highland ladder's aloft rung, on the axis none of the family touches:
+// the cairn squats the border valleys, the frostmaw the caves, the rimewick
+// ring the cold skirts, the roost the deep high heart — and THIS claim stands
+// on the STORIES THEMSELVES: `stories: 3` refuses every flat face at the fold
+// (no darts, no rng — only the pinnacle's switchback country can stack the
+// ask), and the horn gate seats on the third terrace through the aloft dart
+// (siteTier 3; siteTryMul widens the sliver-bench draw, the first live def to
+// wear it). The ascent is the approach; the door you earn opens into the
+// watch itself.
+//
+// Inside: THE WATCH FABRIC AT BOSS GRAIN, its extreme regime — the Sleepless
+// sweeps a LONG narrow gaze across his own open-sky bowl (a lighthouse, not
+// a lantern: the barrow's wide short cone inverted), his drowsing horn-thegns
+// sleep on their posts between you and him, and THE HORN CLOCK is the fight's
+// law: his lock is the shout (perception.alertShout at bowl reach — the watch
+// fabric's own ladder-jump stands the whole court up hunting). Creep the
+// hearing rims, thread the beam's schedule, and open on him clean — or come
+// in loud and fight the woken crown. Pain needs no ladder: your opening blow
+// wakes him to searching, and the duel is a race against his find.
+
+registerDoodadRule('horn_gate', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'horn_gate_site', builder: 'den_mouth', size: [180, 250],
+  clearSite: true,
+  // NO poi/mustReach — an aloft seat never joins the tier-0 nets (the story
+  // road assert at the dart is the guarantee; the midden's law).
+  siteTier: 3,
+  // The third terrace is a sliver of the arena (the summit sweep's measured
+  // starvation: the half-cone face seats 20/40 at the standing 18 darts) —
+  // the dart budget widens on THIS def's own failures only.
+  siteTryMul: 3,
+  params: {
+    mouthKind: 'horn_gate',
+    // The vigil's spoor: waymark cairns climbing to the door, the watch-fire
+    // banked beside it, and the crown's own weathered stone.
+    dress: [
+      { kind: 'cairn', count: [2, 4], radius: [10, 14] },
+      { kind: 'campfire', count: [1, 1], radius: [12, 14] },
+      { kind: 'rock', count: [1, 3], radius: [12, 18] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'horn_gate',
+  dwell: 0.7,
+  ledgerOnEnter: 'sleepless_watch_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, 'sleepless_watch', {
+      rollVariant: true,
+      name: 'the Sleepless Watch',
+      objective: { kind: 'boss', id: 'sleepless_warden' },
+      noDeeper: true,
+    });
+    // THE OPEN-SKY BOWL (the roost's law): skyOf honors an explicit def sky
+    // over the caveDepth derivation — the watch stands under real weather,
+    // real radiance, and the beacon breathes with the day.
+    def.sky = 'open';
+    // The watch's tithe — what the passes paid the keeper to see them
+    // through. Lean by design (the roost keeps the hoard crown).
+    def.fauna = [
+      { id: 'gem_cache', chance: 1, count: [1, 3] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'sleepless_watch',
+  landmark: 'horn_gate_site',
+  seat: {
+    biomes: ['highland'],
+    place: 'surface',
+    // THE STORIES GATE's first live ask: only country whose face can stack
+    // three over-stories qualifies — today that is the pinnacle alone, and
+    // any future highland face that grows real stories joins BY LAW
+    // (capability grain, deliberately no tileset allowlist).
+    stories: 3,
+    // The crown lights its watch as the world deepens: a rung over the
+    // rimewick ring's 7, under the roost's 14 — the ladder keeps its top.
+    level: { from: 12, fadeIn: 3 },
+    chance: 0.35,
+  },
+});

@@ -9686,6 +9686,34 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 1.15,
   },
+
+  // === THE SLEEPLESS WATCH (batch 30 — the crown's residents) ================
+  /** The Sleepless: a tall grey warden wrapped against the crown's wind —
+   *  storm-cloak collar, frost-pale beard, the beacon-staff whose glow is the
+   *  gaze's own lantern — and the EYES, wide-set and watch-gold, the biggest
+   *  in the bestiary on purpose: the far-seer reads as what he does. */
+  sleepless_warden: {
+    parts: [
+      { kind: 'torso', scale: 1.1 },
+      { kind: 'collar', scale: 1.05, alpha: 0.9 },
+      { kind: 'beard', x: 0.32, scale: 0.95 },
+      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'gauntlets', scale: 1.05 },
+      { kind: 'eyes', color: '#f0c060', params: { spread: 0.42, dist: 0.6, size: 0.13 } },
+    ],
+    shadowScale: 1.1,
+  },
+  /** The horn-thegn: a squat hooded ward drowsing on its post — robe, deep
+   *  hood, the hammer across its knees. NO eyes of its own: the watch tell
+   *  opens them as the ladder climbs (the ghoul's law in the crown's gold). */
+  horn_thegn: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.14, seed: 311 } },
+      { kind: 'robe', scale: 0.92 },
+      { kind: 'hood', x: 0.3, scale: 0.95 },
+      { kind: 'mace', y: -0.2, scale: 0.85 },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

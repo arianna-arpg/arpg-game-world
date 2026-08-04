@@ -21176,6 +21176,80 @@ export const MONSTERS: Record<string, MonsterDef> = {
       ],
     },
   },
+
+  // === THE SLEEPLESS WATCH (batch 30 — the mountain crown's aloft residents).
+  // The watch fabric at BOSS GRAIN in its extreme regime (data/lairs.ts seats
+  // the door on the pinnacle's third terrace through the stories gate): the
+  // far-seer's numbers deliberately stand outside the fabric's whole census —
+  // detection 1.9 over the blood mite's 1.6 ceiling, a NARROW slow beam
+  // (68° over 9s — the lighthouse; the barrow lantern is 150° over 6.5) and
+  // an alertShout at bowl reach (1100 over the standing 380–480): THE HORN.
+  // His lock is the shout, the shout jumps every drowsing thegn's ladder to
+  // the search cap, and the whole crown stands up hunting — so the fight's
+  // real clock is his FIND, and the clean way in is the fabric read the den
+  // teaches: creep the hearing rims, thread the beam, open on him first.
+  sleepless_warden: {
+    id: 'sleepless_warden', name: 'the Sleepless',
+    color: '#d8dce8', shape: 'trapezoid', radius: 24, look: 'sleepless_warden',
+    heft: 1.8, boss: true,
+    base: { life: 640, moveSpeed: 96, accuracy: 108, armor: 42, mana: 70, manaRegen: 6, poise: 110 },
+    mods: [mod('coldRes', 'flat', 0.5)],
+    // The post's kit, all standing: the spear-rack rained on searched ground,
+    // thrown crown-stone, and the horn's own concussion when you close.
+    skills: ['skyfall_volley', 'hurl_debris', 'thunderclap'],
+    xp: 300, loot: 'lair_hoard',
+    faction: 'jotun',
+    detection: 1.9,
+    post: true, // the beacon is the post: every chase ends back at the fire
+    // THE CARRIED BEACON (the roost's carried-lamp law): the watch-fire he
+    // tends is the light his gaze swings — the cone you thread is lit gold.
+    light: { radius: -8, color: '#f0c060', intensity: 0.5, flicker: 1.5 },
+    watch: { sweep: { arcDeg: 68, sec: 9 }, riseSec: 2.2, searchSec: 9, fan: 'show' },
+    tells: [
+      { source: 'watch', channel: { kind: 'glow', color: '#f0c060', max: 0.5 } },
+      { source: 'watch', band: [0.5, 1], channel: { kind: 'lean', amp: 0.6 } },
+    ],
+    brain: {
+      type: 'basic',
+      perception: { arcDeg: 60, rearMul: 0.15, alertShout: 1100, memory: 8 },
+      drives: { wrath: { rise: -0.05, onHurt: 0.09 } },
+      rules: [{
+        when: { drive: { id: 'wrath', above: 0.5 } },
+        announce: 'the Horn of the Watch sounds — the crown is AWAKE!',
+        use: { skillUse: { cadence: [0.15, 0.35] }, move: { style: 'direct', pace: 1.15 } },
+      }],
+    },
+  },
+  // The horn-thegns: the watch's drowsing court, asleep on their posts
+  // between the door and the beacon. The drowser law worn plain (the ghoul's
+  // posture in the crown's colors): shut-eyed, hearing-rim drawn, woken by
+  // footfall or the Horn — and every one that wakes is a body hunting you
+  // while the Sleepless counts down.
+  horn_thegn: {
+    id: 'horn_thegn', name: 'Horn-Thegn',
+    color: '#8a8ea0', shape: 'kite', radius: 14, look: 'horn_thegn',
+    heft: 1.2,
+    base: { life: 130, moveSpeed: 105, accuracy: 100, armor: 25, mana: 30, manaRegen: 4 },
+    mods: [mod('coldRes', 'flat', 0.35)],
+    skills: ['heavy_strike', 'hurl_debris'],
+    xp: 55, faction: 'jotun',
+    post: true, // the heap is the post: chase over, it settles dark again
+    vision: { arcDeg: 120, rearMul: 0.5 }, // waking, its EARS are the sense
+    watch: { sleep: true, riseSec: 3.0, decaySec: 9, fan: 'show' },
+    tells: [
+      // Shut eyes that OPEN as the ladder climbs (the ghoul's read in watch
+      // gold — the look wears no eyes of its own on purpose).
+      {
+        source: 'watch', curve: 'early', channel: {
+          kind: 'part',
+          part: { kind: 'eyes', x: 0.42, color: '#f0c060', params: { spread: 0.5, dist: 0.6, size: 0.1 } },
+          alpha: [0, 1], scale: [0.7, 1.1],
+        },
+      },
+      { source: 'watch', band: [1, 0], channel: { kind: 'tint', color: '#232838', max: 0.4 } },
+    ],
+    brain: { type: 'basic' },
+  },
 };
 
 // ---------------------------------------------------------------------------

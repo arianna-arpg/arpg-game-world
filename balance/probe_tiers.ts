@@ -29,6 +29,8 @@ import '../src/engine/interiorGen';
 import '../src/data/massifs';
 import '../src/data/compositions';
 import '../src/data/settled';
+// (the horn_gate door's live def registers there — rig O16's pin.)
+import '../src/data/lairs';
 
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
@@ -39,9 +41,10 @@ import { mod } from '../src/engine/stats';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import {
-  generateLayout, hasLayout, registerCluster, registerComposition, registerDoodadRule,
-  registerLandmark, validateCompositions, type Doodad, type GeneratedLayout,
-} from '../src/engine/levelgen';
+  generateLayout, hasLayout, landmarkOf, registerCluster, registerComposition,
+  registerDoodadRule, registerLandmark, validateCompositions, type Doodad,
+  type GeneratedLayout,
+} from '../src/engine/levelgen'; // (landmarkOf joined for O16 — the horn_gate live-def pin)
 import { castRay, LOS_CFG } from '../src/engine/los';
 import { SightVeil } from '../src/render/vis/sightVeil';
 import { GridWalkField } from '../src/world/gridWalk';
@@ -1594,6 +1597,35 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
   }
   check('O15 the wind faces stack no over-story (the eyrie\'s refusal stands structural)',
     windStoryCells === 0, `storyCells=${windStoryCells}`);
+
+  // O16: THE FIRST LIVE CONSUMER — the horn gate (data/lairs.ts, THE
+  // SLEEPLESS WATCH) wears the lane for real: siteTier 3 over the pinnacle,
+  // and the dart budget's first live value (O13 pinned siteTryMul's widening
+  // on qa content; this pins that a live def actually ships it — the
+  // probes-kept-aim law). Batch-30 sweep measured the def at the mul: base
+  // 40/40, cone 40/40, shoulder 36/40, every placed seat sovereign/rim/road
+  // — the 8-seed probe keeps the cone bar.
+  const liveDef = landmarkOf('horn_gate_site');
+  check('O16 the live crown def ships the lane (siteTier 3 + the first live siteTryMul, no tier-0 promises)',
+    liveDef?.siteTier === 3 && liveDef?.siteTryMul === 3
+    && !liveDef?.poi && !liveDef?.mustReach && liveDef?.clearSite === true);
+  let livePlaced = 0, liveLawful = 0, liveOff = 0;
+  for (let i = 0; i < 8; i++) {
+    const seed = (0x51ee9 + i * 7919) >>> 0;
+    const defL = mkSummit({ layoutParams: coneParams, landmarks: [{ landmark: 'horn_gate_site', chance: 1 }], seed });
+    const out = generateLayout(defL, { w: WQ, h: HQ }, new Rng(seed), entryQ, exitsQ);
+    const mouth = out.doodads.find(d => d.kind === 'horn_gate');
+    if (!mouth) continue;
+    livePlaced++;
+    const walkL = out.walk as GridWalkField | undefined;
+    const rk = walkL?.regionAt ? regionKind(walkL.regionAt(mouth.pos.x, mouth.pos.y)) : undefined;
+    if (!(mouth.tier === 3 && !!rk && !rk.tierLink && !rk.walkable && rk.tier === 3)) { liveOff++; continue; }
+    if (insideBounds(mouth.pos, 28, { w: WQ, h: HQ, shape: 'rect' })
+      && !!walkL && storyReachable(walkL, entryQ, mouth.pos, 3)) liveLawful++;
+  }
+  check('O16 the horn gate seats the third terrace lawfully on the cone face',
+    livePlaced >= 7 && liveOff === 0 && liveLawful === livePlaced,
+    `placed=${livePlaced}/8 lawful=${liveLawful} offStory=${liveOff}`);
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);

@@ -2293,7 +2293,10 @@ import { makeSimWorld } from '../src/sim/arena';
 // [0,1] vs [1,1] dial, never a second row). Any other face carrying the
 // kind breaks absent == identical.
 {
-  const CARRIERS = ['foothills', 'highland', 'overpass', 'snowcrown', 'stonecrown', 'pinnacle'];
+  // (+ sleepless_watch, batch 30: the crown den behind the pinnacle's horn
+  // gate carries the beacon DELIBERATELY — the parent face's race-the-glow
+  // ritual finishing at the top of the world, and the warm walk back down.)
+  const CARRIERS = ['foothills', 'highland', 'overpass', 'snowcrown', 'stonecrown', 'pinnacle', 'sleepless_watch'];
   const found: string[] = [];
   const isHearth = (r: StampSpec): boolean => r.kind === 'hearth_crystal';
   for (const [id, ts] of Object.entries(TILESETS)) {

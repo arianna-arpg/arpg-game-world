@@ -12856,6 +12856,69 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
+  // THE SLEEPLESS WATCH — the crown bowl behind the horn gate (the pinnacle's
+  // third terrace; data/lairs.ts): an OPEN-SKY watch-court under real weather,
+  // the beacon banked at its heart and the drowsing thegns on their posts.
+  // Deliberately plains-only ground: the sweep beam and the hearing rims ARE
+  // the level design, and a winding gut would eat the lighthouse whole. The
+  // watch-fire is the pinnacle's own hearth kind — touch it and carry the
+  // glow, the base-camp ritual honored at the top of the world.
+  sleepless_watch: {
+    id: 'sleepless_watch', frontier: false, perfProbe: true,
+    sky: 'open',
+    caveLayouts: { plains: 3 },
+    nameFirst: ['Sleepless', 'Longwatch', 'Worldbrow', 'Highbrand', 'Coldbeacon', 'Stareye', 'Dawnhail', 'Hornward'],
+    nameSecond: ['Watch', 'Ward', 'Post', 'Court', 'Seat', 'Brow', 'Keeping', 'Gate'],
+    theme: {
+      ambientDark: 0.22,
+      ground: {
+        scale: 1.6, strength: 0.95, speckles: 0.6,
+        palette: ['#191913', '#26251d', '#343329', '#454436', '#585747'], bias: 0.52, alpha: 0.5,
+      },
+      floor: '#12110c', grid: '#1d1c15', border: '#9a9a84',
+      obstacle: '#4c4a3e', obstacleEdge: '#8e876a', accent: '#f0c060',
+      wall: '#4c4a3e', mud: '#3a3828',
+    },
+    sizeW: [1500, 2000], sizeH: [1150, 1550], ellipseChance: 0,
+    layout: [
+      { kind: 'rocks', count: [4, 7], radius: [18, 34] },
+      { kind: 'cairn', count: [2, 4] },
+      { kind: 'scree', count: [2, 4] },
+      { kind: 'stormglass_shard', count: [0, 2] },
+      { kind: 'rubble', count: [1, 2] },
+      // THE BEACON — the hearth row rides the tail on base + both variants
+      // (the append-by-history law; probe_massif R2's census names this face
+      // a deliberate carrier).
+      { kind: 'hearth_crystal', count: [1, 1] },
+    ],
+    variants: [
+      // The long watch: waymark cairns in rows — every relief that ever
+      // climbed here stacked its stone, and the beam sweeps them all.
+      { name: 'the long watch', layout: [
+        { kind: 'cairn', count: [4, 7] },
+        { kind: 'rocks', count: [3, 5], radius: [18, 32] },
+        { kind: 'scree', count: [2, 4] },
+        { kind: 'hearth_crystal', count: [1, 1] },
+      ] },
+      // The cold beacon: the high winter holds the bowl — ice teeth, storm
+      // glass, and the one fire that matters.
+      { name: 'the cold beacon', layout: [
+        { kind: 'ice_spike', count: [2, 4] },
+        { kind: 'stormglass_shard', count: [1, 2] },
+        { kind: 'rocks', count: [3, 5], radius: [18, 32] },
+        { kind: 'hearth_crystal', count: [1, 1] },
+      ] },
+    ],
+    packs: {
+      count: [3, 4], size: [1, 2],
+      table: [
+        { id: 'horn_thegn', weight: 5 },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    objectives: [{ kind: 'clear', weight: 1 }],
+  },
+
   // THE LEVIATHAN TRENCH — the hadal hollow under the deep sea's heart:
   // black water light, kelp gone pale at this depth, and the coil that owns
   // the bottom of the map. Caustics and bubbles keep the drowned read; the
