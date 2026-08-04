@@ -1186,8 +1186,9 @@ registerRouseRule('sap_sleeper', () => ({
 // THE BONE MASSIF (batch 28 — THE HUNT's ground vocabulary): standing masses
 // heaped of the counted dead, so a great beast can house itself in a massif
 // of bone. Region + two kinds register HERE (the catacombs precedent — a data
-// kit carries its own region row); no tileset mixes them yet — the wiring row
-// (downs/ossuary massifMasses) waits on the tileset seat, and the Hunt's own
+// kit carries its own region row); the DOWNS mix them live (base + barrowfield
+// massifMasses — batch 29's wiring; the ossuary was refused with cause, the
+// hollows-budget ruling), and the Hunt's own
 // nest culmination rides the transient dress lane meanwhile (overlays/hunt.ts
 // 'hunt_nest' — event ground is BORROWED; a massif is a place).
 // =============================================================================
