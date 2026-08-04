@@ -75,6 +75,7 @@ import { validateFog } from '../engine/fog';
 import './fog'; // side-effect: the fog bank defs register before validation
 import './garden'; // side-effect: the Garden kit's kinds register before validation
 import './catacombs'; // side-effect: the second under-country's kinds register before validation
+import './lonecrypt'; // side-effect: the lone crypt kit's kinds register before validation
 import { CREEPS, validateCreep } from '../engine/creep';
 import { validateReserves } from '../engine/reserves';
 import { validateRooted } from '../engine/rooted';

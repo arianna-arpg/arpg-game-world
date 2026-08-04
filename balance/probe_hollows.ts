@@ -254,16 +254,20 @@ const huntFace = (ts: TilesetDef, face: string, salt: number, budget: HollowRoll
       const r = genFace(ts, face, 0xc09b, spec, { w: 2400, h: 1800 });
       check(`crypt '${face}' mixture face grids (ensureGrid)`, r.grid);
     }
-    // The convex law, measured on the crypt's own plains face: where no grid
-    // stood up, no hollows may be recorded. (A rolled plan structure may
-    // lazily grid a lucky seed — such a seed just doesn't witness this side.)
-    let convexSeen = 0, convexLeaks = 0;
+    // THE TOMB LAW (data/lonecrypt.ts, 2026-08-03): every graveland zone
+    // raises the sealed_grave [1,1] from `common`, so the plains face now
+    // ALWAYS stands a grid — the convex-law witness this block once was
+    // lives on with the ossuary (§7, the injected-budget half, which
+    // proves convex ⇒ nothing recorded with a FAT budget). Pin the new
+    // truth instead: the tomb grids every plains seed, and losing the
+    // common row would read here as a fallen count.
+    let tombGridded = 0;
     for (let s = 0; s < 10; s++) {
       const r = genFace(ts, 'plains', (0x9d41 + s * 101) >>> 0, spec, { w: 2400, h: 1800 });
-      if (!r.grid) { convexSeen++; if (r.hollows.length) convexLeaks++; }
+      if (r.grid) tombGridded++;
     }
-    check('crypt plains faces stay convex → budget honestly idle', convexSeen >= 1 && convexLeaks === 0,
-      `${convexSeen}/10 convex, ${convexLeaks} leak(s)`);
+    check('crypt plains faces raise the sealed grave → every seed grids (the tomb law)',
+      tombGridded === 10, `${tombGridded}/10 gridded`);
   }
 }
 

@@ -849,6 +849,30 @@ export const STRUCTURES: Record<string, StructureDef> = {
     roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
   },
 
+  // --- THE FUNERARY KIT (the lone crypt — data/lonecrypt.ts) ------------------
+  // THE SEALED GRAVE: the deliberate structure over the lone crypt — a roofed
+  // tomb of standing stone whose inner cell seats the crypt's mouth
+  // (lone_crypt_door), its undercroft the minted crypt below. The threshold
+  // door is the tomb's own and always opens; the SEAL lives on the mouth
+  // (SidezoneDef.sealedBy — refused until the zone's exhumation ring reads
+  // done), so the building invites investigation and the way DOWN is what
+  // the riddle earns. The mouth's indoorsOnly gate rides the roof this plan
+  // raises: nobody exhumes through a wall. Braziers burn either side of the
+  // descent — someone keeps these lights.
+  sealed_grave: {
+    id: 'sealed_grave', halfW: 91, halfH: 65, cellSize: 26,
+    plan: [
+      '#######',
+      '#z...z#',
+      '#..V..#',
+      '#.....#',
+      '###D###',
+    ],
+    legend: { V: { doodad: { kind: 'lone_crypt_door', radius: 14 }, interior: true } },
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'stone', floorStyle: 'flagstone',
+  },
+
   // The longhouse: a hall that sleeps a work-crew — benches down the middle,
   // stores at both gables.
   longhouse: {

@@ -32,6 +32,7 @@ import './data/occurrences'; // side-effect: registers the 'occurrence' ring ten
 import './data/settled'; // side-effect: the settled-belt kit (+ the 'fields'/'district' recipes via engine/settled)
 import './data/garden'; // side-effect: the Garden country kit (kinds, formations, compositions, the nest role pool)
 import './data/catacombs'; // side-effect: the second under-country kit (the crypts lane, the lych way's span row)
+import './data/lonecrypt'; // side-effect: the lone crypt kit (the exhumation's door, the resident pool, the unquiet yard)
 import './data/grove'; // side-effect: the Grove country kit (lantern flora, the hollow way down)
 import './data/warfront'; // side-effect: the Warfront country kit (siege furniture, the war column)
 import './data/compositions'; // side-effect: registers the whole-zone composition bundles

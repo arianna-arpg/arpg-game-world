@@ -93,7 +93,86 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
     label: 'the ember ring',
     reward: { gems: 2, washFor: 20 },
   },
+  // THE GRAVE EXHUMATION — the lone crypt's key (kit: data/lonecrypt.ts).
+  // STRUCK open, never dwelled: every spade-blow is a landed hit through
+  // the knock grammar — the loud contrast with the 'unearth' objective's
+  // stand-and-charge mounds. The reward is deliberately lean; the sealed
+  // crypt this ring opens is the real pay.
+  grave_exhumation: {
+    kind: 'exhumation',
+    label: 'the exhumation',
+    reward: { gems: 1 },
+  },
 };
+
+// ---------------------------------------------------------------------------
+// THE EXHUMATION (the lone crypt's kind — kit in data/lonecrypt.ts): dig the
+// unquiet graves OPEN with your weapon. Each gravestone takes `digs` landed
+// blows (one shared count rolled at boot — the labor is readable, never a
+// lottery), an opened grave holds its kindled glow for good, and every grave
+// open resolves the ring. THE DISTINCTION, loudly: this is the STRIKE
+// exhumation — a blow rings a stone through the knock/spill/hum laws exactly
+// like every riddle; the 'unearth' objective's burial mounds are the DWELL
+// exhumation (stand your ground while the charge fills). Two verbs, two
+// fabrics, on purpose. No falter, no clock: spill 'all' lets a sweeping dig
+// feed several stones (the ember ring's breadth law) and patience alone
+// finishes the job — the pressure is the crypt's resident, not the ring.
+// ---------------------------------------------------------------------------
+
+/** The exhumation's own spec face (the CourtShrineSpec typing precedent —
+ *  extra dials live on an extending interface, presets that want them are
+ *  authored as typed consts). */
+export interface ExhumationSpec extends PuzzleSpec {
+  /** Spade-blows each grave takes to stand open (default [2, 3]); one band
+   *  roll at boot serves every stone. */
+  digs?: [number, number];
+}
+
+const EXHUME_TINT = '#d8cfa8';
+
+registerPuzzleKind({
+  id: 'exhumation',
+  nodeMonster: 'unquiet_grave',
+  geometry: 'ring',
+  who: 'player',
+  spill: 'all', // a wide swing digs several graves at once — breadth is honest labor
+  spacing: 118,
+  count: [4, 6],
+  label: 'the exhumation',
+  boot(run, h) {
+    const band = (run.spec as ExhumationSpec).digs ?? [2, 3];
+    run.state.need = band[0] + Math.floor(h.rng() * (band[1] - band[0] + 1));
+    run.state.dug = run.nodes.map(() => 0);
+  },
+  struck(run, node, h) {
+    const idx = node.puzzleNode?.idx ?? -1;
+    if (idx < 0) return;
+    const dug = run.state.dug as number[];
+    const need = run.state.need as number;
+    if (dug[idx] >= need) return; // an opened grave — quiet
+    dug[idx]++;
+    if (dug[idx] >= need) {
+      h.kindle(node, 9999);
+      h.flash(node.pos, node.radius + 20, EXHUME_TINT, 0.3);
+      h.say(node.pos, 'the grave stands open', EXHUME_TINT, 12);
+      if (dug.every(d => d >= need)) h.complete(run);
+    } else {
+      h.flash(node.pos, node.radius + 14, EXHUME_TINT, 0.2);
+      if (dug[idx] === 1) h.say(node.pos, 'the turf breaks…', EXHUME_TINT, 11);
+    }
+  },
+  solved(run, h) {
+    const need = (run.state.need as number | undefined) ?? 1;
+    run.state.dug = run.nodes.map(() => need);
+    for (const n of run.nodes) h.kindle(n, 9999);
+  },
+  status(run) {
+    const dug = run.state.dug as number[];
+    const need = run.state.need as number;
+    const open = dug.filter(d => d >= need).length;
+    return `${run.spec.label ?? this.label}: ${open}/${dug.length} graves opened`;
+  },
+});
 
 // ---------------------------------------------------------------------------
 // THE COURT SHRINE — a massif court ring that HOLDS a riddle. 'shrine' is a

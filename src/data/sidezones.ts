@@ -76,6 +76,17 @@ export interface SidezoneDef {
    *  Author only on OPEN-SKY parents: sheltered ground reads a flat
    *  twilight and a phase cond there would never (or always) hold. */
   when?: { cond: RadianceCond; refusal?: string };
+  /** THE SEALED MOUTH (the exhumation law — kit in data/lonecrypt.ts): the
+   *  mouth admits only while the parent zone's named riddle KIND (a
+   *  PUZZLE_KINDS id) reads DONE on the live board — drawn == tested, the
+   *  ring IS the lock. A sealed door never starts the dwell, and standing
+   *  on one floats `refusal` through the conditioned door's own throttled
+   *  clock (World.sidezoneSealHolds is the one engine read). A zone holding
+   *  NO run of the named kind has no seal (degrade OPEN — absent data never
+   *  wedges a door); the objective lane stays open for good through
+   *  completedObjectives' re-mark, while a side-riddle seal re-arms when
+   *  zone memory lapses — the ring re-earns the door, never a mystery. */
+  sealedBy?: { kind: string; refusal?: string };
   /** THE SPAN MOUTH (the rooted web, data/underspans.ts): this kind's mouths
    *  open a SHARED multi-parent pocket. The entrance harvest pairs each
    *  mouth with one of its zone's span memberships (ZoneDef.underways) and

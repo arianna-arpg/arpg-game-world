@@ -4937,6 +4937,64 @@ export const LOOKS: Record<string, LookDef> = {
     shadowScale: 0.6,
   },
 
+  // ------------------------------------------------- THE LONE CRYPT KIT
+  // (data/lonecrypt.ts) — the exhumation's stone and the crypt's own four
+  // residents, zero new part painters: fixture and horrors alike composed
+  // from the standing vocabulary (the crystalkin doctrine).
+  /** The exhumation's gravestone: a squat carved marker — plainly STONE
+   *  beside the riddle crystals (a skull emblem where their gem would glow). */
+  unquiet_grave: {
+    parts: [
+      { kind: 'disc', scale: 0.9 },
+      { kind: 'runes', scale: 0.75, params: { n: 3 } },
+      { kind: 'skull', scale: 0.42, y: -0.25 },
+    ],
+    shadowScale: 0.65,
+  },
+  /** The buried king: robe and crown over bone, a grave-mace at rest. */
+  tomb_regent: {
+    parts: [
+      { kind: 'tatters', params: { n: 4 } },
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'ribs', params: { under: true } },
+      { kind: 'mace', params: { len: 0.95 } },
+      { kind: 'skull', x: 0.35, scale: 1.05 },
+      { kind: 'crown', x: 0.2, scale: 0.8 },
+    ],
+    shadowScale: 0.85,
+  },
+  /** The regent's soul-jar: a canopic vessel ringed in grave-script. */
+  tomb_phylactery: {
+    parts: [
+      { kind: 'canopicJar', scale: 1.05 },
+      { kind: 'orb', scale: 0.4, y: -0.3, role: 'glow' },
+      { kind: 'runes', scale: 0.8, params: { n: 4 } },
+    ],
+    shadowScale: 0.6,
+  },
+  /** The casket that eats: a chained sarcophagus, lid ajar on teeth. */
+  casket_maw: {
+    parts: [
+      { kind: 'sarcophagusLid', scale: 1.05 },
+      { kind: 'maw', scale: 0.6, x: 0.3 },
+      { kind: 'fangs', scale: 0.55, x: 0.35 },
+      { kind: 'chains', scale: 0.95 },
+    ],
+    shadowScale: 0.8,
+  },
+  /** The gravedigger's shade: a hooded shroud-drift with the cold lantern
+   *  that IS its tell (the carried lamp on the light layer). */
+  sexton_shade: {
+    parts: [
+      { kind: 'soulGauze', scale: 1.05, alpha: 0.7 },
+      { kind: 'shroudWrap', scale: 0.95 },
+      { kind: 'hood', scale: 0.9 },
+      { kind: 'lantern', x: 0.45, scale: 0.7, role: 'glow' },
+    ],
+    live: [{ kind: 'wisps', role: 'glow', alpha: 0.4, params: { n: 2 } }],
+    shadowScale: 0.55,
+  },
+
   // ------------------------------------------------- THE CRYSTALKIN
   // Four jobs, four silhouettes, zero new part painters: the STALKER is low
   // glass with fin-blades (fast + edged reads instantly); the HAUNT is a

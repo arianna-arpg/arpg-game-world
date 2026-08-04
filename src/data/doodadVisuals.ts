@@ -3437,4 +3437,14 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'saltPillar', order: 52, shadow: 0.5, longShadow: 1.1,
     params: { salt: '#9a6b40' },
   },
+
+  // THE LONE CRYPT'S MOUTH (kit: data/lonecrypt.ts): the mausoleum_door's
+  // cave-mouth idiom in colder, older stone — the sealed grave's way down,
+  // a grave-violet gleam past the jamb (the seal answers at the dwell; the
+  // refusal floater does the talking while it holds).
+  lone_crypt_door: {
+    painter: 'caveMouth', order: 55, shadow: 0.5, longShadow: 1.1,
+    params: { color: '#6e6a78', throat: '#08070c', glow: '#a892d8', label: 'the Lone Crypt' },
+    light: { radius: -1.6, color: '#a892d8', intensity: 0.14 },
+  },
 };

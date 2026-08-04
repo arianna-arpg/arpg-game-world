@@ -2588,6 +2588,88 @@ export const MONSTERS: Record<string, MonsterDef> = {
     ],
   },
 
+  // === THE LONE CRYPT RESIDENTS (kit: data/lonecrypt.ts) =====================
+  // The new-authored quarter of CRYPT_RESIDENTS — each crypt draws ONE horror
+  // from the pool on its mouth's salted fork, so these four never sit on a
+  // spawn table: their only door is the exhumation's opened seal (the
+  // deadwake-exclusive precedent — pool-only kin are legal citizens). All
+  // wear bossBar WITHOUT boss (the spectacle-elite lever): the marquee bar
+  // with none of the boss loot/census weight, and never a HIGH_COURT seat —
+  // the undead court's three thrones stand occupied and doorless elsewhere.
+  /** Her words: "a surfacing or awoken Lich". The marquee draw — a summoner
+   *  court in one body, wearing the standing lich look. */
+  crypt_lich: {
+    id: 'crypt_lich', name: 'Surfacing Lich',
+    color: '#9a8ad8', shape: 'star', radius: 14, material: 'bone', look: 'lich',
+    base: { life: 230, moveSpeed: 105, evasion: 40, energyShield: 80, mana: 220, manaRegen: 14 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('coldRes', 'flat', 0.3)],
+    skills: ['raise_dead', 'despair', 'essence_drain'],
+    xp: 90, bossBar: true,
+    faction: 'undead',
+    gemBias: ['minion', 'curse'], wardPriority: 1,
+    detection: 1.1,
+    brain: { type: 'commander' },
+  },
+  /** The buried king with his soul in a jar: the anatomy gamut's crypt
+   *  lesson — the phylactery part HEALS him while it stands; crack the jar
+   *  first or fight a tide. */
+  tomb_regent: {
+    id: 'tomb_regent', name: 'Tomb Regent',
+    color: '#b8ac8a', shape: 'ribcage', radius: 16, material: 'bone', look: 'tomb_regent',
+    base: { life: 300, moveSpeed: 95, accuracy: 100, armor: 45, poise: 70, mana: 60, manaRegen: 6 },
+    skills: ['scythe_arc', 'ground_slam'],
+    xp: 95, bossBar: true,
+    faction: 'undead',
+    heft: 1.5, turnSpeed: 2.6,
+    brain: { type: 'juggernaut', enrage: 0.45 },
+    parts: [{
+      monster: 'tomb_phylactery', dx: -0.9, dy: -0.35, lifeFrac: 0.35, breakDamage: 0.1,
+    }],
+  },
+  /** The regent's jar: a canopic vessel on the bier behind him — its mend
+   *  is the fight's clock (the swung_censer object-part shape: xp 0, no
+   *  remains, its verbs die with it). */
+  tomb_phylactery: {
+    id: 'tomb_phylactery', name: 'Tomb Phylactery',
+    color: '#d8c88a', shape: 'circle', radius: 9, material: 'crystal', look: 'tomb_phylactery',
+    noNemesis: true, remains: false,
+    base: { life: 60, moveSpeed: 0, armor: 20, mana: 160, manaRegen: 12 },
+    skills: ['soothing_touch', 'despair'],
+    xp: 0, drops: 0,
+    faction: 'undead',
+    brain: { type: 'artillery' },
+  },
+  /** The casket that eats: a chained sarcophagus on the maw_bloom law —
+   *  anchored (moveSpeed 0, the sentry doctrine), it REELS the curious in
+   *  and swallows them (the grab fabric's crypt face). Sprung, not met:
+   *  the lid shifts before it lunges. */
+  casket_maw: {
+    id: 'casket_maw', name: 'Casket Maw',
+    color: '#8a8274', shape: 'rectangle', radius: 16, material: 'stone', look: 'casket_maw',
+    base: { life: 260, moveSpeed: 0, accuracy: 104, armor: 35, poise: 60, mana: 30, manaRegen: 3 },
+    skills: ['tongue_reel', 'gulp'],
+    xp: 85, bossBar: true,
+    faction: 'undead',
+    heft: 2.4,
+    grabbable: false,
+    ambush: { radius: 160, announce: 'the casket lid shifts…' },
+    brain: { type: 'basic' },
+  },
+  /** The gravedigger who never clocked off: a lantern-lit shade that puts
+   *  the living to sleep and buries them in thrown earth. The carried lamp
+   *  is the tell — cold light crossing the yard is the sexton on rounds. */
+  sexton_shade: {
+    id: 'sexton_shade', name: 'Sexton Shade',
+    color: '#a8c8b8', shape: 'kite', radius: 13, material: 'ethereal', look: 'sexton_shade',
+    base: { life: 140, moveSpeed: 140, evasion: 70, energyShield: 120, mana: 120, manaRegen: 10 },
+    skills: ['hurl_debris', 'soporific_veil'],
+    xp: 80, bossBar: true,
+    faction: 'undead',
+    light: { radius: -7, color: '#a8e8c0', intensity: 0.5, flicker: 1.0 },
+    detection: 1.1,
+    brain: { type: 'basic' },
+  },
+
   // A shrieking skull of flame: fast, untouchable, briefly alive — the
   // Raging Spirit swarm body (Summon Raging Spirit / Spirit Pyre).
   raging_spirit: {
@@ -6062,6 +6144,21 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'ember_crystal', name: 'Ember Crystal',
     color: '#ff9a5e', shape: 'circle', radius: 13, material: 'crystal', look: 'lattice_crystal',
     base: { life: 260, lifeRegen: 80, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
+    scaling: { life: { incPerLevel: 0.2 } },
+    skills: [],
+    xp: 0,
+    passive: true, immortal: true, noObjective: true, aims: false,
+  },
+
+  // The exhumation's gravestones (the lone crypt kit, data/lonecrypt.ts):
+  // puzzle-owned STONE on the crystal contract — struck open with real
+  // blows, never dwelled beside. material 'stone' (remains: false by
+  // nature — an exhumation fixture must never seed the corpse economy);
+  // no tune — the spade decides nothing about color.
+  unquiet_grave: {
+    id: 'unquiet_grave', name: 'Unquiet Grave',
+    color: '#a8a294', shape: 'square', radius: 13, material: 'stone', look: 'unquiet_grave',
+    base: { life: 280, lifeRegen: 80, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
     scaling: { life: { incPerLevel: 0.2 } },
     skills: [],
     xp: 0,

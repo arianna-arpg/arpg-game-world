@@ -1571,6 +1571,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       // the coach where it burned, stakes, the fed-on where they knelt.
       { kind: 'formation', count: [0, 1], formation: 'night_feast' },
       { kind: 'drained_husk', count: [0, 2] },
+      // THE UNQUIET YARD (kit: data/lonecrypt.ts): sometimes a whole plotted
+      // graveyard_rows field under the boughs — dress only, the set piece
+      // that goes hand-in-hand (the crypt loop itself lives on the
+      // mournstead, the wood's grave face).
+      { kind: 'formation', count: [0, 1], formation: 'graveyard_rows' },
     ],
     variants: [
       // The tended dead: rows under the crooked roof — the parish that
@@ -1894,6 +1899,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'briarwood', count: [1, 2] },
       { kind: 'drained_husk', count: [0, 2] },
       { kind: 'formation', count: [0, 1], formation: 'night_feast' },
+      // THE LONE CRYPT (kit: data/lonecrypt.ts): the mournstead is the
+      // gloamwood's grave face — every zone keeps its one sealed grave
+      // (the exhumation ring below is its key), and sometimes the plotted
+      // yard (the set piece; never the objective's decider, per the
+      // commission).
+      { kind: 'structure', count: [1, 1], structure: 'sealed_grave' },
+      { kind: 'formation', count: [0, 1], formation: 'graveyard_rows' },
     ],
     variants: [
       // The lord's wood: the walked lanes — lamps and statuary holding a
@@ -1951,6 +1963,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'bone_altar',
+    // THE EXHUMATION (kit: data/lonecrypt.ts): the parish riddle — chance 1
+    // pairs the sealed grave's key with its door in every zone. A
+    // DISCOVERY for now (an objective 'puzzle' row would shift this
+    // table's weighted total and re-roll every mournstead mint — the ask
+    // row rides the kit's coda into a coordinated quiet-tilesets round).
+    puzzles: [{ id: 'grave_exhumation', chance: 1 }],
     objectives: [
       { kind: 'offering', weight: 1 },
       { kind: 'procession', weight: 1 },
@@ -4984,6 +5002,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       // stalled cart itself — strike either and the corpse economy pays out.
       { kind: 'shallow_grave', count: [1, 3] },
       { kind: 'formation', count: [0, 1], formation: 'charnel_waystop' },
+      // THE LONE CRYPT (kit: data/lonecrypt.ts): every graveland zone keeps
+      // exactly ONE sealed grave — the roofed tomb whose mouth the zone's
+      // exhumation ring unseals — and sometimes the plotted YARD around it
+      // (graveyard_rows — the set piece; per the commission it never decides
+      // the objective, it goes hand-in-hand).
+      { kind: 'structure', count: [1, 1], structure: 'sealed_grave' },
+      { kind: 'formation', count: [0, 1], formation: 'graveyard_rows' },
     ],
     variants: [
       { name: 'barrows', layout: [
@@ -5068,6 +5093,15 @@ export const TILESETS: Record<string, TilesetDef> = {
     spawnerId: 'bone_altar',
     // The glutton's schoolyard among the graves (brittle heaps that spill).
     landmarks: [{ landmark: 'carrion_midden', chance: 0.2 }],
+    // THE EXHUMATION (kit: data/lonecrypt.ts): the graveland's own riddle —
+    // chance 1, so the sealed grave's key ALWAYS stands beside its door
+    // (a ring without a tomb, or a tomb without a ring, is a broken
+    // promise). Deliberately a DISCOVERY for now, not an objective row: a
+    // 'puzzle' weight here changes this table's weighted TOTAL, which
+    // re-rolls every graveland mint's objective and cascades through the
+    // chart halo into other countries' pinned-seed rigs — the ask row is
+    // proposed for a coordinated quiet-tilesets round (the kit's coda).
+    puzzles: [{ id: 'grave_exhumation', chance: 1 }],
     objectives: [
       { kind: 'offering', weight: 1 },
       { kind: 'bounty', weight: 1 },
@@ -5093,6 +5127,83 @@ export const TILESETS: Record<string, TilesetDef> = {
       count: [1, 2],
       table: { cache_hollow: 3, ambush_hollow: 2.5, passage_hollow: 2, crevice_hollow: 1 },
     },
+  },
+
+  // THE LONE CRYPT — the sealed grave's undercroft (kit: data/lonecrypt.ts):
+  // the small country below the tomb, minted ONLY by the lone_crypt_door
+  // mouth (no caveFace — never in the wild cave pool; explicit-mint only,
+  // the kings_barrow discipline). One room of halls, one drawn RESIDENT
+  // (the mint forces objective { kind: 'boss' } from CRYPT_RESIDENTS on the
+  // mouth's salted fork — the differentiation IS the tenant), a modest bone
+  // retinue, and no way deeper (noDeeper at mint: a crypt is a room, not a
+  // ladder).
+  lone_crypt: {
+    id: 'lone_crypt', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    biome: 'grave',
+    caveLayouts: { rooms: 2, dungeon: 2, winding: 1 },
+    layoutParams: {
+      rooms: [4, 7], doorChance: 0.4, corridorCells: 2,
+    },
+    nameFirst: ['Stillrest', 'Hollowed', 'Undervault', 'Palefast', 'Gravebound', 'Quietguard', 'Sunless', 'Wormward'],
+    nameSecond: ['Crypt', 'Undercroft', 'Vault', 'Sepulchre', 'Reliquary', 'Bonehall', 'Rest', 'Keeping'],
+    theme: {
+      ambientDark: 0.5,
+      ambientFx: [{ kind: 'motes', intensity: 0.3 }],
+      fog: { banks: [0, 1], kinds: [{ id: 'grave_mist' }] },
+      lite: { swarms: [{
+        monsterId: 'grave_mite', pockets: [1, 2], size: [10, 18], chance: 0.6,
+        announce: 'the coffin dust stirs, and it CRAWLS…', announceColor: '#c8bfa8',
+      }] },
+      ground: {
+        palette: ['#12101a', '#191624', '#211d2e', '#282438', '#302b42'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#0e0d14', grid: '#15141e', border: '#4a4668',
+      obstacle: '#2c2a40', obstacleEdge: '#524e6e', accent: '#b090d8',
+      wall: '#2c2a40', mud: '#171522', water: '#1a2434',
+    },
+    sizeW: [1400, 1900], sizeH: [1100, 1500], ellipseChance: 0,
+    layout: [
+      { kind: 'bone_pile', count: [3, 5] },
+      { kind: 'burial_urn', count: [2, 4] },
+      { kind: 'tombstone', count: [2, 4] },
+      { kind: 'brazier', count: [1, 3] },
+      { kind: 'web', count: [1, 3] },
+      { kind: 'rubble', count: [1, 2] },
+    ],
+    variants: [
+      // The counted dead: shelf-rows and sealed urns — an ordered keeping.
+      { name: 'the counted dead', layout: [
+        { kind: 'ossuary_niche', count: [3, 5] },
+        { kind: 'formation', count: [1, 2], formation: 'reliquary_rows' },
+        { kind: 'burial_urn', count: [3, 5] },
+        { kind: 'brazier', count: [1, 2] },
+      ] },
+      // The flooded vault: the water table won its argument with the masons.
+      { name: 'the flooded vault', layout: [
+        { kind: 'water', count: [2, 3] },
+        { kind: 'mud', count: [1, 2] },
+        { kind: 'rubble', count: [2, 4] },
+        { kind: 'bone_pile', count: [3, 5] },
+        { kind: 'web', count: [1, 2] },
+      ] },
+    ],
+    packs: {
+      count: [3, 5], size: [2, 4],
+      table: [
+        { id: 'skeleton_warrior', weight: 3 },
+        { id: 'skeleton_archer', weight: 2 },
+        { id: 'zombie', weight: 2.5, presence: { to: 18, fadeOut: 9 } },
+        { id: 'crypt_warden', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'barrow_wight', weight: 2, presence: { from: 9, fadeIn: 4 } },
+        { id: 'barrow_shambler', weight: 1.5, presence: { from: 5, fadeIn: 3 } },
+        { id: 'charnel_ghoul', weight: 1.5 },
+        { id: 'gloomling', weight: 1.5, presence: { to: 16, fadeOut: 8 } },
+        { id: 'poltergeist', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled — the mouth's mint forces its resident
+    objectives: [{ kind: 'clear', weight: 1 }],
   },
 
   // THE OSSUARY — the Necropolis' interior sanctum (realm-only: frontier
@@ -13115,6 +13226,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   drake_roost:    { title: 'The Drake Roost',   blurb: 'A wind-scoured shelf at the high heart of the mountains: the hoard underfoot, the larder grazing the rim, the drop on three sides, and Old Scald, who owns the sky until you take the wings off him.' },
   leviathan_trench:{ title: 'The Leviathan Trench', blurb: 'The hadal hollow under the deep sea\'s heart: pale kelp, wreck-drift bones, and the Fathomking: fourteen coils of him, every one a body you can wound, every one a place the fight can go wrong.' },
   kings_barrow:   { title: 'The King\'s Barrow', blurb: 'The halls under the mound, behind a door that answers only after dusk: the court in armor ranks, the grave gold uncounted, and a beam of pale light crossing the dark to the jar that keeps the Unquiet King unquiet.' },
+  lone_crypt:     { title: 'The Lone Crypt',    blurb: 'The undercroft below a sealed grave, opened only when the unquiet graves above have all been dug: one vault, one keeping, and one resident — never the same horror twice, and the seal never held it for your sake.' },
 };
 
 /** QA seam: TILESETS ids with no BIOME_LORE, and lore keys pointing at no

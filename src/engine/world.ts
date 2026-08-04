@@ -40501,6 +40501,10 @@ export class World {
         // barrow): a closed door never starts the dwell. The refusal READ
         // lives below the mouth scan, so the schedule is never a mystery.
         && (!sidezoneOf(cm.kind)?.when || this.radianceCondHeld(sidezoneOf(cm.kind)!.when!.cond))
+        // THE SEALED MOUTH (SidezoneDef.sealedBy — the exhumation law,
+        // data/lonecrypt.ts): a riddle-sealed door never starts the dwell
+        // either; its refusal rides the same float below.
+        && !this.sidezoneSealHolds(cm.kind)
         && this.dwellReachable(this.player.pos, cm.pos, transitReach(`sidezone:${cm.kind}`));
       if (this.caveExitGrace) {
         if (!this.caveEntrances.some(onMouth)) this.caveExitGrace = false;
@@ -40510,14 +40514,20 @@ export class World {
         for (let i = 0; i < this.caveEntrances.length; i++) { if (onMouth(this.caveEntrances[i])) { mouthIdx = i; break; } }
         // THE CONDITIONED DOOR's refusal read: standing on a door whose cond
         // does NOT hold floats its schedule (throttled) — a closed barrow
-        // tells you it is closed, and roughly when it will not be.
+        // tells you it is closed, and roughly when it will not be. A SEALED
+        // mouth (sealedBy — the exhumation law) floats its own line through
+        // the same clock: the shut door names the ring that opens it.
         if (mouthIdx < 0 && this.time - this.doorRefusalAt > 2.5) {
           for (const cm of this.caveEntrances) {
             const sz = sidezoneOf(cm.kind);
-            if (!sz?.when || this.radianceCondHeld(sz.when.cond)) continue;
+            const condShut = !!sz?.when && !this.radianceCondHeld(sz.when.cond);
+            const sealShut = !condShut && this.sidezoneSealHolds(cm.kind);
+            if (!condShut && !sealShut) continue;
             if (dist(this.player.pos, cm.pos) > transitRadius(`sidezone:${cm.kind}`, 28) + this.player.radius) continue;
             this.doorRefusalAt = this.time;
-            this.text(vec(cm.pos.x, cm.pos.y - 26), sz.when.refusal ?? 'the door does not answer…', '#b8a8d8', 12);
+            this.text(vec(cm.pos.x, cm.pos.y - 26),
+              (condShut ? sz!.when!.refusal : sz!.sealedBy!.refusal) ?? 'the door does not answer…',
+              '#b8a8d8', 12);
             break;
           }
         }
@@ -40864,6 +40874,21 @@ export class World {
     if (!e) return null;
     const kind = e.boundary ? `zone_exit:${e.boundary}` : 'zone_exit';
     return { pos: vec(e.pos.x, e.pos.y), frac: clamp((this.time - this.exitDwellStart) / transitDwell(kind), 0, 1), kind };
+  }
+
+  /** THE SEALED MOUTH (SidezoneDef.sealedBy — the exhumation law, kit in
+   *  data/lonecrypt.ts): a mouth sealed by its zone's riddle admits only
+   *  once the run of the named KIND reads DONE on the live board — drawn ==
+   *  tested, the ring IS the lock. The objective lane persists through
+   *  completedObjectives (bootPuzzles re-marks the run at load); a side
+   *  riddle re-arms when zone memory lapses — the ring re-earns the door.
+   *  A zone that stood NO matching riddle up has no seal (degrade OPEN,
+   *  the placer's own unknown-preset law: absent data never wedges a door). */
+  private sidezoneSealHolds(kind: string): boolean {
+    const sb = sidezoneOf(kind)?.sealedBy;
+    if (!sb) return false;
+    const run = this.puzzles.find(r => r.kind.id === sb.kind);
+    return !!run && !run.done;
   }
 
   /** Dwell-to-enter progress on the sidezone mouth the player lingers on

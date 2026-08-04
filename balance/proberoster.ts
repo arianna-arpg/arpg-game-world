@@ -115,6 +115,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_lairs.ts', status: 'green', tier: 'fast', why: 'THE LAIR FABRIC — the registry weave (landmark/mouth/sidezone/den tileset/natives/hoard/look all resolve) and THE SEAT fold' },
   { probe: 'probe_lite.ts', status: 'green', tier: 'fast', why: 'THE LITE TIER — pool spawn/free/reuse, the capacity refusal, kind resolution off MonsterDef.lite and the promotion boundary' },
   { probe: 'probe_liturgy.ts', status: 'green', tier: 'fast', why: 'THE LITURGY — the call/response pair, the Responsory grammar and the delayedBurst harm+mend' },
+  { probe: 'probe_lonecrypt.ts', status: 'green', tier: 'fast', why: 'THE LONE CRYPT kit — the strike exhumation, the riddle-sealed mouth (sealedBy), the resident lottery\'s purity and the yard\'s corridor math' },
   { probe: 'probe_mass.ts', status: 'green', tier: 'fast', why: 'THE MASS & AUTHORITY FABRIC — the weight derivation law, shove authority, wall wounds and the bowling lane' },
   { probe: 'probe_massif.ts', status: 'green', tier: 'fast', why: 'THE MASSIF FABRIC — the weave law, the heal, the courts, the block textures and the placement law pinned structurally' },
   { probe: 'probe_mercs.ts', status: 'green', tier: 'slow', why: '~27s: THE MERCENARY MARKET LAWS — the wilds commission, the retinue, retirement and the hire economy end to end' },
