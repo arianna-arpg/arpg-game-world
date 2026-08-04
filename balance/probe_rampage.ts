@@ -30,6 +30,12 @@
 //   data); an old save's already-minted arena is honored over the rest
 //   seat; roads seal along the path and ALL fall open on the slaying; the
 //   shipped package validates coherent (venue/arenaName/arenaBand).
+// RIG G — THE SINK-AWAY SWEEP (engine half, live world): a sovereign whose
+//   standing fight expired departs WHOLE — slipAway takes the body and the
+//   despawnPartsOf sweep takes its still-standing composite parts with it,
+//   spliced (never killed: no break effects fire on a departure). Green at
+//   HEAD by construction and held green across the manual-loop fold — the
+//   branch's BEHAVIOR is the pin, not its text.
 //
 // The engine-side materializer law (levelBonus on unminted ground — the
 // !def.special read in materializeWorldBossFight) needs a full packaged run
@@ -315,6 +321,42 @@ const D = (kind: string, x = 0, y = 0, extra: Partial<Doodad> = {}): Doodad =>
   const vhShipped = WORLDBOSS_SURGE.defs.find(d => d.id === 'vhorun')!;
   check('F14 Vhorun ships venue ground, no dead arena knobs',
     vhShipped.roam?.venue === 'ground' && !vhShipped.roam?.arenaName && !vhShipped.arenaBand);
+}
+
+// --- RIG G: THE SINK-AWAY SWEEP (engine half) -------------------------------------
+// The standing-fight branch of updateWorldBosses: a boss whose fight is no
+// longer on the field's books sinks away via slipAway, and the ONE
+// despawnPartsOf sweep (world.ts, beside slipAway) takes its composite
+// parts with it. A real composite on a live sim world; the field injected
+// with no fight standing, so the expiry branch is the only road taken.
+{
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const w = makeSimWorld('warrior', 771233) as any;
+  const boss = w.createMonster('hunt_chimera', 12, 'enemy') as Actor;
+  boss.pos = vec(500, 500);
+  w.actors.push(boss);
+  w.updateParts(); // the composite lazy-attach tick (parts join the world)
+  const parts: Actor[] = boss.partActors ?? [];
+  check('G1 the composite stands with its parts attached (the lazy-attach law)',
+    parts.length === 2 && parts.every(p => w.actors.includes(p)), `parts=${parts.length}`);
+  // A field with NO standing fight for this zone — the sovereign's stay is over.
+  const gGate: PackageGate = { active: true, share: 1, pressure: 1, ignitionMul: 1, severityMul: 1, concurrencyMul: 1 };
+  const wbSinkField = new WorldBossField({ seed: 7, gate: () => gGate, biomeSeed: 7 },
+    structuredClone(WORLDBOSS_SURGE) as WorldBossSurge);
+  w.sim.worldBossField = wbSinkField;
+  w.wbBoss = boss;
+  w.wbBossKey = 'qaExpiredStay';
+  const before = w.actors.length;
+  w.updateWorldBosses(1 / 30);
+  check('G2 the departed sovereign is GONE, silently (slipAway — no corpse, no credit)',
+    !w.actors.includes(boss) && w.wbBoss === null && !boss.dead);
+  check('G3 its parts sink WITH it — none left casting at the empty air',
+    parts.length > 0 && parts.every(p => !w.actors.includes(p)));
+  check('G4 spliced, never killed (a departure fires no break effects)',
+    parts.every(p => !p.dead));
+  check('G5 the sweep took exactly the file (root + parts, nobody else)',
+    w.actors.length === before - 1 - parts.length,
+    `actors ${before} -> ${w.actors.length}`);
 }
 
 console.log(fails ? `\nprobe_rampage: ${fails} FAILURE(S)` : '\nprobe_rampage: ALL PASS');

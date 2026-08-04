@@ -9,8 +9,11 @@
 // eats stray doors), den-mint purity (same mouth, same den — byte-equal),
 // and the LIVE laws: the Frostmaw round trip (boss ask, larder fauna, the
 // Rimefather falls → the objective banks), the yeti's snatch-and-hurl
-// through the grab fabric, the cairn giant's visible sleeping ambush, and
-// the vault's riddle (puzzle ask, dormant latched-once sphinx warden).
+// through the grab fabric, the cairn giant's visible sleeping ambush, the
+// vault's riddle (puzzle ask, dormant latched-once sphinx warden), and THE
+// SENTRY LAW on eruption country (RIG R: effectLavaOrb's volley pays awake
+// bodies and passes dormant sleepers by — Zone.spareDormant, the kilnhoard's
+// ember vents beside the Urnfather's coils).
 // Run: npx tsx balance/probe_lairs.ts
 // ---------------------------------------------------------------------------
 
@@ -2687,6 +2690,50 @@ const step = (secs: number): void => {
       .some(r => r.landmark === 'giants_cairn')
     && lairLandmarkRolls({ place: 'surface', biome: 'butteland', level: 12, tileset: 'needles' })
       .some(r => r.landmark === 'midden_mouth_site'));
+}
+
+// --- RIG R: THE SENTRY LAW ON ERUPTION COUNTRY (the dormant-sentry flag) -----
+// effectLavaOrb's volley zones ARE the vent-field economy: hitAll, so a pack
+// kited across a waking vent pays the same toll you would (the smoker face's
+// own authored law). But the sentry law — environmental strikes pass dormant
+// un-roused neutrals by (Zone.spareDormant) — must hold on the same ground:
+// the kilnhoard scatters ember_vent among the Urnfather's dormant coils, and
+// an unflagged volley chips + ROUSES the sleeper with no player act (the
+// Surgeon's Robbery broken by ambient clocks). The pair below pins both
+// sides at the engine seam, live: the awake still pay, the dormant are
+// passed by unroused. (The emberwyrm's drowse is the WATCH fabric — not
+// isDormant — and stays deliberately untouched by this law.)
+{
+  leaveToHome();
+  w.player.pos = vec(1400, 400); // out of the blast — the pair reads clean
+  const eruptionSpares = (tag?: string): Actor => {
+    const m = world.createMonster('zombie', 1, 'enemy');
+    m.pos = vec(tag ? 370 : 430, 400);
+    if (tag) m.tag = tag;
+    w.actors.push(m);
+    return m;
+  };
+  const ventDormant = eruptionSpares('kiln_sleeper'); // the census's own tag
+  const ventAwake = eruptionSpares();
+  check('R1 the rig premise holds (one dormant sleeper, one awake body, both in reach)',
+    isDormant(ventDormant) && !isDormant(ventAwake) && !ventDormant.aiAwakened);
+  // One orb straight down on the vent's own seat (ring 0), blast wide enough
+  // to catch both bodies — the handler's smallest honest eruption.
+  const qaVentEff = { id: 'lava_orb', interval: 1, radius: 0, chance: 1,
+    count: 1, ringRadius: 0, jitter: 0, stagger: 0, blast: 130, power: 0 };
+  const z0: number = w.zones.length;
+  w.effectLavaOrb({ pos: vec(400, 400), radius: 20, kind: 'ember_vent', rot: 0 }, qaVentEff);
+  check('R2 the vent minted its orb (one zone, telegraph pending)', w.zones.length === z0 + 1);
+  for (let i = 0; i < 5; i++) w.updateZones(0.3); // past the 0.9s drop — AI never runs
+  check('R3 the volley resolved and spent itself', w.zones.length === z0);
+  check('R4 the AWAKE body still pays the field (the smoker economy untouched)',
+    ventAwake.life < ventAwake.maxLife(),
+    `life=${ventAwake.life.toFixed(1)}/${ventAwake.maxLife().toFixed(1)}`);
+  check('R5 the DORMANT body is passed by unwounded (Zone.spareDormant)',
+    ventDormant.life >= ventDormant.maxLife() - 0.001,
+    `life=${ventDormant.life.toFixed(1)}/${ventDormant.maxLife().toFixed(1)}`);
+  check('R6 …and never roused (ambience is nobody\'s wounding strike)',
+    !ventDormant.aiAwakened && isDormant(ventDormant));
 }
 
 console.log(fails ? `\nprobe_lairs: ${fails} FAILURE(S)` : '\nprobe_lairs: ALL PASS');

@@ -12006,9 +12006,9 @@ export class World {
 
   /** A DEPARTING composite takes its still-standing parts with it — spliced
    *  out, not killed (no bursts, no break effects: the body leaves whole,
-   *  and a re-spawn regrows them fresh). The world-boss sink-away lane has
-   *  always done this by hand; this is the same sweep for every silent exit,
-   *  so no departure can strand a head still casting at the empty air. */
+   *  and a re-spawn regrows them fresh). ONE sweep for every silent exit —
+   *  the world-boss sink-away lane rides it through slipAway — so no
+   *  departure can strand a head still casting at the empty air. */
   private despawnPartsOf(actor: Actor): void {
     for (const p of actor.partActors ?? []) {
       if (p.dead) continue;
@@ -14981,7 +14981,11 @@ export class World {
         pos: at, radius: blast, caster, inst, color: eff.color ?? '#ff6a2a',
         delay: 0.9 + i * (eff.stagger ?? 0), exploded: false, linger: 0,
         tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
-        dmgMult: 1, depth: 1, hitAll: true, meteor: true,
+        // THE SENTRY LAW (Zone.spareDormant): the vent's own ambience passes
+        // dormant un-roused neutrals by — an ember vent chips + rouses
+        // nobody's sleeper (the kilnhoard's Urnfather) — while AWAKE bodies
+        // keep paying the field's toll (hitAll, the smoker economy).
+        dmgMult: 1, depth: 1, hitAll: true, meteor: true, spareDormant: true,
       });
     }
   }
@@ -19311,12 +19315,8 @@ export class World {
         this.wbBoss = null; // the kill row already resolved the fall
       } else if (!fight || fight.instanceId !== this.wbBossKey) {
         // Departed unbeaten (the apparition's clock ran out) — it sinks away
-        // whole, its silhouette parts with it.
-        for (const p of m.partActors ?? []) {
-          if (p.dead) continue;
-          const i = this.actors.indexOf(p);
-          if (i >= 0) this.actors.splice(i, 1);
-        }
+        // whole; slipAway's despawnPartsOf sweep takes its silhouette parts
+        // with it.
         this.flashes.push({ pos: vec(m.pos.x, m.pos.y), radius: 180, color: '#c8a03c', life: 0.9, maxLife: 0.9 });
         this.slipAway(m, `${m.name} sinks away…`);
         this.wbBoss = null;
