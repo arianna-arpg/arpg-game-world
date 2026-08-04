@@ -240,6 +240,25 @@ export type ObjectiveSpec = (
    *  its own business); a guest gone unanswered REVERTS the ask to the bare
    *  cull (the transience doctrine — the zone is always completable). */
   | { kind: 'package'; pkg: string; key: string; title: string }
+  /** THE ADOPTED VENTURE (THE ADOPTIVE LANE's VENTURE CLASS, data/objectives.ts
+   *  registerVentureAsk — Arianna's ruling, 2026-08-04): the zone's ask IS a
+   *  standing winnable-or-LOSABLE feature its ground actually hosts — the
+   *  sealed holdfast gate is the debut ("open the holdfast"). Never rolled
+   *  from tileset weights (validate refuses a row — the ADOPTIVE_ONLY law)
+   *  and never placing anything of its own: the fabric's spawn/lifecycle
+   *  logic is byte-untouched, adoption is a load-time chance over a BARE
+   *  rolled 'clear'. `venture` names the registered row, `key` the exact
+   *  standing venture (a replaced venture reads stale and the ask hands
+   *  back rather than silently rebinding), `title` its prose name — stamped
+   *  on the spec so every reader speaks it without a registry in hand.
+   *  Completion is the venture's OWN resolution ('won' — the toll paid, the
+   *  gate opened, read off the fabric's own state); THE FAIL ARM is the
+   *  class's defining grammar: the player's own actions may explicitly FAIL
+   *  it ('lost' — the wardens murdered, the gate held), and a lost venture
+   *  hands the ask back to the bare cull IN-VISIT — no completion, no
+   *  punishment, the zone completable the ordinary way. Player agency is
+   *  the point: the bloody road is legitimate, it just isn't THIS road. */
+  | { kind: 'venture'; venture: string; key: string; title: string }
 ) & ObjectiveTuning;
 
 /** Per-kind DEFAULT exit policy: does an UNMET objective seal the zone's other
@@ -262,6 +281,11 @@ export const OBJECTIVE_SEALS: Record<ObjectiveSpec['kind'], boolean> = {
   // a sealed door over a guest that may leave would be a softlock, so the
   // roads stay open structurally, never by tuning.
   package: false,
+  // THE ADOPTED VENTURE never seals BY LAW: an ask the player may explicitly
+  // FAIL (THE FAIL ARM hands it back to the cull) must never hold a door,
+  // and walking on past a toll-gate is itself a road (the holdfast's own
+  // pitch: pay, fight, or walk on).
+  venture: false,
 };
 
 /** Does this zone's UNMET objective seal its exits? (An endless arena never
@@ -297,6 +321,8 @@ export const OBJECTIVE_READS: Record<ObjectiveSpec['kind'], { glyph: string; rea
   lair: { glyph: '☖', read: 'natives claim this ground' },
   // The ADOPTED GUEST (registerPackageAsk) — title composed on in objectiveRead.
   package: { glyph: '☄', read: 'a roving power claims this ground' },
+  // The ADOPTED VENTURE (registerVentureAsk) — title composed on in objectiveRead.
+  venture: { glyph: '⚑', read: 'a warded prize stands here' },
 };
 
 /** Resolve a spec to its pane read, honoring the spec-level refinements the
@@ -317,8 +343,9 @@ export function objectiveRead(o: ObjectiveSpec): { glyph: string; read: string }
   }
   // THE ADOPTED ASK carries its claim's prose name ON the spec (`title` —
   // stamped at adoption), so the pane names the ground without a registry.
-  // The ADOPTED GUEST (registerPackageAsk) speaks the same way.
-  if (o.kind === 'lair' || o.kind === 'package') return { glyph: base.glyph, read: `${base.read}: ${o.title}` };
+  // The ADOPTED GUEST (registerPackageAsk) and the ADOPTED VENTURE
+  // (registerVentureAsk) speak the same way.
+  if (o.kind === 'lair' || o.kind === 'package' || o.kind === 'venture') return { glyph: base.glyph, read: `${base.read}: ${o.title}` };
   return base;
 }
 
@@ -331,7 +358,12 @@ export function objectiveRead(o: ObjectiveSpec): { glyph: string; read: string }
  *  payout stapled onto the parent would double-pay the same feature. The
  *  ADOPTED GUEST ('package' — registerPackageAsk) likewise: the package pays
  *  its own way (the fracture's chasm seals + run-through bounty), and the
- *  chest gate's extra load draw would shift layout streams besides. */
+ *  chest gate's extra load draw would shift layout streams besides. The
+ *  ADOPTED VENTURE ('venture' — registerVentureAsk) the same: the venture's
+ *  own resolution is the pay (the holdfast's purchased pocket), and a chest
+ *  on a fail-armed ask would either be forfeited by the fail (a punishment
+ *  her ruling forbids) or paid by the cull the fail hands back to
+ *  (double-pay) — no coherent seat exists. */
 export const OBJECTIVE_CHEST_KINDS: ReadonlySet<ObjectiveSpec['kind']> =
   new Set<ObjectiveSpec['kind']>(['boss', 'spawners', 'waves', 'beacon', 'procession', 'bounty', 'offering', 'puzzle',
     'leyline', 'rifts', 'pyres', 'unearth']);

@@ -203,11 +203,20 @@ export const ADOPT_CFG = {
    *  and a row's own `chance` overrides. Runs only where the lair classes
    *  stood aside (a resident claim beats a passing guest). */
   packageChance: 0.5,
+  /** THE VENTURE CLASS's coin (registerVentureAsk rows below): the share of
+   *  venture-bearing loads whose bare cull re-negotiates into the standing
+   *  venture's ask ("open the holdfast"). Hashed per (zone, row, KEY) — a
+   *  re-raised venture rolls its own coin — and a row's own `chance`
+   *  overrides. Runs after the package guests (a now-or-never window beats
+   *  a standing gate) and before the patient riddles. */
+  ventureChance: 0.5,
+  /** Chevron face for the adopted venture's pointer (the warded prize). */
+  ventureGlyph: '⚑',
   /** THE PUZZLE CLASS's coin (registerPuzzleAsk rows below): the share of
    *  candidate-bearing loads (the row's door standing + the ring authored)
    *  whose bare cull re-negotiates into the riddle's own ask. Hashed per
    *  (zone, row) — standing ground, standing verdict. Runs LAST of the
-   *  classes (lair → package → puzzle). */
+   *  classes (lair → package → venture → puzzle). */
   puzzleChance: 0.5,
   /** Per-tileset coin overrides, KEYED BY TILESET ID — the ratified rate
    *  lever (a dial here, never a TilesetDef field: tilesets stay mint-pure).
@@ -414,6 +423,118 @@ function maybePackageAsk(
 }
 
 // ---------------------------------------------------------------------------
+// THE VENTURE CLASS — a standing winnable-or-LOSABLE feature as an adoptable
+// ask, THE FAIL ARM's home (Arianna's ruling, 2026-08-04: "OPENING A HOLDFAST
+// would work as a zone objective, because a Holdfast can be explicitly failed
+// if the player murders the wardens. But if that occurs, and the objective
+// actually falls back to its plain cull — no completion — then we actually
+// cohere the entire objective a bit better and leave it up to player agency
+// once more").
+//
+// A fabric REGISTERS what "a standing venture" means — a presence read over
+// its own durable state, a title, and a live TRI-STATE view the driver
+// watches — and the lane then treats the standing venture exactly like a
+// standing lair: adoption at zone load, by hash, never a dependency (the
+// fabric's spawn/lifecycle logic is byte-untouched; nothing is ever placed
+// FOR the ask). Registry-derived like every class (the registerPackageAsk
+// contract: rows registered from the fabric's own module — the holdfast
+// overlay is the debut, and any HoldfastDef is adoptable the moment it
+// registers, def-blind).
+//
+// THE FAIL ARM (the class's defining grammar, in World.updateObjective's
+// 'venture' case): the ask completes ONLY through the venture's own standing
+// verbs (verdict 'won' — the toll paid, the gate unbarred, read off the
+// fabric's own resolved state; drawn == tested). The player's own actions
+// may explicitly FAIL it (verdict 'lost' — the wardens murdered, the gamble
+// held), and a lost venture HANDS THE ASK BACK to the bare cull it adopted
+// over, IN-VISIT: no completion, no punishment — the zone completes the
+// ordinary way (this visit on the empty-floor law, the next load re-deriving
+// the cull stamp). This is the package class's guest-gone hand-back grown an
+// explicit-failure read: the guest's absence is circumstance, the venture's
+// loss is authored by the player's own hand — agency, priced honestly.
+// ---------------------------------------------------------------------------
+
+/** The fabric's live verdict for a BOUND venture (the stamped key), as the
+ *  row's own view reads it. Pure reads over the fabric's durable state —
+ *  never writes; the view must speak the SAME state the fabric's runtime
+ *  resolves (the holdfast's `resolved` ledger), never a parallel one. */
+export interface VentureAskState {
+  /** 'standing' — the venture holds and the ask waits; 'won' — it resolved
+   *  through its own verbs (the driver completes); 'lost' — the player's
+   *  own actions failed it (THE FAIL ARM: the driver hands the ask back to
+   *  the bare cull — no completion, no punishment). A key that no longer
+   *  matches the standing venture also reads 'lost' (stale bindings hand
+   *  back, never rebind). */
+  verdict: 'standing' | 'won' | 'lost';
+  /** Where the ask points (the chevron + HUD anchor); null = no pointer. */
+  pos: { x: number; y: number } | null;
+  /** The HUD line while the ask stands (authored capitalized). */
+  label: string;
+  /** Completion floater override (absent = "<title> is won!"). */
+  wonText?: string;
+  /** Hand-back floater override (absent = the class's forfeit line). */
+  lostText?: string;
+}
+
+/** One fabric's adoptable venture — registered by the fabric's own module
+ *  (packages/overlays/holdfast.ts is the debut; never listed by hand here). */
+export interface VentureAskRow {
+  /** Row id (keys the row + the stamp's `venture`; rows consult sorted —
+   *  import-order-proof, the package class's law). */
+  id: string;
+  /** THE PRESENCE READ: the standing adoptable venture in this zone as a
+   *  STABLE key (null = nothing adoptable stands). THE STANDING CONTRACT:
+   *  candidacy is only ever the STANDING state — a venture whose view would
+   *  read 'won' or 'lost' MUST read null here, so a resolved or failed
+   *  venture can never (re-)offer itself and the hand-back converges to the
+   *  bare cull instead of flip-flopping. */
+  standing: (world: World, def: ZoneDef) => string | null;
+  /** The ask's prose title for this stand (resolved once, stamped on the
+   *  spec — the holdfast speaks its guardian's own name). */
+  title: (world: World, def: ZoneDef, key: string) => string;
+  /** THE LIVE VIEW the driver + HUD watch (World.ventureAskView wraps it):
+   *  the tri-state verdict for the BOUND key, off the fabric's own state. */
+  view: (world: World, def: ZoneDef, key: string) => VentureAskState;
+  /** Adoption coin override (absent = ADOPT_CFG.ventureChance). */
+  chance?: number;
+}
+
+const VENTURE_ASKS: VentureAskRow[] = [];
+
+/** Register a fabric's adoptable venture (call at module scope from the
+ *  fabric's own file — the registerPackageAsk contract: zero edits here). */
+export function registerVentureAsk(row: VentureAskRow): void {
+  VENTURE_ASKS.push(row);
+}
+
+export function ventureAskRow(id: string): VentureAskRow | undefined {
+  return VENTURE_ASKS.find(r => r.id === id);
+}
+
+export function ventureAskRows(): readonly VentureAskRow[] {
+  return [...VENTURE_ASKS].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/** The venture tail of the adoption read: offered only where the lair
+ *  classes AND the package guests stood aside. One hash per (zone, row,
+ *  key) — rng-free like the whole lane; the verdict never moves while the
+ *  same venture stands. */
+function maybeVentureAsk(
+  def: ZoneDef,
+  bare: ObjectiveSpec,
+  world: World,
+): ObjectiveSpec | null {
+  for (const row of ventureAskRows()) {
+    const key = row.standing(world, def);
+    if (!key) continue;
+    const h = hashStr(`${ADOPT_CFG.salt}:ven:${row.id}:${def.id}:${def.seed ?? 0}:${key}`);
+    if (bare.adopt !== true && (h % 10000) / 10000 >= (row.chance ?? ADOPT_CFG.ventureChance)) continue;
+    return { kind: 'venture', venture: row.id, key, title: row.title(world, def, key) };
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // THE PUZZLE CLASS — standing riddle ground as an adoptable ask (Arianna's
 // ruling, 2026-08-04: the graveland exhumation asks at ~1-in-7, and the lane
 // is THE ADOPTIVE one — "the method that allows more extensibility"; the
@@ -434,10 +555,11 @@ function maybePackageAsk(
 // in the layout AND the preset in the zone's own `ZoneDef.puzzles` rows (the
 // ground authored the riddle as content; the ask adopts it, never conjures
 // one the country never wrote). Precedence runs LAST of the classes (lair →
-// package → puzzle): a resident claim beats a passing guest beats the
-// patient dead — standing ground can afford to wait for a load the others
-// stood aside from, and once stamped the ask is permanent (idempotent, like
-// every adopted kind; the ground never leaves, so no hand-back arm exists).
+// package → venture → puzzle): a resident claim beats a passing guest beats
+// a standing venture beats the patient dead — standing ground can afford to
+// wait for a load the others stood aside from, and once stamped the ask is
+// permanent (idempotent, like every adopted kind; the ground never leaves,
+// so no hand-back arm exists).
 // ---------------------------------------------------------------------------
 
 /** One kit's adoptable riddle ground — registered by the kit's own module
@@ -524,6 +646,19 @@ export function maybeAdoptObjective(
     // the rest of the read may adopt afresh — a new guest on its own coin.
     o = reverted = { kind: 'clear' };
   }
+  // THE FAIL ARM's load half: a stamped venture ask re-validates its verdict
+  // every load. 'standing' and 'won' both hold the stamp (a won-but-unbanked
+  // edge completes on the driver's first frame; a banked zone keeps its
+  // name on the pane); 'lost' — or the row's fabric gone from this world —
+  // hands the ask back to the bare cull, and the rest of the read may adopt
+  // afresh (the failed venture itself never re-offers: candidacy reads only
+  // the STANDING state — THE STANDING CONTRACT on VentureAskRow.standing).
+  if (o.kind === 'venture') {
+    if (!world) return null; // no fabric read here (a bare layout probe) — the stamp stands
+    const row = ventureAskRow(o.venture);
+    if (row && row.view(world, def, o.key).verdict !== 'lost') return null;
+    o = reverted = { kind: 'clear' };
+  }
   // Only the BARE roll of an override kind — authored asks are sovereign.
   if (!ADOPT_CFG.overrides.includes(o.kind) || def.special) return reverted;
   if (o.kind === 'clear' && (o.all || o.need !== undefined || o.frac !== undefined)) return reverted;
@@ -564,6 +699,14 @@ export function maybeAdoptObjective(
   // ask only where the lair classes stood aside (a resident beats a guest).
   const guest = world ? maybePackageAsk(def, o, world) : null;
   if (guest) return guest;
+  // THE VENTURE CLASS tail (maybeVentureAsk) — a standing winnable-or-losable
+  // venture waits behind the guests: its gate stands the whole run where a
+  // guest's window is now-or-never, but ahead of the riddles — a venture's
+  // candidacy can END (a toll paid un-asked, a slaughter), the grave keeps
+  // forever. The more patient, the later (the precedence law: lair →
+  // package → venture → puzzle).
+  const venture = world ? maybeVentureAsk(def, o, world) : null;
+  if (venture) return venture;
   // THE PUZZLE CLASS tail (maybePuzzleAsk) — the patient dead wait LAST: a
   // passing guest's window is now-or-never, standing riddle ground keeps.
   // (Same hash every load — ground the earlier classes stood aside from
@@ -579,6 +722,18 @@ registerAttentionSource((world: World): AttentionPoint[] => {
   if (!v || v.done || !v.pos) return [];
   return [{
     id: 'lair_adopt', pos: v.pos, color: ADOPT_CFG.accent, glyph: ADOPT_CFG.glyph,
+    label: v.label, z: 2,
+  }];
+});
+
+// The adopted venture's pointer: the warded gate itself — the destination is
+// visible the whole ask (the offering's doctrine); a resolved venture drops
+// the chevron the same frame the driver acts on the verdict.
+registerAttentionSource((world: World): AttentionPoint[] => {
+  const v = world.ventureAskView();
+  if (!v || v.verdict !== 'standing' || !v.pos) return [];
+  return [{
+    id: 'venture_adopt', pos: v.pos, color: ADOPT_CFG.accent, glyph: ADOPT_CFG.ventureGlyph,
     label: v.label, z: 2,
   }];
 });

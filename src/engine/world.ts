@@ -82,7 +82,7 @@ import { DIG_CFG } from '../data/digsites';
 import type { ContestRecoupSpec, ContestSpec } from '../data/objectives';
 import { PROCESSION_CFG } from '../data/processions';
 import { BOUNTY_CFG } from '../data/bounties';
-import { CLEAR_CFG, CONTEST_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, packageAskRow, pressureRampAt, pressureRampCadence } from '../data/objectives';
+import { CLEAR_CFG, CONTEST_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, packageAskRow, pressureRampAt, pressureRampCadence, ventureAskRow } from '../data/objectives';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
@@ -41245,6 +41245,30 @@ export class World {
     };
   }
 
+  /** THE ADOPTED VENTURE's stamped view (kind 'venture' — THE ADOPTIVE LANE's
+   *  VENTURE CLASS, data/objectives.ts): one read for the completion watch,
+   *  the HUD line and the chevron, resolved through the registered row's OWN
+   *  tri-state view over the fabric's durable state — drawn == tested against
+   *  the same reads the fabric's runtime resolves (the holdfast's `resolved`
+   *  ledger is the debut). Null when the row's fabric is not installed (the
+   *  driver hands the ask back). */
+  ventureAskView(): {
+    ventureId: string; title: string; verdict: 'standing' | 'won' | 'lost';
+    pos: Vec2 | null; label: string; wonText?: string; lostText?: string;
+  } | null {
+    const o = this.zone.objective;
+    if (o.kind !== 'venture') return null;
+    const row = ventureAskRow(o.venture);
+    if (!row) return null;
+    const s = row.view(this, this.zone, o.key);
+    return {
+      ventureId: o.venture, title: o.title, verdict: s.verdict,
+      pos: s.pos ? vec(s.pos.x, s.pos.y) : null, label: s.label,
+      ...(s.wonText !== undefined ? { wonText: s.wonText } : {}),
+      ...(s.lostText !== undefined ? { lostText: s.lostText } : {}),
+    };
+  }
+
   /** The live OFFERING altar, for the attention fabric + the HUD: where it
    *  hungers, how fed, and whether the zone has anything left to feed it. */
   offeringView(): { pos: Vec2; offered: number; need: number; stalled: boolean; done: boolean } | null {
@@ -49393,6 +49417,36 @@ export class World {
         return;
       }
 
+      case 'venture': {
+        // THE ADOPTED VENTURE (THE ADOPTIVE LANE's VENTURE CLASS,
+        // data/objectives.ts registerVentureAsk): a standing winnable-or-
+        // losable feature took the ask — the sealed holdfast gate is the
+        // debut. The ask completes ONLY through the venture's own verbs
+        // (verdict 'won' — the toll paid, the gate unbarred, the slaughter
+        // gamble BURST it open: the fabric's own resolved state is the one
+        // truth, drawn == tested). THE FAIL ARM (her ruling, 2026-08-04):
+        // the player's own actions may FAIL it (verdict 'lost' — the
+        // wardens murdered, the gate held), and a lost venture hands the
+        // ask back to the bare cull IN-VISIT — no completion, no
+        // punishment: this visit completes on the empty-floor law, the
+        // next load re-derives the cull stamp. Player agency is the point —
+        // murdering the wardens is a road, it just isn't THIS road.
+        if (this.objectiveDone) return;
+        const v = this.ventureAskView();
+        if (v?.verdict === 'standing') return;
+        if (v?.verdict === 'won') {
+          this.completeObjective(v.wonText ?? `${o.title} is won!`);
+          return;
+        }
+        // 'lost' — or the row's fabric left this world: THE HAND-BACK.
+        if (v) {
+          this.text(vec(this.player.pos.x, this.player.pos.y - 60),
+            v.lostText ?? `${o.title} is forfeit — the wilds still ask their cull`, '#d05050', 14);
+        }
+        this.zone.objective = { kind: 'clear' };
+        return;
+      }
+
       case 'spawners':
         if (!this.objectiveDone && this.livingSpawners().length === 0) {
           this.completeObjective('Spawners destroyed!');
@@ -51325,6 +51379,14 @@ export class World {
         // reads its exit for the frame before the driver hands the ask back.
         const v = this.packageAskView();
         if (!v || !v.standing) return `${o.title} has moved on`;
+        return v.label;
+      }
+      case 'venture': {
+        // THE ADOPTED VENTURE: the row's own view authors the line; a lost
+        // or vanished venture reads its forfeit for the frame before the
+        // driver hands the ask back to the cull.
+        const v = this.ventureAskView();
+        if (!v || v.verdict === 'lost') return `${o.title} is forfeit`;
         return v.label;
       }
       case 'spawners': return `Destroy the spawners — ${this.livingSpawners().length} remain`;

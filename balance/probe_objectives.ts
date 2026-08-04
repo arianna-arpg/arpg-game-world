@@ -45,6 +45,16 @@
 //     ratified effective rates; the stamp is the standing kind with THE
 //     ring pinned — zero new driver code, the dig E2E lives kit-side in
 //     probe_lonecrypt G.
+//   - THE VENTURE CLASS (kind 'venture' — registerVentureAsk, RIG W; THE
+//     FAIL ARM, Arianna's ruling 2026-08-04): a standing winnable-or-LOSABLE
+//     feature adopts between guest and riddle (lair → package → venture →
+//     puzzle — the more patient, the later); completion ONLY through the
+//     fabric's own verbs (the holdfast debut: the toll paid, or the
+//     slaughter gamble bursting the gate — the fabric's verdict is the one
+//     truth), and an explicit player-authored FAIL (the wardens murdered,
+//     the gate held) hands the ask back to the bare cull IN-VISIT — no
+//     completion, no punishment, the zone completable the ordinary way; a
+//     failed gate never re-offers (THE STANDING CONTRACT).
 // Run: npx tsx balance/probe_objectives.ts
 // ---------------------------------------------------------------------------
 
@@ -65,7 +75,8 @@ import { placeZoneAt } from '../src/engine/worldgen';
 import {
   CONTEST_CFG, PRESSURE_RAMP, adoptDenMouthKinds, adoptHuntRows,
   maybeAdoptObjective, packageAskRow, pressureRampAt, pressureRampCadence,
-  ADOPT_CFG, puzzleAskRows, type ContestRecoupSpec,
+  ADOPT_CFG, puzzleAskRows, registerPackageAsk, registerVentureAsk, ventureAskRows,
+  type ContestRecoupSpec,
 } from '../src/data/objectives';
 import { PUZZLES } from '../src/data/puzzles'; // RIG V: puzzleAskRows census pins the preset is real
 import { BEACON_CFG } from '../src/data/beacons';
@@ -1192,6 +1203,270 @@ withSeededRandom(0x0bec7a, () => {
       w.loadZone(zid);
       check('V7d re-entry re-reads the SAME adopted ask (idempotent — \'puzzle\' never re-rolls)',
         JSON.stringify(w.zone.objective) === stamped);
+      leaveToHome();
+    }
+  }
+
+  // --- RIG W: THE VENTURE CLASS (THE FAIL ARM — the holdfast ask debut) ------
+  // Her ruling (2026-08-04): "opening a Holdfast would work as a zone
+  // objective, because a Holdfast can be explicitly failed if the player
+  // murders the wardens. But if that occurs, and the objective actually
+  // falls back to its plain cull — no completion — then we cohere the
+  // entire objective a bit better and leave it up to player agency once
+  // more." The lane half runs on probe-registered rows (the registry is the
+  // open seam — cheap, exact, no mints); the debut half runs the REAL
+  // holdfast fabric end to end: adopt → pay → complete, adopt → murder →
+  // fail → hand back → cull still finishes, and the burst gamble completing
+  // down the bloody road (the fabric's own verdict is the one truth).
+  {
+    // W1 the census: the holdfast row is registered; rows consult sorted.
+    const rows = ventureAskRows();
+    check('W1a the holdfast venture row is registered (registry-derived, def-blind)',
+      rows.some(r => r.id === 'holdfast'), `${rows.length} rows`);
+    check('W1b rows consult in sorted order (import-order-proof, the package law)',
+      rows.every((r, i) => i === 0 || rows[i - 1].id <= r.id));
+    check('W1c the venture kind\'s citizenship: seals OPEN, read + title composed, NO parent chest, NO weight row',
+      OBJECTIVE_SEALS.venture === false
+      && objectiveRead({ kind: 'venture', venture: 'holdfast', key: 'k', title: 'Roadwarden Toll' }).read.includes('Roadwarden Toll')
+      && !objectiveEarnsChest({ kind: 'venture', venture: 'x', key: 'k', title: 'x' })
+      && !Object.values(TILESETS).some(t => t.objectives.some(ob => (ob.kind as string) === 'venture')));
+
+    // The probe apparatus: an armed test venture + an armed test guest —
+    // the open registry IS the seam, so the lane's laws pin without a mint.
+    // Both rows stand ONLY on the def id they are armed at (inert for every
+    // other rig), and the venture row honors THE STANDING CONTRACT (lost ⇒
+    // standing reads null).
+    let ventureArmId: string | null = null;
+    let ventureVerdict: 'standing' | 'won' | 'lost' = 'standing';
+    registerVentureAsk({
+      id: 'probe_marker',
+      standing: (_wv, d) => (ventureArmId !== null && d.id === ventureArmId ? `pm:${d.id}` : null),
+      title: () => 'the Probe Stand',
+      view: () => ({ verdict: ventureVerdict, pos: null, label: 'Face the Probe Stand' }),
+    });
+    let pkgArmId: string | null = null;
+    registerPackageAsk({
+      pkg: 'probe_guest',
+      title: 'the Probe Guest',
+      standing: (_wv, d) => (pkgArmId !== null && d.id === pkgArmId ? `pg:${d.id}` : null),
+      view: () => ({ standing: true, engaged: false, pos: null, label: 'Probe Guest' }),
+    });
+    const mkDefW = (over: Record<string, unknown> = {}): ZoneDef => ({
+      id: 'probe_adoptw', name: 'x', level: 8, size: 'small', theme: {} as never,
+      layout: [], exits: [], map: { x: 0, y: 0 }, objective: { kind: 'clear' },
+      seed: 1234, ...over,
+    } as unknown as ZoneDef);
+    const bareW = { doodads: [], landmarkSpawns: [] };
+    const mouthW = { doodads: [{ pos: vec(100, 100), radius: 26, kind: 'wyrm_barrow_mouth' }], landmarkSpawns: [] };
+    const adoptTrueW = { kind: 'clear', adopt: true } as ObjectiveSpec;
+
+    // W2 the coin + the stamp, on synthetic ground (pure calls, no rng).
+    ventureArmId = 'probe_adoptw';
+    ventureVerdict = 'standing';
+    let fired = 0;
+    let held = 0;
+    for (let s = 0; s < 60; s++) {
+      const r = maybeAdoptObjective(mkDefW({ seed: s }), bareW, world);
+      if (r?.kind === 'venture') fired++; else held++;
+    }
+    check('W2a the unforced coin both fires and holds (CAN, never MUST)',
+      fired > 0 && held > 0, `${fired} fired / ${held} held over 60 seeds`);
+    check('W2b without `world` the venture tail never runs (fabric reads are world-gated)',
+      maybeAdoptObjective(mkDefW({ objective: adoptTrueW }), bareW) === null);
+    const s1 = maybeAdoptObjective(mkDefW({ objective: adoptTrueW }), bareW, world);
+    const s2 = maybeAdoptObjective(mkDefW({ objective: adoptTrueW }), bareW, world);
+    check('W2c adopt:true skips the coin; the stamp is deterministic + carries row/key/title',
+      JSON.stringify(s1) === JSON.stringify(s2) && s1?.kind === 'venture'
+      && s1.venture === 'probe_marker' && s1.key === 'pm:probe_adoptw' && s1.title === 'the Probe Stand');
+    check('W2d authored asks are sovereign (the shared gate covers the class)',
+      maybeAdoptObjective(mkDefW({ objective: { kind: 'clear', need: 5 } }), bareW, world) === null
+      && maybeAdoptObjective(mkDefW({ objective: { kind: 'clear', adopt: false } }), bareW, world) === null);
+    ventureArmId = null;
+    check('W2e no standing venture ⇒ the lane never binds (adoption can never conjure one)',
+      maybeAdoptObjective(mkDefW({ objective: adoptTrueW }), bareW, world) === null);
+
+    // W3 precedence: lair → package → venture → puzzle, each seam proven
+    // non-vacuous by disarming the winner and watching the next class take
+    // the same ground.
+    ventureArmId = 'probe_adoptw';
+    check('W3a a resident claim beats the venture (lair first)',
+      maybeAdoptObjective(mkDefW({ objective: adoptTrueW }), mouthW, world)?.kind === 'lair');
+    pkgArmId = 'probe_adoptw';
+    check('W3b a standing guest beats the venture (the now-or-never window)',
+      maybeAdoptObjective(mkDefW({ objective: adoptTrueW }), bareW, world)?.kind === 'package');
+    pkgArmId = null;
+    const riddleGround = mkDefW({ objective: adoptTrueW, tileset: 'crypt', puzzles: [{ id: 'grave_exhumation', chance: 1 }] });
+    const doorW = { doodads: [{ pos: vec(100, 100), radius: 15, kind: 'lone_crypt_door' }], landmarkSpawns: [] };
+    check('W3c the venture beats the riddle (the gate can END; the grave keeps forever)',
+      maybeAdoptObjective(riddleGround, doorW, world)?.kind === 'venture');
+    ventureArmId = null;
+    check('W3d …and the riddle candidacy was REAL (disarm the venture, the puzzle takes the ground)',
+      maybeAdoptObjective(riddleGround, doorW, world)?.kind === 'puzzle');
+
+    // W4 THE FAIL ARM's load half: the stamped ask re-validates its verdict.
+    const stampW = { kind: 'venture', venture: 'probe_marker', key: 'pm:probe_adoptw', title: 'the Probe Stand' } as ObjectiveSpec;
+    ventureArmId = 'probe_adoptw';
+    ventureVerdict = 'standing';
+    check('W4a a STANDING venture stamp holds at load (idempotent)',
+      maybeAdoptObjective(mkDefW({ objective: stampW }), bareW, world) === null);
+    ventureVerdict = 'won';
+    check('W4b a WON venture stamp holds (the driver banks it; the pane keeps the name)',
+      maybeAdoptObjective(mkDefW({ objective: stampW }), bareW, world) === null);
+    ventureVerdict = 'lost';
+    ventureArmId = null; // THE STANDING CONTRACT: a lost venture never re-offers
+    check('W4c a LOST venture hands back to the bare cull at load',
+      JSON.stringify(maybeAdoptObjective(mkDefW({ objective: stampW }), bareW, world)) === JSON.stringify({ kind: 'clear' }));
+    check('W4d an unregistered row hands back too (the fabric left this world)',
+      JSON.stringify(maybeAdoptObjective(
+        mkDefW({ objective: { kind: 'venture', venture: 'no_such_row', key: 'x', title: 'X' } as ObjectiveSpec }),
+        bareW, world)) === JSON.stringify({ kind: 'clear' }));
+    // The hand-back FALLS THROUGH: ground a lost venture leaves may adopt a
+    // standing resident on the lair class's own natural coin — scan seeds
+    // for one fire and one hold (the V6d idiom: pure hash, self-healing).
+    {
+      let seedFire = -1;
+      let seedHold = -1;
+      for (let s = 0; s < 60 && (seedFire < 0 || seedHold < 0); s++) {
+        const r = maybeAdoptObjective(mkDefW({ seed: s, objective: stampW }), mouthW, world);
+        if (r?.kind === 'lair' && seedFire < 0) seedFire = s;
+        if (r?.kind === 'clear' && seedHold < 0) seedHold = s;
+      }
+      check('W4e the hand-back falls through to the next standing class on its own coin (fire + hold both seen)',
+        seedFire >= 0 && seedHold >= 0, `lair@${seedFire} cull@${seedHold}`);
+    }
+    ventureVerdict = 'standing';
+
+    // W5 THE DEBUT, live: a real grassland mint + the real gate — adoption
+    // binds the fabric's own ledger (key, name, view, chevron anchor).
+    const hf = w.sim.holdfastField;
+    check('W5a the sim world carries the holdfast overlay (the ledger is live; the gate stays quiet)', !!hf);
+    if (hf) {
+      const zid = w.devMintTileset('grassland', 50, 3, { seed: 909090 }) as string;
+      const forced = w.devForceHoldfast() as boolean;
+      const info = hf.infoFor(zid);
+      const gdef = info ? hf.def(info.defId) : undefined;
+      check('W5b the forced gate stands sealed with its exit appended',
+        forced === true && !!info && !!gdef && info.locked && info.resolved === 'sealed' && info.exitAppended);
+      leaveToHome();
+      const def = w.zoneMap[zid] as ZoneDef;
+      def.objective = { kind: 'clear', adopt: true };
+      def.landmarks = []; // no resident claims — the precedence half is W3's business
+      (w.zoneMemory as Map<string, unknown>).delete(zid);
+      (w.completedObjectives as Set<string>).delete(zid);
+      w.loadZone(zid);
+      const o = w.zone.objective as ObjectiveSpec;
+      check('W5c the load adopted the holdfast (kind, row, the exact gate\'s key, the guardian\'s own name)',
+        o.kind === 'venture' && o.venture === 'holdfast'
+        && o.key === `${info!.lockId}:${info!.defId}` && o.title === gdef!.name);
+      const v = w.ventureAskView();
+      check('W5d the stamped view: standing, anchored at the gate, the HUD asks the toll',
+        v?.verdict === 'standing' && v.pos !== null
+        && String(w.objectiveText()).startsWith(`Open ${gdef!.name}`));
+      check('W5e the adopted ask never seals and stakes no parent chest',
+        objectiveSeals(o) === false && objectiveEarnsChest(o) === false && w.objectiveDone === false);
+      const hrow = ventureAskRows().find(r => r.id === 'holdfast')!;
+      check('W5f a stale binding reads LOST (hand back, never rebind)',
+        hrow.view(world, w.zone, 'not:the:key').verdict === 'lost');
+
+      // W6 THE WIN ARM: pay the toll — the fabric resolves OPEN and the ask
+      // completes through the fabric's own verb (no parallel ledger).
+      world.grantEssence(world.localSeat, { essence: 'coarse', count: 500 });
+      const keeper = (w.actors as Actor[]).find(a => a.id === w.holdfastSite?.keeperId);
+      check('W6a the wardens mustered (the parley stands)', !!keeper);
+      if (keeper) { w.player.pos.x = keeper.pos.x + 20; w.player.pos.y = keeper.pos.y; }
+      const paid = world.payHoldfastToll(-1);
+      step(0.2);
+      check('W6b the toll pays ⇒ resolved OPEN ⇒ THE ASK COMPLETES (drawn == tested)',
+        paid === true && info!.resolved === 'open' && w.objectiveDone === true
+        && (w.completedObjectives as Set<string>).has(zid));
+      const stamped = JSON.stringify(w.zone.objective);
+      leaveToHome();
+      w.loadZone(zid);
+      check('W6c re-entry: the WON stamp holds byte-identically and stays done',
+        JSON.stringify(w.zone.objective) === stamped && w.objectiveDone === true);
+      leaveToHome();
+    }
+
+    // W7 THE FAIL ARM, live: murder the wardens, the gamble pinned SHUT —
+    // the fabric rules 'failed', the ask hands back IN-VISIT, the cull still
+    // finishes the zone, and the failed gate never re-offers.
+    if (hf) {
+      const zid = w.devMintTileset('grassland', 52, 3, { seed: 919191 }) as string;
+      const forced = w.devForceHoldfast() as boolean;
+      const info = hf.infoFor(zid);
+      const gdef = info ? hf.def(info.defId) : undefined;
+      check('W7a a second gate stands for the slaughter road', forced === true && !!info && !!gdef);
+      leaveToHome();
+      const def = w.zoneMap[zid] as ZoneDef;
+      def.objective = { kind: 'clear', adopt: true };
+      def.landmarks = [];
+      (w.zoneMemory as Map<string, unknown>).delete(zid);
+      (w.completedObjectives as Set<string>).delete(zid);
+      w.loadZone(zid);
+      check('W7b the ask adopted the second gate', (w.zone.objective as ObjectiveSpec).kind === 'venture');
+      const savedChance = gdef!.slaughterOpensChance;
+      gdef!.slaughterOpensChance = 0; // chance(0) is exact — the gamble cannot burst
+      try {
+        for (const id of (w.holdfastSite?.banditIds ?? []) as number[]) {
+          const a = w.actorById(id) as Actor | null;
+          if (a && !a.dead) w.kill(a, true);
+        }
+        step(0.3);
+      } finally {
+        gdef!.slaughterOpensChance = savedChance;
+      }
+      check('W7c the fabric ruled the slaughter FAILED (sealed for the run, terminal)',
+        info!.resolved === 'failed');
+      check('W7d THE FAIL ARM: the ask handed back to the bare cull IN-VISIT — no completion, no punishment',
+        (w.zone.objective as ObjectiveSpec).kind === 'clear' && w.objectiveDone === false
+        && !(w.completedObjectives as Set<string>).has(zid));
+      killAllEnemies();
+      step(0.2);
+      check('W7e the zone still completes the ordinary way after the fail (player agency, priced honestly)',
+        w.objectiveDone === true && (w.completedObjectives as Set<string>).has(zid));
+      leaveToHome();
+      def.objective = { kind: 'clear', adopt: true };
+      (w.zoneMemory as Map<string, unknown>).delete(zid);
+      (w.completedObjectives as Set<string>).delete(zid);
+      w.loadZone(zid);
+      check('W7f a failed (wardenless) holdfast never adopts again — the no-conjure analog',
+        (w.zone.objective as ObjectiveSpec).kind === 'clear');
+      leaveToHome();
+    }
+
+    // W8 THE BURST ARM, live: the gamble pinned OPEN — murdered wardens, but
+    // the fabric rules the gate OPEN, so the ask completes down the bloody
+    // road too (adjudicated: a burst gate IS an opened holdfast — the
+    // fabric's own verdict is the one truth, flagged for her word).
+    if (hf) {
+      const zid = w.devMintTileset('grassland', 54, 3, { seed: 929292 }) as string;
+      const forced = w.devForceHoldfast() as boolean;
+      const info = hf.infoFor(zid);
+      const gdef = info ? hf.def(info.defId) : undefined;
+      check('W8a a third gate stands for the gamble road', forced === true && !!info && !!gdef);
+      leaveToHome();
+      const def = w.zoneMap[zid] as ZoneDef;
+      def.objective = { kind: 'clear', adopt: true };
+      def.landmarks = [];
+      (w.zoneMemory as Map<string, unknown>).delete(zid);
+      (w.completedObjectives as Set<string>).delete(zid);
+      w.loadZone(zid);
+      check('W8b the ask adopted the third gate', (w.zone.objective as ObjectiveSpec).kind === 'venture');
+      const savedChance = gdef!.slaughterOpensChance;
+      gdef!.slaughterOpensChance = 1; // chance(1) is exact — the gamble always bursts
+      try {
+        for (const id of (w.holdfastSite?.banditIds ?? []) as number[]) {
+          const a = w.actorById(id) as Actor | null;
+          if (a && !a.dead) w.kill(a, true);
+        }
+        step(0.3);
+      } finally {
+        gdef!.slaughterOpensChance = savedChance;
+      }
+      check('W8c the gamble WON: the fabric resolved OPEN (the gate burst)',
+        info!.resolved === 'open' && info!.locked === false);
+      check('W8d the ask COMPLETES down the bloody road (the fabric\'s verdict is the one truth)',
+        w.objectiveDone === true && (w.completedObjectives as Set<string>).has(zid));
       leaveToHome();
     }
   }

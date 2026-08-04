@@ -103,8 +103,10 @@ import { Rng } from '../core/rng';
  *  exactly the wound the kind census exists to catch). 'package' is the
  *  PACKAGE CLASS (registerPackageAsk — a standing guest like the fracture):
  *  doubly unauthorable, since its presence is transient world state no mint
- *  could promise. */
-const ADOPTIVE_ONLY_KINDS = ['lair', 'package'] as const;
+ *  could promise. 'venture' is the VENTURE CLASS (registerVentureAsk — a
+ *  winnable-or-losable stand like the sealed holdfast): unauthorable the
+ *  same way, its presence being overlay state no mint could promise. */
+const ADOPTIVE_ONLY_KINDS = ['lair', 'package', 'venture'] as const;
 
 export function validateContent(): void {
   const warn = (msg: string): void => console.warn(`[content] ${msg}`);

@@ -18,6 +18,7 @@
 
 import { clamp } from '../../core/math';
 import { Rng } from '../../core/rng';
+import { registerVentureAsk } from '../../data/objectives';
 import type { ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
 import { META_CURRENCY_LABEL } from '../../meta/account';
@@ -298,4 +299,72 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
     label: def?.name ?? 'Holdfast',
     detail: `${pitch ?? 'a sealed side-pocket'}; ${ask}`, z: 12,
   }];
+});
+
+// THE HOLDFAST ASK (THE ADOPTIVE LANE's VENTURE CLASS — registerVentureAsk,
+// data/objectives.ts; Arianna's ruling 2026-08-04): a zone whose mint stands
+// a SEALED holdfast may adopt "open the holdfast" as its ask when it rolled a
+// bare cull. Registered here (the overlays/fractures.ts idiom — zero lane
+// edits): candidacy, verdict and title are all pure reads over THIS overlay's
+// own resolved ledger, so the ask can never disagree with the gate. Any
+// HoldfastDef — bandit, durance, the tinted tolls, every future guardian —
+// is adoptable by construction; the def is read, never listed.
+//   WON — `resolved: 'open'`: the toll paid (World.payHoldfastToll →
+//   unlock), or the slaughter gamble BURST the gate (updateHoldfastSite →
+//   the same unlock). The fabric's own verdict is the ask's verdict: down
+//   the bloody road, a burst gate still means the holdfast genuinely OPENED,
+//   so the ask completes — agency honored in both directions.
+//   LOST — `resolved: 'failed'`: the wardens murdered and the gate held
+//   (markFailed — terminal by the fabric's own law: no re-muster, no
+//   re-pay). THE FAIL ARM hands the ask back to the bare cull, no
+//   completion, no punishment (her ruling verbatim); a failed gate never
+//   re-offers, structurally — candidacy below reads only 'sealed' (THE
+//   STANDING CONTRACT).
+registerVentureAsk({
+  id: 'holdfast',
+  standing: (world: World, def: ZoneDef): string | null => {
+    const hf = world.sim.holdfastField;
+    const info = hf?.infoFor(def.id);
+    // Only a STANDING sealed gate is adoptable: an opened (looted) or a
+    // failed (wardenless) holdfast never adopts, the exit must actually
+    // stand, and the guardian def must still be registered. The key binds
+    // the exact gate (lock + guardian): a re-raised or re-guarded stand
+    // reads stale and hands back rather than silently rebinding.
+    if (!hf || !info || !info.locked || info.resolved !== 'sealed' || !info.exitAppended) return null;
+    if (!hf.def(info.defId)) return null;
+    return `${info.lockId}:${info.defId}`;
+  },
+  title: (world: World, def: ZoneDef): string => {
+    const hf = world.sim.holdfastField;
+    const info = hf?.infoFor(def.id);
+    return (info && hf?.def(info.defId)?.name) || 'the holdfast';
+  },
+  view: (world: World, def: ZoneDef, key: string) => {
+    const hf = world.sim.holdfastField;
+    const info = hf?.infoFor(def.id);
+    const gdef = info ? hf?.def(info.defId) : undefined;
+    // A stale binding — the ledger row gone, the guardian unregistered, or
+    // a different gate standing — reads LOST: hand back, never rebind.
+    if (!info || !gdef || `${info.lockId}:${info.defId}` !== key) {
+      return { verdict: 'lost' as const, pos: null, label: '' };
+    }
+    const portal = world.exits.find(e => def.exits[e.defIndex]?.lock === info.lockId);
+    const pos = portal ? { x: portal.pos.x, y: portal.pos.y } : null;
+    if (info.resolved === 'open') {
+      return {
+        verdict: 'won' as const, pos, label: `${gdef.name} stands open`,
+        wonText: `${gdef.name} stands open!`,
+      };
+    }
+    if (info.resolved === 'failed') {
+      return {
+        verdict: 'lost' as const, pos, label: `${gdef.name} is forfeit`,
+        lostText: `${gdef.name} is forfeit — the wilds still ask their cull`,
+      };
+    }
+    const ask = gdef.unlock.kind === 'pay-currency' && gdef.unlock.currency === 'mortal'
+      ? `the wardens ask ${holdfastTollLabel(gdef, def.level, META_CURRENCY_LABEL)}`
+      : 'the wardens ask a gem';
+    return { verdict: 'standing' as const, pos, label: `Open ${gdef.name} — ${ask}` };
+  },
 });

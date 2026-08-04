@@ -40,6 +40,10 @@ tileset's `objectives` weight table (`data/tilesets.ts` → worldgen
 | `package`    | THE ADOPTED GUEST (adoptive-only — registerPackageAsk): the ask |
 |              | IS a roving content-package presence this ground hosts — trip   |
 |              | the standing fracture and survive its run, however it ends      |
+| `venture`    | THE ADOPTED VENTURE (adoptive-only — registerVentureAsk): the   |
+|              | ask IS a standing winnable-or-LOSABLE feature — open the sealed |
+|              | holdfast; murder its wardens and THE FAIL ARM hands the ask     |
+|              | back to the plain cull, no completion, no punishment            |
 
 ## Exit-seal POLICY (not physics)
 
@@ -474,6 +478,85 @@ module registers.
   the re-arm, both hand-back roads, authored sovereignty, and lair-first
   precedence.
 
+### THE VENTURE CLASS (`kind: 'venture'` — THE FAIL ARM's home)
+
+Her ruling (2026-08-04, redirecting the hunt-ask card): "I really like Option A
+as a mechanic [the engagement-scoped adopted ask] but it feels minorly
+redundant for the Hunt. However, that concept CAN be leveraged in other ways:
+something like OPENING A HOLDFAST would work as a zone objective, because a
+Holdfast can be explicitly failed if the player murders the wardens. But if
+that occurs, and the objective actually falls back to its plain cull — no
+completion — then we actually cohere the entire objective a bit better and
+leave it up to player agency once more."
+
+A fabric REGISTERS its adoptable venture — `registerVentureAsk`
+(data/objectives.ts, called at module scope from the fabric's own file, the
+registerPackageAsk contract; `packages/overlays/holdfast.ts` is the debut) —
+as a row carrying a presence read (`standing`: the venture in this zone as a
+STABLE key, off the fabric's own durable state), a per-stand `title`, a live
+tri-state `view` (`'standing' | 'won' | 'lost'`) and an optional `chance`.
+Rows consult sorted by id; no hand lists anywhere.
+
+- THE FAIL ARM (the class's defining grammar, `World.updateObjective`'s
+  `'venture'` case): the ask completes ONLY through the venture's own
+  standing verbs (verdict `'won'`, read off the fabric's own state — never a
+  parallel ledger, drawn == tested). The player's own actions may explicitly
+  FAIL it (verdict `'lost'`), and a lost venture HANDS THE ASK BACK to the
+  bare cull IN-VISIT: no completion, no punishment — this visit completes on
+  the empty-floor law, the next load re-derives the cull stamp. This is the
+  package class's guest-gone hand-back grown an explicit-failure read: a
+  guest's absence is circumstance, a venture's loss is authored by the
+  player's own hand. The load half re-validates the same view (`'standing'`
+  and `'won'` hold the stamp; `'lost'` — or the fabric uninstalled — reverts
+  and falls through, so another standing class may take the ground on its
+  own coin).
+- THE STANDING CONTRACT (`VentureAskRow.standing`): candidacy is only ever
+  the STANDING state — a venture whose view would read `'won'` or `'lost'`
+  must read null there, so a resolved or failed venture can never
+  (re-)offer itself and the hand-back converges to the cull instead of
+  flip-flopping.
+- THE HOLDFAST DEBUT (`packages/overlays/holdfast.ts` — "open the
+  holdfast"): candidacy = a SEALED gate standing in the overlay's ledger
+  (`resolved: 'sealed'`, exit appended, guardian registered — an opened
+  (looted) or failed (wardenless) holdfast never adopts, structurally); any
+  HoldfastDef is adoptable the moment it registers, def-blind. WON =
+  `resolved: 'open'` — the toll paid (`payHoldfastToll` → `unlock`) or the
+  slaughter gamble BURSTING the gate (`updateHoldfastSite` → the same
+  unlock): the fabric's own verdict is the ask's verdict, so the bloody road
+  can still WIN when the gamble pays — a burst gate IS an opened holdfast
+  (adjudicated; flagged for her word). LOST = `resolved: 'failed'` — the
+  wardens murdered and the gate held (`markFailed`, terminal by the
+  fabric's own law: no re-muster, no re-pay). The key binds the exact gate
+  (`lockId:defId`) — a re-raised or re-guarded stand reads stale and hands
+  back rather than silently rebinding. The HUD line asks the toll in the
+  guardian's own coin (`holdfastTollLabel` — the one formatter).
+- PRECEDENCE: lair → package → **venture** → puzzle. The more patient, the
+  later: the resident native is the ground's own claim; the guest's window
+  is now-or-never (480s idle); the venture's gate stands the whole run but
+  its candidacy can END (a toll paid un-asked, a slaughter); the grave
+  re-mints from seed forever. Ground a lost venture hands back falls
+  through to the remaining classes in the SAME read (my reasoned order,
+  flagged).
+- Seals: OPEN by law (an ask the player may explicitly fail must never hold
+  a door — and walking on past a toll-gate is itself a road). Chest: NONE
+  on the parent — the venture's own resolution is the pay (the holdfast's
+  purchased pocket), and a chest on a fail-armed ask would either be
+  forfeited by the fail (a punishment her ruling forbids) or double-paid by
+  the cull it hands back to. The coin: `ADOPT_CFG.ventureChance` (0.5,
+  unblessed) per (zone, row, key); `adopt: true` skips it, per-row `chance`
+  overrides. `ventureAskView()` is the stamped view; the chevron
+  (`venture_adopt`) anchors on the gate while the ask stands.
+- `validate` refuses `'venture'` everywhere `'lair'`/`'package'` are refused
+  (ADOPTIVE_ONLY_KINDS). Co-op posture: host-authoritative like the whole
+  objective fabric (no objective wire fields exist).
+- Probe: RIG W (balance/probe_objectives.ts) — census + citizenship, the
+  coin, all four precedence seams (each proven non-vacuous), the load-half
+  hand-back (standing/won hold, lost/unregistered revert, the fall-through),
+  and the LIVE debut: adopt → pay → complete; adopt → murder (gamble pinned
+  shut) → fabric rules failed → hand-back in-visit → cull still finishes →
+  a failed gate never re-adopts; adopt → murder (gamble pinned open) → the
+  burst COMPLETES the ask down the bloody road.
+
 ### THE PUZZLE CLASS (the STANDING `kind: 'puzzle'` — the adopted riddle)
 
 The ruling (Arianna, 2026-08-04, closing the lone-crypt coda): the graveland
@@ -514,9 +597,10 @@ read byte-identical mint fingerprints with the class registered.
   13.2% over 250 real mint+load sweeps each. probe_lonecrypt pins the
   arithmetic against the LIVE tables so a table retune re-surfaces the
   landed rate for a ruling.
-- PRECEDENCE runs LAST (lair → package → puzzle): a resident claim beats a
-  passing guest beats the patient dead — a guest's window is now-or-never,
-  the grave keeps. Ground a stale package stamp HANDS BACK falls through
+- PRECEDENCE runs LAST (lair → package → venture → puzzle): a resident
+  claim beats a passing guest beats a standing venture beats the patient
+  dead — a guest's window is now-or-never, a venture's gate can end, the
+  grave keeps. Ground a stale package stamp HANDS BACK falls through
   to the riddle's own coin in the same read. Once stamped the ask is
   permanent (idempotent — `'puzzle'` is not in `overrides`; the ground
   never leaves, so no hand-back arm exists for this class).
