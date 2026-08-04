@@ -1181,3 +1181,88 @@ registerRouseRule('sap_sleeper', () => ({
   woundFrac: 1, radius: 0,
   toast: 'The sap-drunk thing unseals its eyes.', color: '#c8b078', size: 11,
 }));
+
+// =============================================================================
+// THE BONE MASSIF (batch 28 — THE HUNT's ground vocabulary): standing masses
+// heaped of the counted dead, so a great beast can house itself in a massif
+// of bone. Region + two kinds register HERE (the catacombs precedent — a data
+// kit carries its own region row); no tileset mixes them yet — the wiring row
+// (downs/ossuary massifMasses) waits on the tileset seat, and the Hunt's own
+// nest culmination rides the transient dress lane meanwhile (overlays/hunt.ts
+// 'hunt_nest' — event ground is BORROWED; a massif is a place).
+// =============================================================================
+
+// BONE WALL: a heaped charnel mass — the hedgewall's BLIND-COVER policy in
+// bone (bodies stop, SIGHT stops behind the heap, but a shot THREADS the
+// gaps between ribs): flushing what nests behind the dead is the fight. No
+// masonry coursing, no cliff shear — nothing here was stacked or sheared, it
+// ACCUMULATED; the pale rim reads old bone against any floor.
+import { registerRegion } from '../world/regions';
+registerRegion({
+  id: 'bone_wall', walkable: false, blocks: true, label: 'the heaped bones',
+  blocksShot: false, blocksSight: true,
+  visual: { fill: '#3a3226', alpha: 1, edge: { color: '#cfc4a8', width: 4 } },
+});
+
+// THE BONE HEAP — the strewn body: knuckled heaps and strung spine-lines
+// (chains — a fallen colossus reads as one long ridge of vertebrae). Bone
+// litter banks the foot; ribs crest the skyline. The kill-site country's
+// standing silhouette.
+registerMassKind({
+  id: 'bone_heap',
+  region: 'bone_wall',
+  shapes: [{ shape: 'blob', weight: 2.5 }, { shape: 'chain', weight: 1.5 }, { shape: 'ridge', weight: 0.8 }],
+  lobe: 0.26,
+  skirt: [
+    { kind: 'bone_pile', weight: 3, radius: [12, 18] },
+    { kind: 'bone', weight: 2, radius: [9, 13] },
+    { kind: 'bone_cairn', weight: 1, radius: [12, 16] },
+  ],
+  skirtChance: 0.36,
+  skirtSpacing: 52,
+  crest: [
+    { kind: 'rib_arch', weight: 2, radius: [16, 24] },
+    { kind: 'bone_mound', weight: 1, radius: [22, 32] },
+  ],
+  crestChance: 0.18,
+  crestSpacing: 92,
+});
+
+// THE CHARNEL RING — the nest made geology: a bone court whose ring the
+// something-that-eats keeps (mouths for a way in; the open floor is the
+// larder). TENANTS: the nest stock dominant (clutch-and-larder — the read),
+// the ground's own faction answering at about one ring in five (patron
+// default), a picked-clean cache, and the seldom empty ring whose keeper
+// never came home. The trail's climax, wherever a tileset seats it.
+registerMassKind({
+  id: 'charnel_ring',
+  region: 'bone_wall',
+  shapes: [{ shape: 'court', weight: 1 }],
+  lobe: 0.22,
+  ringInner: 0.6,
+  mouths: [1, 2],
+  inner: [
+    { kind: 'bone_pile', weight: 2.5, radius: [12, 18] },
+    { kind: 'egg_clutch', weight: 1.5, radius: [11, 16] },
+    { kind: 'bone_mound', weight: 1, radius: [22, 30] },
+  ],
+  innerChance: 0.6,
+  innerSpacing: 54,
+  tenants: [
+    { kind: 'stock', weight: 42 },
+    { kind: 'garrison', weight: 12 },
+    { kind: 'held_stock', weight: 8 },
+    { kind: 'cache', weight: 14, rows: [
+      { kind: 'bone_pile', weight: 2, radius: [12, 18] },
+      { kind: 'burial_urn', weight: 1, radius: [11, 15] },
+    ] },
+    { kind: 'vacant', weight: 24 },
+  ],
+  skirt: [
+    { kind: 'bone_pile', weight: 2, radius: [12, 18] },
+    { kind: 'bone', weight: 2, radius: [9, 13] },
+    { kind: 'scree', weight: 1, radius: [14, 22] },
+  ],
+  skirtChance: 0.3,
+  skirtSpacing: 56,
+});

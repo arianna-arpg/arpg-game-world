@@ -719,6 +719,57 @@ console.log('eventqa: the waning law (finite clocks)');
   }
 }
 
+// === 10. THE HUNT (surge-contract invariants; the lifecycle rides probe_hunt) =
+console.log('eventqa: hunt surge contract');
+{
+  const huntPkg = PACKAGE_BY_ID['hunt'];
+  assert(!!huntPkg?.world?.overlay, 'hunt', 'the hunt package stands');
+  if (huntPkg?.world?.overlay) {
+    const gate = { active: false, share: 0, pressure: 0, ignitionMul: 0, severityMul: 0, concurrencyMul: 1 };
+    const hf = huntPkg.world.overlay({ seed: 0x4117, gate: () => gate, biomeSeed: 0x4117 }) as unknown as {
+      surge(): {
+        triggerChance: number; trackStages: [number, number]; dwellSeconds: number;
+        beasts: { faction: string; defId: string; weight: number }[];
+        seat: { range?: { min?: number; max?: number } };
+      };
+    };
+    const s = hf.surge();
+    assert(s.triggerChance > 0 && s.triggerChance < 1, 'hunt', 'triggerChance is a live, sane per-step chance');
+    assert(s.trackStages[0] >= 1 && s.trackStages[1] >= s.trackStages[0], 'hunt',
+      `trackStages ordered with ≥1 find ([${s.trackStages}])`);
+    assert(s.dwellSeconds > 0, 'hunt', 'the trail asks a real dwell');
+    assert((s.seat.range?.min ?? 0) >= 0 && (s.seat.range?.max ?? Infinity) > (s.seat.range?.min ?? 0),
+      'hunt', 'the seat envelope is ordered (off the boots, findable)');
+    assert(s.beasts.length >= 1, 'hunt', `the quarry pool stands (${s.beasts.length} beasts)`);
+    for (const b of s.beasts) {
+      const def = MONSTERS[b.defId];
+      assert(!!FACTIONS[b.faction] && !!def && b.weight > 0, 'hunt',
+        `quarry '${b.defId}' resolves (faction '${b.faction}', weight ${b.weight})`);
+      if (!def) continue;
+      // THE CHASE CONTRACT: a hunt beast RUNS — at least one flee phase, each
+      // survivable by burst (damage-reduction < 100%), and the body is a boss
+      // (the one-great-beast promise: payouts, Crowned promotion, the pin).
+      const flees = (def.brain?.phases ?? []).filter(p => p.flee);
+      assert(flees.length >= 1, 'hunt', `quarry '${b.defId}' carries ≥1 flee phase (the chase IS the hunt)`);
+      for (const p of flees) {
+        const dt = (p.mods ?? []).find(m => m.stat === 'damageTaken');
+        assert(dt ? -dt.value < 1 : true, 'hunt',
+          `quarry '${b.defId}' flee @${p.atLifeFrac} stays burst-killable (reduction < 1)`);
+      }
+      assert(!!def.boss, 'hunt', `quarry '${b.defId}' is boss-tier (one GREAT beast, never a pack body)`);
+    }
+    // THE BEAST'S GROUND (the transience doctrine): both dress kinds stand
+    // event-pinned (never sky-born) and the hunt's front source is registered
+    // — the spoor/nest bones can only ever be BORROWED ground.
+    const { WEATHER_DEFS } = await import('../src/world/weather');
+    const { eventFrontSourceIds } = await import('../src/engine/eventWeather');
+    assert(!!WEATHER_DEFS.hunt_spoor?.eventOnly && !WEATHER_DEFS.hunt_spoor?.skyWeight
+      && !!WEATHER_DEFS.hunt_nest?.eventOnly && !WEATHER_DEFS.hunt_nest?.skyWeight,
+      'hunt', 'spoor + nest are event-pinned weather rows (never sky-born)');
+    assert(eventFrontSourceIds().includes('hunt'), 'hunt', 'the hunt event-front source is registered');
+  }
+}
+
 // === verdict =================================================================
 console.log(failures
   ? `\neventqa FAILED — ${failures} breach(es) across ${checks + failures} checks`

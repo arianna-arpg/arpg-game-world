@@ -9562,6 +9562,130 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  // === THE HUNT BESTIARY (batch 28 — the quarry pool's silhouettes) ==========
+  /** The Chimera: the lion body under a doubled mane, goat horns riding the
+   *  off shoulder, the serpent tail's whip — three animals, one silhouette,
+   *  every part its own hittable lesson. */
+  hunt_chimera: {
+    parts: [
+      { kind: 'disc', scale: 1.02 },
+      { kind: 'furRuff', scale: 1.25 },
+      { kind: 'snout', scale: 1.05 },
+      { kind: 'fangJaw', x: 0.4, scale: 0.7 },
+      { kind: 'claws', params: { len: 0.5 } },
+      { kind: 'tail', params: { len: 1.1 } },
+      { kind: 'eyes', color: '#f0b040', params: { spread: 0.36, dist: 0.52, size: 0.1 } },
+    ],
+    shadowScale: 1.1,
+  },
+  /** The goat head part: horned, sung-through — the blessing you silence. */
+  chimera_goat_head: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'horns', scale: 1.3 },
+      { kind: 'snout', scale: 0.8 },
+      { kind: 'eyes', color: '#e8d080', params: { spread: 0.4, dist: 0.5, size: 0.12 } },
+      { kind: 'halo', scale: 1.15, alpha: 0.45 },
+    ],
+  },
+  /** The serpent tail part: the rear fang. */
+  chimera_serpent_tail: {
+    parts: [
+      { kind: 'serpentHead', scale: 0.95 },
+      { kind: 'eyes', color: '#a8e070', params: { n: 2, spread: 0.5, dist: 0.5, size: 0.12 } },
+    ],
+  },
+
+  /** The Knucker: the river-wyrm's head — all maw and marsh-green frill; the
+   *  coil file behind it is the body (worm looks below). */
+  hunt_knucker: {
+    parts: [
+      { kind: 'serpentHead', scale: 1.05 },
+      { kind: 'maw', scale: 0.8, params: { arc: 0.65 } },
+      { kind: 'fins', scale: 0.8, alpha: 0.85 },
+      { kind: 'eyes', color: '#c8e8a0', params: { n: 2, spread: 0.8, dist: 0.58, size: 0.1 } },
+    ],
+  },
+  /** A knucker body coil: wet scale in a raised loop. */
+  knucker_coil: {
+    parts: [
+      { kind: 'blob', scale: 0.92, params: { irr: 0.1, seed: 733 } },
+      { kind: 'segmentRings', params: { n: 2 } },
+    ],
+  },
+  /** The every-nth finned coil — the wound you can pick out mid-slither. */
+  knucker_fin: {
+    parts: [
+      { kind: 'blob', scale: 0.92, params: { irr: 0.1, seed: 733 } },
+      { kind: 'segmentRings', params: { n: 2 } },
+      { kind: 'fins', scale: 0.75, alpha: 0.9 },
+    ],
+  },
+  /** The knucker tail: the river-rudder. */
+  knucker_tail: {
+    parts: [
+      { kind: 'blob', scale: 0.85, params: { irr: 0.1, seed: 733 } },
+      { kind: 'tail', params: { len: 0.9 } },
+      { kind: 'fins', scale: 0.6, alpha: 0.85 },
+    ],
+  },
+
+  /** The Barghest: the death-omen dog — a low black shape trailing grave-mist,
+   *  ember eyes that brighten as its suspicion climbs (the watch tell). */
+  hunt_barghest: {
+    parts: [
+      { kind: 'disc', scale: 0.95 },
+      { kind: 'furRuff', scale: 0.85, alpha: 0.9 },
+      { kind: 'snout' },
+      { kind: 'claws', params: { len: 0.45 } },
+      { kind: 'tail', params: { len: 0.95, tuft: true } },
+      { kind: 'tatters', scale: 0.7, alpha: 0.5 },
+      { kind: 'eyes', color: '#e05030', params: { spread: 0.36, dist: 0.52, size: 0.12 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, scale: 0.7, params: { n: 3 } }],
+  },
+
+  /** The Wendigo: gaunt under a rack of antlers, breath steaming, claws too
+   *  long — the hunger that walks. */
+  hunt_wendigo: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'antlers', scale: 1.35, role: 'bone' },
+      { kind: 'furRuff', scale: 0.7, alpha: 0.8 },
+      { kind: 'snout', scale: 0.9 },
+      { kind: 'claws', params: { len: 0.65 } },
+      { kind: 'eyes', color: '#d8ecf0', params: { spread: 0.32, dist: 0.5, size: 0.09 } },
+    ],
+    live: [{ kind: 'breathPuff', scale: 0.9, color: '#d8ecf0' }],
+  },
+
+  /** The Roc: wings first at any distance — the condor's grammar at quarry
+   *  scale, storm-brown and crowned. */
+  hunt_roc: {
+    parts: [
+      { kind: 'featherWings', scale: 1.6 },
+      { kind: 'torso', scale: 0.68 },
+      { kind: 'beak', scale: 1.1 },
+      { kind: 'plume', x: -0.2, scale: 0.7 },
+      { kind: 'claws', scale: 0.8, params: { len: 0.4, talons: 3 } },
+      { kind: 'eyes', params: { n: 2, spread: 0.38, dist: 0.36, size: 0.11 } },
+    ],
+    shadowScale: 0.55,
+  },
+
+  /** The Draugr Colossus: the barrow-king swollen giant — grave-iron plates
+   *  over old bone, cold runes, a dark crown. */
+  hunt_draugr: {
+    parts: [
+      { kind: 'disc', scale: 1.05 },
+      { kind: 'armorPlates', scale: 0.95, role: 'metal' },
+      { kind: 'runes', color: '#8fb8d8', params: { n: 4 } },
+      { kind: 'crown', x: 0.22, scale: 0.7, role: 'dark' },
+      { kind: 'spikes', scale: 0.5, params: { n: 4 } },
+      { kind: 'eyes', color: '#a8d8e8', params: { spread: 0.3, dist: 0.5, size: 0.1 } },
+    ],
+    shadowScale: 1.15,
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

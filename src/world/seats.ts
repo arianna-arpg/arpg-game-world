@@ -48,6 +48,11 @@ export interface SeatSpec {
   veiledMul?: number;
   /** A gentle linear tilt across the distance band. Default 'flat'. */
   prefer?: 'near' | 'far' | 'flat';
+  /** Per-BIOME weight multipliers — the "this event belongs to that country"
+   *  lean as one data row (the Hunt opens in the fields and the downs; a
+   *  future haunt could lean gravelands the same way). Unlisted biomes (and
+   *  biome-less zones) fold ×1, so an absent row is byte-identical to none. */
+  biomeMul?: Record<string, number>;
   /** The call site's own extras (needs packs, not-already-taken, biome
    *  tests…) — everything that used to live in the hand-rolled loop. */
   filter?: (z: ZoneDef) => boolean;
@@ -60,7 +65,7 @@ export interface SeatSpec {
 /** The DATA half of a SeatSpec — what an event's surge config declares (all
  *  dials, no code): the overlay supplies event/filter/weigh at the call site
  *  and spreads this in. One more row on any surge config = a tuned seat. */
-export type SeatTuning = Pick<SeatSpec, 'range' | 'knownMul' | 'unknownMul' | 'veiledMul' | 'prefer'>;
+export type SeatTuning = Pick<SeatSpec, 'range' | 'knownMul' | 'unknownMul' | 'veiledMul' | 'prefer' | 'biomeMul'>;
 
 /** The filtered candidate list (unweighted) — exposed for QA/probes and for
  *  callers that need a count ("is anywhere left to claim?"). */
@@ -95,6 +100,7 @@ export function pickSeat(view: OverlayView, spec: SeatSpec, rng: Rng): ZoneDef |
     const known = view.visited.has(z.id) || view.surveyed.has(z.id);
     let w = known ? (spec.knownMul ?? 1) : (spec.unknownMul ?? 1);
     if (z.veiled) w *= spec.veiledMul ?? 1;
+    if (spec.biomeMul) w *= spec.biomeMul[z.biome ?? ''] ?? 1;
     if (ref && span > 0 && spec.prefer && spec.prefer !== 'flat') {
       const t = Math.min(1, Math.max(0, (d - min) / span)); // 0 = near edge, 1 = far edge
       w *= spec.prefer === 'far' ? 0.35 + 0.65 * t : 1 - 0.65 * t;

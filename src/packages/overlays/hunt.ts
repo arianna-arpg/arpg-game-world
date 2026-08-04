@@ -19,11 +19,13 @@
 import { clamp } from '../../core/math';
 import { Rng } from '../../core/rng';
 import { FACTIONS } from '../../data/monsters';
+import { registerEventFront } from '../../engine/eventWeather';
 import type { World } from '../../engine/world';
 import type { MapCoord } from '../../world/coords';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { pickSeat, type SeatTuning } from '../../world/seats';
+import { registerWeather } from '../../world/weather';
 import { eventTargetable } from '../../world/zonePolicy';
 import { FACTION_COLORS } from '../../world/palette';
 import type { OverlayBuildCtx, PackageGate } from '../types';
@@ -36,6 +38,15 @@ export interface HuntBeast {
   faction: string;
   defId: string;
   weight: number;
+  /** CHARACTER-level band this quarry may be rolled at ([min, max] inclusive;
+   *  absent = any level). The pool reads as a progression — early hunts meet
+   *  the river-wyrm, the deep bands keep the colossi — and if a band filter
+   *  ever empties the pool the roll falls back to every valid row (a hunt
+   *  never dry-fires over authored bands). */
+  level?: [number, number];
+  /** The LOCATED-quarry map glyph (🐗 when absent). The trail pin stays 🐾 —
+   *  which beast you are tracking is the reveal's own payoff. */
+  glyph?: string;
 }
 
 /** The Hunt config (tunable data on the def). */
@@ -240,7 +251,7 @@ export class HuntField implements WorldOverlay {
     if (this.hunt) return false; // one-at-a-time (matches production; no orphan)
     const lair = view.byId[zoneId];
     if (!lair || !eventTargetable(this.id, lair)) return false;
-    const beast = this.pickBeast();
+    const beast = this.pickBeast(view.charLevel);
     if (!beast) return false;
     this.hunt = {
       id: `hunt_${this.seq++}`, beastDefId: beast.defId, faction: beast.faction,
@@ -258,7 +269,7 @@ export class HuntField implements WorldOverlay {
     // minted web, veiled halo included, inside the tuned distance envelope.
     // The old visited-only filter is gone — a hunt begins as country you
     // navigate INTO, not a cleared zone you backtrack to.
-    const beast = this.pickBeast();
+    const beast = this.pickBeast(view.charLevel);
     if (!beast) return;
     const lair = pickSeat(view, {
       event: this.id, ...this.cfg.seat,
@@ -278,9 +289,14 @@ export class HuntField implements WorldOverlay {
     };
   }
 
-  private pickBeast(): HuntBeast | null {
-    const pool = this.cfg.beasts.filter(b => FACTIONS[b.faction]);
-    if (!pool.length) return null;
+  private pickBeast(charLevel: number): HuntBeast | null {
+    const valid = this.cfg.beasts.filter(b => FACTIONS[b.faction]);
+    if (!valid.length) return null;
+    // The LEVEL BAND fold: rows banded to the character's level make the pool
+    // a progression. An emptied band falls back to every valid row — authored
+    // bands may gap, but a hunt never dry-fires over data.
+    const banded = valid.filter(b => !b.level || (charLevel >= b.level[0] && charLevel <= b.level[1]));
+    const pool = banded.length ? banded : valid;
     let total = 0;
     for (const b of pool) total += b.weight;
     let r = this.rng.next() * total;
@@ -288,6 +304,56 @@ export class HuntField implements WorldOverlay {
     return pool[pool.length - 1];
   }
 }
+
+// --- THE BEAST'S GROUND (registered on import — the transience doctrine) ------
+//
+// The quarry FLAVORS the land it borrows and hands every piece back: two
+// event-pinned weather kinds (never sky-born) whose DRESS kits are the beast's
+// whole ground story, planted while the pin holds and dissolved (Doodad.evap)
+// the moment the hunt moves on or ends. Every doodad kind is an EXISTING one
+// (the demonstorm kit's discipline — bones the world already knows how to
+// draw); caves and roofed ground never dress (the sky-exposure law).
+//
+// SPOOR — the trail zones: the beast has just completed its OWN hunt here.
+// Bones strewn, a picked carcass-cairn — the kill site you track it by.
+registerWeather('hunt_spoor', {
+  label: 'Beast Spoor', color: '#8a7a5c', countMul: 1, factionMul: {},
+  eventOnly: true,
+  dress: {
+    rows: [
+      { doodad: 'bone_pile', count: [2, 4], radius: [12, 18], minGap: 170 },
+      { doodad: 'bone_cairn', count: [1, 2], radius: [12, 16], minGap: 260, solid: true },
+    ],
+  },
+});
+// THE NEST — the located quarry's stand: the chase MAY culminate in a charnel
+// nest — rib arches raised like walls, heaped mounds, the larder's litter —
+// the "housed in bone" read, laid only while the beast stands its ground.
+registerWeather('hunt_nest', {
+  label: 'The Nest', color: '#9a8a68', countMul: 1, factionMul: {},
+  eventOnly: true,
+  dress: {
+    rows: [
+      { doodad: 'bone_mound', count: [2, 3], radius: [24, 38], minGap: 240, solid: true },
+      { doodad: 'rib_arch', count: [2, 4], radius: [16, 26], minGap: 200, solid: true },
+      { doodad: 'bone_pile', count: [3, 6], radius: [12, 18], minGap: 130 },
+      { doodad: 'bone', count: [2, 4], radius: [9, 13], minGap: 150, solid: true },
+    ],
+  },
+});
+// The pin: sampled for the CURRENT zone only — the trail zone wears the spoor
+// while the hunt is unrevealed, the located beast's zone wears the nest. A
+// dead or ended hunt pins nothing, so the dress evaporates with the chase.
+registerEventFront({
+  id: 'hunt',
+  sample: (world: World, zone) => {
+    const hf = world.sim.huntField;
+    if (!hf) return null;
+    const h = hf.peek();
+    if (!h || h.lifeFrac <= 0 || h.currentZoneId !== zone.id) return null;
+    return h.revealed ? { kind: 'hunt_nest', intensity: 1 } : { kind: 'hunt_spoor', intensity: 0.7 };
+  },
+});
 
 // --- map marker (registered on import — zero panels.ts edits) -----------------
 //
@@ -306,9 +372,12 @@ registerMarkerSource((world: World): MapMarker[] => {
     glyph: '🐾', fill: '#241c08', stroke: h.color, text: h.color, r: 9,
     title: 'Fresh tracks lead here. Follow the trail', fog: 'always', z: 17,
   }];
+  // The located pin wears the QUARRY's own glyph (HuntBeast.glyph — the
+  // reveal's payoff): the map tells you WHAT you cornered, not just where.
+  const glyph = hf.surge().beasts.find(b => b.defId === h.beastDefId)?.glyph ?? '🐗';
   return [{
     id: `hunt-${h.id}`, zoneId: h.currentZoneId, coord,
-    glyph: '🐗', fill: '#241c08', stroke: h.color, text: h.color, r: 10,
+    glyph, fill: '#241c08', stroke: h.color, text: h.color, r: 10,
     title: 'A great beast prowls here: the Hunt', fog: 'always', z: 18,
   }];
 });

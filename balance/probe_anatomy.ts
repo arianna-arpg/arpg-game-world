@@ -49,6 +49,7 @@ import { AMBIENT_TAGS } from '../src/engine/world';
 import { SIDEZONES } from '../src/data/sidezones';
 import { PROLOGUE_SCENE, SCENES } from '../src/data/scenes';
 import { WORLDBOSS_SURGE } from '../src/packages/defs/worldboss';
+import { HUNT_SURGE } from '../src/packages/defs/hunt';
 import { landmarkDefs } from '../src/engine/levelgen';
 import { withSeededRandom } from '../src/core/rng';
 
@@ -510,6 +511,9 @@ function rigComposite(id: string, dx = 340): Actor {
     add(d?.roam?.passingMonster, `worldboss:${d?.id}`);
     table(d?.escort?.table, `worldboss:${d?.id}`);
   }
+  // 9 · THE HUNT'S QUARRY POOL — a HuntBeast row is a seat (the package
+  //     materializes the quarry at the trail's end; no spawn table ever will).
+  for (const b of HUNT_SURGE.beasts) add(b.defId, 'hunt:quarry');
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
   const reserved = new Set<string>();

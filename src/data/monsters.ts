@@ -20970,6 +20970,212 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  // === THE HUNT BESTIARY (batch 28 — the quarry pool grown) ==================
+  // Six great beasts beside the Gorehorn Behemoth, spawned ONLY by the Hunt
+  // (src/packages/defs/hunt.ts HuntBeast rows — never a spawn table). Each is
+  // one landed fabric made the whole argument at hunt scale, each mythological
+  // before it is mechanical, and every one honors THE CHASE CONTRACT (≥1 flee
+  // phase, burst-survivable — probe_hunt / eventqa pin it): a hunt beast RUNS.
+
+  // THE CHIMERA — the anatomy gamut as a hunt: three animals stitched by an
+  // older cruelty. The LION is the body you duel; the GOAT HEAD on its
+  // shoulder is a blessing that will not stop singing (the thurible lesson —
+  // silence it or fight a faster, harder beast); the SERPENT TAIL spits venom
+  // from the rear arc (pick it off or fight in two directions). Break the
+  // lesson, then run down what remains.
+  hunt_chimera: {
+    id: 'hunt_chimera', name: 'the Chimera',
+    color: '#b0703a', shape: 'octagon', radius: 26, material: 'fur', look: 'hunt_chimera',
+    boss: true, faction: 'demon', adorn: 'horns',
+    base: { life: 860, moveSpeed: 110, accuracy: 115, armor: 45, poise: 60, mana: 150, manaRegen: 9 },
+    skills: ['claw', 'charge', 'spew_flame'],
+    xp: 240, detection: 1.3,
+    scaling: { life: { incPerLevel: 0.14 } },
+    parts: [
+      { monster: 'chimera_goat_head', dx: -0.3, dy: -0.8, lifeFrac: 0.22, breakDamage: 0.06 },
+      { monster: 'chimera_serpent_tail', dx: -1.1, dy: 0.15, rot: Math.PI, lifeFrac: 0.25, breakDamage: 0.08 },
+    ],
+    brain: {
+      type: 'juggernaut', enrage: 0.2,
+      phases: [
+        { atLifeFrac: 0.66, flee: true, rewardGems: 1, announce: 'The Chimera breaks — three throats howling!',
+          mods: [mod('moveSpeed', 'more', 0.7), mod('damageTaken', 'more', -0.7)] },
+        { atLifeFrac: 0.33, flee: true, rewardGems: 2, announce: 'The Chimera drags its burning flank to new ground!',
+          mods: [mod('moveSpeed', 'more', 0.8), mod('damageTaken', 'more', -0.75)] },
+      ],
+      impulses: [{ type: 'swarm', every: [5, 8], duration: [1.2, 1.8], announce: 'It CHARGES!' }],
+    },
+  },
+  // The goat head: the blessing that rides the lion's shoulder — the thurible
+  // domain follows THIS body, so killing it takes the song away (the
+  // swung_censer lesson, worn by a living beast).
+  chimera_goat_head: {
+    id: 'chimera_goat_head', name: 'Goat Head',
+    color: '#c8b088', shape: 'circle', radius: 9, material: 'fur', look: 'chimera_goat_head',
+    noNemesis: true, remains: false,
+    base: { life: 70, moveSpeed: 0, armor: 20, mana: 120, manaRegen: 10 },
+    skills: ['thurible'], xp: 0, drops: 0, faction: 'demon',
+    brain: { type: 'artillery' },
+  },
+  // The serpent tail: the rear fang — venom on whoever flanks the lion.
+  chimera_serpent_tail: {
+    id: 'chimera_serpent_tail', name: 'Serpent Tail',
+    color: '#6f9a4e', shape: 'oval', radius: 8, material: 'scale', look: 'chimera_serpent_tail',
+    noNemesis: true, remains: false,
+    base: { life: 80, moveSpeed: 0, accuracy: 112, mana: 90, manaRegen: 8 },
+    skills: ['venom_bolt'], xp: 0, drops: 0, faction: 'demon',
+    brain: { type: 'artillery' },
+  },
+
+  // THE KNUCKER — the segment fabric as a hunt: the English river-wyrm, a
+  // coiled thing whose TRAIL IS ITS BODY'S WAKE — fourteen hittable coils
+  // keeping their own wounds behind a snapping head (the marrow whip's law at
+  // quarry scale). Crack the file to slow the slither, or take the skull on.
+  hunt_knucker: {
+    id: 'hunt_knucker', name: 'the Knucker',
+    color: '#4e7a5e', shape: 'oval', radius: 20, material: 'scale', look: 'hunt_knucker',
+    boss: true, faction: 'wild',
+    base: { life: 620, moveSpeed: 120, accuracy: 110, armor: 35, poise: 40, mana: 120, manaRegen: 8 },
+    skills: ['snap_shut', 'undertow', 'claw'],
+    xp: 185, detection: 1.25, turnSpeed: 6,
+    scaling: { life: { incPerLevel: 0.13 } },
+    worm: {
+      length: 14, spacing: 26, taper: 0.955,
+      hittable: true,
+      looks: { body: 'knucker_coil', tail: 'knucker_tail', every: { n: 4, look: 'knucker_fin' } },
+      wounds: {
+        frac: 0.06, mods: [mod('damageTaken', 'increased', 0.015)],
+        text: 'COIL SPLIT',
+        burst: { radius: 50, damageFrac: 0.025, type: 'physical', color: '#8fc8a0' },
+      },
+    },
+    brain: {
+      type: 'skirmish',
+      phases: [
+        { atLifeFrac: 0.6, flee: true, rewardGems: 1, announce: 'The Knucker unknots and pours away!',
+          mods: [mod('moveSpeed', 'more', 1.0), mod('damageTaken', 'more', -0.7)] },
+        { atLifeFrac: 0.3, flee: true, rewardGems: 2, announce: 'The Knucker carves for deeper water!',
+          mods: [mod('moveSpeed', 'more', 1.1), mod('damageTaken', 'more', -0.75)] },
+      ],
+    },
+  },
+
+  // THE BARGHEST — the watch fabric as a hunt: the death-omen dog that STALKS
+  // THE HUNTER BACK. It runs dark (no fan), reads your TRAIL by scent, and
+  // its ember eyes brighten up the suspicion ladder — the drawn tell IS the
+  // tested meter, so a dimming glow means you slipped the nose. Standing
+  // water breaks the line; the flee comes early and often (three phases —
+  // the longest chase in the pool: cowardice is its temperament).
+  hunt_barghest: {
+    id: 'hunt_barghest', name: 'the Barghest',
+    color: '#3a3440', shape: 'kite', radius: 17, material: 'fur', look: 'hunt_barghest',
+    boss: true, faction: 'undead',
+    base: { life: 560, moveSpeed: 150, accuracy: 115, evasion: 70, mana: 110, manaRegen: 8 },
+    skills: ['claw', 'crushing_leap', 'harrowing_wail'],
+    xp: 205, detection: 1.1,
+    scaling: { life: { incPerLevel: 0.12 } },
+    watch: { scent: { range: 220, maxAge: 20 }, riseSec: 1.1, decaySec: 6, fan: 'hide' },
+    tells: [
+      { source: 'watch', channel: { kind: 'glow', color: '#c85030', max: 0.5 } },
+    ],
+    brain: {
+      type: 'skirmish', withdraw: 1.3,
+      move: { style: 'lurk', ring: 280, commitRange: 240, unseenArc: 1.7 },
+      perception: { memory: 4 },
+      phases: [
+        { atLifeFrac: 0.75, flee: true, announce: 'The Barghest melts into the dark!',
+          mods: [mod('moveSpeed', 'more', 0.9), mod('damageTaken', 'more', -0.6)] },
+        { atLifeFrac: 0.5, flee: true, rewardGems: 1, announce: 'The Barghest circles wide — it is not done with you!',
+          mods: [mod('moveSpeed', 'more', 1.0), mod('damageTaken', 'more', -0.65)] },
+        { atLifeFrac: 0.25, flee: true, rewardGems: 2, announce: 'The Barghest limps for the barrows!',
+          mods: [mod('moveSpeed', 'more', 1.0), mod('damageTaken', 'more', -0.7)] },
+      ],
+    },
+  },
+
+  // THE WENDIGO — the drive fabric as a hunt: the hunger that walks. It is
+  // ALWAYS starving (the drive opens near the top and never truly closes),
+  // so it hunts its OWN prey live mid-fight — hares, critters, whatever the
+  // zone keeps — and every kill feeds it. HUNGER_LEAN worn (the tells census
+  // law): a hunkered Wendigo is a hunting Wendigo, and it is always hunkered
+  // until it has just fed. Find it by what it leaves.
+  hunt_wendigo: {
+    id: 'hunt_wendigo', name: 'the Wendigo',
+    color: '#9aa8b0', shape: 'kite', radius: 18, material: 'flesh', look: 'hunt_wendigo',
+    boss: true, faction: 'flesh',
+    base: { life: 700, moveSpeed: 160, accuracy: 118, evasion: 50, mana: 130, manaRegen: 9 },
+    skills: ['claw', 'rend', 'spew_rime'],
+    xp: 220, detection: 1.4,
+    scaling: { life: { incPerLevel: 0.14 } },
+    tells: HUNGER_LEAN,
+    brain: {
+      type: 'skirmish', withdraw: 1.15,
+      drives: { hunger: { rise: 0.02, start: [0.55, 0.85], onKill: -0.35 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.5 } },
+        use: { target: { prey: ['critter'], detectMul: 1.3 }, behavior: { seek: { what: 'prey', pace: 0.55 } } },
+      }],
+      phases: [
+        { atLifeFrac: 0.7, flee: true, rewardGems: 1, announce: 'The Wendigo withdraws — to feed!',
+          mods: [mod('moveSpeed', 'more', 0.9), mod('damageTaken', 'more', -0.7)] },
+        { atLifeFrac: 0.35, flee: true, rewardGems: 2, announce: 'The Wendigo flees gaunt and screaming!',
+          mods: [mod('moveSpeed', 'more', 1.0), mod('damageTaken', 'more', -0.75)] },
+      ],
+    },
+  },
+
+  // THE ROC — the flight fabric as a hunt: a sky terror whose prints are KILL
+  // SITES, not steps (it lands only to feed — the spoor dress is its whole
+  // ground story). Wings first at any distance: it wheels aloft, stoops onto
+  // the painted ring, and the grounded recovery beat is the melee window —
+  // the condor's doctrine at quarry scale.
+  hunt_roc: {
+    id: 'hunt_roc', name: 'the Roc',
+    color: '#8a6a48', shape: 'circle', radius: 24, material: 'fur', look: 'hunt_roc',
+    boss: true, faction: 'wild', adorn: 'wings',
+    base: { life: 640, moveSpeed: 190, accuracy: 112, evasion: 65, mana: 100, manaRegen: 7 },
+    skills: ['claw', 'condor_stoop'],
+    xp: 215, detection: 1.5,
+    scaling: { life: { incPerLevel: 0.13 } },
+    brain: {
+      type: 'juggernaut',
+      script: wingCycle({
+        dive: 'condor_stoop', aloftFor: 6.5, stoopFor: 1.8, groundFor: 4.2, stoopWithin: 460,
+        air: { move: { style: 'orbit', ring: 260, pace: 1.05, flipEvery: [3, 5], flipChance: 0.3 } },
+        ground: { move: { style: 'skitter', dart: [0.3, 0.5], pause: [0.3, 0.5] } },
+      }),
+      phases: [
+        { atLifeFrac: 0.65, flee: true, rewardGems: 1, announce: 'The Roc takes the high wind!',
+          mods: [mod('moveSpeed', 'more', 1.0), mod('damageTaken', 'more', -0.7)] },
+        { atLifeFrac: 0.3, flee: true, rewardGems: 2, announce: 'The Roc drags a broken wingbeat over the ridge!',
+          mods: [mod('moveSpeed', 'more', 0.9), mod('damageTaken', 'more', -0.75)] },
+      ],
+    },
+  },
+
+  // THE DRAUGR COLOSSUS — the rampage fabric as a hunt (and the def's own
+  // margin note honored: the undead colossus). A barrow-king swollen to
+  // giant size, walking THROUGH the standing world — timber fells flat and
+  // the land regrows behind it (temporary by construction). One flee only,
+  // late and slow: a draugr barely deigns to run, and its chase is the
+  // shortest in the pool — the fight is the argument.
+  hunt_draugr: {
+    id: 'hunt_draugr', name: 'the Draugr Colossus',
+    color: '#5e6a72', shape: 'octagon', radius: 30, material: 'bone', look: 'hunt_draugr',
+    boss: true, faction: 'undead',
+    base: { life: 1050, moveSpeed: 70, accuracy: 112, armor: 70, poise: 140, mana: 140, manaRegen: 8 },
+    skills: ['heavy_strike', 'ground_slam', 'hurl_debris'],
+    xp: 260, detection: 1.2, heft: 1.8, turnSpeed: 2.2,
+    rampage: true, // a walking barrow does not notice a fence
+    scaling: { life: { incPerLevel: 0.15 } },
+    brain: {
+      type: 'juggernaut', enrage: 0.3,
+      phases: [
+        { atLifeFrac: 0.5, flee: true, rewardGems: 2, announce: 'The Draugr turns for its barrow — unhurried, unbowed!',
+          mods: [mod('moveSpeed', 'more', 0.5), mod('damageTaken', 'more', -0.75)] },
+      ],
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
