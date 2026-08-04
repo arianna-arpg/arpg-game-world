@@ -65,14 +65,7 @@ const surfacePooled = (t: (typeof TILESETS)[string]): boolean =>
 {
   // Adjudicated exceptions live HERE by name, with their ruling — never as a
   // silent skip.
-  const ADJUDICATED: Record<string, string[]> = {
-    // downs DEFERRED from PLAIN_FACES (2026-08-03): a concurrent tiers rig
-    // (probe_tiers N3, the crypt_duct return) is mid-debug against the downs
-    // face roll — growing its face list re-rolls that rig's pinned mints.
-    // These two stay KNOWN-dead until 'the open downs' seats; delete this
-    // row when it does (the membership rig will then hold it honest).
-    downs: ['log', 'cluster'],
-  };
+  const ADJUDICATED: Record<string, string[]> = {};
   let violators = 0;
   for (const [id, t] of Object.entries(TILESETS)) {
     if (!t.variants?.length || !surfacePooled(t)) continue;

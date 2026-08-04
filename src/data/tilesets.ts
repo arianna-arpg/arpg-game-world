@@ -12812,11 +12812,7 @@ export const TILESETS: Record<string, TilesetDef> = {
 // probe_deadface.ts pins the membership law both ways.
 export const PLAIN_FACES: Record<string, string> = {
   deepwood: 'the old wood',
-  // downs DEFERRED (2026-08-03): a concurrent tiers rig (probe_tiers N3, the
-  // crypt_duct return seam) is mid-debug against the downs face roll — growing
-  // the face list re-rolls its pinned mints under it. Its two dead kinds
-  // (log, the menhir_ring cluster) are adjudicated BY NAME in
-  // probe_deadface's regrow guard; seat 'the open downs' once that rig lands.
+  downs: 'the open downs',
   farmland: 'the patchwork acres',
   forest: 'the greenwood',
   gloamwood: 'the dark wood',
