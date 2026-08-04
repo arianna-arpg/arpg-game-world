@@ -35,13 +35,26 @@
 //   H  TWO TRAIL SYSTEMS STAY TWO: the hunt's footprint dwell never prints
 //      the watch fabric's scent trail (Actor.trail stays empty — the hunt
 //      does not ride the print fabric, and no scent-watcher reads the
-//      footprint).
+//      footprint),
+//   J  THE COMPOSITE FLEE (R1): a migrating composite quarry takes its PARTS
+//      with it — the escape despawns core AND partActors together (no
+//      orphaned casters left standing in the abandoned zone) — and the next
+//      stand regrows them fresh (migration remembrance is life+phase only,
+//      by design),
+//   K  THE CORNERED STAND (R2): a dead-end flee RECORDS the spent phase +
+//      wound into the remembrance even though the beast never left, so
+//      leave-and-return re-spawns it past the threshold — never a repeat
+//      flee/announce beyond the authored migration count,
+//   L  THE TRAIL'S OWN LAW (R3): pickHuntDest refuses the ground the fleeing
+//      beast itself refuses (floating / event-owned / pocket —
+//      pickRovingDest's exclusion set), and HOLDS (locate here) when no
+//      honest neighbor stands.
 // Run: npx tsx balance/probe_hunt.ts
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, classById } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
-import { resetActorIdCounter } from '../src/engine/actor';
+import { resetActorIdCounter, type Actor } from '../src/engine/actor';
 import { updateAI } from '../src/engine/ai';
 import { World } from '../src/engine/world';
 import { buildManifest } from '../src/packages/manifest';
@@ -152,6 +165,78 @@ function clearOthers(world: World): void {
   for (const a of [...world.actors]) {
     if (a.team === 'enemy' && !a.dead && a.tag !== 'hunt_beast') world.kill(a, false, world.player);
   }
+}
+
+/** step() with the local hero topped up each frame — the J/K/L rigs stand the
+ *  player beside a boss-tier quarry for seconds at a time; the subject is the
+ *  escape/corner machinery, never the duel, so the probe stays deterministic
+ *  against a lucky burst felling the hero mid-rig. */
+function stepHealed(world: World, frames: number): void {
+  for (let i = 0; i < frames; i++) {
+    world.player.life = world.player.maxLife();
+    step(world, 1);
+  }
+}
+
+/** A charted wild zone for the escape/corner/filter rigs: never a cave, the
+ *  town, floating/event-owned/pocket ground, or the standing zone; no
+ *  unresolved '?' frontier (the rigs sculpt CHARTED neighbors); and at least
+ *  `minValid` neighbors the roving filter accepts as they stand. */
+function pickWildZone(world: World, minValid: number): string | null {
+  for (const z of Object.values(world.zoneMap)) {
+    if (z.id === world.zone.id || z.caveDepth != null || z.floating || z.eventOwned || z.pocket) continue;
+    if (z.objective.kind === 'safe') continue;
+    if (!z.exits.length || z.exits.some(e => e.to === '?')) continue;
+    const dests = z.exits.filter(e => e.to !== z.id)
+      .map(e => world.zoneMap[e.to]).filter((d): d is ZoneDef => !!d);
+    const valid = dests.filter(d => d.caveDepth == null && !d.floating && !d.eventOwned
+      && !d.pocket && d.objective.kind !== 'safe');
+    if (valid.length >= minValid) return z.id;
+  }
+  return null;
+}
+
+/** The roving filter's own exclusion set, on a def (the L rig's oracle). */
+function roveValid(z: ZoneDef | undefined): boolean {
+  return !!z && z.caveDepth == null && !z.floating && !z.eventOwned && !z.pocket
+    && z.objective.kind !== 'safe';
+}
+
+/** Kill every hostile EXCEPT the given quarry AND its own part actors — the
+ *  composite rig's clear room (clearOthers would break the chimera's parts
+ *  off the root through the kill ladder). */
+function clearOthersSparing(world: World, keep: Actor): void {
+  for (const a of [...world.actors]) {
+    if (a.team !== 'enemy' || a.dead || a === keep) continue;
+    if (a.partLink?.root === keep) continue;
+    world.kill(a, false, world.player);
+  }
+}
+
+/** A life fraction strictly BETWEEN the first flee threshold and the next
+ *  phase down — deep enough to fire the flee, shallow enough that only that
+ *  one phase enters. Returns [frac, fleePhaseIdx]. */
+function woundPastFlee(defId: string): [number, number] {
+  const phases = MONSTERS[defId].brain!.phases!;
+  const fi = phases.findIndex(p => p.flee);
+  const at = phases[fi].atLifeFrac;
+  const next = phases[fi + 1]?.atLifeFrac ?? 0;
+  return [Math.max(next + 0.04, (at + next) / 2), fi];
+}
+
+/** Craft a REVEALED hunt for `defId` standing in `zid` through the overlay's
+ *  own restore lane (the F rigs' shape) — fresh id, no phase spent. */
+function craftStand(hf2: HuntField, world: World, defId: string, zid: string, seq: number): boolean {
+  const row = SURGE.beasts.find(b => b.defId === defId);
+  const node = world.zoneMap[zid];
+  if (!row || !node) return false;
+  hf2.restore({ hunt: {
+    id: `hunt_qa_${seq}`, beastDefId: row.defId, faction: row.faction, color: '#d8a83a',
+    lairZoneId: zid, lairCoord: { x: node.map.x, y: node.map.y },
+    currentZoneId: zid, revealed: true, tracksTotal: 1, tracksFound: 1,
+    lifeFrac: 1, phaseIdx: -1,
+  }, seq });
+  return !!hf2.peek();
 }
 
 /** Park the local hero on the footprint and tick real frames until the trail
@@ -500,6 +585,148 @@ check('B: the hunt overlay is mounted for the run', !!hf);
     } else {
       check('H: the footprint stands for the separation rig', false);
     }
+  }
+}
+
+// ------------------------------------------------- J. the composite flee (R1)
+{
+  hf.endHunt();
+  const def = MONSTERS['hunt_chimera'];
+  check('J: the chimera is a composite (parts to orphan)', (def?.parts?.length ?? 0) >= 2,
+    `${def?.parts?.length ?? 0} parts declared`);
+  const zid = pickWildZone(world, 1);
+  check('J: a charted wild zone with an honest neighbor stands', !!zid, zid ?? '');
+  if (zid && craftStand(hf, world, 'hunt_chimera', zid, 40)) {
+    world.loadZone(zid);
+    const beast = world.actors.find(a => a.tag === 'hunt_beast');
+    check('J: the composite quarry materializes', !!beast, beast?.name);
+    if (beast) {
+      stepHealed(world, 3); // updateParts lazy-attaches on the first ticks
+      const parts = [...(beast.partActors ?? [])];
+      check('J: the parts attach as full actors (the anatomy gamut)', parts.length >= 2, `${parts.length} attached`);
+      clearOthersSparing(world, beast);
+      const [wound] = woundPastFlee('hunt_chimera');
+      beast.life = beast.maxLife() * wound;
+      world.player.pos.x = beast.pos.x + 60;
+      world.player.pos.y = beast.pos.y;
+      for (let i = 0; i < 60 * 4 && !beast.aiFleeing; i++) stepHealed(world, 1);
+      check('J: the wound enters the flee phase', beast.aiFleeing && !!beast.aiFleeGoal);
+      if (beast.aiFleeGoal) { beast.pos.x = beast.aiFleeGoal.x; beast.pos.y = beast.aiFleeGoal.y; }
+      for (let i = 0; i < 60 * 3 && world.actors.includes(beast); i++) stepHealed(world, 1);
+      check('J: the escape despawns the core', !world.actors.includes(beast));
+      const hj = hf.peek();
+      check('J: the hunt migrated on', !!hj && hj.currentZoneId !== zid, hj?.currentZoneId);
+      const orphans = parts.filter(p => world.actors.includes(p));
+      check('J: the parts LEAVE with the body (zero orphaned casters)', orphans.length === 0,
+        orphans.length ? `${orphans.length} orphaned: ${orphans.map(p => p.name).join(', ')}` : '');
+      if (hj && hj.currentZoneId !== zid) {
+        world.loadZone(hj.currentZoneId);
+        const beast2 = world.actors.find(a => a.tag === 'hunt_beast');
+        stepHealed(world, 3);
+        check('J: the next stand regrows the parts fresh (remembrance is life+phase only)',
+          !!beast2 && (beast2.partActors?.length ?? 0) >= 2, `${beast2?.partActors?.length ?? 0} regrown`);
+      }
+    }
+  }
+  hf.endHunt();
+}
+
+// ----------------------------------------------- K. the cornered stand (R2)
+{
+  const quarry = SURGE.beasts.find(b => !MONSTERS[b.defId].parts?.length)?.defId ?? SURGE.beasts[0].defId;
+  const zid = pickWildZone(world, 1);
+  check('K: a charted wild zone stands for the corner rig', !!zid, zid ?? '');
+  if (zid && craftStand(hf, world, quarry, zid, 50)) {
+    world.loadZone(zid);
+    // Wall every charted neighbor off (event-owned reads as claimed ground to
+    // the roving filter) — the beast's flee must find NOWHERE legal to bolt.
+    const flagged: ZoneDef[] = [];
+    for (const e of world.zoneMap[zid].exits) {
+      if (e.to === zid) continue;
+      const dz = world.zoneMap[e.to];
+      if (dz && !dz.eventOwned) { dz.eventOwned = true; flagged.push(dz); }
+    }
+    const beast = world.actors.find(a => a.tag === 'hunt_beast');
+    check('K: the quarry materializes for the corner', !!beast, beast?.name);
+    if (beast) {
+      clearOthersSparing(world, beast);
+      const [wound, fleeIdx] = woundPastFlee(quarry);
+      beast.life = beast.maxLife() * wound;
+      world.player.pos.x = beast.pos.x + 60;
+      world.player.pos.y = beast.pos.y;
+      for (let i = 0; i < 60 * 4 && !beast.aiFleeing; i++) stepHealed(world, 1);
+      check('K: the wound enters the flee phase', beast.aiFleeing && !!beast.aiFleeGoal);
+      if (beast.aiFleeGoal) { beast.pos.x = beast.aiFleeGoal.x; beast.pos.y = beast.aiFleeGoal.y; }
+      for (let i = 0; i < 60 * 3 && beast.aiFleeing; i++) stepHealed(world, 1);
+      check('K: cornered — the beast stands and fights (never despawned)', world.actors.includes(beast));
+      const hk = hf.peek()!;
+      check('K: the cornered stand RECORDS the spent phase', hk.phaseIdx === fleeIdx,
+        `phaseIdx ${hk.phaseIdx} (want ${fleeIdx})`);
+      check('K: …and the wound rides the remembrance',
+        Math.abs(hk.lifeFrac - beast.life / Math.max(1, beast.maxLife())) < 0.05,
+        `lifeFrac ${hk.lifeFrac.toFixed(3)}`);
+      // Leave and return: the re-spawn must stand PAST the threshold — the
+      // old defect re-fired the same flee (an extra migration beyond the
+      // authored count, with its repeat announce).
+      world.loadZone(START_ZONE);
+      world.loadZone(zid);
+      const beast2 = world.actors.find(a => a.tag === 'hunt_beast');
+      check('K: the return re-spawns it at the spent phase', !!beast2 && beast2.aiPhaseIdx === fleeIdx,
+        `aiPhaseIdx ${beast2?.aiPhaseIdx}`);
+      if (beast2) {
+        clearOthersSparing(world, beast2);
+        world.player.pos.x = beast2.pos.x + 60;
+        world.player.pos.y = beast2.pos.y;
+        let refled = false;
+        for (let i = 0; i < 60 * 2; i++) { stepHealed(world, 1); if (beast2.aiFleeing) refled = true; }
+        check('K: no repeat flee fires at the same threshold', !refled && beast2.aiPhaseIdx === fleeIdx,
+          `re-fled ${refled}, phase ${beast2.aiPhaseIdx}`);
+      }
+    }
+    for (const z of flagged) delete z.eventOwned;
+  }
+  hf.endHunt();
+}
+
+// -------------------------------------------- L. the trail's own law (R3)
+{
+  const zid = pickWildZone(world, 2);
+  check('L: a zone with ≥2 honest neighbors stands for the filter rig', !!zid, zid ?? '');
+  if (zid) {
+    world.loadZone(zid);
+    const dests = world.zoneMap[zid].exits.filter(e => e.to !== zid)
+      .map(e => world.zoneMap[e.to]).filter((z): z is ZoneDef => !!z);
+    const valid = dests.filter(z => roveValid(z));
+    const honest = valid[0];
+    const pick = (): string | null =>
+      (world as unknown as { pickHuntDest(): string | null }).pickHuntDest();
+    // Each exclusion in turn: every neighbor but one wears the mark — the
+    // trail must pick the honest ground every draw (the old filter relocated
+    // into demon epicenters and paywalled pockets the beast itself refuses).
+    for (const mark of ['eventOwned', 'pocket', 'floating'] as const) {
+      const flagged: ZoneDef[] = [];
+      for (const z of valid) {
+        if (z === honest || (z as unknown as Record<string, unknown>)[mark]) continue;
+        (z as unknown as Record<string, unknown>)[mark] = true;
+        flagged.push(z);
+      }
+      let stray = '';
+      for (let i = 0; i < 15 && !stray; i++) {
+        const got = pick();
+        if (got !== honest.id) stray = got ?? 'null';
+      }
+      check(`L: the trail refuses ${mark} ground (15 draws, honest only)`, !stray,
+        stray ? `picked ${stray}` : '');
+      for (const z of flagged) delete (z as unknown as Record<string, unknown>)[mark];
+    }
+    // The hold: with EVERY neighbor illegal the trail locates HERE (null) —
+    // never a lawless hop.
+    const flagged: ZoneDef[] = [];
+    for (const z of valid) {
+      if (!z.eventOwned) { z.eventOwned = true; flagged.push(z); }
+    }
+    check('L: with no honest neighbor the trail HOLDS (locate here)', pick() === null);
+    for (const z of flagged) delete z.eventOwned;
   }
 }
 

@@ -416,11 +416,15 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [3200, 4300], sizeH: [2300, 3100], ellipseChance: 0.3, biome: 'downs', sky: 'open',
     layoutParams: {
       // The base face mixes the whole vocabulary; coverage sits at the
-      // reference density (country first, bones everywhere).
+      // reference density (country first, bones everywhere). The BONE MASSIF
+      // (data/massifs.ts, the Hunt's ground vocabulary) joins the open downs
+      // at litter grain: the odd heaped charnel body among the tors, and —
+      // rarely — a standing charnel ring whose keeper's larder it was.
       massifMasses: [
         { kind: 'tor', weight: 2.5 }, { kind: 'bluff', weight: 2 },
         { kind: 'fold', weight: 1.3 }, { kind: 'barrow', weight: 1.2 },
         { kind: 'hedge', weight: 1 },
+        { kind: 'bone_heap', weight: 0.7 }, { kind: 'charnel_ring', weight: 0.18 },
       ],
       massifCoverage: [0.15, 0.23],
       // THE CRYPTS (batch 24 — THE ROOTED WEB's second country): bone
@@ -499,8 +503,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'scree', count: [2, 3] },
         { kind: 'bone_pile', count: [1, 3] },
       ], layoutParams: {
+        // The dead's own face leans hardest into the bone vocabulary: heaped
+        // charnel bodies among the mounds, the charnel ring likelier here
+        // than anywhere (still rare — the trail's climax, not its wallpaper).
         massifMasses: [
           { kind: 'barrow', weight: 3.5 }, { kind: 'tor', weight: 1 }, { kind: 'fold', weight: 1 },
+          { kind: 'bone_heap', weight: 1.2 }, { kind: 'charnel_ring', weight: 0.3 },
         ],
         massifCoverage: [0.14, 0.21],
         underTierChance: 0.8, // the burial face is more crypt than turf

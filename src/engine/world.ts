@@ -6436,13 +6436,17 @@ export class World {
   /** Pick an adjacent zone for the Hunt trail/beast to move to — from the CURRENT
    *  zone's exits, accepting any charted neighbour and generating an uncharted '?'
    *  frontier on the fly (the trail leading into new ground, mirroring onBeastEscape).
-   *  Null at a dead-end (a zone whose only exits are caves/safe/self). */
+   *  The exclusion set is pickRovingDest's own: never a cave, the safe town,
+   *  floating, event-owned, or pocket ground — the TRAIL refuses everything the
+   *  fleeing beast itself refuses, so it can never relocate into a demon
+   *  epicenter or a purchased holdfast. Null at a dead-end (locate here). */
   private pickHuntDest(): string | null {
     const valid = this.zone.exits.filter(e => {
       if (e.to === '?') return true;
       if (e.to === this.zone.id) return false;
       const z = this.zoneMap[e.to];
-      return !!z && z.caveDepth == null && z.objective.kind !== 'safe';
+      return !!z && z.caveDepth == null && !z.floating && !z.eventOwned && !z.pocket
+        && z.objective.kind !== 'safe';
     });
     if (!valid.length) return null;
     const e = valid[Math.floor(rand(0, valid.length))];
@@ -12000,12 +12004,26 @@ export class World {
     this.slipAway(actor, `${actor.name} slips away!`);
   }
 
+  /** A DEPARTING composite takes its still-standing parts with it — spliced
+   *  out, not killed (no bursts, no break effects: the body leaves whole,
+   *  and a re-spawn regrows them fresh). The world-boss sink-away lane has
+   *  always done this by hand; this is the same sweep for every silent exit,
+   *  so no departure can strand a head still casting at the empty air. */
+  private despawnPartsOf(actor: Actor): void {
+    for (const p of actor.partActors ?? []) {
+      if (p.dead) continue;
+      const i = this.actors.indexOf(p);
+      if (i >= 0) this.actors.splice(i, 1);
+    }
+  }
+
   /** SILENT DEPARTURE — the actor leaves the world without dying: no corpse,
    *  no credit, no rattles (a fled hare, the frog's dive into its refuge
    *  pond, rift-spawn the collapsing veil reclaims). A soft flash + a line
    *  mark the exit; nothing else fires. `color` tints both (the default is
    *  the wildlife gold; the veil passes its own). */
   slipAway(actor: Actor, text: string, color = '#c8a850', fx?: string): void {
+    this.despawnPartsOf(actor);
     const i = this.actors.indexOf(actor);
     if (i >= 0) this.actors.splice(i, 1);
     // THE EFFECT VOICE: a refuge row may name its exit's painter (the
@@ -12044,12 +12062,19 @@ export class World {
       // unkillable sponge at 70-75% damage reduction.
       actor.sheet.setSource('aiPhase', []);
       actor.aiFleeGoal = undefined;
+      // A cornered stand is still a STAND: record the wound + the spent phase
+      // into the remembrance (migrate-in-place) exactly as a migration would,
+      // or leave-and-return re-spawns at the stale phase and the same flee
+      // threshold fires again — an extra migration beyond the authored count.
+      hf.setLife(actor.life / Math.max(1, actor.maxLife()));
+      hf.migrate(this.zone.id, actor.aiPhaseIdx);
       this.text(vec(actor.pos.x, actor.pos.y - 30),
         `${actor.name} is cornered — it turns to fight!`, '#d8a83a', 15);
       return true;
     }
     hf.setLife(actor.life / Math.max(1, actor.maxLife())); // last sync before it leaves
     hf.migrate(dest, actor.aiPhaseIdx);
+    this.despawnPartsOf(actor); // a composite's parts flee WITH it (never orphaned mid-cast)
     const i = this.actors.indexOf(actor);
     if (i >= 0) this.actors.splice(i, 1);
     this.huntBeast = null;

@@ -1243,7 +1243,12 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
   // beyond the rim — the dead-door divergence. THE RIM LAW now guarantees
   // in-shape dwell seats, so the original family stands and that once-cursed
   // mint is this lane's own regression specimen; N3.9b pins the pairing.)
-  walkLane('downs', 'downs', 'crypt_gate', [952001, 952002, 952003, 952004, 952005, 952006, 952007, 952008, 952009, 952010, 952011, 952012, 952013, 952014, 952015, 952016]);
+  // (Ladder re-pinned 2026-08-04, the hunt-debts pass: the bone-massif rows
+  // joining the downs base + barrowfield mixes re-rolled those faces' mints,
+  // and none of the original 16 stood a sunk gate any longer — 952017-952020
+  // appended through THIS rig's own run (the process-stream law; 952020 is
+  // the finder). The walked specimens before it, 952006 included, stand.)
+  walkLane('downs', 'downs', 'crypt_gate', [952001, 952002, 952003, 952004, 952005, 952006, 952007, 952008, 952009, 952010, 952011, 952012, 952013, 952014, 952015, 952016, 952017, 952018, 952019, 952020]);
   // THE DOOR GUARANTEE (levelgen doorGuaranteeSeat — the stalkwood heal):
   // the packed forest face whose 10-seed census once placed ZERO of its
   // promised common [1,1] taproot gates now stands one on EVERY mint —
