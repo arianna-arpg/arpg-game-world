@@ -196,6 +196,13 @@ export const ADOPT_CFG = {
    *  true` skips the coin (adopt whatever stands, always — still never
    *  forcing a spawn). */
   chance: 0.55,
+  /** THE PACKAGE CLASS's coin (registerPackageAsk rows below): the share of
+   *  guest-bearing loads whose bare cull re-negotiates into the standing
+   *  guest's ask. Hashed per (zone, GUEST) — every fresh visitation gets its
+   *  own coin ("upon spawning can have a chance", her words 2026-08-03) —
+   *  and a row's own `chance` overrides. Runs only where the lair classes
+   *  stood aside (a resident claim beats a passing guest). */
+  packageChance: 0.5,
   /** The salted fork's name (hashed with the zone id + seed — no rng stream
    *  anywhere near the draw). */
   salt: 'adopt',
@@ -296,20 +303,134 @@ export function adoptHuntRows(): { lairId: string; kin: string[] }[] {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// THE PACKAGE CLASS — content packages as adoptable presences (Arianna,
+// 2026-08-03: "an actual applicable content package BE a zone objective …
+// the content packages appear as normal, and upon spawning can have a chance
+// to become the zone objective").
+//
+// A package REGISTERS what "a spawned <thing> stands here" means — a presence
+// read over its own seat state, a title, and a live view the driver watches —
+// and the lane then treats the standing guest exactly like a standing lair:
+// adoption at zone load, by hash, never a dependency (the package's own
+// spawn/seat logic is byte-untouched; nothing is ever placed FOR the ask).
+// Registry-derived like the lair classes: no hand lists anywhere — a package
+// is adoptable the moment its overlay module registers a row (the
+// registerMarkerSource idiom; overlays/fractures.ts is the debut).
+//
+// THE SURVIVE CONTRACT (her clause, mechanized in World.updateObjective's
+// 'package' case): the ask completes when the player ENGAGED the guest and
+// the guest's run then ENDED — success or fail, the package's own verdict is
+// its own business — while the player still lives. Dying out from under it
+// banks nothing. THE HAND-BACK (the transience doctrine — events borrow the
+// world, never own it): a guest that leaves unanswered (idled out, ended
+// over a dead player, package uninstalled) REVERTS the ask to the bare cull
+// it adopted over — the zone is always completable, and a later guest may
+// adopt afresh on its own coin.
+// ---------------------------------------------------------------------------
+
+/** The live state of a standing package ask, as the row's own view reads it.
+ *  Pure reads over the package's seat + the zone-local run — never writes. */
+export interface PackageAskState {
+  /** The bound guest still stands in this zone (keyed presence). */
+  standing: boolean;
+  /** The player has ENGAGED the guest (the fracture's run-over trigger). */
+  engaged: boolean;
+  /** Where the ask looks right now (HUD/debug; the package's own attention
+   *  pointers remain the in-zone chevrons — no second pointer is drawn). */
+  pos: { x: number; y: number } | null;
+  /** The HUD line while the ask is live (authored capitalized). */
+  label: string;
+}
+
+/** One package's adoptable presence — registered by the package's own module
+ *  (never listed by hand here). */
+export interface PackageAskRow {
+  /** The package id (keys the row; stamped on the spec as `pkg`). */
+  pkg: string;
+  /** The ask's prose title (the map pane + HUD speak it; stamped on the
+   *  spec so every reader names the guest without a registry in hand). */
+  title: string;
+  /** THE PRESENCE READ: the standing adoptable guest in this zone as a
+   *  STABLE key (null = nothing adoptable stands). Read the package's own
+   *  seat state — never force one. The key feeds the per-guest coin and is
+   *  stamped on the spec (`key`), so a replaced guest reads stale and the
+   *  ask hands back / re-rolls rather than silently rebinding. */
+  standing: (world: World, def: ZoneDef) => string | null;
+  /** THE LIVE VIEW the driver + HUD watch (World.packageAskView wraps it). */
+  view: (world: World, def: ZoneDef, key: string) => PackageAskState;
+  /** Adoption coin override (absent = ADOPT_CFG.packageChance). */
+  chance?: number;
+}
+
+const PACKAGE_ASKS: PackageAskRow[] = [];
+
+/** Register a package's adoptable presence (call at module scope from the
+ *  package's overlay file — the registerMarkerSource contract: zero edits
+ *  here). Rows are consulted in registration-independent order (sorted by
+ *  pkg id) so the verdict never depends on import order. */
+export function registerPackageAsk(row: PackageAskRow): void {
+  PACKAGE_ASKS.push(row);
+}
+
+export function packageAskRow(pkg: string): PackageAskRow | undefined {
+  return PACKAGE_ASKS.find(r => r.pkg === pkg);
+}
+
+export function packageAskRows(): readonly PackageAskRow[] {
+  return [...PACKAGE_ASKS].sort((a, b) => (a.pkg < b.pkg ? -1 : a.pkg > b.pkg ? 1 : 0));
+}
+
+/** The package tail of the adoption read: offered only where the lair
+ *  classes stood aside. One hash per (zone, guest) — a fresh visitation gets
+ *  a fresh coin — rng-free like everything else in the lane. */
+function maybePackageAsk(
+  def: ZoneDef,
+  bare: ObjectiveSpec,
+  world: World,
+): ObjectiveSpec | null {
+  for (const row of packageAskRows()) {
+    const key = row.standing(world, def);
+    if (!key) continue;
+    const h = hashStr(`${ADOPT_CFG.salt}:pkg:${row.pkg}:${def.id}:${def.seed ?? 0}:${key}`);
+    if (bare.adopt !== true && (h % 10000) / 10000 >= (row.chance ?? ADOPT_CFG.packageChance)) continue;
+    return { kind: 'package', pkg: row.pkg, key, title: row.title };
+  }
+  return null;
+}
+
 /** THE ADOPTION READ — pure and rng-free: given a zone def and its generated
  *  layout, decide whether this ground's BARE rolled cull re-negotiates into a
  *  standing claim's own ask. Null = the roll stands untouched (no candidate,
  *  a non-bare or waived spec, or the seeded coin said no — the CAN, never
- *  MUST, half of the law). Deterministic per (def.id, def.seed). */
+ *  MUST, half of the law). Deterministic per (def.id, def.seed).
+ *
+ *  `world` (optional — the engine's loadZone passes it) opens THE PACKAGE
+ *  CLASS: a stamped package ask is re-validated against its guest's presence
+ *  (standing ⇒ the stamp holds; gone ⇒ THE HAND-BACK reverts it to the bare
+ *  cull, and the load may adopt afresh), and a standing guest may be adopted
+ *  where the lair classes stood aside. Without `world` the lair half is
+ *  byte-identical to its pre-package behavior. */
 export function maybeAdoptObjective(
   def: ZoneDef,
   layout: Pick<GeneratedLayout, 'doodads' | 'landmarkSpawns'>,
+  world?: World,
 ): ObjectiveSpec | null {
-  const o = def.objective;
+  let o = def.objective;
+  let reverted: ObjectiveSpec | null = null;
+  // THE HAND-BACK: a stamped package ask re-validates its guest every load.
+  if (o.kind === 'package') {
+    if (!world) return null; // no presence read here (a bare layout probe) — the stamp stands
+    const row = packageAskRow(o.pkg);
+    if (row && row.standing(world, def) === o.key) return null; // the guest stands — idempotent
+    // The guest left unanswered (or was replaced): the bare cull returns, and
+    // the rest of the read may adopt afresh — a new guest on its own coin.
+    o = reverted = { kind: 'clear' };
+  }
   // Only the BARE roll of an override kind — authored asks are sovereign.
-  if (!ADOPT_CFG.overrides.includes(o.kind) || def.special) return null;
-  if (o.kind === 'clear' && (o.all || o.need !== undefined || o.frac !== undefined)) return null;
-  if (o.seal !== undefined || o.adopt === false) return null;
+  if (!ADOPT_CFG.overrides.includes(o.kind) || def.special) return reverted;
+  if (o.kind === 'clear' && (o.all || o.need !== undefined || o.frac !== undefined)) return reverted;
+  if (o.seal !== undefined || o.adopt === false) return reverted;
 
   // What actually STANDS, from the generated layout alone (pure data).
   const candidates: AdoptableCandidate[] = [];
@@ -330,17 +451,22 @@ export function maybeAdoptObjective(
     if (row.kin.some(id => packIds.has(id))) continue;
     candidates.push({ lairId: row.lairId, title: adoptTitle(row.lairId), mode: 'hunt', kin: row.kin });
   }
-  if (!candidates.length) return null;
-
-  // ONE seeded verdict per zone: the coin, then the pick — both off the same
-  // salted hash (no rng stream moves; every load re-derives byte-identically).
-  const h = hashStr(`${ADOPT_CFG.salt}:${def.id}:${def.seed ?? 0}`);
-  if (o.adopt !== true && (h % 10000) / 10000 >= ADOPT_CFG.chance) return null;
-  candidates.sort((a, b) => (a.lairId < b.lairId ? -1 : a.lairId > b.lairId ? 1 : 0));
-  const pick = candidates[Math.floor(h / 10000) % candidates.length];
-  return pick.mode === 'den'
-    ? { kind: 'lair', lairId: pick.lairId, title: pick.title, mouthKind: pick.mouthKind }
-    : { kind: 'lair', lairId: pick.lairId, title: pick.title, kin: pick.kin };
+  if (candidates.length) {
+    // ONE seeded verdict per zone: the coin, then the pick — both off the same
+    // salted hash (no rng stream moves; every load re-derives byte-identically).
+    const h = hashStr(`${ADOPT_CFG.salt}:${def.id}:${def.seed ?? 0}`);
+    if (o.adopt === true || (h % 10000) / 10000 < ADOPT_CFG.chance) {
+      candidates.sort((a, b) => (a.lairId < b.lairId ? -1 : a.lairId > b.lairId ? 1 : 0));
+      const pick = candidates[Math.floor(h / 10000) % candidates.length];
+      return pick.mode === 'den'
+        ? { kind: 'lair', lairId: pick.lairId, title: pick.title, mouthKind: pick.mouthKind }
+        : { kind: 'lair', lairId: pick.lairId, title: pick.title, kin: pick.kin };
+    }
+  }
+  // THE PACKAGE CLASS tail (maybePackageAsk) — a standing guest may take the
+  // ask only where the lair classes stood aside (a resident beats a guest).
+  const guest = world ? maybePackageAsk(def, o, world) : null;
+  return guest ?? reverted;
 }
 
 // The adopted ask's pointer: the den's door, or the nearest standing keeper —

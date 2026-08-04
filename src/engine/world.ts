@@ -82,7 +82,7 @@ import { DIG_CFG } from '../data/digsites';
 import type { ContestRecoupSpec, ContestSpec } from '../data/objectives';
 import { PROCESSION_CFG } from '../data/processions';
 import { BOUNTY_CFG } from '../data/bounties';
-import { CLEAR_CFG, CONTEST_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, pressureRampAt, pressureRampCadence } from '../data/objectives';
+import { CLEAR_CFG, CONTEST_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, packageAskRow, pressureRampAt, pressureRampCadence } from '../data/objectives';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
@@ -3103,6 +3103,12 @@ export class World {
   entryFrom: string | null = null;
   /** Set once the zone's objective is met (pays the bounty, unseals exits). */
   objectiveDone = false;
+  /** THE ADOPTED GUEST's engagement latch (kind 'package' — the SURVIVE
+   *  CONTRACT, updateObjective): true once the player has ENGAGED the bound
+   *  guest THIS visit (the fracture's run-over trigger). Zone-local by law —
+   *  reset at the loadZone adoption stamp — so leaving mid-run resets the
+   *  attempt while the guest's own seat persists (its re-arm law, not ours). */
+  private packageAskEngaged = false;
   /** Zone ids whose objective REWARD has already been claimed THIS run. A
    *  revisited zone respawns + re-unseals (objectiveDone re-arms per load), but
    *  the reward pays ONCE — no farming a single zone's bounty. Per-run: a fresh
@@ -5180,7 +5186,12 @@ export class World {
     // (seeded off def.seed), so every load, save and seat re-derives the
     // same verdict; the stamp is idempotent (an adopted kind never re-rolls).
     {
-      const adopted = maybeAdoptObjective(def, layout);
+      // The world read opens THE PACKAGE CLASS (a standing guest may take the
+      // ask; a stamped guest ask re-validates its presence — THE HAND-BACK);
+      // the lair half is byte-identical with or without it. The engagement
+      // latch is zone-local: every load starts the SURVIVE CONTRACT fresh.
+      this.packageAskEngaged = false;
+      const adopted = maybeAdoptObjective(def, layout, this);
       if (adopted) def.objective = adopted;
     }
     // Population: the objective decides who's waiting. Open the Zone Memory
@@ -41174,6 +41185,28 @@ export class World {
     };
   }
 
+  /** THE ADOPTED GUEST's stamped view (kind 'package' — THE ADOPTIVE LANE's
+   *  PACKAGE CLASS, data/objectives.ts): one read for the completion watch
+   *  and the HUD line, resolved through the registered row's OWN view over
+   *  the package's live seat state — drawn == tested against the same reads
+   *  the package's own machinery runs. Null when the row's package is not
+   *  installed (the driver hands the ask back). No second chevron is drawn:
+   *  the package's own attention pointers remain the in-zone guides. */
+  packageAskView(): {
+    pkg: string; title: string; standing: boolean; engaged: boolean;
+    pos: Vec2 | null; label: string;
+  } | null {
+    const o = this.zone.objective;
+    if (o.kind !== 'package') return null;
+    const row = packageAskRow(o.pkg);
+    if (!row) return null;
+    const s = row.view(this, this.zone, o.key);
+    return {
+      pkg: o.pkg, title: o.title, standing: s.standing, engaged: s.engaged,
+      pos: s.pos ? vec(s.pos.x, s.pos.y) : null, label: s.label,
+    };
+  }
+
   /** The live OFFERING altar, for the attention fabric + the HUD: where it
    *  hungers, how fed, and whether the zone has anything left to feed it. */
   offeringView(): { pos: Vec2; offered: number; need: number; stalled: boolean; done: boolean } | null {
@@ -49291,6 +49324,37 @@ export class World {
         return;
       }
 
+      case 'package': {
+        // THE ADOPTED GUEST (THE ADOPTIVE LANE's PACKAGE CLASS,
+        // data/objectives.ts registerPackageAsk): the ask is a roving package
+        // presence this ground hosts — the fracture is the debut. THE SURVIVE
+        // CONTRACT (her law, 2026-08-03): engage the guest and live to the
+        // end of its run; success or fail BOTH bank (the run's own verdict is
+        // the package's business — a "too slow" collapse still completes the
+        // zone), only dying out from under it banks nothing. A guest gone
+        // unanswered HANDS THE ASK BACK (the transience doctrine): the bare
+        // cull returns mid-visit — this visit completes on the empty-floor
+        // law, the next load re-derives the cull stamp — and a later guest
+        // may adopt afresh at load on its own coin.
+        if (this.objectiveDone) return;
+        const v = this.packageAskView();
+        if (v?.standing) {
+          if (v.engaged) this.packageAskEngaged = true;
+          return;
+        }
+        // The guest is gone (its run ended, it moved on, or its package left
+        // this world). An engagement seen through by a LIVING player banks —
+        // the frame order (driver before the fracture runtime) means we read
+        // the end one tick after it landed, alive-now being the honest read.
+        if (this.packageAskEngaged && !this.player.dead) {
+          this.completeObjective(`${o.title} is seen through!`);
+        } else {
+          this.packageAskEngaged = false;
+          this.zone.objective = { kind: 'clear' };
+        }
+        return;
+      }
+
       case 'spawners':
         if (!this.objectiveDone && this.livingSpawners().length === 0) {
           this.completeObjective('Spawners destroyed!');
@@ -51216,6 +51280,14 @@ export class World {
             : `Brave ${v.title} — its door stands on this ground`;
         }
         return `Break the claim of ${v.title} — ${v.remain} keeper${v.remain === 1 ? '' : 's'} remain${v.remain === 1 ? 's' : ''}`;
+      }
+      case 'package': {
+        // THE ADOPTED GUEST: the row's own view authors the line (the label
+        // arrives capitalized for the HUD's opening position). A gone guest
+        // reads its exit for the frame before the driver hands the ask back.
+        const v = this.packageAskView();
+        if (!v || !v.standing) return `${o.title} has moved on`;
+        return v.label;
       }
       case 'spawners': return `Destroy the spawners — ${this.livingSpawners().length} remain`;
       case 'escape': return 'They keep coming — find the way out';

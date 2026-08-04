@@ -34,6 +34,9 @@ tileset's `objectives` weight table (`data/tilesets.ts` → worldgen
 | `lair`       | THE ADOPTED ASK (adoptive-only — never a weight row): the ask   |
 |              | IS a claim the mint stood up — brave the den behind its door,   |
 |              | or fell the apex natives holding the ground                     |
+| `package`    | THE ADOPTED GUEST (adoptive-only — registerPackageAsk): the ask |
+|              | IS a roving content-package presence this ground hosts — trip   |
+|              | the standing fracture and survive its run, however it ends      |
 
 ## Exit-seal POLICY (not physics)
 
@@ -406,6 +409,67 @@ structurally weight 0, not a failed promise. All numbers + the derivations in
   MINTED ask; ground a claim stands on re-negotiates at first entry — the
   same way every time. The `exits seal` tail never shifts (both kinds ship
   open).
+
+### THE PACKAGE CLASS (`kind: 'package'` — the adopted guest)
+
+Her law (2026-08-03): "an actual applicable content package BE a zone
+objective … the content packages appear as normal, and upon spawning can
+have a chance to become the zone objective." A content package REGISTERS its
+adoptable presence — `registerPackageAsk` (data/objectives.ts, called at
+module scope from the package's own overlay file, the `registerMarkerSource`
+zero-edit contract) — as a row carrying a presence read (`standing`: the
+guest in this zone as a STABLE key, off the package's own seat state), a
+prose `title`, a live `view` for the driver + HUD, and an optional per-row
+`chance`. No hand lists anywhere; a package is adoptable the moment its
+module registers.
+
+- THE SEAM is the lane's own: at zone LOAD, `maybeAdoptObjective(def,
+  layout, world)` consults package rows only where the LAIR classes stood
+  aside (a resident claim beats a passing guest — and the lair half stays
+  byte-identical with or without the `world` argument). The verdict is one
+  FNV hash over `(salt, pkg, def.id, def.seed, guestKey)` — the guest's key
+  in the hash means EVERY fresh visitation rolls its own coin
+  (`ADOPT_CFG.packageChance`), rng-free like the whole lane. Load-time is
+  ignite-time deferred to the first moment the player can meet the ground:
+  the hash answers identically whenever it's asked while the same guest
+  stands, so no information is lost — and a guest that arrives MID-visit
+  simply plays as a normal package spawn (her "appears as normal" clause),
+  adoptable at the next load if it still stands.
+- THE SURVIVE CONTRACT (the fracture debut's completion law, in
+  `World.updateObjective`'s `'package'` case): the ask completes when the
+  player ENGAGED the guest (`packageAskEngaged`, a zone-local latch — the
+  fracture's run-over trigger) and the guest's run then ENDED while the
+  player still lives. Success or fail BOTH bank — a "too slow" collapse
+  still completes the zone; the run's own verdict is the package's business.
+  Dying out from under it banks nothing.
+- THE HAND-BACK (the transience doctrine — events borrow the world, never
+  own it): a guest gone unanswered (idled out while away, ended over a dead
+  player, its package uninstalled) REVERTS the ask to the bare `'clear'` it
+  adopted over — mid-visit in the driver, at load in `maybeAdoptObjective`'s
+  reversion arm — so the zone is always completable and a later guest may
+  adopt afresh on its own coin. (The lair classes keep their vacuous-complete
+  mercy; the guest class reverts instead — durable ground can be settled,
+  a transient guest can only be handed back.)
+- THE FRACTURE DEBUT (`overlays/fractures.ts`): ORIGIN SEATS ONLY
+  (`!longerTimer`) — her "when a player triggers it" is the dormant
+  run-over, and a DIVERTED surface is the bounce, sovereign by her word and
+  structurally never offered. Walking out mid-run tears only the zone-local
+  run; the overlay seat survives and re-entry re-arms the dormant origin —
+  the package's OWN re-trigger law, no second lifecycle. After the ask
+  banks, the bounce onward (divert, glide, hops) is byte-untouched.
+- Seals: OPEN structurally (a guest that may leave can never hold a door).
+  Chest: NONE on the parent — the package pays its own way (chasm seals,
+  the run-through bounty), and the chest gate's extra load draw would shift
+  layout streams besides. No second chevron: the package's own attention
+  pointers remain the in-zone guides. `packageAskView()` is the stamped
+  view. `validate` refuses `'package'` everywhere `'lair'` is refused.
+- Co-op posture: host-authoritative like the whole objective fabric (no
+  objective wire fields exist); the client-HUD fidelity gap is the standing
+  one, not widened here.
+- Probe: RIG U (balance/probe_objectives.ts) pins the census, per-guest
+  coins, origin-only candidacy, both survive arms, the dead-player refusal,
+  the re-arm, both hand-back roads, authored sovereignty, and lair-first
+  precedence.
 
 ## `objectiveLost` (the loseable-objective seam)
 

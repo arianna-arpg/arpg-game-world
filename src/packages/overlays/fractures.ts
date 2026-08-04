@@ -28,6 +28,7 @@ import { clamp } from '../../core/math';
 import { Rng } from '../../core/rng';
 import type { ArenaSpec } from '../../data/arenas';
 import { FACTIONS } from '../../data/monsters';
+import { registerPackageAsk } from '../../data/objectives';
 import type { World } from '../../engine/world';
 import { registerAttentionSource, type AttentionPoint } from '../../world/attention';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
@@ -504,4 +505,42 @@ registerAttentionSource((world: World): AttentionPoint[] => {
     out.push({ id: `fracture-rift-${r.variant}`, pos: r.pos, color: r.color, glyph: '✷', label: `the ${r.variant} rift`, z: 7 });
   }
   return out;
+});
+
+// --- the adoptive objective lane (registerPackageAsk — same zero-edit contract) --
+//
+// THE ADOPTED GUEST debut (Arianna, 2026-08-03): a spawned Fracture standing
+// on bare-cull ground MAY simply BE the zone objective — trip it and survive
+// to the end of its run here; success or fail both bank (a "too slow"
+// collapse still completes the zone), and the bounce onward continues as
+// normal, no longer objective-entangled. ORIGIN SEATS ONLY (`!longerTimer`):
+// her "when a player triggers it" is the dormant run-over, and a DIVERTED
+// surface is the bounce — sovereign by her word, structurally never offered.
+// The presence key is the fracture's own id, so every fresh visitation rolls
+// its own adoption coin, and a successor guest can never inherit a stale
+// stamp. Everything here is a pure read over the overlay's seat + the zone
+// run — the fracture's spawn/seat/divert logic is byte-untouched.
+registerPackageAsk({
+  pkg: 'fractures',
+  title: 'the fracture',
+  standing: (world: World, def): string | null => {
+    const info = world.sim.fractureField?.fractureIn(def.id);
+    return info && !info.longerTimer ? info.id : null;
+  },
+  view: (world: World, def, key) => {
+    const info = world.sim.fractureField?.fractureIn(def.id);
+    const run = world.fractureView();
+    const live = !!run && run.id === key && (run.phase === 'fissure' || run.phase === 'chasm');
+    return {
+      standing: !!info && info.id === key,
+      engaged: live,
+      pos: !run ? null
+        : run.phase === 'dormant' ? { x: run.origin.x, y: run.origin.y }
+          : run.phase === 'chasm' && run.chasm ? { x: run.chasm.x, y: run.chasm.y }
+            : { x: run.head.x, y: run.head.y },
+      label: live
+        ? 'See the fracture through — survive its run, however it ends'
+        : 'Trip the volatile fracture and see its run through',
+    };
+  },
 });

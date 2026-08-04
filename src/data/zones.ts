@@ -225,6 +225,21 @@ export type ObjectiveSpec = (
    *  hand. Zero new persistence: dens complete via completedObjectives,
    *  hunts via the living population. */
   | { kind: 'lair'; lairId: string; title: string; mouthKind?: string; kin?: string[] }
+  /** THE ADOPTED GUEST (THE ADOPTIVE LANE's PACKAGE CLASS, data/objectives.ts
+   *  registerPackageAsk): the zone's ask IS a roving content-package presence
+   *  its ground actually hosts — the fracture standing on this ground is the
+   *  debut. Never rolled from tileset weights (validate refuses a row — the
+   *  ADOPTIVE_ONLY law) and never placing anything of its own: the package's
+   *  spawn/seat logic is byte-untouched, adoption is a load-time chance over
+   *  a BARE rolled 'clear' (her law: adoption, never dependency). `pkg` names
+   *  the registered row, `key` the exact standing guest (a replaced guest
+   *  reads stale and the ask hands back rather than silently rebinding),
+   *  `title` its prose name — stamped on the spec so every reader speaks it
+   *  without a registry in hand. Completion is the SURVIVE CONTRACT (engage
+   *  the guest, live to the end of its run — its own success/fail verdict is
+   *  its own business); a guest gone unanswered REVERTS the ask to the bare
+   *  cull (the transience doctrine — the zone is always completable). */
+  | { kind: 'package'; pkg: string; key: string; title: string }
 ) & ObjectiveTuning;
 
 /** Per-kind DEFAULT exit policy: does an UNMET objective seal the zone's other
@@ -242,6 +257,11 @@ export const OBJECTIVE_SEALS: Record<ObjectiveSpec['kind'], boolean> = {
   // THE ADOPTED ASK never seals: the claim stands where it stands — walking
   // away costs the bounty's wait, never the road (the leyline's doctrine).
   lair: false,
+  // THE ADOPTED GUEST never seals BY LAW: a transient presence (the
+  // registerPackageAsk class) that idles out or moves on hands the ask back —
+  // a sealed door over a guest that may leave would be a softlock, so the
+  // roads stay open structurally, never by tuning.
+  package: false,
 };
 
 /** Does this zone's UNMET objective seal its exits? (An endless arena never
@@ -275,6 +295,8 @@ export const OBJECTIVE_READS: Record<ObjectiveSpec['kind'], { glyph: string; rea
   pyres: { glyph: '✶', read: 'kindle the cold pyres' },
   unearth: { glyph: '⛏', read: 'unearth the buried caches' },
   lair: { glyph: '☖', read: 'natives claim this ground' },
+  // The ADOPTED GUEST (registerPackageAsk) — title composed on in objectiveRead.
+  package: { glyph: '☄', read: 'a roving power claims this ground' },
 };
 
 /** Resolve a spec to its pane read, honoring the spec-level refinements the
@@ -295,7 +317,8 @@ export function objectiveRead(o: ObjectiveSpec): { glyph: string; read: string }
   }
   // THE ADOPTED ASK carries its claim's prose name ON the spec (`title` —
   // stamped at adoption), so the pane names the ground without a registry.
-  if (o.kind === 'lair') return { glyph: base.glyph, read: `${base.read}: ${o.title}` };
+  // The ADOPTED GUEST (registerPackageAsk) speaks the same way.
+  if (o.kind === 'lair' || o.kind === 'package') return { glyph: base.glyph, read: `${base.read}: ${o.title}` };
   return base;
 }
 
@@ -305,7 +328,10 @@ export function objectiveRead(o: ObjectiveSpec): { glyph: string; read: string }
  *  nothing completes. The ADOPTED ask ('lair') deliberately stakes NO parent
  *  chest: the claim's own hoard IS the reward (the barrow's cache floor, the
  *  lair_hoard the alphas pay, the den country's own chests) — a second
- *  payout stapled onto the parent would double-pay the same feature. */
+ *  payout stapled onto the parent would double-pay the same feature. The
+ *  ADOPTED GUEST ('package' — registerPackageAsk) likewise: the package pays
+ *  its own way (the fracture's chasm seals + run-through bounty), and the
+ *  chest gate's extra load draw would shift layout streams besides. */
 export const OBJECTIVE_CHEST_KINDS: ReadonlySet<ObjectiveSpec['kind']> =
   new Set<ObjectiveSpec['kind']>(['boss', 'spawners', 'waves', 'beacon', 'procession', 'bounty', 'offering', 'puzzle',
     'leyline', 'rifts', 'pyres', 'unearth']);

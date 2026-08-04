@@ -29,7 +29,14 @@
 //     (den door / apex kin), never forces a spawn, never binds on absent
 //     features (weight 0 structurally), deterministic per zone, sovereign
 //     to authored asks, both classes completing through standing machinery
-//     (derived pocket id / pure population).
+//     (derived pocket id / pure population),
+//   - THE PACKAGE CLASS (kind 'package' — registerPackageAsk, RIG U): a
+//     roving content-package presence (the fracture debut) adopts the same
+//     way — origin seats only (the bounce is sovereign), per-guest coins,
+//     THE SURVIVE CONTRACT (engage + live to the run's end; success or fail
+//     both bank, a dead player banks nothing), THE HAND-BACK (a guest gone
+//     unanswered reverts the ask to the bare cull), and the package's own
+//     spawn/divert life byte-untouched by the ask banking.
 // Run: npx tsx balance/probe_objectives.ts
 // ---------------------------------------------------------------------------
 
@@ -49,7 +56,7 @@ import { transitDwell, transitOf } from '../src/data/transit';
 import { placeZoneAt } from '../src/engine/worldgen';
 import {
   CONTEST_CFG, PRESSURE_RAMP, adoptDenMouthKinds, adoptHuntRows,
-  maybeAdoptObjective, pressureRampAt, pressureRampCadence,
+  maybeAdoptObjective, packageAskRow, pressureRampAt, pressureRampCadence,
   type ContestRecoupSpec,
 } from '../src/data/objectives';
 import { BEACON_CFG } from '../src/data/beacons';
@@ -738,6 +745,286 @@ withSeededRandom(0x0bec7a, () => {
       check('T18 an authored need on door-bearing ground stays the authored cull',
         w.zone.objective.kind === 'clear'
         && (w.doodads as { kind: string }[]).some(d => d.kind === 'wyrm_barrow_mouth'));
+    }
+  }
+
+  // --- RIG U: THE PACKAGE CLASS (the adopted guest — the fracture debut) -----
+  // Her law (2026-08-03): packages appear AS NORMAL; a spawned guest MAY
+  // simply BE the zone objective; trigger it and survive to the end of its
+  // run — success or fail both bank; then the bounce onward continues as
+  // normal, no longer objective-entangled. The overlay's gate is quiet in the
+  // sim (no auto-ignition), so every seat below is devIgnite — the same
+  // spawn verb, one-at-a-time law intact (endFracture clears the slot
+  // between rigs).
+  {
+    const ff = w.sim.fractureField;
+    check('U1 the fracture registered its ask row (registry-derived, no hand lists)',
+      !!ff && packageAskRow('fractures')?.title === 'the fracture');
+    const bare = { doodads: [], landmarkSpawns: [] };
+    /** Mint + stage a bare-cull zone the next rig can adopt over (the mintWith
+     *  law without the load — igniting must precede the adopting load). */
+    const stage = (seed: number, spread: number, objective: ObjectiveSpec): string => {
+      const zid = w.devMintTileset('grassland', spread, 3, { seed }) as string;
+      leaveToHome();
+      (w.zoneMap[zid] as ZoneDef).objective = objective;
+      (w.zoneMemory as Map<string, unknown>).delete(zid);
+      (w.completedObjectives as Set<string>).delete(zid);
+      return zid;
+    };
+
+    // U2 nothing standing ⇒ the package tail NEVER binds, even with the coin
+    // pinned open — adoption can never force a spawn.
+    {
+      const zid = stage(717171, 21, { kind: 'clear', adopt: true });
+      w.loadZone(zid);
+      check('U2 guestless ground stays the bare cull (adopt:true forces nothing)',
+        w.zone.objective.kind === 'clear');
+      leaveToHome();
+    }
+
+    // U3/U4 a standing ORIGIN adopts; the stamp is keyed to THE guest,
+    // deterministic, and idempotent across re-entries.
+    {
+      const zid = stage(727272, 23, { kind: 'clear', adopt: true });
+      check('U3a devIgnite seats the guest in the target zone (spawn logic untouched)',
+        ff.devIgnite(w.devOverlayView(), zid) === true && ff.fractureIn(zid) !== null);
+      const guestId = ff.fractureIn(zid).id as string;
+      w.loadZone(zid);
+      const o = w.zone.objective as ObjectiveSpec;
+      check('U3b the load ADOPTED the standing guest (kind, pkg, key, title)',
+        o.kind === 'package' && o.pkg === 'fractures' && o.key === guestId && o.title === 'the fracture');
+      const v = w.packageAskView();
+      check('U3c the stamped view: standing, unengaged, pointing at the dormant seat; the HUD speaks the trip line',
+        v?.standing === true && v.engaged === false && v.pos !== null
+        && String(w.objectiveText()).includes('Trip the volatile fracture'));
+      check('U3d the guest ask: roads OPEN, NO parent chest, the pane names the guest',
+        objectiveSeals(o) === false && !objectiveEarnsChest(o)
+        && objectiveRead(o).read === 'a roving power claims this ground: the fracture');
+      const stamped = JSON.stringify(o);
+      leaveToHome();
+      w.loadZone(zid);
+      check('U4 re-entry re-reads the SAME stamp (the guest stands — idempotent, deterministic)',
+        JSON.stringify(w.zone.objective) === stamped);
+      leaveToHome();
+      ff.endFracture();
+    }
+
+    // U5 ORIGIN SEATS ONLY: a DIVERTED surface is the bounce — sovereign by
+    // her word, structurally never offered. Seat one via the overlay's own
+    // verbs (the eventqa idiom: ignite far away, divert in, land the glide).
+    {
+      const zidFrom = stage(737373, 25, { kind: 'clear' });
+      const zidTo = stage(747474, 27, { kind: 'clear', adopt: true });
+      check('U5a a guest seats at its far origin', ff.devIgnite(w.devOverlayView(), zidFrom) === true);
+      ff.divert(zidTo, (w.zoneMap[zidFrom] as ZoneDef).map, (w.zoneMap[zidTo] as ZoneDef).map);
+      step(ff.surge().travelSeconds + 0.5); // the world drives the glide home
+      const landed = ff.fractureIn(zidTo);
+      check('U5b the glide landed a DIVERTED surface in the target', !!landed && landed.longerTimer === true);
+      check('U5c a diverted seat is STRUCTURALLY unofferable (packageAskRow.standing reads null)',
+        packageAskRow('fractures')!.standing(world, w.zoneMap[zidTo] as ZoneDef) === null);
+      w.loadZone(zidTo);
+      check('U5d the diverted guest never adopts — the bounce ground keeps its bare cull',
+        w.zone.objective.kind === 'clear');
+      leaveToHome();
+      ff.endFracture();
+    }
+
+    // U6 THE PER-GUEST COIN: hashed per (zone, guest), rng-free — fires
+    // sometimes, stands aside sometimes; and without the world read the lane
+    // is byte-identical to its pre-package self.
+    {
+      const zidSeat = stage(757575, 29, { kind: 'clear' });
+      check('U6a a guest seats for the coin sweep', ff.devIgnite(w.devOverlayView(), zidSeat) === true);
+      const key = ff.fractureIn(zidSeat).id as string;
+      const mk = (seed: number): ZoneDef => ({
+        id: zidSeat, name: 'x', level: 8, size: 'small', theme: {} as never,
+        layout: [], exits: [], map: { x: 0, y: 0 }, objective: { kind: 'clear' },
+        seed,
+      } as unknown as ZoneDef);
+      let fired = 0;
+      let held = 0;
+      let miskeyed = 0;
+      for (let s = 0; s < 60; s++) {
+        const r = maybeAdoptObjective(mk(s), bare, world);
+        if (!r) { held++; continue; }
+        fired++;
+        if (r.kind !== 'package' || r.key !== key || r.pkg !== 'fractures') miskeyed++;
+      }
+      check('U6b the coin: fires AND stands aside over 60 seeds (CAN, never MUST), every stamp keyed to THE guest',
+        fired > 0 && held > 0 && miskeyed === 0, `${fired} fired / ${held} held`);
+      check('U6c without a world read the lane is byte-identical (no guest visible to the pure half)',
+        maybeAdoptObjective(mk(5), bare) === null);
+      ff.endFracture();
+    }
+
+    // U7 THE FAIL ARM of the survive contract: trip it, stand clear, let the
+    // clock die — "success or fail — the zone objective completes, given
+    // that the player had survived".
+    {
+      const zid = stage(767676, 31, { kind: 'clear', adopt: true });
+      check('U7a the fail-arm guest seats', ff.devIgnite(w.devOverlayView(), zid) === true);
+      w.loadZone(zid);
+      killAllEnemies(); // the drain drive needs no ambient AI bill (wall-clock)
+      const run = w.fractureView();
+      check('U7b the adopted origin materialized DORMANT (run-over is the trigger)',
+        w.zone.objective.kind === 'package' && run?.phase === 'dormant');
+      w.player.pos = w.clampPos(vec(run.origin.x, run.origin.y), w.player.radius);
+      step(0.2);
+      check('U7c the trigger took (fissure live) and the HUD flips to the survive line',
+        w.fractureView()?.phase === 'fissure'
+        && String(w.objectiveText()).includes('See the fracture through'));
+      w.player.pos = w.clampPos(vec(run.origin.x + 900, run.origin.y + 900), w.player.radius);
+      let guard = 0;
+      while (w.fractureView() && guard++ < 80) step(0.5);
+      step(0.2); // the driver reads the end one tick after it lands
+      check('U7d the run collapsed (too slow) — and the ask BANKED anyway (her fail arm)',
+        w.objectiveDone === true && (w.completedObjectives as Set<string>).has(zid), `${guard} beats`);
+      check('U7e the failed chain ended at the overlay too (its own law, untouched)', ff.peek() === null);
+      leaveToHome();
+    }
+
+    // U8 THE DEAD DON'T BANK: the chain ends out from under a fallen player
+    // ⇒ no completion — the ask HANDS BACK to the bare cull mid-visit.
+    {
+      const zid = stage(787878, 33, { kind: 'clear', adopt: true });
+      check('U8a the widow-maker guest seats', ff.devIgnite(w.devOverlayView(), zid) === true);
+      w.loadZone(zid);
+      const run = w.fractureView();
+      w.player.pos = w.clampPos(vec(run.origin.x, run.origin.y), w.player.radius);
+      step(0.2);
+      check('U8b engaged while alive (the latch armed)', w.fractureView()?.phase === 'fissure');
+      w.player.dead = true;
+      ff.endFracture(); // the chain dies over the corpse (the end arms' own verb)
+      // ONE driver beat, not a full update: a flag-dead solo player trips the
+      // ALL-DOWN wipe terminator on a real tick (gameOver latches for good and
+      // poisons every later rig's interact sweep — the trigger silently stops
+      // taking). The verdict under test lives entirely in updateObjective, so
+      // run exactly that seam.
+      w.updateObjective(1 / 30);
+      check('U8c a dead player banks NOTHING — the ask hands back to the bare cull instead',
+        w.objectiveDone === false && !(w.completedObjectives as Set<string>).has(zid)
+        && w.zone.objective.kind === 'clear');
+      w.player.dead = false;
+      check('U8d no wipe latched — the rig leaves no residue for later rigs', w.gameOver === false);
+      leaveToHome();
+    }
+
+    // U9 THE SUCCESS ARM + THE SOVEREIGN BOUNCE: chase the head, cull every
+    // chasm, and watch the banking leave the guest's onward life untouched.
+    {
+      // The bounce needs a road: give the run's zone a non-safe neighbor so
+      // its own divert law has somewhere to tear (a dead end beside the safe
+      // town legitimately takes the full-seal arm instead — engine law).
+      const zidNext = stage(797980, 36, { kind: 'clear' });
+      const zid = stage(797979, 35, { kind: 'clear', adopt: true });
+      (w.zoneMap[zid] as ZoneDef).exits.push({ to: zidNext, side: 'e' });
+      check('U9a the success-arm guest seats', ff.devIgnite(w.devOverlayView(), zid) === true);
+      const guestId = ff.fractureIn(zid).id as string;
+      w.loadZone(zid);
+      killAllEnemies(); // the chase drive needs no ambient AI bill (wall-clock)
+      let run = w.fractureView();
+      w.player.pos = w.clampPos(vec(run.origin.x, run.origin.y), w.player.radius);
+      step(0.2);
+      let guard = 0;
+      let sawChasm = false;
+      while (w.fractureView() && guard++ < 900) {
+        run = w.fractureView();
+        if (run.phase === 'fissure') {
+          w.player.pos = w.clampPos(vec(run.head.x, run.head.y), w.player.radius);
+        } else if (run.phase === 'chasm') {
+          sawChasm = true;
+          for (const a of w.actors as Actor[]) if (!a.dead && a.tag === 'fracture_foe') w.kill(a, true);
+        }
+        step(0.2);
+      }
+      step(0.2); // the driver reads the end one tick later
+      check('U9b the run was SEEN THROUGH (chasms culled in time) and the ask banked — the success arm',
+        sawChasm && w.objectiveDone === true && (w.completedObjectives as Set<string>).has(zid),
+        `${guard} beats`);
+      const p = ff.peek();
+      check('U9c THE BOUNCE SOVEREIGN: same guest, one hop spent by ITS OWN divert law, gliding onward',
+        !!p && p.id === guestId && p.hopsRemaining === ff.surge().zoneSpan[1] - 2,
+        p ? `hops ${p.hopsRemaining}` : 'chain ended instead');
+      if (p) {
+        step(ff.surge().travelSeconds + 0.5);
+        const landed = ff.fractureIn(ff.peek()?.zoneId ?? '');
+        check('U9d the diverted surface stands in the next zone — the chain continues, un-entangled',
+          !!landed && landed.longerTimer === true);
+        ff.endFracture();
+      }
+      leaveToHome();
+    }
+
+    // U10 THE RE-ARM (the package's own re-trigger law, no second lifecycle):
+    // walking out mid-run tears only the zone-run; the seat survives, the ask
+    // stands, and re-entry re-arms the dormant origin.
+    {
+      const zid = stage(808080, 37, { kind: 'clear', adopt: true });
+      check('U10a the re-arm guest seats', ff.devIgnite(w.devOverlayView(), zid) === true);
+      w.loadZone(zid);
+      const stamped = JSON.stringify(w.zone.objective);
+      const run = w.fractureView();
+      w.player.pos = w.clampPos(vec(run.origin.x, run.origin.y), w.player.radius);
+      step(0.2);
+      check('U10b triggered (mid-run)', w.fractureView()?.phase === 'fissure');
+      leaveToHome(); // walk out mid-run
+      const seat = ff.fractureIn(zid);
+      check('U10c the overlay seat SURVIVES the walk-out (origin, never diverted)',
+        !!seat && seat.longerTimer === false);
+      w.loadZone(zid);
+      check('U10d re-entry: the ask STANDS (same stamp), the guest re-armed DORMANT, the latch fresh',
+        JSON.stringify(w.zone.objective) === stamped
+        && w.fractureView()?.phase === 'dormant'
+        && w.packageAskView()?.engaged === false
+        && w.objectiveDone === false);
+      leaveToHome();
+      ff.endFracture();
+    }
+
+    // U11 THE HAND-BACK at load: a guest that died while the player was away
+    // reverts the ask — the zone is always completable, never wedged.
+    {
+      const zid = stage(818181, 39, { kind: 'clear', adopt: true });
+      check('U11a the hand-back guest seats', ff.devIgnite(w.devOverlayView(), zid) === true);
+      w.loadZone(zid);
+      check('U11b adopted at load', w.zone.objective.kind === 'package');
+      leaveToHome();
+      ff.endFracture(); // the chain dies while the player is away (idle-out, a far collapse)
+      w.loadZone(zid);
+      check('U11c the unanswered ask reverts to the bare cull at load (completable ground, never a wedge)',
+        w.zone.objective.kind === 'clear' && w.objectiveDone === false);
+      leaveToHome();
+    }
+
+    // U12 the census + sovereignty: the kind is fully wired, structurally
+    // un-rollable, and authored asks refuse the guest outright.
+    {
+      check('U12a \'package\' census: seals OPEN, read stands, NO parent chest, NO tileset weight row anywhere',
+        OBJECTIVE_SEALS.package === false
+        && OBJECTIVE_READS.package.glyph.length > 0
+        && !objectiveEarnsChest({ kind: 'package', pkg: 'fractures', key: 'k', title: 't' })
+        && !Object.values(TILESETS).some(t => t.objectives.some(ob => (ob.kind as string) === 'package')));
+      const zid = stage(828282, 41, { kind: 'clear', need: 4 });
+      check('U12b a guest seats beside an authored ask', ff.devIgnite(w.devOverlayView(), zid) === true);
+      w.loadZone(zid);
+      check('U12c authored asks are SOVEREIGN over a standing guest (the authored cull loads untouched)',
+        w.zone.objective.kind === 'clear' && (w.zone.objective as { need?: number }).need === 4);
+      leaveToHome();
+      ff.endFracture();
+    }
+
+    // U13 THE RESIDENT BEATS THE GUEST: where a lair candidate stands too,
+    // the lair classes win the slot (byte-identical to their pre-package
+    // verdicts); the package tail only takes ground they stood aside from.
+    {
+      const zid = stage(838383, 43, { kind: 'clear', adopt: true });
+      (w.zoneMap[zid] as ZoneDef).landmarks = [{ landmark: 'wyrm_barrow_site', chance: 1 }];
+      check('U13a a guest seats beside a standing den', ff.devIgnite(w.devOverlayView(), zid) === true);
+      w.loadZone(zid);
+      check('U13b the lair wins the slot; the guest waits its turn on other ground',
+        w.zone.objective.kind === 'lair');
+      leaveToHome();
+      ff.endFracture();
     }
   }
 });

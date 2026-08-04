@@ -100,8 +100,11 @@ import { Rng } from '../core/rng';
  *  a bare rolled 'clear' when the mint actually stands the feature — never
  *  rollable from tileset weights or authorable on pocket forms (rollObjective
  *  has no case for them, so a row naming one would silently thin to 'clear':
- *  exactly the wound the kind census exists to catch). */
-const ADOPTIVE_ONLY_KINDS = ['lair'] as const;
+ *  exactly the wound the kind census exists to catch). 'package' is the
+ *  PACKAGE CLASS (registerPackageAsk — a standing guest like the fracture):
+ *  doubly unauthorable, since its presence is transient world state no mint
+ *  could promise. */
+const ADOPTIVE_ONLY_KINDS = ['lair', 'package'] as const;
 
 export function validateContent(): void {
   const warn = (msg: string): void => console.warn(`[content] ${msg}`);
