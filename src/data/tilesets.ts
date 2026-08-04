@@ -1358,7 +1358,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // lift runs strong (real sun-wells); banks still darken toward water.
       ground: {
         palette: ['#122408', '#1b3a12', '#26501b', '#357024', '#478c30'], bias: 0.6, alpha: 0.55,
-        coast: { reach: 85, shift: -0.35, kinds: ['water', 'deep_water', 'bog', 'swamp'] },
+        coast: { reach: 85, shift: -0.35, kinds: ['water', 'deep_water', 'bog', 'swamp', 'spring_pool'] },
         clearing: { reach: 150, lift: 0.34 },
       },
       nightDark: 0.76,
@@ -1530,6 +1530,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         // clearing lift stays WAN — gaps read as paler gloom, never sun.
         palette: ['#101410', '#161c17', '#1d241c', '#242e24', '#31402f', '#4a5a44'],
         bias: 0.44, alpha: 0.5, strength: 1.05,
+        coast: { reach: 75, shift: -0.28, kinds: ['water', 'bog'] },
         clearing: { reach: 150, lift: 0.22 },
       },
       ambientFx: [{ kind: 'motes', color: '#9ab0a0', intensity: 0.7 }],
@@ -2079,7 +2080,16 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       nightDark: 0.74,
       heat: 0,
-      ground: { scale: 1.6, strength: 0.85, speckles: 0.9 },
+      // Frozen needle-litter under snow-light: cold slate rising to frost-
+      // sage, and the authored glades (the negative-space 'clearing' stamps
+      // + windrow gaps) lit as true sun-wells between the pine crowns.
+      // Ceiling + lift pitched ABOVE the dark-wearer floor on purpose: the
+      // snowwash layer sits over this bake, so a timid ramp reads as none.
+      ground: {
+        scale: 1.6, strength: 0.85, speckles: 0.9,
+        palette: ['#0e141b', '#162026', '#20302f', '#2c443c', '#3a5a4c'], bias: 0.5, alpha: 0.55,
+        clearing: { reach: 130, lift: 0.32 },
+      },
       ambientFx: [{ kind: 'aurora' }],
       fog: { banks: [1, 2], kinds: [{ id: 'mist' }] },
       floor: '#101820', grid: '#16222c', border: '#2f4a56',
@@ -2408,6 +2418,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       ground: {
         scale: 2.6, stretchX: 2.1, strength: 1.25, speckles: 0.45,
         palette: ['#201a0e', '#362a16', '#4c3c20', '#63512a', '#7a6434'], bias: 0.56, alpha: 0.55,
+        // Default kinds ON PURPOSE (real water only): the oasis rim reads
+        // damp while the mirage casts no wet shore — the douse law's tell
+        // (docs/engine/douse.md), now positional.
+        coast: { reach: 80, shift: -0.32 },
       },
       floor: '#1a160d', grid: '#2a2418', border: '#7a6438',
       obstacle: '#5c4a2c', obstacleEdge: '#8a6e40', accent: '#e8c060',
@@ -3778,6 +3792,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       ground: {
         palette: ['#141810', '#1b2016', '#232a1c', '#2c3424', '#37402c'],
         bias: 0.5, alpha: 0.5, speckles: 0.9,
+        // The flooded undercroft's standing pools darken their flagstone rim.
+        coast: { reach: 70, shift: -0.3, kinds: ['water', 'mud'] },
       },
       ambientDark: 0.32,
       ambientFx: [{ kind: 'motes', intensity: 0.5 }],
@@ -3843,7 +3859,16 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunken', 'Rotreek', 'Fenmire', 'Blackwater', 'Drownreed', 'Quagmire', 'Stillwater', 'Murkwallow', 'Reekbrack', 'Sludgewater', 'Greenrot', 'Cessmire', 'Gloomwrack', 'Dankmoor', 'Wetrot', 'Slimewater', 'Foulmere', 'Bogshade'],
     nameSecond: ['Bog', 'Fen', 'Marsh', 'Sloughs', 'Swale', 'Lowland', 'Sump', 'Wetland', 'Quag', 'Reeds', 'Shallows', 'Sink', 'Morass', 'Hollow', 'Reach', 'Mudflat'],
     theme: {
-      ground: { scale: 1.35, strength: 1.15 },
+      // Peaty olive loam, wet-fading to drowned black at every pool rim —
+      // the blackwater face's whole read is its margins.
+      ground: {
+        scale: 1.35, strength: 1.15,
+        // Ceiling pitched at the shipped dark-wearer range (deepwood #38662e,
+        // gloamwood #4a5a44): any dimmer and the wet fade has nowhere to fall
+        // from — the first draft's #2e3a22 read as no palette at all.
+        palette: ['#0c100a', '#141b10', '#1d2716', '#28351d', '#364826'], bias: 0.48, alpha: 0.55,
+        coast: { reach: 90, shift: -0.35, kinds: ['water', 'bog', 'swamp', 'gel_pool'] },
+      },
       // The mire's fog ROLLS: river_mist anchors on the blackwater and
       // drifts its banks — walk with it and the veil holds.
       fog: { banks: [2, 4], kinds: [{ id: 'river_mist', weight: 2 }, { id: 'mist' }] },
@@ -4654,6 +4679,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         // Charred basalt banks — near-black, warming toward the old flows.
         palette: ['#140b08', '#1d1009', '#27150a', '#301a0c', '#3a200e'],
         bias: 0.44, alpha: 0.5, stretchX: 1.4, speckles: 0.8, strength: 1.1,
+        // POSITIVE shift — the only wearer that warms at its waterline: the
+        // "warming toward the old flows" above, made positional (heat-baked
+        // banks hugging the poured river; the vents already hug that shore).
+        coast: { reach: 90, shift: 0.34, kinds: ['lava', 'magma_core'] },
       },
       floor: '#150c07', grid: '#22120a', border: '#5c2c14',
       obstacle: '#2e1714', obstacleEdge: '#6a3520', accent: '#ff7a2a',
@@ -5335,7 +5364,13 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       dayLight: 1.35,
       heat: 0.75,
-      ground: { scale: 2.0, stretchX: 1.6, strength: 1.1, speckles: 0.6 },
+      // Sun-bleached scrub soil behind the strandline; the tideline earns a
+      // TRUE wet fade — dark damp sand hugging every pour of surf/shallows.
+      ground: {
+        scale: 2.0, stretchX: 1.6, strength: 1.1, speckles: 0.6,
+        palette: ['#171510', '#292214', '#3d321a', '#524425', '#68582f'], bias: 0.58, alpha: 0.5,
+        coast: { reach: 90, shift: -0.34 },
+      },
       floor: '#15140e', grid: '#221f16', border: '#7a6e44',
       obstacle: '#5c5230', obstacleEdge: '#8a7a48', accent: '#e8d060',
       sand: '#d8c890', water: '#1d6a8a', tree: '#3a6a2a', mud: '#5a5030',
@@ -6364,7 +6399,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       ground: {
         palette: ['#140f08', '#1f180c', '#2a2010', '#352a15', '#40331a'], bias: 0.5, alpha: 0.55,
-        coast: { reach: 80, shift: -0.3 },
+        // The margin's water IS bog and mud (the wet rot face) — the default
+        // water kinds never stamp here, so without this list the tag is inert.
+        coast: { reach: 80, shift: -0.3, kinds: ['water', 'bog', 'mud'] },
       },
       dayLight: 0.9, nightDark: 0.74,
       ambientFx: [{ kind: 'motes', intensity: 0.35, color: '#a89058' }],
@@ -6850,6 +6887,13 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Lonely', 'Storm-Girt', 'Castaway', 'Far-Flung', 'Mistbound', 'Wave-Worn', 'Forsaken', 'Tideringed', 'Solitary', 'Gull-Haunted', 'Windswept', 'Lost', 'Saltcrowned', 'Far-Drifted', 'Brinegirt', 'Sundered', 'Forlorn', 'Sea-Locked'],
     nameSecond: ['Isle', 'Cay', 'Spit', 'Headland', 'Atoll', 'Holm', 'Islet', 'Reef', 'Skerry', 'Promontory', 'Shoal', 'Point', 'Cape', 'Sandbar', 'Ait', 'Eyot'],
     theme: {
+      // Isle turf over dune-soil (a green lean the bare beach lacks), and a
+      // wet fade hugging the lagoon rims — 7-11 shallows pours make this THE
+      // tideline country: the ellipse isle finally reads ringed by its sea.
+      ground: {
+        palette: ['#161510', '#212216', '#2e321c', '#3f4426', '#535630'], bias: 0.55, alpha: 0.5,
+        coast: { reach: 90, shift: -0.34 },
+      },
       floor: '#16140d', grid: '#221f16', border: '#6a6244',
       obstacle: '#54502e', obstacleEdge: '#7a7044', accent: '#7ec8e8',
       sand: '#d4c084', water: '#14516e', tree: '#3a6a2a',
@@ -9357,7 +9401,17 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       nightDark: 0.72,
       fog: { banks: [2, 3], kinds: [{ id: 'river_mist', weight: 2 }, { id: 'mist' }] },
-      ground: { scale: 1.4, strength: 1.15 },
+      // Cold fen-green (greyer, wetter kin of the mire's olive): drowned
+      // grass over peat, wet-fading to black mud at every reed line. No
+      // clearing on purpose — the murk IS the country; sun-wells would
+      // fight the fog and the wisps.
+      ground: {
+        scale: 1.4, strength: 1.15,
+        // Ceiling in the shipped dark-wearer range (the mire's law): dimmer
+        // ramps vanish under the 0.55 alpha and the fade cannot read.
+        palette: ['#0b110c', '#121c12', '#1a2a1a', '#243a24', '#304e30'], bias: 0.48, alpha: 0.55,
+        coast: { reach: 90, shift: -0.35, kinds: ['water', 'bog', 'swamp', 'gel_pool'] },
+      },
       floor: '#0e140e', grid: '#16201a', border: '#3a5240',
       obstacle: '#2a3a2c', obstacleEdge: '#496a4e', accent: '#8ad08a',
       water: '#1a3a30', mud: '#2a3424', tree: '#3a5a2a',
