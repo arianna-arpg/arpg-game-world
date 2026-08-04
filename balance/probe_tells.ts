@@ -123,6 +123,12 @@ const row = (source: string, over?: Partial<TellSpec>): TellSpec =>
   }
   check('weave: every hunger-driven predator wears the family lean (census)',
     bare.length === 0, bare.join(','));
+  // Wave eleven joins the census from the sea floor: the vent crab is the
+  // DEEP's first hunger-driven hunter, and it wears the ONE shared row
+  // (identity, never a copy — the family lean stays one law).
+  check('weave: the deep\'s first hunger-driven hunter wears the shared lean (vent_crab, wave eleven)',
+    !!MONSTERS.vent_crab?.brain?.drives?.hunger
+    && MONSTERS.vent_crab?.tells === HUNGER_LEAN);
   check('weave: HUNGER_LEAN is the one shared row (band spans the hunt thresholds)',
     HUNGER_LEAN.length === 1 && HUNGER_LEAN[0].source === 'drive:hunger'
     && HUNGER_LEAN[0].channel.kind === 'lean'

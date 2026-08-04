@@ -9489,6 +9489,61 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#e0a030', params: { spread: 0.4, dist: 0.55, size: 0.08 } },
     ],
   },
+
+  // --- THE HOMED KIN, WAVE ELEVEN (the sea's faces + the butteland caves) --
+  /** The vent crab: the shore crab's grammar in eruption country — mineral
+   *  crust on the carapace, and the heat-shimmer that never leaves it. */
+  vent_crab: {
+    parts: [
+      { kind: 'carapace', scale: 0.95 },
+      { kind: 'legs', scale: 0.9, params: { n: 6 } },
+      { kind: 'pincers', scale: 1.05 },
+      { kind: 'spots', scale: 0.7, role: 'accent', params: { n: 4 } },
+      { kind: 'eyestalks', scale: 0.8 },
+    ],
+    live: [{ kind: 'wisps', y: -0.25, scale: 0.5, params: { n: 2 } }],
+  },
+  /** The shelf lurker: terrace stone that was never stone — the reef
+   *  lurcher's patience with the gulper's working throat. */
+  shelf_lurker: {
+    parts: [
+      { kind: 'shell', color: '#3a5a66', scale: 1.1 },
+      { kind: 'barbs', color: '#2c4650', scale: 0.9 },
+      { kind: 'polyps', color: '#5a9a94', scale: 0.8 },
+      { kind: 'fangJaw', x: 0.42, scale: 0.85 },
+      { kind: 'eyes', color: '#b8e8e0', params: { spread: 0.28, dist: 0.6, size: 0.07 } },
+    ],
+    live: [{ kind: 'gulletSac', x: 0.22, y: 0.2, scale: 0.95 }],
+    shadowScale: 0.95,
+  },
+  /** The Vent Matron: the crab lineage at brood-mother scale — a carapace
+   *  gone basalt, ember-crusted, wreathed in her own chimney-haze. */
+  vent_matron: {
+    parts: [
+      { kind: 'carapace', scale: 1.15 },
+      { kind: 'legs', scale: 1.0, params: { n: 8 } },
+      { kind: 'pincers', scale: 1.2 },
+      { kind: 'spots', scale: 0.85, role: 'accent', params: { n: 6 } },
+      { kind: 'barbs', color: '#5a3a2c', scale: 0.8 },
+      { kind: 'eyestalks', scale: 0.9 },
+    ],
+    live: [{ kind: 'wisps', y: -0.3, scale: 0.8, params: { n: 3 } }],
+    shadowScale: 1.1,
+  },
+  /** Old Tawny: the dust pard's coat gone pale at the muzzle — heavier ruff,
+   *  the old scars in the spot-work, the larder-keeper's unhurried eye. */
+  larder_pard: {
+    parts: [
+      { kind: 'disc', scale: 0.95 },
+      { kind: 'furRuff', scale: 1.0, alpha: 0.9 },
+      { kind: 'spots', role: 'dark', params: { n: 7 } },
+      { kind: 'ears', scale: 0.75 },
+      { kind: 'whiskers', scale: 1.0 },
+      { kind: 'tail', params: { len: 1.15, tuft: true } },
+      { kind: 'fangJaw', x: 0.4, scale: 0.7 },
+      { kind: 'eyes', color: '#f0c050', params: { spread: 0.38, dist: 0.55, size: 0.1 } },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

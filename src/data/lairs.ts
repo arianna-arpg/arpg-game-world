@@ -1933,3 +1933,147 @@ registerLair({
     chance: 0.22,
   },
 });
+
+// ============================================================================
+// WAVE ELEVEN — THE HOMED KIN reach the sea's new faces and the butteland
+// caves: the nest among the smokers, and the larder under the moot.
+// ============================================================================
+
+// === THE VENT BROOD (the sea-floor nest — the composition lane) ==============
+// "The thing that nests among the smokers", finally given its nest. The door
+// rides the COMPOSITION lane (the vane-roost law: the composition IS the
+// claim, no lair row) because the claim is the whole deepsea country, not an
+// envelope slice — and the cluster brings its OWN chimney ring, so the nest
+// reads as vent ground on whichever face it lands (a lone smoking outcrop is
+// honest sea-floor geology anywhere). siteWalk keeps the anchor out of the
+// trench voids. Inside: the deepsea tileset's own 'vent field' face, FORCED
+// (the geode sett's named-variant lane) — the den's whole argument is the
+// eruption economy inverted, so the den is always eruption country. The
+// Matron shrugs the field's fire; you don't. Her court hunts its shoal
+// larder through the standing hunger drives (the frostmaw's larder law,
+// marine), and the noDeeper seal strips any stray inner nest-door the
+// composition might roll (the standing chokepoint).
+
+registerDoodadRule('vent_nest', { overlap: 'trigger', spacing: 60 });
+
+// The nest knot: the hollow at heart, her chimneys CLOSE around it (their
+// eruption crowns lap the approach — the door is priced in vent clocks, with
+// swim-wide lanes between 2-3 stacks), polyps fattened on the wash, and the
+// shell-midden of everything the brood has finished.
+registerCluster({
+  id: 'vent_nest_ring',
+  anchor: { radius: 26, kind: 'vent_nest' },
+  pieces: [
+    { kind: 'vent_nest', radius: [24, 28], count: [1, 1], ring: [0, 1], centerpiece: true },
+    { kind: 'black_smoker', radius: [18, 26], count: [2, 3], ring: [88, 128], rot: true },
+    { kind: 'scald_polyp', radius: [10, 14], count: [2, 4], ring: [70, 112], rot: true },
+    { kind: 'bone_pile', radius: [10, 15], count: [2, 4], ring: [96, 140], rot: true },
+  ],
+  poi: true,
+});
+
+registerComposition({
+  id: 'vent_nest_site',
+  // siteWalk: the underwater recipe's trench tears are real voids — the
+  // nest steps onto standing seabed (the Driftways' lever, sea-floored).
+  sites: [{ id: 'nest', radius: [100, 140], siteWalk: true }],
+  pre: [{ kind: 'clearing', at: 'nest', count: [1, 1], radius: [45, 60] }],
+  post: [{ kind: 'cluster', cluster: 'vent_nest_ring', at: 'nest', count: [1, 1] }],
+});
+
+registerSidezone({
+  kind: 'vent_nest',
+  dwell: 0.7,
+  ledgerOnEnter: 'vent_brood_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, 'deepsea', {
+      // THE FORCED FACE: the brood is ALWAYS vent country — the den's whole
+      // argument is staged on the eruption clocks, and the undefined pool
+      // would deal a kelp crawl four mints in five.
+      variant: 'vent field',
+      // THE FORCED FLOOR (the chainworks precedent): deepsea carries no
+      // forceLayout, so a bare mint would roll the legacy cave floor — dry
+      // ground where the smoker kit's water habitat REFUSES to stand (the
+      // coherence fabric's own gate) and the den minted no chimneys, ever.
+      // The underwater recipe is the sea's real floor: it carves the swim
+      // arena and sets the aquatic ambience the kit's habitat reads.
+      layoutType: 'underwater',
+      name: 'the Vent Brood',
+      objective: { kind: 'boss', id: 'vent_matron' },
+      noDeeper: true,
+    });
+    // The court and the larder (the NEST_FAUNA lesson): her crabs hunt the
+    // shoals through their own hunger drives — the nest stages the deep's
+    // first predator drama whether or not you watch.
+    def.fauna = [
+      { id: 'vent_crab', chance: 1, count: [2, 4] },
+      { id: 'silver_shoal', chance: 0.8, count: [4, 7] },
+      { id: 'hermit_scuttler', chance: 0.6, count: [2, 3] },
+    ];
+    return def;
+  },
+});
+// NO registerLair — the composition is the claim (the wane-arch family).
+
+// === THE PARD'S LARDER (the butteland cave ladder) ===========================
+// THE CLAIM LAW, applied and recorded: gnoll_moot already holds butteland's
+// SURFACE (downs/butteland/grove, level 6+), so the second claim takes the
+// axis the moot never touches — the CAVES under the buttes (the frostmaw/
+// giants-cairn separation verbatim: one country, two grounds, zero collision
+// by construction). The needles tileset mints real cave mouths (common's
+// cave [0,1] — rescued by the wardrobe's dead-base-face fix), so the seat
+// fires on standing ground. Inside: the kill-larder is LIVE — the dragged-
+// home oryx the alpha hasn't finished, the jackals skulking at the rim of
+// the kill (the same beast-faction truce every savannah carcass draws), and
+// Old Tawny hunting the herd through hunger drives when you take too long.
+// The food web under one roof, all standing law.
+
+registerDoodadRule('larder_crag', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'larder_crag_site', builder: 'den_mouth', size: [180, 250],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'larder_crag',
+    dress: [
+      { kind: 'bone_pile', count: [2, 4], radius: [10, 15] },
+      { kind: 'gore', count: [1, 3], radius: [12, 18] },
+      { kind: 'spear_grass', count: [1, 2], radius: [14, 20] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'larder_crag',
+  dwell: 0.7,
+  ledgerOnEnter: 'pard_larder_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, undefined, {
+      // The Scorpion Well's undefined lane: the strata pool under the
+      // butteland anchor deals the country's own cave face.
+      name: "the Pard's Larder",
+      objective: { kind: 'boss', id: 'larder_pard' },
+      noDeeper: true,
+    });
+    def.fauna = [
+      { id: 'veld_oryx', chance: 1, count: [2, 4] },
+      { id: 'pan_jackal', chance: 0.7, count: [2, 3] },
+      { id: 'sun_hyrax', chance: 0.5, count: [1, 2] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'pard_larder',
+  landmark: 'larder_crag_site',
+  seat: {
+    biomes: ['butteland'],
+    place: 'cave',
+    // Full weight in the first two caves under the buttes, whispering at 3
+    // (the frostmaw's ramp law), never on the moot's open ground.
+    strata: { from: 1, to: 2, fadeOut: 2 },
+    level: { from: 8, fadeIn: 3 },
+    chance: 0.2,
+  },
+});

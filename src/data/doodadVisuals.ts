@@ -3447,4 +3447,29 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { color: '#6e6a78', throat: '#08070c', glow: '#a892d8', label: 'the Lone Crypt' },
     light: { radius: -1.6, color: '#a892d8', intensity: 0.14 },
   },
+
+  // === THE HOMED KIN, WAVE ELEVEN (data/lairs.ts) ===========================
+  // Two doors, zero new painters. The nest is the caveMouth in vent-field
+  // basalt — ember at the throat, because what lives past it is warmer than
+  // the sea; the larder crag is the same painter in butte sandstone, the
+  // dark past the jamb smelling of old kills (the bone-and-gore spoor does
+  // the talking outside).
+  vent_nest: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#1c2126', edge: '#4a3a34', material: 'stone',
+      glow: '#ff9a5a', throat: '#0a0605', rubble: {},
+      label: 'the Vent Brood',
+    },
+    light: { radius: -2, color: '#ff8a3a', intensity: 0.3, flicker: 2.6 },
+  },
+  larder_crag: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#57503c', edge: '#a89a72', material: 'stone',
+      glow: '#d8a24a', throat: '#120d06', rubble: {},
+      label: "the Pard's Larder",
+    },
+    light: { radius: -1.6, color: '#d8a24a', intensity: 0.14, flicker: 1.2 },
+  },
 };

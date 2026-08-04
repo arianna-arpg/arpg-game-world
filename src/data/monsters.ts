@@ -1714,6 +1714,10 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'moon_jelly', chance: 0.5, count: [2, 4] },
     { id: 'hermit_scuttler', chance: 0.45, count: [2, 4], near: 'sea_rock' },
     { id: 'shore_crab', chance: 0.3, count: [2, 3] },
+    // The smoker-field's own hunter: `near` SELF-GATES the row (no chimney,
+    // no crab — the vent field + the brood's nest ring are its whole range),
+    // so a generous chance still spawns nothing on the kelp faces.
+    { id: 'vent_crab', chance: 0.5, count: [1, 2], near: 'black_smoker' },
   ],
   // THE FLESH: the country's ambience IS the country — spare organs out
   // for a stroll (the waltzer tempo: nothing here hurries), fly-knots over
@@ -20835,6 +20839,108 @@ export const MONSTERS: Record<string, MonsterDef> = {
       rules: [{
         when: { drive: { id: 'hunger', above: 0.55 } },
         use: { target: { prey: ['critter'], detectMul: 1.25 }, behavior: { seek: { what: 'prey', pace: 0.55 } } },
+      }],
+    },
+  },
+
+  // THE HOMED KIN — WAVE ELEVEN of the lair fabric (data/lairs.ts): the sea's
+  // new faces get their natives, and the butteland caves get their keeper.
+  // THE VENT CRAB — the smoker field's own hunter: a shell built for the
+  // eruption clocks (the fire-resist carapace shrugs what boils its prey),
+  // seated BY the chimneys (its WILDLIFE row's `near` self-gates — no smoker,
+  // no crab), hunting the shoals through hunger drives whether or not you
+  // watch. The deep's FIRST hunger-driven predator — it wears the family
+  // lean (HUNGER_LEAN, the probe_tells census row).
+  vent_crab: {
+    id: 'vent_crab', name: 'Vent Crab',
+    color: '#c86a3a', shape: 'oval', radius: 11, material: 'chitin', look: 'vent_crab',
+    base: { life: 40, moveSpeed: 120, accuracy: 96, armor: 30, mana: 10, manaRegen: 2 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', 0.3)],
+    skills: ['claw', 'rend'], xp: 14, tag: 'predator',
+    faction: 'beast', tags: ['beast'],
+    detection: 1.3, drops: 0,
+    scaleVariance: [0.85, 1.2],
+    shellGuard: { side: 'front', max: 45, arcDeg: 150, regenDelay: 4, regenRate: 9, color: '#e8845a' },
+    tells: HUNGER_LEAN,
+    brain: {
+      type: 'basic',
+      move: { style: 'lurk' },
+      tempo: { moveFor: [0.8, 1.5], pauseFor: [0.5, 1.1] },
+      drives: { hunger: { rise: 0.012, start: [0.3, 0.7], onKill: -0.85 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.55 } },
+        use: { target: { prey: ['critter'], detectMul: 1.3 }, behavior: { seek: { what: 'prey', pace: 0.5 } } },
+      }],
+    },
+  },
+  // THE SHELF LURKER — the grip tutors' marine seat, on the terraces where
+  // the shove economy already rules: the gulper's grammar (reel, then the
+  // bite that KEEPS) worn by a chasm-shelf stone that was never a stone.
+  // Its spit is a THROW at needle-bank speed (gulp's 640 clears the
+  // needle_coral contact line at 520) — the shred is the standing landed-
+  // contact law, zero new code, and whoever it spits you AT is having a
+  // worse day than you.
+  shelf_lurker: {
+    id: 'shelf_lurker', name: 'Shelf Lurker',
+    color: '#4a7a8a', shape: 'oval', radius: 16, material: 'chitin', look: 'shelf_lurker',
+    base: { life: 130, moveSpeed: 95, accuracy: 106, armor: 22, mana: 40, manaRegen: 4 },
+    mods: [mod('coldRes', 'flat', 0.5)],
+    skills: ['tongue_reel', 'gulp'], xp: 40,
+    heft: 1.4,
+    ambush: { radius: 155, announce: 'the terrace shifts…' },
+    aggro: { fury: 1.2, waver: 0.7 },
+    brain: { type: 'basic' },
+    detection: 0.95,
+    gemBias: ['physical', 'melee'],
+  },
+  // THE VENT MATRON — the thing that nests among the smokers (the Vent
+  // Brood's marquee ask, data/lairs.ts). The crab lineage at brood-mother
+  // scale, and her whole fight is the vent field's own hazard economy
+  // INVERTED: the eruptions that price YOUR footing are her hearth (the
+  // shell shrugs them), so every waking chimney is ground she owns and you
+  // rent. She herds — the knockback on the pincer, the marching ripples —
+  // and the field does the wounding.
+  vent_matron: {
+    id: 'vent_matron', name: 'Vent Matron',
+    color: '#d87a48', shape: 'oval', radius: 22, material: 'chitin', look: 'vent_matron',
+    boss: true,
+    base: { life: 380, moveSpeed: 85, accuracy: 110, armor: 40, poise: 60, mana: 130, manaRegen: 9 },
+    mods: [mod('fireRes', 'flat', 0.85), mod('coldRes', 'flat', 0.5)],
+    skills: ['heavy_strike', 'groundswell', 'magma_lob'],
+    xp: 210, loot: 'lair_hoard',
+    faction: 'beast', tags: ['beast'],
+    heft: 1.8, turnSpeed: 2.4,
+    detection: 1.1,
+    brain: {
+      type: 'juggernaut', enrage: 0.4,
+      behavior: { castArc: 0.7, reaction: [0.25, 0.6] },
+    },
+  },
+  // OLD TAWNY — the pard's larder given its keeper (the Pard's Larder,
+  // data/lairs.ts — the butteland cave ladder's second rung, under the
+  // moot's open ground). The dust pard's patient grammar at alpha scale,
+  // hungry by drives like every honest predator (the larder is LIVE — the
+  // dragged-home herd it hasn't finished), wearing the family lean so the
+  // stalk reads before it costs you.
+  larder_pard: {
+    id: 'larder_pard', name: 'Old Tawny',
+    color: '#d8b06a', shape: 'kite', radius: 16, material: 'fur', look: 'larder_pard',
+    boss: true,
+    base: { life: 300, moveSpeed: 225, accuracy: 118, evasion: 70, mana: 40, manaRegen: 4 },
+    skills: ['crushing_leap', 'claw', 'rend'],
+    xp: 190, loot: 'lair_hoard',
+    faction: 'beast', tags: ['beast'],
+    detection: 1.5,
+    scaleVariance: [0.95, 1.1],
+    tells: HUNGER_LEAN,
+    brain: {
+      type: 'basic',
+      move: { style: 'lurk' },
+      tempo: { moveFor: [0.9, 1.6], pauseFor: [0.3, 0.8] },
+      drives: { hunger: { rise: 0.012, start: [0.35, 0.7], onKill: -0.85 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.55 } },
+        use: { target: { prey: ['critter'], detectMul: 1.3 }, behavior: { seek: { what: 'prey', pace: 0.5 } } },
       }],
     },
   },

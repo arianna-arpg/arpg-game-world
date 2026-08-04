@@ -8437,7 +8437,14 @@ export const TILESETS: Record<string, TilesetDef> = {
   // trenches; reach the next air pocket before you drown.
   deepsea: {
     id: 'deepsea', biome: 'deepsea',
-    compositions: [{ composition: 'kelp_gyre', chance: 0.3 }],
+    compositions: [
+      { composition: 'kelp_gyre', chance: 0.3 },
+      // The Vent Brood's nest (data/lairs.ts — the composition lane, the
+      // vane-roost law: the composition IS the claim, no lair row). The
+      // cluster brings its OWN chimney ring, so the nest reads as vent
+      // country on whichever face it lands.
+      { composition: 'vent_nest_site', chance: 0.2 },
+    ],
     nameFirst: ['Sunken', 'Abyssal', 'Drowned', 'Fathomless', 'Tide-Lost', 'Lightless', 'Pressuredark', 'Brineblack', 'Leviathan', 'Pelagic', 'Sunless', 'Cold-Crushed', 'Hadal', 'Stillwater', 'Deepswell', 'Saltgloom', 'Trenchborn', 'Drownward'],
     nameSecond: ['Deep', 'Trench', 'Shelf', 'Reach', 'Sound', 'Gulf', 'Abyss', 'Fathoms', 'Current', 'Depths', 'Hollow', 'Sink', 'Drift', 'Brine', 'Maw', 'Shoals'],
     theme: {
@@ -8529,6 +8536,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         // Wrecks walk down here too — and the reefs hold their breath.
         { id: 'tidewrack_shambler', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'reef_lurcher', weight: 2 },
+        // The terraces' grip tutor (reel + the bite that keeps) — its spit
+        // clears the needle banks' contact line by standing law.
+        { id: 'shelf_lurker', weight: 2, presence: { from: 7, fadeIn: 3 } },
+        // The chasm-home ambusher comes home (the pit-home fabric): it keeps
+        // its rifts on the shelf face's chasms for free, and noObjective
+        // means it never walls a clear from ground no build can stand on.
+        { id: 'void_angler', weight: 2, presence: { from: 10, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',

@@ -27,8 +27,8 @@ import '../src/data/lairs';
 import { Rng } from '../src/core/rng';
 import { vec, type Vec2 } from '../src/core/math';
 import {
-  compositionDefs, doodadRuleOf, generateLayout, hasCluster, hasComposition,
-  hasLandmark, isSidezoneEntranceKind, landmarkDefs,
+  clusterDefs, compositionDefs, doodadRuleOf, generateLayout, hasCluster,
+  hasComposition, hasLandmark, isSidezoneEntranceKind, landmarkDefs,
   type GenCtx, type GeneratedLayout,
 } from '../src/engine/levelgen';
 import { STATUS_DEFS } from '../src/engine/status';
@@ -39,7 +39,7 @@ import { LAIR_CFG, lairLandmarkRolls, lairOf, lairRows } from '../src/engine/lai
 import { reserveFrac } from '../src/engine/reserves';
 import { BIOMES } from '../src/world/biomes';
 import { TILESETS } from '../src/data/tilesets';
-import { MONSTERS } from '../src/data/monsters';
+import { HUNGER_LEAN, MONSTERS, WILDLIFE } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
 import { LOOKS } from '../src/data/looks';
 import { PART_PAINTERS } from '../src/render/vis/parts';
@@ -74,6 +74,9 @@ const LAIR_IDS = [
   // Wave ten — the freshest ground (the roost is deliberately absent: its
   // door rides the composition lane, no lair row — the wane-arch family).
   'geode_sett', 'rimewick_clutch', 'honeyfold',
+  // Wave eleven — the sea's faces + the butteland caves (the vent brood is
+  // deliberately absent: composition lane, no lair row — the roost's family).
+  'pard_larder',
 ];
 const MOUTHS = [
   'frostmaw_maw', 'hovel_door', 'sphinx_gate',
@@ -87,6 +90,8 @@ const MOUTHS = [
   // Wave ten — the homed kin's three doors (the knoll's hollow included:
   // however a registered-sidezone door is planted, it owes the same kit).
   'geode_crack', 'wax_gate', 'roost_hollow',
+  // Wave eleven — the nest among the smokers + the larder under the moot.
+  'vent_nest', 'larder_crag',
 ];
 const NATIVES = [
   'yeti', 'yeti_alpha', 'hill_giant', 'mire_hag', 'vault_sphinx',
@@ -99,6 +104,8 @@ const NATIVES = [
   // Wave ten — the homed kin's residents (courts and alphas both).
   'prism_brock', 'prismbrock_matriarch', 'rimewick', 'rimewick_matron',
   'gale_swift', 'stream_shrike', 'replete_foldmother',
+  // Wave eleven — the brood court, the terraces' grip tutor, both alphas.
+  'vent_crab', 'shelf_lurker', 'vent_matron', 'larder_pard',
 ];
 
 // --- RIG A: the registry weave --------------------------------------------------
@@ -2265,6 +2272,222 @@ const step = (secs: number): void => {
     fold?.caveDepth === 2 && fold?.anchor === 'garden'
     && (fold?.fauna ?? []).some(f => f.id === 'formic_tender')
     && (fold?.fauna ?? []).some(f => f.id === 'wool_aphid'));
+}
+
+// --- RIG P: WAVE ELEVEN — the sea's new faces get their natives --------------
+// Two claims and three seated kin on batch-25's freshest ground: the Vent
+// Brood (deepsea, the composition lane — the nest brings its own chimney
+// ring, and the den's argument is the vent field's eruption economy
+// INVERTED: the Matron shrugs what prices your footing), the Pard's Larder
+// (the butteland CAVES — THE CLAIM LAW applied: the moot holds the surface,
+// the larder takes the axis the moot never touches), the vent crab (the
+// deep's first hunger-driven hunter, self-gated to smoker ground), the
+// shelf lurker (the grip tutors' marine seat, whose spit clears the needle
+// banks' contact line by standing law), and the void angler seated home
+// (the chasm-shelf face's native, the pit-home fabric). Registry/kit/look
+// censuses arrive from rigs A1–A8 via the extended arrays.
+{
+  const DENS11: { id: string | null; mouth: string; resident: string }[] = [
+    { id: 'pard_larder', mouth: 'larder_crag', resident: 'larder_pard' },
+    { id: null, mouth: 'vent_nest', resident: 'vent_matron' },
+  ];
+  // P19 — the den keys resolve whole; residents pay the hoard as marquee
+  // asks; the brood is the composition lane's den (the wane-arch family).
+  for (const den of DENS11) {
+    if (den.id) {
+      const lair = lairOf(den.id);
+      const lm = lair ? landmarkDefs().find(d => d.id === lair.landmark) : undefined;
+      const mk = (lm?.params as { mouthKind?: string } | undefined)?.mouthKind;
+      check(`P19 den '${den.id}' resolves whole (lair → den_mouth → '${den.mouth}' → sidezone)`,
+        !!lair && lm?.builder === 'den_mouth' && mk === den.mouth && !!sidezoneOf(den.mouth));
+    }
+    const res = MONSTERS[den.resident];
+    check(`P19 '${den.resident}' is the den's marquee ask (boss, lair_hoard)`,
+      res?.boss === true && res?.loot === 'lair_hoard');
+  }
+  check('P19 the brood is the composition lane\'s den (no lair row — the roost\'s family)',
+    hasComposition('vent_nest_site') && hasCluster('vent_nest_ring')
+    && !!sidezoneOf('vent_nest') && !lairOf('vent_brood') && !lairOf('vent_nest'));
+  const broodComp = compositionDefs().find(c => c.id === 'vent_nest_site');
+  check('P19 the nest anchors on WALKABLE seabed (siteWalk — the trench tears are real voids)',
+    broodComp?.sites?.some(s => s.siteWalk === true) === true);
+  check('P19 the composition is the deepsea tileset\'s own row (the claim rolled on every face)',
+    (TILESETS.deepsea?.compositions ?? []).some(c => c.composition === 'vent_nest_site'));
+  const nestRing = clusterDefs().find(c => c.id === 'vent_nest_ring');
+  check('P19 the nest brings its OWN chimneys (the cluster carries smoker + polyp — vent ground wherever it lands)',
+    (['vent_nest', 'black_smoker', 'scald_polyp'] as const).every(k =>
+      (nestRing?.pieces ?? []).some(p => p.kind === k)));
+
+  // P20 — THE FOLD ENVELOPES + THE CLAIM LAW, recorded as assertion: one
+  // country, two grounds, zero collision by construction (the frostmaw /
+  // giants-cairn separation, on the butteland).
+  const at11 = (place: 'cave' | 'surface', biome: string, caveDepth: number | undefined,
+    level: number, tileset = 'cavern') =>
+    lairLandmarkRolls({ place, biome, caveDepth, level, tileset });
+  const has11 = (rolls: { landmark: string }[], lm: string) => rolls.some(r => r.landmark === lm);
+  check('P20 the larder claims the butteland caves at depth 1-2, whispers at 3, refuses 4',
+    has11(at11('cave', 'butteland', 1, 12), 'larder_crag_site')
+    && has11(at11('cave', 'butteland', 2, 12), 'larder_crag_site')
+    && has11(at11('cave', 'butteland', 3, 12), 'larder_crag_site')
+    && !has11(at11('cave', 'butteland', 4, 12), 'larder_crag_site'));
+  check('P20 the larder is silent below its ramp and under foreign anchors',
+    !has11(at11('cave', 'butteland', 1, 3), 'larder_crag_site')
+    && !has11(at11('cave', 'highland', 1, 30), 'larder_crag_site'));
+  check('P20 THE CLAIM LAW: the moot holds the surface, the larder the caves — never the same ground',
+    has11(at11('surface', 'butteland', undefined, 12), 'gnoll_moot')
+    && !has11(at11('cave', 'butteland', 1, 12), 'gnoll_moot')
+    && has11(at11('cave', 'butteland', 1, 12), 'larder_crag_site')
+    && !has11(at11('surface', 'butteland', undefined, 12), 'larder_crag_site'));
+
+  // P21 — placement through the standing machinery: the crag mouth stands
+  // spoored, the composition plants the nest with its chimney ring, the
+  // sweep is deterministic, and a sealed pocket strips BOTH doors.
+  {
+    const crag = gen(caveDef({
+      landmarks: [{ landmark: 'larder_crag_site', chance: 1 }],
+      caveDepth: undefined, anchor: undefined, biome: 'butteland',
+    }), 0xb111);
+    const mouths = crag.doodads.filter(d => d.kind === 'larder_crag');
+    check('P21 the larder crag stands (one mouth through the landmark loop)',
+      mouths.length === 1, `${mouths.length} mouths`);
+    const spoor = mouths[0] ? crag.doodads.filter(d =>
+      ['bone_pile', 'gore', 'spear_grass'].includes(d.kind)
+      && Math.hypot(d.pos.x - mouths[0].pos.x, d.pos.y - mouths[0].pos.y) < 160) : [];
+    check('P21 the crag apron is spoored (the kill-larder reads before the door)',
+      spoor.length >= 2, `${spoor.length} pieces`);
+    // The nest tests on the sea's REAL floor (layoutType underwater — the
+    // smoker kit's water habitat refuses dry test arenas by standing law).
+    const nest = gen(caveDef({
+      compositions: [{ composition: 'vent_nest_site', chance: 1 }],
+      caveDepth: undefined, anchor: undefined, biome: 'deepsea',
+      layoutType: 'underwater', aquatic: true,
+    }), 0xb112);
+    check('P21 the composition plants the nest (the door stands among its own chimneys)',
+      nest.doodads.filter(d => d.kind === 'vent_nest').length === 1
+      && nest.doodads.filter(d => d.kind === 'black_smoker').length >= 2);
+    const cragDef = caveDef({
+      landmarks: [{ landmark: 'larder_crag_site', chance: 1 }],
+      caveDepth: undefined, anchor: undefined, biome: 'butteland',
+    });
+    const print11 = (o: GeneratedLayout) => o.doodads.map(d =>
+      `${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`).join('|');
+    check('P21 same seed, same door (wave-eleven placement determinism)',
+      print11(gen(cragDef, 77311)) === print11(gen(cragDef, 77311)));
+    const SEALED11: [string, Partial<ZoneDef>][] = [
+      ['larder_crag', { landmarks: [{ landmark: 'larder_crag_site', chance: 1 }], biome: 'butteland' }],
+      // Same real floor as the standing pin above — a dry arena could pass
+      // this vacuously if the door never stood at all.
+      ['vent_nest', {
+        compositions: [{ composition: 'vent_nest_site', chance: 1 }],
+        biome: 'deepsea', layoutType: 'underwater', aquatic: true,
+      }],
+    ];
+    for (const [mouth, over] of SEALED11) {
+      const sealed = gen(caveDef({
+        ...over, noDeeper: true, caveDepth: undefined, anchor: undefined,
+      }), 0xb120);
+      check(`P21 a sealed pocket strips the ${mouth} (the noDeeper chokepoint, both planting lanes)`,
+        sealed.doodads.every(d => d.kind !== mouth));
+    }
+  }
+
+  // P22 — THE FABRIC CONTRACTS (static): each seat's one argument, pinned
+  // on the data that carries it.
+  const needleRule = doodadRuleOf('needle_coral');
+  const gulpSeize = (SKILLS.gulp?.effects ?? []).find(e => e.type === 'grabSeize') as
+    { grab?: { throw?: { impulse?: number } } } | undefined;
+  check('P22 THE NEEDLE INTERPLAY: the lurker\'s spit clears the bank\'s contact line (zero new code)',
+    (MONSTERS.shelf_lurker?.skills ?? []).includes('gulp')
+    && typeof needleRule.contact?.minSpeed === 'number'
+    && (gulpSeize?.grab?.throw?.impulse ?? 0) >= (needleRule.contact?.minSpeed ?? Infinity),
+    `impulse ${gulpSeize?.grab?.throw?.impulse} vs minSpeed ${needleRule.contact?.minSpeed}`);
+  check('P22 the lurker is seated on the terraces (deepsea packs) with the gulper\'s grammar',
+    (TILESETS.deepsea?.packs.table ?? []).some(r => r.id === 'shelf_lurker')
+    && (MONSTERS.shelf_lurker?.skills ?? []).includes('tongue_reel')
+    && (MONSTERS.shelf_lurker?.heft ?? 0) > 1 && !!MONSTERS.shelf_lurker?.ambush);
+  check('P22 the angler comes home (deepsea packs, from 10) with its chasm habitat intact',
+    (TILESETS.deepsea?.packs.table ?? []).some(r =>
+      r.id === 'void_angler' && typeof r.presence === 'object' && r.presence.from === 10)
+    && MONSTERS.void_angler?.habitat?.kind === 'chasm'
+    && MONSTERS.void_angler?.noObjective === true);
+  check('P22 the crab is the smoker field\'s own (WILDLIFE self-gated near the chimneys)',
+    (WILDLIFE.deepsea ?? []).some(r => r.id === 'vent_crab' && r.near === 'black_smoker'));
+  check('P22 the crab hunts by drives and TELLS (the family lean — the deep\'s first)',
+    !!MONSTERS.vent_crab?.brain?.drives?.hunger
+    && MONSTERS.vent_crab?.tells === HUNGER_LEAN
+    && MONSTERS.larder_pard?.tells === HUNGER_LEAN);
+  check('P22 the shell shrugs the field (fireRes on crab and Matron — the eruption clocks are the hearth)',
+    (MONSTERS.vent_crab?.mods ?? []).some(m => m.stat === 'fireRes' && m.value >= 0.5)
+    && (MONSTERS.vent_matron?.mods ?? []).some(m => m.stat === 'fireRes' && m.value >= 0.8));
+  check('P22 the Matron affords her kit from her own pool (the anatomy net\'s law, pinned at the seat)',
+    (['heavy_strike', 'groundswell', 'magma_lob'] as const).every(s =>
+      (MONSTERS.vent_matron?.skills ?? []).includes(s)
+      && (SKILLS[s]?.manaCost ?? 0) <= (MONSTERS.vent_matron?.base.mana ?? 0)));
+  check('P22 Old Tawny affords the leap and hunts the herd (crushing_leap payable; prey in the rules)',
+    (SKILLS.crushing_leap?.manaCost ?? 0) <= (MONSTERS.larder_pard?.base.mana ?? 0)
+    && MONSTERS.larder_pard?.brain?.rules?.some(r =>
+      r.use?.target?.prey?.includes('critter')) === true);
+
+  // P23 — THE LIVE DENS: each mouth mints its country, the residents stand,
+  // and the argument holds in the running world.
+  const liveDen11 = (mouth: string, seed: number): void => {
+    w.player.pos = vec(400, 400);
+    w.enterSidezone({ pos: { x: 400, y: 400 }, seed, kind: mouth });
+  };
+  {
+    liveDen11('vent_nest', 92110);
+    check('P23 the nest mints the Vent Brood (boss ask, sealed rung, the FORCED vent-field face)',
+      String(w.zone.name).includes('Vent Brood')
+      && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'vent_matron'
+      && w.zone.noDeeper === true && w.zone.tileset === 'deepsea'
+      && w.zone.variantName === 'vent field',
+      `${w.zone.name} · ${w.zone.tileset} · ${w.zone.variantName}`);
+    const smokers = (w.doodads as { kind: string }[]).filter(d => d.kind === 'black_smoker');
+    check('P23 the den IS eruption country (chimneys stand in the minted brood)',
+      smokers.length >= 2, `${smokers.length} smokers`);
+    const crabs = (w.actors as Actor[]).filter(a => a.defId === 'vent_crab' && !a.dead);
+    const matron = (w.actors as Actor[]).find(a => a.defId === 'vent_matron' && !a.dead);
+    check('P23 the court is home and the Matron holds the nest',
+      crabs.length >= 2 && !!matron, `${crabs.length} crabs, matron=${!!matron}`);
+    leaveToHome();
+  }
+  {
+    liveDen11('larder_crag', 92111);
+    check('P23 the crag mints the Pard\'s Larder (boss ask, sealed rung)',
+      String(w.zone.name).includes("Pard's Larder")
+      && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'larder_pard'
+      && w.zone.noDeeper === true, `${w.zone.name}`);
+    const oryx = (w.actors as Actor[]).filter(a => a.defId === 'veld_oryx' && !a.dead);
+    const tawny = (w.actors as Actor[]).find(a => a.defId === 'larder_pard' && !a.dead);
+    check('P23 the larder is LIVE and the keeper is home (the dragged herd + Old Tawny)',
+      oryx.length >= 2 && !!tawny, `${oryx.length} oryx, tawny=${!!tawny}`);
+    leaveToHome();
+  }
+
+  // P24 — mint purity (the E1 law) + each mint's own authored contract.
+  const mintOf11 = (mouth: string, parentOver: Partial<ZoneDef>, seed: number): ZoneDef | null => {
+    const sz = sidezoneOf(mouth);
+    if (!sz) return null;
+    const mctx = {
+      parent: caveDef({ id: `probe_p24_${mouth}`, caveDepth: undefined, anchor: undefined, ...parentOver }),
+      seed, id: `probe_p24_pocket_${mouth}`,
+      pos: { x: 100, y: 100 }, playerLevel: 12, pkgActive: () => false,
+    };
+    const a = sz.mint(mctx);
+    check(`P24 '${mouth}' mints pure and sealed (byte-equal, noDeeper)`,
+      JSON.stringify(a) === JSON.stringify(sz.mint(mctx)) && a.noDeeper === true);
+    return a;
+  };
+  const brood = mintOf11('vent_nest', { biome: 'deepsea' }, 0xb219);
+  check('P24 the brood wears the vent field ALWAYS (forced deepsea face, court + shoal larder authored)',
+    brood?.tileset === 'deepsea' && brood?.variantName === 'vent field'
+    && (brood?.fauna ?? []).some(f => f.id === 'vent_crab' && f.chance === 1)
+    && (brood?.fauna ?? []).some(f => f.id === 'silver_shoal'));
+  const larder = mintOf11('larder_crag', { biome: 'butteland', anchor: 'butteland' }, 0xb220);
+  check('P24 the larder mints down the butteland ladder (the undefined lane — herd + skulk authored)',
+    larder?.caveDepth === 1 && larder?.anchor === 'butteland'
+    && (larder?.fauna ?? []).some(f => f.id === 'veld_oryx' && f.chance === 1)
+    && (larder?.fauna ?? []).some(f => f.id === 'pan_jackal'));
 }
 
 console.log(fails ? `\nprobe_lairs: ${fails} FAILURE(S)` : '\nprobe_lairs: ALL PASS');
