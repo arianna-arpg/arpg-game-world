@@ -6851,6 +6851,11 @@ export function registerLandmark(def: LandmarkDef): void {
 
 export function hasLandmark(id: string): boolean { return id in LANDMARKS; }
 
+/** Read a registered landmark def (THE ADOPTIVE LANE's derivation reads
+ *  builder/params/spawns to classify what a standing lair actually is —
+ *  data/objectives.ts; pure read, registry stays module-private). */
+export function landmarkOf(id: string): LandmarkDef | undefined { return LANDMARKS[id]; }
+
 /** COMPOSITION EXPORTS — the pieces a layout RECIPE assembles (see
  *  engine/layoutRecipes.ts): the tileset's own decoration scatter, a landmark
  *  by id at a chosen anchor, a plan structure at a plot. Everything a recipe

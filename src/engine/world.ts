@@ -82,7 +82,7 @@ import { DIG_CFG } from '../data/digsites';
 import type { ContestRecoupSpec, ContestSpec } from '../data/objectives';
 import { PROCESSION_CFG } from '../data/processions';
 import { BOUNTY_CFG } from '../data/bounties';
-import { CLEAR_CFG, CONTEST_CFG, OFFERING_CFG, STRAGGLER_CFG, pressureRampAt, pressureRampCadence } from '../data/objectives';
+import { CLEAR_CFG, CONTEST_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, pressureRampAt, pressureRampCadence } from '../data/objectives';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
@@ -5171,6 +5171,18 @@ export class World {
       this.vendorRestockAt = (beat + 1) * this.restockSeconds();
     }
 
+    // THE ADOPTIVE LANE (data/objectives.ts): ground whose mint actually
+    // STANDS an adoptable feature — a lair's den mouth, an apex native's
+    // claim — may re-negotiate a BARE rolled cull into that feature's own
+    // ask. Adoption, never dependency: the feature spawned by its own law in
+    // the layout above, nothing is ever placed FOR the ask, and featureless
+    // ground passes untouched (weight 0 structurally). Pure + rng-free
+    // (seeded off def.seed), so every load, save and seat re-derives the
+    // same verdict; the stamp is idempotent (an adopted kind never re-rolls).
+    {
+      const adopted = maybeAdoptObjective(def, layout);
+      if (adopted) def.objective = adopted;
+    }
     // Population: the objective decides who's waiting. Open the Zone Memory
     // tagging window so every BASE enemy spawned below is flagged fromZoneGen —
     // overlay/event spawns come AFTER the window closes and stay live.
@@ -41069,6 +41081,43 @@ export class World {
     return null;
   }
 
+  /** THE ADOPTED ASK's stamped view (kind 'lair' — THE ADOPTIVE LANE,
+   *  data/objectives.ts): one read for the completion watch, the HUD line
+   *  and the chevron, so drawn == tested. DEN mode resolves the standing
+   *  door(s) from the entrance harvest and reads completion off the derived
+   *  pocket id (completedObjectives — zero new persistence; `entered` reads
+   *  the door's own gateway ledger); HUNT mode is pure population over the
+   *  claim's kin def ids. A bound feature that no longer stands reads done
+   *  (the puzzle's no-wedge law — the binding required it standing at
+   *  adoption, so this is mercy for drifted saves, never a free clear). */
+  lairAskView(): {
+    mode: 'den' | 'hunt'; title: string; pos: Vec2 | null;
+    remain: number; entered: boolean; done: boolean; label: string;
+  } | null {
+    const o = this.zone.objective;
+    if (o.kind !== 'lair') return null;
+    if (o.mouthKind) {
+      const mouths = this.caveEntrances.filter(cm => cm.kind === o.mouthKind);
+      const done = !mouths.length || mouths.some(cm => this.completedObjectives.has(
+        this.sidezoneIdFor(this.zone.id, cm.kind, cm.seed, cm.underSpan)));
+      const sz = sidezoneOf(o.mouthKind);
+      const entered = !!(sz?.ledgerOnEnter && (this.ledger[sz.ledgerOnEnter] ?? 0) > 0);
+      const m = mouths[0] ?? null; // harvest order — deterministic per layout
+      return {
+        mode: 'den', title: o.title, pos: m ? vec(m.pos.x, m.pos.y) : null,
+        remain: done ? 0 : 1, entered, done, label: `brave ${o.title}`,
+      };
+    }
+    const kin = new Set(o.kin ?? []);
+    const live = this.actors.filter(a => !a.dead && a.team === 'enemy' && a.defId && kin.has(a.defId));
+    const m = live[0] ?? null;
+    return {
+      mode: 'hunt', title: o.title, pos: m ? vec(m.pos.x, m.pos.y) : null,
+      remain: live.length, entered: false, done: live.length === 0,
+      label: `${o.title} — ${live.length} keeper${live.length === 1 ? '' : 's'} left`,
+    };
+  }
+
   /** The live OFFERING altar, for the attention fabric + the HUD: where it
    *  hungers, how fed, and whether the zone has anything left to feed it. */
   offeringView(): { pos: Vec2; offered: number; need: number; stalled: boolean; done: boolean } | null {
@@ -49167,6 +49216,25 @@ export class World {
         }
         return;
 
+      case 'lair': {
+        // THE ADOPTED ASK (THE ADOPTIVE LANE, data/objectives.ts): the zone
+        // adopted a feature its own mint stood up. DEN mode watches the den
+        // country's own completion through the derived pocket id (the
+        // gateway machinery IS the persistence — a settled den completes
+        // the parent on the walk back out); HUNT mode is pure population
+        // over the claim's kin (any death counts — the bounty's honesty;
+        // wounded keepers ride Zone Memory free). A bound feature that no
+        // longer stands completes vacuously (the puzzle's no-wedge law).
+        if (this.objectiveDone) return;
+        const v = this.lairAskView();
+        if (!v || v.done) {
+          this.completeObjective(!v || v.mode === 'den'
+            ? `${o.title} is settled!`
+            : `${o.title}'s claim is broken!`);
+        }
+        return;
+      }
+
       case 'spawners':
         if (!this.objectiveDone && this.livingSpawners().length === 0) {
           this.completeObjective('Spawners destroyed!');
@@ -51082,6 +51150,17 @@ export class World {
         return `Cull the area — ${cu.kills}/${cu.need} felled`;
       }
       case 'boss': return `Slay ${MONSTERS[o.id].name}`;
+      case 'lair': {
+        // THE ADOPTED ASK: the line names the claim the mint stood up.
+        const v = this.lairAskView();
+        if (!v) return `Natives claim this ground — ${o.title}`;
+        if (v.mode === 'den') {
+          return v.entered
+            ? `Brave ${v.title} — settle what keeps it`
+            : `Brave ${v.title} — its door stands on this ground`;
+        }
+        return `Break the claim of ${v.title} — ${v.remain} keeper${v.remain === 1 ? '' : 's'} remain${v.remain === 1 ? 's' : ''}`;
+      }
       case 'spawners': return `Destroy the spawners — ${this.livingSpawners().length} remain`;
       case 'escape': return 'They keep coming — find the way out';
       case 'waves': return o.waves === 0

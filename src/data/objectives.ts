@@ -20,6 +20,10 @@
 
 import type { World } from '../engine/world';
 import { registerAttentionSource, type AttentionPoint } from '../world/attention';
+import { lairRows } from '../engine/lairs';
+import { landmarkOf, type GeneratedLayout } from '../engine/levelgen';
+import { sidezoneOf } from './sidezones';
+import type { ObjectiveSpec, ZoneDef } from './zones';
 
 /** THE CONTEST LAW — one contested-presence discipline for every hold-the-
  *  ground objective fixture (survey spires, rift seals, pyre kindlings, dig
@@ -144,6 +148,211 @@ export function pressureRampAt(level: number): number {
 export function pressureRampCadence(mul: number): number {
   return 1 + Math.max(0, mul - 1) * PRESSURE_RAMP.cadence;
 }
+
+// ---------------------------------------------------------------------------
+// THE ADOPTIVE LANE — the objective reads what the mint actually stood up.
+//
+// THE LAW (Arianna, 2026-08-03): ADOPTION, NEVER DEPENDENCY. The world mints
+// what it mints — lairs by their own predicate rows, den mouths by their own
+// chance draws — and the zone's ask then MAY adopt a standing feature as its
+// own ("brave the Emberwyrm Barrow" on volcanic ground whose mint actually
+// stood the barrow's door). Never the reverse: no spawn is ever forced to
+// satisfy an objective, and a zone with nothing adoptable simply never wears
+// the adopted kind — structurally weight 0, not a failed promise. The 'lair'
+// kind therefore has NO tileset weight row (validate refuses one) and NO
+// placement arm of its own: its availability IS the lair fabric's geography.
+//
+// THE SEAM: worldgen's roll is untouched (byte-identical streams). At zone
+// LOAD, after generateLayout has answered every chance draw, World.loadZone
+// calls `maybeAdoptObjective(def, layout)` — a PURE, rng-free read (seeded
+// hash off the def's own seed, the salted-fork idiom) — and stamps the
+// returned spec over a BARE rolled 'clear'. Deterministic per zone: every
+// re-entry, save restore and co-op seat re-derives the same verdict. One
+// honest consequence, documented: pre-walk map intel shows the minted ask;
+// ground a claim stands on re-negotiates at first entry, the same way every
+// time (THE CHART'S PROVISO).
+//
+// TWO ADOPTABLE CLASSES ship (the registry-derived kind — no hand lists):
+//   · DEN — a lair row whose landmark is a 'den_mouth' (the standing door's
+//     doodad kind = the sidezone kind). The ask is the den country behind
+//     the door; completion = that pocket's own objective done, read off the
+//     derived pocket id (zero new persistence — completedObjectives and the
+//     gateway ledger already carry everything). Conditioned doors
+//     (SidezoneDef.when — the King's Barrow's dusk gate) are never adopted:
+//     a schedule is destination content, not a zone ask.
+//   · HUNT — a lair row whose landmark seeds resident bodies in the zone
+//     itself (the Giant's Cairn, the Gnoll Moot). The ask is the claim's
+//     kin, pure population state (any death counts; wounded keepers ride
+//     Zone Memory free). A claim whose kin also ride the zone's own pack
+//     table is NOT offered — the ask must never leak zone-wide.
+// ---------------------------------------------------------------------------
+
+export const ADOPT_CFG = {
+  /** Kinds the lane may adopt over — only ever the BARE roll of these (no
+   *  authored need/frac/all/seal; `adopt: false` waives per zone). */
+  overrides: ['clear'] as readonly string[],
+  /** Seeded per-zone coin: the share of candidate-bearing ground whose bare
+   *  cull re-negotiates into the claim's own ask. `ObjectiveTuning.adopt:
+   *  true` skips the coin (adopt whatever stands, always — still never
+   *  forcing a spawn). */
+  chance: 0.55,
+  /** The salted fork's name (hashed with the zone id + seed — no rng stream
+   *  anywhere near the draw). */
+  salt: 'adopt',
+  /** Chevron face for the adopted ask's pointer. */
+  glyph: '☖',
+  accent: '#d8b46a',
+  /** Prose names per lair row (id-prose fallback covers unlisted rows — a
+   *  new lair is adoptable the moment it registers, named or not). */
+  titles: {
+    frostmaw: 'the Frostmaw',
+    giants_cairn: "the Giant's Cairn",
+    hag_hovel: "the Hag's Hovel",
+    riddle_vault: 'the Riddle Vault',
+    barrow_watch: 'the Barrow Watch',
+    gnoll_moot: 'the Gnoll Moot',
+    bull_maze: 'the Maze',
+    wyrm_barrow: 'the Emberwyrm Barrow',
+    spinney: 'the Spinney',
+    wellspring: 'the Wellspring',
+    drake_roost: 'the Drake Roost',
+    leviathan_trench: 'the Leviathan Trench',
+    kings_barrow: "the King's Barrow",
+    marsh_leviathan: 'the Drowned Wallow',
+    kilnhoard: 'the Kilnhoard',
+    scythe_court: 'the Scythe Court',
+    stamping_ground: 'the Stamping Ground',
+    rimevault: 'the Rimevault',
+    hunts_rest: "the Hunt's Rest",
+    tidewomb: 'the Tidewomb',
+    drumshell: 'the Drumshell',
+    chainworks: 'the Chainworks',
+    geode_sett: 'the Geode Sett',
+    rimewick_clutch: 'the Rimewick Clutch',
+    honeyfold: 'the Honeyfold',
+  } as Record<string, string>,
+} as const;
+
+/** The claim's prose name (ADOPT_CFG.titles, id-prose fallback). */
+export function adoptTitle(lairId: string): string {
+  return ADOPT_CFG.titles[lairId] ?? `the ${lairId.replace(/_/g, ' ')}`;
+}
+
+/** One adoptable feature the loaded ground actually stands. */
+export interface AdoptableCandidate {
+  lairId: string;
+  title: string;
+  mode: 'den' | 'hunt';
+  /** DEN: the standing door's doodad kind (= its sidezone kind). */
+  mouthKind?: string;
+  /** HUNT: the claim's resident def ids (the landmark's spawn table). */
+  kin?: string[];
+}
+
+// FNV-1a (the holdfast-overlay idiom — a local copy keeps the lane leaf-pure).
+function hashStr(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return h >>> 0;
+}
+
+// The two class derivations, computed once on first use (all registries have
+// settled by the first loadZone). DERIVED, never hand-listed: a lair row is
+// adoptable by construction the moment it registers.
+let denKindsCache: Map<string, string> | null = null;
+/** DEN class derivation: mouth doodad kind → lair id, for every lair row
+ *  whose landmark is a den_mouth with a registered, UNCONDITIONED sidezone. */
+export function adoptDenMouthKinds(): Map<string, string> {
+  if (denKindsCache) return denKindsCache;
+  const out = new Map<string, string>();
+  for (const row of lairRows()) {
+    const lm = landmarkOf(row.landmark);
+    if (!lm || lm.builder !== 'den_mouth') continue;
+    const mouthKind = typeof lm.params?.mouthKind === 'string' ? lm.params.mouthKind : undefined;
+    if (!mouthKind) continue;
+    const sz = sidezoneOf(mouthKind);
+    // No registered door = no den; a CONDITIONED door (when) keeps its own
+    // schedule — destination content, never a zone ask.
+    if (!sz || sz.when) continue;
+    out.set(mouthKind, row.id);
+  }
+  denKindsCache = out;
+  return out;
+}
+
+let huntRowsCache: { lairId: string; kin: string[] }[] | null = null;
+/** HUNT class derivation: lair rows whose landmark seeds resident bodies in
+ *  the zone itself (spawns table, non-den). */
+export function adoptHuntRows(): { lairId: string; kin: string[] }[] {
+  if (huntRowsCache) return huntRowsCache;
+  const out: { lairId: string; kin: string[] }[] = [];
+  for (const row of lairRows()) {
+    const lm = landmarkOf(row.landmark);
+    if (!lm || !lm.spawns?.table.length) continue;
+    if (lm.builder === 'den_mouth' && typeof lm.params?.mouthKind === 'string') continue; // the DEN class owns doors
+    out.push({ lairId: row.id, kin: lm.spawns.table.map(e => e.id) });
+  }
+  huntRowsCache = out;
+  return out;
+}
+
+/** THE ADOPTION READ — pure and rng-free: given a zone def and its generated
+ *  layout, decide whether this ground's BARE rolled cull re-negotiates into a
+ *  standing claim's own ask. Null = the roll stands untouched (no candidate,
+ *  a non-bare or waived spec, or the seeded coin said no — the CAN, never
+ *  MUST, half of the law). Deterministic per (def.id, def.seed). */
+export function maybeAdoptObjective(
+  def: ZoneDef,
+  layout: Pick<GeneratedLayout, 'doodads' | 'landmarkSpawns'>,
+): ObjectiveSpec | null {
+  const o = def.objective;
+  // Only the BARE roll of an override kind — authored asks are sovereign.
+  if (!ADOPT_CFG.overrides.includes(o.kind) || def.special) return null;
+  if (o.kind === 'clear' && (o.all || o.need !== undefined || o.frac !== undefined)) return null;
+  if (o.seal !== undefined || o.adopt === false) return null;
+
+  // What actually STANDS, from the generated layout alone (pure data).
+  const candidates: AdoptableCandidate[] = [];
+  const dens = adoptDenMouthKinds();
+  const seenKinds = new Set<string>();
+  for (const d of layout.doodads) {
+    const lairId = dens.get(d.kind);
+    if (!lairId || seenKinds.has(d.kind)) continue;
+    seenKinds.add(d.kind);
+    candidates.push({ lairId, title: adoptTitle(lairId), mode: 'den', mouthKind: d.kind });
+  }
+  const spawnedIds = new Set((layout.landmarkSpawns ?? []).map(s => s.id));
+  const packIds = new Set((def.packs?.table ?? []).map(p => p.id));
+  for (const row of adoptHuntRows()) {
+    if (!row.kin.some(id => spawnedIds.has(id))) continue; // nothing of it stands
+    // Kin that also ride the zone's own pack table would leak the ask
+    // zone-wide ("fell every gnoll on the downs") — structurally not offered.
+    if (row.kin.some(id => packIds.has(id))) continue;
+    candidates.push({ lairId: row.lairId, title: adoptTitle(row.lairId), mode: 'hunt', kin: row.kin });
+  }
+  if (!candidates.length) return null;
+
+  // ONE seeded verdict per zone: the coin, then the pick — both off the same
+  // salted hash (no rng stream moves; every load re-derives byte-identically).
+  const h = hashStr(`${ADOPT_CFG.salt}:${def.id}:${def.seed ?? 0}`);
+  if (o.adopt !== true && (h % 10000) / 10000 >= ADOPT_CFG.chance) return null;
+  candidates.sort((a, b) => (a.lairId < b.lairId ? -1 : a.lairId > b.lairId ? 1 : 0));
+  const pick = candidates[Math.floor(h / 10000) % candidates.length];
+  return pick.mode === 'den'
+    ? { kind: 'lair', lairId: pick.lairId, title: pick.title, mouthKind: pick.mouthKind }
+    : { kind: 'lair', lairId: pick.lairId, title: pick.title, kin: pick.kin };
+}
+
+// The adopted ask's pointer: the den's door, or the nearest standing keeper —
+// the destination is visible the whole hunt (the offering's doctrine).
+registerAttentionSource((world: World): AttentionPoint[] => {
+  const v = world.lairAskView();
+  if (!v || v.done || !v.pos) return [];
+  return [{
+    id: 'lair_adopt', pos: v.pos, color: ADOPT_CFG.accent, glyph: ADOPT_CFG.glyph,
+    label: v.label, z: 2,
+  }];
+});
 
 // The core kinds' straggler chevrons (clear / spawners), named — parity with
 // the bounty's stragglers-by-name treatment.

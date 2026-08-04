@@ -31,6 +31,9 @@ tileset's `objectives` weight table (`data/tilesets.ts` → worldgen
 |              | lightwell (real light; the Gloaming's meter drinks from it)     |
 | `unearth`    | DIG the burial mounds open — spoils spill (spoils-law honest),  |
 |              | and the turned earth may answer                                 |
+| `lair`       | THE ADOPTED ASK (adoptive-only — never a weight row): the ask   |
+|              | IS a claim the mint stood up — brave the den behind its door,   |
+|              | or fell the apex natives holding the ground                     |
 
 ## Exit-seal POLICY (not physics)
 
@@ -350,6 +353,59 @@ name — the same mercy the bounty's marks get. One attention source reads
 fires exactly when it should: only when the standing population runs dry
 before the tally fills (the mercy-floor path — the one moment finding bodies
 is the task again).
+
+## THE ADOPTIVE LANE (`kind: 'lair'` — adoption, never dependency)
+
+The design law (Arianna, 2026-08-03): the world mints what it mints — lairs by
+their own predicate rows (`engine/lairs.ts`), den mouths by their own chance
+draws in generateLayout — and the zone's ask then MAY adopt a standing feature
+as its own. Never the reverse: **no spawn is ever forced to satisfy an
+objective, and featureless ground never rolls the adoptive kind** —
+structurally weight 0, not a failed promise. All numbers + the derivations in
+`data/objectives.ts` `ADOPT_CFG` / `maybeAdoptObjective`.
+
+- THE SEAM: worldgen's roll is byte-untouched. At zone LOAD — after
+  generateLayout has answered every chance draw — `World.loadZone` calls
+  `maybeAdoptObjective(def, layout)` and stamps the result over the def's
+  objective. Only a BARE rolled `'clear'` may be adopted over (no authored
+  `need`/`frac`/`all`/`seal`; `ObjectiveTuning.adopt: false` waives per zone,
+  `adopt: true` skips the coin — adopt whatever stands, always). PURE +
+  rng-free: one FNV hash off `(def.id, def.seed)` is both the coin
+  (`ADOPT_CFG.chance`) and the pick — no rng stream moves, every load, save
+  restore and co-op seat re-derives the identical verdict, and the stamp is
+  idempotent (an adopted kind is not in `overrides`, so it never re-rolls).
+- TWO CLASSES, derived from the registries (no hand lists — a new lair is
+  adoptable the moment it registers):
+  - **DEN** (`mouthKind` on the spec): lair rows whose landmark is a
+    `den_mouth` — the standing door's doodad kind is the sidezone kind.
+    Completion = the den country's own objective done, read off the derived
+    pocket id (`sidezoneIdFor` × `completedObjectives` — zero new
+    persistence; you settle the den, walk out, the parent banks). The HUD's
+    `entered` phase reads the door's own gateway ledger (`ledgerOnEnter`).
+    CONDITIONED doors (`SidezoneDef.when` — the King's Barrow's dusk gate)
+    are never adopted: a schedule is destination content, not a zone ask.
+  - **HUNT** (`kin` on the spec): lair rows whose landmark seeds resident
+    bodies in the zone itself (the Giant's Cairn, the Gnoll Moot, the
+    Wellspring). Pure population state over the claim's def ids — any death
+    counts, wounded keepers ride Zone Memory free, dormant sleepers count
+    (ground with a sleeping giant on it is not settled ground). A claim
+    whose kin also ride the zone's own pack table is NOT offered — the ask
+    must never leak zone-wide.
+- `lairAskView()` is the stamped view (completion watch + HUD + chevron all
+  speak one read); the pointer rides the attention fabric from
+  data/objectives.ts. Seals: OPEN (the claim stands where it stands). Chest:
+  NONE on the parent — the claim's own hoard IS the reward (the barrow's
+  cache floor, the lair_hoard the alphas pay, the den's own chests); a
+  parent chest would double-pay the same feature. A bound feature that no
+  longer stands completes vacuously (the puzzle's no-wedge law — mercy for
+  drifted saves, never a free clear).
+- `validate` refuses `'lair'` in tileset weight tables and pocket-form pools
+  (`ADOPTIVE_ONLY_KINDS`): a weight row would be a promise `rollObjective`
+  cannot keep.
+- THE CHART'S PROVISO (documented, deliberate): pre-walk map intel shows the
+  MINTED ask; ground a claim stands on re-negotiates at first entry — the
+  same way every time. The `exits seal` tail never shifts (both kinds ship
+  open).
 
 ## `objectiveLost` (the loseable-objective seam)
 

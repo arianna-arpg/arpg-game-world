@@ -75,6 +75,12 @@ export interface ObjectiveTuning {
      *  lost — the pre-recoup stand). */
     recoup?: false | { boost?: number; capFrac?: number; drainRefund?: number };
   };
+  /** THE ADOPTIVE LANE's waiver (data/objectives.ts ADOPT_CFG): `false` keeps
+   *  a bare rolled 'clear' exactly as authored even when the mint stands an
+   *  adoptable feature (a lair's den mouth, an apex native's ring). Absent =
+   *  the lane's law: only a BARE rolled cull may be adopted over, and only
+   *  when the feature actually stands — adoption, never dependency. */
+  adopt?: boolean;
 }
 
 /** What the zone asks of you. Whether an UNMET objective seals the exits is
@@ -204,6 +210,21 @@ export type ObjectiveSpec = (
    *  dead dislike shovels), the opened mound SPILLS (through the spoils
    *  law) and may SPRING an ambush of the zone's own kin. */
   | { kind: 'unearth'; count?: [number, number]; digSec?: number }
+  /** THE ADOPTED ASK (THE ADOPTIVE LANE, data/objectives.ts): the zone's ask
+   *  IS a feature its own mint stood up — never rolled from tileset weights
+   *  (weight rows naming it are a data error; validate refuses them) and
+   *  never placing anything of its own. `maybeAdoptObjective` stamps this at
+   *  zone load over a BARE rolled 'clear' when an adoptable feature actually
+   *  stands: a lair's DEN MOUTH (`mouthKind` — complete the den country
+   *  behind the door; completion = the den's own objective done, read off
+   *  the derived pocket id) or an apex native's IN-ZONE claim (`kin` — the
+   *  claim's resident def ids; pure population, any death counts, wounded
+   *  keepers ride Zone Memory free). `lairId` names the claim's registry row
+   *  (engine/lairs.ts), `title` its prose name — stamped on the spec so
+   *  every reader (HUD, map pane, chevron) speaks it without a registry in
+   *  hand. Zero new persistence: dens complete via completedObjectives,
+   *  hunts via the living population. */
+  | { kind: 'lair'; lairId: string; title: string; mouthKind?: string; kin?: string[] }
 ) & ObjectiveTuning;
 
 /** Per-kind DEFAULT exit policy: does an UNMET objective seal the zone's other
@@ -218,6 +239,9 @@ export const OBJECTIVE_SEALS: Record<ObjectiveSpec['kind'], boolean> = {
   // The hold-family + siege kinds keep the roads open: the ground itself is
   // the commitment (a severed waypoint punishes nothing but fast travel).
   leyline: false, rifts: false, pyres: false, unearth: false,
+  // THE ADOPTED ASK never seals: the claim stands where it stands — walking
+  // away costs the bounty's wait, never the road (the leyline's doctrine).
+  lair: false,
 };
 
 /** Does this zone's UNMET objective seal its exits? (An endless arena never
@@ -250,6 +274,7 @@ export const OBJECTIVE_READS: Record<ObjectiveSpec['kind'], { glyph: string; rea
   rifts: { glyph: '⟁', read: 'seal the seeping rifts' },
   pyres: { glyph: '✶', read: 'kindle the cold pyres' },
   unearth: { glyph: '⛏', read: 'unearth the buried caches' },
+  lair: { glyph: '☖', read: 'natives claim this ground' },
 };
 
 /** Resolve a spec to its pane read, honoring the spec-level refinements the
@@ -268,13 +293,19 @@ export function objectiveRead(o: ObjectiveSpec): { glyph: string; read: string }
   if (o.kind === 'beacon' && (o.count ?? 1) > 1) {
     return { glyph: base.glyph, read: `attune the waystone circuit (${o.count})` };
   }
+  // THE ADOPTED ASK carries its claim's prose name ON the spec (`title` —
+  // stamped at adoption), so the pane names the ground without a registry.
+  if (o.kind === 'lair') return { glyph: base.glyph, read: `${base.read}: ${o.title}` };
   return base;
 }
 
 /** Which kinds bank a sealed objective CHEST (the treasure that unlocks on
  *  completion). DECOUPLED from exit-sealing on purpose: a waves zone no longer
  *  locks its roads, yet still stakes its reward. Endless arenas never do —
- *  nothing completes. */
+ *  nothing completes. The ADOPTED ask ('lair') deliberately stakes NO parent
+ *  chest: the claim's own hoard IS the reward (the barrow's cache floor, the
+ *  lair_hoard the alphas pay, the den country's own chests) — a second
+ *  payout stapled onto the parent would double-pay the same feature. */
 export const OBJECTIVE_CHEST_KINDS: ReadonlySet<ObjectiveSpec['kind']> =
   new Set<ObjectiveSpec['kind']>(['boss', 'spawners', 'waves', 'beacon', 'procession', 'bounty', 'offering', 'puzzle',
     'leyline', 'rifts', 'pyres', 'unearth']);

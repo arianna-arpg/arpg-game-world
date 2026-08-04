@@ -95,6 +95,13 @@ import { strataDefs } from '../world/strata';
 import { hollowDef } from './hollows';
 import { Rng } from '../core/rng';
 
+/** THE ADOPTIVE LANE's kinds (data/objectives.ts): stamped at zone load over
+ *  a bare rolled 'clear' when the mint actually stands the feature — never
+ *  rollable from tileset weights or authorable on pocket forms (rollObjective
+ *  has no case for them, so a row naming one would silently thin to 'clear':
+ *  exactly the wound the kind census exists to catch). */
+const ADOPTIVE_ONLY_KINDS = ['lair'] as const;
+
 export function validateContent(): void {
   const warn = (msg: string): void => console.warn(`[content] ${msg}`);
   validatePassiveLayout(warn);
@@ -133,6 +140,7 @@ export function validateContent(): void {
     if (!POCKET_FORMS[DEFAULT_POCKET_FORM]) warn(`pocket forms: default '${DEFAULT_POCKET_FORM}' unregistered`);
     const kinds = new Set(Object.keys(OBJECTIVE_SEALS));
     kinds.add('circuit'); // the tileset-weights alias rollObjective maps onto 'beacon'
+    for (const k of ADOPTIVE_ONLY_KINDS) kinds.delete(k); // never authorable — the lane stamps them at load
     for (const f of Object.values(POCKET_FORMS)) {
       if (!f.pitch) warn(`pocket form '${f.id}': no pitch — the parley would sell it blind`);
       for (const k of f.objectivePool ?? []) {
@@ -534,10 +542,14 @@ export function validateContent(): void {
       // THE OBJECTIVE-KIND CENSUS: every tileset weight row must name a real
       // kind (or the 'circuit' alias) — a typo'd row silently degraded to
       // 'clear' at rollObjective's default, thinning the authored variety
-      // with no witness.
+      // with no witness. ADOPTIVE-ONLY kinds (THE ADOPTIVE LANE — 'lair') are
+      // refused here BY LAW: the lane binds to features the mint actually
+      // stood up, so a weight row for it would be a promise rollObjective
+      // cannot keep (adoption, never dependency).
       {
         const kinds = new Set<string>(Object.keys(OBJECTIVE_SEALS));
         kinds.add('circuit');
+        for (const k of ADOPTIVE_ONLY_KINDS) kinds.delete(k);
         for (const row of t.objectives) {
           if (!kinds.has(row.kind)) warn(`tileset '${t.id}': objective row names unknown kind '${row.kind}' — it would roll as 'clear'`);
           if (!(row.weight > 0)) warn(`tileset '${t.id}': objective row '${row.kind}' weight must be > 0`);

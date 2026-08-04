@@ -23,7 +23,13 @@
 //   - PYRES: the lit kind is a REGISTERED lightwell (the payoff is real
 //     light); UNEARTH: opened mounds stand as dug faces and complete,
 //   - THE OVERRIDES: ObjectiveTuning.contest false waives the law; a
-//     partial re-dials it (drainAt 2 drains at 2).
+//     partial re-dials it (drainAt 2 drains at 2),
+//   - THE ADOPTIVE LANE (kind 'lair'): adoption, never dependency — a bare
+//     rolled cull MAY re-negotiate into a claim the mint actually stood up
+//     (den door / apex kin), never forces a spawn, never binds on absent
+//     features (weight 0 structurally), deterministic per zone, sovereign
+//     to authored asks, both classes completing through standing machinery
+//     (derived pocket id / pure population).
 // Run: npx tsx balance/probe_objectives.ts
 // ---------------------------------------------------------------------------
 
@@ -33,7 +39,7 @@ import { updateAI } from '../src/engine/ai';
 import { vec } from '../src/core/math';
 import type { Actor } from '../src/engine/actor';
 import {
-  OBJECTIVE_SEALS, OBJECTIVE_READS, objectiveEarnsChest, objectiveSeals,
+  OBJECTIVE_SEALS, OBJECTIVE_READS, objectiveEarnsChest, objectiveRead, objectiveSeals,
   type ObjectiveSpec, type ZoneDef,
 } from '../src/data/zones';
 import { TILESETS } from '../src/data/tilesets';
@@ -42,7 +48,8 @@ import { lightwellOf } from '../src/engine/lightwells';
 import { transitDwell, transitOf } from '../src/data/transit';
 import { placeZoneAt } from '../src/engine/worldgen';
 import {
-  CONTEST_CFG, PRESSURE_RAMP, pressureRampAt, pressureRampCadence,
+  CONTEST_CFG, PRESSURE_RAMP, adoptDenMouthKinds, adoptHuntRows,
+  maybeAdoptObjective, pressureRampAt, pressureRampCadence,
   type ContestRecoupSpec,
 } from '../src/data/objectives';
 import { BEACON_CFG } from '../src/data/beacons';
@@ -582,6 +589,156 @@ withSeededRandom(0x0bec7a, () => {
     }
     check('S6 `levelScale: false` keeps the flat trickle at any level',
       peak2 > 0 && peak2 <= BEACON_CFG.reinforce.cap, `peak ${peak2}`);
+  }
+
+  // --- RIG T: THE ADOPTIVE LANE (adoption, never dependency) -----------------
+  // The law: the world mints what it mints; the ask MAY adopt a standing
+  // feature — never force one, never promise one that didn't stand.
+  {
+    // T1 the census: the adopted kind is fully wired AND structurally
+    // un-rollable (no tileset weight row anywhere — weight 0 is the law).
+    check('T1 \'lair\' rows: seals OPEN, read + title refinement, NO parent chest (the claim\'s own hoard pays), NO weight row',
+      OBJECTIVE_SEALS.lair === false
+      && OBJECTIVE_READS.lair.glyph.length > 0
+      && objectiveRead({ kind: 'lair', lairId: 'wyrm_barrow', title: 'the Emberwyrm Barrow' }).read.includes('the Emberwyrm Barrow')
+      && !objectiveEarnsChest({ kind: 'lair', lairId: 'x', title: 'x' })
+      && !Object.values(TILESETS).some(t => t.objectives.some(ob => (ob.kind as string) === 'lair')));
+    // T2 the derivations are REGISTRY-DERIVED, not hand lists: dens carry
+    // their door kinds, the conditioned King's Barrow is refused (a schedule
+    // is destination content), and the cairn's hunt kin derive.
+    const dens = adoptDenMouthKinds();
+    check('T2 den derivation: wyrm + frostmaw doors in; the conditioned barrow_door OUT',
+      dens.get('wyrm_barrow_mouth') === 'wyrm_barrow'
+      && dens.get('frostmaw_maw') === 'frostmaw'
+      && !dens.has('barrow_door'),
+      `${dens.size} den kinds`);
+    const hunts = adoptHuntRows();
+    const cairn = hunts.find(r => r.lairId === 'giants_cairn');
+    check('T3 hunt derivation: the Giant\'s Cairn carries its resident kin',
+      !!cairn && cairn.kin.includes('hill_giant'), `${hunts.length} hunt rows`);
+    // T4 the pure-function laws, on synthetic ground (no rng anywhere).
+    const mkDef = (over: Record<string, unknown> = {}): ZoneDef => ({
+      id: 'probe_adopt', name: 'x', level: 8, size: 'small', theme: {} as never,
+      layout: [], exits: [], map: { x: 0, y: 0 }, objective: { kind: 'clear' },
+      seed: 1234, ...over,
+    } as unknown as ZoneDef);
+    const mouthLayout = { doodads: [{ pos: vec(100, 100), radius: 26, kind: 'wyrm_barrow_mouth' }], landmarkSpawns: [] };
+    const bare = { doodads: [], landmarkSpawns: [] };
+    let absentFired = 0;
+    let withFired = 0;
+    let withHeld = 0;
+    for (let s = 0; s < 60; s++) {
+      if (maybeAdoptObjective(mkDef({ seed: s }), bare)) absentFired++;
+      const r = maybeAdoptObjective(mkDef({ seed: s }), mouthLayout);
+      if (r) withFired++; else withHeld++;
+    }
+    check('T4 ABSENT feature ⇒ the lane NEVER binds (weight 0 structurally)',
+      absentFired === 0, `${absentFired}/60`);
+    check('T5 a standing door binds SOMETIMES and stands aside sometimes (CAN, never MUST)',
+      withFired > 0 && withHeld > 0, `${withFired} fired / ${withHeld} held over 60 seeds`);
+    check('T6 authored asks are sovereign (need/frac/all/seal/adopt:false all refuse)',
+      maybeAdoptObjective(mkDef({ objective: { kind: 'clear', need: 5 } }), mouthLayout) === null
+      && maybeAdoptObjective(mkDef({ objective: { kind: 'clear', frac: 0.4 } }), mouthLayout) === null
+      && maybeAdoptObjective(mkDef({ objective: { kind: 'clear', all: true } }), mouthLayout) === null
+      && maybeAdoptObjective(mkDef({ objective: { kind: 'clear', seal: true } }), mouthLayout) === null
+      && maybeAdoptObjective(mkDef({ objective: { kind: 'clear', adopt: false } }), mouthLayout) === null
+      && maybeAdoptObjective(mkDef({ objective: { kind: 'boss', id: 'zombie' } }), mouthLayout) === null);
+    check('T7 `adopt: true` skips the coin yet STILL never forces a spawn',
+      maybeAdoptObjective(mkDef({ objective: { kind: 'clear', adopt: true } }), mouthLayout)?.kind === 'lair'
+      && maybeAdoptObjective(mkDef({ objective: { kind: 'clear', adopt: true } }), bare) === null);
+    const d1 = maybeAdoptObjective(mkDef({ objective: { kind: 'clear', adopt: true } }), mouthLayout);
+    const d2 = maybeAdoptObjective(mkDef({ objective: { kind: 'clear', adopt: true } }), mouthLayout);
+    check('T8 the verdict is DETERMINISTIC per (id, seed) — byte-identical re-derivation',
+      JSON.stringify(d1) === JSON.stringify(d2)
+      && d1?.kind === 'lair' && d1.mouthKind === 'wyrm_barrow_mouth' && d1.title === 'the Emberwyrm Barrow');
+    // The pack-leak guard: kin riding the zone's own table are NOT offered.
+    const giantStands = { doodads: [], landmarkSpawns: [{ id: 'hill_giant', pos: vec(50, 50) }] };
+    check('T9 a standing hunt claim binds; kin on the zone\'s OWN pack table refuse (no zone-wide leak)',
+      maybeAdoptObjective(mkDef({ objective: { kind: 'clear', adopt: true } }), giantStands)?.kind === 'lair'
+      && maybeAdoptObjective(mkDef({
+        objective: { kind: 'clear', adopt: true },
+        packs: { count: [1, 1], size: [1, 1], table: [{ id: 'hill_giant', weight: 1 }] },
+      }), giantStands) === null);
+    // T10 END TO END, DEN: a real mint whose ground stands the barrow's door.
+    // `adopt: true` pins the coin (the CAN half is T5's business); the mint
+    // law is mintWith's — stamp, forget the scout visit, boot fresh.
+    {
+      const zid = w.devMintTileset('grassland', 14, 9, { seed: 616161 }) as string;
+      leaveToHome();
+      const def = w.zoneMap[zid] as ZoneDef;
+      def.objective = { kind: 'clear', adopt: true };
+      def.landmarks = [{ landmark: 'wyrm_barrow_site', chance: 1 }];
+      (w.zoneMemory as Map<string, unknown>).delete(zid);
+      (w.completedObjectives as Set<string>).delete(zid);
+      w.loadZone(zid);
+      const o = w.zone.objective as ObjectiveSpec;
+      check('T10 the loaded ground ADOPTED the standing door (kind, binding, title)',
+        o.kind === 'lair' && o.mouthKind === 'wyrm_barrow_mouth' && o.lairId === 'wyrm_barrow'
+        && (w.doodads as { kind: string }[]).some(d => d.kind === 'wyrm_barrow_mouth'));
+      const v = w.lairAskView();
+      check('T11 the stamped view: den mode, door found, unentered, not done; HUD names the claim',
+        v?.mode === 'den' && v.pos !== null && v.entered === false && v.done === false
+        && String(w.objectiveText()).includes('Brave the Emberwyrm Barrow'));
+      check('T12 the adopted ask never seals the roads', objectiveSeals(o) === false && w.objectiveDone === false);
+      // Settle the den WITHOUT walking it: the completion read is the derived
+      // pocket id in completedObjectives — the gateway machinery IS the
+      // persistence (zero rider fields anywhere).
+      const cm = (w.caveEntrances as { kind: string; seed: number; underSpan?: string }[])
+        .find(c => c.kind === 'wyrm_barrow_mouth')!;
+      const denId = w.sidezoneIdFor(zid, cm.kind, cm.seed, cm.underSpan) as string;
+      (w.completedObjectives as Set<string>).add(denId);
+      step(0.2);
+      check('T13 the den settled ⇒ the parent banks on the walk back (completedObjectives read)',
+        w.objectiveDone === true && (w.completedObjectives as Set<string>).has(zid));
+      // Idempotence: the stamped kind survives a re-load byte-identically
+      // (not in `overrides`, so the lane never re-rolls it).
+      const stamped = JSON.stringify(w.zone.objective);
+      leaveToHome();
+      w.loadZone(zid);
+      check('T14 re-entry re-reads the SAME adopted ask (idempotent stamp) and stays done',
+        JSON.stringify(w.zone.objective) === stamped && w.objectiveDone === true);
+    }
+    // T15 END TO END, HUNT: the cairn's giant holds the ground; population
+    // state is the whole law (any death counts; the sleeper counts asleep).
+    {
+      const zid = w.devMintTileset('grassland', 16, 9, { seed: 626262 }) as string;
+      leaveToHome();
+      const def = w.zoneMap[zid] as ZoneDef;
+      def.objective = { kind: 'clear', adopt: true };
+      def.landmarks = [{ landmark: 'giants_cairn', chance: 1 }];
+      (w.zoneMemory as Map<string, unknown>).delete(zid);
+      (w.completedObjectives as Set<string>).delete(zid);
+      w.loadZone(zid);
+      const o = w.zone.objective as ObjectiveSpec;
+      const giants = (w.actors as Actor[]).filter(a => !a.dead && a.defId === 'hill_giant');
+      check('T15 the loaded ground ADOPTED the standing claim (hunt kin bound, keeper stands)',
+        o.kind === 'lair' && (o.kin ?? []).includes('hill_giant') && giants.length > 0,
+        `${giants.length} giants`);
+      const v = w.lairAskView();
+      check('T16 the hunt view counts the keepers; the HUD speaks the claim',
+        v?.mode === 'hunt' && v.remain === giants.length && v.done === false
+        && String(w.objectiveText()).includes('Break the claim'),
+        String(w.objectiveText()));
+      for (const g of giants) w.kill(g, true);
+      step(0.2);
+      check('T17 the last keeper falls ⇒ the claim breaks (pure population, no rider state)',
+        w.objectiveDone === true && (w.completedObjectives as Set<string>).has(zid));
+    }
+    // T18 the live sovereignty half of T6: an authored ask on ground that
+    // STANDS the door still loads exactly as authored.
+    {
+      const zid = w.devMintTileset('grassland', 18, 9, { seed: 636363 }) as string;
+      leaveToHome();
+      const def = w.zoneMap[zid] as ZoneDef;
+      def.objective = { kind: 'clear', need: 4 };
+      def.landmarks = [{ landmark: 'wyrm_barrow_site', chance: 1 }];
+      (w.zoneMemory as Map<string, unknown>).delete(zid);
+      (w.completedObjectives as Set<string>).delete(zid);
+      w.loadZone(zid);
+      check('T18 an authored need on door-bearing ground stays the authored cull',
+        w.zone.objective.kind === 'clear'
+        && (w.doodads as { kind: string }[]).some(d => d.kind === 'wyrm_barrow_mouth'));
+    }
   }
 });
 
