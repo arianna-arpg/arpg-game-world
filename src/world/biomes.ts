@@ -275,6 +275,12 @@ export const BIOMES: Record<string, BiomeInfo> = {
     layoutParams: { ruined: 0.85,
       massifMasses: [
         { kind: 'ruincourt', weight: 3 }, { kind: 'barrow', weight: 2 }, { kind: 'hedge', weight: 1 },
+        // THE BONE MASSIF joins the dead's own acres (the 2026-08-04 ossuary
+        // ruling: the kinds seat HERE, and the sanctum keeps only its stamps —
+        // distinguished by omission; never grow an ossuary massif lane).
+        // Barrowfield-class weights: heaped charnel reads as graveland
+        // furniture, the ring still rare — the trail's climax, not wallpaper.
+        { kind: 'bone_heap', weight: 1.2 }, { kind: 'charnel_ring', weight: 0.3 },
       ] },
     structures: [{ structure: 'hedge_labyrinth', chance: 0 }, { structure: 'watchtower', chance: 0.2 }],
     landmarks: [{ landmark: 'sinkhole', chance: 0.15 }, { landmark: 'tar_pool', chance: 0.2 }] },

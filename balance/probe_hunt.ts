@@ -68,6 +68,8 @@ import { collectMarkers } from '../src/world/mapMarkers';
 import { FACTIONS, MONSTERS } from '../src/data/monsters';
 import { LOOKS } from '../src/data/looks';
 import { SKILLS } from '../src/data/skills';
+import { TILESETS } from '../src/data/tilesets';
+import { BIOMES } from '../src/world/biomes';
 import { START_ZONE, type ZoneDef } from '../src/data/zones';
 import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { WEATHER_DEFS, validateWeather } from '../src/world/weather';
@@ -540,6 +542,34 @@ check('B: the hunt overlay is mounted for the run', !!hf);
     check(`I: every '${kid}' dressing kind resolves a visual`, kinds.every(dk => !!DOODAD_VISUALS[dk]),
       kinds.filter(dk => !DOODAD_VISUALS[dk]).join(','));
   }
+
+  // THE GRAVELAND MIX (the sacked-acres seating — the 2026-08-04 ossuary
+  // ruling's option (b)): the kinds seat in the grave BIOME's massif row, the
+  // ring stays the rarer body, and the row has a ROAD TO GROUND — 'massif'
+  // rolls from the biome's own allowedLayouts, the grave surface pool stands,
+  // and no grave face shadows the key (layoutParams merge per-key, most
+  // specific wins — one shadowing tileset/variant row would kill the biome's
+  // rows silently; the ossuary keeps only its stamps, by the ruling).
+  const graveMix = (BIOMES.grave.layoutParams as { massifMasses?: { kind: string; weight: number }[] })
+    ?.massifMasses ?? [];
+  const mixW = (k: string): number => graveMix.find(r => r.kind === k)?.weight ?? 0;
+  check('I: the graveland mix seats both bone kinds', mixW('bone_heap') > 0 && mixW('charnel_ring') > 0,
+    JSON.stringify(graveMix.map(r => r.kind)));
+  check('I: the charnel ring stays the rarer body', mixW('charnel_ring') < mixW('bone_heap'),
+    `ring ${mixW('charnel_ring')} vs heap ${mixW('bone_heap')}`);
+  check('I: graveland rolls the massif face (the row reaches ground)',
+    (BIOMES.grave.allowedLayouts?.massif ?? 0) > 0);
+  const graveFrontier = Object.values(TILESETS).filter(t => t.biome === 'grave' && t.frontier !== false);
+  check('I: the grave surface pool stands (crypt + mire wear the biome)',
+    graveFrontier.some(t => t.id === 'crypt') && graveFrontier.some(t => t.id === 'mire'),
+    graveFrontier.map(t => t.id).join(','));
+  const graveShadow = graveFrontier.flatMap(t => [
+    ...(t.layoutParams?.massifMasses ? [`${t.id} base`] : []),
+    ...(t.variants ?? []).flatMap((v, i) =>
+      (v.layoutParams as { massifMasses?: unknown } | undefined)?.massifMasses ? [`${t.id}/${v.name ?? i}`] : []),
+  ]);
+  check('I: no grave face shadows the biome mix (the per-key replace trap)',
+    graveShadow.length === 0, graveShadow.join(','));
 
   // THE SPAWN GEOGRAPHY (SeatTuning.biomeMul): the lean is real — a seat spec
   // weighted 1000× toward the fields picks the field zone on a synthetic
