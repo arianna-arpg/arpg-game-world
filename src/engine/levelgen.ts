@@ -41,6 +41,7 @@ import type { TrapGenSpec, TrapGeo } from './interiorGen';
 import type { DamageType, Modifier } from './stats';
 import type { WalkField } from '../world/walk';
 import { GridWalkField } from '../world/gridWalk';
+import { boundsOf, insideBounds, type ZoneShape } from '../world/shape';
 import { regionKind } from '../world/regions';
 import { isFieldPixel } from '../world/fieldRegion';
 // Safe despite genkit importing our types: those are `import type` edges,
@@ -2685,7 +2686,11 @@ export type Reservation =
 
 export interface GenCtx {
   rng: Rng;
-  arena: { w: number; h: number };
+  /** The zone box. `shape`/`boundless` ride along (generateLayout normalizes
+   *  them off the def) so placement passes can ask the RIM LAW — the ellipse
+   *  rim is a move-time confine; a DWELL seat beyond it is unreachable
+   *  ground. Every classic consumer reads only w/h. */
+  arena: { w: number; h: number; shape?: ZoneShape; boundless?: boolean };
   /** The zone's monster level — landmark spawn tables shape by PRESENCE
    *  envelopes against it (deterministic: pure math on a pure table). */
   level?: number;
@@ -4344,7 +4349,16 @@ export function generateLayout(
   opts?: { lite?: boolean },
 ): GeneratedLayout {
   const ctx: GenCtx = {
-    rng, arena, entry, exits, level: def.level, seed: def.seed, geo: def.geo,
+    rng,
+    // THE RIM PLUMB: the def's shape rides ctx.arena so placement passes can
+    // ask insideBounds (the rim law). World callers already pass a full
+    // Bounds; headless callers' bare {w,h} normalizes to rect.
+    arena: {
+      w: arena.w, h: arena.h,
+      shape: def.shape ?? (arena as { shape?: ZoneShape }).shape ?? 'rect',
+      ...(def.boundless ? { boundless: true } : {}),
+    },
+    entry, exits, level: def.level, seed: def.seed, geo: def.geo,
     doodads: [], pois: [], camps: [], breakables: [], npcs: [],
     garrisons: [], caveSeeds: [], reserved: [],
     lite: opts?.lite,
@@ -6057,9 +6071,15 @@ function doorGuaranteeSeat(ctx: GenCtx, r: number): Vec2 | null {
   let best: Vec2 | null = null;
   let bd = -1;
   const step = 60;
+  // THE RIM LAW: the farthest-from-entry preference LOVES corners, exactly
+  // the ground an ellipse rim seals off — the lattice must skip them or the
+  // guarantee itself seats dead doors. Rect zones: every lattice point
+  // passes; draw-free either way.
+  const rim = boundsOf(ctx.arena);
   for (let y = BORDER + 30; y < ctx.arena.h - BORDER; y += step) {
     for (let x = BORDER + 30; x < ctx.arena.w - BORDER; x += step) {
       const p = vec(x, y);
+      if (!insideBounds(p, 28, rim)) continue;
       if (!clearOf(ctx, p, r, true)) continue;
       if (inReserved(ctx, p, r)) continue;
       if (ctx.walk && !ctx.walk.isWalkable(x, y)) continue;
@@ -6079,7 +6099,19 @@ export const stampSingle = (kind: DoodadKind, dflt: [number, number]) =>
   (ctx: GenCtx, spec: StampSpec): void => {
     const r = ctx.rng.range((spec.radius ?? dflt)[0], (spec.radius ?? dflt)[1]);
     const p = findSpot(ctx, r, true, doodadRule(kind).spacing ?? 0, true, kind);
-    if (p) { ctx.doodads.push({ pos: p, radius: r, kind, rot: ctx.rng.range(0, Math.PI * 2) }); return; }
+    if (p) {
+      const rot = ctx.rng.range(0, Math.PI * 2);
+      // THE RIM LAW (task_e2243782): findSpot samples the RECT, but the
+      // ellipse rim is a move-time confine — a DWELL door landed beyond it
+      // is a dead door (drawn on ground no body can reach). Such a door
+      // falls through to the guarantee reseat below; the rot draw stands
+      // regardless so every later stamp's dice hold. Scenery keeps the
+      // classic seat; rect zones never fire.
+      if (!isSidezoneEntranceKind(kind) || insideBounds(p, 28, boundsOf(ctx.arena))) {
+        ctx.doodads.push({ pos: p, radius: r, kind, rot });
+        return;
+      }
+    }
     // THE DOOR GUARANTEE (doorGuaranteeSeat above): a starved SIDEZONE door
     // is forced draw-free onto standing ground and joins mustReach so the
     // reachability invariant carves to it; scenery kinds keep the classic

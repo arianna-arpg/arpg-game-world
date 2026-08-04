@@ -32,6 +32,22 @@ export function clampToBounds(p: Vec2, radius: number, b: Bounds): Vec2 {
   return { x: cx + (p.x - cx) * s, y: cy + (p.y - cy) * s };
 }
 
+/** True when the point (with its body-radius margin) lies inside the arena —
+ *  i.e. clampToBounds would return it unmoved. THE SEAT TEST for anything a
+ *  body must DWELL (sidezone doors, tier stairs): the rim is a MOVE-TIME
+ *  confine, so a fixture seated beyond it draws on ground no body can ever
+ *  stand on while its dwell point projects back inside — drawn != dwelled
+ *  (the dead-door defect, task_e2243782). */
+export function insideBounds(p: Vec2, radius: number, b: Bounds): boolean {
+  const c = clampToBounds(p, radius, b);
+  return c.x === p.x && c.y === p.y;
+}
+
+/** Normalize a shape-optional arena box (GenCtx.arena and kin) to Bounds. */
+export function boundsOf(a: { w: number; h: number; shape?: ZoneShape; boundless?: boolean }): Bounds {
+  return { w: a.w, h: a.h, shape: a.shape ?? 'rect', ...(a.boundless ? { boundless: true } : {}) };
+}
+
 /** A random point inside the arena, `inset` from the boundary. Ellipse uses a
  *  uniform-area polar sample so spawns aren't bunched at the centre. */
 export function samplePoint(b: Bounds, inset: number, rand: (a: number, c: number) => number): Vec2 {

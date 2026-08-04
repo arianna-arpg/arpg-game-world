@@ -4973,9 +4973,21 @@ export class World {
     }
     // Cave mouths: pair each cave_entrance doodad with its stable seed (pushed
     // in lock-step by stampCaveMouth). Stepping onto one descends into a cave.
+    // THE MOUTH SEAT: a STORY-SEATED door (tier >= 1 — relocateDeepDoors'
+    // sunken gates) keeps its EXACT seat, bounds-only — the ground-story
+    // furniture push and ground confinement are the wrong frame for a door
+    // standing on its own story's floor (the street-lamp law), and they
+    // tore the dwell entry off the drawn door (the 264px crypt_gate
+    // divergence; the relocation now guarantees an in-shape duct seat, so
+    // the bounds clamp is a no-op safety). Ground mouths keep the classic
+    // byte-identical clamp.
+    const mouthSeat = (d: { pos: Vec2; tier?: number }): Vec2 =>
+      (d.tier ?? 0) >= 1
+        ? clampToBounds(vec(d.pos.x, d.pos.y), 28, this.arena)
+        : this.clampPos(vec(d.pos.x, d.pos.y), 28);
     const mouths = layout.doodads.filter(d => d.kind === 'cave_entrance');
     this.caveEntrances = mouths.map((d, i) => ({
-      pos: this.clampPos(vec(d.pos.x, d.pos.y), 28),
+      pos: mouthSeat(d),
       seed: layout.caveSeeds[i] ?? 0,
       kind: 'cave_entrance',
       mouthTier: d.tier,
@@ -4989,7 +5001,7 @@ export class World {
     for (const d of layout.doodads) {
       const sz = sidezoneOf(d.kind);
       if (d.kind === 'cave_entrance' || !sz) continue;
-      const pos = this.clampPos(vec(d.pos.x, d.pos.y), 28);
+      const pos = mouthSeat(d);
       this.caveEntrances.push({
         pos,
         seed: hashStr(`${zoneId}:${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`),

@@ -138,11 +138,13 @@ const arena = { w: 3400, h: 2500 };
 const entry = vec(150, arena.h / 2);
 const exits = [vec(arena.w - 150, arena.h / 2), vec(arena.w / 2, 150)];
 const THEME = { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' };
-function gen(id: string, layoutType: string, layout: StampSpec[], layoutParams: Record<string, unknown>, seed: number): { out: GeneratedLayout; def: ZoneDef } {
+function gen(id: string, layoutType: string, layout: StampSpec[], layoutParams: Record<string, unknown>, seed: number,
+  genOpts?: { shape?: 'rect' | 'ellipse' }): { out: GeneratedLayout; def: ZoneDef } {
   const def = {
     id, name: `QA ${id}`, level: 8, size: { w: arena.w, h: arena.h },
     theme: THEME, layout, objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
     layoutType, layoutParams, seed,
+    ...(genOpts?.shape ? { shape: genOpts.shape } : {}),
   } as unknown as ZoneDef;
   const out = generateLayout(def, arena, new Rng(seed), entry, exits);
   return { out, def };
@@ -1060,6 +1062,39 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
   const nb2 = gen('qa_crypts', 'massif', [...dn.layout, { kind: 'crypt_gate', count: [2, 2] } as StampSpec],
     { ...dn.layoutParams, underTier: 'crypts', underTierChance: 1 }, 824009);
   check('N2.10 the crypt tier is byte-deterministic', fpN2(na2.out) === fpN2(nb2.out));
+  // N2.11 THE RIM LAW (task_e2243782): the SAME carve on an ELLIPSE def — the
+  // playable ground is the inscribed ellipse (clampPos projects every body
+  // inside it), the carve grid is rect-blind, and the corners the rim seals
+  // off are exactly where the farthest-seat preferences loved to seat doors
+  // (the 264px dead-door divergence). Every DWELL fixture — crypt gates on
+  // BOTH stories, the wells' lych stairs — must stand inside the rim at the
+  // mouth clamp's own 28u margin (the math re-derived here, deliberately not
+  // imported: the rig must not test through the law it pins), and the lane
+  // must still FUNCTION on ellipse ground (the law heals seats, never
+  // starves the layer).
+  {
+    const inRim = (p: { x: number; y: number }): boolean => {
+      const rx = Math.max(8, arena.w / 2 - 28), ry = Math.max(8, arena.h / 2 - 28);
+      const nx = (p.x - arena.w / 2) / rx, ny = (p.y - arena.h / 2) / ry;
+      return nx * nx + ny * ny <= 1;
+    };
+    let outOfRim = 0, sunkE = 0, stairsE = 0, gatesE = 0;
+    for (const seed of [824021, 824022, 824023, 824024, 824025, 824026]) {
+      const { out } = gen('qa_crypts_ellipse', 'massif',
+        [...dn.layout, { kind: 'crypt_gate', count: [2, 2] } as StampSpec],
+        { ...dn.layoutParams, underTier: 'crypts', underTierChance: 1 }, seed, { shape: 'ellipse' });
+      for (const d of out.doodads) {
+        if (d.kind !== 'crypt_gate' && d.kind !== 'crypt_stair') continue;
+        if (d.kind === 'crypt_gate') { gatesE++; if ((d as { tier?: number }).tier === 1) sunkE++; }
+        else stairsE++;
+        if (!inRim(d.pos)) outOfRim++;
+      }
+    }
+    check('N2.11 the rim law: every ellipse dwell seat (gates + stairs) stands inside the rim',
+      outOfRim === 0, `${outOfRim} beyond the rim (gates=${gatesE} sunk=${sunkE} stairs=${stairsE})`);
+    check('N2.11b the ellipse lane still functions (sunk gates + stairs exist across the seeds)',
+      sunkE >= 1 && stairsE >= 2, `sunk=${sunkE} stairs=${stairsE}`);
+  }
 }
 
 // --- RIG N3: THE ARRIVAL STORY (the arrivalStory law — batch 25) ------------------
@@ -1171,6 +1206,13 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
       `tier=${p2.tier} kind=${regionAtOf(w2, p2.pos.x, p2.pos.y)}`
       + (doorDd ? ` doorDd=${doorDd.pos.x.toFixed(0)},${doorDd.pos.y.toFixed(0)}`
         + `@${regionAtOf(w2, doorDd.pos.x, doorDd.pos.y)} rowNudge=${Math.hypot(mouthAt.x - doorDd.pos.x, mouthAt.y - doorDd.pos.y).toFixed(1)}px` : ' doorDd=NONE'));
+    // The pairing law (task_e2243782): the drawn door and the dwell seat are
+    // ONE point — a story-seated mouth keeps its exact relocated seat (the
+    // mouthSeat rule), so the return stands AT the drawn gate, never on
+    // ground a clamp projected it to.
+    check(`N3.9b ${label}: the drawn door stands AT the dwell seat (drawn == dwelled)`,
+      !!doorDd && Math.hypot(mouthAt.x - doorDd.pos.x, mouthAt.y - doorDd.pos.y) < 2,
+      doorDd ? `rowNudge=${Math.hypot(mouthAt.x - doorDd.pos.x, mouthAt.y - doorDd.pos.y).toFixed(1)}px` : 'doorDd=NONE');
     clearField(w2);
     const outStep = bestStep(w2, { x: p2.pos.x, y: p2.pos.y });
     check(`N3.10 ${label}: the return is MOBILE on its story`, outStep > 15, `step=${outStep.toFixed(1)}px`);
@@ -1193,6 +1235,10 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
   // promised gates entirely is healed by THE DOOR GUARANTEE — levelgen's
   // doorGuaranteeSeat — pinned as its own census below at N3.13.)
   walkLane('garden', 'petalfields', 'taproot_gate', [951001, 951002, 951003, 951004, 951005, 951006, 951007, 951008, 951009, 951010]);
+  // (952006 was once skipped here: its ellipse mint seated the sunk gate
+  // beyond the rim — the dead-door divergence. THE RIM LAW now guarantees
+  // in-shape dwell seats, so the original family stands and that once-cursed
+  // mint is this lane's own regression specimen; N3.9b pins the pairing.)
   walkLane('downs', 'downs', 'crypt_gate', [952001, 952002, 952003, 952004, 952005, 952006, 952007, 952008, 952009, 952010, 952011, 952012, 952013, 952014, 952015, 952016]);
   // THE DOOR GUARANTEE (levelgen doorGuaranteeSeat — the stalkwood heal):
   // the packed forest face whose 10-seed census once placed ZERO of its

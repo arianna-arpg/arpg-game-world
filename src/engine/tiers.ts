@@ -48,6 +48,7 @@
 import { vec, type Vec2 } from '../core/math';
 import type { ZoneDef, ZoneTiers } from '../data/zones';
 import { GridWalkField } from '../world/gridWalk';
+import { insideBounds } from '../world/shape';
 import { regionKind, type RegionKind } from '../world/regions';
 import {
   ensureGrid, layoutParam, registerLayout, registerUnderTierPass, scatterDecoration,
@@ -687,6 +688,22 @@ registerUnderTier('sewer', {
   ],
 });
 
+/** THE RIM LAW (the dead-door defect, task_e2243782): the arena SHAPE is a
+ *  MOVE-TIME confine — clampPos projects every body inside the inscribed
+ *  ellipse — but the carve grid is rect-blind, so a duct cell can stand
+ *  beyond the rim on ground no body can ever reach. Any seat a body must
+ *  DWELL (a well's stair, a relocated deep door) must survive the mouth
+ *  clamp unmoved, or the drawn fixture and its dwell entry tear apart (the
+ *  264px crypt_gate divergence). Rect zones: every interior grid cell and
+ *  every inset-200 well pick already clears the 28u margin — a structural
+ *  no-op, draws byte-identical. Boundless zones have no rim; all pass. */
+function seatInArena(def: ZoneDef, arena: { w: number; h: number }, p: Vec2): boolean {
+  return insideBounds(p, 28, {
+    w: arena.w, h: arena.h, shape: def.shape ?? 'rect',
+    ...(def.boundless ? { boundless: true } : {}),
+  });
+}
+
 export function carveUnderTier(ctx: GenCtx, def: ZoneDef, grid: GridWalkField, lane: string): void {
   const spec = UNDER_TIER_LANES[lane];
   if (!spec) {
@@ -702,6 +719,7 @@ export function carveUnderTier(ctx: GenCtx, def: ZoneDef, grid: GridWalkField, l
   for (let t = 0; t < 60 && wells.length < nWells; t++) {
     const p = vec(ctx.rng.range(200, ctx.arena.w - 200), ctx.rng.range(200, ctx.arena.h - 200));
     if (!grid.isWalkable(p.x, p.y)) continue;
+    if (!seatInArena(def, ctx.arena, p)) continue; // the rim law — a stair must be standable
     if (wells.some(w => Math.hypot(w.x - p.x, w.y - p.y) < 420)) continue;
     if (Math.hypot(p.x - ctx.entry.x, p.y - ctx.entry.y) < 260) continue;
     wells.push(p);
@@ -802,6 +820,11 @@ export function relocateDeepDoors(ctx: GenCtx, def: ZoneDef, grid: GridWalkField
     inTunnel = inTunnel.filter(far);
     preferred = preferred.filter(far);
   }
+  // THE RIM LAW: no door seat beyond the arena shape (seatInArena above) —
+  // a door the rim hides from every walker is a dead door however honestly
+  // its duct was carved.
+  inTunnel = inTunnel.filter(p => seatInArena(def, ctx.arena, p));
+  preferred = preferred.filter(p => seatInArena(def, ctx.arena, p));
   if (!inTunnel.length && !preferred.length) return;
   const bias = layoutParam(def, 'grateInDrains', spec.deepDoorBias ?? 0.7);
   for (const d of ctx.doodads) {
