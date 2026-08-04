@@ -135,7 +135,7 @@ import '../src/engine/tiers'; // registers the 'needles' recipe rig N mints
 import '../src/data/massifs';
 import '../src/data/compositions';
 
-import { Rng } from '../src/core/rng';
+import { Rng, withSeededRandom } from '../src/core/rng';
 import { vec } from '../src/core/math';
 import { bodyRadiusOf, doodadRuleOf, generateLayout, hasLayout, layoutParam, registerLandmark, registerLandmarkBuilder, type GenCtx, type GeneratedLayout } from '../src/engine/levelgen';
 import { GridWalkField } from '../src/world/gridWalk';
@@ -2510,6 +2510,156 @@ import { makeSimWorld } from '../src/sim/arena';
     if (JSON.stringify(d1.doodads) !== JSON.stringify(d2.doodads)) fail('S: aimed mint NON-DETERMINISTIC on a fixed seed');
     note(`S ok: aimed ${aimed.placed}/12 (grounded ${aimed.grounded}), blind ${blind.placed}/12`);
   }
+}
+
+// --- Rig T: THE RIM SEAT AUDIT (the door law's kin — task_e2243782's coda) ----
+// Generation is rect-blind, so an ellipse zone's POI pool could offer seats
+// beyond the inscribed rim, and every load-time interactive family (survey
+// spires, the contest-law kin rift/pyre/dig, the ley siphon, the waypoint,
+// chests / shrines / altars / gem caches, the font) drew from that pool and
+// CLAMPED — projecting an out-of-rim pick onto the rim where none of the
+// pick's guarantees (door clearance, walkability, spacing) were measured,
+// and on carved ground the walk confine then dragged it onto walkable-but-
+// unreachable cells BEYOND the rim (measured pre-law: 12 wounded seats over
+// 72 forced-ellipse boots; a spire at k=1.0044, a pyre, two digs among
+// them). THE LAW (world.ts loadZone): the pool is filtered ONCE at birth
+// through insideBounds at the mouth clamp's 28u margin — draw-free, rect
+// pools pass whole BY CONSTRUCTION (rect A/B fingerprints byte-identical at
+// migration, 72 mints), starved consumers degrade to the shape-aware
+// farPoint — and interactSpot grew the footprint lane (`rimMargin`): a
+// spread fixture (the puzzle ring) refuses candidates whose whole footprint
+// would overhang. Pinned END-TO-END on real devMintTileset mints booted
+// ellipse: the fixed seed ladder below is the pre-law WOUND ROSTER (each
+// seed seated a rim-rider or a beyond-rim fixture at HEAD 3f74a9d — the
+// walked-specimen discipline), the rim math re-derived at each family's own
+// clamp margin (never through the law it pins), and the lane must still
+// FUNCTION (the filter heals seats, never starves the families).
+{
+  withSeededRandom(0x9a71b3, () => {
+    const world = makeSimWorld('warrior', 941001);
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = world as any;
+    const homeId: string = w.zone.id;
+    const leaveToHome = (): void => { w.loadZone(homeId); w.caveReturn = null; w.caveStack = []; };
+    const rimAuditMint = (objective: ZoneDef['objective'], seed: number, spread: number): boolean => {
+      const zid = w.devMintTileset('downs', spread, 6, { seed }) as string | null;
+      if (!zid) return false;
+      leaveToHome();
+      const def = w.zoneMap[zid] as ZoneDef;
+      def.objective = objective;
+      if (objective.kind === 'leyline') def.waypoint = true;
+      def.shape = 'ellipse';
+      (w.zoneMemory as Map<string, unknown>).delete(zid);
+      (w.completedObjectives as Set<string>).delete(zid);
+      w.loadZone(zid);
+      return true;
+    };
+    // Rim math re-derived at the seat's own clamp margin — k <= 1 is inside;
+    // k ≈ 1 exactly is the projection's signature, k > 1 is beyond the rim.
+    const rimSeatK = (p: { x: number; y: number }, margin: number): number => {
+      const { w: aw, h: ah } = w.arena as { w: number; h: number };
+      const rx = Math.max(8, aw / 2 - margin), ry = Math.max(8, ah / 2 - margin);
+      const nx = (p.x - aw / 2) / rx, ny = (p.y - ah / 2) / ry;
+      return nx * nx + ny * ny;
+    };
+    // THE WOUND ROSTER: (objective, seed, spread) triples harvested from the
+    // pre-law forensics sweep. In THIS rig's own mint context the pre-law
+    // tree (HEAD 3f74a9d, detached-worktree dress rehearsal) seats SIX
+    // rim-riding / beyond-rim fixtures across five of these boots — a spire
+    // at k=1.0044, altars at k=1.0707 and 1.0319, a chest, a shrine at
+    // k=1.0297, a dig at k=1.0014 — and the footprint lane overhangs 18/24
+    // (the rimMargin param, absent pre-law, is silently ignored). The
+    // leyline boot is family coverage; the clear boot carries the last
+    // shrine wound and hosts the footprint lane.
+    const boots: Array<[ZoneDef['objective'], number, number]> = [
+      [{ kind: 'beacon', count: 3 } as ZoneDef['objective'], 911037, 3],
+      [{ kind: 'rifts' } as ZoneDef['objective'], 911049, 1],
+      [{ kind: 'pyres' } as ZoneDef['objective'], 911057, 8],
+      [{ kind: 'pyres' } as ZoneDef['objective'], 911059, 9],
+      [{ kind: 'unearth' } as ZoneDef['objective'], 911063, 3],
+      [{ kind: 'leyline' } as ZoneDef['objective'], 911066, 5],
+      [{ kind: 'clear' } as ZoneDef['objective'], 911093, 6],
+    ];
+    let seats = 0, worst = 0;
+    const famSeen = new Set<string>();
+    let lastBootStood = false;
+    for (let bi = 0; bi < boots.length; bi++) {
+      const [obj, seed, spread] = boots[bi];
+      lastBootStood = rimAuditMint({ ...(obj as object) } as ZoneDef['objective'], seed, spread);
+      if (!lastBootStood) {
+        fail(`T: premise — the downs mint refused (seed ${seed})`);
+        continue;
+      }
+      const eat = (family: string, p: { x: number; y: number } | null | undefined, margin: number): void => {
+        if (!p) return;
+        seats++;
+        famSeen.add(family);
+        const k = rimSeatK(p, margin);
+        if (k > worst) worst = k;
+        if (k > 0.9995) {
+          fail(`T: ${family} seat rides/overruns the rim (k=${k.toFixed(4)} at ${p.x.toFixed(0)},${p.y.toFixed(0)}, seed ${seed}) — the pool rim filter is dead`);
+        }
+      };
+      for (const s of w.spires ?? []) eat('spire', s.pos, 15);
+      for (const s of w.rifts ?? []) eat('rift', s.pos, 15);
+      for (const s of w.pyres ?? []) eat('pyre', s.pos, 15);
+      for (const s of w.digs ?? []) eat('dig', s.pos, 15);
+      eat('waypoint', w.waypointPos, 18);
+      for (const f of w.fonts ?? []) eat('font', f.pos, 18);
+      for (const s of w.shrines ?? []) eat('shrine', s.pos, 14);
+      for (const a of w.altars ?? []) eat('altar', a.pos, 16);
+      for (const c of w.chests ?? []) eat('chest', c.pos, 14);
+      for (const a of w.actors as Array<{ dead: boolean; defId?: string; tag?: string; pos: { x: number; y: number } }>) {
+        if (a.dead) continue;
+        if (a.defId === 'gem_cache') eat('cache', a.pos, 13);
+        if (a.tag === 'ley_siphon') eat('siphon', a.pos, 13);
+      }
+      if (bi < boots.length - 1) leaveToHome(); // the last boot stays open for the footprint lane
+    }
+    // Function floor: the filter heals seats, never starves the lane — every
+    // family below stands deterministically in this roster (gem caches and
+    // the font are opportunistic rolls here, but ride the SAME two lanes —
+    // the interactSpot splice and the raw pool splice — that chests and the
+    // waypoint pin, so mechanism coverage is whole without them).
+    for (const fam of ['spire', 'rift', 'pyre', 'dig', 'waypoint', 'siphon', 'shrine', 'altar', 'chest']) {
+      if (!famSeen.has(fam)) fail(`T: pressure — the sweep stood no ${fam} (the lane starved; the audit proved nothing)`);
+    }
+    if (seats < 30) fail(`T: pressure — only ${seats} seats stood across the roster (was 35 at the pin)`);
+
+    // THE FOOTPRINT LANE (interactSpot rimMargin), pinned directly on the
+    // still-standing clear boot: a candidate inside the rim at body margin
+    // but OVERHANGING at footprint margin must lose the pick to the deep-
+    // interior candidate; without rimMargin the same pool may seat it (the
+    // pool birth filter, not this lane, owns body-grain law).
+    if (lastBootStood) {
+      const { w: aw, h: ah } = w.arena as { w: number; h: number };
+      // Diagonal point at k(28) ≈ 0.98 — inside at body grain, far past the
+      // rim at a 320u footprint (rx shrinks 28 → 320: k scales ~1.4×).
+      const t = Math.sqrt(0.98 / 2);
+      const edgePt = { x: aw / 2 + t * (aw / 2 - 28), y: ah / 2 + t * (ah / 2 - 28) };
+      const inPt = { x: aw / 2 + aw * 0.04, y: ah / 2 };
+      if (!(rimSeatK(edgePt, 28) < 1 && rimSeatK(edgePt, 320) > 1)) {
+        fail('T: premise — the hand-built edge candidate does not straddle the two margins');
+      }
+      let edgePicked = 0, overhangs = 0, guarded = 0;
+      for (let i = 0; i < 24; i++) {
+        const freePool = [{ ...edgePt }, { ...edgePt }, { ...edgePt }, { ...inPt }];
+        const bare = w.interactSpot(freePool, new Rng(7000 + i), 600, 10) as { x: number; y: number };
+        if (Math.abs(bare.x - edgePt.x) < 0.5 && Math.abs(bare.y - edgePt.y) < 0.5) edgePicked++;
+        const guardPool = [{ ...edgePt }, { ...edgePt }, { ...edgePt }, { ...inPt }];
+        const pick = w.interactSpot(guardPool, new Rng(7000 + i), 600, 10, 320) as { x: number; y: number };
+        if (rimSeatK(pick, 320) > 1.0005) overhangs++;
+        if (Math.abs(pick.x - inPt.x) < 0.5 && Math.abs(pick.y - inPt.y) < 0.5) guarded++;
+      }
+      if (edgePicked === 0) fail('T: premise — the bare lane never sampled the edge candidate (the contrast proves nothing)');
+      if (overhangs > 0) fail(`T: the rimMargin lane seated ${overhangs}/24 overhanging picks (the footprint law is dead)`);
+      if (guarded !== 24) fail(`T: the rimMargin lane picked past the surviving deep candidate ${24 - guarded}/24 times`);
+      leaveToHome();
+    } else {
+      fail('T: premise — the clear boot never stood, so the footprint lane went untested');
+    }
+    note(`T ok: ${seats} seats in-rim across ${boots.length} wound-roster boots (families: ${[...famSeen].sort().join(',')}), worstK=${worst.toFixed(4)}; footprint lane guarded 24/24`);
+  });
 }
 
 if (fails) {

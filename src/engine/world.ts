@@ -290,7 +290,7 @@ import { WEATHER_DEFS, type WeatherFront, type WeatherStrike } from '../world/we
 import { eventFrontFor } from './eventWeather';
 import { WEATHER_DRESS_CFG, dressPlanFor, rollDressPieces } from './weatherDress';
 import { dayCycle, inPhases } from '../world/daynight';
-import { clampToBounds, exitInside, samplePoint, type Bounds } from '../world/shape';
+import { clampToBounds, exitInside, insideBounds, samplePoint, type Bounds } from '../world/shape';
 import { distFromHome, traitsOf, isDeathAligned, factionTemper } from '../world/traits';
 import { extractionLookFor } from '../data/extraction';
 import { REMNANT_KINDS, remnantDropStat } from '../data/remnants';
@@ -5188,7 +5188,25 @@ export class World {
     // overlay/event spawns come AFTER the window closes and stay live.
     this.zoneGenTagging = true;
     const o = def.objective;
-    const pois = [...layout.pois];
+    // THE POOL RIM FILTER (the door law's kin — task_e2243782's coda):
+    // generation is rect-blind, so an ellipse zone's POI pool can hold
+    // points beyond the inscribed rim — ground no body can ever stand on.
+    // Every consumer of this pool seats something a player must REACH
+    // (spires, rift/pyre/dig fixtures, the siphon, the waypoint, chests,
+    // shrines, spawner bodies, puzzle bells), and each clamps its seat,
+    // which PROJECTS an out-of-rim pick onto the rim — where none of the
+    // pick's guarantees (door clearance, walkability, spacing) were ever
+    // measured; on carved ground the walk confine then drags it onto
+    // walkable-but-unreachable cells beyond the rim. Filter the pool ONCE
+    // at its birth, at the mouth clamp's own 28u margin: a surviving POI
+    // is a seat every consumer's smaller body clamp provably leaves
+    // unmoved (picked == clamped == dwelled), and a starved consumer
+    // degrades to farPoint, whose samplePoint is already shape-aware.
+    // Draw-free, and rect zones keep every POI BY CONSTRUCTION (the guard
+    // never fires) — their draws are byte-identical.
+    const pois = this.arena.shape === 'ellipse'
+      ? layout.pois.filter(p => insideBounds(p, 28, this.arena))
+      : [...layout.pois];
     // A SPECIAL arena (boss set-piece) spawns NOTHING ambient — no packs, no faction
     // contest. Only its authored boss (below) populates it.
     if (!def.special && o.kind !== 'waves' && o.kind !== 'safe') {
@@ -10006,9 +10024,21 @@ export class World {
    *  scans, so every road through here is a function of the zone seed.
    *  Clearance is data:
    *  INTERACT_PLACE_CFG.portalClear or the def's own portalClear. */
-  private interactSpot(pois: Vec2[], rng: Rng, minDist: number, clear: number): Vec2 {
+  private interactSpot(pois: Vec2[], rng: Rng, minDist: number, clear: number,
+    rimMargin?: number): Vec2 {
     const clearIdx: number[] = [];
-    for (let i = 0; i < pois.length; i++) if (this.clearOfDoors(pois[i], clear)) clearIdx.push(i);
+    for (let i = 0; i < pois.length; i++) {
+      if (!this.clearOfDoors(pois[i], clear)) continue;
+      // THE FOOTPRINT RIM TEST (the pool rim filter's big-fixture kin): a
+      // caller whose fixture SPREADS (the puzzle ring's bells stand a whole
+      // footprint from this center) names its spread as `rimMargin`, and an
+      // ellipse zone skips candidates whose spread would overhang the rim —
+      // else the per-bell clamp bunches the ring's far arc onto it.
+      // Draw-free (the filter spends no rng); rect zones never fire.
+      if (rimMargin !== undefined && this.arena.shape === 'ellipse'
+        && !insideBounds(pois[i], rimMargin, this.arena)) continue;
+      clearIdx.push(i);
+    }
     if (clearIdx.length) return pois.splice(clearIdx[rng.int(0, clearIdx.length - 1)], 1)[0];
     const far = this.farPoint(minDist, false, this.seededDraw());
     if (this.clearOfDoors(far, clear)) return far;
@@ -33386,7 +33416,8 @@ export class World {
           seats.push(vec(Math.cos(ang) * ringR, Math.sin(ang) * ringR));
         }
       }
-      const at = this.interactSpot(pois, rng, 680, PUZZLE_CFG.portalClear + footprint);
+      const at = this.interactSpot(pois, rng, 680, PUZZLE_CFG.portalClear + footprint,
+        /* rimMargin */ footprint);
       const nodes: Actor[] = [];
       const nodeDef = spec.node ?? kind.nodeMonster;
       for (let i = 0; i < seats.length; i++) {
