@@ -203,6 +203,20 @@ export const ADOPT_CFG = {
    *  and a row's own `chance` overrides. Runs only where the lair classes
    *  stood aside (a resident claim beats a passing guest). */
   packageChance: 0.5,
+  /** THE PUZZLE CLASS's coin (registerPuzzleAsk rows below): the share of
+   *  candidate-bearing loads (the row's door standing + the ring authored)
+   *  whose bare cull re-negotiates into the riddle's own ask. Hashed per
+   *  (zone, row) — standing ground, standing verdict. Runs LAST of the
+   *  classes (lair → package → puzzle). */
+  puzzleChance: 0.5,
+  /** Per-tileset coin overrides, KEYED BY TILESET ID — the ratified rate
+   *  lever (a dial here, never a TilesetDef field: tilesets stay mint-pure).
+   *  The arithmetic: effective ask share = the table's bare-'clear' share ×
+   *  this coin. Ratified 2026-08-04 (Arianna's ~1-in-7): crypt 0.575 ×
+   *  (clear 3 / total 11.5) = 15% of graveland zones ask the exhumation;
+   *  mournstead 0.44 × (3/11) = 12%. probe_lonecrypt pins the arithmetic
+   *  against the LIVE tables so a table retune re-surfaces the dial. */
+  puzzleChanceByTileset: { crypt: 0.575, mournstead: 0.44 } as Record<string, number>,
   /** The salted fork's name (hashed with the zone id + seed — no rng stream
    *  anywhere near the draw). */
   salt: 'adopt',
@@ -399,6 +413,89 @@ function maybePackageAsk(
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// THE PUZZLE CLASS — standing riddle ground as an adoptable ask (Arianna's
+// ruling, 2026-08-04: the graveland exhumation asks at ~1-in-7, and the lane
+// is THE ADOPTIVE one — "the method that allows more extensibility"; the
+// weight-row alternative is DEAD, because a 'puzzle' weight in a table
+// shifts its weighted TOTAL and re-rolls every mint of the country — the
+// weighted-total cascade — while a registry row here draws NOTHING).
+//
+// A kit REGISTERS what "the riddle's ground" means — a standing DOOR doodad
+// (the den class's detection idiom: the generated layout is the truth) plus
+// the PUZZLES preset the ground authors — and the lane then MAY stamp the
+// STANDING 'puzzle' objective kind over a bare rolled cull: the placer
+// (World.bootPuzzles) stands the pinned ring up as the objective run, the
+// standing 'puzzle' driver completes it, and the chest/seals/pane rows all
+// already exist. Zero new engine words — the ask is the standing kind,
+// aimed.
+//
+// THE NO-CONJURE LAW: candidacy needs BOTH reads — the row's doodad standing
+// in the layout AND the preset in the zone's own `ZoneDef.puzzles` rows (the
+// ground authored the riddle as content; the ask adopts it, never conjures
+// one the country never wrote). Precedence runs LAST of the classes (lair →
+// package → puzzle): a resident claim beats a passing guest beats the
+// patient dead — standing ground can afford to wait for a load the others
+// stood aside from, and once stamped the ask is permanent (idempotent, like
+// every adopted kind; the ground never leaves, so no hand-back arm exists).
+// ---------------------------------------------------------------------------
+
+/** One kit's adoptable riddle ground — registered by the kit's own module
+ *  (data/lonecrypt.ts is the debut; never listed by hand here). */
+export interface PuzzleAskRow {
+  /** Row id (keys the row + the probe census; rows consult sorted by id —
+   *  import-order-proof, the package class's law). */
+  id: string;
+  /** THE DETECTION: the standing doodad kind whose presence in the generated
+   *  layout marks candidate ground (the sealed grave's own door). */
+  doodad: string;
+  /** The PUZZLES preset the stamped ask pins ({ kind: 'puzzle', puzzle }) —
+   *  the ask names THE ring, never "whatever the placer draws". */
+  puzzle: string;
+  /** Adoption coin override (absent = ADOPT_CFG.puzzleChance; a tileset row
+   *  in ADOPT_CFG.puzzleChanceByTileset OUTRANKS both — the ratified
+   *  effective rates are per-country dials). */
+  chance?: number;
+}
+
+const PUZZLE_ASKS: PuzzleAskRow[] = [];
+
+/** Register a kit's adoptable riddle ground (call at module scope from the
+ *  kit's own file — the registerPackageAsk contract: zero edits here). */
+export function registerPuzzleAsk(row: PuzzleAskRow): void {
+  PUZZLE_ASKS.push(row);
+}
+
+export function puzzleAskRows(): readonly PuzzleAskRow[] {
+  return [...PUZZLE_ASKS].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/** The coin for a row on this ground: the per-tileset dial (the ratified
+ *  rate lever) outranks the row's own chance outranks the class default —
+ *  explicit undefined-checks so a dial of 0 (a country opted OUT) holds. */
+function puzzleAskChance(def: ZoneDef, row: PuzzleAskRow): number {
+  const byTs = def.tileset !== undefined ? ADOPT_CFG.puzzleChanceByTileset[def.tileset] : undefined;
+  return byTs !== undefined ? byTs : (row.chance !== undefined ? row.chance : ADOPT_CFG.puzzleChance);
+}
+
+/** The puzzle tail of the adoption read: offered only where the lair classes
+ *  AND the package guests stood aside. One hash per (zone, row) — pure and
+ *  rng-free like the whole lane; the verdict never moves. */
+function maybePuzzleAsk(
+  def: ZoneDef,
+  layout: Pick<GeneratedLayout, 'doodads' | 'landmarkSpawns'>,
+  bare: ObjectiveSpec,
+): ObjectiveSpec | null {
+  for (const row of puzzleAskRows()) {
+    if (!layout.doodads.some(d => d.kind === row.doodad)) continue;    // no door, no ask
+    if (!(def.puzzles ?? []).some(r => r.id === row.puzzle)) continue; // THE NO-CONJURE LAW
+    const h = hashStr(`${ADOPT_CFG.salt}:puz:${row.id}:${def.id}:${def.seed ?? 0}`);
+    if (bare.adopt !== true && (h % 10000) / 10000 >= puzzleAskChance(def, row)) continue;
+    return { kind: 'puzzle', puzzle: row.puzzle };
+  }
+  return null;
+}
+
 /** THE ADOPTION READ — pure and rng-free: given a zone def and its generated
  *  layout, decide whether this ground's BARE rolled cull re-negotiates into a
  *  standing claim's own ask. Null = the roll stands untouched (no candidate,
@@ -466,7 +563,13 @@ export function maybeAdoptObjective(
   // THE PACKAGE CLASS tail (maybePackageAsk) — a standing guest may take the
   // ask only where the lair classes stood aside (a resident beats a guest).
   const guest = world ? maybePackageAsk(def, o, world) : null;
-  return guest ?? reverted;
+  if (guest) return guest;
+  // THE PUZZLE CLASS tail (maybePuzzleAsk) — the patient dead wait LAST: a
+  // passing guest's window is now-or-never, standing riddle ground keeps.
+  // (Same hash every load — ground the earlier classes stood aside from
+  // converges on the same verdict whenever it is finally consulted.)
+  const riddle = maybePuzzleAsk(def, layout, o);
+  return riddle ?? reverted;
 }
 
 // The adopted ask's pointer: the den's door, or the nearest standing keeper —

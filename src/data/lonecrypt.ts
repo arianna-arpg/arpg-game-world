@@ -49,6 +49,7 @@
 import { Rng } from '../core/rng';
 import { registerDoodadRule, registerFormation, registerStamp, stampSingle } from '../engine/levelgen';
 import { mintCave } from '../engine/worldgen';
+import { registerPuzzleAsk } from './objectives';
 import { registerSidezone } from './sidezones';
 import type { BossPromote } from './zones';
 
@@ -169,3 +170,19 @@ registerSidezone({
     return def;
   },
 });
+
+// --- THE ASK (THE ADOPTIVE LANE's puzzle class — data/objectives.ts) ----------
+// Arianna's ruling (2026-08-04): a graveland/mournstead zone that rolled a
+// bare cull MAY wear "solve the exhumation" as its ask — ~1-in-7 of zones
+// effective, the per-tileset dials in ADOPT_CFG.puzzleChanceByTileset folding
+// each table's own bare-'clear' share (crypt 15%, mournstead 12%). NEVER a
+// weight row: a 'puzzle' weight in those tables would shift their weighted
+// TOTAL and re-roll every mint of both countries (the weighted-total
+// cascade), where the adoptive read draws nothing — the mint stream stays
+// byte-identical with this row registered. Detection is the sealed grave's
+// own DOOR standing in the layout + the ring authored in the zone's puzzles
+// rows (adoption, never dependency — the no-conjure law); the standing
+// 'puzzle' objective driver then completes the ask through the real dig with
+// zero new engine words, and the same dig lifts the crypt's seal — the ask
+// and the door were always one loop.
+registerPuzzleAsk({ id: 'grave_exhumation', doodad: 'lone_crypt_door', puzzle: 'grave_exhumation' });

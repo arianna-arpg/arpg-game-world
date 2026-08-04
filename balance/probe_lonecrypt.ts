@@ -6,13 +6,18 @@
 // the per-mouth RESIDENT lottery (CRYPT_RESIDENTS on the mint seed's salted
 // fork), and the unquiet yard's walkability contract (graveyard_rows on the
 // grid arranger — corridors ≥ a player diameter by pure def math).
-// Sections: A census (registries + tileset wiring + pool hygiene), B the
-// exhumation driven bare on a stub host, C the yard's corridor arithmetic,
-// D the pool draw (determinism + spread), E the REAL crypt zone end-to-end
-// (devMintTileset → placer birth → seal holds → round-robin dig → seal
-// lifts → the mouth's mint draws its horror), F the structure sweep (the
-// warren-starved law: the [1,1] tomb must actually seat across seeds).
-// Siblings: balance/probe_puzzles.ts (the fabric's own laws).
+// Sections: A census (registries + tileset wiring + the RATIFIED ask
+// arithmetic + pool hygiene), B the exhumation driven bare on a stub host,
+// C the yard's corridor arithmetic, D the pool draw (determinism + spread),
+// E the REAL crypt zone end-to-end (devMintTileset → placer birth → seal
+// holds → round-robin dig → seal lifts → the mouth's mint draws its
+// horror), F the structure sweep (the warren-starved law: the [1,1] tomb
+// must actually seat across seeds), G THE ADOPTED ASK live (the 2026-08-04
+// ruling: the adoptive lane's puzzle class stamps the STANDING 'puzzle'
+// kind over a bare cull; the real dig banks the driver AND lifts the seal).
+// Siblings: balance/probe_puzzles.ts (the fabric's own laws),
+// balance/probe_objectives.ts RIG V (the lane-side pins: coin rates,
+// no-conjure, precedence).
 // Run: npx tsx balance/probe_lonecrypt.ts
 // ---------------------------------------------------------------------------
 
@@ -27,7 +32,9 @@ import {
   hasStamp, type GeneratedLayout,
 } from '../src/engine/levelgen';
 import { PUZZLE_CFG, PUZZLE_KINDS, type PuzzleHost, type PuzzleRun } from '../src/engine/puzzles';
+import { ADOPT_CFG, puzzleAskRows } from '../src/data/objectives';
 import { PUZZLES } from '../src/data/puzzles';
+import { objectiveEarnsChest, objectiveSeals } from '../src/data/zones';
 import { CRYPT_RESIDENTS, rollCryptResident } from '../src/data/lonecrypt';
 import { HIGH_COURT, MONSTERS } from '../src/data/monsters';
 import { LOOKS } from '../src/data/looks';
@@ -89,6 +96,16 @@ p.invulnerable = true;
   // Tileset wiring: the loop's two countries pair key and door in EVERY
   // zone (a ring without a tomb, or a tomb without a ring, is a broken
   // promise); the gloamwood heart carries the yard as dress only.
+  //
+  // THE ASK (RULED 2026-08-04): the exhumation IS askable — via THE ADOPTIVE
+  // LANE's puzzle class (registerPuzzleAsk, the kit's module tail), NEVER a
+  // weight row. The weight-row lane is permanently DEAD for these tables: a
+  // 'puzzle' weight changes a table's weighted TOTAL, which re-rolls every
+  // mint of the country and cascades through the chart halo into other
+  // countries' pinned-seed rigs (probe_tiers N3.9 was the witness) — and it
+  // would double-dip beside the registered row besides. The adoptive read
+  // draws nothing at load; section G drives the adopted ask end to end.
+  const ASK_TARGETS: Record<string, number> = { crypt: 0.15, mournstead: 0.12 };
   for (const tid of ['crypt', 'mournstead']) {
     const t = TILESETS[tid];
     check(`wiring: ${tid} stands the exhumation up in every zone (chance 1)`,
@@ -97,16 +114,22 @@ p.invulnerable = true;
       (t.common ?? []).some((s: StampSpec) =>
         s.kind === 'structure' && s.structure === 'sealed_grave'
         && s.count[0] === 1 && s.count[1] === 1));
-    // THE DELIBERATE DISCOVERY: no 'puzzle' objective row YET — a weight
-    // there changes the table's weighted total, which re-rolls every mint
-    // of the country and cascades through the chart halo into other rigs'
-    // pinned worlds (probe_tiers N3.9 was the witness). The ask row is a
-    // one-line coda proposal for a coordinated quiet-tilesets round; if a
-    // future round lands it, flip this pin to `some(o => o.kind ===
-    // 'puzzle')` in the same commit.
-    check(`wiring: ${tid} holds the ask back (discovery-only until the coordinated round)`,
+    check(`wiring: ${tid} never wears a 'puzzle' weight row (the ask rides the adoptive lane — the cascade law)`,
       !(t.objectives ?? []).some(o => o.kind === 'puzzle'));
+    // THE RATIFIED ARITHMETIC (Arianna's ~1-in-7): effective ask share =
+    // the table's own bare-'clear' share × the per-tileset dial — pinned
+    // against the LIVE table, so a table retune (or a dial edit) that moves
+    // the landed rate re-surfaces for a ruling instead of drifting silently.
+    const total = (t.objectives ?? []).reduce((s, o2) => s + o2.weight, 0);
+    const share = ((t.objectives ?? []).find(o2 => o2.kind === 'clear')?.weight ?? 0) / total;
+    const dial = ADOPT_CFG.puzzleChanceByTileset[tid];
+    check(`ask: ${tid} dial × clear share lands the ratified rate (±0.5pt)`,
+      dial !== undefined && Math.abs(share * dial - ASK_TARGETS[tid]) < 0.005,
+      `${(share * 100).toFixed(1)}% clear × ${dial} = ${(share * dial * 100).toFixed(1)}% vs ${(ASK_TARGETS[tid] * 100).toFixed(0)}%`);
   }
+  check('ask: the kit registered its adoptive row (door → ring, the no-conjure pair)',
+    puzzleAskRows().some(r => r.id === 'grave_exhumation'
+      && r.doodad === 'lone_crypt_door' && r.puzzle === 'grave_exhumation'));
   check('wiring: the gloamwood heart wears the yard as dress only',
     (TILESETS.gloamwood.common ?? []).some((s: StampSpec) => s.formation === 'graveyard_rows')
     && !(TILESETS.gloamwood.puzzles ?? []).length);
@@ -355,6 +378,73 @@ const kindledOn = (a: Actor): boolean =>
   }
   check('sweep: the sealed grave seats its tomb + mouth on every seed',
     seated === swept, `${seated}/${swept}`);
+}
+
+// --- G) THE ADOPTED ASK — the ruling made live (2026-08-04) ------------------
+// Arianna ratified the ~1-in-7 ask on THE ADOPTIVE LANE (the weight-row lane
+// is DEAD — the A-section pin): a graveland/mournstead zone that rolled a
+// bare cull MAY wear the exhumation as its ask, stamped at load by the
+// lane's puzzle class (registerPuzzleAsk, data/objectives.ts) as the
+// STANDING 'puzzle' kind with THE ring pinned, completed by the standing
+// driver through the real dig. This rig pins the loop deterministically:
+// the coin is skipped via adopt:true (the mintWith law — the coin's own
+// rates are RIG V's business in probe_objectives, the effective-rate
+// arithmetic the A-section's), the dig is the real knock queue, and the
+// SAME dig that banks the objective lifts the crypt's seal.
+{
+  type GGuts = {
+    zoneMap: Record<string, ZoneDef>;
+    zoneMemory: Map<string, unknown>;
+    completedObjectives: Set<string>;
+    objectiveDone: boolean;
+    puzzles: PuzzleRun[];
+    puzzleStruck(node: Actor, striker: Actor | null, wounding: boolean): void;
+    sidezoneSealHolds(kind: string): boolean;
+    zone: ZoneDef;
+    loadZone(id: string): void;
+  };
+  const g = world as unknown as GGuts;
+  const before = g.zone.id; // wherever section E left us — any elsewhere serves
+  const zid = world.devMintTileset('crypt', 3, 9, { seed: 777001 })!;
+  check('adopt: a fresh graveland country mints', !!zid);
+  g.loadZone(before); // step off the scout visit (the mintWith law)…
+  const def = g.zoneMap[zid];
+  def.objective = { kind: 'clear', adopt: true }; // …and pin the coin open
+  g.zoneMemory.delete(zid);
+  g.completedObjectives.delete(zid);
+  g.loadZone(zid);
+  const o = g.zone.objective as { kind: string; puzzle?: string };
+  check('adopt: the load ADOPTED the standing ground — kind puzzle, THE ring pinned',
+    o.kind === 'puzzle' && o.puzzle === 'grave_exhumation', JSON.stringify(o));
+  check('adopt: the standing kind\'s own laws apply (chest banks, roads open)',
+    objectiveEarnsChest(g.zone.objective) === true && objectiveSeals(g.zone.objective) === false);
+  const run = g.puzzles.find(r => r.isObjective);
+  check('adopt: the placer bound THE exhumation ring as the objective run',
+    !!run && run.kind.id === 'exhumation' && !run.done,
+    run ? `${run.nodes.length} stones` : 'no run');
+  check('adopt: the seal + the ask are ONE undug yard (mouth holds, ask open)',
+    g.sidezoneSealHolds('lone_crypt_door') === true && g.objectiveDone === false);
+  if (run) {
+    const need = run.state.need as number;
+    for (let d = 0; d < need; d++) {
+      for (const n of run.nodes) {
+        g.puzzleStruck(n, p, true);
+        world.update(1 / 60);
+      }
+    }
+    world.update(1 / 60); // one settling tick for the driver's bank
+  }
+  check('adopt: the REAL dig resolves the run and the STANDING driver banks the ask',
+    !!run && run.done && g.objectiveDone === true && g.completedObjectives.has(zid));
+  check('adopt: the same dig lifts the crypt\'s seal (ask and door, one loop)',
+    g.sidezoneSealHolds('lone_crypt_door') === false);
+  // Idempotence: the stamped kind survives a re-load byte-identically and
+  // stays done ('puzzle' is not in ADOPT_CFG.overrides — never re-rolled).
+  const stamped = JSON.stringify(g.zone.objective);
+  g.loadZone(before);
+  g.loadZone(zid);
+  check('adopt: re-entry re-reads the SAME adopted ask and stays done',
+    JSON.stringify(g.zone.objective) === stamped && g.objectiveDone === true);
 }
 
 console.log(failed ? `\nprobe_lonecrypt: ${failed} FAILED` : '\nprobe_lonecrypt: all OK');

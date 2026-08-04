@@ -31,6 +31,9 @@ tileset's `objectives` weight table (`data/tilesets.ts` → worldgen
 |              | lightwell (real light; the Gloaming's meter drinks from it)     |
 | `unearth`    | DIG the burial mounds open — spoils spill (spoils-law honest),  |
 |              | and the turned earth may answer                                 |
+| `puzzle`     | ANSWER THE RIDDLE — the zone stands one of its own puzzles up   |
+|              | as THE ask (engine/puzzles.ts); rollable by weight row AND      |
+|              | adoptable over standing riddle ground (registerPuzzleAsk)       |
 | `lair`       | THE ADOPTED ASK (adoptive-only — never a weight row): the ask   |
 |              | IS a claim the mint stood up — brave the den behind its door,   |
 |              | or fell the apex natives holding the ground                     |
@@ -470,6 +473,61 @@ module registers.
   coins, origin-only candidacy, both survive arms, the dead-player refusal,
   the re-arm, both hand-back roads, authored sovereignty, and lair-first
   precedence.
+
+### THE PUZZLE CLASS (the STANDING `kind: 'puzzle'` — the adopted riddle)
+
+The ruling (Arianna, 2026-08-04, closing the lone-crypt coda): the graveland
+exhumation IS askable — Dial A stands (a sealed grave + its chance-1 ring in
+every graveland/mournstead zone), the ask lands on ~1-in-7 zones, and the
+lane is THE ADOPTIVE one ("the method that allows more extensibility"). The
+weight-row alternative is permanently DEAD for those tables: a `'puzzle'`
+weight shifts a table's weighted TOTAL, which re-rolls every mint of the
+country and cascades through the chart halo into other countries' pinned
+worlds (the weighted-total cascade — probe_tiers N3.9 was the witness). A
+registry row draws NOTHING: the A/B census (both arms headtree-snapshotted)
+read byte-identical mint fingerprints with the class registered.
+
+- THE ROW (`registerPuzzleAsk`, data/objectives.ts — called at module scope
+  from the kit's own file, the registerPackageAsk contract;
+  data/lonecrypt.ts is the debut): `doodad` — the standing DOOR whose
+  presence in the generated layout marks candidate ground (the den class's
+  detection idiom) — plus `puzzle` — the PUZZLES preset the stamp pins —
+  and an optional `chance`. Rows consult sorted by id.
+- THE NO-CONJURE LAW: candidacy needs BOTH reads — the door in the layout
+  AND the preset in the zone's own `ZoneDef.puzzles` rows (folded from
+  `TilesetDef.puzzles` at mint). The ground authored the riddle as its own
+  content; the ask adopts it, never conjures one the country never wrote.
+- THE STAMP IS THE STANDING KIND: `{ kind: 'puzzle', puzzle: <preset> }`.
+  The puzzle placer (`World.bootPuzzles`) stands THE ring up as the
+  objective run (`isObjective`), the standing `'puzzle'` driver banks it,
+  and the standing kind's own rows apply verbatim — chest BANKS (unlike the
+  lair/package classes: the rolled `'puzzle'` kind is chest-gated by
+  standing law, and the adopted ask pays exactly like the rolled one),
+  seals OPEN, pane reads `❖ answer the riddle`. Zero new driver, spec,
+  seal, read or validate code anywhere.
+- THE COIN: `ADOPT_CFG.puzzleChanceByTileset[def.tileset]` OUTRANKS the
+  row's `chance` OUTRANKS `ADOPT_CFG.puzzleChance` — per-tileset dials
+  KEYED BY TILESET ID inside the config (a dial, never a TilesetDef field:
+  tilesets stay mint-pure). The ratified arithmetic: effective ask = the
+  table's own bare-`'clear'` share × the dial — crypt 0.575 × (3/11.5) =
+  15% of graveland zones, mournstead 0.44 × (3/11) = 12%; measured 14.8% /
+  13.2% over 250 real mint+load sweeps each. probe_lonecrypt pins the
+  arithmetic against the LIVE tables so a table retune re-surfaces the
+  landed rate for a ruling.
+- PRECEDENCE runs LAST (lair → package → puzzle): a resident claim beats a
+  passing guest beats the patient dead — a guest's window is now-or-never,
+  the grave keeps. Ground a stale package stamp HANDS BACK falls through
+  to the riddle's own coin in the same read. Once stamped the ask is
+  permanent (idempotent — `'puzzle'` is not in `overrides`; the ground
+  never leaves, so no hand-back arm exists for this class).
+- The hash: `adopt:puz:<rowId>:<def.id>:<def.seed>` — rng-free like the
+  whole lane; deterministic per zone across loads, saves and co-op seats.
+- Probes: RIG V (balance/probe_objectives.ts — census, no-conjure, coin
+  rates + the exact mournstead-⊂-crypt subset law, both precedence roads,
+  the hand-back fall-through, the live stamp) and probe_lonecrypt A/G
+  (the ratified-rate arithmetic on the live tables; the real dig banking
+  the STANDING driver AND lifting the crypt's seal — ask and door, one
+  loop).
 
 ## `objectiveLost` (the loseable-objective seam)
 

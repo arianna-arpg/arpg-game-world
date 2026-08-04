@@ -37,6 +37,14 @@
 //     both bank, a dead player banks nothing), THE HAND-BACK (a guest gone
 //     unanswered reverts the ask to the bare cull), and the package's own
 //     spawn/divert life byte-untouched by the ask banking.
+//   - THE PUZZLE CLASS (the STANDING kind 'puzzle' via registerPuzzleAsk,
+//     RIG V — the exhumation debut, ruled 2026-08-04): standing riddle
+//     ground adopts LAST (lair → package → puzzle); candidacy needs the
+//     row's door in the layout AND the preset in the zone's own puzzles
+//     rows (the no-conjure law); per-tileset dials in ADOPT_CFG land the
+//     ratified effective rates; the stamp is the standing kind with THE
+//     ring pinned — zero new driver code, the dig E2E lives kit-side in
+//     probe_lonecrypt G.
 // Run: npx tsx balance/probe_objectives.ts
 // ---------------------------------------------------------------------------
 
@@ -57,8 +65,9 @@ import { placeZoneAt } from '../src/engine/worldgen';
 import {
   CONTEST_CFG, PRESSURE_RAMP, adoptDenMouthKinds, adoptHuntRows,
   maybeAdoptObjective, packageAskRow, pressureRampAt, pressureRampCadence,
-  type ContestRecoupSpec,
+  ADOPT_CFG, puzzleAskRows, type ContestRecoupSpec,
 } from '../src/data/objectives';
+import { PUZZLES } from '../src/data/puzzles'; // RIG V: puzzleAskRows census pins the preset is real
 import { BEACON_CFG } from '../src/data/beacons';
 import { RIFT_CFG } from '../src/data/rifts';
 import { PYRE_CFG } from '../src/data/pyres';
@@ -1025,6 +1034,165 @@ withSeededRandom(0x0bec7a, () => {
         w.zone.objective.kind === 'lair');
       leaveToHome();
       ff.endFracture();
+    }
+  }
+
+  // --- RIG V: THE PUZZLE CLASS (standing riddle ground — the exhumation) -----
+  // The ruling (Arianna, 2026-08-04): the graveland exhumation asks at
+  // ~1-in-7 on THE ADOPTIVE LANE — registerPuzzleAsk rows, per-tileset
+  // dials, the STANDING 'puzzle' kind stamped with THE ring pinned; the
+  // crypt/mournstead weight-row plan is permanently DEAD (the weighted-total
+  // cascade). Candidacy = the row's DOOR standing in the layout AND the
+  // preset authored in the zone's own puzzles rows (the no-conjure law);
+  // precedence runs LAST of the classes (lair → package → puzzle — the
+  // patient dead can wait). The dig E2E + the ratified-rate arithmetic live
+  // kit-side (probe_lonecrypt A/G); this rig pins the lane's own laws.
+  {
+    // V1 the census: the debut row is registered, sorted, and its preset is
+    // a real PUZZLES entry; the ratified dials stand in (0, 1].
+    const rows = puzzleAskRows();
+    const debut = rows.find(r => r.id === 'grave_exhumation');
+    check('V1a the exhumation row is registered (door → ring, registry-derived)',
+      !!debut && debut.doodad === 'lone_crypt_door' && debut.puzzle === 'grave_exhumation',
+      `${rows.length} rows`);
+    check('V1b rows consult in sorted order (import-order-proof, the package law)',
+      rows.every((r, i) => i === 0 || rows[i - 1].id <= r.id));
+    check('V1c the pinned preset is a real PUZZLES entry',
+      !!debut && !!PUZZLES[debut.puzzle]);
+    const dials = ADOPT_CFG.puzzleChanceByTileset;
+    check('V1d the ratified per-tileset dials stand sane (crypt + mournstead, each in (0,1])',
+      dials.crypt > 0 && dials.crypt <= 1 && dials.mournstead > 0 && dials.mournstead <= 1
+      && Object.values(dials).every(v => v > 0 && v <= 1),
+      JSON.stringify(dials));
+    // V2 candidacy is BOTH reads, on synthetic ground (pure calls, no rng).
+    const mkDefV = (over: Record<string, unknown> = {}): ZoneDef => ({
+      id: 'probe_puzask', name: 'x', level: 8, size: 'small', theme: {} as never,
+      layout: [], exits: [], map: { x: 0, y: 0 }, objective: { kind: 'clear' },
+      seed: 1234, tileset: 'crypt', puzzles: [{ id: 'grave_exhumation', chance: 1 }], ...over,
+    } as unknown as ZoneDef);
+    const doorLayout = { doodads: [{ pos: vec(100, 100), radius: 15, kind: 'lone_crypt_door' }], landmarkSpawns: [] };
+    const bareLayout = { doodads: [], landmarkSpawns: [] };
+    const adoptTrue = { kind: 'clear', adopt: true } as ObjectiveSpec;
+    const vStamp = maybeAdoptObjective(mkDefV({ objective: adoptTrue }), doorLayout);
+    check('V2a door + authored ring ⇒ the STANDING kind stamps, THE ring pinned',
+      vStamp?.kind === 'puzzle' && (vStamp as { puzzle?: string }).puzzle === 'grave_exhumation');
+    check('V2b no door ⇒ never binds (adoption can never force a spawn)',
+      maybeAdoptObjective(mkDefV({ objective: adoptTrue }), bareLayout) === null);
+    check('V2c THE NO-CONJURE LAW: a door whose country never authored the ring refuses',
+      maybeAdoptObjective(mkDefV({ objective: adoptTrue, puzzles: [] }), doorLayout) === null
+      && maybeAdoptObjective(mkDefV({ objective: adoptTrue, puzzles: [{ id: 'other_riddle', chance: 1 }] }), doorLayout) === null);
+    check('V2d authored asks are sovereign (the shared gate covers the class)',
+      maybeAdoptObjective(mkDefV({ objective: { kind: 'clear', need: 5 } }), doorLayout) === null
+      && maybeAdoptObjective(mkDefV({ objective: { kind: 'clear', adopt: false } }), doorLayout) === null);
+    // V3 determinism + the world argument is inert for this class (no guest
+    // stands on synthetic ground — with/without world, byte-identical).
+    const v1 = maybeAdoptObjective(mkDefV({ objective: adoptTrue }), doorLayout);
+    const v2 = maybeAdoptObjective(mkDefV({ objective: adoptTrue }), doorLayout);
+    const v3 = maybeAdoptObjective(mkDefV({ objective: adoptTrue }), doorLayout, world);
+    check('V3 the verdict is DETERMINISTIC and world-blind for standing ground',
+      JSON.stringify(v1) === JSON.stringify(v2) && JSON.stringify(v1) === JSON.stringify(v3));
+    // V4 the coin rates: one hash per (zone, row), thresholds per tileset —
+    // so the mournstead-fired set is EXACTLY a subset of the crypt-fired set
+    // (same hash, lower dial), and an undialed country rides the default.
+    let fCrypt = 0;
+    let fMourn = 0;
+    let fPlain = 0;
+    let subset = true;
+    for (let s = 0; s < 200; s++) {
+      const rC = !!maybeAdoptObjective(mkDefV({ id: `probe_puzask_${s}`, seed: s }), doorLayout);
+      const rM = !!maybeAdoptObjective(mkDefV({ id: `probe_puzask_${s}`, seed: s, tileset: 'mournstead' }), doorLayout);
+      const rP = !!maybeAdoptObjective(mkDefV({ id: `probe_puzask_${s}`, seed: s, tileset: 'nowhere_downs' }), doorLayout);
+      if (rC) fCrypt++;
+      if (rM) fMourn++;
+      if (rP) fPlain++;
+      if (rM && !rC) subset = false;
+    }
+    check('V4a the crypt dial fires ≈ 0.575 of candidate culls', fCrypt >= 85 && fCrypt <= 145, `${fCrypt}/200`);
+    check('V4b the mournstead dial fires ≈ 0.44, below the crypt\'s', fMourn >= 58 && fMourn <= 118 && fMourn < fCrypt, `${fMourn}/200`);
+    check('V4c mournstead-fired ⊂ crypt-fired EXACTLY (one hash, two thresholds — the dial is the only difference)', subset);
+    check('V4d an undialed country rides the class default', fPlain >= 70 && fPlain <= 130, `${fPlain}/200`);
+    // V5 precedence: a resident claim on the same ground wins the slot.
+    const bothLayout = {
+      doodads: [
+        { pos: vec(80, 80), radius: 26, kind: 'wyrm_barrow_mouth' },
+        { pos: vec(220, 220), radius: 15, kind: 'lone_crypt_door' },
+      ], landmarkSpawns: [],
+    };
+    check('V5 the lair beats the riddle where both stand (lair → package → puzzle)',
+      maybeAdoptObjective(mkDefV({ objective: adoptTrue }), bothLayout)?.kind === 'lair');
+    // V6 the guest beats the riddle too — and ground the guest leaves falls
+    // through to the riddle, including off the package HAND-BACK arm.
+    {
+      const ff = w.sim.fractureField;
+      const zid = w.devMintTileset('grassland', 45, 3, { seed: 848484 }) as string;
+      leaveToHome();
+      const def = w.zoneMap[zid] as ZoneDef;
+      def.objective = { kind: 'clear', adopt: true };
+      (def as unknown as { puzzles: { id: string; chance: number }[] }).puzzles = [{ id: 'grave_exhumation', chance: 1 }];
+      (w.zoneMemory as Map<string, unknown>).delete(zid);
+      (w.completedObjectives as Set<string>).delete(zid);
+      check('V6a a guest seats on riddle-bearing ground', ff.devIgnite(w.devOverlayView(), zid) === true);
+      const withGuest = maybeAdoptObjective(def, doorLayout, world);
+      check('V6b the guest outranks the riddle (package before puzzle)',
+        withGuest?.kind === 'package');
+      ff.endFracture();
+      const afterGuest = maybeAdoptObjective(def, doorLayout, world);
+      check('V6c the ground the guest left falls to the riddle (same load chain, next class)',
+        afterGuest?.kind === 'puzzle');
+      // THE HAND-BACK ROAD: a stale package stamp reverts to the bare cull
+      // and the SAME read then consults the riddle on its own coin — scan
+      // def.seed for one coin-pass and one coin-refuse (pure hash: the scan
+      // is deterministic and self-healing against upstream id drift).
+      let seedFire = -1;
+      let seedHold = -1;
+      for (let s = 0; s < 60 && (seedFire < 0 || seedHold < 0); s++) {
+        def.seed = s;
+        def.objective = { kind: 'clear' };
+        const r = maybeAdoptObjective(def, doorLayout, world);
+        if (r?.kind === 'puzzle' && seedFire < 0) seedFire = s;
+        if (r === null && seedHold < 0) seedHold = s;
+      }
+      check('V6d the unforced coin both fires and holds somewhere (CAN, never MUST)',
+        seedFire >= 0 && seedHold >= 0, `fire@${seedFire} hold@${seedHold}`);
+      def.seed = seedFire;
+      def.objective = { kind: 'package', pkg: 'fractures', key: 'v6-stale' } as ObjectiveSpec;
+      const handback = maybeAdoptObjective(def, doorLayout, world);
+      check('V6e a stale guest stamp hands back AND the riddle takes the ground on its own coin',
+        handback?.kind === 'puzzle');
+      def.seed = seedHold;
+      def.objective = { kind: 'package', pkg: 'fractures', key: 'v6-stale' } as ObjectiveSpec;
+      const handbackBare = maybeAdoptObjective(def, doorLayout, world);
+      check('V6f where the riddle\'s coin refuses, the hand-back lands the bare cull',
+        handbackBare?.kind === 'clear');
+      leaveToHome();
+    }
+    // V7 LIVE: a real graveland mint through the real stamp site — the
+    // loaded zone wears the standing kind, the placer binds THE ring as the
+    // objective run, and the standing kind's own chest/seal laws apply.
+    // (The dig completing the driver + lifting the seal is probe_lonecrypt
+    // G's business — kit-side.)
+    {
+      const zid = w.devMintTileset('crypt', 47, 9, { seed: 858585 }) as string;
+      leaveToHome();
+      const def = w.zoneMap[zid] as ZoneDef;
+      def.objective = { kind: 'clear', adopt: true };
+      (w.zoneMemory as Map<string, unknown>).delete(zid);
+      (w.completedObjectives as Set<string>).delete(zid);
+      w.loadZone(zid);
+      const o = w.zone.objective as ObjectiveSpec & { puzzle?: string };
+      const run = (w.puzzles as { isObjective: boolean; kind: { id: string }; done: boolean }[]).find(r => r.isObjective);
+      check('V7a the real load stamps the STANDING kind with THE ring pinned',
+        o.kind === 'puzzle' && o.puzzle === 'grave_exhumation');
+      check('V7b the placer bound the exhumation as the objective run (isObjective)',
+        !!run && run.kind.id === 'exhumation' && !run.done);
+      check('V7c the standing kind\'s own laws apply (chest banks, roads open)',
+        objectiveEarnsChest(o) === true && objectiveSeals(o) === false);
+      const stamped = JSON.stringify(o);
+      leaveToHome();
+      w.loadZone(zid);
+      check('V7d re-entry re-reads the SAME adopted ask (idempotent — \'puzzle\' never re-rolls)',
+        JSON.stringify(w.zone.objective) === stamped);
+      leaveToHome();
     }
   }
 });
