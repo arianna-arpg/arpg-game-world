@@ -5506,6 +5506,10 @@ export class World {
       if (!MONSTERS[ls.id]) continue;
       const m = this.createMonster(ls.id, Math.max(1, def.level), 'enemy');
       m.pos = vec(ls.pos.x, ls.pos.y);
+      // THE ALOFT COURT (the wildlife wTier precedent): a spawn row placed on
+      // an upper story wears that story, or the mover contract snaps it off
+      // the rim at the first step.
+      if (ls.tier) m.tier = ls.tier;
       // Spawner-row ambush (LandmarkSpawns.ambush): arm the INSTANCE — the
       // same kind roams free elsewhere; these wait (the penned herd).
       if (ls.ambush) {
@@ -10240,7 +10244,16 @@ export class World {
     const band = opts?.band ?? PARTY_LAND_CFG.band;
     const clamp = opts?.clamp ?? true;
     const put = (a: Actor, to: Vec2): void => {
-      a.pos = clamp ? this.clampPos(to, a.radius) : to;
+      // THE STORY-AWARE LANDING (the aloft coda's recorded shape): an aloft
+      // landing must clamp through ITS OWN story's walk view — the tier-0
+      // clampPos would drag a summit seat to the nearest ground cell (195px
+      // onto the ramp foot, measured). Ground landings keep the classic
+      // clamp byte-identical; on-floor targets move in neither form.
+      const story = opts?.tier ?? 0;
+      const view = story >= 1 ? this.tierViews?.[story] : null;
+      a.pos = view
+        ? (view.isWalkable(to.x, to.y) ? vec(to.x, to.y) : view.snapToWalkable(to))
+        : (clamp ? this.clampPos(to, a.radius) : to);
       // THE TRAIL breaks on any party landing (zone arrival, teleport,
       // corpse-run): scent follows walked ground only — you didn't walk
       // here, so nothing leads here (engine/watch.ts).

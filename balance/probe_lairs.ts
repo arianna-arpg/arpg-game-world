@@ -2640,26 +2640,16 @@ const step = (secs: number): void => {
       check('P26c the arrival is MOBILE', inStep > 15, `step=${inStep.toFixed(1)}px`);
       innards.travelThrough({ to: parentId, side: 'n' });
       const p2 = w.player;
-      // THE REPORTED SEAM (batch 28 — the aloft climb-out's last yard):
-      // landPartyAt's put() clamps through the TIER-0 clampPos BEFORE the
-      // story re-seat (world.ts ~10243), so a summit seat drags to the
-      // nearest ground-walkable cell (the ramp foot, ~195px off the door)
-      // and only THEN wears tier 1. The down lane never bit (duct cells
-      // are tier-0-walkable — neither clamp moves them). The exact shape,
-      // for the coordinator (world.ts, landPartyAt's put):
-      //   const story = opts?.tier ?? 0;
-      //   const view = story >= 1 ? this.tierViews?.[story] : null;
-      //   a.pos = view
-      //     ? (view.isWalkable(to.x, to.y) ? vec(to.x, to.y) : view.snapToWalkable(to))
-      //     : (clamp ? this.clampPos(to, a.radius) : to);
-      // When it lands, tighten the drift bar below to < 2 (the N3.8 law).
-      // TODAY's honest floor: the return wears the story, stands on the
-      // story's own floor (ramp or top — never the valley), stays MOBILE,
-      // and lands within the mouth's walk (no strand, no softlock).
-      check('P26c the climb-out wears the summit story on story floor, at the mouth\'s walk (drift bar: the reported landPartyAt seam)',
+      // THE STORY-AWARE LANDING (landed by the coordinator at batch-28
+      // close — the shape this comment used to carry): landPartyAt's put()
+      // now clamps an aloft landing through ITS OWN story's walk view, so
+      // the summit seat holds AT the door and the drift bar is the N3.8
+      // law's own < 2px (was < 300 while the tier-0 clamp dragged the seat
+      // ~195px to the ramp foot).
+      check('P26c the climb-out wears the summit story on story floor, AT the mouth (the N3.8 bar — the story-aware landing holds)',
         w.zone.id === parentId && p2.tier === 1
         && tierFloorAt(innards.walk?.regionAt?.(p2.pos.x, p2.pos.y), 1)
-        && Math.hypot(p2.pos.x - mouthAt.x, p2.pos.y - mouthAt.y) < 300,
+        && Math.hypot(p2.pos.x - mouthAt.x, p2.pos.y - mouthAt.y) < 2,
         `tier=${p2.tier} d=${Math.hypot(p2.pos.x - mouthAt.x, p2.pos.y - mouthAt.y).toFixed(1)}px kind=${innards.walk?.regionAt?.(p2.pos.x, p2.pos.y)}`);
       for (const a of w.actors) { if (a.team === 'enemy' && !a.dead) a.dead = true; }
       const outStep = stepFrom({ x: p2.pos.x, y: p2.pos.y });
