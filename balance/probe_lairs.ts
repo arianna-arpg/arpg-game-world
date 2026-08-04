@@ -31,12 +31,12 @@ import {
   hasComposition, hasLandmark, isSidezoneEntranceKind, landmarkDefs, landmarkOf,
   type GenCtx, type GeneratedLayout,
 } from '../src/engine/levelgen';
-import { storyReachable, tierFloorAt } from '../src/engine/tiers';
+import { storyReachable, tierFloorAt, tilesetStoryReach } from '../src/engine/tiers';
 import { STATUS_DEFS } from '../src/engine/status';
 import { SYMPATHY_LINKS } from '../src/engine/sympathy';
 import { carveMassifs, massKindOf, tenantKindIds, type MassPoolRow, type TenantRow } from '../src/engine/massif';
 import { GridWalkField } from '../src/world/gridWalk';
-import { LAIR_CFG, lairLandmarkRolls, lairOf, lairRows } from '../src/engine/lairs';
+import { LAIR_CFG, lairLandmarkRolls, lairOf, lairRows, registerLair } from '../src/engine/lairs';
 import { reserveFrac } from '../src/engine/reserves';
 import { BIOMES } from '../src/world/biomes';
 import { TILESETS } from '../src/data/tilesets';
@@ -2656,6 +2656,37 @@ const step = (secs: number): void => {
       check('P26c the return is MOBILE on its story', outStep > 15, `step=${outStep.toFixed(1)}px`);
     }
   }
+}
+
+// --- RIG Q: THE STORIES GATE (LairSeat.stories — batch 29, the fold's story rung)
+// A story-hungry claim (a landmark wearing siteTier N) refuses at the FOLD
+// on country that can never stack it — no darts, no rng — through the
+// story-reach resolver engine/tiers.ts installs (registerLairStoryReach:
+// per-layout reach registry × the tileset's faces and routes). Tileset
+// GRAIN by design: per-mint rolls that come up short (a shed mountain, a
+// course's riverland override) still refuse at the dart, the standing
+// starved-landmark class. The qa row registers LAST deliberately — nothing
+// after this block reads the lair registry (the probe-local content law).
+{
+  check('Q1 the reach resolver speaks the register (pinnacle stacks 5, needles 1, flat country 0)',
+    tilesetStoryReach(TILESETS.pinnacle) === 5 && tilesetStoryReach(TILESETS.needles) === 1
+    && tilesetStoryReach(TILESETS.meadow) === 0 && tilesetStoryReach(TILESETS.aether_drift) === 0,
+    `pinnacle=${tilesetStoryReach(TILESETS.pinnacle)} needles=${tilesetStoryReach(TILESETS.needles)}`);
+  registerLair({
+    id: 'qa_stories_claim', landmark: 'qa_stories_site',
+    seat: { biomes: ['highland'], place: 'surface', chance: 1, stories: 2 },
+  });
+  const hasQ = (tileset: string): boolean =>
+    lairLandmarkRolls({ place: 'surface', biome: 'highland', level: 20, tileset })
+      .some(r => r.landmark === 'qa_stories_site');
+  check('Q2 a stories-2 claim folds IN on the face that stacks (the pinnacle)', hasQ('pinnacle'));
+  check('Q3 the same claim refuses the same biome\'s FLAT faces at the fold (no darts burned)',
+    !hasQ('snowcrown') && !hasQ('highland') && !hasQ('meadow'));
+  check('Q4 storyless rows stand beside the gated one unmoved (absent == byte-identical at the fold)',
+    lairLandmarkRolls({ place: 'surface', biome: 'highland', level: 20, tileset: 'snowcrown' })
+      .some(r => r.landmark === 'giants_cairn')
+    && lairLandmarkRolls({ place: 'surface', biome: 'butteland', level: 12, tileset: 'needles' })
+      .some(r => r.landmark === 'midden_mouth_site'));
 }
 
 console.log(fails ? `\nprobe_lairs: ${fails} FAILURE(S)` : '\nprobe_lairs: ALL PASS');

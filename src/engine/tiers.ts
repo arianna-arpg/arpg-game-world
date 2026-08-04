@@ -55,6 +55,9 @@ import {
   scatterDecoration, type GenCtx,
 } from './levelgen';
 import { carveMassifs } from './massif';
+import { registerLairStoryReach } from './lairs';
+import { TILESETS, type TilesetDef } from '../data/tilesets';
+import { BIOMES } from '../world/biomes';
 
 export type { ZoneTiers };
 
@@ -958,4 +961,72 @@ registerTierSiting({
     return !!rk && !rk.tierLink && !rk.walkable && rk.tier === tier;
   },
   reaches: (grid, from, to, tier) => storyReachable(grid, from, to, tier),
+});
+
+// --- THE STORY REACH (the stories gate's resolver — LairSeat.stories) -------------
+// How many OVER-stories a layout family can stack, as an OPEN registry (the
+// registerLayout idiom): each over-story recipe declares its own reach law
+// beside its carve, a fold-time consumer asks per TILESET, and flat country
+// answers 0 free. The lair fold's stories gate (engine/lairs.ts) rides this
+// through registerLairStoryReach — a story-hungry claim refuses at the fold
+// on ground that can NEVER stack, burning no darts and no rng. TILESET
+// GRAIN, deliberately: the reach is the face's best-case CAPABILITY (max
+// over base + variants, and over the biome's allowedLayouts where no
+// forceLayout pins one — worldgen's own precedence), so per-mint rolls that
+// come up short (a shed mountain, a course's riverland override) still
+// refuse at the dart, the standing starved-landmark class.
+
+/** Per-layout story reach: merged layoutParams in, best-case story count
+ *  out. Registered beside the recipes; unregistered layouts stack nothing. */
+const LAYOUT_STORIES: Record<string, (params?: Record<string, unknown>) => number> = {};
+
+export function registerLayoutStories(
+  layoutType: string, reach: (params?: Record<string, unknown>) => number,
+): void {
+  LAYOUT_STORIES[layoutType] = reach;
+}
+
+/** Tolerant band-top reader: a plain [lo, hi] band answers hi; a byDepth
+ *  ramp answers the best end (capability, not a mint's local roll). */
+function bandTop(v: unknown, dflt: number): number {
+  if (Array.isArray(v) && typeof v[1] === 'number') return v[1];
+  if (v && typeof v === 'object' && Array.isArray((v as { byDepth?: unknown[] }).byDepth)) {
+    let m = 0;
+    for (const end of (v as { byDepth: unknown[] }).byDepth) m = Math.max(m, bandTop(end, 0));
+    if (m > 0) return m;
+  }
+  return dflt;
+}
+
+// The needles country: the butte tops are ONE story, always.
+registerLayoutStories('needles', () => 1);
+// The summit ascent: as many stories as the face's level band can roll
+// (peakLevels' top, the recipe's own MAX_TIER clamp — the arena-fit shed
+// is a per-mint roll the capability read deliberately ignores).
+registerLayoutStories('switchback', (p) =>
+  Math.max(1, Math.min(MAX_TIER, bandTop(p?.peakLevels, TIER_CFG.switchback.levels[1]))));
+
+/** A tileset's story reach: max over its faces (base + variants, each with
+ *  the per-key layoutParams merge worldgen mints with) and over its layout
+ *  routes (forceLayout pins one; else the biome's allowedLayouts roll). */
+export function tilesetStoryReach(ts: TilesetDef): number {
+  const routes = ts.forceLayout
+    ? [ts.forceLayout]
+    : Object.keys((ts.biome ? BIOMES[ts.biome]?.allowedLayouts : undefined) ?? {});
+  let best = 0;
+  const faces: (Record<string, unknown> | undefined)[] = [
+    ts.layoutParams,
+    ...(ts.variants ?? []).map(v => ({ ...ts.layoutParams, ...v.layoutParams })),
+  ];
+  for (const route of routes) {
+    const reach = LAYOUT_STORIES[route];
+    if (!reach) continue;
+    for (const p of faces) best = Math.max(best, reach(p));
+  }
+  return best;
+}
+
+registerLairStoryReach((tilesetId) => {
+  const ts = TILESETS[tilesetId];
+  return ts ? tilesetStoryReach(ts) : 0;
 });

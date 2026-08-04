@@ -83,6 +83,18 @@ export interface LairSeat {
    *  relief fabric's vertical truth). `{ elevation: [0.6, 1] }` is "high
    *  ground only". A row that asks refuses ground with no reading. */
   climate?: Record<string, [number, number]>;
+  /** STORY claims (THE STORIES GATE — the aloft lane's fold rung): the
+   *  ground's face must be able to STACK at least this many OVER-stories
+   *  (the tier fabric's upper layers) — a story-hungry claim (a landmark
+   *  wearing siteTier N) refuses at the FOLD on flat country, burning no
+   *  darts and no rng. TILESET-GRAIN by construction: the reach is the
+   *  face's declared CAPABILITY (its layout family's best case across
+   *  base + variants, via the resolver engine/tiers.ts installs), so the
+   *  gate refuses only ground that can NEVER stack — a mint whose own
+   *  roll came up short (a shed mountain, a per-mint forceLayout
+   *  override) still refuses at the dart, the standing starved-landmark
+   *  class. Absent = byte-identical, exactly like every other axis. */
+  stories?: number;
 }
 
 /** One registered lair: an id, the LANDMARK that stands at its seat, and the
@@ -100,6 +112,18 @@ const LAIRS: Record<string, LairSeatRow> = {};
 export function registerLair(row: LairSeatRow): void {
   if (LAIRS[row.id]) console.warn(`[lairs] re-registering '${row.id}' — overriding`);
   LAIRS[row.id] = row;
+}
+
+/** THE STORY-REACH RESOLVER (LairSeat.stories) — how many OVER-stories a
+ *  tileset's country can stack, injected by engine/tiers.ts at eval (the
+ *  registerTierSiting idiom: this module stays a pure leaf; the tier fabric
+ *  owns the recipes' story truths). Absent (a harness that never loads the
+ *  tier fabric): every stories claim stands down LOUDLY — the dead-dial
+ *  law, never a silent valley seat. */
+let STORY_REACH: ((tilesetId: string) => number) | null = null;
+let storyReachWarned = false;
+export function registerLairStoryReach(fn: (tilesetId: string) => number): void {
+  STORY_REACH = fn;
 }
 
 export function lairRows(): LairSeatRow[] { return Object.values(LAIRS); }
@@ -153,6 +177,18 @@ export function lairLandmarkRolls(q: LairGround): LandmarkRoll[] {
         if (v === undefined || v < lo || v > hi) { inBand = false; break; }
       }
       if (!inBand) continue;
+    }
+    // STORY claims (THE STORIES GATE): a story-hungry row refuses ground
+    // whose face can never stack the ask — at the fold, before any rng.
+    if (s.stories && s.stories >= 1) {
+      if (!STORY_REACH) {
+        if (!storyReachWarned) {
+          storyReachWarned = true;
+          console.warn(`[lairs] '${row.id}' asks stories ≥ ${s.stories} but no story-reach resolver stands (tier fabric unloaded) — the claim stands down`);
+        }
+        continue;
+      }
+      if (STORY_REACH(q.tileset) < s.stories) continue;
     }
     // ONE evaluation law: strata reads the ladder depth (surface = 0), level
     // reads the zone's level — both through the presence fabric's envelope.

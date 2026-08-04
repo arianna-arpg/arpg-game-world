@@ -1333,6 +1333,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     // where the herd waters and the grass watches back.
     compositions: [
       { composition: 'grazing_pan', chance: 0.3 },
+      // THE EYRIE RING (data/compositions.ts — the aloft composition lane's
+      // first authored content): a perch court on the butte tops the
+      // standing aloft troop reads against (mesa_baboon + crag_condor ride
+      // the packs above; tierPackSplit posts them). The site wears
+      // siteTier 1, so the ring is the STORY's arrangement.
+      { composition: 'eyrie_ring', chance: 0.25 },
     ],
     spawnerId: 'bone_altar',
     objectives: [

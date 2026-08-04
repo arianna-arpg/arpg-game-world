@@ -1426,5 +1426,175 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
     errsO.filter(e => e.includes('qa_aloft_bad')).join(' | ') || '(no errors)');
 }
 
+// --- RIG O, THE MULTI-STORY SWEEP (batch 29 — siteTier 2+ over the switchback)
+// The lane beyond needles' one-story stack, pinned on the pinnacle's own
+// faces (the 40-seed sweeps measured 100% sovereign/rim/road on every placed
+// seat at stories 2, 3 and 4, rect and ellipse): the aimed story dart, the
+// quantize-hop killer, the sovereign center and the story road all hold with
+// the seat an annulus BENCH crossed by k stacked ramps instead of a butte
+// top. THE DART BUDGET (LandmarkDef.siteTryMul — the dress budget's landmark
+// sibling, this sweep's one lane fix) widens the starved half-cone (story-3
+// bench seats 20/40 forced mints at the standing 18 darts, 34/40 at mul 3 —
+// every refusal honest, every added seat lawful). THE EYRIE RING
+// (data/compositions.ts — the aloft composition lane's first authored
+// content) is pinned on the needles face it ships on; the wind faces were
+// measured storyless (zero over-story floor cells) and refused the claim.
+{
+  seedGlobalRandom(0x51ee7);
+  registerDoodadRule('qa_summit_door', { overlap: 'trigger', spacing: 60 });
+  const dressQ = [
+    { kind: 'bone_pile', count: [3, 5] as [number, number], radius: [10, 15] as [number, number] },
+    { kind: 'rock', count: [1, 3] as [number, number], radius: [12, 18] as [number, number] },
+  ];
+  for (const story of [2, 3]) {
+    registerLandmark({
+      id: `qa_summit_site_${story}`, builder: 'den_mouth', size: [180, 250], clearSite: true,
+      siteTier: story, params: { mouthKind: 'qa_summit_door', dress: dressQ },
+    });
+  }
+  registerLandmark({
+    id: 'qa_summit_site_3_wide', builder: 'den_mouth', size: [180, 250], clearSite: true,
+    siteTier: 3, siteTryMul: 3, params: { mouthKind: 'qa_summit_door', dress: dressQ },
+  });
+
+  const tsQ = TILESETS.pinnacle;
+  const WQ = 3000, HQ = 2350;
+  const entryQ = vec(140, HQ / 2);
+  const exitsQ = [vec(WQ - 140, HQ / 2)];
+  const coneParams = { ...tsQ.layoutParams, ...tsQ.variants![0].layoutParams };
+  const shoulderParams = { ...tsQ.layoutParams, ...tsQ.variants![1].layoutParams };
+  const mkSummit = (over: Partial<ZoneDef>): ZoneDef => ({
+    id: 'qa_summit_zone', name: 'QA Summit', level: 14,
+    size: { w: WQ, h: HQ },
+    theme: { ...tsQ.theme },
+    layoutType: 'switchback',
+    layout: tsQ.layout,
+    layoutParams: { ...tsQ.layoutParams },
+    objective: { kind: 'none' },
+    packs: tsQ.packs,
+    exits: [{ to: 'qa_summit_home', side: 's' }],
+    map: { x: 0, y: 0 }, seed: 0,
+    geo: { biomeDepth: 0.85 },
+    ...over,
+  });
+  const sweepQ = (
+    over: Partial<ZoneDef>, story: number, seedBase: number, n: number,
+  ): { placed: number; lawful: number; offStory: number } => {
+    let placed = 0, lawful = 0, offStory = 0;
+    for (let i = 0; i < n; i++) {
+      const seed = (seedBase + i * 7919) >>> 0;
+      const def = mkSummit({ ...over, seed });
+      const out = generateLayout(def, { w: WQ, h: HQ }, new Rng(seed), entryQ, exitsQ);
+      const mouth = out.doodads.find(d => d.kind === 'qa_summit_door');
+      if (!mouth) continue;
+      placed++;
+      const walkQ = out.walk as GridWalkField | undefined;
+      const rk = walkQ?.regionAt ? regionKind(walkQ.regionAt(mouth.pos.x, mouth.pos.y)) : undefined;
+      const sovereign = mouth.tier === story && !!rk && !rk.tierLink && !rk.walkable && rk.tier === story;
+      if (!sovereign) { offStory++; continue; }
+      const shapeQ = (def.shape ?? 'rect') as 'rect' | 'ellipse';
+      if (insideBounds(mouth.pos, 28, { w: WQ, h: HQ, shape: shapeQ })
+        && !!walkQ && storyReachable(walkQ, entryQ, mouth.pos, story)) lawful++;
+    }
+    return { placed, lawful, offStory };
+  };
+
+  // O10: story 2 on the cone face — the bench annulus seats like the butte.
+  const o10 = sweepQ({ layoutParams: coneParams, landmarks: [{ landmark: 'qa_summit_site_2', chance: 1 }] }, 2, 0x51ee7, 8);
+  check('O10 story-2 seats on the cone face: every placed seat sovereign, in-rim, road-reached',
+    o10.placed >= 7 && o10.offStory === 0 && o10.lawful === o10.placed,
+    `placed=${o10.placed}/8 lawful=${o10.lawful} offStory=${o10.offStory}`);
+
+  // O11: story 3 on the base face — three stacked ramps, one BFS.
+  const o11 = sweepQ({ landmarks: [{ landmark: 'qa_summit_site_3', chance: 1 }] }, 3, 0x51ee7 + 3 * 977, 8);
+  check('O11 story-3 seats cross the stacked ramps (sovereign + rim + the layered story road)',
+    o11.placed >= 5 && o11.offStory === 0 && o11.lawful === o11.placed,
+    `placed=${o11.placed}/8 lawful=${o11.lawful} offStory=${o11.offStory}`);
+
+  // O12: the ellipse batch at story 2 — the rim law where the shape bites.
+  const o12 = sweepQ({ shape: 'ellipse', landmarks: [{ landmark: 'qa_summit_site_2', chance: 1 }] }, 2, 0xe11b5e, 8);
+  check('O12 ellipse mints keep every multi-story dwell seat in-shape and lawful',
+    o12.placed >= 5 && o12.offStory === 0 && o12.lawful === o12.placed,
+    `placed=${o12.placed}/8 lawful=${o12.lawful} offStory=${o12.offStory}`);
+
+  // O13: THE DART BUDGET — the starved half-cone (story 3) at the standing 18
+  // darts vs siteTryMul 3, same seed ladder: strictly more seats, all lawful,
+  // and the misses stay whole refusals in BOTH forms (offStory 0 everywhere).
+  const leanQ = sweepQ({ layoutParams: shoulderParams, landmarks: [{ landmark: 'qa_summit_site_3', chance: 1 }] }, 3, 0x51ee7 + 5 * 977, 10);
+  const wideQ = sweepQ({ layoutParams: shoulderParams, landmarks: [{ landmark: 'qa_summit_site_3_wide', chance: 1 }] }, 3, 0x51ee7 + 5 * 977, 10);
+  check('O13 siteTryMul widens the starved face and every added seat obeys the laws',
+    wideQ.placed > leanQ.placed && wideQ.offStory === 0 && leanQ.offStory === 0
+    && wideQ.lawful === wideQ.placed && leanQ.lawful === leanQ.placed,
+    `lean=${leanQ.placed}/10 wide=${wideQ.placed}/10`);
+
+  // O14: THE EYRIE RING — the authored composition on the face it ships on:
+  // the heart aloft, the ring ≥2 tier-stamped pieces, no unstamped stray on
+  // sovereign top ground, and the needles row + registry refs standing.
+  const tsN = TILESETS.needles;
+  let eyrieRinged = 0, eyrieStrays = 0, eyrieHearts = 0;
+  for (let i = 0; i < 8; i++) {
+    const seed = (0xe4e1e + i * 7919) >>> 0;
+    const defN: ZoneDef = {
+      id: 'qa_eyrie_zone', name: 'QA Eyrie', level: 8,
+      size: { w: 3600, h: 2700 }, theme: { ...tsN.theme },
+      layoutType: 'needles', layout: tsN.layout, layoutParams: { ...tsN.layoutParams },
+      objective: { kind: 'none' }, packs: tsN.packs,
+      exits: [{ to: 'qa_eyrie_home', side: 's' }],
+      map: { x: 0, y: 0 }, seed, geo: { biomeDepth: 0.7 },
+      compositions: [{ composition: 'eyrie_ring', chance: 1 }],
+    };
+    const out = generateLayout(defN, { w: 3600, h: 2700 }, new Rng(seed), vec(140, 1350), [vec(3460, 1350)]);
+    const walkN = out.walk as GridWalkField | undefined;
+    const heart = out.doodads.find(d => d.kind === 'bone_pile' && d.tier === 1);
+    if (!heart) continue;
+    eyrieHearts++;
+    const ringN = out.doodads.filter(d =>
+      (d.kind === 'dead_tree' || d.kind === 'rock' || d.kind === 'veld_grass')
+      && d.tier === 1 && Math.hypot(d.pos.x - heart.pos.x, d.pos.y - heart.pos.y) < 100);
+    if (ringN.length >= 2) eyrieRinged++;
+    eyrieStrays += out.doodads.filter(d => {
+      if (!(d.kind === 'dead_tree' || d.kind === 'rock' || d.kind === 'veld_grass' || d.kind === 'bone_pile')) return false;
+      if (d.tier !== undefined || Math.hypot(d.pos.x - heart.pos.x, d.pos.y - heart.pos.y) >= 100) return false;
+      const rk = walkN?.regionAt ? regionKind(walkN.regionAt(d.pos.x, d.pos.y)) : undefined;
+      return !!rk && !rk.walkable && !rk.tierLink && rk.tier === 1;
+    }).length;
+  }
+  check('O14 the eyrie ring stands aloft on the needles face (hearts + rings, zero unstamped strays)',
+    eyrieHearts >= 6 && eyrieRinged >= 5 && eyrieStrays === 0,
+    `hearts=${eyrieHearts}/8 ringed=${eyrieRinged} strays=${eyrieStrays}`);
+  check('O14 the needles row ships the ring and validation stands clean on it',
+    (tsN.compositions ?? []).some(r => r.composition === 'eyrie_ring' && r.chance > 0 && r.chance <= 1)
+    && !validateCompositions().some(e => e.includes('eyrie_ring')),
+    (tsN.compositions ?? []).map(r => r.composition).join(','));
+
+  // O15: THE WIND-FACE REFUSAL — the aetherial archipelagos stack no
+  // over-story (the eyrie's measured refusal-with-cause: an aloft site
+  // starves there structurally; their aloft flavor stays the vane roost).
+  // A future wind recipe that grows real stories moves this pin on purpose.
+  const tsW = TILESETS.aether_drift;
+  let windStoryCells = 0;
+  for (let i = 0; i < 3; i++) {
+    const seed = (0xa11d + i) >>> 0;
+    const defW: ZoneDef = {
+      id: 'qa_wind_zone', name: 'QA Wind', level: 14,
+      size: { w: 2600, h: 2000 }, theme: { ...tsW.theme },
+      layoutType: 'aether_drift', layout: tsW.layout, layoutParams: { ...tsW.layoutParams },
+      objective: { kind: 'none' }, packs: tsW.packs,
+      exits: [{ to: 'qa_wind_home', side: 's' }],
+      map: { x: 0, y: 0 }, seed,
+    };
+    const out = generateLayout(defW, { w: 2600, h: 2000 }, new Rng(seed), vec(140, 1000), [vec(2460, 1000)]);
+    const walkW = out.walk as GridWalkField | undefined;
+    if (!walkW) continue;
+    for (let gy = 0; gy < walkW.rows; gy++) {
+      for (let gx = 0; gx < walkW.cols; gx++) {
+        if (tierFloorOf(walkW.regionAt(gx * walkW.cell + walkW.cell / 2, gy * walkW.cell + walkW.cell / 2))) windStoryCells++;
+      }
+    }
+  }
+  check('O15 the wind faces stack no over-story (the eyrie\'s refusal stands structural)',
+    windStoryCells === 0, `storyCells=${windStoryCells}`);
+}
+
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);
 process.exit(fails === 0 ? 0 : 1);

@@ -809,3 +809,38 @@ registerComposition({
   pre: [{ kind: 'clearing', at: 'pan', count: [1, 1], radius: [44, 58] }],
   post: [{ kind: 'cluster', cluster: 'pan_court', at: 'pan', count: [1, 1] }],
 });
+
+// THE EYRIE RING (the aloft lane's first authored composition —
+// CompositionSite.siteTier as CONTENT, the qa_aloft_court pattern shipped):
+// a raptor court on the butte TOPS — the nest heap at heart, wind-bleached
+// snag perches and worked stone around it, the sward gone to seed between.
+// The site steps through the STORY's own view and the aloft window judges
+// every piece by the summit's walk truth (each stamped tier 1), so the ring
+// stands where only the ramps and spans reach. THE TENANT READ is the
+// standing law, not a row: mesa_baboon troops and crag_condors already ride
+// the needles packs with tierPackSplit seating them aloft — the ring is the
+// place the troop reads against, never a spawner. The wind faces were
+// MEASURED and refused: the aetherial archipelagos stack no over-story
+// (zero tier floor cells — an aloft site starves there structurally), so
+// their aloft flavor stays the vane roost's own composition. Existing kinds
+// and painters only; no clearing (the tops' kit is sparse by law and
+// layTierKit ignores reservations anyway — a court reservation would be a
+// dead promise up there).
+registerCluster({
+  id: 'eyrie_perches',
+  anchor: { radius: 26 },
+  // Counts are the TRY budget too (cluster pieces dart once each; the tops'
+  // own kit crowds them) — measured at [3,5]/[2,4]: 32/40 forced mints ring
+  // ≥2 around the heart, avg 3.9 pieces; the leaner [2,4]/[1,3] rang 27/40.
+  pieces: [
+    { kind: 'bone_pile', radius: [12, 16], count: [1, 2], ring: [0, 18], centerpiece: true, rot: true },
+    { kind: 'dead_tree', radius: [10, 14], count: [3, 5], ring: [34, 66], rot: true },
+    { kind: 'rock', radius: [10, 16], count: [2, 4], ring: [40, 80], rot: true },
+    { kind: 'veld_grass', radius: [14, 20], count: [1, 2], ring: [48, 86] },
+  ],
+});
+registerComposition({
+  id: 'eyrie_ring',
+  sites: [{ id: 'perch', radius: [70, 100], siteTier: 1 }],
+  post: [{ kind: 'cluster', cluster: 'eyrie_perches', at: 'perch', count: [1, 1] }],
+});

@@ -6861,6 +6861,15 @@ export interface LandmarkDef {
    *  to doodad-dressing builders. Takes precedence over siteWalk; ≥1;
    *  unset = byte-identical siting for every existing def. */
   siteTier?: number;
+  /** THE DART BUDGET (the dress budget's landmark sibling — ctx.siteTryMul's
+   *  per-def kin): multiplies findLandmarkSpot's 18 darts for a def whose
+   *  legal ground is a sliver of the arena (the multi-story sweep's measured
+   *  case: a half-cone's story-3 bench seats 20/40 forced mints at the
+   *  standing budget — every refusal honest, half the country's mints
+   *  doorless). Draw SHAPE per dart is unchanged, so a declared def's stream
+   *  widens only on ITS OWN failures; unset = the exact legacy 18 for every
+   *  existing def. */
+  siteTryMul?: number;
 }
 
 /** What a builder receives: the reserved footprint, the ensured grid, the
@@ -6953,7 +6962,9 @@ export function landmarkDefs(): LandmarkDef[] { return Object.values(LANDMARKS);
 
 /** Site a landmark footprint: portal/entry clearance + reservations + (on a
  *  pre-existing grid) walkable anchor probes. Draws-before-filters. */
-function findLandmarkSpot(ctx: GenCtx, r: number, siteWalk?: boolean, siteTier?: number): Vec2 | null {
+function findLandmarkSpot(
+  ctx: GenCtx, r: number, siteWalk?: boolean, siteTier?: number, tryMul?: number,
+): Vec2 | null {
   // THE ALOFT DART (LandmarkDef.siteTier — the aimed dart's STORY sibling):
   // resolve the story view once. A declared def with no tier fabric or no
   // grid stands DOWN loudly (the dead-dial law) — never a silent valley seat.
@@ -6968,7 +6979,10 @@ function findLandmarkSpot(ctx: GenCtx, r: number, siteWalk?: boolean, siteTier?:
     }
     aloftView = TIER_SITING.view(ctx.walk, siteTier);
   }
-  for (let tries = 0; tries < 18; tries++) {
+  // THE DART BUDGET (LandmarkDef.siteTryMul): scarce-ground defs widen the
+  // dart count, never the per-dart draw shape — unset = the legacy 18.
+  const darts = Math.max(1, Math.round(18 * (tryMul ?? 1)));
+  for (let tries = 0; tries < darts; tries++) {
     let p = vec(
       ctx.rng.range(BORDER + r, Math.max(BORDER + r, ctx.arena.w - BORDER - r)),
       ctx.rng.range(BORDER + r, Math.max(BORDER + r, ctx.arena.h - BORDER - r)));
@@ -7051,7 +7065,7 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
   const builder = LANDMARK_BUILDERS[def.builder];
   if (!builder) { console.warn(`[landmarks] '${def.id}': unknown builder '${def.builder}'`); return; }
   const dia = ctx.rng.range(def.size[0], def.size[1]);
-  const sited = at ?? findLandmarkSpot(ctx, dia / 2, def.siteWalk, def.siteTier);
+  const sited = at ?? findLandmarkSpot(ctx, dia / 2, def.siteWalk, def.siteTier, def.siteTryMul);
   if (!sited) return;
   // SNAP the footprint onto the walk lattice (the plan-structure rule): an
   // unsnapped mask origin phase-shifts every painted run one bleed cell in
