@@ -186,6 +186,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_wisplight.ts', status: 'excluded', excuse: 'flaky', why: 'FLAKY (5 fails in 10 observed runs — the loudest of the four): G10-G12/G16 cascade off "the light rides the STRONGEST body in reach", which picks the fen_hound over the level-18 weaver about half the time; the seek/ride window is not deterministic' },
   { probe: 'probe_workshop.ts', status: 'green', tier: 'fast', why: 'THE WORKSHOP (the Entity Forge\'s store) — the NAMESPACE LAW both directions: grafts refuse unprefixed ids, shipped content never squats the prefix' },
   { probe: 'probe_worldbossloot.ts', status: 'green', tier: 'fast', why: 'THE SOVEREIGN HOARDS — every world boss names its OWN resolvable loot table, the generic KillCtx.dropLootTable verb lays all three result kinds through the drop primitives, and the seal still refuses on spoils-none ground' },
+  { probe: 'probe_zonepolicy.ts', status: 'green', tier: 'fast', why: 'ZONE POLICY — the layout half beside the biome half through the ONE policyFor seam: the shipped-empty layout table is byte-identical to biome-only (exhaustive biome × layout × id A/B against the old logic), authored deny/allow rows AND both ways, and eventTargetable/holdfastHostable route the composed verdict' },
 ];
 
 /** Green rows — the gate — optionally narrowed to one lane. */

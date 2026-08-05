@@ -1,16 +1,19 @@
 // ---------------------------------------------------------------------------
 // ZONE POLICY — the ONE resolver for "may this faction / event appear in this
-// zone", per the zone's BIOME and (Phase-2) LAYOUT.
+// zone", per the zone's BIOME and LAYOUT.
 //
 // The user's ask: whitelist/blacklist events and factions per biome and per
 // layout type — "no goblins in the deep sea, but maybe an Eldritch one; no land
 // crusade marches into the ocean." Every gate routes through these two functions,
-// so the DATA SOURCE is swappable with zero caller churn: today it reads the
-// static BIOMES table; a later pass can read a run-locked manifest policy instead
-// (the user's "static to start, not locked-in"). Callers never change.
+// and both read their sources through ONE seam (policyFor), so the DATA SOURCE
+// is swappable with zero caller churn: today policyFor folds the static BIOMES
+// table with the layout policy table beside it; a later pass appends a
+// run-locked manifest source inside that one function (the user's "static to
+// start, not locked-in"). Callers never change.
 //
 // Semantics (composed): a deny list FORBIDS; a non-empty allow list is a strict
-// WHITELIST (only listed pass). Biome policy and layout policy AND together.
+// WHITELIST (only listed pass). Biome policy and layout policy AND together —
+// a deny in EITHER source refuses, and every allow list present must admit.
 // Pure leaf: imports only the BIOMES data + the structural zone shape.
 // ---------------------------------------------------------------------------
 
@@ -51,23 +54,68 @@ function passes(id: string, deny?: string[], allow?: string[]): boolean {
   return true;
 }
 
-/** May this FACTION appear (as a native, a patron, an ambient pack, or an event
- *  spawn) in this zone? Composed across the zone's biome (+ layout later). */
-export function factionAllowed(faction: string, zone: PolicyZone): boolean {
+/** One SOURCE of zone policy — the row shape every provider speaks: the
+ *  static biome table (BiomeInfo carries these four fields structurally),
+ *  the layout table below, a run-locked manifest later. Absent lists
+ *  abstain; an empty allow list abstains too (`passes` above). */
+export interface ZonePolicySource {
+  denyFactions?: string[];
+  allowFactions?: string[];
+  denyEvents?: string[];
+  allowEvents?: string[];
+}
+
+/** Per-LAYOUT policy rows, keyed by layout id (the id registerLayout takes;
+ *  ZoneDef.layoutType names it on the zone). Layouts register as BARE
+ *  generators (levelgen's LAYOUT_GENERATORS — there is no LayoutDef to hang
+ *  fields on), so their policy lives here as a sibling table instead of
+ *  widening registerLayout, and this file stays a pure leaf. SHIPS EMPTY on
+ *  purpose: with no row authored, every verdict is exactly the biome half's
+ *  (probe_zonepolicy pins the A/B). */
+const LAYOUT_POLICIES: Record<string, ZonePolicySource> = {};
+
+/** Author a layout's policy row — beside the layout's own registerLayout
+ *  call, or from any data pass. Re-registering an id REPLACES its row
+ *  (registerLayout's own idiom). E.g. keeping the land crusade out of every
+ *  'underwater' zone regardless of biome would be one row:
+ *  `registerLayoutPolicy('underwater', { denyEvents: ['crusade'] })`. */
+export function registerLayoutPolicy(layoutType: string, policy: ZonePolicySource): void {
+  LAYOUT_POLICIES[layoutType] = policy;
+}
+
+/** THE ONE DATA-SOURCE SEAM — both verdicts below read their policy sources
+ *  through here, in order: the zone's BIOME row, then its LAYOUT row. The
+ *  verdicts AND `passes` across the list, so a later pass installs a
+ *  run-locked manifest policy by appending its source in THIS function —
+ *  no caller changes, not even factionAllowed/eventAllowed themselves. */
+export function policyFor(zone: PolicyZone): ZonePolicySource[] {
+  const out: ZonePolicySource[] = [];
   const b = zone.biome ? BIOMES[zone.biome] : undefined;
-  if (b && !passes(faction, b.denyFactions, b.allowFactions)) return false;
-  // (Phase-2 LayoutDef faction policy ANDs in here.)
+  if (b) out.push(b);
+  const l = zone.layoutType ? LAYOUT_POLICIES[zone.layoutType] : undefined;
+  if (l) out.push(l);
+  return out;
+}
+
+/** May this FACTION appear (as a native, a patron, an ambient pack, or an event
+ *  spawn) in this zone? ANDed across every policy source claiming the zone —
+ *  its biome and its layout. */
+export function factionAllowed(faction: string, zone: PolicyZone): boolean {
+  for (const src of policyFor(zone)) {
+    if (!passes(faction, src.denyFactions, src.allowFactions)) return false;
+  }
   return true;
 }
 
 /** May this EVENT (an overlay id: 'demon_invasion' | 'crusade' | 'fractures' |
- *  'hunt' | 'conclave' | 'breach' | …) target this zone? Callers compose this with
- *  their existing objective.kind/cave/floating checks — or better, call
- *  eventTargetable below, which composes them for you. */
+ *  'hunt' | 'conclave' | 'breach' | …) target this zone? ANDed across every
+ *  policy source claiming the zone — its biome and its layout. Callers compose
+ *  this with their existing objective.kind/cave/floating checks — or better,
+ *  call eventTargetable below, which composes them for you. */
 export function eventAllowed(eventId: string, zone: PolicyZone): boolean {
-  const b = zone.biome ? BIOMES[zone.biome] : undefined;
-  if (b && !passes(eventId, b.denyEvents, b.allowEvents)) return false;
-  // (Phase-2 LayoutDef event policy ANDs in here.)
+  for (const src of policyFor(zone)) {
+    if (!passes(eventId, src.denyEvents, src.allowEvents)) return false;
+  }
   return true;
 }
 
