@@ -208,6 +208,36 @@ export const BASE_LIST: ItemBaseDef[] = [
     implicits: [line('minionLife', 'increased', [0.08, 0.15])],
     dropWeight: 0,
   },
+  {
+    id: 'legs_mi_gnoll', name: 'Packhunter Trews', category: 'legs',
+    w: CATEGORY_SIZE.legs.w, h: CATEGORY_SIZE.legs.h,
+    tags: ['armour', 'legs', 'evasion', 'mi_gnoll'],
+    defense: { evasion: 1 },
+    implicits: [line('moveSpeed', 'increased', [0.04, 0.08])],
+    dropWeight: 0,
+  },
+  {
+    id: 'ring_mi_gnoll', name: "Impaler's Fang", category: 'ring',
+    w: CATEGORY_SIZE.ring.w, h: CATEGORY_SIZE.ring.h,
+    tags: ['jewelry', 'ring', 'mi_gnoll'],
+    implicits: [line('apply_bleed', 'flat', [0.05, 0.1])],
+    dropWeight: 0,
+  },
+  {
+    id: 'amulet_mi_abyssal', name: "Horologist's Escapement", category: 'amulet',
+    w: CATEGORY_SIZE.amulet.w, h: CATEGORY_SIZE.amulet.h,
+    tags: ['jewelry', 'amulet', 'mi_abyssal'],
+    implicits: [line('cooldownRecovery', 'increased', [0.05, 0.1])],
+    dropWeight: 0,
+  },
+  {
+    id: 'gloves_mi_abyssal', name: 'Riftbound Cuffs', category: 'gloves',
+    w: CATEGORY_SIZE.gloves.w, h: CATEGORY_SIZE.gloves.h,
+    tags: ['armour', 'gloves', 'energyShield', 'mi_abyssal'],
+    defense: { energyShield: 1 },
+    implicits: [line('insight', 'flat', [8, 15])],
+    dropWeight: 0,
+  },
 
   // Amulets — attribute identities + two build-defining oddballs.
   jewel('amulet_amber', 'Amber Amulet', 'amulet', [line('strength', 'flat', [3, 6])], 30, { martial: 1.5 }),

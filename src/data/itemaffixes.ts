@@ -581,6 +581,18 @@ const PREFIXES: AffixDef[] = [
     lines: [{ stat: 'minionDamage', kind: 'increased' }, { stat: 'minionRegen', kind: 'flat' }],
     top: [0.35, 3], floor: 0.25, count: 4, baseTags: ['mi_undead'], weight: 90,
   }),
+  fam({
+    id: 'mi_gnoll_packlaw', kind: 'prefix',
+    names: ["Alpha's", "Packhunter's", "Carrion"],
+    lines: [{ stat: 'apply_bleed', kind: 'flat' }, { stat: 'moveSpeed', kind: 'increased' }],
+    top: [0.12, 0.08], floor: 0.3, count: 3, baseTags: ['mi_gnoll'], weight: 90,
+  }),
+  fam({
+    id: 'mi_abyssal_horologe', kind: 'prefix',
+    names: ['Unhoured', "Horologist's", 'Pendulous'],
+    lines: [{ stat: 'castSpeed', kind: 'increased' }, { stat: 'cooldownRecovery', kind: 'increased' }],
+    top: [0.09, 0.12], floor: 0.3, count: 3, baseTags: ['mi_abyssal'], weight: 90,
+  }),
 
   // THE ROYAL REGISTER — the Swarming's spoils. Royal-jelly caches FORCE one
   // of these three via LootEntry.withFamily; the thin natural weight keeps
