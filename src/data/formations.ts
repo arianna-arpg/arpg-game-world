@@ -1464,6 +1464,50 @@ registerDoodadRule('howdah_wreck', {
   forbidOn: ['water', 'lava', 'chasm'],
 });
 registerStamp('howdah_wreck', stampSingle('howdah_wreck', [20, 26]));
+// The Risen Host's wayside: the censer-stand a procession set down and never
+// took up again (the harvest_idol's shape — a slight solid stand), and the
+// bone-lash's shed links raked flat where a whip re-grew its chain.
+registerDoodadRule('guttered_thurible', {
+  overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 90,
+  bodyScale: 0.5,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerStamp('guttered_thurible', stampSingle('guttered_thurible', [10, 14]));
+registerDoodadRule('marrow_moult', {
+  overlap: 'ground', spacing: 40, walkOnly: true,
+  forbidOn: ['water', 'lava', 'chasm'],
+});
+registerStamp('marrow_moult', stampSingle('marrow_moult', [12, 18]));
+// The wilds' wayside: the ettin's gnaw-heap (walk-through litter — a larder,
+// never an obstacle), and the Glut's spent birthing caul, farrowed flat.
+registerDoodadRule('gnaw_midden', {
+  overlap: 'ground', spacing: 44, walkOnly: true,
+  forbidOn: ['water', 'lava', 'chasm'],
+});
+registerStamp('gnaw_midden', stampSingle('gnaw_midden', [13, 18]));
+registerDoodadRule('farrow_caul', {
+  overlap: 'ground', spacing: 44,
+  forbidOn: ['water', 'lava', 'chasm'],
+});
+registerStamp('farrow_caul', stampSingle('farrow_caul', [12, 16]));
+
+/** THE WAYSIDE LEDGER — anatomy-gamut kin → their home-ground dress kind.
+ *  The declaration IS the coverage contract: probe_anatomy's DRESS CENSUS
+ *  walks these pairs and demands each dress kind (a) resolves visuals →
+ *  registered painter, (b) carries a rule + stamp, and (c) is referenced by
+ *  at least one tileset the kin can actually roll in (a direct spawn seat on
+ *  any face, or a biome whose patron faction fields the kin). Declare the
+ *  row WITH the kit — an undeclared kit is invisible to the gate; a declared,
+ *  unplaced one stops the build (the howdah_wreck orphan, never again). */
+export const ANATOMY_DRESS: Record<string, string> = {
+  pavise_crab: 'whelk_midden',
+  effigy_porter: 'harvest_idol',
+  siegeback_aurochs: 'howdah_wreck',
+  thurible_bearer: 'guttered_thurible',
+  marrow_whip: 'marrow_moult',
+  twinmaw_ettin: 'gnaw_midden',
+  vat_sow: 'farrow_caul',
+};
 
 // ============================ THE FLESH GRAMMAR ==============================
 // The flesh country's kit, COMPOSED — its first formations. The country's

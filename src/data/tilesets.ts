@@ -460,6 +460,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     common: [
       { kind: 'bone_pile', count: [0, 2] },
       { kind: 'crypt_gate', count: [0, 1] },
+      // The two-minded hulk keeps a larder off the lanes: cracked bones,
+      // every one sucked hollow (the anatomy wayside).
+      { kind: 'gnaw_midden', count: [0, 1] },
     ],
     variants: [
       // The stone face: tors and bluffs crowd the heath — cave-mouthed crag
@@ -1278,6 +1281,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'clay_pan', count: [0, 2] },
       { kind: 'standing_stone', count: [0, 2] },
       { kind: 'cave', count: [0, 1] },
+      // An ettin's gnaw-heap in the shade of the tables (the anatomy
+      // wayside — the wilds' hulk walks the warm highlands too).
+      { kind: 'gnaw_midden', count: [0, 1] },
     ],
     // The base layout: the press face's structure rows (genqa's base case +
     // the direct-generateLayout consumers walk this; live mints deal the
@@ -3934,6 +3940,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       // through and be shredded. Stand-sized (a needle disc would let a
       // fast body slip between contact samples).
       { kind: 'gore_stakes', count: [1, 3], radius: [16, 22] },
+      // Shed vertebrae half-swallowed by the sod — the bone-lash walks the
+      // sacked acres too (the anatomy wayside).
+      { kind: 'marrow_moult', count: [0, 2] },
     ],
     packs: {
       count: [5, 7], size: [3, 5],
@@ -5052,6 +5061,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       // the objective, it goes hand-in-hand).
       { kind: 'structure', count: [1, 1], structure: 'sealed_grave' },
       { kind: 'formation', count: [0, 1], formation: 'graveyard_rows' },
+      // The Host's procession rested here: a censer on its gallows-stand,
+      // guttered (the anatomy wayside — the thurible bearer's own ground).
+      { kind: 'guttered_thurible', count: [0, 1] },
     ],
     variants: [
       { name: 'barrows', layout: [
@@ -5303,6 +5315,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'brazier', count: [2, 4] },
       { kind: 'bone_cairn', count: [2, 4] },
       { kind: 'charnel_pit', count: [1, 2] },
+      // The anatomy wayside: the procession's cold censer-stand, and shed
+      // vertebrae where a bone-lash re-grew its chain.
+      { kind: 'guttered_thurible', count: [0, 1] },
+      { kind: 'marrow_moult', count: [1, 2] },
     ],
     layout: [
       { kind: 'bone_mound', count: [3, 5] },
@@ -8730,6 +8746,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       // An ember crystal set in the maze's own walls — the pass windbreaks
       // generously by construction, so the carried glow is a find here, not
       // a fixture (the mountain hearth kit, data/massifs.ts; layout-tail).
+      // Where the tribes' siege answer fell: a howdah burned to its irons
+      // beside the way (the anatomy wayside — the siegeback's home crags).
+      // Seated ABOVE the hearth row: probe_massif R pins the hearth at the
+      // layout TAIL (the append-by-history law's frozen witness).
+      { kind: 'howdah_wreck', count: [0, 1] },
       { kind: 'hearth_crystal', count: [0, 1] },
     ],
     packs: {
@@ -8832,6 +8853,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     common: [
       { kind: 'cairn', count: [1, 2] },
       { kind: 'bone_pile', count: [0, 1] },
+      // The Horned Tribes drove a siege-mount up this approach once; it
+      // never finished the climb (the anatomy wayside).
+      { kind: 'howdah_wreck', count: [0, 1] },
     ],
     variants: [
       // Denser timber — the stands close ranks under the tors.
@@ -8995,6 +9019,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Leaning sarsen knobs near the gulfs — the mass fabric's bounce is
       // the whole conversation at a gorge lip.
       { kind: 'sarsen_bumper', count: [1, 2] },
+      // A howdah that went over the edge of its road (the anatomy wayside).
+      { kind: 'howdah_wreck', count: [0, 1] },
     ],
     variants: [
       // Every shelf seems to hold a way down.
@@ -9582,6 +9608,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     common: [
       { kind: 'flesh_membrane', count: [1, 2] },
       { kind: 'vein_cluster', count: [1, 2] },
+      // A farrow already whelped somewhere near (the anatomy wayside —
+      // the sow's spent caul, farrowed flat).
+      { kind: 'farrow_caul', count: [0, 2] },
     ],
     variants: [
       // Skin-deep: stretched membranes and vessels choke the chambers.
@@ -9821,6 +9850,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     common: [
       { kind: 'villus_bed', count: [1, 2] },
       { kind: 'chyme_pool', count: [1, 2] },
+      // The tract raises broods of its own (the anatomy wayside — a spent
+      // birthing caul, drained against the gut wall).
+      { kind: 'farrow_caul', count: [0, 2] },
     ],
     variants: [
       // The tract in flood: standing acid, everything half-broken-down.

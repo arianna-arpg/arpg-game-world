@@ -50,8 +50,25 @@ import { SIDEZONES } from '../src/data/sidezones';
 import { PROLOGUE_SCENE, SCENES } from '../src/data/scenes';
 import { WORLDBOSS_SURGE } from '../src/packages/defs/worldboss';
 import { HUNT_SURGE } from '../src/packages/defs/hunt';
-import { landmarkDefs } from '../src/engine/levelgen';
+import { hasDoodadRule, hasStamp, landmarkDefs } from '../src/engine/levelgen';
 import { withSeededRandom } from '../src/core/rng';
+// THE DRESS CENSUS's sources: the wayside ledger, the visuals registry, the
+// patron-faction map, and the painter registry AS THE GAME DRAWS IT — the
+// eight biome kits register into PAINTERS by side effect exactly as
+// renderer.ts imports them, so the census judges the live registry, never a
+// subset (gourdTotem lives in paintersHallow, coachWreck in paintersGloam).
+import { ANATOMY_DRESS } from '../src/data/formations';
+import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
+import { patronFaction } from '../src/world/biomes';
+import { PAINTERS } from '../src/render/vis/painters';
+import '../src/render/vis/paintersGloam';
+import '../src/render/vis/paintersHallow';
+import '../src/render/vis/paintersAether';
+import '../src/render/vis/paintersHome';
+import '../src/render/vis/paintersSea';
+import '../src/render/vis/paintersGarden';
+import '../src/render/vis/paintersGrove';
+import '../src/render/vis/paintersWarfront';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -541,6 +558,64 @@ function rigComposite(id: string, dx = 340): Actor {
   check('seat census: the sweep resolves real seats (the leviathan on its wallow)',
     seats.get('marsh_leviathan') === 'landmark:leviathan_wallow' && seats.size > 300,
     `${seats.size} seated; leviathan → ${seats.get('marsh_leviathan') ?? 'NOWHERE'}`);
+}
+
+// ========================================================== THE DRESS CENSUS
+// The wayside doctrine's own gate. howdah_wreck shipped FULLY BUILT — painter
+// row, rule, stamp — and stood in ZERO tilesets for a month, because no gate
+// asked. Now the ledger asks: every kin ANATOMY_DRESS declares (the wayside
+// ledger, data/formations.ts) must have a COMPLETE kit — a visuals row on a
+// REGISTERED painter (zero renderer edits is the recipe's whole point), a
+// placement rule + a stamp — AND a tileset reference on ground the kin can
+// actually roll: a direct spawn seat on any face (the seat census's tileset
+// lanes), or a tileset whose biome's PATRON faction fields the kin (the
+// land's own power walks its own country — world/biomes.ts patronFaction →
+// FACTIONS[pf].table: the graves field the Host, the flesh fields the Glut).
+// Declaring a pair without placing it stops the build; an undeclared kit is
+// invisible here, so the ledger row ships WITH the kit.
+{
+  const rollGround = new Map<string, Set<string>>();   // kin id → tilesets it can roll in
+  const dressGround = new Map<string, Set<string>>();  // dress kind → tilesets referencing it
+  const note = (m: Map<string, Set<string>>, k: string, tid: string): void => {
+    const s = m.get(k) ?? new Set<string>();
+    s.add(tid); m.set(k, s);
+  };
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  for (const [tid, t] of Object.entries(TILESETS) as [string, any][]) {
+    const eat = (o: any): void => {
+      if (!o) return;
+      for (const e of o.packs?.table ?? []) if (e?.id) note(rollGround, e.id, tid);
+      for (const e of o.fauna ?? []) if (e?.id) note(rollGround, e.id, tid);
+      for (const s of o.scenery ?? []) if (s?.monster) note(rollGround, s.monster, tid);
+      for (const row of o.layout ?? []) if (row?.kind) note(dressGround, row.kind, tid);
+      for (const row of o.common ?? []) if (row?.kind) note(dressGround, row.kind, tid);
+      for (const cf of o.caveFaces ?? []) eat(cf);
+      for (const v of o.variants ?? []) eat(v);
+    };
+    eat(t);
+    const pf = t.biome ? patronFaction(t.biome) : null;
+    if (pf) for (const e of (FACTIONS as Record<string, any>)[pf]?.table ?? []) {
+      if (e?.id) note(rollGround, e.id, tid);
+    }
+  }
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+  const bad: string[] = [];
+  for (const [kin, dress] of Object.entries(ANATOMY_DRESS)) {
+    if (!MONSTERS[kin]) { bad.push(`${kin}: ledger names an unknown kin`); continue; }
+    const vis = DOODAD_VISUALS[dress];
+    if (!vis) { bad.push(`${kin}: dress '${dress}' has no DOODAD_VISUALS row`); continue; }
+    if (!PAINTERS[vis.painter]) { bad.push(`${kin}: dress '${dress}' painter '${vis.painter}' unregistered`); continue; }
+    if (!hasDoodadRule(dress)) { bad.push(`${kin}: dress '${dress}' has no doodad rule`); continue; }
+    if (!hasStamp(dress)) { bad.push(`${kin}: dress '${dress}' has no stamp`); continue; }
+    const home = [...(rollGround.get(kin) ?? [])].filter(t2 => dressGround.get(dress)?.has(t2));
+    if (home.length === 0) bad.push(`${kin}: dress '${dress}' stands in NO tileset the kin can roll in`);
+  }
+  check(`dress census: every declared wayside kit is complete AND placed on its kin's own ground (${Object.keys(ANATOMY_DRESS).length} pairs)`,
+    bad.length === 0, bad.slice(0, 4).join('; '));
+  // The census must be able to FAIL (the seat census's law): pin one known
+  // pairing end-to-end — the crab's midden stands on the crab's own shore.
+  check("dress census: the sweep resolves real ground (whelk_midden on the pavise crab's shore)",
+    [...(rollGround.get('pavise_crab') ?? [])].some(t2 => dressGround.get('whelk_midden')?.has(t2)));
 }
 
 // ================================== THE AMBIENT CENSUS (wildlife pass 2)

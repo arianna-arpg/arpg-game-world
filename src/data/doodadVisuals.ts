@@ -3150,6 +3150,31 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'coachWreck', order: 53, shadow: 0.5, longShadow: 0.9,
     params: { char: '#2c2620', wood: '#4c3c28', iron: '#41403a' },
   },
+  // The Host's procession rests here: a censer hung on its gallows-stand,
+  // guttered — the witch_bell frame in grave-wood and cold brass, the light
+  // withheld (the harvest_idol law: the wayside remembers, it never burns).
+  guttered_thurible: {
+    painter: 'hungBell', order: 54, shadow: 0.35, longShadow: 1.3,
+    params: { wood: '#4a4034', metal: '#8a7a4e' },
+  },
+  // Where a bone-lash tore itself new: shed vertebrae in a drag-line heap —
+  // the bones brush in the whip's own marrow-pale.
+  marrow_moult: { painter: 'bones', order: 51, params: { color: '#c8bda0' } },
+  // The two-minded hulk's larder: cracked, sucked marrow-bones where the
+  // heads argued over the kill — the bone-pile brush in gnawed-fresh tones.
+  gnaw_midden: {
+    painter: 'bonePile', order: 53, shadow: 0.5, longShadow: 0.85,
+    params: { bone: '#c2b294', dark: '#4e4232', skulls: 1 },
+  },
+  // A farrow already whelped: the sow's spent caul, deflated and drained
+  // grey-pink — FULL pod params (the contract), the pulse nearly still.
+  farrow_caul: {
+    painter: 'pod', order: 52, shadow: 0.35,
+    params: {
+      body: '#8a5a62', glow: '#c88a90', veins: '#6a3a44',
+      aspectY: 0.72, glowY: -0.05, glowR: 0.4, pulseRate: 0.5,
+    },
+  },
 
   // --- The QUICKENING kit (packages/defs/quickening.ts): the surge's own
   // dress, planted by the 'quickened_air' weather row while a zone runs
