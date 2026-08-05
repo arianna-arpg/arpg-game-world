@@ -9714,6 +9714,42 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'mace', y: -0.2, scale: 0.85 },
     ],
   },
+  /** The Stormcrowned: a jotun rite-caller rooted at his rod-ring — robed,
+   *  crowned, the staff's orb alight; the levin lives in his eyes. */
+  stormcrown_caller: {
+    parts: [
+      { kind: 'torso', scale: 1.12 },
+      { kind: 'robe', scale: 1.05 },
+      { kind: 'beard', x: 0.3, scale: 0.95 },
+      { kind: 'crown', y: -0.05, scale: 1.1 },
+      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'eyes', color: '#9ae8ff', params: { spread: 0.42, dist: 0.6, size: 0.13 } },
+    ],
+    shadowScale: 1.1,
+  },
+  /** The rod: the crown's conductor — a rune-scored post with the storm's
+   *  charge caught at its head (the trebuchet arm's law: the part IS the
+   *  gun's working piece, scaled past its own body to read at the seat). */
+  levin_rod: {
+    parts: [
+      { kind: 'totemPost', scale: 1.8 },
+      { kind: 'runes', scale: 0.9, alpha: 0.8 },
+      { kind: 'orb', y: -0.55, scale: 0.6, role: 'accent' },
+    ],
+    shadowScale: 0.6,
+  },
+  /** The levin-thegn: an awake bench-ward in the crown's colors — caped,
+   *  helmed, the brand-mace ready; open eyes, deliberately (the horn-thegn
+   *  drowses shut-eyed; this court never sleeps). */
+  levin_thegn: {
+    parts: [
+      { kind: 'torso', scale: 1.0 },
+      { kind: 'cape', scale: 0.95 },
+      { kind: 'helm', x: 0.28, scale: 0.95 },
+      { kind: 'mace', y: -0.22, scale: 0.9 },
+      { kind: 'eyes', color: '#9ae8ff', params: { spread: 0.45, dist: 0.6, size: 0.11 } },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

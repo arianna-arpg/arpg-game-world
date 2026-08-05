@@ -21250,6 +21250,65 @@ export const MONSTERS: Record<string, MonsterDef> = {
     ],
     brain: { type: 'basic' },
   },
+
+  // === THE STORM CROWN (batch 31 — the bombardment fabric at lair grain).
+  // The mountain shells the climb: the crown's caller is a STANDING GUN
+  // (MonsterDef.bombard — the D2 catapult law: enemy guns shell player seats
+  // zone-wide, perception-free), rooted in its rite on the FOURTH terrace
+  // while its levin-thegns hold the benches around it. moveSpeed 0 is the
+  // emplacement law worn whole — Actor.stationary stamps at mint, so the
+  // siegebreaker lane prices him like any engine — and the rod is the gun's
+  // working part: break it and the rain is OVER (breakDisables — the
+  // trebuchet's silence law at boss grain), though the crown must still be
+  // taken. His shells spare no banner (StormDelivery.sky hitAll): at the
+  // crest, his own court pays under the same weather you do.
+  stormcrown_caller: {
+    id: 'stormcrown_caller', name: 'the Stormcrowned',
+    color: '#a8c8e8', shape: 'trapezoid', radius: 22, look: 'stormcrown_caller',
+    heft: 2.0, boss: true,
+    base: { life: 700, moveSpeed: 0, accuracy: 108, armor: 40, evasion: 0, mana: 90, manaRegen: 7, poise: 120 },
+    mods: [mod('lightningRes', 'flat', 0.5)],
+    // Three rings of one storm: the zone-range gun (the fabric's shot), the
+    // aimed mid-circle, and the concussion when you finally close.
+    skills: ['levinshot_volley', 'levinfall', 'thunderclap'],
+    xp: 320, loot: 'lair_hoard',
+    faction: 'jotun',
+    // THE CROWN'S OWN LIGHT (the carried-lamp law): the rod-glow sparks
+    // cold blue at the summit — you see the gun before its first shell.
+    light: { radius: -6, color: '#9ae8ff', intensity: 0.4, flicker: 2 },
+    bombard: { skillId: 'levinshot_volley', cadence: [6, 10] },
+    parts: [{
+      monster: 'levin_rod', dx: -0.5, dy: 0, lifeFrac: 0.3, breakDamage: 0.12,
+      breakDisables: ['levinshot_volley'],
+      breakMods: [mod('damageTaken', 'increased', 0.2)],
+    }],
+    brain: { type: 'artillery' },
+  },
+  // The rod: the crown's conductor — a dumb break-target with no kit of its
+  // own (the root wears the gun; breaking this silences it — the arm's law).
+  levin_rod: {
+    id: 'levin_rod', name: 'Levin Rod',
+    color: '#8ad0e8', shape: 'oval', radius: 10, material: 'crystal', look: 'levin_rod',
+    noNemesis: true, remains: false,
+    base: { life: 110, moveSpeed: 0, armor: 30, evasion: 0 },
+    skills: [], xp: 0, drops: 0, faction: 'jotun',
+  },
+  // The levin-thegns: the crown's standing court, AWAKE on their benches —
+  // this mountain never sleeps, and the storm says so with every shell (the
+  // watch's horn-thegns drowse; these hold). Ambush-armed at the landmark
+  // (visible, sprung as one crown when you crest the rim or wound one), and
+  // posted: a chase that peters out walks back up to its bench.
+  levin_thegn: {
+    id: 'levin_thegn', name: 'Levin-Thegn',
+    color: '#90a8c8', shape: 'kite', radius: 14, look: 'levin_thegn',
+    heft: 1.3,
+    base: { life: 150, moveSpeed: 100, accuracy: 102, armor: 30, mana: 40, manaRegen: 4 },
+    mods: [mod('lightningRes', 'flat', 0.35)],
+    skills: ['static_strike', 'hurl_debris'],
+    xp: 60, faction: 'jotun',
+    post: true, // the bench is the post
+    brain: { type: 'basic' },
+  },
 };
 
 // ---------------------------------------------------------------------------

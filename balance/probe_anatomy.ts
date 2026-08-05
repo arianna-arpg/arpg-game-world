@@ -464,7 +464,13 @@ function rigComposite(id: string, dx = 340): Actor {
   }
   // 3 · LANDMARK SPAWNS — the lair fabric's in-zone lane and every pit
   //     dweller: the cairn giant, the wellspring naiad, the drowned wallow.
-  for (const lm of landmarkDefs()) table(lm.spawns?.table, `landmark:${lm.id}`);
+  //     3b · BUILDER-SEATED RESIDENTS (the storm_crown debut): a builder
+  //     that authors its own spawn row names WHO in the def's params — the
+  //     resident param contract makes the seat data the census can read.
+  for (const lm of landmarkDefs()) {
+    table(lm.spawns?.table, `landmark:${lm.id}`);
+    add((lm.params as { resident?: string } | undefined)?.resident, `landmark:${lm.id}`);
+  }
   // 4 · FACTION ROSTERS + the high court's tabled CHAMPIONS.
   for (const [fid, f] of Object.entries(FACTIONS) as [string, any][]) table(f.table, `faction:${fid}`);
   for (const [fid, court] of Object.entries(HIGH_COURT)) add(court.champion, `court:${fid}`);

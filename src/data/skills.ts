@@ -746,7 +746,9 @@ export const SKILLS: Record<string, SkillDef> = {
   // hellshot_volley is the Warfront's trebuchet shot (sky-borne: it spares NO
   // side — lure the Grind's own ranks under their shells); hellbore_lob is
   // the player-planted engine's smaller cousin (keeper-scoped, never friendly
-  // fire); hellbore_mortar plants that engine. The lob comet + the drying
+  // fire); hellbore_mortar plants that engine; levinshot_volley is the same
+  // trebuchet shape in the LIGHTNING voice (the storm crown's gun — fx unset,
+  // so the sky derives the true bolt). The lob comet + the drying
   // shell pocks ride the deliveries as pure data (lob / impactDress).
 
   hellshot_volley: {
@@ -811,6 +813,31 @@ export const SKILLS: Record<string, SkillDef> = {
     requirements: { intelligence: 16, strength: 12 },
     ai: { range: 400, weight: 2, keepDistance: 300 },
     leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.12)] },
+  },
+
+  levinshot_volley: {
+    id: 'levinshot_volley', name: 'Levinshot Volley',
+    description: 'Casts 2–3 brands of levin high across the whole field; each rings its landing'
+      + ' before the bolt comes down, bursting for lightning damage with a 35% chance to shock.'
+      + ' The sky spares no banner, the caller\'s own included.',
+    tags: ['spell', 'lightning', 'aoe', 'storm'], color: '#9ae8ff',
+    noDrop: true, // a storm-caller's rite, not a hand — never a gem (hellshot's law)
+    manaCost: 0, cooldown: 2.5, useTime: 1.1,
+    baseDamage: { lightning: [14, 24] },
+    delivery: {
+      type: 'storm', count: [2, 3], interval: 0.28, areaRadius: 85, hitRadius: 30,
+      castRange: 4200, occlusion: 'free', // the sky does not ask the walls
+      telegraph: 1.1, sky: true, lob: { arc: 0.42 },
+      // NO fx key, deliberately: sky strikes derive the true lightning bolt
+      // ('bolt' stays reserved to real levin — the effect-voice law), so the
+      // landing IS the storm's own strike; only the pock below is new.
+      impactDress: { kind: 'levin_scar', evapAfter: [50, 100] },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'shock', chance: 0.35 },
+    ],
+    ai: { range: 560, weight: 3, keepDistance: 0 },
   },
 
   doom_chant: {

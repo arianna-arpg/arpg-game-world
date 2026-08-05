@@ -2236,3 +2236,127 @@ registerLair({
     chance: 0.35,
   },
 });
+
+// === THE STORM CROWN (batch 31 — the bombardment fabric at lair grain) =======
+// The mountain shells the climb. The highland family's SEVENTH claim, on the
+// axis rung none of them read: the cairn squats the valleys, the frostmaw the
+// caves, the rimewick ring the cold skirts, the roost the deep high heart,
+// the watch the THIRD terrace behind a door — and this claim stands the
+// FOURTH, in the open. stories: 4 refuses every face that cannot stack it at
+// the fold (today: the pinnacle alone, capability grain, no allowlist), and
+// the crown site seats through the aloft dart (siteTier 4 + siteTryMul 3 —
+// the summit sweep's starvation table: the base face sheds sub-4 rolls
+// honestly, the budget widens only this def's own draws).
+//
+// The lair is IN-ZONE, deliberately — no door, no den: the fight IS the
+// ascent. The Stormcrowned is a standing gun (MonsterDef.bombard): from the
+// moment you enter the zone, levinshot falls on YOUR seat, zone-wide,
+// perception-free (the D2 catapult law), and the climb happens under his
+// weather. Shots fly flat at their caster's story, so you cannot snipe the
+// rod from the valley — the silence must be EARNED at the crest, where the
+// break-lesson waits (the gun part's law) and his own sky spares no banner.
+//
+// THE ALOFT COURT (the lane's debut): the landmark's spawn rows seat the
+// levin-thegns ON the fourth bench, story-stamped by the machinery, and the
+// ambush arm makes the held crown REAL — visible from the climb, sprung as
+// one event when you crest the rim or wound one. The CALLER is deliberately
+// NOT armed: an ambush-armed gun still shells (isDormant gates the clock,
+// ambushArmed does not), and a "waiting" body that acts is a lie — this
+// mountain never pretends to sleep. He stands awake; the storm says so.
+// The wallow's composite law also binds: his rod attaches as an ordinary
+// actor after the spawn, and arming only the root would leave the limb
+// awake beside a waiting body.
+
+// The crown floor: a dress-only builder (aloft-honest — no region painting),
+// in the windlass ring's idiom. The rod-ring stands at even bearings around
+// the caller's seat; fused pan-glass and bare stone scatter where the levin
+// has grounded before. The builder also seats the RESIDENT himself: one
+// spawn row at the exact span-quantized center the site contract judged
+// (center-on-story is the dart's own assertion, so the seat cannot miss its
+// bench), tier-stamped by the same derivation placeLandmark uses for its
+// rows (def.siteTier), with NO ambush — the gun stands awake by design.
+registerLandmarkBuilder('storm_crown', (b) => {
+  const { rng, r, ctx } = b;
+  const cx = b.center.x, cy = b.center.y;
+  // THE ROD-RING: worked stones at even bearings, the rite's architecture.
+  const stones = rng.int(...(b.param('rodStones', [4, 6]) as [number, number]));
+  const a0 = rng.range(0, Math.PI * 2);
+  for (let i = 0; i < stones; i++) {
+    const a = a0 + (i / stones) * Math.PI * 2 + rng.range(-0.12, 0.12);
+    const d = r * rng.range(0.44, 0.56);
+    ctx.doodads.push({
+      pos: vec(cx + Math.cos(a) * d, cy + Math.sin(a) * d),
+      radius: rng.range(11, 15), kind: 'standing_stone', rot: rng.range(0, Math.PI * 2),
+    });
+  }
+  // The grounded levin: fused glass + bare stone on the ring's band.
+  for (let i = 0, k = rng.int(1, 3); i < k; i++) {
+    const a = rng.range(0, Math.PI * 2), d = r * rng.range(0.3, 0.7);
+    ctx.doodads.push({
+      pos: vec(cx + Math.cos(a) * d, cy + Math.sin(a) * d),
+      radius: rng.range(9, 13), kind: 'glass_shard', rot: rng.range(0, Math.PI * 2),
+    });
+  }
+  for (let i = 0, k = rng.int(1, 2); i < k; i++) {
+    const a = rng.range(0, Math.PI * 2), d = r * rng.range(0.32, 0.72);
+    ctx.doodads.push({
+      pos: vec(cx + Math.cos(a) * d, cy + Math.sin(a) * d),
+      radius: rng.range(12, 18), kind: 'rock', rot: rng.range(0, Math.PI * 2),
+    });
+  }
+  // THE RESIDENT at the ring's heart (the builder-authored spawn row: the
+  // resolved-row contract carries per-row tier/ambush, and the def.spawns
+  // lane below it carries the court — one landmark, both truths).
+  const resident = b.param('resident', 'stormcrown_caller') as string;
+  (ctx.landmarkSpawns ??= []).push({
+    id: resident, pos: vec(cx, cy),
+    ...(b.def.siteTier && b.def.siteTier >= 1 ? { tier: b.def.siteTier } : {}),
+  });
+  const floor = Mask.forRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+  disc(floor, cx, cy, r * 0.88);
+  b.interior = floor;
+});
+
+registerLandmark({
+  id: 'storm_crown_site', builder: 'storm_crown', size: [190, 260],
+  clearSite: true,
+  // NO poi/mustReach — an aloft seat never joins the tier-0 nets (the story
+  // road assert at the dart is the guarantee; the horn gate's law).
+  siteTier: 4,
+  // The fourth terrace is the summit sweep's thinnest measured ground (the
+  // base face seats 18/40 lean: 13 shed honestly, 9 starved) — the dart
+  // budget widens on THIS def's own failures only.
+  siteTryMul: 3,
+  // THE RESIDENT PARAM CONTRACT: the builder seats WHO this names (its own
+  // spawn row at the ring's heart), and naming him HERE — data, not code —
+  // is what lets the anatomy seat census read a builder-seated boss.
+  params: { resident: 'stormcrown_caller' },
+  spawns: {
+    // THE ALOFT COURT's debut rows: the machinery stamps each with the
+    // sampled story and the ambush arm — the benches hold until you crest.
+    table: [
+      { id: 'levin_thegn', weight: 1 },
+    ],
+    count: [2, 4], where: 'interior',
+    ambush: { radius: 150, visible: true, pack: 320, announce: 'the crown stands as one — the storm court holds!' },
+  },
+});
+
+registerLair({
+  id: 'storm_crown',
+  landmark: 'storm_crown_site',
+  seat: {
+    biomes: ['highland'],
+    place: 'surface',
+    // The rung above the watch's 3: only country that can stack FOUR
+    // over-stories qualifies at the fold (capability grain — the pinnacle
+    // alone today, any future four-story face joins by law). Both crowns
+    // may fold on one cone: the watch's door on the third terrace, the
+    // storm on the fourth — the ladder reads in a single zone.
+    stories: 4,
+    // Between the watch's 12 and the roost's 14: the highland ladder climbs
+    // watch → crown → roost, a rung a claim.
+    level: { from: 13, fadeIn: 3 },
+    chance: 0.3,
+  },
+});

@@ -342,6 +342,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'shellPock', order: 24,
     params: { char: '#241d1a', rim: 'theme:obstacle|#4a3a2c', ember: '#b8502a' },
   },
+  // The levin pock (levinshot_volley's impact dress): the same blast shape
+  // where lightning grounded — fused glass-blue in the char instead of
+  // embers, the storm crown's signature underfoot.
+  levin_scar: {
+    painter: 'shellPock', order: 24,
+    params: { char: '#1a1d24', rim: 'theme:obstacle|#3a4048', ember: '#8ad0e8' },
+  },
   gabion: {
     painter: 'gabion', order: 51, shadow: 0.4,
     params: { wicker: '#5a4632', earth: '#403228' },

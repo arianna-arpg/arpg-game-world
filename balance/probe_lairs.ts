@@ -87,6 +87,9 @@ const LAIR_IDS = [
   // Batch 30 — THE STORIES GATE's first live ask: the pinnacle crown
   // (stories 3 at the fold, siteTier 3 at the dart).
   'sleepless_watch',
+  // Batch 31 — the bombardment fabric at lair grain: the in-zone storm_crown
+  // on the FOURTH terrace (stories 4 at the fold — the rung above the watch).
+  'storm_crown',
 ];
 const MOUTHS = [
   'frostmaw_maw', 'hovel_door', 'sphinx_gate',
@@ -124,6 +127,8 @@ const NATIVES = [
   'baboon_king',
   // Batch 30 — the crown's far-seer and his drowsing court.
   'sleepless_warden', 'horn_thegn',
+  // Batch 31 — the storm crown's gun, its conductor part, its standing court.
+  'stormcrown_caller', 'levin_rod', 'levin_thegn',
 ];
 
 // --- RIG A: the registry weave --------------------------------------------------
@@ -2859,6 +2864,218 @@ const step = (secs: number): void => {
   check('S5 the thegns drowse on their posts (the ghoul\'s law in the crown\'s colors, hearing rims drawn)',
     thegn?.watch?.sleep === true && thegn?.watch?.fan === 'show' && thegn?.post === true
     && thegn?.faction === 'jotun' && seer?.faction === 'jotun');
+}
+
+// --- RIG T, BATCH 31: THE STORM CROWN (the bombardment fabric at lair grain) --
+// The gap the pinnacle pass named, built and consumed in one claim: ONE new
+// siegecraft skill (levinshot_volley — hellshot's exact trebuchet shape in
+// the LIGHTNING voice, noDrop, zone-range sky posture, ai-hinted) unblocks
+// "the mountain shells the climb" — the Stormcrowned stands the FOURTH
+// terrace as a standing gun (MonsterDef.bombard, the D2 catapult law:
+// player seats shelled zone-wide, perception-free) while THE ALOFT COURT
+// (the lane's debut: landmarkSpawns rows WITH tier) holds the bench around
+// him, ambush-armed. T1 pins the skill's siegecraft posture, T2 the fold's
+// story ladder (watch AND crown on one cone — two rungs, one axis, one
+// zone), T3 the headless seat (resident + court rows, story-stamped), T4
+// the gun law live (sky posture, the rod's silence), T5 the aloft court
+// live on a real mint. NOTE the stream shift (the re-roll law): the crown
+// row joined the highland fold, so the batch-30 ladder's hit seeds moved —
+// the watch now lands first at 954004 (S4's first-hit law holds); the
+// crown's own ladder hit under the same configuration is pinned in T5.
+// (Registers BEFORE rig Q: the qa_stories row stays the registry's last
+// write — the probe-local content law.)
+{
+  // T1 — the siegecraft posture (the named gap, closed): hellshot's shape in
+  // the lightning voice — noDrop (a rite, never a gem), free (the sky pays),
+  // zone-range sky delivery with the lob comet read, fx UNSET so the strike
+  // derives the true bolt ('bolt' stays reserved to real levin — the
+  // effect-voice law), the levin pock, and an ai hint (the anatomy net's
+  // own floor, pinned here as identity).
+  const shot = SKILLS.levinshot_volley;
+  const shotD = shot?.delivery as {
+    type?: string; castRange?: number; sky?: true; lob?: { arc?: number };
+    occlusion?: string; telegraph?: number; fx?: string;
+    impactDress?: { kind?: string };
+  } | undefined;
+  check('T1 levinshot is the trebuchet shape in the lightning voice (noDrop, free, zone-range sky + lob, ai-hinted)',
+    shot?.noDrop === true && shot?.manaCost === 0 && !!shot?.ai
+    && shotD?.type === 'storm' && (shotD?.castRange ?? 0) >= 4000
+    && shotD?.sky === true && !!shotD?.lob && shotD?.occlusion === 'free'
+    && (shotD?.telegraph ?? 0) >= 1,
+    `range=${shotD?.castRange} sky=${shotD?.sky}`);
+  check('T1 the strike keeps the reserved bolt (fx unset) and pocks levin glass',
+    shotD?.fx === undefined && shotD?.impactDress?.kind === 'levin_scar'
+    && !!DOODAD_VISUALS.levin_scar);
+  const caller = MONSTERS.stormcrown_caller;
+  check('T1 the caller is a standing gun in its own kit (bombard.skillId owned; the rod is the break-lesson)',
+    caller?.bombard?.skillId === 'levinshot_volley'
+    && caller?.skills.includes('levinshot_volley')
+    && !!caller?.parts?.some(p => p.monster === 'levin_rod'
+      && p.breakDisables?.includes('levinshot_volley'))
+    && caller?.boss === true && caller?.loot === 'lair_hoard'
+    && caller?.base.moveSpeed === 0 && caller?.faction === 'jotun');
+
+  // T2 — the fold's story LADDER: the crown row asks stories 4 + the dart
+  // asks the fourth terrace; on ONE pinnacle query the watch (stories 3)
+  // and the crown (stories 4) fold TOGETHER — two rungs of one axis,
+  // readable in a single zone — while every flat face refuses both and the
+  // roost stays out by its own law (it asks readings this ground lacks).
+  const crownRow = lairOf('storm_crown');
+  const siteDef = landmarkOf('storm_crown_site');
+  check('T2 the claim asks the stories and the def asks the terrace (stories 4 at the fold, siteTier 4 + siteTryMul 3 at the dart)',
+    crownRow?.seat.place === 'surface' && crownRow?.seat.stories === 4
+    && siteDef?.siteTier === 4 && siteDef?.siteTryMul === 3
+    && !siteDef?.poi && !siteDef?.mustReach && siteDef?.clearSite === true);
+  const foldT = (tileset: string, level: number, place: 'cave' | 'surface' = 'surface'): string[] =>
+    lairLandmarkRolls({
+      place, biome: 'highland', caveDepth: place === 'cave' ? 1 : undefined,
+      level, tileset,
+    }).map(r => r.landmark);
+  const pinn16 = foldT('pinnacle', 16);
+  check('T2 the ladder stacks on one face (watch at 3, crown at 4, both on the cone; the roost refused)',
+    pinn16.includes('storm_crown_site') && pinn16.includes('horn_gate_site')
+    && !pinn16.includes('roost_crag_site'));
+  check('T2 the crown refuses what cannot stack it (flat faces, caves, a green world)',
+    !foldT('highland', 16).includes('storm_crown_site')
+    && !foldT('snowcrown', 16).includes('storm_crown_site')
+    && !foldT('pinnacle', 16, 'cave').includes('storm_crown_site')
+    && !foldT('pinnacle', 6).includes('storm_crown_site'));
+
+  // T3 — headless placement at chance 1 on the cone face (the sweep's
+  // generous face: 40/40 placed, all sovereign/road/court at the shipped
+  // dials): the RESIDENT row stands at the ring's heart on sovereign
+  // peak_terrace_4, story-stamped and UNARMED (the gun never pretends to
+  // sleep), the court rows all wear the story AND the ambush arm (THE
+  // ALOFT COURT's debut shape), and the rod-ring dresses its terrace.
+  const WT = 3000, HT = 2350;
+  const entryT = vec(140, HT / 2);
+  const exitsT: Vec2[] = [vec(WT - 140, HT / 2)];
+  const tsT = TILESETS.pinnacle;
+  const coneT = { ...tsT.layoutParams, ...tsT.variants![0].layoutParams };
+  {
+    const seed = 0x51ee9;
+    const zdef: ZoneDef = {
+      id: 'probe_crown_zone', name: 'Probe Storm Crown', level: 16,
+      size: { w: WT, h: HT }, theme: { ...tsT.theme },
+      layoutType: 'switchback', layout: tsT.layout, layoutParams: { ...coneT },
+      objective: { kind: 'none' }, packs: tsT.packs,
+      exits: [{ to: 'probe_home', side: 's' }], map: { x: 0, y: 0 }, seed,
+      geo: { biomeDepth: 0.85 },
+      landmarks: [{ landmark: 'storm_crown_site', chance: 1 }],
+    };
+    const out = generateLayout(zdef, { w: WT, h: HT }, new Rng(seed), entryT, exitsT);
+    const res = (out.landmarkSpawns ?? []).find(ls => ls.id === 'stormcrown_caller');
+    const walkT = out.walk as GridWalkField | undefined;
+    check('T3 the resident row seats ALOFT and UNARMED (sovereign peak_terrace_4, tier-stamped, story road green, no ambush)',
+      !!res && res.tier === 4 && !res.ambush
+      && walkT?.regionAt?.(res.pos.x, res.pos.y) === 'peak_terrace_4'
+      && !!walkT && storyReachable(walkT, entryT, res.pos, 4),
+      res ? `at=${res.pos.x.toFixed(0)},${res.pos.y.toFixed(0)} kind=${walkT?.regionAt?.(res.pos.x, res.pos.y)}` : 'NO RESIDENT');
+    const court = (out.landmarkSpawns ?? []).filter(ls => ls.id === 'levin_thegn');
+    check('T3 the court rows wear the story and the arm (THE ALOFT COURT: every bench row tier 4 + ambush)',
+      court.length >= 2 && court.every(c => c.tier === 4 && !!c.ambush),
+      `${court.length} thegns`);
+    const ring = out.doodads.filter(d => (d.kind === 'standing_stone' || d.kind === 'glass_shard')
+      && res && Math.hypot(d.pos.x - res.pos.x, d.pos.y - res.pos.y) < 160 && d.tier === 4);
+    check('T3 the rod-ring dresses its terrace (story-stamped stones at the seat)',
+      ring.length >= 2, `${ring.length} pieces`);
+  }
+
+  // T4 — THE GUN LAW live (the warfront idiom in the arena): the rod
+  // attaches, the stationary stamp prices him for the siegebreaker lane,
+  // a due clock volleys AT THE SEAT through the ONE pipeline with the sky
+  // posture (hitAll + spareDormant + spareRoofed — the sentry law arrives
+  // from StormDelivery.sky by construction), the comet knows its engine,
+  // and breaking the rod SILENCES the gun while the clock keeps asking.
+  {
+    const gw = makeSimWorld('warrior', 0xc0117);
+    gw.zone.objective = { kind: 'clear' }; // bombard's sanctuary gate stands down
+    const stepG = (seconds: number): void => {
+      const dt = 1 / 60;
+      for (let t = 0; t < seconds - 1e-9; t += dt) {
+        gw.applyInputs(new Map(), dt);
+        for (const a of [...gw.actors]) updateAI(a, gw, dt);
+        gw.update(dt);
+      }
+    };
+    const hero = gw.player;
+    hero.invulnerable = true;
+    hero.pos = vec(600, 500);
+    const gun = (gw as unknown as { createMonster(id: string, lv: number, team: string): Actor })
+      .createMonster('stormcrown_caller', 14, 'enemy');
+    gun.pos = vec(2600, 500); // 2000px out — past every aimed range, inside the 4200 reach
+    gw.actors.push(gun);
+    stepG(0.1);
+    check('T4 the rod attached itself and the emplacement stamp holds (stationary, never ambush-armed)',
+      gun.partActors?.length === 1 && gun.partActors[0].defId === 'levin_rod'
+      && gun.stationary === true && gun.ambushArmed !== true);
+    gun.bombardAt = gw.time;
+    stepG(2.4); // useTime 1.1 + margin
+    const shells = gw.zones.filter(z => z.caster === gun);
+    check('T4 a due clock volleys at the SEAT zone-wide (2000px, perception-free, scatter on the hero)',
+      shells.length >= 2
+      && shells.every(z => Math.hypot(z.pos.x - hero.pos.x, z.pos.y - hero.pos.y) <= 130),
+      `${shells.length} strikes`);
+    check('T4 every strike is WEATHER (sky posture: hitAll + spareDormant + spareRoofed — the sentry law by construction)',
+      shells.every(z => z.hitAll === true && z.spareDormant === true && z.spareRoofed === true));
+    check('T4 the comet knows its engine and pocks levin glass (lobFrom + delay0 + levin_scar)',
+      shells.every(z => !!z.lobFrom && (z.delay0 ?? 0) > 0 && z.impactDress?.kind === 'levin_scar'));
+    const rod = gun.partActors![0];
+    (gw as unknown as { kill(a: Actor, silent: boolean, killer?: Actor): void }).kill(rod, false, hero);
+    stepG(0.2);
+    check('T4 the break: the volley is DISARMED off the root (breakDisables — the crippled crown still stands)',
+      !gun.skills.some(s => s?.def.id === 'levinshot_volley') && !gun.dead);
+    const before = gw.zones.filter(z => z.caster === gun).length;
+    gun.bombardAt = gw.time;
+    stepG(2.6);
+    const after = gw.zones.filter(z => z.caster === gun).length;
+    check('T4 the silence: a due clock on a broken rod fires NOTHING, and keeps asking (a refusal, never a crash)',
+      after <= before && gun.bombardAt !== undefined, `${before} -> ${after}`);
+  }
+
+  // T5 — THE ALOFT COURT live on a REAL mint (the S4 configuration
+  // verbatim; the crown's own ladder hit under it is the honest pin): the
+  // fold at placeZoneAt seats the caller ALOFT on sovereign ground, awake
+  // and unarmed beside his ARMED court on the same bench — and a sprung
+  // thegn is MOBILE on its story (the materializer seat law: a story-blind
+  // spawn would snap off the rim at the first step).
+  {
+    seedGlobalRandom(0xa10f);
+    const lw = makeSimWorld('warrior', 0x1a28);
+    lw.player.invulnerable = true;
+    let hitSeed = 0;
+    for (let i = 0; i < 26 && !hitSeed; i++) {
+      const zid = lw.devMintTileset('pinnacle', i, 16, { seed: 954001 + i });
+      if (!zid) continue;
+      if (lw.actors.some(a => a.defId === 'stormcrown_caller' && !a.dead)) hitSeed = 954001 + i;
+    }
+    // The measured configuration's own hit (scratch sweep, batch 31): 954025.
+    check('T5 a real pinnacle mint carries the crown (the fold at placeZoneAt, the ladder pin)',
+      hitSeed === 954025, hitSeed ? `hit=${hitSeed}` : 'no hit in 26 seeds');
+    if (hitSeed) {
+      const lc = lw.actors.find(a => a.defId === 'stormcrown_caller' && !a.dead)!;
+      const thegns = lw.actors.filter(a => a.defId === 'levin_thegn' && !a.dead);
+      const lWalk = (lw as unknown as { walk: { regionAt?(x: number, y: number): string } | null }).walk;
+      check('T5 the caller stands the fourth terrace AWAKE (sovereign, tier 4, unarmed, undormant, stationary)',
+        lc.tier === 4 && lWalk?.regionAt?.(lc.pos.x, lc.pos.y) === 'peak_terrace_4'
+        && lc.ambushArmed !== true && !isDormant(lc) && lc.stationary === true,
+        `kind=${lWalk?.regionAt?.(lc.pos.x, lc.pos.y)}`);
+      check('T5 the court holds the bench ARMED (every thegn tier 4 + ambushArmed — the aloft court debut, live)',
+        thegns.length >= 2 && thegns.every(t => t.tier === 4 && t.ambushArmed === true),
+        `${thegns.length} thegns`);
+      const t0 = thegns[0];
+      lw.springAmbush(t0);
+      let best = 0;
+      const seat = { x: t0.pos.x, y: t0.pos.y };
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        t0.pos.x = seat.x; t0.pos.y = seat.y;
+        for (let i = 0; i < 6; i++) lw.moveActor(t0, dx, dy, 0.1);
+        best = Math.max(best, Math.hypot(t0.pos.x - seat.x, t0.pos.y - seat.y));
+      }
+      check('T5 a sprung thegn is MOBILE on its story (the mover contract holds the bench)',
+        !t0.ambushArmed && best > 15, `step=${best.toFixed(1)}px`);
+    }
+  }
 }
 
 // --- RIG Q: THE STORIES GATE (LairSeat.stories — batch 29, the fold's story rung)
