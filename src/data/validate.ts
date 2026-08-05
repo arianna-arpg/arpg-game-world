@@ -2483,6 +2483,32 @@ export function validateContent(): void {
     if (v < 0 || v > 1) warn(`nemesis: NEMESIS_CFG.${k} out of [0,1]`);
   }
 
+  // THE TONGUE CENSUS: every faction the bestiary fields must speak a
+  // NON-DEFAULT tongue in BOTH name mills — its own pool or a deliberate kin
+  // alias in the byFaction seat maps. An absent (or all-empty: the rollers
+  // fall back per-array) key drops to the shared default jar SILENTLY, so an
+  // elite gnoll and an elite seraph would be named out of the same pot with
+  // nothing else to say so. Derived from the monster registry — never a
+  // literal faction list; one summary line per mill (the pool-orphan shape).
+  {
+    const fieldedFactions = new Set<string>();
+    for (const m of Object.values(MONSTERS)) if (m.faction) fieldedFactions.add(m.faction);
+    const tonguelessMill = [...fieldedFactions].filter(f => {
+      const p = MONSTER_NAMES.byFaction[f];
+      return !(p && (p.prefixes?.length || p.suffixes?.length || p.epithets?.length));
+    }).sort();
+    const tonguelessSaga = [...fieldedFactions].filter(f => {
+      const p = NEMESIS_NAMES.byFaction[f];
+      return !(p && (p.first?.length || p.epithets?.length));
+    }).sort();
+    if (tonguelessMill.length) {
+      warn(`monster names: ${tonguelessMill.length} fielded faction(s) fall to the default jar (no byFaction tongue): ${tonguelessMill.join(', ')}`);
+    }
+    if (tonguelessSaga.length) {
+      warn(`nemesis names: ${tonguelessSaga.length} fielded faction(s) fall to the default jar (no byFaction tongue): ${tonguelessSaga.join(', ')}`);
+    }
+  }
+
   // CHARACTER MODES: the death-policy ladders must be walkable and every gate
   // they reference must exist. A mode with an unreachable unlock flag or an
   // 'advance' on its LAST stage would strand the death flow at runtime.
