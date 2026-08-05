@@ -299,7 +299,7 @@ import {
   orbRefundStat, orbTrickleStat, ORB_TRICKLE,
 } from '../data/orbs';
 import {
-  ActiveTheaterRun, runTheaterBeat, theaterConcurrencyFold, THEATER_CFG,
+  ActiveTheaterRun, runTheaterBeat, theaterConcurrencyFold, theaterKindDef, THEATER_CFG,
   type TheaterContext, type TheaterKindDef, type TheaterRow, type TheaterSpots,
 } from './theater';
 import {
@@ -17465,7 +17465,9 @@ export class World {
   private eventActivityAt(zid: string): number {
     let a = this.sim.activityAt(zid);
     if (zid === this.zone.id) {
-      a += this.theaterRuns.filter(r => !r.done).length;
+      // OFFSTAGE runs are bodiless leans (a night-long watch change) — no
+      // turmoil for the bloom to feed on (the concurrency fold's own filter).
+      a += this.theaterRuns.filter(r => !r.done && !theaterKindDef(r.kind)?.offstage).length;
       a += this.encounters.length;
     }
     return a;
@@ -48386,6 +48388,9 @@ export class World {
               && !(z.edgeFrac && dist(z.pos, bp) + br < pr * z.edgeFrac)
               && !zoneHoleSpares(z, bp, br));
             if (!nb) continue;
+            // The sky's wrath passes over the unroused (Zone.spareDormant) —
+            // each quake beat keeps the impact's own law.
+            if (z.spareDormant && isDormant(v)) continue;
             if (!this.zoneSees(z, v)) continue;
             noteBodyHit(v, nb.seg);
             this.resolveHit(z.caster, z.inst, v,
@@ -48554,6 +48559,9 @@ export class World {
               this.zoneHas(z, bp, br)
               && !(z.edge && dist(z.pos, bp) + br < z.radius * z.edge));
             if (!nb) continue;
+            // The sky's wrath passes over the unroused (Zone.spareDormant) —
+            // on the tick as at impact: a lingering eruption keeps the law.
+            if (z.spareDormant && isDormant(victim)) continue;
             // Fume zones: the unexposed breathe free. Gated BEFORE the
             // sweep ledger so an unbitten crossing never burns its
             // once-per-life entry on a hit that didn't land.

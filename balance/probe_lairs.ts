@@ -13,7 +13,9 @@
 // vault's riddle (puzzle ask, dormant latched-once sphinx warden), and THE
 // SENTRY LAW on eruption country (RIG R: effectLavaOrb's volley pays awake
 // bodies and passes dormant sleepers by — Zone.spareDormant, the kilnhoard's
-// ember vents beside the Urnfather's coils).
+// ember vents beside the Urnfather's coils; RIG S: the law rides the
+// RE-STRIKES — a lingering eruption's tick and armed pulse spare the same
+// sleeper the impact spares, while awake bodies keep paying both lanes).
 // Run: npx tsx balance/probe_lairs.ts
 // ---------------------------------------------------------------------------
 
@@ -3160,6 +3162,71 @@ const step = (secs: number): void => {
     `life=${ventDormant.life.toFixed(1)}/${ventDormant.maxLife().toFixed(1)}`);
   check('R6 …and never roused (ambience is nobody\'s wounding strike)',
     !ventDormant.aiAwakened && isDormant(ventDormant));
+}
+
+// --- RIG S: THE SENTRY LAW RIDES THE RE-STRIKES (tick + pulse lanes) ---------
+// Batch 30 flagged the eruption's IMPACT (RIG R above); the tick and pulse
+// loops — the lanes a LINGERING eruption re-strikes through — carried no
+// dormant check (the recorded watch item). No shipped content lingers a
+// spareDormant zone yet, so the leak was latent: this rig mints the vent's
+// own zone through the real path, then gives it the linger a future consumer
+// would (exploded pre-set — the initial burst never runs, so every wound
+// below is a RE-STRIKE wound). The awake body keeps paying on both lanes
+// (the smoker economy); the dormant sleeper rides the whole linger unwounded
+// and unroused. Damage asserted as inequality only — a spare shifts the
+// stream for later victims.
+{
+  leaveToHome();
+  w.player.pos = vec(1400, 400); // out of both blasts — the pairs read clean
+  const restrikeSpares = (tag: string | undefined, x: number): Actor => {
+    const m = world.createMonster('zombie', 1, 'enemy');
+    m.pos = vec(x, 400);
+    if (tag) m.tag = tag;
+    w.actors.push(m);
+    return m;
+  };
+  const qaVentEff = { id: 'lava_orb', interval: 1, radius: 0, chance: 1,
+    count: 1, ringRadius: 0, jitter: 0, stagger: 0, blast: 130, power: 0 };
+
+  // The TICK lane: the mint's own zone, lingered.
+  const tickDormant = restrikeSpares('kiln_sleeper', 870); // the census's own tag
+  const tickAwake = restrikeSpares(undefined, 930);
+  let z0: number = w.zones.length;
+  w.effectLavaOrb({ pos: vec(900, 400), radius: 20, kind: 'ember_vent', rot: 0 }, qaVentEff);
+  check('S1 the vent minted its orb for the tick lane', w.zones.length === z0 + 1);
+  const zt = w.zones[w.zones.length - 1];
+  zt.exploded = true; // the burst never runs — ticks alone wound below
+  zt.linger = 1.21; zt.tickInterval = 0.5; zt.tickTimer = 0.5;
+  for (let i = 0; i < 5; i++) w.updateZones(0.3); // past the linger — AI never runs
+  check('S2 the lingering field TICKED the awake body (the lane is live, the toll stands)',
+    tickAwake.life < tickAwake.maxLife(),
+    `life=${tickAwake.life.toFixed(1)}/${tickAwake.maxLife().toFixed(1)}`);
+  check('S3 the DORMANT body rides the whole linger unwounded (the tick spares)',
+    tickDormant.life >= tickDormant.maxLife() - 0.001,
+    `life=${tickDormant.life.toFixed(1)}/${tickDormant.maxLife().toFixed(1)}`);
+  check('S4 …and never roused (the tick is nobody\'s wounding strike)',
+    !tickDormant.aiAwakened && isDormant(tickDormant));
+  check('S5 the lingering field spent itself clean', w.zones.length === z0);
+
+  // The PULSE lane: the armed re-detonation beat, same law.
+  const pulseDormant = restrikeSpares('kiln_sleeper', 570);
+  const pulseAwake = restrikeSpares(undefined, 630);
+  z0 = w.zones.length;
+  w.effectLavaOrb({ pos: vec(600, 400), radius: 20, kind: 'ember_vent', rot: 0 }, qaVentEff);
+  const zp = w.zones[w.zones.length - 1];
+  zp.exploded = true; zp.linger = 2;
+  zp.tickInterval = 99; zp.tickTimer = 99; // the tick lane stays silent here
+  zp.pulse = { delay: 0, interval: 0.4, intervalStep: 1, dmgMult: 1, dmgStep: 1,
+    radiusMult: 1, radiusStep: 1, left: 1, next: 0 }; // fires on the first step
+  for (let i = 0; i < 7; i++) w.updateZones(0.3); // one beat, then the linger dies
+  check('S6 the armed PULSE struck the awake body (the beat is live)',
+    pulseAwake.life < pulseAwake.maxLife(),
+    `life=${pulseAwake.life.toFixed(1)}/${pulseAwake.maxLife().toFixed(1)}`);
+  check('S7 the DORMANT body is passed by the quake (the pulse spares)',
+    pulseDormant.life >= pulseDormant.maxLife() - 0.001,
+    `life=${pulseDormant.life.toFixed(1)}/${pulseDormant.maxLife().toFixed(1)}`);
+  check('S8 …and never roused (the quake is nobody\'s wounding strike)',
+    !pulseDormant.aiAwakened && isDormant(pulseDormant));
 }
 
 console.log(fails ? `\nprobe_lairs: ${fails} FAILURE(S)` : '\nprobe_lairs: ALL PASS');

@@ -27,7 +27,9 @@
 // PARTY's additive burst (standing 'critter' tag + the capped pour), the
 // CART GUARD's road-walked column wheeling its driven cart, and the WATCH
 // CHANGE's bodiless reversible lean (offstage + endWhen 'rowCond' — seats
-// stream-silent, leans draw-free, reverts byte-exact on its closing tick).
+// stream-silent, leans draw-free, reverts byte-exact on its closing tick),
+// and THE MYCELIA READ (World.eventActivityAt: staged runs are the bloom's
+// food, offstage leans are not turmoil — the concurrency fold's own filter).
 // Run: npx tsx balance/probe_theater.ts
 // ---------------------------------------------------------------------------
 
@@ -639,6 +641,28 @@ registerTheaterKind({
     folk.every(a => a.aiPost === undefined && a.postSpec?.slack === priorSlack)
     && warden.aiPost === undefined);
   swapTheaterRows(prior);
+}
+
+// --- 18) THE MYCELIA READ: offstage runs are not food ------------------------
+// World.eventActivityAt feeds the bloom the player's zone's live theater
+// runs (the food: flare charge, the dormancy calm's <=0 gate, and spread
+// targeting all read it) — but an OFFSTAGE run is a bodiless lean (a
+// night-long watch change): no bodies, no turmoil, nothing to feed on. The
+// read wears the concurrency fold's own filter; a staged run still feeds.
+{
+  const w = makeSimWorld('warrior', 0x7e47e2);
+  const read = (): number =>
+    (w as unknown as { eventActivityAt(zid: string): number }).eventActivityAt(w.zone.id);
+  const base = read();
+  const qaRow: TheaterRow = { id: 'qa_mycelia_row', kind: 'watch_change', chance: 1 };
+  w.theaterRuns.push(new ActiveTheaterRun(w, 'watch_change', qaRow, 'freehold', null, 1));
+  check('mycelia read: an OFFSTAGE run is not food (the bloom starves on a bodiless lean)',
+    theaterKindDef('watch_change')?.offstage === true && read() === base,
+    `activity ${read()} vs base ${base}`);
+  w.theaterRuns.push(new ActiveTheaterRun(w, 'patrol', qaRow, 'goblin', null, 1));
+  check('mycelia read: a STAGED run still feeds the bloom by one',
+    !theaterKindDef('patrol')?.offstage && read() === base + 1,
+    `activity ${read()} vs base ${base}`);
 }
 
 console.log(failed ? `probe_theater: ${failed} FAILURE(S)` : 'probe_theater: all checks passed');
