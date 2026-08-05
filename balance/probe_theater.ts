@@ -20,8 +20,14 @@
 // proven with a QA writer and unregistered clean; the per-kind singleton
 // spends extra seats on kind DIVERSITY), THE PASS-THROUGH MARCH (a QA
 // column enters, crosses, and LEAVES — silent departure, no corpses, the
-// ground returns to its baseline), and THE LEGACY SIEGE re-founded (today's
-// 5-on-4 cast forms whole at entry; a spent siege ends with no payout arc).
+// ground returns to its baseline), THE LEGACY SIEGE re-founded (today's
+// 5-on-4 cast forms whole at entry; a spent siege ends with no payout arc),
+// and THE CAST (movement two): the TROOP MARCH's exits-pair true walk, the
+// FUNERAL's paced cortege (speedMul stands, lifts on dissolve), the HUNTING
+// PARTY's additive burst (standing 'critter' tag + the capped pour), the
+// CART GUARD's road-walked column wheeling its driven cart, and the WATCH
+// CHANGE's bodiless reversible lean (offstage + endWhen 'rowCond' — seats
+// stream-silent, leans draw-free, reverts byte-exact on its closing tick).
 // Run: npx tsx balance/probe_theater.ts
 // ---------------------------------------------------------------------------
 
@@ -30,7 +36,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
-import { vec } from '../src/core/math';
+import { dist, vec } from '../src/core/math';
 import { updateAI } from '../src/engine/ai';
 import {
   ActiveTheaterRun, THEATER_CFG, registerTheaterConcurrency, registerTheaterKind,
@@ -72,17 +78,28 @@ const SPOTS: TheaterSpots = {
   pois: [vec(400, 900), vec(1200, 900), vec(800, 200)],
 };
 
-// --- 1) The registry + kind priority (sieges before patrols, as ever) --------
+// --- 1) The registry + kind priority (sieges before patrols, as ever; the
+// cast between the legacy pair and the war column — data/theater registers
+// whole before data/warfront, so registration order IS import order) -------
 {
   const ids = theaterKinds().map(k => k.id);
-  check('registry: the legacy three re-founded, priority preserved',
-    ids[0] === 'siege' && ids[1] === 'patrol' && ids[2] === 'war_column',
-    `order [${ids.slice(0, 3).join(', ')}]`);
-  check('registry: night/day rows stand for all three (the literals died into rows)',
+  const CAST = ['troop_march', 'funeral', 'hunting_party', 'cart_guard', 'watch_change'];
+  check('registry: the legacy pair keeps the head of the order',
+    ids[0] === 'siege' && ids[1] === 'patrol', `order [${ids.slice(0, 2).join(', ')}]`);
+  check('registry: the cast stands registered (movement two shipped)',
+    CAST.every(k => ids.includes(k)));
+  check('registry: the war column still marches with its country — after the cast',
+    CAST.every(k => ids.indexOf('war_column') > ids.indexOf(k)));
+  check('registry: night/day rows stand for the legacy three (the literals died into rows)',
     ['siege', 'patrol', 'war_column'].every(k =>
       theaterRows().filter(r => r.kind === k).length === 2));
-  check('registry: every shipped kind is replacement-posture (the zone\'s own life)',
-    theaterKinds().every(k => k.posture === 'replacement'));
+  check('registry: the hunting party alone ships additive (the burst IS the supply)',
+    theaterKinds().filter(k => !k.id.startsWith('qa_')).every(k =>
+      k.posture === (k.id === 'hunting_party' ? 'additive' : 'replacement')));
+  check('registry: the watch change alone ships offstage + endWhen (the bodiless lean)',
+    theaterKinds().filter(k => !k.id.startsWith('qa_')).every(k =>
+      (k.offstage === true) === (k.id === 'watch_change')
+      && (k.endWhen === 'rowCond') === (k.id === 'watch_change')));
 }
 
 // --- 2) Eligibility + needs (the pure gates) ---------------------------------
@@ -407,6 +424,221 @@ registerTheaterKind({
       w.theaterRuns.length === 0 && !texts.some(t => String(t.text ?? '').includes('favor')));
     swapTheaterRows(prior);
   }
+}
+
+// --- 13) THE TROOP MARCH: the true walk — exits-pair endpoints, cross, leave --
+{
+  const w = makeSimWorld('warrior', 0x7e47e2);
+  w.player.pos = vec(100, 100); // far off the walked line
+  // The arena has no exits — stand a pair so marchEndpoints walks the real
+  // exits-pair lane (rig 11 already proved the edge fallback).
+  w.exits.push(
+    { pos: vec(250, 1080), radius: 24, to: 'qa_a', label: '', defIndex: 0 },
+    { pos: vec(1350, 1080), radius: 24, to: 'qa_b', label: '', defIndex: 1 });
+  const prior = swapTheaterRows([{ id: 'qa_troop_row', kind: 'troop_march', chance: 1 }]);
+  w.theaterSpots = SPOTS;
+  w.theaterAmbientBudget = 40;
+  const actorsBefore = w.actors.length;
+  const corpsesBefore = w.corpses.length;
+  w.theaterRunBeat(0, ctxOf());
+  const marchers = w.actors.filter(a => a.tag === 'troop_march');
+  const lead = marchers.find(a => a.patrolRoute && a.patrolRoute.length >= 2);
+  const exitSeats = [vec(250, 1080), vec(1350, 1080)];
+  const nearAnExit = (p: { x: number; y: number }): boolean =>
+    exitSeats.some(e => Math.hypot(p.x - e.x, p.y - e.y) < 90);
+  check('troop march: a lead + 4 kin stand up in the owner\'s colors',
+    marchers.length === 5 && !!lead && marchers.every(a => a.faction === 'goblin'),
+    `stood ${marchers.length}`);
+  check('troop march: the walk runs exit to exit (the world.exits pair)',
+    !!lead && nearAnExit(lead.patrolRoute![0]) && nearAnExit(lead.patrolRoute![lead.patrolRoute!.length - 1])
+    && lead.patrolIdx === 1);
+  let crossed = false;
+  for (let s = 0; s < 90 && !crossed; s++) {
+    step(w, 1);
+    crossed = !w.actors.some(a => !a.dead && a.tag === 'troop_march');
+  }
+  check('troop march: the column crosses and LEAVES — no corpses, ground restored',
+    crossed && w.actors.length === actorsBefore && w.corpses.length === corpsesBefore
+    && w.theaterRuns.length === 0);
+  w.exits.length = 0;
+  swapTheaterRows(prior);
+}
+
+// --- 14) THE FUNERAL: the slow cortege — speedMul stands, the walk completes --
+{
+  const w = makeSimWorld('warrior', 0x7e47e2);
+  w.player.pos = vec(100, 100);
+  w.exits.push(
+    { pos: vec(250, 1080), radius: 24, to: 'qa_a', label: '', defIndex: 0 },
+    { pos: vec(1350, 1080), radius: 24, to: 'qa_b', label: '', defIndex: 1 });
+  const prior = swapTheaterRows([
+    { id: 'qa_funeral_row', kind: 'funeral', chance: 1, params: { faction: 'undead' } }]);
+  w.theaterSpots = SPOTS;
+  w.theaterAmbientBudget = 40;
+  w.theaterRunBeat(0, ctxOf({ owner: null }));
+  const cortege = w.actors.filter(a => a.tag === 'funeral');
+  const lead = cortege.find(a => a.defId === 'thurible_bearer');
+  check('funeral: the censer-bearer leads 4 mourners (the authored cortege)',
+    cortege.length === 5 && !!lead && cortege.every(a => a.faction === 'undead'),
+    `stood ${cortege.length}`);
+  // The slow walk: the paced lead moves at speedMul of an unpaced twin.
+  const ctrl = w.spawnEventActor([{ id: 'thurible_bearer', weight: 1 }], 1, 'enemy', 'undead', 'qa_ctrl');
+  const paced = lead ? lead.sheet.get('moveSpeed') : 0;
+  const full = ctrl.sheet.get('moveSpeed');
+  check('funeral: the cortege WALKS — speedMul stands on every member',
+    full > 0 && paced > 0 && Math.abs(paced / full - 0.55) < 0.02,
+    `paced ${paced.toFixed(1)} vs full ${full.toFixed(1)}`);
+  ctrl.dead = true;
+  let crossed = false;
+  for (let s = 0; s < 120 && !crossed; s++) {
+    step(w, 1);
+    crossed = !w.actors.some(a => !a.dead && a.tag === 'funeral');
+  }
+  check('funeral: the procession winds across and leaves whole',
+    crossed && w.theaterRuns.length === 0);
+  w.exits.length = 0;
+  swapTheaterRows(prior);
+}
+
+// --- 15) THE HUNTING PARTY: the additive burst — standing tags, capped pour ---
+{
+  const w = makeSimWorld('warrior', 0x7e47e2);
+  w.player.pos = vec(100, 100);
+  w.exits.push(
+    { pos: vec(250, 1080), radius: 24, to: 'qa_a', label: '', defIndex: 0 },
+    { pos: vec(1350, 1080), radius: 24, to: 'qa_b', label: '', defIndex: 1 });
+  const prior = swapTheaterRows([{
+    id: 'qa_hunt_row', kind: 'hunting_party', chance: 1,
+    params: {
+      prey: [{ id: 'meadow_hare', weight: 1 }],
+      hunters: [{ id: 'plains_wolf', weight: 1 }],
+    },
+  }]);
+  w.theaterSpots = SPOTS;
+  w.theaterRunBeat(0, ctxOf());
+  const hares = w.actors.filter(a => a.defId === 'meadow_hare');
+  const wolves = w.actors.filter(a => a.tag === 'hunting_party');
+  check('hunt: the herd bursts in with hunters on its heels (two clumps, one run)',
+    hares.length === 4 && wolves.length === 2 && w.theaterRuns.length === 1,
+    `${hares.length} prey, ${wolves.length} hunters`);
+  check('hunt: the prey wears the STANDING \'critter\' tag — the zone\'s own predators read it free',
+    hares.every(a => a.tag === 'critter' && a.faction === 'beast'));
+  // The farm law: the additive cap prices the whole visit (6 poured, cap 10 —
+  // further beats trim, then refuse).
+  for (let beat = 1; beat < 4; beat++) {
+    w.theaterRuns.length = 0;
+    w.theaterRunBeat(beat, ctxOf());
+  }
+  const poured = w.theaterPour.get('hunting_party') ?? 0;
+  check('hunt: the pour stops AT the kind\'s cap — the burst never floods',
+    poured === 10, `poured ${poured}`);
+  w.exits.length = 0;
+  swapTheaterRows(prior);
+}
+
+// --- 16) THE CART GUARD: the road route, the wheeled cart, the clean leave ----
+{
+  const w = makeSimWorld('warrior', 0x7e47e2);
+  w.player.pos = vec(100, 100);
+  // Lay a farmland lane: a chain of road bodies across the arena floor
+  // (the fields recipe's own doodad kind — roadWaypoints walks these).
+  for (let x = 260; x <= 1340; x += 54) {
+    w.doodads.push({ pos: vec(x, 1080), radius: 12, kind: 'road', rot: 0 });
+  }
+  const prior = swapTheaterRows([{ id: 'qa_cart_row', kind: 'cart_guard', chance: 1 }]);
+  w.theaterSpots = SPOTS;
+  w.theaterAmbientBudget = 40;
+  const actorsBefore = w.actors.length;
+  const corpsesBefore = w.corpses.length;
+  w.theaterRunBeat(0, ctxOf());
+  const crew = w.actors.filter(a => a.tag === 'cart_guard');
+  const cart = crew.find(a => a.defId === 'caravan_cart');
+  const lead = crew.find(a => a.defId === 'village_warden');
+  check('cart guard: a warden, 3 kin and the cart take the lane',
+    crew.length === 5 && !!cart && !!lead, `stood ${crew.length}`);
+  check('cart guard: the route WALKS THE ROAD (via waypoints between the road\'s ends)',
+    !!lead && !!lead.patrolRoute && lead.patrolRoute.length >= 4
+    && lead.patrolRoute.every(pt => Math.abs(pt.y - 1080) < 40));
+  const cartStart = cart ? vec(cart.pos.x, cart.pos.y) : vec(0, 0);
+  step(w, 6);
+  check('cart guard: the driven cart ROLLS at the column\'s heel (the kind\'s tick wheels it)',
+    !!cart && dist(cart.pos, cartStart) > 30, cart ? `rolled ${dist(cart.pos, cartStart).toFixed(0)}px` : '');
+  let crossed = false;
+  for (let s = 0; s < 90 && !crossed; s++) {
+    step(w, 1);
+    crossed = !w.actors.some(a => !a.dead && a.tag === 'cart_guard');
+  }
+  check('cart guard: cart and guard cross together and leave — no corpses, ground restored',
+    crossed && w.actors.length === actorsBefore && w.corpses.length === corpsesBefore
+    && w.theaterRuns.length === 0);
+  swapTheaterRows(prior);
+}
+
+// --- 17) THE WATCH CHANGE: the bodiless lean — reversible, stream-silent, ----
+// offstage, and expired by its own hour (endWhen 'rowCond')
+{
+  const w = makeSimWorld('warrior', 0x7e47e2);
+  w.time = 150; // deep night (PHASE_WHEEL: night spans [120, 216) of 240)
+  const folk = [
+    w.spawnEventActor([{ id: 'crofter', weight: 1 }], 1, 'enemy', 'freehold', 'qa_folk'),
+    w.spawnEventActor([{ id: 'crofter', weight: 1 }], 1, 'enemy', 'freehold', 'qa_folk'),
+  ];
+  const warden = w.spawnEventActor([{ id: 'village_warden', weight: 1 }], 1, 'enemy', 'freehold', 'qa_folk');
+  const priorSlack = folk[0].postSpec?.slack;
+  const prior = swapTheaterRows([
+    {
+      id: 'qa_watch_row', kind: 'watch_change', chance: 1, when: { phases: ['night'] },
+      params: {
+        faction: 'freehold',
+        leans: [
+          { defs: ['crofter'], at: 'camps', hold: false },
+          { defs: ['village_warden'], at: 'pois', hold: true },
+        ],
+      },
+    },
+    { id: 'qa_a_row', kind: 'qa_theater_a', chance: 1 },
+  ]);
+  w.theaterSpots = SPOTS;
+  const actorsBefore = w.actors.length;
+  // The seat itself is stream-silent: a bodiless kind spawns nothing and
+  // draws nothing from the global die even when it SEATS.
+  seedGlobalRandom(0xd1e003);
+  const ref = Math.random();
+  seedGlobalRandom(0xd1e003);
+  w.theaterRunBeat(1, ctxOf());
+  const run = w.theaterRuns.find(r => r.kind === 'watch_change');
+  check('watch change: seats while its hour holds — and touches NOTHING (bodiless + stream-silent)',
+    !!run && !run.done && w.actors.length === actorsBefore && Math.random() === ref);
+  // OFFSTAGE: the standing lean holds no concurrency seat — the ground's
+  // one texture seat is still open for a real kind.
+  qaSeats.length = 0;
+  w.theaterRunBeat(2, ctxOf());
+  check('watch change: offstage — a staged kind still seats beside the standing lean',
+    qaSeats.length === 1 && qaSeats[0].kind === 'qa_theater_a');
+  w.theaterRuns = w.theaterRuns.filter(r => r.kind === 'watch_change');
+  // The lean lands on the sweep tick — reversibly, and without one global draw.
+  seedGlobalRandom(0xd1e004);
+  const ref2 = Math.random();
+  seedGlobalRandom(0xd1e004);
+  run!.tick(1 / 60);
+  const leanHeld = folk.every(a => a.aiPost !== undefined && a.postSpec?.hold === false)
+    && warden.aiPost !== undefined && warden.postSpec?.hold === true;
+  check('watch change: the SAME standing bodies shift roles (folk homebound, watch posted) — draw-free',
+    leanHeld && Math.random() === ref2,
+    `folk posts [${folk.map(a => a.aiPost ? '✓' : '·').join('')}], warden ${warden.aiPost ? '✓' : '·'}`);
+  check('watch change: the posts are REAL spots (camps for the folk, POIs for the watch)',
+    folk.every(a => !!a.aiPost && SPOTS.camps.some(c => dist(a.aiPost!, c) < 60))
+    && !!warden.aiPost && SPOTS.pois.some(c => dist(warden.aiPost!, c) < 60));
+  // Dawn: endWhen 'rowCond' expires the run and the CLOSING TICK reverts
+  // every lean byte-exact — nobody poofs, everybody walks home.
+  w.time = 30; // day
+  run!.tick(1 / 60);
+  check('watch change: the hour turns — the run expires by its own row cond (endWhen)',
+    run!.done === true);
+  check('watch change: the closing tick REVERTS the lean (no poof, no residue)',
+    folk.every(a => a.aiPost === undefined && a.postSpec?.slack === priorSlack)
+    && warden.aiPost === undefined);
+  swapTheaterRows(prior);
 }
 
 console.log(failed ? `probe_theater: ${failed} FAILURE(S)` : 'probe_theater: all checks passed');

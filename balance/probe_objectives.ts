@@ -1003,8 +1003,13 @@ withSeededRandom(0x0bec7a, () => {
 
     // U11 THE HAND-BACK at load: a guest that died while the player was away
     // reverts the ask — the zone is always completable, never wedged.
+    // (Stage seed re-measured at the theater CAST, 2026-08-05: the cast's
+    // entry seats shifted the world stream and 818181's mint re-rolled onto
+    // lair-claimed ground — the resident legitimately beats the guest there,
+    // which is U13's lesson, not this rig's. 818182 mints bare cull ground;
+    // the whole file scanned green through its own run.)
     {
-      const zid = stage(818181, 39, { kind: 'clear', adopt: true });
+      const zid = stage(818182, 39, { kind: 'clear', adopt: true });
       check('U11a the hand-back guest seats', ff.devIgnite(w.devOverlayView(), zid) === true);
       w.loadZone(zid);
       check('U11b adopted at load', w.zone.objective.kind === 'package');

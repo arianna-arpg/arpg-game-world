@@ -58,8 +58,9 @@
 // runner's law). Docs: docs/engine/theater.md.
 // ---------------------------------------------------------------------------
 
-import { vec, type Vec2 } from '../core/math';
+import { rand, randInt, vec, type Vec2 } from '../core/math';
 import { Rng } from '../core/rng';
+import { mod } from './stats';
 import type { PackTableEntry } from '../data/zones';
 import { eventAllowed } from '../world/zonePolicy';
 import type { RadianceCond } from '../world/radiance';
@@ -112,13 +113,29 @@ export interface TheaterKindDef {
     /** An invader distinct from the owner and truly HOSTILE to it. */
     invader?: 'hostileToOwner';
   };
-  /** Resolve the cast from local truth (null = can't form here). */
-  cast(ctx: TheaterContext): { primary: string; secondary?: string | null } | null;
+  /** Resolve the cast from local truth (null = can't form here). The seated
+   *  ROW rides along so one generic kind can serve authored faction×biome
+   *  rows (the funeral reads its cortege's faction from row.params — the
+   *  war-column idiom without a kind per faction). */
+  cast(ctx: TheaterContext, row?: TheaterRow): { primary: string; secondary?: string | null } | null;
   /** Default per-kind dials; row.params spread over these. */
   params?: Record<string, unknown>;
   /** Additive kinds: default per-visit pour cap (row.pourCap overrides;
    *  absent falls to THEATER_CFG.pour.additiveCap — a cap always stands). */
   pourCap?: number;
+  /** END-WHEN SUGAR: 'rowCond' ends the run the moment its row's `when`
+   *  stops holding (the watch change stands while night stands). THE
+   *  CLOSING TICK contract: the fabric marks the run done and then calls
+   *  the kind's tick ONE last time — a tick that observes `run.done ===
+   *  true` is the teardown pass (revert your leans there). Kinds without
+   *  endWhen never receive a done tick. */
+  endWhen?: 'rowCond';
+  /** OFFSTAGE: a bodiless kind (a role-shift lean, never a clump of
+   *  bodies). Its live run holds NO seat in the concurrency fold — a
+   *  night-long watch change must not starve the ground's one texture
+   *  seat — though seating it still spends its beat, and the per-kind
+   *  singleton (sameKindMax) still caps it. */
+  offstage?: boolean;
   /** Lay the run onto the zone (set run.done if it can't form). */
   spawn(world: World, run: ActiveTheaterRun, spots: TheaterSpots): void;
   /** Advance it each frame; set run.done when its life is over. */
@@ -171,8 +188,10 @@ export const THEATER_CFG = {
   pour: { bandFrac: 0.5, floor: 4, additiveCap: 12 },
   /** The pass-through march: how close to its goal the lead must walk
    *  before the column slips away (must exceed the patrol AI's 40px
-   *  waypoint-advance radius, or the lead loops home first). */
-  march: { arriveDist: 44 },
+   *  waypoint-advance radius, or the lead loops home first); the road
+   *  route picker's floor span (px — shorter road networks aren't worth
+   *  a cart's walk) and waypoint stride (px between kept road discs). */
+  march: { arriveDist: 44, roadMinSpan: 700, roadStep: 170 },
 };
 
 const KINDS: TheaterKindDef[] = [];
@@ -343,6 +362,12 @@ export class ActiveTheaterRun {
     if (this.done) return;
     const def = theaterKindDef(this.kind);
     if (!def) { this.done = true; return; }
+    // END-WHEN SUGAR ('rowCond'): the run expires with its row's hour. The
+    // kind's tick still runs THIS ONCE with done already true — the closing
+    // tick, its teardown pass (the watch change reverts its leans there).
+    if (def.endWhen === 'rowCond' && !this.world.radianceCondHeld(this.row.when)) {
+      this.done = true;
+    }
     def.tick(this.world, this, dt);
   }
 
@@ -383,7 +408,9 @@ export interface TheaterBeatOpts {
  *  the old entry did). Returns the seated run (caller keeps it if it
  *  formed), or null. */
 export function runTheaterBeat(world: World, o: TheaterBeatOpts): ActiveTheaterRun | null {
-  const liveCount = o.live.filter(r => !r.done).length;
+  // OFFSTAGE runs (bodiless leans) hold no seat in the fold — a standing
+  // watch change must not starve the ground's one texture seat all night.
+  const liveCount = o.live.filter(r => !r.done && !theaterKindDef(r.kind)?.offstage).length;
   if (liveCount >= o.concurrency) return null;
   if (o.suppression < 1) {
     const supRng = theaterRng(world.manifest.seed, world.zone.id, world.theaterVisit, '(sup)', o.beat);
@@ -401,7 +428,7 @@ export function runTheaterBeat(world: World, o: TheaterBeatOpts): ActiveTheaterR
     const row = rows.length === 1 ? rows[0]
       : rows[weightedIdx(rows.map(r => r.weight ?? 1), rng)];
     if (!rng.chance(row.chance)) continue;
-    const cast = def.cast(o.ctx);
+    const cast = def.cast(o.ctx, row);
     if (!cast) continue;
     // THE POUR seat-gate: a kind whose visit ledger is spent doesn't seat.
     if (world.theaterPourRoom(def, row, o.beat === 0) <= 0) continue;
@@ -440,23 +467,55 @@ export interface MarchSpec {
   followers: number;
   from: Vec2;
   to: Vec2;
-  /** The actor tag the march's bodies wear (default: the run's kind). */
+  /** Waypoints WALKED between from and to (the cart guard's road, a
+   *  cortege's winding way) — the lead's patrol route runs them in order. */
+  via?: Vec2[];
+  /** The actor tag the march's bodies wear (default: the run's kind). The
+   *  ledger below tracks members by ID, so a march may wear a STANDING tag
+   *  ('critter' — the hunting party's prey walks straight into the
+   *  standing prey lane) without confusing the sweep. */
   tag?: string;
+  /** Walking pace as a fraction of full stride (the funeral's slow walk) —
+   *  a 'theater_march_pace' stat source on every member, LIFTED when the
+   *  march dissolves (mourners break stride when the procession shatters). */
+  speedMul?: number;
   leadJitter?: number;
   followJitter?: number;
   level?: number;
 }
 
-/** Stand a march up. Returns the lead (null when the pour ledger refuses
+/** One live column's ledger (run.data.marches[]): members by ID — never by
+ *  tag sweep, so two clumps may share a run (the hunting party's prey +
+ *  hunters) and a march may wear any standing tag. A kind that walks extra
+ *  bodies with a column (the cart guard's cart) may push their ids in. */
+export interface MarchState {
+  lead: number;
+  ids: number[];
+  goal: Vec2;
+  /** speedMul stood on the members (lifted once on dissolve). */
+  pace?: number;
+  /** The lead fell — pace lifted, stragglers mill as ordinary bodies. */
+  dissolved?: boolean;
+  done?: boolean;
+}
+
+function runMarches(run: ActiveTheaterRun): MarchState[] {
+  return (run.data.marches ??= []) as MarchState[];
+}
+
+/** Stand a march up (appends to the run's march ledger — a run may walk
+ *  several columns). Returns the lead (null when the pour ledger refuses
  *  even the lead — the beat's seat-gate makes that rare). */
 export function marchSpawn(world: World, run: ActiveTheaterRun, spec: MarchSpec): Actor | null {
   const tag = spec.tag ?? run.kind;
   const level = spec.level ?? Math.max(1, world.zone.level);
   const lead = world.theaterSpawn(run, spec.leadTable ?? spec.table, level, run.primary, tag);
-  if (!lead) { run.done = true; return null; }
+  if (!lead) { if (!runMarches(run).length) run.done = true; return null; }
   lead.pos = world.clampNear(spec.from, spec.leadJitter ?? 30);
-  lead.patrolRoute = [vec(spec.from.x, spec.from.y), vec(spec.to.x, spec.to.y)];
+  lead.patrolRoute = [vec(spec.from.x, spec.from.y),
+    ...(spec.via ?? []).map(v => vec(v.x, v.y)), vec(spec.to.x, spec.to.y)];
   lead.patrolIdx = 1; // head for the far side, never back to the entry
+  const ids = [lead.id];
   const room = Math.max(0, world.theaterPourRoom(run.def()!, run.row, run.entry));
   const n = run.entry ? spec.followers : Math.min(spec.followers, room);
   for (let i = 0; i < n; i++) {
@@ -464,31 +523,119 @@ export function marchSpawn(world: World, run: ActiveTheaterRun, spec: MarchSpec)
     if (!f) break;
     f.pos = world.clampNear(spec.from, spec.followJitter ?? 55);
     f.patrolFollow = lead.id;
+    ids.push(f.id);
   }
-  run.data.marchLead = lead.id;
-  run.data.marchGoal = vec(spec.to.x, spec.to.y);
-  run.data.marchTag = tag;
+  if (spec.speedMul !== undefined && spec.speedMul !== 1) {
+    for (const id of ids) {
+      world.actorById(id)?.sheet.setSource('theater_march_pace',
+        [mod('moveSpeed', 'more', spec.speedMul - 1)]);
+    }
+  }
+  runMarches(run).push({
+    lead: lead.id, ids, goal: vec(spec.to.x, spec.to.y),
+    pace: spec.speedMul !== undefined && spec.speedMul !== 1 ? spec.speedMul : undefined,
+  });
   return lead;
 }
 
-/** Advance a march: the lead reaching its goal slips the whole column away
- *  (silent departure — they simply leave); a dead lead dissolves it (the
- *  stragglers mill and fight as ordinary bodies until spent). Sets
- *  run.done when the ground is clear either way. */
+/** Advance every column on the run's ledger: a lead reaching its goal slips
+ *  its whole column away (silent departure — they simply leave); a dead
+ *  lead dissolves its column (pace lifted, the stragglers mill and fight
+ *  as ordinary bodies until spent). Sets run.done when every column's
+ *  ground is clear either way. */
 export function marchTick(world: World, run: ActiveTheaterRun): void {
-  const goal = run.data.marchGoal as Vec2 | undefined;
-  const tag = (run.data.marchTag as string | undefined) ?? run.kind;
-  const leadId = run.data.marchLead as number | undefined;
-  const lead = leadId !== undefined ? world.actorById(leadId) : undefined;
-  if (lead && !lead.dead && goal) {
-    const dx = lead.pos.x - goal.x, dy = lead.pos.y - goal.y;
-    if (Math.hypot(dx, dy) < THEATER_CFG.march.arriveDist) {
-      for (const a of [...world.actors]) {
-        if (!a.dead && a.tag === tag && a.faction === run.primary) world.slipAway(a, '');
+  const marches = runMarches(run);
+  if (!marches.length) { run.done = true; return; }
+  let allDone = true;
+  for (const m of marches) {
+    if (m.done) continue;
+    const lead = world.actorById(m.lead);
+    const leadAlive = !!lead && !lead.dead;
+    if (leadAlive) {
+      const dx = lead.pos.x - m.goal.x, dy = lead.pos.y - m.goal.y;
+      if (Math.hypot(dx, dy) < THEATER_CFG.march.arriveDist) {
+        for (const id of m.ids) {
+          const a = world.actorById(id);
+          if (a && !a.dead) world.slipAway(a, '');
+        }
+        m.done = true;
+        continue;
       }
-      run.done = true;
-      return;
+    } else if (!m.dissolved) {
+      // The lead fell: the column loses cohesion (the warband law). The
+      // paced walk lifts — mourners break stride when the procession
+      // shatters — and the stragglers stand as ordinary bodies.
+      m.dissolved = true;
+      if (m.pace !== undefined) {
+        for (const id of m.ids) world.actorById(id)?.sheet.removeSource('theater_march_pace');
+      }
+    }
+    const anyAlive = m.ids.some(id => { const a = world.actorById(id); return !!a && !a.dead; });
+    if (!leadAlive && !anyAlive) { m.done = true; continue; }
+    allDone = false;
+  }
+  if (allDone) run.done = true;
+}
+
+/** THE ENDPOINT PICKER — where a pass-through column enters and leaves:
+ *  two DISTINCT zone exits when the ground has them (the world.exits
+ *  pairs), else one exit + the far side of the arena, else two opposed
+ *  arena-edge points (the warbandDestination idiom's fallback ladder).
+ *  Spawn-phase: draws ride the live die, like every cast placement. */
+export function marchEndpoints(world: World): { from: Vec2; to: Vec2 } {
+  const exits = world.exits;
+  const edge = (ang: number): Vec2 => {
+    const cx = world.arena.w / 2, cy = world.arena.h / 2;
+    const reach = Math.min(world.arena.w, world.arena.h) / 2 - 80;
+    return world.clampPos(vec(cx + Math.cos(ang) * reach, cy + Math.sin(ang) * reach), 16);
+  };
+  if (exits.length >= 2) {
+    const i = randInt(0, exits.length - 1);
+    let j = randInt(0, exits.length - 2);
+    if (j >= i) j++;
+    return { from: vec(exits[i].pos.x, exits[i].pos.y), to: vec(exits[j].pos.x, exits[j].pos.y) };
+  }
+  if (exits.length === 1) {
+    const e = exits[0].pos;
+    const cx = world.arena.w / 2, cy = world.arena.h / 2;
+    const away = Math.atan2(cy - e.y, cx - e.x); // through the middle, out the far side
+    return { from: vec(e.x, e.y), to: edge(away) };
+  }
+  const ang = rand(0, Math.PI * 2);
+  return { from: edge(ang), to: edge(ang + Math.PI) };
+}
+
+/** THE ROAD ROUTE PICKER (the cart guard's lane): walk the zone's laid
+ *  road bodies — the settled belt's REAL portal roads (the exitRoads /
+ *  carveWay fabric leaves discs of the road kind) — as a march route: the
+ *  two farthest-apart discs are the ends, the discs between (ordered by
+ *  projection along the span, thinned to a stride) are the way. Pure
+ *  geometry, draw-free; null when no road worth walking stands. */
+export function roadWaypoints(world: World, kind = 'road'): { from: Vec2; to: Vec2; via: Vec2[] } | null {
+  const discs = world.doodads.filter(d => d.kind === kind && !d.gone).map(d => d.pos);
+  if (discs.length < 6) return null;
+  let ai = 0, bi = 0, best = -1;
+  for (let i = 0; i < discs.length; i++) {
+    for (let j = i + 1; j < discs.length; j++) {
+      const dx = discs[i].x - discs[j].x, dy = discs[i].y - discs[j].y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > best) { best = d2; ai = i; bi = j; }
     }
   }
-  if (!world.anyAliveWithTag(tag, run.primary)) run.done = true;
+  const from = discs[ai], to = discs[bi];
+  const span = Math.sqrt(best) || 1;
+  if (span < THEATER_CFG.march.roadMinSpan) return null;
+  const ux = (to.x - from.x) / span, uy = (to.y - from.y) / span;
+  const along = discs
+    .map(p => ({ p, t: (p.x - from.x) * ux + (p.y - from.y) * uy }))
+    .filter(e => e.t > 1 && e.t < span - 1)
+    .sort((a, b) => a.t - b.t);
+  const via: Vec2[] = [];
+  let lastT = 0;
+  for (const e of along) {
+    if (e.t - lastT < THEATER_CFG.march.roadStep) continue;
+    via.push(vec(e.p.x, e.p.y));
+    lastT = e.t;
+  }
+  return { from: vec(from.x, from.y), to: vec(to.x, to.y), via };
 }
