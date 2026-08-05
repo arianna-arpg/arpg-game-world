@@ -20,9 +20,13 @@ import {
   registerCluster, registerComposition, registerDoodadRule, registerFormation,
   registerStamp, stampSingle,
 } from '../engine/levelgen';
-import { registerZoneEvent } from '../engine/events';
+import {
+  registerTheaterKind, registerTheaterRow, THEATER_CFG,
+  type ActiveTheaterRun, type TheaterSpots,
+} from '../engine/theater';
 import { FACTIONS } from './monsters';
 import { vec } from '../core/math';
+import type { World } from '../engine/world';
 
 // --- THE SIEGE FURNITURE -----------------------------------------------------
 // The shell pock: a blast crater at walking scale — GROUND, not obstacle
@@ -173,45 +177,57 @@ registerComposition({
   ],
 });
 
-// --- THE WAR COLUMN (biome-flavored zone event) ------------------------------
+// --- THE WAR COLUMN (theater BY OWNERSHIP on warfront ground) ----------------
 // A grind-column on the march: a bannerman and his troop walking the ways
-// (the PATROL grammar — Actor.patrolRoute — under Bhorog's standard). Fires
-// on the Warfront's own biome, never gated on a faction OWNER: the surface
-// territorial overlay does not reach hell, but the front is always marching.
-const COLUMN_CFG = {
-  chanceNight: 0.55, chanceDay: 0.45,
-  followers: 5, maxWaypoints: 6, leadJitter: 26, followJitter: 55,
-} as const;
+// (the PATROL grammar — Actor.patrolRoute — under Bhorog's standard). A
+// THEATER kind whose rows claim the Warfront's own biome, never gated on a
+// faction OWNER: the surface territorial overlay does not reach hell, but
+// the front is always marching — the zone's own life, expressed louder.
+// (Its old chanceNight/chanceDay literals live in the two rows below; its
+// old reward row was dead data — the tick never paid — and died with the
+// arcless re-founding.)
 
-registerZoneEvent({
+interface ColumnParams extends Record<string, unknown> {
+  followers: number; maxWaypoints: number; leadJitter: number; followJitter: number;
+}
+
+registerTheaterKind({
   id: 'war_column',
-  reward: { rep: 8, xpMul: 0.8, gems: 0 },
-  choose: (ctx, roll) => {
-    if (ctx.biome === 'warfront' && ctx.hasRoute
-      && roll < (ctx.isNight ? COLUMN_CFG.chanceNight : COLUMN_CFG.chanceDay)) {
-      return { kind: 'war_column', primary: 'demon', secondary: null };
-    }
-    return null;
-  },
-  spawn: (w, run, spots) => {
+  posture: 'replacement',
+  needs: { route: true },
+  cast: () => ({ primary: 'demon' }),
+  params: {
+    followers: 5, maxWaypoints: 6, leadJitter: 26, followJitter: 55,
+  } satisfies ColumnParams,
+  spawn: (w: World, run: ActiveTheaterRun, spots: TheaterSpots) => {
+    const p = run.params<ColumnParams>();
     const roster = FACTIONS[run.primary];
-    const route = [...spots.pois, ...spots.camps].slice(0, COLUMN_CFG.maxWaypoints);
+    const route = [...spots.pois, ...spots.camps].slice(0, p.maxWaypoints);
     if (!roster || route.length < 2) { run.done = true; return; }
+    if (!run.entry && w.theaterPourRoom(run.def()!, run.row, false) < 1 + p.followers) {
+      run.done = true; return;
+    }
     const level = Math.max(1, w.zone.level);
     // The bannerman leads; the column heels to him (the patrol grammar).
-    const lead = w.spawnEventActor([{ id: 'grind_bannerman', weight: 1 }], level, 'enemy', run.primary, 'war_column');
-    lead.pos = w.clampNear(route[0], COLUMN_CFG.leadJitter);
+    const lead = w.theaterSpawn(run, [{ id: 'grind_bannerman', weight: 1 }], level, run.primary, 'war_column');
+    if (!lead) { run.done = true; return; }
+    lead.pos = w.clampNear(route[0], p.leadJitter);
     lead.patrolRoute = route;
     lead.patrolIdx = 0;
-    for (let i = 0; i < COLUMN_CFG.followers; i++) {
-      const f = w.spawnEventActor(roster.table, level, 'enemy', run.primary, 'war_column');
-      f.pos = w.clampNear(route[0], COLUMN_CFG.followJitter);
+    for (let i = 0; i < p.followers; i++) {
+      const f = w.theaterSpawn(run, roster.table, level, run.primary, 'war_column');
+      if (!f) break;
+      f.pos = w.clampNear(route[0], p.followJitter);
       f.patrolFollow = lead.id;
     }
-    w.text(vec(w.player.pos.x, w.player.pos.y - 70), 'a grind-column on the march', '#e8823a', 14);
+    w.text(vec(w.player.pos.x, w.player.pos.y + THEATER_CFG.announce.dy),
+      'a grind-column on the march', '#e8823a', 14);
   },
-  tick: (w, run) => {
+  tick: (w: World, run: ActiveTheaterRun) => {
     // Column troops are ordinary bounties; breaking it ends the march quietly.
     if (!w.anyAliveWithTag('war_column', run.primary)) run.done = true;
   },
 });
+
+registerTheaterRow({ id: 'war_column_night', kind: 'war_column', biomes: ['warfront'], when: { phases: ['night'] }, chance: 0.55 });
+registerTheaterRow({ id: 'war_column_day', kind: 'war_column', biomes: ['warfront'], when: { phases: ['dawn', 'day', 'dusk'] }, chance: 0.45 });

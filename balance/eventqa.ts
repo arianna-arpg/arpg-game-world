@@ -60,6 +60,7 @@ import '../src/data/massifs';
 import '../src/data/settled';
 import '../src/data/garden';
 import '../src/data/grove';
+import '../src/data/theater'; // THE THEATER FABRIC's defaults (before warfront — kind priority is registration order)
 import '../src/data/warfront';
 import '../src/data/compositions';
 // The living-terrain registries main.ts loads (fog banks, creep kinds): a def
@@ -77,7 +78,8 @@ import { validatePackages } from '../src/packages/validation';
 import { buildManifest, reconcileManifest, type ExpeditionManifest } from '../src/packages/manifest';
 import { resolveGates, gateOf, INACTIVE_GATE } from '../src/packages/weighting';
 import { scaledCap } from '../src/packages/frequency';
-import { chooseEvent, zoneEventDefs, type EventContext } from '../src/engine/events';
+import { theaterKinds, theaterRows, theaterKindDef, THEATER_CFG } from '../src/engine/theater';
+import { validateRadianceCond } from '../src/world/radiance';
 import { WorldSim, packageLookups } from '../src/world/sim';
 import { BIOMES } from '../src/world/biomes';
 import { FACTIONS, MONSTERS } from '../src/data/monsters';
@@ -513,7 +515,7 @@ console.log('eventqa: zone policy ids');
   const knownEvents = new Set<string>([
     ...PACKAGES.map(p => p.id),
     ...allEncounterSpecs().map(e => e.packageId),
-    ...zoneEventDefs().map(d => d.id),
+    ...theaterKinds().map(d => d.id),
     'incursion', // always-on infra field (not a package id)
   ]);
   for (const [bid, b] of Object.entries(BIOMES)) {
@@ -526,41 +528,80 @@ console.log('eventqa: zone policy ids');
   }
 }
 
-// === 8. ZONE-EVENT REGISTRY ==================================================
-console.log('eventqa: zone-event registry');
+// === 8. THE THEATER REGISTRY (engine/theater.ts — the zone-event lane's
+// re-founding) ================================================================
+// The STATIC data contract: kinds and rows well-formed, every row naming a
+// registered kind and known ground, hour gates lint-clean, THE RESIDENT
+// LAW's schema holds (no reward surface exists to check — arcless by type),
+// and THE PARITY PIN: the legacy three's re-founded numbers are TODAY'S
+// numbers, verbatim (drift here is a retune, and a retune needs a ruling).
+// Live behavior (draw determinism, the cadence, the pour caps, the
+// concurrency fold) is balance/probe_theater.ts's ground.
+console.log('eventqa: the theater registry');
 {
-  const defs = zoneEventDefs();
-  assert(defs.length >= 2, 'zone-events', `registry holds ${defs.length} kinds`);
-  assert(new Set(defs.map(d => d.id)).size === defs.length, 'zone-events', 'kind ids unique');
-  for (const d of defs) {
-    assert(d.reward.rep >= 0 && d.reward.gems >= 0 && d.reward.xpMul >= 0, 'zone-events', `${d.id}: reward row sane`);
-    assert(typeof d.spawn === 'function' && typeof d.tick === 'function', 'zone-events', `${d.id}: spawn+tick handlers present`);
+  const kinds = theaterKinds();
+  const rows = theaterRows();
+  assert(kinds.length >= 3, 'theater', `registry holds ${kinds.length} kinds`);
+  assert(new Set(kinds.map(d => d.id)).size === kinds.length, 'theater', 'kind ids unique');
+  assert(new Set(rows.map(r => r.id)).size === rows.length, 'theater', 'row ids unique');
+  for (const d of kinds) {
+    assert(typeof d.spawn === 'function' && typeof d.tick === 'function', 'theater', `${d.id}: spawn+tick handlers present`);
+    assert(d.posture === 'replacement' || d.posture === 'additive', 'theater', `${d.id}: posture declared`);
+    if (d.posture === 'additive') {
+      const cap = d.pourCap ?? THEATER_CFG.pour.additiveCap;
+      assert(Number.isFinite(cap) && cap > 0, 'theater', `${d.id}: additive kind stands under a finite pour cap`);
+    }
   }
-  const base: EventContext = {
-    owner: 'goblin', ownerPower: 60, contestants: ['goblin', 'gnoll'],
-    invader: null, isNight: false, hasCamps: true, hasRoute: true, nearHome: true,
+  for (const r of rows) {
+    assert(!!theaterKindDef(r.kind), 'theater', `row '${r.id}' names registered kind '${r.kind}'`);
+    assert(r.chance > 0 && r.chance <= 1, 'theater', `row '${r.id}' chance in (0,1]`);
+    assert(r.weight === undefined || r.weight > 0, 'theater', `row '${r.id}' weight positive`);
+    assert(r.pourCap === undefined || r.pourCap > 0, 'theater', `row '${r.id}' pour cap positive`);
+    for (const b of r.biomes ?? []) {
+      assert(!!BIOMES[b], 'theater', `row '${r.id}' names biome '${b}'`);
+    }
+    for (const f of r.factions ?? []) {
+      assert(!!FACTIONS[f], 'theater', `row '${r.id}' names faction '${f}'`);
+    }
+    for (const w of validateRadianceCond(`theater row '${r.id}'`, r.when)) {
+      fail('theater', w);
+    }
+  }
+  // The ambient caravan stays RETIRED — escorts are the 'procession' zone
+  // OBJECTIVE (data/processions.ts), never a theater kind.
+  assert(!kinds.some(d => d.id === 'caravan'), 'theater', 'the ambient caravan kind is retired');
+  // THE PARITY PIN — the legacy three re-founded with TODAY'S numbers. The
+  // old chanceNight/chanceDay literals live as night/day phase rows; the
+  // cast counts live as kind params. Retuning any of these is a design
+  // ruling, not a drive-by.
+  const pin = (rowId: string, kind: string, chance: number, night: boolean): void => {
+    const r = rows.find(x => x.id === rowId);
+    assert(!!r && r.kind === kind && r.chance === chance, 'theater',
+      `parity: ${rowId} = ${kind} @ ${chance}`);
+    const ph = r?.when?.phases ?? [];
+    assert(night ? ph.length === 1 && ph[0] === 'night'
+      : ph.length === 3 && !ph.includes('night'), 'theater',
+      `parity: ${rowId} keeps the old ${night ? 'isNight' : 'day-side'} phase read`);
   };
-  const plain = {}; // an un-biomed zone — policy admits everything
-  // A siege needs a genuinely HOSTILE invader — take one from the live stance
-  // table rather than assuming any particular pair's politics.
-  const { factionStance } = await import('../src/data/monsters');
-  const hostileInvader = Object.keys(FACTIONS).find(f => f !== 'goblin' && factionStance(f, 'goblin') === 'hostile');
-  if (hostileInvader) {
-    const siege = chooseEvent({ ...base, invader: hostileInvader }, plain, 0);
-    assert(siege?.kind === 'siege', 'zone-events', `priority: a hostile invader (${hostileInvader}) + camps ⇒ siege first`);
-  } else {
-    ok('zone-events', 'no faction is hostile to goblins this build — siege priority untestable, skipped');
-  }
-  // The ambient caravan is RETIRED — escorts are the 'procession' zone
-  // OBJECTIVE now (data/processions.ts), not a faction flavor roll. A settled
-  // owner's quiet ground rolls its patrol.
-  assert(!defs.some(d => d.id === 'caravan'), 'zone-events', 'the ambient caravan def is retired');
-  const settled = chooseEvent(base, plain, 0);
-  assert(settled?.kind === 'patrol', 'zone-events', 'priority: settled owner ⇒ patrol walks its beat');
-  const patrol = chooseEvent({ ...base, ownerPower: 10 }, plain, 0.2);
-  assert(patrol?.kind === 'patrol', 'zone-events', 'priority: weak owner ⇒ patrol');
-  const nothing = chooseEvent({ ...base, owner: null, invader: null }, plain, 0.99);
-  assert(nothing === null, 'zone-events', 'no owner + no invader ⇒ quiet ground');
+  pin('siege_night', 'siege', 0.7, true);
+  pin('siege_day', 'siege', 0.55, false);
+  pin('patrol_night', 'patrol', 0.6, true);
+  pin('patrol_day', 'patrol', 0.4, false);
+  pin('war_column_night', 'war_column', 0.55, true);
+  pin('war_column_day', 'war_column', 0.45, false);
+  const sp = theaterKindDef('siege')?.params as Record<string, number> | undefined;
+  assert(!!sp && sp.attackers === 5 && sp.defenders === 4 && sp.attackerRing === 220
+    && sp.attackerJitter === 30 && sp.defenderJitter === 60, 'theater',
+    'parity: the siege cast is today\'s 5-on-4 at the old ring/jitters');
+  const pp = theaterKindDef('patrol')?.params as Record<string, number> | undefined;
+  assert(!!pp && pp.followers === 3 && pp.maxWaypoints === 5 && pp.leadJitter === 30
+    && pp.followJitter === 60, 'theater', 'parity: the patrol walks today\'s 1+3 beat');
+  const cp = theaterKindDef('war_column')?.params as Record<string, number> | undefined;
+  assert(!!cp && cp.followers === 5 && cp.maxWaypoints === 6 && cp.leadJitter === 26
+    && cp.followJitter === 55, 'theater', 'parity: the war column marches today\'s 1+5 file');
+  // The warfront's ownership proof: the column's rows claim its biome.
+  assert(rows.filter(r => r.kind === 'war_column').every(r => r.biomes?.length === 1 && r.biomes[0] === 'warfront'),
+    'theater', 'war_column rows claim the warfront biome and no other country');
 }
 
 // === 9. THE WANING LAW (finite clocks) =======================================

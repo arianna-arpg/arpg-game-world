@@ -298,8 +298,10 @@ import {
   ORB_DEFS, ORB_CAP, orbAmount, orbOnHitStat, orbOnKillStat, orbOnHurtStat,
   orbRefundStat, orbTrickleStat, ORB_TRICKLE,
 } from '../data/orbs';
-import { chooseEvent, ZONE_EVENT_CFG, type EventContext, type EventReward } from './events';
-import { ActiveZoneEvent } from './zoneEvent';
+import {
+  ActiveTheaterRun, runTheaterBeat, theaterConcurrencyFold, THEATER_CFG,
+  type TheaterContext, type TheaterKindDef, type TheaterRow, type TheaterSpots,
+} from './theater';
 import {
   featureEnabled, isSkillUnlockedForDrop, isSupportUnlockedForDrop, FEATURE,
   STARTER_SKILLS, applyCredits, META_CURRENCY_LABEL,
@@ -2976,7 +2978,28 @@ export class World {
   caravanReturnRequested = false;
   /** The event playing out in this zone — a patrol, caravan, or siege.
    *  Transient: re-chosen on every entry, its rewards flow to persistent stores. */
-  event: ActiveZoneEvent | null = null;
+  // ---- THE THEATER FABRIC (engine/theater.ts) — live zone-texture state ----
+  /** Live theater runs on this ground (concurrency-capped, swept as they
+   *  end). Transient host-side bookkeeping: never saved, never wired —
+   *  co-op guests see the bodies through the ordinary actor snapshot. */
+  theaterRuns: ActiveTheaterRun[] = [];
+  /** Boot-stashed spawn anchors (camps first, then POIs — zone space). */
+  theaterSpots: TheaterSpots = { camps: [], pois: [] };
+  /** Structurally quiet ground (safe/waves/factionWar/pocket-declined):
+   *  no entry beat, no dwell cadence. */
+  theaterQuiet = true;
+  /** This visit's ordinal in the keyed-draw salt (bumped per zone load;
+   *  in-memory only — a restored run replays from visit 1, foreordained). */
+  theaterVisit = 0;
+  private theaterVisitSeq = new Map<string, number>();
+  /** Seconds stood on this ground — the dwell cadence's beat lattice. */
+  theaterDwellSec = 0;
+  theaterBeatIdx = 0;
+  /** THE POUR LEDGER: bodies poured per kind this visit (both postures). */
+  theaterPour = new Map<string, number>();
+  /** The booted counted population — the replacement band's base (re-entry,
+   *  the world's one repop moment, is the only refill). */
+  theaterAmbientBudget = 0;
   /** THE ZONE-RUNTIME REGISTRY (buildZoneRuntimes) — one row per package's
    *  in-zone runtime; loadZone + materializeLiveZoneEvents walk it instead of
    *  three hand-maintained per-package ladders. Closure-building only (no
@@ -4600,7 +4623,12 @@ export class World {
     this.pendingMetas = [];
     this.pendingPersists = [];
     this.pendingFuses = [];
-    this.event = null;
+    this.theaterRuns = [];
+    this.theaterDwellSec = 0;
+    this.theaterBeatIdx = 0;
+    this.theaterPour = new Map();
+    this.theaterSpots = { camps: [], pois: [] };
+    this.theaterQuiet = true;
     this.encounters = [];
     this.transientDoodads = []; // terraform growths are zone-local (the doodad list itself was just rebuilt)
     this.vocationSites = [];    // secret-vocation shrines re-place per load (deterministic)
@@ -5846,47 +5874,51 @@ export class World {
       }
     }
 
-    // A zone event may already be unfolding here — a patrol on its beat, a
-    // caravan on the road, a siege at a camp. Flavour, not objective: skipped
-    // in town, the arenas, and hand-authored war zones.
-    // Skip the ambient-event roll on a REMEMBERED re-entry (a fresh caravan every
-    // time you cross back would itself be a "re-entry punish"); fresh gens roll it.
-    // A pocket FORM may decline them outright (ambientEvents: false — a
-    // bought strongroom hosts no patrols).
-    if (!memory && o.kind !== 'safe' && o.kind !== 'waves' && !def.factionWar
-      && pform?.ambientEvents !== false) {
-      const fac = this.sim.faction, owner = fac.owner(def.id);
-      const host = this.sim.invasion.activeHostOn(def.id);
-      // Rooted factions only stage events near home (FACTION_TRAITS eventRange).
-      let nearHome = true;
-      if (owner.faction) {
-        const t = traitsOf(owner.faction);
-        if (t.eventRange !== undefined) {
-          nearHome = distFromHome(owner.faction, def, this.zoneMap) <= t.eventRange;
-        }
-      }
-      const ctx: EventContext = {
-        owner: owner.faction, ownerPower: owner.power,
-        biome: def.biome,
-        contestants: fac.contestants(def.id),
-        invader: host?.faction ?? null,
-        isNight: dayCycle(this.time).label === 'Night',
-        hasCamps: layout.camps.length > 0,
-        hasRoute: layout.camps.length + layout.pois.length >= 2,
-        nearHome,
-      };
-      // MYCELIA suppression: a spore-smothered zone rolls its ambient event less often
-      // (the bloom choking out competing turmoil — the tug-of-war that starves itself).
-      // ONLY the spore suppression (not biome/encounter density) — so a non-spore zone's
-      // ambient-event cadence stays byte-identical.
+    // THE THEATER FABRIC (engine/theater.ts): the zone's own life may already
+    // be playing here — the owner's patrol on its beat, a siege at a camp,
+    // hell's grind-column on the march. Texture, never objective: skipped in
+    // town, the arenas, and hand-authored war zones; a pocket FORM may
+    // decline it outright (ambientEvents: false — a bought strongroom hosts
+    // no patrols). The ENTRY beat (beat 0) skips on a REMEMBERED re-entry (a
+    // fresh patrol every time you cross back would itself be a "re-entry
+    // punish"); THE DWELL CADENCE (updateTheater) keeps drawing while you
+    // stay — lingering provides the world's life, as the world does not
+    // revolve around the player. Every draw is a pure keyed hash (seed ×
+    // zone × visit × kind × beat — engine/theater.ts THE DRAW LAW), so the
+    // fabric consumes NOTHING from the global die and kinds can never
+    // starve each other (the old one-shared-roll first-bite cascade is
+    // dead). Mycelia suppression still smothers the beat (the bloom choking
+    // out competing turmoil), folded inside runTheaterBeat off its own
+    // keyed stream.
+    this.theaterSpots = {
+      camps: layout.camps.map(c => vec(c.x, c.y)),
+      pois: layout.pois.map(c => vec(c.x, c.y)),
+    };
+    // The ambient envelope THE POUR LEDGER bands replacement kinds against:
+    // the zone's own booted counted population, stamped ONCE per visit —
+    // emptying the floor never regrows the band.
+    this.theaterAmbientBudget = this.countedEnemies().length;
+    this.theaterVisit = (this.theaterVisitSeq.get(def.id) ?? 0) + 1;
+    this.theaterVisitSeq.set(def.id, this.theaterVisit);
+    this.theaterQuiet = o.kind === 'safe' || o.kind === 'waves' || !!def.factionWar
+      || pform?.ambientEvents === false;
+    if (!this.theaterQuiet && !memory) {
+      // MYCELIA suppression gates the entry beat on the LIVE die, exactly as
+      // the old lane's roll did (a spore-smothered zone stays smothered);
+      // dwell beats re-check it keyed inside theaterRunBeat.
       const sup = this.sim.myceliaField?.suppressionAt(def.id) ?? 1;
-      // The registry cascade (engine/events.ts): each registered kind gets the
-      // shared roll in priority order, gated per-biome by zonePolicy.
-      const choice = (sup >= 1 || Math.random() < sup) ? chooseEvent(ctx, def, Math.random()) : null;
-      if (choice) {
-        const ev = new ActiveZoneEvent(this, choice.kind, choice.primary, choice.secondary);
-        ev.spawn(layout.camps, layout.pois);
-        if (!ev.done) this.event = ev;
+      if (sup >= 1 || Math.random() < sup) {
+        // THE PARITY DRAW: the old shared entry roll spent one global draw
+        // HERE on every eligible fresh entry — seated or not — and every
+        // seed-pinned mint downstream of a zone entry is tuned against
+        // that spend (probe_lairs' pinnacle scan and probe_straying's
+        // fold pins caught its removal). The fabric's own draws are keyed
+        // and spend nothing, so the old spend is preserved — and
+        // discarded — to keep the world stream where the world left it.
+        // Retiring this burn is a deliberate world-wide re-pin, never a
+        // drive-by.
+        void Math.random();
+        this.theaterRunBeat(0);
       }
     }
 
@@ -11910,7 +11942,115 @@ export class World {
     return def.packs?.table ?? [];
   }
 
-  // ---- zone-event helpers (called by ActiveZoneEvent) ---------------------
+  // ---- THE THEATER FABRIC — the World glue (engine/theater.ts) ------------
+
+  /** The zone's STANDING truth, read fresh (THE LOCAL GATE: rows can only
+   *  ever see what this returns). Camps/routes come from the boot stash;
+   *  everything else reads the live sim — a siege drawn at dwell beat 4
+   *  sees the contest as it stands NOW. */
+  theaterContextNow(): TheaterContext {
+    const fac = this.sim.faction, owner = fac.owner(this.zone.id);
+    const host = this.sim.invasion.activeHostOn(this.zone.id);
+    // Rooted factions only stage their life near home (FACTION_TRAITS eventRange).
+    let nearHome = true;
+    if (owner.faction) {
+      const t = traitsOf(owner.faction);
+      if (t.eventRange !== undefined) {
+        nearHome = distFromHome(owner.faction, this.zone, this.zoneMap) <= t.eventRange;
+      }
+    }
+    return {
+      owner: owner.faction, ownerPower: owner.power,
+      biome: this.zone.biome,
+      contestants: fac.contestants(this.zone.id),
+      invader: host?.faction ?? null,
+      hasCamps: this.theaterSpots.camps.length > 0,
+      hasRoute: this.theaterSpots.camps.length + this.theaterSpots.pois.length >= 2,
+      nearHome,
+    };
+  }
+
+  /** THE CONCURRENCY LEVER, folded: ground defaults (base 1; 2 on a faction
+   *  HEARTLAND — the owner standing on its own origin zone or home biome;
+   *  small zones clamp to 1) then every registered external writer pushes
+   *  it UP (theaterConcurrencyFold — the Odyssey seam, shipped consumer-
+   *  less). */
+  theaterConcurrencyNow(): number {
+    const cc = THEATER_CFG.concurrency;
+    let ground = cc.base;
+    const owner = this.sim.faction.owner(this.zone.id).faction;
+    if (owner) {
+      const t = traitsOf(owner);
+      const heartland = t.originZone ? t.originZone === this.zone.id
+        : t.homeBiome ? this.zone.biome === t.homeBiome : false;
+      if (heartland) ground = Math.max(ground, cc.heartland);
+    }
+    if (Math.min(this.arena.w, this.arena.h) < cc.smallDim) ground = Math.min(ground, cc.small);
+    return theaterConcurrencyFold(this, ground);
+  }
+
+  /** Run one theater beat (0 = entry; dwell beats count up). Seats at most
+   *  one run. Public so the probe drives the very path the game walks. */
+  theaterRunBeat(beat: number, ctx: TheaterContext = this.theaterContextNow()): void {
+    const run = runTheaterBeat(this, {
+      beat, ctx,
+      spots: this.theaterSpots,
+      live: this.theaterRuns,
+      concurrency: this.theaterConcurrencyNow(),
+      // The ENTRY beat arrives pre-gated (the boot site resolves mycelia on
+      // the live die — the old lane's exact shape); dwell beats re-check
+      // the bloom on their own keyed stream.
+      suppression: beat === 0 ? 1 : (this.sim.myceliaField?.suppressionAt(this.zone.id) ?? 1),
+      held: c => this.radianceCondHeld(c),
+      stance: factionStance,
+    });
+    if (run && !run.done) this.theaterRuns.push(run);
+  }
+
+  /** THE POUR LEDGER's headroom for a kind this visit. Replacement kinds
+   *  band against the booted population (max(floor, bandFrac × budget));
+   *  additive kinds against their authored cap (a default ALWAYS stands).
+   *  The ENTRY beat's replacement pour is whole — the parity floor: entry
+   *  behaves exactly as the old lane, and the ledger still counts it, so
+   *  a big entry cast spends the visit's band honestly. */
+  theaterPourRoom(def: TheaterKindDef, row: TheaterRow, entry: boolean): number {
+    if (entry && def.posture === 'replacement') return Number.POSITIVE_INFINITY;
+    const poured = this.theaterPour.get(def.id) ?? 0;
+    const pc = THEATER_CFG.pour;
+    const cap = def.posture === 'additive'
+      ? (row.pourCap ?? def.pourCap ?? pc.additiveCap)
+      : Math.max(pc.floor, Math.round(pc.bandFrac * this.theaterAmbientBudget));
+    return cap - poured;
+  }
+
+  /** Pour one theater body: the ledger-honest wrapper every kind spawns
+   *  through (spawnEventActor underneath — the ONE presence-banded pick).
+   *  Returns null when the visit's pour room is spent — at cap the pour
+   *  stops cleanly. */
+  theaterSpawn(run: ActiveTheaterRun, table: PackTableEntry[], level: number, faction: string, tag: string): Actor | null {
+    const def = run.def();
+    if (!def) return null;
+    if (this.theaterPourRoom(def, run.row, run.entry) <= 0) return null;
+    const a = this.spawnEventActor(table, level, 'enemy', faction, tag);
+    this.theaterPour.set(def.id, (this.theaterPour.get(def.id) ?? 0) + 1);
+    return a;
+  }
+
+  /** Tick live runs and drive THE DWELL CADENCE: standing on un-quiet
+   *  ground re-draws on the beat lattice ((beat+1) × everySec of dwell) —
+   *  the zone breathes whether or not you were here when it started. */
+  private updateTheater(dt: number): void {
+    for (const r of this.theaterRuns) if (!r.done) r.tick(dt);
+    if (this.theaterRuns.some(r => r.done)) {
+      this.theaterRuns = this.theaterRuns.filter(r => !r.done);
+    }
+    if (this.theaterQuiet) return;
+    this.theaterDwellSec += dt;
+    while (this.theaterDwellSec >= (this.theaterBeatIdx + 1) * THEATER_CFG.dwell.everySec) {
+      this.theaterBeatIdx += 1;
+      this.theaterRunBeat(this.theaterBeatIdx);
+    }
+  }
 
   /** Spawn a tagged event actor from a weighted table; returns it. */
   spawnEventActor(table: PackTableEntry[], level: number, team: Team, faction: string, tag: string): Actor {
@@ -15974,15 +16114,9 @@ export class World {
     return this.actors.some(a => !a.dead && a.tag === tag && a.faction === faction);
   }
 
-  /** Pay out a finished event: xp, gem drops, and faction favor. */
-  payEventReward(faction: string, r: EventReward, at: Vec2, msg: string): void {
-    const rc = ZONE_EVENT_CFG.reward;
-    this.grantXp(Math.round((rc.xpBase + this.zone.level * rc.xpPerLevel) * r.xpMul));
-    for (let i = 0; i < r.gems; i++) this.dropGemAt(at);
-    if (r.rep) this.sim.reputation.add(faction, r.rep);
-    const name = (FACTIONS[faction]?.name ?? faction).replace(/^the /, '');
-    this.text(vec(at.x, at.y - 60), `${msg}  +${r.rep} ${name} favor`, '#ffd700', 16);
-  }
+  // (payEventReward is GONE — THE RESIDENT LAW's arcless gate: a theater
+  // run has no payout verb, structurally. The old siege's broken-siege
+  // reward was the one live caller; its arc died with the re-founding.)
 
   /** Contested node: two (or more) hostile factions hold ground here, so both
    *  field rosters and brawl over it. Mirrors the factionWar staging; the
@@ -17331,7 +17465,7 @@ export class World {
   private eventActivityAt(zid: string): number {
     let a = this.sim.activityAt(zid);
     if (zid === this.zone.id) {
-      if (this.event && !this.event.done) a += 1;
+      a += this.theaterRuns.filter(r => !r.done).length;
       a += this.encounters.length;
     }
     return a;
@@ -39706,7 +39840,7 @@ export class World {
     this.updateArenaCrowd();
     this.updateAttunements(dt);
     this.updateTerraforms(dt);
-    if (this.event && !this.event.done) this.event.tick(dt);
+    this.updateTheater(dt);
     this.updateRepeats(dt);
     this.updateAmbushes();
     this.updatePendingMetas(dt);

@@ -32,6 +32,7 @@ import '../data/garden';
 import '../data/catacombs';
 import '../data/lonecrypt';
 import '../data/grove';
+import '../data/theater'; // THE THEATER FABRIC's defaults (before warfront — kind priority is registration order)
 import '../data/warfront';
 import '../data/compositions';
 import '../data/fog';

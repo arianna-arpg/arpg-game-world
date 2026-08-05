@@ -1690,8 +1690,13 @@ const step = (secs: number): void => {
   }
 
   // P5-IV: the Hunt's Rest — the pair arrives stacked, the spare stands by.
+  // (Den seed re-pinned 81004 → 81007 at the theater re-founding, 2026-08-05:
+  // the keyed entry draws re-rolled per-seed event seating, shifting this
+  // long-lived world's wander-jitter stream — under the old seed's staging
+  // the lazy pairing sweep was still mid-mint at the rig's 1.0s window. The
+  // claim is structural; a cold hunt_gate boot pairs within 1s.)
   {
-    liveDen('hunt_gate', 81004);
+    liveDen('hunt_gate', 81007);
     check('P5 the gate mints the Hunt\'s Rest (boss ask, sealed rung)',
       String(w.zone.name).includes("Hunt's Rest")
       && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'hollow_huntsman'
@@ -3045,13 +3050,16 @@ const step = (secs: number): void => {
     lw.player.invulnerable = true;
     let hitSeed = 0;
     for (let i = 0; i < 26 && !hitSeed; i++) {
-      const zid = lw.devMintTileset('pinnacle', i, 16, { seed: 954001 + i });
+      const zid = lw.devMintTileset('pinnacle', i, 16, { seed: 954201 + i });
       if (!zid) continue;
-      if (lw.actors.some(a => a.defId === 'stormcrown_caller' && !a.dead)) hitSeed = 954001 + i;
+      if (lw.actors.some(a => a.defId === 'stormcrown_caller' && !a.dead)) hitSeed = 954201 + i;
     }
-    // The measured configuration's own hit (scratch sweep, batch 31): 954025.
+    // The measured configuration's own hit (re-measured at the theater
+    // re-founding, 2026-08-05 — the keyed entry draws re-rolled per-seed event
+    // seating, shifting every boot's downstream stream; batch 31's window
+    // 954001+26 lost its hit, base 954201 hits at boot 3): 954204.
     check('T5 a real pinnacle mint carries the crown (the fold at placeZoneAt, the ladder pin)',
-      hitSeed === 954025, hitSeed ? `hit=${hitSeed}` : 'no hit in 26 seeds');
+      hitSeed === 954204, hitSeed ? `hit=${hitSeed}` : 'no hit in 26 seeds');
     if (hitSeed) {
       const lc = lw.actors.find(a => a.defId === 'stormcrown_caller' && !a.dead)!;
       const thegns = lw.actors.filter(a => a.defId === 'levin_thegn' && !a.dead);

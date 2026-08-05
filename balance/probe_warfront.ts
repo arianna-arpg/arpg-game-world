@@ -37,7 +37,7 @@ import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { sidezoneOf } from '../src/data/sidezones';
-import { zoneEventDef } from '../src/engine/events';
+import { theaterKindDef, theaterRowsFor, theaterRowEligible } from '../src/engine/theater';
 import { UNLOCK_CATALOG } from '../src/meta/unlocks';
 import { allLords } from '../src/packages/lords';
 import type { World } from '../src/engine/world';
@@ -164,11 +164,17 @@ const step = (w: World, seconds: number): void => {
   check('den: the Siegecraft pool waits on the yard walked',
     !!pool && pool.reqLedger === 'ordnance_yard_entered'
     && poolSkills.includes('hellbore_mortar'));
-  const col = zoneEventDef('war_column');
-  check('war column: registered, biome-gated, and NOT for other countries',
-    !!col
-    && col.choose({ owner: null, ownerPower: 0, biome: 'warfront', contestants: [], invader: null, isNight: true, hasCamps: true, hasRoute: true, nearHome: true }, 0.1)?.kind === 'war_column'
-    && col.choose({ owner: null, ownerPower: 0, biome: 'grove', contestants: [], invader: null, isNight: true, hasCamps: true, hasRoute: true, nearHome: true }, 0.1) === null);
+  const col = theaterKindDef('war_column');
+  const colCtx = (biome: string) => ({
+    owner: null, ownerPower: 0, biome, contestants: [], invader: null,
+    hasCamps: true, hasRoute: true, nearHome: true,
+  });
+  const colRows = theaterRowsFor('war_column');
+  check('war column: a theater kind, biome-gated to the warfront and NOT other countries',
+    !!col && colRows.length >= 2
+    && colRows.some(r => theaterRowEligible(r, colCtx('warfront'), () => true))
+    && colRows.every(r => !theaterRowEligible(r, colCtx('grove'), () => true))
+    && col.cast(colCtx('warfront'))?.primary === 'demon');
 }
 
 // --- 6) The skills + the gems ------------------------------------------------

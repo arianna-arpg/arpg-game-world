@@ -1,0 +1,226 @@
+# THE THEATER FABRIC — the zone's own life expressed louder
+
+`src/engine/theater.ts` (the fabric) + `src/data/theater.ts` (the default
+rows) + the World glue in `src/engine/world.ts` (the `theater*` family).
+Probe: `balance/probe_theater.ts`. Static data contract: `balance/eventqa.ts`
+section 8. This re-founds the repo's OLDEST event grammar — the on-entry
+zone-event lane (`engine/events.ts` + `engine/zoneEvent.ts`, both retired
+into this module) — as a sovereign ZONE-TEXTURE fabric.
+
+## THE RESIDENT LAW (the ratified taxonomy)
+
+**Theater is the zone's own life expressed louder; a package is something
+happening TO the world.** Four gates, all required, enforced structurally
+where possible:
+
+1. **LOCAL** — a row derives wholly from the zone's STANDING truth: owning
+   faction, biome, contest state, camps/routes. Structural: rows are matched
+   against `TheaterContext`, and the context exposes only zone-standing
+   reads (built fresh per beat by `World.theaterContextNow()`). The fabric
+   is not a `WorldOverlay` — it has no world-map existence at all.
+2. **UNANNOUNCED** — no omen, no map mark, no bulletin. Structural: the
+   fabric's two modules import none of those surfaces (probe-scanned for
+   the import specifiers and registration identifiers), and the row/kind
+   types carry no announcement field. The in-zone floater a kind speaks
+   when you MEET it is the discovery voice, not an announcement.
+3. **BUDGET-HONEST** — potency stays inside the zone's ambient envelope.
+   Casts draw presence-banded from the zone's own faction tables at the
+   zone's own level (`World.spawnEventActor` → the ONE `weightedPick`
+   chokepoint — this half was already standing law), and THE POUR LEDGER
+   (below) caps bodies per visit.
+4. **ARCLESS** — nothing resolves, no scar. Structural: `ActiveTheaterRun`
+   has no reward verb and `World.payEventReward` is deleted. Zone-memory
+   continuity at most. **The one sanctioned delta from the old lane**: the
+   legacy siege PAID on resolution (rep 10 + scaled xp + a gem +
+   "Siege broken!"); the re-founded siege is contested ground's standing
+   look — a spent fight simply ends, the bodies were the bounty. (The old
+   patrol/war-column reward rows were dead data — their ticks never paid.)
+
+Fail any gate → the thing is a package, not theater (the Warband is the
+canonical package: it changes potency and lives a world lifecycle).
+
+## THE GRAMMAR
+
+- **`TheaterKindDef`** (`registerTheaterKind`) — the MECHANISM: `posture`
+  (`'replacement'` | `'additive'` — which pour lane), declarative `needs`
+  (owner/nearHome/camps/route/`invader: 'hostileToOwner'` — the old
+  `choose()` predicates as data), `cast(ctx)` (primary/secondary factions
+  from local truth), `params` (kind dials), `spawn`/`tick` handlers riding
+  the generic run. Priority = registration order (sieges before patrols, as
+  ever — `data/theater` imports BEFORE `data/warfront` in `main.ts` /
+  `sim/arena.ts` / `eventqa.ts` to keep it).
+- **`TheaterRow`** (`registerTheaterRow`) — the AUTHORED OCCURRENCE, pure
+  data: `kind`, WHERE (`biomes` / `factions` (owner) / `grounds`
+  ('owned'|'contested'|'invaded') — axes AND together, omitted abstains),
+  WHEN (`when`: a `RadianceCond` — the old `chanceNight`/`chanceDay`
+  literals died into night/day phase rows), HOW OFTEN (`chance` per beat,
+  `weight` among same-kind rows), plus `params` overrides and `pourCap`.
+- **`THEATER_CFG`** — fabric defaults (announce offsets, the dwell lattice,
+  concurrency ground rules, pour bands). Per-kind numbers live on kinds and
+  rows, never in engine logic.
+- Per-biome policy is unchanged: `BIOMES.denyEvents`/`allowEvents` name
+  KIND ids through `zonePolicy.eventAllowed` (eventqa section 7 censuses).
+
+Adding an occurrence — a funeral procession, a watch change, a hunting
+party — is ONE `registerTheaterKind` + row lines. No engine edits.
+
+## THE DRAW LAW (determinism)
+
+Every draw is a **pure keyed hash**: `theaterRng(worldSeed, zoneId, visit,
+kind, beat)` (FNV-1a over the salt string → mulberry32). Nothing is drawn
+from the global die. Consequences, all probe-pinned:
+
+- **The first-bite cascade is dead.** The old lane handed ONE shared roll
+  down the def list — an eligible-but-failed siege roll could NEVER fall
+  through to the patrol (patrol's threshold was lower on the same die).
+  Each kind now draws its own stream; a later kind seats on a beat an
+  earlier kind lost. Rates are unchanged per kind; multi-eligible ground
+  gains what starvation stole.
+- **Replayable.** Same (seed, zone, visit, beat) → same draws, across
+  worlds, forever. The probe recomputes the engine's own draw to prove
+  drawn == tested.
+- **Visit ordinals** bump per zone load (in-memory only — a restored run
+  replays from visit 1, the foreordained doctrine).
+- **THE PARITY DRAW** (world.ts, the entry site): the old shared roll spent
+  one GLOBAL draw per eligible fresh entry — seated or not — and every
+  seed-pinned mint downstream of a zone entry was tuned against that
+  spend. The entry beat still spends (and discards) it, so unseated boots
+  stay byte-identical to the old world. Retiring the burn is a deliberate
+  world-wide probe re-pin, never a drive-by.
+- **★ THE SEAT-VERDICT RE-ROLL** (landing note, 2026-08-05): keyed draws
+  necessarily re-rolled WHICH per-seed entries seat events (same rates, new
+  verdicts) — a one-time world-wide reshuffle. Seed-pinned rigs downstream
+  of owned-ground boots re-pinned once (probe_lairs T5 + P5-IV,
+  probe_straying H-span).
+- Mycelia suppression still smothers beats: the entry beat resolves it on
+  the live die at the boot site (the old lane's exact shape); dwell beats
+  re-check it on their own keyed stream.
+
+## THE BEATS (entry + THE DWELL CADENCE)
+
+Beat 0 is the ENTRY (the old roll moment): fresh, un-quiet ground only —
+the outer gate is byte-preserved from the old lane (`!memory`, objective
+not 'safe'/'waves', not `factionWar`, pocket `ambientEvents !== false` →
+`World.theaterQuiet`). A remembered re-entry skips beat 0, exactly as ever
+(a fresh patrol every crossing would be a re-entry punish).
+
+THE DWELL CADENCE (`THEATER_CFG.dwell.everySec`, default 90s): standing on
+un-quiet ground fires beats on the lattice — **lingering provides the
+world's life, as the world does not revolve around the player** (the
+ruling). A beat seats AT MOST ONE run (the first kind in priority order
+whose draw wins — the zone's life arrives in breaths, not batches); a
+spawn that can't form still resolves the beat, as the old entry did.
+
+## THE CONCURRENCY LEVER (not a cap)
+
+`World.theaterConcurrencyNow()` = ground default folded with every
+registered external writer, MAX wins:
+
+- Ground defaults (`THEATER_CFG.concurrency`): base 1; **2 on a faction
+  HEARTLAND** — the owner standing on its OWN home ground (its
+  `FACTION_TRAITS.originZone` or `homeBiome` — never a map-distance read:
+  `distFromHome` returns 0 for homeless factions and map-pixels for the
+  rest, so traits are the honest predicate); small zones (min arena
+  dimension < `smallDim`) clamp to 1.
+- **THE WRITER SEAM** (`registerTheaterConcurrency(id, fn)`): a world
+  system may PUSH the fold up — "an Odyssey type would push the
+  concurrency up to 4 or 5 as standard at higher stages, such that the
+  density IS the very theme" (her ruling). Writers can never shrink the
+  ground's own law (max-fold). Shipped consumer-less and probe-proven with
+  a QA writer — the Odyssey stays design-gated.
+- `sameKindMax` (default 1): one live run per kind — spare seats spend on
+  kind DIVERSITY, never on doubled patrols.
+
+## THE POUR LEDGER (THE FARM LAW)
+
+`World.theaterPour` counts bodies per kind per visit; every kind spawns
+through `World.theaterSpawn` (the ledger-honest wrapper). Two lanes by
+posture:
+
+- **'replacement'** (the zone's own life, clumped): cap = `max(floor,
+  bandFrac × theaterAmbientBudget)` where the budget is the zone's own
+  BOOTED counted population, stamped once per visit. With no in-zone repop
+  clock in this engine, re-entry — the world's one repop moment — is the
+  only refill: over any visit, theater can never hand out more than the
+  band of what the zone itself stood, so farming theater can never beat
+  farming the zone's own packs by more than the band. **THE ENTRY POUR IS
+  WHOLE** (the parity floor: beat 0 behaves exactly as the old lane,
+  whatever the band says — and the ledger still counts it, so a big entry
+  cast spends the visit's band honestly).
+- **'additive'** (extra bodies BY DESIGN — movement two's hunting-party
+  prey burst is the coming consumer): authored per-visit cap
+  (`row.pourCap` → `kind.pourCap` → `THEATER_CFG.pour.additiveCap` — a
+  finite cap ALWAYS stands, structurally; eventqa asserts it). At cap the
+  pour stops cleanly — `theaterSpawn` returns null at the hard floor, and
+  courteous kinds size their clumps by `theaterPourRoom` first.
+- Her recorded alternative (first X pay normal, then treated-as-summoned /
+  noBounty) remains a documented optional per-kind lever shape for kinds
+  that ever want endless spectacle; it did not fall out naturally in
+  movement one and ships as documentation, not machinery.
+
+## THE LEGACY THREE, RE-FOUNDED (today's numbers)
+
+- **SIEGE** (`data/theater.ts`) — STANDING-STATE texture, never resolving:
+  needs owner + camps + a hostile invader; casts 5 attackers ringed at
+  220±30 on 4 defenders at ±60; rows 0.7 night / 0.55 day. While the press
+  stands, the dwell cadence may re-draw the fight (band-capped) — the
+  standing state emerges from the cadence. Whole-cast-or-nothing on dwell
+  re-draws (half a siege reads as a bug).
+- **PATROL** (`data/theater.ts`) — the owner's own troop walking its beat:
+  needs owner + nearHome + route; 1 lead + 3 followers on the camps→POIs
+  loop; rows 0.6 night / 0.4 day.
+- **WAR COLUMN** (`data/warfront.ts` — theater BY OWNERSHIP on warfront
+  ground): needs route; rows claim `biomes: ['warfront']` at 0.55 night /
+  0.45 day; the bannerman leads 5 troops on the POIs→camps loop. Its kind
+  and rows live with its country.
+
+eventqa pins every number above verbatim (THE PARITY PIN) — drift is a
+retune, and a retune needs a ruling.
+
+## THE PASS-THROUGH MARCH (movement two's mover grammar, landed now)
+
+`marchSpawn` / `marchTick` (engine/theater.ts): a leader + escort clump
+ENTERS at one point, walks its line (the patrol-route AI, `patrolIdx` aimed
+at the far end), and LEAVES at the other — `World.slipAway`, the silent
+departure: no corpse, no credit, the ground returns to its baseline. A lead
+cut down dissolves the march into a leaderless rabble (the warband law);
+bodies killed en route are ordinary bounties. Probe rig 11 walks a QA
+column across the arena live. Movement two's cast (the faction patrol's
+true border-to-border walk, the funeral procession, the cart guard) rides
+this.
+
+## CO-OP POSTURE (the standing floor, with evidence)
+
+Host-authoritative, exactly as the old lane: `src/net/` contains zero
+references to the zone-event/theater surface (grepped at the re-founding).
+Guests see theater BODIES through the ordinary actor snapshot and nothing
+else; runs, draws, ledgers and the dwell clock are host-side transient
+bookkeeping — never saved, never wired. If a future movement wants
+guest-visible run state (a march's route preview, say), it ships derived
+scalars on the wire (the tell-wire idiom), never source state.
+
+## QA MAP
+
+- `balance/probe_theater.ts` (roster: green/fast) — 31 checks: registry +
+  priority, needs/axes, the resident law's structural gates, keyed purity +
+  zero global-die consumption (absent == silent), anti-starvation (the
+  probe recomputes the engine's draw), two-world determinism, the
+  concurrency fold + writer seam + kind-diversity singleton, both pour
+  lanes (cap-stop + entry-whole + spent-band refusal), the dwell lattice +
+  quiet ground, the live march, the live siege (whole cast, no payout).
+- `balance/eventqa.ts` section 8 — the static data contract + THE PARITY
+  PIN; section 7 censuses kind ids against biome policy.
+- `npm run sim -- baseline check --suite smoke` — the arena is 'safe'
+  (quiet by stamp), so the smoke suite is structurally untouched; gated
+  clean at the landing.
+
+## MOVEMENT TWO (not this pass — the fabric is ready for it)
+
+The cast lands on this grammar: patrol content (the march + faction
+tables), watch change (role-shift on STANDING bodies — see the coda in the
+pass memory: a bodiless kind whose tick leans `aiPost`/brain-variant/tells
+by hour, no new watch-fabric hook needed), funeral procession (faction ×
+biome rows — gravelands yes, Garden no), hunting party (the additive lane +
+pour cap — the burst IS the supply), cart-guard (the march + the settled
+belt's carts). Hour gates, faction×biome axes, the pour lanes and the mover
+all stand.

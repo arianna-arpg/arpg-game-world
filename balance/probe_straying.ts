@@ -413,7 +413,12 @@ withSeededRandom(0xbe1107, () => {
 withSeededRandom(0xbe1108, () => {
   const w: World = makeSimWorld('warrior', 0xbe1104);
   const p = w.player;
-  const zid = w.devMintTileset('farmland', 0, 5, { seed: 553355 });
+  // (Mint seed re-pinned 553355 → 553356 at the theater re-founding, 2026-08-05:
+  // the zone-event lane's keyed draws re-roll per-seed event seating world-wide
+  // — same rates, new verdicts — and the old seed's post-boot stream staged the
+  // carry head onto a road the walk budget couldn't finish. The rig's claims
+  // are structural; any workable staging proves them.)
+  const zid = w.devMintTileset('farmland', 0, 5, { seed: 553356 });
   const sf = w.sim.strayField;
   check('H1: a farmland mint + the field stand', !!zid && !!sf, zid ?? 'null');
   if (zid && sf) {

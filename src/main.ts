@@ -34,6 +34,7 @@ import './data/garden'; // side-effect: the Garden country kit (kinds, formation
 import './data/catacombs'; // side-effect: the second under-country kit (the crypts lane, the lych way's span row)
 import './data/lonecrypt'; // side-effect: the lone crypt kit (the exhumation's door, the resident pool, the unquiet yard)
 import './data/grove'; // side-effect: the Grove country kit (lantern flora, the hollow way down)
+import './data/theater'; // side-effect: THE THEATER FABRIC's default kinds+rows (siege/patrol re-founded — BEFORE warfront so kind priority stays sieges-first, as ever)
 import './data/warfront'; // side-effect: the Warfront country kit (siege furniture, the war column)
 import './data/compositions'; // side-effect: registers the whole-zone composition bundles
 import './data/fog'; // side-effect: registers the living fog bank kinds
