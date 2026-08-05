@@ -2763,6 +2763,12 @@ export interface GenCtx {
   /** The zone's layout seed (def.seed), for seed-stable gen FIELDS (noise
    *  bands must not drift between the try-loop's samples or across co-op). */
   seed?: number;
+  /** The zone's stable identity (def.id) — THE FIELD-SEED LAW's seedless
+   *  anchor: genFieldSeed hashes it where `seed` is absent, so seedless zones
+   *  carve their OWN macro patterns instead of all sharing seed 0. Read only
+   *  by pure-hash derivations, never by anything that draws from the layout
+   *  rng. */
+  zoneId?: string;
   /** LITE GENERATION (the understory's aerial): keep the recipe's own
    *  GEOMETRY (grids, liquids, recipe-planted forests) but skip everything
    *  a hazy 0.22-scale silhouette can't show — tileset scatter,
@@ -2979,15 +2985,35 @@ registerGenField('axisY', (ctx) => (_x, y) => y / Math.max(1, ctx.arena.h));
  *  from def.blend; unblended zones read 0 everywhere (a min>0 band simply
  *  never sites — the WHERE contract). */
 registerGenField('blend', (ctx) => ctx.blendField ?? (() => 0));
+/** THE FIELD-SEED LAW — the ONE seed derivation for every pure-hash gen read
+ *  (the noise/elevation/climate fields, findSpot's blend dither, the pour's
+ *  bank wobble). Seeded zones fold ctx.seed exactly as ever — for a present
+ *  seed this is byte-identical to the historical per-site XOR by
+ *  construction. SEEDLESS zones (terrain reshuffles per visit) used to read
+ *  0 here, so every seedless zone shared one macro pattern; now they hash
+ *  their stable zone id (the axisMix string fold), so each carves its OWN
+ *  patchwork while still repeating it across its own visits. Pure read,
+ *  never draws from the layout rng — no draw-order or co-op skew; a ctx
+ *  with neither seed nor zoneId keeps the legacy 0. Exported for the probe
+ *  (balance/probe_coherence.ts RIG K). */
+export function genFieldSeed(ctx: Pick<GenCtx, 'seed' | 'zoneId'>, salt: number): number {
+  let base = ctx.seed;
+  if (base === undefined) {
+    base = 0;
+    const id = ctx.zoneId;
+    if (id) for (let i = 0; i < id.length; i++) base = (base * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return (base ^ salt) >>> 0;
+}
 /** Smooth seeded patch noise in 0..1 — drift stripes, moss patches. params:
  *  scale (world units per lattice cell, default 460), seed (mixed with the
  *  zone seed so two entries can carve DIFFERENT patchworks of one zone).
- *  Seedless zones (terrain reshuffles per visit) read ctx.seed 0 — their
- *  patch MACRO-placement repeats across visits while the scatter inside it
- *  reshuffles; accepted (never feeds rng, so no draw-order or co-op skew). */
+ *  Seedless zones key on genFieldSeed's zone-id hash — each repeats its own
+ *  patch MACRO-placement across visits (the scatter inside it reshuffles)
+ *  without sharing one patchwork zone-to-zone. */
 registerGenField('noise', (ctx, params) => {
   const scale = typeof params.scale === 'number' ? params.scale : 460;
-  const seed = ((ctx.seed ?? 0) ^ (typeof params.seed === 'number' ? params.seed : 0)) >>> 0;
+  const seed = genFieldSeed(ctx, typeof params.seed === 'number' ? params.seed : 0);
   return (x, y) => valueNoise2(x, y, scale, seed);
 });
 /** 0 touching a liquid body of the listed kinds → 1 at `reach` or beyond —
@@ -3020,7 +3046,7 @@ registerGenField('elevation', (ctx, params) => {
   const scale = typeof params.scale === 'number' ? Math.max(60, params.scale) : 760;
   const octaves = Math.max(1, Math.min(4, typeof params.octaves === 'number' ? Math.round(params.octaves) : 2));
   const dome = typeof params.dome === 'number' ? Math.max(-1, Math.min(1, params.dome)) : 0;
-  const seed = ((ctx.seed ?? 0) ^ (typeof params.seed === 'number' ? params.seed : 0) ^ 0xe1e7) >>> 0;
+  const seed = genFieldSeed(ctx, (typeof params.seed === 'number' ? params.seed : 0) ^ 0xe1e7);
   const cx = ctx.arena.w / 2, cy = ctx.arena.h / 2;
   return (x, y) => {
     let v = 0, amp = 1, total = 0, sc = scale;
@@ -3054,7 +3080,7 @@ registerGenField('climate', (ctx, params) => {
   const scale = typeof params.scale === 'number' ? Math.max(60, params.scale) : 900;
   let axisMix = 0;
   for (let i = 0; i < axis.length; i++) axisMix = (axisMix * 31 + axis.charCodeAt(i)) >>> 0;
-  const seed = ((ctx.seed ?? 0) ^ (typeof params.seed === 'number' ? params.seed : 0) ^ axisMix) >>> 0;
+  const seed = genFieldSeed(ctx, (typeof params.seed === 'number' ? params.seed : 0) ^ axisMix);
   if (!vary) return () => Math.max(0, Math.min(1, base));
   return (x, y) => Math.max(0, Math.min(1, base + (valueNoise2(x, y, scale, seed) - 0.5) * 2 * vary));
 });
@@ -4394,7 +4420,7 @@ export function generateLayout(
       shape: def.shape ?? (arena as { shape?: ZoneShape }).shape ?? 'rect',
       ...(def.boundless ? { boundless: true } : {}),
     },
-    entry, exits, level: def.level, seed: def.seed, geo: def.geo,
+    entry, exits, level: def.level, seed: def.seed, zoneId: def.id, geo: def.geo,
     doodads: [], pois: [], camps: [], breakables: [], npcs: [],
     garrisons: [], caveSeeds: [], reserved: [],
     lite: opts?.lite,
@@ -8223,7 +8249,7 @@ function findSpot(
     if (ctx.blendField && ctx.blendSide !== undefined) {
       const w = ctx.blendField(p.x, p.y);
       const keep = ctx.blendSide === 1 ? w : 1 - w;
-      if (keep < 1 && blendDither(p.x, p.y, (ctx.seed ?? 0) ^ 0x3b1d) >= keep) continue;
+      if (keep < 1 && blendDither(p.x, p.y, genFieldSeed(ctx, 0x3b1d)) >= keep) continue;
     }
     return p;
   }
@@ -8374,7 +8400,7 @@ function maskGuards(ctx: GenCtx, m: Mask, kind: DoodadKind, hard: boolean): void
   // construction: the guard tests run at cr + wob ≥ cr, so no contract
   // (reservation, portal clear, forbid) ever loosens.
   const wobAmp = doodadRule(kind).pour?.bankWobble ?? POUR_CFG.bankWobble;
-  const wobSeed = ((ctx.seed ?? 0) ^ 0x6b4a) >>> 0;
+  const wobSeed = genFieldSeed(ctx, 0x6b4a);
   for (let cy = 0; cy < m.rows; cy++) {
     for (let cx = 0; cx < m.cols; cx++) {
       if (!m.get(cx, cy)) continue;

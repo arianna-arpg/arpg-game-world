@@ -40,7 +40,7 @@ import { vec } from '../src/core/math';
 import {
   generateLayout, blocksMovement, doodadRuleOf, bodyRadiusOf,
   doodadRuleKinds, hitSurfaceOf, normalizeDoodadBound,
-  registerCluster, registerComposition,
+  registerCluster, registerComposition, genFieldSeed,
   type Doodad, type DoodadKind, type GeneratedLayout,
 } from '../src/engine/levelgen';
 import { shapeBoundR, type HitShape } from '../src/engine/shapes';
@@ -773,6 +773,62 @@ function standingOnWay(layout: GeneratedLayout): Doodad[] {
   }
   if (geodes === 0) fail('J4: RIG DEAD — no seed ever raised the geode');
   else if (!fails) console.log(`rig J4 (riven geode): ${geodes}/8 shells stood, each with one crack and a paying lode`);
+}
+
+// --- RIG K: THE FIELD-SEED LAW — seeded folds exact, seedless zones own ------
+// their macro patterns (batch 34). genFieldSeed is the ONE derivation behind the
+// noise/elevation/climate fields, findSpot's blend dither and the pour's bank
+// wobble: a present ctx.seed folds byte-identically to the historical per-site
+// XOR ((seed ^ salt) >>> 0 — zoneId IGNORED), while a seedless ctx hashes its
+// stable zone id so two seedless zones no longer share seed 0's single
+// patchwork. Layout grain rides the WHERE seam for the three fields; the
+// dither/wobble sites share the same one-line genFieldSeed call (helper pins
+// cover them). The zone id must enter generation ONLY through the seedless
+// branch — seeded twins with different ids stay byte-identical.
+{
+  // Unit pins — the fold law across the live salt set + the int32 rim.
+  const salts = [0, 0xe1e7, 0x3b1d, 0x6b4a];
+  for (const s of [0, 1, 0x1234, 0x7fffffff, 0xfeed5eed, 0xffffffff]) {
+    for (const salt of salts) {
+      const want = (s ^ salt) >>> 0;
+      if (genFieldSeed({ seed: s }, salt) !== want) fail(`K: seeded fold moved — genFieldSeed({seed:${s}},${salt}) !== ${want}`);
+      if (genFieldSeed({ seed: s, zoneId: 'ignored_id' }, salt) !== want) fail(`K: zoneId leaked into a SEEDED fold (seed ${s}, salt ${salt})`);
+    }
+  }
+  if (genFieldSeed({}, 0x6b4a) !== ((0 ^ 0x6b4a) >>> 0)) fail('K: bare ctx (no seed, no id) lost the legacy 0 fallback');
+  const idPairs: [string, string][] = [['meadow_1', 'meadow_2'], ['gloamwood_edge', 'gloamwood_deep'], ['a', 'b']];
+  for (const [a, b] of idPairs) {
+    if (genFieldSeed({ zoneId: a }, 0) === genFieldSeed({ zoneId: b }, 0)) fail(`K: seedless ids '${a}'/'${b}' hash together`);
+  }
+  if (genFieldSeed({ zoneId: 'stable_zone' }, 7) !== genFieldSeed({ zoneId: 'stable_zone' }, 7)) fail('K: seedless hash is not stable');
+
+  // Layout grain — one where-banded scatter per field, through generateLayout.
+  const bands: [string, StampSpec[]][] = [
+    ['noise', [{ kind: 'dead_tree', count: [90, 90], where: { field: 'noise', min: 0.55 } }]],
+    ['elevation', [{ kind: 'dead_tree', count: [90, 90], where: { field: 'elevation', min: 0.5 } }]],
+    ['climate', [{ kind: 'dead_tree', count: [90, 90], where: { field: 'climate', min: 0.5 } }]],
+  ];
+  const flatOf = (l: GeneratedLayout): string =>
+    l.doodads.map(d => `${d.kind}@${d.pos.x.toFixed(3)},${d.pos.y.toFixed(3)}`).join('|');
+  const genAs = (id: string, rows: StampSpec[], seed?: number): GeneratedLayout =>
+    generateLayout(defOf(id, rows, seed !== undefined ? { seed } : {}), arena, new Rng(4242), entry, exits);
+  for (const [label, rows] of bands) {
+    // Seedless twins: two ids, same layout rng — each zone carves its OWN
+    // macro pattern now (EQUAL here = the shared-0 regression returned).
+    const a = flatOf(genAs(`qa_k_${label}_a`, rows));
+    const b = flatOf(genAs(`qa_k_${label}_b`, rows));
+    if (!a.length) { fail(`K ${label}: RIG DEAD — the banded row placed nothing`); continue; }
+    if (a === b) fail(`K ${label}: two seedless zones share one macro pattern (the shared-0 bug)`);
+    // Per-zone stability: the SAME seedless id repeats its pattern.
+    if (a !== flatOf(genAs(`qa_k_${label}_a`, rows))) fail(`K ${label}: a seedless zone no longer repeats its own pattern`);
+    // Seeded twins: ids differ, seed wins — byte-identical layouts.
+    const sa = flatOf(genAs(`qa_k_${label}_sa`, rows, 0x51ee0));
+    const sb = flatOf(genAs(`qa_k_${label}_sb`, rows, 0x51ee0));
+    if (sa !== sb) fail(`K ${label}: zone id shifted a SEEDED zone's layout`);
+    // Pressure: the seed genuinely feeds the band (a different seed moves it).
+    if (sa === flatOf(genAs(`qa_k_${label}_sc`, rows, 0x51ee1))) fail(`K ${label}: RIG DEAD — the band ignores the seed entirely`);
+  }
+  if (!fails) console.log('rig K (field-seed law): seeded folds exact, seedless zones own their patterns');
 }
 
 console.log(`\nprobe coherence: ${SEEDS} seeds/rig — ${fails} failure(s)`);
