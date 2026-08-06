@@ -48,7 +48,18 @@
 //   L  THE TRAIL'S OWN LAW (R3): pickHuntDest refuses the ground the fleeing
 //      beast itself refuses (floating / event-owned / pocket —
 //      pickRovingDest's exclusion set), and HOLDS (locate here) when no
-//      honest neighbor stands.
+//      honest neighbor stands,
+//   M  THE WANING CLOCK (her ruling, 2026-08-05 — "a waning clock on
+//      unrevealed hunts only"): an UNFOUND trail (the player has never once
+//      READ its tracks — tracksFound 0, the lifecycle's own "find") lapses
+//      QUIETLY at the clock (no toast, no failure arc, no ledger trace; the
+//      one-at-a-time lane frees and a future hunt reseats); ONE read — or
+//      the located flag — reveals it and it stands FOREVER (the clock
+//      freezes, never resumes); the clock HOLDS while the player stands in
+//      the trail's own zone (never lapses under an active approach); the
+//      spent clock rides the save byte-exact, a pre-clock save restores to
+//      a fresh clock, and the engine's own loop (sim.ts overlay update)
+//      drives the ticking.
 // Run: npx tsx balance/probe_hunt.ts
 // ---------------------------------------------------------------------------
 
@@ -758,6 +769,142 @@ check('B: the hunt overlay is mounted for the run', !!hf);
     check('L: with no honest neighbor the trail HOLDS (locate here)', pick() === null);
     for (const z of flagged) delete z.eventOwned;
   }
+}
+
+// ------------------------------------------- M. the waning clock (her ruling)
+{
+  // THE CONTRACT: the shipping def carries the clock and it is GENEROUS —
+  // hours of play, not minutes (her word). The omen ledger: the hunt fields
+  // NO omen source — its findability is the fog:'always' 🐾 marker, map-wide
+  // from the instant of ignition — so the wane can never race an aging omen
+  // into absurdity; even the omen fabric's slowest shipping voice (longNight,
+  // 10 node-units/min) would carry across the whole seat envelope (~640
+  // units) in under an hour, well inside the clock.
+  check('M: the def carries the waning clock, generous (≥ 1h of play)',
+    (SURGE.waneSeconds ?? 0) >= 3600, `${SURGE.waneSeconds}s`);
+
+  const gate: PackageGate = { active: true, share: 1, pressure: 1, ignitionMul: 1, severityMul: 1, concurrencyMul: 1 };
+  const mkWane = (surge: HuntSurge, seed = 0x3a7e): HuntField =>
+    new HuntField({ seed, gate: () => gate } as OverlayBuildCtx, surge);
+  const view = world.devOverlayView();
+  const trailZone = view.nodes.find(z => eventTargetable('hunt', z) && z.id !== view.currentZoneId)!;
+  // Craft an UNFOUND hunt (unrevealed, zero reads) through the restore lane —
+  // the craftStand idiom, one stage earlier in the lifecycle. No waneSec in
+  // the snap: every craft also exercises the grandfather default (0).
+  const craftUnfound = (f: HuntField): boolean => {
+    const b = SURGE.beasts[0];
+    f.restore({ hunt: {
+      id: 'hunt_qa_wane', beastDefId: b.defId, faction: b.faction, color: '#d8a83a',
+      lairZoneId: trailZone.id, lairCoord: { x: trailZone.map.x, y: trailZone.map.y },
+      currentZoneId: trailZone.id, revealed: false, tracksTotal: 3, tracksFound: 0,
+      lifeFrac: 1, phaseIdx: -1,
+    }, seq: 7 });
+    return !!f.peek();
+  };
+
+  // THE LAPSE, quiet and exact: short of the clock it stands; past it the lane
+  // is simply EMPTY (triggerChance 0 — no reseat can mask a false green).
+  const f = mkWane({ ...SURGE, triggerChance: 0, waneSeconds: 60 });
+  check('M: an unfound hunt stands for the lapse rig', craftUnfound(f));
+  for (let i = 0; i < 59 && f.peek(); i++) f.update(1, view);
+  check('M: short of the clock it stands (59 of 60s spent)',
+    !!f.peek() && f.peek()!.waneSec === 59, `waneSec ${f.peek()?.waneSec}`);
+  f.update(2, view);
+  check('M: past the clock the unfound hunt lapses QUIETLY (the lane frees)', f.peek() === null);
+
+  // THE RESEAT: through the REAL ignition path — a lapsed lane is an open
+  // lane, and the next hunt takes it with a fresh id and fresh remembrance.
+  const g2 = mkWane({ ...SURGE, triggerChance: 1, waneSeconds: 40 }, 0x9e57);
+  for (let i = 0; i < 40 && !g2.peek(); i++) g2.update(0.5, view);
+  const first = g2.peek();
+  check('M: a hunt ignites for the reseat rig', !!first && !first.revealed);
+  if (first) {
+    const id0 = first.id;
+    for (let i = 0; i < 400 && g2.peek()?.id === id0; i++) g2.update(0.5, view);
+    const next = g2.peek();
+    check('M: the lapsed lane RESEATS (fresh id, fresh remembrance — the seq marches)',
+      !!next && next.id !== id0 && !next.revealed && next.lifeFrac === 1 && next.phaseIdx === -1,
+      `${id0} → ${next?.id}`);
+  }
+
+  // REVEALED STANDS FOREVER, flavor 1 — THE LINE IS THE FIRST READ: one
+  // advanceTrail() (tracksFound 0 → 1, the lifecycle's own "find") freezes
+  // the clock at its spend, and 500s against a 30s clock changes nothing.
+  const r1 = mkWane({ ...SURGE, triggerChance: 0, waneSeconds: 30 });
+  craftUnfound(r1);
+  r1.update(10, view);
+  const ticked = r1.peek()!.waneSec;
+  check('M: the clock RUNS while the trail stands unfound', ticked === 10, `waneSec ${ticked}`);
+  r1.advanceTrail();
+  r1.update(500, view);
+  check('M: ONE read reveals it — the hunt stands FOREVER after (her word)',
+    !!r1.peek(), 'lapsed despite the read');
+  check('M: the clock NEVER ticks while revealed (frozen at its spend)',
+    r1.peek()?.waneSec === ticked, `waneSec ${r1.peek()?.waneSec} (want ${ticked})`);
+
+  // Flavor 2 — LOCATED: the revealed flag alone (the final find) outlives the
+  // clock the same way.
+  const r2 = mkWane({ ...SURGE, triggerChance: 0, waneSeconds: 30 });
+  craftUnfound(r2);
+  r2.locateBeast(trailZone.id);
+  r2.update(500, view);
+  check('M: a LOCATED beast outlives the clock (revealed is revealed)', !!r2.peek());
+
+  // THE APPROACH HOLD: while the player stands in the trail's OWN zone the
+  // clock holds — a hunt can never lapse under an active approach — and a
+  // walked-away, still-unfound trail resumes its wane.
+  const a1 = mkWane({ ...SURGE, triggerChance: 0, waneSeconds: 30 });
+  craftUnfound(a1);
+  const atTrail = { ...view, currentZoneId: trailZone.id } as OverlayView;
+  a1.update(500, atTrail);
+  check('M: the clock HOLDS while the player stands in the trail zone (never lapses underfoot)',
+    !!a1.peek() && a1.peek()!.waneSec === 0, `waneSec ${a1.peek()?.waneSec}`);
+  a1.update(10, view);
+  check('M: …and RESUMES when they walk away unfound', a1.peek()?.waneSec === 10,
+    `waneSec ${a1.peek()?.waneSec}`);
+  a1.update(25, view);
+  check('M: an abandoned approach still lapses (the hold is presence, not a visit stamp)',
+    a1.peek() === null);
+
+  // THE SAVE LAWS: the spent clock rides the snapshot byte-exact (no reset,
+  // no free hours on reload), lapses on schedule after resume, and a
+  // PRE-CLOCK save (no waneSec) restores to a fresh clock — grandfathered,
+  // never NaN, never an instant lapse on load.
+  const s1 = mkWane({ ...SURGE, triggerChance: 0, waneSeconds: 90 });
+  craftUnfound(s1);
+  s1.update(30, view);
+  const snap = JSON.stringify(s1.snapshot());
+  check('M: the spent clock rides the snapshot', snap.includes('"waneSec":30'));
+  const s2 = mkWane({ ...SURGE, triggerChance: 0, waneSeconds: 90 });
+  s2.restore(JSON.parse(snap));
+  check('M: a resumed clock is byte-exact (no reset, no free hours)',
+    JSON.stringify(s2.snapshot()) === snap && s2.peek()!.waneSec === 30);
+  s2.update(70, view);
+  check('M: the resumed clock lapses on schedule (30 banked + 70 more ≥ 90)', s2.peek() === null);
+  const legacy = JSON.parse(snap) as { hunt: Record<string, unknown>; seq: number };
+  delete legacy.hunt.waneSec;
+  const s3 = mkWane({ ...SURGE, triggerChance: 0, waneSeconds: 90 });
+  s3.restore(legacy);
+  check('M: a pre-clock save restores to a FRESH clock (grandfathered, not lapsed)',
+    !!s3.peek() && s3.peek()!.waneSec === 0, `waneSec ${s3.peek()?.waneSec}`);
+
+  // THE ENGINE DRIVES IT: the real world's own loop (sim.ts's overlay update,
+  // the scoped view) ticks the real field's clock — and the ticking leaves no
+  // ledger trace (quiet is quiet).
+  const steps = igniteHunt(world);
+  const h = hf.peek();
+  check('M: a live hunt stands for the engine rig', !!h && !h.revealed, `${steps} steps`);
+  if (h) {
+    const before = h.waneSec;
+    const seenBefore = (world.ledger as Record<string, number>).hunt_seen ?? 0;
+    step(world, 90); // 1.5 sim-seconds of the REAL loop, player far from the trail
+    const after = hf.peek()!.waneSec;
+    check('M: the engine\'s own loop drives the clock (sim.ts feeds the overlay)',
+      after > before + 0.5 && after < before + 5, `${before} → ${after}`);
+    check('M: a ticking clock leaves NO ledger trace (quiet is quiet)',
+      ((world.ledger as Record<string, number>).hunt_seen ?? 0) === seenBefore);
+  }
+  hf.endHunt();
 }
 
 console.log(failed ? `\nprobe_hunt: ${failed} FAILED` : '\nprobe_hunt: all green');

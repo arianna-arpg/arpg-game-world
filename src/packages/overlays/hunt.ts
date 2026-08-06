@@ -14,6 +14,20 @@
 // state). The footprint placement, beast spawn, life sync, and migration are
 // engine work the World drives off these accessors; the overlay never touches
 // World. Pure, like every other field.
+//
+// THE WANING CLOCK (her ruling, 2026-08-05 — "a waning clock on unrevealed
+// hunts only"): the hunt is one-at-a-time, so an ignored trail used to stand
+// IMMORTAL and bar every future hunt for the run. Now an UNFOUND hunt — the
+// player has never once READ its tracks (tracksFound 0; the lifecycle's own
+// "find" is the dwell-read, the stage the config itself counts) — lapses
+// QUIETLY once its clock runs out: no toast, no failure arc, no ledger trace;
+// the 🐾 pin simply leaves the map and the lane frees for a future hunt. ONE
+// read (or the located flag) REVEALS it and it stands forever — the clock
+// freezes at its spend and never resumes (her word). THE APPROACH HOLD: the
+// clock pauses while the player stands in the trail's own zone, so a hunt can
+// never lapse under an active approach — which also means no live footprint
+// or dress can ever be orphaned mid-visit (footprints exist only in the
+// loaded zone, where the hold reigns).
 // ---------------------------------------------------------------------------
 
 import { clamp } from '../../core/math';
@@ -66,6 +80,12 @@ export interface HuntSurge {
    *  this draws from — a hunt may now open in country nobody has walked,
    *  and the trail pin leads the player out into it. */
   seat: SeatTuning;
+  /** THE WANING CLOCK (unrevealed hunts only): seconds an UNFOUND trail may
+   *  stand — zero reads, player elsewhere — before the hunt quietly lapses
+   *  and the one-at-a-time lane frees. One track READ (or the located flag)
+   *  reveals the hunt and freezes the clock forever. Absent/0 = no clock
+   *  (the old immortal standing invitation, byte-identical). */
+  waneSeconds?: number;
 }
 
 /** What the engine reads to materialize the beast in a zone. */
@@ -96,12 +116,18 @@ interface ActiveHunt {
   tracksFound: number;
   lifeFrac: number;
   phaseIdx: number;
+  /** Seconds the trail has stood UNFOUND (the waning clock's spend). Ticks
+   *  only while unrevealed AND the player is out of the trail's zone; frozen
+   *  forever at the first read. Rides the save (no free hours on reload). */
+  waneSec: number;
 }
 
 export class HuntField implements WorldOverlay {
   readonly id = 'hunt';
   /** Durable: a half-bloodied quarry mid-chase is an ARC, not weather — the
-   *  remembrance (life fraction, phase, trail progress) resumes exactly. */
+   *  remembrance (life fraction, phase, trail progress) resumes exactly. The
+   *  one exception is the waning clock: a trail NOBODY ever read may lapse
+   *  (quietly, lane-freeing) — but only unfound, and never underfoot. */
   readonly persistence = 'durable' as const;
 
   private rng: Rng;
@@ -118,9 +144,34 @@ export class HuntField implements WorldOverlay {
   }
 
   update(dt: number, view: OverlayView): void {
+    this.tickWane(dt, view); // before ignition: a lane the clock frees may reseat this very tick
     this.acc += dt;
     const g = this.gate();
     while (this.acc >= STEP) { this.acc -= STEP; if (g.active && !this.hunt) this.maybeIgnite(view); }
+  }
+
+  /** THE WANING CLOCK (her ruling, 2026-08-05): an UNFOUND trail wanes; a
+   *  revealed hunt stands forever. THE LINE is the lifecycle's own "find" —
+   *  the first track READ (advanceTrail: tracksFound 0 → 1; located subsumes
+   *  it) — NOT mere zone entry: walking past unread footprints leaves the
+   *  hunt unfound (the marker was always visible; the trail was never met).
+   *  THE APPROACH HOLD keeps the clock paused while the player stands in the
+   *  trail's own zone, so it can never lapse under an active approach — the
+   *  hold protects the walk-up; only walking AWAY unread resumes the wane.
+   *  The lapse is QUIET by construction: this overlay is pure (no toast, no
+   *  ledger), and every visible trace (pin, spoor front) derives from peek()
+   *  per read, so it all simply stops. Runs on the world's own dt (a held
+   *  world doesn't tick), ungated by the package gate — a standing hunt's
+   *  clock is its own; the gate governs ignition only. */
+  private tickWane(dt: number, view: OverlayView): void {
+    const h = this.hunt;
+    if (!h) return;
+    const cap = this.cfg.waneSeconds ?? 0;
+    if (cap <= 0) return; // no clock authored — the immortal standing invitation
+    if (h.revealed || h.tracksFound > 0) return; // found: it stands FOREVER (her word)
+    if (view.currentZoneId === h.currentZoneId) return; // the approach hold
+    h.waneSec += dt;
+    if (h.waneSec >= cap) this.hunt = null; // the quiet lapse — the lane frees
   }
 
   onNodeCharted(): void { /* the hunt targets a charted lair + existing exits */ }
@@ -227,6 +278,10 @@ export class HuntField implements WorldOverlay {
       tracksTotal: Math.max(1, Math.floor(h.tracksTotal as number)),
       tracksFound: Math.max(0, Math.floor(h.tracksFound as number)),
       lifeFrac: clamp(h.lifeFrac as number, 0, 1), phaseIdx: Math.floor(h.phaseIdx as number),
+      // THE GRANDFATHER: a pre-clock save carries no waneSec — restore to a
+      // FRESH clock (0), never NaN, never an instant lapse on load. Keyed
+      // LAST to match the live literals (snapshot byte-parity, the F rigs).
+      waneSec: typeof h.waneSec === 'number' && Number.isFinite(h.waneSec) ? Math.max(0, h.waneSec) : 0,
     };
   }
 
@@ -237,9 +292,9 @@ export class HuntField implements WorldOverlay {
   }
 
   /** Read-only snapshot for markers / tests. */
-  peek(): { id: string; beastDefId: string; faction: string; color: string; lairZoneId: string; coord: MapCoord; currentZoneId: string; revealed: boolean; lifeFrac: number; phaseIdx: number } | null {
+  peek(): { id: string; beastDefId: string; faction: string; color: string; lairZoneId: string; coord: MapCoord; currentZoneId: string; revealed: boolean; lifeFrac: number; phaseIdx: number; waneSec: number } | null {
     const h = this.hunt;
-    return h ? { id: h.id, beastDefId: h.beastDefId, faction: h.faction, color: h.color, lairZoneId: h.lairZoneId, coord: h.lairCoord, currentZoneId: h.currentZoneId, revealed: h.revealed, lifeFrac: h.lifeFrac, phaseIdx: h.phaseIdx } : null;
+    return h ? { id: h.id, beastDefId: h.beastDefId, faction: h.faction, color: h.color, lairZoneId: h.lairZoneId, coord: h.lairCoord, currentZoneId: h.currentZoneId, revealed: h.revealed, lifeFrac: h.lifeFrac, phaseIdx: h.phaseIdx, waneSec: h.waneSec } : null;
   }
 
   // --- internals -------------------------------------------------------------
@@ -258,6 +313,7 @@ export class HuntField implements WorldOverlay {
       color: FACTION_COLORS[beast.faction] ?? HUNT_GOLD,
       lairZoneId: zoneId, lairCoord: { x: lair.map.x, y: lair.map.y },
       currentZoneId: zoneId, revealed: true, tracksTotal: 1, tracksFound: 1, lifeFrac: 1, phaseIdx: 999,
+      waneSec: 0,
     };
     return true;
   }
@@ -286,6 +342,7 @@ export class HuntField implements WorldOverlay {
       beastDefId: beast.defId, faction: beast.faction, color,
       lairZoneId: lair.id, lairCoord: { x: lair.map.x, y: lair.map.y },
       currentZoneId: lair.id, revealed: false, tracksTotal, tracksFound: 0, lifeFrac: 1, phaseIdx: -1,
+      waneSec: 0,
     };
   }
 
