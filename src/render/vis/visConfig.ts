@@ -18,6 +18,29 @@ export const VIS_CFG = {
    *  ambience already darkens the world; this veil tracks the bill. */
   gloamVignette: { base: 0.35, perMeterLost: 0.65 },
 
+  /** THE TIER TINT (ui/panels.ts tierMapTint — the world map's stacked-ground
+   *  SHADE, the tier tell's color half): a revealed tiered zone's node disc
+   *  mixes toward a pole by its story count — 'over' stacks climb toward the
+   *  terrace convention's own pale crown (world/regions.ts TERRACE_FILL's
+   *  ascent: higher = lighter), 'under' stacks sink toward the dark (the
+   *  tell's own under-disc mix target). Strength = stories × perStory,
+   *  capped at max; 0 kills the read whole (flat and fogged ground never
+   *  reaches the mix — byte-identical fills by construction). Pinned by
+   *  balance/probe_tiers.ts RIG M′. */
+  mapTierTint: {
+    /** Mix strength per story (my number, flagged 2026-08-06). */
+    perStory: 0.10,
+    /** Cap on the folded mix — a six-story summit must still read as its
+     *  biome's color (my number, flagged 2026-08-06). */
+    max: 0.28,
+    /** The OVER pole: TERRACE_FILL's crown pale (convention-derived,
+     *  flagged 2026-08-06). */
+    overTo: '#b6c2ba',
+    /** The UNDER pole: the tell's darken target (convention-derived,
+     *  flagged 2026-08-06). */
+    underTo: '#000000',
+  },
+
   /** Baked-sprite cache (bodies, glows, shadows, crowns, whole-doodads). */
   sprite: {
     /** Crowns/whole-doodad bakes share this LRU with actor bodies — a deep

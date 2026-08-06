@@ -265,6 +265,29 @@ export function tierMapTell(def: Pick<ZoneDef, 'tiers'>, revealed: boolean):
     : { mark: 'covered', floors, tint: '#8878c8' };
 }
 
+/** THE TIER TINT (the tell's COLOR half — the map's stacked-ground shade):
+ *  folds a zone's story stack into its node FILL. Direction rides
+ *  `ZoneTiers.kind` (the STRUCTURAL axis — the tell's `mark` rides exposure,
+ *  the presentational one): 'over' stacks mix toward the terrace convention's
+ *  pale crown — higher = lighter, the exact ascent the ground bake already
+ *  draws (world/regions.ts TERRACE_FILL) — and 'under' stacks mix toward the
+ *  dark, the tell's own under-disc law. Strength = story count ×
+ *  `VIS_CFG.mapTierTint.perStory`, capped at `.max`; the dial at 0 kills the
+ *  read whole. Fog-gated by the SAME `revealed` the tell rides, and PURE:
+ *  flat ground, fogged ground, a zero dial, and any fill that isn't a
+ *  6-digit hex (mixHex's contract) all return the INPUT STRING UNTOUCHED —
+ *  byte-zero on storyless zones by construction. Pinned by
+ *  balance/probe_tiers.ts RIG M′. */
+export function tierMapTint(def: Pick<ZoneDef, 'tiers'>, revealed: boolean, fill: string): string {
+  const t = def.tiers;
+  if (!t || !revealed) return fill;
+  const cfg = VIS_CFG.mapTierTint;
+  const stories = Math.max(1, Math.floor(t.levels ?? 1));
+  const k = Math.min(cfg.max, stories * cfg.perStory);
+  if (k <= 0 || !/^#[0-9a-fA-F]{6}$/.test(fill)) return fill;
+  return mixHex(fill, t.kind === 'under' ? cfg.underTo : cfg.overTo, k);
+}
+
 export class UI {
   private classSelect = document.getElementById('class-select')!;
   private charSheet = document.getElementById('char-sheet')!;
@@ -5150,7 +5173,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // Charted ground reads as its biome (a terrain map); the faction washes
       // from the sim sit on top, so you see both the land and who holds it.
       const bi = known || scouted ? biomeOf(z) : null;
-      const fill = known || scouted ? (bi?.mapColor ?? z.theme.accent) : '#26262e';
+      const tierTintBase = known || scouted ? (bi?.mapColor ?? z.theme.accent) : '#26262e';
+      // THE TIER TINT (tierMapTint above): stacked ground shades its whole
+      // disc — a summit lifts toward the crown's pale, a drained city sinks
+      // toward the dark — through the SAME fog gate as the tell below.
+      // Storyless ground keeps its fill byte-identical (the helper returns
+      // the input string untouched).
+      const fill = tierMapTint(z, known || scouted, tierTintBase);
       // ZONE-KIND identity (data/zoneKinds.ts — the town's ring + glyph). Fog
       // gates it exactly like the name: an unvisited minted town keeps its secret.
       const kd = known || scouted ? zoneKindOf(z) : undefined;

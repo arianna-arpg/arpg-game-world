@@ -64,7 +64,22 @@ stateless adapter, one per story, built at zone load from
   anchors sit beyond any honest snap radius). Zone memory remembers a
   body's story; the co-op wire carries it (`tr`); monsters stay on their
   layer (the chase ledger walks pursuers through stairs their quarry
-  took).
+  took). THE STORY TABLE (per-story spawn tables — "harder kin near the
+  crown" as data): any `PackTableEntry` may carry `storyPresence`, the
+  presence-envelope vocabulary verbatim over the STORY axis (`{ from: 2,
+  fadeIn: 1 }` = absent on the valley floor, full from the second bench),
+  folded by `storyTable(table, story)` (engine/tiers.ts — presenceTable's
+  shape: identity fast path, never-starve fallback, draw-free). COLD AT
+  HEAD (2026-08-06): the live fold site is spawnPacks' type pick
+  (world.ts), where today the pick lands BEFORE the tier-split roll; the
+  deferred consumer hoists the story roll above the pick —
+  `const type = weightedPick(packStory > 0 ? storyTable(picks, packStory)
+  : picks, def.level)` with `packStory` rolled from the packSplit +
+  uniform-deal draws moved ahead of it. Flat zones stay byte-identical
+  through that hunk (the tierLevels guard short-circuits before any
+  draw); TIERED zones reorder ≤2 draws per pack, so seed-pinned rigs
+  that LOAD tiered zones re-pin when it lands (probe RIG P holds the
+  cold half: identity over every live table, stream neutrality).
 - **Render**: `exposure:'open'` draws every layer (buttes, summits — the
   region visuals + the cliff read carry the height). `'covered'` hides the
   other layer's bodies and, while the local hero is below, dims the scene
@@ -75,6 +90,15 @@ stateless adapter, one per story, built at zone load from
   per-ACTOR reveals ride the exact ray lerp (`actorShade` passes the
   body's tier) — a rim archer reads as a lit body over conservative
   ground-dark. Pixels under-promise the ray, never over-promise.
+  THE WORLD MAP reads the stack twice (ui/panels.ts, fog-gated alike):
+  `tierMapTell` hangs under-discs below the node — one per extra story,
+  solid rims for 'open', dashed for 'covered' — and `tierMapTint` (the
+  tell's COLOR half) shades the node FILL by story count: 'over' stacks
+  lift toward the terrace convention's own pale crown (higher = lighter,
+  the exact ascent world/regions.ts TERRACE_FILL bakes in-zone), 'under'
+  stacks sink toward the dark. Dials in `VIS_CFG.mapTierTint` (perStory ×
+  stories, capped; 0 = off); storyless and fogged ground keep their fill
+  byte-identical by construction. Probe RIG M / RIG M′.
 
 ## The drawn reads (RegionVisualSpec, baked in render/vis/ground.ts)
 - **`steps`** — THE STEPPED WAY: carved stair treads across a link/deck
@@ -139,11 +163,16 @@ archer's story-1 arrows rain down while story-0 answers die on the cliff
 — climb, span, or shove.
 
 ## The seam this opens (deliberate future work)
-Townhouse floors as covered tiers in one zone; tier-aware minimap tint; AI
-that climbs links; a boulder-chute lane rolling DOWN the switchbacks;
-per-story spawn tables (harder kin near the crown); avalanche fronts that
-respect the benches (creep is tier-blind today — the one reason the
-pinnacle ships without landslide lanes).
+Townhouse floors as covered tiers in one zone; a boulder-chute lane
+rolling DOWN the switchbacks; avalanche fronts that respect the benches
+(creep is tier-blind today — the one reason the pinnacle ships without
+landslide lanes); THE STORY TABLE'S LIVE FOLD (the lever itself landed
+cold 2026-08-06 — `storyTable` + `PackTableEntry.storyPresence` above —
+awaiting only the spawnPacks hunk recorded in the Population law).
+(Landed from this list: tier-aware minimap tint → `tierMapTint`
+2026-08-06; AI that climbs links → the proactive stair election
+`World.tierLinkToward` + the reactive `aiTierGoal` ledger + THE SEVERED
+BAND, already live in the AI law above.)
 
 Probe: `balance/probe_tiers.ts` (family rows + span derivation, the
 crossing law across arbitrary spans, all three carves, per-story orphan

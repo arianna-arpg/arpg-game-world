@@ -56,6 +56,7 @@ import {
 } from './levelgen';
 import { carveMassifs } from './massif';
 import { lairLandmarkRolls, registerLairStoryReach } from './lairs';
+import { presenceMul, type PresenceSpec } from './presence';
 import { TILESETS, type TilesetDef } from '../data/tilesets';
 import { BIOMES } from '../world/biomes';
 
@@ -1260,3 +1261,47 @@ registerLairStoryReach((tilesetId) => {
   const ts = TILESETS[tilesetId];
   return ts ? tilesetStoryReach(ts) : 0;
 });
+
+// --- THE STORY TABLE (the per-story spawn axis) -----------------------------------
+// "Harder kin near the crown" as DATA: any pack-table row may carry
+// `storyPresence` (data/zones.ts PackTableEntry) — the presence-envelope
+// vocabulary (engine/presence.ts) verbatim over the tier fabric's own STORY
+// axis — and storyTable() below is the ONE fold, presenceTable's shape
+// byte-for-byte: the IDENTITY FAST PATH returns the input array object when
+// no row carries the axis (absent == byte-identical by construction), rows
+// gated to zero weight drop, and a story gated ENTIRELY out falls back to
+// the unshaped input (a bench never starves a spawn site at runtime — the
+// presence fold's own law). Pure and draw-free: folding consumes NO rng
+// (RIG P pins the stream), so the lever's mere existence re-pins nothing.
+//
+// COLD AT HEAD (2026-08-06): the live fold site is spawnPacks' type pick
+// (world.ts:~10197), where today the pick lands BEFORE the tier-split roll —
+// the consumer needs the story roll hoisted above weightedPick, and world.ts
+// is another chip's file this batch. The deferred hunk's exact shape, with
+// its stream consequences, is recorded in docs/engine/tiers.md and the
+// tier-seams pass file. Until it lands, rows carrying the axis change
+// nothing anywhere.
+
+/** One weighted row that may carry the story axis. Structural on purpose —
+ *  PackTableEntry satisfies it, and any roster row that grows the field
+ *  joins the fold with no import of the zone grammar. */
+export interface StoryPresenceRow { id: string; weight: number; storyPresence?: PresenceSpec }
+
+/** Fold each row's story envelope into its weight at `story`, returning a
+ *  NEW table with zero-weight rows dropped — or the INPUT ARRAY UNTOUCHED
+ *  when nothing carries the axis (the common fast path, and the absent ==
+ *  identical proof: same object, same bytes). A table gated entirely out
+ *  falls back to the unshaped input. */
+export function storyTable<T extends StoryPresenceRow>(table: readonly T[], story: number): readonly T[] {
+  let touched = false;
+  for (const e of table) {
+    if (e.storyPresence !== undefined) { touched = true; break; }
+  }
+  if (!touched) return table;
+  const out: T[] = [];
+  for (const e of table) {
+    const w = e.weight * presenceMul(e.storyPresence, story);
+    if (w > 0) out.push({ ...e, weight: w });
+  }
+  return out.length > 0 ? out : table;
+}

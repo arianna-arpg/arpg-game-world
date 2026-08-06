@@ -35,7 +35,19 @@ import type { HarborholdState } from './harborholds';
  *  entry is at the spawn's level. Absent = present at every level. The same
  *  monster can carry different envelopes in different tables; MonsterDef
  *  .presence multiplies on top as its global floor/ceiling. */
-export interface PackTableEntry { id: string; weight: number; presence?: PresenceSpec }
+export interface PackTableEntry {
+  id: string; weight: number; presence?: PresenceSpec;
+  /** THE STORY AXIS (engine/tiers.ts storyTable — "harder kin near the
+   *  crown" as data): the presence vocabulary verbatim over the tier
+   *  fabric's STORY axis — `{ from: 2, fadeIn: 1 }` reads "absent on the
+   *  valley floor, full from the second bench", `{ to: 0 }` keeps a grazer
+   *  off every deck. Absent = present on every story, and the fold's
+   *  identity fast path returns the input table object itself. COLD AT
+   *  HEAD (2026-08-06): the live fold site is spawnPacks' pick (world.ts —
+   *  deferred; see docs/engine/tiers.md), so rows carrying this change
+   *  nothing until that consumer lands. */
+  storyPresence?: PresenceSpec;
+}
 
 /** A pack SIZE archetype rolled per pack (a weighted spread): lets a zone mix dense
  *  swarms, standard packs, and tiny grazing groups instead of one uniform size band.

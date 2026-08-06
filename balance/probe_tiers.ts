@@ -17,7 +17,12 @@
 // crosses, while long kits keep their rim duel and stand-ground styles
 // keep their posts — and THE MAP TELL (RIG M): tierMapTell (ui/panels.ts),
 // the world map's fog-gated stacked-ground read, pinned pure and against
-// the real minted defs.
+// the real minted defs — plus its COLOR half THE TIER TINT (RIG M′):
+// tierMapTint, the node fill's story shade (higher = lighter, under =
+// darker, byte-zero on storyless ground) — and THE STORY TABLE (RIG P):
+// storyTable (engine/tiers.ts), the per-story spawn axis's fold, COLD at
+// HEAD (identity fast path over every live table, stream-neutral, the
+// envelope honored on synthetic rows).
 //   npx tsx balance/probe_tiers.ts
 
 import '../src/data/clusters';
@@ -33,7 +38,7 @@ import '../src/data/settled';
 import '../src/data/lairs';
 
 import { Rng } from '../src/core/rng';
-import { vec } from '../src/core/math';
+import { mixHex, vec } from '../src/core/math';
 import { severedBandGoal, updateAI, type KernelCtx } from '../src/engine/ai';
 import type { Actor } from '../src/engine/actor';
 import { SEG_CFG } from '../src/engine/segments';
@@ -52,13 +57,14 @@ import { regionKind } from '../src/world/regions';
 import { massKindOf } from '../src/engine/massif';
 import {
   landingTier, linkFlipTier, linkSpanOf, makeTierView, MAX_TIER,
-  resolveTierCrossing, storyReachable, tierElevOf, tierFloorAt, tierFloorOf,
-  tierLinkOf, UNDER_TIER_LANES,
+  resolveTierCrossing, storyReachable, storyTable, tierElevOf, tierFloorAt,
+  tierFloorOf, tierLinkOf, UNDER_TIER_LANES,
 } from '../src/engine/tiers';
 import { insideBounds } from '../src/world/shape';
 import { TILESETS } from '../src/data/tilesets';
 import type { StampSpec, ZoneDef } from '../src/data/zones';
-import { tierMapTell } from '../src/ui/panels';
+import { tierMapTell, tierMapTint } from '../src/ui/panels';
+import { VIS_CFG } from '../src/render/vis/visConfig';
 
 let fails = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -1626,6 +1632,137 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
   check('O16 the horn gate seats the third terrace lawfully on the cone face',
     livePlaced >= 7 && liveOff === 0 && liveLawful === livePlaced,
     `placed=${livePlaced}/8 lawful=${liveLawful} offStory=${liveOff}`);
+}
+
+// --- RIG M′: THE TIER TINT (the map tell's color half — batch 37) -----------------
+// tierMapTint (ui/panels.ts) folds a zone's story stack into its node FILL:
+// 'over' stacks mix toward VIS_CFG.mapTierTint.overTo (the terrace
+// convention's pale crown — higher = lighter, the ground bake's own ascent),
+// 'under' stacks toward underTo (the tell's darken target), strength =
+// stories × perStory capped at max. The laws pinned here: BYTE-ZERO on
+// storyless ground and under fog (the input string returned untouched), the
+// DERIVATION (the fold is exactly one mixHex through the dials — drawn ==
+// derived), direction (over lighter / under darker), the cap, the non-6-hex
+// pass-through (mixHex's contract honored, never garbled), the dial-zero
+// ablation, and the real minted defs (RIG C/D/E's own pinned seeds re-gen —
+// no new seed enters the file).
+{
+  const lum = (hex: string): number =>
+    [1, 3, 5].reduce((s, i) => s + parseInt(hex.slice(i, i + 2), 16), 0);
+  const cfg = VIS_CFG.mapTierTint;
+  const BASE = '#6b6a5e';
+  const expect = (levels: number | undefined, kind: 'over' | 'under', fill: string): string =>
+    mixHex(fill, kind === 'under' ? cfg.underTo : cfg.overTo,
+      Math.min(cfg.max, Math.max(1, Math.floor(levels ?? 1)) * cfg.perStory));
+
+  check('M′1 storyless ground keeps its fill BYTE-IDENTICAL',
+    tierMapTint({}, true, BASE) === BASE && tierMapTint({}, false, BASE) === BASE);
+  check('M′2 THE FOG GATE: an unrevealed stack keeps its fill',
+    tierMapTint({ tiers: { kind: 'over', exposure: 'open' } }, false, BASE) === BASE);
+  const over1 = tierMapTint({ tiers: { kind: 'over', exposure: 'open' } }, true, BASE);
+  const over3 = tierMapTint({ tiers: { kind: 'over', exposure: 'open', levels: 3 } }, true, BASE);
+  const under1 = tierMapTint({ tiers: { kind: 'under', exposure: 'covered' } }, true, BASE);
+  check('M′3 the derivation: one mixHex through the dials, both directions',
+    over1 === expect(undefined, 'over', BASE) && over3 === expect(3, 'over', BASE)
+    && under1 === expect(undefined, 'under', BASE));
+  check('M′4 higher = lighter (the terrace convention), under = darker',
+    lum(over1) > lum(BASE) && lum(over3) > lum(over1) && lum(under1) < lum(BASE));
+  const over9 = tierMapTint({ tiers: { kind: 'over', exposure: 'open', levels: 9 } }, true, BASE);
+  check('M′5 the cap: a nine-story fantasy tints no further than the capped stack',
+    over9 === expect(9, 'over', BASE) && lum(over9) <= lum(mixHex(BASE, cfg.overTo, cfg.max)) + 3
+    && cfg.perStory > 0 && cfg.max >= cfg.perStory);
+  check('M′6 a non-6-hex fill passes through untouched (never garbled)',
+    tierMapTint({ tiers: { kind: 'over', exposure: 'open' } }, true, '#999') === '#999');
+  {
+    // THE ABLATION: the dial at 0 kills the read whole (the kill-switch law).
+    // VIS_CFG is type-readonly, not frozen — mutate under a restore.
+    const dial = cfg as unknown as { perStory: number };
+    const kept = dial.perStory;
+    dial.perStory = 0;
+    const off = tierMapTint({ tiers: { kind: 'over', exposure: 'open', levels: 4 } }, true, BASE);
+    dial.perStory = kept;
+    check('M′7 the dial at 0 is the whole read OFF (byte-identical everywhere)', off === BASE);
+  }
+  // The real stamps, on RIG C/D/E's own pinned seeds (no new seed enters):
+  // a minted summit tints toward the crown, a carved warren toward the dark,
+  // and fog holds both back.
+  const pkT = gen('qa_tint_peak', 'switchback', TILESETS.pinnacle.layout,
+    { ...TILESETS.pinnacle.layoutParams }, 717001);
+  const pkFill = tierMapTint(pkT.def, true, BASE);
+  check('M′8 a minted summit lifts toward the crown pale — and fog holds it',
+    pkFill === expect(pkT.def.tiers?.levels, 'over', BASE) && lum(pkFill) > lum(BASE)
+    && tierMapTint(pkT.def, false, BASE) === BASE);
+  const metroT = TILESETS.metropolis;
+  const warrensT = metroT.variants?.find(v => v.name === 'the warrens');
+  let carvedT = 0, sankT = 0;
+  for (const seed of [616001, 616002, 616003, 616004, 616005, 616006]) {
+    const { def } = gen('qa_tint_warrens', 'district', warrensT?.layout ?? metroT.layout,
+      { ...metroT.layoutParams, ...warrensT?.layoutParams, sewerTier: 1 }, seed);
+    if (!def.tiers) continue; // the lattice honestly declined (RIG D's tolerance)
+    carvedT++;
+    if (lum(tierMapTint(def, true, BASE)) < lum(BASE)) sankT++;
+  }
+  check('M′9 every carved warren sinks toward the dark', carvedT >= 1 && sankT === carvedT,
+    `${sankT}/${carvedT}`);
+}
+
+// --- RIG P: THE STORY TABLE (the per-story spawn axis, COLD at HEAD — batch 37) ----
+// storyTable (engine/tiers.ts) is the fold for PackTableEntry.storyPresence —
+// the presence vocabulary over the STORY axis ("harder kin near the crown").
+// Cold: no live consumer at HEAD (the spawnPacks fold is deferred to a
+// world.ts pass — the story roll must hoist above the pick). The laws pinned:
+// THE IDENTITY FAST PATH over every LIVE table (the input array OBJECT
+// returned — absent == byte-identical, and the census that no shipped row
+// carries the axis while the lever is cold; the consumer pass moves this
+// check on purpose, dated), the envelope honored on synthetic rows
+// (presenceMul's own math), the never-starve fallback, no input mutation,
+// and STREAM NEUTRALITY (folding consumes no rng — ★A-SPARE-SHIFTS-THE-
+// STREAM stays unarmed while the lever is cold).
+{
+  // P1 the identity fast path + the cold census, over every live packs table
+  // (TilesetDef.packs is required; variants carry no packs of their own).
+  let tables = 0, identity = 0;
+  for (const ts of Object.values(TILESETS)) {
+    const t = ts.packs.table;
+    if (!t.length) continue;
+    tables++;
+    if (storyTable(t, 0) === t && storyTable(t, 3) === t) identity++;
+  }
+  check('P1 every live table folds to ITSELF on every story (cold == byte-identical)',
+    tables >= 10 && identity === tables, `${identity}/${tables}`);
+  // P2 the envelope, honored: { from: 2, fadeIn: 2 } — absent on the valley
+  // floor, half at the first bench, full at the second (presenceMul's math).
+  const rows = [
+    { id: 'valley_kin', weight: 2 },
+    { id: 'crown_kin', weight: 1, storyPresence: { from: 2, fadeIn: 2 } },
+  ];
+  const at = (story: number): Record<string, number> => {
+    const m: Record<string, number> = {};
+    for (const r of storyTable(rows, story)) m[r.id] = r.weight;
+    return m;
+  };
+  const w0 = at(0), w1 = at(1), w2 = at(2);
+  check('P2 the crown kin climbs the benches (0 → ½ → full), the valley kin holds',
+    w0.crown_kin === undefined && Math.abs((w1.crown_kin ?? 0) - 0.5) < 1e-9
+    && Math.abs((w2.crown_kin ?? 0) - 1) < 1e-9
+    && w0.valley_kin === 2 && w1.valley_kin === 2 && w2.valley_kin === 2);
+  check('P3 a fully-gated story falls back to the unshaped input (never starve)',
+    storyTable([{ id: 'grazer', weight: 3, storyPresence: { to: 0 } }], 4)[0].weight === 3);
+  check('P4 the fold never mutates its input (rows keep their authored weights)',
+    rows[1].weight === 1 && rows.length === 2 && storyTable(rows, 1) !== rows);
+  {
+    // P5 STREAM NEUTRALITY: the fold between two seeded draws leaves the
+    // stream exactly where the control run left it.
+    const restoreA = seedGlobalRandom(0x7157a);
+    const control = Math.random();
+    restoreA();
+    const restoreB = seedGlobalRandom(0x7157a);
+    storyTable(rows, 2);
+    storyTable(TILESETS.pinnacle.packs.table, 5);
+    const after = Math.random();
+    restoreB();
+    check('P5 folding consumes NO rng (the cold lever re-pins nothing)', after === control);
+  }
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);
