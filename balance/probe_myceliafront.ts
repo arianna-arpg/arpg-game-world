@@ -54,7 +54,6 @@ const mkSurge = (over: Partial<MyceliaSurge['express']> = {}): MyceliaSurge => (
   spreadInterval: 0.5, maxHops: 6, minIntensity: 0.15, densityDecay: 0,
   seedDensity: 0.45, claimCap: 7, cullDensity: 1, recedeInterval: 0.5,
   suppressPerDensity: 0.7, suppressFloor: 0.2,
-  warp: { radius: 70, strength: 0.85 },
   homeBiome: 'mycelia', faction: 'fungal',
   heartbloom: { enabled: true, defId: 'fungal_heartbloom', promote: 'crowned', promoteAt: 6 },
   express: {

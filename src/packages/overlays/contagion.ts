@@ -6,8 +6,16 @@
 // at one streamable zone far from town — PATIENT ZERO — and pre-spreads a small
 // ball of infection outward along the EXISTING road edges (z.exits), each zone
 // taking an INTENSITY that falls off with its graph hop-distance from the source.
-// It keeps creeping one more zone every spreadInterval, silently, with NO map tell:
-// the disease festers across faded, unvisited ground before the player ever sees it.
+// From there the spread is KIN-BORNE (Movement II — the migration grammar as
+// carrier): the outbreak keeps a small roster of CARRIERS, sick bodies walking
+// the graph on the spreadInterval clock, each step infecting the ground it
+// arrives on (priced by the path it walked, capped at maxHops) — and a zone the
+// player VISITS while infected births one more carrier (World.materializeContagion
+// → seedCarrierAt: bodies infected there spread onward on their own AFTER
+// infection). Silent, with NO map tell: the disease festers across faded,
+// unvisited ground before the player ever sees it. Each outbreak also ROLLS a
+// STRAIN at ignition (packages/contagionStrains.ts — seeded on this overlay's
+// own stream); the engine reads it off contagionOn() to dress every taken body.
 //
 // The player STUMBLES into a corrupted zone (the engine fields its plague packs on
 // entry) before understanding the source. Only then does the contagion begin to
@@ -39,6 +47,7 @@ import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { eventTargetable } from '../../world/zonePolicy';
 import { CONTAGION_COLORS } from '../../world/palette';
+import { rollStrain, strainOf } from '../contagionStrains';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
 
@@ -91,6 +100,26 @@ export interface ContagionSurge {
    *  1 (default) = the linear gradient; >1 holds high then drops steeply; <1 drops fast
    *  then flattens. A pure-data lever on how concentrated the disease reads. */
   falloffExp?: number;
+  /** THE CARRIERS (kin-borne spread): how many sick walkers an outbreak stands
+   *  up at ignition (`base`, at the source) and the most it may ever field
+   *  (`cap` — player visits birth one more each, seedCarrierAt). Curing
+   *  disbands them all: cut the source and no new legs walk. */
+  carriers: { base: number; cap: number };
+  /** THE INFECTION EXPRESSION (World.updateContagionInfection reads these —
+   *  the population-process half): the in-zone sweep cadence, the zombie
+   *  lean's watch-rise multiplier (slow to react — riseSec × dullMul), and
+   *  the FATED SHARE of the standing zone's own breathing kin the plague
+   *  takes, lerped [at minIntensity .. at full] by the zone's intensity (the
+   *  Plaguebound court is always taken). The strain status's own DURATION is
+   *  the body-wane clock — the engine adds no dial for it. */
+  infection: { sweepSec: number; dullMul: number; frac: [number, number] };
+  /** THE EATS-PLAGUE DIALS (packages/groundClaims.ts — this consumer owns
+   *  them): anchored ground whose folded grip is at/above `threshold` refuses
+   *  infection outright (spread + ignition + the pre-spread ball), and
+   *  STANDING infection under such a grip wanes off over `waneSec` — the
+   *  network eats the plague back, never the reverse. Absent (or no grip
+   *  source registered) = the whole lane is structurally silent. */
+  grip?: { threshold: number; waneSec: number };
 }
 
 /** What the engine reads to field the plague / the boss in a zone. */
@@ -103,13 +132,35 @@ export interface ContagionInfo {
   color: string;
   /** 'virulent' | 'spreading' | 'faint' — the severity word for the info row. */
   label: string;
+  /** The outbreak's rolled STRAIN id (contagionStrains.ts) — the engine
+   *  dresses taken bodies in its status. Undefined on a strainless outbreak
+   *  (no rollable strain registered — the pre-Movement-II plague). */
+  strain?: string;
+  /** Patient Zero has fallen (or the source was eaten): the outbreak only
+   *  recedes now — the engine infects NO new bodies and stops refreshing the
+   *  worn marks, so standing infected wane out on the status's own clock. */
+  curing: boolean;
 }
 
-/** One festering outbreak — its source + spread/reveal/cure state. */
+/** One sick walker: where it stands, and how far (in walked hops) it is from
+ *  the source — the price its next infection is stamped at. */
+interface CarrierState {
+  zoneId: string;
+  hops: number;
+}
+
+/** One festering outbreak — its source + strain + carriers + spread/reveal/cure
+ *  state. */
 interface ActiveOutbreak {
   id: string;
   /** The Patient Zero zone id (the hops===0 entry). */
   sourceZoneId: string;
+  /** The rolled STRAIN (contagionStrains.ts — seeded at ignition; undefined
+   *  when nothing rollable is registered). */
+  strainId?: string;
+  /** THE CARRIERS — the sick bodies whose walking IS the spread (kin-borne;
+   *  disbanded the moment the outbreak turns to curing). */
+  carriers: CarrierState[];
   spreadAcc: number;
   /** The player has entered an infected zone of this run (drives the reveal start
    *  + the one-shot discovery ledger). */
@@ -132,6 +183,10 @@ interface InfectedZone {
   hops: number;
   /** Cached intensity = clamp(1 − hops/maxHops, minIntensity, 1). */
   intensity: number;
+  /** Seconds this zone has stood under an anchored claim's grip at/above the
+   *  eats-plague threshold (transient — never snapshotted; a reload restarts
+   *  the meal, which only delays the eating). */
+  waneSec?: number;
 }
 
 export class ContagionField implements WorldOverlay {
@@ -153,6 +208,12 @@ export class ContagionField implements WorldOverlay {
   private seq = 0;
   /** Live reference to the world's node map (= view.byId), refreshed each tick. */
   private nodesById: Record<string, ZoneDef> = {};
+  /** THE EATS-PLAGUE READ (packages/groundClaims.ts): the sim hands this
+   *  accessor in at boot (sim.ts — the vendetta-bridge idiom, an accessor
+   *  instead of pushed values), so the overlay stays PURE of the engine while
+   *  consuming the anchored networks' folded grip. Unset (probes, bare
+   *  fields) = the whole lane silent. */
+  private gripRead?: (zoneId: string) => number;
 
   constructor(ctx: OverlayBuildCtx, surge: ContagionSurge) {
     this.rng = new Rng(ctx.seed);
@@ -183,6 +244,34 @@ export class ContagionField implements WorldOverlay {
       } else if (g.active) { // a closed gate FREEZES the spread (it doesn't recede)
         o.spreadAcc += dt * pressure;
         while (o.spreadAcc >= this.cfg.spreadInterval) { o.spreadAcc -= this.cfg.spreadInterval; this.spread(o, view); }
+      }
+    }
+
+    // THE EATS-PLAGUE CONSUMPTION (groundClaims.ts — Movement II wires the
+    // consumer half; her containment asymmetry: the anchored eats the mobile,
+    // never the reverse). A zone whose folded grip holds at/above the
+    // threshold WANES on this consumer's clock and is eaten off the map; the
+    // SOURCE eaten flips the outbreak to curing outright (a heartless plague
+    // can only recede — the pruneZones shape), and carriers standing on
+    // eaten ground are eaten with it.
+    if (this.gripRead && this.cfg.grip) {
+      const gr = this.cfg.grip;
+      for (const [zid, z] of [...this.infected]) {
+        if (this.gripAt(zid) >= gr.threshold) {
+          z.waneSec = (z.waneSec ?? 0) + dt;
+          if (z.waneSec < gr.waneSec) continue;
+          this.infected.delete(zid);
+          const o = this.outbreaks.find(x => x.id === z.runId && !x.dead);
+          if (!o) continue;
+          o.revealed.delete(zid);
+          o.carriers = o.carriers.filter(c => c.zoneId !== zid);
+          if (o.sourceZoneId === zid && !o.curing) {
+            o.curing = true; o.cureAcc = 0; o.curedThrough = -1; o.carriers = [];
+          }
+          if (![...this.infected.values()].some(zz => zz.runId === o.id)) o.dead = true;
+        } else if (z.waneSec) {
+          z.waneSec = 0; // the grip lapsed mid-meal — the bite starts over
+        }
       }
     }
 
@@ -269,7 +358,32 @@ export class ContagionField implements WorldOverlay {
       isSource: z.hops === 0 && !o.curing, // a slain Patient Zero never re-spawns (curing)
       color: this.glowColors.strong, // matches the map glow (per-variant)
       label: z.intensity > 0.66 ? 'virulent' : z.intensity > 0.33 ? 'spreading' : 'faint',
+      strain: o.strainId,
+      curing: o.curing,
     };
+  }
+
+  /** THE EATS-PLAGUE HANDOFF: the sim wires the anchored networks' folded
+   *  grip in at boot (world/sim.ts → groundClaimGripAt). An accessor, not
+   *  pushed values — the fold is a pure read the overlay may take per zone
+   *  per step (the stub's own cheapness law). */
+  setGripRead(read: (zoneId: string) => number): void {
+    this.gripRead = read;
+  }
+
+  /** THE KIN-BORNE SEAM (World.materializeContagion): a zone the player
+   *  VISITS while infected births ONE more carrier there — the bodies
+   *  infected in it spread onward on their own after infection. Capped
+   *  (cfg.carriers.cap); a curing outbreak births none (containment: cut
+   *  the source and no new legs walk). Returns whether a carrier stood up. */
+  seedCarrierAt(zoneId: string): boolean {
+    const z = this.infected.get(zoneId);
+    if (!z) return false;
+    const o = this.outbreaks.find(x => x.id === z.runId && !x.dead);
+    if (!o || o.curing) return false;
+    if (o.carriers.length >= this.cfg.carriers.cap) return false;
+    o.carriers.push({ zoneId, hops: z.hops });
+    return true;
   }
 
   /** Patient Zero's spawn descriptor if this zone is a live source, else null. */
@@ -313,6 +427,10 @@ export class ContagionField implements WorldOverlay {
     o.curing = true;
     o.cureAcc = 0;
     o.curedThrough = -1;
+    // THE CONTAINMENT: cure the source and no new legs walk — the carriers
+    // disband on the spot (spread was already curing-gated; this makes the
+    // stop structural, and the snapshot carries the emptiness).
+    o.carriers = [];
     return true;
   }
 
@@ -336,16 +454,21 @@ export class ContagionField implements WorldOverlay {
 
   // --- worldstate (the persistence pledge) -----------------------------------
 
-  /** Pure JSON: outbreaks (reveal Sets flattened to arrays), the infection map,
-   *  and the id counter. Rides existing edges only — no zones minted. */
+  /** Pure JSON: outbreaks (reveal Sets flattened to arrays; the strain +
+   *  carriers ride along), the infection map, and the id counter. Rides
+   *  existing edges only — no zones minted. (The per-zone waneSec is
+   *  deliberately transient: a reload restarts the eats-plague meal, which
+   *  only delays the eating.) */
   snapshot(): unknown {
     return {
       outbreaks: this.outbreaks.map(o => ({
-        id: o.id, sourceZoneId: o.sourceZoneId, spreadAcc: o.spreadAcc, seen: o.seen,
+        id: o.id, sourceZoneId: o.sourceZoneId, strainId: o.strainId,
+        carriers: o.carriers.map(c => ({ zoneId: c.zoneId, hops: c.hops })),
+        spreadAcc: o.spreadAcc, seen: o.seen,
         revealed: [...o.revealed], curing: o.curing, cureAcc: o.cureAcc,
         curedThrough: o.curedThrough, dead: o.dead,
       })),
-      infected: [...this.infected.entries()].map(([zid, z]) => ({ zid, ...z })),
+      infected: [...this.infected.entries()].map(([zid, z]) => ({ zid, runId: z.runId, hops: z.hops, intensity: z.intensity })),
       seq: this.seq,
     };
   }
@@ -357,15 +480,33 @@ export class ContagionField implements WorldOverlay {
     if (Array.isArray(s.outbreaks)) {
       this.outbreaks = [];
       for (const raw of s.outbreaks) {
-        const o = raw as { id?: unknown; sourceZoneId?: unknown; spreadAcc?: unknown; seen?: unknown; revealed?: unknown; curing?: unknown; cureAcc?: unknown; curedThrough?: unknown; dead?: unknown } | null;
+        const o = raw as { id?: unknown; sourceZoneId?: unknown; strainId?: unknown; carriers?: unknown; spreadAcc?: unknown; seen?: unknown; revealed?: unknown; curing?: unknown; cureAcc?: unknown; curedThrough?: unknown; dead?: unknown } | null;
         if (!o || typeof o.id !== 'string' || typeof o.sourceZoneId !== 'string') continue;
         if (o.dead) continue; // a finished outbreak stays finished
+        const curing = !!o.curing;
+        // Carriers round-trip; a LEGACY save (pre-Movement-II, no carrier
+        // rows) adopts — a live outbreak re-stands its base walkers at the
+        // source (a curing one stays legless: the containment survives the
+        // trip). A legacy outbreak likewise ROLLS its strain on adoption
+        // (the overlay's own stream), so a standing plague gains a face.
+        const carriers = Array.isArray(o.carriers)
+          ? o.carriers
+            .map(c => c as { zoneId?: unknown; hops?: unknown } | null)
+            .filter((c): c is { zoneId: string; hops: number } =>
+              !!c && typeof c.zoneId === 'string'
+              && typeof c.hops === 'number' && Number.isFinite(c.hops) && c.hops >= 0)
+            .map(c => ({ zoneId: c.zoneId, hops: Math.floor(c.hops) }))
+          : curing ? []
+            : Array.from({ length: Math.max(0, this.cfg.carriers.base) },
+              () => ({ zoneId: o.sourceZoneId as string, hops: 0 }));
         this.outbreaks.push({
           id: o.id, sourceZoneId: o.sourceZoneId,
+          strainId: typeof o.strainId === 'string' ? o.strainId : rollStrain(this.rng)?.id,
+          carriers: curing ? [] : carriers.slice(0, Math.max(0, this.cfg.carriers.cap)),
           spreadAcc: typeof o.spreadAcc === 'number' && Number.isFinite(o.spreadAcc) ? o.spreadAcc : 0,
           seen: !!o.seen,
           revealed: new Set(Array.isArray(o.revealed) ? o.revealed.filter((z): z is string => typeof z === 'string') : []),
-          curing: !!o.curing,
+          curing,
           cureAcc: typeof o.cureAcc === 'number' && Number.isFinite(o.cureAcc) ? o.cureAcc : 0,
           curedThrough: typeof o.curedThrough === 'number' && Number.isFinite(o.curedThrough) ? Math.floor(o.curedThrough) : -1,
           dead: false,
@@ -393,7 +534,8 @@ export class ContagionField implements WorldOverlay {
     for (const zid of [...this.infected.keys()]) if (!has(zid)) this.infected.delete(zid);
     for (const o of this.outbreaks) {
       o.revealed = new Set([...o.revealed].filter(z => has(z)));
-      if (!has(o.sourceZoneId) && !o.curing) { o.curing = true; o.cureAcc = 0; o.curedThrough = -1; }
+      o.carriers = o.carriers.filter(c => has(c.zoneId)); // culled ground takes its walkers
+      if (!has(o.sourceZoneId) && !o.curing) { o.curing = true; o.cureAcc = 0; o.curedThrough = -1; o.carriers = []; }
     }
   }
 
@@ -403,7 +545,7 @@ export class ContagionField implements WorldOverlay {
    *  the full ball at once so the infection + the glow read immediately. (QA only.) */
   devIgnite(view: OverlayView, zoneId: string): boolean {
     const here = view.byId[zoneId];
-    if (!here || !this.streamable(here) || this.infected.has(here.id)) return false;
+    if (!here || !this.mayInfect(here) || this.infected.has(here.id)) return false;
     const o = this.makeOutbreak(here);
     this.outbreaks.push(o);
     this.infect(here.id, o.id, 0);
@@ -417,6 +559,23 @@ export class ContagionField implements WorldOverlay {
    *  (zonePolicy) — in lockstep with the engine's materialize guard. */
   private streamable(z: ZoneDef): boolean {
     return eventTargetable(this.id, z);
+  }
+
+  /** The anchored networks' folded grip over a zone (0 when no read is wired
+   *  or the grip lane is off; a throwing source reads 0 — one bad fold never
+   *  breaks the lifecycle, the groundClaims tolerance law). */
+  private gripAt(zoneId: string): number {
+    if (!this.gripRead || !this.cfg.grip) return 0;
+    try { return this.gripRead(zoneId); } catch { return 0; }
+  }
+
+  /** THE ONE INFECTION GATE — streamable AND not held by an anchored claim
+   *  at/above the eats-plague threshold. Every road in (ignition source, the
+   *  pre-spread ball, a carrier's step) passes here, so claimed ground
+   *  refuses the plague at every door, not just some. */
+  private mayInfect(z: ZoneDef): boolean {
+    return this.streamable(z)
+      && !(this.cfg.grip && this.gripAt(z.id) >= this.cfg.grip.threshold);
   }
 
   private intensityFor(hops: number): number {
@@ -433,6 +592,13 @@ export class ContagionField implements WorldOverlay {
     return {
       id: `contagion_${this.seq++}`,
       sourceZoneId: src.id,
+      // THE STRAIN ROLL — seeded on this overlay's own stream at ignition
+      // (undefined when nothing rollable is registered: the plague then runs
+      // strainless, exactly the pre-Movement-II behavior).
+      strainId: rollStrain(this.rng)?.id,
+      // The ignition's own sick walkers, standing at the source.
+      carriers: Array.from({ length: Math.max(0, this.cfg.carriers.base) },
+        () => ({ zoneId: src.id, hops: 0 })),
       spreadAcc: 0, seen: false, revealed: new Set(),
       curing: false, cureAcc: 0, curedThrough: -1, dead: false,
     };
@@ -448,7 +614,7 @@ export class ContagionField implements WorldOverlay {
     const town = view.byId[START_ZONE];
     const tc = town ? town.map : { x: 0, y: 0 };
     const cands = view.nodes.filter(z =>
-      this.streamable(z) && !this.infected.has(z.id) && coordDist(z.map, tc) >= this.cfg.seedMinDist);
+      this.mayInfect(z) && !this.infected.has(z.id) && coordDist(z.map, tc) >= this.cfg.seedMinDist);
     if (!cands.length) return;
     // Weight by distance (farther = likelier) + an unvisited bonus (a hidden seed).
     let total = 0;
@@ -477,36 +643,54 @@ export class ContagionField implements WorldOverlay {
       for (const e of zn.exits) {
         if (e.to === '?') continue;
         const nb = view.byId[e.to];
-        if (!nb || this.infected.has(nb.id) || !this.streamable(nb)) continue;
+        if (!nb || this.infected.has(nb.id) || !this.mayInfect(nb)) continue;
         this.infect(nb.id, o.id, z.hops + 1);
         q.push(nb.id);
       }
     }
   }
 
-  /** Creep the infection to ONE more zone: pick a uninfected streamable neighbour of
-   *  the current front (within maxHops) and infect it at parentHops+1. The disease
-   *  travels road-by-road — it can only cross edges that already exist (never mints a
-   *  frontier), so it naturally expands as the world web grows around it. */
+  /** THE CARRIER WALK (kin-borne spread — Movement II retires the random
+   *  front-pick the convergence ledger named a placeholder skeleton): each of
+   *  the outbreak's sick walkers takes ONE step per spread beat. A step onto
+   *  fresh ground INFECTS it, priced at the carrier's own walked distance
+   *  (hops+1, capped at maxHops — the disease weakens along the path its
+   *  bodies actually carried it); with no fresh door in reach the carrier
+   *  ROAMS across the outbreak's own infected ground instead (re-syncing its
+   *  hops to the ground it stands on, so its next infection prices honestly).
+   *  Roads only — it can cross nothing that does not exist (never mints a
+   *  frontier), claimed ground refuses it at the one gate (mayInfect), and
+   *  another outbreak's ground is a wall (one plague per zone). Seeded picks
+   *  on the overlay's own stream — deterministic beat for beat. */
   private spread(o: ActiveOutbreak, view: OverlayView): void {
-    const parentHop = new Map<string, number>();
-    for (const [zid, z] of this.infected) {
-      if (z.runId !== o.id) continue;
-      const zn = view.byId[zid];
+    for (const c of o.carriers) {
+      const zn = view.byId[c.zoneId];
       if (!zn) continue;
+      const fresh: string[] = [];
+      const roam: { id: string; hops: number }[] = [];
       for (const e of zn.exits) {
         if (e.to === '?') continue;
         const nb = view.byId[e.to];
-        if (!nb || this.infected.has(nb.id) || !this.streamable(nb)) continue;
-        const ph = Math.min(parentHop.get(nb.id) ?? Infinity, z.hops);
-        parentHop.set(nb.id, ph);
+        if (!nb) continue;
+        const held = this.infected.get(nb.id);
+        if (held) {
+          if (held.runId === o.id) roam.push({ id: nb.id, hops: held.hops });
+          continue;
+        }
+        if (c.hops + 1 > this.cfg.maxHops || !this.mayInfect(nb)) continue;
+        fresh.push(nb.id);
+      }
+      if (fresh.length) {
+        const pick = fresh[this.rng.int(0, fresh.length - 1)];
+        this.infect(pick, o.id, c.hops + 1);
+        c.zoneId = pick;
+        c.hops += 1;
+      } else if (roam.length) {
+        const pick = roam[this.rng.int(0, roam.length - 1)];
+        c.zoneId = pick.id;
+        c.hops = pick.hops;
       }
     }
-    // Only zones still within the spread cap are eligible (a bounded ball of disease).
-    const arr = [...parentHop.entries()].filter(([, ph]) => ph + 1 <= this.cfg.maxHops).map(([id]) => id);
-    if (!arr.length) return;
-    const pick = arr[this.rng.int(0, arr.length - 1)];
-    this.infect(pick, o.id, (parentHop.get(pick) ?? 0) + 1);
   }
 
   /** Grow an outbreak's REVEALED set: a BFS over its infected zones out to revealHops
@@ -556,9 +740,13 @@ export class ContagionField implements WorldOverlay {
 registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   const info = world.sim.contagionField?.revealedInfo(zoneId);
   if (!info) return [];
+  // The strain reads on the row ("virulent (Miasmal)") — the map names the
+  // face of the sickness the moment the glow does.
+  const strainWord = strainOf(info.strain)?.label;
+  const sev = strainWord ? `${info.label} (${strainWord})` : info.label;
   return [{
     kind: 'event', icon: '☣', color: info.color, label: 'Contagion',
-    detail: info.isSource ? 'Patient Zero festers here' : `${info.label}; follow the strongest pulse to its source`,
+    detail: info.isSource ? 'Patient Zero festers here' : `${sev}; follow the strongest pulse to its source`,
     z: 14,
   }];
 });

@@ -58,16 +58,20 @@ export const CONTAGION_COLORS = {
   accent: '#9a5ad0',
 };
 
-/** The Mycelia spore-bloom palette — bioluminescent fungal green brightening toward
- *  the dense core, with a luminous accent for the spore wash + the Heartbloom glyph.
- *  (FACTION_COLORS['fungal'] is grafted at boot from the package FactionSpec.) */
+/** The Mycelia spore-front palette — THE SETTLED CONSTANTS (Movement II of the
+ *  differentiation pass, 2026-08-06): the fallback now agrees with the violet
+ *  the shipped bloom wears (defs/mycelia.ts surge.glow), so the two green
+ *  crises can never read as twins again — GREEN is the plague's word,
+ *  VIOLET the bloom's, at every surface including a variant that clears its
+ *  glow override. (FACTION_COLORS['fungal'] is grafted at boot from the
+ *  package FactionSpec.) */
 export const SPORE_COLORS = {
-  /** Virulent green — a zone thick with spores (high density / near the core). */
-  strong: '#8fd06f',
-  /** Dim, decaying green — the faint creeping edge of the bloom. */
-  weak: '#3f5a32',
+  /** Bloom-violet — a zone thick with the network (high density / near home). */
+  strong: '#b8a0d8',
+  /** Dim dusk-violet — the faint creeping edge of the web. */
+  weak: '#4a3e5c',
   /** Luminous spore-light — the Heartbloom glyph + the densest haze. */
-  accent: '#c8ffa0',
+  accent: '#e8d8f8',
 };
 
 /** The Deepwinter frost-front palette — a glacial gradient for the converted

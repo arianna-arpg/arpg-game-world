@@ -18,13 +18,15 @@
 //     · never the reverse — the plague neither blocks nor drains a claim
 //       (mobility is its whole nature; it flows around, not through).
 //
-// MOVEMENT I wires the ANCHORED half only: mycelia registers its grip source
-// (packages/overlays/mycelia.ts, beside its event-front source). NOTHING
-// consumes the fold yet — Movement II (the infection fabric) threads
-// groundClaimGripAt() into the contagion's spread + cure steps and owns the
-// threshold/wane dials. Keep sources PURE READS of live overlay state (the
-// registerEventFront cheapness law — a consumer may fold every zone it
-// touches, every step).
+// MOVEMENT I wired the ANCHORED half (mycelia registers its grip source —
+// packages/overlays/mycelia.ts, beside its event-front source). MOVEMENT II
+// wired the CONSUMER: the contagion folds gripAt through its ONE infection
+// gate (every road in — ignition, the pre-spread ball, a carrier's step —
+// refuses ground held at/above its threshold) and its standing-wane clock
+// (overlays/contagion.ts, dials on ContagionSurge.grip; the sim hands the
+// accessor in at the composition root, world/sim.ts setGripRead). Keep
+// sources PURE READS of live overlay state (the registerEventFront cheapness
+// law — a consumer may fold every zone it touches, every step).
 // ---------------------------------------------------------------------------
 
 import type { WorldSim } from '../world/sim';

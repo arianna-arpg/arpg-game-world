@@ -23,6 +23,8 @@
 import { vec } from '../../core/math';
 import { registerCreep } from '../../engine/creep';
 import { registerKillHandler } from '../../engine/killHandlers';
+import { STATUS_DEFS } from '../../engine/status';
+import { registerStrain, strainIds, strainOf } from '../contagionStrains';
 import { ContagionField, type ContagionSurge } from '../overlays/contagion';
 import type { ContentPackage, FactionSpec } from '../types';
 
@@ -46,9 +48,30 @@ const CONTAGION_SURGE: ContagionSurge = {
   bossPromote: 'crowned',
   packCount: [1, 3],     // 1-3 plague packs per infected zone (lerped by intensity — denser near the source)
   packSize: [2, 4],      // …of 2-4 diseased each
+  carriers: { base: 2, cap: 5 },  // the kin-borne walkers: 2 stand up at ignition; visits birth more, to 5
+  grip: { threshold: 0.35, waneSec: 20 },  // the eats-plague dials (this consumer owns them; groundClaims.ts)
+  infection: { sweepSec: 1.2, dullMul: 2.6, frac: [0.35, 0.8] },  // the in-zone expression: sweep beat, the lean's slowed stare, the fated share of native kin
   reward: { xpBase: 260, xpPerLevel: 46, gems: 4 },
   color: PLAGUE_COLOR,
 };
+
+// --- THE STRAINS (Movement II — packages/contagionStrains.ts) ---------------
+//
+// Each outbreak rolls ONE face at ignition; every body the plague takes wears
+// that face's status (engine/status.ts infected_* rows — buff, zombie lean and
+// worn look all live there). MUTANT rides the weight-0 RESERVED row: its id is
+// Movement III's seam (the runtime part-graft) and nothing of it is built —
+// structurally unrollable, validator-skipped, never dead (the reserved-word
+// law).
+registerStrain({
+  id: 'miasma', label: 'Miasmal', statusId: 'infected_miasma', color: PLAGUE_COLOR, weight: 3,
+  arrive: 'The air here is thick with rot…',
+});
+registerStrain({
+  id: 'adrenal', label: 'Adrenal', statusId: 'infected_adrenal', color: '#c8e04a', weight: 2,
+  arrive: 'Something quick and wrong is moving out there…',
+});
+registerStrain({ id: 'mutant', label: 'Mutant', statusId: 'infected_mutant', weight: 0 });
 
 /** THE PLAGUEBOUND — the diseased 'plague' faction. contexts:['contagion'] keeps them
  *  out of ordinary generation; they appear ONLY inside an infected zone. No warlord,
@@ -105,6 +128,15 @@ export const CONTAGION: ContentPackage = {
   validate: (look) => [
     ...(look.faction(CONTAGION_SURGE.faction) ? [] : [`plague faction '${CONTAGION_SURGE.faction}' unknown`]),
     ...(look.monster(CONTAGION_SURGE.bossDefId) ? [] : [`Patient Zero '${CONTAGION_SURGE.bossDefId}' unknown`]),
+    // Every ROLLABLE strain must wear a real status; weight-0 rows are
+    // RESERVED and skipped (the reserved-word law — 'mutant' is Movement
+    // III's seam, not a defect).
+    ...strainIds()
+      .map(id => strainOf(id))
+      .filter((s): s is NonNullable<typeof s> => !!s && s.weight > 0 && !STATUS_DEFS[s.statusId])
+      .map(s => `strain '${s.id}' names unknown status '${s.statusId}'`),
+    ...(CONTAGION_SURGE.carriers.base < 1 ? ['carriers.base must be ≥ 1 (a spread with no legs never walks)'] : []),
+    ...(CONTAGION_SURGE.carriers.cap < CONTAGION_SURGE.carriers.base ? ['carriers.cap below carriers.base'] : []),
   ],
 };
 

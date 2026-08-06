@@ -184,6 +184,39 @@ export interface StatusDef {
    *  from anything that applies statuses: skill effects, procs, fog banks,
    *  ground, monster kits. */
   timeScale?: number;
+  /** THE PRESS (the zombie lean, half one): while worn, an AI bearer NEVER
+   *  retreats — the retreat gate (ai.ts retreatMove) refuses outright, with
+   *  no winded theater (a body that never backs up never tires of backing
+   *  up; the kite budget is moot by construction). Approach, standoff and
+   *  forced motion are untouched: it simply keeps coming. Self-reverting
+   *  like every status read — the flag ends with the wear. Players are
+   *  input-driven and never gated. */
+  neverRetreats?: true;
+  /** THE FICKLE MIND (the adrenal temper): while worn, the bearer's LOCK
+   *  LAPSES on this rolled window — the attention-span daze machinery
+   *  (PerceptionSpec.attentionSpan → aiAttendUntil) carries the forget-
+   *  and-wander whole: target dropped, aggro cleared, a short daze that a
+   *  landed hit snaps it out of. Folded with an authored span by SHORTEST
+   *  WINDOW WINS; a span arriving mid-lock arms the clock instead of
+   *  lapsing it on the spot. */
+  fickleSpan?: [number, number];
+  /** WORN BODY FX (the visible-infection law: a changed body must LOOK
+   *  changed): a status declaring this draws ON its bearer — a soft
+   *  under-glow beneath the body (`glow`, radius × glowScale of the body,
+   *  at glowAlpha) and/or a mote skin at the rim (`motes`: 'fume' = rising
+   *  wisps, 'bubbles' = orbiting pops, in moteColor ?? glow). Pure
+   *  presentation, deterministic from the sim clock (no render-side rng);
+   *  ships to co-op clients on the ordinary status wire (the client
+   *  resolves the def from its own registry — the tells-wire idiom). */
+  bodyFx?: {
+    glow?: string;
+    /** Body-radius multiple of the glow (default 1.9). */
+    glowScale?: number;
+    /** Peak glow alpha (default 0.22). */
+    glowAlpha?: number;
+    motes?: 'fume' | 'bubbles';
+    moteColor?: string;
+  };
 }
 
 /** GLOBAL AILMENT BASELINE TUNING — the "physical damage is physical damage"
@@ -1183,6 +1216,45 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   quickborn: {
     label: 'Quickborn', color: '#e8c86a', duration: 7, beneficial: true,
     mods: [mod('damage', 'increased', 0.14), mod('moveSpeed', 'increased', 0.08), mod('castSpeed', 'increased', 0.08)],
+  },
+
+  // THE CONTAGION's strain marks (packages/contagionStrains.ts — Movement II
+  // of the differentiation pass): worn by every body the plague takes in an
+  // infected zone (the Plaguebound court always; a fated share of the zone's
+  // own BREATHING kin). Each row IS its strain whole — the buff, the zombie
+  // lean (neverRetreats; the watch half is the engine's ledgered mutation),
+  // and the worn look (bodyFx — the aura that reads deadly IS the buff:
+  // drawn == tested). Pulse-refreshed by the infection sweep while the
+  // outbreak stands (the quickborn idiom); when the source is cured the
+  // refresh stops and the DURATION IS THE BODY-WANE CLOCK — standing
+  // infected shamble it out, then recover whole. powerInert: engine-applied
+  // binary marks the potency lane cannot deepen. Deliberately NOT
+  // beneficial: a future cleanse verb should read a disease as a disease.
+  // MIASMAL — the noxious pall: hits far harder, moves and casts far slower;
+  // fumes rise off the body. Numbers are the coordinator's, flagged.
+  infected_miasma: {
+    label: 'Miasmal', color: '#8fd24a', duration: 12, powerInert: true,
+    neverRetreats: true,
+    bodyFx: { glow: '#8fd24a', motes: 'fume' },
+    mods: [
+      mod('damage', 'more', 0.3),
+      mod('moveSpeed', 'more', -0.35),
+      mod('castSpeed', 'more', -0.3),
+      mod('attackSpeed', 'more', -0.3),
+    ],
+  },
+  // ADRENAL — the racing sickness: quicker on its feet but FICKLE — the lock
+  // lapses on a short rolled window (drop the target, wander the daze) until
+  // pain re-teaches it; noxious bubbles crawl the rim.
+  infected_adrenal: {
+    label: 'Adrenal', color: '#c8e04a', duration: 12, powerInert: true,
+    neverRetreats: true,
+    fickleSpan: [4, 9],
+    bodyFx: { glow: '#c8e04a', motes: 'bubbles' },
+    mods: [
+      mod('moveSpeed', 'more', 0.28),
+      mod('attackSpeed', 'more', 0.1),
+    ],
   },
 
   // THE WISPLIGHT's ride marks — one per wisp KIND (the kind row names its

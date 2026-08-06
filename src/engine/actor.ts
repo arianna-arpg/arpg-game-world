@@ -1896,6 +1896,24 @@ export class Actor {
     return this.statuses.some(s => STATUS_DEFS[s.id]?.panic);
   }
 
+  /** Wearing any PRESS status (StatusDef.neverRetreats — the zombie lean)?
+   *  The retreat gate refuses while this holds; players are never gated. */
+  neverRetreats(): boolean {
+    return this.statuses.some(s => STATUS_DEFS[s.id]?.neverRetreats);
+  }
+
+  /** The shortest worn FICKLE window (StatusDef.fickleSpan — the adrenal
+   *  temper), or undefined. The attention-span fold reads it beside the
+   *  brain's authored span; shortest window wins there. */
+  fickleSpan(): [number, number] | undefined {
+    let best: [number, number] | undefined;
+    for (const s of this.statuses) {
+      const f = STATUS_DEFS[s.id]?.fickleSpan;
+      if (f && (!best || f[0] + f[1] < best[0] + best[1])) best = f;
+    }
+    return best;
+  }
+
   /** Holding a guard stance right now? */
   isGuarding(): boolean { return this.casting?.mode === 'guard'; }
 

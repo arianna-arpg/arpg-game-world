@@ -12,6 +12,7 @@ import { Rng } from '../core/rng';
 import { FACTIONS, MONSTERS } from '../data/monsters';
 import type { PackTableEntry, ZoneDef } from '../data/zones';
 import type { AmalgamationField } from '../packages/overlays/amalgamation';
+import { groundClaimGripAt } from '../packages/groundClaims';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import type { ConclaveField } from '../packages/overlays/conclave';
@@ -487,6 +488,12 @@ export class WorldSim {
         };
       }
     }
+    // THE EATS-PLAGUE HANDOFF (packages/groundClaims.ts — Movement II): the
+    // contagion CONSUMES the anchored networks' folded grip. Wired HERE (the
+    // composition root, the war-below idiom) as an ACCESSOR so the overlay
+    // stays pure of the engine and neither vector imports the other; sources
+    // are pure reads of live overlay state, cheap by the stub's own contract.
+    this.contagionField?.setGripRead(zid => groundClaimGripAt(this, zid, 'contagion'));
     this.gates = resolveGates(manifest, 1);
   }
 

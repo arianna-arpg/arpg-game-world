@@ -256,6 +256,7 @@ const LEVITATE_DISP: DisplacementPolicy = { ignoreFall: true };
 import type { ExpeditionManifest } from '../packages/manifest';
 import type { Ledger } from '../packages/types';
 import { bumpLedger, mergeLedger } from '../packages/ledger';
+import { strainByStatus, strainOf, type StrainDef } from '../packages/contagionStrains';
 import type { InvasionInfo } from '../packages/overlays/demonInvasion';
 import type { CrusadeInfo } from '../packages/overlays/crusade';
 import type { DeadwakeInfo, DeadwakeSurge } from '../packages/overlays/deadwake';
@@ -2646,6 +2647,14 @@ export class World {
    *  materialized this zone visit — one muster per visit; cleared per loadZone. The
    *  contagion spread/reveal/cure is owned by the pure ContagionField overlay. */
   private materializedContagion = new Set<string>();
+  /** THE INFECTION LEDGER (the watch-change revert idiom, Movement II): actor
+   *  id → the watch spec the body wore BEFORE the zombie lean landed. The
+   *  sweep's revert pass restores it byte-exact the moment no strain status
+   *  stands (waned after the cure, cleansed, dispelled) and drops despawned
+   *  ids. Runtime-only BY DESIGN: bodies despawn on zone leave and re-infect
+   *  on re-entry, so no save can ever carry a leaned watch. */
+  private contagionLeans = new Map<number, { watch: WatchSpec | undefined }>();
+  private contagionSweepAt = 0;
   /** Warren-claimed zones whose nests/packs (+ the armed King) were already
    *  fielded this visit — one muster per visit; cleared per loadZone. The claim
    *  + nest ledger is owned by the pure VerminfallField overlay. */
@@ -2668,14 +2677,11 @@ export class World {
    *  one muster per visit; cleared per loadZone. The FRONT is the whole gate
    *  (weather registry 'starfall'): no shower, no Court. */
   private materializedStarfall = new Set<string>();
-  /** Spore-laced zones whose fungal horde (+ Heartbloom at the core) was already fielded
-   *  this visit — one muster per visit; cleared per loadZone. The bloom's mobile spread is
-   *  owned by the pure MyceliaField overlay. */
+  /** Spore-laced zones whose fungal horde (+ Heartbloom at the foundation) was already
+   *  fielded this visit — one muster per visit; cleared per loadZone. The anchored claim
+   *  tree is owned by the pure MyceliaField overlay. (The old mobile bloom's biome-warp
+   *  set is GONE with the never-warps law — see drainMyceliaLedger.) */
   private materializedMycelia = new Set<string>();
-  /** Zones the Mycelia bloom has WARPED to its biome (live BiomeField modifiers we own,
-   *  reconciled each tick against myceliaField.transformedZones() — added as the bloom
-   *  saturates, removed as it recedes). NOT per-loadZone (the warp follows the bloom). */
-  private myceliaWarped = new Set<string>();
   /** Frost-CONVERTED zones whose court packs (+ the Winter King, at the glacial
    *  heart) were already fielded this visit — one muster per visit; cleared per
    *  loadZone. The march/thaw is owned by the pure DeepwinterField overlay
@@ -2699,7 +2705,7 @@ export class World {
    *  heart come out winter country). Reconciled beside the zone warps. */
   private deepwinterEyeWarped = false;
   /** Converted LONG NIGHT estates currently warping the biome field toward
-   *  the gloam (mirrors myceliaWarped — reconciled each tick against
+   *  the gloam (mirrors deepwinterWarped — reconciled each tick against
    *  longNightField.convertedZones(); a reclaim lifts the warp). */
   private longNightWarped = new Set<string>();
   /** Zones whose Holdfast gate + wardens were already raised this visit (one per
@@ -16992,10 +16998,18 @@ export class World {
     // DISCOVERY — being caught in an infected zone surfaces the Vault tuning (one-shot
     // per outbreak), exactly like the Deadwake / Migration "you've been caught" bump.
     if (cf.markDiscovered(def.id)) bumpLedger(this.ledger, 'contagion_seen');
+    // THE KIN-BORNE SEAM (Movement II): a VISIT births one more carrier here —
+    // the bodies infected on this ground spread onward on their own after
+    // infection (capped by the surge; a curing outbreak births none).
+    cf.seedCarrierAt(def.id);
     const cfg = cf.surge();
+    const strain = strainOf(info.strain);
     const lvl = Math.max(1, def.level);
     const roster = FACTIONS[cfg.faction];
     // The diseased: pack COUNT scales with intensity (denser nearer the source).
+    // Every fielded body wears the outbreak's STRAIN — the Plaguebound court IS
+    // the infection (the SYMPTOMS re-flavor: mycelia's packs are an attackable
+    // network, the plague's are the sickness worn on bodies).
     if (roster?.table?.length) {
       const packs = Math.max(1, Math.round(
         cfg.packCount[0] + (cfg.packCount[1] - cfg.packCount[0]) * clamp(info.intensity, 0, 1)));
@@ -17009,6 +17023,7 @@ export class World {
           m.tag = 'contagion';
           m.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), m.radius);
           this.actors.push(m);
+          if (strain && !info.curing) this.infectActorWith(m, strain);
         }
       }
     }
@@ -17026,8 +17041,83 @@ export class World {
         `${boss.name} festers here — cut out the source!`, cfg.color, 18);
     } else if (roster?.table?.length) {
       this.text(vec(this.player.pos.x, this.player.pos.y - 80),
-        'The air here is thick with rot…', cfg.color, 15);
+        strain?.arrive ?? 'The air here is thick with rot…', cfg.color, 15);
     }
+  }
+
+  /** THE INFECTION SWEEP (Movement II — the plague as a population-process
+   *  living on KIN): while the standing zone is infected and the source
+   *  stands, the outbreak's strain is WORN — the Plaguebound court always,
+   *  plus a FATED SHARE of the zone's own breathing kin (a draw-free hash of
+   *  actor id × zone, so the world's seeded streams never move for it — the
+   *  absent==identical law). Worn marks pulse-refresh on the sweep (the
+   *  quickborn idiom); the moment the outbreak turns to CURING (Patient Zero
+   *  slain, or the source eaten by an anchored claim) the refresh stops and
+   *  the STRAIN STATUS'S OWN DURATION is the body-wane clock — standing
+   *  infected shamble it out and recover whole. THE REVERT PASS runs first
+   *  and unconditionally (the watch-change idiom): a body no longer wearing
+   *  any strain gets its prior watch back byte-exact, and despawned ids drop
+   *  from the ledger. Dormant sleepers are spared (the sentry law); Patient
+   *  Zero is untouched (its identity is Movement III's ground). */
+  private updateContagionInfection(): void {
+    const cf = this.sim.contagionField;
+    if (!cf && this.contagionLeans.size === 0) return;
+    if (this.time < this.contagionSweepAt) return;
+    const cfg = cf?.surge();
+    this.contagionSweepAt = this.time + (cfg?.infection.sweepSec ?? 1.2);
+    for (const [id, prior] of this.contagionLeans) {
+      const a = this.actorById(id);
+      if (!a || a.dead) { this.contagionLeans.delete(id); continue; }
+      if (!a.statuses.some(s => strainByStatus(s.id))) {
+        a.watch = prior.watch;
+        this.contagionLeans.delete(id);
+      }
+    }
+    if (!cf || !cfg) return;
+    const info = cf.contagionOn(this.zone.id);
+    if (!info || info.curing) return;
+    const strain = strainOf(info.strain);
+    if (!strain || !STATUS_DEFS[strain.statusId]) return;
+    const fr = cfg.infection.frac;
+    const frac = fr[0] + (fr[1] - fr[0]) * clamp(info.intensity, 0, 1);
+    let zh = 0;
+    for (let i = 0; i < this.zone.id.length; i++) zh = (zh * 31 + this.zone.id.charCodeAt(i)) | 0;
+    const fated = (aid: number): boolean => {
+      let h = Math.imul(aid, 2654435761) ^ zh;
+      h ^= h >>> 13; h = Math.imul(h, 1597334677); h ^= h >>> 16;
+      return ((h >>> 0) % 1000) / 1000 < frac;
+    };
+    for (const a of this.actors) {
+      if (a.dead || a.team !== 'enemy' || a.owner !== undefined || a.passive) continue;
+      if (a.tag === 'patient_zero') continue;
+      if (isDormant(a)) continue;
+      if (a.faction !== cfg.faction) {
+        if (!a.breathes) continue; // the plague takes the LIVING (MATERIAL_NATURE)
+        if (!fated(a.id)) continue;
+      }
+      this.infectActorWith(a, strain);
+    }
+  }
+
+  /** Take one body for the plague: the strain status (the buff, the press,
+   *  the worn look — all on the status row) plus THE ZOMBIE LEAN's watch
+   *  half — the authored ladder's rise slowed by the surge's dullMul, and a
+   *  ladder IMPOSED where none stood (the slow stare; unprovoked locks now
+   *  climb, pain still bypasses — the watch fabric's own law; the fan stays
+   *  hidden by the fan default). The prior spec lands in the ledger FIRST,
+   *  so the revert is byte-exact by construction. Re-taking a taken body
+   *  just refreshes the mark (the status system's re-apply law). */
+  private infectActorWith(a: Actor, strain: StrainDef): void {
+    const cfg = this.sim.contagionField?.surge();
+    if (!cfg || !STATUS_DEFS[strain.statusId]) return;
+    if (!this.contagionLeans.has(a.id)) {
+      this.contagionLeans.set(a.id, { watch: a.watch });
+      a.watch = {
+        ...(a.watch ?? {}),
+        riseSec: (a.watch?.riseSec ?? WATCH_CFG.riseSec) * cfg.infection.dullMul,
+      };
+    }
+    a.applyStatus(strain.statusId, 0, 1, 'the contagion');
   }
 
   // ------------------------------------------------------- deepwinter materialize
@@ -17393,11 +17483,14 @@ export class World {
 
   // ------------------------------------------------------- mycelia bloom
   //
-  // A Mycelia bloom is a mobile, event-fed spore-density INFLUENCE owned by the pure
-  // MyceliaField overlay. The engine fields its fungal hordes in a spore-laced zone (pouring
-  // from the exit FACING the core — the directional creep), raises the Heartbloom at the
-  // core, feeds the overlay per-zone event activity, suppresses events via eventDensityFor,
-  // warps saturated biomes, and culls density when the fungal are slain.
+  // A Mycelia bloom is an ANCHORED place-network (the spore front) owned by the pure
+  // MyceliaField overlay: claims grow as a TREE from the home-biome foundation, and the
+  // home never relocates. The engine fields its fungal hordes in a claimed zone (pouring
+  // from the exit FACING the foundation — the directional creep), raises the Heartbloom
+  // at the home, feeds the overlay per-zone event activity, suppresses events via
+  // eventDensityFor, and culls claims as the fungal are slain. It transforms NO biome
+  // (the never-warps law — the loud read is the EXPRESSION: sporefall weather + evap
+  // dress + spawn seasoning, transient by construction).
 
   /** Field the fungal horde in a spore-laced zone (count scales with density), pouring from
    *  the exit toward the core, plus the Heartbloom at the core. One muster per visit (guarded
@@ -17486,27 +17579,16 @@ export class World {
     return a;
   }
 
-  /** Reconcile the BiomeField warps the bloom owns against the zones it has saturated:
-   *  add a transient 'mycelia' warp as a zone saturates, remove it as the bloom recedes —
-   *  so the biome transform FOLLOWS the influence (and lifts when culled back). */
-  private reconcileMyceliaWarps(): void {
-    const bf = this.sim.biomeField;
-    const mf = this.sim.myceliaField;
-    if (mf?.consumePushedBack()) bumpLedger(this.ledger, 'mycelia_pushed'); // pushed back to dormant
-    const want = new Set<string>(mf ? mf.transformedZones() : []);
-    const wcfg = mf?.surge();
-    for (const zid of want) {
-      if (this.myceliaWarped.has(zid)) continue;
-      const z = this.zoneMap[zid];
-      if (!z || !wcfg) continue;
-      bf.setWarp(`mycelia:${zid}`, { id: `mycelia:${zid}`, center: { x: z.map.x, y: z.map.y }, radius: wcfg.warp.radius, biome: wcfg.homeBiome, strength: wcfg.warp.strength });
-      this.myceliaWarped.add(zid);
-    }
-    for (const zid of [...this.myceliaWarped]) {
-      if (want.has(zid)) continue;
-      bf.unwarp(`mycelia:${zid}`);
-      this.myceliaWarped.delete(zid);
-    }
+  /** Drain the Mycelia bloom's one-shot news to the account ledger (pushed
+   *  back to dormant — the player's containment win). The warp reconcile
+   *  this method once carried is GONE with the spore front's never-warps
+   *  law (Movement I): the anchored network transforms no biome
+   *  (transformedZones() is [] by construction), BiomeField warps are
+   *  runtime-only and never serialized (WorldStateSave carries no warp
+   *  field — verified 2026-08-06), so no pushed save can deliver a stale
+   *  mycelia warp for a heal to catch. */
+  private drainMyceliaLedger(): void {
+    if (this.sim.myceliaField?.consumePushedBack()) bumpLedger(this.ledger, 'mycelia_pushed');
   }
 
   /** Reconcile the BiomeField warps the frost front owns against the ground it
@@ -18930,7 +19012,7 @@ export class World {
   /** Reconcile the BiomeField warps the Court owns against its converted
    *  estates: a zone that converts warps toward the gloam (attributed on the
    *  map — never a silent recolor), a reclaimed one lifts. Mirrors
-   *  reconcileMyceliaWarps — the transform FOLLOWS the ledger. */
+   *  reconcileDeepwinter — the transform FOLLOWS the ledger. */
   private reconcileLongNightWarps(): void {
     const lnf = this.sim.longNightField;
     if (!lnf) return;
@@ -39537,7 +39619,8 @@ export class World {
     this.updateWebSettle();
     // THE OMENS: the world murmurs about what waits unfound (world/omens.ts).
     this.updateOmens();
-    this.reconcileMyceliaWarps();
+    this.drainMyceliaLedger();
+    this.updateContagionInfection();
     this.reconcileDeepwinter();
     this.updateStorm(dt);
     this.updateDemonStorm(dt);

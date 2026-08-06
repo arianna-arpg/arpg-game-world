@@ -1417,6 +1417,18 @@ function scoreTarget(
   }
 }
 
+/** The effective attention window: the brain's authored span vs any worn
+ *  FICKLE window (StatusDef.fickleSpan) — SHORTEST WINDOW WINS, compared by
+ *  the window's endpoint sum (a fickle mind can only get worse, never
+ *  steadier). Undefined when neither speaks (no gate at all). */
+function attendSpanOf(
+  per: [number, number] | undefined, fickle: [number, number] | undefined,
+): [number, number] | undefined {
+  if (!per) return fickle;
+  if (!fickle) return per;
+  return fickle[0] + fickle[1] < per[0] + per[1] ? fickle : per;
+}
+
 function acquireTarget(
   actor: Actor, world: World, tuning: BrainTuning,
 ): { target: Actor | null; d: number } {
@@ -1428,13 +1440,24 @@ function acquireTarget(
   const per = tuning.perception;
   // ATTENTION SPAN (dim brains): the lock LAPSES — forget the target and
   // stumble into a short daze. A landed hit since the daze began snaps the
-  // actor out of it (pain is a great teacher, briefly).
-  if (per?.attentionSpan && actor.aiTargetId !== undefined
-    && world.time >= actor.aiAttendUntil) {
-    actor.aiTargetId = undefined;
-    actor.aggroed = false;
-    actor.aiDazeFrom = world.time;
-    actor.aiDazeUntil = world.time + rand(1.5, 3);
+  // actor out of it (pain is a great teacher, briefly). A worn FICKLE
+  // window (StatusDef.fickleSpan — the adrenal strain) folds in at
+  // SHORTEST WINDOW WINS; landing MID-LOCK it ARMS the un-stamped clock
+  // instead of lapsing on the spot (the infection staggers the mind, it
+  // doesn't blink it).
+  {
+    const span = attendSpanOf(per?.attentionSpan, actor.fickleSpan());
+    if (span && actor.aiTargetId !== undefined) {
+      if (actor.aiAttendUntil <= 0 && !per?.attentionSpan) {
+        actor.aiAttendUntil = world.time + rand(span[0], span[1]);
+      } else if (world.time >= actor.aiAttendUntil) {
+        actor.aiTargetId = undefined;
+        actor.aggroed = false;
+        actor.aiAttendUntil = 0; // consumed — a later lock re-arms, never inherits
+        actor.aiDazeFrom = world.time;
+        actor.aiDazeUntil = world.time + rand(1.5, 3);
+      }
+    }
   }
   if (actor.aiDazeUntil > world.time && actor.lastCombatAt >= actor.aiDazeFrom) {
     actor.aiDazeUntil = 0; // re-stimulated: the haze lifts
@@ -1668,9 +1691,11 @@ function acquireTarget(
         const react = tuning.behavior?.reaction;
         if (react) actor.aiReactAt = world.time + rand(react[0], react[1]);
       }
-      // Dim brains roll how long this lock can HOLD their attention.
-      if (per?.attentionSpan) {
-        actor.aiAttendUntil = world.time + rand(per.attentionSpan[0], per.attentionSpan[1]);
+      // Dim brains roll how long this lock can HOLD their attention — a
+      // worn FICKLE window (StatusDef.fickleSpan) folds in, shortest wins.
+      const attendSpan = attendSpanOf(per?.attentionSpan, actor.fickleSpan());
+      if (attendSpan) {
+        actor.aiAttendUntil = world.time + rand(attendSpan[0], attendSpan[1]);
       }
       const shout = tuning.perception?.alertShout;
       if (shout) {
@@ -2273,7 +2298,11 @@ function retreatMove(actor: Actor, world: World, dx: number, dy: number, dt: num
   // a statue must not float 'winded!'), so every retreat consumer reads
   // the truth and falls through to its standing conduct — for artillery,
   // the plant-and-fire promise below.
-  if (actor.anchored || actor.partLink || actor.sheet.get('moveSpeed') <= 0) return false;
+  // THE PRESS rides the same instant refusal (StatusDef.neverRetreats — the
+  // contagion's zombie lean): a pressed body never backs up and never tires
+  // of it, so no winded theater either — it just keeps coming.
+  if (actor.anchored || actor.partLink || actor.sheet.get('moveSpeed') <= 0
+    || actor.neverRetreats()) return false;
   if (actor.aiWindedUntil > world.time) return false; // the legs gave out
   const ks = actor.aiKiteSpec;
   if (ks && dt > 0) {

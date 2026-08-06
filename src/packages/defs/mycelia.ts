@@ -54,10 +54,6 @@ const MYCELIA_SURGE: MyceliaSurge = {
   recedeInterval: 4,      // a ring retracts every 4s during the collapse
   suppressPerDensity: 0.7, // grip 1 → that zone's events drop to 0.3×
   suppressFloor: 0.2,
-  // VESTIGIAL — the anchored network never warps the land (transformedZones()
-  // is empty by law); the field stands only for world.ts' reconcile types
-  // until its removal hunk lands (mycelia-front pass coda).
-  warp: { radius: 70, strength: 0.85 },
   homeBiome: 'mycelia',
   faction: 'fungal',
   // The crown is EARNED at zone level 6 (the repo's earliest crowned floor —

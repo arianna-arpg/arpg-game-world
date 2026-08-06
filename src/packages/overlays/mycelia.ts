@@ -80,11 +80,6 @@ export interface MyceliaSurge {
   /** How hard a claim's grip smothers a zone's events (1 − grip×this, floored). */
   suppressPerDensity: number;
   suppressFloor: number;
-  /** VESTIGIAL (the anchored network NEVER warps the land — the biome does not
-   *  change or shift; transformedZones() is empty by law). Kept only because
-   *  world.ts' reconcileMyceliaWarps still types against it until its removal
-   *  hunk lands — see the mycelia-front pass coda. */
-  warp: { radius: number; strength: number };
   /** The biome this network is anchored in (a 2nd influence-biome reuses this
    *  overlay as pure data). Defaults to 'mycelia'. */
   homeBiome: string;
@@ -352,8 +347,9 @@ export class MyceliaField implements WorldOverlay {
 
   /** EMPTY BY LAW — the anchored network never warps the land (the biome does
    *  not change or shift; the EXPRESSION is the loud read instead). The method
-   *  stands so world.ts' reconcile heals any legacy warp set to nothing on its
-   *  first tick; its removal hunk is deferred (mycelia-front pass coda). */
+   *  stands as the law's own probe-pinned witness (probe_myceliafront A8/E12/
+   *  F2); the old world.ts warp reconcile is gone (Movement II's cleanup —
+   *  warps are runtime-only, so no save could carry one to heal). */
   transformedZones(): string[] { return []; }
 
   /** The claims + their neighbours + the home + its neighbours — the only zones

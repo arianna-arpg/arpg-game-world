@@ -10,7 +10,7 @@ import { instanceChargeCost, instanceMeta, instanceMods, instanceStrikeTiming, i
 import { ITEM_RARITIES } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { ESSENCES } from '../data/essences';
-import { STATUS_DEFS } from '../engine/status';
+import { STATUS_DEFS, type StatusDef } from '../engine/status';
 import { toneTint } from '../engine/tuning';
 import { STANCE_PLANT_TIME, shellArcFactor, type Actor } from '../engine/actor';
 import { throngSightSet } from '../engine/throng';
@@ -4289,6 +4289,9 @@ export class Renderer {
     // co-op clients read them too. The LOCAL hero keeps their struggle
     // meter even unseen: swallowed is a predicament, not a blackout.
     let statusGhost = 1;
+    // WORN BODY FX (StatusDef.bodyFx — the contagion's visible-infection law)
+    // collected in the same pass: the first declaring status dresses the body.
+    let bodyFx: StatusDef['bodyFx'];
     for (const s of a.statuses) {
       const sd = STATUS_DEFS[s.id];
       if (sd?.conceals) {
@@ -4298,6 +4301,7 @@ export class Renderer {
       if (sd?.ghostAlpha !== undefined && sd.ghostAlpha < statusGhost) {
         statusGhost = sd.ghostAlpha;
       }
+      if (sd?.bodyFx && !bodyFx) bodyFx = sd.bodyFx;
     }
 
     // THE TIER FABRIC (engine/tiers.ts), COVERED exposure: the other layer
@@ -4551,6 +4555,49 @@ export class Renderer {
         ctx.beginPath();
         ctx.arc(0, 0, a.radius + 2, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.globalAlpha = baseAlpha;
+      }
+    }
+
+    // WORN BODY FX (StatusDef.bodyFx — the visible-infection law: a changed
+    // body must LOOK changed): the enshrouding under-light plus a mote skin —
+    // 'fume' wisps rising off the shoulders (the miasma), 'bubbles' crawling
+    // the rim to a pop (the adrenal froth). All phases derive from the sim
+    // clock + the actor id (no render-side rng — the beatless doctrine), and
+    // co-op clients resolve the same rows from their own status registry.
+    if (bodyFx) {
+      const t = world.time, seed = a.id * 0.7;
+      if (bodyFx.glow) {
+        const breathe = 0.8 + 0.2 * Math.sin(t * 2.4 + seed);
+        drawGlow(ctx, 0, a.radius * 0.25, a.radius * (bodyFx.glowScale ?? 1.9),
+          bodyFx.glow, Math.min(baseAlpha, (bodyFx.glowAlpha ?? 0.22) * breathe));
+      }
+      if (bodyFx.motes) {
+        ctx.fillStyle = bodyFx.moteColor ?? bodyFx.glow ?? '#8fd24a';
+        if (bodyFx.motes === 'fume') {
+          // Wisps: born near the crown, rising, thinning, looping.
+          for (let i = 0; i < 3; i++) {
+            const cyc = t * 0.45 + i * 0.37 + seed;
+            const ph = ((cyc % 1) + 1) % 1;
+            const wob = Math.sin(t * 2.2 + i * 1.9 + seed) * 3;
+            ctx.globalAlpha = Math.min(baseAlpha, 0.34 * (1 - ph));
+            ctx.beginPath();
+            ctx.arc(Math.cos(seed + i * 2.1 + Math.floor(cyc) * 1.7) * a.radius * 0.6 + wob,
+              -a.radius * 0.3 - ph * (a.radius + 14), 2.2 + 2.6 * ph, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          // Bubbles: orbiting the rim, swelling to a pop at the loop's end.
+          for (let i = 0; i < 4; i++) {
+            const ph = (((t * 0.8 + i * 0.29 + seed) % 1) + 1) % 1;
+            const ang = seed + i * 1.6 + t * 1.1;
+            const r = a.radius + 3 + ph * 4;
+            ctx.globalAlpha = Math.min(baseAlpha, 0.4 * (ph < 0.85 ? 1 : (1 - ph) / 0.15));
+            ctx.beginPath();
+            ctx.arc(Math.cos(ang) * r, Math.sin(ang) * r * 0.8, 1.6 + 2 * ph, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
         ctx.globalAlpha = baseAlpha;
       }
     }
