@@ -200,7 +200,13 @@ check('A: at the unlock level the ordinary roll seats wild camps', armedAt30.len
 
   // Hires strike rows FOR GOOD — spend the whole sheet (hire → dismiss →
   // hire…), then prove sold-out stays sold-out across re-entry and save.
-  w30.account.credits = 999999;
+  // THE MORTAL EXCHANGE (mercstrike 2026-08-05): the Reckoning (48fce6f +
+  // ee19b41, 08-03) re-priced hiring into CARRIED ESSENCE — templates
+  // against the seat's mortal value, veterans in the Brilliant tint
+  // (MERC_CFG.retiredTint). The rigs now fund the wallet the hire actually
+  // reads (account.credits is not that wallet); every assertion is
+  // untouched — only the funding moved with the economy.
+  w30.grantEssence(w30.localSeat, { essence: 'coarse', count: 100000 });
   const dealt = w30.mercOutpost!.offers.length;
   let hires = 0;
   for (let guard = 0; guard < 24 && w30.mercOutpost!.offers.length; guard++) {
@@ -271,7 +277,8 @@ check('A: at the unlock level the ordinary roll seats wild camps', armedAt30.len
 
     // Released: the same locked row hires, engages to THIS patron, strikes.
     delete r.engagedBy;
-    wV.account.credits = 999999;
+    // The veteran's coin rides the TINTED lane (mercstrike 2026-08-05).
+    wV.grantEssence(wV.localSeat, { essence: MERC_CFG.retiredTint ?? 'brilliant', count: 2000 });
     check('B2: the released veteran hires off the same locked row',
       wV.hireMercenary(vetIdx) === true && r.engagedBy === 'probe_patron'
       && wV.mercOutpost!.offers.length === before - 1);
@@ -356,7 +363,10 @@ check('A: at the unlock level the ordinary roll seats wild camps', armedAt30.len
         check('C: the port sheet outlives the clock (the reroll window is dead)',
           sheetKey(w.mercOutpost?.offers ?? []) === sheet1);
         const cost = w.mercOutpost ? w.mercHireCost(w.mercOutpost.offers[0]) : 0;
-        w.account.credits = cost;
+        // Exact funding kept in the new coin (mercstrike 2026-08-05): the
+        // port sheet is template-only → the wallet lane; coarse is worth 1,
+        // so count === cost is value-exact.
+        w.grantEssence(w.localSeat, { essence: 'coarse', count: cost });
         const hired = w.hireMercenary(0);
         w.loadZone(az.id);
         w.loadZone(pz.id);
@@ -410,7 +420,7 @@ check('A: at the unlock level the ordinary roll seats wild camps', armedAt30.len
       sheetKey(w.mercOutpost?.offers ?? []) === sheet1);
 
     // A hire strikes a row for good — and the SAVE carries the spent state.
-    w.account.credits = 999999;
+    w.grantEssence(w.localSeat, { essence: 'coarse', count: 100000 }); // (mercstrike 2026-08-05)
     const before = w.mercOutpost!.offers.length;
     const hired = w.hireMercenary(0);
     check('D: hiring at the table rides the one pipeline and strikes the row',
