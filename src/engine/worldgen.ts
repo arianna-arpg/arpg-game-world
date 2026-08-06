@@ -167,6 +167,13 @@ export interface ZoneSpec {
    *  a pocket FORM mints its deliberately small hollow through the same
    *  roller (same draw count, so spec-less mints stay byte-identical). */
   sizeBand?: { w: [number, number]; h: [number, number] };
+  /** BOUNDARY-SILHOUETTE override: force 'rect' or 'ellipse' regardless of
+   *  the tileset's ellipseChance roll. The chance draw is still SPENT (the
+   *  sizeBand law: overrides swap values, never draws), so spec-less mints
+   *  stay byte-identical. Ports author 'rect' — the harborcove's quay carve
+   *  is rect-oriented and diagonal ocean bearings otherwise project the
+   *  formula seat (her ruling 2026-08-05, the rim audit's report). */
+  shape?: import('../world/shape').ZoneShape;
   /** OBJECTIVE-ROLL filter: when `objective` is absent, only these kinds may
    *  come up from the tileset's own weights (a dead-end pocket bans arena
    *  modes that want room or a way onward). An emptied pool degrades to
@@ -1270,7 +1277,8 @@ export function placeZoneAt(
   // Roll a varied footprint: an independent width and an ASPECT class. A
   // sizeBand spec (a pocket form's deliberate hollow) swaps the bands under
   // the SAME two draws — spec-less mints keep every stream byte-identical.
-  const shape = genRng.chance(tileset.ellipseChance ?? 0) ? 'ellipse' as const : 'rect' as const;
+  const rolledShape = genRng.chance(tileset.ellipseChance ?? 0) ? 'ellipse' as const : 'rect' as const;
+  const shape = spec.shape ?? rolledShape;
   const aspect = genRng.pick([1, 1, 0.64, 1.55, 0.78, 1.32]);
   const bandW = spec.sizeBand?.w ?? tileset.sizeW;
   const bandH = spec.sizeBand?.h ?? tileset.sizeH;

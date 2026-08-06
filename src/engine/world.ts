@@ -9109,6 +9109,7 @@ export class World {
           biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor,
           fieldBiome: true, port: true,
           kind: 'port',                 // sealed shores bind INSIDE the mint (the weave already honors it)
+          shape: 'rect',                // her ruling 2026-08-05: the quay carve is rect-oriented — no ellipse ports
           layoutType: HARBORCOVE_LAYOUT,
           layoutParams: { quayFacing: Math.atan2(ly, lx) },
           sizeBand: { w: P.sizeW, h: P.sizeH },
