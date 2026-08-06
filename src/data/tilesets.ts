@@ -87,6 +87,42 @@ export interface TilesetVariant {
    *  theme retunes its colors: the prism face weights its span table
    *  toward rainbows without a sibling tileset. Absent = byte-identical. */
   layoutParams?: Record<string, unknown>;
+  /** THE FACE WEIGHT: this face's share of the variant roll, folded by
+   *  pickTilesetVariant below — the ONE resolver every variant-roll site
+   *  consults (the surface mint and both mintCave variant lanes). Absent = 1.
+   *  THE COLD-LEVER LAW: with EVERY weight on the list absent, the roll is
+   *  byte-identical to the historical uniform pick (same single draw, same
+   *  index mapping — no pinned-seed mint can shift until a weight is
+   *  authored); the first authored weight switches the whole list to the
+   *  weighted law. 0 = structurally unrollable (the slot-graft idiom). */
+  weight?: number;
+}
+
+/** ONE fold for every variant-roll site (placeZoneAt's surface face pick,
+ *  mintCave's rollVariant and face-rolled lanes — the caveFaceBiomeW
+ *  pattern): pick a face honoring TilesetVariant.weight. Exactly ONE draw
+ *  burns on every path, and the all-weights-absent branch IS the legacy
+ *  uniform mapping textually (floor(u × n) on that same die — Rng.pick's
+ *  own math, so absence stays byte-identical by construction rather than
+ *  by float luck). Negative weights clamp to 0 (never rollable); a
+ *  degenerate all-zero list falls back to the uniform mapping rather than
+ *  wedge the mint chain. */
+export function pickTilesetVariant(
+  rng: { next(): number }, variants: readonly TilesetVariant[],
+): TilesetVariant {
+  const u = rng.next(); // THE ONE DRAW — burned identically on every path
+  let total = 0, weighted = false;
+  for (const v of variants) {
+    if (v.weight !== undefined) weighted = true;
+    total += Math.max(0, v.weight ?? 1);
+  }
+  if (!weighted || total <= 0) return variants[Math.floor(u * variants.length)];
+  let x = u * total;
+  for (const v of variants) {
+    x -= Math.max(0, v.weight ?? 1);
+    if (x < 0) return v;
+  }
+  return variants[variants.length - 1];
 }
 
 export interface TilesetDef {

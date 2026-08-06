@@ -11,7 +11,7 @@
 import { clamp } from '../core/math';
 import { Rng, rollSeed } from '../core/rng';
 import { WAR_PAIRS } from '../data/monsters';
-import { TILESETS, pickCaveFace, pickDockTileset, pickTilesetForBiome, type TilesetDef, type TilesetVariant } from '../data/tilesets';
+import { TILESETS, pickCaveFace, pickDockTileset, pickTilesetForBiome, pickTilesetVariant, type TilesetDef, type TilesetVariant } from '../data/tilesets';
 import { hasLayout } from './levelgen';
 import { registerGenPin } from './genPins';
 import { lairLandmarkRolls } from './lairs';
@@ -1081,11 +1081,13 @@ export function placeZoneAt(
   if (tileset.variants && tileset.variants.length) {
     // A NAMED face (spec.variant — perf-gate pins, dev mints) skips the roll;
     // the spec-less stream stays byte-identical. Unknown names warn and roll.
+    // The roll itself is pickTilesetVariant — TilesetVariant.weight honored,
+    // all-weights-absent byte-identical to the old uniform pick.
     const forced = spec.variant ? tileset.variants.find(x => x.name === spec.variant) : undefined;
     if (spec.variant && !forced) {
       console.warn(`[worldgen] mint '${spec.id ?? `gen_${genIndex}`}': tileset '${tileset.id}' has no variant '${spec.variant}' — rolling`);
     }
-    const v = forced ?? genRng.pick(tileset.variants);
+    const v = forced ?? pickTilesetVariant(genRng, tileset.variants);
     variantName = v.name;
     layout = v.layout;
     variantTheme = v.theme; // a face may RECOLOR itself (merged over base below)
@@ -1731,10 +1733,14 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     if (v) wearVariant(v);
     else console.warn(`[worldgen] mintCave '${id}': tileset '${ts.id}' has no variant '${opts.variant}' — base layout`);
   } else if (opts?.rollVariant && ts.variants?.length) {
-    wearVariant(rng.pick(ts.variants));
+    // Both rolled lanes fold TilesetVariant.weight via pickTilesetVariant —
+    // the surface mint's own law, so a country's authored face shares hold
+    // whether the face is dealt above ground or down its ladder (all
+    // weights absent = the old uniform pick, byte-identical).
+    wearVariant(pickTilesetVariant(rng, ts.variants));
   } else if (faceRolled && ts.variants?.length
     && faceRng.chance(ts.caveFace?.variantChance ?? 0)) {
-    wearVariant(faceRng.pick(ts.variants));
+    wearVariant(pickTilesetVariant(faceRng, ts.variants));
   }
   // COMMON rows ride along whichever face rolled — the brittle-kit doctrine
   // (what the biome always IS must not vanish when a face is chosen) now

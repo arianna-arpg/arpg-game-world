@@ -38,6 +38,10 @@
 //              can never be met (kelp with no water poured before it)
 //   caveSeeds  the cave_entrance ↔ caveSeeds index zip holds
 //   reachable  on walk-grid layouts, every exit shares the entry's component
+//   deadface   no surface-pooled tileset with variants carries a base-layout
+//              kind absent from every variant + common layout (warn) — the
+//              dead-base-face class that silently killed 42 plain faces
+//              (deadBaseFaceKinds, shared with probe_deadface's own sweep)
 //   doors      placed doors keep walkable floor on BOTH sides (warn)
 //   fuse       poured bodies never sit a sliver apart (warn) — contiguity read
 //              off RIM OVERLAP, and a seam another poured ground overlay
@@ -98,6 +102,7 @@ import { hollowDef, hollowShapeOf } from '../src/data/hollows';
 import { BIOMES, isAquaticBiome } from '../src/world/biomes';
 import { CLIMATE_AXES } from '../src/world/climate';
 import { interiorRoleDefs } from '../src/engine/interiorGen';
+import { deadBaseFaceKinds } from './deadface_check';
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -666,6 +671,25 @@ const registryErrors = [
         ...(!hasBlendField(roll.field.kind) ? [`tileset ${t.id}${tag}: unregistered blend field '${roll.field.kind}'`] : []),
       ])),
 ];
+
+// --- 1b. THE DEAD-FACE WARN (static, over the authored table) ---------------
+// A surface-pooled tileset with variants deals ONLY variants at every surface
+// mint, so a base-layout kind absent from every variant + common layout can
+// never stand in the world — the class that silently killed 42 plain faces
+// before PLAIN_FACES restated them. Warn, not fail: the heal is an authoring
+// decision (join PLAIN_FACES, or hoist the kind into common/a face), and the
+// adjudication ledger for deliberate exceptions lives in probe_deadface,
+// which cross-checks this same predicate (deadBaseFaceKinds — one law, two
+// witnesses).
+if (!FILTER || 'deadface'.includes(FILTER)) {
+  const warns = Object.values(TILESETS).flatMap(t => {
+    const dead = deadBaseFaceKinds(t);
+    return dead.length
+      ? [`tileset ${t.id}: base-only kinds never mint on the surface path — ${dead.join(', ')} (restate the plain face or hoist into common/a variant)`]
+      : [];
+  });
+  results.push({ name: 'deadface:static', seeds: 0, doodads: 0, ms: 0, fails: [], warns });
+}
 
 // --- 2. Every tileset, base + variants --------------------------------------
 for (const ts of Object.values(TILESETS)) {
