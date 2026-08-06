@@ -357,7 +357,11 @@ registerTheaterKind({
     const cart = w.theaterSpawn(run, [{ id: p.cartId, weight: 1 }],
       Math.max(1, w.zone.level), run.primary, run.kind);
     if (cart) {
-      cart.pos = w.clampNear(route.from, 40);
+      // The ward seats at the column's heel, never the road's own end — the
+      // road may BEGIN at the arrival portal, and the lead's seat already
+      // advanced clear of it (THE BOOT-SEAT LAW, engine/theater.ts marchSeat;
+      // hfpocket 2026-08-05).
+      cart.pos = w.clampNear(vec(lead.pos.x, lead.pos.y), 40);
       run.data.cartId = cart.id;
       // The cart walks IN the column's ledger: arrival slips it away with
       // the guards; a dead cart counts as gone like any member.

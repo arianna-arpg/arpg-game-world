@@ -190,8 +190,12 @@ export const THEATER_CFG = {
    *  before the column slips away (must exceed the patrol AI's 40px
    *  waypoint-advance radius, or the lead loops home first); the road
    *  route picker's floor span (px — shorter road networks aren't worth
-   *  a cart's walk) and waypoint stride (px between kept road discs). */
-  march: { arriveDist: 44, roadMinSpan: 700, roadStep: 170 },
+   *  a cart's walk) and waypoint stride (px between kept road discs);
+   *  seatGrace = THE BOOT-SEAT LAW's disc (px from the visit's arrival
+   *  point no column may SEAT inside — spawnPoint's own 450 ambient
+   *  player-distance bar, the one placement law; hfpocket 2026-08-05,
+   *  number flagged). */
+  march: { arriveDist: 44, roadMinSpan: 700, roadStep: 170, seatGrace: 450 },
 };
 
 const KINDS: TheaterKindDef[] = [];
@@ -503,25 +507,66 @@ function runMarches(run: ActiveTheaterRun): MarchState[] {
   return (run.data.marches ??= []) as MarchState[];
 }
 
+/** THE BOOT-SEAT LAW — A MARCH NEVER SEATS ON THE ARRIVAL (hfpocket
+ *  2026-08-05): marchEndpoints legitimately anchors routes at zone portals,
+ *  and a pocket's ONE portal is the arrival itself — seating the clump at
+ *  the route head stood five bodies on the player's boot frame
+ *  (probe_holdfast_pocket's arrival-grace red at f35036c). Advance the SEAT
+ *  along the authored polyline to the first sample clear of the arrival's
+ *  grace disc (march.seatGrace); the WALK keeps the authored line, so the
+ *  column reads as having entered a moment ago. Degrades to the route's
+ *  farthest-from-arrival sample when nothing clears (ground wholly inside
+ *  the disc); a seat landing at the goal simply slips away on its first
+ *  tick — a march that already passed through. Pure geometry, draw-free:
+ *  a route head already clear of the arrival seats byte-identically at
+ *  pts[0]. */
+export function marchSeat(world: World, pts: Vec2[]): { pos: Vec2; nextIdx: number } {
+  const entry = world.zoneEntryPos();
+  const grace = THEATER_CFG.march.seatGrace;
+  const d0 = Math.hypot(pts[0].x - entry.x, pts[0].y - entry.y);
+  if (d0 >= grace) return { pos: vec(pts[0].x, pts[0].y), nextIdx: 1 };
+  const step = 40;
+  let best = { pos: vec(pts[0].x, pts[0].y), nextIdx: 1 };
+  let bestD = d0;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i], b = pts[i + 1];
+    const seg = Math.hypot(b.x - a.x, b.y - a.y);
+    if (seg <= 0) continue;
+    for (let t = step; t <= seg + step; t += step) {
+      const f = Math.min(1, t / seg);
+      const x = a.x + (b.x - a.x) * f;
+      const y = a.y + (b.y - a.y) * f;
+      const d = Math.hypot(x - entry.x, y - entry.y);
+      if (d >= grace) return { pos: vec(x, y), nextIdx: i + 1 };
+      if (d > bestD) { bestD = d; best = { pos: vec(x, y), nextIdx: i + 1 }; }
+      if (f >= 1) break;
+    }
+  }
+  return best;
+}
+
 /** Stand a march up (appends to the run's march ledger — a run may walk
  *  several columns). Returns the lead (null when the pour ledger refuses
- *  even the lead — the beat's seat-gate makes that rare). */
+ *  even the lead — the beat's seat-gate makes that rare). Seats honor THE
+ *  BOOT-SEAT LAW above. */
 export function marchSpawn(world: World, run: ActiveTheaterRun, spec: MarchSpec): Actor | null {
   const tag = spec.tag ?? run.kind;
   const level = spec.level ?? Math.max(1, world.zone.level);
   const lead = world.theaterSpawn(run, spec.leadTable ?? spec.table, level, run.primary, tag);
   if (!lead) { if (!runMarches(run).length) run.done = true; return null; }
-  lead.pos = world.clampNear(spec.from, spec.leadJitter ?? 30);
-  lead.patrolRoute = [vec(spec.from.x, spec.from.y),
+  const pts = [vec(spec.from.x, spec.from.y),
     ...(spec.via ?? []).map(v => vec(v.x, v.y)), vec(spec.to.x, spec.to.y)];
-  lead.patrolIdx = 1; // head for the far side, never back to the entry
+  const seat = marchSeat(world, pts);
+  lead.pos = world.clampNear(seat.pos, spec.leadJitter ?? 30);
+  lead.patrolRoute = pts;
+  lead.patrolIdx = seat.nextIdx; // head onward — never back toward the arrival's leg
   const ids = [lead.id];
   const room = Math.max(0, world.theaterPourRoom(run.def()!, run.row, run.entry));
   const n = run.entry ? spec.followers : Math.min(spec.followers, room);
   for (let i = 0; i < n; i++) {
     const f = world.theaterSpawn(run, spec.table, level, run.primary, tag);
     if (!f) break;
-    f.pos = world.clampNear(spec.from, spec.followJitter ?? 55);
+    f.pos = world.clampNear(seat.pos, spec.followJitter ?? 55);
     f.patrolFollow = lead.id;
     ids.push(f.id);
   }

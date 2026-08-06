@@ -12070,6 +12070,14 @@ export class World {
     return this.clampPos(vec(at.x + rand(-r, r), at.y + rand(-r, r)), 16);
   }
 
+  /** The current visit's ARRIVAL point (the walked portal, or the waypoint
+   *  stone) — the theater march's boot-seat law reads it (engine/theater.ts
+   *  marchSeat: no column seats inside the arrival's grace disc). A copy:
+   *  zoneEntry itself stays private. (hfpocket 2026-08-05) */
+  zoneEntryPos(): Vec2 {
+    return vec(this.zoneEntry.x, this.zoneEntry.y);
+  }
+
   /** Where a caravan starts: well across the zone from the player. */
   farFromExit(): Vec2 {
     return this.farPoint(320);

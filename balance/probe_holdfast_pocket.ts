@@ -241,14 +241,32 @@ for (let s = 0; s < SEEDS; s++) {
     // spawnPoint contract in THIS ground: never the entry stack. Compute the
     // farthest achievable stand, then demand every sample clears the lesser
     // of the classic 450 bar and 45% of what the ground allows.
-    let maxD = 0;
+    // THE HONEST MIRROR (hfpocket 2026-08-05): "what the ground allows" is
+    // what the SAMPLER is permitted to return — walkable AND clear of solids
+    // AND (when plan structures stand) reachable from the entry: exactly
+    // spawnPoint/farthestStand's own ladder (world.ts), incl. the understudy
+    // (reachability that eliminates EVERY stand falls back to walkable +
+    // non-solid). The old walkable-only scan counted unreachable walkable
+    // islands, demanding ground the sampler is FORBIDDEN to use — a mirror
+    // born approximate at 4ce9a25 alongside the sampler itself, surfaced
+    // when an ordinal reshuffle first minted a structure-bearing winding
+    // carve here (seed 511309: honest ceiling 424 vs walkable-only 1295,
+    // every sample correctly pinned 351-423 by farthestStand).
+    const needReach = (w.structures as unknown[]).length > 0;
+    let maxD = 0;      // the sampler's true field
+    let maxDOpen = 0;  // farthestStand's understudy (walkable + non-solid)
     for (let y = 90; y < pocket.size.h - 60; y += 60) {
       for (let x = 90; x < pocket.size.w - 60; x += 60) {
         if (walk && !walk.isWalkable(x, y)) continue;
+        if (w.pointInSolid(x, y, 12)) continue; // spawnPoint(24)'s radius*0.5 gate
         const d = Math.hypot(x - world.player.pos.x, y - world.player.pos.y);
+        if (d > maxDOpen) maxDOpen = d;
+        if (needReach && walk instanceof GridWalkField && walk.reachable
+          && !walk.reachable(entry, { x, y })) continue;
         if (d > maxD) maxD = d;
       }
     }
+    if (maxD <= 0) maxD = maxDOpen;
     const bar = Math.min(450, maxD * 0.45);
     let spawnWorst = Infinity;
     for (let i = 0; i < 24; i++) {
