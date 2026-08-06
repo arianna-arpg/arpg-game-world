@@ -100,7 +100,10 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
   // crypt this ring opens is the real pay.
   grave_exhumation: {
     kind: 'exhumation',
-    label: 'the exhumation',
+    // Her ruling 2026-08-05: the adopted objective NAMES the thing — "this
+    // zone had a lone crypt at one point, find it and unseal it" reads as
+    // lore, not chore. The status line opens with this label.
+    label: 'Break the seal on the lone crypt',
     reward: { gems: 1 },
   },
 };
