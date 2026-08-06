@@ -125,6 +125,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_mimic.ts', status: 'green', tier: 'fast', why: 'THE MIMICRY FABRIC — policy defaults, the explicit allow/deny lane, structural refusals that beat an allow, and the capture path' },
   { probe: 'probe_mireille_lesson.ts', status: 'green', tier: 'fast', why: 'MIREILLE\'S FLASK LESSON — the gift arc end to end, then every way a finished lesson must STAY finished' },
   { probe: 'probe_mount.ts', status: 'green', tier: 'fast', why: 'THE MOUNT FABRIC — the registry weave, seat geometry, the unhorsed beat and the remount rule as pure data' },
+  { probe: 'probe_myceliafront.ts', status: 'green', tier: 'fast', why: 'THE SPORE FRONT (mycelia Movement I) — the anchored claim tree, the fragmentation law, the eased sporefall window through the real skyFront + dress (dissolves whole), the eats-plague seam stub, absent==identical, and legacy mobile-bloom save adoption' },
   { probe: 'probe_mountain.ts', status: 'green', tier: 'fast', why: 'THE MOUNTAIN COUNTRY — the geoAffinity fold (per-range snow lock) and the depthAffinity climb staging' },
   { probe: 'probe_murmuration.ts', status: 'green', tier: 'fast', why: 'THE FLOCKING FABRIC — THE ONE MATH: weaveOffset golden values and weaveVel as the analytic derivative shared with projectiles' },
   { probe: 'probe_nan_hunt.ts', status: 'green', tier: 'slow', why: '~60s (the whole content surface swept): NON-FINITE HUNT — catches the first bad number at the source, the shape of the createRadialGradient crash' },
