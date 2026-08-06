@@ -3261,9 +3261,13 @@ export class World {
     heading: number;
   } | null = null;
   /** Set when a LOSEABLE objective is failed (the procession's cart dies):
-   *  the bounty is forfeit, the HUD says so, and NOTHING locks — losing costs
-   *  the reward, never the road. Rides Zone Memory, so the loss stands until
-   *  the zone's TTL refresh deals fresh ground. */
+   *  the bounty is forfeit and the HUD says so. On OPEN ground nothing
+   *  locks — losing costs the reward, never the road. On SEALED ground
+   *  (THE FORFEIT LAW, her ruling 2026-08-05) the doors STAY barred: the
+   *  seal belongs to the ORIGINAL ask, so a loss forfeits passage for the
+   *  memory's life — isExitLocked stays lost-blind by design. Rides Zone
+   *  Memory, so the loss stands until the zone's TTL refresh deals fresh
+   *  ground (and the re-staged ask re-arms the seal with it). */
   objectiveLost = false;
   /** The OFFERING objective's runtime: which altar hungers (index into
    *  this.altars), how fed it is, how deep the need runs. Zone-local; the
@@ -51485,12 +51489,21 @@ export class World {
   objectiveText(): string {
     const o = this.zone.objective;
     if (o.kind === 'safe') return 'Sanctuary';
-    // A LOST objective reads as lost — and says what losing costs (nothing
-    // but the bounty; the roads never lock).
+    // A LOST objective reads as lost — and says what losing costs. On open
+    // ground: nothing but the bounty, the roads never lock. On SEALED ground
+    // (THE FORFEIT LAW, her ruling 2026-08-05): the seal belongs to the
+    // ORIGINAL ask alone — a loss keeps the doors barred for the memory's
+    // life (the ground forgets, a fresh ask re-stages, the seal re-arms
+    // with it), and no fallback can buy the passage the ask itself
+    // forfeited. The gate needs no lost-awareness: isExitLocked already
+    // reads only the done latch + the seal policy.
     if (this.objectiveLost) {
+      const barred = objectiveSeals(o);
       return o.kind === 'procession'
-        ? 'The caravan was lost — the roads remain open'
-        : 'The objective was lost — the roads remain open';
+        ? (barred ? 'The caravan was lost — the pass stays barred'
+          : 'The caravan was lost — the roads remain open')
+        : (barred ? 'The objective was lost — the roads stay barred'
+          : 'The objective was lost — the roads remain open');
     }
     if (this.objectiveDone) return 'Cleared';
     switch (o.kind) {

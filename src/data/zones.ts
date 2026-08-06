@@ -288,9 +288,22 @@ export const OBJECTIVE_SEALS: Record<ObjectiveSpec['kind'], boolean> = {
   venture: false,
 };
 
+/** Kinds whose ask can END WITHOUT COMPLETION — an explicit fail (the
+ *  venture's slaughtered wardens) or an unanswered guest (the package's
+ *  hand-back): the ask reverts to the bare cull and the zone completes the
+ *  ordinary way. THE FORFEIT LAW (her ruling 2026-08-05) refuses these a
+ *  seal STRUCTURALLY, per-zone `seal: true` included: an ask with a
+ *  fallback must never hold a door, or failing it on purpose and then
+ *  completing the fallback would buy the passage the original ask priced —
+ *  the toll's opportunity cost traded for nothing. A future kind that
+ *  grows a hand-back joins this set the day it does. */
+const FALLBACK_KINDS = new Set<ObjectiveSpec['kind']>(['venture', 'package']);
+
 /** Does this zone's UNMET objective seal its exits? (An endless arena never
- *  seals — there is nothing to finish.) */
+ *  seals — there is nothing to finish; a fallback-bearing ask never seals —
+ *  THE FORFEIT LAW above, override-proof.) */
 export function objectiveSeals(o: ObjectiveSpec): boolean {
+  if (FALLBACK_KINDS.has(o.kind)) return false;
   if (o.kind === 'waves' && o.waves === 0) return false;
   return o.seal ?? OBJECTIVE_SEALS[o.kind];
 }
