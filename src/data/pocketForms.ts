@@ -88,11 +88,17 @@ export function pocketFormOf(id: string | undefined): PocketFormDef {
 // way onward, 'waves' is an arena mode that spawns AT the population's backs
 // (a closet-sized carve put that on the arrival portal). Everything else —
 // including the procession, which already degrades to its roadless far-POI
-// run in a dead end — plays as authored.
+// run in a dead end — plays as authored. The standing kinds a dead end hosts
+// fine all enter at their own tileset weights (the pool is permission, the
+// tileset's rows are the offer): 'puzzle' seats at load on POIs, and the
+// contest-law fixtures ('rifts'/'pyres'/'unearth') place exactly like the
+// beacon. 'leyline' stays banned — worldgen forces that kind's waypoint and
+// pockets are waypointless, so the roll would only degrade to 'clear'.
 registerPocketForm({
   id: 'delve',
   pitch: 'a whole hidden reach lies past the bar: rich ground, and one road home',
-  objectivePool: ['clear', 'spawners', 'bounty', 'offering', 'beacon', 'circuit', 'procession'],
+  objectivePool: ['clear', 'spawners', 'bounty', 'offering', 'beacon', 'circuit', 'procession',
+    'puzzle', 'rifts', 'pyres', 'unearth'],
   packDensity: 1,
 });
 

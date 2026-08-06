@@ -1539,9 +1539,13 @@ const SPEARHEAD: VocationDef = {
           objective: { kind: 'escape', interval: [4, 7] },
           forceWaypoint: true },
         xp: 800, gems: 3, turnInPrompt: 'You walked out the far side. Return to the quartermaster.' },
+      // THE GAUNTLET (ObjectiveTuning.seal's first consumer): an escort you may
+      // not abandon mid-run — every road but the one you came by stays barred
+      // until the column is through (World.isExitLocked honors the per-zone
+      // override; the entry edge is always spared, so failure never strands).
       { offerLabel: 'Escort the relief column through bandit country',
         zone: { tileset: 'grassland', direction: 'w', distance: 2, level: 'character',
-          objective: { kind: 'procession', robbers: [
+          objective: { kind: 'procession', seal: true, robbers: [
             { id: 'bandit_cutthroat', weight: 3 }, { id: 'bandit_bruiser', weight: 2 }, { id: 'bandit_fusilier', weight: 1 } ] },
           forceWaypoint: true },
         xp: 1200, gems: 4, turnInPrompt: 'The column came through whole. Return to the quartermaster.' },

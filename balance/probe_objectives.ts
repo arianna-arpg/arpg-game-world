@@ -55,6 +55,22 @@
 //     the gate held) hands the ask back to the bare cull IN-VISIT — no
 //     completion, no punishment, the zone completable the ordinary way; a
 //     failed gate never re-offers (THE STANDING CONTRACT).
+//   - THE OBJECTIVE LEVERS (RIG X, 2026-08-05 — static half after RIG A, live
+//     half last in the span): the delve pocket's WIDENED objectivePool
+//     (puzzle/rifts/pyres/unearth in, 'leyline' banned — pockets are
+//     waypointless) can really roll (every pool kind weighted somewhere), and
+//     the FIRST `seal: true` zone (the Spearhead's relief column,
+//     data/vocations.ts) provably locks every non-entry road until the column
+//     is through — isExitLocked honors the override, spares the entry edge,
+//     and an untouched procession keeps the kind's own OPEN row.
+//   - THE FORFEIT LAW (RIG X13/X14 + X6b, her ruling 2026-08-05): the seal
+//     belongs to the ORIGINAL ask alone. A LOST sealing objective keeps the
+//     doors barred for the memory's life (the HUD says so — the "roads
+//     remain open" line no longer lies on sealed ground), the entry edge
+//     stays spared, and fallback-bearing kinds (venture/package — asks that
+//     can END without completion) refuse a seal STRUCTURALLY, per-zone
+//     override included: failing an ask on purpose and completing its
+//     fallback must never buy the passage the ask priced.
 // Run: npx tsx balance/probe_objectives.ts
 // ---------------------------------------------------------------------------
 
@@ -79,6 +95,9 @@ import {
   type ContestRecoupSpec,
 } from '../src/data/objectives';
 import { PUZZLES } from '../src/data/puzzles'; // RIG V: puzzleAskRows census pins the preset is real
+import { POCKET_FORMS } from '../src/data/pocketForms'; // RIG X: the delve pool census
+import { VOCATIONS } from '../src/data/vocations';       // RIG X: the authored gauntlet
+import type { ZoneExit } from '../src/engine/world';     // RIG X: the travel-gate face
 import { BEACON_CFG } from '../src/data/beacons';
 import { RIFT_CFG } from '../src/data/rifts';
 import { PYRE_CFG } from '../src/data/pyres';
@@ -131,6 +150,48 @@ const NEW_KINDS = ['leyline', 'rifts', 'pyres', 'unearth'] as const;
   const kinds = new Set<string>([...Object.keys(OBJECTIVE_SEALS), 'circuit']);
   const bad = Object.values(TILESETS).flatMap(t => t.objectives.filter(o => !kinds.has(o.kind)).map(o => `${t.id}:${o.kind}`));
   check('A13 every tileset weight row names a real kind', bad.length === 0, bad.join(','));
+}
+
+// --- RIG X (static half): THE OBJECTIVE LEVERS (2026-08-05) ----------------
+// The delve pocket's widened objectivePool + the authored gauntlet seal —
+// rng-free census here; the live travel-gate half runs LAST in the span
+// below (the seeded-span law: a new rig never shifts an older rig's stream).
+{
+  const pool = POCKET_FORMS.delve.objectivePool ?? [];
+  for (const k of ['puzzle', 'rifts', 'pyres', 'unearth']) {
+    check(`X1 the delve pool names '${k}' (a cul-de-sac hosts it fine)`, pool.includes(k));
+  }
+  check("X2 the delve pool still bans 'leyline' (pockets are waypointless — the roll would only degrade)",
+    !pool.includes('leyline'));
+  const unweighted = pool.filter(k =>
+    !Object.values(TILESETS).some(t => t.objectives.some(o => o.kind === k)));
+  check('X3 every delve-pool kind rides ≥1 tileset weight row (the widened pool can really roll)',
+    unweighted.length === 0, unweighted.join(',') || `${pool.length} kinds all weighted`);
+  // THE GAUNTLET: exactly ONE procession deed carries seal:true — the
+  // Spearhead's relief column — and every other procession stays the kind's
+  // own OPEN row (the untouched control the live half re-tests at the gate).
+  const processions = Object.values(VOCATIONS)
+    .flatMap(v => v.quest.steps.map(s => ({ voc: v.id, o: s.zone.objective })))
+    .filter((r): r is { voc: string; o: ObjectiveSpec } => r.o?.kind === 'procession');
+  const sealed = processions.filter(r => objectiveSeals(r.o));
+  check('X4 exactly ONE authored gauntlet seals (the Spearhead relief column)',
+    sealed.length === 1 && sealed[0].voc === 'spearhead',
+    sealed.map(r => r.voc).join(',') || 'none sealed');
+  check('X5 every other procession deed keeps the kind\'s open row (>1 exists — the control is real)',
+    processions.length > 1
+    && processions.filter(r => r.voc !== 'spearhead').every(r => objectiveSeals(r.o) === false));
+  check('X6 the per-zone seal override wins over the kind row (the zones.ts contract)',
+    objectiveSeals({ kind: 'procession', seal: true }) === true
+    && OBJECTIVE_SEALS.procession === false);
+  // THE FORFEIT LAW (her ruling 2026-08-05): a kind whose ask can end
+  // WITHOUT completion (the venture's fail arm, the package's hand-back)
+  // refuses the seal STRUCTURALLY — even a per-zone seal:true cannot hold
+  // a door with it, or fail-on-purpose + complete-the-fallback would buy
+  // the passage the original ask priced.
+  check('X6b THE FORFEIT LAW: fallback-bearing kinds refuse the seal even against the override',
+    objectiveSeals({ kind: 'venture', venture: 'x', key: 'k', title: 'T', seal: true } as ObjectiveSpec) === false
+    && objectiveSeals({ kind: 'package', seal: true } as unknown as ObjectiveSpec) === false
+    && OBJECTIVE_SEALS.venture === false && OBJECTIVE_SEALS.package === false);
 }
 
 // --- Boot the real engine --------------------------------------------------
@@ -1472,6 +1533,98 @@ withSeededRandom(0x0bec7a, () => {
         info!.resolved === 'open' && info!.locked === false);
       check('W8d the ask COMPLETES down the bloody road (the fabric\'s verdict is the one truth)',
         w.objectiveDone === true && (w.completedObjectives as Set<string>).has(zid));
+      leaveToHome();
+    }
+  }
+
+  // --- RIG X (live half): THE GAUNTLET AT THE GATE (2026-08-05) --------------
+  // The Spearhead's own sealed procession, stamped verbatim on real ground —
+  // isExitLocked must lock every non-entry road while the column is out,
+  // spare the entry edge, and open everything the moment the latch flips.
+  // Runs LAST in the span so no older rig's stream moves (the seeded-span law).
+  {
+    const spear = VOCATIONS.spearhead.quest.steps
+      .map(s => s.zone.objective)
+      .find(o => o?.kind === 'procession');
+    check('X7 the Spearhead deed still authors the sealed procession (the data the rig rides)',
+      spear?.kind === 'procession' && spear.seal === true);
+    const zid = mintWith(JSON.parse(JSON.stringify(spear)) as ObjectiveSpec, 343434, 56);
+    // Holdfast toll gates are their own law (isExitLocked's lock branch) —
+    // the seal rig speaks only for POLICY exits.
+    const liveExits = (): ZoneExit[] =>
+      (w.exits as ZoneExit[]).filter(e => !w.zone.exits[e.defIndex]?.lock);
+    const exits = liveExits();
+    check('X8 the gauntlet stands on real ground (several policy roads to test)',
+      exits.length > 1, `${exits.length} exits, zone ${zid}`);
+    // A teleport-load carries NO entry edge (the waypoint-arrival face the
+    // Spearhead's own boss step already ships): every road seals.
+    check('X9 an entry-edge-less arrival seals every road while the column is out',
+      exits.every(e => w.isExitLocked(e)));
+    // The walked-in face: stamp the door we "came through" — it alone opens.
+    // The gate spares by DESTINATION (e.to !== entryFrom), so every portal
+    // to the entry zone is spared — the rig filters at the same grain.
+    const back = exits.find(e => e.to !== '?');
+    if (back) w.entryFrom = back.to;
+    check('X10 the entry edge is spared; every OTHER road stays barred (the gauntlet reads)',
+      !!back && !w.isExitLocked(back!)
+      && exits.filter(e => e.to !== back!.to).every(e => w.isExitLocked(e)));
+    w.objectiveDone = true;
+    check('X11 the met objective opens every road (the latch is the gate\'s one truth)',
+      liveExits().every(e => !w.isExitLocked(e)));
+    leaveToHome();
+    // The control: an UNTOUCHED procession (the kind's own OPEN row) locks
+    // nothing — even with no entry edge at all.
+    mintWith({ kind: 'procession' }, 353535, 58);
+    check('X12 an unsealed procession keeps every road open (the seal is the zone\'s, never the kind\'s)',
+      liveExits().length > 0 && liveExits().every(e => !w.isExitLocked(e)));
+    leaveToHome();
+
+    // X13 THE FORFEIT LAW, live (her ruling 2026-08-05): the column DIES —
+    // the gauntlet stays barred (the seal belongs to the original ask;
+    // losing never buys the road), the entry edge stays spared, and the
+    // HUD's lost line speaks the barred pass. The memory's TTL refresh is
+    // the retry road: fresh ground re-stages the column, seal re-armed.
+    // Staged on X8's PROVEN 5-road ground (a fresh spread-60 mint drew a
+    // one-road zone — no non-entry roads to test): mintWith's own
+    // stamp/forget/load tail, without the mint.
+    {
+      const def = w.zoneMap[zid] as ZoneDef;
+      def.objective = JSON.parse(JSON.stringify(spear)) as ObjectiveSpec;
+      (w.zoneMemory as Map<string, unknown>).delete(zid);
+      (w.completedObjectives as Set<string>).delete(zid);
+      w.loadZone(zid);
+      const pr = w.procession as { cartId: number | null } | null;
+      const cart = pr?.cartId != null ? w.actorById(pr.cartId) : null;
+      check('X13a the escort staged (the cart stands at the entry)', !!cart && !cart.dead, `zone ${zid}`);
+      if (cart) { w.kill(cart, true); step(0.3); }
+      check('X13b the loss latched (lost, never done)',
+        w.objectiveLost === true && w.objectiveDone === false);
+      const backL = liveExits().find(e => e.to !== '?');
+      if (backL) w.entryFrom = backL.to;
+      // Destination grain, the gate's own (e.to !== entryFrom — X10's law).
+      const others = (): ZoneExit[] => liveExits().filter(e => e.to !== backL!.to);
+      check('X13c the lost gauntlet keeps every non-entry road BARRED (losing never buys the road)',
+        !!backL && others().length > 0 && others().every(e => w.isExitLocked(e)),
+        liveExits().map(e => `${e.to}:${w.isExitLocked(e) ? 'barred' : 'open'}`).join(' '));
+      check('X13d the entry edge stays spared even lost (the walk back is never punished)',
+        !!backL && !w.isExitLocked(backL!));
+      check('X13e the HUD speaks the barred pass (the lost line no longer lies on sealed ground)',
+        String(w.objectiveText()) === 'The caravan was lost — the pass stays barred');
+      leaveToHome();
+    }
+    // X14 the control: an UNSEALED lost escort keeps the legacy words and
+    // the open roads byte-for-byte (open ground: losing costs the reward,
+    // never the road — the standing law untouched).
+    {
+      mintWith({ kind: 'procession' }, 373737, 62);
+      const pr = w.procession as { cartId: number | null } | null;
+      const cart = pr?.cartId != null ? w.actorById(pr.cartId) : null;
+      check('X14a the control escort staged', !!cart && !cart.dead);
+      if (cart) { w.kill(cart, true); step(0.3); }
+      check('X14b an unsealed loss keeps every road open + the legacy line byte-same',
+        w.objectiveLost === true
+        && liveExits().every(e => !w.isExitLocked(e))
+        && String(w.objectiveText()) === 'The caravan was lost — the roads remain open');
       leaveToHome();
     }
   }
