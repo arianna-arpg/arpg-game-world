@@ -186,10 +186,12 @@ the tell: no terrace, no drop).
   only `descend`; the veto protects everywhere). `pitHomeKinds` reads
   `groundInsured` outright — pain, pricing, falls and the veto share the
   one predicate. Pinned in `balance/probe_pathpref.ts`.
-- **Brittle spans over descend pits**: `rotten_bridge` keeps its authored
-  collapse recovery (edge + toll). Routing a span's give-way through the
-  zone's pitfall policy is one data field if a biome ever wants planks that
-  drop you INTO the dark.
+- ~~**Brittle spans over descend pits**~~ — CLOSED: the give-way IS a
+  pit-family fall (`pitPolicyFor`, the ONE resolver — theme.pitfall → the
+  cave default → the span's own word): a `rotten_bridge` popping over a
+  descend gorge drops its riders one stratum exactly as the walked rim
+  does, and with no zone word the span's authored toll (edge + the 12%
+  bite) stands untouched. Pinned in `balance/probe_pitfall.ts` §13.
 
 ## The dev truth layer
 
