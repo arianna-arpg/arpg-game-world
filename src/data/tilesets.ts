@@ -2280,6 +2280,16 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'rime_stone',
+    // THE ICE SLIDE + the cold lattices (batch-35 puzzle wave): side-finds
+    // only — deliberately NO 'puzzle' objective row (the mournstead
+    // precedent: an objective row would shift this table's weighted total
+    // and re-roll every tundra mint). This list is NEW, so no standing roll
+    // moves. ⚠ chances are my numbers, unblessed.
+    puzzles: [
+      { id: 'ice_slide', chance: 0.3 },
+      { id: 'kindled_wheel', chance: 0.12 },
+      { id: 'crossed_lattice', chance: 0.12 },
+    ],
     objectives: [
       { kind: 'bounty', weight: 1 },
       { kind: 'circuit', weight: 1 },
@@ -7948,6 +7958,16 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     biome: 'cavern',
+    // THE GLACIAL SLIDE under the ice (batch-35 puzzle wave): the icy cave
+    // face carries the pushed-block riddles + the cold lattices as
+    // side-finds (no 'puzzle' objective row — the mournstead precedent).
+    // This list is NEW, so no standing roll moves. ⚠ chances unblessed.
+    puzzles: [
+      { id: 'ice_slide', chance: 0.25 },
+      { id: 'glacial_slide', chance: 0.2 },
+      { id: 'diamond_lattice', chance: 0.1 },
+      { id: 'hollow_lattice', chance: 0.1 },
+    ],
     objectives: [
       { kind: 'clear', weight: 1 },
       { kind: 'spawners', weight: 1 },

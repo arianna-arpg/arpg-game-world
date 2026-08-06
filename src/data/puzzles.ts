@@ -16,7 +16,9 @@
 import { vec } from '../core/math';
 import type { Rng } from '../core/rng';
 import { registerTenantKind, tenantKindOf } from '../engine/massif';
-import { PUZZLE_KINDS, registerPuzzleKind, type PuzzleSpec } from '../engine/puzzles';
+import {
+  latticeFormatGrid, PUZZLE_KINDS, registerPuzzleKind, type PuzzleSpec,
+} from '../engine/puzzles';
 import type { World } from '../engine/world';
 import { registerAttentionSource, type AttentionPoint } from '../world/attention';
 import { registerZoneInfoSource } from '../world/zoneInfo';
@@ -93,6 +95,71 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
     label: 'the ember ring',
     reward: { gems: 2, washFor: 20 },
   },
+  // THE SHAPED LATTICES (batch-35 puzzle wave) — the same lights-out law on
+  // formatted courts (LATTICE_FORMATS, engine/puzzles.ts): each preset pins
+  // its grid through latticeFormatGrid so the authored census can never
+  // drift from its format's cell count. Scramble-from-solved still rules —
+  // a shaped board is exactly as solvable as the rectangle.
+  // THE KINDLED WHEEL — ten voices on a ring; a strike rolls its two
+  // neighbors with it. The rectangle's law bent into a circle.
+  kindled_wheel: {
+    kind: 'lattice',
+    format: 'wheel',
+    grid: latticeFormatGrid('wheel'),
+    label: 'the kindled wheel',
+    reward: { gems: 2, washFor: 20 },
+  },
+  // THE CROSSED LATTICE — nine cells in a plus: the center strike sweeps
+  // five voices, an arm's tip barely two. Reads as a waymark on the ground.
+  crossed_lattice: {
+    kind: 'lattice',
+    format: 'cross',
+    grid: latticeFormatGrid('cross'),
+    label: 'the crossed lattice',
+    reward: { gems: 2, washFor: 20 },
+  },
+  // THE DIAMOND LATTICE — twelve cells on the point with a hollow heart,
+  // corners pared to lone voices with tiny neighborhoods.
+  diamond_lattice: {
+    kind: 'lattice',
+    format: 'diamond',
+    grid: latticeFormatGrid('diamond'),
+    label: 'the diamond lattice',
+    reward: { gems: 2, washFor: 20 },
+  },
+  // THE HOLLOW LATTICE — a 4×4 with two cells eaten out of the diagonal:
+  // the holes thin the neighborhoods around them, so the same strike does
+  // less where the board has gone hollow.
+  hollow_lattice: {
+    kind: 'lattice',
+    format: 'gapped',
+    grid: latticeFormatGrid('gapped'),
+    label: 'the hollow lattice',
+    reward: { gems: 2, washFor: 20 },
+  },
+  // THE ICE SLIDE (batch-35, her ask) — the pushed block: strike it and it
+  // slides on the blow's axis until something catches it; seat it on the
+  // pulsing socket. grid's PRODUCT is the whole body budget (blocks +
+  // stones) — one block, seven stones on the default 6×5 rink. Dealt
+  // solvable BY CONSTRUCTION (reverse moves from solved + the exhaustive
+  // reachability proof; a dry deal degrades, never wedges).
+  ice_slide: {
+    kind: 'iceslide',
+    grid: [4, 2],
+    label: 'the ice slide',
+    reward: { gems: 2, washFor: 20 },
+  },
+  // THE GLACIAL SLIDE — the deep-ice face: two blocks, two sockets, a wider
+  // rink. The blocks stop each other — the second seat is the riddle.
+  glacial_slide: {
+    kind: 'iceslide',
+    grid: [5, 2],
+    board: [7, 5],
+    blocks: [2, 2],
+    label: 'the glacial slide',
+    reward: { gems: 2, washFor: 20 },
+  },
+
   // THE GRAVE EXHUMATION — the lone crypt's key (kit: data/lonecrypt.ts).
   // STRUCK open, never dwelled: every spade-blow is a landed hit through
   // the knock grammar — the loud contrast with the 'unearth' objective's

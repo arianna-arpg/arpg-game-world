@@ -4,7 +4,7 @@
 // A puzzle is a small machine of STRUCK FIXTURES: crystal bodies (ordinary
 // passive monster defs — they reach resolveHit like anything else, so every
 // delivery in the game can play them: arcs, arrows, novas, minions) wired to
-// a PUZZLE RUN that a registered KIND drives. Six kinds ship here; the
+// a PUZZLE RUN that a registered KIND drives. Seven kinds ship here; the
 // registry is open — a package or future biome adds a kind + a spec row and
 // the placer, HUD, objective plumbing and reward lane all follow.
 //
@@ -31,6 +31,18 @@
 //   • ember — the tended ring: a struck coal stays alight for its gutter
 //     window; have EVERY coal alight at once. No falter, no clock but the
 //     coals' own — patience circles, breadth blazes.
+//   • iceslide — the pushed block (the Zelda ice-court law): strike a loose
+//     block and it SLIDES on the blow's axis, grid-true, stopping only
+//     against a stopper stone or its kin (THE CATCH LAW: a push with
+//     nothing to catch it refuses — no invisible walls, no runaway ice).
+//     Seat every block on its drawn goal socket. Boards deal by REVERSE
+//     MOVES from the solved pose and an exhaustive reachability proof
+//     rejects any deal with a trappable line — solvable BY CONSTRUCTION.
+//
+// The lattice also takes a FORMAT (LATTICE_FORMATS, spec.format): the same
+// lights-out law on shaped courts — a wheel, a cross, a diamond, a gapped
+// board — each a data row carrying its own seats + neighbor map. Formats
+// re-seat the placer's minted line at boot; formatless boards are untouched.
 //
 // Placement happens at ZONE LOAD (World's puzzle placer), never at
 // generation: no genqa surface, no layout-rng movement — the same salted
@@ -63,10 +75,25 @@
 // ---------------------------------------------------------------------------
 
 import type { Vec2 } from '../core/math';
-import { angleDiff, angleTo, dist } from '../core/math';
+import { angleDiff, angleTo, dist, vec } from '../core/math';
 import type { Actor } from './actor';
 import type { DamageType } from './stats';
 import { ELEMENTAL_TYPES } from './stats';
+
+/** An authored, hand-pinned ice-slide board (probe rigs + future set-piece
+ *  courts): explicit cells as [x, y]. A pin is the author's word — boot
+ *  verifies it and WARNS on a dishonest deal, but stands it as written. */
+export interface IceSlideBoard {
+  /** Board dims [w, h] in cells. */
+  board: [number, number];
+  /** Stopper stones. blocks.length + rocks.length must equal the run's
+   *  minted node census (spec.grid[0]) — a mismatch discards the pin. */
+  rocks: [number, number][];
+  /** Pushable blocks (node idx 0..blocks-1 wear the ice dress). */
+  blocks: [number, number][];
+  /** Goal seats, one per block (drawn as the pulsing want). */
+  sockets: [number, number][];
+}
 
 /** An authored puzzle (data/puzzles.ts) — everything the placer + kind read. */
 export interface PuzzleSpec {
@@ -77,8 +104,30 @@ export interface PuzzleSpec {
   /** Heart fixture def (chord; default: the kind's heartMonster).
    *  `false` = heartless (the shatter variant's fixed goal). */
   heart?: string | false;
-  /** lattice: board dims [w, h] (default [3, 3]). */
+  /** lattice: board dims [w, h] (default [3, 3]). For a SHAPED court
+   *  (`format`) pin this via latticeFormatGrid(id) — the squarest ≥2×2
+   *  rect whose PRODUCT is the format's census; the placer's rect is
+   *  scaffolding (boot re-seats every node) and its reserved footprint
+   *  covers the drawn spread. iceslide: the same product law — grid is
+   *  the whole fixture budget (blocks + stones), both dims ≥ 2, and the
+   *  rect's reserve covers the rink (max board dim ≤ max grid dim + 3
+   *  at the house pitch — probe-pinned). */
   grid?: [number, number];
+  /** lattice: a LATTICE_FORMATS id — the same lights-out law on a shaped
+   *  court (wheel / cross / diamond / gapped). Absent = the plain
+   *  rectangle, byte-identical to the pre-format law. */
+  format?: string;
+  /** iceslide: rink dims [w, h] in cells (default ICESLIDE_CFG.board). */
+  board?: [number, number];
+  /** iceslide: pushable-block count band (default ICESLIDE_CFG.blocks;
+   *  clamped so every block keeps a catch stone — blocks ≤ bodies / 2). */
+  blocks?: [number, number];
+  /** iceslide: reverse-move scramble band rolled at boot (default
+   *  ICESLIDE_CFG.shuffle) — the lattice scramble law's sibling. */
+  shuffle?: [number, number];
+  /** iceslide: a hand-authored board (probes, set-piece courts) — skips
+   *  generation; verified, warned about if dishonest, stood as written. */
+  pinned?: IceSlideBoard;
   /** ring kinds: node count band (default per kind). */
   count?: [number, number];
   /** refrain: notes in the sequence (band; default [4, 6]). */
@@ -280,10 +329,123 @@ function rollBand(h: PuzzleHost, band: [number, number] | undefined, fallback: [
   return lo + Math.floor(h.rng() * (hi - lo + 1));
 }
 
+// --- LATTICE FORMATS (the board's SHAPE as data) -----------------------------
+// The lights-out law is graph-blind: a strike flips a node + its NEIGHBORS,
+// and scrambling by simulated strikes from solved keeps ANY board solvable —
+// so the court's shape is pure data. A format row carries its drawn seats
+// (pitch units around the court center) and its own neighbor map; the
+// lattice boot re-seats the placer's minted line onto them (the court
+// shrine's re-seat precedent) and swaps only the toggle's adjacency.
+// Formatless presets never touch any of this — byte-identical, structurally.
+
+export interface LatticeFormat {
+  id: string;
+  /** Node seats in PITCH units around the court center — the drawn board.
+   *  Every seat must sit within (cells − 1) / 2 units so the preset's
+   *  [cells, 1] grid pin (latticeFormatGrid) always over-reserves it. */
+  seats: { x: number; y: number }[];
+  /** The format's neighbor map: striking node i also flips adj[i]. */
+  adj: number[][];
+}
+
+/** Open format registry — the four house shapes below; packages add rows. */
+export const LATTICE_FORMATS: Record<string, LatticeFormat> = {};
+export function registerLatticeFormat(f: LatticeFormat): void {
+  LATTICE_FORMATS[f.id] = f;
+}
+
+/** A shaped preset's `grid` pin: the SQUAREST ≥2×2 rectangle whose product
+ *  is the format's census — the placer mints exactly that many bodies (its
+ *  seat rect is scaffolding; boot re-seats every node), the validator's
+ *  rectangle sanity holds (2×2..5×5), and the rect's reserved footprint
+ *  covers the drawn spread through the placer's own +90px grace (house
+ *  formats keep their spread within it — probe-pinned). House censuses are
+ *  COMPOSITE by design: a prime cell count could only pin [n, 1]. */
+export function latticeFormatGrid(id: string): [number, number] {
+  const n = Math.max(1, LATTICE_FORMATS[id]?.seats.length ?? 1);
+  for (let b = Math.floor(Math.sqrt(n)); b >= 2; b--) {
+    if (n % b === 0) return [n / b, b];
+  }
+  return [n, 1]; // a prime census — the validator will say so, loudly
+}
+
+/** Orthogonal adjacency among explicit seats (unit-spaced grids with holes —
+ *  a missing cell simply breaks the neighborhood, no special casing). */
+function orthoAdjOf(seats: { x: number; y: number }[]): number[][] {
+  return seats.map((a, i) => seats.flatMap((z, j) => {
+    if (j === i) return [];
+    const dx = Math.abs(a.x - z.x), dy = Math.abs(a.y - z.y);
+    return dx + dy > 0.99 && dx + dy < 1.01 && Math.min(dx, dy) < 0.01 ? [j] : [];
+  }));
+}
+
+/** Center explicit grid points on their bounding box (the drawn court). */
+function centeredSeats(pts: [number, number][]): { x: number; y: number }[] {
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  return pts.map(p => ({ x: p[0] - cx, y: p[1] - cy }));
+}
+
+// THE WHEEL — ten voices on a circle; a strike rolls its two ring
+// neighbors with it (the 3-flip drum). Radius in pitch units is a look
+// dial: 1.9 × the lattice's 66px pitch ≈ the ring riddles' own court.
+{
+  const n = 10, r = 1.9; // ⚠ unblessed look numbers (batch-35 puzzle wave)
+  const seats = Array.from({ length: n }, (_, i) => {
+    const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
+    return { x: Math.cos(a) * r, y: Math.sin(a) * r };
+  });
+  registerLatticeFormat({
+    id: 'wheel', seats,
+    adj: seats.map((_, i) => [(i + n - 1) % n, (i + 1) % n]),
+  });
+}
+// THE CROSS — nine cells in a plus; the center strike flips five, an arm's
+// tip flips two. Reads at a glance as a waymark on the ground.
+{
+  const pts: [number, number][] = [
+    [0, 0], [1, 0], [2, 0], [-1, 0], [-2, 0], [0, 1], [0, 2], [0, -1], [0, -2],
+  ];
+  const seats = centeredSeats(pts);
+  registerLatticeFormat({ id: 'cross', seats, adj: orthoAdjOf(seats) });
+}
+// THE DIAMOND — twelve cells, |x| + |y| ≤ 2 with the heart left hollow: the
+// rectangle turned on its point, corners pared to lone voices. (Twelve, not
+// thirteen, on purpose: a prime census could not wear a validator-legal
+// grid pin — and the hollow heart reads better anyway.)
+{
+  const pts: [number, number][] = [];
+  for (let y = -2; y <= 2; y++) {
+    for (let x = -2; x <= 2; x++) {
+      const d = Math.abs(x) + Math.abs(y);
+      if (d <= 2 && d > 0) pts.push([x, y]);
+    }
+  }
+  const seats = centeredSeats(pts);
+  registerLatticeFormat({ id: 'diamond', seats, adj: orthoAdjOf(seats) });
+}
+// THE GAPPED BOARD — a 4×4 with two cells eaten out of the diagonal: the
+// holes break the neighborhoods around them, so the same strike does less
+// where the board is thin (sparse-holes, the asked-for fourth shape).
+{
+  const pts: [number, number][] = [];
+  for (let y = 0; y <= 3; y++) {
+    for (let x = 0; x <= 3; x++) {
+      if ((x === 1 && y === 1) || (x === 2 && y === 2)) continue;
+      pts.push([x, y]);
+    }
+  }
+  const seats = centeredSeats(pts);
+  registerLatticeFormat({ id: 'gapped', seats, adj: orthoAdjOf(seats) });
+}
+
 // --- LATTICE (lights-out) ----------------------------------------------------
 // state: { w, h, lit: boolean[] } — lit rides each node's tone ('lightning'
 // kindled / 'physical' dark) so the board reads at a glance and co-op wires
-// it for free (the tone dressing is an ordinary status).
+// it for free (the tone dressing is an ordinary status). A SHAPED court
+// (spec.format) adds state.adj — the format's neighbor map — and re-seats
+// the nodes; everything else (scramble, dress, status) is the one law.
 
 const LATTICE_LIT: DamageType = 'lightning';
 const LATTICE_DARK: DamageType = 'physical';
@@ -294,8 +456,16 @@ function latticeDress(run: PuzzleRun, h: PuzzleHost, idx: number): void {
 }
 
 function latticeToggle(run: PuzzleRun, idx: number): number[] {
-  const w = run.state.w as number, hgt = run.state.h as number;
   const lit = run.state.lit as boolean[];
+  // A shaped court flips by its format's own neighbor map…
+  const adj = run.state.adj as number[][] | undefined;
+  if (adj) {
+    const flipped = [idx, ...(adj[idx] ?? [])];
+    for (const i of flipped) lit[i] = !lit[i];
+    return flipped;
+  }
+  // …and the plain rectangle keeps its original orthogonal math, verbatim.
+  const w = run.state.w as number, hgt = run.state.h as number;
   const col = idx % w, row = Math.floor(idx / w);
   const flipped: number[] = [];
   const flip = (c: number, r: number): void => {
@@ -318,6 +488,23 @@ registerPuzzleKind({
   label: 'the charged lattice',
   boot(run, h) {
     const [w, hgt] = run.spec.grid ?? [3, 3];
+    // THE FORMAT: a shaped court re-seats the placer's minted line onto its
+    // own drawn seats and records its neighbor map; a missing or
+    // census-mismatched format warns and falls back to the plain rectangle
+    // (degrade, never wedge). Formatless boards take the exact old path.
+    const fmt = run.spec.format ? LATTICE_FORMATS[run.spec.format] : undefined;
+    if (run.spec.format && (!fmt || fmt.seats.length !== w * hgt)) {
+      console.warn(`[puzzles] lattice '${run.id}': format '${run.spec.format}' `
+        + `${fmt ? `census ${fmt.seats.length} ≠ grid ${w * hgt}` : 'is not registered'} — plain board`);
+    }
+    if (fmt && fmt.seats.length === w * hgt) {
+      const pitch = run.spec.spacing ?? this.spacing;
+      for (let i = 0; i < run.nodes.length && i < fmt.seats.length; i++) {
+        run.nodes[i].pos.x = run.at.x + fmt.seats[i].x * pitch;
+        run.nodes[i].pos.y = run.at.y + fmt.seats[i].y * pitch;
+      }
+      run.state.adj = fmt.adj;
+    }
     const lit = new Array<boolean>(w * hgt).fill(true);
     run.state.w = w; run.state.h = hgt; run.state.lit = lit;
     // Scramble by SIMULATED strikes from the solved board — every board a
@@ -733,5 +920,397 @@ registerPuzzleKind({
   status(run) {
     const lit = run.state.litUntil as number[];
     return `${run.spec.label ?? this.label}: ${lit.filter(t => t > 0).length}/${lit.length} alight`;
+  },
+});
+
+// --- ICE SLIDE (the pushed block) ----------------------------------------------
+// state: { w, h, pitch, rocks: number[] (cells), sockets: number[] (cells),
+// blockCells: number[] (one per block node, idx 0..B-1), sliding: { idx,
+// fx, fy, tx, ty, t0, dur } | null, pulseAt, goal: 'cold' }.
+//
+// THE LAWS OF THE RINK:
+//   • ONE INPUT, the knock: fixtures are anchored bodies (pulls and shoves
+//     pass them by — the fixture contract), so the standing knock grammar
+//     is the whole grammar: any landed blow pushes a block along the BLOW'S
+//     bearing, squared to the rink's axes. Every delivery in the game plays
+//     it, exactly like every other riddle.
+//   • THE SLIDE: grid-true, to the last open cell before a stopper (a stone
+//     or another block). Occupancy is claimed the instant a block is loosed;
+//     the glide is the drawn catch-up, snapped to the tested cell on
+//     arrival (drawn == tested at rest, and one block moves at a time).
+//   • THE CATCH LAW: a push whose ray leaves the rink uncaught REFUSES —
+//     the block does not budge and says why. No invisible walls, no
+//     runaway ice; every stop the player sees is a body the world drew.
+//   • SOLVABLE BY CONSTRUCTION: boards deal sockets + their catch stones,
+//     seat the blocks SOLVED, scramble by REVERSE moves (each one the
+//     mirror of a legal push — the lattice scramble law's sibling), then
+//     PROVE the deal: an exhaustive slide-graph flood rejects any board
+//     with a reachable dead end. A dry deal budget degrades to silent
+//     scenery (the court shrine's doctrine) — and completes a vacuous
+//     OBJECTIVE ask rather than seal a zone (the unknown-preset precedent).
+//   • THE GOAL IS DRAWN: unseated sockets pulse their want on a slow clock
+//     at the exact cell the seat test reads; a seated block kindles.
+
+export const ICESLIDE_CFG = {
+  // ⚠ UNBLESSED numbers (batch-35 puzzle wave) — my picks, flagged for
+  // Arianna: pitch/speed are feel, bands are difficulty, tries/states are
+  // generation budget, tints are look.
+  /** Cell pitch px (the kind's spacing doubles as the placer's line pitch). */
+  pitch: 46,
+  /** Default rink dims [w, h] in cells. */
+  board: [6, 5] as [number, number],
+  /** Default pushable-block band. */
+  blocks: [1, 1] as [number, number],
+  /** Default reverse-move scramble band. */
+  shuffle: [4, 9] as [number, number],
+  /** A loosed block's glide, px/s. */
+  slideSpeed: 300,
+  /** Seconds between goal-socket telegraph pulses. */
+  socketPulse: 0.8,
+  /** Bounded deal budget before the degrade. */
+  genTries: 40,
+  /** Reachability-proof state ceiling (shipped boards sit far below it —
+   *  a blown flood is treated as an unsafe deal, never trusted). */
+  maxStates: 6000,
+  tintIce: '#bfe8f8',
+  tintSocket: '#ffd88a',
+  tintRefuse: '#9ab0c8',
+} as const;
+
+/** The block's worn dress vs the stones' (the lattice LIT/DARK idiom — the
+ *  tone lane is the co-op-safe paint, and 'cold' IS the ice). */
+const ICESLIDE_ICE: DamageType = 'cold';
+const ICESLIDE_STONE: DamageType = 'physical';
+const SLIDE_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+
+/** Everything solid on the rink but the mover itself. */
+function slideOcc(rocks: number[], blocks: number[], skip: number): Set<number> {
+  const occ = new Set(rocks);
+  for (let i = 0; i < blocks.length; i++) {
+    if (i !== skip) occ.add(blocks[i]);
+  }
+  return occ;
+}
+
+/** THE SLIDE + THE CATCH LAW, pure: the landing cell for a push of `from`
+ *  along (dc, dr) — `from` itself for a bump, −1 for an uncaught ray. */
+function slideDest(occ: ReadonlySet<number>, w: number, h: number,
+  from: number, dc: number, dr: number): number {
+  let x = from % w, y = Math.floor(from / w);
+  let prev = from;
+  for (;;) {
+    x += dc; y += dr;
+    if (x < 0 || x >= w || y < 0 || y >= h) return -1; // nothing would catch it
+    const c = y * w + x;
+    if (occ.has(c)) return prev; // the cell before the stopper
+    prev = c;
+  }
+}
+
+/** THE PROOF: flood every position the blocks can reach by legal slides
+ *  (completion locks a solved board, so solved states spread no further),
+ *  then flood BACK from the solved set over the transposed graph — the deal
+ *  is honest only if every reachable state can still finish. Pure; the
+ *  probe re-proves it with an independent implementation. */
+function slideVerify(w: number, h: number, rocks: number[], sockets: number[],
+  blocks: number[], cap: number): boolean {
+  const keyOf = (b: number[]): string => [...b].sort((a, z) => a - z).join(',');
+  const solvedAt = (b: number[]): boolean => sockets.every(s => b.includes(s));
+  const start = keyOf(blocks);
+  const seen = new Map<string, number[]>([[start, [...blocks]]]);
+  const edges = new Map<string, string[]>();
+  const queue = [start];
+  const solvedKeys: string[] = [];
+  while (queue.length) {
+    const k = queue.pop()!;
+    const b = seen.get(k)!;
+    const out: string[] = [];
+    edges.set(k, out);
+    if (solvedAt(b)) { solvedKeys.push(k); continue; } // the board locks solved
+    for (let i = 0; i < b.length; i++) {
+      const occ = slideOcc(rocks, b, i);
+      for (const [dc, dr] of SLIDE_DIRS) {
+        const dest = slideDest(occ, w, h, b[i], dc, dr);
+        if (dest < 0 || dest === b[i]) continue;
+        const nb = [...b];
+        nb[i] = dest;
+        const nk = keyOf(nb);
+        out.push(nk);
+        if (!seen.has(nk)) {
+          if (seen.size >= cap) return false; // a blown flood is an unsafe deal
+          seen.set(nk, nb);
+          queue.push(nk);
+        }
+      }
+    }
+  }
+  if (!solvedKeys.length) return false;
+  const rev = new Map<string, string[]>();
+  for (const [k, outs] of edges) {
+    for (const o of outs) {
+      const r = rev.get(o);
+      if (r) r.push(k); else rev.set(o, [k]);
+    }
+  }
+  const canFinish = new Set(solvedKeys);
+  const back = [...solvedKeys];
+  while (back.length) {
+    const k = back.pop()!;
+    for (const pk of rev.get(k) ?? []) {
+      if (!canFinish.has(pk)) { canFinish.add(pk); back.push(pk); }
+    }
+  }
+  for (const k of seen.keys()) {
+    if (!canFinish.has(k)) return false; // a reachable dead end — reject the deal
+  }
+  return true;
+}
+
+/** THE DEAL: sockets each with a catch stone, the leftover stones strewn,
+ *  blocks seated SOLVED and walked backward by reverse moves — then the
+ *  proof above, rejection-sampled inside a bounded budget. Pure on the
+ *  host's stream (the world's global die; probes hand it a seeded one). */
+function genSlideBoard(h: PuzzleHost, w: number, hh: number, bodies: number,
+  bBand: [number, number], kBand: [number, number]):
+  { rocks: number[]; sockets: number[]; blocks: number[] } | null {
+  const cells = w * hh;
+  const pick = (n: number): number => Math.floor(h.rng() * n);
+  const inB = (x: number, y: number): boolean => x >= 0 && x < w && y >= 0 && y < hh;
+  for (let attempt = 0; attempt < ICESLIDE_CFG.genTries; attempt++) {
+    // Every block keeps a catch stone: B ≤ bodies / 2, always ≥ 1.
+    const b = Math.max(1, Math.min(Math.floor(bodies / 2), rollBand(h, bBand, bBand)));
+    const rocks: number[] = [];
+    const sockets: number[] = [];
+    const taken = new Set<number>(); // stones + sockets — sockets stay open ice
+    let dealt = true;
+    for (let s = 0; s < b && dealt; s++) {
+      dealt = false;
+      for (let t = 0; t < 40; t++) {
+        const c = pick(cells);
+        if (taken.has(c)) continue;
+        const d = SLIDE_DIRS[pick(4)];
+        const x = c % w, y = Math.floor(c / w);
+        if (!inB(x + d[0], y + d[1])) continue;
+        const catcher = (y + d[1]) * w + (x + d[0]);
+        if (taken.has(catcher)) continue;
+        sockets.push(c); taken.add(c);
+        rocks.push(catcher); taken.add(catcher);
+        dealt = true;
+        break;
+      }
+    }
+    if (!dealt) continue;
+    for (let r = b; r < bodies - b && dealt; r++) {
+      dealt = false;
+      for (let t = 0; t < 60; t++) {
+        const c = pick(cells);
+        if (taken.has(c)) continue;
+        rocks.push(c); taken.add(c);
+        dealt = true;
+        break;
+      }
+    }
+    if (!dealt) continue;
+    // The scramble: each reverse move is a legal push played backward — a
+    // stopper past the seat to have landed against, open ice behind to
+    // have come from. Forward play retraces it by construction.
+    const blocks = [...sockets];
+    const k = rollBand(h, kBand, kBand);
+    for (let step = 0; step < k; step++) {
+      const cands: { i: number; lane: number[] }[] = [];
+      for (let i = 0; i < blocks.length; i++) {
+        const occ = slideOcc(rocks, blocks, i);
+        const x0 = blocks[i] % w, y0 = Math.floor(blocks[i] / w);
+        for (const [dc, dr] of SLIDE_DIRS) {
+          const sx = x0 + dc, sy = y0 + dr;
+          if (!inB(sx, sy) || !occ.has(sy * w + sx)) continue;
+          const lane: number[] = [];
+          let bx = x0 - dc, by = y0 - dr;
+          while (inB(bx, by) && !occ.has(by * w + bx)) {
+            lane.push(by * w + bx);
+            bx -= dc; by -= dr;
+          }
+          if (lane.length) cands.push({ i, lane });
+        }
+      }
+      if (!cands.length) break;
+      const c = cands[pick(cands.length)];
+      blocks[c.i] = c.lane[pick(c.lane.length)];
+    }
+    if (sockets.every(s => blocks.includes(s))) continue; // dealt itself solved — re-deal
+    if (!slideVerify(w, hh, rocks, sockets, blocks, ICESLIDE_CFG.maxStates)) continue;
+    return { rocks, sockets, blocks };
+  }
+  return null;
+}
+
+/** A rink cell's world seat (the board centers on the run's court). */
+function slideCellPos(run: PuzzleRun, cell: number): Vec2 {
+  const w = run.state.w as number, h = run.state.h as number;
+  const pitch = run.state.pitch as number;
+  const x = cell % w, y = Math.floor(cell / w);
+  return vec(run.at.x + (x - (w - 1) / 2) * pitch,
+    run.at.y + (y - (h - 1) / 2) * pitch);
+}
+
+interface SlideAnim { idx: number; fx: number; fy: number; tx: number; ty: number; t0: number; dur: number }
+
+registerPuzzleKind({
+  id: 'iceslide',
+  nodeMonster: 'lattice_crystal',
+  geometry: 'grid',
+  who: 'player',
+  spacing: ICESLIDE_CFG.pitch,
+  label: 'the ice slide',
+  boot(run, h) {
+    const pin = run.spec.pinned;
+    let bw: number, bh: number;
+    let bd: { rocks: number[]; sockets: number[]; blocks: number[] } | null = null;
+    if (pin) {
+      bw = pin.board[0]; bh = pin.board[1];
+      const cellOf = (p: [number, number]): number => p[1] * bw + p[0];
+      const cand = {
+        rocks: pin.rocks.map(cellOf), sockets: pin.sockets.map(cellOf),
+        blocks: pin.blocks.map(cellOf),
+      };
+      if (cand.blocks.length + cand.rocks.length !== run.nodes.length
+        || cand.blocks.length !== cand.sockets.length) {
+        console.warn(`[puzzles] iceslide '${run.id}': pinned board census `
+          + 'mismatches its minted nodes — pin discarded');
+      } else {
+        if (!slideVerify(bw, bh, cand.rocks, cand.sockets, cand.blocks, ICESLIDE_CFG.maxStates)) {
+          console.warn(`[puzzles] iceslide '${run.id}': pinned board is not `
+            + 'honestly solvable — it stands as authored');
+        }
+        bd = cand;
+      }
+    }
+    if (!bd) {
+      [bw, bh] = run.spec.board ?? ICESLIDE_CFG.board;
+      bd = genSlideBoard(h, bw, bh, run.nodes.length,
+        run.spec.blocks ?? ICESLIDE_CFG.blocks,
+        run.spec.shuffle ?? ICESLIDE_CFG.shuffle);
+    } else {
+      bw = pin!.board[0]; bh = pin!.board[1];
+    }
+    if (!bd) {
+      // The degrade (never wedge): the bodies stand as silent scenery, and
+      // an OBJECTIVE ask completes vacuously rather than seal a zone.
+      console.warn(`[puzzles] iceslide '${run.id}' dealt no honest board in `
+        + `${ICESLIDE_CFG.genTries} tries — degraded to scenery`);
+      if (run.isObjective) h.complete(run);
+      return;
+    }
+    run.state.w = bw; run.state.h = bh;
+    run.state.pitch = run.spec.spacing ?? this.spacing;
+    run.state.rocks = bd.rocks;
+    run.state.sockets = bd.sockets;
+    run.state.blockCells = bd.blocks;
+    run.state.sliding = null;
+    run.state.pulseAt = 0;
+    run.state.goal = ICESLIDE_ICE; // the parting wash pays in the rink's coin
+    for (let i = 0; i < run.nodes.length; i++) {
+      const isBlock = i < bd.blocks.length;
+      const cell = isBlock ? bd.blocks[i] : bd.rocks[i - bd.blocks.length];
+      const p = slideCellPos(run, cell);
+      run.nodes[i].pos.x = p.x;
+      run.nodes[i].pos.y = p.y;
+      h.setTone(run.nodes[i], isBlock ? ICESLIDE_ICE : ICESLIDE_STONE);
+      if (isBlock && bd.sockets.includes(cell)) h.kindle(run.nodes[i], 9999);
+    }
+  },
+  struck(run, node, h, striker) {
+    const cells = run.state.blockCells as number[] | undefined;
+    if (!cells || !striker) return; // a degraded rink is silent scenery
+    const idx = node.puzzleNode?.idx ?? -1;
+    if (idx < 0) return;
+    if (idx >= cells.length) { // a stopper stone — it holds fast, quietly
+      h.flash(node.pos, node.radius + 8, ICESLIDE_CFG.tintRefuse, 0.15);
+      return;
+    }
+    if (run.state.sliding) { // one loosed block at a time — the ice is busy
+      h.flash(node.pos, node.radius + 10, ICESLIDE_CFG.tintRefuse, 0.18);
+      return;
+    }
+    // The push takes the blow's bearing, squared to the rink's axes.
+    const w = run.state.w as number, hh = run.state.h as number;
+    const dx = node.pos.x - striker.pos.x, dy = node.pos.y - striker.pos.y;
+    const dc = Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 1 : -1) : 0;
+    const dr = dc === 0 ? (dy >= 0 ? 1 : -1) : 0;
+    const dest = slideDest(slideOcc(run.state.rocks as number[], cells, idx),
+      w, hh, cells[idx], dc, dr);
+    if (dest < 0) { // THE CATCH LAW: with nothing to stop it, the block refuses
+      h.say(node.pos, 'nothing would catch it…', ICESLIDE_CFG.tintRefuse, 11);
+      h.flash(node.pos, node.radius + 12, ICESLIDE_CFG.tintRefuse, 0.2);
+      return;
+    }
+    if (dest === cells[idx]) { // shoved square into a stopper — a dull thud
+      h.flash(node.pos, node.radius + 10, ICESLIDE_CFG.tintRefuse, 0.18);
+      return;
+    }
+    const sockets = run.state.sockets as number[];
+    if (sockets.includes(cells[idx])) h.quench(node); // it leaves its seat
+    const from = slideCellPos(run, cells[idx]);
+    const to = slideCellPos(run, dest);
+    const moved = Math.abs((dest % w) - (cells[idx] % w))
+      + Math.abs(Math.floor(dest / w) - Math.floor(cells[idx] / w));
+    cells[idx] = dest; // the lane is claimed the moment the block is loosed
+    run.state.sliding = {
+      idx, fx: from.x, fy: from.y, tx: to.x, ty: to.y,
+      t0: h.now(), dur: (moved * (run.state.pitch as number)) / ICESLIDE_CFG.slideSpeed,
+    } satisfies SlideAnim;
+    h.flash(node.pos, node.radius + 10, ICESLIDE_CFG.tintIce, 0.18);
+  },
+  tick(run, h) {
+    const cells = run.state.blockCells as number[] | undefined;
+    if (!cells) return;
+    const sockets = run.state.sockets as number[];
+    // The goal telegraph: unseated sockets pulse their want on a slow clock
+    // at the exact cell the seat test reads (drawn == tested).
+    if (h.now() >= (run.state.pulseAt as number)) {
+      run.state.pulseAt = h.now() + ICESLIDE_CFG.socketPulse;
+      for (const s of sockets) {
+        if (cells.includes(s)) continue;
+        h.flash(slideCellPos(run, s), (run.state.pitch as number) * 0.42,
+          ICESLIDE_CFG.tintSocket, 0.55);
+      }
+    }
+    const sl = run.state.sliding as SlideAnim | null;
+    if (!sl) return;
+    const node = run.nodes[sl.idx];
+    const t = sl.dur <= 0 ? 1 : (h.now() - sl.t0) / sl.dur;
+    if (t < 1) {
+      node.pos.x = sl.fx + (sl.tx - sl.fx) * t;
+      node.pos.y = sl.fy + (sl.ty - sl.fy) * t;
+      return;
+    }
+    node.pos.x = sl.tx; node.pos.y = sl.ty; // the snap: at rest, drawn == tested
+    run.state.sliding = null;
+    if (sockets.includes(cells[sl.idx])) {
+      h.kindle(node, 9999);
+      h.flash(node.pos, node.radius + 18, ICESLIDE_CFG.tintSocket, 0.3);
+      if (sockets.every(s => cells.includes(s))) h.complete(run);
+    }
+  },
+  solved(run, h) {
+    const cells = run.state.blockCells as number[] | undefined;
+    if (!cells) return; // a degraded rink has nothing to prove
+    const sockets = run.state.sockets as number[];
+    run.state.sliding = null;
+    for (let b = 0; b < cells.length; b++) {
+      cells[b] = sockets[b];
+      const p = slideCellPos(run, sockets[b]);
+      run.nodes[b].pos.x = p.x;
+      run.nodes[b].pos.y = p.y;
+      h.kindle(run.nodes[b], 9999);
+    }
+  },
+  status(run) {
+    const label = run.spec.label ?? this.label;
+    const cells = run.state.blockCells as number[] | undefined;
+    if (!cells) return `${label}: the ice lies still`;
+    const sockets = run.state.sockets as number[];
+    const seated = sockets.filter(s => cells.includes(s)).length;
+    return `${label}: ${seated}/${sockets.length} blocks seated`;
   },
 });
