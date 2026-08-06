@@ -69,6 +69,7 @@ import '../src/data/occurrences'; // the 'occurrence' ring-tenant kind + the occ
 import '../src/data/settled';
 import '../src/data/garden';
 import '../src/data/catacombs';
+import '../src/data/merelake';
 import '../src/data/lonecrypt';
 import '../src/data/grove';
 import '../src/data/warfront';

@@ -51,11 +51,11 @@ import { GridWalkField } from '../world/gridWalk';
 import { insideBounds } from '../world/shape';
 import { regionKind, type RegionKind } from '../world/regions';
 import {
-  ensureGrid, layoutParam, registerLayout, registerTierSiting, registerUnderTierPass,
-  scatterDecoration, type GenCtx,
+  ensureGrid, layoutParam, placeLandmarkById, registerLayout, registerTierSiting,
+  registerUnderTierPass, scatterDecoration, type GenCtx,
 } from './levelgen';
 import { carveMassifs } from './massif';
-import { registerLairStoryReach } from './lairs';
+import { lairLandmarkRolls, registerLairStoryReach } from './lairs';
 import { TILESETS, type TilesetDef } from '../data/tilesets';
 import { BIOMES } from '../world/biomes';
 
@@ -83,6 +83,19 @@ export const TIER_CFG = {
   ductHalfW: 32,
   /** Fraction of a tiered zone's packs seeded on tier 1 (ZoneTiers override). */
   packSplit: 0.4,
+  /** THE GROTTO FORM's defaults (UnderTierSpec.grotto — the meadow mere):
+   *  chamber radius band, the water blob's share of it, the guaranteed
+   *  shore-ring width (in cells), the chamber's clearance from the entry,
+   *  the seat-hunt try budget, and the court's clearance from the one
+   *  stair (a lair's clearSite must never splice the only way out). */
+  grotto: {
+    radius: [230, 320] as [number, number],
+    waterFrac: 0.55,
+    shoreRing: 2.2,
+    entryClear: 260,
+    seatTries: 40,
+    lairSeatClear: 130,
+  },
   /** THE SEVERED BAND (ai.ts runKernel — the tier chase's kernel law): a
    *  chase-band kernel whose target stands on ground its own story's floor
    *  doesn't own holds flat distance across a cliff — a lie. Kits whose
@@ -665,6 +678,41 @@ export interface UnderTierSpec {
    *  surface stamp (the classic street grate reads from above). */
   doorTier?: 'seat' | 'none';
   portClear?: number;
+  /** THE GROTTO FORM (the meadow mere's debut): the lane's payload is ONE
+   *  set-piece chamber instead of a duct web — deliberately NOT the
+   *  worm-runs (no structural twinning with the garden/downs lattices).
+   *  When present, carveUnderTier sinks a single wobble-rimmed chamber
+   *  whose floor is `duct`, pools `grotto.water` at its heart, and cuts
+   *  EXACTLY ONE well/stair mouth ("one entryway" — the ruling's word).
+   *  Ephemerality is NOT carved here: the water region is an ordinary
+   *  span target (ZoneTheme.spans swaps full/ebbing/drained on its
+   *  RadianceCond), so the wet-by-night law rides standing machinery. */
+  grotto?: UnderGrottoSpec;
+}
+
+/** The set-piece chamber a grotto lane carves. Every field is data; every
+ *  number is a default a layoutParam can outrank. */
+export interface UnderGrottoSpec {
+  /** Region pooled at the chamber's heart (tier-1 floor like the shore —
+   *  the mere is wade-depth ground to the story that owns it, and the
+   *  theme's span row swaps its face through the ephemerality phases). */
+  water: string;
+  /** Chamber radius band (px). */
+  radius?: [number, number];
+  /** The water blob's share of the chamber radius (a shore ring always
+   *  survives — the drained-face read and the court need standing ground). */
+  waterFrac?: number;
+  /** The story's OWN population (the "truly independent, layered zones" law
+   *  grown from dress to LIFE): rows seeded on the chamber's floor as
+   *  tier-stamped landmarkSpawns — materialized by loadZone as ordinary
+   *  base population, memory-tagged, unreachable from the surface story by
+   *  the standing same-tier combat law. */
+  fauna?: { id: string; count: [number, number] }[];
+  /** Multiplier over the folded weight of every LairSeat.underLane row this
+   *  lane resolves (layoutParam 'underLairBias' outranks — the probe's
+   *  forcing lever). The lair fold itself is engine/lairs.ts's, verbatim:
+   *  rows claim the land, the grotto is merely where the claim can stand. */
+  lairBias?: number;
 }
 
 /** The lane registry — an OPEN vocabulary (the registerLayout idiom). */
@@ -713,6 +761,9 @@ export function carveUnderTier(ctx: GenCtx, def: ZoneDef, grid: GridWalkField, l
     console.warn(`[tiers] '${def.id}' asks under-tier lane '${lane}' but none is registered — the layer is dead`);
     return;
   }
+  // THE GROTTO FORM: a set-piece lane carves ONE chamber, never the lattice.
+  // Branched before any draw, so every lattice lane stays byte-identical.
+  if (spec.grotto) { carveUnderGrotto(ctx, def, grid, lane, spec, spec.grotto); return; }
   const underWall = spec.underWall ?? {};
   const cs: number = (grid as unknown as { cell?: number }).cell ?? 30;
   const wellBand = spec.wells ?? TIER_CFG.wells;
@@ -786,6 +837,185 @@ export function carveUnderTier(ctx: GenCtx, def: ZoneDef, grid: GridWalkField, l
   const underKinds = Object.values(underWall);
   layTierKit(ctx, grid, layoutParam<TierKitRow[]>(def, 'tierKit', spec.kit ?? []),
     k => k === spec.duct || (!!k && underKinds.includes(k)));
+}
+
+/** THE GROTTO CARVE (UnderTierSpec.grotto — the moonlit mere's debut): one
+ *  wobble-rimmed chamber sunk under open ground, `duct` for its shore,
+ *  `grotto.water` pooled at its heart, and EXACTLY ONE well + stair — "one
+ *  entryway", the ruling's word, structurally. All-or-nothing by
+ *  construction: cells are CLASSIFIED first and painted only once a chamber
+ *  AND its mouth both stand (a mouthless grotto would be an orphan story —
+ *  refusing before the first fillRegion means a failed hunt leaves the zone
+ *  byte-flat). The story then grows its own kit, resolves the land's
+ *  LairSeat.underLane claims (the fold is engine/lairs.ts's, verbatim —
+ *  this is the only moment the story's floor exists to seat them on), and
+ *  seeds its own fauna as tier-stamped landmarkSpawns. Ephemerality is the
+ *  theme's business: the water region is a span target and this carve
+ *  never reads the sky. */
+function carveUnderGrotto(
+  ctx: GenCtx, def: ZoneDef, grid: GridWalkField, lane: string,
+  spec: UnderTierSpec, g: UnderGrottoSpec,
+): void {
+  const G = TIER_CFG.grotto;
+  const cs: number = (grid as unknown as { cell?: number }).cell ?? 30;
+  const rBand = g.radius ?? G.radius;
+  // The chamber must FIT: shed radius toward the arena, refuse honestly when
+  // even the shed chamber has no room (a QA pocket stays flat, loudly not).
+  let R = ctx.rng.range(rBand[0], rBand[1]);
+  R = Math.min(R, (Math.min(ctx.arena.w, ctx.arena.h) - 2 * (200 + cs)) / 2);
+  if (R < cs * 5) return;
+  const portClear = spec.portClear ?? 150;
+  const ports = [ctx.entry, ...ctx.exits];
+  // The boreable law — the lattice's ductable, minus under-walls (a grotto
+  // sinks under open country only) and never under another layer's rows.
+  const boreable = (k: string | undefined): boolean => {
+    if (!k) return false;
+    const rk = regionKind(k);
+    return !!rk?.walkable && !rk.tier && !rk.tierLink && !spec.forbid?.includes(k);
+  };
+  // THE SEAT: hunt a disc of WHOLLY boreable ground (a pond or a wall inside
+  // the rim would hole the story — all-boreable keeps the chamber one
+  // country and the orphan census at zero by construction), rim-honest at
+  // the compass points, clear of the arrival.
+  const wob1 = ctx.rng.range(0, Math.PI * 2), wob2 = ctx.rng.range(0, Math.PI * 2), wob3 = ctx.rng.range(0, Math.PI * 2);
+  const amp = cs * ctx.rng.range(0.8, 1.5);
+  const wob = (th: number): number =>
+    amp * (Math.sin(th * 3 + wob1) * 0.55 + Math.sin(th * 7 + wob2) * 0.3 + Math.sin(th * 13 + wob3) * 0.15);
+  const wR = Math.max(cs * 2, R * (g.waterFrac ?? G.waterFrac));
+  let shoreCells: Vec2[] = [], waterCells: Vec2[] = [];
+  let at: Vec2 | null = null;
+  for (let t = 0; t < G.seatTries && !at; t++) {
+    const p = vec(
+      ctx.rng.range(200 + R, ctx.arena.w - 200 - R),
+      ctx.rng.range(200 + R, ctx.arena.h - 200 - R),
+    );
+    if (Math.hypot(p.x - ctx.entry.x, p.y - ctx.entry.y) < G.entryClear + R) continue;
+    if (!seatInArena(def, ctx.arena, p)) continue;
+    let ok = true;
+    for (const [dx, dy] of [[R, 0], [-R, 0], [0, R], [0, -R]] as const) {
+      if (!seatInArena(def, ctx.arena, vec(p.x + dx, p.y + dy))) { ok = false; break; }
+    }
+    if (!ok) continue;
+    // Classify the disc WITHOUT painting (the all-or-nothing law).
+    const shore: Vec2[] = [], water: Vec2[] = [];
+    const gx0 = Math.max(1, Math.floor((p.x - R - amp) / cs));
+    const gx1 = Math.min(Math.floor(ctx.arena.w / cs) - 2, Math.ceil((p.x + R + amp) / cs));
+    const gy0 = Math.max(1, Math.floor((p.y - R - amp) / cs));
+    const gy1 = Math.min(Math.floor(ctx.arena.h / cs) - 2, Math.ceil((p.y + R + amp) / cs));
+    for (let gy = gy0; gy <= gy1 && ok; gy++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const x = gx * cs + cs / 2, y = gy * cs + cs / 2;
+        const dx = x - p.x, dy = y - p.y;
+        const d = Math.hypot(dx, dy);
+        const th = Math.atan2(dy, dx);
+        const rim = R + wob(th);
+        if (d > rim) continue;
+        if (!boreable(grid.regionAt?.(x, y))) { ok = false; break; }
+        const wRim = Math.min(wR + wob(th) * 0.5, rim - cs * G.shoreRing);
+        if (d <= wRim) water.push(vec(x, y)); else shore.push(vec(x, y));
+      }
+    }
+    if (!ok || water.length < 4 || shore.length < 12) continue;
+    at = p; shoreCells = shore; waterCells = water;
+  }
+  if (!at) return;
+  const heart: Vec2 = at; // the seated chamber center (const for the closures below)
+  // THE ONE WELL: the nearest-arrival shore cell that keeps the deep-door
+  // law's portal clearance and the rim (a dwell seat must be standable).
+  // Chosen BEFORE any paint — no mouth, no chamber.
+  let well: Vec2 | null = null;
+  let bestD = Infinity;
+  for (const c of shoreCells) {
+    if (!ports.every(q => Math.hypot(q.x - c.x, q.y - c.y) >= portClear)) continue;
+    if (!seatInArena(def, ctx.arena, c)) continue;
+    const d = Math.hypot(c.x - ctx.entry.x, c.y - ctx.entry.y);
+    if (d < bestD) { bestD = d; well = c; }
+  }
+  if (!well) return;
+  // PAINT (the classification's own cells — drawn == classified).
+  for (const c of shoreCells) grid.fillRegion(c.x - cs * 0.45, c.y - cs * 0.45, c.x + cs * 0.45, c.y + cs * 0.45, spec.duct);
+  for (const c of waterCells) grid.fillRegion(c.x - cs * 0.45, c.y - cs * 0.45, c.x + cs * 0.45, c.y + cs * 0.45, g.water);
+  grid.fillRegion(well.x - cs, well.y - cs, well.x + cs, well.y + cs, spec.well);
+  ctx.doodads.push({
+    pos: vec(well.x, well.y), radius: 16, kind: spec.stairKind,
+    rot: Math.atan2(heart.y - well.y, heart.x - well.x), // the stair faces INTO its chamber
+  });
+  def.tiers = {
+    kind: 'under', exposure: 'covered', label: spec.label, lane,
+    packSplit: layoutParam(def, 'tierPackSplit', spec.packSplit ?? 0.3),
+  };
+  // The story's OWN generation layer — shore only (nothing stands on water).
+  layTierKit(ctx, grid, layoutParam<TierKitRow[]>(def, 'tierKit', spec.kit ?? []),
+    k => k === spec.duct);
+  // THE LAIR RESOLUTION (LairSeat.underLane): the standing fold, handed the
+  // lane it can finally stand on — one rng draw per PRESENT row (the
+  // landmark loop's own law), the court seated on the far shore, clear of
+  // the one stair so a clearSite can never splice the way out. ONE court
+  // per mere: a grotto is a set piece, not a district.
+  const bias = layoutParam(def, 'underLairBias', g.lairBias ?? 1);
+  if (bias > 0) {
+    const ts = def.tileset ? TILESETS[def.tileset] : undefined;
+    const rolls = lairLandmarkRolls({
+      place: def.caveDepth ? 'cave' : 'surface',
+      biome: def.caveDepth ? def.anchor : ts?.biome,
+      caveDepth: def.caveDepth ?? 0,
+      level: ctx.level ?? def.level ?? 1,
+      tileset: def.tileset ?? '',
+      biomeDepth: def.geo?.biomeDepth, climate: def.geo?.climate,
+      underLane: lane,
+    });
+    for (const roll of rolls) {
+      if (!ctx.rng.chance(Math.min(1, roll.chance * bias))) continue;
+      // The court stands at the WATERLINE (inner shore), farthest from the
+      // stair: deep enough inside the rim that the den apron never spills
+      // onto the surface country, far enough from the well that its
+      // clearSite can never splice the one way out. SNUG seats only — the
+      // whole 8-neighbour ring must be the mere's own ground, so the
+      // landmark placer's lattice snap (≤ half a cell) can never step the
+      // centerpiece off the story. Waterline first, any snug shore as the
+      // honest fallback.
+      const mereGround = (k: string | undefined): boolean =>
+        k === spec.duct || k === g.water || k === spec.well;
+      const snug = (c: Vec2): boolean => {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!mereGround(grid.regionAt?.(c.x + dx * cs, c.y + dy * cs))) return false;
+          }
+        }
+        return true;
+      };
+      const waterline = shoreCells.filter(c =>
+        Math.hypot(c.x - heart.x, c.y - heart.y) <= wR + cs * 2.5);
+      let seat: Vec2 | null = null;
+      let far = -1;
+      for (const pool of [waterline.filter(snug), shoreCells.filter(snug)]) {
+        for (const c of pool) {
+          const d = Math.hypot(c.x - well.x, c.y - well.y);
+          if (d < G.lairSeatClear) continue;
+          if (d > far) { far = d; seat = c; }
+        }
+        if (seat) break;
+      }
+      if (!seat) break;
+      placeLandmarkById(ctx, roll.landmark, seat);
+      break;
+    }
+  }
+  // THE FAUNA (the story's own life): tier-stamped landmarkSpawns rows —
+  // loadZone materializes them as memory-tagged base population, and the
+  // standing same-tier laws keep them unreachable from the surface story.
+  const seats = [...shoreCells, ...waterCells];
+  for (const row of g.fauna ?? []) {
+    const n = ctx.rng.int(row.count[0], row.count[1]);
+    for (let k = 0; k < n; k++) {
+      const c = seats[ctx.rng.int(0, seats.length - 1)];
+      (ctx.landmarkSpawns ??= []).push({
+        id: row.id,
+        pos: vec(c.x + ctx.rng.range(-cs * 0.3, cs * 0.3), c.y + ctx.rng.range(-cs * 0.3, cs * 0.3)),
+        tier: 1,
+      });
+    }
+  }
 }
 
 /** THE DEEP DOOR PREFERS THE DRAINS: after scatter, a lane-tiered zone pulls

@@ -3285,6 +3285,33 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       throat: '#0a0806',
     },
   },
+  // === THE MOONLIT MERE (the meadow's grotto lane, batch 35 — kit in
+  // data/merelake.ts): the under-tier prop grammar in moon-water. Standing
+  // painters, three data entries (the doodadVisuals doctrine).
+  // THE MERE STAIR — the one entryway's crossing prop (the taproot/crypt
+  // stair's role at the lea): mossy kerb, a faint water-pale breath so the
+  // ruling's "occasionally" reads as a FIND, not a hazard.
+  mere_stair: {
+    painter: 'caveMouth', order: 23, bakeWhole: 'static',
+    params: {
+      color: '#16241e', edge: '#4a7a66', material: 'stone',
+      throat: '#060c0a',
+    },
+  },
+  // THE COURT STONE — the sovereign's monolith at the waterline: an INERT
+  // centerpiece, never a door (the lake is the destination). No dynamic
+  // light spec on any mere piece: the light layer's story audit is a
+  // deferred thread (the pass file) — the glow lives in the painter fills.
+  mere_court_stone: {
+    painter: 'slab', order: 54, shadow: 0.65, longShadow: 1.2,
+    params: { shape: 'monolith', fill: '#2a3c38', edge: '#7fd8d0' },
+  },
+  // THE MERE BLOOM — the jungle_bloom's pod grammar in the mere's palette:
+  // a moon-fed bud lighting the shore from its own skin.
+  mere_bloom: {
+    painter: 'pod', order: 50,
+    params: { body: '#16302a', glow: '#9fe8dc', aspectY: 0.9, glowY: -0.2, glowR: 0.55, pulseRate: 0.4 },
+  },
   giant_dandelion: {
     painter: 'trunk', order: 52, shadow: 0.5, longShadow: 1.2, bakeWhole: 'static',
     params: { color: '#8a9a6c', scale: 0.24, roots: 3 },

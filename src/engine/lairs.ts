@@ -83,6 +83,15 @@ export interface LairSeat {
    *  relief fabric's vertical truth). `{ elevation: [0.6, 1] }` is "high
    *  ground only". A row that asks refuses ground with no reading. */
   climate?: Record<string, [number, number]>;
+  /** UNDER-LANE claims (THE GROTTO RUNG — the moonlit mere's debut): the
+   *  seat stands only on the STORY an under-tier lane of this id carves
+   *  (engine/tiers.ts UNDER_TIER_LANES), resolved by the lane's own carve —
+   *  the one moment the story's floor exists to seat a landmark on. The
+   *  standing mint chokepoints (placeZoneAt / mintCave) hand the fold no
+   *  lane, so a row that asks REFUSES there and can never double-seat on
+   *  the surface; every other axis (interior, level, chance) folds
+   *  verbatim wherever the row resolves. Absent = byte-identical. */
+  underLane?: string;
   /** STORY claims (THE STORIES GATE — the aloft lane's fold rung): the
    *  ground's face must be able to STACK at least this many OVER-stories
    *  (the tier fabric's upper layers) — a story-hungry claim (a landmark
@@ -145,6 +154,9 @@ export interface LairGround {
   biomeDepth?: number;
   /** Climate axes at the mint coordinate (ZoneDef.geo.climate). */
   climate?: Record<string, number>;
+  /** The under-tier lane whose carve is asking (THE GROTTO RUNG) — only the
+   *  lane's own resolution passes it; the standing chokepoints never do. */
+  underLane?: string;
   /** Sealed pockets grow no lairs (the noDeeper contract — mintCave's
    *  authored-row filter, extended to the fabric's own rows). */
   noDeeper?: boolean;
@@ -162,6 +174,11 @@ export function lairLandmarkRolls(q: LairGround): LandmarkRoll[] {
     if (s.place !== 'both' && s.place !== q.place) continue;
     if (!s.biomes.includes(q.biome)) continue;
     if (s.tilesets && !s.tilesets.includes(q.tileset)) continue;
+    // THE GROTTO RUNG (underLane): both directions refuse — a lane-claiming
+    // row never seats on laneless ground (the standing chokepoints), and a
+    // lane's resolution never seats the ordinary rows (their seats are the
+    // chokepoints' business; double-seating is the defect this line closes).
+    if ((s.underLane ?? null) !== (q.underLane ?? null)) continue;
     // Course claims: a row listing courses stands ONLY on those courses; a
     // row listing none never minds them (ordinary ground law, unchanged).
     if (s.courses && (!q.course || !s.courses.includes(q.course))) continue;

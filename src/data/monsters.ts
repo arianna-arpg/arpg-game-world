@@ -11870,6 +11870,86 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  // --- THE MEREFOLK (the moonlit mere's own — data/merelake.ts, batch 35) ---
+  // Her ratified branch: NEW fantastical/high-fantasy kin for the meadow's
+  // under-lake — fey, luminous, otherworldly, and deliberately the MEADOW's
+  // palette (moon-water teals over the lea's green), never the aether's.
+  // They live on the mere's own story: seeded by the grotto carve as
+  // tier-stamped base population, sealed off the surface by the standing
+  // same-tier laws (the probe's heart). Faction 'merefolk' debuts
+  // DIPLOMACY-SILENT (the jotun/coven law: natives claim ground, not
+  // wars — no FACTIONS roster row on purpose). None carries a
+  // MonsterDef.light: the light layer's story audit is a deferred thread
+  // (the pass file) — their glow lives in the look parts alone.
+  // The mere wisp: the lake's own lantern-mote — a scrap of moon-water
+  // light drifting over the pool, stinging in slow pulses.
+  mere_wisp: {
+    id: 'mere_wisp', name: 'Mere Wisp',
+    color: '#9fe8dc', shape: 'kite', radius: 8, material: 'chitin', look: 'mere_wisp',
+    base: { life: 22, moveSpeed: 165, evasion: 75, mana: 60, manaRegen: 6 },
+    skills: ['glimmer_pulse'], xp: 12, faction: 'merefolk', tags: ['beast'],
+    flier: true, levitates: true,
+    packSize: [2, 4],
+    tells: [...NOCTURNE_UNFURL],
+    nocturne: { phases: ['dusk', 'night'], mods: [
+      mod('evasion', 'increased', 0.3), mod('damage', 'increased', 0.2),
+    ] },
+    detection: 0.9,
+    brain: {
+      type: 'swarm',
+      behavior: { flock: { kin: 'def', radius: 150, cohesion: 0.7, alignment: 0.6, separation: 1.1, weave: 1.4, erratic: 1.0 } },
+    },
+  },
+  // The mere dancer: the fey charmer at the waterline — a veiled figure of
+  // ebb-light whose glow holds your eye (transfixed) while the water rises.
+  mere_dancer: {
+    id: 'mere_dancer', name: 'Mere Dancer',
+    color: '#c8f0ea', shape: 'diamond', radius: 11, material: 'chitin', look: 'mere_dancer',
+    base: { life: 28, energyShield: 70, moveSpeed: 145, evasion: 50, mana: 120, manaRegen: 9 },
+    skills: ['beguiling_glow', 'glimmer_pulse'], xp: 22, faction: 'merefolk', tags: ['beast'],
+    gemBias: ['duration', 'aoe'],
+    flier: true, levitates: true,
+    tells: [...NOCTURNE_UNFURL],
+    nocturne: { phases: ['dusk', 'night'], mods: [
+      mod('evasion', 'increased', 0.25), mod('castSpeed', 'increased', 0.15),
+    ] },
+    detection: 1.0,
+    brain: { type: 'strafer' },
+  },
+  // The mere leaper: the pool's luminous hunter — a moon-fed haunch that
+  // stoops onto the drawn ring (the honest dive: read the water-light on
+  // the ground, step off it).
+  mere_leaper: {
+    id: 'mere_leaper', name: 'Mere Leaper',
+    color: '#7fd8b0', shape: 'oval', radius: 12, material: 'flesh', look: 'mere_leaper',
+    base: { life: 60, moveSpeed: 130, accuracy: 92, evasion: 40, mana: 20, manaRegen: 3 },
+    skills: ['claw', 'locust_dive'], xp: 16, faction: 'merefolk', tags: ['beast'],
+    packSize: [2, 3],
+    tells: [...NOCTURNE_UNFURL],
+    nocturne: { phases: ['dusk', 'night'], mods: [
+      mod('moveSpeed', 'increased', 0.2), mod('damage', 'increased', 0.2),
+    ] },
+    detection: 0.8,
+    brain: { type: 'flanker' },
+  },
+  // THE MERE SOVEREIGN: the court's regent — the lair fabric's alpha (the
+  // mere_court lair, data/merelake.ts), not a boss: barrow-watch tier, an
+  // ice-and-charm commander whose court is the argument.
+  mere_sovereign: {
+    id: 'mere_sovereign', name: 'the Mere Sovereign',
+    color: '#b8f8ec', shape: 'diamond', radius: 15, material: 'chitin', look: 'mere_sovereign',
+    base: { life: 240, energyShield: 110, moveSpeed: 150, evasion: 55, accuracy: 108, mana: 180, manaRegen: 12 },
+    skills: ['beguiling_glow', 'creeping_ice', 'glimmer_pulse'], xp: 90,
+    faction: 'merefolk', tags: ['beast'],
+    flier: true, levitates: true,
+    tells: [...NOCTURNE_UNFURL],
+    nocturne: { phases: ['dusk', 'night'], mods: [
+      mod('castSpeed', 'increased', 0.2), mod('damage', 'increased', 0.25),
+    ] },
+    detection: 1.1,
+    brain: { type: 'commander' },
+  },
+
   // --- THE SMALL LIVES (ambient prey; the refuge seam's showcase) -----------
   // A squirrel: all tail — and when spooked it makes FOR the nearest tree
   // and is simply gone up it (refuge).

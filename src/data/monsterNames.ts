@@ -496,6 +496,8 @@ export const MONSTER_NAMES = {
     primeval: TELLURIC_TONGUE,
     wyrmkin: TELLURIC_TONGUE,
     glimmerkin: LANTERN_TONGUE,
+    // The moonlit mere's fey speak the lit courts' tongue (data/merelake.ts).
+    merefolk: LANTERN_TONGUE,
     wax: LANTERN_TONGUE,
     umbral: DUSK_TONGUE,
     gloamborn: DUSK_TONGUE,

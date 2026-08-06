@@ -3899,6 +3899,51 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'wisps', x: -0.3, scale: 0.7, params: { n: 2 } }],
   },
+
+  // --- THE MEREFOLK (the moonlit mere's own — data/merelake.ts) ------------
+  /** The mere wisp: a mote of moon-water light over the pool — the
+   *  will-o'-wisp grammar in the lake's teal. */
+  mere_wisp: {
+    parts: [
+      { kind: 'disc', scale: 0.45, role: 'glow' },
+      { kind: 'halo', scale: 1.0, alpha: 0.65 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.6, params: { n: 3 } }],
+  },
+  /** The mere dancer: a veiled figure of ebb-light — dark water-tatters
+   *  around the glow that holds your eye, which is the point of her. */
+  mere_dancer: {
+    parts: [
+      { kind: 'tatters', scale: 0.8, role: 'dark', params: { n: 4 } },
+      { kind: 'disc', scale: 0.5, role: 'glow' },
+      { kind: 'halo', scale: 1.0, alpha: 0.7 },
+      { kind: 'antennae', scale: 0.8 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.65, params: { n: 3 } }],
+  },
+  /** The mere leaper: a moon-fed haunch — wet-sheened bulk, lamp eyes,
+   *  built entirely out of the jump it is about to make. */
+  mere_leaper: {
+    parts: [
+      { kind: 'blob', scale: 0.95, params: { irr: 0.2, seed: 613 } },
+      { kind: 'disc', scale: 0.35, x: -0.3, role: 'glow' },
+      { kind: 'eyes', color: '#b8f8ec', params: { spread: 0.42, dist: 0.55, size: 0.11 } },
+    ],
+  },
+  /** THE MERE SOVEREIGN: the court's regent — the dancer's grammar grown
+   *  regal: more veil, a brighter heart, sign-marks orbiting the crownless
+   *  crown. */
+  mere_sovereign: {
+    parts: [
+      { kind: 'tatters', scale: 0.95, role: 'dark', params: { n: 5 } },
+      { kind: 'blob', scale: 0.85, role: 'dark', params: { irr: 0.22, seed: 941 } },
+      { kind: 'disc', scale: 0.5, role: 'glow' },
+      { kind: 'halo', scale: 1.15, alpha: 0.8 },
+      { kind: 'runes', scale: 0.8, params: { n: 3 } },
+      { kind: 'eyes', color: '#d8fff4', params: { spread: 0.38, dist: 0.45, size: 0.1 } },
+    ],
+    live: [{ kind: 'wisps', x: 0.2, scale: 0.75, params: { n: 3 } }],
+  },
   /** The poltergeist: NO body at all — a knot of orbiting debris and two
    *  furious pinpricks. The absence is the silhouette. */
   poltergeist: {

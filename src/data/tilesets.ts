@@ -5502,6 +5502,16 @@ export const TILESETS: Record<string, TilesetDef> = {
           announceColor: '#d8f078',
         }],
       },
+      // THE MOONLIT MERE's ephemerality (data/merelake.ts — her ratified
+      // CONDITION-HELD law): the under-lake's water stands full through the
+      // lea's own firefly hours (dusk+night — FLAGGED; night-alone is the
+      // one-lever re-point), EBBS for a slow fade when day breaks, and
+      // drains to the walkable mere_bed. A meadow that rolled no mere
+      // paints none of these kinds, so the row stands down free.
+      spans: [{
+        region: 'mere_water', when: { phases: ['dusk', 'night'] },
+        fadeRegion: 'mere_water_fading', voidRegion: 'mere_bed', fade: 6,
+      }],
       floor: '#0e130c', grid: '#172013', border: '#3a5a2c',
       obstacle: '#2c4a22', obstacleEdge: '#477534', accent: '#9ed060',
       tree: '#3a7a34', grass: '#4e7a34', mud: '#1d2b16', water: '#1a4a54',
@@ -5510,6 +5520,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     // THE COUNTRY STAGING: the meadow is the doorstep breather — the rim of
     // the grove country, thinning fast once the wood properly begins.
     depthAffinity: { to: 0.34, fadeOut: 0.12 },
+    // THE MOONLIT MERE (data/merelake.ts, batch 35 — her ratified design):
+    // "one entryway... can occasionally spawn in a meadows area, leading to
+    // an underground, ephemeral, fantasy-based lake." The grotto lane rides
+    // the standing underTier tail (engine/tiers.ts); the chance is the
+    // mouth's rarity — FLAGGED, "occasionally"'s number. The emberwind
+    // variant inherits it (merges over base): a refuge under the burning
+    // lea is the fabric composing, kept deliberately.
+    layoutParams: { underTier: 'mere', underTierChance: 0.14 },
     layout: [
       // A kept lawn at the heart of the lea — negative space first.
       { kind: 'clearing', count: [1, 2], radius: [100, 170] },

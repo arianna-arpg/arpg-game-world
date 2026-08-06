@@ -120,6 +120,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_lonecrypt.ts', status: 'green', tier: 'fast', why: 'THE LONE CRYPT kit — the strike exhumation, the riddle-sealed mouth (sealedBy), the resident lottery\'s purity and the yard\'s corridor math' },
   { probe: 'probe_mass.ts', status: 'green', tier: 'fast', why: 'THE MASS & AUTHORITY FABRIC — the weight derivation law, shove authority, wall wounds and the bowling lane' },
   { probe: 'probe_massif.ts', status: 'green', tier: 'fast', why: 'THE MASSIF FABRIC — the weave law, the heal, the courts, the block textures and the placement law pinned structurally' },
+  { probe: 'probe_meadowmere.ts', status: 'green', tier: 'fast', why: 'THE MOONLIT MERE — the meadow\'s grotto lane (one entryway, one set-piece under-lake), the condition-held ephemerality through every phase, the underLane lair rung, and HER LAYER-HONESTY LAW live: invisible and untouchable from the surface story, real one story down' },
   { probe: 'probe_mercs.ts', status: 'green', tier: 'slow', why: '~27s: THE MERCENARY MARKET LAWS — the wilds commission, the retinue, retirement and the hire economy end to end' },
   { probe: 'probe_mimic.ts', status: 'green', tier: 'fast', why: 'THE MIMICRY FABRIC — policy defaults, the explicit allow/deny lane, structural refusals that beat an allow, and the capture path' },
   { probe: 'probe_mireille_lesson.ts', status: 'green', tier: 'fast', why: 'MIREILLE\'S FLASK LESSON — the gift arc end to end, then every way a finished lesson must STAY finished' },

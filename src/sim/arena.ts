@@ -30,6 +30,7 @@ import '../data/occurrences'; // the 'occurrence' ring tenant + occurrence defs
 import '../data/settled';
 import '../data/garden';
 import '../data/catacombs';
+import '../data/merelake';
 import '../data/lonecrypt';
 import '../data/grove';
 import '../data/theater'; // THE THEATER FABRIC's defaults (before warfront — kind priority is registration order)

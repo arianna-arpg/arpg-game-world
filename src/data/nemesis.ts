@@ -516,6 +516,8 @@ export const NEMESIS_NAMES = {
     primeval: TELLURIC_KIN,
     wyrmkin: TELLURIC_KIN,
     glimmerkin: LANTERN_KIN,
+    // The moonlit mere's fey speak the lit courts' tongue (data/merelake.ts).
+    merefolk: LANTERN_KIN,
     wax: LANTERN_KIN,
     umbral: DUSK_KIN,
     gloamborn: DUSK_KIN,
