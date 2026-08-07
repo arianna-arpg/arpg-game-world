@@ -82,7 +82,7 @@ import { DIG_CFG } from '../data/digsites';
 import type { ContestRecoupSpec, ContestSpec } from '../data/objectives';
 import { PROCESSION_CFG } from '../data/processions';
 import { BOUNTY_CFG } from '../data/bounties';
-import { CLEAR_CFG, CONTEST_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, packageAskRow, pressureRampAt, pressureRampCadence, ventureAskRow } from '../data/objectives';
+import { ADOPT_CFG, CLEAR_CFG, CONTEST_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, packageAskRow, pressureRampAt, pressureRampCadence, ventureAskRow } from '../data/objectives';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
@@ -3153,6 +3153,16 @@ export class World {
    *  reset at the loadZone adoption stamp — so leaving mid-run resets the
    *  attempt while the guest's own seat persists (its re-arm law, not ours). */
   private packageAskEngaged = false;
+  /** THE RESOLUTION LATCH (kind 'venture' — her ruling, 2026-08-07): the
+   *  resolved ask's own prose (wonText/lostText) held AS the objective HUD
+   *  line, so the resolution stays in sight — the underlying hand-back /
+   *  completion bank is instant and byte-unchanged; this is DISPLAY STATE
+   *  ONLY. objectiveText releases it by pure read once BOTH
+   *  ADOPT_CFG.resolveLinger gates pass: seconds since the resolution
+   *  instant AND credited kills since it (`at`/`kills` snapshot the clock
+   *  and the kill counter at resolution — the murders that caused a loss
+   *  never count). Zone-local, never persisted: cleared at every loadZone. */
+  private objectiveLatch: { text: string; at: number; kills: number } | null = null;
   /** Zone ids whose objective REWARD has already been claimed THIS run. A
    *  revisited zone respawns + re-unseals (objectiveDone re-arms per load), but
    *  the reward pays ONCE — no farming a single zone's bounty. Per-run: a fresh
@@ -4673,6 +4683,7 @@ export class World {
     this.offering = null;   // the hungering altar re-stages below (fed count rides Zone Memory)
     this.cull = null;       // the cull re-stamps below (tally + ask ride Zone Memory)
     this.objectiveLost = false; // re-armed from the memory rider below
+    this.objectiveLatch = null; // THE RESOLUTION LATCH is display state — zone-local, never persisted
     this.lures.clear();     // lures are zone-local
 
     // HOLDFAST: on first arrival in an uncharted zone, maybe raise a fortified, LOCKED
@@ -41542,9 +41553,12 @@ export class World {
       const sz = sidezoneOf(o.mouthKind);
       const entered = !!(sz?.ledgerOnEnter && (this.ledger[sz.ledgerOnEnter] ?? 0) > 0);
       const m = mouths[0] ?? null; // harvest order — deterministic per layout
+      // THE UNTITLED CLAIM (her ruling, 2026-08-07): the chevron label is
+      // player-facing objective prose — title-free like the HUD line; the
+      // `title` field itself stays on the view as DATA (dev surfaces).
       return {
         mode: 'den', title: o.title, pos: m ? vec(m.pos.x, m.pos.y) : null,
-        remain: done ? 0 : 1, entered, done, label: `brave ${o.title}`,
+        remain: done ? 0 : 1, entered, done, label: 'brave the claim',
       };
     }
     const kin = new Set(o.kin ?? []);
@@ -41553,7 +41567,7 @@ export class World {
     return {
       mode: 'hunt', title: o.title, pos: m ? vec(m.pos.x, m.pos.y) : null,
       remain: live.length, entered: false, done: live.length === 0,
-      label: `${o.title} — ${live.length} keeper${live.length === 1 ? '' : 's'} left`,
+      label: `${live.length} keeper${live.length === 1 ? '' : 's'} left`,
     };
   }
 
@@ -49791,9 +49805,12 @@ export class World {
         if (this.objectiveDone) return;
         const v = this.lairAskView();
         if (!v || v.done) {
+          // THE UNTITLED CLAIM (her ruling, 2026-08-07): the floater
+          // speaks the deed, never the name — identity lives in the
+          // mouth's own visual.
           this.completeObjective(!v || v.mode === 'den'
-            ? `${o.title} is settled!`
-            : `${o.title}'s claim is broken!`);
+            ? 'The claim is settled!'
+            : "The natives' claim is broken!");
         }
         return;
       }
@@ -49847,13 +49864,26 @@ export class World {
         const v = this.ventureAskView();
         if (v?.verdict === 'standing') return;
         if (v?.verdict === 'won') {
-          this.completeObjective(v.wonText ?? `${o.title} is won!`);
+          // THE RESOLUTION LATCH (her ruling, 2026-08-07): the win's own
+          // prose takes the objective LINE while the linger gates run —
+          // the banking itself stays at the resolution instant (chest,
+          // seals, XP timing byte-unchanged; only the TEXT lingers).
+          const line = v.wonText ?? `${o.title} is won!`;
+          this.objectiveLatch = { text: line, at: this.time, kills: this.kills };
+          this.completeObjective(line);
           return;
         }
         // 'lost' — or the row's fabric left this world: THE HAND-BACK.
         if (v) {
-          this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-            v.lostText ?? `${o.title} is forfeit — the wilds still ask their cull`, '#d05050', 14);
+          // THE RESOLUTION LATCH replaces the old transient red floater
+          // (her reduce-on-screen-text word, 2026-08-07): the forfeit
+          // prose holds the objective LINE instead — one seat, no double
+          // text. A vanished fabric (v null) stays silent, as it always
+          // was: nothing resolved, there is no prose to hold.
+          this.objectiveLatch = {
+            text: v.lostText ?? `${o.title} is forfeit — the wilds still ask their cull`,
+            at: this.time, kills: this.kills,
+          };
         }
         this.zone.objective = { kind: 'clear' };
         return;
@@ -51778,6 +51808,20 @@ export class World {
   objectiveText(): string {
     const o = this.zone.objective;
     if (o.kind === 'safe') return 'Sanctuary';
+    // THE RESOLUTION LATCH (her ruling, 2026-08-07): a resolved venture's
+    // own prose HOLDS this line — "the text remains in sight for a player
+    // to see" — until BOTH linger gates pass (ADOPT_CFG.resolveLinger:
+    // seconds since the resolution instant AND credited kills since it),
+    // then the line "swaps to the new objective per what the prose actually
+    // states" (the done state for a win, the live cull for a loss). A pure
+    // read — the latch object goes inert once both gates pass and dies at
+    // the next zone load. Ahead of the lost/done branches on purpose: the
+    // resolution prose is the display truth for its whole window.
+    const latch = this.objectiveLatch;
+    if (latch && (this.time - latch.at < ADOPT_CFG.resolveLinger.sec
+      || this.kills - latch.kills < ADOPT_CFG.resolveLinger.kills)) {
+      return latch.text;
+    }
     // A LOST objective reads as lost — and says what losing costs. On open
     // ground: nothing but the bounty, the roads never lock. On SEALED ground
     // (THE FORFEIT LAW, her ruling 2026-08-05): the seal belongs to the
@@ -51807,15 +51851,18 @@ export class World {
       }
       case 'boss': return `Slay ${MONSTERS[o.id].name}`;
       case 'lair': {
-        // THE ADOPTED ASK: the line names the claim the mint stood up.
+        // THE ADOPTED ASK — THE UNTITLED CLAIM (her ruling, 2026-08-07):
+        // the line never names the claim; identity lives in the mouth's
+        // own distinct visual. Structure unchanged (den/hunt, entered,
+        // keeper count) — only the title left the prose.
         const v = this.lairAskView();
-        if (!v) return `Natives claim this ground — ${o.title}`;
+        if (!v) return 'Natives claim this ground';
         if (v.mode === 'den') {
           return v.entered
-            ? `Brave ${v.title} — settle what keeps it`
-            : `Brave ${v.title} — its door stands on this ground`;
+            ? 'Brave the claim — settle what keeps it'
+            : 'Brave the claim — its door stands on this ground';
         }
-        return `Break the claim of ${v.title} — ${v.remain} keeper${v.remain === 1 ? '' : 's'} remain${v.remain === 1 ? 's' : ''}`;
+        return `Break the natives' claim — ${v.remain} keeper${v.remain === 1 ? '' : 's'} remain${v.remain === 1 ? 's' : ''}`;
       }
       case 'package': {
         // THE ADOPTED GUEST: the row's own view authors the line (the label

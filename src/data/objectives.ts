@@ -212,6 +212,15 @@ export const ADOPT_CFG = {
   ventureChance: 0.5,
   /** Chevron face for the adopted venture's pointer (the warded prize). */
   ventureGlyph: '⚑',
+  /** THE RESOLUTION LATCH (her ruling, 2026-08-07): a resolved venture's own
+   *  prose (wonText/lostText) HOLDS the objective HUD line — "the text
+   *  remains in sight for a player to see" — released only once BOTH gates
+   *  pass: `sec` seconds since the resolution instant AND `kills` credited
+   *  kills SINCE it (snapshotted at resolution — the warden murders that
+   *  CAUSED a loss never count). Her numbers ("something like ten seconds" /
+   *  "at least one entity"), both tweakable dials. Display state only: the
+   *  hand-back and the completion bank stay instant (World.objectiveLatch). */
+  resolveLinger: { sec: 10, kills: 1 },
   /** THE PUZZLE CLASS's coin (registerPuzzleAsk rows below): the share of
    *  candidate-bearing loads (the row's door standing + the ring authored)
    *  whose bare cull re-negotiates into the riddle's own ask. Hashed per
@@ -233,7 +242,13 @@ export const ADOPT_CFG = {
   glyph: '☖',
   accent: '#d8b46a',
   /** Prose names per lair row (id-prose fallback covers unlisted rows — a
-   *  new lair is adoptable the moment it registers, named or not). */
+   *  new lair is adoptable the moment it registers, named or not).
+   *  THE UNTITLED CLAIM (her ruling, 2026-08-07): LAIR titles left ALL
+   *  player-facing objective prose — the pane read, the HUD line, the
+   *  completion floater and the chevron label all speak title-free; a
+   *  claim's identity lives in its mouth's own distinct visual. These names
+   *  remain DATA (the stamp's `title` field, dev surfaces, and the package/
+   *  venture classes' pattern) — do not re-wire them into prose casually. */
   titles: {
     frostmaw: 'the Frostmaw',
     giants_cairn: "the Giant's Cairn",

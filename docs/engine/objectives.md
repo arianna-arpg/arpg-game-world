@@ -409,6 +409,17 @@ structurally weight 0, not a failed promise. All numbers + the derivations in
   parent chest would double-pay the same feature. A bound feature that no
   longer stands completes vacuously (the puzzle's no-wedge law — mercy for
   drifted saves, never a free clear).
+- THE UNTITLED CLAIM (her ruling, 2026-08-07): LAIR titles left ALL
+  player-facing objective prose — the pane read stays the bare row
+  (`objectiveRead` composes no title), the HUD line speaks the structure
+  title-free ("Brave the claim — its door stands on this ground" / "Break
+  the natives' claim — N keepers remain"), the completion floater speaks
+  the deed ("The claim is settled!"), and the chevron label follows — a
+  claim's identity lives in its mouth's own distinct visual, not in text.
+  `ADOPT_CFG.titles` and the spec's `title` remain DATA (dev surfaces, and
+  the package/venture classes still speak their names by design); only the
+  lair READS stopped consuming them. Probe: RIG T (T1/T11/T16 pin both the
+  bare prose and the title's absence).
 - `validate` refuses `'lair'` in tileset weight tables and pocket-form pools
   (`ADOPTIVE_ONLY_KINDS`): a weight row would be a promise `rollObjective`
   cannot keep.
@@ -515,6 +526,29 @@ Rows consult sorted by id; no hand lists anywhere.
   must read null there, so a resolved or failed venture can never
   (re-)offer itself and the hand-back converges to the cull instead of
   flip-flopping.
+- THE RESOLUTION LATCH (her ruling, 2026-08-07): when the venture resolves —
+  EITHER arm — the resolution's own prose (`wonText`/`lostText`, the
+  standing fallbacks) takes the objective HUD line and HOLDS it
+  (`World.objectiveLatch`, read at the one `objectiveText` seam), released
+  only once BOTH gates pass: `ADOPT_CFG.resolveLinger.sec` seconds since
+  the resolution instant AND `resolveLinger.kills` credited kills SINCE it
+  (the clock and the kill counter snapshot at resolution — the warden
+  murders that CAUSED a loss never count; `World.kills` = non-silent
+  enemy deaths credited to the player's side). Then the line converts to
+  whatever the objective now is — the done state for a win, the live cull
+  for a loss. DISPLAY STATE ONLY: the hand-back and the completion bank
+  stay instant and byte-unchanged (chest/seals/XP timing untouched), the
+  latch is zone-local and never persisted (cleared at every loadZone), and
+  the old transient red LOST floater is dead — the latch is its
+  replacement (her reduce-on-screen-text word: one seat, no double text).
+  A vanished fabric (view null) latches nothing: nothing resolved, there
+  is no prose to hold. Honest consequence, named: a WON venture on ground
+  the player never kills again holds its won line indefinitely — the
+  guardian does stand open. Co-op: the latch is host-side display state
+  like the whole objective line (no objective wire fields exist; a network
+  guest's HUD line derives from its own local graph — see the co-op
+  posture bullet below); couch seats share the one World and see it
+  naturally.
 - THE HOLDFAST DEBUT (`packages/overlays/holdfast.ts` — "open the
   holdfast"): candidacy = a SEALED gate standing in the overlay's ledger
   (`resolved: 'sealed'`, exit appended, guardian registered — an opened
@@ -555,7 +589,10 @@ Rows consult sorted by id; no hand lists anywhere.
   and the LIVE debut: adopt → pay → complete; adopt → murder (gamble pinned
   shut) → fabric rules failed → hand-back in-visit → cull still finishes →
   a failed gate never re-adopts; adopt → murder (gamble pinned open) → the
-  burst COMPLETES the ask down the bloody road.
+  burst COMPLETES the ask down the bloody road. RIG W-L pins the latch:
+  both arms latch their prose, each gate holds alone (kill-first and
+  clock-first orders), both met converts, the lost floater is gone, a zone
+  load clears it, ordinary kinds never linger.
 
 ### THE PUZZLE CLASS (the STANDING `kind: 'puzzle'` — the adopted riddle)
 

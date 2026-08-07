@@ -55,6 +55,17 @@
 //     the gate held) hands the ask back to the bare cull IN-VISIT — no
 //     completion, no punishment, the zone completable the ordinary way; a
 //     failed gate never re-offers (THE STANDING CONTRACT).
+//   - THE RESOLUTION LATCH (RIG W-L, her ruling 2026-08-07): a resolved
+//     venture's own prose (wonText/lostText, the standing fallbacks) HOLDS
+//     the objective HUD line — released only once BOTH gates pass
+//     (ADOPT_CFG.resolveLinger: sec seconds since the resolution AND kills
+//     credited kills SINCE it), then the line converts to what the prose
+//     stated; the lost floater is dead, the hand-back/banking stay
+//     instant, ordinary kinds never linger, a zone load clears it.
+//   - THE UNTITLED CLAIM (RIG T asserts, her ruling 2026-08-07): LAIR
+//     titles left every player-facing objective read/line/floater/label —
+//     identity lives in the mouth's own visual (package/venture keep
+//     their names; the spec's `title` stays data).
 //   - THE OBJECTIVE LEVERS (RIG X, 2026-08-05 — static half after RIG A, live
 //     half last in the span): the delve pocket's WIDENED objectivePool
 //     (puzzle/rifts/pyres/unearth in, 'leyline' banned — pockets are
@@ -685,10 +696,13 @@ withSeededRandom(0x0bec7a, () => {
   {
     // T1 the census: the adopted kind is fully wired AND structurally
     // un-rollable (no tileset weight row anywhere — weight 0 is the law).
-    check('T1 \'lair\' rows: seals OPEN, read + title refinement, NO parent chest (the claim\'s own hoard pays), NO weight row',
+    // THE UNTITLED CLAIM (her ruling, 2026-08-07): the pane read is BARE —
+    // exactly the table row, no title composed on (the mouth's visual is
+    // the identity; package/venture keep their names, W1c's business).
+    check('T1 \'lair\' rows: seals OPEN, read BARE (THE UNTITLED CLAIM — no title), NO parent chest (the claim\'s own hoard pays), NO weight row',
       OBJECTIVE_SEALS.lair === false
       && OBJECTIVE_READS.lair.glyph.length > 0
-      && objectiveRead({ kind: 'lair', lairId: 'wyrm_barrow', title: 'the Emberwyrm Barrow' }).read.includes('the Emberwyrm Barrow')
+      && objectiveRead({ kind: 'lair', lairId: 'wyrm_barrow', title: 'the Emberwyrm Barrow' }).read === OBJECTIVE_READS.lair.read
       && !objectiveEarnsChest({ kind: 'lair', lairId: 'x', title: 'x' })
       && !Object.values(TILESETS).some(t => t.objectives.some(ob => (ob.kind as string) === 'lair')));
     // T2 the derivations are REGISTRY-DERIVED, not hand lists: dens carry
@@ -764,9 +778,10 @@ withSeededRandom(0x0bec7a, () => {
         o.kind === 'lair' && o.mouthKind === 'wyrm_barrow_mouth' && o.lairId === 'wyrm_barrow'
         && (w.doodads as { kind: string }[]).some(d => d.kind === 'wyrm_barrow_mouth'));
       const v = w.lairAskView();
-      check('T11 the stamped view: den mode, door found, unentered, not done; HUD names the claim',
+      check('T11 the stamped view: den mode, door found, unentered, not done; HUD asks TITLE-FREE (THE UNTITLED CLAIM)',
         v?.mode === 'den' && v.pos !== null && v.entered === false && v.done === false
-        && String(w.objectiveText()).includes('Brave the Emberwyrm Barrow'));
+        && String(w.objectiveText()).includes('Brave the claim')
+        && !String(w.objectiveText()).includes('Emberwyrm'));
       check('T12 the adopted ask never seals the roads', objectiveSeals(o) === false && w.objectiveDone === false);
       // Settle the den WITHOUT walking it: the completion read is the derived
       // pocket id in completedObjectives — the gateway machinery IS the
@@ -803,9 +818,10 @@ withSeededRandom(0x0bec7a, () => {
         o.kind === 'lair' && (o.kin ?? []).includes('hill_giant') && giants.length > 0,
         `${giants.length} giants`);
       const v = w.lairAskView();
-      check('T16 the hunt view counts the keepers; the HUD speaks the claim',
+      check('T16 the hunt view counts the keepers; the HUD speaks TITLE-FREE (THE UNTITLED CLAIM)',
         v?.mode === 'hunt' && v.remain === giants.length && v.done === false
-        && String(w.objectiveText()).includes('Break the claim'),
+        && String(w.objectiveText()).includes('Break the natives\' claim')
+        && !String(w.objectiveText()).includes('Cairn'),
         String(w.objectiveText()));
       for (const g of giants) w.kill(g, true);
       step(0.2);
@@ -1625,6 +1641,123 @@ withSeededRandom(0x0bec7a, () => {
         w.objectiveLost === true
         && liveExits().every(e => !w.isExitLocked(e))
         && String(w.objectiveText()) === 'The caravan was lost — the roads remain open');
+      leaveToHome();
+    }
+  }
+
+  // --- RIG W-L: THE RESOLUTION LATCH (her ruling, 2026-08-07) ----------------
+  // "keep it up for a minimum of something like ten seconds in the objective
+  // space, and after ten seconds AND the player has killed at least one
+  // entity in the zone, it converts to whatever the objective ends up as."
+  // The latch is DISPLAY STATE ONLY — the hand-back and the completion bank
+  // stay instant — and the old lost floater is DEAD (her reduce-on-screen-
+  // text word: one seat, no double text). Appended at the span's tail per
+  // the seeded-span law (a new rig never shifts an older rig's stream), on
+  // its OWN registry row (RIG W's probe_marker closures are block-scoped).
+  // The sec gate is proven by AGING the latch stamp (pure display math —
+  // byte-equivalent to waiting out the clock without stepping 10s of sim).
+  {
+    const linger = ADOPT_CFG.resolveLinger;
+    let latchArmId: string | null = null;
+    let latchVerdict: 'standing' | 'won' | 'lost' = 'standing';
+    registerVentureAsk({
+      id: 'probe_latch',
+      standing: (_wv, d) => (latchArmId !== null && d.id === latchArmId ? `pl:${d.id}` : null),
+      title: () => 'the Latch Stand',
+      view: () => ({
+        verdict: latchVerdict, pos: null, label: 'Face the Latch Stand',
+        wonText: 'The Latch Stand stands open!',
+      }),
+    });
+    /** Mint + arm + boot venture ground for the latch (the W5 idiom: arm
+     *  must precede the adopting load, so mintWith can't serve). */
+    const stageLatch = (seed: number, spread: number): string => {
+      latchVerdict = 'standing';
+      const zid = w.devMintTileset('grassland', spread, 3, { seed }) as string;
+      leaveToHome();
+      const def = w.zoneMap[zid] as ZoneDef;
+      def.objective = { kind: 'clear', adopt: true };
+      def.landmarks = [];
+      latchArmId = zid;
+      (w.zoneMemory as Map<string, unknown>).delete(zid);
+      (w.completedObjectives as Set<string>).delete(zid);
+      w.loadZone(zid);
+      return zid;
+    };
+
+    // THE LOST ARM: the forfeit prose holds THE LINE (no floater), the
+    // hand-back is instant, the kill gate met alone does NOT release (the
+    // clock still holds), both met converts to the live cull. The row
+    // carries no lostText, so this pins the title fallback lane.
+    {
+      stageLatch(939393, 64);
+      check('WL1 the ground adopted the latch venture',
+        (w.zone.objective as ObjectiveSpec).kind === 'venture');
+      // Two planted bodies: one feeds the kill gate, one keeps the residual
+      // cull LIVE (a sparse mint must never let the empty-floor law fire).
+      plantFoe(w.player.pos.x + 380, w.player.pos.y + 60);
+      const gateFoe = plantFoe(w.player.pos.x + 420, w.player.pos.y);
+      latchVerdict = 'lost';
+      step(0.1);
+      const lostLine = 'the Latch Stand is forfeit — the wilds still ask their cull';
+      check('WL2 the loss handed back INSTANTLY (the latch is display state — the ask is already the cull)',
+        (w.zone.objective as ObjectiveSpec).kind === 'clear' && w.objectiveDone === false);
+      check('WL3 the forfeit prose HOLDS the objective line (the title fallback lane)',
+        String(w.objectiveText()) === lostLine);
+      check('WL4 the old red floater is DEAD (no transient forfeit text queued)',
+        !(w.texts as { text: string }[]).some(t => t.text.includes('forfeit')));
+      w.kill(gateFoe); // non-silent, killerless — the player's side credits
+      step(0.1);
+      check('WL5 the kill gate met alone does NOT release (the clock still holds the latch)',
+        String(w.objectiveText()) === lostLine);
+      (w.objectiveLatch as { at: number }).at -= linger.sec + 1;
+      check('WL6 both gates met ⇒ the line converts to what the prose stated (the live cull)',
+        String(w.objectiveText()).startsWith('Clear the area')
+        && !String(w.objectiveText()).includes('forfeit'));
+      latchArmId = null;
+      leaveToHome();
+    }
+
+    // THE WON ARM: the banking is instant while the prose lingers, the sec
+    // gate met alone does NOT release (pre-resolution kills never count —
+    // the snapshot law; a kill-less win stands honest), both met converts
+    // to the done state, and a zone load clears the latch. The row's
+    // wonText pins the authored-prose lane.
+    {
+      const zid = stageLatch(949494, 66);
+      check('WL7 the second ground adopted', (w.zone.objective as ObjectiveSpec).kind === 'venture');
+      const gateFoe = plantFoe(w.player.pos.x + 420, w.player.pos.y);
+      latchVerdict = 'won';
+      step(0.1);
+      const wonLine = 'The Latch Stand stands open!';
+      check('WL8 the win BANKS at the resolution instant while the prose lingers (only the TEXT waits)',
+        w.objectiveDone === true && (w.completedObjectives as Set<string>).has(zid)
+        && String(w.objectiveText()) === wonLine);
+      (w.objectiveLatch as { at: number }).at -= linger.sec + 1;
+      check('WL9 the clock met alone does NOT release (kills since resolution = 0 — the snapshot law)',
+        String(w.objectiveText()) === wonLine);
+      w.kill(gateFoe);
+      check('WL10 both met ⇒ the line converts to the done state',
+        String(w.objectiveText()) === 'Cleared');
+      leaveToHome();
+      w.loadZone(zid);
+      check('WL11 a zone load clears the latch (display state, never persisted)',
+        w.objectiveLatch === null && String(w.objectiveText()) === 'Cleared');
+      latchArmId = null;
+      leaveToHome();
+    }
+
+    // THE CONTROL: ordinary ground never engages the latch — the read falls
+    // through on a null latch byte-identically, and completion converts the
+    // line the same frame (no linger outside the venture resolution).
+    {
+      mintWith({ kind: 'clear' }, 959595, 68);
+      check('WL12 plain ground never latches', w.objectiveLatch === null);
+      killAllEnemies();
+      step(0.2);
+      check('WL13 completion converts INSTANTLY on ordinary kinds (zero credited kills, no linger)',
+        w.objectiveDone === true && String(w.objectiveText()) === 'Cleared'
+        && w.objectiveLatch === null);
       leaveToHome();
     }
   }

@@ -343,6 +343,8 @@ export const OBJECTIVE_READS: Record<ObjectiveSpec['kind'], { glyph: string; rea
   rifts: { glyph: '⟁', read: 'seal the seeping rifts' },
   pyres: { glyph: '✶', read: 'kindle the cold pyres' },
   unearth: { glyph: '⛏', read: 'unearth the buried caches' },
+  // THE UNTITLED CLAIM (2026-08-07): the lair read stays BARE — no title
+  // composed on (objectiveRead below); the mouth's visual is the identity.
   lair: { glyph: '☖', read: 'natives claim this ground' },
   // The ADOPTED GUEST (registerPackageAsk) — title composed on in objectiveRead.
   package: { glyph: '☄', read: 'a roving power claims this ground' },
@@ -366,11 +368,13 @@ export function objectiveRead(o: ObjectiveSpec): { glyph: string; read: string }
   if (o.kind === 'beacon' && (o.count ?? 1) > 1) {
     return { glyph: base.glyph, read: `attune the waystone circuit (${o.count})` };
   }
-  // THE ADOPTED ASK carries its claim's prose name ON the spec (`title` —
-  // stamped at adoption), so the pane names the ground without a registry.
   // The ADOPTED GUEST (registerPackageAsk) and the ADOPTED VENTURE
-  // (registerVentureAsk) speak the same way.
-  if (o.kind === 'lair' || o.kind === 'package' || o.kind === 'venture') return { glyph: base.glyph, read: `${base.read}: ${o.title}` };
+  // (registerVentureAsk) carry their prose name ON the spec (`title` —
+  // stamped at adoption), so the pane names the ground without a registry.
+  // THE UNTITLED CLAIM (her ruling, 2026-08-07): the adopted LAIR does
+  // NOT — its identity lives in the mouth's own distinct visual, so the
+  // pane keeps the bare read (the spec's `title` stays data, never prose).
+  if (o.kind === 'package' || o.kind === 'venture') return { glyph: base.glyph, read: `${base.read}: ${o.title}` };
   return base;
 }
 
