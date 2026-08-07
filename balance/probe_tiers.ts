@@ -28,7 +28,13 @@
 // touch sweep answer only the striker's own story (with surface controls
 // proving the gate alive), a surface trunk neither blocks nor sentinel-
 // snaps the under-story walker, summons wear their caster's story, and
-// the crossings still serve both ends.
+// the crossings still serve both ends — and THE DIRECT SEAT'S STAMP
+// (RIG R, batch 41): the tierseal coda's suspicion adjudicated — the
+// aloft stamp is DEF-driven (LandmarkDef.siteTier at placeLandmark's
+// builder tail) and covers the direct placeLandmarkById path too, so the
+// mere court's pieces wear the lane's story; the underLane intent census
+// (a seat's story can never be sensed from lid ground — the def carries
+// the intent) and the flat-control purity pin hold the law's two rims.
 //   npx tsx balance/probe_tiers.ts
 
 import '../src/data/clusters';
@@ -42,6 +48,9 @@ import '../src/data/compositions';
 import '../src/data/settled';
 // (the horn_gate door's live def registers there — rig O16's pin.)
 import '../src/data/lairs';
+// (the mere lane + court register there — rig R's pins; the lair fold is
+// pure off-lane, so no existing rig's stream moves.)
+import '../src/data/merelake';
 
 import { Rng } from '../src/core/rng';
 import { mixHex, vec } from '../src/core/math';
@@ -58,6 +67,7 @@ import {
   type GeneratedLayout,
 } from '../src/engine/levelgen'; // (landmarkOf joined for O16 — the horn_gate live-def pin)
 import { applyBuild } from '../src/sim/builds'; // (RIG Q — bar-learned casts through useSkill)
+import { lairRows } from '../src/engine/lairs'; // (RIG R — the underLane intent census)
 import { castRay, LOS_CFG } from '../src/engine/los';
 import { SightVeil } from '../src/render/vis/sightVeil';
 import { GridWalkField } from '../src/world/gridWalk';
@@ -1981,6 +1991,80 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
       && tierFloorAt('root_well', 0) && tierFloorAt('root_well', 1)
       && !throatRule.blocksMove && !throatRule.brittle);
   }
+}
+
+// --- RIG R: THE DIRECT SEAT'S STAMP (the mere court — batch 41 adjudication) -------
+// The tierseal coda (batch 40) suspected the grotto's direct
+// placeLandmarkById path skipped the tier stamp on its landmark doodads.
+// ADJUDICATED FALSE: the aloft stamp is DEF-driven (LandmarkDef.siteTier at
+// placeLandmark's builder tail, levelgen.ts) and runs identically for darted
+// and directly-seated landmarks — the court's pieces wear the lane's story.
+// These pins hold the law's three sides:
+//  · THE INTENT CENSUS (R1): under-lane ground is BOTH stories' floor (the
+//    lid law — floor0 AND floor1 true), so a seat's story can NEVER be
+//    sensed from the ground; the def's siteTier IS the intent channel.
+//    Every lair row claiming an underLane must name a landmark def that
+//    carries it — a future lane row that forgets is named here, not found
+//    as invisible furniture under some lake.
+//  · THE LIVE SEAT (R2/R3): a bias-forced mere (probe_meadowmere RIG C's
+//    exact fixture — same id, params, seed, so the court provably stands):
+//    the court stone wears tier 1 on its own story's floor, and every
+//    den-dress piece standing on mere ground is stamped (pieces thrown
+//    past the rim keep tier 0 honestly — surface litter by the placer's
+//    own law).
+//  · THE CONTROL (R4): a dial-less meadow mints ZERO tier fields anywhere
+//    (doodads and spawn rows both) — the stamp never leaks to flat ground.
+{
+  const shirkers = lairRows()
+    .filter(r => r.seat.underLane && ((landmarkOf(r.landmark)?.siteTier ?? 0) < 1))
+    .map(r => r.id);
+  check('R1 every underLane lair row names a siteTier landmark (the intent channel)',
+    shirkers.length === 0, shirkers.length ? `shirkers: ${shirkers.join(', ')}` : '');
+
+  const arena = { w: 2600, h: 1900 };
+  const entry = vec(150, arena.h / 2);
+  const exits = [vec(arena.w - 150, arena.h / 2), vec(arena.w / 2, 150)];
+  const THEME = { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' };
+  const gen = (id: string, layoutParams: Record<string, unknown>, seed: number): GeneratedLayout => {
+    const def = {
+      id, name: `QA ${id}`, level: 8, size: { w: arena.w, h: arena.h },
+      theme: THEME, layout: TILESETS.meadow.layout as StampSpec[],
+      objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+      layoutType: 'plains', layoutParams, seed,
+      tileset: 'meadow', geo: { biomeDepth: 0.3 },
+    } as unknown as ZoneDef;
+    return generateLayout(def, arena, new Rng(seed), entry, exits);
+  };
+  const MERE_GROUND = ['mere_shore', 'mere_water', 'mere_water_fading', 'mere_bed'];
+
+  const out = gen('qa_mere_court', { underTier: 'mere', underTierChance: 1, underLairBias: 1e6 }, 936001);
+  const g = out.walk as GridWalkField;
+  const stone = out.doodads.find(d => d.kind === 'mere_court_stone');
+  check('R2 the directly-seated court stone wears the lane\'s story on its own floor',
+    !!stone && (stone as { tier?: number }).tier === 1
+    && tierFloorAt(g.regionAt(stone.pos.x, stone.pos.y), 1),
+    stone ? `tier=${(stone as { tier?: number }).tier} ground=${g.regionAt(stone.pos.x, stone.pos.y)}` : 'no court stood');
+  // Every den-dress piece ON mere ground is stamped; rim spill keeps tier 0.
+  let onStory = 0, stamped = 0, rimSpill = 0, rimStamped = 0;
+  if (stone) {
+    for (const d of out.doodads) {
+      if (d.kind !== 'mere_bloom' && d.kind !== 'standing_stone') continue;
+      if (Math.hypot(d.pos.x - stone.pos.x, d.pos.y - stone.pos.y) >= 160) continue;
+      const k = g.regionAt(d.pos.x, d.pos.y);
+      const t = (d as { tier?: number }).tier;
+      if (MERE_GROUND.includes(k)) { onStory++; if (t === 1) stamped++; }
+      else { rimSpill++; if (t !== undefined) rimStamped++; }
+    }
+  }
+  check('R3 every den-dress piece on mere ground is stamped; rim spill stays honestly flat',
+    onStory >= 2 && stamped === onStory && rimStamped === 0,
+    `onStory=${stamped}/${onStory} rimSpill=${rimSpill} rimStamped=${rimStamped}`);
+
+  const flat = gen('qa_tiers_flat', {}, 936001);
+  const flatStamps = flat.doodads.filter(d => (d as { tier?: number }).tier !== undefined).length
+    + (flat.landmarkSpawns ?? []).filter(r => r.tier !== undefined).length;
+  check('R4 the control: a dial-less lea mints ZERO tier fields (no stamp leaks to flat ground)',
+    flatStamps === 0, `stamps=${flatStamps}`);
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);
