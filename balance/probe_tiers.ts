@@ -23,7 +23,12 @@
 // storyTable (engine/tiers.ts), the per-story spawn axis's fold, LIVE at
 // spawnPacks since the story fold (2026-08-06: identity + ledger census,
 // stream-neutral, the envelope honored on synthetic rows and the real
-// pinnacle gale debut).
+// pinnacle gale debut) — and LAYER SOVEREIGNTY (RIG Q, batch 40): cross-tier
+// touch/pop/block sealed live on a rooted garden — the mallet and the
+// touch sweep answer only the striker's own story (with surface controls
+// proving the gate alive), a surface trunk neither blocks nor sentinel-
+// snaps the under-story walker, summons wear their caster's story, and
+// the crossings still serve both ends.
 //   npx tsx balance/probe_tiers.ts
 
 import '../src/data/clusters';
@@ -47,10 +52,12 @@ import { mod } from '../src/engine/stats';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import {
-  generateLayout, hasLayout, landmarkOf, registerCluster, registerComposition,
-  registerDoodadRule, registerLandmark, validateCompositions, type Doodad,
+  doodadRuleOf, generateLayout, hasLayout, landmarkOf, registerCluster,
+  registerComposition, registerDoodadRule, registerLandmark,
+  validateCompositions, type Doodad,
   type GeneratedLayout,
 } from '../src/engine/levelgen'; // (landmarkOf joined for O16 — the horn_gate live-def pin)
+import { applyBuild } from '../src/sim/builds'; // (RIG Q — bar-learned casts through useSkill)
 import { castRay, LOS_CFG } from '../src/engine/los';
 import { SightVeil } from '../src/render/vis/sightVeil';
 import { GridWalkField } from '../src/world/gridWalk';
@@ -1794,6 +1801,185 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
     const after = Math.random();
     restoreB();
     check('P5 folding consumes NO rng (the cold lever re-pins nothing)', after === control);
+  }
+}
+
+// --- RIG Q: LAYER SOVEREIGNTY (batch 40 — cross-tier touch, pop and block sealed) --
+// Arianna's garden report made law: each layer is untouchable by anything on
+// another layer. The fixture is the reported bug verbatim — surface furniture
+// (a dew bead, a bloom-stalk trunk; tier-unstamped = story 0) standing over
+// the root web, a body IN the web (tier 1) beneath it. Pinned, live:
+//   POP  — the mallet (strikeSurfaces: every damaging delivery's surface
+//          seam) and the touch/near sweep (updateBrittle) answer only the
+//          striker's own story; the SAME blows from the surface still pop
+//          (the gate is alive, not dead).
+//   BLOCK — clampPos walks a story-1 body straight through a surface trunk;
+//          the unstuck sentinel (pointInSolid/findFreeSpot on the body's OWN
+//          story) no longer snap-teleports the under-story runner out from
+//          beneath every tree it passes under; the story pathfield never saw
+//          doodads to begin with (regions only — asserted).
+//   STORY — a summon minted below joins its caster's layer (spawnMinion
+//          stamps caster.tier — the flight law's sibling), confined to the
+//          story's own floor.
+//   LINKS — crossings still serve BOTH ends (the well flips both ways; the
+//          throat prop is inert to every gate by rule).
+// All gates are pure reads at runtime seams — generation untouched, flat
+// zones compare 0 === 0 everywhere (byte-identical by construction).
+{
+  const w = makeSimWorld('sorcerer', 0x40a11);
+  // The casts must ride the BAR (the applyBuild lane): a loose instance's
+  // summons are orphans the reconciler culls at full life — learned skills
+  // are the real player pipeline this rig claims to pin.
+  const sovWarns = applyBuild(w, {
+    id: 'sov_probe', classId: 'sorcerer', level: 9,
+    skills: [{ id: 'frost_nova', level: 3 }, { id: 'heat_split', level: 1 }],
+  }, 7);
+  if (sovWarns.length) console.log('RIG Q build warnings:', sovWarns.join(' | '));
+  const p = w.player;
+  const novaInst = p.skills.find(s => s?.def.id === 'frost_nova');
+  const splitInst = p.skills.find(s => s?.def.id === 'heat_split');
+  // The touch fixture's own kind: brittle on TOUCH (the garden ships none at
+  // 'touch' grain — pods and beads are 'hit'; the sweep under test is the same).
+  registerDoodadRule('qa_sov_pod', { overlap: 'inert', brittle: { on: ['touch'], text: 'popped' } });
+
+  // Q0 — the stage: a REAL garden-country mint (stalkwood: underTier 'roots'
+  // at 0.8) hunted until the lane carves, then a straight 5-cell duct run.
+  let grid: GridWalkField | null = null;
+  let run: { x: number; y: number; ax: number; ay: number } | null = null; // center + run axis
+  for (const [i, seed] of [404101, 404102, 404103, 404104, 404105, 404106].entries()) {
+    const zid = w.devMintTileset('stalkwood', 3 + i, 8, { seed });
+    if (!zid || w.zone.tiers?.lane !== 'roots') continue;
+    const pf = w.pathField(0);
+    if (!(pf instanceof GridWalkField)) continue;
+    const cs = pf.cell, cols = pf.cols, rows = pf.rows;
+    const at = (gx: number, gy: number): string => pf.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
+    outer:
+    for (let gy = 1; gy < rows - 1; gy++) {
+      for (let gx = 3; gx < cols - 3; gx++) {
+        let h = true, v = true;
+        for (let o = -2; o <= 2; o++) {
+          if (at(gx + o, gy) !== 'root_duct') h = false;
+          if (at(gx, gy + o) !== 'root_duct') v = false;
+        }
+        if (h || v) {
+          run = { x: gx * cs + cs / 2, y: gy * cs + cs / 2, ax: h ? 1 : 0, ay: h ? 0 : 1 };
+          grid = pf;
+          break outer;
+        }
+      }
+    }
+    if (run) break;
+  }
+  check('Q0 the rig finds a rooted garden and a straight duct run', !!grid && !!run);
+
+  if (grid && run) {
+    const cs = grid.cell;
+    // A quiet stage (the RIG J idiom): this rig strikes alone.
+    for (const a of w.actors) if (a !== p) a.dead = true;
+    w.update(1 / 30);
+    // The fixtures, planted as the report describes them: SURFACE bodies
+    // (no tier stamp = story 0) standing over the web — the bead + touch pod
+    // at one end of the run, the trunk at the other.
+    const seatA = vec(run.x - run.ax * cs * 2, run.y - run.ay * cs * 2);
+    const seatB = vec(run.x + run.ax * cs * 2, run.y + run.ay * cs * 2);
+    const bead: Doodad = { pos: vec(seatA.x, seatA.y), radius: 12, kind: 'dew_bead' };
+    const pod: Doodad = { pos: vec(seatA.x, seatA.y), radius: 10, kind: 'qa_sov_pod' };
+    const trunk: Doodad = { pos: vec(seatB.x, seatB.y), radius: 40, kind: 'bloom_stalk' };
+    w.doodads.push(bead, pod, trunk);
+    w.markDoodadsChanged();
+    check('Q0b the fixture premise holds (hit-brittle bead, blocking trunk, surface stamps)',
+      doodadRuleOf('dew_bead').brittle?.on.includes('hit') === true
+      && doodadRuleOf('bloom_stalk').blocksMove === true
+      && (bead.tier ?? 0) === 0 && (trunk.tier ?? 0) === 0);
+
+    // Q1 — POP FROM BELOW, SEALED: a story-1 nova at the bead's own seat
+    // pops nothing of the street's, and five seconds of standing ON the
+    // touch pod never accrues it. (Before the gate: both popped — the
+    // report's gap 1.) The long window also clears the nova's cooldown
+    // for the control cast.
+    check('Q1a the bar carries the rig\'s kit', !!novaInst && !!splitInst);
+    p.pos = vec(seatA.x, seatA.y);
+    p.tier = 1;
+    p.fillResources();
+    const q1press = w.useSkill(p, novaInst!, { x: p.pos.x, y: p.pos.y });
+    for (let i = 0; i < 150; i++) w.update(1 / 30);
+    check('Q1 an under-story nova pops NO surface furniture above the web',
+      q1press && !bead.gone && !pod.gone,
+      `press=${q1press} bead=${bead.gone ? 'popped' : 'stands'} pod=${pod.gone ? 'popped' : 'stands'}`);
+
+    // Q2 — THE CONTROL (the gate is alive): the SAME ground at story 0 —
+    // one tick of standing pops the touch pod, and the same nova (pressed
+    // a step clear of the bead's solid, so the rescue snap never moves the
+    // cast) pops the bead.
+    p.tier = 0;
+    w.update(1 / 30); // the touch sweep fires on the first surface tick
+    p.pos = vec(seatA.x + run.ax * 40, seatA.y + run.ay * 40);
+    p.fillResources();
+    const q2press = w.useSkill(p, novaInst!, { x: p.pos.x, y: p.pos.y });
+    for (let i = 0; i < 60; i++) w.update(1 / 30);
+    check('Q2 the same blows from the surface still pop both',
+      q2press && bead.gone === true && pod.gone === true,
+      `press=${q2press} bead=${bead.gone ? 'popped' : 'stands'} pod=${pod.gone ? 'popped' : 'stands'}`);
+
+    // Q3 — BLOCK BELOW, SEALED: the trunk's move surface (bodyScale 0.3 →
+    // r=12) plus the mover's 12 gives a 24u push zone. A story-1 clamp to a
+    // point 12u past the bole's heart stands; the story-0 clamp is pushed
+    // clear — one seam, both stories, opposite verdicts.
+    const dest = vec(seatB.x + run.ax * 12, seatB.y + run.ay * 12);
+    const from = vec(seatB.x - run.ax * cs, seatB.y - run.ay * cs);
+    p.tier = 1;
+    const thru = w.clampPos(vec(dest.x, dest.y), 12, from, { mover: p });
+    p.tier = 0;
+    const stop = w.clampPos(vec(dest.x, dest.y), 12, from, { mover: p });
+    check('Q3 a surface trunk yields to the under-story walker and stops the surface one',
+      Math.hypot(thru.x - dest.x, thru.y - dest.y) < 1
+      && Math.hypot(stop.x - seatB.x, stop.y - seatB.y) > 20,
+      `thru=${Math.round(Math.hypot(thru.x - dest.x, thru.y - dest.y))}u off dest, stop=${Math.round(Math.hypot(stop.x - seatB.x, stop.y - seatB.y))}u off bole`);
+
+    // Q3b — THE SENTINEL judges on the body's OWN story: parked at the
+    // bole's heart on story 1, the unstuck sentinel (every ~16 frames)
+    // leaves the runner exactly where it stands; the same park at story 0
+    // is a genuine embed and the rescue snaps it clear. (Before the gate:
+    // the story-1 runner was snap-teleported out from under every tree —
+    // the report's "trees block travel down there".)
+    p.tier = 1;
+    p.pos = vec(seatB.x, seatB.y);
+    for (let i = 0; i < 48; i++) w.update(1 / 30);
+    const heldD = Math.hypot(p.pos.x - seatB.x, p.pos.y - seatB.y);
+    p.tier = 0;
+    p.pos = vec(seatB.x, seatB.y);
+    for (let i = 0; i < 48; i++) w.update(1 / 30);
+    const rescuedD = Math.hypot(p.pos.x - seatB.x, p.pos.y - seatB.y);
+    check('Q3b the sentinel holds the under-story runner and rescues the surface embed',
+      heldD < 1 && rescuedD > 20, `held=${heldD.toFixed(1)}u rescued=${Math.round(rescuedD)}u`);
+
+    // Q3c — the story pathfield never knew the trunk (regions only): the
+    // bole's cell is open floor to the web's own field.
+    const pf1 = w.pathField(1);
+    check('Q3c the story field reads the bole\'s ground as its own open floor',
+      !!pf1 && pf1 !== grid && pf1.isWalkable(seatB.x, seatB.y));
+
+    // Q4 — THE SUMMON'S STORY: a double called from the web joins the web —
+    // caster's story stamped at mint, confined to the story's own floor.
+    p.tier = 1;
+    p.pos = vec(seatA.x, seatA.y);
+    p.fillResources();
+    const q4press = w.useSkill(p, splitInst!, { x: p.pos.x, y: p.pos.y });
+    for (let i = 0; i < 20; i++) w.update(1 / 30);
+    const dbl = w.actors.find(a => !a.dead && a.defId === 'heat_double');
+    if (!q4press) console.log('RIG Q: heat_split press refused');
+    check('Q4 the under-story summon wears its caster\'s story on the story\'s own floor',
+      !!dbl && dbl.tier === 1 && (pf1?.isWalkable(dbl.pos.x, dbl.pos.y) ?? false),
+      dbl ? `tier=${dbl.tier}` : 'no double stood');
+
+    // Q5 — LINKS SERVE BOTH ENDS: the well flips either story to the other,
+    // and the throat prop is inert to every gate by its own rule (never
+    // blocking, never brittle — no gate can seal a crossing).
+    const throatRule = doodadRuleOf(UNDER_TIER_LANES.roots.stairKind);
+    check('Q5 the crossings stay whole (well flips both ways; the throat blocks/pops nothing)',
+      linkFlipTier('root_well', 0) === 1 && linkFlipTier('root_well', 1) === 0
+      && tierFloorAt('root_well', 0) && tierFloorAt('root_well', 1)
+      && !throatRule.blocksMove && !throatRule.brittle);
   }
 }
 

@@ -246,7 +246,14 @@ const FROZEN_LAKE_LM = registerGenPin('landmark', 'frozen_lake', 'the pre-graft 
  *  knockback-collision-proc seam) + the MOVING BODY itself (the pitfall confine
  *  reads its ground insurance: a body HOME in a pit's kind walks it like floor).
  *  All omitted = the original byte-identical clamp. */
-interface ClampOpts { disp?: DisplacementPolicy; out?: CollisionResult; mover?: Actor; }
+interface ClampOpts {
+  disp?: DisplacementPolicy; out?: CollisionResult; mover?: Actor;
+  /** The STORY the clamp judges on when no mover carries one (the tier
+   *  fabric's layer sovereignty): moverless callers (spawn rescues, the
+   *  unstuck sentinel's free-spot hunt) pass the body's own tier so the
+   *  doodad gate and the walk-confine swap read the right layer. */
+  tier?: number;
+}
 /** DEV noclip displacement: phase through walls/rocks/void (bounds still hold). */
 const NOCLIP_DISP: DisplacementPolicy = { ignoreConfine: true };
 /** A LEVITATING body's walk: void bands cross underfoot (the float), walls
@@ -32648,11 +32655,18 @@ export class World {
       caster.mana = Math.min(caster.mana, caster.availableMaxMana());
     }
     minion.fillResources();
+    // THE SUMMON'S STORY (layer sovereignty — the flight law's sibling): a
+    // conjured body belongs to its caster's layer, and the placement clamp
+    // below confines it against that story's own floor — an army raised in
+    // the root ducts fights the ducts, not the street over them. Stamped
+    // BEFORE the clamp so the mover gate reads the right layer; flat zones
+    // (tier 0) walk the identical path.
+    minion.tier = caster.tier;
     const ang = rand(0, Math.PI * 2);
     minion.pos = overrides?.pos
-      ? this.clampPos(vec(overrides.pos.x, overrides.pos.y), minion.radius)
+      ? this.clampPos(vec(overrides.pos.x, overrides.pos.y), minion.radius, undefined, { mover: minion })
       : this.clampPos(vec(
-        caster.pos.x + Math.cos(ang) * 50, caster.pos.y + Math.sin(ang) * 50), minion.radius);
+        caster.pos.x + Math.cos(ang) * 50, caster.pos.y + Math.sin(ang) * 50), minion.radius, undefined, { mover: minion });
     this.actors.push(minion);
     // Tethers: summons may trail a band to their master or web into their
     // pack, exactly like constructs (one vocabulary, both spawn kinds).
@@ -33121,14 +33135,18 @@ export class World {
     }
 
     // Placement: at the cursor (clamped to placeRange), facing the aim —
-    // or at an explicit override (barrier wall segments).
+    // or at an explicit override (barrier wall segments). THE CONSTRUCT'S
+    // STORY (layer sovereignty): the working stands on its caster's layer —
+    // the flight law's sibling — so its rings, its bell, and the mallet's
+    // answer all stay one story's conversation. Flat zones read 0 as ever.
+    c.tier = caster.tier;
     const placeRange = d.placeRange ?? 100;
     const dd = dist(caster.pos, aim);
     const ang = angleTo(caster.pos, aim);
     const reach = Math.min(dd, placeRange);
     c.pos = this.clampPos(at ? vec(at.x, at.y) : vec(
       caster.pos.x + Math.cos(ang) * reach,
-      caster.pos.y + Math.sin(ang) * reach), c.radius);
+      caster.pos.y + Math.sin(ang) * reach), c.radius, undefined, { mover: c });
     c.facing = ang;
     // CLEARWAY: the rising object SHOVES overlapping actors out of its
     // footprint — a wall arriving under a goblin relocates the goblin.
@@ -33504,13 +33522,23 @@ export class World {
     striker: Actor | null, at: Vec2, reach: number,
     test?: (pos: Vec2, radius: number) => boolean,
     struck?: Set<number>,
+    strikeTier?: number,
   ): void {
+    // THE LAYER SOVEREIGNTY GATE (the tier fabric): a strike happens ON a
+    // story — the striker's own, or the flight's, passed as `strikeTier` —
+    // and only that story's surfaces answer: a swing in the root ducts pops
+    // no dewdrop on the street above, and the street's mallet rings no bell
+    // below. Ownerless blasts with no explicit story (death bursts baked
+    // past their actor, sky strikes) stay tier-agnostic — the world-authored
+    // hitAll law. Flat zones: every side reads story 0, nothing changes.
+    const story = strikeTier ?? (striker ? striker.tier : null);
     const within = (pos: Vec2, radius: number): boolean =>
       test ? test(pos, radius) : dist(at, pos) - radius <= reach;
     if (!striker?.construct) {
       for (const c of this.actorsNear(at.x, at.y, reach + 64, this.surfaceScratch)) {
         if (c.dead || c === striker || !c.construct?.castOnStruck) continue;
         if (striker && c.team !== striker.team) continue; // cross-team rings ride resolveHit
+        if (story !== null && c.tier !== story) continue; // its story's bells only
         if (struck?.has(c.id)) continue;
         if (!within(c.pos, c.radius)) continue;
         struck?.add(c.id);
@@ -33524,6 +33552,7 @@ export class World {
     }
     for (const o of this.doodadsNear(at.x, at.y, reach)) {
       if (o.gone || !within(o.pos, o.radius)) continue;
+      if (story !== null && (o.tier ?? 0) !== story) continue; // its story's furniture only
       const rule = doodadRuleOf(o.kind);
       // RESONANT kinds toll on ANY strike that plays the surfaces — the ring
       // sounds whether or not the stone also breaks (a pop tolls loudest via
@@ -36671,8 +36700,9 @@ export class World {
         }
         this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: splash, color: def.color, life: 0.15, maxLife: 0.15 });
         // THE MALLET: the splash detonation strikes the surfaces around
-        // the struck body too.
-        this.strikeSurfaces(caster, target.pos, splash);
+        // the struck body too — on the STRUCK body's story (a rim-duel hit
+        // detonates where the victim stands, not where the archer does).
+        this.strikeSurfaces(caster, target.pos, splash, undefined, undefined, target.tier);
       }
     }
 
@@ -44462,7 +44492,7 @@ export class World {
       const rule = doodadRuleOf(c.d.kind);
       if (!rule.contact) continue;
       const shape = hitSurfaceOf(c.d, 'move');
-      this.sweepHazardSurface(c.d.pos.x, c.d.pos.y, shape, c.d.rot ?? 0, rule.contact, c.gate, undefined, this.actors);
+      this.sweepHazardSurface(c.d.pos.x, c.d.pos.y, shape, c.d.rot ?? 0, rule.contact, c.gate, undefined, this.actors, c.d.tier ?? 0);
     }
   }
 
@@ -44607,10 +44637,15 @@ export class World {
   private sweepHazardSurface(
     x: number, y: number, shape: HitShape, laneDir: number,
     payload: TrackPayload, gate: Map<number, number>, owner: Actor | undefined,
-    bodies: Actor[],
+    bodies: Actor[], strikeTier?: number,
   ): void {
     for (const a of bodies) {
       if (a.dead || a.downed || a.untargetable || a.invulnerable || a.passive) continue;
+      // LAYER SOVEREIGNTY (static contact doodads pass their own story): a
+      // surface bumper bumps no root-duct runner beneath its footprint.
+      // Track riders pass nothing — lanes carry no story today, and no
+      // tiered zone runs tracks (the glacial heart is flat country).
+      if (strikeTier !== undefined && a.tier !== strikeTier) continue;
       if (payload.sparesDormant !== false && isDormant(a)) continue;
       if (payload.sparesAirborne !== false && (a.flying || a.leap)) continue;
       if (payload.factions && (!a.faction || !payload.factions.includes(a.faction))) continue;
@@ -45135,7 +45170,11 @@ export class World {
       if (((this.terrainTick + i) & 15) !== 0) continue;
       const a = this.actors[i];
       if (a.dead || a.construct || a.leap || a.dash || a.anchored || a.passive) continue;
-      const stuck = this.pointInSolid(a.pos.x, a.pos.y, -a.radius * 0.3);
+      // The probe judges on the body's OWN story (layer sovereignty): a
+      // root-duct runner under a surface trunk is not stuck — before the
+      // gate, the sentinel snap-teleported it out from beneath every tree
+      // it passed under, which read as "the trees block the under-story".
+      const stuck = this.pointInSolid(a.pos.x, a.pos.y, -a.radius * 0.3, a.tier);
       if (!stuck) continue;
       // A body over a FALL-ABLE pit is not stuck (the pitfall fabric): a
       // grasped lip is lawful footing, a home body (the void angler) roams
@@ -45143,7 +45182,7 @@ export class World {
       // fall doors — the rescue snap must never hand out a free teleport
       // off a lip (the aetherial rescue-snap lesson, disc space).
       if (pitRegionOf(stuck)) continue;
-      const free = this.findFreeSpot(a.pos, a.radius);
+      const free = this.findFreeSpot(a.pos, a.radius, a.tier);
       a.pos.x = free.x; a.pos.y = free.y;
     }
     const hasGrid = !!this.walk;
@@ -47741,9 +47780,10 @@ export class World {
             this.resolveHit(p.caster, p.inst, e, (ts.blast.damageScale ?? 0.35) * p.mult, 1, p.flat);
           }
           this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius, color: p.color, life: 0.22, maxLife: 0.22 });
-          // THE MALLET: each path-blast is a fresh strike surface.
+          // THE MALLET: each path-blast is a fresh strike surface — on the
+          // FLIGHT's story (the projectile law), not the caster's current one.
           this.frontSplash(p.caster, p.inst, p.pos, radius);
-          this.strikeSurfaces(p.caster, p.pos, radius);
+          this.strikeSurfaces(p.caster, p.pos, radius, undefined, undefined, p.tier ?? 0);
         }
         if (ts.zone) {
           // The drop-zone composables (DropZoneSpec): a size envelope
@@ -47888,6 +47928,7 @@ export class World {
       if (!dead && !p.caster.construct) {
         for (const c of this.actors) {
           if (c.dead || !c.construct?.castOnStruck || c.team !== p.caster.team) continue;
+          if (c.tier !== (p.tier ?? 0)) continue; // its story's bells only (layer sovereignty)
           const until = p.hits.get(c.id);
           if (until !== undefined && p.age < until) continue;
           if (!this.projTouches(p, c.pos.x, c.pos.y, c.radius)) continue;
@@ -49023,6 +49064,10 @@ export class World {
     for (const a of this.actors) {
       if (a.dead || a.passive || a.team !== this.player.team) continue;
       for (const d of this.doodadsAt(a.pos.x, a.pos.y)) {
+        // LAYER SOVEREIGNTY: feet touch only their own story's breakables —
+        // a runner in the root ducts neither creaks nor pops the street's
+        // pods standing over the web. Flat zones read 0 === 0 everywhere.
+        if ((d.tier ?? 0) !== a.tier) continue;
         const br = doodadRuleOf(d.kind).brittle;
         if (!br || d.gone) continue;
         const gap = dist(a.pos, d.pos);
@@ -51038,9 +51083,12 @@ export class World {
 
   /** The blocking doodad whose SURFACE (± margin) covers this point, if any —
    *  bridged chasm spans excepted, exactly like clampPos. Powers spawn
-   *  placement rejection and the unstuck sentinel. */
-  private pointInSolid(x: number, y: number, margin = 0): Doodad | null {
+   *  placement rejection and the unstuck sentinel. `tier` is the STORY the
+   *  point is judged on (layer sovereignty — a surface trunk is no solid to
+   *  the root duct beneath it; clampPos's own doodad gate, mirrored). */
+  private pointInSolid(x: number, y: number, margin = 0, tier = 0): Doodad | null {
     for (const o of this.doodadsAt(x, y)) {
+      if ((o.tier ?? 0) !== tier) continue; // its layer's solids only
       if (!blocksMovement(o)) continue;
       // The TRUNK (or the true slab surface) — never the crown.
       if (!shapeContains(hitSurfaceOf(o, 'move'), o.pos.x, o.pos.y, x, y, margin)) continue;
@@ -51055,16 +51103,26 @@ export class World {
    *  can't escape) — probe outward rings for the nearest free, walkable spot.
    *  Spawn placement and the unstuck sentinel both come through here, so an
    *  actor can never be born into (or left inside) a wall to pingpong forever. */
-  findFreeSpot(at: Vec2, radius: number): Vec2 {
-    const p = this.clampPos(vec(at.x, at.y), radius);
-    if (!this.pointInSolid(p.x, p.y, radius * 0.4)) return p;
+  findFreeSpot(at: Vec2, radius: number, tier = 0): Vec2 {
+    // LAYER SOVEREIGNTY: the whole hunt happens on ONE story — solids of the
+    // body's own layer reject, the clamp confines against that story's floor
+    // (ClampOpts.tier), and the walkability read is the story's own view
+    // (the base grid is another layer's truth: a "free" spot judged on it
+    // would strand an under-story runner off its own web). tier 0 (every
+    // legacy caller) walks the identical path it always did.
+    const opts = tier >= 1 ? { tier } : undefined;
+    const walkAt = tier >= 1 && this.tierViews
+      ? this.tierViews[Math.min(tier, this.tierViews.length - 1)] ?? this.walk
+      : this.walk;
+    const p = this.clampPos(vec(at.x, at.y), radius, undefined, opts);
+    if (!this.pointInSolid(p.x, p.y, radius * 0.4, tier)) return p;
     for (let ring = 1; ring <= 7; ring++) {
       const rr = ring * 55;
       for (let k = 0; k < 10; k++) {
         const a = (k / 10) * Math.PI * 2 + ring * 0.73;
-        const q = this.clampPos(vec(at.x + Math.cos(a) * rr, at.y + Math.sin(a) * rr), radius);
-        if (this.pointInSolid(q.x, q.y, radius * 0.4)) continue;
-        if (this.walk && !this.walk.isWalkable(q.x, q.y)) continue;
+        const q = this.clampPos(vec(at.x + Math.cos(a) * rr, at.y + Math.sin(a) * rr), radius, undefined, opts);
+        if (this.pointInSolid(q.x, q.y, radius * 0.4, tier)) continue;
+        if (walkAt && !walkAt.isWalkable(q.x, q.y)) continue;
         return q;
       }
     }
@@ -51083,7 +51141,7 @@ export class World {
     // THE TIER FABRIC: the mover's layer, read once — gates the doodad
     // collision below (a street lamp never blocks the duct runner beneath
     // it) and the walk-confine swap further down.
-    const mvTier = (opts?.mover as { tier?: number } | undefined)?.tier ?? 0;
+    const mvTier = opts?.tier ?? (opts?.mover as { tier?: number } | undefined)?.tier ?? 0;
     // A wall-phasing displacement (ignoreConfine) stays in-bounds but skips doodad
     // + walk confinement (a flicker/teleport lands past rocks, walls, the void).
     if (!opts?.disp?.ignoreConfine) {
