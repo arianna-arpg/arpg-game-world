@@ -375,8 +375,19 @@ withSeededRandom(0xbe1107, () => {
       i1 ? `phase ${i1.phase}, ${i1.converted} gone` : 'resolved early');
     check('G12: the changed walked to the rally DORMANT first', sawDormantThrall && thralls().length >= 1,
       `${thralls().length} thralls`);
-    for (const a of [...callers(), ...thralls()]) w.kill(a, false, w.player);
-    step(2);
+    // plain-weight authoring (2026-08-06): farmland@771177 now deals 'the
+    // patchwork acres' — the plain face's richer stock leaves 2 heads still
+    // LOOSE when the bell turns, and the sweep converts a ripe head even
+    // mid-raid (world.ts THE DEFENSE: the fold holds when the march is
+    // broken to the LAST body — fresh thralls are more march). The break
+    // therefore PRESSES until no marcher stands (the player's own fight),
+    // instead of assuming the loose pool was spent at raid time; every
+    // assertion below is unchanged.
+    let presses = 0;
+    while (presses++ < 8 && info() !== null) {
+      for (const a of [...callers(), ...thralls()]) w.kill(a, false, w.player);
+      step(2);
+    }
     check('G13: breaking the march holds the fold (the defense pays too)',
       info() === null && (w.ledger.strayings_relieved ?? 0) >= 2,
       `ledger ${w.ledger.strayings_relieved ?? 0}`);

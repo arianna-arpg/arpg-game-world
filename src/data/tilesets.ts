@@ -3655,7 +3655,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       tree: '#2f6a34', mud: '#14260f', water: '#16404a', wall: '#22421a', road: '#3f351f',
     },
     sizeW: [2400, 3400], sizeH: [1600, 2400], ellipseChance: 0.25, biome: 'jungle',
-    // The authored/probe default face (generated zones always roll a variant).
+    // The plain face — 'the old growth' in the live roll (PLAIN_FACES, ruled
+    // in 2026-08-06): the deep floor the four dressed extremes depart from.
     layout: [
       { kind: 'canopy_colossus', count: [1, 2] },
       { kind: 'palm', count: [5, 9] },
@@ -13168,15 +13169,63 @@ export const TILESETS: Record<string, TilesetDef> = {
 // (mintCave rolls variants only behind caveFace.variantChance) and den-mint
 // rollVariant pools must not grow a face (the Scorpion Well's odds are
 // authored against the variant list as it stands). Tilesets whose base kinds
-// all survive in variants (jungle, deepsea, the aether family…) lose only
-// the base MIX — restating those is a design choice, not a defect heal, and
-// waits on its own ruling. needles restated textually in the butteland pass.
+// all survive in variants lose only the base MIX — restating those is a
+// design choice, not a defect heal; RULED 2026-08-06: jungle joined (a
+// plain floor between its four dressed extremes is real country), the other
+// ten (deepsea, metropolis, caul, crystal, pinnacle, river_of_souls, the
+// aether four) stay always-dressed by identity. needles restated textually
+// in the butteland pass.
 // probe_deadface.ts pins the membership law both ways.
-export const PLAIN_FACES: Record<string, string> = {
+//
+// THE PLAIN-WEIGHT LAW (ruled 2026-08-06, blessed as PRELIMINARY): the
+// plain face is the country's DEFAULT read, so it takes PLAIN_SHARE of its
+// country's variant roll — not one uniform slot among the dressed extremes.
+// The share is ONE dial (PLAIN_SHARE below — tune that number, nothing
+// else); each plain face's weight DERIVES from it at registration via
+// plainFaceWeight (the k-law), never a hand-scattered literal. Escape hatch
+// per country: a registry entry may pin an explicit weight ({ name, weight })
+// and that number beats the derivation (zero members use it today — the
+// dial rules everywhere).
+
+/** THE DIAL — the plain face's share of every member country's variant
+ *  roll. Blessed 2026-08-06 as PRELIMINARY ("we may find it to be too high
+ *  or too low to taste"): ONE number, move it and every member re-derives
+ *  at boot. 0 = plain faces structurally unrollable (the weight-0 idiom);
+ *  1 = plain effectively always (the derivation saturates finite). */
+export const PLAIN_SHARE = 0.5;
+
+/** THE K-LAW: a plain face's derived weight against its country's own
+ *  specials — share s of the whole roll means s/(1-s) × the specials'
+ *  total effective weight (absent = 1, clamped like the walk itself; with
+ *  every special weight absent the total IS the count k, so 0.5 derives
+ *  exactly k — plain deals half, specials keep their relative shares).
+ *  Dial 0 → weight 0 (structurally unrollable); dial ≥1 → a finite
+ *  colossus (the weighted walk cannot carry Infinity): plain takes all but
+ *  a ≤1e-12 sliver of the die. Exported for probe_deadface (the derivation
+ *  pin + the dial-0/dial-1 extreme regimes). */
+export function plainFaceWeight(specialsWeight: number, share: number = PLAIN_SHARE): number {
+  if (share <= 0) return 0;
+  if (share >= 1) return Math.max(1, specialsWeight) * 1e12;
+  return specialsWeight * (share / (1 - share));
+}
+
+/** A member row: the plain face's NAME alone (the dial derives its weight),
+ *  or { name, weight } to pin the face's share by hand — the per-country
+ *  escape hatch. */
+export type PlainFaceEntry = string | { name: string; weight?: number };
+export const plainFaceName = (e: PlainFaceEntry): string =>
+  typeof e === 'string' ? e : e.name;
+
+export const PLAIN_FACES: Record<string, PlainFaceEntry> = {
   deepwood: 'the old wood',
   downs: 'the open downs',
   farmland: 'the patchwork acres',
   forest: 'the greenwood',
+  // Asymptomatic member (ruled in 2026-08-06 — no dead kinds, only the base
+  // MIX was lost): the deep floor between the green's four dressed extremes.
+  // A later pass may seat this face as the DEEP interior along the climate
+  // axis (the forested faces as outskirts) — seated plain here, unpreempted.
+  jungle: 'the old growth',
   gloamwood: 'the dark wood',
   hallowfield: 'the standing harvest',
   mournstead: 'the quiet grounds',
@@ -13217,10 +13266,24 @@ export const PLAIN_FACES: Record<string, string> = {
   petrified_weald: 'the still weald',
   aether_spires: 'the singing spires',
 };
-for (const [id, name] of Object.entries(PLAIN_FACES)) {
+/** THE RESTATEMENT FOLD (one country): the plain face joins FIRST, BY
+ *  REFERENCE, wearing its entry's authored weight if one is pinned, else
+ *  the dial's derivation against the specials as authored. Exported for
+ *  probe_deadface (the escape-hatch rig folds fixtures without shipping a
+ *  single authored weight); the live table folds once below. */
+export function restatePlainFace(t: TilesetDef, entry: PlainFaceEntry): void {
+  if (!t.variants?.length) return;
+  const authored = typeof entry === 'string' ? undefined : entry.weight;
+  const specials = t.variants.reduce((s, v) => s + Math.max(0, v.weight ?? 1), 0);
+  t.variants = [
+    { name: plainFaceName(entry), layout: t.layout, weight: authored ?? plainFaceWeight(specials) },
+    ...t.variants,
+  ];
+}
+for (const [id, entry] of Object.entries(PLAIN_FACES)) {
   const t = TILESETS[id];
   if (!t?.variants?.length) continue; // membership drift is probe_deadface's to catch
-  t.variants = [{ name, layout: t.layout }, ...t.variants];
+  restatePlainFace(t, entry);
 }
 
 // --- BIOME → TILESET resolver (the heat-map-authoritative mint) --------------

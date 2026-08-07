@@ -27,6 +27,16 @@
 //      checker) is clean on the live table, agrees with B's independent
 //      sweep, flags a synthetic violator, exempts its cave-lane twin, and
 //      catches its realm twin.
+// THE DIAL (plain-weight chip, ruled 2026-08-06 — 0.5 blessed PRELIMINARY):
+//   H  THE PLAIN-WEIGHT LAW — PLAIN_SHARE is ONE dial: every member's live
+//      plain weight IS plainFaceWeight(its own specials) with zero explicit
+//      registry weights and zero authored weights off the registry (no
+//      hand-scattered numbers, structurally); the die-grain measured share
+//      sits inside the band at every member; jungle (the ruled-in
+//      asymptomatic member) deals its plain face on the live mint path at
+//      share; dial-0 kills the plain face and dial-1 deals it always
+//      through the real path (patched, try/finally, restore-proven); the
+//      escape hatch beats the derivation on fixtures (no live weight ships).
 // Run: npx tsx balance/probe_deadface.ts
 // ---------------------------------------------------------------------------
 
@@ -35,6 +45,7 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { Rng } from '../src/core/rng';
 import {
   TILESETS, PLAIN_FACES, pickTilesetVariant,
+  PLAIN_SHARE, plainFaceWeight, plainFaceName, restatePlainFace,
   type TilesetDef, type TilesetVariant,
 } from '../src/data/tilesets';
 import { deadBaseFaceKinds } from './deadface_check';
@@ -55,8 +66,9 @@ const surfacePooled = (t: (typeof TILESETS)[string]): boolean =>
 
 // --- A) THE MEMBERSHIP LAW --------------------------------------------------
 {
-  for (const [id, name] of Object.entries(PLAIN_FACES)) {
+  for (const [id, entry] of Object.entries(PLAIN_FACES)) {
     const t = TILESETS[id];
+    const name = plainFaceName(entry);
     check(`member: '${id}' stands`, !!t);
     if (!t) continue;
     check(`member: '${id}' is surface-pooled (the affected lane — never the cave lane)`,
@@ -69,6 +81,11 @@ const surfacePooled = (t: (typeof TILESETS)[string]): boolean =>
       t.variants?.[0]?.layout === t.layout);
     check(`member: '${id}' plain face carries no dial overrides (the base dials rule)`,
       !t.variants?.[0]?.layoutParams && !t.variants?.[0]?.theme);
+    // THE DIAL RULES EVERYWHERE (0.5 blessed preliminary): no entry pins an
+    // explicit weight today — spending the escape hatch is a witnessed act
+    // (flip this row deliberately WITH the country that spends it).
+    check(`member: '${id}' entry pins no explicit weight (the dial rules)`,
+      typeof entry === 'string');
   }
   // needles healed TEXTUALLY in the butteland pass (its press face restated
   // as 'the standing tables' with its own rows) — deliberately NOT a member.
@@ -116,9 +133,13 @@ const bViolators: string[] = [];
     { id: 'stonecrown', revived: ['charged_crystal', 'stormglass_shard'] },
     { id: 'marsh', revived: ['venom_bloom', 'briarwood'] },
     { id: 'aether_spires', revived: ['prayer_bell', 'flowers'] },
+    // jungle — the ruled-in ASYMPTOMATIC member (2026-08-06): no kind was
+    // dead (every base kind lives in some special), so these are STANDING
+    // witnesses that the base MIX itself mints, not revivals.
+    { id: 'jungle', revived: ['canopy_colossus', 'thicket'] },
   ];
   for (const c of CASES) {
-    const plainName = PLAIN_FACES[c.id];
+    const plainName = plainFaceName(PLAIN_FACES[c.id]);
     let plain = 0, faces = 0;
     const seen = new Set<string>();
     for (let i = 0; i < 16 && plain < 5; i++) {
@@ -182,9 +203,11 @@ const bViolators: string[] = [];
 // weight 1000 patched onto ONE special face (deliberately not the plain
 // face — the lever must point anywhere) dominates the live mint stream
 // through the real devMintTileset → placeZoneAt path. The patch is scoped
-// try/finally; a control re-mint after restore re-deals its unpatched face,
-// so the lever ships COLD (zero authored weights) with the patch provably
-// lifted. Pinned seeds — the measured shares are deterministic draws.
+// try/finally; a control re-mint after restore re-deals its unpatched face.
+// Since the plain-weight chip the lever is no longer cold: plain faces wear
+// DERIVED weights (H pins them) — off the registry the lists stay absent,
+// and this patch is still provably lifted. Pinned seeds — the measured
+// shares are deterministic draws.
 {
   const world = makeSimWorld('warrior', 424242);
   const ts = TILESETS.stonecrown;
@@ -248,6 +271,149 @@ const bViolators: string[] = [];
     deadBaseFaceKinds(fixture({ frontier: false })).length === 0);
   check('invariant: the REALM twin is caught (the realm pool is surface-pooled)',
     deadBaseFaceKinds(fixture({ frontier: false, realm: 'qa_realm' })).join(',') === 'qa_dead_kind');
+}
+
+// --- H) THE PLAIN-WEIGHT LAW — one dial, derived everywhere ------------------
+// Her condition verbatim (2026-08-06): "ensure that that's basically
+// parameterized and extremely easy to tweak" — so the law under test is
+// STRUCTURAL: every member's live plain weight is plainFaceWeight(its own
+// specials' effective total), no literal anywhere, and the dial's extreme
+// settings behave through the real mint path. The 0.5 itself is blessed
+// PRELIMINARY; the share BAND here (±0.05 die-grain over 4096 draws) is
+// the probe's own number, flagged — a moved dial moves the pin with it.
+{
+  // H1 — THE DERIVATION PIN + no hand-scattered numbers, structurally.
+  const specialsTotalOf = (t: TilesetDef): number =>
+    (t.variants ?? []).slice(1).reduce((s, v) => s + Math.max(0, v.weight ?? 1), 0);
+  let derived = true, offRegistryCold = true;
+  const offenders: string[] = [];
+  for (const id of Object.keys(PLAIN_FACES)) {
+    const t = TILESETS[id];
+    if (!t?.variants?.length) continue;
+    const want = plainFaceWeight(specialsTotalOf(t));
+    if (t.variants[0].weight !== want) { derived = false; offenders.push(`${id}:${t.variants[0].weight}≠${want}`); }
+    if (t.variants.slice(1).some(v => v.weight !== undefined)) {
+      offRegistryCold = false; offenders.push(`${id}: special wears a weight`);
+    }
+  }
+  for (const t of Object.values(TILESETS)) {
+    if (!(t.id in PLAIN_FACES) && t.variants?.some(v => v.weight !== undefined)) {
+      offRegistryCold = false; offenders.push(`${t.id}: off-registry weight`);
+    }
+  }
+  check('dial: every member plain weight IS plainFaceWeight(its own specials) — zero literals',
+    derived, offenders.join('; ') || `share ${PLAIN_SHARE}`);
+  check('dial: zero authored weights off the derivation (specials + non-members all absent)',
+    offRegistryCold, offenders.join('; ') || 'cold off the registry');
+
+  // H2 — the k-law's arithmetic, at pure-function grain.
+  const close = (a: number, b: number): boolean => Math.abs(a - b) < 1e-9;
+  check('dial: k-law arithmetic (0.5 → k; share identity w/(w+W) = s; extremes clamp)',
+    close(plainFaceWeight(4), 4 * (PLAIN_SHARE / (1 - PLAIN_SHARE)))
+    && close(plainFaceWeight(1), 1 * (PLAIN_SHARE / (1 - PLAIN_SHARE)))
+    && close(plainFaceWeight(6, 0.25) / (plainFaceWeight(6, 0.25) + 6), 0.25)
+    && close(plainFaceWeight(3, 0.75) / (plainFaceWeight(3, 0.75) + 3), 0.75)
+    && plainFaceWeight(5, 0) === 0
+    && Number.isFinite(plainFaceWeight(5, 1)) && plainFaceWeight(5, 1) > 1e9);
+
+  // H3 — THE MEASURED SHARE, die grain, EVERY member: 4096 seeded draws
+  // through pickTilesetVariant on the live list land plain within the band.
+  const BAND = 0.05; // probe's own number (≈6σ at N=4096, p=.5) — flagged
+  let inBand = true;
+  let shareMin = 1, shareMax = 0, minAt = '', maxAt = '';
+  for (const id of Object.keys(PLAIN_FACES)) {
+    const t = TILESETS[id];
+    if (!t?.variants?.length) continue;
+    const r = new Rng(0x9e3d + id.length * 7919 + id.charCodeAt(0) * 131);
+    let plain = 0;
+    const N = 4096;
+    for (let i = 0; i < N; i++) {
+      if (pickTilesetVariant(r, t.variants) === t.variants[0]) plain++;
+    }
+    const share = plain / N;
+    if (share < shareMin) { shareMin = share; minAt = id; }
+    if (share > shareMax) { shareMax = share; maxAt = id; }
+    if (Math.abs(share - PLAIN_SHARE) > BAND) {
+      inBand = false;
+      console.log(`  OFF-BAND ${id}: plain ${share.toFixed(3)} vs dial ${PLAIN_SHARE}`);
+    }
+  }
+  check(`dial: measured plain share within ±${BAND} of ${PLAIN_SHARE} at EVERY member (4096 draws each)`,
+    inBand, `min ${shareMin.toFixed(3)} (${minAt}), max ${shareMax.toFixed(3)} (${maxAt})`);
+}
+{
+  // H4 — jungle's membership in the LIVE roll: the ruled-in face deals on
+  // the real devMintTileset → placeZoneAt path at the dial's share (24
+  // pinned mints; band ±0.25 is the probe's own number at N=24, flagged).
+  const world = makeSimWorld('warrior', 424242);
+  const mintFace = (id: string, seed: number): string | undefined => {
+    const zid = world.devMintTileset(id, 0, 9, { seed });
+    return zid ? world.zoneMap[zid]?.variantName : undefined;
+  };
+  const SEEDS = Array.from({ length: 24 }, (_, i) => 92000 + i * 977);
+  const jungleName = plainFaceName(PLAIN_FACES.jungle);
+  const faces = SEEDS.map(s => mintFace('jungle', s));
+  const plainN = faces.filter(n => n === jungleName).length;
+  check(`dial: jungle deals '${jungleName}' live at share (24 pinned mints)`,
+    plainN >= 6 && plainN <= 18, `${plainN}/24`);
+
+  // H5 — THE EXTREME REGIMES through the real path (marsh, k=1: the
+  // smallest member list). Patch the LIVE plain weight to the dial-0 and
+  // dial-1 derivations, mint the same pinned seeds, restore exactly (the
+  // F-section discipline: try/finally + control re-mint).
+  const marsh = TILESETS.marsh;
+  const plainFace = marsh.variants?.[0];
+  const marshName = plainFaceName(PLAIN_FACES.marsh);
+  check("extreme dial: 'marsh' fields its plain face first", plainFace?.name === marshName);
+  if (plainFace) {
+    const w0 = plainFace.weight;
+    const specials = (marsh.variants ?? []).slice(1)
+      .reduce((s, v) => s + Math.max(0, v.weight ?? 1), 0);
+    const before = SEEDS.map(s => mintFace('marsh', s));
+    let zeroPlain = -1, onePlain = -1;
+    try {
+      plainFace.weight = plainFaceWeight(specials, 0); // dial 0 → weight 0
+      zeroPlain = SEEDS.map(s => mintFace('marsh', s)).filter(n => n === marshName).length;
+      plainFace.weight = plainFaceWeight(specials, 1); // dial 1 → saturated
+      onePlain = SEEDS.map(s => mintFace('marsh', s)).filter(n => n === marshName).length;
+    } finally {
+      plainFace.weight = w0;
+    }
+    check('extreme dial: dial-0 NEVER deals the plain face (structurally unrollable)',
+      zeroPlain === 0, `${zeroPlain}/24`);
+    check('extreme dial: dial-1 ALWAYS deals the plain face (saturated colossus)',
+      onePlain === 24, `${onePlain}/24`);
+    check('extreme dial: restore is exact — the control seed re-deals its live face',
+      mintFace('marsh', SEEDS[0]) === before[0], `'${before[0]}'`);
+  }
+
+  // H6 — THE ESCAPE HATCH on fixtures (no live weight ships): an explicit
+  // entry weight beats the derivation; a string entry derives against the
+  // specials' effective SUM (an authored special weight shifts the plain
+  // derivation to HOLD the share — the k-law generalized).
+  const donor = TILESETS.forest;
+  const fixture = (): TilesetDef => ({
+    ...donor,
+    id: 'qa_plainweight_fixture',
+    layout: [{ kind: 'rock', count: [1, 2] }],
+    variants: [
+      { name: 's1', layout: [{ kind: 'rock', count: [1, 2] }] },
+      { name: 's2', layout: [{ kind: 'rock', count: [1, 2] }] },
+    ],
+  });
+  const fxA = fixture();
+  restatePlainFace(fxA, { name: 'qa plain', weight: 7 });
+  check('hatch: an explicit entry weight beats the derivation',
+    fxA.variants?.[0]?.weight === 7 && fxA.variants?.[0]?.name === 'qa plain');
+  const fxB = fixture();
+  restatePlainFace(fxB, 'qa plain');
+  check('hatch: a string entry derives against the specials (k=2 → weight 2 at 0.5)',
+    fxB.variants?.[0]?.weight === plainFaceWeight(2));
+  const fxC = fixture();
+  fxC.variants![0].weight = 3; // an authored special: effective total 3+1
+  restatePlainFace(fxC, 'qa plain');
+  check('hatch: an authored SPECIAL weight folds into the derivation (share held)',
+    fxC.variants?.[0]?.weight === plainFaceWeight(4));
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
