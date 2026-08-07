@@ -773,15 +773,15 @@ check('B: the hunt overlay is mounted for the run', !!hf);
 
 // ------------------------------------------- M. the waning clock (her ruling)
 {
-  // THE CONTRACT: the shipping def carries the clock and it is GENEROUS —
-  // hours of play, not minutes (her word). The omen ledger: the hunt fields
-  // NO omen source — its findability is the fog:'always' 🐾 marker, map-wide
-  // from the instant of ignition — so the wane can never race an aging omen
-  // into absurdity; even the omen fabric's slowest shipping voice (longNight,
-  // 10 node-units/min) would carry across the whole seat envelope (~640
-  // units) in under an hour, well inside the clock.
-  check('M: the def carries the waning clock, generous (≥ 1h of play)',
-    (SURGE.waneSeconds ?? 0) >= 3600, `${SURGE.waneSeconds}s`);
+  // THE CONTRACT (re-ruled 2026-08-07): the shipping def carries the clock
+  // at HER thirty-minute turnover number — long enough that an active player
+  // meets the trail, short enough that a lapsed unfound hunt frees the
+  // one-at-a-time lane and the package stays in play. The hunt fields NO
+  // omen source (its findability is the fog:'always' 🐾 marker, map-wide
+  // from ignition) so the wane races no aging voice. An EXACT pin: a future
+  // retune must come back through her word, deliberately.
+  check('M: the def carries the waning clock at her ruled 30 minutes',
+    SURGE.waneSeconds === 1800, `${SURGE.waneSeconds}s`);
 
   const gate: PackageGate = { active: true, share: 1, pressure: 1, ignitionMul: 1, severityMul: 1, concurrencyMul: 1 };
   const mkWane = (surge: HuntSurge, seed = 0x3a7e): HuntField =>

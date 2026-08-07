@@ -15,17 +15,17 @@ export const HUNT_SURGE: HuntSurge = {
   triggerChance: 0.006,   // per 0.5s step (×pressure) — a hunt opens now and then
   trackStages: [1, 3],    // times the tracks are FOUND (incl. the first) before the beast is located
   dwellSeconds: 0.9,      // linger by the tracks this long to read the trail
-  // THE WANING CLOCK (her ruling, 2026-08-05): an UNFOUND trail — never once
-  // read — lapses quietly after TWO HOURS of play, freeing the one-at-a-time
-  // lane for a future hunt; one read (or the locate) and it stands forever.
-  // 7200s is generous by design ("hours of play, not minutes") and can never
-  // catch an approach: the clock holds while the player stands in the trail's
-  // zone. [7200 = MY NUMBER — FLAGGED for Arianna.] The omen ledger: the hunt
-  // fields no omen — its 🐾 marker is fog:'always', map-wide from ignition,
-  // so there is no aging voice for the wane to race; even the omen fabric's
-  // slowest shipping whisper (longNight, 160 units + 10/min) would carry the
-  // whole seat envelope (max 640 units) in ~48 min, well inside this clock.
-  waneSeconds: 7200,
+  // THE WANING CLOCK (her rulings, 2026-08-05 + 2026-08-07): an UNFOUND
+  // trail — never once read — lapses quietly after THIRTY MINUTES of play,
+  // freeing the one-at-a-time lane for a future hunt; one read (or the
+  // locate) and it stands forever. First shipped at 7200s ("hours of play");
+  // re-ruled to 1800s on 2026-08-07 — the faster turnover keeps the package
+  // IN PLAY ("not noticeably devoid of content"): a lapsed unfound hunt
+  // frees the lane sooner, so the world more often carries a live trail.
+  // The clock still holds while the player stands in the trail's zone, and
+  // the hunt fields no omen (its 🐾 marker is fog:'always', map-wide from
+  // ignition) so no aging voice races the wane. [1800 = HER NUMBER.]
+  waneSeconds: 1800,
   // THE QUARRY POOL (batch 28 — grown from one to seven): each row one great
   // beast, one landed fabric as its whole argument (defs in data/monsters.ts,
   // THE HUNT BESTIARY block), banded to the CHARACTER level so the pool reads
