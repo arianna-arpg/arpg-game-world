@@ -50540,7 +50540,17 @@ export class World {
       // wave objectives). Explicit garrison/slot spawns bypass this by design.
       if (this.structures.length && this.walk?.reachable
         && !this.walk.reachable(this.zoneEntry, p)) continue;
-      if (dist(p, this.player.pos) > 450) return this.clampPos(p, radius);
+      if (dist(p, this.player.pos) > 450) {
+        // THE CLAMPED BAR (hfpocket II, 2026-08-07): clampPos resolves the
+        // body's FULL radius (the solid gate above cleared only radius*0.5)
+        // and can push a marginal candidate back INSIDE the grace disc — the
+        // 08-07 nightly's 448-under-450 (probe_holdfast_pocket seed 471714).
+        // The bar judges the point the caller actually RECEIVES: clamp
+        // first, and a pulled-under candidate keeps sampling — the
+        // farthestStand degrade below still floors cramped ground.
+        const q = this.clampPos(p, radius);
+        if (dist(q, this.player.pos) > 450) return q;
+      }
     }
     // Sampling failed — usually a CRAMPED zone where nothing clears the
     // player-distance bar. The old fallback stacked everything at the entry
