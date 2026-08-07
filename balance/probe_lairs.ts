@@ -31,6 +31,7 @@ import '../src/data/lairs';
 
 import { Rng } from '../src/core/rng';
 import { vec, type Vec2 } from '../src/core/math';
+import { presenceMul, presenceTable } from '../src/engine/presence';
 import {
   clusterDefs, compositionDefs, doodadRuleOf, generateLayout, hasCluster,
   hasComposition, hasLandmark, isSidezoneEntranceKind, landmarkDefs, landmarkOf,
@@ -3063,10 +3064,11 @@ const step = (secs: number): void => {
     // draws shifted every downstream boot's stream: base 954301's first
     // crown moved to boot 41 and base 954401's to boot 33, both outside the
     // try budget (the budget never widens — the base moves), base 954501
-    // hits at boot 24 — the window measured whole through this rig's own
-    // run): 954525.
+    // hits at boot 24 = 954525; re-measured at WAVE TWELVE, 2026-08-07 —
+    // the pinnacle table grew the peak_roc row, so the same window's pack
+    // TYPE picks re-dealt and the first crown moved up to boot 15): 954516.
     check('T5 a real pinnacle mint carries the crown (the fold at placeZoneAt, the ladder pin)',
-      hitSeed === 954525, hitSeed ? `hit=${hitSeed}` : 'no hit in 26 seeds');
+      hitSeed === 954516, hitSeed ? `hit=${hitSeed}` : 'no hit in 26 seeds');
     if (hitSeed) {
       const lc = lw.actors.find(a => a.defId === 'stormcrown_caller' && !a.dead)!;
       const thegns = lw.actors.filter(a => a.defId === 'levin_thegn' && !a.dead);
@@ -3231,6 +3233,116 @@ const step = (secs: number): void => {
     `life=${pulseDormant.life.toFixed(1)}/${pulseDormant.maxLife().toFixed(1)}`);
   check('S8 …and never roused (the quake is nobody\'s wounding strike)',
     !pulseDormant.aiAwakened && isDormant(pulseDormant));
+}
+
+// --- RIG P: WAVE TWELVE — THE SUCCESSION LADDERS (the presence fabric) -------
+// Her commission: "…actual leveled lists where certain entities begin
+// appearing later, or, even more interestingly, weighted more heavily at
+// different ranges… it induces what feels like a genuine world continuing."
+// The wave authors no machinery — presence.ts already folds at
+// World.weightedPick — so these pins hold the SHAPE: one full pack-table
+// ladder (early kin absent high, band kin peaked, late kin absent low), the
+// per-list law's debut (one cat, two different peaks), the stops gradient's
+// debut, the game's first def-level BAND, the wildlife layers' succession
+// (field / highland / cavern / the deepsea coda), and the new kits'
+// affordability + grab credentials.
+{
+  // P27a — THE FULL LADDER through the REAL fold (presenceTable folds entry
+  // × def envelopes exactly as World.weightedPick does): the grassland at 5
+  // has the sounder and no lion; at 25 the lion and no sounder; the harrier
+  // peaks between and YIELDS both ways.
+  const defP = (id: string) => MONSTERS[id]?.presence;
+  const gl = TILESETS.grassland?.packs.table ?? [];
+  const glAt = (lvl: number) => presenceTable(gl, lvl, defP);
+  const wOf = (rows: readonly { id: string; weight: number }[], id: string) =>
+    rows.find(r => r.id === id)?.weight ?? 0;
+  check('P27a the grassland ladders: the sounder is EARLY (present at 5, gone by 25)',
+    wOf(glAt(5), 'sod_boar') > 0 && wOf(glAt(25), 'sod_boar') === 0);
+  check('P27a the lion is LATE (absent at 5, present at 25 — the def envelope alone gates its bare row)',
+    wOf(glAt(5), 'dust_lion') === 0 && wOf(glAt(25), 'dust_lion') > 0);
+  check('P27a the harrier is the BAND (peaked at 12 above both edges, gone by 30)',
+    wOf(glAt(12), 'steppe_harrier') > wOf(glAt(4), 'steppe_harrier')
+    && wOf(glAt(12), 'steppe_harrier') > wOf(glAt(26), 'steppe_harrier')
+    && wOf(glAt(30), 'steppe_harrier') === 0);
+
+  // P27b — THE PER-LIST LAW (presence.ts's own doc promise, first kept):
+  // the SAME lynx peaks early in the foothills and late on the highland —
+  // and the folds truly diverge at 24 (closed there, alive here).
+  const fh = TILESETS.foothills?.packs.table ?? [];
+  const hl = TILESETS.highland?.packs.table ?? [];
+  const lynxFh = fh.find(r => r.id === 'crag_lynx')?.presence;
+  const lynxHl = hl.find(r => r.id === 'crag_lynx')?.presence;
+  check('P27b the lynx wears DIFFERENT bands per roster (foothills 4..16, highland 6..20)',
+    typeof lynxFh === 'object' && typeof lynxHl === 'object'
+    && lynxFh.from === 4 && lynxFh.to === 16 && lynxHl.from === 6 && lynxHl.to === 20);
+  check('P27b …and the folds diverge at 24 (closed in the foothills, alive on the highland)',
+    wOf(presenceTable(fh, 24, defP), 'crag_lynx') === 0
+    && wOf(presenceTable(hl, 24, defP), 'crag_lynx') > 0);
+
+  // P27c — THE STOPS DEBUT (the census counted zero anywhere): the field's
+  // crows RISE with level — an arbitrary-gradient row, monotone up.
+  const crow = (WILDLIFE.field ?? []).find(r => r.id === 'carrion_crow');
+  check('P27c the crows thicken over harder country (the stops gradient, rising)',
+    typeof crow?.presence === 'object' && (crow.presence.stops?.length ?? 0) >= 2
+    && presenceMul(crow.presence, 4) < 1 && presenceMul(crow.presence, 16) > 1);
+
+  // P27d — THE FIRST DEF-LEVEL BAND: the weaver arrives ~4 and yields by
+  // ~25 EVERYWHERE it ever seats (the def is the envelope's home).
+  const wv = MONSTERS.dripstone_weaver?.presence;
+  check('P27d the weaver\'s def carries from AND to (the game\'s first def-level band)',
+    typeof wv === 'object' && wv.from !== undefined && wv.to !== undefined
+    && presenceMul(wv, 2) === 0 && presenceMul(wv, 10) === 1 && presenceMul(wv, 26) === 0);
+
+  // P27e — THE WILDLIFE SUCCESSION (the ambience layer ladders too):
+  // spawnWildlife folds row × def envelopes into CHANCE — these pins hold
+  // that same fold at the discriminating levels for all four countries.
+  const wrow = (key: string, id: string) => (WILDLIFE[key] ?? []).find(r => r.id === id);
+  const wmul = (key: string, id: string, lvl: number): number => {
+    const r = wrow(key, id);
+    return r ? presenceMul(r.presence, lvl) * presenceMul(MONSTERS[id]?.presence, lvl) : -1;
+  };
+  check('P27e the field turns over (hares + the sounder fade out; the lion walks in)',
+    wmul('field', 'meadow_hare', 5) === 1 && wmul('field', 'meadow_hare', 25) === 0
+    && wmul('field', 'sod_boar', 25) === 0
+    && wmul('field', 'dust_lion', 5) === 0 && wmul('field', 'dust_lion', 25) === 1);
+  check('P27e the dark turns over (rats out by 25, the creeper in from 10, near-gated to the pools)',
+    wmul('cavern', 'gutter_rat', 25) === 0 && wmul('cavern', 'pallid_creeper', 5) === 0
+    && wmul('cavern', 'pallid_creeper', 25) === 1
+    && wrow('cavern', 'pallid_creeper')?.near === 'water');
+  check('P27e the deep ladders (shoals thin, the jelly bloom is a band, the vent crab endures FLAT)',
+    wmul('deepsea', 'silver_shoal', 28) === 0
+    && wmul('deepsea', 'moon_jelly', 1) === 0 && wmul('deepsea', 'moon_jelly', 10) === 1
+    && wmul('deepsea', 'moon_jelly', 28) === 0
+    && wmul('deepsea', 'vent_crab', 30) === 1);
+  check('P27e the heights turn over (the elk herds yield; the white hart stands from 14)',
+    wmul('highland', 'taiga_elk', 25) === 0 && wmul('highland', 'white_hart', 8) === 0
+    && wmul('highland', 'white_hart', 20) === 1);
+
+  // P27f — THE KITS (standing verbs recombined, zero new skills; the
+  // anatomy net pins these repo-wide — these are the seat-grain contracts):
+  // every new hunter pays its kit from its own pool, the lion and the roc
+  // carry true grab credentials (mass authority — the lurker's P22 idiom),
+  // and the roc is the only FLIER wearing the yeti's verbs.
+  const afford12 = (id: string) => (MONSTERS[id]?.skills ?? []).every(s =>
+    (SKILLS[s]?.manaCost ?? 0) <= (MONSTERS[id]?.base.mana ?? 0));
+  check('P27f every wave-twelve kit is affordable from its own pool',
+    (['sod_boar', 'steppe_harrier', 'dust_lion', 'crag_lynx', 'peak_roc', 'white_hart', 'dripstone_weaver'] as const)
+      .every(afford12));
+  check('P27f the lion pins (the yoke-mauler\'s clinch on a cat, with the heft to open it)',
+    (MONSTERS.dust_lion?.skills ?? []).includes('mauler_clinch')
+    && (MONSTERS.dust_lion?.heft ?? 0) > 1);
+  check('P27f the roc carries (the frostmaw\'s snatch + hurl on a flier, heft-backed)',
+    (MONSTERS.peak_roc?.skills ?? []).includes('yeti_snatch')
+    && (MONSTERS.peak_roc?.skills ?? []).includes('yeti_hurl')
+    && MONSTERS.peak_roc?.flier === true && (MONSTERS.peak_roc?.heft ?? 0) > 1);
+  check('P27f the harrier is the pure air mix (stoop + rake + wing — a set no standing raptor owns)',
+    (['condor_stoop', 'talon_rake', 'take_wing'] as const).every(s =>
+      (MONSTERS.steppe_harrier?.skills ?? []).includes(s)));
+  check('P27f the weaver snares and saws (the web without the widow\'s claw or her brood)',
+    (MONSTERS.dripstone_weaver?.skills ?? []).includes('web_shot')
+    && (MONSTERS.dripstone_weaver?.skills ?? []).includes('rend')
+    && !(MONSTERS.dripstone_weaver?.skills ?? []).includes('claw')
+    && !(MONSTERS.dripstone_weaver?.skills ?? []).includes('lay_brood_egg'));
 }
 
 console.log(fails ? `\nprobe_lairs: ${fails} FAILURE(S)` : '\nprobe_lairs: ALL PASS');

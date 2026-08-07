@@ -129,6 +129,13 @@ const row = (source: string, over?: Partial<TellSpec>): TellSpec =>
   check('weave: the deep\'s first hunger-driven hunter wears the shared lean (vent_crab, wave eleven)',
     !!MONSTERS.vent_crab?.brain?.drives?.hunger
     && MONSTERS.vent_crab?.tells === HUNGER_LEAN);
+
+  // WAVE TWELVE (the succession ladders): every new hunter joins by
+  // IDENTITY — the ONE shared row, never a copy (the census above already
+  // names any future shirker; this pin names the wave's five by hand).
+  check('weave: the wave-twelve hunters wear the ONE shared lean by identity',
+    (['steppe_harrier', 'dust_lion', 'crag_lynx', 'peak_roc', 'dripstone_weaver'] as const)
+      .every(id => !!MONSTERS[id]?.brain?.drives?.hunger && MONSTERS[id]?.tells === HUNGER_LEAN));
   check('weave: HUNGER_LEAN is the one shared row (band spans the hunt thresholds)',
     HUNGER_LEAN.length === 1 && HUNGER_LEAN[0].source === 'drive:hunger'
     && HUNGER_LEAN[0].channel.kind === 'lean'

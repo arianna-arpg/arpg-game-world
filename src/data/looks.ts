@@ -9795,6 +9795,99 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#9ae8ff', params: { spread: 0.45, dist: 0.6, size: 0.11 } },
     ],
   },
+
+  // === WAVE TWELVE — the succession ladders' kin (2026-08-07) ===
+  /** The sod boar: a humped rooter, tusks forward, ridge-bristled. */
+  sod_boar: {
+    parts: [
+      { kind: 'torso', scale: 0.95, role: 'base' },
+      { kind: 'hump', scale: 0.9 },
+      { kind: 'furRuff', scale: 0.8, alpha: 0.85 },
+      { kind: 'snout', scale: 1.05 },
+      { kind: 'tusks', x: 0.42, scale: 0.9 },
+      { kind: 'tail', params: { len: 0.35 } },
+    ],
+  },
+  /** The steppe harrier: long wings low over the grass, a light body all
+   *  glide — the quartering silhouette. */
+  steppe_harrier: {
+    parts: [
+      { kind: 'featherWings', scale: 1.25 },
+      { kind: 'torso', scale: 0.55 },
+      { kind: 'beak', scale: 0.8 },
+      { kind: 'tail', params: { len: 0.7 } },
+      { kind: 'eyes', color: '#e8c030', params: { n: 2, spread: 0.36, dist: 0.36, size: 0.11 } },
+    ],
+    shadowScale: 0.5,
+  },
+  /** The dust lion: the mane IS the read (the ruff outsizes the head), a
+   *  tufted tail, hunter's eyes. */
+  dust_lion: {
+    parts: [
+      { kind: 'disc', scale: 0.9 },
+      { kind: 'furRuff', scale: 1.15, alpha: 0.95 },
+      { kind: 'snout', scale: 0.9 },
+      { kind: 'ears', scale: 0.5 },
+      { kind: 'tail', params: { len: 1.1, tuft: true } },
+      { kind: 'eyes', color: '#f0c040', params: { spread: 0.4, dist: 0.55, size: 0.09 } },
+    ],
+  },
+  /** The crag lynx: tufted ears over a bobbed tail — the mountain cat's
+   *  exact opposite proportions to the lion (ears big, tail short). */
+  crag_lynx: {
+    parts: [
+      { kind: 'disc', scale: 0.82 },
+      { kind: 'furRuff', scale: 0.95, alpha: 0.9 },
+      { kind: 'ears', scale: 0.7 },
+      { kind: 'snout', scale: 0.75 },
+      { kind: 'spots', scale: 0.75, role: 'accent', params: { n: 5 } },
+      { kind: 'tail', params: { len: 0.35, tuft: true } },
+      { kind: 'eyes', color: '#d8e850', params: { spread: 0.42, dist: 0.55, size: 0.09 } },
+    ],
+  },
+  /** The peak roc: the condor's frame at half again the span, talons
+   *  carried ready — the shadow that means put the small ones indoors. */
+  peak_roc: {
+    parts: [
+      { kind: 'featherWings', scale: 1.55 },
+      { kind: 'torso', scale: 0.68 },
+      { kind: 'beak', scale: 1.1 },
+      { kind: 'plume', x: -0.22, scale: 0.6 },
+      { kind: 'claws', y: 0.3, scale: 0.9, params: { len: 0.5, talons: 3 } },
+      { kind: 'eyes', color: '#e8a030', params: { n: 2, spread: 0.38, dist: 0.34, size: 0.12 } },
+    ],
+    shadowScale: 0.45,
+  },
+  /** The white hart: the elk's frame in white, crowned wide — no hump, no
+   *  bulk; the antlers carry the whole silhouette. */
+  white_hart: {
+    parts: [
+      { kind: 'torso', scale: 0.92, role: 'base' },
+      { kind: 'antlers', scale: 1.35 },
+      { kind: 'snout', scale: 0.95 },
+      { kind: 'tail', params: { len: 0.35 } },
+    ],
+  },
+  /** The dripstone weaver: a pale-legged orb spider, eye-cluster dim as
+   *  wet stone. */
+  dripstone_weaver: {
+    parts: [
+      { kind: 'legs', scale: 1.25, params: { n: 8 } },
+      { kind: 'disc', scale: 0.6 },
+      { kind: 'spots', params: { n: 4 } },
+      { kind: 'eyeCluster', color: '#c8d8d0', params: { n: 6, spread: 0.42, dist: 0.5 } },
+    ],
+  },
+  /** The pallid creeper: a soft white blob-body on stub legs, eyes gone to
+   *  pale dots — the cave's own unpigmented make. */
+  pallid_creeper: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.14, seed: 412 } },
+      { kind: 'legs', scale: 0.6, params: { n: 4 } },
+      { kind: 'tail', params: { len: 0.6 } },
+      { kind: 'eyes', color: '#e8e8e0', params: { spread: 0.4, dist: 0.5, size: 0.07 } },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

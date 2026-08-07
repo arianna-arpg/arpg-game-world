@@ -1086,7 +1086,12 @@ withSeededRandom(0x0bec7a, () => {
     // which is U13's lesson, not this rig's. 818182 mints bare cull ground;
     // the whole file scanned green through its own run.)
     {
-      const zid = stage(818182, 39, { kind: 'clear', adopt: true });
+      // (Re-measured again at WAVE TWELVE, 2026-08-07: the wave's pack-table
+      // rows re-dealt the span stream and 818182's mint re-seated onto ground
+      // the Barrow Watch claims — the resident beat the guest, U13's lesson
+      // again. 818183 mints bare cull ground, proven through this rig's own
+      // run at its own span position.)
+      const zid = stage(818183, 39, { kind: 'clear', adopt: true });
       check('U11a the hand-back guest seats', ff.devIgnite(w.devOverlayView(), zid) === true);
       w.loadZone(zid);
       check('U11b adopted at load', w.zone.objective.kind === 'package');

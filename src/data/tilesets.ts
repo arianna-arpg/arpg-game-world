@@ -8856,6 +8856,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'beastlord_khan', weight: 1, presence: { from: 16, fadeIn: 6 } },
         { id: 'molting_behemoth', weight: 1, presence: { from: 14, fadeIn: 6 } },
         { id: 'bulwark_scuttler', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        // THE SUCCESSION (wave 12): the lynx works the MIDDLE band and
+        // yields — the fade-crowned shape the census counted five of in the
+        // whole world — and the roc arrives ABOVE the khan's muster (its
+        // def carries from 17), so the crown country finally changes past
+        // 15. Envelope numbers proposed, not blessed.
+        { id: 'crag_lynx', weight: 2, presence: { from: 6, fadeIn: 3, to: 20, fadeOut: 8 } },
+        { id: 'peak_roc', weight: 1 },
       ],
     },
     spawnerId: 'rime_stone',
@@ -8979,6 +8986,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'boulderback', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'troll_mauler', weight: 1, presence: { from: 9, fadeIn: 5 } },
         { id: 'gale_elemental', weight: 1, presence: { to: 18, fadeOut: 9 } },
+        // (wave 12) THE PER-LIST LAW's debut: the same lynx peaks EARLY
+        // here (4..16) and later on the highland proper (6..20) —
+        // presence.ts's "the same monster can peak early in one roster and
+        // late in another", first kept anywhere.
+        { id: 'crag_lynx', weight: 2, presence: { from: 4, fadeIn: 2, to: 16, fadeOut: 6 } },
       ],
     },
     caveLayouts: { rooms: 2, plains: 1 },
@@ -9141,6 +9153,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'stone_sentinel', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'pit_mauler', weight: 1, presence: { from: 9, fadeIn: 4 } },
         { id: 'molting_behemoth', weight: 1, presence: { from: 14, fadeIn: 6 } },
+        // (wave 12) The pass's ambusher, banded to the traveled years.
+        { id: 'crag_lynx', weight: 1, presence: { from: 5, fadeIn: 3, to: 18, fadeOut: 7 } },
       ],
     },
     caveLayouts: { rooms: 2, plains: 1, dungeon: 0.5 },
@@ -9286,6 +9300,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'troll_mauler', weight: 1, presence: { from: 10, fadeIn: 5 } },
         // The cold's own giant walks the white — HARD gate, the tundra law.
         { id: 'frost_giant', weight: 1, presence: { from: 12 } },
+        // (wave 12) The white's own shadow — the roc hunts above the
+        // giant's snowline (its def carries from 17).
+        { id: 'peak_roc', weight: 1 },
       ],
     },
     caveLayouts: { rooms: 2, plains: 1 },
@@ -9403,6 +9420,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'steppe_ronin', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'cadence_maestro', weight: 1, presence: { from: 12, fadeIn: 5 } },
         { id: 'gale_elemental', weight: 1 },
+        // (wave 12) The stone crown's late arrival (def carries from 17).
+        { id: 'peak_roc', weight: 1 },
       ],
     },
     caveLayouts: { rooms: 2, plains: 1 },
@@ -9504,6 +9523,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'stone_sentinel', weight: 1.5, presence: { from: 10, fadeIn: 5 } },
         { id: 'troll_mauler', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'beastkin_ritualist', weight: 1, presence: { from: 11, fadeIn: 5 } },
+        // (wave 12) The crown face is the roc's home hunt (def from 17).
+        { id: 'peak_roc', weight: 1.5 },
       ],
     },
     caveLayouts: { rooms: 2, plains: 1 },
@@ -10785,6 +10806,14 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'alpha_stalker', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'brute', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'warband_chieftain', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        // THE SUCCESSION (wave 12): the sounder roots the young field, the
+        // harrier owns the middle sky, and the lion is the late field's
+        // answer (its def carries from 14) — re-walk this country at 25 and
+        // the population has genuinely turned over. Envelopes proposed,
+        // not blessed.
+        { id: 'sod_boar', weight: 2, presence: { to: 14, fadeOut: 6 } },
+        { id: 'steppe_harrier', weight: 2, presence: { from: 5, fadeIn: 3, to: 20, fadeOut: 8 } },
+        { id: 'dust_lion', weight: 1 },
       ],
     },
     spawnerId: 'bone_altar',

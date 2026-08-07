@@ -1475,13 +1475,18 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   // watch below (the marmot's freeze IS the whistle) and one slow shadow
   // above it all writing circles on the crags.
   highland: [
-    { id: 'taiga_elk', chance: 0.45, count: [2, 3] },
-    { id: 'meadow_hare', chance: 0.4, count: [2, 3] },
+    // THE SUCCESSION (wave 12): the gentle-country strays (hares, the elk
+    // herds) yield the heights as levels rise; the marmots, ibex and condors
+    // are the high country's constants; and where the elk stood at 8, the
+    // white hart stands at 20 (its def carries from 14) — rare on purpose.
+    { id: 'taiga_elk', chance: 0.45, count: [2, 3], presence: { to: 16, fadeOut: 7 } },
+    { id: 'meadow_hare', chance: 0.4, count: [2, 3], presence: { to: 12, fadeOut: 5 } },
     { id: 'bloodwing_nest', chance: 0.25, count: [1, 2] },
     { id: 'gore_hawk', chance: 0.15, count: [1, 1] },
     { id: 'whistle_marmot', chance: 0.5, count: [2, 4] },
     { id: 'crag_condor', chance: 0.3, count: [1, 2] },
     { id: 'salt_ibex', chance: 0.4, count: [2, 3] },
+    { id: 'white_hart', chance: 0.15, count: [1, 1] },
   ],
   // THE BUTTELAND (the needle country — its own biome since the tier pass):
   // the savannah wardrobe (planned pass #14b) — the tables stop guesting the
@@ -1551,17 +1556,29 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'canopy_screecher', chance: 0.5, count: [3, 5] },
   ],
   field: [
-    { id: 'meadow_hare', chance: 0.7, count: [3, 5] },
+    // THE SUCCESSION (wave 12): the tender pastoral thins as the country
+    // hardens — hares and coveys fade, the crows THICKEN over harder ground
+    // (the stops gradient's first use anywhere), the harrier works the
+    // middle band, and the late field belongs to the lion. Chances are the
+    // standing numbers; only the envelopes are new (proposed, not blessed).
+    { id: 'meadow_hare', chance: 0.7, count: [3, 5], presence: { to: 14, fadeOut: 6 } },
     // The wild chains: coveys in the grain, the fox working the margins.
-    { id: 'dust_quail', chance: 0.5, count: [3, 5] },
+    { id: 'dust_quail', chance: 0.5, count: [3, 5], presence: { to: 12, fadeOut: 5 } },
     { id: 'red_fox', chance: 0.3, count: [1, 1] },
-    // the Verminfall — grain draws rats; the dead of the open field draw crows.
+    // the Verminfall — grain draws rats; the dead of the open field draw crows
+    // (and the harder the country, the more dead: the crows RISE with level).
     { id: 'gutter_rat', chance: 0.4, count: [2, 4] },
-    { id: 'carrion_crow', chance: 0.25, count: [2, 3] },
+    { id: 'carrion_crow', chance: 0.25, count: [2, 3], presence: { stops: [[4, 0.7], [16, 1.6]] } },
     { id: 'plains_wolf', chance: 0.4, count: [2, 3] },
     { id: 'taiga_elk', chance: 0.3, count: [2, 3] },
     { id: 'bloodwing_nest', chance: 0.2, count: [1, 1] },
     { id: 'wayfarer_pilgrim', chance: 0.2, count: [2, 3] },
+    // The sounder roots the young sod and is gone from the hardened field…
+    { id: 'sod_boar', chance: 0.4, count: [2, 3], presence: { to: 14, fadeOut: 6 } },
+    // …the harrier quarters the grass through the middle years…
+    { id: 'steppe_harrier', chance: 0.3, count: [1, 2], presence: { from: 5, fadeIn: 3, to: 20, fadeOut: 8 } },
+    // …and the lion is why the late field goes quiet (its def carries from 14).
+    { id: 'dust_lion', chance: 0.15, count: [1, 1] },
   ],
   // The dark keeps its own small lives — and its own PACE: the snail is the
   // cave's clock, the cricket its blind detonation. (No bare cave_bat row:
@@ -1571,13 +1588,20 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   // rocklings, constructs — live in CAVE_POOLS below, rolled per zone by
   // World.caveAirFor; this key stays the biome-stamped 'cavern' answer.)
   cavern: [
+    // THE SUCCESSION (wave 12): the shallow tenants (rats, crickets) thin
+    // as the level deepens; the weaver works the moth tide through the
+    // middle band (its def carries the game's first def-level BAND); and
+    // the pale deep sends its own small tenant up as they go — quieter and
+    // stranger ambience is the late dark's point.
     { id: 'glow_moth', chance: 0.65, count: [3, 6] },
     // the Verminfall — the dark's small tenants.
-    { id: 'gutter_rat', chance: 0.4, count: [2, 3] },
+    { id: 'gutter_rat', chance: 0.4, count: [2, 3], presence: { to: 14, fadeOut: 6 } },
     { id: 'gutter_roach', chance: 0.55, count: [3, 6] },
     { id: 'bat_roost', chance: 0.45, count: [1, 2] },
     { id: 'dripstone_snail', chance: 0.5, count: [1, 3] },
-    { id: 'cave_cricket', chance: 0.45, count: [2, 4] },
+    { id: 'cave_cricket', chance: 0.45, count: [2, 4], presence: { to: 16, fadeOut: 7 } },
+    { id: 'dripstone_weaver', chance: 0.3, count: [1, 2] },
+    { id: 'pallid_creeper', chance: 0.4, count: [1, 3], near: 'water' },
   ],
   // The rot country DRIFTS: loosed caps riding the spore-haze at the speed
   // of patience, snails working the mulch beneath them.
@@ -1710,10 +1734,15 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   // (one creature, a hundred bodies), jelly-lamps drifting the crush (the
   // carried-lamp law underwater), hermits clamping among the sea-rocks.
   deepsea: [
-    { id: 'silver_shoal', chance: 0.65, count: [5, 9] },
-    { id: 'moon_jelly', chance: 0.5, count: [2, 4] },
+    // THE SUCCESSION (wave 12 — the wave-11 coda cashed): the water's
+    // ambience ladders. Bright shoals thin as the water hardens, the jelly
+    // bloom is a middle band, the shore-strays never reach the late deep;
+    // the scuttlers endure, and the vent crab's range is the chimneys at
+    // ANY level (both stay flat on purpose). Envelopes proposed, not blessed.
+    { id: 'silver_shoal', chance: 0.65, count: [5, 9], presence: { to: 18, fadeOut: 8 } },
+    { id: 'moon_jelly', chance: 0.5, count: [2, 4], presence: { from: 3, fadeIn: 2, to: 18, fadeOut: 8 } },
     { id: 'hermit_scuttler', chance: 0.45, count: [2, 4], near: 'sea_rock' },
-    { id: 'shore_crab', chance: 0.3, count: [2, 3] },
+    { id: 'shore_crab', chance: 0.3, count: [2, 3], presence: { to: 14, fadeOut: 6 } },
     // The smoker-field's own hunter: `near` SELF-GATES the row (no chimney,
     // no crab — the vent field + the brood's nest ring are its whole range),
     // so a generous chance still spawns nothing on the kelp faces.
@@ -21409,6 +21438,209 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 60, faction: 'jotun',
     post: true, // the bench is the post
     brain: { type: 'basic' },
+  },
+
+  // === THE SUCCESSION LADDERS — WAVE TWELVE of the homed kin (2026-08-07).
+  // Her commission: "…actual leveled lists where certain entities begin
+  // appearing later, or, even more interestingly, weighted more heavily at
+  // different ranges… it induces what feels like a genuine world
+  // continuing." The shape census (pass memory) found the BAND shape nearly
+  // absent (5 of ~1240 tileset table entries, ZERO at def level) and the
+  // WILDLIFE layer flat in 36 of 48 biome keys — so these kin seat real
+  // succession in three spread countries (field / highland / cavern; the
+  // deepsea coda is envelope-only): early kin that fade, band kin that peak
+  // and YIELD, late kin that arrive as the early thin. Zero new skills —
+  // every kit is standing verbs recombined. Envelope numbers proposed, not
+  // blessed.
+
+  // THE SOD BOAR — the field's early tusker: a rooting sounder the young
+  // country is full of and the hardened country has eaten (its rows fade
+  // out by ~20 — the first thing the returning walker misses). Prey that
+  // hurts: the elk pattern (critter tag, one horn verb, juveniles that run).
+  sod_boar: {
+    id: 'sod_boar', name: 'Sod Boar',
+    color: '#8a6a4e', shape: 'oval', radius: 13, material: 'fur', look: 'sod_boar',
+    base: { life: 55, moveSpeed: 165, accuracy: 98, poise: 40, mana: 20, manaRegen: 3 },
+    skills: ['gore_rend'], xp: 9, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.3, drops: 0,
+    scaleVariance: [0.8, 1.3], scaleStats: true, juvenileBelow: 0.9,
+    juvenileBrain: { type: 'flee' },
+    brain: { type: 'juggernaut', move: { style: 'charge', commitRange: 260, chargeSpeed: 2.0 } },
+  },
+  // THE STEPPE HARRIER — the field's middle years on the wing, a verb mix
+  // neither raptor owns (the condor's stoop + the hawk's escape + the rake):
+  // its rows BAND 5..20 — it arrives after the coveys thin and yields the
+  // sky before the lion walks. Hunts by hunger (the family lean); quail and
+  // hares stage its dramas whether or not you watch.
+  steppe_harrier: {
+    id: 'steppe_harrier', name: 'Steppe Harrier',
+    color: '#b09a6a', shape: 'kite', radius: 11, material: 'fur', look: 'steppe_harrier',
+    base: { life: 48, moveSpeed: 200, accuracy: 108, evasion: 75, mana: 15, manaRegen: 3 },
+    skills: ['condor_stoop', 'talon_rake', 'take_wing'], xp: 18,
+    tag: 'predator', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 1.4,
+    scaleVariance: [0.9, 1.1],
+    tells: HUNGER_LEAN,
+    brain: {
+      type: 'skirmish', withdraw: 1.4,
+      tempo: { moveFor: [1.2, 2.0], pauseFor: [0.2, 0.5] },
+      drives: { hunger: { rise: 0.013, start: [0.35, 0.75], onKill: -0.8 } },
+      rules: [
+        { when: { drive: { id: 'hunger', above: 0.55 } },
+          use: { target: { prey: ['critter'], detectMul: 1.35 }, behavior: { seek: { what: 'prey', pace: 0.6 } } } },
+        { when: { lifeBelow: 0.45 }, every: [6, 9], hold: [2.5, 4],
+          actions: [{ do: 'cast', skill: 'take_wing', at: 'awayFromTarget', force: true }],
+          use: { move: { style: 'holdRange', hold: 380 } } },
+      ],
+    },
+  },
+  // THE DUST LION — why the late field goes quiet. Def-level DEBUT (from
+  // 14) so its lateness holds in EVERY roster it ever joins; the kit is the
+  // lion's true hunt in three standing verbs: the leap to close, the CLINCH
+  // to pin (the yoke-mauler's grab, worn by a cat), the claw for the held.
+  // It hunts the herds by hunger — the aurochs finally meet their answer.
+  dust_lion: {
+    id: 'dust_lion', name: 'Dust Lion',
+    color: '#c8a05a', shape: 'kite', radius: 15, material: 'fur', look: 'dust_lion',
+    presence: { from: 14, fadeIn: 6 },
+    heft: 1.6,
+    base: { life: 170, moveSpeed: 215, accuracy: 114, evasion: 55, mana: 30, manaRegen: 4 },
+    skills: ['crushing_leap', 'mauler_clinch', 'claw'], xp: 55,
+    tag: 'predator', faction: 'beast', tags: ['beast'],
+    detection: 1.5,
+    scaleVariance: [0.92, 1.12],
+    tells: HUNGER_LEAN,
+    brain: {
+      type: 'basic',
+      move: { style: 'lurk' },
+      tempo: { moveFor: [0.9, 1.6], pauseFor: [0.3, 0.8] },
+      drives: { hunger: { rise: 0.012, start: [0.35, 0.7], onKill: -0.85 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.55 } },
+        use: { target: { prey: ['critter'], detectMul: 1.3 }, behavior: { seek: { what: 'prey', pace: 0.55 } } },
+      }],
+    },
+  },
+  // THE CRAG LYNX — the high country's MIDDLE band, and the per-list law's
+  // debut: the same cat peaks EARLY in the foothills (rows band 4..16),
+  // later on the highland proper (6..20) — presence.ts's own promise ("the
+  // same monster can peak early in one roster and late in another"), first
+  // kept here. The pounce-and-bleed specialist: leap + rend and no brawling
+  // claw — it opens you and circles while you leak.
+  crag_lynx: {
+    id: 'crag_lynx', name: 'Crag Lynx',
+    color: '#b8a284', shape: 'kite', radius: 13, material: 'fur', look: 'crag_lynx',
+    base: { life: 95, moveSpeed: 220, accuracy: 112, evasion: 80, mana: 25, manaRegen: 4 },
+    skills: ['crushing_leap', 'rend'], xp: 34,
+    tag: 'predator', faction: 'beast', tags: ['beast'],
+    detection: 1.5,
+    scaleVariance: [0.9, 1.15],
+    tells: HUNGER_LEAN,
+    brain: {
+      type: 'skirmish', withdraw: 1.6,
+      move: { style: 'lurk' },
+      tempo: { moveFor: [1.0, 1.8], pauseFor: [0.3, 0.7] },
+      drives: { hunger: { rise: 0.013, start: [0.4, 0.8], onKill: -0.8 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.55 } },
+        use: { target: { prey: ['critter'], detectMul: 1.35 }, behavior: { seek: { what: 'prey', pace: 0.55 } } },
+      }],
+    },
+  },
+  // THE PEAK ROC — the highland's LATE rung, the country above the khan's
+  // muster (def DEBUT from 17, so the ossified crown faces finally have a
+  // 17+ arrival). The frostmaw's lesson in the sky — the only FLIER wearing
+  // the grab verbs: the snatch (a carry the size of a shadow), the hurl,
+  // and a rake for what won't lift. It hunts the ibex and the white harts
+  // by hunger; sometimes the luggage is you.
+  peak_roc: {
+    id: 'peak_roc', name: 'Peak Roc',
+    color: '#7a6a58', shape: 'kite', radius: 19, material: 'fur', look: 'peak_roc',
+    presence: { from: 17, fadeIn: 6 },
+    heft: 1.7,
+    base: { life: 260, moveSpeed: 205, accuracy: 112, poise: 50, mana: 30, manaRegen: 4 },
+    skills: ['yeti_snatch', 'yeti_hurl', 'talon_rake'], xp: 70,
+    tag: 'predator', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 1.4,
+    scaleVariance: [0.95, 1.1],
+    tells: HUNGER_LEAN,
+    brain: {
+      type: 'basic',
+      tempo: { moveFor: [1.1, 1.9], pauseFor: [0.2, 0.6] },
+      drives: { hunger: { rise: 0.011, start: [0.3, 0.7], onKill: -0.85 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.55 } },
+        use: { target: { prey: ['critter'], detectMul: 1.3 }, behavior: { seek: { what: 'prey', pace: 0.5 } } },
+      }],
+    },
+  },
+  // THE WHITE HART — what stands where the elk herds stood: the high
+  // country's late grazer (def DEBUT from 14), rare on purpose. All grace:
+  // it jukes, it is scarcely seen (the marmot's stealth at hart scale), and
+  // there is an antler answer for anything that truly corners it.
+  white_hart: {
+    id: 'white_hart', name: 'White Hart',
+    color: '#e8e4dc', shape: 'hexagon', radius: 14, material: 'fur', look: 'white_hart',
+    presence: { from: 14, fadeIn: 5 },
+    base: { life: 70, moveSpeed: 215, evasion: 90, mana: 25, manaRegen: 4 },
+    mods: [mod('detectability', 'more', -0.5)],
+    skills: ['heavy_strike'], xp: 12, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.15, drops: 0,
+    scaleVariance: [0.95, 1.1],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 220, duration: [1.6, 2.6] } },
+      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.1 },
+      tempo: { kite: 4.2, windedFor: [0.8, 1.2] },
+    },
+  },
+  // THE DRIPSTONE WEAVER — the dark's middle band, and the FIRST def-level
+  // BAND in the game (the census counted zero): everywhere it ever seats,
+  // it arrives ~4 and yields by ~25 — the deep dark is not its country.
+  // Snare + saw (web_shot + rend — the widow's net without her claw or her
+  // brood): it hangs the moth tide and the rats in wet silk.
+  dripstone_weaver: {
+    id: 'dripstone_weaver', name: 'Dripstone Weaver',
+    color: '#9a94a0', shape: 'cross', radius: 12, material: 'chitin', look: 'dripstone_weaver',
+    presence: { from: 4, fadeIn: 2, to: 18, fadeOut: 7 },
+    base: { life: 60, moveSpeed: 150, accuracy: 110, evasion: 50, mana: 60, manaRegen: 6 },
+    skills: ['web_shot', 'rend'], xp: 24,
+    tag: 'predator', faction: 'beast', tags: ['beast'],
+    detection: 1.3, drops: 0,
+    scaleVariance: [0.85, 1.15],
+    tells: HUNGER_LEAN,
+    brain: {
+      type: 'skirmish', withdraw: 1.3,
+      drives: { hunger: { rise: 0.012, start: [0.35, 0.75], onKill: -0.8 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.55 } },
+        use: { target: { prey: ['critter'], detectMul: 1.3 }, behavior: { seek: { what: 'prey', pace: 0.5 } } },
+      }],
+    },
+  },
+  // THE PALLID CREEPER — the deep's own small tenant, climbing INTO the
+  // lists as the rats and crickets climb out (def DEBUT from 10): a blind
+  // white salamander at the pool rims (its row's `near` self-gates — no
+  // water, no creeper). Pure texture; the late dark's ambience is quieter
+  // and stranger, which is the point.
+  pallid_creeper: {
+    id: 'pallid_creeper', name: 'Pallid Creeper',
+    color: '#d8d4c8', shape: 'oval', radius: 9, material: 'slime', look: 'pallid_creeper',
+    presence: { from: 10, fadeIn: 4 },
+    base: { life: 14, moveSpeed: 150, evasion: 70, mana: 0 },
+    mods: [mod('detectability', 'more', -0.6)],
+    skills: [], xp: 2, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.15, drops: 0,
+    scaleVariance: [0.85, 1.2],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 160, duration: [1.2, 2.0] } },
+      perception: { arcDeg: 360, rearMul: 1 },
+      move: { style: 'juke', hookEvery: [0.5, 0.9], hookArc: 0.9, freezeChance: 0.5, freeze: [0.7, 1.4] },
+      tempo: { kite: 2.4, windedFor: [0.9, 1.3] },
+    },
   },
 };
 
