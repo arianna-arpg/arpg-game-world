@@ -20,9 +20,10 @@
 // the real minted defs — plus its COLOR half THE TIER TINT (RIG M′):
 // tierMapTint, the node fill's story shade (higher = lighter, under =
 // darker, byte-zero on storyless ground) — and THE STORY TABLE (RIG P):
-// storyTable (engine/tiers.ts), the per-story spawn axis's fold, COLD at
-// HEAD (identity fast path over every live table, stream-neutral, the
-// envelope honored on synthetic rows).
+// storyTable (engine/tiers.ts), the per-story spawn axis's fold, LIVE at
+// spawnPacks since the story fold (2026-08-06: identity + ledger census,
+// stream-neutral, the envelope honored on synthetic rows and the real
+// pinnacle gale debut).
 //   npx tsx balance/probe_tiers.ts
 
 import '../src/data/clusters';
@@ -1706,30 +1707,61 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
     `${sankT}/${carvedT}`);
 }
 
-// --- RIG P: THE STORY TABLE (the per-story spawn axis, COLD at HEAD — batch 37) ----
+// --- RIG P: THE STORY TABLE (the per-story spawn axis — LIVE since the story fold) ----
 // storyTable (engine/tiers.ts) is the fold for PackTableEntry.storyPresence —
 // the presence vocabulary over the STORY axis ("harder kin near the crown").
-// Cold: no live consumer at HEAD (the spawnPacks fold is deferred to a
-// world.ts pass — the story roll must hoist above the pick). The laws pinned:
-// THE IDENTITY FAST PATH over every LIVE table (the input array OBJECT
-// returned — absent == byte-identical, and the census that no shipped row
-// carries the axis while the lever is cold; the consumer pass moves this
-// check on purpose, dated), the envelope honored on synthetic rows
-// (presenceMul's own math), the never-starve fallback, no input mutation,
-// and STREAM NEUTRALITY (folding consumes no rng — ★A-SPARE-SHIFTS-THE-
-// STREAM stays unarmed while the lever is cold).
+// Built cold in batch 37; the story fold (2026-08-06, batch 39) LANDED the
+// consumer: spawnPacks (world.ts) rolls tier membership + story BEFORE the
+// type pick and folds every tiered-ground pack's table at its ROLLED story
+// (ground packs at 0 — a from-the-benches row is absent from the valley;
+// flat zones skip the fold entirely, A/B-proven byte-identical). The laws
+// pinned: THE IDENTITY FAST PATH + THE LEDGER (absent == byte-identical for
+// every table off the ledger; the ledger's tables fold live — the pinnacle
+// gale debut; a rogue axis row is NAMED), the envelope honored on synthetic
+// rows and the real debut (presenceMul's own math), the never-starve
+// fallback, no input mutation, and STREAM NEUTRALITY (folding consumes no
+// rng — the fold itself re-pins nothing; the HOIST's reorder in tiered
+// zones is the consumer's own, per-seed re-pins dated where they landed).
 {
-  // P1 the identity fast path + the cold census, over every live packs table
-  // (TilesetDef.packs is required; variants carry no packs of their own).
-  let tables = 0, identity = 0;
-  for (const ts of Object.values(TILESETS)) {
+  // P1 the identity fast path + THE LEDGER census, over every live packs
+  // table (TilesetDef.packs is required; variants carry no packs of their
+  // own). THE STORY FOLD LANDED (2026-08-06, batch 39): spawnPacks folds
+  // every tiered-ground pack at its ROLLED story (world.ts — the story
+  // roll hoisted above the type pick), and the pinnacle's gale row is the
+  // debut — so the census now reads against the ledger: a table ON it must
+  // fold LIVE (a new object where the envelope bites), every table OFF it
+  // still folds to ITSELF on every story (absent == byte-identical), and a
+  // new storyPresence row lands its ledger entry in this same commit or
+  // this check NAMES the rogue — the tripwire, re-armed.
+  const LIVE_STORY_TABLES = ['pinnacle'];
+  let tables = 0, identity = 0, live = 0;
+  const rogue: string[] = [];
+  for (const [tid, ts] of Object.entries(TILESETS)) {
     const t = ts.packs.table;
     if (!t.length) continue;
+    if (LIVE_STORY_TABLES.includes(tid)) {
+      if (storyTable(t, 0) !== t && storyTable(t, 3) !== t) live++;
+      continue;
+    }
     tables++;
     if (storyTable(t, 0) === t && storyTable(t, 3) === t) identity++;
+    else rogue.push(tid);
   }
-  check('P1 every live table folds to ITSELF on every story (cold == byte-identical)',
-    tables >= 10 && identity === tables, `${identity}/${tables}`);
+  check('P1 axis-less tables fold to THEMSELVES on every story; the ledger folds live',
+    tables >= 10 && identity === tables && live === LIVE_STORY_TABLES.length,
+    `${identity}/${tables} identity${rogue.length ? ' (rogue: ' + rogue.join(',') + ')' : ''}, ${live}/${LIVE_STORY_TABLES.length} live`);
+  // P1b the debut envelope, honored on the REAL pinnacle table: the gale
+  // absent from the valley floor, half-weight at the first bench, full from
+  // the second — and the valley's own kin untouched by the fold.
+  {
+    const t = TILESETS.pinnacle.packs.table;
+    const at = (s: number, id: string): number | undefined =>
+      storyTable(t, s).find(r => r.id === id)?.weight;
+    check('P1b the gale claims the benches (valley absent → ½ → full), the condor holds',
+      at(0, 'gale_elemental') === undefined && at(1, 'gale_elemental') === 1
+      && at(2, 'gale_elemental') === 2 && at(3, 'gale_elemental') === 2
+      && at(0, 'crag_condor') === 3 && at(2, 'crag_condor') === 3);
+  }
   // P2 the envelope, honored: { from: 2, fadeIn: 2 } — absent on the valley
   // floor, half at the first bench, full at the second (presenceMul's math).
   const rows = [

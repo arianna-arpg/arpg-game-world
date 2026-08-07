@@ -9493,7 +9493,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       table: [
         { id: 'crag_condor', weight: 3 },
         { id: 'sarsen_ram', weight: 2 },
-        { id: 'gale_elemental', weight: 2 },
+        // THE STORY TABLE's debut (the story fold, 2026-08-06): the wind
+        // claims the high benches — absent from the valley floor, half at
+        // the first bench, full from the second. The valley reads condor
+        // and ram; the crown reads gale. Envelope numbers are proposed,
+        // not blessed — awaiting her word.
+        { id: 'gale_elemental', weight: 2, storyPresence: { from: 2, fadeIn: 2 } },
         { id: 'boulderback', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'beastkin_horncaller', weight: 1.5, presence: { from: 8, fadeIn: 4 } },
         { id: 'stone_sentinel', weight: 1.5, presence: { from: 10, fadeIn: 5 } },

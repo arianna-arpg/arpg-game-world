@@ -1274,13 +1274,16 @@ registerLairStoryReach((tilesetId) => {
 // presence fold's own law). Pure and draw-free: folding consumes NO rng
 // (RIG P pins the stream), so the lever's mere existence re-pins nothing.
 //
-// COLD AT HEAD (2026-08-06): the live fold site is spawnPacks' type pick
-// (world.ts:~10197), where today the pick lands BEFORE the tier-split roll —
-// the consumer needs the story roll hoisted above weightedPick, and world.ts
-// is another chip's file this batch. The deferred hunk's exact shape, with
-// its stream consequences, is recorded in docs/engine/tiers.md and the
-// tier-seams pass file. Until it lands, rows carrying the axis change
-// nothing anywhere.
+// LIVE (the story fold, 2026-08-06): spawnPacks (world.ts) rolls tier
+// membership + story BEFORE the type pick and folds every tiered-ground
+// pack's offer at its ROLLED story — ground packs fold at 0, so a
+// from-the-benches row is absent from the valley floor, while flat zones
+// skip the fold entirely (byte-identical stream, A/B-proven). The fold is
+// at the rolled story, not the seated one, by deliberate trade: the anchor
+// hunt's fall-down can seat a refused bench's pack one story lower (or
+// grounded) still wearing the higher table. Debut row: the pinnacle's
+// gale_elemental (data/tilesets.ts); the ledger census lives in
+// balance/probe_tiers.ts RIG P.
 
 /** One weighted row that may carry the story axis. Structural on purpose —
  *  PackTableEntry satisfies it, and any roster row that grows the field

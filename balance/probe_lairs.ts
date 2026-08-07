@@ -3052,17 +3052,21 @@ const step = (secs: number): void => {
     lw.player.invulnerable = true;
     let hitSeed = 0;
     for (let i = 0; i < 26 && !hitSeed; i++) {
-      const zid = lw.devMintTileset('pinnacle', i, 16, { seed: 954301 + i });
+      const zid = lw.devMintTileset('pinnacle', i, 16, { seed: 954501 + i });
       if (!zid) continue;
-      if (lw.actors.some(a => a.defId === 'stormcrown_caller' && !a.dead)) hitSeed = 954301 + i;
+      if (lw.actors.some(a => a.defId === 'stormcrown_caller' && !a.dead)) hitSeed = 954501 + i;
     }
     // The measured configuration's own hit (re-measured at the theater CAST,
-    // 2026-08-05 — the troop_march rows seat on owned pinnacle ground, so
-    // each boot's spawn draws shifted every downstream stream; the theater
-    // re-founding's window 954201+26 lost its hit, base 954301 hits at boot
-    // 12 — the window measured whole through this rig's own run): 954313.
+    // 2026-08-05: window 954201+26 lost its hit, base 954301 hit at boot 12
+    // = 954313; re-measured again at the STORY FOLD, 2026-08-06 — spawnPacks
+    // rolls the tier split before the type pick, so every tiered LOAD's
+    // draws shifted every downstream boot's stream: base 954301's first
+    // crown moved to boot 41 and base 954401's to boot 33, both outside the
+    // try budget (the budget never widens — the base moves), base 954501
+    // hits at boot 24 — the window measured whole through this rig's own
+    // run): 954525.
     check('T5 a real pinnacle mint carries the crown (the fold at placeZoneAt, the ladder pin)',
-      hitSeed === 954313, hitSeed ? `hit=${hitSeed}` : 'no hit in 26 seeds');
+      hitSeed === 954525, hitSeed ? `hit=${hitSeed}` : 'no hit in 26 seeds');
     if (hitSeed) {
       const lc = lw.actors.find(a => a.defId === 'stormcrown_caller' && !a.dead)!;
       const thegns = lw.actors.filter(a => a.defId === 'levin_thegn' && !a.dead);

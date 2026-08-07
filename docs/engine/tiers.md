@@ -69,17 +69,27 @@ stateless adapter, one per story, built at zone load from
   presence-envelope vocabulary verbatim over the STORY axis (`{ from: 2,
   fadeIn: 1 }` = absent on the valley floor, full from the second bench),
   folded by `storyTable(table, story)` (engine/tiers.ts — presenceTable's
-  shape: identity fast path, never-starve fallback, draw-free). COLD AT
-  HEAD (2026-08-06): the live fold site is spawnPacks' type pick
-  (world.ts), where today the pick lands BEFORE the tier-split roll; the
-  deferred consumer hoists the story roll above the pick —
-  `const type = weightedPick(packStory > 0 ? storyTable(picks, packStory)
-  : picks, def.level)` with `packStory` rolled from the packSplit +
-  uniform-deal draws moved ahead of it. Flat zones stay byte-identical
-  through that hunk (the tierLevels guard short-circuits before any
-  draw); TIERED zones reorder ≤2 draws per pack, so seed-pinned rigs
-  that LOAD tiered zones re-pin when it lands (probe RIG P holds the
-  cold half: identity over every live table, stream neutrality).
+  shape: identity fast path, never-starve fallback, draw-free). LIVE
+  since the story fold (2026-08-06): spawnPacks rolls tier membership +
+  story BEFORE the type pick and folds every tiered-ground pack's offer
+  at its ROLLED story — ground packs fold at 0 (a from-the-benches row
+  is absent from the valley floor), flat zones skip the fold entirely
+  and stay byte-identical (the tierLevels guard short-circuits before
+  any draw; A/B-proven through a real seeded boot). TIERED zones
+  reordered the two tier draws ahead of the pick/size/rarity rolls —
+  and because the reordered values feed value-dependent loops (anchor
+  hunt attempts, size lanes), a tiered load's total draw count can
+  drift, so seed-pinned rigs that LOAD tiered zones re-pinned where
+  they broke, dated. THE ROLLED-STORY TRADE: the anchor hunt's
+  fall-down still walks a refused bench's pack DOWN the stories, so a
+  crown-priced pack can seat one bench lower (or ground out, unstamped)
+  still wearing the crown's table — folding at the seated story instead
+  would need pick-after-anchor, a far heavier reorder for a rare
+  misfit. Debut row: the pinnacle's `gale_elemental`
+  (`{ from: 2, fadeIn: 2 }`, numbers flagged) — the valley reads condor
+  and ram, the benches grow the gale. Probe RIG P holds the ledger
+  census (axis-less tables identity, the pinnacle folds live, a rogue
+  row is named) + the debut envelope + stream neutrality.
 - **Render**: `exposure:'open'` draws every layer (buttes, summits — the
   region visuals + the cliff read carry the height). `'covered'` hides the
   other layer's bodies and, while the local hero is below, dims the scene
@@ -166,13 +176,13 @@ archer's story-1 arrows rain down while story-0 answers die on the cliff
 Townhouse floors as covered tiers in one zone; a boulder-chute lane
 rolling DOWN the switchbacks; avalanche fronts that respect the benches
 (creep is tier-blind today — the one reason the pinnacle ships without
-landslide lanes); THE STORY TABLE'S LIVE FOLD (the lever itself landed
-cold 2026-08-06 — `storyTable` + `PackTableEntry.storyPresence` above —
-awaiting only the spawnPacks hunk recorded in the Population law).
+landslide lanes).
 (Landed from this list: tier-aware minimap tint → `tierMapTint`
 2026-08-06; AI that climbs links → the proactive stair election
 `World.tierLinkToward` + the reactive `aiTierGoal` ledger + THE SEVERED
-BAND, already live in the AI law above.)
+BAND, already live in the AI law above; THE STORY TABLE'S LIVE FOLD →
+the story fold 2026-08-06, spawnPacks folding at the rolled story with
+the pinnacle gale debut, in the Population law above.)
 
 Probe: `balance/probe_tiers.ts` (family rows + span derivation, the
 crossing law across arbitrary spans, all three carves, per-story orphan

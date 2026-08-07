@@ -93,7 +93,7 @@ import {
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
 import { canSquish, SQUISH_CFG, squishSpecOf } from './squish';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
-import { landingTier, linkFlipTier, makeTierNav, makeTierView, resolveTierCrossing, tierElevOf, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
+import { landingTier, linkFlipTier, makeTierNav, makeTierView, resolveTierCrossing, storyTable, tierElevOf, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { liquidOf } from './genkit';
@@ -10208,7 +10208,29 @@ export class World {
       // The keenest sensors (blood mites, whose swarm AI ×1.4's an already-high
       // detection) still notice you on arrival — by design, that's their thing.
       const at = this.farPoint(840);
-      const type = this.weightedPick(picks, def.level);
+      // THE TIER SPLIT (engine/tiers.ts): a tiered zone seeds a share of its
+      // packs on the elevated stories — the deck duel and the valley duel
+      // are different packs. Rolled per PACK so squads never straddle a rim;
+      // multi-story summits deal the elevated share uniformly across their
+      // levels. Rolled BEFORE the type pick (the story fold, 2026-08-06) so
+      // THE STORY TABLE (engine/tiers.ts storyTable — PackTableEntry.
+      // storyPresence, "harder kin near the crown") can shape the offer by
+      // the pack's own story: on tiered ground every pack folds at its
+      // ROLLED story — ground packs at 0, so a from-the-benches row is
+      // absent from the valley — while flat zones skip the fold entirely
+      // (short-circuit before any draw: byte-identical stream, A/B-proven).
+      // Folding at the rolled story, not the seated one, is the deliberate
+      // light-footprint trade: the anchor hunt below lets a refused bench
+      // fall a story, so a crown-priced pack can seat one bench lower (or
+      // ground out entirely when no bench anchors) still wearing the
+      // crown's table. Seat-true folding would need pick-after-anchor — a
+      // far heavier stream reorder for a rare misfit.
+      const tierLevels = def.tiers && this.tierViews ? Math.max(1, def.tiers.levels ?? 1) : 0;
+      const tierPack = tierLevels > 0
+        && Math.random() < (def.tiers!.packSplit ?? TIER_CFG.packSplit);
+      const packStory = tierPack && this.walk
+        ? (tierLevels > 1 ? 1 + Math.floor(Math.random() * tierLevels) : 1) : 0;
+      const type = this.weightedPick(tierLevels > 0 ? storyTable(picks, packStory) : picks, def.level);
       // SIZE: a def that declares its NATURAL GROUP (MonsterDef.packSize)
       // sizes its own packs — murmurations field as flocks, hermits walk
       // alone — else a weighted ARCHETYPE spread (swarm / standard /
@@ -10223,23 +10245,15 @@ export class World {
       // rolled, else the first body) — squad tactics (muster, tokens, focus
       // fire, formations, leader-death reactions) all key off these stamps.
       const squadId = this.nextSquadId();
-      // THE TIER SPLIT (engine/tiers.ts): a tiered zone seeds a share of its
-      // packs on the elevated stories — the deck duel and the valley duel
-      // are different packs. Rolled per PACK so squads never straddle a rim;
-      // multi-story summits deal the elevated share uniformly across their
-      // levels (a roll whose bench refuses falls DOWN the stories). The
-      // BENCH picks the anchor (the wildlife rig's proven sampling): a
+      // The BENCH picks the anchor (the wildlife rig's proven sampling): a
       // valley anchor usually stands beyond any snap radius of the layer,
       // so an elevated pack rolls its own seat instead of quietly staying
-      // grounded (the old near-`at` snap under-filled every deck).
-      const tierLevels = def.tiers && this.tierViews ? Math.max(1, def.tiers.levels ?? 1) : 0;
-      const tierPack = tierLevels > 0
-        && Math.random() < (def.tiers!.packSplit ?? TIER_CFG.packSplit);
+      // grounded (the old near-`at` snap under-filled every deck). A roll
+      // whose bench refuses falls DOWN the stories from packStory.
       let tierAnchor: Vec2 | null = null;
       let tierAnchorAt = 0;
-      if (tierPack && this.walk) {
-        const first = tierLevels > 1 ? 1 + Math.floor(Math.random() * tierLevels) : 1;
-        for (let t = first; t >= 1 && !tierAnchor; t--) {
+      if (packStory > 0 && this.walk) {
+        for (let t = packStory; t >= 1 && !tierAnchor; t--) {
           const view = this.tierViews?.[t];
           if (!view) continue;
           for (let s = 0; s < 8; s++) {
@@ -19924,7 +19938,7 @@ export class World {
    *  by the PRESENCE envelopes (engine/presence.ts) — entry × def — so
    *  leveled lists apply uniformly to packs, rosters, events and overlays.
    *  Omit it only for tables that genuinely have no level context. */
-  private weightedPick(table: PackTableEntry[], atLevel?: number): string {
+  private weightedPick(table: readonly PackTableEntry[], atLevel?: number): string {
     const picks = atLevel === undefined ? table
       : presenceTable(table, atLevel, id => MONSTERS[id]?.presence);
     let total = 0;
