@@ -40,6 +40,7 @@ on:
 permissions:
   contents: write   # push the RC tag
   actions: write    # dispatch release.yml on it
+  issues: write     # the red-night alarm (`alarm` below) + the green cut's close
 
 concurrency: nightly-rc
 
@@ -93,3 +94,52 @@ jobs:
           git push origin "refs/tags/$next"
           gh workflow run release.yml --ref "$next" -f rc=true
           echo "Dispatched release.yml on $next. It publishes (as a prerelease) only if both OS legs build."
+
+      # The green half of THE RED-NIGHT ALARM (see `alarm` below): a night that
+      # reaches this job verified green, so any standing `nightly-red` issue is
+      # answered and closed — a quiet night (no new commits) counts, the lane
+      # is healthy either way. Fully tolerant: an API hiccup here must never
+      # taint a cut that already happened.
+      - name: Close the nightly-red alarm (the lane is green again)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          num="$(gh issue list --repo "$REPO" --label nightly-red --state open --json number --jq '.[0].number // empty' || true)"
+          if [ -n "$num" ]; then
+            gh issue close "$num" --repo "$REPO" \
+              --comment "Verify is green again at $(git rev-parse --short HEAD) — the cadence stands." || true
+          fi
+
+  # THE RED-NIGHT ALARM: three straight red verifies (2026-08-03..05, the
+  # mercs + holdfast slow-lane rots) died silently on the Actions page — a
+  # broken cadence must be LOUD. Any failure among verify/cut files (or
+  # feeds) the single open `nightly-red` issue with the run link and the
+  # failing lines; the next green cut closes it (the step above). ONE issue,
+  # reds accumulating as comments, so an outage reads as one timeline and
+  # reaches the repo owner's notifications the night it starts.
+  alarm:
+    needs: [verify, cut]
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: File or feed the nightly-red issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          tail="$(gh run view "$RUN_ID" --repo "$REPO" --log-failed 2>/dev/null | grep -E 'REGRESSED|FAIL |##\[error\]' | tail -n 12 || true)"
+          body="$(printf 'A nightly run went red — no RC was cut tonight.\n\nRun: %s\n\n```\n%s\n```\n\nFix the tree, then either let the next night cut, or re-cut now with the workflow_dispatch button.' \
+            "$RUN_URL" "${tail:-log tail unavailable — open the run link}")"
+          gh label create nightly-red --repo "$REPO" --color B60205 \
+            --description "The nightly RC lane is red — cadence interrupted" --force
+          num="$(gh issue list --repo "$REPO" --label nightly-red --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$REPO" --body "$body"
+          else
+            gh issue create --repo "$REPO" --label nightly-red --body "$body" \
+              --title "Nightly RC red — the release cadence is interrupted"
+          fi
