@@ -1256,6 +1256,21 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
       mod('attackSpeed', 'more', 0.1),
     ],
   },
+  // MUTANT — the warping sickness (Movement III): the mark itself is mild —
+  // a lurching gait, flesh gone hungry — because the strain's WHOLE identity
+  // is the GRAFT: every taken body sprouts a targetable plague_tendril
+  // (StrainDef.graft → World.graftPart), and this status is only the skin it
+  // grows from. Wither rides the mark: when this wanes, the sweep takes the
+  // growth with it. Numbers are the coordinator's, flagged.
+  infected_mutant: {
+    label: 'Mutant', color: '#c07ad0', duration: 12, powerInert: true,
+    neverRetreats: true,
+    bodyFx: { glow: '#c07ad0', motes: 'fume', moteColor: '#a86ad0' },
+    mods: [
+      mod('damage', 'more', 0.1),
+      mod('moveSpeed', 'more', -0.1),
+    ],
+  },
 
   // THE WISPLIGHT's ride marks — one per wisp KIND (the kind row names its
   // status; a new kind is a new row here + one entry in the surge's kind

@@ -22,6 +22,7 @@
 // ---------------------------------------------------------------------------
 
 import type { Rng } from '../core/rng';
+import type { MonsterPartDef } from '../engine/actor';
 
 /** One strain of the plague — the whole variant as one row. */
 export interface StrainDef {
@@ -39,6 +40,20 @@ export interface StrainDef {
   weight: number;
   /** Optional stumble-in line (materializeContagion's arrival text). */
   arrive?: string;
+  /** THE GRAFT (Movement III — the mutant's face): a part row this strain
+   *  SPROUTS on every body it takes, minted mid-life through World.graftPart
+   *  onto the standing composite fabric — so the growth inherits the whole
+   *  death asymmetry as law: the host's death takes its graft with it; the
+   *  graft's death frees the host unharmed. The engine grafts once per
+   *  infection (a killed growth stays killed) and the cure WITHERS it (a
+   *  cured body keeps no scar — transience). Absent = the strain marks
+   *  flesh and grows nothing (miasma/adrenal). */
+  graft?: MonsterPartDef;
+  /** RESERVED (her future pass, recorded 2026-08-06: per-strain zero
+   *  identities — "each strain's outbreak fields its own zero"). Nothing
+   *  reads this yet — the shape is held so wave two lands as pure data: a
+   *  strain-owned boss def + name pool overriding the surge's own zero. */
+  zero?: { bossDefId?: string; names?: string[] };
 }
 
 const STRAINS: StrainDef[] = [];

@@ -560,6 +560,12 @@ export class Actor {
    *  death fires the part-break effects on the root instead of the loot
    *  ladder (see World.updateParts / onPartBroken). */
   partLink?: { root: Actor; def: MonsterPartDef };
+  /** THE GRAFT MARK (World.graftPart `key`): set on a part minted onto a
+   *  standing body AT RUNTIME (the graft verb — curses, parasites, the
+   *  contagion's mutant tentacle), naming the consumer that grew it so
+   *  witherGrafts can take back exactly its own. Def-declared parts (the
+   *  spawn-time lazy attach) never carry one. */
+  graftKey?: string;
   /** The live part actors attached to this root (composite monsters). */
   partActors?: Actor[];
   /** Lazy-spawn latch: parts attach on the root's first update tick, so

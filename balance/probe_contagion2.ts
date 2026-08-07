@@ -1,23 +1,29 @@
 // ---------------------------------------------------------------------------
-// ONE-OFF PROBE — THE INFECTION FABRIC (contagion Movement II), headless: THE
-// STRAIN GRAMMAR (open registry, weighted seeded roll, 'mutant' RESERVED at
-// weight 0 — structurally unrollable, validator-skipped; rollable strains name
-// real statuses carrying the lean flags + the worn body fx), KIN-BORNE SPREAD
-// (the carrier walk — infection grows only where the outbreak's sick walkers
-// step, priced by walked distance, capped at maxHops, deterministic beat for
-// beat; a visit births one more carrier through seedCarrierAt, capped;
-// curing disbands every leg), THE EATS-PLAGUE CONSUMPTION (groundClaims —
-// claimed ground refuses infection at the ONE gate incl. ignition, standing
-// infection wanes off on the consumer's clock with the grip-lapse reset, the
-// eaten SOURCE flips the outbreak to curing), THE ZOMBIE LEAN on a REAL world
-// (the sweep takes the Plaguebound court + the fated share of breathing kin:
-// strain status worn + watch rise slowed ×dullMul — imposed where none stood —
-// + neverRetreats; all REVERTED BYTE-EXACT when the cure lets the marks wane
-// out on the status's own duration: the watch-change revert idiom),
-// ABSENT==IDENTICAL (an inert field mutates nothing; a fully-claimed world
-// never ignites at chance 1), and PERSISTENCE (strain + carriers round-trip;
-// a LEGACY pre-Movement-II save adopts — strain rolled, base carriers
-// re-stood for a live outbreak, none for a curing one).
+// ONE-OFF PROBE — THE INFECTION FABRIC (contagion Movements II + III),
+// headless: THE STRAIN GRAMMAR (open registry, weighted seeded roll — the
+// mutant's weight-0 reservation SPENT by Movement III: all three strains
+// LIVE, every rollable one naming a real status with the lean flags + worn
+// body fx), KIN-BORNE SPREAD (the carrier walk — infection grows only where
+// the outbreak's sick walkers step, priced by walked distance, capped at
+// maxHops, deterministic beat for beat; a visit births one more carrier
+// through seedCarrierAt, capped; curing disbands every leg), THE EATS-PLAGUE
+// CONSUMPTION (groundClaims — claimed ground refuses infection at the ONE
+// gate incl. ignition, standing infection wanes off on the consumer's clock
+// with the grip-lapse reset, the eaten SOURCE flips the outbreak to curing),
+// THE ZOMBIE LEAN on a REAL world (the sweep takes the Plaguebound court +
+// the fated share of breathing kin: strain status worn + watch rise slowed
+// ×dullMul — imposed where none stood — + neverRetreats; all REVERTED
+// BYTE-EXACT when the cure lets the marks wane out on the status's own
+// duration), ABSENT==IDENTICAL, PERSISTENCE (strain + carriers + the zero
+// round-trip; legacy saves adopt), THE GRAFT VERB (Movement III — runtime
+// part-mint onto standing bodies through World.graftPart: frame hold, the
+// break that FREES the host, the host death that takes the graft, key-scoped
+// wither; the mutant strain's tentacle as its first consumer, once-per-
+// infection latched, withered by the cure), and THE ROAMING ZERO (Movement
+// III — a NAMED zero per outbreak walking the carrier grammar on its own
+// stride, one zone at a time by construction, pinned by the cornered hold,
+// omen-voiced only once SEEN, its kill cutting the source through the REAL
+// kill path into Movement II's wane — the containment handoff end to end).
 // Run: npx tsx balance/probe_contagion2.ts
 // ---------------------------------------------------------------------------
 
@@ -85,11 +91,15 @@ const mkLine = (): ZoneDef[] => [
   mkZone('e', 10, 0, ['d']),
 ];
 
-type SnapOutbreak = { sourceZoneId: string; strainId?: string; carriers: { zoneId: string; hops: number }[]; curing: boolean };
+type SnapOutbreak = { sourceZoneId: string; strainId?: string; carriers: { zoneId: string; hops: number }[]; zero?: { zoneId: string; hops: number; name: string }; curing: boolean };
 type Snap = { outbreaks: SnapOutbreak[]; infected: { zid: string; hops: number }[] };
 const snap = (f: ContagionField): Snap => JSON.parse(JSON.stringify(f.snapshot())) as Snap;
 const infectedIds = (f: ContagionField): string => snap(f).infected.map(z => z.zid).sort().join(',');
 const hopsOf = (f: ContagionField, zid: string): number | undefined => snap(f).infected.find(z => z.zid === zid)?.hops;
+/** The ROLLABLE strain ids (weight > 0) — the honest set an ignition or a
+ *  legacy adoption may land on (Movement III made mutant live, so no rig may
+ *  hardcode the pair again). */
+const rollableIds = (): string[] => strainIds().filter(id => (strainOf(id)?.weight ?? 0) > 0);
 
 /** Ignite deterministically: chance 1 on a graph where 'a' is the only
  *  lawful source, then hand back the field with ignition re-quieted (the
@@ -104,19 +114,30 @@ const igniteAt = (surge: ContagionSurge, view: OverlayView, seed: number): Conta
 
 // ------------------------------ A. THE STRAIN GRAMMAR --------------------------
 {
-  check('A1 the registry carries the trio (miasma, adrenal, the reserved mutant)',
+  check('A1 the registry carries the trio (miasma, adrenal, mutant)',
     ['miasma', 'adrenal', 'mutant'].every(id => strainIds().includes(id)), strainIds().join(','));
-  check('A2 mutant is RESERVED — weight 0, structurally unrollable',
-    strainOf('mutant')?.weight === 0);
+  // Movement III SPENT the reservation: mutant is LIVE (weight > 0) and its
+  // whole identity is the GRAFT (a part row naming the tentacle).
+  check('A2 mutant is LIVE (the weight-0 reservation spent) and carries THE GRAFT',
+    (strainOf('mutant')?.weight ?? 0) > 0
+    && strainOf('mutant')?.graft?.monster === 'plague_tendril'
+    && (strainOf('mutant')?.graft?.lifeFrac ?? 0) > 0);
   const rng = new Rng(0x57a1);
   const rolls = new Set<string>();
   for (let i = 0; i < 300; i++) rolls.add(rollStrain(rng)?.id ?? 'none');
-  check('A3 300 seeded rolls surface BOTH live strains and NEVER the reserved one',
-    rolls.has('miasma') && rolls.has('adrenal') && !rolls.has('mutant'), [...rolls].join(','));
+  check('A3 300 seeded rolls surface ALL THREE live strains (mutant rolls now)',
+    rolls.has('miasma') && rolls.has('adrenal') && rolls.has('mutant'), [...rolls].join(','));
   const mi = STATUS_DEFS[strainOf('miasma')?.statusId ?? ''];
   const ad = STATUS_DEFS[strainOf('adrenal')?.statusId ?? ''];
-  check('A4 every ROLLABLE strain names a real status; the reserved one need not',
-    !!mi && !!ad && !STATUS_DEFS[strainOf('mutant')?.statusId ?? '']);
+  const mu = STATUS_DEFS[strainOf('mutant')?.statusId ?? ''];
+  check('A4 every rollable strain names a real status (the mutant\'s now exists)',
+    !!mi && !!ad && !!mu);
+  check('A4b the mutant mark wears the lean too (the press) and stays powerInert',
+    mu?.neverRetreats === true && mu?.powerInert === true);
+  check('A4c only the mutant strain grafts; the flesh-mark strains grow nothing',
+    !strainOf('miasma')?.graft && !strainOf('adrenal')?.graft);
+  check('A4d the RESERVED per-strain zero seam stays unbuilt (wave two\'s ground)',
+    strainOf('mutant')?.zero === undefined);
   check('A5 both strain marks carry THE PRESS (neverRetreats — the zombie lean)',
     mi?.neverRetreats === true && ad?.neverRetreats === true);
   check('A6 the adrenal alone is FICKLE (fickleSpan), and quicker on its feet',
@@ -149,7 +170,7 @@ const igniteAt = (surge: ContagionSurge, view: OverlayView, seed: number): Conta
     && snap(f).outbreaks[0]?.carriers.length === 2
     && snap(f).outbreaks[0]?.carriers.every(c => c.zoneId === 'a' && c.hops === 0));
   check('B2 the outbreak rolled a LIVE strain at ignition',
-    ['miasma', 'adrenal'].includes(snap(f).outbreaks[0]?.strainId ?? ''),
+    rollableIds().includes(snap(f).outbreaks[0]?.strainId ?? ''),
     snap(f).outbreaks[0]?.strainId);
   for (let i = 0; i < 3; i++) f.update(0.5, view);
   check('B3 the walk is CONTIGUOUS and priced by walked distance (hops = the line index)',
@@ -270,7 +291,11 @@ const igniteAt = (surge: ContagionSurge, view: OverlayView, seed: number): Conta
   const arena = w.zoneMap[SIM_ARENA_ID];
   const prevObjective = arena.objective;
   arena.objective = { kind: 'clear' }; // wake the quiet floor (restored below)
-  const surge = mkSurge({ seedMinDist: 0 });
+  // bossDefId names NO def: Movement III's WALK-IN would otherwise raise the
+  // zero's real body mid-rig (its seat is the arena) and a Crowned commander
+  // wandering the floor makes the lean measurements flaky. The refusal is
+  // structural (MONSTERS[] gate) — this rig tests the SWEEP, H tests the boss.
+  const surge = mkSurge({ seedMinDist: 0, bossDefId: 'probe_no_boss' });
   const f = new ContagionField({ seed: 0xd15e, gate: GATE, biomeSeed: 1 }, surge);
   (w.sim as unknown as { contagionField: ContagionField | null }).contagionField = f;
   const fv = mkView([mkZone(SIM_ARENA_ID, 300, 0, [])], SIM_ARENA_ID);
@@ -388,11 +413,250 @@ const igniteAt = (surge: ContagionSurge, view: OverlayView, seed: number): Conta
   const curing = s3.outbreaks.find(o => o.sourceZoneId === 'e');
   check('E2 legacy live outbreak: base carriers re-stood at the source, a strain rolled',
     live?.carriers.length === 2 && live.carriers.every(c => c.zoneId === 'a' && c.hops === 0)
-    && ['miasma', 'adrenal'].includes(live?.strainId ?? ''));
+    && rollableIds().includes(live?.strainId ?? ''));
   check('E3 legacy curing outbreak: adopted LEGLESS (the containment survives the trip)',
     curing?.carriers.length === 0 && curing?.curing === true);
   check('E4 the legacy infection map itself resumes whole',
     infectedIds(f3) === 'a,b,e', infectedIds(f3));
+  check('E5 legacy zero adoption: a LIVE outbreak stands a NAMED zero at its source; a curing one stands none (already cut)',
+    live?.zero?.zoneId === 'a' && (live?.zero?.name.length ?? 0) > 0
+    && curing?.zero === undefined);
+}
+
+// ---------------- F. THE GRAFT VERB (the runtime part-mint primitive) ----------
+{
+  const w = makeSimWorld('warrior', 0x6f21);
+  const far = (i: number) => w.clampPos(vec(2000 + i * 80, 2000), 20);
+  const host = w.createMonster('plague_carrier', 6, 'enemy');
+  host.pos = far(0);
+  w.actors.push(host);
+  const pd = { monster: 'plague_tendril', dx: -0.45, dy: 0.85, lifeFrac: 0.4 };
+  const part = w.graftPart(host, pd, { key: 'probe', flash: true });
+  check('F1 the verb mints a live part actor bound to the standing host',
+    !!part && !part.dead && part.partLink?.root === host
+    && host.partActors?.includes(part) === true && w.actors.includes(part));
+  check('F2 the graft is key-marked, pays no bounty, never zone-snapshots',
+    part?.graftKey === 'probe' && part?.xpValue === 0 && part?.fromZoneGen === false);
+  const target = Math.round(host.maxLife() * 0.4);
+  check('F3 lifeFrac aims the part pool at its share of the HOST\'s own (never the def\'s)',
+    !!part && Math.abs(part.maxLife() - target) <= Math.max(2, target * 0.1),
+    `part ${part?.maxLife()} vs target ${target}`);
+  // The verb SEATS the graft in the host's facing frame at mint (exact — no
+  // one-frame teleport)…
+  const c = Math.cos(host.facing), s = Math.sin(host.facing);
+  check('F4 the verb seats the graft in the host\'s facing frame at mint (drawn == held)',
+    !!part && Math.abs(part.pos.x - (host.pos.x + (pd.dx * c - pd.dy * s) * host.radius)) < 0.01
+    && Math.abs(part.pos.y - (host.pos.y + (pd.dx * s + pd.dy * c) * host.radius)) < 0.01);
+  // …and the frame hold KEEPS it riding the (possibly walking) host every
+  // tick — a loose leash bound, so intra-frame system order never flakes it.
+  for (let i = 0; i < 6; i++) w.update(0.1);
+  check('F4b the frame hold keeps the graft riding the host across ticks',
+    !!part && Math.hypot(part.pos.x - host.pos.x, part.pos.y - host.pos.y)
+      <= host.radius * 2 + part.radius);
+  // THE DEATH ASYMMETRY, graft first: its death FREES the host, unharmed
+  // (no break effects authored on the row).
+  const lifeBefore = host.life;
+  w.kill(part!, false, w.player);
+  check('F5 killing the graft frees the host UNHARMED (her ask verbatim)',
+    !!part?.dead && !host.dead && host.life === lifeBefore
+    && !(host.partActors ?? []).includes(part!));
+  const part2 = w.graftPart(host, pd, { key: 'probe' });
+  check('F6 a second graft mints fresh on the same standing host', !!part2 && !part2.dead);
+  // …and the HOST's death takes its graft with it, quietly (the root sweep).
+  w.kill(host, false, w.player);
+  check('F7 the dying host takes its graft with it (host death kills the attachment)',
+    host.dead && part2!.dead === true);
+  // REFUSALS: dead host; part-as-host (two-deep by construction); unknown def.
+  const host2 = w.createMonster('plague_carrier', 6, 'enemy');
+  host2.pos = far(1);
+  w.actors.push(host2);
+  const p3 = w.graftPart(host2, pd, { key: 'probe' });
+  check('F8 refusals: dead host / part-as-host / unknown def all return null',
+    w.graftPart(host, pd) === null
+    && !!p3 && w.graftPart(p3, pd) === null
+    && w.graftPart(host2, { monster: 'probe_no_such_def', dx: 0, dy: 0 }) === null);
+  // THE WITHER: key-scoped, quiet — no break, no corpse ladder, just gone.
+  const hostLife = host2.life;
+  check('F9 witherGrafts takes back exactly its own (key-scoped, host untouched), then finds nothing',
+    w.witherGrafts(host2, 'probe') === 1 && p3!.dead && !host2.dead
+    && host2.life === hostLife && (host2.partActors ?? []).length === 0
+    && w.witherGrafts(host2, 'probe') === 0);
+}
+
+// ---------------- G. THE MUTANT LIVE (the graft wiring end to end) -------------
+{
+  const w = makeSimWorld('warrior', 0x9a7e);
+  const arena = w.zoneMap[SIM_ARENA_ID];
+  const prevObjective = arena.objective;
+  arena.objective = { kind: 'clear' };
+  // A 2-zone bench: the outbreak IGNITES off-arena (the zero seats there, so
+  // no boss body raises in the standing zone — G tests the SWEEP's grafts;
+  // bossDefId names no def besides, the D-rig law) and the pre-spread ball
+  // takes the arena at hops 1.
+  const fv = mkView([
+    mkZone(SIM_ARENA_ID, 300, 0, ['g_off']),
+    mkZone('g_off', 320, 0, [SIM_ARENA_ID]),
+  ], SIM_ARENA_ID);
+  // Hunt a seed whose ignition rolls MUTANT — deterministic per seed, and the
+  // hunt stays honest when the weights re-tune (the seat-verdict law: never
+  // hardcode a rolled verdict's seed).
+  let f: ContagionField | null = null;
+  for (let seed = 1; seed < 400 && !f; seed++) {
+    const cand = new ContagionField({ seed, gate: GATE, biomeSeed: 1 },
+      mkSurge({ seedMinDist: 0, bossDefId: 'probe_no_boss' }));
+    if (!cand.devIgnite(fv, 'g_off')) continue;
+    if (cand.contagionOn('g_off')?.strain === 'mutant') f = cand;
+  }
+  check('G1 (setup) a seeded ignition rolls the LIVE mutant strain', !!f);
+  if (f) {
+    (w.sim as unknown as { contagionField: ContagionField | null }).contagionField = f;
+    const far = (i: number) => w.clampPos(vec(2000 + i * 80, 2000), 20);
+    const kin = w.createMonster('plague_carrier', 6, 'enemy');
+    kin.faction = 'plague'; kin.tag = 'contagion'; kin.pos = far(0);
+    w.actors.push(kin);
+    const stepBoth = (dt: number, n: number): void => {
+      for (let i = 0; i < n; i++) { w.update(dt); f!.update(dt, fv); }
+    };
+    const graftsOf = (a: typeof kin) => (a.partActors ?? []).filter(p => p.graftKey === 'contagion' && !p.dead);
+    stepBoth(0.5, 4);
+    check('G2 the sweep SPROUTS the tentacle on taken bodies (the mutant\'s whole face)',
+      graftsOf(kin).length === 1 && graftsOf(kin)[0].defId === 'plague_tendril');
+    const t1 = graftsOf(kin)[0];
+    stepBoth(0.5, 3);
+    check('G3 ONCE per infection: refresh beats never stack growths',
+      graftsOf(kin).length === 1 && graftsOf(kin)[0] === t1);
+    w.kill(t1, false, w.player);
+    stepBoth(0.5, 3);
+    check('G4 a killed growth STAYS killed while the mark stands (the latch), host alive',
+      graftsOf(kin).length === 0 && !kin.dead
+      && kin.statuses.some(st => st.id === 'infected_mutant'));
+    // THE WITHER end to end: cut the source; the marks wane on their own
+    // duration; the revert takes the growth with the mark (no scar). A
+    // second body infected fresh proves the wither path too (its growth
+    // stands until the mark leaves).
+    const kin2 = w.createMonster('plague_carrier', 6, 'enemy');
+    kin2.faction = 'plague'; kin2.tag = 'contagion'; kin2.pos = far(1);
+    w.actors.push(kin2);
+    stepBoth(0.5, 2);
+    check('G5 (setup) the second body wears mark + growth', graftsOf(kin2).length === 1);
+    f.onPatientZeroSlain('g_off');
+    const dur = STATUS_DEFS['infected_mutant']?.duration ?? 12;
+    stepBoth(0.5, Math.ceil((dur + 3) / 0.5));
+    check('G6 the cure WITHERS the growth with the mark (transience — no scar)',
+      graftsOf(kin2).length === 0 && !kin2.dead
+      && !kin2.statuses.some(st => st.id === 'infected_mutant'));
+  }
+  arena.objective = prevObjective;
+}
+
+// ---------------- H. THE ROAMING ZERO ------------------------------------------
+{
+  // The walk: bench line, player parked at the FAR END ('e') so the cornered
+  // hold never pins the source — the zero walks free from 'a'.
+  const surge = mkSurge();
+  const view = mkView(mkLine(), 'e');
+  const f = igniteAt(surge, view, 0xca11);
+  const z0 = f.zeroSeat();
+  check('H1 the zero stands NAMED at the source at ignition — ONE seat, unseen',
+    z0.length === 1 && z0[0].zoneId === 'a' && z0[0].name.length > 0
+    && z0[0].seen === false && z0[0].seenAgeSec === 0);
+  const snapZero = snap(f).outbreaks[0]?.zero;
+  check('H2 the seat and the snapshot agree (zoneId + name round-trip shape)',
+    snapZero?.zoneId === z0[0].zoneId && snapZero?.name === z0[0].name);
+  // THE WALK — the zero steps on its stride (every 2nd beat), one zone at a
+  // time, its ground always its outbreak's own (fresh steps infect at the
+  // walked price; roams re-sync). Observed beat by beat: the seat count
+  // never leaves 1, every seat stands on infected soil, and the path truly
+  // MOVES (≥2 distinct seats — a roam may lawfully revisit home later, so
+  // the pin is the visited set, never the final seat).
+  const seats = new Set<string>();
+  let seatLawHeld = true;
+  for (let i = 0; i < 8; i++) {
+    f.update(0.5, view);
+    const zs = f.zeroSeat();
+    seatLawHeld = seatLawHeld && zs.length === 1 && hopsOf(f, zs[0].zoneId) !== undefined;
+    seats.add(zs[0].zoneId);
+  }
+  const z1 = f.zeroSeat()[0];
+  check('H3 ONE seat every beat, always on the outbreak\'s own infected soil', seatLawHeld);
+  check('H4 the walk is REAL — the quarry visited more than one zone',
+    seats.size >= 2, [...seats].join(','));
+  // DETERMINISM: same seed + same drive ⇒ the identical zero path.
+  const drivePath = (seed: number): string => {
+    const s2 = mkSurge();
+    const v2 = mkView(mkLine(), 'e');
+    const g = igniteAt(s2, v2, seed);
+    const log: string[] = [];
+    for (let i = 0; i < 10; i++) { g.update(0.5, v2); log.push(g.zeroSeat()[0]?.zoneId ?? '-'); }
+    return log.join(' ');
+  };
+  check('H5 same seed + same drive ⇒ the identical zero itinerary', drivePath(0x2ea1) === drivePath(0x2ea1));
+  // THE CORNERED HOLD: the player standing in the zero's zone PINS the seat.
+  const pinView = mkView(mkLine(), z1.zoneId);
+  for (let i = 0; i < 8; i++) f.update(0.5, pinView);
+  check('H6 THE CORNERED HOLD: the hunter\'s presence pins the quarry',
+    f.zeroSeat()[0]?.zoneId === z1.zoneId);
+  // THE SEAT LAW: patientZeroIn resolves at the seat ALONE, named.
+  check('H7 patientZeroIn resolves at the SEAT alone, carrying the name',
+    f.patientZeroIn(z1.zoneId)?.name === z1.name
+    && ['a', 'b', 'c', 'd', 'e'].filter(id => id !== z1.zoneId).every(id => f.patientZeroIn(id) === null));
+  // THE SILENCE DOCTRINE → THE OPENED VOICE: a stumble flips seen; age runs.
+  f.markDiscovered(z1.zoneId);
+  f.update(0.5, pinView);
+  check('H8 the stumble opens the omen voice: seen, aging',
+    f.zeroSeat()[0]?.seen === true && (f.zeroSeat()[0]?.seenAgeSec ?? 0) > 0);
+  // PERSISTENCE: the seat, the name and the seen-age all round-trip. (A
+  // fresh field has no node map until its first update — a zero-dt beat
+  // teaches it the world without moving any clock.)
+  const f2 = new ContagionField({ seed: 0xca11, gate: GATE, biomeSeed: 1 }, mkSurge());
+  f2.restore(JSON.parse(JSON.stringify(f.snapshot())));
+  f2.update(0, pinView);
+  check('H9 the zero round-trips byte-stable (seat + name + age + seen)',
+    f2.zeroSeat()[0]?.zoneId === f.zeroSeat()[0]?.zoneId
+    && f2.zeroSeat()[0]?.name === f.zeroSeat()[0]?.name
+    && f2.zeroSeat()[0]?.seen === true
+    && Math.abs((f2.zeroSeat()[0]?.seenAgeSec ?? 0) - (f.zeroSeat()[0]?.seenAgeSec ?? 0)) < 1e-9);
+  // THE ACCESSOR-LEVEL CUT: slaying the zero ANYWHERE on its outbreak's
+  // ground cures — seat cleared, no re-raise possible.
+  check('H10 the cut clears the seat and the outbreak turns curing',
+    f.onPatientZeroSlain(z1.zoneId) === true
+    && f.zeroSeat().length === 0 && f.contagionOn(z1.zoneId)?.curing === true
+    && f.patientZeroIn(z1.zoneId) === null);
+}
+
+// -------- H2. THE HANDOFF END TO END (the REAL kill path into the wane) --------
+{
+  const w = makeSimWorld('warrior', 0x2e40);
+  const arena = w.zoneMap[SIM_ARENA_ID];
+  const prevObjective = arena.objective;
+  arena.objective = { kind: 'clear' };
+  const f = new ContagionField({ seed: 0xd00d, gate: GATE, biomeSeed: 1 }, mkSurge({ seedMinDist: 0 }));
+  (w.sim as unknown as { contagionField: ContagionField | null }).contagionField = f;
+  const fv = mkView([mkZone(SIM_ARENA_ID, 300, 0, [])], SIM_ARENA_ID);
+  check('Hx1 (setup) devIgnite takes the proving ground', f.devIgnite(fv, SIM_ARENA_ID));
+  const stepBoth = (dt: number, n: number): void => {
+    for (let i = 0; i < n; i++) { w.update(dt); f.update(dt, fv); }
+  };
+  // The zero's seat IS the standing zone (and the cornered hold pins it
+  // here) — THE WALK-IN raises its real body, named, through the sweep.
+  stepBoth(0.5, 3);
+  const boss = w.actors.find(a => a.tag === 'patient_zero' && !a.dead);
+  check('Hx2 THE WALK-IN raises the zero\'s BODY at its seat, wearing the outbreak\'s name',
+    !!boss && boss.name === f.zeroSeat()[0]?.name, boss?.name);
+  stepBoth(0.5, 2);
+  check('Hx3 ONE live body ever (the scan guard holds across sweeps)',
+    w.actors.filter(a => a.tag === 'patient_zero' && !a.dead).length === 1);
+  // Slay it THROUGH the real kill path: the tag handler cuts the source →
+  // curing → the marks stop refreshing → Movement II's wane takes it home.
+  const cleansedBefore = w.ledger.contagion_cleansed ?? 0;
+  w.kill(boss!, false, w.player);
+  check('Hx4 the REAL kill cuts the source: curing, seat cleared, cleanse ledger paid',
+    f.contagionOn(SIM_ARENA_ID)?.curing === true && f.zeroSeat().length === 0
+    && (w.ledger.contagion_cleansed ?? 0) === cleansedBefore + 1);
+  stepBoth(0.5, 4);
+  check('Hx5 no fresh body raises while curing (a slain zero never re-spawns)',
+    !w.actors.some(a => a.tag === 'patient_zero' && !a.dead));
+  arena.objective = prevObjective;
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASSED');

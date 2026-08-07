@@ -3932,13 +3932,34 @@ export const MONSTERS: Record<string, MonsterDef> = {
     scaleVariance: [0.9, 1.5], scaleStats: true,
   },
 
+  // THE MUTANT'S GROWTH (contagion Movement III): the tentacle a mutant-
+  // strain infection SPROUTS on a taken body — minted MID-LIFE by the graft
+  // verb (World.graftPart off StrainDef.graft), a full part actor riding the
+  // composite fabric's death asymmetry: the host's death takes it quietly;
+  // ITS death frees the host unharmed (her ask verbatim). Eldritch cord in
+  // plague flesh (the caulborn lasher's look); anchored in the host's frame,
+  // its whole kit is the REEL — it drags the host's dinner in. Numbers
+  // flagged.
+  plague_tendril: {
+    id: 'plague_tendril', name: 'Plague Tendril',
+    color: '#5a7a3e', shape: 'oval', radius: 12, material: 'flesh', look: 'caul_lasher',
+    base: { life: 90, moveSpeed: 0, accuracy: 100, mana: 60, manaRegen: 6 },
+    mods: [mod('chaosRes', 'flat', 0.6)],
+    skills: ['plague_reel'], xp: 6, faction: 'plague',
+    turnSpeed: 4,
+    vision: { arcDeg: 360, rearMul: 1 }, // a growth has no face — it feels you all around
+    detection: 1.1, brain: { type: 'basic' },
+  },
+
   // --- PATIENT ZERO (the Contagion source boss) ----------------------------
-  // Fielded ONLY at the hops===0 source of an outbreak (the engine spawns it off
-  // contagionField.patientZeroIn, Crowned on spawn). Its phases escalate it from a
-  // disease-shepherd that raises hosts → a lurching juggernaut → a spore artillery
-  // that floods the field. Felling it does NOT cure the zones at once — it destroys
-  // the SOURCE, and the contagion recedes outward from here over time (the cure
-  // chain-reaction). Repeatable: a new outbreak can ignite elsewhere on a later run.
+  // Fielded at the ROAMING zero's seat (Movement III — the engine raises it off
+  // contagionField.patientZeroIn, Crowned + wearing the outbreak's rolled NAME;
+  // one zone at a time, walking the outbreak's own carrier grammar). Its phases
+  // escalate it from a disease-shepherd that raises hosts → a lurching juggernaut
+  // → a spore artillery that floods the field. Felling it does NOT cure the zones
+  // at once — it CUTS the source, and the contagion recedes outward from the
+  // ignition ground over time (the cure chain-reaction). Repeatable: a new
+  // outbreak can ignite elsewhere on a later run.
   patient_zero: {
     id: 'patient_zero', name: 'Patient Zero, the First Host',
     color: '#a6d24a', shape: 'cross', radius: 27, material: 'slime', look: 'ghoul',

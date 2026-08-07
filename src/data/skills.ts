@@ -13239,6 +13239,26 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 320, weight: 3, keepDistance: 140 },
     leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
+  // THE MUTANT'S REEL (contagion Movement III): the grafted plague_tendril's
+  // one verb — tongue_reel's grammar at graft scale (shorter, softer,
+  // plague-hued): a barbed cord snaps out in a line and PULLS the catch to
+  // the host's side. Counterplay is the graft itself: the tendril is its own
+  // targetable body, and killing it frees the host of its reach while the
+  // host shambles on. Numbers flagged.
+  plague_reel: {
+    id: 'plague_reel', name: 'Plague Reel', noDrop: true,
+    description: 'A barbed cord of warped flesh snaps out in a line: physical and chaos damage,'
+      + ' and the catch is REELED bodily to the tendril, stunned for 0.25 seconds on arrival.',
+    tags: ['attack', 'projectile', 'physical', 'chaos'], color: '#8a6ab0',
+    manaCost: 8, cooldown: 5, useTime: 0.8,
+    baseDamage: { physical: [4, 7], chaos: [3, 6] },
+    delivery: { type: 'projectile', speed: 560, radius: 8, range: 240, shape: 'line' },
+    effects: [
+      { type: 'damage' },
+      { type: 'pull', stun: 0.25 },
+    ],
+    ai: { range: 230, weight: 3 },
+  },
   // The chew: short, brutal, and it DRINKS — every landed bite knocks a
   // life-orb loose that homes back to the maw (siphonOrb: sustain with
   // travel time, dodgeable by walking away from your own blood).

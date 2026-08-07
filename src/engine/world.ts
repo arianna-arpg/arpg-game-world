@@ -14,7 +14,7 @@ import { ActorGrid } from './actorGrid';
 import { erraticTurn, spinOffset, weaveOffset, weaveVel } from './flight';
 import { mod, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
-import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingState, type GainEvent, type Team } from './actor';
+import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingState, type GainEvent, type MonsterPartDef, type Team } from './actor';
 import { EventBus } from './eventbus';
 import { Party } from './party';
 import { NullInput, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
@@ -562,6 +562,11 @@ function statusReqs(req: string | string[] | undefined): string[] | null {
 /** The well-known STEALTH charge id (granted by gainCharge like any combo
  *  resource; the engine treats its bearer as shrouded — see ai.ts). */
 const STEALTH_CHARGE = 'stealth';
+
+/** The graft key the CONTAGION stamps on the parts it grows (the mutant
+ *  strain's tentacle — Movement III): infectActorWith mints under it,
+ *  the sweep's revert withers exactly it. One word, two sites. */
+const CONTAGION_GRAFT_KEY = 'contagion';
 
 /** Is the actor operating unseen — stealth charges banked or invisible? */
 function isStealthed(a: Actor): boolean {
@@ -2652,8 +2657,11 @@ export class World {
    *  sweep's revert pass restores it byte-exact the moment no strain status
    *  stands (waned after the cure, cleansed, dispelled) and drops despawned
    *  ids. Runtime-only BY DESIGN: bodies despawn on zone leave and re-infect
-   *  on re-entry, so no save can ever carry a leaned watch. */
-  private contagionLeans = new Map<number, { watch: WatchSpec | undefined }>();
+   *  on re-entry, so no save can ever carry a leaned watch. `grafted` is the
+   *  MUTANT latch (Movement III): the strain's tentacle grows ONCE per
+   *  infection — a killed growth stays killed until the cure clears the
+   *  entry (a later outbreak grows fresh). */
+  private contagionLeans = new Map<number, { watch: WatchSpec | undefined; grafted?: boolean }>();
   private contagionSweepAt = 0;
   /** Warren-claimed zones whose nests/packs (+ the armed King) were already
    *  fielded this visit — one muster per visit; cleared per loadZone. The claim
@@ -16979,9 +16987,11 @@ export class World {
   // A Contagion is a slow PLAGUE spreading along the road graph, owned by the pure
   // ContagionField overlay (per-zone intensity + the reveal/cure clocks). The engine
   // reads contagionOn() to field intensity-scaled plague packs in an infected zone you
-  // enter, and patientZeroIn() to raise the unique boss at the hops===0 SOURCE — a
-  // tagged kill that begins the outward cure. Despawn-on-leave (post-tagging-window);
-  // re-materialized from the accessors on re-entry while the zone stays infected.
+  // enter, and patientZeroIn() to raise the named boss at the ROAMING zero's seat
+  // (Movement III — one zone at a time; the sweep also raises a mid-visit walk-in) —
+  // a tagged kill that begins the outward cure. Despawn-on-leave (post-tagging-
+  // window); re-materialized from the accessors on re-entry while the zone stays
+  // infected.
 
   /** Field the plague (intensity-scaled packs) in an infected zone, plus PATIENT ZERO
    *  at the source. One muster per zone visit (guarded by materializedContagion). The
@@ -17027,22 +17037,44 @@ export class World {
         }
       }
     }
-    // PATIENT ZERO holds the source — a tagged, (Crowned) boss whose fall starts the cure.
+    // PATIENT ZERO stands here — the ROAMING seat resolves to this zone (one
+    // zone at a time; Movement III): a tagged, named boss whose fall CUTS the
+    // source wherever it is caught.
     const pz = cf.patientZeroIn(def.id);
     if (pz && MONSTERS[pz.bossDefId]) {
-      const boss = this.createMonster(pz.bossDefId, lvl, 'enemy');
-      boss.faction = cfg.faction;
-      boss.tag = 'patient_zero';
-      if (pz.promote !== 'none') this.promoteRarity(boss, pz.promote === 'crowned' ? 'crowned' : 'champion');
-      boss.pos = this.clampPos(this.farPoint(520, true), boss.radius);
-      this.actors.push(boss);
-      this.flashes.push({ pos: vec(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
-      this.text(vec(boss.pos.x, boss.pos.y - 60),
-        `${boss.name} festers here — cut out the source!`, cfg.color, 18);
+      this.spawnPatientZero(pz);
     } else if (roster?.table?.length) {
       this.text(vec(this.player.pos.x, this.player.pos.y - 80),
         strain?.arrive ?? 'The air here is thick with rot…', cfg.color, 15);
     }
+  }
+
+  /** Raise the zero's BODY at its seat — ONE door for the enter-time muster
+   *  (materializeContagion) and the sweep's mid-visit WALK-IN: tagged
+   *  'patient_zero' (the kill handler's cure), promoted per the surge, and
+   *  wearing the outbreak's rolled NAME (Movement III — the omen, the map
+   *  row and the body all speak the same word). THE ONE-BODY GUARD lives in
+   *  the door itself, not its callers: the zone-enter muster is DEFERRED to
+   *  the first update in some boots, landing in the same frame as the
+   *  sweep's walk-in — whichever knocks first wins, the other refuses. */
+  private spawnPatientZero(pz: { bossDefId: string; promote: 'none' | 'champion' | 'crowned'; name?: string }): void {
+    const cfg = this.sim.contagionField?.surge();
+    if (!cfg) return;
+    if (this.actors.some(x => !x.dead && x.tag === 'patient_zero')) return;
+    const boss = this.createMonster(pz.bossDefId, Math.max(1, this.zone.level), 'enemy');
+    boss.faction = cfg.faction;
+    boss.tag = 'patient_zero';
+    if (pz.promote !== 'none') {
+      this.promoteRarity(boss, pz.promote === 'crowned' ? 'crowned' : 'champion',
+        pz.name ? { distinctName: pz.name } : undefined);
+    } else if (pz.name) {
+      boss.name = pz.name;
+    }
+    boss.pos = this.clampPos(this.farPoint(520, true), boss.radius);
+    this.actors.push(boss);
+    this.flashes.push({ pos: vec(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
+    this.text(vec(boss.pos.x, boss.pos.y - 60),
+      `${boss.name} festers here — cut out the source!`, cfg.color, 18);
   }
 
   /** THE INFECTION SWEEP (Movement II — the plague as a population-process
@@ -17056,9 +17088,12 @@ export class World {
    *  the STRAIN STATUS'S OWN DURATION is the body-wane clock — standing
    *  infected shamble it out and recover whole. THE REVERT PASS runs first
    *  and unconditionally (the watch-change idiom): a body no longer wearing
-   *  any strain gets its prior watch back byte-exact, and despawned ids drop
-   *  from the ledger. Dormant sleepers are spared (the sentry law); Patient
-   *  Zero is untouched (its identity is Movement III's ground). */
+   *  any strain gets its prior watch back byte-exact — and the mark leaving
+   *  takes the mutant's grafted growth with it (witherGrafts) — while
+   *  despawned ids drop from the ledger. Dormant sleepers are spared (the
+   *  sentry law); Patient Zero wears no marks (the zero IS the plague — its
+   *  named, roaming identity is Movement III's own, raised at its seat by
+   *  the walk-in below). */
   private updateContagionInfection(): void {
     const cf = this.sim.contagionField;
     if (!cf && this.contagionLeans.size === 0) return;
@@ -17070,12 +17105,24 @@ export class World {
       if (!a || a.dead) { this.contagionLeans.delete(id); continue; }
       if (!a.statuses.some(s => strainByStatus(s.id))) {
         a.watch = prior.watch;
+        // THE WITHER (Movement III): the mark leaving the body takes the
+        // plague's growth with it — no break effects, no scar (transience);
+        // a re-infection later grows fresh through the cleared latch.
+        if (prior.grafted) this.witherGrafts(a, CONTAGION_GRAFT_KEY);
         this.contagionLeans.delete(id);
       }
     }
     if (!cf || !cfg) return;
     const info = cf.contagionOn(this.zone.id);
     if (!info || info.curing) return;
+    // THE WALK-IN (Movement III): the ROAMING zero ARRIVES mid-visit — the
+    // sweep raises its body the beat its seat reaches the standing zone (the
+    // enter-time muster can't see a later arrival). One live body ever (the
+    // guard lives in the spawn door); a slain zero never re-raises (curing
+    // gates the seat); and while the player stands in its zone the seat is
+    // PINNED by the overlay's cornered hold, so body and seat cannot desync.
+    const pzHere = cf.patientZeroIn(this.zone.id);
+    if (pzHere && MONSTERS[pzHere.bossDefId]) this.spawnPatientZero(pzHere);
     const strain = strainOf(info.strain);
     if (!strain || !STATUS_DEFS[strain.statusId]) return;
     const fr = cfg.infection.frac;
@@ -17118,6 +17165,17 @@ export class World {
       };
     }
     a.applyStatus(strain.statusId, 0, 1, 'the contagion');
+    // THE MUTANT'S GROWTH (Movement III): a strain that declares a graft
+    // SPROUTS it on the taken body — once per infection (the leans entry is
+    // the latch, so a killed tentacle STAYS killed; the cure's revert clears
+    // the entry and a later outbreak grows fresh). Rides the ONE graft verb:
+    // host death kills the growth, the growth's death frees the host — the
+    // composite fabric's standing asymmetry, inherited whole.
+    const lean = this.contagionLeans.get(a.id);
+    if (strain.graft && lean && !lean.grafted) {
+      lean.grafted = true;
+      this.graftPart(a, strain.graft, { key: CONTAGION_GRAFT_KEY, flash: true });
+    }
   }
 
   // ------------------------------------------------------- deepwinter materialize
@@ -43207,41 +43265,98 @@ export class World {
     return rand(0, Math.PI * 2);
   }
 
+  /** THE GRAFT VERB (Movement III debut — a GENERIC primitive): mint a part
+   *  actor onto a STANDING body mid-life, inheriting the composite fabric's
+   *  whole standing law rather than re-implementing any of it — the frame
+   *  hold (updateParts), the break path (kill() routes a part's death to
+   *  onPartBroken: the HOST SURVIVES its part's loss), and the root-death
+   *  sweep (a dying host takes every part with it, quietly). The def-parts
+   *  lazy attach below is this verb's first caller, so spawn-time composites
+   *  and runtime grafts are ONE mint path; the contagion's mutant tentacle
+   *  is the first runtime consumer — future curses/parasites/blessings ride
+   *  the same door. `key` marks the graft for its owner (witherGrafts takes
+   *  back exactly its own); `flash` pops the sprout tell (runtime grafts
+   *  only — the lazy path stays silent, so spawn-time composites are
+   *  byte-identical to what they were).
+   *  REFUSALS: a dead host; a host that is ITSELF a part (a break would
+   *  orphan the grandchildren — the composite law stays two-deep by
+   *  construction); an unknown part def. */
+  graftPart(host: Actor, pd: MonsterPartDef, opts?: { key?: string; flash?: boolean }): Actor | null {
+    if (host.dead || host.partLink || !MONSTERS[pd.monster]) return null;
+    const part = this.createMonster(pd.monster, host.level, host.team);
+    part.faction = host.faction;
+    part.anchored = true;          // rigid: never shoved off the frame
+    part.xpValue = 0;              // the HOST pays any bounty
+    part.fromZoneGen = false;      // never snapshotted apart from it
+    part.partLink = { root: host, def: pd };
+    part.graftKey = opts?.key;
+    if (pd.lifeFrac) {
+      // Aim the FINAL pool at frac × host max: set the base, measure what
+      // the level curve turns it into, and rescale — so a part is exactly
+      // its share of the beast at any spawn level.
+      const target = Math.max(1, Math.round(host.maxLife() * pd.lifeFrac));
+      part.sheet.setBase('life', target);
+      const got = part.maxLife();
+      if (got > 1 && Math.abs(got - target) > 1) {
+        part.sheet.setBase('life', Math.max(1, target * (target / got)));
+      }
+      part.fillResources();
+    }
+    // Seat it in the host's facing frame NOW (updateParts re-holds it every
+    // tick) — a runtime graft must never flash into the world at a stranger's
+    // coordinates for one frame.
+    const c = Math.cos(host.facing), s = Math.sin(host.facing);
+    part.pos.x = host.pos.x + (pd.dx * c - pd.dy * s) * host.radius;
+    part.pos.y = host.pos.y + (pd.dx * s + pd.dy * c) * host.radius;
+    (host.partActors ??= []).push(part);
+    this.actors.push(part);
+    if (opts?.flash) {
+      this.flashes.push({
+        pos: vec(part.pos.x, part.pos.y), radius: part.radius * 1.6,
+        color: part.color, life: 0.35, maxLife: 0.35,
+      });
+    }
+    return part;
+  }
+
+  /** THE QUIET UNGRAFT — every `key`-marked graft on the host is REMOVED
+   *  without dying: no break effects, no SUNDERED, no bounty (the root-death
+   *  sweep's own grammar — dead, unlinked, a soft flash). The transience
+   *  half of the graft verb: the cause leaving the body takes its growth
+   *  with it, and a cured body keeps no scar. Returns how many withered. */
+  witherGrafts(host: Actor, key: string): number {
+    if (!host.partActors?.length) return 0;
+    let n = 0;
+    for (const p of [...host.partActors]) {
+      if (p.dead || p.graftKey !== key) continue;
+      p.dead = true;
+      p.partLink = undefined;
+      this.flashes.push({
+        pos: vec(p.pos.x, p.pos.y), radius: p.radius * 1.3,
+        color: p.color, life: 0.3, maxLife: 0.3,
+      });
+      n++;
+    }
+    if (n) host.partActors = host.partActors.filter(p => !p.dead || p.partLink);
+    return n;
+  }
+
   /** COMPOSITE MONSTERS (MonsterDef.parts): lazy-attach part actors to any
-   *  live root that declares them, then hold every part rigid in the root's
+   *  live root that declares them (through the ONE graft verb above), then
+   *  hold every part — def-declared or runtime-grafted — rigid in the root's
    *  facing frame each tick. Parts are full actors — they aim/cast on their
    *  own once aggroed; inert or idle parts track the root's own bearing. */
   private updateParts(): void {
     for (const a of this.actors) {
-      if (a.dead || !a.defId) continue;
-      const def = MONSTERS[a.defId];
-      if (!def?.parts) continue;
-      if (!a.partsSpawned) {
+      if (a.dead) continue;
+      const def = a.defId ? MONSTERS[a.defId] : undefined;
+      if (def?.parts && !a.partsSpawned) {
         a.partsSpawned = true;
-        a.partActors = [];
-        for (const pd of def.parts) {
-          if (!MONSTERS[pd.monster]) continue;
-          const part = this.createMonster(pd.monster, a.level, a.team);
-          part.faction = a.faction;
-          part.anchored = true;          // rigid: never shoved off the frame
-          part.xpValue = 0;              // the ROOT pays the bounty
-          part.fromZoneGen = false;      // never snapshotted apart from it
-          part.partLink = { root: a, def: pd };
-          if (pd.lifeFrac) {
-            // Aim the FINAL pool at frac × root max: set the base, measure
-            // what the level curve turns it into, and rescale — so a part is
-            // exactly its share of the beast at any spawn level.
-            const target = Math.max(1, Math.round(a.maxLife() * pd.lifeFrac));
-            part.sheet.setBase('life', target);
-            const got = part.maxLife();
-            if (got > 1 && Math.abs(got - target) > 1) {
-              part.sheet.setBase('life', Math.max(1, target * (target / got)));
-            }
-            part.fillResources();
-          }
-          a.partActors.push(part);
-          this.actors.push(part);
-        }
+        // ??= not =: a runtime graft may have landed BEFORE the first update
+        // tick (the contagion infects pack members at creation) — the lazy
+        // attach must append beside it, never orphan it.
+        a.partActors ??= [];
+        for (const pd of def.parts) this.graftPart(a, pd);
       }
       if (!a.partActors?.length) continue;
       const c = Math.cos(a.facing), s = Math.sin(a.facing);

@@ -51,6 +51,19 @@ const CONTAGION_SURGE: ContagionSurge = {
   carriers: { base: 2, cap: 5 },  // the kin-borne walkers: 2 stand up at ignition; visits birth more, to 5
   grip: { threshold: 0.35, waneSec: 20 },  // the eats-plague dials (this consumer owns them; groundClaims.ts)
   infection: { sweepSec: 1.2, dullMul: 2.6, frac: [0.35, 0.8] },  // the in-zone expression: sweep beat, the lean's slowed stare, the fated share of native kin
+  // THE ROAMING ZERO (Movement III): steps once per 2 spread beats (the head
+  // walks slower than its legs); the name pool each outbreak draws its zero
+  // from; the omen voice once SEEN (whisper/reveal node radii + the aging
+  // widen — the hunt for the root never goes blind). Numbers FLAGGED.
+  zero: {
+    stride: 2,
+    names: [
+      'Maruch, the First Host', 'Vessel Ondrel', 'Hollow Amasa',
+      'Carrier Vey', 'The Gray Pilgrim', 'Mother Rot',
+      'Yeva the Unburied', 'Pale Tomasz', 'The Patient Man',
+    ],
+    omen: { whisper: 280, reveal: 140, widenPerMin: 30 },
+  },
   reward: { xpBase: 260, xpPerLevel: 46, gems: 4 },
   color: PLAGUE_COLOR,
 };
@@ -59,10 +72,11 @@ const CONTAGION_SURGE: ContagionSurge = {
 //
 // Each outbreak rolls ONE face at ignition; every body the plague takes wears
 // that face's status (engine/status.ts infected_* rows — buff, zombie lean and
-// worn look all live there). MUTANT rides the weight-0 RESERVED row: its id is
-// Movement III's seam (the runtime part-graft) and nothing of it is built —
-// structurally unrollable, validator-skipped, never dead (the reserved-word
-// law).
+// worn look all live there). MUTANT is LIVE (Movement III — the weight-0
+// reservation SPENT, her ratified design): the rarest face, and its whole
+// identity is THE GRAFT — every taken body really does SPROUT a targetable
+// tentacle (World.graftPart onto the composite fabric: kill the host and the
+// growth dies with it; kill the growth and the host shambles on unharmed).
 registerStrain({
   id: 'miasma', label: 'Miasmal', statusId: 'infected_miasma', color: PLAGUE_COLOR, weight: 3,
   arrive: 'The air here is thick with rot…',
@@ -71,7 +85,14 @@ registerStrain({
   id: 'adrenal', label: 'Adrenal', statusId: 'infected_adrenal', color: '#c8e04a', weight: 2,
   arrive: 'Something quick and wrong is moving out there…',
 });
-registerStrain({ id: 'mutant', label: 'Mutant', statusId: 'infected_mutant', weight: 0 });
+registerStrain({
+  id: 'mutant', label: 'Mutant', statusId: 'infected_mutant', color: '#c07ad0', weight: 1,
+  arrive: 'The flesh here grows what flesh should not…',
+  // The tentacle seat: behind the shoulder, off the flank (root radii), at
+  // 40% of the host's own pool — a growth worth aiming at, never a second
+  // health bar. Numbers are the coordinator's, FLAGGED.
+  graft: { monster: 'plague_tendril', dx: -0.45, dy: 0.85, lifeFrac: 0.4 },
+});
 
 /** THE PLAGUEBOUND — the diseased 'plague' faction. contexts:['contagion'] keeps them
  *  out of ordinary generation; they appear ONLY inside an infected zone. No warlord,
@@ -128,15 +149,21 @@ export const CONTAGION: ContentPackage = {
   validate: (look) => [
     ...(look.faction(CONTAGION_SURGE.faction) ? [] : [`plague faction '${CONTAGION_SURGE.faction}' unknown`]),
     ...(look.monster(CONTAGION_SURGE.bossDefId) ? [] : [`Patient Zero '${CONTAGION_SURGE.bossDefId}' unknown`]),
-    // Every ROLLABLE strain must wear a real status; weight-0 rows are
-    // RESERVED and skipped (the reserved-word law — 'mutant' is Movement
-    // III's seam, not a defect).
+    // Every ROLLABLE strain must wear a real status; weight-0 rows stay
+    // RESERVED and skipped (the reserved-word law).
     ...strainIds()
       .map(id => strainOf(id))
       .filter((s): s is NonNullable<typeof s> => !!s && s.weight > 0 && !STATUS_DEFS[s.statusId])
       .map(s => `strain '${s.id}' names unknown status '${s.statusId}'`),
+    // A rollable strain's GRAFT must name a real monster (the tentacle
+    // exists — Movement III).
+    ...strainIds()
+      .map(id => strainOf(id))
+      .filter((s): s is NonNullable<typeof s> => !!s && s.weight > 0 && !!s.graft && !look.monster(s.graft.monster))
+      .map(s => `strain '${s.id}' grafts unknown monster '${s.graft?.monster}'`),
     ...(CONTAGION_SURGE.carriers.base < 1 ? ['carriers.base must be ≥ 1 (a spread with no legs never walks)'] : []),
     ...(CONTAGION_SURGE.carriers.cap < CONTAGION_SURGE.carriers.base ? ['carriers.cap below carriers.base'] : []),
+    ...(CONTAGION_SURGE.zero?.names?.length ? [] : ['zero.names must not be empty (a nameless zero cannot be hunted by word)']),
   ],
 };
 

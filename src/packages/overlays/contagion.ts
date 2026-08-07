@@ -21,14 +21,18 @@
 // entry) before understanding the source. Only then does the contagion begin to
 // READ on the map: a glowing, pulsing outline appears on the infected ADJACENT
 // zones (revealHops out from where you stand) — brighter + faster-pulsing the closer
-// to the source. Walking toward the strongest glow reveals the next ring, and so on:
-// following the intensity backward is a monotonic descent in hops that INEVITABLY
-// ends at Patient Zero (the hops===0 zone), where the unique boss festers.
+// to the source. Walking toward the strongest glow reveals the next ring; the
+// intensity gradient still descends toward the IGNITION ground — but the quarry
+// itself moves: PATIENT ZERO is a NAMED, ROAMING counterpart (Movement III), one
+// body in one zone at a time, walking the outbreak's own carrier grammar on a
+// slower beat and seeding infection where it stands. Once the outbreak is SEEN,
+// the omen fabric murmurs a bearing toward the zero's current seat (aging wider
+// — the hunt never goes blind), and the ☣ rides wherever it is revealed.
 //
 // Navigating or clearing zones does NOT touch the contagion. Only felling PATIENT
-// ZERO does — and not all at once: it destroys the SOURCE, and the infection then
-// recedes OUTWARD from the source over time (cure ring by cure ring, the Migration
-// tail-first recession turned inside-out), a slow chain-reaction cleanse.
+// ZERO does — and not all at once: it CUTS the source, and the infection then
+// recedes OUTWARD from the ignition ground over time (cure ring by cure ring, the
+// Migration tail-first recession turned inside-out), a slow chain-reaction cleanse.
 //
 // PURE of the engine, exactly like CrusadeField: it owns the node-space spread + the
 // per-zone intensity + the reveal/cure clocks, with no runtime coupling to World (the
@@ -44,6 +48,7 @@ import { START_ZONE, type ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
 import { coordDist } from '../../world/coords';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
+import { registerOmenSource, type Omen } from '../../world/omens';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { eventTargetable } from '../../world/zonePolicy';
 import { CONTAGION_COLORS } from '../../world/palette';
@@ -52,6 +57,33 @@ import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
 
 const STEP = 0.5;          // fixed ignition cadence (seconds)
+
+/** THE ROAMING ZERO's fallback dials (surge.zero rows absent take these —
+ *  one place, never inline; the zero is the fabric's LAW, not an opt-in).
+ *  Numbers are the coordinator's, FLAGGED. */
+const ZERO_DEFAULTS = {
+  /** The zero steps once per this many spread beats — the head walks
+   *  slower than its legs (the carriers), so the map outruns the quarry. */
+  stride: 2,
+  /** The name pool a fresh outbreak draws its zero from (overlay stream). */
+  names: [
+    'Maruch, the First Host', 'Vessel Ondrel', 'Hollow Amasa',
+    'Carrier Vey', 'The Gray Pilgrim', 'Mother Rot',
+    'Yeva the Unburied', 'Pale Tomasz', 'The Patient Man',
+  ],
+  /** The zero's omen voice ({name}/{bearing}/{dist} expand): whisper/reveal
+   *  radii in node units + the aging widen — published only once the
+   *  outbreak is SEEN (the silence doctrine holds until the stumble; from
+   *  then on the hunt for the root never goes blind). */
+  omen: {
+    whisper: 280, reveal: 140, widenPerMin: 30,
+    lines: [
+      '{name} walks {bearing}, and the rot walks with it…',
+      'They say the first sickness has a face — something {dist}, {bearing}.',
+      'The plague runs thickest {bearing}. Its heart is moving.',
+    ],
+  },
+};
 
 /** The whole Contagion mechanic as data — every number is a knob (mirrors the
  *  other surges). Carried by the def, passed into the overlay constructor. */
@@ -80,7 +112,8 @@ export interface ContagionSurge {
   seedMinDist: number;
   /** The plague faction the engine fields in an infected zone. */
   faction: string;
-  /** Patient Zero's monster id (the engine spawns it at the hops===0 zone). */
+  /** Patient Zero's monster id (the engine raises it at the ROAMING zero's
+   *  current seat — patientZeroIn). */
   bossDefId: string;
   /** Patient Zero's elite tier on spawn. */
   bossPromote: 'none' | 'champion' | 'crowned';
@@ -120,15 +153,28 @@ export interface ContagionSurge {
    *  network eats the plague back, never the reverse. Absent (or no grip
    *  source registered) = the whole lane is structurally silent. */
   grip?: { threshold: number; waneSec: number };
+  /** THE ROAMING ZERO (Movement III): the outbreak's named counterpart — its
+   *  step cadence (once per `stride` spread beats), the name pool a fresh
+   *  outbreak draws from, and its omen voice. Every row optional; absent
+   *  rows take ZERO_DEFAULTS (the zero itself is the fabric's law). */
+  zero?: {
+    stride?: number;
+    names?: string[];
+    omen?: { whisper: number; reveal: number; widenPerMin: number; lines?: string[] };
+  };
 }
 
 /** What the engine reads to field the plague / the boss in a zone. */
 export interface ContagionInfo {
   /** 0..1, falls off with hops from the source (the glow + pack-density driver). */
   intensity: number;
-  /** This is the hops===0 source (and the outbreak is not yet curing) — the engine
-   *  spawns Patient Zero here. */
+  /** The outbreak's ROAMING ZERO stands in this zone (and the outbreak is not
+   *  yet curing) — the engine raises the named boss here. One zone at a time
+   *  by construction (Movement III: the seat walks). */
   isSource: boolean;
+  /** The zero's rolled NAME (the omen, the map row and the body all speak
+   *  it). Undefined once cut, or on a legacy snapshot mid-adoption. */
+  zeroName?: string;
   color: string;
   /** 'virulent' | 'spreading' | 'faint' — the severity word for the info row. */
   label: string;
@@ -153,7 +199,8 @@ interface CarrierState {
  *  state. */
 interface ActiveOutbreak {
   id: string;
-  /** The Patient Zero zone id (the hops===0 entry). */
+  /** The IGNITION ground (the hops===0 entry — the intensity geometry's
+   *  anchor; the zero itself walks). */
   sourceZoneId: string;
   /** The rolled STRAIN (contagionStrains.ts — seeded at ignition; undefined
    *  when nothing rollable is registered). */
@@ -161,6 +208,16 @@ interface ActiveOutbreak {
   /** THE CARRIERS — the sick bodies whose walking IS the spread (kin-borne;
    *  disbanded the moment the outbreak turns to curing). */
   carriers: CarrierState[];
+  /** THE ROAMING ZERO (Movement III): the outbreak's named counterpart — ONE
+   *  body, one zone at a time, walking the carrier grammar on its own slower
+   *  beat and seeding infection where it stands. patientZeroIn resolves at
+   *  THIS seat; the cut (slain, or the source lost) clears it — the zero is
+   *  the outbreak's life, and a curing outbreak has none. */
+  zero?: CarrierState & { name: string };
+  /** Spread beats taken (the zero steps on every `stride`-th). */
+  zeroBeat: number;
+  /** Seconds since the outbreak was SEEN (ages the omen's widening voice). */
+  seenAgeSec: number;
   spreadAcc: number;
   /** The player has entered an infected zone of this run (drives the reveal start
    *  + the one-shot discovery ledger). */
@@ -238,6 +295,7 @@ export class ContagionField implements WorldOverlay {
     // LIFECYCLE — each outbreak SPREADS (until killed), then RECEDES (once curing).
     for (const o of this.outbreaks) {
       if (o.dead) continue;
+      if (o.seen && !o.curing) o.seenAgeSec += dt; // the omen's voice ages from discovery
       if (o.curing) {
         o.cureAcc += dt;
         while (o.cureAcc >= this.cfg.cureInterval) { o.cureAcc -= this.cfg.cureInterval; this.cureRing(o); }
@@ -265,9 +323,11 @@ export class ContagionField implements WorldOverlay {
           if (!o) continue;
           o.revealed.delete(zid);
           o.carriers = o.carriers.filter(c => c.zoneId !== zid);
-          if (o.sourceZoneId === zid && !o.curing) {
-            o.curing = true; o.cureAcc = 0; o.curedThrough = -1; o.carriers = [];
-          }
+          // The zero's ground eaten under it: it slips to the outbreak's own
+          // nearest ring (draw-free) — the anchored network eats GROUND, the
+          // mobile heart walks on (her containment asymmetry, Movement III).
+          if (o.zero?.zoneId === zid) this.rehomeZero(o);
+          if (o.sourceZoneId === zid && !o.curing) this.cutSource(o);
           if (![...this.infected.values()].some(zz => zz.runId === o.id)) o.dead = true;
         } else if (z.waneSec) {
           z.waneSec = 0; // the grip lapsed mid-meal — the bite starts over
@@ -326,8 +386,11 @@ export class ContagionField implements WorldOverlay {
           + `<animate attributeName="r" values="${r0};${r1};${r0}" dur="${dur}s" repeatCount="indefinite"/>`
           + `<animate attributeName="stroke-opacity" values="${op};${(+op * 0.35).toFixed(2)};${op}" dur="${dur}s" repeatCount="indefinite"/>`
           + `</circle>`;
-        // A ☣ over Patient Zero's own node once it's revealed — "you've traced it home".
-        if (z.hops === 0) {
+        // A ☣ over the ZERO's CURRENT seat once that zone is revealed — the
+        // quarry sighted (Movement III: the mark walks with it; slipping into
+        // unrevealed ground takes the mark away until the hunt catches up —
+        // the omen keeps murmuring the bearing so it is never lost blind).
+        if (o.zero?.zoneId === zid) {
           over += `<text x="${cx}" y="${(n.map.y - 15).toFixed(1)}" text-anchor="middle" `
             + `font-size="13" fill="${this.glowColors.accent}">☣</text>`;
         }
@@ -344,10 +407,13 @@ export class ContagionField implements WorldOverlay {
   /** Event-activity fed to the bloom (WorldOverlay.activityAt): an infected zone. */
   activityAt(zoneId: string): number { return this.contagionOn(zoneId) ? 1 : 0; }
 
-  /** The contagion affecting a zone (intensity + whether it's the source), or null
-   *  when uninfected. The engine fields intensity-scaled plague packs off this, and
-   *  Patient Zero when isSource. NOT gated on `revealed` — entering an infected zone
-   *  always fields its plague, which IS the player stumbling in. */
+  /** The contagion affecting a zone (intensity + whether the ZERO stands
+   *  here), or null when uninfected. The engine fields intensity-scaled
+   *  plague packs off this, and the named Patient Zero when isSource
+   *  (Movement III: the seat ROAMS — one zone at a time by construction; a
+   *  slain zero never re-spawns, curing gates it). NOT gated on `revealed` —
+   *  entering an infected zone always fields its plague, which IS the player
+   *  stumbling in. */
   contagionOn(zoneId: string): ContagionInfo | null {
     const z = this.infected.get(zoneId);
     if (!z) return null;
@@ -355,7 +421,8 @@ export class ContagionField implements WorldOverlay {
     if (!o || o.dead) return null;
     return {
       intensity: z.intensity,
-      isSource: z.hops === 0 && !o.curing, // a slain Patient Zero never re-spawns (curing)
+      isSource: !o.curing && o.zero?.zoneId === zoneId,
+      zeroName: o.zero?.name,
       color: this.glowColors.strong, // matches the map glow (per-variant)
       label: z.intensity > 0.66 ? 'virulent' : z.intensity > 0.33 ? 'spreading' : 'faint',
       strain: o.strainId,
@@ -386,11 +453,33 @@ export class ContagionField implements WorldOverlay {
     return true;
   }
 
-  /** Patient Zero's spawn descriptor if this zone is a live source, else null. */
-  patientZeroIn(zoneId: string): { bossDefId: string; promote: 'none' | 'champion' | 'crowned' } | null {
-    return this.contagionOn(zoneId)?.isSource
-      ? { bossDefId: this.cfg.bossDefId, promote: this.cfg.bossPromote }
+  /** Patient Zero's spawn descriptor if the outbreak's ROAMING ZERO stands in
+   *  this zone (Movement III — one zone at a time by construction), else
+   *  null. Carries the outbreak's rolled NAME so the raised body, the omen
+   *  and the map row all speak the same word. */
+  patientZeroIn(zoneId: string): { bossDefId: string; promote: 'none' | 'champion' | 'crowned'; name?: string } | null {
+    const info = this.contagionOn(zoneId);
+    return info?.isSource
+      ? { bossDefId: this.cfg.bossDefId, promote: this.cfg.bossPromote, name: info.zeroName }
       : null;
+  }
+
+  /** THE ZERO SEATS (the omen source + probes): each live outbreak's named
+   *  zero — its CURRENT zone + node coords, whether the outbreak has been
+   *  SEEN (the omen holds the silence doctrine until then), and the seen-age
+   *  (the widening voice). Pure read. */
+  zeroSeat(): ReadonlyArray<{ outbreakId: string; zoneId: string; name: string; x: number; y: number; seen: boolean; curing: boolean; seenAgeSec: number }> {
+    const out: { outbreakId: string; zoneId: string; name: string; x: number; y: number; seen: boolean; curing: boolean; seenAgeSec: number }[] = [];
+    for (const o of this.outbreaks) {
+      if (o.dead || !o.zero) continue;
+      const n = this.nodesById[o.zero.zoneId];
+      if (!n) continue;
+      out.push({
+        outbreakId: o.id, zoneId: o.zero.zoneId, name: o.zero.name,
+        x: n.map.x, y: n.map.y, seen: o.seen, curing: o.curing, seenAgeSec: o.seenAgeSec,
+      });
+    }
+    return out;
   }
 
   /** The info row for the map's zone box — only for a zone the player has REVEALED
@@ -417,21 +506,47 @@ export class ContagionField implements WorldOverlay {
     return true;
   }
 
-  /** Patient Zero was slain in `sourceZoneId` — begin the outward recession. Returns
-   *  true if it actually started a cure (the cleanse ledger gates the Vault tiers). */
+  /** Patient Zero was slain in `sourceZoneId` (any of the outbreak's zones —
+   *  the seat ROAMS) — begin the outward recession. Returns true if it
+   *  actually started a cure (the cleanse ledger gates the Vault tiers). */
   onPatientZeroSlain(sourceZoneId: string): boolean {
     const z = this.infected.get(sourceZoneId);
     const o = z ? this.outbreaks.find(x => x.id === z.runId)
                 : this.outbreaks.find(x => x.sourceZoneId === sourceZoneId);
     if (!o || o.dead || o.curing) return false;
+    this.cutSource(o);
+    return true;
+  }
+
+  /** THE CUT — one door for every way the outbreak's heart is lost (the zero
+   *  slain, its source ground eaten or culled): curing begins, the legs
+   *  disband on the spot (spread was already curing-gated; this makes the
+   *  stop structural, and the snapshot carries the emptiness), and the zero
+   *  is gone — a curing outbreak has no quarry left to hunt. */
+  private cutSource(o: ActiveOutbreak): void {
     o.curing = true;
     o.cureAcc = 0;
     o.curedThrough = -1;
-    // THE CONTAINMENT: cure the source and no new legs walk — the carriers
-    // disband on the spot (spread was already curing-gated; this makes the
-    // stop structural, and the snapshot carries the emptiness).
     o.carriers = [];
-    return true;
+    o.zero = undefined;
+  }
+
+  /** The ground under the ZERO was eaten/culled: it slips to the outbreak's
+   *  nearest still-infected ring (lowest hops, ties lexical — DRAW-FREE, so
+   *  no stream moves for it). Nothing left to stand on = the heart is gone:
+   *  the cut lands here. */
+  private rehomeZero(o: ActiveOutbreak): void {
+    if (!o.zero) return;
+    let best: { zoneId: string; hops: number } | null = null;
+    for (const [zid, z] of this.infected) {
+      if (z.runId !== o.id || zid === o.zero.zoneId) continue;
+      if (!best || z.hops < best.hops || (z.hops === best.hops && zid < best.zoneId)) {
+        best = { zoneId: zid, hops: z.hops };
+      }
+    }
+    if (best) { o.zero.zoneId = best.zoneId; o.zero.hops = best.hops; }
+    else if (!o.curing) this.cutSource(o);
+    else o.zero = undefined;
   }
 
   activeCount(): number { return this.outbreaks.filter(o => !o.dead).length; }
@@ -464,6 +579,8 @@ export class ContagionField implements WorldOverlay {
       outbreaks: this.outbreaks.map(o => ({
         id: o.id, sourceZoneId: o.sourceZoneId, strainId: o.strainId,
         carriers: o.carriers.map(c => ({ zoneId: c.zoneId, hops: c.hops })),
+        zero: o.zero ? { zoneId: o.zero.zoneId, hops: o.zero.hops, name: o.zero.name } : undefined,
+        zeroBeat: o.zeroBeat, seenAgeSec: o.seenAgeSec,
         spreadAcc: o.spreadAcc, seen: o.seen,
         revealed: [...o.revealed], curing: o.curing, cureAcc: o.cureAcc,
         curedThrough: o.curedThrough, dead: o.dead,
@@ -479,8 +596,9 @@ export class ContagionField implements WorldOverlay {
     if (typeof s.seq === 'number' && Number.isFinite(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
     if (Array.isArray(s.outbreaks)) {
       this.outbreaks = [];
+      const zc = this.zeroCfg();
       for (const raw of s.outbreaks) {
-        const o = raw as { id?: unknown; sourceZoneId?: unknown; strainId?: unknown; carriers?: unknown; spreadAcc?: unknown; seen?: unknown; revealed?: unknown; curing?: unknown; cureAcc?: unknown; curedThrough?: unknown; dead?: unknown } | null;
+        const o = raw as { id?: unknown; sourceZoneId?: unknown; strainId?: unknown; carriers?: unknown; zero?: unknown; zeroBeat?: unknown; seenAgeSec?: unknown; spreadAcc?: unknown; seen?: unknown; revealed?: unknown; curing?: unknown; cureAcc?: unknown; curedThrough?: unknown; dead?: unknown } | null;
         if (!o || typeof o.id !== 'string' || typeof o.sourceZoneId !== 'string') continue;
         if (o.dead) continue; // a finished outbreak stays finished
         const curing = !!o.curing;
@@ -499,10 +617,23 @@ export class ContagionField implements WorldOverlay {
           : curing ? []
             : Array.from({ length: Math.max(0, this.cfg.carriers.base) },
               () => ({ zoneId: o.sourceZoneId as string, hops: 0 }));
+        // The ZERO round-trips; a LEGACY save (pre-Movement-III, no zero row)
+        // adopts — a LIVE outbreak stands its zero at the source with a name
+        // rolled on the overlay's own stream (the strain-adoption idiom); a
+        // curing one was already cut and stands none.
+        const zr = o.zero as { zoneId?: unknown; hops?: unknown; name?: unknown } | null | undefined;
+        const zero = curing ? undefined
+          : zr && typeof zr.zoneId === 'string' && typeof zr.name === 'string'
+            && typeof zr.hops === 'number' && Number.isFinite(zr.hops) && zr.hops >= 0
+            ? { zoneId: zr.zoneId, hops: Math.floor(zr.hops), name: zr.name }
+            : { zoneId: o.sourceZoneId, hops: 0, name: zc.names[this.rng.int(0, zc.names.length - 1)] };
         this.outbreaks.push({
           id: o.id, sourceZoneId: o.sourceZoneId,
           strainId: typeof o.strainId === 'string' ? o.strainId : rollStrain(this.rng)?.id,
           carriers: curing ? [] : carriers.slice(0, Math.max(0, this.cfg.carriers.cap)),
+          zero,
+          zeroBeat: typeof o.zeroBeat === 'number' && Number.isFinite(o.zeroBeat) ? Math.floor(o.zeroBeat) : 0,
+          seenAgeSec: typeof o.seenAgeSec === 'number' && Number.isFinite(o.seenAgeSec) ? o.seenAgeSec : 0,
           spreadAcc: typeof o.spreadAcc === 'number' && Number.isFinite(o.spreadAcc) ? o.spreadAcc : 0,
           seen: !!o.seen,
           revealed: new Set(Array.isArray(o.revealed) ? o.revealed.filter((z): z is string => typeof z === 'string') : []),
@@ -535,7 +666,8 @@ export class ContagionField implements WorldOverlay {
     for (const o of this.outbreaks) {
       o.revealed = new Set([...o.revealed].filter(z => has(z)));
       o.carriers = o.carriers.filter(c => has(c.zoneId)); // culled ground takes its walkers
-      if (!has(o.sourceZoneId) && !o.curing) { o.curing = true; o.cureAcc = 0; o.curedThrough = -1; o.carriers = []; }
+      if (o.zero && !has(o.zero.zoneId)) this.rehomeZero(o); // …but the zero slips aside
+      if (!has(o.sourceZoneId) && !o.curing) this.cutSource(o);
     }
   }
 
@@ -588,7 +720,23 @@ export class ContagionField implements WorldOverlay {
     this.infected.set(zoneId, { runId, hops, intensity: this.intensityFor(hops) });
   }
 
+  /** The zero's resolved dials (surge rows over ZERO_DEFAULTS — one fold). */
+  private zeroCfg(): { stride: number; names: string[]; omen: { whisper: number; reveal: number; widenPerMin: number; lines: string[] } } {
+    const z = this.cfg.zero;
+    return {
+      stride: Math.max(1, Math.floor(z?.stride ?? ZERO_DEFAULTS.stride)),
+      names: z?.names?.length ? z.names : ZERO_DEFAULTS.names,
+      omen: {
+        whisper: z?.omen?.whisper ?? ZERO_DEFAULTS.omen.whisper,
+        reveal: z?.omen?.reveal ?? ZERO_DEFAULTS.omen.reveal,
+        widenPerMin: z?.omen?.widenPerMin ?? ZERO_DEFAULTS.omen.widenPerMin,
+        lines: z?.omen?.lines?.length ? z.omen.lines : ZERO_DEFAULTS.omen.lines,
+      },
+    };
+  }
+
   private makeOutbreak(src: ZoneDef): ActiveOutbreak {
+    const zc = this.zeroCfg();
     return {
       id: `contagion_${this.seq++}`,
       sourceZoneId: src.id,
@@ -599,6 +747,10 @@ export class ContagionField implements WorldOverlay {
       // The ignition's own sick walkers, standing at the source.
       carriers: Array.from({ length: Math.max(0, this.cfg.carriers.base) },
         () => ({ zoneId: src.id, hops: 0 })),
+      // THE ZERO stands where it all began, NAMED on the same stream (after
+      // the strain roll — appended draws, so the strain's seat never shifts).
+      zero: { zoneId: src.id, hops: 0, name: zc.names[this.rng.int(0, zc.names.length - 1)] },
+      zeroBeat: 0, seenAgeSec: 0,
       spreadAcc: 0, seen: false, revealed: new Set(),
       curing: false, cureAcc: 0, curedThrough: -1, dead: false,
     };
@@ -663,33 +815,51 @@ export class ContagionField implements WorldOverlay {
    *  another outbreak's ground is a wall (one plague per zone). Seeded picks
    *  on the overlay's own stream — deterministic beat for beat. */
   private spread(o: ActiveOutbreak, view: OverlayView): void {
-    for (const c of o.carriers) {
-      const zn = view.byId[c.zoneId];
-      if (!zn) continue;
-      const fresh: string[] = [];
-      const roam: { id: string; hops: number }[] = [];
-      for (const e of zn.exits) {
-        if (e.to === '?') continue;
-        const nb = view.byId[e.to];
-        if (!nb) continue;
-        const held = this.infected.get(nb.id);
-        if (held) {
-          if (held.runId === o.id) roam.push({ id: nb.id, hops: held.hops });
-          continue;
-        }
-        if (c.hops + 1 > this.cfg.maxHops || !this.mayInfect(nb)) continue;
-        fresh.push(nb.id);
+    // THE ZERO'S STEP first (the head walks, then the legs — one stream,
+    // stable order): once per `stride` beats, and NEVER out of the zone the
+    // player stands in — THE CORNERED HOLD: the hunter's presence pins the
+    // quarry, so its materialized body can never desync from this seat.
+    o.zeroBeat += 1;
+    if (o.zero && o.zeroBeat % this.zeroCfg().stride === 0
+      && o.zero.zoneId !== view.currentZoneId) {
+      this.stepWalker(o, view, o.zero);
+    }
+    for (const c of o.carriers) this.stepWalker(o, view, c);
+  }
+
+  /** ONE sick body's step (the carrier grammar — Movement III's zero rides
+   *  the same law): onto fresh ground if any door offers it (infecting at
+   *  the WALKED distance, capped at maxHops), else roaming the outbreak's
+   *  own infected ground (hops re-synced so its next infection prices
+   *  honestly). Roads only; claimed ground refuses at the one gate; another
+   *  outbreak's ground is a wall. Seeded picks on the overlay's own stream —
+   *  deterministic beat for beat. */
+  private stepWalker(o: ActiveOutbreak, view: OverlayView, c: CarrierState): void {
+    const zn = view.byId[c.zoneId];
+    if (!zn) return;
+    const fresh: string[] = [];
+    const roam: { id: string; hops: number }[] = [];
+    for (const e of zn.exits) {
+      if (e.to === '?') continue;
+      const nb = view.byId[e.to];
+      if (!nb) continue;
+      const held = this.infected.get(nb.id);
+      if (held) {
+        if (held.runId === o.id) roam.push({ id: nb.id, hops: held.hops });
+        continue;
       }
-      if (fresh.length) {
-        const pick = fresh[this.rng.int(0, fresh.length - 1)];
-        this.infect(pick, o.id, c.hops + 1);
-        c.zoneId = pick;
-        c.hops += 1;
-      } else if (roam.length) {
-        const pick = roam[this.rng.int(0, roam.length - 1)];
-        c.zoneId = pick.id;
-        c.hops = pick.hops;
-      }
+      if (c.hops + 1 > this.cfg.maxHops || !this.mayInfect(nb)) continue;
+      fresh.push(nb.id);
+    }
+    if (fresh.length) {
+      const pick = fresh[this.rng.int(0, fresh.length - 1)];
+      this.infect(pick, o.id, c.hops + 1);
+      c.zoneId = pick;
+      c.hops += 1;
+    } else if (roam.length) {
+      const pick = roam[this.rng.int(0, roam.length - 1)];
+      c.zoneId = pick.id;
+      c.hops = pick.hops;
     }
   }
 
@@ -746,7 +916,37 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   const sev = strainWord ? `${info.label} (${strainWord})` : info.label;
   return [{
     kind: 'event', icon: '☣', color: info.color, label: 'Contagion',
-    detail: info.isSource ? 'Patient Zero festers here' : `${sev}; follow the strongest pulse to its source`,
+    detail: info.isSource ? `${info.zeroName ?? 'Patient Zero'} festers here`
+      : `${sev}; follow the strongest pulse to its source`,
     z: 14,
   }];
+});
+
+// --- the zero's omen (registered on import — the findability guarantee) ------
+//
+// THE SILENCE DOCTRINE HOLDS: the contagion festers unannounced until the
+// player STUMBLES in (markDiscovered flips `seen`) — only a SEEN outbreak's
+// zero murmurs. From then on the hunt for the root never goes blind: the
+// world whispers a bearing toward the zero's CURRENT seat, aging wider
+// (widenPerMin — an uncaught quarry's shadow grows), and close in it surveys
+// the seat onto the map. The omen id is stable per OUTBREAK while `at` walks
+// with the quarry — the whisper memory follows one hunt, not one zone.
+registerOmenSource((world: World): Omen[] => {
+  const cf = world.sim.contagionField;
+  if (!cf) return [];
+  const surge = cf.surge();
+  const om = {
+    whisper: surge.zero?.omen?.whisper ?? ZERO_DEFAULTS.omen.whisper,
+    reveal: surge.zero?.omen?.reveal ?? ZERO_DEFAULTS.omen.reveal,
+    widenPerMin: surge.zero?.omen?.widenPerMin ?? ZERO_DEFAULTS.omen.widenPerMin,
+    lines: surge.zero?.omen?.lines?.length ? surge.zero.omen.lines : ZERO_DEFAULTS.omen.lines,
+  };
+  return cf.zeroSeat().filter(z => z.seen && !z.curing).map(z => ({
+    id: `contagion_zero_${z.outbreakId}`,
+    at: { x: z.x, y: z.y }, zoneId: z.zoneId,
+    color: surge.color,
+    lines: om.lines.map(l => l.replace('{name}', z.name)),
+    whisper: om.whisper, reveal: om.reveal, widenPerMin: om.widenPerMin,
+    age: z.seenAgeSec,
+  }));
 });
