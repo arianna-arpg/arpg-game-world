@@ -376,7 +376,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       color: '#3a2e26', edge: '#5e4630', material: 'stone',
       glow: '#ff8a3a', throat: '#0c0806',
       teeth: {}, rubble: {},
-      label: 'the Ordnance Yard',
     },
     light: { radius: -2.2, color: '#ff8a3a', intensity: 0.32, flicker: 2 },
   },
@@ -513,7 +512,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       color: '#6a5834', edge: '#927448', material: 'stone',
       glow: '#e8b060', throat: '#0f0a04',
       teeth: {}, rubble: {},
-      label: 'the Buried Vault',
     },
     light: { radius: -2.2, color: '#e8b060', intensity: 0.32, flicker: 1.8 },
   },
@@ -526,7 +524,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       color: '#8a7448', edge: '#b09660', material: 'stone',
       glow: '#f0cc70', throat: '#0a0703',
       teeth: {}, rubble: {},
-      label: 'the Sepulcher Sands',
     },
     light: { radius: -2.2, color: '#f0cc70', intensity: 0.38, flicker: 0.9 },
   },
@@ -536,14 +533,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // finally showing, a steady grave-gold glow where the seal used to be.
   regent_door: {
     painter: 'slab', order: 55, shadow: 0.65, longShadow: 1.3,
-    params: { shape: 'monolith', fill: '#cfc4ac', edge: '#e8c060', label: 'the Regent\'s Door' },
+    params: { shape: 'monolith', fill: '#cfc4ac', edge: '#e8c060' },
   },
   regent_door_open: {
     painter: 'caveMouth', order: 55,
     params: {
       color: '#cfc4ac', edge: '#e8c060', material: 'stone',
       glow: '#ffd890', throat: '#060402',
-      label: 'the Regent\'s Door',
     },
     light: { radius: -2.4, color: '#ffd890', intensity: 0.5, flicker: 1.2 },
   },
@@ -838,7 +834,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       color: '#6a705c', edge: '#8a8c74', material: 'stone',
       glow: '#9fd07a', throat: '#0a0f08', teeth: {}, rubble: {},
       vines: { color: 'theme:tree' },
-      label: 'the Sunken Ruin',
     },
     light: { radius: -2.2, color: '#9fd07a', intensity: 0.32, flicker: 1.8 },
   },
@@ -1015,20 +1010,20 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'standingMirror', order: 54, shadow: 0.4, bakeWhole: 'static',
     params: { frame: '#5a4a2c', glass: '#0e1418', glint: '#8fb0c0' },
   },
-  // The ways between the house's floors (sidezone triggers, labels roof-gated).
+  // The ways between the house's floors (sidezone triggers).
   manor_stair: {
     painter: 'stairFlight', order: 54, shadow: 0.4,
-    params: { wood: '#4c3a28', dark: '#0a0808', runner: '#4a1a24', label: 'Upstairs' },
+    params: { wood: '#4c3a28', dark: '#0a0808', runner: '#4a1a24' },
   },
   attic_stair: {
     painter: 'stairFlight', order: 54, shadow: 0.4,
-    params: { wood: '#3e2e20', dark: '#060505', runner: '#3a3226', label: 'the Attic' },
+    params: { wood: '#3e2e20', dark: '#060505', runner: '#3a3226' },
   },
   // The family plot's sealed door: the cave-mouth idiom in pale estate stone,
   // a cold gleam past the jamb (it minted an ossuary, and it knows).
   mausoleum_door: {
     painter: 'caveMouth', order: 55, shadow: 0.5, longShadow: 1.1,
-    params: { color: '#8a8578', throat: '#0a0c10', glow: '#9fb8c8', label: 'the Mausoleum' },
+    params: { color: '#8a8578', throat: '#0a0c10', glow: '#9fb8c8' },
     light: { radius: -1.6, color: '#9fb8c8', intensity: 0.14 },
   },
   // Giant fungus wears the WALK-UNDER TREE mechanism now: a real pale-ringed
@@ -1279,15 +1274,15 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   chimney_stack: { painter: 'chimneyStack', order: 56, shadow: 0.2, bakeWhole: 'static' },
   hide_rack: { painter: 'hideRack', order: 52, shadow: 0.35, bakeWhole: 'static' },
   target_butt: { painter: 'targetButt', order: 52, shadow: 0.35, bakeWhole: 'static' },
-  // The burgher stairs: the manor's flight painter, city-labelled (the
+  // The burgher stairs: the manor's flight painter in city colors (the
   // ascension mouths — data/sidezones.ts owns the doors).
   city_stair: {
     painter: 'stairFlight', order: 54, shadow: 0.4,
-    params: { wood: '#4c3a28', dark: '#0a0808', runner: '#2e3a4a', label: 'the Rooms Above' },
+    params: { wood: '#4c3a28', dark: '#0a0808', runner: '#2e3a4a' },
   },
   garret_stair: {
     painter: 'stairFlight', order: 54, shadow: 0.4,
-    params: { wood: '#3e2e20', dark: '#060505', runner: '#2e3a4a', label: 'the Garret' },
+    params: { wood: '#3e2e20', dark: '#060505', runner: '#2e3a4a' },
   },
   // The sewers' door + its one honest lamp (the descend lane's civic mouth).
   sewer_grate: { painter: 'sewerGrate', order: 22, bakeWhole: 'static' },
@@ -1699,7 +1694,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   crevice_shaft: {
     painter: 'caveMouth', order: 30,
-    params: { label: 'Crevice', tumble: 1 },
+    params: { tumble: 1 },
   },
   // --- The bog set: mire dressing + the contracting-fume hazard -------------
   // A waterlogged trunk gone half to moss — the log painter saying 'drowned'.
@@ -2161,12 +2156,14 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     light: { radius: -1.6, color: '#7de84a', intensity: 0.12, flicker: 1.1 },
   },
   // THE STANDING BREACH: the cave-ladder breach's surface twin (same wound
-  // painter, same underworld red — the player who has delved knows this door
-  // on sight), standing open at the Sundering's heart.
+  // painter, the same underworld-red FAMILY — the player who has delved
+  // knows the door), standing open at the Sundering's heart and burning
+  // GRANDER than its cave kin: hotter edge, denser cracks, a taller ember
+  // column. The unnamed ways read apart by fire, not by text.
   hell_breach: {
     painter: 'breach', order: 58,
-    params: { edge: '#d84a2a', label: 'the Sundering' },
-    light: { radius: -2.6, color: '#d84a2a', intensity: 0.4, flicker: 2.8 },
+    params: { edge: '#ff6a2a', cracks: 8, motes: { count: 9, color: '#ffb04a' } },
+    light: { radius: -2.6, color: '#ff6a2a', intensity: 0.4, flicker: 2.8 },
   },
   tooth_row: {
     painter: 'teethRow', order: 52, shadow: 0.45,
@@ -2282,7 +2279,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone',
       glow: '#caa860', teeth: {}, rubble: {}, vines: { color: 'theme:tree' },
-      label: 'Cave',
     },
     light: { radius: -2, color: '#caa860', intensity: 0.25, flicker: 2.5 },
   },
@@ -2290,7 +2286,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // cellar (data/sidezones.ts 'cellar_hatch').
   cellar_hatch: {
     painter: 'hatch', order: 54,
-    params: { wood: '#5c4630', seam: '#3a2c1c', frame: '#2e2418', ring: '#8a8578', label: 'Cellar' },
+    params: { wood: '#5c4630', seam: '#3a2c1c', frame: '#2e2418', ring: '#8a8578' },
   },
   // The Pit's maw (the pit package's furnish): bottomless dark ringed in
   // tumbled home-stone, torchlight licking up from somewhere far below.
@@ -2299,7 +2295,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone',
       glow: '#c8a84b', throat: '#050507', tumble: 1, teeth: {}, rubble: {},
-      label: 'The Pit',
     },
     light: { radius: -2, color: '#c8a84b', intensity: 0.4, flicker: 4 },
   },
@@ -2309,12 +2304,16 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // hovel door is peat and root under witchlight; the vault gate is
   // sunkstone gone gold at the throat. Fixed palettes on purpose — a lair
   // mouth should read as ITSELF whatever country it stands in.
+  // THE UNNAMED WAYS (2026-08-07 ruling): no mouth into minted ground
+  // speaks its name — the visual IS the identity, and the country
+  // introduces itself only once entered. Veteran knowledge lives in the
+  // player's head, never in a label (the painters keep the capability;
+  // the data simply says nothing).
   frostmaw_maw: {
     painter: 'caveMouth', order: 55,
     params: {
       color: '#3a4a58', edge: '#7a98ac', material: 'stone',
       glow: '#8ac8e8', throat: '#0a1016', teeth: {},
-      label: 'the Frostmaw',
     },
     light: { radius: -2, color: '#8ac8e8', intensity: 0.3, flicker: 2 },
   },
@@ -2323,7 +2322,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#2c3018', edge: '#4c542e', material: 'wood',
       glow: '#b8d070', throat: '#0a0c06', vines: { color: '#4a5a2c' },
-      label: "Hag's Hovel",
     },
     light: { radius: -2, color: '#b8d070', intensity: 0.32, flicker: 3.5 },
   },
@@ -2332,7 +2330,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#3e321a', edge: '#70603a', material: 'stone',
       glow: '#f0d078', throat: '#0c0a06', rubble: {}, tumble: 1,
-      label: 'the Vault of the Asking',
     },
     light: { radius: -2, color: '#f0d078', intensity: 0.28, flicker: 1.6 },
   },
@@ -2343,7 +2340,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#3c2c1c', edge: '#6a5238', material: 'stone',
       glow: '#d88a4a', throat: '#0c0806', rubble: {},
-      label: 'the Maze',
     },
     light: { radius: -2, color: '#d88a4a', intensity: 0.26, flicker: 2 },
   },
@@ -2352,7 +2348,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#2e2018', edge: '#5a3c2a', material: 'stone',
       glow: '#ff8a2a', throat: '#140a04', teeth: {},
-      label: 'the Emberwyrm Barrow',
     },
     light: { radius: -2, color: '#ff8a2a', intensity: 0.42, flicker: 5 },
   },
@@ -2365,7 +2360,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#32200f', edge: '#64401f', material: 'stone',
       glow: '#ff9a3a', throat: '#160b04', teeth: {},
-      label: "the Urnfather's Kiln",
     },
     light: { radius: -2, color: '#ff9a3a', intensity: 0.34, flicker: 1.2 },
   },
@@ -2374,7 +2368,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#322c1e', edge: '#585034', material: 'wood',
       glow: '#e8e4d0', throat: '#0a0906', vines: { color: '#d8d4c0' },
-      label: 'the Spinney',
     },
     light: { radius: -2, color: '#e8e4d0', intensity: 0.22, flicker: 1.2 },
   },
@@ -2385,7 +2378,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#4a4238', edge: '#786a54', material: 'stone',
       glow: '#ff9a3a', throat: '#120c06', teeth: {}, rubble: {},
-      label: 'the Drake Roost',
     },
     light: { radius: -2, color: '#ff9a3a', intensity: 0.45, flicker: 4 },
   },
@@ -2395,7 +2387,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#1e3240', edge: '#3a586c', material: 'stone',
       glow: '#7ab8d8', throat: '#040a10', teeth: {},
-      label: 'the Leviathan Trench',
     },
     light: { radius: -2, color: '#7ab8d8', intensity: 0.3, flicker: 1.5 },
   },
@@ -2404,7 +2395,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#322e22', edge: '#5a5440', material: 'stone',
       glow: '#b8a8e8', throat: '#0a0810', rubble: {},
-      label: "the King's Barrow",
     },
     light: { radius: -2, color: '#b8a8e8', intensity: 0.3, flicker: 1.8 },
   },
@@ -2415,7 +2405,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#4a3c24', edge: '#7a6844', material: 'stone',
       glow: '#c8d060', throat: '#0c0a04', rubble: {}, tumble: 1,
-      label: 'the Scorpion Well',
     },
     light: { radius: -2, color: '#c8d060', intensity: 0.26, flicker: 2.4 },
   },
@@ -2426,7 +2415,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#22421a', edge: '#3f6a2c', material: 'wood',
       glow: '#8ed070', throat: '#060a05', vines: { color: '#c8d8a0' },
-      label: 'the Scythe Court',
     },
     light: { radius: -2, color: '#8ed070', intensity: 0.22, flicker: 1.4 },
   },
@@ -2436,7 +2424,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#3a3226', edge: '#5c5038', material: 'wood',
       glow: '#b08a50', throat: '#0a0805', rubble: {},
-      label: 'the Stamping Ground',
     },
     light: { radius: -2, color: '#b08a50', intensity: 0.2, flicker: 1.2 },
   },
@@ -2446,7 +2433,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#2a4150', edge: '#487086', material: 'ice',
       glow: '#8ed0ec', throat: '#04080c', teeth: {},
-      label: 'the Rimevault',
     },
     light: { radius: -2, color: '#8ed0ec', intensity: 0.28, flicker: 1.6 },
   },
@@ -2456,7 +2442,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#2e2a20', edge: '#524a38', material: 'wood',
       glow: '#9fd8b0', throat: '#08070a', rubble: {},
-      label: "the Hunt's Rest",
     },
     light: { radius: -2, color: '#9fd8b0', intensity: 0.26, flicker: 2.0 },
   },
@@ -2466,7 +2451,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#1e4038', edge: '#3a6c5c', material: 'stone',
       glow: '#9fe8d8', throat: '#04100c', teeth: {},
-      label: 'the Tidewomb',
     },
     light: { radius: -2, color: '#9fe8d8', intensity: 0.28, flicker: 1.8 },
   },
@@ -2478,7 +2462,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#b8a274', edge: '#d8c890', material: 'stone',
       glow: '#e8906a', throat: '#141008', rubble: {},
-      label: 'the Drumshell',
     },
     light: { radius: -2, color: '#e8906a', intensity: 0.2, flicker: 2.6 },
   },
@@ -2489,7 +2472,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#33231c', edge: '#5a3a28', material: 'metal',
       glow: '#ff8a3a', throat: '#0c0502', rubble: {}, tumble: 1,
-      label: 'the Chainworks',
     },
     light: { radius: -2, color: '#ff8a3a', intensity: 0.3, flicker: 2.2 },
   },
@@ -2538,7 +2520,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   breach: {
     painter: 'breach', order: 58,
-    params: { edge: '#d84a2a', label: 'the Breach' },
+    params: { edge: '#d84a2a' },
     light: { radius: -2.4, color: '#d84a2a', intensity: 0.35, flicker: 2.8 },
   },
   isle_beacon: {
@@ -2914,7 +2896,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // gold runner — the climb INTO the colossal buildings (gallery floors).
   basilica_stair: {
     painter: 'stairFlight', order: 54, shadow: 0.4,
-    params: { wood: '#d8d0bc', dark: '#8a8270', runner: '#c8a44a', label: 'the Gallery Above' },
+    params: { wood: '#d8d0bc', dark: '#8a8270', runner: '#c8a44a' },
   },
   // The country dens' doors: the Wane's crescent arch (the gateArch painter
   // after dark — its star-glow wakes with the night) and the Storm-Throat's
@@ -3093,21 +3075,22 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'moundSpire', order: 50, shadow: 0.35, bakeWhole: 'static',
     params: { earth: '#7a5e40' },
   },
-  // The gate spire names itself close-up (labelRevealed) — never baked, the
-  // label is a live read.
+  // The gate spire's doorway-dark arch (params.mouth) is the door's whole
+  // introduction. (Un-baked from its label days — THE UNNAMED WAYS retired
+  // the text; the stroke is time-free, so a bake is a deferred perf nicety.)
   mound_gate: {
     painter: 'moundSpire', order: 53, shadow: 0.55, longShadow: 1.0,
-    params: { earth: '#916f4a', mouth: true, label: 'the Formicary' },
+    params: { earth: '#916f4a', mouth: true },
   },
   comb_wax: {
     painter: 'waxComb', order: 44, bakeWhole: 'static',
     params: { wax: '#c8a24a', cap: '#e8cf7a' },
   },
   // The formicary's way down — the cellar-hatch contract in colony earth
-  // (caveMouth painter, tumble + label: the pit_entrance precedent).
+  // (caveMouth painter, tumble: the pit_entrance precedent).
   brood_stair: {
     painter: 'caveMouth', order: 53, shadow: 0.45,
-    params: { tumble: 1, label: 'the brood run' },
+    params: { tumble: 1 },
   },
   compost_heap: {
     painter: 'moundSpire', order: 52, shadow: 0.5, bakeWhole: 'static',
@@ -3126,13 +3109,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { body: '#4a6a3a', glow: '#d8f078', aspectY: 1.15, glowY: -0.1, glowR: 0.42, pulseRate: 0.7, bands: 3 },
     light: { radius: 95, color: '#d8f078', intensity: 0.55, flicker: 1.1, radiance: { at0: 1, at1: 0.05 } },
   },
-  // The hollow bole names itself close-up (labelRevealed) — never baked,
-  // the label is a live read (the mound_gate contract in dead wood). Its
-  // mouth-gleam dims by day but never fully sleeps: the den below keeps
-  // its own hours.
+  // The hollow bole's mouth-gleam dims by day but never fully sleeps: the
+  // den below keeps its own hours. (Un-baked from its label days — THE
+  // UNNAMED WAYS retired the text; the stroke is time-free, so a bake is
+  // a deferred perf nicety.)
   hollow_bole: {
     painter: 'hollowBole', order: 53, shadow: 0.55, longShadow: 1.0,
-    params: { bark: '#4a3a26', gleam: '#b8e88f', label: 'the Gleamhollow' },
+    params: { bark: '#4a3a26', gleam: '#b8e88f' },
     light: { radius: 70, color: '#b8e88f', intensity: 0.35, radiance: { at1: 0.3 } },
   },
 
@@ -3221,7 +3204,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#3a2c1a', edge: '#6a5234', material: 'wood',
       glow: '#c8b060', throat: '#0c0804', vines: { color: '#4a3a24' },
-      label: 'the Undergrowth',
     },
     light: { radius: -2, color: '#c8b060', intensity: 0.26, flicker: 2.2 },
   },
@@ -3234,14 +3216,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#42341e', edge: '#7a6240', material: 'wood',
       glow: '#e0d090', throat: '#0c0a04', vines: { color: '#5a4a2c' },
-      label: 'the Rootways',
     },
     light: { radius: -2, color: '#e0d090', intensity: 0.3, flicker: 1.8 },
   },
   // THE TAPROOT THROAT (the root tier — the 'roots' under-tier lane,
   // data/massifs.ts): the tier CROSSING's prop, not a door — the culvert
   // stair's role in garden tongue. The gate's bore re-dressed darker, no
-  // glow, no label: you walk down in place, nothing mints. Same caveMouth
+  // glow: you walk down in place, nothing mints. Same caveMouth
   // painter, one data entry (the doodadVisuals doctrine).
   taproot_throat: {
     painter: 'caveMouth', order: 23, bakeWhole: 'static', bakeScope: 3.2,
@@ -3263,7 +3244,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#3a352a', edge: '#6a6350', material: 'stone',
       glow: '#c8bfa8', throat: '#0a0806',
-      label: 'the Catacombs',
     },
     light: { radius: -2, color: '#c8bfa8', intensity: 0.24, flicker: 2.4 },
   },
@@ -3275,13 +3255,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#443f30', edge: '#7a705c', material: 'stone',
       glow: '#e8dcb0', throat: '#0a0806',
-      label: 'the Lych Way',
     },
     light: { radius: -2, color: '#e8dcb0', intensity: 0.3, flicker: 1.8 },
   },
   // THE CRYPT STAIR (the 'crypts' under-tier lane): the tier CROSSING's
   // prop, not a door — the culvert stair's role in kerbstone. Darker, no
-  // glow, no label: you walk down in place, nothing mints.
+  // glow: you walk down in place, nothing mints.
   crypt_stair: {
     painter: 'caveMouth', order: 23, bakeWhole: 'static', bakeScope: 3.2,
     params: {
@@ -3412,7 +3391,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#2a3a6a', edge: '#5a7ad0', material: 'crystal',
       glow: '#9fd8ff', throat: '#060a18', rubble: {},
-      label: 'the Geode Sett',
     },
     light: { radius: -2, color: '#9fd8ff', intensity: 0.3, flicker: 1.6 },
   },
@@ -3422,7 +3400,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#8a6a34', edge: '#c89848', material: 'wood',
       glow: '#e8c060', throat: '#140e04', rubble: {},
-      label: 'the Honeyfold',
     },
     light: { radius: -2, color: '#e8c060', intensity: 0.24, flicker: 1.8 },
   },
@@ -3438,7 +3415,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#bcd4e4', edge: '#e2eef6', material: 'stone',
       glow: '#8fe0e8', throat: '#4a7a9a', rubble: {},
-      label: 'the Vane Roost',
     },
     light: { radius: -2, color: '#8fe0e8', intensity: 0.22, flicker: 1.4 },
   },
@@ -3513,7 +3489,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // refusal floater does the talking while it holds).
   lone_crypt_door: {
     painter: 'caveMouth', order: 55, shadow: 0.5, longShadow: 1.1,
-    params: { color: '#6e6a78', throat: '#08070c', glow: '#a892d8', label: 'the Lone Crypt' },
+    params: { color: '#6e6a78', throat: '#08070c', glow: '#a892d8' },
     light: { radius: -1.6, color: '#a892d8', intensity: 0.14 },
   },
 
@@ -3528,7 +3504,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#1c2126', edge: '#4a3a34', material: 'stone',
       glow: '#ff9a5a', throat: '#0a0605', rubble: {},
-      label: 'the Vent Brood',
     },
     light: { radius: -2, color: '#ff8a3a', intensity: 0.3, flicker: 2.6 },
   },
@@ -3537,7 +3512,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#57503c', edge: '#a89a72', material: 'stone',
       glow: '#d8a24a', throat: '#120d06', rubble: {},
-      label: "the Pard's Larder",
     },
     light: { radius: -1.6, color: '#d8a24a', intensity: 0.14, flicker: 1.2 },
   },
@@ -3550,7 +3524,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#57503c', edge: '#a89a72', material: 'stone',
       glow: '#c8883a', throat: '#0e0a05', rubble: {},
-      label: "the Baboon King's Midden",
     },
     light: { radius: -1.6, color: '#c8883a', intensity: 0.12, flicker: 1.4 },
   },
@@ -3562,7 +3535,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       color: '#4c4a3e', edge: '#8e876a', material: 'stone',
       glow: '#f0c060', throat: '#0a0906', rubble: {},
-      label: 'the Sleepless Watch',
     },
     light: { radius: -1.6, color: '#f0c060', intensity: 0.14, flicker: 1.2 },
   },
