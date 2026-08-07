@@ -208,6 +208,11 @@ export interface DoodadVisualDef {
    *  painter still authors every pixel (wholeKindSprite runs it at bake);
    *  this flag only moves WHEN it runs. */
   bakeWhole?: 'static' | 'sway';
+  /** Bake-canvas reach as a multiple of the doodad radius (default 1.7 —
+   *  fern fronds arcing past the disc). A painter whose dressing fans wider
+   *  (a mouth's stain skirt) raises it or the bake CLIPS the skirt; the blit
+   *  centers itself off the sprite size, so no other seam moves. */
+  bakeScope?: number;
 }
 
 // --- Shared path helpers -----------------------------------------------------
@@ -3051,6 +3056,12 @@ export interface CaveMouthParams {
   /** Hanging growth trailing over the lip — theme-gated, so verdant biomes
    *  drape their caves and deserts stay bare (~45%). */
   vines?: { color?: ColorSpec };
+  /** THE SEATED APRON (opt-in — the under-tier bore mouths): widen the
+   *  threshold apron by `scale` and scatter `flecks`-toned dressing (chips
+   *  + short fibrous hairs) around the lip, so a mouth stamped on OPEN
+   *  ground tessellates into it instead of floating. Absent = the classic
+   *  apron, pixel-exact — every gate and cave door keeps its face. */
+  apron?: { scale?: number; flecks?: ColorSpec };
   label?: string;
 }
 
@@ -3081,6 +3092,51 @@ const caveMouth: GroupPainter = (env, group, def) => {
     ctx.ellipse(0, r * 0.3, r * 1.5, r * 1.05, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
+    // THE SEATED APRON (opt-in): a wider, fainter second fan + fleck chips
+    // + short fibrous hairs creeping from the lip — the bore mouths' seat
+    // on open ground. Everything hash-rolled, nothing shared with the
+    // classic apron above, so param-less mouths stay pixel-exact.
+    if (p.apron) {
+      const asc = p.apron.scale ?? 1.8;
+      const ag = ctx.createRadialGradient(0, r * 0.25, r * 0.6, 0, r * 0.25, r * 1.5 * asc);
+      ag.addColorStop(0, withAlpha(shade(base, -0.35), 0.14));
+      ag.addColorStop(1, withAlpha(shade(base, -0.35), 0));
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = ag;
+      ctx.beginPath();
+      ctx.ellipse(0, r * 0.25, r * 1.5 * asc, r * 1.05 * asc, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const fc = resolveColorOpt(p.apron.flecks, theme) ?? shade(base, -0.15);
+      for (let i = 0; i < 9; i++) {
+        const a = hash01(i, seed + 211) * Math.PI * 2;
+        const d = r * (1.15 + hash01(i, seed + 217) * 0.85) * asc * 0.72;
+        ctx.globalAlpha = 0.3 + hash01(i, seed + 223) * 0.25;
+        ctx.fillStyle = shade(fc, hash01(i, seed + 227) * 0.24 - 0.12);
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(a) * d, Math.sin(a) * d * 0.88,
+          1.1 + hash01(i, seed + 229) * 2.0, 0.9 + hash01(i, seed + 233) * 1.4, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = shade(fc, -0.1);
+      for (let i = 0; i < 6; i++) {
+        const a = hash01(i, seed + 241) * Math.PI * 2;
+        const d0 = r * (0.98 + hash01(i, seed + 243) * 0.2);
+        const len = r * (0.35 + hash01(i, seed + 247) * 0.5) * asc * 0.55;
+        const bend = (hash01(i, seed + 251) - 0.5) * r * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * d0, Math.sin(a) * d0 * 0.9);
+        ctx.quadraticCurveTo(
+          Math.cos(a) * (d0 + len * 0.55) - Math.sin(a) * bend,
+          (Math.sin(a) * (d0 + len * 0.55) + Math.cos(a) * bend) * 0.9,
+          Math.cos(a) * (d0 + len) - Math.sin(a) * bend * 1.5,
+          (Math.sin(a) * (d0 + len) + Math.cos(a) * bend * 1.5) * 0.9);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
     // THE THROAT: underground black swallowing a rim-lifted edge — the hole
     // reads round because its rim remembers the daylight.
     const tg = ctx.createRadialGradient(0, r * 0.1, r * 0.12, 0, 0, r);
@@ -8974,35 +9030,117 @@ const lightShaft: GroupPainter = (env, group) => {
   }
 };
 
-/** THE CULVERT STAIR: stone steps descending INTO the drain — drawn ALONG
- *  the doodad's rot (the tunnel's first bearing), each tread darker than the
- *  last, so the street reads which way the tunnel runs before anyone climbs
- *  down. A ringed mouth like the well it opens from. */
-const culvertStair: GroupPainter = (env, group) => {
-  const { ctx } = env;
+/** THE CULVERT STAIR: the drain-mouth the sewer lane's wells wear — a
+ *  kerbstone ring sunk into the paving, worked treads descending ALONG the
+ *  doodad's rot (the tunnel's first bearing) so the street reads which way
+ *  the drain runs before anyone climbs down. Form-rolled like the cave
+ *  mouths (no two alike): real voussoir stones with the course BROKEN over
+ *  the treads' exit and the odd slumped block, a damp stain + moss flecks
+ *  skirting the lip into the surrounding paving. Time-free (bakeWhole
+ *  'static'); the skirt fans past the disc, so the visual row carries
+ *  bakeScope. */
+interface CulvertStairParams {
+  /** Kerb ring stone. */
+  stone?: ColorSpec;
+  /** Moss/damp accent — fleck skirt, kerb seams. */
+  moss?: ColorSpec;
+  /** The dark past the last tread. */
+  throat?: ColorSpec;
+}
+const culvertStair: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as CulvertStairParams;
+  const { ctx, theme } = env;
+  const stone = resolveColor(p.stone, theme, '#3f5248');
+  const moss = resolveColor(p.moss, theme, '#54745c');
+  const throatCol = resolveColor(p.throat, theme, '#070b08');
+  const ramp = rampOf(stone, materialOf('stone'));
   for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
     const r = o.radius;
+    const R = r * 1.3;
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     ctx.rotate(o.rot ?? 0);
-    // The mouth ring (street-side lip).
-    ctx.strokeStyle = '#54745c';
-    ctx.lineWidth = Math.max(2, r * 0.14);
-    ctx.strokeRect(-r * 0.95, -r * 0.62, r * 1.9, r * 1.24);
-    // Treads march +X (into the tunnel), each darker — the descent reads.
+    // THE SKIRT: damp stain fanning off the lip, moss flecks seeding the
+    // paving seams — the mouth's tessellation into the street around it.
+    ctx.globalAlpha = 0.2;
+    const sg = ctx.createRadialGradient(r * 0.2, 0, r * 0.5, r * 0.2, 0, r * 2.5);
+    sg.addColorStop(0, shade(stone, -0.4));
+    sg.addColorStop(1, withAlpha(shade(stone, -0.4), 0));
+    ctx.fillStyle = sg;
+    ctx.beginPath(); ctx.ellipse(r * 0.2, 0, r * 2.5, r * 2.1, 0, 0, Math.PI * 2); ctx.fill();
+    for (let i = 0; i < 8; i++) {
+      const a = hash01(i, seed + 11) * Math.PI * 2;
+      const d = r * (1.5 + hash01(i, seed + 17) * 0.9);
+      ctx.globalAlpha = 0.3 + hash01(i, seed + 23) * 0.25;
+      ctx.fillStyle = shade(moss, hash01(i, seed + 29) * 0.2 - 0.25);
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * d, Math.sin(a) * d * 0.9,
+        1.2 + hash01(i, seed + 31) * 2.2, 1 + hash01(i, seed + 37) * 1.6, a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // THE THROAT: the drain's own dark, rim-lifted so the hole reads round.
+    const tg = ctx.createRadialGradient(0, 0, R * 0.15, 0, 0, R);
+    tg.addColorStop(0, throatCol);
+    tg.addColorStop(0.72, throatCol);
+    tg.addColorStop(1, shade(throatCol, 0.35));
+    ctx.fillStyle = tg;
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+    // TREADS: worked slabs marching +X into the tunnel, each darker and the
+    // channel narrowing, edges wobbled by hash — the descent reads.
     const steps = 5;
     for (let s = 0; s < steps; s++) {
       const t = s / (steps - 1);
-      const shadeK = 0.78 - t * 0.62;
-      ctx.fillStyle = `rgb(${Math.round(74 * shadeK + 12)},${Math.round(86 * shadeK + 14)},${Math.round(78 * shadeK + 12)})`;
-      const x0 = -r * 0.85 + t * r * 1.5;
-      ctx.fillRect(x0, -r * 0.52, r * 0.32, r * 1.04);
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.fillRect(x0 + r * 0.26, -r * 0.52, r * 0.06, r * 1.04);
+      const x0 = -R * 0.72 + t * R * 1.28;
+      const hw = R * (0.62 - t * 0.2);
+      const wob = (hash01(s, seed + 41) - 0.5) * R * 0.06;
+      ctx.fillStyle = shade(stone, 0.24 - t * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(x0, -hw + wob);
+      ctx.lineTo(x0 + R * 0.24, -hw * 0.92 + wob);
+      ctx.lineTo(x0 + R * 0.24, hw * 0.92 + wob);
+      ctx.lineTo(x0, hw + wob);
+      ctx.closePath();
+      ctx.fill();
+      // The riser lip in shadow.
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.fillRect(x0 + R * 0.19, -hw * 0.92 + wob, R * 0.05, hw * 1.84);
     }
-    // The black past the last tread: the drain itself.
-    ctx.fillStyle = '#080c08';
-    ctx.fillRect(r * 0.68, -r * 0.52, r * 0.28, r * 1.04);
+    // The dark past the last tread — the duct swallowing the stair.
+    ctx.fillStyle = throatCol;
+    ctx.beginPath();
+    ctx.moveTo(R * 0.56, -R * 0.42);
+    ctx.lineTo(R * 1.02, -R * 0.3);
+    ctx.lineTo(R * 1.02, R * 0.3);
+    ctx.lineTo(R * 0.56, R * 0.42);
+    ctx.closePath();
+    ctx.fill();
+    // THE KERB RING: real form-rolled stones around the lip, the course
+    // broken over the treads' exit and the odd block slumped outward —
+    // built once, settled since.
+    const n = 7 + (seed % 3);
+    const gap = 0.62;
+    const squash = 0.88 + hash01(seed, 3) * 0.12;
+    for (let i = 0; i < n; i++) {
+      const a = gap + ((i + 0.5) / n) * (Math.PI * 2 - gap * 2)
+        + (hash01(i, seed + 47) - 0.5) * 0.12;
+      const d = R * (0.98 + (hash01(i, seed + 53) < 0.18 ? 0.16 : 0) + hash01(i, seed + 59) * 0.08);
+      drawRockBody(ctx, {
+        cx: Math.cos(a) * d, cy: Math.sin(a) * d * 0.96,
+        r: r * (0.3 + hash01(i, seed + 61) * 0.14), seed: seed + i * 7 + 5, squash,
+      }, ramp, withAlpha(shade(moss, -0.08), 0.6), 1, false);
+    }
+    // Moss dabs riding a couple of kerb seams.
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = moss;
+    for (let i = 0; i < 3; i++) {
+      const a = gap + hash01(i, seed + 67) * (Math.PI * 2 - gap * 2);
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * R, Math.sin(a) * R * 0.96, r * (0.06 + hash01(i, seed + 71) * 0.08), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 };
@@ -10034,7 +10172,7 @@ export function wholeKindSprite(def: DoodadVisualDef, theme: ZoneTheme,
   radius: number, variant: number): HTMLCanvasElement {
   const painter = PAINTERS[def.painter] ?? PAINTERS.fallback;
   const rq = Math.max(6, Math.round(radius / 4) * 4);
-  const size = rq * 2 * 1.7; // fern fronds arc past the disc
+  const size = rq * 2 * (def.bakeScope ?? 1.7); // fern fronds arc past the disc
   const key = `wk|${def.painter}|${paramsIdOf(def)}|${variant}|${rq}|${themeTokenOf(theme)}`;
   return baked(key, size, size, (ctx) => {
     const fake = {

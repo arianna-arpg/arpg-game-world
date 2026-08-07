@@ -144,6 +144,15 @@ export interface RegionVisualSpec {
    *  junction. Opt-in because covered layers (bored galleries, ducts) must
    *  keep their surface faces unbroken — a shadow would leak the secret. */
   cliff?: boolean;
+  /** THE BLOT BAKE (walkable visual rows, opt-in): the row's component
+   *  reads as ground SUNK INTO the land instead of a stamped plate — the
+   *  under-tier well mouths. Interior cells fill solid; sides facing other
+   *  ground trade the ruler-straight rim for seeded blobs straddling the
+   *  boundary plus a few stain speckles thrown just past it, so the patch
+   *  tessellates into the surrounding wash. Pure bake dressing: the cells
+   *  the engine tests are untouched, and the covered area never recedes
+   *  more than a rag's width from the tested truth. */
+  blot?: boolean;
 }
 
 /** A once-on-enter status (bog poison, tentacle stun). amount scales with zone
@@ -1209,10 +1218,12 @@ registerRegion({ id: 'sewer_under_wall', walkable: false, blocks: true, label: '
   visual: { fill: '#4a3226', alpha: 1, masonry: true, edge: { color: '#8a6a4a', width: 4 } },
   tierVisual: { fill: '#181f1a', edge: '#54745c' } });
 // CULVERT WELL: the open drain-mouth — the crossing between street and duct
-// (walkable both tiers, flips on exit). Reads as a ringed well from above.
+// (walkable both tiers, flips on exit). The blot bake sinks the patch into
+// the paving (ragged rim, stain speckles) so the drain reads dug, not
+// stamped; the culvert_stair prop draws the worked mouth at its heart.
 registerRegion({ id: 'culvert_well', walkable: true, blocks: false, label: 'the culvert',
   tier: 1, tierLink: true,
-  visual: { fill: '#222824', alpha: 0.95, edge: { color: '#54745c', width: 4 } },
+  visual: { fill: '#222824', alpha: 0.95, blot: true, edge: { color: '#54745c', width: 4 } },
   tierVisual: { fill: '#26302a', edge: '#6a8a70' } });
 // ROOT DUCT: THE ROOT TIER's bored gallery (the 'roots' under-tier lane —
 // engine/tiers.ts, spec in data/massifs.ts): the sewer family in garden
@@ -1223,10 +1234,12 @@ registerRegion({ id: 'root_duct', walkable: true, blocks: false, label: 'the roo
   tierVisual: { fill: '#171106', edge: '#5c4830' } });
 // TAPROOT THROAT: the root tier's crossing — a bore straight down between
 // the garden floor and the root gallery (walkable both tiers, flips on
-// exit). Reads as a dark root-ringed mouth from above.
+// exit). The blot bake breaks the patch's rim into the lea (turned-earth
+// blobs, mulch speckles) so the bore reads dug, not stamped; the
+// taproot_throat prop draws the root-lipped mouth at its heart.
 registerRegion({ id: 'root_well', walkable: true, blocks: false, label: 'the taproot throat',
   tier: 1, tierLink: true,
-  visual: { fill: '#241c10', alpha: 0.95, edge: { color: '#5c4830', width: 4 } },
+  visual: { fill: '#241c10', alpha: 0.95, blot: true, edge: { color: '#5c4830', width: 4 } },
   tierVisual: { fill: '#2a2212', edge: '#7a6444' } });
 
 // TOR GALLERY: a hollow tor's bored tunnel (the massif-bore lane,

@@ -935,7 +935,11 @@ export class GroundRenderer {
             // Static visuals bake; ANIMATED ones stay live (renderer overlay).
             ctx.globalAlpha = vis.alpha ?? 1;
             ctx.fillStyle = vis.fill;
-            ctx.fillRect(x, y, cell + 0.6, cell + 0.6);
+            // THE BLOT BAKE (RegionVisualSpec.blot): boundary cells trade the
+            // ruler-straight rim for seeded blobs + stain speckles, so the
+            // patch sinks into the land instead of reading as a stamped plate.
+            if (vis.blot) this.bakeBlot(ctx, x, y, cell, ox, oy, gx, gy, idAt, vis, id);
+            else ctx.fillRect(x, y, cell + 0.6, cell + 0.6);
             ctx.globalAlpha = 1;
             // TEXTURE FLAGS ON VISUAL ROWS: masonry / foliage / eyes are
             // declared on RegionVisualSpec, but the bakes below only ran on
@@ -1097,6 +1101,70 @@ export class GroundRenderer {
         if (dropAt(gx + 1, gy)) ctx.fillRect(x + cell, y, 1.4, cell + 0.6);
         if (dropAt(gx - 1, gy)) ctx.fillRect(x - 1.4, y, 1.4, cell + 0.6);
       }
+    }
+  }
+
+  /** THE BLOT BAKE (RegionVisualSpec.blot): one cell of a walkable visual
+   *  row whose patch should read SUNK INTO the land — the under-tier well
+   *  mouths. Sides facing the row's own kind fill flush (the interior stays
+   *  solid); sides facing other ground pull the fill back a rag's width and
+   *  re-cover the line with seeded blobs that straddle it — sometimes poking
+   *  past the true cell edge, sometimes letting the land peek through — plus
+   *  a few low-alpha stain speckles thrown just beyond the rim (dressing,
+   *  never floor). World-coord hashed: chunk-seam stable, deterministic,
+   *  rng-free. The caller has already set fillStyle + globalAlpha. */
+  private bakeBlot(ctx: CanvasRenderingContext2D, x: number, y: number,
+    cell: number, ox: number, oy: number, gxi: number, gyi: number,
+    idAt: (gx: number, gy: number) => string, vis: RegionVisualSpec, id: string): void {
+    const same = (nx: number, ny: number): boolean => idAt(nx, ny) === id;
+    const bN = !same(gxi, gyi - 1), bS = !same(gxi, gyi + 1);
+    const bW = !same(gxi - 1, gyi), bE = !same(gxi + 1, gyi);
+    const rag = cell * 0.18;
+    // The solid core, pulled back only on boundary sides.
+    const ix = x + (bW ? rag : 0), iy = y + (bN ? rag : 0);
+    ctx.fillRect(ix, iy,
+      cell + 0.6 - (bW ? rag : 0) - (bE ? rag : 0),
+      cell + 0.6 - (bN ? rag : 0) - (bS ? rag : 0));
+    if (!bN && !bS && !bW && !bE) return;
+    const a = vis.alpha ?? 1;
+    const wx = ox + x, wy = oy + y; // world-coord hash keys — seam-stable
+    // Each boundary side: blobs straddle the pulled-back line, speckles
+    // scatter just past the true edge. Axis form: for N/S the blobs walk X
+    // at a hashed Y around the line (and mirrored for W/E).
+    const sides: [number, number][] = [];
+    if (bN) sides.push([0, -1]);
+    if (bS) sides.push([0, 1]);
+    if (bW) sides.push([-1, 0]);
+    if (bE) sides.push([1, 0]);
+    for (const [sdx, sdy] of sides) {
+      const horiz = sdy !== 0; // N/S sides run horizontally
+      // The line the core pulled back to, in local px along the cross axis.
+      const line = sdy < 0 ? y + rag : sdy > 0 ? y + cell + 0.6 - rag
+        : sdx < 0 ? x + rag : x + cell + 0.6 - rag;
+      const edge = sdy < 0 ? y : sdy > 0 ? y + cell + 0.6
+        : sdx < 0 ? x : x + cell + 0.6;
+      const sk = sdx * 3 + sdy * 7; // side key folds into every hash
+      for (let i = 0; i < 5; i++) {
+        const t = ((i + 0.5) / 5 + (hash01(wx + i * 13, wy + sk, this.seed) - 0.5) * 0.15) * cell;
+        const across = line + (edge - line) * (hash01(wx + i * 29, wy + sk + 1, this.seed) * 1.3 - 0.15);
+        const r = cell * (0.11 + hash01(wx + i * 43, wy + sk + 2, this.seed) * 0.1);
+        ctx.fillStyle = shade(vis.fill, (hash01(wx + i * 61, wy + sk + 3, this.seed) - 0.5) * 0.16);
+        ctx.beginPath();
+        ctx.arc(horiz ? x + t : across, horiz ? across : y + t, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = a * 0.42;
+      for (let i = 0; i < 3; i++) {
+        const t = ((i + 0.5) / 3 + (hash01(wx + i * 17, wy + sk + 4, this.seed) - 0.5) * 0.3) * cell;
+        const out = edge + (sdx + sdy) * cell * (0.05 + hash01(wx + i * 23, wy + sk + 5, this.seed) * 0.18);
+        const r = cell * (0.045 + hash01(wx + i * 31, wy + sk + 6, this.seed) * 0.06);
+        ctx.fillStyle = shade(vis.fill, (hash01(wx + i * 37, wy + sk + 7, this.seed) - 0.5) * 0.1);
+        ctx.beginPath();
+        ctx.arc(horiz ? x + t : out, horiz ? out : y + t, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = a;
+      ctx.fillStyle = vis.fill;
     }
   }
 

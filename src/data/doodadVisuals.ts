@@ -1293,7 +1293,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   sewer_grate: { painter: 'sewerGrate', order: 22, bakeWhole: 'static' },
   // The culvert's stair prop: treads descend ALONG rot — the tunnel's first
   // bearing — so the street reads where the drain runs (the tier fabric).
-  culvert_stair: { painter: 'culvertStair', order: 23, bakeWhole: 'static' },
+  // bakeScope carries the mouth's stain-and-moss skirt past the disc.
+  culvert_stair: { painter: 'culvertStair', order: 23, bakeWhole: 'static', bakeScope: 2.8 },
   // The smugglers' stash (drains-only loot — the potCluster bundle re-tinted).
   smuggler_cache: {
     painter: 'potCluster', order: 52, shadow: 0.35,
@@ -3243,10 +3244,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // glow, no label: you walk down in place, nothing mints. Same caveMouth
   // painter, one data entry (the doodadVisuals doctrine).
   taproot_throat: {
-    painter: 'caveMouth', order: 23, bakeWhole: 'static',
+    painter: 'caveMouth', order: 23, bakeWhole: 'static', bakeScope: 3.2,
     params: {
       color: '#241a0e', edge: '#54432a', material: 'wood',
       throat: '#0c0804', vines: { color: '#4a3a24' },
+      // THE SEATED APRON: mulch chips + rootlets creep from the lip, so the
+      // bore beds into the lea's turned earth instead of floating on it.
+      apron: { scale: 2.0, flecks: '#4a3a24' },
     },
   },
   // === THE CATACOMBS DOORS (the rooted web's second country, batch 24 —
@@ -3279,10 +3283,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // prop, not a door — the culvert stair's role in kerbstone. Darker, no
   // glow, no label: you walk down in place, nothing mints.
   crypt_stair: {
-    painter: 'caveMouth', order: 23, bakeWhole: 'static',
+    painter: 'caveMouth', order: 23, bakeWhole: 'static', bakeScope: 3.2,
     params: {
       color: '#1d1812', edge: '#54492f', material: 'stone',
       throat: '#0a0806',
+      // THE SEATED APRON: kerb chips scatter off the descent's lip (the
+      // taproot_throat's seat, in kerbstone).
+      apron: { scale: 2.0, flecks: '#54492f' },
     },
   },
   // === THE MOONLIT MERE (the meadow's grotto lane, batch 35 — kit in
@@ -3292,10 +3299,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // stair's role at the lea): mossy kerb, a faint water-pale breath so the
   // ruling's "occasionally" reads as a FIND, not a hazard.
   mere_stair: {
-    painter: 'caveMouth', order: 23, bakeWhole: 'static',
+    painter: 'caveMouth', order: 23, bakeWhole: 'static', bakeScope: 3.2,
     params: {
       color: '#16241e', edge: '#4a7a66', material: 'stone',
       throat: '#060c0a',
+      // THE SEATED APRON: mossy chips off the kerb (the crypt_stair's seat,
+      // gone green at the waterline).
+      apron: { scale: 2.0, flecks: '#2e5a4a' },
     },
   },
   // THE COURT STONE — the sovereign's monolith at the waterline: an INERT
