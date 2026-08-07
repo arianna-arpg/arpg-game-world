@@ -46,6 +46,8 @@
         if (!ring.length) { window.__bootTrapTimer = setTimeout(fallback, 4000); return; }
         var host = document.body || document.documentElement;
         var box = document.createElement('div');
+        // z mirrors ui/zorder.ts Z_LADDER.error — this pre-module script
+        // cannot import, so the two literals are kept in sync by hand.
         box.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#0a0a0e;'
           + 'color:#d8d4c8;font:14px/1.5 Verdana,sans-serif;padding:40px;overflow:auto;';
         var text = '';
@@ -93,6 +95,9 @@
     img, svg, canvas { -webkit-user-drag: none; }
     #game { display: block; width: 100vw; height: 100vh; }
 
+    /* z-index arrives from THE UI STACK LAW's injected sheet (ui/zorder.ts):
+       every activatable panel sits on the `panel` rung, above every canvas
+       surface — never write a z literal here. */
     .panel {
       position: absolute;
       background: var(--panel-bg);
@@ -232,9 +237,10 @@
     }
     .graft-land:hover { background: #3a2f56; }
 
-    /* Choice-node popup (data/passiveChoices.ts deals, panels.openChoicePopup) */
+    /* Choice-node popup (data/passiveChoices.ts deals, panels.openChoicePopup)
+       — z-index from the UI stack law's `popup` rung (ui/zorder.ts). */
     .choice-popup {
-      position: fixed; z-index: 60; width: 300px; max-height: calc(62vh / var(--ui-scale)); overflow-y: auto;
+      position: fixed; width: 300px; max-height: calc(62vh / var(--ui-scale)); overflow-y: auto;
       background: #17151f; border: 1px solid #6a54a0; border-radius: 6px;
       padding: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.6);
       font-size: 12px; color: #d8d4c8;
@@ -355,8 +361,9 @@
     /* THE DRAG FABRIC (ui/dnd.ts) — ghost + target affordances, shared by
        every consumer panel; the fabric toggles these, panels only declare
        data-drag / data-drop. */
+    /* z-index from the UI stack law's `drag` rung (ui/zorder.ts). */
     .dnd-ghost {
-      position: fixed; left: 0; top: 0; z-index: 100000; pointer-events: none;
+      position: fixed; left: 0; top: 0; pointer-events: none;
       display: flex; align-items: center; gap: 6px; padding: 3px 9px;
       background: rgba(24,20,34,0.94); border: 1px solid var(--gold);
       border-radius: 5px; font-size: 11px; color: #e8e4d8;
@@ -480,9 +487,10 @@
     #start-menu .esc-btns button:hover:not(:disabled) { background: #3a3a55; }
     #start-menu .esc-btns button:disabled { opacity: 0.4; cursor: default; border-color: var(--panel-border); color: var(--text-dim); }
 
-    /* Floating tooltip (outside .panel so panel display rules don't hide it) */
+    /* Floating tooltip (outside .panel so panel display rules don't hide it)
+       — z-index from the UI stack law's `tooltip` rung (ui/zorder.ts). */
     .tooltip {
-      position: fixed; z-index: 10000; max-width: 280px; pointer-events: none;
+      position: fixed; max-width: 280px; pointer-events: none;
       background: rgba(12,12,18,0.97); border: 1px solid var(--gold); border-radius: 4px;
       padding: 9px 11px; font-size: 11px; line-height: 1.4; box-shadow: 0 4px 16px rgba(0,0,0,0.8);
     }

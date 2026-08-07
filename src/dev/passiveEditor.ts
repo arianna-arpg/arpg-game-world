@@ -27,6 +27,7 @@
 // ---------------------------------------------------------------------------
 
 import type { UI } from '../ui/panels';
+import { Z_LADDER } from '../ui/zorder';
 import {
   PASSIVE_ADJACENCY, PASSIVE_NODES, type NodeKind, type PassiveNode,
 } from '../data/passives';
@@ -67,7 +68,7 @@ export function mountPassiveEditor(ui: UI): void {
   // --- side panel ----------------------------------------------------------
   const panel = document.createElement('div');
   css(panel, {
-    position: 'fixed', right: '8px', top: '60px', zIndex: '99998', width: '300px',
+    position: 'fixed', right: '8px', top: '60px', zIndex: String(Z_LADDER.devTool), width: '300px',
     maxHeight: '82vh', overflowY: 'auto', display: 'none', flexDirection: 'column', gap: '6px',
     background: 'rgba(18,16,26,0.97)', color: '#d8d4e0', border: '1px solid #5a4a6a',
     borderRadius: '6px', padding: '9px', font: '12px Verdana', boxShadow: '0 6px 24px rgba(0,0,0,0.6)',

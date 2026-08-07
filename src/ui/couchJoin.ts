@@ -11,6 +11,8 @@
 // whose hand confirms.
 // ---------------------------------------------------------------------------
 
+import { Z_LADDER } from './zorder';
+
 export interface CouchJoinChoice {
   key: string;
   title: string;
@@ -39,7 +41,7 @@ export class CouchJoinOverlay {
   constructor() {
     this.root = document.createElement('div');
     this.root.style.cssText =
-      'position:fixed;inset:0;display:none;z-index:9000;background:rgba(6,6,10,0.82);'
+      `position:fixed;inset:0;display:none;z-index:${Z_LADDER.cover};background:rgba(6,6,10,0.82);`
       + 'align-items:center;justify-content:center;font-family:Verdana,sans-serif;';
     document.body.appendChild(this.root);
   }

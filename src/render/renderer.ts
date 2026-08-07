@@ -54,6 +54,7 @@ const RENDER_CULL_PAD = 150;
 import { roofStyle } from '../data/structures';
 import { DEFAULT_KEYBINDS, keyDisplay, resolveBindTokens, type ActionId, type Settings } from '../meta/settings';
 import { UI_SCALE_CFG } from '../ui/uiScale';
+import { Z_LADDER } from '../ui/zorder';
 import { padDisplay } from '../core/gamepad';
 import { collectActiveFx, collectFalterK, type ActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
@@ -208,7 +209,13 @@ export class Renderer {
    *  THE SCALED-MODE TRADE, stated honestly: on the overlay, words ride
    *  ABOVE the light layer and weather washes (they cannot both be sharp
    *  and under a wash painted on another surface) — full-screen fades that
-   *  must cover the HUD draw on the overlay too, so covers still cover. */
+   *  must cover the HUD draw on the overlay too, so covers still cover.
+   *  Those fades cover every CANVAS surface, and only those: the overlay
+   *  sits on THE UI STACK LAW's crest rung (ui/zorder.ts), UNDER every
+   *  activatable DOM panel — at scale 1 the same words and fades draw on
+   *  the unpositioned world canvas below all DOM, and the crest keeps
+   *  that truth at every notch (a death screen is never overdrawn by the
+   *  floaters that killed you). */
   private overlay: HTMLCanvasElement;
   private octx: CanvasRenderingContext2D;
 
@@ -221,7 +228,7 @@ export class Renderer {
     this.octx = this.overlay.getContext('2d')!;
     const os = this.overlay.style;
     os.position = 'fixed'; os.left = '0'; os.top = '0';
-    os.pointerEvents = 'none'; os.zIndex = '5'; os.display = 'none';
+    os.pointerEvents = 'none'; os.zIndex = String(Z_LADDER.crest); os.display = 'none';
     (canvas.parentElement ?? document.body).insertBefore(this.overlay, canvas.nextSibling);
     this.resize();
     window.addEventListener('resize', () => this.resize());

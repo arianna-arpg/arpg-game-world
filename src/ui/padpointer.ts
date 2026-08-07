@@ -35,6 +35,7 @@
 
 import { PAD_CFG, PadState, PadTuning, synthEscape } from '../core/gamepad';
 import { hideTooltip } from './tooltip';
+import { Z_LADDER } from './zorder';
 
 export class PadPointer {
   /** The pointer owns the pad this frame (menus up + pad recently active). */
@@ -61,7 +62,7 @@ export class PadPointer {
     // Self-contained styling — no stylesheet dependency, renders over any panel.
     this.ring.style.cssText =
       'position:fixed;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;'
-      + 'border:2px solid #c8a84b;border-radius:50%;pointer-events:none;z-index:99999;'
+      + `border:2px solid #c8a84b;border-radius:50%;pointer-events:none;z-index:${Z_LADDER.padPointer};`
       + 'box-shadow:0 0 8px rgba(200,168,75,0.8),inset 0 0 4px rgba(200,168,75,0.5);'
       + 'display:none;';
     const dot = document.createElement('div');

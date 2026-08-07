@@ -30,6 +30,7 @@
 
 import type { World } from '../engine/world';
 import type { UI } from '../ui/panels';
+import { Z_LADDER } from '../ui/zorder';
 import type { Doodad, DoodadRule } from '../engine/levelgen';
 import { vec } from '../core/math';
 import {
@@ -52,7 +53,7 @@ import {
 
 /** Glyph Forge dials. */
 export const GLYPH_FORGE_CFG = {
-  z: 100000,
+  z: Z_LADDER.forge, // the UI stack law's forge rung; +1 = inner picker
   canvasCss: 460,
   oversample: 2,
   unitFrac: 0.5,   // 1 body radius = this fraction of the half-canvas at zoom 1

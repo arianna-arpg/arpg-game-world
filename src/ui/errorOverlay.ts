@@ -21,6 +21,7 @@
 // ---------------------------------------------------------------------------
 
 import { GAME_TITLE } from '../config';
+import { Z_LADDER } from './zorder'; // dependency-free constants — safe for a crashed frame
 
 /** One captured error — the shape both traps push into window.__bootErrors. */
 export interface CrashEntry {
@@ -91,7 +92,7 @@ export function showErrorOverlay(fatal: CrashEntry, ring: readonly CrashEntry[])
 
   const wrap = document.createElement('div');
   wrap.id = 'crash-overlay';
-  wrap.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(5,5,8,0.88);'
+  wrap.style.cssText = `position:fixed;inset:0;z-index:${Z_LADDER.error};background:rgba(5,5,8,0.88);`
     + 'display:flex;align-items:center;justify-content:center;';
 
   const panel = document.createElement('div');

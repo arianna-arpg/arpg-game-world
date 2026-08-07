@@ -15,6 +15,7 @@
 import { webDisturbance } from '../../engine/worldgen';
 import type { DevTabDef } from '../panel';
 import { DEV_UI, css, btn, section } from '../ui';
+import { Z_LADDER } from '../../ui/zorder';
 
 interface Rings { gap: number[]; sim: number[]; ren: number[] }
 const rings = (): Rings | null => {
@@ -53,7 +54,7 @@ function setChip(on: boolean): void {
   if (chip) return;
   chip = document.createElement('div');
   css(chip, {
-    position: 'fixed', right: '8px', top: '8px', zIndex: '99998',
+    position: 'fixed', right: '8px', top: '8px', zIndex: String(Z_LADDER.devTool),
     background: 'rgba(16,12,24,0.78)', border: `1px solid ${DEV_UI.border}`,
     borderRadius: '5px', padding: '3px 8px', font: '12px/1.5 Consolas, monospace',
     color: DEV_UI.good, pointerEvents: 'none', whiteSpace: 'pre',

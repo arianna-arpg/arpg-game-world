@@ -17,6 +17,7 @@
 
 import type { World } from '../engine/world';
 import { DEV_UI, css } from './ui';
+import { Z_LADDER } from '../ui/zorder';
 import { gemsTab } from './tabs/gems';
 import { itemsTab } from './tabs/items';
 import { eventsTab } from './tabs/events';
@@ -62,14 +63,14 @@ export function mountDevPanel(getWorld: () => World): void {
   const openBtn = document.createElement('button');
   openBtn.textContent = '🔧 Dev';
   css(openBtn, {
-    position: 'fixed', left: '8px', bottom: '8px', zIndex: '99999',
+    position: 'fixed', left: '8px', bottom: '8px', zIndex: String(Z_LADDER.devBar),
     background: '#2a2438', color: DEV_UI.accent, border: `1px solid ${DEV_UI.border}`,
     borderRadius: '5px', padding: '5px 10px', font: DEV_UI.font, cursor: 'pointer',
   });
 
   const panel = document.createElement('div');
   css(panel, {
-    position: 'fixed', left: '8px', bottom: '44px', zIndex: '99999',
+    position: 'fixed', left: '8px', bottom: '44px', zIndex: String(Z_LADDER.devBar),
     width: '460px', maxHeight: '70vh', display: 'none', flexDirection: 'column',
     background: DEV_UI.bg, color: DEV_UI.text, border: `1px solid ${DEV_UI.border}`,
     borderRadius: '6px', padding: '8px', font: DEV_UI.font, boxShadow: '0 6px 24px rgba(0,0,0,0.6)',

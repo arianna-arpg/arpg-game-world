@@ -33,6 +33,7 @@
 
 import type { World } from '../engine/world';
 import type { UI } from '../ui/panels';
+import { Z_LADDER } from '../ui/zorder';
 import { MONSTERS, type MonsterDef } from '../data/monsters';
 import { LOOKS } from '../data/looks';
 import {
@@ -63,7 +64,7 @@ import {
 
 /** Forge dials — one knob block, no magic literals in the body. */
 export const FORGE_CFG = {
-  z: 100000,            // above the dev panel (99999)
+  z: Z_LADDER.forge,    // the UI stack law's forge rung (above the dev bar); +1 = inner picker
   canvasCss: 460,       // preview square (CSS px)
   oversample: 2,        // backing-store multiplier
   fit: 0.8,             // body radius as a fraction of the half-canvas at zoom 1

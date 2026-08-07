@@ -17,6 +17,7 @@ import { applyCursor } from './core/cursor';
 import { assistAim, AIM_ASSIST } from './engine/aimassist';
 import { PadPointer } from './ui/padpointer';
 import { applyUiScale, installUiScaleStyles } from './ui/uiScale';
+import { installUiStack } from './ui/zorder';
 import { rollSeed } from './core/rng';
 import { validateContent } from './data/validate';
 import './data/clusters'; // side-effect: registers the data-driven cluster stamps
@@ -142,6 +143,9 @@ const settings: Settings = loadSettings();
 // player's size, not at 100% until they visit Options.
 installUiScaleStyles();
 applyUiScale(settings.uiScale);
+// THE UI STACK LAW (ui/zorder.ts): seat every selector-delivered surface on
+// its rung before anything shows — activatable panels above every canvas.
+installUiStack();
 
 const renderer = new Renderer(canvas, () => settings);
 // The thematic cursor identity (style + tint) — applied at boot; the options

@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { UI_SCALE_CFG } from './uiScale';
+import { Z_LADDER } from './zorder';
 
 export interface LobbyClass { id: string; name: string; color: string; description: string; }
 
@@ -29,7 +30,7 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
   const overlay = document.createElement('div');
   overlay.className = UI_SCALE_CFG.markerClass; // dynamically-built root — opts into the UI-scale dial
   css(overlay, {
-    position: 'fixed', inset: '0', zIndex: '9000', display: 'flex',
+    position: 'fixed', inset: '0', zIndex: String(Z_LADDER.cover), display: 'flex',
     alignItems: 'center', justifyContent: 'center', background: 'rgba(6,5,10,0.86)', font: '13px Verdana',
   });
   const panel = document.createElement('div');

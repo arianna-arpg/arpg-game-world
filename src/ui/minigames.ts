@@ -22,6 +22,7 @@
 
 import { CRAFT_CFG } from '../engine/crafting';
 import { UI_SCALE_CFG } from './uiScale';
+import { Z_LADDER } from './zorder';
 
 export interface MinigameResult { score: number; }
 
@@ -30,7 +31,7 @@ export interface MinigameResult { score: number; }
 function overlay(title: string, hint: string): { box: HTMLElement; close: () => void } {
   const root = document.createElement('div');
   root.className = UI_SCALE_CFG.markerClass; // dynamically-built root — opts into the UI-scale dial
-  root.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(6,4,10,0.72);display:flex;align-items:center;justify-content:center';
+  root.style.cssText = `position:fixed;inset:0;z-index:${Z_LADDER.minigame};background:rgba(6,4,10,0.72);display:flex;align-items:center;justify-content:center`;
   for (const ev of ['mousedown', 'mouseup', 'click', 'contextmenu', 'wheel']) {
     root.addEventListener(ev, e => e.stopPropagation());
   }
