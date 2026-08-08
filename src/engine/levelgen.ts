@@ -24,7 +24,7 @@ import type { TrackSpec, TrackPayload } from './tracks';
 import type { TrapworkSpec } from './trapworks';
 import { rockSurfaceOf, type RockFormSpec } from './rockForms';
 import type { AmbushSpec } from './actor';
-import type { Rng } from '../core/rng';
+import { Rng } from '../core/rng';
 import type { ExitRoadSpec, PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, WhereSpec, ZoneDef } from '../data/zones';
 import { STRUCTURES, legendCell, type CellSpec, type StructureDef } from '../data/structures';
 import { hollowShapeOf } from '../data/hollows';
@@ -4555,6 +4555,14 @@ export function generateLayout(
     if (UNDER_TIER_PASS) UNDER_TIER_PASS(ctx, def);
     else console.warn(`[tiers] '${def.id}' authors layoutParams.underTier but no under-tier pass is registered — the dial is dead`);
   }
+  // THE WAYSIDE DRESS (layoutParams.wayside): kerb flora and waymarkers
+  // seated BESIDE every live way laid above — the coherence fabric's beside
+  // lane. After the chutes/under-tier so its gates judge the final ground
+  // (a chute groove refuses dress like any live way), before the sweeps so
+  // the invariants audit the dress like any scatter. Absent = zero work;
+  // present = a DEDICATED rng (the meld idiom), so the pass only APPENDS —
+  // no existing fixture or seeded pick ever shifts.
+  layWaysideDress(ctx, def);
   // THE CLEARWAY CONTRACT, GLOBALLY: traveled ways collect their right-of-way
   // after every placement system has spoken — ways yield to molten/void
   // ground, deck the soft wet ground they cross (ford the true bodies), and
@@ -6707,6 +6715,203 @@ export function layTraveledWay(ctx: GenCtx, pts: Vec2[], opts?: {
     }
   }
   return laid;
+}
+
+/** THE WAYSIDE DIALS — the beside-lane's modular defaults (per-spec overrides
+ *  on WaysideSpec; never inline literals). step/chance pace the verge scatter,
+ *  offset is the beside band beyond a way disc's rim, chainBreak is the gap
+ *  that ends one way's polyline, minGap keeps the dress from stacking,
+ *  maxPieces is the restraint bar per zone, margin/portalClear keep the verge
+ *  off the arena rim and the portal aprons. `kinds` is the way vocabulary the
+ *  dress serves by default: true ROADS only — track grooves are hazard lanes
+ *  (the rake telegraph must stay readable) and processional ways carry their
+ *  own authored dress, so both stay out unless a spec names them. */
+export const WAYSIDE_CFG = {
+  kinds: ['road', 'paved_way'] as DoodadKind[],
+  step: 110,
+  chance: 0.55,
+  offset: [10, 34] as [number, number],
+  chainBreak: 90,
+  minGap: 26,
+  maxPieces: 90,
+  margin: 42,
+  portalClear: 150,
+};
+
+/** One wayside dress row: a verge-pool entry (weighted scatter rolled every
+ *  WaysideSpec.step of way), or — with `every` — a cadenced MARKER lane (one
+ *  piece per ~`every` px of way, alternating sides: mile-cairns, signposts,
+ *  the khan's banners). */
+export interface WaysideRow {
+  kind: DoodadKind;
+  radius: [number, number];
+  /** Verge-pool share (default 1). Ignored on `every` rows. */
+  weight?: number;
+  /** MARKER cadence: one piece per ~this many px of chained way. */
+  every?: number;
+  /** Hard per-zone cap for this row. */
+  max?: number;
+}
+
+/** THE WAYSIDE SPEC (layoutParams.wayside) — the beside lane the coherence
+ *  fabric lacked: kerb flora and waymarkers seated BESIDE the traveled ways,
+ *  never on them. The pass walks every laid way of `kinds` at generateLayout's
+ *  tail and seats dress at a perpendicular offset, gated by the way's own
+ *  right-of-way (onClearway), walkability, portal clears, structure rects and
+ *  the arena rim — then the standing outcome sweeps audit it like any
+ *  scatter. */
+export interface WaysideSpec {
+  /** Way kinds dressed (default WAYSIDE_CFG.kinds — true roads only). */
+  kinds?: DoodadKind[];
+  /** Verge candidate cadence along the way, px (default WAYSIDE_CFG.step). */
+  step?: number;
+  /** Verge seat chance per candidate (default WAYSIDE_CFG.chance). */
+  chance?: number;
+  /** Beside band beyond the way disc's rim (default WAYSIDE_CFG.offset). */
+  offset?: [number, number];
+  /** Per-zone piece cap (default WAYSIDE_CFG.maxPieces). */
+  maxPieces?: number;
+  rows: WaysideRow[];
+}
+
+/** THE WAYSIDE DRESS PASS — dress the traveled ways' shoulders as data.
+ *
+ *  Runs at generateLayout's finished-ground tail (before the clearway/
+ *  forbidOn sweeps, so every invariant audits the dress), only when the zone
+ *  authors layoutParams.wayside — absent = return before any work, and even
+ *  when present every draw comes from a DEDICATED seeded stream (the meld
+ *  builder's idiom), so the pass can only ever APPEND dress: no existing
+ *  fixture, seeded pick or layout roll ever shifts (the batch-41 re-deal law,
+ *  honored by construction).
+ *
+ *  Geometry: laid way discs of the spec's kinds are rechained in lay order
+ *  (consecutive discs within chainBreak = one way), each chain marched by arc
+ *  length — the verge lane rolls the weighted pool every `step` px, marker
+ *  rows pace their `every` cadence on alternating sides. Seats sit at the
+ *  anchor disc's rim + offset, perpendicular to the way; wild (overgrown)
+ *  stretches seat nothing — the wood's own reclaiming flora dresses those.
+ *  Every seat passes: arena bounds (ellipse-honest), portal clears, grid
+ *  walkability where a grid exists (the dressWayLamps gate), never ON any
+ *  live way (onClearway at body radius — chute grooves stay unpluggable by
+ *  construction), never inside a plan-structure rect, never overlapping a
+ *  standing blocker, minGap from its own kin. Pieces inherit the anchor
+ *  disc's story (`tier`) so the tier fabric reads them at the way's own
+ *  height, and spin kinds roll their `rot` like any stamp. */
+export function layWaysideDress(ctx: GenCtx, def: ZoneDef): void {
+  const spec = layoutParam<WaysideSpec | undefined>(def, 'wayside', undefined);
+  if (!spec?.rows?.length || ctx.lite) return;
+  const wayKinds = new Set(spec.kinds ?? WAYSIDE_CFG.kinds);
+  // Rechain the laid ways in lay order (each emitter pushes its polyline
+  // consecutively; a gap or kind change ends the chain).
+  const chainBreak = WAYSIDE_CFG.chainBreak;
+  const chains: Doodad[][] = [];
+  let cur: Doodad[] | null = null;
+  for (const d of ctx.doodads) {
+    if (!wayKinds.has(d.kind)) continue;
+    const prev = cur?.[cur.length - 1];
+    if (!cur || !prev || prev.kind !== d.kind
+      || Math.hypot(d.pos.x - prev.pos.x, d.pos.y - prev.pos.y) > chainBreak) {
+      cur = [d];
+      chains.push(cur);
+    } else cur.push(d);
+  }
+  const usable = chains.filter(c => c.length >= 3);
+  if (!usable.length) return;
+  // THE DEDICATED STREAM (the meld builder's idiom): presence never shifts
+  // the layout rng — the pass only appends.
+  const rng = new Rng((((def.seed ?? 1) ^ 0x57a9d) >>> 0) || 1);
+  const bounds = boundsOf(ctx.arena);
+  const grid = ctx.walk instanceof GridWalkField ? ctx.walk : null;
+  const portals = [ctx.entry, ...ctx.exits];
+  const blockers = ctx.doodads.filter(d => blocksMovement(d));
+  const placed: { x: number; y: number }[] = [];
+  const rowCount = new Map<WaysideRow, number>();
+  const cap = spec.maxPieces ?? WAYSIDE_CFG.maxPieces;
+  let total = 0;
+  const bodyROf = (kind: DoodadKind, r: number): number => {
+    const rule = doodadRule(kind);
+    return rule.blocksMove ? r * (rule.bodyScale ?? 1) : Math.max(4, r * 0.4);
+  };
+  const trySeat = (row: WaysideRow, at: Vec2, perp: Vec2, side: number,
+    anchor: Doodad, r: number, off: number, rot: number): void => {
+    if (total >= cap) return;
+    if ((rowCount.get(row) ?? 0) >= (row.max ?? Infinity)) return;
+    if (anchor.wild) return; // the wood won that stretch — its flora dresses it
+    const bodyR = bodyROf(row.kind, r);
+    const p = vec(at.x + perp.x * side * (anchor.radius + bodyR + off),
+      at.y + perp.y * side * (anchor.radius + bodyR + off));
+    if (!insideBounds(p, r + WAYSIDE_CFG.margin, bounds)) return;
+    if (portals.some(pt => Math.hypot(p.x - pt.x, p.y - pt.y) < WAYSIDE_CFG.portalClear + r)) return;
+    if (grid && !grid.isWalkable(p.x, p.y)) return;
+    if (onClearway(ctx, p, bodyR)) return;
+    if (inStructureRect(ctx, { pos: p, radius: r, kind: row.kind })) return;
+    if (blockers.some(b => Math.hypot(p.x - b.pos.x, p.y - b.pos.y)
+      < bodyR + bodyRadiusOf(b) + 4)) return;
+    if (placed.some(q => Math.hypot(p.x - q.x, p.y - q.y) < WAYSIDE_CFG.minGap)) return;
+    ctx.doodads.push({
+      pos: p, radius: r, kind: row.kind,
+      ...(anchor.tier !== undefined ? { tier: anchor.tier } : {}),
+      ...(doodadRule(row.kind).spin ? { rot } : {}),
+    });
+    placed.push({ x: p.x, y: p.y });
+    rowCount.set(row, (rowCount.get(row) ?? 0) + 1);
+    total++;
+  };
+  // March one chain at `cadence`, calling `seat` per candidate with the
+  // local along-way frame (position, perpendicular, nearest disc).
+  const march = (chain: Doodad[], cadence: number, start: number,
+    seat: (at: Vec2, perp: Vec2, anchor: Doodad) => void): void => {
+    let walked = 0, next = start;
+    for (let i = 1; i < chain.length; i++) {
+      const a = chain[i - 1].pos, b = chain[i].pos;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const seg = Math.hypot(dx, dy);
+      if (seg < 1e-3) continue;
+      while (walked + seg >= next) {
+        const t = (next - walked) / seg;
+        seat(vec(a.x + dx * t, a.y + dy * t), vec(-dy / seg, dx / seg),
+          t < 0.5 ? chain[i - 1] : chain[i]);
+        next += cadence;
+      }
+      walked += seg;
+    }
+  };
+  const verge = spec.rows.filter(r => !r.every);
+  const markers = spec.rows.filter(r => r.every);
+  const vergeStep = spec.step ?? WAYSIDE_CFG.step;
+  const vergeChance = spec.chance ?? WAYSIDE_CFG.chance;
+  const offBand = spec.offset ?? WAYSIDE_CFG.offset;
+  const totalWeight = verge.reduce((a, r) => a + (r.weight ?? 1), 0);
+  for (const chain of usable) {
+    // THE VERGE LANE — the weighted pool rolled every step. Draw shape is
+    // fixed per candidate (the findSpot discipline): a refused seat never
+    // shifts the stream of later pieces.
+    if (verge.length && totalWeight > 0) {
+      march(chain, vergeStep, vergeStep * 0.5, (at, perp, anchor) => {
+        const hit = rng.chance(vergeChance);
+        let pickRoll = rng.range(0, totalWeight);
+        let row = verge[verge.length - 1];
+        for (const r of verge) { pickRoll -= r.weight ?? 1; if (pickRoll <= 0) { row = r; break; } }
+        const r = rng.range(row.radius[0], row.radius[1]);
+        const off = rng.range(offBand[0], offBand[1]);
+        const side = rng.chance(0.5) ? 1 : -1;
+        const rot = rng.range(0, Math.PI * 2);
+        if (hit) trySeat(row, at, perp, side, anchor, r, off, rot);
+      });
+    }
+    // THE MARKER LANES — cadenced waymarks pacing the way, alternating
+    // sides (the dressWayLamps rhythm, per row).
+    for (const row of markers) {
+      let side = rng.chance(0.5) ? 1 : -1;
+      march(chain, row.every!, row.every! * 0.5, (at, perp, anchor) => {
+        const r = rng.range(row.radius[0], row.radius[1]);
+        const off = rng.range(offBand[0], offBand[1]);
+        const rot = rng.range(0, Math.PI * 2);
+        trySeat(row, at, perp, side, anchor, r, off, rot);
+        side = -side;
+      });
+    }
+  }
 }
 
 /** A WORN PATH — road discs marching a jittered line clear across the zone:

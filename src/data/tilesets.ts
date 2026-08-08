@@ -777,6 +777,21 @@ export const TILESETS: Record<string, TilesetDef> = {
       // The parcel pass at its reference dials (engine/settled.ts): a few
       // true tilled plots on the open face; the variants retune below.
       cropParcels: [3, 5],
+      // THE WAYSIDE (the density census's naked-lanes wound, batch 42): the
+      // worked country's verge — hedgerow tufts and working litter along the
+      // shoulders, a signpost pacing the lane. Tileset-level so every face
+      // inherits (the fallow shires measured the barest: 51-98% of way discs
+      // naked within half a screen).
+      wayside: {
+        rows: [
+          { kind: 'grass', radius: [10, 16], weight: 3 },
+          { kind: 'flowers', radius: [9, 14], weight: 2 },
+          { kind: 'brush', radius: [10, 15], weight: 1.5 },
+          { kind: 'hay_bale', radius: [12, 16], weight: 0.7, max: 4 },
+          { kind: 'scarecrow', radius: [10, 13], weight: 0.35, max: 2 },
+          { kind: 'signpost', radius: [10, 12], every: 640, max: 5 },
+        ],
+      },
     },
     // The base face: the open shires — worked land at its widest.
     layout: [
@@ -2589,6 +2604,19 @@ export const TILESETS: Record<string, TilesetDef> = {
     layoutParams: {
       duneGap: [260, 380], duneCrestW: [26, 42], duneLee: 56,
       dunePans: [1, 2], duneCombEvery: 84, duneBow: 0.26,
+      // THE WAYSIDE (batch 42): the caravan road's leavings — what the trade
+      // dropped and the sun kept — with trail cairns pacing the crossing.
+      // The erg lays no roads of its own; the kit stands ready for the ways
+      // events annotate (a procession's march, a kept road).
+      wayside: {
+        chance: 0.45,
+        rows: [
+          { kind: 'bone_pile', radius: [11, 16], weight: 1.5 },
+          { kind: 'rock', radius: [9, 14], weight: 1 },
+          { kind: 'cactus', radius: [10, 14], weight: 0.8 },
+          { kind: 'cairn', radius: [9, 12], every: 720, max: 6 },
+        ],
+      },
     },
     variants: [
       // Broad, slow swells — the ground itself stretches longer.
@@ -8901,6 +8929,20 @@ export const TILESETS: Record<string, TilesetDef> = {
       // the big bones carry a gallery straight through the rock — the cut
       // stairs at the feet are the doors.
       massifBores: { chance: 0.4, max: 2 },
+      // THE WAYSIDE (batch 42): the old drove's shoulders — bracken and
+      // stone, drove cairns, a dropped bale where the herds rested. Serves
+      // whatever way crosses (event roads; the chute grooves stay out by
+      // the way-vocabulary law).
+      wayside: {
+        chance: 0.5,
+        rows: [
+          { kind: 'brush', radius: [10, 15], weight: 2 },
+          { kind: 'rock', radius: [9, 14], weight: 1.5 },
+          { kind: 'scree', radius: [12, 18], weight: 1 },
+          { kind: 'hay_bale', radius: [12, 15], weight: 0.3, max: 2 },
+          { kind: 'cairn', radius: [9, 12], every: 600, max: 6 },
+        ],
+      },
     },
     compositions: [
       { composition: 'drover_waystation', chance: 0.24 },
@@ -9031,6 +9073,18 @@ export const TILESETS: Record<string, TilesetDef> = {
       // between interior shelves (the karst recipe's conditional-crossing
       // lace; theme.spans below carries the schedule and the fall's law).
       karstSpanKinds: ['span_sun'], karstSpanLinks: [1, 2],
+      // THE WAYSIDE (batch 42): the high crossing's sparse stone verge —
+      // scree and small stones off the shoulder, cairns pacing the traverse
+      // (the census's worst event-road read: 94-100% of way discs naked).
+      // Chute grooves stay undressed by the way-vocabulary law.
+      wayside: {
+        chance: 0.4,
+        rows: [
+          { kind: 'scree', radius: [12, 20], weight: 2 },
+          { kind: 'rock', radius: [9, 14], weight: 1.5 },
+          { kind: 'cairn', radius: [9, 12], every: 560, max: 7 },
+        ],
+      },
     },
     compositions: [
       { composition: 'drover_waystation', chance: 0.18 },
@@ -9342,6 +9396,18 @@ export const TILESETS: Record<string, TilesetDef> = {
       boulderChutes: { count: [1, 3], rest: 7, bounces: [0, 2] },
       // The tribes' smuggler roads: galleries bored through the fell's bones.
       massifBores: { chance: 0.45, max: 2 },
+      // THE WAYSIDE (batch 42): the khan's high way — a stone verge under
+      // the wind, cairns close-paced (the fell's weather asks for them),
+      // and the tribes' banners rare along the crossing.
+      wayside: {
+        chance: 0.45,
+        rows: [
+          { kind: 'rock', radius: [9, 14], weight: 2 },
+          { kind: 'scree', radius: [12, 18], weight: 1.2 },
+          { kind: 'cairn', radius: [9, 12], every: 520, max: 7 },
+          { kind: 'banner_post', radius: [9, 11], every: 1400, max: 2 },
+        ],
+      },
     },
     compositions: [
       { composition: 'war_camp', chance: 0.2 },
