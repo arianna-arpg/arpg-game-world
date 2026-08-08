@@ -320,6 +320,10 @@ export interface ItemInstance {
   /** Bag grid position while carried (absent when equipped / on the ground). */
   x?: number;
   y?: number;
+  /** THE KEEPER'S MARK (salvageLock intent): a locked piece refuses the
+   *  breaker's hammer on BOTH lanes and every salvageBulk sweep passes it
+   *  by. Rides the instance verbatim through saves and the co-op wire. */
+  locked?: boolean;
 }
 
 // ---------------------------------------------------------------- config ---

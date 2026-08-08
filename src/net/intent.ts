@@ -100,6 +100,15 @@ export type MetaAction =
   | { t: 'salvageItem'; uid: number; lane?: 'break' | 'sell' } // bag gear → essence (+ lore on 'break')
   | { t: 'salvageSkill'; index: number; lane?: 'break' | 'sell' }  // skillInv gem (granted: nothing)
   | { t: 'salvageSupport'; index: number; lane?: 'break' | 'sell' } // loose support
+  // THE SWEEP (salvageBulk): break/sell one whole CATEGORY in a blow,
+  // optionally narrowed to a rarity ('legendary' is the gem-side orange).
+  // Locked things and granted sparks are skipped host-side.
+  | { t: 'salvageBulk'; cat: 'item' | 'skill' | 'support';
+      rarity?: 'common' | 'magic' | 'rare' | 'unique' | 'legendary'; lane?: 'break' | 'sell' }
+  // THE KEEPER'S MARK (salvageLock): flip the salvage lock on a carried
+  // thing — gear by uid (bag OR doll — the mark rides the piece), carried
+  // gems by index. Pure bookkeeping; no station gate.
+  | { t: 'salvageLock'; kind: 'item' | 'skill' | 'support'; id: number; on: boolean }
   | { t: 'craftAffix'; uid: number; affixId: string; score?: number } // essence + SMITHING score → a studied affix
   | { t: 'rerollAffix'; uid: number; affix: number; score: number }   // Oracle COMMUNION: reroll + seal one line
   // SOCKETS & VESTIGES (deterministic craft):

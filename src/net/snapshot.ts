@@ -207,8 +207,11 @@ export interface SeatW {
 // JSON-safe replicas — NEVER ship def bodies (a SkillDef is huge); ship def IDS
 // + level/sockets/rarity and rehydrate via the SKILLS/SUPPORTS catalogs on apply.
 // Sent only when a seat's meta CHANGES (dirty-flagged), so it's nearly free.
-export interface SupportInstW { id: string; lvl: number; }
-export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; eLv?: number; }
+/** `lk` = THE KEEPER'S MARK (salvageLock) — 1 when the gem is locked, absent
+ *  otherwise (the derived-bit idiom; the client renders 🔒 and computes its
+ *  toggle asks from it — the host stays the authority). */
+export interface SupportInstW { id: string; lvl: number; lk?: 1; }
+export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; eLv?: number; lk?: 1; }
 /** The client OWN-seat build: enough to render the char-sheet / skill-book / tree
  *  and re-derive the stat sheet (recalcSeat) on the client. */
 export interface SeatMetaW {
@@ -239,12 +242,14 @@ export interface SeatMetaW {
   vest?: Record<string, number>;
 }
 
-const supW = (s: SupportInstance): SupportInstW => ({ id: s.def.id, lvl: s.level });
+const supW = (s: SupportInstance): SupportInstW =>
+  ({ id: s.def.id, lvl: s.level, lk: s.locked ? 1 : undefined });
 const skillInstW = (s: SkillInstance): SkillInstW => ({
   id: s.def.id, lvl: s.level, rarity: s.rarity,
   sockets: s.sockets.map(x => (x ? supW(x) : null)),
   mark: s.state?.markPos ?? undefined,
   g: s.granted || undefined, eLv: s.essenceLevels || undefined,
+  lk: s.locked ? 1 : undefined,
 });
 
 /** Host: serialize one seat's build/progression for its owning client.
@@ -282,7 +287,7 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
 
 const rehydrateSupport = (w: SupportInstW): SupportInstance | null => {
   const def = SUPPORTS[w.id];
-  return def ? { def, level: w.lvl } : null;
+  return def ? { def, level: w.lvl, ...(w.lk ? { locked: true } : {}) } : null;
 };
 const rehydrateSkill = (w: SkillInstW): SkillInstance | null => {
   const def = SKILLS[w.id];
@@ -293,6 +298,7 @@ const rehydrateSkill = (w: SkillInstW): SkillInstance | null => {
   if (w.mark) inst.state = { markPos: w.mark };
   if (w.g) inst.granted = true;
   if (w.eLv) inst.essenceLevels = w.eLv;
+  if (w.lk) inst.locked = true; // the keeper's mark (salvageLock)
   return inst;
 };
 

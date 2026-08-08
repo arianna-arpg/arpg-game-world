@@ -38,7 +38,7 @@ import {
   BESTIARY_CFG, bestiaryKills, bestiaryList, bestiaryReveals,
   bestiaryThreshold, bestiaryTotals, spectreAttunable,
 } from '../data/bestiary';
-import { dndCancel, registerDragSource, registerDropTarget } from './dnd';
+import { dndCancel, dndCarried, registerDragSource, registerDropTarget } from './dnd';
 import { applyUiScale, UI_SCALE_CFG } from './uiScale';
 import { RENDER_SCALE_CFG } from '../render/renderScale';
 import { CAMERA_MODES, cameraModeOf } from '../render/camera';
@@ -225,6 +225,14 @@ const CATEGORY_GLYPHS: Record<string, string> = {
  *  an SVG data-URI, crosshair fallback where custom cursors are refused. */
 const SCRAP_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><text x="2" y="20" font-size="19">⚙</text></svg>',
+)}") 13 13, crosshair`;
+
+/** The BREAKER'S-HAMMER cursor (the bench's BREAK mode, benchBreakMode): the
+ *  scrap wheel's bench sibling — while armed it rides the salvage panel AND
+ *  the inventory, where clicks break things for essence. Same sovereign
+ *  data-URI idiom as SCRAP_CURSOR (never themed), crosshair fallback. */
+const BREAK_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><text x="2" y="20" font-size="19">⚒</text></svg>',
 )}") 13 13, crosshair`;
 
 /** Resistance rows display the EFFECTIVE (soft/hard-capped) value, with the
@@ -424,6 +432,11 @@ export class UI {
   caravanOpen = false;
   mercOpen = false;
   salvageOpen = false;
+  /** THE BREAKER'S HAMMER (bench break mode): while the salvage tab is up
+   *  and this is armed, the BAG is the salvage menu — the break cursor rides
+   *  the inventory and clicks there salvage. Re-armed on every bench visit;
+   *  the panel's toggle stands it down. */
+  private benchBreakMode = true;
   /** Station view state: which tab, and the craft tab's chosen piece. */
   private salvageTab: 'salvage' | 'craft' = 'salvage';
   private craftTargetUid: number | null = null;
@@ -570,7 +583,7 @@ export class UI {
     // the extended flag only ever reaches itemTooltip — other cards have no
     // deeper form and simply re-serve themselves.
     bindTooltips(this.inventory, (el, ext) =>
-      el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.inventory))
+      el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.inventory), this.breakArmedFor(this.inventory))
         : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!, ext)
         : el.dataset.tip === 'vestige' ? this.vestigeTooltip(el.dataset.vestigeId!) : null,
     { extend: true });
@@ -2128,11 +2141,30 @@ export class UI {
    *  inventory panel, tabs instead of overlapping windows). 'skills' also
    *  hosts the contextual counters (Brandt / the Delver) since buying puts
    *  gems into exactly these bags. */
-  private gemInventoryHtml(kind: 'skills' | 'gems'): string {
+  private gemInventoryHtml(kind: 'skills' | 'gems', breaking = false): string {
     const world = this.getWorld();
     const invSeat = this.panelSeat(this.inventory);
     const m = invSeat.meta;
+    // THE KEEPER'S MARK badge (right-click toggles it — wired in
+    // wireInventory's lockBind, both modes, every tab).
+    const lockBadge = '<span style="font-size:10px" title="Locked: salvage refuses it, sweeps skip it (right-click to unlock)">🔒</span>';
     if (kind === 'gems') {
+      // Under the hammer (benchBreakMode): each row IS the break surface —
+      // action buttons stand down, the yield prints inline, a locked row
+      // keeps still and says why.
+      if (breaking) {
+        return m.inventory.map((gem, idx) => {
+          const y = salvageSupportYield(gem);
+          return `
+          <div class="skill-entry" data-salv-sup="${idx}" data-lock-sup="${idx}"
+            style="border-left:3px solid ${gem.def.color};cursor:inherit">
+            <div class="name">${gem.def.name} <span style="color:#ffd700">Lv ${gem.level}</span>
+              ${gem.locked ? lockBadge : ''}</div>
+            <div class="desc" style="color:${gem.locked ? '#8a8678' : '#e8c87a'}">
+              ⚒ ${gem.locked ? 'locked — the hammer passes it by' : `click to break into ${this.essCostText(y)}`}</div>
+          </div>`;
+        }).join('') || '<div style="color:#8a8678;font-size:11px">No loose support gems to break.</div>';
+      }
       // THE FIELD DISCIPLINE: one predicate, the engine's own words — the
       // buttons refuse exactly when the mutation would (sanctuary waives).
       const swapWhy = world.swapRefusal(invSeat, 'socket');
@@ -2160,9 +2192,9 @@ export class UI {
         const socketLabel = swapWhy
           ? `Socket into <span style="color:#c08a68">(${swapWhy})</span>:` : 'Socket into:';
         return `
-          <div class="skill-entry" data-drag="supportGem:${idx}" style="border-left:3px solid ${gem.def.color}">
+          <div class="skill-entry" data-drag="supportGem:${idx}" data-lock-sup="${idx}" style="border-left:3px solid ${gem.def.color}">
             <div class="name">${gem.def.name} <span style="color:#ffd700">Lv ${gem.level}</span>
-              <span style="color:#8a8678;font-weight:normal;font-size:10px">support gem</span></div>
+              ${gem.locked ? `${lockBadge} ` : ''}<span style="color:#8a8678;font-weight:normal;font-size:10px">support gem</span></div>
             <div class="desc">${gem.def.description}</div>
             <div class="bind-btns">
               <button data-invlvl="${idx}" ${m.skillPoints < 1 || gem.level >= supportMaxLevel(gem.def) ? 'disabled' : ''}>
@@ -2173,6 +2205,25 @@ export class UI {
             </div>
           </div>`;
       }).join('') || '<div style="color:#8a8678;font-size:11px">Slain monsters drop support gems; walk over one to collect it.</div>';
+    }
+
+    // Under the hammer: skill-gem rows as break surfaces (same shape as the
+    // supports above; a granted spark says plainly it breaks into nothing).
+    if (breaking) {
+      return m.skillInv.map((inst, idx) => {
+        const y = salvageSkillYield(inst);
+        const socketed = inst.sockets.some(s => s);
+        return `
+        <div class="skill-entry" data-salv-skill="${idx}" data-lock-skill="${idx}"
+          style="border-left:3px solid ${SKILL_RARITIES[inst.rarity ?? 'common'].color};cursor:inherit">
+          <div class="name">${inst.def.name} <span style="color:#ffd700">Lv ${inst.level}</span> ${this.rarityTagHtml(inst)}
+            ${inst.locked ? lockBadge : ''}${inst.granted ? ' <span style="color:#8a8678;font-size:10px">(granted)</span>' : ''}</div>
+          <div class="desc" style="color:${inst.locked ? '#8a8678' : y ? '#e8c87a' : '#8a8678'}">
+            ⚒ ${inst.locked ? 'locked — the hammer passes it by'
+              : y ? `click to break into ${this.essCostText(y)}${socketed ? ' (socketed gems are pried out, not lost)' : ''}`
+              : 'breaks into NOTHING (granted spark) — a click still deletes it'}</div>
+        </div>`;
+      }).join('') || '<div style="color:#8a8678;font-size:11px">No skill gems to break.</div>';
     }
 
     const nearFont = world.nearFont();
@@ -2191,8 +2242,8 @@ export class UI {
         : 'No requirements';
       const blocker = dupe ? 'already learned' : slotsFull ? 'all slots full' : !ok ? 'requirements unmet' : '';
       return `
-        <div class="skill-entry" data-drag="skillGem:${idx}" style="border-left:3px solid ${SKILL_RARITIES[inst.rarity ?? 'common'].color}">
-          <div class="name">${def.name} <span style="color:#ffd700">Lv ${inst.level}</span> ${this.rarityTagHtml(inst)}</div>
+        <div class="skill-entry" data-drag="skillGem:${idx}" data-lock-skill="${idx}" style="border-left:3px solid ${SKILL_RARITIES[inst.rarity ?? 'common'].color}">
+          <div class="name">${def.name} <span style="color:#ffd700">Lv ${inst.level}</span> ${this.rarityTagHtml(inst)}${inst.locked ? ` ${lockBadge}` : ''}</div>
           <div class="tags">${def.tags.join(' · ')}</div>
           <div class="desc">${def.description}</div>
           <div class="req">Requires: ${reqText}</div>
@@ -2318,12 +2369,25 @@ export class UI {
 
   /** Rich item card — every line derives live from the instance's rolls, so
    *  a data retune re-prices the tooltip the same instant it re-prices play.
-   *  DWELLING (extended hover) grows the card with the ON-SWAP comparison. */
-  private itemTooltip(uid: number, extended?: boolean, seat: Seat = this.getWorld().localSeat): TooltipContent | null {
+   *  DWELLING (extended hover) grows the card with the ON-SWAP comparison.
+   *  `breaking` (benchBreakMode, passed by the INVENTORY binder only): the
+   *  hover overlay leads with what the hammer would pay — or why it refuses
+   *  (locked / worn). The keeper's-mark line shows in EVERY mode. */
+  private itemTooltip(uid: number, extended?: boolean, seat: Seat = this.getWorld().localSeat, breaking = false): TooltipContent | null {
     const item = this.findItem(uid, seat);
     if (!item) return null;
     const d = describeItem(item);
     const lines: string[] = [`<div style="color:#9a94a8;font-size:10px">${d.baseLine}</div>`];
+    if (item.locked) {
+      lines.unshift('<div style="color:#c8a84b">🔒 Locked — salvage refuses it, sweeps skip it (right-click to unlock)</div>');
+    } else if (breaking) {
+      const breakLine = seat.meta.items.some(i => i.uid === item.uid)
+        ? `<div style="color:#e8c87a;font-weight:bold">⚒ Click to break into ${this.essCostText(salvageItemYield(item))}</div>`
+        : Object.values(seat.meta.equipped).some(i => i?.uid === item.uid)
+          ? '<div style="color:#8a8678">⚒ Worn — take it off before the hammer can touch it</div>'
+          : ''; // a counter's ware — the hammer has no claim on it
+      if (breakLine) lines.unshift(breakLine);
+    }
     // Item-own defenses; locally-augmented values tint affix-blue (the same
     // "modified" language PoE speaks — base-white vs touched-blue).
     for (const s of d.defense) lines.push(`<div style="color:${s.augmented ? '#8fa3e8' : '#e0d8c8'}">${s.text}</div>`);
@@ -2386,6 +2450,16 @@ export class UI {
     const CELL = 34;
     const W = ITEM_CFG.inventory.w;
     const H = ITEM_CFG.inventory.h;
+    // THE BREAKER'S HAMMER (benchBreakMode): while armed for THIS panel's
+    // seat, bag tiles trade their lift for a break click, gem rows become
+    // break surfaces, and the ⚒ cursor marks the whole face. The doll keeps
+    // its full gestures — unequipping mid-break is the intended flow.
+    const breaking = this.breakArmedFor(this.inventory);
+    // THE KEEPER'S MARK: the 🔒 pip every locked thing wears, both modes.
+    const lockPip = (locked: boolean | undefined): string => locked
+      ? `<span style="position:absolute;top:0;right:1px;font-size:9px;line-height:10px;text-shadow:0 0 3px #000"
+          title="Locked: salvage refuses it, sweeps skip it (right-click to unlock)">🔒</span>`
+      : '';
 
     // --- THE DOLL: the equipped figure as a BODY (the true-RPG read) -------
     // Seats come from DOLL_SEATS (presentation data in the bag's own CELL
@@ -2410,11 +2484,11 @@ export class UI {
       }).join('')}</span>` : '';
       const wornGlyph = worn ? CATEGORY_GLYPHS[ITEM_BASES[worn.baseId]?.category ?? slot.accepts[0]] ?? '?' : '';
       const face = worn
-        ? `<span style="font-size:${small ? 14 : 21}px;line-height:1">${wornGlyph}</span>${pips}`
+        ? `<span style="font-size:${small ? 14 : 21}px;line-height:1">${wornGlyph}</span>${lockPip(worn.locked)}${pips}`
         : `<span style="opacity:0.22;font-size:${small ? 14 : 22}px;line-height:1">${CATEGORY_GLYPHS[slot.accepts[0]] ?? '?'}</span>
            ${small ? '' : `<span style="position:absolute;bottom:2px;left:0;right:0;font-size:7px;letter-spacing:0.5px;color:#4a4656;text-align:center">${slot.label.toUpperCase()}</span>`}`;
       return `<button data-doll="${slot.id}" data-drop="equipSlot:${slot.id}"
-        ${worn ? `data-drag="gearItem:${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : `title="${slot.label}"`}
+        ${worn ? `data-drag="gearItem:${worn.uid}" data-lock-uid="${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : `title="${slot.label}"`}
         style="position:absolute;left:${seat.x * CELL}px;top:${seat.y * CELL}px;
         width:${seat.w * CELL - 2}px;height:${seat.h * CELL - 2}px;box-sizing:border-box;padding:0;
         display:flex;align-items:center;justify-content:center;
@@ -2439,9 +2513,9 @@ export class UI {
         ? `<span style="color:${ITEM_RARITIES[worn.rarity].color}">${worn.name}</span>`
         : `<span style="color:#5a5668">${slot.label}</span>`;
       return `<button data-doll="${slot.id}" data-drop="equipSlot:${slot.id}"
-        ${worn ? `data-drag="gearItem:${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : ''}
+        ${worn ? `data-drag="gearItem:${worn.uid}" data-lock-uid="${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : ''}
         style="display:block;width:${dollW}px;margin:3px 0;padding:6px 8px;text-align:left;font-size:10px;
-        background:#1a1722;border:1px solid ${border};border-radius:4px;cursor:var(--cursor-point, pointer)">${label}</button>`;
+        background:#1a1722;border:1px solid ${border};border-radius:4px;cursor:var(--cursor-point, pointer)">${worn?.locked ? '🔒 ' : ''}${label}</button>`;
     }).join('');
     const doll = figure + spare;
 
@@ -2469,18 +2543,23 @@ export class UI {
     };
     // Tiles: drag sources AND drop targets (another piece swaps; a vestige
     // inlays forgivingly). The fabric's .dnd-src mark dims a lifted tile.
+    // Under the hammer (benchBreakMode) a tile trades its lift for a BREAK
+    // click (data-salv-uid) — locked tiles keep still and say why.
     const tiles = m.items.map(i => {
       if (i.x === undefined || i.y === undefined) return '';
       const s = itemGridSize(i);
       const r = ITEM_RARITIES[i.rarity];
       const cat = ITEM_BASES[i.baseId]?.category ?? 'ring';
-      return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1"
-        data-drag="gearItem:${i.uid}" data-drop="gearTile:${i.uid}"
+      const verb = breaking
+        ? `data-salv-uid="${i.uid}"`
+        : `data-drag="gearItem:${i.uid}"`;
+      return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
+        ${verb} data-drop="gearTile:${i.uid}"
         style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
         width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;
-        border:2px solid ${r.color};border-radius:3px;cursor:var(--cursor-point, pointer);box-sizing:border-box;
+        border:2px solid ${r.color};border-radius:3px;cursor:${breaking ? 'inherit' : 'var(--cursor-point, pointer)'};box-sizing:border-box;
         display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
-        ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${CATEGORY_GLYPHS[cat] ?? '?'}${pipRow(i)}</div>`;
+        ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${CATEGORY_GLYPHS[cat] ?? '?'}${lockPip(i.locked)}${pipRow(i)}</div>`;
     }).join('');
 
     // The SATCHEL: a little pouch flap on the panel's edge holding the
@@ -2565,9 +2644,15 @@ export class UI {
           <h3>Bag <span style="color:#8a8678;font-weight:normal">(${m.items.length} item${m.items.length === 1 ? '' : 's'})</span></h3>
           <div style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
           <div style="margin-top:8px;color:#8a8678;font-size:10px">
-            drag (or click to lift) any piece: bag ↔ doll ↔ the other slot,
-            onto another item to swap, onto the world to drop it ·
-            double-click: equip / unequip · shift-click: drop to ground · ${pickupHint}
+            ${breaking
+              ? `⚒ <b style="color:#e8c87a">BREAKING</b>: click a piece to salvage it for essence ·
+                <b>right-click</b> locks 🔒 it (locked pieces refuse the hammer) ·
+                worn pieces are safe — drag or double-click them off the doll first ·
+                shift-click still drops to ground`
+              : `drag (or click to lift) any piece: bag ↔ doll ↔ the other slot,
+                onto another item to swap, onto the world to drop it ·
+                double-click: equip / unequip · shift-click: drop to ground ·
+                right-click: lock 🔒 against salvage · ${pickupHint}`}
           </div>
         </div>
       </div>`;
@@ -2583,7 +2668,7 @@ export class UI {
       ${tabBtn('skills', `Skill Gems (${m.skillInv.length})`)}
       ${tabBtn('gems', `Support Gems (${m.inventory.length})`)}
     </div>`;
-    const body = this.invTab === 'gear' ? gearBody : this.gemInventoryHtml(this.invTab);
+    const body = this.invTab === 'gear' ? gearBody : this.gemInventoryHtml(this.invTab, breaking);
 
     // Same-tab scroll restore (the golden rule — a re-render must never
     // yank a list to the top mid-read). The panel itself no longer scrolls
@@ -2609,6 +2694,7 @@ export class UI {
     this.lastInvTab = this.invTab;
     this.wireInventory();
     this.paintPortraitsIn(this.inventory); // the build flap's Spectre chip
+    this.applyBreakChrome();
   }
 
   /** Re-attach bag/doll click handlers after a re-render (the panels' idiom).
@@ -2638,11 +2724,90 @@ export class UI {
     if (this.buildFlapOpen) {
       this.wireLearnedList(this.inventory, () => this.refreshInventory());
     }
+
+    const breaking = this.breakArmedFor(this.inventory);
+    const seatMeta = this.panelSeat(this.inventory).meta;
+    // THE KEEPER'S MARK: right-click (button-2 press) toggles the salvage
+    // lock on anything carried — bag tiles, worn chips, gem rows; every
+    // tab, hammer up or down. The dnd fabric's own button-2 (cancel a
+    // carry) runs first at document capture and stops propagation, so a
+    // carry-cancel never doubles as a lock flip; dndCarried() is the belt
+    // to that suspender.
+    const lockBind = (
+      attr: string, kind: 'item' | 'skill' | 'support',
+      find: (el: HTMLElement) => { id: number; locked?: boolean } | null,
+    ): void => {
+      q<HTMLElement>(`[${attr}]`).forEach(el => el.addEventListener('pointerdown', ev => {
+        if (ev.button !== 2 || dndCarried()) return;
+        const hit = find(el);
+        if (!hit) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        world.requestMeta({ t: 'salvageLock', kind, id: hit.id, on: !hit.locked });
+        this.refreshInventory();
+        if (this.salvageOpen) this.refreshSalvage(); // sweep counts moved
+      }));
+    };
+    lockBind('data-lock-uid', 'item', el => {
+      const uid = Number(el.dataset.lockUid);
+      const it = seatMeta.items.find(i => i.uid === uid)
+        ?? Object.values(seatMeta.equipped).find(i => i?.uid === uid);
+      return it ? { id: uid, locked: it.locked } : null;
+    });
+    lockBind('data-lock-skill', 'skill', el => {
+      const idx = Number(el.dataset.lockSkill);
+      const inst = seatMeta.skillInv[idx];
+      return inst ? { id: idx, locked: inst.locked } : null;
+    });
+    lockBind('data-lock-sup', 'support', el => {
+      const idx = Number(el.dataset.lockSup);
+      const gem = seatMeta.inventory[idx];
+      return gem ? { id: idx, locked: gem.locked } : null;
+    });
+
     // The gem tabs re-use the shared list wiring (learning moves gems into
     // knownSkills — the drawer re-renders with the same refresh).
     if (this.invTab !== 'gear') {
       this.wireGemInventory(this.inventory, () => this.refreshInventory());
+      // Under the hammer the rows themselves are break surfaces (their
+      // action buttons stood down in gemInventoryHtml — one verb per mode).
+      if (breaking) {
+        q<HTMLElement>('[data-salv-skill]').forEach(el => el.addEventListener('click', ev => {
+          if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey || dndCarried()) return;
+          const idx = Number(el.dataset.salvSkill);
+          if (seatMeta.skillInv[idx]?.locked) return; // the row says why
+          world.requestMeta({ t: 'salvageSkill', index: idx, lane: 'break' });
+          hideTooltip();
+          this.refreshInventory();
+          this.refreshSalvage();
+        }));
+        q<HTMLElement>('[data-salv-sup]').forEach(el => el.addEventListener('click', ev => {
+          if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey || dndCarried()) return;
+          const idx = Number(el.dataset.salvSup);
+          if (seatMeta.inventory[idx]?.locked) return;
+          world.requestMeta({ t: 'salvageSupport', index: idx, lane: 'break' });
+          hideTooltip();
+          this.refreshInventory();
+          this.refreshSalvage();
+        }));
+      }
       return; // no gear handlers to attach on gem tabs
+    }
+
+    // THE HAMMER'S BITE: while breaking, a plain click on a bag tile
+    // salvages it (the lift verb stood down with data-drag; a carried doll
+    // piece's landing click is the fabric's, never this).
+    if (breaking) {
+      q<HTMLElement>('[data-salv-uid]').forEach(el => el.addEventListener('click', e => {
+        if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || dndCarried()) return;
+        const uid = Number(el.dataset.salvUid);
+        const item = seatMeta.items.find(i => i.uid === uid);
+        if (!item || item.locked) return; // pip + tooltip explain the refusal
+        world.requestMeta({ t: 'salvageItem', uid, lane: 'break' });
+        hideTooltip();
+        this.refreshInventory();
+        this.refreshSalvage();
+      }));
     }
 
     // CLICK VERBS on gear (the fast paths beside the drag):
@@ -2657,6 +2822,7 @@ export class UI {
         this.refreshInventory();
       });
       el.addEventListener('dblclick', () => {
+        if (breaking) return; // one verb under the hammer — the click broke it
         world.requestMeta({ t: 'equipItem', uid });
         this.refreshInventory();
         this.refreshCharSheet();
@@ -2695,15 +2861,59 @@ export class UI {
   showSalvage(seatId?: string): void {
     this.ownPanel(this.salvageMenu, this.couchSeatFor(seatId));
     this.salvageOpen = true;
+    // THE BREAKER'S EYE: arriving at the bench ARMS the hammer and opens the
+    // bag beside it — the inventory IS the salvage menu now (click things to
+    // break them; the station panel holds the sweeps and the craft bench).
+    // Never steal a bag another couch seat is browsing — the seat-match gate
+    // (breakArmedFor) keeps the hammer off a borrowed panel anyway.
+    this.benchBreakMode = true;
+    if (!this.inventoryOpen) this.toggleInventory(seatId);
     this.salvageMenu.classList.remove('hidden');
     this.refreshSalvage();
+    this.refreshInventory(); // re-render the bag with benchBreakMode's verbs armed
   }
 
   closeSalvage(): void {
     this.salvageOpen = false;
     this.salvageMenu.classList.add('hidden');
     this.craftTargetUid = null;
+    this.benchBreakMode = true; // next bench visit re-arms fresh
+    this.applyBreakChrome();
+    if (this.inventoryOpen) this.refreshInventory(); // shed the break verbs
     hideTooltip();
+  }
+
+  /** Is the breaker's hammer up? (Salvage panel open on its salvage tab,
+   *  mode armed.) The INVENTORY half additionally demands both panels
+   *  belong to the same couch seat — see breakArmedFor. */
+  private breakArmed(): boolean {
+    return this.salvageOpen && this.salvageTab === 'salvage' && this.benchBreakMode;
+  }
+
+  /** The hammer bites on the inventory only when the bag and the bench
+   *  belong to the SAME seat (the couch lens rule — seat B's browsing must
+   *  never break under seat A's hammer). */
+  private breakArmedFor(panel: HTMLElement): boolean {
+    return this.breakArmed() && this.panelSeat(this.salvageMenu) === this.panelSeat(panel);
+  }
+
+  /** One seam for the break-mode cursor dress: the ⚒ rides the salvage
+   *  panel and the (same-seat) inventory while armed, and leaves both
+   *  clean the moment the hammer goes down. */
+  private applyBreakChrome(): void {
+    this.salvageMenu.style.cursor = this.breakArmed() ? BREAK_CURSOR : '';
+    this.inventory.style.cursor = this.breakArmedFor(this.inventory) ? BREAK_CURSOR : '';
+  }
+
+  /** Fold many essence yields into per-tier chips ("12▪ 4◆") — the sweep
+   *  buttons' price preview. The lists fed here mirror salvageBulk's own
+   *  filters, so the label IS the payout. */
+  private essSumText(costs: (EssenceCost | null)[]): string {
+    const sum: Partial<Record<EssenceId, number>> = {};
+    for (const c of costs) if (c) sum[c.essence] = (sum[c.essence] ?? 0) + c.count;
+    return ESSENCE_IDS.filter(id => (sum[id] ?? 0) > 0)
+      .map(id => `<span style="color:${ESSENCES[id].color}" title="${ESSENCES[id].label}">${sum[id]}${ESSENCES[id].glyph}</span>`)
+      .join(' ');
   }
 
   refreshSalvage(): void {
@@ -2720,32 +2930,59 @@ export class UI {
     let body: string;
 
     if (this.salvageTab === 'salvage') {
-      const gearRows = m.items.map(i => {
-        const y = salvageItemYield(i);
-        return `<div class="skill-entry" style="border-left:3px solid ${ITEM_RARITIES[i.rarity].color}">
-          <div class="name" data-tip="item" data-item-uid="${i.uid}" style="color:${ITEM_RARITIES[i.rarity].color}">${i.name}</div>
-          <div class="bind-btns"><button data-salv-item="${i.uid}">Break down (${this.essCostText(y)})</button></div>
-        </div>`;
-      }).join('') || '<div style="color:#8a8678;font-size:11px">No gear in the bag. (Worn pieces must be unequipped first.)</div>';
-      const skillRows = m.skillInv.map((inst, idx) => {
-        const y = salvageSkillYield(inst);
-        return `<div class="skill-entry" style="border-left:3px solid ${SKILL_RARITIES[inst.rarity ?? 'common'].color}">
-          <div class="name">${inst.def.name} <span style="color:#ffd700">Lv ${inst.level}</span>${inst.granted ? ' <span style="color:#8a8678;font-size:10px">(granted)</span>' : ''}</div>
-          <div class="bind-btns"><button data-salv-skill="${idx}">${y ? `Break down (${this.essCostText(y)})` : 'Break down (nothing, granted)'}</button></div>
-        </div>`;
-      }).join('') || '<div style="color:#8a8678;font-size:11px">No skill gems carried.</div>';
-      const supRows = m.inventory.map((gem, idx) => {
-        const y = salvageSupportYield(gem);
-        return `<div class="skill-entry" style="border-left:3px solid ${gem.def.color}">
-          <div class="name">${gem.def.name} <span style="color:#ffd700">Lv ${gem.level}</span></div>
-          <div class="bind-btns"><button data-salv-sup="${idx}">Break down (${this.essCostText(y)})</button></div>
-        </div>`;
-      }).join('') || '<div style="color:#8a8678;font-size:11px">No loose support gems.</div>';
+      // THE BREAKER'S EYE — the bag IS the menu. This face holds the hammer
+      // toggle and THE SWEEPS; individual breaking happens by clicking
+      // things in the inventory beside it (the break cursor marks it).
+      const armed = this.benchBreakMode;
+      // Eligible sets mirror the host's salvageBulk filters exactly: locks
+      // skipped, granted sparks out, worn gear structurally out of reach.
+      const gearAll = m.items.filter(i => !i.locked);
+      const gearLocked = m.items.length - gearAll.length;
+      const skillAll = m.skillInv.filter(s => !s.locked && !s.granted);
+      const skillLocked = m.skillInv.filter(s => s.locked).length;
+      const supAll = m.inventory.filter(g => !g.locked);
+      const supLocked = m.inventory.length - supAll.length;
+      const bulkBtn = (
+        cat: 'item' | 'skill' | 'support', label: string,
+        yields: (EssenceCost | null)[], rarity?: string, color?: string,
+      ): string => {
+        const n = yields.length;
+        const pay = n ? this.essSumText(yields) : '';
+        return `<button data-bulk="${cat}${rarity ? `:${rarity}` : ''}" ${n ? '' : 'disabled'}
+          ${color ? `style="border-color:${color};color:${color}"` : ''}
+          title="${n ? `Break ${n} — locked things are skipped` : 'Nothing eligible'}">
+          ${label} (${n})${pay ? ` → ${pay}` : ''}</button>`;
+      };
+      const keptNote = (n: number): string =>
+        n > 0 ? ` <span style="color:#8a8678;font-weight:normal;font-size:10px">· ${n} 🔒 kept aside</span>` : '';
       body = `<div style="margin-bottom:6px">${this.essWallet(seat)}</div>
-        <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
-          Breaking gear pays Essence by its quality, and STUDIES each affix on it (expertise, on the account, survives death).
+        <div class="bind-btns" style="margin-bottom:6px">
+          <button data-breaker class="${armed ? 'bound' : ''}">
+            ⚒ ${armed ? 'Hammer in hand — click things in your bag to break them' : 'Take up the hammer (click-to-break in the bag)'}</button>
         </div>
-        <h3>Gear</h3>${gearRows}<h3>Skill Gems</h3>${skillRows}<h3>Support Gems</h3>${supRows}`;
+        <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
+          Breaking pays Essence by quality and STUDIES each affix (expertise, on the account, survives death).
+          Worn gear never breaks — unequip it first. <b>Right-click</b> anything carried to lock 🔒 it:
+          locked things refuse the hammer, and every sweep below skips them. Granted sparks sit out of sweeps.
+        </div>
+        <h3>Gear${keptNote(gearLocked)}</h3>
+        <div class="bind-btns">
+          ${bulkBtn('item', 'Break all', gearAll.map(salvageItemYield))}
+          ${(['common', 'magic', 'rare', 'unique'] as const).map(r => bulkBtn(
+            'item', ITEM_RARITIES[r].label, gearAll.filter(i => i.rarity === r).map(salvageItemYield),
+            r, ITEM_RARITIES[r].color)).join('')}
+        </div>
+        <h3>Skill Gems${keptNote(skillLocked)}</h3>
+        <div class="bind-btns">
+          ${bulkBtn('skill', 'Break all', skillAll.map(salvageSkillYield))}
+          ${(['common', 'magic', 'rare', 'legendary'] as const).map(r => bulkBtn(
+            'skill', SKILL_RARITIES[r].label, skillAll.filter(s => (s.rarity ?? 'common') === r).map(salvageSkillYield),
+            r, SKILL_RARITIES[r].color)).join('')}
+        </div>
+        <h3>Support Gems${keptNote(supLocked)}</h3>
+        <div class="bind-btns">
+          ${bulkBtn('support', 'Break all', supAll.map(salvageSupportYield))}
+        </div>`;
     } else {
       const targets = [...m.items, ...Object.values(m.equipped).filter((x): x is ItemInstance => !!x)];
       const targetRows = targets.map(i =>
@@ -2810,17 +3047,25 @@ export class UI {
       this.salvageTab = btn.dataset.stab as 'salvage' | 'craft';
       this.refreshSalvage();
     }));
-    q<HTMLButtonElement>('button[data-salv-item]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'salvageItem', uid: Number(btn.dataset.salvItem), lane: 'break' });
+    // THE BREAKER'S HAMMER toggle: arming (re)opens the bag beside the bench.
+    this.salvageMenu.querySelector<HTMLButtonElement>('button[data-breaker]')?.addEventListener('click', () => {
+      this.benchBreakMode = !this.benchBreakMode;
+      if (this.benchBreakMode && !this.inventoryOpen) {
+        this.toggleInventory(this.panelSeat(this.salvageMenu).id);
+      }
       this.refreshSalvage();
-    }));
-    q<HTMLButtonElement>('button[data-salv-skill]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'salvageSkill', index: Number(btn.dataset.salvSkill), lane: 'break' });
+      this.refreshInventory();
+    });
+    // THE SWEEPS: one blow per category, optionally narrowed to a rarity.
+    // The host re-filters (locks, granted, lane) — these buttons only ask.
+    q<HTMLButtonElement>('button[data-bulk]').forEach(btn => btn.addEventListener('click', () => {
+      const [cat, rarity] = btn.dataset.bulk!.split(':') as [
+        'item' | 'skill' | 'support',
+        ('common' | 'magic' | 'rare' | 'unique' | 'legendary') | undefined,
+      ];
+      world.requestMeta({ t: 'salvageBulk', cat, rarity, lane: 'break' });
       this.refreshSalvage();
-    }));
-    q<HTMLButtonElement>('button[data-salv-sup]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'salvageSupport', index: Number(btn.dataset.salvSup), lane: 'break' });
-      this.refreshSalvage();
+      this.refreshInventory(); // salvageBulk emptied bag tiles — repaint them
     }));
     q<HTMLButtonElement>('button[data-ctar]').forEach(btn => btn.addEventListener('click', () => {
       this.craftTargetUid = Number(btn.dataset.ctar);
@@ -2845,6 +3090,7 @@ export class UI {
       });
     }));
     this.salvageMenu.querySelector<HTMLButtonElement>('[data-salv-close]')?.addEventListener('click', () => this.closeSalvage());
+    this.applyBreakChrome();
   }
 
   // -------------------------------------------------------- the bestiary book
@@ -3321,20 +3567,24 @@ export class UI {
    *  Reads the VENDOR panel's owner (the seat working the wheel). */
   private scrapListHtml(): string {
     const m = this.panelSeat(this.vendorMenu).meta;
-    const chip = (attr: string, color: string, label: string, yieldHtml: string): string =>
-      `<button ${attr} style="margin:2px 4px 2px 0;border-color:${color};color:${color}">
-        ${label} <span style="color:#8a8678">→ ${yieldHtml}</span></button>`;
+    // THE KEEPER'S MARK holds here too: a locked thing's chip stands
+    // disabled with its 🔒 — the same salvageLock the bench honors (and the
+    // host refuses regardless).
+    const chip = (attr: string, color: string, label: string, yieldHtml: string, locked?: boolean): string =>
+      `<button ${attr} ${locked ? 'disabled title="Locked (right-click it in the inventory to unlock)"' : ''}
+        style="margin:2px 4px 2px 0;border-color:${color};color:${color}">
+        ${locked ? '🔒 ' : ''}${label} <span style="color:#8a8678">→ ${yieldHtml}</span></button>`;
     const gear = m.items.map(i =>
       chip(`data-scrap-item="${i.uid}" data-tip="item" data-item-uid="${i.uid}"`,
-        ITEM_RARITIES[i.rarity].color, i.name, this.essCostText(sellItemYield(i)))).join('');
+        ITEM_RARITIES[i.rarity].color, i.name, this.essCostText(sellItemYield(i)), i.locked)).join('');
     const skills = m.skillInv.map((inst, idx) => {
       const y = sellSkillYield(inst);
       return chip(`data-scrap-skill="${idx}"`, SKILL_RARITIES[inst.rarity ?? 'common'].color,
-        `${inst.def.name} Lv${inst.level}`, y ? this.essCostText(y) : 'nothing (granted)');
+        `${inst.def.name} Lv${inst.level}`, y ? this.essCostText(y) : 'nothing (granted)', inst.locked);
     }).join('');
     const sups = m.inventory.map((gem, idx) =>
       chip(`data-scrap-sup="${idx}"`, gem.def.color, `${gem.def.name} Lv${gem.level}`,
-        this.essCostText(sellSupportYield(gem)))).join('');
+        this.essCostText(sellSupportYield(gem)), gem.locked)).join('');
     const all = gear + skills + sups;
     return all || '<div style="color:#8a8678;font-size:11px">Nothing carried worth selling.</div>';
   }
@@ -6961,6 +7211,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     this.salvageOpen = false;
     this.craftTargetUid = null;
     this.salvageMenu.classList.add('hidden');
+    this.applyBreakChrome(); // sheds the ⚒ from bench AND bag together
     this.oracleOpen = false;
     this.oracleTargetUid = null;
     this.oracleMenu.classList.add('hidden');

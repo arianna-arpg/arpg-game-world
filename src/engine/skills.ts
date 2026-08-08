@@ -4611,6 +4611,9 @@ export interface SupportInstance {
    *  forwarded copy fold at ×scale (CONSTRUCT_FORWARD_CFG per kind).
    *  Absent on minion-crew forwards — Resonance's socket is their price. */
   forwardScale?: number;
+  /** THE KEEPER'S MARK (salvageLock intent): a locked loose gem refuses
+   *  salvage on BOTH lanes and every salvageBulk sweep passes it by. */
+  locked?: boolean;
 }
 
 /** Default socket count for instances not minted as drops (monster kits). */
@@ -4686,6 +4689,9 @@ export interface SkillInstance {
   /** Levels bought with ESSENCE (vs skill points). Excluded from the font's
    *  point refund on sacrifice — no essence→points arbitrage. */
   essenceLevels?: number;
+  /** THE KEEPER'S MARK (salvageLock intent): a locked carried gem refuses
+   *  salvage on BOTH lanes and every salvageBulk sweep passes it by. */
+  locked?: boolean;
   /** DERIVED, never saved: +levels granted by the OWNER's gear/passives
    *  (the classSkill_<classId> stat family — "+1 to Summoner Skills").
    *  recalcSeat recomputes it from the live sheet whenever the build moves;

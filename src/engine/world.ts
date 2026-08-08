@@ -1491,6 +1491,16 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'salvageItem': return isIdx(a.uid) && isLane(a.lane);
     case 'pickupItem': return true;
     case 'salvageSkill': case 'salvageSupport': return isIdx(a.index) && isLane(a.lane);
+    // THE SWEEP + THE KEEPER'S MARK (salvageBulk / salvageLock): categories
+    // and rarities are closed vocabularies; ids untrusted client numbers.
+    case 'salvageBulk':
+      return (a.cat === 'item' || a.cat === 'skill' || a.cat === 'support')
+        && (a.rarity === undefined
+          || (['common', 'magic', 'rare', 'unique', 'legendary'] as const).includes(a.rarity))
+        && isLane(a.lane);
+    case 'salvageLock':
+      return (a.kind === 'item' || a.kind === 'skill' || a.kind === 'support')
+        && isIdx(a.id) && typeof a.on === 'boolean';
     case 'craftAffix':
       return isIdx(a.uid) && isStr(a.affixId)
         && (a.score === undefined || (typeof a.score === 'number' && Number.isFinite(a.score)));
@@ -24703,6 +24713,8 @@ export class World {
       case 'salvageItem': this.salvageItem(seat, action.uid, action.lane); break;
       case 'salvageSkill': this.salvageSkillGem(seat, action.index, action.lane); break;
       case 'salvageSupport': this.salvageSupportGem(seat, action.index, action.lane); break;
+      case 'salvageBulk': this.salvageBulk(seat, action.cat, action.rarity, action.lane); break;
+      case 'salvageLock': this.salvageLockSet(seat, action.kind, action.id, action.on); break;
       case 'craftAffix': this.craftAffix(seat, action.uid, action.affixId, action.score ?? 0); break;
       case 'rerollAffix': this.rerollAffix(seat, action.uid, action.affix, action.score); break;
       case 'socketVestige': this.socketVestige(seat, action.uid, action.socket, action.vestigeId); break;
@@ -39043,34 +39055,56 @@ export class World {
     return this.nearScrapVendor(seat) ? 'sell' : null;
   }
 
-  /** Break (bench) or sell (counter) a BAG item — the lane decides the tint:
-   *  the bench pays the rarity's essence AND studies each line into lore;
-   *  selling pays coarse volume and teaches nothing. Worn gear must be
-   *  unequipped first — a deliberate two-step, no accidental doll salvage. */
-  salvageItem(seat: Seat, uid: number, lane?: 'break' | 'sell'): void {
-    const mode = this.salvageLane(seat, lane);
-    if (!mode) return;
-    const item = this.bagItem(seat, uid);
-    if (!item) return;
-    removeFromBag(seat.meta.items, uid);
+  /** The keeper's-mark refusal floater — one voice for every locked thing. */
+  private lockedRefusal(seat: Seat): void {
+    this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26),
+      'locked — the hammer passes it by', '#8a8678', 12);
+  }
+
+  /** The break/sell CORE for one bag item (already vetted: in the bag, not
+   *  locked): removes it, pays the lane's essence, and — bench only, while
+   *  meta-progression runs — studies its lines into account lore (the DEED
+   *  GATE ledger bump included). Returns what the study taught. saveAccount
+   *  and floaters are the CALLER's duty: salvageBulk batches many breaks
+   *  into ONE account write and one summary line. */
+  private breakOneItem(seat: Seat, item: ItemInstance, mode: 'break' | 'sell'): { family: string; rankedUp: boolean }[] {
+    removeFromBag(seat.meta.items, item.uid);
     this.grantEssence(seat, mode === 'break' ? salvageItemYield(item) : sellItemYield(item));
     // TIER-TRUE study — BENCH ONLY: the counter pays cash, never knowledge.
     // Craft lore is ACCOUNT knowledge (meta-progression): a sealed character
     // still salvages for essence and crafts from what the account already
     // knows — it just teaches the account nothing new.
-    if (mode === 'break' && this.metaProgressionActive()) {
-      const taught = studySalvage(this.account.craftLore, item);
-      for (const t of taught.filter(x => x.rankedUp)) {
-        this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26),
-          `craft expertise deepens: ${t.family}`, '#c8a84b', 12);
-        // THE DEED GATE (LEDGER_CRAFTS_UNLOCKED): a family's FIRST rank is
-        // "this craft is unlocked at all" — count each such family once,
-        // lifetime; the Oracle Stone's gate reads the tally. (saveAccount
-        // below already persists the stamp with the lore itself.)
-        if (this.account.craftLore[t.family]?.rank === 1) {
-          this.account.ledger[LEDGER_CRAFTS_UNLOCKED] = (this.account.ledger[LEDGER_CRAFTS_UNLOCKED] ?? 0) + 1;
-        }
+    if (mode !== 'break' || !this.metaProgressionActive()) return [];
+    const taught = studySalvage(this.account.craftLore, item);
+    for (const t of taught.filter(x => x.rankedUp)) {
+      // THE DEED GATE (LEDGER_CRAFTS_UNLOCKED): a family's FIRST rank is
+      // "this craft is unlocked at all" — count each such family once,
+      // lifetime; the Oracle Stone's gate reads the tally. (the caller's
+      // saveAccount persists the stamp with the lore itself.)
+      if (this.account.craftLore[t.family]?.rank === 1) {
+        this.account.ledger[LEDGER_CRAFTS_UNLOCKED] = (this.account.ledger[LEDGER_CRAFTS_UNLOCKED] ?? 0) + 1;
       }
+    }
+    return taught;
+  }
+
+  /** Break (bench) or sell (counter) a BAG item — the lane decides the tint:
+   *  the bench pays the rarity's essence AND studies each line into lore;
+   *  selling pays coarse volume and teaches nothing. Worn gear must be
+   *  unequipped first — a deliberate two-step, no accidental doll salvage —
+   *  and a locked piece (THE KEEPER'S MARK) refuses either lane. */
+  salvageItem(seat: Seat, uid: number, lane?: 'break' | 'sell'): void {
+    const mode = this.salvageLane(seat, lane);
+    if (!mode) return;
+    const item = this.bagItem(seat, uid);
+    if (!item) return;
+    if (item.locked) { this.lockedRefusal(seat); return; }
+    const taught = this.breakOneItem(seat, item, mode);
+    for (const t of taught.filter(x => x.rankedUp)) {
+      this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26),
+        `craft expertise deepens: ${t.family}`, '#c8a84b', 12);
+    }
+    if (mode === 'break' && this.metaProgressionActive()) {
       saveAccount(this.account); // lore is account knowledge — survive the run
     }
     this.markMetaDirty(seat);
@@ -39078,13 +39112,14 @@ export class World {
 
   /** Break/sell a CARRIED skill gem (skillInv). Granted sparks yield nothing
    *  on EITHER lane — deleted outright, exactly as promised. Sockets are
-   *  pried out first. */
+   *  pried out first; a locked gem (THE KEEPER'S MARK) refuses. */
   salvageSkillGem(seat: Seat, index: number, lane?: 'break' | 'sell'): void {
     const mode = this.salvageLane(seat, lane);
     if (!mode) return;
     const m = seat.meta;
     const inst = m.skillInv[index];
     if (!inst) return;
+    if (inst.locked) { this.lockedRefusal(seat); return; }
     m.skillInv.splice(index, 1);
     for (const s of inst.sockets) if (s) m.inventory.push(s);
     const yieldd = mode === 'break' ? salvageSkillYield(inst) : sellSkillYield(inst);
@@ -39093,16 +39128,107 @@ export class World {
     this.markMetaDirty(seat);
   }
 
-  /** Break/sell a loose support gem (inventory). */
+  /** Break/sell a loose support gem (inventory). Locked gems refuse. */
   salvageSupportGem(seat: Seat, index: number, lane?: 'break' | 'sell'): void {
     const mode = this.salvageLane(seat, lane);
     if (!mode) return;
     const m = seat.meta;
     const gem = m.inventory[index];
     if (!gem) return;
+    if (gem.locked) { this.lockedRefusal(seat); return; }
     m.inventory.splice(index, 1);
     this.grantEssence(seat, mode === 'break' ? salvageSupportYield(gem) : sellSupportYield(gem));
     this.markMetaDirty(seat);
+  }
+
+  /** THE SWEEP (salvageBulk) — break (or sell) one whole CATEGORY in a blow,
+   *  optionally narrowed to a rarity. The keeper's marks are the whole
+   *  safety: locked things are skipped, granted sparks sit out (they break
+   *  into nothing — deleting them stays a deliberate single click), and
+   *  worn gear was never in the bag to begin with. Pried sockets survive
+   *  into the loose bag exactly as the single path pries them. However many
+   *  things fall: ONE account write, one summary floater. */
+  salvageBulk(
+    seat: Seat, cat: 'item' | 'skill' | 'support',
+    rarity?: 'common' | 'magic' | 'rare' | 'unique' | 'legendary',
+    lane?: 'break' | 'sell',
+  ): void {
+    const mode = this.salvageLane(seat, lane);
+    if (!mode) return;
+    const m = seat.meta;
+    const before: Partial<Record<EssenceId, number>> = { ...m.essences };
+    let broke = 0;
+    const ranked: string[] = [];
+    if (cat === 'item') {
+      // Snapshot the eligible set first — breakOneItem splices the bag.
+      const targets = m.items.filter(i => !i.locked && (!rarity || i.rarity === rarity));
+      for (const item of targets) {
+        const taught = this.breakOneItem(seat, item, mode);
+        ranked.push(...taught.filter(t => t.rankedUp).map(t => t.family));
+        broke++;
+      }
+      if (broke > 0 && mode === 'break' && this.metaProgressionActive()) {
+        saveAccount(this.account); // one write for the whole sweep
+      }
+    } else if (cat === 'skill') {
+      const targets = m.skillInv.filter(s => !s.locked && !s.granted
+        && (!rarity || (s.rarity ?? 'common') === rarity));
+      for (const inst of targets) {
+        const at = m.skillInv.indexOf(inst);
+        if (at < 0) continue;
+        m.skillInv.splice(at, 1);
+        for (const s of inst.sockets) if (s) m.inventory.push(s);
+        const y = mode === 'break' ? salvageSkillYield(inst) : sellSkillYield(inst);
+        if (y) this.grantEssence(seat, y);
+        broke++;
+      }
+    } else {
+      const targets = m.inventory.filter(g => !g.locked);
+      for (const gem of targets) {
+        const at = m.inventory.indexOf(gem);
+        if (at < 0) continue;
+        m.inventory.splice(at, 1);
+        this.grantEssence(seat, mode === 'break' ? salvageSupportYield(gem) : sellSupportYield(gem));
+        broke++;
+      }
+    }
+    if (broke > 0) {
+      const chips = ESSENCE_IDS
+        .map(id => ({ id, n: (m.essences[id] ?? 0) - (before[id] ?? 0) }))
+        .filter(g => g.n > 0)
+        .map(g => `${g.n}${ESSENCES[g.id].glyph}`)
+        .join(' ');
+      this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26),
+        `the hammer falls: ${broke} broken → ${chips || 'nothing'}`, '#c8a84b', 12);
+      for (const family of [...new Set(ranked)]) {
+        this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 40),
+          `craft expertise deepens: ${family}`, '#c8a84b', 12);
+      }
+    }
+    this.markMetaDirty(seat);
+  }
+
+  /** THE KEEPER'S MARK (salvageLock) — flip the salvage lock on a carried
+   *  thing: gear by uid (bag OR doll — the mark rides the piece through
+   *  equip/unequip), carried gems by index. Pure bookkeeping: no station
+   *  gate, works anywhere, persists with the save. A locked thing refuses
+   *  the hammer on both lanes and every salvageBulk sweep skips it. */
+  salvageLockSet(seat: Seat, kind: 'item' | 'skill' | 'support', id: number, on: boolean): void {
+    const m = seat.meta;
+    const mark = (thing: { locked?: boolean } | undefined): void => {
+      if (!thing) return;
+      if (on) thing.locked = true;
+      else delete thing.locked;
+      this.markMetaDirty(seat);
+    };
+    if (kind === 'item') {
+      mark(m.items.find(i => i.uid === id)
+        ?? Object.values(m.equipped).find(i => i?.uid === id));
+    } else if (kind === 'skill') {
+      mark(m.skillInv[id]);
+    } else {
+      mark(m.inventory[id]);
+    }
   }
 
   /** Crafted-affix capacity for this account (the Vault can widen it). */

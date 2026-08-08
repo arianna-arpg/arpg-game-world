@@ -35,7 +35,12 @@ export const CHAR_SCHEMA_VERSION = 1;
 const CHAR_KEY = 'arpg_character_v1';
 const CHAR_SLOT = 1; // disk save slot (saves/save_1.json)
 
-interface SavedSocket { supportId: string; level: number; }
+interface SavedSocket {
+  supportId: string; level: number;
+  /** THE KEEPER'S MARK (salvageLock): the gem refuses salvage and every
+   *  salvageBulk sweep skips it. Optional → older saves load unchanged. */
+  locked?: boolean;
+}
 interface SavedSkill {
   skillId: string; level: number; rarity: SkillRarity;
   sockets: (SavedSocket | null)[];
@@ -44,6 +49,8 @@ interface SavedSkill {
    *  older saves load unchanged. */
   granted?: boolean;
   essenceLevels?: number;
+  /** THE KEEPER'S MARK (salvageLock) — see SavedSocket. */
+  locked?: boolean;
   /** THE GRIMOIRE: the bestiary form this instance is attuned to (a monster
    *  def id; rebuilt tolerantly — a removed def drops the attunement). */
   attunedForm?: string;
@@ -140,10 +147,18 @@ export interface CharacterSave {
 
 const saveSkill = (i: SkillInstance): SavedSkill => ({
   skillId: i.def.id, level: i.level, rarity: i.rarity ?? 'common',
-  sockets: i.sockets.map(s => s ? { supportId: s.def.id, level: s.level } : null),
+  sockets: i.sockets.map(s => s ? saveSocket(s) : null),
   ...(i.granted ? { granted: true } : {}),
   ...(i.essenceLevels ? { essenceLevels: i.essenceLevels } : {}),
   ...(i.attunedForm ? { attunedForm: i.attunedForm } : {}),
+  ...(i.locked ? { locked: true } : {}),
+});
+
+/** One support gem, saved — the keeper's mark (salvageLock) rides along so
+ *  a locked gem stays locked through save/load, loose or socketed. */
+const saveSocket = (s: SupportInstance): SavedSocket => ({
+  supportId: s.def.id, level: s.level,
+  ...(s.locked ? { locked: true } : {}),
 });
 
 export function serializeCharacter(world: World): CharacterSave {
@@ -174,7 +189,7 @@ export function serializeCharacter(world: World): CharacterSave {
     vocationPoints: m.vocationPoints,
     knownSkills: [...m.knownSkills.values()].map(saveSkill),
     skillInv: m.skillInv.map(saveSkill),
-    inventory: m.inventory.map(s => ({ supportId: s.def.id, level: s.level })),
+    inventory: m.inventory.map(saveSocket),
     items: m.items.map(i => ({ ...i })),
     equipped: Object.fromEntries(
       Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
@@ -262,10 +277,11 @@ export function rebuildSkill(s: SavedSkill): SkillInstance | null {
   if (s.granted) inst.granted = true;
   if (s.essenceLevels) inst.essenceLevels = s.essenceLevels;
   if (s.attunedForm && MONSTERS[s.attunedForm]) inst.attunedForm = s.attunedForm;
+  if (s.locked) inst.locked = true; // the keeper's mark (salvageLock) survives
   inst.sockets = s.sockets.map(sock => {
     if (!sock) return null;
     const sd = SUPPORTS[sock.supportId];
-    return sd ? ({ def: sd, level: sock.level } as SupportInstance) : null;
+    return sd ? ({ def: sd, level: sock.level, ...(sock.locked ? { locked: true } : {}) } as SupportInstance) : null;
   });
   return inst;
 }
@@ -288,7 +304,11 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
     .map(rebuildSkill)
     .filter((x): x is SkillInstance => x !== null);
   const inventory = save.inventory
-    .map(s => { const d = SUPPORTS[s.supportId]; return d ? ({ def: d, level: s.level } as SupportInstance) : null; })
+    .map(s => {
+      const d = SUPPORTS[s.supportId];
+      // The keeper's mark (salvageLock) rides the rebuilt gem.
+      return d ? ({ def: d, level: s.level, ...(s.locked ? { locked: true } : {}) } as SupportInstance) : null;
+    })
     .filter((x): x is SupportInstance => x !== null);
 
   // GEAR: rebuild every saved item against the live registries (tolerant —
@@ -597,7 +617,7 @@ export function serializeCouchGuest(
     vocationPoints: m.vocationPoints,
     knownSkills: [...m.knownSkills.values()].map(saveSkill),
     skillInv: m.skillInv.map(saveSkill),
-    inventory: m.inventory.map(s => ({ supportId: s.def.id, level: s.level })),
+    inventory: m.inventory.map(saveSocket),
     items: m.items.map(i => ({ ...i })),
     equipped: Object.fromEntries(
       Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
