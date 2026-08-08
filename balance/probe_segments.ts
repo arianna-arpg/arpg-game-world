@@ -12,7 +12,11 @@
 //     retaliation burst biting a bystander),
 //   - single-kill credit off a tail hit (one death, xp paid, spine flashes),
 //   - aim assist snapping to the nearest COIL, never dragged to the head,
-//   - the co-op wire (ht/wd/sf ride ActorW.worm; looks stay off the wire).
+//   - the co-op wire (ht/wd/sf ride ActorW.worm; looks stay off the wire),
+//   - THE SEEKWORTHY GATE: the homing seek pick (nearestProjTarget) refuses
+//     passive scenery armor and the caster's own breakable conjurations —
+//     assistAim's furniture law worn by the steering pick — while both stay
+//     in the pool and a monster's seeker keeps the player's real constructs.
 // Run: npx tsx balance/probe_segments.ts
 // ---------------------------------------------------------------------------
 
@@ -254,6 +258,66 @@ check('spine at authored length', w.segments.length === 26, `${w.segments.length
   const pass = MONSTERS.primeval_wyrm_passing;
   check('passing body wears the kit but carries NO hit surface',
     !!pass.worm?.looks && !pass.worm?.hittable);
+}
+
+// ------------------------------------------------- THE SEEKWORTHY GATE
+// The homing seek pick (world.nearestProjTarget): a guided flight chases
+// things that FIGHT. Passive scenery armor (barrels, racks, bells) and the
+// caster's OWN breakable conjurations (pool members so his blows can
+// demolish them) never draw the steering — the aim-assist furniture law
+// worn by the seek — while both STAY in enemiesOf (the demolish paths and
+// monster seekers keep them; only the pick refuses).
+{
+  const w2 = makeSimWorld('sorcerer', 31337);
+  const p2 = w2.player;
+  const seekPick = (caster: Actor, at: { x: number; y: number }): Actor | null =>
+    (w2 as unknown as { nearestProjTarget(p: object): Actor | null })
+      .nearestProjTarget({ preyId: undefined, hits: new Map<number, number>(), pos: at, age: 0, caster });
+
+  // A pot on the flight path, a live wolf beyond it.
+  const barrel = w2.createMonster('barrel', 5, 'enemy');
+  barrel.pos = vec(p2.pos.x + 300, p2.pos.y + 200);
+  w2.actors.push(barrel);
+  const wolfA = w2.createMonster('plains_wolf', 5, 'enemy');
+  wolfA.aiCooldown = 99999; wolfA.anchored = true;
+  wolfA.pos = vec(p2.pos.x + 460, p2.pos.y + 200);
+  w2.actors.push(wolfA);
+  const atA = vec(barrel.pos.x - 100, barrel.pos.y);
+  check('seek pick: the pot stays in the POOL (loot logic unbroken)',
+    w2.enemiesOf(p2).includes(barrel));
+  check('seek pick: passive scenery never out-draws the live foe',
+    seekPick(p2, atA) === wolfA, `picked ${seekPick(p2, atA)?.name ?? 'null'}`);
+  // Furniture alone in range: the flight flies TRUE (no target at all).
+  wolfA.pos = vec(p2.pos.x + 1200, p2.pos.y + 200);
+  check('seek pick: furniture alone draws NOTHING (null, not the pot)',
+    seekPick(p2, atA) === null, `picked ${seekPick(p2, atA)?.name ?? 'null'}`);
+
+  // The caster's own conjured breakables: in his pool, never his prey.
+  const mark = vec(p2.pos.x - 200, p2.pos.y - 100);
+  p2.mana = p2.availableMaxMana();
+  const spiresInst = makeSkillInstance(SKILLS.stone_spires, 1);
+  p2.skills.push(spiresInst);
+  w2.useSkill(p2, spiresInst, mark);
+  for (let t = 0; t < 1.2; t += 1 / 60) w2.update(1 / 60);
+  const spires = w2.actors.filter(a => !a.dead && a.construct?.breakable !== undefined && a.owner === p2);
+  wolfA.pos = vec(mark.x + 380, mark.y);
+  check('seek pick: spires stood and stayed demolishable (the pool law)',
+    spires.length >= 3 && w2.enemiesOf(p2).some(a => a.construct?.breakable !== undefined),
+    `${spires.length} spires`);
+  check('seek pick: own furniture never out-draws the live foe',
+    seekPick(p2, mark) === wolfA, `picked ${seekPick(p2, mark)?.name ?? 'null'}`);
+
+  // A MONSTER's seeker keeps the player's real constructs as prey — only
+  // passive scenery and the caster's OWN furniture are exempt, never a
+  // real body on the other side.
+  const wolfSeeker = w2.createMonster('plains_wolf', 6, 'enemy');
+  wolfSeeker.aiCooldown = 99999; wolfSeeker.anchored = true;
+  wolfSeeker.pos = vec(mark.x - 300, mark.y);
+  w2.actors.push(wolfSeeker);
+  const dPick = seekPick(wolfSeeker, mark);
+  check('seek pick: a monster seeker still hunts the player\'s constructs',
+    dPick !== null && dPick.construct?.breakable !== undefined && dPick.owner === p2,
+    `picked ${dPick?.name ?? 'null'}`);
 }
 
 console.log(failed === 0 ? '\nprobe_segments: ALL GREEN' : `\nprobe_segments: ${failed} FAILURE(S)`);

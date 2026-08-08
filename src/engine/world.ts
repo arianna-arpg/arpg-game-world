@@ -27806,9 +27806,11 @@ export class World {
     return this.actors.filter(a =>
       (this.hostileTo(actor, a)
         // BREAKABLE conjured objects join their OWNER's hostile pool — the
-        // owner's every damage path (swings, zones, projectiles, homing)
-        // can find and demolish them. Never anyone else's pool: minions
-        // and allies see furniture, the owner sees a target.
+        // owner's every damage path (swings, zones, projectiles) can find
+        // and demolish them, though the steering PICKS refuse to CHASE
+        // furniture (assistAim + the SEEKWORTHY homing gate). Never anyone
+        // else's pool: minions and allies see furniture, the owner sees a
+        // target.
         || (a.construct?.breakable !== undefined && a.owner === actor))
       && !a.dead && !a.untargetable && !a.downed);
   }
@@ -38066,6 +38068,24 @@ export class World {
     };
   }
 
+  /** THE EVENT-BOSS PAYOUT — one fold for the capstone kills that pay the
+   *  level-scaled bounty (hunt beast / balor realm / crusade leader /
+   *  fracture boss): XP = round((base + zone.level × 52) × mul), a gem
+   *  shower at the corpse, and the loud announce. The dials ARE the
+   *  divergences the four copies carried — the crusade's 320 base, the
+   *  hunt's flat five gems, each row's own words / lift / color — named
+   *  here, never re-derived. No number moved in the fold-up. */
+  private grantEventKillReward(ctx: KillCtx, r: {
+    base: number; mul?: number; gems: number; msg: string;
+    color?: string; lift?: number;
+  }): void {
+    const mul = r.mul ?? 1;
+    ctx.grantXp(Math.round((r.base + ctx.zone.level * 52) * mul));
+    for (let i = 0; i < r.gems; i++) ctx.dropGemAt(ctx.actor.pos);
+    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - (r.lift ?? 58)),
+      r.msg, r.color ?? '#ffd700', 20);
+  }
+
   /** KILL RULES bound to this World's RUN-STATE (the dive's haul, the hunt's
    *  beast ref, realm contexts, the built-boss site). Module rows in
    *  killHandlers.ts must stay stateless — one registry serves every World the
@@ -38170,10 +38190,10 @@ export class World {
         if (this.huntBeast === ctx.actor) this.huntBeast = null;
         ctx.bumpLedger('hunt_beasts_slain');
         ctx.bumpLedger('hunt_seen');
-        ctx.grantXp(Math.round(300 + ctx.zone.level * 52));
-        for (let i = 0; i < 5; i++) ctx.dropGemAt(ctx.actor.pos);
-        ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 58),
-          `${ctx.actor.name} is slain — the hunt is won!`, '#ffd700', 20);
+        this.grantEventKillReward(ctx, {
+          base: 300, gems: 5,
+          msg: `${ctx.actor.name} is slain — the hunt is won!`,
+        });
       },
     },
     // The Balor in its home realm — felling it repels the OVERWORLD invasion it
@@ -38191,11 +38211,10 @@ export class World {
         const mul = rctx?.rewardMul ?? 1;
         ctx.bumpLedger('demon_invasions_repelled');
         ctx.bumpLedger('balor_slain');
-        ctx.grantXp(Math.round((300 + ctx.zone.level * 52) * mul));
-        const gems = 3 + Math.floor(mul);
-        for (let i = 0; i < gems; i++) ctx.dropGemAt(ctx.actor.pos);
-        ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-          `The demon realm is purged! (×${mul.toFixed(1)} spoils)`, '#ffd700', 20);
+        this.grantEventKillReward(ctx, {
+          base: 300, mul, gems: 3 + Math.floor(mul), lift: 56,
+          msg: `The demon realm is purged! (×${mul.toFixed(1)} spoils)`,
+        });
       },
     },
     // The Crusade LEADER in its sanctum — felling it COLLAPSES the whole crusade
@@ -38208,11 +38227,10 @@ export class World {
         this.crusadeRealmContext = null;
         const mul = rctx ? (ctx.sim.crusadeField?.resolveCrusade(rctx.crusadeId) ?? 1) : 1;
         ctx.bumpLedger('crusade_leaders_slain');
-        ctx.grantXp(Math.round((320 + ctx.zone.level * 52) * mul));
-        const gems = 3 + Math.floor(mul);
-        for (let i = 0; i < gems; i++) ctx.dropGemAt(ctx.actor.pos);
-        ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-          `The Crusade is broken! (×${mul.toFixed(1)} spoils)`, '#ffd700', 20);
+        this.grantEventKillReward(ctx, {
+          base: 320, mul, gems: 3 + Math.floor(mul), lift: 56,
+          msg: `The Crusade is broken! (×${mul.toFixed(1)} spoils)`,
+        });
       },
     },
     // THE NECROPOLIS BONELORD (the uber) — purging it DISPERSES every active tide
@@ -38252,12 +38270,11 @@ export class World {
         ctx.sim.fractureField?.consumeRift(); // the rift is spent — stop re-materializing it
         const mul = rctx?.rewardMul ?? 1.5;
         ctx.bumpLedger('fracture_boss_slain');
-        ctx.grantXp(Math.round((300 + ctx.zone.level * 52) * mul));
-        const gems = 3 + Math.floor(mul);
-        for (let i = 0; i < gems; i++) ctx.dropGemAt(ctx.actor.pos);
-        ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 58),
-          `The ${rctx?.variant ?? 'fracture'} rift collapses! (×${mul.toFixed(1)} spoils)`,
-          rctx?.color ?? '#ffd700', 20);
+        this.grantEventKillReward(ctx, {
+          base: 300, mul, gems: 3 + Math.floor(mul),
+          msg: `The ${rctx?.variant ?? 'fracture'} rift collapses! (×${mul.toFixed(1)} spoils)`,
+          color: rctx?.color,
+        });
       },
     },
     // AMALGAMATION: the assembled boss falls — claim the part-themed spoils you
@@ -47664,6 +47681,13 @@ export class World {
     }
     let target: Actor | null = null, bestD = 500;
     for (const e of this.enemiesOf(p.caster)) {
+      // THE SEEKWORTHY GATE: a seeker chases things that FIGHT. Passive
+      // scenery armor (pots, racks, bells) and the caster's OWN breakable
+      // conjurations (in his pool so his blows can demolish them) never
+      // draw the flight off a live foe — assistAim's furniture law, worn
+      // by the steering pick. Real bodies stay fair prey: a monster's
+      // seeker still hunts totems, summons and heroes.
+      if (e.passive || (e.construct?.breakable !== undefined && e.owner === p.caster)) continue;
       const until = p.hits.get(e.id);
       if (until !== undefined && p.age < until) continue;
       const dd = dist(p.pos, e.pos);
