@@ -196,6 +196,33 @@ export const EPITAPH_LIST: EpitaphDef[] = [
     ],
     flavor: 'The first light does not knock.',
   },
+  // --- The wind's words (the gale written small) -----------------------------
+  {
+    id: 'following_wind', name: 'Following Wind', sequence: ['sylph', 'kessa'], categories: ['boots'],
+    effects: [
+      { stat: 'moveSpeed', kind: 'increased', value: 0.06 },
+      { stat: 'lifeRegen', kind: 'flat', value: 2 },
+      { stat: 'evasion', kind: 'flat', value: 30 },
+    ],
+    flavor: 'The road agreed to carry her the rest of the way.',
+  },
+  {
+    id: 'held_breath', name: 'Held Breath', sequence: ['morren', 'sylph'], categories: ['helmet'],
+    effects: [
+      { stat: 'survivalEase_breath', kind: 'flat', value: 0.25 },
+      { stat: 'evasion', kind: 'flat', value: 40 },
+    ],
+    flavor: 'What the tide taught the gale: keep some.',
+  },
+  {
+    id: 'wuthering', name: 'Wuthering', sequence: ['sylph', 'sylph'], categories: ['gloves'],
+    effects: [
+      { stat: 'knockback', kind: 'flat', value: 35 },
+      { stat: 'attackSpeed', kind: 'increased', value: 0.06 },
+      { stat: 'apply_winded', kind: 'flat', value: 0.08 },
+    ],
+    flavor: 'Two winds arguing over one house.',
+  },
 ];
 
 export const EPITAPHS: Record<string, EpitaphDef> =

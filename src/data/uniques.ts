@@ -20,6 +20,8 @@
 
 import type { UniqueDef } from '../engine/items';
 import { slotGraftStat } from '../engine/skills';
+import { comboStat } from '../engine/sequence';
+import { procStat } from './procs';
 
 export const UNIQUE_LIST: UniqueDef[] = [
   {
@@ -240,6 +242,186 @@ export const UNIQUE_LIST: UniqueDef[] = [
         text: 'The skill in Skill Slot 3 is granted Level {v} Splitting' },
       { stat: 'attackSpeed', kind: 'increased', range: [0.06, 0.1] },
       { stat: 'evasion', kind: 'increased', range: [0.2, 0.3], local: true },
+    ],
+  },
+  // --- The build-around wave (each legend IS one landed fabric's lever) ------
+  // THE UNMOVED — the conversion fabric at FULL RENUNCIATION (the
+  // Iron-Reflexes shape as an item): the rate line reads the wearer's whole
+  // evasion baseline as armor while the forgo dial renounces ALL of it,
+  // pinned whole — half a renunciation is a different item. Every point of
+  // footwork anywhere on the doll becomes plate (the golden rule reads the
+  // pre-forgo baseline, so nothing is lost to the order of grants); beside
+  // the Ledger's net-positive echo and the Lattice's bargain below, this is
+  // the fabric's third texture: total. Stone is slow — a real downside line.
+  {
+    id: 'the_unmoved', name: 'The Unmoved', baseId: 'chest_armor_evasion', weight: 65,
+    minIlvl: 9,
+    flavor: 'Let the wind vote. The stone abstains.',
+    lines: [
+      { stat: 'evasionToArmor', kind: 'flat', range: [0.85, 1.0] },
+      { stat: 'evasionForgone', kind: 'flat', range: [1, 1], tierScale: 0 },
+      { stat: 'armor', kind: 'increased', range: [0.3, 0.45], local: true },
+      { stat: 'moveSpeed', kind: 'increased', range: [-0.06, -0.04] },
+    ],
+  },
+  // THE GALEWRIGHTS — the worn-graft fabric's second teacher, wearing the
+  // wind: two shove gems granted by SEAT (Turbulence onto Skill Slot 1,
+  // Battering Ram onto Skill Slot 2 — the player aims them by choosing what
+  // to bind there), so one bar reads buffet-and-ram while the flat lines
+  // put the whole doll into the mass fabric's shove economy (authority
+  // folds into every push, impact prices every arrested body). Misfits sit
+  // honestly dormant — Battering Ram wants melee in Slot 2, and the socket
+  // gate, not the item, says so.
+  {
+    id: 'galewrights', name: 'The Galewrights', baseId: 'gloves_armor_evasion', weight: 70,
+    minIlvl: 8,
+    flavor: 'The wind writes with both hands.',
+    lines: [
+      { stat: slotGraftStat(1, 'turbulence'), kind: 'flat', range: [1, 1], tierScale: 0,
+        text: 'The skill in Skill Slot 1 is granted Level {v} Turbulence' },
+      { stat: slotGraftStat(2, 'battering_ram'), kind: 'flat', range: [1, 1], tierScale: 0,
+        text: 'The skill in Skill Slot 2 is granted Level {v} Battering Ram' },
+      { stat: 'shoveAuthority', kind: 'flat', range: [0.15, 0.25] },
+      { stat: 'impactDamage', kind: 'flat', range: [0.2, 0.3] },
+    ],
+  },
+  // SQUALLSTEP WINDTREWS — the proc registry's signature lane worn as a
+  // legend (data/procs.ts answering_gale): a slipped blow claps a REAL Gust
+  // Burst off the evader, so the dodge wardrobe stops crowds instead of
+  // merely leaving them. Chance and evasion feed one loop — more slips,
+  // more sky — and the winded lane pays it forward. The first legend on a
+  // LEGS base.
+  {
+    id: 'squallstep', name: 'Squallstep Windtrews', baseId: 'legs_evasion_es', weight: 65,
+    minIlvl: 9,
+    flavor: 'Miss her once, and the sky files its answer.',
+    lines: [
+      { stat: procStat('answering_gale'), kind: 'flat', range: [0.3, 0.4] },
+      { stat: 'evasion', kind: 'increased', range: [0.25, 0.4], local: true },
+      { stat: 'apply_winded', kind: 'flat', range: [0.15, 0.25] },
+      { stat: 'moveSpeed', kind: 'increased', range: [0.06, 0.1] },
+    ],
+  },
+  // THE BORROWED BREATH — the survival-meter fabric's EASE LANE as a wind
+  // legend: the gale lends its lung (slower breath drain — the diver's
+  // amulet, still capped by the meter's own row at the fold) and marks its
+  // prey in the gale family's own word, WINDED — applied by the amulet,
+  // then priced by it. Wind kits get a predator loop; everyone else gets
+  // the deep.
+  {
+    id: 'borrowed_breath', name: 'The Borrowed Breath', baseId: 'amulet_jade', weight: 70,
+    minIlvl: 6,
+    flavor: 'Give it back slowly.',
+    lines: [
+      { stat: 'survivalEase_breath', kind: 'flat', range: [0.25, 0.35] },
+      { stat: 'apply_winded', kind: 'flat', range: [0.12, 0.2] },
+      { stat: 'damageVs_winded', kind: 'flat', range: [0.15, 0.25] },
+      { stat: 'evasion', kind: 'flat', range: [40, 70] },
+    ],
+  },
+  // THE GLEANER'S CROWN — the throng fabric's FIND LEVERS as a legend: one
+  // more husk pocket rolled into every zone (pinned whole — the quanta law:
+  // a fractional pocket would promise bodies that aren't there) and every
+  // mint event swollen through the one quanta-rounded fold. The gatherer's
+  // farming crown; the minion lines keep the harvest standing once claimed.
+  {
+    id: 'gleaners_crown', name: "The Gleaner's Crown", baseId: 'helmet_armor_es', weight: 65,
+    minIlvl: 8,
+    flavor: 'A kingdom is picked up one pair of hands at a time.',
+    lines: [
+      { stat: 'throngPockets', kind: 'flat', range: [1, 1], tierScale: 0 },
+      { stat: 'throngYield', kind: 'increased', range: [0.25, 0.4] },
+      { stat: 'minionLife', kind: 'increased', range: [0.15, 0.25] },
+      { stat: 'minionDamage', kind: 'increased', range: [0.1, 0.18] },
+    ],
+  },
+  // BELLWETHER — the watch fabric's noise stimulus worn as doctrine: every
+  // landed blow RINGS (the Ringing Report's lure play, item-wide), so
+  // watchers step off their posts to investigate you — and the agate's
+  // poise plus the thorns are what they find when they arrive. The flock
+  // goes where the bell goes; the poised line pays the shepherd who holds.
+  {
+    id: 'bellwether', name: 'Bellwether', baseId: 'amulet_agate', weight: 70,
+    minIlvl: 7,
+    flavor: 'The flock goes where the bell goes.',
+    lines: [
+      { stat: 'noiseOnHit', kind: 'flat', range: [150, 220] },
+      { stat: 'poise', kind: 'flat', range: [25, 40] },
+      { stat: 'thorns', kind: 'flat', range: [10, 18] },
+      { stat: 'damage', kind: 'increased', range: [0.12, 0.18], when: 'poised' },
+    ],
+  },
+  // THE STANDING TOAST — the reflex fabric's from-outside twin worn whole:
+  // flask skills become REFLEXES (the stat doc's own example made a legend
+  // — the press pierces your own casts and dashes) and the THIRST gate is
+  // waived (drink brimming for the on-drink riders and let the pour spill).
+  // The restore lines make every toast worth raising.
+  {
+    id: 'standing_toast', name: 'The Standing Toast', baseId: 'belt_endurance', weight: 65,
+    minIlvl: 7,
+    flavor: 'Raised mid-argument, drained mid-swing.',
+    lines: [
+      { stat: 'reflex', kind: 'flat', range: [1, 1], tierScale: 0, tags: ['flask'],
+        text: 'Your flask skills are Reflexes: their press pierces your own casts and dashes' },
+      { stat: 'thirstless', kind: 'flat', range: [1, 1], tierScale: 0, tags: ['flask'],
+        text: 'Your flasks never refuse a drink: thirst gates are waived' },
+      { stat: 'restorePower', kind: 'increased', range: [0.15, 0.25] },
+      { stat: 'restorePctMax', kind: 'flat', range: [0.02, 0.04] },
+    ],
+  },
+  // THE SHARED CUP — the sympathy fabric's tamed BOND as a legend: the
+  // keeper's pours and orb scoops REPLAY on the bonded companion, potency
+  // rolled (the fabric multiplies the echo by the stat's value), so one
+  // flask waters the whole hunt. Without a companion both lines sit
+  // honestly dormant — the Rote Hand's law: the item teaches by being worn.
+  {
+    id: 'shared_cup', name: 'The Shared Cup', baseId: 'ring_coral', weight: 70,
+    minIlvl: 6,
+    flavor: 'What she drinks, they drink.',
+    lines: [
+      // text overrides: both links register the label 'bond', so bare lines
+      // would read as twins — the override names each echo's channel.
+      { stat: 'sympathy_bond_flask', kind: 'flat', range: [0.5, 0.75],
+        text: 'Flask pours you drink echo to your bonded companion at {v}× strength' },
+      { stat: 'sympathy_bond_orb', kind: 'flat', range: [0.5, 0.75],
+        text: 'Orbs you scoop echo to your bonded companion at {v}× strength' },
+      { stat: 'healPower', kind: 'increased', range: [0.1, 0.15] },
+      { stat: 'life', kind: 'flat', range: [20, 30] },
+    ],
+  },
+  // ROUNDELAY — a combo grammar granted by jewelry (the same combo_<id>
+  // stat family the tree's notables write, worn instead of specced): the
+  // Prismatic Round arrives with the amulet, and the comboVaried condition
+  // — the grammar's own starter read — pays the cycling it teaches. The
+  // elementalist's reason to own three schools.
+  {
+    id: 'roundelay', name: 'Roundelay', baseId: 'amulet_opal', weight: 65,
+    minIlvl: 8,
+    flavor: 'Three verses, one round, no rest.',
+    lines: [
+      { stat: comboStat('elemental_round'), kind: 'flat', range: [1, 1], tierScale: 0,
+        text: 'Grants the Prismatic Round grammar: three different elements in a row close the round' },
+      { stat: 'damage', kind: 'increased', range: [0.1, 0.16], when: 'comboVaried' },
+      { stat: 'castSpeed', kind: 'increased', range: [0.06, 0.1] },
+      { stat: 'mana', kind: 'flat', range: [20, 30] },
+    ],
+  },
+  // THE GROUNDED LATTICE — the bonewright lane worn PARTIAL: half the
+  // mage-shield knelt into footing, rate over a mid forgo — a true trade
+  // with change left over. Beside The Unmoved's total renunciation and the
+  // Ledger's echo this is the conversion fabric's BARGAIN texture; the
+  // poise-increased line scales the granted base (trades join the BASE
+  // layer — the fabric's own law), and the local armor keeps the plate
+  // honest while the lattice thins.
+  {
+    id: 'grounded_lattice', name: 'The Grounded Lattice', baseId: 'chest_armor_es', weight: 65,
+    minIlvl: 9,
+    flavor: 'The shield did not break. It knelt.',
+    lines: [
+      { stat: 'esToPoise', kind: 'flat', range: [0.5, 0.7] },
+      { stat: 'esForgone', kind: 'flat', range: [0.35, 0.5] },
+      { stat: 'poise', kind: 'increased', range: [0.2, 0.3] },
+      { stat: 'armor', kind: 'increased', range: [0.3, 0.45], local: true },
     ],
   },
 ];

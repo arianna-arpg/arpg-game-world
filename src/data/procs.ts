@@ -402,6 +402,18 @@ export const PROCS: Record<string, ProcDef> = {
     },
   },
 
+  // THE ANSWERING GALE: a slipped blow claps a REAL Gust Burst off the
+  // evader (the gale family's own hello — a no-damage knockback ring with
+  // its winded chances intact), so a dodge wardrobe stops crowds instead of
+  // merely leaving them. The signature-lane 'cast' payload on the evade
+  // trigger; unique-borne debut (Squallstep Windtrews, data/uniques.ts) —
+  // the chance stat is open to any grantor like every proc.
+  answering_gale: {
+    id: 'answering_gale', name: 'Answering Gale',
+    color: '#d8ecf8', trigger: 'evade', icd: 3,
+    effect: { type: 'cast', cast: { skillId: 'gust_burst', count: [1, 1], at: 'self' } },
+  },
+
   // CAPACITOR BURST: the shield doesn't die quietly — its collapse arcs
   // out as a lightning nova (baseline-scaled).
   capacitor_burst: {
