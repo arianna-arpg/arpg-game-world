@@ -405,6 +405,172 @@ const TABLE_LIST: LootTableDef[] = [
       },
     ],
   },
+
+  // --- THE RIDDLE SPOILS (the puzzle fabric's diversified pay, 2026-08-07) ---
+  //
+  // A resolved riddle pays through PuzzleRewardSpec.table (engine/puzzles.ts;
+  // World.completePuzzle resolves it through THIS fabric — never a bespoke
+  // payout path). Riddles are repeatable per-zone DISCOVERIES (≤ two a zone,
+  // solved once per zone instance, no combat toll), so the tier prices between
+  // the world droplet and the lair faucet — one honest find plus a themed side
+  // pour, with gems kept RICHEST where the theme is the crystal itself (the
+  // chord, the founding pay's true heir). The flat 2-gem pay of the first
+  // iterations becomes variety at comparable value.
+  // ⚠ EVERY weight / count / rarity split / ilvl bonus in this block is my
+  // pick (puzzle-rewards pass), flagged for Arianna as one unit.
+
+  // THE RIDDLE TROVE — the shared spine: what "a riddle's worth" means in
+  // gear, retuned in one row (the primeval_spoil idiom). The themed faces
+  // nest it; it pays exactly one find.
+  {
+    id: 'puzzle_trove',
+    rolls: [{
+      count: 1,
+      entries: [
+        {
+          weight: 70, kind: 'item', ilvlBonus: 1,
+          rarityWeights: { common: 15, magic: 45, rare: 35, unique: 5 },
+        },
+        { weight: 30, kind: 'table', table: 'world_gear' },
+      ],
+    }],
+  },
+
+  // THE SONGLINE SPOILS (refrain / tempo / accord — the sung riddles): the
+  // singer's own jewelry first, and the song keeps a little of the crystal's
+  // coin on the side.
+  {
+    id: 'songline_spoils',
+    rolls: [
+      {
+        count: 1,
+        entries: [
+          { weight: 40, kind: 'table', table: 'jewelry_cache' },
+          { weight: 25, kind: 'item', category: 'amulet', ilvlBonus: 1 },
+          { weight: 35, kind: 'table', table: 'puzzle_trove' },
+        ],
+      },
+      {
+        count: 1,
+        entries: [
+          { weight: 35, kind: 'gem' },
+          { weight: 20, kind: 'vestige' },
+          { weight: 45, kind: 'nothing' },
+        ],
+      },
+    ],
+  },
+
+  // THE CHORD SPOILS (the attunement riddles): the gem-riddle proper — the
+  // crystals pay in their own stone. The richest gem lane of the riddle
+  // tables, on purpose: where the theme IS the gem, the gems stay.
+  {
+    id: 'chord_spoils',
+    rolls: [{
+      count: [1, 2],
+      entries: [
+        { weight: 60, kind: 'gem' },
+        { weight: 25, kind: 'table', table: 'puzzle_trove' },
+        { weight: 15, kind: 'vestige' },
+      ],
+    }],
+  },
+
+  // THE LATTICE SPOILS (the charged boards, shaped or plain): storm-caught
+  // kit — the Stormlit words ride their magic-only family (forced magic so
+  // the promise never silently degrades to an unworded rare), the board's
+  // charge keeps a gem lane second only to the chord's.
+  {
+    id: 'lattice_spoils',
+    rolls: [
+      {
+        count: 1,
+        entries: [
+          { weight: 30, kind: 'item', withFamily: 'proc_stormlit', rarityWeights: { common: 0, magic: 100, rare: 0 } },
+          { weight: 45, kind: 'table', table: 'puzzle_trove' },
+          { weight: 25, kind: 'gem' },
+        ],
+      },
+      {
+        count: 1,
+        entries: [
+          { weight: 25, kind: 'gem' },
+          { weight: 15, kind: 'vestige' },
+          { weight: 60, kind: 'nothing' },
+        ],
+      },
+    ],
+  },
+
+  // THE EMBER SPOILS (the tended ring): forge-goods — the smith's wear off
+  // the coals, the Concussive words where a blue can carry them, and slag
+  // worth socketing (the furnace's own doctrine: the richest vestige side
+  // of the riddle tables).
+  {
+    id: 'ember_spoils',
+    rolls: [
+      {
+        count: 1,
+        entries: [
+          { weight: 20, kind: 'item', category: 'gloves', ilvlBonus: 1 },
+          { weight: 15, kind: 'item', category: 'belt', ilvlBonus: 1 },
+          { weight: 15, kind: 'item', withFamily: 'proc_concussive', rarityWeights: { common: 0, magic: 100, rare: 0 } },
+          { weight: 50, kind: 'table', table: 'puzzle_trove' },
+        ],
+      },
+      {
+        count: 1,
+        entries: [
+          { weight: 30, kind: 'vestige', count: [1, 2] },
+          { weight: 20, kind: 'gem' },
+          { weight: 50, kind: 'nothing' },
+        ],
+      },
+    ],
+  },
+
+  // THE RINK SPOILS (the pushed blocks): deepwinter kit — footing first
+  // (boots, the Icewalker's own Traction words), the cold's wear second,
+  // the trove behind.
+  {
+    id: 'iceslide_spoils',
+    rolls: [
+      {
+        count: 1,
+        entries: [
+          { weight: 25, kind: 'item', category: 'boots', ilvlBonus: 1 },
+          { weight: 15, kind: 'item', category: 'boots', withFamily: 'traction' },
+          { weight: 20, kind: 'item', category: 'chest', ilvlBonus: 1 },
+          { weight: 40, kind: 'table', table: 'puzzle_trove' },
+        ],
+      },
+      {
+        count: 1,
+        entries: [
+          { weight: 25, kind: 'gem' },
+          { weight: 15, kind: 'vestige' },
+          { weight: 60, kind: 'nothing' },
+        ],
+      },
+    ],
+  },
+
+  // THE EXHUMATION GOODS (the lone crypt's ring): grave-goods, and LEAN by
+  // her ruling (2026-08-05 — the sealed crypt this ring opens is the real
+  // pay): exactly ONE thing, always, valued near the old single gem — the
+  // stone's coin, the dead's jewelry, or a grave chain worth socketing.
+  {
+    id: 'exhumation_goods',
+    rolls: [{
+      count: 1,
+      entries: [
+        { weight: 40, kind: 'gem' },
+        { weight: 15, kind: 'item', category: 'ring' },
+        { weight: 15, kind: 'item', category: 'amulet' },
+        { weight: 30, kind: 'vestige' },
+      ],
+    }],
+  },
 ];
 
 export const LOOT_TABLES: Record<string, LootTableDef> =

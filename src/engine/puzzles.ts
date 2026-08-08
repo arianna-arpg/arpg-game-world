@@ -95,6 +95,29 @@ export interface IceSlideBoard {
   sockets: [number, number][];
 }
 
+/** What a RESOLVED riddle pays (World.completePuzzle) — every lane optional,
+ *  lanes compose when several are named:
+ *    • `cast` — free-cast a catalog skill at the site (the flourish).
+ *    • `gems` — N draws of the classic gem droplet (world.dropGemAt), the
+ *      fabric's founding coin, kept verbatim for byte-compat.
+ *    • `washFor` — a generous parting wash of the finishing tone over the
+ *      solver's side (the puzzle pays in the fabric's own coin; never loot,
+ *      so it fires even on sealed ground).
+ *    • `table` — THE DIVERSIFIED POUR: resolve this LOOT TABLE id
+ *      (data/loottables.ts through engine/loot.ts — the standing nestable
+ *      drop fabric) at the site and land the results through the ordinary
+ *      drop primitives. Themed grave-goods, deepwinter kit, forge spoils
+ *      are one table id here — never a bespoke payout path. UNOWED by law:
+ *      a riddle pays of the ground underfoot, not of a writ, so sealed
+ *      (spoils 'none') ground refuses the mint exactly like the gem lane.
+ *  Resolution is spec → kind (puzzleRewardOf), WHOLE-ROW — see the dial. */
+export interface PuzzleRewardSpec {
+  cast?: string;
+  gems?: number;
+  washFor?: number;
+  table?: string;
+}
+
 /** An authored puzzle (data/puzzles.ts) — everything the placer + kind read. */
 export interface PuzzleSpec {
   /** PUZZLE_KINDS id. */
@@ -172,10 +195,10 @@ export interface PuzzleSpec {
   hum?: number;
   /** Node spacing: grid cell pitch / ring radius (defaults per kind). */
   spacing?: number;
-  /** Completion flourish: free-cast a catalog skill at the site, sprinkle
-   *  gems, and/or wash the finishing tone over the solver's side for a
-   *  GENEROUS `washFor` seconds (the puzzle pays in the fabric's own coin). */
-  reward?: { cast?: string; gems?: number; washFor?: number };
+  /** Completion pay (PuzzleRewardSpec above; resolved spec → kind through
+   *  puzzleRewardOf — absent on both levels, the resolve pays nothing but
+   *  the objective lane, the standing law). */
+  reward?: PuzzleRewardSpec;
   /** HUD noun ("the charged lattice"). Default per kind. */
   label?: string;
 }
@@ -233,6 +256,9 @@ export interface PuzzleKindDef {
   knock?: 'landed' | 'wounding';
   spill?: 'aim' | 'all';
   hum?: number;
+  /** Kind-level completion pay — the reward dial's fallback seat (a spec's
+   *  own `reward` overrides it WHOLE; see puzzleRewardOf). */
+  reward?: PuzzleRewardSpec;
   /** Default ring radius / grid pitch (spec.spacing overrides). */
   spacing: number;
   /** Default node count band for ring kinds. */
@@ -300,6 +326,19 @@ export function puzzleSpillOf(run: PuzzleRun): 'aim' | 'all' {
 }
 export function puzzleHumOf(run: PuzzleRun): number {
   return run.spec.hum ?? run.kind.hum ?? PUZZLE_CFG.hum;
+}
+
+/** THE REWARD DIAL resolves spec → kind, WHOLE-ROW: a level that names any
+ *  reward owns the whole payout — fields never merge across levels, so a
+ *  themed table can retire a kind's gems without a phantom residue. Absent
+ *  on both = undefined, and the resolve pays nothing (the standing law for
+ *  rewardless specs — byte-identical to the pre-lever world). No PUZZLE_CFG
+ *  backstop on purpose: a config default would put pay under every future
+ *  rewardless spec and break that law. Note the court-shrine wrapper
+ *  REBINDS run.kind to its inner riddle at boot, so the kind seat here is
+ *  the LIVE kind's — the riddle that actually ran is the one that pays. */
+export function puzzleRewardOf(run: PuzzleRun): PuzzleRewardSpec | undefined {
+  return run.spec.reward ?? run.kind.reward;
 }
 
 /** THE SPILL LAW's pick: of the nodes ONE blow struck, the bell the blow

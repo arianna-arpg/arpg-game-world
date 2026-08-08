@@ -26,6 +26,12 @@ import { registerZoneInfoSource } from '../world/zoneInfo';
 /** The riddle chevron/panel accent (crystal-glass blue). */
 export const PUZZLE_ACCENT = '#9fd8ff';
 
+// THE DIVERSIFIED POUR (2026-08-07, her commission): rewards left the flat
+// 2-gem pay of the first iterations — each preset now names a THEMED loot
+// table (PuzzleRewardSpec.table → data/loottables.ts riddle-spoils block;
+// gems stay in the mix inside the tables where the theme fits, richest on
+// the chord). ⚠ The table assignments below ride the flagged-numbers block
+// in loottables.ts — one blessing unit.
 export const PUZZLES: Record<string, PuzzleSpec> = {
   // THE GREAT CHORD — a locked heart holds a rolled element; strike the
   // ring's crystals with matching damage until every voice joins. The
@@ -33,7 +39,7 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
   great_chord: {
     kind: 'chord',
     label: 'the great chord',
-    reward: { gems: 2, washFor: 20 },
+    reward: { table: 'chord_spoils', washFor: 20 },
   },
   // THE SHATTERED CHORD — the heartless inversion: the ring wakes mistuned
   // and asks for SILENCE. Batter every crystal back to physical — the
@@ -44,7 +50,7 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
     tones: ['physical'],
     label: 'the shattered chord',
     count: [4, 5],
-    reward: { gems: 2, washFor: 20 },
+    reward: { table: 'chord_spoils', washFor: 20 },
   },
   // THE CHARGED LATTICE — lights-out on a 3×3 of crystals: a strike toggles
   // a cell and its orthogonal neighbors. Kindle the whole board.
@@ -52,14 +58,14 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
     kind: 'lattice',
     grid: [3, 3],
     label: 'the charged lattice',
-    reward: { gems: 2, washFor: 20 },
+    reward: { table: 'lattice_spoils', washFor: 20 },
   },
   // THE SINGING REFRAIN — the ring plays; you answer. Wrong notes falter
   // the song back to its opening bar; the crystals are patient.
   singing_refrain: {
     kind: 'refrain',
     label: 'the singing refrain',
-    reward: { gems: 2, washFor: 20 },
+    reward: { table: 'songline_spoils', washFor: 20 },
   },
   // THE GLIMMER REFRAIN — the grove country's version of the same patience:
   // the ring flashes a firefly sign; you answer it back. The lampwrights
@@ -67,7 +73,7 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
   glimmer_refrain: {
     kind: 'refrain',
     label: 'the glimmer refrain',
-    reward: { gems: 2, washFor: 20 },
+    reward: { table: 'songline_spoils', washFor: 20 },
   },
   // THE RISING TEMPO — every voice keeps its own time from one synced
   // opening bar; strike them slowest first, fastest last. Nothing to
@@ -76,7 +82,7 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
   rising_tempo: {
     kind: 'tempo',
     label: 'the rising tempo',
-    reward: { gems: 2, washFor: 20 },
+    reward: { table: 'songline_spoils', washFor: 20 },
   },
   // THE TWIN ACCORD — opposite seats share a color; ring both halves of a
   // pair inside the linger and the accord binds for good. A wide blow can
@@ -84,7 +90,7 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
   twin_accord: {
     kind: 'accord',
     label: 'the twin accord',
-    reward: { gems: 2, washFor: 20 },
+    reward: { table: 'songline_spoils', washFor: 20 },
   },
   // THE EMBER RING — struck coals stay alight for their gutter window;
   // have every coal burning at once. Patience circles the ring forever,
@@ -93,7 +99,7 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
   ember_ring: {
     kind: 'ember',
     label: 'the ember ring',
-    reward: { gems: 2, washFor: 20 },
+    reward: { table: 'ember_spoils', washFor: 20 },
   },
   // THE SHAPED LATTICES (batch-35 puzzle wave) — the same lights-out law on
   // formatted courts (LATTICE_FORMATS, engine/puzzles.ts): each preset pins
@@ -107,7 +113,7 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
     format: 'wheel',
     grid: latticeFormatGrid('wheel'),
     label: 'the kindled wheel',
-    reward: { gems: 2, washFor: 20 },
+    reward: { table: 'lattice_spoils', washFor: 20 },
   },
   // THE CROSSED LATTICE — nine cells in a plus: the center strike sweeps
   // five voices, an arm's tip barely two. Reads as a waymark on the ground.
@@ -116,7 +122,7 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
     format: 'cross',
     grid: latticeFormatGrid('cross'),
     label: 'the crossed lattice',
-    reward: { gems: 2, washFor: 20 },
+    reward: { table: 'lattice_spoils', washFor: 20 },
   },
   // THE DIAMOND LATTICE — twelve cells on the point with a hollow heart,
   // corners pared to lone voices with tiny neighborhoods.
@@ -125,7 +131,7 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
     format: 'diamond',
     grid: latticeFormatGrid('diamond'),
     label: 'the diamond lattice',
-    reward: { gems: 2, washFor: 20 },
+    reward: { table: 'lattice_spoils', washFor: 20 },
   },
   // THE HOLLOW LATTICE — a 4×4 with two cells eaten out of the diagonal:
   // the holes thin the neighborhoods around them, so the same strike does
@@ -135,7 +141,7 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
     format: 'gapped',
     grid: latticeFormatGrid('gapped'),
     label: 'the hollow lattice',
-    reward: { gems: 2, washFor: 20 },
+    reward: { table: 'lattice_spoils', washFor: 20 },
   },
   // THE ICE SLIDE (batch-35, her ask) — the pushed block: strike it and it
   // slides on the blow's axis until something catches it; seat it on the
@@ -147,7 +153,7 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
     kind: 'iceslide',
     grid: [4, 2],
     label: 'the ice slide',
-    reward: { gems: 2, washFor: 20 },
+    reward: { table: 'iceslide_spoils', washFor: 20 },
   },
   // THE GLACIAL SLIDE — the deep-ice face: two blocks, two sockets, a wider
   // rink. The blocks stop each other — the second seat is the riddle.
@@ -157,7 +163,7 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
     board: [7, 5],
     blocks: [2, 2],
     label: 'the glacial slide',
-    reward: { gems: 2, washFor: 20 },
+    reward: { table: 'iceslide_spoils', washFor: 20 },
   },
 
   // THE GRAVE EXHUMATION — the lone crypt's key (kit: data/lonecrypt.ts).
@@ -171,7 +177,7 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
     // zone had a lone crypt at one point, find it and unseal it" reads as
     // lore, not chore. The status line opens with this label.
     label: 'Break the seal on the lone crypt',
-    reward: { gems: 1 },
+    reward: { table: 'exhumation_goods' },
   },
 };
 
@@ -352,15 +358,17 @@ const SHRINE_CFG = {
  *  a ring; grid boards and hearted chords stay the wilds' own riddles).
  *  `pairs` kinds draw a pair count and double it, so the accord can never
  *  mint an orphan voice (the quantize law honored at MINT time). A probe or
- *  authored table row may pin the pool via TenantRow.params.kinds. */
-const SHRINE_INNERS: {
-  kind: string; weight: number; node: string; label: string;
+ *  authored table row may pin the pool via TenantRow.params.kinds. Each row
+ *  names its riddle family's reward TABLE (the diversified pour — the
+ *  courtyard pays what its riddle's kin pay); exported for the probe census. */
+export const SHRINE_INNERS: {
+  kind: string; weight: number; node: string; label: string; table: string;
   count?: [number, number]; pairs?: [number, number];
 }[] = [
-  { kind: 'refrain', weight: 3, node: 'chime_crystal', count: [4, 5], label: 'the courtyard refrain' },
-  { kind: 'tempo', weight: 2, node: 'tempo_crystal', count: [4, 5], label: 'the courtyard tempo' },
-  { kind: 'accord', weight: 2, node: 'accord_crystal', pairs: [2, 3], label: 'the courtyard accord' },
-  { kind: 'ember', weight: 3, node: 'ember_crystal', count: [5, 6], label: 'the courtyard embers' },
+  { kind: 'refrain', weight: 3, node: 'chime_crystal', count: [4, 5], label: 'the courtyard refrain', table: 'songline_spoils' },
+  { kind: 'tempo', weight: 2, node: 'tempo_crystal', count: [4, 5], label: 'the courtyard tempo', table: 'songline_spoils' },
+  { kind: 'accord', weight: 2, node: 'accord_crystal', pairs: [2, 3], label: 'the courtyard accord', table: 'songline_spoils' },
+  { kind: 'ember', weight: 3, node: 'ember_crystal', count: [5, 6], label: 'the courtyard embers', table: 'ember_spoils' },
 ];
 
 function pickShrineInner(rng: Rng, pool: typeof SHRINE_INNERS): typeof SHRINE_INNERS[number] {
@@ -468,7 +476,7 @@ registerTenantKind('shrine', (ctx, def, grid, cm, rng, kd, row) => {
   }
   const minted: CourtShrineSpec = {
     kind: COURT_SHRINE_KIND, node: inner.node, count: [n, n], spacing: ringR,
-    label: inner.label, reward: { gems: 2, washFor: 20 },
+    label: inner.label, reward: { table: inner.table, washFor: 20 },
     shrine: { x: seat.x, y: seat.y, ringR, a0, kind: inner.kind },
     mintCtx: ctx,
   };

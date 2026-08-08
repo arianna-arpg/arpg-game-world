@@ -167,7 +167,7 @@ import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackArcFrac, track
 import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { bootOccSites, driveOccSites, OCC_CFG, reviveOccSite, seedOccClockMarks, wakeRousedResidents, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
-import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun } from './puzzles';
+import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun } from './puzzles';
 import {
   batchScaleOf, buildWornThrongDef, isThrongBody, THRONG_CFG, throngMarkerOf,
   throngPocketKey, throngSkillSalt, throngSpecsOn, WORN_THRONGS,
@@ -34047,10 +34047,24 @@ export class World {
       });
     }
     this.text(vec(run.at.x, run.at.y - 20), `${label} resolves!`, tint, 16);
-    const rw = run.spec.reward;
+    const rw = puzzleRewardOf(run);
     if (rw?.gems) {
       for (let i = 0; i < rw.gems; i++) {
         this.dropGemAt(vec(run.at.x + rand(-30, 30), run.at.y + rand(-30, 30)));
+      }
+    }
+    // THE DIVERSIFIED POUR (2026-08-07): a reward TABLE resolves through the
+    // standing loot fabric (engine/loot.ts — nestable tables, the drove-purse
+    // routing) and lands through the ordinary drop primitives. UNOWED on
+    // purpose: a riddle pays of the ground underfoot, not of a writ — sealed
+    // (spoils 'none') ground refuses the mint exactly like the gem lane
+    // above (the cheap skip is rollDrops' own idiom: no resolution, no rng).
+    if (rw?.table && !this.spoilsSealed()) {
+      for (const res of resolveLootTable(rw.table, { ilvl: this.zone.level })) {
+        const at = this.clampPos(vec(run.at.x + rand(-30, 30), run.at.y + rand(-30, 30)), 10);
+        if (res.kind === 'gem') this.dropGemAt(at);
+        else if (res.kind === 'vestige') this.dropVestigeAt(at, res.id, res.count);
+        else this.dropGearAt(at, res.item);
       }
     }
     if (rw?.washFor) {

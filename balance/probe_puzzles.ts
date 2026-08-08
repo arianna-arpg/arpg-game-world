@@ -20,6 +20,13 @@
 // scripted solve on a pinned rink, the catch law, the bump, the one-block
 // law, a 40-seed deal sweep re-proved by an INDEPENDENT reachability
 // implementation, and the real placer end-to-end incl. memory re-entry).
+// The puzzle-rewards pass grows THE DIVERSIFIED POUR (J — PuzzleRewardSpec
+// through the standing loot fabric: the reward dial's whole-row precedence,
+// the riddle-table census + nested refs + seeded determinism through the
+// REAL resolver, the chord's kept gem lane + the exhumation's lean law, and
+// the drop-grain covenants through the REAL completePuzzle — a legacy
+// gems-only spec pays exactly its gems, and sealed spoils ground refuses
+// the riddle's whole mint while the wash still lands).
 // Siblings: balance/probe_attunement.ts (tones, pulses, the original three
 // kinds, spill/knock dial routing). Run: npx tsx balance/probe_puzzles.ts
 // ---------------------------------------------------------------------------
@@ -39,16 +46,20 @@ import { generateLayout, type GenCtx, type GeneratedLayout } from '../src/engine
 import { carveMassifs, type TenantRow } from '../src/engine/massif';
 import type { ZoneDef } from '../src/data/zones';
 import {
-  COURT_SHRINE_KIND, COURT_SHRINE_PRESET_PREFIX, type CourtShrineSpec,
+  COURT_SHRINE_KIND, COURT_SHRINE_PRESET_PREFIX, SHRINE_INNERS, type CourtShrineSpec,
 } from '../src/data/puzzles';
 import { attunedStatus, TUNE_CFG } from '../src/engine/tuning';
 import { ELEMENTAL_TYPES } from '../src/engine/stats';
 import {
   ICESLIDE_CFG, LATTICE_FORMATS, latticeFormatGrid,
-  PUZZLE_CFG, PUZZLE_KINDS, puzzleSpillOf,
+  PUZZLE_CFG, PUZZLE_KINDS, puzzleRewardOf, puzzleSpillOf, registerPuzzleKind,
   type IceSlideBoard, type PuzzleHost, type PuzzleRun,
 } from '../src/engine/puzzles';
 import { PUZZLES } from '../src/data/puzzles';
+import { resolveLootTable } from '../src/engine/loot';
+import { LOOT_TABLES } from '../src/data/loottables';
+import { ITEM_BASES } from '../src/data/itembases';
+import { VESTIGE_LIST } from '../src/data/vestiges';
 import { MONSTERS } from '../src/data/monsters';
 import { TILESETS } from '../src/data/tilesets';
 
@@ -1021,6 +1032,168 @@ const probeSlideProof = (w: number, h: number, rocks: number[], sockets: number[
     !!recalled && recalled.done && !!rc && !!rs
     && rc.every((c, i) => c === rs[i]) && kindledOn(recalled.nodes[0]),
     recalled ? recalled.kind.status(recalled) : 'no run');
+  guts.puzzles.length = 0;
+}
+
+// --- J) THE DIVERSIFIED POUR — rewards as open data ---------------------------
+// The lever (puzzle-rewards pass): PuzzleRewardSpec.table resolves through
+// THE STANDING LOOT FABRIC (engine/loot.ts + the loottables.ts riddle-spoils
+// block) — never a bespoke payout path. Everything here must hold BOTH
+// before and after the world-side table pour lands in completePuzzle: the
+// pure lanes exercise the fabric directly, and the drop-grain rigs pin the
+// pre-lever behaviors the pour is bound to preserve.
+{
+  // J1 — THE REWARD DIAL: spec → kind, WHOLE-ROW, absent = silent.
+  const at = { x: p.pos.x + 300, y: p.pos.y + 10200 };
+  registerPuzzleKind({ ...PUZZLE_KINDS.ember, id: 'probe_pay_kind', reward: { gems: 9 } });
+  const dialNodes = mkCourt('ember_crystal', 'probe_pay#0', 3, at);
+  const specWin = mkRun('probe_pay#0',
+    { kind: 'probe_pay_kind', reward: { table: 'puzzle_trove' } }, dialNodes, at);
+  const rw = puzzleRewardOf(specWin);
+  check('reward dial: a spec row wins WHOLE (no per-field merge from the kind)',
+    rw?.table === 'puzzle_trove' && rw?.gems === undefined);
+  const kindFall = mkRun('probe_pay#1', { kind: 'probe_pay_kind' }, dialNodes, at);
+  check('reward dial: an unrewarded spec falls to the kind seat',
+    puzzleRewardOf(kindFall)?.gems === 9);
+  const silent = mkRun('probe_pay#2', { kind: 'ember' }, dialNodes, at);
+  check('reward dial: absent on both levels = a silent resolve',
+    puzzleRewardOf(silent) === undefined);
+  delete PUZZLE_KINDS['probe_pay_kind'];
+
+  // J2 — THE TABLE CENSUS: the riddle tables are registered, their nested
+  // refs resolve (a dangling kind:'table' silently pays nothing at depth —
+  // the audit's orphan class, pinned here), every preset + shrine inner row
+  // names a REAL table, and the lever is live across the shipped repertoire.
+  const RIDDLE_TABLES = ['puzzle_trove', 'songline_spoils', 'chord_spoils',
+    'lattice_spoils', 'ember_spoils', 'iceslide_spoils', 'exhumation_goods'];
+  for (const t of RIDDLE_TABLES) {
+    check(`pour census: table '${t}' is registered in the loot fabric`, !!LOOT_TABLES[t]);
+    const nested = (LOOT_TABLES[t]?.rolls ?? [])
+      .flatMap(r => r.entries.flatMap(e => (e.kind === 'table' ? [e.table] : [])));
+    check(`pour census: '${t}' nested refs all resolve`,
+      nested.every(id => !!LOOT_TABLES[id]), nested.join(','));
+  }
+  const badRef = Object.entries(PUZZLES)
+    .filter(([, s]) => s.reward?.table && !LOOT_TABLES[s.reward.table])
+    .map(([id]) => id);
+  check('pour census: every preset reward.table names a registered table',
+    badRef.length === 0, badRef.join(','));
+  check('pour census: the lever is live across the shipped repertoire',
+    Object.values(PUZZLES).some(s => !!s.reward?.table));
+  check('pour census: every shrine inner row names a registered table',
+    SHRINE_INNERS.every(r => !!LOOT_TABLES[r.table]));
+
+  // J3 — THE FABRIC PAYS REAL GOODS, deterministically: seeded resolves per
+  // table mint genuine bases + registry vestiges through the REAL roller,
+  // and an identical stream replays identical spoils (uid excluded — a
+  // session counter, never part of the deal).
+  const fingerprint = (t: string, seed: number, n: number): string => {
+    const rng = mulberry32(seed);
+    const out: unknown[] = [];
+    for (let i = 0; i < n; i++) {
+      for (const res of resolveLootTable(t, { ilvl: 8, rng })) {
+        out.push(res.kind === 'item'
+          ? { k: 'item', b: res.item.baseId, r: res.item.rarity, u: res.item.uniqueId,
+            a: res.item.affixes.map(a => [a.id, a.tier]) }
+          : res.kind === 'vestige' ? { k: 'vestige', id: res.id, n: res.count }
+            : { k: 'gem' });
+      }
+    }
+    return JSON.stringify(out);
+  };
+  for (const t of RIDDLE_TABLES) {
+    const rng = mulberry32(0x9d7 + t.length * 131);
+    let items = 0, gems = 0, vests = 0, badBase = 0, badVest = 0;
+    for (let i = 0; i < 60; i++) {
+      for (const res of resolveLootTable(t, { ilvl: 8, rng })) {
+        if (res.kind === 'item') { items++; if (!ITEM_BASES[res.item.baseId]) badBase++; }
+        else if (res.kind === 'gem') gems++;
+        else { vests += res.count; if (!VESTIGE_LIST.some(v => v.id === res.id)) badVest++; }
+      }
+    }
+    check(`pour fabric: '${t}' pays real goods through the real roller`,
+      items + gems + vests > 0 && badBase === 0 && badVest === 0,
+      `items=${items} gems=${gems} vestiges=${vests}`);
+    check(`pour determinism: '${t}' same seed = same spoils`,
+      fingerprint(t, 0xbeef + t.length, 40) === fingerprint(t, 0xbeef + t.length, 40));
+  }
+  // Themed covenants: the chord keeps the fabric's founding coin richest
+  // (gems ARE its theme), and the exhumation pays EXACTLY one thing, always
+  // (her lean ruling — the sealed crypt is the real pay).
+  const chordRng = mulberry32(4041);
+  let chordGems = 0;
+  for (let i = 0; i < 60; i++) {
+    for (const res of resolveLootTable('chord_spoils', { ilvl: 8, rng: chordRng })) {
+      if (res.kind === 'gem') chordGems++;
+    }
+  }
+  check('pour theme: the chord still pays gems (the founding coin kept)',
+    chordGems >= 30, `${chordGems} gems / 60 resolves`);
+  const leanRng = mulberry32(5152);
+  let leanBad = 0;
+  for (let i = 0; i < 80; i++) {
+    if (resolveLootTable('exhumation_goods', { ilvl: 8, rng: leanRng }).length !== 1) leanBad++;
+  }
+  check('pour lean: the exhumation pays exactly ONE thing, always',
+    leanBad === 0, `${leanBad} off-count resolves`);
+
+  // J4 — THE DROP-GRAIN COVENANTS through the REAL knock queue + drain +
+  // completePuzzle. ABSENT == IDENTICAL: a legacy gems-only spec drops
+  // exactly its gems and nothing else (the founding behavior, pinned at the
+  // drop grain — the world-side table pour must keep this byte-true). THE
+  // SPOILS LAW: sealed ground refuses the riddle's whole mint (unowed, of
+  // the ground underfoot) while the parting wash — a status, not loot —
+  // still lands.
+  type WorldGuts = {
+    puzzles: PuzzleRun[];
+    farPointDraws: number;
+    drops: { item: { kind: string } }[];
+    puzzleStruck(node: Actor, striker: Actor | null, wounding: boolean): void;
+    bootPuzzles(def: unknown, pois: Vec2[], memory?: { puzzlesDone?: string[] } | null): void;
+  };
+  const guts = world as unknown as WorldGuts;
+  const zoneSpoils = world.zone as unknown as { spoils?: 'full' | 'none' };
+  const gemKinds = new Set(['skill', 'support']);
+  const solveEmber = (preset: string): { gems: number; gear: number; vest: number } => {
+    guts.puzzles.length = 0;
+    guts.farPointDraws = 0;
+    guts.bootPuzzles({
+      id: 'probe_pay_zone', level: 8,
+      objective: { kind: 'puzzle', puzzle: preset }, puzzles: [],
+    }, [{ x: p.pos.x + 700, y: p.pos.y + 10800 }]);
+    const run = guts.puzzles[0];
+    if (!run) return { gems: -1, gear: -1, vest: -1 };
+    p.pos = { x: run.at.x + 40, y: run.at.y }; // inside the parting wash's reach
+    const before = guts.drops.length;
+    for (const n of run.nodes) guts.puzzleStruck(n, p, true);
+    world.update(1 / 60);
+    if (!run.done) return { gems: -2, gear: -2, vest: -2 };
+    const landed = guts.drops.slice(before).map(d => d.item.kind);
+    return {
+      gems: landed.filter(k => gemKinds.has(k)).length,
+      gear: landed.filter(k => k === 'gear').length,
+      vest: landed.filter(k => k === 'vestige').length,
+    };
+  };
+  PUZZLES['probe_legacy_pay'] = { kind: 'ember', reward: { gems: 2, washFor: 20 } };
+  p.endStatus(attunedStatus('lightning')); // a clean slate for the wash asserts
+  const legacy = solveEmber('probe_legacy_pay');
+  check('pour absent==identical: a gems-only reward drops exactly its gems',
+    legacy.gems === 2 && legacy.gear === 0 && legacy.vest === 0,
+    JSON.stringify(legacy));
+  check('pour absent==identical: the parting wash landed on the solver',
+    p.statuses.some(s => s.id === attunedStatus('lightning')));
+  p.endStatus(attunedStatus('lightning'));
+  zoneSpoils.spoils = 'none';
+  const sealed = solveEmber('probe_legacy_pay');
+  zoneSpoils.spoils = undefined;
+  check('pour spoils: sealed ground refuses the riddle mint whole',
+    sealed.gems === 0 && sealed.gear === 0 && sealed.vest === 0,
+    JSON.stringify(sealed));
+  check('pour spoils: the wash still lands (pay of the fabric, not the ground)',
+    p.statuses.some(s => s.id === attunedStatus('lightning')));
+  p.endStatus(attunedStatus('lightning'));
+  delete PUZZLES['probe_legacy_pay'];
   guts.puzzles.length = 0;
 }
 
