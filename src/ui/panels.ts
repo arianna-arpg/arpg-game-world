@@ -6038,7 +6038,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const deed = retired
       ? `hangs up the blade at ${world.zone.name}, and joins the mercenary roster (${acc.mercRoster.length} retired)`
       : `fell in ${world.zone.name}`;
-    const who = world.meta.name !== world.meta.classDef.name ? `${world.meta.name} — ` : '';
+    const who = world.meta.name !== world.meta.classDef.name ? `${esc(world.meta.name)} — ` : '';
     const rowHtml = (r: { id: EssenceId; count: number; worth: number; value: number }): string => {
       const e = ESSENCES[r.id];
       return `<div class="reck-row"><span style="color:${e.color}">${e.glyph} ${r.count} ${e.label}</span>
@@ -6950,11 +6950,11 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       const badge = stageOf(e.modeId, e.stage).badge ?? mode.name.toUpperCase();
       return `
         <div style="display:flex;gap:6px">
-          <button class="sm-roster-go" data-cid="${e.charId}" style="flex:1 1 auto;text-align:left">
-            ⟢ ${e.name} — Level ${e.level}
+          <button class="sm-roster-go" data-cid="${esc(e.charId)}" style="flex:1 1 auto;text-align:left">
+            ⟢ ${esc(e.name)} — Level ${e.level}
             <span style="font-size:10px;color:${mode.color};border:1px solid ${mode.color};
               border-radius:6px;padding:0 5px;margin-left:6px">${badge}</span></button>
-          <button class="sm-roster-del" data-cid="${e.charId}" style="flex:0 0 auto"
+          <button class="sm-roster-del" data-cid="${esc(e.charId)}" style="flex:0 0 auto"
             title="Release this vessel: the character is permanently discarded">✕</button>
         </div>`;
     }).join('');

@@ -11,6 +11,7 @@
 // whose hand confirms.
 // ---------------------------------------------------------------------------
 
+import { esc } from './dom';
 import { Z_LADDER } from './zorder';
 
 export interface CouchJoinChoice {
@@ -73,19 +74,19 @@ export class CouchJoinOverlay {
     const v = this.view;
     if (!v) return;
     const cards = v.choices.map(c => `
-      <button data-couch-pick="${c.key}" ${c.disabled ? 'disabled' : ''}
+      <button data-couch-pick="${esc(c.key)}" ${c.disabled ? 'disabled' : ''}
         style="display:block;width:100%;text-align:left;margin:6px 0;padding:10px 12px;
           background:#14121c;border:1px solid ${c.disabled ? '#3a3a44' : c.color};border-radius:4px;
           color:#e8e4d8;cursor:${c.disabled ? 'var(--cursor-default, default)' : 'var(--cursor-point, pointer)'}">
-        <div style="font-weight:bold;color:${c.disabled ? '#6a6a74' : c.color}">${c.title}</div>
-        <div style="font-size:11px;color:#9a96a8;margin-top:2px">${c.disabled ?? c.sub}</div>
+        <div style="font-weight:bold;color:${c.disabled ? '#6a6a74' : c.color}">${esc(c.title)}</div>
+        <div style="font-size:11px;color:#9a96a8;margin-top:2px">${esc(c.disabled ?? c.sub)}</div>
       </button>`).join('');
     const html = `
       <div style="width:min(560px,92vw);max-height:86vh;overflow-y:auto;background:#0e0c14;
         border:1px solid #c8a84b;border-radius:6px;padding:18px 20px;box-shadow:0 0 40px rgba(0,0,0,0.7)">
         <h2 style="margin:0 0 4px;color:#c8a84b;font-size:18px">Local Co-op</h2>
-        <div style="color:#b8a97a;font-size:12px;margin-bottom:8px">${v.lane}</div>
-        <div style="color:#d8d4c8;font-size:13px;margin-bottom:10px">${v.message}</div>
+        <div style="color:#b8a97a;font-size:12px;margin-bottom:8px">${esc(v.lane)}</div>
+        <div style="color:#d8d4c8;font-size:13px;margin-bottom:10px">${esc(v.message)}</div>
         ${v.phase === 'pick' ? cards : ''}
         <div style="margin-top:12px;text-align:right">
           <button data-couch-cancel style="padding:6px 14px;background:#1a1822;border:1px solid #3a3a52;

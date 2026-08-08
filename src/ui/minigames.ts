@@ -21,6 +21,7 @@
 // ---------------------------------------------------------------------------
 
 import { CRAFT_CFG } from '../engine/crafting';
+import { esc } from './dom';
 import { UI_SCALE_CFG } from './uiScale';
 import { Z_LADDER } from './zorder';
 
@@ -38,8 +39,8 @@ function overlay(title: string, hint: string): { box: HTMLElement; close: () => 
   const box = document.createElement('div');
   box.style.cssText = 'position:relative;width:460px;background:var(--panel-bg,#171221);border:1px solid #4a3a5a;border-radius:8px;padding:16px;box-shadow:0 6px 30px rgba(0,0,0,0.8)';
   box.innerHTML = `
-    <div style="color:var(--gold,#c8a84b);font-size:14px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:2px">${title}</div>
-    <div style="color:#8a8678;font-size:10px;margin-bottom:10px">${hint}</div>`;
+    <div style="color:var(--gold,#c8a84b);font-size:14px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:2px">${esc(title)}</div>
+    <div style="color:#8a8678;font-size:10px;margin-bottom:10px">${esc(hint)}</div>`;
   root.appendChild(box);
   document.body.appendChild(root);
   let closed = false;

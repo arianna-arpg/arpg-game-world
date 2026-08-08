@@ -7,6 +7,7 @@
 // screen, not a polished menu.
 // ---------------------------------------------------------------------------
 
+import { esc } from './dom';
 import { UI_SCALE_CFG } from './uiScale';
 import { Z_LADDER } from './zorder';
 
@@ -74,7 +75,7 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
   for (const c of cb.classes) {
     const card = h('div');
     css(card, { width: '162px', padding: '8px 10px', border: '1px solid #3a3450', borderRadius: '6px', cursor: 'var(--cursor-point, pointer)', background: '#100d18', boxSizing: 'border-box' });
-    card.innerHTML = `<div style="color:${c.color};font-weight:bold;margin-bottom:3px">${c.name}</div><div style="color:#9a93ac;font-size:11px;line-height:1.4">${c.description}</div>`;
+    card.innerHTML = `<div style="color:${c.color};font-weight:bold;margin-bottom:3px">${esc(c.name)}</div><div style="color:#9a93ac;font-size:11px;line-height:1.4">${esc(c.description)}</div>`;
     const refresh = (): void => css(card, {
       borderColor: c.id === selectedClassId ? c.color : '#3a3450',
       background: c.id === selectedClassId ? '#1c1726' : '#100d18',
