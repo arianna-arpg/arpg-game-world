@@ -69,6 +69,7 @@ import { drawWatchSense, drawWatchTrails } from './vis/watchLayer';
 import { driftColor } from './vis/colorDrift';
 import { portraitSubjectOf, portraitTile, type PortraitSubject } from './vis/portrait';
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
+import { drawRuneRing } from './vis/runeRing';
 import { registerVisCache, trimVisCaches } from './vis/caches';
 import { resolveSpeech, revealedChars, wrapSpeech, type SpeechStyle } from './vis/speech';
 import { drawEdgeOverlay, qFrac, qChan } from './vis/overlays';
@@ -3537,6 +3538,11 @@ export class Renderer {
   private drawExits(world: World): void {
     const { ctx } = this;
     const t = world.time;
+    const RG = VIS_CFG.rings;
+    // THE KINDLE's aim point: wherever aim truly lives (the pad's reticle
+    // when the pad owns it, else the mouse — the elite nameplate's own
+    // read); no pointer, no pointer half.
+    const aim = this.padAim ?? (this.hudMouse.x >= 0 ? this.toWorld(this.hudMouse) : null);
     for (const e of world.exits) {
       const locked = world.isExitLocked(e);
       // A BOUNDARY-GATE exit answers in its enclave's color (the gate row's
@@ -3545,12 +3551,31 @@ export class Renderer {
       const bg = !locked ? boundaryGateOf(e.boundary) : undefined;
       const accent = locked ? '#6a6a72' : bg?.accent ?? world.zone.theme.accent;
       const pulse = locked ? 1 : 1 + 0.06 * Math.sin(t * 2.4);
-      // Soft glow
+      // THE KINDLE (ringKindle, VIS_CFG.rings): the portal warms as the
+      // player nears or the aim point rests on its ring. The pointer half
+      // honors the label law — labelRevealAt gates it, so the cursor probes
+      // no veiled way the labels would keep from it (frameOccluders is the
+      // canopy pass's list, one frame old here — a kindle affordance can
+      // afford that; the concealment itself never depends on it, since the
+      // whole face draws under the veils). A SEALED way never kindles:
+      // inert is the state read, the padlock + label already speak.
+      let ringKindle = 0;
+      if (!locked) {
+        ringKindle = clamp((RG.nearPx - dist(world.player.pos, e.pos)) / RG.nearFeather, 0, 1);
+        if (ringKindle < 1 && aim) {
+          const hov = clamp((e.radius + RG.hoverPad + RG.hoverFeather - dist(aim, e.pos)) / RG.hoverFeather, 0, 1);
+          if (hov > ringKindle) ringKindle = Math.max(ringKindle, hov * this.labelRevealAt(world, e.pos));
+        }
+      }
+      // Soft glow — the kindle adds a brighter breath over it
       ctx.globalAlpha = 0.12 + 0.04 * Math.sin(t * 2.4);
       ctx.fillStyle = accent;
       ctx.beginPath();
       ctx.arc(e.pos.x, e.pos.y, e.radius * 1.5, 0, Math.PI * 2);
       ctx.fill();
+      if (ringKindle > 0.02) {
+        drawGlow(ctx, e.pos.x, e.pos.y, e.radius * RG.hiGlowScale, accent, RG.hiGlowAlpha * ringKindle);
+      }
       // Disc + double ring
       ctx.globalAlpha = 0.3;
       ctx.beginPath();
@@ -3568,6 +3593,16 @@ export class Renderer {
       ctx.arc(e.pos.x, e.pos.y, e.radius * 0.62 * pulse, t, t + Math.PI * 1.4);
       ctx.stroke();
       ctx.globalAlpha = 1;
+      // THE RUNE BAND (vis/runeRing.ts): carved glyphs between the two
+      // rings — turning slowly while the way stands open, standing STILL
+      // and dim where it is sealed (motion is the state read; carved stone
+      // never throbs, only its light breathes, phase-locked to the portal's
+      // own pulse).
+      const bandAlpha = locked
+        ? RG.dimAlpha
+        : RG.runeAlpha * (1 + RG.breatheAmp * Math.sin(t * 2.4)) + RG.hiRuneBoost * ringKindle;
+      drawRuneRing(ctx, e.pos.x, e.pos.y, e.radius * RG.bandFrac, accent, bandAlpha,
+        locked ? 0 : t * RG.spin);
       // Destination label — queued into the post-veil label pass: a name the
       // player is entitled to read draws WHOLE above the sight veil (never a
       // half-dimmed ghost), and one the world still conceals stays concealed
@@ -5604,6 +5639,43 @@ export class Renderer {
       ctx.restore();
     }
     const color = besieged ? '#8a5aa8' : attuned ? '#5ad8d8' : '#3a6a72';
+    const RG = VIS_CFG.rings;
+    // THE KINDLE (ringKindle, VIS_CFG.rings): the stone warms to the
+    // player's approach or a resting aim point (reveal-gated like the
+    // exits') — EXCEPT while besieged. A starved stone answers nobody's
+    // approach: the attune brush refuses on the same predicate, and the
+    // broken arcs + tether + refusal floater carry the why. A DORMANT
+    // stone's kindle glows in the attuned cyan — the promise of what the
+    // brush wakes — while its carved band stays unlit slate.
+    let ringKindle = 0;
+    if (!besieged) {
+      const aim = this.padAim ?? (this.hudMouse.x >= 0 ? this.toWorld(this.hudMouse) : null);
+      ringKindle = clamp((RG.nearPx - dist(world.player.pos, wp)) / RG.nearFeather, 0, 1);
+      if (ringKindle < 1 && aim) {
+        const hov = clamp((20 + RG.hoverPad + RG.hoverFeather - dist(aim, wp)) / RG.hoverFeather, 0, 1);
+        if (hov > ringKindle) ringKindle = Math.max(ringKindle, hov * this.labelRevealAt(world, wp));
+      }
+      if (ringKindle > 0.02) {
+        drawGlow(ctx, wp.x, wp.y, RG.wpBand * RG.hiGlowScale, '#5ad8d8',
+          RG.hiGlowAlpha * (attuned ? 1 : 0.7) * ringKindle);
+      }
+    }
+    // THE RUNE BAND (vis/runeRing.ts), one face per state: attuned turns
+    // lit and breathing with the disc's own phase; dormant stands STILL and
+    // dim (the kindle alone warms it); besieged GUTTERS — flickering with
+    // the starved disc's phase and counter-turning slowly (the drain runs
+    // backward) — always beneath the broken arcs, which keep the loud tell.
+    if (besieged) {
+      drawRuneRing(ctx, wp.x, wp.y, RG.wpBand, color,
+        RG.dimAlpha * (0.55 + 0.45 * Math.sin(t * 9)), t * RG.wpGutterSpin);
+    } else if (attuned) {
+      drawRuneRing(ctx, wp.x, wp.y, RG.wpBand, color,
+        RG.runeAlpha * (1 + RG.breatheAmp * Math.sin(t * 3)) + RG.hiRuneBoost * ringKindle,
+        t * RG.wpSpin);
+    } else {
+      drawRuneRing(ctx, wp.x, wp.y, RG.wpBand, color,
+        RG.dimAlpha + RG.hiRuneBoost * ringKindle, 0);
+    }
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     if (besieged) {
@@ -5626,10 +5698,13 @@ export class Renderer {
     ctx.arc(wp.x, wp.y, 12, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
-    ctx.textAlign = 'center';
-    ctx.font = '10px Verdana';
-    ctx.fillStyle = color;
-    ctx.fillText(besieged ? 'severed waypoint' : attuned ? 'waypoint' : 'dormant waypoint', wp.x, wp.y + 36);
+    // The caption rides the word layer now (queueLabelAt) — same words,
+    // same seat, but revealed by what covers the stone like every other
+    // world-anchored line (the label law), instead of leaking through
+    // walls as inline ink.
+    this.queueLabelAt(wp, wp, wp.x, wp.y + 36,
+      besieged ? 'severed waypoint' : attuned ? 'waypoint' : 'dormant waypoint',
+      color, { font: '10px Verdana' });
   }
 
   /** Resource orbs: little glowing droplets of life / mana / shield. */

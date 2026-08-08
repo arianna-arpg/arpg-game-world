@@ -51,6 +51,53 @@ export const VIS_CFG = {
     padFactor: 2.55,
   },
 
+  /** THE RUNE RINGS (vis/runeRing.ts; renderer drawExits/drawWaypoint): the
+   *  travel family's carved glyph bands. Portals and the waypoint stone wear
+   *  a baked ring of stone-cut marks that TURNS while the way stands open
+   *  and STANDS STILL where it is sealed or dormant (motion is the state
+   *  read), kindling with a soft glow as the player nears or the aim point
+   *  rests on the ring. The pointer half of the kindle honors the label law
+   *  (labelRevealAt gates it — the cursor probes no veiled way); the bands
+   *  themselves draw in the world pass UNDER the veils, so concealment keeps
+   *  its authority over the art for free. The besieged waypoint stone
+   *  refuses the kindle outright — a starved stone answers nobody's
+   *  approach, which is exactly its law face. All numbers my numbers,
+   *  flagged 2026-08-07. */
+  rings: {
+    /** Glyphs per band. */
+    runeCount: 11,
+    /** Base glyph mark length (px, ±30% bake-time variation). */
+    glyphLen: 5.5,
+    /** Band radius as a fraction of a portal's ring radius. */
+    bandFrac: 0.84,
+    /** Open-way band rotation (rad/s — stately, readable at a glance). */
+    spin: 0.16,
+    /** Band base alpha: lit (open/attuned) / dim (sealed/dormant). */
+    runeAlpha: 0.55,
+    dimAlpha: 0.26,
+    /** Lit-band alpha breathing amplitude (fraction of base; phase-locked
+     *  to each face's existing pulse so the whole object breathes as one). */
+    breatheAmp: 0.3,
+    /** Player-proximity kindle: ramps in from nearPx over nearFeather px. */
+    nearPx: 92,
+    nearFeather: 48,
+    /** Pointer kindle: aim within ring radius + hoverPad, edge softened
+     *  over hoverFeather px. */
+    hoverPad: 12,
+    hoverFeather: 16,
+    /** Kindle look: peak added glow alpha × glow radius (× ring radius),
+     *  plus the band-alpha boost at full kindle. */
+    hiGlowAlpha: 0.4,
+    hiGlowScale: 1.75,
+    hiRuneBoost: 0.35,
+    /** The waypoint stone: its band radius (the stone ring is 20), the
+     *  attuned band's spin, and the besieged band's slow COUNTER-spin (the
+     *  drain runs backward; the broken arcs + tether stay the loud tell). */
+    wpBand: 27,
+    wpSpin: 0.12,
+    wpGutterSpin: -0.34,
+  },
+
   /** Actor bodies. */
   body: {
     outlineWidth: 1.8,
