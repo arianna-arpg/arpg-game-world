@@ -21,6 +21,13 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { MONSTERS } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
+import { TILESETS } from '../src/data/tilesets';
+import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
+import { PAINTERS } from '../src/render/vis/painters';
+import '../src/render/vis/paintersGloam';
+import '../src/render/vis/paintersHallow';
+import '../src/render/vis/paintersAether';
+import '../src/render/vis/paintersHome';
 import { makeSkillInstance, type SkillDef } from '../src/engine/skills';
 import { LITE_CFG, LitePool, liteNoise, resolveLiteKind } from '../src/engine/lite';
 import { updateAI } from '../src/engine/ai';
@@ -329,6 +336,41 @@ const bolt = {
   for (let i = 0; same && i < a.length; i++) same = a[i] === b[i];
   check('determinism: two seeded runs are BYTE-IDENTICAL (x/y/vx/vy)', same,
     `${a.length / 4} rows compared`);
+}
+
+// --- 9) THE BURROW WARDROBE census (dress resolves, everywhere named) ------
+// A pour row's burrowKind is a doodad-kind STRING — a typo'd face would
+// ship as the warned generic disc with no other witness. Pin: the default
+// flesh maw (LITE_CFG.regen.burrowKind), every face any tileset's pour
+// rows name (base theme + variant overrides), and the RESERVED faces all
+// resolve to a DOODAD_VISUALS entry whose painter is registered; and the
+// dressed countries of the wardrobe pass stand seated.
+{
+  const seats = new Map<string, string>();
+  seats.set('LITE_CFG.regen.burrowKind', LITE_CFG.regen.burrowKind);
+  for (const k of ['colony_rimecrack']) seats.set(`reserved:${k}`, k);
+  for (const [tid, ts] of Object.entries(TILESETS)) {
+    ts.theme.lite?.swarms.forEach((row, i) => {
+      if (row.burrowKind) seats.set(`${tid}[${i}]`, row.burrowKind);
+    });
+    ts.variants?.forEach((v, vi) => v.theme?.lite?.swarms.forEach((row, i) => {
+      if (row.burrowKind) seats.set(`${tid}:v${vi}[${i}]`, row.burrowKind);
+    }));
+  }
+  const bad: string[] = [];
+  for (const [seat, kind] of seats) {
+    const vis = DOODAD_VISUALS[kind];
+    if (!vis) bad.push(`${seat} → '${kind}': no DOODAD_VISUALS entry`);
+    else if (!PAINTERS[vis.painter]) bad.push(`${seat} → '${kind}': painter '${vis.painter}' unregistered`);
+  }
+  check('wardrobe: every named burrow face resolves (visual + painter)',
+    bad.length === 0, bad.length ? bad.join('; ') : `${seats.size} seats checked`);
+  const dressed = new Set([...seats.values()].filter(k => k !== LITE_CFG.regen.burrowKind));
+  const want = ['colony_gall', 'colony_blister', 'colony_sandthroat', 'colony_ashvent'];
+  const missing = want.filter(k => !dressed.has(k));
+  check('wardrobe: the dressed countries stand (green/bog/sand/ash faces seated)',
+    missing.length === 0,
+    missing.length ? `missing: ${missing.join(', ')}` : 'gall+blister+sandthroat+ashvent seated');
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');

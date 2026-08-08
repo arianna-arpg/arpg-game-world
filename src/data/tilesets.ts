@@ -306,6 +306,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       lite: {
         swarms: [{
           monsterId: 'glimmerling', pockets: [1, 3], size: [8, 16], chance: 0.7,
+          burrowKind: 'colony_gall',
           when: { phases: ['dusk', 'night'] },
           announce: 'the wood kindles: small lights rise from the bracken…',
           announceColor: '#d8f078',
@@ -2357,6 +2358,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // let the crawl press its burn. They rekindle if left to rest.
       lite: { swarms: [{
         monsterId: 'emberling', pockets: [1, 3], size: [12, 22], chance: 0.8,
+        burrowKind: 'colony_ashvent',
         announce: 'the ash stirs: embers on the move…', announceColor: '#ff8a3a',
       }] },
       floor: '#150e0a', grid: '#221510', border: '#5c3824',
@@ -2890,6 +2892,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // texture (a heavier step to crush), poured by the pocket.
       lite: { swarms: [{
         monsterId: 'husk_swarmer', pockets: [1, 3], size: [10, 20], chance: 0.8,
+        burrowKind: 'colony_sandthroat',
         announce: 'the sand itself is crawling…', announceColor: '#b89858',
       }] },
       floor: '#1a140c', grid: '#2a2014', border: '#7a5c34',
@@ -3944,6 +3947,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // their size.
       lite: { swarms: [{
         monsterId: 'blood_mite', pockets: [1, 3], size: [12, 24], chance: 0.75,
+        burrowKind: 'colony_blister',
         announce: 'a red shimmer spreads over the mud…', announceColor: '#c84848',
       }] },
       floor: '#10140e', grid: '#18201a', border: '#3a4a38',
@@ -5534,6 +5538,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       lite: {
         swarms: [{
           monsterId: 'glimmerling', pockets: [1, 2], size: [6, 12], chance: 0.5,
+          burrowKind: 'colony_gall',
           when: { phases: ['dusk', 'night'] },
           announce: 'fireflies rise over the lea…',
           announceColor: '#d8f078',
@@ -5702,6 +5707,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       lite: {
         swarms: [{
           monsterId: 'glimmerling', pockets: [2, 4], size: [12, 22], chance: 0.95,
+          burrowKind: 'colony_gall',
           when: { phases: ['dusk', 'night'] },
           announce: 'the vale kindles: the glimmerkin rise…',
           announceColor: '#d8f078',
@@ -5801,6 +5807,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       lite: {
         swarms: [{
           monsterId: 'glimmerling', pockets: [1, 2], size: [8, 16], chance: 0.7,
+          burrowKind: 'colony_gall',
           when: { phases: ['dusk', 'night'] },
           announce: 'small lights climb through the old boughs…',
           announceColor: '#d8f078',
@@ -5919,6 +5926,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       lite: {
         swarms: [{
           monsterId: 'glimmerling', pockets: [2, 3], size: [10, 18], chance: 1,
+          burrowKind: 'colony_gall',
           announce: 'the hollow is full of small lights…',
           announceColor: '#d8f078',
         }],
@@ -6190,6 +6198,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       lite: {
         swarms: [{
           monsterId: 'wool_aphid', pockets: [2, 4], size: [16, 30], chance: 0.85,
+          burrowKind: 'colony_gall',
           announce: 'the stems are lousy with aphids…', announceColor: '#b8d8a0',
         }],
       },
@@ -6718,6 +6727,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       lite: {
         swarms: [{
           monsterId: 'wool_aphid', pockets: [1, 3], size: [10, 22], chance: 0.8,
+          burrowKind: 'colony_gall',
           announce: 'the herd shifts in the dark…', announceColor: '#b8d8a0',
         }],
       },
@@ -6871,6 +6881,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       lite: {
         swarms: [{
           monsterId: 'wool_aphid', pockets: [2, 4], size: [14, 26], chance: 0.85,
+          burrowKind: 'colony_gall',
           announce: 'the herd stirs among the roots…', announceColor: '#b8d8a0',
         }],
       },

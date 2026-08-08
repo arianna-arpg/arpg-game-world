@@ -1945,6 +1945,52 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'mawPit', order: 17,
     blend: { strength: 0.3, feather: 12, color: '#241c12' },
   },
+  // THE BURROW WARDROBE (same law, native dress): biome-family faces for
+  // the colony burrow above, every one the ONE mawPit painter re-clothed in
+  // local materials — zero new painters. A pour row names its face via
+  // LiteSwarmRow.burrowKind (engine/lite.ts); an undressed row keeps the
+  // flesh maw, and the flesh/grave countries keep it ON PURPOSE. Same law
+  // throughout: runtime-planted only, never in layouts, sealed by evap
+  // when the pocket dies, walkable ground decal by the default rule.
+  // The green countries' face — a root-boil: a knothole lipped in wet
+  // bark, splinter teeth, a loam throat (the groves' firefly beds, the
+  // garden's aphid herds).
+  colony_gall: {
+    painter: 'mawPit', order: 17,
+    params: { gum: '#54402a', enamel: '#c8ac6a', gullet: '#120c04' },
+    blend: { strength: 0.3, feather: 12, color: '#241a0e' },
+  },
+  // The bog's face — a weed-choked blister: moss-slick peat lip, reed-stub
+  // teeth, bog-water dark (the mire's blood-mite beds).
+  colony_blister: {
+    painter: 'mawPit', order: 17,
+    params: { gum: '#465838', enamel: '#a8b080', gullet: '#0a1208' },
+    blend: { strength: 0.3, feather: 12, color: '#1c2a16' },
+  },
+  // The sands' face — a shard throat: an antlion funnel rimmed in packed
+  // sand, sun-bleached chitin teeth (the hivesands' crawling floor).
+  colony_sandthroat: {
+    painter: 'mawPit', order: 17,
+    params: { gum: '#a8824e', enamel: '#e8d8ac', gullet: '#241708' },
+    blend: { strength: 0.3, feather: 12, color: '#8a6a3c' },
+  },
+  // The ash country's face — a cinder vent: heat-cracked char lip, scorched
+  // teeth, a live-coal heart breathing its own light (the emberlings' door).
+  colony_ashvent: {
+    painter: 'mawPit', order: 17,
+    params: { gum: '#33201a', enamel: '#7a5a42', gullet: '#ff7a2e' },
+    blend: { strength: 0.3, feather: 12, color: '#1b0703' },
+    light: { radius: -1.5, color: '#ff8a3a', intensity: 0.1, flicker: 1.4 },
+  },
+  // The snows' face — a rime crack: wind-glazed lip, icicle teeth, the
+  // under-ice dark. RESERVED (no snow country pours today): the first
+  // taiga/tundra pour row seats it by naming it — never a dead entry,
+  // a reserved word (the descent-register doctrine).
+  colony_rimecrack: {
+    painter: 'mawPit', order: 17,
+    params: { gum: '#8ab0cc', enamel: '#e8f4fc', gullet: '#0a1420' },
+    blend: { strength: 0.3, feather: 12, color: '#b8d4e4' },
+  },
   nerve_root: {
     painter: 'veins', order: 29,
     params: { vessel: '#382848', pulse: '#9a72c8', node: '#48305c' },

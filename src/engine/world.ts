@@ -26922,16 +26922,17 @@ export class World {
     const pk = this.litePockets.length;
     const p = this.litePocketPush(regen, kindIdx, heart.x, heart.y, cap, 0, undefined);
     if (row.when) p.when = row.when;
-    this.litePlantBurrow(pk, heart.x, heart.y);
+    this.litePlantBurrow(pk, heart.x, heart.y, row.burrowKind);
     return pk;
   }
 
   /** THE BURROW TELL: ambient regen hearts wear a findable mark — the
    *  exterminator can SEE where the collective breeds, and the mark seals
    *  (evaporates) when the pocket dies. Render-only dress; anchored
-   *  pockets never plant one (the anchor IS the tell). */
-  private litePlantBurrow(pk: number, x: number, y: number): void {
-    const bk = LITE_CFG.regen.burrowKind;
+   *  pockets never plant one (the anchor IS the tell). The row's burrowKind
+   *  wardrobe face rides in here (dress, never law). */
+  private litePlantBurrow(pk: number, x: number, y: number, kind?: string): void {
+    const bk = kind ?? LITE_CFG.regen.burrowKind;
     if (!bk) return;
     const d: Doodad = { pos: vec(x, y), radius: 13, kind: bk as Doodad['kind'] };
     this.doodads.push(d);

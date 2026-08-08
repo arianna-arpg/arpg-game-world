@@ -153,6 +153,14 @@ export interface LiteSwarmRow {
    *  falls back to the kind's default. Pockets remember their poured size
    *  as the cap and replenish toward it while unmolested. */
   regen?: LiteRegenSpec | true;
+  /** THE BURROW'S WARDROBE (dress, never mechanics): the doodad kind this
+   *  row's ambient regen hearts wear in place of the flesh-mouthed default
+   *  (LITE_CFG.regen.burrowKind) — a biome-native mouth over the same law:
+   *  the green countries' root gall, the bog's weed blister, the sands'
+   *  shard throat (data/doodadVisuals.ts, the colony-burrow wardrobe).
+   *  Render-only dress: the seal, the regrowth and the pocket's whole law
+   *  never read it, and an undressed row keeps the flesh maw. */
+  burrowKind?: string;
   /** Arrival line on the first pour (the wildlife announce idiom). */
   announce?: string;
   announceColor?: string;
