@@ -8,9 +8,14 @@
 //     visual clutter. 'system' opts back into the native arrow.
 //   • THE CURSOR COSTUME: the whole AFFORDANCE SET — hover-a-button, pressed,
 //     text entry, grab/drag, help, copy, crosshair — derived from that same
-//     style + tint (CursorRole variants: lit/tilted/re-glyphed in the one rim
-//     discipline), so no interactive surface ever snaps back to the OS stock
-//     arrow. applyCursor publishes each role as a root CSS custom property
+//     style + tint (CursorRole variants: re-formed/lit/re-glyphed in the one
+//     rim discipline), so no interactive surface ever snaps back to the OS
+//     stock arrow. THE GRIP READ: point/press are true GESTURE forms — each
+//     style's art articulated through an open→ready→closed arc (the wake's
+//     swallowtail fans then folds, the sigil turns then clamps, the talon
+//     doubles into a pincer that bites) — so hover and click read as the
+//     cursor CHANGING MECHANISM, not merely lighting up; the lit tint +
+//     same-tint halo stay on as the secondary cue. applyCursor publishes each role as a root CSS custom property
 //     (`--cursor-<role>`) and flags `html.cursor-themed`; declaration sites
 //     opt in with `cursor: var(--cursor-<role>, <stock keyword>)` — the
 //     fallback keyword IS the un-themed behavior, so the 'system' style
@@ -28,6 +33,8 @@
 // canvas — no renderer or settings-UI edits (the options view iterates the
 // registry; unknown saved styles fall back to the default on load), and the
 // costume derives every role variant from the style's own painter for free.
+// An optional `gesture` pair gives the style's point/press forms its own
+// articulation; styles without one keep the derived lit/tilted read.
 // ---------------------------------------------------------------------------
 
 /** The player-facing cursor choice, persisted in Settings.cursor. */
@@ -48,6 +55,17 @@ export interface CursorStyleDef {
   hotspot: [number, number];
   /** Paint the cursor into a size×size canvas in the given tint. */
   paint: (ctx: CanvasRenderingContext2D, size: number, color: string) => void;
+  /** THE GRIP READ — optional gesture forms for the point/press roles: the
+   *  style's own art articulated 'ready' (hover — poised open) and 'closed'
+   *  (press — clamped shut), painted in the SAME coordinate space + hotspot
+   *  seat as `paint` so the click point never drifts between states. The
+   *  painters run with ROLE_PAD px of honored overdraw past every nominal
+   *  edge (the halo headroom), so a flared form may breathe past the base
+   *  box. Styles without one keep the derived lit/tilted point/press. */
+  gesture?: {
+    ready: (ctx: CanvasRenderingContext2D, size: number, color: string) => void;
+    closed: (ctx: CanvasRenderingContext2D, size: number, color: string) => void;
+  };
 }
 
 /** Swatch palette for the options UI — picked to survive every biome's
@@ -80,10 +98,129 @@ const rim = (ctx: CanvasRenderingContext2D, path: () => void, color: string): vo
   ctx.stroke();
 };
 
+// The gesture forms (THE GRIP READ) — each style's point/press articulation
+// as a parameterized re-draw of its own base geometry, so the whole arc
+// stays in one art language and one tint. All geometry numbers here are one
+// tuning unit with the base art above.
+
+/** The wake arrow split at its swallowtail seam: the head+shaft body and the
+ *  tail fin as separate rimmed pieces (their union at rest is the base
+ *  arrow), the fin swung about a pivot on that seam — about its root
+ *  (11.5,14) it FANS open off the notch (ready), about the seam corner
+ *  (7.5,15.5) it sweeps back to NEST flush under the head, closing the
+ *  swallowtail notch into one solid dart (closed). The hollow eye keeps its
+ *  base seat in the untouched head, and the tip never leaves (2,2). */
+const wakeForm = (finRot: number, px = 11.5, py = 14) =>
+  (ctx: CanvasRenderingContext2D, _s: number, color: string): void => {
+    const body = (): void => {
+      ctx.beginPath();
+      ctx.moveTo(2, 2);
+      ctx.lineTo(2, 20);
+      ctx.lineTo(7.5, 15.5);
+      ctx.lineTo(11.5, 14);
+      ctx.lineTo(18.5, 13);
+      ctx.closePath();
+    };
+    rim(ctx, body, color);
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(finRot);
+    ctx.translate(-px, -py);
+    const fin = (): void => {
+      ctx.beginPath();
+      ctx.moveTo(11.5, 14);
+      ctx.lineTo(7.5, 15.5);
+      ctx.lineTo(11.5, 23.5);
+      ctx.lineTo(15, 21.5);
+      ctx.closePath();
+    };
+    rim(ctx, fin, color);
+    ctx.restore();
+    // The hollow eye — the same punch the base art wears.
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.arc(7.2, 8.2, 2.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(8,8,12,0.9)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(7.2, 8.2, 2.1, 0, Math.PI * 2);
+    ctx.stroke();
+  };
+
+/** The sigil rose at a given spread: ring radius, compass-tick span
+ *  (radial in→out), heart dot, and the tick bearing — cardinals at rest,
+ *  diagonals once the seal TURNS. The gesture arc is a twist-lock: ready
+ *  turns the ticks and tightens the ring; closed drives them THROUGH it
+ *  onto the heart. The base painter is this form at its rest numbers. */
+const sigilForm = (ring: number, tickIn: number, tickOut: number, dot: number, diag = false) =>
+  (ctx: CanvasRenderingContext2D, _s: number, color: string): void => {
+    const ringPath = (): void => {
+      ctx.beginPath();
+      ctx.arc(13, 13, ring, 0, Math.PI * 2);
+    };
+    ringPath();
+    ctx.strokeStyle = 'rgba(8,8,12,0.92)';
+    ctx.lineWidth = 5.5;
+    ctx.stroke();
+    ringPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.4;
+    ctx.stroke();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    const d = Math.SQRT1_2;
+    const dirs = diag
+      ? ([[-d, -d], [d, d], [-d, d], [d, -d]] as const)
+      : ([[0, -1], [0, 1], [-1, 0], [1, 0]] as const);
+    for (const [dx, dy] of dirs) {
+      ctx.beginPath();
+      ctx.moveTo(13 + dx * tickIn, 13 + dy * tickIn);
+      ctx.lineTo(13 + dx * tickOut, 13 + dy * tickOut);
+      ctx.stroke();
+    }
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(13, 13, dot, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+/** The talon as a raptor PINCER: the base claw joined by its diagonal-mirror
+ *  twin, both hinged at the shared heel (20.5,20.5) — `part` swings each
+ *  claw about the hinge: positive gapes the tips apart AROUND the hotspot
+ *  (ready), negative crosses them past their seat (closed — the pinch bites
+ *  exactly the click point, which never moves). */
+const talonForm = (part: number) =>
+  (ctx: CanvasRenderingContext2D, _s: number, color: string): void => {
+    for (const flip of [false, true]) {
+      const p = (x: number, y: number): [number, number] => (flip ? [y, x] : [x, y]);
+      const claw = (): void => {
+        ctx.beginPath();
+        ctx.moveTo(...p(2, 2));
+        ctx.quadraticCurveTo(...p(16, 4), ...p(21, 17));
+        ctx.quadraticCurveTo(...p(21.5, 20.5), ...p(18.5, 22.5));
+        ctx.quadraticCurveTo(...p(18, 15), ...p(10.5, 9.5));
+        ctx.quadraticCurveTo(...p(5, 5.5), ...p(2, 2));
+        ctx.closePath();
+      };
+      ctx.save();
+      ctx.translate(20.5, 20.5);
+      ctx.rotate(flip ? -part : part);
+      ctx.translate(-20.5, -20.5);
+      rim(ctx, claw, color);
+      ctx.restore();
+    }
+  };
+
 export const CURSOR_STYLES: Record<string, CursorStyleDef> = {
-  /** The signature: a swallowtail arrow with a hollow "wake" eye. */
+  /** The signature: a swallowtail arrow with a hollow "wake" eye. Its grip
+   *  arc articulates the swallowtail itself: the tail fans open, then folds
+   *  shut under the body. */
   wake: {
     id: 'wake', label: 'Wake', size: 26, hotspot: [2, 2],
+    gesture: { ready: wakeForm(-0.42), closed: wakeForm(-0.72, 7.5, 15.5) },
     paint: (ctx, _s, color) => {
       const arrow = (): void => {
         ctx.beginPath();
@@ -111,40 +248,25 @@ export const CURSOR_STYLES: Record<string, CursorStyleDef> = {
       ctx.stroke();
     },
   },
-  /** A centered ring-and-dot — the precision pick (hotspot at its heart). */
+  /** A centered ring-and-dot — the precision pick (hotspot at its heart).
+   *  Its grip arc is a twist-lock: the ticks turn diagonal and draw in
+   *  (ready), then clamp through the tightened ring onto the heart
+   *  (closed). Radially symmetric about the hotspot — zero drift by
+   *  construction. */
   sigil: {
     id: 'sigil', label: 'Sigil', size: 26, hotspot: [13, 13],
-    paint: (ctx, _s, color) => {
-      const ring = (): void => {
-        ctx.beginPath();
-        ctx.arc(13, 13, 7.5, 0, Math.PI * 2);
-      };
-      ring();
-      ctx.strokeStyle = 'rgba(8,8,12,0.92)';
-      ctx.lineWidth = 5.5;
-      ctx.stroke();
-      ring();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2.4;
-      ctx.stroke();
-      // four compass ticks + the center point
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]] as const) {
-        ctx.beginPath();
-        ctx.moveTo(13 + dx * 9.5, 13 + dy * 9.5);
-        ctx.lineTo(13 + dx * 12.5, 13 + dy * 12.5);
-        ctx.stroke();
-      }
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(13, 13, 1.8, 0, Math.PI * 2);
-      ctx.fill();
+    paint: sigilForm(7.5, 9.5, 12.5, 1.8),
+    gesture: {
+      ready: sigilForm(6.6, 8.2, 11.2, 2.0, true),
+      closed: sigilForm(5.0, 4.2, 7.8, 2.3, true),
     },
   },
-  /** A raked talon — the bestial option. */
+  /** A raked talon — the bestial option. Its grip arc doubles the claw into
+   *  a facing pincer: gaped around the click point, then crossed shut on
+   *  it. */
   talon: {
     id: 'talon', label: 'Talon', size: 26, hotspot: [2, 2],
+    gesture: { ready: talonForm(0.11), closed: talonForm(-0.045) },
     paint: (ctx, _s, color) => {
       const claw = (): void => {
         ctx.beginPath();
@@ -268,6 +390,24 @@ function paintStyleArt(def: CursorStyleDef, color: string): HTMLCanvasElement | 
   return c;
 }
 
+/** A gesture form on its own PADDED scratch canvas — the painter speaks the
+ *  style's base coordinates (origin pre-shifted by ROLE_PAD), so an
+ *  articulated form may overdraw up to ROLE_PAD px past every nominal edge
+ *  and still land inside the halo headroom. */
+function paintFormArt(
+  def: CursorStyleDef,
+  painter: (ctx: CanvasRenderingContext2D, size: number, color: string) => void,
+  color: string,
+): HTMLCanvasElement | null {
+  const c = document.createElement('canvas');
+  c.width = c.height = def.size + ROLE_PAD * 2;
+  const ctx = c.getContext('2d');
+  if (!ctx) return null;
+  ctx.translate(ROLE_PAD, ROLE_PAD);
+  painter(ctx, def.size, color);
+  return c;
+}
+
 /** Corner badge for the help/copy variants — a dark coin in the rim
  *  discipline wearing a tint glyph, composited over the style's own arrow. */
 function paintBadge(ctx: CanvasRenderingContext2D, glyph: '?' | '+', color: string): void {
@@ -314,18 +454,29 @@ function roleArt(
     return { canvas: base, hotspot: [hx, hy] };
   }
   if (role === 'point' || role === 'press') {
-    // The "about to click" read: the same arrow LIT — tint lifted toward
-    // white under a soft same-tint halo. Press adds the stamp: the body
-    // compresses and tips a few degrees ABOUT THE HOTSPOT, so the click
-    // point holds still while the cursor visibly commits.
-    const lit = paintStyleArt(def, lighten(color, 0.32));
+    // THE GRIP READ: hover and press are FORM changes — the style's own
+    // gesture forms ('ready' poised open, 'closed' clamped shut) painted
+    // lit, the same-tint halo kept on as the secondary cue. The gesture
+    // painters hold the hotspot seat in their own geometry, so the click
+    // point never drifts between states. A registry style without gesture
+    // art keeps the derived read: the base arrow lit (point) / compressed
+    // and tipped a few degrees ABOUT THE HOTSPOT (press).
+    const form = def.gesture?.[role === 'point' ? 'ready' : 'closed'];
+    const lit = form
+      ? paintFormArt(def, form, lighten(color, 0.32))
+      : paintStyleArt(def, lighten(color, 0.32));
     if (!lit) return null;
     const out = document.createElement('canvas');
     out.width = out.height = def.size + ROLE_PAD * 2;
     const ctx = out.getContext('2d');
     if (!ctx) return null;
     ctx.shadowColor = color;
-    if (role === 'press') {
+    if (form) {
+      // Form art is already padded — it seats at the origin whole.
+      ctx.shadowBlur = role === 'press' ? 1.5 : 2.5;
+      ctx.drawImage(lit, 0, 0);
+      if (role === 'point') ctx.drawImage(lit, 0, 0); // second pass fills the halo
+    } else if (role === 'press') {
       ctx.shadowBlur = 1.5;
       ctx.translate(hx + ROLE_PAD, hy + ROLE_PAD);
       ctx.rotate(0.10);
