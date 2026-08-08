@@ -976,6 +976,20 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
       && supModsStat(sup, ['thirstless', 'restorePower', 'restorePctMax', 'effectDuration'])
       && sup.followUp === undefined && sup.chargeGain === undefined,
   },
+  {
+    // The corpse-raise shape (2026-08-08, the pour-lane trade gems): an
+    // unknowable crew boards anything, so the gate admits a lane rider
+    // for whatever body may rise — but the arena economy never banks a
+    // crew flask charge (no orb ever feeds a minion's fount), so no crew
+    // drink fires and the lane dials have nothing to read. Same
+    // self-deleting rule as the rows above: a probe pack that feeds a
+    // crew fount re-enters these pairs automatically.
+    note: 'pour-lane rider on an unknowable-crew raiser: the arena never banks a crew flask charge, so no crew drink ever fires',
+    when: (def, sup) => supModsStat(sup,
+      ['pourPower_surge', 'pourPower_settle', 'pourPct_surge', 'pourPct_settle'])
+      && def.delivery.type === 'summon'
+      && summonCrewOf(def.delivery, id => MONSTERS[id], id => SKILLS[id]) === 'unknowable',
+  },
   // ---- BACKLOG-SWEEP classes (2026-07-21 triage of the 24k-row ledger):
   // condition/environment gaps the standard probes cannot arm, each verified
   // by hand against the engine read-site before earning its row. Same

@@ -106,6 +106,11 @@ export interface CharacterSave {
   /** The throng's run-long pocket-claim ledger (World.throngClaimed —
    *  the completedObjectives idiom): claimed seats stay empty on revisit. */
   throngClaimed?: string[];
+  /** THE PRIMED POUR (pourPrime): banked full-pool sips awaiting their
+   *  releasing wound — paid for at press, so they ride the save (the
+   *  throng rows' idiom). Optional → older saves load unchanged; an
+   *  entry whose skill left the bar dissolves at release anyway. */
+  primedPours?: { skillId: string; chargesSpent: number }[];
   bar: (string | null)[];   // bar bindings as skill ids (any length; padded to BAR_SLOTS on load)
   level: number;            // Actor level (display + xp continuity)
   // Content-package run state (optional → old saves still load). The expedition
@@ -250,6 +255,9 @@ export function serializeCharacter(world: World): CharacterSave {
       return [...rows.values()];
     })(),
     throngClaimed: [...world.throngClaimed],
+    // THE PRIMED POUR: paid, unreleased sips ride the save whole.
+    ...(hero.primedPours.length
+      ? { primedPours: hero.primedPours.map(e => ({ ...e })) } : {}),
     modeId: m.modeId,
     modeStage: m.modeStage,
     charId: m.charId,
@@ -376,6 +384,12 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
   // gathered rosters beside the keeper (engine/throng.ts).
   world.throngClaimed = new Set(save.throngClaimed ?? []);
   if (save.throng?.length) world.restoreThrong(save.throng);
+  // THE PRIMED POUR: re-bank the paid, unreleased sips on the hero —
+  // verbatim (record tolerance only); entries whose skill left the bar
+  // dissolve at release, so the law lives where it always lives.
+  world.seatHero(world.localSeat).primedPours = (save.primedPours ?? [])
+    .filter(e => e && typeof e.skillId === 'string')
+    .map(e => ({ skillId: e.skillId, chargesSpent: Math.max(0, Math.floor(e.chargesSpent ?? 0)) }));
   return true;
 }
 

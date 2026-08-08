@@ -764,6 +764,22 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  brimming pool no longer refuses the drink. The rider-chaser's lever:
    *  drink for the on-drink effects and let the pour spill. */
   thirstless:     { label: 'Thirstless', base: 0, min: 0 },
+  /** POUR LANES (2026-08-08, the two-stream sip — RestoreOverTimeEffect
+   *  .lane): per-lane multipliers on labeled restore streams, beside the
+   *  whole-pour restorePower — the trade gems' dials ("50% less settle,
+   *  richer surge" is two ordinary modifiers). */
+  pourPower_surge:  { label: 'Surge Pour', base: 1, min: 0 },
+  pourPower_settle: { label: 'Settle Pour', base: 1, min: 0 },
+  /** Flat percent-of-maximum added to a labeled lane's total. The surge's
+   *  ONE investment road (its authored % is a fixed floor: no gem-level
+   *  growth ever, and restorePctMax folds into the settle alone — THE
+   *  ONCE-PER-DRINK LAW). */
+  pourPct_surge:  { label: 'Surge % of Maximum', base: 0, min: 0, percent: true },
+  pourPct_settle: { label: 'Settle % of Maximum', base: 0, min: 0, percent: true },
+  /** THE PRIMED POUR (count): full-pool drinks BANK instead of refusing —
+   *  every cost paid at press, the payload held, released whole by the
+   *  first life-damage event. The value is how many sips may wait. */
+  pourPrime:      { label: 'Primed Pours', base: 0, min: 0 },
   /** Victim-side chance to SHRUG an incoming ailment outright — queried
    *  with the status's element tag, so Purity of Fire resists ignites
    *  specifically while Purity of Elements resists the lot. */
@@ -1527,6 +1543,15 @@ export class StatSheet {
    *  with instance-level consumers scan those themselves. */
   private whenRefs: Set<ConditionId> | null = null;
 
+  /** Which stats any registered modifier TAG-FILTERS (Modifier.tags) —
+   *  the whenRefs idiom, for tag scope: per-frame consumers whose read is
+   *  normally untagged (the cooldown map's one cooldownRecovery read) ask
+   *  this before paying for per-item context reads, so a tag-scoped grant
+   *  ("flask cooldown recovery") stops being invisible to them the moment
+   *  it exists and costs nothing while it doesn't. Skill-local `extra`
+   *  mods are NOT visible here, exactly like whenRefs. */
+  private taggedStats: Set<string> | null = null;
+
   /** THE ARMED LISTS — per generated stat FAMILY (see armedFamily), keyed by
    *  the family's prefix and derived lazily. Dropped by invalidate() beside
    *  the value cache: a derived list that outlived a departed source would
@@ -1581,13 +1606,28 @@ export class StatSheet {
     this.sources.set(name, mods);
     this.invalidate();
     this.whenRefs = null;
+    this.taggedStats = null;
   }
 
   removeSource(name: string): void {
     if (this.sources.delete(name)) {
       this.invalidate();
       this.whenRefs = null;
+      this.taggedStats = null;
     }
+  }
+
+  /** Does any registered (sheet-level) modifier tag-filter `stat`? See
+   *  taggedStats above — derived once per source generation. */
+  hasTaggedMods(stat: string): boolean {
+    if (!this.taggedStats) {
+      const s = new Set<string>();
+      for (const mods of this.sources.values()) {
+        for (const m of mods) if (m.tags?.length) s.add(m.stat);
+      }
+      this.taggedStats = s;
+    }
+    return this.taggedStats.has(stat);
   }
 
   hasSource(name: string): boolean { return this.sources.has(name); }

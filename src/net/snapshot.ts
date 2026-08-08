@@ -109,6 +109,10 @@ export interface ActorW {
   /** INVOCATION RUNES (players only, while banked) — the client's own bar
    *  draws the woven sequence the host is holding for it. */
   rn?: string[];
+  /** THE PRIMED POUR's banked sips (players, while held) — the SKILL IDS
+   *  only (the runes idiom: one derived label per hotbar glint;
+   *  chargesSpent and the release live host-side, host-authoritative). */
+  pp?: string[];
   /** COMBO GRAMMAR chips, host-computed like the boss bar (clients hold no
    *  ring): per equipped rule [id, lit, len, glow]. Players only. */
   cb?: [string, number, number, number][];
@@ -560,6 +564,8 @@ function actorToW(a: Actor): ActorW {
   // (host-computed rows — the boss-bar idiom; clients hold no cast ring).
   if (a.kind === 'player') {
     if (a.runes.length) w.rn = a.runes.slice();
+    // THE PRIMED POUR's glints (pourPrime) — ids only, the runes idiom.
+    if (a.primedPours.length) w.pp = a.primedPours.map(e => e.skillId);
     const cb = COMBO_HUD_OF(a);
     if (cb?.length) w.cb = cb;
     if (a.mimicBank?.length) {
@@ -1015,6 +1021,10 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // Player bar readouts (own hero + party): runes verbatim, combo chips
     // as host-computed rows the renderer prefers over local derivation.
     a.runes = aw.rn ?? [];
+    // THE PRIMED POUR mirror (render-only): ids rebuild the hotbar
+    // glints; chargesSpent never crosses — the release is host law.
+    if (aw.pp?.length) a.primedPours = aw.pp.map(id => ({ skillId: id, chargesSpent: 0 }));
+    else if (a.primedPours.length) a.primedPours = [];
     a.comboHud = aw.cb?.map(([id, lit, len, glow]) => ({ id, lit, len, glow }));
     // Mimic bank mirror (render/UI only — capture clocks stay host-side,
     // so mirrored entries carry at:0 and the client never prunes them).

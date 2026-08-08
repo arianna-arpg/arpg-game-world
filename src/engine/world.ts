@@ -28535,12 +28535,19 @@ export class World {
 
     const castTime = caster.skillUseTime(inst);
     if (effMode === 'cast' && castTime <= 0.001) {
+      // THE PRIMED POUR: a true-full pour press BANKS its sip instead of
+      // pouring — decided HERE, after every cost is paid, so the press
+      // stays a real press while the payload defers (the gate already
+      // admitted it through primedPourOpen; a life-cost dent between
+      // press and here honestly demotes the bank to an ordinary pour).
+      const primed = caster.primedPourOpen(inst);
       // Instant: resolves on press. A stepsFromBank flicker resolves once
       // per BANKED round (movement deliveries stagger into the train).
       this.executeSkill(caster, inst, aim, {
         targetInfo: targetInfo ?? undefined, dmgMult: baseMult, paidCost: paid,
         chargesSpent: cc.consumed,
         repeat: bankSteps,
+        primed: primed || undefined,
       });
       // A REFLEX that pierced paces on its own clock and stamps NO recovery
       // — it must never lengthen the action it slipped through. Hold combos
@@ -28661,6 +28668,11 @@ export class World {
       /** MOVEMENT-speed factor from a charge release (ChargeSpec.speedAtFull:
        *  Immolation Rush's laden comet travels SLOWER, distance held). */
       speedMult?: number;
+      /** THE PRIMED POUR (pourPrime): the press is REAL — mana, charges
+       *  and the clock all pay — but the pool stood at true full, so the
+       *  self-payload BANKS instead of applying (released whole by the
+       *  first life-damage event; see releasePrimedPours). */
+      primed?: boolean;
     } = {},
   ): boolean {
     const def = inst.def;
@@ -29026,6 +29038,21 @@ export class World {
     if (!opts.noCooldown && !instanceUseCharges(inst)?.magazine
       && def.cooldownAt !== 'press') {
       this.stampSkillCooldown(caster, inst, def.cooldown);
+    }
+
+    // THE PRIMED POUR (pourPrime): everything above paid — mana at press,
+    // charges at press, the clock just now ("a use is a use") — and here
+    // the payload DEFERS: push the bank entry, apply nothing. The first
+    // life-damage event replays the def's whole self-payload fresh
+    // (releasePrimedPours: % of the max at RELEASE, a fresh lucky roll,
+    // the quaffing buff starting with the live pour). Prime outranks
+    // thirstless at true full by her ruling — the press that could bank
+    // banks, it never spills.
+    if (opts.primed) {
+      caster.primedPours.push({ skillId: def.id, chargesSpent: opts.chargesSpent ?? 0 });
+      // Copy FLAGGED for Arianna's word (the smallest honest float).
+      this.text(caster.pos, 'primed', def.color, 11);
+      return true;
     }
 
     const d = def.delivery;
@@ -29544,6 +29571,10 @@ export class World {
           ? targetInfo.actor
           : targetInfo?.self ? caster : null;
         if (friendly) {
+          // THE LUCKY POUR's one roll per press: every restore stream this
+          // use opens (a two-lane sip) shares it — rolled lazily at the
+          // first pour so pourless mends never consult the dice.
+          let pourCrit: number | undefined;
           for (const fx of def.effects) {
             if (fx.type === 'heal') this.applyHealChained(caster, inst, friendly, fx, useMult);
             else if (fx.type === 'cleanse') this.cleanseActor(friendly, fx.count ?? 2);
@@ -29555,7 +29586,8 @@ export class World {
               friendly.gainWard(fx.amount
                 * (fx.perCharge ? Math.max(1, opts.chargesSpent ?? 0) : 1));
             } else if (fx.type === 'restoreOverTime') {
-              this.startRestoreStream(friendly, caster, inst, fx, opts.chargesSpent ?? 0);
+              pourCrit ??= this.critMendMult(caster, inst, friendly.pos);
+              this.startRestoreStream(friendly, caster, inst, fx, opts.chargesSpent ?? 0, pourCrit);
             }
           }
           this.flashes.push({
@@ -30868,6 +30900,10 @@ export class World {
     // extra body consumed (CORPSE_CFG.batch.durationPerExtra).
     const durScale = caster.sheet.get('effectDuration', tags, extra)
       * (corpseFeast > 0 ? 1 + CORPSE_CFG.batch.durationPerExtra * corpseFeast : 1);
+    // THE LUCKY POUR's one roll per press: every restore stream this use
+    // opens (the two-lane flask sip) shares it — rolled lazily at the
+    // first pour so non-drinking casts never consult the dice.
+    let pourCrit: number | undefined;
     for (const fx of def.effects) {
       if (fx.type === 'buff') {
         // THE FUSE defers the worn payload too — the blessing that lands
@@ -31168,7 +31204,8 @@ export class World {
       }
       // The flask POUR: a restore stream ticking on the actor (self).
       if (d.type === 'self' && fx.type === 'restoreOverTime') {
-        this.startRestoreStream(caster, caster, inst, fx, opts.chargesSpent ?? 0);
+        pourCrit ??= this.critMendMult(caster, inst, caster.pos);
+        this.startRestoreStream(caster, caster, inst, fx, opts.chargesSpent ?? 0, pourCrit);
       }
       // Self-delivered mends and cleanses land on the caster directly.
       if (d.type === 'self' && fx.type === 'heal') {
@@ -35089,28 +35126,42 @@ export class World {
    *  stat, × the TARGET's max — the drinker's pool pays the percent), all
    *  scaled by restorePower; × charges when perCharge (the gulp lane),
    *  spread across the duration (× the drinker's effectDuration: same
-   *  total, longer sip). Streams stack. */
+   *  total, longer sip). Streams stack.
+   *  POUR LANES (fx.lane, 2026-08-08): THE ONCE-PER-DRINK LAW — the
+   *  drinker's restorePctMax folds into the SETTLE lane and UNLABELED
+   *  streams only; the surge reads its authored % + pourPct_surge alone
+   *  (the percent already scales once with the pool — a second fold would
+   *  double every +N%-per-drink node across a two-stream sip). Each
+   *  labeled lane is additionally scaled by its own pourPower_<lane>.
+   *  THE LUCKY POUR rolls ONCE PER SIP: callers opening several streams
+   *  for one press pass the shared multiplier (critMult) so a two-stream
+   *  drink can never crit half-and-half; a caller without one rolls here. */
   private startRestoreStream(
     target: Actor, caster: Actor, inst: SkillInstance,
     fx: {
       resource: 'life' | 'mana' | 'es'; amount: number; duration: number;
       amountPerLevel?: number; amountPctMax?: number; perCharge?: boolean;
+      lane?: 'surge' | 'settle';
     },
     chargesSpent: number,
+    critMult?: number,
   ): void {
     const tags = skillContextTags(inst.def);
     const extra = instanceMods(inst);
     const maxPool = fx.resource === 'life' ? target.maxLife()
       : fx.resource === 'mana' ? target.availableMaxMana() : target.maxEs();
-    const pct = (fx.amountPctMax ?? 0) + caster.sheet.get('restorePctMax', tags, extra);
+    const pct = (fx.amountPctMax ?? 0)
+      + (fx.lane !== 'surge' ? caster.sheet.get('restorePctMax', tags, extra) : 0)
+      + (fx.lane ? caster.sheet.get('pourPct_' + fx.lane, tags, extra) : 0);
     const base = fx.amount
       + (fx.amountPerLevel ?? 0) * Math.max(0, effectiveSkillLevel(inst) - 1)
       + pct * maxPool;
     const total = base * (fx.perCharge ? Math.max(1, chargesSpent) : 1)
       * caster.sheet.get('restorePower', tags, extra)
+      * (fx.lane ? caster.sheet.get('pourPower_' + fx.lane, tags, extra) : 1)
       // THE LUCKY POUR: the whole stream may crit at the pour (a flask
       // with Deadly Precision socketed pours deeper on its crits).
-      * this.critMendMult(caster, inst, target.pos);
+      * (critMult ?? this.critMendMult(caster, inst, target.pos));
     if (total <= 0) return;
     const dur = Math.max(0.2, fx.duration
       * caster.sheet.get('effectDuration', tags, extra));
@@ -35128,6 +35179,37 @@ export class World {
     }
     this.text(target.pos, fx.resource === 'life' ? 'drinking...' :
       fx.resource === 'mana' ? 'sipping...' : 'charging...', inst.def.color, 11);
+  }
+
+  /** THE PRIMED POUR's release (pourPrime): the first LIFE-DAMAGE event
+   *  opens every banked sip at once — each replays its def's whole SELF
+   *  payload fresh AT RELEASE (streams through startRestoreStream with the
+   *  banked charges and one fresh lucky roll shared per sip; the quaffing
+   *  buff starts NOW — on-drink riders become on-first-wound riders, her
+   *  ruling). Both wound seams call here — the resolved hit and the DoT
+   *  tick — deliberately: the primed sip answers the bleed the instant it
+   *  opens. Costs were paid at press, so nothing is charged again; an
+   *  entry whose skill has left the bar DISSOLVES silently (the
+   *  unslot-disbands precedent). Released streams are ORDINARY streams —
+   *  running past re-full is the standing composition, no flags. */
+  private releasePrimedPours(a: Actor): void {
+    if (!a.primedPours.length || a.dead) return;
+    const banked = a.primedPours;
+    a.primedPours = [];
+    for (const b of banked) {
+      const inst = a.skills.find(s => s?.def.id === b.skillId);
+      if (!inst) continue;
+      const durScale = a.sheet.get('effectDuration',
+        skillContextTags(inst.def), instanceMods(inst));
+      const pourCrit = this.critMendMult(a, inst, a.pos);
+      for (const fx of inst.def.effects) {
+        if (fx.type === 'restoreOverTime') {
+          this.startRestoreStream(a, a, inst, fx, b.chargesSpent, pourCrit);
+        } else if (fx.type === 'buff') {
+          this.applyBuffEffect(a, inst, fx, durScale, 1);
+        }
+      }
+    }
   }
 
   /**
@@ -35980,7 +36062,11 @@ export class World {
       }
       // The RECENT-WOUND clock (GateSpec.recentDamage): a landed hit
       // licenses the victim's counter-blows.
-      if (dealt > 0) target.recentHurt = 0;
+      if (dealt > 0) {
+        target.recentHurt = 0;
+        // THE PRIMED POUR answers the first wound (pourPrime).
+        this.releasePrimedPours(target);
+      }
       // THE THREAT CHART: a landed hit books aggro against the attacker —
       // weighted by the victim's brain (TargetSpec.threat.damage; the per-body
       // tuning graft outranks the base, matching resolveMachines' merge order),
@@ -40445,6 +40531,9 @@ export class World {
         if (raw > 0) {
           this.bankDamageTakenTriggers(a, raw);
           a.recentHurt = 0;
+          // THE PRIMED POUR: a DoT tick is a wound — the banked sip
+          // answers the bleed the instant it opens (pourPrime).
+          this.releasePrimedPours(a);
         }
       }
       // The per-frame defense-event sweep: harvests TIMER-driven flips the

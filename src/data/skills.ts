@@ -9505,10 +9505,12 @@ export const SKILLS: Record<string, SkillDef> = {
 
   life_flask: {
     id: 'life_flask', name: 'Life Flask',
+    // Copy FLAGGED for Arianna's word (the two-stream rewrite, 2026-08-08).
     description: 'Holds up to 3 charges; every life orb you pick up banks one. Drinking spends'
-      + ' a charge to restore life over 3 seconds, deeper as the skill levels; a REFLEX press'
-      + ' works even mid-cast but is refused at full life, so a sip is never wasted. While'
-      + ' slotted, your hits have a 5% chance to shake a life orb loose.',
+      + ' a charge to pour TWO streams at once: a SURGE of 15% of your maximum life over 0.4'
+      + ' seconds, and a SETTLE of flat life over 4.5 seconds that deepens as the skill'
+      + ' levels. A REFLEX press works even mid-cast but is refused at full life, so a sip is'
+      + ' never wasted. While slotted, your hits have a 5% chance to shake a life orb loose.',
     tags: ['instant', 'buff', 'duration', 'flask'], color: '#d04848',
     manaCost: 0, cooldown: 2, useTime: 0, reflex: true,
     gate: { missing: { kind: 'life' }, note: 'brimming' },
@@ -9517,13 +9519,24 @@ export const SKILLS: Record<string, SkillDef> = {
     equipMods: [mod('orbOnHit_life', 'flat', 0.05)],
     delivery: { type: 'self' },
     effects: [
-      { type: 'restoreOverTime', resource: 'life', amount: 16, amountPerLevel: 4, duration: 3 },
-      // The pour's public face: gates, procs and passives key on it.
-      { type: 'buff', id: 'quaffing', duration: 3, mods: [] },
+      // THE TWO-STREAM SIP (2026-08-08, design-locked; numbers ONE
+      // BLESSING UNIT, blessed in-conversation): the SURGE is a FIXED
+      // FLOOR — % of max over a blink, never growing with gem level (the
+      // percent already scales once with the pool; gem growth would scale
+      // it twice) — deepened only by explicit investment (pourPct_surge).
+      // The SETTLE alone carries the gem's growth. Full sip ≈ 35% of the
+      // average level-1 pool.
+      { type: 'restoreOverTime', resource: 'life', lane: 'surge', amount: 0, amountPctMax: 0.15, duration: 0.4 },
+      { type: 'restoreOverTime', resource: 'life', lane: 'settle', amount: 18, amountPerLevel: 4, duration: 4.5 },
+      // The pour's public face: gates, procs and passives key on it —
+      // worn for the whole sip (the settle's span).
+      { type: 'buff', id: 'quaffing', duration: 4.5, mods: [] },
     ],
     thresholds: [
       { level: 12, label: 'Deeper draught', mods: [mod('chargeCap', 'flat', 1)] },
     ],
+    // The kept -4%/lvl line now also SNAPPIFIES the surge — feel growth
+    // without magnitude growth (her ruling: same total, quicker sip).
     leveling: { perLevel: [mod('effectDuration', 'increased', -0.04)] },
   },
 
@@ -9541,7 +9554,10 @@ export const SKILLS: Record<string, SkillDef> = {
     equipMods: [mod('orbOnHit_mana', 'flat', 0.05)],
     delivery: { type: 'self' },
     effects: [
-      { type: 'restoreOverTime', resource: 'mana', amount: 13, amountPerLevel: 3, duration: 3 },
+      // Lane LABEL only (2026-08-08): a one-stream pour is all settle —
+      // restorePctMax folds exactly as before, zero behavior change; the
+      // label opens the pour:settle mechanism and the settle dials.
+      { type: 'restoreOverTime', resource: 'mana', lane: 'settle', amount: 13, amountPerLevel: 3, duration: 3 },
       { type: 'buff', id: 'quaffing', duration: 3, mods: [] },
     ],
     thresholds: [
@@ -9565,8 +9581,10 @@ export const SKILLS: Record<string, SkillDef> = {
     equipMods: [mod('orbOnHit_life', 'flat', 0.025), mod('orbOnHit_mana', 'flat', 0.025)],
     delivery: { type: 'self' },
     effects: [
-      { type: 'restoreOverTime', resource: 'life', amount: 7, duration: 3.5, perCharge: true },
-      { type: 'restoreOverTime', resource: 'mana', amount: 6, duration: 3.5, perCharge: true },
+      // Lane LABELS only (2026-08-08): the gulp's pours are all settle —
+      // restorePctMax folds exactly as before, zero behavior change.
+      { type: 'restoreOverTime', resource: 'life', lane: 'settle', amount: 7, duration: 3.5, perCharge: true },
+      { type: 'restoreOverTime', resource: 'mana', lane: 'settle', amount: 6, duration: 3.5, perCharge: true },
       { type: 'buff', id: 'quaffing', duration: 3.5, mods: [] },
       {
         type: 'buff', id: 'catalyst_high', duration: 6,

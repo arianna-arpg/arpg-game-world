@@ -6646,6 +6646,35 @@ export class Renderer {
             }
           }
         }
+        // THE PRIMED GLINT (pourPrime): banked full-pool sips waiting on
+        // the first wound — a small bright diamond at the slot's top-right
+        // corner beside the fount pips, the count beneath it when more
+        // than one is held. Reads the same primedPours the release drains
+        // (mirrors adopt ids off the wire), so the glint can never
+        // outlive its bank. Shape/color FLAGGED for Arianna's word.
+        {
+          let primedN = 0;
+          for (const e of p.primedPours) if (e.skillId === def.id) primedN++;
+          if (primedN > 0) {
+            const gx = x + slot - 9, gy = by + 9;
+            ctx.fillStyle = '#ffe9a8';
+            ctx.beginPath();
+            ctx.moveTo(gx, gy - 4.5);
+            ctx.lineTo(gx + 4.5, gy);
+            ctx.lineTo(gx, gy + 4.5);
+            ctx.lineTo(gx - 4.5, gy);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            if (primedN > 1) {
+              ctx.fillStyle = '#ffe9a8';
+              ctx.font = 'bold 9px Verdana';
+              ctx.fillText(String(primedN), gx, gy + 14);
+            }
+          }
+        }
         // BRIM strip (ChannelSpec.brim / a Gathered Casting conversion):
         // the persistent gauge lives on the slot's bottom edge — the
         // banked scream visible between presses, gold at the brim. Gated

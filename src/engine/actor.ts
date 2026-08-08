@@ -1143,6 +1143,11 @@ export class Actor {
   /** RESTORE STREAMS (restoreOverTime — the flask pours): each entry
    *  trickles a resource until spent. Life flows through healBy. */
   restoreStreams: { resource: 'life' | 'mana' | 'es'; perSec: number; remaining: number }[] = [];
+  /** THE PRIMED POUR (pourPrime): full-pool sips BANKED at press — every
+   *  cost paid, the self-payload deferred — released whole by the first
+   *  life-damage event (World.releasePrimedPours). One entry per banked
+   *  press; an entry whose skill leaves the bar dissolves at release. */
+  primedPours: { skillId: string; chargesSpent: number }[] = [];
   /** USE-CHARGE banks per skill id (SkillDef.useCharges): the count and
    *  the running recovery timer. Lazily seeded FULL on first query.
    *  `reloading` marks a magazine mid-cycle (the emptying press stamped
@@ -2644,10 +2649,26 @@ export class Actor {
     if (this.comboCondLeft > 0) this.comboCondLeft = Math.max(0, this.comboCondLeft - dt);
     // Hire-clock high-water mark (the lifespan sliver's denominator).
     if (this.lifespan > this.lifespanTotal) this.lifespanTotal = this.lifespan;
-    // Cooldowns tick faster with cooldownRecovery.
+    // Cooldowns tick faster with cooldownRecovery. THE TAGGED CLOCK
+    // (2026-08-08): a tag-FILTERED recovery mod (flask-scoped CDR) is
+    // invisible to the one untagged read, so while the sheet carries any,
+    // each clock ticks in its OWNING instance's context instead (the
+    // drip-reload lane's read below); an id no bar instance answers falls
+    // back untagged. The common untagged sheet keeps today's single read
+    // (hasTaggedMods is cached per source generation — null-cost until a
+    // tag-scoped recovery grant actually exists).
     const cdr = this.sheet.get('cooldownRecovery');
+    const taggedCdr = this.sheet.hasTaggedMods('cooldownRecovery');
     for (const [id, t] of this.cooldowns) {
-      const left = t - dt * cdr;
+      let rate = cdr;
+      if (taggedCdr) {
+        const inst = this.skills.find(s => s?.def.id === id);
+        if (inst) {
+          rate = this.sheet.get('cooldownRecovery',
+            skillContextTags(inst.def), instanceMods(inst));
+        }
+      }
+      const left = t - dt * rate;
       if (left <= 0) this.cooldowns.delete(id); else this.cooldowns.set(id, left);
     }
     // SELF-STACKS bleed (SelfStackSpec): each skill's own pile fades while
@@ -2797,8 +2818,25 @@ export class Actor {
       const st = this.restoreStreams[i];
       const step = Math.min(st.remaining, st.perSec * dt);
       st.remaining -= step;
-      if (st.resource === 'life') this.healBy(step);
-      else if (st.resource === 'mana') {
+      if (st.resource === 'life') {
+        const landed = this.healBy(step);
+        // STREAM OVERMEND (2026-08-08, the pre-emptive drinker's lane):
+        // pour past a full pool HARDENS instead of evaporating — ceiling
+        // spill × the drinker's overheal stat accrues into the absorb
+        // shield under Overmend's own cap and clock (applyHeal's formula:
+        // spill measures AFTER healTaken, so a seared-wounds debuff is
+        // never laundered into ward; a stream's summed ticks are one
+        // pour, so accrual meets the same maxLife/2 ceiling one big spill
+        // would). Without the stat, spill evaporates exactly as before.
+        const spill = step * this.sheet.get('healTaken') - landed;
+        if (spill > 0.0001) {
+          const oh = this.sheet.get('overheal');
+          if (oh > 0) {
+            this.absorb = Math.min(this.maxLife() * 0.5, this.absorb + spill * oh);
+            this.absorbTimer = Math.max(this.absorbTimer, 6);
+          }
+        }
+      } else if (st.resource === 'mana') {
         this.mana = Math.min(this.availableMaxMana(), this.mana + step);
       } else {
         this.gainEs(step);
@@ -3277,7 +3315,11 @@ export class Actor {
         const met = g.missing.kind === 'any'
           ? short('life') >= need('life') || short('mana') >= need('mana')
           : short(g.missing.kind) >= need(g.missing.kind);
-        if (!met) return g;
+        // THE PRIMED POUR admits what thirst would refuse: with prime
+        // capacity open a true-full press isn't moot — it BANKS (the
+        // payload's own defer decides; actor-local like the gate itself,
+        // so HUD, AI and press all agree the slot is live).
+        if (!met && !this.primedPourOpen(inst)) return g;
       }
       if (g.guard && this.casting?.mode !== 'guard') return g;
       if (g.active && !this.activeAuras.has(g.active) && !this.summonToggles.has(g.active)) return g;
@@ -3291,6 +3333,34 @@ export class Actor {
   /** Are every gate's thresholds met? (unmetGate, as the yes/no.) */
   gatesMet(inst: SkillInstance): boolean {
     return this.unmetGate(inst) === null;
+  }
+
+  /** THE PRIMED POUR's press test (pourPrime): may this instant pour,
+   *  pressed at TRUE FULL, BANK instead of refusing? Demands prime
+   *  capacity open (the floored stat minus sips already held), a def
+   *  that actually pours, and the thirst gate's own pool(s) short less
+   *  than one point — "nothing left to sip FOR". Any real dent and the
+   *  ordinary pour happens instead; a pct-floor micro-sip refusal stays
+   *  a refusal (the pool is NOT at true maximum). Prime outranks
+   *  thirstless at true full by her ruling — the payload defer in
+   *  useSkill asks this directly, whichever lever admitted the press. */
+  primedPourOpen(inst: SkillInstance): boolean {
+    if (!inst.def.effects.some(e => e.type === 'restoreOverTime')) return false;
+    if (this.skillUseTime(inst) > 0.001) return false; // the bank rides the instant press only
+    const cap = Math.floor(this.sheet.get('pourPrime',
+      skillContextTags(inst.def), instanceMods(inst)));
+    if (cap <= 0 || this.primedPours.length >= cap) return false;
+    const full = (kind: 'life' | 'mana' | 'es'): boolean =>
+      (kind === 'life' ? this.maxLife() - this.life
+        : kind === 'mana' ? this.availableMaxMana() - this.mana
+        : this.maxEs() - this.es) < 1;
+    for (const g of instanceGates(inst)) {
+      if (!g.missing) continue;
+      if (g.missing.kind === 'any' ? full('life') && full('mana') : full(g.missing.kind)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** SELECTIVE CC (StatusDef.forbidsTags): any carried status that forbids

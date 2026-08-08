@@ -2145,6 +2145,26 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  adrenal_decant: {
+    // Name + copy FLAGGED for Arianna's word (2026-08-08 placeholder).
+    id: 'adrenal_decant', name: 'Adrenal Decant',
+    description: 'The supported drink is decanted toward the rush: its SURGE pours an extra 10%'
+      + ' of your maximum (15% becomes 25%), and its SETTLE pours 50% less. Fits only drinks'
+      + ' that carry both streams.',
+    color: '#e8744a', requiresTags: ['flask'],
+    // THE LANE GATE (pour mechanisms, engine/skills.ts): both lanes must
+    // stand on the host — a surge-less mana or catalyst flask refuses
+    // honestly, and the refusal self-lifts the day its def grows a surge.
+    requiresMechanisms: ['pour:surge', 'pour:settle'],
+    // Her spec verbatim (ONE BLESSING UNIT, 2026-08-08): +10pp surge, 50%
+    // LESS settle. No perLevel on purpose — the surge is a fixed floor
+    // that deepens only by explicit investment, and growth curves await
+    // her word. (The inverse settle-fat gem is a noted future row,
+    // deliberately not shipped this pass.)
+    mods: [mod('pourPct_surge', 'flat', 0.10), mod('pourPower_settle', 'more', -0.5)],
+    weight: 5,
+  },
+
   shared_draught: {
     id: 'shared_draught', name: 'Shared Draught',
     description: 'Every drink from this flask casts a Benediction a beat later, mending'

@@ -176,7 +176,9 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'conduction', 'suffusion', 'poolCap', 'embedIcd', 'tetherWidth',
       'bashPower', 'bashFloor', 'bashInvert',
       'durationAuraCap', 'auraEsRecharge', 'auraEsDelay',
-      'reflex', 'thirstless', 'remnantChance', 'remnantOnCast',
+      'reflex', 'thirstless',
+      'pourPower_surge', 'pourPower_settle', 'pourPct_surge', 'pourPct_settle', 'pourPrime',
+      'remnantChance', 'remnantOnCast',
       // Borrowed kits — the mimic's stolen arts and the possession seam's
       // ride (huskGuard defends the body you left behind, but it belongs
       // beside the two dials that decide the ride itself)
@@ -654,6 +656,11 @@ const STAT_BLURBS: Record<string, string> = {
   auraEsDelay: 'Your auras shorten allied energy-shield recharge delays.',
   reflex: 'The skill fires THROUGH your own casts, channels and dashes without disturbing them.',
   thirstless: 'Thirst gates are waived: a brimming pool no longer refuses the drink.',
+  pourPower_surge: 'Scales the SURGE half of your two-stream pours: the fast slug of percent-of-maximum at the front of a drink.',
+  pourPower_settle: 'Scales the SETTLE half of your two-stream pours: the long mend behind the surge.',
+  pourPct_surge: 'Adds flat percent-of-maximum to the surge lane of your pours. The surge never grows with skill level; this is its investment road.',
+  pourPct_settle: 'Adds flat percent-of-maximum to the settle lane of your pours.',
+  pourPrime: 'Full-pool drinks BANK instead of refusing, up to this many: every cost paid at the press, the pour held, released whole by the first wound that lands on you.',
   remnantChance: 'Your hits may shed an elemental remnant; picking it up empowers the next cast of that school.',
   remnantOnCast: 'Chance a direct cast of a school sheds its remnant.',
   mimicWitness: 'Opens WITNESSED capture: studied arts cast near you are banked without your having to take the blow. The value is how far away you can learn from.',

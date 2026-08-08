@@ -3571,6 +3571,18 @@ export interface RestoreOverTimeEffect {
   /** Fraction of the drinker's MAXIMUM pool added to the total (0.05 =
    *  +5% of max per drink) — the percent lever, per skill. */
   amountPctMax?: number;
+  /** POUR LANE (2026-08-08, the two-stream sip): 'surge' is the adrenaline
+   *  slug — % of max over a blink, a FIXED FLOOR that never grows with gem
+   *  level and reads ONLY its authored amountPctMax + the pourPct_surge
+   *  stat (the drinker's restorePctMax deliberately skips it: THE
+   *  ONCE-PER-DRINK LAW — the percent lever folds once per SIP, into the
+   *  settle, never per stream). 'settle' is the slow mend behind it — the
+   *  flat + amountPerLevel lane, wearing restorePctMax + pourPct_settle.
+   *  Each labeled lane is additionally scaled by its own pourPower_<lane>
+   *  beside the whole-pour restorePower. Unlabeled streams read exactly as
+   *  before (restorePctMax folds in, no lane dials); labeling a lane is
+   *  also what opens the pour:<lane> socket mechanisms. */
+  lane?: 'surge' | 'settle';
   /** Seconds the stream runs (× effectDuration). */
   duration: number;
   /** Multiply the total by the charges this use consumed. */
@@ -5134,6 +5146,17 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
       || hostSockets(inst).some(s => [...s.def.mods, ...(s.def.perLevel ?? [])]
         .some(m => m.stat.startsWith('apply_') && qualifies(m.stat.slice(6))));
   },
+  /** A POUR host (2026-08-08, the flask redesign's lane grammar): the
+   *  instance restores over time. PARAMETERIZED ('pour:surge' /
+   *  'pour:settle'): the def carries a stream wearing that LANE label —
+   *  the trade gems' honest gate (a surge-less mana flask refuses a
+   *  surge trade, and the refusal self-lifts the day the def grows the
+   *  lane). STRICT on labels by design: an unlabeled stream opens only
+   *  the bare 'pour' — naming a lane is what opens that lane's market,
+   *  so a legacy pour can never be silently half-served by a lane gem. */
+  pour: (inst, param) =>
+    inst.def.effects.some(e => e.type === 'restoreOverTime'
+      && (!param || e.lane === param)),
 };
 
 /** Resolve one requiresMechanisms entry — 'name' or 'name:param' (the
