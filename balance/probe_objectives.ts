@@ -780,7 +780,7 @@ withSeededRandom(0x0bec7a, () => {
       const v = w.lairAskView();
       check('T11 the stamped view: den mode, door found, unentered, not done; HUD asks TITLE-FREE (THE UNTITLED CLAIM)',
         v?.mode === 'den' && v.pos !== null && v.entered === false && v.done === false
-        && String(w.objectiveText()).includes('Brave the claim')
+        && String(w.objectiveText()).includes('Brave the lair')
         && !String(w.objectiveText()).includes('Emberwyrm'));
       check('T12 the adopted ask never seals the roads', objectiveSeals(o) === false && w.objectiveDone === false);
       // Settle the den WITHOUT walking it: the completion read is the derived
@@ -820,7 +820,7 @@ withSeededRandom(0x0bec7a, () => {
       const v = w.lairAskView();
       check('T16 the hunt view counts the keepers; the HUD speaks TITLE-FREE (THE UNTITLED CLAIM)',
         v?.mode === 'hunt' && v.remain === giants.length && v.done === false
-        && String(w.objectiveText()).includes('Break the natives\' claim')
+        && String(w.objectiveText()).includes("Fell the lair's keepers")
         && !String(w.objectiveText()).includes('Cairn'),
         String(w.objectiveText()));
       for (const g of giants) w.kill(g, true);

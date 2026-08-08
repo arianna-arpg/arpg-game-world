@@ -41701,7 +41701,7 @@ export class World {
       // `title` field itself stays on the view as DATA (dev surfaces).
       return {
         mode: 'den', title: o.title, pos: m ? vec(m.pos.x, m.pos.y) : null,
-        remain: done ? 0 : 1, entered, done, label: 'brave the claim',
+        remain: done ? 0 : 1, entered, done, label: 'brave the lair',
       };
     }
     const kin = new Set(o.kin ?? []);
@@ -49952,8 +49952,8 @@ export class World {
           // speaks the deed, never the name — identity lives in the
           // mouth's own visual.
           this.completeObjective(!v || v.mode === 'den'
-            ? 'The claim is settled!'
-            : "The natives' claim is broken!");
+            ? 'The lair is cleared!'
+            : 'The lair is broken!');
         }
         return;
       }
@@ -51999,13 +51999,13 @@ export class World {
         // own distinct visual. Structure unchanged (den/hunt, entered,
         // keeper count) — only the title left the prose.
         const v = this.lairAskView();
-        if (!v) return 'Natives claim this ground';
+        if (!v) return 'A lair stands on this ground';
         if (v.mode === 'den') {
           return v.entered
-            ? 'Brave the claim — settle what keeps it'
-            : 'Brave the claim — its door stands on this ground';
+            ? 'Brave the lair — settle what keeps it'
+            : 'Brave the lair — its door stands on this ground';
         }
-        return `Break the natives' claim — ${v.remain} keeper${v.remain === 1 ? '' : 's'} remain${v.remain === 1 ? 's' : ''}`;
+        return `Fell the lair's keepers — ${v.remain} remain${v.remain === 1 ? 's' : ''}`;
       }
       case 'package': {
         // THE ADOPTED GUEST: the row's own view authors the line (the label

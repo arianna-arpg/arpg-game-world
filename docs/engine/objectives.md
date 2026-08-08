@@ -412,9 +412,11 @@ structurally weight 0, not a failed promise. All numbers + the derivations in
 - THE UNTITLED CLAIM (her ruling, 2026-08-07): LAIR titles left ALL
   player-facing objective prose — the pane read stays the bare row
   (`objectiveRead` composes no title), the HUD line speaks the structure
-  title-free ("Brave the claim — its door stands on this ground" / "Break
-  the natives' claim — N keepers remain"), the completion floater speaks
-  the deed ("The claim is settled!"), and the chevron label follows — a
+  title-free in HER coining ("the lair" — ruled 2026-08-07 over the first
+  draft's mechanical "claim": "Brave the lair — its door stands on this
+  ground" / "Fell the lair's keepers — N remain"), the completion floater
+  speaks the deed ("The lair is cleared!" / "The lair is broken!"), and
+  the chevron label follows ('brave the lair') — a
   claim's identity lives in its mouth's own distinct visual, not in text.
   `ADOPT_CFG.titles` and the spec's `title` remain DATA (dev surfaces, and
   the package/venture classes still speak their names by design); only the
