@@ -352,10 +352,15 @@ here so nobody hunts a phantom.
   one story down, sheltered by authorship AND derivation, deepening with
   the country above it (geo inherits down the ladder; `massifCoverage`/
   `massifLaneW` ride byDepth ramps — THE PRESS BELOW, rim bores open at
-  84, heart bores tight at 70, above the bocage floor). Deliberately NO
-  `caveFace` claim: the rootways stay the strata pool's wild half, the
-  undergrowth is reached only through its own doors (the named-door
-  precedent, mirrored exactly). THE NURSERY LAW is the country's identity —
+  84, heart bores tight at 70, above the bocage floor). TWO doors in
+  (the batch-23 ROOTED WEB depth rewire): the named `taproot_gate`
+  mouths, AND the garden's ordinary depth-1 cave mouths — a `caveFace`
+  claims the plot's shallows with the envelope mass the rootways held
+  (`garden: 8` × `mul 1.5`, `strata { to: 1, fadeOut: 1 }`, `'*'`
+  sealed at 0 so no other country's ladder ever rolls it; the
+  named-door discipline survives as that seal), formalizing the
+  ladder: garden → undergrowth@1 → rootways/caverns@2+.
+  THE NURSERY LAW is the country's identity —
   every fight happens beside a cradle: three kinds on `nest_wall` (one
   soil — the mesa/sand_court one-region precedent), `taproot_bole` gnarled
   tunnel bones, `brood_gall` the court whose ring the kin breed inside
