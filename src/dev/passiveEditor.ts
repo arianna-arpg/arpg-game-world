@@ -83,7 +83,7 @@ export function mountPassiveEditor(ui: UI): void {
   const inputStyle = (el: HTMLElement): void => css(el, { width: '100%', boxSizing: 'border-box', background: '#0e0c14', color: '#d8d4e0', border: '1px solid #3a3450', borderRadius: '4px', padding: '3px 5px', font: '12px Verdana' });
   const btn = (t: string, onClick: () => void, color = '#e8d44a'): HTMLButtonElement => {
     const b = document.createElement('button'); b.textContent = t;
-    css(b, { background: '#241f33', color, border: '1px solid #5a4a6a', borderRadius: '4px', padding: '4px 8px', font: '11px Verdana', cursor: 'pointer' });
+    css(b, { background: '#241f33', color, border: '1px solid #5a4a6a', borderRadius: '4px', padding: '4px 8px', font: '11px Verdana', cursor: 'var(--cursor-point, pointer)' });
     b.addEventListener('click', onClick); return b;
   };
 

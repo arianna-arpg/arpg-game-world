@@ -199,7 +199,7 @@ export const eventsTab: DevTabDef = {
     };
     const cruRefresh = btn('Refresh wars', syncCrusades);
     const revealLbl = document.createElement('label');
-    css(revealLbl, { fontSize: '11px', display: 'inline-flex', gap: '5px', alignItems: 'center', marginLeft: '10px', cursor: 'pointer' });
+    css(revealLbl, { fontSize: '11px', display: 'inline-flex', gap: '5px', alignItems: 'center', marginLeft: '10px', cursor: 'var(--cursor-point, pointer)' });
     const revealChk = document.createElement('input');
     revealChk.type = 'checkbox';
     revealChk.addEventListener('change', () => {

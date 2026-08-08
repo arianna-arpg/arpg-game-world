@@ -1341,7 +1341,7 @@ export class UI {
         const d = SKILLS[sid];
         return d ? `<span data-tip="cskill" data-skill-id="${sid}"
           style="display:inline-block;padding:1px 7px;margin:1px 3px 1px 0;border:1px solid ${d.color};
-          border-radius:8px;font-size:9px;color:${d.color};cursor:help">${d.name}</span>` : '';
+          border-radius:8px;font-size:9px;color:${d.color};cursor:var(--cursor-help, help)">${d.name}</span>` : '';
       }).join('');
       return chips ? `<div style="margin-top:3px">${chips}</div>` : '';
     };
@@ -1389,7 +1389,7 @@ export class UI {
       const sel = this.pendingModeId === md.id;
       return `
         <div class="mode-card" data-mode="${md.id}" data-full="${full}"
-          style="flex:1 1 260px;max-width:420px;text-align:left;cursor:pointer;padding:8px 10px;
+          style="flex:1 1 260px;max-width:420px;text-align:left;cursor:var(--cursor-point, pointer);padding:8px 10px;
             border-radius:8px;background:#16121c;border:1px solid ${sel ? md.color : '#3a3644'};
             ${sel ? `box-shadow:0 0 10px ${md.color}44;` : ''}${full ? 'opacity:.45;' : ''}">
           <div style="font-weight:bold;color:${md.color}">${sel ? '◈ ' : ''}${md.name}
@@ -1998,7 +1998,7 @@ export class UI {
       const total = m.attrs[id] ?? 0;
       const bonus = total - (m.baseAttrs[id] ?? 0);
       return `
-      <div class="attr-row" data-tip="attr" data-attr-id="${id}" style="cursor:help">
+      <div class="attr-row" data-tip="attr" data-attr-id="${id}" style="cursor:var(--cursor-help, help)">
         <span>${ATTRIBUTES[id].label}</span>
         <span class="val">${total}
           ${bonus > 0 ? `<span style="color:#c8a84b;font-size:10px">(+${bonus} tree)</span>` : ''}
@@ -2020,7 +2020,7 @@ export class UI {
       if (resType && raw > v + 0.0001) {
         text += ` <span style="color:#8a8678;font-size:10px">(${Math.round(raw * 100)}% raw)</span>`;
       }
-      return `<div class="stat-row" data-tip="stat" data-stat-id="${id}" style="cursor:help"><span>${def.label}</span><span class="val">${text}</span></div>`;
+      return `<div class="stat-row" data-tip="stat" data-stat-id="${id}" style="cursor:var(--cursor-help, help)"><span>${def.label}</span><span class="val">${text}</span></div>`;
     };
 
     // THE STATISTICS TABS (data/sheet.ts — the sheet's organization as
@@ -2074,7 +2074,7 @@ export class UI {
     const html = `
       <div style="position:sticky;top:-14px;z-index:2;background:var(--panel-bg);
         margin:-14px -14px 8px;padding:14px 14px 5px;border-bottom:1px solid var(--panel-border)">
-        <h2 style="border-bottom:none;margin:0;padding-bottom:2px"><span data-tip="class" style="cursor:help;border-bottom:1px dotted var(--gold)">${m.classDef.name}</span>${vocTitle} — Level ${p.level}</h2>
+        <h2 style="border-bottom:none;margin:0;padding-bottom:2px"><span data-tip="class" style="cursor:var(--cursor-help, help);border-bottom:1px dotted var(--gold)">${m.classDef.name}</span>${vocTitle} — Level ${p.level}</h2>
         <div style="font-size:9px;color:#6a6478">starters: ${starterChips}</div>
       </div>
       <div style="font-size:11px;margin-bottom:6px">
@@ -2084,7 +2084,7 @@ export class UI {
       <h3>Attributes <span style="color:#8a8678;font-weight:normal">(allocated on the passive tree: P)</span></h3>
       ${attrRows}
       <h3 style="display:flex;justify-content:space-between;align-items:baseline">Statistics
-        <label style="font-weight:normal;font-size:10px;color:#8a8678;cursor:pointer"
+        <label style="font-weight:normal;font-size:10px;color:#8a8678;cursor:var(--cursor-point, pointer)"
           title="List every stat this tab organizes, invested or not; generated families still surface only once touched">
           <input type="checkbox" data-statshowall${this.charShowAll ? ' checked' : ''}
             style="width:10px;height:10px;margin:0 3px 0 0;vertical-align:-1px;accent-color:var(--gold)">show unused</label></h3>
@@ -2406,7 +2406,7 @@ export class UI {
       const pips = worn?.sockets?.length ? `<span style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:11px;line-height:12px">${worn.sockets.map((vid, si) => {
         const v = vid ? VESTIGES[vid] : null;
         return `<span data-sock="${worn.uid}:${si}" data-drop="sock:${worn.uid}:${si}" title="${v ? v.name : 'Empty socket: drop a vestige here'}"
-          style="color:${v?.color ?? '#5a5668'};padding:0 2px;cursor:copy">${v?.glyph ?? '◇'}</span>`;
+          style="color:${v?.color ?? '#5a5668'};padding:0 2px;cursor:var(--cursor-copy, copy)">${v?.glyph ?? '◇'}</span>`;
       }).join('')}</span>` : '';
       const wornGlyph = worn ? CATEGORY_GLYPHS[ITEM_BASES[worn.baseId]?.category ?? slot.accepts[0]] ?? '?' : '';
       const face = worn
@@ -2418,7 +2418,7 @@ export class UI {
         style="position:absolute;left:${seat.x * CELL}px;top:${seat.y * CELL}px;
         width:${seat.w * CELL - 2}px;height:${seat.h * CELL - 2}px;box-sizing:border-box;padding:0;
         display:flex;align-items:center;justify-content:center;
-        background:${worn ? '#221e2c' : '#171420'};border:${worn ? 2 : 1}px solid ${border};border-radius:4px;cursor:pointer;
+        background:${worn ? '#221e2c' : '#171420'};border:${worn ? 2 : 1}px solid ${border};border-radius:4px;cursor:var(--cursor-point, pointer);
         ${worn?.rarity === 'unique' ? `box-shadow:0 0 10px ${border};` : ''}">${face}</button>`;
     };
     const seatedSlots = dollSlots.filter(s => DOLL_SEATS[s.id]);
@@ -2441,7 +2441,7 @@ export class UI {
       return `<button data-doll="${slot.id}" data-drop="equipSlot:${slot.id}"
         ${worn ? `data-drag="gearItem:${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : ''}
         style="display:block;width:${dollW}px;margin:3px 0;padding:6px 8px;text-align:left;font-size:10px;
-        background:#1a1722;border:1px solid ${border};border-radius:4px;cursor:pointer">${label}</button>`;
+        background:#1a1722;border:1px solid ${border};border-radius:4px;cursor:var(--cursor-point, pointer)">${label}</button>`;
     }).join('');
     const doll = figure + spare;
 
@@ -2463,7 +2463,7 @@ export class UI {
         ${i.sockets.map((vid, si) => {
           const v = vid ? VESTIGES[vid] : null;
           return `<span data-sock="${i.uid}:${si}" data-drop="sock:${i.uid}:${si}" title="${v ? v.name : 'Empty socket: drop a vestige here'}"
-            style="color:${v?.color ?? '#5a5668'};padding:0 2px;cursor:copy">${v?.glyph ?? '◇'}</span>`;
+            style="color:${v?.color ?? '#5a5668'};padding:0 2px;cursor:var(--cursor-copy, copy)">${v?.glyph ?? '◇'}</span>`;
         }).join('')}
       </div>`;
     };
@@ -2478,7 +2478,7 @@ export class UI {
         data-drag="gearItem:${i.uid}" data-drop="gearTile:${i.uid}"
         style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
         width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;
-        border:2px solid ${r.color};border-radius:3px;cursor:pointer;box-sizing:border-box;
+        border:2px solid ${r.color};border-radius:3px;cursor:var(--cursor-point, pointer);box-sizing:border-box;
         display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
         ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${CATEGORY_GLYPHS[cat] ?? '?'}${pipRow(i)}</div>`;
     }).join('');
@@ -2487,7 +2487,7 @@ export class UI {
     // essence wallet — click to flip it open/closed.
     const satchel = `
       <button data-satchel style="position:absolute;top:10px;right:14px;font-size:11px;
-        background:#241d2e;border:1px solid #4a3a5a;border-radius:6px 6px 2px 2px;padding:3px 9px;cursor:pointer"
+        background:#241d2e;border:1px solid #4a3a5a;border-radius:6px 6px 2px 2px;padding:3px 9px;cursor:var(--cursor-point, pointer)"
         title="Essence satchel (salvage currency, dies with you)">🎒 ${this.satchelOpen ? '▾' : '▸'}</button>
       ${this.satchelOpen ? `
         <div style="position:absolute;top:38px;right:14px;z-index:3;background:#1b1524;
@@ -2506,7 +2506,7 @@ export class UI {
               ${owned.map(v => {
                 const n = this.getWorld().meta.vestiges[v.id];
                 return `<div data-drag="vestige:${v.id}" data-tip="vestige" data-vestige-id="${v.id}"
-                  style="font-size:11px;color:${v.color};margin:2px 0;cursor:grab">${v.glyph} ${n}
+                  style="font-size:11px;color:${v.color};margin:2px 0;cursor:var(--cursor-grab, grab)">${v.glyph} ${n}
                   <span style="color:#6a6478;font-size:9px">${v.name.split(',')[0]}</span></div>`;
               }).join('')}
               <div style="color:#5a5668;font-size:8px;margin-top:3px">drag (or click to lift) a vestige,
@@ -2538,7 +2538,7 @@ export class UI {
         title="Your learned skills: the whole build, full management"
         style="position:absolute;left:-27px;top:56px;writing-mode:vertical-rl;text-orientation:mixed;
         padding:12px 4px;font-size:11px;letter-spacing:1px;background:#241d2e;color:#c8a8ff;
-        border:1px solid #4a3a5a;border-right:none;border-radius:6px 0 0 6px;cursor:pointer;z-index:4">
+        border:1px solid #4a3a5a;border-right:none;border-radius:6px 0 0 6px;cursor:var(--cursor-point, pointer);z-index:4">
         📖 BUILD ${this.buildFlapOpen ? '▸' : '◂'}</button>`;
     const drawer = this.buildFlapOpen ? `
       <div style="position:absolute;right:100%;top:0;margin-right:2px;width:360px;
@@ -3621,7 +3621,7 @@ export class UI {
           const lockPip = canLock && (lockCap > 0 || heldRow)
             ? `<button data-vlock="${v.id}:${idx}" ${atCap ? 'disabled' : ''} title="${lockTitleFor(heldRow, atCap)}"
                 style="position:absolute;top:-1px;right:-1px;z-index:2;font-size:9px;line-height:1;padding:1px 2px;
-                background:#141019cc;border:1px solid ${heldRow ? v.accent : '#3a3644'};border-radius:0 3px 0 3px;cursor:pointer">${heldRow ? '🔒' : '🔓'}</button>`
+                background:#141019cc;border:1px solid ${heldRow ? v.accent : '#3a3644'};border-radius:0 3px 0 3px;cursor:var(--cursor-point, pointer)">${heldRow ? '🔒' : '🔓'}</button>`
             : '';
           const badge = heldRow
             ? `<div style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:8px;color:${heldRow.commission ? '#7fe0d8' : v.accent}">${heldRow.commission ? 'ORDER' : 'RESERVED'}</div>`
@@ -3632,7 +3632,7 @@ export class UI {
             title="${entryLock ? esc(entryLock) : tradeRefusal ? esc(tradeRefusal) : afford ? `Buy: ${esc(i.name)}` : 'Not enough essence'}"
             style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
             width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;
-            border:2px solid ${heldRow ? v.accent : r.color};border-radius:3px;cursor:${canBuy ? 'pointer' : 'default'};box-sizing:border-box;
+            border:2px solid ${heldRow ? v.accent : r.color};border-radius:3px;cursor:${canBuy ? 'var(--cursor-point, pointer)' : 'var(--cursor-default, default)'};box-sizing:border-box;
             display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
             ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}${canBuy ? '' : 'opacity:0.55;'}">${CATEGORY_GLYPHS[cat] ?? '?'}${lockPip}${badge}</div>`;
         });
@@ -4307,7 +4307,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           </span> &nbsp;${DEV.passiveTreeEditor
             ? 'EDITOR · scroll to zoom · drag empty space to pan'
             : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span></h2>
-      <svg viewBox="${viewBox}" id="tree-svg" style="cursor:grab;touch-action:none">${edges}${circles}</svg>`;
+      <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none">${edges}${circles}</svg>`;
 
     // THE TREE LENS: typing filters LIVE via class toggles on the standing
     // circles (never a re-render — the input keeps its focus); a refresh
@@ -5192,7 +5192,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // existing .wp-node click + the drag-guard still target the inner elements.
       const pinned = this.pinnedZone === z.id;
       const r = current ? 13 : 10;
-      const travelAttrs = canTravel ? ` class="wp-node" data-wp="${z.id}" style="cursor:pointer"` : '';
+      const travelAttrs = canTravel ? ` class="wp-node" data-wp="${z.id}" style="cursor:var(--cursor-point, pointer)"` : '';
       // THE TIER TELL (tierMapTell above — ZoneDef.tiers distilled): multi-
       // story ground wears UNDER-DISCS peeking below the node, one per extra
       // story — solid rims for 'open' exposure (both layers visible: buttes,
@@ -5215,7 +5215,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // def.map is the blob centre). The region BOUNDS live on def.field but are NOT drawn —
       // the player understands a Field is a single zone, and the bbox stays available as the
       // Field's spatial "event node" (a stormfront / incursion can later target/show over it).
-      nodes += `<g data-zone="${z.id}" style="cursor:help">
+      nodes += `<g data-zone="${z.id}" style="cursor:var(--cursor-help, help)">
         <circle cx="${z.map.x}" cy="${z.map.y}" r="${MAP_CFG.nodeHitR}" fill="none" pointer-events="all"${travelAttrs}/>${tierMark}
         <circle cx="${z.map.x}" cy="${z.map.y}" r="${r}"
           fill="${fill}" fill-opacity="${known ? 0.85 : scouted ? 0.55 : 1}"
@@ -5239,7 +5239,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // exactly like the node; one sitting on the primary node is skipped.
       for (const p of z.berths ?? []) {
         if (Math.hypot(p.x - z.map.x, p.y - z.map.y) < 26) continue;
-        nodes += `<g data-zone="${z.id}" style="cursor:help">
+        nodes += `<g data-zone="${z.id}" style="cursor:var(--cursor-help, help)">
           <circle cx="${p.x}" cy="${p.y}" r="${MAP_CFG.nodeHitR * 0.7}" fill="none" pointer-events="all"${travelAttrs}/>
           <circle cx="${p.x}" cy="${p.y}" r="5.5" fill="${fill}" fill-opacity="${known ? 0.8 : scouted ? 0.5 : 0.9}"
             stroke="${kd?.ring?.color ?? (known ? '#d8d4c8' : '#4a4a5e')}" stroke-width="1.3"${travelAttrs}/></g>`;
@@ -5404,7 +5404,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         <span style="color:#6a6a78"> · scroll to zoom, drag to pan · hover a zone, click to pin</span></div>
       ${this.mapLayerChipsHtml(allLayers)}
       <div class="map-body">
-        <svg id="world-map-svg" viewBox="${this.mapViewBox()}" style="cursor:grab;touch-action:none"><g pointer-events="none">${ocean}${simUnder}${edges}${stubs}</g>${nodes}<g pointer-events="none">${markers}${simOver}${cards}</g></svg>
+        <svg id="world-map-svg" viewBox="${this.mapViewBox()}" style="cursor:var(--cursor-grab, grab);touch-action:none"><g pointer-events="none">${ocean}${simUnder}${edges}${stubs}</g>${nodes}<g pointer-events="none">${markers}${simOver}${cards}</g></svg>
         <aside id="map-aside">${this.zoneBoxHtml(world)}</aside>
       </div>`;
     // Unchanged since the last write? Keep the standing SVG + its wiring.
@@ -5484,7 +5484,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const chips = shown.map(l => {
       const off = this.mapLayersOff.has(l.id);
       return `<button data-mlayer="${esc(l.id)}" title="toggle this map layer"
-        style="font-size:9px;padding:1px 7px;margin:0 3px 0 0;border-radius:8px;cursor:pointer;
+        style="font-size:9px;padding:1px 7px;margin:0 3px 0 0;border-radius:8px;cursor:var(--cursor-point, pointer);
         border:1px solid ${off ? '#33333e' : '#4a4a5e'};background:${off ? '#141418' : '#22222e'};
         color:${off ? '#55555e' : '#b8b4a8'};${off ? 'text-decoration:line-through;' : ''}">${esc(l.label)}</button>`;
     }).join('');

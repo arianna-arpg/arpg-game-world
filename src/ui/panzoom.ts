@@ -48,8 +48,8 @@ export const PANZOOM_DEFAULTS: PanZoomConfig = {
   minZoom: 0.2,
   maxZoom: 16,
   dragThresholdPx: 4,
-  cursorIdle: 'grab',
-  cursorDrag: 'grabbing',
+  cursorIdle: 'var(--cursor-grab, grab)',
+  cursorDrag: 'var(--cursor-grabbing, grabbing)',
 };
 
 export function clampZoom(z: number, cfg: PanZoomConfig = PANZOOM_DEFAULTS): number {

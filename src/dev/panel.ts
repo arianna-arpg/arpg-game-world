@@ -65,7 +65,7 @@ export function mountDevPanel(getWorld: () => World): void {
   css(openBtn, {
     position: 'fixed', left: '8px', bottom: '8px', zIndex: String(Z_LADDER.devBar),
     background: '#2a2438', color: DEV_UI.accent, border: `1px solid ${DEV_UI.border}`,
-    borderRadius: '5px', padding: '5px 10px', font: DEV_UI.font, cursor: 'pointer',
+    borderRadius: '5px', padding: '5px 10px', font: DEV_UI.font, cursor: 'var(--cursor-point, pointer)',
   });
 
   const panel = document.createElement('div');
@@ -102,7 +102,7 @@ export function mountDevPanel(getWorld: () => World): void {
     tabBtn.textContent = def.label;
     css(tabBtn, {
       background: DEV_UI.bgRaised, color: DEV_UI.accent, border: `1px solid ${DEV_UI.border}`,
-      borderRadius: '4px', padding: '4px 7px', font: DEV_UI.fontSmall, cursor: 'pointer',
+      borderRadius: '4px', padding: '4px 7px', font: DEV_UI.fontSmall, cursor: 'var(--cursor-point, pointer)',
     });
     return { def, el, onShow, tabBtn };
   });

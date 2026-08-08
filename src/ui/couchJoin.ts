@@ -76,7 +76,7 @@ export class CouchJoinOverlay {
       <button data-couch-pick="${c.key}" ${c.disabled ? 'disabled' : ''}
         style="display:block;width:100%;text-align:left;margin:6px 0;padding:10px 12px;
           background:#14121c;border:1px solid ${c.disabled ? '#3a3a44' : c.color};border-radius:4px;
-          color:#e8e4d8;cursor:${c.disabled ? 'default' : 'pointer'}">
+          color:#e8e4d8;cursor:${c.disabled ? 'var(--cursor-default, default)' : 'var(--cursor-point, pointer)'}">
         <div style="font-weight:bold;color:${c.disabled ? '#6a6a74' : c.color}">${c.title}</div>
         <div style="font-size:11px;color:#9a96a8;margin-top:2px">${c.disabled ?? c.sub}</div>
       </button>`).join('');
@@ -89,7 +89,7 @@ export class CouchJoinOverlay {
         ${v.phase === 'pick' ? cards : ''}
         <div style="margin-top:12px;text-align:right">
           <button data-couch-cancel style="padding:6px 14px;background:#1a1822;border:1px solid #3a3a52;
-            color:#b8b4a8;border-radius:4px;cursor:pointer">Cancel</button>
+            color:#b8b4a8;border-radius:4px;cursor:var(--cursor-point, pointer)">Cancel</button>
         </div>
       </div>`;
     if (html === this.lastHtml) return;

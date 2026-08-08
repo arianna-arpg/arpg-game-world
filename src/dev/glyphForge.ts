@@ -160,7 +160,7 @@ export function mountGlyphForge(ui: UI, getWorld: () => World): { open: (mode?: 
   css(canvas, {
     width: `${GLYPH_FORGE_CFG.canvasCss}px`, height: `${GLYPH_FORGE_CFG.canvasCss}px`,
     background: '#131019', border: `1px solid ${DEV_UI.border}`, borderRadius: '6px',
-    cursor: 'crosshair', touchAction: 'none',
+    cursor: 'var(--cursor-crosshair, crosshair)', touchAction: 'none',
   });
   const toolRow = hrow();
   const toolSel = selectEl();
@@ -653,7 +653,7 @@ export function mountGlyphForge(ui: UI, getWorld: () => World): { open: (mode?: 
     const lab = document.createElement('span');
     lab.textContent = label;
     css(lab, { width: '120px', flexShrink: '0', color: DEV_UI.text, fontSize: '11px' });
-    if (help) { lab.title = help; css(lab, { cursor: 'help', borderBottom: `1px dotted ${DEV_UI.borderDim}` }); }
+    if (help) { lab.title = help; css(lab, { cursor: 'var(--cursor-help, help)', borderBottom: `1px dotted ${DEV_UI.borderDim}` }); }
     row.append(lab, el);
     return row;
   };
@@ -809,7 +809,7 @@ export function mountGlyphForge(ui: UI, getWorld: () => World): { open: (mode?: 
       const row = document.createElement('div');
       css(row, {
         display: 'flex', gap: '4px', alignItems: 'center', padding: '2px 4px', borderRadius: '3px',
-        background: selected ? DEV_UI.bgActive : 'transparent', cursor: 'pointer',
+        background: selected ? DEV_UI.bgActive : 'transparent', cursor: 'var(--cursor-point, pointer)',
       });
       const label = document.createElement('span');
       const desc = op.kind === 'disc' || op.kind === 'ring'

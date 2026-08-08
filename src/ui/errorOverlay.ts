@@ -118,7 +118,7 @@ export function showErrorOverlay(fatal: CrashEntry, ring: readonly CrashEntry[])
       #crash-overlay button {
         background: linear-gradient(180deg, #30304a, #232338);
         color: var(--gold); border: 1px solid var(--gold); border-radius: 5px;
-        font-size: 14px; font-family: inherit; cursor: pointer; padding: 8px 24px;
+        font-size: 14px; font-family: inherit; cursor: var(--cursor-point, pointer); padding: 8px 24px;
         box-shadow: 0 1px 4px rgba(0,0,0,0.45);
       }
       #crash-overlay button:hover { background: linear-gradient(180deg, #3d3d5c, #2b2b46); }

@@ -33,7 +33,7 @@ export function btn(label: string, onClick: () => void): HTMLButtonElement {
   b.textContent = label;
   css(b, {
     background: DEV_UI.bgRaised, color: DEV_UI.accent, border: `1px solid ${DEV_UI.border}`,
-    borderRadius: '4px', padding: '4px 7px', font: DEV_UI.fontSmall, cursor: 'pointer',
+    borderRadius: '4px', padding: '4px 7px', font: DEV_UI.fontSmall, cursor: 'var(--cursor-point, pointer)',
   });
   b.addEventListener('click', onClick);
   return b;
@@ -55,7 +55,7 @@ export function section(title: string): HTMLElement {
 export function listRow(name: string, color: string, sub: string, onClick?: () => void): HTMLElement {
   const r = document.createElement('div');
   r.dataset.search = (name + ' ' + sub).toLowerCase();
-  css(r, { display: 'flex', justifyContent: 'space-between', gap: '6px', padding: '3px 5px', cursor: onClick ? 'pointer' : 'default', borderRadius: '3px', alignItems: 'center' });
+  css(r, { display: 'flex', justifyContent: 'space-between', gap: '6px', padding: '3px 5px', cursor: onClick ? 'var(--cursor-point, pointer)' : 'var(--cursor-default, default)', borderRadius: '3px', alignItems: 'center' });
   r.innerHTML = `<span style="color:${color}">${name}</span><span style="color:${DEV_UI.textDim};font-size:10px">${sub}</span>`;
   r.addEventListener('mouseenter', () => css(r, { background: DEV_UI.bgRaised }));
   r.addEventListener('mouseleave', () => css(r, { background: 'transparent' }));
@@ -111,7 +111,7 @@ export function dot(color: string): HTMLElement {
 /** A labelled checkbox; returns the wrapper and the box. */
 export function check(label: string, initial: boolean): { el: HTMLElement; box: HTMLInputElement } {
   const wrap = document.createElement('label');
-  css(wrap, { display: 'inline-flex', gap: '4px', alignItems: 'center', font: DEV_UI.fontSmall, color: DEV_UI.text, cursor: 'pointer' });
+  css(wrap, { display: 'inline-flex', gap: '4px', alignItems: 'center', font: DEV_UI.fontSmall, color: DEV_UI.text, cursor: 'var(--cursor-point, pointer)' });
   const box = document.createElement('input');
   box.type = 'checkbox'; box.checked = initial;
   const span = document.createElement('span');

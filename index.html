@@ -125,10 +125,10 @@
     .attr-row button {
       width: 22px; height: 20px; margin-left: 8px;
       background: #2a2a3e; color: var(--gold); border: 1px solid var(--panel-border);
-      border-radius: 3px; cursor: pointer; font-weight: bold;
+      border-radius: 3px; cursor: var(--cursor-point, pointer); font-weight: bold;
     }
     .attr-row button:hover { background: #3a3a55; }
-    .attr-row button:disabled { opacity: 0.3; cursor: default; }
+    .attr-row button:disabled { opacity: 0.3; cursor: var(--cursor-default, default); }
 
     /* Inventory (doll + tetris bag; the satchel + Build drawer anchor to it —
        the drawer hangs OUTSIDE the panel, so the panel itself must not clip:
@@ -138,7 +138,7 @@
     }
     .skill-entry {
       border: 1px solid var(--panel-border); border-radius: 4px;
-      padding: 8px; margin-bottom: 6px; cursor: default;
+      padding: 8px; margin-bottom: 6px; cursor: var(--cursor-default, default);
     }
     .skill-entry .name { font-weight: bold; color: #fff; }
     .skill-entry .tags { color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -149,10 +149,10 @@
     .skill-entry .bind-btns { margin-top: 5px; display: flex; gap: 4px; flex-wrap: wrap; }
     .skill-entry .bind-btns button {
       background: #2a2a3e; color: var(--text); border: 1px solid var(--panel-border);
-      border-radius: 3px; cursor: pointer; font-size: 10px; padding: 2px 7px;
+      border-radius: 3px; cursor: var(--cursor-point, pointer); font-size: 10px; padding: 2px 7px;
     }
     .skill-entry .bind-btns button:hover:not(:disabled) { background: #3a3a55; color: #fff; }
-    .skill-entry .bind-btns button:disabled { opacity: 0.3; cursor: default; }
+    .skill-entry .bind-btns button:disabled { opacity: 0.3; cursor: var(--cursor-default, default); }
     .skill-entry .bind-btns button.bound { background: #4a3c14; color: var(--gold); border-color: var(--gold); }
     .skill-entry.locked { opacity: 0.85; }
 
@@ -161,7 +161,7 @@
     .book-tabs button {
       flex: 1; background: #1a1a26; color: var(--text-dim);
       border: 1px solid var(--panel-border); border-radius: 4px 4px 0 0;
-      padding: 6px 4px; cursor: pointer; font-size: 11px;
+      padding: 6px 4px; cursor: var(--cursor-point, pointer); font-size: 11px;
     }
     .book-tabs button:hover { color: var(--text); }
     .book-tabs button.active {
@@ -199,10 +199,10 @@
     }
     .gem-chip.empty { color: #555; border-style: dashed; }
     .gem-chip button {
-      background: none; border: none; color: var(--gold); cursor: pointer;
+      background: none; border: none; color: var(--gold); cursor: var(--cursor-point, pointer);
       font-size: 10px; padding: 0 2px;
     }
-    .gem-chip button:disabled { opacity: 0.3; cursor: default; }
+    .gem-chip button:disabled { opacity: 0.3; cursor: var(--cursor-default, default); }
     .gem-chip button:hover:not(:disabled) { color: #fff; }
 
     /* Passive tree */
@@ -211,7 +211,7 @@
       width: min(calc(92vh / var(--ui-scale)), 760px); max-width: calc(95vw / var(--ui-scale));
     }
     #passive-tree svg { width: 100%; height: auto; display: block; }
-    .tree-node.available { cursor: pointer; }
+    .tree-node.available { cursor: var(--cursor-point, pointer); }
     .tree-node.available:hover { stroke: #ffd700; stroke-width: 3; }
 
     /* Passive REALM tabs (data/passiveRealms.ts — the tree's constellations) */
@@ -219,7 +219,7 @@
     .realm-tabs .realm-tab {
       background: #1c1926; border: 1px solid #3c3556; border-bottom-width: 2px;
       border-radius: 5px 5px 0 0; padding: 4px 12px; color: #8a8678;
-      font: inherit; font-size: 12px; cursor: pointer;
+      font: inherit; font-size: 12px; cursor: var(--cursor-point, pointer);
     }
     .realm-tabs .realm-tab:hover { color: #d8d4c8; }
     .realm-tabs .realm-tab.active {
@@ -228,12 +228,12 @@
     }
 
     /* Graft chips (bindable passive powers riding skills — panels graft bank) */
-    .gem-chip.graft-chip { border-style: dashed; cursor: pointer; }
+    .gem-chip.graft-chip { border-style: dashed; cursor: var(--cursor-point, pointer); }
     .gem-chip.graft-chip.lifted { box-shadow: 0 0 6px #b8a2e8; color: #e6d8ff; }
     .graft-bank { margin: 2px 0 8px; }
     .graft-land {
       background: #2d2444; border: 1px dashed #8a68c8; border-radius: 4px;
-      color: #cbb8f0; font: inherit; font-size: 10px; padding: 2px 8px; cursor: pointer;
+      color: #cbb8f0; font: inherit; font-size: 10px; padding: 2px 8px; cursor: var(--cursor-point, pointer);
     }
     .graft-land:hover { background: #3a2f56; }
 
@@ -253,7 +253,7 @@
     .choice-popup .choice-opt {
       display: block; width: 100%; text-align: left; margin: 3px 0;
       background: #221e30; border: 1px solid #3c3556; border-radius: 4px;
-      padding: 6px 8px; color: inherit; cursor: pointer; font: inherit;
+      padding: 6px 8px; color: inherit; cursor: var(--cursor-point, pointer); font: inherit;
     }
     .choice-popup .choice-opt:hover:not(:disabled) { border-color: #cbb8f0; background: #2b2540; }
     .choice-popup .choice-opt .opt-name { color: #e6d8ff; font-weight: bold; display: block; }
@@ -261,7 +261,7 @@
     .choice-popup .choice-opt .opt-note { display: block; color: #8a8678; font-size: 11px; margin-top: 3px; }
     .choice-popup .choice-opt.chosen { border-color: #8a68c8; background: #2d2444; }
     .choice-popup .choice-opt.chosen .opt-note { color: #b8a2e8; }
-    .choice-popup .choice-opt.locked { opacity: 0.55; cursor: default; }
+    .choice-popup .choice-opt.locked { opacity: 0.55; cursor: var(--cursor-default, default); }
 
     /* World map */
     #world-map {
@@ -282,7 +282,7 @@
       font: 11px Verdana; color: var(--text);
     }
     #map-aside .zi-zone { color: var(--gold); font-weight: bold; font-size: 12px; }
-    #map-aside .zi-pin { color: #5ad8d8; font-size: 10px; font-weight: normal; cursor: pointer; }
+    #map-aside .zi-pin { color: #5ad8d8; font-size: 10px; font-weight: normal; cursor: var(--cursor-point, pointer); }
     #map-aside .zi-hint { color: var(--text-dim); font-size: 10px; margin: 1px 0 6px; }
     #map-aside .zi-chips { display: flex; flex-wrap: wrap; gap: 3px; margin: 0 0 5px; }
     #map-aside .zi-chip {
@@ -304,7 +304,7 @@
     .map-zoom-grp, .tree-zoom-grp { display: inline-flex; gap: 2px; vertical-align: middle; }
     .map-zoom, .tree-zoom {
       background: #2a2a3e; color: var(--gold); border: 1px solid var(--panel-border);
-      border-radius: 3px; min-width: 22px; padding: 1px 5px; font: 11px Verdana; cursor: pointer;
+      border-radius: 3px; min-width: 22px; padding: 1px 5px; font: 11px Verdana; cursor: var(--cursor-point, pointer);
     }
     .map-zoom:hover, .tree-zoom:hover { background: #3a3a55; }
 
@@ -319,7 +319,7 @@
     .class-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: left; }
     .class-card {
       border: 1px solid var(--panel-border); border-radius: 6px; padding: 12px;
-      cursor: pointer; transition: border-color 0.15s, background 0.15s;
+      cursor: var(--cursor-point, pointer); transition: border-color 0.15s, background 0.15s;
       background: rgba(255,255,255,0.02);
     }
     .class-card:hover { border-color: var(--gold); background: rgba(200,168,75,0.07); }
@@ -343,10 +343,10 @@
     /* The Tracker's book spreads two facing columns. */
     #bestiary-menu { width: 640px; max-height: calc(86vh / var(--ui-scale)); }
     #bestiary-menu .b-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin: 8px 0; }
-    #bestiary-menu .b-row { display: flex; align-items: center; gap: 7px; padding: 3px 6px; border: 1px solid #2a2a3a; border-radius: 3px; cursor: pointer; background: rgba(16,16,24,0.6); }
+    #bestiary-menu .b-row { display: flex; align-items: center; gap: 7px; padding: 3px 6px; border: 1px solid #2a2a3a; border-radius: 3px; cursor: var(--cursor-point, pointer); background: rgba(16,16,24,0.6); }
     #bestiary-menu .b-row:hover { border-color: #8a86b8; }
     #bestiary-menu .b-row.sel { border-color: #c8a84b; }
-    #bestiary-menu .b-row.dark { color: #55536a; cursor: default; }
+    #bestiary-menu .b-row.dark { color: #55536a; cursor: var(--cursor-default, default); }
     #bestiary-menu .b-bar { height: 3px; background: #26263a; border-radius: 2px; overflow: hidden; margin-top: 2px; }
     #bestiary-menu .b-bar i { display: block; height: 100%; background: #8ab06a; }
     #bestiary-menu .b-bar i.done { background: #e8c860; }
@@ -357,7 +357,7 @@
       font-size: 11px; background: rgba(24,20,34,0.55); min-height: 24px;
     }
     #bestiary-menu .spec-slot .empty { color: #6a6478; font-size: 10px; }
-    #bestiary-menu .b-row.attunable { cursor: grab; }
+    #bestiary-menu .b-row.attunable { cursor: var(--cursor-grab, grab); }
     /* THE DRAG FABRIC (ui/dnd.ts) — ghost + target affordances, shared by
        every consumer panel; the fabric toggles these, panels only declare
        data-drag / data-drop. */
@@ -378,7 +378,7 @@
        but a full-viewport outline would be absurd — there, the ghost chip's
        lit/miss border IS the affordance. */
     #game.dnd-can, #game.dnd-over { outline: none; background: none; }
-    body.dnd-active, body.dnd-active * { cursor: grabbing !important; }
+    body.dnd-active, body.dnd-active * { cursor: var(--cursor-grabbing, grabbing) !important; }
     #account-screen {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 820px; max-width: calc(95vw / var(--ui-scale)); max-height: calc(90vh / var(--ui-scale));
@@ -399,7 +399,7 @@
     .unlock-card {
       border: 1px solid var(--panel-border); border-radius: 6px; padding: 8px 10px;
       background: rgba(255,255,255,0.02); display: flex; flex-direction: column;
-      cursor: help; transition: border-color 0.15s, background 0.15s;
+      cursor: var(--cursor-help, help); transition: border-color 0.15s, background 0.15s;
     }
     .unlock-card:hover { border-color: var(--gold); background: rgba(200,168,75,0.05); }
     .unlock-card.owned { opacity: 0.5; }
@@ -408,14 +408,14 @@
     .unlock-card .ukind { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); }
     .unlock-card button {
       background: #2a2a3e; color: var(--gold); border: 1px solid var(--gold);
-      border-radius: 3px; padding: 4px 8px; font-size: 11px; cursor: pointer;
+      border-radius: 3px; padding: 4px 8px; font-size: 11px; cursor: var(--cursor-point, pointer);
     }
     .unlock-card button:hover:not(:disabled) { background: #3a3a55; }
-    .unlock-card button:disabled { opacity: 0.4; cursor: default; border-color: var(--panel-border); color: var(--text-dim); }
+    .unlock-card button:disabled { opacity: 0.4; cursor: var(--cursor-default, default); border-color: var(--panel-border); color: var(--text-dim); }
     #account-screen .acct-btns { margin-top: 14px; }
     #account-screen .acct-btns button {
       background: #2a2a3e; color: var(--gold); border: 1px solid var(--gold);
-      border-radius: 4px; padding: 8px 24px; font-size: 14px; cursor: pointer; margin: 12px 6px 0 6px;
+      border-radius: 4px; padding: 8px 24px; font-size: 14px; cursor: var(--cursor-point, pointer); margin: 12px 6px 0 6px;
     }
     /* THE VAULT SHELVES: the book-tabs shape at store grain. Each face wears
        a quiet stock count — gold while ≥1 of that stock is affordable right
@@ -425,7 +425,7 @@
     #account-screen .vault-tabs { margin: 0 0 10px; }
     /* THE RUMOR FOLD: the wall's header is a latch — one click folds the
        whispers away whole; the count stays spoken on the face. */
-    #account-screen .vault-fold { cursor: pointer; user-select: none; }
+    #account-screen .vault-fold { cursor: var(--cursor-point, pointer); user-select: none; }
     #account-screen .vault-fold:hover { color: var(--gold); }
     #account-screen .vault-fold .arr { display: inline-block; width: 14px; color: var(--gold); }
     #account-screen .vault-tabs .cnt {
@@ -444,7 +444,7 @@
     /* The death screen's two buttons (#unlocks-btn, #restart-btn) both ride the
        shared #death-screen button base + the cohesive gradient rule below. */
     #death-screen button { margin: 12px 6px 0 6px; }
-    .class-card.locked { cursor: pointer; }
+    .class-card.locked { cursor: var(--cursor-point, pointer); }
     .class-card .class-lock { margin-top: 6px; font-size: 11px; font-weight: bold; color: var(--gold); }
 
     /* Escape menu + keybinds */
@@ -456,7 +456,7 @@
     #escape-menu .esc-btns { display: flex; flex-direction: column; gap: 8px; align-items: center; margin-top: 10px; }
     #escape-menu .esc-btns button {
       width: 240px; background: #2a2a3e; color: var(--gold); border: 1px solid var(--gold);
-      border-radius: 4px; padding: 9px 0; font-size: 14px; cursor: pointer;
+      border-radius: 4px; padding: 9px 0; font-size: 14px; cursor: var(--cursor-point, pointer);
     }
     #escape-menu .esc-btns button:hover { background: #3a3a55; }
     #escape-menu .rebind-list { text-align: left; margin: 8px 0; }
@@ -467,7 +467,7 @@
     .rebind-row span { font-size: 12px; color: var(--text); }
     .rebind-row button {
       min-width: 64px; background: #2a2a3e; color: var(--gold); border: 1px solid var(--panel-border);
-      border-radius: 3px; padding: 3px 8px; font-size: 11px; cursor: pointer; text-transform: uppercase;
+      border-radius: 3px; padding: 3px 8px; font-size: 11px; cursor: var(--cursor-point, pointer); text-transform: uppercase;
     }
     .rebind-row button:hover { background: #3a3a55; border-color: var(--gold); }
 
@@ -482,10 +482,10 @@
     #start-menu .esc-btns { display: flex; flex-direction: column; gap: 8px; align-items: center; }
     #start-menu .esc-btns button {
       width: 260px; background: #2a2a3e; color: var(--gold); border: 1px solid var(--gold);
-      border-radius: 4px; padding: 10px 0; font-size: 14px; cursor: pointer;
+      border-radius: 4px; padding: 10px 0; font-size: 14px; cursor: var(--cursor-point, pointer);
     }
     #start-menu .esc-btns button:hover:not(:disabled) { background: #3a3a55; }
-    #start-menu .esc-btns button:disabled { opacity: 0.4; cursor: default; border-color: var(--panel-border); color: var(--text-dim); }
+    #start-menu .esc-btns button:disabled { opacity: 0.4; cursor: var(--cursor-default, default); border-color: var(--panel-border); color: var(--text-dim); }
 
     /* Floating tooltip (outside .panel so panel display rules don't hide it)
        — z-index from the UI stack law's `tooltip` rung (ui/zorder.ts). */
@@ -580,7 +580,7 @@
     .chron-lvlbar i { display: block; height: 100%; background: var(--gold); }
 
     /* THE SKILL GRAFT PICK — selectable cards; the chosen rider glows. */
-    .graft-card { cursor: pointer; }
+    .graft-card { cursor: var(--cursor-point, pointer); }
     .graft-card.graft-chosen {
       border-color: var(--gold); background: rgba(200,168,75,0.12);
       box-shadow: 0 0 12px rgba(200,168,75,0.25);
@@ -617,7 +617,7 @@
     .exped-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; text-align: left; }
     .exped-card { border: 1px solid var(--panel-border); border-radius: 6px; padding: 10px; background: rgba(255,255,255,0.02); transition: opacity 0.15s; }
     .exped-card.exped-off { opacity: 0.5; }
-    .exped-head { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .exped-head { display: flex; align-items: center; gap: 8px; cursor: var(--cursor-point, pointer); }
     .exped-head input { width: 15px; height: 15px; accent-color: var(--gold); }
     .exped-name { font-size: 14px; font-weight: bold; }
     .exped-blurb { font-size: 11px; color: var(--text-dim); margin: 5px 0; min-height: 28px; }
@@ -628,20 +628,20 @@
     .slider-row .sv { width: 42px; text-align: right; color: var(--gold); font-weight: bold; }
     .slider-row input[type=range] {
       flex: 1; -webkit-appearance: none; appearance: none; height: 5px; border-radius: 3px;
-      background: #2a2a3e; outline: none; cursor: pointer;
+      background: #2a2a3e; outline: none; cursor: var(--cursor-point, pointer);
     }
     .slider-row input[type=range]::-webkit-slider-thumb {
       -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%;
-      background: var(--gold); border: 1px solid #0a0a0e; cursor: pointer;
+      background: var(--gold); border: 1px solid #0a0a0e; cursor: var(--cursor-point, pointer);
     }
     .slider-row input[type=range]::-moz-range-thumb {
-      width: 14px; height: 14px; border-radius: 50%; background: var(--gold); border: 1px solid #0a0a0e; cursor: pointer;
+      width: 14px; height: 14px; border-radius: 50%; background: var(--gold); border: 1px solid #0a0a0e; cursor: var(--cursor-point, pointer);
     }
-    .slider-row input[type=range]:disabled { opacity: 0.4; cursor: default; }
+    .slider-row input[type=range]:disabled { opacity: 0.4; cursor: var(--cursor-default, default); }
     #expedition-setup .acct-btns { margin-top: 14px; }
     #expedition-setup .acct-btns button {
       background: #2a2a3e; color: var(--gold); border: 1px solid var(--gold);
-      border-radius: 4px; padding: 8px 24px; font-size: 14px; cursor: pointer; margin: 0 6px;
+      border-radius: 4px; padding: 8px 24px; font-size: 14px; cursor: var(--cursor-point, pointer); margin: 0 6px;
     }
     #expedition-setup .acct-btns button:hover { background: #3a3a55; }
     #expedition-setup #exped-begin { background: #2c3a2c; border-color: #6fc06f; color: #b6f0b6; }
@@ -662,7 +662,7 @@
     }
     #story-card button {
       background: #2a2a3e; color: var(--gold); border: 1px solid var(--gold);
-      border-radius: 4px; padding: 8px 24px; font-size: 14px; cursor: pointer; margin-top: 14px;
+      border-radius: 4px; padding: 8px 24px; font-size: 14px; cursor: var(--cursor-point, pointer); margin-top: 14px;
     }
     #story-card button:hover { background: #3a3a55; }
 
@@ -674,7 +674,7 @@
     #death-screen h1 { color: #c03030; letter-spacing: 4px; }
     #death-screen button {
       background: #2a2a3e; color: var(--gold); border: 1px solid var(--gold);
-      border-radius: 4px; padding: 8px 24px; font-size: 14px; cursor: pointer; margin-top: 12px;
+      border-radius: 4px; padding: 8px 24px; font-size: 14px; cursor: var(--cursor-point, pointer); margin-top: 12px;
     }
     #death-screen button:hover { background: #3a3a55; }
 
@@ -686,7 +686,7 @@
     #class-select .acct-btns button, #death-screen button {
       background: linear-gradient(180deg, #30304a, #232338);
       color: var(--gold); border: 1px solid var(--gold); border-radius: 5px;
-      font-size: 14px; font-family: inherit; cursor: pointer;
+      font-size: 14px; font-family: inherit; cursor: var(--cursor-point, pointer);
       box-shadow: 0 1px 4px rgba(0,0,0,0.45);
       transition: background 0.15s, box-shadow 0.15s, transform 0.05s;
     }
@@ -704,7 +704,7 @@
     #start-menu .esc-btns button:disabled, #escape-menu .esc-btns button:disabled,
     #account-screen .acct-btns button:disabled, #expedition-setup .acct-btns button:disabled,
     #class-select .acct-btns button:disabled {
-      opacity: 0.4; cursor: default; border-color: var(--panel-border); color: var(--text-dim); box-shadow: none;
+      opacity: 0.4; cursor: var(--cursor-default, default); border-color: var(--panel-border); color: var(--text-dim); box-shadow: none;
     }
 
     #hint-bar {
