@@ -31,9 +31,20 @@ import { MI_CFG, MONSTER_THEMES } from '../src/data/infrequents';
 import { MONSTERS } from '../src/data/monsters';
 import { ITEM_BASES } from '../src/data/itembases';
 import { ITEM_AFFIXES } from '../src/data/itemaffixes';
-import { pickThemedBase } from '../src/engine/itemgen';
+import { PROCS, procStat } from '../src/data/procs';
+import { SKILLS } from '../src/data/skills';
+import { compileItemMods, pickThemedBase, rollItem } from '../src/engine/itemgen';
 import { resolveLootTable } from '../src/engine/loot';
-import { bootSimEngine } from '../src/sim/arena';
+import { makeSkillInstance } from '../src/engine/skills';
+import { mod } from '../src/engine/stats';
+import { setSimTap } from '../src/engine/tap';
+import {
+  WORN_THRONGS, wornThrongCap, wornThrongCount, wornThrongPeriod,
+  wornThrongStat, wornThrongTtl,
+} from '../src/engine/throng';
+import { vec } from '../src/core/math';
+import { updateAI } from '../src/engine/ai';
+import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { deriveSeed, mulberry32, seedGlobalRandom } from '../src/sim/rng';
 
 let failed = 0;
@@ -159,6 +170,136 @@ const basesFor = (theme: string) =>
   }
   check(`dropWeight-0 law: ${DRAWS} un-themed world_gear draws mint zero mi_ bases`,
     strays === 0, `strays=${strays}`);
+}
+
+// ============================================ RIG E — THE SIGNATURE LANE
+// (2026-08-07, the MI-levers pass): each debut theme's proc carries the
+// source monster's OWN kit verb as a 'cast' payload, granted ONLY by a
+// suffix family gated on that theme's bases — the farm law, proc form.
+{
+  const LANE = [
+    { theme: 'gnoll', proc: 'mi_gnoll_impale', fam: 'mi_gnoll_impalement', skill: 'pinning_spear' },
+    { theme: 'goblin', proc: 'mi_goblin_fan', fam: 'mi_goblin_knifefan', skill: 'fan_of_blades' },
+    { theme: 'bandit', proc: 'mi_bandit_caltrops', fam: 'mi_bandit_toll', skill: 'caltrops' },
+  ];
+  for (const row of LANE) {
+    const proc = PROCS[row.proc];
+    check(`signature '${row.theme}': the proc carries the kit verb as a cast payload`,
+      !!proc && proc.effect.type === 'cast' && proc.effect.cast.skillId === row.skill
+      && !!SKILLS[row.skill] && proc.oncePerCast === true && (proc.icd ?? 0) > 0,
+      proc ? `${proc.effect.type} → ${proc.effect.type === 'cast' ? proc.effect.cast.skillId : '?'}` : 'missing');
+    const famDef = ITEM_AFFIXES[row.fam];
+    check(`signature '${row.theme}': a theme-gated suffix grants the chance stat`,
+      !!famDef && famDef.kind === 'suffix'
+      && famDef.tags?.length === 1 && famDef.tags[0] === `mi_${row.theme}`
+      && famDef.lines.length === 1 && famDef.lines[0].stat === procStat(row.proc),
+      famDef ? `${famDef.kind} tags=${famDef.tags?.join(',')}` : 'missing');
+    const elsewhere = Object.values(ITEM_AFFIXES).filter(f =>
+      f.id !== row.fam && f.lines.some(l => l.stat === procStat(row.proc)));
+    check(`signature '${row.theme}': the chance stat rolls NOWHERE outside the theme`,
+      elsewhere.length === 0, elsewhere.map(f => f.id).join(', '));
+  }
+  const ring = rollItem({
+    ilvl: 20, rarity: 'magic', baseId: 'ring_mi_gnoll', withFamily: 'mi_gnoll_impalement',
+  });
+  const mods = ring ? compileItemMods(ring) : [];
+  check("signature roll: withFamily mints a live chance line on the Impaler's Fang",
+    mods.some(m => m.stat === procStat('mi_gnoll_impale') && m.value > 0),
+    mods.filter(m => m.stat.startsWith('proc_')).map(m => `${m.stat}=${m.value.toFixed(3)}`).join(','));
+}
+
+// =========================================== RIG F — THE LIVE TRANSPLANT
+// The whole lane end to end on the real engine: a sheet-granted chance
+// (the affix's stat, pinned to 1 — the roll caps at 0.95, so each verb
+// retries across icd-spaced strikes) fires the monster's REAL skill from
+// the wearer's hit. Spear = ONE bolt; fan = its authored 3-5 knives;
+// caltrops = a true caltrops cast at the mark (the cast tap sees it).
+{
+  const w = makeSimWorld('warrior', 0x1a7e);
+  const p = w.player;
+  const DT = 1 / 60;
+  const step = (sec: number): void => {
+    for (let t = 0; t < sec; t += DT) {
+      for (const a of w.actors) updateAI(a, w, DT);
+      w.update(DT);
+    }
+  };
+  // Pin BOTH sides of the hit roll (the probe_throng lesson): the lane
+  // must test the PROC, never the accuracy dice.
+  p.sheet.setSource('probeacc', [mod('accuracy', 'increased', 50)]);
+  const claw = makeSkillInstance(SKILLS.claw, 1);
+  const strike = (): void => {
+    const prey = w.createMonster('zombie', 8, 'enemy');
+    prey.sheet.setBase('evasion', 0);
+    prey.pos = vec(p.pos.x + 40, p.pos.y);
+    w.actors.push(prey);
+    w.executeSkill(p, claw, vec(prey.pos.x, prey.pos.y));
+  };
+  /** Strike up to `tries` times (icd waited out between), until the
+   *  payload observer reports ≥1 — the 0.95 chance cap made honest. */
+  const fireUntil = (statId: string, icd: number, tries: number, count: () => number): number => {
+    p.sheet.setSource('probeproc', [mod(statId, 'flat', 1)]);
+    let seen = 0;
+    for (let i = 0; i < tries && seen <= 0; i++) {
+      const before = count();
+      strike();
+      seen = count() - before;
+      if (seen <= 0) step(icd + 0.15);
+    }
+    return seen;
+  };
+  const spear = fireUntil(procStat('mi_gnoll_impale'), 2.5, 3, () => w.projectiles.length);
+  check("live: Impaler's Steel hurls exactly ONE pinning spear from the wearer",
+    spear === 1, `${spear} projectiles`);
+  const fan = fireUntil(procStat('mi_goblin_fan'), 3, 3, () => w.projectiles.length);
+  check("live: Scrapper's Fan flings its authored 3-5 knives",
+    fan >= 3 && fan <= 5, `${fan} projectiles`);
+  let calCasts = 0;
+  setSimTap({ onCast: (_c, i2) => { if (i2.def.id === 'caltrops') calCasts++; } });
+  const cal = fireUntil(procStat('mi_bandit_caltrops'), 4, 3, () => calCasts);
+  setSimTap(null);
+  check("live: Snaresetter's Toll strews a real caltrops cast at the mark",
+    cal === 1, `${cal} casts`);
+}
+
+// ====================================== RIG G — THE UNTAMED BROOD (wiring)
+// The abyssal theme's throng rework at the registry grain (the live claim/
+// hunt lane runs on the real engine in probe_throng.ts): the worn def, the
+// base implicit, the INTEGER rank ladder, and the pure rank folds.
+{
+  const def = WORN_THRONGS['abyssal_brood'];
+  check('brood: the worn throng is registered and its body resolves',
+    !!def && !!MONSTERS[def.monsterId], def ? def.monsterId : 'missing');
+  const cuffs = ITEM_BASES['gloves_mi_abyssal'];
+  check('brood: the Riftbound Cuffs seed rank 1 at the base (the theme IS the brood)',
+    cuffs?.implicits?.some(l => l.stat === wornThrongStat('abyssal_brood')) === true);
+  const famDef = ITEM_AFFIXES['mi_abyssal_teeming'];
+  check('brood: the Teeming suffix is an INTEGER ladder on the theme tag (whole ranks only)',
+    !!famDef && famDef.kind === 'suffix' && famDef.tags?.length === 1
+    && famDef.tags[0] === 'mi_abyssal'
+    && famDef.tiers.every(t2 => t2.ranges[0][0] === t2.ranges[0][1]
+      && Number.isInteger(t2.ranges[0][0]))
+    && famDef.tiers[0].magicOnly === true,
+    famDef ? famDef.tiers.map(t2 => `[${t2.ranges[0][0]}]`).join('') : 'missing');
+  if (def) {
+    const ranks = [1, 2, 3, 4];
+    const periods = ranks.map(r => wornThrongPeriod(def, r));
+    const counts = ranks.map(r => wornThrongCount(def, r));
+    const caps = ranks.map(r => wornThrongCap(def, r));
+    const ttls = ranks.map(r => wornThrongTtl(def, r));
+    check('brood folds: frequency quickens with rank, never past the floor',
+      periods.every((v, i) => i === 0 || v <= periods[i - 1])
+      && periods.every(v => v >= def.everyFloorSec), periods.map(v => v.toFixed(1)).join(' '));
+    check('brood folds: count + cap climb in WHOLE bodies (the quanta law)',
+      counts.every((v, i) => Number.isInteger(v) && v >= 1 && (i === 0 || v >= counts[i - 1]))
+      && caps.every((v, i) => Number.isInteger(v) && v >= 1 && (i === 0 || v >= caps[i - 1])),
+      `counts ${counts.join(' ')} caps ${caps.join(' ')}`);
+    check('brood folds: the husk linger grows with rank (the density axis)',
+      ttls.every((v, i) => i === 0 || v >= ttls[i - 1]), ttls.map(v => v.toFixed(0)).join(' '));
+    check('brood folds: an absurd rank floors the clock and still counts whole bodies',
+      wornThrongPeriod(def, 99) === def.everyFloorSec
+      && Number.isInteger(wornThrongCount(def, 99)));
+  }
 }
 
 console.log(failed === 0 ? '\nprobe_infrequents: ALL GREEN' : `\nprobe_infrequents: ${failed} FAILURE(S)`);

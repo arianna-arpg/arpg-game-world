@@ -13,7 +13,7 @@ import { ESSENCES } from '../data/essences';
 import { STATUS_DEFS, type StatusDef } from '../engine/status';
 import { toneTint } from '../engine/tuning';
 import { STANCE_PLANT_TIME, shellArcFactor, type Actor } from '../engine/actor';
-import { throngSightSet } from '../engine/throng';
+import { throngSightSet, wornThrongKindsOf } from '../engine/throng';
 import { GRAB_VERB_LABEL } from '../engine/grab';
 import { PLY_CFG } from '../engine/plies';
 import { SEG_CFG, segLook, segR, segsHittable } from '../engine/segments';
@@ -4244,7 +4244,11 @@ export class Renderer {
   private throngSightOf(world: World): Set<string> {
     if (world.time !== this.throngSightAt) {
       this.throngSightAt = world.time;
-      this.throngSightMemo = throngSightSet(world.player.skills);
+      const sight = throngSightSet(world.player.skills);
+      // The WORN half (engine/throng.ts WORN_THRONGS): gear-granted
+      // throngs reveal their kind exactly as a slotted anchor does.
+      for (const k of wornThrongKindsOf(world.player)) sight.add(k);
+      this.throngSightMemo = sight;
     }
     return this.throngSightMemo;
   }

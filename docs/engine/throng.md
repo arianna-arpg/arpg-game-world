@@ -40,7 +40,7 @@ cursor. Tags `['minion', 'summon', …]` admit minion supports on the HOST lane.
 | `onCrit` | `chance`, `icd` | the executioner's court: your best blows shake bodies loose |
 | `onKill` | `chance` | the reaper's wake: corpses give up their husks |
 | `gauge` | `per: hit/minionHit/both`, `fill`, `yield` | THE ADD-LESS BOSS FALLBACK: traded blows fill a gauge that mints at 100 |
-| `trickle` | `everySec`, `at: near/roster` | THE RECURRING BROOD: one body per clock below cap — a husk at your feet ('near', the stoop kept) or straight into the roster ('roster', the true replenish-per-second); DISARMED at cap, re-arms with a full wait on a loss |
+| `trickle` | `everySec`, `at: near/roster/ring`, `count`, `ttl` | THE RECURRING BROOD: `count` bodies per clock below cap — a husk at your feet ('near', the stoop kept), scattered in the mote near-band around you ('ring', the worn brood's grain), or straight into the roster ('roster', the true replenish-per-second); DISARMED at cap, re-arms with a full wait on a loss |
 
 A new source kind = one union row + one branch in the world executors.
 One `motes` row per skill and one `trickle` row per skill (the first wins).
@@ -57,6 +57,33 @@ FOLDED at registry load onto every anchor (the construct fold's sibling),
 so they never socket into a skill with no roster to grow. The graft is
 seat-bound (the tameMod precedent): source executors read the KEEPER's bar
 instance, and throng bodies take no forwarded gems anyway.
+
+### The worn anchor (`WORN_THRONGS` — item-granted throngs)
+
+The gem graft's seam one grain up: a registered `WornThrongDef` binds a
+whole gathered-swarm identity to ONE ordinary stat (`wornThrong_<id>`) any
+modifier source can grant — an MI implicit, an affix, a unique line, a
+passive. While the stat stands above zero, the world derives a SYNTHETIC
+off-bar anchor per keeper (`World.wornThrongAnchorsOf` — a real
+SkillInstance of a def built by `buildWornThrongDef`, never in the SKILLS
+catalog) whose spec is the def's dials FOLDED BY THE RANK: the brood clock
+quickens (frequency), beats condense more kin (number), and the roster cap
+plus husk linger grow (density) — pure monotone folds, quanta-rounded
+where bodies are counted. To every consumer it meets — the walk-through
+claim, the batch-scaled rebake, the disband release, the sight gate (the
+renderer unions `wornThrongKindsOf` beside the bar's set) — it is an
+ordinary anchor; rank changes re-point the instance's def in place, so
+state clocks and the `__throng:worn:<id>` roster marker survive gear
+churn, and un-equipping re-wilds the roster through the standing disband
+law. Saved rosters restore only while the stat still stands (the
+bar-anchor law's exact shape). **THE UNTAMED STANCE** (`ThrongSpec.
+untamed`) usually rides along: a world-side drive re-aims each body at
+its own nearest foe inside `huntRadius` of the keeper on the rebake beat,
+through ordinary assault orders — the pack fights on its own drive and
+heels when nothing is near; no bar skill exists to conduct it. Debut: the
+abyssal Monster Infrequents' UNTAMED BROOD (`data/infrequents.ts` —
+Riftbound Cuffs implicit rank 1, the 'of the Teeming Rift' suffix stacks
+whole ranks).
 
 ### The find levers (stats — gems, passives, affixes all reach)
 

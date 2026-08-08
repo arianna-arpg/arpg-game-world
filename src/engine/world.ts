@@ -67,7 +67,7 @@ import { CHOICE_GROUPS, PASSIVE_CHOICE_CFG, choiceDealSpent, choiceLockReason, c
 import { openRealms, realmOf, realmOpen, type PassiveRealmDef } from '../data/passiveRealms';
 import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocationRootId, vocationStepKey, type VocationSiteFilter } from '../data/vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
-import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcDef } from '../data/procs';
+import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcCastSpec, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
 import { COMBO_CFG, comboRepeatedNow, comboStat, comboVariedNow, matchComboRule, type ComboRuleDef } from './sequence';
 import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSelected } from './mimic';
@@ -169,8 +169,10 @@ import { bootOccSites, driveOccSites, OCC_CFG, reviveOccSite, seedOccClockMarks,
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
 import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun } from './puzzles';
 import {
-  batchScaleOf, isThrongBody, THRONG_CFG, throngMarkerOf, throngPocketKey,
-  throngSkillSalt, throngSpecsOn, type ThrongSourceRow, type ThrongSpec,
+  batchScaleOf, buildWornThrongDef, isThrongBody, THRONG_CFG, throngMarkerOf,
+  throngPocketKey, throngSkillSalt, throngSpecsOn, WORN_THRONGS,
+  wornThrongDefOfSkillId, wornThrongSkillId, wornThrongStat,
+  type ThrongSourceRow, type ThrongSpec,
 } from './throng';
 import {
   CLING_CFG, clingBurrowed, clingEligible, clingSeatPos, clingSeatsOf, gnawTags,
@@ -25713,7 +25715,13 @@ export class World {
     keeper: Actor = this.player,
   ): void {
     for (const row of list) {
-      const inst = keeper.skills.find(s => s?.def.id === row.skillId && s.def.throng);
+      // A WORN roster's anchor rebuilds only if the keeper still wears the
+      // granting stat (adoptSavedMeta baked the sheet before this runs) —
+      // gone gear, gone roster: the bar-anchor law's exact shape.
+      const inst = keeper.skills.find(s => s?.def.id === row.skillId && s.def.throng)
+        ?? (wornThrongDefOfSkillId(row.skillId)
+          ? this.wornThrongAnchorsOf(keeper).find(a => a.inst.def.id === row.skillId)?.inst
+          : undefined);
       if (!inst || !MONSTERS[row.defId]) continue;
       const n = Math.min(row.count, this.throngCapOf(keeper, inst));
       // A lite-tier roster resumes as POOL ROWS (fresh plies — wear does
@@ -25750,6 +25758,89 @@ export class World {
   private throngSources(inst: SkillInstance, spec: ThrongSpec): ThrongSourceRow[] {
     const grafts = instanceThrongSources(inst);
     return grafts.length ? [...spec.sources, ...grafts] : spec.sources;
+  }
+
+  /** THE WORN ANCHORS (engine/throng.ts WORN_THRONGS): per-keeper synthetic
+   *  off-bar instances derived from the wornThrong_<id> stat family —
+   *  gear-granted throngs that need no bar skill. */
+  private wornThrongInsts = new Map<number, Map<string, { inst: SkillInstance; rank: number }>>();
+
+  /** Reconcile + enumerate a keeper's worn anchors. A standing rank keeps
+   *  its INSTANCE (state clocks and the roster marker survive gear churn;
+   *  a moved rank re-points the def at the fresh rank fold), a dropped
+   *  rank forgets it — the sweep's anchored check then re-wilds the
+   *  roster (the disband law: unequip releases, never deletes). */
+  private wornThrongAnchorsOf(keeper: Actor): { inst: SkillInstance; spec: ThrongSpec }[] {
+    let out: { inst: SkillInstance; spec: ThrongSpec }[] | null = null;
+    let mine = this.wornThrongInsts.get(keeper.id);
+    for (const def of Object.values(WORN_THRONGS)) {
+      const rank = keeper.sheet.get(wornThrongStat(def.id));
+      if (rank <= 0) { mine?.delete(def.id); continue; }
+      if (!mine) this.wornThrongInsts.set(keeper.id, mine = new Map());
+      let row = mine.get(def.id);
+      if (!row) {
+        row = { inst: makeSkillInstance(buildWornThrongDef(def, rank), 1), rank };
+        mine.set(def.id, row);
+      } else if (row.rank !== rank) {
+        row.inst.def = buildWornThrongDef(def, rank);
+        row.rank = rank;
+      }
+      (out ??= []).push({ inst: row.inst, spec: row.inst.def.throng! });
+    }
+    return out ?? [];
+  }
+
+  /** Is this roster marker a WORN anchor its owner still wears? Sheet
+   *  truth, not the memo — the disband sweep may meet a de-equip before
+   *  the reconcile does. */
+  private wornThrongAnchored(owner: Actor, marker: string | undefined): boolean {
+    if (!marker?.startsWith('__throng:worn:')) return false;
+    const def = wornThrongDefOfSkillId(marker.slice('__throng:'.length));
+    return !!def && owner.sheet.get(wornThrongStat(def.id)) > 0;
+  }
+
+  /** THE UNTAMED DRIVE (ThrongSpec.untamed): each body takes its own
+   *  nearest foe inside the hunt reach around the KEEPER — self-issued
+   *  assault orders on the rebake beat, the command fabric doing the
+   *  walking and the fighting. Nothing in reach = no order: the pack
+   *  heels like any minions until prey wanders close. */
+  private driveUntamedThrong(keeper: Actor, inst: SkillInstance, spec: ThrongSpec): void {
+    const bodies = this.throngBodiesOf(keeper, inst.def.id);
+    if (!bodies.length) return;
+    const reach = spec.untamed?.huntRadius ?? THRONG_CFG.untamed.huntRadius;
+    const until = this.time + THRONG_CFG.untamed.orderSec;
+    const prey: Actor[] = [];
+    for (const e of this.enemiesOf(keeper)) {
+      if (e.dead || e.passive || e.untargetable || e.sheet.get('invisible') > 0) continue;
+      if (dist(e.pos, keeper.pos) > reach) continue;
+      prey.push(e);
+    }
+    if (!prey.length) return;
+    for (const b of bodies) {
+      let best: Actor | null = null;
+      let bd = Infinity;
+      for (const e of prey) {
+        const dd = dist(b.pos, e.pos);
+        if (dd < bd) { bd = dd; best = e; }
+      }
+      if (!best) continue;
+      const cmd: CommandState = {
+        kind: 'assault', pos: vec(best.pos.x, best.pos.y), until,
+        radius: THRONG_CFG.direct.radius, issuerId: keeper.id, targetId: best.id,
+      };
+      issueCommand(b, cmd);
+    }
+  }
+
+  /** Hurry a worn anchor's brood clock to NOW (dev/probe — the
+   *  devThrongFillGauge pattern: state poked, laws untouched). */
+  devWornThrongHurry(defId: string): boolean {
+    for (const a of this.wornThrongAnchorsOf(this.player)) {
+      if (a.inst.def.id !== wornThrongSkillId(defId)) continue;
+      (a.inst.state ??= {}).throngTrickleAt = this.time;
+      return true;
+    }
+    return false;
   }
 
   /** THE FIND-SIZE FOLD (the throngYield stat): bodies per mint event,
@@ -25899,7 +25990,8 @@ export class World {
       }
       if (!m.owner || !isThrongBody(m)) continue;
       const anchored = m.owner.skills.some(s =>
-        s?.def.throng && throngMarkerOf(s.def.id) === m.sourceSkillId);
+        s?.def.throng && throngMarkerOf(s.def.id) === m.sourceSkillId)
+        || this.wornThrongAnchored(m.owner, m.sourceSkillId);
       if (!anchored) {
         const defId = m.defId;
         this.kill(m, true);
@@ -25915,7 +26007,12 @@ export class World {
     for (const seat of this.seats) {
       const keeper = seat.actor;
       if (keeper.dead || keeper.downed) continue;
-      for (const { inst, spec } of throngSpecsOn(keeper.skills)) {
+      // Bar anchors first, then the WORN anchors (gear-granted throngs —
+      // engine/throng.ts WORN_THRONGS): both are ordinary anchors to
+      // every consumer below (claim, rebake, clocks, the disband law).
+      for (const { inst, spec } of [
+        ...throngSpecsOn(keeper.skills), ...this.wornThrongAnchorsOf(keeper),
+      ]) {
         if (rebake) {
           for (const b of this.throngBodiesOf(keeper, inst.def.id)) {
             this.bakeMinionOwnerStats(b, keeper, inst, batchScaleOf(spec));
@@ -25975,7 +26072,7 @@ export class World {
             st.throngTrickleAt = t + trickleRow.everySec;
           } else if (t >= st.throngTrickleAt) {
             st.throngTrickleAt = t + trickleRow.everySec;
-            let n = this.throngYieldCount(keeper, inst, 1);
+            let n = this.throngYieldCount(keeper, inst, trickleRow.count ?? 1);
             if ((trickleRow.at ?? 'near') === 'roster') {
               n = Math.min(n, cap - roster);
               for (let i = 0; i < n; i++) {
@@ -25986,13 +26083,23 @@ export class World {
               }
               if (n > 0) this.charDirty = true;
             } else {
+              // 'ring' condenses the finds in the mote near-band AROUND
+              // the keeper (the worn brood's grain — a short walk, the
+              // collection thesis); 'near' keeps the at-feet stoop.
               for (let i = 0; i < n; i++) {
-                this.mintThrongHusk(spec.monsterId,
-                  this.throngStandNear(keeper.pos), { ttl: THRONG_CFG.motes.ttl });
+                const spot = trickleRow.at === 'ring'
+                  ? this.throngMoteSpot(keeper, 'near') ?? this.throngStandNear(keeper.pos)
+                  : this.throngStandNear(keeper.pos);
+                this.mintThrongHusk(spec.monsterId, spot,
+                  { ttl: trickleRow.ttl ?? THRONG_CFG.motes.ttl });
               }
             }
           }
         }
+        // THE UNTAMED DRIVE rides the rebake beat (1s): self-issued hunt
+        // orders that outlive the beat by a breath (orderSec), so the
+        // stance never gaps mid-fight.
+        if (spec.untamed && rebake) this.driveUntamedThrong(keeper, inst, spec);
       }
     }
   }
@@ -37512,6 +37619,12 @@ export class World {
         this.spawnLightwell(fx.kind, vec(at.x, at.y));
         break;
       }
+      // THE CAST PAYLOAD (the signature lane, data/procs.ts): play a
+      // catalog skill from the proc's site — the rider grammar's payload
+      // as a first-class effect, one depth deeper like every consequence.
+      case 'cast':
+        this.castProcPayload(caster, inst, target, depth + 1, fx.cast);
+        break;
       case 'extraHit':
         if (!inst || !target) break;
         this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: target.radius + 8, color: proc.color, life: 0.2, maxLife: 0.2 });
@@ -37620,10 +37733,57 @@ export class World {
     this.fireProcRiders(proc, caster, inst, target, depth);
   }
 
+  /** THE CAST PAYLOAD (data/procs.ts ProcCastSpec — ONE executor shared by
+   *  proc riders and the 'cast' proc effect): plays a catalog skill from
+   *  the proc's site at `depth`. PROJECTILE payloads SPRAY from the site
+   *  (the shatter pattern — hit-locked against the struck body so they
+   *  always fly OUTWARD); any other delivery executes AT the site, count
+   *  times. Returns whether anything actually fired. */
+  private castProcPayload(
+    caster: Actor, inst: SkillInstance | null, target: Actor | null,
+    depth: number, cast: ProcCastSpec,
+  ): boolean {
+    const skill = SKILLS[cast.skillId];
+    if (!skill) return false;
+    const site = cast.at === 'self' || !target ? caster : target;
+    const origin = vec(site.pos.x, site.pos.y);
+    const n = randInt(cast.count[0], cast.count[1]);
+    if (n <= 0) return false;
+    const level = inst ? effectiveSkillLevel(inst)
+      : Math.max(1, Math.round(caster.level / 2));
+    const mult = cast.mult ?? 1;
+    if (skill.delivery.type === 'projectile') {
+      const bearing = target && target !== caster
+        ? angleTo(caster.pos, target.pos) : caster.facing;
+      const phase = rand(0, Math.PI * 2);
+      const fan = typeof cast.spread === 'number' ? cast.spread : undefined;
+      for (let i = 0; i < n; i++) {
+        const dir = fan === undefined
+          ? phase + (i / n) * Math.PI * 2
+          : bearing + (n === 1 ? 0 : (i / (n - 1) - 0.5) * fan * Math.PI / 180);
+        this.spawnProjectile(caster, makeSkillInstance(skill, level), origin, dir,
+          { depth, mult });
+        if (target) {
+          this.projectiles[this.projectiles.length - 1].hits.set(target.id, Infinity);
+        }
+      }
+    } else {
+      for (let i = 0; i < n; i++) {
+        // targetInfo anchors CENTERED deliveries (novas, instants) at
+        // the proc's site — without it they would bloom on the caster.
+        this.executeSkill(caster, makeSkillInstance(skill, level), origin, {
+          targetInfo: { pos: vec(origin.x, origin.y) },
+          dmgMult: mult, noCooldown: true, noRepeat: true,
+          noFollowUp: true, keepFacing: true,
+        });
+      }
+    }
+    return true;
+  }
+
   /** Fire every registered rider hosted on this proc that the caster has
-   *  invested in. PROJECTILE payloads SPRAY from the site (the shatter
-   *  pattern — hit-locked against the struck body so they always fly
-   *  OUTWARD); any other delivery executes AT the site, count times. */
+   *  invested in — each rolls its own chance, then the shared cast
+   *  payload plays from the proc's site one depth deeper. */
   private fireProcRiders(
     proc: ProcDef, caster: Actor, inst: SkillInstance | null,
     target: Actor | null, depth: number,
@@ -37639,41 +37799,9 @@ export class World {
       // Luck multiplies rider rates exactly as it does proc rates.
       c *= 1 + caster.sheet.get('luck', tags, extra);
       if (!chance(Math.min(0.95, c))) continue;
-      const skill = SKILLS[rider.cast.skillId];
-      if (!skill) continue;
       const site = rider.cast.at === 'self' || !target ? caster : target;
-      const origin = vec(site.pos.x, site.pos.y);
-      const n = randInt(rider.cast.count[0], rider.cast.count[1]);
-      if (n <= 0) continue;
-      this.text(vec(origin.x, origin.y - 26), rider.name + '!', rider.color, 11);
-      const level = inst ? effectiveSkillLevel(inst)
-        : Math.max(1, Math.round(caster.level / 2));
-      const mult = rider.cast.mult ?? 1;
-      if (skill.delivery.type === 'projectile') {
-        const bearing = target && target !== caster
-          ? angleTo(caster.pos, target.pos) : caster.facing;
-        const phase = rand(0, Math.PI * 2);
-        const fan = typeof rider.cast.spread === 'number' ? rider.cast.spread : undefined;
-        for (let i = 0; i < n; i++) {
-          const dir = fan === undefined
-            ? phase + (i / n) * Math.PI * 2
-            : bearing + (n === 1 ? 0 : (i / (n - 1) - 0.5) * fan * Math.PI / 180);
-          this.spawnProjectile(caster, makeSkillInstance(skill, level), origin, dir,
-            { depth: depth + 1, mult });
-          if (target) {
-            this.projectiles[this.projectiles.length - 1].hits.set(target.id, Infinity);
-          }
-        }
-      } else {
-        for (let i = 0; i < n; i++) {
-          // targetInfo anchors CENTERED deliveries (novas, instants) at
-          // the proc's site — without it they would bloom on the caster.
-          this.executeSkill(caster, makeSkillInstance(skill, level), origin, {
-            targetInfo: { pos: vec(origin.x, origin.y) },
-            dmgMult: mult, noCooldown: true, noRepeat: true,
-            noFollowUp: true, keepFacing: true,
-          });
-        }
+      if (this.castProcPayload(caster, inst, target, depth + 1, rider.cast)) {
+        this.text(vec(site.pos.x, site.pos.y - 26), rider.name + '!', rider.color, 11);
       }
     }
   }

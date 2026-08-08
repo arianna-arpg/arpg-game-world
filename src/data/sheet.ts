@@ -251,6 +251,7 @@ export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
   { prefix: 'remnantDrop_', cat: 'skills', blurb: 'Chance your casts shed this remnant, empowering the next cast of its school.' },
   { prefix: 'minionApply_', cat: 'minions', blurb: 'Your minions\' hits may inflict this status.' },
   { prefix: 'sympathy_', cat: 'minions', blurb: 'Your gains echo along this bond to kin: flasks, orbs, charges, heals.' },
+  { prefix: 'wornThrong_', cat: 'minions', blurb: 'A worn brood: dormant kin condense around you, join when you walk over them, and hunt on their own. Deeper ranks quicken the clock, thicken each clutch, and raise the cap.' },
   { prefix: 'attune_', cat: 'misc', blurb: 'Attunement to this tone.' },
   { prefix: 'terraform_', cat: 'misc', blurb: 'Multiplies how fast this ground grows for its bearer.' },
   { prefix: 'terraformFx_', cat: 'misc', blurb: 'Arms this ground\'s authored combat effect.' },

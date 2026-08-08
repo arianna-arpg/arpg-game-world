@@ -19,9 +19,12 @@ import { SUPPORTS } from '../src/data/supports';
 import { MONSTERS } from '../src/data/monsters';
 import { makeSkillInstance, supportFits, type SkillDef } from '../src/engine/skills';
 import {
-  batchScaleOf, THRONG_CFG, throngHeelOffset, throngMarkerOf, throngPocketKey,
-  throngSightSet, throngSkillSalt, throngSpecsOn,
+  batchScaleOf, isThrongBody, THRONG_CFG, throngHeelOffset, throngMarkerOf,
+  throngPocketKey, throngSightSet, throngSkillSalt, throngSpecsOn,
+  WORN_THRONGS, wornThrongCount, wornThrongDefOfSkillId, wornThrongKindsOf,
+  wornThrongSkillId, wornThrongStat,
 } from '../src/engine/throng';
+import { compileItemMods, rollItem } from '../src/engine/itemgen';
 import { CLING_CFG, clingBurrowed, clingSeatsOf } from '../src/engine/cling';
 import { STATUS_DEFS } from '../src/engine/status';
 import { mod } from '../src/engine/stats';
@@ -527,6 +530,14 @@ const step = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
     `${w.actors.filter(a => a.throngWild === 'palewisp').length} husks`);
   check('graft: the AUTHORED sources never mutate (doctrine pin survives)',
     !SKILLS.beckon_palewisps.throng!.sources.some(r => r.kind === 'gauge'));
+  // QUIET THE ARENA (2026-08-07 — the excluded-red adjudication): the prey
+  // zombie existed only to feed the gauge's two claw hits; left alive it
+  // CAMPS the keeper and eats each trickle refill the moment it mints, so
+  // the re-arm law below read as broken when it was firing exactly on
+  // schedule (fabric proven OK in isolation; the beat fired, re-armed, and
+  // the wisp died to the claw before the assert could see it). The law
+  // needs a clean courtroom, not a softer assertion.
+  w.kill(prey, true);
 
   // THE TRICKLE ('roster'): a synthetic anchor replenishes straight into
   // the roster below cap, stands DISARMED at cap, and re-arms on loss.
@@ -681,6 +692,113 @@ const step = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
   const stacked = w.throngBodiesOf(p, 'loose_marrowgrubs')[2];
   check('plies: flat minionPlies stacks atop a def\'s own count (quanta)',
     stacked.pliesMax === 4, `pliesMax ${stacked.pliesMax}`);
+}
+
+// --- 11) THE WORN ANCHOR: the untamed brood end to end ----------------------
+// (2026-08-07, the MI-levers pass — engine/throng.ts WORN_THRONGS): the
+// item-granted throng lane on the real engine. The item is equipped
+// EXPLICITLY — bare sim instances wear no gear, so the fabric is census-
+// invisible by construction (the slotgraft law) and this rig is the proof
+// both ways.
+{
+  const w = makeSimWorld('warrior', 0x0b0d);
+  const p = w.player;
+  const seat = w.localSeat;
+  const brood = WORN_THRONGS['abyssal_brood'];
+  const wornId = wornThrongSkillId('abyssal_brood');
+  const marker = throngMarkerOf(wornId);
+
+  // THE CENSUS LAW: no gear, no fabric.
+  step(w, 1.0);
+  check('worn: a bare hero stands NO brood (census-invisible by construction)',
+    w.actors.every(a => a.throngWild !== brood.monsterId)
+    && wornThrongKindsOf(p).size === 0 && !w.devWornThrongHurry('abyssal_brood'));
+
+  // The REAL item: cuffs implicit (rank 1, tierScale 0 — pinned whole) +
+  // the Teeming suffix at ilvl 10, BELOW the exquisite gate, so T2's +1 is
+  // the only eligible tier — deterministic WHOLE rank 2.
+  const cuffs = rollItem({
+    ilvl: 10, rarity: 'magic', baseId: 'gloves_mi_abyssal', withFamily: 'mi_abyssal_teeming',
+  });
+  const rolled = cuffs ? compileItemMods(cuffs)
+    .filter(m => m.stat === wornThrongStat('abyssal_brood'))
+    .reduce((s, m) => s + m.value, 0) : 0;
+  check('worn: implicit + suffix stack to WHOLE rank 2 on the rolled cuffs',
+    rolled === 2 && Number.isInteger(rolled), `rank ${rolled}`);
+  seat.meta.equipped['gloves'] = cuffs!;
+  w.recalcSeat(seat);
+  check('worn: the sheet carries the rank; gear ALONE reveals the kind',
+    p.sheet.get(wornThrongStat('abyssal_brood')) === 2
+    && wornThrongKindsOf(p).has(brood.monsterId));
+
+  // The brood clock (hurried through the dev seam — laws untouched): one
+  // beat condenses the rank-folded clutch, planted dormant.
+  step(w, 0.3);
+  check('worn: the anchor stands off-bar and its clock can be hurried',
+    throngSpecsOn(p.skills).length === 0 && w.devWornThrongHurry('abyssal_brood'));
+  step(w, 0.3);
+  const husks = w.actors.filter(a => a.throngWild === brood.monsterId);
+  check('worn: the beat condensed the rank-folded clutch, planted dormant',
+    husks.length === wornThrongCount(brood, 2)
+    && husks.every(h => h.passive && h.untargetable && h.invulnerable && h.noBounty
+      && h.throngExpiresAt !== undefined),
+    `${husks.length} husks (want ${wornThrongCount(brood, 2)})`);
+
+  // THE INNATE CLAIM: walking over a husk joins it — no bar skill exists.
+  for (const h of husks) { p.pos = vec(h.pos.x, h.pos.y); step(w, 0.3); }
+  const bodies = w.actors.filter(a => !a.dead && a.owner === p && a.sourceSkillId === marker);
+  check('worn: walk-over claims mint owned minions on the worn marker',
+    bodies.length === husks.length
+    && bodies.every(b => b.kind === 'minion' && b.level === p.level && isThrongBody(b)),
+    `${bodies.length} bodies`);
+
+  // THE UNTAMED DRIVE: prey wanders near — the pack aims itself, no order
+  // ever pressed (there is no skill to press).
+  const prey = w.createMonster('zombie', 8, 'enemy');
+  prey.pos = vec(p.pos.x + 300, p.pos.y);
+  w.actors.push(prey);
+  step(w, 1.3); // at least one rebake beat
+  check('untamed: the drive self-issues assault orders at the nearby foe',
+    bodies.every(b => b.dead
+      || (b.aiCommand?.kind === 'assault' && b.aiCommand.targetId === prey.id)));
+
+  // THE RANK FOLD LIVE: +2 ranks re-point the SAME anchor (state and
+  // marker survive), and the next beat mints the deeper clutch.
+  p.sheet.setSource('proberank', [mod(wornThrongStat('abyssal_brood'), 'flat', 2)]);
+  step(w, 0.3);
+  w.devWornThrongHurry('abyssal_brood');
+  step(w, 0.3);
+  const husks4 = w.actors.filter(a => a.throngWild === brood.monsterId);
+  check('worn: a deeper rank mints the deeper clutch through the SAME anchor',
+    husks4.length === wornThrongCount(brood, 4),
+    `${husks4.length} (want ${wornThrongCount(brood, 4)})`);
+
+  // THE DISBAND LAW: strip the gear — the roster re-wilds, never deletes.
+  const alive = bodies.filter(b => !b.dead).length;
+  delete seat.meta.equipped['gloves'];
+  p.sheet.setSource('proberank', []);
+  w.recalcSeat(seat);
+  step(w, 0.5);
+  check('worn: stripping the gear releases the roster as claimable husks',
+    w.actors.filter(a => !a.dead && a.owner === p && a.sourceSkillId === marker).length === 0
+    && w.actors.filter(a => a.throngWild === brood.monsterId).length >= husks4.length + alive);
+
+  // THE RESTORE LAW: saved rows re-field only while the stat still stands.
+  const w2 = makeSimWorld('warrior', 0x0b0e);
+  const seat2 = w2.localSeat;
+  seat2.meta.equipped['gloves'] = cuffs!;
+  w2.recalcSeat(seat2);
+  w2.restoreThrong([{ skillId: wornId, defId: brood.monsterId, level: 4, count: 2 }]);
+  check('worn restore: rows re-field beside a keeper still wearing the stat',
+    w2.actors.filter(a => !a.dead && a.owner === w2.player && a.sourceSkillId === marker).length === 2);
+  const w3 = makeSimWorld('warrior', 0x0b0f);
+  w3.restoreThrong([{ skillId: wornId, defId: brood.monsterId, level: 4, count: 2 }]);
+  check('worn restore: gone gear, gone roster (rows drop honestly)',
+    w3.actors.filter(a => a.sourceSkillId === marker).length === 0);
+
+  check('worn helpers: skill-id round trip + strangers refused',
+    wornThrongDefOfSkillId(wornId) === brood
+    && wornThrongDefOfSkillId('gather_cinderkin') === undefined);
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');

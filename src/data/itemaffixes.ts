@@ -38,6 +38,7 @@ import { CLASSES, classSkillStat } from './classes';
 import { BAR_SLOTS, slotGraftStat } from '../engine/skills';
 import { CHARGE_DEFS, chargeCapStat } from '../engine/charges';
 import { SUPPORT_LIST } from './supports';
+import { procStat } from './procs';
 
 // ------------------------------------------------------------ generation ---
 
@@ -1206,6 +1207,55 @@ const SUFFIXES: AffixDef[] = [
     stat: 'comboWindow', modKind: 'increased', top: 0.3, floor: 0.3, count: 3,
     baseTags: ['ring', 'amulet', 'gloves'], weight: 0,
   }),
+  // MONSTER-INFREQUENT suffixes — THE SIGNATURE LANE (data/procs.ts):
+  // each theme's monsters' OWN kit verb, transplanted onto the gear only
+  // they drop (the same mi_<theme> gate as the prefix families — hunting
+  // the faction is the only road to the faction's move). The chance stat
+  // is procStat(<id>) — an ordinary sheet grant, so the proc rolls on ANY
+  // hit the wearer lands, paced by the proc's own oncePerCast + icd. A
+  // themed magic item can carry its theme's prefix AND its signature
+  // suffix at once: the full identity on a blue.
+  fam({
+    id: 'mi_gnoll_impalement', kind: 'suffix',
+    names: ['of Impalement', 'of the Pinned Hunt', 'of the Fence'],
+    stat: procStat('mi_gnoll_impale'), top: 0.12, floor: 0.3, count: 3,
+    baseTags: ['mi_gnoll'], weight: 90,
+  }),
+  fam({
+    id: 'mi_goblin_knifefan', kind: 'suffix',
+    names: ['of the Knife-Fan', 'of Flung Blades', 'of the Scrap'],
+    stat: procStat('mi_goblin_fan'), top: 0.12, floor: 0.3, count: 3,
+    baseTags: ['mi_goblin'], weight: 90,
+  }),
+  fam({
+    id: 'mi_bandit_toll', kind: 'suffix',
+    names: ['of the Toll Road', 'of Strewn Spikes', 'of the Waylay'],
+    stat: procStat('mi_bandit_caltrops'), top: 0.12, floor: 0.3, count: 3,
+    baseTags: ['mi_bandit'], weight: 90,
+  }),
+  // THE UNTAMED BROOD's rank suffix (the abyssal theme's throng rework —
+  // data/infrequents.ts): WHOLE ranks only, the corpse_batch law — a
+  // fractional brood rank would promise bodies that aren't there, so the
+  // ladder is hand-built integer steps (the slotgraft catalog's shape):
+  // T2 grants +1 from the floor, T1 +2, the EXQUISITE +3 blue-only.
+  {
+    id: 'mi_abyssal_teeming', kind: 'suffix' as AffixKind,
+    family: 'mi_abyssal_teeming',
+    names: ['of the Teeming Rift', 'of the Brood', 'of the Hatch'],
+    lines: [{ stat: 'wornThrong_abyssal_brood', kind: 'flat' as ModKind }],
+    tiers: [
+      {
+        ilvl: ITEM_CFG.tierBreaks[Math.max(0, ITEM_CFG.tierBreaks.length - 2)] + ITEM_CFG.exquisite.ilvlPad,
+        ranges: [[3, 3]] as [number, number][],
+        weight: Math.round(100 * ITEM_CFG.exquisite.weightFrac),
+        magicOnly: true,
+      },
+      { ilvl: 28, ranges: [[2, 2]] as [number, number][], weight: 100 },
+      { ilvl: 1, ranges: [[1, 1]] as [number, number][], weight: 100 },
+    ],
+    weight: 90,
+    tags: ['mi_abyssal'],
+  },
   ...ATTRIBUTE_AFFIXES,
   ...RESIST_AFFIXES,
   ...PEN_AFFIXES,

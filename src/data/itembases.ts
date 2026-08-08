@@ -235,7 +235,13 @@ export const BASE_LIST: ItemBaseDef[] = [
     w: CATEGORY_SIZE.gloves.w, h: CATEGORY_SIZE.gloves.h,
     tags: ['armour', 'gloves', 'energyShield', 'mi_abyssal'],
     defense: { energyShield: 1 },
-    implicits: [line('insight', 'flat', [8, 15])],
+    // THE UNTAMED BROOD at the base (the abyssal theme's throng rework,
+    // data/infrequents.ts): EVERY pair of cuffs seeds rank 1 — dormant
+    // broodlings condense around the wearer and join underfoot; the
+    // 'of the Teeming Rift' suffix stacks the rank. tierScale 0 pins the
+    // rank WHOLE at every base tier (the corpse_batch law — a fractional
+    // brood rank would promise bodies that aren't there).
+    implicits: [{ stat: 'wornThrong_abyssal_brood', kind: 'flat', range: [1, 1], tierScale: 0 }],
     dropWeight: 0,
   },
 

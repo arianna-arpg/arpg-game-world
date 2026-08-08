@@ -116,7 +116,13 @@ export type ProcEffect =
    *  well's own pool/decay row bounds the litter; outside a darkness
    *  event the mote is honest lamplight (the lightwell fabric's law:
    *  the sweep feeds only meters that exist). */
-  | { type: 'kindle'; kind: string };
+  | { type: 'kindle'; kind: string }
+  /** CASTS a catalog skill from the proc's site — the RIDER grammar's
+   *  payload as a first-class effect (one shared executor, world.ts
+   *  castProcPayload). THE SIGNATURE LANE rides this: a Monster
+   *  Infrequent's proc line carries the source monster's OWN kit verb,
+   *  so hunting the faction buys the faction's move. */
+  | { type: 'cast'; cast: ProcCastSpec };
 
 export interface ProcDef {
   id: string;
@@ -671,6 +677,43 @@ export const PROCS: Record<string, ProcDef> = {
     color: '#ffd98a', trigger: 'orbPickup', orb: 'wakeflame', icd: 0.5,
     effect: { type: 'restore', resource: 'mana', flat: 6 },
   },
+
+  // --- THE SIGNATURE LANE (Monster-Infrequent theme procs) --------------------
+  // Each row transplants a themed monster's OWN kit verb onto the theme's
+  // gear as a proc — the 'cast' payload plays the real catalog skill from
+  // the trigger's site, so the move arrives with its full native grammar
+  // (plants, statuses, ground linger) and scales with the wearer's own
+  // investment like any cast. The chance stat rolls ONLY off the
+  // mi_<theme> affix families (itemaffixes.ts — the farm law: hunting the
+  // faction is the only road to the faction's move). oncePerCast keeps a
+  // wide cleave to ONE trigger; the icd is the litter clock.
+
+  // The Gnoll Impaler's steel: the spear flies your strike's bearing,
+  // passes the mark (cast payloads never re-hit the struck body — they
+  // fly OUTWARD) and PLANTS beyond it — the pack's fence rises behind
+  // whatever you are fighting, Tripwire Web ready to string it.
+  mi_gnoll_impale: {
+    id: 'mi_gnoll_impale', name: "Impaler's Steel",
+    color: '#c8b890', trigger: 'hit', oncePerCast: true, icd: 2.5,
+    effect: { type: 'cast', cast: { skillId: 'pinning_spear', count: [1, 1], spread: 0, at: 'self' } },
+  },
+
+  // The Goblin Skirmisher's pocket-sand moment: a scrappy fan of knives
+  // flung from your own hand toward the struck bearing.
+  mi_goblin_fan: {
+    id: 'mi_goblin_fan', name: 'Scrapper\'s Fan',
+    color: '#7aa83e', trigger: 'hit', oncePerCast: true, icd: 3,
+    effect: { type: 'cast', cast: { skillId: 'fan_of_blades', count: [3, 5], spread: 70, at: 'self' } },
+  },
+
+  // The Snaresetter's toll: forged spikes bloom under the struck body —
+  // the highway robber's ground game arriving on your gear. Longest icd
+  // of the lane: ground litter is the loudest payload.
+  mi_bandit_caltrops: {
+    id: 'mi_bandit_caltrops', name: 'Snaresetter\'s Toll',
+    color: '#a8905a', trigger: 'hit', oncePerCast: true, icd: 4,
+    effect: { type: 'cast', cast: { skillId: 'caltrops', count: [1, 1], at: 'target' } },
+  },
 };
 
 export const PROC_LIST: ProcDef[] = Object.values(PROCS);
@@ -697,6 +740,25 @@ export function procStat(id: string): string {
 // from any modifier source. No engine changes needed.
 // ---------------------------------------------------------------------------
 
+/** A CAST payload: a catalog skill fired from a proc's site — the shape
+ *  shared by ProcRiderDef.cast and the 'cast' ProcEffect (one executor,
+ *  world.ts castProcPayload).
+ *  - count: casts per firing, rolled uniformly ([1,4] = one to four —
+ *    the random-assortment die).
+ *  - PROJECTILE payloads SPRAY from the site: 'ring' (default) spaces
+ *    the count evenly around the circle at a random phase; a number
+ *    fans them across that many degrees around the strike bearing.
+ *  - at: 'target' (default) anchors at the struck body, 'self' at the
+ *    caster.
+ *  - mult: damage multiplier on the payload (default 1). */
+export interface ProcCastSpec {
+  skillId: string;
+  count: [number, number];
+  spread?: 'ring' | number;
+  at?: 'target' | 'self';
+  mult?: number;
+}
+
 export interface ProcRiderDef {
   id: string;
   name: string;
@@ -704,22 +766,8 @@ export interface ProcRiderDef {
   color: string;
   /** The host proc(s) whose firings this rider follows. */
   proc: string | string[];
-  /** The payload: CAST a catalog skill from the proc's site.
-   *  - count: casts per firing, rolled uniformly ([1,4] = one to four —
-   *    the random-assortment die).
-   *  - PROJECTILE payloads SPRAY from the site: 'ring' (default) spaces
-   *    the count evenly around the circle at a random phase; a number
-   *    fans them across that many degrees around the strike bearing.
-   *  - at: 'target' (default) anchors at the struck body, 'self' at the
-   *    rider's owner.
-   *  - mult: damage multiplier on the payload (default 1). */
-  cast: {
-    skillId: string;
-    count: [number, number];
-    spread?: 'ring' | number;
-    at?: 'target' | 'self';
-    mult?: number;
-  };
+  /** The payload: CAST a catalog skill from the proc's site. */
+  cast: ProcCastSpec;
 }
 
 export const PROC_RIDERS: Record<string, ProcRiderDef> = {

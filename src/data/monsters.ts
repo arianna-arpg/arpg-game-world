@@ -4363,6 +4363,18 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'juggernaut' },
     detection: 0.85,
   },
+  // THE UNTAMED BROOD's body (engine/throng.ts WORN_THRONGS — the abyssal
+  // Monster Infrequents' worn-throng debut, data/infrequents.ts): a rift
+  // scamp that condenses dormant beside whoever wears the brood, joins
+  // underfoot, and hunts on its own drive. Never in a spawn table — the
+  // gear is its only door into the world (so leveled lists never move).
+  abyssal_broodling: {
+    id: 'abyssal_broodling', name: 'Abyssal Broodling',
+    color: '#7ac8d8', shape: 'diamond', radius: 9, material: 'void',
+    base: { life: 26, moveSpeed: 150, accuracy: 100, mana: 0 },
+    skills: ['claw'],
+    xp: 6, faction: 'abyssal',
+  },
 
   // --- MYCELIA: "The Bloom" — the fungal 'fungal' faction --------------------
   //     Patron of the mycelia biome + the spore-bloom's spawn. contexts:['mycelia']

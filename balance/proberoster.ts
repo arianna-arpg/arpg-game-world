@@ -170,7 +170,12 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_sympathy.ts', status: 'green', tier: 'fast', why: 'THE SYMPATHY FABRIC — the tamed flask/orb bond, keeper-support potency, the charge echo and the one-depth discipline' },
   { probe: 'probe_tells.ts', status: 'green', tier: 'fast', why: 'THE TELL FABRIC — every shipped tell row names a live source, bands its unbounded reads and wears a painter that resolves' },
   { probe: 'probe_theater.ts', status: 'green', tier: 'fast', why: 'THE THEATER FABRIC — the zone-event lane re-founded: keyed-draw purity + zero global-die consumption, the dead first-bite cascade (drawn == tested), kind priority, the resident law\'s arcless/unannounced/quiet gates, the pour ledger (additive cap-stop + the replacement band\'s farm law), the dwell cadence, the concurrency writer seam, the pass-through march, and the legacy siege\'s whole cast with no payout arc' },
-  { probe: 'probe_throng.ts', status: 'excluded', excuse: 'red', why: 'RED at HEAD (1 fail, deterministic, exit 2): "trickle: the re-armed clock refills the loss" — the RECURRING BROOD source does not re-mint the killed body after a full wait' },
+  // PROMOTED 2026-08-07 (the MI-levers pass): the excluded red was a DIRTY
+  // ARENA, not the fabric — the gauge section's prey zombie camped the
+  // keeper and ate each trickle refill the moment it minted (isolation rig
+  // + in-position diagnosis: the beat fired and re-armed exactly on law).
+  // The rig now quiets the arena after the gauge hits; assertions untouched.
+  { probe: 'probe_throng.ts', status: 'green', tier: 'fast', why: 'THE THRONG FABRIC + THE LATCH + THE WORN ANCHOR — sight/claims/batch law/cap fold/sweep orders, the latch, combat sources, meta delegation, disband/restore, the lever gems + ply levers, the RECURRING BROOD re-arm law, and the item-granted untamed brood end to end (equip → rank fold → dormant clutch → innate claim → self-hunting drive → re-wild on unequip)' },
   { probe: 'probe_tiers.ts', status: 'green', tier: 'fast', why: 'THE TIER FABRIC — the region rows (incl. N-story terrace/ramp families), the crossing law over arbitrary spans, the elevation law, and THE BAND LAW (tether bands vs. masonry, per touched body)' },
   { probe: 'probe_timeflow.ts', status: 'green', tier: 'fast', why: 'THE TIMEFLOW FABRIC\'s castChrono bridge — BOTH consumers (the SkillDef.chrono door and the { do: \'chrono\' } script verb), the refresh law, raw-clock expiry, the Unmade\'s debut reveals through the real FSM, and the brevity census' },
   { probe: 'probe_tracks.ts', status: 'green', tier: 'fast', why: 'THE TRACK FABRIC — the pure resolver\'s geometry (loop closure, pingpong mirror, pause plateaus, phase spread) and clock-purity' },

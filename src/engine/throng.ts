@@ -64,7 +64,8 @@
 // ---------------------------------------------------------------------------
 
 import type { Actor } from './actor';
-import type { SkillInstance } from './skills';
+import type { SkillDef, SkillInstance } from './skills';
+import { STAT_DEFS } from './stats';
 
 // --- Source rows (the playstyle axis) ---------------------------------------
 
@@ -111,15 +112,22 @@ export interface ThrongGaugeRow {
  *  is slotted and the roster stands below cap — the reknitting-hive
  *  texture as a SOURCE row, so any anchor (or any graft gem) can wear it.
  *  `at` picks the grain: 'near' (default) condenses a HUSK at the
- *  keeper's feet — a stoop, the collection thesis kept — while 'roster'
+ *  keeper's feet — a stoop, the collection thesis kept — 'ring' drops it
+ *  in the mote near-band AROUND the keeper (a short walk: the find
+ *  scattered on your road, the worn brood's grain), while 'roster'
  *  replenishes the roster DIRECTLY, no walk (the truest "X per second").
- *  At cap the clock stands DISARMED and re-arms with a full wait when a
- *  body is lost — the brood takes time, never banks it. ONE trickle row
- *  per anchor (the first wins — the motes one-clock law). */
+ *  `count` husks condense per beat (default 1, quanta — throngYield still
+ *  folds on top); husk drops linger `ttl` seconds (default
+ *  THRONG_CFG.motes.ttl). At cap the clock stands DISARMED and re-arms
+ *  with a full wait when a body is lost — the brood takes time, never
+ *  banks it. ONE trickle row per anchor (the first wins — the motes
+ *  one-clock law). */
 export interface ThrongTrickleRow {
   kind: 'trickle';
   everySec: number;
-  at?: 'near' | 'roster';
+  at?: 'near' | 'roster' | 'ring';
+  count?: number;
+  ttl?: number;
 }
 
 export type ThrongSourceRow =
@@ -151,6 +159,14 @@ export interface ThrongSpec {
    *  carry MonsterDef.lite (the validator warns otherwise). Omitted =
    *  classic full-actor roster, byte-identical. */
   tier?: 'lite';
+  /** THE UNTAMED STANCE: this throng picks its OWN fights — a world-side
+   *  drive re-aims each body at the nearest foe near the keeper on a
+   *  beat, through the standing assault-order machinery (obedience, the
+   *  quarry pin and the heel exemption all arrive from the command
+   *  fabric). With nothing in reach the order lapses and the body heels
+   *  like any minion. Worn anchors (WORN_THRONGS) sit off the bar, so no
+   *  held sweep ever conducts them — the drive is their only voice. */
+  untamed?: { huntRadius?: number };
 }
 
 // --- Config -----------------------------------------------------------------
@@ -185,6 +201,11 @@ export const THRONG_CFG = {
    *  distance, per-body spread, and the slow orbit (rad/sec) that keeps
    *  the cloud breathing instead of stacking into one dot. */
   heelRing: { dist: 46, spread: 30, spin: 0.22 },
+  /** THE UNTAMED STANCE defaults (ThrongSpec.untamed): the engagement
+   *  reach around the KEEPER inside which the drive hunts (each body
+   *  takes its own nearest foe within it), and how long each self-issued
+   *  assault order stands before the next beat re-aims or lapses it. */
+  untamed: { huntRadius: 420, orderSec: 1.6 },
   /** Claim flourish text color. */
   joinColor: '#9fe08a',
 } as const;
@@ -264,4 +285,142 @@ export function throngSkillSalt(skillId: string): number {
     h = Math.imul(h, 0x01000193);
   }
   return h >>> 0;
+}
+
+// --- THE WORN THRONG (item-granted anchors) ---------------------------------
+//
+// A throng that needs NO bar skill: a registered WornThrongDef binds a
+// whole gathered-swarm identity to one ordinary stat (`wornThrong_<id>`)
+// that any modifier source can grant — an MI implicit, an affix family, a
+// unique line, a passive. While the stat stands above zero on a keeper,
+// the world derives a SYNTHETIC off-bar anchor (a real SkillInstance of a
+// def built here — never in the SKILLS catalog, never castable, never
+// learnable) whose ThrongSpec is the def's dials FOLDED BY THE RANK: the
+// stat's value scales the brood clock (frequency), the bodies per beat
+// (number), and the roster cap + husk linger (density) through the pure
+// folds below, quanta-rounded where bodies are counted. Everything else —
+// the walk-through claim, the batch-scaled owner fold, the disband
+// release, husks-never-gate-clears — is the standing fabric verbatim,
+// because the anchor IS an ordinary anchor to every consumer that meets
+// it. The SupportDef.throngSource gem graft is this seam's precedent, one
+// grain up: the gem grafts a source onto a bar anchor, the worn row
+// grafts the whole anchor onto a body of gear.
+//
+// Debut: the abyssal Monster Infrequents' UNTAMED BROOD
+// (data/infrequents.ts) — dormant broodlings condense in a ring around
+// the wearer, join innately underfoot, and hunt on their own drive.
+
+export interface WornThrongDef {
+  /** Registry key; the granting stat is `wornThrong_<id>`. */
+  id: string;
+  /** Display name — the stat label and the synthetic anchor's name. */
+  name: string;
+  /** The gathered body (MonsterDef id). */
+  monsterId: string;
+  /** UI color for the synthetic anchor. */
+  color: string;
+  /** Base roster cap at rank 1 (minionMaxCount folds on top, the
+   *  standing cap law) + growth per rank beyond 1 — half the DENSITY
+   *  axis. Quanta-rounded at the fold. */
+  cap: number;
+  capPerRank: number;
+  /** The brood clock at rank 1 and its FREQUENCY axis: period =
+   *  everySec / (1 + freqPerRank × (rank − 1)), floored at
+   *  everyFloorSec so no stack of ranks reaches machine-gun. */
+  everySec: number;
+  everyFloorSec: number;
+  freqPerRank: number;
+  /** The NUMBER axis: husks per beat = round(1 + countPerRank ×
+   *  (rank − 1)), never below 1 (quanta — throngYield folds on top). */
+  countPerRank: number;
+  /** Unclaimed-husk linger at rank 1 + growth per rank — the other half
+   *  of the DENSITY axis (finds persist longer on the road behind you). */
+  ttlSec: number;
+  ttlPerRank: number;
+  /** The untamed drive's engagement reach around the keeper. */
+  huntRadius: number;
+  /** Owner-investment divisor override (default THRONG_CFG.batch). */
+  batch?: number;
+}
+
+/** The open registry (the ThrongSourceRow pattern at item grain). */
+export const WORN_THRONGS: Record<string, WornThrongDef> = {};
+
+/** Register a worn throng + its granting stat's display identity. */
+export function registerWornThrong(def: WornThrongDef): void {
+  WORN_THRONGS[def.id] = def;
+  STAT_DEFS[wornThrongStat(def.id)] = { label: def.name, base: 0, min: 0 };
+}
+
+/** The granting stat — ordinary, so ANY modifier source can wear it. */
+export function wornThrongStat(id: string): string {
+  return 'wornThrong_' + id;
+}
+
+/** The synthetic anchor's skill id (namespaced: no catalog skill may ever
+ *  collide with it, and save rows round-trip through the same string). */
+export function wornThrongSkillId(id: string): string {
+  return 'worn:' + id;
+}
+
+/** Parse a worn anchor skill id back to its registry def (undefined for
+ *  ordinary skill ids). */
+export function wornThrongDefOfSkillId(skillId: string): WornThrongDef | undefined {
+  return skillId.startsWith('worn:') ? WORN_THRONGS[skillId.slice(5)] : undefined;
+}
+
+// The rank folds — pure, monotone, quanta-honest where bodies are counted.
+export function wornThrongPeriod(def: WornThrongDef, rank: number): number {
+  return Math.max(def.everyFloorSec,
+    def.everySec / (1 + def.freqPerRank * Math.max(0, rank - 1)));
+}
+export function wornThrongCount(def: WornThrongDef, rank: number): number {
+  return Math.max(1, Math.round(1 + def.countPerRank * Math.max(0, rank - 1)));
+}
+export function wornThrongTtl(def: WornThrongDef, rank: number): number {
+  return def.ttlSec * (1 + def.ttlPerRank * Math.max(0, rank - 1));
+}
+export function wornThrongCap(def: WornThrongDef, rank: number): number {
+  return Math.max(1, Math.round(def.cap + def.capPerRank * Math.max(0, rank - 1)));
+}
+
+/** Build the synthetic anchor def at a rank: a legal SkillDef that never
+ *  enters SKILLS — worn, not pressed (the delivery is claw-shaped inert
+ *  filler; nothing ever casts it). The world re-points an existing
+ *  instance's def at this when the rank moves, so state clocks and the
+ *  roster marker survive gear churn. */
+export function buildWornThrongDef(def: WornThrongDef, rank: number): SkillDef {
+  return {
+    id: wornThrongSkillId(def.id), name: def.name,
+    description: `${def.name}: dormant kin condense nearby and join you underfoot — untamed, they hunt on their own.`,
+    tags: ['minion', 'throng'], color: def.color,
+    manaCost: 0, cooldown: 0, useTime: 0,
+    delivery: { type: 'melee', range: 42, arcDeg: 80 },
+    effects: [],
+    noDrop: true,
+    throng: {
+      monsterId: def.monsterId,
+      cap: wornThrongCap(def, rank),
+      sources: [{
+        kind: 'trickle', at: 'ring',
+        everySec: wornThrongPeriod(def, rank),
+        count: wornThrongCount(def, rank),
+        ttl: wornThrongTtl(def, rank),
+      }],
+      batch: def.batch,
+      untamed: { huntRadius: def.huntRadius },
+    },
+  };
+}
+
+/** The husk kinds a wearer's GEAR reveals (the sight gate's worn half —
+ *  unioned with the bar's throngSightSet by the renderer). */
+export function wornThrongKindsOf(
+  a: { sheet: { get(stat: string): number } },
+): Set<string> {
+  const out = new Set<string>();
+  for (const def of Object.values(WORN_THRONGS)) {
+    if (a.sheet.get(wornThrongStat(def.id)) > 0) out.add(def.monsterId);
+  }
+  return out;
 }
