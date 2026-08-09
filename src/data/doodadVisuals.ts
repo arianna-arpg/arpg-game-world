@@ -1505,6 +1505,28 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     longShadow: 0.8, painter: 'boulder', order: 55, shadow: 0.6,
     params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone', strata: {}, contrast: 0.95, cluster: 0 },
   },
+  // --- THE REVEAL FACES (Secrets Movement II — the growing zone's fake
+  // walls, data/annexes.ts). Same mono-plug law as the secret faces above
+  // (cluster: 0 — the disc IS the seal), same native stone vocabulary; only
+  // the finish differs per trigger verb: the cracked face wears its fissures
+  // openly (a STRIKE invitation), the fitted face is suspiciously clean
+  // coursed masonry (the PRESS tell), the draft seam is the faintest —
+  // found by walking close, not by looking hard.
+  cracked_face: {
+    longShadow: 0.8, painter: 'boulder', order: 55, shadow: 0.6,
+    params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone', cracks: 1, grain: true, contrast: 1.2, cluster: 0 },
+  },
+  fitted_face: {
+    longShadow: 0.8, painter: 'boulder', order: 55, shadow: 0.6,
+    params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone', strata: {}, contrast: 1.0, cluster: 0 },
+  },
+  draft_seam: {
+    longShadow: 0.8, painter: 'boulder', order: 55, shadow: 0.55,
+    params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone', strata: {}, contrast: 0.8, cluster: 0 },
+  },
+  // The face's wreck: settled broken facing stone in the local palette —
+  // the pile that REMAINS after the crumble (BrittleSpec.remains).
+  face_rubble: { painter: 'scree', order: 37, params: { color: 'theme:obstacle' } },
   // --- Brittle wave 2: hazard breakables ------------------------------------
   // A decayed crossing: the plank painter saying 'rot' — missing boards over
   // the dark, a split seam, moss on the rails. Order matches sound bridges.

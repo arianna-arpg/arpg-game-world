@@ -106,6 +106,11 @@ export interface CharacterSave {
   /** The throng's run-long pocket-claim ledger (World.throngClaimed —
    *  the completedObjectives idiom): claimed seats stay empty on revisit. */
   throngClaimed?: string[];
+  /** FOUND IS FOUND (the growing zone — World.annexFound): every annex this
+   *  run ever revealed, keyed `zoneId:pieceId`. Outlives zone memory by
+   *  design — the boot replay re-opens what the TTL forgot. Optional →
+   *  older saves load unchanged (nothing found yet). */
+  annexFound?: string[];
   /** THE PRIMED POUR (pourPrime): banked full-pool sips awaiting their
    *  releasing wound — paid for at press, so they ride the save (the
    *  throng rows' idiom). Optional → older saves load unchanged; an
@@ -255,6 +260,7 @@ export function serializeCharacter(world: World): CharacterSave {
       return [...rows.values()];
     })(),
     throngClaimed: [...world.throngClaimed],
+    ...(world.annexFound.size ? { annexFound: [...world.annexFound] } : {}),
     // THE PRIMED POUR: paid, unreleased sips ride the save whole.
     ...(hero.primedPours.length
       ? { primedPours: hero.primedPours.map(e => ({ ...e })) } : {}),
@@ -383,6 +389,9 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
   // THE THRONG: the claim ledger first (pocket finiteness), then the
   // gathered rosters beside the keeper (engine/throng.ts).
   world.throngClaimed = new Set(save.throngClaimed ?? []);
+  // FOUND IS FOUND (the growing zone): the run's reveal ledger — loadZone's
+  // boot replay re-opens these beyond the memory TTL.
+  world.annexFound = new Set((save.annexFound ?? []).filter(k => typeof k === 'string'));
   if (save.throng?.length) world.restoreThrong(save.throng);
   // THE PRIMED POUR: re-bank the paid, unreleased sips on the hero —
   // verbatim (record tolerance only); entries whose skill left the bar
@@ -649,6 +658,9 @@ export function serializeCouchGuest(
     completedObjectives: [],
     throng: [...(dormant.throng ?? [])],
     throngClaimed: [...(dormant.throngClaimed ?? [])],
+    // The shared world's reveal ledger rides the guest card like the run
+    // ledger above — the find happened with them standing there.
+    ...(world.annexFound.size ? { annexFound: [...world.annexFound] } : {}),
     modeId: m.modeId,
     modeStage: m.modeStage,
     charId: m.charId,

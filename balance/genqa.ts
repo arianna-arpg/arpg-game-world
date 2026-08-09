@@ -81,7 +81,7 @@ import '../src/data/compositions';
 
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
-import { generateZone, randomizeStarterWeb, spacedExitAt, MIN_PORTAL_SEP, PORTAL_RADIUS } from '../src/engine/worldgen';
+import { applyAnnexes, generateZone, randomizeStarterWeb, spacedExitAt, MIN_PORTAL_SEP, PORTAL_RADIUS } from '../src/engine/worldgen';
 import { transitRadius } from '../src/data/transit';
 import { dimensionDef, dimensionIds } from '../src/world/dimensions';
 import {
@@ -99,6 +99,7 @@ import { ZONES, type StampSpec, type ZoneDef } from '../src/data/zones';
 import { MELDS } from '../src/data/melds';
 import { blendFieldIds, composeBlendLayout, hasBlendField } from '../src/engine/blend';
 import { hollowDef, hollowShapeOf } from '../src/data/hollows';
+import { annexKindDef } from '../src/data/annexes';
 import { BIOMES, isAquaticBiome } from '../src/world/biomes';
 import { CLIMATE_AXES } from '../src/world/climate';
 import { interiorRoleDefs } from '../src/engine/interiorGen';
@@ -340,6 +341,55 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
     // Every seam doodad must point at a recorded hollow (no orphans).
     for (const d of doodads) {
       if (d.hollow && !ids.has(d.hollow)) fails.push(`${name}: seam doodad points at unknown hollow '${d.hollow}'`);
+    }
+  }
+  // ANNEX faces (the growing zone — Secrets Movement II, data/annexes.ts):
+  // every spec pairs a def piece with a registered kind; ring-0 faces stand
+  // as doodads while CHILDREN are recorded only (a gen doodad in dormant
+  // space would draw over the void band); grid chambers stay SEALED at
+  // generation (the hollows doctrine's leak check) with their carve
+  // recorded; convex specs carry no carve. A def piece without a spec is a
+  // WARN (best-effort seating), never a fail.
+  {
+    const specs = layout.annexes ?? [];
+    const seen = new Set<string>();
+    const pieceIds = new Set((def.annexes ?? []).map(pc => pc.id));
+    const wf = layout.walk instanceof GridWalkField ? layout.walk : null;
+    for (const s of specs) {
+      if (seen.has(s.piece)) fails.push(`${name}: duplicate annex spec '${s.piece}'`);
+      seen.add(s.piece);
+      if (!pieceIds.has(s.piece)) fails.push(`${name}: annex spec '${s.piece}' names no def piece`);
+      const kd = annexKindDef(s.kind);
+      if (!kd) { fails.push(`${name}: annex '${s.piece}' names unregistered kind '${s.kind}'`); continue; }
+      const faces = doodads.filter(d => d.annex === s.piece);
+      const ring0 = !s.piece.includes('.');
+      if (ring0 && faces.length !== 1) {
+        fails.push(`${name}: annex '${s.piece}' has ${faces.length} face doodad(s), wants 1`);
+      }
+      if (!ring0 && faces.length !== 0) {
+        fails.push(`${name}: CHILD annex '${s.piece}' planted a generation face — dormant space would draw it over the void`);
+      }
+      if (ring0 && faces[0] && faces[0].kind !== kd.face) {
+        fails.push(`${name}: annex '${s.piece}' face doodad '${faces[0].kind}' ≠ its kind's face '${kd.face}'`);
+      }
+      if (wf) {
+        if (!s.carve?.length) fails.push(`${name}: grid annex '${s.piece}' recorded no carve`);
+        let leak = false;
+        for (let y = s.rect.y + wf.cell / 2; y < s.rect.y + s.rect.h && !leak; y += wf.cell) {
+          for (let x = s.rect.x + wf.cell / 2; x < s.rect.x + s.rect.w && !leak; x += wf.cell) {
+            if (wf.isWalkable(x, y)) leak = true;
+          }
+        }
+        if (leak) fails.push(`${name}: annex '${s.piece}' chamber holds walkable ground — the secret leaks`);
+      } else if (s.carve) {
+        fails.push(`${name}: convex annex '${s.piece}' carries a carve`);
+      }
+    }
+    for (const pc of def.annexes ?? []) {
+      if (!seen.has(pc.id)) warns.push(`${name}: annex piece '${pc.id}' seated no face (sealed forever — best-effort)`);
+    }
+    for (const d of doodads) {
+      if (d.annex && !seen.has(d.annex)) fails.push(`${name}: face doodad points at unknown annex '${d.annex}'`);
     }
   }
   // HIT-SURFACE fabric invariants (engine/shapes.ts):
@@ -786,6 +836,29 @@ for (const ts of Object.values(TILESETS)) {
     objective: { kind: 'clear' },
     exits: [], map: { x: 0, y: 0 },
   });
+}
+
+// --- 3b²ᵃ. ANNEXES forced on every face that budgets them ---------------------
+// The growing zone's mint roll fires at worldgen's chokepoints — the tileset
+// cases above never see it — so pre-roll each annex-budgeted tileset's chains
+// onto a rooms def (fat count, the tileset's own table + depth, one fixed
+// seed: the roll itself is probe-pinned pure) and let checkLayout's annex
+// invariants (sealed chambers, face pairing, carve records, the child
+// dormant-space law) bite on real per-seed placements.
+for (const ts of Object.values(TILESETS)) {
+  if (!ts.annexes) continue;
+  const def: ZoneDef = {
+    id: `qa_annexes_${ts.id}`, name: `QA annexes ${ts.id}`, level: 8,
+    size: { w: 1300, h: 1000 },
+    theme: ts.theme,
+    layout: [...(ts.common ?? []), ...ts.layout],
+    layoutType: 'rooms',
+    objective: { kind: 'clear' },
+    exits: [], map: { x: 0, y: 0 },
+    seed: 1000003 + 17,
+  };
+  applyAnnexes(def, { ...ts, annexes: { ...ts.annexes, count: [2, 2] } });
+  runCase(`annexes:${ts.id}`, def);
 }
 
 // --- 3b³. THE TRAPWORKS DIAL through the surface rooms recipe -----------------

@@ -109,7 +109,8 @@ import { STRUCTURES } from '../data/structures';
 import { dwellOf, sidezoneOf } from '../data/sidezones';
 import { underSpanPolicyOf } from '../data/underspans';
 import { hollowDef } from '../data/hollows';
-import type { HollowSpec } from './levelgen';
+import { annexKindDef, annexParentIdOf } from '../data/annexes';
+import type { AnnexSpec, HollowSpec } from './levelgen';
 import { DWELL_CFG, npcDwellReach, transitDwell, transitRadius, transitReach } from '../data/transit';
 import type { DwellReach } from '../data/transit';
 import type { ArenaCrowdSpec, ArenaSpec, ArenaWardSpec } from '../data/arenas';
@@ -3065,6 +3066,16 @@ export class World {
    *  the capture writes it to zone memory, the revive re-opens it, the
    *  20 Hz snapshot row converges co-op clients. */
   annexOpen = new Set<string>();
+  /** SEALED ANNEX FACE records this zone minted (layout.annexes — the
+   *  growing zone's carve + face + furnish specs; public for the net layer,
+   *  the zoneHollows law). */
+  zoneAnnexSpecs: AnnexSpec[] = [];
+  /** FOUND IS FOUND (run scope, her ruling): every annex this run ever
+   *  revealed, keyed `zoneId:pieceId` — outlives zone memory and the
+   *  campfire (the throngClaimed idiom, serialized whole in character.ts:
+   *  surviving the TTL is the point). The boot replay re-opens what the
+   *  memory forgot. */
+  annexFound = new Set<string>();
   doodads: Doodad[] = [];
   /** Spatial index over `doodads` (see spatial.ts) — the O(1) candidate set
    *  behind movement clamping, projectile flight, and ground sensing. Rebuilt
@@ -5145,6 +5156,9 @@ export class World {
     // once the doodads and the walk grid are both live.
     this.zoneHollows = layout.hollows ?? [];
     this.openedHollows = new Set();
+    // SEALED ANNEX FACES (the growing zone): the layout's reveal records —
+    // remembered + found opens replay below through the same seam.
+    this.zoneAnnexSpecs = layout.annexes ?? [];
     this.caveExitGrace = false; // re-armed by the cave-return path after this returns
 
     this.zoneEntry = vec(entry.x, entry.y);
@@ -5224,10 +5238,21 @@ export class World {
       this.openHollow(id, null, { silent: true, revive: true });
     }
     // REVEALED ANNEX PIECES (the composite bound) re-join the union the same
-    // way — revealed stays revealed for the memory's life. After the layout:
-    // generation stays base-piece by construction (the pieces were dormant
-    // through every boot consumer above).
-    for (const id of memory?.annexOpen ?? []) this.annexReveal(id, { silent: true });
+    // way — revive mode carves + re-dresses structure, never re-pays loot
+    // (THE FIND LAW). After the layout: generation stays base-piece by
+    // construction (the pieces were dormant through every boot consumer
+    // above).
+    for (const id of memory?.annexOpen ?? []) this.annexReveal(id, { silent: true, revive: true });
+    // FOUND IS FOUND (her ruling — the run ledger outlives the memory): every
+    // annex this run ever revealed here re-opens even when the TTL forgot
+    // the visit — the mundane zone re-dressed on its own clock, the broken
+    // wall stays broken. Sorted so a chain replays parents-first ('ax0' <
+    // 'ax0.1' lexicographically); idempotent over the memory loop above.
+    {
+      const pfx = zoneId + ':';
+      const found = [...this.annexFound].filter(k => k.startsWith(pfx)).sort();
+      for (const key of found) this.annexReveal(key.slice(pfx.length), { silent: true, revive: true });
+    }
     // BREAKABLE door-actors: every still-closed breakable door gets a passive
     // guard-actor at the exact door pos (RAW — no clampPos snap off the sealed
     // cells; it is anchored + passive, nothing ever re-legalizes it). Spawned
@@ -44735,6 +44760,8 @@ export class World {
       // The door lane: THE one door gate does everything (state, repaint,
       // memory, co-op) — the narrow method is a pure delegation.
       setDoorOpen: (id) => this.setDoorState(id, 'open'),
+      // The annex lane rides the same delegation law: THE one reveal verb.
+      annexReveal: (id) => { this.annexReveal(id); },
       collapseFloor: (cells, delaySec, presserId, visualOnly) =>
         this.collapseFloor(cells, delaySec, presserId, visualOnly),
       clearDoodads: (kind, at, r) => this.clearDoodadsNear(kind, at, r),
@@ -49628,6 +49655,11 @@ export class World {
     // reveal belong to the hollow record, not the brittle spec (openHollow
     // is idempotent — a passage's twin seam popping later is a no-op).
     if (d.hollow) this.openHollow(d.hollow, striker ?? null);
+    // AN ANNEX FACE routes through the growing zone the same way: carve,
+    // admission, furnish and persistence all belong to the annex record
+    // (annexReveal is idempotent). Silent — the pop's own flash at the
+    // WALL is the tell; the reveal pulse would fire in still-unseen space.
+    if (d.annex) this.annexReveal(d.annex, { silent: true });
     const br = doodadRuleOf(d.kind).brittle;
     if (!br) return;
     const color = br.color ?? '#c8b89a';
@@ -49644,6 +49676,16 @@ export class World {
       this.shedOrb(chance(0.5) ? 'life' : 'mana', d.pos);
     }
     if (br.gemChance && chance(br.gemChance)) this.dropGemAt(vec(d.pos.x, d.pos.y));
+    // THE REMAINS (the quiet reclass): the wreck leaves its own pile — the
+    // crumble SHOWS and the dust STAYS. Pushed after the splice; the rev
+    // bump below covers the same-frame length-net window.
+    if (br.remains) {
+      this.doodads.push({
+        pos: vec(d.pos.x, d.pos.y), radius: Math.max(10, d.radius * 0.85),
+        kind: br.remains, rot: rand(0, Math.PI * 2),
+      });
+      this.markDoodadsChanged();
+    }
     if (br.carve && this.walk instanceof GridWalkField) {
       // A wall face beside it? Carve INTO it — that's where the passage goes.
       const cs = this.walk.cell;
@@ -49812,50 +49854,123 @@ export class World {
 
   // --- THE COMPOSITE BOUND's ACTIVATION SEAM (Secrets Charter, Movement I) --
 
-  /** Join an ANNEX piece to the CURRENT zone's union — the growing zone's one
-   *  runtime verb (mechanism only: Movement II authors the reveal faces and
-   *  the annex's minted interior). Idempotent per id (the openHollow law).
-   *  What re-derives: the hull cache here, now; the convex nav re-rakes on
-   *  its next pathField ask (the cache key carries the active fingerprint);
-   *  the drawn face (floor mask, void frame, camera span) reads the live
-   *  pieces per frame. What stays LAZILY HONEST until the next zone boot:
-   *  the creep/fog skins and the lite pool keep their boot-time base sizing
-   *  (fronts and tides reach the annex on re-entry), and a CARVED-grid
-   *  zone's walk field does not grow — the bounds authority admits, the
-   *  layout's own walkability still refuses until Movement II mints the
-   *  annex's carve (on convex zones admission is immediate and whole).
-   *  Activation is a player-authored scar: annexOpen rides zone memory
-   *  (capture/revive, the hollows lane) and the 20 Hz co-op row. */
-  annexReveal(pieceId: string, opts?: { silent?: boolean }): boolean {
+  /** Join an ANNEX piece to the CURRENT zone's union — the growing zone's
+   *  ONE runtime verb, now carrying Movement II's whole reveal: bounds
+   *  admission, the walk CARVE (the recorded chamber + mouth repaint to
+   *  ground through fillRegion — whose version bump + dirty rects carry
+   *  collision, pathing, LoS, veil, lights and the floor bake, the collapse
+   *  fabric's law), the face splice + CHILD-face planting (a chain's next
+   *  secret stands up exactly when its host opens), the FOUND stamp (run
+   *  scope — outlives the TTL), and the kind's FURNISH off the piece's own
+   *  seed. Idempotent per id (the openHollow law); modes mirror openHollow:
+   *  `silent` = no FX (replays + the wire), `revive` = structure only,
+   *  never loot/ambush (THE FIND LAW — memory revive AND found replay),
+   *  `bare` = carve + dress only, no furnish (the co-op client; contents
+   *  arrive on the host's streams). Convex zones carry no carve — bounds
+   *  admission is the whole reveal. Still LAZILY HONEST until next boot:
+   *  creep/fog skins and the lite pool keep boot-time sizing. */
+  annexReveal(pieceId: string, opts?: { silent?: boolean; revive?: boolean; bare?: boolean }): boolean {
     const pc = this.arena.pieces?.find(q => q.id === pieceId);
     if (!pc) return false;
     if (this.annexOpen.has(pieceId)) return true;
     pc.active = true;
     this.annexOpen.add(pieceId);
     this.arenaHull = hullOf(this.arena);
+    // FOUND IS FOUND (her ruling): the find outlives zone memory — the boot
+    // replay reads this back beyond the TTL. The mundane zone re-dresses on
+    // its own clock; the broken wall stays broken.
+    this.annexFound.add(`${this.zone.id}:${pieceId}`);
+    const spec = this.zoneAnnexSpecs.find(s => s.piece === pieceId);
+    // THE CARVE (grid zones): repaint the recorded chamber + mouth run.
+    if (spec?.carve && this.walk instanceof GridWalkField) {
+      for (const r of spec.carve) {
+        this.walk.fillRegion(r.x + 1, r.y + 1, r.x + r.w - 1, r.y + r.h - 1, 'ground');
+      }
+    }
+    // The face dies (a struck ring-0 face was already spliced by its pop;
+    // replays and remote reveals splice here), and the CHILD faces stand up
+    // inside the freshly opened ground.
+    let dressed = false;
+    for (let i = this.doodads.length - 1; i >= 0; i--) {
+      const d = this.doodads[i];
+      if (d.annex === pieceId) { d.gone = true; this.doodads.splice(i, 1); dressed = true; }
+    }
+    const faceR = (this.walk instanceof GridWalkField ? this.walk.cell : 30) * 0.62;
+    for (const cs of this.zoneAnnexSpecs) {
+      if (annexParentIdOf(cs.piece) !== pieceId) continue;
+      if (this.annexOpen.has(cs.piece)) continue;
+      if (this.doodads.some(d => d.annex === cs.piece)) continue;
+      const face = annexKindDef(cs.kind)?.face;
+      if (!face) continue;
+      this.doodads.push({ pos: vec(cs.face.x, cs.face.y), radius: faceR, kind: face, annex: cs.piece });
+      dressed = true;
+    }
+    if (dressed) this.markDoodadsChanged();
     if (!opts?.silent) {
-      // THE QUIET RECLASS: no text box — one soft flash at the piece's heart
-      // (the visual tell is Movement II's ground; this is the seam's pulse).
+      // THE QUIET RECLASS: no text box — one soft pulse at the broken FACE
+      // (the wall the player watched), never the unseen annex heart; the
+      // faceless dev/QA lane keeps the centroid pulse.
+      const at = spec ? spec.face : vec(pc.x + pc.w / 2, pc.y + pc.h / 2);
       this.flashes.push({
-        pos: vec(pc.x + pc.w / 2, pc.y + pc.h / 2),
-        radius: Math.max(pc.w, pc.h) * 0.4, color: '#d8c890', life: 0.4, maxLife: 0.4,
+        pos: vec(at.x, at.y),
+        radius: spec ? 52 : Math.max(pc.w, pc.h) * 0.4, color: '#d8c890', life: 0.4, maxLife: 0.4,
       });
     }
+    // FURNISH (host business — the client passes bare and takes the host's
+    // doodad/actor streams): the kind dresses its ground from the piece's
+    // own seed; loot pays once ever (the revive discipline).
+    if (!opts?.bare && spec) this.annexFurnish(spec, pc, !!opts?.revive);
     return true;
   }
 
+  /** Dress a revealed annex from its piece's own seed (data/annexes.ts —
+   *  the openHollow verb surface, one fabric over). Structure replants on
+   *  every replay; loot/ambush only at the live find (revive=false). */
+  private annexFurnish(spec: AnnexSpec, pc: { seed?: number }, revive: boolean): void {
+    const kd = annexKindDef(spec.kind);
+    if (!kd) return;
+    const rng = new Rng((pc.seed ?? hashStr(`${this.zone.id}:${spec.piece}`)) >>> 0);
+    const center = vec(spec.rect.x + spec.rect.w / 2, spec.rect.y + spec.rect.h / 2);
+    const added: Doodad[] = [];
+    kd.furnish({
+      center, rect: spec.rect, rng, level: Math.max(1, this.zone.level), revive,
+      addDoodad: (d) => {
+        const dd: Doodad = {
+          pos: vec(d.pos.x, d.pos.y), radius: d.radius, kind: d.kind,
+          ...(d.rot !== undefined ? { rot: d.rot } : {}),
+        };
+        this.doodads.push(dd);
+        added.push(dd);
+      },
+      spawnEnemy: (mid, pos) => {
+        const m = this.createMonster(mid, Math.max(1, this.zone.level), 'enemy');
+        m.pos = this.clampPos(vec(pos.x, pos.y), m.radius);
+        m.fromZoneGen = true; // zone memory captures the annex's survivors
+        this.actors.push(m);
+      },
+      packPick: () => this.zone.packs?.table?.length
+        ? this.weightedPick(this.zone.packs.table, Math.max(1, this.zone.level)) : null,
+      dropGem: (pos) => this.dropGemAt(vec(pos.x, pos.y)),
+      shedOrb: (kind, pos) => this.shedOrb(kind, vec(pos.x, pos.y)),
+    });
+    if (added.length) this.markDoodadsChanged();
+  }
+
   /** Reveal by ADDRESS — the cross-zone face of the seam. The current zone
-   *  routes to annexReveal; an away zone stamps its standing memory so the
-   *  piece opens with the revive on return (no memory standing = nothing to
-   *  stamp — the away lane beyond the TTL is Movement II's adjudication). */
+   *  routes to annexReveal; an away zone stamps the run-scope FOUND ledger
+   *  (Movement II's adjudication of the old TTL hole: the durable half the
+   *  boot replay reads back regardless of memory freshness) plus any
+   *  standing memory's annexOpen as the fresh-lane fast path. */
   annexActivate(zoneId: string, pieceId: string): boolean {
     if (zoneId === this.zone.id) return this.annexReveal(pieceId);
-    const m = this.zoneMemory.get(zoneId);
-    if (!m) return false;
     const def = this.zoneMap[zoneId] ?? this.caveMap[zoneId];
     if (!def?.annexes?.some(r => r.id === pieceId)) return false;
-    if (!m.annexOpen) m.annexOpen = [];
-    if (!m.annexOpen.includes(pieceId)) m.annexOpen.push(pieceId);
+    this.annexFound.add(`${zoneId}:${pieceId}`);
+    const m = this.zoneMemory.get(zoneId);
+    if (m) {
+      if (!m.annexOpen) m.annexOpen = [];
+      if (!m.annexOpen.includes(pieceId)) m.annexOpen.push(pieceId);
+    }
     return true;
   }
 

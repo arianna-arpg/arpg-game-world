@@ -95,6 +95,7 @@ import './lightwells'; // side-effect: the ambient lightwell rows register befor
 import { ITEM_AFFIX_LIST } from './itemaffixes';
 import { strataDefs } from '../world/strata';
 import { hollowDef } from './hollows';
+import { ANNEX_CFG, annexKindDef } from './annexes';
 import { Rng } from '../core/rng';
 
 /** THE ADOPTIVE LANE's kinds (data/objectives.ts): stamped at zone load over
@@ -409,6 +410,27 @@ export function validateContent(): void {
       }
       for (const k of Object.keys(hs.table)) {
         if (!hollowDef(k)) warn(`tileset '${t.id}' hollows: unregistered kind '${k}'`);
+      }
+    }
+    // ANNEX budgets (the growing zone — data/annexes.ts): registered kinds
+    // only, real ranges, faces that resolve to registered doodad rules, and
+    // an authored depth inside the sanity cap.
+    for (const t of Object.values(TILESETS)) {
+      const ax = t.annexes;
+      if (!ax) continue;
+      if (ax.count[0] < 0 || ax.count[1] < ax.count[0]) {
+        warn(`tileset '${t.id}' annexes.count [${ax.count}] is not a range`);
+      }
+      if (ax.depth !== undefined && (ax.depth < 1 || ax.depth > ANNEX_CFG.depthCap)) {
+        warn(`tileset '${t.id}' annexes.depth ${ax.depth} outside [1, ${ANNEX_CFG.depthCap}]`);
+      }
+      for (const k of Object.keys(ax.table)) {
+        const kd = annexKindDef(k);
+        if (!kd) { warn(`tileset '${t.id}' annexes: unregistered kind '${k}'`); continue; }
+        if (!hasDoodadRule(kd.face)) warn(`annex kind '${k}' face '${kd.face}' is not a doodad rule`);
+        for (const ck of Object.keys(kd.child?.table ?? {})) {
+          if (!annexKindDef(ck)) warn(`annex kind '${k}' child table names unregistered kind '${ck}'`);
+        }
       }
     }
   }

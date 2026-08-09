@@ -46,6 +46,15 @@ export interface BoundsPiece {
   active?: boolean;
   /** The annex layout's own seed slot (Movement II mints from it). */
   seed?: number;
+  /** Registered annex kind (data/annexes.ts — Movement II's grammar rider:
+   *  face + furnish resolve through it; pure geometry reads never touch it,
+   *  so the kernel stays shape-only exactly as with `seed`). */
+  kind?: string;
+  /** Which way this piece attaches to its host (east or south — the
+   *  origin-pinned quadrant): the mint records its own construction so the
+   *  face stamp never has to re-derive it from lapped geometry. A grammar
+   *  rider like `seed`/`kind` — no shape math reads it. */
+  dir?: 'e' | 's';
 }
 
 export interface Bounds {
@@ -135,6 +144,25 @@ export function hullOf(b: Bounds): { w: number; h: number } {
   if (pcs) {
     for (const pc of pcs) {
       if (!pc.active) continue;
+      if (pc.x + pc.w > w) w = pc.x + pc.w;
+      if (pc.y + pc.h > h) h = pc.y + pc.h;
+    }
+  }
+  return { w, h };
+}
+
+/** The enclosing box of EVERY piece, dormant included — the GENERATION span.
+ *  A carved zone's walk grid must already hold the cells a future reveal will
+ *  carve (the grid never grows at runtime), so grid allocation sizes to THIS
+ *  while every drawn/tested authority keeps reading the ACTIVE hull
+ *  (hullOf) — a dormant annex costs invisible wall cells and nothing else.
+ *  Zero pieces = the base box exactly (the classic law). Origin-pinned like
+ *  hullOf: east/south growth only. */
+export function gridSpanOf(b: { w: number; h: number; pieces?: readonly BoundsPiece[] }): { w: number; h: number } {
+  let w = b.w, h = b.h;
+  const pcs = b.pieces;
+  if (pcs) {
+    for (const pc of pcs) {
       if (pc.x + pc.w > w) w = pc.x + pc.w;
       if (pc.y + pc.h > h) h = pc.y + pc.h;
     }

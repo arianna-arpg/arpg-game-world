@@ -18,7 +18,7 @@
 
 import { Actor, type ActorAdorn, type ActorShape, type Team,
   type CastingState, type ActiveAura, type ConstructState, type LeapState, type WormBody } from '../engine/actor';
-import type { Doodad, DoodadDoor, HollowSpec, PlacedStructure } from '../engine/levelgen';
+import type { AnnexSpec, Doodad, DoodadDoor, HollowSpec, PlacedStructure } from '../engine/levelgen';
 import type { HitShape } from '../engine/shapes';
 import type { TrackSpec } from '../engine/tracks';
 import type { TrapworkSpec } from '../engine/trapworks';
@@ -964,9 +964,11 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   }
   // Revealed ANNEX pieces converge the same way (idempotent, zone-guarded):
   // the client's union — prediction clamp, nav, drawn face — joins the piece
-  // the moment the row lands, however many packets it missed.
+  // the moment the row lands, however many packets it missed. BARE mode (the
+  // openHollow law): carve + face dress only — furnish contents arrive on
+  // the host's own doodad/actor streams.
   if (snap.annexes && (!world.appliedZoneId || snap.zoneId === world.appliedZoneId)) {
-    for (const id of snap.annexes) world.annexReveal(id, { silent: true });
+    for (const id of snap.annexes) world.annexReveal(id, { silent: true, bare: true });
   }
   // Runtime LANE state (trapworks levers): reconcile tagged arm flips + live
   // once-lanes every snapshot (undefined laneOnce truly means none stand —
@@ -1293,6 +1295,10 @@ export interface DoodadW {
   door?: DoodadDoor;
   /** The hollow this seam seals (hollows fabric) — ids match ZoneMsg.hollows. */
   hollow?: string;
+  /** The annex this face seals (the growing zone) — ids match the arena's
+   *  pieces + ZoneMsg.annexSpecs; the client's pop prediction never fires
+   *  (brittle authority is host-side), but the tell must draw. */
+  annex?: string;
   /** The true collision surface (hit-surface fabric) — shipped so the
    *  client's predicted clampPos squeezes a doorway exactly as the host's
    *  does (boundR is re-derived client-side at index rebuild). */
@@ -1334,6 +1340,13 @@ export interface ZoneMsg {
    *  did. The shipped walk grid already arrives pre-carved for anything
    *  opened before the client stepped in. */
   hollows?: HollowSpec[];
+  /** SEALED ANNEX FACES (the growing zone): the zone's reveal records, so a
+   *  client can carve + dress a mid-play reveal (StateSnapshot.annexes)
+   *  exactly where the host did — seedless like the pieces themselves (the
+   *  furnish stream is host business; contents ride the doodad/actor
+   *  channels). The shipped walk grid arrives pre-carved for anything
+   *  opened before the client stepped in. */
+  annexSpecs?: AnnexSpec[];
   /** MOVING-HAZARD LANES (the track fabric): the host's placed specs,
    *  verbatim. Geometry is the WHOLE wire — rider poses derive from the
    *  synced clock on both sides (trackPose is pure), so lanes cost zero
@@ -1363,12 +1376,13 @@ export function serializeZone(world: World): ZoneMsg {
     // Pooled LIGHTWELLS are excluded on purpose: they ride the per-tick
     // wells channel EXCLUSIVELY (a copy here would arrive stateless and
     // duplicate the reconciled one).
-    doodads: world.doodads.filter(d => !d.well).map(d => ({ p: v2(d.pos), r: d.radius, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow, wild: d.wild, fall: d.fall })),
+    doodads: world.doodads.filter(d => !d.well).map(d => ({ p: v2(d.pos), r: d.radius, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow, annex: d.annex, wild: d.wild, fall: d.fall })),
     exits: world.exits.map(e => ({ p: v2(e.pos), r: e.radius, to: e.to, label: e.label, b: e.boundary })),
     waypoint: world.waypointPos ? v2(world.waypointPos) : null,
     walk: world.walk instanceof GridWalkField ? world.walk.pack() : null,
     structures: world.structures.length ? world.structures : undefined,
     hollows: world.zoneHollows.length ? world.zoneHollows : undefined,
+    annexSpecs: world.zoneAnnexSpecs.length ? world.zoneAnnexSpecs : undefined,
     tracks: world.tracks.length ? world.tracks.map(t => t.spec) : undefined,
     trapworks: world.trapworks.length ? world.trapworks.map(t => t.spec) : undefined,
   };
@@ -1394,7 +1408,7 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   world.zone.level = msg.level;
   world.zone.dimension = msg.dimension;
   world.doodads = msg.doodads.map(d => ({
-    pos: { x: d.p[0], y: d.p[1] }, radius: d.r, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow, wild: d.wild, fall: d.fall,
+    pos: { x: d.p[0], y: d.p[1] }, radius: d.r, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow, annex: d.annex, wild: d.wild, fall: d.fall,
   })) as Doodad[];
   world.structures = msg.structures ?? [];
   // SECRET HOLLOWS: adopt the host's specs fresh (the shipped walk grid is
@@ -1402,6 +1416,9 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   // snapshot converges any reveal that lands mid-play.
   world.zoneHollows = msg.hollows ?? [];
   world.openedHollows = new Set();
+  // SEALED ANNEX FACES: same law — specs fresh, grid pre-carved, the 20 Hz
+  // annexes row converges mid-play reveals (bare: carve + dress only).
+  world.zoneAnnexSpecs = msg.annexSpecs ?? [];
   // The zone the CLIENT's terrain currently mirrors — the guard that keeps a
   // stale old-zone snapshot from ratcheting same-id doors open in the new zone
   // (do NOT write msg.zoneId into world.zone.id: world.zone aliases a node in

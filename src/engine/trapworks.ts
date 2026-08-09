@@ -166,6 +166,13 @@ export interface CollapseEffectRow extends TrapEffectRow {
 export interface DoorEffectRow extends TrapEffectRow {
   kind: 'door'; ids: string[];
 }
+/** Reveal the named ANNEX pieces (the growing zone, data/annexes.ts)
+ *  through THE ONE reveal verb — the remote lane: a lever in one hall
+ *  opens a sealed wall in another (the pseudo-secret tier's mechanism
+ *  pair, exactly the door effect's shape). Open-only, like doors. */
+export interface AnnexEffectRow extends TrapEffectRow {
+  kind: 'annex'; pieces: string[];
+}
 
 // --- specs -----------------------------------------------------------------
 
@@ -232,6 +239,11 @@ export interface TrapHost {
    *  visualOnly half is the co-op client mirror (doodads + FX, no routing). */
   collapseFloor(cells: { x: number; y: number; r?: number }[], delaySec: number,
     presserId?: number, visualOnly?: boolean): void;
+  /** Reveal an annex piece in the CURRENT zone (World.annexReveal — THE one
+   *  reveal verb: admission, carve, furnish, persistence all converge
+   *  there). Idempotent; an unknown id is silently nothing (the door
+   *  gate's own law). */
+  annexReveal(pieceId: string): void;
   /** Remove tell/decor doodads of a kind near a point (the cradle empties
    *  when the boulder rolls). */
   clearDoodads(kind: string, at: Vec2, r: number): void;
@@ -389,6 +401,15 @@ registerTrapEffect('door', {
   },
   // No mirror: structure-door states converge on their own 20 Hz snapshot
   // channel through the same setDoorState gate (the laneArm precedent).
+});
+
+registerTrapEffect('annex', {
+  spring(host, _trap, row) {
+    const r = row as AnnexEffectRow;
+    for (const id of r.pieces ?? []) host.annexReveal(id);
+  },
+  // No mirror: annex admissions converge on the standing 20 Hz snapshot
+  // annexes row through the same annexReveal gate (the door precedent).
 });
 
 registerTrapEffect('collapse', {

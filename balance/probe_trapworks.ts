@@ -91,12 +91,14 @@ const DT = 1 / 60;
   const cleared: string[] = [];
   const collapsed: { cells: number; delay: number; presser?: number; visual?: boolean }[] = [];
   const deferred: { sec: number; run: () => void }[] = [];
+  const revealed: string[] = [];
   const host: TrapHost = {
     time: 50,
     tracksEnsure: (s) => ensured.push(...s),
     setTracksArmed: (tag, on) => armed.set(tag, on),
     laneArmed: (tag) => armed.get(tag) ?? false,
     setDoorOpen: (id) => opened.push(id),
+    annexReveal: (id) => revealed.push(id),
     collapseFloor: (cells, delay, presser, visual) =>
       collapsed.push({ cells: cells.length, delay, presser, visual }),
     clearDoodads: (kind) => cleared.push(kind),
@@ -114,6 +116,11 @@ const DT = 1 / 60;
     opened.length === 2 && opened[0] === 'vault/d0' && opened[1] === 'vault/d1');
   check('effect door: no mirror on purpose (door states ride their own 20 Hz channel)',
     !trapEffect('door')!.mirror);
+  trapEffect('annex')!.spring(host, trap, { kind: 'annex', pieces: ['ax0', 'ax1'] });
+  check('effect annex: every named piece reveals through the narrow host',
+    revealed.length === 2 && revealed[0] === 'ax0' && revealed[1] === 'ax1');
+  check('effect annex: no mirror on purpose (admissions ride the 20 Hz annexes row)',
+    !trapEffect('annex')!.mirror);
   trapEffect('boulder')!.spring(host, trap,
     { kind: 'boulder', from: vec(0, 0), to: vec(400, 0) }, 7);
   check('effect boulder: one ONCE-lane, presser-credited, trap-tagged, born after the rumble',

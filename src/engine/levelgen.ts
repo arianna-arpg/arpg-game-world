@@ -28,6 +28,7 @@ import { Rng } from '../core/rng';
 import type { ExitRoadSpec, PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, WhereSpec, ZoneDef } from '../data/zones';
 import { STRUCTURES, legendCell, type CellSpec, type StructureDef } from '../data/structures';
 import { hollowShapeOf } from '../data/hollows';
+import { ANNEX_CFG, annexKindDef } from '../data/annexes';
 import { MONSTERS } from '../data/monsters';
 import { presenceTable } from './presence';
 import { runStructureGen } from './structureGen';
@@ -41,7 +42,7 @@ import type { TrapGenSpec, TrapGeo } from './interiorGen';
 import type { DamageType, Modifier } from './stats';
 import type { WalkField } from '../world/walk';
 import { GridWalkField } from '../world/gridWalk';
-import { boundsOf, insideBounds, type ZoneShape } from '../world/shape';
+import { boundsOf, gridSpanOf, insideBounds, type BoundsPiece, type ZoneShape } from '../world/shape';
 import { regionKind } from '../world/regions';
 import { isFieldPixel } from '../world/fieldRegion';
 // Safe despite genkit importing our types: those are `import type` edges,
@@ -244,6 +245,10 @@ export type KnownDoodadKind =
   | 'clay_pots'      // a huddle of pots: pops on a hit or a body brushing through
   | 'crumbling_wall' // a fissured plug that collapses (and carves open) when neared
   | 'secret_wall'    // looks like stone; struck or leaned on, a passage grinds open
+  | 'cracked_face'   // a sealed annex's STRIKE face — the fissured fake wall (data/annexes.ts)
+  | 'fitted_face'    // a sealed annex's PRESS face — masonry too neat to be structural
+  | 'draft_seam'     // a sealed annex's NEAR face — cold air moving where none should
+  | 'face_rubble'    // what a reveal face leaves: settled broken facing stone
   // The brittle kit, wave 2 (hazard breakables — pop effects on BrittleSpec)
   | 'rotten_bridge'  // a decayed span: footing that remembers every crossing, then drops you
   | 'gas_pod'        // a bloated marsh bladder: ruptures into a lingering fume
@@ -586,6 +591,11 @@ export interface Doodad {
    *  through World.openHollow — carve, reveal, persistence. A passage's two
    *  seams share one id and give together. */
   hollow?: string;
+  /** THE ANNEX this face seals (BoundsPiece.id — the growing zone, Secrets
+   *  Movement II): popping the doodad routes through World.annexReveal —
+   *  bounds admission, the walk carve, furnish, found-is-found persistence.
+   *  The hollow twin, one fabric over. */
+  annex?: string;
   /** THE TRUE COLLISION SURFACE (engine/shapes.ts), when it isn't a disc —
    *  a door's slab rect, authored at gen time in world orientation. Absent =
    *  the classic disc (radius / bodyRadiusOf per channel). Consumers never
@@ -798,6 +808,10 @@ export interface GeneratedLayout {
    *  lays plates, rays, runways and grooves with full room/corridor
    *  knowledge). World.loadZone places them; sprung state is transient. */
   trapworks?: TrapworkSpec[];
+  /** SEALED ANNEX FACES (the growing zone — Secrets Movement II): one row
+   *  per dormant BoundsPiece the mint rolled, seated by stampAnnexFaces.
+   *  The world consumes these (World.annexReveal) — carve, furnish, memory. */
+  annexes?: AnnexSpec[];
 }
 
 /** One secret carved inside the wall mass (the HOLLOWS fabric). The pocket's
@@ -816,6 +830,31 @@ export interface HollowSpec {
   /** Per-hollow seed — reveal contents draw from their own stream, so a
    *  remembered reveal re-furnishes identically. */
   seed: number;
+}
+
+/** One sealed ANNEX face + its recorded carve (the growing zone — Secrets
+ *  Movement II; kinds in data/annexes.ts). While sealed, a grid annex's
+ *  cells keep their native wall kind (the hollows doctrine — identity is
+ *  the disguise) and a convex annex is simply outside the active union;
+ *  this record is what World.annexReveal repaints and furnishes when the
+ *  face gives. Deterministic per layout — the co-op wire ships it whole
+ *  (seedless: the furnish stream reads the BoundsPiece row host-side). */
+export interface AnnexSpec {
+  /** The BoundsPiece this face unseals (ZoneDef.annexes row id). Chain
+   *  children ('ax0.1'…) are recorded here too but their face doodads are
+   *  planted at the PARENT's reveal — a doodad standing in dormant space
+   *  would draw over the void band. */
+  piece: string;
+  /** The registered annex kind (data/annexes.ts) — face look + furnish. */
+  kind: string;
+  /** The face doodad's seat (the seam tell; world coords). */
+  face: Vec2;
+  /** GRID zones: world-space rects the reveal repaints to 'ground' — the
+   *  interior chamber + the mouth run through the sealing mass. Convex
+   *  zones omit (bounds admission is the whole reveal). */
+  carve?: { x: number; y: number; w: number; h: number }[];
+  /** The furnishable interior (content scatter bounds; world coords). */
+  rect: { x: number; y: number; w: number; h: number };
 }
 
 // PLACEMENT RULES — the single per-kind registry that decides everything about how
@@ -1154,6 +1193,12 @@ export interface BrittleSpec {
   /** Carve the walk grid open in this radius on break — a crumbling plug
    *  unblocks itself; a secret wall carves INTO the wall face behind it. */
   carve?: number;
+  /** What the break LEAVES BEHIND: a doodad kind pushed at the wreck's seat
+   *  (THE QUIET RECLASS — the crumble shows and the dust REMAINS; a reveal
+   *  face collapses into its own rubble pile instead of vanishing). Give the
+   *  remains kind a non-blocking rule ('inert'/'ground') so the wreck never
+   *  re-seals the way it just opened. */
+  remains?: string;
   /** Break flavor: floating text + flash tint. */
   text?: string;
   color?: string;
@@ -1742,6 +1787,22 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     brittle: { on: ['near', 'hit'], reach: 46, carve: 40, orbChance: 0.15, text: 'the wall crumbles!', color: '#8a8276' } },
   secret_wall: { overlap: 'solid', blocksMove: true, blocksShot: true,
     brittle: { on: ['hit', 'near'], reach: 36, dwell: 1.3, carve: 62, gemChance: 0.6, orbChance: 0.8, warn: 'the stone sounds hollow…', text: 'a hidden passage grinds open!', color: '#d8c890' } },
+  // THE REVEAL FACES (Secrets Movement II — data/annexes.ts): the D2 fake
+  // wall, one rule per trigger verb (her kind-matched ruling). Each stands at
+  // a sealed annex's mouth carrying `annex: <pieceId>`; the pop routes
+  // through World.annexReveal (the d.hollow twin). DELIBERATELY QUIET — no
+  // text, no warn (THE QUIET RECLASS: the crumble shows, the rubble remains,
+  // nothing announces). The annex's carve rides the recorded spec, never the
+  // blind brittle.carve disc. Reach/dwell dials are one blessing unit.
+  cracked_face: { overlap: 'solid', blocksMove: true, blocksShot: true,
+    brittle: { on: ['hit'], remains: 'face_rubble', color: '#8a8276' } },
+  fitted_face: { overlap: 'solid', blocksMove: true, blocksShot: true,
+    brittle: { on: ['near'], reach: 34, dwell: 1.25, remains: 'face_rubble', color: '#d8c890' } },
+  draft_seam: { overlap: 'solid', blocksMove: true, blocksShot: true,
+    brittle: { on: ['near'], reach: 60, dwell: 0.55, remains: 'face_rubble', color: '#a8b4c0' } },
+  // What a reveal face leaves: a low spill of broken facing stone. Inert by
+  // law — the wreck must never re-block the mouth it just opened.
+  face_rubble: { overlap: 'inert', spacing: 0 },
   // WAVE 2 — hazard breakables, every consequence pure BrittleSpec data.
   // The rotten span is FOOTING (ground + spans): it creaks at first tread,
   // remembers every crossing, and drops whoever lingers into the fall
@@ -2866,6 +2927,8 @@ export interface GenCtx {
   airPockets?: { x: number; y: number; r: number }[];
   /** SECRET HOLLOWS carved by stampHollows (the hollows fabric). */
   hollows?: HollowSpec[];
+  /** SEALED ANNEX FACES seated by stampAnnexFaces (the growing zone). */
+  annexes?: AnnexSpec[];
 }
 
 /** A whole-zone LAYOUT GENERATOR: given the prepared context (rng/arena/portals,
@@ -4398,6 +4461,179 @@ function stampHollows(ctx: GenCtx, def: ZoneDef): void {
   }
 }
 
+/** Regrow a carve grid to a wider span, every cell keeping its kind; new
+ *  cells are born 'wall' (byte 0) — the virgin sealing mass dormant annexes
+ *  live in. Run-coalesced fillRegion copy; at generation time nothing has
+ *  baked against the grid yet, so the dirty ring's overflow costs nothing.
+ *  Generators never see the wider grid — their interior math ran classic
+ *  before this, which is exactly why the regrow is safe for every recipe. */
+function regrowWalkGrid(g: GridWalkField, w: number, h: number): GridWalkField {
+  const ng = new GridWalkField(w, h, g.cell);
+  const cs = g.cell;
+  for (let cy = 0; cy < g.rows; cy++) {
+    const wy = cy * cs + cs / 2;
+    let run: string | null = null;
+    let start = 0;
+    for (let cx = 0; cx <= g.cols; cx++) {
+      const k = cx < g.cols ? g.regionAt(cx * cs + cs / 2, wy) : null;
+      if (k !== run) {
+        if (run !== null && run !== 'wall') {
+          ng.fillRegion(start * cs + 1, cy * cs + 1, cx * cs - 1, (cy + 1) * cs - 1, run);
+        }
+        run = k;
+        start = cx;
+      }
+    }
+  }
+  return ng;
+}
+
+/** THE ANNEX STAMP (the growing zone — Secrets Movement II; data/annexes.ts).
+ *  Runs LAST of all (the stampHollows law: after every rescue/navigability
+ *  pass, so nothing scatters a seal open): for every dormant BoundsPiece the
+ *  mint rolled onto the def, seat the sealed reveal FACE and record the
+ *  carve World.annexReveal repaints when it gives.
+ *
+ *  GRID zones — the walk grid REGROWS to the generation span first (it never
+ *  grows at runtime, so the dormant chain's cells must exist now, born
+ *  wall). The chamber is RECORDED, never carved — the seal is the native
+ *  wall mass, the hollows doctrine — and an honest dead-end APPROACH
+ *  corridor is carved on the host side where no floor already nears the
+ *  mouth (the D2 read: a corridor that ends at a suspicious wall). CONVEX
+ *  zones — the face doodad alone seats where the piece laps the rim;
+ *  bounds admission is the whole reveal.
+ *
+ *  Ring-0 faces plant as generation doodads; a chain child's face is only
+ *  RECORDED here (a doodad standing in dormant space would draw over the
+ *  void band) — World.annexReveal plants it when the parent opens.
+ *  Best-effort: a face that can find no host floor is skipped and its
+ *  piece stays sealed forever — dormant ground admits nothing, so the
+ *  failure mode is invisible, never a leak. Annex-less defs return before
+ *  any draw (byte-identity by construction). */
+function stampAnnexFaces(ctx: GenCtx, def: ZoneDef): void {
+  const pieces = def.annexes;
+  if (!pieces?.length || ctx.lite || def.boundless) return;
+  const cs0 = ctx.walk instanceof GridWalkField ? ctx.walk.cell : 30;
+  if (ctx.walk instanceof GridWalkField) {
+    const span = gridSpanOf({ w: ctx.arena.w, h: ctx.arena.h, pieces });
+    if (span.w > ctx.walk.cols * cs0 || span.h > ctx.walk.rows * cs0) {
+      ctx.walk = regrowWalkGrid(ctx.walk, span.w, span.h);
+    }
+  }
+  const g = ctx.walk instanceof GridWalkField ? ctx.walk : null;
+  if (ctx.walk && !g) return; // an exotic walk impl: no faces, seals keep
+  const cs = g?.cell ?? 30;
+  const byId = new Map<string, BoundsPiece>();
+  for (const pc of pieces) byId.set(pc.id, pc);
+  const chambers = new Map<string, { x: number; y: number; w: number; h: number }>();
+  const parentOf = (id: string): BoundsPiece | null => {
+    const dot = id.lastIndexOf('.');
+    if (dot < 0) return null;
+    const d = Number(id.slice(dot + 1));
+    const stem = id.slice(0, dot);
+    return byId.get(d <= 1 ? stem : `${stem}.${d - 1}`) ?? null;
+  };
+  for (const pc of pieces) {
+    const kd = annexKindDef(pc.kind ?? '');
+    if (!kd) continue;
+    const parent = parentOf(pc.id);
+    if (parent && !chambers.has(parent.id) && g) continue; // parent seatless — chain dies sealed
+    const east = (pc.dir ?? 'e') === 'e';
+    if (!g) {
+      // CONVEX: the face seats mid-lap on the piece's host seam, inside the
+      // active silhouette; the furnish rect is the piece box, inset.
+      const face = east
+        ? vec(pc.x + ANNEX_CFG.lap * 0.55, pc.y + pc.h / 2)
+        : vec(pc.x + pc.w / 2, pc.y + ANNEX_CFG.lap * 0.55);
+      const inset = 40;
+      const rect = { x: pc.x + inset, y: pc.y + inset, w: Math.max(1, pc.w - inset * 2), h: Math.max(1, pc.h - inset * 2) };
+      (ctx.annexes ??= []).push({ piece: pc.id, kind: pc.kind!, face, rect });
+      if (!parent) {
+        ctx.doodads.push({ pos: face, radius: cs * 0.62, kind: kd.face, annex: pc.id, rot: ctx.rng.range(0, Math.PI * 2) });
+      }
+      continue;
+    }
+    // GRID: host edge = where the sealing band begins (the base box's rim
+    // for ring-0; the parent's box rim for children). The chamber sits one
+    // sealing cell beyond it, one wall-ring cell inside the piece's far
+    // side, cross-axis inset one cell — RECORDED, never carved.
+    const hostEdge = parent
+      ? (east ? parent.x + parent.w : parent.y + parent.h)
+      : (east ? ctx.arena.w : ctx.arena.h);
+    const chx = east ? hostEdge + cs : Math.max(0, pc.x) + cs;
+    const chy = east ? Math.max(0, pc.y) + cs : hostEdge + cs;
+    const ch = { x: chx, y: chy, w: pc.x + pc.w - cs - chx, h: pc.y + pc.h - cs - chy };
+    if (ch.w < cs * 2 || ch.h < cs * 2) continue; // too small to be a room
+    // The mouth's cross-axis seat: a child centers on its overlap with the
+    // parent's chamber; ring-0 hunts the nearest standing host floor row by
+    // row (fixed scan order — deterministic, zero draws).
+    const mouthHalf = (ANNEX_CFG.mouthCells * cs) / 2;
+    const crossLo = (east ? ch.y : ch.x) + mouthHalf;
+    const crossHi = (east ? ch.y + ch.h : ch.x + ch.w) - mouthHalf;
+    let seat: { at: number; from: number } | null = null;
+    if (parent) {
+      const pch = chambers.get(parent.id)!;
+      const lo = Math.max(crossLo - mouthHalf, east ? pch.y : pch.x);
+      const hi = Math.min(crossHi + mouthHalf, east ? pch.y + pch.h : pch.x + pch.w);
+      if (hi - lo >= mouthHalf * 2) {
+        seat = {
+          at: Math.min(Math.max((lo + hi) / 2, crossLo), crossHi),
+          from: east ? pch.x + pch.w - cs : pch.y + pch.h - cs, // one cell into the parent chamber
+        };
+      }
+    } else {
+      const mid = (crossLo + crossHi) / 2;
+      const rows: number[] = [mid];
+      for (let k = 1; k <= 4; k++) rows.push(mid + k * cs, mid - k * cs);
+      const maxScan = 20; // approach-hunt reach in cells (a dial, one blessing unit)
+      let best: { at: number; floor: number; distC: number } | null = null;
+      for (const at of rows) {
+        if (at < crossLo || at > crossHi) continue;
+        for (let i = 1; i <= maxScan; i++) {
+          const along = hostEdge - cs * (i + 0.5);
+          if (along < cs) break;
+          if (g.isWalkable(east ? along : at, east ? at : along)) {
+            if (!best || i < best.distC) best = { at, floor: hostEdge - cs * i, distC: i };
+            break;
+          }
+        }
+        if (best && best.distC <= 2) break; // adjacent floor — take it
+      }
+      if (best) {
+        seat = { at: best.at, from: best.floor };
+        // The approach: an honest dead-end corridor carved from the found
+        // floor to one cell short of the host edge — the seal band is never
+        // pierced at generation (the reveal's mouth carve opens it).
+        if (best.distC > 2) {
+          const a0 = best.floor + 1, a1 = hostEdge - cs - 1;
+          if (east) g.fillRegion(a0, best.at - mouthHalf + 1, a1, best.at + mouthHalf - 1, 'ground');
+          else g.fillRegion(best.at - mouthHalf + 1, a0, best.at + mouthHalf - 1, a1, 'ground');
+        }
+      }
+    }
+    if (!seat) continue; // no host floor in reach: sealed forever, never a leak
+    // The mouth run: host floor through the seal, one cell INTO the chamber.
+    const m1 = (east ? ch.x : ch.y) + cs;
+    const mouth = east
+      ? { x: seat.from, y: seat.at - mouthHalf, w: m1 - seat.from, h: mouthHalf * 2 }
+      : { x: seat.at - mouthHalf, y: seat.from, w: mouthHalf * 2, h: m1 - seat.from };
+    // The face: astride the seal's host-side surface, proud into the
+    // corridor's (or parent chamber's) dead end — visible, strikeable,
+    // leanable, and gone the moment it gives.
+    const faceAlong = hostEdge - cs * 0.4;
+    const face = east ? vec(faceAlong, seat.at) : vec(seat.at, faceAlong);
+    chambers.set(pc.id, ch);
+    (ctx.annexes ??= []).push({
+      piece: pc.id, kind: pc.kind!, face,
+      carve: [{ x: ch.x, y: ch.y, w: ch.w, h: ch.h }, mouth],
+      rect: { x: ch.x, y: ch.y, w: ch.w, h: ch.h },
+    });
+    if (!parent) {
+      ctx.doodads.push({ pos: face, radius: cs * 0.62, kind: kd.face, annex: pc.id, rot: ctx.rng.range(0, Math.PI * 2) });
+    }
+  }
+}
+
 /** Generate a zone's terrain from its layout spec. */
 export function generateLayout(
   def: ZoneDef, arena: { w: number; h: number },
@@ -4706,6 +4942,10 @@ export function generateLayout(
   // SECRET HOLLOWS last of all (the hollows fabric): carved after every
   // rescue and navigability pass, so a pocket stays sealed and unscattered.
   stampHollows(ctx, def);
+  // SEALED ANNEX FACES after even the hollows (the growing zone): the walk
+  // grid regrows to the generation span and every dormant piece gets its
+  // face seated + carve recorded — nothing later may scatter a seal open.
+  stampAnnexFaces(ctx, def);
   return {
     doodads: ctx.doodads, pois: ctx.pois, camps: ctx.camps,
     breakables: ctx.breakables, npcs: ctx.npcs,
@@ -4716,6 +4956,7 @@ export function generateLayout(
     pockets: ctx.pockets,
     landmarkSpawns: ctx.landmarkSpawns,
     hollows: ctx.hollows,
+    annexes: ctx.annexes,
     tracks: ctx.tracks,
     trapworks: ctx.trapworks,
   };

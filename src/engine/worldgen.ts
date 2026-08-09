@@ -19,6 +19,8 @@ import { darkFloorAt, deeperChanceAt, levelStepAt, namePrefixAt } from '../world
 import { START_ZONE, HUB_ZONE } from '../data/zones';
 import type { BlendSpec, HollowRollSpec, ObjectiveSpec, SkyExposure, ZoneDef, ZoneExitDef } from '../data/zones';
 import { hollowDescends } from '../data/hollows';
+import { ANNEX_CFG, annexKindDef, rollAnnexBox } from '../data/annexes';
+import type { BoundsPiece } from '../world/shape';
 import { blendMean, composeBlendLayout, mergeBlendPacks } from './blend';
 import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
@@ -981,6 +983,142 @@ function applyBlend(
   if (mergePacks && def.packs) def.packs = mergeBlendPacks(def.packs, partner.packs, blendMean(resolved));
 }
 
+/** The annex roll's dedicated sub-stream salts (the applyBlend law: off the
+ *  DEF seed, never the mint's main stream — budget-less tilesets burn ZERO
+ *  draws and stay draw-for-draw byte-identical). Children fork from their
+ *  PARENT's seed (the caveSeeds-zip law taken recursive), so any chain depth
+ *  is pure f(zone seed) — the future infinite regime (an identity-country
+ *  materializing its chain lazily) becomes a materialization-timing change,
+ *  never a derivation change. */
+const ANNEX_ROLL_SALT = 0x0a77e51;
+const ANNEX_CHILD_SALT = 0x0c41d75;
+
+/** How far east the inscribed ellipse's interior reaches at row y (the rim's
+ *  world x), and the south twin at column x. */
+function ellipseReachX(w: number, h: number, y: number): number {
+  const ny = (y - h / 2) / (h / 2);
+  return w / 2 + (w / 2) * Math.sqrt(Math.max(0, 1 - ny * ny));
+}
+function ellipseReachY(w: number, h: number, x: number): number {
+  const nx = (x - w / 2) / (w / 2);
+  return h / 2 + (h / 2) * Math.sqrt(Math.max(0, 1 - nx * nx));
+}
+
+/** THE ANNEX ROLL (the Secrets Charter's growing zone, Movement II): resolve
+ *  a tileset's annex budget onto a freshly minted def as chains of DORMANT
+ *  BoundsPiece rows — kinds, boxes and seeds whole from the def's own seed.
+ *  Chains seat on the base box's east/south edges (the composite bound's
+ *  origin-pinned quadrant) and march outward; every attachment LAPS into its
+ *  host by ANNEX_CFG.lap so the bounds seam never pinches a crossing body
+ *  (flush boxes leave a radius-margin gap neither piece admits — the lap IS
+ *  the doorway's clearance), with ellipse bases lapped from the rim's true
+ *  reach at the mouth row. The layout half stays sovereign over the FACES
+ *  (levelgen stampAnnexFaces seats the seals + records the carve); this roll
+ *  owns geometry + kinds + seeds only. Best-effort: a crowded edge seats
+ *  fewer chains than rolled, never breaks. */
+export function applyAnnexes(def: ZoneDef, tileset: TilesetDef): void {
+  const spec = tileset.annexes;
+  if (!spec || def.boundless || def.special || def.annexes?.length) return;
+  const rng = new Rng(((def.seed ?? 0) ^ ANNEX_ROLL_SALT) >>> 0);
+  const n = rng.int(spec.count[0], spec.count[1]);
+  if (n <= 0) return;
+  const depthCap = Math.max(1, Math.min(spec.depth ?? ANNEX_CFG.defaultDepth, ANNEX_CFG.depthCap));
+  const kinds = Object.entries(spec.table).filter(([k]) => annexKindDef(k));
+  if (!kinds.length) return;
+  const bw = def.size.w, bh = def.size.h;
+  const ellipse = def.shape === 'ellipse';
+  const placed: BoundsPiece[] = [];
+  // A chain's own pieces are EXCLUDED from its collision test (chainStem):
+  // children lap their parents by construction, and the outward march
+  // guarantees no true self-intersection — the sep padding is a law
+  // BETWEEN chains, meaningless within one.
+  const collides = (x: number, y: number, w: number, h: number, chainStem?: string): boolean =>
+    placed.some(p => {
+      if (chainStem && (p.id === chainStem || p.id.startsWith(chainStem + '.'))) return false;
+      return x < p.x + p.w + ANNEX_CFG.sep && x + w + ANNEX_CFG.sep > p.x &&
+        y < p.y + p.h + ANNEX_CFG.sep && y + h + ANNEX_CFG.sep > p.y;
+    });
+  for (let i = 0; i < n; i++) {
+    // Kind first (one weighted draw), geometry second — the hollows law.
+    let roll = rng.range(0, kinds.reduce((s, [, w]) => s + w, 0));
+    let kindId = kinds[kinds.length - 1][0];
+    for (const [k, w] of kinds) { roll -= w; if (roll <= 0) { kindId = k; break; } }
+    const kd = annexKindDef(kindId)!;
+    const box = rollAnnexBox(kd, rng, spec.scale);
+    const east = rng.chance(0.5);
+    // Seat along the chosen edge, corners respected; ellipse bases keep to
+    // the middle band, where the rim runs deep enough to take the lap.
+    const span = east ? bh : bw;
+    const across = east ? box.h : box.w;
+    const bandLo = ellipse ? span * 0.28 : ANNEX_CFG.edgeMargin;
+    const bandHi = span - across - bandLo;
+    if (bandHi <= bandLo) continue;
+    for (let t = 0; t < 6; t++) {
+      const along = rng.range(bandLo, bandHi);
+      let x: number, y: number;
+      if (east) {
+        const cy = along + box.h / 2;
+        x = (ellipse ? ellipseReachX(bw, bh, cy) : bw) - ANNEX_CFG.lap;
+        y = along;
+      } else {
+        const cx = along + box.w / 2;
+        x = along;
+        y = (ellipse ? ellipseReachY(bw, bh, cx) : bh) - ANNEX_CFG.lap;
+      }
+      if (collides(x, y, box.w, box.h)) continue;
+      // Seated. Mint the chain root, then march children outward — each
+      // forked from its parent's seed, each lapped into its parent.
+      let px = x, py = y, pw = box.w, ph = box.h;
+      let pSeed = rng.int(1, 0x7fffffff);
+      let pKind = kindId;
+      placed.push({
+        id: `ax${i}`, x, y, w: box.w, h: box.h,
+        ...(kd.shape ? { shape: kd.shape } : {}), seed: pSeed, kind: kindId,
+        dir: east ? 'e' : 's',
+      });
+      for (let d = 1; d < depthCap; d++) {
+        const childSpec = annexKindDef(pKind)?.child;
+        if (!childSpec) break;
+        const crng = new Rng((pSeed ^ ANNEX_CHILD_SALT ^ d) >>> 0);
+        if (!crng.chance(childSpec.chance)) break;
+        let cKind = pKind;
+        const ct = childSpec.table ? Object.entries(childSpec.table).filter(([k]) => annexKindDef(k)) : null;
+        if (ct?.length) {
+          let cr = crng.range(0, ct.reduce((s, [, w]) => s + w, 0));
+          for (const [k, w] of ct) { cr -= w; if (cr <= 0) { cKind = k; break; } }
+        }
+        const ckd = annexKindDef(cKind)!;
+        const cbox = rollAnnexBox(ckd, crng, spec.scale);
+        // Cross-axis seat: guarantee the parent/child overlap a mouth needs.
+        const need = Math.min(120, Math.min(east ? ph : pw, east ? cbox.h : cbox.w));
+        let cx: number, cy: number;
+        if (east) {
+          cx = px + pw - ANNEX_CFG.lap;
+          const lo = py + need - cbox.h, hi = py + ph - need;
+          cy = hi > lo ? crng.range(lo, hi) : py + ph / 2 - cbox.h / 2;
+          cy = Math.max(0, cy);
+        } else {
+          cy = py + ph - ANNEX_CFG.lap;
+          const lo = px + need - cbox.w, hi = px + pw - need;
+          cx = hi > lo ? crng.range(lo, hi) : px + pw / 2 - cbox.w / 2;
+          cx = Math.max(0, cx);
+        }
+        if (collides(cx, cy, cbox.w, cbox.h, `ax${i}`)) break;
+        pSeed = new Rng((pSeed ^ ANNEX_CHILD_SALT) >>> 0).int(1, 0x7fffffff);
+        placed.push({
+          id: `ax${i}.${d}`, x: cx, y: cy, w: cbox.w, h: cbox.h,
+          ...(ckd.shape ? { shape: ckd.shape } : {}), seed: pSeed, kind: cKind,
+          dir: east ? 'e' : 's',
+        });
+        px = cx; py = cy; pw = cbox.w; ph = cbox.h;
+        pKind = cKind;
+      }
+      break;
+    }
+  }
+  if (placed.length) def.annexes = placed;
+}
+
 /**
  * THE reusable placement primitive. Mints a fully-specified zone at an
  * approximate target coordinate, guarantees a back-edge to `anchor` (the nearest
@@ -1462,6 +1600,10 @@ export function placeZoneAt(
   // layout rows tagged, pack tables merged — off the def seed's dedicated
   // sub-stream (blendless mints keep every draw byte-identical).
   applyBlend(def, tileset, variantName, spec.blend, !spec.packsOverride);
+  // THE ANNEX ROLL (the growing zone): dormant secret chains onto the def,
+  // whole from its seed on their own salted stream — annex-less tilesets
+  // burn zero draws (the blend law).
+  applyAnnexes(def, tileset);
   // THE SETTLING (WEB_CFG.settle): when this mint could not fully clear its
   // neighbours — a directed quest dropped into saturated ring-1, twenty
   // anti-crowd pushes spent — the NEIGHBOURHOOD gives way instead of two
@@ -1844,6 +1986,10 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   // the whole fold rides the def seed's dedicated sub-stream, so blendless
   // pockets keep the classic draw order exactly.
   applyBlend(def, ts, variantName, opts?.blend, true);
+  // THE ANNEX ROLL: cave pockets grow secrets by the same law (noDeeper
+  // needs no filter here — annex faces are never sidezone entrances, and
+  // the chains stay inside this zone's own bound).
+  applyAnnexes(def, ts);
   return def;
 }
 

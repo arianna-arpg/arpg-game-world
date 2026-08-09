@@ -10,6 +10,7 @@
 // ---------------------------------------------------------------------------
 
 import type { BlendSpec, CompositionRoll, HollowRollSpec, LandmarkRoll, PackSpec, SkyExposure, StampSpec, StructureRoll, ZoneTheme } from './zones';
+import type { AnnexRollSpec } from './annexes';
 import type { Rng } from '../core/rng';
 import { presenceMul, type LevelEnvelope } from '../engine/presence';
 import { climateAffinity, type ClimateSpec } from '../world/climate';
@@ -242,6 +243,13 @@ export interface TilesetDef {
    *  ZoneDef.hollows): sealed pockets and through-wall passages behind
    *  brittle seams, GRID layouts only. */
   hollows?: HollowRollSpec;
+  /** ANNEX budget (the Secrets Charter's growing zone — data/annexes.ts):
+   *  sealed bounds pieces the zone GROWS into when their reveal faces give.
+   *  Rolled once per mint on a dedicated salted stream (applyAnnexes) —
+   *  absent = zero draws, byte-identical by construction. `scale` is the
+   *  per-country size POLICY ('room' default; 'wing' for a country whose
+   *  identity is the secret mechanism), `depth` the nesting budget. */
+  annexes?: AnnexRollSpec;
   /** THE BLEND (engine/blend.ts): zones minted from this tileset interleave a
    *  PARTNER tileset's theme + kit + packs by a weight field — transition
    *  bands, tessellated pockets, patchwork (see BlendFieldSpec). Rolled per
@@ -650,6 +658,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     hollows: {
       count: [0, 2],
       table: { cache_hollow: 3, ambush_hollow: 2, crevice_hollow: 1.2 },
+    },
+    // THE GROWING ZONE's debut (Secrets Movement II — data/annexes.ts): the
+    // D2 fake wall in the D2 place. A modest teaser budget — room-scale,
+    // depth 2 by default — while Movement IV carries the content wave.
+    // Count + weights are one blessing unit, unblessed.
+    annexes: {
+      count: [0, 1],
+      table: { reliquary_annex: 3, burrow_annex: 1.5, draft_gallery: 1.5 },
     },
     nameFirst: ['Barrowdeep', 'Lychgate', 'Kerbstone', 'Old-King', 'Wightrest', 'Chalkbone', 'Turf-Hidden', 'Cold-Delved', 'Mound-Laid', 'Greybone', 'Under-Moor', 'Hollowhowe', 'Wold-Deep', 'Sexton’s'],
     nameSecond: ['Catacombs', 'Halls', 'Howes', 'Cists', 'Gallery', 'Processional', 'Vaults', 'Delvings', 'Undercroft', 'Chambers', 'Corpse-Ways', 'Barrows'],
