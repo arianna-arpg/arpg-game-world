@@ -244,11 +244,12 @@ export type KnownDoodadKind =
   // The brittle kit (lifeless breakables — DoodadRule.brittle)
   | 'clay_pots'      // a huddle of pots: pops on a hit or a body brushing through
   | 'crumbling_wall' // a fissured plug that collapses (and carves open) when neared
-  | 'secret_wall'    // looks like stone; struck or leaned on, a passage grinds open
+  | 'secret_wall'    // looks like stone; struck or leaned on, a passage opens (quietly)
   | 'cracked_face'   // a sealed annex's STRIKE face — the fissured fake wall (data/annexes.ts)
   | 'fitted_face'    // a sealed annex's PRESS face — masonry too neat to be structural
   | 'draft_seam'     // a sealed annex's NEAR face — cold air moving where none should
   | 'face_rubble'    // what a reveal face leaves: settled broken facing stone
+  | 'verdure_litter' // what a cut verdure face leaves: chopped stems, fallen fronds
   // The brittle kit, wave 2 (hazard breakables — pop effects on BrittleSpec)
   | 'rotten_bridge'  // a decayed span: footing that remembers every crossing, then drops you
   | 'gas_pod'        // a bloated marsh bladder: ruptures into a lingering fume
@@ -1783,10 +1784,14 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // body nears; the secret face gives to a strike — or a deliberate lean.
   clay_pots: { overlap: 'inert', spacing: 8,
     brittle: { on: ['hit', 'touch'], orbChance: 0.4, text: 'crash!', color: '#c8a06a' } },
+  // THE QUIET RECLASS (Secrets Movement III): the classic secret faces shed
+  // their announcements — the crumble SHOWS and the rubble REMAINS (the
+  // BrittleSpec.remains lever); the notice is the look itself (the clean
+  // strata, the fissures), never a floating line. Pay stands untouched.
   crumbling_wall: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24,
-    brittle: { on: ['near', 'hit'], reach: 46, carve: 40, orbChance: 0.15, text: 'the wall crumbles!', color: '#8a8276' } },
+    brittle: { on: ['near', 'hit'], reach: 46, carve: 40, orbChance: 0.15, remains: 'face_rubble', color: '#8a8276' } },
   secret_wall: { overlap: 'solid', blocksMove: true, blocksShot: true,
-    brittle: { on: ['hit', 'near'], reach: 36, dwell: 1.3, carve: 62, gemChance: 0.6, orbChance: 0.8, warn: 'the stone sounds hollow…', text: 'a hidden passage grinds open!', color: '#d8c890' } },
+    brittle: { on: ['hit', 'near'], reach: 36, dwell: 1.3, carve: 62, gemChance: 0.6, orbChance: 0.8, remains: 'face_rubble', color: '#d8c890' } },
   // THE REVEAL FACES (Secrets Movement II — data/annexes.ts): the D2 fake
   // wall, one rule per trigger verb (her kind-matched ruling). Each stands at
   // a sealed annex's mouth carrying `annex: <pieceId>`; the pop routes
@@ -1865,9 +1870,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // THE HOLLOWS FABRIC: the seam is the pocket's one honest tell — cracked
   // stone flush with a wall face; its pop routes through World.openHollow
   // (Doodad.hollow), which carves the recorded rect and runs the reveal. No
-  // carve on the spec: the HOLLOW knows its own shape.
+  // carve on the spec: the HOLLOW knows its own shape. QUIET (Movement III):
+  // the look is the notice, the rubble is the aftermath — no words.
   hollow_seam: { overlap: 'solid', blocksMove: true, blocksShot: true,
-    brittle: { on: ['hit', 'near'], reach: 34, dwell: 1.1, warn: 'the wall rings hollow…', text: 'the seam gives way!', color: '#d8c890' } },
+    brittle: { on: ['hit', 'near'], reach: 34, dwell: 1.1, remains: 'face_rubble', color: '#d8c890' } },
   // A revealed way DOWN (data/sidezones.ts 'crevice_shaft'): the wall was
   // hiding a whole further cave — one stratum deeper, face-rolled fresh.
   crevice_shaft: { overlap: 'trigger', spacing: 20 },
@@ -2581,9 +2587,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
       spawn: { monster: 'fern_stalker', count: [1, 1], chance: 0.07, text: 'the brush erupts!' } } },
   // The face-cut pays like a secret wall but HIDES like nothing — the tell is
   // the wall itself: cut the knot and the pop carves a pocket INTO the verdure.
+  // QUIET (Movement III): the cut litter remains; no words.
   verdure_face: { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: true, spacing: 40,
     brittle: { on: ['hit'], carve: 52, orbChance: 0.5, gemChance: 0.28,
-      text: 'you carve into the green!', color: '#5f8a34' } },
+      remains: 'verdure_litter', color: '#5f8a34' } },
+  // What a cut face leaves: chopped stems and fallen fronds on the new floor.
+  verdure_litter: { overlap: 'inert', spacing: 0 },
   // The curtain: walk THROUGH it freely — but neither you nor they see past
   // it until crossed (occlude fades its strands for whoever stands under).
   liana_veil: { overlap: 'inert', blocksMove: false, blocksShot: false, blocksSight: true,

@@ -85,8 +85,10 @@ A **hollow** is a sealed void the layout knows about and the walls don't show:
 The pocket's cells **keep their native wall kind** — identity is the disguise,
 pixel-for-pixel and physics-for-physics, whatever the zone builds its walls
 from (`wall`, `fungal_wall`, `sunkstone_wall`…). The only tell is a
-**hollow seam** doodad flush with the face: cracked stone that *rings hollow*
-when neared (BrittleSpec warn) and gives to a blow or a lingering press.
+**hollow seam** doodad flush with the face: cracked stone that gives to a
+blow or a lingering press. THE QUIET RECLASS (Secrets Movement III): the
+look IS the notice and the give-way speaks no text — the seam crumbles into
+a rubble pile that remains (`BrittleSpec.remains`).
 
 **The reveal** (`World.openHollow`): carve the recorded rect (plus a doorway
 cell at every seam) to ground — chunk re-bake, LoS, and pathing all ride the

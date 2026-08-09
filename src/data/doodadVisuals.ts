@@ -1527,6 +1527,9 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // The face's wreck: settled broken facing stone in the local palette —
   // the pile that REMAINS after the crumble (BrittleSpec.remains).
   face_rubble: { painter: 'scree', order: 37, params: { color: 'theme:obstacle' } },
+  // The verdure cut's wreck: chopped stems and fallen fronds (the jungle
+  // face's remains — same law, green voice).
+  verdure_litter: { painter: 'scree', order: 37, params: { color: '#4a662a' } },
   // --- Brittle wave 2: hazard breakables ------------------------------------
   // A decayed crossing: the plank painter saying 'rot' — missing boards over
   // the dark, a split seam, moss on the rails. Order matches sound bridges.
