@@ -611,10 +611,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     caveLayouts: { plains: 3, rooms: 2, dungeon: 1 },
     // The bodies themselves hide the finds: cache and ambush hollows carve
     // into tor/bluff wall mass behind brittle seams (grid layout — the
-    // hollows fabric's requirement — comes with the recipe).
+    // hollows fabric's requirement — comes with the recipe). The rarest
+    // find is a DOOR: the forgotten crypt under the turf (Movement IV's
+    // door-scale lane — weight is one blessing unit, unblessed).
     hollows: {
       count: [0, 2],
-      table: { cache_hollow: 3, ambush_hollow: 2, vein_hollow: 1 },
+      table: { cache_hollow: 3, ambush_hollow: 2, vein_hollow: 1, forgotten_crypt_hollow: 0.7 },
     },
   },
 
@@ -657,14 +659,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     caveLayouts: { rooms: 3, dungeon: 2, plains: 1.5 },
     hollows: {
       count: [0, 2],
-      table: { cache_hollow: 3, ambush_hollow: 2, crevice_hollow: 1.2 },
+      table: { cache_hollow: 3, ambush_hollow: 2, crevice_hollow: 1.2, forgotten_crypt_hollow: 0.9 },
     },
-    // THE GROWING ZONE's debut (Secrets Movement II — data/annexes.ts): the
-    // D2 fake wall in the D2 place. A modest teaser budget — room-scale,
-    // depth 2 by default — while Movement IV carries the content wave.
-    // Count + weights are one blessing unit, unblessed.
+    // THE GROWING ZONE's debut (Secrets Movements II+IV — data/annexes.ts):
+    // the D2 fake wall in the D2 place, now at debut presence — most kept
+    // halls hide at least one wall that lies. Count + weights are one
+    // blessing unit, unblessed.
     annexes: {
-      count: [0, 1],
+      count: [1, 2],
       table: { reliquary_annex: 3, burrow_annex: 1.5, draft_gallery: 1.5 },
     },
     nameFirst: ['Barrowdeep', 'Lychgate', 'Kerbstone', 'Old-King', 'Wightrest', 'Chalkbone', 'Turf-Hidden', 'Cold-Delved', 'Mound-Laid', 'Greybone', 'Under-Moor', 'Hollowhowe', 'Wold-Deep', 'Sexton’s'],

@@ -33,6 +33,10 @@
 //   dresses the child face without furnishing.
 // RIG F — the away lane: annexActivate stamps the run ledger with NO
 //   standing memory (the closed TTL hole) and the piece opens on arrival.
+// RIG G — Movement IV: the forgotten-crypt door-scale lane resolves whole
+//   by registry (descending hollow → gate sidezone → rule → painter), and
+//   THE SPOILS LAW reaches the annex furnish (sealed ground refuses the
+//   find's gem; its orbs still flow).
 //
 // Run: npx tsx balance/probe_annexgrammar.ts
 // ---------------------------------------------------------------------------
@@ -44,8 +48,11 @@ import { GridWalkField } from '../src/world/gridWalk';
 import { ZONES, type ZoneDef } from '../src/data/zones';
 import type { TilesetDef } from '../src/data/tilesets';
 import { ANNEX_CFG, annexParentIdOf, registerAnnex, type AnnexRevealCtx } from '../src/data/annexes';
+import { hollowDef } from '../src/data/hollows';
+import { sidezoneOf } from '../src/data/sidezones';
+import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { applyAnnexes } from '../src/engine/worldgen';
-import { generateLayout } from '../src/engine/levelgen';
+import { doodadRuleOf, generateLayout } from '../src/engine/levelgen';
 import { bootSimEngine, makeSimWorld, SIM_ARENA_ID } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { applyZone, serializeZone } from '../src/net/snapshot';
@@ -308,6 +315,55 @@ world.loadZone(QA_GRID);
     w3.annexOpen.has(ring0.id));
   check('F3 an unknown piece id still refuses honestly',
     w3.annexActivate(QA_GRID, 'ax_no_such') === false);
+}
+
+// --- RIG G: Movement IV — the door-scale lane + the spoils law ---------------
+
+{
+  // The forgotten crypt: a registered DESCENDING hollow whose gate is a real
+  // sidezone with a rule and a painter — the whole door resolves by registry.
+  const fc = hollowDef('forgotten_crypt_hollow');
+  check('G1 the forgotten crypt is a registered descending hollow kind',
+    !!fc && fc.descends === true);
+  check('G2 its gate resolves whole: sidezone + doodad rule + painter entry',
+    !!sidezoneOf('forgotten_crypt_gate')
+    && doodadRuleOf('forgotten_crypt_gate').overlap === 'trigger'
+    && !!DOODAD_VISUALS['forgotten_crypt_gate']);
+
+  // THE SPOILS LAW reaches the annex furnish: on sealed ground the find's
+  // gem refuses to mint while its orbs still flow (XP + orbs are never
+  // spoils). The recording kind pays one gem + one orb at the live find.
+  registerAnnex({
+    id: 'qa_spoils_probe',
+    face: 'draft_seam',
+    size: { w: [300, 300], h: [300, 300] },
+    furnish(c: AnnexRevealCtx) {
+      if (!c.revive) { c.dropGem(c.center); c.shedOrb('life', c.center); }
+    },
+  });
+  const QA_SPOILS = 'qa_annex_spoils';
+  const sdef: ZoneDef = {
+    id: QA_SPOILS, name: 'Annex Spoils (QA)', level: 1,
+    size: { w: 2100, h: 1500 }, shape: 'rect', layoutType: 'rooms', spoils: 'none',
+    theme: { floor: '#101010', grid: '#181818', border: '#3a3a3a', obstacle: '#2a2a2a', obstacleEdge: '#444444', accent: '#888888' },
+    // The PROVEN seat seed (QA_GRID's): same size + layoutType + seed ⇒ the
+    // identical rooms grid and the identical ring-0 seat — the spoils rig
+    // re-tests the law, never the stamp's luck.
+    seed: 0xcafe03, layout: [], objective: { kind: 'none' }, exits: [], map: { x: 9990, y: 9998 },
+  };
+  applyAnnexes(sdef, { annexes: { count: [1, 1], table: { qa_spoils_probe: 1 }, depth: 1 } } as unknown as TilesetDef);
+  ZONES[QA_SPOILS] = sdef;
+  seedGlobalRandom(0x5ec7e76);
+  const w4 = makeSimWorld('warrior', 0xa22e);
+  w4.loadZone(QA_SPOILS);
+  const ring0 = w4.zoneAnnexSpecs.find(s => !s.piece.includes('.'))!;
+  const gemsBefore = w4.drops.filter(d => d.item.kind === 'skill').length;
+  const orbsBefore = w4.orbs.length;
+  w4.annexReveal(ring0.piece);
+  check('G3 sealed ground refuses the annex gem (the spoils law reaches the furnish)',
+    w4.drops.filter(d => d.item.kind === 'skill').length === gemsBefore);
+  check('G4 the find\'s orbs still flow (orbs are never spoils)',
+    w4.orbs.length > orbsBefore);
 }
 
 console.log(fails === 0 ? '\nprobe_annexgrammar: ALL GREEN' : `\nprobe_annexgrammar: ${fails} FAILURE(S)`);

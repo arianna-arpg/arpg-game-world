@@ -1721,6 +1721,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'caveMouth', order: 30,
     params: { tumble: 1 },
   },
+  // The forgotten crypt's mouth (the door-scale secret, Secrets Movement IV):
+  // old coursed stone around a cold throat — kerbstone greys, a guttering
+  // grave-light glow, rubble where the sealing wall came down.
+  forgotten_crypt_gate: {
+    painter: 'caveMouth', order: 30,
+    params: { color: '#6e6a5e', edge: '#8e887a', material: 'stone', glow: '#b9a06a', throat: '#080706', tumble: 1, teeth: {}, rubble: {} },
+  },
   // --- The bog set: mire dressing + the contracting-fume hazard -------------
   // A waterlogged trunk gone half to moss — the log painter saying 'drowned'.
   sunken_log: {

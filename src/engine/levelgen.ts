@@ -280,6 +280,7 @@ export type KnownDoodadKind =
   // The HOLLOWS fabric (secrets carved inside the wall mass — stampHollows)
   | 'hollow_seam'      // cracked stone flush with a wall face: break it and the wall confesses
   | 'crevice_shaft'    // a revealed way DOWN — a sidezone mouth one stratum deeper
+  | 'forgotten_crypt_gate' // a revealed DOOR — the walled-away older crypt's mouth
   // The melt (lava is a crossable LIQUID; this is the wall)
   | 'magma_core'      // impassable molten mass — the caldera's spiral walls
   // The wayfarer kit (roadside & village-story furniture)
@@ -1877,6 +1878,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // A revealed way DOWN (data/sidezones.ts 'crevice_shaft'): the wall was
   // hiding a whole further cave — one stratum deeper, face-rolled fresh.
   crevice_shaft: { overlap: 'trigger', spacing: 20 },
+  // A revealed DOOR (data/sidezones.ts 'forgotten_crypt_gate'): the wall
+  // was younger than what it sealed — the older crypt's own mouth.
+  forgotten_crypt_gate: { overlap: 'trigger', spacing: 20 },
   // The bog set: mire dressing + the contracting-fume hazard flower. The
   // bloom's pop is pure BrittleSpec data — its fume names venom_seep, so the
   // cloud inherits the skill's own closing SIZE ENVELOPE (it shrinks away).

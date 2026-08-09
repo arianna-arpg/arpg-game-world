@@ -192,6 +192,28 @@ registerSidezone({
   mint: ({ parent, seed, id }) => mintCave(parent, seed, id),
 });
 
+// --- THE FORGOTTEN CRYPT (the door-scale secret — Secrets Movement IV) -------
+// A hollow seam gives way and the wall confesses a DOOR: the
+// forgotten_crypt_hollow reveal (data/hollows.ts) plants this mouth, and
+// behind it waits a whole OLDER necropolis — a forced-catacombs country
+// ("older and forgotten... its own miniature adventure", her charter beat),
+// terminal by law (noDeeper: the miniature adventure concludes; the strip
+// law keeps every further entrance out). Position-hash seeds = persistent
+// geography: the same crypt waits behind the same wall forever. The ledger
+// key is the lane's GATEWAY SEAM for future unlocks (the ruin_entered
+// pattern). Name + objective are one blessing unit, unblessed.
+registerSidezone({
+  kind: 'forgotten_crypt_gate',
+  dwell: 0.7,
+  ledgerOnEnter: 'forgotten_crypt_entered',
+  mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'catacombs', {
+    rollVariant: true,
+    name: 'the Forgotten Crypt',
+    objective: { kind: 'clear' },
+    noDeeper: true,
+  }),
+});
+
 // --- THE LASTLIGHT CELLAR ----------------------------------------------------
 // Under the spare house's floorboards: a small, barren stone room — the
 // blacksmith's flagstone underfoot (the cellar_room slab structure), a crate

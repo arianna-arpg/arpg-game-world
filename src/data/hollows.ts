@@ -211,3 +211,20 @@ registerHollow({
     if (!c.revive) c.text(c.center, 'a hidden passage runs through!', '#d8c890');
   },
 });
+
+/** THE FORGOTTEN CRYPT: the wall was younger than the door it hid — behind
+ *  it, a whole older necropolis nobody living remembers sealing (the
+ *  Secrets Charter's door-scale lane, Movement IV: the find is a MOUTH to
+ *  a minted country, not a pocket — data/sidezones.ts mints the crypt
+ *  itself). Position-hash seeds make the revealed door persistent
+ *  geography: the same crypt waits behind the same wall forever.
+ *  STRUCTURAL: revives always. */
+registerHollow({
+  id: 'forgotten_crypt_hollow',
+  descends: true, // a way ONWARD — noDeeper pockets filter it at mint
+  blurb: 'The wall was younger than the door it hid.',
+  reveal(c) {
+    c.addDoodad({ pos: c.center, radius: 24, kind: 'forgotten_crypt_gate' });
+    if (!c.revive) c.text(c.center, 'an older dark opens beyond…', '#c8b489');
+  },
+});
