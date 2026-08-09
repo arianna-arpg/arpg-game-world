@@ -1861,6 +1861,29 @@ export interface DashDelivery {
    *  Gale family paves). The `cloudTrail` STAT reads at the same site, so
    *  a support can teach any dash to leave sky-road. */
   trailConjure?: { radius: number; duration: number; grants?: readonly ConjureGrant[]; look?: string };
+  /** THE CHARGE CARRY (the grab fabric, engine/grab.ts — consumed at the
+   *  world's dash block): the run's first valid corridor CONTACT is seized
+   *  under `grab` and DRAGGED along the remainder of the run. The catch is
+   *  a BODY event (the bull's mass — dodged with your feet by leaving the
+   *  corridor, the wall doctrine), so it rides the contact rather than the
+   *  gore's accuracy roll; every other gate is grabSeize's own (mass law,
+   *  policy tiers, the re-seize grace, dormancy, hostility — and 'hands
+   *  full' makes it first-catch-wins). The hold's patience is clamped to
+   *  the run's own clock, so the drag can never outlive the charge that
+   *  authored it; at the run's end the catch is SHED forward at `shove` ×
+   *  the run's speed with authority already spent (the bowling lane's
+   *  momentum hand-off) — a wall answers with the mass fabric's arrest
+   *  wound, a rim with the pit-aware push law, charger-credited both. The
+   *  struggle/sever/CC ladder releases early as ever; an escaped catch is
+   *  dropped where it tore free, never shed. Debut: gore_charge (the
+   *  beastkin gorer). */
+  onContact?: {
+    /** The seizing temper — 'drag' is the charge's natural verb. */
+    grab: GrabSpec;
+    /** Fraction of the run's own speed handed forward at the run's-end
+     *  release (default GRAB_CFG.runCarry.shoveFrac). */
+    shove?: number;
+  };
 }
 
 /** Teleportation: instant, delayed (Warp), or behind a targeted enemy. */

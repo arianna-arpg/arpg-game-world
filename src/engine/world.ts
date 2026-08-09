@@ -40923,6 +40923,24 @@ export class World {
               // Corridor grazes can be tuned down (Closing Fang: the
               // arrival is the bite, not the trip past).
               this.resolveHit(a, inst, enemy, inst.def.delivery.corridorScale ?? 1);
+              // THE CHARGE CARRY (DashDelivery.onContact — the grab
+              // fabric): the run's first valid CONTACT is seized and
+              // dragged for the remainder of the run. The catch is a BODY
+              // event (the bull's mass — dodged with your feet by leaving
+              // the corridor, the wall doctrine), so it rides the contact,
+              // not the gore's accuracy roll; every other gate is
+              // grabSeize's own (mass law, policy tiers, grace, dormancy,
+              // hostility — 'hands full' makes it first-catch-wins). The
+              // hold's patience is clamped to the run's own clock: the
+              // drag can never outlive the charge that authored it,
+              // however the run ends.
+              const carry = inst.def.delivery.onContact;
+              if (carry && this.grabSeize(a, inst, enemy, carry.grab)) {
+                const hold = a.gripping;
+                if (hold && hold.id === enemy.id) {
+                  hold.until = Math.min(hold.until, this.time + a.dash.remaining);
+                }
+              }
             }
           }
           // THE MALLET: the corridor rings bells / pops pots it passes
@@ -40963,6 +40981,39 @@ export class World {
         }
         a.dash.remaining -= dt;
         if (a.dash.remaining <= 0) {
+          // THE RUN'S-END SHED (DashDelivery.onContact — the charge
+          // carry's release): a catch this run's corridor seized leaves
+          // NOW — re-seated at the stopped charger's leading rim (the
+          // crack of the whip: the towed body overtakes the tower that
+          // stopped; the throw's own rim constant) and handed shove ×
+          // the run's speed forward with authority ALREADY SPENT (the
+          // bowling lane's hand-off — pushActor noAuthority). A wall
+          // answers with the mass fabric's arrest wound, a rim with the
+          // pit-aware push law, charger-credited both. An early escape
+          // (struggle/sever/CC) already released through the standing
+          // ladder and finds nothing here.
+          {
+            const hold = a.gripping;
+            const carryD = inst && inst.def.delivery.type === 'dash'
+              ? inst.def.delivery.onContact : undefined;
+            if (inst && carryD && hold && hold.skillId === inst.def.id) {
+              const v = this.actorById(hold.id);
+              this.grabRelease(a);
+              if (v && !v.dead) {
+                v.pos = this.clampPos(vec(
+                  a.pos.x + Math.cos(a.dash.dir) * (a.radius + v.radius) * 0.9,
+                  a.pos.y + Math.sin(a.dash.dir) * (a.radius + v.radius) * 0.9), v.radius);
+                v.facing = a.dash.dir + Math.PI;
+                this.pushActor(v, a.dash.dir,
+                  a.dash.speed * (carryD.shove ?? GRAB_CFG.runCarry.shoveFrac) / PUSH_DAMPING,
+                  a, inst, { noAuthority: true });
+                this.flashes.push({
+                  pos: vec(v.pos.x, v.pos.y), radius: a.radius + v.radius + 10,
+                  color: '#d8a06a', life: 0.2, maxLife: 0.2,
+                });
+              }
+            }
+          }
           a.dash = null;
           // Dive Bomb: the arrival erupts; No Man's Land fields drop here.
           if (inst) {

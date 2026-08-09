@@ -2618,6 +2618,34 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
   },
 
+  // THE GORER'S OWN CHARGE (noDrop — the beastkin gorer's horns, never a
+  // gem): the player's charge grammar with THE CHARGE CARRY armed
+  // (DashDelivery.onContact — the grab fabric's 'drag' verb): the first
+  // body the run CONNECTS with is hooked and dragged the remainder of the
+  // run, shed forward at the stop. holdSec outlasts any possible remainder
+  // (the run is ≤ ~1.02s), so the run's own clock — never the roll —
+  // decides the release; mass law, policy tiers and the re-seize grace
+  // all gate inside the fabric.
+  gore_charge: {
+    id: 'gore_charge', name: 'Goring Charge', noDrop: true,
+    description: 'Lowered horns and a committed run: the first body the charge connects with'
+      + ' is hooked and dragged along the rest of the run, flung loose where it ends.',
+    tags: ['attack', 'melee', 'movement', 'physical'], color: '#d89858',
+    manaCost: 7, cooldown: 4, useTime: 0,
+    baseDamage: { physical: [9, 14] },
+    delivery: {
+      type: 'dash', distance: 430, speed: 420, width: 85,
+      onContact: { grab: { verb: 'drag', holdSec: [1.2, 1.5] } },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 70 },
+      { type: 'status', status: 'stun', chance: 0.25 },
+    ],
+    ai: { range: 380, weight: 2, minRange: 140 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
+  },
+
   warp: {
     id: 'warp', name: 'Warp',
     description: 'Fold space toward the target point: after a 0.9-second delay, you are simply'

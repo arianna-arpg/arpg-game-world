@@ -282,6 +282,25 @@ export const GRAB_CFG = {
      *  carries the body over the gap afterward. */
     range: 260,
   },
+
+  /** THE RUN CARRY (DashDelivery.onContact — the charge that DRAGS its
+   *  catch; consumed at the world's dash block): the run's end sheds the
+   *  catch FORWARD at this fraction of the run's own speed, authority
+   *  already spent (the bowling lane's hand-off idiom — pushActor
+   *  noAuthority, so only the catch's weight shapes the skid). 1 = pure
+   *  momentum continuity: the body was TOWED at the run's speed and the
+   *  release preserves it, adding nothing — the skid is still short (the
+   *  push lane's ~5.5/s decay ≈ a body-length stumble), well under a true
+   *  throw's 520 impulse. COUPLED DIAL: the wall wound lives on the
+   *  margin over MASS_CFG.impact.minSpeed (340) — at the gorer's 420-speed
+   *  charge a weight-1 catch arrests above the gate for only ~2 frames of
+   *  free flight (decay ducks it fast), and a catch heavier than
+   *  speed × frac / minSpeed (≈1.23 effW at these numbers) never wounds
+   *  at all (the push lane divides by weight). Lower this and the wall
+   *  goes silent; tune the pair together. */
+  runCarry: {
+    shoveFrac: 1,
+  },
 } as const;
 
 /** Verb → the marker status the victim wears (engine/status.ts rows —
