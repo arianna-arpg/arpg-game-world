@@ -690,13 +690,15 @@ export const STAT_DEFS: Record<string, StatDef> = {
   manaLeech:      { label: 'Damage Leeched as Mana', base: 0, min: 0, max: 0.15, percent: true },
 
   // Block & evade texture
-  /** Fraction of a blocked hit actually STOPPED (base 1 = the classic full
-   *  block; below 1 the remainder lands as chip damage — bosses can carry
-   *  high block chance with low power and stay pressureable). */
+  /** CAP on the fraction of a blocked wound the guard may stop (base 1 —
+   *  a wide-enough guard stops everything; below 1 that fraction leaks
+   *  however strong the guard — bosses can carry high block chance with
+   *  low power and stay pressureable). */
   blockPower:     { label: 'Block Power', base: 1, min: 0, max: 1, percent: true },
-  /** FLAT damage a block eats before blockPower's fraction (the WoW-style
-   *  block VALUE) — the two lanes scale independently: flat mitigation on
-   *  a chance, and percentage mitigation on a chance. */
+  /** FLAT investment lane on the block's GUARD (the WoW-style block
+   *  VALUE): adds to the level floor DEFENSE_CFG.block grants every
+   *  blocker, × guardStrength — the guard eats the wound up to that
+   *  total and only the excess seeps (damage.ts, the guard law). */
   blockValue:     { label: 'Block Value', base: 0, min: 0 },
   /** RECUPERATION (the stagger-heal): this fraction of every hit that
    *  lands on LIFE flows back as healing over recuperateTime seconds —

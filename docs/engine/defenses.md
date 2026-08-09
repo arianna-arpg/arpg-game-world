@@ -63,6 +63,41 @@ bar):
 - **Endurance**: unchanged — the break-less wall that spends what it
   prevents.
 
+## Passive block — the guard law (block value)
+
+A made passive block (`blockChance`) **guards a finite amount, it never
+voids the world** (2026-08-08 ruling: the WoW-style block value — "some
+damage still seeps through where the blocked hit deals more than what was
+guarded against"; the active guard stance is deliberately untouched).
+
+- **The guard**: `(guardBase + guardPerLevel × level + blockValue) ×
+  guardStrength` — level floor in `DEFENSE_CFG.block` (the poise
+  bossBase/bossPerLevel idiom: every blocker guards something for free),
+  investment on the sheet (`blockValue` flat; `guardStrength` scales every
+  guard the wearer raises — passive block and the raised stance speak ONE
+  vocabulary, so a `'guarding'`-scoped grant widens both while the wall is
+  up, and Shieldwall Doctrine's "+block value" line is finally live).
+- **The currency**: the guard prices the wound through the PURE half of
+  mitigation (`mitigateWound` — armor/resists, the slayer lane,
+  damageTaken; no pool touched). Covered ⇒ blocked COLD: no life, no pool
+  spend, no poise chip — byte-identical to the old full stop, so the
+  shield identity survives every small and middling hit.
+- **The seep**: the excess alone rides the MUTATING half (`mitigatePools`
+  — insight/poise/endurance/ledger/soak/hitCap) and then the ply gate (a
+  plied blocker's seep tears a ply, no life — the ply law holds through
+  the shield). Pools pay only for what got past the rim. A block always
+  stops the hit's EFFECTS (statuses, knockback), cold or seeping; the
+  attacker's landed-hit economies (leech, cull, on-hit) never fire on it.
+- **blockPower** caps the stoppable *fraction* of the wound (base 1) —
+  the reserved bosses-stay-pressureable dial, now composing with the
+  guard instead of gating `blockValue` (which was dead until this pass:
+  granted by two passives and two support lines, read never).
+- **Wearers**: the shield-wall texture — crypt_warden 0.15,
+  deadwake_revenant_knight 0.18, stone_sentinel 0.2, sylvan_warden 0.15,
+  winter_herald 0.25, frost_giant 0.3, the Winter King 0.3 — plus player
+  tree/vocation nodes and minions under Bone Offering. The item affix
+  family stays dormant-until-offhand-bases by design.
+
 ## Breath — the default kite budget
 
 `MATERIAL_NATURE.breathes` (+ `MonsterDef.breathes` override) marks the
@@ -113,12 +148,16 @@ modifier (gear affixes, uniques, passives, supports, monster mods):
 
 ## Verification
 
-`npx tsx balance/probe_defenses.ts` (42 pins): empty-base doctrine,
+`npx tsx balance/probe_defenses.ts` (95 pins): empty-base doctrine,
 attribute scaling shape, material-nature coverage, object inertness +
 corpse gating (see docs/engine/corpses.md), zero-max CC honesty, the
 burst window armed-vs-broken, the sap ladder (1 / 0.6 / 0 momentum with
 mitigation 60/70/110 on one def), refill stall, default-kite stamping,
-and the ES soak/recharge/interrupt loop. `sim run --suite smoke` +
+the ES soak/recharge/interrupt loop, the reserved-faction roster laws,
+and the GUARD LAW: cold-block parity (life/poise untouched), the
+wound==guard boundary, exact seep arithmetic through the pools half,
+blockValue/guardStrength investment scaling, the ply law through the
+shield, and the active Shield Up lane pinned byte-untouched. `sim run --suite smoke` +
 `audit textures` grade the fleet-level result.
 `npx tsx balance/probe_conversions.ts` pins the conversion fabric: lane
 registry hygiene, the pure echo, the separable forgo, full-forgo

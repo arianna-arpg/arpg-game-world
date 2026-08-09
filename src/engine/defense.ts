@@ -52,6 +52,22 @@ export const DEFENSE_CFG = {
     windowReset: 4,
   },
 
+  /** PASSIVE BLOCK — THE GUARD LAW (the WoW-style block VALUE): a made
+   *  block (blockChance) GUARDS a finite amount instead of voiding the hit.
+   *    guard = (guardBase + guardPerLevel × level + blockValue) × guardStrength
+   *  priced against the PURE half of mitigation (post armor/resists/slayer/
+   *  damageTaken, before any pool pays): a covered wound is blocked COLD —
+   *  no life, no pool spend, no poise chip — and a heavier wound SEEPS the
+   *  excess through the pools half + the ply gate. Effects (statuses,
+   *  knockback) stay blocked either way. The two dials here are the LEVEL
+   *  FLOOR every blocker gets free (the poise bossBase/bossPerLevel idiom);
+   *  the investment lanes (blockValue, guardStrength, blockPower) are stats
+   *  per the rules-here / numbers-on-the-sheet split above. */
+  block: {
+    guardBase: 12,
+    guardPerLevel: 3,
+  },
+
   /** POISE — the break-bar (Fortitude's pool), a STAMINA-BREAK state machine.
    *  ARMED: the bearer shrugs stagger — `poiseDR` less hit damage and
    *  `poiseCcAvoid` chance to ignore hard CC (both stats). Every hit drains

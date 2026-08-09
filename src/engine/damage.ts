@@ -307,7 +307,8 @@ export function skillDamageBands(
 export interface HitResult {
   evaded: boolean;
   immune: boolean;
-  /** Stopped flat by the passive blockChance stat. */
+  /** Met by the passive blockChance stat — the guard ate the wound up to
+   *  its VALUE; `total` carries whatever seeped past (0 = blocked cold). */
   blocked: boolean;
   total: number;
   crit: boolean;
@@ -376,8 +377,25 @@ export interface MitigateOpts {
  * LIFE damage that lands — the caller subtracts it from target.life. Shared
  * by applyHit AND caster-less area damage (death-bursts, environmental
  * blasts) so EVERY source is mitigated identically — there is no "true damage".
+ *
+ * Internally TWO halves composed in order: mitigateWound (pure — sizes the
+ * wound) then mitigatePools (mutating — the pools pay). The passive block's
+ * guard needs the halves separately: it prices the wound BEFORE any pool
+ * spends, so a cold block stays a true refusal (see applyHitCore).
  */
 export function mitigateTyped(
+  target: Actor, amounts: Partial<Record<DamageType, number>>,
+  opts?: MitigateOpts,
+): number {
+  return mitigatePools(target, mitigateWound(target, amounts, opts), opts);
+}
+
+/** The PURE half of mitigation: armor/resists per type, the slayer lane,
+ *  and the damage-taken multiplier — everything that decides how big the
+ *  WOUND is before any pool pays. No rng, no state writes: safe to call
+ *  as a preview (the passive block prices its guard against exactly this
+ *  number), then the pools half spends against what it returned. */
+function mitigateWound(
   target: Actor, amounts: Partial<Record<DamageType, number>>,
   opts?: MitigateOpts,
 ): number {
@@ -474,6 +492,16 @@ export function mitigateTyped(
     }
   }
   total *= target.sheet.get('damageTaken');
+  return total;
+}
+
+/** The MUTATING half of mitigation: insight, poise, endurance, the ledger
+ *  skim, the soak chain, and the hit ceiling — the pools that PAY, spending
+ *  victim state as they go. One call per wound that actually presses
+ *  through a defense (the whole hit, or the block's seeping excess). */
+function mitigatePools(
+  target: Actor, total: number, opts?: MitigateOpts,
+): number {
   // INSIGHT (the Charisma pool): read the blow coming and slip the brunt —
   // up to insightDR × momentum of the damage is avoided by SPENDING the
   // pool (insightEfficiency damage per point). Momentum is 1 on the move
@@ -564,6 +592,25 @@ export function mitigateTyped(
   return landed;
 }
 
+/** THE PLY GATE (engine/plies.ts), shared by the landed path and the block
+ *  seep: a plied body EATS a landing wound whole — magnitude-blind, one ply
+ *  (+ the attacker's plyRend, tag-queried) tears, NO life moves; sub-floor
+ *  tickles thud (they tear nothing and wound nothing while plies remain).
+ *  The last tear stamps the spec's 'worn open' status. Returns whether the
+ *  plies ate the wound — the caller skips its life cut when they did. */
+function plyEats(attacker: Actor, target: Actor, total: number, packet: DamagePacket): boolean {
+  if (target.plies <= 0) return false;
+  if (total >= plyFloorOf(target)) {
+    const rend = Math.max(0, Math.floor(
+      attacker.sheet.get('plyRend', packet.tags, packet.extra)));
+    target.plies = Math.max(0, target.plies - 1 - rend);
+    if (target.plies === 0 && target.plySpec?.spentStatus) {
+      target.applyStatus(target.plySpec.spentStatus, 0, 1, 'plies');
+    }
+  }
+  return true;
+}
+
 /** Apply a rolled packet to a defender. Returns what actually landed. */
 export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): HitResult {
   const result = applyHitCore(attacker, target, packet);
@@ -608,37 +655,60 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
     }
     target.evadeEntropy -= 1;
   }
-  // Passive block: a flat chance to intercept ANY hit. blockPower is the
-  // FRACTION actually stopped (base 1 = the classic full stop); anything
-  // under 1 leaks through as mitigated CHIP damage — but a block always
-  // stops the hit's effects (statuses, knockback), full or not.
-  // Two independent block lanes: blockPower stops a FRACTION, blockValue
-  // eats a FLAT amount off what still got through (post-mitigation, so
-  // value reads in the same currency as the wound it prevents). Defaults
-  // (power 1) keep the classic full stop; effects always stay blocked.
-  // A held stance's own kit joins the block reads (Actor.stanceRead) —
-  // Shieldwall Doctrine's 'guarding'-scoped chance/value live on the
-  // guard instance, never on the sheet.
+  // PASSIVE BLOCK — THE GUARD LAW (the WoW-style block VALUE): a made
+  // block (blockChance) GUARDS a finite amount, it never voids the world.
+  // The wound is sized first through the PURE half of mitigation (armor/
+  // resists/slayer/damageTaken — no pool touched, no state spent), then
+  // the guard eats up to its value:
+  //   guard = (block.guardBase + block.guardPerLevel × level + blockValue)
+  //           × guardStrength                      (DEFENSE_CFG.block)
+  // A wound the guard covers is blocked COLD — no life, no pool spend, no
+  // poise chip: byte-identical to the classic full stop, so the shield
+  // identity survives for every small and middling hit. A HEAVIER wound
+  // SEEPS the excess: the residue alone rides the pools half (insight /
+  // poise / endurance / ledger / soak / hitCap) and then the ply gate, so
+  // a blocked haymaker always accomplishes something. blockPower caps the
+  // stoppable FRACTION of the wound (base 1; under it, that fraction
+  // leaks however wide the guard); blockValue is the flat investment lane
+  // on top of the level floor; guardStrength scales every guard the
+  // wearer raises — passive block and the raised stance speak one
+  // vocabulary, so a 'guarding'-scoped grant widens both while the wall
+  // is up. A block always stops the hit's EFFECTS (statuses, knockback),
+  // cold or seeping. A held stance's own kit joins the block reads
+  // (Actor.stanceRead) — Shieldwall Doctrine's 'guarding'-scoped
+  // chance/value live on the guard instance, never on the sheet.
   const bsc = target.stanceRead();
   if (chance(target.sheet.get('blockChance', bsc?.tags, bsc?.extra))) {
-    const stop = target.sheet.get('blockPower', bsc?.tags, bsc?.extra);
-    let leaked = 0;
-    if (stop < 0.999) {
-      const chip: Partial<Record<DamageType, number>> = {};
-      for (const t of Object.keys(packet.amounts) as DamageType[]) {
-        chip[t] = packet.amounts[t]! * (1 - stop);
+    const mo = { attacker, tags: packet.tags, extra: packet.extra };
+    const wound = mitigateWound(target, packet.amounts, mo);
+    const guard = (DEFENSE_CFG.block.guardBase
+      + DEFENSE_CFG.block.guardPerLevel * target.level
+      + target.sheet.get('blockValue', bsc?.tags, bsc?.extra))
+      * target.sheet.get('guardStrength', bsc?.tags, bsc?.extra);
+    const stopped = Math.min(
+      wound * target.sheet.get('blockPower', bsc?.tags, bsc?.extra), guard);
+    let leaked = Math.max(0, wound - stopped);
+    if (leaked > 0) {
+      const out: { poiseBroke?: boolean; clamped?: boolean } = {};
+      leaked = mitigatePools(target, leaked, { ...mo, out });
+      // The seep is a landing wound like any other: a plied body's ply
+      // eats it whole — no life moves (the ply law holds through the
+      // shield; the blow got past the rim, so the ply pays, not the bar).
+      if (plyEats(attacker, target, leaked, packet)) {
+        target.hitFlash = 0.12;
+        return { evaded: false, immune: false, blocked: true, total: 0,
+          crit: false, poiseBroke: out.poiseBroke, plyEaten: true };
       }
-      leaked = Math.max(0, mitigateTyped(target, chip,
-        { attacker, tags: packet.tags, extra: packet.extra })
-        - target.sheet.get('blockValue', bsc?.tags, bsc?.extra));
       target.life -= leaked;
       target.hitFlash = 0.1;
       if (leaked > 0 && segHit !== undefined && segHit >= 0) {
         stampSegFlash(target, segHit);
         if (feedWound(target, segHit, leaked)) (target.segTears ??= []).push(segHit);
       }
+      return { evaded: false, immune: false, blocked: true, total: leaked,
+        crit: false, poiseBroke: out.poiseBroke, clamped: out.clamped };
     }
-    return { evaded: false, immune: false, blocked: true, total: leaked, crit: false };
+    return { evaded: false, immune: false, blocked: true, total: 0, crit: false };
   }
 
   // CRIT AVOIDANCE (victim-side): a made roll downgrades the crit to a
@@ -681,24 +751,11 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   const out: { poiseBroke?: boolean; clamped?: boolean } = {};
   const total = mitigateTyped(target, packet.amounts,
     { attacker, tags: packet.tags, extra: packet.extra, out });
-  // THE PLY GATE (engine/plies.ts): a plied body EATS the landed hit whole
-  // — magnitude-blind, one ply tears, NO life moves. Runs AFTER mitigation
-  // so poise still chips (poise-break stays honest counterplay) and AFTER
-  // evasion/block (a dodge is a dodge). Sub-floor tickles thud: they tear
-  // nothing and wound nothing while plies remain. The last tear stamps the
-  // spec's 'worn open' status — the bracket seam's first rider.
-  if (target.plies > 0) {
-    if (total >= plyFloorOf(target)) {
-      // PLY REND (the exterminator's stat, tag-queried like every attacker
-      // fold): one blow tears 1 + plyRend plies — the anti-swarm blade vs
-      // count-durable bodies. Never below one, never past what remains.
-      const rend = Math.max(0, Math.floor(
-        attacker.sheet.get('plyRend', packet.tags, packet.extra)));
-      target.plies = Math.max(0, target.plies - 1 - rend);
-      if (target.plies === 0 && target.plySpec?.spentStatus) {
-        target.applyStatus(target.plySpec.spentStatus, 0, 1, 'plies');
-      }
-    }
+  // THE PLY GATE (plyEats above): runs AFTER mitigation so poise still
+  // chips (poise-break stays honest counterplay) and AFTER evasion/block
+  // (a dodge is a dodge; a cold block never reaches here, a seeping one
+  // feeds the gate its residue inside the block branch).
+  if (plyEats(attacker, target, total, packet)) {
     target.hitFlash = 0.12;
     return {
       evaded: false, immune: false, blocked: false, total: 0,

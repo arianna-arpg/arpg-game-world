@@ -35990,8 +35990,8 @@ export class World {
         // back at whoever swung (passive block; guard blocks fire from
         // tryGuardBlock).
         this.rollTriggers(target, 'block', { aim: vec(caster.pos.x, caster.pos.y) });
-        // blockPower < 1 leaks CHIP damage through (result.total) — the
-        // chip can finish a wounded blocker.
+        // A seeping block leaks its excess through (result.total) — the guard
+        // law's chip can finish a wounded blocker.
         if (target.life <= 0 && !target.dead) this.kill(target);
         return; // a passively blocked hit applies nothing either
       }
