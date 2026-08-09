@@ -24,7 +24,7 @@ import type { TrackSpec } from '../engine/tracks';
 import type { TrapworkSpec } from '../engine/trapworks';
 import type { PartSpec } from '../render/vis/parts';
 import type { ZoneTheme } from '../data/zones';
-import type { ZoneShape } from '../world/shape';
+import { hullOf, type ZoneShape } from '../world/shape';
 import { GridWalkField, type PackedWalk } from '../world/gridWalk';
 import { emptyEssences } from '../engine/world';
 import type { World, Seat, VendorEntry } from '../engine/world';
@@ -425,6 +425,10 @@ export interface StateSnapshot {
    *  (openHollow is idempotent, applied in bare mode: carve + seam splice;
    *  the contents ride the host's own streams). */
   hollows?: string[];
+  /** Revealed ANNEX pieces (the composite bound) — the hollows row's twin:
+   *  the 20 Hz repeat converges a client that missed a reveal (annexReveal
+   *  is idempotent; the geometry shipped with the zone message). */
+  annexes?: string[];
   /** LIVE POOLED LIGHTWELLS (engine/lightwells.ts): runtime-spawned light
    *  sources with per-tick power (dim) state. They never ride the one-shot
    *  zone doodad list — this 20 Hz reconcile IS their client existence
@@ -706,6 +710,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     })),
     doors: doorStatesOf(world),
     hollows: world.openedHollows.size ? [...world.openedHollows] : undefined,
+    annexes: world.annexOpen.size ? [...world.annexOpen] : undefined,
     wells: wellsOf(world),
     gloom: world.gloom() > 0.005 ? Math.round(world.gloom() * 1000) / 1000 : undefined,
     laneArm: laneArmOf(world),
@@ -956,6 +961,12 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     for (const id of snap.hollows) {
       world.openHollow(id, null, { silent: true, bare: true });
     }
+  }
+  // Revealed ANNEX pieces converge the same way (idempotent, zone-guarded):
+  // the client's union — prediction clamp, nav, drawn face — joins the piece
+  // the moment the row lands, however many packets it missed.
+  if (snap.annexes && (!world.appliedZoneId || snap.zoneId === world.appliedZoneId)) {
+    for (const id of snap.annexes) world.annexReveal(id, { silent: true });
   }
   // Runtime LANE state (trapworks levers): reconcile tagged arm flips + live
   // once-lanes every snapshot (undefined laneOnce truly means none stand —
@@ -1299,7 +1310,14 @@ export interface ZoneMsg {
    *  seals, and any dimension-scoped rendering read the same plane the host is
    *  in (a client in hell must not paint surface weather over it). */
   dimension?: string;
-  arena: { w: number; h: number; shape: ZoneShape };
+  /** Arena box + THE COMPOSITE BOUND's pieces (geometry + open state at zone
+   *  send — the client's prediction clamp and drawn face read the same union
+   *  the host tests; mid-play reveals converge via StateSnapshot.annexes).
+   *  Seeds stay host-side (the annex mint is the host's business). */
+  arena: {
+    w: number; h: number; shape: ZoneShape;
+    pieces?: { id: string; x: number; y: number; w: number; h: number; shape?: ZoneShape; active?: boolean }[];
+  };
   theme: ZoneTheme;
   doodads: DoodadW[];
   exits: ExitW[];
@@ -1331,7 +1349,16 @@ export function serializeZone(world: World): ZoneMsg {
   return {
     zoneId: world.zone.id, name: world.zone.name, level: world.zone.level,
     dimension: world.zone.dimension,
-    arena: { w: world.arena.w, h: world.arena.h, shape: world.arena.shape },
+    arena: {
+      w: world.arena.w, h: world.arena.h, shape: world.arena.shape,
+      ...(world.arena.pieces?.length ? {
+        pieces: world.arena.pieces.map(pc => ({
+          id: pc.id, x: pc.x, y: pc.y, w: pc.w, h: pc.h,
+          ...(pc.shape ? { shape: pc.shape } : {}),
+          ...(pc.active ? { active: true } : {}),
+        })),
+      } : {}),
+    },
     theme: world.zone.theme,
     // Pooled LIGHTWELLS are excluded on purpose: they ride the per-tick
     // wells channel EXCLUSIVELY (a copy here would arrive stateless and
@@ -1350,6 +1377,17 @@ export function serializeZone(world: World): ZoneMsg {
 /** Client: rebuild the render terrain from a host zone message. */
 export function applyZone(world: World, msg: ZoneMsg): void {
   world.arena.w = msg.arena.w; world.arena.h = msg.arena.h; world.arena.shape = msg.arena.shape;
+  // THE COMPOSITE BOUND: adopt the host's pieces whole (fresh objects), then
+  // let the hull + revealed set follow — the client's predicted clampPos and
+  // the drawn face read the same union the host tests.
+  if (msg.arena.pieces?.length) {
+    world.arena.pieces = msg.arena.pieces.map(pc => ({ ...pc }));
+  } else {
+    delete world.arena.pieces;
+  }
+  world.arenaHull = hullOf(world.arena);
+  world.annexOpen = new Set(
+    (msg.arena.pieces ?? []).filter(pc => pc.active).map(pc => pc.id));
   // Patch the client's render zone so drawFloor reads the host's theme/name/level.
   world.zone.theme = msg.theme;
   world.zone.name = msg.name;

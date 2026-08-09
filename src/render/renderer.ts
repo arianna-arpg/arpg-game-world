@@ -95,6 +95,7 @@ import { UnderstoryLayer } from './vis/understory';
 import { cameraModeOf, couchConfineRect, couchFit, placeCamera } from './camera';
 import { COUCH_CFG } from '../data/couch';
 import { drawVoidFrame, voidBaseOf } from './vis/voidFrame';
+import { activePieces } from '../world/shape';
 import { traversalPose, traversalVeil } from '../engine/traversal';
 import './vis/paintersGloam'; // side-effect: the Gloamwood kit's painters register
 import './vis/paintersHallow'; // side-effect: the Hallow-country kit's painters register
@@ -482,7 +483,13 @@ export class Renderer {
     const z = this.zoom, vw = w / z, vh = h / z;
     const az = world.arena;
     const camMode = cameraModeOf(world.zone.camera ?? this.getSettings?.().cameraMode);
-    const camAt = placeCamera(camMode, focus, vw, vh, az);
+    // THE COMPOSITE BOUND: the frame spans the ACTIVE union's hull, so the
+    // camera can rest over revealed annex ground — the base box exactly
+    // until a piece opens (piece-less zones pass the arena object untouched).
+    const azSpan = az.pieces?.length
+      ? { w: world.arenaHull.w, h: world.arenaHull.h, boundless: az.boundless }
+      : az;
+    const camAt = placeCamera(camMode, focus, vw, vh, azSpan);
     this.cam.x = camAt.x;
     this.cam.y = camAt.y;
     world.couchConfine = couchOn && viewOk
@@ -2035,13 +2042,18 @@ export class Renderer {
       return;
     }
     const ell = world.arena.shape === 'ellipse';
+    // THE COMPOSITE BOUND: the floor pass works the ACTIVE union — clip to
+    // its hull (the base box exactly until an annex opens), mask back to the
+    // void outside the union at the end.
+    const pcs = activePieces(world.arena);
+    const hullW = world.arenaHull.w, hullH = world.arenaHull.h;
     ctx.save();
     // Clip RECT only: a persistent curved clip forces every chunk blit and
     // cell fill under it onto a slow raster path (isles are always ellipses
     // and paid for it every frame). Elliptical zones draw unclipped and mask
     // the outside ONCE at the end of the pass instead.
     ctx.beginPath();
-    ctx.rect(0, 0, w, h);
+    ctx.rect(0, 0, hullW, hullH);
     ctx.clip();
     // THE UNDERSTORY (vis/understory.ts): the world far BELOW, drawn first so
     // it shows only through the ground chunks' punched `window` cells — the
@@ -2084,12 +2096,45 @@ export class Renderer {
     }
     // ELLIPSE zones: mask everything outside the oval back to the void
     // color — one even-odd fill instead of a whole-pass curved clip.
-    if (ell) {
+    if (!pcs.length) {
+      if (ell) {
+        ctx.fillStyle = voidBaseOf(theme);
+        ctx.beginPath();
+        ctx.rect(-8, -8, w + 16, h + 16);
+        ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+        ctx.fill('evenodd');
+      }
+    } else {
+      // THE UNION MASK (composite bound): void ink over hull-minus-union.
+      // One even-odd fill cannot union OVERLAPPING silhouettes (a seam
+      // crossed twice reads even = outside), so each piece contributes an
+      // outside-clip and the clips INTERSECT: outside(base) ∩ outside(A) ∩
+      // outside(B) = outside(base ∪ A ∪ B). Rect bases join the mask here
+      // too — their old whole-pass clip stopped at the base box; the hull
+      // clip above no longer does.
+      ctx.save();
+      const outsideOf = (trace: () => void): void => {
+        ctx.beginPath();
+        ctx.rect(-8, -8, hullW + 16, hullH + 16);
+        trace();
+        ctx.clip('evenodd');
+      };
+      outsideOf(() => {
+        if (ell) ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+        else ctx.rect(0, 0, w, h);
+      });
+      for (const pc of pcs) {
+        outsideOf(() => {
+          if ((pc.shape ?? 'rect') === 'ellipse') {
+            ctx.ellipse(pc.x + pc.w / 2, pc.y + pc.h / 2, pc.w / 2, pc.h / 2, 0, 0, Math.PI * 2);
+          } else {
+            ctx.rect(pc.x, pc.y, pc.w, pc.h);
+          }
+        });
+      }
       ctx.fillStyle = voidBaseOf(theme);
-      ctx.beginPath();
-      ctx.rect(-8, -8, w + 16, h + 16);
-      ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
-      ctx.fill('evenodd');
+      ctx.fillRect(-8, -8, hullW + 16, hullH + 16);
+      ctx.restore();
     }
     ctx.restore();
     // THE VOID FRAME (vis/voidFrame.ts): everything past the rim — the

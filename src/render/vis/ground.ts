@@ -250,9 +250,12 @@ export class GroundRenderer {
     let x0 = Math.floor(camX / C), x1 = Math.floor((camX + vw) / C);
     let y0 = Math.floor(camY / C), y1 = Math.floor((camY + vh) / C);
     if (!world.arena.boundless) {
+      // THE COMPOSITE BOUND: the window spans the ACTIVE union's hull — the
+      // base box exactly until an annex opens (a protruding annex must bake
+      // its floor; drawn == tested at the bound).
       x0 = Math.max(0, x0); y0 = Math.max(0, y0);
-      x1 = Math.min(Math.floor(Math.max(0, world.arena.w - 1) / C), x1);
-      y1 = Math.min(Math.floor(Math.max(0, world.arena.h - 1) / C), y1);
+      x1 = Math.min(Math.floor(Math.max(0, world.arenaHull.w - 1) / C), x1);
+      y1 = Math.min(Math.floor(Math.max(0, world.arenaHull.h - 1) / C), y1);
     }
     const bakeT0 = performance.now();
     const budgetLeft = (): boolean =>
@@ -364,8 +367,8 @@ export class GroundRenderer {
       let bx0 = x0 - 1, bx1 = x1 + 1, by0 = y0 - 1, by1 = y1 + 1;
       if (!world.arena.boundless) {
         bx0 = Math.max(0, bx0); by0 = Math.max(0, by0);
-        bx1 = Math.min(Math.floor(Math.max(0, world.arena.w - 1) / C), bx1);
-        by1 = Math.min(Math.floor(Math.max(0, world.arena.h - 1) / C), by1);
+        bx1 = Math.min(Math.floor(Math.max(0, world.arenaHull.w - 1) / C), bx1);
+        by1 = Math.min(Math.floor(Math.max(0, world.arenaHull.h - 1) / C), by1);
       }
       outer: for (let cy = by0; cy <= by1; cy++) {
         for (let cx = bx0; cx <= bx1; cx++) {

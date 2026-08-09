@@ -300,7 +300,7 @@ import { WEATHER_DEFS, type WeatherFront, type WeatherStrike } from '../world/we
 import { eventFrontFor } from './eventWeather';
 import { WEATHER_DRESS_CFG, dressPlanFor, rollDressPieces } from './weatherDress';
 import { dayCycle, inPhases } from '../world/daynight';
-import { clampToBounds, exitInside, insideBounds, samplePoint, type Bounds } from '../world/shape';
+import { activeAnnexKey, clampToBounds, exitInside, hullOf, insideBounds, samplePoint, unionArea, type Bounds } from '../world/shape';
 import { distFromHome, traitsOf, isDeathAligned, factionTemper } from '../world/traits';
 import { extractionLookFor } from '../data/extraction';
 import { REMNANT_KINDS, remnantDropStat } from '../data/remnants';
@@ -1984,7 +1984,14 @@ function makeArena(def: ZoneDef): Bounds {
       shape = (h % 100) < 25 ? 'ellipse' : 'rect';
     }
   }
-  return { w: def.size.w, h: def.size.h, shape, boundless: !!def.boundless };
+  const b: Bounds = { w: def.size.w, h: def.size.h, shape, boundless: !!def.boundless };
+  // THE COMPOSITE BOUND: authored annex rows mint as live pieces, ALL DORMANT
+  // — generation, entry seats and every boot consumer see the classic base
+  // arena; zone memory's revealed set re-opens survivors AFTER the layout
+  // stands (loadZone, beside the hollows revive). Fresh objects per mint so
+  // a runtime flip never writes into the def's authored rows.
+  if (def.annexes?.length) b.pieces = def.annexes.map(r => ({ ...r, active: false }));
+  return b;
 }
 
 /** The live, in-zone runtime of a Fracture — the chase that plays out in the
@@ -2096,6 +2103,10 @@ interface ZoneMemory {
    *  secret stays revealed — the re-entry re-carves each id through the
    *  shared openHollow path in revive mode. */
   hollows?: string[];
+  /** Revealed ANNEX pieces at capture (the composite bound): a piece the
+   *  player joined to the union stays joined — re-entry re-opens each id
+   *  through the shared annexReveal path (the hollows law's twin). */
+  annexOpen?: string[];
   /** SOLVED riddle run-ids at capture (the puzzle fabric): bootPuzzles
    *  re-enters them through kind.solved — never gate progression on it
    *  (the objective's own done-ness lives in completedObjectives). */
@@ -3045,6 +3056,15 @@ export class World {
   // --- the current zone -------------------------------------------------
   zone: ZoneDef = this.zoneMap[START_ZONE];
   arena: Bounds = makeArena(this.zoneMap[START_ZONE]);
+  /** The ACTIVE union's enclosing box (world/shape.ts hullOf), cached — the
+   *  grid-anchored consumers' hot read (lite membership, camera spans, the
+   *  chunk window). Exactly the base box until an annex piece activates;
+   *  refreshed at zone load and at every annexReveal. */
+  arenaHull: { w: number; h: number } = hullOf(this.arena);
+  /** Revealed ANNEX piece ids in the CURRENT zone (the openedHollows idiom):
+   *  the capture writes it to zone memory, the revive re-opens it, the
+   *  20 Hz snapshot row converges co-op clients. */
+  annexOpen = new Set<string>();
   doodads: Doodad[] = [];
   /** Spatial index over `doodads` (see spatial.ts) — the O(1) candidate set
    *  behind movement clamping, projectile flight, and ground sensing. Rebuilt
@@ -4590,6 +4610,11 @@ export class World {
     // from the spawn-in grow (only true mid-play arrivals swell in).
     this.zoneEnteredAt = this.time;
     this.arena = makeArena(def);
+    // THE COMPOSITE BOUND: pieces mint dormant — the whole boot (layout,
+    // entry, fixtures) sees the classic base arena; the memory revive below
+    // re-opens what the player already revealed. Hull follows the actives.
+    this.annexOpen = new Set();
+    this.arenaHull = hullOf(this.arena);
     if (!isCave) {
       this.visited.add(zoneId);   // caves never chart onto the map
       // THE DEED GATE (LEDGER_ZONES_EXPLORED): each zone newly charted this
@@ -5198,6 +5223,11 @@ export class World {
     for (const id of memory?.hollows ?? []) {
       this.openHollow(id, null, { silent: true, revive: true });
     }
+    // REVEALED ANNEX PIECES (the composite bound) re-join the union the same
+    // way — revealed stays revealed for the memory's life. After the layout:
+    // generation stays base-piece by construction (the pieces were dormant
+    // through every boot consumer above).
+    for (const id of memory?.annexOpen ?? []) this.annexReveal(id, { silent: true });
     // BREAKABLE door-actors: every still-closed breakable door gets a passive
     // guard-actor at the exact door pos (RAW — no clampPos snap off the sealed
     // cells; it is anchored + passive, nothing ever re-legalizes it). Spawned
@@ -10222,8 +10252,11 @@ export class World {
     } else if (def.pocket && this.walk instanceof GridWalkField) {
       area = this.walk.walkableCount() * this.walk.cell * this.walk.cell;
     } else {
-      const bbox = this.arena.w * this.arena.h;
-      area = this.arena.shape === 'ellipse' ? bbox * (Math.PI / 4) : bbox;
+      // The composite bound's area fold (world/shape.ts): the base piece's
+      // classic bbox (×π/4 inscribed) plus each OPEN annex — the same
+      // arithmetic, so a piece-less zone budgets to the bit what it always
+      // did, and revealed ground buys its own share of the population.
+      area = unionArea(this.arena);
     }
     const areaFactor = clamp(Math.sqrt(area / REF_AREA), def.pocket ? POCKET_CFG.packAreaFloor : 0.8, cap);
     const packs = Math.max(1,
@@ -15442,6 +15475,7 @@ export class World {
     return {
       seed: this.currentZoneSeed, enemies, savedAt: this.time, doorState,
       ...(this.openedHollows.size ? { hollows: [...this.openedHollows] } : {}),
+      ...(this.annexOpen.size ? { annexOpen: [...this.annexOpen] } : {}),
       // Objective-progress riders, per kind: the wave gauntlet's position, the
       // stones' banked charges, the escort's stand. Done-ness itself lives in
       // completedObjectives; a LOSS rides the procession rider.
@@ -15770,6 +15804,7 @@ export class World {
       enemies: m.enemies.map(e => ({ ...e })),
       ...(m.doorState ? { doorState: { ...m.doorState } } : {}),
       ...(m.hollows ? { hollows: [...m.hollows] } : {}),
+      ...(m.annexOpen ? { annexOpen: [...m.annexOpen] } : {}),
       ...(m.wave !== undefined ? { wave: m.wave, waveActive: !!m.waveActive } : {}),
       ...(m.spireCharges ? { spireCharges: [...m.spireCharges] } : {}),
       ...(m.riftCharges ? { riftCharges: [...m.riftCharges] } : {}),
@@ -15971,11 +16006,16 @@ export class World {
       }
       const hollows = Array.isArray(m.hollows)
         ? m.hollows.filter((x): x is string => typeof x === 'string') : [];
+      // Revealed annex pieces: string ids only (keep-what-stands — an id
+      // whose def row left the registry simply finds no piece at revive).
+      const annexOpen = Array.isArray(m.annexOpen)
+        ? m.annexOpen.filter((x): x is string => typeof x === 'string') : [];
       const procMemo = sanitizeProcessionMemo(m.procession);
       this.zoneMemory.set(m.zoneId, {
         seed: m.seed, savedAt: m.savedAt, enemies,
         ...(doors ? { doorState } : {}),
         ...(hollows.length ? { hollows } : {}),
+        ...(annexOpen.length ? { annexOpen } : {}),
         // Objective-progress riders (waves counter, stone charges, the
         // escort): finite, clamped-at-use numbers; malformed rows drop.
         ...(typeof m.wave === 'number' && Number.isFinite(m.wave)
@@ -26333,9 +26373,13 @@ export class World {
 
   /** The pool's ground truth: arena bounds + the walk grid (the creep
    *  openAt idiom). Deliberately NOT clampPos and NOT doodad solidity —
-   *  pool bodies are beneath the hit-surface fabric's notice. */
+   *  pool bodies are beneath the hit-surface fabric's notice. The box is the
+   *  ACTIVE union's hull (cached — this is the pool's hot read): exactly the
+   *  base box until an annex opens, corner-quirk included (an ellipse zone's
+   *  pool has always ridden the plain box; a hull's piece gaps read the
+   *  same way, and the walk grid still arbitrates where one stands). */
   private liteOpenAt(x: number, y: number): boolean {
-    return x >= 0 && y >= 0 && x <= this.arena.w && y <= this.arena.h
+    return x >= 0 && y >= 0 && x <= this.arenaHull.w && y <= this.arenaHull.h
       && (!this.walk || this.walk.isWalkable(x, y));
   }
 
@@ -49766,6 +49810,66 @@ export class World {
     }
   }
 
+  // --- THE COMPOSITE BOUND's ACTIVATION SEAM (Secrets Charter, Movement I) --
+
+  /** Join an ANNEX piece to the CURRENT zone's union — the growing zone's one
+   *  runtime verb (mechanism only: Movement II authors the reveal faces and
+   *  the annex's minted interior). Idempotent per id (the openHollow law).
+   *  What re-derives: the hull cache here, now; the convex nav re-rakes on
+   *  its next pathField ask (the cache key carries the active fingerprint);
+   *  the drawn face (floor mask, void frame, camera span) reads the live
+   *  pieces per frame. What stays LAZILY HONEST until the next zone boot:
+   *  the creep/fog skins and the lite pool keep their boot-time base sizing
+   *  (fronts and tides reach the annex on re-entry), and a CARVED-grid
+   *  zone's walk field does not grow — the bounds authority admits, the
+   *  layout's own walkability still refuses until Movement II mints the
+   *  annex's carve (on convex zones admission is immediate and whole).
+   *  Activation is a player-authored scar: annexOpen rides zone memory
+   *  (capture/revive, the hollows lane) and the 20 Hz co-op row. */
+  annexReveal(pieceId: string, opts?: { silent?: boolean }): boolean {
+    const pc = this.arena.pieces?.find(q => q.id === pieceId);
+    if (!pc) return false;
+    if (this.annexOpen.has(pieceId)) return true;
+    pc.active = true;
+    this.annexOpen.add(pieceId);
+    this.arenaHull = hullOf(this.arena);
+    if (!opts?.silent) {
+      // THE QUIET RECLASS: no text box — one soft flash at the piece's heart
+      // (the visual tell is Movement II's ground; this is the seam's pulse).
+      this.flashes.push({
+        pos: vec(pc.x + pc.w / 2, pc.y + pc.h / 2),
+        radius: Math.max(pc.w, pc.h) * 0.4, color: '#d8c890', life: 0.4, maxLife: 0.4,
+      });
+    }
+    return true;
+  }
+
+  /** Reveal by ADDRESS — the cross-zone face of the seam. The current zone
+   *  routes to annexReveal; an away zone stamps its standing memory so the
+   *  piece opens with the revive on return (no memory standing = nothing to
+   *  stamp — the away lane beyond the TTL is Movement II's adjudication). */
+  annexActivate(zoneId: string, pieceId: string): boolean {
+    if (zoneId === this.zone.id) return this.annexReveal(pieceId);
+    const m = this.zoneMemory.get(zoneId);
+    if (!m) return false;
+    const def = this.zoneMap[zoneId] ?? this.caveMap[zoneId];
+    if (!def?.annexes?.some(r => r.id === pieceId)) return false;
+    if (!m.annexOpen) m.annexOpen = [];
+    if (!m.annexOpen.includes(pieceId)) m.annexOpen.push(pieceId);
+    return true;
+  }
+
+  /** DEV QA LANE: reveal one named piece — or every dormant piece of the
+   *  current zone when called bare. Returns how many joined the union. */
+  devAnnexReveal(pieceId?: string): number {
+    if (pieceId !== undefined) return this.annexReveal(pieceId) ? 1 : 0;
+    let n = 0;
+    for (const pc of this.arena.pieces ?? []) {
+      if (!pc.active && this.annexReveal(pc.id)) n++;
+    }
+    return n;
+  }
+
   /** Soft circle-collision separation so actors don't stack. */
   /** Scratch for separateActors' per-actor neighbor query. */
   private separateScratch: Actor[] = [];
@@ -51334,8 +51438,12 @@ export class World {
     // Convex zones carry no tier stack (tierViews ride this.walk), so every
     // story normalizes onto the ONE nav below; the per-story fields cache in
     // tierNavs — a Map keyed BY story — never through this single-slot key,
-    // so two stories can't clobber (or serve) each other here.
-    const key = this.zone.id + ':' + this.doodads.length + ':' + this.doodadFamilyRev('nav-block');
+    // so two stories can't clobber (or serve) each other here. A composite
+    // zone's key carries the ACTIVE-union fingerprint, so an annex reveal
+    // re-rakes the grid on its next ask (piece-less zones append nothing —
+    // the standing key strings never move).
+    const ak = this.arena.pieces?.length ? '|ax:' + activeAnnexKey(this.arena) : '';
+    const key = this.zone.id + ':' + this.doodads.length + ':' + this.doodadFamilyRev('nav-block') + ak;
     if (!this.convexNav || this.convexNavKey !== key) {
       this.convexNav = this.buildConvexNav();
       this.convexNavKey = key;
@@ -51442,7 +51550,10 @@ export class World {
    *  chasm discs first so bridge spans can re-open their crossings, solids
    *  last so a boulder on a bridge still blocks (clampPos parity). */
   private buildConvexNav(): GridWalkField {
-    const g = new GridWalkField(this.arena.w, this.arena.h);
+    // Sized to the ACTIVE union's hull — the base box exactly until an annex
+    // opens (hullOf is origin-pinned), so a piece-less zone rakes the grid it
+    // always did.
+    const g = new GridWalkField(this.arenaHull.w, this.arenaHull.h);
     if (this.arena.shape === 'ellipse') {
       // Row-fill the inscribed ellipse; the corners stay 'wall' so paths
       // never hug ground clampToBounds would drag feet back from.
@@ -51456,6 +51567,27 @@ export class World {
       }
     } else {
       g.fillRect(0, 0, this.arena.w, this.arena.h, true);
+    }
+    // OPEN ANNEX PIECES join the walkable union in their own silhouettes
+    // (dormant pieces stay 'wall' — the nav refuses exactly what the clamp
+    // refuses, drawn == pathed at the bound). Rows ride the global cell
+    // lattice like the base fill, so seams share cells cleanly.
+    for (const pc of this.arena.pieces ?? []) {
+      if (!pc.active) continue;
+      if ((pc.shape ?? 'rect') !== 'ellipse') {
+        g.fillRect(pc.x, pc.y, pc.x + pc.w, pc.y + pc.h, true);
+      } else {
+        const prx = pc.w / 2, pry = pc.h / 2;
+        const pcx = pc.x + prx, pcy = pc.y + pry;
+        for (let y = g.cell / 2; y < this.arenaHull.h; y += g.cell) {
+          if (y < pc.y || y > pc.y + pc.h) continue;
+          const ny = (y - pcy) / pry;
+          const k = 1 - ny * ny;
+          if (k <= 0) continue;
+          const half = Math.sqrt(k) * prx;
+          g.fillRect(pcx - half, y - g.cell / 2, pcx + half, y + g.cell / 2 - 1, true);
+        }
+      }
     }
     const solids: Doodad[] = [], spans: Doodad[] = [];
     for (const d of this.doodads) {
@@ -51492,15 +51624,17 @@ export class World {
   private paintNavGrounds(g: GridWalkField): void {
     if (this.grounds.length === 0) return;
     const cell = g.cell;
-    const cols = Math.ceil(this.arena.w / cell);
-    const seen = new Uint8Array(cols * Math.ceil(this.arena.h / cell) + cols + 1);
+    // The dedup lattice matches the GRID's own dims (the union hull) — a
+    // cols mismatch would fold annex-column indices onto the next row's.
+    const cols = Math.ceil(this.arenaHull.w / cell);
+    const seen = new Uint8Array(cols * Math.ceil(this.arenaHull.h / cell) + cols + 1);
     const probe = vec(0, 0);
     for (const d of this.grounds) {
       const r2 = (d.radius + cell * 0.5) ** 2;
       const x0 = Math.max(cell / 2, Math.floor((d.pos.x - d.radius) / cell) * cell + cell / 2);
       const y0 = Math.max(cell / 2, Math.floor((d.pos.y - d.radius) / cell) * cell + cell / 2);
-      for (let cy = y0; cy <= Math.min(this.arena.h, d.pos.y + d.radius); cy += cell) {
-        for (let cx = x0; cx <= Math.min(this.arena.w, d.pos.x + d.radius); cx += cell) {
+      for (let cy = y0; cy <= Math.min(this.arenaHull.h, d.pos.y + d.radius); cy += cell) {
+        for (let cx = x0; cx <= Math.min(this.arenaHull.w, d.pos.x + d.radius); cx += cell) {
           if ((cx - d.pos.x) ** 2 + (cy - d.pos.y) ** 2 > r2) continue; // bbox corner, not the disc
           const si = Math.floor(cy / cell) * cols + Math.floor(cx / cell);
           if (seen[si]) continue; // one sample per cell per rebuild

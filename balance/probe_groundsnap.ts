@@ -138,6 +138,10 @@ const mkWorld = (zoneId: string): { world: World; wf: InstanceType<typeof GridWa
     },
     walk: wf,
     arena: { boundless: false, w: W, h: W },
+    // THE COMPOSITE BOUND (2026-08-08): the live World always carries the
+    // ACTIVE-union hull cache (== the base box at one piece); a shim world
+    // must model it or the ground bake's hull clamp reads undefined.
+    arenaHull: { w: W, h: W },
     doodads: [],
     doodadFamilyRev: () => 0,
   } as unknown as World;

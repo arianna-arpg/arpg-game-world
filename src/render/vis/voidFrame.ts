@@ -42,6 +42,7 @@
 import type { ZoneTheme } from '../../data/zones';
 import type { World } from '../../engine/world';
 import { hash01 } from '../../engine/hash';
+import { activePieces, type BoundsPiece } from '../../world/shape';
 import { contrastGuard, mix, withAlpha } from './color';
 import { VIS_ABLATE, VIS_CFG } from './visConfig';
 
@@ -124,11 +125,40 @@ function moteColorOf(theme: ZoneTheme): string {
 }
 
 /** The zone silhouette as the current path (rim strokes + mote clip share it).
- *  Ellipses keep the classic -2px inset the old border stroke drew with. */
-function traceRim(ctx: CanvasRenderingContext2D, w: number, h: number, ell: boolean, inset: number): void {
+ *  Ellipses keep the classic -2px inset the old border stroke drew with.
+ *  x0/y0 seat the silhouette at an ANNEX piece's corner (0,0 = the base —
+ *  the classic calls, arithmetic untouched). */
+function traceRim(ctx: CanvasRenderingContext2D, w: number, h: number, ell: boolean, inset: number,
+  x0 = 0, y0 = 0): void {
   ctx.beginPath();
-  if (ell) ctx.ellipse(w / 2, h / 2, w / 2 - inset, h / 2 - inset, 0, 0, Math.PI * 2);
-  else ctx.rect(0, 0, w, h);
+  if (ell) ctx.ellipse(x0 + w / 2, y0 + h / 2, w / 2 - inset, h / 2 - inset, 0, 0, Math.PI * 2);
+  else ctx.rect(x0, y0, w, h);
+}
+
+/** One union member's silhouette SUBPATH (no beginPath — clip builders
+ *  compose it after their own bounding rect). null = the base piece. */
+function pieceSubpath(ctx: CanvasRenderingContext2D, w: number, h: number, ell: boolean,
+  pc: BoundsPiece | null): void {
+  if (!pc) {
+    if (ell) ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+    else ctx.rect(0, 0, w, h);
+  } else if ((pc.shape ?? 'rect') === 'ellipse') {
+    ctx.ellipse(pc.x + pc.w / 2, pc.y + pc.h / 2, pc.w / 2, pc.h / 2, 0, 0, Math.PI * 2);
+  } else {
+    ctx.rect(pc.x, pc.y, pc.w, pc.h);
+  }
+}
+
+/** Clip the context to OUTSIDE one union member (a big-rect + silhouette
+ *  even-odd). Sequential calls INTERSECT: outside(base) ∩ outside(A) ∩ … =
+ *  outside the whole union — the overlap-safe way to mask a union (one
+ *  even-odd fill reads a lapped seam as outside). */
+function clipOutside(ctx: CanvasRenderingContext2D, w: number, h: number, ell: boolean,
+  pc: BoundsPiece | null): void {
+  ctx.beginPath();
+  ctx.rect(-1e6, -1e6, 2e6, 2e6);
+  pieceSubpath(ctx, w, h, ell, pc);
+  ctx.clip('evenodd');
 }
 
 /** Is the view rect wholly inside the zone silhouette? (Nothing beyond the
@@ -213,13 +243,21 @@ function drawSkirt(ctx: CanvasRenderingContext2D, theme: ZoneTheme,
 function drawMotes(ctx: CanvasRenderingContext2D, theme: ZoneTheme, time: number,
   camX: number, camY: number, vw: number, vh: number,
   w: number, h: number, ell: boolean): void {
-  const m = VIS_CFG.voidFrame.motes;
   ctx.save();
   ctx.beginPath();
   ctx.rect(camX, camY, vw, vh);
   if (ell) ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
   else ctx.rect(0, 0, w, h);
   ctx.clip('evenodd');
+  drawMotesCore(ctx, theme, time, camX, camY, vw, vh);
+  ctx.restore();
+}
+
+/** The mote field itself — the caller owns the clip (classic: view minus the
+ *  base silhouette; composite: view minus the whole union). */
+function drawMotesCore(ctx: CanvasRenderingContext2D, theme: ZoneTheme, time: number,
+  camX: number, camY: number, vw: number, vh: number): void {
+  const m = VIS_CFG.voidFrame.motes;
   // Anchors live in PARALLAX SPACE (world × parallax): a point p renders at
   // world pos p + cam·(1-parallax), so it slides slower than the ground —
   // the dark gains depth. Grid the visible parallax window, one mote a cell.
@@ -243,15 +281,15 @@ function drawMotes(ctx: CanvasRenderingContext2D, theme: ZoneTheme, time: number
     }
   }
   ctx.globalAlpha = 1;
-  ctx.restore();
 }
 
-/** The rim lip: dark seat under the classic border line, lit crest over it. */
+/** The rim lip: dark seat under the classic border line, lit crest over it.
+ *  x0/y0 seat it at an ANNEX piece's corner (0,0 = the base, classic). */
 function drawRim(ctx: CanvasRenderingContext2D, theme: ZoneTheme,
-  w: number, h: number, ell: boolean): void {
+  w: number, h: number, ell: boolean, x0 = 0, y0 = 0): void {
   const r = VIS_CFG.voidFrame.rim;
   const inset = ell ? 2 : 0; // the classic ellipse stroke's -2px inset, kept
-  traceRim(ctx, w, h, ell, inset);
+  traceRim(ctx, w, h, ell, inset, x0, y0);
   ctx.strokeStyle = withAlpha(seatColorOf(theme), r.seatAlpha);
   ctx.lineWidth = r.seatWidth;
   ctx.stroke();
@@ -263,6 +301,21 @@ function drawRim(ctx: CanvasRenderingContext2D, theme: ZoneTheme,
   ctx.stroke();
 }
 
+/** Is the view rect wholly inside one ANNEX piece's silhouette? (Convex, so
+ *  the four corners are sufficient — viewInside's own law per piece.) */
+function viewInsidePiece(camX: number, camY: number, vw: number, vh: number,
+  pc: BoundsPiece): boolean {
+  if ((pc.shape ?? 'rect') !== 'ellipse') {
+    return camX >= pc.x && camY >= pc.y && camX + vw <= pc.x + pc.w && camY + vh <= pc.y + pc.h;
+  }
+  const rx = pc.w / 2, ry = pc.h / 2, cx = pc.x + rx, cy = pc.y + ry;
+  for (const [x, y] of [[camX, camY], [camX + vw, camY], [camX, camY + vh], [camX + vw, camY + vh]] as const) {
+    const dx = (x - cx) / rx, dy = (y - cy) / ry;
+    if (dx * dx + dy * dy > 1) return false;
+  }
+  return true;
+}
+
 /** The whole frame, called by drawFloor for every BOUNDED zone after the
  *  clipped ground pass (world transform live, so the frame shakes with the
  *  world). Boundless zones never get here — no edge, no frame. */
@@ -272,7 +325,8 @@ export function drawVoidFrame(ctx: CanvasRenderingContext2D, world: World,
   if (az.boundless) return;
   const theme = world.zone.theme;
   const ell = az.shape === 'ellipse';
-  // Ablated: the pre-fabric look — the plain border line, nothing else.
+  // Ablated: the pre-fabric look — the plain border line, nothing else
+  // (base silhouette only; a composite zone's forensics face is the base's).
   if (VIS_ABLATE.has('voidframe')) {
     traceRim(ctx, az.w, az.h, ell, ell ? 2 : 0);
     ctx.strokeStyle = theme.border;
@@ -280,11 +334,47 @@ export function drawVoidFrame(ctx: CanvasRenderingContext2D, world: World,
     ctx.stroke();
     return;
   }
-  // Skirt + motes only when some void is actually in view; the rim line is
-  // visible from inside the zone too (canvas clips its own overdraw).
-  if (!viewInside(camX, camY, vw, vh, az.w, az.h, ell)) {
-    drawSkirt(ctx, theme, camX, camY, vw, vh, az.w, az.h, ell);
-    drawMotes(ctx, theme, time, camX, camY, vw, vh, az.w, az.h, ell);
+  const pcs = activePieces(az);
+  if (!pcs.length) {
+    // Skirt + motes only when some void is actually in view; the rim line is
+    // visible from inside the zone too (canvas clips its own overdraw).
+    if (!viewInside(camX, camY, vw, vh, az.w, az.h, ell)) {
+      drawSkirt(ctx, theme, camX, camY, vw, vh, az.w, az.h, ell);
+      drawMotes(ctx, theme, time, camX, camY, vw, vh, az.w, az.h, ell);
+    }
+    drawRim(ctx, theme, az.w, az.h, ell);
+    return;
   }
-  drawRim(ctx, theme, az.w, az.h, ell);
+  // THE COMPOSITE FRAME: every union member wears its own rim, with the
+  // stroke CLIPPED where it runs through another member's ground — the wall
+  // line dies exactly at an open annex's mouth, so the seam READS open. The
+  // skirt stays the base piece's own (annex dress is later movements'
+  // ground) but is clipped off open annex ground; motes drift only outside
+  // the whole union.
+  const members: (BoundsPiece | null)[] = [null, ...pcs];
+  const inside = viewInside(camX, camY, vw, vh, az.w, az.h, ell)
+    || pcs.some(pc => viewInsidePiece(camX, camY, vw, vh, pc));
+  if (!inside) {
+    ctx.save();
+    for (const pc of pcs) clipOutside(ctx, az.w, az.h, ell, pc);
+    drawSkirt(ctx, theme, camX, camY, vw, vh, az.w, az.h, ell);
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(camX, camY, vw, vh);
+    ctx.clip();
+    for (const m of members) clipOutside(ctx, az.w, az.h, ell, m);
+    drawMotesCore(ctx, theme, time, camX, camY, vw, vh);
+    ctx.restore();
+  }
+  for (let i = 0; i < members.length; i++) {
+    ctx.save();
+    for (let j = 0; j < members.length; j++) {
+      if (j !== i) clipOutside(ctx, az.w, az.h, ell, members[j]);
+    }
+    const m = members[i];
+    if (!m) drawRim(ctx, theme, az.w, az.h, ell);
+    else drawRim(ctx, theme, m.w, m.h, (m.shape ?? 'rect') === 'ellipse', m.x, m.y);
+    ctx.restore();
+  }
 }

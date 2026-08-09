@@ -140,6 +140,9 @@ export interface SavedZoneMemory {
   doorState?: Record<string, 'open' | 'broken'>;
   /** Opened SECRET HOLLOWS (the hollows fabric) — revealed stays revealed. */
   hollows?: string[];
+  /** Revealed ANNEX pieces (the composite bound) — a piece the player joined
+   *  to the zone's union stays joined for the memory's life. */
+  annexOpen?: string[];
   /** WAVES zones: the assault's progress at capture (see the engine's
    *  ZoneMemory) — a resume mid-gauntlet faces wave N, not wave 1. */
   wave?: number;

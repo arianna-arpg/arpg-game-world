@@ -1187,6 +1187,14 @@ export interface ZoneDef {
   factionWar?: [string, string];
   /** Boundary silhouette; omitted = 'rect'. 'ellipse' = inscribed ellipse. */
   shape?: import('../world/shape').ZoneShape;
+  /** ANNEX pieces (THE COMPOSITE BOUND, the Secrets Charter's Movement I):
+   *  further shape pieces of this zone's playable area, DORMANT until a
+   *  reveal (World.annexReveal) joins them to the union — sealed ground is
+   *  outside the bound until then, at every authority (clamp, rim, nav,
+   *  veil, camera). Rows are pure geometry + a seed slot; Movement II mints
+   *  their interiors from the seed and authors the reveal faces. A zone
+   *  without rows walks the classic single-shape paths byte-identically. */
+  annexes?: readonly import('../world/shape').BoundsPiece[];
   /** BOUNDLESS: no outer wall — the player streams forever (the Descent abyss).
    *  clampToBounds skips the perimeter; only doodad collision stops movement, and
    *  the engine streams terrain/enemies around the player. Absent = a normal arena. */
