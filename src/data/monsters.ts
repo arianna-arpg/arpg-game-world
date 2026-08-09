@@ -5628,7 +5628,22 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('lightningRes', 'flat', 0.5)],
     skills: ['thunderclap', 'claw'],
     xp: 24,
-    brain: { type: 'flanker' },
+    // THE PACK TEMPO, stun twin (the chain-stun complaint): the clap IS
+    // this body's charge (burstSkills), so a pack acquiring together
+    // staggers its openers, at most two claps ride the same body inside a
+    // claim window, and a prey already hard-CC'd (or freshly released)
+    // reads the clap at a fifth weight — the claw carries the lull. The
+    // band shaves the point-blank clap so the orbiting kiss leans claw.
+    brain: {
+      type: 'flanker',
+      skillUse: {
+        strike: {
+          stagger: [0.3, 1.2], inFlight: 2, stunWeight: 0.2,
+          burstSkills: ['thunderclap'], claimSec: 0.9,
+        },
+        bands: { thunderclap: [{ to: 40, mul: 0.5 }, { mul: 1 }] },
+      },
+    },
     faction: 'elemental',
   },
 
@@ -5765,7 +5780,15 @@ export const MONSTERS: Record<string, MonsterDef> = {
     boons: [{ group: 'bulwark_doctrines', chance: 0.5 }],
     skills: ['shield_up', 'cleave'],
     xp: 32,
-    brain: { type: 'protector' },
+    // CAST SLACK debut (the metronome complaint): the guard used to come
+    // back the exact tick its cooldown cleared, so the open window read as
+    // clockwork. Now the re-raise waits a rolled human beat — and the
+    // cleave breathes a shorter one — so the warden's rhythm is a rhythm,
+    // not a schedule.
+    brain: {
+      type: 'protector',
+      skillUse: { slack: { shield_up: [0.7, 2.2], cleave: [0.2, 0.9] } },
+    },
     faction: 'sylvan',
   },
 
@@ -8253,14 +8276,32 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'beastkin_gorer', name: 'Beastkin Gorer',
     color: '#b07a4a', shape: 'hexagon', radius: 14, material: 'fur', look: 'beastkin_gorer',
     base: { life: 85, moveSpeed: 170, accuracy: 105, armor: 20, mana: 25, manaRegen: 4, poise: 35 },
-    skills: ['heavy_strike', 'charge'], xp: 24, faction: 'beastkin', adorn: 'horns',
+    // THE CHARGE CARRY debut (gore_charge — the charge grammar with the
+    // grab fabric's drag lever armed; data/skills.ts): the horns that
+    // CONNECT hook the catch and drag it the rest of the run. Kit-only
+    // swap — the brain's charge posture and the pack tempo's bands row
+    // (re-keyed to the new id; the curve mirrors the same ai hint) are
+    // the BRAIN's seat and ride unchanged.
+    skills: ['heavy_strike', 'gore_charge'], xp: 24, faction: 'beastkin', adorn: 'horns',
     detection: 1.2,
     // War-camp posture: beastkin packs idle in SIEGE — pickets out, any
     // watchtower crewed by their shooters before the fight finds them.
+    // THE PACK TEMPO debut (the Rhoa-pack law): a zone-entry cluster no
+    // longer arrives as one simultaneous volley of horns — the 2nd+ gorer
+    // to acquire staggers its rush, at most two charges fly at one body at
+    // once, and a prey already stunned tempers the follow-up horn. The
+    // BANDS row is the charge skill's range curve: collapsed point-blank
+    // (the standing 140 × 0.15 discount, unchanged), full through the
+    // mid-band, tapered near max reach — the long overshoot stays a
+    // MOMENT, not the habit.
     brain: {
       type: 'juggernaut', enrage: 0.5,
       move: { style: 'charge', commitRange: 320, chargeSpeed: 2.4 },
       squad: { idle: { style: 'siege' } },
+      skillUse: {
+        strike: { stagger: [0.35, 1.5], inFlight: 2, stunWeight: 0.25 },
+        bands: { gore_charge: [{ to: 140, mul: 0.15 }, { to: 300, mul: 1 }, { mul: 0.6 }] },
+      },
     },
   },
   beastkin_impaler: {

@@ -712,6 +712,30 @@ export class Actor {
   /** REACTION (BehaviorSpec.reaction): casts hold until this world time —
    *  rolled once per FRESH engagement; the feet never wait, only the blade. */
   aiReactAt = 0;
+  /** THE PACK TEMPO (SkillPolicy.strike — ai.ts): burst verbs hold until this
+   *  world time — the desync rolled when this body was the 2nd+ to freshly
+   *  acquire one prey inside the cluster window. Only the alpha strike waits;
+   *  ordinary casts and the feet never do. */
+  aiBurstHoldUntil = 0;
+  /** PACK TEMPO, prey-side ledger (written ON the body being acquired):
+   *  last fresh hostile acquisition stamp + how many landed inside the
+   *  rolling cluster window. Pure bookkeeping — only strike-dialed brains
+   *  ever read it. */
+  aiSwarmedAt = -1;
+  aiSwarmN = 0;
+  /** PACK TEMPO, prey-side: expiry times of burst verbs currently in flight
+   *  AGAINST this body (kernel charges + dash/leap casts claim dial-blind;
+   *  swept lazily on write/read — the concurrency budget counts the live
+   *  ones). */
+  aiBurstClaims?: number[];
+  /** PACK TEMPO, prey-side: when a stun-tempering reader last SAW this body
+   *  hard-CC'd — the "freshly un-stunned" grace reads off it (an observer
+   *  stamp, not a status hook; -1 = never seen). */
+  aiStunSeenAt = -1;
+  /** CAST SLACK (SkillPolicy.slack): per-skill eligible-at world times,
+   *  rolled at the first pick that sees the skill off cooldown, cleared on
+   *  cast. Lazily allocated — absent for every undialed brain. */
+  aiSlackUntil?: Map<string, number>;
   /** ELBOW ROOM (BehaviorSpec.spacing): this tick's kin-repulsion radius,
    *  stamped by updateAI while closing on a target (undefined = none). */
   aiSpacing?: number;

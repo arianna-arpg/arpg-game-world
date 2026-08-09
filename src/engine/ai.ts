@@ -26,7 +26,7 @@ import {
   alertScale, ARCHETYPES, BEHAVIOR_CFG, BEHAVIOR_STATS, castRemaining, evalCondition, FLOCK_CFG, mergeTuning,
   normalizeBrain, POST_CFG, registerAICondition, tuningOf,
   type AICtx, type BehaviorSpec, type BrainDef, type BrainTuning, type CommandState,
-  type MoveSpec, type NormalizedBrain, type PhaseCadence, type SkillPolicy,
+  type MoveSpec, type NormalizedBrain, type PackStrikeSpec, type PhaseCadence, type SkillPolicy,
 } from './brain';
 import { erraticTurn, weaveVel } from './flight';
 import { PACK_CFG, nerveFromLife, nerveFromOdds, nerveFromProximity, packDriveOf } from './pack';
@@ -38,7 +38,7 @@ import { isThrongBody, throngHeelOffset } from './throng';
 import { runAIActions } from './aiActions';
 import { nearestBody, segsHittable } from './segments';
 import { LOS_CFG } from './los';
-import { socketSpec, type SkillInstance } from './skills';
+import { socketSpec, type SkillDef, type SkillInstance } from './skills';
 import { TIER_CFG } from './tiers';
 import type { World } from './world';
 import { PATH_CFG } from '../world/regions';
@@ -1690,6 +1690,22 @@ function acquireTarget(
         // sighting and the first cast — the feet close, the blade waits.
         const react = tuning.behavior?.reaction;
         if (react) actor.aiReactAt = world.time + rand(react[0], react[1]);
+        // THE PACK TEMPO (SkillPolicy.strike): stamp the prey's cluster
+        // ledger — fresh engagements landing within packTempo.clusterWin of
+        // the last read as ONE acquisition wave (the zone-entry moment).
+        // The stamp is dial-blind bookkeeping; only a strike-dialed 2nd+
+        // acquirer rolls its burst-verb stagger off it, so the first body
+        // keeps its clean opening and the pack spreads out behind it
+        // instead of arriving as one simultaneous volley.
+        if (target.aiSwarmedAt >= 0
+          && world.time - target.aiSwarmedAt <= BEHAVIOR_CFG.packTempo.clusterWin) {
+          target.aiSwarmN++;
+        } else target.aiSwarmN = 1;
+        target.aiSwarmedAt = world.time;
+        const stag = tuning.skillUse?.strike?.stagger;
+        if (stag && target.aiSwarmN >= 2) {
+          actor.aiBurstHoldUntil = world.time + rand(stag[0], stag[1]);
+        }
       }
       // Dim brains roll how long this lock can HOLD their attention — a
       // worn FICKLE window (StatusDef.fickleSpan) folds in, shortest wins.
@@ -1747,6 +1763,64 @@ function acquireTarget(
 
 // === SKILL POLICY ===============================================================
 
+// --- THE PACK TEMPO (SkillPolicy.strike — the alpha-strike discipline) ---------
+// The Rhoa-pack law as pick-time SELECTION, never combat math: a zone-entry
+// cluster desyncs its burst verbs (the stagger roll at the fresh-engagement
+// stamp), the prey's in-flight ledger caps simultaneous charges (the budget),
+// and a hard-CC'd prey tempers further stun-capable casts (a weight, never a
+// refusal). Everything below is inert without a def's dial: no rand consumed,
+// no eligibility moved — absent == identical by construction.
+
+/** Structural burst/stun classification per skill def, cached (the registry
+ *  is static within a run; probes hot-swap DEFS, never mutate one in place,
+ *  so a WeakMap keyed on the object stays honest). BURST = a
+ *  movement-committed strike (delivery named in packTempo.deliveries);
+ *  STUN-CAPABLE = any effect row applying a configured stun status. */
+const TEMPO_KINDS = new WeakMap<SkillDef, { burst: boolean; stun: boolean }>();
+
+function tempoKindOf(def: SkillDef): { burst: boolean; stun: boolean } {
+  let k = TEMPO_KINDS.get(def);
+  if (!k) {
+    const cfg = BEHAVIOR_CFG.packTempo;
+    k = {
+      burst: cfg.deliveries.includes(def.delivery.type),
+      stun: def.effects.some(e =>
+        e.type === 'status' && cfg.stunStatuses.includes(e.status)),
+    };
+    TEMPO_KINDS.set(def, k);
+  }
+  return k;
+}
+
+/** Is this skill a BURST verb for this wearer — structural (dash/leap), or
+ *  named by the wearer's own strike.burstSkills (the gale's clap is its
+ *  charge)? */
+function burstKindOf(def: SkillDef, strike?: PackStrikeSpec): boolean {
+  return tempoKindOf(def).burst || !!strike?.burstSkills?.includes(def.id);
+}
+
+/** Live burst claims against a prey (expired entries swept in place, order
+ *  free — the ledger is a count, never a queue). Exported for the probe. */
+export function burstClaimsLive(prey: Actor, now: number): number {
+  const claims = prey.aiBurstClaims;
+  if (!claims?.length) return 0;
+  let n = 0;
+  for (let i = claims.length - 1; i >= 0; i--) {
+    if (claims[i] <= now) { claims[i] = claims[claims.length - 1]; claims.pop(); }
+    else n++;
+  }
+  return n;
+}
+
+/** Stamp one burst verb in flight against a prey. DIAL-BLIND at every launch
+ *  site (kernel charges, dash/leap casts) so a budget wearer respects the
+ *  whole pack's pressure — and swept before each push, so an unread ledger
+ *  can never grow past the moment's truth. */
+export function claimBurst(prey: Actor, now: number, sec?: number): void {
+  burstClaimsLive(prey, now);
+  (prey.aiBurstClaims ??= []).push(now + (sec ?? BEHAVIOR_CFG.packTempo.claimSec));
+}
+
 /** Weighted / priority / rotation pick among usable skills (in range, off
  *  cooldown, affordable), honoring openers, combos, reserves, and the
  *  commander's support range. */
@@ -1779,6 +1853,31 @@ function pickSkill(
   let fire: boolean | undefined;
   const fireLine = (): boolean =>
     fire ??= !target || world.lineOfFire(actor.pos, target.pos, actor.tier);
+  // THE PACK TEMPO + CAST SLACK eligibility (mode-blind, like range and
+  // cooldown — an ordered kit still respects the prey's budget; every lane
+  // is time-bounded so no kit can deadlock): a desync-held body's BURST
+  // verbs wait out aiBurstHoldUntil; a prey at its in-flight cap parks
+  // further burst verbs while the claims live; a slack-dialed skill rolls
+  // its hold at the first pick that sees it ready (cleared on cast — the
+  // next readiness rolls fresh). Undialed brains touch none of it: the
+  // hold reads time < 0, the cap is absent, the slack map never allocates.
+  const strike = policy.strike;
+  const burstHeld = world.time < actor.aiBurstHoldUntil;
+  const budgetFull = strike?.inFlight !== undefined && target !== undefined
+    && burstClaimsLive(target, world.time) >= strike.inFlight;
+  const tempoGate = (s: SkillInstance): boolean => {
+    if ((burstHeld || budgetFull) && burstKindOf(s.def, strike)) return false;
+    const win = policy.slack?.[s.def.id];
+    if (win) {
+      let until = actor.aiSlackUntil?.get(s.def.id);
+      if (until === undefined) {
+        until = world.time + rand(win[0], win[1]);
+        (actor.aiSlackUntil ??= new Map()).set(s.def.id, until);
+      }
+      if (world.time < until) return false;
+    }
+    return true;
+  };
   // pressUsable, not raw canUse: a convert-held press is judged as the
   // face it would cast — an empty magazine still gets pressed (the press
   // IS the reload, and the standing-there-racking window is the player's
@@ -1791,7 +1890,8 @@ function pickSkill(
       || !!socketSpec(s, 'guardCast'))
     && world.pressUsable(actor, s) && best <= rangeOf(s)
     && !(s.def.delivery.type === 'aura' && actor.activeAuras.has(s.def.id))
-    && (!world.aiNeedsFireLine(actor, s) || fireLine()));
+    && (!world.aiNeedsFireLine(actor, s) || fireLine())
+    && tempoGate(s));
   if (!usable.length) return null;
   // OPENER: the first cast of a fresh engagement, when it reaches.
   if (policy.opener && (!actor.aiLastSkill || actor.aiLastSkill.at < actor.aiEngagedAt)) {
@@ -1823,19 +1923,47 @@ function pickSkill(
     }
     return null;
   }
+  // STUN TEMPERING (strike.stunWeight): while the prey is hard-CC'd — or
+  // freshly out of it, read off the observer stamp aiStunSeenAt + the grace
+  // window — stun-CAPABLE casts weigh × stunWeight. A temper, never a ban:
+  // the chain gets RARE, the simultaneous moment stays possible. The stamp
+  // is a lazy observer write (refreshed each weighted pick that sees the
+  // CC), so the grace clock starts within a pick beat of the release.
+  let stunMul = 1;
+  if (strike?.stunWeight !== undefined && target) {
+    if (target.isStunned()) target.aiStunSeenAt = world.time;
+    const grace = strike.stunGraceSec ?? BEHAVIOR_CFG.packTempo.stunGraceSec;
+    if (target.aiStunSeenAt >= 0 && world.time - target.aiStunSeenAt <= grace) {
+      stunMul = strike.stunWeight;
+    }
+  }
   // WEIGHTED (the default): each skill's declared ai.weight — read through
   // CHARGE DISCIPLINE's near discount: inside an authored ai.minRange the
   // weight collapses (× nearWeight ?? BEHAVIOR_CFG.nearDiscount) so a
   // shove-dash stops being the standard point-blank tactic while never
   // being refused — the floor above zero keeps the walk sound and lets a
-  // discounted skill that is the ONLY usable one still fire. The authored
-  // modes (priority / rotation / openers / reserves) stay sovereign: an
-  // ordered kit is a deliberate script, not a habit to temper.
+  // discounted skill that is the ONLY usable one still fire. RANGE BANDS
+  // (SkillPolicy.bands) are that discount grown into a CURVE: a named
+  // skill's ascending rows pick one multiplier by distance (low near,
+  // peaking mid-band, tapering far — the overshoot as an authored choice)
+  // and REPLACE the minRange step; past the last bounded row with no open
+  // row, the last row carries. The authored modes (priority / rotation /
+  // openers / reserves) stay sovereign: an ordered kit is a deliberate
+  // script, not a habit to temper.
   const weightOf = (s: SkillInstance): number => {
     const ai = s.def.ai!;
-    return ai.minRange !== undefined && best < ai.minRange
-      ? ai.weight * Math.max(0.01, ai.nearWeight ?? BEHAVIOR_CFG.nearDiscount)
-      : ai.weight;
+    const rows = policy.bands?.[s.def.id];
+    let mul = 1;
+    if (rows) {
+      mul = rows[rows.length - 1]?.mul ?? 1;
+      for (const r of rows) {
+        if (r.to === undefined || best <= r.to) { mul = r.mul; break; }
+      }
+    } else if (ai.minRange !== undefined && best < ai.minRange) {
+      mul = ai.nearWeight ?? BEHAVIOR_CFG.nearDiscount;
+    }
+    if (stunMul !== 1 && tempoKindOf(s.def).stun) mul *= stunMul;
+    return mul === 1 ? ai.weight : ai.weight * Math.max(0.01, mul);
   };
   let totalWeight = 0;
   for (const s of usable) totalWeight += weightOf(s);
@@ -1852,7 +1980,14 @@ function useOn(
 ): void {
   // Resolved tuning never carries a null axis (mergeTuning clears it), but a
   // RAW layer can — coalesce for the aim path's plain-optional signature.
-  world.useSkill(actor, inst, aimPointFor(actor, inst, target, tuning?.behavior ?? undefined));
+  const cast = world.useSkill(actor, inst, aimPointFor(actor, inst, target, tuning?.behavior ?? undefined));
+  // THE PACK TEMPO: a LANDED burst verb claims the prey's in-flight ledger
+  // (dial-blind — refusals never claim), and any cast clears its own slack
+  // hold so the next readiness rolls a fresh window.
+  if (cast && burstKindOf(inst.def, tuning?.skillUse?.strike)) {
+    claimBurst(target, world.time, tuning?.skillUse?.strike?.claimSec);
+  }
+  actor.aiSlackUntil?.delete(inst.def.id);
   const cad = tuning?.skillUse?.cadence ?? [0.15, 0.4];
   actor.aiCooldown = rand(cad[0], cad[1]);
   actor.aiLastSkill = { id: inst.def.id, at: world.time };
@@ -2735,6 +2870,9 @@ function makeCtx(
           const hw = f.hold ?? BEHAVIOR_CFG.feintHold;
           actor.aiFeintAt = world.time + rand(hw[0], hw[1]);
           actor.aiCooldown = rand(0.08, 0.2); // the real blow follows fast
+          // A feinted press still spends the slack hold (the bar began for
+          // real); the bluff never claims the burst ledger — nothing flew.
+          actor.aiSlackUntil?.delete(inst.def.id);
         }
         return;
       }
@@ -3148,6 +3286,20 @@ function chargeKernel(ctx: KernelCtx): void {
   if (a.aiPhase === 'charge_balk' && d > floor) a.aiPhase = '';
   // A tempo-paused beast doesn't LAUNCH (dt 0 = its feet are planted).
   if (dt > 0 && d <= commit && d > desired * 1.2) {
+    // THE PACK TEMPO: a desync-held body (clustered fresh acquisition) or a
+    // prey already at its in-flight budget PARKS the rush — the beast closes
+    // on foot, squared up, the kit above still swinging. Both gates are
+    // time-bounded (the hold expires, claims expire), so the charge always
+    // returns; an undialed body reads time < 0 and no cap — the old
+    // conduct, byte-identical.
+    const strike = ctx.tuning.skillUse?.strike;
+    if (world.time < a.aiBurstHoldUntil
+      || (strike?.inFlight !== undefined
+        && burstClaimsLive(target, world.time) >= strike.inFlight)) {
+      a.facing = angleTo(a.pos, target.pos);
+      if (d > desired) moveToward(a, world, ctx.goal, dt);
+      return;
+    }
     if (d <= floor) {
       // Point-blank the rush is the EXCEPTION, never the standard tactic —
       // a committed shove from melee range mostly just propels the prey
@@ -3171,6 +3323,9 @@ function chargeKernel(ctx: KernelCtx): void {
       speed,
       remaining: Math.min(1.2, (d + 70) / Math.max(1, speed)),
     };
+    // The launch claims the prey's in-flight ledger (dial-blind — budget
+    // wearers respect kernel rushes from the whole pack, dialed or not).
+    claimBurst(target, world.time, ctx.tuning.skillUse?.strike?.claimSec);
     const cd = spec.chargeCooldown ?? [2.5, 4.5];
     a.aiPhase = 'charge_recover';
     a.aiTimer = rand(cd[0], cd[1]);

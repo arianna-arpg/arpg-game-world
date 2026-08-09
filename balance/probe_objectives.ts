@@ -1569,11 +1569,38 @@ withSeededRandom(0x0bec7a, () => {
       .find(o => o?.kind === 'procession');
     check('X7 the Spearhead deed still authors the sealed procession (the data the rig rides)',
       spear?.kind === 'procession' && spear.seal === true);
-    const zid = mintWith(JSON.parse(JSON.stringify(spear)) as ObjectiveSpec, 343434, 56);
     // Holdfast toll gates are their own law (isExitLocked's lock branch) —
     // the seal rig speaks only for POLICY exits.
     const liveExits = (): ZoneExit[] =>
       (w.exits as ZoneExit[]).filter(e => !w.zone.exits[e.defIndex]?.lock);
+    // THE GROUND BUILDER (2026-08-08): the gauntlet needs MULTI-ROAD ground,
+    // but a frontier draw's road count rides the whole session's accumulated
+    // web and re-deals under any upstream data change (the one-road draws in
+    // the X13 staging note; again when the packTempo wearers moved the
+    // stream — by X-time the home neighborhood's road budgets saturate and
+    // every nearby cell weaves exactly its entry road). So BUILD the ground
+    // instead of hunting it: mint the gauntlet, then hang two plain
+    // neighbors off it with linkBack (the RIG B placeZoneAt idiom) — the
+    // reciprocal road onto the anchor is that lane's own contract, so the
+    // roads the law rigs need exist by construction.
+    const zid = mintWith(JSON.parse(JSON.stringify(spear)) as ObjectiveSpec, 343434, 56);
+    {
+      const gdef = w.zoneMap[zid] as ZoneDef;
+      const cells = [{ x: gdef.map.x + 1, y: gdef.map.y }, { x: gdef.map.x, y: gdef.map.y + 1 }];
+      for (let i = 0; i < cells.length; i++) {
+        const nd = placeZoneAt(cells[i], gdef, w.zoneMap, (w.nextGenId as number)++, {
+          tileset: 'grassland', level: 3, seed: 343440 + i, linkBack: true,
+        } as any);
+        (w.zoneMap as Record<string, ZoneDef>)[nd.id] = nd;
+      }
+      // Re-stage the gauntlet fresh (the X13 tail): forget the scouted
+      // memory and walk in again — the column re-stages, the seal re-arms,
+      // and the reload reads the def's grown road set.
+      gdef.objective = JSON.parse(JSON.stringify(spear)) as ObjectiveSpec;
+      (w.zoneMemory as Map<string, unknown>).delete(zid);
+      (w.completedObjectives as Set<string>).delete(zid);
+      w.loadZone(zid);
+    }
     const exits = liveExits();
     check('X8 the gauntlet stands on real ground (several policy roads to test)',
       exits.length > 1, `${exits.length} exits, zone ${zid}`);

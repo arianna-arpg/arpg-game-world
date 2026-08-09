@@ -454,6 +454,24 @@ export const BEHAVIOR_CFG = {
    *  override per def, chargeFloor: 0 restores the old point-blank launch. */
   nearDiscount: 0.15,
   chargeNear: { floor: 130, chance: 0.15, rollSec: 1.4 },
+  /** THE PACK TEMPO (alpha-strike discipline, PackStrikeSpec): the SHARED
+   *  shapes every wearer's dials read through — the def arms each lane by
+   *  field presence; these are never a default ON. `clusterWin` is the
+   *  fresh-acquisition window (secs) within which engagements of one prey
+   *  read as a CLUSTER (the zone-entry moment — the 2nd+ acquirer staggers);
+   *  `deliveries` names the structural BURST verbs (movement-committed
+   *  strikes; wearers extend per-def via burstSkills); `claimSec` is the
+   *  default in-flight claim lifetime the concurrency budget counts;
+   *  `stunStatuses` names the applications that read as stun-CAPABLE on a
+   *  skill's effect rows; `stunGraceSec` is how long a prey reads as
+   *  "freshly un-stunned" after its last observed hard-CC. */
+  packTempo: {
+    clusterWin: 1.5,
+    deliveries: ['dash', 'leap'] as string[],
+    claimSec: 1.1,
+    stunStatuses: ['stun'] as string[],
+    stunGraceSec: 1.2,
+  },
 };
 
 /** The behavior knobs that read THROUGH the actor's stat sheet at their read
@@ -611,6 +629,57 @@ export interface MoraleSpec {
 
 // --- SKILL POLICY ----------------------------------------------------------------
 
+/** THE PACK TEMPO (the alpha-strike discipline, PackStrikeSpec) — the Rhoa-pack
+ *  law: a cluster acquired at zone entry must not DELETE a body with one
+ *  simultaneous volley of charges and stuns. Three separable lanes, each armed
+ *  only by its field's PRESENCE (absent = today's conduct, byte-identical), all
+ *  pure AI SELECTION — combat math is never touched:
+ *  - `stagger` desyncs the consideration clocks: the 2nd+ body to freshly
+ *    acquire the same prey inside BEHAVIOR_CFG.packTempo.clusterWin rolls this
+ *    window (secs) before its BURST verbs become eligible (ordinary casts and
+ *    the feet never wait — only the alpha strike).
+ *  - `inFlight` is the CONCURRENCY BUDGET keyed on the PREY: at most this many
+ *    burst verbs airborne against one body at once (claims live `claimSec`,
+ *    default cfg.claimSec; kernel charges and dash/leap casts both claim,
+ *    dial-blind, so a wearer respects the WHOLE pack's pressure).
+ *  - `stunWeight` tempers the chain: while the prey is hard-CC'd or freshly
+ *    out of it (`stunGraceSec`, default cfg.stunGraceSec), stun-capable casts
+ *    weigh × this in the pick — diminished, NEVER refused (simultaneous drama
+ *    stays possible, just rare).
+ *  A BURST verb is structural (delivery in cfg.deliveries — dash/leap) plus
+ *  whatever `burstSkills` names for this wearer (the gale's clap is its
+ *  charge). */
+export interface PackStrikeSpec {
+  /** Desync roll (secs, rolled) for the 2nd+ clustered fresh acquirer. */
+  stagger?: [number, number];
+  /** Max burst verbs in flight against one prey (the budget). */
+  inFlight?: number;
+  /** In-flight claim lifetime override (secs; default cfg.claimSec). */
+  claimSec?: number;
+  /** Stun-capable pick-weight multiplier while the prey is hard-CC'd or
+   *  freshly released (kept above zero — a temper, never a ban). */
+  stunWeight?: number;
+  /** How long "freshly un-stunned" lasts (secs; default cfg.stunGraceSec). */
+  stunGraceSec?: number;
+  /** Extra skill ids counted as burst verbs for THIS wearer, beyond the
+   *  structural dash/leap read. */
+  burstSkills?: string[];
+}
+
+/** One row of a RANGE-BAND weight curve (SkillPolicy.bands): up to `to` px the
+ *  skill's pick weight multiplies by `mul`; rows ascend, and the open row (no
+ *  `to`) covers the rest. The generalization of the ai-hint minRange discount
+ *  from a step to a curve — low near, peaking mid-band, tapering far — so the
+ *  overshoot stays an authored CHOICE (sometimes wanted, sometimes a worse
+ *  position) instead of a constant. A curve that names a skill REPLACES that
+ *  skill's minRange/nearWeight read; absent = the legacy step, byte-identical. */
+export interface RangeBandRow {
+  /** Band upper edge (px, inclusive); omit for the open row. */
+  to?: number;
+  /** Pick-weight multiplier inside the band (floored at 0.01 in the fold). */
+  mul: number;
+}
+
 /** WHEN to cast what. The default stays v1's weighted roll over usable skills
  *  (each skill's `ai.weight`); the other modes give kits a spine. */
 export interface SkillPolicy {
@@ -636,6 +705,20 @@ export interface SkillPolicy {
    *  Flawless! empower the player earns), otherwise it fumbles outside —
    *  a sniper you can hear practicing. Absent = never presses (a plain cast). */
   finesse?: { chance: number };
+  /** THE PACK TEMPO (alpha-strike discipline) — see PackStrikeSpec. */
+  strike?: PackStrikeSpec;
+  /** RANGE-BAND weight curves by skill id — see RangeBandRow. A named skill's
+   *  curve replaces its hint's minRange step; unnamed skills keep the legacy
+   *  read. Weighted mode only (ordered kits stay sovereign, the near-discount
+   *  precedent). */
+  bands?: Record<string, RangeBandRow[]>;
+  /** CAST SLACK by skill id: a rolled hold (secs) between a skill coming OFF
+   *  cooldown and the AI treating it as castable again — the warden re-raises
+   *  its guard on a human clock, not a metronome. Rolled once per readiness
+   *  (at the first pick that sees the skill ready), cleared on cast; reserves
+   *  and player presses never wait. Absent = eligible the tick it's ready,
+   *  byte-identical. */
+  slack?: Record<string, [number, number]>;
 }
 
 // --- SQUADS ----------------------------------------------------------------------
