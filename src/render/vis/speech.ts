@@ -19,6 +19,11 @@
 //             opts that speaker out, and a later rung's typing object opts
 //             back in. Settings.speechTyping is the player's master switch,
 //             read by the renderer above the whole fold.
+//   NAME    — '{name}' in world-authored talk is the HERO'S ADDRESS, expanded
+//             at the display seam only (resolveNameTokens, invoked beside the
+//             '{bind:…}' expansion in Renderer.resolveText — one token
+//             grammar); a missing name degrades to an honest word, never a
+//             raw brace.
 // ---------------------------------------------------------------------------
 
 /** The typewriter's own dials (VIS_CFG.speech.typing is the shipped base). */
@@ -145,4 +150,21 @@ export function revealBudget(text: string,
     }
   }
   return acc;
+}
+
+/** THE NAME TOKEN — text that addresses the hero never bakes the name in.
+ *  A world-authored line carries plain '{name}' and only the surface that
+ *  DISPLAYS it expands the token, at draw time, against the LIVE hero
+ *  (Renderer.resolveText invokes this beside the '{bind:…}' expansion — one
+ *  token grammar, one seam) — so a renamed hero re-addresses every line the
+ *  same frame, and world code needs no import to participate. A missing or
+ *  blank name degrades to an honest address — 'Traveller', standing in the
+ *  name's own position — never a raw brace and never 'undefined'. (Announce
+ *  templates whose '{name}' means a CHAMPION substitute at their own push
+ *  sites — worldboss/breach/grudge lines — and by standing law never reach
+ *  the display seam raw, so the hero owns the token there.) */
+const NAME_TOKEN_RE = /\{name\}/g;
+export function resolveNameTokens(text: string, name?: string): string {
+  if (!text.includes('{name}')) return text;
+  return text.replace(NAME_TOKEN_RE, name?.trim() || 'Traveller');
 }

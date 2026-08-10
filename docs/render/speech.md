@@ -101,4 +101,8 @@ telling with the world. A caret blinks on the arriving glyph.
 Per-speaker utterance clocks live in one renderer map, registered with THE
 CACHE STEWARD (`id: 'speech'`) and dropped at every zone boundary; silent
 speakers prune the same frame. Bind tokens (`{bind:…}`) resolve at queue
-time through the same `resolveText` chokepoint as labels.
+time through the same `resolveText` chokepoint as labels, and so does the
+hero's address: `{name}` in any world-authored line expands to the live
+hero's name at that seam (`resolveNameTokens`, this module — a blank name
+degrades to 'Traveller', never a raw brace), so prompts address the player
+with no import anywhere in world code.

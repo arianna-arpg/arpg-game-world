@@ -25,7 +25,7 @@
 //   npx tsx balance/probe_speech.ts
 
 import {
-  resolveSpeech, revealedChars, revealBudget, wrapSpeech,
+  resolveSpeech, revealedChars, revealBudget, wrapSpeech, resolveNameTokens,
   type SpeechTuning,
 } from '../src/render/vis/speech';
 import {
@@ -196,6 +196,45 @@ console.log('E. SHIPPED DIALS (VIS_CFG.speech + the live longest line)');
   const budget = revealBudget(longest, c.typing);
   check('E7 the longest live line tells inside a patient breath (1s..12s)',
     budget > 1 && budget < 12, `${budget.toFixed(2)}s`);
+}
+
+// --- F. THE NAME TOKEN ------------------------------------------------------
+console.log('F. THE NAME TOKEN (resolveNameTokens — the hero\'s address at the display seam)');
+{
+  check('F1 the token expands to the hero\'s name',
+    resolveNameTokens('Linger, {name} — I have work for you…', 'Maro')
+      === 'Linger, Maro — I have work for you…');
+  check('F2 every occurrence expands in one pass',
+    resolveNameTokens('{name}, {name}!', 'Maro') === 'Maro, Maro!');
+  check('F3 a missing name degrades to the honest address, never a brace',
+    resolveNameTokens('Linger, {name}.', undefined) === 'Linger, Traveller.'
+    && resolveNameTokens('{name}', '') === 'Traveller');
+  check('F4 a whitespace-only name degrades the same way',
+    resolveNameTokens('{name}', '   ') === 'Traveller');
+  check('F5 token-free text passes through byte-identical',
+    resolveNameTokens('No work for you yet, traveller.', 'Maro')
+      === 'No work for you yet, traveller.');
+  check('F6 only {name} is claimed — other braces stay legible',
+    resolveNameTokens('{namex} {bind:panelInv} {name}less', 'Maro')
+      === '{namex} {bind:panelInv} Maroless');
+  // A name LENGTHENS lines — every live name-bearing prompt must still wrap
+  // whole at the shipped width with a LONG name standing in (the wrap-law
+  // duty of the seasoning; mirrors of the world.ts innkeep/questGiver lines,
+  // the way every probe mirrors content).
+  const seasoned = [
+    '{name}, is it? Come here — I keep flasks for new faces.',
+    'Linger, {name} — I have work for you…',
+    'Linger — a CALLING awaits you, {name}.',
+  ];
+  const longName = 'Aleximandrastra the Unbowed';
+  const proxy = (s: string): number => s.length * 6.2;
+  for (const [i, line] of seasoned.entries()) {
+    const shown = resolveNameTokens(line, longName);
+    const lines = wrapSpeech(shown, VIS_CFG.speech.maxWidth, proxy);
+    check(`F7.${i} a seasoned line wraps whole under a long name`,
+      lines.every(l => proxy(l) <= VIS_CFG.speech.maxWidth || !l.includes(' '))
+      && lines.join(' ') === shown, `${lines.length} lines`);
+  }
 }
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} passed, ${fail} failed`);

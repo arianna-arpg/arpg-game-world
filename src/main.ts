@@ -334,6 +334,11 @@ ui.disarmPadCapture = () => pad.disarmCapture();
 const padActiveNow = (): boolean => pad.activeRecently(performance.now() / 1000);
 renderer.getPadActive = padActiveNow;
 ui.getPadActive = padActiveNow;
+// THE HERO'S ADDRESS: '{name}' tokens in world-authored talk resolve against
+// the live hero at the same display seam as '{bind:…}' (Renderer.resolveText
+// → resolveNameTokens) — the closure reads the CURRENT world, so a new run's
+// hero re-addresses every line the moment it seats.
+renderer.getPlayerName = () => world.meta.name;
 
 let running = false;
 let deathShown = false;

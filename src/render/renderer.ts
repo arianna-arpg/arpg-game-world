@@ -71,7 +71,7 @@ import { portraitSubjectOf, portraitTile, type PortraitSubject } from './vis/por
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { drawRuneRing } from './vis/runeRing';
 import { registerVisCache, trimVisCaches } from './vis/caches';
-import { resolveSpeech, revealedChars, wrapSpeech, type SpeechStyle } from './vis/speech';
+import { resolveSpeech, revealedChars, wrapSpeech, resolveNameTokens, type SpeechStyle } from './vis/speech';
 import { drawEdgeOverlay, qFrac, qChan } from './vis/overlays';
 import { canvasCap, canvasCapsReport } from './vis/canvasCaps';
 import { GroundRenderer } from './vis/ground';
@@ -262,6 +262,12 @@ export class Renderer {
    *  slot labels read, so every hint follows the device of the moment. */
   getPadActive?: () => boolean;
 
+  /** Wired by main.ts (same altitude as getSettings): the LIVE hero's name,
+   *  read by resolveText to expand '{name}' address tokens in world-authored
+   *  talk (resolveNameTokens, vis/speech.ts) — so a renamed hero, or a fresh
+   *  run's, re-addresses every line the same frame. */
+  getPlayerName?: () => string;
+
   /** Live keybind label for one action — every HUD hint that names a key
    *  goes through this, so hints can never drift from a rebind (the retired
    *  Skill Book key taught that lesson). */
@@ -269,14 +275,18 @@ export class Renderer {
     return keyDisplay(this.getSettings?.().keybinds[id] ?? DEFAULT_KEYBINDS[id]);
   }
 
-  /** Resolve '{bind:…}' tokens in display text against the LIVE binds —
-   *  keyboard, or the pad map while the controller is active (see
-   *  meta/settings.ts resolveBindTokens). The queueLabel and floating-text
-   *  chokepoints run every world-authored prompt through this, so no hint
-   *  can name a key the player rebound away or a device they put down. */
+  /** Resolve display tokens in world-authored text: '{bind:…}' against the
+   *  LIVE binds — keyboard, or the pad map while the controller is active
+   *  (meta/settings.ts resolveBindTokens) — and '{name}' against the LIVE
+   *  hero (vis/speech.ts resolveNameTokens). The queueLabel, queueSpeech and
+   *  floating-text chokepoints run every world-authored prompt through this,
+   *  so no hint can name a key the player rebound away or a device they put
+   *  down, and an NPC line can address the hero with no import anywhere:
+   *  the token is plain text; only this display seam expands it. */
   private resolveText(text: string): string {
     const s = this.getSettings?.();
-    return s ? resolveBindTokens(text, s, this.getPadActive?.() ?? false) : text;
+    const bound = s ? resolveBindTokens(text, s, this.getPadActive?.() ?? false) : text;
+    return resolveNameTokens(bound, this.getPlayerName?.());
   }
 
   /** Bar-slot labels, derived from the live binds: the pad map (RT/LT/Ⓐ…)

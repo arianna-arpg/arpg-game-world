@@ -20874,7 +20874,12 @@ export class World {
    *  npcRole 'innkeep' gets the prompt, no renderer edit. */
   innkeepPrompt(): string | null {
     if (!this.nearMireille()) return null;
-    if (this.mireilleGiftOwed()) return 'Come here, dear — I keep flasks for new faces.';
+    // ('{name}' resolves at the DISPLAY surface against the live hero —
+    // resolveNameTokens, render/vis/speech.ts, invoked beside the bind
+    // expansion in Renderer.resolveText — so her greeting addresses the
+    // player with no import here: the token is plain text; only the
+    // display seam expands it. An innkeep hears every new name first.)
+    if (this.mireilleGiftOwed()) return '{name}, is it? Come here — I keep flasks for new faces.';
     // The handed gift TEACHES: she names the player's own next move in the
     // one loop every skill gem follows — and the line clears the moment
     // they make it. An in-universe tutorial: no popup, no forced hand.
@@ -23803,12 +23808,16 @@ export class World {
       && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('questgiver')));
   }
 
-  /** Prompt text above a nearby quest giver, or null. */
+  /** Prompt text above a nearby quest giver, or null. ('{name}' resolves at
+   *  the DISPLAY surface against the live hero — resolveNameTokens, invoked
+   *  beside the bind expansion in Renderer.resolveText — no import here; the
+   *  'traveller' line stays a common noun on purpose: work is offered by
+   *  name, and its absence to whoever wandered up.) */
   questGiverPrompt(): string | null {
     if (!this.nearAnyQuestGiver()) return null;
     if (this.pendingTurnIns().length) return 'Linger — a bounty is yours to claim.';
-    if (this.nextAcceptableQuest()) return 'Linger, and I have work for you…';
-    if (this.vocationChoiceOffers().length) return 'Linger — a CALLING awaits you.';
+    if (this.nextAcceptableQuest()) return 'Linger, {name} — I have work for you…';
+    if (this.vocationChoiceOffers().length) return 'Linger — a CALLING awaits you, {name}.';
     if (this.activeQuests.length) return 'Your hunts await out in the wilds.';
     return 'No work for you yet, traveller.';
   }
