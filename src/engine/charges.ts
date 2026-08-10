@@ -74,6 +74,16 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
     decay: { perSec: 1, delay: 6 },
   },
 
+  // MAGMA (Magma Ward): made blocks bank molten beads behind the shield —
+  // riposte's fire-tempered sibling. Mute fuel by design (damagePerCharge
+  // is the payoff; the vent refuses below its minimum). No decay landed:
+  // the standing keeps-until-vented economy is unchanged — a cooling fade
+  // (riposte's law) is Arianna's call, as is the tint (currently the
+  // ward's own identity hue).
+  magma: {
+    label: 'Magma', color: '#e06a30',
+  },
+
   // RAGE (Berserk): every charge quickens and hardens the swing — flat
   // attack damage AND speed per charge, cooling fast once the hitting
   // stops. Fed by Berserk's melee blows and by rage remnants; capacity is
