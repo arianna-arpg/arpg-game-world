@@ -15,8 +15,9 @@ import {
 } from '../engine/stats';
 import { SHEET_VITALS, sheetTabs, statBlurbOf } from '../data/sheet';
 import { resistValue } from '../engine/damage';
+import { chargeLabel } from '../engine/charges';
 import {
-  crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, SKILL_RARITIES, skillCooldownSeconds, skillMaxLevel,
+  crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, instanceChargeCost, SKILL_RARITIES, skillCooldownSeconds, skillMaxLevel,
   supportFitsInst, supportFitsInstOrCrew, supportMaxLevel,
   type SkillDef, type SkillInstance, type SupportInstance,
 } from '../engine/skills';
@@ -1126,16 +1127,53 @@ export class UI {
     </div>`;
   }
 
+  /** Compact charge-price clause for the meta line, read from the LIVE
+   *  resolver — a socketed SPENDER graft (Ravening / Embargo) wins over the
+   *  skill's innate cost, so this names the economy the press will actually
+   *  pay, which the authored prose can't know. Labels come from the charge
+   *  registry, and the gate math mirrors the engine's: `optional` waives the
+   *  bank check entirely, a flat amount spends what it says (minimum printed
+   *  only when it demands MORE than the spend), amount 0 is a pure gate
+   *  (Bloodlust needs its bank but the drain burns it), and 'all' drains
+   *  the bank (minimum printed once it gates past the implicit 1). */
+  private chargeCostText(inst: SkillInstance): string {
+    const cc = instanceChargeCost(inst);
+    if (!cc) return '';
+    const label = chargeLabel(cc.charge);
+    let s: string;
+    if (cc.amount === 'all') {
+      s = `spends all ${label}`;
+      const min = cc.minimum ?? 1;
+      if (!cc.optional && min > 1) s += ` (min ${min})`;
+    } else if (cc.amount > 0) {
+      s = `spends ${cc.amount} ${label}`;
+      const min = cc.minimum ?? 0;
+      if (!cc.optional && min > cc.amount) s += ` (needs ${min})`;
+    } else {
+      const min = cc.minimum ?? 0;
+      if (cc.optional || min <= 0) return '';
+      s = `needs ${min} ${label}`;
+    }
+    if (cc.optional) s += ' (optional)';
+    const riders: string[] = [];
+    if (cc.damagePerCharge) riders.push(`+${Math.round(cc.damagePerCharge * 100)}% damage`);
+    if (cc.projectilesPerCharge) riders.push(`+${cc.projectilesPerCharge} projectile${cc.projectilesPerCharge > 1 ? 's' : ''}`);
+    if (cc.repeatsPerCharge) riders.push(`+${cc.repeatsPerCharge} repeat${cc.repeatsPerCharge > 1 ? 's' : ''}`);
+    if (riders.length) s += `, ${riders.join(', ')} per charge`;
+    return s;
+  }
+
   private skillTooltip(id: string, extended = false): TooltipContent | null {
     const seat = this.panelSeat(this.inventory);
     const inst = seat.meta.knownSkills.get(id);
     if (!inst) return null;
     const d = inst.def;
     const preview = previewSkill(seat.actor, inst);
+    const charge = this.chargeCostText(inst);
     return {
       title: `${d.name} — Lv ${inst.level}`,
       description: d.description + this.previewRowsHtml(preview.rows, extended),
-      meta: d.tags.join(' · '),
+      meta: d.tags.join(' · ') + (charge ? ` · ${charge}` : ''),
       wide: extended && preview.hasDetail,
     };
   }
