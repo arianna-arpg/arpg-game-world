@@ -3186,12 +3186,23 @@ export class Actor {
     // costs (Archmage: ceil(pct × max)) join the BASE, so the multiplier
     // and lane conversion below apply to everything uniformly.
     const cs = inst.def.costScaling;
+    // THE POOL-PRICING LEVER (costScaling.pricedFrom — 2026-08-10, the
+    // user's call): the pct-MAX lanes bill the RAW maxima BY DEFAULT, and
+    // the asymmetry with lifePctCur's current-life read below is chosen,
+    // not an oversight. Reserve half your mana and an Archmage price
+    // still charges the whole wellspring — reservation makes %-cost
+    // skills MORE limiting, and that bite is the point. 'available'
+    // opts a cost into the reservation-aware twins (availableMaxMana /
+    // lifeCeiling) so its price follows the spendable band instead.
+    const availPriced = cs?.pricedFrom === 'available';
     const baseMana = inst.def.manaCost
       + this.sheet.get('addedManaCost', tags, extra)
-      + (cs?.manaPctMax ? this.maxMana() * cs.manaPctMax : 0);
+      + (cs?.manaPctMax
+        ? (availPriced ? this.availableMaxMana() : this.maxMana()) * cs.manaPctMax : 0);
     const baseLife = (inst.def.lifeCost ?? 0)
       + this.sheet.get('addedLifeCost', tags, extra)
-      + (cs?.lifePctMax ? this.maxLife() * cs.lifePctMax : 0)
+      + (cs?.lifePctMax
+        ? (availPriced ? this.lifeCeiling() : this.maxLife()) * cs.lifePctMax : 0)
       // The marrow price (Bonespray): a cut of CURRENT life — cheap when
       // bleeding out, dear at full blood (floored so it always costs).
       + (cs?.lifePctCur ? Math.max(1, this.life * cs.lifePctCur) : 0);
@@ -3427,6 +3438,25 @@ export class Actor {
     return true;
   }
 
+  /** THE BANKED RELEASE (GatherConvertSpec.releaseOnCooldown — 2026-08-10,
+   *  the user's call): does this press RELEASE a standing gather bank? True
+   *  only when a socketed gather conversion authors the admission, the host
+   *  truly converts (the useSkill gather block's own terms — castMode is
+   *  pure def-side, so an admitted press can only re-enter the conversion,
+   *  never fall through to a plain cast around the clock), and the
+   *  persistent brim already holds at least the fizzle floor. Such a press
+   *  pierces the host's running cooldown: the bank was paid before the
+   *  clock, so the clock gates NEW banking, never the spend — a thin or
+   *  empty bank never opens the lane. */
+  private gatherReleasable(inst: SkillInstance): boolean {
+    const g = socketSpec(inst, 'gather');
+    if (!g?.releaseOnCooldown) return false;
+    const def = inst.def;
+    if ((def.castMode ?? 'cast') !== 'cast' || def.concentration || def.useTime < 0.3) return false;
+    const fill = this.brims?.get(def.id)?.fill ?? 0;
+    return fill >= (g.minRelease ?? 0.15);
+  }
+
   canUse(inst: SkillInstance): boolean {
     if (this.tagsForbidden(inst)) return false;
     // HOLD COMBOS: a held cast (guard / channel / charge / overcharge) is
@@ -3456,7 +3486,11 @@ export class Actor {
         if (this.dead || this.useLock > 0 || this.isStunned()) return false;
       } else if (!this.canAct()) return false;
     }
-    if (this.cooldowns.has(inst.def.id)) return false;
+    // A running cooldown refuses the press — EXCEPT the banked-release
+    // lane: a gather conversion authored releaseOnCooldown fires its
+    // already-paid bank through the clock (gatherReleasable holds the
+    // whole law; a fresh or thin-bank press while cooling stays refused).
+    if (this.cooldowns.has(inst.def.id) && !this.gatherReleasable(inst)) return false;
     // Guard-locked skills (Transgression) demand a raised stance.
     if (inst.def.requiresGuard && this.casting?.mode !== 'guard') return false;
     // Toggling an active aura OFF must always be possible, even at 0 mana —

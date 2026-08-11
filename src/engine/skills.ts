@@ -2800,6 +2800,15 @@ export interface GatherConvertSpec {
   decay?: number;
   /** Releases under this fill fizzle without spending (default 0.15). */
   minRelease?: number;
+  /** THE BANKED RELEASE (2026-08-10, the user's call): a press that
+   *  RELEASES a standing bank — fill at/past the fizzle floor — is
+   *  admitted THROUGH the host skill's running cooldown. The bank was
+   *  paid before the clock, so the clock gates NEW banking, never the
+   *  spend: a thin-bank press while cooling stays refused (that press
+   *  could only bank fresh). Omit for the refusing shape — the whole
+   *  gather waits the cooldown out (Actor.gatherReleasable is the one
+   *  predicate). */
+  releaseOnCooldown?: boolean;
   /** Payload power at empty / full (default 0.25 / 1). */
   minScale?: number;
   maxScale?: number;
@@ -3801,8 +3810,19 @@ export interface SkillDef {
    *  BEFORE the manaCost multiplier and lane conversion — the Archmage cost
    *  shape that makes pool-STACKING a damage axis (with costDamage stats).
    *  `lifePctCur` bills a fraction of CURRENT life instead (Bonespray's
-   *  marrow price: cheap when bleeding out, dear at full blood). */
-  costScaling?: { manaPctMax?: number; lifePctMax?: number; lifePctCur?: number };
+   *  marrow price: cheap when bleeding out, dear at full blood).
+   *  THE POOL-PRICING LEVER (2026-08-10, the user's call): `pricedFrom`
+   *  picks the ceiling the two pct-MAX lanes read — 'max' (the default)
+   *  bills the RAW maximum, so reserving half the pool never cheapens the
+   *  price and a %-cost skill grows MORE limiting under reservation (the
+   *  bite is deliberate); 'available' bills the spendable band instead
+   *  (availableMaxMana / lifeCeiling — the price follows what reservation
+   *  and overdrive debt leave open). lifePctCur reads CURRENT life either
+   *  way. */
+  costScaling?: {
+    manaPctMax?: number; lifePctMax?: number; lifePctCur?: number;
+    pricedFrom?: 'max' | 'available';
+  };
   /** USE-CHARGES: the skill banks `max` uses (+ the skillCharges stat) and
    *  spends one per press — spammable down to empty, then a dry spell.
    *  THREE recovery lanes, chosen by the data (composable, but pick one):

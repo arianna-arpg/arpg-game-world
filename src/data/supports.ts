@@ -949,9 +949,11 @@ export const SUPPORTS: Record<string, SupportDef> = {
     description: 'This skill becomes a GATHER: hold to bank its cast time into a bar that keeps'
       + ' between holds, then release the whole spell on your own schedule at a power matching'
       + ' the fill. The bank runs to half again the normal cast, mana is paid as you pour, and'
-      + ' haste fills it faster. Channels, instants and quick flicks refuse the conversion.',
+      + ' haste fills it faster. Channels, instants and quick flicks refuse the conversion.'
+      + ' A banked spell may be loosed even while the skill\'s cooldown turns; fresh banking'
+      + ' waits out the clock.',
     color: '#c8b8e8', excludeTags: ['channel', 'guard', 'instant', 'movement', 'aura', 'overcharge'],
-    gather: { premium: 1.5, minRelease: 0.15 },
+    gather: { premium: 1.5, minRelease: 0.15, releaseOnCooldown: true },
     mods: [],
     perLevel: [mod('brimFill', 'increased', 0.04)],
     weight: 4, minDropLevel: 12,
