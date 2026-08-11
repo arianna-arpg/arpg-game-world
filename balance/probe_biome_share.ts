@@ -9,6 +9,8 @@
 
 import { biomeAt, OCEAN_BIOME } from '../src/world/biomes';
 import { installCapitalPole } from '../src/world/civics';
+import { setClimateOrigin } from '../src/world/climate';
+import { START_ZONE, ZONES } from '../src/data/zones';
 
 const argv = process.argv.slice(2);
 const num = (flag: string, dflt: number): number => {
@@ -27,17 +29,24 @@ const EXTENT = BANDS[BANDS.length - 1][1];
 const perBand = BANDS.map(() => new Map<string, number>());
 const landPerBand = BANDS.map(() => 0);
 
+// The town's canonical map coord — the bands measure distance from HERE, and
+// every sample is offset by it, so the probe reads the ground live mints read.
+const HOME = ZONES[START_ZONE].map;
+
 for (let s = 0; s < SEEDS; s++) {
   const seed = (0x9e3779b9 ^ (s * 0x85ebca6b)) >>> 0;
   // The live field carries a capital pole (world/civics.ts — sim installs it
-  // at boot); the share read must measure the same world the mints see.
+  // at boot); the share read must measure the same world the mints see, in
+  // the LIVE ORDER (world/sim.ts boot: setClimateOrigin THEN the pole — the
+  // pole is home-relative, and home is the town's coord, not (0,0)).
+  setClimateOrigin(HOME);
   installCapitalPole(seed);
   for (let x = -EXTENT; x <= EXTENT; x += STEP) {
     for (let y = -EXTENT; y <= EXTENT; y += STEP) {
       const r = Math.hypot(x, y);
       const band = BANDS.findIndex(([a, b]) => r >= a && r < b);
       if (band < 0) continue;
-      const b = biomeAt({ x, y }, seed);
+      const b = biomeAt({ x: HOME.x + x, y: HOME.y + y }, seed);
       if (b === OCEAN_BIOME) continue;
       landPerBand[band]++;
       perBand[band].set(b, (perBand[band].get(b) ?? 0) + 1);
