@@ -327,6 +327,12 @@ export const LIVE_PROBE_SUPPORT_STATS: ReadonlySet<string> = new Set([
   'fireRes', 'coldRes', 'lightningRes', 'chaosRes',
 ]);
 
+/** The area-GEOMETRY stat family — payloads that reshape a drawn area
+ *  (size/form/spin/scatter). ONE list serves the live routing row below
+ *  AND the woundless-area blindness rule (BLINDNESS_RULES), so the two
+ *  can never disagree about what counts as geometry. */
+export const AREA_GEOMETRY_STATS = ['aoeRadius', 'aoeShape', 'aoeSpin', 'aoeScatter'];
+
 /** KILL-SCOPED & MULTI-BODY payload rules (2026-07-21 backlog triage): the
  *  immortal dummy never dies and sits centered in every shape, so payloads
  *  that fire on KILLS (kill-trigger procs, on-kill charge taps, orb/remnant
@@ -364,8 +370,7 @@ export const LIVE_PROBE_SUPPORT_RULES: {
   },
   {
     why: 'area-geometry payload (radius/shape/spin/scatter) reads at area EDGES and across bodies — the centered dummy sits inside every shape',
-    when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
-      ['aoeRadius', 'aoeShape', 'aoeSpin', 'aoeScatter'].includes(m.stat)),
+    when: sup => supModsStat(sup, AREA_GEOMETRY_STATS),
   },
   {
     why: 'knockback payload moves bodies — displacement only matters against bodies that can be displaced and re-hit',
@@ -499,6 +504,17 @@ export const PROBE_POLICIES: {
     name: 'small_chance',
     when: sup => supModsStat(sup, ['critChance', 'critMulti', 'luckyChance', 'dotCrit']),
     seeds: 5, durationMult: 3,
+  },
+  {
+    // THE CHANCE-GATED APPLY RIDERS (2026-08-10, the stale-ledger pass): a
+    // 25-40% on-hit application is a coin flip per press on a LOW-CADENCE
+    // host — a 16s-cooldown verdict rolls it once an episode, and two seeds
+    // of misses mint a false INERT (judgement × sunbaked_edge read inert at
+    // standard length, EFFECTIVE at 8 seeds). Same law as small_chance:
+    // give the window ROLLS.
+    name: 'chance_apply',
+    when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m => m.stat.startsWith('apply_')),
+    seeds: 5, durationMult: 2,
   },
 ];
 export function probePolicyFor(sup: SupportDef | undefined): (typeof PROBE_POLICIES)[number] | undefined {
@@ -834,6 +850,54 @@ export function costFunctionSupport(sup: SupportDef): boolean {
     if ((sup as unknown as Record<string, unknown>)[k] !== undefined) return false;
   }
   return true;
+}
+
+/** THE HARD PILOT REFUSALS — def-static cast (or payoff) verbs no standard
+ *  probe pilot performs: held charges, sustained channels, raised guards,
+ *  unmet gates, unbanked famine charges, status-gated touches, and
+ *  construct fields whose payoff waits on a META press. Mirrored off
+ *  muteWhy's HARD arms (the census-why ladder below — keep the two in
+ *  step); the soft arms (melee whiff bands, target validity, curse
+ *  exploiters) stay OUT, because those hosts may yet express. Shape-blind
+ *  by construction — swapping the fielded bodies never grows the pilot a
+ *  verb — which is exactly the claim the host-expression screen's
+ *  bare-shape guard (probePair) is forbidden to make across a support-
+ *  decorated rig. Delete arms as pilots learn the verbs. */
+export function pilotRefusalOf(def: SkillDef): string | null {
+  if (def.gate) return 'gate';
+  if (def.castMode === 'channel' || def.channel) return 'channel';
+  if (def.castMode === 'charge') return 'charge-hold';
+  if (def.castMode === 'guard' || def.requiresGuard) return 'guard';
+  const cc = def.chargeCost;
+  if (cc && !cc.optional && !(def.chargeGain ?? []).some(cg =>
+    cg.charge === cc.charge && (cg.on === 'second' || cg.on === 'use'))) return 'charge-famine';
+  const reqs = (def.delivery as { requiresStatus?: string[] }).requiresStatus
+    ?? (typeof def.targeting?.requiresStatus === 'string'
+      ? [def.targeting.requiresStatus] : def.targeting?.requiresStatus);
+  if (reqs?.length) return 'gated-touch';
+  if (def.meta !== undefined && def.delivery.type === 'construct') return 'meta-detonate';
+  return null;
+}
+
+/** Does the def carry ANY foldable area surface — a radius-named numeric
+ *  field anywhere under delivery/effects (ground/nova radii, aura radii,
+ *  domeRadius, healBurst radii, effect zone/burst radii, splash)? These
+ *  are the surfaces the aoeRadius fold multiplies at cast (world.ts's
+ *  delivery + fx read-sites), so a def WITH one genuinely widens in real
+ *  play even where the rig cannot show it — and a def WITHOUT one has
+ *  nothing for an area gem to serve at all (that pairing is a ledger
+ *  matter, never a blindness). Generic walk on purpose: a new
+ *  radius-named surface joins without a compat edit. */
+export function hasFoldableRadiusSurface(def: SkillDef): boolean {
+  const walk = (o: unknown): boolean => {
+    if (o === null || typeof o !== 'object') return false;
+    for (const [k, v] of Object.entries(o as Record<string, unknown>)) {
+      if (typeof v === 'number' && /radius|splash/i.test(k) && v > 0) return true;
+      if (walk(v)) return true;
+    }
+    return false;
+  };
+  return walk({ delivery: def.delivery, effects: def.effects });
 }
 
 export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: SupportDef) => boolean }[] = [
@@ -1197,6 +1261,56 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     note: 'companion gem: a cadence bends beats something else must MINT — no innate pulse/cascade on this host and no beat gem beside it in a single-gem probe',
     when: (def, sup) => sup.cadence !== undefined
       && !(def.delivery.type === 'ground' && (def.delivery.pulse !== undefined || def.delivery.cascade !== undefined)),
+  },
+  // ---- THE DECORATED-SHAPE MUTE CLASSES (2026-08-10, the stale-ledger
+  // pass): the host-expression screen (probePair) claims a mute host only
+  // at its censused BARE shape — a support payload that decorates the rig
+  // (area-geometry live routing & kin) honestly breaks that claim, while
+  // the refusal itself is DEF-STATIC and rides every shape. These rows are
+  // the hand-rule lane the screen's own comment reserves; each dissolves
+  // when a pilot learns its verb.
+  {
+    note: 'pilot-refused cast (charge-hold/channel/guard/gate/charge-famine/gated-touch/meta-detonate) — no standard pilot lands the press (or the payoff verb) on ANY rig shape, so every gem reads unmeasured on this host',
+    when: (def, _sup) => pilotRefusalOf(def) !== null,
+  },
+  {
+    note: "the cast's whole produce is a LIGHTWELL — no fingerprint channel reads wells, so a gem's contribution to the pour is invisible at every shape",
+    when: (def, _sup) => (def.effects ?? []).some(e => e.type === 'kindle'),
+  },
+  {
+    // The woundless-area geometry class: buff novas, blessing grounds,
+    // auras, curse rings, domes. The widened rim FOLDS in real play
+    // (hasFoldableRadiusSurface — the same surfaces world.ts multiplies),
+    // but the fingerprint can only carry a membership flip through a
+    // wound, and the rig's bodies engage at close stations inside every
+    // candidate ring while the damage rider finds no damaging effect of
+    // the host's to scale. A def with NO foldable surface stays OUT — that
+    // pairing is genuinely unserved (tag breadth), a ledger matter.
+    note: "area-size payload on a WOUNDLESS area (buff novas, blessing grounds, auras, curse rings, domes): the widened rim folds in real play, but membership flips reach the fingerprint only through wounds — the rig's bodies engage inside every candidate ring, and the damage rider finds no damaging effect of the host's to scale",
+    when: (def, sup) => supModsStat(sup, AREA_GEOMETRY_STATS)
+      && hasFoldableRadiusSurface(def)
+      && !(def.effects ?? []).some(e => e.type === 'damage'),
+  },
+  {
+    // Cloudborne's blink/leap half: the DASH lane measures the same stat
+    // live (trail along the travel — the caster stands in their own
+    // windlane), so this row guards only the departure-point conjures.
+    note: 'departure-point cloud (cloudTrail on a blink/leap host) stands where the caster LEFT — allies, void bridges and backtracking are its whole function, and the solo forward-facing probe never re-treads it (the dash lane measures the same stat live)',
+    when: (def, sup) => supModsStat(sup, ['cloudTrail'])
+      && (def.delivery.type === 'blink' || def.delivery.type === 'leap'),
+  },
+  {
+    // The generalized sibling of the pour-lane row above: the census
+    // admits every rider onto an unknowable crew by benefit-of-the-doubt
+    // (corpse-raised kin board anything), so an inert reading says only
+    // that the probe's FED corpses raised no body that pressed the rider
+    // where it could diverge. Host-fitting pairs stay measured — this row
+    // guards the crew-only lane.
+    note: 'crew-boarded rider on an UNKNOWABLE (corpse-raised) crew — what the raise fields, and what the fielded body presses, is decided by the fed corpse rather than the probe: an inert reading is unmeasured, never evidence',
+    when: (def, sup) => def.delivery.type === 'summon'
+      && summonCrewOf(def.delivery, id => MONSTERS[id], id => SKILLS[id]) === 'unknowable'
+      && supportRidesMinions(sup)
+      && !supportFitsInst(sup, makeSkillInstance(def, 1, 3)),
   },
 ];
 
