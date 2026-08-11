@@ -5109,6 +5109,22 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
       if (d.type !== 'projectile') return true;
       return !d.rehit && !d.noImpact;
     }
+    if (param === 'mints') {
+      // THE MINTED FLIGHT ('flight:mints', 2026-08-10 — the path-payload
+      // gate): the cast MINTS REAL FLIGHTS for its riders to board — its
+      // own delivery flies (spawnProjectile is the family's one
+      // read-site), or a construct's fired payload flies wearing the
+      // host's forwarded gems (the sub-cast board). A storm's strikes
+      // are sky-fall impacts, never flights — the trail family
+      // (Detonating Passage, the wakes) refuses them honestly instead
+      // of riding inert; teaching storms to mint boarded flights is the
+      // promotion path, and this arm grows the day it lands. Summon
+      // hosts fit through their crew (the mechanism hop runs this same
+      // predicate per crew skill).
+      const d = inst.def.delivery as { type?: string; castSkillId?: string };
+      return d.type === 'projectile'
+        || (d.type === 'construct' && d.castSkillId !== undefined);
+    }
     return true; // unknown params pass open (the registry is the authority)
   },
   /** A DISPLACING host — the cast bodily moves the caster (dash/blink/

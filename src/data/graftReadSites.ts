@@ -147,12 +147,11 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
   {
     kind: 'graft', key: 'trail',
     deliveries: ['projectile', 'construct'],
-    site: 'spawnProjectile (flights + construct sub-casts via the sub-cast board; storm-spawned shots still unread — arrowfall flagged)',
-    inertOk: [
-      { support: 'detonating_passage', why: `arrowfall alone: storm-spawned shots never pass spawnProjectile's trail read — the hole the site note flags; promotion tracked there`, since: '2026-07-28' },
-      { support: 'scorched_wake', why: `arrowfall alone — the same storm-spawned-shot hole the site note flags`, since: '2026-07-28' },
-      { support: 'sloughing_wake', why: `arrowfall alone — the same storm-spawned-shot hole the site note flags`, since: '2026-07-28' },
-    ],
+    // (the trail gems carry no inertOk anymore: the 'flight:mints'
+    //  mechanism gate — requiresMechanisms, the golden rule — refuses
+    //  flightless hosts STRUCTURALLY at the census. arrowfall's storm
+    //  was the whole breadth; 2026-08-10.)
+    site: 'spawnProjectile (flights + construct sub-casts via the sub-cast board; storms never mint boarded flights — the flight:mints gate refuses them)',
   },
   {
     kind: 'graft', key: 'fissureTrail',

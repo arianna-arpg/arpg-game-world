@@ -10392,8 +10392,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'reavers_sweep', name: "Reaver's Sweep",
     description: 'One committed side-to-side pass: a crescent blade at arm\'s length crosses'
       + ' your whole front, cutting whatever it passes exactly once, with a 25% chance to'
-      + ' Bleed. The near ground at your boots goes untouched; keep them at blade\'s reach.'
-      + ' Socket Return Stroke to teach it the way back.',
+      + ' Bleed. The near ground at your boots goes untouched; keep them at blade\'s reach.',
     tags: ['attack', 'melee', 'physical', 'aoe', 'duration', 'sweep'], color: '#b06ad8',
     manaCost: 10, cooldown: 2, useTime: 0.6,
     baseDamage: { physical: [10, 15] },

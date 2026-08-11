@@ -3686,6 +3686,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
       + ' travel, each dealing 35% of the skill\'s damage. Steer the shot in a curve and the'
       + ' blasts follow that arc.',
     color: '#f0b060', requiresTags: ['projectile'],
+    requiresMechanisms: ['flight:mints'],
     mods: [],
     trail: { every: 80, blast: { radius: 55, damageScale: 0.35 } },
     weight: 5,
@@ -3696,6 +3697,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     description: 'Burning ground is laid every stretch of the projectile\'s flight, each patch'
       + ' lasting 2.5 seconds and ticking for 30% of the skill\'s damage every 0.4 seconds.',
     color: '#e88a4a', requiresTags: ['projectile'],
+    requiresMechanisms: ['flight:mints'],
     mods: [],
     trail: { every: 90, zone: { radius: 40, duration: 2.5, tickInterval: 0.4, damageScale: 0.3 } },
     weight: 5,
@@ -3709,6 +3711,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
       + ' long when slow and down to half as long when fast. Lob something ponderous to write a'
       + ' moat; a decelerating shot ages its trail young to old.',
     color: '#9ab84a', requiresTags: ['projectile'],
+    requiresMechanisms: ['flight:mints'],
     mods: [],
     trail: {
       every: 74,
