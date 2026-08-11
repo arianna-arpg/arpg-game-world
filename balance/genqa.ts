@@ -777,27 +777,49 @@ for (const ts of Object.values(TILESETS)) {
 }
 
 // --- 3. Every registered layout generator -----------------------------------
-// A representative liquid-y def; layoutParams sampled from the first biome
-// that rolls the layout (riverland gets its freezeAt, spiral its lava).
+// A representative liquid-y def, swept under EVERY parameterization the
+// biome registry authors for the layout: one `layout:id@biome` case per
+// DISTINCT layoutParams object among the biomes that roll it (dedupe by
+// sorted-key stringify, so biomes sharing identical dials — and biomes with
+// none — never multiply cases) plus one `layout:id:bare` case with no params
+// at all (the generator's own defaults; also where the param-less biomes
+// land). A generator that only breaks under one biome's dials — a riverland
+// without its freezeAt, a spiral without its lava, a deep-country overgrowth
+// band — now fails NAMED instead of shipping unswept, and the bare lane
+// keeps no-param callers (sidezones, hand-authored defs) honest.
+const layoutParamsKey = (v: unknown): string => JSON.stringify(v, (_k, val) =>
+  val && typeof val === 'object' && !Array.isArray(val)
+    ? Object.fromEntries(Object.keys(val as object).sort().map(k => [k, (val as Record<string, unknown>)[k]]))
+    : val);
 for (const id of layoutIds()) {
   // 'field' shapes itself to a World-side heat-map region (fieldifyZone
   // overrides the footprint; def.field carries the blob) — no headless def
   // is representative. It is exercised through the real world web instead.
   if (id === 'field') continue;
-  const biome = Object.values(BIOMES).find(b => b.allowedLayouts && id in b.allowedLayouts);
-  runCase(`layout:${id}`, {
-    id: `qa_layout_${id}`, name: `QA ${id}`, level: 8,
-    size: { w: 2400, h: 1800 },
-    theme: { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' },
-    layout: [
-      { kind: 'rocks', count: [4, 7] }, { kind: 'trees', count: [5, 8] },
-      { kind: 'water', count: [1, 2] }, { kind: 'grass', count: [3, 5] },
-    ],
-    layoutType: id,
-    ...(biome?.layoutParams ? { layoutParams: biome.layoutParams } : {}),
-    objective: { kind: 'clear' },
-    exits: [], map: { x: 0, y: 0 },
-  });
+  const layoutSweepCase = (label: string, defId: string, params?: Record<string, unknown>): void => {
+    runCase(label, {
+      id: defId, name: `QA ${id}`, level: 8,
+      size: { w: 2400, h: 1800 },
+      theme: { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' },
+      layout: [
+        { kind: 'rocks', count: [4, 7] }, { kind: 'trees', count: [5, 8] },
+        { kind: 'water', count: [1, 2] }, { kind: 'grass', count: [3, 5] },
+      ],
+      layoutType: id,
+      ...(params ? { layoutParams: params } : {}),
+      objective: { kind: 'clear' },
+      exits: [], map: { x: 0, y: 0 },
+    });
+  };
+  layoutSweepCase(`layout:${id}:bare`, `qa_layout_${id}`);
+  const seenParams = new Set<string>();
+  for (const [biomeId, b] of Object.entries(BIOMES)) {
+    if (!b.allowedLayouts || !(id in b.allowedLayouts) || !b.layoutParams) continue;
+    const key = layoutParamsKey(b.layoutParams);
+    if (seenParams.has(key)) continue;
+    seenParams.add(key);
+    layoutSweepCase(`layout:${id}@${biomeId}`, `qa_layout_${id}_${biomeId}`, b.layoutParams);
+  }
 }
 
 // --- 3b. Interior layouts at CAVE scale ---------------------------------------
