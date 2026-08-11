@@ -78,7 +78,19 @@ export async function diskGet<T>(slot: SaveSlot): Promise<T | null> {
 /** Write a save slot to disk (fire-and-forget; localStorage already holds it). */
 export function diskPut(slot: SaveSlot, body: string): void {
   if (saveRefused(`disk slot ${slot}`)) return; // the stand-down's structural backstop
-  fetch(`/__save/${slot}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
+  void diskPutRaw(slot, body);
+}
+
+/** AWAITED, latch-FREE disk write — the save-import lane's primitive
+ *  (meta/portage.ts): import stands the ordinary writers down FIRST
+ *  (suppressSaves, so a mid-import autosave can't clobber the incoming
+ *  slots), then lands the imported bodies through this — and the caller
+ *  awaits every write before reloading, else the disk-first loader would
+ *  resurrect the pre-import state from a POST the reload dropped. Nothing
+ *  else should route here: the stand-down latch exists for a reason. */
+export function diskPutRaw(slot: SaveSlot, body: string): Promise<void> {
+  return fetch(`/__save/${slot}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
+    .then(() => undefined)
     .catch(() => { /* endpoint absent — localStorage is the fallback */ });
 }
 
@@ -181,3 +193,7 @@ export function saveSettings(s: Settings): void {
   try { window.localStorage.setItem(SETTINGS_KEY, body); } catch { /* ignore */ }
   diskPut(SETTINGS_SLOT, body);
 }
+
+// SAVE PORTAGE (meta/portage.ts) reads/writes the slots by their real keys —
+// exported HERE so the constants keep one home and portage re-types nothing.
+export { KEY as ACCOUNT_KEY, SETTINGS_KEY, ACCOUNT_SLOT, SETTINGS_SLOT };

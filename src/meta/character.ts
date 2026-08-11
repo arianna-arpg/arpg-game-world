@@ -33,7 +33,7 @@ import type { Account } from './account';
 
 export const CHAR_SCHEMA_VERSION = 1;
 const CHAR_KEY = 'arpg_character_v1';
-const CHAR_SLOT = 1; // disk save slot (saves/save_1.json)
+export const CHAR_SLOT = 1; // disk save slot (saves/save_1.json; exported for meta/portage.ts)
 
 interface SavedSocket {
   supportId: string; level: number;
@@ -426,8 +426,8 @@ export async function loadCharacterAsync(): Promise<CharacterSave | null> {
 }
 
 /** The localStorage mirror key for a character slot (the shared run slot keeps
- *  its historical key; roster slots suffix theirs). */
-const charKeyFor = (slot: number): string => slot === CHAR_SLOT ? CHAR_KEY : `${CHAR_KEY}_s${slot}`;
+ *  its historical key; roster slots suffix theirs). Exported for meta/portage.ts. */
+export const charKeyFor = (slot: number): string => slot === CHAR_SLOT ? CHAR_KEY : `${CHAR_KEY}_s${slot}`;
 
 /** The disk slot this world's character persists to. Roster-saved modes
  *  (Immortal vessels) write their OWN account slot, looked up by charId;

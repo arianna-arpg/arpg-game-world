@@ -91,6 +91,10 @@ import {
 import { PAD_CFG, padDisplay, AIM_ASSIST_MODES, connectedPadIndices } from '../core/gamepad';
 import { wipeRosterSlot, type CharacterSave } from '../meta/character';
 import {
+  applySaveImport, buildSaveEnvelope, planSaveImport, saveEnvelopeName,
+  type SaveImportPlan,
+} from '../meta/portage';
+import {
   availableModes, DEFAULT_MODE_ID, modeById, rosterCapacity, rosterOf, stageOf,
   type RosterEntry,
 } from '../meta/modes';
@@ -379,6 +383,11 @@ export class UI {
   /** The Options menu's active tab (the character sheet's book-tab idiom —
    *  the panel long outgrew "Customize Keybinds"). */
   private optionsTab: 'controls' | 'controller' | 'interface' | 'visuals' = 'controls';
+  /** SAVE PORTAGE (options → Interface, meta/portage.ts): the transient
+   *  status line and the validated import awaiting its overwrite confirm.
+   *  Session-local by design — an abandoned confirm simply lapses. */
+  private savePortNote: string | null = null;
+  private savePortPending: SaveImportPlan | null = null;
   /** THE VAULT SHELVES (meta/unlocks.ts VAULT_TABS — the store's organization
    *  as data): the active shelf, plus each shelf's remembered scroll — the
    *  store keeps your place per aisle across purchases, flips, and re-opens.
@@ -6502,6 +6511,21 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         <span>Swap Sticks (southpaw)</span>
         <button id="opt-swapsticks">${s.pad.swapSticks ? 'ON' : 'OFF'}</button>
       </div>`;
+    // SAVE PORTAGE (meta/portage.ts): the Interface tab's Save Data section.
+    // Export is one click; import renders its overwrite confirm IN PLACE once
+    // a picked file has validated whole (a refusal shows on the note line and
+    // writes nothing).
+    const sp = this.savePortPending;
+    const savePortImportRow = sp ? `
+      <div class="rebind-row">
+        <span>File holds ${sp.summary.characters === 1 ? '1 hero' : `${sp.summary.characters} heroes`}, account level ${sp.summary.accountLevel}${sp.summary.exportedAt ? `, exported ${new Date(sp.summary.exportedAt).toLocaleDateString()}` : ''}</span>
+        <span><button id="opt-saveport-confirm" title="No way back: the moment this is pressed, everything on this device is replaced by the file's contents and the game restarts into them.">OVERWRITE &amp; RESTART</button>
+        <button id="opt-saveport-cancel" style="margin-left:5px">CANCEL</button></span>
+      </div>` : `
+      <div class="rebind-row">
+        <span>Import Saves</span>
+        <button id="opt-importsave" title="Pick a Hollow Wake save file to restore. The file is checked whole before anything is touched — a malformed or mismatched file is refused outright and changes nothing. Nothing merges: importing replaces this device's account, characters, and settings with the file's, then restarts the game.">CHOOSE FILE…</button>
+      </div>`;
     const interfaceTabHead = `
       <div class="rebind-row">
         <span>UI Scale</span>
@@ -6599,7 +6623,16 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <span class="pad-opt"><input type="range" id="opt-pickupsec" min="${PICKUP_FEED_CFG.secMin * 10}" max="${PICKUP_FEED_CFG.secMax * 10}" step="5"
           value="${Math.round(s.pickupFeedSec * 10)}"
           title="How long each pickup row stands before it fades (a repeat grab refreshes its row's clock)."> <b id="val-pickupsec">${s.pickupFeedSec.toFixed(1)}s</b></span>
-      </div>`;
+      </div>
+      <h1>Save Data</h1>
+      <div class="acct-head">Your progress as one portable file: account, settings, and every character.
+        Importing replaces what stands on this device, whole, then restarts the game.</div>
+      ${this.savePortNote ? `<div class="acct-head" style="color:var(--gold)">${esc(this.savePortNote)}</div>` : ''}
+      <div class="rebind-row">
+        <span>Export Saves</span>
+        <button id="opt-exportsave" title="Bundles the last-saved state of everything — account, settings, the Continue character, and every roster vessel — into one .json file named for the day and who's inside. The file holds what a relaunch would load, so quit to menu (or let the autosave land) if you want this exact moment in it.">DOWNLOAD</button>
+      </div>
+      ${savePortImportRow}`;
     const visualsTab = `
       <div class="rebind-row">
         <span>Line-of-Sight Shade</span>
@@ -6749,6 +6782,57 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       const st = this.getSettings();
       st.poolBars = st.poolBars === 'smart' ? 'recent' : st.poolBars === 'recent' ? 'always' : 'smart';
       this.saveSettings();
+      this.renderOptions(root, onBack);
+    });
+    // SAVE PORTAGE (meta/portage.ts): export downloads the whole save set as
+    // one envelope; import validates a picked file WHOLE (a refusal lands on
+    // the note line, nothing written) then holds for the overwrite confirm —
+    // apply stands the ordinary savers down, awaits every disk write, and
+    // restarts into the imported state.
+    root.querySelector<HTMLElement>('#opt-exportsave')?.addEventListener('click', () => {
+      void buildSaveEnvelope().then(env => {
+        const name = saveEnvelopeName(env);
+        const url = URL.createObjectURL(new Blob([JSON.stringify(env)], { type: 'application/json' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        this.savePortNote = `Exported ${name}`;
+        this.renderOptions(root, onBack);
+      }).catch((e: unknown) => {
+        this.savePortNote = `Export failed: ${String(e)}`;
+        this.renderOptions(root, onBack);
+      });
+    });
+    root.querySelector<HTMLElement>('#opt-importsave')?.addEventListener('click', () => {
+      const picker = document.createElement('input');
+      picker.type = 'file';
+      picker.accept = '.json,application/json';
+      picker.addEventListener('change', () => {
+        const file = picker.files?.[0];
+        if (!file) return;
+        void file.text().then(text => {
+          const verdict = planSaveImport(text);
+          if (verdict.ok) { this.savePortPending = verdict.plan; this.savePortNote = null; }
+          else { this.savePortPending = null; this.savePortNote = verdict.why; }
+          this.renderOptions(root, onBack);
+        }).catch(() => {
+          this.savePortPending = null;
+          this.savePortNote = 'Could not read that file.';
+          this.renderOptions(root, onBack);
+        });
+      });
+      picker.click();
+    });
+    root.querySelector<HTMLElement>('#opt-saveport-confirm')?.addEventListener('click', () => {
+      const plan = this.savePortPending;
+      if (!plan) return;
+      this.savePortPending = null; // one press, one apply
+      void applySaveImport(plan).then(() => window.location.reload());
+    });
+    root.querySelector<HTMLElement>('#opt-saveport-cancel')?.addEventListener('click', () => {
+      this.savePortPending = null;
+      this.savePortNote = null;
       this.renderOptions(root, onBack);
     });
     // Controller feel sliders: drag = immediate (padTuning reads Settings live
