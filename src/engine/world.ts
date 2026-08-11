@@ -215,7 +215,7 @@ import { buildZoneSpans, type SpanField } from './spans';
 import { buildZoneFlux, CONJURE_CFG, ConjuredGround, FLUX_CFG, type ConjureGrant, type FluxField } from './flux';
 import { CONJURE_RIDERS } from '../data/conjury';
 import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
-import { castRay, LOS_CFG, type RayElev } from './los';
+import { affordTravel, castRay, LOS_CFG, type RayElev } from './los';
 import { coordDist, type MapCoord } from '../world/coords';
 import { FORECHART_CFG, forechartSource, zonesWithin } from '../world/forechart';
 import { OMEN_CFG, collectOmens, omenLine, omenReach, type Omen } from '../world/omens';
@@ -30736,7 +30736,12 @@ export class World {
             caster.pos.x + Math.cos(caster.facing) * dd,
             caster.pos.y + Math.sin(caster.facing) * dd);
         }
-        dest = this.clampPos(dest, caster.radius);
+        // THE AFFORDANCE DOCTRINE: the travel line is gated (walls clip it,
+        // corners forgive, chasms still jump) — the cast itself never
+        // refuses. A Shadow Step at a wall-cornered foe lands on YOUR side
+        // of the foe instead of phasing through the masonry behind it.
+        dest = this.affordedDest(caster, inst,
+          this.clampPos(dest, caster.radius));
         // Cloudborne: the vanish-point keeps a cloud where you left (the
         // arrival is already confined to standing ground — departure is
         // the honest half a blink can gift).
@@ -30793,9 +30798,14 @@ export class World {
           break;
         }
         const dd = Math.min(dist(caster.pos, aim), d.range);
-        const dest = this.clampPos(vec(
+        // THE AFFORDANCE DOCTRINE: the flight line is gated exactly like the
+        // blink's — barred ground shortens the arc to the last afforded
+        // point (a leap cast against a wall lands where it began, slam and
+        // all), and the telegraph ring below draws at the TRUE landing by
+        // construction (drawn == tested).
+        const dest = this.affordedDest(caster, inst, this.clampPos(vec(
           caster.pos.x + Math.cos(caster.facing) * dd,
-          caster.pos.y + Math.sin(caster.facing) * dd), caster.radius);
+          caster.pos.y + Math.sin(caster.facing) * dd), caster.radius));
         caster.leap = {
           from: vec(caster.pos.x, caster.pos.y), dest,
           total: d.airTime, timer: d.airTime,
@@ -44130,6 +44140,36 @@ export class World {
                from.y + (to.y - from.y) * (back / len));
   }
 
+  /** THE AFFORDANCE DOCTRINE's resolver (the 'travel' occlusion attitude —
+   *  blink and leap): a movement verb is NEVER REFUSED and NEVER STUCK. The
+   *  cast always fires; when the way is barred it resolves to the last
+   *  afforded point along its line — a leap straight into a wall is a leap
+   *  that lands where it began, animation and costs intact. CORNER
+   *  FORGIVENESS rides affordTravel (los.ts): a clipped corner or grazed
+   *  trunk affords the WHOLE travel; only geometry that bars the center and
+   *  both nudged lanes clips it, clipBackoff short of the face (clipShot's
+   *  own pullback — no new number). The ray is the shot channel at the
+   *  caster's story, so chasms, water and ledges bar nothing (clampPos's
+   *  gap-jump law stands untouched) while walls, masonry and trunks read
+   *  exactly as they do for every other delivery. 'free' (a positive
+   *  `phasing`, or a def's own occlusion word) skips the read whole. Pass
+   *  the ALREADY-CLAMPED destination; a clipped short-fall re-clamps here
+   *  so the landing always stands on ground. Rng-free by construction —
+   *  clear lines return `dest` untouched, byte-identical to the ungated
+   *  path. */
+  private affordedDest(caster: Actor, inst: SkillInstance, dest: Vec2): Vec2 {
+    if (this.skillOcclusion(caster, inst) !== 'travel') return dest;
+    const len = dist(caster.pos, dest);
+    if (len <= 1e-6) return dest;
+    const hit = affordTravel(this, caster.pos, dest,
+      this.shotElev(caster.pos, caster.tier));
+    if (!hit) return dest;
+    const back = Math.max(0, hit.d - LOS_CFG.clipBackoff);
+    return this.clampPos(vec(
+      caster.pos.x + (dest.x - caster.pos.x) * (back / len),
+      caster.pos.y + (dest.y - caster.pos.y) * (back / len)), caster.radius);
+  }
+
   /** THE DWELL-REACH RULE (data/transit.ts DWELL_CFG + per-row `reach` /
    *  per-role npcReach overrides): may a dwell build from `from` toward an
    *  object at `target`? A dwell is an act of attention, so it only builds
@@ -44193,15 +44233,21 @@ export class World {
 
   /** The delivery's occlusion ATTITUDE for one use: the spec's own word wins,
    *  else the type default (LOS_CFG.delivery — unlisted types are free: melee
-   *  reach and self-effects have no remote firing line to cut). A positive
-   *  `phasing` stat frees the whole use — the support-graftable passage
-   *  (Wraith Passage conjures it from nothing, exactly like projBounce). */
-  skillOcclusion(caster: Actor, inst: SkillInstance): 'blocked' | 'free' {
+   *  reach and self-effects have no remote firing line to cut). 'travel' is
+   *  the movement verbs' word (blink, leap — THE AFFORDANCE DOCTRINE): the
+   *  travel LINE is gated (affordedDest), while every refusal lane stays
+   *  disengaged because each keys on 'blocked' — a targeted blink still
+   *  finds its walled foe, and the AI never holds a movement cast. A
+   *  positive `phasing` stat frees the whole use — the support-graftable
+   *  passage (Wraith Passage conjures it from nothing, exactly like
+   *  projBounce), which is also how a build BUYS the through-wall blink
+   *  back on purpose. */
+  skillOcclusion(caster: Actor, inst: SkillInstance): 'blocked' | 'free' | 'travel' {
     const d = inst.def.delivery as { type: string; occlusion?: 'blocked' | 'free' };
     const base = d.occlusion ?? LOS_CFG.delivery[d.type] ?? 'free';
     if (base === 'free') return 'free';
     return caster.sheet.get('phasing', skillContextTags(inst.def, grantedTags(inst)),
-      instanceMods(inst)) > 0 ? 'free' : 'blocked';
+      instanceMods(inst)) > 0 ? 'free' : base;
   }
 
   /** THE BAND LAW's attitude for one strung band — skillOcclusion's exact

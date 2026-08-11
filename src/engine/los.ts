@@ -76,14 +76,34 @@ export const LOS_CFG = {
   /** Pull a clipped placement back from the wall face by this much (px), so
    *  a clamped cast point lands on the castable side of the blocking cell. */
   clipBackoff: 12,
-  /** Per-delivery-type DEFAULT occlusion attitude. 'blocked' = walls eat it;
-   *  types absent here are 'free' (melee reach, self buffs, movement — no
-   *  remote firing line to cut). A skill's own `occlusion` field overrides;
-   *  a positive `phasing` stat (support-graftable) frees the whole use. */
+  /** Per-delivery-type DEFAULT occlusion attitude. 'blocked' = walls eat it
+   *  AND the refusal lanes engage (hostile targeting skips occluded victims,
+   *  the AI holds fire per aiHoldFire); 'travel' = THE AFFORDANCE DOCTRINE
+   *  (2026-08-10): the use is gated as a TRAVEL LINE — the cast is NEVER
+   *  REFUSED and never stuck, it resolves to the last afforded point along
+   *  its line (a leap straight into a wall is a leap that lands where it
+   *  began), with CORNER FORGIVENESS via affordTravel below — while every
+   *  refusal lane stays disengaged (they key on 'blocked': a Shadow Step
+   *  still FINDS its walled foe, then lands honestly short of the wall).
+   *  Types absent here are 'free' (melee reach, self buffs — no remote
+   *  firing line to cut). DASH is absent BY CONSTRUCTION, not oversight:
+   *  its travel is stepped through the mover's own ground clamp every
+   *  frame (steppedClamp — a body sweep, not a remote line), so walls
+   *  already arrest it and a second gate here would double-judge it.
+   *  A skill's own `occlusion` field overrides; a positive `phasing` stat
+   *  (support-graftable — Wraith Passage) frees the whole use, so the
+   *  through-wall blink stays a BUILD CHOICE, never an accident. */
   delivery: {
     projectile: 'blocked', cone: 'blocked', nova: 'blocked',
     target: 'blocked', ground: 'blocked', storm: 'blocked',
-  } as Record<string, 'blocked' | 'free' | undefined>,
+    blink: 'travel', leap: 'travel',
+  } as Record<string, 'blocked' | 'free' | 'travel' | undefined>,
+  /** THE AFFORDANCE DOCTRINE's forgiveness margin (px): how far sideways a
+   *  travel line may be nudged to find a clear lane. Grazing a corner or a
+   *  slim trunk by up to this much never truncates the travel; geometry
+   *  thick enough to bar the center AND both nudged lanes is a genuine
+   *  wall. [FLAGGED dial — awaiting blessing.] */
+  afford: { nudge: 10 },
   /** Which delivery types' ZONES occlude per-victim while they tick/pulse.
    *  Ground placements do (a wall shields you from the burning field's far
    *  side); storm strikes fall from the SKY and melee sweeps are traveling
@@ -211,4 +231,36 @@ export function castRay(
 
   if (bestT === Infinity) return null;
   return { x: from.x + dx * bestT, y: from.y + dy * bestT, d: bestT * len, kind };
+}
+
+/** THE AFFORDANCE READ (the 'travel' attitude's corner forgiveness): judge
+ *  from→to as a TRAVEL LINE rather than a firing line. The center ray is
+ *  asked first; when it is barred, two parallel lanes nudged ±afford.nudge
+ *  sideways are tried, and ANY clear lane AFFORDS the whole travel — a
+ *  clipped corner or a grazed slim trunk never truncates the verb (the
+ *  traveler is allowed a sidestep's imprecision; lightly tapping a rock
+ *  must not stop the player). Geometry that bars every lane is a genuine
+ *  wall: the travel clips at the CENTER ray's hit. Lanes are judged whole
+ *  (start included — hugging a blocker grants no passage through it, the
+ *  veil rule per lane). Returns null when the travel is afforded, else the
+ *  center hit to clip at. Pure and rng-free: a clear line costs one ray
+ *  and answers byte-identically to castRay alone. */
+export function affordTravel(
+  env: OccEnv,
+  from: { x: number; y: number }, to: { x: number; y: number },
+  elev?: RayElev,
+): RayHit | null {
+  const hit = castRay(env, from, to, 'shot', elev);
+  if (!hit) return null;
+  const dx = to.x - from.x, dy = to.y - from.y;
+  const len = Math.hypot(dx, dy);
+  if (len <= 1e-6) return hit;
+  const px = -dy / len, py = dx / len;
+  for (const side of [1, -1]) {
+    const off = LOS_CFG.afford.nudge * side;
+    if (!castRay(env,
+      { x: from.x + px * off, y: from.y + py * off },
+      { x: to.x + px * off, y: to.y + py * off }, 'shot', elev)) return null;
+  }
+  return hit;
 }
