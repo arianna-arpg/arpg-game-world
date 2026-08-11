@@ -4227,12 +4227,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
     gemBias: ['physical', 'melee'],
   },
   /** The planted swallower: a carnivorous bloom that stays where it grew
-   *  (moveSpeed 0 = anchored — the sentry doctrine) and GULPS whatever it
-   *  HATES that strays — or is thrown — into reach. Hostility rides the
-   *  ordinary team/faction fabric (it will not eat same-team kin without
-   *  a faction war), so its pane-proved meal is the player's side; the
-   *  faction-BLIND throw payoffs (stakes, walls, pits) cover hurling
-   *  enemies into hazards. Same gulp row as the gulper — zero new skills. */
+   *  (moveSpeed 0 = anchored — the sentry doctrine) and GULPS whatever
+   *  strays — or is thrown — into reach. Hostility rides the ordinary
+   *  team/faction fabric PLUS the predation lane (target.prey ['critter']
+   *  — the wolf law), so ambient wildlife is food wherever it grows: a
+   *  frog that hops inside the wake springs the bloom with no player
+   *  anywhere near. The faction-BLIND throw payoffs (stakes, walls, pits)
+   *  cover hurling enemies into hazards. Same gulp row as the gulper —
+   *  zero new skills. */
   maw_bloom: {
     id: 'maw_bloom', name: 'Maw Bloom',
     color: '#8a6a9a', shape: 'hexagon', radius: 13, material: 'verdant', look: 'maw_bloom',
@@ -4243,7 +4245,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     heft: 2.2,
     grabbable: false,
     ambush: { radius: 150, announce: 'the bloom leans…' },
-    brain: { type: 'basic' },
+    brain: { type: 'basic', target: { prey: ['critter'] } },
     gemBias: ['chaos', 'duration'],
   },
 

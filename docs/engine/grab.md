@@ -162,9 +162,11 @@ refuse (`'rooted fast'`) while anchored HOLDERS hold fine (the maw bloom).
   monster-side with clinch → toss — the cadenced-kin teaching pattern),
   `gorge_gulper` (swallow; reel reuses the caulborn `tongue_reel` row),
   `maw_bloom` (the planted swallower — same `gulp` row, zero new skills;
-  it eats what it HATES, through the ordinary hostility fabric — its
-  pane-proved ambush meal is the player's side. Hurling enemy bodies into
-  hazards rides the faction-BLIND payoffs: stakes, walls, pits).
+  it eats what it HATES and what it HUNTS — the ordinary hostility
+  fabric plus the predation lane (`target.prey ['critter']`), so a
+  straying frog springs and feeds the planted ambush as readily as the
+  player's side. Hurling enemy bodies into hazards rides the
+  faction-BLIND payoffs: stakes, walls, pits).
 - Terrain: **gore_stakes** (`data/tracks.ts`) — the contact grammar's new
   `TrackPayload.minSpeed` gate: careful feet pick through free; any body
   ARRIVING at push-speed (a Heave, a toss, a plow, a bumper fling) is
