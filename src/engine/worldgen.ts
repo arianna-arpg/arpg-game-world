@@ -189,6 +189,11 @@ export interface ZoneSpec {
    *  set piece) shelter themselves here; absent = tileset word, then the
    *  skyOf() derivations. */
   sky?: SkyExposure;
+  /** CAMERA PIN override for this mint (ZoneDef.camera — the sky law): wins
+   *  over the tileset's own `camera`. A directed set-piece mint declares its
+   *  frame here; absent = tileset word; absent everywhere = NO key on the
+   *  def, the player's Options pick rules (render/camera.ts chain). */
+  camera?: import('../render/camera').CameraModeId;
   /** BLEND override for this mint (the blend fabric): a spec wins over the
    *  tileset's declared roll (an event mint dissolving a zone toward a
    *  neighbor authors its own field); null SUPPRESSES the tileset's blend.
@@ -1543,6 +1548,11 @@ export function placeZoneAt(
   // interior carries its roof on the def, so skyOf() answers from pure
   // zone data everywhere (engine, sim, renderer, both co-op sides).
   const sky = spec.sky ?? tileset.sky;
+  // CAMERA PIN bake (the sky law, same precedence): the biome's claim on its
+  // frame rides the def so the renderer's existing chain (render/camera.ts:
+  // ZoneDef.camera ▷ Settings ▷ CAMERA_CFG.default) picks it up unchanged.
+  // Absent everywhere = no key, byte-identical — no draw burns either way.
+  const camera = spec.camera ?? tileset.camera;
   const def: ZoneDef = {
     id, name, level,
     size,
@@ -1595,6 +1605,7 @@ export function placeZoneAt(
     ...(spec.dimension ? { dimension: spec.dimension } : {}),
     ...(spec.pocket ? { pocket: true } : {}),
     ...(sky ? { sky } : {}),
+    ...(camera ? { camera } : {}),
   };
   // THE BLEND (engine/blend.ts): resolve a declared partner onto the def —
   // layout rows tagged, pack tables merged — off the def seed's dedicated
@@ -1953,6 +1964,11 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     // the salted streams.
     ...(ts.puzzles ? { puzzles: ts.puzzles } : {}),
     ...(ts.scenery ? { scenery: ts.scenery } : {}),
+    // CAMERA PIN: the face's claim on its frame rides the ladder down (the
+    // puzzles/scenery law — surface mints also honor a ZoneSpec override;
+    // down here the tileset's word is the whole voice). Absent = no key,
+    // byte-identical; the player's Options pick rules (render/camera.ts).
+    ...(ts.camera ? { camera: ts.camera } : {}),
     // COMPOSITION ROLLS: the face's whole-zone bundles ride the minted def
     // exactly as the surface literal bakes them — planCompositions reads
     // only def.compositions, so an un-baked row was a dead dial down here

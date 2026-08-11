@@ -9,6 +9,14 @@
 //
 //   ZoneDef.camera pin  →  Settings.cameraMode (Options)  →  CAMERA_CFG.default
 //
+// The pin itself is either authored on a hand-written def, or STAMPED AT MINT
+// by the most specific word (the sky-exposure law, engine/worldgen.ts — both
+// chokepoints, placeZoneAt + the cave ladder):
+//
+//   ZoneSpec.camera (directed mint)  ▷  TilesetDef.camera (the biome's claim)
+//
+// Absent everywhere = no key on the def, and the player's Options pick rules.
+//
 // BOUNDLESS zones (the Descent abyss, the open sea) have no frame to clamp
 // to: placeCamera free-follows there regardless of the chosen mode — that is
 // the same behavior the old inline branch had, now a property of the resolver.

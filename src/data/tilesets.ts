@@ -168,6 +168,15 @@ export interface TilesetDef {
    *  sheltered by construction (caveDepth); declare it anyway wherever the
    *  place IS an interior, so a graph-minted use of the tileset stays honest. */
   sky?: SkyExposure;
+  /** CAMERA PIN baked onto minted zones (ZoneDef.camera — the sky-exposure
+   *  law's sibling): the BIOME's claim on how the view frames its ground
+   *  ('zone' = the classic clamped frame a tight interior wants; 'hero' =
+   *  locked follow). Stamped at BOTH mint chokepoints (placeZoneAt + the
+   *  cave ladder). PRECEDENCE: a mint spec's override (ZoneSpec.camera) ▷
+   *  this word ▷ absent — with no pin the def carries NO key and the
+   *  player's Options pick rules (render/camera.ts resolution chain).
+   *  (Type-only import — the registry stays a render concern.) */
+  camera?: import('../render/camera').CameraModeId;
   /** COMMON rows folded into EVERY rolled layout — base or variant. Variants
    *  say what CHANGES about a zone; common says what the biome always IS
    *  (the brittle-kit lesson: rows wired only into the base layout go dead
