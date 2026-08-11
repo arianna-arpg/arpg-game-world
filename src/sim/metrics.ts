@@ -44,6 +44,9 @@ export class Collector implements SimTap {
   orbsShed = 0;
   orbsScooped = 0;
   lifeGainHero = 0;     // landed healBy healing on the hero seat
+  lifeGainMinions = 0;  // landed healBy healing on hero-side non-hero actors —
+                        // the court's EFFECTIVE sustain (regen flows through
+                        // healBy, so clipped-at-full pours land here as 0)
   // -- lifecycle --
   kills = 0;
   deaths: { t: number; who: string; team: string; killer?: string }[] = [];
@@ -116,6 +119,7 @@ export class Collector implements SimTap {
 
   onHeal(target: Actor, landed: number): void {
     if (target === this.hero()) this.lifeGainHero += landed;
+    else if (target.team === this.hero().team) this.lifeGainMinions += landed;
   }
 
   onOrbShed(): void { this.orbsShed++; }
@@ -250,6 +254,13 @@ export function collectMetrics(c: Collector, simSeconds: number): MetricRecord {
     mana_floor_pct: r2(c.manaFloor * 100),
     life_end_pct: r2(c.lifeEnd * 100),
     casts_per_sec: r2(presses / t),
+    // The COURT lanes (minion-sustain measurements): average standing crew
+    // across the vitals samples, hero-side non-hero deaths, and the court's
+    // landed (post-clip) healing per second. Derived from channels the
+    // collector already observes — zero for crewless scenarios.
+    minions_mean: r2(c.minionSamples / Math.max(1, c.samples)),
+    minion_deaths: c.deaths.filter(d => d.team === 'player' && d.who !== 'player').length,
+    heal_minions_ps: r2(c.lifeGainMinions / t),
   };
 }
 

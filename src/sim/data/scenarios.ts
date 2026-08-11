@@ -186,6 +186,56 @@ for (const build of [
   });
 }
 
+// THE REGEN-AVENUE CURVE (ledger #267, ruled 2026-08-10: uncapped
+// minionRegenPct IS a build avenue — this family is its measured curve).
+// One reference court (summon_skeleton ×4, the court-keeper refilling it)
+// under sustained pressure, at four TOTAL-investment tiers (see the
+// regen_curve_* builds for the grantor derivations):
+//   t0 0%/s · t1 1.5%/s (tree smalls) · t1b 2.9%/s (Vital Bond L4 +
+//   smalls — the knee locator, malus-free) · t2 5.8%/s (both bond gems
+//   L4 + smalls) · t3 ~9.3%/s (ledger #267's max stack — gems L5 +
+//   smalls + the vocation share carried by pct-only overlevel).
+// Two press grades ask the curve twice: 'press' is the sibling sustain
+// ladder's exact wave grammar (the cross-family anchor — wounds the crew,
+// doesn't delete it), 'siege' throws the same species harder (regen must
+// carry bodies through back-to-back engagements or the court thins).
+// Reads: minions_mean (court uptime vs cap 4) + minion_deaths ranks the
+// tiers; heal_minions_ps is the effective (post-clip) healing actually
+// landed — where it saturates, investment past that tier buys nothing
+// AGAINST THIS PRESS; dps_minions/kill_rate carry the throughput story
+// (transfusion_bond's −25% minion damage is the lane's real price).
+for (const build of ['regen_curve_t0_l10', 'regen_curve_t1_l10', 'regen_curve_t1b_l10', 'regen_curve_t2_l10', 'regen_curve_t3_l10']) {
+  const tier = build.replace('regen_curve_', '').replace('_l10', '');
+  add({
+    id: `regen_curve_${tier}_press_l10`,
+    label: `Regen-avenue curve — ${tier} under the standard press`,
+    build,
+    pilot: { kind: 'summoner' },
+    parityLevel: 10,
+    waves: [{
+      monsters: [{ id: 'zombie', count: 2 }, { id: 'skeleton_warrior', count: 1 }],
+      repeatEvery: 8,
+    }],
+    duration: 60,
+    stop: 'duration',
+    notes: 'Investment-tier ladder, standard press: rank tiers by minions_mean/minion_deaths; heal_minions_ps is the effective sustain landed.',
+  });
+  add({
+    id: `regen_curve_${tier}_siege_l10`,
+    label: `Regen-avenue curve — ${tier} under siege`,
+    build,
+    pilot: { kind: 'summoner' },
+    parityLevel: 10,
+    waves: [{
+      monsters: [{ id: 'zombie', count: 3 }, { id: 'skeleton_warrior', count: 2 }],
+      repeatEvery: 6,
+    }],
+    duration: 60,
+    stop: 'duration',
+    notes: 'Investment-tier ladder, heavy press: where the deep tiers separate — or fail to (saturation is a finding, not a bug).',
+  });
+}
+
 // FORTUNE-FABRIC PROBE PAIR (rollTop procs, the Static Shrapnel rider,
 // damageSpread) plus the variance channel: bare vs loaded Fulminate against
 // the dummy — the loaded build's jackpot payloads are the entire A/B
@@ -332,6 +382,9 @@ export const SUITES: Record<string, string[]> = {
   minions: Object.keys(SCENARIOS).filter(id => id.startsWith('minion_probe_')),
   /** The minion-regen sustain ladder (crew uptime per regen lane). */
   sustain: Object.keys(SCENARIOS).filter(id => id.startsWith('minion_sustain_')),
+  /** The regen-avenue investment curve (ledger #267): one court, four
+   *  minionRegenPct totals, two press grades. */
+  regencurve: Object.keys(SCENARIOS).filter(id => id.startsWith('regen_curve_')),
   /** THE GEAR VALUE CURVE: bare vs geared twins at the measurement bands —
    *  read as pairs (dps ratio, ttk ratio); the spread across bands is the
    *  found-gear power curve. */

@@ -188,6 +188,64 @@ BUILDS['sustain_wraiths_bonds_l10'] = sustainSummoner('sustain_wraiths_bonds_l10
 BUILDS['sustain_wraiths_rate_l10'] = sustainSummoner('sustain_wraiths_rate_l10', 'summon_wraith',
   { gems: true, picks: ['cl_sky_regen', 'cl_sky_t3', 'cl_sky_graze', 'cl_sky_evergreen'] });
 
+// THE REGEN-AVENUE CURVE (ledger #267, ruled 2026-08-10: minionRegenPct is
+// an uncapped additive build avenue BY DESIGN — no cap, no diminishing form;
+// this ladder is the avenue's measured curve, so any future revisit argues
+// from data). One court (summon_skeleton, cap 4), one press, ONLY the total
+// minionRegenPct investment moves — the INVESTMENT axis, where the sibling
+// sustain_* ladder isolates lanes. Tiers derive from the live grantor
+// census (every minionRegenPct source in src/data at HEAD):
+//   t0 none      0.0%/s — zero investment (control).
+//   t1 cheap     1.5%/s — the two tree smalls: Green Pastures (cl_sky_regen,
+//                1%) + Milk and Marrow (cl_sky_t3, 0.5%).
+//   t2 committed 5.8%/s — both bond gems at the L10 kit level (gemLevelAt=4):
+//                Vital Bond L4 (0.8+0.2×3 = 1.4%, +6 flat) + Transfusion
+//                Bond L4 (2.0+0.3×3 = 2.9%, +6 flat, its −25% minion damage
+//                rides — the lane's real price) + the smalls. All
+//                game-reachable at L10.
+//   t3 max      ~9.3%/s — ledger #267's committed stack: Vital Bond L5
+//                (1.6%) + Transfusion Bond L5 (3.2%) + the smalls (1.5%) +
+//                Den-Mended (Packwarden n3, 3%) ≈ 9.3%/s. VOCATIONS ARE NOT
+//                EXPRESSIBLE in a BuildSpec (the applier pins vocations: []),
+//                so the vocation share rides Transfusion Bond overleveled to
+//                L15 — its perLevel is PCT-ONLY, so the flat lane stays
+//                byte-identical to the real stack (7+6 = 13/s) and
+//                bakeMinionOwnerStats folds the identical additive total.
+// The minionRegenRate chain (Sweetgrass + Evergreen Fold, +45% increased on
+// both lanes) is deliberately NOT stacked here — it multiplies whatever this
+// axis measures and the sustain_* rate legs already probe it.
+const regenCurveSummoner = (
+  id: string,
+  o: { gems?: { id: string; level: number }[]; picks?: string[] },
+): BuildSpec => ({
+  id,
+  label: `Regen-avenue curve — summon_skeleton (${o.gems ? o.gems.map(g => `${g.id} L${g.level}`).join(' + ') : 'no gems'}${o.picks?.length ? ' + tree smalls' : ''}) @ L10`,
+  classId: 'summoner', level: 10,
+  // The sibling sustain ladder's attribute pin, verbatim — identical on
+  // every tier so it cancels across the curve.
+  attributes: { wisdom: 40, willpower: 100, vitality: 40 },
+  skills: [{ id: 'summon_skeleton', level: gemLevelAt(10), supports: o.gems }],
+  passives: o.picks ?? [],
+});
+BUILDS['regen_curve_t0_l10'] = regenCurveSummoner('regen_curve_t0_l10', {});
+BUILDS['regen_curve_t1_l10'] = regenCurveSummoner('regen_curve_t1_l10',
+  { picks: ['cl_sky_regen', 'cl_sky_t3'] });
+// t1b — the KNEE LOCATOR (2.9%/s): Vital Bond L4 alone + the smalls. A real
+// one-socket story, and the malus-free control beside t2 (no transfusion_bond
+// means no −25% minion damage — the confound splitter for the siege rows).
+BUILDS['regen_curve_t1b_l10'] = regenCurveSummoner('regen_curve_t1b_l10', {
+  gems: [{ id: 'vital_bond', level: 4 }],
+  picks: ['cl_sky_regen', 'cl_sky_t3'],
+});
+BUILDS['regen_curve_t2_l10'] = regenCurveSummoner('regen_curve_t2_l10', {
+  gems: [{ id: 'vital_bond', level: 4 }, { id: 'transfusion_bond', level: 4 }],
+  picks: ['cl_sky_regen', 'cl_sky_t3'],
+});
+BUILDS['regen_curve_t3_l10'] = regenCurveSummoner('regen_curve_t3_l10', {
+  gems: [{ id: 'vital_bond', level: 5 }, { id: 'transfusion_bond', level: 15 }],
+  picks: ['cl_sky_regen', 'cl_sky_t3'],
+});
+
 // THE IRON BELL TEXTURE PAIR (hitCap): the same sovereign, two answers. The
 // ROT build stacks poison + decay — DoT ticks pass the per-hit ceiling by
 // construction, so it should CRACK the colossus inside the episode. The
