@@ -6,7 +6,7 @@
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { instanceChargeCost, instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, instanceUseCharges, skillContextTags, SKILL_RARITIES } from '../engine/skills';
+import { instanceChargeCost, instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { ESSENCES } from '../data/essences';
@@ -6741,6 +6741,37 @@ export class Renderer {
             ctx.fillRect(x + 3, by + slot - 7, slot - 6, 4);
             ctx.fillStyle = bFill >= 1 ? '#ffd700' : def.color;
             ctx.fillRect(x + 3, by + slot - 7, (slot - 6) * bFill, 4);
+          }
+        }
+        // POOL BANK strip (SkillDef.pool): the banked fuel one row above
+        // the brim's seat — ALWAYS present on a pool slot, so an empty
+        // bank reads as an empty gauge, never a mystery grey. The fill is
+        // bank / the poolCap-folded cap and the notch is the `min` the
+        // cast gate tests (poolReadOf — the engine's own read), castable
+        // the moment the fill crosses it. Gold at the brim (the brim
+        // strip's grammar); a venting bank wears the recharge line's
+        // bright edge while the gold border says "running", and the fill
+        // visibly walks left as the vent drains the bank.
+        {
+          const pr = poolReadOf(p, inst);
+          if (pr && pr.cap > 0) {
+            const px0 = x + 3, pw = slot - 6, py0 = by + slot - 12;
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(px0, py0, pw, 4);
+            const frac = clamp(pr.banked / pr.cap, 0, 1);
+            if (frac > 0) {
+              ctx.fillStyle = frac >= 1 ? '#ffd700' : def.color;
+              ctx.fillRect(px0, py0, pw * frac, 4);
+              if (pr.venting) {
+                ctx.fillStyle = 'rgba(255,232,106,0.85)';
+                ctx.fillRect(px0 + Math.max(0, pw * frac - 1.5), py0, 1.5, 4);
+              }
+            }
+            const tick = clamp(pr.min / pr.cap, 0, 1);
+            if (tick > 0 && tick < 1) {
+              ctx.fillStyle = 'rgba(200,200,220,0.9)';
+              ctx.fillRect(px0 + pw * tick - 0.5, py0 - 1, 1, 6);
+            }
           }
         }
         // Skill level badge

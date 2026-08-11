@@ -2949,6 +2949,33 @@ export function instanceChargeCost(inst: SkillInstance): SkillDef['chargeCost'] 
   return inst.def.chargeCost;
 }
 
+/** THE POOL BANK READ (DamagePoolSpec): the one resolved view of a pool
+ *  skill's bank — the same values the cast gate tests (pool id, banked
+ *  fuel, `min`), plus the cap folded exactly as World.bankPools folds it
+ *  (supports socketed into the pool skill widen ITS bank through the
+ *  poolCap query), so a HUD face drawn from this read cannot drift from
+ *  the engine's own arithmetic. Null for pool-less instances. */
+export function poolReadOf(
+  caster: {
+    sheet: { get(stat: string, tags?: ReadonlySet<SkillTag>, extra?: readonly Modifier[]): number };
+    pools: Map<string, number>;
+    venting: Set<string>;
+  },
+  inst: SkillInstance,
+): { spec: DamagePoolSpec; banked: number; min: number; cap: number; venting: boolean } | null {
+  const pl = inst.def.pool;
+  if (!pl) return null;
+  const cap = pl.cap * caster.sheet.get('poolCap',
+    skillContextTags(inst.def), instanceMods(inst));
+  return {
+    spec: pl,
+    banked: caster.pools.get(pl.id) ?? 0,
+    min: pl.min ?? 1,
+    cap,
+    venting: caster.venting.has(pl.id),
+  };
+}
+
 // --- THE MUNITION CONVERSION (SupportDef.munition) ---------------------------
 // Chambered Casting's lane: a socketed gem CONVERTS any bar-cast into an
 // AMMUNITION skill — `rounds` manual-reload uses (no trickle, no magazine),
