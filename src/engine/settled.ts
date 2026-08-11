@@ -508,8 +508,45 @@ function cityMassing(ctx: GenCtx, def: ZoneDef, grid: GridWalkField): void {
   for (const m of masses) {
     if (!m.interior) continue;
     if (courtStruct && m.r >= structMinR && ctx.rng.chance(courtStruct.chance)) {
-      raiseStructure(ctx, courtStruct.structure, m.interior);
-      continue; // the structure IS the yard's keeping
+      // THE COURT SEAT GUARANTEE (the metropolis townhouse strand): a court
+      // structure spans most of its yard, so an unqualified seat SPLITS the
+      // yard and strands whichever half the doors face away from the mouth —
+      // both aprons sealed, and unrescuable by construction (the belt's
+      // rescue rays refuse structure margins, so a door apron can never be
+      // carved back). Two-part guarantee, judged on the grid the seat will
+      // actually paint into:
+      //   (1) the yard must already be ON the streets — a court whose mouth
+      //       never reached the entry's component refuses the seat and keeps
+      //       its small furniture instead (the chance draw stands either
+      //       way, so the verdict never forks the stream);
+      //   (2) THE GARDEN PATH — carve one walkable band ringing the exact
+      //       footprint the plan pipeline will paint (its own lattice snap,
+      //       via the same draw-free structureMaxFootprint the plot-fit law
+      //       reads), BEFORE the walls rise. Every face then keeps a way
+      //       around to whichever mouth the court rolled, so the door-apron
+      //       law holds at stamp time — drawn == tested.
+      const entryOn = grid.isWalkable(ctx.entry.x, ctx.entry.y);
+      const seatable = grid.isWalkable(m.interior.x, m.interior.y)
+        && (!entryOn || grid.reachable(ctx.entry, m.interior));
+      if (seatable) {
+        const fp = structureMaxFootprint(courtStruct.structure);
+        if (fp) {
+          const cs = grid.cell;
+          const rx = Math.round((m.interior.x - fp.w / 2) / cs) * cs;
+          const ry = Math.round((m.interior.y - fp.h / 2) / cs) * cs;
+          const off = cs * 1.6, half = cs * 1.2;
+          const x0 = Math.max(cs, rx - off), y0 = Math.max(cs, ry - off);
+          const x1 = Math.min(ctx.arena.w - cs, rx + fp.w + off);
+          const y1 = Math.min(ctx.arena.h - cs, ry + fp.h + off);
+          grid.carveCorridor(x0, y0, x1, y0, half);
+          grid.carveCorridor(x1, y0, x1, y1, half);
+          grid.carveCorridor(x1, y1, x0, y1, half);
+          grid.carveCorridor(x0, y1, x0, y0, half);
+        }
+        raiseStructure(ctx, courtStruct.structure, m.interior);
+        continue; // the structure IS the yard's keeping
+      }
+      // Refused: fall through — the yard keeps its kit furniture.
     }
     if (!kit.length) continue;
     const pieces = ctx.rng.int(1, 2);

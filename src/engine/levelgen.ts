@@ -5854,8 +5854,16 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
 
   // Paint floors first, then walls/regions, then door cells (closed = rampart),
   // so overlapping specs resolve wall-wins deterministically.
+  // THE THRESHOLD PAINT: door cells are the structure's own floor too. A door
+  // seated over pre-existing rock (a self-sited house flush against a massif
+  // lobe) otherwise keeps that rock UNDER the doorway, and the open-doors
+  // stamp check below floods against a threshold no open door could ever
+  // have — the metropolis townhouse's interior-door apron warned exactly
+  // this way. Painted ground here, sealed rampart at the end as before, so
+  // the FINISHED grid is byte-identical; only the mid-stamp topology (which
+  // setDoorState's open repaint already promises is floor) tells the truth.
   for (const c of cells) {
-    if (c.spec.interior || c.spec.courtyard || c.spec.slot || c.spec.breakable || c.spec.npc || c.spec.doodad) {
+    if (c.spec.interior || c.spec.courtyard || c.spec.slot || c.spec.breakable || c.spec.npc || c.spec.doodad || c.spec.door) {
       const r = cellRect(c.cx, c.cy);
       grid.fillRegion(r.x0, r.y0, r.x1, r.y1, 'ground');
     }
@@ -6107,6 +6115,17 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
   // The apron is SEARCHED along the door's outward normal (a fixed offset can
   // land on a second wall line — the concentric fortress taught us that); blind
   // carves are allowed only OUTSIDE the footprint, so a wall is never breached.
+  //
+  // RESOLVE, THEN VERIFY. Resolution (searches, reverse flips, egress carves)
+  // runs for EVERY door before any verdict is spoken: a door's egress carve is
+  // part of standing the structure up, and an interior door judged before a
+  // later perimeter door had carved its way out reads as stranded when the
+  // finished stamp is whole (the metropolis townhouse jammed in manor mass:
+  // d0 warned, then d1's stub reached daylight and healed the very island the
+  // warn described). The verdicts below judge the SAME predicate on the
+  // topology the stamp actually leaves behind — carves only ever ADD ground,
+  // so deferral can silence a premature warn, never invent a pass.
+  const resolvedAprons: (Vec2 | null)[] = [];
   for (let gi = 0; gi < doorGroups.length; gi++) {
     const pd = placed.doors[gi];
     const searchAlong = (nx: number, ny: number): Vec2 | null =>
@@ -6139,6 +6158,11 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
         }
       }
     }
+    resolvedAprons.push(apron);
+  }
+  for (let gi = 0; gi < doorGroups.length; gi++) {
+    const pd = placed.doors[gi];
+    const apron = resolvedAprons[gi];
     if (!apron) {
       // Once per def+door — a generator gap repeats identically on every
       // mint of that blueprint; the first line says everything.
