@@ -291,6 +291,9 @@ let pendingRejoinClass: ClassDef | null = null;
  *  frame, tagged with the sender's seat. Drained + applied just before world.update
  *  (so the change replicates in the SAME tick's snapshot). */
 const pendingActions: Array<{ seat: string; action: MetaAction }> = [];
+/** THE SEAMLESS REFUSAL NOTE (M0): the co-op refusal speaks once per session,
+ *  not once per world construction (adoptWorld also wires the placeholder). */
+let seamlessRefusedNoted = false;
 
 /** A LIVE over-the-wire co-op session with at least one connected peer. Gates the
  *  run-end broadcast + the keep-the-transport-alive restart path. */
@@ -311,7 +314,15 @@ function adoptWorld(w: World): World {
   // the ONE funnel every world construction passes through, so restarts and
   // fresh runs keep the mode. Absent = false = the discrete path,
   // byte-identical to main (THE MODE LAW, docs/design/seamless-world.md).
-  w.seamless = new URLSearchParams(location.search).has('seamless');
+  // M0 is SOLO-ONLY: a live network session (host with peers, or a client
+  // shell) refuses the flag at this same funnel, once, out loud — couch
+  // seats stand the fabric down world-side (seamlessEnsureBoot).
+  const seamlessAsked = new URLSearchParams(location.search).has('seamless');
+  w.seamless = seamlessAsked && net.isHost && !coopActive();
+  if (seamlessAsked && !w.seamless && !seamlessRefusedNoted) {
+    seamlessRefusedNoted = true;
+    console.warn('[seamless] co-op session — the mode refuses at boot (M0 is solo-only)');
+  }
   return w;
 }
 

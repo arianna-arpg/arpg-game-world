@@ -591,10 +591,24 @@ export function syncRosterEntry(account: Account, world: World): RosterEntry | n
   return entry;
 }
 
+/** THE SEAMLESS SAVE REFUSAL (M0, docs/design/seamless-world.md): a seamless
+ *  run is a throwaway dev walk — neither persistence artery may half-capture
+ *  the mode into a slot a discrete boot would then resume. One line, once. */
+let seamlessSaveNoted = false;
+function seamlessSaveRefused(world: World): boolean {
+  if (!world.seamless) return false;
+  if (!seamlessSaveNoted) {
+    seamlessSaveNoted = true;
+    console.info('[seamless] M0 run — persistence refused (throwaway dev walk; saves stay discrete-only)');
+  }
+  return true;
+}
+
 /** THE run-persistence choke point: save the character to its routed slot and,
  *  for roster characters, refresh the account index card beside it — every
  *  autosave/baseline/dirty-flag path calls this one helper. */
 export function persistRun(account: Account, world: World): void {
+  if (seamlessSaveRefused(world)) return;
   saveCharacter(world);
   if (modeById(world.meta.modeId).save === 'roster' && syncRosterEntry(account, world)) {
     saveAccount(account);
@@ -605,6 +619,7 @@ export function persistRun(account: Account, world: World): void {
  *  writes ride sendBeacon so the closing tab still delivers them; everything
  *  else is byte-identical to persistRun. */
 export function persistRunDurable(account: Account, world: World): void {
+  if (seamlessSaveRefused(world)) return;
   saveCharacterDurable(world);
   if (modeById(world.meta.modeId).save === 'roster' && syncRosterEntry(account, world)) {
     saveAccountDurable(account);

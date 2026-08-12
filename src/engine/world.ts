@@ -87,7 +87,7 @@ import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
   hitSurfaceOf, normalizeDoodadBound, pitRegionOf,
-  type BrittleSpec, type Doodad, type DoodadEffect, type DoodadKind, type PlacedStructure, type PlacedSlot,
+  type BrittleSpec, type Doodad, type DoodadEffect, type DoodadKind, type GeneratedLayout, type PlacedStructure, type PlacedSlot,
   type ResonanceSpec,
 } from './levelgen';
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
@@ -216,7 +216,9 @@ import { buildZoneFlux, CONJURE_CFG, ConjuredGround, FLUX_CFG, type ConjureGrant
 import { CONJURE_RIDERS } from '../data/conjury';
 import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
 import { affordTravel, castRay, LOS_CFG, type RayElev } from './los';
-import { coordDist, type MapCoord } from '../world/coords';
+import { coordDist, mapToPx, type MapCoord } from '../world/coords';
+import { getTissueSampler, setTissueSampler, type RegionSeat } from '../world/seamless';
+import { buildTissueSampler } from '../world/tissue';
 import { FORECHART_CFG, forechartSource, zonesWithin } from '../world/forechart';
 import { OMEN_CFG, collectOmens, omenLine, omenReach, type Omen } from '../world/omens';
 import { PORT_CFG } from '../data/ports';
@@ -1990,6 +1992,37 @@ interface PlayerCorpse {
  *  else a stable hash of the id gives ~a quarter of plain static zones an
  *  ellipse; safe and fixture (town) zones stay rect so their hand-placed
  *  buildings always fit. Authored sizes are never resized — only the shape. */
+/** A resident zone's boot mint (seamless M0): the layout exactly as loadZone
+ *  would stand it up on first arrival through the partner's door, plus the
+ *  base-arena span the seat centers on (pieces dormant at mint, so the span
+ *  IS the classic box). `exitsKey` is the mint's INVALIDATION FINGERPRINT:
+ *  the def rows the layout derives its portals from — the living web may
+ *  weave a new road onto a resident (the forechart's halo keeps growing),
+ *  and a stale mint would then draw a neighbor the arrival won't stand up.
+ *  The threshold sweep re-mints on drift (drawn == arrived, kept honest by
+ *  refreshing the drawing, never by freezing the web). */
+export interface SeamlessMint {
+  layout: GeneratedLayout;
+  span: { w: number; h: number };
+  exitsKey: string;
+}
+
+/** The resident mint's exits fingerprint (see SeamlessMint.exitsKey). */
+function seamlessExitsKeyOf(def: ZoneDef): string {
+  return JSON.stringify(def.exits.map(e => [e.to, e.side, e.at ?? null, e.lock ?? null]));
+}
+
+/** M0 rim dials — FLAGGED (unblessed; her word moves them). The corridor
+ *  margin is the tissue leash: how far past the pair's union box the open
+ *  country stays walkable before the classic rim refuses again (M0 keeps the
+ *  walk between the pair, not into the endless fields). The threshold inset
+ *  asks a crossing to stand genuinely ON partner ground before the rebase
+ *  fires — a rim graze never swaps the frame. */
+const SEAMLESS_RIM = {
+  corridorMarginPx: 220,
+  thresholdInsetPx: 32,
+} as const;
+
 function makeArena(def: ZoneDef): Bounds {
   let shape = def.shape;
   if (!shape) {
@@ -3081,6 +3114,15 @@ export class World {
    *  it, the render/collision lanes read it). Empty in discrete mode BY
    *  CONSTRUCTION. */
   seamlessRegions: import('../world/seamless').RegionSeat[] = [];
+  /** THE RESIDENT MINTS (M0): each resident zone's boot-minted layout + base
+   *  span, keyed by zone id — the render lane draws the pair's ground from
+   *  these; the threshold sweep reads the partner's walk grid for an honest
+   *  landing. Minted by seamlessEnsureBoot through the SAME derivation
+   *  loadZone runs (probe_seamless pin B). Empty in discrete mode BY
+   *  CONSTRUCTION, like the seats beside it. */
+  seamlessMints = new Map<string, SeamlessMint>();
+  /** Once-per-key console notes (the boot line, the refusals). */
+  private seamlessNotes = new Set<string>();
 
   // --- the current zone -------------------------------------------------
   zone: ZoneDef = this.zoneMap[START_ZONE];
@@ -6234,6 +6276,305 @@ export class World {
     // POOLED-AMBIENT lightwells wake with the zone (after every doodad source
     // above — generation, memory restore, package dressing — has finished).
     this.attachZoneWells();
+    // THE SEAMLESS BOOT (M0, docs/design/seamless-world.md): with the mode
+    // on, stand the resident pair up once the web can seat it — idempotent,
+    // retried at every load until the pick lands. Flag off = one boolean
+    // read (THE MODE LAW).
+    if (this.seamless) this.seamlessEnsureBoot();
+  }
+
+  // --- THE RESIDENT PAIR (seamless M0 — docs/design/seamless-world.md) ----
+  // The spike's placement lane: pick two adjacent wilds, mint both layouts
+  // resident at their map seats, open the rim between them to the tissue,
+  // and rebase the live frame at the threshold. Every entry point below is
+  // gated on `this.seamless`; discrete play never reaches any of it.
+
+  /** Once-per-key console note (the boot line, the standing refusals). */
+  private seamlessNote(key: string, msg: string): void {
+    if (this.seamlessNotes.has(key)) return;
+    this.seamlessNotes.add(key);
+    console.info(msg);
+  }
+
+  /** May this zone stand as a RESIDENT of the M0 pair? Plain, unvisited
+   *  surface wilds only — THE PICK RULE (flagged; her word moves it):
+   *  surface dimension, not the town, no zone-kind identity (excludes
+   *  towns/outposts/sanctums), not 'safe', no port/harborhold/hold-anchor
+   *  ground, no FIELD expanse (their scale reconciles in M2), not
+   *  boundless/aquatic/floating/concealed/special, on-graph surface (no
+   *  caveDepth), spoils intact, and — load-bearing — a FIXED def.seed (the
+   *  boot mint and the arrival mint must meet the same layout; seedless
+   *  statics re-roll per load) plus UNVISITED (a visited zone's arrival
+   *  replays zone memory, which the boot mint cannot see). */
+  private seamlessResidentEligible(z: ZoneDef): boolean {
+    return (z.dimension ?? 'surface') === 'surface'
+      && z.id !== START_ZONE
+      && !this.visited.has(z.id)
+      && z.kind === undefined
+      && z.objective.kind !== 'safe'
+      && !z.port && !z.harborhold && !z.holdAnchor
+      && !z.field
+      && !z.boundless && !z.aquatic && !z.floating && !z.concealed && !z.special
+      && z.caveDepth == null
+      && z.seed != null
+      && z.spoils !== 'none';
+  }
+
+  /** THE PAIR PICK (deterministic, documented): among eligible zones linked
+   *  by an UNLOCKED road edge (reciprocal edges are the web's append-only
+   *  law, so scanning from the lexicographically smaller id sees every
+   *  pair once), take the pair whose FARTHER member is nearest the start
+   *  town (the shortest dev walk), tiebroken by the pair key — a pure
+   *  function of the charted web, which at boot is pure f(worldSeed). */
+  private seamlessPickPair(): [ZoneDef, ZoneDef] | null {
+    const town = this.zoneMap[START_ZONE];
+    let best: { a: ZoneDef; b: ZoneDef; d: number; key: string } | null = null;
+    for (const a of Object.values(this.zoneMap)) {
+      if (!this.seamlessResidentEligible(a)) continue;
+      for (const e of a.exits) {
+        if (e.to === '?' || e.crossDim || e.lock || a.id >= e.to) continue;
+        const b = this.zoneMap[e.to];
+        if (!b || !this.seamlessResidentEligible(b)) continue;
+        const d = Math.max(coordDist(a.map, town.map), coordDist(b.map, town.map));
+        const key = `${a.id}|${b.id}`;
+        if (!best || d < best.d - 1e-9 || (Math.abs(d - best.d) <= 1e-9 && key < best.key)) {
+          best = { a, b, d, key };
+        }
+      }
+    }
+    return best ? [best.a, best.b] : null;
+  }
+
+  /** Mint one resident's layout through the SAME derivation loadZone runs at
+   *  a true first arrival — the two first-visit pre-rolls (both latch, so
+   *  the eventual arrival's own calls no-op), the placed exits + boundary/
+   *  road/meld stashes under a scoped zone-context swap, and the back-portal
+   *  entry toward the PARTNER (the rebase arrives through that door; a
+   *  discrete first arrival from a third neighbor would carve its aprons
+   *  off its own door instead — portal-clear variance the discrete game
+   *  already tolerates on re-entries; bounds and seat never move). Crusade
+   *  works are boot-absent by construction (a fresh run holds no tier) —
+   *  a crusade claiming the zone before first arrival is a documented M0
+   *  divergence of dress, never of bounds. */
+  private seamlessMintResident(def: ZoneDef, partnerId: string): void {
+    this.rollHoldfast(def);
+    this.eagerChartNeighbors(def);
+    // THE MINT HORIZON, pre-run (the third of loadZone's def-shaping steps —
+    // an arrival resolves its whole horizon BEFORE placing portals, and the
+    // fresh ring's weave may put new roads onto THIS def; charted ground is
+    // charted forever, so the arrival's own call then no-ops and the mint
+    // meets the same exits the arrival will). Same guard shape as loadZone.
+    if (FORECHART_CFG.enabled && def.objective.kind !== 'safe') {
+      this.chartWithin(def.map, FORECHART_CFG.horizon, def.dimension ?? 'surface');
+    }
+    const keepZone = this.zone, keepArena = this.arena, keepExits = this.exits;
+    const keepEntryFrom = this.entryFrom;
+    try {
+      this.zone = def;
+      this.arena = makeArena(def);
+      // THE ENTRY CONTEXT rides the swap too: stash derivations may read the
+      // live entry (pickProcessionDest picks the escort's crossing as "the
+      // farthest portal from the one we came in by") — the mint must answer
+      // as the REBASE ARRIVAL will, entered through the partner's door.
+      this.entryFrom = partnerId;
+      this.exits = def.exits.map((e, i) => this.placeExit(e, i));
+      def.exitBoundaries = this.exits.map(x => x.boundary);
+      def.exitRoads = this.exitRoadAnnotations(def);
+      def.exitMelds = this.exits.map(x => x.meld);
+      this.separateOverlappingExits();
+      let entry = vec(this.arena.w / 2, this.arena.h / 2);
+      const back = this.exits.find(e => e.to === partnerId);
+      if (back) {
+        const ang = angleTo(back.pos, entry);
+        entry = vec(back.pos.x + Math.cos(ang) * 120, back.pos.y + Math.sin(ang) * 120);
+      }
+      const rng = new Rng(def.seed!);
+      const layout = generateLayout(def, this.arena, rng, entry, this.exits.map(e => e.pos), undefined);
+      const span = hullOf(this.arena);
+      this.seamlessMints.set(def.id, { layout, span, exitsKey: seamlessExitsKeyOf(def) });
+      // UPSERT the seat: a re-mint (the exits-key invalidation) refreshes the
+      // layout record and keeps the standing seat — def.size never moves, so
+      // origin and span are stable identities the render lane may hold.
+      if (!this.seamlessRegions.some(s => s.zoneId === def.id)) {
+        const at = mapToPx(def.map);
+        this.seamlessRegions.push({
+          zoneId: def.id,
+          originPx: { x: at.x - span.w / 2, y: at.y - span.h / 2 },
+        });
+      }
+      // THE M0 CAMERA CUT (flagged): the zone-framed mode's rim clamp has no
+      // seat across an open rim, so the pair pins the hero-locked frame (the
+      // audition default — placeCamera is pure per frame, so a rebase that
+      // shifts hero and ground by the same delta draws the identical screen:
+      // the camera "compensates" by construction). Def pins never persist —
+      // seamless refuses saves.
+      def.camera = 'hero';
+    } finally {
+      this.zone = keepZone; this.arena = keepArena; this.exits = keepExits;
+      this.entryFrom = keepEntryFrom;
+    }
+  }
+
+  /** THE SEAMLESS BOOT — idempotent; called at every loadZone tail while the
+   *  mode is on. Picks the pair, mints both residents, installs the tissue
+   *  sampler. Couch seats stand the whole fabric down (M0 is solo-only —
+   *  the remote-co-op refusal lives at main.ts's flag wire). */
+  private seamlessEnsureBoot(): void {
+    if (this.seamlessRegions.length) return;
+    if (!this.zoneMap[this.zone.id] || (this.zone.dimension ?? 'surface') !== 'surface') return;
+    if (this.couchActive()) {
+      this.seamlessNote('couch', '[seamless] couch seats present — M0 is solo-only; the resident pair stands down');
+      return;
+    }
+    let pair = this.seamlessPickPair();
+    if (!pair) {
+      // The pick starves on the starter web (the town is 'safe' — no
+      // horizon charted yet): resolve the standing pregen ring around us
+      // once, through the forechart's own idempotent chartWithin, then
+      // re-pick. Seamless-only work; discrete boots never chart here.
+      this.chartWithin(this.zone.map, FORECHART_CFG.horizon, this.zone.dimension ?? 'surface');
+      pair = this.seamlessPickPair();
+    }
+    if (!pair) {
+      this.seamlessNote('nopair', '[seamless] no eligible adjacent wilds pair charted yet — retrying at the next zone load');
+      return;
+    }
+    const [a, b] = pair;
+    this.seamlessMintResident(a, b.id);
+    this.seamlessMintResident(b, a.id);
+    setTissueSampler(buildTissueSampler(this));
+    this.seamlessNote('boot',
+      `[seamless] resident pair: ${a.id} ↔ ${b.id} — walk out where their road leaves the rim`);
+  }
+
+  /** A resident zone's footprint in world px (seat origin + base span). */
+  private seamlessRectOf(seat: RegionSeat): { x: number; y: number; w: number; h: number } | null {
+    const mint = this.seamlessMints.get(seat.zoneId);
+    return mint ? { x: seat.originPx.x, y: seat.originPx.y, w: mint.span.w, h: mint.span.h } : null;
+  }
+
+  /** THE OPEN RIM (seamless M0): classify a clamp ask that leaves the active
+   *  arena. 'open' admits the raw target — walkable tissue inside the pair
+   *  corridor, or the partner's own ground (the threshold sweep owns the
+   *  crossing). 'hold' refuses a step FROM tissue (stand still — the classic
+   *  clamp would otherwise yank the body back to the rim in one frame).
+   *  'reenter' resolves a tissue→arena return as a placement, so the walk
+   *  grid and doodads seat it honestly. Null = not this fabric's ask.
+   *  PARTY BODIES ONLY (seat actors + their owned court): the pack keeps the
+   *  classic confine — the M0 leash; enemies never roam tissue. A null
+   *  sampler keeps the rim shut (the tissue lane's stand-down law). */
+  private seamlessRimVerdict(p: Vec2, radius: number, from: Vec2 | undefined, opts?: ClampOpts): 'open' | 'hold' | 'reenter' | null {
+    if (this.seamlessRegions.length < 2) return null;
+    const seat = this.seamlessRegions.find(s => s.zoneId === this.zone.id);
+    if (!seat) return null;
+    const mover = opts?.mover as Actor | undefined;
+    if (!mover) return null;
+    const party = this.seats.some(s => s.actor === mover)
+      || (!!mover.owner && this.seats.some(s => s.actor === mover.owner));
+    if (!party) return null;
+    const inNow = insideBounds(p, radius, this.arena);
+    const wasOut = !!from && !insideBounds(from, radius, this.arena);
+    if (inNow) return wasOut ? 'reenter' : null;
+    const wx = p.x + seat.originPx.x, wy = p.y + seat.originPx.y;
+    const partner = this.seamlessRegions.find(s => s.zoneId !== this.zone.id);
+    const pr = partner ? this.seamlessRectOf(partner) : null;
+    const admit = ((): boolean => {
+      if (pr && wx >= pr.x && wx <= pr.x + pr.w && wy >= pr.y && wy <= pr.y + pr.h) return true;
+      const ar = this.seamlessRectOf(seat);
+      if (!ar || !pr) return false;
+      const m = SEAMLESS_RIM.corridorMarginPx;
+      const x0 = Math.min(ar.x, pr.x) - m, x1 = Math.max(ar.x + ar.w, pr.x + pr.w) + m;
+      const y0 = Math.min(ar.y, pr.y) - m, y1 = Math.max(ar.y + ar.h, pr.y + pr.h) + m;
+      if (wx < x0 || wx > x1 || wy < y0 || wy > y1) return false;
+      const ts = getTissueSampler();
+      if (!ts) return false;
+      return ts(wx, wy, this.manifest.seed >>> 0).walkable;
+    })();
+    if (admit) return 'open';
+    return wasOut ? 'hold' : null;
+  }
+
+  /** THE THRESHOLD SWEEP (seamless M0): when the local hero, walking the
+   *  tissue, stands genuinely ON the partner's ground (threshold inset, and
+   *  the partner's own boot-minted walk grid says walkable — an honest
+   *  landing defers, never teleports), rebase the live frame there in one
+   *  between-frames step. */
+  private updateSeamless(): void {
+    if (this.seamlessRegions.length < 2 || this.scene) return;
+    const seat = this.seamlessRegions.find(s => s.zoneId === this.zone.id);
+    if (!seat) return;
+    const partner = this.seamlessRegions.find(s => s.zoneId !== this.zone.id);
+    const pr = partner ? this.seamlessRectOf(partner) : null;
+    if (!partner || !pr) return;
+    const p = this.player;
+    if (insideBounds(p.pos, p.radius, this.arena)) return; // still home — rect overlap belongs to the ACTIVE zone
+    // THE MINT REFRESH (tissue frames only — near-zero cost in normal play):
+    // the living web may have woven a new road onto a resident since its
+    // mint; a stale record would draw a neighbor the arrival won't stand up
+    // and mis-read its walk grid at the threshold. Re-mint on drift — the
+    // seat holds, only the layout record refreshes.
+    for (const s of this.seamlessRegions) {
+      const def = this.zoneMap[s.zoneId];
+      const mint = this.seamlessMints.get(s.zoneId);
+      if (!def || !mint || mint.exitsKey === seamlessExitsKeyOf(def)) continue;
+      const other = this.seamlessRegions.find(o => o.zoneId !== s.zoneId);
+      if (other) this.seamlessMintResident(def, other.zoneId);
+    }
+    const wx = p.pos.x + seat.originPx.x, wy = p.pos.y + seat.originPx.y;
+    const inset = SEAMLESS_RIM.thresholdInsetPx;
+    if (wx < pr.x + inset || wx > pr.x + pr.w - inset
+      || wy < pr.y + inset || wy > pr.y + pr.h - inset) return;
+    const lw = this.seamlessMints.get(partner.zoneId)?.layout.walk;
+    if (lw && !lw.isWalkable(wx - partner.originPx.x, wy - partner.originPx.y)) return;
+    this.seamlessRebase(partner, seat);
+  }
+
+  /** THE REBASE AT THE THRESHOLD (the M0 keel decision): swap the live sim
+   *  to the partner's zone-local frame with no loadZone FEEL. loadZone runs
+   *  WHOLE underneath — zone memory captures the ground we left, the
+   *  partner's population materializes on first arrival and replays memory
+   *  thereafter, every ~130 zone-local assumption stays satisfied — and THE
+   *  CONTINUITY SET rides across it shifted by the seat delta: the party's
+   *  exact world-px seats (velocity kept), their own projectiles in flight,
+   *  and the drawn transients (floaters, flashes). Everything else follows
+   *  the standing door law (drops/corpses/skill-zones die at the seam
+   *  exactly as they die at a portal — M1's ring demotion re-sites that).
+   *  The camera compensates by construction: placeCamera is pure per frame
+   *  and the pair pins the hero-locked mode, so hero and ground shifting by
+   *  one delta draw the identical screen. */
+  private seamlessRebase(dest: RegionSeat, src: RegionSeat): void {
+    const delta = { x: src.originPx.x - dest.originPx.x, y: src.originPx.y - dest.originPx.y };
+    const fromId = this.zone.id;
+    const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
+    const carried = this.actors.filter(a =>
+      seatActors.has(a) || (!!a.owner && seatActors.has(a.owner) && !a.dead && !a.construct));
+    const seats = carried.map(a => ({ a, x: a.pos.x + delta.x, y: a.pos.y + delta.y, vx: a.vel.x, vy: a.vel.y }));
+    const keepProj = this.projectiles.filter(pr =>
+      seatActors.has(pr.caster) || (!!pr.caster.owner && seatActors.has(pr.caster.owner)));
+    const keepTexts = this.texts, keepFlashes = this.flashes;
+    this.loadZone(dest.zoneId, fromId);
+    for (const s of seats) {
+      // Exact continuity, with the placement clamp as pure safety (the sweep
+      // pre-checked the partner grid; rim dress can still nudge a shoulder).
+      s.a.pos = this.clampPos(vec(s.x, s.y), s.a.radius);
+      s.a.vel.x = s.vx; s.a.vel.y = s.vy;
+    }
+    for (const pr of keepProj) { pr.pos.x += delta.x; pr.pos.y += delta.y; this.projectiles.push(pr); }
+    for (const t of keepTexts) { t.pos.x += delta.x; t.pos.y += delta.y; this.texts.push(t); }
+    for (const f of keepFlashes) { f.pos.x += delta.x; f.pos.y += delta.y; this.flashes.push(f); }
+    // THE POST-ARRIVAL RECORD REFRESH: the arrival's own loadZone resolves
+    // the standing horizon, and a frontier promise that grew DURING the walk
+    // can mint-and-weave a new road onto this very def inside that call —
+    // after every checkpoint a sweep could run. The ground underfoot is the
+    // truth; if the record's exits drifted from it, re-mint the RECORD from
+    // the settled def (chartWithin just drained, so the re-mint's own
+    // horizon call no-ops and the record reproduces the arrival exactly).
+    const destDef = this.zoneMap[dest.zoneId];
+    const mintRec = this.seamlessMints.get(dest.zoneId);
+    if (destDef && mintRec && mintRec.exitsKey !== seamlessExitsKeyOf(destDef)) {
+      this.seamlessMintResident(destDef, src.zoneId);
+    }
+    console.info(`[seamless] threshold: ${fromId} → ${dest.zoneId} (delta ${Math.round(delta.x)},${Math.round(delta.y)})`);
   }
 
   /** THE ZONE-RUNTIME REGISTRY — one row per package's in-zone runtime, built
@@ -16006,6 +16347,19 @@ export class World {
     const healed = sanitizeWorldZones(ws.zones, claimed);
     if (!healed) return false;
     this.zoneMap = healed;
+    // THE SEAMLESS RESET (M0): the resident pair indexed the graph this
+    // adoption just replaced — createPlayer's initial town load booted it
+    // against the FRESH worldgen graph, and those seats/mints/camera pins
+    // now describe defs that no longer exist. Stand the whole fabric down;
+    // resumeSpawn ALWAYS loads a zone next, and that load's ensure-boot
+    // re-picks and re-mints against the RESTORED graph. Flag off = two
+    // empty-array clears (byte-inert).
+    if (this.seamless) {
+      this.seamlessRegions.length = 0;
+      this.seamlessMints.clear();
+      this.seamlessNotes.delete('boot');
+      this.seamlessNotes.delete('nopair');
+    }
     // HARBORHOLD state rides the defs verbatim — sanitize each (foreign
     // saves, hand edits, renamed classes): a malformed state drops to a
     // bare quay, valid ones clamp to the data ladder. Never a crash.
@@ -40211,6 +40565,10 @@ export class World {
     if (this.scene) updateScene(this, rawDt);
     if (dt <= 0) return;
     this.time += dt;
+    // THE SEAMLESS THRESHOLD (M0): the tissue walk's crossing runs as one
+    // between-frames step, before any sweep reads positions. Flag off = one
+    // boolean read (THE MODE LAW).
+    if (this.seamless) this.updateSeamless();
     // Fresh actor-grid epoch: the AI phase just moved monsters (kernels call
     // moveActor directly), so spatial queries from here read current bodies.
     this.actorGridRev++;
@@ -52034,6 +52392,16 @@ export class World {
    * beyond the gap crosses it, while walking and dashing slide along it.
    */
   clampPos(p: Vec2, radius: number, from?: Vec2, opts?: ClampOpts): Vec2 {
+    // THE OPEN RIM (seamless M0, docs/design/seamless-world.md): on a
+    // resident zone a party body may walk out into the tissue — the verdict
+    // stands IN FRONT of the classic law, and with the flag off this whole
+    // branch is one boolean read (THE MODE LAW).
+    if (this.seamless) {
+      const rim = this.seamlessRimVerdict(p, radius, from, opts);
+      if (rim === 'open') return vec(p.x, p.y);
+      if (rim === 'hold') return vec(from!.x, from!.y);
+      if (rim === 'reenter') return this.clampPos(p, radius, undefined, opts);
+    }
     const b0 = clampToBounds(p, radius, this.arena);
     const out = vec(b0.x, b0.y);
     // THE TIER FABRIC: the mover's layer, read once — gates the doodad
