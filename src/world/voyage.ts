@@ -25,6 +25,8 @@
 import { continentAt, continentSeedFrom } from './continents';
 import { climateAt, climateAffinity } from './climate';
 import { islandMulAt } from './seas';
+import { registerOmenSource, type Omen } from './omens';
+import type { World } from '../engine/world';
 import { VOYAGE_ISLANDS, type VoyageIslandDef } from '../data/voyageIslands';
 
 export const VOYAGE_CFG = {
@@ -159,3 +161,77 @@ export function islandsNear(
   }
   return out;
 }
+
+// --- THE WATER OMENS (the island half) ---------------------------------------
+// Voyage islands are streamed shores: their zone MINTS ON SIGHT from the
+// water (mintIslandZone) and never before, so an unfound island has no zone
+// to seat an omen on — COORD-ONLY whispers BY CONSTRUCTION (a bearing over
+// the water, never a self-reveal, never a chart: the engine's reveal branch
+// needs a zoneId, and this source must never mint one). Once sighted (its
+// zone stands in zoneMap) the island is charted ground and the murmur goes
+// silent — the unfound law. While SAILING the source stands down: the
+// sighting law owns discovery at sea, and the pseudo-zone's map coord is the
+// departure port, not the boat.
+//
+// SEAT NOTE (batch 52): module-local pure read, not a World method — see the
+// sea half in world/seas.ts (world.ts is owned by a sibling chip this batch).
+
+/** Every dial + line of the island omen — ONE BLESSING UNIT (all invented
+ *  this pass, unblessed). No `reveal` row on purpose: coord-only by law. */
+export const ISLE_OMEN = {
+  lines: [
+    'sailors speak of an isle off the {bearing}, {dist}',
+    'driftwood and strange blossom wash in from the {bearing}',
+    'a far light winks over the water, to the {bearing}',
+  ],
+  whisper: 500,
+  widenPerMin: 2,
+  /** The sea half's cap law (SEA_OMEN.widenCapMin): permanent geography must
+   *  never widen its way onto the whole map. */
+  widenCapMin: 120,
+  scanPad: 80,
+  color: '#9ad0e8',
+};
+
+/** The island omen rows near `at` — a PURE READ (zoneMap consulted, never
+ *  written; no rng, no mint). Exported at this grain for the probe. */
+export function islandOmensAt(world: World, at: { x: number; y: number }): Omen[] {
+  const O = ISLE_OMEN;
+  const scanR = O.whisper + O.widenPerMin * O.widenCapMin + O.scanPad;
+  const age = Math.min(world.time, O.widenCapMin * 60);
+  const out: Omen[] = [];
+  for (const isle of islandsNear(at, scanR, world.sim.biomeField.fieldSeed)) {
+    if (world.zoneMap[isle.id]) continue; // sighted from the water — charted ground
+    out.push({
+      id: `isle:${isle.id}`, at: { x: isle.coord.x, y: isle.coord.y }, color: O.color,
+      lines: [...O.lines], whisper: O.whisper, widenPerMin: O.widenPerMin, age,
+    });
+  }
+  return out;
+}
+
+/** THE SAILOR'S-EARS LAW (a design reshape, FLAGGED with the blessing unit):
+ *  island talk airs only where salt water meets the ground — the listener's
+ *  zone must carry the sea's identity (seaId: ports, hold anchors, isles),
+ *  a quay (port), or open water (aquatic). Plain inland ground hears NO
+ *  island whisper; the harbor BOARD still carries isle bearings far inland
+ *  (harborHearsay reads the rows off watery stances — a pure read). Besides
+ *  the fiction ("sailors speak" needs sailors), this is load-bearing: an
+ *  engine whisper costs one Math.random draw (the line pick in updateOmens),
+ *  and an ambient island murmur near any coast-adjacent land deterministically
+ *  drifted seeded sim streams (probe_straying H8). The sea-spot source keeps
+ *  its inland whisper — that breadcrumb IS the coastward pull — and its
+ *  sparse spots carry a far smaller drift surface. Follow-up proposed in the
+ *  coda: a seeded/keyed line pick in updateOmens (world.ts — closed this
+ *  batch) would let island talk go ambient again.
+ *  While SAILING the source also stands down: the sighting law owns
+ *  discovery at sea, and the pseudo-zone's map coord is the departure port,
+ *  not the boat. */
+export function islandOmens(world: World): Omen[] {
+  const z = world.zone;
+  if (z.id === VOYAGE_ZONE_ID) return [];
+  if (!z.seaId && !z.port && !z.aquatic) return [];
+  return islandOmensAt(world, z.map);
+}
+
+registerOmenSource(islandOmens);

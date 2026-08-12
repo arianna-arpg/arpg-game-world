@@ -31,6 +31,8 @@ import { Rng } from '../core/rng';
 import { SEA_CFG, SEA_CLASSES, type SeaClassDef } from '../data/seas';
 import { CONTINENT_CFG, cellKind, cellSite, continentCellAt, continentSeedFrom } from './continents';
 import type { MapCoord } from './coords';
+import { registerOmenSource, type Omen } from './omens';
+import type { World } from '../engine/world';
 
 export interface SeaPortSpot {
   /** Stable id — also the minted port ZONE's id (`sea_3_-2_p1`). */
@@ -257,3 +259,88 @@ function hash2(a: number, b: number, seed: number): number {
   h ^= h >>> 13; h = Math.imul(h, 0x27d4eb2f) >>> 0; h ^= h >>> 15;
   return h >>> 0;
 }
+
+// --- THE WATER OMENS (the sea half) ------------------------------------------
+// THE FINDABILITY GUARANTEE reaches the shoreline: every planned port spot
+// near the listener murmurs. A spot whose PORT ZONE is minted (the veiled
+// harbor pair — the World's ensureSeaPorts has run) publishes a zone-seated
+// omen: the engine's reveal can survey it and a harbor chart can be bought
+// for it (harborHearsay's canChart reads the live def). A spot with NO minted
+// zone is a COORD-ONLY whisper — a bearing on the salt wind, never a reveal,
+// never a chart (the omen fabric's documented law: no zoneId, no self-reveal)
+// and NEVER a mint: ensureSeaPorts is the World's own private write, and a
+// pure read must not write. The whisper leads the walker coastward; the halo
+// touching the water is what mints the pair — and the SAME omen id then
+// carries the zone seat, so whisper memory rides across the mint.
+//
+// SEAT NOTE (batch 52): registered as a MODULE-LOCAL pure read rather than a
+// World method (the harborholdOmens shape) — world.ts is owned by a sibling
+// chip this batch. A follow-up may hoist seaSpotOmens/islandOmens onto World
+// for symmetry; the registration line below is the only seam that would move.
+
+/** Every dial + line of the sea-spot omen — ONE BLESSING UNIT (pools, radii,
+ *  widen rate, cap, color: all invented this pass, unblessed). */
+export const SEA_OMEN = {
+  /** Whisper pool — `{bearing}`/`{dist}` expand at speak time; the REVEAL
+   *  toast always reads lines[0] (the omen fabric's law). */
+  lines: [
+    'gulls wheel to the {bearing} — a harborage, {dist}',
+    'salt rides the wind from the {bearing}',
+    'tar and brine on the air — a quay waits {dist}, to the {bearing}',
+  ],
+  whisper: 560,
+  /** The land-side sight law: within this of a minted harbor the map marks
+   *  itself — the walking cousin of the quay beacon's sail-by sighting. */
+  reveal: 320,
+  widenPerMin: 2,
+  /** THE CAP (minutes of world clock fed as the omen's age): geography is
+   *  permanent — unbounded widening would eventually survey every far coast
+   *  unwalked. Events lapse; seas don't; the cap is the honest difference. */
+  widenCapMin: 120,
+  /** Scan slack past the derived max reach, so spot enumeration can never
+   *  miss a whisper-range spot. */
+  scanPad: 80,
+  color: '#7fd0ff',
+};
+
+/** The sea-spot omen rows near `at` — a PURE READ (zoneMap consulted, never
+ *  written; no rng, no mint). Exported at this grain so the probe can stand
+ *  the listener anywhere; the registered source listens at the current zone. */
+export function seaSpotOmensAt(world: World, at: MapCoord): Omen[] {
+  const O = SEA_OMEN;
+  const scanR = Math.max(O.whisper, O.reveal) + O.widenPerMin * O.widenCapMin + O.scanPad;
+  const age = Math.min(world.time, O.widenCapMin * 60);
+  const out: Omen[] = [];
+  for (const spot of seaSpotsNear(at, scanR, world.sim.biomeField.fieldSeed)) {
+    const z = world.zoneMap[spot.id];
+    if (z && !z.veiled) continue; // found ground — the map already knows it
+    if (z) {
+      // Minted + veiled: seat the omen on the port zone — reveal + chart live.
+      out.push({
+        id: `seaspot:${spot.id}`, at: z.map, zoneId: spot.id, color: O.color,
+        lines: [...O.lines], whisper: O.whisper, reveal: O.reveal,
+        widenPerMin: O.widenPerMin, age,
+      });
+    } else {
+      // Unminted: a coord-only whisper (no zoneId — the engine's reveal
+      // branch is structurally unreachable; hearsay lists it unchartable).
+      out.push({
+        id: `seaspot:${spot.id}`, at: { x: spot.coord.x, y: spot.coord.y }, color: O.color,
+        lines: [...O.lines], whisper: O.whisper,
+        widenPerMin: O.widenPerMin, age,
+      });
+    }
+  }
+  return out;
+}
+
+/** The registered source: the listener stands at the current zone. The
+ *  INLAND whisper is deliberate — it is the coastward breadcrumb (an unfound
+ *  sea's pull), and port spots are sparse enough (SEA_CFG.portMinSep) that
+ *  its engine whisper-draw surface stays small — the island half gates
+ *  harder (voyage.ts, THE SAILOR'S-EARS LAW). */
+export function seaSpotOmens(world: World): Omen[] {
+  return seaSpotOmensAt(world, world.zone.map);
+}
+
+registerOmenSource(seaSpotOmens);
