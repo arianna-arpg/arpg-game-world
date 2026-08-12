@@ -614,3 +614,79 @@ earns a flag.
 - **F9 — no crashes, no warned rows.** Both instruments completed full
   scope; every row is clean by the harness's own `warning_count`
   standard. The coverage gap is expressibility (F1), not stability.
+
+### Addendum (2026-08-12, batch 52) — the three flagged verdicts, chased
+
+HEAD `1f04c5a` plus this batch's sim-side fixes. The shared tree carried
+concurrent sessions' in-flight engine edits before and after these runs,
+so cross-run readings are directional; every mechanism claim below was
+proven same-boot (the sitting's own reproducibility caveat applies).
+
+- **F2 — the berserker whiff: PILOT DEFECT, fixed sim-side.** The episode
+  cast ledger told the whole story: `dash` 13 presses per 30 s (= the
+  0.43 casts/s), `heavy_strike` 0 accepted of 442 pressed, `whirlwind`
+  34 accepted one-tick spools, zero beats. Mechanism: a cooldown-free
+  CHANNEL in a tap slot is usable on every idle frame, so the pilot's
+  round-robin taps it every time; the one-tick tap dies under its own
+  0.45 s first-beat interval (no damage, no mana — the 91.7% floor is
+  dash fare), and the held primary's presses all land on the freshly
+  restarted channel's busy frames, refused forever. Reach exonerated
+  (the brawler stands at gap 33, inside heavy_strike's 50 and
+  whirlwind's 75); the castreq gate exonerated (base STR/DEX 14/10 meet
+  both kit gates exactly). FIX — THE FILLER SEAT (`sim/pilots.ts`,
+  auto-layout only): when the bar carries a cd-0 channel and NO cd-0
+  instant, the channel IS the filler — seated as the held primary,
+  surplus cd-0 channels dropped; explicit pilot specs never reshaped.
+  Post-fix berserker: bare 14.6 / 20.0 / 31.0 / **64.2** (the L20 seat
+  lands beside blademaster's 64.6), geared L20 230.0 (3.58×), parity
+  CLEARS at every band (8–20 s). Blast radius audited: 2/36 classes move
+  (berserker here, guardian below); sorcerer/hivecaller — whose channel
+  already led — proven byte-identical same-tree; warrior/magician
+  structurally untouched and `baseline check --suite smoke` reads clean.
+- **F3 — the guardian geared-mute: LANE ARTIFACT, fixed sim-side.** No
+  slot graft, no trigger, no castreq refusal — the geared rig casts MORE
+  hammers than bare (10 vs 8 per 30 s; the wardrobe's move_speed T2 legs
+  re-time the pilot's retreat) and lands zero, every seed. Mechanism:
+  `hammer_of_judgment` is an ORBITER (orbitRadius 55, ~30 px/s spiral
+  reel) and the caster pilot holds the 144–207 band, where a spiral
+  pass-by misses the dummy by ~5 px — the row was measuring spiral PHASE
+  against the band (bare grazed exactly 8, geared exactly 0), not power.
+  compat.ts already refuses this shape (soloPilot forces the brawler for
+  `trajectory.orbit > 0`). FIX — THE ORBITER RULE
+  (`sim/data/scenarios.ts` `singleTargetPilotFor`, wired into the dummy
+  and duel factories only): an orbit-led kit walks up to one body.
+  Post-fix guardian dummy: bare 1.4 / 2.4 / 4.9 / 10.0, geared 3.7 /
+  17.7 / **32.7** (3.26× — a sane gear story at last). The first cut
+  applied the brawler to the PACK lanes too and killed the working
+  parity clears (life floors 1–4%): reverted — pack lanes keep the
+  kiting band (per-scenario pilots are this file's own precedent), and
+  the geared parity clear stands (~33 s at L20).
+- **F8 — planted_banderilla: DESIGN, not defect — reclass into the
+  known-zero lanes.** Control reproduced (2.26 dummy). The flagged
+  `--vs` re-measure seats it LOWER, not higher: vs zombie /
+  skeleton_warrior duels it posts edps_cycle **0 / 0** (raw dps_out 1.6
+  — its darts clear no kill cycle) while the anchors hold their order
+  (thrown_ace 45.9/43.0 · perfect_strike 9.7/8.1 · toppling_stroke
+  9.7/8.0 · shatterchord 4.3/4.0). No solo lane — dummy or movers — can
+  price a taunt + VULNERABLE setup dart whose own damage line (6–10 on
+  cd 6) is a formality. The escort A/B (cleave filling, banderilla on a
+  6 s metronome, zombie duels) prices the payload honestly: **−6.4%**
+  edps vs parity trash (the tap's tempo tax outruns 8%/stack on 2.5 s
+  kills) and **+21.8% edps / +20% kills** vs a long-lived body —
+  banderillas are for bulls, and the catalog fields the payoff
+  (`execution` consumes VULNERABLE at 1.45×/stack). Verdict: seat it
+  beside cape_feint/incite in the known-lane cohort; its true number
+  lives in the rescale's escort/debuff lane, not this table.
+
+Residuals routed to the rescale's pilot/scenario pass (F1's lane), not
+forced here: the swashbuckler tail is real but resists both naive
+re-seats (wild_strike held solo reads 1.9 dps — random-bearing 12°
+slivers starve a single-target lane; and buckler_strike's ±75° flank
+cuts with a 100° arc geometrically cannot touch a dead-ahead single
+target — a kit-texture question for data, not the harness); the cli.ts
+matchup/panel duels still ride tag-derived pilots (the orbiter rule
+reaches only the scenarios.ts factories); cape_feint/incite still await
+their counter/crowd scenarios. Gates: `npx tsc --noEmit` 0 ·
+`npm run check` 0 · `baseline check --suite smoke` green ("no gated
+metric moved"). Fixes live entirely in `src/sim/` (pilots.ts +
+data/scenarios.ts); no engine or data bytes moved.

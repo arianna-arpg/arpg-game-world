@@ -23,6 +23,24 @@ export function pilotFor(classId: string): PilotSpec {
   return tags?.includes('spell') ? { kind: 'caster' } : { kind: 'brawler' };
 }
 
+/** THE ORBITER RULE, single-target lanes only (2026-08-12, the guardian
+ *  geared-mute — compat.ts soloPilot's own law): a tethered orbiter grinds
+ *  its wheel at the body, and against ONE stationary target the caster
+ *  band holds its blades a knife's-edge short — the guardian's dummy row
+ *  was measuring spiral phase against the band (bare grazed exactly 8,
+ *  geared exactly 0, every seed), so an orbit-led kit walks up instead.
+ *  Pack lanes keep pilotFor's kiting band: standing in a parity pack is
+ *  not how an orbit-led kit plays, and the brawler stance measurably
+ *  killed the guardian's working parity clears. */
+export function singleTargetPilotFor(classId: string): PilotSpec {
+  const cls = CLASSES.find(c => c.id === classId);
+  const first = cls?.bar.find(s => s !== null);
+  const def = first ? SKILLS[first] : undefined;
+  const traj = (def?.delivery as { trajectory?: { orbit?: number } } | undefined)?.trajectory;
+  if ((traj?.orbit ?? 0) > 0) return { kind: 'brawler' };
+  return pilotFor(classId);
+}
+
 /** The canonical parity trash pack — small, mixed, early-game. Keep in sync
  *  with what a real early zone throws (crossroads' table). */
 export const PARITY_PACK = [
@@ -44,7 +62,7 @@ export function dummyDps(classId: string, level: number, opts?: TierOpt): Scenar
     id: `dummy_dps_${tierTag(opts)}${classId}_l${level}`,
     label: `Dummy DPS — ${classId} ${tierOf(opts)} @ L${level}`,
     build: `${tierOf(opts)}_${classId}_l${level}`,
-    pilot: pilotFor(classId),
+    pilot: singleTargetPilotFor(classId),
     waves: [{ monsters: [{ id: 'target_dummy', level: 1 }], distance: 70 }],
     duration: 30,
     stop: 'duration',
@@ -89,7 +107,7 @@ export function monsterDuel(classId: string, level: number, monsterId: string): 
     id: `duel_${monsterId}_${classId}_l${level}`,
     label: `Duel — ${monsterId} vs ${classId} @ L${level}`,
     build: `starter_${classId}_l${level}`,
-    pilot: pilotFor(classId),
+    pilot: singleTargetPilotFor(classId),
     parityLevel: level,
     waves: [{ monsters: [{ id: monsterId, count: 1 }] }],
     duration: 45,

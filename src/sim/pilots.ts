@@ -125,6 +125,36 @@ class Pilot implements PlayerInputSource {
         || (dv.type === 'summon');
       (toggleish ? autoOpeners : autoRotation).push(i);
     }
+    // THE FILLER SEAT (2026-08-12, the berserker whiff): a cooldown-free
+    // CHANNEL is a hold-to-work skill — seated as a tap it is usable on
+    // every idle frame, so it claims each one, and its one-tick taps
+    // restart the spool without ever reaching the first beat while the
+    // released primary's presses all land on busy frames: the whole bar
+    // deadlocks (berserker read 0 dps at every band; only dash ever cast).
+    // When the bar carries NO other spammable filler (no cd-0 instant),
+    // the channel IS the filler — seat it as the held primary and drop
+    // any further cd-0 channels (one hand, one wheel). A bar that does
+    // carry a cd-0 instant keeps its authored order: both re-seatings
+    // were measured WORSE on the swashbuckler (wild_strike held solo
+    // reads 1.9 dps — random-bearing slivers starve a single-target
+    // lane), so that shape stays as-is for the rescale's pilot pass.
+    // Explicit specs are never reshaped.
+    if (autoRotation.length) {
+      const wheelish = (i: number): boolean => {
+        const d = actor.skills[i]?.def;
+        return !!d && d.cooldown === 0 && (d.castMode === 'channel' || d.channel !== undefined);
+      };
+      const cd0Instant = autoRotation.some(i => {
+        const d = actor.skills[i]?.def;
+        return !!d && d.cooldown === 0 && !wheelish(i);
+      });
+      if (!cd0Instant && autoRotation.some(wheelish)) {
+        const wheel = autoRotation.find(wheelish)!;
+        const rest = autoRotation.filter(i => i !== wheel && !wheelish(i));
+        autoRotation.length = 0;
+        autoRotation.push(wheel, ...rest);
+      }
+    }
     const allOpeners = [...openers, ...autoOpeners];
     const allRotation = rotation.length || this.spec.rotation ? rotation : autoRotation;
 
