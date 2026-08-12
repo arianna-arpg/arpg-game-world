@@ -2168,7 +2168,7 @@ export class Renderer {
       // THE SEAMLESS COUNTRY (vis/seamlessDraw.ts): tissue poured from the
       // global fields past the rim, and the neighbor layouts standing at
       // their map seats — in place of the frame's abyss dress entirely.
-      drawSeamlessCountry(ctx, world, this.cam.x, this.cam.y, vw, vh);
+      drawSeamlessCountry(ctx, world, this.ground, this.cam.x, this.cam.y, vw, vh);
       return;
     }
     // THE VOID FRAME (vis/voidFrame.ts): everything past the rim — the

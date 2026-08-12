@@ -11,22 +11,43 @@
 // version, so a broken door or a terraform repaints itself. Animated region
 // visuals (flesh throb, water drift) intentionally do NOT bake — the renderer
 // overlays them live.
+//
+// THE WORLD-KEYED GROUND (seamless M1 wave 1 — docs/design/seamless-world.md):
+// while the seamless mode stands (seamlessDrawActive), the zone-local cache
+// above yields to `worldChunks` — full-fidelity chunks keyed on WORLD chunk
+// coordinates + the region whose ground they bake (`zoneId:cx,cy`), where the
+// ACTIVE region's chunks and every resident NEIGHBOR's chunks are cache
+// PEERS. The active region bakes from the LIVE walk grid/doodads/structures;
+// a neighbor bakes from its boot mint (World.seamlessMints) through the SAME
+// pipeline via a scoped world swap (seamlessMintResident's own idiom), at its
+// own zone-local coords — so a chunk's pixels are identical whichever side of
+// the threshold it was baked on, and crossing changes which region is ACTIVE
+// without dropping either (the rebase shifts the drawn frame; the world keys
+// don't move — THE CONTINUITY LAW). Live staleness (walk repaints, bed churn)
+// applies only to entries stamped by the CURRENT visit (`seamlessEpoch`);
+// older entries and mint bakes stay drawable and converge through the stale
+// budget. Discrete mode never touches any of it — the flag off runs the
+// zone-local path above byte-identically (THE MODE LAW).
 // ---------------------------------------------------------------------------
 
 import { clamp } from '../../core/math';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import { TILESETS } from '../../data/tilesets';
-import type { ZoneTheme } from '../../data/zones';
+import type { ZoneDef, ZoneTheme } from '../../data/zones';
 import { compileBlendField, type BlendSampler } from '../../engine/blend';
 import type { Doodad } from '../../engine/levelgen';
-import type { World } from '../../engine/world';
+import type { SeamlessMint, World } from '../../engine/world';
 import { GridWalkField } from '../../world/gridWalk';
+import type { RegionSeat } from '../../world/seamless';
+import { activePieces } from '../../world/shape';
 import { regionKind, type RegionVisualSpec } from '../../world/regions';
 import { linkSpanOf, tierElevOf, tierFloorAt } from '../../engine/tiers';
+import { registerVisCache } from './caches';
 import { adjust, hash01, mix, shade, valueNoise, withAlpha } from './color';
 import { wallEyeSockets } from './wallEyes';
 import { liquidBodyIsLive, paintBlendUnderlay, paintLiquidStatics, type DoodadVisualDef } from './painters';
 import { paintStructureFloors } from './floors';
+import { awayShapeOf, SEAMLESS_DRAW_CFG, seamlessDrawActive } from './seamlessDraw';
 import { releaseCanvas } from './sprites';
 import { VIS_ABLATE, VIS_CFG, VIS_TELEMETRY } from './visConfig';
 import { registerDoodadFamily } from '../../engine/doodadFamilies';
@@ -142,6 +163,29 @@ function dropChunkImg(img: HTMLCanvasElement | ImageBitmap | null): void {
   else releaseCanvas(img as HTMLCanvasElement);
 }
 
+/** One WORLD-KEYED chunk (the seamless lane; key `zoneId:cx,cy` carries the
+ *  region). `at` is the draw/LRU stamp (the tissue cache's working-set guard
+ *  reads it); `bakedAt` orders stale rebakes oldest-first. `epoch` says which
+ *  ACTIVE visit live-baked it (`seamlessEpoch`) — `-1` = baked from a boot
+ *  mint (`mint` holds the record's identity: a re-mint refresh stales it).
+ *  Entries whose epoch is not the current one are FROZEN: drawable as-is,
+ *  converging to live truth through the stale budget only while their region
+ *  is the active one. Sync lane only — images are always canvases. */
+interface WorldChunkEntry {
+  img: HTMLCanvasElement; at: number; bakedAt: number;
+  epoch: number; v: number; b: number; mint: SeamlessMint | null;
+}
+
+/** One away region's memoized bake inputs, keyed to the mint record that
+ *  produced them (a re-mint rebuilds): the region's own bake seed, its
+ *  static bed/body groups off the mint's doodads, and its compiled blend. */
+interface AwayStatics {
+  mint: SeamlessMint;
+  seed: number;
+  groups: StaticGroup[];
+  blend: { at: BlendSampler; theme: ZoneTheme } | null;
+}
+
 export class GroundRenderer {
   private chunks = new Map<string, ChunkEntry>();
   private zoneRef: unknown = null;
@@ -201,6 +245,57 @@ export class GroundRenderer {
    *  null entry = the zone is unblended (the common case, zero cost). */
   private blendMemo: { zoneId: string; info: { at: BlendSampler; theme: ZoneTheme } | null } | null = null;
 
+  // --- THE WORLD-KEYED GROUND (seamless M1 wave 1 — header law above) -----
+  /** World-keyed full-fidelity chunks, all resident regions as PEERS
+   *  (`zoneId:cx,cy`). Map insertion order is the LRU (the zone-local cache's
+   *  own idiom); survives every zone swap and threshold crossing BY LAW —
+   *  only the run boundary (steward) and the cap release entries. */
+  private worldChunks = new Map<string, WorldChunkEntry>();
+  /** Draw/LRU sequence for the working-set guard (never evict a chunk drawn
+   *  this frame — the tissue cache's idiom). */
+  private worldSeq = 0;
+  /** The ACTIVE visit's live-stamp epoch: bumped whenever the active zone
+   *  changes under the seamless lane (rebase or door), because a fresh
+   *  loadZone's walk field resets its version counter — old live stamps are
+   *  incomparable, so the epoch turns them stale-class instead. */
+  private seamlessEpoch = 0;
+  /** Away regions' memoized bake inputs (see AwayStatics), keyed by zone id,
+   *  invalidated by mint identity. */
+  private awayStatics = new Map<string, AwayStatics>();
+  /** THE SHARED FRAME LEDGER: the active pass (drawFloor runs it first each
+   *  frame) opens the budget; the away passes (drawSeamlessCountry) spend
+   *  the remainder. One never-baked chunk per FRAME is always allowed
+   *  across all passes — streaming must progress (the discrete lane's own
+   *  law); everything further holds to SEAMLESS_DRAW_CFG's dials. */
+  private seamlessT0 = 0;
+  private seamlessRebakes = 0;
+  private seamlessBakedNew = false;
+  /** The frame's eviction floor (worldSeq at the active pass's start): every
+   *  pass this frame evicts against the SAME floor, so nothing any of them
+   *  drew or baked this frame can be evicted by a later pass. */
+  private seamlessDrawFloor = 0;
+
+  constructor() {
+    // The world-keyed cache joins the steward (renderer-owned instance — the
+    // understory idiom). NO zone handler on purpose: a threshold crossing
+    // must keep both regions' chunks (the tissue cache's continuity law,
+    // seamlessDraw.ts); the run boundary releases everything.
+    registerVisCache({
+      id: 'seamlessGround',
+      count: () => this.worldChunks.size,
+      bytes: () => this.worldChunks.size * VIS_CFG.ground.chunk * VIS_CFG.ground.chunk * 4,
+      onRunSwap: () => this.clearSeamless(),
+    });
+  }
+
+  /** Release every world-keyed chunk + away gather (run boundary only). */
+  private clearSeamless(): void {
+    for (const e of this.worldChunks.values()) dropChunkImg(e.img);
+    this.worldChunks.clear();
+    this.awayStatics.clear();
+    this.seamlessEpoch++;
+  }
+
   /** Resolve (and memoize) the current zone's blend for the bake passes. */
   private blendFor(world: World): { at: BlendSampler; theme: ZoneTheme } | null {
     const z = world.zone;
@@ -226,6 +321,14 @@ export class GroundRenderer {
   draw(ctx: CanvasRenderingContext2D, world: World,
     camX: number, camY: number, vw: number, vh: number): void {
     if (VIS_ABLATE.has('ground')) return; // perf forensics (visConfig)
+    // THE WORLD KEY (seamless M1): while the mode stands, the active region
+    // draws from the world-keyed peer cache instead — the gate is the draw
+    // lane's ONE predicate, so flag off / no sampler / unseated zones run
+    // the discrete path below byte-identically (THE MODE LAW).
+    if (seamlessDrawActive(world)) {
+      this.drawSeamlessLive(ctx, world, camX, camY, vw, vh);
+      return;
+    }
     if (this.zoneRef !== world.zone) {
       // Release the old zone's whole cache NOW (≈ maxChunks × chunk² of
       // pixels): left to the GC, a few zone hops of discarded floors pile
@@ -319,7 +422,7 @@ export class GroundRenderer {
       } else {
         this.stampLane('missing');
         this.chunks.set(m.key,
-          { img: this.bake(world, wf, m.cx, m.cy), pending: false, v: ver, b: this.bedsRev, at: ++this.bakeSeq });
+          { img: this.bake(world, wf, m.cx * C, m.cy * C), pending: false, v: ver, b: this.bedsRev, at: ++this.bakeSeq });
       }
       bakedNew = true;
       this.evictOverCap();
@@ -338,7 +441,7 @@ export class GroundRenderer {
         // closed (dropChunkImg), never cast at.
         this.stampLane('stale');
         const reuse = s.entry.img instanceof HTMLCanvasElement ? s.entry.img : undefined;
-        const img = this.bake(world, wf, s.cx, s.cy, reuse);
+        const img = this.bake(world, wf, s.cx * C, s.cy * C, reuse);
         if (s.entry.img !== img) dropChunkImg(s.entry.img);
         s.entry.img = img;
         s.entry.v = ver; s.entry.b = this.bedsRev; s.entry.at = ++this.bakeSeq;
@@ -381,7 +484,7 @@ export class GroundRenderer {
           } else {
             this.stampLane('missing');
             this.chunks.set(key,
-              { img: this.bake(world, wf, cx, cy), pending: false, v: ver, b: this.bedsRev, at: ++this.bakeSeq });
+              { img: this.bake(world, wf, cx * C, cy * C), pending: false, v: ver, b: this.bedsRev, at: ++this.bakeSeq });
           }
           this.evictOverCap();
           break outer;
@@ -433,7 +536,7 @@ export class GroundRenderer {
     key: string, entry: ChunkEntry | null, ver: number): void {
     const C = VIS_CFG.ground.chunk;
     if (!this.scratch) this.scratch = document.createElement('canvas');
-    this.bake(world, wf, cx, cy, this.scratch);
+    this.bake(world, wf, cx * C, cy * C, this.scratch);
     const e: ChunkEntry = entry
       ?? { img: null, pending: false, v: ver, b: this.bedsRev, at: ++this.bakeSeq };
     if (!entry) this.chunks.set(key, e);
@@ -469,6 +572,321 @@ export class GroundRenderer {
     }
   }
 
+  // --- THE WORLD-KEYED GROUND (seamless M1 wave 1) -------------------------
+
+  /** The shared per-frame bake budget (SEAMLESS_DRAW_CFG.groundBakeBudgetMs):
+   *  opened by the active pass, spent across active + away. */
+  private seamlessBudgetLeft(): boolean {
+    return performance.now() - this.seamlessT0 < SEAMLESS_DRAW_CFG.groundBakeBudgetMs;
+  }
+
+  /** Evict world-keyed chunks past the cap — but NEVER one drawn this frame
+   *  (the tissue cache's working-set guard: a wide dev zoom's visible set
+   *  may exceed the cap; thrashing it would leave holes that rebake forever,
+   *  so the cap bounds SESSION growth, not the view). */
+  private evictWorldChunks(drawFloor: number): void {
+    while (this.worldChunks.size > SEAMLESS_DRAW_CFG.maxGroundChunks) {
+      const oldest = this.worldChunks.entries().next().value;
+      if (oldest === undefined || oldest[1].at > drawFloor) break;
+      dropChunkImg(oldest[1].img);
+      this.worldChunks.delete(oldest[0]);
+    }
+  }
+
+  /** THE ACTIVE REGION on the world lattice: full-fidelity chunks from the
+   *  LIVE zone (walk grid, doodads, structures — today's bake, verbatim),
+   *  keyed `zoneId:cx,cy` in world chunk coordinates so they stay cache
+   *  peers with every neighbor's chunks across the threshold. The zone flip
+   *  here re-arms every zone-scoped bake input (seed, blend, the static-bed
+   *  gather, the live-stamp epoch) and releases the DISCRETE cache — whose
+   *  zone really is gone — but never a world-keyed entry: the rebase must
+   *  not pop (THE CONTINUITY LAW). Entries from older visits or mint bakes
+   *  draw as-is and converge through the stale budget — on a first arrival
+   *  their pixels already equal the live bake's (same layout, same seed,
+   *  same zone-local coords), so convergence is invisible; after a revisit
+   *  it repaints zone-memory deltas within a few frames. */
+  private drawSeamlessLive(ctx: CanvasRenderingContext2D, world: World,
+    camX: number, camY: number, vw: number, vh: number): void {
+    let seat: RegionSeat | null = null;
+    for (const s of world.seamlessRegions) if (s.zoneId === world.zone.id) { seat = s; break; }
+    if (!seat) return; // the predicate said yes a frame ago; races are harmless
+    // Open the frame ledger (drawFloor runs this pass first; the away passes
+    // in drawSeamlessCountry spend what remains).
+    this.seamlessT0 = performance.now();
+    this.seamlessRebakes = 0;
+    this.seamlessBakedNew = false;
+    if (this.zoneRef !== world.zone) {
+      // THE FLIP WITHOUT THE DROP: re-arm the zone-scoped machinery exactly
+      // as the discrete flip does — minus the world-cache clear. The
+      // discrete cache's zone was left through a real door (or the rebase's
+      // loadZone underneath), so it releases as always; in-flight discrete
+      // snapshots land dead via the epoch.
+      for (const e of this.chunks.values()) dropChunkImg(e.img);
+      this.chunks.clear();
+      this.zoneEpoch++;
+      this.snapAt = 0;
+      this.zoneRef = world.zone;
+      this.seed = strSeed(`${world.zone.id}|${world.zone.name}`);
+      this.staticArr = null; this.staticLen = -1; this.staticRev = -1;
+      this.prevBaked.clear();
+      this.bedsDirty.length = 0;
+      this.bedsPrimed = false;
+      this.blendMemo = null;
+      // A fresh loadZone's walk field resets its version counter, so live
+      // stamps from the previous visit are incomparable — the epoch turns
+      // every older entry stale-class (drawable, converging) instead.
+      this.seamlessEpoch++;
+    }
+    if (VIS_CFG.ground.bakeBlend || VIS_CFG.ground.bakeLiquidBody) this.syncStaticGroups(world);
+    const C = VIS_CFG.ground.chunk;
+    const wf = world.walk instanceof GridWalkField ? world.walk : null;
+    const ver = wf ? wf.version : 0;
+    const originX = seat.originPx.x, originY = seat.originPx.y;
+    this.seamlessDrawFloor = this.worldSeq;
+    // The region's silhouette (base + open annexes), traced in chunk-local
+    // coords at bake time: one path, nonzero-winding union. Baked-in so an
+    // ellipse zone's corners stay transparent — the country draw owns them.
+    const az = world.arena;
+    const pieces = activePieces(az);
+    const clipAt = (g: CanvasRenderingContext2D, ox: number, oy: number): void => {
+      g.beginPath();
+      if (az.shape === 'ellipse') g.ellipse(az.w / 2 - ox, az.h / 2 - oy, az.w / 2, az.h / 2, 0, 0, Math.PI * 2);
+      else g.rect(-ox, -oy, az.w, az.h);
+      for (const pc of pieces) {
+        if ((pc.shape ?? 'rect') === 'ellipse') {
+          g.ellipse(pc.x + pc.w / 2 - ox, pc.y + pc.h / 2 - oy, pc.w / 2, pc.h / 2, 0, 0, Math.PI * 2);
+        } else {
+          g.rect(pc.x - ox, pc.y - oy, pc.w, pc.h);
+        }
+      }
+      g.clip();
+    };
+    // The visible window ∩ the active union's hull, in WORLD chunk indices
+    // (the discrete pass's own clamp, rebased by the seat).
+    const wx0 = Math.max(0, camX) + originX, wx1 = Math.min(world.arenaHull.w - 1, camX + vw) + originX;
+    const wy0 = Math.max(0, camY) + originY, wy1 = Math.min(world.arenaHull.h - 1, camY + vh) + originY;
+    let x0 = 0, x1 = -1, y0 = 0, y1 = -1;
+    if (wx1 >= wx0 && wy1 >= wy0) {
+      x0 = Math.floor(wx0 / C); x1 = Math.floor(wx1 / C);
+      y0 = Math.floor(wy0 / C); y1 = Math.floor(wy1 / C);
+    }
+    // --- Inventory (the discrete pass's three-phase shape, world-keyed). ---
+    const ccx = (wx0 + wx1) / 2 / C, ccy = (wy0 + wy1) / 2 / C;
+    const missing: { key: string; cx: number; cy: number; d2: number }[] = [];
+    const stale: { entry: WorldChunkEntry; cx: number; cy: number }[] = [];
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const key = `${world.zone.id}:${cx},${cy}`;
+        const entry = this.worldChunks.get(key);
+        if (!entry) {
+          missing.push({ key, cx, cy, d2: (cx + 0.5 - ccx) ** 2 + (cy + 0.5 - ccy) ** 2 });
+          continue;
+        }
+        this.worldChunks.delete(key); this.worldChunks.set(key, entry); // LRU touch
+        entry.at = ++this.worldSeq;
+        if (entry.epoch !== this.seamlessEpoch) { stale.push({ entry, cx, cy }); continue; }
+        const ox = cx * C - originX, oy = cy * C - originY;
+        const bedsStale = entry.b < this.bedsFloodRev || this.bedsTouched(entry.b, ox, oy, C);
+        if (bedsStale || (wf && entry.v < ver)) {
+          const touched = bedsStale || (wf ? this.chunkStale(wf, entry.v, ox, oy, C) : false);
+          if (!touched) { entry.v = ver; entry.b = this.bedsRev; }
+          else stale.push({ entry, cx, cy });
+        }
+      }
+    }
+    // --- Bake: nearest missing first (ONE per frame always allowed — the
+    // shared guarantee), then stale oldest-bake-first under the trickle. ---
+    missing.sort((a, b) => a.d2 - b.d2);
+    for (const m of missing) {
+      if (this.seamlessBakedNew && !this.seamlessBudgetLeft()) break;
+      const ox = m.cx * C - originX, oy = m.cy * C - originY;
+      const img = this.bake(world, wf, ox, oy, undefined, g => clipAt(g, ox, oy));
+      this.worldChunks.set(m.key,
+        { img, at: ++this.worldSeq, bakedAt: ++this.bakeSeq, epoch: this.seamlessEpoch, v: ver, b: this.bedsRev, mint: null });
+      this.seamlessBakedNew = true;
+    }
+    stale.sort((a, b) => a.entry.bakedAt - b.entry.bakedAt);
+    for (const s of stale) {
+      if (this.seamlessRebakes >= SEAMLESS_DRAW_CFG.groundRebakesPerFrame || !this.seamlessBudgetLeft()) break;
+      const ox = s.cx * C - originX, oy = s.cy * C - originY;
+      const img = this.bake(world, wf, ox, oy, s.entry.img, g => clipAt(g, ox, oy));
+      if (s.entry.img !== img) dropChunkImg(s.entry.img);
+      s.entry.img = img;
+      s.entry.epoch = this.seamlessEpoch; s.entry.mint = null;
+      s.entry.v = ver; s.entry.b = this.bedsRev; s.entry.bakedAt = ++this.bakeSeq;
+      this.seamlessRebakes++;
+    }
+    // --- Blit in spatial order (missing chunks stand in flat — the hull
+    // clip crops the rim, the country draw covers outside the union). ---
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const entry = this.worldChunks.get(`${world.zone.id}:${cx},${cy}`);
+        const ox = cx * C - originX, oy = cy * C - originY;
+        if (entry) {
+          ctx.drawImage(entry.img, ox, oy);
+        } else {
+          ctx.fillStyle = world.zone.theme.floor;
+          ctx.fillRect(ox, oy, C, C);
+        }
+      }
+    }
+    // PREFETCH one ring chunk ahead of the walker when idle (the discrete
+    // pass's own streaming idiom), clamped to the region's footprint.
+    if (this.seamlessRebakes === 0 && this.seamlessBudgetLeft() && x1 >= x0) {
+      const bx0 = Math.max(Math.floor(originX / C), x0 - 1);
+      const bx1 = Math.min(Math.floor((originX + world.arenaHull.w - 1) / C), x1 + 1);
+      const by0 = Math.max(Math.floor(originY / C), y0 - 1);
+      const by1 = Math.min(Math.floor((originY + world.arenaHull.h - 1) / C), y1 + 1);
+      outer: for (let cy = by0; cy <= by1; cy++) {
+        for (let cx = bx0; cx <= bx1; cx++) {
+          if (cy >= y0 && cy <= y1 && cx >= x0 && cx <= x1) continue; // visible: handled above
+          const key = `${world.zone.id}:${cx},${cy}`;
+          if (this.worldChunks.get(key)) continue;
+          const ox = cx * C - originX, oy = cy * C - originY;
+          const img = this.bake(world, wf, ox, oy, undefined, g => clipAt(g, ox, oy));
+          this.worldChunks.set(key,
+            { img, at: ++this.worldSeq, bakedAt: ++this.bakeSeq, epoch: this.seamlessEpoch, v: ver, b: this.bedsRev, mint: null });
+          break outer;
+        }
+      }
+    }
+    this.evictWorldChunks(this.seamlessDrawFloor);
+  }
+
+  /** ONE AWAY REGION's ground at full fidelity, from its boot mint — the
+   *  cache peer of the active pass above. Called by drawSeamlessCountry
+   *  inside its outside-the-active-union clip, in the ACTIVE seat's frame
+   *  (originX/Y — everything seamless draws through the one transform).
+   *  Chunks bake through the SAME pipeline via the scoped world swap
+   *  (bakeAwayChunk); a re-minted record (the exits-key refresh) stales its
+   *  chunks by mint identity, converging under the shared budget. */
+  drawSeamlessAway(ctx: CanvasRenderingContext2D, world: World, seat: RegionSeat,
+    originX: number, originY: number, camX: number, camY: number, vw: number, vh: number): void {
+    const def = world.zoneMap[seat.zoneId];
+    const mint = world.seamlessMints.get(seat.zoneId);
+    if (!def || def.boundless || !mint) return; // no mint = stand down (the M0 law)
+    const C = VIS_CFG.ground.chunk;
+    const w = mint.span.w || def.size.w, h = mint.span.h || def.size.h;
+    // View ∩ footprint, in world px (the seat's own rect; annexes unknown to
+    // a mint — a piece opened live rejoins when the region next goes active).
+    const wx0 = Math.max(camX + originX, seat.originPx.x);
+    const wy0 = Math.max(camY + originY, seat.originPx.y);
+    const wx1 = Math.min(camX + vw + originX, seat.originPx.x + w - 1);
+    const wy1 = Math.min(camY + vh + originY, seat.originPx.y + h - 1);
+    if (wx1 < wx0 || wy1 < wy0) return;
+    const st = this.awayStaticsFor(def, mint);
+    const ell = awayShapeOf(def) === 'ellipse';
+    const clipAt = (g: CanvasRenderingContext2D, ox: number, oy: number): void => {
+      g.beginPath();
+      if (ell) g.ellipse(w / 2 - ox, h / 2 - oy, w / 2, h / 2, 0, 0, Math.PI * 2);
+      else g.rect(-ox, -oy, w, h);
+      g.clip();
+    };
+    const x0 = Math.floor(wx0 / C), x1 = Math.floor(wx1 / C);
+    const y0 = Math.floor(wy0 / C), y1 = Math.floor(wy1 / C);
+    const ccx = (wx0 + wx1) / 2 / C, ccy = (wy0 + wy1) / 2 / C;
+    const missing: { key: string; cx: number; cy: number; d2: number }[] = [];
+    const stale: { entry: WorldChunkEntry; cx: number; cy: number }[] = [];
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const key = `${seat.zoneId}:${cx},${cy}`;
+        const entry = this.worldChunks.get(key);
+        const lx = cx * C - originX, ly = cy * C - originY;
+        if (entry) {
+          this.worldChunks.delete(key); this.worldChunks.set(key, entry); // LRU touch
+          entry.at = ++this.worldSeq;
+          // A mint-baked chunk of a RE-MINTED record repaints; live-frozen
+          // chunks (a visit we left) stay the as-left truth until active.
+          if (entry.mint && entry.mint !== mint) stale.push({ entry, cx, cy });
+          ctx.drawImage(entry.img, lx, ly);
+        } else {
+          missing.push({ key, cx, cy, d2: (cx + 0.5 - ccx) ** 2 + (cy + 0.5 - ccy) ** 2 });
+          // Stand in flat inside the footprint (rect silhouettes only — an
+          // ellipse's corners must stay tissue; it goes bare for a frame).
+          if (!ell) {
+            const sx = Math.max(lx, seat.originPx.x - originX), sy = Math.max(ly, seat.originPx.y - originY);
+            const sw = Math.min(lx + C, seat.originPx.x - originX + w) - sx;
+            const sh = Math.min(ly + C, seat.originPx.y - originY + h) - sy;
+            if (sw > 0 && sh > 0) {
+              ctx.fillStyle = def.theme.floor;
+              ctx.fillRect(sx, sy, sw, sh);
+            }
+          }
+        }
+      }
+    }
+    missing.sort((a, b) => a.d2 - b.d2);
+    for (const m of missing) {
+      if (this.seamlessBakedNew && !this.seamlessBudgetLeft()) break;
+      const img = this.bakeAwayChunk(world, def, mint, seat, st, m.cx, m.cy, clipAt);
+      this.worldChunks.set(m.key,
+        { img, at: ++this.worldSeq, bakedAt: ++this.bakeSeq, epoch: -1, v: 0, b: 0, mint });
+      this.seamlessBakedNew = true;
+      ctx.drawImage(img, m.cx * C - originX, m.cy * C - originY); // no one-frame hole
+    }
+    stale.sort((a, b) => a.entry.bakedAt - b.entry.bakedAt);
+    for (const s of stale) {
+      if (this.seamlessRebakes >= SEAMLESS_DRAW_CFG.groundRebakesPerFrame || !this.seamlessBudgetLeft()) break;
+      const img = this.bakeAwayChunk(world, def, mint, seat, st, s.cx, s.cy, clipAt);
+      if (s.entry.img !== img) dropChunkImg(s.entry.img);
+      s.entry.img = img;
+      s.entry.mint = mint; s.entry.epoch = -1;
+      s.entry.bakedAt = ++this.bakeSeq;
+      this.seamlessRebakes++;
+    }
+    this.evictWorldChunks(this.seamlessDrawFloor);
+  }
+
+  /** An away region's memoized bake inputs (rebuilt when its mint record
+   *  refreshes): its own bake seed, the static bed/body groups off the
+   *  mint's doodads, its compiled blend (blendFor's own derivation, off the
+   *  def instead of the live zone). */
+  private awayStaticsFor(def: ZoneDef, mint: SeamlessMint): AwayStatics {
+    const hit = this.awayStatics.get(def.id);
+    if (hit && hit.mint === mint) return hit;
+    const partner = def.blend ? TILESETS[def.blend.with]?.theme : undefined;
+    const st: AwayStatics = {
+      mint,
+      seed: strSeed(`${def.id}|${def.name}`),
+      groups: this.gatherStaticGroups(mint.layout.doodads).groups,
+      blend: def.blend && partner
+        ? { at: compileBlendField(def.blend.field, { w: def.size.w, h: def.size.h }, def.seed ?? 0), theme: partner }
+        : null,
+    };
+    this.awayStatics.set(def.id, st);
+    return st;
+  }
+
+  /** Bake one AWAY chunk from the region's boot mint through the FULL
+   *  pipeline. The scoped world swap is seamlessMintResident's own idiom
+   *  (world.ts): the bake reads zone/doodads/structures as "the world", so
+   *  presenting the mint's layout through those three fields for the span
+   *  of one bake yields byte-the-same pixels the region would bake live —
+   *  restored in finally, and the render runs between sim updates, so
+   *  nothing else reads mid-bake. `still` freezes animated region visuals
+   *  into the bake (no live overlay reaches an away region). */
+  private bakeAwayChunk(world: World, def: ZoneDef, mint: SeamlessMint, seat: RegionSeat,
+    st: AwayStatics, cx: number, cy: number,
+    clipAt: (g: CanvasRenderingContext2D, ox: number, oy: number) => void): HTMLCanvasElement {
+    const C = VIS_CFG.ground.chunk;
+    const keepZone = world.zone, keepDoodads = world.doodads, keepStructures = world.structures;
+    const keepSeed = this.seed, keepGroups = this.staticGroups, keepBlend = this.blendMemo;
+    world.zone = def;
+    world.doodads = mint.layout.doodads;
+    world.structures = mint.layout.structures ?? [];
+    this.seed = st.seed;
+    this.staticGroups = st.groups;
+    this.blendMemo = { zoneId: def.id, info: st.blend };
+    const wf = mint.layout.walk instanceof GridWalkField ? mint.layout.walk : null;
+    const ox = cx * C - seat.originPx.x, oy = cy * C - seat.originPx.y;
+    try {
+      return this.bake(world, wf, ox, oy, undefined, g => clipAt(g, ox, oy), true);
+    } finally {
+      world.zone = keepZone; world.doodads = keepDoodads; world.structures = keepStructures;
+      this.seed = keepSeed; this.staticGroups = keepGroups; this.blendMemo = keepBlend;
+    }
+  }
+
   /** Did any repaint since `bakedV` touch this chunk's rect? Padded by one
    *  walk cell: the bake reads a one-cell ring PAST its border (rim edges,
    *  bevels, contact AO), so a repaint just outside — a melt on the far side
@@ -496,6 +914,54 @@ export class GroundRenderer {
     return false;
   }
 
+  /** The bake-with-floor gather itself, over ANY doodad list: every kind
+   *  whose blend bed and/or liquid body bakes with the floor, as painter
+   *  groups (kind-ascending paint order) plus each body's baked-reach rect.
+   *  The shared derivation behind the live gather's diffing below and the
+   *  away mints' per-layout gather (awayStaticsFor — the seamless lane). */
+  private gatherStaticGroups(doodads: readonly Doodad[]): {
+    groups: StaticGroup[];
+    reaches: Map<Doodad, { kind: string; x0: number; y0: number; x1: number; y1: number }>;
+  } {
+    const byKind = new Map<string, Doodad[]>();
+    for (const d of doodads) {
+      const def = DOODAD_VISUALS[d.kind];
+      if (!def) continue;
+      const blend = VIS_CFG.ground.bakeBlend && def.blend && !def.blend.live;
+      const body = def.painter === 'liquid' && !liquidBodyIsLive(def);
+      if (!blend && !body) continue;
+      const arr = byKind.get(d.kind);
+      if (arr) arr.push(d); else byKind.set(d.kind, [d]);
+    }
+    const groups: StaticGroup[] = [];
+    const reaches = new Map<Doodad, { kind: string; x0: number; y0: number; x1: number; y1: number }>();
+    for (const [kind, list] of byKind) {
+      const def = DOODAD_VISUALS[kind]!;
+      let maxR = 0;
+      for (const d of list) maxR = Math.max(maxR, d.radius);
+      const blend = !!(VIS_CFG.ground.bakeBlend && def.blend && !def.blend.live);
+      // pathBand strokes whole segments: a neighbour up to (rA+rB)·1.35 away
+      // can reach into this chunk, so pad by the worst span, not just feather.
+      // Blob pad 1.4·maxR covers melt crust plates spilling into the union.
+      const pad = (blend ? def.blend!.feather : 0)
+        + maxR * (def.blend?.mode === 'path' ? 3.7 : 1.4) + 8; // +8: rim/core grow
+      groups.push({
+        def, list, pad, blend,
+        body: def.painter === 'liquid' && !liquidBodyIsLive(def),
+      });
+      for (const d of list) {
+        const reach = d.radius + pad;
+        reaches.set(d, {
+          kind,
+          x0: d.pos.x - reach, y0: d.pos.y - reach,
+          x1: d.pos.x + reach, y1: d.pos.y + reach,
+        });
+      }
+    }
+    groups.sort((a, b) => (a.def.order ?? 50) - (b.def.order ?? 50));
+    return { groups, reaches };
+  }
+
   /** Gather (or re-gather when the doodad list changed) every kind whose
    *  blend bed and/or liquid body bakes with the floor, then DIFF the baked
    *  set against the last gather (object identity) and stale only what a
@@ -512,43 +978,9 @@ export class GroundRenderer {
     this.staticArr = world.doodads;
     this.staticLen = world.doodads.length;
     this.staticRev = rev;
-    const byKind = new Map<string, Doodad[]>();
-    for (const d of world.doodads) {
-      const def = DOODAD_VISUALS[d.kind];
-      if (!def) continue;
-      const blend = VIS_CFG.ground.bakeBlend && def.blend && !def.blend.live;
-      const body = def.painter === 'liquid' && !liquidBodyIsLive(def);
-      if (!blend && !body) continue;
-      const arr = byKind.get(d.kind);
-      if (arr) arr.push(d); else byKind.set(d.kind, [d]);
-    }
-    this.staticGroups = [];
-    const next = new Map<Doodad, { kind: string; x0: number; y0: number; x1: number; y1: number }>();
+    const { groups, reaches: next } = this.gatherStaticGroups(world.doodads);
+    this.staticGroups = groups;
     let flood = false;
-    for (const [kind, list] of byKind) {
-      const def = DOODAD_VISUALS[kind]!;
-      let maxR = 0;
-      for (const d of list) maxR = Math.max(maxR, d.radius);
-      const blend = !!(VIS_CFG.ground.bakeBlend && def.blend && !def.blend.live);
-      // pathBand strokes whole segments: a neighbour up to (rA+rB)·1.35 away
-      // can reach into this chunk, so pad by the worst span, not just feather.
-      // Blob pad 1.4·maxR covers melt crust plates spilling into the union.
-      const pad = (blend ? def.blend!.feather : 0)
-        + maxR * (def.blend?.mode === 'path' ? 3.7 : 1.4) + 8; // +8: rim/core grow
-      this.staticGroups.push({
-        def, list, pad, blend,
-        body: def.painter === 'liquid' && !liquidBodyIsLive(def),
-      });
-      for (const d of list) {
-        const reach = d.radius + pad;
-        next.set(d, {
-          kind,
-          x0: d.pos.x - reach, y0: d.pos.y - reach,
-          x1: d.pos.x + reach, y1: d.pos.y + reach,
-        });
-      }
-    }
-    this.staticGroups.sort((a, b) => (a.def.order ?? 50) - (b.def.order ?? 50));
 
     // First gather of a zone: nothing is baked yet — adopt without staling.
     if (!this.bedsPrimed) {
@@ -591,12 +1023,22 @@ export class GroundRenderer {
     }
   }
 
-  /** Bake one chunk. Pass `reuse` (the chunk's outgoing canvas) on a REBAKE:
-   *  re-setting width resets the surface in place, so a continuously-melting
-   *  floor re-bakes into the same backing store instead of churning a fresh
-   *  ~0.8MB canvas per rebake through the allocator (the GC-hitch tax). */
-  private bake(world: World, wf: GridWalkField | null, cx: number, cy: number,
-    reuse?: HTMLCanvasElement): HTMLCanvasElement {
+  /** Bake one chunk whose zone-local origin is (ox, oy) px — the discrete
+   *  lane passes chunk-lattice corners (cx·C), the seamless lane passes
+   *  world-lattice corners rebased by the region's seat (fractional is
+   *  fine: every hash below keys on position, not index). Pass `reuse` (the
+   *  chunk's outgoing canvas) on a REBAKE: re-setting width resets the
+   *  surface in place, so a continuously-melting floor re-bakes into the
+   *  same backing store instead of churning a fresh ~0.8MB canvas per
+   *  rebake through the allocator (the GC-hitch tax). `clip` (seamless
+   *  only) traces the region's silhouette in chunk-local coords so an
+   *  ellipse neighbor's corners stay transparent for the tissue below;
+   *  `still` (away bakes only) freezes ANIMATED region visuals into the
+   *  bake — an away lake reads as water at a distance, and the live
+   *  overlay paints over the still the moment the region goes active. */
+  private bake(world: World, wf: GridWalkField | null, ox: number, oy: number,
+    reuse?: HTMLCanvasElement, clip?: (g: CanvasRenderingContext2D) => void,
+    still?: boolean): HTMLCanvasElement {
     VIS_TELEMETRY.groundBakes++;
 
     const CFG = VIS_CFG.ground;
@@ -605,7 +1047,7 @@ export class GroundRenderer {
     const c = reuse ?? document.createElement('canvas');
     c.width = C; c.height = C;
     const ctx = c.getContext('2d')!;
-    const ox = cx * C, oy = cy * C; // world coords of the chunk origin
+    if (clip) { ctx.save(); clip(ctx); }
 
     // --- Base + noise mottle: the floor stops being one flat rectangle. ---
     // The tone swing is HUE-PRESERVING: lightness moves, saturation gets a
@@ -772,16 +1214,20 @@ export class GroundRenderer {
     // Tufts only where the theme declares grass; embers only where it
     // declares lava; pebbles from the obstacle tone everywhere. The ground
     // style scales density (a dune sea is bare; a forest floor is busy).
+    // Speckle hash keys are the chunk origin in CHUNK UNITS — exactly the
+    // old chunk index on the discrete lattice (ox/C == cx there), stable
+    // fractional keys on the seamless world lattice.
+    const kx = ox / C, ky = oy / C;
     const n = Math.round(CFG.speckles * (gs.speckles ?? 1));
     for (let i = 0; i < n; i++) {
-      const sx = hash01(cx * 31 + i, cy * 17, this.seed) * C;
-      const sy = hash01(cx * 13, cy * 41 + i, this.seed + 7) * C;
-      const roll = hash01(i, cx * 7 + cy * 3, this.seed + 13);
+      const sx = hash01(kx * 31 + i, ky * 17, this.seed) * C;
+      const sy = hash01(kx * 13, ky * 41 + i, this.seed + 7) * C;
+      const roll = hash01(i, kx * 7 + ky * 3, this.seed + 13);
       // BLENDED SPECKLES speak the vocabulary of whichever country holds
       // that spot (a dither vs the weight — bone chips on one side, grass
       // tufts on the other; discrete details PICK a side, never tint-mix).
       const th = blend && bTheme
-        && hash01(i * 53, cx * 19 + cy * 7, this.seed + 91) < blend.at(ox + sx, oy + sy)
+        && hash01(i * 53, kx * 19 + ky * 7, this.seed + 91) < blend.at(ox + sx, oy + sy)
         ? bTheme : theme;
       ctx.globalAlpha = CFG.speckleAlpha;
       if (th.grass && roll < 0.4) {
@@ -861,15 +1307,18 @@ export class GroundRenderer {
     }
 
     // --- Walk-grid pass: static region visuals, walls, bevel + AO. --------
-    if (wf) this.bakeRegions(ctx, world, wf, ox, oy, C);
+    if (wf) this.bakeRegions(ctx, world, wf, ox, oy, C, still);
+    if (clip) ctx.restore();
     return c;
   }
 
   /** Region cells inside (and one ring around) the chunk: static visuals fill
    *  over the mottle, walls take the themed fill with a lit/shaded bevel, and
-   *  the floor picks up contact occlusion along wall edges — carved space. */
+   *  the floor picks up contact occlusion along wall edges — carved space.
+   *  `still` (away mints only) bakes ANIMATED visuals as a frozen fill —
+   *  the live overlay owns them everywhere else. */
   private bakeRegions(ctx: CanvasRenderingContext2D, world: World,
-    wf: GridWalkField, ox: number, oy: number, C: number): void {
+    wf: GridWalkField, ox: number, oy: number, C: number, still?: boolean): void {
     const CFG = VIS_CFG.ground;
     const theme = world.zone.theme;
     // CONTRAST GUARD: a biome whose wall tone sits within a whisker of its
@@ -934,7 +1383,7 @@ export class GroundRenderer {
           // still bakes: a torn cloud-lip around every gap.
           if (vis.window) {
             ctx.clearRect(x, y, cell + 0.6, cell + 0.6);
-          } else if (!vis.animate) {
+          } else if (!vis.animate || still) {
             // Static visuals bake; ANIMATED ones stay live (renderer overlay).
             ctx.globalAlpha = vis.alpha ?? 1;
             ctx.fillStyle = vis.fill;

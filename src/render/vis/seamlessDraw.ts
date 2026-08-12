@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// THE SEAMLESS COUNTRY DRAW (seamless-world M0, the render lane) — what the
+// THE SEAMLESS COUNTRY DRAW (seamless-world, the render lane) — what the
 // view shows PAST the active layout's rim when the mode stands: connective
 // TISSUE poured from the global fields, and the NEIGHBOR layouts standing at
 // their map seats. Charter: docs/design/seamless-world.md; contracts:
@@ -10,11 +10,21 @@
 // active zone unseated ⇒ false ⇒ the renderer runs today's void-frame path
 // byte-identically. Null sampler = "no tissue exists"; nothing here throws.
 //
-// M0 IS HONEST, NOT PRETTY: tissue is flat lattice tones (biome hex from the
-// sampler), the road is a flat lighter band, water is a darkened lean, and
-// the neighbor is a reduced-fidelity flat bake — no new painters anywhere.
+// THE NEIGHBOR'S GROUND (M1 wave 1) lives in render/vis/ground.ts: the
+// world-keyed chunk cache (GroundRenderer.worldChunks) bakes every resident
+// region — active AND away — at FULL fidelity through the one bake pipeline,
+// keyed on world chunk coordinates so a threshold crossing changes which
+// region is active without dropping a single chunk. drawSeamlessCountry
+// below hands each away seat to it inside the outside-the-union clip. The
+// M0 reduced-fidelity flat ground bake (SeamlessAwayGrounds) RETIRED with
+// it — what remains here of the neighbor is SeamlessAwayBodies, the flat
+// STANDING-DOODAD discs over that real ground (the doodad painters only run
+// live for the active zone; a future wave makes neighbor bodies resident).
+// The M0 away DIM retired with the flats too: the crossing may not pop, so
+// the neighbor's ground wears its true tones (FLAGGED — if her eye wants
+// the not-yet-real veil back, it belongs at draw time, never in the bake).
 //
-// TWO CACHES, both steward-registered (render/vis/caches.ts):
+// TWO MODULE CACHES, both steward-registered (render/vis/caches.ts):
 //  • SeamlessTissueChunks — per-chunk offscreen canvases keyed `${cx},${cy}`
 //    in WORLD px at SEAMLESS_CFG.chunkPx grain, LRU-evicted over a cap: the
 //    ground-chunk cache idiom (render/vis/ground.ts GroundRenderer.chunks —
@@ -23,37 +33,25 @@
 //    own purity law — so they survive zone swaps VALIDLY (no onZoneSwap
 //    handler on purpose: clearing at the threshold would pop the tissue at
 //    the exact moment that must feel continuous; the cap is the bound).
-//  • SeamlessAwayGrounds — one reduced-scale flat bake per resident neighbor.
-//
-// THE NEIGHBOR CUT (documented choice): the ground-chunk cache is too
-// zone-coupled to serve two zones in M0 (GroundRenderer keys its whole cache
-// on `world.zone` identity and bakes off the LIVE walk grid/doodad list/zone
-// theme — a second zone would need a second World view). So the neighbor
-// draws the chip's sanctioned simpler cut: FLAT GRID TONES + doodad discs at
-// reduced scale, dimmed — painted from the placement lane's OWN resident
-// mint (World.seamlessMints, minted through the same derivation loadZone
-// runs, true exits and road dress included), never a second render-side
-// generation. A seat without a mint draws nothing (structurally impossible
-// while the placement lane fills both together; the guard is the stand-down
-// law's shape). M1 replaces this bake with world-keyed real ground chunks.
+//  • SeamlessAwayBodies — one reduced-scale disc bake per resident neighbor.
+// (The world-keyed ground cache registers from its own home, ground.ts.)
 // ---------------------------------------------------------------------------
 
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import type { ZoneDef } from '../../data/zones';
-import type { Doodad, GeneratedLayout } from '../../engine/levelgen';
-import type { World } from '../../engine/world';
+import type { Doodad } from '../../engine/levelgen';
+import type { SeamlessMint, World } from '../../engine/world';
 import { getTissueSampler, SEAMLESS_CFG, type RegionSeat, type TissueSampler } from '../../world/seamless';
 import { activePieces, type BoundsPiece } from '../../world/shape';
 import { registerVisCache } from './caches';
-import { mix, withAlpha } from './color';
+import { mix } from './color';
+import type { GroundRenderer } from './ground';
 import { releaseCanvas } from './sprites';
 
-/** M0 render-lane dials — ALL FLAGGED (unblessed; her word moves them).
- *  Tone/dim rationale: the road lifts the biome tone just enough to read as
- *  a way without inventing a material; water leans the same tone into one
- *  shared dark so every biome's coast reads as the same sea; the away dim
- *  is a light hand — the neighbor should read as REAL ground you haven't
- *  reached, not a ghost. */
+/** Seamless render-lane dials — ALL FLAGGED (unblessed; her word moves
+ *  them). Tone rationale: the road lifts the biome tone just enough to read
+ *  as a way without inventing a material; water leans the same tone into
+ *  one shared dark so every biome's coast reads as the same sea. */
 export const SEAMLESS_DRAW_CFG = {
   /** Tissue sample lattice inside a chunk, px (720/30 = 24 cells exactly).
    *  Coarser = cheaper bakes; finer = smoother biome borders. */
@@ -70,17 +68,28 @@ export const SEAMLESS_DRAW_CFG = {
    *  waterDark by waterMix — one shared dark, biome-tinted. */
   waterDark: '#0a1826',
   waterMix: 0.62,
-  /** Neighbor ground bake scale (reduced fidelity — the documented M0 cut). */
+  /** THE WORLD-KEYED GROUND (M1 wave 1, ground.ts worldChunks) — LRU cap on
+   *  full-fidelity chunks across ALL resident regions (~0.8MB each at 448²;
+   *  72 ≈ 58MB: two regions' views + crossing hysteresis + the prefetch
+   *  ring — the ground cache's own byte class, sized for the pair). The
+   *  working-set guard means the cap bounds session growth, never the view. */
+  maxGroundChunks: 72,
+  /** Shared per-frame world-chunk bake budget (ms) — the active pass opens
+   *  the ledger, away passes spend the remainder; ONE never-baked chunk per
+   *  frame is always allowed regardless (streaming must progress — the
+   *  discrete ground lane's own law). Mirrors VIS_CFG.ground.bakeBudgetMs. */
+  groundBakeBudgetMs: 6,
+  /** Stale world-chunk rebakes per frame — the convergence trickle after a
+   *  crossing (epoch turnover), a walk repaint, or a mint refresh. The
+   *  discrete lane runs 3; the seamless lane keeps a lighter hand because
+   *  convergence bakes are usually pixel-identical to what they replace. */
+  groundRebakesPerFrame: 2,
+  /** Away BODY discs (SeamlessAwayBodies) bake scale — the M0 cut, now
+   *  bodies-only: the ground beneath is full fidelity. */
   awayScale: 1 / 3,
-  /** The away-region read: dim wash baked over the neighbor (source-atop, so
-   *  an ellipse neighbor's transparent corners stay tissue). */
-  awayDim: 0.24,
-  awayDimInk: '#05070e',
-  /** Resident neighbor bakes kept (LRU). */
+  /** Resident neighbor body bakes kept (LRU). */
   maxAway: 3,
-  /** Neighbor wall-cell tone: floor leaned this far toward black. */
-  wallDarken: 0.45,
-  /** Neighbor doodad disc alphas by paint-order class (grounds vs standing). */
+  /** Away body-disc alphas by paint-order class (grounds vs standing). */
   groundDoodadAlpha: 0.55,
   standingDoodadAlpha: 0.9,
 } as const;
@@ -214,31 +223,36 @@ class SeamlessTissueChunks {
 }
 
 // ---------------------------------------------------------------------------
-// THE AWAY GROUNDS — the neighbor's layout at its seat, flat and dimmed.
+// THE AWAY BODIES — the neighbor's standing doodads as flat discs, drawn
+// OVER its world-keyed full-fidelity ground (M1 wave 1: the M0 flat ground
+// bake retired into ground.ts's worldChunks). The doodad painter pass only
+// runs live for the active zone, so until a wave makes neighbor bodies
+// resident this keeps the treeline readable at the M0 disc fidelity.
 // ---------------------------------------------------------------------------
 
-interface AwayEntry { img: HTMLCanvasElement; w: number; h: number; at: number }
+interface AwayEntry { img: HTMLCanvasElement; w: number; h: number; at: number; mint: SeamlessMint }
 
-class SeamlessAwayGrounds {
-  private grounds = new Map<string, AwayEntry>(); // zoneId → bake (LRU)
+class SeamlessAwayBodies {
+  private bodies = new Map<string, AwayEntry>(); // zoneId → bake (LRU)
   private seq = 0;
 
-  count(): number { return this.grounds.size; }
+  count(): number { return this.bodies.size; }
   bytes(): number {
     let b = 0;
-    for (const e of this.grounds.values()) b += e.img.width * e.img.height * 4;
+    for (const e of this.bodies.values()) b += e.img.width * e.img.height * 4;
     return b;
   }
 
   clear(): void {
-    for (const e of this.grounds.values()) releaseCanvas(e.img);
-    this.grounds.clear();
+    for (const e of this.bodies.values()) releaseCanvas(e.img);
+    this.bodies.clear();
   }
 
-  /** Draw one away seat if its footprint touches the view. The ground comes
-   *  from the placement lane's OWN resident mint (World.seamlessMints — the
-   *  same layout the threshold sweep lands on, so drawn == arrived-at); the
-   *  bake is lazy and view-gated, so an off-screen neighbor costs nothing. */
+  /** Draw one away seat's bodies if its footprint touches the view. The
+   *  doodads come from the placement lane's OWN resident mint
+   *  (World.seamlessMints — the same layout the threshold sweep lands on,
+   *  so drawn == arrived-at); the bake is lazy and view-gated, and a
+   *  re-minted record (the exits-key refresh) re-bakes by mint identity. */
   draw(ctx: CanvasRenderingContext2D, world: World, seat: RegionSeat,
     originX: number, originY: number, camX: number, camY: number, vw: number, vh: number): void {
     const def = world.zoneMap[seat.zoneId];
@@ -247,78 +261,52 @@ class SeamlessAwayGrounds {
     const w = mint.span.w || def.size.w, h = mint.span.h || def.size.h;
     const lx = seat.originPx.x - originX, ly = seat.originPx.y - originY; // zone-local top-left
     if (lx > camX + vw || ly > camY + vh || lx + w < camX || ly + h < camY) return;
-    let entry = this.grounds.get(seat.zoneId);
-    if (!entry) {
-      entry = this.bake(def, mint.layout, w, h);
-      this.grounds.set(seat.zoneId, entry);
-      while (this.grounds.size > SEAMLESS_DRAW_CFG.maxAway) {
-        const oldest = this.grounds.keys().next().value;
+    let entry = this.bodies.get(seat.zoneId);
+    if (!entry || entry.mint !== mint) {
+      if (entry) releaseCanvas(entry.img);
+      entry = this.bake(def, mint, w, h);
+      this.bodies.delete(seat.zoneId); this.bodies.set(seat.zoneId, entry);
+      while (this.bodies.size > SEAMLESS_DRAW_CFG.maxAway) {
+        const oldest = this.bodies.keys().next().value;
         if (oldest === undefined) break;
-        const old = this.grounds.get(oldest);
+        const old = this.bodies.get(oldest);
         if (old) releaseCanvas(old.img);
-        this.grounds.delete(oldest);
+        this.bodies.delete(oldest);
       }
     } else {
-      this.grounds.delete(seat.zoneId); this.grounds.set(seat.zoneId, entry); // LRU touch
+      this.bodies.delete(seat.zoneId); this.bodies.set(seat.zoneId, entry); // LRU touch
     }
     ctx.drawImage(entry.img, lx, ly, entry.w, entry.h);
   }
 
-  /** The reduced-fidelity flat bake: silhouette-clipped floor tone, walk-grid
-   *  wall cells where the layout carries a WalkField, doodads as flat discs
-   *  in paint order, then the away dim washed source-atop (painted pixels
-   *  only — an ellipse neighbor's corners stay transparent for the tissue
-   *  below). */
-  private bake(def: ZoneDef, layout: GeneratedLayout, w: number, h: number): AwayEntry {
+  /** The disc bake: silhouette-clipped (an ellipse neighbor's corners stay
+   *  transparent for the ground/tissue below), doodads as flat discs in
+   *  ascending paint order (grounds under standing bodies) — the def's own
+   *  params.color where it speaks hex, else a theme-derived dark. No
+   *  painters, by the M0 law; no floor, no walls, no dim — the world-keyed
+   *  chunks beneath are the real ground. */
+  private bake(def: ZoneDef, mint: SeamlessMint, w: number, h: number): AwayEntry {
     const S = SEAMLESS_DRAW_CFG.awayScale;
     const c = document.createElement('canvas');
     c.width = Math.max(1, Math.ceil(w * S));
     c.height = Math.max(1, Math.ceil(h * S));
     const g = c.getContext('2d')!;
     g.scale(S, S);
-    const ell = awayShapeOf(def) === 'ellipse';
-    if (ell) { g.beginPath(); g.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); g.clip(); }
-    const floor = def.theme.floor;
-    g.fillStyle = floor;
-    g.fillRect(0, 0, w, h);
-    // Wall cells (non-convex layouts only — convex plains carry no WalkField
-    // and read as open floor + doodads, which is what they are).
-    const walk = layout.walk;
-    if (walk?.cellSize && walk.isWalkable) {
-      const cs = walk.cellSize;
-      const wall = mix(floor, '#000000', SEAMLESS_DRAW_CFG.wallDarken);
-      g.fillStyle = wall;
-      for (let y = cs / 2; y < h; y += cs) {
-        let runStart = -1;
-        for (let x = cs / 2; x < w; x += cs) {
-          const open = walk.isWalkable(x, y);
-          if (!open && runStart < 0) runStart = x - cs / 2;
-          if (open && runStart >= 0) { g.fillRect(runStart, y - cs / 2, x - cs / 2 - runStart, cs); runStart = -1; }
-        }
-        if (runStart >= 0) g.fillRect(runStart, y - cs / 2, w - runStart, cs);
-      }
+    if (awayShapeOf(def) === 'ellipse') {
+      g.beginPath(); g.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); g.clip();
     }
-    // Doodads as flat discs, painted in ascending paint order (grounds under
-    // standing bodies) — the def's own params.color where it speaks hex,
-    // else a theme-derived dark. No painters, by M0 law.
-    const dressed = [...layout.doodads].sort((a, b) => orderOf(a) - orderOf(b));
+    const dressed = [...mint.layout.doodads].sort((a, b) => orderOf(a) - orderOf(b));
     for (const d of dressed) {
       const order = orderOf(d);
       g.globalAlpha = order < 44
         ? SEAMLESS_DRAW_CFG.groundDoodadAlpha : SEAMLESS_DRAW_CFG.standingDoodadAlpha;
-      g.fillStyle = doodadToneOf(d, floor);
+      g.fillStyle = doodadToneOf(d, def.theme.floor);
       g.beginPath();
       g.arc(d.pos.x, d.pos.y, d.radius, 0, Math.PI * 2);
       g.fill();
     }
     g.globalAlpha = 1;
-    // THE AWAY DIM (flagged): baked in once, source-atop.
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    g.globalCompositeOperation = 'source-atop';
-    g.fillStyle = withAlpha(SEAMLESS_DRAW_CFG.awayDimInk, SEAMLESS_DRAW_CFG.awayDim);
-    g.fillRect(0, 0, c.width, c.height);
-    g.globalCompositeOperation = 'source-over';
-    return { img: c, w, h, at: ++this.seq };
+    return { img: c, w, h, at: ++this.seq, mint };
   }
 }
 
@@ -340,9 +328,13 @@ function doodadToneOf(d: Doodad, floor: string): string {
 
 /** The neighbor's silhouette shape — ZoneDef.shape where authored, else the
  *  same FNV pick World.makeArena derives (world.ts ~1993; replicated because
- *  makeArena is world-private and the mint stores only the span — M1's
- *  world-keyed ground chunks retire this, drift risk dies with them). */
-function awayShapeOf(def: ZoneDef): 'rect' | 'ellipse' {
+ *  makeArena is world-private and the mint stores only the span). The
+ *  world-keyed ground chunks and the body bake both clip by it — the drift
+ *  risk retires only when the world side stamps the shape onto the mint
+ *  record itself (one line in seamlessMintResident, inside its scoped swap:
+ *  `shape: this.arena.shape` on SeamlessMint — the deferred prescription;
+ *  adopt it here as `mint.shape ?? awayShapeOf(def)` when it lands). */
+export function awayShapeOf(def: ZoneDef): 'rect' | 'ellipse' {
   if (def.shape) return def.shape === 'ellipse' ? 'ellipse' : 'rect';
   if (def.objective.kind === 'safe' || def.fixtures) return 'rect';
   let hsh = 2166136261;
@@ -358,7 +350,7 @@ function awayShapeOf(def: ZoneDef): 'rect' | 'ellipse' {
 // ---------------------------------------------------------------------------
 
 const tissue = new SeamlessTissueChunks();
-const away = new SeamlessAwayGrounds();
+const away = new SeamlessAwayBodies();
 
 registerVisCache({
   id: 'seamlessTissue',
@@ -397,12 +389,15 @@ function clipOutsideMember(ctx: CanvasRenderingContext2D, w: number, h: number,
   ctx.clip('evenodd');
 }
 
-/** Everything past the active rim, seamless-mode: the tissue country and the
- *  neighbor layouts at their seats. Runs under the world transform with the
- *  same (cam, view) frame drawVoidFrame takes; the caller has already gated
- *  on seamlessDrawActive. */
+/** Everything past the active rim, seamless-mode: the tissue country, then
+ *  each neighbor's full-fidelity world-keyed ground (the GroundRenderer's
+ *  own away pass — chunks are cache peers with the active zone's, so the
+ *  threshold crossing pops nothing), then its flat body discs over that.
+ *  Runs under the world transform with the same (cam, view) frame
+ *  drawVoidFrame takes; the caller has already gated on seamlessDrawActive
+ *  and lends its ground renderer (the renderer owns the one instance). */
 export function drawSeamlessCountry(ctx: CanvasRenderingContext2D, world: World,
-  camX: number, camY: number, vw: number, vh: number): void {
+  ground: GroundRenderer, camX: number, camY: number, vw: number, vh: number): void {
   const seat = activeSeatOf(world);
   if (!seat) return; // stand down (the predicate said yes a frame ago; races are harmless)
   const az = world.arena;
@@ -417,6 +412,7 @@ export function drawSeamlessCountry(ctx: CanvasRenderingContext2D, world: World,
   tissue.draw(ctx, world, seat.originPx.x, seat.originPx.y, camX, camY, vw, vh);
   for (const s of world.seamlessRegions) {
     if (s.zoneId === world.zone.id) continue;
+    ground.drawSeamlessAway(ctx, world, s, seat.originPx.x, seat.originPx.y, camX, camY, vw, vh);
     away.draw(ctx, world, s, seat.originPx.x, seat.originPx.y, camX, camY, vw, vh);
   }
   ctx.restore();
