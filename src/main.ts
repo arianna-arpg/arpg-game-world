@@ -337,8 +337,13 @@ ui.getPadActive = padActiveNow;
 // THE HERO'S ADDRESS: '{name}' tokens in world-authored talk resolve against
 // the live hero at the same display seam as '{bind:…}' (Renderer.resolveText
 // → resolveNameTokens) — the closure reads the CURRENT world, so a new run's
-// hero re-addresses every line the moment it seats.
-renderer.getPlayerName = () => world.meta.name;
+// hero re-addresses every line the moment it seats. THE RENOWN GATE
+// (World.heroKnown — run-scope; the Odyssey's first arm will stamp it): an
+// UNKNOWN hero feeds the BLANK name, so every token site current and future
+// degrades to the resolver's own 'Traveller' fallback through this one seam
+// — no per-line churn, and no future line can leak a name the world has not
+// yet learned.
+renderer.getPlayerName = () => world.heroKnown() ? world.meta.name : '';
 
 let running = false;
 let deathShown = false;

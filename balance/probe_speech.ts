@@ -21,6 +21,15 @@
 //      through walls); door/window spills stay honest.
 //   E. SHIPPED DIALS — the committed VIS_CFG.speech block stays sane, and
 //      Mireille's longest authored line actually wraps at the shipped width.
+//   F. NAME TOKEN — '{name}' expands at the display seam; blank/whitespace
+//      names degrade to 'Traveller'; token-free text passes byte-identical;
+//      the seasoned lines wrap whole under a long name.
+//   G. RENOWN GATE — heroKnown() on the real engine (the one section that
+//      boots it): run-scope by law (a fresh world AND an account-stamped
+//      account both start unknown), the three prompt sites speak their
+//      pre-renown words until the run stamp and the {name} faces after,
+//      and the unknown-state main.ts feed (the blank name) degrades any
+//      stray token to the honest address.
 //
 //   npx tsx balance/probe_speech.ts
 
@@ -28,6 +37,10 @@ import {
   resolveSpeech, revealedChars, revealBudget, wrapSpeech, resolveNameTokens,
   type SpeechTuning,
 } from '../src/render/vis/speech';
+import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
+import { bumpLedger } from '../src/packages/ledger';
+import { LEDGER_HERO_RENOWNED, type World } from '../src/engine/world';
+import { QUESTS } from '../src/quests/defs';
 import {
   roomVolume, veiledAtVolume,
   type ConfineRoom, type ConfineStructure,
@@ -234,6 +247,88 @@ console.log('F. THE NAME TOKEN (resolveNameTokens — the hero\'s address at the
     check(`F7.${i} a seasoned line wraps whole under a long name`,
       lines.every(l => proxy(l) <= VIS_CFG.speech.maxWidth || !l.includes(' '))
       && lines.join(' ') === shown, `${lines.length} lines`);
+  }
+}
+
+// --- G. THE RENOWN GATE -----------------------------------------------------
+console.log('G. THE RENOWN GATE (heroKnown — the name arrives with the deed, run-scope)');
+{
+  bootSimEngine();
+  // Town NPCs, spawned the way probe_mireille does (createMonster + push),
+  // close enough that the live dist+reach reads pass — the rig never steps
+  // the world, so no dwell fires and the staged states hold still.
+  const spawn = (w: World, defId: string): void => {
+    const npc = w.createMonster(defId, 1, 'player');
+    npc.pos = { x: w.player.pos.x + 60, y: w.player.pos.y };
+    w.actors.push(npc);
+  };
+
+  // The innkeep's greeting — the SAME world-state read twice, only renown
+  // flipping between reads: the line changing at the stamp IS the feature.
+  const A = makeSimWorld('tamer', 77031);
+  spawn(A, 'townsfolk_innkeep');
+  check('G1 a fresh world knows no hero', !A.heroKnown());
+  check('G2 unknown: the original stranger\'s welcome, token-free',
+    A.innkeepPrompt() === 'Come here, dear — I keep flasks for new faces.',
+    `"${A.innkeepPrompt()}"`);
+  bumpLedger(A.account.ledger, LEDGER_HERO_RENOWNED);
+  check('G3 ACCOUNT renown never knows a fresh hero (run scope is the law)',
+    !A.heroKnown());
+  bumpLedger(A.ledger, LEDGER_HERO_RENOWNED);
+  check('G4 the run stamp makes the hero known', A.heroKnown());
+  check('G5 known: the same owed gift now greets by name',
+    A.innkeepPrompt() === '{name}, is it? Come here — I keep flasks for new faces.',
+    `"${A.innkeepPrompt()}"`);
+
+  // The quartermaster's work offer (level 5 — exactly one acceptable quest,
+  // so the offer shuffle draws nothing and the read stays deterministic).
+  const B = makeSimWorld('tamer', 77032);
+  spawn(B, 'townsfolk_questgiver');
+  B.player.level = 5;
+  check('G6 unknown: work offered in the original words',
+    B.questGiverPrompt() === 'Linger, and I have work for you…',
+    `"${B.questGiverPrompt()}"`);
+  bumpLedger(B.ledger, LEDGER_HERO_RENOWNED);
+  check('G7 known: work offered by name',
+    B.questGiverPrompt() === 'Linger, {name} — I have work for you…',
+    `"${B.questGiverPrompt()}"`);
+
+  // The CALLING (vocation choice): an ordinary chain's class at its offer
+  // level, every non-vocation quest marked done (derived from the registry,
+  // never a hand list) so the choice line is the one on offer.
+  const C = makeSimWorld('warrior', 77033);
+  spawn(C, 'townsfolk_questgiver');
+  C.player.level = 30;
+  for (const q of Object.values(QUESTS)) if (!q.vocation) C.completedQuests.add(q.id);
+  check('G8 unknown: the CALLING in the original words',
+    C.questGiverPrompt() === 'Linger — a CALLING awaits you.',
+    `"${C.questGiverPrompt()}"`);
+  bumpLedger(C.ledger, LEDGER_HERO_RENOWNED);
+  check('G9 known: the CALLING by name',
+    C.questGiverPrompt() === 'Linger — a CALLING awaits you, {name}.',
+    `"${C.questGiverPrompt()}"`);
+
+  // THE COMPOSITION (main.ts's wire, mirrored — getPlayerName returns ''
+  // while unknown): any token that DOES reach the seam under an unknown
+  // hero degrades to the honest address, so a future unbranched line can
+  // never leak a name the world has not learned.
+  check('G10 the unknown feed degrades a stray token to Traveller',
+    resolveNameTokens('{name}, is it? Come here — I keep flasks for new faces.', '')
+      === 'Traveller, is it? Come here — I keep flasks for new faces.');
+
+  // Wrap law under BOTH faces: the restored pre-renown lines must wrap
+  // whole at the shipped width like their seasoned twins (F7 holds those).
+  const originals = [
+    'Come here, dear — I keep flasks for new faces.',
+    'Linger, and I have work for you…',
+    'Linger — a CALLING awaits you.',
+  ];
+  const proxy = (s: string): number => s.length * 6.2;
+  for (const [i, line] of originals.entries()) {
+    const lines = wrapSpeech(line, VIS_CFG.speech.maxWidth, proxy);
+    check(`G11.${i} a pre-renown line wraps whole at the shipped width`,
+      lines.every(l => proxy(l) <= VIS_CFG.speech.maxWidth || !l.includes(' '))
+      && lines.join(' ') === line, `${lines.length} lines`);
   }
 }
 

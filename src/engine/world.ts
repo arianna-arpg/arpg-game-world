@@ -1794,6 +1794,21 @@ registerConvertRule('seatAway', (caster, _inst, world) => !!world.seatOf(caster)
 // npcRole counts as kin for the 'npcs' relation.
 SYMPATHY_HOOKS.isNpc = a => !!a.defId && !!MONSTERS[a.defId]?.npcRole;
 
+/** THE RENOWN GATE (run-ledger key — name flagged for her blessing pass):
+ *  has THIS hero become KNOWN, by name, to the world's people? Her ruling
+ *  (2026-08-11): "a player, on every new world, is effectively only known
+ *  as an unnamed 'traveler'. But upon completion of the first Odyssey
+ *  segment, we can presume that they are 'known' to some degree, and so
+ *  the NPCs and spoken lines can begin interpreting them as {name}…
+ *  giving a small nod towards the player's own renown!" RUN scope on
+ *  purpose — every new world starts unknown, and a death-merge copy of
+ *  this key in the ACCOUNT ledger is residue heroKnown() never reads (a
+ *  storied account's fresh hero is still a stranger). Nothing stamps it
+ *  today: THE ODYSSEY'S FIRST ARM is the stamper-to-be when that fabric
+ *  builds (exported for it), and always-traveller is the intended
+ *  interim, not a gap. */
+export const LEDGER_HERO_RENOWNED = 'hero_renowned';
+
 const MIREILLE_RADIUS = 150;     // how close you must stand to Mireille
 const MIREILLE_DWELL = 0.8;      // seconds lingering in radius before she heals
 const MIREILLE_COOLDOWN = 5;     // seconds before she'll heal again
@@ -20866,6 +20881,16 @@ export class World {
     if (!(this.ledger[MIREILLE_LESSON_LEDGER] ?? 0)) bumpLedger(this.ledger, MIREILLE_LESSON_LEDGER);
   }
 
+  /** THE RENOWN GATE: is this hero KNOWN, by name, to the world's people
+   *  yet? False on every new world (run ledger, LEDGER_HERO_RENOWNED — see
+   *  the key's doc for her ruling); the Odyssey's first arm will stamp it.
+   *  ONE predicate: main.ts's getPlayerName wiring (an unknown hero feeds
+   *  the blank name, so every '{name}' site current and future degrades to
+   *  the resolver's honest address) and the prompt sites below (which speak
+   *  their pre-renown words instead) both read it — the lines changing at
+   *  renown IS the nod. */
+  heroKnown(): boolean { return (this.ledger[LEDGER_HERO_RENOWNED] ?? 0) >= 1; }
+
   /** The innkeep's prompt above her head while the player is near (renderer):
    *  the welcome-gift invitation while the flasks are still owed, then her
    *  DIRECTIONS through the gem loop the gift teaches, else the locked-care
@@ -20878,8 +20903,13 @@ export class World {
     // resolveNameTokens, render/vis/speech.ts, invoked beside the bind
     // expansion in Renderer.resolveText — so her greeting addresses the
     // player with no import here: the token is plain text; only the
-    // display seam expands it. An innkeep hears every new name first.)
-    if (this.mireilleGiftOwed()) return '{name}, is it? Come here — I keep flasks for new faces.';
+    // display seam expands it. An innkeep hears every new name first —
+    // but only once there is a name to hear: an UNKNOWN hero (heroKnown,
+    // the renown gate) gets her original welcome for strangers, and the
+    // "is it?" greeting arrives with the renown that makes it fitting.)
+    if (this.mireilleGiftOwed()) return this.heroKnown()
+      ? '{name}, is it? Come here — I keep flasks for new faces.'
+      : 'Come here, dear — I keep flasks for new faces.';
     // The handed gift TEACHES: she names the player's own next move in the
     // one loop every skill gem follows — and the line clears the moment
     // they make it. An in-universe tutorial: no popup, no forced hand.
@@ -23812,12 +23842,19 @@ export class World {
    *  the DISPLAY surface against the live hero — resolveNameTokens, invoked
    *  beside the bind expansion in Renderer.resolveText — no import here; the
    *  'traveller' line stays a common noun on purpose: work is offered by
-   *  name, and its absence to whoever wandered up.) */
+   *  name, and its absence to whoever wandered up. THE RENOWN GATE
+   *  (heroKnown): until the hero is known the by-name offers speak their
+   *  pre-renown words — the quartermaster starts addressing you the day
+   *  the world learns who you are.) */
   questGiverPrompt(): string | null {
     if (!this.nearAnyQuestGiver()) return null;
     if (this.pendingTurnIns().length) return 'Linger — a bounty is yours to claim.';
-    if (this.nextAcceptableQuest()) return 'Linger, {name} — I have work for you…';
-    if (this.vocationChoiceOffers().length) return 'Linger — a CALLING awaits you, {name}.';
+    if (this.nextAcceptableQuest()) return this.heroKnown()
+      ? 'Linger, {name} — I have work for you…'
+      : 'Linger, and I have work for you…';
+    if (this.vocationChoiceOffers().length) return this.heroKnown()
+      ? 'Linger — a CALLING awaits you, {name}.'
+      : 'Linger — a CALLING awaits you.';
     if (this.activeQuests.length) return 'Your hunts await out in the wilds.';
     return 'No work for you yet, traveller.';
   }
