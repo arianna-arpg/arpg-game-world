@@ -135,10 +135,27 @@ projectiles) re-sites from the loadZone boundary to ring demotion.
   structurally conservative, replaced by true multi-region sim in M1. The
   away region's population stays unmaterialized until first arrival (M0's
   ring-0-only cut); seamless M0 runs refuse saves and co-op outright.
+- **M0.5 — THE OPEN WAY (landed 7a67238, her greenlight 2026-08-12).** The
+  direction ratified in her words: the D2 walk — "no actual exit or entry,
+  just a marked pathway the player passes through entirely unhindered."
+  Between resident zones the door is gone: `seamlessWalkExit` is the one
+  predicate (no dwell, no lock hint, no drawn mouth; the exit ROW survives
+  as the graph's truth), and a signpost pair flanks the road at each open
+  way. Doors beyond the resident set remain doors — M1 grows the set until
+  surface doors vanish. Found seam for M3: escape-class objectives speak of
+  "the way out" — their semantics on a doorless surface need the laws
+  movement.
 - **M1 — THE ACTIVE SET.** The ring ladder, freeze/thaw at region grain, the
   ring-tagged array, world-keyed render chunks (re-key ground/canopy from
   zone-local to world coords; doodadFamilyRev is the decoupling seam),
   threshold travel replacing loadZone on the surface. The big one.
+  *M1 frame direction (set 2026-08-12 with wave 1):* GENERALIZE THE REBASE,
+  don't rewrite the frame — the resident PAIR becomes the resident RING
+  (membership by map distance, demotion through the zone-memory law that
+  already owns away-state), the threshold rebases into whichever resident
+  rect the walker enters, and the active-local frame stays sovereign. The
+  world-frame rewrite stays on the shelf unless the ring model hits a wall
+  M2 cannot dress.
 - **M2 — THE COUNTRY DRESS.** Tissue to authored quality: literal roads
   (the web's own polylines), meld-grade biome blending, wayside dress, water
   honesty at shores; exits→thresholds everywhere on the surface; the world
