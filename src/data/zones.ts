@@ -658,6 +658,15 @@ export interface ZoneExitDef {
    *  into sealed shores is web accretion and heals away. Set only by the
    *  notary, persisted with the exit. */
   notarized?: true;
+  /** A DECLARED one-way road: the author MEANS for this door to have no
+   *  return — `to` deliberately never exits back here (a drop, a chute, a
+   *  ceremonial way out). Read ONLY by the boot reciprocity census
+   *  (validate.ts), which otherwise flags an exit whose known destination
+   *  never points back; runtime behavior is untouched (the web's link paths
+   *  keep forging missing back edges in saves via World.linkBackTo either
+   *  way). Lives on the exit row so the validator never grows a zone-id
+   *  allowlist. */
+  oneWay?: true;
 }
 
 /** One UNDER-ROAD row (ZoneDef.underways — the rooted web): the far surface

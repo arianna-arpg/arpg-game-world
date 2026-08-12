@@ -2173,6 +2173,29 @@ export function validateContent(): void {
       if (e.to === '?' && e.tileset && !TILESETS[e.tileset]) {
         warn(`zone ${z.id}: frontier names unknown tileset '${e.tileset}'`);
       }
+      // THE RECIPROCITY NET: an exit into a KNOWN zone whose def never
+      // points back is an accidental one-way door. The runtime forges the
+      // missing back edge in saves where its link paths happen to pass
+      // (World.linkBackTo), but a heal never tells the AUTHOR — the
+      // authored catalog answers for itself at boot instead. Exempt:
+      //   - frontiers ('?'): no destination def to answer;
+      //   - lock rows: a Holdfast's earned bonus door — its pocket mints
+      //     the way home when the lock opens, never authored ahead;
+      //   - crossDim rows: dimension gates — the way home is MINTED by the
+      //     gate (dimensions are sealed; linkers refuse cross-plane edges);
+      //   - oneWay rows: the author's DECLARED one-way road (the opt-out
+      //     lives on the exit row — never a zone-id allowlist here).
+      // notarized rows are NOT exempt, deliberately: the notary
+      // (World.notarizeRoad) always cuts BOTH edges and stamps both, so a
+      // genuine deed is reciprocal by construction — an authored one-way
+      // wearing the deed claims a provenance the notary never produces,
+      // and must say oneWay if it means the silence.
+      if (e.to !== '?' && !e.lock && !e.crossDim && !e.oneWay) {
+        const dest = ZONES[e.to];
+        if (dest && !dest.exits.some(x => x.to === z.id)) {
+          warn(`zone ${z.id}: exit ${e.side} → '${e.to}' has no back edge — '${e.to}' never exits to '${z.id}' (an accidental one-way door; add the return exit, or declare oneWay on this row)`);
+        }
+      }
     }
   }
   for (const t of Object.values(TILESETS)) {
