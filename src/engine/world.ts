@@ -2016,6 +2016,10 @@ export interface SeamlessMint {
   exitsKey: string;
   partnerId: string;
   prevCamera: ZoneDef['camera'];
+  /** The minted arena's base shape, recorded inside the mint's own scoped
+   *  swap — the render lane's away clip reads THIS (the FNV shape
+   *  replication it replaced could drift; the record cannot). */
+  shape: 'rect' | 'ellipse';
 }
 
 /** The resident mint's exits fingerprint (see SeamlessMint.exitsKey). */
@@ -6518,7 +6522,12 @@ export class World {
       const rng = new Rng(def.seed!);
       const layout = generateLayout(def, this.arena, rng, entry, this.exits.map(e => e.pos), undefined);
       const span = hullOf(this.arena);
-      this.seamlessMints.set(def.id, { layout, span, exitsKey: seamlessExitsKeyOf(def), partnerId, prevCamera });
+      this.seamlessMints.set(def.id, {
+        layout, span, exitsKey: seamlessExitsKeyOf(def), partnerId, prevCamera,
+        // Recorded inside the scoped swap: this.arena IS the minted zone's
+        // arena here, so the shape on the record is the shape the mint baked.
+        shape: this.arena.shape === 'ellipse' ? 'ellipse' : 'rect',
+      });
       // UPSERT the seat: a re-mint (the exits-key invalidation) refreshes the
       // layout record and keeps the standing seat — def.size never moves, so
       // origin and span are stable identities the render lane may hold.

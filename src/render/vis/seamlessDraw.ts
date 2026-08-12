@@ -292,7 +292,7 @@ class SeamlessAwayBodies {
     c.height = Math.max(1, Math.ceil(h * S));
     const g = c.getContext('2d')!;
     g.scale(S, S);
-    if (awayShapeOf(def) === 'ellipse') {
+    if (mint.shape === 'ellipse') {
       g.beginPath(); g.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); g.clip();
     }
     const dressed = [...mint.layout.doodads].sort((a, b) => orderOf(a) - orderOf(b));
@@ -326,21 +326,10 @@ function doodadToneOf(d: Doodad, floor: string): string {
   return mix(floor, '#000000', 0.35);
 }
 
-/** The neighbor's silhouette shape — ZoneDef.shape where authored, else the
- *  same FNV pick World.makeArena derives (world.ts ~1993; replicated because
- *  makeArena is world-private and the mint stores only the span). The
- *  world-keyed ground chunks and the body bake both clip by it — the drift
- *  risk retires only when the world side stamps the shape onto the mint
- *  record itself (one line in seamlessMintResident, inside its scoped swap:
- *  `shape: this.arena.shape` on SeamlessMint — the deferred prescription;
- *  adopt it here as `mint.shape ?? awayShapeOf(def)` when it lands). */
-export function awayShapeOf(def: ZoneDef): 'rect' | 'ellipse' {
-  if (def.shape) return def.shape === 'ellipse' ? 'ellipse' : 'rect';
-  if (def.objective.kind === 'safe' || def.fixtures) return 'rect';
-  let hsh = 2166136261;
-  for (let i = 0; i < def.id.length; i++) hsh = ((hsh ^ def.id.charCodeAt(i)) * 16777619) >>> 0;
-  return (hsh % 100) < 25 ? 'ellipse' : 'rect';
-}
+// (awayShapeOf is RETIRED: the mint record now carries `shape`, stamped
+// inside seamlessMintResident's own scoped swap — the FNV replication of
+// makeArena's pick, and its drift risk, die with it. Both former consumers
+// read mint.shape.)
 
 // ---------------------------------------------------------------------------
 // The module singletons + their steward rows (module caches register at load

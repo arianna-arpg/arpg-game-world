@@ -47,7 +47,7 @@ import { adjust, hash01, mix, shade, valueNoise, withAlpha } from './color';
 import { wallEyeSockets } from './wallEyes';
 import { liquidBodyIsLive, paintBlendUnderlay, paintLiquidStatics, type DoodadVisualDef } from './painters';
 import { paintStructureFloors } from './floors';
-import { awayShapeOf, SEAMLESS_DRAW_CFG, seamlessDrawActive } from './seamlessDraw';
+import { SEAMLESS_DRAW_CFG, seamlessDrawActive } from './seamlessDraw';
 import { releaseCanvas } from './sprites';
 import { VIS_ABLATE, VIS_CFG, VIS_TELEMETRY } from './visConfig';
 import { registerDoodadFamily } from '../../engine/doodadFamilies';
@@ -775,7 +775,7 @@ export class GroundRenderer {
     const wy1 = Math.min(camY + vh + originY, seat.originPx.y + h - 1);
     if (wx1 < wx0 || wy1 < wy0) return;
     const st = this.awayStaticsFor(def, mint);
-    const ell = awayShapeOf(def) === 'ellipse';
+    const ell = mint.shape === 'ellipse';
     const clipAt = (g: CanvasRenderingContext2D, ox: number, oy: number): void => {
       g.beginPath();
       if (ell) g.ellipse(w / 2 - ox, h / 2 - oy, w / 2, h / 2, 0, 0, Math.PI * 2);
