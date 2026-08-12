@@ -411,7 +411,7 @@ void (async (): Promise<void> => {
   console.log('--- RIG G: the memo invariance (grown chart, hot lane == full re-derive) ---');
   const accountG = makeAccount();
   for (const c of CLASSES) accountG.unlockedClasses.add(c.id);
-  const manifestG = buildManifest(accountG, 424242);
+  const manifestG = buildManifest(accountG, 424243);
   for (const p of manifestG.packages) p.enabled = false;
   const worldG = new World(accountG, Object.freeze(manifestG));
   worldG.createPlayer(CLASSES[0], { charId: mintCharId() });
@@ -434,7 +434,12 @@ void (async (): Promise<void> => {
   }
   const zonesG = Object.keys(worldG.zoneMap).length;
   // The floor guards the FIXTURE (a broken growth idiom would vacuous-green
-  // the byte pins below); this seed's geography saturates around ~81 zones.
+  // the byte pins below); this seed's geography saturates around ~76 zones.
+  // (Seed 424242 → 424243 at THE EXISTENCE FLOOR's landing, 2026-08-11: the
+  // old seed's world sat in the healed zero-farmland regime, and the floor's
+  // one seat re-dealt its web down to ~54 zones — intended biome behavior;
+  // the fixture only needs scale, so it moved one seed over. The new world
+  // grows farmland in-chart, so the rig now walks floor-era ground.)
   check('G0: the chart grew past sixty zones (fixture sane)', zonesG > 60,
     `${zonesG} zones, ${visitG.length} visited`);
   worldG.serializeWorldState(); // prime the memo

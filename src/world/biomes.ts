@@ -19,7 +19,7 @@
 // ---------------------------------------------------------------------------
 
 import { continentAt, continentSeedFrom } from './continents';
-import { climateAt, climateAffinity, registerClimateInvalidation, validateClimateSpecs, type ClimateSpec } from './climate';
+import { CLIMATE_CFG, climateAt, climateAffinity, registerClimateInvalidation, validateClimateSpecs, type ClimateSpec } from './climate';
 import { presenceMul, type LevelEnvelope } from '../engine/presence';
 import type { MapCoord } from './coords';
 
@@ -1259,6 +1259,59 @@ registerFieldBand({
   ],
 });
 
+// --- THE EXISTENCE FLOOR ------------------------------------------------------
+// The guarantee the field bands promised, closed for the WORKED half. The bands
+// were built because "a world could roll NO farmland, NO metropolis at all" —
+// and the single-entry capital seat truly closed it for the metropolis (0/332
+// zero-metro worlds in the 2026-08-11 census). Farmland stayed a weighted
+// CONTEST inside the ring, and the residual measured 12/320 worlds (3.8%)
+// minting ZERO farmland anywhere in the Dev scan's whole 6000-unit reach — the
+// "0/0 Farmlands and nowhere to teleport to" sighting. Two heads: dry-belt
+// worlds where the moisture gate zeroes the whole settled band (the farmland
+// row's own "must never starve the belt" vow, starved by the axis its comment
+// didn't cover), and pure cell-dice busts on wet worlds (eligible ground is a
+// handful of Voronoi cells; every one can roll a competitor).
+//
+// THE FLOOR: per fieldSeed, a pure memoized scan of the biome's VIABLE ground
+// (lattice cells whose jittered site stands on land inside the declared
+// anchor discs). If any such cell already picks the biome ordinarily, the
+// floor claims NOTHING — a satisfied world is byte-identical by construction.
+// Only a world that would otherwise zero seats the biome on its single
+// most-hospitable cell (affinity, then moisture, then the cell hash — all
+// pure). The moisture split still decides who DOMINATES the belt (a dry-belt
+// capital keeps its sheep country); the floor only forbids winner-takes-ALL.
+//
+// BLESSING DIALS (current values stated, hers to move): the disc radii
+// (origin 520 / capital 900 — derived to cover every cell whose wildness can
+// pass farmland's ≤0.58 hard gate: home calm dies by ~475 out, the capital
+// basin by ~646, sites jitter ±58), ONE seat per floor (existence, the
+// metropolis precedent — never abundance), and the unconditional force (a
+// bone-dry belt still seats its least-hostile cell: "cool shires grow oats").
+export interface BiomeFloorDef {
+  /** The biome whose per-world EXISTENCE this floor guarantees. */
+  biome: string;
+  /** The bounded viable ground: lattice cells whose jittered SITE stands
+   *  within `r` map units of the named climate anchor ('origin' = home). An
+   *  uninstalled anchor contributes nothing (the civic axis' inert-when-
+   *  anchorless law) — menu contexts wait for the world's own boot. */
+  discs: { anchor: string; r: number }[];
+}
+
+export const BIOME_FLOORS: BiomeFloorDef[] = [];
+
+export function registerBiomeFloor(def: BiomeFloorDef): void {
+  if (!BIOMES[def.biome]) console.warn(`[biomes] existence floor names unknown biome '${def.biome}' — it will stand down`);
+  if (BIOME_FLOORS.some(f => f.biome === def.biome)) {
+    console.warn(`[biomes] re-registering existence floor '${def.biome}' — overriding`);
+    BIOME_FLOORS.splice(BIOME_FLOORS.findIndex(f => f.biome === def.biome), 1);
+  }
+  BIOME_FLOORS.push(def);
+}
+
+// THE BELT FLOOR debut: farmland — the settled belt's worked half may lose
+// the moisture split, never existence.
+registerBiomeFloor({ biome: 'farmland', discs: [{ anchor: 'origin', r: 520 }, { anchor: 'capital', r: 900 }] });
+
 /** Tunable thresholds (modular, not scattered literals): the Voronoi cell size,
  *  seed jitter, the heat-map render cell, and the marine DEEP threshold — how far
  *  INTO a marine region (biomeDepth, 1=center) before the true DEEP-SEA zone mints
@@ -1338,11 +1391,16 @@ function hashCell(a: number, b: number, seed: number): number {
 const pickMemo = new Map<string, string>();
 const PICK_MEMO_CAP = 16384;
 
+// Existence-floor seats per fieldSeed (lazy; flushed with the pick memo — a
+// seat bakes the anchor geometry of its moment exactly like the picks do).
+const floorSeatMemo = new Map<number, { gx: number; gy: number; biome: string }[]>();
+const FLOOR_MEMO_CAP = 64;
+
 /** Drop every memoized cell pick. Called when a NEW world constructs (a fresh
  *  BiomeField) — the seed in the key already isolates worlds, but a hard reset
  *  also kills any stale entries a dev-session module swap (HMR duality) or a
  *  climate-origin change could otherwise carry across runs. */
-export function resetFieldPickMemo(): void { pickMemo.clear(); }
+export function resetFieldPickMemo(): void { pickMemo.clear(); floorSeatMemo.clear(); }
 
 // A pick bakes the climate GEOMETRY of its moment (bands read the origin +
 // anchors through climateAt) — so any re-anchor (the capital pole install,
@@ -1350,18 +1408,14 @@ export function resetFieldPickMemo(): void { pickMemo.clear(); }
 // world serves picks computed under the old geometry.
 registerClimateInvalidation(resetFieldPickMemo);
 
-/** Weighted biome for a Voronoi cell: seed weight × CLIMATE AFFINITY sampled
- *  at the cell's SITE (one climate reading per blob — regions stay coherent).
- *  THE shared pick for the surface field and every dimension palette. A cell
- *  whose climate zeroes every candidate falls back to the raw weights so the
- *  world never starves (validateBiomeClimate flags authoring instead). */
-export function fieldBiomePick(
+/** The ORDINARY roll — the pick machinery minus memo and floor consult, ONE
+ *  source shared by fieldBiomePick and the existence-floor scan (no drift by
+ *  construction). Never writes the pick memo: the scan's reads must not bake
+ *  pre-floor values under the keys real sampling will ask for. */
+function ordinaryFieldPick(
   table: readonly BiomeSeedDef[], gx: number, gy: number, site: MapCoord,
-  fieldSeed: number, dimension = 'surface',
+  fieldSeed: number, dimension: string,
 ): string {
-  const memoKey = `${dimension}|${fieldSeed}|${gx}|${gy}`;
-  const hit = pickMemo.get(memoKey);
-  if (hit !== undefined) return hit;
   const climate = climateAt(site, fieldSeed, dimension);
   // FIELD BANDS (surface only): a claimed climate stratum swaps in (or
   // tilts) the candidate table — the capital's structure. Biome affinities
@@ -1389,6 +1443,92 @@ export function fieldBiomePick(
       if (r <= 0) { picked = src[i].biome; break; }
     }
   }
+  return picked;
+}
+
+/** The existence-floor seats for one world — pure f(fieldSeed, anchors),
+ *  computed whole on first consult (the foreordained tenet). A floor whose
+ *  viable ground already grows its biome seats NOTHING — the satisfied world
+ *  is byte-identical because every cell falls through to the ordinary roll. */
+function computeFloorSeats(fieldSeed: number): { gx: number; gy: number; biome: string }[] {
+  const seats: { gx: number; gy: number; biome: string }[] = [];
+  if (floorSeatMemo.size >= FLOOR_MEMO_CAP) floorSeatMemo.clear();
+  floorSeatMemo.set(fieldSeed, seats); // set-first: reentrancy-proof by construction
+  const span = BIOME_FIELD_CFG.cellSpan, jit = BIOME_FIELD_CFG.jitter;
+  const contSeed = continentSeedFrom(fieldSeed);
+  for (const floor of BIOME_FLOORS) {
+    if (!BIOMES[floor.biome]) continue; // authoring hole — registerBiomeFloor warned, the floor stands down
+    // The candidate cells: every lattice cell whose jittered SITE stands on
+    // land inside any declared disc (range padded one cell — jitter can pull
+    // an outside-centred cell's site in).
+    const cells = new Map<string, { gx: number; gy: number; site: MapCoord }>();
+    for (const disc of floor.discs) {
+      const at = disc.anchor === 'origin' ? CLIMATE_CFG.origin : CLIMATE_CFG.anchors[disc.anchor];
+      if (!at) continue; // uninstalled anchor — this disc does not exist yet
+      const g0x = Math.floor((at.x - disc.r) / span) - 1, g1x = Math.floor((at.x + disc.r) / span) + 1;
+      const g0y = Math.floor((at.y - disc.r) / span) - 1, g1y = Math.floor((at.y + disc.r) / span) + 1;
+      for (let gx = g0x; gx <= g1x; gx++) {
+        for (let gy = g0y; gy <= g1y; gy++) {
+          const h = hashCell(gx, gy, fieldSeed);
+          const px = (gx + 0.5 + (((h & 0xffff) / 0xffff) - 0.5) * jit) * span;
+          const py = (gy + 0.5 + ((((h >>> 16) & 0xffff) / 0xffff) - 0.5) * jit) * span;
+          if (Math.hypot(px - at.x, py - at.y) > disc.r) continue;
+          if (continentAt({ x: px, y: py }, contSeed).kind !== 'land') continue; // the sea grows no belt
+          cells.set(`${gx}|${gy}`, { gx, gy, site: { x: px, y: py } });
+        }
+      }
+    }
+    if (!cells.size) continue;
+    // Satisfied = some candidate cell already picks the biome ordinarily —
+    // the floor then claims nothing (the fix is not reached).
+    let satisfied = false;
+    for (const c of cells.values()) {
+      if (ordinaryFieldPick(BIOME_FIELD, c.gx, c.gy, c.site, fieldSeed, 'surface') === floor.biome) { satisfied = true; break; }
+    }
+    if (satisfied) continue;
+    // The seat: the most-hospitable candidate — affinity, then the wetter
+    // site, then the cell hash. All pure; host/clients/reloads agree.
+    let best: { gx: number; gy: number } | null = null;
+    let bestAff = -1, bestMoist = -1, bestH = -1;
+    for (const c of cells.values()) {
+      const cl = climateAt(c.site, fieldSeed);
+      const aff = climateAffinity(BIOMES[floor.biome]?.climate, cl);
+      const moist = cl.moisture ?? 0;
+      const hh = hashCell(c.gx, c.gy, (fieldSeed ^ 0x600dfa2) >>> 0);
+      if (aff > bestAff || (aff === bestAff && (moist > bestMoist || (moist === bestMoist && hh > bestH)))) {
+        best = c; bestAff = aff; bestMoist = moist; bestH = hh;
+      }
+    }
+    if (best) seats.push({ gx: best.gx, gy: best.gy, biome: floor.biome });
+  }
+  return seats;
+}
+
+/** The floor's claim on a surface cell, or null (the overwhelmingly common
+ *  read: no floors registered, a satisfied world, or a foreign cell). */
+function floorClaimAt(gx: number, gy: number, fieldSeed: number): string | null {
+  if (!BIOME_FLOORS.length) return null;
+  const seats = floorSeatMemo.get(fieldSeed) ?? computeFloorSeats(fieldSeed);
+  for (const s of seats) if (s.gx === gx && s.gy === gy) return s.biome;
+  return null;
+}
+
+/** Weighted biome for a Voronoi cell: seed weight × CLIMATE AFFINITY sampled
+ *  at the cell's SITE (one climate reading per blob — regions stay coherent).
+ *  THE shared pick for the surface field and every dimension palette. A cell
+ *  whose climate zeroes every candidate falls back to the raw weights so the
+ *  world never starves (validateBiomeClimate flags authoring instead); a
+ *  world that would zero a FLOORED biome outright seats it first (surface
+ *  only — BIOME_FLOORS above). */
+export function fieldBiomePick(
+  table: readonly BiomeSeedDef[], gx: number, gy: number, site: MapCoord,
+  fieldSeed: number, dimension = 'surface',
+): string {
+  const memoKey = `${dimension}|${fieldSeed}|${gx}|${gy}`;
+  const hit = pickMemo.get(memoKey);
+  if (hit !== undefined) return hit;
+  const picked = (dimension === 'surface' ? floorClaimAt(gx, gy, fieldSeed) : null)
+    ?? ordinaryFieldPick(table, gx, gy, site, fieldSeed, dimension);
   if (pickMemo.size >= PICK_MEMO_CAP) pickMemo.clear();
   pickMemo.set(memoKey, picked);
   return picked;
