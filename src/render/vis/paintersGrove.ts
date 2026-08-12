@@ -9,7 +9,7 @@
 // NaN-gradient doctrine: flat fills and arcs cannot throw).
 // ---------------------------------------------------------------------------
 
-import { PAINTERS, labelRevealed, resolveColor, type ColorSpec, type GroupPainter } from './painters';
+import { PAINTERS, resolveColor, type ColorSpec, type GroupPainter } from './painters';
 import { hash01, shade, withAlpha } from './color';
 
 /** THE HOLLOW BOLE — a great tree long dead and open at the root: a
@@ -85,14 +85,8 @@ const hollowBole: GroupPainter = (env, group, def) => {
       ctx.fill();
     }
     ctx.restore();
-    if (p.label && labelRevealed(env, o.pos)) {
-      ctx.save();
-      ctx.fillStyle = '#d8d4c8';
-      ctx.font = '11px Verdana';
-      ctx.textAlign = 'center';
-      ctx.fillText(p.label, o.pos.x, o.pos.y + r + 14);
-      ctx.restore();
-    }
+    if (p.label) env.labelSink?.(o, o.pos, o.pos.x, o.pos.y + r + 14,
+      p.label, '#d8d4c8', { font: '11px Verdana' });
   }
 };
 

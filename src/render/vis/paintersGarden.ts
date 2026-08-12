@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 
 import {
-  CANOPY_PAINTERS, CANOPY_STATIC, PAINTERS, labelRevealed, resolveColor,
+  CANOPY_PAINTERS, CANOPY_STATIC, PAINTERS, resolveColor,
   type CanopyPainter, type ColorSpec, type GroupPainter,
 } from './painters';
 import { hash01, shade, withAlpha } from './color';
@@ -171,12 +171,8 @@ const gardenRelic: GroupPainter = (env, group, def) => {
       ctx.beginPath(); ctx.ellipse(-r * 0.3, -r * 0.2, r * 0.18, r * 0.1, 0.4, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
-    if (p.label && labelRevealed(env, o.pos)) {
-      ctx.save();
-      ctx.fillStyle = '#d8d4c8'; ctx.font = '11px Verdana'; ctx.textAlign = 'center';
-      ctx.fillText(p.label, o.pos.x, o.pos.y + r + 14);
-      ctx.restore();
-    }
+    if (p.label) env.labelSink?.(o, o.pos, o.pos.x, o.pos.y + r + 14,
+      p.label, '#d8d4c8', { font: '11px Verdana' });
   }
 };
 
@@ -340,12 +336,8 @@ const moundSpire: GroupPainter = (env, group, def) => {
       ctx.beginPath(); ctx.ellipse(0, r * 0.62, r * 0.36, r * 0.28, 0, Math.PI * 0.9, Math.PI * 2.1); ctx.stroke();
     }
     ctx.restore();
-    if (p.label && labelRevealed(env, o.pos)) {
-      ctx.save();
-      ctx.fillStyle = '#d8d4c8'; ctx.font = '11px Verdana'; ctx.textAlign = 'center';
-      ctx.fillText(p.label, o.pos.x, o.pos.y + r + 14);
-      ctx.restore();
-    }
+    if (p.label) env.labelSink?.(o, o.pos, o.pos.x, o.pos.y + r + 14,
+      p.label, '#d8d4c8', { font: '11px Verdana' });
   }
 };
 

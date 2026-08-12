@@ -8,7 +8,7 @@
 // glow lives on the light layer, never in the stroke.
 // ---------------------------------------------------------------------------
 
-import { PAINTERS, labelRevealed, resolveColor, type ColorSpec, type GroupPainter } from './painters';
+import { PAINTERS, resolveColor, type ColorSpec, type GroupPainter } from './painters';
 import { hash01, shade, withAlpha } from './color';
 
 /** A LANTERN TOTEM — carved gourds stacked on a stake, the top one grinning.
@@ -602,15 +602,8 @@ const stairFlight: GroupPainter = (env, group, def) => {
     ctx.beginPath(); ctx.arc(-r * 0.8, r * 0.62, r * 0.11, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
     // The destination, named upright regardless of the flight's turn.
-    if (p.label && labelRevealed(env, o.pos)) {
-      ctx.save();
-      ctx.translate(o.pos.x, o.pos.y);
-      ctx.fillStyle = '#d8d4c8';
-      ctx.font = '11px Verdana';
-      ctx.textAlign = 'center';
-      ctx.fillText(p.label, 0, r + 14);
-      ctx.restore();
-    }
+    if (p.label) env.labelSink?.(o, o.pos, o.pos.x, o.pos.y + r + 14,
+      p.label, '#d8d4c8', { font: '11px Verdana' });
   }
 };
 

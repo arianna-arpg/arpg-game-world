@@ -33,6 +33,15 @@ export interface PaintEnv {
    *  bodies under `minR` (world units, screen threshold pre-divided by
    *  zoom). Absent = ungoverned (bakes, portraits, forges). */
   shadowGate?: { left: number; minR: number };
+  /** THE WORD LAYER's sink (the renderer's private queueLabelAt, lent as a
+   *  closure): queue one world-anchored line drawn at (x, y) AFTER the
+   *  veils, revealed by whatever covers `probe` — one gate for every word
+   *  on the field (roofs, crowns, room + sight veils); `key` dedups the
+   *  per-frame reveal lookup. Absent = wordless (bakes, portraits, forges):
+   *  a label is a LIVE read, so sites SKIP it rather than fillText — pixels
+   *  frozen into a cached sprite could never honor the reveal gate. */
+  labelSink?: (key: object, probe: { x: number; y: number }, x: number, y: number,
+    text: string, color: string, opts?: { font?: string; stroke?: boolean }) => void;
 }
 
 /** CANOPY EYES spec (DoodadVisualDef.canopy.eyes → vis/canopyEyes.ts): the
@@ -52,16 +61,6 @@ export interface CrownEyesSpec {
 
 /** '#hex' literal or 'theme:key' / 'theme:key|#fallback'. */
 export type ColorSpec = string;
-
-/** Is a labeled doodad's TEXT revealed? Text under an UNSEEN layer stays
- *  unseen: a roofed label draws only while the local hero shares its roof —
- *  the same interior-reveal rule the roof pass follows, so a hatch's name
- *  never advertises through a wall. Open-air labels always draw. */
-export function labelRevealed(env: PaintEnv, pos: { x: number; y: number }): boolean {
-  const w = env.world;
-  const roof = w.roofedStructureAt(pos);
-  return roof === null || roof === w.roofedStructureAt(w.player.pos);
-}
 
 export function resolveColor(spec: ColorSpec | undefined, theme: ZoneTheme, fallback = '#9a9aa0'): string {
   if (!spec) return fallback;
@@ -3242,12 +3241,8 @@ const caveMouth: GroupPainter = (env, group, def) => {
         }
       }
     }
-    if (p.label && labelRevealed(env, o.pos)) {
-      ctx.fillStyle = '#d8d4c8';
-      ctx.font = '11px Verdana';
-      ctx.textAlign = 'center';
-      ctx.fillText(p.label, 0, r + 14);
-    }
+    if (p.label) env.labelSink?.(o, o.pos, o.pos.x, o.pos.y + r + 14,
+      p.label, '#d8d4c8', { font: '11px Verdana' });
     ctx.restore();
   }
 };
@@ -7428,12 +7423,8 @@ const hatch: GroupPainter = (env, group, def) => {
     ctx.strokeStyle = ring;
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(0, r * 0.3, r * 0.24, 0, Math.PI * 2); ctx.stroke();
-    if (p.label && labelRevealed(env, o.pos)) {
-      ctx.fillStyle = '#d8d4c8';
-      ctx.font = '11px Verdana';
-      ctx.textAlign = 'center';
-      ctx.fillText(p.label, 0, r + 14);
-    }
+    if (p.label) env.labelSink?.(o, o.pos, o.pos.x, o.pos.y + r + 14,
+      p.label, '#d8d4c8', { font: '11px Verdana' });
     ctx.restore();
   }
 };

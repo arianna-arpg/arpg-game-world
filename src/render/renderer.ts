@@ -2722,6 +2722,10 @@ export class Renderer {
         left: Math.round(VIS_CFG.shadows.budget * (shTheme?.budgetMul ?? 1)),
         minR: VIS_CFG.shadows.minRadiusPx / this.zoom,
       },
+      // THE WORD LAYER's sink: painter labels queue into the post-veil text
+      // pass (queueLabelAt stays private — the live frame lends this hand).
+      labelSink: (key, probe, x, y, text, color, opts) =>
+        this.queueLabelAt(key, probe, x, y, text, color, opts),
     };
     type Grp = { kind: string; list: readonly Doodad[]; def: DoodadVisualDef | undefined };
     const groups: Grp[] = [];
