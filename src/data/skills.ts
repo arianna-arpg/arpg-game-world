@@ -3087,6 +3087,42 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
   },
 
+  // THE CONVERGING PILE (trajectory.arcTo on corpse fuel — rimeclaw's hook
+  // married to the cinders' grammar): the volley leaves the caster's hand,
+  // fans wide, and every sliver bends home on the mark to detonate where
+  // the pile lies — the fan's spread is the telegraph, the stacked bursts
+  // are the payoff. One sliver more per extra body eaten (THE WAGON's
+  // projectilesPerExtra lane, exactly the cinders' flight law). Delivery
+  // numbers are rimeclaw's verbatim; launch stays at the HAND because an
+  // origin-'cursor' arcTo flight would spawn inside its own 16-unit
+  // arrival ring (instant, dt-shaped detonation — the honest geometry is
+  // the reference's own). Surfaced by the Marrowcraft pool row
+  // (meta/unlocks.ts — the charnel ghoul's lesson).
+  marrowhooks: {
+    id: 'marrowhooks', name: 'Marrowhooks',
+    description: 'Consume a corpse at your mark and loose three hooked slivers of bone: the'
+      + ' fan opens wide, then every sliver bends back to converge on the pile, each'
+      + ' detonating where it closes, with a 35% chance to open a bleeding wound. Every'
+      + ' extra body eaten looses one more.',
+    tags: ['spell', 'corpse', 'physical', 'projectile', 'aoe'], color: '#c2b28e',
+    manaCost: 10, cooldown: 1.2, useTime: 0.6,
+    baseDamage: { physical: [10, 15] },
+    targeting: { target: 'corpse', castRange: 420, plural: true },
+    delivery: {
+      type: 'projectile', speed: 480, radius: 9, range: 900,
+      count: 3, spreadDeg: 110,
+      explode: { radius: 72, damageScale: 0.8 },
+      trajectory: { arcTo: 2.2 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.35, magnitude: 0.35 },
+    ],
+    requirements: { willpower: 15, intelligence: 12 },
+    ai: { range: 420, weight: 2, keepDistance: 260 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
+  },
+
   // --- Golems: three skills, ONE shared cap ('golem' pool group) -----------
 
   summon_fire_golem: {
@@ -9234,6 +9270,50 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'status', status: 'decay', chance: 0.5, magnitude: 0.35 },
     ],
     ai: { range: 50, weight: 2 },
+  },
+
+  // --- THE BOTTLED SWARM (litePour's player side — the thrown hive) --------
+  // The colony fabric's wave verb as a droppable gem, seated as a LITE-TIER
+  // THRONG ANCHOR whose main acquisition is its own throw: the pour is OWNED
+  // (LitePourEffect.owned — the bodyguard veil's idiom the engine doc
+  // anticipates), and the anchor is what makes the keeper LEGITIMATE — the
+  // disband ledger (liteDemoteSweep) re-wilds any owned row whose keeper
+  // wears no matching lite throng, so a throng-less owned pour dies on the
+  // half-second beat by standing law. The throw doubles as the marching
+  // order (throngDirect at the cast's aim; bodies poured at the flight's
+  // end inherit the standing order and fight AT the mark, then heel to the
+  // keeper ring where the pooled bite chews pressers). Real cost and clock
+  // where the kin's vents above cast free. NOTE: litePourAt consults no
+  // throng cap — the pour can overshoot cap until attrition; and a throw
+  // with no swarm standing floats the sweep's 'no throng gathered' while
+  // the jar is still mid-air (cosmetic — the pour lands regardless).
+  // Surfaced by the Vermincraft pool row (meta/unlocks.ts — the piper's
+  // own lesson).
+  bottled_swarm: {
+    id: 'bottled_swarm', name: 'Bottled Swarm',
+    description: 'Hurl a jarred nest that bursts where it lands: physical damage on impact,'
+      + ' and 4–6 vermin spill out already knowing their keeper — the throw itself orders'
+      + ' the whole swarm onto its mark. About one kill in five shakes another loose from'
+      + ' the boards; walk through it to claim it, up to 12 in the swarm. At heel they ring'
+      + ' you and chew whatever presses in.',
+    tags: ['spell', 'projectile'], color: '#9a8a62',
+    manaCost: 14, cooldown: 7, useTime: 0.8,
+    baseDamage: { physical: [6, 10] },
+    delivery: { type: 'projectile', speed: 420, radius: 8, range: 400 },
+    effects: [
+      { type: 'damage' },
+      { type: 'litePour', monsterId: 'vermin_tide', count: [4, 6], scatter: 34, owned: true },
+      { type: 'throngDirect' },
+    ],
+    throng: {
+      monsterId: 'vermin_tide', cap: 12,
+      sources: [{ kind: 'onKill', chance: 0.2 }],
+      tier: 'lite',
+    },
+    requirements: { willpower: 16 },
+    ai: { range: 400, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
+    minDropLevel: 5,
   },
 
   // --- THE LONG CANDLE's verbs (the Wax Court & the Umbral Parliament) ------

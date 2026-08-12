@@ -608,6 +608,17 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     reqLedgerCounts: { [bestiaryKey('dire_wolf')]: 20 }, label: 'Skill Pool: the Wolf Form',
     description: 'Form of the Dire Wolf may drop. Twenty wolves taught you how the shoulders roll; the twenty-first lesson is from inside.',
     payload: { skillIds: ['form_of_the_dire_wolf'] } },
+  // THE VERMINCRAFT — the piper's own trick, learned the hard way (the
+  // mimicry counted-ledger idiom: put down one Vermin Piper who threw its
+  // squirming bundles at you, and the bottling is yours).
+  { id: 'gem_skills_vermincraft', kind: 'skill', cost: 180, reqLedgerCounts: { [bestiaryKey('vermin_piper')]: 1 }, label: 'Skill Pool: Vermincraft',
+    description: 'Bottled Swarm may drop. The piper threw its bundle at you first; now you know what a jar can hold, and who it answers to.',
+    payload: { skillIds: ['bottled_swarm'] } },
+  // THE MARROWCRAFT — spent where the ghoul hoards (the same idiom): the
+  // corpse-eater that denies your fuel is the lesson that it IS fuel.
+  { id: 'gem_skills_marrowcraft', kind: 'skill', cost: 190, reqLedgerCounts: { [bestiaryKey('charnel_ghoul')]: 1 }, label: 'Skill Pool: Marrowcraft',
+    description: 'Marrowhooks may drop. The ghoul guarded its pile like a purse. It was right about the worth, wrong about the spending.',
+    payload: { skillIds: ['marrowhooks'] } },
 
   // --- Support drop bundles -------------------------------------------------
   { id: 'sup_t2', kind: 'support', cost: 100, reqLevel: 0, label: 'Support Pool II',
