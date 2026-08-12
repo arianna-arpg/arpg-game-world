@@ -27,6 +27,7 @@
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { applyBuild } from '../src/sim/builds';
+import { PROBE_ATTRIBUTES } from '../src/sim/compat';
 import { MONSTERS } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
 import { updateAI } from '../src/engine/ai';
@@ -45,7 +46,9 @@ bootSimEngine();
 seedGlobalRandom(20260716); // every chance()/rand() roll below replays exactly
 const world = makeSimWorld('warrior', 424242);
 const spec: BuildSpec = {
-  id: 'ironbell_probe', classId: 'warrior', level: 12,
+  // PROBE_ATTRIBUTES: the rig's documented stance — requirement gates never
+  // confound the measurement (the cast-time gate now runs at the press).
+  id: 'ironbell_probe', classId: 'warrior', level: 12, attributes: PROBE_ATTRIBUTES,
   skills: [{ id: 'ground_slam', level: 5 }],
 };
 const warnings = applyBuild(world, spec, 12);

@@ -16,6 +16,7 @@ import type { World } from '../src/engine/world';
 import { makeSkillInstance } from '../src/engine/skills';
 import { SKILLS } from '../src/data/skills';
 import type { BuildSpec } from '../src/sim/types';
+import { PROBE_ATTRIBUTES } from '../src/sim/compat';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -28,7 +29,9 @@ seedGlobalRandom(20260715); // every chance() roll below replays exactly
 
 const mkWorld = (skills: BuildSpec['skills']): World => {
   const world = makeSimWorld('tamer', 7411);
-  const spec: BuildSpec = { id: 'corpse_probe', classId: 'tamer', level: 12, skills };
+  // PROBE_ATTRIBUTES: the rig's documented stance — requirement gates never
+  // confound the measurement (the cast-time gate now runs at the press).
+  const spec: BuildSpec = { id: 'corpse_probe', classId: 'tamer', level: 12, attributes: PROBE_ATTRIBUTES, skills };
   const warnings = applyBuild(world, spec, 12);
   if (warnings.length) console.log('build warnings:', warnings.join(' | '));
   return world;

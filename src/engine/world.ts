@@ -72,7 +72,7 @@ import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../d
 import { COMBO_CFG, comboRepeatedNow, comboStat, comboVariedNow, matchComboRule, type ComboRuleDef } from './sequence';
 import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSelected } from './mimic';
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
-import { ATTRIBUTE_IDS, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
+import { ATTRIBUTE_IDS, ATTRIBUTES, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { skyOf, START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { BEACON_CFG } from '../data/beacons';
 import { LEYLINE_CFG } from '../data/leyline';
@@ -20405,12 +20405,58 @@ export class World {
   // UI call them with no seat → identical behavior; the host applies a remote
   // client's intent to THAT client's seat via applyAction(seat, …).
 
+  /** The unmet attribute gates of a skill against a seat's build, spoken
+   *  ('needs STR 24, INT 12') — undefined when the build clears them (or the
+   *  skill asks nothing). The ONE requirements read: the learn gate, the
+   *  cast-time gate and the panels all fold through here. */
+  reqShortfall(skillId: string, seat: Seat = this.localSeat): string | undefined {
+    const req = SKILLS[skillId]?.requirements;
+    if (!req) return undefined;
+    let short = '';
+    for (const [attr, need] of Object.entries(req)) {
+      if ((seat.meta.attrs[attr as keyof Attributes] ?? 0) < (need ?? 0)) {
+        short += `${short ? ', ' : ''}${ATTRIBUTES[attr as keyof Attributes].short} ${need}`;
+      }
+    }
+    return short ? 'needs ' + short : undefined;
+  }
+
   /** Does the seat's hero meet a skill's attribute gates? */
   meetsRequirements(skillId: string, seat: Seat = this.localSeat): boolean {
-    const req = SKILLS[skillId]?.requirements;
-    if (!req) return true;
-    return Object.entries(req).every(([attr, need]) =>
-      (seat.meta.attrs[attr as keyof Attributes] ?? 0) >= (need ?? 0));
+    return this.reqShortfall(skillId, seat) === undefined;
+  }
+
+  /** THE CAST-TIME REQUIREMENT GATE (backlog #90): the learn gate's attribute
+   *  law, held for as long as the build WIELDS the gem — respec the tree or
+   *  shed the +attribute gear that carried a skill's requirements and the gem
+   *  falls silent until the build meets them again (the learn-then-respec
+   *  bypass closes). Scope, precisely:
+   *   - No seat, no gate: seatOf(caster) undefined exempts monsters, minions
+   *     and every other kit-caster BY CONSTRUCTION — their bars carry no
+   *     build to judge (gating them on player attributes would break enemy
+   *     kits wholesale).
+   *   - THE POSSESSION SEAM: Seat.actor re-points to the ridden body while
+   *     the build/save truth stays home (Seat.home / World.seatHero), so the
+   *     attribute read follows seat.meta — the HOME build — never the husk's
+   *     sheet. A borrowed husk's own kit is not in that meta's knownSkills,
+   *     so possession bars stay ungated; only gems the seat itself has
+   *     learned answer to its attributes, and a convert/mimic/combo mint is
+   *     judged only when its resolved face is itself a learned gem.
+   *   - GRANTED sparks are exempt (SkillInstance.granted — the class-kit
+   *     re-kindle, the dev grant): the game's own gifts never passed the
+   *     learn gate, so the gate binds exactly the population the learn gate
+   *     admitted. Structurally safe: the kit census (probe_castreq D) pins
+   *     every class kit under its class BASE attributes, so a granted
+   *     starter never asks more than any build's floor carries.
+   *   - A LIVE TOGGLE is exempt (aura up, strobe held): the gate refuses
+   *     ignition, never release — a working you no longer qualify for can
+   *     always be shut off; re-lighting it is what the gate refuses.
+   *  Returns the refusal, spoken; undefined = cast freely. */
+  castReqRefusal(caster: Actor, inst: SkillInstance): string | undefined {
+    const seat = this.seatOf(caster);
+    if (!seat || inst.granted || !seat.meta.knownSkills.has(inst.def.id)) return undefined;
+    if (caster.activeAuras.has(inst.def.id) || caster.strobes.has(inst.def.id)) return undefined;
+    return this.reqShortfall(inst.def.id, seat);
   }
 
   /**
@@ -26368,6 +26414,11 @@ export class World {
     const slot = p.skills.findIndex(s => !s);
     if (slot < 0) return false;
     const inst = makeSkillInstance(def, 1);
+    // The game's own gift (the class-kit re-kindle idiom): a dev grant never
+    // passed the learn gate, so the cast-time requirement gate passes it by
+    // (castReqRefusal's granted exemption) — grant it, cast it, whatever the
+    // rig's build happens to carry.
+    inst.granted = true;
     this.localSeat.meta.knownSkills.set(skillId, inst);
     p.skills[slot] = inst;
     this.charDirty = true;
@@ -27818,6 +27869,11 @@ export class World {
     const slot = p.skills.findIndex(s => !s);
     if (slot < 0) return false;
     const inst = makeSkillInstance(def, 1);
+    // The game's own gift (the class-kit re-kindle idiom): a dev grant never
+    // passed the learn gate, so the cast-time requirement gate passes it by
+    // (castReqRefusal's granted exemption) — grant it, cast it, whatever the
+    // rig's build happens to carry.
+    inst.granted = true;
     this.localSeat.meta.knownSkills.set(skillId, inst);
     p.skills[slot] = inst;
     this.charDirty = true;
@@ -28070,6 +28126,17 @@ export class World {
       // A stale chain-depth stamp on a NO-LONGER-triggered skill must not
       // dampen its events — direct casts always count as real actions.
       if (inst.state?.trigDepth) inst.state.trigDepth = 0;
+    }
+    // THE CAST-TIME REQUIREMENT GATE (backlog #90): a learned gem's attribute
+    // law binds at the press, not only at the learn — castReqRefusal carries
+    // the full scope (seatless casters, the possession seam, mints, live
+    // toggles). Sits AFTER the trigger lane (a disarm always lands; live
+    // toggles release through the predicate's own exemption) and BEFORE the
+    // convert/mimic redirects and every cost, so a refused press pays
+    // nothing and the refusal names the slot actually pressed.
+    {
+      const why = this.castReqRefusal(caster, inst);
+      if (why) { this.failNote(caster, inst.def.id + ':req', why); return false; }
     }
     // SKILL CONVERSION (SkillDef.convert): while the rule holds, this press
     // IS the converted skill — minted per host at the host's effective
@@ -47787,6 +47854,10 @@ export class World {
     // casting gate would break the whole point of Cast-while-Channeling
     // (instant executions never clobber a held cast).
     if (owner.isStunned() || owner.tagsForbidden(inst)) return false;
+    // THE CAST-TIME REQUIREMENT GATE reaches the trigger artery too — an
+    // armed gem below its wielder's live attributes must not fire by the
+    // side door (silent, by the artery's own law).
+    if (this.castReqRefusal(owner, inst) !== undefined) return false;
     if (def.useTime > TRIGGER_CFG.maxUseTime) {
       if (!instanceTriggerPermit(inst)) return false;
       // A bar cast needs the caster FREE — never interrupt a held channel

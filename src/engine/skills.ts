@@ -3959,7 +3959,9 @@ export interface SkillDef {
   delivery: Delivery;
   effects: SkillEffect[];
 
-  /** Attribute gates — any character meeting these can use the skill. */
+  /** Attribute gates — held at LEARN and at CAST (World.castReqRefusal): a
+   *  build below them cannot learn the gem, and a learned gem falls silent
+   *  while a respec or shed gear leaves the build under them. */
   requirements?: Partial<Record<AttributeId, number>>;
 
   /** Never drops as a skill gem (monster-only kit pieces). */

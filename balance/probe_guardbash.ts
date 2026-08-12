@@ -14,6 +14,7 @@
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { applyBuild } from '../src/sim/builds';
+import { PROBE_ATTRIBUTES } from '../src/sim/compat';
 import { MONSTERS } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
@@ -33,7 +34,9 @@ const check = (name: string, ok: boolean, detail = ''): void => {
 bootSimEngine();
 const world = makeSimWorld('guardian', 31337);
 const spec: BuildSpec = {
-  id: 'guardbash_probe', classId: 'guardian', level: 12,
+  // PROBE_ATTRIBUTES: the rig's documented stance — requirement gates never
+  // confound the measurement (the cast-time gate now runs at the press).
+  id: 'guardbash_probe', classId: 'guardian', level: 12, attributes: PROBE_ATTRIBUTES,
   skills: [
     { id: 'shield_up', level: 3 },                                                  // innate bash, bare
     { id: 'spiked_bulwark', level: 3, supports: [{ id: 'answering_wall', level: 1 }] }, // mute wall, TAUGHT

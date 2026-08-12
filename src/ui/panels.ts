@@ -256,12 +256,11 @@ const SHEET_RES: Record<string, DamageType> = {
   fireRes: 'fire', coldRes: 'cold', lightningRes: 'lightning', chaosRes: 'chaos',
 };
 
-export function meetsRequirements(world: World, def: SkillDef): boolean {
-  if (!def.requirements) return true;
-  for (const [attr, need] of Object.entries(def.requirements)) {
-    if ((world.meta.attrs[attr as AttributeId] ?? 0) < (need ?? 0)) return false;
-  }
-  return true;
+/** Delegates to the engine's ONE requirements predicate (World.meetsRequirements
+ *  → reqShortfall) — the learn gate, the cast-time gate and this panel speak
+ *  the same law, judged against the OPENER seat's build (the couch lens). */
+export function meetsRequirements(world: World, def: SkillDef, seat: Seat = world.localSeat): boolean {
+  return world.meetsRequirements(def.id, seat);
 }
 
 /** THE TIER TELL (the world map's stacked-ground read, refreshMap's node
@@ -2298,7 +2297,7 @@ export class UI {
     const slotsFull = m.knownSkills.size >= MAX_LEARNED_SKILLS;
     const skillGems = m.skillInv.map((inst, idx) => {
       const def = inst.def;
-      const ok = meetsRequirements(world, def);
+      const ok = meetsRequirements(world, def, invSeat);
       const dupe = m.knownSkills.has(def.id);
       const reqText = def.requirements
         ? Object.entries(def.requirements).map(([a, n]) => {
