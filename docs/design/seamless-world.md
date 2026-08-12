@@ -126,6 +126,15 @@ projectiles) re-sites from the loadZone boundary to ring demotion.
   collision-honest, road drawn), and WALK from one into the other with no
   loadZone. Combat stays ring-0-only. Deliverable: the feel, on video, plus
   frame telemetry. This answers "how would it play" for the cost of days.
+  *M0 keel decisions (committed 2026-08-11 with the keel + the three lane
+  briefs):* THE REBASE AT THE THRESHOLD — the live sim keeps the ACTIVE
+  region's zone-local frame (every zone-local assumption survives); tissue
+  and the neighbor are addressed through the frame transform; crossing the
+  threshold rebases all live positions by the seat delta in one
+  between-frames step with the camera compensating — visually continuous,
+  structurally conservative, replaced by true multi-region sim in M1. The
+  away region's population stays unmaterialized until first arrival (M0's
+  ring-0-only cut); seamless M0 runs refuse saves and co-op outright.
 - **M1 — THE ACTIVE SET.** The ring ladder, freeze/thaw at region grain, the
   ring-tagged array, world-keyed render chunks (re-key ground/canopy from
   zone-local to world coords; doodadFamilyRev is the decoupling seam),
