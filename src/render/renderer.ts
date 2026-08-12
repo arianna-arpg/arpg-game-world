@@ -95,6 +95,7 @@ import { UnderstoryLayer } from './vis/understory';
 import { cameraModeOf, couchConfineRect, couchFit, placeCamera } from './camera';
 import { COUCH_CFG } from '../data/couch';
 import { drawVoidFrame, voidBaseOf } from './vis/voidFrame';
+import { drawSeamlessCountry, seamlessDrawActive } from './vis/seamlessDraw';
 import { activePieces } from '../world/shape';
 import { traversalPose, traversalVeil } from '../engine/traversal';
 import './vis/paintersGloam'; // side-effect: the Gloamwood kit's painters register
@@ -499,7 +500,12 @@ export class Renderer {
     const azSpan = az.pieces?.length
       ? { w: world.arenaHull.w, h: world.arenaHull.h, boundless: az.boundless }
       : az;
-    const camAt = placeCamera(camMode, focus, vw, vh, azSpan);
+    // THE SEAMLESS CAMERA (vis/seamlessDraw.ts): with tissue country standing
+    // past the rim there is no abyss to spare the player — the camera
+    // free-follows into it (the boundless posture, whatever the chosen mode)
+    // and the clamp returns the moment the mode stands down (Law 1).
+    const camAt = placeCamera(camMode, focus, vw, vh,
+      seamlessDrawActive(world) ? { w: azSpan.w, h: azSpan.h, boundless: true } : azSpan);
     this.cam.x = camAt.x;
     this.cam.y = camAt.y;
     world.couchConfine = couchOn && viewOk
@@ -2056,6 +2062,11 @@ export class Renderer {
     // its hull (the base box exactly until an annex opens), mask back to the
     // void outside the union at the end.
     const pcs = activePieces(world.arena);
+    // THE SEAMLESS COUNTRY (vis/seamlessDraw.ts): when the mode stands, the
+    // ground past the rim is TISSUE, not abyss — the settling vignette, the
+    // outside mask and the void frame all yield to the country draw below.
+    // False (flag off / no sampler / no seats) = today's path, byte-identical.
+    const seamlessCountry = seamlessDrawActive(world);
     const hullW = world.arenaHull.w, hullH = world.arenaHull.h;
     ctx.save();
     // Clip RECT only: a persistent curved clip forces every chunk blit and
@@ -2076,9 +2087,12 @@ export class Renderer {
     this.drawSnowCover(world, vw, vh);
     this.drawAnimatedRegions(world);
     // Soft edge vignette — the world settles into its bounds instead of
-    // ending on a hairline.
+    // ending on a hairline. (Seamless: the world does not END here — the
+    // country continues, so nothing settles and the vignette stands down.)
     const D = 90;
-    if (ell) {
+    if (seamlessCountry) {
+      // no settling band — the rim is a seam in the ground, not an ending
+    } else if (ell) {
       ctx.save();
       ctx.translate(w / 2, h / 2);
       ctx.scale(1, h / w);
@@ -2106,7 +2120,10 @@ export class Renderer {
     }
     // ELLIPSE zones: mask everything outside the oval back to the void
     // color — one even-odd fill instead of a whole-pass curved clip.
-    if (!pcs.length) {
+    if (seamlessCountry) {
+      // no mask — the tissue draw below owns everything outside the union
+      // (drawn under the same outside-clip geometry this mask would use)
+    } else if (!pcs.length) {
       if (ell) {
         ctx.fillStyle = voidBaseOf(theme);
         ctx.beginPath();
@@ -2147,6 +2164,13 @@ export class Renderer {
       ctx.restore();
     }
     ctx.restore();
+    if (seamlessCountry) {
+      // THE SEAMLESS COUNTRY (vis/seamlessDraw.ts): tissue poured from the
+      // global fields past the rim, and the neighbor layouts standing at
+      // their map seats — in place of the frame's abyss dress entirely.
+      drawSeamlessCountry(ctx, world, this.cam.x, this.cam.y, vw, vh);
+      return;
+    }
     // THE VOID FRAME (vis/voidFrame.ts): everything past the rim — the
     // falling-away skirt, the lip strokes, the drifting motes in the dark.
     // Under the hero-locked camera the abyss is on screen whenever the hero
