@@ -59,4 +59,24 @@ export const SEAMLESS_CFG = {
   cull: 2600,
   /** Road ribbon half-width in px (the literal way's walkable spine). */
   roadHalfPx: 52,
+  // --- M1 THE RING (the resident pair generalized) — ALL THREE FLAGGED
+  // (unblessed; her word moves them). Membership is seat-center distance from
+  // the ACTIVE zone's seat: admit within ringInPx, keep until past ringOutPx
+  // — in < out BY LAW, so a seat straddling the boundary never flaps between
+  // two evaluations (hysteresis). Calibrated 2026-08-12 on the probe seed's
+  // SETTLED web: linked-edge spacing clusters at ~2200-3300px (p50 2791,
+  // the walk pair 3193) with a long-link tail past 7800px (p90) that is a
+  // different class (frontier/expanse spans) — 3600 covers the adjacent
+  // cluster without reaching the tail or two-hop country (~4800+); 4800
+  // keeps the walked-from zone resident across every rebase BY
+  // CONSTRUCTION (members sit within ringOutPx of the old center, so the
+  // back-way survives recentering). A link stretched past ringInPx simply
+  // keeps its door — degradation, never a strand.
+  /** Admit an eligible zone as resident within this seat distance (px). */
+  ringInPx: 3600,
+  /** Demote a resident once its seat passes this distance (px); > ringInPx. */
+  ringOutPx: 4800,
+  /** Resident mints per evaluation beat (the forechart's budget doctrine —
+   *  a walker never pays two synchronous layout mints in one frame). */
+  mintBudgetPerBeat: 1,
 } as const;
