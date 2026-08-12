@@ -5,8 +5,9 @@
 // affinity weighting + the clearway firebreak, consumption (remnant swap,
 // removal, kin), conversion-behind (ashfield; the flood's shallow wake),
 // the yieldWays causeway mask (drawn == tested), quench/feed through the
-// real blast tap, undertow drag + the breath ramp, ambient wave lanes,
-// and the cadence-less creep heart's ONE-SHOT latch (a shipped
+// real blast tap, undertow drag + the breath ramp, ambient wave lanes
+// (+ the authored landslide announce rows driven off TILESETS — drawn ==
+// tested), and the cadence-less creep heart's ONE-SHOT latch (a shipped
 // creepSource without a cadence never arms the pump clock — and the
 // section-0 fingerprint re-proves the classic path byte-identical under
 // the pump-aware sweep). Plus THE GROW VERB (growCreepAt — cleanseAt's
@@ -21,6 +22,7 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { applyBuild } from '../src/sim/builds';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { buildZoneCreep, CreepField, CREEPS, CREEP_CFG, registerCreep } from '../src/engine/creep';
+import type { FrontSpawnRow } from '../src/engine/creep';
 import { killRules } from '../src/engine/killHandlers';
 import { TILESETS } from '../src/data/tilesets';
 import type { Doodad } from '../src/engine/levelgen';
@@ -779,6 +781,145 @@ const fnv = (text: string): string => {
     for (let i = 0; i < 60 * 4; i++) { tr += dtq; f.update(dtq, tr, []); }
     check('poxrot: cleansed skin recoils to nothing (borrowed weather, no scar)',
       f.sources.length === 0);
+  }
+}
+
+// --- 18) THE LANDSLIDE ANNOUNCE: the authored mountain lanes speak ---------
+// Backlog #62. Three shipped mountain faces (overpass, snowcrown, stonecrown)
+// author `announce: { text: 'the mountainside lets go!' }` on their ungated
+// landslide span lanes, and snowcrown appends a snow-gated avalanche SIBLING
+// (the same 'landslide' kind wearing its OWN line) — the fire site
+// (spawnWave: `fielded > 0 && row.announce`) was live but only ever probed
+// through section 12's SYNTHETIC row. These checks drive the REAL rows, read
+// off TILESETS and installed VERBATIM (drawn == tested: re-wording or
+// dropping an announce in tilesets.ts breaks this section — the expected
+// lines are pinned below as literals, while the emission itself rides the
+// authored row through the real machinery; the stub's sky always says yes,
+// so the snow gate opens — gate behavior is section 14's subject, not ours).
+// THE SEED LAW: installLanes rolls a row's `chance` as the field stream's
+// FIRST draw, so one pinned seed whose first draw clears the meanest
+// authored chance (0.55) admits every lane deterministically — and rolled
+// delays are bounded by the row's own [lo, hi], so ticking past hi can
+// never flake. Seed 7's first draw is 0.0117.
+{
+  const SLIDE_LINE = 'the mountainside lets go!';
+  const AVALANCHE_LINE = 'the crown sheds: avalanche!';
+  const slideRows: { home: string; row: FrontSpawnRow }[] = [];
+  for (const [home, ts] of Object.entries(TILESETS)) {
+    for (const row of ts.theme.creep?.fronts ?? []) {
+      if (row.id === 'landslide') slideRows.push({ home, row });
+    }
+  }
+  // Partition STRUCTURALLY (by the sky gate, never by text): the ungated
+  // rows are the mountainside fixtures, the when-gated one is snowcrown's
+  // avalanche — so a re-worded row stays in its partition and fails its
+  // pin instead of silently migrating out of the driven set.
+  const mountainRows = slideRows.filter(r => !r.row.when);
+  const gatedRows = slideRows.filter(r => !!r.row.when);
+  check('slide census: three mountain faces field the ungated landslide lane',
+    mountainRows.length >= 3, mountainRows.map(r => r.home).join(',') || 'none');
+  check('slide census: every ungated lane wears the one authored line',
+    mountainRows.length > 0 && mountainRows.every(r => r.row.announce?.text === SLIDE_LINE),
+    mountainRows.map(r => `${r.home}: '${r.row.announce?.text ?? 'SILENT'}'`).join(' | '));
+  check('slide census: the snow-gated avalanche sibling wears its OWN line',
+    gatedRows.length === 1 && gatedRows[0].row.announce?.text === AVALANCHE_LINE
+    && gatedRows[0].row.when?.weather !== undefined,
+    gatedRows.map(r => `${r.home}: '${r.row.announce?.text ?? 'SILENT'}'`).join(' | ') || 'none');
+  check('slide census: no landslide lane anywhere is silent (future shirkers get named)',
+    slideRows.every(r => !!r.row.announce?.text),
+    slideRows.map(r => `${r.home}${r.row.when ? ' (gated)' : ''}`).join(','));
+  // The walk reads base themes; the stringify counts prove it TOTAL — no
+  // variant or future row hides either line where the walk can't see (the
+  // poxrot scan idiom).
+  const reg = JSON.stringify(TILESETS);
+  check('slide census: the base-theme walk is total (stringify agrees, both lines)',
+    reg.split(SLIDE_LINE).length - 1
+      === mountainRows.filter(r => r.row.announce?.text === SLIDE_LINE).length
+    && reg.split(AVALANCHE_LINE).length - 1
+      === gatedRows.filter(r => r.row.announce?.text === AVALANCHE_LINE).length,
+    `${reg.split(SLIDE_LINE).length - 1}+${reg.split(AVALANCHE_LINE).length - 1} in the registry vs `
+    + `${mountainRows.length}+${gatedRows.length} walked`);
+
+  const SLIDE_SEED = 7; // first draw 0.0117 — clears every authored chance
+  const mkSlideField = (): { f: CreepField; seen: [string, string | undefined][] } => {
+    const f = new CreepField(new Rng(SLIDE_SEED), 1600, 1200);
+    const seen: [string, string | undefined][] = [];
+    f.setTerrain({
+      groundKindAt: () => null,
+      eachFuelNear: () => {},
+      consume: () => {},
+      stamp: () => {},
+      drag: () => {},
+      drown: () => {},
+      condHeld: () => true, // the sky always says yes — the snow gate opens
+      announce: (text, color) => seen.push([text, color]),
+    });
+    return { f, seen };
+  };
+  const dt = 0.25;
+
+  // (a) EXACTLY ONE LINE PER FIELDING WAVE, for every authored row — the
+  // avalanche included (under the stub's held sky it fields like any
+  // other) — text pinned per partition, color exactly as the row wires it.
+  for (const { home, row } of slideRows) {
+    const label = row.when ? `${home} avalanche` : home;
+    const want = row.when ? AVALANCHE_LINE : SLIDE_LINE;
+    const { f, seen } = mkSlideField();
+    f.installLanes([row]);
+    check(`slide: the ${label} lane is admitted under its authored chance (the seed law)`,
+      f.laneCount() === 1, `chance ${row.chance ?? 'fixture'}`);
+    let t = 0;
+    const hi = (row.delay ?? CREEP_CFG.front.delay)[1] + 6;
+    while (seen.length === 0 && t < hi) { t += dt; f.update(dt, t, []); }
+    const fieldedAt = f.sources.filter(s => s.front).length;
+    for (let i = 0; i < 12; i++) { t += dt; f.update(dt, t, []); } // grace: the march never re-announces
+    check(`slide: the ${label} wave speaks the authored line EXACTLY once as it fields`,
+      seen.length === 1 && seen[0][0] === want && seen[0][1] === row.announce?.color && fieldedAt > 0,
+      `${seen.length} line(s) by ${t.toFixed(1)}s, ${fieldedAt} sections — `
+      + (seen.map(s => `'${s[0]}'/${s[1]}`).join('|') || 'silence'));
+  }
+
+  // PER WAVE means per wave: gutter the first wave (the section-6 idiom) and
+  // the lane's return on its own `waves` clock speaks AGAIN — one line each.
+  {
+    const { home, row } = mountainRows[0];
+    const { f, seen } = mkSlideField();
+    f.installLanes([row]);
+    let t = 0;
+    const hi = (row.delay ?? CREEP_CFG.front.delay)[1] + 6;
+    while (seen.length === 0 && t < hi) { t += dt; f.update(dt, t, []); }
+    f.cleanseAt(0, 0, 1e9);
+    const cap = t + (row.waves ?? [0, 0])[1] + 40;
+    while (seen.length < 2 && t < cap) { t += dt; f.update(dt, t, []); }
+    check(`slide: the ${home} lane's RETURNING wave re-announces (one line per wave)`,
+      seen.length === 2 && seen.every(s => s[0] === SLIDE_LINE),
+      `${seen.length} line(s) by ${t.toFixed(0)}s (waves ${row.waves?.join('-') ?? 'none'})`);
+  }
+
+  // (b) A WAVE THE CAP REFUSES WHOLE IS SILENT — and the lane still owes
+  // its return: gutter the squatters and the NEXT wave finally speaks (the
+  // silence was the `fielded > 0` gate, never a dead collector).
+  {
+    const { home, row } = mountainRows[0];
+    const { f, seen } = mkSlideField();
+    f.installLanes([row]); // chance + delay bank as draws 1-2 (the seed law)
+    let squat = 0;
+    while (f.addSource(CREEPS['landslide'], 40 + (squat % 24) * 60, 40 + Math.floor(squat / 24) * 60,
+      { reach: 20, bornFrac: 1 })) squat++;
+    check('slide: the squat saturated the field to the source cap',
+      squat === CREEP_CFG.maxSources, `${squat} of ${CREEP_CFG.maxSources}`);
+    let t = 0;
+    const quiet = (row.delay ?? CREEP_CFG.front.delay)[1] + 8;
+    while (t < quiet) { t += dt; f.update(dt, t, []); }
+    check(`slide: the ${home} wave refused WHOLE at the cap stays silent (fielded 0)`,
+      seen.length === 0 && !f.sources.some(s => s.front) && f.sources.length === CREEP_CFG.maxSources,
+      `${seen.length} line(s), ${f.sources.length} sources by ${t.toFixed(0)}s`);
+    f.cleanseAt(0, 0, 1e9);
+    const cap = t + (row.waves ?? [0, 0])[1] + 40;
+    while (seen.length === 0 && t < cap) { t += dt; f.update(dt, t, []); }
+    check('slide: the refused lane still owed its wave — space freed, it SPEAKS',
+      seen.length === 1 && seen[0][0] === SLIDE_LINE && f.sources.some(s => s.front),
+      `${seen.length} line(s) by ${t.toFixed(0)}s`);
   }
 }
 
