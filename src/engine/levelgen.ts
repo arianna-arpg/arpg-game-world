@@ -2156,7 +2156,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // the answer (skep_bee: habitat-bound with a territory-wide grace).
   beehive:   { overlap: 'solid', blocksMove: true, spacing: 75,
     resonance: { radius: 420, text: 'the skep thrums with fury…', color: '#e0b048' } },
-  thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 }, mutable: true, fuel: 'kindling' },
+  // THE THICKET MENDS ITS OWN (thicket_heal — the ally direction's first row):
+  // the bramble quietly restores the grove's wounded kin while you fight them.
+  // BOTH halves are load-bearing — target 'ally' without a faction matches
+  // nobody by construction (isEffectTarget). Burn the brambles to stop it.
+  thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 }, mutable: true, fuel: 'kindling',
+    effect: { id: 'thicket_heal', target: 'ally', faction: 'sylvan', interval: 2.6, radius: 130, chance: 0.6, power: 5 } },
   tombstone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 22, mutable: true,
     surface: { hw: 0.65, hh: 0.34 }, // the headstone slab (arch face 1.3r wide; thin depth)
     sightShadow: { mul: 0.35 } },    // waist-high: a soft short gloom, never a rampart's night

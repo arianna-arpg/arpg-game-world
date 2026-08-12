@@ -2867,8 +2867,8 @@ export class World {
   };
   /** DOODAD-EFFECT registry — the general framework. A doodad carrying a DoodadEffect
    *  ticks through here (updateDoodadEffects). Add an effect = a handler + one entry
-   *  (e.g. a future `thicket_heal`). Host-authoritative; damage/statuses replicate
-   *  via the actor snapshot, the adorn via serializeZone. */
+   *  (`thicket_heal` was minted exactly this way). Host-authoritative; damage/statuses
+   *  replicate via the actor snapshot, the adorn via serializeZone. */
   private readonly doodadEffects: Record<string, (d: Doodad, eff: DoodadEffect) => void> = {
     tentacle_swing: (d, eff) => this.effectTentacleSwing(d, eff),
     crystal_beam: (d, eff) => this.effectCrystalBeam(d, eff),
@@ -2877,6 +2877,7 @@ export class World {
     descent_trap: (d, eff) => this.effectDescentTrap(d, eff),
     spore_puff: (d, eff) => this.effectSporePuff(d, eff),
     growth_lash: (d, eff) => this.effectGrowthLash(d, eff),
+    thicket_heal: (d, eff) => this.effectThicketHeal(d, eff),
     status_wash: (d, eff) => this.effectStatusWash(d, eff),
     maw_reel: (d, eff) => this.effectMawReel(d, eff),
     orb_spring: (d, eff) => this.effectOrbSpring(d, eff),
@@ -14980,8 +14981,8 @@ export class World {
   // --- DOODAD-EFFECT framework (general; first effect: the Eldritch tentacle swing).
   //  Any doodad carrying a DoodadEffect ticks here. Host-authoritative: damage +
   //  statuses replicate via the actor snapshot, the adorn via serializeZone. A new
-  //  effect (e.g. a Thicket healing its Sylvan kin) is one handler + one registry
-  //  entry — the doodad just carries the data.
+  //  effect is one handler + one registry entry — the doodad just carries the data
+  //  (thicket_heal, the Thicket mending its Sylvan kin, is the worked example).
 
   private updateDoodadEffects(dt: number): void {
     for (const d of this.doodads) {
@@ -15142,6 +15143,30 @@ export class World {
     this.text(victim.pos, Math.round(taken).toString(), '#6ac860', 12);
     this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: eff.radius * 0.7, color: '#6ac860', life: 0.22, maxLife: 0.22 });
     if (victim.life <= 0 && !victim.dead) this.kill(victim);
+  }
+
+  /** THE THICKET MEND (thicket_heal — the ally direction's debut): a bramble
+   *  quietly RESTORES the nearest wounded kinsman of its faction. The growth
+   *  lash inverted: same shared-scan pick + chance gate, life given back
+   *  instead of taken. The row must carry BOTH target:'ally' AND a faction —
+   *  a faction-less ally row matches nobody by construction (isEffectTarget).
+   *  Already-whole kin are skipped in the pick, so a full body never shadows
+   *  a wounded one behind it; the mend never crests maxLife. Counterplay is
+   *  the rule's own fuel line: brambles burn. */
+  private effectThicketHeal(d: Doodad, eff: DoodadEffect): void {
+    const kin = this.nearestInReach(d.pos, eff.radius,
+      x => this.isEffectTarget(x, eff) && x.life < x.maxLife());
+    if (!kin) return;
+    if (!chance(eff.chance)) return;
+    // Rule-row effects are authored once for every level — fold the zone in
+    // (the heat_wash idiom) so the mend keeps pace with the pools it fills.
+    const amount = eff.power * (1 + this.zone.level * 0.08);
+    const healed = Math.min(amount, kin.maxLife() - kin.life);
+    if (healed <= 0) return;
+    kin.life = Math.min(kin.life + amount, kin.maxLife());
+    const col = eff.color ?? '#8ae0a8';
+    this.text(kin.pos, '+' + Math.round(healed), col, 12);
+    this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: eff.radius * 0.7, color: col, life: 0.22, maxLife: 0.22 });
   }
 
   /** A tentacle-adorned doodad lashes at the nearest OPPONENT in reach (resolved by
