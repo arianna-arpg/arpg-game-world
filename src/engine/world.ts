@@ -217,7 +217,7 @@ import { CONJURE_RIDERS } from '../data/conjury';
 import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
 import { affordTravel, castRay, LOS_CFG, type RayElev } from './los';
 import { coordDist, mapToPx, type MapCoord } from '../world/coords';
-import { getTissueSampler, setTissueSampler, type RegionSeat } from '../world/seamless';
+import { getTissueSampler, SEAMLESS_CFG, setTissueSampler, type RegionSeat } from '../world/seamless';
 import { buildTissueSampler } from '../world/tissue';
 import { FORECHART_CFG, forechartSource, zonesWithin } from '../world/forechart';
 import { OMEN_CFG, collectOmens, omenLine, omenReach, type Omen } from '../world/omens';
@@ -6280,7 +6280,7 @@ export class World {
     // on, stand the resident pair up once the web can seat it — idempotent,
     // retried at every load until the pick lands. Flag off = one boolean
     // read (THE MODE LAW).
-    if (this.seamless) this.seamlessEnsureBoot();
+    if (this.seamless) { this.seamlessEnsureBoot(); this.seamlessDressWalkExits(); }
   }
 
   // --- THE RESIDENT PAIR (seamless M0 — docs/design/seamless-world.md) ----
@@ -6294,6 +6294,49 @@ export class World {
     if (this.seamlessNotes.has(key)) return;
     this.seamlessNotes.add(key);
     console.info(msg);
+  }
+
+  /** M0.5 THE OPEN WAY (her greenlight 2026-08-12 — the D2 walk): an exit
+   *  between two RESIDENT zones is not a door. True = the dwell never arms,
+   *  the lock-hint scan never sees it, and the renderer draws no mouth —
+   *  the road simply continues into the country, and the WALK is the travel
+   *  (the threshold rebase). The exit ROW stays untouched: the graph's link
+   *  is the map's truth. Discrete mode reads false at the first clause, so
+   *  every door behaves exactly as on main (THE MODE LAW). */
+  seamlessWalkExit(e: { to: string }): boolean {
+    return this.seamless && e.to !== '?'
+      && this.seamlessMints.has(this.zone.id) && this.seamlessMints.has(e.to);
+  }
+
+  /** M0.5 THE WAYMARKED CROSSING: each open way wears a pair of signposts
+   *  flanking the road just inside the rim — the "marked pathway" read her
+   *  D2 reference asks for (dress, not law: the tissue's road ribbon is the
+   *  true guide). Runs at every load of a resident zone (doodads reset per
+   *  load — idempotent per visit); pure geometry off the exit seat, no rng.
+   *  Flank = the tissue road's half width + a shoulder; inset keeps the
+   *  posts on active ground (both FLAGGED with the M0 dials). */
+  private seamlessDressWalkExits(): void {
+    if (!this.seamless) return;
+    let planted = false;
+    for (const e of this.exits) {
+      if (!this.seamlessWalkExit(e)) continue;
+      const side = this.zone.exits[e.defIndex]?.side;
+      const flank = SEAMLESS_CFG.roadHalfPx + 14;
+      const inset = 30;
+      // n/s ways run vertically → posts flank in x; e/w ways flank in y.
+      const dx = side === 'n' || side === 's' ? flank : 0;
+      const dy = side === 'e' || side === 'w' ? flank : 0;
+      const ix = side === 'e' ? -inset : side === 'w' ? inset : 0;
+      const iy = side === 's' ? -inset : side === 'n' ? inset : 0;
+      for (const s of [-1, 1] as const) {
+        this.doodads.push({
+          pos: vec(e.pos.x + ix + dx * s, e.pos.y + iy + dy * s),
+          radius: 11, kind: 'signpost',
+        });
+      }
+      planted = true;
+    }
+    if (planted) this.markDoodadsChanged();
   }
 
   /** May this zone stand as a RESIDENT of the M0 pair? Plain, unvisited
@@ -42238,6 +42281,9 @@ export class World {
       let onExit: ZoneExit | null = null, bestD = Infinity;
       let lockedExit: ZoneExit | null = null, lockedD = Infinity;
       for (const e of this.exits) {
+        // M0.5 THE OPEN WAY: a resident-pair way is not a door — no dwell,
+        // no lock hint; the walk itself is the travel (seamlessWalkExit).
+        if (this.seamlessWalkExit(e)) continue;
         const d = dist(this.player.pos, e.pos);
         if (d > e.radius) continue;
         if (!this.dwellReachable(this.player.pos, e.pos,

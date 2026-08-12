@@ -3627,6 +3627,10 @@ export class Renderer {
     // read); no pointer, no pointer half.
     const aim = this.padAim ?? (this.hudMouse.x >= 0 ? this.toWorld(this.hudMouse) : null);
     for (const e of world.exits) {
+      // M0.5 THE OPEN WAY (seamless): a resident-pair way draws no mouth —
+      // the road runs on into the country and the crossing is just ground
+      // (world.seamlessWalkExit; the waymark posts are the marked pathway).
+      if (world.seamlessWalkExit(e)) continue;
       const locked = world.isExitLocked(e);
       // A BOUNDARY-GATE exit answers in its enclave's color (the gate row's
       // accent), not the zone's — the crossing reads as somewhere ELSE from

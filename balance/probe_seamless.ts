@@ -489,6 +489,80 @@ const stripHostiles = (w: World): void => {
   setTissueSampler(buildTissueSampler(ws)); // leave the real sampler standing
 }
 
+// --- RIG F: M0.5 THE OPEN WAY (the doorless marked pathway) --------------------
+// Her greenlight (2026-08-12): between RESIDENT zones there is no door — the
+// dwell never arms, the mouth never draws (renderer-side, gated on the SAME
+// predicate pinned here), the road runs on, and a signpost pair marks the
+// crossing. The exit ROW survives (the graph's link is the map's truth).
+
+{
+  const walkExits = ws.exits.filter(e => ws.seamlessWalkExit(e));
+  check('F1 every resident-pair exit reads as an OPEN WAY (and at least one stands)',
+    walkExits.length >= 1 && walkExits.every(e => ws.seamlessMints.has(e.to)),
+    `${walkExits.length} open way(s) in ${ws.zone.id}`);
+  check('F2 no exit to unresident ground opens (doors beyond the pair stay doors)',
+    ws.exits.every(e => ws.seamlessWalkExit(e) === ws.seamlessMints.has(e.to) && (e.to !== '?' || !ws.seamlessWalkExit(e))));
+  check('F3 the exit ROW survives the open way (the graph link is untouched)',
+    walkExits.every(e => ws.zone.exits[e.defIndex] && ws.zone.exits[e.defIndex].to === e.to));
+
+  // THE WAYMARKED CROSSING: a signpost PAIR flanks each open way, planted by
+  // the load-tail dress (pure geometry — flank 66 / inset 30 at the shipped
+  // dials; the pin is presence + nearness, never exact dials, so her re-dial
+  // breaks nothing).
+  for (const [i, e] of walkExits.entries()) {
+    const posts = ws.doodads.filter(d => d.kind === 'signpost'
+      && Math.hypot(d.pos.x - e.pos.x, d.pos.y - e.pos.y) < 140);
+    check(`F4.${i} a signpost pair marks the open way (${e.to})`,
+      posts.length >= 2, `${posts.length} post(s) near the crossing`);
+  }
+
+  // THE DEAD DWELL: park the hero exactly on the open way's seat and stand
+  // idle far past the door's dwell — the travel ring must never arm (the
+  // walk is the travel; exitDwellView is the renderer's own read). Parked ON
+  // the rim seat = inside active bounds, so the threshold cannot fire here.
+  const way = walkExits[0];
+  if (way) {
+    ws.player.pos = vec(way.pos.x, way.pos.y);
+    let armed = false;
+    for (let i = 0; i < 180; i++) {
+      stripHostiles(ws);
+      ws.update(1 / 60);
+      if (ws.exitDwellView()) { armed = true; break; }
+    }
+    check('F5 the dead dwell — three idle seconds on the open way arm NOTHING',
+      !armed && ws.seamlessMints.has(ws.zone.id));
+  } else {
+    check('F5 the dead dwell', false, 'no open way to park on');
+  }
+
+  // THE CONTROL: a door to unresident ground still arms its dwell ring —
+  // the scan skip is the predicate's alone, never a broken scan.
+  const door = ws.exits.find(e => !ws.seamlessWalkExit(e) && !ws.isExitLocked(e));
+  if (door) {
+    ws.player.pos = vec(door.pos.x, door.pos.y);
+    let armed = false;
+    for (let i = 0; i < 30 && !armed; i++) {
+      stripHostiles(ws);
+      ws.update(1 / 60);
+      armed = !!ws.exitDwellView();
+    }
+    check('F6 the control — a true door beyond the pair still arms its ring', armed);
+    ws.player.pos = vec(ws.arena.w / 2, ws.arena.h / 2); // step off before the dwell completes
+    ws.update(1 / 60);
+  } else {
+    check('F6 the control — a true door beyond the pair still arms its ring',
+      true, 'no unlocked non-pair door in this zone (nothing to control against)');
+  }
+
+  // DISCRETE INERTNESS: the predicate is false on every exit of a discrete
+  // world — the dwell skip and the renderer's mouth skip both gate on it
+  // alone, so false IS byte-inertness (the fast lane holds the wider law).
+  seedGlobalRandom(GSEED ^ 0x55);
+  const wdisc = makeSimWorld('warrior', WSEED ^ 0x55);
+  check('F7 discrete worlds hold no open ways (the mode law at the predicate)',
+    wdisc.exits.every(e => !wdisc.seamlessWalkExit(e)));
+}
+
 // --- RIG E: THE SAVE REFUSAL ---------------------------------------------------
 
 {
