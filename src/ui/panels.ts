@@ -240,6 +240,13 @@ const BREAK_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><text x="2" y="20" font-size="19">⚒</text></svg>',
 )}") 13 13, crosshair`;
 
+/** THE AUTO-ARM CHOICE — one seam, every salvage view: true (shipped) means
+ *  arriving at the bench OR an open scrap counter ARMS its salvage mode and
+ *  opens the bag beside it (arm-on-open, exactly as the bench debuted);
+ *  false makes every view wait for its toggle press instead (arm-on-toggle).
+ *  One word here settles all surfaces at once. */
+const SALVAGE_AUTO_ARM = true;
+
 /** Resistance rows display the EFFECTIVE (soft/hard-capped) value, with the
  *  raw overcap alongside when it exceeds the cap (shred insurance). The
  *  sheet's ORGANIZATION — which stats print where, and when — lives in
@@ -460,8 +467,11 @@ export class UI {
   /** The Borough arming panel: which villager the dwell offered. */
   boroughOpen = false;
   private boroughFolkId = -1;
-  /** The scrap wheel: while ON, the vendor screen's sell-half is live and
-   *  clicks BREAK your things for essence. Reset on close — never sticky. */
+  /** The scrap wheel (the SELL lane's armed flag): while ON, the BAG is the
+   *  sell menu — the ⚙ cursor rides the counter and the (same-seat)
+   *  inventory, and clicks there SELL for Coarse Essence (the Breaker's Eye
+   *  baseline on the sell lane). Auto-armed on arrival at an open scrap
+   *  counter (SALVAGE_AUTO_ARM); reset on close — never sticky. */
   private scrapMode = false;
   /** THE STANDING ORDER picker: which counter's pane is open + its filter. */
   private vendorCommOpen: string | null = null;
@@ -593,7 +603,7 @@ export class UI {
     // the extended flag only ever reaches itemTooltip — other cards have no
     // deeper form and simply re-serve themselves.
     bindTooltips(this.inventory, (el, ext) =>
-      el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.inventory), this.breakArmedFor(this.inventory))
+      el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.inventory), this.salvageLaneFor(this.inventory))
         : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!, ext)
         : el.dataset.tip === 'vestige' ? this.vestigeTooltip(el.dataset.vestigeId!) : null,
     { extend: true });
@@ -2187,8 +2197,10 @@ export class UI {
   /** The CARRIED-GEM inventories (moved here from the skill book — one
    *  inventory panel, tabs instead of overlapping windows). 'skills' also
    *  hosts the contextual counters (Brandt / the Delver) since buying puts
-   *  gems into exactly these bags. */
-  private gemInventoryHtml(kind: 'skills' | 'gems', breaking = false): string {
+   *  gems into exactly these bags. `salv` = the armed salvage lane, if any:
+   *  under it each row is that lane's surface (break at the bench, sell at
+   *  a counter's wheel). */
+  private gemInventoryHtml(kind: 'skills' | 'gems', salv: 'break' | 'sell' | null = null): string {
     const world = this.getWorld();
     const invSeat = this.panelSeat(this.inventory);
     const m = invSeat.meta;
@@ -2196,21 +2208,24 @@ export class UI {
     // wireInventory's lockBind, both modes, every tab).
     const lockBadge = '<span style="font-size:10px" title="Locked: salvage refuses it, sweeps skip it (right-click to unlock)">🔒</span>';
     if (kind === 'gems') {
-      // Under the hammer (benchBreakMode): each row IS the break surface —
-      // action buttons stand down, the yield prints inline, a locked row
-      // keeps still and says why.
-      if (breaking) {
+      // Under an armed lane (the bench's hammer, a counter's wheel): each
+      // row IS that lane's surface — action buttons stand down, the yield
+      // prints inline, a locked row keeps still and says why.
+      if (salv) {
+        const glyph = salv === 'sell' ? '⚙' : '⚒';
+        const tool = salv === 'sell' ? 'the wheel' : 'the hammer';
+        const doWord = salv === 'sell' ? 'sell for' : 'break into';
         return m.inventory.map((gem, idx) => {
-          const y = salvageSupportYield(gem);
+          const y = salv === 'sell' ? sellSupportYield(gem) : salvageSupportYield(gem);
           return `
           <div class="skill-entry" data-salv-sup="${idx}" data-lock-sup="${idx}"
             style="border-left:3px solid ${gem.def.color};cursor:inherit">
             <div class="name">${gem.def.name} <span style="color:#ffd700">Lv ${gem.level}</span>
               ${gem.locked ? lockBadge : ''}</div>
             <div class="desc" style="color:${gem.locked ? '#8a8678' : '#e8c87a'}">
-              ⚒ ${gem.locked ? 'locked — the hammer passes it by' : `click to break into ${this.essCostText(y)}`}</div>
+              ${glyph} ${gem.locked ? `locked — ${tool} passes it by` : `click to ${doWord} ${this.essCostText(y)}`}</div>
           </div>`;
-        }).join('') || '<div style="color:#8a8678;font-size:11px">No loose support gems to break.</div>';
+        }).join('') || `<div style="color:#8a8678;font-size:11px">No loose support gems to ${salv === 'sell' ? 'sell' : 'break'}.</div>`;
       }
       // THE FIELD DISCIPLINE: one predicate, the engine's own words — the
       // buttons refuse exactly when the mutation would (sanctuary waives).
@@ -2254,11 +2269,15 @@ export class UI {
       }).join('') || '<div style="color:#8a8678;font-size:11px">Slain monsters drop support gems; walk over one to collect it.</div>';
     }
 
-    // Under the hammer: skill-gem rows as break surfaces (same shape as the
-    // supports above; a granted spark says plainly it breaks into nothing).
-    if (breaking) {
+    // Under an armed lane: skill-gem rows as its surfaces (same shape as the
+    // supports above; a granted spark says plainly it yields nothing).
+    if (salv) {
+      const glyph = salv === 'sell' ? '⚙' : '⚒';
+      const tool = salv === 'sell' ? 'the wheel' : 'the hammer';
+      const doWord = salv === 'sell' ? 'sell for' : 'break into';
+      const nothingWord = salv === 'sell' ? 'sells for' : 'breaks into';
       return m.skillInv.map((inst, idx) => {
-        const y = salvageSkillYield(inst);
+        const y = salv === 'sell' ? sellSkillYield(inst) : salvageSkillYield(inst);
         const socketed = inst.sockets.some(s => s);
         return `
         <div class="skill-entry" data-salv-skill="${idx}" data-lock-skill="${idx}"
@@ -2266,11 +2285,11 @@ export class UI {
           <div class="name">${inst.def.name} <span style="color:#ffd700">Lv ${inst.level}</span> ${this.rarityTagHtml(inst)}
             ${inst.locked ? lockBadge : ''}${inst.granted ? ' <span style="color:#8a8678;font-size:10px">(granted)</span>' : ''}</div>
           <div class="desc" style="color:${inst.locked ? '#8a8678' : y ? '#e8c87a' : '#8a8678'}">
-            ⚒ ${inst.locked ? 'locked — the hammer passes it by'
-              : y ? `click to break into ${this.essCostText(y)}${socketed ? ' (socketed gems are pried out, not lost)' : ''}`
-              : 'breaks into NOTHING (granted spark) — a click still deletes it'}</div>
+            ${glyph} ${inst.locked ? `locked — ${tool} passes it by`
+              : y ? `click to ${doWord} ${this.essCostText(y)}${socketed ? ' (socketed gems are pried out, not lost)' : ''}`
+              : `${nothingWord} NOTHING (granted spark) — a click still deletes it`}</div>
         </div>`;
-      }).join('') || '<div style="color:#8a8678;font-size:11px">No skill gems to break.</div>';
+      }).join('') || `<div style="color:#8a8678;font-size:11px">No skill gems to ${salv === 'sell' ? 'sell' : 'break'}.</div>`;
     }
 
     const nearFont = world.nearFont();
@@ -2417,22 +2436,27 @@ export class UI {
   /** Rich item card — every line derives live from the instance's rolls, so
    *  a data retune re-prices the tooltip the same instant it re-prices play.
    *  DWELLING (extended hover) grows the card with the ON-SWAP comparison.
-   *  `breaking` (benchBreakMode, passed by the INVENTORY binder only): the
-   *  hover overlay leads with what the hammer would pay — or why it refuses
-   *  (locked / worn). The keeper's-mark line shows in EVERY mode. */
-  private itemTooltip(uid: number, extended?: boolean, seat: Seat = this.getWorld().localSeat, breaking = false): TooltipContent | null {
+   *  `salv` (the armed salvage lane, passed by the INVENTORY binder only):
+   *  the hover overlay leads with what the hammer would pay — or the wheel,
+   *  on the sell lane — or why the tool refuses (locked / worn). The
+   *  keeper's-mark line shows in EVERY mode. */
+  private itemTooltip(uid: number, extended?: boolean, seat: Seat = this.getWorld().localSeat, salv: 'break' | 'sell' | null = null): TooltipContent | null {
     const item = this.findItem(uid, seat);
     if (!item) return null;
     const d = describeItem(item);
     const lines: string[] = [`<div style="color:#9a94a8;font-size:10px">${d.baseLine}</div>`];
     if (item.locked) {
       lines.unshift('<div style="color:#c8a84b">🔒 Locked — salvage refuses it, sweeps skip it (right-click to unlock)</div>');
-    } else if (breaking) {
+    } else if (salv) {
       const breakLine = seat.meta.items.some(i => i.uid === item.uid)
-        ? `<div style="color:#e8c87a;font-weight:bold">⚒ Click to break into ${this.essCostText(salvageItemYield(item))}</div>`
+        ? `<div style="color:#e8c87a;font-weight:bold">${salv === 'sell'
+          ? `⚙ Click to sell for ${this.essCostText(sellItemYield(item))}`
+          : `⚒ Click to break into ${this.essCostText(salvageItemYield(item))}`}</div>`
         : Object.values(seat.meta.equipped).some(i => i?.uid === item.uid)
-          ? '<div style="color:#8a8678">⚒ Worn — take it off before the hammer can touch it</div>'
-          : ''; // a counter's ware — the hammer has no claim on it
+          ? `<div style="color:#8a8678">${salv === 'sell'
+            ? '⚙ Worn — take it off before the wheel can touch it'
+            : '⚒ Worn — take it off before the hammer can touch it'}</div>`
+          : ''; // a counter's ware — neither tool has a claim on it
       if (breakLine) lines.unshift(breakLine);
     }
     // Item-own defenses; locally-augmented values tint affix-blue (the same
@@ -2497,11 +2521,13 @@ export class UI {
     const CELL = 34;
     const W = ITEM_CFG.inventory.w;
     const H = ITEM_CFG.inventory.h;
-    // THE BREAKER'S HAMMER (benchBreakMode): while armed for THIS panel's
-    // seat, bag tiles trade their lift for a break click, gem rows become
-    // break surfaces, and the ⚒ cursor marks the whole face. The doll keeps
-    // its full gestures — unequipping mid-break is the intended flow.
-    const breaking = this.breakArmedFor(this.inventory);
+    // THE SALVAGE BASELINE: while a salvage host is armed for THIS panel's
+    // seat — the bench's hammer (break) or a counter's scrap wheel (sell) —
+    // bag tiles trade their lift for the lane's click, gem rows become its
+    // surfaces, and the mode's cursor marks the whole face. The doll keeps
+    // its full gestures — unequipping mid-salvage is the intended flow.
+    const salv = this.salvageLaneFor(this.inventory);
+    const breaking = salv !== null;
     // THE KEEPER'S MARK: the 🔒 pip every locked thing wears, both modes.
     const lockPip = (locked: boolean | undefined): string => locked
       ? `<span style="position:absolute;top:0;right:1px;font-size:9px;line-height:10px;text-shadow:0 0 3px #000"
@@ -2590,8 +2616,8 @@ export class UI {
     };
     // Tiles: drag sources AND drop targets (another piece swaps; a vestige
     // inlays forgivingly). The fabric's .dnd-src mark dims a lifted tile.
-    // Under the hammer (benchBreakMode) a tile trades its lift for a BREAK
-    // click (data-salv-uid) — locked tiles keep still and say why.
+    // Under an armed lane a tile trades its lift for the lane's click
+    // (data-salv-uid) — locked tiles keep still and say why.
     const tiles = m.items.map(i => {
       if (i.x === undefined || i.y === undefined) return '';
       const s = itemGridSize(i);
@@ -2691,9 +2717,14 @@ export class UI {
           <h3>Bag <span style="color:#8a8678;font-weight:normal">(${m.items.length} item${m.items.length === 1 ? '' : 's'})</span></h3>
           <div style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
           <div style="margin-top:8px;color:#8a8678;font-size:10px">
-            ${breaking
+            ${salv === 'break'
               ? `⚒ <b style="color:#e8c87a">BREAKING</b>: click a piece to salvage it for essence ·
                 <b>right-click</b> locks 🔒 it (locked pieces refuse the hammer) ·
+                worn pieces are safe — drag or double-click them off the doll first ·
+                shift-click still drops to ground`
+              : salv === 'sell'
+              ? `⚙ <b style="color:#e8c87a">SELLING</b>: click a piece to sell it for Coarse Essence ·
+                <b>right-click</b> locks 🔒 it (locked pieces refuse the wheel) ·
                 worn pieces are safe — drag or double-click them off the doll first ·
                 shift-click still drops to ground`
               : `drag (or click to lift) any piece: bag ↔ doll ↔ the other slot,
@@ -2715,7 +2746,7 @@ export class UI {
       ${tabBtn('skills', `Skill Gems (${m.skillInv.length})`)}
       ${tabBtn('gems', `Support Gems (${m.inventory.length})`)}
     </div>`;
-    const body = this.invTab === 'gear' ? gearBody : this.gemInventoryHtml(this.invTab, breaking);
+    const body = this.invTab === 'gear' ? gearBody : this.gemInventoryHtml(this.invTab, salv);
 
     // Same-tab scroll restore (the golden rule — a re-render must never
     // yank a list to the top mid-read). The panel itself no longer scrolls
@@ -2772,7 +2803,7 @@ export class UI {
       this.wireLearnedList(this.inventory, () => this.refreshInventory());
     }
 
-    const breaking = this.breakArmedFor(this.inventory);
+    const salv = this.salvageLaneFor(this.inventory);
     const seatMeta = this.panelSeat(this.inventory).meta;
     // THE KEEPER'S MARK: right-click (button-2 press) toggles the salvage
     // lock on anything carried — bag tiles, worn chips, gem rows; every
@@ -2793,6 +2824,7 @@ export class UI {
         world.requestMeta({ t: 'salvageLock', kind, id: hit.id, on: !hit.locked });
         this.refreshInventory();
         if (this.salvageOpen) this.refreshSalvage(); // sweep counts moved
+        if (this.vendorOpen) this.refreshVendor(); // a counter's cluster counts too
       }));
     };
     lockBind('data-lock-uid', 'item', el => {
@@ -2816,44 +2848,48 @@ export class UI {
     // knownSkills — the drawer re-renders with the same refresh).
     if (this.invTab !== 'gear') {
       this.wireGemInventory(this.inventory, () => this.refreshInventory());
-      // Under the hammer the rows themselves are break surfaces (their
+      // Under an armed lane the rows themselves are its surfaces (their
       // action buttons stood down in gemInventoryHtml — one verb per mode).
-      if (breaking) {
+      if (salv) {
         q<HTMLElement>('[data-salv-skill]').forEach(el => el.addEventListener('click', ev => {
           if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey || dndCarried()) return;
           const idx = Number(el.dataset.salvSkill);
           if (seatMeta.skillInv[idx]?.locked) return; // the row says why
-          world.requestMeta({ t: 'salvageSkill', index: idx, lane: 'break' });
+          world.requestMeta({ t: 'salvageSkill', index: idx, lane: salv });
           hideTooltip();
           this.refreshInventory();
           this.refreshSalvage();
+          this.refreshVendor();
         }));
         q<HTMLElement>('[data-salv-sup]').forEach(el => el.addEventListener('click', ev => {
           if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey || dndCarried()) return;
           const idx = Number(el.dataset.salvSup);
           if (seatMeta.inventory[idx]?.locked) return;
-          world.requestMeta({ t: 'salvageSupport', index: idx, lane: 'break' });
+          world.requestMeta({ t: 'salvageSupport', index: idx, lane: salv });
           hideTooltip();
           this.refreshInventory();
           this.refreshSalvage();
+          this.refreshVendor();
         }));
       }
       return; // no gear handlers to attach on gem tabs
     }
 
-    // THE HAMMER'S BITE: while breaking, a plain click on a bag tile
-    // salvages it (the lift verb stood down with data-drag; a carried doll
-    // piece's landing click is the fabric's, never this).
-    if (breaking) {
+    // THE HAMMER'S BITE (or the wheel's): while a lane is armed, a plain
+    // click on a bag tile salvages it down that lane (the lift verb stood
+    // down with data-drag; a carried doll piece's landing click is the
+    // fabric's, never this).
+    if (salv) {
       q<HTMLElement>('[data-salv-uid]').forEach(el => el.addEventListener('click', e => {
         if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || dndCarried()) return;
         const uid = Number(el.dataset.salvUid);
         const item = seatMeta.items.find(i => i.uid === uid);
         if (!item || item.locked) return; // pip + tooltip explain the refusal
-        world.requestMeta({ t: 'salvageItem', uid, lane: 'break' });
+        world.requestMeta({ t: 'salvageItem', uid, lane: salv });
         hideTooltip();
         this.refreshInventory();
         this.refreshSalvage();
+        this.refreshVendor();
       }));
     }
 
@@ -2869,7 +2905,7 @@ export class UI {
         this.refreshInventory();
       });
       el.addEventListener('dblclick', () => {
-        if (breaking) return; // one verb under the hammer — the click broke it
+        if (salv) return; // one verb under an armed lane — the click salvaged it
         world.requestMeta({ t: 'equipItem', uid });
         this.refreshInventory();
         this.refreshCharSheet();
@@ -2912,9 +2948,11 @@ export class UI {
     // bag beside it — the inventory IS the salvage menu now (click things to
     // break them; the station panel holds the sweeps and the craft bench).
     // Never steal a bag another couch seat is browsing — the seat-match gate
-    // (breakArmedFor) keeps the hammer off a borrowed panel anyway.
-    this.benchBreakMode = true;
-    if (!this.inventoryOpen) this.toggleInventory(seatId);
+    // (salvageLaneFor) keeps the hammer off a borrowed panel anyway.
+    if (SALVAGE_AUTO_ARM) {
+      this.benchBreakMode = true;
+      if (!this.inventoryOpen) this.toggleInventory(seatId);
+    }
     this.salvageMenu.classList.remove('hidden');
     this.refreshSalvage();
     this.refreshInventory(); // re-render the bag with benchBreakMode's verbs armed
@@ -2924,7 +2962,9 @@ export class UI {
     this.salvageOpen = false;
     this.salvageMenu.classList.add('hidden');
     this.craftTargetUid = null;
-    this.benchBreakMode = true; // next bench visit re-arms fresh
+    // Next bench visit re-arms fresh — or waits for the toggle, by the one
+    // auto-arm choice.
+    this.benchBreakMode = SALVAGE_AUTO_ARM;
     this.applyBreakChrome();
     if (this.inventoryOpen) this.refreshInventory(); // shed the break verbs
     hideTooltip();
@@ -2932,24 +2972,31 @@ export class UI {
 
   /** Is the breaker's hammer up? (Salvage panel open on its salvage tab,
    *  mode armed.) The INVENTORY half additionally demands both panels
-   *  belong to the same couch seat — see breakArmedFor. */
+   *  belong to the same couch seat — see salvageLaneFor. */
   private breakArmed(): boolean {
     return this.salvageOpen && this.salvageTab === 'salvage' && this.benchBreakMode;
   }
 
-  /** The hammer bites on the inventory only when the bag and the bench
-   *  belong to the SAME seat (the couch lens rule — seat B's browsing must
-   *  never break under seat A's hammer). */
-  private breakArmedFor(panel: HTMLElement): boolean {
-    return this.breakArmed() && this.panelSeat(this.salvageMenu) === this.panelSeat(panel);
+  /** Which salvage lane is ARMED over this panel, if any: 'break' under the
+   *  bench's hammer, 'sell' under a counter's scrap wheel. Both hosts obey
+   *  the couch lens rule — the host and the bag must belong to the SAME
+   *  seat (seat B's browsing must never break under seat A's hammer) — and
+   *  the bench wins a same-seat tie: its lane studies, the wheel only pays. */
+  private salvageLaneFor(panel: HTMLElement): 'break' | 'sell' | null {
+    if (this.breakArmed() && this.panelSeat(this.salvageMenu) === this.panelSeat(panel)) return 'break';
+    if (this.vendorOpen && this.scrapMode && this.panelSeat(this.vendorMenu) === this.panelSeat(panel)) return 'sell';
+    return null;
   }
 
-  /** One seam for the break-mode cursor dress: the ⚒ rides the salvage
-   *  panel and the (same-seat) inventory while armed, and leaves both
-   *  clean the moment the hammer goes down. */
+  /** One seam for the salvage-mode cursor dress: the ⚒ rides the bench and
+   *  the ⚙ a counter's armed wheel, each spilling onto the (same-seat)
+   *  inventory while armed — and every face comes back clean the moment
+   *  its mode stands down. */
   private applyBreakChrome(): void {
     this.salvageMenu.style.cursor = this.breakArmed() ? BREAK_CURSOR : '';
-    this.inventory.style.cursor = this.breakArmedFor(this.inventory) ? BREAK_CURSOR : '';
+    this.vendorMenu.style.cursor = this.vendorOpen && this.scrapMode ? SCRAP_CURSOR : '';
+    const lane = this.salvageLaneFor(this.inventory);
+    this.inventory.style.cursor = lane === 'break' ? BREAK_CURSOR : lane === 'sell' ? SCRAP_CURSOR : '';
   }
 
   /** Fold many essence yields into per-tier chips ("12▪ 4◆") — the sweep
@@ -2961,6 +3008,109 @@ export class UI {
     return ESSENCE_IDS.filter(id => (sum[id] ?? 0) > 0)
       .map(id => `<span style="color:${ESSENCES[id].color}" title="${ESSENCES[id].label}">${sum[id]}${ESSENCES[id].glyph}</span>`)
       .join(' ');
+  }
+
+  /** THE BREAKER'S EYE, portable — the one salvage control cluster every
+   *  salvage-capable view composes (the bench's salvage face, a counter's
+   *  scrap section): the arm toggle, the lane's teaching line, and THE
+   *  SWEEPS, with the keeper's-lock read woven through. The LANE keeps each
+   *  view honest — the bench BREAKS (typed essence + study), a counter
+   *  SELLS (coarse, no study) — same controls, same laws, never a verb the
+   *  host would refuse (World.salvageLane gates break to the bench, sell to
+   *  an open scrap counter). Eligible sets mirror the host's salvageBulk
+   *  filters exactly: locks skipped, granted sparks out, worn gear
+   *  structurally out of reach. */
+  private salvageClusterHtml(seat: Seat, lane: 'break' | 'sell', armed: boolean): string {
+    const m = seat.meta;
+    const sell = lane === 'sell';
+    const itemY = sell ? sellItemYield : salvageItemYield;
+    const skillY = sell ? sellSkillYield : salvageSkillYield;
+    const supY = sell ? sellSupportYield : salvageSupportYield;
+    const verb = sell ? 'Sell' : 'Break';
+    const gearAll = m.items.filter(i => !i.locked);
+    const gearLocked = m.items.length - gearAll.length;
+    const skillAll = m.skillInv.filter(s => !s.locked && !s.granted);
+    const skillLocked = m.skillInv.filter(s => s.locked).length;
+    const supAll = m.inventory.filter(g => !g.locked);
+    const supLocked = m.inventory.length - supAll.length;
+    const bulkBtn = (
+      cat: 'item' | 'skill' | 'support', label: string,
+      yields: (EssenceCost | null)[], rarity?: string, color?: string,
+    ): string => {
+      const n = yields.length;
+      const pay = n ? this.essSumText(yields) : '';
+      return `<button data-bulk="${cat}${rarity ? `:${rarity}` : ''}" ${n ? '' : 'disabled'}
+        ${color ? `style="border-color:${color};color:${color}"` : ''}
+        title="${n ? `${verb} ${n} — locked things are skipped` : 'Nothing eligible'}">
+        ${label} (${n})${pay ? ` → ${pay}` : ''}</button>`;
+    };
+    const keptNote = (n: number): string =>
+      n > 0 ? ` <span style="color:#8a8678;font-weight:normal;font-size:10px">· ${n} 🔒 kept aside</span>` : '';
+    const toggle = sell
+      ? `⚙ ${armed ? 'Scrap wheel ON — click things in your bag to sell them' : 'Flip the scrap wheel (click-to-sell in the bag)'}`
+      : `⚒ ${armed ? 'Hammer in hand — click things in your bag to break them' : 'Take up the hammer (click-to-break in the bag)'}`;
+    const teaches = sell
+      ? `Selling pays Coarse Essence by quality and teaches nothing — the bench's hammer studies, the counter's wheel only pays.
+          Worn gear never sells — unequip it first.`
+      : `Breaking pays Essence by quality and STUDIES each affix (expertise, on the account, survives death).
+          Worn gear never breaks — unequip it first.`;
+    const tool = sell ? 'the wheel' : 'the hammer';
+    return `<div class="bind-btns" style="margin-bottom:6px">
+          <button data-breaker class="${armed ? 'bound' : ''}">
+            ${toggle}</button>
+        </div>
+        <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
+          ${teaches} <b>Right-click</b> anything carried to lock 🔒 it:
+          locked things refuse ${tool}, and every sweep below skips them. Granted sparks sit out of sweeps.
+        </div>
+        <h3>Gear${keptNote(gearLocked)}</h3>
+        <div class="bind-btns">
+          ${bulkBtn('item', `${verb} all`, gearAll.map(itemY))}
+          ${(['common', 'magic', 'rare', 'unique'] as const).map(r => bulkBtn(
+            'item', ITEM_RARITIES[r].label, gearAll.filter(i => i.rarity === r).map(itemY),
+            r, ITEM_RARITIES[r].color)).join('')}
+        </div>
+        <h3>Skill Gems${keptNote(skillLocked)}</h3>
+        <div class="bind-btns">
+          ${bulkBtn('skill', `${verb} all`, skillAll.map(skillY))}
+          ${(['common', 'magic', 'rare', 'legendary'] as const).map(r => bulkBtn(
+            'skill', SKILL_RARITIES[r].label, skillAll.filter(s => (s.rarity ?? 'common') === r).map(skillY),
+            r, SKILL_RARITIES[r].color)).join('')}
+        </div>
+        <h3>Support Gems${keptNote(supLocked)}</h3>
+        <div class="bind-btns">
+          ${bulkBtn('support', `${verb} all`, supAll.map(supY))}
+        </div>`;
+  }
+
+  /** Wire a composed salvage cluster (the toggle + THE SWEEPS) inside its
+   *  hosting view. The host stays sovereign — it owns the armed flag and
+   *  its own repaint — and the bag repaints alongside because both verbs
+   *  move it. Arming (re)opens the bag beside the counter: the inventory
+   *  IS the salvage menu, whichever roof it stands under. */
+  private bindSalvageCluster(root: HTMLElement, lane: 'break' | 'sell', view: {
+    armed: () => boolean; setArmed: (on: boolean) => void; refresh: () => void;
+  }): void {
+    const world = this.getWorld();
+    root.querySelector<HTMLButtonElement>('button[data-breaker]')?.addEventListener('click', () => {
+      view.setArmed(!view.armed());
+      if (view.armed() && !this.inventoryOpen) {
+        this.toggleInventory(this.panelSeat(root).id);
+      }
+      view.refresh();
+      this.refreshInventory();
+    });
+    // THE SWEEPS: one blow per category, optionally narrowed to a rarity.
+    // The host re-filters (locks, granted, lane) — these buttons only ask.
+    [...root.querySelectorAll<HTMLButtonElement>('button[data-bulk]')].forEach(btn => btn.addEventListener('click', () => {
+      const [cat, rarity] = btn.dataset.bulk!.split(':') as [
+        'item' | 'skill' | 'support',
+        ('common' | 'magic' | 'rare' | 'unique' | 'legendary') | undefined,
+      ];
+      world.requestMeta({ t: 'salvageBulk', cat, rarity, lane });
+      view.refresh();
+      this.refreshInventory(); // the sweep emptied bag tiles — repaint them
+    }));
   }
 
   refreshSalvage(): void {
@@ -2977,59 +3127,12 @@ export class UI {
     let body: string;
 
     if (this.salvageTab === 'salvage') {
-      // THE BREAKER'S EYE — the bag IS the menu. This face holds the hammer
-      // toggle and THE SWEEPS; individual breaking happens by clicking
-      // things in the inventory beside it (the break cursor marks it).
-      const armed = this.benchBreakMode;
-      // Eligible sets mirror the host's salvageBulk filters exactly: locks
-      // skipped, granted sparks out, worn gear structurally out of reach.
-      const gearAll = m.items.filter(i => !i.locked);
-      const gearLocked = m.items.length - gearAll.length;
-      const skillAll = m.skillInv.filter(s => !s.locked && !s.granted);
-      const skillLocked = m.skillInv.filter(s => s.locked).length;
-      const supAll = m.inventory.filter(g => !g.locked);
-      const supLocked = m.inventory.length - supAll.length;
-      const bulkBtn = (
-        cat: 'item' | 'skill' | 'support', label: string,
-        yields: (EssenceCost | null)[], rarity?: string, color?: string,
-      ): string => {
-        const n = yields.length;
-        const pay = n ? this.essSumText(yields) : '';
-        return `<button data-bulk="${cat}${rarity ? `:${rarity}` : ''}" ${n ? '' : 'disabled'}
-          ${color ? `style="border-color:${color};color:${color}"` : ''}
-          title="${n ? `Break ${n} — locked things are skipped` : 'Nothing eligible'}">
-          ${label} (${n})${pay ? ` → ${pay}` : ''}</button>`;
-      };
-      const keptNote = (n: number): string =>
-        n > 0 ? ` <span style="color:#8a8678;font-weight:normal;font-size:10px">· ${n} 🔒 kept aside</span>` : '';
+      // THE BREAKER'S EYE — the bag IS the menu. This face composes the
+      // shared cluster (the hammer toggle + THE SWEEPS, salvageClusterHtml)
+      // on the BREAK lane; individual breaking happens by clicking things
+      // in the inventory beside it (the break cursor marks it).
       body = `<div style="margin-bottom:6px">${this.essWallet(seat)}</div>
-        <div class="bind-btns" style="margin-bottom:6px">
-          <button data-breaker class="${armed ? 'bound' : ''}">
-            ⚒ ${armed ? 'Hammer in hand — click things in your bag to break them' : 'Take up the hammer (click-to-break in the bag)'}</button>
-        </div>
-        <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
-          Breaking pays Essence by quality and STUDIES each affix (expertise, on the account, survives death).
-          Worn gear never breaks — unequip it first. <b>Right-click</b> anything carried to lock 🔒 it:
-          locked things refuse the hammer, and every sweep below skips them. Granted sparks sit out of sweeps.
-        </div>
-        <h3>Gear${keptNote(gearLocked)}</h3>
-        <div class="bind-btns">
-          ${bulkBtn('item', 'Break all', gearAll.map(salvageItemYield))}
-          ${(['common', 'magic', 'rare', 'unique'] as const).map(r => bulkBtn(
-            'item', ITEM_RARITIES[r].label, gearAll.filter(i => i.rarity === r).map(salvageItemYield),
-            r, ITEM_RARITIES[r].color)).join('')}
-        </div>
-        <h3>Skill Gems${keptNote(skillLocked)}</h3>
-        <div class="bind-btns">
-          ${bulkBtn('skill', 'Break all', skillAll.map(salvageSkillYield))}
-          ${(['common', 'magic', 'rare', 'legendary'] as const).map(r => bulkBtn(
-            'skill', SKILL_RARITIES[r].label, skillAll.filter(s => (s.rarity ?? 'common') === r).map(salvageSkillYield),
-            r, SKILL_RARITIES[r].color)).join('')}
-        </div>
-        <h3>Support Gems${keptNote(supLocked)}</h3>
-        <div class="bind-btns">
-          ${bulkBtn('support', 'Break all', supAll.map(salvageSupportYield))}
-        </div>`;
+        ${this.salvageClusterHtml(seat, 'break', this.benchBreakMode)}`;
     } else {
       const targets = [...m.items, ...Object.values(m.equipped).filter((x): x is ItemInstance => !!x)];
       const targetRows = targets.map(i =>
@@ -3094,26 +3197,13 @@ export class UI {
       this.salvageTab = btn.dataset.stab as 'salvage' | 'craft';
       this.refreshSalvage();
     }));
-    // THE BREAKER'S HAMMER toggle: arming (re)opens the bag beside the bench.
-    this.salvageMenu.querySelector<HTMLButtonElement>('button[data-breaker]')?.addEventListener('click', () => {
-      this.benchBreakMode = !this.benchBreakMode;
-      if (this.benchBreakMode && !this.inventoryOpen) {
-        this.toggleInventory(this.panelSeat(this.salvageMenu).id);
-      }
-      this.refreshSalvage();
-      this.refreshInventory();
+    // THE BREAKER'S HAMMER toggle + THE SWEEPS: the shared cluster's verbs,
+    // bound on the BREAK lane (bindSalvageCluster).
+    this.bindSalvageCluster(this.salvageMenu, 'break', {
+      armed: () => this.benchBreakMode,
+      setArmed: on => { this.benchBreakMode = on; },
+      refresh: () => this.refreshSalvage(),
     });
-    // THE SWEEPS: one blow per category, optionally narrowed to a rarity.
-    // The host re-filters (locks, granted, lane) — these buttons only ask.
-    q<HTMLButtonElement>('button[data-bulk]').forEach(btn => btn.addEventListener('click', () => {
-      const [cat, rarity] = btn.dataset.bulk!.split(':') as [
-        'item' | 'skill' | 'support',
-        ('common' | 'magic' | 'rare' | 'unique' | 'legendary') | undefined,
-      ];
-      world.requestMeta({ t: 'salvageBulk', cat, rarity, lane: 'break' });
-      this.refreshSalvage();
-      this.refreshInventory(); // salvageBulk emptied bag tiles — repaint them
-    }));
     q<HTMLButtonElement>('button[data-ctar]').forEach(btn => btn.addEventListener('click', () => {
       this.craftTargetUid = Number(btn.dataset.ctar);
       this.refreshSalvage();
@@ -3578,8 +3668,18 @@ export class UI {
   showVendor(seatId?: string): void {
     this.ownPanel(this.vendorMenu, this.couchSeatFor(seatId));
     this.vendorOpen = true;
+    // THE BREAKER'S EYE, abroad (the salvage baseline): arriving at a
+    // counter whose scrap gate is open ARMS the wheel and opens the bag
+    // beside it — the inventory IS the sell menu, exactly as the bench
+    // arms its hammer (SALVAGE_AUTO_ARM is the one seam for that choice;
+    // the host's own nearScrapVendor read keeps the arm honest).
+    if (SALVAGE_AUTO_ARM && this.getWorld().nearScrapVendor(this.panelSeat(this.vendorMenu))) {
+      this.scrapMode = true;
+      if (!this.inventoryOpen) this.toggleInventory(seatId);
+    }
     this.vendorMenu.classList.remove('hidden');
     this.refreshVendor();
+    this.refreshInventory(); // re-render the bag with the wheel's verbs armed
     // THE LIVE COUNTER: tick the restock countdown IN PLACE (no rebuild —
     // hovers, tooltips and the order-search box all survive); when a restock
     // actually lands the shelves changed, so THAT repaints whole (the search
@@ -3603,37 +3703,10 @@ export class UI {
     this.vendorCommOpen = null;
     this.vendorCommQuery = '';
     if (this.vendorTicker !== null) { window.clearInterval(this.vendorTicker); this.vendorTicker = null; }
-    this.vendorMenu.style.cursor = '';
+    this.applyBreakChrome(); // sheds the ⚙ from counter AND bag together
     this.vendorMenu.classList.add('hidden');
+    if (this.inventoryOpen) this.refreshInventory(); // shed the sell verbs
     hideTooltip();
-  }
-
-  /** The player's things as scrap-wheel targets — the SELL lane. Prices are
-   *  the sell yields (everything converts to COARSE by quality × rarity
-   *  rate); the bench's break yields live on the station screen instead.
-   *  Reads the VENDOR panel's owner (the seat working the wheel). */
-  private scrapListHtml(): string {
-    const m = this.panelSeat(this.vendorMenu).meta;
-    // THE KEEPER'S MARK holds here too: a locked thing's chip stands
-    // disabled with its 🔒 — the same salvageLock the bench honors (and the
-    // host refuses regardless).
-    const chip = (attr: string, color: string, label: string, yieldHtml: string, locked?: boolean): string =>
-      `<button ${attr} ${locked ? 'disabled title="Locked (right-click it in the inventory to unlock)"' : ''}
-        style="margin:2px 4px 2px 0;border-color:${color};color:${color}">
-        ${locked ? '🔒 ' : ''}${label} <span style="color:#8a8678">→ ${yieldHtml}</span></button>`;
-    const gear = m.items.map(i =>
-      chip(`data-scrap-item="${i.uid}" data-tip="item" data-item-uid="${i.uid}"`,
-        ITEM_RARITIES[i.rarity].color, i.name, this.essCostText(sellItemYield(i)), i.locked)).join('');
-    const skills = m.skillInv.map((inst, idx) => {
-      const y = sellSkillYield(inst);
-      return chip(`data-scrap-skill="${idx}"`, SKILL_RARITIES[inst.rarity ?? 'common'].color,
-        `${inst.def.name} Lv${inst.level}`, y ? this.essCostText(y) : 'nothing (granted)', inst.locked);
-    }).join('');
-    const sups = m.inventory.map((gem, idx) =>
-      chip(`data-scrap-sup="${idx}"`, gem.def.color, `${gem.def.name} Lv${gem.level}`,
-        this.essCostText(sellSupportYield(gem)), gem.locked)).join('');
-    const all = gear + skills + sups;
-    return all || '<div style="color:#8a8678;font-size:11px">Nothing carried worth selling.</div>';
   }
 
   // --- THE BOROUGH ARMING PANEL (packages/defs/borough.ts) -------------------
@@ -3966,14 +4039,15 @@ export class UI {
           </div>`;
       })();
 
-      // The SELL lane: counters whose scrap gate is OPEN offer the wheel
-      // (everything → Coarse, by quality). A gated-shut counter explains
-      // itself (salvageLocked) — the Vault sells the key.
+      // The SELL lane: counters whose scrap gate is OPEN carry the full
+      // salvage cluster on the SELL lane — the Breaker's Eye abroad (the
+      // wheel arms like the bench's hammer, the bag is the sell menu, THE
+      // SWEEPS sell by category, the keeper's locks refuse throughout). A
+      // gated-shut counter explains itself (salvageLocked) — the Vault
+      // sells the key.
       const scrap = v.salvage?.(world) ? `
         <div style="margin-top:8px;border-top:1px dashed ${v.accent}55;padding-top:6px">
-          <button data-scrapmode class="${this.scrapMode ? 'bound' : ''}">
-            ⚙ ${this.scrapMode ? 'Scrap wheel ON: click your things to SELL them for Coarse Essence' : 'Flip the scrap wheel (sell for Coarse Essence)'}</button>
-          ${this.scrapMode ? `<div style="margin-top:6px">${this.scrapListHtml()}</div>` : ''}
+          ${this.salvageClusterHtml(seat, 'sell', this.scrapMode)}
         </div>` : (v.salvage && v.salvageLocked ? `
         <div style="margin-top:8px;border-top:1px dashed ${v.accent}55;padding-top:6px;color:#8a8678;font-size:11px">
           🔒 ${v.salvageLocked}</div>` : '');
@@ -4019,8 +4093,6 @@ export class UI {
       <div style="margin-bottom:6px">${this.essWallet()}</div>
       ${sections}
       <div class="bind-btns" style="margin-top:8px"><button data-vendor-close>Step away</button></div>`;
-    // The wheel turns the whole screen's cursor into the scrap gear.
-    this.vendorMenu.style.cursor = this.scrapMode ? SCRAP_CURSOR : '';
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.vendorMenu.querySelectorAll<T>(sel)];
     const refresh = (): void => { this.refreshVendor(); this.refreshInventory(); };
@@ -4087,20 +4159,15 @@ export class UI {
       search.focus();
       if (caret !== null) search.setSelectionRange(caret, caret);
     }
-    q<HTMLButtonElement>('button[data-scrapmode]').forEach(btn => btn.addEventListener('click', () => {
-      this.scrapMode = !this.scrapMode;
-      this.refreshVendor();
-    }));
-    q<HTMLButtonElement>('button[data-scrap-item]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'salvageItem', uid: Number(btn.dataset.scrapItem), lane: 'sell' }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-scrap-skill]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'salvageSkill', index: Number(btn.dataset.scrapSkill), lane: 'sell' }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-scrap-sup]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'salvageSupport', index: Number(btn.dataset.scrapSup), lane: 'sell' }); refresh();
-    }));
+    // THE BREAKER'S EYE, abroad: the shared cluster's verbs, bound on the
+    // SELL lane (bindSalvageCluster — the wheel toggle + the sell sweeps).
+    this.bindSalvageCluster(this.vendorMenu, 'sell', {
+      armed: () => this.scrapMode,
+      setArmed: on => { this.scrapMode = on; },
+      refresh: () => this.refreshVendor(),
+    });
     this.vendorMenu.querySelector<HTMLButtonElement>('[data-vendor-close]')?.addEventListener('click', () => this.closeVendor());
+    this.applyBreakChrome(); // the ⚙ rides the counter + the bag while the wheel is armed
   }
 
   /** Class-select starting-skill chip tooltip (name + quick description). */
@@ -7333,14 +7400,13 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     this.salvageOpen = false;
     this.craftTargetUid = null;
     this.salvageMenu.classList.add('hidden');
-    this.applyBreakChrome(); // sheds the ⚒ from bench AND bag together
     this.oracleOpen = false;
     this.oracleTargetUid = null;
     this.oracleMenu.classList.add('hidden');
     this.vendorOpen = false;
     this.scrapMode = false;
-    this.vendorMenu.style.cursor = '';
     this.vendorMenu.classList.add('hidden');
+    this.applyBreakChrome(); // sheds the ⚒/⚙ from bench, counter AND bag together
     this.boroughOpen = false;
     this.boroughFolkId = -1;
     this.boroughMenu.classList.add('hidden');
