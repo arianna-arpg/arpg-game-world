@@ -413,3 +413,204 @@ Kept here as living examples of what reports look like as claims:
 5. **Pilot lesson baked in**: cooldowns-first rotation (the fix that let the
    magician actually use frost_nova) — a held primary starves the rest of the
    kit if it goes first.
+
+## The powercurve sitting (2026-08-12) — full roster, full catalog
+
+Backlog #148: the first FULL-SCOPE run of both curve instruments. Before this
+section, `sweep progression` had been run once ever (warrior alone, 07-12)
+and every `sweep skills` on record was a `--filter` slice — so the roster
+had never been ranked as a roster, and eleven newer class skills had never
+been seated in the catalog at all. This is a **measurement record**: numbers
+and findings, no retunes. It is also the harness-coverage prerequisite that
+**THE NUMBERS-CRUNCH RESCALE** (planned pass #12, user-named 2026-07-17,
+"grow the harness's coverage first") names: the rescale must sweep class
+bases, monster damage/life, affix magnitudes, regen and the sim baselines
+together, and these tables are its "before" picture. The expressibility gaps
+in F1–F3 below are the part of that coverage the rescale must NOT inherit
+blind — a class the rig cannot express is a class the rescale cannot verify.
+
+Provenance: HEAD `ce3773b`, 2026-08-12, seeds 5, default base-seed. The
+shared working tree carried concurrent sessions' in-flight edits (33 files)
+— reruns of the commands below reproduce the readings exactly on the same
+tree (deterministic seeds), directionally on any nearby HEAD. No sweep
+crashed; `warning_count` was 0 on every row — all 6,085 episodes are clean
+data by the harness's own standard. Runtimes: progression 2,520 episodes in
+~11.6 min wall across 6 sequential shards (89–156 s each; sharding keeps the
+run-directory name under Windows MAX_PATH — a single `--classes` list of all
+36 ids overflows it); skills 3,565 episodes in ~8 min. Per-shard logs:
+`balance/reports/powercurve_shard{1..6}.log` + `powercurve_skills_l5.log`
+(gitignored, like the report dirs — this section is the durable copy).
+
+```
+npm run sim -- sweep progression --geared --seeds 5 --levels 1,5,10,20 --classes <6-at-a-time>
+npm run sim -- sweep skills --level 5 --seeds 5
+```
+
+### The roster curve (36 classes × L1/5/10/20 × bare+geared × 5 seeds)
+
+Bare dummy DPS per band; L20 geared and the geared÷bare multiplier. `0` is
+a reading, not a blank — see the expressibility split below the table.
+
+| class | L1 | L5 | L10 | L20 | L20 geared | ×gear | note |
+|---|---|---|---|---|---|---|---|
+| sorcerer | 37.2 | 58.9 | 85.6 | 146.6 | 582.0 | 3.97× | head of the pack, every band |
+| trapper | 27.9 | 37.4 | 56.1 | 101.6 | 224.4 | 2.21× | 2nd bare every band |
+| warrior | 21.6 | 33.5 | 50.5 | 87.3 | 164.8 | 1.89× | lowest ×gear in the roster |
+| summoner | 32.7 | 36.8 | 45.9 | 82.7 | 250.8 | 3.03× | |
+| necromancer | 12.1 | 20.7 | 25.2 | 67.0 | 275.6 | 4.11× | geared #2; only bare L20 parity clear inside the band (12.4 s) |
+| brawler | 15.8 | 20.5 | 32.7 | 65.1 | 199.6 | 3.07× | |
+| blademaster | 19.6 | 25.3 | 38.4 | 64.6 | 177.8 | 2.75× | |
+| pyromancer | 17.0 | 25.9 | 37.2 | 61.1 | 221.3 | 3.62× | |
+| juggernaut | 12.9 | 18.1 | 25.8 | 54.4 | 107.4 | 1.98× | tank archetype, yet floors 2.4% / dies at bare L20 parity |
+| ascetic | 22.7 | 27.4 | 32.4 | 48.8 | 117.3 | 2.40× | |
+| breaker | 13.9 | 19.1 | 25.5 | 37.8 | 86.8 | 2.30× | durable (94.7% L1 floor) |
+| magician | 11.3 | 17.2 | 23.7 | 36.7 | 102.3 | 2.79× | dummy under-reads its AoE: bare L20 parity dps_out 97.9 |
+| cleric | 13.7 | 16.6 | 21.9 | 31.2 | 118.9 | 3.81× | floor collapses 14→5→2.1% from L5 on |
+| sharper | 6.6 | 9.2 | 14.5 | 30.2 | 187.2 | 6.20× | highest real ×gear; 14th bare → 7th geared |
+| ranger | 10.5 | 12.5 | 18.3 | 30.0 | 105.5 | 3.52× | glass: dies at parity from L5 on |
+| vanguard | 8.8 | 12.2 | 18.6 | 29.0 | 80.8 | 2.79× | |
+| rogue | 5.2 | 12.3 | 12.3 | 25.9 | 90.4 | 3.48× | glass tail |
+| matador | 10.7 | 13.6 | 18.0 | 25.6 | 51.5 | 2.01× | carries 3 of the eleven; clears parity every band |
+| resonator | 8.7 | 11.3 | 15.7 | 23.8 | 85.0 | 3.57× | carries 2 of the eleven |
+| lancer | 9.1 | 11.3 | 15.2 | 22.8 | 95.5 | 4.19× | glass tail |
+| skald | 8.9 | 11.0 | 13.9 | 21.8 | 93.8 | 4.30× | slow-but-immortal corner (99% floors early) |
+| wallwright | 4.9 | 8.7 | 11.3 | 16.6 | 42.7 | 2.57× | tail every band; 96% floors |
+| swashbuckler | 4.8 | 5.4 | 7.0 | 9.6 | 28.6 | 2.98× | tail every band, parity kills fall to 0 by L20 |
+| guardian | 1.2 | 2.2 | 4.5 | 9.7 | **0.0** | — | near-mute; geared L20 dummy-mute (F3) |
+| firebrand | 2.2 | 2.8 | 3.3 | 4.0 | 18.1 | 4.55×* | near-mute; L5 geared 0.90× (only sub-1 cell) |
+| chronomancer | 1.5 | 1.9 | 2.5 | 2.5 | 10.7 | 4.25×* | near-mute, 0–0.2 parity kills |
+| beguiler | 0.7 | 1.0 | 0.7 | 1.3 | 7.5 | 5.69×* | near-mute, 0 parity kills at every band |
+| falconer | 0.6 | 0.6 | 0.6 | 0.6 | 6.5 | 11.12×* | dummy-mute, parity-LIVE (full clears, ~100% floor) |
+| sentinel | 0 | 0 | 0 | 0 | 0 | — | dummy-mute, parity-LIVE (6/6 kills every band) |
+| hivecaller | 0 | 0 | 0 | 0 | 0 | — | dummy-mute, parity-LIVE (2.4–4.8 kills) |
+| berserker | 0 | 0 | 0 | 0 | 0 | — | full-mute (F2) |
+| assassin | 0 | 0 | 0 | 0 | 0 | — | full-mute |
+| tamer | 1.0 | 0 | 0 | 0 | 0 | — | full-mute (kit needs a wild beast; arena has none) |
+| warlord | 0 | 0 | 0 | 0 | 0 | — | full-mute (support bar: standard/mark/shout) |
+| flagellant | 0 | 0 | 0 | 0 | 0 | — | full-mute (bar has no direct attack) |
+| runeweaver | 0 | 0 | 0 | 0 | 0 | — | full-mute (weave grammar the pilot can't drum) |
+
+`*` = a near-zero bare denominator: the multiplier is an arithmetic
+artifact, not a gear story. Expressible-cohort medians (bare, dps>3):
+L1 12.1 / L5 17.2 / L10 21.9 / L20 31.2 — and the spread within that
+cohort **widens 7.7× → 11.0× → 26.3× → 36.8×** from L1 to L20: the pack
+diverges as it levels. Outside the pack at every band: **sorcerer and
+trapper above** (sorcerer 1.7× the median at L1 growing to 4.7× at L20),
+**swashbuckler and wallwright below** (plus the near-mutes). The geared
+column reshuffles rather than amplifies: the bare head (warrior, trapper,
+juggernaut, matador, breaker: 1.89–2.30×) gains least from the wardrobe
+while sharper/skald/lancer/necromancer/cleric (3.8–6.2×) gain most —
+except sorcerer, which keeps 3.97× on the highest base and lands geared
+L20 at 2.1× the geared runner-up.
+
+**The expressibility wall (the headline): 13 of 36 classes post no
+meaningful bare dummy DPS at any band.** Three distinct shapes, and per
+the shakedown/fire-gap doctrine zeros are TRIAGE, not nerf/buff targets:
+
+- **Full-mute** (0 dummy DPS, 0 parity kills, dies to the pack) —
+  berserker, assassin, tamer, warlord, flagellant, runeweaver.
+- **Dummy-mute but parity-live** (the kit expresses only against bodies
+  that fight back) — sentinel (retaliation: 6/6 parity kills at every
+  band), hivecaller (throng), falconer (0.58 trickle vs dummy, full
+  parity clears at ~100% life floor). Clean rig artifacts.
+- **Near-mute** (<5 bare dummy DPS through L20, parity marginal-to-dead)
+  — guardian, beguiler, chronomancer, firebrand (+ swashbuckler at the
+  healthy tail's edge).
+
+The dummy lane therefore ranks 23 of 36 classes; the parity lane rescues
+three more; ten classes are effectively OUTSIDE the instrument today.
+That is a harness-coverage number as much as a balance number — the
+rescale's safety net has holes exactly where those ten stand.
+
+The parity lane adds a band-wide reading: **bare L20 parity is a wall.**
+Only 8 of 36 record a full bare clear at L20; 19 die in the attempt
+(`player_deaths` ≈ 1.0); only necromancer clears inside the provisional
+2–14 s band. Geared L20 clears are comfortable nearly roster-wide
+(10–33 s). Shakedown finding 1 ("parity TTK is sloggy") at roster scale:
+by L20 the parity band's expectations are calibrated to geared reality,
+and bare builds have left the instrument's range.
+
+### The catalog ranking (713 attack/spell rigs, solo vs dummy @ L5, gem 2, 5 seeds)
+
+Cohorts: 549 droppable + 164 noDrop kit rows; 260 of 713 post zero (214
+droppable) — the familiar triage cohort (auras, buffs, summons vs a
+passive dummy, mines, plus genuinely broken kits). Droppable-live decile
+medians (335 rows): 102.3 / 58.4 / 42.7 / 29.1 / 21.4 / 15.1 / 11.2 /
+7.6 / 5.4 / 2.25 — a 45× spread between the top and bottom decile
+medians. The noDrop lane re-confirms the fire-gap verdict: its top row
+(`invoke_conflagration`, 1790.6) posts 5× the best droppable row on cast
+economics alone — noDrop rows are never ranked against droppable ones.
+Droppable head: shardrift 357.4, grasping_chasm 239.5, marshlight 233.5,
+mirespume 211.6, blizzard_coil 177.0.
+
+**The eleven newer class skills, seated at last** (percentile within the
+335 live droppable rows, 0 = top):
+
+| skill | dps | seat | reading |
+|---|---|---|---|
+| thrown_ace | 54.8 | top 18% (d1) | healthy — sharper's dealt card |
+| tuning_strike | 54.4 | top 19% (d1) | healthy — resonator's anchor |
+| perfect_strike | 47.8 | top 23% (d2) | healthy — matador's payoff |
+| toppling_stroke | 11.9 | 61% (d6) | mid-low; cd-3 AoE, sustained lane under-rates it |
+| shatterchord | 6.1 | 82% (d8) | low; cd-7 burst read on a sustained lane — re-read under `--vs` before judging |
+| planted_banderilla | 2.2 | 96% (bottom decile) | the one live row seated as an outlier — see F8 |
+| cape_feint | 0 | zero cohort | movement/counter grammar; no scenario can arm it yet |
+| ashen_vow | 0 | zero cohort | aura — zero-alone by design |
+| cast_falcon | 0 | zero cohort | summon vs passive dummy — known lane |
+| stack_the_deck | 0 | zero cohort | buff — zero-alone by design |
+| incite | 0 | zero cohort | needs a crowd to incite; dummy can't be |
+
+Five of the eleven land in the zero cohort — but every one classifies
+into a KNOWN zero lane (aura/buff/summon/crowd/counter), and their
+carrier classes tell the fuller story: matador, sharper and resonator
+(seven of the eleven between them) all express and clear parity in the
+progression table, while flagellant, falconer and firebrand (the other
+four skills' chassis) are mute or near-mute there. None of the eleven
+reads as an outright balance defect on this evidence; one (banderilla)
+earns a flag.
+
+### Findings
+
+- **F1 — the expressibility wall.** 13/36 classes unrankable on the dummy
+  lane (shapes above). The fix lane is pilots/scenarios (a retaliation
+  probe that hits back, a throng/tame source in the arena, a weave-capable
+  pilot, richer bars), NOT class retunes. Repro: any shard command above.
+- **F2 — berserker presses and never connects.** 0.43 casts/s (~13
+  presses per 30 s episode), 0 hits landed, mana floor 91.7%, at every
+  band, bare and geared — an ordinary melee bar (heavy_strike/whirlwind,
+  mana 4/3) whiffing against a STATIONARY dummy under the same pilot that
+  lands warrior's cleave 37 times. Genuine-defect smell, engine forensics
+  owed. Repro: `npm run sim -- sweep progression --classes berserker --levels 5 --seeds 5`.
+- **F3 — guardian's geared rig goes dummy-mute.** Bare L20 connects
+  (8 hits, 9.65 dps); geared L20 presses 0.53/s and lands 0 hits on the
+  dummy while the SAME geared build clears parity (6 kills, 35.6
+  dps_out). The wardrobe changes something that unmakes the dummy lane
+  for this class. Repro: `npm run sim -- sweep progression --classes guardian --levels 20 --geared --seeds 5`.
+- **F4 — sorcerer sits above the pack at every band.** 1.7× the
+  expressible median at L1 → 4.7× at L20 bare; geared L20 (582) is 2.1×
+  the geared runner-up. The roster's top outlier both bare and geared.
+- **F5 — the bare L20 parity wall.** 8/36 full clears, 19 deaths, one
+  in-band clear (necromancer). Either late bare damage is low, late
+  parity packs are hot, or the band is geared-only — decide on purpose.
+- **F6 — the gear-value column spans 1.89×–6.20×** among expressible
+  classes at L20 (warrior lowest, sharper highest), with firebrand's L5
+  0.90× the only sub-1 cell (its geared twin posts LESS than bare) and
+  falconer/beguiler/chronomancer/firebrand multipliers flagged `*` as
+  near-zero-denominator artifacts.
+- **F7 — shardrift and grasping_chasm top the droppable board FROM the
+  cooldown-disadvantaged side.** The sustained dummy lane structurally
+  under-rates cooldown skills (fire-gap law), yet these two cd-5 rows
+  post 357/239 against the best cd-0 row's 233 — their per-cast payloads
+  out-earn the entire cooldown tax. A burst-window or `--vs` read would
+  only widen the gap. The catalog's clearest above-pack outliers.
+- **F8 — planted_banderilla seats in the bottom decile of live droppable
+  rows** (2.19 dps, 15th from the bottom, casts 0.20/s on cd-6). Its
+  plant-then-payoff duration grammar is exactly what a solo-dummy
+  sustained lane under-reads — and matador, which leads with it, is
+  mid-pack and parity-clearing in progression — so this is flagged for a
+  richer-lane re-measure (`--vs`, or a matador-chassis run), not a
+  retune. If it still seats bottom-decile there, THEN it reads as a
+  defect.
+- **F9 — no crashes, no warned rows.** Both instruments completed full
+  scope; every row is clean by the harness's own `warning_count`
+  standard. The coverage gap is expressibility (F1), not stability.
