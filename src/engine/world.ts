@@ -3069,6 +3069,19 @@ export class World {
    *  this visit — one spring per visit, like every materialized-set sibling. */
   private materializedWrits = new Set<string>();
 
+  // --- THE SEAMLESS MODE (branch keel — docs/design/seamless-world.md) ----
+  /** THE MODE LAW: seamless is a MODE, never a rewrite. False = the discrete
+   *  path, byte-identical to main — every branch commit keeps the whole
+   *  probe lane green with this off. Set by main.ts from the `?seamless`
+   *  boot param (the `?prologue` idiom); sim rigs set it directly. */
+  seamless = false;
+  /** The RESIDENT SET (M0+): zones whose layouts stand materialized at their
+   *  map seats in world px (RegionSeat, world/seamless.ts — originPx =
+   *  mapToPx(def.map) minus half the layout span; the placement lane fills
+   *  it, the render/collision lanes read it). Empty in discrete mode BY
+   *  CONSTRUCTION. */
+  seamlessRegions: import('../world/seamless').RegionSeat[] = [];
+
   // --- the current zone -------------------------------------------------
   zone: ZoneDef = this.zoneMap[START_ZONE];
   arena: Bounds = makeArena(this.zoneMap[START_ZONE]);

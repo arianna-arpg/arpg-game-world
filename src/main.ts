@@ -307,6 +307,11 @@ function adoptWorld(w: World): World {
   // (Couch guests count as live players too — a shared screen is never one
   // player's to stop, so a seated guest waives the menu hold like a peer.)
   w.timeflow.allowHold = () => net.isHost && !coopActive() && !w.couchActive();
+  // THE SEAMLESS MODE FLAG (`?seamless`, the `?prologue` idiom) — wired at
+  // the ONE funnel every world construction passes through, so restarts and
+  // fresh runs keep the mode. Absent = false = the discrete path,
+  // byte-identical to main (THE MODE LAW, docs/design/seamless-world.md).
+  w.seamless = new URLSearchParams(location.search).has('seamless');
   return w;
 }
 

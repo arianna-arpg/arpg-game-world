@@ -33,3 +33,25 @@ export function projectCoord(from: MapCoord, dir: Dir, steps = 1): MapCoord {
 export function coordDist(a: MapCoord, b: MapCoord): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
+
+// --- THE SCALE LAW (seamless-world branch — docs/design/seamless-world.md) --
+// ONE committed, axis-consistent conversion between node-units and world
+// pixels. 32 px/unit sits inside the band the discrete game already implies
+// (~27-51 px/unit from zone widths vs link spacing) and makes median node
+// spacing (78/86 units → ~2500-2750px) match the median zone width band
+// (2300-4400px) — adjacent layouts nearly tile at current sizes, which is
+// the whole reason the map can go literal. Every seamless authority reads
+// THIS constant; nothing re-derives its own scale (the two pre-existing
+// literalizations — FIELD expanses' clamp(3..68) and the implied zone scale
+// — reconcile onto it in M2). Discrete mode never reads it.
+export const PX_PER_UNIT = 32;
+
+/** A map coordinate's seat in seamless world pixels. */
+export function mapToPx(c: MapCoord): { x: number; y: number } {
+  return { x: c.x * PX_PER_UNIT, y: c.y * PX_PER_UNIT };
+}
+
+/** The map coordinate a seamless world-pixel position stands on. */
+export function pxToMap(p: { x: number; y: number }): MapCoord {
+  return { x: p.x / PX_PER_UNIT, y: p.y / PX_PER_UNIT };
+}
