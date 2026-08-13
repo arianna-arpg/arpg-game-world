@@ -161,6 +161,44 @@ what changes is how their ground claims the plane):
   SIZE-AWARE (the map minted WITH the intent, the deepest reading of
   "leveraging the world map"). Expanses keep their standing literal law.
 
+## HER FEEL VERDICT + THE ENCLOSURE DOCTRINE (M2 opens — 2026-08-13)
+
+She walked the partition build. Verdict, near-verbatim: "this is actually
+really, really cool… a huge number of kinks, but I kind of really like the
+general feel." Her five observations, each ratified into a fix:
+
+1. **Optimization** → the dense soak answered it (section below): quiet sim
+   ≈ discrete cost (+0.34ms/tick); the true cost is THE CROSSING STUTTER
+   (60-127ms rebase in the open, no door fade to cover it). Quick cuts
+   (approach-bearing partner pick, no same-tick admissions on rebase ticks)
+   fold into wave 5; THE SOFT CROSSING (the rebase amortized across frames)
+   is wave 6's world.ts headliner.
+2. **"Zones basically enclosed, with the old entrances carving passage gaps
+   in those borders"** → THE ENCLOSURE: per-tileset border dress (wall /
+   hedge / cliff / treeline rows) around the cell perimeter, carved open at
+   the agreed points — walls-with-gaps everywhere, not only on
+   naturally-walled layouts. D2's own edge grammar, universal.
+3. **"Massive gaps between zones… filled in as untraversable walls colored
+   per the bounding biomes"** → THE SOLID BETWEEN: walkable tissue NARROWS
+   to the passage corridors (the roads + mouth aprons); wedges and long-link
+   country become impassable mass wearing the blend's tones (the ONE WEIGHT
+   LAW already colors them by the bounding zones). This AMENDS the earlier
+   open-tissue reading — the world reads as zones joined by passes, never
+   featureless country. Roads stay literal: a long link is a mountain pass.
+4. **"Entities treat borders as strict walls; zones flash in and out"** →
+   THE NEIGHBOR LIFE (wave 6): ring-1 population resident at drowsy cadence
+   — visible across borders, no first-arrival flash, crossings through
+   passages for aggro'd bodies. The charter's drowsy ring, promoted by her
+   observation from LOD nicety to feel-critical.
+5. **"The veil acts as if the player has no visibility into bordering
+   zones"** → THE VEIL ACROSS BORDERS (wave 5, render): the sight veil
+   gathers occluders from resident neighbors' mints and treats their open
+   ground as open air — the veil answers walls, never administrative lines.
+6. **"You can walk INTO an away zone's walls from outside"** → THE FAR-WALL
+   LAW (wave 5, folded into the enclosure lane): a resident neighbor's wall
+   cells refuse entry from tissue — walls are walls from both sides; the
+   rim consults the resident mint grids, not just cell membership.
+
 ## The movements
 
 - **M0 — THE TISSUE WALK (the spike; 1-2 focused sessions).** Behind
@@ -236,3 +274,138 @@ modules junctioned; gates run in-place). Merge cadence: pull main → branch
 after each main landing train; the mode flag keeps merges mechanical. Nothing
 merges back to main before M1 is judged. Sessions working the branch declare
 ownership in-worktree as usual; the main tree's chip loop is untouched.
+
+### The dense soak (2026-08-13)
+
+*The M1.5 wave-4 measurement pass — the fitted pass's coda 7 and the ring
+pass's coda 3, answered with numbers. Headless sim-clock rigs
+(`balance/scratch_soak_longwalk / _tightweb / _evalscan / _soaklib`,
+untracked), the probe's own seeds (global `0x5ea51e55`, world `0xa11e`),
+run SEQUENTIALLY against the LANDED bytes at `8ea9ad8` in a detached
+measurement worktree (the mouth-alignment sibling was mid-flight in the
+shared tree — half-built engine bytes would have poisoned every number;
+the perf-wedge hunt's dirty-shared-tree verdict lane, reused).*
+
+**THE LONG WALK (10 thresholds, road-following, hostiles stripped; web grew
+130 → 340 zones under the walk).** Update-tick distribution p50 1.02ms /
+p95 5.51 / p99 6.53 / max 127. The tick classes, attributed by wrapped
+chokepoints: QUIET 12,480 ticks (p50 1.02, p99 6.28, max 9.5 — the discrete
+parked control reads p50 0.68 / p99 5.19 in the same zone, so the seamless
+per-tick overhead is ~+0.34ms at 340 zones, almost exactly the eval beat);
+CHART-BURST 46 ticks (p50 9.4, max 46 — the forechart sweep's node mints,
+discrete-identical class, control shows the same); MINT-BEAT 13 ticks
+(p50 20, max 43 — the budgeted admission: one fitted layout mint, a 1-3
+frame hitch on a 60fps client); and THE CROSSING, the worst class by far.
+**Rebase ticks ran p50 ~60ms, worst 127ms** — the whole loadZone rides the
+threshold tick, and the worst stacks THREE costs: the rebase's load, a
+partner-miss REFRESH re-mint (4 of 10 arrivals entered by an edge the
+record hadn't assumed — `seamlessPartnerFor`'s nearest-linked guess missed
+40% on a real walk), and the tail beat's own admission (mintN=2 on the
+three worst crossings). Populated lane B: parked ambient p50 3.6ms / p99
+12.4 at ~89 actors; the populated crossing cost 43ms with the court riding.
+Ring churn over the walk: 24 fresh mints, 4 refreshes, 0 refits, 16
+demotions, ring peak 8 members.
+
+**THE TIGHT WEB (692 surface zones charted; 661 eligible cells folded).**
+The floor is UNEXERCISED on web-law ground: min cell axis 1,387px, p5
+1,836, p50 2,499 — **zero cells below the 900px admission floor, zero even
+below 1,200**, and across 2,079 cell-step observations under four growth
+steps, 34 cells shrank but **0 crossed the floor while standing**. The
+occupancy/hover-clear laws keep the partition far from its own guard rail.
+The mint bench (68 smallest admitted boxes, real `seamlessMintResident`,
+then demoted): **0 throws, 0 side-misses** — every openable way's side is
+reached by the largest walkable component, including all 11 walled faces
+(seal >80%: jungle/gloamwood/gutworks/crypt keep their corridor identity at
+17-52% walkFrac and stay connected, largest component 93-100%); the 12
+"fragmented" mints are sliver pockets (≤3-7% of walkable), the discrete
+game's own texture. Forced SUB-floor boxes (what the unguarded refit lane
+would pass): generateLayout degrades gracefully to 320px — no throw at any
+size, mouths hold, only door-guarantee/portal-overlap heals fire (≤640px).
+Mint cost scales with cell AREA: bench p50 13.6ms but p95 103 / max 134ms
+on 3-5k-px cells — the admission budget counts MINTS, not pixels.
+
+**THE EVAL SCAN (coda 3 sized).** Quiet-beat `seamlessEnsureBoot` cost is
+linear in zoneMap: p50 0.06ms @ 138 zones → 0.29 @ 619 → **0.51 @ 978 →
+0.77 @ 1,386 (crosses 0.5ms/beat at ~1,000 zones; slope ≈ 0.57ms per 1,000
+zones)** — the candidates() full-map walk plus the seamlessCells KEY BUILD,
+which allocates `Object.keys(zoneMap)` per call (0.089ms/call @ 1,386
+zones) and is consulted (members+1)× per beat, so a walking ring of 8 at
+1,400 zones pays ~1.4ms/beat before anything mints. The two REBUILD terms
+are worse and stack on admission beats: `foldCells` is O(S²) — 0.3ms @ 138
+seats, 5.5 @ 619, **31ms @ 1,386** — and `buildTissueSampler` (its own fold
++ road capture) reads 1.3 → 8.2 → **40ms @ 1,386**, re-run after EVERY
+admission. At today's walk scale (300-700 zones) an admission beat pays
+mint + ~2-8ms of rebuilds; at 1,400+ zones it pays mint + ~70ms. The fold
+cache itself holds: 99.95% hit rate walking (42 refolds / 80,017 consults),
+100% parked.
+
+**MEMORY (engine-side; render caches are code-audited below).** Heap after
+gc: 71.7MB at first arrival → 75.8 after ten crossings (+4.1MB ≈ 210 newly
+charted defs + 10 zone memories + the standing ring) → parked slope +0.2MB
+per 2,500 ticks (≈flat) → resting 76.3 (2.0 of it the rig's own preallocated
+telemetry). **Demotion and replacement genuinely release**: a WeakRef
+census over all 20 dropped layout records reads 0 reachable after
+turn-end gc. (Census law learned the hard way: same-turn WeakRefs sit on
+the spec's kept-alive list — a synchronous-script census convicts the rig,
+not the engine; the rig yields the turn before judging.) The four
+world-keyed render LRUs hold by construction at `8ea9ad8` — tissue 24
+chunks / ground 72 / bodies 48 (`SEAMLESS_DRAW_CFG`, seamlessDraw.ts:86/
+101/116, eviction loops :225/:404 + ground.ts's working-set guard) and
+canopy under the global `VIS_CFG.canopy.maxSlices` LRU — all mint-identity
+invalidated; headless can't exercise pixels, so the live qa-drive lane owns
+their runtime verdict (the worldchunks pass already flags ground 72 as
+pair-sized against a ring of 8).
+
+**The worst finds, each with its prescription:**
+
+1. **The crossing stack (worst tick 127ms).** The threshold tick pays
+   loadZone + a 40%-miss partner refresh + the tail admission. Fixes, in
+   order of value: predict the partner from the walker's approach bearing
+   (the admission already knows the border being neared — feed it to
+   `seamlessPartnerFor` instead of nearest-linked), and skip same-tick
+   admissions when the beat already carried a rebase (one clause in
+   `seamlessEnsureBoot`'s admission slice; the mint waits one beat by law
+   anyway). Both live in the mouth-alignment lane's own seam — hand them
+   with it.
+2. **The ~1,000-zone scaling wall.** Three terms, one shared cure: (a) hoist
+   ONE fold read per eval pass and key the cells cache on a maintained rev
+   (the scan-lattice's `(identity, count, disturbance)` triple) instead of
+   per-call `Object.keys` (world.ts:6551 — 6 allocs of the whole key set
+   per beat); (b) give `foldCells` and `candidates()` a coarse seat-bin
+   index (reach is already 2×cellMaxHalfPx — 9-bin neighborhoods make the
+   fold O(S·k) and the scan ring-local; the webperf lattice precedent);
+   (c) take `buildTissueSampler` off the admission tick (defer one beat or
+   rebuild bin-scoped). None is due before M2 — today's halo sits well
+   under the wall — but M3's long-horizon play will cross it.
+3. **Area-blind mint budget.** `mintBudgetPerBeat 1` admits one 134ms mint
+   as readily as one 14ms mint. If the admission hitch reads on the live
+   client (perf harness's entry-burst lane), budget by area or defer
+   oversized mints to consecutive beats; flagged, not urgent — 13 mint
+   beats in 12,500 ticks.
+4. **The refit lane skips the floor** (world.ts:6797-6807 re-mints on cell
+   drift, and updateSeamless's exits-drift loop likewise, with no
+   `minArenaPx` clause — the admission filter alone carries it,
+   :6818-6820). Empirically unreachable today (0 floor crossings in 2,079
+   observations), so this is one cheap insurance clause — demote-to-door
+   instead of re-mint when the live cell falls under the floor — not a
+   fire.
+5. **Two of twelve hops never crossed** (gen_11→gen_17 with a compliant
+   border way standing; gen_14→gen_21 without one — the walker routed
+   through gen_22 instead). The road chord and the carved mouth can
+   diverge: a march crossing the border OFF the mouth meets the far side's
+   wall band and defers forever. This is the mouth-alignment commission's
+   exact case, now with a headless repro (the soak seeds, park in gen_11,
+   target gen_17) — corroboration for the sibling, not a new lane.
+
+**Verdict: the ring model is ready for M2's dress investment.** Nothing
+structural must be paid first at today's web scale: the partition holds
+under census (no overlap, no strands, no floor breaches, walled faces keep
+their mouths), demotion releases memory, the per-tick overhead is ~0.3ms,
+and the worst cost class — the crossing — is p50 ~60ms hidden behind no
+door. Pay find 1 alongside the mouth-alignment landing, and schedule find
+2's binning before M3's long-horizon play. **For her eye:** the crossing
+now happens mid-stride with no fade to cover it (discrete doors paid
+100-200ms behind a curtain; seamless pays ~60-127ms in the open — the feel
+milestone should judge whether that stutter reads), and the 900px floor is
+currently decorative — only her size-aware worldgen seating (the charter's
+own note) would ever create the tight cells it guards against.
