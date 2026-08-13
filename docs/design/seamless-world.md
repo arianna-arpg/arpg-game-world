@@ -117,6 +117,50 @@ consumer (objectives, overlays, packages, vendor beats, zone memory) working
 untouched through the whole migration. Transient discard (drops, corpses,
 projectiles) re-sites from the loadZone boundary to ring demotion.
 
+## THE PARTITION LAW (M1.5 — her edge-to-edge ruling, 2026-08-12)
+
+Her words, near-verbatim, after walking the ring live: zones should "slot
+into entirely non-overlapping indices", their generation "almost push off of
+each other"; "the world map and its nodes drive the WHERE of generation, but
+the actual HOW of generation is effectively entirely dynamic and maps
+directly into the next zone by LEVERAGING the world map"; and the bleed-in
+between adjacent zones "would effectively work as the blending of the zones
+so that the transition happens nicely rather than being abrupt." This
+RATIFIES the edge-to-edge model over embedded-with-wide-tissue, and AMENDS
+Law 2's geometry half (zones remain authored PLACES — that half stands;
+what changes is how their ground claims the plane):
+
+- **THE CELL FOLD** (world/cells.ts, landed with this amendment): every
+  surface node claims an axis-cut cell — midpoint cuts toward each near
+  seat, clamped at `PARTITION_CFG.cellMaxHalfPx` — non-overlapping BY
+  CONSTRUCTION (the cut axis is a pair property computed identically from
+  both ends; both cells clip at the same line). Pure f(seats); probe_cells
+  pins the law over grown webs. The fold guarantees NON-OVERLAP, never full
+  coverage: axis-cut triple points open small unclaimed WEDGES (~500-600px
+  worst measured) that stay tissue — the blend's food, bounded by pin.
+- **THE FITTED MINT**: a resident zone's arena derives from its CELL — the
+  authored size roll stands down in seamless mode (the tileset band goes
+  advisory; THE SIZE TENSION is flagged below). The cell edge is the true
+  rim; overlap between residents becomes impossible at the source.
+- **THE OPEN BORDER**: where a link crosses a border, the crossing is open
+  walkable ground — walled layouts carve a walk-mouth at the way (the
+  walled-rim strand find becomes law: walls-with-gaps, D2's own cliff-line
+  grammar). Elsewhere the border may wall or hedge per theme.
+- **THE BORDER BLEND**: the tissue sampler re-scopes from country-between to
+  the BLEND BAND — within `blendBandPx` of a border, both cells' themes
+  gradient into each other (the meld grammar at world grain); interstitial
+  wedges dress as blended tissue; a wide cell's outer margin reads as its
+  OWN zone's sparse outskirts, never no-man's-land. Roads unchanged.
+- **WHAT SURVIVES UNCHANGED**: the ring streamer, the threshold rebase (the
+  rect test becomes the cell test), all three world-keyed render lanes, the
+  open ways, determinism, the mode law, the save/co-op refusals.
+- **THE SIZE TENSION (flagged, her eye owed)**: per-tileset size bands
+  express identity (a den is small, a field is vast); under the partition,
+  cell geometry rules. The web's own spacing clusters at current-size scale,
+  so most zones barely change — and a future worldgen pass may seat nodes
+  SIZE-AWARE (the map minted WITH the intent, the deepest reading of
+  "leveraging the world map"). Expanses keep their standing literal law.
+
 ## The movements
 
 - **M0 — THE TISSUE WALK (the spike; 1-2 focused sessions).** Behind

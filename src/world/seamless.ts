@@ -80,3 +80,27 @@ export const SEAMLESS_CFG = {
    *  a walker never pays two synchronous layout mints in one frame). */
   mintBudgetPerBeat: 1,
 } as const;
+
+// --- THE PARTITION (M1.5 — her edge-to-edge ruling, 2026-08-12) -------------
+// The map's nodes drive the WHERE as non-overlapping CELLS: every surface
+// node claims an axis-aligned cell cut at the midpoint toward each near
+// node and clamped at cellMaxHalfPx — cells tile with ZERO overlap by
+// construction, linked neighbors share a border segment, and the zone
+// generates INTO its cell (THE FITTED MINT). The bleed between adjacent
+// zones becomes THE BORDER BLEND (the meld grammar at world grain) instead
+// of neutral country. world/cells.ts owns the fold; these are the shared
+// contracts the lanes build against.
+export interface CellRect { x0: number; y0: number; x1: number; y1: number }
+
+export const PARTITION_CFG = {
+  /** A cell's maximum half-extent from its seat (px) — beyond this on a long
+   *  link the remainder is outskirts, not claim. FLAGGED. */
+  cellMaxHalfPx: 2400,
+  /** The border blend band's half-width (px): within this reach of a cell
+   *  border, both neighbors' themes gradient into each other. FLAGGED. */
+  blendBandPx: 260,
+  /** Degenerate-web floor: an axis whose cuts would invert clamps to a band
+   *  this wide centered between the cuts (the occupancy law keeps real webs
+   *  far from this; the floor makes the fold total, never throwing). */
+  minCellSpanPx: 320,
+} as const;
