@@ -57,6 +57,13 @@
 //   MOUTHS at every openable way — the walled-rim strand healed, walked
 //   OUT and BACK IN — and the discrete path never folds a cell nor fits
 //   an arena (the mode law).
+// RIG I — THE AGREED MOUTHS (M1.5 wave 4, mouth alignment): facing walk-ways
+//   across a shared border seat at ONE agreed point (the midpoint of the
+//   border's overlap run — borderAgreedPoint, pure f(the two cells), derived
+//   independently by both sides), doors and discrete seats never move, both
+//   carves meet the point (the corridor is walkable straight through the
+//   border), a driven crossing rides the partner's mouth at wave-1-class
+//   drift, and the signpost pair flanks the agreed seat.
 //
 // Layout GEOMETRY is compared as (kind, pos, radius, tier) rows: loadZone
 // deliberately randomizes post-mint runtime fields (DoodadEffect first
@@ -68,7 +75,8 @@
 import { vec } from '../src/core/math';
 import { insideBounds } from '../src/world/shape';
 import { coordDist, mapToPx } from '../src/world/coords';
-import { cellsShareBorder, foldCells, type CellSeat } from '../src/world/cells';
+import { borderAgreedPoint, cellsShareBorder, foldCells, type CellSeat } from '../src/world/cells';
+import { PORTAL_EDGE_INSET } from '../src/engine/worldgen';
 import { getTissueSampler, setTissueSampler, SEAMLESS_CFG, type TissueSampler } from '../src/world/seamless';
 import { buildTissueSampler } from '../src/world/tissue';
 import { START_ZONE, type ZoneDef } from '../src/data/zones';
@@ -1381,6 +1389,202 @@ const depthOf = (way: NonNullable<ReturnType<typeof pickBorderWay>>, wx: number,
       !!dz && cache === null && wd.seamlessMints.size === 0
       && wd.arena.w === dz.size.w && wd.arena.h === dz.size.h,
       dz ? `${dz.id} arena ${wd.arena.w}×${wd.arena.h} == authored ${dz.size.w}×${dz.size.h}` : 'no surface zone stood (staging failure)');
+  }
+}
+
+// --- RIG I: THE AGREED MOUTHS (M1.5 wave 4 — mouth alignment) -----------------
+// Each border pair's walk-ways cross at ONE point (borderAgreedPoint —
+// symmetric pure geometry, no negotiation), so the far-band ghost dies: a
+// crossing lands in the partner's carved corridor, never its wall band.
+
+/** placeExit's raw seat grammar for a NON-field rect zone (the discrete /
+ *  door truth this rig compares against — inset edge point, `at` along). */
+const rawSeatOf = (def: ZoneDef, i: number, arena: { w: number; h: number }): { x: number; y: number } => {
+  const e = def.exits[i];
+  const t = e.at ?? 0.5;
+  const inset = PORTAL_EDGE_INSET;
+  const cl = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+  return e.side === 'n' ? { x: cl(arena.w * t, inset, arena.w - inset), y: inset }
+    : e.side === 's' ? { x: cl(arena.w * t, inset, arena.w - inset), y: arena.h - inset }
+    : e.side === 'w' ? { x: inset, y: cl(arena.h * t, inset, arena.h - inset) }
+    : { x: arena.w - inset, y: cl(arena.h * t, inset, arena.h - inset) };
+};
+
+{
+  ws.loadZone(zoneA!.id);
+  ringSettle(ws);
+  let iway = pickBorderWay(ws);
+  if (!iway) {
+    ws.loadZone(zoneB!.id);
+    ringSettle(ws);
+    iway = pickBorderWay(ws);
+  }
+  check('I0 a border-shared open way stands for the alignment pins', !!iway,
+    iway ? `${ws.zone.id} → ${iway.destId}` : 'no border-facing walk exit in the staged ring');
+  if (iway) {
+    const aId = ws.zone.id;
+    const bId = iway.destId;
+    const seatA = ws.seamlessRegions.find(s => s.zoneId === aId)!;
+    const mintA = ws.seamlessMints.get(aId)!;
+    const mintB = ws.seamlessMints.get(bId)!;
+    const agreed = borderAgreedPoint(mintA.cell, mintB.cell)!;
+    const agreedAlong = iway.axis === 'x' ? agreed.y : agreed.x;
+    const eps = 0.6;
+
+    // --- I1: THE FACING SEATS — both zones' ways toward each other project
+    // to the agreed point: equal along-border coordinates, each seat one
+    // portal inset inside its own rim (the crossing is ONE world point). ---
+    const aSeatW = { x: iway.exit.pos.x + seatA.originPx.x, y: iway.exit.pos.y + seatA.originPx.y };
+    const aAlong = iway.axis === 'x' ? aSeatW.y : aSeatW.x;
+    const aNormal = iway.axis === 'x' ? aSeatW.x : aSeatW.y;
+    check('I1a the active way seats at the agreed point (along == midpoint of the overlap run)',
+      Math.abs(aAlong - agreedAlong) <= eps
+      && Math.abs(aNormal - (iway.borderW - iway.sign * PORTAL_EDGE_INSET)) <= eps,
+      `along Δ${Math.abs(aAlong - agreedAlong).toFixed(2)}px, normal Δ${Math.abs(aNormal - (iway.borderW - iway.sign * PORTAL_EDGE_INSET)).toFixed(2)}px`);
+
+    // --- I1b: THE UNTOUCHED DOORS — every exit NOT an agreed way keeps
+    // placeExit's raw seat (the re-seat moves walk-ways only). ---
+    {
+      const defA = ws.zoneMap[aId];
+      let doors = 0, moved = 0;
+      const worst = { d: 0, i: -1 };
+      for (const ex of ws.exits) {
+        const row = defA.exits[ex.defIndex];
+        if (!row) continue;
+        const dest = row.to === '?' ? null : ws.zoneMap[row.to];
+        const isAgreed = !!dest && ws.seamlessResidentEligible(dest)
+          && !!ws.seamlessMints.get(row.to)
+          && !!borderAgreedPoint(mintA.cell, ws.seamlessMints.get(row.to)!.cell);
+        if (isAgreed) continue;
+        doors++;
+        const raw = rawSeatOf(defA, ex.defIndex, { w: ws.arena.w, h: ws.arena.h });
+        const d = Math.hypot(ex.pos.x - raw.x, ex.pos.y - raw.y);
+        if (d > eps) { moved++; if (d > worst.d) { worst.d = d; worst.i = ex.defIndex; } }
+      }
+      check('I1b doors and non-bordering ways keep their raw seats (the re-seat moves agreed ways only)',
+        moved === 0, `${doors} untouched row(s)${moved ? `, worst Δ${worst.d.toFixed(1)}px at defIndex ${worst.i}` : ''}`);
+    }
+
+    // The partner's own seat: arrive for real and read the live way home. ---
+    ws.loadZone(bId, aId);
+    ringSettle(ws);
+    const seatB = ws.seamlessRegions.find(s => s.zoneId === bId)!;
+    const eBack = ws.exits.find(e => e.to === aId);
+    const bSeatW = eBack
+      ? { x: eBack.pos.x + seatB.originPx.x, y: eBack.pos.y + seatB.originPx.y } : null;
+    const bAlong = bSeatW ? (iway.axis === 'x' ? bSeatW.y : bSeatW.x) : NaN;
+    const bNormal = bSeatW ? (iway.axis === 'x' ? bSeatW.x : bSeatW.y) : NaN;
+    check('I1c the partner\'s facing way seats at the SAME agreed point (one crossing, two frames)',
+      !!bSeatW && Math.abs(bAlong - agreedAlong) <= eps
+      && Math.abs(bNormal - (iway.borderW + iway.sign * PORTAL_EDGE_INSET)) <= eps,
+      bSeatW ? `along Δ${Math.abs(bAlong - agreedAlong).toFixed(2)}px, normal Δ${Math.abs(bNormal - (iway.borderW + iway.sign * PORTAL_EDGE_INSET)).toFixed(2)}px` : 'no way home stood');
+
+    // --- I2: THE CONTINUOUS CORRIDOR — the carves meet the agreed point
+    // from both sides: every sample along the crossing line, rim-band deep
+    // on each side, is walkable (A on its record grid, B on the live one). --
+    {
+      const mintA2 = ws.seamlessMints.get(aId)!;
+      let blockedA = -1, blockedB = -1;
+      for (let d = 6; d <= 84; d += 6) {
+        const wxA = iway.axis === 'x' ? iway.borderW - iway.sign * d : agreed.x;
+        const wyA = iway.axis === 'x' ? agreed.y : iway.borderW - iway.sign * d;
+        if (mintA2.layout.walk
+          && !mintA2.layout.walk.isWalkable(wxA - mintA2.cell.x0, wyA - mintA2.cell.y0)) { blockedA = d; break; }
+        const wxB = iway.axis === 'x' ? iway.borderW + iway.sign * d : agreed.x;
+        const wyB = iway.axis === 'x' ? agreed.y : iway.borderW + iway.sign * d;
+        if (ws.walk && !ws.walk.isWalkable(wxB - seatB.originPx.x, wyB - seatB.originPx.y)) { blockedB = d; break; }
+      }
+      check('I2 the corridor is walkable straight through the border (both carves meet the point)',
+        blockedA < 0 && blockedB < 0,
+        blockedA >= 0 ? `A-side wall ${blockedA}px shy of the border` : blockedB >= 0 ? `B-side wall ${blockedB}px past the border` : 'both mouths open');
+    }
+
+    // --- I4: THE FLANKING POSTS — the waymark pair straddles the agreed
+    // seat on the along axis (the M0.5 dress follows the moved seat free). --
+    {
+      const posts = eBack ? ws.doodads
+        .filter(dd => dd.kind === 'signpost' && Math.hypot(dd.pos.x - eBack.pos.x, dd.pos.y - eBack.pos.y) <= 110)
+        .map(dd => (iway!.axis === 'x' ? dd.pos.y : dd.pos.x) + (iway!.axis === 'x' ? seatB.originPx.y : seatB.originPx.x)) : [];
+      posts.sort((p, q) => p - q);
+      const straddle = posts.length >= 2 && posts[0] < bAlong && posts[posts.length - 1] > bAlong;
+      const mid = posts.length >= 2 ? (posts[0] + posts[posts.length - 1]) / 2 : NaN;
+      check('I4 the signpost pair flanks the agreed seat (mid-post == the crossing line)',
+        straddle && Math.abs(mid - agreedAlong) <= 1,
+        posts.length >= 2 ? `${posts.length} post(s), mid Δ${Math.abs(mid - agreedAlong).toFixed(2)}px` : `${posts.length} post(s) near the way`);
+    }
+
+    // --- I3: THE DRIVEN DRIFT — a real walk through the mouth crosses at
+    // wave-1-class continuity: the rebase carries the exact world point, the
+    // clamp finds it already walkable (the far-band ghost is dead). ---------
+    {
+      ws.loadZone(aId, bId);
+      ringSettle(ws);
+      const dway = pickBorderWay(ws, bId);
+      check('I3a the driven lane stands (the staged way survives the reload)', !!dway,
+        dway ? `${aId} → ${bId}` : 're-pick failed');
+      if (dway) {
+        stripHostiles(ws);
+        ws.player.pos = vec(dway.exit.pos.x, dway.exit.pos.y);
+        ws.update(0.05);
+        let prevW = heroWorldPx(ws)!;
+        let cross: { prev: { x: number; y: number }; now: { x: number; y: number } } | null = null;
+        const goal = (): { x: number; y: number } => (dway.axis === 'x'
+          ? { x: dway.borderW + dway.sign * 900, y: dway.crossW }
+          : { x: dway.crossW, y: dway.borderW + dway.sign * 900 });
+        const each = (): void => {
+          stripHostiles(ws);
+          ws.objectiveDone = true;
+          prevW = heroWorldPx(ws) ?? prevW;
+        };
+        const done = (): boolean => {
+          if (ws.zone.id === bId && !cross) cross = { prev: prevW, now: heroWorldPx(ws)! };
+          return !!cross;
+        };
+        const went = walkToward(ws, goal, done, 1200, each);
+        const crossFact = cross as { prev: { x: number; y: number }; now: { x: number; y: number } } | null;
+        const drift = crossFact
+          ? Math.hypot(crossFact.now.x - crossFact.prev.x, crossFact.now.y - crossFact.prev.y) : NaN;
+        const landAlong = crossFact ? (dway.axis === 'x' ? crossFact.now.y : crossFact.now.x) : NaN;
+        check('I3b the driven crossing rides the mouth at wave-1-class drift (the ghost is dead)',
+          went && !!crossFact && drift <= 2,
+          crossFact ? `drift ${drift.toFixed(2)}px (fitted-wave live baseline 14.3/10.0)` : 'never crossed');
+        check('I3c …landing on the agreed corridor, not the wall band',
+          !!crossFact && Math.abs(landAlong - agreedAlong) <= SEAMLESS_CFG.roadHalfPx + 8 + ws.player.radius,
+          crossFact ? `landing Δ${Math.abs(landAlong - agreedAlong).toFixed(1)}px off the crossing line` : 'never crossed');
+      }
+    }
+  }
+
+  // --- I5: THE DISCRETE SEATS — flag off, every exit sits at placeExit's raw
+  // grammar to the byte (the re-seat is seamless-gated at its one site). The
+  // stage picks from the DISCRETE world's own charted map (a fresh flag-off
+  // boot never grows the seamless world's graph — the H6 staging idiom),
+  // rect arenas only (the raw grammar's domain; ellipse rims pull portals). -
+  {
+    seedGlobalRandom(GSEED);
+    const wd2 = makeSimWorld('warrior', WSEED);
+    wd2.loadZone(START_ZONE);
+    const cands = Object.values(wd2.zoneMap)
+      .filter(z => (z.dimension ?? 'surface') === 'surface' && z.id !== START_ZONE
+        && z.caveDepth == null && !z.field && !z.boundless)
+      .sort((a, b) => (a.id < b.id ? -1 : 1));
+    let picked: ZoneDef | null = null;
+    for (const z of cands.slice(0, 6)) {
+      wd2.loadZone(z.id);
+      if (wd2.arena.shape === 'rect') { picked = z; break; }
+    }
+    let rows = 0, moved = 0;
+    if (picked) {
+      for (const ex of wd2.exits) {
+        if (!picked.exits[ex.defIndex]) continue;
+        rows++;
+        const raw = rawSeatOf(picked, ex.defIndex, { w: wd2.arena.w, h: wd2.arena.h });
+        if (Math.hypot(ex.pos.x - raw.x, ex.pos.y - raw.y) > 1e-6) moved++;
+      }
+    }
+    check('I5 discrete seats are byte-unchanged (raw placeExit grammar, no re-seat leak)',
+      !!picked && rows >= 1 && moved === 0,
+      picked ? `${rows} exit(s) checked in ${picked.id}` : 'no rect surface zone stood (staging failure)');
   }
 }
 

@@ -67,6 +67,41 @@ export function foldCells(seats: readonly CellSeat[]): Map<string, CellRect> {
   return out;
 }
 
+/** THE AGREED POINT (M1.5 wave 4 — mouth alignment): for two cells sharing a
+ *  border, the ONE world point where facing walk-ways cross — the midpoint of
+ *  the shared border segment's overlap run, clamped into the run (the fitted
+ *  pass's overlap-run clamp lesson; a no-op for a positive run, belt against
+ *  degenerate float). `side` is the edge of `a` the border lies on. Pure
+ *  f(the two cells) and SYMMETRIC BY CONSTRUCTION: the border line and the
+ *  run are commutative expressions (sums and min/max of the same pair), so
+ *  both zones derive the identical point independently — no negotiation
+ *  state. Null = no shared border (corner touches and slivers below eps
+ *  included). The x-touch is checked first; a pair touching on BOTH axes
+ *  with positive runs would need overlapping interiors, which the fold's
+ *  non-overlap proof forbids — unreachable for fold cells, deterministic
+ *  regardless. */
+export function borderAgreedPoint(a: CellRect, b: CellRect, eps = 0.01):
+  { x: number; y: number; side: 'n' | 'e' | 's' | 'w' } | null {
+  const clampIn = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+  if (Math.abs(a.x1 - b.x0) < eps || Math.abs(b.x1 - a.x0) < eps) {
+    const lo = Math.max(a.y0, b.y0), hi = Math.min(a.y1, b.y1);
+    if (hi - lo > eps) {
+      const east = Math.abs(a.x1 - b.x0) < eps;
+      const x = east ? (a.x1 + b.x0) / 2 : (a.x0 + b.x1) / 2;
+      return { x, y: clampIn((lo + hi) / 2, lo, hi), side: east ? 'e' : 'w' };
+    }
+  }
+  if (Math.abs(a.y1 - b.y0) < eps || Math.abs(b.y1 - a.y0) < eps) {
+    const lo = Math.max(a.x0, b.x0), hi = Math.min(a.x1, b.x1);
+    if (hi - lo > eps) {
+      const south = Math.abs(a.y1 - b.y0) < eps;
+      const y = south ? (a.y1 + b.y0) / 2 : (a.y0 + b.y1) / 2;
+      return { x: clampIn((lo + hi) / 2, lo, hi), y, side: south ? 's' : 'n' };
+    }
+  }
+  return null;
+}
+
 /** Do two cells share a border segment (touch along an edge with positive
  *  overlap on the other axis)? The open-border carve and the blend band both
  *  ask this of linked neighbors. */

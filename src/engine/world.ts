@@ -218,7 +218,7 @@ import { traversalDef, type TraversalCapture, type TraversalState } from './trav
 import { affordTravel, castRay, LOS_CFG, type RayElev } from './los';
 import { coordDist, mapToPx, type MapCoord } from '../world/coords';
 import { getTissueSampler, SEAMLESS_CFG, setTissueSampler, type CellRect, type RegionSeat } from '../world/seamless';
-import { foldCells } from '../world/cells';
+import { borderAgreedPoint, foldCells } from '../world/cells';
 import { buildTissueSampler } from '../world/tissue';
 import { FORECHART_CFG, forechartSource, zonesWithin } from '../world/forechart';
 import { OMEN_CFG, collectOmens, omenLine, omenReach, type Omen } from '../world/omens';
@@ -2036,6 +2036,14 @@ export interface SeamlessMint {
    *  the geometric center from the node, so the node is STORED, never
    *  re-derived (a settle may drift the live map; the record cannot). */
   node: { x: number; y: number };
+  /** THE MOUTHS FINGERPRINT (M1.5 wave 4 — the exits-key idiom at mouth
+   *  grain): the agreed border points this mint seated its walk-ways at
+   *  (seamlessMouthsKeyOf). A record's mouths depend on the PARTNERS' cells,
+   *  not only its own — a neighbor's re-fit moves the agreed point without
+   *  touching this cell, so the cell trigger alone would leave the record
+   *  carved at a border the partner no longer meets. The re-fit sweep and
+   *  the load-tail refresh compare this key and re-mint on drift. */
+  mouthsKey: string;
 }
 
 /** Two cells agree within the fitted epsilon (float-noise tolerance — a
@@ -5001,6 +5009,12 @@ export class World {
       if (kept.length !== def.exits.length) def.exits = kept;
     }
     this.exits = def.exits.map((e, i) => this.placeExit(e, i));
+    // THE SEATED WAYS (seamless M1.5 wave 4): walk-ways toward bordering
+    // residents re-seat at the pair's agreed border point BEFORE anything
+    // reads a position — the layout's clears, the entry derivation, and the
+    // mouth carve below all meet the aligned seat. Discrete loads never set
+    // an arrival cell, so the move is seamless-gated at this one site.
+    if (this.seamlessArrivalCell) this.seamlessSeatAgreedWays(def, this.seamlessArrivalCell);
     // Stash the boundary annotations on the def (index-aligned, TRANSIENT —
     // re-derived every load) so generateLayout below can erect the gate
     // terrain for whichever exits cross an enclave boundary.
@@ -5082,7 +5096,7 @@ export class World {
     // inputs, so the grid-agreement pins hold byte-for-byte. Flag off = one
     // boolean read.
     if (this.seamless && !isCave && this.seamlessResidentEligible(def)) {
-      this.seamlessCarveMouths(def, layout);
+      this.seamlessCarveMouths(def, layout, this.seamlessArrivalCell);
     }
     // THE TIER FABRIC (engine/tiers.ts): one walk view per elevated story —
     // stateless adapters over the SAME grid (tier flags on region rows), so
@@ -6443,13 +6457,19 @@ export class World {
   private seamlessDressWalkExits(): void {
     if (!this.seamless) return;
     let planted = false;
+    // Wave 4: agreed ways flank on their GEOMETRIC border side (the seat
+    // moved there; the def side may disagree with the fitted plane). The
+    // consult keys on the arrival cell — exactly when the live seats were
+    // agreed-seated — so posts and seat can never speak different laws.
+    const agreed = this.seamlessArrivalCell
+      ? this.seamlessAgreedWays(this.zone, this.seamlessArrivalCell) : null;
     for (const e of this.exits) {
       if (!this.seamlessWalkExit(e)) continue;
       // Once per way per load (the ring admits members over several beats;
       // each admission re-runs the dress for the ways it just opened).
       if (this.seamlessDressed.has(e.defIndex)) continue;
       this.seamlessDressed.add(e.defIndex);
-      const side = this.zone.exits[e.defIndex]?.side;
+      const side = agreed?.get(e.defIndex)?.side ?? this.zone.exits[e.defIndex]?.side;
       const flank = SEAMLESS_CFG.roadHalfPx + 14;
       const inset = 30;
       // n/s ways run vertically → posts flank in x; e/w ways flank in y.
@@ -6468,6 +6488,70 @@ export class World {
     if (planted) this.markDoodadsChanged();
   }
 
+  /** THE AGREED WAYS (M1.5 wave 4 — mouth alignment): defIndex → the seated
+   *  crossing for every walk-way whose destination is resident-eligible and
+   *  whose cell shares a border with ours. The agreed point is pure f(the
+   *  two cells) — borderAgreedPoint's midpoint-of-the-overlap-run, which
+   *  both zones derive IDENTICALLY and independently (no negotiation state)
+   *  — so facing exits meet at ONE border point and a crossing lands in the
+   *  partner's carved corridor, never its wall band. The runtime seat is
+   *  the point's zone-local projection wearing placeExit's own edge inset
+   *  on the rim normal; only the ALONG-border coordinate moves (the DEF row
+   *  is untouched — the graph's truth). The partner's cell reads the MINT
+   *  RECORD where one stands (meet the ground the partner actually wears —
+   *  the arrival-cell law's own preference), else the live fold. `side` is
+   *  the GEOMETRIC border side: the carve and the waymark dress follow it,
+   *  so a way whose authored side disagrees with the fitted plane still
+   *  opens toward the border it actually crosses. */
+  private seamlessAgreedWays(def: ZoneDef, ownCell: CellRect):
+    Map<number, { pos: Vec2; side: 'n' | 'e' | 's' | 'w'; world: { x: number; y: number } }> {
+    const out = new Map<number, { pos: Vec2; side: 'n' | 'e' | 's' | 'w'; world: { x: number; y: number } }>();
+    for (let i = 0; i < def.exits.length; i++) {
+      const e = def.exits[i];
+      if (e.to === '?') continue;
+      const dest = this.zoneMap[e.to];
+      if (!dest || !this.seamlessResidentEligible(dest)) continue;
+      const theirs = this.seamlessCellOf(e.to) ?? this.seamlessCells().get(e.to);
+      if (!theirs) continue;
+      const p = borderAgreedPoint(ownCell, theirs);
+      if (!p) continue;
+      const inset = PORTAL_EDGE_INSET;
+      const lx = p.x - ownCell.x0, ly = p.y - ownCell.y0;
+      const w = ownCell.x1 - ownCell.x0, h = ownCell.y1 - ownCell.y0;
+      const pos = p.side === 'e' ? vec(w - inset, ly)
+        : p.side === 'w' ? vec(inset, ly)
+        : p.side === 's' ? vec(lx, h - inset)
+        : vec(lx, inset);
+      out.set(i, { pos, side: p.side, world: { x: p.x, y: p.y } });
+    }
+    return out;
+  }
+
+  /** THE SEATED WAYS (wave 4): move the live runtime seats to their agreed
+   *  points — loadZone, the mint swap, and the mid-session append all speak
+   *  this one move, so record and live always derive identically. Runs
+   *  BEFORE the overlap separation: the no-two-portals-share-a-footprint
+   *  belt keeps the last word (both paths run the same separation over the
+   *  same seats, so a nudge lands identically on record and live). */
+  private seamlessSeatAgreedWays(def: ZoneDef, ownCell: CellRect, only?: number): void {
+    const ways = this.seamlessAgreedWays(def, ownCell);
+    for (const ex of this.exits) {
+      if (only !== undefined && ex.defIndex !== only) continue;
+      const w = ways.get(ex.defIndex);
+      if (w) { ex.pos.x = w.pos.x; ex.pos.y = w.pos.y; }
+    }
+  }
+
+  /** The agreed-ways fingerprint (SeamlessMint.mouthsKey) — the exits-key
+   *  idiom at mouth grain. Rounded to a tenth so float noise never buys a
+   *  layout re-mint. */
+  private seamlessMouthsKeyOf(def: ZoneDef, ownCell: CellRect): string {
+    return [...this.seamlessAgreedWays(def, ownCell).entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([i, w]) => `${i}:${w.side}:${w.world.x.toFixed(1)},${w.world.y.toFixed(1)}`)
+      .join('|');
+  }
+
   /** THE OPEN BORDER (M1.5 — the walled-rim strand made law): where a way can
    *  ever OPEN (an exit toward resident-eligible ground), the layout's rim
    *  band carries a walkable MOUTH — a road-wide corridor carved from the
@@ -6479,16 +6563,20 @@ export class World {
    *  exits, arena, destination eligibility), and called in the SAME position
    *  by the mint and the arrival, so the two grids stay byte-equal (the
    *  grid-agreement pins ride it). Runs inside the mint's scoped swap /
-   *  the load's own frame: this.exits and this.arena ARE the carved zone's. */
-  private seamlessCarveMouths(def: ZoneDef, layout: GeneratedLayout): void {
+   *  the load's own frame: this.exits and this.arena ARE the carved zone's.
+   *  Wave 4: agreed ways carve toward their GEOMETRIC border side — the
+   *  seat already sits at the agreed point's projection, so the corridor
+   *  meets the border exactly where the partner's carve does. */
+  private seamlessCarveMouths(def: ZoneDef, layout: GeneratedLayout, ownCell: CellRect | null): void {
     const grid = layout.walk;
     if (!(grid instanceof GridWalkField)) return;
     const half = SEAMLESS_FIT.mouthHalfPx;
+    const agreed = ownCell ? this.seamlessAgreedWays(def, ownCell) : null;
     for (const e of this.exits) {
       if (e.to === '?') continue;
       const dest = this.zoneMap[e.to];
       if (!dest || !this.seamlessResidentEligible(dest)) continue;
-      let side = def.exits[e.defIndex]?.side;
+      let side = agreed?.get(e.defIndex)?.side ?? def.exits[e.defIndex]?.side;
       if (!side) {
         // Side-less row (defensive): carve toward the nearest rim.
         const d = [e.pos.x, this.arena.w - e.pos.x, e.pos.y, this.arena.h - e.pos.y];
@@ -6697,6 +6785,9 @@ export class World {
       // as the REBASE ARRIVAL will, entered through the partner's door.
       this.entryFrom = partnerId;
       this.exits = def.exits.map((e, i) => this.placeExit(e, i));
+      // THE SEATED WAYS (wave 4): the same one move the arrival's load makes,
+      // from the same cell — record and live meet the same aligned seats.
+      this.seamlessSeatAgreedWays(def, cell);
       def.exitBoundaries = this.exits.map(x => x.boundary);
       def.exitRoads = this.exitRoadAnnotations(def);
       def.exitMelds = this.exits.map(x => x.meld);
@@ -6712,7 +6803,7 @@ export class World {
       // THE OPEN BORDER: mouths through the rim band at every way that can
       // ever open — carved on the mint's grid exactly as the arrival carves
       // its live one (same inputs, same order — the grid-agreement pins).
-      this.seamlessCarveMouths(def, layout);
+      this.seamlessCarveMouths(def, layout, cell);
       const span = hullOf(this.arena);
       this.seamlessMints.set(def.id, {
         layout, span, exitsKey: seamlessExitsKeyOf(def), partnerId, prevCamera,
@@ -6720,6 +6811,7 @@ export class World {
         // survives on the record for the render clip's contract.
         shape: 'rect',
         cell, node: { x: at.x, y: at.y },
+        mouthsKey: this.seamlessMouthsKeyOf(def, cell),
       });
       // UPSERT the seat: a re-mint refreshes the layout record, and the seat
       // FOLLOWS the cell (the stored cell is the identity; the seat is its
@@ -6801,7 +6893,12 @@ export class World {
       const mint = this.seamlessMints.get(s.zoneId);
       const live = this.seamlessCells().get(s.zoneId);
       const def = this.zoneMap[s.zoneId];
-      if (!mint || !live || !def || seamlessCellEq(mint.cell, live)) continue;
+      if (!mint || !live || !def) continue;
+      // Wave 4: a NEIGHBOR's re-fit moves the agreed point without touching
+      // this cell, so the mouths fingerprint can drift where the cell holds
+      // — one re-mint heals either (the exits-key idiom at both grains).
+      if (seamlessCellEq(mint.cell, live)
+        && mint.mouthsKey === this.seamlessMouthsKeyOf(def, mint.cell)) continue;
       this.seamlessMintResident(def, mint.partnerId);
       budget--;
     }
@@ -6878,7 +6975,11 @@ export class World {
     // owns its beat.
     const cellNow = this.seamlessArrivalCell ?? this.seamlessCells().get(def.id);
     const cellDrift = !!cellNow && !seamlessCellEq(cellNow, mint.cell);
-    if (arrivalDrift || cellDrift || mint.exitsKey !== seamlessExitsKeyOf(def)) {
+    // Wave 4: the arrival just seated its ways from cellNow — a record whose
+    // mouths were derived against OLDER partner cells must re-mint here or
+    // the walk-grid agreement (D6b/B10) would compare two different carves.
+    const mouthDrift = !!cellNow && mint.mouthsKey !== this.seamlessMouthsKeyOf(def, cellNow);
+    if (arrivalDrift || cellDrift || mouthDrift || mint.exitsKey !== seamlessExitsKeyOf(def)) {
       this.seamlessMintResident(def, arrivalDrift ? this.entryFrom! : mint.partnerId, cellNow ?? undefined);
     }
   }
@@ -11088,6 +11189,12 @@ export class World {
     for (let i = this.exits.length; i < defs.length; i++) {
       const ze = this.placeExit(defs[i], i);
       this.exits.push(ze);
+      // THE SEATED WAYS (wave 4): a walk-way appended mid-session seats at
+      // the agreed point too — the record's exits-drift re-mint derives the
+      // same seat, so live and record never disagree on the crossing.
+      if (this.seamless && this.seamlessArrivalCell) {
+        this.seamlessSeatAgreedWays(this.zone, this.seamlessArrivalCell, i);
+      }
       // A mid-session append resolves ONLY itself against the standing portals —
       // never sliding one the player already saw.
       this.separateOverlappingExits(this.exits.length - 1);
