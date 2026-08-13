@@ -32,13 +32,43 @@
 // bounded; bakes pace themselves (bakeBudgetMs/maxBakesPerFrame) with the
 // per-crown path as a pixel-identical stand-in, clipped per pending chunk so
 // a crown spanning a baked neighbor never draws twice.
+//
+// THE SEAMLESS AWAY CANOPY (seamless M1 wave 2, SeamlessCanopy below —
+// docs/design/seamless-world.md): while the seamless mode stands, resident
+// NEIGHBOR regions' static crowns draw as world-keyed OPAQUE slices — the
+// ground peer cache's key shape (`zoneId:cx,cy` in WORLD chunk coordinates,
+// render/vis/ground.ts worldChunks) applied to the roof, so a threshold
+// crossing changes which region is ACTIVE without dropping one world-keyed
+// slice (THE CONTINUITY LAW). THE VEIL SPLIT shipped as the documented cut:
+// the veil is a live-hero read, so the ACTIVE region keeps this whole live
+// composite (CanopySlices — patch alphas, near-fades, divergence,
+// byte-identical to discrete play) and every AWAY region draws its crowns
+// opaque through the still posture — no veil, no near-fade; nobody stands
+// under them. The flip converges structurally: the live composite takes a
+// region over the moment it activates (per-crown stand-ins cover its first
+// frames), and an away crown at alpha 1 meets the live path's own fade seed
+// of 1 — so the crossing pops nothing on either side. Staleness is MINT
+// IDENTITY alone (a re-minted record — arrival drift, the exits-key law,
+// demote→re-admit — stales its slices; they stay DRAWABLE and converge
+// under the bake budget): the ground lane's epoch separates live bakes from
+// mint bakes inside one cache, but this lane never live-bakes, so the epoch
+// collapses out by construction. Accepted divergence, named: live-only
+// crown changes (a felled trunk) reappear standing in the away draw — the
+// rampage fabric's own roads back (regrowth, re-mint) make that temporary,
+// and a discrete re-entry has always re-minted them standing. Live
+// (canopy.live) crowns never join — they keep the flat body-disc read
+// (seamlessDraw.ts). Discrete mode never reaches any of it: the renderer's
+// hook gates on seamlessDrawActive (THE MODE LAW).
 // ---------------------------------------------------------------------------
 
 import { VEIL_DEFAULTS, veilSpecOf, type VeilPatch, type VeilSpec } from '../../engine/veil';
-import type { Doodad } from '../../engine/levelgen';
+import { doodadRuleOf, type Doodad } from '../../engine/levelgen';
 import type { ZoneTheme } from '../../data/zones';
+import type { SeamlessMint } from '../../engine/world';
+import type { RegionSeat } from '../../world/seamless';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import { CANOPY_PAINTERS, CANOPY_STATIC, crownSprite, crownVariantOf } from './painters';
+import { registerVisCache } from './caches';
 import { releaseCanvas } from './sprites';
 import { VIS_CFG } from './visConfig';
 
@@ -350,5 +380,267 @@ export class CanopySlices {
         }
       }
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// THE SEAMLESS AWAY CANOPY — the world-keyed lane (module header law above).
+// ---------------------------------------------------------------------------
+
+/** Away-canopy dials — ALL FLAGGED (unblessed; her word moves them). Slice
+ *  grain is the composite's own compositeChunk (448² ≈ 0.8 MB each), so the
+ *  byte class mirrors the discrete cap: 64 here + 96 there ≈ the ground
+ *  world-cache's 72-chunk envelope. Budgets are a lighter hand than the
+ *  discrete composite's (away crowns converge off-screen-first; nothing
+ *  waits on them mid-fight), with the ONE never-baked slice per frame
+ *  always allowed — streaming must progress (the ground lane's own law). */
+export const SEAMLESS_CANOPY_CFG = {
+  /** LRU cap on world-keyed away slices across ALL resident regions. */
+  maxSlices: 64,
+  /** Per-frame away bake budget (ms) — first bake exempt (the guarantee). */
+  bakeBudgetMs: 2,
+  /** Fresh away bakes per frame past the first. */
+  maxBakesPerFrame: 3,
+  /** Stale (re-minted record) rebakes per frame — the convergence trickle. */
+  maxRebakesPerFrame: 2,
+} as const;
+
+/** The World sliver the away lane reads (structural — this module keeps the
+ *  vis layer's no-engine-import law; SeamlessMint/RegionSeat arrive as
+ *  erased type imports, the ground lane's own idiom). */
+export interface SeamlessCanopyView {
+  zone: { id: string };
+  seamlessRegions: readonly RegionSeat[];
+  seamlessMints: ReadonlyMap<string, SeamlessMint>;
+  zoneMap: Record<string, { theme: ZoneTheme } | undefined>;
+}
+
+/** One away region's crown index, keyed to the mint record that produced it
+ *  (a re-mint rebuilds): every static canopy-bearing crown of the mint's
+ *  doodad list, bucketed by the WORLD chunks its draw reach touches. Seat
+ *  origins are stable identities by the placement lane's own law (upsert
+ *  keeps the standing seat; def.size never moves), so world coordinates
+ *  baked into the index survive demote→re-admit cycles byte-equal. */
+interface AwayCanopyRegion {
+  mint: SeamlessMint;
+  theme: ZoneTheme;
+  originX: number;
+  originY: number;
+  byChunk: Map<number, Doodad[]>;
+}
+
+/** One world-keyed away slice (`zoneId:cx,cy`). `at` is the draw/LRU stamp
+ *  (the working-set guard reads it); `bakedAt` orders stale rebakes
+ *  oldest-first; `mint` is the record identity — a re-minted region stales
+ *  its slices (frozen-DRAWABLE, converging under the budget), the lane's
+ *  whole staleness vocabulary (no epoch: this cache never live-bakes). */
+interface AwaySliceEntry {
+  img: HTMLCanvasElement;
+  at: number;
+  bakedAt: number;
+  mint: SeamlessMint;
+}
+
+export class SeamlessCanopy {
+  /** Map insertion order is the LRU (the ground world-cache's idiom) —
+   *  survives every zone swap and threshold crossing BY LAW; only the run
+   *  boundary (steward) and the cap release entries. */
+  private slices = new Map<string, AwaySliceEntry>();
+  /** Away regions' memoized crown indexes, keyed by zone id, invalidated by
+   *  mint identity; pruned to the resident set as seats demote. */
+  private regions = new Map<string, AwayCanopyRegion>();
+  /** Draw/LRU sequence for the working-set guard. */
+  private seq = 0;
+
+  constructor() {
+    // The steward row (renderer-owned instance — the ground world-cache's
+    // registration posture). NO zone handler on purpose: a threshold
+    // crossing must keep every resident's slices (THE CONTINUITY LAW);
+    // the run boundary releases everything.
+    registerVisCache({
+      id: 'seamlessCanopy',
+      count: () => this.slices.size,
+      bytes: () => this.slices.size * VIS_CFG.canopy.compositeChunk * VIS_CFG.canopy.compositeChunk * 4,
+      onRunSwap: () => this.clear(),
+    });
+  }
+
+  /** Release every slice + region index (run boundary only). */
+  private clear(): void {
+    for (const e of this.slices.values()) releaseCanvas(e.img);
+    this.slices.clear();
+    this.regions.clear();
+  }
+
+  /** An away region's crown index (rebuilt when its mint record refreshes):
+   *  static canopy-bearing crowns only — the composite's own eligibility
+   *  (CANOPY_STATIC painter, not canopy.live) over occlude/veil kinds; live
+   *  crowns keep the flat body-disc read (the documented cut). Felled and
+   *  gone crowns stay out (the mint list is static, so build-time filtering
+   *  is complete). */
+  private regionFor(zoneId: string, mint: SeamlessMint, theme: ZoneTheme,
+    seat: RegionSeat): AwayCanopyRegion {
+    const hit = this.regions.get(zoneId);
+    if (hit && hit.mint === mint) return hit;
+    const chunk = VIS_CFG.canopy.compositeChunk;
+    const byChunk = new Map<number, Doodad[]>();
+    for (const d of mint.layout.doodads) {
+      if (d.gone || d.felled) continue;
+      const rule = doodadRuleOf(d.kind);
+      if (!rule.occlude && !rule.veil) continue;
+      if (!metaOf(d.kind).eligible) continue;
+      const r = d.radius * CROWN_REACH;
+      const wx = d.pos.x + seat.originPx.x, wy = d.pos.y + seat.originPx.y;
+      const cx0 = Math.floor((wx - r) / chunk), cx1 = Math.floor((wx + r) / chunk);
+      const cy0 = Math.floor((wy - r) / chunk), cy1 = Math.floor((wy + r) / chunk);
+      for (let cy = cy0; cy <= cy1; cy++) {
+        for (let cx = cx0; cx <= cx1; cx++) {
+          const ck = chunkKey(cx, cy);
+          const arr = byChunk.get(ck);
+          if (arr) arr.push(d); else byChunk.set(ck, [d]);
+        }
+      }
+    }
+    const reg: AwayCanopyRegion = {
+      mint, theme, originX: seat.originPx.x, originY: seat.originPx.y, byChunk,
+    };
+    this.regions.set(zoneId, reg);
+    return reg;
+  }
+
+  /** Draw every away region's crowns the view touches, as opaque world-keyed
+   *  slices — called from the renderer's canopy pass BEFORE the active
+   *  region's own loop (away under active: the live layout's crowns win the
+   *  overlap, the country draw's own doctrine), in the active seat's frame
+   *  (the caller has already gated on seamlessDrawActive). Missing slices
+   *  bake nearest-view-center-first under the budget with per-crown opaque
+   *  stand-ins meanwhile; stale (re-minted) slices keep drawing and rebake
+   *  oldest-first; eviction never touches a slice drawn this frame. */
+  draw(ctx: CanvasRenderingContext2D, world: SeamlessCanopyView,
+    camX: number, camY: number, vw: number, vh: number): void {
+    const seats = world.seamlessRegions;
+    if (!seats.length) return;
+    let active: RegionSeat | null = null;
+    for (const s of seats) if (s.zoneId === world.zone.id) { active = s; break; }
+    if (!active) return;
+    // Prune region indexes that lost their seat (demotions) — the memo map
+    // stays exactly the resident set's size.
+    if (this.regions.size >= seats.length) {
+      for (const id of this.regions.keys()) {
+        if (!seats.some(s => s.zoneId === id)) this.regions.delete(id);
+      }
+    }
+    const chunk = VIS_CFG.canopy.compositeChunk;
+    const cfg = SEAMLESS_CANOPY_CFG;
+    const t0 = performance.now();
+    const drawFloor = this.seq;
+    // OPAQUE means SET: the pass we run inside inherits whatever alpha the
+    // previous layer left (the sight veil parks it near zero), and every
+    // standing draw path re-asserts its own — so must this lane, or the
+    // slices blit invisibly (the live-proof lesson, 2026-08-12).
+    ctx.globalAlpha = 1;
+    const originX = active.originPx.x, originY = active.originPx.y;
+    const wx0 = camX + originX, wy0 = camY + originY;
+    const x0 = Math.floor(wx0 / chunk), x1 = Math.floor((wx0 + vw) / chunk);
+    const y0 = Math.floor(wy0 / chunk), y1 = Math.floor((wy0 + vh) / chunk);
+    const ccx = (wx0 + vw / 2) / chunk, ccy = (wy0 + vh / 2) / chunk;
+    const missing: { key: string; reg: AwayCanopyRegion; cx: number; cy: number; d2: number }[] = [];
+    const stale: { entry: AwaySliceEntry; reg: AwayCanopyRegion; cx: number; cy: number }[] = [];
+    for (const s of seats) {
+      if (s.zoneId === world.zone.id) continue;
+      const mint = world.seamlessMints.get(s.zoneId);
+      const def = world.zoneMap[s.zoneId];
+      if (!mint || !def) continue; // no mint = stand down (the ground lane's law)
+      const reg = this.regionFor(s.zoneId, mint, def.theme, s);
+      if (!reg.byChunk.size) continue;
+      for (let cy = y0; cy <= y1; cy++) {
+        for (let cx = x0; cx <= x1; cx++) {
+          if (!reg.byChunk.get(chunkKey(cx, cy))) continue;
+          const key = `${s.zoneId}:${cx},${cy}`;
+          const entry = this.slices.get(key);
+          if (entry) {
+            this.slices.delete(key); this.slices.set(key, entry); // LRU touch
+            entry.at = ++this.seq;
+            // A slice of a RE-MINTED record repaints (drawable meanwhile).
+            if (entry.mint !== reg.mint) stale.push({ entry, reg, cx, cy });
+            ctx.drawImage(entry.img, cx * chunk - originX, cy * chunk - originY);
+          } else {
+            missing.push({ key, reg, cx, cy, d2: (cx + 0.5 - ccx) ** 2 + (cy + 0.5 - ccy) ** 2 });
+          }
+        }
+      }
+    }
+    // Bake nearest-first — ONE per frame always allowed; the rest hold to
+    // the count + ms budget. Pending chunks stand in per-crown, opaque,
+    // once per crown per frame (a crown spanning two pending chunks must
+    // not double-darken its translucent lobes — the composite's own rule).
+    let bakes = 0;
+    let standIn: Set<Doodad> | null = null;
+    missing.sort((a, b) => a.d2 - b.d2);
+    for (const m of missing) {
+      if (bakes === 0 || (bakes < cfg.maxBakesPerFrame && performance.now() - t0 < cfg.bakeBudgetMs)) {
+        const img = this.bake(m.reg, m.cx, m.cy);
+        this.slices.set(m.key, { img, at: ++this.seq, bakedAt: ++this.seq, mint: m.reg.mint });
+        bakes++;
+        ctx.drawImage(img, m.cx * chunk - originX, m.cy * chunk - originY); // no one-frame hole
+      } else {
+        const members = m.reg.byChunk.get(chunkKey(m.cx, m.cy));
+        if (!members) continue;
+        if (!standIn) standIn = new Set();
+        ctx.save();
+        ctx.translate(m.reg.originX - originX, m.reg.originY - originY);
+        for (const o of members) {
+          if (standIn.has(o)) continue;
+          standIn.add(o);
+          const meta = metaOf(o.kind);
+          blitCrown(ctx, m.reg.theme, o, meta.name, meta.params, 1);
+        }
+        ctx.restore();
+      }
+    }
+    stale.sort((a, b) => a.entry.bakedAt - b.entry.bakedAt);
+    let rebakes = 0;
+    for (const s of stale) {
+      if (rebakes >= cfg.maxRebakesPerFrame || performance.now() - t0 >= cfg.bakeBudgetMs) break;
+      const img = this.bake(s.reg, s.cx, s.cy);
+      if (s.entry.img !== img) releaseCanvas(s.entry.img);
+      s.entry.img = img;
+      s.entry.mint = s.reg.mint;
+      s.entry.bakedAt = ++this.seq;
+      rebakes++;
+    }
+    // Evict past the cap — never a slice drawn this frame (the working-set
+    // guard: the cap bounds SESSION growth, not the view).
+    while (this.slices.size > cfg.maxSlices) {
+      const oldest = this.slices.entries().next().value;
+      if (oldest === undefined || oldest[1].at > drawFloor) break;
+      releaseCanvas(oldest[1].img);
+      this.slices.delete(oldest[0]);
+    }
+  }
+
+  /** Bake one away slice: the region's member crowns flattened OPAQUE into a
+   *  world-frame chunk canvas. blitCrown is already world-free (theme +
+   *  doodad + params — CANOPY_STATIC's own assertion), so the ground lane's
+   *  scoped world swap collapses to parameter passing here; crown variants
+   *  hash the doodad's mint-LOCAL position, which equals its live zone-local
+   *  position by the one-affine seat law — away and live bakes are
+   *  pixel-identical by construction. */
+  private bake(reg: AwayCanopyRegion, cx: number, cy: number): HTMLCanvasElement {
+    const chunk = VIS_CFG.canopy.compositeChunk;
+    const c = document.createElement('canvas');
+    c.width = chunk; c.height = chunk;
+    const bctx = c.getContext('2d');
+    const members = reg.byChunk.get(chunkKey(cx, cy));
+    if (bctx && members) {
+      // Members hold mint-local positions; the slice lives in world frame.
+      bctx.translate(reg.originX - cx * chunk, reg.originY - cy * chunk);
+      for (const o of members) {
+        if (o.gone || o.felled) continue; // build-time filtered; same-frame guard idiom
+        const meta = metaOf(o.kind);
+        blitCrown(bctx, reg.theme, o, meta.name, meta.params, 1);
+      }
+    }
+    return c;
   }
 }

@@ -76,7 +76,7 @@ import { drawEdgeOverlay, qFrac, qChan } from './vis/overlays';
 import { canvasCap, canvasCapsReport } from './vis/canvasCaps';
 import { GroundRenderer } from './vis/ground';
 import { CANOPY_PAINTERS, CANOPY_STATIC, PAINTERS, paintBakedWhole, paintBlendUnderlay, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
-import { blitCrown, CanopySlices, EMPTY_PARAMS } from './vis/canopy';
+import { blitCrown, CanopySlices, EMPTY_PARAMS, SeamlessCanopy } from './vis/canopy';
 import { CanopyEyes, type EyedGroup } from './vis/canopyEyes';
 import { WallEyes } from './vis/wallEyes';
 import { RoomVeil } from './vis/roomVeil';
@@ -3194,6 +3194,10 @@ export class Renderer {
   /** The sealed-roof composite (vis/canopy.ts): static veil crowns flatten
    *  into chunk slices drawn at the patch's shared alpha. */
   private canopySlices = new CanopySlices();
+  /** THE SEAMLESS AWAY CANOPY (vis/canopy.ts SeamlessCanopy): resident
+   *  neighbors' static crowns as world-keyed opaque slices — the ground
+   *  peer cache's key shape on the roof. Dormant off-mode (THE MODE LAW). */
+  private seamlessCanopy = new SeamlessCanopy();
 
   /** THE ROOM VEIL (vis/roomVeil.ts): interior vision confinement — inside a
    *  confining structure, the world beyond the room veils dark. */
@@ -3232,6 +3236,15 @@ export class Renderer {
     const composite = VIS_CFG.canopy.composite && VIS_CFG.canopy.bakeCrowns
       && !VIS_ABLATE.has('canopyslices');
     this.canopySlices.begin(dt, world);
+    // THE SEAMLESS AWAY CANOPY (vis/canopy.ts): resident neighbors' crowns
+    // draw FIRST — under the active region's own live canopy, so the live
+    // layout's crowns win any overlap (the country draw's doctrine). The
+    // active region keeps the whole veil composite below, byte-identical;
+    // flag off = one predicate read (THE MODE LAW).
+    if (seamlessDrawActive(world)) {
+      this.seamlessCanopy.draw(this.ctx, world, this.cam.x, this.cam.y,
+        this.canvas.width / this.zoom, this.canvas.height / this.zoom);
+    }
     for (const o of this.culledAll) {
       const rule = doodadRuleOf(o.kind);
       const occ = rule.occlude;
