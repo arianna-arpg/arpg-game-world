@@ -103,4 +103,17 @@ export const PARTITION_CFG = {
    *  this wide centered between the cuts (the occupancy law keeps real webs
    *  far from this; the floor makes the fold total, never throwing). */
   minCellSpanPx: 320,
+  /** THE OPEN BORDER's mouth half-width (px): the walk-grid corridor carved
+   *  from a walk-way's seat to the cell edge. ONE home (M2 wave 5 — hoisted
+   *  from the engine's fitted-mint dials so the tissue's corridor law and
+   *  the carve read the same width): the road's own half plus a shoulder,
+   *  so the M0.5 signposts (roadHalfPx + 14 flank) stand just off the
+   *  carved ground. FLAGGED. */
+  mouthHalfPx: SEAMLESS_CFG.roadHalfPx + 8,
+  /** THE MOUTH APRON (M2 wave 5, THE SOLID BETWEEN): the walkable pocket the
+   *  tissue keeps around each agreed border point — outside the cells, the
+   *  only walkable tissue is the road ribbon plus these discs, so a crossing
+   *  whose corner geometry pokes past both cells never strands. Radius ≈ the
+   *  corridor's full width (2 × mouthHalfPx). FLAGGED. */
+  mouthApronPx: 2 * (SEAMLESS_CFG.roadHalfPx + 8),
 } as const;

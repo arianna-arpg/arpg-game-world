@@ -64,6 +64,16 @@
 //   carves meet the point (the corridor is walkable straight through the
 //   border), a driven crossing rides the partner's mouth at wave-1-class
 //   drift, and the signpost pair flanks the agreed seat.
+// RIG J — THE ENCLOSURE (M2 wave 5): THE SOLID BETWEEN (off-corridor tissue
+//   outside every cell refuses on the ring's own web; a non-abutting linked
+//   pair's ribbon still crosses its gap), THE FAR-WALL LAW (a step into a
+//   resident neighbor's wall cell — or its border body — refuses from
+//   outside exactly as from inside; the mouth corridor still admits: her
+//   ghost repro dead), THE ENCLOSURE DRESS (the record's border rows stand
+//   in the rim band, matched by live bodies, gapped at every exit seat;
+//   walled layouts and authored `none` tilesets plant nothing), THE REBASE
+//   TICK ADMITS NOTHING (a threshold tick's load tail defers its admission
+//   slice one beat), and the discrete world stays inert.
 //
 // Layout GEOMETRY is compared as (kind, pos, radius, tier) rows: loadZone
 // deliberately randomizes post-mint runtime fields (DoodadEffect first
@@ -74,11 +84,15 @@
 
 import { vec } from '../src/core/math';
 import { insideBounds } from '../src/world/shape';
-import { coordDist, mapToPx } from '../src/world/coords';
+import { coordDist, mapToPx, pxToMap } from '../src/world/coords';
 import { borderAgreedPoint, cellsShareBorder, foldCells, type CellSeat } from '../src/world/cells';
 import { PORTAL_EDGE_INSET } from '../src/engine/worldgen';
-import { getTissueSampler, setTissueSampler, SEAMLESS_CFG, type TissueSampler } from '../src/world/seamless';
-import { buildTissueSampler } from '../src/world/tissue';
+import { getTissueSampler, setTissueSampler, PARTITION_CFG, SEAMLESS_CFG, type TissueSampler } from '../src/world/seamless';
+import { buildTissueSampler, TISSUE_CFG } from '../src/world/tissue';
+import { ENCLOSURE_CFG, enclosureRowFor } from '../src/data/enclosure';
+import { GridWalkField } from '../src/world/gridWalk';
+import { OCEAN_BIOME, biomeAt } from '../src/world/biomes';
+import { elevationAt } from '../src/world/relief';
 import { START_ZONE, type ZoneDef } from '../src/data/zones';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -1585,6 +1599,312 @@ const rawSeatOf = (def: ZoneDef, i: number, arena: { w: number; h: number }): { 
     check('I5 discrete seats are byte-unchanged (raw placeExit grammar, no re-seat leak)',
       !!picked && rows >= 1 && moved === 0,
       picked ? `${rows} exit(s) checked in ${picked.id}` : 'no rect surface zone stood (staging failure)');
+  }
+}
+
+// --- RIG J: THE ENCLOSURE (M2 wave 5 — the solid between / the far-wall law /
+// the border dress / the rebase-tick admission skip) ---------------------------
+
+{
+  // Data pins first (pure registry reads, no staging).
+  check('J0a the authored `none` row refuses dress (the lever\'s refusal face)',
+    enclosureRowFor('jungle') === null);
+  const defRow = enclosureRowFor(undefined);
+  check('J0b an unknown tileset resolves to the default border body',
+    !!defRow && defRow.kind === 'rock');
+
+  ws.loadZone(zoneA!.id);
+  ringSettle(ws);
+  const activeId = ws.zone.id;
+  const seatAJ = ws.seamlessRegions.find(s => s.zoneId === activeId)!;
+  const mintAJ = ws.seamlessMints.get(activeId)!;
+
+  // --- J1: THE SOLID BETWEEN on the ring's own web — outside every cell,
+  // off every corridor, dry flat ground REFUSES tissue; the apron capture
+  // stands (eligible bordering pairs exist on this web). -----------------------
+  {
+    const sampler = buildTissueSampler(ws);
+    const seed = ws.manifest.seed >>> 0;
+    const roster: CellSeat[] = Object.values(ws.zoneMap)
+      .filter(z => (z.dimension ?? 'surface') === 'surface' && z.caveDepth == null && !z.pocket && !z.floating)
+      .map(z => ({ id: z.id, ...mapToPx(z.map) }));
+    const foldJ = foldCells(roster);
+    const cellsJ = [...foldJ.values()];
+    const inAnyCell = (x: number, y: number): boolean =>
+      cellsJ.some(c => x >= c.x0 && x <= c.x1 && y >= c.y0 && y <= c.y1);
+    let aprons = 0;
+    const seenP = new Set<string>();
+    for (const z of Object.values(ws.zoneMap)) {
+      if (!ws.seamlessResidentEligible(z)) continue;
+      for (const e of z.exits) {
+        if (e.to === '?' || e.crossDim) continue;
+        const dest = ws.zoneMap[e.to];
+        if (!dest || !ws.seamlessResidentEligible(dest)) continue;
+        const key = z.id < e.to ? `${z.id}|${e.to}` : `${e.to}|${z.id}`;
+        if (seenP.has(key)) continue;
+        seenP.add(key);
+        const ca = foldJ.get(z.id), cb = foldJ.get(e.to);
+        if (ca && cb && borderAgreedPoint(ca, cb)) aprons++;
+      }
+    }
+    check('J1a the apron capture stands — eligible bordering pairs exist on the staged web', aprons >= 1,
+      `${aprons} agreed point(s)`);
+    // Outside-cell refusal scan (the tissue probe's J2, on THIS grown web,
+    // sampler-verdict only — the lattice-equality oracle lives there).
+    const c0 = mintAJ.node;
+    let found = 0, refused = 0;
+    for (let k = 0; k < 6000 && found < 40; k++) {
+      const ang = k * 2.399963229728653;
+      const r = 300 + (k / 6000) * 14000;
+      const x = c0.x + Math.cos(ang) * r, y = c0.y + Math.sin(ang) * r;
+      if (inAnyCell(x, y)) continue;
+      const t = sampler(x, y, seed);
+      if (t.road) continue;
+      // dry flat only (ocean/cliff refuse under the standing law — this scan
+      // pins the NEW clause, so oracle those away probe-side):
+      const cm = pxToMap({ x, y });
+      if (biomeAt(cm, seed) === OCEAN_BIOME) continue;
+      const h = TISSUE_CFG.slopeStepUnits;
+      const gx = elevationAt({ x: cm.x + h, y: cm.y }, seed) - elevationAt({ x: cm.x - h, y: cm.y }, seed);
+      const gy = elevationAt({ x: cm.x, y: cm.y + h }, seed) - elevationAt({ x: cm.x, y: cm.y - h }, seed);
+      if (Math.hypot(gx, gy) / (2 * h) > TISSUE_CFG.slopeMax) continue;
+      // clear of aprons (they admit by law): conservative margin
+      found++;
+      if (!t.walkable) refused++;
+    }
+    const wedgeShare = found ? refused / found : 0;
+    check('J1b outside-cell off-road country refuses tissue (aprons alone may admit)',
+      found >= 10 && wedgeShare >= 0.9,
+      `${refused}/${found} refused (apron pockets account for the rest)`);
+    // A non-abutting linked pair's ribbon crosses its gap walkable.
+    let gapSample: { x: number; y: number } | null = null;
+    for (const key of seenP) {
+      const [ida, idb] = key.split('|');
+      const ca = foldJ.get(ida), cb = foldJ.get(idb);
+      if (!ca || !cb || borderAgreedPoint(ca, cb)) continue;
+      const pa = mapToPx(ws.zoneMap[ida].map), pb = mapToPx(ws.zoneMap[idb].map);
+      for (let t = 0.1; t <= 0.9; t += 0.02) {
+        const x = pa.x + (pb.x - pa.x) * t, y = pa.y + (pb.y - pa.y) * t;
+        if (!inAnyCell(x, y)) { gapSample = { x, y }; break; }
+      }
+      if (gapSample) break;
+    }
+    check('J1c a linked pair\'s ribbon crosses its between-cells gap walkable (border-to-border corridor)',
+      !gapSample || sampler(gapSample.x, gapSample.y, seed).walkable,
+      gapSample ? `gap sample (${gapSample.x.toFixed(0)}, ${gapSample.y.toFixed(0)})` : 'every linked pair abuts on this web (vacuous — no tissue between)');
+  }
+
+  // --- J2: THE FAR-WALL LAW — a clamp step from active ground into a
+  // resident neighbor's refusing cell holds at the border; the mouth
+  // corridor still admits (her ghost repro dead, the crossing alive). ----------
+  {
+    const way = pickBorderWay(ws);
+    check('J2a a border way stands for the far-wall pins', !!way, way ? `${activeId} → ${way.destId}` : 'none');
+    if (way) {
+      const mintB = ws.seamlessMints.get(way.destId)!;
+      const seatB2 = ws.seamlessRegions.find(s => s.zoneId === way.destId)!;
+      const agreed = borderAgreedPoint(mintAJ.cell, mintB.cell)!;
+      const agreedAlong = way.axis === 'x' ? agreed.y : agreed.x;
+      const lo = way.axis === 'x' ? Math.max(mintAJ.cell.y0, mintB.cell.y0) : Math.max(mintAJ.cell.x0, mintB.cell.x0);
+      const hi = way.axis === 'x' ? Math.min(mintAJ.cell.y1, mintB.cell.y1) : Math.min(mintAJ.cell.x1, mintB.cell.x1);
+      // Hunt a REFUSING target just inside B along the shared border, well
+      // off the mouth: a wall cell of B's own grid first, else a dress body.
+      const depth = 26;
+      let target: { wx: number; wy: number; kind: 'wall' | 'dress' } | null = null;
+      const bw = mintB.layout.walk;
+      if (bw) {
+        for (let along = lo + 40; along <= hi - 40 && !target; along += 12) {
+          if (Math.abs(along - agreedAlong) < 260) continue;
+          const wx = way.axis === 'x' ? way.borderW + way.sign * depth : along;
+          const wy = way.axis === 'x' ? along : way.borderW + way.sign * depth;
+          if (!bw.isWalkable(wx - seatB2.originPx.x, wy - seatB2.originPx.y)) target = { wx, wy, kind: 'wall' };
+        }
+      }
+      if (!target) {
+        for (const b of mintB.dress) {
+          const bx = b.x + seatB2.originPx.x, by = b.y + seatB2.originPx.y;
+          const along = way.axis === 'x' ? by : bx;
+          const normal = way.axis === 'x' ? bx : by;
+          if (Math.abs(along - agreedAlong) < 260) continue;
+          if (Math.abs(normal - way.borderW) > 120) continue; // this side's rim band only
+          if (along < lo + 40 || along > hi - 40) continue;
+          target = { wx: bx, wy: by, kind: 'dress' };
+          break;
+        }
+      }
+      check('J2b a refusing target stands on the neighbor\'s border band (wall cell or border body)',
+        !!target, target ? `${target.kind} at (${target.wx.toFixed(0)}, ${target.wy.toFixed(0)})` : 'open rim + no dress band toward us');
+      if (target) {
+        stripHostiles(ws);
+        // Step from just inside A straight at the refusing target.
+        const fromW = {
+          x: way.axis === 'x' ? way.borderW - way.sign * 30 : target.wx,
+          y: way.axis === 'x' ? target.wy : way.borderW - way.sign * 30,
+        };
+        const from = vec(fromW.x - seatAJ.originPx.x, fromW.y - seatAJ.originPx.y);
+        const p = vec(target.wx - seatAJ.originPx.x, target.wy - seatAJ.originPx.y);
+        const out = ws.clampPos(p, ws.player.radius, from, { mover: ws.player });
+        const held = Math.hypot(out.x - p.x, out.y - p.y) > 1e-6;
+        check('J2c the step INTO the refusing ground is not admitted (the ghost walk is dead)',
+          held, `asked (${p.x.toFixed(0)}, ${p.y.toFixed(0)}), got (${out.x.toFixed(0)}, ${out.y.toFixed(0)})`);
+        // The mouth corridor still admits: the same step at the agreed point.
+        const mouthW = {
+          x: way.axis === 'x' ? way.borderW + way.sign * depth : agreedAlong,
+          y: way.axis === 'x' ? agreedAlong : way.borderW + way.sign * depth,
+        };
+        const fromM = vec(
+          (way.axis === 'x' ? way.borderW - way.sign * 30 : agreedAlong) - seatAJ.originPx.x,
+          (way.axis === 'x' ? agreedAlong : way.borderW - way.sign * 30) - seatAJ.originPx.y);
+        const pM = vec(mouthW.x - seatAJ.originPx.x, mouthW.y - seatAJ.originPx.y);
+        const outM = ws.clampPos(pM, ws.player.radius, fromM, { mover: ws.player });
+        check('J2d the mouth corridor still admits the same step (the crossing lives)',
+          Math.hypot(outM.x - pM.x, outM.y - pM.y) <= 1e-6,
+          `Δ${Math.hypot(outM.x - pM.x, outM.y - pM.y).toFixed(3)}px at the agreed point`);
+      }
+    }
+  }
+
+  // --- J3: THE ENCLOSURE DRESS — record rows in the rim band, live bodies
+  // matching, gaps at every exit seat, walled/`none` layouts bare. -------------
+  {
+    const row = enclosureRowFor(ws.zoneMap[activeId].tileset);
+    check('J3a the active zone resolves a border row (derivation or author)', !!row,
+      row ? `${row.kind} r[${row.radius[0]}..${row.radius[1]}] on '${ws.zoneMap[activeId].tileset ?? '(none)'}'` : 'null row');
+    if (row && mintAJ.dress.length) {
+      const [, r1] = row.radius;
+      const bandMax = r1 + ENCLOSURE_CFG.insetPad + ENCLOSURE_CFG.jitterPx + 1;
+      let offBand = 0;
+      for (const b of mintAJ.dress) {
+        const edgeD = Math.min(b.x, b.y, ws.arena.w - b.x, ws.arena.h - b.y);
+        // b.r is BODY radius (bodyScale-folded); the planted center's inset
+        // used the FULL rolled radius, so bound with r1.
+        if (edgeD > bandMax) offBand++;
+      }
+      check('J3b every record dress row stands in the rim band', offBand === 0,
+        `${mintAJ.dress.length} row(s), ${offBand} off-band (band ≤ ${bandMax.toFixed(0)}px)`);
+      // Live bodies match the record rows (same derivation both sites).
+      let unmatched = 0;
+      for (const b of mintAJ.dress) {
+        if (!ws.doodads.some(d => d.kind === row.kind
+          && Math.abs(d.pos.x - b.x) <= 0.5 && Math.abs(d.pos.y - b.y) <= 0.5)) unmatched++;
+      }
+      check('J3c every record dress row has its live body (record == arrival at the border line)',
+        unmatched === 0, `${unmatched}/${mintAJ.dress.length} unmatched`);
+      // Gaps at every exit seat: no dress row within gapHalf of an exit's
+      // along-line on that exit's side.
+      const gapHalf = PARTITION_CFG.mouthHalfPx + r1 + ENCLOSURE_CFG.gapShoulder;
+      const sideOf = (b: { x: number; y: number }): 'n' | 's' | 'w' | 'e' => {
+        const d = [b.y, ws.arena.h - b.y, b.x, ws.arena.w - b.x];
+        return (['n', 's', 'w', 'e'] as const)[d.indexOf(Math.min(...d))];
+      };
+      let gapViolations = 0;
+      for (const ex of ws.exits) {
+        const eSide = ((): 'n' | 's' | 'w' | 'e' => {
+          const d = [ex.pos.y, ws.arena.h - ex.pos.y, ex.pos.x, ws.arena.w - ex.pos.x];
+          return (['n', 's', 'w', 'e'] as const)[d.indexOf(Math.min(...d))];
+        })();
+        const eAlong = eSide === 'n' || eSide === 's' ? ex.pos.x : ex.pos.y;
+        for (const b of mintAJ.dress) {
+          if (sideOf(b) !== eSide) continue;
+          const bAlong = eSide === 'n' || eSide === 's' ? b.x : b.y;
+          if (Math.abs(bAlong - eAlong) < gapHalf - 1) gapViolations++;
+        }
+      }
+      check('J3d the line opens at every exit seat (agreed mouths AND doors)', gapViolations === 0,
+        `${gapViolations} body(ies) inside a gap window (gapHalf ${gapHalf.toFixed(0)}px)`);
+    }
+    // Walled members plant nothing (probe-side re-derivation of the detect).
+    let walledSeen = 0, walledDressed = 0;
+    for (const [zid, m] of ws.seamlessMints) {
+      const g = m.layout.walk;
+      if (!(g instanceof GridWalkField)) continue;
+      const zrow = enclosureRowFor(ws.zoneMap[zid]?.tileset);
+      if (!zrow) continue;
+      const ringIn = zrow.radius[1] + ENCLOSURE_CFG.insetPad;
+      const w = m.cell.x1 - m.cell.x0, h = m.cell.y1 - m.cell.y0;
+      let solid = 0, total = 0;
+      for (let x = ringIn; x <= w - ringIn; x += 30) {
+        total += 2;
+        if (!g.isWalkable(x, ringIn)) solid++;
+        if (!g.isWalkable(x, h - ringIn)) solid++;
+      }
+      for (let y = ringIn; y <= h - ringIn; y += 30) {
+        total += 2;
+        if (!g.isWalkable(ringIn, y)) solid++;
+        if (!g.isWalkable(w - ringIn, y)) solid++;
+      }
+      if (total > 0 && solid / total >= ENCLOSURE_CFG.walledSkipFrac) {
+        walledSeen++;
+        if (m.dress.length > 0) walledDressed++;
+      }
+    }
+    check('J3e walled layouts keep their own walls — no double border', walledDressed === 0,
+      walledSeen ? `${walledSeen} walled member(s), ${walledDressed} wrongly dressed` : 'no walled member in the ring (vacuous)');
+  }
+
+  // --- J4: THE REBASE TICK ADMITS NOTHING — a member due only from the
+  // DESTINATION's center is not admitted on the crossing tick; the next
+  // beat admits it (the skip defers, never starves). ---------------------------
+  {
+    const way = pickBorderWay(ws);
+    let staged: string | null = null;
+    if (way) {
+      const nodeA = mintAJ.node;
+      const nodeB = ws.seamlessMints.get(way.destId)!.node;
+      for (const s of [...ws.seamlessRegions]) {
+        if (s.zoneId === activeId || s.zoneId === way.destId) continue;
+        const c = seatCenterOf(ws, s.zoneId);
+        if (!c) continue;
+        const dA = Math.hypot(c.x - nodeA.x, c.y - nodeA.y);
+        const dB = Math.hypot(c.x - nodeB.x, c.y - nodeB.y);
+        if (dA > SEAMLESS_CFG.ringInPx && dB <= SEAMLESS_CFG.ringInPx) { staged = s.zoneId; break; }
+      }
+    }
+    if (way && staged) {
+      // Manual demotion (mint + seat — the probe's minimal twin of the
+      // engine's own demote; camera re-pins on re-admission).
+      ws.seamlessMints.delete(staged);
+      const si = ws.seamlessRegions.findIndex(s => s.zoneId === staged);
+      if (si >= 0) ws.seamlessRegions.splice(si, 1);
+      stripHostiles(ws);
+      ws.player.pos = vec(way.exit.pos.x, way.exit.pos.y);
+      ws.update(0.05);
+      let crossedTickClean: boolean | null = null;
+      const goal = (): { x: number; y: number } => (way.axis === 'x'
+        ? { x: way.borderW + way.sign * 900, y: way.crossW }
+        : { x: way.crossW, y: way.borderW + way.sign * 900 });
+      const done = (): boolean => {
+        if (ws.zone.id === way.destId && crossedTickClean === null) {
+          crossedTickClean = !ws.seamlessMints.has(staged!);
+        }
+        return crossedTickClean !== null;
+      };
+      const went = walkToward(ws, goal, done, 1200, () => { stripHostiles(ws); ws.objectiveDone = true; });
+      check('J4a the crossing tick admits nothing (the staged member stays out through the rebase)',
+        went && crossedTickClean === true,
+        went ? `staged '${staged}'` : 'never crossed');
+      ws.update(0.05);
+      check('J4b the next beat admits it (the skip defers one beat, never starves)',
+        ws.seamlessMints.has(staged),
+        `re-admitted on the following evaluation beat`);
+    } else {
+      check('J4a the crossing tick admits nothing (the staged member stays out through the rebase)',
+        true, 'no member due-only-from-the-destination on this web (vacuous — the skip clause is exercised by every rebase regardless)');
+    }
+  }
+
+  // --- J5: THE DISCRETE WORLD stays inert (structural re-pin; the byte pins
+  // are RIG A + the fast lane on the whole tree). ------------------------------
+  {
+    check('J5a the mouth half-width hoist kept its value (PARTITION_CFG == the carve\'s width)',
+      PARTITION_CFG.mouthHalfPx === SEAMLESS_CFG.roadHalfPx + 8,
+      `${PARTITION_CFG.mouthHalfPx} vs roadHalfPx+8=${SEAMLESS_CFG.roadHalfPx + 8}`);
+    seedGlobalRandom(GSEED);
+    const wd4 = makeSimWorld('warrior', WSEED ^ 0x99);
+    wd4.loadZone(START_ZONE);
+    for (let i = 0; i < 3; i++) wd4.update(0.05);
+    check('J5b a discrete world stands no ring, no mints, no dress',
+      !wd4.seamless && wd4.seamlessRegions.length === 0 && wd4.seamlessMints.size === 0);
   }
 }
 

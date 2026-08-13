@@ -77,8 +77,9 @@
 // ---------------------------------------------------------------------------
 
 import type { World } from '../engine/world';
+import type { ZoneDef } from '../data/zones';
 import { PARTITION_CFG, SEAMLESS_CFG, type TissueSample, type TissueSampler } from './seamless';
-import { foldCells, type CellSeat } from './cells';
+import { borderAgreedPoint, foldCells, type CellSeat } from './cells';
 import { mapToPx, pxToMap } from './coords';
 import { BIOMES, OCEAN_BIOME, biomeAt } from './biomes';
 import { elevationAt } from './relief';
@@ -134,15 +135,28 @@ function formatHex(r: number, g: number, b: number): string {
  * Build a TissueSampler off this world's CURRENT zone graph. Export-only:
  * nothing here installs it (setTissueSampler is the placement lane's call).
  *
- * - walkable: UNCHANGED IN LAW from M0 (the partition blends TONE, never
- *   passability). The sea grows no tissue (open ocean → false — read off the
- *   SAME lane as the shore exception: biomeAt answers OCEAN_BIOME exactly
- *   when continentAt says ocean, biomes.ts's own landmass-layer law, so
- *   drawn and tested agree by construction; a 'bridge' cell is the walkable
- *   isthmus by continents.ts's own design). Relief steeper than
- *   TISSUE_CFG.slopeMax per node unit (centered ±slopeStepUnits read of
- *   elevationAt — relief.ts, THE elevation read) → false. Roads are ALWAYS
- *   walkable.
+ * - walkable: THE SOLID BETWEEN (M2 wave 5 — her enclosure doctrine, item 3:
+ *   "massive gaps between zones… filled in as untraversable walls colored
+ *   per the bounding biomes"). OUTSIDE every cell, walkable ground narrows
+ *   to the PASSAGE CORRIDORS — the road ribbon (as before) plus a MOUTH
+ *   APRON (PARTITION_CFG.mouthApronPx) around each agreed border point
+ *   between two resident-eligible linked cells; wedges and long-link
+ *   remainder country beyond the corridors REFUSE, wearing the blend's
+ *   tones as impassable mass (the draw lane already leans non-walkable
+ *   ground dark — the look follows free; real mass dress is later M2).
+ *   This AMENDS M0's open-tissue law deliberately — the world reads as
+ *   zones joined by passes, never featureless country. INSIDE a cell the
+ *   old law stands (the ground belongs to its zone; when resident, the
+ *   zone's own grid rules through the rim verdict, and the ring admits
+ *   the zone before deep entry). The standing refusals are untouched and
+ *   rank ABOVE the corridor law: the sea grows no tissue (open ocean →
+ *   false — read off the SAME lane as the shore exception: biomeAt answers
+ *   OCEAN_BIOME exactly when continentAt says ocean, biomes.ts's own
+ *   landmass-layer law, so drawn and tested agree by construction; a
+ *   'bridge' cell is the walkable isthmus by continents.ts's own design),
+ *   and relief steeper than TISSUE_CFG.slopeMax per node unit (centered
+ *   ±slopeStepUnits read of elevationAt — relief.ts, THE elevation read)
+ *   → false. Roads alone are ALWAYS walkable (M0's honest TODO stands).
  * - tone: THE BORDER BLEND (module header carries the law) — the sample's
  *   cell's own zone tone, gradiented with its neighbors inside the blend
  *   band, nearest-pair blended in wedges; ocean keeps the sea's own
@@ -159,9 +173,12 @@ function formatHex(r: number, g: number, b: number): string {
  *   and shore honesty are M2's.
  */
 export function buildTissueSampler(world: World): TissueSampler {
-  // --- THE CAPTURE: linked surface pairs → road segments in world px.
+  // --- THE CAPTURE: linked surface pairs → road segments in world px. The
+  // pair defs ride along for THE MOUTH APRONS below (the solid between's
+  // second corridor class needs to know which links can ever CROSS).
   const zoneMap = world.zoneMap;
   const segs: RoadSeg[] = [];
+  const segPairs: Array<[ZoneDef, ZoneDef]> = [];
   const seen = new Set<string>();
   for (const z of Object.values(zoneMap)) {
     if ((z.dimension ?? 'surface') !== 'surface') continue;
@@ -174,6 +191,7 @@ export function buildTissueSampler(world: World): TissueSampler {
       seen.add(key);
       const a = mapToPx(z.map), b = mapToPx(dest.map);
       segs.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y });
+      segPairs.push([z, dest]);
     }
   }
 
@@ -200,6 +218,24 @@ export function buildTissueSampler(world: World): TissueSampler {
     mintedTone[i] = (z.biome && BIOMES[z.biome]?.mapColor) || null;
     seatCoord[i] = z.map;
   }
+  // --- THE MOUTH APRONS (M2 wave 5, THE SOLID BETWEEN): one walkable pocket
+  // per agreed border point between two LINKED, RESIDENT-ELIGIBLE cells —
+  // the same borderAgreedPoint the engine seats its walk-ways at (world/
+  // cells.ts, pure f(the two cells)), so the tissue's corridor and the
+  // carved mouth meet at the identical world point BY CONSTRUCTION. The
+  // eligibility gate mirrors the mouth carve's own (a way toward ineligible
+  // ground keeps its DOOR — no crossing, no apron; the town's border stays
+  // solid). Pure capture — graph data + the fold, no rng.
+  const aprons: Array<{ x: number; y: number }> = [];
+  for (const [za, zb] of segPairs) {
+    if (!world.seamlessResidentEligible(za) || !world.seamlessResidentEligible(zb)) continue;
+    const ca = fold.get(za.id), cb = fold.get(zb.id);
+    if (!ca || !cb) continue;
+    const p = borderAgreedPoint(ca, cb);
+    if (p) aprons.push({ x: p.x, y: p.y });
+  }
+  const apronSq = PARTITION_CFG.mouthApronPx * PARTITION_CFG.mouthApronPx;
+
   // The per-seed resolved-tone memo (rgb triples; almost always one seed a
   // session — the world's own). Invisible by law: same (graph, seed) →
   // same tones, memoized or cold.
@@ -226,6 +262,25 @@ export function buildTissueSampler(world: World): TissueSampler {
     const dx = x < cx0[i] ? cx0[i] - x : x > cx1[i] ? x - cx1[i] : 0;
     const dy = y < cy0[i] ? cy0[i] - y : y > cy1[i] ? y - cy1[i] : 0;
     return dx === 0 ? dy : dy === 0 ? dx : Math.hypot(dx, dy);
+  };
+
+  /** Inside ANY cell (borders inclusive — a border point belongs to both its
+   *  cells, so the crossing line itself is never "between"). THE SOLID
+   *  BETWEEN's containment read; same flat arrays as the tone fold. */
+  const insideAnyCell = (x: number, y: number): boolean => {
+    for (let i = 0; i < nCells; i++) {
+      if (x >= cx0[i] && x <= cx1[i] && y >= cy0[i] && y <= cy1[i]) return true;
+    }
+    return false;
+  };
+
+  /** Within a mouth apron (THE SOLID BETWEEN's second corridor class). */
+  const nearApron = (x: number, y: number): boolean => {
+    for (const a of aprons) {
+      const dx = x - a.x, dy = y - a.y;
+      if (dx * dx + dy * dy <= apronSq) return true;
+    }
+    return false;
   };
 
   /** THE BORDER BLEND's tone at a land sample (the one weight law — module
@@ -292,6 +347,11 @@ export function buildTissueSampler(world: World): TissueSampler {
         const gx = elevationAt({ x: c.x + h, y: c.y }, seed) - elevationAt({ x: c.x - h, y: c.y }, seed);
         const gy = elevationAt({ x: c.x, y: c.y + h }, seed) - elevationAt({ x: c.x, y: c.y - h }, seed);
         if (Math.hypot(gx, gy) / (2 * h) > TISSUE_CFG.slopeMax) walkable = false;
+        // THE SOLID BETWEEN (M2 wave 5): off-road land OUTSIDE every cell is
+        // impassable mass unless it sits in a mouth apron — the corridors
+        // are the only ways between the zones (module header carries the
+        // amended law; ocean/cliff refusals above rank first).
+        else if (!insideAnyCell(x, y) && !nearApron(x, y)) walkable = false;
       }
     }
     // THE BORDER BLEND: land tone belongs to the cells; the sea keeps its

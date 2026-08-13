@@ -45,10 +45,17 @@
 //      nearest TWO cells' tones — the equidistant spine reads the exact
 //      50/50 of the flanking pair (the far third cell weightless), and the
 //      walk across the wedge is monotone between them,
-//   J  THE PRE-BLEND LAW STANDS: walkable and road over the whole A lattice
-//      equal the pre-blend derivation re-implemented verbatim as oracle
-//      (ocean by biomeAt, slope by the centered elevationAt read, road by
-//      the segment ribbon) — the partition blends TONE, never passability.
+//   J  THE SOLID BETWEEN (M2 wave 5 — the walkable law AMENDED by her
+//      enclosure doctrine, item 3): walkable and road over the whole A
+//      lattice equal the amended derivation re-implemented verbatim as
+//      oracle — road by the segment ribbon; else ocean (biomeAt) and cliff
+//      (the centered elevationAt read) refuse; else INSIDE any fold cell is
+//      open ground while OUTSIDE every cell only a mouth apron
+//      (borderAgreedPoint of a linked resident-eligible pair, radius
+//      PARTITION_CFG.mouthApronPx) admits — wedges and long-link country
+//      refuse. A second scan proves the refusal FIRES on real remainder
+//      ground (off-road outside-cell samples read unwalkable) and that a
+//      real ribbon still crosses it.
 // Run: npx tsx balance/probe_tissue.ts
 // ---------------------------------------------------------------------------
 
@@ -64,7 +71,7 @@ import { continentAt, continentSeedFrom } from '../src/world/continents';
 import { mapToPx, pxToMap } from '../src/world/coords';
 import { elevationAt } from '../src/world/relief';
 import { PARTITION_CFG, SEAMLESS_CFG, getTissueSampler, setTissueSampler } from '../src/world/seamless';
-import { foldCells, type CellSeat } from '../src/world/cells';
+import { borderAgreedPoint, foldCells, type CellSeat } from '../src/world/cells';
 import { TISSUE_CFG, buildTissueSampler } from '../src/world/tissue';
 
 let failed = 0;
@@ -504,12 +511,14 @@ function monotoneAB(tones: string[], a: string, b: string): boolean {
 
 // -------------------------------------------------------------------------- J
 {
-  // THE PRE-BLEND LAW re-implemented verbatim as oracle: road by the segment
-  // ribbon (same squared compare, all segments — the bins are a conservative
-  // superset, so verdicts match exactly), ocean by the same biomeAt read,
-  // slope by the same centered elevationAt formula. The partition blends
-  // TONE, never passability — walkable/road must equal the pre-blend
-  // sampler's own derivation on every lattice sample.
+  // THE SOLID BETWEEN's law re-implemented verbatim as oracle: road by the
+  // segment ribbon (same squared compare, all segments — the bins are a
+  // conservative superset, so verdicts match exactly), ocean by the same
+  // biomeAt read, slope by the same centered elevationAt formula; then the
+  // amended corridor clause — inside ANY fold cell open, outside every cell
+  // only a mouth apron admits (linked resident-eligible pairs' agreed
+  // border points, the engine's own public eligibility predicate as the
+  // gate the sampler documents).
   const segsJ = pairs.map(([a, b]) => {
     const pa = mapToPx(a.map), pb = mapToPx(b.map);
     return { ax: pa.x, ay: pa.y, bx: pb.x, by: pb.y };
@@ -523,6 +532,32 @@ function monotoneAB(tones: string[], a: string, b: string): boolean {
     const qx = s.ax + dx * t, qy = s.ay + dy * t;
     return (px - qx) * (px - qx) + (py - qy) * (py - qy);
   };
+  const rosterJ = cellRosterOf(world.zoneMap);
+  const seatsJ: CellSeat[] = rosterJ.map(z => ({ id: z.id, ...mapToPx(z.map) }));
+  const foldJ = foldCells(seatsJ);
+  const cellsJ = [...foldJ.values()];
+  const insideAnyCellJ = (x: number, y: number): boolean =>
+    cellsJ.some(c => x >= c.x0 && x <= c.x1 && y >= c.y0 && y <= c.y1);
+  const apronsJ: Array<{ x: number; y: number }> = [];
+  for (const [a, b] of pairs) {
+    if (!world.seamlessResidentEligible(a) || !world.seamlessResidentEligible(b)) continue;
+    const ca = foldJ.get(a.id), cb = foldJ.get(b.id);
+    if (!ca || !cb) continue;
+    const p = borderAgreedPoint(ca, cb);
+    if (p) apronsJ.push({ x: p.x, y: p.y });
+  }
+  const apronSqJ = PARTITION_CFG.mouthApronPx * PARTITION_CFG.mouthApronPx;
+  const lawWalkable = (x: number, y: number, road: boolean): boolean => {
+    if (road) return true;
+    const c = pxToMap({ x, y });
+    if (biomeAt(c, seed) === OCEAN_BIOME) return false;
+    const h = TISSUE_CFG.slopeStepUnits;
+    const gx = elevationAt({ x: c.x + h, y: c.y }, seed) - elevationAt({ x: c.x - h, y: c.y }, seed);
+    const gy = elevationAt({ x: c.x, y: c.y + h }, seed) - elevationAt({ x: c.x, y: c.y - h }, seed);
+    if (Math.hypot(gx, gy) / (2 * h) > TISSUE_CFG.slopeMax) return false;
+    if (insideAnyCellJ(x, y)) return true;
+    return apronsJ.some(a => (x - a.x) * (x - a.x) + (y - a.y) * (y - a.y) <= apronSqJ);
+  };
   const N = 40;
   let mismatched = 0;
   let firstBad = '';
@@ -531,17 +566,7 @@ function monotoneAB(tones: string[], a: string, b: string): boolean {
       const x = latMinX + ((i + 0.5) / N) * (latMaxX - latMinX);
       const y = latMinY + ((j + 0.5) / N) * (latMaxY - latMinY);
       const road = segsJ.some(s => segDistSqJ(x, y, s) <= ribbonSq);
-      const c = pxToMap({ x, y });
-      let walkable = true;
-      if (!road) {
-        if (biomeAt(c, seed) === OCEAN_BIOME) walkable = false;
-        else {
-          const h = TISSUE_CFG.slopeStepUnits;
-          const gx = elevationAt({ x: c.x + h, y: c.y }, seed) - elevationAt({ x: c.x - h, y: c.y }, seed);
-          const gy = elevationAt({ x: c.x, y: c.y + h }, seed) - elevationAt({ x: c.x, y: c.y - h }, seed);
-          if (Math.hypot(gx, gy) / (2 * h) > TISSUE_CFG.slopeMax) walkable = false;
-        }
-      }
+      const walkable = lawWalkable(x, y, road);
       const t = s1(x, y, seed);
       if (t.road !== road || t.walkable !== walkable) {
         mismatched++;
@@ -549,8 +574,60 @@ function monotoneAB(tones: string[], a: string, b: string): boolean {
       }
     }
   }
-  check('J: walkable + road equal the pre-blend law on every lattice sample — the blend touches TONE only',
+  check('J: walkable + road equal the amended law on every lattice sample (blend still touches TONE only)',
     mismatched === 0, mismatched ? `${mismatched} mismatches; first ${firstBad}` : `${N * N} samples byte-equal`);
+
+  // --- J2: THE REFUSAL FIRES — real remainder ground outside every cell,
+  // off every ribbon, on dry flat land, reads UNWALKABLE (the solid
+  // between is live wiring); a real linked pair's ribbon still crosses
+  // whatever gap it spans (corridors walk border-to-border). -----------------
+  {
+    let refused = 0, wrongOpen = 0, found = 0;
+    // Scan outward from the web's first pair midpoint in golden-angle rays
+    // until we bank enough oracle-qualified outside-cell samples.
+    const [a0, b0] = pairs[0];
+    const pa0 = mapToPx(a0.map), pb0 = mapToPx(b0.map);
+    const cx = (pa0.x + pb0.x) / 2, cy = (pa0.y + pb0.y) / 2;
+    for (let k = 0; k < 4000 && found < 60; k++) {
+      const ang = k * 2.399963229728653;
+      const r = 200 + (k / 4000) * 12000;
+      const x = cx + Math.cos(ang) * r, y = cy + Math.sin(ang) * r;
+      if (insideAnyCellJ(x, y)) continue;
+      if (segsJ.some(s => segDistSqJ(x, y, s) <= ribbonSq * 4)) continue; // clear of ribbons (margin)
+      if (apronsJ.some(ap => (x - ap.x) * (x - ap.x) + (y - ap.y) * (y - ap.y) <= apronSqJ * 2)) continue;
+      const c = pxToMap({ x, y });
+      if (biomeAt(c, seed) === OCEAN_BIOME) continue;
+      const h = TISSUE_CFG.slopeStepUnits;
+      const gx = elevationAt({ x: c.x + h, y: c.y }, seed) - elevationAt({ x: c.x - h, y: c.y }, seed);
+      const gy = elevationAt({ x: c.x, y: c.y + h }, seed) - elevationAt({ x: c.x, y: c.y - h }, seed);
+      if (Math.hypot(gx, gy) / (2 * h) > TISSUE_CFG.slopeMax) continue;
+      found++;
+      const t = s1(x, y, seed);
+      if (!t.walkable) refused++; else wrongOpen++;
+    }
+    check('J2: dry flat outside-cell ground stands to test against (the remainder country exists)',
+      found >= 20, `${found} samples banked`);
+    check('J2: THE SOLID BETWEEN fires — every such sample refuses tissue', found > 0 && wrongOpen === 0,
+      `${refused}/${found} refused`);
+
+    // A linked pair whose cells DON'T abut spans a true gap — its ribbon
+    // must still walk (the corridor between the zones).
+    let gapPair: { midX: number; midY: number } | null = null;
+    for (const [a, b] of pairs) {
+      const ca = foldJ.get(a.id), cb = foldJ.get(b.id);
+      if (!ca || !cb || borderAgreedPoint(ca, cb)) continue;
+      const pa = mapToPx(a.map), pb = mapToPx(b.map);
+      // march the chord; take the first sample outside BOTH cells
+      for (let t = 0.1; t <= 0.9; t += 0.02) {
+        const x = pa.x + (pb.x - pa.x) * t, y = pa.y + (pb.y - pa.y) * t;
+        if (!insideAnyCellJ(x, y)) { gapPair = { midX: x, midY: y }; break; }
+      }
+      if (gapPair) break;
+    }
+    check('J2: a real ribbon crosses its gap walkable (corridors walk border-to-border)',
+      !gapPair || s1(gapPair.midX, gapPair.midY, seed).walkable,
+      gapPair ? `gap sample (${gapPair.midX.toFixed(0)}, ${gapPair.midY.toFixed(0)})` : 'no non-abutting linked pair on this web (vacuous — the abutting crossings need no tissue)');
+  }
 }
 
 // ---------------------------------------------------------------- E (part 2)

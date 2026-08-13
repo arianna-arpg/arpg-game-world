@@ -217,7 +217,8 @@ import { CONJURE_RIDERS } from '../data/conjury';
 import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
 import { affordTravel, castRay, LOS_CFG, type RayElev } from './los';
 import { coordDist, mapToPx, type MapCoord } from '../world/coords';
-import { getTissueSampler, SEAMLESS_CFG, setTissueSampler, type CellRect, type RegionSeat } from '../world/seamless';
+import { getTissueSampler, PARTITION_CFG, SEAMLESS_CFG, setTissueSampler, type CellRect, type RegionSeat } from '../world/seamless';
+import { ENCLOSURE_CFG, enclosureRowFor } from '../data/enclosure';
 import { borderAgreedPoint, foldCells } from '../world/cells';
 import { buildTissueSampler } from '../world/tissue';
 import { FORECHART_CFG, forechartSource, zonesWithin } from '../world/forechart';
@@ -2044,6 +2045,15 @@ export interface SeamlessMint {
    *  carved at a border the partner no longer meets. The re-fit sweep and
    *  the load-tail refresh compare this key and re-mint on drift. */
   mouthsKey: string;
+  /** THE ENCLOSURE'S CONSULT ROWS (M2 wave 5): the border bodies this mint's
+   *  dress planted, zone-local, at BODY radius (radius × the rule's
+   *  bodyScale — the same trunk the doodad collision pushes at, so refusal
+   *  from outside ≈ collision from inside). THE FAR-WALL LAW's second read:
+   *  the rim verdict refuses a tissue step into any of these exactly as it
+   *  refuses a wall cell — the treeline is a wall from both sides, and its
+   *  gaps are the mouths. Empty = the layout walls itself (the walled-skip)
+   *  or the tileset refused dress. */
+  dress: { x: number; y: number; r: number }[];
 }
 
 /** Two cells agree within the fitted epsilon (float-noise tolerance — a
@@ -2077,11 +2087,11 @@ const SEAMLESS_RIM = {
 
 /** M1.5 fitted-mint dials — FLAGGED (unblessed; her word moves them). */
 const SEAMLESS_FIT = {
-  /** THE OPEN BORDER's mouth half-width (px): the walk-grid corridor carved
-   *  from a walk-way's seat to the cell edge. Sized to the tissue road's own
-   *  half-width plus a shoulder, so the M0.5 signposts (roadHalfPx + 14
-   *  flank) stand just off the carved ground. */
-  mouthHalfPx: SEAMLESS_CFG.roadHalfPx + 8,
+  /** THE OPEN BORDER's mouth half-width (px) — hoisted to the contract file
+   *  (M2 wave 5: PARTITION_CFG.mouthHalfPx, ONE home) so the tissue's mouth
+   *  aprons and the carve read the same width; referenced here so every
+   *  standing consumer keeps its name. */
+  mouthHalfPx: PARTITION_CFG.mouthHalfPx,
   /** Cell agreement epsilon (px): live-fold drift beyond this re-mints a
    *  standing record; below it, float noise never buys a layout. */
   cellEps: 0.5,
@@ -3209,6 +3219,13 @@ export class World {
    *  (re-fits exempt it); the next arrival re-reads the fold. Null when the
    *  standing zone is unfitted (town, cave, discrete). */
   private seamlessArrivalCell: CellRect | null = null;
+  /** M2 wave 5 (the dense soak's prescription 1b): a threshold rebase sets
+   *  this so the SAME TICK's load-tail ring beat skips its admission slice —
+   *  the soak's worst crossings stacked loadZone + a partner-miss refresh +
+   *  a fresh admission mint into one 127ms tick, and the mint waits one
+   *  beat by the budget law anyway. Consumed (cleared) by the first
+   *  evaluation beat that honors it; discrete play never sets it. */
+  private seamlessSkipAdmit = false;
 
   // --- the current zone -------------------------------------------------
   zone: ZoneDef = this.zoneMap[START_ZONE];
@@ -5094,9 +5111,13 @@ export class World {
     // THE OPEN BORDER (seamless M1.5): the live grid carries the same mouths
     // the mint carved — same call, same position after generateLayout, same
     // inputs, so the grid-agreement pins hold byte-for-byte. Flag off = one
-    // boolean read.
+    // boolean read. THE ENCLOSURE DRESS (M2 wave 5) plants beside it into
+    // the SAME layout.doodads this.doodads already aliases — the live border
+    // line equals the record's by the shared derivation (deterministic off
+    // def.seed; no effect attach by the data file's law).
     if (this.seamless && !isCave && this.seamlessResidentEligible(def)) {
       this.seamlessCarveMouths(def, layout, this.seamlessArrivalCell);
+      this.seamlessDressEnclosure(def, layout, this.seamlessArrivalCell);
     }
     // THE TIER FABRIC (engine/tiers.ts): one walk view per elevated story —
     // stateless adapters over the SAME grid (tier flags on region rows), so
@@ -6590,6 +6611,104 @@ export class World {
     }
   }
 
+  /** THE ENCLOSURE DRESS (M2 wave 5 — her doctrine, item 2): a border
+   *  treatment around the fitted cell's perimeter, carved open at every
+   *  exit seat — agreed mouths AND doors alike (a treeline across a door
+   *  would wall the discrete travel; the portal-clear law reaches the
+   *  dress). Data three layers deep (data/enclosure.ts: authored row ▷
+   *  theme derivation ▷ default); layouts that wall their OWN rims are
+   *  detected (rim-ring wall fraction ≥ walledSkipFrac) and skipped — no
+   *  double border. Bodies plant into layout.doodads (the live list and
+   *  the away-bodies draw both read it) on the dress's OWN seeded stream
+   *  (pure f(def.seed) — never the layout rng, so record and arrival grids
+   *  stay byte-equal around it), and the returned rows — BODY radius, the
+   *  same trunk collision pushes at — are the far-wall law's consult list
+   *  (SeamlessMint.dress): the line refuses from outside exactly where it
+   *  collides from inside, and its gaps are the mouths. Runs inside the
+   *  mint's scoped swap / the load's own frame (this.exits and this.arena
+   *  ARE the dressed zone's), in the SAME position at both call sites,
+   *  directly after the mouth carve — one derivation feeds carve + dress
+   *  + posts. NO effect attach, ever: border kinds are inert standing mass
+   *  by the data file's law. */
+  private seamlessDressEnclosure(def: ZoneDef, layout: GeneratedLayout, ownCell: CellRect | null): { x: number; y: number; r: number }[] {
+    const row = enclosureRowFor(def.tileset);
+    if (!row) return [];
+    const rule = doodadRuleOf(row.kind);
+    if (!rule.blocksMove || rule.effect) {
+      this.seamlessNote(`dressrow:${def.tileset ?? def.id}`,
+        `[seamless] enclosure row for '${def.tileset ?? def.id}' names '${row.kind}' (non-blocking or effect-carrying) — dress stands down (data defect)`);
+      return [];
+    }
+    const w = this.arena.w, h = this.arena.h;
+    const [r0, r1] = row.radius;
+    const meanR = (r0 + r1) / 2;
+    const grid = layout.walk instanceof GridWalkField ? layout.walk : null;
+    // THE WALLED DETECT: sample the rim ring at the dress's own inset line;
+    // a layout already mostly wall there expresses its own enclosure.
+    if (grid) {
+      const ringIn = r1 + ENCLOSURE_CFG.insetPad;
+      let solid = 0, total = 0;
+      const step = 30;
+      for (let x = ringIn; x <= w - ringIn; x += step) {
+        total += 2;
+        if (!grid.isWalkable(x, ringIn)) solid++;
+        if (!grid.isWalkable(x, h - ringIn)) solid++;
+      }
+      for (let y = ringIn; y <= h - ringIn; y += step) {
+        total += 2;
+        if (!grid.isWalkable(ringIn, y)) solid++;
+        if (!grid.isWalkable(w - ringIn, y)) solid++;
+      }
+      if (total > 0 && solid / total >= ENCLOSURE_CFG.walledSkipFrac) return [];
+    }
+    // THE GAPS: every placed exit opens the line on its side — the agreed
+    // side where the ways were re-seated (the carve's own consult), the def
+    // side else, the nearest rim for side-less rows (the carve's ladder).
+    const agreed = ownCell ? this.seamlessAgreedWays(def, ownCell) : null;
+    const gaps: Record<'n' | 'e' | 's' | 'w', number[]> = { n: [], e: [], s: [], w: [] };
+    for (const e of this.exits) {
+      let side = agreed?.get(e.defIndex)?.side ?? def.exits[e.defIndex]?.side;
+      if (!side) {
+        const d = [e.pos.x, w - e.pos.x, e.pos.y, h - e.pos.y];
+        side = (['w', 'e', 'n', 's'] as const)[d.indexOf(Math.min(...d))];
+      }
+      gaps[side].push(side === 'n' || side === 's' ? e.pos.x : e.pos.y);
+    }
+    const gapHalf = SEAMLESS_FIT.mouthHalfPx + r1 + ENCLOSURE_CFG.gapShoulder;
+    // THE LINE: four edges on the dress's own seeded stream (fixed side
+    // order + fixed rolls per slot, so a skipped slot never shifts its
+    // neighbors). n/s edges stop short of the corners; e/w run whole — no
+    // corner double-plant.
+    const rng = new Rng(((def.seed ?? 0) ^ 0xe9c705e) >>> 0);
+    const spacing = meanR * (row.spacingMul ?? ENCLOSURE_CFG.spacingMul);
+    const density = row.density ?? 1;
+    const bodyScale = rule.bodyScale ?? 1;
+    const out: { x: number; y: number; r: number }[] = [];
+    const corner = 2 * r1 + ENCLOSURE_CFG.insetPad;
+    const edges: Array<{ side: 'n' | 'e' | 's' | 'w'; from: number; to: number }> = [
+      { side: 'n', from: corner, to: w - corner },
+      { side: 'e', from: r1 + ENCLOSURE_CFG.insetPad, to: h - r1 - ENCLOSURE_CFG.insetPad },
+      { side: 's', from: corner, to: w - corner },
+      { side: 'w', from: r1 + ENCLOSURE_CFG.insetPad, to: h - r1 - ENCLOSURE_CFG.insetPad },
+    ];
+    for (const edge of edges) {
+      for (let along = edge.from; along <= edge.to; along += spacing) {
+        const r = rng.range(r0, r1);
+        const jit = rng.range(0, ENCLOSURE_CFG.jitterPx);
+        const keep = rng.next() < density;
+        if (!keep) continue;
+        if (gaps[edge.side].some(g => Math.abs(along - g) < gapHalf)) continue;
+        const inset = r + ENCLOSURE_CFG.insetPad + jit;
+        const x = edge.side === 'w' ? inset : edge.side === 'e' ? w - inset : along;
+        const y = edge.side === 'n' ? inset : edge.side === 's' ? h - inset : along;
+        if (grid && !grid.isWalkable(x, y)) continue; // its own wall/water ground keeps the rim
+        layout.doodads.push({ pos: vec(x, y), radius: r, kind: row.kind });
+        out.push({ x, y, r: r * bodyScale });
+      }
+    }
+    return out;
+  }
+
   /** May this zone stand RESIDENT? THE STRUCTURAL PICK RULE (M0's clauses,
    *  unchanged; flagged — her word moves it): surface dimension, not the
    *  town, no zone-kind identity (excludes towns/outposts/sanctums), not
@@ -6672,22 +6791,29 @@ export class World {
   /** THE PARTNER RULE (deterministic): the arrival edge a fresh mint's
    *  entry derivation assumes. The zone's OWN admission (the walker stands
    *  in it) takes the REAL arrival edge first — mint == standing ground at
-   *  once; otherwise the nearest linked member (the edge the threshold walk
-   *  will actually cross), else the active zone when a road links it (the
-   *  town-boot shape: the eventual walk out of the town door meets the mint
-   *  exactly), else '' (the center-entry derivation, exactly as a from-less
-   *  loadZone arrives). */
+   *  once; otherwise THE APPROACH READ (M2 wave 5, the dense soak's
+   *  prescription 1): among linked members, the one nearest THE WALKER'S
+   *  own world position — the ground they stand on or beside is the edge
+   *  they will actually cross from, where the old nearest-to-the-def
+   *  metric guessed the graph's shortest edge and missed 40% of real
+   *  arrivals (each miss a full re-mint on the rebase tick). Falls back to
+   *  the ring center (the town-boot anchor) when no active seat stands,
+   *  then to the active zone when a road links it, else '' (the
+   *  center-entry derivation, exactly as a from-less loadZone arrives). */
   private seamlessPartnerFor(def: ZoneDef): string {
     if (def.id === this.zone.id && this.entryFrom && def.exits.some(e => e.to === this.entryFrom)) {
       return this.entryFrom;
     }
-    const at = mapToPx(def.map);
+    const seat = this.seamlessRegions.find(s => s.zoneId === this.zone.id);
+    const walker = seat
+      ? { x: this.player.pos.x + seat.originPx.x, y: this.player.pos.y + seat.originPx.y }
+      : this.seamlessRingCenter() ?? mapToPx(def.map);
     let best: { id: string; d: number } | null = null;
     for (const s of this.seamlessRegions) {
       if (s.zoneId === def.id || !def.exits.some(e => e.to === s.zoneId)) continue;
       const c = this.seamlessSeatCenter(s);
       if (!c) continue;
-      const d = Math.hypot(c.x - at.x, c.y - at.y);
+      const d = Math.hypot(c.x - walker.x, c.y - walker.y);
       if (!best || d < best.d - 1e-9 || (Math.abs(d - best.d) <= 1e-9 && s.zoneId < best.id)) {
         best = { id: s.zoneId, d };
       }
@@ -6804,6 +6930,10 @@ export class World {
       // ever open — carved on the mint's grid exactly as the arrival carves
       // its live one (same inputs, same order — the grid-agreement pins).
       this.seamlessCarveMouths(def, layout, cell);
+      // THE ENCLOSURE DRESS (M2 wave 5): the border line planted beside the
+      // carve — same inputs, same order as the arrival's own plant, so the
+      // record's doodads equal the live ones (the D6 ground pins ride it).
+      const dress = this.seamlessDressEnclosure(def, layout, cell);
       const span = hullOf(this.arena);
       this.seamlessMints.set(def.id, {
         layout, span, exitsKey: seamlessExitsKeyOf(def), partnerId, prevCamera,
@@ -6812,6 +6942,7 @@ export class World {
         shape: 'rect',
         cell, node: { x: at.x, y: at.y },
         mouthsKey: this.seamlessMouthsKeyOf(def, cell),
+        dress,
       });
       // UPSERT the seat: a re-mint refreshes the layout record, and the seat
       // FOLLOWS the cell (the stored cell is the identity; the seat is its
@@ -6887,13 +7018,24 @@ export class World {
     // defers a crossing one beat (the transient the exits-key law already
     // tolerates).
     let budget = SEAMLESS_CFG.mintBudgetPerBeat;
-    for (const s of this.seamlessRegions) {
+    for (const s of [...this.seamlessRegions]) {
       if (budget <= 0) break;
       if (s.zoneId === this.zone.id) continue;
       const mint = this.seamlessMints.get(s.zoneId);
       const live = this.seamlessCells().get(s.zoneId);
       const def = this.zoneMap[s.zoneId];
       if (!mint || !live || !def) continue;
+      // THE FLOOR INSURANCE (M2 wave 5, the dense soak's prescription 4): a
+      // live cell fallen under the admission floor DEMOTES back to its door
+      // instead of re-minting a box no authored layout would meet —
+      // empirically unreachable today (0 floor crossings in 2,079 soak
+      // observations), one clause of insurance all the same (degradation,
+      // never a strand: the stretched-link grammar).
+      if (live.x1 - live.x0 < SEAMLESS_FIT.minArenaPx
+        || live.y1 - live.y0 < SEAMLESS_FIT.minArenaPx) {
+        this.seamlessDemote(s.zoneId);
+        continue;
+      }
       // Wave 4: a NEIGHBOR's re-fit moves the agreed point without touching
       // this cell, so the mouths fingerprint can drift where the cell holds
       // — one re-mint heals either (the exits-key idiom at both grains).
@@ -6901,6 +7043,14 @@ export class World {
         && mint.mouthsKey === this.seamlessMouthsKeyOf(def, mint.cell)) continue;
       this.seamlessMintResident(def, mint.partnerId);
       budget--;
+    }
+    // THE REBASE TICK ADMITS NOTHING (M2 wave 5, consume-once): the beat
+    // that carried a threshold rebase already paid a whole loadZone — its
+    // admission slice waits for the next beat (the budget law's own
+    // cadence; demotions and re-fits above stay free/served).
+    if (this.seamlessSkipAdmit) {
+      this.seamlessSkipAdmit = false;
+      return;
     }
     // THE ADMISSION (budgeted, nearest-first, tiebroken by id — pure
     // f(charted web) given the same walk): structurally eligible ground
@@ -7039,7 +7189,27 @@ export class World {
         const d = Math.hypot(c.x - wx, c.y - wy);
         if (d < landedD) { landed = s; landedD = d; }
       }
-      if (landed) return !this.seamlessRimSealed(landed.zoneId);
+      if (landed) {
+        if (this.seamlessRimSealed(landed.zoneId)) return false;
+        // THE FAR-WALL LAW (M2 wave 5 — her doctrine, item 6): the landed
+        // resident's own minted ground rules its cell — a wall cell refuses
+        // entry from tissue exactly as it refuses from inside (the ghost
+        // walk into an away wall band is dead), and the enclosure's border
+        // bodies refuse at their trunks (SeamlessMint.dress — the treeline
+        // is a wall from both sides; its gaps are the mouths). Convex open
+        // layouts (walk == null) admit across their whole border by
+        // construction — their dress line is then the only refusal.
+        const lm = this.seamlessMints.get(landed.zoneId);
+        if (lm) {
+          const lx = wx - landed.originPx.x, ly = wy - landed.originPx.y;
+          if (lm.layout.walk && !lm.layout.walk.isWalkable(lx, ly)) return false;
+          for (const b of lm.dress) {
+            const dx = lx - b.x, dy = ly - b.y, rr = b.r + radius;
+            if (dx * dx + dy * dy < rr * rr) return false;
+          }
+        }
+        return true;
+      }
       // Lane 2 — tissue inside the ring corridor (a departure by no
       // particular door: the seal clause holds it whole, never entry-exempt).
       if (this.seamlessRimSealed(null)) return false;
@@ -7086,10 +7256,21 @@ export class World {
     // and mis-read its walk grid at the threshold. Re-mint on drift through
     // the record's own remembered edge — the seat holds, only the layout
     // record refreshes.
-    for (const s of this.seamlessRegions) {
+    for (const s of [...this.seamlessRegions]) {
       const def = this.zoneMap[s.zoneId];
       const mint = this.seamlessMints.get(s.zoneId);
       if (!def || !mint || mint.exitsKey === seamlessExitsKeyOf(def)) continue;
+      // THE FLOOR INSURANCE (M2 wave 5 — the refit lane's second door, the
+      // dense soak's prescription 4): a non-active member whose live cell
+      // fell under the floor demotes to its door rather than re-mint.
+      if (s.zoneId !== this.zone.id) {
+        const live = this.seamlessCells().get(s.zoneId);
+        if (live && (live.x1 - live.x0 < SEAMLESS_FIT.minArenaPx
+          || live.y1 - live.y0 < SEAMLESS_FIT.minArenaPx)) {
+          this.seamlessDemote(s.zoneId);
+          continue;
+        }
+      }
       // The ACTIVE record keeps its standing cell through an exits re-mint
       // (the live ground cannot reshape mid-stand — the arrival-cell law).
       const cellOverride = s.zoneId === this.zone.id
@@ -7145,6 +7326,10 @@ export class World {
     const keepProj = this.projectiles.filter(pr =>
       seatActors.has(pr.caster) || (!!pr.caster.owner && seatActors.has(pr.caster.owner)));
     const keepTexts = this.texts, keepFlashes = this.flashes;
+    // THE REBASE TICK ADMITS NOTHING (M2 wave 5): the load tail's ring beat
+    // consumes this and defers its admission slice one beat — the crossing
+    // tick pays the rebase alone, never a fresh mint stacked on top.
+    this.seamlessSkipAdmit = true;
     this.loadZone(dest.zoneId, fromId);
     for (const s of seats) {
       // Exact continuity, with the placement clamp as pure safety (the sweep
@@ -16951,6 +17136,7 @@ export class World {
       this.seamlessMints.clear();
       this.seamlessCellsCache = null; // the fold indexed the replaced graph
       this.seamlessArrivalCell = null; // …and so did the standing arrival fit
+      this.seamlessSkipAdmit = false;  // …and any pending rebase-tick deferral
       this.seamlessNotes.delete('boot');
       this.seamlessNotes.delete('nopair');
     }
