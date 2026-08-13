@@ -48,6 +48,15 @@
 //   a sealed zone's rim holds the walk AND the sweep until its objective
 //   completes or the seal is waived, consulting isExitLocked itself where
 //   a live edge names the destination.
+// RIG H — THE FITTED MINT (M1.5, the partition law): every resident record
+//   IS its live-fold cell (origin/span/node, one derivation — the probe
+//   refolds and compares), the active arena wears its own cell, resident
+//   ground cannot overlap, the crossing is the CELL TEST with the threshold
+//   inset as the border hysteresis (no swap on the line, one swap per
+//   genuine crossing, jitter buys nothing), walled rims carry carved
+//   MOUTHS at every openable way — the walled-rim strand healed, walked
+//   OUT and BACK IN — and the discrete path never folds a cell nor fits
+//   an arena (the mode law).
 //
 // Layout GEOMETRY is compared as (kind, pos, radius, tier) rows: loadZone
 // deliberately randomizes post-mint runtime fields (DoodadEffect first
@@ -59,6 +68,7 @@
 import { vec } from '../src/core/math';
 import { insideBounds } from '../src/world/shape';
 import { coordDist, mapToPx } from '../src/world/coords';
+import { cellsShareBorder, foldCells, type CellSeat } from '../src/world/cells';
 import { getTissueSampler, setTissueSampler, SEAMLESS_CFG, type TissueSampler } from '../src/world/seamless';
 import { buildTissueSampler } from '../src/world/tissue';
 import { START_ZONE, type ZoneDef } from '../src/data/zones';
@@ -146,11 +156,14 @@ const ringSettle = (w: World, beats = 16): void => {
   }
 };
 
-/** A member seat's center in world px (the ring's own distance metric). */
+/** A member's map NODE in world px (the ring's own distance metric — M1.5:
+ *  the fitted cell decouples geometric center from node, so the engine
+ *  stores the node on the mint and measures THAT; the probe reads the same
+ *  record). */
 const seatCenterOf = (w: World, zoneId: string): { x: number; y: number } | null => {
   const s = w.seamlessRegions.find(r => r.zoneId === zoneId);
   const m = w.seamlessMints.get(zoneId);
-  return s && m ? { x: s.originPx.x + m.span.w / 2, y: s.originPx.y + m.span.h / 2 } : null;
+  return s && m ? { x: m.node.x, y: m.node.y } : null;
 };
 
 /** THE MEMBERSHIP BANDS — the ring law as a post-settle invariant. Seats may
@@ -285,21 +298,28 @@ const zoneB = walkPair?.[1];
     && zoneA.kind === undefined && zoneB.kind === undefined
     && zoneA.seed != null && zoneB.seed != null
     && zoneA.exits.some(e => e.to === zoneB.id) && zoneB.exits.some(e => e.to === zoneA.id));
-  // Seat math on any standing member: origin = at-mint node point − span/2
-  // (span = the def's base size). Web settling may drift the LIVE map a few
-  // px after admission — the stored seat is the identity — so the node
-  // relation carries a drift tolerance; exactness rides B7's twin compare.
+  // Seat math on any standing member (M1.5 THE FITTED MINT): the seat IS the
+  // cell — originPx its (x0,y0) projection, span its dims (the authored size
+  // roll stands down; the partition law's one-home record) — and the node
+  // the mint stood around is STORED (mint.node), standing strictly inside
+  // its own cell (the fold's B1 law). Web settling may drift the LIVE map a
+  // few px after admission — the stored record is the identity — so the
+  // node-vs-map relation carries a drift tolerance; exactness rides B7's
+  // twin compare.
   const seat0 = ws.seamlessRegions[0];
   const mint0 = seat0 ? ws.seamlessMints.get(seat0.zoneId) : undefined;
   const def0 = seat0 ? ws.zoneMap[seat0.zoneId] : undefined;
   const at0 = def0 ? mapToPx(def0.map) : { x: 0, y: 0 };
-  const seatDrift = seat0 && mint0
-    ? Math.hypot(seat0.originPx.x - (at0.x - mint0.span.w / 2), seat0.originPx.y - (at0.y - mint0.span.h / 2))
-    : Infinity;
-  check('B3 a member seat centers its layout on its node (drift = settling only)',
-    !!seat0 && !!mint0 && !!def0 && seatDrift <= 260
-    && mint0.span.w === def0.size.w && mint0.span.h === def0.size.h,
-    `drift ${seatDrift.toFixed(1)}px`);
+  const nodeDrift = mint0 ? Math.hypot(mint0.node.x - at0.x, mint0.node.y - at0.y) : Infinity;
+  check('B3 a member seat IS its cell (origin/span exact, node contained; node drift = settling only)',
+    !!seat0 && !!mint0 && !!def0
+    && seat0.originPx.x === mint0.cell.x0 && seat0.originPx.y === mint0.cell.y0
+    && mint0.span.w === mint0.cell.x1 - mint0.cell.x0
+    && mint0.span.h === mint0.cell.y1 - mint0.cell.y0
+    && mint0.node.x > mint0.cell.x0 && mint0.node.x < mint0.cell.x1
+    && mint0.node.y > mint0.cell.y0 && mint0.node.y < mint0.cell.y1
+    && nodeDrift <= 260,
+    `node drift ${nodeDrift.toFixed(1)}px`);
   check('B4 the tissue sampler is installed at boot', getTissueSampler() !== null);
   check('B5 every member wears the hero-cam pin',
     ws.seamlessRegions.every(s => ws.zoneMap[s.zoneId]?.camera === 'hero'));
@@ -999,6 +1019,369 @@ const memoryRows = (w: World): string => JSON.stringify(w.actors
     }
   }
   setTissueSampler(buildTissueSampler(ws));
+}
+
+// --- RIG H: THE FITTED MINT (M1.5 — the partition law) -------------------------
+// The map drives the WHERE: every resident arena IS its cell in the live fold
+// (H1 — one derivation, probe-refolded), resident ground cannot overlap (H2),
+// the crossing is the CELL TEST with the threshold inset as the border
+// hysteresis band (H3 + H5 on one driven lane: no swap on the line, one swap
+// per genuine crossing, jitter buys nothing), walled rims carry carved MOUTHS
+// at every openable way and the walled-rim strand heals — walked OUT and back
+// IN (H4), and the discrete path never touches any of it (H6).
+
+/** The engine's fold roster, mirrored exactly (H1 is the one-derivation pin —
+ *  if the filters drift apart, H1 fails loudly). */
+const rosterOf = (w: World): CellSeat[] => Object.values(w.zoneMap)
+  .filter(z => (z.dimension ?? 'surface') === 'surface' && z.caveDepth == null && !z.pocket && !z.floating)
+  .map(z => ({ id: z.id, ...mapToPx(z.map) }));
+
+type CellR = { x0: number; y0: number; x1: number; y1: number };
+const cellAgree = (a: CellR, b: CellR, eps = 0.5): boolean =>
+  Math.abs(a.x0 - b.x0) <= eps && Math.abs(a.y0 - b.y0) <= eps
+  && Math.abs(a.x1 - b.x1) <= eps && Math.abs(a.y1 - b.y1) <= eps;
+
+/** A border-shared OPEN WAY out of the active zone: the walk exit, the
+ *  destination seat, the shared border's world line + outward axis, and the
+ *  way's world cross-position (clamped into the border's overlap run). Null
+ *  = no such way stands here. */
+const pickBorderWay = (w: World, wantDest?: string): {
+  exit: (typeof w.exits)[number]; destId: string;
+  axis: 'x' | 'y'; sign: 1 | -1; borderW: number; crossW: number;
+} | null => {
+  const home = w.seamlessMints.get(w.zone.id);
+  const seat = w.seamlessRegions.find(s => s.zoneId === w.zone.id);
+  if (!home || !seat) return null;
+  for (const e of w.exits) {
+    if (!w.seamlessWalkExit(e) || (wantDest && e.to !== wantDest)) continue;
+    const dest = w.seamlessMints.get(e.to);
+    if (!dest || !cellsShareBorder(home.cell, dest.cell)) continue;
+    const side = w.zone.exits[e.defIndex]?.side;
+    const eps = 0.5;
+    const east = Math.abs(home.cell.x1 - dest.cell.x0) < eps;
+    const west = Math.abs(dest.cell.x1 - home.cell.x0) < eps;
+    const south = Math.abs(home.cell.y1 - dest.cell.y0) < eps;
+    const north = Math.abs(dest.cell.y1 - home.cell.y0) < eps;
+    const bSide = east ? 'e' : west ? 'w' : south ? 's' : north ? 'n' : null;
+    if (!bSide || bSide !== side) continue; // the way must face its border
+    const axis = (bSide === 'e' || bSide === 'w') ? 'x' as const : 'y' as const;
+    const sign = (bSide === 'e' || bSide === 's') ? 1 as const : -1 as const;
+    const borderW = bSide === 'e' ? home.cell.x1 : bSide === 'w' ? home.cell.x0
+      : bSide === 's' ? home.cell.y1 : home.cell.y0;
+    const lo = axis === 'x' ? Math.max(home.cell.y0, dest.cell.y0) : Math.max(home.cell.x0, dest.cell.x0);
+    const hi = axis === 'x' ? Math.min(home.cell.y1, dest.cell.y1) : Math.min(home.cell.x1, dest.cell.x1);
+    if (hi - lo < 160) continue; // too thin an overlap run to march through
+    const crossLocal = axis === 'x' ? e.pos.y + seat.originPx.y : e.pos.x + seat.originPx.x;
+    if (crossLocal < lo + 60 || crossLocal > hi - 60) continue; // the way exits past the shared run
+    return { exit: e, destId: e.to, axis, sign, borderW, crossW: crossLocal };
+  }
+  return null;
+};
+
+/** Signed depth of a world point past the border into the destination
+ *  (positive = inside the destination's cell on the crossing axis). */
+const depthOf = (way: NonNullable<ReturnType<typeof pickBorderWay>>, wx: number, wy: number): number =>
+  way.sign * ((way.axis === 'x' ? wx : wy) - way.borderW);
+
+{
+  ringSettle(ws); // fixpoint the fold: budgeted re-fits land before the pins read
+
+  // --- H1: the fitted law — every AWAY record IS its live-fold cell (the
+  // ACTIVE zone wears its ARRIVAL cell instead: the load's own charting may
+  // move the fold mid-visit, and the record's law is record == the standing
+  // ground — H1b pins that side). Origin/span/node discipline binds ALL. ---
+  const foldNow = foldCells(rosterOf(ws));
+  let misfits = 0, seatDrifts = 0, spanDrifts = 0, nodeOut = 0;
+  for (const s of ws.seamlessRegions) {
+    const m = ws.seamlessMints.get(s.zoneId);
+    const live = foldNow.get(s.zoneId);
+    if (!m) continue;
+    if (s.zoneId !== ws.zone.id && (!live || !cellAgree(m.cell, live))) misfits++;
+    if (s.originPx.x !== m.cell.x0 || s.originPx.y !== m.cell.y0) seatDrifts++;
+    if (m.span.w !== m.cell.x1 - m.cell.x0 || m.span.h !== m.cell.y1 - m.cell.y0) spanDrifts++;
+    if (!(m.node.x > m.cell.x0 && m.node.x < m.cell.x1 && m.node.y > m.cell.y0 && m.node.y < m.cell.y1)) nodeOut++;
+  }
+  check('H1 every away record IS its live-fold cell (origin/span/node — one derivation)',
+    ws.seamlessRegions.length >= 2 && misfits === 0 && seatDrifts === 0 && spanDrifts === 0 && nodeOut === 0,
+    `${ws.seamlessRegions.length} member(s): ${misfits} misfit, ${seatDrifts} seat-drift, ${spanDrifts} span-drift, ${nodeOut} node-out`);
+  const activeMint = ws.seamlessMints.get(ws.zone.id);
+  check('H1b the ACTIVE zone\'s live arena wears its own cell',
+    !!activeMint && ws.arena.w === activeMint.cell.x1 - activeMint.cell.x0
+    && ws.arena.h === activeMint.cell.y1 - activeMint.cell.y0
+    && ws.arena.shape === 'rect');
+
+  // --- H2: THE NON-OVERLAP LAW over the grown ring (at the fold's fixpoint). --
+  {
+    const cells = ws.seamlessRegions
+      .map(s => ws.seamlessMints.get(s.zoneId)?.cell)
+      .filter((c): c is NonNullable<typeof c> => !!c);
+    let overlaps = 0, worst = 0;
+    for (let i = 0; i < cells.length; i++) for (let j = i + 1; j < cells.length; j++) {
+      const ox = Math.min(cells[i].x1, cells[j].x1) - Math.max(cells[i].x0, cells[j].x0);
+      const oy = Math.min(cells[i].y1, cells[j].y1) - Math.max(cells[i].y0, cells[j].y0);
+      if (ox > 0.01 && oy > 0.01) { overlaps++; worst = Math.max(worst, Math.min(ox, oy)); }
+    }
+    check('H2 resident arenas cannot overlap (the partition at ring grain)',
+      cells.length >= 2 && overlaps === 0,
+      overlaps ? `${overlaps} pair(s), worst ${worst.toFixed(1)}px` : `${cells.length} cells clean`);
+  }
+
+  // --- H3 + H5: THE CELL TEST at a shared border (one driven lane). -----------
+  // March out of the active zone's open way, straight through the border on
+  // the way's own cross-line: the swap must never fire shy of the hysteresis
+  // band, must fire exactly once for the genuine crossing, and jitter ON the
+  // line must buy nothing either way.
+  let way = pickBorderWay(ws);
+  if (!way) {
+    ws.loadZone(zoneA!.id);
+    ringSettle(ws);
+    way = pickBorderWay(ws);
+  }
+  check('H3a a border-shared open way stands to march through', !!way,
+    way ? `${ws.zone.id} → ${way.destId}` : 'no border-facing walk exit in the staged ring');
+  if (way) {
+    const homeId = ws.zone.id;
+    const w0 = way;
+    stripHostiles(ws);
+    ws.player.pos = vec(w0.exit.pos.x, w0.exit.pos.y);
+    ws.update(0.05);
+    const goalOut = (): { x: number; y: number } => (w0.axis === 'x'
+      ? { x: w0.borderW + w0.sign * 900, y: w0.crossW }
+      : { x: w0.crossW, y: w0.borderW + w0.sign * 900 });
+    let shySwap = false; // a swap observed while the walker sat shy of the band
+    let swaps = 0;
+    let lastZone = ws.zone.id;
+    let preDepth = -Infinity;
+    const stepEach = (): void => {
+      stripHostiles(ws);
+      ws.objectiveDone = true; // geometry rig — the seal law is G5's own pin
+      const hw = heroWorldPx(ws);
+      if (hw) preDepth = depthOf(w0, hw.x, hw.y);
+    };
+    const outDone = (): boolean => {
+      if (ws.zone.id !== lastZone) {
+        swaps++;
+        if (preDepth < 16) shySwap = true; // fired shy of the hysteresis band
+        lastZone = ws.zone.id;
+      }
+      return ws.zone.id === w0.destId;
+    };
+    const crossed = walkToward(ws, goalOut, outDone, 1200, stepEach);
+    const hwAfter = heroWorldPx(ws);
+    const dFire = crossed && hwAfter ? depthOf(w0, hwAfter.x, hwAfter.y) : NaN;
+    check('H3b the march thresholds into the border neighbor (the cell receives)',
+      crossed && ws.zone.id === w0.destId, `fired at depth ${Number.isFinite(dFire) ? dFire.toFixed(1) : '?'}px`);
+    check('H3c the swap never fires shy of the hysteresis band (the border belongs to nobody)',
+      crossed && !shySwap && swaps === 1, `${swaps} swap(s) on the outward leg`);
+
+    if (crossed) {
+      // H5 — THE JITTER: dance on the line at ±amp (inside the band both
+      // sides); the frame must hold. Zone-agnostic placement: the point is
+      // set directly (the F5 parking idiom) and the sweep judges it.
+      const amp = Math.min(18, Math.max(8, Math.floor((Number.isFinite(dFire) ? dFire : 32) * 0.55)));
+      const destSeat = ws.seamlessRegions.find(s => s.zoneId === w0.destId)!;
+      let flutters = 0;
+      for (let i = 0; i < 16; i++) {
+        const d = (i % 2 === 0 ? 1 : -1) * amp; // +amp = deeper into dest, −amp = back over the line
+        const wx = w0.axis === 'x' ? w0.borderW + w0.sign * d : w0.crossW;
+        const wy = w0.axis === 'x' ? w0.crossW : w0.borderW + w0.sign * d;
+        ws.player.pos = vec(wx - destSeat.originPx.x, wy - destSeat.originPx.y);
+        stripHostiles(ws);
+        ws.objectiveDone = true;
+        ws.update(0.05);
+        if (ws.zone.id !== w0.destId) flutters++;
+      }
+      check('H5 jitter on the border buys nothing (the hysteresis band holds the frame)',
+        flutters === 0, `amp ±${amp}px, ${flutters} flutter swap(s)`);
+
+      // The deep return: one genuine crossing back — exactly one swap, home.
+      const homeMint = ws.seamlessMints.get(homeId)!;
+      const homeSeat = ws.seamlessRegions.find(s => s.zoneId === homeId)!;
+      // A home-walkable return point on the cross-line, past the band (the
+      // mouth's own lane — scan the mint grid for the first walkable depth).
+      let backLocal: { x: number; y: number } | null = null;
+      for (let d = 40; d <= 400; d += 15) {
+        const wx = w0.axis === 'x' ? w0.borderW - w0.sign * d : w0.crossW;
+        const wy = w0.axis === 'x' ? w0.crossW : w0.borderW - w0.sign * d;
+        const lx = wx - homeSeat.originPx.x, ly = wy - homeSeat.originPx.y;
+        if (!homeMint.layout.walk || homeMint.layout.walk.isWalkable(lx, ly)) { backLocal = { x: lx, y: ly }; break; }
+      }
+      check('H5b a walkable return lane stands past the band (the home mouth)', !!backLocal);
+      if (backLocal) {
+        let backSwaps = 0;
+        let last = ws.zone.id;
+        const goalBack = (): { x: number; y: number } => ({
+          x: backLocal!.x + homeSeat.originPx.x, y: backLocal!.y + homeSeat.originPx.y,
+        });
+        const backDone = (): boolean => {
+          if (ws.zone.id !== last) { backSwaps++; last = ws.zone.id; }
+          return ws.zone.id === homeId;
+        };
+        const home = walkToward(ws, goalBack, backDone, 1200, stepEach);
+        check('H5c the genuine return crosses once — home, no churn',
+          home && ws.zone.id === homeId && backSwaps === 1, `${backSwaps} swap(s) back`);
+      }
+    }
+  }
+
+  // --- H4: THE OPEN BORDER on a WALLED rim (the strand heal). -----------------
+  // Hunt a walled-class resident-eligible zone (most of its rim band
+  // unwalkable), enter it for real, and pin: every openable way wears a
+  // carved mouth (walk-grid walkable from seat to edge), and the walker
+  // LEAVES through one and comes BACK — the crypt repro, healed.
+  {
+    const walledness = (w: World): number => {
+      if (!w.walk) return 0;
+      let probes = 0, closed = 0;
+      const inset = 20;
+      for (let x = 40; x < w.arena.w - 40; x += 60) {
+        for (const y of [inset, w.arena.h - inset]) { probes++; if (!w.walk.isWalkable(x, y)) closed++; }
+      }
+      for (let y = 40; y < w.arena.h - 40; y += 60) {
+        for (const x of [inset, w.arena.w - inset]) { probes++; if (!w.walk.isWalkable(x, y)) closed++; }
+      }
+      return probes ? closed / probes : 0;
+    };
+    const eligibleIds = Object.values(ws.zoneMap)
+      .filter(z => ws.seamlessResidentEligible(z))
+      .map(z => z.id)
+      .sort();
+    let walledId: string | null = null;
+    let gridsSeen = 0;
+    let bestFrac = 0;
+    for (const id of eligibleIds.slice(0, 14)) {
+      stripHostiles(ws);
+      ws.loadZone(id);
+      stripHostiles(ws);
+      if (!ws.walk) continue;
+      gridsSeen++;
+      const frac = walledness(ws);
+      bestFrac = Math.max(bestFrac, frac);
+      if (frac >= 0.6) { walledId = id; break; }
+    }
+    check('H4a the hunt finds walled-class ground (or at least real grids to pin mouths on)',
+      gridsSeen >= 1 && walledId !== null,
+      walledId ? `${walledId} (rim ${Math.round(bestFrac * 100)}% closed)` : `${gridsSeen} grid zone(s), walled-est rim ${Math.round(bestFrac * 100)}%`);
+
+    if (walledId) {
+      ws.objectiveDone = true;
+      ringSettle(ws);
+      // The mouth pin: every openable way's carve line reads walkable from
+      // seat to the rim on the LIVE grid (drawn == walked out).
+      const openable = ws.exits.filter(e => e.to !== '?'
+        && !!ws.zoneMap[e.to] && ws.seamlessResidentEligible(ws.zoneMap[e.to]));
+      let mouths = 0, blocked = 0;
+      for (const e of openable) {
+        const side = ws.zone.exits[e.defIndex]?.side;
+        if (!side) continue;
+        const to = side === 'e' ? { x: ws.arena.w, y: e.pos.y } : side === 'w' ? { x: 0, y: e.pos.y }
+          : side === 's' ? { x: e.pos.x, y: ws.arena.h } : { x: e.pos.x, y: 0 };
+        const len = Math.hypot(to.x - e.pos.x, to.y - e.pos.y);
+        let open = true;
+        for (let t = 0; t <= len; t += 12) {
+          const x = e.pos.x + (to.x - e.pos.x) * (len ? t / len : 0);
+          const y = e.pos.y + (to.y - e.pos.y) * (len ? t / len : 0);
+          const cx = Math.min(ws.arena.w - 1, Math.max(1, x)), cy = Math.min(ws.arena.h - 1, Math.max(1, y));
+          if (ws.walk && !ws.walk.isWalkable(cx, cy)) { open = false; break; }
+        }
+        if (open) mouths++; else blocked++;
+      }
+      check('H4b every openable way wears a carved MOUTH through the walled rim',
+        openable.length >= 1 && blocked === 0, `${mouths}/${openable.length} way(s) open to the rim`);
+
+      // The strand heal: OUT through a border way, then BACK IN.
+      const wayW = pickBorderWay(ws);
+      check('H4c a border-shared way stands at the walled zone', !!wayW,
+        wayW ? `${walledId} → ${wayW.destId}` : 'no resident border way after settle');
+      if (wayW) {
+        stripHostiles(ws);
+        ws.player.pos = vec(wayW.exit.pos.x, wayW.exit.pos.y);
+        ws.update(0.05);
+        let out = false;
+        const outGoal = (): { x: number; y: number } => (wayW.axis === 'x'
+          ? { x: wayW.borderW + wayW.sign * 500, y: wayW.crossW }
+          : { x: wayW.crossW, y: wayW.borderW + wayW.sign * 500 });
+        const outDone = (): boolean => {
+          const hw = heroWorldPx(ws);
+          out = ws.zone.id !== walledId
+            || (!!hw && depthOf(wayW, hw.x, hw.y) > 40 && !insideBounds(ws.player.pos, ws.player.radius, ws.arena));
+          return out;
+        };
+        walkToward(ws, outGoal, outDone, 1500, () => { stripHostiles(ws); ws.objectiveDone = true; });
+        check('H4d the walker WALKS OUT of the walled zone (the strand is dead)', out,
+          ws.zone.id !== walledId ? `rebased into ${ws.zone.id}` : 'stands admitted beyond the walled rim');
+
+        // The way back — RIG D's own two-leg return grammar: seat on a
+        // walkable rim lane facing home (the neighbor's border way toward
+        // the walled zone where one stands, else seatAtRimLane's proven
+        // scan), march straight OUT the rim, then home ALONG THE WALLED
+        // ZONE'S OWN MOUTH — the goal is its border way's exit seat, so the
+        // return retraces the carved column H4b just pinned walkable (a
+        // 96%-walled interior would swallow a blunt node beeline in wall
+        // cells the threshold rightly defers on). backHome fires at the
+        // first true stand inside. A walker who never rebased is already
+        // beyond the rim and just walks home (the reenter lane).
+        const wGoal = (): { x: number; y: number } => {
+          const s = ws.seamlessRegions.find(r => r.zoneId === walledId)!;
+          return { x: wayW.exit.pos.x + s.originPx.x, y: wayW.exit.pos.y + s.originPx.y };
+        };
+        const each = (): void => { stripHostiles(ws); ws.objectiveDone = true; };
+        if (out && ws.zone.id !== walledId) {
+          const back = pickBorderWay(ws, walledId);
+          const lane = back ? { x: back.exit.pos.x, y: back.exit.pos.y } : seatAtRimLane(ws, wGoal());
+          if (lane) {
+            ws.player.pos = vec(lane.x, lane.y);
+            stripHostiles(ws);
+            ws.update(0.05);
+          }
+          const outPastW = ((): { x: number; y: number } => {
+            if (back) {
+              return back.axis === 'x'
+                ? { x: back.borderW + back.sign * 140, y: back.crossW }
+                : { x: back.crossW, y: back.borderW + back.sign * 140 };
+            }
+            const hw = heroWorldPx(ws)!;
+            const g = wGoal();
+            const dx = g.x - hw.x, dy = g.y - hw.y;
+            return Math.abs(dy) >= Math.abs(dx)
+              ? { x: hw.x, y: hw.y + Math.sign(dy) * 800 }
+              : { x: hw.x + Math.sign(dx) * 800, y: hw.y };
+          })();
+          walkToward(ws, () => outPastW,
+            () => ws.zone.id === walledId || !insideBounds(ws.player.pos, ws.player.radius, ws.arena),
+            800, each);
+        }
+        const backHome = (): boolean => ws.zone.id === walledId
+          && insideBounds(ws.player.pos, ws.player.radius, ws.arena);
+        const cameBack = walkToward(ws, wGoal, backHome, 2500, each);
+        check('H4e …and WALKS BACK IN (in-and-back-out, the crypt repro healed)',
+          cameBack && ws.zone.id === walledId,
+          cameBack ? '' : `ended in ${ws.zone.id}, inside=${insideBounds(ws.player.pos, ws.player.radius, ws.arena)}`);
+      }
+    }
+  }
+
+  // --- H6: THE MODE LAW at the new sites. -------------------------------------
+  // A discrete world walks the identical path: the fold never computes, no
+  // arena re-fits, no mints stand (A3's byte-identity already rode through
+  // the new hook sites; these are the direct reads).
+  {
+    seedGlobalRandom(GSEED ^ 0xF17);
+    const wd = makeSimWorld('warrior', WSEED ^ 0xF17);
+    wd.loadZone(START_ZONE);
+    // A deterministic surface zone (first by id): the flag short-circuits
+    // before eligibility, so ANY discrete load must keep the authored size
+    // to the byte — and the fold cache must never have computed.
+    const dz = Object.values(wd.zoneMap)
+      .filter(z => (z.dimension ?? 'surface') === 'surface' && z.id !== START_ZONE && z.caveDepth == null)
+      .sort((a, b) => (a.id < b.id ? -1 : 1))[0];
+    if (dz) wd.loadZone(dz.id);
+    const cache = (wd as unknown as { seamlessCellsCache: unknown }).seamlessCellsCache;
+    check('H6 discrete play never folds a cell nor fits an arena (the mode law)',
+      !!dz && cache === null && wd.seamlessMints.size === 0
+      && wd.arena.w === dz.size.w && wd.arena.h === dz.size.h,
+      dz ? `${dz.id} arena ${wd.arena.w}×${wd.arena.h} == authored ${dz.size.w}×${dz.size.h}` : 'no surface zone stood (staging failure)');
+  }
 }
 
 console.log(fails === 0 ? '\nprobe_seamless: ALL GREEN' : `\nprobe_seamless: ${fails} FAILURE(S)`);

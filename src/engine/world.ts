@@ -217,7 +217,8 @@ import { CONJURE_RIDERS } from '../data/conjury';
 import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
 import { affordTravel, castRay, LOS_CFG, type RayElev } from './los';
 import { coordDist, mapToPx, type MapCoord } from '../world/coords';
-import { getTissueSampler, SEAMLESS_CFG, setTissueSampler, type RegionSeat } from '../world/seamless';
+import { getTissueSampler, SEAMLESS_CFG, setTissueSampler, type CellRect, type RegionSeat } from '../world/seamless';
+import { foldCells } from '../world/cells';
 import { buildTissueSampler } from '../world/tissue';
 import { FORECHART_CFG, forechartSource, zonesWithin } from '../world/forechart';
 import { OMEN_CFG, collectOmens, omenLine, omenReach, type Omen } from '../world/omens';
@@ -2018,8 +2019,31 @@ export interface SeamlessMint {
   prevCamera: ZoneDef['camera'];
   /** The minted arena's base shape, recorded inside the mint's own scoped
    *  swap — the render lane's away clip reads THIS (the FNV shape
-   *  replication it replaced could drift; the record cannot). */
+   *  replication it replaced could drift; the record cannot). Fitted mints
+   *  are always 'rect' (a cell is a rect); the field survives for the
+   *  fallback lane + the render clip's contract. */
   shape: 'rect' | 'ellipse';
+  /** THE FITTED CELL (M1.5, the partition law): the world-px cell this mint
+   *  filled — the ONE home of the resident's claim. seat.originPx is its
+   *  (x0,y0) projection for the render lanes and span its dims; the rim
+   *  verdict and the threshold both test THIS rect. Frozen at mint (records
+   *  are identities); the re-fit sweep re-mints when the live fold drifts
+   *  from it, the exits-key idiom at cell grain. */
+  cell: CellRect;
+  /** The map node the mint stood around (world px, frozen at mint) — the
+   *  ring's own distance metric and recenter identity. Before the fitted
+   *  mint this equaled originPx + span/2 by construction; the cell decouples
+   *  the geometric center from the node, so the node is STORED, never
+   *  re-derived (a settle may drift the live map; the record cannot). */
+  node: { x: number; y: number };
+}
+
+/** Two cells agree within the fitted epsilon (float-noise tolerance — a
+ *  re-mint is a whole layout; sub-pixel fold jitter must never buy one). */
+function seamlessCellEq(a: CellRect, b: CellRect): boolean {
+  const e = SEAMLESS_FIT.cellEps;
+  return Math.abs(a.x0 - b.x0) <= e && Math.abs(a.y0 - b.y0) <= e
+    && Math.abs(a.x1 - b.x1) <= e && Math.abs(a.y1 - b.y1) <= e;
 }
 
 /** The resident mint's exits fingerprint (see SeamlessMint.exitsKey). */
@@ -2035,7 +2059,29 @@ function seamlessExitsKeyOf(def: ZoneDef): string {
  *  fires — a rim graze never swaps the frame. */
 const SEAMLESS_RIM = {
   corridorMarginPx: 220,
+  /** THE BORDER HYSTERESIS (M1.5 re-read): fitted cells ABUT, so this inset
+   *  is the whole anti-flutter band — a crossing must stand this deep inside
+   *  the destination cell before the rebase fires, and the active zone keeps
+   *  the band on the way back, so a walker jittering ON the line never swaps
+   *  frames. FLAGGED with the rest. */
   thresholdInsetPx: 32,
+} as const;
+
+/** M1.5 fitted-mint dials — FLAGGED (unblessed; her word moves them). */
+const SEAMLESS_FIT = {
+  /** THE OPEN BORDER's mouth half-width (px): the walk-grid corridor carved
+   *  from a walk-way's seat to the cell edge. Sized to the tissue road's own
+   *  half-width plus a shoulder, so the M0.5 signposts (roadHalfPx + 14
+   *  flank) stand just off the carved ground. */
+  mouthHalfPx: SEAMLESS_CFG.roadHalfPx + 8,
+  /** Cell agreement epsilon (px): live-fold drift beyond this re-mints a
+   *  standing record; below it, float noise never buys a layout. */
+  cellEps: 0.5,
+  /** THE ADMISSION FLOOR (px): a zone whose live cell is tighter than this
+   *  on either axis keeps its DOOR instead of standing resident — layout
+   *  generators never meet a box the authored game couldn't produce
+   *  (degradation, never a strand: the ring's own stretched-link grammar). */
+  minArenaPx: 900,
 } as const;
 
 function makeArena(def: ZoneDef): Bounds {
@@ -3142,6 +3188,19 @@ export class World {
    *  loadZone tail): the ring admits members over several beats, and each
    *  newly opened way gets its signpost pair exactly once per visit. */
   private seamlessDressed = new Set<number>();
+  /** THE CELL FOLD CACHE (M1.5): foldCells over the surface roster, keyed on
+   *  the same disturbance signals the chart scans key on (zone count +
+   *  webDisturbance) — the web growing or settling recomputes it exactly
+   *  once; an adoption that replaces the graph clears it with the ring. */
+  private seamlessCellsCache: { key: string; cells: Map<string, CellRect> } | null = null;
+  /** THE ARRIVAL CELL (M1.5): the cell the ACTIVE zone's live arena was
+   *  fitted to at its load — the load's own charting (and the tail beat's
+   *  admissions) can move the fold before the tail refresh runs, and the
+   *  record's law is record == the ground the arrival STOOD UP, never the
+   *  newest fold. The active zone wears this cell for its whole stand
+   *  (re-fits exempt it); the next arrival re-reads the fold. Null when the
+   *  standing zone is unfitted (town, cave, discrete). */
+  private seamlessArrivalCell: CellRect | null = null;
 
   // --- the current zone -------------------------------------------------
   zone: ZoneDef = this.zoneMap[START_ZONE];
@@ -4710,6 +4769,33 @@ export class World {
     // from the spawn-in grow (only true mid-play arrivals swell in).
     this.zoneEnteredAt = this.time;
     this.arena = makeArena(def);
+    // THE FITTED ARENA (seamless M1.5 — the partition law): a resident-
+    // eligible surface arrival fills its CELL, not its authored size — the
+    // same derivation seamlessMintResident bakes, so the live ground always
+    // equals the standing record (drawn == arrived; the walk-grid pins ride
+    // it). The def-shaping trio runs FIRST (holdfast / eager web / mint
+    // horizon — all latching or idempotent, so the classic ladder below
+    // no-ops where this already ran): the fold must read the SAME resolved
+    // web the mint read, or an arrival-first zone would fit a pre-chart
+    // cell while its load-tail record fits the post-chart one. Flag off =
+    // one boolean read (THE MODE LAW).
+    if (this.seamless) {
+      this.seamlessArrivalCell = null; // unfitted until this load proves otherwise
+      if (!isCave && this.seamlessResidentEligible(def)) {
+        this.rollHoldfast(def);
+        this.eagerChartNeighbors(def);
+        if (FORECHART_CFG.enabled && def.objective.kind !== 'safe') {
+          this.chartWithin(def.map, FORECHART_CFG.horizon, def.dimension ?? 'surface');
+        }
+        const cell = this.seamlessCells().get(def.id);
+        if (cell) {
+          this.arena.w = cell.x1 - cell.x0;
+          this.arena.h = cell.y1 - cell.y0;
+          this.arena.shape = 'rect'; // a cell is a rect — the shape roll stands down
+          this.seamlessArrivalCell = cell; // the record's truth for this stand
+        }
+      }
+    }
     // THE COMPOSITE BOUND: pieces mint dormant — the whole boot (layout,
     // entry, fixtures) sees the classic base arena; the memory revive below
     // re-opens what the player already revealed. Hull follows the actives.
@@ -4991,6 +5077,13 @@ export class World {
     this.bridges = layout.doodads.filter(d => doodadRuleOf(d.kind).spans);
     this.grounds = layout.doodads.filter(d => GROUND_KINDS.includes(d.kind));
     this.walk = layout.walk ?? null; // a non-convex layout's walkability (else convex)
+    // THE OPEN BORDER (seamless M1.5): the live grid carries the same mouths
+    // the mint carved — same call, same position after generateLayout, same
+    // inputs, so the grid-agreement pins hold byte-for-byte. Flag off = one
+    // boolean read.
+    if (this.seamless && !isCave && this.seamlessResidentEligible(def)) {
+      this.seamlessCarveMouths(def, layout);
+    }
     // THE TIER FABRIC (engine/tiers.ts): one walk view per elevated story —
     // stateless adapters over the SAME grid (tier flags on region rows), so
     // carves and repaints self-heal on every layer by construction. Reads
@@ -6375,6 +6468,40 @@ export class World {
     if (planted) this.markDoodadsChanged();
   }
 
+  /** THE OPEN BORDER (M1.5 — the walled-rim strand made law): where a way can
+   *  ever OPEN (an exit toward resident-eligible ground), the layout's rim
+   *  band carries a walkable MOUTH — a road-wide corridor carved from the
+   *  way's seat straight out to the cell edge, so a walled layout reads as
+   *  walls-with-gaps (the D2 cliff-line grammar) and a walker who crossed in
+   *  can always walk back out. Convex layouts (walk == null) are open by
+   *  construction and carve nothing; doors that stay doors (towns, caves,
+   *  ineligible ground) keep their walls. Deterministic — pure f(placed
+   *  exits, arena, destination eligibility), and called in the SAME position
+   *  by the mint and the arrival, so the two grids stay byte-equal (the
+   *  grid-agreement pins ride it). Runs inside the mint's scoped swap /
+   *  the load's own frame: this.exits and this.arena ARE the carved zone's. */
+  private seamlessCarveMouths(def: ZoneDef, layout: GeneratedLayout): void {
+    const grid = layout.walk;
+    if (!(grid instanceof GridWalkField)) return;
+    const half = SEAMLESS_FIT.mouthHalfPx;
+    for (const e of this.exits) {
+      if (e.to === '?') continue;
+      const dest = this.zoneMap[e.to];
+      if (!dest || !this.seamlessResidentEligible(dest)) continue;
+      let side = def.exits[e.defIndex]?.side;
+      if (!side) {
+        // Side-less row (defensive): carve toward the nearest rim.
+        const d = [e.pos.x, this.arena.w - e.pos.x, e.pos.y, this.arena.h - e.pos.y];
+        side = (['w', 'e', 'n', 's'] as const)[d.indexOf(Math.min(...d))];
+      }
+      const to = side === 'e' ? { x: this.arena.w, y: e.pos.y }
+        : side === 'w' ? { x: 0, y: e.pos.y }
+        : side === 's' ? { x: e.pos.x, y: this.arena.h }
+        : { x: e.pos.x, y: 0 };
+      grid.carveCorridor(e.pos.x, e.pos.y, to.x, to.y, half);
+    }
+  }
+
   /** May this zone stand RESIDENT? THE STRUCTURAL PICK RULE (M0's clauses,
    *  unchanged; flagged — her word moves it): surface dimension, not the
    *  town, no zone-kind identity (excludes towns/outposts/sanctums), not
@@ -6403,12 +6530,41 @@ export class World {
       && z.spoils !== 'none';
   }
 
-  /** A resident seat's CENTER in world px (the seat carries the top-left;
-   *  the span restores the node point the mint centered on). */
+  /** A resident's map NODE in world px — the ring's distance metric and
+   *  recenter identity, frozen at mint. Before the fitted mint this was
+   *  originPx + span/2 by construction (the mint centered on its node); the
+   *  cell decouples the geometric center from the node, so the record
+   *  carries the node itself and this read never drifts with the fold. */
   private seamlessSeatCenter(seat: RegionSeat): { x: number; y: number } | null {
-    const mint = this.seamlessMints.get(seat.zoneId);
-    if (!mint) return null;
-    return { x: seat.originPx.x + mint.span.w / 2, y: seat.originPx.y + mint.span.h / 2 };
+    return this.seamlessMints.get(seat.zoneId)?.node ?? null;
+  }
+
+  /** THE CELL SOURCE (M1.5 — the partition law): the fold over every
+   *  surface-plane seat (the probe_cells roster: surface dimension, no
+   *  caveDepth, not pocket/floating). INELIGIBLE nodes still cut their
+   *  neighbors' cells — the town's ground is nobody else's claim, it just
+   *  never mints. Pure f(zoneMap) at a disturbance snapshot; cached on the
+   *  scan-lattice's own signals (count + webDisturbance), so mints and
+   *  settles recompute it exactly once each and quiet beats pay one string
+   *  compare. */
+  private seamlessCells(): Map<string, CellRect> {
+    const key = `${Object.keys(this.zoneMap).length}|${webDisturbance()}`;
+    if (this.seamlessCellsCache?.key === key) return this.seamlessCellsCache.cells;
+    const seats: { id: string; x: number; y: number }[] = [];
+    for (const z of Object.values(this.zoneMap)) {
+      if ((z.dimension ?? 'surface') !== 'surface' || z.caveDepth != null || z.pocket || z.floating) continue;
+      const at = mapToPx(z.map);
+      seats.push({ id: z.id, x: at.x, y: at.y });
+    }
+    const cells = foldCells(seats);
+    this.seamlessCellsCache = { key, cells };
+    return cells;
+  }
+
+  /** A resident's FITTED CELL (the mint record's one home — the rect the
+   *  rim verdict and the threshold test). Null = unminted. */
+  private seamlessCellOf(zoneId: string): CellRect | null {
+    return this.seamlessMints.get(zoneId)?.cell ?? null;
   }
 
   /** THE RING'S CENTER: the active member's own minted seat center where one
@@ -6483,7 +6639,7 @@ export class World {
    *  works are boot-absent by construction (a fresh run holds no tier) —
    *  a crusade claiming the zone before first arrival is a documented M0
    *  divergence of dress, never of bounds. */
-  private seamlessMintResident(def: ZoneDef, partnerId: string): void {
+  private seamlessMintResident(def: ZoneDef, partnerId: string, cellOverride?: CellRect): void {
     // Capture the authored camera ONCE (a refresh re-mints an already-
     // pinned resident — the standing record's capture is the true prior).
     const standing = this.seamlessMints.get(def.id);
@@ -6498,11 +6654,43 @@ export class World {
     if (FORECHART_CFG.enabled && def.objective.kind !== 'safe') {
       this.chartWithin(def.map, FORECHART_CFG.horizon, def.dimension ?? 'surface');
     }
+    // THE FITTED CELL (M1.5 — the partition law): the arena derives from the
+    // zone's cell in the live fold, read AFTER the def-shaping trio above
+    // (the fold must see the resolved horizon — the same order the arrival's
+    // own load reads it, so record == arrival by construction). A caller
+    // holding a deeper truth passes `cellOverride` — the ACTIVE zone's
+    // re-mints pass its ARRIVAL cell, because the live ground was fitted
+    // once at its load and the record's law is record == that ground, never
+    // the newest fold. The node is read at the same snapshot: cell and node
+    // freeze together as the record's identity. A fold miss (an off-roster
+    // def slipped eligibility) is a defect, healed to the legacy centered
+    // rect — noted, never thrown.
+    const at = mapToPx(def.map);
+    let cell = cellOverride ?? this.seamlessCells().get(def.id) ?? null;
+    if (!cell) {
+      this.seamlessNote(`nocell:${def.id}`,
+        `[seamless] no cell in the fold for eligible '${def.id}' — minting the legacy centered rect (defect)`);
+      cell = {
+        x0: at.x - def.size.w / 2, y0: at.y - def.size.h / 2,
+        x1: at.x + def.size.w / 2, y1: at.y + def.size.h / 2,
+      };
+    }
     const keepZone = this.zone, keepArena = this.arena, keepExits = this.exits;
     const keepEntryFrom = this.entryFrom;
     try {
       this.zone = def;
       this.arena = makeArena(def);
+      // THE FITTED ARENA: the authored size roll (and the FNV shape roll —
+      // a cell is a rect) stand down in seamless mode; the cell's dims ARE
+      // the arena, so resident ground can no longer overlap BY CONSTRUCTION
+      // (the fold's own non-overlap proof). Applied BEFORE placeExit so the
+      // portals seat on the fitted rim. Annex pieces ride along untouched
+      // (authored rows on eligible wilds are rare; flagged in the pass
+      // notes). THE SIZE TENSION (charter): per-tileset bands express
+      // identity; under the partition, cell geometry rules.
+      this.arena.w = cell.x1 - cell.x0;
+      this.arena.h = cell.y1 - cell.y0;
+      this.arena.shape = 'rect';
       // THE ENTRY CONTEXT rides the swap too: stash derivations may read the
       // live entry (pickProcessionDest picks the escort's crossing as "the
       // farthest portal from the one we came in by") — the mint must answer
@@ -6521,21 +6709,30 @@ export class World {
       }
       const rng = new Rng(def.seed!);
       const layout = generateLayout(def, this.arena, rng, entry, this.exits.map(e => e.pos), undefined);
+      // THE OPEN BORDER: mouths through the rim band at every way that can
+      // ever open — carved on the mint's grid exactly as the arrival carves
+      // its live one (same inputs, same order — the grid-agreement pins).
+      this.seamlessCarveMouths(def, layout);
       const span = hullOf(this.arena);
       this.seamlessMints.set(def.id, {
         layout, span, exitsKey: seamlessExitsKeyOf(def), partnerId, prevCamera,
-        // Recorded inside the scoped swap: this.arena IS the minted zone's
-        // arena here, so the shape on the record is the shape the mint baked.
-        shape: this.arena.shape === 'ellipse' ? 'ellipse' : 'rect',
+        // A fitted mint is a rect by law (the cell IS the arena); the field
+        // survives on the record for the render clip's contract.
+        shape: 'rect',
+        cell, node: { x: at.x, y: at.y },
       });
-      // UPSERT the seat: a re-mint (the exits-key invalidation) refreshes the
-      // layout record and keeps the standing seat — def.size never moves, so
-      // origin and span are stable identities the render lane may hold.
-      if (!this.seamlessRegions.some(s => s.zoneId === def.id)) {
-        const at = mapToPx(def.map);
+      // UPSERT the seat: a re-mint refreshes the layout record, and the seat
+      // FOLLOWS the cell (the stored cell is the identity; the seat is its
+      // render-lane projection). EVERY re-mint fits the LIVE fold's cell —
+      // an exits change and a cell drift heal in the same mint, so record,
+      // seat, and fold can never disagree past one evaluation beat.
+      const seat = this.seamlessRegions.find(s => s.zoneId === def.id);
+      if (seat) {
+        seat.originPx.x = cell.x0; seat.originPx.y = cell.y0;
+      } else {
         this.seamlessRegions.push({
           zoneId: def.id,
-          originPx: { x: at.x - span.w / 2, y: at.y - span.h / 2 },
+          originPx: { x: cell.x0, y: cell.y0 },
         });
       }
       // THE M0 CAMERA CUT (flagged): the zone-framed mode's rim clamp has no
@@ -6587,13 +6784,40 @@ export class World {
       if (!c) { this.seamlessDemote(s.zoneId); continue; } // seatless record = a defect; heal it out
       if (Math.hypot(c.x - center.x, c.y - center.y) > SEAMLESS_CFG.ringOutPx) this.seamlessDemote(s.zoneId);
     }
+    // THE RE-FIT SWEEP (M1.5): the web grew or settled and the live fold
+    // moved a standing member's cell — the record re-mints FITTED to the new
+    // cell (the exits-key idiom at cell grain), sharing the admission budget
+    // below (re-fits first: a stale record misdraws and mis-tests the
+    // threshold). The ACTIVE zone is exempt — its live arena cannot reshape
+    // under the walker's feet; the next arrival's own load re-fits it
+    // (seamlessActiveMintRefresh consults the cell too). Until a stale
+    // member's beat comes, its old cell stands — worst case the threshold
+    // defers a crossing one beat (the transient the exits-key law already
+    // tolerates).
+    let budget = SEAMLESS_CFG.mintBudgetPerBeat;
+    for (const s of this.seamlessRegions) {
+      if (budget <= 0) break;
+      if (s.zoneId === this.zone.id) continue;
+      const mint = this.seamlessMints.get(s.zoneId);
+      const live = this.seamlessCells().get(s.zoneId);
+      const def = this.zoneMap[s.zoneId];
+      if (!mint || !live || !def || seamlessCellEq(mint.cell, live)) continue;
+      this.seamlessMintResident(def, mint.partnerId);
+      budget--;
+    }
     // THE ADMISSION (budgeted, nearest-first, tiebroken by id — pure
     // f(charted web) given the same walk): structurally eligible ground
-    // whose live map seat sits inside the in radius.
+    // whose live map seat sits inside the in radius AND whose cell clears
+    // the floor — a too-tight cell keeps its DOOR (SEAMLESS_FIT.minArenaPx;
+    // degradation, never a strand: the stretched-link grammar).
     const candidates = (): ZoneDef[] => {
+      const fold = this.seamlessCells(); // re-read per call (the starved branch charts)
       const due: { def: ZoneDef; d: number }[] = [];
       for (const z of Object.values(this.zoneMap)) {
         if (this.seamlessMints.has(z.id) || !this.seamlessResidentEligible(z)) continue;
+        const cell = fold.get(z.id);
+        if (!cell || cell.x1 - cell.x0 < SEAMLESS_FIT.minArenaPx
+          || cell.y1 - cell.y0 < SEAMLESS_FIT.minArenaPx) continue;
         const at = mapToPx(z.map);
         const d = Math.hypot(at.x - center.x, at.y - center.y);
         if (d <= SEAMLESS_CFG.ringInPx) due.push({ def: z, d });
@@ -6616,8 +6840,12 @@ export class World {
       }
       return;
     }
-    for (const def of due.slice(0, SEAMLESS_CFG.mintBudgetPerBeat)) {
-      this.seamlessMintResident(def, this.seamlessPartnerFor(def));
+    for (const def of due.slice(0, budget)) {
+      // The ACTIVE zone's own admission (the arrival-first flow: a door led
+      // into unminted eligible ground) records the cell its live arena was
+      // fitted to — the fold may already have moved past it.
+      const cellOverride = def.id === this.zone.id ? this.seamlessArrivalCell ?? undefined : undefined;
+      this.seamlessMintResident(def, this.seamlessPartnerFor(def), cellOverride);
     }
     setTissueSampler(buildTissueSampler(this));
     this.seamlessNote('boot',
@@ -6641,24 +6869,38 @@ export class World {
     const mint = this.seamlessMints.get(this.zone.id);
     if (!def || !mint) return;
     const arrivalDrift = !!this.entryFrom && this.entryFrom !== mint.partnerId;
-    if (arrivalDrift || mint.exitsKey !== seamlessExitsKeyOf(def)) {
-      this.seamlessMintResident(def, arrivalDrift ? this.entryFrom! : mint.partnerId);
+    // THE CELL CONDITION (M1.5): the record must wear the ARRIVAL's own cell
+    // — the cell the live arena was actually fitted to (the load's charting
+    // and the tail beat's admissions can move the fold before this runs; a
+    // record chasing the newest fold would disagree with the standing
+    // ground, mis-scale the mouth carve, and mis-seat the world frame). The
+    // re-fit sweep skips the active zone precisely because THIS refresh
+    // owns its beat.
+    const cellNow = this.seamlessArrivalCell ?? this.seamlessCells().get(def.id);
+    const cellDrift = !!cellNow && !seamlessCellEq(cellNow, mint.cell);
+    if (arrivalDrift || cellDrift || mint.exitsKey !== seamlessExitsKeyOf(def)) {
+      this.seamlessMintResident(def, arrivalDrift ? this.entryFrom! : mint.partnerId, cellNow ?? undefined);
     }
   }
 
-  /** A resident zone's footprint in world px (seat origin + base span). */
+  /** A resident zone's footprint in world px — THE CELL TEST's rect (M1.5):
+   *  reads the mint's stored cell, the one home. seat.originPx/span are the
+   *  same values by the fitted-mint assignment; consulting the cell here
+   *  keeps the verdict/threshold honest even if a render-lane projection
+   *  ever drifted. */
   private seamlessRectOf(seat: RegionSeat): { x: number; y: number; w: number; h: number } | null {
-    const mint = this.seamlessMints.get(seat.zoneId);
-    return mint ? { x: seat.originPx.x, y: seat.originPx.y, w: mint.span.w, h: mint.span.h } : null;
+    const c = this.seamlessCellOf(seat.zoneId);
+    return c ? { x: c.x0, y: c.y0, w: c.x1 - c.x0, h: c.y1 - c.y0 } : null;
   }
 
-  /** THE OPEN RIM (M1): classify a clamp ask that leaves the active arena.
-   *  'open' admits the raw target — ANY resident's own ground (the
-   *  threshold sweep owns the crossing; the nearest seat wins where rects
-   *  overlap, the sweep's own metric), or walkable tissue inside the ring
-   *  corridor (the union box over every resident rect + the corridor
-   *  margin — M0's pair box at ring grain; the sampler stays the true
-   *  gate). THE RIM SEAL gates both lanes through the door law's own
+  /** THE OPEN RIM (M1; cells M1.5): classify a clamp ask that leaves the
+   *  active arena. 'open' admits the raw target — ANY resident's own CELL
+   *  (the threshold sweep owns the crossing; cells cannot overlap at the
+   *  fold's fixpoint, so the nearest-seat pick survives only as safety for
+   *  the one-beat re-fit window), or walkable tissue inside the ring
+   *  corridor (the union box over every resident cell + the corridor
+   *  margin — the WEDGES between cells stay tissue; the sampler stays the
+   *  true gate). THE RIM SEAL gates both lanes through the door law's own
    *  predicate (seamlessRimSealed): a sealed zone's rim holds until its
    *  objective opens it, and the entry edge stays exempt exactly as at a
    *  door. 'hold' refuses a step FROM tissue (stand still — the classic
@@ -6682,8 +6924,9 @@ export class World {
     if (inNow) return wasOut ? 'reenter' : null;
     const wx = p.x + seat.originPx.x, wy = p.y + seat.originPx.y;
     const admit = ((): boolean => {
-      // Lane 1 — a resident's own ground (nearest seat wins on overlap;
-      // the ground names its zone, so the seal consult is per-edge).
+      // Lane 1 — a resident's own CELL (point-in-cell; non-overlap makes
+      // the nearest pick a formality kept for the re-fit transient; the
+      // ground names its zone, so the seal consult is per-edge).
       let landed: RegionSeat | null = null;
       let landedD = Infinity;
       for (const s of this.seamlessRegions) {
@@ -6716,14 +6959,16 @@ export class World {
     return wasOut ? 'hold' : null;
   }
 
-  /** THE THRESHOLD SWEEP (M1): one ring evaluation beat first (the budgeted
-   *  fill — admissions land while the walker fights, walks, or stands),
-   *  then the crossing: when the local hero, walking the open country,
-   *  stands genuinely ON a resident's ground (threshold inset, and that
-   *  resident's own minted walk grid says walkable — an honest landing
-   *  defers, never teleports; the NEAREST seat wins where resident rects
-   *  overlap, and the ACTIVE zone keeps the whole overlap band — the M0
-   *  hysteresis law), rebase the live frame there in one between-frames
+  /** THE THRESHOLD SWEEP (M1; THE CELL TEST M1.5): one ring evaluation beat
+   *  first (the budgeted fill — admissions land while the walker fights,
+   *  walks, or stands), then the crossing: when the local hero, walking the
+   *  open country, stands genuinely INSIDE a resident's CELL (the
+   *  threshold-inset hysteresis band — fitted cells ABUT, so the inset is
+   *  the whole anti-flutter law: the border itself belongs to nobody's
+   *  crossing, and a walker jittering on the line never swaps frames) with
+   *  that resident's own minted walk grid saying walkable (an honest
+   *  landing defers, never teleports — a walled rim's mouth is where the
+   *  deferral ends), rebase the live frame there in one between-frames
    *  step. The rim seal holds the sweep exactly as it holds the walk —
    *  one law, one refusal (seamlessRimSealed). */
   private updateSeamless(): void {
@@ -6733,7 +6978,7 @@ export class World {
     const seat = this.seamlessRegions.find(s => s.zoneId === this.zone.id);
     if (!seat) return;
     const p = this.player;
-    if (insideBounds(p.pos, p.radius, this.arena)) return; // still home — rect overlap belongs to the ACTIVE zone
+    if (insideBounds(p.pos, p.radius, this.arena)) return; // still home — the active cell keeps its whole ground
     // THE MINT REFRESH (tissue frames only — near-zero cost in normal play):
     // the living web may have woven a new road onto a resident since its
     // mint; a stale record would draw a neighbor the arrival won't stand up
@@ -6744,12 +6989,18 @@ export class World {
       const def = this.zoneMap[s.zoneId];
       const mint = this.seamlessMints.get(s.zoneId);
       if (!def || !mint || mint.exitsKey === seamlessExitsKeyOf(def)) continue;
-      this.seamlessMintResident(def, mint.partnerId);
+      // The ACTIVE record keeps its standing cell through an exits re-mint
+      // (the live ground cannot reshape mid-stand — the arrival-cell law).
+      const cellOverride = s.zoneId === this.zone.id
+        ? this.seamlessArrivalCell ?? mint.cell : undefined;
+      this.seamlessMintResident(def, mint.partnerId, cellOverride);
     }
     const wx = p.pos.x + seat.originPx.x, wy = p.pos.y + seat.originPx.y;
     const inset = SEAMLESS_RIM.thresholdInsetPx;
-    // ANY resident's ground may receive the crossing — nearest seat center
-    // wins on overlap (the same metric the rim verdict admitted by).
+    // ANY resident's CELL may receive the crossing — cells cannot overlap
+    // at the fold's fixpoint, so the nearest-node pick survives only as
+    // safety for the one-beat re-fit window (the rim verdict keeps the
+    // same formality).
     let dest: RegionSeat | null = null;
     let destD = Infinity;
     for (const s of this.seamlessRegions) {
@@ -16591,6 +16842,8 @@ export class World {
     if (this.seamless) {
       this.seamlessRegions.length = 0;
       this.seamlessMints.clear();
+      this.seamlessCellsCache = null; // the fold indexed the replaced graph
+      this.seamlessArrivalCell = null; // …and so did the standing arrival fit
       this.seamlessNotes.delete('boot');
       this.seamlessNotes.delete('nopair');
     }
