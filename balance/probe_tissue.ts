@@ -1,31 +1,54 @@
 // ---------------------------------------------------------------------------
-// ONE-OFF PROBE — THE CONNECTIVE TISSUE (seamless-world M0, src/world/tissue.ts):
-// the between-zones country synthesized from the global fields, against the
-// TissueSampler contract (src/world/seamless.ts). Pins:
+// ONE-OFF PROBE — THE CONNECTIVE TISSUE (seamless-world M0, re-scoped M1.5
+// THE BORDER BLEND — src/world/tissue.ts): the country between and around
+// the zones, against the TissueSampler contract (src/world/seamless.ts) and
+// the partition law's cell fold (src/world/cells.ts). Pins:
 //   A  THE PURITY LAW: two samplers built off the SAME world answer
 //      byte-identically over a 40×40 lattice spanning two linked nodes, and
 //      one sampler re-asked answers itself byte-identically (any internal
 //      cache is invisible — same answers cached or cold),
-//   B  THE SEA GROWS NO TISSUE: open-ocean ground (continentAt's own verdict,
-//      the independent oracle) never samples walkable — and its tone is the
-//      sea's own mapColor (drawn and tested agree on the water),
+//   B  THE SEA GROWS NO TISSUE + THE SHORE EXCEPTION: open-ocean ground
+//      (continentAt's own verdict, the independent oracle) never samples
+//      walkable — and its tone is the sea's own mapColor (the sea is
+//      nobody's outskirts; a cell's claim stops at the shore),
 //   C  THE ROAD RIBBON: every sample within SEAMLESS_CFG.roadHalfPx of the
 //      segment between two LINKED nodes' seats reads road:true AND
 //      walkable:true (roads are always walkable), while ground far off every
 //      ribbon reads road:false,
-//   D  THE HONEST TONE: three different biomes' tissue tones are sane hexes
-//      and each IS that biome's own BiomeInfo.mapColor — the same tint the
-//      world-map wash paints, read through the mint path's own biomeAt lane,
+//   D  THE OWN-TONE LAW: a zone whose seat stands beyond the blend band of
+//      every other cell (the fold's own verdict, re-derived as oracle)
+//      samples AT ITS SEAT to exactly its OWN zone tone — def.biome's
+//      mapColor, the seat-field tint when the def carries none — never the
+//      raw field tone of the sample point: the no-man's tone is dead inside
+//      a cell,
 //   E  THE NULL SEAM: getTissueSampler() is null at boot (fresh module
 //      state), STILL null after builders run (buildTissueSampler is
 //      export-only — install belongs to the placement lane), and the
 //      registry round-trips set/read/clear,
-//   F  THE CAPTURE LAW: a sampler captures the graph AT BUILD — linking two
-//      new nodes after the build leaves the old sampler blind to their road,
-//      while a fresh sampler poured off the grown graph draws it,
+//   F  THE CAPTURE LAW (roads): a sampler captures the graph AT BUILD —
+//      linking two new nodes after the build leaves the old sampler blind
+//      to their road, while a fresh sampler poured off the grown graph
+//      draws it,
 //   G  THE CLIFF LAW: land whose relief slope exceeds TISSUE_CFG.slopeMax
 //      (the field's own elevationAt read — the independent oracle) refuses
-//      tissue off-road, so the slope lane is live wiring, not dead code.
+//      tissue off-road, so the slope lane is live wiring, not dead code,
+//   H  THE BLEND BAND: across a known shared border between two minted-
+//      theme cells (a synthetic pair with hand-picked max-contrast biomes),
+//      samples walked border-perpendicular move MONOTONICALLY per channel
+//      from one zone's pure tone to the other's; the border itself is the
+//      exact 50/50 mix (independent arithmetic); beyond ±blendBandPx the
+//      tone is the pure own tone; the blend is deterministic across fresh
+//      samplers; and a sampler built BEFORE the pair existed is blind to
+//      it (THE CAPTURE LAW reaches the cells),
+//   I  THE WEDGE: a point the axis-cut fold leaves in NO cell (a synthetic
+//      triple whose fold is re-derived probe-side as the oracle) blends the
+//      nearest TWO cells' tones — the equidistant spine reads the exact
+//      50/50 of the flanking pair (the far third cell weightless), and the
+//      walk across the wedge is monotone between them,
+//   J  THE PRE-BLEND LAW STANDS: walkable and road over the whole A lattice
+//      equal the pre-blend derivation re-implemented verbatim as oracle
+//      (ocean by biomeAt, slope by the centered elevationAt read, road by
+//      the segment ribbon) — the partition blends TONE, never passability.
 // Run: npx tsx balance/probe_tissue.ts
 // ---------------------------------------------------------------------------
 
@@ -38,9 +61,10 @@ import { makeAccount } from '../src/meta/account';
 import { START_ZONE, type ZoneDef } from '../src/data/zones';
 import { BIOMES, OCEAN_BIOME, biomeAt } from '../src/world/biomes';
 import { continentAt, continentSeedFrom } from '../src/world/continents';
-import { mapToPx } from '../src/world/coords';
+import { mapToPx, pxToMap } from '../src/world/coords';
 import { elevationAt } from '../src/world/relief';
-import { SEAMLESS_CFG, getTissueSampler, setTissueSampler } from '../src/world/seamless';
+import { PARTITION_CFG, SEAMLESS_CFG, getTissueSampler, setTissueSampler } from '../src/world/seamless';
+import { foldCells, type CellSeat } from '../src/world/cells';
 import { TISSUE_CFG, buildTissueSampler } from '../src/world/tissue';
 
 let failed = 0;
@@ -98,6 +122,35 @@ function nearestSegDist(px: number, py: number): number {
   return best;
 }
 
+// --- The probe's OWN color arithmetic (the oracle side, independent of the
+// sampler's implementation — same rounding rule, separate code). -------------
+const hexRgb = (hex: string): [number, number, number] | null => {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex);
+  if (!m) return null;
+  const s = m[1];
+  if (s.length === 3) return [parseInt(s[0] + s[0], 16), parseInt(s[1] + s[1], 16), parseInt(s[2] + s[2], 16)];
+  return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+};
+const rgbHex = (r: number, g: number, b: number): string => {
+  const c = (v: number): string => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+  return `#${c(r)}${c(g)}${c(b)}`;
+};
+const midHex = (a: string, b: string): string => {
+  const ra = hexRgb(a)!, rb = hexRgb(b)!;
+  return rgbHex((ra[0] + rb[0]) / 2, (ra[1] + rb[1]) / 2, (ra[2] + rb[2]) / 2);
+};
+/** Rect distance oracle (the fold consumers' own metric, re-derived). */
+const rectDistP = (x: number, y: number, c: { x0: number; y0: number; x1: number; y1: number }): number => {
+  const dx = x < c.x0 ? c.x0 - x : x > c.x1 ? x - c.x1 : 0;
+  const dy = y < c.y0 ? c.y0 - y : y > c.y1 ? y - c.y1 : 0;
+  return Math.hypot(dx, dy);
+};
+/** The partition's surface roster (probe-side twin of the sampler's cell
+ *  capture filter — and probe_cells' own). */
+const cellRosterOf = (zm: Record<string, ZoneDef>): ZoneDef[] =>
+  Object.values(zm).filter(z =>
+    (z.dimension ?? 'surface') === 'surface' && z.caveDepth == null && !z.pocket && !z.floating);
+
 // ---------------------------------------------------------------- E (part 1)
 check('E: getTissueSampler() is null at boot — fresh module state', getTissueSampler() === null);
 
@@ -106,19 +159,20 @@ const s2 = buildTissueSampler(world);
 check('E: STILL null after builders run — buildTissueSampler is export-only', getTissueSampler() === null);
 
 // -------------------------------------------------------------------------- A
+let latMinX = 0, latMaxX = 0, latMinY = 0, latMaxY = 0;
 {
   const [a, b] = pairs[0];
   const pa = mapToPx(a.map), pb = mapToPx(b.map);
   const pad = 256;
-  const minX = Math.min(pa.x, pb.x) - pad, maxX = Math.max(pa.x, pb.x) + pad;
-  const minY = Math.min(pa.y, pb.y) - pad, maxY = Math.max(pa.y, pb.y) + pad;
+  latMinX = Math.min(pa.x, pb.x) - pad; latMaxX = Math.max(pa.x, pb.x) + pad;
+  latMinY = Math.min(pa.y, pb.y) - pad; latMaxY = Math.max(pa.y, pb.y) + pad;
   const N = 40;
   const row = (fn: (x: number, y: number) => string): string => {
     let out = '';
     for (let i = 0; i < N; i++) {
       for (let j = 0; j < N; j++) {
-        const x = minX + ((i + 0.5) / N) * (maxX - minX);
-        const y = minY + ((j + 0.5) / N) * (maxY - minY);
+        const x = latMinX + ((i + 0.5) / N) * (latMaxX - latMinX);
+        const y = latMinY + ((j + 0.5) / N) * (latMaxY - latMinY);
         out += fn(x, y) + ';';
       }
     }
@@ -159,7 +213,7 @@ check('E: STILL null after builders run — buildTissueSampler is export-only', 
     `${tested} ocean points tested (${roadSkips} on road ribbons skipped)`);
   check('B: water is NEVER walkable — the sea grows no tissue', tested > 0 && wetWalkable === 0,
     `${wetWalkable}/${tested} wet-walkable`);
-  check('B: the sea wears the sea\'s own tone (drawn and tested agree on the water)', wrongTone === 0,
+  check('B: THE SHORE EXCEPTION — the sea wears the sea\'s own tone, never a cell\'s', wrongTone === 0,
     `${wrongTone} mismatches vs BIOMES.${OCEAN_BIOME}.mapColor`);
 }
 
@@ -207,22 +261,34 @@ check('E: STILL null after builders run — buildTissueSampler is export-only', 
 
 // -------------------------------------------------------------------------- D
 {
-  const found = new Map<string, { x: number; y: number }>();
-  for (let x = -5000; x <= 5000 && found.size < 3; x += 331) {
-    for (let y = -5000; y <= 5000 && found.size < 3; y += 331) {
-      const biome = biomeAt({ x, y }, seed);
-      if (!found.has(biome)) found.set(biome, { x, y });
+  // THE OWN-TONE LAW at the seats of the REAL captured web: the fold
+  // re-derived probe-side gives the isolation oracle (seat beyond the blend
+  // band of every OTHER cell ⇒ the blend has exactly one voice there).
+  const roster = cellRosterOf(world.zoneMap);
+  const seats: CellSeat[] = roster.map(z => ({ id: z.id, ...mapToPx(z.map) }));
+  const foldD = foldCells(seats);
+  let tested = 0, wrong = 0, notHex = 0;
+  const details: string[] = [];
+  for (const z of roster) {
+    if (biomeAt(z.map, seed) === OCEAN_BIOME) continue; // shore-exception seats speak the sea's tone
+    const sp = mapToPx(z.map);
+    let isolated = true;
+    for (const [oid, oc] of foldD) {
+      if (oid === z.id) continue;
+      if (rectDistP(sp.x, sp.y, oc) <= PARTITION_CFG.blendBandPx + 1) { isolated = false; break; }
     }
+    if (!isolated) continue;
+    tested++;
+    const expected = (z.biome && BIOMES[z.biome]?.mapColor)
+      || BIOMES[biomeAt(z.map, seed)]?.mapColor || TISSUE_CFG.fallbackTone;
+    const t = s1(sp.x, sp.y, seed);
+    if (!/^#[0-9a-f]{3,8}$/i.test(t.tone)) notHex++;
+    if (t.tone !== expected) { wrong++; details.push(`${z.id}: ${t.tone} ≠ ${expected}`); }
   }
-  check('D: three different biomes stand within the scan window', found.size >= 3,
-    [...found.keys()].join(', '));
-  for (const [biome, c] of found) {
-    const p = mapToPx(c);
-    const t = s1(p.x, p.y, seed);
-    const saneHex = /^#[0-9a-f]{3,8}$/i.test(t.tone);
-    check(`D: '${biome}' tissue tone is a sane hex AND the biome's own mapColor (the map wash's tint)`,
-      saneHex && t.tone === BIOMES[biome]?.mapColor, t.tone);
-  }
+  check('D: isolated real seats stand to test against (the fold oracle)', tested >= 2, `${tested} seats`);
+  check('D: every isolated seat wears its OWN zone tone — the no-man\'s tone is dead inside a cell',
+    tested > 0 && wrong === 0, wrong ? details.slice(0, 3).join('; ') : `${tested}/${tested} exact`);
+  check('D: every tone sampled is a sane hex', notHex === 0, `${notHex} malformed`);
 }
 
 // -------------------------------------------------------------------------- F
@@ -279,6 +345,212 @@ check('E: STILL null after builders run — buildTissueSampler is export-only', 
     check('G: THE CLIFF LAW — steep relief refuses tissue off-road', !t.road && !t.walkable,
       `walkable=${t.walkable} road=${t.road}`);
   }
+}
+
+// --- The blend fixtures' shared machinery ------------------------------------
+// Max-contrast biome pair, picked deterministically from the registry: the
+// gradient pins want channel deltas far above rounding grain.
+const biomeIds = Object.keys(BIOMES).filter(id => id !== OCEAN_BIOME && hexRgb(BIOMES[id].mapColor) !== null);
+let toneA = '', toneB = '', biomeA = '', biomeB = '', bestDelta = -1;
+for (let i = 0; i < biomeIds.length; i++) {
+  for (let j = i + 1; j < biomeIds.length; j++) {
+    const ra = hexRgb(BIOMES[biomeIds[i]].mapColor)!, rb = hexRgb(BIOMES[biomeIds[j]].mapColor)!;
+    const d = Math.abs(ra[0] - rb[0]) + Math.abs(ra[1] - rb[1]) + Math.abs(ra[2] - rb[2]);
+    if (d > bestDelta) {
+      bestDelta = d;
+      biomeA = biomeIds[i]; biomeB = biomeIds[j];
+      toneA = BIOMES[biomeIds[i]].mapColor; toneB = BIOMES[biomeIds[j]].mapColor;
+    }
+  }
+}
+
+/** Find a base seat (map units) whose candidate sample points are ALL land
+ *  (the shore exception must not bite the blend fixtures) — scan a far
+ *  window, deterministic. `probe` maps a base to the px points that must
+ *  be dry. */
+function findLandBase(probePts: (bx: number, by: number) => Array<{ x: number; y: number }>): { bx: number; by: number } | null {
+  for (let bx = 2500; bx <= 6500; bx += 67) {
+    for (let by = -2010; by <= 2010; by += 67) {
+      const pts = probePts(bx, by);
+      let dry = true;
+      for (const p of pts) {
+        if (biomeAt(pxToMap(p), seed) === OCEAN_BIOME) { dry = false; break; }
+      }
+      if (dry) return { bx, by };
+    }
+  }
+  return null;
+}
+
+/** Per-channel monotonicity along an ordered tone walk, directed A→B. */
+function monotoneAB(tones: string[], a: string, b: string): boolean {
+  const ra = hexRgb(a)!, rb = hexRgb(b)!;
+  for (let ch = 0; ch < 3; ch++) {
+    const dir = Math.sign(rb[ch] - ra[ch]);
+    for (let k = 1; k < tones.length; k++) {
+      const prev = hexRgb(tones[k - 1])![ch], cur = hexRgb(tones[k])![ch];
+      if (dir >= 0 ? cur < prev : cur > prev) return false;
+    }
+  }
+  return true;
+}
+
+// -------------------------------------------------------------------------- H
+{
+  const band = PARTITION_CFG.blendBandPx;
+  const fracs = [-1.25, -1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1, 1.25];
+  // Two seats 86 units apart share a midpoint-cut border; the walk crosses
+  // it perpendicular at the seats' own latitude.
+  const walkPts = (bx: number, by: number): Array<{ x: number; y: number }> => {
+    const pa = mapToPx({ x: bx, y: by }), pb = mapToPx({ x: bx + 86, y: by });
+    const borderX = (pa.x + pb.x) / 2;
+    return fracs.map(f => ({ x: borderX + f * band, y: pa.y }));
+  };
+  const base = findLandBase(walkPts);
+  check('H: a dry fixture window stands within the far scan', base !== null,
+    base ? `base (${base.bx}, ${base.by}) units` : 'none found — widen the scan');
+  if (base) {
+    const { bx, by } = base;
+    const preBlind = s1(walkPts(bx, by)[5].x, walkPts(bx, by)[5].y, seed).tone;
+    const [tplA, tplB] = pairs[0];
+    world.zoneMap['tissue_blend_a'] = {
+      ...tplA, id: 'tissue_blend_a', map: { x: bx, y: by }, exits: [], biome: biomeA,
+    };
+    world.zoneMap['tissue_blend_b'] = {
+      ...tplB, id: 'tissue_blend_b', map: { x: bx + 86, y: by }, exits: [], biome: biomeB,
+    };
+    const s4 = buildTissueSampler(world);
+    const pts = walkPts(bx, by);
+    const tones = pts.map(p => s4(p.x, p.y, seed).tone);
+    check(`H: beyond −band the tone is pure '${biomeA}' (the own-tone outskirts)`,
+      tones[0] === toneA && tones[1] === toneA, `${tones[0]}/${tones[1]} vs ${toneA}`);
+    check(`H: beyond +band the tone is pure '${biomeB}'`,
+      tones[9] === toneB && tones[10] === toneB, `${tones[9]}/${tones[10]} vs ${toneB}`);
+    check('H: the border itself is the exact 50/50 mix (independent arithmetic)',
+      tones[5] === midHex(toneA, toneB), `${tones[5]} vs ${midHex(toneA, toneB)}`);
+    check('H: the walk moves monotonically per channel from tone to tone',
+      monotoneAB(tones, toneA, toneB), tones.join(' '));
+    const inBand = [tones[3], tones[4], tones[6], tones[7]];
+    check('H: in-band samples are true gradients — neither pure tone',
+      inBand.every(t => t !== toneA && t !== toneB), inBand.join(' '));
+    const s5 = buildTissueSampler(world);
+    check('H: the blend is deterministic — a fresh sampler answers the walk byte-identically',
+      pts.every((p, i) => s5(p.x, p.y, seed).tone === tones[i]));
+    check('H: THE CAPTURE LAW reaches the cells — the pre-fixture sampler is blind to the pair',
+      preBlind !== tones[5], `blind ${preBlind} vs blended ${tones[5]}`);
+    delete world.zoneMap['tissue_blend_a'];
+    delete world.zoneMap['tissue_blend_b'];
+  }
+}
+
+// -------------------------------------------------------------------------- I
+{
+  const band = PARTITION_CFG.blendBandPx;
+  // Three seats whose axis cuts open a true wedge strip between A (x≤45u)
+  // and B (x≥49.5u) below C's floor (y≥40u): the fold's own geometry,
+  // re-derived probe-side as the oracle.
+  const seatsOf = (bx: number, by: number) => [
+    { id: 'tissue_wedge_a', x: bx, y: by },
+    { id: 'tissue_wedge_b', x: bx + 90, y: by + 5 },
+    { id: 'tissue_wedge_c', x: bx + 9, y: by + 80 },
+  ];
+  const walkOf = (bx: number, by: number): Array<{ x: number; y: number }> => {
+    const pa = mapToPx({ x: bx, y: by });
+    const u = mapToPx({ x: bx + 1, y: by }).x - pa.x; // px per unit, derived not assumed
+    const xA = pa.x + 45 * u, xB = pa.x + 49.5 * u;   // the two wedge rims
+    const out: Array<{ x: number; y: number }> = [];
+    const from = xB - band - 60, to = xA + band + 60;
+    for (let k = 0; k <= 12; k++) out.push({ x: from + (k / 12) * (to - from), y: pa.y });
+    out.push({ x: (xA + xB) / 2, y: pa.y }); // the equidistant spine, exact
+    return out;
+  };
+  const base = findLandBase(walkOf);
+  check('I: a dry wedge window stands within the far scan', base !== null,
+    base ? `base (${base.bx}, ${base.by}) units` : 'none found — widen the scan');
+  if (base) {
+    const { bx, by } = base;
+    const [tplA, tplB] = pairs[0];
+    const thirdBiome = biomeIds.find(id => id !== biomeA && id !== biomeB) ?? biomeA;
+    const defs: Array<[string, { x: number; y: number }, string]> = [
+      ['tissue_wedge_a', { x: bx, y: by }, biomeA],
+      ['tissue_wedge_b', { x: bx + 90, y: by + 5 }, biomeB],
+      ['tissue_wedge_c', { x: bx + 9, y: by + 80 }, thirdBiome],
+    ];
+    for (const [id, map, biome] of defs) {
+      world.zoneMap[id] = { ...(id.endsWith('_b') ? tplB : tplA), id, map, exits: [], biome };
+    }
+    // The oracle: fold the three seats alone (the real web is beyond every
+    // cut's reach out here) and prove the spine point sits in NO cell.
+    const seats: CellSeat[] = seatsOf(bx, by).map(s => ({ id: s.id, ...mapToPx({ x: s.x, y: s.y }) }));
+    const foldW = foldCells(seats);
+    const walk = walkOf(bx, by);
+    const spine = walk[walk.length - 1];
+    const inNoCell = [...foldW.values()].every(c =>
+      !(spine.x >= c.x0 && spine.x <= c.x1 && spine.y >= c.y0 && spine.y <= c.y1));
+    check('I: the spine point is claimed by NO cell — a true wedge (the fold oracle)', inNoCell,
+      `spine (${spine.x.toFixed(0)}, ${spine.y.toFixed(0)})`);
+    const s6 = buildTissueSampler(world);
+    const spineTone = s6(spine.x, spine.y, seed).tone;
+    check('I: the wedge spine blends the nearest TWO cells 50/50 — the far third is weightless',
+      spineTone === midHex(toneA, toneB), `${spineTone} vs ${midHex(toneA, toneB)}`);
+    const tones = walk.slice(0, 13).map(p => s6(p.x, p.y, seed).tone);
+    check('I: the walk across the wedge is monotone between the flanking pair',
+      monotoneAB(tones, toneA, toneB), tones.join(' '));
+    check('I: the wedge\'s far flanks read the pure own tones',
+      tones[0] === toneA && tones[12] === toneB, `${tones[0]} / ${tones[12]}`);
+    for (const [id] of defs) delete world.zoneMap[id];
+  }
+}
+
+// -------------------------------------------------------------------------- J
+{
+  // THE PRE-BLEND LAW re-implemented verbatim as oracle: road by the segment
+  // ribbon (same squared compare, all segments — the bins are a conservative
+  // superset, so verdicts match exactly), ocean by the same biomeAt read,
+  // slope by the same centered elevationAt formula. The partition blends
+  // TONE, never passability — walkable/road must equal the pre-blend
+  // sampler's own derivation on every lattice sample.
+  const segsJ = pairs.map(([a, b]) => {
+    const pa = mapToPx(a.map), pb = mapToPx(b.map);
+    return { ax: pa.x, ay: pa.y, bx: pb.x, by: pb.y };
+  });
+  const ribbonSq = SEAMLESS_CFG.roadHalfPx * SEAMLESS_CFG.roadHalfPx;
+  const segDistSqJ = (px: number, py: number, s: { ax: number; ay: number; bx: number; by: number }): number => {
+    const dx = s.bx - s.ax, dy = s.by - s.ay;
+    const len2 = dx * dx + dy * dy;
+    let t = len2 > 0 ? ((px - s.ax) * dx + (py - s.ay) * dy) / len2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const qx = s.ax + dx * t, qy = s.ay + dy * t;
+    return (px - qx) * (px - qx) + (py - qy) * (py - qy);
+  };
+  const N = 40;
+  let mismatched = 0;
+  let firstBad = '';
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < N; j++) {
+      const x = latMinX + ((i + 0.5) / N) * (latMaxX - latMinX);
+      const y = latMinY + ((j + 0.5) / N) * (latMaxY - latMinY);
+      const road = segsJ.some(s => segDistSqJ(x, y, s) <= ribbonSq);
+      const c = pxToMap({ x, y });
+      let walkable = true;
+      if (!road) {
+        if (biomeAt(c, seed) === OCEAN_BIOME) walkable = false;
+        else {
+          const h = TISSUE_CFG.slopeStepUnits;
+          const gx = elevationAt({ x: c.x + h, y: c.y }, seed) - elevationAt({ x: c.x - h, y: c.y }, seed);
+          const gy = elevationAt({ x: c.x, y: c.y + h }, seed) - elevationAt({ x: c.x, y: c.y - h }, seed);
+          if (Math.hypot(gx, gy) / (2 * h) > TISSUE_CFG.slopeMax) walkable = false;
+        }
+      }
+      const t = s1(x, y, seed);
+      if (t.road !== road || t.walkable !== walkable) {
+        mismatched++;
+        if (!firstBad) firstBad = `(${x.toFixed(0)}, ${y.toFixed(0)}): got ${t.walkable}/${t.road}, law says ${walkable}/${road}`;
+      }
+    }
+  }
+  check('J: walkable + road equal the pre-blend law on every lattice sample — the blend touches TONE only',
+    mismatched === 0, mismatched ? `${mismatched} mismatches; first ${firstBad}` : `${N * N} samples byte-equal`);
 }
 
 // ---------------------------------------------------------------- E (part 2)
