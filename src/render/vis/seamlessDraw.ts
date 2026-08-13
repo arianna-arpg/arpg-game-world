@@ -15,14 +15,34 @@
 // region — active AND away — at FULL fidelity through the one bake pipeline,
 // keyed on world chunk coordinates so a threshold crossing changes which
 // region is active without dropping a single chunk. drawSeamlessCountry
-// below hands each away seat to it inside the outside-the-union clip. The
-// M0 reduced-fidelity flat ground bake (SeamlessAwayGrounds) RETIRED with
-// it — what remains here of the neighbor is SeamlessAwayBodies, the flat
-// STANDING-DOODAD discs over that real ground (the doodad painters only run
-// live for the active zone; a future wave makes neighbor bodies resident).
-// The M0 away DIM retired with the flats too: the crossing may not pop, so
-// the neighbor's ground wears its true tones (FLAGGED — if her eye wants
-// the not-yet-real veil back, it belongs at draw time, never in the bake).
+// below hands each away seat to it inside the outside-the-union clip.
+// The M0 away DIM retired with the flat grounds: the crossing may not pop,
+// so the neighbor wears its true tones (FLAGGED — if her eye wants a
+// distance veil back, it belongs at draw time, never in the bake).
+//
+// THE NEIGHBOR'S BODIES (M1 wave 2 — SeamlessBodyChunks): the away regions'
+// standing doodads drawn by the REAL painter library, baked at ground-chunk
+// grain over the SAME world lattice the wave-1 ground rides (`zoneId:cx,cy`
+// keys, cache peers across the threshold — THE CONTINUITY LAW). Each chunk
+// bake runs the drawDoodads paint loop (cull → kind groups → ascending
+// order → blend-live underlays → contact shadows → bakeWhole sprites →
+// painters, structure roofs last) against the region's boot mint through
+// THE SCOPED WORLD SWAP (ground.ts bakeAwayChunk's own idiom, walk added:
+// zone/doodads/structures/walk present the mint as "the world" for the span
+// of one bake, restored in finally — painters' zone-shaped reads all serve).
+// THE BAKE POSTURE (ground.ts's static-layer env, verbatim): time 0 — THE
+// STILL LAW, every animated painter freezes at its zero phase, the live
+// overlay owns motion the moment the region goes active — no shadowGate
+// (ungoverned, the bake law), no labelSink (wordless BY CONSTRUCTION).
+// Live-WORLD reads a painter makes anyway (hero bearing, snowCover, the
+// conclave's heat) freeze as stills of the moment — documented per kind in
+// the pass memory; no kind at this HEAD requires a disc fallback, and the
+// warned generic disc remains only for registry-less kinds (the live pass's
+// own fallback). What the still forgoes, BY LAW: sun longShadows (they spin
+// with the day — a frozen cast would lie within minutes), the light layer
+// (live-only by design), eldritch adorn writhes, labels. The M0 flat-disc
+// bake (SeamlessAwayBodies) and its alpha/scale dials RETIRED with this —
+// full-fidelity bodies draw at their own alphas.
 //
 // TWO MODULE CACHES, both steward-registered (render/vis/caches.ts):
 //  • SeamlessTissueChunks — per-chunk offscreen canvases keyed `${cx},${cy}`
@@ -33,20 +53,25 @@
 //    own purity law — so they survive zone swaps VALIDLY (no onZoneSwap
 //    handler on purpose: clearing at the threshold would pop the tissue at
 //    the exact moment that must feel continuous; the cap is the bound).
-//  • SeamlessAwayBodies — one reduced-scale disc bake per resident neighbor.
+//  • SeamlessBodyChunks — the away bodies above, invalidated by mint
+//    identity (a re-minted record re-bakes), LRU + the working-set guard.
 // (The world-keyed ground cache registers from its own home, ground.ts.)
 // ---------------------------------------------------------------------------
 
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
+import { roofStyle } from '../../data/structures';
 import type { ZoneDef } from '../../data/zones';
 import type { Doodad } from '../../engine/levelgen';
 import type { SeamlessMint, World } from '../../engine/world';
 import { getTissueSampler, SEAMLESS_CFG, type RegionSeat, type TissueSampler } from '../../world/seamless';
 import { activePieces, type BoundsPiece } from '../../world/shape';
 import { registerVisCache } from './caches';
-import { mix } from './color';
+import { mix, shade } from './color';
 import type { GroundRenderer } from './ground';
+import { PAINTERS, paintBakedWhole, paintBlendUnderlay, paintGroupShadows,
+  type DoodadVisualDef, type PaintEnv } from './painters';
 import { releaseCanvas } from './sprites';
+import { VIS_ABLATE, VIS_CFG } from './visConfig';
 
 /** Seamless render-lane dials — ALL FLAGGED (unblessed; her word moves
  *  them). Tone rationale: the road lifts the biome tone just enough to read
@@ -84,14 +109,20 @@ export const SEAMLESS_DRAW_CFG = {
    *  discrete lane runs 3; the seamless lane keeps a lighter hand because
    *  convergence bakes are usually pixel-identical to what they replace. */
   groundRebakesPerFrame: 2,
-  /** Away BODY discs (SeamlessAwayBodies) bake scale — the M0 cut, now
-   *  bodies-only: the ground beneath is full fidelity. */
-  awayScale: 1 / 3,
-  /** Resident neighbor body bakes kept (LRU). */
-  maxAway: 3,
-  /** Away body-disc alphas by paint-order class (grounds vs standing). */
-  groundDoodadAlpha: 0.55,
-  standingDoodadAlpha: 0.9,
+  /** THE NEIGHBOR'S BODIES (M1 wave 2, SeamlessBodyChunks) — LRU cap on
+   *  away body-overlay chunks (~0.8MB each at the ground grain; 48 ≈ 38MB,
+   *  the ground cache's own byte class; empty-country chunks cost no
+   *  bytes). The working-set guard bounds session growth, never the view. */
+  maxBodyChunks: 48,
+  /** Fresh body-chunk bakes per frame across every away seat (the tissue
+   *  lane's count-budget idiom — a bake is one drawDoodads-class paint over
+   *  one chunk, so the trickle fills a view in a few frames). */
+  bodyBakesPerFrame: 2,
+  /** The chunk cull's flat paint-reach margin past a doodad's radius (px) —
+   *  the live view cull's own posture (renderer RENDER_CULL_PAD): skirts,
+   *  bakeWhole overreach and eye-stalk leans all land inside it; blend beds
+   *  widen it per kind by their true feather reach. */
+  bodyCullPad: 150,
 } as const;
 
 /** The seed lane the engine itself reads for climate/continents
@@ -151,6 +182,13 @@ class SeamlessTissueChunks {
     if (!sampler) return;
     const seed = worldSeedOf(world);
     if (seed !== this.seedRef) { this.clear(); this.seedRef = seed; }
+    // THE INTEGER-SNAP LAW (every world-keyed chunk lane): seats sit at
+    // FRACTIONAL world px, and a drawImage at a fractional dest bleeds its
+    // bilinear edge — a visible 1px column at every chunk boundary over
+    // flat country. One rounded draw-origin per pass keeps all chunks on
+    // one integer lattice (exact 720 spacing, seams closed); the ≤0.5px
+    // whole-field shift is invisible and identical for every chunk.
+    const dox = Math.round(originX), doy = Math.round(originY);
     const C = SEAMLESS_CFG.chunkPx, ahead = SEAMLESS_CFG.seedAhead;
     const wx0 = camX + originX, wy0 = camY + originY; // view origin in world px
     const x0 = Math.floor((wx0 - ahead) / C), x1 = Math.floor((wx0 + vw + ahead) / C);
@@ -165,7 +203,7 @@ class SeamlessTissueChunks {
         if (entry) {
           this.chunks.delete(key); this.chunks.set(key, entry); // LRU touch
           entry.at = ++this.seq;
-          ctx.drawImage(entry.img, cx * C - originX, cy * C - originY);
+          ctx.drawImage(entry.img, cx * C - dox, cy * C - doy);
         } else {
           missing.push({ cx, cy, d2: (cx + 0.5 - ccx) ** 2 + (cy + 0.5 - ccy) ** 2 });
         }
@@ -178,7 +216,7 @@ class SeamlessTissueChunks {
         const m = missing[i];
         const img = this.bake(sampler, seed, m.cx, m.cy);
         this.chunks.set(`${m.cx},${m.cy}`, { img, at: ++this.seq });
-        ctx.drawImage(img, m.cx * C - originX, m.cy * C - originY);
+        ctx.drawImage(img, m.cx * C - dox, m.cy * C - doy);
       }
     }
     // Evict past the cap — but never a chunk this very frame drew (a wide dev
@@ -223,107 +261,289 @@ class SeamlessTissueChunks {
 }
 
 // ---------------------------------------------------------------------------
-// THE AWAY BODIES — the neighbor's standing doodads as flat discs, drawn
-// OVER its world-keyed full-fidelity ground (M1 wave 1: the M0 flat ground
-// bake retired into ground.ts's worldChunks). The doodad painter pass only
-// runs live for the active zone, so until a wave makes neighbor bodies
-// resident this keeps the treeline readable at the M0 disc fidelity.
+// THE AWAY BODIES (M1 wave 2) — the neighbor's standing doodads drawn by the
+// REAL painters, baked at ground-chunk grain over the world lattice, drawn
+// OVER its world-keyed full-fidelity ground. The M0 flat-disc pass retired
+// into this (module header carries the laws). Canopy CROWNS are the canopy
+// layer's own seat (render/vis/canopy.ts) — this lane paints what the live
+// drawDoodads pass paints, nothing above it.
 // ---------------------------------------------------------------------------
 
-interface AwayEntry { img: HTMLCanvasElement; w: number; h: number; at: number; mint: SeamlessMint }
+interface BodyChunkEntry {
+  /** null = the bake culled NOTHING in reach (the empty-country marker —
+   *  most chunks of a sparse zone): drawn as nothing, costs no bytes,
+   *  remembered so the cull never re-runs per frame. */
+  img: HTMLCanvasElement | null;
+  at: number;
+  mint: SeamlessMint;
+}
 
-class SeamlessAwayBodies {
-  private bodies = new Map<string, AwayEntry>(); // zoneId → bake (LRU)
+/** Per-region memo for the body lane, invalidated by mint identity: the
+ *  widest cull reach any doodad in the layout needs (the chunk-lattice
+ *  window's expansion — bodies legitimately overreach the layout rect). */
+interface BodyStatics { mint: SeamlessMint; reach: number }
+
+/** A doodad's conservative paint reach past its center for the chunk cull:
+ *  the live view cull's own posture (radius + RENDER_CULL_PAD-class
+ *  margin), widened by a blend bed's true reach where the kind declares one
+ *  (the ground gather's own pad formula). */
+function bodyCullPadOf(d: Doodad, def: DoodadVisualDef | undefined): number {
+  let pad = d.radius + SEAMLESS_DRAW_CFG.bodyCullPad;
+  const blend = def?.blend;
+  if (blend) {
+    pad = Math.max(pad, blend.feather + d.radius * (blend.mode === 'path' ? 3.7 : 1.4) + 8);
+  }
+  return pad;
+}
+
+class SeamlessBodyChunks {
+  /** `zoneId:cx,cy` in WORLD chunk coords at the ground grain — the wave-1
+   *  peer-key idiom; Map insertion order as LRU (delete+set touch). */
+  private chunks = new Map<string, BodyChunkEntry>();
+  private statics = new Map<string, BodyStatics>();
   private seq = 0;
+  private bakesLeft = 0;
+  private drawFloor = 0;
 
-  count(): number { return this.bodies.size; }
+  count(): number { return this.chunks.size; }
   bytes(): number {
     let b = 0;
-    for (const e of this.bodies.values()) b += e.img.width * e.img.height * 4;
+    for (const e of this.chunks.values()) if (e.img) b += e.img.width * e.img.height * 4;
     return b;
   }
 
   clear(): void {
-    for (const e of this.bodies.values()) releaseCanvas(e.img);
-    this.bodies.clear();
+    for (const e of this.chunks.values()) if (e.img) releaseCanvas(e.img);
+    this.chunks.clear();
+    this.statics.clear();
   }
 
-  /** Draw one away seat's bodies if its footprint touches the view. The
-   *  doodads come from the placement lane's OWN resident mint
-   *  (World.seamlessMints — the same layout the threshold sweep lands on,
-   *  so drawn == arrived-at); the bake is lazy and view-gated, and a
-   *  re-minted record (the exits-key refresh) re-bakes by mint identity. */
+  /** Open the frame's bake budget + eviction floor (drawSeamlessCountry
+   *  calls this once before the seat loop; every away seat spends from the
+   *  same purse — the shared-ledger idiom at count grain). */
+  beginFrame(): void {
+    this.bakesLeft = SEAMLESS_DRAW_CFG.bodyBakesPerFrame;
+    this.drawFloor = this.seq;
+  }
+
+  private staticsFor(zoneId: string, mint: SeamlessMint): BodyStatics {
+    const hit = this.statics.get(zoneId);
+    if (hit && hit.mint === mint) return hit;
+    let reach: number = SEAMLESS_DRAW_CFG.bodyCullPad;
+    for (const d of mint.layout.doodads) {
+      reach = Math.max(reach, bodyCullPadOf(d, DOODAD_VISUALS[d.kind]));
+    }
+    const st: BodyStatics = { mint, reach };
+    this.statics.set(zoneId, st);
+    return st;
+  }
+
+  /** Draw one away seat's body chunks where its footprint (+overreach)
+   *  touches the view. Doodads come from the placement lane's OWN resident
+   *  mint (World.seamlessMints — the same layout the threshold sweep lands
+   *  on, so drawn == arrived-at); bakes are lazy, view-gated and budgeted;
+   *  a re-minted record (the exits-key refresh) re-bakes by mint identity
+   *  while the old image keeps drawing (the ground's own converge idiom). */
   draw(ctx: CanvasRenderingContext2D, world: World, seat: RegionSeat,
     originX: number, originY: number, camX: number, camY: number, vw: number, vh: number): void {
     const def = world.zoneMap[seat.zoneId];
     const mint = world.seamlessMints.get(seat.zoneId);
     if (!def || def.boundless || !mint) return; // no mint = stand down
+    const C = VIS_CFG.ground.chunk;
     const w = mint.span.w || def.size.w, h = mint.span.h || def.size.h;
-    const lx = seat.originPx.x - originX, ly = seat.originPx.y - originY; // zone-local top-left
-    if (lx > camX + vw || ly > camY + vh || lx + w < camX || ly + h < camY) return;
-    let entry = this.bodies.get(seat.zoneId);
-    if (!entry || entry.mint !== mint) {
-      if (entry) releaseCanvas(entry.img);
-      entry = this.bake(def, mint, w, h);
-      this.bodies.delete(seat.zoneId); this.bodies.set(seat.zoneId, entry);
-      while (this.bodies.size > SEAMLESS_DRAW_CFG.maxAway) {
-        const oldest = this.bodies.keys().next().value;
-        if (oldest === undefined) break;
-        const old = this.bodies.get(oldest);
-        if (old) releaseCanvas(old.img);
-        this.bodies.delete(oldest);
+    const st = this.staticsFor(seat.zoneId, mint);
+    // View ∩ footprint+overreach, world px. NO silhouette clip here, on
+    // purpose: a rim tree's skirt spilling onto the tissue is what an
+    // embedded place looks like (the ellipse corner stays body-sparse
+    // because no doodad STANDS there — the mint's own geometry is the law).
+    const wx0 = Math.max(camX + originX, seat.originPx.x - st.reach);
+    const wy0 = Math.max(camY + originY, seat.originPx.y - st.reach);
+    const wx1 = Math.min(camX + vw + originX, seat.originPx.x + w - 1 + st.reach);
+    const wy1 = Math.min(camY + vh + originY, seat.originPx.y + h - 1 + st.reach);
+    if (wx1 < wx0 || wy1 < wy0) return;
+    // THE INTEGER-SNAP LAW (the tissue draw's own note): one rounded
+    // draw-origin per pass, so every chunk blits on one integer lattice.
+    const dox = Math.round(originX), doy = Math.round(originY);
+    const x0 = Math.floor(wx0 / C), x1 = Math.floor(wx1 / C);
+    const y0 = Math.floor(wy0 / C), y1 = Math.floor(wy1 / C);
+    const ccx = (wx0 + wx1) / 2 / C, ccy = (wy0 + wy1) / 2 / C;
+    const missing: { key: string; cx: number; cy: number; d2: number }[] = [];
+    const stale: { entry: BodyChunkEntry; cx: number; cy: number }[] = [];
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const key = `${seat.zoneId}:${cx},${cy}`;
+        const entry = this.chunks.get(key);
+        if (!entry) {
+          missing.push({ key, cx, cy, d2: (cx + 0.5 - ccx) ** 2 + (cy + 0.5 - ccy) ** 2 });
+          continue;
+        }
+        this.chunks.delete(key); this.chunks.set(key, entry); // LRU touch
+        entry.at = ++this.seq;
+        if (entry.mint !== mint) stale.push({ entry, cx, cy });
+        if (entry.img) ctx.drawImage(entry.img, cx * C - dox, cy * C - doy);
       }
-    } else {
-      this.bodies.delete(seat.zoneId); this.bodies.set(seat.zoneId, entry); // LRU touch
     }
-    ctx.drawImage(entry.img, lx, ly, entry.w, entry.h);
+    missing.sort((a, b) => a.d2 - b.d2); // nearest-first: the view center dresses first
+    for (const m of missing) {
+      if (this.bakesLeft <= 0) break;
+      this.bakesLeft--;
+      const img = this.bake(world, def, mint, seat, m.cx, m.cy);
+      this.chunks.set(m.key, { img, at: ++this.seq, mint });
+      if (img) ctx.drawImage(img, m.cx * C - dox, m.cy * C - doy); // no one-frame hole
+    }
+    for (const s of stale) {
+      if (this.bakesLeft <= 0) break;
+      this.bakesLeft--;
+      const img = this.bake(world, def, mint, seat, s.cx, s.cy);
+      if (s.entry.img && s.entry.img !== img) releaseCanvas(s.entry.img);
+      s.entry.img = img;
+      s.entry.mint = mint;
+    }
+    // Evict past the cap — never an entry this frame touched (the
+    // working-set guard: the cap bounds SESSION growth, not the view).
+    while (this.chunks.size > SEAMLESS_DRAW_CFG.maxBodyChunks) {
+      const oldest = this.chunks.entries().next().value;
+      if (oldest === undefined || oldest[1].at > this.drawFloor) break;
+      if (oldest[1].img) releaseCanvas(oldest[1].img);
+      this.chunks.delete(oldest[0]);
+    }
   }
 
-  /** The disc bake: silhouette-clipped (an ellipse neighbor's corners stay
-   *  transparent for the ground/tissue below), doodads as flat discs in
-   *  ascending paint order (grounds under standing bodies) — the def's own
-   *  params.color where it speaks hex, else a theme-derived dark. No
-   *  painters, by the M0 law; no floor, no walls, no dim — the world-keyed
-   *  chunks beneath are the real ground. */
-  private bake(def: ZoneDef, mint: SeamlessMint, w: number, h: number): AwayEntry {
-    const S = SEAMLESS_DRAW_CFG.awayScale;
+  /** Bake one chunk of one away region's bodies through the REAL painter
+   *  loop — the drawDoodads mirror at bake posture, against the mint via
+   *  THE SCOPED WORLD SWAP (ground.ts bakeAwayChunk's idiom + walk, so
+   *  litPolygon's halo-pooling and every zone-shaped painter read serve the
+   *  MINT's geometry). Runs between sim updates like every render bake;
+   *  restored in finally. Returns null when nothing reaches the chunk. */
+  private bake(world: World, def: ZoneDef, mint: SeamlessMint, seat: RegionSeat,
+    cx: number, cy: number): HTMLCanvasElement | null {
+    const C = VIS_CFG.ground.chunk;
+    const ox = cx * C - seat.originPx.x, oy = cy * C - seat.originPx.y; // chunk top-left, zone-local
+    // THE TIER FILTER at arrival posture: a covered-exposure zone shows its
+    // ground deck (tier 0) — the live pass's own filter with the hero at
+    // the arrival tier (nobody stands in an away region to say otherwise).
+    const hideTier = def.tiers?.exposure === 'covered' ? 1 : null;
+    // --- Cull: everything whose paint reach touches this chunk. -----------
+    type Grp = { kind: string; list: Doodad[]; def: DoodadVisualDef | undefined };
+    const byKind = new Map<string, Grp>();
+    let any = false;
+    for (const d of mint.layout.doodads) {
+      if (d.gone || d.felled) continue; // mint bodies stand; belt for evap/fell state
+      if (hideTier !== null && (d.tier ?? 0) === hideTier) continue;
+      const vdef = DOODAD_VISUALS[d.kind];
+      const pad = bodyCullPadOf(d, vdef);
+      if (d.pos.x + pad < ox || d.pos.x - pad > ox + C
+        || d.pos.y + pad < oy || d.pos.y - pad > oy + C) continue;
+      let g = byKind.get(d.kind);
+      if (!g) { g = { kind: d.kind, list: [], def: vdef }; byKind.set(d.kind, g); }
+      g.list.push(d);
+      any = true;
+    }
+    const roofs = (mint.layout.structures ?? []).some(s2 =>
+      s2.roofs.some(r => r.x < ox + C && r.x + r.w > ox && r.y < oy + C && r.y + r.h > oy));
+    if (!any && !roofs) return null; // empty country — the null marker
     const c = document.createElement('canvas');
-    c.width = Math.max(1, Math.ceil(w * S));
-    c.height = Math.max(1, Math.ceil(h * S));
+    c.width = C; c.height = C;
     const g = c.getContext('2d')!;
-    g.scale(S, S);
-    if (mint.shape === 'ellipse') {
-      g.beginPath(); g.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); g.clip();
+    g.translate(-ox, -oy);
+    // THE SCOPED WORLD SWAP — the mint presents as "the world" for one bake.
+    const keepZone = world.zone, keepDoodads = world.doodads,
+      keepStructures = world.structures, keepWalk = world.walk;
+    world.zone = def;
+    world.doodads = mint.layout.doodads;
+    world.structures = mint.layout.structures ?? [];
+    world.walk = mint.layout.walk ?? null;
+    try {
+      this.paintBodies(g, world, def, mint, byKind);
+    } finally {
+      world.zone = keepZone; world.doodads = keepDoodads;
+      world.structures = keepStructures; world.walk = keepWalk;
     }
-    const dressed = [...mint.layout.doodads].sort((a, b) => orderOf(a) - orderOf(b));
-    for (const d of dressed) {
-      const order = orderOf(d);
-      g.globalAlpha = order < 44
-        ? SEAMLESS_DRAW_CFG.groundDoodadAlpha : SEAMLESS_DRAW_CFG.standingDoodadAlpha;
-      g.fillStyle = doodadToneOf(d, def.theme.floor);
-      g.beginPath();
-      g.arc(d.pos.x, d.pos.y, d.radius, 0, Math.PI * 2);
-      g.fill();
+    return c;
+  }
+
+  /** The drawDoodads paint loop at bake posture (see the module header for
+   *  what the still forgoes and why). Order mirrors the live pass exactly:
+   *  per kind ascending def order — blend-live underlay, contact shadows,
+   *  bakeWhole sprite or the kind's painter — then structure roofs. */
+  private paintBodies(g: CanvasRenderingContext2D, world: World, def: ZoneDef,
+    mint: SeamlessMint, byKind: Map<string, { kind: string; list: Doodad[]; def: DoodadVisualDef | undefined }>): void {
+    const shAlphaMul = def.theme.shadows?.alphaMul ?? 1;
+    // THE BAKE POSTURE (ground.ts's static-layer env): time 0, no
+    // shadowGate (ungoverned), no labelSink (wordless).
+    const env: PaintEnv = { ctx: g, theme: def.theme, time: 0, world };
+    const groups = [...byKind.values()].sort((a, b) => (a.def?.order ?? 50) - (b.def?.order ?? 50));
+    for (const grp of groups) {
+      if (!grp.def) {
+        // Registry-less kind: the live pass's warned generic disc (it warns
+        // there; the bake stays quiet — the region going active will speak).
+        PAINTERS.fallback(env, grp.list, { painter: 'fallback', order: 50 });
+        continue;
+      }
+      // (No sun longShadow: it spins with the day — a frozen cast lies.)
+      if (grp.def.blend && (grp.def.blend.live || !VIS_CFG.ground.bakeBlend)) {
+        // Static beds are already IN the wave-1 ground chunks; only the
+        // live-bed lane paints here — the live pass's own condition. Path
+        // mode needs the CHAIN intact (the ground gather's wholeChain law).
+        const list = grp.def.blend.mode === 'path'
+          ? mint.layout.doodads.filter(d => d.kind === grp.kind && !d.gone && !d.felled)
+          : grp.list;
+        paintBlendUnderlay(env, list, grp.def);
+      }
+      if (grp.def.shadow && !VIS_ABLATE.has('shadows')) {
+        paintGroupShadows(env, grp.list, grp.def.shadow * shAlphaMul);
+      }
+      if (grp.def.bakeWhole && VIS_CFG.ground.bakeDoodads) paintBakedWhole(env, grp.list, grp.def);
+      else (PAINTERS[grp.def.painter] ?? PAINTERS.fallback)(env, grp.list, grp.def);
     }
-    g.globalAlpha = 1;
-    return { img: c, w, h, at: ++this.seq, mint };
+    // --- Structure roofs: the drawRoofs geometry at standing alpha (nobody
+    // is inside an away region — no fade, no veil composite; under the
+    // canopy layer's crowns, which is the true aerial read). -------------
+    for (const st of mint.layout.structures ?? []) {
+      if (!st.roofs.length) continue;
+      const style = roofStyle(st.roofStyle);
+      const fade = style.alpha;
+      if (fade < 0.03) continue;
+      g.globalAlpha = fade;
+      for (const r of st.roofs) {
+        g.fillStyle = style.fill;
+        g.fillRect(r.x, r.y, r.w, r.h);
+        const lit = shade(style.fill, 0.16), dark = shade(style.fill, -0.22);
+        g.globalAlpha = fade * 0.55;
+        if (r.w >= r.h) {
+          g.fillStyle = lit; g.fillRect(r.x, r.y, r.w, r.h / 2);
+          g.fillStyle = dark; g.fillRect(r.x, r.y + r.h / 2, r.w, r.h / 2);
+        } else {
+          g.fillStyle = lit; g.fillRect(r.x, r.y, r.w / 2, r.h);
+          g.fillStyle = dark; g.fillRect(r.x + r.w / 2, r.y, r.w / 2, r.h);
+        }
+        g.globalAlpha = fade * 0.7;
+        g.strokeStyle = shade(style.fill, 0.3);
+        g.lineWidth = 1.5;
+        g.beginPath();
+        if (r.w >= r.h) { g.moveTo(r.x + 3, r.y + r.h / 2); g.lineTo(r.x + r.w - 3, r.y + r.h / 2); }
+        else { g.moveTo(r.x + r.w / 2, r.y + 3); g.lineTo(r.x + r.w / 2, r.y + r.h - 3); }
+        g.stroke();
+        g.globalAlpha = fade;
+        g.strokeStyle = style.edge;
+        g.lineWidth = 3;
+        g.strokeRect(r.x + 1.5, r.y + 1.5, r.w - 3, r.h - 3);
+        g.lineWidth = 1;
+        g.globalAlpha = fade * 0.45;
+        if (r.w >= r.h) {
+          for (let x = r.x + 12; x < r.x + r.w; x += 12) {
+            g.beginPath(); g.moveTo(x, r.y); g.lineTo(x, r.y + r.h); g.stroke();
+          }
+        } else {
+          for (let y = r.y + 12; y < r.y + r.h; y += 12) {
+            g.beginPath(); g.moveTo(r.x, y); g.lineTo(r.x + r.w, y); g.stroke();
+          }
+        }
+        g.globalAlpha = fade;
+      }
+      g.globalAlpha = 1;
+    }
   }
-}
-
-function orderOf(d: Doodad): number {
-  return DOODAD_VISUALS[d.kind]?.order ?? 46;
-}
-
-/** A doodad's flat preview tone: params.color when it is a plain hex or a
- *  'theme:x|#hex' spec's fallback hex; else the floor leaned dark. */
-function doodadToneOf(d: Doodad, floor: string): string {
-  const c = DOODAD_VISUALS[d.kind]?.params?.color;
-  if (typeof c === 'string') {
-    if (c.startsWith('#')) return c;
-    const bar = c.indexOf('|#');
-    if (bar >= 0) return c.slice(bar + 1);
-  }
-  return mix(floor, '#000000', 0.35);
 }
 
 // (awayShapeOf is RETIRED: the mint record now carries `shape`, stamped
@@ -339,7 +559,7 @@ function doodadToneOf(d: Doodad, floor: string): string {
 // ---------------------------------------------------------------------------
 
 const tissue = new SeamlessTissueChunks();
-const away = new SeamlessAwayBodies();
+const bodies = new SeamlessBodyChunks();
 
 registerVisCache({
   id: 'seamlessTissue',
@@ -348,10 +568,10 @@ registerVisCache({
   onRunSwap: () => tissue.clear(),
 });
 registerVisCache({
-  id: 'seamlessAway',
-  count: () => away.count(),
-  bytes: () => away.bytes(),
-  onRunSwap: () => away.clear(),
+  id: 'seamlessBodies',
+  count: () => bodies.count(),
+  bytes: () => bodies.bytes(),
+  onRunSwap: () => bodies.clear(),
 });
 
 // ---------------------------------------------------------------------------
@@ -381,10 +601,11 @@ function clipOutsideMember(ctx: CanvasRenderingContext2D, w: number, h: number,
 /** Everything past the active rim, seamless-mode: the tissue country, then
  *  each neighbor's full-fidelity world-keyed ground (the GroundRenderer's
  *  own away pass — chunks are cache peers with the active zone's, so the
- *  threshold crossing pops nothing), then its flat body discs over that.
- *  Runs under the world transform with the same (cam, view) frame
- *  drawVoidFrame takes; the caller has already gated on seamlessDrawActive
- *  and lends its ground renderer (the renderer owns the one instance). */
+ *  threshold crossing pops nothing), then its REAL painted bodies over that
+ *  (SeamlessBodyChunks — M1 wave 2). Runs under the world transform with
+ *  the same (cam, view) frame drawVoidFrame takes; the caller has already
+ *  gated on seamlessDrawActive and lends its ground renderer (the renderer
+ *  owns the one instance). */
 export function drawSeamlessCountry(ctx: CanvasRenderingContext2D, world: World,
   ground: GroundRenderer, camX: number, camY: number, vw: number, vh: number): void {
   const seat = activeSeatOf(world);
@@ -399,10 +620,11 @@ export function drawSeamlessCountry(ctx: CanvasRenderingContext2D, world: World,
   clipOutsideMember(ctx, az.w, az.h, ell, null);
   for (const pc of activePieces(az)) clipOutsideMember(ctx, az.w, az.h, ell, pc);
   tissue.draw(ctx, world, seat.originPx.x, seat.originPx.y, camX, camY, vw, vh);
+  bodies.beginFrame(); // one bake purse + eviction floor across every seat
   for (const s of world.seamlessRegions) {
     if (s.zoneId === world.zone.id) continue;
     ground.drawSeamlessAway(ctx, world, s, seat.originPx.x, seat.originPx.y, camX, camY, vw, vh);
-    away.draw(ctx, world, s, seat.originPx.x, seat.originPx.y, camX, camY, vw, vh);
+    bodies.draw(ctx, world, s, seat.originPx.x, seat.originPx.y, camX, camY, vw, vh);
   }
   ctx.restore();
 }

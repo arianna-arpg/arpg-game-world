@@ -717,11 +717,15 @@ export class GroundRenderer {
       this.seamlessRebakes++;
     }
     // --- Blit in spatial order (missing chunks stand in flat — the hull
-    // clip crops the rim, the country draw covers outside the union). ---
+    // clip crops the rim, the country draw covers outside the union).
+    // THE INTEGER-SNAP LAW (seamlessDraw.ts's tissue note): one rounded
+    // draw-origin per pass — a fractional-seat dest bleeds a 1px column at
+    // every chunk boundary; the snapped lattice closes the seams. ---
+    const dox = Math.round(originX), doy = Math.round(originY);
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         const entry = this.worldChunks.get(`${world.zone.id}:${cx},${cy}`);
-        const ox = cx * C - originX, oy = cy * C - originY;
+        const ox = cx * C - dox, oy = cy * C - doy;
         if (entry) {
           ctx.drawImage(entry.img, ox, oy);
         } else {
@@ -784,6 +788,8 @@ export class GroundRenderer {
     };
     const x0 = Math.floor(wx0 / C), x1 = Math.floor(wx1 / C);
     const y0 = Math.floor(wy0 / C), y1 = Math.floor(wy1 / C);
+    // THE INTEGER-SNAP LAW (the live pass's note above): snapped draw dests.
+    const dox = Math.round(originX), doy = Math.round(originY);
     const ccx = (wx0 + wx1) / 2 / C, ccy = (wy0 + wy1) / 2 / C;
     const missing: { key: string; cx: number; cy: number; d2: number }[] = [];
     const stale: { entry: WorldChunkEntry; cx: number; cy: number }[] = [];
@@ -791,7 +797,7 @@ export class GroundRenderer {
       for (let cx = x0; cx <= x1; cx++) {
         const key = `${seat.zoneId}:${cx},${cy}`;
         const entry = this.worldChunks.get(key);
-        const lx = cx * C - originX, ly = cy * C - originY;
+        const lx = cx * C - dox, ly = cy * C - doy;
         if (entry) {
           this.worldChunks.delete(key); this.worldChunks.set(key, entry); // LRU touch
           entry.at = ++this.worldSeq;
@@ -822,7 +828,7 @@ export class GroundRenderer {
       this.worldChunks.set(m.key,
         { img, at: ++this.worldSeq, bakedAt: ++this.bakeSeq, epoch: -1, v: 0, b: 0, mint });
       this.seamlessBakedNew = true;
-      ctx.drawImage(img, m.cx * C - originX, m.cy * C - originY); // no one-frame hole
+      ctx.drawImage(img, m.cx * C - dox, m.cy * C - doy); // no one-frame hole
     }
     stale.sort((a, b) => a.entry.bakedAt - b.entry.bakedAt);
     for (const s of stale) {
