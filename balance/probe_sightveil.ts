@@ -568,6 +568,171 @@ console.log('— B4. THE HULL LAW: a standing roof seals its doorways from outsi
   }
 }
 
+console.log('— B5. THE VEIL ACROSS BORDERS: neighbor walls cast, tissue stays open —');
+{
+  // The seamless commission (docs/design/seamless-world.md, feel verdict 5):
+  // "the veil acts as if the player has no visibility into bordering zones".
+  // The mechanism: regionAt answers 'wall' for EVERY out-of-grid point, so
+  // the query march read the whole beyond-rim country as one administrative
+  // wall (actors faded, labels gated) while the gather never saw neighbor
+  // mints (no drawn faces there — query and sheet even disagreed). This rig
+  // pins the fix from both sides: phantom dark DIES over away open ground,
+  // honest dark ARRIVES behind away walls — plus the away asymmetries
+  // (open-outside rim faces, the always-standing roof hull) and the
+  // mode-law controls.
+  const rF = VIS_CFG.sightVeil.regionStrength, dF = VIS_CFG.sightVeil.doodadStrength;
+  const radius = Math.min(VIS_CFG.sightVeil.maxRadius, Math.hypot(1280, 800) / 2 + 120);
+  const far = radius * VIS_CFG.sightVeil.farSlack;
+  const EYE = { x: 2200, y: 800 };
+
+  // ACTIVE zone: 2400×1600, open, east rim walled ONLY south of y=900 (the
+  // enclosure look: a wall with a gap — the y 0..900 border stands open).
+  const mkActiveWalk = (): GridWalkField => {
+    const w = new GridWalkField(2400, 1600, 30);
+    w.fillRect(0, 0, 2400, 1600, true);
+    w.fillRect(2370, 900, 2400, 1600, false);
+    return w;
+  };
+  // NEIGHBOR mint (seated at dx=2400, dy=0): west rim wall over y 0..600,
+  // an interior run, one cliff, one roofed structure.
+  const nbWalk = new GridWalkField(1200, 1600, 30);
+  nbWalk.fillRect(0, 0, 1200, 1600, true);
+  nbWalk.fillRect(0, 0, 30, 600, false);      // west rim wall (rows 0..600)
+  nbWalk.fillRect(300, 750, 600, 780, false); // interior run
+  const nbDoodads: Doodad[] = [
+    { kind: 'cliff', radius: 30, pos: { x: 500, y: 600 } } as unknown as Doodad,
+  ];
+  const nbMint = {
+    layout: {
+      walk: nbWalk,
+      doodads: nbDoodads,
+      structures: [{ roofs: [{ x: 350, y: 350, w: 200, h: 150 }] }],
+    },
+  };
+  const mkView = (mode: 'seamless' | 'flagOff' | 'plain'): SightView => {
+    const walk = mkActiveWalk();
+    const base: SightView = {
+      player: { pos: { x: EYE.x, y: EYE.y } },
+      walk, zone: { id: 'act' }, doodads: [] as Doodad[],
+      doodadsNear: () => [] as Doodad[], doodadRev: 1,
+    };
+    if (mode === 'plain') return base;
+    base.seamless = mode === 'seamless';
+    base.seamlessRegions = [
+      { zoneId: 'act', originPx: { x: 10000, y: 20000 } },
+      { zoneId: 'nb', originPx: { x: 12400, y: 20000 } },
+    ];
+    base.seamlessMints = new Map([['nb', nbMint]]);
+    return base;
+  };
+
+  const veil = new SightVeil();
+  veil.update(mkView('seamless'), 0, 1280, 800);
+  const inner = veil as unknown as {
+    edges: OccEdge[]; discs: { x: number }[]; nbMemo: Map<string, unknown>;
+  };
+
+  // The gather: the neighbor's cliff joined the live set translated; the
+  // neighbor rim's BOUNDARY face exists at the border line (the
+  // open-outside law — solid-outside would never emit it).
+  check('the neighbor cliff joined the fold (translated)',
+    inner.discs.length === 1 && Math.abs(inner.discs[0].x - 2900) < 1e-9,
+    `discs ${inner.discs.length}`);
+  const rimFace = inner.edges.some(e => e.nx === -1 && Math.abs(e.ax - 2400) < 1e-9
+    && e.ay <= 0.1 && e.by >= 599.9);
+  check('the neighbor rim wall casts its boundary face (open-outside law)', rimFace);
+
+  // Witness rays, all crossing the border inside the OPEN y 0..900 band:
+  const openNb = { x: 2900, y: 1100 };    // A: away open ground past the gap
+  const behindRim = { x: 2600, y: 300 };  // C: behind the neighbor's own rim wall
+  const behindRun = { x: 3050, y: 760 };  // B: behind its interior wall run
+  const inRoof = { x: 2850, y: 430 };     // hull: inside its standing roof
+  const tissue = { x: 2250, y: -300 };    // no grid owns this ground
+  const behindCliff = { x: 2986.5, y: 575.3 }; // 90px past the cliff, on-ray
+  check('away OPEN ground reads open (the administrative dark dies)',
+    veil.occludedAt(openNb) === 0, `${veil.occludedAt(openNb)}`);
+  check('behind the neighbor\'s rim wall: honest regionStrength',
+    Math.abs(veil.occludedAt(behindRim) - rF) < 1e-9, `${veil.occludedAt(behindRim)}`);
+  check('behind the neighbor\'s interior wall: regionStrength',
+    Math.abs(veil.occludedAt(behindRun) - rF) < 1e-9, `${veil.occludedAt(behindRun)}`);
+  check('inside the neighbor\'s standing roof: concealed (the away hull)',
+    Math.abs(veil.occludedAt(inRoof) - rF) < 1e-9, `${veil.occludedAt(inRoof)}`);
+  check('tissue (no grid owns it) occludes nothing',
+    veil.occludedAt(tissue) === 0, `${veil.occludedAt(tissue)}`);
+  check('behind the neighbor\'s cliff: the graded doodad dark crosses the border',
+    Math.abs(veil.occludedAt(behindCliff) - dF) < 1e-9, `${veil.occludedAt(behindCliff)}`);
+
+  // Drawn == tested at the wall family: the sheet's own edge geometry
+  // paints the wall witnesses and leaves the open one lit.
+  const sink = new CollectSink();
+  for (const e of inner.edges) edgeShadowForEye(sink, e, EYE.x, EYE.y, far, 0, 0, 1);
+  check('drawn agrees: wall witnesses painted, open ground not',
+    inside(sink.polys, behindRim.x, behindRim.y)
+    && inside(sink.polys, behindRun.x, behindRun.y)
+    && !inside(sink.polys, openNb.x, openNb.y));
+
+  // PRESSURE (the pre-wave law): a discrete-shaped veil over the same
+  // active ground reads EVERY beyond-grid sample as 'wall' (regionAt's
+  // out-of-bounds answer) — open neighbor ground, walled neighbor ground
+  // and bare tissue all march to the same administrative dark. That IS the
+  // "no visibility into bordering zones" sweep the lane kills.
+  const ctrl = new SightVeil();
+  ctrl.update(mkView('plain'), 0, 1280, 800);
+  check('pressure: the discrete law darkened the open neighbor ground',
+    Math.abs(ctrl.occludedAt(openNb) - rF) < 1e-9, `${ctrl.occludedAt(openNb)}`);
+  check('pressure: …and the walled ground and the tissue alike (the sweep)',
+    Math.abs(ctrl.occludedAt(behindRim) - rF) < 1e-9
+    && Math.abs(ctrl.occludedAt(tissue) - rF) < 1e-9,
+    `${ctrl.occludedAt(behindRim)} / ${ctrl.occludedAt(tissue)}`);
+
+  // THE MODE LAW, both stands: flag off (seats present, seamless false) and
+  // dial off (seamless true, crossBorder false) answer BYTE-IDENTICAL to
+  // the plain discrete veil across every witness.
+  const witnesses = [openNb, behindRim, behindRun, inRoof, behindCliff, tissue];
+  const flagOff = new SightVeil();
+  flagOff.update(mkView('flagOff'), 0, 1280, 800);
+  const cbDial = VIS_CFG.sightVeil as unknown as { crossBorder: boolean };
+  const dialOff = new SightVeil();
+  cbDial.crossBorder = false;
+  dialOff.update(mkView('seamless'), 0, 1280, 800);
+  cbDial.crossBorder = true;
+  let modeOk = true, modeWorst = '';
+  for (const p of witnesses) {
+    const want = ctrl.occludedAt(p);
+    if (flagOff.occludedAt(p) !== want) { modeOk = false; modeWorst = `flagOff @(${p.x},${p.y})`; }
+    if (dialOff.occludedAt(p) !== want) { modeOk = false; modeWorst = `dialOff @(${p.x},${p.y})`; }
+  }
+  const fEdges = (flagOff as unknown as { edges: OccEdge[]; discs: unknown[] });
+  const dEdges = (dialOff as unknown as { edges: OccEdge[]; discs: unknown[] });
+  const cEdges = (ctrl as unknown as { edges: OccEdge[]; discs: unknown[] });
+  check('mode law: flag-off and dial-off answer as plain discrete', modeOk, modeWorst);
+  check('mode law: their occluder sets are the discrete set',
+    fEdges.edges.length === cEdges.edges.length && fEdges.discs.length === cEdges.discs.length
+    && dEdges.edges.length === cEdges.edges.length && dEdges.discs.length === cEdges.discs.length,
+    `edges ${cEdges.edges.length}/${fEdges.edges.length}/${dEdges.edges.length}`);
+
+  // MINT IDENTITY invalidates: a re-minted neighbor (rim wall gone) swaps
+  // in and the standing memo dies with the old record.
+  const reWalk = new GridWalkField(1200, 1600, 30);
+  reWalk.fillRect(0, 0, 1200, 1600, true);
+  const view2 = mkView('seamless');
+  view2.seamlessMints = new Map([['nb', { layout: { walk: reWalk, doodads: [] as Doodad[] } }]]);
+  veil.update(view2, 0, 1280, 800);
+  check('a re-minted neighbor re-extracts (the rim dark lifts with its wall)',
+    veil.occludedAt(behindRim) === 0, `${veil.occludedAt(behindRim)}`);
+
+  // DEMOTION prunes: the ring drops the neighbor, the memo store follows
+  // (the working-set guard), and its ground honestly RETURNS to the
+  // discrete read (unresident country is unknown country again).
+  const view3 = mkView('seamless');
+  view3.seamlessRegions = [{ zoneId: 'act', originPx: { x: 10000, y: 20000 } }];
+  veil.update(view3, 0, 1280, 800);
+  check('a demoted neighbor prunes its memo; its ground reads discrete again',
+    inner.nbMemo.size === 0
+    && Math.abs(veil.occludedAt(behindRun) - ctrl.occludedAt(behindRun)) < 1e-9,
+    `memo ${inner.nbMemo.size}, occ ${veil.occludedAt(behindRun)}`);
+}
+
 console.log(`\n${pass} pass, ${fail} fail`);
 if (fail) process.exit(1);
 console.log('ALL PASS');

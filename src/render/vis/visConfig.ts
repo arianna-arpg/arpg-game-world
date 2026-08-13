@@ -440,6 +440,14 @@ export const VIS_CFG = {
      *  (the "one big blackened section" expectation); 0 = the old
      *  skyline-stays-lit doctrine (roofs float bright over the dark). */
     roofMul: 1,
+    /** THE VEIL ACROSS BORDERS (seamless mode — FLAGGED, unblessed): gather
+     *  occluders from resident neighbors' mints at their seat offsets, so
+     *  their walls cast honest shadows across the border and their open
+     *  ground reads open (the veil answers walls, never administrative
+     *  lines). False restores the pre-wave administrative dark WITHOUT
+     *  touching the mode — the A/B forensics lever. Discrete play never
+     *  reads it (no seats = the lane is structurally inert). */
+    crossBorder: true,
   },
 
   /** THE WATCH FABRIC's drawn read (render/vis/watchLayer.ts): a watcher's

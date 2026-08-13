@@ -81,6 +81,27 @@
 // "two differently shaded sections split by a straight line" sighting).
 // Wall runs keep the veil's full reach: the rampart is a visible cause.
 //
+// THE VEIL ACROSS BORDERS (seamless mode — VIS_CFG.sightVeil.crossBorder,
+// M2 wave 5): with resident neighbors standing at their map seats, the
+// occluder set extends past the active rim — each neighbor MINT's wall
+// cells and solid trunks join at its seat offset (memoized WHOLE per mint
+// identity × the hero's story, folded into the live set at the same reach
+// the active sweep uses — mint grain, never per-frame re-derivation), and
+// the query march routes every sample to the grid that OWNS its ground:
+// the active grid inside its own extent (today's law verbatim), a resident
+// neighbor's grid inside its span, and NO grid — the connective tissue —
+// reads OPEN. Away open ground contributes no occlusion: the veil answers
+// walls, never administrative lines (regionAt answers 'wall' for every
+// out-of-grid point, so the un-routed march read the WHOLE beyond-rim
+// country as one administrative wall — that sweep dies here). TWO deliberate
+// asymmetries against the active extraction, both documented at
+// buildNbMemo: a neighbor's out-of-grid reads OPEN (its rim walls are
+// watched from OUTSIDE and must cast over their own interior), and its
+// roofs ALWAYS conceal (nobody stands inside an away region — the hull law
+// at away posture). Discrete play is byte-identical BY CONSTRUCTION: no
+// seats = the lane is structurally inert (empty fold, the march's
+// discrete path untouched).
+//
 // The vis-layer doctrine holds: no World import — the pass reads a structural
 // view (World satisfies it) plus the same pure terrain-data helpers the LoS
 // ray itself resolves through. The path builders speak to a structural
@@ -88,6 +109,7 @@
 // (balance/probe_sightveil.ts) walks the EXACT polygons the sheet fills.
 // ---------------------------------------------------------------------------
 
+import { registerVisCache } from './caches';
 import { VIS_ABLATE, VIS_CFG } from './visConfig';
 import type { Doodad } from '../../engine/levelgen';
 import { doodadRuleOf, sightShadowFrac, hitSurfaceOf } from '../../engine/levelgen';
@@ -103,10 +125,32 @@ export interface SightView {
   /** The eye — pos plus its STORY (Actor.tier; THE ELEVATION LAW). */
   player: { pos: Pt; tier?: number };
   walk: unknown;
-  zone: { theme?: { sightVeil?: { mul?: number; regionMul?: number; doodadMul?: number } } };
+  zone: { id?: string; theme?: { sightVeil?: { mul?: number; regionMul?: number; doodadMul?: number } } };
   doodads: readonly Doodad[];
   doodadsNear(x: number, y: number, reach: number): readonly Doodad[];
   doodadRev: number;
+  /** THE VEIL ACROSS BORDERS (seamless mode) — all three optional: absent,
+   *  or the mode off, or no seats, or the active zone unseated, and the
+   *  cross-border lane is structurally inert (discrete play byte-identical
+   *  — the seamlessDrawActive predicate's shape, minus the tissue sampler:
+   *  the veil answers MINTS, never tissue). World satisfies these fields
+   *  as it stands; probe literals simply omit them. */
+  seamless?: boolean;
+  seamlessRegions?: readonly { zoneId: string; originPx: { x: number; y: number } }[];
+  seamlessMints?: { get(zoneId: string): SeamlessVeilMint | undefined };
+}
+
+/** The sliver of a resident neighbor's mint the veil reads (structural —
+ *  World.seamlessMints rows satisfy it; the probe builds literals). The
+ *  layout is the placement lane's OWN resident mint, so the shadows a
+ *  neighbor casts come from the same ground the threshold sweep lands on
+ *  (drawn == arrived-at — the body-chunk lane's contract). */
+export interface SeamlessVeilMint {
+  layout: {
+    walk?: unknown;
+    doodads: readonly Doodad[];
+    structures?: readonly { roofs: readonly { x: number; y: number; w: number; h: number }[] }[];
+  };
 }
 
 /** The path surface the shadow builders draw into. Path2D and canvas
@@ -129,6 +173,30 @@ export interface OccEdge { ax: number; ay: number; bx: number; by: number; nx: n
  *  punched out of the finished sheet so the object stays discernible through
  *  any shadow — a door on the wall plane must never read as wall. */
 interface Pierce { x: number; y: number; r: number; s: number }
+
+/** One resident neighbor's occluders, extracted WHOLE in NEIGHBOR-LOCAL px
+ *  and memoized against (mint identity × the settled hero story) — the
+ *  mint-identity idiom (SeamlessBodyChunks.statics): a re-minted record
+ *  rebuilds, a standing one never re-derives. `gw`/`gh` are the grid's
+ *  pixel extent — the march's ownership test. */
+interface NbMemo {
+  mint: SeamlessVeilMint;
+  heroT: number;
+  grid: GridWalkField | null;
+  gw: number; gh: number;
+  /** The mint's roof rects (neighbor-local) — ALWAYS concealing (the hull
+   *  law at away posture: nobody stands inside an away region). */
+  roofs: readonly { x: number; y: number; w: number; h: number }[];
+  edges: OccEdge[];
+  discs: OccDisc[];
+  rects: OccRect[];
+  pierces: Pierce[];
+}
+
+/** A resolved resident neighbor: its memo + this frame's seat offset —
+ *  neighbor-local + (dx,dy) = ACTIVE-local (one affine, the RegionSeat
+ *  contract), so a threshold rebase only moves the offsets. */
+interface NbRef { zoneId: string; dx: number; dy: number; memo: NbMemo }
 
 /** Hero-bucket size for cache keys (px): crossing one triggers a re-gather. */
 const GATHER_BUCKET = 96;
@@ -258,6 +326,36 @@ export class SightVeil {
   private gridRef: GridWalkField | null = null;
   private gridBx = 1e9; private gridBy = 1e9; private gridV = -1; private gridR = 0;
 
+  /** THE VEIL ACROSS BORDERS: the resolved resident neighbors (empty =
+   *  discrete play / mode off / dial off — the whole lane inert) + the
+   *  per-zone memo store. Working set = the resident ring BY CONSTRUCTION:
+   *  resolveNeighbors prunes demoted zones, and an emptied seat list
+   *  (discrete load, run end) prunes everything. */
+  private nbs: NbRef[] = [];
+  private nbMemo = new Map<string, NbMemo>();
+
+  constructor() {
+    // The steward row (instance caches register at construction — the
+    // ground/canopy idiom; re-registering the id replaces the row, so probe
+    // rigs constructing throwaway veils never accumulate rows). No
+    // onZoneSwap on purpose — the memo is world-keyed like the seamless
+    // chunk caches (clearing at the threshold would re-derive every
+    // neighbor at the exact moment that must stay smooth); demotion prunes
+    // through resolveNeighbors instead.
+    registerVisCache({
+      id: 'sightVeilBorders',
+      count: () => this.nbMemo.size,
+      bytes: () => {
+        let n = 0;
+        for (const m of this.nbMemo.values()) {
+          n += m.edges.length + m.discs.length + m.rects.length + m.pierces.length + m.roofs.length;
+        }
+        return n * 96; // census-grade: small numeric records
+      },
+      onRunSwap: () => { this.nbs = []; this.nbMemo.clear(); },
+    });
+  }
+
   /** THE HULL LAW: roof rects currently CONCEALING (standing roofs, fed by
    *  the renderer each frame) — their cells read solid to the extraction
    *  and to occludedAt alike, so an open doorway never lances a wedge
@@ -316,13 +414,20 @@ export class SightVeil {
       this.pendTier = null; this.heroT = hT; heroLifted = true;
     }
 
+    // THE VEIL ACROSS BORDERS: resolve the resident-neighbor fold (seat
+    // offsets + mint-identity memos, heroT-aware — hence after the settle
+    // block above). A changed fold (admission, demotion, re-mint, rebase,
+    // a settled story) re-runs both gathers below; an unchanged one costs
+    // a handful of compares. Discrete play: structurally empty, free.
+    const nbChanged = this.resolveNeighbors(view);
+
     // Doodad silhouettes: re-gather when the hero crosses a bucket, the
     // doodad list changes (identity/length/rev), or the reach outgrows the
     // last sweep. Between rebuilds this costs nothing per frame.
     const bx = Math.floor(p.x / GATHER_BUCKET), by = Math.floor(p.y / GATHER_BUCKET);
     if (bx !== this.dooBx || by !== this.dooBy || view.doodadRev !== this.dooRev
       || view.doodads !== this.dooArr || view.doodads.length !== this.dooLen
-      || this.radius > this.dooR || heroLifted) {
+      || this.radius > this.dooR || heroLifted || nbChanged) {
       this.gatherDoodads(view);
       this.dooBx = bx; this.dooBy = by; this.dooRev = view.doodadRev;
       this.dooArr = view.doodads; this.dooLen = view.doodads.length;
@@ -345,12 +450,15 @@ export class SightVeil {
       const gbx = Math.floor(p.x / g.cellSize), gby = Math.floor(p.y / g.cellSize);
       if (g !== this.gridRef || gbx !== this.gridBx || gby !== this.gridBy
         || g.version !== this.gridV || this.radius > this.gridR || hullChanged
-        || heroLifted) {
+        || heroLifted || nbChanged) {
         this.extractEdges(g);
         this.gridRef = g; this.gridBx = gbx; this.gridBy = gby;
         this.gridV = g.version; this.gridR = this.radius + GATHER_PAD;
       }
     } else if (this.gridRef) {
+      // No active grid = no region veil at all (neighbor edges fold inside
+      // extractEdges, so they stand down WITH it — and the query march
+      // gates on gridRef the same way: drawn == tested in the degenerate).
       this.gridRef = null;
       this.edges.length = 0;
     }
@@ -408,11 +516,36 @@ export class SightVeil {
         });
       }
     }
+    // THE CROSS-BORDER GATHER: resident neighbors' bodies join the live set
+    // at the SAME center-distance reach the active sweep used, translated
+    // by their seat offsets (memo holds each zone whole at mint grain; this
+    // fold is the only per-gather cost, and it runs at bucket cadence).
+    for (const nb of this.nbs) {
+      const m = nb.memo;
+      const ex = this.px - nb.dx, ey = this.py - nb.dy; // the eye, neighbor-local
+      for (const c of m.discs) {
+        const dx = c.x - ex, dy = c.y - ey;
+        if (dx * dx + dy * dy > reach * reach) continue;
+        this.discs.push({ x: c.x + nb.dx, y: c.y + nb.dy, r: c.r, s: c.s });
+      }
+      for (const r of m.rects) {
+        const dx = r.x - ex, dy = r.y - ey;
+        if (dx * dx + dy * dy > reach * reach) continue;
+        this.rects.push({ x: r.x + nb.dx, y: r.y + nb.dy, hw: r.hw, hh: r.hh,
+          rot: r.rot, boundR: r.boundR, s: r.s });
+      }
+      for (const q of m.pierces) {
+        const dx = q.x - ex, dy = q.y - ey;
+        if (dx * dx + dy * dy > reach * reach) continue;
+        this.pierces.push({ x: q.x + nb.dx, y: q.y + nb.dy, r: q.r, s: q.s });
+      }
+    }
     // Backstop for pathological groves: keep the NEAREST bodies (the far
     // ones matter least — the per-frame far cull already skips any body
     // whose whole shadow lies past the veil radius, so by construction the
     // cap only ever drops OFF-SCREEN casters unless a grove packs more than
-    // maxOccluders inside one screen).
+    // maxOccluders inside one screen). Runs over the cross-border union, so
+    // a grove straddling a seam degrades exactly like a native one.
     if (this.discs.length > cfg.maxOccluders) {
       const px = this.px, py = this.py;
       this.discs.sort((a, b) =>
@@ -423,7 +556,9 @@ export class SightVeil {
 
   /** Extract the solid mass's facing edges (merged runs) within reach.
    *  Out-of-window and out-of-grid both read as SOLID, so no phantom edge
-   *  ever appears at the sweep rim or the arena border. */
+   *  ever appears at the sweep rim or the arena border. Resident neighbors'
+   *  faces (THE CROSS-BORDER GATHER) fold in at the tail — even when the
+   *  eye stands so deep in tissue that the active window is empty. */
   private extractEdges(g: GridWalkField): void {
     this.edges.length = 0;
     const cs = g.cellSize;
@@ -432,25 +567,59 @@ export class SightVeil {
     const x1 = Math.min(g.cols - 1, Math.floor((this.px + reach) / cs));
     const y0 = Math.max(0, Math.floor((this.py - reach) / cs));
     const y1 = Math.min(g.rows - 1, Math.floor((this.py + reach) / cs));
-    if (x1 < x0 || y1 < y0) return;
-    const w = x1 - x0 + 1, h = y1 - y0 + 1;
-    const solid = new Uint8Array(w * h);
-    const heroEye = this.heroT + LOS_CFG.elev.eye;
-    for (let cy = y0; cy <= y1; cy++) {
-      for (let cx = x0; cx <= x1; cx++) {
-        const wx = (cx + 0.5) * cs, wy = (cy + 0.5) * cs;
-        // The hull law: cells under a standing roof read solid from outside
-        // — the structure is one opaque mass, and its doorways/slits spill
-        // only as the roof yields. THE ELEVATION LAW: a blocking cell that
-        // is tier FLOOR reads solid only to eyes below its deck.
-        const sb = sightBlockOf(g.regionAt(wx, wy));
-        if ((sb.b && (sb.e === null || heroEye < sb.e)) || this.concealedAt(wx, wy)) {
-          solid[(cy - y0) * w + (cx - x0)] = 1;
+    if (x1 >= x0 && y1 >= y0) {
+      const w = x1 - x0 + 1, h = y1 - y0 + 1;
+      const solid = new Uint8Array(w * h);
+      const heroEye = this.heroT + LOS_CFG.elev.eye;
+      for (let cy = y0; cy <= y1; cy++) {
+        for (let cx = x0; cx <= x1; cx++) {
+          const wx = (cx + 0.5) * cs, wy = (cy + 0.5) * cs;
+          // The hull law: cells under a standing roof read solid from outside
+          // — the structure is one opaque mass, and its doorways/slits spill
+          // only as the roof yields. THE ELEVATION LAW: a blocking cell that
+          // is tier FLOOR reads solid only to eyes below its deck.
+          const sb = sightBlockOf(g.regionAt(wx, wy));
+          if ((sb.b && (sb.e === null || heroEye < sb.e)) || this.concealedAt(wx, wy)) {
+            solid[(cy - y0) * w + (cx - x0)] = 1;
+          }
         }
       }
+      SightVeil.mergeGridFaces(solid, w, h, x0, y0, cs, 1, this.edges);
     }
+    // THE CROSS-BORDER GATHER: resident neighbors' wall faces join at the
+    // same reach, by SEGMENT distance (a merged run's midpoint can stand far
+    // beyond reach while its near end shadows the border — center distance
+    // would drop the exact walls this lane exists to draw).
+    for (const nb of this.nbs) {
+      const ex = this.px - nb.dx, ey = this.py - nb.dy; // the eye, neighbor-local
+      for (const e of nb.memo.edges) {
+        const vx = e.bx - e.ax, vy = e.by - e.ay;
+        const wx2 = ex - e.ax, wy2 = ey - e.ay;
+        const l2 = vx * vx + vy * vy;
+        let t = l2 > 0 ? (wx2 * vx + wy2 * vy) / l2 : 0;
+        if (t < 0) t = 0; else if (t > 1) t = 1;
+        const dx2 = wx2 - vx * t, dy2 = wy2 - vy * t;
+        if (dx2 * dx2 + dy2 * dy2 > reach * reach) continue;
+        this.edges.push({
+          ax: e.ax + nb.dx, ay: e.ay + nb.dy,
+          bx: e.bx + nb.dx, by: e.by + nb.dy, nx: e.nx, ny: e.ny,
+        });
+      }
+    }
+  }
+
+  /** Merge a solid mask's facing edges into `out` — ONE merge law shared by
+   *  the active window extraction and the neighbor whole-grid extraction,
+   *  differing only in the boundary rule: `outside` is what beyond-mask
+   *  reads as. 1 (solid) for the active window — no phantom edge at the
+   *  sweep rim or the arena border; 0 (open) for a neighbor grid — its rim
+   *  walls are watched from OUTSIDE and must cast over their own interior
+   *  (see buildNbMemo). Mask coords are cells; (x0,y0) the mask's cell
+   *  offset; emitted edges are px. */
+  private static mergeGridFaces(solid: Uint8Array, w: number, h: number,
+    x0: number, y0: number, cs: number, outside: 0 | 1, out: OccEdge[]): void {
     const solidAt = (wx: number, wy: number): number =>
-      wx < 0 || wy < 0 || wx >= w || wy >= h ? 1 : solid[wy * w + wx];
+      wx < 0 || wy < 0 || wx >= w || wy >= h ? outside : solid[wy * w + wx];
     // Horizontal faces (top: outward −y; bottom: outward +y), merged per row.
     for (let wy = 0; wy < h; wy++) {
       for (const [dy, ny] of [[-1, -1], [1, 1]] as const) {
@@ -460,7 +629,7 @@ export class SightVeil {
           if (face && run < 0) run = wx;
           else if (!face && run >= 0) {
             const yEdge = (y0 + wy + (dy > 0 ? 1 : 0)) * cs;
-            this.edges.push({
+            out.push({
               ax: (x0 + run) * cs, ay: yEdge,
               bx: (x0 + wx) * cs, by: yEdge, nx: 0, ny,
             });
@@ -478,7 +647,7 @@ export class SightVeil {
           if (face && run < 0) run = wy;
           else if (!face && run >= 0) {
             const xEdge = (x0 + wx + (dx > 0 ? 1 : 0)) * cs;
-            this.edges.push({
+            out.push({
               ax: xEdge, ay: (y0 + run) * cs,
               bx: xEdge, by: (y0 + wy) * cs, nx, ny: 0,
             });
@@ -487,6 +656,157 @@ export class SightVeil {
         }
       }
     }
+  }
+
+  /** THE VEIL ACROSS BORDERS — resolve this frame's resident-neighbor fold.
+   *  Returns true when it CHANGED (admission/demotion/re-mint/rebase/a
+   *  settled story), which forces both gathers. The steady frame is a
+   *  handful of compares and zero allocation; discrete play (no seats, or
+   *  the mode/dial off) resolves structurally empty. */
+  private resolveNeighbors(view: SightView): boolean {
+    const mints = view.seamlessMints;
+    const zid = view.zone.id;
+    let seats: SightView['seamlessRegions'];
+    let ax = 0, ay = 0;
+    if (VIS_CFG.sightVeil.crossBorder && view.seamless && mints && zid
+      && view.seamlessRegions?.length) {
+      // The active zone must hold a seat — without its origin, seat offsets
+      // are unaddressable (seamlessDrawActive's own stand-down).
+      for (const s of view.seamlessRegions) {
+        if (s.zoneId === zid) { ax = s.originPx.x; ay = s.originPx.y; seats = view.seamlessRegions; break; }
+      }
+    }
+    // First pass: does the standing fold still match? (allocation-free)
+    let n = 0, same = true;
+    if (seats && mints) {
+      for (const s of seats) {
+        if (s.zoneId === zid) continue;
+        const mint = mints.get(s.zoneId);
+        if (!mint) continue; // no mint = stand down (the body lane's rule)
+        const cur = this.nbs[n++];
+        if (!cur || cur.zoneId !== s.zoneId || cur.memo.mint !== mint
+          || cur.memo.heroT !== this.heroT
+          || cur.dx !== s.originPx.x - ax || cur.dy !== s.originPx.y - ay) {
+          same = false;
+          break;
+        }
+      }
+    }
+    if (same && n === this.nbs.length) return false;
+    // Rebuild the fold, reusing every memo whose (mint, story) still holds.
+    this.nbs = [];
+    if (seats && mints) {
+      for (const s of seats) {
+        if (s.zoneId === zid) continue;
+        const mint = mints.get(s.zoneId);
+        if (!mint) continue;
+        this.nbs.push({
+          zoneId: s.zoneId,
+          dx: s.originPx.x - ax, dy: s.originPx.y - ay,
+          memo: this.nbMemoFor(s.zoneId, mint),
+        });
+      }
+    }
+    // The working-set guard: the memo store never outgrows the resident
+    // ring — demoted (or mode-dropped) zones prune here.
+    if (this.nbMemo.size > this.nbs.length) {
+      for (const id of [...this.nbMemo.keys()]) {
+        if (!this.nbs.some(nb => nb.zoneId === id)) this.nbMemo.delete(id);
+      }
+    }
+    return true;
+  }
+
+  private nbMemoFor(zoneId: string, mint: SeamlessVeilMint): NbMemo {
+    const hit = this.nbMemo.get(zoneId);
+    if (hit && hit.mint === mint && hit.heroT === this.heroT) return hit;
+    const memo = this.buildNbMemo(mint);
+    this.nbMemo.set(zoneId, memo);
+    return memo;
+  }
+
+  /** Extract one resident neighbor's occluders WHOLE, neighbor-local — at
+   *  MINT grain (re-runs only on a re-mint or a settled hero-story change,
+   *  never per frame; the ring's own mint budget already paces admissions
+   *  to one layout per beat, and this ride-along is a fraction of one).
+   *  The flattening laws are the active gather's, verbatim (tier band,
+   *  graded strength, shot surface, pierce rows) — with the two AWAY
+   *  asymmetries: OUT-OF-GRID READS OPEN in the face merge (a neighbor is
+   *  watched from OUTSIDE; with the active law's solid-outside its rim
+   *  walls would never emit a boundary face and a walled zone would read
+   *  lit through its own rampart — while an OPEN rim still emits nothing,
+   *  so the border line itself casts no shadow: the veil answers walls,
+   *  never administrative lines), and ROOFS ALWAYS CONCEAL (the hull law
+   *  at away posture — nobody stands inside an away region, so every roof
+   *  stands; its cells read solid to face merge and march alike). */
+  private buildNbMemo(mint: SeamlessVeilMint): NbMemo {
+    const cfg = VIS_CFG.sightVeil;
+    const heroEye = this.heroT + LOS_CFG.elev.eye;
+    const roofs: { x: number; y: number; w: number; h: number }[] = [];
+    for (const st of mint.layout.structures ?? []) for (const r of st.roofs) roofs.push(r);
+    const memo: NbMemo = {
+      mint, heroT: this.heroT, grid: null, gw: 0, gh: 0, roofs,
+      edges: [], discs: [], rects: [], pierces: [],
+    };
+    for (const d of mint.layout.doodads) {
+      if (d.gone) continue; // evaporated remains in a memory-carried layout
+      const dT = d.tier ?? 0;
+      if (heroEye < dT || heroEye >= dT + LOS_CFG.elev.doodadBand) continue;
+      const vp = doodadRuleOf(d.kind).veilPierce;
+      if (vp) {
+        const spec = vp === true ? undefined : vp;
+        memo.pierces.push({
+          x: d.pos.x, y: d.pos.y,
+          r: spec?.radius ?? cfg.pierceRadius,
+          s: Math.max(0, Math.min(1, spec?.strength ?? cfg.pierceStrength)),
+        });
+      }
+      const sf = sightShadowFrac(d);
+      if (sf <= 0) continue;
+      const s = hitSurfaceOf(d, 'shot');
+      if (s.kind === 'circle') {
+        if (s.r > 0.5) memo.discs.push({ x: d.pos.x, y: d.pos.y, r: s.r, s: sf });
+      } else if (s.kind === 'multi') {
+        for (const q of s.parts) {
+          if (q.r > 0.5) memo.discs.push({ x: d.pos.x + q.dx, y: d.pos.y + q.dy, r: q.r, s: sf });
+        }
+      } else {
+        memo.rects.push({
+          x: d.pos.x, y: d.pos.y, hw: s.hw, hh: s.hh, rot: s.rot ?? 0,
+          boundR: Math.hypot(s.hw, s.hh), s: sf,
+        });
+      }
+    }
+    const g = mint.layout.walk instanceof GridWalkField ? mint.layout.walk : null;
+    if (g) {
+      memo.grid = g;
+      memo.gw = g.cols * g.cellSize;
+      memo.gh = g.rows * g.cellSize;
+      const cs = g.cellSize;
+      const solid = new Uint8Array(g.cols * g.rows);
+      for (let cy = 0; cy < g.rows; cy++) {
+        for (let cx = 0; cx < g.cols; cx++) {
+          const wx = (cx + 0.5) * cs, wy = (cy + 0.5) * cs;
+          const sb = sightBlockOf(g.regionAt(wx, wy));
+          if ((sb.b && (sb.e === null || heroEye < sb.e))
+            || SightVeil.nbRoofAt(roofs, wx, wy)) {
+            solid[cy * g.cols + cx] = 1;
+          }
+        }
+      }
+      SightVeil.mergeGridFaces(solid, g.cols, g.rows, 0, 0, cs, 0, memo.edges);
+    }
+    return memo;
+  }
+
+  /** Is this NEIGHBOR-LOCAL point under one of the mint's roofs? (The away
+   *  hull — see buildNbMemo.) */
+  private static nbRoofAt(roofs: readonly { x: number; y: number; w: number; h: number }[],
+    x: number, y: number): boolean {
+    for (const r of roofs) {
+      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return true;
+    }
+    return false;
   }
 
   /** How occluded a WORLD point is from the hero's eye (0 clear .. 1 fully
@@ -553,15 +873,56 @@ export class SightVeil {
       const limit = Math.min(len, this.radius);
       const eye = LOS_CFG.elev.eye;
       const hFrom = this.heroT + eye;
-      const hTo = (targetElev ?? (tierElevOf(g.regionAt(pos.x, pos.y)) ?? 0)) + eye;
-      for (let s = step; s < limit; s += step) {
-        const t = s / len;
-        const wx = px + qx * t, wy = py + qy * t;
-        const sb = sightBlockOf(g.regionAt(wx, wy));
-        if ((sb.b && (sb.e === null || hFrom + (hTo - hFrom) * t < sb.e))
-          || this.concealedAt(wx, wy)) {
-          f = this.regionF;
-          break;
+      if (!this.nbs.length) {
+        // Discrete play (and the dial off): today's march, verbatim —
+        // regionAt's out-of-grid 'wall' answer included (nothing stands
+        // past a discrete zone's rim for it to misread).
+        const hTo = (targetElev ?? (tierElevOf(g.regionAt(pos.x, pos.y)) ?? 0)) + eye;
+        for (let s = step; s < limit; s += step) {
+          const t = s / len;
+          const wx = px + qx * t, wy = py + qy * t;
+          const sb = sightBlockOf(g.regionAt(wx, wy));
+          if ((sb.b && (sb.e === null || hFrom + (hTo - hFrom) * t < sb.e))
+            || this.concealedAt(wx, wy)) {
+            f = this.regionF;
+            break;
+          }
+        }
+      } else {
+        // THE SEAMLESS MARCH (the veil across borders): every sample reads
+        // the grid that OWNS its ground — the active grid inside its own
+        // extent (today's law verbatim), a resident neighbor's grid inside
+        // its span at the seat offset (its roofs conceal — the away hull),
+        // and NO grid (the connective tissue) reads OPEN: away open ground
+        // contributes no occlusion. Beyond-extent samples no longer take
+        // regionAt's out-of-grid 'wall' answer — that read darkened the
+        // whole neighbor country (the administrative sweep this lane kills).
+        const gw = g.cols * g.cellSize, gh = g.rows * g.cellSize;
+        const hTo = (targetElev ?? this.floorElevAt(pos.x, pos.y, g, gw, gh)) + eye;
+        for (let s = step; s < limit; s += step) {
+          const t = s / len;
+          const wx = px + qx * t, wy = py + qy * t;
+          const rayH = hFrom + (hTo - hFrom) * t;
+          let hit = false;
+          if (wx >= 0 && wy >= 0 && wx < gw && wy < gh) {
+            const sb = sightBlockOf(g.regionAt(wx, wy));
+            hit = (sb.b && (sb.e === null || rayH < sb.e)) || this.concealedAt(wx, wy);
+          } else {
+            for (const nb of this.nbs) {
+              const m = nb.memo;
+              if (!m.grid) continue;
+              const lx = wx - nb.dx, ly = wy - nb.dy;
+              if (lx < 0 || ly < 0 || lx >= m.gw || ly >= m.gh) continue;
+              const sb = sightBlockOf(m.grid.regionAt(lx, ly));
+              hit = (sb.b && (sb.e === null || rayH < sb.e))
+                || SightVeil.nbRoofAt(m.roofs, lx, ly);
+              break; // spans tile without overlap (the partition law)
+            }
+          }
+          if (hit) {
+            f = this.regionF;
+            break;
+          }
         }
       }
     }
@@ -569,6 +930,22 @@ export class SightVeil {
     // sheet (drawn==tested at the door's threshold).
     if (f > 0 && this.pierces.length) f *= 1 - this.pierceAt(pos.x, pos.y);
     return f;
+  }
+
+  /** The floor story a WORLD point sits on, routed by owning grid (the
+   *  seamless march's hTo when the caller gave no story): the active grid
+   *  inside its extent (today's read), a resident neighbor's inside its
+   *  span, the tissue ground floor 0. */
+  private floorElevAt(x: number, y: number, g: GridWalkField, gw: number, gh: number): number {
+    if (x >= 0 && y >= 0 && x < gw && y < gh) return tierElevOf(g.regionAt(x, y)) ?? 0;
+    for (const nb of this.nbs) {
+      const m = nb.memo;
+      if (!m.grid) continue;
+      const lx = x - nb.dx, ly = y - nb.dy;
+      if (lx < 0 || ly < 0 || lx >= m.gw || ly >= m.gh) continue;
+      return tierElevOf(m.grid.regionAt(lx, ly)) ?? 0;
+    }
+    return 0;
   }
 
   /** The reveal fraction at a point (0 none .. 1 fully pierced) — the linear
