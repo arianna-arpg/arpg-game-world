@@ -79,8 +79,9 @@
 import type { World } from '../engine/world';
 import type { ZoneDef } from '../data/zones';
 import { Rng } from '../core/rng';
+import { PORTAL_EDGE_INSET } from '../engine/worldgen';
 import { MASSDRESS_CFG, ROADDRESS_CFG, ROAD_TONE_DEFAULT, WAYSIDE_GLYPHS, massKitFor } from '../data/enclosure';
-import { PARTITION_CFG, SEAMLESS_CFG, type TissueSample, type TissueSampler } from './seamless';
+import { PARTITION_CFG, SEAMLESS_CFG, type CellRect, type TissueSample, type TissueSampler } from './seamless';
 import { borderAgreedPoint, foldCells, type CellSeat } from './cells';
 import { mapToPx, pxToMap } from './coords';
 import { BIOMES, OCEAN_BIOME, biomeAt } from './biomes';
@@ -103,10 +104,12 @@ export const TISSUE_CFG = {
   fallbackTone: '#3d4351',
 } as const;
 
-/** One road segment between two linked nodes' seats, in world px — the
- *  ribbon's own spine. PUBLIC (M2 wave 8): the road-face painter consumes
- *  the capture's segments through the carried read (roadSegsForChunk), so
- *  the drawn ribbon and the walkable verdict share ONE geometry. */
+/** One road segment of a linked pair's ROUTED way, in world px — the
+ *  ribbon's own spine (M2 wave 8b: a pair contributes one chord, an agreed
+ *  two-piece bend, or a seat+mouth elbow polyline — the capture carries the
+ *  routing law). PUBLIC (M2 wave 8): the road-face painter consumes the
+ *  capture's segments through the carried read (roadSegsForChunk), so the
+ *  drawn ribbon and the walkable verdict share ONE geometry. */
 export interface TissueRoadSeg { ax: number; ay: number; bx: number; by: number }
 type RoadSeg = TissueRoadSeg;
 
@@ -171,41 +174,26 @@ function formatHex(r: number, g: number, b: number): string {
  *   tint the world-map wash paints that zone's country with — falling back
  *   to the field at its seat when the def carries no biome (Lastlight and
  *   authored kin).
- * - road: within SEAMLESS_CFG.roadHalfPx of the segment between two LINKED
- *   surface nodes' mapToPx seats (the graph's exits, both directions deduped;
- *   '?' frontiers have no far seat yet and cross-dimension ways are gates,
- *   not ground). TODO(M0-honest): a road segment may cross open water (a
- *   port's causeway link) and reads walkable over it — real causeway ground
- *   and shore honesty are M2's.
+ * - road: within SEAMLESS_CFG.roadHalfPx of THE ROUTED WAY between two
+ *   LINKED surface nodes (the graph's exits, both directions deduped; '?'
+ *   frontiers have no far seat yet and cross-dimension ways are gates, not
+ *   ground). M2 wave 8b: the way is a POLYLINE through the pair's true
+ *   crossing — the agreed border point where the cells abut, the door
+ *   seats + rim mouths where a tissue strip lies between (the capture
+ *   block carries the law); pairs no pairing applies to keep the bare
+ *   center-to-center chord. TODO(M0-honest): a road piece may cross open
+ *   water (a port's causeway link) and reads walkable over it — real
+ *   causeway ground and shore honesty are M2's.
  */
 export function buildTissueSampler(world: World): TissueSampler {
-  // --- THE CAPTURE: linked surface pairs → road segments in world px. The
-  // pair defs ride along for THE MOUTH APRONS below (the solid between's
-  // second corridor class needs to know which links can ever CROSS).
   const zoneMap = world.zoneMap;
-  const segs: RoadSeg[] = [];
-  const segPairs: Array<[ZoneDef, ZoneDef]> = [];
-  const seen = new Set<string>();
-  for (const z of Object.values(zoneMap)) {
-    if ((z.dimension ?? 'surface') !== 'surface') continue;
-    for (const e of z.exits) {
-      if (e.to === '?' || e.crossDim) continue;
-      const dest = zoneMap[e.to];
-      if (!dest || (dest.dimension ?? 'surface') !== 'surface') continue;
-      const key = z.id < e.to ? `${z.id}|${e.to}` : `${e.to}|${z.id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const a = mapToPx(z.map), b = mapToPx(dest.map);
-      segs.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y });
-      segPairs.push([z, dest]);
-    }
-  }
 
   // --- THE CELL CAPTURE: the partition fold over the same web's surface
   // seats (the roster the module header states), flattened for the per-
-  // sample scan. Tones resolve per cell: a minted def.biome is captured
-  // seed-independent NOW; a def without one marks a lazy seat-field read
-  // (per-seed memo below — the invisible-cache law).
+  // sample scan. Hoisted above the road capture (M2 wave 8b): THE ROUTED
+  // WAY below consults the fold's cells. Tones resolve per cell: a minted
+  // def.biome is captured seed-independent NOW; a def without one marks a
+  // lazy seat-field read (per-seed memo below — the invisible-cache law).
   const cellZones = Object.values(zoneMap).filter(z =>
     (z.dimension ?? 'surface') === 'surface' && z.caveDepth == null && !z.pocket && !z.floating);
   const cellSeats: CellSeat[] = cellZones.map(z => ({ id: z.id, ...mapToPx(z.map) }));
@@ -239,6 +227,86 @@ export function buildTissueSampler(world: World): TissueSampler {
     const rr = (z.theme?.road && parseHex(z.theme.road)) || roadDefaultRgb;
     cellRoadRgb[i * 3] = rr[0]; cellRoadRgb[i * 3 + 1] = rr[1]; cellRoadRgb[i * 3 + 2] = rr[2];
   }
+
+  // --- THE ROUTED WAY (M2 wave 8b — her feel report: "the transitions don't
+  // actually align"): a linked pair's way is a POLYLINE through its true
+  // crossing, never a bare center-to-center chord. ABUTTING resident-
+  // eligible pairs bend through their agreed border point — the SAME pure
+  // borderAgreedPoint the engine seats and carves the mouth by (world.ts
+  // seamlessAgreedWays), so the ribbon and the carved mouth meet at ONE
+  // world point BY CONSTRUCTION. NON-ABUTTING eligible pairs (a real tissue
+  // strip between) route center → door SEAT → door MOUTH → partner mouth →
+  // partner seat → center: the seat is placeExit's own edge formula over
+  // the fitted cell (the fitted arena IS the cell, its origin the cell
+  // corner; worldgen's PORTAL_EDGE_INSET the one shared inset), and the
+  // mouth is that seat's rim projection along the def side — exactly where
+  // the mint carves its corridor and the border treatment opens its gap
+  // window — so the strip piece runs gap-center to gap-center and the
+  // crossing is walkable door-to-door BY CONSTRUCTION (the 2026-08-14 route
+  // census: bare seat-to-seat strip pieces crossed the rim OUTSIDE the
+  // carved gap window on 62% of non-abutting pairs — the oblique class the
+  // mouth elbow closes). Ineligible ends, missing cells, and a one-sided
+  // link's unknown half keep the chord — no pairing applies (towns keep
+  // their doors; degradation, never a strand). Pure f(def rows, the fold) —
+  // no live mint state, no rng: the capture law and the determinism pins
+  // hold unchanged, and a partner re-fit moves the route only at the next
+  // rebuild (the mouths pass's own active-stand residual, at tissue grain).
+  const doorWayFor = (z: ZoneDef, destId: string, cell: CellRect):
+    { seat: { x: number; y: number }; mouth: { x: number; y: number } } | null => {
+    const e = z.exits.find(ex => ex.to === destId && !ex.crossDim);
+    if (!e) return null;
+    const w = cell.x1 - cell.x0, h = cell.y1 - cell.y0;
+    const t = e.at ?? 0.5, inset = PORTAL_EDGE_INSET;
+    const cl = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+    const sx = e.side === 'w' ? inset : e.side === 'e' ? w - inset : cl(w * t, inset, w - inset);
+    const sy = e.side === 'n' ? inset : e.side === 's' ? h - inset : cl(h * t, inset, h - inset);
+    const mx = e.side === 'w' ? 0 : e.side === 'e' ? w : sx;
+    const my = e.side === 'n' ? 0 : e.side === 's' ? h : sy;
+    return { seat: { x: cell.x0 + sx, y: cell.y0 + sy }, mouth: { x: cell.x0 + mx, y: cell.y0 + my } };
+  };
+  const routePointsFor = (za: ZoneDef, zb: ZoneDef): Array<{ x: number; y: number }> => {
+    const a = mapToPx(za.map), b = mapToPx(zb.map);
+    if (!world.seamlessResidentEligible(za) || !world.seamlessResidentEligible(zb)) return [a, b];
+    const ca = fold.get(za.id), cb = fold.get(zb.id);
+    if (!ca || !cb) return [a, b];
+    const p = borderAgreedPoint(ca, cb);
+    if (p) return [a, { x: p.x, y: p.y }, b];
+    const wa = doorWayFor(za, zb.id, ca), wb = doorWayFor(zb, za.id, cb);
+    const pts: Array<{ x: number; y: number }> = [a];
+    if (wa) pts.push(wa.seat, wa.mouth);
+    if (wb) pts.push(wb.mouth, wb.seat);
+    pts.push(b);
+    return pts;
+  };
+
+  // --- THE CAPTURE: linked surface pairs → THE ROUTED WAY's polyline pieces
+  // in world px (every piece is an ordinary road segment: the bins, the
+  // walkable ribbon, the drawn face and the wayside march all consume pieces
+  // exactly as they consumed chords). The pair defs ride along for THE MOUTH
+  // APRONS below (the solid between's second corridor class needs to know
+  // which links can ever CROSS).
+  const segs: RoadSeg[] = [];
+  const segPairs: Array<[ZoneDef, ZoneDef]> = [];
+  const seen = new Set<string>();
+  for (const z of Object.values(zoneMap)) {
+    if ((z.dimension ?? 'surface') !== 'surface') continue;
+    for (const e of z.exits) {
+      if (e.to === '?' || e.crossDim) continue;
+      const dest = zoneMap[e.to];
+      if (!dest || (dest.dimension ?? 'surface') !== 'surface') continue;
+      const key = z.id < e.to ? `${z.id}|${e.to}` : `${e.to}|${z.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const pts = routePointsFor(z, dest);
+      for (let k = 1; k < pts.length; k++) {
+        const p0 = pts[k - 1], p1 = pts[k];
+        if (Math.abs(p1.x - p0.x) < 1e-6 && Math.abs(p1.y - p0.y) < 1e-6) continue; // co-located joint
+        segs.push({ ax: p0.x, ay: p0.y, bx: p1.x, by: p1.y });
+      }
+      segPairs.push([z, dest]);
+    }
+  }
+
   // --- THE MOUTH APRONS (M2 wave 5, THE SOLID BETWEEN): one walkable pocket
   // per agreed border point between two LINKED, RESIDENT-ELIGIBLE cells —
   // the same borderAgreedPoint the engine seats its walk-ways at (world/

@@ -772,3 +772,176 @@ this movement changes only how it reads.
   lands 1px off its door) the face threads the gap exactly. The fix is
   a WALKABLE-LAW change (route segments via agreed points / door
   seats), proposed for the soft-crossing sibling — not built here.
+
+### THE SOFT CROSSING + THE TRANSIENT FLOW (M2 wave 8b — movement record, 2026-08-14)
+
+*Her transients ruling ("the world flows… an event or entity that does not
+transition with the player across a zone while chasing them would be less
+alive") split by the build order: THIS wave is THE CARRY — the
+transition-with-the-player half — plus the crossing stutter's re-measure and
+amortization. Wave 9 owns the drowsy away-event ticking; the full transient
+ledger stays parked by her word. All behind `world.seamless`; dials FLAGGED
+in `SEAMLESS_SOFT` (world.ts: adoptLayout / deferRefresh / approachPx 520 /
+transientPadPx 600).*
+
+- **THE RE-MEASURE FIRST** (the commission's own order): the soak's
+  60-127ms rebase predated population-at-admission. The fresh phase table
+  (driven populated crossings, probe seeds): typical crossing 13-52ms
+  p50 ~32, worst 192 — and the anatomy named the true remainder:
+  generateLayout REGENERATED at arrival (7-102ms — the record already
+  built the identical layout on a quiet beat), the arrival refresh
+  re-minting the record in the load tail (13-57ms on 6/10), the horizon
+  chart's frontier work, and 4-19ms of same-tick AI/warm glue. The
+  seamlessShiftFrame actor sweep measured NOISE (~1.5µs/body) — the
+  amortization aimed at builds, never the shift.
+- **THE ADOPTED LAYOUT**: an arrival whose standing record is CURRENT for
+  its exact entry (same partner edge, same cell, same exits + mouths
+  keys, the def's own seed, no crusade works) adopts the record's layout
+  instead of regenerating — and restores the mint's stored post-gen rng
+  state (`SeamlessMint.postGenRng`) so every downstream roll (POIs,
+  altars, spawns) is byte-identical to a fresh build (RIG M7 pins ground
+  + fixture equality A/B). THE PURE RECORD held: the live zone takes
+  COPIES of the mutable containers — doodad objects and the walk grid
+  through the co-op pack/unpack seam — so site plants, effect attach,
+  breaks and door carves never write into the record (the G-rig byte
+  pins and the veil's identity key stay law).
+- **THE DEFERRED REFRESH**: the load tail flags `seamlessRefreshDue`; the
+  next ring beat serves seamlessActiveMintRefresh (a re-mint that fires
+  is the beat's whole job — THE SLICING LAW). The crossing tick sheds the
+  record re-mint; a second rebase inside the window overwrites the flag
+  with its own arrival (RIG M3 pins the double crossing).
+- **THE APPROACH PRE-STAGE**: a walker within approachPx of a bordering,
+  linked neighbor names the crossing's edge before the threshold fires —
+  a facing record whose assumed partner differs re-mints through THIS
+  zone on a quiet beat (one per beat, below the rebase-tick admit gate),
+  so the arrival's adoption guard meets a record built for its entry.
+  RESULT (same rig, same seeds): 8 of 10 crossings 8.5-15ms, worst 49
+  (a frontier first-entry whose horizon chart weaves exits mid-load —
+  adoption honestly refuses; named, not fixable this wave). Live
+  (qa57, in-page driver overhead included): steady-state adopted
+  crossings 14-64ms by zone weight, `carved: 0` both directions.
+  A chart-dedupe cut (skip loadZone's twin chartWithin) was tried and
+  WITHDRAWN: it shifts when settle-drift stragglers chart, perturbing
+  same-seed web history for a ~10ms frontier-only win.
+- **THE TRANSIENT FLOW — THE REBASE IS NOT A DEPARTURE**: every transient
+  category rides the crossing shifted by the seat delta: ground loot,
+  corpses, orbs, remnants, ALL live flights (pos + origin + anchor +
+  catch spot + arc destination + fissure chain + patrol ring — the
+  party-only carry's single-field shift was a latent staleness),
+  standing skill zones (emptied before the load so the expire loop can't
+  strip live domain mods mid-crossing), tethers, and the drawn floaters
+  (already riding since M1). `seamlessShiftWorldTransients` is the
+  non-actor half of the one shift law. Discards RE-SITE to ring
+  demotion: `seamlessDemote` sweeps the departing cell's ground
+  transients (skill zones expire honestly) plus anything stranded
+  outside every resident cell + pad — the ring boundary is the discard
+  boundary. The adjacency RECEDE deliberately does not sweep (a receded
+  region still stands in the ring). A true DOOR discards everything by
+  the standing law, untouched (RIG M6).
+- **EVENT BODIES RIDE** (her ruling's heart): the rebase's demote-tag
+  predicate widened — every enemy body with a def (door guards excluded
+  by doorId) tags `ringRegion` and crosses in place, so a warband
+  mid-chase follows you over the border and wave 9 finds every event
+  body addressable by region. Their demotion fate stays the door law's
+  (the bank's memo write still speaks only for zone-gen rows); THE KILL
+  LEDGER gained the fromZoneGen guard so an event body's tagged death
+  can never let an empty bank overwrite a memo the base population owns
+  (RIG M2).
+- **THE LIVING LEDGER** (the double-spawn guard): every per-visit
+  materialization latch resets each load, so a rebase-return over
+  carried event bodies would re-mint the event over its own survivors
+  (a second world boss, a twin warband). The guard is the world itself:
+  `seamlessEventSurvivors(zoneId, {tag|eventKey})` — live bodies wearing
+  the event's marker latch the materializer WITHOUT spawning; gone
+  bodies re-open it (RIG M4 pins never-twin + honest re-materialize).
+  Guarded: warbands (eventKey stamped at spawn), demon epicenter,
+  crusade garrison, hell court + marshal (escorts stamped), world boss
+  (+ wbBoss re-adopt) and the passing glimpse-body, hunt beast
+  (re-adopt), contagion, deepwinter, verminfall, swarming broods +
+  caches, longcandle, starfall, mycelia, incursion observer, vendetta,
+  haunt + deadwake + long-night leaders, conclave (survivors adopted
+  into a rebuilt ritualSite), amalgamation (necromancer + boss ref
+  re-adopt), miniboss, warlord. NATURALLY SAFE by their own shape
+  (documented, untouched): every live-capped pour (rift/spire/fracture/
+  eldritch/soulriver/procession robbers, all stream spawners), patient
+  zero (a native one-body guard — the pattern's prior art), brigands
+  (overlay retire), dig ambushes (memory charges), encounters
+  (insideCount counts live bodies), caravan return (a live scan),
+  theater (memory-guarded entry + budget dampening — wave 9's own
+  flagship). Non-enemy event bodies (folk, carts, escorts of the
+  player's) keep the door law this wave, named in the pass memory.
+- **PROBES**: probe_seamless grew RIG M (29 checks, 189 total ALL GREEN
+  — carry exactness per category, the double crossing, the kill ledger,
+  the living ledger end-to-end on spawnWarband, demotion discard vs the
+  standing ring, the door control, adoption ground/fixture A/B
+  byte-equality, the mode law). Fast lane 133/133. Discrete play:
+  byte-identical by construction — every new lane is seamless-gated.
+
+### THE ROUTED RIBBON (M2 wave 8b — movement record, 2026-08-14)
+
+*Her feel report ("we also likely want to ensure that the transitions line
+up on both sides of the zones — as right now there are instances where the
+transitions don't actually align, and this causes finicky instances of
+navigation") + the three converging codas (the road dress's chord-off-gap
+divergence, the border treatment's non-abutting way, the dense soak's
+never-crossed hops) made ONE commission: route the tissue's ways through
+the crossings the engine actually carves. ONE geometry change at
+buildTissueSampler's capture (src/world/tissue.ts); every consumer rides.*
+
+- **THE ROUTED WAY**: a linked pair's captured way is a POLYLINE through
+  its true crossing, never a bare center-to-center chord. ABUTTING
+  resident-eligible pairs bend through their agreed border point —
+  `borderAgreedPoint`, the SAME pure derivation the engine seats and
+  carves the mouth by — so ribbon and carved mouth meet at ONE world
+  point BY CONSTRUCTION. NON-ABUTTING eligible pairs (a real tissue strip
+  between) route center → door SEAT → door MOUTH → partner mouth →
+  partner seat → center: the seat is placeExit's own edge formula over
+  the fitted cell (the fitted arena IS the cell, its origin the cell
+  corner; worldgen's `PORTAL_EDGE_INSET` the one shared inset — no new
+  number anywhere), the mouth its rim projection along the def side —
+  exactly where the mint carves its corridor and the border treatment
+  opens its gap window. Pairs no pairing applies to (an ineligible end, a
+  missing cell, a one-sided link's unknown half) keep the chord — towns
+  keep their doors; degradation, never a strand.
+- **THE MOUTH ELBOW (the census's forced refinement)**: the commissioned
+  bare seat→seat strip piece crosses the cell rim OBLIQUELY — the 08-14
+  route census (620 pairs, scratch_routecensus.ts) measured 62% of
+  non-abutting rim crossings landing OUTSIDE the carved gap window
+  (p50 128px off, p90 451px), which would strand the walker at the very
+  door the routing promises. Routing through the seat's rim projection
+  (the mouth) puts the strip piece's endpoints AT both gap centers, so
+  the corridor is walkable door-to-door BY CONSTRUCTION. Census after:
+  agreed points 365/365, door seats 408/408, rim mouths 408/408 read
+  road:true through the built sampler.
+- **EVERY CONSUMER RIDES THE CAPTURE** (the design's whole point — zero
+  edits beyond it): the walkable ribbon (segDist over pieces), the chunk
+  bins, THE EXACT-RIBBON drawn face (strokes the same pieces — the face
+  now visibly threads every gap), the mouth aprons (pair-grain,
+  unchanged), the mass/wayside shoulder reads and both stamp scatters
+  (segment-keyed streams re-key to the routed endpoints). world.ts is
+  untouched: the carve, the gap ladder and the agreed seats already
+  stood at these points — the tissue came to meet them.
+- **THE MISALIGNMENT, QUANTIFIED (the before)**: on the census web the
+  old chords crossed borders p50 150px / p90 508px / max 718px off their
+  agreed points, and non-abutting doors stood p50 389px / max 2549px off
+  the chord's rim crossing — every one a finicky transition or a hedge-
+  face dead end. After routing both distances are 0 by construction.
+- **PURITY + STALENESS**: the route is pure f(def rows, the fold,
+  PORTAL_EDGE_INSET) — no live mint state, no rng; the capture law and
+  the determinism pins hold unchanged. A partner re-fit moves the route
+  only at the next sampler rebuild (the ring's own admission beat) — the
+  mouths pass's active-stand residual at tissue grain.
+- **PROBES**: probe_tissue grew RIG M (93 → 115 checks ALL GREEN): stage
+  honesty through the engine's own eligibility predicate + non-trivial
+  displacement oracles (Δ240px agreed / Δ1920px-over-640px oblique
+  stages) · THE ALIGNMENT PIN (the sampler's own chunk segments pass
+  within 0.5px of P, both seats and both mouths, all road:true) · THE
+  DEAD CROSSING WALKS (mouth-to-mouth 338/338 steps road+walkable while
+  the OLD chord's strip crossing reads solid mass — the swap pinned both
+  ways) · chord country endpoint-exact where no pairing applies ·
+  determinism ×3 · THE COVERING LAW over routed pieces (168 march
+  points, 0 uncovered — the face can never hole) · the solid between +
+  the mass-dress subset law survive routing · the rig installs nothing.
+  Existing rigs A–L byte-untouched (the boot web's one pair is
+  ineligible, so its chord stands — proven by the census before a line
+  moved).

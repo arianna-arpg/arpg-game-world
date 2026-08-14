@@ -90,7 +90,28 @@
 //      long-link's between-stretch; the one-shoulder arithmetic holds
 //      (waysideOff max + widest glyph ≤ shoulderPx, roadGap < waysideOff
 //      min); and the road-dress reads install NOTHING (the seam stays
-//      null — discrete play reads none of this).
+//      null — discrete play reads none of this),
+//   M  THE ROUTED RIBBON (M2 wave 8b — her feel report: "the transitions
+//      don't actually align"): a linked pair's captured way is a POLYLINE
+//      through its true crossing, never a bare center-to-center chord —
+//      ABUTTING resident-eligible pairs bend through their agreed border
+//      point (borderAgreedPoint, the engine's own seat/carve derivation),
+//      NON-ABUTTING eligible pairs route center → door seat → rim MOUTH →
+//      partner mouth → partner seat → center (placeExit's edge formula
+//      over the fitted cell + the seat's rim projection — exactly where
+//      the mint carves its corridor and the border treatment opens its
+//      gap), and pairs no pairing applies to keep the chord. Pins: the
+//      stage is honest (fixtures eligible through the engine's own
+//      predicate, the abutting stage NON-TRIVIAL, the oblique stage
+//      truly oblique) · THE ALIGNMENT PIN (the sampler's own chunk
+//      segments pass within RIG_M_EPS of P / both seats / both mouths,
+//      each reading road:true) · THE DEAD CROSSING WALKS (the strip
+//      corridor is walkable mouth-to-mouth through the sampler while the
+//      OLD chord's strip crossing reads solid mass — the swap pinned both
+//      ways) · chord country unchanged where no pairing applies ·
+//      determinism ×3 over routed geometry · THE COVERING LAW over every
+//      routed piece · the solid between + the mass-dress subset law
+//      survive routing · the rig installs nothing.
 // Run: npx tsx balance/probe_tissue.ts
 // ---------------------------------------------------------------------------
 
@@ -105,8 +126,9 @@ import { BIOMES, OCEAN_BIOME, biomeAt } from '../src/world/biomes';
 import { continentAt, continentSeedFrom } from '../src/world/continents';
 import { mapToPx, pxToMap } from '../src/world/coords';
 import { elevationAt } from '../src/world/relief';
-import { PARTITION_CFG, SEAMLESS_CFG, getTissueSampler, setTissueSampler } from '../src/world/seamless';
+import { PARTITION_CFG, SEAMLESS_CFG, getTissueSampler, setTissueSampler, type CellRect } from '../src/world/seamless';
 import { borderAgreedPoint, foldCells, type CellSeat } from '../src/world/cells';
+import { PORTAL_EDGE_INSET } from '../src/engine/worldgen';
 import { TISSUE_CFG, buildTissueSampler, massDressOf, massStampSeatsForChunk,
   waysideSeatsForChunk, type MassStampSeat, type TissueRoadSeg } from '../src/world/tissue';
 import { MASSDRESS_CFG, MASS_KITS, MASS_KIT_DEFAULT, MASS_STAMP_GLYPHS,
@@ -1095,6 +1117,359 @@ function monotoneAB(tones: string[], a: string, b: string): boolean {
 
     // L5 — the road lane installed NOTHING (discrete play reads none of it).
     check('L: the road-dress reads installed NOTHING — the seam stays null', getTissueSampler() === null);
+  }
+}
+
+// -------------------------------------------------------------------------- M
+{
+  // THE ROUTED RIBBON (M2 wave 8b) — the header carries the law. Three
+  // fixture groups on one scanned dry base, y-separated 300u (9600px —
+  // beyond every cut's reach of 2×cellMaxHalfPx and of the real web far
+  // behind the scan window): AB abuts (86u apart) with a north CUTTER
+  // trimming A's border band so the agreed point stands OFF the old chord
+  // (non-trivial by construction); NA stands 170u apart (a true 640px
+  // tissue strip — the border-treatment coda's gen_33↔gen_41 class) with
+  // deliberately OFFSET door `at`s (0.3 / 0.7 — the oblique class the
+  // 08-14 route census measured at 62% of live pairs); CH is the
+  // ineligible control (seedless spreads — towns keep their chords).
+  const RIG_M_EPS = 0.5; // px — the alignment bound (flagged; endpoints are exact by construction)
+  const C = SEAMLESS_CFG.chunkPx;
+  const pad = SEAMLESS_CFG.roadHalfPx;
+  const segDistSqM = (px: number, py: number, s: { ax: number; ay: number; bx: number; by: number }): number => {
+    const dx = s.bx - s.ax, dy = s.by - s.ay;
+    const len2 = dx * dx + dy * dy;
+    let t = len2 > 0 ? ((px - s.ax) * dx + (py - s.ay) * dy) / len2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    return (px - (s.ax + dx * t)) ** 2 + (py - (s.ay + dy * t)) ** 2;
+  };
+
+  // The dry scan covers the points the MASS pins read (road pins are
+  // dryness-free — roads are always walkable); u = px per unit, derived
+  // not assumed (the I-rig idiom).
+  const uPx = mapToPx({ x: 1, y: 0 }).x - mapToPx({ x: 0, y: 0 }).x;
+  const massPts = (bx: number, by: number): Array<{ x: number; y: number }> => {
+    const pts: Array<{ x: number; y: number }> = [];
+    for (const gx of [80, 85, 90]) {
+      for (const gy of [240, 270, 330, 360]) pts.push(mapToPx({ x: bx + gx, y: by + gy }));
+    }
+    for (const gx of [78, 82, 88, 92]) pts.push(mapToPx({ x: bx + gx, y: by + 300 }));
+    return pts;
+  };
+  const baseM = findLandBase(massPts);
+  check('M: a dry fixture base stands within the far scan', baseM !== null,
+    baseM ? `base (${baseM.bx}, ${baseM.by}) units` : 'none found — widen the scan');
+  if (baseM) {
+    const { bx, by } = baseM;
+    const [tplA, tplB] = pairs[0];
+    // GROUP AB (abutting, at by): eligible pair + the ineligible cutter.
+    world.zoneMap['tissue_rt_ab_a'] = {
+      ...tplB, id: 'tissue_rt_ab_a', map: { x: bx, y: by }, seed: 424242,
+      exits: [{ to: 'tissue_rt_ab_b', side: 'e', at: 0.35 }],
+    };
+    world.zoneMap['tissue_rt_ab_b'] = {
+      ...tplB, id: 'tissue_rt_ab_b', map: { x: bx + 86, y: by + 30 }, seed: 424243,
+      exits: [{ to: 'tissue_rt_ab_a', side: 'w', at: 0.62 }],
+    };
+    world.zoneMap['tissue_rt_ab_cut'] = {
+      ...tplB, id: 'tissue_rt_ab_cut', map: { x: bx - 5, y: by - 60 }, exits: [],
+    };
+    // GROUP NA (non-abutting, at by+300): a real strip, oblique doors.
+    world.zoneMap['tissue_rt_na_a'] = {
+      ...tplB, id: 'tissue_rt_na_a', map: { x: bx, y: by + 300 }, seed: 424244,
+      exits: [{ to: 'tissue_rt_na_b', side: 'e', at: 0.3 }],
+    };
+    world.zoneMap['tissue_rt_na_b'] = {
+      ...tplB, id: 'tissue_rt_na_b', map: { x: bx + 170, y: by + 300 }, seed: 424245,
+      exits: [{ to: 'tissue_rt_na_a', side: 'w', at: 0.7 }],
+    };
+    // GROUP CH (ineligible control, at by-300): seedless — towns keep chords.
+    world.zoneMap['tissue_rt_ch_a'] = {
+      ...tplA, id: 'tissue_rt_ch_a', map: { x: bx, y: by - 300 },
+      exits: [{ to: 'tissue_rt_ch_b', side: 'e' }],
+    };
+    world.zoneMap['tissue_rt_ch_b'] = {
+      ...tplB, id: 'tissue_rt_ch_b', map: { x: bx + 86, y: by - 300 },
+      exits: [{ to: 'tissue_rt_ch_a', side: 'w' }],
+    };
+    const rtIds = ['tissue_rt_ab_a', 'tissue_rt_ab_b', 'tissue_rt_ab_cut',
+      'tissue_rt_na_a', 'tissue_rt_na_b', 'tissue_rt_ch_a', 'tissue_rt_ch_b'];
+
+    // M0 — the stage is honest, through the engine's own predicate.
+    const elig = (id: string): boolean => world.seamlessResidentEligible(world.zoneMap[id]);
+    check('M0: the four routed fixtures are resident-eligible (the engine\'s own predicate)',
+      elig('tissue_rt_ab_a') && elig('tissue_rt_ab_b') && elig('tissue_rt_na_a') && elig('tissue_rt_na_b'));
+    check('M0: the control pair is NOT eligible (seedless — the chord class exists)',
+      !elig('tissue_rt_ch_a') && !elig('tissue_rt_ch_b'));
+
+    // The probe's own oracle twin: the fold, the placeExit edge formula
+    // (side-first, an independent re-derivation), and the route classifier.
+    const foldM = foldCells(cellRosterOf(world.zoneMap).map(z => ({ id: z.id, ...mapToPx(z.map) })));
+    const doorWayOracle = (z: ZoneDef, destId: string, cell: CellRect):
+      { seat: { x: number; y: number }; mouth: { x: number; y: number } } | null => {
+      const e = z.exits.find(ex => ex.to === destId && !(ex as { crossDim?: true }).crossDim);
+      if (!e) return null;
+      const w = cell.x1 - cell.x0, h = cell.y1 - cell.y0;
+      const t = e.at ?? 0.5, lo = PORTAL_EDGE_INSET;
+      const ax = Math.min(w - lo, Math.max(lo, w * t));
+      const ay = Math.min(h - lo, Math.max(lo, h * t));
+      const seat = e.side === 'n' ? { x: ax, y: lo } : e.side === 's' ? { x: ax, y: h - lo }
+        : e.side === 'w' ? { x: lo, y: ay } : { x: w - lo, y: ay };
+      const mouth = e.side === 'n' ? { x: seat.x, y: 0 } : e.side === 's' ? { x: seat.x, y: h }
+        : e.side === 'w' ? { x: 0, y: seat.y } : { x: w, y: seat.y };
+      return { seat: { x: cell.x0 + seat.x, y: cell.y0 + seat.y },
+        mouth: { x: cell.x0 + mouth.x, y: cell.y0 + mouth.y } };
+    };
+    const routeOracle = (a: ZoneDef, b: ZoneDef): Array<{ x: number; y: number }> => {
+      const pa = mapToPx(a.map), pb = mapToPx(b.map);
+      if (!world.seamlessResidentEligible(a) || !world.seamlessResidentEligible(b)) return [pa, pb];
+      const ca = foldM.get(a.id), cb = foldM.get(b.id);
+      if (!ca || !cb) return [pa, pb];
+      const p = borderAgreedPoint(ca, cb);
+      if (p) return [pa, { x: p.x, y: p.y }, pb];
+      const wa = doorWayOracle(a, b.id, ca), wb = doorWayOracle(b, a.id, cb);
+      const out: Array<{ x: number; y: number }> = [pa];
+      if (wa) out.push(wa.seat, wa.mouth);
+      if (wb) out.push(wb.mouth, wb.seat);
+      out.push(pb);
+      return out;
+    };
+    const zm = (id: string): ZoneDef => world.zoneMap[id];
+    const cellAB_a = foldM.get('tissue_rt_ab_a')!, cellAB_b = foldM.get('tissue_rt_ab_b')!;
+    const cellNA_a = foldM.get('tissue_rt_na_a')!, cellNA_b = foldM.get('tissue_rt_na_b')!;
+    const pAB = borderAgreedPoint(cellAB_a, cellAB_b);
+    check('M0: the AB pair abuts with an agreed point (the fold oracle)', pAB !== null);
+    check('M0: the NA pair does NOT abut — a true tissue strip lies between',
+      borderAgreedPoint(cellNA_a, cellNA_b) === null,
+      `gap ${(cellNA_b.x0 - cellNA_a.x1).toFixed(0)}px`);
+    const wayNA_a = doorWayOracle(zm('tissue_rt_na_a'), 'tissue_rt_na_b', cellNA_a);
+    const wayNA_b = doorWayOracle(zm('tissue_rt_na_b'), 'tissue_rt_na_a', cellNA_b);
+    check('M0: both NA door ways derive (seat + mouth)', wayNA_a !== null && wayNA_b !== null);
+    // Non-triviality: the OLD chord misses P (AB) and the doors stand
+    // laterally offset (NA) — the routed shapes actually bend.
+    const abA = mapToPx(zm('tissue_rt_ab_a').map), abB = mapToPx(zm('tissue_rt_ab_b').map);
+    let chordAtBorder: { x: number; y: number } | null = null;
+    if (pAB) {
+      const t = (pAB.x - abA.x) / (abB.x - abA.x);
+      chordAtBorder = { x: pAB.x, y: abA.y + (abB.y - abA.y) * t };
+    }
+    check('M0: the abutting stage is NON-TRIVIAL — the old chord crossed the border off P',
+      !!pAB && !!chordAtBorder && Math.abs(chordAtBorder.y - pAB.y) > 60,
+      pAB && chordAtBorder ? `chord ${chordAtBorder.y.toFixed(1)} vs P ${pAB.y.toFixed(1)} (Δ${Math.abs(chordAtBorder.y - pAB.y).toFixed(0)}px)` : '');
+    check('M0: the oblique stage is truly oblique — the NA doors stand far apart along the rim',
+      !!wayNA_a && !!wayNA_b && Math.abs(wayNA_a.seat.y - wayNA_b.seat.y) > 500,
+      wayNA_a && wayNA_b ? `lateral Δ${Math.abs(wayNA_a.seat.y - wayNA_b.seat.y).toFixed(0)}px over a ${(cellNA_b.x0 - cellNA_a.x1).toFixed(0)}px strip` : '');
+
+    // Fresh samplers over the staged web (M4's determinism trio).
+    const sM1 = buildTissueSampler(world), sM2 = buildTissueSampler(world);
+    const dM1 = massDressOf(sM1)!;
+
+    // M1 — THE ALIGNMENT PIN: the sampler's OWN chunk segments pass within
+    // RIG_M_EPS of every crossing point, and each point reads road:true.
+    const segsNear = (x: number, y: number): readonly TissueRoadSeg[] =>
+      dM1.roadSegsForChunk(Math.floor(x / C), Math.floor(y / C));
+    const minDistTo = (x: number, y: number): number => {
+      let best = Infinity;
+      for (const s of segsNear(x, y)) best = Math.min(best, Math.sqrt(segDistSqM(x, y, s)));
+      return best;
+    };
+    const alignPts: Array<[string, { x: number; y: number }]> = [];
+    if (pAB) alignPts.push(['AB agreed point', { x: pAB.x, y: pAB.y }]);
+    if (wayNA_a) alignPts.push(['NA seat A', wayNA_a.seat], ['NA mouth A', wayNA_a.mouth]);
+    if (wayNA_b) alignPts.push(['NA seat B', wayNA_b.seat], ['NA mouth B', wayNA_b.mouth]);
+    let alignBad = '';
+    for (const [name, pt] of alignPts) {
+      const d = minDistTo(pt.x, pt.y);
+      if (d > RIG_M_EPS) alignBad += `${name} Δ${d.toFixed(2)}px; `;
+      if (!sM1(pt.x, pt.y, seed).road) alignBad += `${name} not road; `;
+    }
+    check('M1: THE ALIGNMENT PIN — the ribbon passes within eps of P, both seats and both mouths, all road:true',
+      alignPts.length === 5 && alignBad === '', alignBad || `${alignPts.length} crossing points exact`);
+
+    // M2 — THE DEAD CROSSING WALKS. The strip corridor: mouth to mouth at
+    // 6px steps, every sample road+walkable through the sampler; the strip
+    // is REAL (samples outside both cells exist).
+    if (wayNA_a && wayNA_b) {
+      const mA = wayNA_a.mouth, mB = wayNA_b.mouth;
+      const len = Math.hypot(mB.x - mA.x, mB.y - mA.y);
+      let walkN = 0, walkBad = 0, outside = 0;
+      for (let d = 0; d <= len; d += 6) {
+        const x = mA.x + (mB.x - mA.x) * (d / len), y = mA.y + (mB.y - mA.y) * (d / len);
+        const t = sM1(x, y, seed);
+        walkN++;
+        if (!t.walkable || !t.road) walkBad++;
+        const inA = x >= cellNA_a.x0 && x <= cellNA_a.x1 && y >= cellNA_a.y0 && y <= cellNA_a.y1;
+        const inB = x >= cellNA_b.x0 && x <= cellNA_b.x1 && y >= cellNA_b.y0 && y <= cellNA_b.y1;
+        if (!inA && !inB) outside++;
+      }
+      check('M2: the NA corridor walks mouth-to-mouth — every step road+walkable (the dead crossing lives)',
+        walkN > 0 && walkBad === 0, `${walkN - walkBad}/${walkN} steps, ${len.toFixed(0)}px`);
+      check('M2: and the walk truly crosses the strip (outside-cell steps exist)', outside >= 20,
+        `${outside} outside-cell steps`);
+
+      // The OLD chord's strip crossing reads solid mass now (the swap's
+      // other face): qualified samples = outside both cells, dry, flat,
+      // clear of every routed piece (oracle) by 2× the ribbon.
+      const naA = mapToPx(zm('tissue_rt_na_a').map), naB = mapToPx(zm('tissue_rt_na_b').map);
+      const oraclePieces: Array<{ ax: number; ay: number; bx: number; by: number }> = [];
+      for (const [pa2, pb2] of [
+        [zm('tissue_rt_ab_a'), zm('tissue_rt_ab_b')] as const,
+        [zm('tissue_rt_na_a'), zm('tissue_rt_na_b')] as const,
+        [zm('tissue_rt_ch_a'), zm('tissue_rt_ch_b')] as const,
+      ]) {
+        const pts = routeOracle(pa2, pb2);
+        for (let k = 1; k < pts.length; k++) {
+          oraclePieces.push({ ax: pts[k - 1].x, ay: pts[k - 1].y, bx: pts[k].x, by: pts[k].y });
+        }
+      }
+      const clearOfRouted = (x: number, y: number, margin: number): boolean =>
+        oraclePieces.every(s => segDistSqM(x, y, s) > margin * margin)
+        && nearestSegDist(x, y) > margin;
+      let deadN = 0, deadBad = 0;
+      for (let t = 0.3; t <= 0.7; t += 0.02) {
+        const x = naA.x + (naB.x - naA.x) * t, y = naA.y + (naB.y - naA.y) * t;
+        const inA = x >= cellNA_a.x0 && x <= cellNA_a.x1 && y >= cellNA_a.y0 && y <= cellNA_a.y1;
+        const inB = x >= cellNA_b.x0 && x <= cellNA_b.x1 && y >= cellNA_b.y0 && y <= cellNA_b.y1;
+        if (inA || inB) continue;
+        if (!clearOfRouted(x, y, pad * 2)) continue;
+        const cm = pxToMap({ x, y });
+        if (biomeAt(cm, seed) === OCEAN_BIOME) continue;
+        const h = TISSUE_CFG.slopeStepUnits;
+        const gx = elevationAt({ x: cm.x + h, y: cm.y }, seed) - elevationAt({ x: cm.x - h, y: cm.y }, seed);
+        const gy = elevationAt({ x: cm.x, y: cm.y + h }, seed) - elevationAt({ x: cm.x, y: cm.y - h }, seed);
+        if (Math.hypot(gx, gy) / (2 * h) > TISSUE_CFG.slopeMax) continue;
+        const t2 = sM1(x, y, seed);
+        deadN++;
+        if (t2.road || t2.walkable) deadBad++;
+      }
+      check('M2: the OLD chord\'s strip crossing reads solid mass (the misaligned way is dead)',
+        deadN >= 2 && deadBad === 0, `${deadN - deadBad}/${deadN} qualified chord samples refused`);
+    }
+
+    // M3 — chord country unchanged where no pairing applies: the control
+    // pair's midpoint chunk lists EXACTLY its bare chord (endpoint oracle),
+    // and the chord midpoint still reads road.
+    {
+      const chA = mapToPx(zm('tissue_rt_ch_a').map), chB = mapToPx(zm('tissue_rt_ch_b').map);
+      const q = (v: number): string => v.toFixed(1);
+      const key = (s: { ax: number; ay: number; bx: number; by: number }): string =>
+        `${q(s.ax)},${q(s.ay)}|${q(s.bx)},${q(s.by)}`;
+      const want = new Set([
+        `${q(chA.x)},${q(chA.y)}|${q(chB.x)},${q(chB.y)}`,
+        `${q(chB.x)},${q(chB.y)}|${q(chA.x)},${q(chA.y)}`,
+      ]);
+      const mx = (chA.x + chB.x) / 2, my = (chA.y + chB.y) / 2;
+      const list = dM1.roadSegsForChunk(Math.floor(mx / C), Math.floor(my / C));
+      check('M3: the ineligible pair keeps its bare chord — the midpoint chunk lists it endpoint-exact',
+        list.length >= 1 && list.every(s2 => want.has(key(s2))) && list.some(s2 => want.has(key(s2))),
+        `${list.length} listed`);
+      check('M3: and the chord midpoint still reads road (doors keep their ways)',
+        sM1(mx, my, seed).road);
+    }
+
+    // M4 — determinism ×3 over routed geometry: samples and chunk lists.
+    {
+      const windows: Array<[number, number]> = [
+        [mapToPx({ x: bx, y: by }).x, mapToPx({ x: bx, y: by }).y],
+        [mapToPx({ x: bx, y: by + 300 }).x, mapToPx({ x: bx, y: by + 300 }).y],
+        [mapToPx({ x: bx, y: by - 300 }).x, mapToPx({ x: bx, y: by - 300 }).y],
+      ];
+      const span = 190 * uPx;
+      const dump = (s: ReturnType<typeof buildTissueSampler>): string => {
+        const d = massDressOf(s)!;
+        let out = '';
+        for (const [wx, wy] of windows) {
+          for (let i = 0; i < 24; i++) {
+            for (let j = 0; j < 24; j++) {
+              const x = wx + ((i + 0.5) / 24 - 0.25) * span, y = wy + ((j + 0.5) / 24 - 0.5) * span * 0.6;
+              const t = s(x, y, seed);
+              out += `${t.walkable ? 1 : 0}${t.road ? 1 : 0}${t.tone};`;
+            }
+          }
+          for (let cx2 = Math.floor((wx - span / 4) / C); cx2 <= Math.floor((wx + span * 0.75) / C); cx2++) {
+            for (let cy2 = Math.floor((wy - span * 0.3) / C); cy2 <= Math.floor((wy + span * 0.3) / C); cy2++) {
+              out += JSON.stringify(d.roadSegsForChunk(cx2, cy2)) + ';';
+            }
+          }
+        }
+        return out;
+      };
+      const m1 = dump(sM1);
+      check('M4: two builders answer the routed geometry byte-identically', m1 === dump(sM2));
+      check('M4: a re-ask answers itself byte-identically', m1 === dump(sM1));
+    }
+
+    // M5 — THE COVERING LAW over the routed geometry: every road:true
+    // sample (lattice + marches along every oracle piece) finds a listed
+    // segment within the ribbon in its OWN chunk's list.
+    {
+      const roadPtsM: Array<{ x: number; y: number }> = [];
+      for (const [pa2, pb2] of [
+        [zm('tissue_rt_ab_a'), zm('tissue_rt_ab_b')] as const,
+        [zm('tissue_rt_na_a'), zm('tissue_rt_na_b')] as const,
+        [zm('tissue_rt_ch_a'), zm('tissue_rt_ch_b')] as const,
+      ]) {
+        const pts = routeOracle(pa2, pb2);
+        for (let k = 1; k < pts.length; k++) {
+          const p0 = pts[k - 1], p1 = pts[k];
+          const n = 20;
+          for (let i = 0; i <= n; i++) {
+            roadPtsM.push({ x: p0.x + (p1.x - p0.x) * (i / n), y: p0.y + (p1.y - p0.y) * (i / n) });
+          }
+        }
+      }
+      let offRibbon = 0, uncoveredM = 0;
+      for (const p of roadPtsM) {
+        if (!sM1(p.x, p.y, seed).road) { offRibbon++; continue; }
+        const list = dM1.roadSegsForChunk(Math.floor(p.x / C), Math.floor(p.y / C));
+        if (!list.some(s2 => segDistSqM(p.x, p.y, s2) <= pad * pad)) uncoveredM++;
+      }
+      check('M5: every oracle-piece march point reads road through the sampler (route == capture)',
+        roadPtsM.length > 60 && offRibbon === 0, `${offRibbon}/${roadPtsM.length} off-ribbon`);
+      check('M5: THE COVERING LAW holds over routed pieces — every road sample finds its own chunk\'s segment',
+        uncoveredM === 0, `${uncoveredM}/${roadPtsM.length} uncovered`);
+    }
+
+    // M6 — the solid between + the subset law survive routing: strip grid
+    // ground clear of the corridor refuses tissue AND reads dressable mass;
+    // ON the routed strip piece the mass read stands down (road exclusion).
+    if (wayNA_a && wayNA_b) {
+      let stripN = 0, stripOpen = 0, stripNotMass = 0;
+      for (const p of massPts(bx, by)) {
+        // the twelve strip-grid points (the dry scan's own list, first 12)
+        if (p.y === mapToPx({ x: 0, y: by + 300 }).y) continue; // chord-lane points belong to M2
+        const inA = p.x >= cellNA_a.x0 && p.x <= cellNA_a.x1 && p.y >= cellNA_a.y0 && p.y <= cellNA_a.y1;
+        const inB = p.x >= cellNA_b.x0 && p.x <= cellNA_b.x1 && p.y >= cellNA_b.y0 && p.y <= cellNA_b.y1;
+        if (inA || inB) continue;
+        const clear = Math.sqrt(Math.min(
+          segDistSqM(p.x, p.y, { ax: wayNA_a.mouth.x, ay: wayNA_a.mouth.y, bx: wayNA_b.mouth.x, by: wayNA_b.mouth.y }),
+          segDistSqM(p.x, p.y, { ax: wayNA_a.seat.x, ay: wayNA_a.seat.y, bx: wayNA_a.mouth.x, by: wayNA_a.mouth.y }),
+          segDistSqM(p.x, p.y, { ax: wayNA_b.seat.x, ay: wayNA_b.seat.y, bx: wayNA_b.mouth.x, by: wayNA_b.mouth.y }),
+        ));
+        if (clear <= pad + MASSDRESS_CFG.shoulderPx + 1) continue;
+        const cm = pxToMap(p);
+        if (biomeAt(cm, seed) === OCEAN_BIOME) continue;
+        const h = TISSUE_CFG.slopeStepUnits;
+        const gx = elevationAt({ x: cm.x + h, y: cm.y }, seed) - elevationAt({ x: cm.x - h, y: cm.y }, seed);
+        const gy = elevationAt({ x: cm.x, y: cm.y + h }, seed) - elevationAt({ x: cm.x, y: cm.y - h }, seed);
+        if (Math.hypot(gx, gy) / (2 * h) > TISSUE_CFG.slopeMax) continue;
+        stripN++;
+        if (sM1(p.x, p.y, seed).walkable) stripOpen++;
+        if (!dM1.massAt(p.x, p.y, seed)) stripNotMass++;
+      }
+      check('M6: off-corridor strip ground still refuses tissue (the solid between survives routing)',
+        stripN >= 4 && stripOpen === 0, `${stripN - stripOpen}/${stripN} refused`);
+      check('M6: and reads dressable mass (the country dress reaches the routed strip)',
+        stripN >= 4 && stripNotMass === 0, `${stripN - stripNotMass}/${stripN} mass`);
+      const midStrip = {
+        x: (wayNA_a.mouth.x + wayNA_b.mouth.x) / 2,
+        y: (wayNA_a.mouth.y + wayNA_b.mouth.y) / 2,
+      };
+      check('M6: ON the routed corridor the mass read stands down (the road exclusion reaches routed pieces)',
+        !dM1.massAt(midStrip.x, midStrip.y, seed) && sM1(midStrip.x, midStrip.y, seed).road);
+      check('M6: the routed rig installed NOTHING — the seam stays null', getTissueSampler() === null);
+    }
+
+    for (const id of rtIds) delete world.zoneMap[id];
   }
 }
 
