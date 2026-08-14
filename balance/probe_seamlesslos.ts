@@ -539,6 +539,35 @@ if (priest && lockedAtMouth && mouthSeats) {
     check('E3 a real bolt down the trunk-blocked line dies where castRay said it ends (verdicts equal)',
       !trunkShot, trunkShot ? 'no kit instance on the staged body' : 'VACUOUS: no blocked border line on this web (B1)');
   }
+
+  // E4: THE CROSSING FLIGHT (the masonry-march gate's own pin — landed with
+  // the coordinator's world.ts fix): a real bolt spawned down the OPEN mouth
+  // line (E1's pinned seats; castRay says clear) CROSSES the border alive.
+  // Pre-fix, the sweep's active-grid march answered the administrative
+  // 'wall' for every out-of-arena sample and a crossing flight died at the
+  // muzzle one half-cell past the rim; now the away lane owns out-of-arena
+  // samples, so the two laws agree on the open line exactly as E3 pins
+  // their agreement on the blocked one.
+  if (kit) {
+    const before4 = ws.projectiles.length;
+    const ang4 = Math.atan2(seats.p.y - seats.m.y, seats.p.x - seats.m.x);
+    ws.spawnProjectile(priest, kit, vec(seats.m.x, seats.m.y), ang4);
+    const bolt4 = ws.projectiles.length > before4 ? ws.projectiles[ws.projectiles.length - 1] : null;
+    let sawInside = false, travel4 = 0, beats4 = 0;
+    while (bolt4 && ws.projectiles.includes(bolt4) && beats4 < 80) {
+      if (insideArena(bolt4.pos)) sawInside = true;
+      travel4 = Math.hypot(bolt4.pos.x - seats.m.x, bolt4.pos.y - seats.m.y);
+      pin();
+      for (const a of ws.actors) updateAI(a, ws, DT);
+      ws.update(DT);
+      beats4++;
+    }
+    check('E4 a real bolt down the OPEN mouth line crosses the border alive (the masonry-march gate)',
+      sawInside, `entered arena ${sawInside}, travel ~${travel4.toFixed(1)}px over ${beats4} beats`);
+  } else {
+    check('E4 a real bolt down the OPEN mouth line crosses the border alive (the masonry-march gate)',
+      false, 'no kit instance on the staged body');
+  }
 } else {
   check('E1 the locked body CASTS from across the border (the hold-fire gate releases on the routed line)',
     false, 'no lock stood (D2)');

@@ -50334,6 +50334,13 @@ export class World {
         const n = Math.max(1, Math.ceil(slen / step));
         for (let i = 1; i <= n; i++) {
           const sx = prev.x + sdx * (i / n), sy = prev.y + sdy * (i / n);
+          // Under the resident ring, an out-of-arena sample is NOT masonry —
+          // the active grid answers 'wall' for all out-of-grid ground (the
+          // administrative dark), which killed every border-crossing flight
+          // one grid pad past the rim before the away lane (which consults
+          // the OWNER's true law above) ever ruled. The away lane owns
+          // out-of-arena samples; discrete play reads ring null.
+          if (ring && (sx < 0 || sx > this.arena.w || sy < 0 || sy > this.arena.h)) continue;
           const kId = this.walk.regionAt(sx, sy);
           const k = regionKind(kId);
           // Elevated flights cross deck-height air: any floor AT OR BELOW
