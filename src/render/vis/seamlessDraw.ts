@@ -66,10 +66,11 @@ import type { ZoneDef } from '../../data/zones';
 import type { Doodad } from '../../engine/levelgen';
 import type { SeamlessMint, World } from '../../engine/world';
 import { getTissueSampler, SEAMLESS_CFG, type RegionSeat, type TissueSampler } from '../../world/seamless';
-import { massDressOf, massStampSeatsForChunk, type MassStampSeat } from '../../world/tissue';
+import { massDressOf, massStampSeatsForChunk, waysideSeatsForChunk,
+  type MassDressRead, type MassStampSeat } from '../../world/tissue';
 import { activePieces, type BoundsPiece } from '../../world/shape';
 import { registerVisCache } from './caches';
-import { mix, shade } from './color';
+import { hash01, mix, shade } from './color';
 import type { GroundRenderer } from './ground';
 import { PAINTERS, paintBakedWhole, paintBlendUnderlay, paintGroupShadows,
   type DoodadVisualDef, type PaintEnv } from './painters';
@@ -152,6 +153,43 @@ export const SEAMLESS_DRAW_CFG = {
    *  shadow's alpha. Tone-local on purpose — the glyph SHAPES carry the
    *  flank's identity, the ground's own palette carries the place. */
   stampInk: { body: 0.12, lit: 0.26, dark: -0.14, shadowAlpha: 0.18 },
+  // --- THE ROAD DRESS (M2 wave 8) — the ribbon reads as the zones' own
+  // roads continuing (the mass-dress pass's coda-3 debt paid). The world-
+  // grain dials (wayside cadence/offset/salt, the glyph pool) live in
+  // data/enclosure.ts ROADDRESS_CFG + WAYSIDE_GLYPHS. ALL FLAGGED
+  // (unblessed; her word moves them). ---------------------------------------
+  /** Master dial for the road lane: the analytic ROAD FACE (exact-ribbon
+   *  strokes in the gravelPath grammar — the 30px lattice stair-step dies
+   *  with the flat lighten) + the wayside shoulder glyphs. Off — or a
+   *  sampler whose carried read predates the road lane — restores the
+   *  wave-6 flat lighten byte-identically (the mode law at dial grain). */
+  roadDress: true,
+  /** The gravelPath grammar at ribbon scale. bedAlpha / wornShade /
+   *  wornAlpha and the grit/kerb shade deltas are the discrete road
+   *  painter's OWN numbers (painters.ts gravelPath) — the same road,
+   *  continuing; alpha composites are precomputed against the local ground
+   *  so every stroke lands OPAQUE (no double-alpha at piece joins or
+   *  crossings). tonePiecePx paces the flank-blend color gradient along the
+   *  way; gritStepPx is the discrete lay step (virtual discs); gritPerStep
+   *  scales gravelPath's 7-per-disc to the ribbon's width (~2.6×);
+   *  wornInsetPx is the worn center's edge inset (gravelPath's −7 at disc
+   *  scale, deepened for the wide ribbon). */
+  roadFace: {
+    bedAlpha: 0.6,
+    wornShade: 0.16,
+    wornAlpha: 0.45,
+    wornInsetPx: 18,
+    tonePiecePx: 96,
+    gritStepPx: 30,
+    gritPerStep: 16,
+    gritAlpha: 0.4,
+    gritLitShade: 0.28,
+    gritDarkShade: -0.25,
+    kerbShade: -0.35,
+    kerbAlpha: 0.5,
+    kerbStepPx: 11,
+    kerbInsetPx: 3,
+  },
 } as const;
 
 /** The seed lane the engine itself reads for climate/continents
@@ -279,9 +317,20 @@ class SeamlessTissueChunks {
     c.width = C; c.height = C;
     const g = c.getContext('2d')!;
     const dress = SEAMLESS_DRAW_CFG.massDress ? massDressOf(sampler) : null;
+    // THE ROAD LANE (M2 wave 8) gates on its own dial AND the carried read
+    // actually knowing roads (a dev-swapped older sampler stands the lane
+    // down structurally — the null-seam law at read grain).
+    const rd: MassDressRead | null =
+      dress && SEAMLESS_DRAW_CFG.roadDress && typeof dress.roadSegsForChunk === 'function'
+        ? dress : null;
     // --- Pass 1: the flat tone fill (run-merged rows). Land mass leans
     // lighter than the sea when dressing (massMix vs waterMix) so the
-    // texture above it reads; the shadeable lattice is remembered.
+    // texture above it reads; the shadeable lattice is remembered. With the
+    // road lane standing, a road-centered lattice cell paints its UNDER
+    // color instead of the flat lift (what the ground would be sans road —
+    // massSansRoadAt, the sampler's own law): the opaque face strokes cover
+    // the exact walkable ribbon, so only the cell's off-ribbon remainder
+    // shows, wearing its true country — the 30px stair-step dies here.
     const shadeable: boolean[] | null = dress ? new Array(cells * cells).fill(false) : null;
     for (let j = 0; j < cells; j++) {
       const wy = cy * C + (j + 0.5) * L;
@@ -297,6 +346,15 @@ class SeamlessTissueChunks {
             shadeable![j * cells + i] = true;
           } else {
             color = mix(s.tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.waterMix);
+          }
+        } else if (s.road && rd) {
+          if (!rd.landAt(wx, wy, seed)) {
+            color = mix(s.tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.waterMix);
+          } else if (rd.massSansRoadAt(wx, wy, seed)) {
+            color = mix(s.tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.massMix);
+            shadeable![j * cells + i] = true;
+          } else {
+            color = s.tone;
           }
         } else {
           color = s.road ? mix(s.tone, '#ffffff', SEAMLESS_DRAW_CFG.roadLighten) : s.tone;
@@ -333,16 +391,34 @@ class SeamlessTissueChunks {
         }
         if (runColor) { g.fillStyle = runColor; g.fillRect(runStart * L, j * L, (cells - runStart) * L, L); }
       }
+      // --- Pass 2.5: THE ROAD FACE (M2 wave 8) — the ribbon drawn as the
+      // zones' own roads continuing: analytic exact-ribbon strokes (the
+      // walkable verdict IS a round-capped stroke of the captured segments,
+      // so the drawn edge is the tested edge with the canvas's own AA — no
+      // lattice, no stair-step) in the gravelPath grammar, colored by the
+      // flanks' own theme road tones. After the shade so the relief never
+      // re-jags the smooth edge; before the stamps so a rim tree's canopy
+      // may honestly overhang the way.
+      if (rd) drawRoadFace(g, rd, sampler, seed, cx, cy);
       // --- Pass 3: THE STAMP SCATTER — this chunk's seats plus every
       // neighbor seat whose paint reach crosses the seam, y-sorted (the
       // painter's order, canonical), drawn as texture glyphs inked off the
       // local blend tone (shape carries the flank's identity, tone carries
-      // the ground's — one country, no foreign palette).
+      // the ground's — one country, no foreign palette). THE WAYSIDE DRESS
+      // (M2 wave 8) rides the same gather: shoulder-band glyph seats from
+      // the road lane's own pure helper, merged into the one y-sort so the
+      // verge and the mass interleave honestly.
       const seats: MassStampSeat[] = [];
       const x0 = cx * C, y0 = cy * C;
       for (let ny = cy - 1; ny <= cy + 1; ny++) {
         for (let nx = cx - 1; nx <= cx + 1; nx++) {
           for (const s of massStampSeatsForChunk(dress, seed, nx, ny)) {
+            const rr = s.r * SEAMLESS_DRAW_CFG.stampReachMul + 6;
+            if (s.x + rr < x0 || s.x - rr > x0 + C || s.y + rr < y0 || s.y - rr > y0 + C) continue;
+            seats.push(s);
+          }
+          if (!rd) continue;
+          for (const s of waysideSeatsForChunk(rd, seed, nx, ny)) {
             const rr = s.r * SEAMLESS_DRAW_CFG.stampReachMul + 6;
             if (s.x + rr < x0 || s.x - rr > x0 + C || s.y + rr < y0 || s.y - rr > y0 + C) continue;
             seats.push(s);
@@ -463,6 +539,45 @@ const MASS_GLYPHS: Record<string, (g: CanvasRenderingContext2D, ink: MassInk,
       blob(g, x + Math.cos(a) * d, y + Math.sin(a) * d * 0.7, rng.range(0.28, 0.5) * r);
     }
   },
+  // --- THE WAYSIDE GLYPHS (M2 wave 8) — road-culture furniture on the
+  // shoulder band (data/enclosure.ts WAYSIDE_GLYPHS; 'brush' above serves
+  // as the verge tuft). Tone-local ink like every glyph — the deliberate
+  // SHAPES (stacked courses, one true vertical) read as made things against
+  // the mass's organic scatter.
+  cairn(g, ink, x, y, r, rng) {
+    // Stacked waymark stones: courses narrowing upward, each capped by a
+    // lit top face leaning toward THE ONE SUN.
+    const [lx] = MASSDRESS_CFG.lightDir;
+    const courses = rng.int(2, 3);
+    let cw = r * rng.range(0.85, 1.0), yy = y;
+    for (let k = 0; k < courses; k++) {
+      const ch = r * rng.range(0.34, 0.46);
+      g.fillStyle = ink.body;
+      g.beginPath();
+      g.ellipse(x + rng.range(-0.08, 0.08) * r, yy - ch / 2, cw, ch * 0.62, 0, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = ink.lit;
+      g.beginPath();
+      g.ellipse(x + lx * cw * 0.25, yy - ch * 0.72, cw * 0.5, ch * 0.28, 0, 0, Math.PI * 2);
+      g.fill();
+      yy -= ch * 0.78;
+      cw *= rng.range(0.6, 0.72);
+    }
+  },
+  post(g, ink, x, y, r, rng) {
+    // A plain marker post: one near-vertical with a lit cap — deliberate
+    // where the dead tree leans wild; the M0.5 mouth signposts keep their
+    // boards (real doodads, another lane).
+    const h = r * 2.1;
+    const lean = rng.range(-0.06, 0.06);
+    const topX = x + lean * h, topY = y - h;
+    g.strokeStyle = ink.body;
+    g.lineCap = 'round';
+    g.lineWidth = Math.max(1.5, r * 0.26);
+    g.beginPath(); g.moveTo(x, y + r * 0.2); g.lineTo(topX, topY); g.stroke();
+    g.fillStyle = ink.lit;
+    blob(g, topX, topY, Math.max(1, r * 0.22));
+  },
 };
 
 /** One stamp: contact shadow, then the kind's glyph (unknown kinds read as
@@ -479,6 +594,126 @@ function drawMassStamp(g: CanvasRenderingContext2D, sampler: TissueSampler,
   g.ellipse(s.x, s.y + s.r * 0.15, s.r * 0.8, s.r * 0.42, 0, 0, Math.PI * 2);
   g.fill();
   (MASS_GLYPHS[s.kind] ?? MASS_GLYPHS.rock)(g, inks, s.x, s.y, s.r, new Rng(s.varSeed));
+}
+
+// ---------------------------------------------------------------------------
+// THE ROAD FACE (M2 wave 8) — the ribbon drawn as the zones' own roads
+// continuing. THE EXACT-RIBBON LAW: the walkable verdict (segDist ≤
+// roadHalfPx) IS geometrically a round-capped stroke of the captured
+// segments at width 2×roadHalfPx — so the face strokes THAT, and the drawn
+// edge equals the tested edge to the canvas's own anti-aliasing (sub-cell
+// contouring at its limit; the walkable law is consulted, never changed).
+// The dress grammar is gravelPath's own (painters.ts): bed band, worn
+// center, two-tone grit, kerb stones — recolored per stretch by the flanks'
+// theme road tones through roadToneAt, so the crossing reads as ONE road
+// changing country exactly as the ground does. Every stroke and dot derives
+// from GLOBAL geometry (the segments' own arc lattices + gravelPath's
+// position-hash grit), so neighboring chunks paint identical pixels at the
+// seam and re-bakes are byte-stable forever.
+// ---------------------------------------------------------------------------
+
+function drawRoadFace(g: CanvasRenderingContext2D, rd: MassDressRead,
+  sampler: TissueSampler, seed: number, cx: number, cy: number): void {
+  const segs = rd.roadSegsForChunk(cx, cy);
+  if (!segs.length) return;
+  const RF = SEAMLESS_DRAW_CFG.roadFace;
+  const C = SEAMLESS_CFG.chunkPx;
+  const x0 = cx * C, y0 = cy * C, x1 = x0 + C, y1 = y0 + C;
+  const pad = SEAMLESS_CFG.roadHalfPx;
+  const reach = pad + 6; // stroke half-width + AA slack (the cull's honesty bound)
+  // --- The tone pieces: each segment cut on its OWN arc lattice
+  // (tonePiecePx), colors resolved at piece midpoints — the flank gradient
+  // at draw grain. Composites are precomputed (bed = road over ground at
+  // bedAlpha; worn = the lightened center over the bed), so strokes land
+  // opaque and piece joins/crossings never double-darken.
+  interface FacePiece { ax: number; ay: number; bx: number; by: number; bed: string; worn: string }
+  const pieces: FacePiece[] = [];
+  for (const s of segs) {
+    const dx = s.bx - s.ax, dy = s.by - s.ay;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) continue;
+    const n = Math.max(1, Math.ceil(len / RF.tonePiecePx));
+    for (let k = 0; k < n; k++) {
+      const ax = s.ax + dx * (k / n), ay = s.ay + dy * (k / n);
+      const bx = s.ax + dx * ((k + 1) / n), by = s.ay + dy * ((k + 1) / n);
+      if (Math.max(ax, bx) + reach < x0 || Math.min(ax, bx) - reach > x1
+        || Math.max(ay, by) + reach < y0 || Math.min(ay, by) - reach > y1) continue;
+      const mx = (ax + bx) / 2, my = (ay + by) / 2;
+      const road = rd.roadToneAt(mx, my, seed);
+      const bed = mix(sampler(mx, my, seed).tone, road, RF.bedAlpha);
+      pieces.push({ ax, ay, bx, by, bed, worn: mix(bed, shade(road, RF.wornShade), RF.wornAlpha) });
+    }
+  }
+  if (!pieces.length) return;
+  g.save();
+  g.translate(-x0, -y0); // world coords onto the chunk canvas (pass 3's own idiom)
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  // Pass A — every piece's BED, then Pass B — every WORN center (gravelPath's
+  // own two-phase order, so crossings merge instead of layering).
+  g.lineWidth = pad * 2;
+  for (const p of pieces) {
+    g.strokeStyle = p.bed;
+    g.beginPath(); g.moveTo(p.ax, p.ay); g.lineTo(p.bx, p.by); g.stroke();
+  }
+  g.lineWidth = Math.max(8, (pad - RF.wornInsetPx) * 2);
+  for (const p of pieces) {
+    g.strokeStyle = p.worn;
+    g.beginPath(); g.moveTo(p.ax, p.ay); g.lineTo(p.bx, p.by); g.stroke();
+  }
+  // Pass C — THE GRIT: virtual discs at the discrete lay step along each
+  // segment's arc, pebbles scattered by gravelPath's own position-hash math
+  // (two-tone, oriented ellipses) — pure f(segment), seam-free.
+  for (const s of segs) {
+    const dx = s.bx - s.ax, dy = s.by - s.ay;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) continue;
+    const nd = Math.max(1, Math.round(len / RF.gritStepPx));
+    for (let k = 0; k <= nd; k++) {
+      const px = s.ax + dx * (k / nd), py = s.ay + dy * (k / nd);
+      if (px + reach < x0 || px - reach > x1 || py + reach < y0 || py - reach > y1) continue;
+      const road = rd.roadToneAt(px, py, seed);
+      const lit = shade(road, RF.gritLitShade), dark = shade(road, RF.gritDarkShade);
+      const dseed = ((px * 31 + py * 17) | 0) >>> 0; // gravelPath's own hash
+      g.globalAlpha = RF.gritAlpha;
+      for (let i = 0; i < RF.gritPerStep; i++) {
+        const a = hash01(i, dseed) * Math.PI * 2;
+        const rr = Math.sqrt(hash01(i, dseed + 5)) * pad * 0.8;
+        g.fillStyle = i % 2 ? lit : dark;
+        g.beginPath();
+        g.ellipse(px + Math.cos(a) * rr, py + Math.sin(a) * rr,
+          1.6 + hash01(i, dseed + 9) * 1.6, 1.2 + hash01(i, dseed + 13), a, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  }
+  // Pass D — THE KERB: darker edge stones marched along BOTH ribbon edges
+  // (the band-rim survivors of gravelPath's per-disc rim rings), jittered
+  // along the way by the same hash family.
+  g.globalAlpha = RF.kerbAlpha;
+  for (const s of segs) {
+    const dx = s.bx - s.ax, dy = s.by - s.ay;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) continue;
+    const ux = dx / len, uy = dy / len;
+    const edge = pad - RF.kerbInsetPx;
+    const nk = Math.max(1, Math.round(len / RF.kerbStepPx));
+    for (let k = 0; k <= nk; k++) {
+      const px = s.ax + dx * (k / nk), py = s.ay + dy * (k / nk);
+      if (px + reach < x0 || px - reach > x1 || py + reach < y0 || py - reach > y1) continue;
+      const kseed = ((px * 29 + py * 13) | 0) >>> 0;
+      g.fillStyle = shade(rd.roadToneAt(px, py, seed), RF.kerbShade);
+      for (let side = -1; side <= 1; side += 2) {
+        const jit = (hash01(k, kseed + (side < 0 ? 3 : 7)) - 0.5) * RF.kerbStepPx * 0.6;
+        g.beginPath();
+        g.arc(px - uy * side * edge + ux * jit, py + ux * side * edge + uy * jit,
+          1.4 + hash01(k, kseed + 11 + side) * 1.4, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  }
+  g.globalAlpha = 1;
+  g.restore();
 }
 
 /** The dress bake's own clock (last 48 tissue-chunk bakes, dress or flat —

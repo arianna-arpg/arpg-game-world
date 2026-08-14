@@ -79,7 +79,7 @@
 import type { World } from '../engine/world';
 import type { ZoneDef } from '../data/zones';
 import { Rng } from '../core/rng';
-import { MASSDRESS_CFG, massKitFor } from '../data/enclosure';
+import { MASSDRESS_CFG, ROADDRESS_CFG, ROAD_TONE_DEFAULT, WAYSIDE_GLYPHS, massKitFor } from '../data/enclosure';
 import { PARTITION_CFG, SEAMLESS_CFG, type TissueSample, type TissueSampler } from './seamless';
 import { borderAgreedPoint, foldCells, type CellSeat } from './cells';
 import { mapToPx, pxToMap } from './coords';
@@ -103,8 +103,12 @@ export const TISSUE_CFG = {
   fallbackTone: '#3d4351',
 } as const;
 
-/** One road segment between two linked nodes' seats, in world px. */
-interface RoadSeg { ax: number; ay: number; bx: number; by: number }
+/** One road segment between two linked nodes' seats, in world px — the
+ *  ribbon's own spine. PUBLIC (M2 wave 8): the road-face painter consumes
+ *  the capture's segments through the carried read (roadSegsForChunk), so
+ *  the drawn ribbon and the walkable verdict share ONE geometry. */
+export interface TissueRoadSeg { ax: number; ay: number; bx: number; by: number }
+type RoadSeg = TissueRoadSeg;
 
 /** Squared distance from a point to a segment (the ribbon test's kernel). */
 function segDistSq(px: number, py: number, s: RoadSeg): number {
@@ -217,6 +221,13 @@ export function buildTissueSampler(world: World): TissueSampler {
    *  massKitFor keys on the tileset a flanking zone minted from). */
   const cellIds: string[] = new Array(nCells);
   const cellTileset: (string | undefined)[] = new Array(nCells);
+  /** THE ROAD-TONE CAPTURE (M2 wave 8): each cell's own drawn-road color —
+   *  the zone theme's `road` lane, the road doodad's exact resolveColor
+   *  ladder ('theme:road|#574f44'), so the tissue ribbon continues in the
+   *  SAME color the zone's own gravel wears. Seed-independent minted data,
+   *  parsed once (rgb triples for the weight fold). */
+  const cellRoadRgb = new Float64Array(nCells * 3);
+  const roadDefaultRgb = parseHex(ROAD_TONE_DEFAULT)!;
   for (let i = 0; i < nCells; i++) {
     const z = cellZones[i];
     const c = fold.get(z.id)!;
@@ -225,6 +236,8 @@ export function buildTissueSampler(world: World): TissueSampler {
     seatCoord[i] = z.map;
     cellIds[i] = z.id;
     cellTileset[i] = z.tileset;
+    const rr = (z.theme?.road && parseHex(z.theme.road)) || roadDefaultRgb;
+    cellRoadRgb[i * 3] = rr[0]; cellRoadRgb[i * 3 + 1] = rr[1]; cellRoadRgb[i * 3 + 2] = rr[2];
   }
   // --- THE MOUTH APRONS (M2 wave 5, THE SOLID BETWEEN): one walkable pocket
   // per agreed border point between two LINKED, RESIDENT-ELIGIBLE cells —
@@ -410,6 +423,71 @@ export function buildTissueSampler(world: World): TissueSampler {
     return out;
   };
 
+  // --- THE ROAD-DRESS READS (M2 wave 8) — the road face + wayside lane's
+  // half of the carried read. All four ride the SAME capture the walkable
+  // law reads (segments, bins, cells, aprons — one closure), so the drawn
+  // face and the tested ribbon can never disagree about geometry.
+  /** The capture's own per-chunk segment lists (the bins the ribbon test
+   *  consults — registered at pad + shoulder reach, so everything the face
+   *  or the wayside band touches is present BY CONSTRUCTION). */
+  const roadSegsForChunk = (cx: number, cy: number): readonly TissueRoadSeg[] =>
+    bins.get(`${cx},${cy}`) ?? EMPTY_SEGS;
+  /** The flanks' own drawn-road color at a point — the cell road tones
+   *  (theme.road ▷ the packed-grey default) through THE ONE WEIGHT LAW's
+   *  own fold, so the ribbon's color slides from one zone's gravel to the
+   *  next exactly as the ground tone does. Seed-free minted data (the
+   *  parameter stands for signature uniformity). */
+  const roadToneAt = (x: number, y: number, _worldSeed: number): string => {
+    if (nCells === 0) return ROAD_TONE_DEFAULT;
+    let dmin = Infinity;
+    for (let i = 0; i < nCells; i++) {
+      const d = rectDistToCell(i, x, y);
+      if (d < dmin) dmin = d;
+    }
+    const band = PARTITION_CFG.blendBandPx;
+    let wSum = 0, r = 0, g = 0, b = 0;
+    for (let i = 0; i < nCells; i++) {
+      const w = 1 - (rectDistToCell(i, x, y) - dmin) / band;
+      if (w <= 0) continue;
+      wSum += w;
+      r += w * cellRoadRgb[i * 3]; g += w * cellRoadRgb[i * 3 + 1]; b += w * cellRoadRgb[i * 3 + 2];
+    }
+    return formatHex(r / wSum, g / wSum, b / wSum);
+  };
+  /** Would this ground draw as MASS (unwalkable land) if the road weren't
+   *  here — the sampler's own walkable law verbatim MINUS the road clause
+   *  (ocean → false: the sea wears water; cliff-class → true; else outside
+   *  every cell off the aprons). The road face's under-color read: a lattice
+   *  cell the ribbon only PARTLY covers paints its off-ribbon remainder as
+   *  what that ground truly is, so the opaque stroke's smooth edge meets the
+   *  right country and the 30px stair-step dies with the lift. */
+  const massSansRoadAt = (x: number, y: number, worldSeed: number): boolean => {
+    const seed = worldSeed >>> 0;
+    const c = pxToMap({ x, y });
+    if (biomeAt(c, seed) === OCEAN_BIOME) return false;
+    const h = TISSUE_CFG.slopeStepUnits;
+    const gx = elevationAt({ x: c.x + h, y: c.y }, seed) - elevationAt({ x: c.x - h, y: c.y }, seed);
+    const gy = elevationAt({ x: c.x, y: c.y + h }, seed) - elevationAt({ x: c.x, y: c.y - h }, seed);
+    if (Math.hypot(gx, gy) / (2 * h) > TISSUE_CFG.slopeMax) return true;
+    return !insideAnyCell(x, y) && !nearApron(x, y);
+  };
+  /** THE WAYSIDE SEAT TEST: shoulder-band ground a glyph of `bodyR` may
+   *  honestly dress — LAND, outside every cell (inside a cell the ground is
+   *  walkable and a drawn body would lie), off the mouth aprons by the mass
+   *  stamps' own margin (the M0.5 signposts keep their stage), body clear of
+   *  EVERY ribbon by waysideRoadGap (the rolled offset already clears its
+   *  own road by more), and within the clearway shoulder of SOME road — THE
+   *  ONE SHOULDER the mass stamps stop at (MASSDRESS_CFG.shoulderPx), so
+   *  the two dress bands partition the roadside BY CONSTRUCTION. Bin-valid
+   *  for bodyR ≤ shoulderPx − waysideRoadGap (the registration reach). */
+  const shoulderSeatAt = (x: number, y: number, worldSeed: number, bodyR: number): boolean => {
+    if (!landAt(x, y, worldSeed)) return false;
+    if (insideAnyCell(x, y)) return false;
+    if (apronWithin(x, y, PARTITION_CFG.mouthApronPx + MASSDRESS_CFG.shoulderPx)) return false;
+    if (roadWithin(x, y, pad + ROADDRESS_CFG.waysideRoadGap + bodyR)) return false;
+    return roadWithin(x, y, pad + MASSDRESS_CFG.shoulderPx);
+  };
+
   const sampler: TissueSampler = (x: number, y: number, worldSeed: number): TissueSample => {
     const seed = worldSeed >>> 0;
     const c = pxToMap({ x, y });
@@ -440,9 +518,15 @@ export function buildTissueSampler(world: World): TissueSampler {
       : cellToneAt(x, y, seed);
     return { walkable, tone, road };
   };
-  (sampler as DressedTissueSampler).massDress = { massAt, landAt, shadeAt, flanksAt };
+  (sampler as DressedTissueSampler).massDress = {
+    massAt, landAt, shadeAt, flanksAt,
+    roadSegsForChunk, roadToneAt, massSansRoadAt, shoulderSeatAt,
+  };
   return sampler;
 }
+
+/** The road-less chunk's shared empty answer (identity-stable). */
+const EMPTY_SEGS: readonly TissueRoadSeg[] = Object.freeze([]);
 
 // ---------------------------------------------------------------------------
 // THE MASS-DRESS READ (M2 wave 6) — the solid between wears COUNTRY, draw-time
@@ -475,6 +559,21 @@ export interface MassDressRead {
   shadeAt(x: number, y: number, worldSeed: number): number;
   /** The blend's contributing cells at this point, weight-desc. */
   flanksAt(x: number, y: number, worldSeed: number): MassFlank[];
+  // --- THE ROAD-DRESS READS (M2 wave 8) — the road face's half. -------------
+  /** The road segments whose dressed reach (ribbon + shoulder) touches the
+   *  chunk — the capture's own bins, the very lists the ribbon test consults
+   *  (drawn geometry == tested geometry BY CONSTRUCTION). */
+  roadSegsForChunk(cx: number, cy: number): readonly TissueRoadSeg[];
+  /** The flanks' own drawn-road color at a point (theme.road through THE
+   *  ONE WEIGHT LAW; the packed-grey default where a theme names none). */
+  roadToneAt(x: number, y: number, worldSeed: number): string;
+  /** Mass-class ground with the road overlay set aside — the road face's
+   *  under-color read (the walkable law verbatim minus the road clause). */
+  massSansRoadAt(x: number, y: number, worldSeed: number): boolean;
+  /** Wayside-seatable shoulder ground for a glyph body of `bodyR` px (see
+   *  buildTissueSampler — off ribbon and aprons, outside cells, in THE ONE
+   *  SHOULDER the mass stamps stop at). */
+  shoulderSeatAt(x: number, y: number, worldSeed: number, bodyR: number): boolean;
 }
 
 /** A sampler that carries the dress read (buildTissueSampler's product). */
@@ -536,6 +635,69 @@ export function massStampSeatsForChunk(dress: MassDressRead, worldSeed: number,
       varSeed: Math.floor(r.next() * 4294967296) >>> 0,
       tileset: flank?.tileset,
     });
+  }
+  return seats;
+}
+
+/**
+ * THE WAYSIDE DRESS's seat derivation (M2 wave 8) — the road's shoulder
+ * furniture as an exported pure helper (the massStampSeatsForChunk idiom;
+ * the probe asserts through it): for one tissue chunk, every wayside glyph
+ * seat, deterministic per (dress capture, worldSeed, cx, cy).
+ *
+ * THE MARCH IS THE STREAM: candidates pace each road segment's own arc at
+ * ROADDRESS_CFG.waysideStepPx (the discrete layWaysideDress's cadence
+ * grammar at world grain), each candidate drawing from its OWN fork of a
+ * SEGMENT-keyed salted stream (endpoints quantized at 0.1px are the
+ * identity — pure f(graph), so every chunk that holds the segment derives
+ * the identical candidate and a skipped attempt never shifts a neighbor:
+ * the throng pockets' fork law). A candidate rolls chance, side, along
+ * jitter, offset, glyph row (WAYSIDE_GLYPHS by weight) and radius, seats at
+ * ribbon-edge + offset + body radius on the rolled side, then stands ONLY
+ * where the sampler's own shoulderSeatAt admits — off the ribbon and every
+ * crossing road by arithmetic, outside every cell, clear of the mouth
+ * aprons (the M0.5 signposts keep their stage), inside THE ONE SHOULDER.
+ * Chunk ownership is by seat point (the painter gathers 3×3 for paint
+ * reach, the mass scatter's own law). DOM-free: the painter turns seats
+ * into pixels; probes read the same list.
+ */
+export function waysideSeatsForChunk(dress: MassDressRead, worldSeed: number,
+  cx: number, cy: number): MassStampSeat[] {
+  const seed = worldSeed >>> 0;
+  const C = SEAMLESS_CFG.chunkPx;
+  const x0 = cx * C, y0 = cy * C;
+  const pad = SEAMLESS_CFG.roadHalfPx;
+  const step = ROADDRESS_CFG.waysideStepPx;
+  const seats: MassStampSeat[] = [];
+  for (const s of dress.roadSegsForChunk(cx, cy)) {
+    const dx = s.bx - s.ax, dy = s.by - s.ay;
+    const len = Math.hypot(dx, dy);
+    if (len < step) continue;
+    const ux = dx / len, uy = dy / len;
+    const segKey = (Math.imul(Math.round(s.ax * 10), 0x9e3779b1)
+      ^ Math.imul(Math.round(s.ay * 10), 0x85ebca6b)
+      ^ Math.imul(Math.round(s.bx * 10), 0xc2b2ae35)
+      ^ Math.imul(Math.round(s.by * 10), 0x27d4eb2f)) >>> 0;
+    const base = (segKey ^ seed ^ ROADDRESS_CFG.salt) >>> 0;
+    const n = Math.floor(len / step);
+    for (let i = 1; i <= n; i++) {
+      const r = new Rng((base + Math.imul(i, 0x51a7cd7)) >>> 0);
+      // Every roll lands BEFORE the tests (the fork law makes order moot
+      // across attempts; within one it keeps the draw ledger fixed).
+      const chanceRoll = r.next();
+      const side = r.next() < 0.5 ? -1 : 1;
+      const along = (i - 0.5 + (r.next() - 0.5) * 0.6) * step;
+      const off = r.range(ROADDRESS_CFG.waysideOff[0], ROADDRESS_CFG.waysideOff[1]);
+      const row = r.weighted(WAYSIDE_GLYPHS);
+      const rr = r.range(row.radius[0], row.radius[1]);
+      const varSeed = Math.floor(r.next() * 4294967296) >>> 0;
+      if (chanceRoll >= ROADDRESS_CFG.waysideChance) continue;
+      const px = s.ax + ux * along - uy * side * (pad + off + rr);
+      const py = s.ay + uy * along + ux * side * (pad + off + rr);
+      if (px < x0 || px >= x0 + C || py < y0 || py >= y0 + C) continue; // another chunk's seat
+      if (!dress.shoulderSeatAt(px, py, seed, rr)) continue;
+      seats.push({ x: px, y: py, kind: row.kind, r: rr, varSeed });
+    }
   }
   return seats;
 }

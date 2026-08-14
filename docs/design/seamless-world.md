@@ -697,3 +697,78 @@ TWO CLASSES, and the biome chooses through its own texture.
   only interior tors drift. If an entry-sensitive-recipe zone ever
   stands resident naturally, the D6b walk-grid pin will surface it —
   flagged in the wave-7 pass memory, not silently absorbed.
+
+### THE ROAD DRESS (M2 wave 8 — movement record, 2026-08-13)
+
+The mass-dress pass's coda-3 debt paid: the tissue ribbon stops reading as
+a flat lightened slab and reads as the zones' own roads continuing between
+them. DRAW-TIME ONLY — the ribbon's walkable verdict is byte-untouched;
+this movement changes only how it reads.
+
+- **THE EXACT-RIBBON LAW (the de-stair-step)**: the walkable verdict
+  (segDist ≤ roadHalfPx) IS geometrically a round-capped stroke of the
+  captured segments at width 2×roadHalfPx — so the face STROKES that
+  (render/vis/seamlessDraw.ts `drawRoadFace`), and the drawn edge equals
+  the tested edge to the canvas's own anti-aliasing. The 30px lattice's
+  stair-step dies structurally: pass 1 paints a road-centered lattice cell
+  its UNDER color instead of the flat lift (`massSansRoadAt` — the
+  walkable law verbatim minus the road clause, so off-ribbon remainders
+  wear their true country and relief shade continues to the road's edge),
+  and the opaque strokes cover the exact ribbon.
+- **THE GRAMMAR IS gravelPath's OWN** (painters.ts — the discrete road):
+  bed band, worn center, two-tone position-hashed grit at the discrete
+  30px lay step, kerb stones marched along both edges — recolored per
+  stretch by `roadToneAt` (each cell's `theme.road` ▷ the packed-grey
+  `ROAD_TONE_DEFAULT` '#574f44', blended through THE ONE WEIGHT LAW), so
+  the crossing reads as ONE road changing country exactly as the ground
+  does. Alpha composites are precomputed against the local ground —
+  every stroke lands opaque, piece joins and crossings never
+  double-darken. All geometry derives from GLOBAL arc lattices + the
+  segments' own endpoints: neighboring chunks paint identical pixels at
+  the seam, re-bakes byte-stable forever.
+- **THE READS RIDE THE SAMPLER** (world/tissue.ts, the carried-read
+  idiom; the TissueSample contract stays byte-untouched):
+  `roadSegsForChunk` (the capture's own bins — the very lists the ribbon
+  test consults, so face and verdict share one geometry),
+  `roadToneAt`, `massSansRoadAt`, and `shoulderSeatAt` — the wayside
+  seat test (land ∧ outside every cell ∧ off the mouth aprons + shoulder
+  ∧ body-clear of every ribbon ∧ inside THE ONE SHOULDER).
+- **THE WAYSIDE DRESS**: `waysideSeatsForChunk` (exported pure helper,
+  the massStampSeatsForChunk idiom) marches each segment's own arc at
+  `ROADDRESS_CFG.waysideStepPx` (300 — generous; the M0.5 mouth
+  signposts keep their stage, the aprons excluded outright) with
+  per-candidate forks off a segment-keyed salted stream (endpoints
+  quantized at 0.1px are the identity — every chunk derives identical
+  candidates; skips never shift neighbors), drawing from the closed
+  `WAYSIDE_GLYPHS` pool (cairn / post / brush verge tufts — road-culture
+  furniture in the doodad-kind-shaped vocabulary; two new glyphs join
+  MASS_GLYPHS). Seats live IN the clearway shoulder the mass stamps stop
+  AT — one shared read (`MASSDRESS_CFG.shoulderPx`), the two dress bands
+  partition the roadside BY CONSTRUCTION (`waysideOff` max + widest
+  glyph ≤ shoulderPx, probe-pinned arithmetic). Wayside glyphs ride the
+  stamp scatter's own 3×3 gather and y-sort.
+- **PROBES** (balance/probe_tissue.ts RIG L, 93 checks total): segment
+  lists deterministic + real-pairs-only + midpoint-complete + THE
+  COVERING LAW (every road:true sample finds its segment within the
+  ribbon in its OWN chunk's list — the face can never hole); road tones
+  deterministic/pure/50-50-at-the-equidistant-middle/defaulted; wayside
+  seats deterministic, never walkable, shoulder-banded, body-clear,
+  outside cells, apron-clear, on land, pool-closed — alive along a
+  synthetic 9,600px long link; the seam stays null (discrete play reads
+  none of it).
+- **COST** (live, same 16-chunk wedge view fresh-baked three ways):
+  flat wave-5 bake p50 13.7ms → mass dress 14.9 → mass + road **16.4**
+  — the road lane costs **+1.5ms p50**, total dress **+2.7ms** over
+  flat, inside the ~+3ms/chunk budget. (Absolute costs on this view run
+  high for every lane — the tone fold's O(nCells) at a ~200-zone web,
+  the massdress pass's named scaling wall; the deltas are the lane's
+  own.) `seamlessTissueDressStats()` remains the standing clock;
+  `SEAMLESS_DRAW_CFG.roadDress` false restores the wave-6 flat lift
+  byte-identically.
+- **NAMED HONESTLY**: the ribbon is the web's center-to-center chords,
+  so at most borders the face meets a rim band OFF its gap (the chord
+  and the carved mouth diverge — the soak's find-5 class, now VISIBLE
+  as a road running into a hedge). Where they align (gen_13→gen_17
+  lands 1px off its door) the face threads the gap exactly. The fix is
+  a WALKABLE-LAW change (route segments via agreed points / door
+  seats), proposed for the soft-crossing sibling — not built here.

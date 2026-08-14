@@ -70,7 +70,27 @@
 //      both voices at weight 1, canonical order); massKitFor resolves
 //      authored ▷ derived ▷ default with glyph-map-closed kinds; shadeAt is
 //      0 on ocean, bounded on land, and alive somewhere (the relief is
-//      wired).
+//      wired),
+//   L  THE ROAD DRESS (M2 wave 8 — the reads the road-face painter + the
+//      wayside dress consume): the carried read speaks the road lane;
+//      roadSegsForChunk is deterministic across builders/re-asks, lists ONLY
+//      real linked pairs' chords (endpoint oracle), holds every pair's chord
+//      at its own midpoint chunk, and COVERS the ribbon — every road:true
+//      sample finds a listed segment within roadHalfPx of itself in its own
+//      chunk's list (the painter's per-chunk geometry can never hole the
+//      face); roadToneAt is deterministic, sane hex, pure at an isolated
+//      cell's own seat (its theme.road verbatim), the exact 50/50 midHex at
+//      a synthetic pair's equidistant chord middle, and the packed-grey
+//      default where a theme names none; THE WAYSIDE SEATS through the pure
+//      helper waysideSeatsForChunk are deterministic, never walkable through
+//      the sampler, centered INSIDE the clearway shoulder band of a real
+//      segment (independent oracle), body-clear of every ribbon, outside
+//      every fold cell, beyond every mouth apron + shoulder, on land, drawn
+//      from the closed WAYSIDE_GLYPHS pool — and ALIVE along a synthetic
+//      long-link's between-stretch; the one-shoulder arithmetic holds
+//      (waysideOff max + widest glyph ≤ shoulderPx, roadGap < waysideOff
+//      min); and the road-dress reads install NOTHING (the seam stays
+//      null — discrete play reads none of this).
 // Run: npx tsx balance/probe_tissue.ts
 // ---------------------------------------------------------------------------
 
@@ -87,8 +107,10 @@ import { mapToPx, pxToMap } from '../src/world/coords';
 import { elevationAt } from '../src/world/relief';
 import { PARTITION_CFG, SEAMLESS_CFG, getTissueSampler, setTissueSampler } from '../src/world/seamless';
 import { borderAgreedPoint, foldCells, type CellSeat } from '../src/world/cells';
-import { TISSUE_CFG, buildTissueSampler, massDressOf, massStampSeatsForChunk, type MassStampSeat } from '../src/world/tissue';
-import { MASSDRESS_CFG, MASS_KITS, MASS_KIT_DEFAULT, MASS_STAMP_GLYPHS, massKitFor } from '../src/data/enclosure';
+import { TISSUE_CFG, buildTissueSampler, massDressOf, massStampSeatsForChunk,
+  waysideSeatsForChunk, type MassStampSeat, type TissueRoadSeg } from '../src/world/tissue';
+import { MASSDRESS_CFG, MASS_KITS, MASS_KIT_DEFAULT, MASS_STAMP_GLYPHS,
+  ROADDRESS_CFG, ROAD_TONE_DEFAULT, WAYSIDE_GLYPHS, massKitFor } from '../src/data/enclosure';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -821,6 +843,258 @@ function monotoneAB(tones: string[], a: string, b: string): boolean {
     }
 
     check('K: the dress reads installed NOTHING — the seam stays null', getTissueSampler() === null);
+  }
+}
+
+// -------------------------------------------------------------------------- L
+{
+  // THE ROAD DRESS (M2 wave 8) — the reads the road-face painter and the
+  // wayside dress consume, plus the wayside seat law through the exported
+  // pure helper. Oracles are all probe-side re-derivations (segments from
+  // the pair list, cells from the fold, aprons from borderAgreedPoint).
+  const d1 = massDressOf(s1), d2 = massDressOf(s2);
+  const speaks = (d: ReturnType<typeof massDressOf>): boolean =>
+    !!d && typeof d.roadSegsForChunk === 'function' && typeof d.roadToneAt === 'function'
+    && typeof d.massSansRoadAt === 'function' && typeof d.shoulderSeatAt === 'function';
+  check('L: the carried read speaks the road lane (segments/tone/under-color/seat test)',
+    speaks(d1) && speaks(d2));
+  const segDistSqL = (px: number, py: number, s: TissueRoadSeg): number => {
+    const dx = s.bx - s.ax, dy = s.by - s.ay;
+    const len2 = dx * dx + dy * dy;
+    let t = len2 > 0 ? ((px - s.ax) * dx + (py - s.ay) * dy) / len2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    return (px - (s.ax + dx * t)) ** 2 + (py - (s.ay + dy * t)) ** 2;
+  };
+  if (d1 && d2 && speaks(d1) && speaks(d2)) {
+    const C = SEAMLESS_CFG.chunkPx;
+    const pad = SEAMLESS_CFG.roadHalfPx;
+
+    // L1 — SEGMENT TRUTH: the chunk lists the painter strokes are the
+    // capture's own bins — deterministic, real-pairs-only, complete at each
+    // pair's midpoint chunk, and COVERING (no ribbon pixel can miss its
+    // chunk's list — the face can never hole).
+    const chunkWin: Array<{ cx: number; cy: number }> = [];
+    for (let cyL = Math.floor(latMinY / C); cyL <= Math.floor(latMaxY / C); cyL++) {
+      for (let cxL = Math.floor(latMinX / C); cxL <= Math.floor(latMaxX / C); cxL++) {
+        chunkWin.push({ cx: cxL, cy: cyL });
+      }
+    }
+    for (const [a, b] of pairs) {
+      const pa = mapToPx(a.map), pb = mapToPx(b.map);
+      chunkWin.push({ cx: Math.floor((pa.x + pb.x) / 2 / C), cy: Math.floor((pa.y + pb.y) / 2 / C) });
+    }
+    const segDump = (d: NonNullable<typeof d1>): string =>
+      chunkWin.map(k => JSON.stringify(d.roadSegsForChunk(k.cx, k.cy))).join(';');
+    const sd1 = segDump(d1);
+    check('L: chunk segment lists are deterministic across independent builders', sd1 === segDump(d2));
+    check('L: and across re-asks', sd1 === segDump(d1));
+    const q = (v: number): string => v.toFixed(1);
+    const pairKeyAB = (ax: number, ay: number, bx: number, by: number): string =>
+      `${q(ax)},${q(ay)}|${q(bx)},${q(by)}`;
+    const pairKeys = new Set<string>();
+    for (const [a, b] of pairs) {
+      const pa = mapToPx(a.map), pb = mapToPx(b.map);
+      pairKeys.add(pairKeyAB(pa.x, pa.y, pb.x, pb.y));
+      pairKeys.add(pairKeyAB(pb.x, pb.y, pa.x, pa.y));
+    }
+    let listed = 0, foreign = 0;
+    for (const k of chunkWin) {
+      for (const s of d1.roadSegsForChunk(k.cx, k.cy)) {
+        listed++;
+        if (!pairKeys.has(pairKeyAB(s.ax, s.ay, s.bx, s.by))) foreign++;
+      }
+    }
+    check('L: every listed segment is a real linked pair\'s chord (endpoint oracle)',
+      listed > 0 && foreign === 0, `${foreign}/${listed} foreign`);
+    let missingMid = 0;
+    for (const [a, b] of pairs) {
+      const pa = mapToPx(a.map), pb = mapToPx(b.map);
+      const list = d1.roadSegsForChunk(Math.floor((pa.x + pb.x) / 2 / C), Math.floor((pa.y + pb.y) / 2 / C));
+      const k1 = pairKeyAB(pa.x, pa.y, pb.x, pb.y), k2 = pairKeyAB(pb.x, pb.y, pa.x, pa.y);
+      if (!list.some(s => { const k = pairKeyAB(s.ax, s.ay, s.bx, s.by); return k === k1 || k === k2; })) missingMid++;
+    }
+    check('L: every pair\'s chord stands in its own midpoint chunk\'s list', missingMid === 0,
+      `${missingMid}/${pairs.length} missing`);
+    // THE COVERING LAW: every road:true sample finds a listed segment within
+    // the ribbon in ITS OWN chunk's list (lattice + on-spine walks).
+    const roadPts: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i < 40; i++) {
+      for (let j = 0; j < 40; j++) {
+        const x = latMinX + ((i + 0.5) / 40) * (latMaxX - latMinX);
+        const y = latMinY + ((j + 0.5) / 40) * (latMaxY - latMinY);
+        if (s1(x, y, seed).road) roadPts.push({ x, y });
+      }
+    }
+    for (const [a, b] of pairs.slice(0, Math.min(3, pairs.length))) {
+      const pa = mapToPx(a.map), pb = mapToPx(b.map);
+      for (let ti = 0; ti <= 20; ti++) {
+        const t = ti / 20;
+        roadPts.push({ x: pa.x + (pb.x - pa.x) * t, y: pa.y + (pb.y - pa.y) * t });
+      }
+    }
+    let uncovered = 0;
+    for (const p of roadPts) {
+      const list = d1.roadSegsForChunk(Math.floor(p.x / C), Math.floor(p.y / C));
+      if (!list.some(s => segDistSqL(p.x, p.y, s) <= pad * pad)) uncovered++;
+    }
+    check('L: THE COVERING LAW — every road sample finds its segment in its own chunk\'s list',
+      roadPts.length >= 40 && uncovered === 0, `${uncovered}/${roadPts.length} uncovered`);
+
+    // L2 — ROAD TONE over the K lattice: deterministic, sane hex.
+    const toneDump = (d: NonNullable<typeof d1>): string => {
+      let out = '';
+      for (let i = 0; i < 24; i++) {
+        for (let j = 0; j < 24; j++) {
+          const x = latMinX + ((i + 0.5) / 24) * (latMaxX - latMinX);
+          const y = latMinY + ((j + 0.5) / 24) * (latMaxY - latMinY);
+          out += d.roadToneAt(x, y, seed) + ';';
+        }
+      }
+      return out;
+    };
+    const td1 = toneDump(d1);
+    check('L: road tones are deterministic across independent builders', td1 === toneDump(d2));
+    check('L: and across re-asks', td1 === toneDump(d1));
+    check('L: every road tone is a sane hex', td1.split(';').filter(Boolean).every(h => hexRgb(h) !== null));
+
+    // L2b/L3 — THE SYNTHETIC LONG LINK: two zones 300 units (9600px) apart
+    // with authored theme road colors — cells clamp at 2400px halves, so a
+    // TRUE between-stretch of ~4800px spans the chord (the wayside dress's
+    // guaranteed stage; the fake-pair grammar of rig F, stretched). The
+    // chord's shoulder must be dry land for the seat rig, so the base is
+    // scanned (findLandBase's own idiom).
+    const roadA = '#804020', roadB = '#204080';
+    const base = findLandBase((bx, by) => {
+      const pa = mapToPx({ x: bx, y: by });
+      const pts: Array<{ x: number; y: number }> = [];
+      for (let along = 2500; along <= 7100; along += 460) {
+        for (const off of [-90, 0, 90]) pts.push({ x: pa.x + along, y: pa.y + off });
+      }
+      return pts;
+    });
+    check('L: a dry long-link stage stands within the far scan', base !== null,
+      base ? `base (${base.bx}, ${base.by})` : 'no dry stretch found — widen the scan');
+    if (base) {
+      const { bx, by } = base;
+      const [tplA, tplB] = pairs[0];
+      world.zoneMap['tissue_road_a'] = {
+        ...tplA, id: 'tissue_road_a', map: { x: bx, y: by },
+        exits: [{ to: 'tissue_road_b', side: 'e' }],
+        theme: { ...tplA.theme, road: roadA },
+      };
+      world.zoneMap['tissue_road_b'] = {
+        ...tplB, id: 'tissue_road_b', map: { x: bx + 300, y: by },
+        exits: [{ to: 'tissue_road_a', side: 'w' }],
+        theme: { ...tplB.theme, road: roadB },
+      };
+      world.zoneMap['tissue_road_c'] = {
+        ...tplA, id: 'tissue_road_c', map: { x: bx, y: by + 900 }, exits: [],
+        theme: { ...tplA.theme, road: undefined },
+      };
+      const s8 = buildTissueSampler(world), s9 = buildTissueSampler(world);
+      const d8 = massDressOf(s8), d9 = massDressOf(s9);
+      check('L: the grown world\'s samplers carry the road lane', speaks(d8) && speaks(d9));
+      if (d8 && d9 && speaks(d8)) {
+        const paL = mapToPx({ x: bx, y: by }), pbL = mapToPx({ x: bx + 300, y: by });
+        // Tone law: pure at the isolated seat, exact 50/50 at the
+        // equidistant chord middle, the default where the theme is silent.
+        check('L: an isolated cell\'s own seat wears its OWN theme road tone verbatim',
+          d8.roadToneAt(paL.x, paL.y, seed) === roadA,
+          `got ${d8.roadToneAt(paL.x, paL.y, seed)}, authored ${roadA}`);
+        const midX = (paL.x + pbL.x) / 2;
+        check('L: the equidistant chord middle mixes the pair 50/50 (midHex oracle)',
+          d8.roadToneAt(midX, paL.y, seed) === midHex(roadA, roadB),
+          `got ${d8.roadToneAt(midX, paL.y, seed)}, oracle ${midHex(roadA, roadB)}`);
+        const pcL = mapToPx({ x: bx, y: by + 900 });
+        check('L: a theme without a road lane wears the packed-grey default',
+          d8.roadToneAt(pcL.x, pcL.y, seed) === ROAD_TONE_DEFAULT,
+          `got ${d8.roadToneAt(pcL.x, pcL.y, seed)}`);
+
+        // THE WAYSIDE SEATS along the between-stretch, through the pure
+        // helper: deterministic across builders + re-asks, alive, and every
+        // seat honest against the independent oracles.
+        const chord: TissueRoadSeg = { ax: paL.x, ay: paL.y, bx: pbL.x, by: pbL.y };
+        const cxA = Math.floor((paL.x + 2400) / C), cxB = Math.floor((paL.x + 7200) / C);
+        const cyMid = Math.floor(paL.y / C);
+        const wsSeats: MassStampSeat[] = [];
+        let w1 = '', w2 = '', w3 = '';
+        for (let cxL = cxA; cxL <= cxB; cxL++) {
+          for (let cyL = cyMid - 1; cyL <= cyMid + 1; cyL++) {
+            const list = waysideSeatsForChunk(d8, seed, cxL, cyL);
+            w1 += JSON.stringify(list);
+            w2 += JSON.stringify(waysideSeatsForChunk(d9, seed, cxL, cyL));
+            w3 += JSON.stringify(waysideSeatsForChunk(d8, seed, cxL, cyL));
+            wsSeats.push(...list);
+          }
+        }
+        check('L: wayside seats are deterministic across independent builders', w1 === w2);
+        check('L: and across re-asks', w1 === w3);
+        check('L: the verge is alive along the between-stretch', wsSeats.length >= 1,
+          `${wsSeats.length} seats over ${(cxB - cxA + 1) * 3} chunks`);
+        // Oracles: the grown web's own fold cells + agreed aprons + every
+        // segment (real pairs + the chord).
+        const rosterL = cellRosterOf(world.zoneMap);
+        const foldL = foldCells(rosterL.map(z => ({ id: z.id, ...mapToPx(z.map) })));
+        const cellsL = [...foldL.values()];
+        const grownPairs = linkedPairs(world.zoneMap);
+        const apronsL: Array<{ x: number; y: number }> = [];
+        for (const [a, b] of grownPairs) {
+          if (!world.seamlessResidentEligible(a) || !world.seamlessResidentEligible(b)) continue;
+          const ca = foldL.get(a.id), cb = foldL.get(b.id);
+          if (!ca || !cb) continue;
+          const p = borderAgreedPoint(ca, cb);
+          if (p) apronsL.push({ x: p.x, y: p.y });
+        }
+        const nearestAll = (x: number, y: number): number =>
+          Math.min(nearestSegDist(x, y), Math.sqrt(segDistSqL(x, y, chord)));
+        const poolKinds = new Set(WAYSIDE_GLYPHS.map(r => r.kind));
+        const rLo = Math.min(...WAYSIDE_GLYPHS.map(r => r.radius[0]));
+        const rHi = Math.max(...WAYSIDE_GLYPHS.map(r => r.radius[1]));
+        let badWalk = 0, badBand = 0, badBody = 0, badCell = 0, badApron = 0, badLand = 0, badKind = 0;
+        for (const st of wsSeats) {
+          if (s8(st.x, st.y, seed).walkable) badWalk++;
+          const nd = nearestAll(st.x, st.y);
+          if (!(nd <= pad + MASSDRESS_CFG.shoulderPx)) badBand++;
+          if (!(nd > pad + ROADDRESS_CFG.waysideRoadGap + st.r)) badBody++;
+          if (cellsL.some(cc => st.x >= cc.x0 && st.x <= cc.x1 && st.y >= cc.y0 && st.y <= cc.y1)) badCell++;
+          if (apronsL.some(ap => Math.hypot(st.x - ap.x, st.y - ap.y)
+            <= PARTITION_CFG.mouthApronPx + MASSDRESS_CFG.shoulderPx)) badApron++;
+          if (biomeAt(pxToMap({ x: st.x, y: st.y }), seed) === OCEAN_BIOME) badLand++;
+          if (!poolKinds.has(st.kind) || !(st.r >= rLo && st.r <= rHi)) badKind++;
+        }
+        check('L: no wayside seat is walkable through the sampler (drawn == tested)',
+          badWalk === 0, `${badWalk}/${wsSeats.length}`);
+        check('L: every seat centers INSIDE the clearway shoulder band (independent oracle)',
+          badBand === 0, `${badBand} beyond roadHalfPx+shoulderPx`);
+        check('L: every seat\'s body clears every ribbon by the crossing gap',
+          badBody === 0, `${badBody} within pad+gap+r`);
+        check('L: every seat stands outside every fold cell (re-derived oracle)', badCell === 0,
+          `${badCell} inside a cell`);
+        check('L: every seat stands clear of every mouth apron + shoulder (the M0.5 posts keep their stage)',
+          badApron === 0, `${badApron} crowding`);
+        check('L: every seat stands on land', badLand === 0, `${badLand} wet`);
+        check('L: every seat draws from the closed wayside pool at a sane radius', badKind === 0,
+          `${badKind} bad`);
+      }
+      delete world.zoneMap['tissue_road_a'];
+      delete world.zoneMap['tissue_road_b'];
+      delete world.zoneMap['tissue_road_c'];
+    }
+
+    // L4 — THE ONE-SHOULDER ARITHMETIC (the law the seat test leans on).
+    const maxGlyph = Math.max(...WAYSIDE_GLYPHS.map(r => r.radius[1]));
+    check('L: THE ONE SHOULDER fits — waysideOff max + widest glyph ≤ shoulderPx (bin-valid by arithmetic)',
+      ROADDRESS_CFG.waysideOff[1] + maxGlyph <= MASSDRESS_CFG.shoulderPx,
+      `${ROADDRESS_CFG.waysideOff[1]} + ${maxGlyph} vs ${MASSDRESS_CFG.shoulderPx}`);
+    check('L: the crossing gap undercuts the own-road offset (a seat\'s own segment can never refuse it)',
+      ROADDRESS_CFG.waysideRoadGap < ROADDRESS_CFG.waysideOff[0],
+      `${ROADDRESS_CFG.waysideRoadGap} vs ${ROADDRESS_CFG.waysideOff[0]}`);
+    check('L: the wayside pool is non-empty and sane',
+      WAYSIDE_GLYPHS.length > 0 && WAYSIDE_GLYPHS.every(r =>
+        r.weight > 0 && r.radius[0] > 0 && r.radius[1] >= r.radius[0]));
+
+    // L5 — the road lane installed NOTHING (discrete play reads none of it).
+    check('L: the road-dress reads installed NOTHING — the seam stays null', getTissueSampler() === null);
   }
 }
 

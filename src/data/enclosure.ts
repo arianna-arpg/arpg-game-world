@@ -385,6 +385,60 @@ export const MASS_KIT_DEFAULT: MassStampRow[] = [
   { kind: 'brush', radius: [9, 15], weight: 1 },
 ];
 
+// ---------------------------------------------------------------------------
+// THE ROAD DRESS (seamless M2 wave 8) — the mass-dress pass's coda-3 debt:
+// the tissue ribbon stops reading as a flat lightened slab and reads as the
+// zones' own roads continuing between them. DRAW-TIME ONLY, the mass dress's
+// own charter: the ribbon's walkable verdict is untouched — these rows only
+// dress how it reads. The world-grain half lives here beside MASSDRESS_CFG
+// (seat cadence, offsets, the salt); the painter's look half (stroke alphas,
+// grit density) lives in SEAMLESS_DRAW_CFG.roadFace.
+//
+// THE ONE SHOULDER: the wayside band and the mass stamps read the SAME
+// clearway shoulder (MASSDRESS_CFG.shoulderPx) — mass stamps stop AT it,
+// wayside glyphs live IN it, so the two bands can never fight: seat centers
+// stay within roadHalfPx + shoulderPx BY ARITHMETIC (waysideOff max + the
+// widest glyph radius ≤ shoulderPx — also the road bins' registration reach,
+// so a seat's chunk always holds its own segment).
+// ---------------------------------------------------------------------------
+
+/** THE ROAD-DRESS DIALS — ALL FLAGGED (unblessed; her word moves them). */
+export const ROADDRESS_CFG = {
+  /** Wayside candidate cadence along a road segment's arc (px) — generous on
+   *  purpose: the M0.5 mouth signposts already stand and the verge must not
+   *  crowd them (the aprons are excluded outright; this spaces the rest). */
+  waysideStepPx: 300,
+  /** Seat chance per candidate (the discrete WAYSIDE_CFG.chance's own
+   *  posture — sparse and honest). */
+  waysideChance: 0.55,
+  /** Seat offset band past the ribbon edge (px): a seat's center stands at
+   *  roadHalfPx + off + its own body radius, so the glyph body clears the
+   *  walkable ribbon by ≥ off[0] BY ARITHMETIC. */
+  waysideOff: [6, 16] as [number, number],
+  /** Refuse a seat whose body comes within this of ANY ribbon (a crossing
+   *  road's clearance; the seat's own road stands off + r away already). */
+  waysideRoadGap: 4,
+  /** The wayside streams' salt (segment-keyed forks off the world seed). */
+  salt: 0x77a9c13d,
+} as const;
+
+/** THE WAYSIDE GLYPH POOL — road-culture furniture, one pool for every road
+ *  (waymarks are the travelers' artifact, not the biome's; the tone-local
+ *  ink law dresses them in the local palette regardless). Kinds are
+ *  doodad-kind-SHAPED names per the vocabulary law above — 'cairn' is the
+ *  waymark-stones kind's own id, 'post' a plain marker post, 'brush' the
+ *  verge tuft — interpreted as GLYPHS, never planted. FLAGGED. */
+export const WAYSIDE_GLYPHS: MassStampRow[] = [
+  { kind: 'cairn', radius: [7, 12], weight: 2 },
+  { kind: 'post', radius: [6, 9], weight: 1 },
+  { kind: 'brush', radius: [7, 12], weight: 2 },
+];
+
+/** The tissue road's base tone when a flanking zone's theme names none — the
+ *  road doodad's own packed-grey fallback (doodadVisuals 'theme:road|#574f44'),
+ *  so an unthemed road continues in the same grey it wears in-zone. FLAGGED. */
+export const ROAD_TONE_DEFAULT = '#574f44';
+
 const massKitMemo = new Map<string, MassStampRow[]>();
 
 /** Resolve a tileset's mass kit: authored rows ▷ THE MASS DERIVATION (every
