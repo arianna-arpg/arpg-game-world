@@ -2069,6 +2069,12 @@ export interface SeamlessMint {
    *  vanished kill-less (a harness strip) leaves the standing memo alone,
    *  so banking can never destroy information it didn't earn. */
   slainCount: number;
+  /** THE ADOPTED LAYOUT's stream stamp (wave 8b): the mint rng's internal
+   *  state right after generateLayout — an arrival that adopts this record
+   *  restores its own stream here, so every roll downstream of the layout
+   *  is byte-identical to a fresh build. Absent on pre-wave records (the
+   *  adoption guard falls back to the full build). */
+  postGenRng?: number;
 }
 
 /** Two cells agree within the fitted epsilon (float-noise tolerance — a
@@ -2141,6 +2147,38 @@ const SEAMLESS_LIFE = {
   /** The population rng's salt (pure f(def.seed) — the enclosure dress's
    *  own idiom; the layout stream is never resumed for bodies). */
   populateSalt: 0x11fe5eed,
+} as const;
+
+/** THE SOFT CROSSING + THE TRANSIENT FLOW (M2 wave 8b) — all FLAGGED.
+ *  The re-measure's verdict drives the three cuts: the crossing's cost is
+ *  generateLayout paid at arrival (the record already built it on a quiet
+ *  beat), the arrival refresh re-minting the record in the tail, and the
+ *  horizon chart run twice per load. Exported for the probe's adoption
+ *  A/B pin (RIG M toggles adoptLayout and restores it). */
+export const SEAMLESS_SOFT = {
+  /** THE ADOPTED LAYOUT: an arrival whose standing record is CURRENT for
+   *  this entry (same cell, same partner edge, same exits + mouths keys,
+   *  def-seed stream) adopts the record's layout instead of regenerating —
+   *  the admission already paid the build. The stored post-gen rng state
+   *  restores the stream, so every downstream roll is byte-identical to a
+   *  fresh build (RIG M pins the equality). */
+  adoptLayout: true,
+  /** THE DEFERRED REFRESH: the load tail flags the arrival refresh due and
+   *  the next ring beat serves it — the crossing tick sheds the record
+   *  re-mint (a drifted record is one beat stale, the re-fit sweep's own
+   *  standing tolerance). */
+  deferRefresh: true,
+  /** THE APPROACH PRE-STAGE: a walker this close to a neighbor's cell is
+   *  telling us the crossing's edge before the threshold does — a facing
+   *  record whose assumed partner differs re-mints through THIS zone on a
+   *  quiet beat (one per beat, the budget law), so the arrival's adoption
+   *  guard meets a record built for its exact entry. */
+  approachPx: 520,
+  /** THE RING DISCARD pad: at a demotion beat, ground transients (drops,
+   *  corpses, orbs, remnants, skill zones) standing outside EVERY resident
+   *  cell by more than this die — the tissue between cells is nobody's
+   *  ground, and the ring boundary is the discard boundary now. */
+  transientPadPx: 600,
 } as const;
 
 function makeArena(def: ZoneDef): Bounds {
@@ -3278,6 +3316,11 @@ export class World {
    *  promote pass and the demotion bank translate through THIS, never the
    *  freshly-seated active origin. Null outside a rebase. */
   private seamlessRebaseSrcOrigin: { x: number; y: number } | null = null;
+  /** THE DEFERRED REFRESH flag (wave 8b): the load tail sets it, the next
+   *  ring beat serves seamlessActiveMintRefresh — the crossing tick sheds
+   *  the record re-mint. A newer load simply overwrites it with its own
+   *  arrival; discrete play never sets it. */
+  private seamlessRefreshDue = false;
   /** The drowsy cadence counter — one tick per seamless update beat. */
   private seamlessBeat = 0;
 
@@ -5557,7 +5600,49 @@ export class World {
     // stamped over portals, never ghost-geometry.
     const crusadeWorks = this.crusadeFixtureSpecs(def, entry);
     this.crusadeWorksAt = crusadeWorks ? vec(crusadeWorks.center.x, crusadeWorks.center.y) : null;
-    const layout = generateLayout(def, this.arena, rng, entry, this.exits.map(e => e.pos), crusadeWorks?.fixtures);
+    // THE ADOPTED LAYOUT (wave 8b, THE SOFT CROSSING): an arrival whose
+    // standing record is CURRENT for this exact entry — same partner edge,
+    // same cell, same exits + mouths keys, the def's own seed stream, no
+    // crusade works — adopts the record's layout instead of regenerating:
+    // the admission already paid the build on a quiet beat (the pre-stage
+    // the crossing wanted), and the stored post-gen rng state restores the
+    // stream so every downstream roll (POIs, altars, spawns) is
+    // byte-identical to a fresh build (RIG M pins the equality). The
+    // record's arrays BECOME the live ground — a later stand meets the
+    // mutations the ring kept, which is the law's point: what you saw
+    // across the border is what you arrive in. Any drift falls back to
+    // the full build; discrete play never reaches the guard.
+    let seamlessAdopted = false;
+    let layout: GeneratedLayout;
+    {
+      const am = this.seamless && SEAMLESS_SOFT.adoptLayout && !isCave && !crusadeWorks
+        && !!from && !!this.seamlessArrivalCell && def.seed !== undefined
+        && layoutSeed === def.seed && this.seamlessResidentEligible(def)
+        ? this.seamlessMints.get(def.id) : undefined;
+      if (am && am.postGenRng !== undefined && am.partnerId === from
+        && seamlessCellEq(am.cell, this.seamlessArrivalCell!)
+        && am.exitsKey === seamlessExitsKeyOf(def)
+        && am.mouthsKey === this.seamlessMouthsKeyOf(def, am.cell)) {
+        // THE PURE RECORD: the mint's geometry is a byte-pure contract
+        // (the veil's identity key, the G-rig byte pins, the population
+        // slice's own throwaway-copy law) — so the live zone takes COPIES
+        // of the mutable containers: doodad objects (site plants, effect
+        // attach, breaks and evap all write per-object) and the walk grid
+        // through the co-op wire's own pack/unpack seam (door carves
+        // write cells). Everything else in the layout is read-only at
+        // load by the standing law.
+        layout = {
+          ...am.layout,
+          doodads: am.layout.doodads.map(d => ({ ...d, pos: vec(d.pos.x, d.pos.y) })),
+          walk: am.layout.walk instanceof GridWalkField
+            ? GridWalkField.unpack(am.layout.walk.pack()) : am.layout.walk,
+        };
+        (rng as unknown as { s: number }).s = am.postGenRng;
+        seamlessAdopted = true;
+      } else {
+        layout = generateLayout(def, this.arena, rng, entry, this.exits.map(e => e.pos), crusadeWorks?.fixtures);
+      }
+    }
     this.doodads = layout.doodads;
     // RULE-EFFECT ATTACH: a kind whose DOODAD_RULES row declares a standing
     // `effect` (lava's heat wash, a leyline node's element surge) gets it
@@ -5581,7 +5666,9 @@ export class World {
     // the SAME layout.doodads this.doodads already aliases — the live border
     // line equals the record's by the shared derivation (deterministic off
     // def.seed; no effect attach by the data file's law).
-    if (this.seamless && !isCave && this.seamlessResidentEligible(def)) {
+    // An ADOPTED layout already carries its carve + dress (the mint ran
+    // both) — running the dress again would double-plant the border line.
+    if (this.seamless && !isCave && !seamlessAdopted && this.seamlessResidentEligible(def)) {
       this.seamlessCarveMouths(def, layout, this.seamlessArrivalCell);
       this.seamlessDressEnclosure(def, layout, this.seamlessArrivalCell);
     }
@@ -6323,7 +6410,10 @@ export class World {
     // A faction's WARLORD rules its capital — walking in is a boss fight, and
     // cutting it down is how you break that faction's grip on the world.
     const lord = this.sim.warlord.lordAt(def.id);
-    if (lord && o.kind !== 'boss' && this.sim.faction.owner(def.id).faction === lord.faction) {
+    if (lord && o.kind !== 'boss' && this.sim.faction.owner(def.id).faction === lord.faction
+      // THE LIVING LEDGER (wave 8b): a warlord that rode a rebase still
+      // rules — never a twin throne.
+      && !this.seamlessEventSurvivors(def.id, { tag: 'warlord' })) {
       const bossId = this.sim.warlord.bossId(lord.faction);
       if (bossId && MONSTERS[bossId]) {
         const wl = this.createMonster(bossId, def.level + 2, 'enemy');
@@ -6576,7 +6666,12 @@ export class World {
     if (this.seamless) {
       this.seamlessDressed.clear(); // doodads rebuilt — every open way re-earns its posts
       this.seamlessEnsureBoot();
-      this.seamlessActiveMintRefresh();
+      // THE DEFERRED REFRESH (wave 8b): the arrival refresh leaves the
+      // crossing tick — the next ring beat serves it (seamlessEnsureBoot's
+      // head), one beat of record staleness the re-fit law already
+      // tolerates everywhere else. Dial off = the classic synchronous call.
+      if (SEAMLESS_SOFT.deferRefresh) this.seamlessRefreshDue = true;
+      else this.seamlessActiveMintRefresh();
       this.seamlessDressWalkExits();
     }
   }
@@ -7115,9 +7210,17 @@ export class World {
     // (populated false) has nothing to say and must not overwrite the
     // standing memo with an empty roster.
     this.seamlessBankRegionBodies(zoneId);
+    const goneCell = this.seamlessMints.get(zoneId)?.cell ?? null;
     this.seamlessMints.delete(zoneId);
     const i = this.seamlessRegions.findIndex(s => s.zoneId === zoneId);
     if (i >= 0) this.seamlessRegions.splice(i, 1);
+    // THE RING DISCARD (wave 8b): the demotion is the transients' door now
+    // — the departing cell's ground loot, corpses and standing surfaces
+    // take their standing door-law fate here instead of at the crossing
+    // (the adjacency RECEDE deliberately does not: a receded region still
+    // stands in the ring, and its ground keeps reading).
+    const frame = this.seamlessFrameOrigin();
+    if (frame) this.seamlessDiscardRegionTransients(goneCell, frame);
   }
 
   /** The frame the live coordinates are IN right now: the rebase's source
@@ -7148,6 +7251,91 @@ export class World {
     if (a.patrolRoute) for (const w of a.patrolRoute) mv(w);
     if (a.trail) for (const t of a.trail) mv(t);
     if (a.worm) for (const s of a.worm.segments) mv(s);
+  }
+
+  /** THE TRANSIENT SHIFT (wave 8b) — seamlessShiftFrame's non-actor half,
+   *  and the ONE place a transient's position-bearing fields are known: a
+   *  flight shifts its pos AND its cast origin, polar anchor, catch spot,
+   *  arc destination, fissure chain and patrol ring; a skill zone shifts
+   *  its disc and its drawn lob source; a tether's cached endpoints move
+   *  (they self-heal next tick — the shift keeps the one drawn frame
+   *  honest); everything else is a bare pos. No field shifted at one site
+   *  and forgotten at another. */
+  private seamlessShiftWorldTransients(dx: number, dy: number, t: {
+    proj?: Projectile[]; zones?: Zone[]; tethers?: Tether[];
+    points?: { pos: Vec2 }[][];
+  }): void {
+    const mv = (v: { x: number; y: number } | null | undefined): void => {
+      if (v) { v.x += dx; v.y += dy; }
+    };
+    for (const pr of t.proj ?? []) {
+      mv(pr.pos); mv(pr.origin); mv(pr.anchor); mv(pr.landAt); mv(pr.destAt);
+      if (pr.fisChain) for (const p of pr.fisChain) mv(p);
+      if (pr.patrol) for (const p of pr.patrol.points) mv(p);
+    }
+    for (const z of t.zones ?? []) { mv(z.pos); mv(z.lobFrom); }
+    for (const th of t.tethers ?? []) {
+      th.ax += dx; th.ay += dy; th.bx += dx; th.by += dy;
+    }
+    for (const arr of t.points ?? []) for (const p of arr) mv(p.pos);
+  }
+
+  /** THE RING DISCARD (wave 8b): ground transients take their door-law
+   *  fate at ring DEMOTION — anything standing in the departing cell dies
+   *  (skill zones expire honestly first, so no rider keeps a dead domain's
+   *  mods), and anything stranded in the tissue outside EVERY resident
+   *  cell (+pad) goes with it: the ring boundary is the discard boundary.
+   *  Flights keep their own standing ring cull; the active cell's ground
+   *  is never touched (it is a resident cell). */
+  private seamlessDiscardRegionTransients(gone: CellRect | null, frame: { x: number; y: number }): void {
+    const cells: CellRect[] = [];
+    for (const s of this.seamlessRegions) {
+      const m = this.seamlessMints.get(s.zoneId);
+      if (m) cells.push(m.cell);
+    }
+    if (!gone && !cells.length) return;
+    const pad = SEAMLESS_SOFT.transientPadPx;
+    const dead = (p: { x: number; y: number }): boolean => {
+      const wx = p.x + frame.x, wy = p.y + frame.y;
+      if (gone && wx >= gone.x0 && wx <= gone.x1 && wy >= gone.y0 && wy <= gone.y1) return true;
+      for (const c of cells) {
+        if (wx >= c.x0 - pad && wx <= c.x1 + pad && wy >= c.y0 - pad && wy <= c.y1 + pad) return false;
+      }
+      return true;
+    };
+    this.drops = this.drops.filter(d => !dead(d.pos));
+    this.orbs = this.orbs.filter(o => !dead(o.pos));
+    this.remnants = this.remnants.filter(r => !dead(r.pos));
+    this.corpses = this.corpses.filter(c => !dead(c.pos));
+    const keepZones: Zone[] = [];
+    for (const z of this.zones) {
+      if (dead(z.pos)) this.expireZone(z); else keepZones.push(z);
+    }
+    this.zones = keepZones;
+  }
+
+  /** THE LIVING LEDGER (wave 8b): under the transient flow an event's own
+   *  bodies SURVIVE a threshold rebase, but every materialization latch is
+   *  per-visit (the reset ladder clears them each load) — so a rebase back
+   *  into a zone whose event bodies rode the crossing would re-mint the
+   *  event over its own survivors (a second world boss, a twin warband).
+   *  The guard is the world itself: TRUE = live bodies wearing this
+   *  event's marker already stand for this zone (the active zone's own
+   *  untagged bodies, or bodies still tagged to it), and the materializer
+   *  should latch WITHOUT spawning — the survivors ARE the content. An
+   *  eventKey names an instance exactly; a tag names the event's kind
+   *  zone-scoped. Bodies die at demotion and at every door, so the scan
+   *  answers false there and the event re-materializes by the standing
+   *  per-visit law. Discrete play: no event body survives a load — the
+   *  scan is seamless-gated and false by construction (THE MODE LAW). */
+  private seamlessEventSurvivors(zoneId: string, m: { tag?: string; eventKey?: string }): Actor | null {
+    if (!this.seamless) return null;
+    for (const a of this.actors) {
+      if (a.dead) continue;
+      if (a.ringRegion !== undefined && a.ringRegion !== zoneId) continue;
+      if (m.eventKey !== undefined ? a.eventKey === m.eventKey : (m.tag !== undefined && a.tag === m.tag)) return a;
+    }
+    return null;
   }
 
   /** The drowsy posture in one read: a resident neighbor's body, un-roused
@@ -7471,6 +7659,9 @@ export class World {
       }
       const rng = new Rng(def.seed!);
       const layout = generateLayout(def, this.arena, rng, entry, this.exits.map(e => e.pos), undefined);
+      // THE ADOPTED LAYOUT's stream stamp (wave 8b): the arrival that
+      // adopts this record resumes the stream exactly here.
+      const postGenRng = (rng as unknown as { s: number }).s;
       // THE OPEN BORDER: mouths through the rim band at every way that can
       // ever open — carved on the mint's grid exactly as the arrival carves
       // its live one (same inputs, same order — the grid-agreement pins).
@@ -7490,6 +7681,7 @@ export class World {
         dress,
         populated,
         slainCount: standing?.slainCount ?? 0,
+        postGenRng,
       });
       // UPSERT the seat: a re-mint refreshes the layout record, and the seat
       // FOLLOWS the cell (the stored cell is the identity; the seat is its
@@ -7557,6 +7749,19 @@ export class World {
       }
       return;
     }
+    // THE DEFERRED REFRESH (wave 8b): the load tail flags the arrival
+    // refresh due and the NEXT ring beat serves it here — the crossing
+    // tick sheds the record re-mint. A re-mint that actually fired is the
+    // beat's whole job (THE SLICING LAW); the no-drift case costs a few
+    // key compares and the beat proceeds. A second rebase inside the
+    // window simply overwrites the flag with its own arrival — the old
+    // zone's drift heals through the ordinary re-fit sweep below.
+    if (this.seamlessRefreshDue) {
+      this.seamlessRefreshDue = false;
+      const before = this.seamlessMints.get(this.zone.id);
+      this.seamlessActiveMintRefresh();
+      if (this.seamlessMints.get(this.zone.id) !== before) return;
+    }
     const center = this.seamlessRingCenter();
     if (!center) return;
     // THE DEMOTION SWEEP (free): members past the out radius drop mint +
@@ -7578,7 +7783,7 @@ export class World {
     // member's beat comes, its old cell stands — worst case the threshold
     // defers a crossing one beat (the transient the exits-key law already
     // tolerates).
-    let budget = SEAMLESS_CFG.mintBudgetPerBeat;
+    let budget: number = SEAMLESS_CFG.mintBudgetPerBeat;
     for (const s of [...this.seamlessRegions]) {
       if (budget <= 0) break;
       if (s.zoneId === this.zone.id) continue;
@@ -7608,11 +7813,20 @@ export class World {
     // THE REBASE TICK ADMITS NOTHING (M2 wave 5, consume-once): the beat
     // that carried a threshold rebase already paid a whole loadZone — its
     // admission slice waits for the next beat (the budget law's own
-    // cadence; demotions and re-fits above stay free/served).
+    // cadence; demotions and re-fits above stay free/served). The wave-8b
+    // approach pre-stage sits BELOW this gate for the same reason — the
+    // load tail's own ring beat runs with the walker standing right at
+    // the border it just crossed, and pre-staging the departed record
+    // there would put a whole layout build back on the crossing tick.
     if (this.seamlessSkipAdmit) {
       this.seamlessSkipAdmit = false;
       return;
     }
+    // THE APPROACH PRE-STAGE (wave 8b): the walker nearing a border
+    // re-aims the facing record's partner ahead of the crossing — the
+    // threshold then swaps cheap through the adoption guard. Shares the
+    // mint budget (a beat never builds two layouts).
+    budget = this.seamlessApproachStage(budget);
     // THE ADMISSION (budgeted, nearest-first, tiebroken by id — pure
     // f(charted web) given the same walk): structurally eligible ground
     // whose live map seat sits inside the in radius AND whose cell clears
@@ -7665,6 +7879,37 @@ export class World {
       `[seamless] the resident ring stands around ${this.zone.id} — walk out where a road leaves the rim`);
     // A way opened by this beat's admission wears its waymarks at once.
     this.seamlessDressWalkExits();
+  }
+
+  /** THE APPROACH PRE-STAGE (wave 8b): a walker within approachPx of a
+   *  bordering, linked neighbor's cell names the crossing's edge before
+   *  the threshold fires — a facing record whose assumed partner differs
+   *  re-mints through THIS zone on the quiet beat, so the arrival's
+   *  adoption guard (loadZone) meets a record built for its exact entry
+   *  and the crossing tick pays no layout at all. One re-mint per beat
+   *  (the caller passes the shared mint budget); a record already facing
+   *  us costs a few compares. Never the active zone; a hovering walker
+   *  re-aims each neighbor at most once (the partner check latches). */
+  private seamlessApproachStage(budget: number): number {
+    if (budget <= 0 || !SEAMLESS_SOFT.adoptLayout) return budget;
+    const seat = this.seamlessRegions.find(s => s.zoneId === this.zone.id);
+    const home = this.seamlessMints.get(this.zone.id);
+    if (!seat || !home) return budget;
+    const wx = this.player.pos.x + seat.originPx.x, wy = this.player.pos.y + seat.originPx.y;
+    for (const s of this.seamlessRegions) {
+      if (s.zoneId === this.zone.id) continue;
+      const m = this.seamlessMints.get(s.zoneId);
+      const def = this.zoneMap[s.zoneId];
+      if (!m || !def || m.partnerId === this.zone.id) continue;
+      if (!def.exits.some(e => e.to === this.zone.id)) continue;
+      if (!cellsShareBorder(home.cell, m.cell)) continue;
+      const dx = Math.max(m.cell.x0 - wx, 0, wx - m.cell.x1);
+      const dy = Math.max(m.cell.y0 - wy, 0, wy - m.cell.y1);
+      if (Math.hypot(dx, dy) > SEAMLESS_SOFT.approachPx) continue;
+      this.seamlessMintResident(def, this.zone.id);
+      return budget - 1;
+    }
+    return budget;
   }
 
   /** THE ARRIVAL REFRESH (M1, the load tail): when the walker's REAL entry
@@ -7960,24 +8205,39 @@ export class World {
     const carried = this.actors.filter(a =>
       seatActors.has(a) || (!!a.owner && seatActors.has(a.owner) && !a.dead && !a.construct));
     const seats = carried.map(a => ({ a, x: a.pos.x + delta.x, y: a.pos.y + delta.y, vx: a.vel.x, vy: a.vel.y }));
-    const keepProj = this.projectiles.filter(pr =>
-      seatActors.has(pr.caster) || (!!pr.caster.owner && seatActors.has(pr.caster.owner)));
+    // THE TRANSIENT FLOW (wave 8b — THE REBASE IS NOT A DEPARTURE): every
+    // transient category rides the crossing shifted — ground loot, corpses,
+    // ALL live flights (the ring cull already owns them spatially), orbs,
+    // remnants, standing skill zones and tethers, and the drawn floaters.
+    // Their discard RE-SITES to ring demotion (seamlessBankRegionBodies'
+    // transient sweep — each category's standing door-law fate applies
+    // there); a true DOOR load still discards everything by the standing
+    // law, untouched. Skill zones are emptied BEFORE the load so its
+    // expire loop cannot strip live domain mods off riders mid-crossing.
+    const keepProj = this.projectiles;
+    const keepZones = this.zones;
+    this.zones = [];
+    const keepTethers = this.tethers;
+    const keepDrops = this.drops, keepOrbs = this.orbs, keepRemnants = this.remnants;
+    const keepCorpses = this.corpses;
     const keepTexts = this.texts, keepFlashes = this.flashes;
     // THE DEMOTION IN PLACE (wave 6, THE NEIGHBOR LIFE): the ground we
     // leave stays resident — its base population demotes to the drowsy
     // ring by TAG, never by teardown: the same actor ids stand on both
     // sides of the crossing (her kink 4's no-flash promise, both
     // directions). The memo-roster predicate names the demoting set
-    // (zoneMemorySnapshot's own filter); everything else — event spawns,
-    // overlay kin, unowned constructs — keeps the standing door law and
-    // dies at the seam. Tagged BEFORE the load, so the leave-capture skips
-    // them (their ledger is the live array now, not the memo — the
-    // populated bit on the from-record stays true) and the carry keeps
-    // them by one clause.
+    // (zoneMemorySnapshot's own filter). Wave 8b widens the tag to EVENT
+    // bodies (the fromZoneGen clause dropped): a warband mid-chase, a
+    // rift's pour, a march — every enemy body rides the crossing tagged
+    // with its region so wave 9's drowsy events find it addressable. The
+    // memo write still speaks only for zone-gen rows (the bank's own
+    // filter), so an event body's demotion fate stays the door law's:
+    // removal, never a bank. Non-enemy transients (folk, carts, door
+    // guards via doorId) keep the standing door law and die at the seam.
     const carriedSet = new Set<Actor>(carried);
     for (const a of this.actors) {
       if (a.ringRegion !== undefined || a.dead || carriedSet.has(a)) continue;
-      if (a.team === 'enemy' && a.fromZoneGen && !!a.defId && !a.doorId) a.ringRegion = fromId;
+      if (a.team === 'enemy' && !!a.defId && !a.doorId) a.ringRegion = fromId;
     }
     // THE REBASE TICK ADMITS NOTHING (M2 wave 5): the load tail's ring beat
     // consumes this and defers its admission slice one beat — the crossing
@@ -8012,9 +8272,27 @@ export class World {
     for (const a of this.actors) {
       if (a.ringRegion !== undefined) this.seamlessShiftFrame(a, delta.x, delta.y, true);
     }
-    for (const pr of keepProj) { pr.pos.x += delta.x; pr.pos.y += delta.y; this.projectiles.push(pr); }
-    for (const t of keepTexts) { t.pos.x += delta.x; t.pos.y += delta.y; this.texts.push(t); }
-    for (const f of keepFlashes) { f.pos.x += delta.x; f.pos.y += delta.y; this.flashes.push(f); }
+    // THE TRANSIENT FLOW's re-seat: shift every stashed category by the one
+    // seat delta through the one transient helper, then stand it back up.
+    // The load may have minted its own rows (a corpse-run's ring corpses)
+    // — those are already in the new frame, so the shift runs on the stash
+    // alone, never the live arrays. The pending sub-second queues
+    // (bursts, blinks, salvos…) keep the door law — a scheduling beat is
+    // not standing world state (coda'd, deliberate).
+    this.seamlessShiftWorldTransients(delta.x, delta.y, {
+      proj: keepProj, zones: keepZones, tethers: keepTethers,
+      points: [keepDrops, keepOrbs, keepRemnants, keepCorpses, keepTexts, keepFlashes],
+    });
+    this.projectiles.push(...keepProj);
+    this.zones.push(...keepZones);
+    this.tethers.push(...keepTethers);
+    this.drops.push(...keepDrops);
+    this.orbs.push(...keepOrbs);
+    this.remnants.push(...keepRemnants);
+    this.corpses.push(...keepCorpses);
+    while (this.corpses.length > CORPSE_CFG.max) this.corpses.shift();
+    this.texts.push(...keepTexts);
+    this.flashes.push(...keepFlashes);
     // (The M0 post-arrival record refresh lives in the load tail now —
     // seamlessActiveMintRefresh ran inside the loadZone above, re-minting
     // the record through THIS arrival's own edge whenever the standing one
@@ -8343,6 +8621,12 @@ export class World {
     if (this.materializedWrits.has(def.id)) return;
     const spec = vf.wantsAmbush(def);
     if (!spec) return;
+    // THE LIVING LEDGER (wave 8b): the writ's hunters rode a rebase and
+    // still stand — the sprung ambush IS standing; latch without a twin.
+    if (this.seamlessEventSurvivors(def.id, { eventKey: spec.writId })) {
+      this.materializedWrits.add(def.id);
+      return;
+    }
     this.materializedWrits.add(def.id);
     const level = Math.max(1, def.level + spec.levelBonus);
     const at = this.clampPos(this.farPoint(430, true), 24);
@@ -8409,6 +8693,15 @@ export class World {
    *  + flee-phase so the chase carries over, tag it for the kill/flee hooks. */
   private spawnHuntBeast(info: { id: string; beastDefId: string; faction: string; color: string; lifeFrac: number; phaseIdx: number }): void {
     if (this.materializedHunts.has(info.id)) return;
+    // THE LIVING LEDGER (wave 8b): the beast rode a rebase and stands where
+    // the chase left it — adopt the survivor (its live wounds are truer
+    // than the overlay's remembered fraction) instead of minting a twin.
+    const survivorBeast = this.seamlessEventSurvivors(this.zone.id, { tag: 'hunt_beast' });
+    if (survivorBeast) {
+      this.materializedHunts.add(info.id);
+      this.huntBeast = survivorBeast;
+      return;
+    }
     this.materializedHunts.add(info.id);
     if (!MONSTERS[info.beastDefId]) return;
     const lvl = Math.max(1, this.zone.level + 2);
@@ -8462,6 +8755,15 @@ export class World {
    *  faction already RULES the zone (it spawns natively there). */
   private spawnWarband(host: InvasionHost): void {
     if (this.materializedHosts.has(host)) return;
+    // THE LIVING LEDGER (wave 8b): this host's pack rode a rebase and still
+    // stands — the march IS materialized; latch without a twin. Keyed by
+    // faction × zone (the host object dies with the reset; the bodies are
+    // the record).
+    const warbandKey = `warband:${host.faction}:${this.zone.id}`;
+    if (this.seamlessEventSurvivors(this.zone.id, { eventKey: warbandKey })) {
+      this.materializedHosts.add(host);
+      return;
+    }
     this.materializedHosts.add(host);
     if (this.sim.faction.conquerorOf(this.zone.id) === host.faction) return; // already theirs
     const roster = FACTIONS[host.faction];
@@ -8489,6 +8791,7 @@ export class World {
       const m = this.createMonster(this.weightedPick(roster.table, lvl), lvl, 'enemy');
       if (k === 0) { const r = rollRarity(crowned); if (r !== 'normal') this.promoteRarity(m, r, { distinctName: true }); leader = m; }
       m.pos = this.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-70, 70)), m.radius);
+      m.eventKey = warbandKey; // the living ledger's marker (wave 8b)
       this.actors.push(m);
       pack.push(m);
     }
@@ -14791,6 +15094,25 @@ export class World {
     if (!info) return;
     const key = `${info.id}@${def.id}`;
     if (this.materializedRituals.has(key)) return;
+    // THE LIVING LEDGER (wave 8b): the ring's cultists rode a rebase —
+    // ADOPT the survivors into a rebuilt site (the subdue resolve reads
+    // cultistIds) instead of raising a twin rite. The pentagram doodad
+    // survives only on an adopted-layout return; a drift rebuild loses
+    // the drawn star while the rite stays resolvable (coda'd).
+    {
+      const ring = this.actors.filter(a => !a.dead && a.tag === 'ritual_cultist'
+        && (a.ringRegion === undefined || a.ringRegion === def.id));
+      if (this.seamless && ring.length) {
+        this.materializedRituals.add(key);
+        const cx = ring.reduce((s, a) => s + a.pos.x, 0) / ring.length;
+        const cy = ring.reduce((s, a) => s + a.pos.y, 0) / ring.length;
+        this.ritualSite = {
+          id: info.id, zoneId: def.id, center: vec(cx, cy),
+          cultistIds: ring.map(a => a.id), subdued: false,
+        };
+        return;
+      }
+    }
     this.materializedRituals.add(key);
     const cfg = cf.surge().ritual;
     const rng = new Rng((packageSeed(this.manifest.seed, 'conclave') ^ hashStr(`${info.id}:${def.id}`)) >>> 0);
@@ -15410,6 +15732,18 @@ export class World {
     if (!info) return;
     const key = `${info.id}@${def.id}`;
     if (this.materializedAmalgam.has(key)) return;
+    // THE LIVING LEDGER (wave 8b): the Bonewright rode a rebase — adopt it
+    // (and any risen boss) back into the site refs instead of a twin.
+    const necroSurvivor = this.seamlessEventSurvivors(def.id, { tag: 'amalgam_necromancer' });
+    if (necroSurvivor) {
+      this.materializedAmalgam.add(key);
+      const bossSurvivor = this.seamlessEventSurvivors(def.id, { tag: 'amalgam_boss' });
+      this.amalgamSite = {
+        id: info.id, zoneId: def.id, center: vec(necroSurvivor.pos.x, necroSurvivor.pos.y),
+        necroId: necroSurvivor.id, bossId: bossSurvivor ? bossSurvivor.id : null,
+      };
+      return;
+    }
     this.materializedAmalgam.add(key);
     const cfg = af.surge();
     const rng = new Rng((packageSeed(this.manifest.seed, 'amalgamation') ^ hashStr(`${info.id}:${def.id}`)) >>> 0);
@@ -15443,6 +15777,11 @@ export class World {
     if (!mb || !MONSTERS[mb.defId]) return;
     const key = `${mb.id}@${def.id}`;
     if (this.materializedAmalgamMobs.has(key)) return;
+    // THE LIVING LEDGER (wave 8b): the miniboss rode a rebase — no twin.
+    if (this.seamlessEventSurvivors(def.id, { tag: 'amalgam_miniboss' })) {
+      this.materializedAmalgamMobs.add(key);
+      return;
+    }
     this.materializedAmalgamMobs.add(key);
     const cfg = af.surge();
     const m = this.createMonster(mb.defId, Math.max(1, def.level + cfg.minibossLevelBonus), 'enemy');
@@ -17239,6 +17578,12 @@ export class World {
     if (!info) return;
     const term = info.archetype.termination;
     if (term.policy !== 'hybridCleanseObserver' || !term.observer || !MONSTERS[term.observer]) return;
+    // THE LIVING LEDGER (wave 8b): the Observer rode a rebase and still
+    // watches — latch without a twin gaze.
+    if (this.seamlessEventSurvivors(def.id, { tag: 'eldritch_observer' })) {
+      this.materializedObservers.add(def.id);
+      return;
+    }
     this.materializedObservers.add(def.id);
     const obs = this.createMonster(term.observer, Math.max(1, def.level + 2), 'enemy');
     obs.faction = info.archetype.factions[0];
@@ -17830,6 +18175,7 @@ export class World {
       this.seamlessCellsCache = null; // the fold indexed the replaced graph
       this.seamlessArrivalCell = null; // …and so did the standing arrival fit
       this.seamlessSkipAdmit = false;  // …and any pending rebase-tick deferral
+      this.seamlessRefreshDue = false; // …and any pending arrival refresh (wave 8b)
       this.seamlessRebasing = false;   // …and the rebase discriminator (wave 6)
       this.seamlessRebaseSrcOrigin = null; // …with its frame stash
       this.seamlessNotes.delete('boot');
@@ -18412,6 +18758,12 @@ export class World {
    *  bounty), so entering late = a deadlier fight but a fatter reward. */
   private spawnEpicenter(info: InvasionInfo, live = false): void {
     if (this.materializedEpicenters.has(info.id)) return;
+    // THE LIVING LEDGER (wave 8b): the eruption's court rode a rebase and
+    // still stands — one Balor per epicenter, never a twin.
+    if (this.seamlessEventSurvivors(this.zone.id, { eventKey: `invasion:${info.id}` })) {
+      this.materializedEpicenters.add(info.id);
+      return;
+    }
     this.materializedEpicenters.add(info.id);
     // The strike's RESOLVED faction: an attributed strike fields its sending
     // LORD'S host (the War Below's banner made flesh); legacy keeps the Legion.
@@ -18434,6 +18786,7 @@ export class World {
     balor.faction = facId;
     if (this.sim.factionInvasionActive(facId, this.player.level)) this.promoteRarity(balor, 'crowned');
     balor.tag = 'balor_epicenter';
+    balor.eventKey = `invasion:${info.id}`; // the living ledger's marker (wave 8b)
     balor.pos = this.clampPos(vec(at.x, at.y), balor.radius);
     this.actors.push(balor);
     const pool = roster.table.filter(e => e.id !== champId);
@@ -18442,6 +18795,7 @@ export class World {
       const m = this.createMonster(this.weightedPick(pool.length ? pool : roster.table, lvl), lvl, 'enemy');
       m.faction = facId;
       m.pos = this.clampPos(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)), m.radius);
+      m.eventKey = `invasion:${info.id}`;
       this.actors.push(m);
     }
     bumpLedger(this.ledger, 'demon_invasion_seen'); // DISCOVERY — surfaces the Vault tiers
@@ -18478,6 +18832,12 @@ export class World {
     if (this.materializedHellWar.has(key)) return;
     const front = this.sim.hellWarField?.frontStage(def.id);
     if (!front) return;
+    // THE LIVING LEDGER (wave 8b): the marshal rode a rebase and still
+    // holds the field — latch without a twin officer.
+    if (this.seamlessEventSurvivors(def.id, { eventKey: `hellwar:${front.attacker.id}` })) {
+      this.materializedHellWar.add(key);
+      return;
+    }
     this.materializedHellWar.add(key);
     const lord = front.attacker;
     const roster = FACTIONS[lord.faction];
@@ -18499,6 +18859,7 @@ export class World {
       const m = this.createMonster(this.weightedPick(roster.table, lvl), lvl, 'enemy');
       m.faction = lord.faction;
       m.pos = this.clampPos(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)), m.radius);
+      m.eventKey = `hellwar:${lord.id}`; // the living ledger's marker (wave 8b)
       this.actors.push(m);
     }
     this.text(vec(at.x, at.y - 40), `${lord.short}'s marshal drives the front!`, lord.color, 15);
@@ -18515,6 +18876,12 @@ export class World {
     if (this.materializedHellWar.has(key)) return;
     const lord = this.sim.hellWarField?.manifestHere(def.id);
     if (!lord) return;
+    // THE LIVING LEDGER (wave 8b): the lord's court rode a rebase and
+    // still stands its seat — latch without a twin.
+    if (this.seamlessEventSurvivors(def.id, { eventKey: `hellwar:${lord.id}` })) {
+      this.materializedHellWar.add(key);
+      return;
+    }
     this.materializedHellWar.add(key);
     const roster = FACTIONS[lord.faction];
     if (!MONSTERS[lord.lord] || !roster?.table?.length) return;
@@ -18532,6 +18899,7 @@ export class World {
       const m = this.createMonster(this.weightedPick(roster.table, lvl), lvl, 'enemy');
       m.faction = lord.faction;
       m.pos = this.clampPos(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
+      m.eventKey = `hellwar:${lord.id}`; // the living ledger's marker (wave 8b)
       this.actors.push(m);
     }
     this.text(vec(at.x, at.y - 48),
@@ -18847,6 +19215,12 @@ export class World {
    *  muster per zone visit. (The sanctum gate is opened per-frame elsewhere.) */
   private materializeCrusade(info: CrusadeInfo): void {
     if (this.materializedCrusades.has(this.zone.id)) return;
+    // THE LIVING LEDGER (wave 8b): the garrison rode a rebase and still
+    // holds its works — latch without a twin muster.
+    if (this.seamlessEventSurvivors(this.zone.id, { eventKey: `crusade:${this.zone.id}` })) {
+      this.materializedCrusades.add(this.zone.id);
+      return;
+    }
     this.materializedCrusades.add(this.zone.id);
     const roster = FACTIONS[info.faction];
     if (!roster?.table?.length) return;
@@ -18872,6 +19246,7 @@ export class World {
         this.promoteRarity(m, info.leaderRarity === 'crowned' ? 'crowned' : 'champion');
         if (info.leaderTag) { m.tag = info.leaderTag; m.xpValue = Math.max(m.xpValue, 90); }
       }
+      m.eventKey = `crusade:${this.zone.id}`; // the living ledger's marker (wave 8b)
       this.actors.push(m);
     }
     this.flashes.push({ pos: vec(center.x, center.y), radius: 110, color: info.color, life: 0.6, maxLife: 0.6 });
@@ -18970,6 +19345,13 @@ export class World {
     const info = cf.contagionOn(def.id);
     if (!info) return;
     if (this.materializedContagion.has(def.id)) return;
+    // THE LIVING LEDGER (wave 8b): the infection's packs rode a rebase and
+    // still fester here — latch without a twin muster (the tag is
+    // zone-scoped through the survivors scan).
+    if (this.seamlessEventSurvivors(def.id, { tag: 'contagion' })) {
+      this.materializedContagion.add(def.id);
+      return;
+    }
     this.materializedContagion.add(def.id);
     // DISCOVERY — being caught in an infected zone surfaces the Vault tuning (one-shot
     // per outbreak), exactly like the Deadwake / Migration "you've been caught" bump.
@@ -19261,6 +19643,14 @@ export class World {
     }
     // THE MUSTER — once per zone visit.
     if (this.materializedDeepwinter.has(def.id)) return;
+    // THE LIVING LEDGER (wave 8b): the winter's court rode a rebase and
+    // still holds — latch without a twin muster (the dressing above stays
+    // idempotent-per-entry by its own law).
+    if (this.seamlessEventSurvivors(def.id, { tag: 'deepwinter' })
+      || this.seamlessEventSurvivors(def.id, { tag: 'winter_king' })) {
+      this.materializedDeepwinter.add(def.id);
+      return;
+    }
     this.materializedDeepwinter.add(def.id);
     // DISCOVERY — walking held ground surfaces the Vault tuning (one-shot per
     // front), exactly like the Contagion "you've stumbled in" bump.
@@ -19340,6 +19730,14 @@ export class World {
     const info = vf.infestOn(def.id);
     if (!info) return;
     if (this.materializedInfestation.has(def.id)) return;
+    // THE LIVING LEDGER (wave 8b): the warren's nests rode a rebase and
+    // still stand — latch without twin nests (the overlay's nestsRemaining
+    // would re-field the full count over the survivors).
+    if (this.seamlessEventSurvivors(def.id, { tag: 'warren_nest' })
+      || this.seamlessEventSurvivors(def.id, { tag: 'rat_king_manifest' })) {
+      this.materializedInfestation.add(def.id);
+      return;
+    }
     this.materializedInfestation.add(def.id);
     // DISCOVERY — walking a claimed zone surfaces the Vault tuning (one-shot per
     // infestation), exactly like the Contagion "you've stumbled in" bump.
@@ -19405,6 +19803,14 @@ export class World {
     const info = lc.candleOn(def.id);
     if (!info) return;
     if (this.materializedCandle.has(def.id)) return;
+    // THE LIVING LEDGER (wave 8b): a court that rode a rebase still holds
+    // its night — latch without a twin session.
+    if (this.seamlessEventSurvivors(def.id, { tag: 'candle_shrine' })
+      || this.seamlessEventSurvivors(def.id, { tag: 'wax_vigil' })
+      || this.seamlessEventSurvivors(def.id, { tag: 'umbral_parliament' })) {
+      this.materializedCandle.add(def.id);
+      return;
+    }
     this.materializedCandle.add(def.id);
     const cfg = lc.surge();
     const lvl = Math.max(1, def.level);
@@ -19463,6 +19869,13 @@ export class World {
     const front = this.sim.weather.sample(def);
     if (front?.kind !== 'starfall') return;
     if (this.materializedStarfall.has(def.id)) return;
+    // THE LIVING LEDGER (wave 8b): the Court rode a rebase and still
+    // stands under its sky — latch without a twin muster.
+    if (this.seamlessEventSurvivors(def.id, { tag: 'starfall' })
+      || this.seamlessEventSurvivors(def.id, { tag: 'fallen_star' })) {
+      this.materializedStarfall.add(def.id);
+      return;
+    }
     this.materializedStarfall.add(def.id);
     bumpLedger(this.ledger, 'starfall_seen');
     const cfg = STARFALL_CFG;
@@ -19526,6 +19939,13 @@ export class World {
     const info = mf.sporeOn(def.id);
     if (!info) return;
     if (this.materializedMycelia.has(def.id)) return;
+    // THE LIVING LEDGER (wave 8b): the horde rode a rebase and still
+    // creeps here — latch without a twin pour.
+    if (this.seamlessEventSurvivors(def.id, { tag: 'mycelia' })
+      || this.seamlessEventSurvivors(def.id, { tag: 'mycelia_heart' })) {
+      this.materializedMycelia.add(def.id);
+      return;
+    }
     this.materializedMycelia.add(def.id);
     if ((this.ledger.mycelia_seen ?? 0) === 0) bumpLedger(this.ledger, 'mycelia_seen'); // DISCOVERY (once)
     const cfg = mf.surge();
@@ -19716,6 +20136,10 @@ export class World {
     // routs the wake. Bump the discovery ledger here — the player has been caught.
     if (!this.materializedDeadwakes.has(info.id)) {
       this.materializedDeadwakes.add(info.id);
+      // THE LIVING LEDGER (wave 8b): the tide's commander rode a rebase
+      // and still leads — no twin leader (streamers are headcount-capped
+      // and need no guard).
+      if (this.seamlessEventSurvivors(this.zone.id, { tag: 'deadwake_leader' })) return;
       bumpLedger(this.ledger, 'deadwake_seen'); // surfaces the Vault tuning
       this.spawnDeadwakeLeader(info);
       this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 150, color: info.color, life: 0.8, maxLife: 0.8 });
@@ -19771,6 +20195,11 @@ export class World {
     const lvl = Math.max(1, this.zone.level + info.levelBonus);
     if (!this.materializedHaunts.has(info.id)) {
       this.materializedHaunts.add(info.id);
+      // THE LIVING LEDGER (wave 8b): the grief's anchor (or its walking
+      // boss) rode a rebase and still stands — no twin haunt (the spawn
+      // stream below is headcount-capped and needs no guard).
+      if (this.seamlessEventSurvivors(this.zone.id, { tag: 'haunt_anchor' })
+        || this.seamlessEventSurvivors(this.zone.id, { tag: 'wailing_one' })) return;
       bumpLedger(this.ledger, 'haunt_seen'); // surfaces the Vault tuning
       this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
       if (info.anchorBroken) {
@@ -20977,6 +21406,10 @@ export class World {
     const lvl = Math.max(1, this.zone.level + info.levelBonus);
     if (!this.materializedLongNights.has(info.id)) {
       this.materializedLongNights.add(info.id);
+      // THE LIVING LEDGER (wave 8b): the parked coach (or the seated
+      // Countess) rode a rebase and still stands — no twin court.
+      if (this.seamlessEventSurvivors(this.zone.id, { tag: 'long_night_coach' })
+        || this.seamlessEventSurvivors(this.zone.id, { tag: 'long_night_court' })) return;
       bumpLedger(this.ledger, 'long_night_seen'); // surfaces the Vault tuning
       // The parked coach, wearing every prior blow. Its def carries the duty
       // post (MonsterDef.post) — wherever it parks IS its stand.
@@ -21325,6 +21758,12 @@ export class World {
     if (!sf) return;
     const info = sf.broodOn(def.id);
     if (!info || this.materializedBroods.has(def.id)) return;
+    // THE LIVING LEDGER (wave 8b): the hive throats rode a rebase and
+    // still stand — the overlay's `standing` count would double them.
+    if (this.seamlessEventSurvivors(def.id, { tag: 'swarm_brood_node' })) {
+      this.materializedBroods.add(def.id);
+      return;
+    }
     this.materializedBroods.add(def.id);
     // DISCOVERY — walking a brood ground surfaces the Vault tuning (one-shot
     // per ground), exactly like the herd's first catch.
@@ -21353,6 +21792,11 @@ export class World {
     if (!sf) return;
     const n = sf.cachesIn(def.id);
     if (n <= 0 || this.materializedSwarmWake.has(def.id)) return;
+    // THE LIVING LEDGER (wave 8b): the caches rode a rebase — no twins.
+    if (this.seamlessEventSurvivors(def.id, { tag: 'royal_cache' })) {
+      this.materializedSwarmWake.add(def.id);
+      return;
+    }
     this.materializedSwarmWake.add(def.id);
     const cfg = sf.surge();
     if (!MONSTERS[cfg.cacheId]) return;
@@ -21698,6 +22142,16 @@ export class World {
     const pass = f.passingIn(this.zone.id);
     const key = pass ? `${pass.serpentId}:${pass.toZoneId}` : '';
     if (pass && pass.def.roam && !this.wbPassing && this.wbPassingKey !== key) {
+      // THE LIVING LEDGER (wave 8b): the glimpse-body rode a rebase — adopt
+      // it back into the driver instead of raising a second serpent.
+      const passSurvivor = this.seamlessEventSurvivors(this.zone.id, { tag: 'wb_passing' });
+      if (passSurvivor) {
+        this.wbPassing = passSurvivor;
+        this.wbPassingKey = key;
+        const doorOutS = this.exits.find(x => x.to === pass.toZoneId);
+        this.wbPassingGoal = doorOutS ? vec(doorOutS.pos.x, doorOutS.pos.y) : null;
+        return;
+      }
       const doorOut = this.exits.find(x => x.to === pass.toZoneId);
       if (doorOut) {
         const doorIn = pass.fromZoneId ? this.exits.find(x => x.to === pass.fromZoneId) : null;
@@ -21740,6 +22194,16 @@ export class World {
     if (!f) return;
     const fight = f.fightAt(def.id);
     if (!fight || this.materializedWorldBoss.has(fight.instanceId) || this.wbBoss) return;
+    // THE LIVING LEDGER (wave 8b): the sovereign rode a rebase and still
+    // stands its ground — ADOPT the survivor back into the fight's live
+    // ref (the driver reads wbBoss) instead of raising a twin.
+    const wbSurvivor = this.seamlessEventSurvivors(def.id, { eventKey: fight.instanceId });
+    if (wbSurvivor) {
+      this.wbBoss = wbSurvivor;
+      this.wbBossKey = fight.instanceId;
+      this.materializedWorldBoss.add(fight.instanceId);
+      return;
+    }
     const at = this.clearTransitSpot(this.clampPos(this.farPoint(340), 80), 110);
     // The LAIR's throne rises first — the habitat ground the sovereign binds to
     // (the per-frame confine sweep welds the body to the nearest matching dais).
@@ -40357,7 +40821,10 @@ export class World {
     // emptied roster (kills — bank the emptiness, cleared stays cleared)
     // from one that merely vanished (a harness sweep, a heal-out) and must
     // leave the standing memo untouched. Discrete play: tag never set.
-    if (actor.ringRegion !== undefined) {
+    // THE LEDGER IS THE BASE ROSTER'S (wave 8b): carried EVENT bodies ride
+    // the same tag but their deaths must never let an empty bank overwrite
+    // a memo the base population still owns — only zone-gen deaths book.
+    if (actor.ringRegion !== undefined && actor.fromZoneGen) {
       const rm = this.seamlessMints.get(actor.ringRegion);
       if (rm) rm.slainCount++;
     }

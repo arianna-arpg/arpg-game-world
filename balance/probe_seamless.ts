@@ -117,11 +117,13 @@ import { regionKind } from '../src/world/regions';
 import { OCEAN_BIOME, biomeAt } from '../src/world/biomes';
 import { elevationAt } from '../src/world/relief';
 import { START_ZONE, type ZoneDef } from '../src/data/zones';
+import { FACTIONS, MONSTERS } from '../src/data/monsters';
+import { ORB_DEFS } from '../src/data/orbs';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { updateAI } from '../src/engine/ai';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { persistRun, persistRunDurable } from '../src/meta/character';
-import type { World } from '../src/engine/world';
+import { SEAMLESS_SOFT, type World } from '../src/engine/world';
 
 let fails = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -2537,6 +2539,337 @@ const rawSeatOf = (def: ZoneDef, i: number, arena: { w: number; h: number }): { 
   check('L2 THE MODE LAW — a discrete load of a massif-class def carves NO band (flag-off silence)',
     !!zb7 && !wd7.seamless && wd7.seamlessMints.size === 0 && discreteBand === 0,
     `${zb7 ? `'${zb7.id}' loaded` : 'no pair in the discrete chart'}; seamless=${wd7.seamless}, ${wd7.seamlessMints.size} mint(s), ${discreteBand} band sample(s) on the discrete rim`);
+}
+
+// --- RIG M: THE SOFT CROSSING + THE TRANSIENT FLOW (M2 wave 8b) ---------------
+// THE REBASE IS NOT A DEPARTURE: ground loot, corpses, orbs, remnants, live
+// flights (every position-bearing field), standing skill zones, tethers and
+// EVENT bodies all ride a driven crossing shifted by the exact seat delta;
+// the double crossing loses and doubles nothing; the kill ledger books only
+// base deaths; THE LIVING LEDGER never twins a carried event's content and
+// re-materializes honestly once the bodies are gone; discards RE-SITE to
+// ring demotion (the departing cell's ground takes its door-law fate there);
+// a true DOOR still discards by the standing law; THE ADOPTED LAYOUT is
+// byte-equal ground to a fresh build (the A/B pin); the mode law holds.
+// Own twin world (the K idiom). Perf numbers live in the pass memory, never
+// here.
+/** The M-rigs' crossing target: a linked, bordering, agreed-point neighbor
+ *  of the ACTIVE zone — the mouth recipe's own requirements, re-derived on
+ *  the live ring so a re-fit can never strand the pick. */
+const pickAgreedNeighbor = (w: World): ZoneDef | null => {
+  const home = w.seamlessMints.get(w.zone.id);
+  const a = w.zoneMap[w.zone.id];
+  if (!home || !a) return null;
+  for (const s of w.seamlessRegions) {
+    if (s.zoneId === w.zone.id) continue;
+    const b = w.zoneMap[s.zoneId];
+    const mb = w.seamlessMints.get(s.zoneId);
+    if (!b || !mb || !a.exits.some(e => e.to === b.id && !e.lock)) continue;
+    if (!cellsShareBorder(home.cell, mb.cell) || !borderAgreedPoint(home.cell, mb.cell)) continue;
+    return b;
+  }
+  return null;
+};
+
+rigM: {
+  type ActorX = World['actors'][number];
+  seedGlobalRandom(GSEED ^ 0x8b);
+  const wm = makeSimWorld('warrior', WSEED);
+  wm.seamless = true;
+  wm.loadZone(START_ZONE);
+  ringSettle(wm);
+  const pairM = pickWalkPair(wm);
+  check('M0a a walk pair stands for the transient-flow rigs', !!pairM);
+  if (!pairM) break rigM;
+  const zoneMA = pairM[0];
+  wm.loadZone(zoneMA.id);
+  // Bare beats, NEVER ringSettle here — the settle helper strips hostiles,
+  // and this rig's whole subject is the standing population + transients.
+  for (let i = 0; i < 8; i++) wm.update(0.05);
+  const zoneMBpick = pickAgreedNeighbor(wm);
+  check('M0b a linked agreed-border neighbor stands to cross into',
+    !!zoneMBpick, zoneMBpick?.id ?? 'none on this ring');
+  if (!zoneMBpick) break rigM;
+  const zoneMB = zoneMBpick;
+  for (let i = 0; i < 40 && !wm.seamlessMints.get(zoneMB.id)?.populated; i++) wm.update(0.05);
+  const anyM = wm as unknown as {
+    createMonster(id: string, lvl: number, team: 'enemy'): ActorX;
+    objectiveCountable(a: ActorX): boolean;
+    spawnWarband(host: unknown): void;
+    materializedHosts: Set<unknown>;
+    seamlessDemote(id: string): void;
+  };
+  const seatOfM = (w: World): { x: number; y: number } =>
+    w.seamlessRegions.find(s => s.zoneId === w.zone.id)!.originPx;
+
+  // The crossing recipe (K3's): corridor seat 150px before the agreed point,
+  // drive 400px past it.
+  const agreedM = borderAgreedPoint(wm.seamlessMints.get(zoneMA.id)!.cell, wm.seamlessMints.get(zoneMB.id)!.cell);
+  check('M0c the pair still agrees its border point after the populate settle', !!agreedM);
+  if (!agreedM) break rigM;
+  const nM = agreedM.side === 'e' ? { x: 1, y: 0 } : agreedM.side === 'w' ? { x: -1, y: 0 }
+    : agreedM.side === 's' ? { x: 0, y: 1 } : { x: 0, y: -1 };
+  const pM = { x: -nM.y, y: nM.x }; // the corridor's perpendicular — plants sit OFF the walk line
+  const seatA0 = seatOfM(wm);
+  wm.player.pos = vec(agreedM!.x - nM.x * 150 - seatA0.x, agreedM!.y - nM.y * 150 - seatA0.y);
+
+  // Plant ONE transient of every category, each held by OBJECT IDENTITY and
+  // remembered at its WORLD position (the invariant the shift must keep).
+  const base = vec(wm.player.pos.x - nM.x * 80, wm.player.pos.y - nM.y * 80);
+  // Clamped into the arena with a deep margin: a corridor near a cell
+  // corner would otherwise walk the perpendicular plants out of the zone
+  // (the away lane's wall would honestly kill a planted flight there).
+  const plantAt = (k: number): Vec2 => vec(
+    Math.min(wm.arena.w - 160, Math.max(160, base.x + pM.x * (220 + k * 40))),
+    Math.min(wm.arena.h - 160, Math.max(160, base.y + pM.y * (220 + k * 40))));
+  const dropM: (typeof wm.drops)[number] = {
+    pos: plantAt(0), item: { kind: 'vestige', id: 'probe_relic', count: 1 }, bob: 0,
+  };
+  wm.drops.push(dropM);
+  const corpseM: (typeof wm.corpses)[number] = {
+    pos: plantAt(1), defId: wm.actors.find(a => a.team === 'enemy' && a.defId)?.defId ?? 'x',
+    level: 1, maxLife: 40, remaining: 900,
+  };
+  wm.corpses.push(corpseM);
+  const orbM: (typeof wm.orbs)[number] = {
+    pos: plantAt(2), kind: Object.keys(ORB_DEFS)[0], amount: 3, bob: 0, life: 900,
+  };
+  wm.orbs.push(orbM);
+  const remnantM: (typeof wm.remnants)[number] = { pos: plantAt(3), element: 'fire', bob: 0, life: 900 };
+  wm.remnants.push(remnantM);
+  const instM = [...wm.meta.knownSkills.values()][0];
+  const zoneM = {
+    pos: plantAt(4), radius: 40, caster: wm.player, inst: instM, color: '#fff',
+    delay: 0, exploded: true, linger: 900, tickInterval: 900, tickTimer: 899,
+    shape: 'circle', facing: 0, dmgMult: 0, depth: 0,
+  } as unknown as (typeof wm.zones)[number];
+  wm.zones.push(zoneM);
+  const evDef = wm.actors.find(a => a.fromZoneGen && a.team === 'enemy' && a.defId)?.defId
+    ?? Object.keys(MONSTERS)[0];
+  check('M0d a def stands to mint probe event bodies from', !!evDef,
+    `${evDef} (${wm.actors.length} actor(s) standing in ${wm.zone.id})`);
+  const mintEv = (k: number): ActorX => {
+    const ev = anyM.createMonster(evDef!, Math.max(1, zoneMA.level), 'enemy');
+    ev.tag = 'probe_event';
+    ev.passive = true;
+    ev.pos = plantAt(5 + k);
+    wm.actors.push(ev);
+    return ev;
+  };
+  const evA = mintEv(0), evB = mintEv(1), evC = mintEv(2);
+  const tetherM = {
+    a: evA, b: evB, owner: evA, skillId: 'probe', link: 'zap', amounts: {}, heal: 0,
+    affects: 'all', width: 10, remaining: 900, tickTimer: 0, color: '#fff',
+    ax: evA.pos.x, ay: evA.pos.y, bx: evB.pos.x, by: evB.pos.y,
+  } as unknown as (typeof wm.tethers)[number];
+  wm.tethers.push(tetherM);
+  // The anchor sits AT the flight's own point (every real spawn's shape —
+  // a resting flight derives pos from it), as a DISTINCT object so the
+  // multi-field shift still pins; the origin stays a separate point.
+  const projSeat = plantAt(8);
+  const projM = {
+    pos: vec(projSeat.x, projSeat.y), dir: 0, speed: 0, radius: 2, traveled: 0, range: 1e6, pierce: 9999,
+    chains: 0, hits: new Map<number, number>(), age: 0, mult: 1, caster: evA, inst: instM,
+    color: '#fff', shape: 'bolt', forks: 0, returnMode: 0, returnPhase: false,
+    origin: plantAt(9), homing: 0, guide: 0, erratic: 0, spiral: 0, orbit: 0, spin: 0,
+    weave: 0, amp: 0, orbitR0: 0, guideDir: 0, guided: false, anchor: vec(projSeat.x, projSeat.y),
+    angle: 0, orbRadius: 0, hitDetonate: false, shrapnel: 0, trailNext: 0,
+    inheritFrac: 0, reShatter: false, depth: 0,
+  } as unknown as (typeof wm.projectiles)[number];
+  wm.projectiles.push(projM);
+  const wpt = (p: { x: number; y: number }, o: { x: number; y: number }): { x: number; y: number } =>
+    ({ x: p.x + o.x, y: p.y + o.y });
+  const markM = {
+    drop: wpt(dropM.pos, seatA0), corpse: wpt(corpseM.pos, seatA0), orb: wpt(orbM.pos, seatA0),
+    remnant: wpt(remnantM.pos, seatA0), zone: wpt(zoneM.pos, seatA0),
+    proj: wpt(projM.pos, seatA0), projOrigin: wpt(projM.origin, seatA0), projAnchor: wpt(projM.anchor, seatA0),
+    evA: wpt(evA.pos, seatA0),
+  };
+
+  // --- M1: everything rides the crossing at the exact seat delta. -----------
+  const goalM1 = { x: agreedM!.x + nM.x * 400, y: agreedM!.y + nM.y * 400 };
+  const gotM1 = walkToward(wm, () => goalM1, () => wm.zone.id === zoneMB.id, 900);
+  check('M1a the driven walk crosses with the transients standing', gotM1 && wm.zone.id === zoneMB.id);
+  const seatB1 = seatOfM(wm);
+  const near = (a: { x: number; y: number }, b: { x: number; y: number }, tol: number): boolean =>
+    Math.hypot(a.x - b.x, a.y - b.y) <= tol;
+  check('M1b the ground loot rides (same object, world seat exact)',
+    wm.drops.includes(dropM) && near(wpt(dropM.pos, seatB1), markM.drop, 0.01));
+  check('M1c the corpse rides', wm.corpses.includes(corpseM) && near(wpt(corpseM.pos, seatB1), markM.corpse, 0.01));
+  check('M1d the orb rides', wm.orbs.includes(orbM) && near(wpt(orbM.pos, seatB1), markM.orb, 0.01));
+  check('M1e the remnant rides', wm.remnants.includes(remnantM) && near(wpt(remnantM.pos, seatB1), markM.remnant, 0.01));
+  check('M1f the standing skill zone rides un-expired',
+    wm.zones.includes(zoneM) && near(wpt(zoneM.pos, seatB1), markM.zone, 0.01));
+  check('M1g the tether rides with both endpoints',
+    wm.tethers.includes(tetherM) && !tetherM.a.dead && !tetherM.b.dead);
+  check('M1h the enemy flight rides — pos AND origin AND anchor shift together',
+    wm.projectiles.includes(projM)
+    && near(wpt(projM.pos, seatB1), markM.proj, 0.01)
+    && near(wpt(projM.origin, seatB1), markM.projOrigin, 0.01)
+    && near(wpt(projM.anchor, seatB1), markM.projAnchor, 0.01),
+    wm.projectiles.includes(projM)
+      ? `Δpos ${Math.hypot(wpt(projM.pos, seatB1).x - markM.proj.x, wpt(projM.pos, seatB1).y - markM.proj.y).toFixed(3)}px`
+      : 'flight gone from the array');
+  check('M1i the event bodies ride TAGGED with their region (wave 9\'s address)',
+    !evA.dead && !evB.dead && !evC.dead
+    && evA.ringRegion === zoneMA.id && evB.ringRegion === zoneMA.id && evC.ringRegion === zoneMA.id
+    && near(wpt(evA.pos, seatB1), markM.evA, 60));
+  check('M1j a carried event body never counts toward the DESTINATION\'s objective',
+    !anyM.objectiveCountable(evA));
+
+  // --- M2: the kill ledger books only BASE deaths. --------------------------
+  const slain0 = wm.seamlessMints.get(zoneMA.id)!.slainCount;
+  wm.kill(evC, false, wm.player);
+  check('M2a an event body\'s tagged death books NO base-roster kill (the bank cannot forge an empty memo)',
+    wm.seamlessMints.get(zoneMA.id)!.slainCount === slain0);
+  const baseTagged = wm.actors.find(a => a.ringRegion !== undefined && a.fromZoneGen && !a.dead && a.team === 'enemy');
+  const mintOfBase = baseTagged?.ringRegion !== undefined ? wm.seamlessMints.get(baseTagged.ringRegion) : undefined;
+  const slainBase0 = mintOfBase?.slainCount ?? 0;
+  if (baseTagged) wm.kill(baseTagged, false, wm.player);
+  check('M2b a base body\'s tagged death books exactly one',
+    !!baseTagged && !!mintOfBase && mintOfBase.slainCount === slainBase0 + 1,
+    baseTagged ? `region ${baseTagged.ringRegion}` : 'no tagged base body stood');
+
+  // --- M3: THE DOUBLE CROSSING — two rebases inside the deferral window. ----
+  const backGoal = { x: agreedM!.x - nM.x * 400, y: agreedM!.y - nM.y * 400 };
+  const gotM3 = walkToward(wm, () => backGoal, () => wm.zone.id === zoneMA.id, 900);
+  const seatA2 = seatOfM(wm);
+  check('M3a the immediate return crosses (the pending-refresh window holds)', gotM3 && wm.zone.id === zoneMA.id);
+  check('M3b nothing lost, nothing doubled — every ref stands once at its ORIGINAL world seat',
+    wm.drops.includes(dropM) && near(wpt(dropM.pos, seatA2), markM.drop, 0.01)
+    && wm.corpses.includes(corpseM) && near(wpt(corpseM.pos, seatA2), markM.corpse, 0.01)
+    && wm.orbs.includes(orbM) && wm.remnants.includes(remnantM)
+    && wm.zones.includes(zoneM) && wm.projectiles.includes(projM)
+    && near(wpt(projM.origin, seatA2), markM.projOrigin, 0.01)
+    && wm.drops.filter(d => d === dropM).length === 1);
+  check('M3c the carried event bodies PROMOTE home (untagged actives; the fallen stay fallen)',
+    !evA.dead && evA.ringRegion === undefined && !evB.dead && evB.ringRegion === undefined && evC.dead
+    && wm.actors.filter(a => a.tag === 'probe_event' && !a.dead).length === 2);
+
+  // --- M4: THE LIVING LEDGER — a carried march never twins; a fallen one
+  // re-materializes by the standing per-visit law. ---------------------------
+  const facM = Object.keys(FACTIONS).find(f => FACTIONS[f]?.table?.length);
+  check('M4a a fielded faction stands for the warband pin', !!facM);
+  const hostShape = (): unknown => ({
+    faction: facM!, pos: vec(0, 0), target: vec(0, 0), fromZoneId: zoneMB.id,
+    targetZoneId: wm.zone.id, radius: 30, age: 0, life: 100, arrived: true,
+  });
+  const wbKey = `warband:${facM}:${wm.zone.id}`;
+  const packOf = (): number => wm.actors.filter(a => !a.dead && a.eventKey === wbKey).length;
+  anyM.spawnWarband(hostShape());
+  const packN = packOf();
+  check('M4b the march materializes wearing the living ledger\'s marker', packN >= 3, `${packN} body(ies)`);
+  anyM.materializedHosts.clear(); // the reset ladder's own effect at a load
+  anyM.spawnWarband(hostShape());
+  check('M4c the survivors latch the guard — never a twin march', packOf() === packN, `${packOf()} vs ${packN}`);
+  wm.actors = wm.actors.filter(a => a.eventKey !== wbKey);
+  anyM.materializedHosts.clear();
+  anyM.spawnWarband(hostShape());
+  check('M4d gone bodies re-open the ledger (the world is the record)', packOf() >= 3, `${packOf()} body(ies)`);
+  wm.actors = wm.actors.filter(a => a.eventKey !== wbKey);
+
+  // --- M5: discards RE-SITE to ring demotion. -------------------------------
+  const cellB5 = wm.seamlessMints.get(zoneMB.id)!.cell;
+  const seatA5 = seatOfM(wm);
+  const inB = vec((cellB5.x0 + cellB5.x1) / 2 - seatA5.x, (cellB5.y0 + cellB5.y1) / 2 - seatA5.y);
+  const dropB: (typeof wm.drops)[number] = {
+    pos: vec(inB.x, inB.y), item: { kind: 'vestige', id: 'probe_relic2', count: 1 }, bob: 0,
+  };
+  const corpseB: (typeof wm.corpses)[number] = {
+    pos: vec(inB.x + 30, inB.y), defId: corpseM.defId, level: 1, maxLife: 40, remaining: 900,
+  };
+  const zoneB5 = {
+    pos: vec(inB.x, inB.y + 30), radius: 40, caster: wm.player, inst: instM, color: '#fff',
+    delay: 0, exploded: true, linger: 900, tickInterval: 900, tickTimer: 899,
+    shape: 'circle', facing: 0, dmgMult: 0, depth: 0,
+  } as unknown as (typeof wm.zones)[number];
+  wm.drops.push(dropB);
+  wm.corpses.push(corpseB);
+  wm.zones.push(zoneB5);
+  anyM.seamlessDemote(zoneMB.id);
+  check('M5a the demoted cell\'s ground takes its door-law fate AT the demotion',
+    !wm.drops.includes(dropB) && !wm.corpses.includes(corpseB) && !wm.zones.includes(zoneB5));
+  check('M5b the standing ring\'s ground is untouched by the sweep',
+    wm.drops.includes(dropM) && wm.corpses.includes(corpseM) && wm.zones.includes(zoneM));
+
+  // --- M6: a true DOOR still discards by the standing law (the control). ----
+  wm.loadZone(START_ZONE);
+  check('M6 the door is still the door — every transient array clears at a true load',
+    wm.drops.length === 0 && wm.corpses.length === 0 && wm.orbs.length === 0
+    && wm.remnants.length === 0 && wm.zones.length === 0
+    && wm.actors.every(a => a.tag !== 'probe_event' || a.dead));
+
+}
+
+// --- M7 + M8: the adoption A/B and the mode law (own worlds — they run
+// even when the M crossing rig bails on a pairless ring). ----------------------
+{
+  type ActorX = World['actors'][number];
+  // --- M7: THE ADOPTED LAYOUT is byte-equal GROUND to a fresh build. --------
+  // Same seeds, same driven crossing; one world adopts the record, the twin
+  // builds from scratch — the arena, every doodad, the walk grid, and the
+  // stream-fed fixture rolls (altars, shrines) must agree exactly (the
+  // postGenRng restoration's whole proof). Body positions may drift (the
+  // tide's own legs); the ground may not.
+  const driveOnce = (adopt: boolean): World | null => {
+    (SEAMLESS_SOFT as { adoptLayout: boolean }).adoptLayout = adopt;
+    seedGlobalRandom(GSEED ^ 0x8c);
+    const w = makeSimWorld('warrior', WSEED);
+    w.seamless = true;
+    w.loadZone(START_ZONE);
+    ringSettle(w);
+    const pr = pickWalkPair(w);
+    if (!pr) return null;
+    w.loadZone(pr[0].id);
+    ringSettle(w, 8);
+    const target = pickAgreedNeighbor(w);
+    if (!target) return null;
+    for (let i = 0; i < 40 && !w.seamlessMints.get(target.id)?.populated; i++) w.update(0.05);
+    const home = w.seamlessMints.get(pr[0].id), dest = w.seamlessMints.get(target.id);
+    const seat = w.seamlessRegions.find(s => s.zoneId === pr[0].id);
+    if (!home || !dest || !seat) return null;
+    const ag = borderAgreedPoint(home.cell, dest.cell);
+    if (!ag) return null;
+    const n = ag.side === 'e' ? { x: 1, y: 0 } : ag.side === 'w' ? { x: -1, y: 0 }
+      : ag.side === 's' ? { x: 0, y: 1 } : { x: 0, y: -1 };
+    w.player.pos = vec(ag.x - n.x * 150 - seat.originPx.x, ag.y - n.y * 150 - seat.originPx.y);
+    const goal = { x: ag.x + n.x * 400, y: ag.y + n.y * 400 };
+    walkToward(w, () => goal, () => w.zone.id === target.id, 900);
+    return w.zone.id === target.id ? w : null;
+  };
+  const wOn = driveOnce(true);
+  const wOff = driveOnce(false);
+  (SEAMLESS_SOFT as { adoptLayout: boolean }).adoptLayout = true; // restore the dial
+  const bothM7 = !!wOn && !!wOff && wOn.zone.id === wOff.zone.id;
+  check('M7a both A/B worlds cross the same threshold', bothM7,
+    bothM7 ? wOn!.zone.id : `on=${wOn?.zone.id ?? 'held'} off=${wOff?.zone.id ?? 'held'}`);
+  if (bothM7) {
+    check('M7b the adopted arena equals the built arena',
+      wOn!.arena.w === wOff!.arena.w && wOn!.arena.h === wOff!.arena.h);
+    check('M7c the adopted ground IS the built ground (doodad-geometry equality)',
+      geoOf(wOn!.doodads) === geoOf(wOff!.doodads));
+    check('M7d …and answers the same walk grid', gridsAgree(wOn!.walk, wOff!.walk, wOn!.arena.w, wOn!.arena.h));
+    const fixturesOf = (w: World): string => JSON.stringify([
+      w.altars.map(a => [a.def.id, a.pos.x, a.pos.y]),
+      w.shrines.map(s => [s.pos.x, s.pos.y]),
+    ]);
+    check('M7e the restored stream feeds the same fixture rolls (altars + shrines byte-equal)',
+      fixturesOf(wOn!) === fixturesOf(wOff!));
+  }
+
+  // --- M8: THE MODE LAW — the living ledger is seamless-gated. --------------
+  seedGlobalRandom(GSEED);
+  const wd8 = makeSimWorld('warrior', WSEED ^ 0x8d);
+  wd8.loadZone(START_ZONE);
+  const evDef8 = Object.keys(MONSTERS)[0];
+  const evD = (wd8 as unknown as { createMonster(id: string, lvl: number, team: 'enemy'): ActorX })
+    .createMonster(evDef8, 1, 'enemy');
+  evD.tag = 'probe_event';
+  wd8.actors.push(evD);
+  check('M8 discrete play never consults the living ledger (a standing tag reads null, flag off)',
+    (wd8 as unknown as { seamlessEventSurvivors(z: string, m: { tag?: string }): ActorX | null })
+      .seamlessEventSurvivors(wd8.zone.id, { tag: 'probe_event' }) === null
+    && wd8.drops.length === 0);
 }
 
 console.log(fails === 0 ? '\nprobe_seamless: ALL GREEN' : `\nprobe_seamless: ${fails} FAILURE(S)`);
