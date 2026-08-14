@@ -58,12 +58,15 @@
 // (The world-keyed ground cache registers from its own home, ground.ts.)
 // ---------------------------------------------------------------------------
 
+import { Rng } from '../../core/rng';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
+import { MASSDRESS_CFG } from '../../data/enclosure';
 import { roofStyle } from '../../data/structures';
 import type { ZoneDef } from '../../data/zones';
 import type { Doodad } from '../../engine/levelgen';
 import type { SeamlessMint, World } from '../../engine/world';
 import { getTissueSampler, SEAMLESS_CFG, type RegionSeat, type TissueSampler } from '../../world/seamless';
+import { massDressOf, massStampSeatsForChunk, type MassStampSeat } from '../../world/tissue';
 import { activePieces, type BoundsPiece } from '../../world/shape';
 import { registerVisCache } from './caches';
 import { mix, shade } from './color';
@@ -123,6 +126,32 @@ export const SEAMLESS_DRAW_CFG = {
    *  bakeWhole overreach and eye-stalk leans all land inside it; blend beds
    *  widen it per kind by their true feather reach. */
   bodyCullPad: 150,
+  // --- THE MASS DRESS (M2 wave 6) — the painter's look half; the world-
+  // grain dials (shoulder, attempts, the one sun) live in data/enclosure.ts
+  // MASSDRESS_CFG. ALL FLAGGED (unblessed; her word moves them). ------------
+  /** Master dial: dress the solid between (stamps + shade + the land-mass
+   *  lean). Off — or a sampler without the carried read — restores the
+   *  wave-5 flat bake byte-identically. Doubles as the live A/B lever. */
+  massDress: true,
+  /** Non-walkable LAND (the between's mass, cliff country) leans toward
+   *  waterDark by this — lighter than the sea's waterMix so the dress
+   *  reads; the sea keeps its own dark. Dress-off ground keeps waterMix. */
+  massMix: 0.5,
+  /** Hillshade overlay alpha at full saturation (the relief's texture on
+   *  top of the blend tones — subtle by charter). */
+  shadeStrength: 0.18,
+  /** Shade quantization steps per sign — run-merged rows, byte-stable. */
+  shadeSteps: 8,
+  /** A stamp's paint reach as a multiple of its rolled radius (+6px): the
+   *  3×3 neighbor-chunk seat gather culls by it, so a rim tree's canopy
+   *  crosses the chunk seam whole — seam-free BY CONSTRUCTION (seats are
+   *  pure per chunk; every neighbor derives the same list). */
+  stampReachMul: 2.6,
+  /** Stamp glyph ink, as shade() deltas off the LOCAL mass ground (the seat's
+   *  blend tone under the massMix lean): body/lit/dark facets + the contact
+   *  shadow's alpha. Tone-local on purpose — the glyph SHAPES carry the
+   *  flank's identity, the ground's own palette carries the place. */
+  stampInk: { body: 0.12, lit: 0.26, dark: -0.14, shadowAlpha: 0.18 },
 } as const;
 
 /** The seed lane the engine itself reads for climate/continents
@@ -230,24 +259,48 @@ class SeamlessTissueChunks {
     }
   }
 
-  /** One chunk: sample the tissue on the lattice, fill flat run-merged rows.
-   *  Pure f(worldSeed, cx, cy) — same seed, same chunk, same pixels forever
-   *  (the sampler's own contract carries the proof). */
+  /** One chunk: sample the tissue on the lattice, fill flat run-merged rows —
+   *  then THE MASS DRESS (M2 wave 6) when the sampler carries the read and
+   *  the master dial stands: the solid between wears country. Pass 2 lays
+   *  quantized hillshade rows on non-walkable LAND (the relief as texture on
+   *  top of the blend tones — the sea and the walkable corridors stay flat,
+   *  so the way through reads); pass 3 scatters the flanking zones' own
+   *  stamp glyphs (seats from massStampSeatsForChunk — the sampler-side pure
+   *  helper the probe asserts through; gathered over the 3×3 neighborhood so
+   *  canopies cross chunk seams whole). Still pure f(worldSeed, cx, cy) —
+   *  same seed, same chunk, same pixels forever (the sampler's own contract
+   *  plus the seat derivation's carry the proof). Dress-less samplers and
+   *  the dial-off lane keep the wave-5 flat bake byte-identically. */
   private bake(sampler: TissueSampler, seed: number, cx: number, cy: number): HTMLCanvasElement {
+    const t0 = performance.now();
     const C = SEAMLESS_CFG.chunkPx, L = SEAMLESS_DRAW_CFG.latticePx;
     const cells = Math.ceil(C / L);
     const c = document.createElement('canvas');
     c.width = C; c.height = C;
     const g = c.getContext('2d')!;
+    const dress = SEAMLESS_DRAW_CFG.massDress ? massDressOf(sampler) : null;
+    // --- Pass 1: the flat tone fill (run-merged rows). Land mass leans
+    // lighter than the sea when dressing (massMix vs waterMix) so the
+    // texture above it reads; the shadeable lattice is remembered.
+    const shadeable: boolean[] | null = dress ? new Array(cells * cells).fill(false) : null;
     for (let j = 0; j < cells; j++) {
       const wy = cy * C + (j + 0.5) * L;
       let runStart = 0;
       let runColor = '';
       for (let i = 0; i < cells; i++) {
-        const s = sampler(cx * C + (i + 0.5) * L, wy, seed);
-        const color = !s.walkable
-          ? mix(s.tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.waterMix)
-          : s.road ? mix(s.tone, '#ffffff', SEAMLESS_DRAW_CFG.roadLighten) : s.tone;
+        const wx = cx * C + (i + 0.5) * L;
+        const s = sampler(wx, wy, seed);
+        let color: string;
+        if (!s.walkable) {
+          if (dress && dress.landAt(wx, wy, seed)) {
+            color = mix(s.tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.massMix);
+            shadeable![j * cells + i] = true;
+          } else {
+            color = mix(s.tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.waterMix);
+          }
+        } else {
+          color = s.road ? mix(s.tone, '#ffffff', SEAMLESS_DRAW_CFG.roadLighten) : s.tone;
+        }
         if (color !== runColor) {
           if (i > runStart) { g.fillStyle = runColor; g.fillRect(runStart * L, j * L, (i - runStart) * L, L); }
           runStart = i; runColor = color;
@@ -256,8 +309,200 @@ class SeamlessTissueChunks {
       g.fillStyle = runColor;
       g.fillRect(runStart * L, j * L, (cells - runStart) * L, L);
     }
+    if (dress) {
+      // --- Pass 2: THE RELIEF SHADE — signed hillshade off the dress read
+      // (the ONE SUN in MASSDRESS_CFG), quantized to shadeSteps so rows
+      // run-merge and re-bakes stay byte-stable. Overlay only — the blend
+      // tones remain the base.
+      const steps = SEAMLESS_DRAW_CFG.shadeSteps, strength = SEAMLESS_DRAW_CFG.shadeStrength;
+      for (let j = 0; j < cells; j++) {
+        const wy = cy * C + (j + 0.5) * L;
+        let runStart = 0;
+        let runColor = '';
+        for (let i = 0; i < cells; i++) {
+          let color = '';
+          if (shadeable![j * cells + i]) {
+            const q = Math.round(dress.shadeAt(cx * C + (i + 0.5) * L, wy, seed) * steps) / steps;
+            if (q > 0) color = `rgba(255,255,255,${(q * strength).toFixed(4)})`;
+            else if (q < 0) color = `rgba(0,0,0,${(-q * strength).toFixed(4)})`;
+          }
+          if (color !== runColor) {
+            if (i > runStart && runColor) { g.fillStyle = runColor; g.fillRect(runStart * L, j * L, (i - runStart) * L, L); }
+            runStart = i; runColor = color;
+          }
+        }
+        if (runColor) { g.fillStyle = runColor; g.fillRect(runStart * L, j * L, (cells - runStart) * L, L); }
+      }
+      // --- Pass 3: THE STAMP SCATTER — this chunk's seats plus every
+      // neighbor seat whose paint reach crosses the seam, y-sorted (the
+      // painter's order, canonical), drawn as texture glyphs inked off the
+      // local blend tone (shape carries the flank's identity, tone carries
+      // the ground's — one country, no foreign palette).
+      const seats: MassStampSeat[] = [];
+      const x0 = cx * C, y0 = cy * C;
+      for (let ny = cy - 1; ny <= cy + 1; ny++) {
+        for (let nx = cx - 1; nx <= cx + 1; nx++) {
+          for (const s of massStampSeatsForChunk(dress, seed, nx, ny)) {
+            const rr = s.r * SEAMLESS_DRAW_CFG.stampReachMul + 6;
+            if (s.x + rr < x0 || s.x - rr > x0 + C || s.y + rr < y0 || s.y - rr > y0 + C) continue;
+            seats.push(s);
+          }
+        }
+      }
+      seats.sort((a, b) => a.y - b.y || a.x - b.x);
+      g.save();
+      g.translate(-x0, -y0);
+      for (const s of seats) drawMassStamp(g, sampler, seed, s);
+      g.restore();
+    }
+    noteDressBake(performance.now() - t0);
     return c;
   }
+}
+
+// ---------------------------------------------------------------------------
+// THE MASS GLYPHS (M2 wave 6) — the stamp scatter's texture vocabulary: tiny
+// painter-drawn shapes (a canopy, a snag, a boulder, a column, a tuft) keyed
+// by the mass kit's doodad-kind-shaped names (data/enclosure.ts — the
+// vocabulary law). TEXTURE, never doodads: no collision, no effects, no
+// registry rows — the tissue's refusal is the law, these only make it read
+// as country. Every glyph draws off its seat's own forked Rng (varSeed), so
+// a re-bake wobbles identically forever. Deltas ink off the LOCAL mass
+// ground; THE ONE SUN (MASSDRESS_CFG.lightDir) orients every lit facet and
+// highlight, so between-mass and a future border mass share one light.
+// ---------------------------------------------------------------------------
+
+interface MassInk { body: string; lit: string; dark: string }
+
+function blob(g: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  g.beginPath();
+  g.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2);
+  g.fill();
+}
+
+const MASS_GLYPHS: Record<string, (g: CanvasRenderingContext2D, ink: MassInk,
+  x: number, y: number, r: number, rng: Rng) => void> = {
+  tree(g, ink, x, y, r, rng) {
+    const [lx, ly] = MASSDRESS_CFG.lightDir;
+    g.fillStyle = ink.dark;
+    blob(g, x - lx * r * 0.22, y - ly * r * 0.22, r * 0.95);
+    g.fillStyle = ink.body;
+    const lobes = rng.int(3, 4);
+    for (let k = 0; k < lobes; k++) {
+      const a = rng.range(0, Math.PI * 2), d = rng.range(0.12, 0.38) * r;
+      blob(g, x + Math.cos(a) * d, y + Math.sin(a) * d, rng.range(0.5, 0.72) * r);
+    }
+    g.fillStyle = ink.lit;
+    blob(g, x + lx * r * 0.3, y + ly * r * 0.3, r * 0.4);
+  },
+  dead_tree(g, ink, x, y, r, rng) {
+    const footY = y + r * 0.5;
+    const lean = rng.range(-0.3, 0.3);
+    const topX = x + lean * r, topY = y - r * 1.05;
+    g.strokeStyle = ink.lit;
+    g.lineCap = 'round';
+    g.lineWidth = Math.max(1.5, r * 0.14);
+    g.beginPath(); g.moveTo(x, footY); g.lineTo(topX, topY); g.stroke();
+    const n = rng.int(2, 3);
+    g.lineWidth = Math.max(1, r * 0.09);
+    for (let k = 0; k < n; k++) {
+      const t = rng.range(0.4, 0.85);
+      const bx = x + (topX - x) * t, by = footY + (topY - footY) * t;
+      const side = k % 2 === 0 ? 1 : -1;
+      const ang = -Math.PI / 2 + side * rng.range(0.55, 1.15);
+      const len = r * rng.range(0.35, 0.6);
+      g.beginPath(); g.moveTo(bx, by);
+      g.lineTo(bx + Math.cos(ang) * len, by + Math.sin(ang) * len); g.stroke();
+    }
+  },
+  rock(g, ink, x, y, r, rng) {
+    const n = rng.int(5, 7);
+    const pts: Array<[number, number]> = [];
+    const a0 = rng.range(0, Math.PI * 2);
+    for (let k = 0; k < n; k++) {
+      const a = a0 + (k / n) * Math.PI * 2;
+      const rr = r * rng.range(0.62, 1.0);
+      pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.82]);
+    }
+    g.fillStyle = ink.body;
+    g.beginPath();
+    g.moveTo(pts[0][0], pts[0][1]);
+    for (let k = 1; k < n; k++) g.lineTo(pts[k][0], pts[k][1]);
+    g.closePath(); g.fill();
+    const [lx, ly] = MASSDRESS_CFG.lightDir;
+    let bi = 0, bs = -Infinity;
+    for (let k = 0; k < n; k++) {
+      const s = (pts[k][0] - x) * lx + (pts[k][1] - y) * ly;
+      if (s > bs) { bs = s; bi = k; }
+    }
+    const p0 = pts[(bi + n - 1) % n], p1 = pts[bi], p2 = pts[(bi + 1) % n];
+    g.fillStyle = ink.lit;
+    g.beginPath(); g.moveTo(x, y);
+    g.lineTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.lineTo(p2[0], p2[1]);
+    g.closePath(); g.fill();
+  },
+  cactus(g, ink, x, y, r, rng) {
+    const w = r * 0.42, h = r * 1.5;
+    g.fillStyle = ink.body;
+    g.fillRect(x - w / 2, y - h, w, h);
+    blob(g, x, y - h, w / 2);
+    const side = rng.next() < 0.5 ? -1 : 1;
+    const ay = y - h * rng.range(0.45, 0.7);
+    const aw = w * 0.7, al = w * 0.9;
+    g.fillRect(Math.min(x + side * w / 2, x + side * (w / 2 + al)), ay - aw / 2, al, aw);
+    const ax = x + side * (w / 2 + al - aw / 2);
+    g.fillRect(ax - aw / 2, ay - aw / 2 - h * 0.3, aw, h * 0.3 + aw / 2);
+    g.fillStyle = ink.lit;
+    blob(g, ax, ay - aw / 2 - h * 0.3, aw / 2);
+  },
+  brush(g, ink, x, y, r, rng) {
+    const n = rng.int(3, 5);
+    for (let k = 0; k < n; k++) {
+      const a = rng.range(0, Math.PI * 2), d = rng.range(0, 0.7) * r;
+      g.fillStyle = k > 0 && rng.next() < 0.35 ? ink.lit : ink.body;
+      blob(g, x + Math.cos(a) * d, y + Math.sin(a) * d * 0.7, rng.range(0.28, 0.5) * r);
+    }
+  },
+};
+
+/** One stamp: contact shadow, then the kind's glyph (unknown kinds read as
+ *  stone — the kit map is curated, but data outlives painters). Ink derives
+ *  from the seat's OWN blend tone under the mass lean — the local ground's
+ *  palette, never a foreign one. */
+function drawMassStamp(g: CanvasRenderingContext2D, sampler: TissueSampler,
+  seed: number, s: MassStampSeat): void {
+  const ink = SEAMLESS_DRAW_CFG.stampInk;
+  const base = mix(sampler(s.x, s.y, seed).tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.massMix);
+  const inks: MassInk = { body: shade(base, ink.body), lit: shade(base, ink.lit), dark: shade(base, ink.dark) };
+  g.fillStyle = `rgba(0,0,0,${ink.shadowAlpha})`;
+  g.beginPath();
+  g.ellipse(s.x, s.y + s.r * 0.15, s.r * 0.8, s.r * 0.42, 0, 0, Math.PI * 2);
+  g.fill();
+  (MASS_GLYPHS[s.kind] ?? MASS_GLYPHS.rock)(g, inks, s.x, s.y, s.r, new Rng(s.varSeed));
+}
+
+/** The dress bake's own clock (last 48 tissue-chunk bakes, dress or flat —
+ *  the before/after A/B reads this): p50/max ms + the dial's stance. */
+const dressBakeMs: number[] = [];
+function noteDressBake(ms: number): void {
+  dressBakeMs.push(ms);
+  if (dressBakeMs.length > 48) dressBakeMs.shift();
+}
+export function seamlessTissueDressStats(): { n: number; p50: number; max: number; dress: boolean } {
+  const a = [...dressBakeMs].sort((x, y) => x - y);
+  return {
+    n: a.length,
+    p50: a.length ? a[Math.floor(a.length / 2)] : 0,
+    max: a.length ? a[a.length - 1] : 0,
+    dress: !!SEAMLESS_DRAW_CFG.massDress,
+  };
+}
+/** Dev/A-B lever: drop every baked tissue chunk (and the clock) so a dial
+ *  change re-bakes the view in place — never needed by play (the caches are
+ *  seed-keyed and the dials are constants in a session). */
+export function seamlessTissueReset(): void {
+  tissue.clear();
+  dressBakeMs.length = 0;
 }
 
 // ---------------------------------------------------------------------------

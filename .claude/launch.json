@@ -827,6 +827,22 @@
       ],
       "port": 5184,
       "autoPort": false
+    },
+    {
+      "name": "arpg-seamless-qa59",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "D:/Games/Claude/arpg-seamless",
+        "--",
+        "--port",
+        "5178",
+        "--strictPort"
+      ],
+      "port": 5178,
+      "autoPort": false
     }
   ]
 }

@@ -515,3 +515,50 @@ now happens mid-stride with no fade to cover it (discrete doors paid
 milestone should judge whether that stutter reads), and the 900px floor is
 currently decorative — only her size-aware worldgen seating (the charter's
 own note) would ever create the tight cells it guards against.
+
+### THE MASS DRESS (M2 wave 6 — movement record, 2026-08-13)
+
+The enclosure pass's coda-1 debt paid: the SOLID BETWEEN wears country,
+draw-time only — no doodads, no collision, no engine planting; the
+tissue's refusal stays the law and the dress only makes it read.
+
+- **THE KIT VOCABULARY** (data/enclosure.ts, beside the border rows — her
+  border-treatment word made the seat deliberate): `massKitFor(tileset)`
+  resolves authored `MASS_KITS` rows (mire's drowned timber, downs'
+  drystone litter) ▷ THE MASS DERIVATION (every layout+common stamp row
+  matching `MASS_STAMP_GLYPHS` contributes, weighted by mean count — the
+  between wants the tileset's whole texture, not the border's one fence
+  body) ▷ `MASS_KIT_DEFAULT` stone-and-scrub. Kinds are doodad-kind-shaped
+  glyph names; there is deliberately no `none` lane (refusal belongs to
+  the border line, not the mass).
+- **THE READS RIDE THE SAMPLER** (world/tissue.ts): the dress read
+  (`massAt`/`landAt`/`shadeAt`/`flanksAt`) is CARRIED by the sampler
+  function (`massDressOf` discovers it) — one capture serves the walkable
+  law and the dress, the placement lane's rebuild refreshes both, and the
+  TissueSample contract in world/seamless.ts is byte-untouched.
+  `massStampSeatsForChunk` is the painter's skip predicate made an
+  exported pure helper: chunk-salted per-attempt forked streams (skips
+  never shift neighbors), flank voiced by the ONE WEIGHT LAW's own
+  weights, kit row by kit weights — probe K asserts every seat unwalkable
+  through the sampler, shoulder-clear of every ribbon, outside every cell.
+- **THE PAINTER** (render/vis/seamlessDraw.ts): pass 2 lays quantized
+  hillshade rows on non-walkable land (THE ONE SUN,
+  `MASSDRESS_CFG.lightDir` — between-mass and any future border mass share
+  one light); pass 3 draws stamp glyphs (tree/dead_tree/rock/cactus/brush)
+  gathered over the 3×3 chunk neighborhood so canopies cross seams whole,
+  inked off the LOCAL blend tone (shape carries the flank's identity, the
+  ground's palette carries the place). Land mass leans `massMix` (0.5),
+  lighter than the sea's `waterMix` — the first deliberate look change to
+  the between since the blend. Dress-off or a read-less sampler = the
+  wave-5 flat bake byte-identically.
+- **COST** (measured live, same 20-chunk view fresh-baked both ways):
+  chunk bake p50 6.6ms dressed vs 5.1ms flat (+1.5ms, ~+29%), max 9.9 vs
+  6.2 — ≤ +3ms/frame at the 2-bake budget. `seamlessTissueDressStats()` is
+  the standing clock; `seamlessTissueReset()` the A/B lever.
+- **THE WAVE-7 SHARING SEAM (proposal):** the border-treatment painter
+  should consume `massKitFor` for its texture vocabulary and the same
+  MASSDRESS_CFG sun for its shading; if it paints texture (massif-like
+  faces) the glyph library in seamlessDraw.ts is one export away from
+  shared — if it plants bodies, the kit rows' doodad-kind-shaped names
+  already speak the enclosure's own id space. Either way the between and
+  the border read as ONE country by construction.

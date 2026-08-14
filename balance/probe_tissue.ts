@@ -55,7 +55,22 @@
 //      PARTITION_CFG.mouthApronPx) admits — wedges and long-link country
 //      refuse. A second scan proves the refusal FIRES on real remainder
 //      ground (off-road outside-cell samples read unwalkable) and that a
-//      real ribbon still crosses it.
+//      real ribbon still crosses it,
+//   K  THE MASS DRESS (M2 wave 6 — the reads the between's painter
+//      consumes): the sampler CARRIES the dress read (massDressOf — the
+//      TissueSample contract itself untouched, install still export-only);
+//      massAt/landAt/shadeAt/flanksAt answer byte-identically across
+//      independent builders; THE CLEARWAY LAW — every stamp seat the pure
+//      helper massStampSeatsForChunk derives reads UNWALKABLE through the
+//      sampler, stands clear of every ribbon by the shoulder (independent
+//      segment oracle), outside every fold cell (re-derived oracle), and on
+//      land; seats are deterministic across builders and non-empty over
+//      known mass; flank weights speak the ONE WEIGHT LAW on a synthetic
+//      pair (own seat = own voice alone at weight 1, the shared border =
+//      both voices at weight 1, canonical order); massKitFor resolves
+//      authored ▷ derived ▷ default with glyph-map-closed kinds; shadeAt is
+//      0 on ocean, bounded on land, and alive somewhere (the relief is
+//      wired).
 // Run: npx tsx balance/probe_tissue.ts
 // ---------------------------------------------------------------------------
 
@@ -72,7 +87,8 @@ import { mapToPx, pxToMap } from '../src/world/coords';
 import { elevationAt } from '../src/world/relief';
 import { PARTITION_CFG, SEAMLESS_CFG, getTissueSampler, setTissueSampler } from '../src/world/seamless';
 import { borderAgreedPoint, foldCells, type CellSeat } from '../src/world/cells';
-import { TISSUE_CFG, buildTissueSampler } from '../src/world/tissue';
+import { TISSUE_CFG, buildTissueSampler, massDressOf, massStampSeatsForChunk, type MassStampSeat } from '../src/world/tissue';
+import { MASSDRESS_CFG, MASS_KITS, MASS_KIT_DEFAULT, MASS_STAMP_GLYPHS, massKitFor } from '../src/data/enclosure';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -627,6 +643,184 @@ function monotoneAB(tones: string[], a: string, b: string): boolean {
     check('J2: a real ribbon crosses its gap walkable (corridors walk border-to-border)',
       !gapPair || s1(gapPair.midX, gapPair.midY, seed).walkable,
       gapPair ? `gap sample (${gapPair.midX.toFixed(0)}, ${gapPair.midY.toFixed(0)})` : 'no non-abutting linked pair on this web (vacuous — the abutting crossings need no tissue)');
+  }
+}
+
+// -------------------------------------------------------------------------- K
+{
+  // K0 — THE CARRY: the dress read travels ON the sampler function
+  // (world/seamless.ts's TissueSample contract is byte-untouched; a bare or
+  // null sampler dresses nothing and no consumer throws).
+  const d1 = massDressOf(s1), d2 = massDressOf(s2);
+  check('K: a built sampler carries the mass-dress read', d1 !== null && d2 !== null);
+  check('K: massDressOf(null) stands down null — the null-seam law', massDressOf(null) === null);
+  if (d1 && d2) {
+    // K1 — determinism: all four reads byte-identical across independent
+    // builders and across re-asks (the A law's own idiom at dress grain).
+    const N = 24;
+    const dumpDress = (d: NonNullable<ReturnType<typeof massDressOf>>): string => {
+      let out = '';
+      for (let i = 0; i < N; i++) {
+        for (let j = 0; j < N; j++) {
+          const x = latMinX + ((i + 0.5) / N) * (latMaxX - latMinX);
+          const y = latMinY + ((j + 0.5) / N) * (latMaxY - latMinY);
+          const fl = d.flanksAt(x, y, seed).map(f => `${f.zoneId}:${f.tileset ?? ''}:${f.weight.toFixed(6)}`).join('|');
+          out += `${d.massAt(x, y, seed) ? 1 : 0}${d.landAt(x, y, seed) ? 1 : 0}${d.shadeAt(x, y, seed).toFixed(6)};${fl};;`;
+        }
+      }
+      return out;
+    };
+    const kd1 = dumpDress(d1);
+    check('K: two builders\' dress reads answer byte-identically over the lattice', kd1 === dumpDress(d2));
+    check('K: one dress read re-asked answers itself byte-identically', kd1 === dumpDress(d1));
+
+    // K2 — THE SUBSET LAW: dressable mass is NEVER walkable through the
+    // sampler (lattice + the J2 golden-angle scatter as the sample bank).
+    const [a0k, b0k] = pairs[0];
+    const pa0k = mapToPx(a0k.map), pb0k = mapToPx(b0k.map);
+    const mxK = (pa0k.x + pb0k.x) / 2, myK = (pa0k.y + pb0k.y) / 2;
+    const scanPts: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i < 40; i++) {
+      for (let j = 0; j < 40; j++) {
+        scanPts.push({
+          x: latMinX + ((i + 0.5) / 40) * (latMaxX - latMinX),
+          y: latMinY + ((j + 0.5) / 40) * (latMaxY - latMinY),
+        });
+      }
+    }
+    for (let k = 0; k < 4000; k++) {
+      const ang = k * 2.399963229728653;
+      const r = 200 + (k / 4000) * 12000;
+      scanPts.push({ x: mxK + Math.cos(ang) * r, y: myK + Math.sin(ang) * r });
+    }
+    let massSeen = 0, massWalkable = 0;
+    let massAnchor: { x: number; y: number } | null = null;
+    for (const p of scanPts) {
+      if (!d1.massAt(p.x, p.y, seed)) continue;
+      massSeen++;
+      if (!massAnchor) massAnchor = p;
+      if (s1(p.x, p.y, seed).walkable) massWalkable++;
+    }
+    check('K: dressable mass stands to test against (the between exists)', massSeen >= 20, `${massSeen} mass points banked`);
+    check('K: THE CLEARWAY LAW roots — mass is never walkable through the sampler',
+      massSeen > 0 && massWalkable === 0, `${massWalkable}/${massSeen}`);
+
+    // K3 — THE STAMP SEATS through the painter's own pure helper: window
+    // chunks + the mass anchor's 3×3; deterministic across builders and
+    // re-asks; every seat unwalkable, shoulder-clear of every ribbon
+    // (independent segment oracle), outside every fold cell (re-derived
+    // oracle), on land, with a glyph-closed kind and a sane radius.
+    const C = SEAMLESS_CFG.chunkPx;
+    const chunkList: Array<{ cx: number; cy: number }> = [];
+    for (let cyK = Math.floor(latMinY / C); cyK <= Math.floor(latMaxY / C); cyK++) {
+      for (let cxK = Math.floor(latMinX / C); cxK <= Math.floor(latMaxX / C); cxK++) {
+        chunkList.push({ cx: cxK, cy: cyK });
+      }
+    }
+    if (massAnchor) {
+      const acx = Math.floor(massAnchor.x / C), acy = Math.floor(massAnchor.y / C);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) chunkList.push({ cx: acx + dx, cy: acy + dy });
+      }
+    }
+    const allSeats: MassStampSeat[] = [];
+    let j1 = '', j2 = '', j3 = '';
+    for (const ck of chunkList) {
+      const l1 = massStampSeatsForChunk(d1, seed, ck.cx, ck.cy);
+      j1 += JSON.stringify(l1);
+      j2 += JSON.stringify(massStampSeatsForChunk(d2, seed, ck.cx, ck.cy));
+      j3 += JSON.stringify(massStampSeatsForChunk(d1, seed, ck.cx, ck.cy));
+      allSeats.push(...l1);
+    }
+    check('K: seats are deterministic across independent builders', j1 === j2);
+    check('K: seats are deterministic across re-asks', j1 === j3);
+    check('K: seats stand over known mass (the scatter is alive)', allSeats.length >= 1,
+      `${allSeats.length} seats over ${chunkList.length} chunks`);
+    const foldK = foldCells(cellRosterOf(world.zoneMap).map(z => ({ id: z.id, ...mapToPx(z.map) })));
+    const cellsK = [...foldK.values()];
+    const glyphKinds = new Set(Object.values(MASS_STAMP_GLYPHS).map(g => g.kind));
+    for (const kit of Object.values(MASS_KITS)) for (const row of kit) glyphKinds.add(row.kind);
+    for (const row of MASS_KIT_DEFAULT) glyphKinds.add(row.kind);
+    let badWalk = 0, badShoulder = 0, badCell = 0, badLand = 0, badKind = 0;
+    for (const st of allSeats) {
+      if (s1(st.x, st.y, seed).walkable) badWalk++;
+      if (nearestSegDist(st.x, st.y) <= SEAMLESS_CFG.roadHalfPx + MASSDRESS_CFG.shoulderPx) badShoulder++;
+      if (cellsK.some(cc => st.x >= cc.x0 && st.x <= cc.x1 && st.y >= cc.y0 && st.y <= cc.y1)) badCell++;
+      if (biomeAt(pxToMap({ x: st.x, y: st.y }), seed) === OCEAN_BIOME) badLand++;
+      if (!glyphKinds.has(st.kind) || !(st.r > 0)) badKind++;
+    }
+    check('K: no seat is walkable through the sampler — the clearway law at seat grain', badWalk === 0, `${badWalk}/${allSeats.length}`);
+    check('K: every seat clears every ribbon by the shoulder (independent oracle)', badShoulder === 0, `${badShoulder} inside roadHalfPx+shoulderPx`);
+    check('K: every seat stands outside every fold cell (re-derived oracle)', badCell === 0, `${badCell} inside a cell`);
+    check('K: every seat stands on land', badLand === 0, `${badLand} wet`);
+    check('K: every seat wears a glyph-closed kind and a sane radius', badKind === 0, `${badKind} bad`);
+
+    // K4 — THE FLANK VOICES on a synthetic isolated pair with authored-kit
+    // tilesets: the one weight law's own weights, with mint provenance.
+    {
+      const bxK = 5200, byK = 1500; // far from the real web — geometry only, no dryness needed
+      const [tplA, tplB] = pairs[0];
+      world.zoneMap['tissue_mass_a'] = { ...tplA, id: 'tissue_mass_a', map: { x: bxK, y: byK }, exits: [], tileset: 'mire' };
+      world.zoneMap['tissue_mass_b'] = { ...tplB, id: 'tissue_mass_b', map: { x: bxK + 86, y: byK }, exits: [], tileset: 'downs' };
+      const s7 = buildTissueSampler(world);
+      const d7 = massDressOf(s7);
+      const paK = mapToPx({ x: bxK, y: byK }), pbK = mapToPx({ x: bxK + 86, y: byK });
+      const atSeat = d7 ? d7.flanksAt(paK.x, paK.y, seed) : [];
+      check('K: an isolated cell\'s own seat hears ONE voice at weight 1',
+        atSeat.length === 1 && atSeat[0].zoneId === 'tissue_mass_a' && Math.abs(atSeat[0].weight - 1) < 1e-9,
+        JSON.stringify(atSeat));
+      check('K: and the voice carries the mint\'s tileset (the kit key)', atSeat[0]?.tileset === 'mire');
+      const border = d7 ? d7.flanksAt((paK.x + pbK.x) / 2, paK.y, seed) : [];
+      check('K: the shared border hears BOTH voices at weight 1, canonical order',
+        border.length === 2 && border[0].zoneId === 'tissue_mass_a' && border[1].zoneId === 'tissue_mass_b'
+        && Math.abs(border[0].weight - 1) < 1e-9 && Math.abs(border[1].weight - 1) < 1e-9,
+        JSON.stringify(border));
+      delete world.zoneMap['tissue_mass_a'];
+      delete world.zoneMap['tissue_mass_b'];
+    }
+
+    // K5 — THE KIT LADDER: authored ▷ derived-from-own-stamps ▷ default,
+    // memo-stable, every row glyph-closed.
+    check('K: massKitFor honors AUTHORED rows first',
+      massKitFor('mire') === MASS_KITS.mire && massKitFor('downs') === MASS_KITS.downs);
+    const jungleKit = massKitFor('jungle');
+    check('K: a kit-less tileset DERIVES its kit from its own stamps (jungle wears its thicket)',
+      jungleKit.length > 0 && jungleKit !== MASS_KIT_DEFAULT
+      && jungleKit.every(r2 => glyphKinds.has(r2.kind) && r2.weight > 0 && r2.radius[0] > 0 && r2.radius[1] >= r2.radius[0]),
+      JSON.stringify(jungleKit));
+    check('K: no tileset draws THE DEFAULT kit', massKitFor(undefined) === MASS_KIT_DEFAULT);
+    check('K: the kit memo is invisible — the same table forever', massKitFor('jungle') === jungleKit);
+
+    // K6 — THE SHADE: 0 on the sea, bounded on land, alive somewhere (the
+    // relief lane is wired, not dead).
+    {
+      const contSeed = continentSeedFrom(seed);
+      let oceanPt: { x: number; y: number } | null = null;
+      const landPx: Array<{ x: number; y: number }> = [];
+      for (let x = -8000; x <= 8000 && landPx.length < 200; x += 173) {
+        for (let y = -8000; y <= 8000 && landPx.length < 200; y += 173) {
+          if (continentAt({ x, y }, contSeed).kind === 'ocean') {
+            if (!oceanPt) oceanPt = mapToPx({ x, y });
+          } else {
+            landPx.push(mapToPx({ x, y }));
+          }
+        }
+      }
+      check('K: the sea wears no relief — shadeAt is 0 on ocean',
+        oceanPt !== null && d1.shadeAt(oceanPt.x, oceanPt.y, seed) === 0);
+      let outOfBounds = 0, alive = 0;
+      for (const p of landPx) {
+        const sh = d1.shadeAt(p.x, p.y, seed);
+        if (sh < -1 || sh > 1 || Number.isNaN(sh)) outOfBounds++;
+        if (Math.abs(sh) > 0.01) alive++;
+      }
+      check('K: land shade is bounded in [-1, 1]', landPx.length >= 100 && outOfBounds === 0,
+        `${outOfBounds}/${landPx.length} out of bounds`);
+      check('K: the relief is alive — shade moves somewhere on land', alive > 0,
+        `${alive}/${landPx.length} with |shade| > 0.01`);
+    }
+
+    check('K: the dress reads installed NOTHING — the seam stays null', getTissueSampler() === null);
   }
 }
 

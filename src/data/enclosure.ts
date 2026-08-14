@@ -145,3 +145,149 @@ export function enclosureRowFor(tilesetId: string | undefined): EnclosureBorder 
   }
   return best ? { kind: best.kind, radius: best.radius } : ENCLOSURE_DEFAULT;
 }
+
+// ---------------------------------------------------------------------------
+// THE MASS DRESS (seamless M2 wave 6) — the SOLID BETWEEN's country kit, the
+// border rows' sibling vocabulary. The impassable mass between the cells is
+// draw-time TEXTURE (no doodads, no collision — the tissue's refusal is the
+// law; the dress only makes it read as country), scattered from the flanking
+// zones' OWN stamp vocabulary and shaded off the relief field. HER WORD
+// (2026-08-13): a border may itself become massif-like mass or a body line
+// with the BIOME choosing — so the kit derivation lives HERE, beside the
+// border rows, as reusable data: wave 7's border-treatment painter and the
+// between's painter read ONE kit and ONE light, and the two masses read as
+// one country.
+//
+// VOCABULARY LAW: MassStampRow.kind speaks doodad-kind-SHAPED names ('tree',
+// 'rock', 'dead_tree', 'cactus', 'brush') — the enclosure bodies' own ids —
+// but a mass consumer interprets them as GLYPHS (painter texture), never
+// plants them. A future border-mass lane may interpret the same kit as
+// bodies OR texture; the kit itself carries no effect, no collision, no
+// state — the enclosure file's inert-mass law, unchanged.
+// ---------------------------------------------------------------------------
+
+/** One texture stamp in a tileset's MASS KIT: a glyph id (see the vocabulary
+ *  law above), a radius band rolled per stamp, and a weight for the scatter
+ *  draw. */
+export interface MassStampRow {
+  kind: string;
+  radius: [number, number];
+  weight: number;
+}
+
+/** THE MASS-DRESS DIALS — the WORLD-GRAIN half (seat derivation + the shared
+ *  shade math; the painter's look dials live in SEAMLESS_DRAW_CFG). ALL
+ *  FLAGGED (unblessed; her word moves them). */
+export const MASSDRESS_CFG = {
+  /** THE CLEARWAY SHOULDER (px): stamps keep this far past the walkable
+   *  corridor's own edge (road ribbon + mouth aprons) — the way through
+   *  stays readable; the M0.5 signposts stand inside it untouched. */
+  shoulderPx: 40,
+  /** Stamp attempts per 720px tissue chunk (fixed count — skips on
+   *  non-mass ground never shift a neighbor's roll; density on mass scales
+   *  with the mass's own share of the chunk). */
+  stampAttempts: 26,
+  /** THE ONE SUN: the direction the light comes FROM, unit vector in world
+   *  axes (screen up-left — the doodad painters' own lit-side convention).
+   *  Every mass consumer shades with this, so between-mass and a future
+   *  border mass can never disagree about the light. */
+  lightDir: [-0.6, -0.8] as const,
+  /** Slope (elevation units per node unit) that saturates the hillshade —
+   *  calibrated against the field's own land-slope p99 ≈ 0.0013/unit (the
+   *  tissue cliff calibration, 2026-08-12): 2× p99 puts ordinary rolling
+   *  country at mid alphas and ridge creases at full. */
+  shadeSlopeRef: 0.0026,
+  /** The stamp streams' salt (chunk-keyed forks off the world seed). */
+  salt: 0x3a55d7e5,
+} as const;
+
+/** Stamp-vocabulary → mass-kit row template (THE MASS DERIVATION's map — the
+ *  border-body map's broader sibling: the between wants the tileset's WHOLE
+ *  texture, not one fence body, so every matching stamp row contributes a
+ *  kit row instead of electing a single winner). FLAGGED. */
+export const MASS_STAMP_GLYPHS: Record<string, { kind: string; radius: [number, number] }> = {
+  trees: { kind: 'tree', radius: [20, 32] },
+  grove: { kind: 'tree', radius: [20, 32] },
+  palm: { kind: 'tree', radius: [18, 30] },
+  dead_tree: { kind: 'dead_tree', radius: [18, 28] },
+  rocks: { kind: 'rock', radius: [16, 28] },
+  scree: { kind: 'rock', radius: [10, 18] },
+  cliff: { kind: 'rock', radius: [22, 36] },
+  obsidian: { kind: 'rock', radius: [14, 24] },
+  cactus: { kind: 'cactus', radius: [14, 22] },
+  brush: { kind: 'brush', radius: [10, 18] },
+  thicket: { kind: 'brush', radius: [12, 20] },
+  grass: { kind: 'brush', radius: [8, 14] },
+  fern: { kind: 'brush', radius: [9, 16] },
+  jungle_brush: { kind: 'brush', radius: [10, 18] },
+  vines: { kind: 'brush', radius: [9, 15] },
+} as const;
+
+/** Authored per-tileset MASS KITS (the lever, exemplars — ALL FLAGGED):
+ *  - mire: drowned timber + reed tufts (the marsh's between is its own
+ *    dead country, denser in snags than its stamp tally would derive);
+ *  - downs: drystone litter + gorse (small stones — the field-wall country's
+ *    rubble, where the derivation would seed full boulders).
+ *  A tileset absent here DERIVES its kit from its own stamp rows; there is
+ *  deliberately no `none` lane — every between wears SOME texture (the
+ *  refusal class belongs to the border line, not the mass). */
+export const MASS_KITS: Record<string, MassStampRow[]> = {
+  mire: [
+    { kind: 'dead_tree', radius: [18, 30], weight: 3 },
+    { kind: 'brush', radius: [9, 15], weight: 2 },
+  ],
+  downs: [
+    { kind: 'rock', radius: [10, 18], weight: 3 },
+    { kind: 'brush', radius: [9, 15], weight: 2 },
+  ],
+};
+
+/** The last-resort mass kit — every country has stone and scrub. FLAGGED. */
+export const MASS_KIT_DEFAULT: MassStampRow[] = [
+  { kind: 'rock', radius: [14, 26], weight: 2 },
+  { kind: 'brush', radius: [9, 15], weight: 1 },
+];
+
+const massKitMemo = new Map<string, MassStampRow[]>();
+
+/** Resolve a tileset's mass kit: authored rows ▷ THE MASS DERIVATION (every
+ *  layout+common stamp row matching MASS_STAMP_GLYPHS contributes a kit row
+ *  weighted by mean count, at the tileset's own stamped radius where the row
+ *  carries one — heaviest electing row wins the radius, the border
+ *  derivation's own tie law) ▷ the default. Pure f(registry), memoized (the
+ *  registry never mutates at runtime); canonical weight-desc order so every
+ *  consumer's weighted walk reads the same table. */
+export function massKitFor(tilesetId: string | undefined): MassStampRow[] {
+  const key = tilesetId ?? '';
+  const hit = massKitMemo.get(key);
+  if (hit) return hit;
+  const kit = deriveMassKit(tilesetId);
+  massKitMemo.set(key, kit);
+  return kit;
+}
+
+function deriveMassKit(tilesetId: string | undefined): MassStampRow[] {
+  const authored = tilesetId ? MASS_KITS[tilesetId] : undefined;
+  if (authored && authored.length) return authored;
+  const ts = tilesetId ? TILESETS[tilesetId] : undefined;
+  if (!ts) return MASS_KIT_DEFAULT;
+  const tally = new Map<string, { row: MassStampRow; radiusW: number }>();
+  for (const row of [...ts.layout, ...(ts.common ?? [])]) {
+    const g = MASS_STAMP_GLYPHS[row.kind];
+    if (!g) continue;
+    const w = (row.count[0] + row.count[1]) / 2;
+    const cur = tally.get(g.kind);
+    if (!cur) {
+      tally.set(g.kind, {
+        row: { kind: g.kind, radius: row.radius ?? g.radius, weight: w },
+        radiusW: row.radius ? w : -1,
+      });
+    } else {
+      cur.row.weight += w;
+      if (row.radius && w > cur.radiusW) { cur.row.radius = row.radius; cur.radiusW = w; }
+    }
+  }
+  const rows = [...tally.values()].map(t => t.row)
+    .sort((a, b) => b.weight - a.weight || (a.kind < b.kind ? -1 : 1));
+  return rows.length ? rows : MASS_KIT_DEFAULT;
+}

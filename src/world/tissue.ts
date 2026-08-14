@@ -78,6 +78,8 @@
 
 import type { World } from '../engine/world';
 import type { ZoneDef } from '../data/zones';
+import { Rng } from '../core/rng';
+import { MASSDRESS_CFG, massKitFor } from '../data/enclosure';
 import { PARTITION_CFG, SEAMLESS_CFG, type TissueSample, type TissueSampler } from './seamless';
 import { borderAgreedPoint, foldCells, type CellSeat } from './cells';
 import { mapToPx, pxToMap } from './coords';
@@ -211,12 +213,18 @@ export function buildTissueSampler(world: World): TissueSampler {
   const mintedTone: (string | null)[] = new Array(nCells);
   /** Seat map coord per cell (the lazy lane's biomeAt argument). */
   const seatCoord: { x: number; y: number }[] = new Array(nCells);
+  /** Cell identity + mint provenance (THE MASS-DRESS READ's flank voice —
+   *  massKitFor keys on the tileset a flanking zone minted from). */
+  const cellIds: string[] = new Array(nCells);
+  const cellTileset: (string | undefined)[] = new Array(nCells);
   for (let i = 0; i < nCells; i++) {
     const z = cellZones[i];
     const c = fold.get(z.id)!;
     cx0[i] = c.x0; cy0[i] = c.y0; cx1[i] = c.x1; cy1[i] = c.y1;
     mintedTone[i] = (z.biome && BIOMES[z.biome]?.mapColor) || null;
     seatCoord[i] = z.map;
+    cellIds[i] = z.id;
+    cellTileset[i] = z.tileset;
   }
   // --- THE MOUTH APRONS (M2 wave 5, THE SOLID BETWEEN): one walkable pocket
   // per agreed border point between two LINKED, RESIDENT-ELIGIBLE cells —
@@ -234,7 +242,6 @@ export function buildTissueSampler(world: World): TissueSampler {
     const p = borderAgreedPoint(ca, cb);
     if (p) aprons.push({ x: p.x, y: p.y });
   }
-  const apronSq = PARTITION_CFG.mouthApronPx * PARTITION_CFG.mouthApronPx;
 
   // The per-seed resolved-tone memo (rgb triples; almost always one seed a
   // session — the world's own). Invisible by law: same (graph, seed) →
@@ -274,14 +281,19 @@ export function buildTissueSampler(world: World): TissueSampler {
     return false;
   };
 
-  /** Within a mouth apron (THE SOLID BETWEEN's second corridor class). */
-  const nearApron = (x: number, y: number): boolean => {
+  /** Within `r` of a mouth apron center — r = mouthApronPx is THE SOLID
+   *  BETWEEN's second corridor class (the walkable law's own read); the
+   *  mass-dress lane asks the same list with its shoulder added. */
+  const apronWithin = (x: number, y: number, r: number): boolean => {
+    const rSq = r * r;
     for (const a of aprons) {
       const dx = x - a.x, dy = y - a.y;
-      if (dx * dx + dy * dy <= apronSq) return true;
+      if (dx * dx + dy * dy <= rSq) return true;
     }
     return false;
   };
+  const nearApron = (x: number, y: number): boolean =>
+    apronWithin(x, y, PARTITION_CFG.mouthApronPx);
 
   /** THE BORDER BLEND's tone at a land sample (the one weight law — module
    *  header). Two passes over the flat cell arrays, allocation-free. */
@@ -305,15 +317,20 @@ export function buildTissueSampler(world: World): TissueSampler {
 
   // --- Spatial bins at the chunk grain (SEAMLESS_CFG.chunkPx): each segment
   // registered into every chunk cell its ribbon-inflated bbox touches, so a
-  // sample consults only its own cell's list. Pure build-time geometry — the
-  // invisible-cache law holds trivially (no per-call state ever mutates).
+  // sample consults only its own cell's list. Registration inflates by the
+  // ribbon PLUS the mass-dress shoulder so the widened corridor test below
+  // reads the same bins — a wider superset never changes a verdict (the
+  // compare is the exact segment distance either way). Pure build-time
+  // geometry — the invisible-cache law holds trivially (no per-call state
+  // ever mutates).
   const span = SEAMLESS_CFG.chunkPx, pad = SEAMLESS_CFG.roadHalfPx;
+  const binPad = pad + MASSDRESS_CFG.shoulderPx;
   const bins = new Map<string, RoadSeg[]>();
   for (const s of segs) {
-    const x0 = Math.floor((Math.min(s.ax, s.bx) - pad) / span);
-    const x1 = Math.floor((Math.max(s.ax, s.bx) + pad) / span);
-    const y0 = Math.floor((Math.min(s.ay, s.by) - pad) / span);
-    const y1 = Math.floor((Math.max(s.ay, s.by) + pad) / span);
+    const x0 = Math.floor((Math.min(s.ax, s.bx) - binPad) / span);
+    const x1 = Math.floor((Math.max(s.ax, s.bx) + binPad) / span);
+    const y0 = Math.floor((Math.min(s.ay, s.by) - binPad) / span);
+    const y1 = Math.floor((Math.max(s.ay, s.by) + binPad) / span);
     for (let gx = x0; gx <= x1; gx++) {
       for (let gy = y0; gy <= y1; gy++) {
         const k = `${gx},${gy}`;
@@ -323,15 +340,77 @@ export function buildTissueSampler(world: World): TissueSampler {
       }
     }
   }
-  const ribbonSq = pad * pad;
-  const onRoad = (x: number, y: number): boolean => {
+  /** Within `half` of any road segment — half = roadHalfPx is the ribbon
+   *  (the walkable/road law's own read); the mass-dress lane adds its
+   *  shoulder. Valid for any half ≤ binPad (the bins' registration reach). */
+  const roadWithin = (x: number, y: number, half: number): boolean => {
     const arr = bins.get(`${Math.floor(x / span)},${Math.floor(y / span)}`);
     if (!arr) return false;
-    for (const s of arr) if (segDistSq(x, y, s) <= ribbonSq) return true;
+    const hSq = half * half;
+    for (const s of arr) if (segDistSq(x, y, s) <= hSq) return true;
     return false;
   };
+  const onRoad = (x: number, y: number): boolean => roadWithin(x, y, pad);
 
-  return (x: number, y: number, worldSeed: number): TissueSample => {
+  // --- THE MASS-DRESS READ (M2 wave 6) — carried BY the sampler function
+  // (massDressOf below finds it), so the read and the walkable law share ONE
+  // capture: the same cells, the same corridor bins, the same apron list —
+  // drawn == tested through one closure, and a sampler rebuild (the
+  // placement lane's own moment) refreshes both together. The TissueSample
+  // contract itself is UNCHANGED.
+  const landAt = (x: number, y: number, worldSeed: number): boolean =>
+    biomeAt(pxToMap({ x, y }), worldSeed >>> 0) !== OCEAN_BIOME;
+  /** Dressable solid mass: LAND outside every cell, off the corridor AND its
+   *  clearway shoulder — a strict subset of the walkable law's refusals BY
+   *  CONSTRUCTION (everything walkable out here is road or apron, and both
+   *  are excluded with margin), so no stamp can ever seed on walkable
+   *  ground. Cliff-steep between counts (mass is mass); the sea does not
+   *  (it wears water, not country). */
+  const massAt = (x: number, y: number, worldSeed: number): boolean => {
+    if (!landAt(x, y, worldSeed)) return false;
+    if (insideAnyCell(x, y)) return false;
+    if (roadWithin(x, y, pad + MASSDRESS_CFG.shoulderPx)) return false;
+    if (apronWithin(x, y, PARTITION_CFG.mouthApronPx + MASSDRESS_CFG.shoulderPx)) return false;
+    return true;
+  };
+  /** Signed hillshade in [-1, 1] under THE ONE SUN (MASSDRESS_CFG.lightDir):
+   *  >0 = the ground slopes up toward the light (lit face), <0 = away
+   *  (shadow face), 0 = flat — or ocean, which wears no relief. Gradient by
+   *  the cliff law's own centered elevationAt read (slopeStepUnits),
+   *  saturated at shadeSlopeRef. */
+  const shadeAt = (x: number, y: number, worldSeed: number): number => {
+    const seed = worldSeed >>> 0;
+    const c = pxToMap({ x, y });
+    if (biomeAt(c, seed) === OCEAN_BIOME) return 0;
+    const h = TISSUE_CFG.slopeStepUnits;
+    const gx = (elevationAt({ x: c.x + h, y: c.y }, seed) - elevationAt({ x: c.x - h, y: c.y }, seed)) / (2 * h);
+    const gy = (elevationAt({ x: c.x, y: c.y + h }, seed) - elevationAt({ x: c.x, y: c.y - h }, seed)) / (2 * h);
+    const [lx, ly] = MASSDRESS_CFG.lightDir;
+    const s = (gx * lx + gy * ly) / MASSDRESS_CFG.shadeSlopeRef;
+    return s < -1 ? -1 : s > 1 ? 1 : s;
+  };
+  /** THE FLANKS: every cell the ONE WEIGHT LAW gives voice at this point
+   *  (w > 0 — the blend's own weights, not a re-derivation), with the zone's
+   *  mint provenance for the kit lookup; weight-desc canonical order. Seed-
+   *  free geometry (the parameter stands for signature uniformity). */
+  const flanksAt = (x: number, y: number, _worldSeed: number): MassFlank[] => {
+    const band = PARTITION_CFG.blendBandPx;
+    let dmin = Infinity;
+    for (let i = 0; i < nCells; i++) {
+      const d = rectDistToCell(i, x, y);
+      if (d < dmin) dmin = d;
+    }
+    const out: MassFlank[] = [];
+    for (let i = 0; i < nCells; i++) {
+      const w = 1 - (rectDistToCell(i, x, y) - dmin) / band;
+      if (w <= 0) continue;
+      out.push({ zoneId: cellIds[i], tileset: cellTileset[i], weight: w });
+    }
+    out.sort((a, b) => b.weight - a.weight || (a.zoneId < b.zoneId ? -1 : 1));
+    return out;
+  };
+
+  const sampler: TissueSampler = (x: number, y: number, worldSeed: number): TissueSample => {
     const seed = worldSeed >>> 0;
     const c = pxToMap({ x, y });
     const road = onRoad(x, y);
@@ -361,4 +440,102 @@ export function buildTissueSampler(world: World): TissueSampler {
       : cellToneAt(x, y, seed);
     return { walkable, tone, road };
   };
+  (sampler as DressedTissueSampler).massDress = { massAt, landAt, shadeAt, flanksAt };
+  return sampler;
+}
+
+// ---------------------------------------------------------------------------
+// THE MASS-DRESS READ (M2 wave 6) — the solid between wears COUNTRY, draw-time
+// only. The reads below are CARRIED by the sampler function (the extension
+// travels with the install seam: the placement lane's setTissueSampler hands
+// the painter a dress read of the same vintage as the walkable law — one
+// capture, zero drift, and the TissueSample contract in world/seamless.ts
+// stays byte-untouched). A sampler without the carry (an old stub, a dev
+// swap) simply dresses nothing: massDressOf answers null and every consumer
+// stands down structurally — the mode law's shape at read grain.
+// ---------------------------------------------------------------------------
+
+/** One flanking cell's voice at a point: the ONE WEIGHT LAW's own weight plus
+ *  the zone's mint provenance (massKitFor's key). */
+export interface MassFlank {
+  zoneId: string;
+  /** ZoneDef.tileset — undefined (authored towns) draws the default kit. */
+  tileset?: string;
+  weight: number;
+}
+
+/** The reads the mass-dress painter consumes — all pure per (capture, args),
+ *  same signature discipline as the sampler itself. */
+export interface MassDressRead {
+  /** Dressable solid mass (land, outside every cell, off corridor+shoulder). */
+  massAt(x: number, y: number, worldSeed: number): boolean;
+  /** Land vs the sea (the shore exception's own read, exposed). */
+  landAt(x: number, y: number, worldSeed: number): boolean;
+  /** Signed hillshade in [-1, 1]; 0 on ocean and flat ground. */
+  shadeAt(x: number, y: number, worldSeed: number): number;
+  /** The blend's contributing cells at this point, weight-desc. */
+  flanksAt(x: number, y: number, worldSeed: number): MassFlank[];
+}
+
+/** A sampler that carries the dress read (buildTissueSampler's product). */
+export interface DressedTissueSampler extends TissueSampler { massDress: MassDressRead }
+
+/** Find the dress read on an installed sampler — null when the sampler is
+ *  null or carries none (stand down; never throw — the null-seam law). */
+export function massDressOf(s: TissueSampler | null): MassDressRead | null {
+  if (!s) return null;
+  const d = (s as Partial<DressedTissueSampler>).massDress;
+  return d && typeof d.massAt === 'function' ? d : null;
+}
+
+/** One stamp seat the mass painter will draw: world-px position, glyph
+ *  vocabulary id (data/enclosure.ts MassStampRow.kind), rolled radius, and
+ *  the glyph's own wobble seed. `tileset` records the flank that voiced it
+ *  (probe/debug — the draw needs only kind + geometry). */
+export interface MassStampSeat {
+  x: number;
+  y: number;
+  kind: string;
+  r: number;
+  varSeed: number;
+  tileset?: string;
+}
+
+/**
+ * THE STAMP SCATTER's seat derivation — the painter's skip predicate made an
+ * exported pure helper (the probe asserts through it): for one tissue chunk,
+ * the full list of stamp seats, deterministic per (dress capture, worldSeed,
+ * cx, cy). The stream is chunk-keyed off the world seed (the far-field
+ * dress streamer's own salt idiom) with a PER-ATTEMPT fork, so a skipped
+ * attempt (non-mass ground) never shifts a neighbor's roll — the throng
+ * pockets' fork law. Each seated attempt voices ONE flank drawn by the
+ * blend's own weights (a mire flank scatters its dead trees into its half
+ * of the mass; a wedge blends both by weight), then one kit row by the
+ * kit's weights, then radius + wobble. DOM-free on purpose: the painter
+ * turns seats into pixels; headless consumers (probes) read the same list.
+ */
+export function massStampSeatsForChunk(dress: MassDressRead, worldSeed: number,
+  cx: number, cy: number): MassStampSeat[] {
+  const seed = worldSeed >>> 0;
+  const C = SEAMLESS_CFG.chunkPx;
+  const base = (Math.imul(cx, 0x9e3779b1) ^ Math.imul(cy, 0x85ebca6b) ^ seed ^ MASSDRESS_CFG.salt) >>> 0;
+  const seats: MassStampSeat[] = [];
+  for (let i = 0; i < MASSDRESS_CFG.stampAttempts; i++) {
+    const r = new Rng((base + Math.imul(i + 1, 0xc2b2ae35)) >>> 0);
+    const x = cx * C + r.next() * C;
+    const y = cy * C + r.next() * C;
+    if (!dress.massAt(x, y, seed)) continue;
+    const flanks = dress.flanksAt(x, y, seed);
+    const flank = flanks.length ? r.weighted(flanks) : null;
+    const kit = massKitFor(flank?.tileset);
+    const row = r.weighted(kit);
+    seats.push({
+      x, y,
+      kind: row.kind,
+      r: r.range(row.radius[0], row.radius[1]),
+      varSeed: Math.floor(r.next() * 4294967296) >>> 0,
+      tileset: flank?.tileset,
+    });
+  }
+  return seats;
 }
