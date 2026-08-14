@@ -397,6 +397,112 @@ pair-sized against a ring of 8).
    exact case, now with a headless repro (the soak seeds, park in gen_11,
    target gen_17) — corroboration for the sibling, not a new lane.
 
+### The neighbor life (M2 wave 6 — 2026-08-13, the neighborlife pass)
+
+*Her kink 4, promoted feel-critical, built: ring-1 population RESIDENT at
+drowsy cadence — visible across borders, no first-arrival flash, crossings
+through passages for aggro'd bodies. All behind `world.seamless`; every dial
+FLAGGED (`SEAMLESS_LIFE` in world.ts: drowsyCadence 4 / populatePerBeat 1 /
+populateSalt).*
+
+- **THE RING TAG** (`Actor.ringRegion`): set ONLY on bodies standing in a
+  neighbor region — the active zone's own bodies and all of discrete play
+  leave it undefined, so every consumer clause reads one undefined (the mode
+  law's shape). The tag is PROVENANCE, not posture: a roused body keeps it
+  while fighting across borders, so THE SCOPING LAW holds mid-chase.
+- **POPULATION AT ADMISSION, SLICED**: `spawnZonePopulation` is loadZone's
+  population block factored whole (byte-order preserved; the discrete path
+  is the same call with both lanes open) behind two lane gates — `bodies`
+  (packs/contest/war/boss/spawners/siphon/camps/garrisons/landmark/bounty/
+  wildlife) and `fixtures` (spires/hold fixtures/escort/scenery/puzzle/
+  throng/lite boots + announcements + zone-scoped state). The ring beat
+  gains THE POPULATION SLICE: on beats that mint no layout, ONE unpeopled
+  member stands its roster through the bodies lane inside a scoped swap
+  (fresh on `def.seed ^ populateSalt`, or a REMEMBERED region's memo
+  replayed — spawn-then-swap scoped to the batch), then translates into the
+  live frame and tags. Bodies and ground never bill the same tick (THE
+  SLICING LAW); the town anchors a ring it never peoples (population defers
+  until an active frame stands).
+- **NO FLASH AT THE THRESHOLD**: the rebase carries the whole tide — the
+  destination's standing bodies PROMOTE (tag drops before the objective
+  stamps read the floor; the fresh-spawn ladder and the memory restore stand
+  down whole), the departed zone's base population DEMOTES IN PLACE by tag
+  (the memo-roster predicate names the set; event transients keep the door
+  law), and every position-bearing field shifts by the seat delta through
+  ONE helper (`seamlessShiftFrame` — pos, anchors, posts, trails, worm
+  segments). The same actor ids stand on both sides; region-local seats are
+  the invariant (probe RIG K3 pins it). The landing scatter learned to skip
+  tagged bodies — only the party re-seats at the door.
+- **THE DROWSY POSTURE**: one world-side predicate pair
+  (`seamlessDrowsy` / `seamlessDrowsyGate`) consulted at TWO one-line ai.ts
+  seams — updateAI's top (think every Nth beat, staggered by id; roused =
+  the standing lock predicate `aggroed || aiTargetId` = full cadence) and
+  the aiFlock stamp (no fine flocking while drowsy — the lite batch-steering
+  read). No fx built for the tide (its footprint IS the divided cadence);
+  statuses/regen/death tick normally — biology never sleeps, so a burn
+  landed across the border keeps burning and kills credit normally.
+- **HONEST BORDERS FOR BODIES**: the rim verdict's mover gate widened to
+  ROUSED enemies — an aggro'd body walks the party's own crossing law both
+  directions (in through the mouths, refused off-mouth by the same far-wall
+  grid + dress-trunk consults; an active body chasing a fleeing hero follows
+  out and stays live while engaged — the lean policy, adopted). Un-roused
+  foreign bodies confine INTO their own region (`seamlessForeignConfine`:
+  cell bounds + the mint's walk grid through the tier-swap idiom + its
+  furniture at trunk grain) — the drowsy tide never roams tissue.
+- **THE BANK + THE KILL LEDGER**: demotion sweeps the region's bodies into
+  its own zone memory (region-local rows — wounds, names, rarities, rouse
+  latches survive; brains drop; corpses die at the seam), and any NON-rebase
+  loadZone banks the whole tide first (THE DOOR LAW FOR THE TIDE — frames
+  don't survive a door; the arrival then replays the bank it just wrote).
+  THE INFORMATION LAW: the bank writes only what it earned — standing rows,
+  or an emptiness `SeamlessMint.slainCount` accounts for (kill() books
+  tagged deaths); a roster that vanished kill-less leaves the standing memo
+  untouched. `SeamlessMint.populated` is the one ledger bit (live XOR
+  banked).
+- **THE SHOT LANE**: projectiles cull at the RING's footprint (union of
+  cells + corridor margin) instead of the arena edge, and out-of-arena
+  samples route by grid OWNERSHIP (the veil march's idiom engine-side):
+  the owning mint's blocksShot regions + its furniture's true shot faces
+  stop the arrow; tissue is open sky. The drowsy population is visible AND
+  hittable; kills credit through the ordinary path. Engine LoS keeps its
+  administrative dark (out-of-grid = wall), which the perception scoping
+  leans on: a drowsy watcher cannot LOCK through the border (pain and kin
+  shouts still promote — snipe it, never leave it dumb), and aim assist's
+  LoS gate makes auto-aim prefer active bodies for free.
+- **SCOPING CENSUS** (every touched consumer): objectiveCountable (the one
+  predicate — cull/contest/empty-floor/HUD counts/bounty fallback all
+  scope through it), zoneMemorySnapshot (the active memo never speaks for
+  foreign bodies), restoreZoneEnemies' sweep filter (+ the factored
+  materializeMemoRows), the cave-cleared drop, kill()'s ledger book, the
+  landing scatter, and TAG INHERITANCE at the three adjacent-mint
+  chokepoints (graftPart, spawnMinion, mount pairing/crew) so a drowsy
+  composite's limbs, a spawner's trickle and a rider's steed all share
+  their region's ledger. XP/bounty on cross-border kills deliberately
+  unchanged (hittable = worth killing).
+- **THE VEIL DEPENDENCY held**: nothing in the drowsy posture mutates away
+  geometry — no door opens, no doodad breaks (drowsy bodies have no
+  targets; population plants land in a throwaway doodad copy so the mint's
+  recorded geometry stays byte-pure). The veil's mint-identity × heroT memo
+  key stays sufficient this wave.
+- **THE TIDE'S PRICE (the wave's own soak, parked populated stand, live
+  loop shape — updateAI + update per tick)**: the naïve tide read p50
+  +29ms/tick over the discrete control (ring 9 fully populated, 391 tagged
+  bodies — the full-brain scans' diplomacy walk over a 450-body roster was
+  the frame). Three laws closed it to **p50 +5.7ms at 96 tagged bodies**
+  (discrete 3.77ms → seamless 9.43ms, same zone, same mob): THE ADJACENCY
+  SCOPE (population stands only in members whose cell BORDERS the active
+  one — the charter's own "adjacent country"; the tide recedes behind the
+  walker via the bank), THE DROWSY BREATH (per-body upkeep — statuses,
+  DoTs, charges, regen — on the same divided clock, dt-compensated:
+  chunkier ticks, true rate), and THE DIM EYE (a drowsy scanner's
+  candidate walk caps at the actor grid's neighborhood — aiScanRoster,
+  the one world-side roster consult). Plus one discrete-shared free win:
+  the target scan's diplomacy read now runs only inside sense reach
+  (distance-first filter order, byte-identical set). Remaining ~+6ms =
+  ~96 standing bodies' divided brains + upkeep; next-cut levers named in
+  the pass memory (cadence dial, per-body brain cost, the scan's grid
+  query for actives).
+
 **Verdict: the ring model is ready for M2's dress investment.** Nothing
 structural must be paid first at today's web scale: the partition holds
 under census (no overlap, no strands, no floor breaches, walled faces keep

@@ -219,7 +219,7 @@ import { affordTravel, castRay, LOS_CFG, type RayElev } from './los';
 import { coordDist, mapToPx, type MapCoord } from '../world/coords';
 import { getTissueSampler, PARTITION_CFG, SEAMLESS_CFG, setTissueSampler, type CellRect, type RegionSeat } from '../world/seamless';
 import { ENCLOSURE_CFG, enclosureRowFor } from '../data/enclosure';
-import { borderAgreedPoint, foldCells } from '../world/cells';
+import { borderAgreedPoint, cellsShareBorder, foldCells } from '../world/cells';
 import { buildTissueSampler } from '../world/tissue';
 import { FORECHART_CFG, forechartSource, zonesWithin } from '../world/forechart';
 import { OMEN_CFG, collectOmens, omenLine, omenReach, type Omen } from '../world/omens';
@@ -2054,6 +2054,21 @@ export interface SeamlessMint {
    *  gaps are the mouths. Empty = the layout walls itself (the walled-skip)
    *  or the tileset refused dress. */
   dress: { x: number; y: number; r: number }[];
+  /** THE NEIGHBOR LIFE ledger bit (M2 wave 6): true = this region's
+   *  population LIVES — either standing tagged in the one actors array
+   *  (a populated neighbor), or standing untagged as the active zone's own
+   *  live population. False = the population is BANKED (zone memory / the
+   *  def's seed): a fresh mint before its population beat, or a record
+   *  whose bodies banked at a door. The population slice stands bodies
+   *  only while false; the demotion bank speaks only while true — the one
+   *  bit that keeps a body from ever living in two ledgers at once. */
+  populated: boolean;
+  /** THE KILL LEDGER: tagged deaths booked against this stand (kill()
+   *  bumps it; each population beat re-arms it at 0). The demotion bank
+   *  writes an EMPTY roster only over recorded kills — a roster that
+   *  vanished kill-less (a harness strip) leaves the standing memo alone,
+   *  so banking can never destroy information it didn't earn. */
+  slainCount: number;
 }
 
 /** Two cells agree within the fitted epsilon (float-noise tolerance — a
@@ -2100,6 +2115,32 @@ const SEAMLESS_FIT = {
    *  generators never meet a box the authored game couldn't produce
    *  (degradation, never a strand: the ring's own stretched-link grammar). */
   minArenaPx: 900,
+} as const;
+
+/** M2 wave 6 THE NEIGHBOR LIFE dials — ALL FLAGGED (unblessed; her word
+ *  moves them). The drowsy ring: resident neighbors' populations stand in
+ *  the one actors array (visible across borders, no first-arrival flash)
+ *  on a divided brain clock. */
+const SEAMLESS_LIFE = {
+  /** THE DROWSY CADENCE: a foreign un-roused body thinks every Nth update
+   *  beat (staggered by actor id so the tide never thinks in lockstep). A
+   *  roused body (the standing lock predicate) thinks every beat. */
+  drowsyCadence: 4,
+  /** Population beats per quiet ring beat: how many standing-but-unpeopled
+   *  members stand their population per evaluation beat. Populations run
+   *  only on beats that minted no layout (a mint beat is already the tick's
+   *  whole budget — never two heavy jobs one frame; THE SLICING LAW). */
+  populatePerBeat: 1,
+  /** THE DIM EYE (the drowsy scan bound): a drowsy scanner's candidate
+   *  walk caps at detectionRange × mul + pad via the actor grid — sound
+   *  for every ordinary detectability/alert multiplier, and an exotic
+   *  beyond-bound candidate is a posture cut, not a law break (the rouse
+   *  restores the full roster). Both FLAGGED. */
+  drowsyScanReachMul: 2.5,
+  drowsyScanPadPx: 240,
+  /** The population rng's salt (pure f(def.seed) — the enclosure dress's
+   *  own idiom; the layout stream is never resumed for bodies). */
+  populateSalt: 0x11fe5eed,
 } as const;
 
 function makeArena(def: ZoneDef): Bounds {
@@ -3226,6 +3267,19 @@ export class World {
    *  beat by the budget law anyway. Consumed (cleared) by the first
    *  evaluation beat that honors it; discrete play never sets it. */
   private seamlessSkipAdmit = false;
+  /** THE REBASE DISCRIMINATOR (M2 wave 6): true only for the loadZone a
+   *  threshold rebase runs underneath — the carry keeps ring-tagged bodies
+   *  and the promote path adopts the destination's standing population.
+   *  Every OTHER loadZone (doors, waypoints, caves) reads false and banks
+   *  the whole drowsy tide first (frames don't survive a door). */
+  private seamlessRebasing = false;
+  /** The SOURCE frame's origin while a rebase's loadZone runs (tagged
+   *  bodies still sit in that frame until the post-load shift) — the
+   *  promote pass and the demotion bank translate through THIS, never the
+   *  freshly-seated active origin. Null outside a rebase. */
+  private seamlessRebaseSrcOrigin: { x: number; y: number } | null = null;
+  /** The drowsy cadence counter — one tick per seamless update beat. */
+  private seamlessBeat = 0;
 
   // --- the current zone -------------------------------------------------
   zone: ZoneDef = this.zoneMap[START_ZONE];
@@ -4762,6 +4816,400 @@ export class World {
 
   // ---------------------------------------------------------------- zones ---
 
+  /** THE POPULATION PASS (factored from loadZone, byte-order preserved —
+   *  seamless M2 wave 6): the zone's own population path behind two lane
+   *  gates. `bodies` spawns the living roster (packs, contest, war, boss,
+   *  spawners, siphon, camps, garrisons, landmark dwellers, bounty marks,
+   *  wildlife); `fixtures` stands the objective furniture + zone-scoped
+   *  state (spires, hold fixtures, the escort, scenery/puzzles/throng/lite
+   *  boots, arrival announcements). loadZone runs {bodies, fixtures} —
+   *  both true on every discrete load, so the classic path is this method
+   *  called whole; the resident mint's population beat runs
+   *  {bodies: true, fixtures: false} inside its scoped swap, and a rebase
+   *  onto standing drowsy bodies runs {bodies: false, fixtures: true}.
+   *  POIs splice in place (the caller's later treasure dress reads the
+   *  survivors); the rng continues the caller's stream. */
+  private spawnZonePopulation(
+    def: ZoneDef, layout: GeneratedLayout, rng: Rng, pois: Vec2[],
+    memory: ZoneMemory | null,
+    opts: { bodies: boolean; fixtures: boolean },
+  ): void {
+    this.zoneGenTagging = true;
+    const o = def.objective;
+    // A SPECIAL arena (boss set-piece) spawns NOTHING ambient — no packs, no faction
+    // contest. Only its authored boss (below) populates it.
+    if (opts.bodies && !def.special && o.kind !== 'waves' && o.kind !== 'safe') {
+      // Day/night, weather, and faction territory bend the table and the count;
+      // a conquered zone draws from its new ruler's roster (see baseTable).
+      const e = this.effectiveSpawn(def, this.baseTable(def));
+      this.spawnPacks(def, (o.kind === 'escape' ? 0.6 : 1) * e.countMul, e.table);
+      // A node two hostile factions both hold spawns both — let them brawl.
+      // (Hand-authored factionWar zones stage their own fight below.)
+      if (!def.factionWar) this.spawnContest(def, e.inject);
+    }
+    // FACTION WAR: two rival hosts spawn mid-brawl at a contested point,
+    // with skirmishing packs of each side scattered wider. Wade in, or
+    // circle the carnage and pick off whoever limps away.
+    if (opts.bodies && def.factionWar) {
+      const battlefield = this.farPoint(700);
+      def.factionWar.forEach((factionId, side) => {
+        const roster = FACTIONS[factionId];
+        if (!roster) return;
+        const dir = side === 0 ? -1 : 1;
+        // the front line
+        for (let pk = 0; pk < 2; pk++) {
+          const type = this.weightedPick(roster.table, Math.max(1, def.level));
+          const n = randInt(3, 5);
+          for (let k = 0; k < n; k++) {
+            const mw = this.createMonster(type, Math.max(1, def.level), 'enemy');
+            mw.pos = this.clampPos(vec(
+              battlefield.x + dir * (70 + rand(0, 60)),
+              battlefield.y + (pk - 0.5) * 90 + rand(-40, 40)), mw.radius);
+            this.actors.push(mw);
+          }
+        }
+        // reinforcements in the field
+        const at = this.farPoint(650);
+        const type2 = this.weightedPick(roster.table, Math.max(1, def.level));
+        for (let k = 0; k < randInt(3, 5); k++) {
+          const mw = this.createMonster(type2, Math.max(1, def.level), 'enemy');
+          mw.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), mw.radius);
+          this.actors.push(mw);
+        }
+      });
+      // The announcement is arrival dress (the fixtures lane): a neighbor's
+      // war stands silent until the player's own load meets it.
+      if (opts.fixtures) {
+        this.text(vec(this.player.pos.x, this.player.pos.y - 70),
+          `${FACTIONS[def.factionWar[0]]?.name ?? def.factionWar[0]} wars with ${FACTIONS[def.factionWar[1]]?.name ?? def.factionWar[1]}!`,
+          '#e85050', 15);
+      }
+    }
+    if (opts.bodies && o.kind === 'boss') {
+      // ONE-SHOT UBER lifecycle: a recorded forever-dead boss never re-spawns (the
+      // zone becomes an empty cleared arena). Absent uber = a normal repeatable boss.
+      if (!this.uberDefeated(o, def.id)) {
+        const boss = this.createMonster(o.id, def.level + (o.levelBonus ?? 0), 'enemy');
+        // The Unmade arena: spawn on the dais (pois[0]) instead of a random far point,
+        // and init the in-zone choreography (no longer Crowned by default — see promote).
+        if (def.layoutType === 'unmade_vault') {
+          const dais = layout.pois.length ? layout.pois[0] : vec(this.arena.w / 2, this.arena.h / 2);
+          boss.pos = this.clampPos(vec(dais.x, dais.y), boss.radius);
+          // EXCLUDE the boss from Zone Memory (it's spawned inside the tagging window, so
+          // clear the flag): re-entry should re-spawn it FRESH (full HP, replaying from
+          // Phase I on a regenerated grid) — not restore a wounded body that would
+          // phase-JUMP to the apex with stale flood/crack paint. Also keeps the arena
+          // cleanly re-fightable (a killed Unmade respawns on the next entry).
+          boss.fromZoneGen = false;
+          const m = 70;
+          // The choreography is zone-scoped state — the fixtures lane owns
+          // it (a neighbor mint must never arm the ACTIVE arena's run).
+          if (opts.fixtures) {
+            this.bossRun = {
+              bossId: o.id, anchor: vec(dais.x, dais.y),
+              rect: { x0: m, y0: m, x1: this.arena.w - m, y1: this.arena.h - m },
+            };
+          }
+        } else {
+          boss.pos = this.clampPos(this.farPoint(720), boss.radius);
+        }
+        // OPT-IN difficulty spike (any boss): promote to an elite rarity, optionally
+        // STACKED. Absent = a plain boss. The lever to crank a boss harder via data.
+        if (o.promote) this.promoteRarityStacked(boss, o.promote.rarity, o.promote.stacks ?? 1);
+        this.actors.push(boss);
+      }
+    }
+    if (opts.bodies && o.kind === 'spawners') {
+      const n = rng.int(o.count[0], o.count[1]);
+      for (let i = 0; i < n; i++) {
+        const s = this.createMonster(o.spawnerId, def.level, 'enemy');
+        const at = pois.length
+          ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
+          : this.farPoint(740, false, this.seededDraw());
+        s.pos = this.clampPos(vec(at.x, at.y), s.radius);
+        this.actors.push(s);
+      }
+    }
+    // SURVEY SPIRES (beacon): the objective fixtures stand at POIs — dormant
+    // stone until a hero holds ground beside one (updateObjective drives the
+    // charge, the lure, and the survey). count 1 = the lone spire; 2+ = the
+    // ATTUNEMENT CIRCUIT's smaller waystones. A finished zone keeps LIT
+    // stones (scenery — proof the ground is surveyed); remembered charges
+    // resume exactly, stone by stone. Placement rides the layout rng, so a
+    // remembered seed puts every stone back where it stood.
+    if (opts.fixtures && o.kind === 'beacon') {
+      const count = Math.max(1, o.count ?? 1);
+      const circuit = count > 1;
+      const bodyR = circuit ? BEACON_CFG.wayRadius : BEACON_CFG.radius;
+      const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
+      const charges = memory?.spireCharges
+        ?? (memory?.spireCharge !== undefined ? [memory.spireCharge] : undefined);
+      for (let i = 0; i < count; i++) {
+        const at = this.interactSpot(pois, rng, 620, BEACON_CFG.portalClear);
+        const pos = this.clampPos(vec(at.x, at.y), bodyR);
+        const charge = this.objectiveDone ? need : Math.min(charges?.[i] ?? 0, need);
+        const spireDoodad: Doodad = {
+          pos: vec(pos.x, pos.y), radius: bodyR,
+          kind: charge >= need
+            ? (circuit ? BEACON_CFG.kindWayLit : BEACON_CFG.kindLit)
+            : (circuit ? BEACON_CFG.kindWay : BEACON_CFG.kind),
+        };
+        this.doodads.push(spireDoodad);
+        this.spires.push({ pos: vec(pos.x, pos.y), charge, doodad: spireDoodad, pourAt: 0, recoup: 0 });
+      }
+    }
+    // THE CONTEST-LAW KIN (rifts / pyres / dig sites): the spire's placement
+    // discipline verbatim — fixtures at POIs off the layout rng (a remembered
+    // seed re-places every one on the same ground), remembered charges resume
+    // fixture by fixture, and a finished zone stands them in their finished
+    // face (sealed seam / burning bowl / opened mound — proof of work done).
+    const placeHolds = (
+      count: [number, number], need: number, bodyR: number, clear: number,
+      kinds: { open: string; done: string }, charges: number[] | undefined,
+      into: HoldFixture[],
+    ): void => {
+      const n = rng.int(count[0], count[1]);
+      for (let i = 0; i < n; i++) {
+        const at = this.interactSpot(pois, rng, 620, clear);
+        const pos = this.clampPos(vec(at.x, at.y), bodyR);
+        const charge = this.objectiveDone ? need : Math.min(charges?.[i] ?? 0, need);
+        const d: Doodad = {
+          pos: vec(pos.x, pos.y), radius: bodyR,
+          kind: charge >= need ? kinds.done : kinds.open,
+        };
+        this.doodads.push(d);
+        into.push({ pos: vec(pos.x, pos.y), charge, doodad: d, pourAt: 0, recoup: 0 });
+      }
+    };
+    if (opts.fixtures && o.kind === 'rifts') {
+      placeHolds(o.count ?? RIFT_CFG.count, o.sealSec ?? transitDwell('rift', RIFT_CFG.sealSec),
+        RIFT_CFG.radius, RIFT_CFG.portalClear,
+        { open: RIFT_CFG.kind, done: RIFT_CFG.kindSealed }, memory?.riftCharges, this.rifts);
+    }
+    if (opts.fixtures && o.kind === 'pyres') {
+      placeHolds(o.count ?? PYRE_CFG.count, o.kindleSec ?? transitDwell('pyre', PYRE_CFG.kindleSec),
+        PYRE_CFG.radius, PYRE_CFG.portalClear,
+        { open: PYRE_CFG.kind, done: PYRE_CFG.kindLit }, memory?.pyreCharges, this.pyres);
+    }
+    if (opts.fixtures && o.kind === 'unearth') {
+      placeHolds(o.count ?? DIG_CFG.count, o.digSec ?? transitDwell('digsite', DIG_CFG.digSec),
+        DIG_CFG.radius, DIG_CFG.portalClear,
+        { open: DIG_CFG.kind, done: DIG_CFG.kindDug }, memory?.digCharges, this.digs);
+    }
+    // THE BESIEGED WAYPOINT ('leyline'): the SIPHON seats at its own POI —
+    // it taps the vein wherever it runs, and the drawn tether spans back to
+    // the starved stone (the beam is the map to the fight). A promoted,
+    // NAMED champion of the zone's own table by default (every biome's thief
+    // is native; spec `id` pins a def), posted at its tap so nothing wanders
+    // the objective away. Spawned inside the tagging window: the wounded
+    // thief rides Zone Memory like any body, and a fallen one stays fallen
+    // via completedObjectives. A rosterless zone spawns nothing — the
+    // objective completes vacuously (the puzzle's no-wedge law).
+    if (opts.bodies && o.kind === 'leyline' && !this.objectiveDone) {
+      let type = o.id && MONSTERS[o.id] ? o.id : undefined;
+      if (!type && def.packs) {
+        const e = this.effectiveSpawn(def, this.baseTable(def));
+        const eligible = e.table.filter(en => {
+          const d = MONSTERS[en.id];
+          return !!d && !d.passive && !d.noObjective && !d.spawner;
+        });
+        // THE STATURE FLOOR (LEYLINE_CFG.siphonMinXp): the thief is a body
+        // worth promoting — livestock-grade fauna stay in the flock. The
+        // floor degrades gracefully: an all-critter table rolls unfiltered.
+        const statured = eligible.filter(en =>
+          (MONSTERS[en.id]?.xp ?? 0) >= LEYLINE_CFG.siphonMinXp);
+        const pool = statured.length ? statured : eligible;
+        if (pool.length) type = this.weightedPick(pool, def.level);
+      }
+      if (type) {
+        const m = this.createMonster(type,
+          Math.max(1, def.level + (o.levelBonus ?? LEYLINE_CFG.levelBonus)), 'enemy');
+        const at = this.interactSpot(pois, rng, 640, LEYLINE_CFG.portalClear);
+        m.pos = this.clampPos(this.findFreeSpot(vec(at.x, at.y), m.radius + 2) ?? vec(at.x, at.y), m.radius);
+        this.promoteRarityStacked(m, o.rarity ?? LEYLINE_CFG.rarity, o.stacks ?? LEYLINE_CFG.stacks);
+        const fac = m.faction ?? (m.defId ? MONSTERS[m.defId]?.faction : undefined) ?? '';
+        m.name = `${mintNemesisName(fac, () => rng.next())}, ${rng.pick(LEYLINE_CFG.titles)}`;
+        m.tag = 'ley_siphon';
+        // Posted at the tap (the duty-post fabric): a displaced thief walks
+        // back to the vein it drinks from.
+        m.aiPost = vec(m.pos.x, m.pos.y);
+        m.postSpec = { slack: LEYLINE_CFG.leash, hold: false };
+        this.actors.push(m);
+      }
+    }
+    // PROCESSION (escort): the caravan waits DORMANT beside the gate you came
+    // in by — immobile, immune cargo until the rally dwell sets it rolling
+    // (updateObjective owns the march, the robbers, the arrival, the loss).
+    // The memory rider re-stages a left march exactly: same crossing, cart
+    // re-waiting where you left it at its remembered health; a LOST caravan
+    // stays lost until the memory lapses and the zone deals a fresh one.
+    if (opts.fixtures && o.kind === 'procession' && !this.objectiveDone) {
+      const rider = memory?.procession;
+      if (rider?.lost) {
+        this.objectiveLost = true;
+      } else {
+        const destIdx = def.exitRoads?.findIndex(r => r !== undefined) ?? -1;
+        const destExit = destIdx >= 0 ? this.exits.find(x => x.defIndex === destIdx) : undefined;
+        // Roadless fallback (a dead-end pocket): the farthest POI stands in
+        // for the crossing — the escort runs, only the carved way is absent.
+        const dest = destExit ? vec(destExit.pos.x, destExit.pos.y)
+          : (pois.length ? vec(pois[pois.length - 1].x, pois[pois.length - 1].y)
+            : this.farPoint(700, false, this.seededDraw()));
+        const cart = this.createMonster(PROCESSION_CFG.cartId, Math.max(1, def.level), 'player');
+        const pool = Math.round(PROCESSION_CFG.lifeBase + Math.max(1, def.level) * PROCESSION_CFG.lifePerLevel);
+        cart.sheet.setSource('procession_cart', [{ stat: 'life', kind: 'flat', value: Math.max(0, pool - cart.maxLife()) }]);
+        cart.fillResources();
+        const spawnAt = rider?.x !== undefined && rider?.y !== undefined
+          ? vec(rider.x, rider.y)
+          : vec(this.zoneEntry.x + rand(-26, 26), this.zoneEntry.y + 44 + rand(-10, 10));
+        cart.pos = this.clampPos(this.findFreeSpot(spawnAt, cart.radius + 2) ?? spawnAt, cart.radius);
+        if (rider?.life !== undefined) cart.life = Math.max(1, Math.min(cart.maxLife(), rider.life));
+        cart.untargetable = true; // dormant cargo — nothing chews it before the rally
+        cart.invulnerable = true;
+        cart.tag = 'procession_cart';
+        cart.eventKey = `procession:${def.id}`;
+        this.actors.push(cart);
+        this.procession = {
+          cartId: cart.id, rolling: false, started: !!rider?.started,
+          startPos: rider?.sx !== undefined && rider?.sy !== undefined
+            ? vec(rider.sx, rider.sy) : vec(cart.pos.x, cart.pos.y),
+          dest, destIdx: destIdx >= 0 ? destIdx : null,
+          dwellStart: 0, puffAt: 0, heading: angleTo(cart.pos, dest),
+        };
+      }
+    }
+    // AMBIENT SCENERY + THE PUZZLE PLACER (engine/puzzles.ts): the zone's
+    // planted object-actors and activity riddles stand up HERE, each on its
+    // own salted stream + the leftover POIs — never a generation concern,
+    // never a draw off layout/spawn rng. All four boots pour ZONE-SCOPED
+    // state (the puzzle roster, the throng pockets, the lite pool) — the
+    // fixtures lane owns them whole.
+    if (opts.fixtures) {
+      this.bootScenery(def, pois);
+      this.bootPuzzles(def, pois, memory);
+      // THE THRONG POCKET BOOT (engine/throng.ts): finite gatherable husks
+      // stand up on their own salted stream — same discipline as the two
+      // lines above; claimed seats (throngClaimed, run-long) stay empty.
+      this.bootThrong(pois);
+      // THE LITE POOL BOOT (engine/lite.ts): carry keeper-owned rows across,
+      // zero the pool, pour the theme's ambient swarms on their own salted
+      // stream, re-field the carried roster — same boot discipline again.
+      this.bootLite(def, pois);
+    }
+    // Walled camps post their guards — each watch is a squad.
+    if (opts.bodies && def.packs) {
+      for (const c of layout.camps) {
+        const type = this.weightedPick(def.packs.table, def.level);
+        const n = randInt(3, 5);
+        const squadId = this.nextSquadId();
+        for (let k = 0; k < n; k++) {
+          const m = this.createMonster(type, def.level, 'enemy');
+          m.squadId = squadId;
+          m.squadLeader = k === 0;
+          m.pos = this.clampPos(vec(c.x + rand(-70, 70), c.y + rand(-70, 70)), m.radius);
+          this.actors.push(m);
+        }
+      }
+    }
+    // Faction POIs (war camps, halls, fortresses, townships) come pre-inhabited
+    // by their garrison faction — drawn from that faction's own roster, with the
+    // faction forced on each so the census/contest sim counts them correctly.
+    if (opts.bodies) for (const grn of layout.garrisons) {
+      const roster = FACTIONS[grn.faction];
+      if (!roster) continue;
+      const type = this.weightedPick(roster.table, def.level);
+      const n = randInt(grn.size[0], grn.size[1]);
+      const squadId = this.nextSquadId();
+      for (let k = 0; k < n; k++) {
+        const m = this.createMonster(type, Math.max(1, def.level), 'enemy');
+        m.faction = grn.faction;
+        m.squadId = squadId;
+        m.squadLeader = k === 0;
+        m.pos = this.clampPos(vec(grn.pos.x + rand(-70, 70), grn.pos.y + rand(-70, 70)), m.radius);
+        this.actors.push(m);
+      }
+    }
+    // LANDMARK dwellers (pit spawns): positions + ids resolved AT GEN
+    // (deterministic per seed) — spawned raw at their sampled cells (a pocket
+    // dweller must stay ON its jump-only island; clampPos would snap it off).
+    if (opts.bodies) for (const ls of layout.landmarkSpawns ?? []) {
+      if (!MONSTERS[ls.id]) continue;
+      const m = this.createMonster(ls.id, Math.max(1, def.level), 'enemy');
+      m.pos = vec(ls.pos.x, ls.pos.y);
+      // THE ALOFT COURT (the wildlife wTier precedent): a spawn row placed on
+      // an upper story wears that story, or the mover contract snaps it off
+      // the rim at the first step.
+      if (ls.tier) m.tier = ls.tier;
+      // Spawner-row ambush (LandmarkSpawns.ambush): arm the INSTANCE — the
+      // same kind roams free elsewhere; these wait (the penned herd).
+      if (ls.ambush) {
+        m.ambushSpec = ls.ambush;
+        this.armAmbush(m, ls.ambush);
+      }
+      this.actors.push(m);
+    }
+    // BOUNTY WRITS: `count` of the zone's own bodies walk it as MARKED QUARRY —
+    // named from the nemesis vocabulary, promoted, tagged, roaming with the
+    // population. Spawned INSIDE the tagging window, so Zone Memory resumes a
+    // half-claimed hunt with the SAME named marks at the same wounds (names,
+    // rarity, tags and HP all ride ZoneEnemyMemo — no rider needed). A
+    // completed zone posts no new writs; the board is settled.
+    if (opts.bodies && o.kind === 'bounty' && !this.objectiveDone) {
+      const n = rng.int(o.count?.[0] ?? BOUNTY_CFG.count[0], o.count?.[1] ?? BOUNTY_CFG.count[1]);
+      const { table } = this.effectiveSpawn(def, this.baseTable(def));
+      const eligible = table.filter(en => {
+        const md = MONSTERS[en.id];
+        return !!md && !md.passive && !md.noObjective && !md.spawner && !md.npcRole;
+      });
+      for (let i = 0; i < n; i++) {
+        let m: Actor | null;
+        if (eligible.length) {
+          const type = this.weightedPick(eligible, Math.max(1, def.level));
+          m = this.createMonster(type, Math.max(1, def.level), 'enemy');
+          m.pos = this.spawnPoint(24);
+          this.actors.push(m);
+        } else {
+          // No eligible roster (a strange zone) — post the writ on an existing
+          // counted body instead; an empty zone simply posts fewer writs.
+          // The bodies-only lane (a neighbor mint) concedes here outright:
+          // countedEnemies reads the ACTIVE zone's floor, and a writ must
+          // never land on another region's body.
+          if (!opts.fixtures) break;
+          m = this.countedEnemies().find(a =>
+            a.tag !== 'bounty_mark' && (a.rarity ?? 'normal') === 'normal') ?? null;
+          if (!m) break;
+        }
+        this.promoteRarityStacked(m, o.rarity ?? BOUNTY_CFG.rarity, o.stacks ?? BOUNTY_CFG.stacks);
+        // Two writs must never name the same quarry (a small pool re-rolls a
+        // few times, then concedes — a rare double is livable, a common one
+        // reads as a bug).
+        const fac = m.faction ?? (m.defId ? MONSTERS[m.defId]?.faction : undefined) ?? '';
+        let name = mintNemesisName(fac, () => rng.next());
+        for (let tries = 0; tries < 4 && this.actors.some(a => a !== m && a.tag === 'bounty_mark' && a.name === name); tries++) {
+          name = mintNemesisName(fac, () => rng.next());
+        }
+        m.name = name;
+        m.tag = 'bounty_mark';
+      }
+    }
+    // WILDLIFE: the biome's ambient fauna (WILDLIFE registry) — hares that
+    // exist to be chased, the wolf packs that chase them. AMBIENT_TAGS
+    // bearers all, so no objective ever waits on a rabbit. Spawned inside
+    // the tagging window: the meadow you left is the meadow you return to.
+    if (opts.bodies) this.spawnWildlife(def);
+    // ARRIVAL GRACE (purchased pockets): the sold ground has exactly ONE
+    // portal and the buyer arrives through it — a fair landing is part of
+    // the promise. Fresh gens sweep hostiles off the entry ring (gen-time
+    // camps/garrisons can seat anywhere; the samplers already keep away);
+    // remembered re-entries are exempt on purpose — bodies the PLAYER led to
+    // the door are history, not generation.
+    if (opts.fixtures && def.pocket && !memory) this.enforceArrivalGrace();
+    // Close the Zone Memory tagging window: the base population is placed. On a
+    // remembered re-entry, swap the freshly-spawned base enemies for the ones we
+    // left (cleared stays cleared; survivors keep their wounds + positions).
+    this.zoneGenTagging = false;
+  }
+
   /**
    * Enter a zone: regenerate its terrain, exits, and population, carrying
    * the player and their mobile minions through. Zones regenerate on every
@@ -4783,6 +5231,17 @@ export class World {
     // ZONE MEMORY: snapshot the zone we're LEAVING (its seed + surviving base
     // enemies) before we switch away, so returning within the TTL restores it.
     this.captureZoneMemory();
+    // THE DOOR LAW FOR THE TIDE (seamless M2 wave 6): frames don't survive a
+    // door — any NON-rebase travel (a waypoint, a cave mouth, the town road)
+    // banks every region's standing drowsy bodies to its own zone memory
+    // first (the leave law at ring grain: wounds and absences survive,
+    // brains drop) and marks those records unpeopled, so later population
+    // beats re-materialize each roster from its own bank. The threshold
+    // rebase instead carries the whole tide shifted — see seamlessRebase.
+    // Runs BEFORE the memory read below, so a door INTO a populated member
+    // replays the bank it just wrote (same bodies, the discrete door's own
+    // spawn-then-swap shape).
+    if (this.seamless && !this.seamlessRebasing) this.seamlessBankRegionBodies();
     // Caves resolve from the off-graph caveMap; everything else from zoneMap.
     const isCave = !this.zoneMap[zoneId];
     // FIRST VISIT (captured BEFORE visited.add below) — gates the once-per-zone Holdfast
@@ -5057,7 +5516,14 @@ export class World {
     const p = this.player;
     const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
     this.actors = this.actors.filter(a =>
-      seatActors.has(a) || (!!a.owner && seatActors.has(a.owner) && !a.dead && !a.construct));
+      seatActors.has(a) || (!!a.owner && seatActors.has(a.owner) && !a.dead && !a.construct)
+      // THE TIDE RIDES THE REBASE (seamless wave 6): ring-tagged living
+      // bodies cross the threshold in place — the rebase shifts them by the
+      // seat delta after this load returns, and the destination's own set
+      // promotes below. Door travels banked + removed them above, so this
+      // clause is rebase-only by construction; tagged corpses keep the door
+      // law and die at the seam.
+      || (this.seamlessRebasing && a.ringRegion !== undefined && !a.dead));
     p.dash = null;
     p.casting = null;
     // Mark runes don't span zones.
@@ -5411,6 +5877,14 @@ export class World {
       a.dash = null;
       a.casting = null;
       a.push = null;
+      // THE TIDE KEEPS ITS GROUND (seamless wave 6): a ring-tagged body is
+      // not part of the arriving party — it stands where its region holds
+      // it (the rebase shifts every tagged body by the frame delta after
+      // this load returns), on its own story. Only the party re-seats at
+      // the landing; frame-transient motion state (dash/cast/push) still
+      // drops for everyone, exactly as at any door. Discrete play never
+      // carries a tag here — one undefined read.
+      if (a.ringRegion !== undefined) continue;
       a.tier = 0;
       a.onTierLink = false;
       a.aiTierGoal = undefined;
@@ -5542,387 +6016,56 @@ export class World {
       const adopted = maybeAdoptObjective(def, layout, this);
       if (adopted) def.objective = adopted;
     }
-    // Population: the objective decides who's waiting. Open the Zone Memory
-    // tagging window so every BASE enemy spawned below is flagged fromZoneGen —
-    // overlay/event spawns come AFTER the window closes and stay live.
-    this.zoneGenTagging = true;
-    const o = def.objective;
-    // THE POOL RIM FILTER (the door law's kin — task_e2243782's coda):
-    // generation is rect-blind, so an ellipse zone's POI pool can hold
-    // points beyond the inscribed rim — ground no body can ever stand on.
-    // Every consumer of this pool seats something a player must REACH
-    // (spires, rift/pyre/dig fixtures, the siphon, the waypoint, chests,
-    // shrines, spawner bodies, puzzle bells), and each clamps its seat,
-    // which PROJECTS an out-of-rim pick onto the rim — where none of the
-    // pick's guarantees (door clearance, walkability, spacing) were ever
-    // measured; on carved ground the walk confine then drags it onto
-    // walkable-but-unreachable cells beyond the rim. Filter the pool ONCE
-    // at its birth, at the mouth clamp's own 28u margin: a surviving POI
-    // is a seat every consumer's smaller body clamp provably leaves
-    // unmoved (picked == clamped == dwelled), and a starved consumer
-    // degrades to farPoint, whose samplePoint is already shape-aware.
-    // Draw-free, and rect zones keep every POI BY CONSTRUCTION (the guard
-    // never fires) — their draws are byte-identical.
+    // THE PROMOTION (seamless M2 wave 6 — the commission's heart): a rebase
+    // into a POPULATED member meets its own standing drowsy bodies — the
+    // same actor ids that stood visible across the border, shifted into
+    // this frame — so the fresh-spawn ladder and the memory restore stand
+    // down whole (no first-arrival flash, her kink 4). The tag drops HERE,
+    // before any objective stamp reads the floor, so the cull's fresh ask
+    // counts the true standing population; positions shift in the same
+    // pass (the record's frame → this arrival's frame) and take one
+    // placement clamp (a re-fit may have re-dealt walls under a body).
+    let seamlessStanding = false;
+    if (this.seamless) {
+      const mint = this.seamlessMints.get(def.id);
+      if (this.seamlessRebasing) {
+        const seat = this.seamlessRegions.find(s => s.zoneId === def.id);
+        const srcO = this.seamlessRebaseSrcOrigin;
+        if (mint?.populated && seat && srcO) {
+          seamlessStanding = true;
+          const dx = srcO.x - seat.originPx.x, dy = srcO.y - seat.originPx.y;
+          for (const a of this.actors) {
+            if (a.ringRegion !== def.id) continue;
+            a.ringRegion = undefined;
+            this.seamlessShiftFrame(a, dx, dy, true);
+            a.pos = this.clampPos(vec(a.pos.x, a.pos.y), a.radius, undefined, { mover: a });
+          }
+        }
+      }
+      // EVERY arrival shape owns this ground's population from here — the
+      // rebase (promoted or fresh-spawned below) AND the door (its bank
+      // ran at the load head; the spawn/restore below stands the live
+      // roster). Without this, a door-entered member read as unpeopled,
+      // and the first crossing away would pour a SECOND population over
+      // its standing demoted tide (the live drive's find).
+      if (mint) mint.populated = true;
+    }
+    // Population: the objective decides who's waiting — factored whole into
+    // spawnZonePopulation (seamless M2 wave 6, THE NEIGHBOR LIFE) so the
+    // resident-ring mint can stand a neighbor's bodies through the same
+    // pass. This call, with both lanes open, IS the old inline block: the
+    // rng stream, the POI pool and every spawn run in the exact order they
+    // always did (the promote path alone closes the bodies lane — a rebase
+    // into a POPULATED member adopts its standing drowsy bodies instead).
     const pois = this.arena.shape === 'ellipse'
       ? layout.pois.filter(p => insideBounds(p, 28, this.arena))
       : [...layout.pois];
-    // A SPECIAL arena (boss set-piece) spawns NOTHING ambient — no packs, no faction
-    // contest. Only its authored boss (below) populates it.
-    if (!def.special && o.kind !== 'waves' && o.kind !== 'safe') {
-      // Day/night, weather, and faction territory bend the table and the count;
-      // a conquered zone draws from its new ruler's roster (see baseTable).
-      const e = this.effectiveSpawn(def, this.baseTable(def));
-      this.spawnPacks(def, (o.kind === 'escape' ? 0.6 : 1) * e.countMul, e.table);
-      // A node two hostile factions both hold spawns both — let them brawl.
-      // (Hand-authored factionWar zones stage their own fight below.)
-      if (!def.factionWar) this.spawnContest(def, e.inject);
-    }
-    // FACTION WAR: two rival hosts spawn mid-brawl at a contested point,
-    // with skirmishing packs of each side scattered wider. Wade in, or
-    // circle the carnage and pick off whoever limps away.
-    if (def.factionWar) {
-      const battlefield = this.farPoint(700);
-      def.factionWar.forEach((factionId, side) => {
-        const roster = FACTIONS[factionId];
-        if (!roster) return;
-        const dir = side === 0 ? -1 : 1;
-        // the front line
-        for (let pk = 0; pk < 2; pk++) {
-          const type = this.weightedPick(roster.table, Math.max(1, def.level));
-          const n = randInt(3, 5);
-          for (let k = 0; k < n; k++) {
-            const mw = this.createMonster(type, Math.max(1, def.level), 'enemy');
-            mw.pos = this.clampPos(vec(
-              battlefield.x + dir * (70 + rand(0, 60)),
-              battlefield.y + (pk - 0.5) * 90 + rand(-40, 40)), mw.radius);
-            this.actors.push(mw);
-          }
-        }
-        // reinforcements in the field
-        const at = this.farPoint(650);
-        const type2 = this.weightedPick(roster.table, Math.max(1, def.level));
-        for (let k = 0; k < randInt(3, 5); k++) {
-          const mw = this.createMonster(type2, Math.max(1, def.level), 'enemy');
-          mw.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), mw.radius);
-          this.actors.push(mw);
-        }
-      });
-      this.text(vec(p.pos.x, p.pos.y - 70),
-        `${FACTIONS[def.factionWar[0]]?.name ?? def.factionWar[0]} wars with ${FACTIONS[def.factionWar[1]]?.name ?? def.factionWar[1]}!`,
-        '#e85050', 15);
-    }
-    if (o.kind === 'boss') {
-      // ONE-SHOT UBER lifecycle: a recorded forever-dead boss never re-spawns (the
-      // zone becomes an empty cleared arena). Absent uber = a normal repeatable boss.
-      if (!this.uberDefeated(o, def.id)) {
-        const boss = this.createMonster(o.id, def.level + (o.levelBonus ?? 0), 'enemy');
-        // The Unmade arena: spawn on the dais (pois[0]) instead of a random far point,
-        // and init the in-zone choreography (no longer Crowned by default — see promote).
-        if (def.layoutType === 'unmade_vault') {
-          const dais = layout.pois.length ? layout.pois[0] : vec(this.arena.w / 2, this.arena.h / 2);
-          boss.pos = this.clampPos(vec(dais.x, dais.y), boss.radius);
-          // EXCLUDE the boss from Zone Memory (it's spawned inside the tagging window, so
-          // clear the flag): re-entry should re-spawn it FRESH (full HP, replaying from
-          // Phase I on a regenerated grid) — not restore a wounded body that would
-          // phase-JUMP to the apex with stale flood/crack paint. Also keeps the arena
-          // cleanly re-fightable (a killed Unmade respawns on the next entry).
-          boss.fromZoneGen = false;
-          const m = 70;
-          this.bossRun = {
-            bossId: o.id, anchor: vec(dais.x, dais.y),
-            rect: { x0: m, y0: m, x1: this.arena.w - m, y1: this.arena.h - m },
-          };
-        } else {
-          boss.pos = this.clampPos(this.farPoint(720), boss.radius);
-        }
-        // OPT-IN difficulty spike (any boss): promote to an elite rarity, optionally
-        // STACKED. Absent = a plain boss. The lever to crank a boss harder via data.
-        if (o.promote) this.promoteRarityStacked(boss, o.promote.rarity, o.promote.stacks ?? 1);
-        this.actors.push(boss);
-      }
-    }
-    if (o.kind === 'spawners') {
-      const n = rng.int(o.count[0], o.count[1]);
-      for (let i = 0; i < n; i++) {
-        const s = this.createMonster(o.spawnerId, def.level, 'enemy');
-        const at = pois.length
-          ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
-          : this.farPoint(740, false, this.seededDraw());
-        s.pos = this.clampPos(vec(at.x, at.y), s.radius);
-        this.actors.push(s);
-      }
-    }
-    // SURVEY SPIRES (beacon): the objective fixtures stand at POIs — dormant
-    // stone until a hero holds ground beside one (updateObjective drives the
-    // charge, the lure, and the survey). count 1 = the lone spire; 2+ = the
-    // ATTUNEMENT CIRCUIT's smaller waystones. A finished zone keeps LIT
-    // stones (scenery — proof the ground is surveyed); remembered charges
-    // resume exactly, stone by stone. Placement rides the layout rng, so a
-    // remembered seed puts every stone back where it stood.
-    if (o.kind === 'beacon') {
-      const count = Math.max(1, o.count ?? 1);
-      const circuit = count > 1;
-      const bodyR = circuit ? BEACON_CFG.wayRadius : BEACON_CFG.radius;
-      const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
-      const charges = memory?.spireCharges
-        ?? (memory?.spireCharge !== undefined ? [memory.spireCharge] : undefined);
-      for (let i = 0; i < count; i++) {
-        const at = this.interactSpot(pois, rng, 620, BEACON_CFG.portalClear);
-        const pos = this.clampPos(vec(at.x, at.y), bodyR);
-        const charge = this.objectiveDone ? need : Math.min(charges?.[i] ?? 0, need);
-        const spireDoodad: Doodad = {
-          pos: vec(pos.x, pos.y), radius: bodyR,
-          kind: charge >= need
-            ? (circuit ? BEACON_CFG.kindWayLit : BEACON_CFG.kindLit)
-            : (circuit ? BEACON_CFG.kindWay : BEACON_CFG.kind),
-        };
-        this.doodads.push(spireDoodad);
-        this.spires.push({ pos: vec(pos.x, pos.y), charge, doodad: spireDoodad, pourAt: 0, recoup: 0 });
-      }
-    }
-    // THE CONTEST-LAW KIN (rifts / pyres / dig sites): the spire's placement
-    // discipline verbatim — fixtures at POIs off the layout rng (a remembered
-    // seed re-places every one on the same ground), remembered charges resume
-    // fixture by fixture, and a finished zone stands them in their finished
-    // face (sealed seam / burning bowl / opened mound — proof of work done).
-    const placeHolds = (
-      count: [number, number], need: number, bodyR: number, clear: number,
-      kinds: { open: string; done: string }, charges: number[] | undefined,
-      into: HoldFixture[],
-    ): void => {
-      const n = rng.int(count[0], count[1]);
-      for (let i = 0; i < n; i++) {
-        const at = this.interactSpot(pois, rng, 620, clear);
-        const pos = this.clampPos(vec(at.x, at.y), bodyR);
-        const charge = this.objectiveDone ? need : Math.min(charges?.[i] ?? 0, need);
-        const d: Doodad = {
-          pos: vec(pos.x, pos.y), radius: bodyR,
-          kind: charge >= need ? kinds.done : kinds.open,
-        };
-        this.doodads.push(d);
-        into.push({ pos: vec(pos.x, pos.y), charge, doodad: d, pourAt: 0, recoup: 0 });
-      }
-    };
-    if (o.kind === 'rifts') {
-      placeHolds(o.count ?? RIFT_CFG.count, o.sealSec ?? transitDwell('rift', RIFT_CFG.sealSec),
-        RIFT_CFG.radius, RIFT_CFG.portalClear,
-        { open: RIFT_CFG.kind, done: RIFT_CFG.kindSealed }, memory?.riftCharges, this.rifts);
-    }
-    if (o.kind === 'pyres') {
-      placeHolds(o.count ?? PYRE_CFG.count, o.kindleSec ?? transitDwell('pyre', PYRE_CFG.kindleSec),
-        PYRE_CFG.radius, PYRE_CFG.portalClear,
-        { open: PYRE_CFG.kind, done: PYRE_CFG.kindLit }, memory?.pyreCharges, this.pyres);
-    }
-    if (o.kind === 'unearth') {
-      placeHolds(o.count ?? DIG_CFG.count, o.digSec ?? transitDwell('digsite', DIG_CFG.digSec),
-        DIG_CFG.radius, DIG_CFG.portalClear,
-        { open: DIG_CFG.kind, done: DIG_CFG.kindDug }, memory?.digCharges, this.digs);
-    }
-    // THE BESIEGED WAYPOINT ('leyline'): the SIPHON seats at its own POI —
-    // it taps the vein wherever it runs, and the drawn tether spans back to
-    // the starved stone (the beam is the map to the fight). A promoted,
-    // NAMED champion of the zone's own table by default (every biome's thief
-    // is native; spec `id` pins a def), posted at its tap so nothing wanders
-    // the objective away. Spawned inside the tagging window: the wounded
-    // thief rides Zone Memory like any body, and a fallen one stays fallen
-    // via completedObjectives. A rosterless zone spawns nothing — the
-    // objective completes vacuously (the puzzle's no-wedge law).
-    if (o.kind === 'leyline' && !this.objectiveDone) {
-      let type = o.id && MONSTERS[o.id] ? o.id : undefined;
-      if (!type && def.packs) {
-        const e = this.effectiveSpawn(def, this.baseTable(def));
-        const eligible = e.table.filter(en => {
-          const d = MONSTERS[en.id];
-          return !!d && !d.passive && !d.noObjective && !d.spawner;
-        });
-        // THE STATURE FLOOR (LEYLINE_CFG.siphonMinXp): the thief is a body
-        // worth promoting — livestock-grade fauna stay in the flock. The
-        // floor degrades gracefully: an all-critter table rolls unfiltered.
-        const statured = eligible.filter(en =>
-          (MONSTERS[en.id]?.xp ?? 0) >= LEYLINE_CFG.siphonMinXp);
-        const pool = statured.length ? statured : eligible;
-        if (pool.length) type = this.weightedPick(pool, def.level);
-      }
-      if (type) {
-        const m = this.createMonster(type,
-          Math.max(1, def.level + (o.levelBonus ?? LEYLINE_CFG.levelBonus)), 'enemy');
-        const at = this.interactSpot(pois, rng, 640, LEYLINE_CFG.portalClear);
-        m.pos = this.clampPos(this.findFreeSpot(vec(at.x, at.y), m.radius + 2) ?? vec(at.x, at.y), m.radius);
-        this.promoteRarityStacked(m, o.rarity ?? LEYLINE_CFG.rarity, o.stacks ?? LEYLINE_CFG.stacks);
-        const fac = m.faction ?? (m.defId ? MONSTERS[m.defId]?.faction : undefined) ?? '';
-        m.name = `${mintNemesisName(fac, () => rng.next())}, ${rng.pick(LEYLINE_CFG.titles)}`;
-        m.tag = 'ley_siphon';
-        // Posted at the tap (the duty-post fabric): a displaced thief walks
-        // back to the vein it drinks from.
-        m.aiPost = vec(m.pos.x, m.pos.y);
-        m.postSpec = { slack: LEYLINE_CFG.leash, hold: false };
-        this.actors.push(m);
-      }
-    }
-    // PROCESSION (escort): the caravan waits DORMANT beside the gate you came
-    // in by — immobile, immune cargo until the rally dwell sets it rolling
-    // (updateObjective owns the march, the robbers, the arrival, the loss).
-    // The memory rider re-stages a left march exactly: same crossing, cart
-    // re-waiting where you left it at its remembered health; a LOST caravan
-    // stays lost until the memory lapses and the zone deals a fresh one.
-    if (o.kind === 'procession' && !this.objectiveDone) {
-      const rider = memory?.procession;
-      if (rider?.lost) {
-        this.objectiveLost = true;
-      } else {
-        const destIdx = def.exitRoads?.findIndex(r => r !== undefined) ?? -1;
-        const destExit = destIdx >= 0 ? this.exits.find(x => x.defIndex === destIdx) : undefined;
-        // Roadless fallback (a dead-end pocket): the farthest POI stands in
-        // for the crossing — the escort runs, only the carved way is absent.
-        const dest = destExit ? vec(destExit.pos.x, destExit.pos.y)
-          : (pois.length ? vec(pois[pois.length - 1].x, pois[pois.length - 1].y)
-            : this.farPoint(700, false, this.seededDraw()));
-        const cart = this.createMonster(PROCESSION_CFG.cartId, Math.max(1, def.level), 'player');
-        const pool = Math.round(PROCESSION_CFG.lifeBase + Math.max(1, def.level) * PROCESSION_CFG.lifePerLevel);
-        cart.sheet.setSource('procession_cart', [{ stat: 'life', kind: 'flat', value: Math.max(0, pool - cart.maxLife()) }]);
-        cart.fillResources();
-        const spawnAt = rider?.x !== undefined && rider?.y !== undefined
-          ? vec(rider.x, rider.y)
-          : vec(this.zoneEntry.x + rand(-26, 26), this.zoneEntry.y + 44 + rand(-10, 10));
-        cart.pos = this.clampPos(this.findFreeSpot(spawnAt, cart.radius + 2) ?? spawnAt, cart.radius);
-        if (rider?.life !== undefined) cart.life = Math.max(1, Math.min(cart.maxLife(), rider.life));
-        cart.untargetable = true; // dormant cargo — nothing chews it before the rally
-        cart.invulnerable = true;
-        cart.tag = 'procession_cart';
-        cart.eventKey = `procession:${def.id}`;
-        this.actors.push(cart);
-        this.procession = {
-          cartId: cart.id, rolling: false, started: !!rider?.started,
-          startPos: rider?.sx !== undefined && rider?.sy !== undefined
-            ? vec(rider.sx, rider.sy) : vec(cart.pos.x, cart.pos.y),
-          dest, destIdx: destIdx >= 0 ? destIdx : null,
-          dwellStart: 0, puffAt: 0, heading: angleTo(cart.pos, dest),
-        };
-      }
-    }
-    // AMBIENT SCENERY + THE PUZZLE PLACER (engine/puzzles.ts): the zone's
-    // planted object-actors and activity riddles stand up HERE, each on its
-    // own salted stream + the leftover POIs — never a generation concern,
-    // never a draw off layout/spawn rng.
-    this.bootScenery(def, pois);
-    this.bootPuzzles(def, pois, memory);
-    // THE THRONG POCKET BOOT (engine/throng.ts): finite gatherable husks
-    // stand up on their own salted stream — same discipline as the two
-    // lines above; claimed seats (throngClaimed, run-long) stay empty.
-    this.bootThrong(pois);
-    // THE LITE POOL BOOT (engine/lite.ts): carry keeper-owned rows across,
-    // zero the pool, pour the theme's ambient swarms on their own salted
-    // stream, re-field the carried roster — same boot discipline again.
-    this.bootLite(def, pois);
-    // Walled camps post their guards — each watch is a squad.
-    if (def.packs) {
-      for (const c of layout.camps) {
-        const type = this.weightedPick(def.packs.table, def.level);
-        const n = randInt(3, 5);
-        const squadId = this.nextSquadId();
-        for (let k = 0; k < n; k++) {
-          const m = this.createMonster(type, def.level, 'enemy');
-          m.squadId = squadId;
-          m.squadLeader = k === 0;
-          m.pos = this.clampPos(vec(c.x + rand(-70, 70), c.y + rand(-70, 70)), m.radius);
-          this.actors.push(m);
-        }
-      }
-    }
-    // Faction POIs (war camps, halls, fortresses, townships) come pre-inhabited
-    // by their garrison faction — drawn from that faction's own roster, with the
-    // faction forced on each so the census/contest sim counts them correctly.
-    for (const grn of layout.garrisons) {
-      const roster = FACTIONS[grn.faction];
-      if (!roster) continue;
-      const type = this.weightedPick(roster.table, def.level);
-      const n = randInt(grn.size[0], grn.size[1]);
-      const squadId = this.nextSquadId();
-      for (let k = 0; k < n; k++) {
-        const m = this.createMonster(type, Math.max(1, def.level), 'enemy');
-        m.faction = grn.faction;
-        m.squadId = squadId;
-        m.squadLeader = k === 0;
-        m.pos = this.clampPos(vec(grn.pos.x + rand(-70, 70), grn.pos.y + rand(-70, 70)), m.radius);
-        this.actors.push(m);
-      }
-    }
-    // LANDMARK dwellers (pit spawns): positions + ids resolved AT GEN
-    // (deterministic per seed) — spawned raw at their sampled cells (a pocket
-    // dweller must stay ON its jump-only island; clampPos would snap it off).
-    for (const ls of layout.landmarkSpawns ?? []) {
-      if (!MONSTERS[ls.id]) continue;
-      const m = this.createMonster(ls.id, Math.max(1, def.level), 'enemy');
-      m.pos = vec(ls.pos.x, ls.pos.y);
-      // THE ALOFT COURT (the wildlife wTier precedent): a spawn row placed on
-      // an upper story wears that story, or the mover contract snaps it off
-      // the rim at the first step.
-      if (ls.tier) m.tier = ls.tier;
-      // Spawner-row ambush (LandmarkSpawns.ambush): arm the INSTANCE — the
-      // same kind roams free elsewhere; these wait (the penned herd).
-      if (ls.ambush) {
-        m.ambushSpec = ls.ambush;
-        this.armAmbush(m, ls.ambush);
-      }
-      this.actors.push(m);
-    }
-    // BOUNTY WRITS: `count` of the zone's own bodies walk it as MARKED QUARRY —
-    // named from the nemesis vocabulary, promoted, tagged, roaming with the
-    // population. Spawned INSIDE the tagging window, so Zone Memory resumes a
-    // half-claimed hunt with the SAME named marks at the same wounds (names,
-    // rarity, tags and HP all ride ZoneEnemyMemo — no rider needed). A
-    // completed zone posts no new writs; the board is settled.
-    if (o.kind === 'bounty' && !this.objectiveDone) {
-      const n = rng.int(o.count?.[0] ?? BOUNTY_CFG.count[0], o.count?.[1] ?? BOUNTY_CFG.count[1]);
-      const { table } = this.effectiveSpawn(def, this.baseTable(def));
-      const eligible = table.filter(en => {
-        const md = MONSTERS[en.id];
-        return !!md && !md.passive && !md.noObjective && !md.spawner && !md.npcRole;
-      });
-      for (let i = 0; i < n; i++) {
-        let m: Actor | null;
-        if (eligible.length) {
-          const type = this.weightedPick(eligible, Math.max(1, def.level));
-          m = this.createMonster(type, Math.max(1, def.level), 'enemy');
-          m.pos = this.spawnPoint(24);
-          this.actors.push(m);
-        } else {
-          // No eligible roster (a strange zone) — post the writ on an existing
-          // counted body instead; an empty zone simply posts fewer writs.
-          m = this.countedEnemies().find(a =>
-            a.tag !== 'bounty_mark' && (a.rarity ?? 'normal') === 'normal') ?? null;
-          if (!m) break;
-        }
-        this.promoteRarityStacked(m, o.rarity ?? BOUNTY_CFG.rarity, o.stacks ?? BOUNTY_CFG.stacks);
-        // Two writs must never name the same quarry (a small pool re-rolls a
-        // few times, then concedes — a rare double is livable, a common one
-        // reads as a bug).
-        const fac = m.faction ?? (m.defId ? MONSTERS[m.defId]?.faction : undefined) ?? '';
-        let name = mintNemesisName(fac, () => rng.next());
-        for (let tries = 0; tries < 4 && this.actors.some(a => a !== m && a.tag === 'bounty_mark' && a.name === name); tries++) {
-          name = mintNemesisName(fac, () => rng.next());
-        }
-        m.name = name;
-        m.tag = 'bounty_mark';
-      }
-    }
-    // WILDLIFE: the biome's ambient fauna (WILDLIFE registry) — hares that
-    // exist to be chased, the wolf packs that chase them. AMBIENT_TAGS
-    // bearers all, so no objective ever waits on a rabbit. Spawned inside
-    // the tagging window: the meadow you left is the meadow you return to.
-    this.spawnWildlife(def);
-    // ARRIVAL GRACE (purchased pockets): the sold ground has exactly ONE
-    // portal and the buyer arrives through it — a fair landing is part of
-    // the promise. Fresh gens sweep hostiles off the entry ring (gen-time
-    // camps/garrisons can seat anywhere; the samplers already keep away);
-    // remembered re-entries are exempt on purpose — bodies the PLAYER led to
-    // the door are history, not generation.
-    if (def.pocket && !memory) this.enforceArrivalGrace();
-    // Close the Zone Memory tagging window: the base population is placed. On a
-    // remembered re-entry, swap the freshly-spawned base enemies for the ones we
-    // left (cleared stays cleared; survivors keep their wounds + positions).
-    this.zoneGenTagging = false;
-    if (memory) this.restoreZoneEnemies(memory);
+    this.spawnZonePopulation(def, layout, rng, pois, memory,
+      { bodies: !seamlessStanding, fixtures: true });
+    const o = def.objective;
+    // On a promote arrival the standing bodies ARE the memory — the memo's
+    // rows are the stale shadow the door law would have replayed.
+    if (memory && !seamlessStanding) this.restoreZoneEnemies(memory);
     // THE OCCURRENCE FABRIC (engine/occurrences.ts): adopt the mint's planted
     // triggers — armed spots carry NO standing state (invisible by
     // construction); a remembered SPRUNG spot re-stands its seeded wound +
@@ -5966,7 +6109,8 @@ export class World {
     // TTL: drop its base population so re-entry never re-stocks a one-time cave (the
     // objective is already done; exits are already open). Surface zones still refresh.
     if (isCave && this.objectiveDone) {
-      this.actors = this.actors.filter(a => !(a.fromZoneGen && a.team === 'enemy'));
+      this.actors = this.actors.filter(a =>
+        !(a.fromZoneGen && a.team === 'enemy' && a.ringRegion === undefined));
     }
 
     // Leftover points of interest hold treasure, shrines, and altars. (A SPECIAL
@@ -6837,9 +6981,277 @@ export class World {
       if (mint.prevCamera === undefined) delete def.camera;
       else def.camera = mint.prevCamera;
     }
+    // THE DEMOTION SWEEPS THE BODIES (wave 6): a populated record banks its
+    // standing roster to its own zone memory before the record drops — a
+    // body shot across the border keeps its wound through the bank (the
+    // leave law at ring grain), a body killed across it stays killed
+    // (no row), and a record whose bodies already banked at a door
+    // (populated false) has nothing to say and must not overwrite the
+    // standing memo with an empty roster.
+    this.seamlessBankRegionBodies(zoneId);
     this.seamlessMints.delete(zoneId);
     const i = this.seamlessRegions.findIndex(s => s.zoneId === zoneId);
     if (i >= 0) this.seamlessRegions.splice(i, 1);
+  }
+
+  /** The frame the live coordinates are IN right now: the rebase's source
+   *  origin while its loadZone runs (bodies shift only after it returns),
+   *  else the active member's own seat origin. Null = no seamless frame
+   *  stands (the town anchors a ring it never joins) — position math that
+   *  needs a frame defers. */
+  private seamlessFrameOrigin(): { x: number; y: number } | null {
+    if (this.seamlessRebaseSrcOrigin) return this.seamlessRebaseSrcOrigin;
+    const seat = this.seamlessRegions.find(s => s.zoneId === this.zone.id);
+    return seat ? seat.originPx : null;
+  }
+
+  /** Shift a body's position-bearing state by a frame delta — the ONE
+   *  helper the rebase (whole tide + party aux), the re-fit position
+   *  policy, and the population translate all ride, so no aux field is
+   *  ever shifted at one site and forgotten at another. `shiftPos` false =
+   *  aux only (the party's positions are exact-restored by the rebase's
+   *  own seat list). Velocity is frame-invariant and never moves. */
+  private seamlessShiftFrame(a: Actor, dx: number, dy: number, shiftPos: boolean): void {
+    if (shiftPos) { a.pos.x += dx; a.pos.y += dy; }
+    const mv = (v: { x: number; y: number } | null | undefined): void => {
+      if (v) { v.x += dx; v.y += dy; }
+    };
+    mv(a.aiAnchor); mv(a.aiPost); mv(a.aiFleeGoal); mv(a.aiLastSeen);
+    mv(a.aiDodgeExit); mv(a.alertFrom); mv(a.watchAt); mv(a.aimPos);
+    mv(a.wakePrev); mv(a.reservePrev);
+    if (a.patrolRoute) for (const w of a.patrolRoute) mv(w);
+    if (a.trail) for (const t of a.trail) mv(t);
+    if (a.worm) for (const s of a.worm.segments) mv(s);
+  }
+
+  /** The drowsy posture in one read: a resident neighbor's body, un-roused
+   *  (the standing lock predicate — aggroed / a live aiTargetId). Roused
+   *  bodies think, move and cross at full cadence while the fight lasts;
+   *  the tag itself stays (provenance for THE SCOPING LAW), so a stood-down
+   *  chaser drowses again by this same derivation. */
+  seamlessDrowsy(a: Actor): boolean {
+    return this.seamless && a.ringRegion !== undefined && a.ringRegion !== this.zone.id
+      && !a.aggroed && a.aiTargetId === undefined;
+  }
+
+  /** ai.ts's one drowsy consult (the updateAI gate): true = skip this
+   *  body's brain this beat. Foreign un-roused bodies think every
+   *  SEAMLESS_LIFE.drowsyCadence-th beat, staggered by actor id so the
+   *  tide never thinks in lockstep; everything else (discrete play above
+   *  all — one boolean read) thinks every beat. */
+  seamlessDrowsyGate(a: Actor): boolean {
+    if (!this.seamless) return false;
+    if (!this.seamlessDrowsy(a)) return false;
+    return (this.seamlessBeat + a.id) % SEAMLESS_LIFE.drowsyCadence !== 0;
+  }
+
+  /** The target scan's candidate roster (ai.ts's one roster consult —
+   *  seamless wave 6): a DROWSY scanner's eye is dim by posture — it scans
+   *  only the bodies NEAR it (the actor grid's superset at a generous
+   *  reach bound), never the whole continent of residents; its region's
+   *  kin brawls and prey stay real, the far party stays administrative
+   *  dark it could not lock through anyway (the LoS law), and the rouse
+   *  restores the full-roster walk through the same predicate. Everyone
+   *  else — discrete play above all — receives THE SAME ARRAY IDENTITY
+   *  the scan always walked (one predicate read, byte-identical). The
+   *  soak's find: 98 served drowsy walks × a 450-body roster × the
+   *  diplomacy read was the whole frame. */
+  aiScanRoster(a: Actor): readonly Actor[] {
+    if (!this.seamless || !this.seamlessDrowsy(a)) return this.actors;
+    const detect = a.sheet.get('detectionRange');
+    const reach = detect * SEAMLESS_LIFE.drowsyScanReachMul + SEAMLESS_LIFE.drowsyScanPadPx;
+    return this.actorsNear(a.pos.x, a.pos.y, reach, this.seamlessScanScratch);
+  }
+  private seamlessScanScratch: Actor[] = [];
+
+  /** THE BANK (wave 6): write each POPULATED region's standing tagged
+   *  roster into its own zone memory (region-local coordinates, the memo's
+   *  own row shape — wounds, names, rarities and rouse latches survive;
+   *  brains and statuses drop, exactly as the discrete leave law drops
+   *  them), mark the record unpeopled, and remove the bodies (corpses
+   *  included — transients die at the ring boundary). `only` scopes the
+   *  bank to one region (the demotion); absent, every region banks (the
+   *  door law). A record left unpopulated banks NOTHING — its roster
+   *  already lives in the memo it would clobber. */
+  private seamlessBankRegionBodies(only?: string): void {
+    if (!this.seamlessRegions.length) return;
+    const frame = this.seamlessFrameOrigin();
+    const due = new Set<string>();
+    for (const a of this.actors) {
+      if (a.ringRegion !== undefined && (only === undefined || a.ringRegion === only)) {
+        due.add(a.ringRegion);
+      }
+    }
+    // A populated-but-bodiless record still owes its bank (every body slain
+    // across the border = an honestly emptied roster).
+    for (const [zid, m] of this.seamlessMints) {
+      if (m.populated && zid !== this.zone.id && (only === undefined || zid === only)) due.add(zid);
+    }
+    for (const zid of due) {
+      const mint = this.seamlessMints.get(zid);
+      const seat = this.seamlessRegions.find(s => s.zoneId === zid);
+      const def = this.zoneMap[zid];
+      if (mint?.populated && seat && def && frame) {
+        const enemies: ZoneEnemyMemo[] = [];
+        for (const a of this.actors) {
+          if (a.ringRegion !== zid || a.dead || a.team !== 'enemy' || !a.fromZoneGen
+            || !a.defId || a.doorId) continue;
+          enemies.push({
+            defId: a.defId, level: a.level,
+            x: a.pos.x + frame.x - seat.originPx.x,
+            y: a.pos.y + frame.y - seat.originPx.y,
+            life: a.life, faction: a.faction, rarity: a.rarity, tag: a.tag,
+            name: a.name, ...(a.tier ? { tier: a.tier } : {}),
+            ...(a.aiAwakened ? { aiAwakened: 1 as const } : {}),
+          });
+        }
+        // THE INFORMATION LAW: the bank writes only what it EARNED —
+        // standing rows, or an emptiness the kill ledger accounts for. A
+        // roster that vanished kill-less (nothing standing, nothing
+        // slain) says nothing, and the standing memo — the last honest
+        // record — survives to feed the next population beat.
+        if (enemies.length > 0 || mint.slainCount > 0) {
+          const prev = this.zoneMemory.get(zid);
+          this.zoneMemory.set(zid, {
+            ...(prev ?? {}),
+            seed: prev?.seed ?? def.seed!,
+            enemies, savedAt: this.time,
+          });
+        }
+        mint.populated = false;
+      }
+      this.actors = this.actors.filter(a => a.ringRegion !== zid);
+    }
+  }
+
+  /** THE POPULATION SLICE (wave 6): stand ONE unpeopled member's roster per
+   *  quiet ring beat (nearest node first — life fills outward from the
+   *  walker). Runs only on beats that minted no layout and only while an
+   *  active frame stands (the town's doors defer the tide to the first
+   *  member arrival) — a mint beat is already the tick's whole budget, so
+   *  bodies and ground never bill the same frame (THE SLICING LAW). */
+  private seamlessPopulateSlice(): void {
+    const active = this.seamlessRegions.find(s => s.zoneId === this.zone.id);
+    if (!active) return;
+    const activeCell = this.seamlessCellOf(this.zone.id);
+    const center = this.seamlessRingCenter();
+    if (!center || !activeCell) return;
+    let budget = SEAMLESS_LIFE.populatePerBeat;
+    const due: { def: ZoneDef; mint: SeamlessMint; seat: RegionSeat; d: number }[] = [];
+    for (const s of this.seamlessRegions) {
+      if (s.zoneId === this.zone.id) continue;
+      const mint = this.seamlessMints.get(s.zoneId);
+      const def = this.zoneMap[s.zoneId];
+      if (!mint || !def) continue;
+      // THE ADJACENCY SCOPE (the charter's own word — ring 1 is ADJACENT
+      // country): population stands only in members whose cell BORDERS the
+      // active one — the only bodies a walker can ever SEE across a border
+      // (her kink 4's whole ask). Farther members keep their records and
+      // their banks; the tide FOLLOWS the walker — a populated member that
+      // stopped bordering the active cell banks back (the recede), so the
+      // standing body count stays a few zones' worth however wide the ring.
+      const borders = cellsShareBorder(activeCell, mint.cell);
+      if (mint.populated) {
+        if (!borders) this.seamlessBankRegionBodies(s.zoneId);
+        continue;
+      }
+      if (!borders) continue;
+      due.push({ def, mint, seat: s, d: Math.hypot(mint.node.x - center.x, mint.node.y - center.y) });
+    }
+    due.sort((a, b) => a.d - b.d || (a.def.id < b.def.id ? -1 : 1));
+    for (const row of due) {
+      if (budget <= 0) break;
+      this.seamlessPopulateRegion(row.def, row.mint, row.seat, active);
+      budget--;
+    }
+  }
+
+  /** POPULATION AT ADMISSION (wave 6): stand one resident neighbor's
+   *  population in the one actors array, through the zone's OWN population
+   *  pass under a scoped swap (the mint's own idiom — the same tables, the
+   *  same objective counts, the same spawn laws a discrete entry runs),
+   *  then translate every body into the live frame and tag it with its
+   *  region. A fresh region spawns fresh on its own salted stream (the
+   *  layout stream is never resumed for bodies — populateSalt); a
+   *  REMEMBERED region replays its memo instead, exactly as a door arrival
+   *  would (spawn-then-swap, scoped to this batch — wounds and absences
+   *  survive). Fixture furniture, announcements and zone-scoped boots stay
+   *  arrival work (the fixtures lane). */
+  private seamlessPopulateRegion(def: ZoneDef, mint: SeamlessMint, seat: RegionSeat, active: RegionSeat): void {
+    const layout = mint.layout;
+    const firstNew = this.actors.length;
+    const keepZone = this.zone, keepArena = this.arena, keepHull = this.arenaHull;
+    const keepExits = this.exits, keepEntryFrom = this.entryFrom;
+    const keepWalk = this.walk, keepTierViews = this.tierViews;
+    const keepDoodads = this.doodads, keepBridges = this.bridges, keepGrounds = this.grounds;
+    const keepEntry = this.zoneEntry, keepObjDone = this.objectiveDone;
+    try {
+      this.zone = def;
+      this.arena = makeArena(def);
+      this.arena.w = mint.span.w;
+      this.arena.h = mint.span.h;
+      this.arena.shape = 'rect';
+      this.arenaHull = hullOf(this.arena);
+      this.entryFrom = mint.partnerId;
+      this.exits = def.exits.map((e, i) => this.placeExit(e, i));
+      this.seamlessSeatAgreedWays(def, mint.cell);
+      this.separateOverlappingExits();
+      let entry = vec(this.arena.w / 2, this.arena.h / 2);
+      const back = this.exits.find(e => e.to === mint.partnerId);
+      if (back) {
+        const ang = angleTo(back.pos, entry);
+        entry = vec(back.pos.x + Math.cos(ang) * 120, back.pos.y + Math.sin(ang) * 120);
+      }
+      this.zoneEntry = vec(entry.x, entry.y);
+      this.walk = (layout.walk as GridWalkField | undefined) ?? null;
+      if (this.walk && def.tiers) {
+        const lv = Math.max(1, def.tiers.levels ?? 1);
+        this.tierViews = [];
+        for (let t = 1; t <= lv; t++) this.tierViews[t] = makeTierView(this.walk, t);
+      } else this.tierViews = null;
+      // THE THROWAWAY COPY: spawn placement consults the region's true
+      // furniture (doodadsAt re-keys on the list identity), but anything a
+      // spawn PLANTS lands in the copy and dies with the swap — the mint's
+      // recorded geometry stays byte-pure (the drawn==re-minted pins).
+      this.doodads = [...layout.doodads];
+      this.bridges = this.doodads.filter(d => doodadRuleOf(d.kind).spans);
+      this.grounds = this.doodads.filter(d => GROUND_KINDS.includes(d.kind));
+      this.objectiveDone = this.completedObjectives.has(def.id);
+      const memory = !def.boundless && this.zoneMemoryFresh(def.id)
+        ? this.zoneMemory.get(def.id)! : null;
+      const rng = new Rng(((def.seed ?? 0) ^ SEAMLESS_LIFE.populateSalt) >>> 0);
+      // A fitted arena is a rect by law — the ellipse POI rim filter is
+      // structurally moot here (loadZone's own call keeps it for the
+      // discrete shapes).
+      const pois = [...layout.pois];
+      this.spawnZonePopulation(def, layout, rng, pois, memory, { bodies: true, fixtures: false });
+      if (memory) {
+        // The scoped memo swap (the door law's spawn-then-swap at region
+        // grain): drop exactly the batch this pass spawned, then stand the
+        // remembered rows — never the global filter, which would sweep the
+        // active zone's own population and every other region's tide.
+        const batch = new Set(this.actors.slice(firstNew));
+        this.actors = this.actors.filter(a => !(batch.has(a) && a.fromZoneGen && a.team === 'enemy'));
+        this.materializeMemoRows(memory);
+      }
+    } finally {
+      this.zone = keepZone; this.arena = keepArena; this.arenaHull = keepHull;
+      this.exits = keepExits; this.entryFrom = keepEntryFrom;
+      this.walk = keepWalk; this.tierViews = keepTierViews;
+      this.doodads = keepDoodads; this.bridges = keepBridges; this.grounds = keepGrounds;
+      this.zoneEntry = keepEntry; this.objectiveDone = keepObjDone;
+    }
+    // TAG + TRANSLATE: the appended batch stands at ACTIVE-frame
+    // coordinates, wearing its region (drawn where it lives, skipped by
+    // every zone-scoped read, banked by its own demotion).
+    const dx = seat.originPx.x - active.originPx.x, dy = seat.originPx.y - active.originPx.y;
+    for (let i = firstNew; i < this.actors.length; i++) {
+      const a = this.actors[i];
+      a.ringRegion = def.id;
+      this.seamlessShiftFrame(a, dx, dy, true);
+    }
+    mint.populated = true;
+    mint.slainCount = 0; // a fresh stand re-arms the kill ledger
   }
 
   /** Mint one resident's layout through the SAME derivation loadZone runs at
@@ -6858,6 +7270,13 @@ export class World {
     // pinned resident — the standing record's capture is the true prior).
     const standing = this.seamlessMints.get(def.id);
     const prevCamera = standing ? standing.prevCamera : def.camera;
+    // THE NEIGHBOR LIFE (wave 6): the populated bit carries through every
+    // re-fit/refresh (a re-mint re-deals GROUND, never bodies — the no-dup
+    // law); a FRESH mint starts unpeopled and waits for its population
+    // beat — except the ACTIVE zone's own self-admission, whose population
+    // is the live untagged array by definition (loadZone owns it). Read
+    // BEFORE the scoped swap flips this.zone.
+    const populated = standing?.populated ?? (def.id === this.zone.id);
     this.rollHoldfast(def);
     this.eagerChartNeighbors(def);
     // THE MINT HORIZON, pre-run (the third of loadZone's def-shaping steps —
@@ -6943,6 +7362,8 @@ export class World {
         cell, node: { x: at.x, y: at.y },
         mouthsKey: this.seamlessMouthsKeyOf(def, cell),
         dress,
+        populated,
+        slainCount: standing?.slainCount ?? 0,
       });
       // UPSERT the seat: a re-mint refreshes the layout record, and the seat
       // FOLLOWS the cell (the stored cell is the identity; the seat is its
@@ -6968,6 +7389,20 @@ export class World {
     } finally {
       this.zone = keepZone; this.arena = keepArena; this.exits = keepExits;
       this.entryFrom = keepEntryFrom;
+    }
+    // THE RE-FIT POSITION POLICY (wave 6): a standing region's bodies keep
+    // their REGION-LOCAL seats through a cell drift — the record's origin
+    // moved, so their active-frame positions shift by the same world delta
+    // (frame-independent: an origin delta is the same vector in any
+    // zone-local frame, so this composes safely even inside a rebase's
+    // load tail). The layout may have re-dealt walls under a shifted body;
+    // its own next steps re-clamp it (the promote clamp is the arrival's
+    // own safety) — a re-fit re-deals ground, never bodies.
+    if (standing && (standing.cell.x0 !== cell.x0 || standing.cell.y0 !== cell.y0)) {
+      const sx = cell.x0 - standing.cell.x0, sy = cell.y0 - standing.cell.y0;
+      for (const a of this.actors) {
+        if (a.ringRegion === def.id) this.seamlessShiftFrame(a, sx, sy, true);
+      }
     }
   }
 
@@ -7085,6 +7520,11 @@ export class World {
       if (!this.seamlessRegions.length) {
         this.seamlessNote('nopair', '[seamless] no eligible resident ground charted in ring range yet — retrying each beat');
       }
+      // THE POPULATION SLICE (wave 6): a beat with no admission due stands
+      // one unpeopled member's roster instead — bodies and ground never
+      // bill the same frame, and the tide fills in over the quiet beats
+      // right behind the ring (THE SLICING LAW).
+      this.seamlessPopulateSlice();
       return;
     }
     for (const def of due.slice(0, budget)) {
@@ -7169,7 +7609,17 @@ export class World {
     if (!mover) return null;
     const party = this.seats.some(s => s.actor === mover)
       || (!!mover.owner && this.seats.some(s => s.actor === mover.owner));
-    if (!party) return null;
+    // THE ROUSED CROSSING (wave 6 — her honest-borders commission): an
+    // ENGAGED enemy body (the standing lock predicate) walks the same rim
+    // law the party does, in BOTH directions — a drowsy neighbor roused by
+    // pain chases in through the mouths and can never cross off-mouth (the
+    // far-wall grid, the dress trunks and the tissue ribbon refuse it
+    // exactly as they refuse a walker), and an active body chasing a
+    // fleeing hero follows out and stays live while the fight lasts.
+    // Un-engaged enemies keep the classic leash: the pack never roams
+    // tissue, and a stood-down stray simply holds until it re-drowses.
+    const roused = mover.team === 'enemy' && (mover.aggroed || mover.aiTargetId !== undefined);
+    if (!party && !roused) return null;
     const inNow = insideBounds(p, radius, this.arena);
     const wasOut = !!from && !insideBounds(from, radius, this.arena);
     if (inNow) return wasOut ? 'reenter' : null;
@@ -7230,6 +7680,66 @@ export class World {
     return wasOut ? 'hold' : null;
   }
 
+  /** THE DROWSY HOME CONFINE (wave 6): resolve an un-roused ring-tagged
+   *  body's step. Null = the ask stands on ACTIVE ground (the classic
+   *  confine owns it — walls are real where the player fights). Otherwise
+   *  the body confines into its OWN region: cell bounds, the mint's walk
+   *  grid (walkResolve through the tier-swap idiom, so wall sliding and
+   *  void policy arrive from standing law), and the region's blocking
+   *  furniture at trunk grain (linear over the mint's list — the tide
+   *  moves at divided cadence, so the scan stays cheap). A frameless ask
+   *  (no active seat, a mid-teardown edge) holds still. */
+  private seamlessForeignConfine(p: Vec2, radius: number, from: Vec2 | undefined, mv: Actor): Vec2 | null {
+    if (insideBounds(p, radius, this.arena)) return null;
+    const active = this.seamlessRegions.find(s => s.zoneId === this.zone.id);
+    const home = this.seamlessRegions.find(s => s.zoneId === mv.ringRegion);
+    const mint = mv.ringRegion !== undefined ? this.seamlessMints.get(mv.ringRegion) : undefined;
+    if (!active || !home || !mint) return from ? vec(from.x, from.y) : vec(p.x, p.y);
+    const ox = home.originPx.x - active.originPx.x, oy = home.originPx.y - active.originPx.y;
+    const out = vec(
+      clamp(p.x - ox, radius, Math.max(radius, mint.span.w - radius)),
+      clamp(p.y - oy, radius, Math.max(radius, mint.span.h - radius)));
+    const grid = mint.layout.walk;
+    if (grid) {
+      if (from) {
+        const lf = vec(from.x - ox, from.y - oy);
+        const keepWalk = this.walk;
+        this.walk = grid as GridWalkField;
+        try {
+          const r = this.walkResolve(lf, out, false, radius * WALK_CFG.ledgeGrasp);
+          out.x = r.x; out.y = r.y;
+        } finally { this.walk = keepWalk; }
+      } else if (!grid.isWalkable(out.x, out.y)) {
+        const s = grid.snapToWalkable(out);
+        out.x = s.x; out.y = s.y;
+      }
+    }
+    const mvTier = mv.tier ?? 0;
+    for (const o of mint.layout.doodads) {
+      if ((o.tier ?? 0) !== mvTier) continue;
+      const rr = o.radius + radius + 24;
+      if (Math.abs(o.pos.x - out.x) > rr || Math.abs(o.pos.y - out.y) > rr) continue;
+      if (!blocksMovement(o) || pitRegionOf(o)) continue;
+      const push = pushOutOfShape(hitSurfaceOf(o, 'move'), o.pos.x, o.pos.y, out.x, out.y, radius);
+      if (push) { out.x = push.x; out.y = push.y; }
+    }
+    return vec(out.x + ox, out.y + oy);
+  }
+
+  /** The region whose ground owns a WORLD-px point (the projectile lane's
+   *  ownership router — the sight veil's march idiom, engine-side). Null =
+   *  tissue / beyond the ring: open sky. */
+  private seamlessProjOwnerAt(wx: number, wy: number): { seat: RegionSeat; mint: SeamlessMint } | null {
+    for (const s of this.seamlessRegions) {
+      if (s.zoneId === this.zone.id) continue;
+      const r = this.seamlessRectOf(s);
+      if (!r || wx < r.x || wx > r.x + r.w || wy < r.y || wy > r.y + r.h) continue;
+      const mint = this.seamlessMints.get(s.zoneId);
+      if (mint) return { seat: s, mint };
+    }
+    return null;
+  }
+
   /** THE THRESHOLD SWEEP (M1; THE CELL TEST M1.5): one ring evaluation beat
    *  first (the budgeted fill — admissions land while the walker fights,
    *  walks, or stands), then the crossing: when the local hero, walking the
@@ -7244,6 +7754,7 @@ export class World {
    *  one law, one refusal (seamlessRimSealed). */
   private updateSeamless(): void {
     if (this.scene) return;
+    this.seamlessBeat++; // the drowsy cadence clock (wave 6)
     this.seamlessEnsureBoot(); // the ring beat (guards its own ground)
     if (this.seamlessRegions.length < 2) return;
     const seat = this.seamlessRegions.find(s => s.zoneId === this.zone.id);
@@ -7326,16 +7837,54 @@ export class World {
     const keepProj = this.projectiles.filter(pr =>
       seatActors.has(pr.caster) || (!!pr.caster.owner && seatActors.has(pr.caster.owner)));
     const keepTexts = this.texts, keepFlashes = this.flashes;
+    // THE DEMOTION IN PLACE (wave 6, THE NEIGHBOR LIFE): the ground we
+    // leave stays resident — its base population demotes to the drowsy
+    // ring by TAG, never by teardown: the same actor ids stand on both
+    // sides of the crossing (her kink 4's no-flash promise, both
+    // directions). The memo-roster predicate names the demoting set
+    // (zoneMemorySnapshot's own filter); everything else — event spawns,
+    // overlay kin, unowned constructs — keeps the standing door law and
+    // dies at the seam. Tagged BEFORE the load, so the leave-capture skips
+    // them (their ledger is the live array now, not the memo — the
+    // populated bit on the from-record stays true) and the carry keeps
+    // them by one clause.
+    const carriedSet = new Set<Actor>(carried);
+    for (const a of this.actors) {
+      if (a.ringRegion !== undefined || a.dead || carriedSet.has(a)) continue;
+      if (a.team === 'enemy' && a.fromZoneGen && !!a.defId && !a.doorId) a.ringRegion = fromId;
+    }
     // THE REBASE TICK ADMITS NOTHING (M2 wave 5): the load tail's ring beat
     // consumes this and defers its admission slice one beat — the crossing
     // tick pays the rebase alone, never a fresh mint stacked on top.
     this.seamlessSkipAdmit = true;
-    this.loadZone(dest.zoneId, fromId);
+    // THE FRAME STASH (wave 6): while this load runs, tagged bodies still
+    // sit in the SOURCE zone's frame — the promote pass and any demotion
+    // bank inside the load tail read this origin instead of the fresh
+    // active seat's (the one honest answer to "whose frame are these
+    // coordinates in?" mid-rebase).
+    this.seamlessRebasing = true;
+    this.seamlessRebaseSrcOrigin = { x: src.originPx.x, y: src.originPx.y };
+    try {
+      this.loadZone(dest.zoneId, fromId);
+    } finally {
+      this.seamlessRebasing = false;
+      this.seamlessRebaseSrcOrigin = null;
+    }
     for (const s of seats) {
       // Exact continuity, with the placement clamp as pure safety (the sweep
       // pre-checked the partner grid; rim dress can still nudge a shoulder).
       s.a.pos = this.clampPos(vec(s.x, s.y), s.a.radius);
       s.a.vel.x = s.vx; s.a.vel.y = s.vy;
+      // Position-bearing AI fields ride the same delta (anchors, posts,
+      // trails — pos itself was just exact-restored above).
+      this.seamlessShiftFrame(s.a, delta.x, delta.y, false);
+    }
+    // THE RING RIDES THE FRAME: every still-tagged body shifts by the same
+    // seat delta — same ids, same region-local seats, new frame (the
+    // no-flash pin reads exactly this arithmetic; the destination's own
+    // set was promoted + shifted inside the load and stands untagged).
+    for (const a of this.actors) {
+      if (a.ringRegion !== undefined) this.seamlessShiftFrame(a, delta.x, delta.y, true);
     }
     for (const pr of keepProj) { pr.pos.x += delta.x; pr.pos.y += delta.y; this.projectiles.push(pr); }
     for (const t of keepTexts) { t.pos.x += delta.x; t.pos.y += delta.y; this.texts.push(t); }
@@ -12631,6 +13180,7 @@ export class World {
         m.faction = a.faction;
         m.fromZoneGen = false;
         m.mountPaired = true;
+        m.ringRegion = a.ringRegion; // a tagged rider's steed shares its ledger (seamless wave 6)
         m.pos.x = a.pos.x;
         m.pos.y = a.pos.y;
         m.facing = a.facing;
@@ -12668,6 +13218,7 @@ export class World {
       r.faction = m.faction;
       r.fromZoneGen = false;
       r.mountPaired = true;
+      r.ringRegion = m.ringRegion; // a tagged steed's crew shares its ledger (seamless wave 6)
       r.pos.x = m.pos.x;
       r.pos.y = m.pos.y;
       const at = this.actors.indexOf(m);
@@ -16609,7 +17160,11 @@ export class World {
       || (!this.inCave && !this.visited.has(z.id))) return null;
     const enemies: ZoneEnemyMemo[] = [];
     for (const a of this.actors) {
-      if (a.dead || a.team !== 'enemy' || !a.fromZoneGen || !a.defId || a.doorId) continue;
+      // Ring-tagged bodies belong to ANOTHER region's ledger (seamless
+      // wave 6) — their positions are foreign-frame and their bank is the
+      // demotion's own; the active memo never speaks for them.
+      if (a.dead || a.team !== 'enemy' || !a.fromZoneGen || !a.defId || a.doorId
+        || a.ringRegion !== undefined) continue;
       enemies.push({
         defId: a.defId, level: a.level, x: a.pos.x, y: a.pos.y,
         life: a.life, faction: a.faction, rarity: a.rarity, tag: a.tag,
@@ -16705,7 +17260,19 @@ export class World {
   /** Restore a remembered zone's base enemies: drop the freshly-spawned batch and
    *  re-materialize exactly what we left (who / where / how-hurt). */
   private restoreZoneEnemies(memory: ZoneMemory): void {
-    this.actors = this.actors.filter(a => !(a.fromZoneGen && a.team === 'enemy'));
+    // THE SCOPING LAW (seamless wave 6): the swap may only sweep the ACTIVE
+    // zone's own fresh batch — a rebase carries other regions' ring-tagged
+    // tides through this very call, and the memo must never eat them.
+    // Discrete play: ringRegion is never set, so the filter is byte-true.
+    this.actors = this.actors.filter(a =>
+      !(a.fromZoneGen && a.team === 'enemy' && a.ringRegion === undefined));
+    this.materializeMemoRows(memory);
+  }
+
+  /** Materialize a memo's enemy rows (the restore's spawn half, factored so
+   *  the resident ring's population beat can replay a REGION's memo without
+   *  the active-scoped filter above). */
+  private materializeMemoRows(memory: ZoneMemory): void {
     for (const e of memory.enemies) {
       if (!MONSTERS[e.defId]) continue;
       const m = this.createMonster(e.defId, Math.max(1, e.level), 'enemy');
@@ -17137,6 +17704,8 @@ export class World {
       this.seamlessCellsCache = null; // the fold indexed the replaced graph
       this.seamlessArrivalCell = null; // …and so did the standing arrival fit
       this.seamlessSkipAdmit = false;  // …and any pending rebase-tick deferral
+      this.seamlessRebasing = false;   // …and the rebase discriminator (wave 6)
+      this.seamlessRebaseSrcOrigin = null; // …with its frame stash
       this.seamlessNotes.delete('boot');
       this.seamlessNotes.delete('nopair');
     }
@@ -34104,6 +34673,11 @@ export class World {
     // spawn stream can't be farmed for xp/drops (kill the caster instead),
     // and a re-raised corpse can't pay twice. No-op for player minions.
     minion.noBounty = true;
+    // A tagged caster's conjurations share its region ledger (seamless
+    // wave 6): a drowsy spawner's trickle can never stall the active
+    // objective nor escape its region's demotion. Undefined for everyone
+    // else — one assign, discrete-inert.
+    minion.ringRegion = caster.ringRegion;
     // BORROWED UNLIFE: a body minted by a player-side conjurer that isn't
     // itself a seat (a spectre'd grave shaman answering with its own call)
     // is LIFELINED to that conjurer — it unmakes when its raiser goes, so
@@ -39652,6 +40226,15 @@ export class World {
     // A DOWNED co-op seat is already out of the fight — stray AoE/DoT must not
     // re-enter the death path (which would fire onPlayerDown twice).
     if (actor.downed) return;
+    // THE KILL LEDGER (seamless wave 6): a ring-tagged death is booked on
+    // its region's record, so the demotion bank can tell an honestly
+    // emptied roster (kills — bank the emptiness, cleared stays cleared)
+    // from one that merely vanished (a harness sweep, a heal-out) and must
+    // leave the standing memo untouched. Discrete play: tag never set.
+    if (actor.ringRegion !== undefined) {
+      const rm = this.seamlessMints.get(actor.ringRegion);
+      if (rm) rm.slainCount++;
+    }
     // THE ANSWERING WALL BREAKS (guardBash beyond the stance, 2026-07-22):
     // a construct minted by a bash-carrying working answers when it DIES —
     // and a broken wall answers HARDEST: violent deaths pay the whole
@@ -41791,7 +42374,19 @@ export class World {
       // so the entire body below inherits the bend untouched.
       const atf = this.timeflow.actorScale(a);
       if (atf <= 0) { a.tickChronoStatuses(rawDt); continue; }
-      const dt = atf === 1 ? flowDt : flowDt * atf;
+      // THE DROWSY BREATH (seamless wave 6): a resident neighbor's body
+      // does its upkeep on the same divided clock its brain thinks on —
+      // suspended off-beat, dt-COMPENSATED on its served beat, so statuses
+      // burn, DoTs bite and regen pours at TRUE rate in chunkier ticks
+      // (biology never sleeps; it breathes slower). A roused body resumes
+      // full cadence through the same predicate, and discrete play pays
+      // one boolean read (the timeflow bend's own suspension shape).
+      let drowsyMul = 1;
+      if (this.seamless && this.seamlessDrowsy(a)) {
+        if ((this.seamlessBeat + a.id) % SEAMLESS_LIFE.drowsyCadence !== 0) continue;
+        drowsyMul = SEAMLESS_LIFE.drowsyCadence;
+      }
+      const dt = (atf === 1 ? flowDt : flowDt * atf) * drowsyMul;
       // EXPONENTIAL UNLIFE (decay minions): the survival meter drains at an
       // accelerating rate — unmitigable, only healing races it, and healing
       // loses on schedule. Death is REAL (Martyrdom, contracts, Deadwake).
@@ -45147,6 +45742,7 @@ export class World {
     part.anchored = true;          // rigid: never shoved off the frame
     part.xpValue = 0;              // the HOST pays any bounty
     part.fromZoneGen = false;      // never snapshotted apart from it
+    part.ringRegion = host.ringRegion; // a tagged root's limbs share its ledger (seamless wave 6)
     part.partLink = { root: host, def: pd };
     part.graftKey = opts?.key;
     if (pd.lifeFrac) {
@@ -49422,6 +50018,32 @@ export class World {
 
   private updateProjectiles(dt: number): void {
     const flowDt = dt; // the world-scaled frame; each flight bends it below
+    // THE NEIGHBOR SHOT LANE (seamless wave 6): across open borders a
+    // flight is culled at the RING's own footprint (the union of resident
+    // cells + the corridor margin, in active-local px) instead of the
+    // arena edge — the drowsy population is visible AND hittable by
+    // design (her kink 4: what you can see across the border answers to
+    // arrows; kills credit through the ordinary path). Discrete play:
+    // ring null, the classic perimeter cull byte-identical.
+    const ring = ((): { x0: number; y0: number; x1: number; y1: number; active: RegionSeat } | null => {
+      if (!this.seamless || this.seamlessRegions.length < 2) return null;
+      const active = this.seamlessRegions.find(s => s.zoneId === this.zone.id);
+      if (!active) return null;
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const s of this.seamlessRegions) {
+        const r = this.seamlessRectOf(s);
+        if (!r) continue;
+        x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y);
+        x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h);
+      }
+      if (x0 === Infinity) return null;
+      const m = SEAMLESS_RIM.corridorMarginPx;
+      return {
+        x0: x0 - m - active.originPx.x, y0: y0 - m - active.originPx.y,
+        x1: x1 + m - active.originPx.x, y1: y1 + m - active.originPx.y,
+        active,
+      };
+    })();
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
       // THE TIMEFLOW BEND (engine/timeflow.ts): a projectile flies on its
@@ -49467,7 +50089,9 @@ export class World {
       let dead = p.traveled >= p.range
         || (p.maxAge !== undefined && p.age >= p.maxAge)
         || (!tethered && !this.arena.boundless
-            && (p.pos.x < 0 || p.pos.x > this.arena.w || p.pos.y < 0 || p.pos.y > this.arena.h));
+            && (ring
+              ? (p.pos.x < ring.x0 || p.pos.x > ring.x1 || p.pos.y < ring.y0 || p.pos.y > ring.y1)
+              : (p.pos.x < 0 || p.pos.x > this.arena.w || p.pos.y < 0 || p.pos.y > this.arena.h)));
       // Did a fatal end land ON A BODY (pierce spent, guarded stop) rather
       // than spend itself (range, walls, arrivals)? The SequelSpec
       // 'hit'|'expire' lever reads this at the death payout below.
@@ -49611,6 +50235,50 @@ export class World {
               SIM_TAP.current?.onOccluded?.('proj');
             }
             break;
+          }
+        }
+      }
+      // THE AWAY GROUND ANSWERS (seamless wave 6 — the far-wall law's shot
+      // half): once a flight leaves the active arena, the region that OWNS
+      // each sample rules it — the neighbor's grid walls block by the same
+      // blocksShot/elevation law as home, and its standing furniture stops
+      // the arrow at its true shot faces (no bounce lane out there — a
+      // stopped flight dies at the trunk). Tissue is open sky. Cost: only
+      // samples past the arena edge consult the router.
+      if (!dead && !p.phase && ring) {
+        const sdx = p.pos.x - prev.x, sdy = p.pos.y - prev.y;
+        const slen = Math.hypot(sdx, sdy);
+        const step = 15;
+        const n = Math.max(1, Math.ceil(slen / step));
+        for (let k2 = 1; k2 <= n && !dead; k2++) {
+          const sx = prev.x + sdx * (k2 / n), sy = prev.y + sdy * (k2 / n);
+          if (sx >= 0 && sx <= this.arena.w && sy >= 0 && sy <= this.arena.h) continue;
+          const owner = this.seamlessProjOwnerAt(sx + ring.active.originPx.x, sy + ring.active.originPx.y);
+          if (!owner) continue;
+          const lx = sx + ring.active.originPx.x - owner.seat.originPx.x;
+          const ly = sy + ring.active.originPx.y - owner.seat.originPx.y;
+          const g = owner.mint.layout.walk;
+          if (g instanceof GridWalkField) {
+            const kId = g.regionAt(lx, ly);
+            const k = regionKind(kId);
+            const shotElev = tierElevOf(kId);
+            if (k?.blocksShot && !((p.tier ?? 0) >= 1 && shotElev !== null && shotElev <= (p.tier ?? 0))) {
+              this.flashes.push({ pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.15, maxLife: 0.15 });
+              dead = true;
+              SIM_TAP.current?.onOccluded?.('proj');
+              break;
+            }
+          }
+          for (const o of owner.mint.layout.doodads) {
+            if ((o.tier ?? 0) !== (p.tier ?? 0)) continue;
+            if (o.gone || !blocksProjectiles(o)) continue;
+            const rr = o.radius + 46;
+            if (Math.abs(o.pos.x - lx) > rr || Math.abs(o.pos.y - ly) > rr) continue;
+            if (shapeContains(hitSurfaceOf(o, 'shot'), o.pos.x, o.pos.y, lx, ly, this.projNose(p) + 1e-9)) {
+              this.flashes.push({ pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.15, maxLife: 0.15 });
+              dead = true;
+              break;
+            }
           }
         }
       }
@@ -51424,17 +52092,26 @@ export class World {
           // Origin-less clampPos takes the placement branch — snapToWalkable's
           // cell-CENTER hop — and a crowded wall-press rubberbands forever
           // (pop out ~half a cell, walk back in, pop out again).
+          // A ring-tagged body's shoulder resolves through the mover-aware
+          // path (seamless wave 6): the moverless classic clamp would
+          // confine a far body against the ACTIVE arena — a cross-map
+          // walkResolve sweep per shouldered pair per tick (the soak's
+          // 29ms find) — where the foreign confine is local arithmetic on
+          // its own cell. Discrete play: tag never set, opts undefined,
+          // byte-identical.
           if (!aFixed && aShare > 0) {
             const fx = a.pos.x, fy = a.pos.y;
             a.pos.x -= Math.cos(ang) * overlap * aShare;
             a.pos.y -= Math.sin(ang) * overlap * aShare;
-            a.pos = this.clampPos(a.pos, a.radius, vec(fx, fy));
+            a.pos = this.clampPos(a.pos, a.radius, vec(fx, fy),
+              this.seamless && a.ringRegion !== undefined ? { mover: a } : undefined);
           }
           if (!bFixed && aShare < 1) {
             const fx = b.pos.x, fy = b.pos.y;
             b.pos.x += Math.cos(ang) * overlap * (1 - aShare);
             b.pos.y += Math.sin(ang) * overlap * (1 - aShare);
-            b.pos = this.clampPos(b.pos, b.radius, vec(fx, fy));
+            b.pos = this.clampPos(b.pos, b.radius, vec(fx, fy),
+              this.seamless && b.ringRegion !== undefined ? { mover: b } : undefined);
           }
         }
       }
@@ -51517,6 +52194,12 @@ export class World {
    *  by what actually stands on THIS floor, not by what its def promised. */
   private objectiveCountable(a: Actor): boolean {
     return a.team === 'enemy'
+      // THE SCOPING LAW (seamless wave 6): a ring-tagged body belongs to
+      // another region's floor — it can neither stall this zone's cull /
+      // contest / empty-floor read nor complete it, even while it chases
+      // the player across the border (the tag is provenance and survives
+      // the rouse). Discrete play: never set, one undefined read.
+      && !(a.ringRegion !== undefined && a.ringRegion !== this.zone.id)
       && !this.isAmbientTag(a.tag)
       // ACTOR-level scenery armor is the same soft-lock guard one layer
       // down: a planted body no build can even FIGHT — a throng husk
@@ -53209,10 +53892,22 @@ export class World {
     // stands IN FRONT of the classic law, and with the flag off this whole
     // branch is one boolean read (THE MODE LAW).
     if (this.seamless) {
-      const rim = this.seamlessRimVerdict(p, radius, from, opts);
-      if (rim === 'open') return vec(p.x, p.y);
-      if (rim === 'hold') return vec(from!.x, from!.y);
-      if (rim === 'reenter') return this.clampPos(p, radius, undefined, opts);
+      // THE DROWSY HOME CONFINE (wave 6): an un-roused ring-tagged body is
+      // its own region's citizen — its steps confine against ITS cell, ITS
+      // walk grid and ITS furniture (drawn == wandered across the border),
+      // and it never roams tissue. Roused bodies and the party fall through
+      // to the rim verdict (one crossing law); anything standing on ACTIVE
+      // ground answers to the classic confine below.
+      const fmv = opts?.mover as Actor | undefined;
+      if (fmv && this.seamlessDrowsy(fmv)) {
+        const fc = this.seamlessForeignConfine(p, radius, from, fmv);
+        if (fc) return fc;
+      } else {
+        const rim = this.seamlessRimVerdict(p, radius, from, opts);
+        if (rim === 'open') return vec(p.x, p.y);
+        if (rim === 'hold') return vec(from!.x, from!.y);
+        if (rim === 'reenter') return this.clampPos(p, radius, undefined, opts);
+      }
     }
     const b0 = clampToBounds(p, radius, this.arena);
     const out = vec(b0.x, b0.y);

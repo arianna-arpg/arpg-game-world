@@ -64,6 +64,14 @@
 //   carves meet the point (the corridor is walkable straight through the
 //   border), a driven crossing rides the partner's mouth at wave-1-class
 //   drift, and the signpost pair flanks the agreed seat.
+// RIG K — THE NEIGHBOR LIFE (M2 wave 6): population at admission (tagged
+//   bodies in the one array, inside their cells), re-fit no-dup, THE
+//   NO-FLASH PIN (same ids across a driven crossing — dest promotes, the
+//   departed ground demotes in place, world positions invariant), the
+//   drowsy cadence divide + rouse exception, the roused crossing law at
+//   the clamp, the demotion/door bank (wounds survive to re-admission),
+//   THE SCOPING PIN, and the discrete mode-law re-pin.
+//
 // RIG J — THE ENCLOSURE (M2 wave 5): THE SOLID BETWEEN (off-corridor tissue
 //   outside every cell refuses on the ring's own web; a non-abutting linked
 //   pair's ribbon still crosses its gap), THE FAR-WALL LAW (a step into a
@@ -82,7 +90,7 @@
 // Run: npx tsx balance/probe_seamless.ts
 // ---------------------------------------------------------------------------
 
-import { vec } from '../src/core/math';
+import { vec, type Vec2 } from '../src/core/math';
 import { insideBounds } from '../src/world/shape';
 import { coordDist, mapToPx, pxToMap } from '../src/world/coords';
 import { borderAgreedPoint, cellsShareBorder, foldCells, type CellSeat } from '../src/world/cells';
@@ -95,6 +103,7 @@ import { OCEAN_BIOME, biomeAt } from '../src/world/biomes';
 import { elevationAt } from '../src/world/relief';
 import { START_ZONE, type ZoneDef } from '../src/data/zones';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
+import { updateAI } from '../src/engine/ai';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { persistRun, persistRunDurable } from '../src/meta/character';
 import type { World } from '../src/engine/world';
@@ -769,9 +778,13 @@ const seatAtRimLane = (w: World, towardW: { x: number; y: number }): { x: number
 // --- the rim seal) -------------------------------------------------------------
 
 // The zone-memory row read, mirroring zoneMemorySnapshot's own filter — the
-// witness rows a leave captures and a return must replay.
+// witness rows a leave captures and a return must replay. Wave 6: the
+// snapshot excludes ring-tagged bodies (they are OTHER regions' drowsy
+// tides, banked by their own demotion), so the mirror excludes them too —
+// the assertion still pins the ACTIVE zone's memo roster at full strength.
 const memoryRows = (w: World): string => JSON.stringify(w.actors
-  .filter(a => !a.dead && a.team === 'enemy' && a.fromZoneGen && a.defId && !a.doorId)
+  .filter(a => !a.dead && a.team === 'enemy' && a.fromZoneGen && a.defId && !a.doorId
+    && a.ringRegion === undefined)
   .map(a => [a.defId, a.level, Math.round(a.pos.x * 10) / 10, Math.round(a.pos.y * 10) / 10, Math.round(a.life * 10) / 10])
   .sort((x, y) => (JSON.stringify(x) < JSON.stringify(y) ? -1 : 1)));
 
@@ -1905,6 +1918,319 @@ const rawSeatOf = (def: ZoneDef, i: number, arena: { w: number; h: number }): { 
     for (let i = 0; i < 3; i++) wd4.update(0.05);
     check('J5b a discrete world stands no ring, no mints, no dress',
       !wd4.seamless && wd4.seamlessRegions.length === 0 && wd4.seamlessMints.size === 0);
+  }
+}
+
+// --- RIG K: THE NEIGHBOR LIFE (M2 wave 6 — the drowsy ring) --------------------
+// Population at admission (a populated member's bodies stand tagged in the one
+// actors array, inside its cell, at active-frame coordinates), re-fit no-dup,
+// THE NO-FLASH PIN (the same actor ids stand across a driven threshold
+// crossing — dest promotes untagged, the departed zone's base bodies demote
+// tagged, world positions invariant), the drowsy cadence divide + the rouse
+// exception at the updateAI gate, the roused crossing law at the clamp (mouth
+// admits, off-mouth wall refuses, drowsy never leaves home), the demotion/door
+// bank (a wounded body's life survives to re-admission), THE SCOPING PIN (an
+// away body neither stalls nor completes the active objective), and the mode
+// law re-pin (discrete play wears no tags and the gate never engages). Runs on
+// its OWN twin world so def/objective staging never leaks into earlier rigs.
+{
+  seedGlobalRandom(GSEED ^ 0x6b);
+  const wk = makeSimWorld('warrior', WSEED);
+  wk.seamless = true;
+  wk.loadZone(START_ZONE);
+  ringSettle(wk); // town-anchored: records mint, population defers (no frame)
+  const pairK = pickWalkPair(wk);
+  check('K0a a walk pair stands for the neighbor-life rigs', !!pairK);
+  const zoneKA = pairK![0], zoneKB = pairK![1];
+  const worldOf = (w: World, a: { pos: { x: number; y: number } }): { x: number; y: number } => {
+    const seat = w.seamlessRegions.find(s => s.zoneId === w.zone.id)!;
+    return { x: a.pos.x + seat.originPx.x, y: a.pos.y + seat.originPx.y };
+  };
+  // Stand the frame: a door arrival into A (discrete-shaped) — the ring
+  // recenters, and the quiet beats behind the admissions stand each
+  // member's population (THE SLICING LAW: never on a mint beat).
+  wk.loadZone(zoneKA.id);
+  for (let i = 0; i < 40 && !wk.seamlessMints.get(zoneKB.id)?.populated; i++) wk.update(0.05);
+
+  // --- K1: population at admission. -----------------------------------------
+  const mintKB = wk.seamlessMints.get(zoneKB.id);
+  check('K1a the walk partner stands POPULATED after the quiet beats',
+    !!mintKB && mintKB.populated);
+  const tideKB = wk.actors.filter(a => a.ringRegion === zoneKB.id && !a.dead);
+  check('K1b the population stands tagged in the one actors array', tideKB.length > 0,
+    `${tideKB.length} tagged body(ies) for ${zoneKB.id}`);
+  const cellKB = mintKB!.cell;
+  const outOfCell = tideKB.filter(a => {
+    const wp = worldOf(wk, a);
+    return wp.x < cellKB.x0 - 40 || wp.x > cellKB.x1 + 40 || wp.y < cellKB.y0 - 40 || wp.y > cellKB.y1 + 40;
+  });
+  check('K1c every tagged body stands inside its OWN cell (active-frame coordinates)',
+    outOfCell.length === 0, `${outOfCell.length}/${tideKB.length} out of cell`);
+  const activeOwn = wk.actors.filter(a =>
+    !a.dead && a.team === 'enemy' && a.fromZoneGen && a.ringRegion === undefined);
+  check('K1d the active zone\'s own population stands UNTAGGED (loadZone owns it)',
+    activeOwn.length > 0, `${activeOwn.length} untagged base body(ies)`);
+
+  // --- K2: a re-fit re-deals ground, never bodies (the no-dup law). ---------
+  const idsBefore = tideKB.map(a => a.id).sort((x, y) => x - y).join(',');
+  mintKB!.mouthsKey = 'K2-stale'; // force the re-fit sweep's mouths-drift lane
+  wk.update(0.05);
+  const mintKB2 = wk.seamlessMints.get(zoneKB.id);
+  const idsAfter = wk.actors.filter(a => a.ringRegion === zoneKB.id && !a.dead)
+    .map(a => a.id).sort((x, y) => x - y).join(',');
+  check('K2a the staleness re-mints the record (the refit lane ran)',
+    !!mintKB2 && mintKB2.mouthsKey !== 'K2-stale');
+  check('K2b the re-fit keeps the SAME bodies — no duplicate spawn, no loss',
+    idsAfter === idsBefore && mintKB2!.populated,
+    `${idsAfter.split(',').length} body(ies) held`);
+
+  // --- K3: THE NO-FLASH PIN — a driven crossing keeps every id. -------------
+  // The invariant is REGION-LOCAL position: the rebase shifts the frame and
+  // a mid-walk re-fit shifts a cell's origin, but a body's seat WITHIN its
+  // region survives both by construction (the promote clamp alone may
+  // nudge). Rosters latch per approach tick (the D-rig's prevW idiom), so
+  // the compare spans exactly the crossing tick.
+  const seatKB = wk.seamlessRegions.find(s => s.zoneId === zoneKB.id)!;
+  const goalKB = {
+    x: seatKB.originPx.x + mintKB2!.span.w / 2,
+    y: seatKB.originPx.y + mintKB2!.span.h / 2,
+  };
+  const laneK = seatAtRimLane(wk, goalKB);
+  if (laneK) wk.player.pos = vec(laneK.x, laneK.y);
+  type KRow = { id: number; lx: number; ly: number };
+  let preB: KRow[] = [], preA: KRow[] = [];
+  const latchK = (): void => {
+    if (wk.zone.id !== zoneKA.id) return;
+    const sB = wk.seamlessRegions.find(s => s.zoneId === zoneKB.id);
+    const sA = wk.seamlessRegions.find(s => s.zoneId === zoneKA.id);
+    if (!sB || !sA) return;
+    preB = wk.actors.filter(a => a.ringRegion === zoneKB.id && !a.dead)
+      .map(a => {
+        const w = worldOf(wk, a);
+        return { id: a.id, lx: w.x - sB.originPx.x, ly: w.y - sB.originPx.y };
+      });
+    preA = wk.actors.filter(a =>
+      !a.dead && a.team === 'enemy' && a.fromZoneGen && a.ringRegion === undefined && a.defId && !a.doorId)
+      .map(a => {
+        const w = worldOf(wk, a);
+        return { id: a.id, lx: w.x - sA.originPx.x, ly: w.y - sA.originPx.y };
+      });
+  };
+  latchK();
+  const gotK = walkToward(wk, () => goalKB, () => wk.zone.id === zoneKB.id, 8000, latchK);
+  check('K3a the driven walk crosses into the populated partner', gotK && wk.zone.id === zoneKB.id);
+  const byId = new Map(wk.actors.map(a => [a.id, a]));
+  const sB2 = wk.seamlessRegions.find(s => s.zoneId === zoneKB.id);
+  const sA2 = wk.seamlessRegions.find(s => s.zoneId === zoneKA.id);
+  let bMissing = 0, bTagged = 0, bDrift = 0, bFar = 0;
+  for (const r of preB) {
+    const a = byId.get(r.id);
+    if (!a || a.dead) { bMissing++; continue; }
+    if (a.ringRegion !== undefined) { bTagged++; continue; }
+    const w = worldOf(wk, a);
+    const lx = w.x - sB2!.originPx.x, ly = w.y - sB2!.originPx.y;
+    const d = Math.hypot(lx - r.lx, ly - r.ly);
+    // The promote clamp may displace a body whose seat the arrival's own
+    // SITE DRESS claimed (occurrence/vocation rings — the mintMeetsGround
+    // idiom's exact class, its own 300px reach); a handful of such nudges
+    // is the site-tolerant law, a re-spawned roster is a wall of them.
+    if (d > 300) bFar++;
+    else if (d > 24) bDrift++;
+  }
+  check('K3b THE NO-FLASH PIN — every destination body PROMOTES in place (same ids, untagged, region-local seat held; ≤2 site-displaced)',
+    preB.length > 0 && !!sB2 && bMissing === 0 && bTagged === 0 && bDrift <= 2 && bFar === 0,
+    `${preB.length} body(ies): ${bMissing} missing, ${bTagged} still tagged, ${bDrift} site-displaced (≤300px), ${bFar} beyond`);
+  let aMissing = 0, aUntagged = 0, aDrift = 0;
+  for (const r of preA) {
+    const a = byId.get(r.id);
+    if (!a || a.dead) { aMissing++; continue; }
+    if (a.ringRegion !== zoneKA.id) { aUntagged++; continue; }
+    const w = worldOf(wk, a);
+    const lx = w.x - sA2!.originPx.x, ly = w.y - sA2!.originPx.y;
+    if (Math.hypot(lx - r.lx, ly - r.ly) > 1) aDrift++;
+  }
+  // COUNT PARITY: the departed ground's tagged roster equals the base set
+  // that demoted — a door-entered member left unmarked as populated would
+  // pour a SECOND population over its own demoted tide here (the live
+  // drive's find; the parity is the dup class's exact signature).
+  const aTaggedNow = wk.actors.filter(a => a.ringRegion === zoneKA.id && !a.dead
+    && a.team === 'enemy' && a.fromZoneGen).length;
+  check('K3c …and the departed zone\'s base bodies DEMOTE in place (same ids, tagged home, region-local seat exact, count parity)',
+    preA.length > 0 && !!sA2 && aMissing === 0 && aUntagged === 0 && aDrift === 0
+    && aTaggedNow === preA.length,
+    `${preA.length} body(ies): ${aMissing} missing, ${aUntagged} untagged/mistagged, ${aDrift} drifted; ${aTaggedNow} tagged now`);
+
+  // --- K4: the drowsy cadence divide + the rouse exception. -----------------
+  const tideKA = wk.actors.filter(a => a.ringRegion === zoneKA.id && !a.dead
+    && !a.aggroed && a.aiTargetId === undefined);
+  check('K4a drowsy bodies stand for the cadence pins', tideKA.length >= 2, `${tideKA.length} available`);
+  if (tideKA.length >= 2) {
+    const v1 = tideKA[0], v2 = tideKA[1];
+    v1.aiAnchor = undefined;
+    const BEATS = 8;
+    let served = 0, stampedEarly = false;
+    for (let i = 0; i < BEATS; i++) {
+      const skip = wk.seamlessDrowsyGate(v1);
+      updateAI(v1, wk, 0.05);
+      if (!skip) served++;
+      else if (v1.aiAnchor !== undefined && served === 0) stampedEarly = true;
+      wk.update(0.05);
+    }
+    check('K4b the drowsy divide holds at the updateAI gate (served beats ≤ half; the brain runs only when served)',
+      served >= 1 && served <= BEATS / 2 && !stampedEarly && v1.aiAnchor !== undefined,
+      `${served}/${BEATS} beats served`);
+    v2.aggroed = true;
+    let servedRoused = 0;
+    for (let i = 0; i < 4; i++) {
+      if (!wk.seamlessDrowsyGate(v2)) servedRoused++;
+      wk.update(0.05);
+    }
+    check('K4c a ROUSED body thinks every beat (the standing lock predicate lifts the divide)',
+      servedRoused === 4 && !wk.seamlessDrowsy(v2), `${servedRoused}/4 served`);
+    check('K4d the active zone\'s own bodies never meet the gate',
+      wk.actors.filter(a => a.ringRegion === undefined).every(a => !wk.seamlessDrowsyGate(a)));
+
+    // --- K5: the roused crossing law at the clamp. --------------------------
+    const cellKA = wk.seamlessMints.get(zoneKA.id)!.cell;
+    const agreedK = borderAgreedPoint(cellKA, wk.seamlessMints.get(zoneKB.id)!.cell);
+    check('K5a the pair shares an agreed border point', !!agreedK);
+    if (agreedK) {
+      const activeSeat = wk.seamlessRegions.find(s => s.zoneId === wk.zone.id)!;
+      // Seat the movers on the A-side apron just off the border; ask a step
+      // ONTO the agreed point (mouth-carved, walkable on both carves).
+      const n = agreedK.side === 'e' ? { x: 1, y: 0 } : agreedK.side === 'w' ? { x: -1, y: 0 }
+        : agreedK.side === 's' ? { x: 0, y: 1 } : { x: 0, y: -1 };
+      const seatL = vec(agreedK.x - n.x * 30 - activeSeat.originPx.x, agreedK.y - n.y * 30 - activeSeat.originPx.y);
+      const askL = vec(agreedK.x - activeSeat.originPx.x, agreedK.y - activeSeat.originPx.y);
+      v2.pos = vec(seatL.x, seatL.y); // roused (K4c set aggroed)
+      const gotRoused = wk.clampPos(vec(askL.x, askL.y), v2.radius, vec(seatL.x, seatL.y), { mover: v2 });
+      check('K5b a ROUSED foreign body crosses at the mouth (the rim law admits its step)',
+        Math.hypot(gotRoused.x - askL.x, gotRoused.y - askL.y) <= 0.01,
+        `Δ${Math.hypot(gotRoused.x - askL.x, gotRoused.y - askL.y).toFixed(2)}px`);
+      const v3 = tideKA.find(a => a !== v2 && !a.aggroed && a.aiTargetId === undefined);
+      if (v3) {
+        v3.pos = vec(seatL.x, seatL.y);
+        const gotDrowsy = wk.clampPos(vec(askL.x, askL.y), v3.radius, vec(seatL.x, seatL.y), { mover: v3 });
+        const homeKA = wk.seamlessRegions.find(s => s.zoneId === zoneKA.id)!;
+        const inHome = ((): boolean => {
+          const wpx = gotDrowsy.x + activeSeat.originPx.x, wpy = gotDrowsy.y + activeSeat.originPx.y;
+          return wpx >= cellKA.x0 - 1 && wpx <= cellKA.x1 + 1 && wpy >= cellKA.y0 - 1 && wpy <= cellKA.y1 + 1
+            && !!homeKA;
+        })();
+        check('K5c an UN-ROUSED body confines to its own region (the drowsy tide never leaves home)',
+          inHome, `resolved ${gotDrowsy.x.toFixed(0)},${gotDrowsy.y.toFixed(0)}`);
+      } else {
+        check('K5c an UN-ROUSED body confines to its own region (the drowsy tide never leaves home)',
+          true, 'vacuous — no second drowsy body free');
+      }
+      // Off-mouth: hunt a refusing target on the destination's border band
+      // (a wall cell or a dress trunk — the J2 idiom, roused mover).
+      const mintB3 = wk.seamlessMints.get(zoneKB.id)!;
+      const seatB3 = wk.seamlessRegions.find(s => s.zoneId === zoneKB.id)!;
+      let wallAsk: Vec2 | null = null;
+      const gB = mintB3.layout.walk;
+      if (gB) {
+        const along = agreedK.side === 'n' || agreedK.side === 's' ? 'x' : 'y';
+        for (let off = 400; off < 2400 && !wallAsk; off += 60) {
+          for (const sgn of [1, -1]) {
+            const wx2 = along === 'x' ? agreedK.x + sgn * off : agreedK.x;
+            const wy2 = along === 'y' ? agreedK.y + sgn * off : agreedK.y;
+            const lx = wx2 - seatB3.originPx.x + n.x * 40, ly = wy2 - seatB3.originPx.y + n.y * 40;
+            if (lx < 8 || ly < 8 || lx > mintB3.span.w - 8 || ly > mintB3.span.h - 8) continue;
+            if (!gB.isWalkable(lx, ly)) {
+              wallAsk = vec(lx + seatB3.originPx.x - activeSeat.originPx.x, ly + seatB3.originPx.y - activeSeat.originPx.y);
+              break;
+            }
+          }
+        }
+      }
+      // An open layout may carry no wall cell on the border band — the
+      // enclosure's DRESS TRUNKS are then the refusing target (the far-wall
+      // law's second read): ask straight into a border body off-gap.
+      if (!wallAsk) {
+        const dRow = mintB3.dress.find(b =>
+          b.x > 30 && b.y > 30 && b.x < mintB3.span.w - 30 && b.y < mintB3.span.h - 30);
+        if (dRow) {
+          wallAsk = vec(
+            dRow.x + seatB3.originPx.x - activeSeat.originPx.x,
+            dRow.y + seatB3.originPx.y - activeSeat.originPx.y);
+        }
+      }
+      if (wallAsk) {
+        const fromW = vec(wallAsk.x - n.x * 60, wallAsk.y - n.y * 60);
+        v2.pos = vec(fromW.x, fromW.y);
+        const gotWall = wk.clampPos(vec(wallAsk.x, wallAsk.y), v2.radius, fromW, { mover: v2 });
+        check('K5d …but CANNOT cross off-mouth (the far-wall law refuses the roused step too)',
+          Math.hypot(gotWall.x - wallAsk.x, gotWall.y - wallAsk.y) > 0.5,
+          `asked into wall, held ${Math.hypot(gotWall.x - wallAsk.x, gotWall.y - wallAsk.y).toFixed(1)}px short`);
+      } else {
+        check('K5d …but CANNOT cross off-mouth (the far-wall law refuses the roused step too)',
+          true, 'vacuous — no wall cell found on the border band (open layout)');
+      }
+    }
+
+    // --- K6: the bank — a wounded body survives demotion to re-admission. ---
+    const wounded = tideKA.find(a => a !== v2 && a.defId && a.fromZoneGen) ?? v2;
+    const seatKA6 = wk.seamlessRegions.find(s => s.zoneId === zoneKA.id)!;
+    const w0 = Math.max(1, Math.round(wounded.life * 0.5731 * 10) / 10);
+    wounded.life = w0;
+    const expectPos = {
+      x: wounded.pos.x + wk.seamlessRegions.find(s => s.zoneId === wk.zone.id)!.originPx.x - seatKA6.originPx.x,
+      y: wounded.pos.y + wk.seamlessRegions.find(s => s.zoneId === wk.zone.id)!.originPx.y - seatKA6.originPx.y,
+    };
+    const woundedDef = wounded.defId!;
+    wk.loadZone(zoneKA.id); // a DOOR arrival: the tide banks, then the load replays A's own bank
+    // (zoneMemory is private — the REPLAY is the observable pin: bank →
+    // memo → arrival materialization, the whole road in one read.)
+    const replayed = wk.actors.find(a =>
+      !a.dead && a.team === 'enemy' && a.fromZoneGen && a.ringRegion === undefined
+      && a.defId === woundedDef && Math.abs(a.life - w0) <= 0.101);
+    check('K6a THE BANK — a body wounded across the border keeps its wound through demotion (life survives to re-admission)',
+      !!replayed, replayed
+        ? `${woundedDef} replayed at life ${replayed.life.toFixed(1)} (banked ${w0})`
+        : `${woundedDef} at life ${w0} not found among the replayed`);
+    check('K6b …at its remembered seat (the bank wrote region-local coordinates)',
+      !!replayed && Math.hypot(replayed.pos.x - expectPos.x, replayed.pos.y - expectPos.y) <= 26,
+      replayed ? `Δ${Math.hypot(replayed.pos.x - expectPos.x, replayed.pos.y - expectPos.y).toFixed(1)}px` : 'no body');
+
+    // --- K7: THE SCOPING PIN — away bodies never gate the active objective. -
+    for (let i = 0; i < 24 && !wk.actors.some(a => a.ringRegion !== undefined && !a.dead); i++) wk.update(0.05);
+    const awayStand = wk.actors.filter(a => a.ringRegion !== undefined && !a.dead).length;
+    const keepObj = zoneKA.objective;
+    zoneKA.objective = { kind: 'clear', all: true } as ZoneDef['objective'];
+    wk.objectiveDone = false;
+    // The player "clears the floor": every ACTIVE-zone hostile falls; the
+    // neighbor tides stand untouched, visible across the borders.
+    wk.actors = wk.actors.filter(a =>
+      a === wk.player || !!a.owner || a.ringRegion !== undefined || a.team !== 'enemy');
+    for (let i = 0; i < 6 && !wk.objectiveDone; i++) wk.update(0.05);
+    check('K7 THE SCOPING PIN — the emptied active floor completes with the away tide still standing',
+      wk.objectiveDone && awayStand > 0,
+      `${awayStand} away body(ies) standing when the clear completed`);
+    zoneKA.objective = keepObj;
+  }
+
+  // --- K8: THE MODE LAW — discrete play wears no tags, meets no gate. -------
+  {
+    seedGlobalRandom(GSEED ^ 0x6c);
+    const wd6 = makeSimWorld('warrior', WSEED ^ 0x6b);
+    wd6.loadZone(START_ZONE);
+    for (let i = 0; i < 4; i++) wd6.update(0.05);
+    // The town floor is passive — sample a wilds monster for the brain pin.
+    const wildsK = pickWalkPair(wd6);
+    if (wildsK) wd6.loadZone(wildsK[0].id);
+    const anyTag = wd6.actors.some(a => a.ringRegion !== undefined);
+    const anyGate = wd6.actors.some(a => wd6.seamlessDrowsyGate(a) || wd6.seamlessDrowsy(a));
+    const mon = wd6.actors.find(a => a.team === 'enemy' && !a.dead && !a.passive && !a.ambushArmed);
+    let discreteThinks = true;
+    if (mon) {
+      mon.aiAnchor = undefined;
+      updateAI(mon, wd6, 0.05);
+      discreteThinks = mon.aiAnchor !== undefined;
+    }
+    check('K8 THE MODE LAW — discrete play wears no ring tags and the drowsy gate never engages',
+      !wd6.seamless && !anyTag && !anyGate && discreteThinks,
+      mon ? '' : '(no monster sampled — tag/gate pins carried)');
   }
 }
 

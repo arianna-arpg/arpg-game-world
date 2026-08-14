@@ -414,6 +414,11 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // without this line the brainless hero body would fall through to the
   // DEFAULT_BRAIN approach-and-attack bundle the moment its seat left it.
   if (actor.dead || actor.downed || world.seatOf(actor) || actor.vacated) return;
+  // THE DROWSY RING (seamless M2 wave 6, docs/design/seamless-world.md): a
+  // resident neighbor's un-roused body thinks on a divided clock — the
+  // world-side gate owns the whole law (mode flag, ring tag, the standing
+  // lock predicate, the cadence stagger); discrete play reads one false.
+  if (world.seamlessDrowsyGate(actor)) return;
   // THE TIMEFLOW GATE (engine/timeflow.ts): a held body doesn't scheme —
   // stasis and a paused world skip the brain outright; fractional time
   // thinks (and so paces its cadences and kernels) in slow motion. Gated
@@ -543,7 +548,10 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // shiftable, so an aloft phase wears heavy coupling and a grounded
   // feeding window sheds it. steerMove folds it into every self-directed
   // step; undefined = not a flock body, one branch of cost.
-  actor.aiFlock = tuning.behavior?.flock;
+  // THE DROWSY POSTURE sheds fine flocking (seamless wave 6 — the lite
+  // tier's batch-steering read): a ring-tagged un-roused body wanders
+  // plain; the murmuration returns the beat it rouses.
+  actor.aiFlock = world.seamlessDrowsy(actor) ? undefined : tuning.behavior?.flock;
 
   // THE WANTS (BrainDef.drives): meters drift on their clocks — events jump
   // them elsewhere (World.bumpDrives: kills feed, wounds sting). Seeded on
@@ -1569,17 +1577,16 @@ function acquireTarget(
   // bodies that alone was a meaningful slice of the sim's measured
   // garbage-per-second (GC pressure IS the crowd-fight stutter on the
   // engines that collect it slowest). Same predicate as enemiesOf, inline,
-  // cheapest checks first; behavior byte-identical.
-  const roster = world.actors;
+  // cheapest checks first; behavior byte-identical. The roster consult is
+  // world-side (seamless wave 6's DIM EYE): a drowsy scanner walks only
+  // its neighborhood; everyone else receives world.actors itself.
+  const roster = world.aiScanRoster(actor);
   for (let ri = 0; ri < roster.length; ri++) {
     const e = roster[ri];
     if (e.dead || e.untargetable || e.downed) continue;
     // Scenery is not prey: nobody dedicates their life to a barrel,
     // and the townsfolk are not on the menu.
     if (e.passive) continue;
-    if (!(world.hostileTo(actor, e)
-      || (e.construct?.breakable !== undefined && e.owner === actor))) continue;
-    if (e.sheet.get('invisible') > 0) continue;
     // SEGMENT FABRIC: a segmented creature is engaged by its NEAREST
     // hittable body — the coil beside you counts, not only the far head.
     // Detection, range gates and kiting all inherit this d. Perception
@@ -1593,6 +1600,15 @@ function acquireTarget(
       alerted || Math.abs(angleDiff(actor.facing, angleTo(actor.pos, e.pos))) < arcHalf,
       rearMul);
     if (d > reach) continue;
+    // The DIPLOMACY read runs only inside reach (seamless wave 6's perf
+    // find, a free win for the discrete crowd too): hostileTo's faction
+    // stance walk was the scan's hottest line, paid per ROSTER row — a
+    // continent of drowsy neighbors made it the whole frame. Same
+    // predicate set, distance first; behavior byte-identical (all three
+    // are pure filters).
+    if (!(world.hostileTo(actor, e)
+      || (e.construct?.breakable !== undefined && e.owner === actor))) continue;
+    if (e.sheet.get('invisible') > 0) continue;
     if (losGated) {
       if (e.id !== actor.aiTargetId) {
         if (!world.losCached(actor, e)) continue; // unseen strangers don't exist

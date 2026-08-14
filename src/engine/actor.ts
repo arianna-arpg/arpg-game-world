@@ -599,6 +599,20 @@ export class Actor {
   leap?: LeapState;
   /** Swarm/bomber brains: once they've seen you, they never stop coming. */
   aggroed = false;
+  /** THE RING TAG (seamless M2 wave 6, docs/design/seamless-world.md): the
+   *  resident-ring region this body belongs to, set ONLY on bodies standing
+   *  in a NEIGHBOR region at drowsy cadence — the active zone's own bodies
+   *  (and every body in discrete play) leave it undefined, so the discrete
+   *  path never carries a tag and every consumer clause reads one undefined
+   *  (THE MODE LAW). Maintained by the streamer: the population beat stamps
+   *  it, the threshold rebase swaps it (dest promotes to undefined, the
+   *  departed zone's base bodies demote onto it), demotion banks the body
+   *  to zone memory and removes it. A roused body (the standing lock
+   *  predicate — aggroed / aiTargetId) KEEPS the tag while fighting across
+   *  borders: the tag is provenance (whose ledger owns this body), never
+   *  posture — THE SCOPING LAW reads it so a foreign body can neither
+   *  stall nor complete another zone's objective. */
+  ringRegion?: string;
   /** Generic brain state-machine scratch (skirmish/assassin phases). */
   aiPhase = '';
   aiTimer = 0;
