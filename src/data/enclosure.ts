@@ -28,13 +28,40 @@
 // solid exactly where it IS solid; an authored sparse density opens real
 // gaps a walker can honestly thread. ALL DIALS + ROWS FLAGGED (unblessed;
 // her word moves them).
+//
+// THE TREATMENT CLASS (M2 wave 7 — HER BORDER RULING, 2026-08-13): "have the
+// borders themselves be something similar to the massif structures OR
+// potentially border rocks, with the biome itself possibly being the thing
+// doing that placement." The border vocabulary carries TWO classes:
+//   'bodies' — the landed line above (border rocks; open/arid country);
+//   'massif' — rim MASS: a coherent impassable BAND of a REGISTERED region
+//     kind (world/regions.ts — the massif fabric's own doctrine: collision,
+//     shot/sight policy and the whole drawn look ride the region row) carved
+//     into the zone's OWN walk grid along the cell perimeter, gapped at
+//     every exit through the same gap ladder the body line uses. A massif
+//     zone plants NO body line — the class replaces it.
+// THE CLASS DERIVATION rides massKitFor (THE SHARING SEAM, below): the
+// tileset's own mass-kit vocabulary elects the class — grown texture
+// (tree/brush glyphs) derives massif, standing-body texture (rock/cactus/
+// dead-tree) derives bodies — so the border and the between-mass speak ONE
+// country by construction. Deserts land bodies-rocks; jungle lands massif
+// under the derivation (her named exemplars).
 // ---------------------------------------------------------------------------
 
 import { TILESETS } from './tilesets';
 
 /** One tileset's AUTHORED border row (the lever). A row with `none: true` —
- *  or without a body — is an authored refusal. */
+ *  or without a body OR a massif class — is an authored refusal. */
 export interface EnclosureRow {
+  /** THE TREATMENT CLASS (wave 7): 'massif' carves rim mass instead of
+   *  planting the body line. Absent = 'bodies' (the landed line) when body
+   *  fields stand; an unauthored tileset derives its class (see
+   *  enclosureRowFor). */
+  treatment?: 'bodies' | 'massif';
+  /** Massif rows: the REGISTERED region kind the rim band paints (the
+   *  collision/shot/sight/look truth — world/regions.ts). Absent = derived
+   *  from the tileset's kit class (ENCLOSURE_MASSIF_CFG.regionByClass). */
+  massifRegion?: string;
   /** Doodad kind planted as the border body — a registered blocking kind
    *  with no rule effect (see the law notes above). */
   kind?: string;
@@ -52,14 +79,25 @@ export interface EnclosureRow {
   none?: boolean;
 }
 
-/** A RESOLVED border treatment (what enclosureRowFor answers): the body is
- *  always present — refusals resolve to null instead. */
+/** A RESOLVED bodies-class treatment (the landed line). */
 export interface EnclosureBorder {
+  treatment: 'bodies';
   kind: string;
   radius: [number, number];
   spacingMul?: number;
   density?: number;
 }
+
+/** A RESOLVED massif-class treatment (wave 7): the rim band's region. */
+export interface EnclosureMassif {
+  treatment: 'massif';
+  /** Registered region kind (world/regions.ts) — the band's one truth. */
+  region: string;
+}
+
+/** What enclosureRowFor answers: one of the two classes, or null (an
+ *  authored refusal — the tileset's own country is the enclosure). */
+export type EnclosureTreatment = EnclosureBorder | EnclosureMassif;
 
 /** THE DRESS DIALS — ALL FLAGGED (unblessed; her word moves them). */
 export const ENCLOSURE_CFG = {
@@ -93,37 +131,93 @@ export const ENCLOSURE_STAMP_BODIES: Record<string, { kind: string; radius: [num
 };
 
 /** The last-resort border body — every biome has stone. FLAGGED. */
-export const ENCLOSURE_DEFAULT: EnclosureBorder = { kind: 'rock', radius: [20, 32] };
+export const ENCLOSURE_DEFAULT: EnclosureBorder = { treatment: 'bodies', kind: 'rock', radius: [20, 32] };
+
+/** THE MASSIF-TREATMENT DIALS (wave 7) — ALL FLAGGED (unblessed; her word
+ *  moves them). The band's geometry: a guaranteed BASE STRIP (no walkable
+ *  pinhole can survive inside the band, by construction) plus overlapping
+ *  inner LOBES on the treatment's own seeded stream — the organic edge, the
+ *  massif fabric's blob vocabulary at band grain. */
+export const ENCLOSURE_MASSIF_CFG = {
+  /** Guaranteed strip depth from the cell rim (px). */
+  bandBasePx: 55,
+  /** Lobe radius band [min, max] px — lobes half-embed in the strip and
+   *  poke inward, so the band's inner edge wobbles between bandBasePx and
+   *  ~bandBasePx + lobeJitterPx + max lobe radius. */
+  bandLobeR: [45, 85] as [number, number],
+  /** Lobe center spacing = mean lobe radius × this (< 2 ⇒ lobes overlap —
+   *  a coherent mass, never a dotted line). */
+  lobeSpacingMul: 1.35,
+  /** Per-lobe inward center jitter (px). */
+  lobeJitterPx: 16,
+  /** THE WALLED DETECT's sample ring inset for the massif class (px) — the
+   *  bodies class samples at its own body radius; the band samples here. */
+  detectInsetPx: 34,
+  /** THE CLASS DERIVATION threshold: grown-texture share of the tileset's
+   *  mass kit at/above which the border derives 'massif'. */
+  massifShareMin: 0.6,
+  /** Derived massif REGION by the kit's dominant texture class: grown
+   *  country walls itself in hedge, stone country in crag (the massif
+   *  fabric's reference regions — both true walls to bodies; hedge blocks
+   *  sight and threads shots, crag stops all three, per their rows). */
+  regionByClass: { grown: 'hedgewall', stone: 'crag' } as const,
+  /** The rim-mass stream's salt (pure f(def.seed) — the dress's idiom). */
+  salt: 0x51a90b7,
+} as const;
+
+/** Kit-glyph → texture class for THE CLASS DERIVATION (glyph kinds are
+ *  MASS_STAMP_GLYPHS' own vocabulary — THE SHARING SEAM). Standing snags
+ *  and stones read as BODIES country; canopy and scrub read as GROWN mass.
+ *  Unknown kinds count stone (the default kit derives bodies — an unknown
+ *  tileset keeps the landed rock line). FLAGGED. */
+export const ENCLOSURE_CLASS_OF: Record<string, 'grown' | 'stone'> = {
+  tree: 'grown',
+  brush: 'grown',
+  rock: 'stone',
+  cactus: 'stone',
+  dead_tree: 'stone',
+};
 
 /** Authored per-tileset rows (the lever, exemplars — ALL FLAGGED):
  *  - downs: a low drystone line with real gaps (the barrow country's field
  *    walls), where the derivation would fence it in boulders;
  *  - mire: a dead-tree brake — the marsh's rim is drowned timber, not the
- *    stone its scatter rows would elect;
- *  - jungle: authored refusal — the thicket IS the border (its walled
- *    layouts are also caught by the detect; the row states the intent). */
+ *    stone its scatter rows would elect.
+ *  Jungle's old authored `none` is gone on purpose (wave 7 — her ruling):
+ *  the green country now DERIVES the massif class from its own vocabulary
+ *  (the biome is the thing doing the placement), and `none` survives as
+ *  the vocabulary's refusal face for any tileset that wants it. */
 export const ENCLOSURE_ROWS: Record<string, EnclosureRow> = {
   downs: { kind: 'rock', radius: [16, 24], density: 0.85 },
   mire: { kind: 'dead_tree', radius: [20, 30] },
-  jungle: { none: true },
 };
 
-/** Resolve a tileset's border treatment: authored row ▷ theme derivation ▷
- *  the default. Null = no dress (an authored `none` — or a bodyless row).
- *  Pure f(registry) — deterministic, no rng; the engine seeds body rolls
- *  itself. */
-export function enclosureRowFor(tilesetId: string | undefined): EnclosureBorder | null {
-  const authored = tilesetId ? ENCLOSURE_ROWS[tilesetId] : undefined;
-  if (authored) {
-    if (authored.none || !authored.kind || !authored.radius) return null;
-    return { kind: authored.kind, radius: authored.radius, spacingMul: authored.spacingMul, density: authored.density };
+/** THE CLASS DERIVATION (wave 7): the tileset's own mass kit (massKitFor —
+ *  authored kit or stamp derivation, THE SHARING SEAM) elects the treatment
+ *  class by texture: grown share ≥ massifShareMin ⇒ massif, else bodies.
+ *  The derived massif REGION follows the DOMINANT class (grown ⇒ hedge,
+ *  stone ⇒ crag) so an authored massif row on stony country still walls
+ *  itself in stone. Pure f(registry). */
+function enclosureClassOf(tilesetId: string | undefined): { cls: 'bodies' | 'massif'; region: string } {
+  let grown = 0, stone = 0;
+  for (const r of massKitFor(tilesetId)) {
+    if (ENCLOSURE_CLASS_OF[r.kind] === 'grown') grown += r.weight;
+    else stone += r.weight;
   }
-  const ts = tilesetId ? TILESETS[tilesetId] : undefined;
-  if (!ts) return ENCLOSURE_DEFAULT;
-  // THE THEME DERIVATION: tally the tileset's own base+common stamp rows
-  // (variants say what CHANGES; the base says what the biome IS) against
-  // the stamp-body map, weighted by mean count. Heaviest body wins; its
-  // radius comes from the heaviest single electing row that stamped one.
+  const total = grown + stone;
+  const share = total > 0 ? grown / total : 0;
+  return {
+    cls: share >= ENCLOSURE_MASSIF_CFG.massifShareMin ? 'massif' : 'bodies',
+    region: ENCLOSURE_MASSIF_CFG.regionByClass[grown >= stone ? 'grown' : 'stone'],
+  };
+}
+
+/** THE THEME DERIVATION's body election (the landed wave-5 tally): the
+ *  tileset's own base+common stamp rows (variants say what CHANGES; the
+ *  base says what the biome IS) against the stamp-body map, weighted by
+ *  mean count. Heaviest body wins; its radius comes from the heaviest
+ *  single electing row that stamped one. */
+function electBodyRow(ts: (typeof TILESETS)[string]): EnclosureBorder {
   const tally = new Map<string, { weight: number; radius: [number, number]; radiusW: number }>();
   for (const row of [...ts.layout, ...(ts.common ?? [])]) {
     const body = ENCLOSURE_STAMP_BODIES[row.kind];
@@ -143,7 +237,50 @@ export function enclosureRowFor(tilesetId: string | undefined): EnclosureBorder 
       best = { kind, weight: t.weight, radius: t.radius };
     }
   }
-  return best ? { kind: best.kind, radius: best.radius } : ENCLOSURE_DEFAULT;
+  return best
+    ? { treatment: 'bodies', kind: best.kind, radius: best.radius }
+    : ENCLOSURE_DEFAULT;
+}
+
+/** Resolve a tileset's border treatment: authored row ▷ THE CLASS
+ *  DERIVATION (massif) ▷ THE THEME DERIVATION (body election) ▷ the
+ *  default. Null = no dress (an authored `none` — or a bodyless bodies
+ *  row). Pure f(registry) — deterministic, no rng; the engine seeds band
+ *  and body rolls itself. */
+export function enclosureRowFor(tilesetId: string | undefined): EnclosureTreatment | null {
+  const authored = tilesetId ? ENCLOSURE_ROWS[tilesetId] : undefined;
+  if (authored) {
+    if (authored.none) return null;
+    if (authored.treatment === 'massif') {
+      return { treatment: 'massif', region: authored.massifRegion ?? enclosureClassOf(tilesetId).region };
+    }
+    if (!authored.kind || !authored.radius) return null;
+    return { treatment: 'bodies', kind: authored.kind, radius: authored.radius, spacingMul: authored.spacingMul, density: authored.density };
+  }
+  const ts = tilesetId ? TILESETS[tilesetId] : undefined;
+  if (!ts) return ENCLOSURE_DEFAULT;
+  const derived = enclosureClassOf(tilesetId);
+  if (derived.cls === 'massif') return { treatment: 'massif', region: derived.region };
+  return electBodyRow(ts);
+}
+
+/** The BODY-LINE half alone (wave 7 — the massif class's degradation lane:
+ *  convex grid-less ground cannot carve a band, so the treatment falls back
+ *  to the tileset's own body line rather than leaving the rim bare; an
+ *  authored `none` still refuses). */
+export function enclosureBodiesFor(tilesetId: string | undefined): EnclosureBorder | null {
+  const authored = tilesetId ? ENCLOSURE_ROWS[tilesetId] : undefined;
+  if (authored) {
+    if (authored.none) return null;
+    if (authored.kind && authored.radius) {
+      return { treatment: 'bodies', kind: authored.kind, radius: authored.radius, spacingMul: authored.spacingMul, density: authored.density };
+    }
+    // An authored massif row without body fields degrades through the
+    // election below — the class asked for mass; the fallback still fences.
+  }
+  const ts = tilesetId ? TILESETS[tilesetId] : undefined;
+  if (!ts) return ENCLOSURE_DEFAULT;
+  return electBodyRow(ts);
 }
 
 // ---------------------------------------------------------------------------

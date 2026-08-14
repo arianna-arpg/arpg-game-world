@@ -83,6 +83,20 @@
 //   TICK ADMITS NOTHING (a threshold tick's load tail defers its admission
 //   slice one beat), and the discrete world stays inert.
 //
+// RIG L — THE BORDER TREATMENT (M2 wave 7): THE CLASS DERIVATION (jungle
+//   derives massif, desert derives bodies-rocks — her exemplars; authored
+//   overrides win with their named region; the `none` refusal face and the
+//   registered-region law hold), THE RIM MASS on a DIRECTED member (a real
+//   def re-tileseted to a derived massif-class vocabulary on an open-rim
+//   grid recipe: the band dominates the rim as ONE region, unbroken
+//   stretches, no body line, every agreed window walkable through the whole
+//   band reach — the walled-member-with-empty-dress class J3e could only
+//   name vacuously, made real), THE FREE LAWS (the far-wall refusal ON the
+//   band from tissue, the agreed gap admitting, the population tide never
+//   standing in rim mass), THE ARRIVAL (record == live at REGION grain
+//   through both mint chokepoints), and THE MODE LAW (a discrete load of
+//   the same massif-class def carves no band).
+//
 // Layout GEOMETRY is compared as (kind, pos, radius, tier) rows: loadZone
 // deliberately randomizes post-mint runtime fields (DoodadEffect first
 // cooldowns), so raw-object equality would pin the wrong thing.
@@ -97,8 +111,9 @@ import { borderAgreedPoint, cellsShareBorder, foldCells, type CellSeat } from '.
 import { PORTAL_EDGE_INSET } from '../src/engine/worldgen';
 import { getTissueSampler, setTissueSampler, PARTITION_CFG, SEAMLESS_CFG, type TissueSampler } from '../src/world/seamless';
 import { buildTissueSampler, TISSUE_CFG } from '../src/world/tissue';
-import { ENCLOSURE_CFG, enclosureRowFor } from '../src/data/enclosure';
+import { ENCLOSURE_CFG, ENCLOSURE_MASSIF_CFG, ENCLOSURE_ROWS, enclosureRowFor } from '../src/data/enclosure';
 import { GridWalkField } from '../src/world/gridWalk';
+import { regionKind } from '../src/world/regions';
 import { OCEAN_BIOME, biomeAt } from '../src/world/biomes';
 import { elevationAt } from '../src/world/relief';
 import { START_ZONE, type ZoneDef } from '../src/data/zones';
@@ -1619,12 +1634,17 @@ const rawSeatOf = (def: ZoneDef, i: number, arena: { w: number; h: number }): { 
 // the border dress / the rebase-tick admission skip) ---------------------------
 
 {
-  // Data pins first (pure registry reads, no staging).
+  // Data pins first (pure registry reads, no staging). Wave 7 moved jungle
+  // off its authored `none` (the class derivation now lands massif — RIG L
+  // pins it); the refusal FACE survives as vocabulary, pinned on a
+  // synthetic authored row through the real resolver path.
+  ENCLOSURE_ROWS['__probe_none'] = { none: true };
   check('J0a the authored `none` row refuses dress (the lever\'s refusal face)',
-    enclosureRowFor('jungle') === null);
+    enclosureRowFor('__probe_none') === null);
+  delete ENCLOSURE_ROWS['__probe_none'];
   const defRow = enclosureRowFor(undefined);
   check('J0b an unknown tileset resolves to the default border body',
-    !!defRow && defRow.kind === 'rock');
+    !!defRow && defRow.treatment === 'bodies' && defRow.kind === 'rock');
 
   ws.loadZone(zoneA!.id);
   ringSettle(ws);
@@ -1780,9 +1800,14 @@ const rawSeatOf = (def: ZoneDef, i: number, arena: { w: number; h: number }): { 
   // --- J3: THE ENCLOSURE DRESS — record rows in the rim band, live bodies
   // matching, gaps at every exit seat, walled/`none` layouts bare. -------------
   {
-    const row = enclosureRowFor(ws.zoneMap[activeId].tileset);
-    check('J3a the active zone resolves a border row (derivation or author)', !!row,
-      row ? `${row.kind} r[${row.radius[0]}..${row.radius[1]}] on '${ws.zoneMap[activeId].tileset ?? '(none)'}'` : 'null row');
+    const row0 = enclosureRowFor(ws.zoneMap[activeId].tileset);
+    check('J3a the active zone resolves a border row (derivation or author)', !!row0,
+      row0
+        ? (row0.treatment === 'bodies'
+          ? `${row0.kind} r[${row0.radius[0]}..${row0.radius[1]}] on '${ws.zoneMap[activeId].tileset ?? '(none)'}'`
+          : `massif ${row0.region} on '${ws.zoneMap[activeId].tileset ?? '(none)'}' (band pins live in RIG L)`)
+        : 'null row');
+    const row = row0 && row0.treatment === 'bodies' ? row0 : null;
     if (row && mintAJ.dress.length) {
       const [, r1] = row.radius;
       const bandMax = r1 + ENCLOSURE_CFG.insetPad + ENCLOSURE_CFG.jitterPx + 1;
@@ -1827,12 +1852,14 @@ const rawSeatOf = (def: ZoneDef, i: number, arena: { w: number; h: number }): { 
         `${gapViolations} body(ies) inside a gap window (gapHalf ${gapHalf.toFixed(0)}px)`);
     }
     // Walled members plant nothing (probe-side re-derivation of the detect).
+    // Massif-class members carry their band instead of a dress by LAW — the
+    // walled-with-empty-dress assertion for that class lives in RIG L.
     let walledSeen = 0, walledDressed = 0;
     for (const [zid, m] of ws.seamlessMints) {
       const g = m.layout.walk;
       if (!(g instanceof GridWalkField)) continue;
       const zrow = enclosureRowFor(ws.zoneMap[zid]?.tileset);
-      if (!zrow) continue;
+      if (!zrow || zrow.treatment !== 'bodies') continue;
       const ringIn = zrow.radius[1] + ENCLOSURE_CFG.insetPad;
       const w = m.cell.x1 - m.cell.x0, h = m.cell.y1 - m.cell.y0;
       let solid = 0, total = 0;
@@ -1995,8 +2022,29 @@ const rawSeatOf = (def: ZoneDef, i: number, arena: { w: number; h: number }): { 
     x: seatKB.originPx.x + mintKB2!.span.w / 2,
     y: seatKB.originPx.y + mintKB2!.span.h / 2,
   };
-  const laneK = seatAtRimLane(wk, goalKB);
-  if (laneK) wk.player.pos = vec(laneK.x, laneK.y);
+  // Wave 7 — the borders wear TREATMENTS (this pair's meadow/deepwood both
+  // derive massif rims): the driven walk goes the way a player goes,
+  // THROUGH the agreed gap (the D2 walk itself), never cross-country into
+  // the band. Seat on the A-side corridor and drive out along the way; the
+  // no-flash pins below are untouched.
+  const agreedK3 = borderAgreedPoint(wk.seamlessMints.get(zoneKA.id)!.cell, mintKB2!.cell);
+  const nK3 = agreedK3
+    ? (agreedK3.side === 'e' ? { x: 1, y: 0 } : agreedK3.side === 'w' ? { x: -1, y: 0 }
+      : agreedK3.side === 's' ? { x: 0, y: 1 } : { x: 0, y: -1 })
+    : null;
+  const goalK3 = (): { x: number; y: number } =>
+    agreedK3 && nK3 && wk.zone.id === zoneKA.id
+      ? { x: agreedK3.x + nK3.x * 400, y: agreedK3.y + nK3.y * 400 }
+      : goalKB;
+  const seatA3 = wk.seamlessRegions.find(s => s.zoneId === zoneKA.id)!;
+  if (agreedK3 && nK3) {
+    wk.player.pos = vec(
+      agreedK3.x - nK3.x * 150 - seatA3.originPx.x,
+      agreedK3.y - nK3.y * 150 - seatA3.originPx.y);
+  } else {
+    const laneK = seatAtRimLane(wk, goalKB);
+    if (laneK) wk.player.pos = vec(laneK.x, laneK.y);
+  }
   type KRow = { id: number; lx: number; ly: number };
   let preB: KRow[] = [], preA: KRow[] = [];
   const latchK = (): void => {
@@ -2017,7 +2065,7 @@ const rawSeatOf = (def: ZoneDef, i: number, arena: { w: number; h: number }): { 
       });
   };
   latchK();
-  const gotK = walkToward(wk, () => goalKB, () => wk.zone.id === zoneKB.id, 8000, latchK);
+  const gotK = walkToward(wk, goalK3, () => wk.zone.id === zoneKB.id, 8000, latchK);
   check('K3a the driven walk crosses into the populated partner', gotK && wk.zone.id === zoneKB.id);
   const byId = new Map(wk.actors.map(a => [a.id, a]));
   const sB2 = wk.seamlessRegions.find(s => s.zoneId === zoneKB.id);
@@ -2232,6 +2280,263 @@ const rawSeatOf = (def: ZoneDef, i: number, arena: { w: number; h: number }): { 
       !wd6.seamless && !anyTag && !anyGate && discreteThinks,
       mon ? '' : '(no monster sampled — tag/gate pins carried)');
   }
+}
+
+// --- RIG L: THE BORDER TREATMENT (M2 wave 7 — the massif rim / the class
+// derivation / the free laws). Runs in its OWN twin worlds (the K idiom), so
+// the directed def mutations never leak into earlier rigs' ground. The
+// directed member re-tilesets a REAL def to a derived massif-class
+// vocabulary ('grassland') on an open-rim GRID recipe ('massif'), with its
+// interior mass pool pinned to crag tors — so the band's own region
+// ('hedgewall') is uniquely the treatment's paint, distinguishable from
+// every layout-born wall. -----------------------------------------------------
+
+{
+  // --- L0: the data pins (pure registry reads). -------------------------------
+  const bandRegion = 'hedgewall';
+  const jRow = enclosureRowFor('jungle');
+  check('L0a THE CLASS DERIVATION lands massif for jungle (her exemplar — the biome places its own border)',
+    !!jRow && jRow.treatment === 'massif' && jRow.region === bandRegion,
+    jRow ? (jRow.treatment === 'massif' ? `region '${jRow.region}'` : `bodies '${jRow.kind}'`) : 'null row');
+  const dRow = enclosureRowFor('desert');
+  check('L0b …and bodies-ROCKS for desert (her exemplar)',
+    !!dRow && dRow.treatment === 'bodies' && dRow.kind === 'rock',
+    dRow ? (dRow.treatment === 'bodies' ? `'${dRow.kind}'` : `massif '${dRow.region}'`) : 'null row');
+  ENCLOSURE_ROWS['__probe_m'] = { treatment: 'massif', massifRegion: 'crag' };
+  const oRow = enclosureRowFor('__probe_m');
+  check('L0c an authored massif row wins with its named region',
+    !!oRow && oRow.treatment === 'massif' && oRow.region === 'crag');
+  ENCLOSURE_ROWS['__probe_m'] = { treatment: 'massif' };
+  const o2 = enclosureRowFor('__probe_m');
+  check('L0d an authored massif row without a region derives one (no tileset ⇒ the stone default)',
+    !!o2 && o2.treatment === 'massif' && o2.region === ENCLOSURE_MASSIF_CFG.regionByClass.stone);
+  delete ENCLOSURE_ROWS['__probe_m'];
+  check('L0e both derived band regions are REGISTERED true walls (the region row is the one law the veil, LoS and bakes read)',
+    (['grown', 'stone'] as const).every(c => {
+      const rk = regionKind(ENCLOSURE_MASSIF_CFG.regionByClass[c]);
+      return !!rk && !rk.walkable && !!rk.blocks;
+    }));
+
+  // --- L1: the directed member. -----------------------------------------------
+  seedGlobalRandom(GSEED ^ 0x7a);
+  const wl = makeSimWorld('warrior', WSEED);
+  wl.seamless = true;
+  wl.loadZone(START_ZONE);
+  ringSettle(wl);
+  const pairL = pickWalkPair(wl);
+  check('L1a a walk pair stands for the treatment rigs', !!pairL);
+  const zoneLA = pairL![0], zoneLB = pairL![1];
+  zoneLB.tileset = 'grassland';
+  zoneLB.layoutType = 'massif';
+  zoneLB.layoutParams = { ...(zoneLB.layoutParams ?? {}), massifMasses: [{ kind: 'tor', weight: 1 }] };
+  // A town-ring mint of B (its original vocabulary) never re-keys on a
+  // tileset change — drop any standing record so the fresh mint reads the
+  // directed rows (the J4 demotion twin).
+  wl.seamlessMints.delete(zoneLB.id);
+  const siL = wl.seamlessRegions.findIndex(s => s.zoneId === zoneLB.id);
+  if (siL >= 0) wl.seamlessRegions.splice(siL, 1);
+  wl.loadZone(zoneLA.id);
+  for (let i = 0; i < 40 && !wl.seamlessMints.get(zoneLB.id)?.populated; i++) wl.update(0.05);
+  const mintL = wl.seamlessMints.get(zoneLB.id);
+  const seatL = wl.seamlessRegions.find(s => s.zoneId === zoneLB.id);
+  const seatLA = wl.seamlessRegions.find(s => s.zoneId === wl.zone.id)!;
+  check('L1b the directed member stands minted under the massif class', !!mintL && !!seatL);
+  const gL = mintL?.layout.walk instanceof GridWalkField ? mintL.layout.walk : null;
+  check('L1c the massif recipe minted a grid (the band\'s canvas)', !!gL);
+  if (mintL && seatL && gL) {
+    const mw = mintL.span.w, mh = mintL.span.h;
+    check('L1d a massif member plants NO body line (the class replaces the dress)',
+      mintL.dress.length === 0, `${mintL.dress.length} dress row(s)`);
+    // The rim ring at half the base depth: the band should DOMINATE, read as
+    // ONE region, run unbroken somewhere, and open only at lawful windows.
+    const D2 = ENCLOSURE_MASSIF_CFG.bandBasePx / 2;
+    type Cls = 'band' | 'walk' | 'solid';
+    const clsAt = (x: number, y: number): Cls =>
+      gL.regionAt(x, y) === bandRegion ? 'band' : gL.isWalkable(x, y) ? 'walk' : 'solid';
+    const ringSamples: { along: number; side: 'n' | 'e' | 's' | 'w'; cls: Cls }[] = [];
+    for (let x = 15; x < mw; x += 30) {
+      ringSamples.push({ along: x, side: 'n', cls: clsAt(x, D2) });
+      ringSamples.push({ along: x, side: 's', cls: clsAt(x, mh - D2) });
+    }
+    for (let y = 15; y < mh; y += 30) {
+      ringSamples.push({ along: y, side: 'w', cls: clsAt(D2, y) });
+      ringSamples.push({ along: y, side: 'e', cls: clsAt(mw - D2, y) });
+    }
+    const bandN = ringSamples.filter(s => s.cls === 'band').length;
+    const walkN = ringSamples.filter(s => s.cls === 'walk').length;
+    check('L1e the rim ring reads BAND — coherent mass dominates the perimeter',
+      bandN / ringSamples.length >= 0.5, `${bandN}/${ringSamples.length} band samples`);
+    let longestBand = 0;
+    for (const side of ['n', 'e', 's', 'w'] as const) {
+      const seq = ringSamples.filter(s => s.side === side).sort((a, b) => a.along - b.along);
+      let run = 0;
+      for (const s of seq) {
+        run = s.cls === 'band' ? run + 30 : 0;
+        longestBand = Math.max(longestBand, run);
+      }
+    }
+    check('L1f …with an unbroken mass stretch (a band, not speckle)',
+      longestBand >= 450, `${longestBand}px longest band run`);
+    check('L1g …and openings stay window-scale (gaps + fixture punches, never a missing wall)',
+      walkN / ringSamples.length <= 0.35, `${walkN}/${ringSamples.length} walkable samples`);
+    // Every agreed way's window: walkable straight through the band's whole
+    // reach — the crossing lives (the portal-clear law at band grain).
+    const reachL = ENCLOSURE_MASSIF_CFG.bandBasePx + ENCLOSURE_MASSIF_CFG.lobeJitterPx
+      + ENCLOSURE_MASSIF_CFG.bandLobeR[1];
+    let waysChecked = 0, wayBlocked = 0;
+    for (const e of zoneLB.exits) {
+      if (e.to === '?') continue;
+      const other = wl.seamlessMints.get(e.to);
+      if (!other || !wl.zoneMap[e.to] || !wl.seamlessResidentEligible(wl.zoneMap[e.to])) continue;
+      const p = borderAgreedPoint(mintL.cell, other.cell);
+      if (!p) continue;
+      waysChecked++;
+      const lx = p.x - mintL.cell.x0, ly = p.y - mintL.cell.y0;
+      for (let d = 8; d <= reachL + 14; d += 14) {
+        const sx = p.side === 'e' ? mw - d : p.side === 'w' ? d : lx;
+        const sy = p.side === 's' ? mh - d : p.side === 'n' ? d : ly;
+        if (!gL.isWalkable(sx, sy)) { wayBlocked++; break; }
+      }
+    }
+    check('L1h every agreed way\'s window stays walkable through the whole band reach (the crossing lives)',
+      waysChecked >= 1 && wayBlocked === 0, `${waysChecked} way(s), ${wayBlocked} blocked`);
+    // THE TIDE PIN (before any hostile strip): population consulted the
+    // carved grid — no body stands in rim mass.
+    const tideL = wl.actors.filter(a => a.ringRegion === zoneLB.id && !a.dead);
+    const inMass = tideL.filter(a => {
+      const wx = a.pos.x + seatLA.originPx.x, wy = a.pos.y + seatLA.originPx.y;
+      return !gL.isWalkable(wx - seatL.originPx.x, wy - seatL.originPx.y);
+    });
+    check('L1i the tide never stands in rim mass (population placement consults the carved grid)',
+      tideL.length > 0 && inMass.length === 0, `${tideL.length} body(ies), ${inMass.length} in mass`);
+    // THE FREE LAWS at the border: a step from tissue INTO a band cell
+    // refuses (the far-wall law's grid consult — zero new code), while the
+    // agreed gap admits the same step.
+    const wayL = pickBorderWay(wl, zoneLB.id);
+    check('L1j a border way stands toward the directed member', !!wayL);
+    if (wayL) {
+      const homeMintL = wl.seamlessMints.get(wl.zone.id)!;
+      const agreedL = borderAgreedPoint(homeMintL.cell, mintL.cell)!;
+      const agreedAlong = wayL.axis === 'x' ? agreedL.y : agreedL.x;
+      const lo = wayL.axis === 'x' ? Math.max(homeMintL.cell.y0, mintL.cell.y0) : Math.max(homeMintL.cell.x0, mintL.cell.x0);
+      const hi = wayL.axis === 'x' ? Math.min(homeMintL.cell.y1, mintL.cell.y1) : Math.min(homeMintL.cell.x1, mintL.cell.x1);
+      let target: { wx: number; wy: number } | null = null;
+      for (let along = lo + 40; along <= hi - 40 && !target; along += 12) {
+        if (Math.abs(along - agreedAlong) < 340) continue;
+        const wx = wayL.axis === 'x' ? wayL.borderW + wayL.sign * D2 : along;
+        const wy = wayL.axis === 'x' ? along : wayL.borderW + wayL.sign * D2;
+        if (gL.regionAt(wx - seatL.originPx.x, wy - seatL.originPx.y) === bandRegion) target = { wx, wy };
+      }
+      check('L1k a band cell stands on the shared border (the treatment faces the tissue)', !!target);
+      if (target) {
+        const from = vec(
+          (wayL.axis === 'x' ? wayL.borderW - wayL.sign * 30 : target.wx) - seatLA.originPx.x,
+          (wayL.axis === 'x' ? target.wy : wayL.borderW - wayL.sign * 30) - seatLA.originPx.y);
+        const pAsk = vec(target.wx - seatLA.originPx.x, target.wy - seatLA.originPx.y);
+        const out = wl.clampPos(pAsk, wl.player.radius, from, { mover: wl.player });
+        check('L1l THE FAR-WALL LAW rides the band FREE — the step into rim mass refuses from tissue',
+          Math.hypot(out.x - pAsk.x, out.y - pAsk.y) > 1e-6,
+          `asked (${pAsk.x.toFixed(0)}, ${pAsk.y.toFixed(0)}), got (${out.x.toFixed(0)}, ${out.y.toFixed(0)})`);
+        const mouthW = {
+          x: wayL.axis === 'x' ? wayL.borderW + wayL.sign * 26 : agreedAlong,
+          y: wayL.axis === 'x' ? agreedAlong : wayL.borderW + wayL.sign * 26,
+        };
+        const fromM = vec(
+          (wayL.axis === 'x' ? wayL.borderW - wayL.sign * 30 : agreedAlong) - seatLA.originPx.x,
+          (wayL.axis === 'x' ? agreedAlong : wayL.borderW - wayL.sign * 30) - seatLA.originPx.y);
+        const pM = vec(mouthW.x - seatLA.originPx.x, mouthW.y - seatLA.originPx.y);
+        const outM = wl.clampPos(pM, wl.player.radius, fromM, { mover: wl.player });
+        check('L1m …and the carved gap admits the same step (the crossing lives at the agreed point)',
+          Math.hypot(outM.x - pM.x, outM.y - pM.y) <= 1e-6,
+          `Δ${Math.hypot(outM.x - pM.x, outM.y - pM.y).toFixed(3)}px at the agreed point`);
+      }
+    }
+    // THE ARRIVAL: walk in by the door law — the live grid must equal the
+    // record's at the TREATMENT's own grain: the rim ring (band, windows,
+    // punches), region-exact. The whole-arena compare is deliberately NOT
+    // pinned: the massif recipe's INTERIOR mass seats are entry-sensitive
+    // (record minted through the partner door, arrival entered live), the
+    // exact variance class the site-tolerant ground comparator has always
+    // owned — named for the ring at large in the pass coda. A small
+    // tolerance absorbs fixture-punch edges riding those interior seats.
+    stripHostiles(wl);
+    wl.loadZone(zoneLB.id);
+    const mintL2 = wl.seamlessMints.get(zoneLB.id);
+    const gLive = wl.walk instanceof GridWalkField ? wl.walk : null;
+    const gRec = mintL2?.layout.walk instanceof GridWalkField ? mintL2.layout.walk : null;
+    let ringDisagree = 0, ringTotal = 0, liveBandN = 0;
+    if (gLive && gRec && mintL2) {
+      const w2 = mintL2.span.w, h2 = mintL2.span.h;
+      const ringPts: { x: number; y: number }[] = [];
+      for (let x = 15; x < w2; x += 30) ringPts.push({ x, y: D2 }, { x, y: h2 - D2 });
+      for (let y = 15; y < h2; y += 30) ringPts.push({ x: D2, y }, { x: w2 - D2, y });
+      for (const p of ringPts) {
+        ringTotal++;
+        if (gLive.regionAt(p.x, p.y) !== gRec.regionAt(p.x, p.y)) ringDisagree++;
+        if (gLive.regionAt(p.x, p.y) === bandRegion) liveBandN++;
+      }
+    }
+    check('L1n the arrival stands the record\'s RIM at region grain (record == live through both chokepoints)',
+      !!gLive && !!gRec && ringTotal > 0 && ringDisagree <= 4 && liveBandN / Math.max(1, ringTotal) >= 0.5,
+      `${ringDisagree}/${ringTotal} ring disagreement(s), ${liveBandN} live band sample(s)`);
+    // Every placed exit's CORRIDOR on the ACTIVE frame: no band cell across
+    // the way itself (doors AND mouths — the gap ladder is one law for both
+    // classes). The window's painted edge may quantize a cell inward past
+    // the shoulder; the corridor width is the absolute claim.
+    if (gLive) {
+      const corrHalf = PARTITION_CFG.mouthHalfPx - 2;
+      let doorsChecked = 0, doorBandHits = 0;
+      for (const ex of wl.exits) {
+        const dd = [ex.pos.y, wl.arena.h - ex.pos.y, ex.pos.x, wl.arena.w - ex.pos.x];
+        const dside = (['n', 's', 'w', 'e'] as const)[dd.indexOf(Math.min(...dd))];
+        const eAlong = dside === 'n' || dside === 's' ? ex.pos.x : ex.pos.y;
+        doorsChecked++;
+        for (let a2 = eAlong - corrHalf; a2 <= eAlong + corrHalf; a2 += 12) {
+          const sx = dside === 'w' ? D2 : dside === 'e' ? wl.arena.w - D2 : a2;
+          const sy = dside === 'n' ? D2 : dside === 's' ? wl.arena.h - D2 : a2;
+          if (gLive.regionAt(sx, sy) === bandRegion) { doorBandHits++; break; }
+        }
+      }
+      check('L1o the band opens at EVERY placed exit (doors and mouths — the corridor is clean)',
+        doorsChecked >= 1 && doorBandHits === 0, `${doorsChecked} exit(s), ${doorBandHits} banded corridor(s)`);
+    }
+  }
+
+  // --- L2: THE MODE LAW — the discrete load of the SAME massif-class def
+  // carves no band (the flag gates both chokepoints). The twin world's
+  // fresh boot has only its starter chart — resolve the SAME pair through
+  // its own graph (same world seed ⇒ same pick), never by a zone id the
+  // seamless world charted later. --------------------------------------------
+  seedGlobalRandom(GSEED ^ 0x7b);
+  const wd7 = makeSimWorld('warrior', WSEED);
+  wd7.loadZone(START_ZONE);
+  // The town is 'safe' — no mint horizon charts at its load; let the
+  // forechart sweep stand the halo before picking the pair (discrete law).
+  for (let i = 0; i < 12; i++) wd7.update(0.05);
+  const pair7 = pickWalkPair(wd7);
+  const zb7 = pair7 ? pair7[1] : undefined;
+  if (zb7) {
+    zb7.tileset = 'grassland';
+    zb7.layoutType = 'massif';
+    zb7.layoutParams = { ...(zb7.layoutParams ?? {}), massifMasses: [{ kind: 'tor', weight: 1 }] };
+    wd7.loadZone(zb7.id);
+  }
+  const gd = wd7.walk instanceof GridWalkField ? wd7.walk : null;
+  let discreteBand = 0;
+  if (gd) {
+    const D2 = ENCLOSURE_MASSIF_CFG.bandBasePx / 2;
+    for (let x = 15; x < wd7.arena.w; x += 30) {
+      if (gd.regionAt(x, D2) === bandRegion) discreteBand++;
+      if (gd.regionAt(x, wd7.arena.h - D2) === bandRegion) discreteBand++;
+    }
+    for (let y = 15; y < wd7.arena.h; y += 30) {
+      if (gd.regionAt(D2, y) === bandRegion) discreteBand++;
+      if (gd.regionAt(wd7.arena.w - D2, y) === bandRegion) discreteBand++;
+    }
+  }
+  check('L2 THE MODE LAW — a discrete load of a massif-class def carves NO band (flag-off silence)',
+    !!zb7 && !wd7.seamless && wd7.seamlessMints.size === 0 && discreteBand === 0,
+    `${zb7 ? `'${zb7.id}' loaded` : 'no pair in the discrete chart'}; seamless=${wd7.seamless}, ${wd7.seamlessMints.size} mint(s), ${discreteBand} band sample(s) on the discrete rim`);
 }
 
 console.log(fails === 0 ? '\nprobe_seamless: ALL GREEN' : `\nprobe_seamless: ${fails} FAILURE(S)`);

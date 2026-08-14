@@ -218,7 +218,7 @@ import { traversalDef, type TraversalCapture, type TraversalState } from './trav
 import { affordTravel, castRay, LOS_CFG, type RayElev } from './los';
 import { coordDist, mapToPx, type MapCoord } from '../world/coords';
 import { getTissueSampler, PARTITION_CFG, SEAMLESS_CFG, setTissueSampler, type CellRect, type RegionSeat } from '../world/seamless';
-import { ENCLOSURE_CFG, enclosureRowFor } from '../data/enclosure';
+import { ENCLOSURE_CFG, ENCLOSURE_MASSIF_CFG, enclosureRowFor, enclosureBodiesFor, type EnclosureBorder, type EnclosureMassif } from '../data/enclosure';
 import { borderAgreedPoint, cellsShareBorder, foldCells } from '../world/cells';
 import { buildTissueSampler } from '../world/tissue';
 import { FORECHART_CFG, forechartSource, zonesWithin } from '../world/forechart';
@@ -6775,8 +6775,32 @@ export class World {
    *  + posts. NO effect attach, ever: border kinds are inert standing mass
    *  by the data file's law. */
   private seamlessDressEnclosure(def: ZoneDef, layout: GeneratedLayout, ownCell: CellRect | null): { x: number; y: number; r: number }[] {
-    const row = enclosureRowFor(def.tileset);
-    if (!row) return [];
+    const treatment = enclosureRowFor(def.tileset);
+    if (!treatment) return [];
+    let row: EnclosureBorder;
+    // THE TREATMENT CLASS (M2 wave 7 — her border ruling): a massif-class
+    // tileset carves rim MASS into its own grid and plants NO body line
+    // (the class replaces it — SeamlessMint.dress stays empty and the
+    // walled detect below would read the band anyway); bodies-class zones
+    // keep the landed dress byte-unchanged. Convex (grid-less) ground and
+    // an unregistered region both DEGRADE to the tileset's own body line —
+    // the treatment never leaves a rim bare by classing it.
+    if (treatment.treatment === 'massif') {
+      const mgrid = layout.walk instanceof GridWalkField ? layout.walk : null;
+      if (mgrid && regionKind(treatment.region)) {
+        this.seamlessCarveRimMass(def, layout, mgrid, ownCell, treatment);
+        return [];
+      }
+      if (!regionKind(treatment.region)) {
+        this.seamlessNote(`massifregion:${def.tileset ?? def.id}`,
+          `[seamless] massif treatment for '${def.tileset ?? def.id}' names unregistered region '${treatment.region}' — degrading to the body line (data defect)`);
+      }
+      const fallback = enclosureBodiesFor(def.tileset);
+      if (!fallback) return [];
+      row = fallback;
+    } else {
+      row = treatment;
+    }
     const rule = doodadRuleOf(row.kind);
     if (!rule.blocksMove || rule.effect) {
       this.seamlessNote(`dressrow:${def.tileset ?? def.id}`,
@@ -6789,35 +6813,13 @@ export class World {
     const grid = layout.walk instanceof GridWalkField ? layout.walk : null;
     // THE WALLED DETECT: sample the rim ring at the dress's own inset line;
     // a layout already mostly wall there expresses its own enclosure.
-    if (grid) {
-      const ringIn = r1 + ENCLOSURE_CFG.insetPad;
-      let solid = 0, total = 0;
-      const step = 30;
-      for (let x = ringIn; x <= w - ringIn; x += step) {
-        total += 2;
-        if (!grid.isWalkable(x, ringIn)) solid++;
-        if (!grid.isWalkable(x, h - ringIn)) solid++;
-      }
-      for (let y = ringIn; y <= h - ringIn; y += step) {
-        total += 2;
-        if (!grid.isWalkable(ringIn, y)) solid++;
-        if (!grid.isWalkable(w - ringIn, y)) solid++;
-      }
-      if (total > 0 && solid / total >= ENCLOSURE_CFG.walledSkipFrac) return [];
+    if (grid && this.seamlessRimWalledFrac(grid, w, h, r1 + ENCLOSURE_CFG.insetPad) >= ENCLOSURE_CFG.walledSkipFrac) {
+      return [];
     }
-    // THE GAPS: every placed exit opens the line on its side — the agreed
-    // side where the ways were re-seated (the carve's own consult), the def
-    // side else, the nearest rim for side-less rows (the carve's ladder).
-    const agreed = ownCell ? this.seamlessAgreedWays(def, ownCell) : null;
-    const gaps: Record<'n' | 'e' | 's' | 'w', number[]> = { n: [], e: [], s: [], w: [] };
-    for (const e of this.exits) {
-      let side = agreed?.get(e.defIndex)?.side ?? def.exits[e.defIndex]?.side;
-      if (!side) {
-        const d = [e.pos.x, w - e.pos.x, e.pos.y, h - e.pos.y];
-        side = (['w', 'e', 'n', 's'] as const)[d.indexOf(Math.min(...d))];
-      }
-      gaps[side].push(side === 'n' || side === 's' ? e.pos.x : e.pos.y);
-    }
+    // THE GAPS: every placed exit opens the line on its side (the ladder —
+    // agreed side ▷ def side ▷ nearest rim; factored for wave 7, both
+    // treatment classes read it).
+    const gaps = this.seamlessExitGapSides(def, ownCell);
     const gapHalf = SEAMLESS_FIT.mouthHalfPx + r1 + ENCLOSURE_CFG.gapShoulder;
     // THE LINE: four edges on the dress's own seeded stream (fixed side
     // order + fixed rolls per slot, so a skipped slot never shifts its
@@ -6851,6 +6853,130 @@ export class World {
       }
     }
     return out;
+  }
+
+  /** THE WALLED DETECT (factored, wave 7 — both treatment classes read it):
+   *  rim-ring wall fraction at a given inset — a layout already mostly wall
+   *  there expresses its own enclosure and the treatment stands down (no
+   *  double border). 0 when unsampleable. */
+  private seamlessRimWalledFrac(grid: GridWalkField, w: number, h: number, ringIn: number): number {
+    let solid = 0, total = 0;
+    const step = 30;
+    for (let x = ringIn; x <= w - ringIn; x += step) {
+      total += 2;
+      if (!grid.isWalkable(x, ringIn)) solid++;
+      if (!grid.isWalkable(x, h - ringIn)) solid++;
+    }
+    for (let y = ringIn; y <= h - ringIn; y += step) {
+      total += 2;
+      if (!grid.isWalkable(ringIn, y)) solid++;
+      if (!grid.isWalkable(w - ringIn, y)) solid++;
+    }
+    return total > 0 ? solid / total : 0;
+  }
+
+  /** THE GAP LADDER (factored, wave 7 — both treatment classes open the
+   *  line at every placed exit): per-side along-coordinates — the agreed
+   *  side where the ways were re-seated (the carve's own consult), the def
+   *  side else, the nearest rim for side-less rows. Runs inside the mint
+   *  swap / the load's frame: this.exits and this.arena ARE the zone's. */
+  private seamlessExitGapSides(def: ZoneDef, ownCell: CellRect | null): Record<'n' | 'e' | 's' | 'w', number[]> {
+    const w = this.arena.w, h = this.arena.h;
+    const agreed = ownCell ? this.seamlessAgreedWays(def, ownCell) : null;
+    const gaps: Record<'n' | 'e' | 's' | 'w', number[]> = { n: [], e: [], s: [], w: [] };
+    for (const e of this.exits) {
+      let side = agreed?.get(e.defIndex)?.side ?? def.exits[e.defIndex]?.side;
+      if (!side) {
+        const d = [e.pos.x, w - e.pos.x, e.pos.y, h - e.pos.y];
+        side = (['w', 'e', 'n', 's'] as const)[d.indexOf(Math.min(...d))];
+      }
+      gaps[side].push(side === 'n' || side === 's' ? e.pos.x : e.pos.y);
+    }
+    return gaps;
+  }
+
+  /** THE RIM MASS (M2 wave 7 — her border ruling: borders as massif-like
+   *  structures, the biome choosing). A massif-class zone carves a coherent
+   *  impassable BAND of a REGISTERED region kind into its OWN walk grid
+   *  along the cell perimeter — the massif fabric's doctrine: collision,
+   *  shot/sight policy and the whole drawn look ride the region row
+   *  (world/regions.ts), so the far-wall law, the foreign confine, the
+   *  threshold's walkability deferral, population placement, the sight
+   *  veil's occlusion and BOTH ground bakes (active + the away peer cache)
+   *  consume the band with ZERO new consumers. Geometry: a guaranteed BASE
+   *  STRIP split at the gap windows (no walkable pinhole can survive inside
+   *  the band, by construction) plus overlapping inner LOBES on the
+   *  treatment's own seeded stream (fixed rolls per slot — a gap skip never
+   *  shifts its neighbors; the organic edge). GAPPED at every placed exit
+   *  through the dress's own ladder — doors AND mouths stay open (the
+   *  portal-clear law is absolute; the mouth carve ran just before this and
+   *  the windows keep its corridors whole). THE FIXTURE CLEAR: entrance-
+   *  class doodads standing in the band's reach (doors, hollows, wells,
+   *  seed-paired cave mouths — the rampage fabric's state-carrier fields)
+   *  get a ground corridor punched inward, so the band can never entomb
+   *  content the layout guaranteed reachable. Deterministic pure
+   *  f(def.seed, cell, exits) and called in the same position at both mint
+   *  chokepoints, so record == live byte-for-byte (the grid-agreement pins
+   *  ride it). */
+  private seamlessCarveRimMass(def: ZoneDef, layout: GeneratedLayout, grid: GridWalkField, ownCell: CellRect | null, row: EnclosureMassif): void {
+    const w = this.arena.w, h = this.arena.h;
+    const M = ENCLOSURE_MASSIF_CFG;
+    // THE WALLED DETECT at the band's own ring: a layout that walls its own
+    // rim keeps its own walls (the bodies detect's law — no double border).
+    if (this.seamlessRimWalledFrac(grid, w, h, M.detectInsetPx) >= ENCLOSURE_CFG.walledSkipFrac) return;
+    const gaps = this.seamlessExitGapSides(def, ownCell);
+    const [lr0, lr1] = M.bandLobeR;
+    const D = M.bandBasePx;
+    const gapHalf = SEAMLESS_FIT.mouthHalfPx + ENCLOSURE_CFG.gapShoulder;
+    const edges: Array<{ side: 'n' | 'e' | 's' | 'w'; len: number }> = [
+      { side: 'n', len: w }, { side: 'e', len: h }, { side: 's', len: w }, { side: 'w', len: h },
+    ];
+    const paintStrip = (side: 'n' | 'e' | 's' | 'w', a0: number, a1: number): void => {
+      if (a1 <= a0) return;
+      if (side === 'n') grid.fillRegion(a0, 0, a1, D, row.region);
+      else if (side === 's') grid.fillRegion(a0, h - D, a1, h, row.region);
+      else if (side === 'w') grid.fillRegion(0, a0, D, a1, row.region);
+      else grid.fillRegion(w - D, a0, w, a1, row.region);
+    };
+    for (const e of edges) {
+      const cuts = [...gaps[e.side]].sort((a, b) => a - b);
+      let cursor = 0;
+      for (const g of cuts) {
+        paintStrip(e.side, cursor, Math.min(e.len, g - gapHalf));
+        cursor = Math.max(cursor, g + gapHalf);
+      }
+      paintStrip(e.side, cursor, e.len);
+    }
+    // THE LOBES: fixed rolls per slot on the band's own stream (skips never
+    // shift neighbors); centers ride the strip's inner edge so each lobe
+    // half-embeds and half pokes inward — coverage stays continuous.
+    const rng = new Rng(((def.seed ?? 0) ^ M.salt) >>> 0);
+    const spacing = ((lr0 + lr1) / 2) * M.lobeSpacingMul;
+    for (const e of edges) {
+      for (let along = spacing / 2; along <= e.len - spacing / 2; along += spacing) {
+        const r = rng.range(lr0, lr1);
+        const jit = rng.range(0, M.lobeJitterPx);
+        if (gaps[e.side].some(g => Math.abs(along - g) < gapHalf + r)) continue;
+        const depth = D + jit;
+        const x = e.side === 'w' ? depth : e.side === 'e' ? w - depth : along;
+        const y = e.side === 'n' ? depth : e.side === 's' ? h - depth : along;
+        grid.fillDisc(x, y, r, row.region);
+      }
+    }
+    // THE FIXTURE CLEAR: any entrance-class doodad the band could bury gets
+    // a ground corridor punched inward from its seat — un-buried AND
+    // connected (the massif recipe's own belt-and-suspenders grammar).
+    const reach = D + M.lobeJitterPx + lr1;
+    for (const d of layout.doodads) {
+      if (!(d.door || d.hollow || d.well || doodadRuleOf(d.kind).seedPaired)) continue;
+      const edgeD = Math.min(d.pos.x, d.pos.y, w - d.pos.x, h - d.pos.y);
+      if (edgeD > reach + d.radius) continue;
+      const inX = d.pos.x <= edgeD ? 1 : (w - d.pos.x <= edgeD ? -1 : 0);
+      const inY = d.pos.y <= edgeD ? 1 : (h - d.pos.y <= edgeD ? -1 : 0);
+      const len = reach + d.radius + 40;
+      grid.carveCorridor(d.pos.x, d.pos.y, d.pos.x + inX * len, d.pos.y + inY * len,
+        Math.max(30, d.radius + 16));
+    }
   }
 
   /** May this zone stand RESIDENT? THE STRUCTURAL PICK RULE (M0's clauses,
