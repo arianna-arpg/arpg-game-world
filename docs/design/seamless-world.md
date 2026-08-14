@@ -562,3 +562,138 @@ tissue's refusal stays the law and the dress only makes it read.
   shared — if it plants bodies, the kit rows' doodad-kind-shaped names
   already speak the enclosure's own id space. Either way the between and
   the border read as ONE country by construction.
+
+### THE CROSS-BORDER SIGHT (M2 wave 7 — movement record, 2026-08-13)
+
+The neighbor-life pass's codas 2+3 paid: castRay itself now routes by grid
+OWNERSHIP (engine/los.ts — the sight veil's march engine-side, the
+projectile sweep's away-ground law at ray grain), so the DECISION to fire
+and the line the eye reads stop dying at the administrative border
+(GridWalkField.regionAt answers 'wall' for every out-of-grid point — the
+pre-wave dark).
+
+- **THE ROUTING** (`seamlessRayOwners` + the seamless march in castRay):
+  a ray with an endpoint outside the active arena resolves each
+  out-of-arena sample to the resident mint whose CELL owns the ground —
+  the owner's grid answers blocksShot/blocksSight with the elevation law
+  at the routed sample, the owner's standing doodads (enclosure dress
+  trunks included) stop the ray at their true surfaces via the same
+  rayShapeT entries (t survives the seat translation), and NO owner —
+  the connective tissue — reads OPEN. Both-endpoints-inside rays take an
+  O(1) early reject (a segment between two points inside a convex rect
+  cannot leave it), so in-zone rays and all of discrete play are
+  byte-identical BY CONSTRUCTION (`OccEnv` grew five OPTIONAL structural
+  fields — `SeamlessRaySeat`/`SeamlessRayMint` slivers World satisfies
+  as it stands; zero World edits, the veil pass's SightView precedent).
+- **THE CONSEQUENCES**: a roused ranged body across the border FIRES
+  through the carved mouth instead of stalling at its own rim (the
+  hold-fire consult reads the routed line — the wave-6 border stall
+  dead); the player's hold-fire/clipShot/aim-assist reads agree with the
+  geometry the away lane flies; chain hops, target deliveries and dwell
+  sight inherit the same law free.
+- **THE SIGHT POLICY — FLAGGED CHOICE, sight ROUTES**: bodies visible
+  across a border are watchABLE across it (the symmetric read — the
+  administrative "a drowsy watcher cannot lock through the border" was
+  a blanket the enclosure made obsolete). The standing guards replace
+  it: the border's own geometry (dress lines + rim walls block off-mouth
+  lines), senseReach's distance/cone gates, the watch fabric's ladder on
+  watch-wearing defs, and the drowsy think cadence. Pinned both ways in
+  probe_seamlesslos rig D: behind a border blocker a drowsy body NEVER
+  locks; at the carved mouth with a clear line it DOES — and fires.
+  Dial `LOS_CFG.crossBorder.sight: false` restores the sight dark alone.
+- **DIALS — ALL FLAGGED** (`LOS_CFG.crossBorder`): `shot: true` /
+  `sight: true` (per-channel routing; false = that channel's pre-wave
+  administrative dark, the A/B forensics lever) / `ownerPad: 96` /
+  `bodyPad: 12` (prune-only bbox slacks).
+- **COST (micro-lap, the staged probe ring — gen_2 active, 3 members,
+  547/816 neighbor doodad rows)**: in-arena rays 8.40µs/ray flag-on vs
+  8.86 flag-off on identical rays — the early reject is measurement-noise
+  free; routed cross-border rays 24.7µs (shot) / 25.5µs (sight) vs 8.7µs
+  under the dark — ~+16µs per cross-border ray, paid only by rays that
+  actually leave the arena (losCached memoizes perception pairs at
+  0.25s TTL, so a border pack's worst case stays ≪0.1ms/frame). The
+  neighbor doodad fold runs bbox-first over the mint's whole array
+  (predicate-first measured ~5× dearer at 816 rows).
+- **THE DEFERRED SEAM (world.ts — the sibling lane's file, reported for
+  the coordinator)**: the projectile sweep's MASONRY march
+  (updateProjectiles' active-grid blocksShot sweep) still consults
+  `this.walk.regionAt` for out-of-arena samples, so an out-flying or
+  born-out bolt dies at the administrative wall ~one grid pad past the
+  rim BEFORE the wave-6 away lane (which already applies the owner's
+  law) gets to rule — in GRIDDED active zones the away lane is
+  effectively unreachable for border-crossing flights. The one-line fix,
+  inside the masonry march's sample loop, mirroring the away lane's own
+  boundary: `if (ring && (sx < 0 || sx > this.arena.w || sy < 0 || sy >
+  this.arena.h)) continue;` — discrete play byte-identical (ring null).
+  Until it lands, probe_seamlesslos rig E pins the decision half (the
+  released gate, per-channel) and the blocked-line flight agreement
+  (both laws refuse at the same trunk, verdicts equal at ±nose); the
+  open-line crossing pin joins when the seam lands.
+- **NAMED ASYMMETRY**: the SOLID BETWEEN refuses feet but not rays —
+  tissue is OPEN to shots and sight by the charter's own law, while the
+  mass dress draws scree/thickets there (draw-only by that pass's
+  charter). If her eye wants the between to occlude, the sampler's
+  massAt read could feed a tissue occluder lane later — a fork, not a
+  defect.
+
+### THE BORDER TREATMENT (M2 wave 7 — movement record, 2026-08-13)
+
+Her ruling built: "have the borders themselves be something similar to the
+massif structures OR potentially border rocks, with the biome itself
+possibly being the thing doing that placement; deserts might be more apt to
+have rocks as its borders, while something like an internal jungle… better
+served with the massif-like structure." The enclosure vocabulary carries
+TWO CLASSES, and the biome chooses through its own texture.
+
+- **THE TREATMENT CLASS** (data/enclosure.ts): `EnclosureRow.treatment` —
+  `'bodies'` (the landed wave-5 line, byte-unchanged) vs `'massif'` (rim
+  MASS: a coherent impassable band carved into the zone's OWN walk grid).
+  Resolution: authored row ▷ THE CLASS DERIVATION ▷ the body election ▷
+  the rock default. THE CLASS DERIVATION rides `massKitFor` — the sharing
+  seam made structural: the tileset's own mass-kit glyphs elect the class
+  (tree/brush = grown ⇒ massif at `massifShareMin` 0.6+ share; rock/
+  cactus/dead-tree = stone ⇒ bodies), so the border and the between-mass
+  speak one vocabulary. Census at the landing: 14 of 113 tilesets derive
+  massif — jungle, deepwood, meadow, grassland, farmland, marsh, beach,
+  glimmervale, peninsula, petalfields and the green kin; desert lands
+  bodies-rocks and jungle lands massif exactly as she named. Jungle's old
+  authored `none` is gone (the derivation IS the intent now); `none`
+  survives as the refusal face.
+- **THE RIM MASS** (`World.seamlessCarveRimMass`, both mint chokepoints
+  beside the wave-5 dress): the band paints a REGISTERED region kind —
+  the massif fabric's own doctrine, so collision, shot/sight policy and
+  the whole drawn look ride the region row (grown country walls itself in
+  `hedgewall` — sight-blocking, shot-threading bocage; stone country in
+  `crag`; authored rows may name any registered region via
+  `massifRegion`, e.g. `sandstone`, `verdure`). Geometry: a guaranteed
+  BASE STRIP (`ENCLOSURE_MASSIF_CFG.bandBasePx` 55 — no walkable pinhole
+  can survive inside the band, by construction) plus overlapping inner
+  LOBES (`bandLobeR` [45,85] × `lobeSpacingMul` 1.35, fixed rolls per
+  slot on the treatment's own salted stream) — the organic edge. GAPPED
+  at every placed exit through the wave-5 gap ladder (agreed side ▷ def
+  side ▷ nearest rim; factored `seamlessExitGapSides`); THE FIXTURE
+  CLEAR punches a ground corridor inward for any entrance-class doodad in
+  the band's reach (doors/hollows/wells/seed-paired cave mouths — the
+  rampage fabric's state-carrier fields), so the band can never entomb
+  content the layout guaranteed. A massif zone plants NO body line; the
+  walled detect (factored `seamlessRimWalledFrac`) stands the band down
+  where a layout already walls its own rim (jungle's verdure faces keep
+  their own walls — no double border), and convex grid-less ground
+  degrades to the tileset's body line (`enclosureBodiesFor` — the
+  treatment never leaves a rim bare).
+- **THE FREE LAWS, proven not assumed** (probe RIG L, 20 checks): the
+  far-wall law refuses a tissue step INTO the band with zero new code
+  (the mint-grid consult), the agreed gap admits the same step at
+  Δ0.000px, the drowsy tide confines off the band, population placement
+  never seeds a body in rim mass, the memo replay heals through the
+  origin-less clampPos snap, record == live at the rim's region grain
+  through BOTH chokepoints, and the discrete load of the same
+  massif-class def carves nothing (the mode law).
+- **NAMED FOR THE RING AT LARGE**: the massif recipe's INTERIOR mass
+  seats are entry-sensitive across chokepoints (record minted through the
+  partner door vs the live arrival's own entry) — the site-tolerant
+  ground comparator's variance class, now visible at region grain. The
+  rim band itself is pure f(def.seed, cell, exits) and agrees exactly;
+  only interior tors drift. If an entry-sensitive-recipe zone ever
+  stands resident naturally, the D6b walk-grid pin will surface it —
+  flagged in the wave-7 pass memory, not silently absorbed.

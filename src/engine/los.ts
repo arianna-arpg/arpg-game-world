@@ -32,6 +32,24 @@
 //
 // World wraps this as lineOfSight / lineOfFire / clipShot; every consumer
 // (deliveries, AI perception, aim assist, channel grips) goes through those.
+//
+// THE CROSS-BORDER ROUTING (seamless mode — M2 wave 7, LOS_CFG.crossBorder):
+// with resident neighbors standing at their map seats, a ray that leaves the
+// active arena routes every out-of-arena sample to the grid that OWNS its
+// ground — the owning resident mint's blocking regions and its standing
+// doodads (dress trunks included) answer at the seat offset, through the
+// SAME channel predicates, surfaces and elevation law as home, and NO owner
+// — the connective tissue — reads OPEN. This is the sight veil's march
+// (render/vis/sightVeil.ts) engine-side and the projectile sweep's own
+// away-ground law (seamlessProjOwnerAt) at ray grain, so the decision to
+// fire and the flight can never disagree across a border: pre-routing,
+// castRay read the whole beyond-rim country as one administrative wall
+// (GridWalkField.regionAt answers 'wall' for every out-of-grid point) while
+// the swept arrow flew true — ranged kits held fire at their own border.
+// Discrete play is byte-identical BY CONSTRUCTION: the routing engages only
+// when env.seamless is set, two or more seats stand, and an endpoint
+// actually leaves the arena (both-inside rays never consult it — a segment
+// between two points inside a convex rect cannot leave it).
 // ---------------------------------------------------------------------------
 
 import type { Doodad } from './levelgen';
@@ -54,11 +72,33 @@ export type OccChannel = 'shot' | 'sight';
  *  blocker blocks) — untiered zones pay nothing and change nothing. */
 export interface RayElev { from: number; to: number }
 
+/** THE CROSS-BORDER ROUTING's structural slivers (the sight veil's
+ *  SightView idiom): what the ray needs of a resident neighbor. World's own
+ *  RegionSeat / SeamlessMint rows satisfy them as they stand; probe
+ *  literals build them by hand. The seat places the mint's local (0,0) at
+ *  `originPx` (one affine, no scaling — the RegionSeat contract), and the
+ *  CELL is the ownership rect (the partition law: cells tile with zero
+ *  overlap, so the first containing cell is THE owner). */
+export interface SeamlessRaySeat { zoneId: string; originPx: { x: number; y: number } }
+export interface SeamlessRayMint {
+  cell: { x0: number; y0: number; x1: number; y1: number };
+  layout: { walk?: WalkField | null; doodads: readonly Doodad[] };
+}
+
 /** What castRay needs from the world — the doodad spatial index and the
- *  (optional) walk grid. World satisfies it structurally. */
+ *  (optional) walk grid. World satisfies it structurally.
+ *  The seamless fields are ALL optional (THE MODE LAW): absent, or the mode
+ *  off, or fewer than two seats, and the cross-border routing is
+ *  structurally inert — discrete play byte-identical BY CONSTRUCTION, and
+ *  every existing OccEnv literal stays valid unchanged. */
 export interface OccEnv {
   doodadsAt(x: number, y: number): readonly Doodad[];
   walk: WalkField | null;
+  seamless?: boolean;
+  zone?: { id: string };
+  arena?: { w: number; h: number };
+  seamlessRegions?: readonly SeamlessRaySeat[];
+  seamlessMints?: { get(zoneId: string): SeamlessRayMint | undefined };
 }
 
 export interface RayHit {
@@ -166,7 +206,76 @@ export const LOS_CFG = {
    *  floor: a valley trunk stops valley rays; a deck-height flight sails
    *  over it (and a deck rock never shades the street below). */
   elev: { eye: 0.62, doodadBand: 1 },
+  /** THE CROSS-BORDER ROUTING's dials (seamless mode only — discrete play
+   *  never reaches them; see the header). Per-CHANNEL engagement: `shot`
+   *  routes firing lines (hold-fire agrees with the arrow the sweep
+   *  actually flies — the wave-6 shot lane's decision half), `sight`
+   *  routes perception (bodies visible across a border are watchABLE
+   *  across it — symmetric with the veil; a false value restores that
+   *  channel's administrative dark, the pre-wave posture, without
+   *  touching the mode). `ownerPad` is the owner-rect pre-filter's slack
+   *  (px) for surfaces poking past their own cell line; `bodyPad` the
+   *  per-body bbox slack (px) over the doodad's radius in the neighbor
+   *  fold — both prune-only (rayShapeT stays the exact judge).
+   *  [FLAGGED dials — awaiting blessing.] */
+  crossBorder: { shot: true, sight: true, ownerPad: 96, bodyPad: 12 },
 };
+
+/** One resident neighbor resolved for a routed ray: its cell in ACTIVE-local
+ *  px (the ownership rect) and the seat delta (active-local − delta =
+ *  owner-local — one translation, so rayShapeT's t survives the frame). */
+interface RayOwner {
+  x0: number; y0: number; x1: number; y1: number;
+  dx: number; dy: number;
+  grid: GridWalkField | null;
+  doodads: readonly Doodad[];
+}
+interface RayOwners { aw: number; ah: number; owners: RayOwner[] }
+
+/** THE CROSS-BORDER ROUTING's per-ray gate + owner fold (the projectile
+ *  sweep's seamlessProjOwnerAt at ray grain). Null on EVERY inactive path —
+ *  discrete play (env.seamless unset/false), the channel's dial off, fewer
+ *  than two seats, no active seat, or a ray whose both endpoints stand
+ *  inside the active arena (a segment between two points inside a convex
+ *  rect cannot leave it — the O(1) early reject that keeps in-zone rays at
+ *  today's exact cost). The owner list is a handful of cell rects (ring
+ *  size ≤ ~6), pre-translated into active-local px so the per-sample
+ *  ownership lookup is bare compares — one cheap rect scan per
+ *  out-of-arena sample, never a mint walk. */
+function seamlessRayOwners(
+  env: OccEnv,
+  from: { x: number; y: number }, to: { x: number; y: number },
+  channel: OccChannel,
+): RayOwners | null {
+  if (!env.seamless) return null;
+  const cb = LOS_CFG.crossBorder;
+  if (!(channel === 'shot' ? cb.shot : cb.sight)) return null;
+  const seats = env.seamlessRegions, mints = env.seamlessMints;
+  if (!seats || seats.length < 2 || !mints || !env.zone || !env.arena) return null;
+  const aw = env.arena.w, ah = env.arena.h;
+  if (from.x >= 0 && from.x <= aw && from.y >= 0 && from.y <= ah
+    && to.x >= 0 && to.x <= aw && to.y >= 0 && to.y <= ah) return null;
+  const activeId = env.zone.id;
+  let active: SeamlessRaySeat | null = null;
+  for (const s of seats) if (s.zoneId === activeId) { active = s; break; }
+  if (!active) return null;
+  const ox = active.originPx.x, oy = active.originPx.y;
+  const owners: RayOwner[] = [];
+  for (const s of seats) {
+    if (s.zoneId === activeId) continue;
+    const m = mints.get(s.zoneId);
+    if (!m) continue;
+    const w = m.layout.walk;
+    owners.push({
+      x0: m.cell.x0 - ox, y0: m.cell.y0 - oy,
+      x1: m.cell.x1 - ox, y1: m.cell.y1 - oy,
+      dx: s.originPx.x - ox, dy: s.originPx.y - oy,
+      grid: w instanceof GridWalkField ? w : null,
+      doodads: m.layout.doodads,
+    });
+  }
+  return owners.length ? { aw, ah, owners } : null;
+}
 
 /** First blocker along from→to on the given channel, or null when clear.
  *  Doodad hits are exact ray/circle entries; grid hits are half-cell samples. */
@@ -182,6 +291,7 @@ export function castRay(
   let bestT = Infinity;
   let kind: RayHit['kind'] = 'doodad';
   const band = LOS_CFG.elev.doodadBand;
+  const ring = seamlessRayOwners(env, from, to, channel);
 
   // --- doodad surfaces (spatial-index buckets sampled along the segment) ----
   // Geometry rides the hit-surface fabric (engine/shapes.ts): discs keep the
@@ -207,8 +317,81 @@ export function castRay(
     }
   }
 
+  // --- resident-neighbor doodads (THE CROSS-BORDER ROUTING) -----------------
+  // The active spatial index holds only the active zone's bodies, so a
+  // routed ray folds each in-reach neighbor mint's standing doodads at the
+  // seat offset — the enclosure's dress trunks and every interior body stop
+  // the ray at their true surfaces (drawn == tested across the line). Same
+  // channel predicates, same exact rayShapeT entry (t survives the pure
+  // translation), same elevation band as the active lane; `gone` skipped
+  // (memory-carried layouts hold evaporated remains — the sweep's own law).
+  if (ring) {
+    const cb = LOS_CFG.crossBorder;
+    const rx0 = Math.min(from.x, to.x), rx1 = Math.max(from.x, to.x);
+    const ry0 = Math.min(from.y, to.y), ry1 = Math.max(from.y, to.y);
+    for (const own of ring.owners) {
+      if (rx1 < own.x0 - cb.ownerPad || rx0 > own.x1 + cb.ownerPad
+        || ry1 < own.y0 - cb.ownerPad || ry0 > own.y1 + cb.ownerPad) continue;
+      const lfx = from.x - own.dx, lfy = from.y - own.dy;
+      const lx0 = rx0 - own.dx, lx1 = rx1 - own.dx;
+      const ly0 = ry0 - own.dy, ly1 = ry1 - own.dy;
+      for (const o of own.doodads) {
+        // Bbox first — pure arithmetic prunes the whole mint's array before
+        // any rule lookup runs (the fold sees EVERY row, not a spatial
+        // index's pre-pruned handful; predicate-first measured ~5× dearer).
+        const rr = o.radius + cb.bodyPad;
+        if (o.pos.x < lx0 - rr || o.pos.x > lx1 + rr
+          || o.pos.y < ly0 - rr || o.pos.y > ly1 + rr) continue;
+        if (o.gone) continue;
+        if (channel === 'shot' ? !blocksProjectiles(o) : !blocksSightOf(o)) continue;
+        const t = rayShapeT(hitSurfaceOf(o, channel), o.pos.x, o.pos.y, lfx, lfy, dx, dy);
+        if (t === null || t >= bestT) continue;
+        if (elev) {
+          const dT = o.tier ?? 0;
+          const h = elev.from + (elev.to - elev.from) * t;
+          if (h < dT || h >= dT + band) continue;
+        }
+        bestT = t; kind = 'doodad';
+      }
+    }
+  }
+
   // --- grid cells (half-cell ray-march; start cell never self-blocks) -------
-  if (env.walk instanceof GridWalkField) {
+  if (ring) {
+    // THE SEAMLESS MARCH (the veil's shape, engine-side): each sample reads
+    // the grid that OWNS its ground — the active grid inside the arena
+    // (today's law verbatim), the owning resident's grid inside its cell at
+    // the seat offset, and NO owner — the connective tissue — reads OPEN.
+    // The blocking + elevation law is the active lane's own at every routed
+    // sample, so a border never blocks as a line: only real walls do.
+    const g = env.walk instanceof GridWalkField ? env.walk : null;
+    const step = (g ? g.cellSize : 30) / 2;
+    const limit = Math.min(len, bestT === Infinity ? len : bestT * len);
+    for (let s = step; s < limit; s += step) {
+      const t = s / len;
+      const x = from.x + dx * t, y = from.y + dy * t;
+      let kId: string | null = null;
+      if (x >= 0 && x <= ring.aw && y >= 0 && y <= ring.ah) {
+        if (g) kId = g.regionAt(x, y);
+      } else {
+        for (const own of ring.owners) {
+          if (x < own.x0 || x > own.x1 || y < own.y0 || y > own.y1) continue;
+          if (own.grid) kId = own.grid.regionAt(x - own.dx, y - own.dy);
+          break; // cells tile without overlap (the partition law)
+        }
+      }
+      if (kId === null) continue; // tissue / gridless ground: open sky
+      const k = regionKind(kId);
+      if (channel === 'shot' ? k?.blocksShot : k?.blocksSight) {
+        if (elev) {
+          const e = tierElevOf(kId);
+          if (e !== null && elev.from + (elev.to - elev.from) * t >= e) continue;
+        }
+        if (t < bestT) { bestT = t; kind = 'region'; }
+        break;
+      }
+    }
+  } else if (env.walk instanceof GridWalkField) {
     const step = (env.walk.cellSize ?? 30) / 2;
     const limit = Math.min(len, bestT === Infinity ? len : bestT * len);
     for (let s = step; s < limit; s += step) {
