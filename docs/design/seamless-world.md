@@ -1131,3 +1131,153 @@ and the invisible-wall read must become a visually honest mechanism.
   pin) · probe_sightveil grew RIG B6 (march occludes solid / spares open,
   the fringe face at the exact lattice line, drawn==tested via the sheet's
   own edges, dial + seed-lane + null-sampler stand-downs).
+
+### M2 movement — THE SEAM POLISH (wave 10, 2026-08-14; three banked codas, one commission)
+
+Pure look — the laws stay untouched. Three named codas paid: the tone
+lines (massdress coda 2, mesh coda 6), the town-door stubs (ribbon coda
+6, mesh coda 7), the thin-strip fullness (mesh coda 5).
+
+- **THE TONE LINES DIAGNOSED, then killed (the gutter)**: the commission
+  named two candidates — cross-chunk tone smoothing and lattice phase
+  dither. The diagnosis rig (scratch_seamtone.ts) measured the BAKED
+  tones stepping exactly **0** across 960 chunk-boundary cell pairs: the
+  color law is pure f(world pos) on a globally-aligned lattice, so the
+  bake carries no boundary discontinuity and neither candidate has
+  anything to smooth. The lines are COMPOSITE-TIME: the world pass draws
+  under `ctx.scale(zoom ≈ 1.3)` with a fractional camera translate, so
+  every chunk canvas blits at fractional device coordinates and its edge
+  bilinear-samples against out-of-canvas transparency — a faint straight
+  seam at every 720px boundary, visible over flat mass, masked by
+  texture. THE GUTTER + THE OVERLAP BLIT kill the class by construction:
+  `SEAMLESS_DRAW_CFG.seamGutterPx` (2, FLAGGED; 0 = the old bake + blit
+  byte-identically) bakes each chunk with a ring of its NEIGHBORS' own
+  content (the same pure laws at the same world positions — the lattice
+  loops extend one cell, the glyph/road culls widen by G) and the whole
+  guttered canvas lands at −G, so adjacent chunks OVERLAP by 2G with
+  byte-identical content: every boundary device pixel is fully covered
+  by at least one draw and the fringe composites same-over-same. (A
+  source-rect inset alone was tried first and proven insufficient live —
+  it fixes the sampled color but not the destination rect's partial
+  edge coverage, which still lets the underlay bleed through; the live
+  A/B at one camera measured the boundary crack 20.0 → 0.2 luminance
+  units.) Pass 1's per-cell decision
+  is extracted as `tissueCellColor` (exported, DOM-free): no chunk term
+  exists in its signature, so a chunk-relative term can never enter the
+  color law unnoticed (probe O6 pins determinism through it).
+- **THE TOWN-DOOR STUBS (the look meets the door)**: an ineligible
+  pair's drawn way met the town's rim wherever its chord crossed — off
+  any door. The wayStubs derivation grew THE TOWN-DOOR LANE
+  (world/tissue.ts): each ineligible end that resolves a def exit row
+  toward its partner grows ONE stub at that door's rim mouth pointing
+  mouth → seat — the SAME doorWayFor read the routing uses for eligible
+  pairs (placeExit's edge formula over the fold cell, the town's one
+  drawn frame) — marked `door: true`. The painter gates the lane on
+  `SEAMLESS_DRAW_CFG.mesh.doorStubs` (FLAGGED); the derivation always
+  carries the rows. Towns stay doors by law — nothing walkable changes;
+  a doorless end (a one-sided link's silent half) grows nothing; an
+  abutting ineligible pair's two mouths legitimately coincide on the
+  shared border, told apart by their opposed normals (the agreed-point
+  pair's own grammar).
+- **THE THIN-STRIP FULLNESS (the strip response)**: thin strips (~157px)
+  read as plazas because the full 40px clearway shoulder owned most of
+  their width. `MASSDRESS_STRIP` (data/enclosure.ts, mutable for probe
+  A/B — ALL FLAGGED): where the LOCAL gap (the two nearest claims'
+  rect-distance sum, `gapAt` on the carried read) falls below gapWidePx
+  340, the shoulder eases from 40 toward shoulderFloorPx 24 (full at
+  gapTightPx 170) through `stripShoulderPx` — monotone, clamped, and
+  floored ABOVE the solid lattice's half-diagonal so no wall cell can
+  ever touch the walkable ribbon (THE FLOOR LAW, probe-pinned). massAt
+  and shoulderSeatAt fold the SAME response (THE ONE SHOULDER survives —
+  the two dress bands still partition the roadside by arithmetic), and
+  the solid field follows massAt, so drawn == tested rides along: thin
+  strips read walled where they ARE walls, sight and shot agree. THE
+  FLANK BIAS (`stampBiasAt`, stampFlankPull 0.65) pulls stamp attempts
+  toward the nearest claim's rim by the local tightness — no roll
+  consumed (the fork law and every determinism pin hold), identity in
+  wide country BY the response's own clamp — so the surviving flank
+  slivers seed densely (live fixture: mean seat rim-distance 45.6 →
+  16.8px). The crossing plaza stays clear: the road + aprons keep their
+  exclusions, and stamps never stand inside pad + floor of any routed
+  piece (THE PLAZA LAW at seat grain). The WALKABLE margins were never
+  read — the walkable law is byte-untouched (probe-pinned at every
+  fixture point).
+- **PROBES**: probe_tissue 139 → 171. RIG O (the seam polish): the
+  response law (monotone/clamped/THE FLOOR LAW), three aligned-door
+  fixtures (thin 160 / mid 256 / wide 640px gaps) — THE WALLS STAND on
+  the thin flanks while the wide control keeps the wave-9 verge, the
+  crossing walks, the walkable law never moves; THE PLAZA LAW; THE FLANK
+  BIAS (hug + wide-identity + determinism); INERTNESS (dial off == the
+  degenerate response byte-identically); THE CELL COLOR LAW ×2 builders
+  over boundary-spanning windows + the gutter dial pin. RE-AIMS
+  (documented, never weakened): N3 derives each sweep point's owning
+  center and asserts openness inside pad + the center's OWN local
+  shoulder (wide regime = the wave-9 bound verbatim); K's seat-shoulder
+  oracle now measures the ROUTED pieces (the chord approximation
+  predated the routed ribbon) at the local width; N7's ineligible
+  control narrows to its true core — no CROSSING stub, door-flagged
+  rows only, at the oracle mouths, doorless ends bare.
+
+## Wave 10 — THE OPEN DOOR (M2/M3: the hub joins, the mints affix)
+
+Her two asks made one law: WHO joins the country, and WHEN.
+
+- **THE DERIVED SEED** (`World.seamlessSeedOf` — the one layout-seed read):
+  an authored/minted `def.seed` answers first, mode-blind, byte-untouched.
+  A SEEDLESS STATIC under the mode derives a stable per-world seed —
+  `(worldSeed ^ FNV(zone id) ^ SEAMLESS_STATIC_SEED_SALT) >>> 0`, the
+  acceptQuest/wire-in idiom with its own stream identity — scoped by
+  `seamlessStructuralOk` to exactly the class that can ever stand resident
+  (never caves, scene stages, or sealed kinds). Every seamless authority
+  reads THIS method: the resident mint's layout rng, the arrival's
+  layoutSeed chain (`memory ?? seamlessSeedOf ?? rollSeed`), the adoption
+  guard's seed identity, the enclosure/rim/population salts, and the
+  demotion bank's memory row — record == arrival for the derived class by
+  construction. THE DISCRETE BYTE LAW: out of the mode the method returns
+  `def.seed ?? null` and the rollSeed() re-roll runs draw-for-draw as ever
+  (RIG O pins twins byte-identical, the derivation unconsulted, and the
+  expired-memory re-roll still re-rolling).
+- **THE HUB JOINS**: the eligibility seed clause reads through the
+  derivation, so the Wayfarer's Crossroads — seedless by authorship, its
+  def untouched — mints into the town's own boot ring (live: cell
+  3049×2443 at the canonical seed, partner lastlight), adopts on the
+  door-in arrival, and opens its outward borders while the town way keeps
+  its DOOR (lastlight still refuses on START_ZONE/'safe'/kind). The first
+  minutes are door-once-then-one-world.
+- **THE SEED BELT**: `seamlessMintResident` refuses a def whose seed
+  resolves null (the mid-flip re-mint hazard) — loudly, via seamlessNote.
+- **THE AFFIXED MINT**: every dynamic placer (quests, events, soundings,
+  sea ports, gate fans, lair dens — all through placeZoneAt) moves the
+  standing signals (zone count, webDisturbance); the ONE bypass was the
+  floating wire-in (connectFloatingZone flips z.floating and forges roads
+  with no new node, no settle residue) — closed by `seamlessGraphRev`, a
+  world-local rev bumped at the wire-in call site and folded into the
+  fold's cache key and the sampler freshness key. A wired-in quest target
+  joins the fold — and the country — on the very next ring beat.
+- **THE SAMPLER FRESHNESS LAW** (`seamlessTissueEnsure` — the
+  routed-ribbon coda 5 closed): the tissue sampler rebuilds when the WEB
+  changed, not when an admission happened to land. The key is every input
+  class the capture reads — zone count, webDisturbance, the surface
+  road-row sum ('?' consolidations, wire-ins, severs), the eligibility
+  census (concealed clears, quest stamps), and the graph rev. Checked at
+  every ring beat's head; same key → the capture is byte-identical by the
+  sampler's purity law → skip. RIG O pins the gate exact over 40 live
+  beats: quiet heads stand, drifted heads rebuild, zero churn, zero lag.
+- **THE ELIGIBILITY FRESHNESS**: the demotion sweep demotes a standing
+  member whose def FLIPPED out of the resident class (quest stamps,
+  future seals) on the next beat — back to its door, the degradation
+  grammar; a flip back rejoins through the ordinary admission. The
+  ACTIVE zone stays exempt mid-stand (its next departure resolves it).
+- **PROBES**: probe_seamless 189 → 239 (RIG O, 25 checks: the hub's
+  eligibility/mint/arrival byte-pins, the door-and-mouths shape, the
+  discrete twins, the affixed mint end-to-end — connected + unveiled +
+  eligible + fold re-deal + next-beat sampler rebuild + no-twin + member
+  re-fits — the quest zone's own ring and its agreed-border crossing at
+  drift 0.00px, the freshness gate, and the flip dance). Existing rigs
+  recalibrated where the enlarged town ring re-dealt their stages
+  (witness fallback to the zone's own packs table; G4 drives the two-leg
+  agreed-point grammar — ★DRIVE-THE-POLYLINE; K3b's clamp-nudge budget
+  2 → 8 with the class verified body-by-body; L1o's corridor claim
+  re-bounded to the band's 30px-grid quantization-proof span) — no
+  assertion weakened: the teeth of every pin (ids, tags, walkability,
+  Δ-bounds) stand.

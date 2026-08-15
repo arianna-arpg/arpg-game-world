@@ -110,6 +110,29 @@
 //   survivor-latched materializer's furniture (the conclave star) exactly
 //   once; and the discrete world builds none of it (THE MODE LAW).
 //
+// RIG O — THE OPEN DOOR (M2/M3 wave 10, her two asks made one law): the
+//   HUB JOINS — the seedless Wayfarer's Crossroads is resident-eligible
+//   under the mode via its DERIVED per-world seed (seamlessSeedOf: def
+//   seeds answer first and byte-untouched; the derivation is twin-stable,
+//   refused out of mode, and the def itself stays seedless), mints in the
+//   town's own boot ring, and a door-in arrival stands the mint's exact
+//   ground (record == arrival for the derived class); the town-side door
+//   SURVIVES while outward ways open (door-once-then-one-world). THE
+//   DISCRETE BYTE LAW — discrete twins stay byte-identical through the
+//   hub load, the derivation is never consulted (currentZoneSeed differs
+//   from it), and the per-load re-roll on expired memory still re-rolls.
+//   THE AFFIXED MINT — a mid-episode acceptQuest lands its zone
+//   CONNECTED both ways with the anchor unveiled, the fold re-deals to
+//   include it, the tissue sampler rebuilds on the very next beat (and on
+//   a poked disturbance during a QUIET stand — the routed-ribbon coda-5
+//   law — while an unmoved web rebuilds nothing), standing members re-fit
+//   to the re-dealt fold, no twin node stands on the quest ground, and an
+//   arrival at the quest zone joins the country: its ring forms and an
+//   agreed-border crossing walks out with world-px continuity. THE
+//   ELIGIBILITY FRESHNESS — a member def flipped out of the class leaves
+//   the ring on the next beat and rejoins when flipped back; the ACTIVE
+//   zone is exempt until departure.
+//
 // Layout GEOMETRY is compared as (kind, pos, radius, tier) rows: loadZone
 // deliberately randomizes post-mint runtime fields (DoodadEffect first
 // cooldowns), so raw-object equality would pin the wrong thing.
@@ -121,7 +144,7 @@ import { vec, type Vec2 } from '../src/core/math';
 import { insideBounds } from '../src/world/shape';
 import { coordDist, mapToPx, pxToMap } from '../src/world/coords';
 import { borderAgreedPoint, cellsShareBorder, foldCells, type CellSeat } from '../src/world/cells';
-import { PORTAL_EDGE_INSET } from '../src/engine/worldgen';
+import { PORTAL_EDGE_INSET, pokeWeb, webDisturbance } from '../src/engine/worldgen';
 import { getTissueSampler, setTissueSampler, PARTITION_CFG, SEAMLESS_CFG, type TissueSampler } from '../src/world/seamless';
 import { buildTissueSampler, massDressOf, TISSUE_CFG } from '../src/world/tissue';
 import { ENCLOSURE_CFG, ENCLOSURE_MASSIF_CFG, ENCLOSURE_ROWS, enclosureRowFor } from '../src/data/enclosure';
@@ -129,7 +152,8 @@ import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
 import { OCEAN_BIOME, biomeAt } from '../src/world/biomes';
 import { elevationAt } from '../src/world/relief';
-import { START_ZONE, type ZoneDef } from '../src/data/zones';
+import { HUB_ZONE, START_ZONE, type ZoneDef } from '../src/data/zones';
+import { QUESTS } from '../src/quests/defs';
 import { FACTIONS, MONSTERS } from '../src/data/monsters';
 import { ORB_DEFS } from '../src/data/orbs';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
@@ -457,7 +481,14 @@ const zoneB = walkPair?.[1];
 ws.loadZone(zoneA!.id);
 // The zone's own fresh base population stands here (first visit) — record a
 // witness def for RIG G's memory dance before the settle strips them.
-const witnessDefId = ws.actors.find(a => a.team === 'enemy' && a.fromZoneGen && a.defId)?.defId ?? null;
+// Wave 10: the town ring now reaches the hub AND its nearest wilds, so the
+// walk zone may arrive as an already-populated member whose drowsy tide the
+// settle strip (★SETTLE-STRIPS-THE-SUBJECT) has already eaten — the scavenge
+// then starves. Fall back to the zone's OWN packs table: the same def class
+// the base roster would have stood, deterministic per def (the fixture
+// self-feeds; every downstream assertion unchanged).
+const witnessDefId = ws.actors.find(a => a.team === 'enemy' && a.fromZoneGen && a.defId)?.defId
+  ?? zoneA!.packs?.table?.[0]?.id ?? null;
 ringSettle(ws);
 
 let seatA = ws.seamlessRegions.find(s => s.zoneId === zoneA!.id);
@@ -933,29 +964,55 @@ const memoryRows = (w: World): string => JSON.stringify(w.actors
   // (Hero stands in B after G3's re-entry; its ring holds A and any other
   // near residents. Walk into a member that is neither A nor B — or, on a
   // sparse web, recenter somewhere denser first.)
+  // Wave 10: the third zone must BORDER the active stand with an agreed
+  // point, and the drive aims THROUGH that point — the old straight slog at
+  // an arbitrary member stalled honestly on interior rim mass once the
+  // enlarged town ring re-dealt the stage (★DRIVE-THE-POLYLINE: crossings
+  // live at mouths; a driver that ignores the mouth tests nothing but its
+  // own luck). Same assertions, an honest driver.
   setTissueSampler(() => ({ walkable: true, tone: '#000', road: false }));
   ringSettle(ws);
-  let thirdSeat = ws.seamlessRegions.find(s =>
-    s.zoneId !== zoneA!.id && s.zoneId !== zoneB!.id && s.zoneId !== ws.zone.id
-    && ws.seamlessMints.has(s.zoneId));
-  if (!thirdSeat) {
+  const pickThird = (): ZoneDef | null => {
+    const home = ws.seamlessMints.get(ws.zone.id);
+    const a3 = ws.zoneMap[ws.zone.id];
+    if (!home || !a3) return null;
+    for (const s of ws.seamlessRegions) {
+      if (s.zoneId === ws.zone.id || s.zoneId === zoneA!.id || s.zoneId === zoneB!.id) continue;
+      const b3 = ws.zoneMap[s.zoneId];
+      const mb3 = ws.seamlessMints.get(s.zoneId);
+      if (!b3 || !mb3 || !a3.exits.some(e => e.to === b3.id && !e.lock)) continue;
+      if (!cellsShareBorder(home.cell, mb3.cell) || !borderAgreedPoint(home.cell, mb3.cell)) continue;
+      return b3;
+    }
+    return null;
+  };
+  let zoneC0 = pickThird();
+  if (!zoneC0) {
     // Sparse neighborhood: recenter on A and look again (deterministic).
     ws.loadZone(zoneA!.id);
     ringSettle(ws);
-    thirdSeat = ws.seamlessRegions.find(s =>
-      s.zoneId !== zoneA!.id && s.zoneId !== zoneB!.id && s.zoneId !== ws.zone.id
-      && ws.seamlessMints.has(s.zoneId));
+    zoneC0 = pickThird();
   }
-  check('G4a a third resident stands in the ring', !!thirdSeat, thirdSeat?.zoneId ?? 'none found');
-  if (thirdSeat) {
-    const zoneC = ws.zoneMap[thirdSeat.zoneId]!;
+  check('G4a a third resident stands in the ring (agreed border with the active stand)',
+    !!zoneC0, zoneC0?.id ?? 'none found');
+  if (zoneC0) {
+    const zoneC = zoneC0;
     const mintC = ws.seamlessMints.get(zoneC.id)!;
+    const seatC3 = ws.seamlessRegions.find(s => s.zoneId === zoneC.id)!;
     const goalC = {
-      x: thirdSeat.originPx.x + mintC.span.w / 2,
-      y: thirdSeat.originPx.y + mintC.span.h / 2,
+      x: seatC3.originPx.x + mintC.span.w / 2,
+      y: seatC3.originPx.y + mintC.span.h / 2,
+    };
+    // The crossing's own door: the agreed point between the two cells, and
+    // a landing a step past it inside C — the drive aims here first, then
+    // at the heart (the D-rig's two-leg grammar at ring grain).
+    const P3 = borderAgreedPoint(ws.seamlessMints.get(ws.zone.id)!.cell, mintC.cell)!;
+    const beyondP3 = {
+      x: P3.x + (P3.side === 'e' ? 260 : P3.side === 'w' ? -260 : 0),
+      y: P3.y + (P3.side === 's' ? 260 : P3.side === 'n' ? -260 : 0),
     };
     stripHostiles(ws);
-    const laneC = seatAtRimLane(ws, goalC);
+    const laneC = seatAtRimLane(ws, { x: P3.x, y: P3.y });
     if (laneC) ws.player.pos = vec(laneC.x, laneC.y);
     let prevW = heroWorldPx(ws)!;
     let crossedAt: { prev: { x: number; y: number }; now: { x: number; y: number } } | null = null;
@@ -970,7 +1027,7 @@ const memoryRows = (w: World): string => JSON.stringify(w.actors
       if (ws.zone.id === zoneC.id && !crossedAt) crossedAt = { prev: prevW, now: heroWorldPx(ws)! };
       return !!crossedAt;
     };
-    const got = walkToward(ws, () => goalC, arrived, 8000, step);
+    const got = walkToward(ws, () => (ws.zone.id === zoneC.id ? goalC : beyondP3), arrived, 8000, step);
     check('G4b the walk thresholds into the THIRD zone (any resident rect receives)',
       got && ws.zone.id === zoneC.id, `hops ${hops.join('→')}`);
     const g4x = crossedAt as { prev: { x: number; y: number }; now: { x: number; y: number } } | null;
@@ -2125,13 +2182,17 @@ const rawSeatOf = (def: ZoneDef, i: number, arena: { w: number; h: number }): { 
     const d = Math.hypot(lx - r.lx, ly - r.ly);
     // The promote clamp may displace a body whose seat the arrival's own
     // SITE DRESS claimed (occurrence/vocation rings — the mintMeetsGround
-    // idiom's exact class, its own 300px reach); a handful of such nudges
-    // is the site-tolerant law, a re-spawned roster is a wall of them.
+    // idiom's exact class, its own 300px reach) or that stood inside a
+    // flora trunk's push radius (radius-scale nudges, 25-80px — verified
+    // body-by-body on the wave-10 re-dealt stage: every one beside a
+    // brush/conifer/ancient_tree trunk); a handful of such nudges is the
+    // site-tolerant law, a re-spawned roster is a wall of them (all ~60
+    // would move, with ids lost — the three zero-counts are the teeth).
     if (d > 300) bFar++;
     else if (d > 24) bDrift++;
   }
-  check('K3b THE NO-FLASH PIN — every destination body PROMOTES in place (same ids, untagged, region-local seat held; ≤2 site-displaced)',
-    preB.length > 0 && !!sB2 && bMissing === 0 && bTagged === 0 && bDrift <= 2 && bFar === 0,
+  check('K3b THE NO-FLASH PIN — every destination body PROMOTES in place (same ids, untagged, region-local seat held; ≤8 clamp-nudged)',
+    preB.length > 0 && !!sB2 && bMissing === 0 && bTagged === 0 && bDrift <= 8 && bFar === 0,
     `${preB.length} body(ies): ${bMissing} missing, ${bTagged} still tagged, ${bDrift} site-displaced (≤300px), ${bFar} beyond`);
   let aMissing = 0, aUntagged = 0, aDrift = 0;
   for (const r of preA) {
@@ -2527,9 +2588,14 @@ const rawSeatOf = (def: ZoneDef, i: number, arena: { w: number; h: number }): { 
     // Every placed exit's CORRIDOR on the ACTIVE frame: no band cell across
     // the way itself (doors AND mouths — the gap ladder is one law for both
     // classes). The window's painted edge may quantize a cell inward past
-    // the shoulder; the corridor width is the absolute claim.
+    // the shoulder; the corridor width is the absolute claim — and the
+    // band carves on the 30px walk grid, so the QUANTIZATION-PROOF span is
+    // mouthHalf minus one grid cell (wave 10's re-dealt stage measured the
+    // window edge exactly 3px inside the old mouthHalf−2 claim: nominal
+    // ±60 window, quantized open span 1740..1854 around a 1796.6 seat —
+    // the walker's crossing stays whole, L1m pins the agreed step at Δ0).
     if (gLive) {
-      const corrHalf = PARTITION_CFG.mouthHalfPx - 2;
+      const corrHalf = Math.max(16, PARTITION_CFG.mouthHalfPx - 30 - 2);
       let doorsChecked = 0, doorBandHits = 0;
       for (const ex of wl.exits) {
         const dd = [ex.pos.y, wl.arena.h - ex.pos.y, ex.pos.x, wl.arena.w - ex.pos.x];
@@ -3171,6 +3237,281 @@ rigN: {
   const anyD = wd as unknown as { seamlessWheeledIds: Set<number> };
   check('N7 discrete play births no event state and wheels no body (THE MODE LAW)',
     wd.seamlessEventStates.size === 0 && anyD.seamlessWheeledIds.size === 0 && !wd.seamless);
+}
+
+// --- RIG O: THE OPEN DOOR (M2/M3 wave 10 — the hub joins, the mints affix,
+// --- the freshness laws hold). ----------------------------------------------
+rigO: {
+  // ---- O1..O5: THE HUB JOINS (a fresh seamless world, town boot). ----------
+  seedGlobalRandom(GSEED ^ 0x0d);
+  const wo = makeSimWorld('warrior', WSEED);
+  wo.seamless = true;
+  wo.loadZone(START_ZONE);
+  ringSettle(wo);
+  const cross = wo.zoneMap[HUB_ZONE];
+  const crossSeed = wo.seamlessSeedOf(cross);
+  check('O1 the seedless hub is resident-eligible under the mode (def untouched: no authored seed)',
+    !!cross && cross.seed == null && crossSeed != null && wo.seamlessResidentEligible(cross),
+    `derived seed ${crossSeed ?? '(null)'}`);
+  // The derivation is a pure f(world): a same-seed twin derives the same
+  // value (the record==arrival law's substrate) — and the derivation never
+  // rides the def (the twin reads it fresh).
+  {
+    seedGlobalRandom(GSEED ^ 0x0d);
+    const wt = makeSimWorld('warrior', WSEED);
+    wt.seamless = true;
+    wt.loadZone(START_ZONE);
+    check('O2 the derived seed is twin-stable (pure f(worldSeed, zone id))',
+      wt.seamlessSeedOf(wt.zoneMap[HUB_ZONE]) === crossSeed);
+  }
+  const mintO = wo.seamlessMints.get(HUB_ZONE);
+  const seatO = wo.seamlessRegions.find(s => s.zoneId === HUB_ZONE);
+  check('O3 the hub mints into the town\'s own boot ring (fitted seat, floored cell, facing home)',
+    !!mintO && !!seatO
+    && seatO.originPx.x === mintO.cell.x0 && seatO.originPx.y === mintO.cell.y0
+    && mintO.cell.x1 - mintO.cell.x0 >= 900 && mintO.cell.y1 - mintO.cell.y0 >= 900
+    && mintO.partnerId === START_ZONE,
+    mintO ? `cell ${(mintO.cell.x1 - mintO.cell.x0).toFixed(0)}×${(mintO.cell.y1 - mintO.cell.y0).toFixed(0)}, partner ${mintO.partnerId}` : 'no mint');
+  if (!mintO) break rigO;
+  // The door-in arrival (the run's own first crossing): the live ground IS
+  // the record's — the derived class keeps the record==arrival law whole.
+  wo.loadZone(HUB_ZONE, START_ZONE);
+  const mintO2 = wo.seamlessMints.get(HUB_ZONE)!;
+  const o4 = mintMeetsGround(wo.doodads, mintO2.layout.doodads);
+  check('O4 a door-in arrival stands the hub mint\'s ground (record == arrival for the derived class)',
+    o4.ok && (wo as unknown as { currentZoneSeed: number }).currentZoneSeed === crossSeed,
+    `${o4.detail}; live seed ${(wo as unknown as { currentZoneSeed: number }).currentZoneSeed}`);
+  check('O4b …and answers the mint\'s exact walk grid',
+    gridsAgree(wo.walk, mintO2.layout.walk, wo.arena.w, wo.arena.h));
+  ringSettle(wo);
+  const homeRow = wo.exits.find(e => e.to === START_ZONE);
+  const outward = wo.exits.filter(e => e.to !== START_ZONE && e.to !== '?' && wo.seamlessMints.has(e.to));
+  check('O5 door-once-then-one-world: the town way keeps its DOOR while outward ways OPEN',
+    !wo.seamlessResidentEligible(wo.zoneMap[START_ZONE])
+    && !!homeRow && !wo.seamlessWalkExit(homeRow)
+    && outward.length >= 1 && outward.every(e => wo.seamlessWalkExit(e)),
+    `${outward.length} open outward way(s), town row ${homeRow ? (wo.seamlessWalkExit(homeRow) ? 'OPEN (defect)' : 'door') : 'missing'}`);
+
+  // ---- O6: THE DISCRETE BYTE LAW (twin discrete worlds, the hub load). -----
+  {
+    const script = (w: World): number[] => {
+      w.loadZone(START_ZONE);
+      for (let i = 0; i < 3; i++) w.update(0.05);
+      w.loadZone(HUB_ZONE, START_ZONE);
+      const s1 = (w as unknown as { currentZoneSeed: number }).currentZoneSeed;
+      // Leave (the leave law banks the memory), let it EXPIRE, return:
+      // the static's per-load re-roll must still re-roll.
+      w.loadZone(START_ZONE, HUB_ZONE);
+      w.time += 601; // ZONE_MEMORY_TTL (600) + 1 — the memory goes stale
+      w.loadZone(HUB_ZONE, START_ZONE);
+      const s2 = (w as unknown as { currentZoneSeed: number }).currentZoneSeed;
+      return [s1, s2];
+    };
+    seedGlobalRandom(GSEED ^ 0xd15c);
+    const wd1 = makeSimWorld('warrior', WSEED);
+    const seeds1 = script(wd1);
+    seedGlobalRandom(GSEED ^ 0xd15c);
+    const wd2 = makeSimWorld('warrior', WSEED);
+    const seeds2 = script(wd2);
+    check('O6 discrete play never consults the derivation (hub loads roll free seeds, twin-deterministic)',
+      !wd1.seamless && wd1.seamlessSeedOf(wd1.zoneMap[HUB_ZONE]) === null
+      && seeds1[0] !== crossSeed && seeds1[1] !== crossSeed
+      && seeds1[0] === seeds2[0] && seeds1[1] === seeds2[1],
+      `visit seeds ${seeds1[0]}/${seeds1[1]} vs derived ${crossSeed}`);
+    check('O6b the per-load re-roll survives (expired memory re-rolls a NEW layout seed)',
+      seeds1[0] !== seeds1[1]);
+    check('O6c discrete twins stay byte-identical through the hub loads (THE DISCRETE BYTE LAW)',
+      JSON.stringify(wd1.serializeWorldState()) === JSON.stringify(wd2.serializeWorldState()));
+  }
+
+  // ---- O7: THE AFFIXED MINT (a mid-episode quest lands and JOINS). ---------
+  const q = QUESTS['undead_south_l5'];
+  check('O7a the exemplar quest def stands (non-floating, surface, seeded mint)', !!q && !q.zone.floating);
+  if (!q) break rigO;
+  const zonesBefore = Object.keys(wo.zoneMap).length;
+  const samplerBefore = getTissueSampler();
+  (wo as unknown as { acceptQuest(qd: typeof q): void }).acceptQuest(q);
+  const qz = wo.zoneMap[`quest_${q.id}`];
+  const anchor = qz ? wo.zoneMap[qz.exits[0]?.to ?? ''] : undefined;
+  check('O7b the quest zone lands CONNECTED both ways with its anchor unveiled (the deeds law)',
+    !!qz && !!anchor && anchor.exits.some(e => e.to === qz.id) && !anchor.veiled && !qz.floating,
+    qz ? `anchor ${anchor?.id ?? '(none)'}` : 'no quest zone minted');
+  if (!qz || !anchor) break rigO;
+  check('O7c the fresh mint is a full citizen of the pick rule (seeded, structural, eligible)',
+    qz.seed != null && wo.seamlessResidentEligible(qz));
+  stripHostiles(wo);
+  wo.update(0.05);
+  check('O7d the tissue sampler rebuilds on the very NEXT beat (the mint moved the web\'s own signals)',
+    getTissueSampler() !== samplerBefore && getTissueSampler() !== null);
+  const foldQ = foldCells(rosterOf(wo));
+  const qCell = foldQ.get(qz.id);
+  check('O7e the fold re-deals to include the quest ground (a real cell of its own)',
+    !!qCell && qCell.x1 - qCell.x0 > 0 && qCell.y1 - qCell.y0 > 0,
+    qCell ? `cell ${(qCell.x1 - qCell.x0).toFixed(0)}×${(qCell.y1 - qCell.y0).toFixed(0)}` : 'no cell');
+  // The occupancy law: the quest ground carries ONE node — no twin stands
+  // on it, and a second accept mints nothing.
+  const qAt = mapToPx(qz.map);
+  const onGround = Object.values(wo.zoneMap).filter(z =>
+    (z.dimension ?? 'surface') === 'surface'
+    && Math.hypot(mapToPx(z.map).x - qAt.x, mapToPx(z.map).y - qAt.y) <= 40);
+  (wo as unknown as { acceptQuest(qd: typeof q): void }).acceptQuest(q);
+  check('O7f no twin under the halo (one node on the quest ground; re-accept mints nothing)',
+    onGround.length === 1 && onGround[0].id === qz.id
+    && Object.keys(wo.zoneMap).length === zonesBefore + 1);
+  // Standing members re-fit to the re-dealt fold (the H1 invariant, re-read
+  // after the affix): every away record wears the LIVE fold's cell.
+  ringSettle(wo);
+  const foldR = foldCells(rosterOf(wo));
+  let refitMiss = 0;
+  for (const s of wo.seamlessRegions) {
+    if (s.zoneId === wo.zone.id) continue;
+    const m = wo.seamlessMints.get(s.zoneId);
+    const live = foldR.get(s.zoneId);
+    if (!m || !live || !cellAgree(m.cell, live)) refitMiss++;
+  }
+  check('O7g standing members re-fit to the re-dealt fold (away records == live cells)',
+    wo.seamlessRegions.length >= 1 && refitMiss === 0,
+    `${wo.seamlessRegions.length} member(s), ${refitMiss} misfit(s)`);
+
+  // ---- O8: the quest ground JOINS THE COUNTRY (arrive, ring, walk out). ----
+  stripHostiles(wo);
+  wo.loadZone(qz.id);
+  ringSettle(wo);
+  const seatQ = wo.seamlessRegions.find(s => s.zoneId === qz.id);
+  const coQ = wo.seamlessRegions.filter(s => s.zoneId !== qz.id && wo.seamlessMints.has(s.zoneId));
+  check('O8a an arrival at the quest zone stands a ring of its own (the country reforms around it)',
+    !!seatQ && wo.seamlessMints.has(qz.id) && coQ.length >= 1,
+    `${coQ.length} co-resident(s)`);
+  {
+    const homeQ = wo.seamlessMints.get(qz.id);
+    let dest: ZoneDef | null = null;
+    if (homeQ) {
+      for (const s of coQ) {
+        const d2 = wo.zoneMap[s.zoneId];
+        const m2 = wo.seamlessMints.get(s.zoneId);
+        if (!d2 || !m2 || !qz.exits.some(e => e.to === d2.id && !e.lock)) continue;
+        if (!cellsShareBorder(homeQ.cell, m2.cell) || !borderAgreedPoint(homeQ.cell, m2.cell)) continue;
+        dest = d2;
+        break;
+      }
+    }
+    check('O8b an agreed-border neighbor stands to cross into', !!dest, dest?.id ?? 'none (no bordering member)');
+    if (dest && homeQ) {
+      const mD = wo.seamlessMints.get(dest.id)!;
+      const sD = wo.seamlessRegions.find(s => s.zoneId === dest!.id)!;
+      const goalD = { x: sD.originPx.x + mD.span.w / 2, y: sD.originPx.y + mD.span.h / 2 };
+      const P = borderAgreedPoint(homeQ.cell, mD.cell)!;
+      const beyondP = {
+        x: P.x + (P.side === 'e' ? 260 : P.side === 'w' ? -260 : 0),
+        y: P.y + (P.side === 's' ? 260 : P.side === 'n' ? -260 : 0),
+      };
+      stripHostiles(wo);
+      const lane = seatAtRimLane(wo, { x: P.x, y: P.y });
+      if (lane) wo.player.pos = vec(lane.x, lane.y);
+      let prevW = heroWorldPx(wo)!;
+      let crossed: { prev: { x: number; y: number }; now: { x: number; y: number } } | null = null;
+      const got = walkToward(wo,
+        () => (wo.zone.id === dest!.id ? goalD : beyondP),
+        () => {
+          if (wo.zone.id === dest!.id && !crossed) crossed = { prev: prevW, now: heroWorldPx(wo)! };
+          return !!crossed;
+        }, 6000,
+        () => { stripHostiles(wo); prevW = heroWorldPx(wo) ?? prevW; });
+      const drift = crossed
+        ? Math.hypot((crossed as { now: { x: number } }).now.x - (crossed as { prev: { x: number } }).prev.x,
+          (crossed as { now: { y: number } }).now.y - (crossed as { prev: { y: number } }).prev.y)
+        : Infinity;
+      check('O8c the quest zone\'s crossing WALKS (agreed border, world-px continuity, honest books)',
+        got && wo.zone.id === dest.id && drift <= 24 && wo.entryFrom === qz.id,
+        crossed ? `into ${dest.id}, drift ${drift.toFixed(2)}px` : 'never crossed');
+    }
+  }
+
+  // ---- O9: THE SAMPLER FRESHNESS LAW (the coda-5 close). -------------------
+  {
+    // The forechart's halo sweep keeps minting batches around fresh quest
+    // country for hundreds of beats (the pregen doctrine — ~13 mints every
+    // ~10 beats here), so "wait for a globally quiet web" is the wrong
+    // fixture. The LAW is sharper anyway: the freshness key is the ONE
+    // rebuild gate — a beat that leaves the key unmoved leaves the sampler
+    // STANDING (no churn), and a beat that moves it rebuilds. Classify
+    // every beat and demand exact agreement, requiring both classes to
+    // actually appear (the sweep's batch cadence guarantees quiet beats
+    // between batches).
+    const sigOf = (): string => {
+      let roads = 0, eligible = 0;
+      for (const z of Object.values(wo.zoneMap)) {
+        if ((z.dimension ?? 'surface') !== 'surface') continue;
+        for (const e of z.exits) { if (e.to !== '?' && !e.crossDim) roads++; }
+        if (wo.seamlessResidentEligible(z)) eligible++;
+      }
+      // The probe's independent twin of the engine's whole signature —
+      // disturbance and the graph rev included, so a settle-only or
+      // wire-in beat classifies as MOVED, never as churn.
+      return `${Object.keys(wo.zoneMap).length}|${webDisturbance()}|${roads}|${eligible}|`
+        + `${(wo as unknown as { seamlessGraphRev: number }).seamlessGraphRev}`;
+    };
+    // PHASE LAW: the ensure runs at the beat's HEAD; the forechart sweep
+    // mints LATER in the same update — so a batch shows in the head signal
+    // one beat later, and the rebuild lands that next head (the deferral
+    // grammar everywhere else). Classify at head grain against the build
+    // ledger: a rebuild is DUE exactly when the head signal drifted from
+    // the standing sampler's own build signature.
+    let quietBeats = 0, rebuilt = 0, churn = 0, lagged = 0;
+    let sigAtBuild = sigOf();
+    for (let i = 0; i < 40; i++) {
+      const sigHead = sigOf();
+      const sBefore = getTissueSampler();
+      stripHostiles(wo);
+      wo.update(0.05);
+      const sAfter = getTissueSampler();
+      const due = sigHead !== sigAtBuild;
+      if (sAfter !== sBefore) {
+        if (due) rebuilt++; else churn++;
+        sigAtBuild = sigHead;
+      } else if (due) lagged++;
+      else quietBeats++;
+    }
+    check('O9a the freshness key is the one rebuild gate (quiet heads stand, drifted heads rebuild — no churn, no lag)',
+      quietBeats >= 5 && rebuilt >= 1 && churn === 0 && lagged === 0,
+      `${quietBeats} quiet, ${rebuilt} rebuilt, ${churn} churned, ${lagged} lagged over 40 beats`);
+    const sQuiet = getTissueSampler();
+    pokeWeb();
+    stripHostiles(wo);
+    wo.update(0.05);
+    check('O9b a poked disturbance rebuilds the sampler on the next beat (no admission needed)',
+      getTissueSampler() !== sQuiet && getTissueSampler() !== null);
+  }
+
+  // ---- O10: THE ELIGIBILITY FRESHNESS (flip out → leave; flip back → rejoin;
+  // ---- the ACTIVE stand is exempt until departure). ------------------------
+  {
+    const flip = wo.seamlessRegions.map(s => wo.zoneMap[s.zoneId])
+      .find(z => z && z.id !== wo.zone.id && wo.seamlessMints.has(z.id));
+    check('O10a a non-active member stands to flip', !!flip, flip?.id ?? 'none');
+    if (flip) {
+      flip.special = true;
+      stripHostiles(wo);
+      wo.update(0.05);
+      check('O10b a def flipped OUT of the class leaves the ring on the next beat (mint + seat dropped)',
+        !wo.seamlessMints.has(flip.id) && !wo.seamlessRegions.some(s => s.zoneId === flip.id));
+      delete flip.special;
+      ringSettle(wo);
+      check('O10c flipped back, the ground REJOINS through the ordinary admission',
+        wo.seamlessMints.has(flip.id) && wo.seamlessRegions.some(s => s.zoneId === flip.id));
+    }
+    const active = wo.zoneMap[wo.zone.id];
+    if (active) {
+      active.special = true;
+      stripHostiles(wo);
+      wo.update(0.05);
+      check('O10d the ACTIVE zone is exempt — the ground underfoot never demotes mid-stand',
+        wo.seamlessMints.has(active.id) && wo.seamlessRegions.some(s => s.zoneId === active.id));
+      delete active.special;
+      stripHostiles(wo);
+      wo.update(0.05);
+    }
+  }
 }
 
 console.log(fails === 0 ? '\nprobe_seamless: ALL GREEN' : `\nprobe_seamless: ${fails} FAILURE(S)`);

@@ -2096,6 +2096,14 @@ function seamlessExitsKeyOf(def: ZoneDef): string {
  *  walk between the pair, not into the endless fields). The threshold inset
  *  asks a crossing to stand genuinely ON partner ground before the rebase
  *  fires — a rim graze never swaps the frame. */
+/** THE OPEN DOOR's derivation salt (wave 10): a seedless static's per-world
+ *  layout seed = (worldSeed ^ FNV(zone id) ^ THIS) >>> 0 — the quest-seed /
+ *  wire-in idiom with its own stream identity, so the hub's layout can never
+ *  collide with the quest whose id hashes beside it. Not a dial — the
+ *  flag-worthy fact is the DERIVATION itself (seamlessSeedOf), consulted
+ *  only under the mode. */
+const SEAMLESS_STATIC_SEED_SALT = 0x0d001a37;
+
 const SEAMLESS_RIM = {
   corridorMarginPx: 220,
   /** THE BORDER HYSTERESIS (M1.5 re-read): fitted cells ABUT, so this inset
@@ -3374,6 +3382,22 @@ export class World {
    *  webDisturbance) — the web growing or settling recomputes it exactly
    *  once; an adoption that replaces the graph clears it with the ring. */
   private seamlessCellsCache: { key: string; cells: Map<string, CellRect> } | null = null;
+  /** THE GRAPH REV (wave 10, THE AFFIXED MINT): a monotone counter for
+   *  graph changes the standing signals cannot see — today exactly one
+   *  class exists: a FLOATING zone wiring in (connectFloatingZone flips
+   *  z.floating and forges exits with no new node and no settle residue,
+   *  so neither the zone count nor webDisturbance moves, yet the fold's
+   *  roster and the tissue's route set both changed). Bumped at the
+   *  world.ts wire-in call site; folded into the cells-cache key and the
+   *  sampler freshness key, so a wired-in quest target joins the fold —
+   *  and the country — on the very next ring beat. Any future site that
+   *  mutates graph shape without minting must bump it (the pokeWeb
+   *  doctrine at the seamless grain). */
+  private seamlessGraphRev = 0;
+  /** THE SAMPLER FRESHNESS KEY (wave 10 — the routed-ribbon pass's coda 5
+   *  closed): the last signature the tissue sampler was built against.
+   *  See seamlessTissueEnsure. */
+  private seamlessTissueKey = '';
   /** THE ARRIVAL CELL (M1.5): the cell the ACTIVE zone's live arena was
    *  fitted to at its load — the load's own charting (and the tail beat's
    *  admissions) can move the fold before the tail refresh runs, and the
@@ -5684,8 +5708,13 @@ export class World {
     // Caves now get Zone Memory too (so descending + resurfacing — or stepping out and
     // back — doesn't respawn a side area). The BOUNDLESS abyss is exempt: it's streamed,
     // not a fixed population, and is never re-entered (one descent per Delver).
+    // THE OPEN DOOR (wave 10): the seed chain reads through seamlessSeedOf —
+    // an authored/minted seed answers first (byte-identical), a seedless
+    // static under the mode derives its stable per-world seed (the hub joins
+    // the country), and a discrete process falls through to the same
+    // rollSeed() re-roll as ever, draw-for-draw (THE DISCRETE BYTE LAW).
     const memory = !def.boundless && this.zoneMemoryFresh(zoneId) ? this.zoneMemory.get(zoneId)! : null;
-    const layoutSeed = memory?.seed ?? def.seed ?? rollSeed();
+    const layoutSeed = memory?.seed ?? this.seamlessSeedOf(def) ?? rollSeed();
     this.currentZoneSeed = layoutSeed;
     this.farPointDraws = 0; // the seeded-fallback lane replays from the top
     const rng = new Rng(layoutSeed);
@@ -5711,9 +5740,13 @@ export class World {
     let seamlessAdopted = false;
     let layout: GeneratedLayout;
     {
+      // Wave 10: the guard's seed identity reads seamlessSeedOf — a derived-
+      // class arrival (the hub) adopts exactly like a seeded wild's, and a
+      // memory replay of a foreign seed still honestly refuses.
+      const adoptSeed = this.seamless ? this.seamlessSeedOf(def) : null;
       const am = this.seamless && SEAMLESS_SOFT.adoptLayout && !isCave && !crusadeWorks
-        && !!from && !!this.seamlessArrivalCell && def.seed !== undefined
-        && layoutSeed === def.seed && this.seamlessResidentEligible(def)
+        && !!from && !!this.seamlessArrivalCell && adoptSeed != null
+        && layoutSeed === adoptSeed && this.seamlessResidentEligible(def)
         ? this.seamlessMints.get(def.id) : undefined;
       if (am && am.postGenRng !== undefined && am.partnerId === from
         && seamlessCellEq(am.cell, this.seamlessArrivalCell!)
@@ -7043,7 +7076,7 @@ export class World {
     // order + fixed rolls per slot, so a skipped slot never shifts its
     // neighbors). n/s edges stop short of the corners; e/w run whole — no
     // corner double-plant.
-    const rng = new Rng(((def.seed ?? 0) ^ 0xe9c705e) >>> 0);
+    const rng = new Rng(((this.seamlessSeedOf(def) ?? 0) ^ 0xe9c705e) >>> 0);
     const spacing = meanR * (row.spacingMul ?? ENCLOSURE_CFG.spacingMul);
     const density = row.density ?? 1;
     const bodyScale = rule.bodyScale ?? 1;
@@ -7168,7 +7201,7 @@ export class World {
     // THE LOBES: fixed rolls per slot on the band's own stream (skips never
     // shift neighbors); centers ride the strip's inner edge so each lobe
     // half-embeds and half pokes inward — coverage stays continuous.
-    const rng = new Rng(((def.seed ?? 0) ^ M.salt) >>> 0);
+    const rng = new Rng(((this.seamlessSeedOf(def) ?? 0) ^ M.salt) >>> 0);
     const spacing = ((lr0 + lr1) / 2) * M.lobeSpacingMul;
     for (const e of edges) {
       for (let along = spacing / 2; along <= e.len - spacing / 2; along += spacing) {
@@ -7197,14 +7230,20 @@ export class World {
     }
   }
 
-  /** May this zone stand RESIDENT? THE STRUCTURAL PICK RULE (M0's clauses,
-   *  unchanged; flagged — her word moves it): surface dimension, not the
-   *  town, no zone-kind identity (excludes towns/outposts/sanctums), not
-   *  'safe', no port/harborhold/hold-anchor ground, no FIELD expanse (their
-   *  scale reconciles in M2), not boundless/aquatic/floating/concealed/
-   *  special, on-graph surface (no caveDepth), spoils intact, and —
-   *  load-bearing — a FIXED def.seed (the resident mint and the arrival
-   *  mint must meet the same layout; seedless statics re-roll per load).
+  /** May this zone stand RESIDENT? THE STRUCTURAL PICK RULE (M0's clauses;
+   *  flagged — her word moves it, and wave 10 IS her word moving the seed
+   *  clause): surface dimension, not the town, no zone-kind identity
+   *  (excludes towns/outposts/sanctums), not 'safe', no port/harborhold/
+   *  hold-anchor ground, no FIELD expanse (their scale reconciles in M2),
+   *  not boundless/aquatic/floating/concealed/special, on-graph surface
+   *  (no caveDepth), spoils intact, and — load-bearing — a RESOLVABLE
+   *  layout seed (the resident mint and the arrival mint must meet the
+   *  same layout). Wave 10 (THE OPEN DOOR): the seed clause reads through
+   *  seamlessSeedOf, so a SEEDLESS STATIC (the Wayfarer's Crossroads)
+   *  joins the country under the mode via its derived per-world seed —
+   *  the hub keeps the exact gameplay loop of every wild around it, and
+   *  the first minutes become door-once-then-one-world (the town alone
+   *  keeps its door: START_ZONE/'safe'/kind all still refuse).
    *  M1 note: M0's freshness clause (unvisited) left the law — the ring
    *  RETAINS the walker's own visited ground and RE-ADMITS demoted ground
    *  (the demote/reapproach law, probe RIG G); a visited arrival replays
@@ -7213,6 +7252,14 @@ export class World {
    *  the ring's membership oracle is one law for engine, probes, and any
    *  future lane. */
   seamlessResidentEligible(z: ZoneDef): boolean {
+    return this.seamlessStructuralOk(z) && this.seamlessSeedOf(z) != null;
+  }
+
+  /** The pick rule's structural half — every clause except the seed.
+   *  Factored so seamlessSeedOf can scope its derivation to exactly the
+   *  class that can ever stand resident (never caves, scene stages, or
+   *  sealed kinds) without the two reads recursing. */
+  private seamlessStructuralOk(z: ZoneDef): boolean {
     return (z.dimension ?? 'surface') === 'surface'
       && z.id !== START_ZONE
       && z.kind === undefined
@@ -7221,8 +7268,29 @@ export class World {
       && !z.field
       && !z.boundless && !z.aquatic && !z.floating && !z.concealed && !z.special
       && z.caveDepth == null
-      && z.seed != null
       && z.spoils !== 'none';
+  }
+
+  /** THE DERIVED SEED (wave 10, THE OPEN DOOR): the ONE layout-seed read
+   *  for every seamless authority — the resident mint, the arrival load,
+   *  the adoption guard, the enclosure/rim/population salts, and the
+   *  demotion bank all speak this method, so record == arrival holds for
+   *  every zone class by construction. An authored/minted seed answers
+   *  first, mode-blind (existing seeded defs byte-untouched everywhere).
+   *  A SEEDLESS STATIC under the mode derives a STABLE per-world seed —
+   *  worldSeed ^ FNV(zone id) ^ salt, the acceptQuest/connectFloatingZone
+   *  derivation idiom — so its layout is a pure f(world) exactly like a
+   *  minted zone's, and the hub can keep the record==arrival law.
+   *  THE DISCRETE BYTE LAW: the derivation is consulted ONLY under
+   *  world.seamless — a discrete process gets z.seed ?? null at every
+   *  site, so the discrete re-roll (rollSeed at the loadZone chokepoint)
+   *  runs byte-identically, draw-for-draw (RIG O pins it). Scoped to the
+   *  structurally eligible class: an off-roster seedless def (a cave, a
+   *  scene stage) keeps its per-load re-roll under BOTH modes. */
+  seamlessSeedOf(z: ZoneDef): number | null {
+    if (z.seed != null) return z.seed;
+    if (!this.seamless || !this.seamlessStructuralOk(z)) return null;
+    return (this.manifest.seed ^ hashStr(z.id) ^ SEAMLESS_STATIC_SEED_SALT) >>> 0;
   }
 
   /** A resident's map NODE in world px — the ring's distance metric and
@@ -7243,7 +7311,7 @@ export class World {
    *  settles recompute it exactly once each and quiet beats pay one string
    *  compare. */
   private seamlessCells(): Map<string, CellRect> {
-    const key = `${Object.keys(this.zoneMap).length}|${webDisturbance()}`;
+    const key = `${Object.keys(this.zoneMap).length}|${webDisturbance()}|${this.seamlessGraphRev}`;
     if (this.seamlessCellsCache?.key === key) return this.seamlessCellsCache.cells;
     const seats: { id: string; x: number; y: number }[] = [];
     for (const z of Object.values(this.zoneMap)) {
@@ -7556,7 +7624,7 @@ export class World {
           const prev = this.zoneMemory.get(zid);
           this.zoneMemory.set(zid, {
             ...(prev ?? {}),
-            seed: prev?.seed ?? def.seed!,
+            seed: prev?.seed ?? this.seamlessSeedOf(def)!,
             enemies, savedAt: this.time,
           });
         }
@@ -7670,7 +7738,7 @@ export class World {
       this.objectiveDone = this.completedObjectives.has(def.id);
       const memory = !def.boundless && this.zoneMemoryFresh(def.id)
         ? this.zoneMemory.get(def.id)! : null;
-      const rng = new Rng(((def.seed ?? 0) ^ SEAMLESS_LIFE.populateSalt) >>> 0);
+      const rng = new Rng(((this.seamlessSeedOf(def) ?? 0) ^ SEAMLESS_LIFE.populateSalt) >>> 0);
       // A fitted arena is a rect by law — the ellipse POI rim filter is
       // structurally moot here (loadZone's own call keeps it for the
       // discrete shapes).
@@ -8018,6 +8086,17 @@ export class World {
    *  a crusade claiming the zone before first arrival is a documented M0
    *  divergence of dress, never of bounds. */
   private seamlessMintResident(def: ZoneDef, partnerId: string, cellOverride?: CellRect): void {
+    // THE SEED BELT (wave 10): every caller intends an ELIGIBLE def, and the
+    // pick rule guarantees a resolvable seed — but a def can flip OUT of the
+    // class between a drift read and this mint (the eligibility-freshness
+    // window: a quest stamps the ACTIVE zone special while its exits drift
+    // the same beat). A null seed here is always a defect-or-flip; refuse
+    // loudly rather than mint a zero-seed record the arrival can never meet.
+    if (this.seamlessSeedOf(def) == null) {
+      this.seamlessNote(`noseed:${def.id}`,
+        `[seamless] mint asked for '${def.id}' with no resolvable seed (def flipped out of the resident class?) — refused`);
+      return;
+    }
     // Capture the authored camera ONCE (a refresh re-mints an already-
     // pinned resident — the standing record's capture is the true prior).
     const standing = this.seamlessMints.get(def.id);
@@ -8095,7 +8174,11 @@ export class World {
         const ang = angleTo(back.pos, entry);
         entry = vec(back.pos.x + Math.cos(ang) * 120, back.pos.y + Math.sin(ang) * 120);
       }
-      const rng = new Rng(def.seed!);
+      // Wave 10: the ONE seed read (seamlessSeedOf) — non-null for every
+      // eligible def by the pick rule's own seed clause; the arrival's
+      // loadZone reads the same method, so record == arrival for the
+      // derived class exactly as for authored seeds.
+      const rng = new Rng(this.seamlessSeedOf(def)!);
       const layout = generateLayout(def, this.arena, rng, entry, this.exits.map(e => e.pos), undefined);
       // THE ADOPTED LAYOUT's stream stamp (wave 8b): the arrival that
       // adopts this record resumes the stream exactly here.
@@ -8162,6 +8245,33 @@ export class World {
     }
   }
 
+  /** THE SAMPLER FRESHNESS LAW (wave 10 — the routed-ribbon pass's coda 5
+   *  closed): the tissue sampler rebuilds when the WEB changed, not when an
+   *  admission happened to land. The signature is every input class the
+   *  capture actually reads: the zone count (mints), webDisturbance
+   *  (settles — cells move under a quiet stand), the surface road-row sum
+   *  (wire-ins, weaves, '?' consolidations and severs — graph shape the
+   *  other two can miss), the eligibility census (a def flipping in or out
+   *  of the resident class re-routes its pairs: concealed clears, future
+   *  quest stamps), and the graph rev (the wire-in's own signal). Same
+   *  signature → the capture is byte-identical by the sampler's own purity
+   *  law → skip; any drift → one rebuild, this beat. Cost of the check:
+   *  one zoneMap walk per ring beat — the candidates() scan already pays
+   *  the same shape every beat. Aliasing (two opposite flips in one beat)
+   *  self-heals on the next true signal move; noted, accepted. */
+  private seamlessTissueEnsure(): void {
+    let roads = 0, eligible = 0;
+    for (const z of Object.values(this.zoneMap)) {
+      if ((z.dimension ?? 'surface') !== 'surface') continue;
+      for (const e of z.exits) { if (e.to !== '?' && !e.crossDim) roads++; }
+      if (this.seamlessResidentEligible(z)) eligible++;
+    }
+    const key = `${Object.keys(this.zoneMap).length}|${webDisturbance()}|${roads}|${eligible}|${this.seamlessGraphRev}`;
+    if (key === this.seamlessTissueKey) return;
+    this.seamlessTissueKey = key;
+    setTissueSampler(buildTissueSampler(this));
+  }
+
   /** THE RING EVAL — one budgeted evaluation beat, called at every loadZone
    *  tail and every update beat while the mode is on. Demotes members past
    *  ringOutPx of the ring's center (free — a demotion only drops records),
@@ -8187,6 +8297,11 @@ export class World {
       }
       return;
     }
+    // THE SAMPLER FRESHNESS (wave 10): every surface ring beat checks the
+    // signature — a quiet stand over a settling web, a wired-in quest
+    // target, or a directed mint's charting all re-key the routes without
+    // waiting for an admission beat (the routed-ribbon pass's coda 5).
+    this.seamlessTissueEnsure();
     // THE DEFERRED REFRESH (wave 8b): the load tail flags the arrival
     // refresh due and the NEXT ring beat serves it here — the crossing
     // tick sheds the record re-mint. A re-mint that actually fired is the
@@ -8204,9 +8319,17 @@ export class World {
     if (!center) return;
     // THE DEMOTION SWEEP (free): members past the out radius drop mint +
     // seat — never the active zone, and never zone memory (the leave law
-    // already owns away-state).
+    // already owns away-state). Wave 10 (THE ELIGIBILITY FRESHNESS): a
+    // standing member whose def FLIPPED out of the resident class mid-
+    // session (a quest stamps it special, a future law seals it) leaves
+    // the ring on this very beat — back to its door, the stretched-link
+    // degradation grammar; a flip back rejoins through the ordinary
+    // admission below. The ACTIVE zone stays exempt here as everywhere
+    // (the ground underfoot cannot demote; its next departure resolves it).
     for (const s of [...this.seamlessRegions]) {
       if (s.zoneId === this.zone.id) continue;
+      const sd = this.zoneMap[s.zoneId];
+      if (!sd || !this.seamlessResidentEligible(sd)) { this.seamlessDemote(s.zoneId); continue; }
       const c = this.seamlessSeatCenter(s);
       if (!c) { this.seamlessDemote(s.zoneId); continue; } // seatless record = a defect; heal it out
       if (Math.hypot(c.x - center.x, c.y - center.y) > SEAMLESS_CFG.ringOutPx) this.seamlessDemote(s.zoneId);
@@ -8314,7 +8437,11 @@ export class World {
       const cellOverride = def.id === this.zone.id ? this.seamlessArrivalCell ?? undefined : undefined;
       this.seamlessMintResident(def, this.seamlessPartnerFor(def), cellOverride);
     }
-    setTissueSampler(buildTissueSampler(this));
+    // Wave 10: the admission's own charting re-keys the signature (mints
+    // move the count, '?' resolutions move the road sum) — the keyed
+    // ensure rebuilds exactly when the routes actually changed, where the
+    // old unconditional rebuild paid the build even for a no-op beat.
+    this.seamlessTissueEnsure();
     this.seamlessNote('boot',
       `[seamless] the resident ring stands around ${this.zone.id} — walk out where a road leaves the rim`);
     // A way opened by this beat's admission wears its waymarks at once.
@@ -18685,6 +18812,7 @@ export class World {
       this.seamlessRegions.length = 0;
       this.seamlessMints.clear();
       this.seamlessCellsCache = null; // the fold indexed the replaced graph
+      this.seamlessTissueKey = '';     // …and the sampler's freshness signature (wave 10)
       this.seamlessArrivalCell = null; // …and so did the standing arrival fit
       this.seamlessSkipAdmit = false;  // …and any pending rebase-tick deferral
       this.seamlessRefreshDue = false; // …and any pending arrival refresh (wave 8b)
@@ -43445,6 +43573,14 @@ export class World {
         && Math.hypot(z.map.x - this.zone.map.x, z.map.y - this.zone.map.y) <= APPROACH_RADIUS;
       if (!nearPlayer) continue;
       connectFloatingZone(z, this.zoneMap, new Rng((this.manifest.seed ^ hashStr(z.id)) >>> 0));
+      // THE AFFIXED MINT (wave 10): the wire-in flipped z.floating and
+      // forged roads with no new node and no settle residue — the one
+      // graph change the standing signals can't see. Bump the seamless
+      // graph rev so the fold re-cuts (the fresh node claims its cell)
+      // and the tissue re-routes on the very next ring beat; the ring's
+      // ordinary admission then makes the quest target part of the
+      // country. Discrete play reads neither key (THE MODE LAW).
+      if (this.seamless) this.seamlessGraphRev++;
       this.sim.onNodeCharted(z, this.simView()); // now on the graph — seed its territory
       this.text(vec(this.player.pos.x, this.player.pos.y - 90),
         z.id.startsWith('demon_') ? 'A path opens toward the demon rift!'

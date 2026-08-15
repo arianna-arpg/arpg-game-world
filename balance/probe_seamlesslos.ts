@@ -249,53 +249,119 @@ interface BlockedLine {
 /** Hunt a border-sharing member's standing body that BLOCKS the given
  *  channel: perpendicular ray from inside A, through the border, at the
  *  body — the hit must stand PAST the border (routed geometry, never the
- *  active zone's own). */
+ *  active zone's own). Wave 10, THE BODY-GRAIN CORRIDOR: the swept bolt
+ *  (rig E3) flies an 8px-radius body, not a zero-width ray — the old
+ *  ±16px ray-lane pair threaded hair gaps in the active rim's dead-tree
+ *  clusters that the body honestly cannot (measured live: ray clear to
+ *  152, bolt dead at 99 beside a radius-20 trunk 17px off the line), so
+ *  the lanes now sweep ±10/±20/±30 (a ≥20px body cannot hide between
+ *  10px-spaced lanes) and the from-seat scans INWARD depths too — the
+ *  active zone's own sight-eating hedge dress (blocksSight, passes shot)
+ *  stands ~50-90px inside the border on re-dealt webs, and a from-seat
+ *  between the dress and the border still crosses the border (the
+ *  routing is exercised identically; the ray just isn't pre-eaten by
+ *  the active side's own furniture). */
 const huntBodyBlock = (channel: 'shot' | 'sight'): BlockedLine | null => {
   const blocks = channel === 'shot' ? blocksProjectiles : blocksSightOf;
-  for (const f of borderFrames) {
-    for (const o of f.mint.layout.doodads as readonly Doodad[]) {
-      if (o.gone || (o.tier ?? 0) !== 0 || !blocks(o)) continue;
-      const wx = o.pos.x + f.seat.originPx.x, wy = o.pos.y + f.seat.originPx.y;
-      const depth = f.depthOf(wx, wy);
-      if (depth < 0 || depth > 110) continue; // the border band: dress rows + rim bodies
-      const al = f.alongOf(wx, wy);
-      if (al < f.runLo + 40 || al > f.runHi - 40) continue;
-      if (Math.abs(al - f.alongOf(f.agreed.x, f.agreed.y)) < 170) continue; // off the carved gap
-      const inA = 140;
-      const b = f.borderAt(al);
-      const fromW = { x: b.x - f.n.x * inA, y: b.y - f.n.y * inA };
-      const targetW = { x: wx + f.n.x * (o.radius + 60), y: wy + f.n.y * (o.radius + 60) };
-      const from = aL(fromW.x, fromW.y), to = aL(targetW.x, targetW.y);
-      if (!insideArena(from)) continue;
-      const hit = castRay(ws, from, to, channel);
-      if (!hit || hit.d <= inA - 6) continue;
-      // THE CORRIDOR CHECK: the swept bolt (rig E3) flies a nose-wide body,
-      // not a zero-width ray — demand two parallel lanes ±16px ALSO reach
-      // the border unblocked, so nothing in the active stretch can graze a
-      // flight the ray itself misses.
-      const lanesClear = [16, -16].every(off => {
-        const h2 = castRay(ws,
-          { x: from.x + f.t.x * off, y: from.y + f.t.y * off },
-          { x: to.x + f.t.x * off, y: to.y + f.t.y * off }, channel);
-        return !h2 || h2.d >= inA - 6;
-      });
-      if (lanesClear) return { from, to, hit, frame: f, targetW };
+  for (const inA of [140, 60, 40]) {
+    for (const f of borderFrames) {
+      for (const o of f.mint.layout.doodads as readonly Doodad[]) {
+        if (o.gone || (o.tier ?? 0) !== 0 || !blocks(o)) continue;
+        const wx = o.pos.x + f.seat.originPx.x, wy = o.pos.y + f.seat.originPx.y;
+        const depth = f.depthOf(wx, wy);
+        if (depth < 0 || depth > 110) continue; // the border band: dress rows + rim bodies
+        const al = f.alongOf(wx, wy);
+        if (al < f.runLo + 40 || al > f.runHi - 40) continue;
+        if (Math.abs(al - f.alongOf(f.agreed.x, f.agreed.y)) < 170) continue; // off the carved gap
+        const b = f.borderAt(al);
+        const fromW = { x: b.x - f.n.x * inA, y: b.y - f.n.y * inA };
+        const targetW = { x: wx + f.n.x * (o.radius + 60), y: wy + f.n.y * (o.radius + 60) };
+        const from = aL(fromW.x, fromW.y), to = aL(targetW.x, targetW.y);
+        if (!insideArena(from)) continue;
+        const hit = castRay(ws, from, to, channel);
+        if (!hit || hit.d <= inA - 6) continue;
+        const lanesClear = [10, -10, 20, -20, 30, -30].every(off => {
+          const h2 = castRay(ws,
+            { x: from.x + f.t.x * off, y: from.y + f.t.y * off },
+            { x: to.x + f.t.x * off, y: to.y + f.t.y * off }, channel);
+          return !h2 || h2.d >= inA - 6;
+        });
+        if (lanesClear) return { from, to, hit, frame: f, targetW };
+      }
     }
   }
   return null;
 };
 
-const trunkShot = huntBodyBlock('shot');
+/** THE PLANTED WITNESS (wave 10): a re-dealt web may dress every border
+ *  band with bodies that starve one channel's hunt (sight-passing
+ *  window-class shot blockers; sight-eating hedges on the ACTIVE side) —
+ *  and the LAW doesn't need the web's luck. Plant a registry-true
+ *  both-channels blocker ('rock') into a border frame's own mint record —
+ *  the exact list the routed ray reads (drawn == tested) — then re-hunt
+ *  through the same preconditions. Refused plants unwind. */
+const plantBlock = (channel: 'shot' | 'sight'): BlockedLine | null => {
+  for (const f of borderFrames) {
+    for (let t = 0.2; t <= 0.81; t += 0.1) {
+      const al = f.runLo + (f.runHi - f.runLo) * t;
+      if (al < f.runLo + 40 || al > f.runHi - 40) continue;
+      if (Math.abs(al - f.alongOf(f.agreed.x, f.agreed.y)) < 210) continue;
+      const b = f.borderAt(al);
+      const wx = b.x + f.n.x * 70, wy = b.y + f.n.y * 70;
+      f.mint.layout.doodads.push({
+        pos: vec(wx - f.seat.originPx.x, wy - f.seat.originPx.y),
+        radius: 40, kind: 'rock',
+      } as Doodad);
+      const found = huntBodyBlock(channel);
+      if (found) return found;
+      f.mint.layout.doodads.pop();
+    }
+  }
+  return null;
+};
+
+const trunkShot = huntBodyBlock('shot') ?? plantBlock('shot');
 check('B1 a neighbor border body stops the routed SHOT ray past the border',
   !!trunkShot && trunkShot.hit.kind === 'doodad' && !ws.lineOfFire(trunkShot.from, trunkShot.to),
   trunkShot ? `${trunkShot.frame.zoneId} hit d ${trunkShot.hit.d.toFixed(1)} (${trunkShot.hit.kind})`
-    : 'VACUOUS: no shot-blocking border body in any member\'s band on this web');
+    : 'VACUOUS: no shot-blocking border body in any member\'s band on this web (plant refused everywhere)');
 
-const trunkSight = huntBodyBlock('sight');
+/** THE MOUTH-OBLIQUE RUNG (sight only — no bolt ever flies B2's line, so
+ *  the body-grain corridor is not required): the enclosure dress is a
+ *  near-continuous sight-eating hedge along the whole rim, gapped ONLY at
+ *  the carved ways — so a perpendicular sight line can be impossible
+ *  anywhere off the gap. From INSIDE the mouth's own clear corridor, an
+ *  oblique line to a planted off-gap rock still CROSSES the border (the
+ *  routing is what's pinned) while its in-A stretch stays inside the
+ *  dress-free window: the lateral displacement lands almost entirely
+ *  PAST the border by the line's own geometry. */
+const plantMouthSight = (): BlockedLine | null => {
+  for (const f of borderFrames) {
+    for (const alOff of [240, -240, 320, -320, 400, -400]) {
+      const al = f.alongOf(f.agreed.x, f.agreed.y) + alOff;
+      if (al < f.runLo + 60 || al > f.runHi - 60) continue;
+      const b = f.borderAt(al);
+      const wx = b.x + f.n.x * 70, wy = b.y + f.n.y * 70;
+      f.mint.layout.doodads.push({
+        pos: vec(wx - f.seat.originPx.x, wy - f.seat.originPx.y),
+        radius: 40, kind: 'rock',
+      } as Doodad);
+      const fromW = { x: f.agreed.x - f.n.x * 80, y: f.agreed.y - f.n.y * 80 };
+      const targetW = { x: wx + f.n.x * 60, y: wy + f.n.y * 60 };
+      const from = aL(fromW.x, fromW.y), to = aL(targetW.x, targetW.y);
+      const minD = Math.hypot(f.agreed.x - fromW.x, f.agreed.y - fromW.y);
+      const hit = insideArena(from) ? castRay(ws, from, to, 'sight') : null;
+      if (hit && hit.kind === 'doodad' && hit.d > minD) return { from, to, hit, frame: f, targetW };
+      f.mint.layout.doodads.pop();
+    }
+  }
+  return null;
+};
+const trunkSight = huntBodyBlock('sight') ?? plantBlock('sight') ?? plantMouthSight();
 check('B2 a neighbor border body stops the routed SIGHT ray past the border',
   !!trunkSight && !ws.lineOfSight(trunkSight.from, trunkSight.to),
   trunkSight ? `${trunkSight.frame.zoneId} hit d ${trunkSight.hit.d.toFixed(1)}`
-    : 'VACUOUS: no sight-blocking border body in any member\'s band on this web');
+    : 'VACUOUS: no sight-blocking border body in any member\'s band on this web (plant refused everywhere)');
 
 /** Hunt a member GRID cell that blocks shots: nearest-to-border blocking
  *  cells first, ray aimed straight through the border at the cell. */
@@ -573,7 +639,14 @@ if (priest && lockedAtMouth && mouthSeats) {
 
   // E3: THE BLOCKED LINE'S FLIGHT — a real bolt spawned down B1's line (the
   // engine's own spawn path) dies where castRay said the line ends: the
-  // two laws' verdicts equal on the same border geometry.
+  // two laws' verdicts equal on the same border geometry. THE CLEAR-LANE
+  // SEAT (wave 10): the mouth pin parks the PLAYER on the mouth line, and
+  // a re-dealt web can seat that line across B1's — castRay is geometry-
+  // only while the sweep honestly hits bodies, so a player on the lane
+  // eats the bolt 40px early and the pin compares apples to a corpse.
+  // For the flight window the player parks at the arena's heart (inside
+  // the active cell — no threshold, no rim read); E4's own loop re-pins
+  // the mouth seats verbatim.
   const kit = priest.skills.find(s => s?.def.id === 'venom_bolt') ?? priest.skills.find(s => !!s);
   if (trunkShot && kit) {
     const before = ws.projectiles.length;
@@ -584,7 +657,8 @@ if (priest && lockedAtMouth && mouthSeats) {
     let beats = 0;
     while (bolt && ws.projectiles.includes(bolt) && beats < 80) {
       last = { x: bolt.pos.x, y: bolt.pos.y };
-      pin();
+      priest.pos.x = seats.m.x; priest.pos.y = seats.m.y;
+      ws.player.pos.x = ws.arena.w / 2; ws.player.pos.y = ws.arena.h / 2;
       for (const a of ws.actors) updateAI(a, ws, DT);
       ws.update(DT);
       beats++;
