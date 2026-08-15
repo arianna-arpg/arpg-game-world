@@ -301,6 +301,12 @@ export interface WorldStateSave {
    *  hold is nothing — unlike a sold-out merc sheet, empty here is not
    *  load-bearing). */
   vendorHolds?: Record<string, VendorHoldSave>;
+  /** Harbor charts PAID for (World.buyHarborChart): the OMEN ids whose chart
+   *  the player bought — the board's persisted once-guard, so a resumed run
+   *  neither re-lists nor re-charges a bought row while the FREE whisper/
+   *  reveal memory stays transient by design. Omen ids, not zone ids: stale
+   *  ones gate nothing. Absent = nothing bought (not load-bearing). */
+  chartsBought?: string[];
 }
 
 /** One reserved shelf row: WHERE it sits (the slot index the overlay

@@ -9331,7 +9331,17 @@ export class World {
    *  run may murmur the same rumor once more — the world repeating itself is
    *  no lie, and the reveal re-stamps ground already surveyed (idempotent). */
   private omenWhisperedAt = new Map<string, number>();
+  /** Whispers FIRED per omen instance — the ordinal half of the keyed line
+   *  pick below (transient with the pair around it: a resumed run re-murmurs
+   *  from the top of its pool). */
+  private omenWhisperN = new Map<string, number>();
   private omenRevealed = new Set<string>();
+  /** Harbor charts PAID for (omen ids) — the counterpoint to the transient
+   *  trio above: a purchase is a purchase across saves (WorldStateSave
+   *  .chartsBought), so a resumed board neither re-lists nor re-charges a
+   *  bought row, while the FREE whisper/reveal channels keep their blessed
+   *  re-murmur. Stale ids gate nothing (the completedQuests idiom). */
+  private chartsBought = new Set<string>();
 
   /** The murmuring pass: every registered omen source is read on a hushed
    *  cadence; whispers carry a bearing, reveals survey the seat onto the map
@@ -9371,9 +9381,18 @@ export class World {
         const last = this.omenWhisperedAt.get(o.id);
         if (last !== undefined && this.time - last < OMEN_CFG.whisperCooldownSec) continue;
         this.omenWhisperedAt.set(o.id, this.time);
-        const line = omenLine(o, o.lines[Math.floor(Math.random() * o.lines.length)], here);
-        this.text(vec(this.player.pos.x, this.player.pos.y - 110),
-          line, o.color ?? OMEN_CFG.color, OMEN_CFG.size);
+        // The line pick AND the toast's own position jitter are keyed on
+        // (omen id, whisper ordinal) — an always-on geographic source must
+        // never move the global stream, or every seeded rig near its
+        // geography re-rolls its stream lottery (THE OFF-STREAM LAW;
+        // probe_straying H8 was the casualty).
+        const n = this.omenWhisperN.get(o.id) ?? 0;
+        this.omenWhisperN.set(o.id, n + 1);
+        const key = hashStr(`${o.id}:${n}`);
+        const line = omenLine(o, o.lines[key % o.lines.length], here);
+        withSeededRandom(key, () => this.text(
+          vec(this.player.pos.x, this.player.pos.y - 110),
+          line, o.color ?? OMEN_CFG.color, OMEN_CFG.size));
       }
     }
   }
@@ -16009,6 +16028,9 @@ export class World {
       // THE PATRON'S HOLD: reserved counter rows + standing orders (absent
       // when no hold carries state — the JSON layer drops the undefined).
       vendorHolds: this.serializeVendorHolds(),
+      // Harbor charts PAID for (omen ids) — the board's persisted once-guard
+      // (absent when none: nothing bought is not load-bearing).
+      ...(this.chartsBought.size ? { chartsBought: [...this.chartsBought] } : {}),
     };
   }
 
@@ -16058,6 +16080,11 @@ export class World {
     this.surveyed = new Set((ws.surveyed ?? []).filter(id => typeof id === 'string' && healed[id]));
     this.discoveredWaypoints = new Set(
       (ws.discoveredWaypoints ?? []).filter(id => typeof id === 'string' && healed[id]));
+    // Bought harbor charts: OMEN ids (cross-registry, not zone ids), so the
+    // scrub is keep-what-stands — a stale id simply never matches a hearsay
+    // row again (the completedQuests idiom).
+    this.chartsBought = new Set(
+      (ws.chartsBought ?? []).filter((id): id is string => typeof id === 'string'));
     // Zone memory: structural scrub per memo; unknown monster defs stay in the
     // list (restoreZoneEnemies already skips them — one tolerance point);
     // rarity re-validates against the live registry.
@@ -21594,36 +21621,45 @@ export class World {
 
   /** THE HEARSAY (the harbor board's rumor rows): every live omen FAR enough
    *  to be sailor's talk (PORT_CFG.hearsay.farBeyond — near murmurs are the
-   *  land's own business), freshest-loudest first, each priced as a CHART
-   *  that would survey its seat onto the map. Pure read for the panel. */
+   *  land's own business), LOUDEST FIRST — the aged whisper reach, omenReach's
+   *  own widening fold, so the fabric's findability guarantee governs the
+   *  board's scarce seats and an unfound seat CLIMBS as it stands — with
+   *  fresher rows breaking equal voices and source-registration order
+   *  breaking exact ties (stable sort); each priced as a CHART that would
+   *  survey its seat onto the map. Bought charts (chartsBought, persisted)
+   *  never re-list. Pure read for the panel. */
   harborHearsay(): { id: string; line: string; price: number; canChart: boolean }[] {
     const here = this.zone.map;
     const H = PORT_CFG.hearsay;
-    const out: { id: string; line: string; price: number; canChart: boolean }[] = [];
+    const cand: { o: Omen; d: number; reach: number }[] = [];
     for (const o of collectOmens(this)) {
       if ((o.dimension ?? 'surface') !== 'surface') continue; // harbors are surface ears
       if (this.omenRevealed.has(o.id)) continue;              // already on the map
+      if (this.chartsBought.has(o.id)) continue;              // the chart is owned — never re-sold
       const d = coordDist(o.at, here);
       if (d < H.farBeyond) continue;
-      const line = o.lines.length ? omenLine(o, o.lines[0], here) : 'something waits out there';
-      out.push({
-        id: o.id, line,
-        price: Math.max(H.chartPriceMin, Math.round(d * H.chartPricePerDist)),
-        canChart: !!o.zoneId && !!this.zoneMap[o.zoneId ?? ''],
-      });
-      if (out.length >= H.max) break;
+      cand.push({ o, d, reach: omenReach(o).whisper });
     }
-    return out;
+    cand.sort((a, b) => (b.reach - a.reach) || (a.o.age - b.o.age));
+    return cand.slice(0, H.max).map(({ o, d }) => ({
+      id: o.id,
+      line: o.lines.length ? omenLine(o, o.lines[0], here) : 'something waits out there',
+      price: Math.max(H.chartPriceMin, Math.round(d * H.chartPricePerDist)),
+      canChart: !!o.zoneId && !!this.zoneMap[o.zoneId ?? ''],
+    }));
   }
 
   /** Buy the CHART of a rumored seat (requestMeta 'harborChart', host-only):
    *  the buying seat's carried essence pays at the mortal exchange, then the
    *  seat's surroundings are SURVEYED — the spire's own reveal machinery,
-   *  bought at the dock. The walk (or the sail) out there is still yours. */
+   *  bought at the dock. The walk (or the sail) out there is still yours.
+   *  The once-guard is PERSISTED (chartsBought): a resumed board can never
+   *  re-sell ground already paid for, while the free reveal memory stays
+   *  transient by design. */
   buyHarborChart(omenId: string, seat: Seat = this.localSeat): void {
     const o = collectOmens(this).find(x => x.id === omenId && (x.dimension ?? 'surface') === 'surface');
     const z = o?.zoneId ? this.zoneMap[o.zoneId] : undefined;
-    if (!o || !z || this.omenRevealed.has(o.id)) return;
+    if (!o || !z || this.omenRevealed.has(o.id) || this.chartsBought.has(o.id)) return;
     const H = PORT_CFG.hearsay;
     const price = Math.max(H.chartPriceMin, Math.round(coordDist(o.at, this.zone.map) * H.chartPricePerDist));
     if (this.mortalValueOf(seat) < price) {
@@ -21632,6 +21668,7 @@ export class World {
       return;
     }
     if (!this.spendMortalValue(seat, price, 'harbor:chart')) return;
+    this.chartsBought.add(o.id); // the paid once-guard — rides the save
     this.omenRevealed.add(o.id);
     this.surveyAround(z, H.chartReveal);
     this.text(vec(this.player.pos.x, this.player.pos.y - 84),

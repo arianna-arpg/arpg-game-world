@@ -33,7 +33,17 @@
 //     guarantee past the shoreline — an unminted spot and an unfound island
 //     whisper COORD-ONLY (pure reads that never mint), a minted veiled
 //     harbor seats its omen ON the port zone, and the engine pass reveals
-//     it through the registered source; a found harbor goes silent.
+//     it through the registered source; a found harbor goes silent,
+//   - THE HEARSAY ORDER + THE PAID ONCE-GUARD (batch 54): the board sorts
+//     LOUDEST FIRST (aged whisper reach — omenReach's widening fold — with
+//     freshness breaking equal voices) BEFORE the cap, pinned on an injected
+//     trio and as law over every consecutive row; and a bought chart rides
+//     WorldStateSave.chartsBought — no re-list, no re-charge across a
+//     resume, the FREE reveal channel untouched,
+//   - THE KEYED WHISPER (World.updateOmens, batch 54): the murmured line is
+//     picked by (omen id, whisper ordinal) and the toast's jitter rides a
+//     seeded swap — a fired whisper moves the global stream by ZERO draws
+//     (the ablation pin; ★AMBIENT-WHISPER-COSTS-A-DRAW closed).
 // Run: npx tsx balance/probe_forechart.ts
 // ---------------------------------------------------------------------------
 
@@ -320,9 +330,12 @@ check('A: THE VEIL INVARIANT — no veiled zone borders visited ground',
   // fixture currently stands, and the kill switch silences it for later
   // rigs — the D-rig idiom). Injected rows: the canChart split's two REFUSAL
   // legs plus the two gate filters, all placed clear of the farBeyond
-  // boundary. The CHARTABLE witness is never injected — the staged deadline
-  // siege's own row is the known-zone half of the split, derived wholly from
-  // world state.
+  // boundary. The refusal legs + the stale row DOUBLE as the ORDER fixture:
+  // loud enough (4000+) to out-shout every organic voice (sea 560, isle 500,
+  // the staged siege 700–850), with controlled (reach, age) keys so the
+  // promised sort is pinned on known rows. The CHARTABLE witness is never
+  // injected — the staged deadline siege's own row is the known-zone half of
+  // the split, derived wholly from world state.
   const fix = { on: true, burst: false, stance: { x: 0, y: 0 }, rows: [] as Omen[] };
   registerOmenSource(() => {
     if (!fix.on) return [];
@@ -374,11 +387,17 @@ check('A: THE VEIL INVARIANT — no veiled zone borders visited ground',
     const off = H.farBeyond + 400;
     fix.stance = at;
     fix.rows = [
-      // canChart FALSE, leg one: a coord-only rumor (a marching column).
-      { id: 'hearsay_coord', at: { x: at.x + off, y: at.y }, lines: ['a column marches {bearing}'], whisper: 10, age: 0 },
-      // canChart FALSE, leg two: names ground the world does NOT know.
+      // canChart FALSE, leg one — and THE LOUDEST VOICE: ancient but wide
+      // (no widenPerMin: reach IS the whisper). Loudness outranks freshness,
+      // so the board must seat it FIRST despite its age.
+      { id: 'hearsay_coord', at: { x: at.x + off, y: at.y }, lines: ['a column marches {bearing}'], whisper: 4500, age: 9999 },
+      // canChart FALSE, leg two — the FRESH half of an equal-voice pair.
       { id: 'hearsay_ghost', at: { x: at.x - off, y: at.y }, zoneId: 'hearsay_no_such_zone',
-        lines: ['a door nobody can place'], whisper: 10, age: 0 },
+        lines: ['a door nobody can place'], whisper: 4000, age: 0 },
+      // The STALE half of the pair: equal reach, older — freshness breaks
+      // the tie, so this row must list BELOW its fresh twin.
+      { id: 'hearsay_stale', at: { x: at.x, y: at.y - off },
+        lines: ['an old rumor gone hoarse'], whisper: 4000, age: 300 },
       // Filtered: near talk is the land's own business, even chartable talk.
       { id: 'hearsay_near', at: { x: at.x + Math.max(40, H.farBeyond - 60), y: at.y },
         zoneId: best.port.id, lines: ['near talk'], whisper: 10, age: 0 },
@@ -387,7 +406,8 @@ check('A: THE VEIL INVARIANT — no veiled zone borders visited ground',
         lines: ['not surface talk'], whisper: 10, age: 0 },
     ];
     const seated = new Set(cand.harborHearsay().map(r => r.id));
-    if (!seated.has(`harborhold:${best.anchor.id}`) || !seated.has('hearsay_coord') || !seated.has('hearsay_ghost')) continue;
+    if (!seated.has(`harborhold:${best.anchor.id}`) || !seated.has('hearsay_coord')
+      || !seated.has('hearsay_ghost') || !seated.has('hearsay_stale')) continue;
     wH = cand; stancePort = best.port; farAnchor = best.anchor; huntSeed = ws;
     break;
   }
@@ -432,10 +452,35 @@ check('A: THE VEIL INVARIANT — no veiled zone borders visited ground',
       const o = omens.get(r.id);
       return !!o && r.canChart === (!!o.zoneId && !!wH!.zoneMap[o.zoneId ?? '']);
     }));
-    // The cap: crowd the sources past max and the board stops at max.
+    // --- THE PROMISED ORDER (the doc's law, sorted for real): loudest aged
+    // voice first, freshness breaking equal voices — pinned on the injected
+    // trio's controlled keys, then as LAW over every consecutive pair
+    // (re-derived from the omen substrate, organic rows included). ---
+    const idxOf = (id: string): number => rows.findIndex(r => r.id === id);
+    check('H: loudness outranks freshness (the ancient wide row tops the board)',
+      idxOf('hearsay_coord') === 0, `hearsay_coord at ${idxOf('hearsay_coord')}`);
+    check('H: equal voices — the fresher row speaks first',
+      idxOf('hearsay_ghost') >= 0 && idxOf('hearsay_ghost') < idxOf('hearsay_stale'),
+      `ghost@${idxOf('hearsay_ghost')} stale@${idxOf('hearsay_stale')}`);
+    check('H: the whole board is monotone under (loudest, then freshest)',
+      rows.every((r, i) => {
+        if (!i) return true;
+        const a = omens.get(rows[i - 1].id), b = omens.get(r.id);
+        if (!a || !b) return false;
+        const ra = omenReach(a).whisper, rb = omenReach(b).whisper;
+        return ra > rb || (ra === rb && a.age <= b.age);
+      }), rows.map(r => r.id).join(','));
+    // The cap: crowd the sources past max — the board stops at max, and the
+    // quiet crowd cannot displace louder rows (sort THEN cap: the loudest
+    // voices win the seats, never the earliest-registered source).
     fix.burst = true;
-    check('H: the board caps at hearsay.max under a crowd', wH.harborHearsay().length === H.max,
-      `${wH.harborHearsay().length} of ${H.max}`);
+    const crowded = wH.harborHearsay();
+    check('H: the board caps at hearsay.max under a crowd', crowded.length === H.max,
+      `${crowded.length} of ${H.max}`);
+    check('H: a quiet crowd cannot displace louder rows (sort THEN cap)',
+      ['hearsay_coord', 'hearsay_ghost', 'hearsay_stale', holdRowId]
+        .every(id => crowded.some(r => r.id === id)),
+      crowded.map(r => r.id).join(','));
     fix.burst = false;
 
     // --- THE ROUND TRIP: the board never loses knowledge across a save ---
@@ -451,7 +496,7 @@ check('A: THE VEIL INVARIANT — no veiled zone borders visited ground',
       w2.loadZone(stancePort.id);
       check('H: the resumed walker stands at the same quay', w2.zone.id === stancePort.id);
       const rowsB = w2.harborHearsay();
-      check('H: the board reads IDENTICALLY across the save (rows, lines, prices, chartability)',
+      check('H: the board reads IDENTICALLY across the save (rows, ORDER, lines, prices, chartability)',
         JSON.stringify(rowsB) === JSON.stringify(rowsA),
         `${rowsA.length} rows before, ${rowsB.length} after`);
       const byId2 = new Map(rowsB.map(r => [r.id, r] as const));
@@ -460,7 +505,8 @@ check('A: THE VEIL INVARIANT — no veiled zone borders visited ground',
       check('H: the persisted deadline siege still murmurs, still chartable',
         byId2.get(holdRowId)?.canChart === true);
       check('H: the canChart split survives the resume',
-        byId2.get('hearsay_coord')?.canChart === false && byId2.get('hearsay_ghost')?.canChart === false);
+        byId2.get('hearsay_coord')?.canChart === false && byId2.get('hearsay_ghost')?.canChart === false
+        && byId2.get('hearsay_stale')?.canChart === false);
     }
 
     // --- THE CHART PURCHASE (the real intent path: requestMeta 'harborChart') ---
@@ -493,6 +539,39 @@ check('A: THE VEIL INVARIANT — no veiled zone borders visited ground',
         wH.surveyed.has(farAnchor.id) && farAnchor.veiled !== true);
       wH.requestMeta({ t: 'harborChart', omen: holdRowId });
       check('H: a second press buys nothing twice', wH.mortalValueOf() === 7);
+
+      // --- THE PAID ONCE-GUARD RIDES THE SAVE (WorldStateSave.chartsBought) ---
+      // The staged siege still stands (fallAt unreached), so its omen still
+      // murmurs in a resumed world — but the chart is OWNED: the row must not
+      // re-list, a funded re-press must not charge, and the FREE reveal
+      // channel (transient by design) must still speak. Same-sim-seed law as
+      // the round trip above (★RESUME-RIGS-REUSE-THE-SIM-SEED).
+      const save2 = wH.serializeWorldState();
+      check('H: the bought chart rides the save', (save2.chartsBought ?? []).includes(holdRowId),
+        (save2.chartsBought ?? []).join(',') || 'field absent');
+      const w3 = makeSimWorld('warrior', huntSeed);
+      const adopted2 = w3.adoptWorldState(save2);
+      check('H: the post-purchase world stands back up', adopted2 === true);
+      if (adopted2) {
+        w3.loadZone(stancePort.id);
+        check('H: the bought row does NOT return to a resumed board',
+          !w3.harborHearsay().some(r => r.id === holdRowId),
+          w3.harborHearsay().map(r => r.id).join(','));
+        w3.localSeat.meta.essences.coarse = 500;
+        w3.requestMeta({ t: 'harborChart', omen: holdRowId });
+        check('H: a funded re-press cannot re-charge for owned ground',
+          w3.mortalValueOf() === 500, `${w3.mortalValueOf()} of 500 left`);
+        check('H: the resumed ground stays surveyed (the purchase held)',
+          w3.surveyed.has(farAnchor.id) && w3.zoneMap[farAnchor.id]?.veiled !== true);
+        // The FREE channel: stand IN the besieged anchor (d = 0 ≤ reveal) —
+        // the engine's murmuring pass re-stamps the bought seat idempotently.
+        // The paid guard gates the BOARD alone, never the world's own voice.
+        w3.loadZone(farAnchor.id);
+        step(w3, 0.5, 12);
+        check('H: the free re-reveal still speaks for a bought seat (the engine pass untouched)',
+          (w3 as unknown as { omenRevealed: Set<string> }).omenRevealed.has(holdRowId)
+          && w3.surveyed.has(farAnchor.id));
+      }
     }
     fix.on = false; // silence the source for any rig below
   }
@@ -622,6 +701,55 @@ check('A: THE VEIL INVARIANT — no veiled zone borders visited ground',
         `${islandOmens(w).length} rows at the quay`);
     }
   }
+}
+
+// ------------------------------------------------ J. the keyed whisper
+// (World.updateOmens): the murmured line is picked by (omen id, whisper
+// ordinal) and the toast's own position jitter rides a seeded swap (THE
+// OFF-STREAM LAW, core/rng.ts withSeededRandom) — an always-on geographic
+// source can no longer re-roll a seeded rig's stream lottery
+// (★AMBIENT-WHISPER-COSTS-A-DRAW; probe_straying H8 was the casualty). Pins:
+//   - two SAME-SEED runs murmur byte-identical lines, first and second
+//     whisper both (★RESUME-RIGS-REUSE-THE-SIM-SEED — the global stream is
+//     reseeded per run, the world stands on the same sim seed),
+//   - THE ABLATION: a run whose fixture whispers and its silent twin leave
+//     the global stream at the SAME position — a fired whisper costs ZERO
+//     draws (line pick and toast jitter both off-stream).
+{
+  const jfix = { on: false, rows: [] as Omen[] };
+  registerOmenSource(() => jfix.on ? jfix.rows : []);
+  const heardRun = (silent: boolean): { heard: string[]; probe: number } => {
+    seedGlobalRandom(0x77ab5eed);
+    const wj = makeSimWorld('warrior', 0x77a01);
+    jfix.on = !silent;
+    jfix.rows = [{
+      id: 'whisper_probe', at: { x: wj.zone.map.x + 120, y: wj.zone.map.y },
+      lines: ['the probe hums {bearing}', 'the probe drones {dist}', 'the probe rattles {bearing}'],
+      whisper: 400, age: 0,
+    }];
+    // The observation tap: every floated line routes through World.text —
+    // shadowing it on the instance records the murmurs TTL-proof while the
+    // real floater still runs (a read tap, never a behavior change).
+    const heard: string[] = [];
+    const orig = wj.text.bind(wj);
+    (wj as unknown as { text: (...a: unknown[]) => void }).text =
+      (...a: unknown[]) => { heard.push(String(a[1])); (orig as (...a: unknown[]) => void)(...a); };
+    step(wj, 0.5, 620); // first whisper at the first cadence; the second past the 300s cooldown
+    jfix.on = false;
+    return { heard: heard.filter(l => l.includes('the probe')), probe: Math.random() };
+  };
+  const a1 = heardRun(false);
+  const a2 = heardRun(false);
+  const c = heardRun(true);
+  check('J: the fixture whispers fire (ordinal 0, then past the cooldown ordinal 1)',
+    a1.heard.length === 2, `${a1.heard.length} heard: ${a1.heard.join(' | ')}`);
+  check('J: two same-seed runs murmur byte-identical lines (the resume law)',
+    JSON.stringify(a1.heard) === JSON.stringify(a2.heard) && a1.probe === a2.probe,
+    a1.heard.join(' | '));
+  check('J: the silent twin heard nothing (the ablation is real)', c.heard.length === 0,
+    c.heard.join(' | ') || 'silence');
+  check('J: THE ABLATION — a fired whisper moves the global stream not at all',
+    a1.probe === c.probe, `fired ends at ${a1.probe}, silent at ${c.probe}`);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');

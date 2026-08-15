@@ -33,7 +33,8 @@ export const PORT_CFG = {
     /** Omens at least this far (node units) from the harbor make the board —
      *  nearer ones are the land's own whisper business (world/omens.ts). */
     farBeyond: 260,
-    /** Most hearsay rows a board shows at once (freshest + farthest first). */
+    /** Most hearsay rows a board shows at once — the loudest aged voices win
+     *  the seats, fresher rows breaking ties (World.harborHearsay's sort). */
     max: 6,
     /** CHART pricing: gold per node-unit of distance to the rumored seat… */
     chartPricePerDist: 0.35,
