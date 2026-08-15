@@ -220,8 +220,8 @@ const preSnap = JSON.parse(JSON.stringify(war.snapshot())) as unknown;
   const fresh = heard.slice(mark);
   check('F the bulletin: the pact shatters LOUDLY, naming both lords',
     fresh.some(t => /pact shatters/i.test(t)
-      && t.includes(war.seatedLords()[truce.a]?.short ?? ' ')
-      && t.includes(war.seatedLords()[truce.b]?.short ?? ' ')),
+      && t.includes(war.seatedLords()[truce.a]?.short ?? '\u0000')
+      && t.includes(war.seatedLords()[truce.b]?.short ?? '\u0000')),
     fresh.filter(t => /shatter/i.test(t)).join(' | ') || `${fresh.length} other line(s)`);
   // THE REPUBLISH, read against the floor: 'hostile' is unreachable from the
   // static table now, so this can only be applyStances() having run again.
