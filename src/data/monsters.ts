@@ -10145,6 +10145,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'wax', tags: ['construct'],
     passive: true, noNemesis: true, noBestiary: true, drops: 0,
     onHitByType: { fire: { skillId: 'wax_flare' } },
+    // THE RE-LIGHT'S BEAT (the first authored onHitTypeIcd): this is the
+    // bestiary's one CHANCE-LESS payload row, so at the 0.8s default a
+    // sustained burn strobes wax_flare ~1.25×/s from every pool a fought
+    // court left standing. The answer should read as an EVENT — 2.5 matches
+    // wax_drip's linger (the court's own burn-beat), and the FIRST answer
+    // is untouched (the clock arms only on a firing). ⚠ 2.5 unblessed.
+    onHitTypeIcd: 2.5,
   },
 
   // THE UMBRAL PARLIAMENT: your shadow, seceded. Near-invisible by nature —
@@ -17400,6 +17407,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['belligerence', 'war_cry', 'cleave'],
     xp: 110, bossBar: true,
     faction: 'goblin', adorn: 'ears',
+    // THE CHAMPION'S REGALIA (the first authored infrequentTheme — the
+    // def-side MI declaration, precedence over MONSTER_THEMES): the
+    // warband's champion minted no goblin gear while his skirmishers did.
+    // The faction's apex kill is the theme's natural jackpot farm — the
+    // infrequents header's own Grim Dawn pattern. ⚠ theme seat unblessed.
+    infrequentTheme: 'goblin',
     presence: { from: 12, fadeIn: 5 },
     scaling: { life: { incPerLevel: 0.09 } },
     wardPriority: 2,
@@ -17429,6 +17442,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['carve', 'deep_carve', 'dash_strike'],
     xp: 100, bossBar: true,
     faction: 'gnoll', adorn: 'ears',
+    // The pack's whole MI wardrobe hung on one impaler until now — the
+    // champion joins the hunt (the warboss note tells the pattern).
+    // ⚠ theme seat unblessed.
+    infrequentTheme: 'gnoll',
     presence: { from: 11, fadeIn: 5 },
     scaling: { life: { incPerLevel: 0.09 } },
     detection: 1.3,
