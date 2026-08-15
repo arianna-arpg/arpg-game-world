@@ -220,7 +220,7 @@ import { coordDist, mapToPx, type MapCoord } from '../world/coords';
 import { getTissueSampler, PARTITION_CFG, SEAMLESS_CFG, setTissueSampler, type CellRect, type RegionSeat } from '../world/seamless';
 import { ENCLOSURE_CFG, ENCLOSURE_MASSIF_CFG, enclosureRowFor, enclosureBodiesFor, type EnclosureBorder, type EnclosureMassif } from '../data/enclosure';
 import { borderAgreedPoint, cellsShareBorder, foldCells } from '../world/cells';
-import { buildTissueSampler } from '../world/tissue';
+import { buildTissueSampler, massDressOf } from '../world/tissue';
 import { FORECHART_CFG, forechartSource, zonesWithin } from '../world/forechart';
 import { OMEN_CFG, collectOmens, omenLine, omenReach, type Omen } from '../world/omens';
 import { PORT_CFG } from '../data/ports';
@@ -51390,11 +51390,28 @@ export class World {
         const slen = Math.hypot(sdx, sdy);
         const step = 15;
         const n = Math.max(1, Math.ceil(slen / step));
+        // THE MESH (M2 wave 9): the SOLID BETWEEN eats tier-0 flights at its
+        // drawn lattice surface — the same carried field castRay consults and
+        // the tissue painter fills (drawn == tested), behind the shot ray's
+        // own dial; story-1+ flights sail over the between's ground scrub
+        // (this lane's own elevation posture).
+        const meshSolid = LOS_CFG.crossBorder.solidShot && (p.tier ?? 0) < 1
+          ? massDressOf(getTissueSampler()) : null;
         for (let k2 = 1; k2 <= n && !dead; k2++) {
           const sx = prev.x + sdx * (k2 / n), sy = prev.y + sdy * (k2 / n);
           if (sx >= 0 && sx <= this.arena.w && sy >= 0 && sy <= this.arena.h) continue;
           const owner = this.seamlessProjOwnerAt(sx + ring.active.originPx.x, sy + ring.active.originPx.y);
-          if (!owner) continue;
+          if (!owner) {
+            if (meshSolid?.solidAt(sx + ring.active.originPx.x,
+              sy + ring.active.originPx.y, this.sim.biomeField.fieldSeed >>> 0)) {
+              this.flashes.push({ pos: vec(sx, sy), radius: p.radius + 6,
+                color: p.color, life: 0.15, maxLife: 0.15 });
+              dead = true;
+              SIM_TAP.current?.onOccluded?.('proj');
+              break;
+            }
+            continue;
+          }
           const lx = sx + ring.active.originPx.x - owner.seat.originPx.x;
           const ly = sy + ring.active.originPx.y - owner.seat.originPx.y;
           const g = owner.mint.layout.walk;
