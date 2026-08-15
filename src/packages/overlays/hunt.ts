@@ -35,6 +35,7 @@ import { Rng } from '../../core/rng';
 import { FACTIONS } from '../../data/monsters';
 import { registerEventFront } from '../../engine/eventWeather';
 import type { World } from '../../engine/world';
+import { registerAttentionSource, type AttentionPoint } from '../../world/attention';
 import type { MapCoord } from '../../world/coords';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
@@ -437,4 +438,34 @@ registerMarkerSource((world: World): MapMarker[] => {
     glyph, fill: '#241c08', stroke: h.color, text: h.color, r: 10,
     title: 'A great beast prowls here: the Hunt', fog: 'always', z: 18,
   }];
+});
+
+// --- in-zone attention pointers (world/attention.ts — same zero-edit contract) --
+//
+// The map pin says which ZONE the trail or the quarry is in; these edge
+// chevrons say where in THIS zone — the fabric's founding rider ("built for
+// the Hunt beast", its own header). The FOOTPRINT is a dwell target lost in
+// open country: the pin led the player here, and an unfindable track reads as
+// "it never spawned" (the fracture lesson). The BEAST is the chase itself —
+// off-screen exactly when it breaks for an exit, the moment the player must
+// not lose it. Both wear the hunt's own colour; the beast wears the quarry's
+// own map glyph (the located pin's fold), the trail the 🐾 it pinned by.
+registerAttentionSource((world: World): AttentionPoint[] => {
+  const hf = world.sim.huntField;
+  if (!hf) return [];
+  const h = hf.peek();
+  if (!h || h.lifeFrac <= 0) return [];
+  const out: AttentionPoint[] = [];
+  const fp = world.huntFootprintView();
+  if (fp) out.push({
+    id: `hunt-track-${h.id}`, pos: fp.pos, color: h.color, glyph: '🐾',
+    label: 'beast tracks — dwell to follow', z: 2,
+  });
+  const beast = world.huntBeastView();
+  if (beast) out.push({
+    id: `hunt-beast-${h.id}`, pos: beast.pos, color: h.color,
+    glyph: hf.surge().beasts.find(b => b.defId === h.beastDefId)?.glyph ?? '🐗',
+    label: beast.name, z: 6,
+  });
+  return out;
 });

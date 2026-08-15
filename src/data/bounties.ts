@@ -58,6 +58,10 @@ registerKillHandler({
 
 // The last stragglers: once the hunt is nearly done, the remaining marks get
 // edge chevrons (name as label — you know exactly who still owes the writ).
+// bountyView speaks for EVERY writ wearing the 'bounty_mark' tag — the zone
+// objective's own quarry AND the harborhold plaza board's posted writs
+// (postHoldWrits, the same grammar on any coast) — so board writs share the
+// same stragglers law instead of roaming invisible.
 registerAttentionSource((world: World): AttentionPoint[] => {
   const v = world.bountyView();
   if (!v || v.remaining === 0 || v.remaining > BOUNTY_CFG.chevronWhenRemaining) return [];

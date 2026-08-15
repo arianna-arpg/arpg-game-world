@@ -12412,6 +12412,16 @@ export class World {
   /** The footprint object in this zone (for the renderer), or null. */
   huntFootprintView(): { pos: Vec2 } | null { return this.huntFootprint; }
 
+  /** The materialized hunt beast standing in this zone (for the attention
+   *  fabric), or null — a pure read: the live actor's position and name while
+   *  the quarry is up (dead or migrated hands back null; the per-zone reset
+   *  already clears the pointer on load). */
+  huntBeastView(): { pos: Vec2; name: string } | null {
+    const b = this.huntBeast;
+    if (!b || b.dead) return null;
+    return { pos: b.pos, name: b.name };
+  }
+
   // --- FRACTURES: the player-driven chase/timer module -----------------------
   //
   // A volatile fracture you RUN OVER unleashes a fissure that crawls only while
@@ -14335,6 +14345,15 @@ export class World {
     return this.descentSpent.has(this.zone.id)
       ? 'Linger to trade — the shaft below is spent.'
       : 'The wares wait on the deep — dwell the shaft to descend.';
+  }
+
+  /** The standing Descent shaft in THIS cave (for the attention fabric), or
+   *  null — a pure read mirroring updateDelver's own gate (unspent, no dive
+   *  underway), so the chevron speaks exactly while the platform's dwell
+   *  would work and falls silent forever once the one descent is spent. */
+  descentShaftView(): { pos: Vec2 } | null {
+    if (!this.descentSite || this.descentRun || this.descentSpent.has(this.zone.id)) return null;
+    return { pos: this.descentSite.platform };
   }
 
   /** The live descent readout for the renderer (HUD depth + the banked
@@ -42275,10 +42294,16 @@ export class World {
   }
 
   /** The live BOUNTY board, for the attention fabric: the marks still owing
-   *  their writs (position + name — the chevron says who). */
+   *  their writs (position + name — the chevron says who). Marks are marks
+   *  WHOEVER posted them — the 'bounty' zone objective's own quarry (silent
+   *  once the objective is done) or the harborhold plaza board's writs
+   *  (postHoldWrits tags the same 'bounty_mark' grammar on any coast), so
+   *  board writs are never invisible to the chevron pass. */
   bountyView(): { remaining: number; marks: { pos: Vec2; name: string }[] } | null {
-    if (this.zone.objective.kind !== 'bounty' || this.objectiveDone) return null;
+    const isObjective = this.zone.objective.kind === 'bounty';
+    if (isObjective && this.objectiveDone) return null;
     const marks = this.actors.filter(a => !a.dead && a.tag === 'bounty_mark');
+    if (!isObjective && !marks.length) return null;
     return { remaining: marks.length, marks: marks.map(a => ({ pos: a.pos, name: a.name })) };
   }
 

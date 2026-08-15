@@ -23,6 +23,8 @@
 // ---------------------------------------------------------------------------
 
 import { registerLightwell } from '../../engine/lightwells';
+import type { World } from '../../engine/world';
+import { registerAttentionSource, type AttentionPoint } from '../../world/attention';
 import { DescentField, type DescentSurge } from '../overlays/descent';
 import type { ContentPackage, FactionSpec } from '../types';
 
@@ -92,6 +94,30 @@ const DESCENT_SURGE: DescentSurge = {
 registerLightwell({
   kind: 'light_spot',
   burst: { grant: DESCENT_SURGE.lightBurst, on: 'touch', text: 'the light holds back the dark!', color: '#ffe08a' },
+});
+
+// --- in-zone attention pointer (world/attention.ts — the zero-edit contract) ---
+//
+// The Delver announces itself the moment its cave is entered ("A Delver
+// lingers by a gaping shaft…") but stands at a FAR point of an unlit cave —
+// an announced find the player can't locate reads as "it never spawned" (the
+// fracture lesson, and the fabric header's own named rider: "a Descent
+// shaft"). The chevron rides the announcement's truth: descentShaftView
+// mirrors the platform dwell's own gate, so it speaks exactly while the way
+// down still opens and falls silent forever once the one descent is spent
+// (the counter that opens then stands beside the resurface point — nothing
+// left to find).
+/** The Delver's teal — the accent every descent text in world.ts already
+ *  wears ('You descend into the dark…' et al.), worn here so the chevron
+ *  reads as the same voice. */
+const DESCENT_ACCENT = '#7fe0d8';
+registerAttentionSource((world: World): AttentionPoint[] => {
+  const v = world.descentShaftView();
+  if (!v) return [];
+  return [{
+    id: 'descent_shaft', pos: v.pos, color: DESCENT_ACCENT, glyph: '⛏',
+    label: "the Delver's shaft — dwell to descend", z: 2,
+  }];
 });
 
 /** The DEPTHKIN — the abyss's pale brood. contexts:['descent'] keeps them out of
