@@ -2053,7 +2053,16 @@ export const SKILLS: Record<string, SkillDef> = {
       + ' as long as the button is held, each with a 20% chance to nick a bleed, while you keep'
       + ' moving at 70% of your usual speed. Chaos, with footwork.',
     tags: ['attack', 'melee', 'physical', 'channel'], color: '#6ab8d8',
-    manaCost: 3, cooldown: 0, useTime: 0,
+    // ⚠ Batch 54 wild_strike solo-sustain re-seat (2026-08-15), unblessed:
+    // cost 3→1 — at 3/beat the 5/s channel demanded 15 mana/s and ran
+    // REGEN-clocked (~2 strikes/s bare L20; interval is not the frequency
+    // lever while starved). Sliver 12°→30°, damage [6,10]→[8,13] — the
+    // cone angle test is center-only, so a 12° sliver in the 90° sector
+    // touched an adjacent single target ~13% of beats; 30° lands ~1 in 3
+    // with the wander untouched. Held solo bare L20: 5.7→51.8 dps —
+    // seated beside ascetic/juggernaut, under the rooted primaries (the
+    // 70%-mobility premium); pack lane touches 5/5 bodies.
+    manaCost: 1, cooldown: 0, useTime: 0,
     castMode: 'channel',
     channel: { interval: 0.2, move: 'slowed', moveFactor: 0.7, trackAim: true },
     // The random SECTOR is a lever set: forward-biased 90° here (reined in
@@ -2061,8 +2070,8 @@ export const SKILLS: Record<string, SkillDef> = {
     // supports move it: Wild Abandon rounds it toward a full circle,
     // Measured Blade focuses it, offsetDeg can lock it aside or behind.
     aim: { random: { offsetDeg: 0, spreadDeg: 90 } },
-    baseDamage: { physical: [6, 10] },
-    delivery: { type: 'cone', range: 150, arcDeg: 12 },
+    baseDamage: { physical: [8, 13] },
+    delivery: { type: 'cone', range: 150, arcDeg: 30 },
     effects: [
       { type: 'damage' },
       { type: 'status', status: 'bleed', chance: 0.2, magnitude: 0.25 },

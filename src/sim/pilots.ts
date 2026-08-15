@@ -136,8 +136,13 @@ class Pilot implements PlayerInputSource {
     // any further cd-0 channels (one hand, one wheel). A bar that does
     // carry a cd-0 instant keeps its authored order: both re-seatings
     // were measured WORSE on the swashbuckler (wild_strike held solo
-    // reads 1.9 dps — random-bearing slivers starve a single-target
+    // read 1.9 dps then — random-bearing slivers starved a single-target
     // lane), so that shape stays as-is for the rescale's pilot pass.
+    // (2026-08-15 batch 54: the wild_strike row was re-seated — cost
+    // 3→1, arc 12→30, dmg up — and held solo now reads ~52 bare L20;
+    // the channel-held re-seat re-measures 2.1× the status quo at both
+    // bands. The seating rule here stays UNCHANGED per the rescale
+    // boundary — the flip is the pilot pass's call.)
     // Explicit specs are never reshaped.
     if (autoRotation.length) {
       const wheelish = (i: number): boolean => {
