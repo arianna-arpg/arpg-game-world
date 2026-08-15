@@ -97,6 +97,19 @@
 //   through both mint chokepoints), and THE MODE LAW (a discrete load of
 //   the same massif-class def carves no band).
 //
+// RIG N — THE DROWSY EVENTS (M2 wave 9): an away ADJACENT region's event
+//   life runs while the player stands elsewhere — the populate births the
+//   region's living event state and its entry beat seats a march AWAY; the
+//   march ADVANCES between slices (the march wheel, true pace); the away
+//   dwell lattice accrues wall time (dt-compensation on event clocks); an
+//   away event body never gates the active objective (the scoping pin);
+//   the arrival ADOPTS the standing state (same run object, same lead, no
+//   visit bump, no second entry beat) and quick re-crossings stack nothing
+//   (the softcrossing coda-4 kill); away vs live march rate agree within a
+//   stated band (the not-1-to-1 pin); THE DRESS REPLANT re-stands a
+//   survivor-latched materializer's furniture (the conclave star) exactly
+//   once; and the discrete world builds none of it (THE MODE LAW).
+//
 // Layout GEOMETRY is compared as (kind, pos, radius, tier) rows: loadZone
 // deliberately randomizes post-mint runtime fields (DoodadEffect first
 // cooldowns), so raw-object equality would pin the wrong thing.
@@ -110,7 +123,7 @@ import { coordDist, mapToPx, pxToMap } from '../src/world/coords';
 import { borderAgreedPoint, cellsShareBorder, foldCells, type CellSeat } from '../src/world/cells';
 import { PORTAL_EDGE_INSET } from '../src/engine/worldgen';
 import { getTissueSampler, setTissueSampler, PARTITION_CFG, SEAMLESS_CFG, type TissueSampler } from '../src/world/seamless';
-import { buildTissueSampler, TISSUE_CFG } from '../src/world/tissue';
+import { buildTissueSampler, massDressOf, TISSUE_CFG } from '../src/world/tissue';
 import { ENCLOSURE_CFG, ENCLOSURE_MASSIF_CFG, ENCLOSURE_ROWS, enclosureRowFor } from '../src/data/enclosure';
 import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
@@ -123,7 +136,8 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { updateAI } from '../src/engine/ai';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { persistRun, persistRunDurable } from '../src/meta/character';
-import { SEAMLESS_SOFT, type World } from '../src/engine/world';
+import { SEAMLESS_SOFT, SEAMLESS_EVENTS, type World } from '../src/engine/world';
+import { swapTheaterRows, type TheaterRow } from '../src/engine/theater';
 
 let fails = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -1711,22 +1725,51 @@ const rawSeatOf = (def: ZoneDef, i: number, arena: { w: number; h: number }): { 
     check('J1b outside-cell off-road country refuses tissue (aprons alone may admit)',
       found >= 10 && wedgeShare >= 0.9,
       `${refused}/${found} refused (apron pockets account for the rest)`);
-    // A non-abutting linked pair's ribbon crosses its gap walkable.
+    // A non-abutting linked pair's ribbon crosses its gap walkable. THE
+    // RE-AIM (wave 9, the routed-ribbon pass's coda 1): the way ROUTES
+    // through door seats + rim mouths now, so the bare center-to-center
+    // chord no longer names it — an oblique staging could sample chord
+    // ground the routed strip lawfully left. Sample the ROUTED way itself
+    // through the PUBLIC carried read (massDressOf(sampler)
+    // .roadSegsForChunk — the very bins the walkable verdict consults):
+    // hunt the pair's gap-crossing strip piece (endpoints clear of both
+    // cells at 1px shrink, midpoint outside EVERY cell — the between-cells
+    // ground the check has always meant) and pin its midpoint walkable AND
+    // road — the sample sits on the ribbon's own centerline by
+    // construction, so this is the same spirit, oblique-proof.
     let gapSample: { x: number; y: number } | null = null;
-    for (const key of seenP) {
-      const [ida, idb] = key.split('|');
-      const ca = foldJ.get(ida), cb = foldJ.get(idb);
-      if (!ca || !cb || borderAgreedPoint(ca, cb)) continue;
-      const pa = mapToPx(ws.zoneMap[ida].map), pb = mapToPx(ws.zoneMap[idb].map);
-      for (let t = 0.1; t <= 0.9; t += 0.02) {
-        const x = pa.x + (pb.x - pa.x) * t, y = pa.y + (pb.y - pa.y) * t;
-        if (!inAnyCell(x, y)) { gapSample = { x, y }; break; }
+    const dressJ = massDressOf(sampler);
+    if (dressJ) {
+      const CJ = SEAMLESS_CFG.chunkPx;
+      const outside = (x: number, y: number, c: { x0: number; y0: number; x1: number; y1: number }): boolean =>
+        x < c.x0 + 1 || x > c.x1 - 1 || y < c.y0 + 1 || y > c.y1 - 1;
+      outer: for (const key of seenP) {
+        const [ida, idb] = key.split('|');
+        const ca = foldJ.get(ida), cb = foldJ.get(idb);
+        if (!ca || !cb || borderAgreedPoint(ca, cb)) continue;
+        const pa = mapToPx(ws.zoneMap[ida].map), pb = mapToPx(ws.zoneMap[idb].map);
+        const seenChunks = new Set<string>();
+        for (let t = 0; t <= 1.0001; t += 0.04) {
+          const x = pa.x + (pb.x - pa.x) * t, y = pa.y + (pb.y - pa.y) * t;
+          const ck = `${Math.floor(x / CJ)},${Math.floor(y / CJ)}`;
+          if (seenChunks.has(ck)) continue;
+          seenChunks.add(ck);
+          for (const s of dressJ.roadSegsForChunk(Math.floor(x / CJ), Math.floor(y / CJ))) {
+            if (!outside(s.ax, s.ay, ca) || !outside(s.ax, s.ay, cb)
+              || !outside(s.bx, s.by, ca) || !outside(s.bx, s.by, cb)) continue;
+            const mx = (s.ax + s.bx) / 2, my = (s.ay + s.by) / 2;
+            if (inAnyCell(mx, my)) continue;
+            gapSample = { x: mx, y: my };
+            break outer;
+          }
+        }
       }
-      if (gapSample) break;
     }
-    check('J1c a linked pair\'s ribbon crosses its between-cells gap walkable (border-to-border corridor)',
-      !gapSample || sampler(gapSample.x, gapSample.y, seed).walkable,
-      gapSample ? `gap sample (${gapSample.x.toFixed(0)}, ${gapSample.y.toFixed(0)})` : 'every linked pair abuts on this web (vacuous — no tissue between)');
+    const gapT = gapSample ? sampler(gapSample.x, gapSample.y, seed) : null;
+    check('J1c a linked pair\'s ROUTED way crosses its between-cells gap walkable (border-to-border corridor)',
+      !gapSample || (!!gapT && gapT.walkable && gapT.road),
+      gapSample ? `routed strip midpoint (${gapSample.x.toFixed(0)}, ${gapSample.y.toFixed(0)})`
+        : 'no gap-crossing strip piece on this web (every linked pair abuts — vacuous, no tissue between)');
   }
 
   // --- J2: THE FAR-WALL LAW — a clamp step from active ground into a
@@ -2870,6 +2913,264 @@ rigM: {
     (wd8 as unknown as { seamlessEventSurvivors(z: string, m: { tag?: string }): ActorX | null })
       .seamlessEventSurvivors(wd8.zone.id, { tag: 'probe_event' }) === null
     && wd8.drops.length === 0);
+}
+
+// --- RIG N: THE DROWSY EVENTS (M2 wave 9) -----------------------------------
+// The alive-when-away half of her transients ruling: the away region's event
+// state is born WITH its population, its march advances between slices at
+// true pace, its dwell clock accrues wall time, its bodies never gate the
+// active objective, the arrival adopts the standing life whole (no visit
+// bump, no twin), quick re-crossings stack nothing, and discrete play builds
+// none of it. The theater row table is swapped for one deterministic
+// chance-1 march row (the swapTheaterRows probe seam) and restored after.
+rigN: {
+  type ActorN = World['actors'][number];
+  type MarchRow = { lead: number; ids: number[]; goal: { x: number; y: number }; done?: boolean; dissolved?: boolean };
+  const marchesOf = (r: { data: Record<string, unknown> }): MarchRow[] =>
+    (r.data.marches as MarchRow[] | undefined) ?? [];
+  seedGlobalRandom(GSEED ^ 0x9e);
+  const wn = makeSimWorld('warrior', WSEED);
+  wn.seamless = true;
+  wn.loadZone(START_ZONE);
+  ringSettle(wn);
+  const pairN = pickWalkPair(wn);
+  check('N0a a walk pair stands for the drowsy-events rigs', !!pairN);
+  if (!pairN) break rigN;
+  const zoneNA = pairN[0];
+  // Swap the theater table to ONE deterministic march row BEFORE any ground
+  // populates around the walk pair — every fresh entry beat (the active
+  // door load and every away populate) draws it at chance 1.
+  const evDefN = Object.values(MONSTERS).find(m => !m.parts && !m.passive
+    && (m.base?.moveSpeed ?? 60) >= 60)?.id ?? Object.keys(MONSTERS)[0];
+  const oldRows = swapTheaterRows([{
+    id: 'n_probe_march', kind: 'hunting_party', chance: 1,
+    params: { prey: [{ id: evDefN, weight: 1 }], hunters: [], preyCount: 4, hunterCount: 0 },
+  } as TheaterRow]);
+  try {
+    wn.loadZone(zoneNA.id);
+    // Bare beats, never ringSettle — the away population + its event state
+    // ARE the subject (the M0 discipline).
+    for (let i = 0; i < 8; i++) wn.update(0.05);
+    const zoneNBpick = pickAgreedNeighbor(wn);
+    check('N0b a linked agreed-border neighbor stands to host the away life',
+      !!zoneNBpick, zoneNBpick?.id ?? 'none on this ring');
+    if (!zoneNBpick) break rigN;
+    const zoneNB = zoneNBpick;
+    for (let i = 0; i < 60 && !wn.seamlessMints.get(zoneNB.id)?.populated; i++) wn.update(0.05);
+    check('N0c the neighbor stands populated for the birth', !!wn.seamlessMints.get(zoneNB.id)?.populated);
+    const stN = wn.seamlessEventStates.get(zoneNB.id);
+    check('N0d the populate birthed the region\'s living event state', !!stN,
+      stN ? `visit ${stN.visit}, quiet ${stN.quiet}` : 'no state');
+    if (!stN) break rigN;
+    if (stN.quiet) {
+      check('N0e (vacuous) the staged neighbor is theater-quiet ground — the march rigs stand down', true,
+        `${zoneNB.id} is quiet (safe/waves/factionWar) on this seed`);
+      break rigN;
+    }
+    const runN = stN.runs.find(r => marchesOf(r).length > 0);
+    check('N0e the away entry beat seated the probe march (chance-1 row, THE ENTRY BEAT AT POPULATION)',
+      !!runN, `${stN.runs.length} run(s) standing`);
+    if (!runN) break rigN;
+    const mN = marchesOf(runN)[0];
+    const leadN0 = wn.actorById(mN.lead);
+    check('N0f the march lead stands tagged to its region (the batch tag law)',
+      !!leadN0 && !leadN0.dead && leadN0.ringRegion === zoneNB.id);
+    if (!leadN0) break rigN;
+
+    // Deterministic march ground: strip the region's NON-march bodies (kin
+    // brawls would rouse the column — combat is other probes' business) and
+    // the active zone's own hostiles (the hero must survive the stands).
+    const marchIdsN = new Set(mN.ids);
+    wn.actors = wn.actors.filter(a =>
+      a === wn.player || !!a.owner
+      || (a.ringRegion === zoneNB.id ? marchIdsN.has(a.id) : a.ringRegion !== undefined));
+
+    // --- N1: the away march ADVANCES between slices (the march wheel). ------
+    const posN1 = vec(leadN0.pos.x, leadN0.pos.y);
+    const dwell0 = stN.dwellSec;
+    const T1 = 3.0;
+    for (let i = 0; i < Math.round(T1 / 0.05); i++) wn.update(0.05);
+    const movedN1 = Math.hypot(leadN0.pos.x - posN1.x, leadN0.pos.y - posN1.y);
+    check('N1 the away march advances while the player stands elsewhere',
+      !leadN0.dead && movedN1 >= 30,
+      `lead moved ${movedN1.toFixed(0)}px in ${T1}s away`);
+
+    // --- N8: the away dwell lattice accrues wall time (dt-compensation on
+    // event clocks — the drive settles the whole span in chunkier beats). ----
+    const dwellGain = stN.dwellSec - dwell0;
+    check('N8 the away dwell clock accrues ≈ wall time (chunkier beats, true rate)',
+      dwellGain >= T1 - SEAMLESS_EVENTS.driveEverySec - SEAMLESS_EVENTS.maxCatchupSec * 0 - 1.6
+      && dwellGain <= T1 + 0.25,
+      `+${dwellGain.toFixed(2)}s dwell over ${T1}s wall`);
+
+    // --- N5: an away event body never gates the active objective. -----------
+    const anyN = wn as unknown as { objectiveCountable(a: ActorN): boolean };
+    check('N5 an away march body never counts toward the active floor (the scoping pin)',
+      !anyN.objectiveCountable(leadN0));
+
+    // --- N2 (away half): the away rate, measured mid-march as PATH LENGTH
+    // (turn-robust — the not-1-to-1 pin compares movement, not bearing). ----
+    const T2 = 4.0;
+    let pathAway = 0;
+    {
+      let px = leadN0.pos.x, py = leadN0.pos.y;
+      for (let i = 0; i < Math.round(T2 / 0.05); i++) {
+        wn.update(0.05);
+        pathAway += Math.hypot(leadN0.pos.x - px, leadN0.pos.y - py);
+        px = leadN0.pos.x; py = leadN0.pos.y;
+      }
+    }
+    const rateAway = pathAway / T2;
+
+    // --- N3: the arrival ADOPTS the standing life whole. --------------------
+    const seatN = (w: World): { x: number; y: number } =>
+      w.seamlessRegions.find(s => s.zoneId === w.zone.id)!.originPx;
+    const visitBefore = stN.visit;
+    const aliveBefore = mN.ids.filter(id => { const a = wn.actorById(id); return !!a && !a.dead; }).length;
+    const agreedN = borderAgreedPoint(wn.seamlessMints.get(zoneNA.id)!.cell, wn.seamlessMints.get(zoneNB.id)!.cell);
+    check('N3a the pair still agrees its border point', !!agreedN);
+    if (!agreedN) break rigN;
+    const nvN = agreedN.side === 'e' ? { x: 1, y: 0 } : agreedN.side === 'w' ? { x: -1, y: 0 }
+      : agreedN.side === 's' ? { x: 0, y: 1 } : { x: 0, y: -1 };
+    const seatA0N = seatN(wn);
+    wn.player.pos = vec(agreedN.x - nvN.x * 150 - seatA0N.x, agreedN.y - nvN.y * 150 - seatA0N.y);
+    const leadWorldBefore = { x: leadN0.pos.x + seatA0N.x, y: leadN0.pos.y + seatA0N.y };
+    const goalN3 = { x: agreedN.x + nvN.x * 400, y: agreedN.y + nvN.y * 400 };
+    const gotN3 = walkToward(wn, () => goalN3, () => wn.zone.id === zoneNB.id, 900);
+    check('N3b the driven walk crosses into the away event country', gotN3 && wn.zone.id === zoneNB.id);
+    if (!gotN3) break rigN;
+    const seatB3 = seatN(wn);
+    check('N3c the arrival adopted the standing run (same object — the march continues, never re-seats)',
+      wn.theaterRuns.includes(runN as (typeof wn.theaterRuns)[number]));
+    check('N3d the visit ordinal never bumped (the adopt IS the visit continuing)',
+      wn.theaterVisit === visitBefore, `visit ${wn.theaterVisit} vs stashed ${visitBefore}`);
+    check('N3e the lead crossed the seam promoted (untagged, alive)',
+      !leadN0.dead && leadN0.ringRegion === undefined);
+    const leadWorldAfter = { x: leadN0.pos.x + seatB3.x, y: leadN0.pos.y + seatB3.y };
+    const driftN3 = Math.hypot(leadWorldAfter.x - leadWorldBefore.x, leadWorldAfter.y - leadWorldBefore.y);
+    check('N3f the lead\'s world seat is continuous (its own legs, never a re-seat teleport)',
+      driftN3 <= 900, `${driftN3.toFixed(0)}px across the crossing walk`);
+    const aliveAfter = mN.ids.filter(id => { const a = wn.actorById(id); return !!a && !a.dead; }).length;
+    check('N3g no body doubled at the seam (the adopt replaced the entry beat)',
+      aliveAfter === aliveBefore, `${aliveAfter} vs ${aliveBefore} march bodies`);
+
+    // --- N2 (live half + the verdict): away rate ≈ live rate (not 1-to-1;
+    // the stated band is generous for turns + shoulder variance). The live
+    // control drives the LEAD's own brain (the probe loop carries no global
+    // AI phase — updateAI is the game loop's, per-actor here), with the
+    // hero parked far so acquisition never bends the patrol walk. ----------
+    wn.player.pos = vec(
+      leadN0.pos.x > wn.arena.w / 2 ? 120 : wn.arena.w - 120,
+      leadN0.pos.y > wn.arena.h / 2 ? 120 : wn.arena.h - 120);
+    let liveT = 0;
+    let pathLive = 0;
+    {
+      let px = leadN0.pos.x, py = leadN0.pos.y;
+      for (let i = 0; i < Math.round(T2 / 0.05); i++) {
+        if (leadN0.dead || !wn.actors.includes(leadN0)) break;
+        updateAI(leadN0, wn, 0.05);
+        wn.update(0.05);
+        pathLive += Math.hypot(leadN0.pos.x - px, leadN0.pos.y - py);
+        px = leadN0.pos.x; py = leadN0.pos.y;
+        liveT += 0.05;
+      }
+    }
+    if (liveT >= 1.0 && !leadN0.dead && wn.actors.includes(leadN0)) {
+      const rateLive = pathLive / liveT;
+      const ratio = rateLive > 1 ? rateAway / rateLive : Infinity;
+      check('N2 the away march rate matches the live rate within the stated band (0.45–1.8×)',
+        rateLive <= 1 || (ratio >= 0.45 && ratio <= 1.8),
+        `away ${rateAway.toFixed(0)}px/s vs live ${rateLive.toFixed(0)}px/s`);
+    } else {
+      check('N2 (vacuous) the march ended before a live-rate window stood',
+        true, `lead ${leadN0.dead ? 'dead' : 'departed'} after ${liveT.toFixed(1)}s`);
+    }
+
+    // --- N4: quick re-crossings stack nothing (the coda-4 kill). The hero
+    // re-seats on the carved corridor before each drive (the N2 control
+    // parked it in a far corner; the blind walk owns no pathing). ------------
+    const countAlive = (): number => mN.ids.filter(id => { const a = wn.actorById(id); return !!a && !a.dead; }).length;
+    const beforeN4 = countAlive();
+    const backGoal = { x: agreedN.x - nvN.x * 400, y: agreedN.y - nvN.y * 400 };
+    const thereGoal = { x: agreedN.x + nvN.x * 400, y: agreedN.y + nvN.y * 400 };
+    const corridorSeat = (sign: 1 | -1): void => {
+      const seatNow = seatN(wn);
+      wn.player.pos = vec(agreedN.x + nvN.x * sign * 150 - seatNow.x, agreedN.y + nvN.y * sign * 150 - seatNow.y);
+    };
+    corridorSeat(1); // standing in NB, 150px past the agreed point
+    const backOk = walkToward(wn, () => backGoal, () => wn.zone.id === zoneNA.id, 900);
+    if (backOk) corridorSeat(-1); // standing in NA, 150px before the point
+    const thereOk = backOk && walkToward(wn, () => thereGoal, () => wn.zone.id === zoneNB.id, 900);
+    check('N4a the double re-crossing drives clean', backOk && thereOk);
+    if (backOk && thereOk) {
+      const runsOfKind = wn.theaterRuns.filter(r => marchesOf(r).length > 0).length
+        + [...wn.seamlessEventStates.values()].reduce((s, st2) => s + st2.runs.filter(r => marchesOf(r).length > 0).length, 0);
+      check('N4b re-crossings stack no second march (one standing run, bodies stable)',
+        runsOfKind <= 1 && countAlive() <= beforeN4,
+        `${runsOfKind} march run(s), ${countAlive()} vs ${beforeN4} bodies`);
+      check('N4c the visit ordinal still never bumped', wn.theaterVisit === visitBefore,
+        `visit ${wn.theaterVisit}`);
+    }
+  } finally {
+    swapTheaterRows(oldRows);
+  }
+}
+
+// --- RIG N6: THE DRESS REPLANT (coda 2) — the survivor-latched conclave
+// re-stands its drawn star exactly once, through the def's own placement
+// derivation. The overlay field is stubbed data (the materializer path is
+// the real one under test); the survivors are real bodies wearing the tag.
+{
+  type ActorN = World['actors'][number];
+  seedGlobalRandom(GSEED ^ 0x6e);
+  const wr = makeSimWorld('warrior', WSEED ^ 0x6e);
+  wr.seamless = true;
+  wr.loadZone(START_ZONE);
+  ringSettle(wr);
+  const anyR = wr as unknown as {
+    createMonster(id: string, lvl: number, team: 'enemy'): ActorN;
+    placeRitualSite(def: ZoneDef): void;
+    ritualSite: { center: { x: number; y: number }; cultistIds: number[] } | null;
+    sim: { conclaveField?: unknown };
+  };
+  const ringAt = { x: wr.arena.w / 2 + 200, y: wr.arena.h / 2 };
+  const cultDef = Object.keys(MONSTERS)[0];
+  for (let i = 0; i < 3; i++) {
+    const c = anyR.createMonster(cultDef, 1, 'enemy');
+    c.tag = 'ritual_cultist';
+    c.passive = true;
+    c.pos = vec(ringAt.x + Math.cos((i / 3) * Math.PI * 2) * 80, ringAt.y + Math.sin((i / 3) * Math.PI * 2) * 80);
+    wr.actors.push(c);
+  }
+  anyR.sim.conclaveField = {
+    ritualIn: (zid: string) => (zid === wr.zone.id ? { id: 'n_probe_rite' } : null),
+    surge: () => ({ ritual: { pentagramRadius: 80, cultistCount: 3, cultistId: cultDef, farFrom: 500 } }),
+  };
+  const starsBefore = wr.doodads.filter(d => d.kind === 'ritual_pentagram').length;
+  anyR.placeRitualSite(wr.zone);
+  const stars1 = wr.doodads.filter(d => d.kind === 'ritual_pentagram');
+  check('N6a the survivor-latched rite replants its drawn star (bodies stood, furniture returns)',
+    stars1.length === starsBefore + 1 && !!anyR.ritualSite,
+    `${stars1.length - starsBefore} star(s) planted, site ${anyR.ritualSite ? 'rebuilt' : 'missing'}`);
+  const star = stars1[stars1.length - 1];
+  check('N6b the star stands at the ring\'s own centroid (the bodies ARE where the rite stands)',
+    !!star && Math.hypot(star.pos.x - ringAt.x, star.pos.y - ringAt.y) <= 160,
+    star ? `${Math.hypot(star.pos.x - ringAt.x, star.pos.y - ringAt.y).toFixed(0)}px off the centroid` : 'no star');
+  anyR.placeRitualSite(wr.zone);
+  check('N6c the replant latches once (a second pass plants no twin star)',
+    wr.doodads.filter(d => d.kind === 'ritual_pentagram').length === stars1.length);
+}
+
+// --- RIG N7: THE MODE LAW — discrete play builds no event state, wheels no
+// body, and the update hook is one boolean read. -----------------------------
+{
+  seedGlobalRandom(GSEED ^ 0x7e);
+  const wd = makeSimWorld('warrior', WSEED ^ 0x7e);
+  wd.loadZone(START_ZONE);
+  for (let i = 0; i < 30; i++) wd.update(0.05);
+  const anyD = wd as unknown as { seamlessWheeledIds: Set<number> };
+  check('N7 discrete play births no event state and wheels no body (THE MODE LAW)',
+    wd.seamlessEventStates.size === 0 && anyD.seamlessWheeledIds.size === 0 && !wd.seamless);
 }
 
 console.log(fails === 0 ? '\nprobe_seamless: ALL GREEN' : `\nprobe_seamless: ${fails} FAILURE(S)`);

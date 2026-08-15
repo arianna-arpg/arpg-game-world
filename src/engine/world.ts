@@ -315,7 +315,7 @@ import {
 } from '../data/orbs';
 import {
   ActiveTheaterRun, runTheaterBeat, theaterConcurrencyFold, theaterKindDef, THEATER_CFG,
-  type TheaterContext, type TheaterKindDef, type TheaterRow, type TheaterSpots,
+  type MarchState, type TheaterContext, type TheaterKindDef, type TheaterRow, type TheaterSpots,
 } from './theater';
 import {
   featureEnabled, isSkillUnlockedForDrop, isSupportUnlockedForDrop, FEATURE,
@@ -2181,6 +2181,90 @@ export const SEAMLESS_SOFT = {
   transientPadPx: 600,
 } as const;
 
+/** THE DROWSY EVENTS (M2 wave 9) — her transients ruling's alive-when-away
+ *  half: an away ADJACENT region's event clocks keep running while the
+ *  player stands elsewhere ("it doesn't necessarily have to be an exact
+ *  1-to-1, but I would certainly like for the world to flow"). All FLAGGED
+ *  (unblessed; her word moves them). The design is the population slice's
+ *  own idiom — one member's bookkeeping per quiet ring beat under the
+ *  scoped swap, dt-COMPENSATED to true wall-clock rate in chunkier ticks
+ *  (THE DROWSY BREATH's shape on event clocks) — plus THE MARCH WHEEL, a
+ *  per-tick active-frame mover for drowsy march bodies (the migrant
+ *  straggler wheel's exact precedent), so a column crosses an away zone at
+ *  its true pace instead of the drowsy cadence's amble. */
+export const SEAMLESS_EVENTS = {
+  /** Bookkeeping drive cadence per region (seconds of wall clock between
+   *  served event beats — run ticks, march arrivals, dwell-lattice draws).
+   *  Movement rides the per-tick wheel, so this only paces bookkeeping. */
+  driveEverySec: 1.5,
+  /** A served drive's dt is substepped at this grain so kind ticks that
+   *  MOVE bodies (the cart guard's wheel) never tunnel a big beat (the
+   *  track fabric's swept-beat law). */
+  driveSubstepSec: 0.4,
+  /** The catch-up ceiling: a region undriven longer than this (mint bursts,
+   *  crossing ticks) settles at most this much event time on its next beat
+   *  — honest progress, never an unbounded stampede. */
+  maxCatchupSec: 8,
+  /** THE ENTRY BEAT AT POPULATION: a fresh (un-remembered) away population
+   *  rolls theater beat 0 as a discrete first entry would — the zone's own
+   *  life stands WITH its bodies, visible across the border. Off = the old
+   *  arrival-only entry. */
+  entryBeat: true,
+  /** THE MARCH WHEEL's waypoint-reach (px — the patrol AI's own 40u
+   *  node-reach) and the follower heel distance (px). */
+  wheelArrivePx: 40,
+  heelDistPx: 64,
+} as const;
+
+/** One away region's LIVING EVENT STATE (M2 wave 9) — the active zone's
+ *  theater cluster + march ledgers, stashed zone-LOCAL so the payload never
+ *  needs a frame shift: the active frame IS the active zone's local frame,
+ *  so a rebase stash (old active → state) and a promote adopt (state → new
+ *  active) are both identity moves, and the drive reads it only under the
+ *  region swap with the bodies shuttled to the same frame (THE ZONE-LOCAL
+ *  LEDGER LAW — only bodies commute between frames; run payloads never do).
+ *  Born at population (or the rebase stash), dies with the region's bodies
+ *  at the bank (door / demotion / recede). Never serialized; discrete play
+ *  never builds one (THE MODE LAW). */
+interface SeamlessRegionEvents {
+  runs: ActiveTheaterRun[];
+  quiet: boolean;
+  dwellSec: number;
+  beatIdx: number;
+  spots: TheaterSpots;
+  pour: Map<string, number>;
+  visit: number;
+  ambientBudget: number;
+  warbandMarches: { leader: Actor; members: Actor[]; goal: Vec2 }[];
+  /** Invasion hosts that ARRIVED at this away region while it stood
+   *  resident — drained by the next drive beat (the warband marches in
+   *  across the border instead of being silently dropped). */
+  pendingHosts: InvasionHost[];
+  /** World-time of the last served drive (dt-compensation's watermark). */
+  drivenAt: number;
+  /** THE DRIVE CONTEXT (cost law): the swap's derived zone furniture —
+   *  arena, placed exits, walk views, the throwaway doodad copy — built
+   *  ONCE per mint record and reused every beat (keyed on the mint's own
+   *  object identity, so a re-fit's fresh record rebuilds it). Without
+   *  this the per-beat derivation (tier views, exit placement, list
+   *  copies) was the whole drive cost — measured 4.8ms/beat, ~0.3 after. */
+  ctx?: SeamlessDriveCtx;
+}
+
+/** The cached half of the drive's scoped swap (see SeamlessRegionEvents.ctx). */
+interface SeamlessDriveCtx {
+  mint: SeamlessMint;
+  arena: Bounds;
+  hull: { w: number; h: number };
+  exits: ZoneExit[];
+  walk: WalkField | null;
+  tierViews: WalkView[] | null;
+  doodads: Doodad[];
+  bridges: Doodad[];
+  grounds: Doodad[];
+  entry: Vec2;
+}
+
 function makeArena(def: ZoneDef): Bounds {
   let shape = def.shape;
   if (!shape) {
@@ -3323,6 +3407,18 @@ export class World {
   private seamlessRefreshDue = false;
   /** The drowsy cadence counter — one tick per seamless update beat. */
   private seamlessBeat = 0;
+  /** THE DROWSY EVENTS (M2 wave 9): each away region's living event state
+   *  (zone-local theater cluster + march ledgers), keyed by zone id. Born
+   *  at population / the rebase stash, adopted whole by the promote, dead
+   *  with the region's bodies at the bank. Empty in discrete play BY
+   *  CONSTRUCTION (every writer is seamless-gated — THE MODE LAW). */
+  seamlessEventStates = new Map<string, SeamlessRegionEvents>();
+  /** THE MARCH WHEEL's roster: actor ids of away march bodies (theater
+   *  columns, warband packs) the per-tick wheel walks at true pace in the
+   *  active frame. A wheeled DROWSY body's brain stands down whole (the
+   *  wheel is its whole mind); rousing returns it to the AI through the
+   *  standing predicates. Rebuilt whenever an event state changes hands. */
+  private seamlessWheeledIds = new Set<number>();
 
   // --- the current zone -------------------------------------------------
   zone: ZoneDef = this.zoneMap[START_ZONE];
@@ -6444,6 +6540,32 @@ export class World {
     // dead). Mycelia suppression still smothers the beat (the bloom choking
     // out competing turmoil), folded inside runTheaterBeat off its own
     // keyed stream.
+    // THE EVENT ADOPT (seamless wave 9): a rebase into a member whose event
+    // state stands ADOPTS the whole cluster — the standing runs continue
+    // from their away positions (payloads zone-local == this new active
+    // frame, THE ZONE-LOCAL LEDGER LAW), the dwell lattice keeps its
+    // accrued clock, the visit ordinal never re-mints, and NO entry beat
+    // re-rolls — which is exactly what kills the quick-re-crossing march
+    // stack (the softcrossing pass's coda 4): the return meets the zone's
+    // one continuing life, never a second first-impression.
+    const adoptEv = this.seamless && seamlessStanding
+      ? this.seamlessEventStates.get(def.id) : undefined;
+    if (adoptEv) {
+      this.seamlessEventStates.delete(def.id);
+      this.theaterSpots = adoptEv.spots;
+      this.theaterAmbientBudget = adoptEv.ambientBudget;
+      this.theaterVisit = adoptEv.visit;
+      this.theaterQuiet = adoptEv.quiet;
+      this.theaterDwellSec = adoptEv.dwellSec;
+      this.theaterBeatIdx = adoptEv.beatIdx;
+      this.theaterPour = adoptEv.pour;
+      this.theaterRuns = adoptEv.runs;
+      this.warbandMarches.push(...adoptEv.warbandMarches);
+      // Hosts that arrived while this ground stood away march in NOW — the
+      // player walks into the arrival instead of past a dropped one.
+      for (const host of adoptEv.pendingHosts) this.spawnWarband(host);
+      this.seamlessRebuildWheeledIds(); // adopted members are the AI's again
+    } else {
     this.theaterSpots = {
       camps: layout.camps.map(c => vec(c.x, c.y)),
       pois: layout.pois.map(c => vec(c.x, c.y)),
@@ -6474,6 +6596,7 @@ export class World {
         void Math.random();
         this.theaterRunBeat(0);
       }
+    }
     }
 
     // In-zone ENCOUNTERS (Breach diamonds): rolled per package gate (pressure +
@@ -7356,6 +7479,11 @@ export class World {
   seamlessDrowsyGate(a: Actor): boolean {
     if (!this.seamless) return false;
     if (!this.seamlessDrowsy(a)) return false;
+    // THE MARCH WHEEL (wave 9): a wheeled drowsy body's brain stands down
+    // WHOLE — the wheel is its whole mind while it marches, so the column
+    // moves at true pace with no AI double-drive. Pain rouses it out of
+    // the drowsy predicate above and the AI takes over mid-fight.
+    if (this.seamlessWheeledIds.has(a.id)) return true;
     return (this.seamlessBeat + a.id) % SEAMLESS_LIFE.drowsyCadence !== 0;
   }
 
@@ -7435,7 +7563,13 @@ export class World {
         mint.populated = false;
       }
       this.actors = this.actors.filter(a => a.ringRegion !== zid);
+      // THE DROWSY EVENTS (wave 9): the region's living event state dies
+      // WITH its bodies — every bank shape (door, demotion, the adjacency
+      // recede) drops it here, so a later stand boots events fresh exactly
+      // as the door law re-materializes the bodies themselves.
+      this.seamlessEventStates.delete(zid);
     }
+    this.seamlessRebuildWheeledIds();
   }
 
   /** THE POPULATION SLICE (wave 6): stand ONE unpeopled member's roster per
@@ -7444,12 +7578,12 @@ export class World {
    *  active frame stands (the town's doors defer the tide to the first
    *  member arrival) — a mint beat is already the tick's whole budget, so
    *  bodies and ground never bill the same frame (THE SLICING LAW). */
-  private seamlessPopulateSlice(): void {
+  private seamlessPopulateSlice(): boolean {
     const active = this.seamlessRegions.find(s => s.zoneId === this.zone.id);
-    if (!active) return;
+    if (!active) return false;
     const activeCell = this.seamlessCellOf(this.zone.id);
     const center = this.seamlessRingCenter();
-    if (!center || !activeCell) return;
+    if (!center || !activeCell) return false;
     let budget = SEAMLESS_LIFE.populatePerBeat;
     const due: { def: ZoneDef; mint: SeamlessMint; seat: RegionSeat; d: number }[] = [];
     for (const s of this.seamlessRegions) {
@@ -7473,11 +7607,14 @@ export class World {
       due.push({ def, mint, seat: s, d: Math.hypot(mint.node.x - center.x, mint.node.y - center.y) });
     }
     due.sort((a, b) => a.d - b.d || (a.def.id < b.def.id ? -1 : 1));
+    let stood = false;
     for (const row of due) {
       if (budget <= 0) break;
       this.seamlessPopulateRegion(row.def, row.mint, row.seat, active);
+      stood = true;
       budget--;
     }
+    return stood;
   }
 
   /** POPULATION AT ADMISSION (wave 6): stand one resident neighbor's
@@ -7548,6 +7685,57 @@ export class World {
         this.actors = this.actors.filter(a => !(batch.has(a) && a.fromZoneGen && a.team === 'enemy'));
         this.materializeMemoRows(memory);
       }
+      // THE DROWSY EVENTS (wave 9): the region's LIVING EVENT STATE is born
+      // WITH its population — the theater cluster stands zone-LOCAL beside
+      // the bodies, and a fresh (un-remembered) stand rolls the discrete
+      // entry beat under this same swap, MUTED (announcements are the
+      // player's frame — the ACTIVE-ONLY law; the bodies it pours join the
+      // batch and ride the tag+translate below). The discrete boot's
+      // parity draw is deliberately NOT mirrored — that burn preserves the
+      // legacy world stream at a discrete entry; this path is
+      // seamless-only. (Resident-eligible ground is never a pocket, so the
+      // pocket-form ambientEvents clause is structurally moot here.)
+      {
+        const keepRuns = this.theaterRuns, keepQuiet = this.theaterQuiet;
+        const keepDwell = this.theaterDwellSec, keepBeat = this.theaterBeatIdx;
+        const keepSpots = this.theaterSpots, keepPour = this.theaterPour;
+        const keepVisit = this.theaterVisit, keepBudget = this.theaterAmbientBudget;
+        const keepTexts = this.texts, keepFlashes = this.flashes;
+        try {
+          this.theaterRuns = [];
+          this.theaterDwellSec = 0;
+          this.theaterBeatIdx = 0;
+          this.theaterPour = new Map();
+          this.theaterSpots = {
+            camps: layout.camps.map(c => vec(c.x, c.y)),
+            pois: layout.pois.map(c => vec(c.x, c.y)),
+          };
+          this.theaterAmbientBudget = this.actors.slice(firstNew)
+            .filter(a => !a.dead && this.objectiveCountable(a)).length;
+          this.theaterVisit = (this.theaterVisitSeq.get(def.id) ?? 0) + 1;
+          this.theaterVisitSeq.set(def.id, this.theaterVisit);
+          this.theaterQuiet = def.objective.kind === 'safe' || def.objective.kind === 'waves'
+            || !!def.factionWar;
+          this.texts = []; this.flashes = [];
+          if (SEAMLESS_EVENTS.entryBeat && !this.theaterQuiet && !memory) {
+            const sup = this.sim.myceliaField?.suppressionAt(def.id) ?? 1;
+            if (sup >= 1 || Math.random() < sup) this.theaterRunBeat(0);
+          }
+          this.seamlessEventStates.set(def.id, {
+            runs: this.theaterRuns, quiet: this.theaterQuiet,
+            dwellSec: this.theaterDwellSec, beatIdx: this.theaterBeatIdx,
+            spots: this.theaterSpots, pour: this.theaterPour,
+            visit: this.theaterVisit, ambientBudget: this.theaterAmbientBudget,
+            warbandMarches: [], pendingHosts: [], drivenAt: this.time,
+          });
+        } finally {
+          this.theaterRuns = keepRuns; this.theaterQuiet = keepQuiet;
+          this.theaterDwellSec = keepDwell; this.theaterBeatIdx = keepBeat;
+          this.theaterSpots = keepSpots; this.theaterPour = keepPour;
+          this.theaterVisit = keepVisit; this.theaterAmbientBudget = keepBudget;
+          this.texts = keepTexts; this.flashes = keepFlashes;
+        }
+      }
     } finally {
       this.zone = keepZone; this.arena = keepArena; this.arenaHull = keepHull;
       this.exits = keepExits; this.entryFrom = keepEntryFrom;
@@ -7566,6 +7754,256 @@ export class World {
     }
     mint.populated = true;
     mint.slainCount = 0; // a fresh stand re-arms the kill ledger
+    this.seamlessRebuildWheeledIds(); // the entry beat may have seated a march
+  }
+
+  /** THE EVENT SLICE (wave 9): serve ONE away region's event bookkeeping on
+   *  a quiet ring beat that stood no roster — the population slice's own
+   *  cadence law (one heavy job per beat; here the job is light). Adjacency
+   *  scoped BY CONSTRUCTION: an event state exists only while its region's
+   *  population stands, and population itself is adjacency-scoped. Serves
+   *  the LEAST-recently-driven due region (driveEverySec paces each). */
+  private seamlessEventSlice(): void {
+    if (!this.seamlessEventStates.size) return;
+    const active = this.seamlessRegions.find(s => s.zoneId === this.zone.id);
+    if (!active) return;
+    let pick: string | null = null;
+    let oldest = Infinity;
+    for (const [zid, st] of this.seamlessEventStates) {
+      if (zid === this.zone.id) { this.seamlessEventStates.delete(zid); continue; } // defensive — the adopt owns this
+      if (!this.seamlessMints.get(zid)?.populated) continue;
+      if (this.time - st.drivenAt < SEAMLESS_EVENTS.driveEverySec) continue;
+      if (st.drivenAt < oldest) { oldest = st.drivenAt; pick = zid; }
+    }
+    if (pick) this.seamlessDriveRegionEvents(pick, active);
+  }
+
+  /** THE DRIVE (wave 9): run one away region's event bookkeeping under the
+   *  population slice's scoped swap — zone identity, walk grid, furniture,
+   *  the theater cluster and the march ledgers all read the REGION — with
+   *  the region's bodies SHUTTLED into its zone-local frame for the beat
+   *  (the one shift helper both ways, tags cleared so every mover clamp
+   *  reads the region's own ground law) and the drawn channels muted (an
+   *  away zone's announcements are nobody's frame — the ACTIVE-ONLY law).
+   *  dt-COMPENSATED: the beat settles the whole wall-clock span since the
+   *  last served drive (capped), substepped so kind ticks that move bodies
+   *  never tunnel (the swept-beat law). Pours seat new bodies zone-local;
+   *  they join the region on the way out (tag + translate, the population
+   *  batch's own shape). */
+  private seamlessDriveRegionEvents(zoneId: string, active: RegionSeat): void {
+    const st = this.seamlessEventStates.get(zoneId);
+    const mint = this.seamlessMints.get(zoneId);
+    const seat = this.seamlessRegions.find(s => s.zoneId === zoneId);
+    const def = this.zoneMap[zoneId];
+    if (!st || !mint || !seat || !def) return;
+    const driveDt = Math.min(this.time - st.drivenAt, SEAMLESS_EVENTS.maxCatchupSec);
+    st.drivenAt = this.time;
+    if (driveDt <= 0) return;
+    const dx = seat.originPx.x - active.originPx.x, dy = seat.originPx.y - active.originPx.y;
+    // Partition the one array: the region's bodies shuttle zone-local and
+    // become THE array for the beat, so every sweep the drive runs (march
+    // arrivals, kind ticks, the crowd shoulder under a mover step) scopes
+    // to the region by construction.
+    const regionActors: Actor[] = [];
+    const rest: Actor[] = [];
+    for (const a of this.actors) (a.ringRegion === zoneId ? regionActors : rest).push(a);
+    for (const a of regionActors) {
+      a.ringRegion = undefined;
+      this.seamlessShiftFrame(a, -dx, -dy, true);
+    }
+    // THE DRIVE CONTEXT: derived once per mint record (arena, placed exits,
+    // walk views, the throwaway doodad copy), reused every beat — the
+    // per-beat derivation WAS the drive's whole cost (soak: 4.8ms → ~0.3).
+    // A re-fit mints a fresh record object and the identity key rebuilds.
+    let ctx = st.ctx;
+    if (!ctx || ctx.mint !== mint) {
+      const layout = mint.layout;
+      const arena = makeArena(def);
+      arena.w = mint.span.w;
+      arena.h = mint.span.h;
+      arena.shape = 'rect';
+      const keepZoneC = this.zone, keepArenaC = this.arena, keepExitsC = this.exits;
+      const keepEntryFromC = this.entryFrom;
+      let exits: ZoneExit[];
+      try {
+        this.zone = def;
+        this.arena = arena;
+        this.entryFrom = mint.partnerId;
+        this.exits = def.exits.map((e, i) => this.placeExit(e, i));
+        this.seamlessSeatAgreedWays(def, mint.cell);
+        this.separateOverlappingExits();
+        exits = this.exits;
+      } finally {
+        this.zone = keepZoneC; this.arena = keepArenaC; this.exits = keepExitsC;
+        this.entryFrom = keepEntryFromC;
+      }
+      const walk = (layout.walk as GridWalkField | undefined) ?? null;
+      let tierViews: WalkView[] | null = null;
+      if (walk && def.tiers) {
+        const lv = Math.max(1, def.tiers.levels ?? 1);
+        tierViews = [];
+        for (let t = 1; t <= lv; t++) tierViews[t] = makeTierView(walk, t);
+      }
+      const doodads = [...layout.doodads]; // the throwaway copy — plants never reach the record
+      ctx = {
+        mint, arena, hull: hullOf(arena), exits, walk, tierViews, doodads,
+        bridges: doodads.filter(d => doodadRuleOf(d.kind).spans),
+        grounds: doodads.filter(d => GROUND_KINDS.includes(d.kind)),
+        entry: vec(arena.w / 2, arena.h / 2),
+      };
+      st.ctx = ctx;
+    }
+    const keepZone = this.zone, keepArena = this.arena, keepHull = this.arenaHull;
+    const keepExits = this.exits, keepEntryFrom = this.entryFrom;
+    const keepWalk = this.walk, keepTierViews = this.tierViews;
+    const keepDoodads = this.doodads, keepBridges = this.bridges, keepGrounds = this.grounds;
+    const keepEntry = this.zoneEntry, keepObjDone = this.objectiveDone;
+    const keepActors = this.actors;
+    const keepRuns = this.theaterRuns, keepQuiet = this.theaterQuiet;
+    const keepDwell = this.theaterDwellSec, keepBeat = this.theaterBeatIdx;
+    const keepSpots = this.theaterSpots, keepPour = this.theaterPour;
+    const keepVisit = this.theaterVisit, keepBudget = this.theaterAmbientBudget;
+    const keepMarches = this.warbandMarches;
+    const keepTexts = this.texts, keepFlashes = this.flashes;
+    try {
+      this.zone = def;
+      this.arena = ctx.arena;
+      this.arenaHull = ctx.hull;
+      this.entryFrom = mint.partnerId;
+      this.exits = ctx.exits;
+      this.zoneEntry = ctx.entry;
+      this.walk = ctx.walk;
+      this.tierViews = ctx.tierViews;
+      this.doodads = ctx.doodads;
+      this.bridges = ctx.bridges;
+      this.grounds = ctx.grounds;
+      this.objectiveDone = this.completedObjectives.has(def.id);
+      this.actors = regionActors;
+      this.actorGridRev++; // spatial queries during the drive read the region slice
+      this.theaterRuns = st.runs; this.theaterQuiet = st.quiet;
+      this.theaterDwellSec = st.dwellSec; this.theaterBeatIdx = st.beatIdx;
+      this.theaterSpots = st.spots; this.theaterPour = st.pour;
+      this.theaterVisit = st.visit; this.theaterAmbientBudget = st.ambientBudget;
+      this.warbandMarches = st.warbandMarches;
+      this.texts = []; this.flashes = [];
+      // A host that arrived at this away ground while it stood resident
+      // marches in NOW — visible across the border instead of silently
+      // dropped (her ruling's heart; the living-ledger key stamps as ever).
+      for (const host of st.pendingHosts) this.spawnWarband(host);
+      st.pendingHosts.length = 0;
+      // The bookkeeping, substepped: run ticks (their own movers included),
+      // march arrivals, and the dwell lattice — the lattice accrues true
+      // wall time, so an away zone breathes at the standing cadence.
+      let left = driveDt;
+      while (left > 0) {
+        const sub = Math.min(left, SEAMLESS_EVENTS.driveSubstepSec);
+        left -= sub;
+        this.updateTheater(sub);
+        this.updateWarbandMarches();
+      }
+      // Capture the cluster back (ticks reassign arrays via their filters).
+      st.runs = this.theaterRuns; st.quiet = this.theaterQuiet;
+      st.dwellSec = this.theaterDwellSec; st.beatIdx = this.theaterBeatIdx;
+      st.spots = this.theaterSpots; st.pour = this.theaterPour;
+      st.visit = this.theaterVisit; st.ambientBudget = this.theaterAmbientBudget;
+      st.warbandMarches = this.warbandMarches;
+    } finally {
+      this.zone = keepZone; this.arena = keepArena; this.arenaHull = keepHull;
+      this.exits = keepExits; this.entryFrom = keepEntryFrom;
+      this.walk = keepWalk; this.tierViews = keepTierViews;
+      this.doodads = keepDoodads; this.bridges = keepBridges; this.grounds = keepGrounds;
+      this.zoneEntry = keepEntry; this.objectiveDone = keepObjDone;
+      this.actors = keepActors;
+      this.theaterRuns = keepRuns; this.theaterQuiet = keepQuiet;
+      this.theaterDwellSec = keepDwell; this.theaterBeatIdx = keepBeat;
+      this.theaterSpots = keepSpots; this.theaterPour = keepPour;
+      this.theaterVisit = keepVisit; this.theaterAmbientBudget = keepBudget;
+      this.warbandMarches = keepMarches;
+      this.texts = keepTexts; this.flashes = keepFlashes;
+    }
+    // TAG + TRANSLATE OUT: everything still standing in the region's array
+    // — survivors and any body the beat poured — re-tags and shifts back
+    // into the active frame; bodies the beat removed (a march that slipped
+    // away) simply do not return. The one array rebuilds rest-then-region
+    // (the population slice appends at the tail by the same shape).
+    for (const a of regionActors) {
+      a.ringRegion = zoneId;
+      this.seamlessShiftFrame(a, dx, dy, true);
+    }
+    this.actors = rest.concat(regionActors);
+    this.actorGridRev++; // …and the frame's queries read the whole array again
+    this.seamlessRebuildWheeledIds();
+  }
+
+  /** THE MARCH WHEEL (wave 9): drowsy march bodies walk their routes at
+   *  TRUE pace in the active frame, every tick — the migrant straggler
+   *  wheel's exact precedent (engine-moved dormant walkers; moveActor keeps
+   *  collision, the crowd shoulder and the foreign confine honest). The
+   *  wheel is these bodies' whole mind while they stay un-roused
+   *  (seamlessDrowsyGate stands their brains down); a roused member is the
+   *  AI's again and the wheel skips it. Leads walk their patrolRoute
+   *  polyline; followers heel to the lead. Waypoints are actor-side state,
+   *  already shifted into the active frame by the one shift helper. */
+  private seamlessWheelMarches(dt: number): void {
+    if (!this.seamless || !this.seamlessWheeledIds.size) return;
+    const roused = (a: Actor): boolean => a.aggroed || a.aiTargetId !== undefined;
+    const wheel = (a: Actor | undefined | null): void => {
+      if (!a || a.dead || roused(a)) return;
+      const route = a.patrolRoute;
+      if (!route?.length) return;
+      let idx = Math.min(a.patrolIdx ?? 0, route.length - 1);
+      if (dist(a.pos, route[idx]) < SEAMLESS_EVENTS.wheelArrivePx && idx < route.length - 1) {
+        idx++;
+        a.patrolIdx = idx;
+      }
+      const goal = route[idx];
+      a.facing = angleTo(a.pos, goal);
+      this.moveActor(a, goal.x - a.pos.x, goal.y - a.pos.y, dt);
+    };
+    const heel = (f: Actor | undefined | null, lead: Actor | null): void => {
+      if (!f || f.dead || roused(f) || !lead || lead.dead) return;
+      if (dist(f.pos, lead.pos) > SEAMLESS_EVENTS.heelDistPx) {
+        f.facing = angleTo(f.pos, lead.pos);
+        this.moveActor(f, lead.pos.x - f.pos.x, lead.pos.y - f.pos.y, dt);
+      }
+    };
+    for (const st of this.seamlessEventStates.values()) {
+      for (const r of st.runs) {
+        for (const m of ((r.data.marches as MarchState[] | undefined) ?? [])) {
+          if (m.done || m.dissolved) continue;
+          const lead = this.actorById(m.lead) ?? null;
+          wheel(lead);
+          for (const id of m.ids) {
+            if (id === m.lead) continue;
+            heel(this.actorById(id), lead);
+          }
+        }
+      }
+      for (const wb of st.warbandMarches) {
+        if (wb.leader.dead) continue;
+        wheel(wb.leader);
+        for (const mm of wb.members) if (mm !== wb.leader) heel(mm, wb.leader);
+      }
+    }
+  }
+
+  /** Rebuild THE MARCH WHEEL's roster from every standing event state's own
+   *  ledgers (theater columns + warband packs). Called wherever a state
+   *  changes hands — birth, drive, stash, adopt, bank. Cheap by size. */
+  private seamlessRebuildWheeledIds(): void {
+    this.seamlessWheeledIds.clear();
+    for (const st of this.seamlessEventStates.values()) {
+      for (const r of st.runs) {
+        for (const m of ((r.data.marches as MarchState[] | undefined) ?? [])) {
+          if (m.done) continue;
+          for (const id of m.ids) this.seamlessWheeledIds.add(id);
+        }
+      }
+      for (const wb of st.warbandMarches) {
+        this.seamlessWheeledIds.add(wb.leader.id);
+        for (const mm of wb.members) this.seamlessWheeledIds.add(mm.id);
+      }
+    }
   }
 
   /** Mint one resident's layout through the SAME derivation loadZone runs at
@@ -7863,8 +8301,10 @@ export class World {
       // THE POPULATION SLICE (wave 6): a beat with no admission due stands
       // one unpeopled member's roster instead — bodies and ground never
       // bill the same frame, and the tide fills in over the quiet beats
-      // right behind the ring (THE SLICING LAW).
-      this.seamlessPopulateSlice();
+      // right behind the ring (THE SLICING LAW). A beat that stood no
+      // roster serves THE EVENT SLICE instead (wave 9) — one away region's
+      // event bookkeeping, the same one-heavy-job-per-beat cadence.
+      if (!this.seamlessPopulateSlice()) this.seamlessEventSlice();
       return;
     }
     for (const def of due.slice(0, budget)) {
@@ -8235,10 +8675,48 @@ export class World {
     // removal, never a bank. Non-enemy transients (folk, carts, door
     // guards via doorId) keep the standing door law and die at the seam.
     const carriedSet = new Set<Actor>(carried);
+    // THE MARCH LEDGER RIDES (wave 9, the softcrossing pass's coda 3): a
+    // body walking in the departed zone's march ledgers (theater columns —
+    // carts and prey included — and warband packs) tags REGARDLESS of team,
+    // because its objective machinery now survives the seam too (the event
+    // state stash below). Every current member happens to be team 'enemy'
+    // by spawnEventActor's law, so this clause is future-proofing the
+    // moment a neutral member ships; the remaining non-enemy event classes
+    // (procession carts, borough folk, extraction nodes) keep the door law
+    // — their machinery is objective/encounter state, ACTIVE-ONLY BY LAW.
+    const marchIds = new Set<number>();
+    for (const r of this.theaterRuns) {
+      for (const m of ((r.data.marches as MarchState[] | undefined) ?? [])) {
+        if (m.done) continue;
+        for (const id of m.ids) marchIds.add(id);
+      }
+    }
+    for (const wb of this.warbandMarches) {
+      marchIds.add(wb.leader.id);
+      for (const mm of wb.members) marchIds.add(mm.id);
+    }
     for (const a of this.actors) {
       if (a.ringRegion !== undefined || a.dead || carriedSet.has(a)) continue;
-      if (a.team === 'enemy' && !!a.defId && !a.doorId) a.ringRegion = fromId;
+      if ((a.team === 'enemy' && !!a.defId && !a.doorId) || marchIds.has(a.id)) a.ringRegion = fromId;
     }
+    // THE EVENT STASH (wave 9): the departed zone's whole event cluster —
+    // theater runs, dwell clock, pour ledger, visit ordinal, march ledgers
+    // — survives the crossing as its region's living event state. The
+    // payload is zone-LOCAL by construction (the active frame IS the
+    // active zone's local frame), so no coordinate ever shifts: the drive
+    // reads it under the region swap, and a return adopts it verbatim
+    // (THE ZONE-LOCAL LEDGER LAW). Stashed unconditionally: an empty
+    // cluster still carries the dwell lattice, so the zone keeps breathing
+    // on the wall clock across the player's absence.
+    this.seamlessEventStates.set(fromId, {
+      runs: this.theaterRuns, quiet: this.theaterQuiet,
+      dwellSec: this.theaterDwellSec, beatIdx: this.theaterBeatIdx,
+      spots: this.theaterSpots, pour: this.theaterPour,
+      visit: this.theaterVisit, ambientBudget: this.theaterAmbientBudget,
+      warbandMarches: [...this.warbandMarches], // the reset row empties in place
+      pendingHosts: [], drivenAt: this.time,
+    });
+    this.seamlessRebuildWheeledIds(); // the departed marches wheel from the first away tick
     // THE REBASE TICK ADMITS NOTHING (M2 wave 5): the load tail's ring beat
     // consumes this and defers its admission slice one beat — the crossing
     // tick pays the rebase alone, never a fresh mint stacked on top.
@@ -15110,6 +15588,22 @@ export class World {
           id: info.id, zoneId: def.id, center: vec(cx, cy),
           cultistIds: ring.map(a => a.id), subdued: false,
         };
+        // THE DRESS REPLANT (wave 9, the softcrossing pass's coda 2): the
+        // survivors latched the rite but the drawn star is a load-time site
+        // plant the adopt skipped — bodies stood, furniture didn't. Replant
+        // it at the ring's own centroid (the bodies ARE where the rite
+        // stands) through the def's own placement path: the site rng's
+        // first draw is the star's tilt, exactly as the fresh mint rolls it.
+        const cfgR = this.sim.conclaveField?.surge().ritual;
+        if (cfgR && !this.doodads.some(d => d.kind === 'ritual_pentagram'
+          && dist(d.pos, vec(cx, cy)) < cfgR.pentagramRadius * 2)) {
+          const rngR = new Rng((packageSeed(this.manifest.seed, 'conclave') ^ hashStr(`${info.id}:${def.id}`)) >>> 0);
+          this.doodads.push({
+            pos: this.clampPos(vec(cx, cy), cfgR.pentagramRadius + 26),
+            radius: cfgR.pentagramRadius, kind: 'ritual_pentagram',
+            rot: rngR.range(-0.15, 0.15),
+          });
+        }
         return;
       }
     }
@@ -15742,6 +16236,24 @@ export class World {
         id: info.id, zoneId: def.id, center: vec(necroSurvivor.pos.x, necroSurvivor.pos.y),
         necroId: necroSurvivor.id, bossId: bossSurvivor ? bossSurvivor.id : null,
       };
+      // THE DRESS REPLANT (wave 9, coda 2): the Bonewright rode the seam
+      // but its grave ring is a load-time site plant the adopt skipped.
+      // Replant it around the necromancer's own stand (it was spawned at
+      // the ring's center and stands planted — the sentry law) through the
+      // def's own placement path: the site rng's draws in the fresh mint's
+      // exact order (tilt, then one rot per grave), cracked graves by the
+      // overlay's live stage as ever.
+      const c0 = necroSurvivor.pos;
+      if (!this.doodads.some(d => (d.kind === 'tombstone' || d.kind === 'gore')
+        && dist(d.pos, c0) < AMALGAM_GRAVE_RING + 60)) {
+        const rngG = new Rng((packageSeed(this.manifest.seed, 'amalgamation') ^ hashStr(`${info.id}:${def.id}`)) >>> 0);
+        const tiltG = rngG.range(-0.3, 0.3);
+        for (let i = 0; i < info.partsNeeded; i++) {
+          const ang = -Math.PI / 2 + tiltG + (i / Math.max(1, info.partsNeeded)) * Math.PI * 2;
+          const gp = this.clampPos(vec(c0.x + Math.cos(ang) * AMALGAM_GRAVE_RING, c0.y + Math.sin(ang) * AMALGAM_GRAVE_RING), 16);
+          this.doodads.push({ pos: gp, radius: 14, kind: i < info.stage ? 'gore' : 'tombstone', rot: rngG.range(-0.3, 0.3) });
+        }
+      }
       return;
     }
     this.materializedAmalgam.add(key);
@@ -18178,6 +18690,8 @@ export class World {
       this.seamlessRefreshDue = false; // …and any pending arrival refresh (wave 8b)
       this.seamlessRebasing = false;   // …and the rebase discriminator (wave 6)
       this.seamlessRebaseSrcOrigin = null; // …with its frame stash
+      this.seamlessEventStates.clear();    // …and the living event states (wave 9)
+      this.seamlessWheeledIds.clear();     // …with the march wheel's roster
       this.seamlessNotes.delete('boot');
       this.seamlessNotes.delete('nopair');
     }
@@ -22202,6 +22716,21 @@ export class World {
       this.wbBoss = wbSurvivor;
       this.wbBossKey = fight.instanceId;
       this.materializedWorldBoss.add(fight.instanceId);
+      // THE DRESS REPLANT (wave 9, coda 2): the sovereign rode the seam but
+      // its lair throne is a load-time site plant the adopt skipped — and
+      // the per-frame confine welds the body to the nearest matching dais,
+      // so a throne-less return leaves it unmoored. Replant the dais under
+      // the survivor's own stand (where it fights IS where it binds).
+      if (fight.archetype === 'lair' && fight.def.lair) {
+        const lr = fight.def.lair.radius ?? 130;
+        if (!this.doodads.some(d => d.kind === fight.def.lair!.structureKind
+          && dist(d.pos, wbSurvivor.pos) < lr * 1.5)) {
+          this.doodads.push({
+            pos: vec(wbSurvivor.pos.x, wbSurvivor.pos.y),
+            radius: lr, kind: fight.def.lair.structureKind,
+          });
+        }
+      }
       return;
     }
     const at = this.clearTransitSpot(this.clampPos(this.farPoint(340), 80), 110);
@@ -42702,11 +43231,22 @@ export class World {
 
     // WARBAND ARRIVALS: a host that just reached its target node, while YOU stand
     // in that zone, marches in for real — a coherent pack at the entry it came by.
+    // THE DROWSY EVENTS (seamless wave 9): an arrival at an away RESIDENT
+    // region queues on that region's living event state instead of being
+    // dropped — the next drive beat marches the pack in across the border
+    // (or the player's own arrival adopts it). Discrete play: the else
+    // never matches (no event states exist — THE MODE LAW).
     for (const host of this.sim.invasion.arrivals) {
       if (host.targetZoneId === this.zone.id) this.spawnWarband(host);
+      else if (this.seamless) this.seamlessEventStates.get(host.targetZoneId)?.pendingHosts.push(host);
     }
     this.sim.invasion.arrivals.length = 0;
     this.updateWarbandMarches();
+    // THE MARCH WHEEL (seamless wave 9): away march bodies walk their
+    // routes at true pace in the active frame, every tick — the migrant
+    // straggler wheel's own precedent, one line beside it. Discrete play:
+    // one boolean read (the roster is empty by construction).
+    this.seamlessWheelMarches(dt);
 
     // DEMON INVASION: mint the epicenter zone at its coordinate (within the visible
     // map) so the player can travel toward it and fight the Balor. Minted FLOATING
