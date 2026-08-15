@@ -64,3 +64,8 @@ for (let i = 0; i < BANDS.length; i++) {
     console.log(`${pct}%  ${biome}`);
   }
 }
+
+// The roster's law (runprobes `passed`): the EXIT CODE is the verdict. A
+// report-only probe asserts nothing — completion IS the pass (a throw already
+// exits nonzero); the explicit 0 keeps the exit-code census whole.
+process.exit(0);

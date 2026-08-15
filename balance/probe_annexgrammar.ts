@@ -367,3 +367,6 @@ world.loadZone(QA_GRID);
 }
 
 console.log(fails === 0 ? '\nprobe_annexgrammar: ALL GREEN' : `\nprobe_annexgrammar: ${fails} FAILURE(S)`);
+// The roster's law (runprobes `passed`): the EXIT CODE is the verdict — a
+// FAIL line without a nonzero exit would never gate.
+process.exit(fails ? 2 : 0);
