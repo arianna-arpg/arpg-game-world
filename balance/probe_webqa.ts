@@ -25,6 +25,10 @@
 //   THE UNDER-ROADS (§K — ZoneDef.underways, the rooted web): organically
 //     grown spans are two-way, policy-bound, budget-free; rootheld ground is
 //     surface-sealed yet reachable THROUGH the web; heals never cut a row.
+//   THE LABYRINTHIAN WINDING (§L — worldgen.LABYRINTH_WIND): random-frontier
+//     mints bend perpendicular to the cardinal step (±30, replayed
+//     closed-form); directed mints draw zero winding rng; the bend never
+//     mis-faces a back-edge; one seed grows one web, byte-stable.
 //
 // Run: npx tsx balance/probe_webqa.ts [--seeds N] [--rounds N] [--report]
 // ---------------------------------------------------------------------------
@@ -42,6 +46,9 @@ import { zoneKindOf } from '../src/data/zoneKinds';
 import { QUESTS } from '../src/quests/defs';
 import { Rng } from '../src/core/rng';
 import { FORECHART_CFG } from '../src/world/forechart';
+// §L (the LABYRINTH_WIND pin) — the section's own imports, on their own lines:
+import { setRouteGuard } from '../src/engine/worldgen';
+import { DIRS, MAP_DIR, OPP_DIR } from '../src/world/coords';
 
 const args = process.argv.slice(2);
 const argNum = (name: string, dflt: number): number => {
@@ -767,6 +774,159 @@ console.log(`  (info) jungle nodes pressing past the world cap by their own budg
     check('K: reconcileWebLaws never cuts an under-road', before.join('/') === after.join('/'),
       `${before.join('/')} → ${after.join('/')}`);
   }
+}
+
+// ------------------------------------------------ L. THE LABYRINTHIAN WINDING
+// worldgen's LABYRINTH_WIND (module-private, pinned 30 here): every RANDOM-
+// frontier mint (spec.fieldBiome) bends its node PERPENDICULAR to the cardinal
+// step by one seeded draw in ±LABYRINTH_WIND, so the world grows as a meander,
+// never dead-straight N/S/E/W spokes. The code's own promises, pinned:
+//   • closed form — jitter (±16, ±12) then the perpendicular bend, nothing
+//     else on empty ground (anti-crowd, clearway, settle all provably no-op);
+//   • DIRECTED mints draw ZERO winding rng: position AND the downstream
+//     frontier rolls replay wind-less on the same stream (the byte-identity
+//     promise, tested at stream grain);
+//   • the dial stays well under half a cardinal step — the bend can never flip
+//     sideToward's dominant-axis pick, so the back-edge always faces home;
+//   • same seed, same winding — two independently grown webs are byte-equal.
+{
+  // PINNED MIRRORS of placeZoneAt's module-private literals (transcribed on
+  // purpose — the pin is the point: a deliberate dial change must update these
+  // and re-pass the headroom checks below). LAB_WIND ↔ worldgen.LABYRINTH_WIND.
+  const LAB_WIND = 30;
+  const JIT_X = 16, JIT_Y = 12; // the map-placement jitter half-widths
+  setRouteGuard(null); // the documented boot/tests state — no wet-deed notarization in these controlled scenes
+  const sideToward2 = (from: { x: number; y: number }, to: { x: number; y: number }): 'n' | 's' | 'e' | 'w' => {
+    const dx = to.x - from.x, dy = to.y - from.y;
+    return Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 'e' : 'w') : (dy >= 0 ? 's' : 'n');
+  };
+  const SRC_X = 41000, SRC_Y = 37000; // far from every grown node — a lone-anchor scene
+  const windBase = surfaceZones(worlds[0].w).find(z => z.id.startsWith('gen_') && !z.field && z.objective.kind !== 'safe')!;
+  let mintN = 0;
+  const mintAt = (seed: number, tx: number, ty: number, winding: boolean): { def: ZoneDef; src: ZoneDef } => {
+    const src: ZoneDef = {
+      ...windBase, id: 'qa_wind_src', name: 'qa_wind_src', map: { x: SRC_X, y: SRC_Y },
+      exits: [] as ZoneExitDef[], field: undefined, berths: undefined,
+      wpExclusionRadius: undefined, kind: undefined, port: undefined,
+    };
+    const zm: Record<string, ZoneDef> = { [src.id]: src };
+    const n = mintN++;
+    const def = placeZoneAt({ x: tx, y: ty }, src, zm, 91000 + n, {
+      id: `qa_wind_${n}`, name: `qa wind ${n}`, tileset: 'crypt', level: 8,
+      seed, objective: { kind: 'clear' }, ...(winding ? { fieldBiome: true } : {}),
+    });
+    return { def, src };
+  };
+  // The replay: the spec above burns NO shared-stream draw before the map
+  // (name given, objective given, no port/biomeFor/courseFor; identity rolls
+  // ride the seeded genRng sub-stream), so Rng(seed)'s first draws are
+  // jitter-x, jitter-y[, wind], then the frontier rolls — replayed verbatim.
+  interface WindReplay { x: number; y: number; wind: number; backSide: string; rows: { side: string; at: number }[] }
+  const windReplay = (seed: number, tx: number, ty: number, winding: boolean): WindReplay => {
+    const r = new Rng(seed);
+    let x = tx + r.range(-JIT_X, JIT_X);
+    let y = ty + r.range(-JIT_Y, JIT_Y);
+    const ndx = tx - SRC_X, ndy = ty - SRC_Y;
+    const tl = Math.hypot(ndx, ndy) || 1;
+    const nx = ndx / tl, ny = ndy / tl;
+    let wind = 0;
+    if (winding) { wind = r.range(-LAB_WIND, LAB_WIND); x += -ny * wind; y += nx * wind; }
+    const backSide = sideToward2({ x, y }, { x: SRC_X, y: SRC_Y });
+    const open = (['n', 's', 'e', 'w'] as const).filter(s => s !== backSide);
+    const rows: { side: string; at: number }[] = [];
+    const nf = r.int(1, 2);
+    for (let i = 0; i < nf && open.length; i++) {
+      const side = open.splice(r.int(0, open.length - 1), 1)[0];
+      rows.push({ side, at: r.pick([0.35, 0.5, 0.65]) });
+    }
+    return { x, y, wind, backSide, rows };
+  };
+  const exitsMatch = (def: ZoneDef, e: WindReplay): boolean =>
+    def.exits.length === 1 + e.rows.length
+    && def.exits[0].to === 'qa_wind_src' && def.exits[0].side === e.backSide
+    && def.exits[0].at === undefined && def.exits[0].notarized === undefined
+    && e.rows.every((r, i) => {
+      const row = def.exits[i + 1];
+      return row.to === '?' && row.side === r.side && row.at === r.at && row.tileset === 'crypt';
+    });
+
+  const AXES: [number, number][] = [[1, 0], [-1, 0], [0, -1], [0, 1]]; // e/w/n/s unit steps
+  const SEEDS_L = Array.from({ length: 24 }, (_, i) => (0x1ab0001 + i * 0x2711) >>> 0);
+  const WSTEP = 200; // past grave spacing (60), the weave radius (96), every push trigger — the tail provably no-ops
+  let eqBad = 0, streamBad = 0, gateBad = 0, deltaBad = 0, biteMax = 0;
+  for (const [ux, uy] of AXES) {
+    for (const seed of SEEDS_L) {
+      const tx = SRC_X + ux * WSTEP, ty = SRC_Y + uy * WSTEP;
+      const { def: wd } = mintAt(seed, tx, ty, true);
+      const { def: dd } = mintAt(seed, tx, ty, false);
+      const ew = windReplay(seed, tx, ty, true);
+      const ed = windReplay(seed, tx, ty, false);
+      if (Math.abs(wd.map.x - ew.x) > 1e-9 || Math.abs(wd.map.y - ew.y) > 1e-9) eqBad++;
+      if (!exitsMatch(wd, ew) || !exitsMatch(dd, ed)) streamBad++;
+      if (Math.abs(dd.map.x - ed.x) > 1e-9 || Math.abs(dd.map.y - ed.y) > 1e-9) gateBad++;
+      // Same seed, gate on vs off: the difference is EXACTLY the perpendicular
+      // wind vector — the jitter cancels, the along-axis stays untouched.
+      const ddx = wd.map.x - dd.map.x, ddy = wd.map.y - dd.map.y;
+      if (Math.abs(ddx * ux + ddy * uy) > 1e-9
+        || Math.abs(ddx + uy * ew.wind) > 1e-9 || Math.abs(ddy - ux * ew.wind) > 1e-9) deltaBad++;
+      biteMax = Math.max(biteMax, Math.abs(ew.wind));
+    }
+  }
+  const windPairs = AXES.length * SEEDS_L.length;
+  check('L: the winding equation holds closed-form (jitter → perpendicular ±LABYRINTH_WIND)', eqBad === 0, `${windPairs} mints`);
+  check('L: frontier rolls ride the SAME stream right after the wind draw (draw order pinned)', streamBad === 0, `${windPairs * 2} exit sets`);
+  check('L: a DIRECTED mint draws ZERO winding rng (jitter-only replay, byte-exact)', gateBad === 0, `${windPairs} mints`);
+  check('L: gate on vs off at one seed differs by EXACTLY the perpendicular wind vector', deltaBad === 0, `${windPairs} pairs`);
+  // FLAGGED floor: 12 (= the perpendicular jitter half-width) — a property of
+  // this fixed seed list; reaching past the whole jitter envelope is what
+  // "the dial bites" means here (a zeroed/halved dial cannot).
+  check('L: the dial BITES past the jitter envelope on these seeds', biteMax > JIT_Y, `max |wind| ${biteMax.toFixed(1)} of ±${LAB_WIND}`);
+
+  // THE MIS-FACE GUARD at the REAL cardinal steps: a wound mint one true step
+  // out (MAP_DIR) still hands its back-edge the honest facing — the winding
+  // may bend the road, never turn the door.
+  let faceBad = 0, faceN = 0;
+  for (const dir of DIRS) {
+    for (const seed of SEEDS_L) {
+      const { def } = mintAt(seed, SRC_X + MAP_DIR[dir].x, SRC_Y + MAP_DIR[dir].y, true);
+      faceN++;
+      if (def.exits[0]?.to !== 'qa_wind_src' || def.exits[0]?.side !== OPP_DIR[dir]) faceBad++;
+    }
+  }
+  check('L: real-step wound mints never mis-face the back-edge', faceBad === 0, `${faceN} mints`);
+  const stepNS = Math.abs(MAP_DIR.n.y), stepEW = Math.abs(MAP_DIR.e.x);
+  check('L: the dial stays well under half the shortest cardinal step',
+    LAB_WIND < Math.min(stepNS, stepEW) / 2, `${LAB_WIND} < ${Math.min(stepNS, stepEW) / 2}`);
+  check('L: wind + jitter can never flip the dominant axis (both step kinds)',
+    LAB_WIND + JIT_X < stepNS - JIT_Y && LAB_WIND + JIT_Y < stepEW - JIT_X,
+    `${LAB_WIND + JIT_X} < ${stepNS - JIT_Y} (N/S), ${LAB_WIND + JIT_Y} < ${stepEW - JIT_X} (E/W)`);
+
+  // DETERMINISM on the REAL frontier path: two independent boots on one seed
+  // grow byte-identical webs — winding included (chartNeighborsOf mints with
+  // fieldBiome: true, so every gen_ node above town rode the wind draw).
+  const growSig = (rounds: number): { sig: string; zones: number } => {
+    seedGlobalRandom(0x1ab5eed);
+    const w = makeSimWorld('warrior', 0x1abf00d);
+    w.loadZone(HUB_ZONE);
+    const chart = w as unknown as { chartNeighborsOf(z: ZoneDef): void };
+    for (let r = 0; r < rounds; r++) {
+      const batch = Object.values(w.zoneMap).filter(z =>
+        (z.dimension ?? 'surface') === 'surface' && z.caveDepth == null && !z.pocket
+        && z.objective.kind !== 'safe' && !z.floating && !zoneKindOf(z)?.staticExits
+        && z.exits.some(e => e.to === '?'));
+      for (const z of batch) chart.chartNeighborsOf(z);
+    }
+    const rows = Object.values(w.zoneMap)
+      .map(z => `${z.id}@${z.map.x},${z.map.y}|${z.exits.map(e => `${e.to}:${e.side}:${e.at ?? ''}`).join(';')}`)
+      .sort();
+    return { sig: rows.join('\n'), zones: rows.length };
+  };
+  const g1 = growSig(4), g2 = growSig(4);
+  // FLAGGED floor: 20 zones — a vacuity guard (the growth must actually have
+  // exercised random frontiers), far under what 4 rounds mint in practice.
+  check('L: same seed grows the same winding — byte-stable over two builds',
+    g1.sig === g2.sig && g1.zones >= 20,
+    g1.sig === g2.sig ? `${g1.zones} zones byte-equal` : `DIVERGED (${g1.zones} vs ${g2.zones} zones)`);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');
