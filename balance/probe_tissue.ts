@@ -112,6 +112,35 @@
 //      determinism ×3 over routed geometry · THE COVERING LAW over every
 //      routed piece · the solid between + the mass-dress subset law
 //      survive routing · the rig installs nothing.
+//   N  THE MESH (M2 wave 9): the SOLID FIELD (solidAt == massAt at the
+//      owning 30px lattice center — the quantize law ×9600, ⊆ unwalkable),
+//      corridors + their LOCAL shoulder hold no solid cell (re-derived at
+//      wave 10 through the strip response's own width — the wide regime
+//      keeps the wave-9 bound verbatim), the density lever on flat-dress
+//      unit fixtures, the form footprint law on a half-plane oracle, the
+//      grammar speckle's band/alpha/ink, THE WAY STUBS (two opposed at an
+//      agreed point, one inward per door mouth) + THE TOWN-DOOR LANE
+//      (M2 wave 10: an ineligible pair's ONLY stubs are door-flagged rows
+//      at its def exits' resolved mouths — the same placeExit formula the
+//      routing reads — pointing mouth → seat; coinciding abutting mouths
+//      told apart by normal; a doorless end grows NOTHING; eligible
+//      crossings stay unflagged), and the gradient anchors,
+//   O  THE SEAM POLISH (M2 wave 10): THE STRIP RESPONSE — stripShoulderPx
+//      monotone in gap, clamped [floor, shoulderPx], THE FLOOR LAW (floor ≥
+//      the solid lattice's half-diagonal, so no wall cell can ever touch
+//      the walkable ribbon); three aligned-door fixtures (thin ~160px /
+//      mid ~256 / wide ~640): the thin strip's flank band inside the old
+//      shoulder reads massAt (THE WALLS STAND) while the wide control keeps
+//      the wave-9 verge, the walkable law never moves, the crossing walks
+//      mouth-to-mouth; THE PLAZA LAW at seat grain (no stamp inside pad +
+//      floor of any routed piece); THE FLANK BIAS (biased thin-strip seats
+//      hug the walls vs pull 0, wide country byte-identical, deterministic
+//      ×2); INERTNESS (dial off == the degenerate response byte-identically,
+//      and the thin walls stand down with it); THE CELL COLOR LAW
+//      (tissueCellColor — pass 1's per-cell ground color as pure f(world
+//      pos): byte-identical across builders over boundary-spanning windows;
+//      the tone lines' composite-time fix, THE GUTTER, rides
+//      SEAMLESS_DRAW_CFG.seamGutterPx — pinned sane).
 // Run: npx tsx balance/probe_tissue.ts
 // ---------------------------------------------------------------------------
 
@@ -131,9 +160,11 @@ import { borderAgreedPoint, foldCells, type CellSeat } from '../src/world/cells'
 import { PORTAL_EDGE_INSET } from '../src/engine/worldgen';
 import { TISSUE_CFG, buildTissueSampler, grammarSeatsForChunk, massDressOf,
   massStampSeatsForChunk, solidFormsForChunk, waysideSeatsForChunk,
-  type MassDressRead, type MassStampSeat, type TissueRoadSeg } from '../src/world/tissue';
-import { MASSDRESS_CFG, MASS_KITS, MASS_KIT_DEFAULT, MASS_STAMP_GLYPHS,
-  ROADDRESS_CFG, ROAD_TONE_DEFAULT, WAYSIDE_GLYPHS, massDensityFor, massKitFor } from '../src/data/enclosure';
+  type MassDressRead, type MassStampSeat, type TissueRoadSeg, type WayStub } from '../src/world/tissue';
+import { MASSDRESS_CFG, MASSDRESS_STRIP, MASS_KITS, MASS_KIT_DEFAULT, MASS_STAMP_GLYPHS,
+  ROADDRESS_CFG, ROAD_TONE_DEFAULT, WAYSIDE_GLYPHS, massDensityFor, massKitFor,
+  stripShoulderPx } from '../src/data/enclosure';
+import { SEAMLESS_DRAW_CFG, tissueCellColor } from '../src/render/vis/seamlessDraw';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -218,6 +249,77 @@ const rectDistP = (x: number, y: number, c: { x0: number; y0: number; x1: number
 const cellRosterOf = (zm: Record<string, ZoneDef>): ZoneDef[] =>
   Object.values(zm).filter(z =>
     (z.dimension ?? 'surface') === 'surface' && z.caveDepth == null && !z.pocket && !z.floating);
+/** THE STRIP RESPONSE's gap, independently re-derived (M2 wave 10): the two
+ *  smallest rect distances to a cell list, summed — the probe's own twin of
+ *  the sampler's gapAt (the response's one input). */
+const gapOracle = (x: number, y: number, cells: CellRect[]): number => {
+  if (cells.length < 2) return Infinity;
+  let d1 = Infinity, d2 = Infinity;
+  for (const c of cells) {
+    const d = rectDistP(x, y, c);
+    if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) { d2 = d; }
+  }
+  return d1 + d2;
+};
+/** Squared point-to-segment distance (top-level twin for the K/O scopes). */
+const segDistSqP = (px: number, py: number, s: { ax: number; ay: number; bx: number; by: number }): number => {
+  const dx = s.bx - s.ax, dy = s.by - s.ay;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 > 0 ? ((px - s.ax) * dx + (py - s.ay) * dy) / len2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return (px - (s.ax + dx * t)) ** 2 + (py - (s.ay + dy * t)) ** 2;
+};
+/** The placeExit edge formula over a fold cell (side-first re-derivation —
+ *  the M rig's doorWayOracle hoisted for the K/O scopes and THE TOWN-DOOR
+ *  LANE's own pins). */
+const doorWayP = (z: ZoneDef, destId: string, cell: CellRect):
+  { seat: { x: number; y: number }; mouth: { x: number; y: number } } | null => {
+  const e = z.exits.find(ex => ex.to === destId && !(ex as { crossDim?: true }).crossDim);
+  if (!e) return null;
+  const w = cell.x1 - cell.x0, h = cell.y1 - cell.y0;
+  const t = e.at ?? 0.5, lo = PORTAL_EDGE_INSET;
+  const ax = Math.min(w - lo, Math.max(lo, w * t));
+  const ay = Math.min(h - lo, Math.max(lo, h * t));
+  const seat = e.side === 'n' ? { x: ax, y: lo } : e.side === 's' ? { x: ax, y: h - lo }
+    : e.side === 'w' ? { x: lo, y: ay } : { x: w - lo, y: ay };
+  const mouth = e.side === 'n' ? { x: seat.x, y: 0 } : e.side === 's' ? { x: seat.x, y: h }
+    : e.side === 'w' ? { x: 0, y: seat.y } : { x: w, y: seat.y };
+  return { seat: { x: cell.x0 + seat.x, y: cell.y0 + seat.y },
+    mouth: { x: cell.x0 + mouth.x, y: cell.y0 + mouth.y } };
+};
+/** THE ROUTED WAY's pieces over a pair list, independently re-derived (the
+ *  M rig's route oracle hoisted): agreed bend where the pair abuts, the
+ *  seat+mouth elbow where eligible and strip-split, the bare chord where no
+ *  pairing applies — the very geometry massAt's road exclusion tests. */
+const routedPiecesOracle = (prs: Array<[ZoneDef, ZoneDef]>, fold: Map<string, CellRect>):
+  Array<{ ax: number; ay: number; bx: number; by: number }> => {
+  const pieces: Array<{ ax: number; ay: number; bx: number; by: number }> = [];
+  for (const [a, b] of prs) {
+    const pa = mapToPx(a.map), pb = mapToPx(b.map);
+    let pts: Array<{ x: number; y: number }> = [pa, pb];
+    if (world.seamlessResidentEligible(a) && world.seamlessResidentEligible(b)) {
+      const ca = fold.get(a.id), cb = fold.get(b.id);
+      if (ca && cb) {
+        const p = borderAgreedPoint(ca, cb);
+        if (p) {
+          pts = [pa, { x: p.x, y: p.y }, pb];
+        } else {
+          const wa = doorWayP(a, b.id, ca), wb = doorWayP(b, a.id, cb);
+          pts = [pa];
+          if (wa) pts.push(wa.seat, wa.mouth);
+          if (wb) pts.push(wb.mouth, wb.seat);
+          pts.push(pb);
+        }
+      }
+    }
+    for (let k = 1; k < pts.length; k++) {
+      const p0 = pts[k - 1], p1 = pts[k];
+      if (Math.abs(p1.x - p0.x) < 1e-6 && Math.abs(p1.y - p0.y) < 1e-6) continue;
+      pieces.push({ ax: p0.x, ay: p0.y, bx: p1.x, by: p1.y });
+    }
+  }
+  return pieces;
+};
 
 // ---------------------------------------------------------------- E (part 1)
 check('E: getTissueSampler() is null at boot — fresh module state', getTissueSampler() === null);
@@ -786,16 +888,28 @@ function monotoneAB(tones: string[], a: string, b: string): boolean {
     const glyphKinds = new Set(Object.values(MASS_STAMP_GLYPHS).map(g => g.kind));
     for (const kit of Object.values(MASS_KITS)) for (const row of kit) glyphKinds.add(row.kind);
     for (const row of MASS_KIT_DEFAULT) glyphKinds.add(row.kind);
+    // THE SHOULDER ORACLE re-derived at M2 wave 10 (not weakened — the wide
+    // regime keeps the exact roadHalfPx+shoulderPx bound BY the response's
+    // own clamp): seats clear every ROUTED piece (the capture's own road
+    // geometry — the chord approximation predates the routed ribbon) by the
+    // LOCAL clearway shoulder, where a thin strip may honestly tighten it.
+    const routedK = routedPiecesOracle(pairs, foldK);
+    const distToRoutedK = (x: number, y: number): number => {
+      let best = Infinity;
+      for (const sg of routedK) best = Math.min(best, segDistSqP(x, y, sg));
+      return Math.sqrt(best);
+    };
     let badWalk = 0, badShoulder = 0, badCell = 0, badLand = 0, badKind = 0;
     for (const st of allSeats) {
       if (s1(st.x, st.y, seed).walkable) badWalk++;
-      if (nearestSegDist(st.x, st.y) <= SEAMLESS_CFG.roadHalfPx + MASSDRESS_CFG.shoulderPx) badShoulder++;
+      const shK = stripShoulderPx(gapOracle(st.x, st.y, cellsK));
+      if (distToRoutedK(st.x, st.y) <= SEAMLESS_CFG.roadHalfPx + shK - 1e-6) badShoulder++;
       if (cellsK.some(cc => st.x >= cc.x0 && st.x <= cc.x1 && st.y >= cc.y0 && st.y <= cc.y1)) badCell++;
       if (biomeAt(pxToMap({ x: st.x, y: st.y }), seed) === OCEAN_BIOME) badLand++;
       if (!glyphKinds.has(st.kind) || !(st.r > 0)) badKind++;
     }
     check('K: no seat is walkable through the sampler — the clearway law at seat grain', badWalk === 0, `${badWalk}/${allSeats.length}`);
-    check('K: every seat clears every ribbon by the shoulder (independent oracle)', badShoulder === 0, `${badShoulder} inside roadHalfPx+shoulderPx`);
+    check('K: every seat clears every routed ribbon by its local shoulder (independent oracle)', badShoulder === 0, `${badShoulder} inside roadHalfPx+local shoulder`);
     check('K: every seat stands outside every fold cell (re-derived oracle)', badCell === 0, `${badCell} inside a cell`);
     check('K: every seat stands on land', badLand === 0, `${badLand} wet`);
     check('K: every seat wears a glyph-closed kind and a sane radius', badKind === 0, `${badKind} bad`);
@@ -1534,16 +1648,24 @@ function monotoneAB(tones: string[], a: string, b: string): boolean {
     check('N2: solid ground is never walkable through the sampler (occlusion ⊆ refusal)',
       sSolidN >= 20 && sBadN === 0, `${sBadN}/${sSolidN}`);
 
-    // N3 — THE CORRIDOR STAYS OPEN SKY: along every captured road segment
-    // (the bins' own lists), the ribbon and its shoulder margin hold no
-    // solid cell — sight and shot thread every crossing the feet can (the
-    // wave-7 open-tissue law's true core, restated at the field's grain).
-    // Offsets stay 22px (half-diagonal of a lattice cell) inside the
-    // pad+shoulder reach, so the owning centers are massAt-false by
-    // arithmetic.
-    let corrN = 0, corrBad = 0;
+    // N3 — THE CORRIDOR STAYS OPEN SKY, at the response's own width (M2
+    // wave 10 re-derivation — NOT weakened: in wide country the response's
+    // clamp answers the full shoulderPx, so the exact wave-9 bound stands
+    // verbatim; where a thin strip tightens the shoulder the assertion is
+    // the law's own tightened band, and rig O pins the strip's positive
+    // face). For every sweep point the probe derives its OWNING lattice
+    // center (the exact cell solidAt answers from), that center's own gap
+    // through the fold oracle, and the center's own distance to every
+    // captured segment — a center within pad + ITS OWN local shoulder must
+    // never read solid. Sound by the subset direction: the window's segment
+    // list under-estimates nothing (min over all segs ≤ min over the
+    // window's), so every asserted point truly falls inside the exclusion.
+    const cellsN3 = [...foldCells(cellRosterOf(world.zoneMap).map(z => ({ id: z.id, ...mapToPx(z.map) }))).values()];
+    let corrN = 0, corrBad = 0, corrTight = 0;
     {
       const CC = SEAMLESS_CFG.chunkPx;
+      const padN = SEAMLESS_CFG.roadHalfPx;
+      const allSegsN: TissueRoadSeg[] = [];
       const segsSeen = new Set<string>();
       for (let cyC = Math.floor((myN - 6000) / CC); cyC <= Math.floor((myN + 6000) / CC); cyC++) {
         for (let cxC = Math.floor((mxN - 6000) / CC); cxC <= Math.floor((mxN + 6000) / CC); cxC++) {
@@ -1551,22 +1673,34 @@ function monotoneAB(tones: string[], a: string, b: string): boolean {
             const key = `${sg.ax},${sg.ay},${sg.bx},${sg.by}`;
             if (segsSeen.has(key)) continue;
             segsSeen.add(key);
-            const len = Math.hypot(sg.bx - sg.ax, sg.by - sg.ay);
-            if (len < 1) continue;
-            const ux = (sg.bx - sg.ax) / len, uy = (sg.by - sg.ay) / len;
-            for (let t = 0; t <= len; t += 90) {
-              for (const off of [0, -30, 30, -70, 70]) {
-                const px2 = sg.ax + ux * t - uy * off, py2 = sg.ay + uy * t + ux * off;
-                corrN++;
-                if (dN.solidAt(px2, py2, seed)) corrBad++;
-              }
-            }
+            allSegsN.push(sg);
+          }
+        }
+      }
+      const segDistMinN = (x: number, y: number): number => {
+        let best = Infinity;
+        for (const sg of allSegsN) best = Math.min(best, segDistSqP(x, y, sg));
+        return Math.sqrt(best);
+      };
+      for (const sg of allSegsN) {
+        const len = Math.hypot(sg.bx - sg.ax, sg.by - sg.ay);
+        if (len < 1) continue;
+        const ux = (sg.bx - sg.ax) / len, uy = (sg.by - sg.ay) / len;
+        for (let t = 0; t <= len; t += 90) {
+          for (const off of [0, -30, 30, -70, 70]) {
+            const px2 = sg.ax + ux * t - uy * off, py2 = sg.ay + uy * t + ux * off;
+            const ocx = (Math.floor(px2 / L) + 0.5) * L, ocy = (Math.floor(py2 / L) + 0.5) * L;
+            const shN = stripShoulderPx(gapOracle(ocx, ocy, cellsN3));
+            if (shN < MASSDRESS_CFG.shoulderPx - 1e-9) corrTight++;
+            if (segDistMinN(ocx, ocy) > padN + shN - 1e-6) continue; // outside the law's own band
+            corrN++;
+            if (dN.solidAt(px2, py2, seed)) corrBad++;
           }
         }
       }
     }
-    check('N3: no solid cell inside any corridor + shoulder margin (the ways stay open sky)',
-      corrN >= 100 && corrBad === 0, `${corrBad}/${corrN} solid`);
+    check('N3: no solid cell inside any corridor + its local shoulder (the ways stay open sky)',
+      corrN >= 100 && corrBad === 0, `${corrBad}/${corrN} solid; ${corrTight} tightened centers seen`);
 
     // N4 — THE DENSITY LEVER (the named jungle-vs-desert dial), unit-pinned
     // on hand-built flat dresses so geography can't confound the counts:
@@ -1691,8 +1825,22 @@ function monotoneAB(tones: string[], a: string, b: string): boolean {
         ...tplB0, id: 'tissue_mesh_ch_b', map: { x: 5286, y: 3900 },
         exits: [{ to: 'tissue_mesh_ch_a', side: 'w' }],
       };
+      // THE DOORLESS-END fixture (M2 wave 10, THE TOWN-DOOR LANE): a
+      // one-sided NON-abutting ineligible link — ch_c speaks an exit toward
+      // ch_d across a real strip, ch_d answers nothing, so only the
+      // exit-bearing end may grow a door stub and ch_d's rim stays bare
+      // (the abutting-coincident-mouth face lives on the ch_a/ch_b pair).
+      world.zoneMap['tissue_mesh_ch_c'] = {
+        ...tplB0, id: 'tissue_mesh_ch_c', map: { x: 5200, y: 3560 },
+        exits: [{ to: 'tissue_mesh_ch_d', side: 'e', at: 0.35 }],
+      };
+      world.zoneMap['tissue_mesh_ch_d'] = {
+        ...tplB0, id: 'tissue_mesh_ch_d', map: { x: 5370, y: 3560 },
+        exits: [],
+      };
       const meshIds = ['tissue_mesh_ab_a', 'tissue_mesh_ab_b', 'tissue_mesh_na_a',
-        'tissue_mesh_na_b', 'tissue_mesh_ch_a', 'tissue_mesh_ch_b'];
+        'tissue_mesh_na_b', 'tissue_mesh_ch_a', 'tissue_mesh_ch_b',
+        'tissue_mesh_ch_c', 'tissue_mesh_ch_d'];
       const s9 = buildTissueSampler(world);
       const s9b = buildTissueSampler(world);
       const d9 = massDressOf(s9)!, d9b = massDressOf(s9b)!;
@@ -1750,12 +1898,47 @@ function monotoneAB(tones: string[], a: string, b: string): boolean {
         check('N7: each NA door mouth wears one stub pointing mouth → seat (the carve\'s own perpendicular)',
           inward(sA, wNa) && inward(sB, wNb));
       }
-      // The seedless control: no stub near its would-be agreed point.
+      // The seedless control, RE-AIMED at M2 wave 10 (documented, not
+      // weakened — THE TOWN-DOOR LANE made an ineligible pair's resolved
+      // DOORS grow stubs, so the wave-9 "grows NONE" narrows to its true
+      // core): an ineligible pair grows NO crossing stub — every stub on
+      // its ground is door-flagged and sits EXACTLY at a def exit's
+      // resolved mouth (the same placeExit formula the routing reads),
+      // pointing mouth → seat; a doorless end still grows NOTHING.
       const cCH_a = fold9.get('tissue_mesh_ch_a'), cCH_b = fold9.get('tissue_mesh_ch_b');
       const pCH = cCH_a && cCH_b ? borderAgreedPoint(cCH_a, cCH_b) : null;
-      check('N7: the ineligible pair grows NO stub (towns keep their doors)',
-        pCH !== null && !d9.wayStubs.some(st =>
-          Math.abs(st.x - pCH.x) < 1 && Math.abs(st.y - pCH.y) < 1));
+      check('N7: an ineligible pair grows NO crossing stub — anything near its agreed point is door-flagged',
+        pCH !== null && d9.wayStubs.every(st => st.door === true
+          || !(Math.abs(st.x - pCH.x) < 1 && Math.abs(st.y - pCH.y) < 1)));
+      const wCHa = cCH_a ? doorWayP(world.zoneMap['tissue_mesh_ch_a'], 'tissue_mesh_ch_b', cCH_a) : null;
+      const wCHb = cCH_b ? doorWayP(world.zoneMap['tissue_mesh_ch_b'], 'tissue_mesh_ch_a', cCH_b) : null;
+      check('N7: both control doors resolve through the probe\'s own oracle', wCHa !== null && wCHb !== null);
+      const doorStubsAt = (m: { x: number; y: number }): WayStub[] =>
+        d9.wayStubs.filter(st => st.door === true
+          && Math.abs(st.x - m.x) < 1e-6 && Math.abs(st.y - m.y) < 1e-6);
+      // Exactly ONE door stub at the mouth wearing THIS end's inward normal
+      // (an ABUTTING ineligible pair's two mouths legitimately coincide on
+      // the shared border — each end's stub is told apart by its normal,
+      // the same way the agreed point wears its opposed pair).
+      const inwardDoor = (w2: { seat: { x: number; y: number }; mouth: { x: number; y: number } }): boolean => {
+        const dx = w2.seat.x - w2.mouth.x, dy = w2.seat.y - w2.mouth.y;
+        const len = Math.hypot(dx, dy);
+        const match = doorStubsAt(w2.mouth).filter(st =>
+          Math.abs(st.nx - dx / len) < 1e-9 && Math.abs(st.ny - dy / len) < 1e-9);
+        return match.length === 1;
+      };
+      check('N7: THE TOWN-DOOR STUBS — each ineligible door mouth wears exactly ONE door-flagged stub pointing mouth → seat',
+        !!wCHa && !!wCHb && inwardDoor(wCHa) && inwardDoor(wCHb));
+      const cCH_c = fold9.get('tissue_mesh_ch_c'), cCH_d = fold9.get('tissue_mesh_ch_d');
+      const wCHc = cCH_c ? doorWayP(world.zoneMap['tissue_mesh_ch_c'], 'tissue_mesh_ch_d', cCH_c) : null;
+      check('N7: the one-sided link\'s exit-bearing end wears its door stub', !!wCHc && inwardDoor(wCHc!));
+      check('N7: and its DOORLESS half grows nothing on its whole rim',
+        !!cCH_d && !d9.wayStubs.some(st =>
+          st.x >= cCH_d.x0 - 2 && st.x <= cCH_d.x1 + 2 && st.y >= cCH_d.y0 - 2 && st.y <= cCH_d.y1 + 2));
+      check('N7: eligible pairs\' crossing stubs carry NO door flag',
+        d9.wayStubs.some(st => !st.door)
+        && d9.wayStubs.filter(st => !st.door).every(st => pCH === null
+          || !(Math.abs(st.x - pCH.x) < 1 && Math.abs(st.y - pCH.y) < 1)));
       check('N7: stubs are deterministic across builders',
         JSON.stringify(d9.wayStubs) === JSON.stringify(d9b.wayStubs));
       // N8 — the gradient anchors: the fixture cells answer nearestCellAt
@@ -1773,6 +1956,353 @@ function monotoneAB(tones: string[], a: string, b: string): boolean {
     }
   }
   check('N: the mesh rig installed NOTHING — the seam stays null', getTissueSampler() === null);
+}
+
+// -------------------------------------------------------------------------- O
+{
+  // THE SEAM POLISH (M2 wave 10) — THE STRIP RESPONSE (mesh coda 5: thin
+  // strips read walled where they are walls, the crossing plaza stays
+  // clear), THE FLANK BIAS, and THE CELL COLOR LAW's purity (the tone
+  // lines' pin). The walkable law is NEVER read by the response — every
+  // fixture asserts it byte-unchanged.
+
+  // O1 — THE RESPONSE LAW, pure: monotone nondecreasing in gap, clamped to
+  // [floor, shoulderPx], the full shoulder at/above gapWide, and THE FLOOR
+  // LAW — the floor stays above the solid lattice's half-diagonal, so a
+  // tightened wall's drawn+tested cells can never touch the walkable
+  // ribbon (the quantize margin the mesh's corridors are guaranteed by).
+  {
+    let mono = true, clamped = true, prev = -Infinity;
+    for (let g2 = 0; g2 <= 800; g2 += 4) {
+      const s = stripShoulderPx(g2);
+      if (s < prev - 1e-9) mono = false;
+      if (s < MASSDRESS_STRIP.shoulderFloorPx - 1e-9 || s > MASSDRESS_CFG.shoulderPx + 1e-9) clamped = false;
+      prev = s;
+    }
+    check('O1: the shoulder response is monotone nondecreasing in strip width', mono);
+    check('O1: and clamped to [floor, shoulderPx]', clamped);
+    check('O1: the full shoulder stands at/above gapWide and at Infinity',
+      stripShoulderPx(MASSDRESS_STRIP.gapWidePx) === MASSDRESS_CFG.shoulderPx
+      && stripShoulderPx(Infinity) === MASSDRESS_CFG.shoulderPx);
+    check('O1: the floor holds at/below gapTight', stripShoulderPx(0) === Math.min(MASSDRESS_STRIP.shoulderFloorPx, MASSDRESS_CFG.shoulderPx)
+      && stripShoulderPx(MASSDRESS_STRIP.gapTightPx) === Math.min(MASSDRESS_STRIP.shoulderFloorPx, MASSDRESS_CFG.shoulderPx));
+    check('O1: THE FLOOR LAW — floor ≥ the solid lattice\'s half-diagonal + margin (no wall cell can touch the ribbon)',
+      MASSDRESS_STRIP.shoulderFloorPx >= TISSUE_CFG.solidCellPx * Math.SQRT2 / 2 + 0.5
+      && MASSDRESS_STRIP.shoulderFloorPx <= MASSDRESS_CFG.shoulderPx,
+      `floor ${MASSDRESS_STRIP.shoulderFloorPx} vs half-diag ${(TISSUE_CFG.solidCellPx * Math.SQRT2 / 2).toFixed(1)}`);
+    check('O1: the dial geometry is sane (tight < wide, pull in [0,1])',
+      MASSDRESS_STRIP.gapTightPx < MASSDRESS_STRIP.gapWidePx
+      && MASSDRESS_STRIP.stampFlankPull >= 0 && MASSDRESS_STRIP.stampFlankPull <= 1);
+  }
+
+  // O2..O5 — THE THIN-STRIP FIXTURES: three eligible aligned-door pairs on
+  // one dry base — THIN (~160px gap, the live 157px class), MID (~256px, a
+  // partial response), WIDE (~640px, the stand-down control) — cut so both
+  // cells clamp at cellMaxHalfPx and the strip width IS the seat spacing's
+  // remainder. Doors at 0.5/0.5 so the crossing is a clean perpendicular
+  // and the flank band is measurable along the strip's own axis.
+  {
+    const uPx = mapToPx({ x: 1, y: 0 }).x - mapToPx({ x: 0, y: 0 }).x;
+    const sepFor = (gapPx: number): number => Math.round((2 * PARTITION_CFG.cellMaxHalfPx + gapPx) / uPx);
+    const seps = { thin: sepFor(160), mid: sepFor(256), wide: sepFor(640) };
+    const pad = SEAMLESS_CFG.roadHalfPx;
+    const probeO = (bx: number, by: number): Array<{ x: number; y: number }> => {
+      const pts: Array<{ x: number; y: number }> = [];
+      for (const [dy, sep] of [[0, seps.thin], [300, seps.mid], [600, seps.wide]] as const) {
+        for (const oy of [-14, -7, 0, 7, 14]) {
+          pts.push(mapToPx({ x: bx + sep / 2, y: by + dy + oy }));
+        }
+      }
+      return pts;
+    };
+    const baseO = findLandBase(probeO);
+    check('O2: a dry fixture base stands within the far scan', baseO !== null,
+      baseO ? `base (${baseO.bx}, ${baseO.by}) units` : 'none found — widen the scan');
+    if (baseO) {
+      const { bx, by } = baseO;
+      const [, tplB] = pairs[0];
+      const mk = (id: string, x: number, y: number, to: string, side: 'e' | 'w', sd: number): void => {
+        world.zoneMap[id] = { ...tplB, id, map: { x, y }, seed: sd,
+          exits: [{ to, side, at: 0.5 }] };
+      };
+      mk('tissue_strip_thin_a', bx, by, 'tissue_strip_thin_b', 'e', 616161);
+      mk('tissue_strip_thin_b', bx + seps.thin, by, 'tissue_strip_thin_a', 'w', 616162);
+      mk('tissue_strip_mid_a', bx, by + 300, 'tissue_strip_mid_b', 'e', 616163);
+      mk('tissue_strip_mid_b', bx + seps.mid, by + 300, 'tissue_strip_mid_a', 'w', 616164);
+      mk('tissue_strip_wide_a', bx, by + 600, 'tissue_strip_wide_b', 'e', 616165);
+      mk('tissue_strip_wide_b', bx + seps.wide, by + 600, 'tissue_strip_wide_a', 'w', 616166);
+      const stripIds = ['tissue_strip_thin_a', 'tissue_strip_thin_b', 'tissue_strip_mid_a',
+        'tissue_strip_mid_b', 'tissue_strip_wide_a', 'tissue_strip_wide_b'];
+      try {
+        const sO = buildTissueSampler(world);
+        const dO = massDressOf(sO)!;
+        const foldO = foldCells(cellRosterOf(world.zoneMap).map(z => ({ id: z.id, ...mapToPx(z.map) })));
+        const cellsO = [...foldO.values()];
+        const gapOf = (name: string): { a: CellRect; b: CellRect; gap: number } => {
+          const a = foldO.get(`tissue_strip_${name}_a`)!, b = foldO.get(`tissue_strip_${name}_b`)!;
+          return { a, b, gap: b.x0 - a.x1 };
+        };
+        const thin = gapOf('thin'), mid = gapOf('mid'), wide = gapOf('wide');
+        check('O2: the staged gaps land in their bands (thin ~160, mid ~256, wide ~640)',
+          thin.gap > 120 && thin.gap <= MASSDRESS_STRIP.gapTightPx
+          && mid.gap > MASSDRESS_STRIP.gapTightPx && mid.gap < MASSDRESS_STRIP.gapWidePx
+          && wide.gap >= MASSDRESS_STRIP.gapWidePx,
+          `thin ${thin.gap.toFixed(0)} mid ${mid.gap.toFixed(0)} wide ${wide.gap.toFixed(0)}px`);
+        check('O2: all six fixtures are resident-eligible (the engine\'s own predicate)',
+          stripIds.every(id => world.seamlessResidentEligible(world.zoneMap[id])));
+        check('O2: no strip pair abuts (true tissue lies between)',
+          borderAgreedPoint(thin.a, thin.b) === null && borderAgreedPoint(mid.a, mid.b) === null
+          && borderAgreedPoint(wide.a, wide.b) === null);
+
+        // The crossing pieces (probe's own oracle) + the flank test points:
+        // at each pair, points in the strip's x-middle at |Δy| from the
+        // crossing chosen INSIDE the full shoulder band but OUTSIDE the
+        // pair's own tightened band — thin ground there is the response's
+        // newly-opened wall, wide ground is the old law's verge.
+        const wThin = { a: doorWayP(world.zoneMap['tissue_strip_thin_a'], 'tissue_strip_thin_b', thin.a)!,
+          b: doorWayP(world.zoneMap['tissue_strip_thin_b'], 'tissue_strip_thin_a', thin.b)! };
+        const wWide = { a: doorWayP(world.zoneMap['tissue_strip_wide_a'], 'tissue_strip_wide_b', wide.a)!,
+          b: doorWayP(world.zoneMap['tissue_strip_wide_b'], 'tissue_strip_wide_a', wide.b)! };
+        check('O2: the door oracles resolve on the thin and wide pairs',
+          !!wThin.a && !!wThin.b && !!wWide.a && !!wWide.b);
+        const shThin = stripShoulderPx(thin.gap);
+        const dBand = [pad + shThin + 4, pad + (shThin + MASSDRESS_CFG.shoulderPx) / 2, pad + MASSDRESS_CFG.shoulderPx - 4];
+        check('O2: the test band is real (tightened shoulder < full shoulder on the thin pair)',
+          shThin < MASSDRESS_CFG.shoulderPx && dBand[0] < dBand[2],
+          `local ${shThin.toFixed(1)} vs full ${MASSDRESS_CFG.shoulderPx}`);
+        const flankPts = (w2: { a: { seat: { x: number; y: number }; mouth: { x: number; y: number } };
+          b: { seat: { x: number; y: number }; mouth: { x: number; y: number } } }, cellA: CellRect, cellB: CellRect):
+          Array<{ x: number; y: number }> => {
+          const mxO = (w2.a.mouth.x + w2.b.mouth.x) / 2;
+          const cyO = (w2.a.mouth.y + w2.b.mouth.y) / 2;
+          const pts: Array<{ x: number; y: number }> = [];
+          for (const d of dBand) {
+            for (const sgn of [-1, 1]) {
+              const p = { x: mxO, y: cyO + sgn * d };
+              if (p.x > cellA.x1 && p.x < cellB.x0) pts.push(p);
+            }
+          }
+          return pts;
+        };
+        const thinPts = flankPts(wThin, thin.a, thin.b);
+        const widePts = flankPts(wWide, wide.a, wide.b);
+        let thinMass = 0, thinOpen = 0, thinWalk = 0, wideMass = 0;
+        for (const p of thinPts) {
+          if (dO.massAt(p.x, p.y, seed)) thinMass++; else thinOpen++;
+          if (sO(p.x, p.y, seed).walkable) thinWalk++;
+        }
+        for (const p of widePts) if (dO.massAt(p.x, p.y, seed)) wideMass++;
+        check('O2: THE WALLS STAND — thin-strip flank ground inside the old shoulder band reads massAt (the response opens it)',
+          thinPts.length >= 4 && thinMass === thinPts.length, `${thinMass}/${thinPts.length} mass`);
+        check('O2: the wide control keeps the wave-9 verge there (massAt stands down inside the full shoulder)',
+          widePts.length >= 4 && wideMass === 0, `${wideMass}/${widePts.length} mass`);
+        check('O2: the walkable law never moved — every flank point still refuses feet',
+          thinWalk === 0, `${thinWalk} walkable`);
+        // The corridor itself: mouth-to-mouth every 6px stays road+walkable —
+        // the response may wall the flanks, never the way.
+        {
+          const mA = wThin.a.mouth, mB = wThin.b.mouth;
+          const len = Math.hypot(mB.x - mA.x, mB.y - mA.y);
+          let n = 0, bad = 0;
+          for (let d = 0; d <= len; d += 6) {
+            const x = mA.x + (mB.x - mA.x) * (d / len), y = mA.y + (mB.y - mA.y) * (d / len);
+            const t = sO(x, y, seed);
+            n++;
+            if (!t.road || !t.walkable) bad++;
+          }
+          check('O2: the thin crossing still walks mouth-to-mouth (the way is never eaten)',
+            n > 0 && bad === 0, `${n - bad}/${n} steps`);
+        }
+
+        // O3 — THE PLAZA LAW at seat grain: over the thin strip's chunks,
+        // every stamp seat clears every routed piece by pad + the FLOOR
+        // (massAt's own tightest exclusion) and stands outside both cells.
+        const C = SEAMLESS_CFG.chunkPx;
+        const stripChunks: Array<{ cx: number; cy: number }> = [];
+        {
+          const cxA = Math.floor(thin.a.x1 / C), cxB = Math.floor(thin.b.x0 / C);
+          const rowY = (wThin.a.mouth.y + wThin.b.mouth.y) / 2;
+          for (let cyC = Math.floor((rowY - 2200) / C); cyC <= Math.floor((rowY + 2200) / C); cyC++) {
+            for (let cxC = cxA; cxC <= cxB; cxC++) stripChunks.push({ cx: cxC, cy: cyC });
+          }
+        }
+        const piecesO = routedPiecesOracle(
+          [[world.zoneMap['tissue_strip_thin_a'], world.zoneMap['tissue_strip_thin_b']],
+            [world.zoneMap['tissue_strip_mid_a'], world.zoneMap['tissue_strip_mid_b']],
+            [world.zoneMap['tissue_strip_wide_a'], world.zoneMap['tissue_strip_wide_b']]], foldO);
+        const inStrip = (p: { x: number; y: number }): boolean =>
+          p.x > thin.a.x1 && p.x < thin.b.x0 && p.y > thin.a.y0 && p.y < thin.a.y1;
+        const seatsThin: MassStampSeat[] = [];
+        for (const ck of stripChunks) {
+          for (const st of massStampSeatsForChunk(dO, seed, ck.cx, ck.cy)) {
+            if (inStrip(st)) seatsThin.push(st);
+          }
+        }
+        let badPlaza = 0, badCellO = 0, badMassO = 0;
+        const floorO = Math.min(MASSDRESS_STRIP.shoulderFloorPx, MASSDRESS_CFG.shoulderPx);
+        for (const st of seatsThin) {
+          let dMin = Infinity;
+          for (const sg of piecesO) dMin = Math.min(dMin, segDistSqP(st.x, st.y, sg));
+          if (Math.sqrt(dMin) <= pad + floorO - 1e-6) badPlaza++;
+          if (cellsO.some(cc => st.x >= cc.x0 && st.x <= cc.x1 && st.y >= cc.y0 && st.y <= cc.y1)) badCellO++;
+          if (!dO.massAt(st.x, st.y, seed)) badMassO++;
+        }
+        check('O3: the thin strip actually seats stamps (the fullness is real)', seatsThin.length >= 6,
+          `${seatsThin.length} seats in the strip`);
+        check('O3: THE PLAZA LAW — no seat inside pad + floor of any routed piece (the way + its tightest shoulder stay clear)',
+          badPlaza === 0, `${badPlaza}/${seatsThin.length}`);
+        check('O3: every strip seat stands outside both cells and on massAt ground',
+          badCellO === 0 && badMassO === 0, `cell ${badCellO}, mass ${badMassO}`);
+
+        // O4 — THE FLANK BIAS: same fixtures, pull 0 vs the dial — biased
+        // seats hug the walls (mean rim distance strictly drops), wide
+        // country is byte-identical (identity where the response stands
+        // down), and the biased scatter is deterministic ×2.
+        {
+          const rimDist = (st: { x: number; y: number }): number =>
+            Math.min(rectDistP(st.x, st.y, thin.a), rectDistP(st.x, st.y, thin.b));
+          const collect = (d2: MassDressRead, chunks: Array<{ cx: number; cy: number }>,
+            filt: (p: { x: number; y: number }) => boolean): MassStampSeat[] => {
+            const out: MassStampSeat[] = [];
+            for (const ck of chunks) {
+              for (const st of massStampSeatsForChunk(d2, seed, ck.cx, ck.cy)) if (filt(st)) out.push(st);
+            }
+            return out;
+          };
+          const keepPull = MASSDRESS_STRIP.stampFlankPull;
+          let unb: MassStampSeat[] = [];
+          try {
+            MASSDRESS_STRIP.stampFlankPull = 0;
+            unb = collect(massDressOf(buildTissueSampler(world))!, stripChunks, inStrip);
+          } finally {
+            MASSDRESS_STRIP.stampFlankPull = keepPull;
+          }
+          const biased = seatsThin;
+          const mean = (a: MassStampSeat[]): number =>
+            a.reduce((s2, st) => s2 + rimDist(st), 0) / Math.max(1, a.length);
+          check('O4: THE FLANK BIAS pulls the thin strip\'s seats toward the walls (mean rim distance drops vs pull 0)',
+            keepPull > 0 && biased.length > 0 && unb.length > 0 && mean(biased) < mean(unb) - 1e-9,
+            `biased ${mean(biased).toFixed(1)}px (n ${biased.length}) vs unbiased ${mean(unb).toFixed(1)}px (n ${unb.length})`);
+          // Wide country identity: the wide pair's strip chunks, byte-equal
+          // under pull 0 and the dial (the response stands down at its gap).
+          const wideChunks: Array<{ cx: number; cy: number }> = [];
+          {
+            const cxA = Math.floor(wide.a.x1 / C), cxB = Math.floor(wide.b.x0 / C);
+            const rowY = (wWide.a.mouth.y + wWide.b.mouth.y) / 2;
+            for (let cyC = Math.floor((rowY - 1500) / C); cyC <= Math.floor((rowY + 1500) / C); cyC++) {
+              for (let cxC = cxA; cxC <= cxB; cxC++) wideChunks.push({ cx: cxC, cy: cyC });
+            }
+          }
+          const inWideStrip = (p: { x: number; y: number }): boolean =>
+            p.x > wide.a.x1 && p.x < wide.b.x0 && p.y > wide.a.y0 && p.y < wide.a.y1;
+          let wideUnb = '';
+          try {
+            MASSDRESS_STRIP.stampFlankPull = 0;
+            wideUnb = JSON.stringify(collect(massDressOf(buildTissueSampler(world))!, wideChunks, inWideStrip));
+          } finally {
+            MASSDRESS_STRIP.stampFlankPull = keepPull;
+          }
+          const wideBiased = JSON.stringify(collect(dO, wideChunks, inWideStrip));
+          check('O4: wide country is byte-identical under the bias (identity where the response stands down)',
+            wideBiased === wideUnb);
+          check('O4: the biased scatter is deterministic across builders',
+            JSON.stringify(collect(massDressOf(buildTissueSampler(world))!, stripChunks, inStrip))
+            === JSON.stringify(biased));
+        }
+
+        // O5 — INERTNESS: the dial off is byte-identical to the degenerate
+        // response (floor == shoulderPx, pull 0) over the thin strip — the
+        // wave-9 law restored two independent ways — and the thin flank
+        // band's walls stand down with it.
+        {
+          const keep = { enabled: MASSDRESS_STRIP.enabled, floor: MASSDRESS_STRIP.shoulderFloorPx,
+            pull: MASSDRESS_STRIP.stampFlankPull };
+          const dumpLaw = (d2: MassDressRead, s2: ReturnType<typeof buildTissueSampler>): string => {
+            let out = '';
+            const rowY = (wThin.a.mouth.y + wThin.b.mouth.y) / 2;
+            for (let i = 0; i < 40; i++) {
+              for (let j = 0; j < 24; j++) {
+                const x = thin.a.x1 - 60 + (i / 39) * (thin.gap + 120);
+                const y = rowY - 1400 + (j / 23) * 2800;
+                out += `${d2.massAt(x, y, seed) ? 1 : 0}${d2.solidAt(x, y, seed) ? 1 : 0}${s2(x, y, seed).walkable ? 1 : 0}`;
+              }
+            }
+            for (const ck of stripChunks) out += JSON.stringify(massStampSeatsForChunk(d2, seed, ck.cx, ck.cy));
+            return out;
+          };
+          let offDump = '', degDump = '', offThinMass = 0;
+          try {
+            MASSDRESS_STRIP.enabled = false;
+            const sOff = buildTissueSampler(world);
+            const dOff = massDressOf(sOff)!;
+            offDump = dumpLaw(dOff, sOff);
+            for (const p of thinPts) if (dOff.massAt(p.x, p.y, seed)) offThinMass++;
+          } finally {
+            MASSDRESS_STRIP.enabled = keep.enabled;
+          }
+          try {
+            MASSDRESS_STRIP.shoulderFloorPx = MASSDRESS_CFG.shoulderPx;
+            MASSDRESS_STRIP.stampFlankPull = 0;
+            const sDeg = buildTissueSampler(world);
+            degDump = dumpLaw(massDressOf(sDeg)!, sDeg);
+          } finally {
+            MASSDRESS_STRIP.shoulderFloorPx = keep.floor;
+            MASSDRESS_STRIP.stampFlankPull = keep.pull;
+          }
+          check('O5: dial off == the degenerate response (floor = shoulderPx, pull 0) byte-identically — inert two ways',
+            offDump.length > 0 && offDump === degDump);
+          check('O5: with the response off, the thin flank band is the wave-9 verge again (no wall stands)',
+            offThinMass === 0, `${offThinMass}/${thinPts.length} mass`);
+        }
+      } finally {
+        for (const id of stripIds) delete world.zoneMap[id];
+      }
+    }
+  }
+
+  // O6 — THE CELL COLOR LAW (the tone lines' pin): the bake's per-cell
+  // ground color is a pure function of WORLD position — no chunk term in
+  // its signature, byte-identical across independent builders over a
+  // lattice window that SPANS chunk boundaries (the seam-polish diagnosis
+  // measured the baked tones stepping exactly 0 across every boundary; the
+  // gutter fixes the composite-time bleed and this keeps the law itself
+  // boundary-blind forever) — and the gutter dial is a sane non-negative
+  // integer (0 = the old gutterless bake byte-identically).
+  {
+    const dC1 = massDressOf(s1), dC2 = massDressOf(s2);
+    check('O6: the gutter dial is a sane non-negative integer',
+      Number.isInteger(SEAMLESS_DRAW_CFG.seamGutterPx) && SEAMLESS_DRAW_CFG.seamGutterPx >= 0,
+      `seamGutterPx ${SEAMLESS_DRAW_CFG.seamGutterPx}`);
+    if (dC1 && dC2) {
+      const [aC, bC] = pairs[0];
+      const pC = mapToPx(aC.map), qC = mapToPx(bC.map);
+      const C = SEAMLESS_CFG.chunkPx, L = TISSUE_CFG.solidCellPx;
+      let dump1 = '', dump2 = '';
+      const colorsSeen = new Set<string>();
+      // Twenty boundary columns fanned across the country (blend bands,
+      // roads, verge, sea — the window must speak several colors), four
+      // cells either side of each boundary.
+      for (let k = 0; k < 20; k++) {
+        const bxC = Math.floor((pC.x + (k - 10) * 1800) / C) * C;
+        for (let j = 0; j < 12; j++) {
+          const wy = Math.floor((pC.y + qC.y) / 2 / L) * L + ((k % 3) * 12 + j - 18) * L + L / 2;
+          for (let i = -4; i < 4; i++) {
+            const wx = bxC + i * L + L / 2;
+            const c1 = tissueCellColor(s1, dC1, dC1, true, wx, wy, seed);
+            const c2 = tissueCellColor(s2, dC2, dC2, true, wx, wy, seed);
+            dump1 += `${c1.color}${c1.shadeable ? 1 : 0};`;
+            dump2 += `${c2.color}${c2.shadeable ? 1 : 0};`;
+            colorsSeen.add(c1.color);
+          }
+        }
+      }
+      check('O6: the color law answers byte-identically across independent builders over a boundary-spanning window',
+        dump1.length > 0 && dump1 === dump2);
+      check('O6: the window is non-degenerate (the law speaks more than one color)', colorsSeen.size >= 2,
+        `${colorsSeen.size} colors`);
+    }
+  }
+  check('O: the seam-polish rig installed NOTHING — the seam stays null', getTissueSampler() === null);
 }
 
 // ---------------------------------------------------------------- E (part 2)

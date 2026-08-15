@@ -89,6 +89,20 @@ export const SEAMLESS_DRAW_CFG = {
    *  painter's mass verdict and the occlusion consult read ONE lattice, so
    *  drawn == tested survives any retune of either BY CONSTRUCTION. */
   latticePx: TISSUE_CFG.solidCellPx,
+  /** THE GUTTER (M2 wave 10, THE SEAM POLISH — the tone lines' true fix):
+   *  each tissue chunk bakes this many px of its NEIGHBORS' own content
+   *  around its rim (the same pure f(seed, world-pos) laws — the diagnosis
+   *  rig proved the baked tones carry ZERO step at chunk boundaries, so the
+   *  visible lines are composite-time: under the world transform's zoom and
+   *  fractional camera each chunk's drawImage only PARTIALLY covers its
+   *  edge device pixels and bilinear-samples past its canvas edge — a
+   *  faint straight seam of underlay at every 720px boundary over flat
+   *  mass). THE OVERLAP BLIT lands the whole guttered canvas at −G, so
+   *  adjacent chunks overlap by 2G with byte-identical content: every
+   *  boundary pixel is fully covered and the fringe composites
+   *  same-over-same — the class dies BY CONSTRUCTION. 0 restores the old
+   *  gutterless bake + blit byte-identically (the A/B lever). FLAGGED. */
+  seamGutterPx: 2,
   /** LRU cap on live tissue chunks (ground.ts maxChunks idiom: 60 × 448²
    *  ≈ 48MB there; 24 × 720² ≈ 50MB here — the same byte class). */
   maxTissueChunks: 24,
@@ -226,6 +240,11 @@ export const SEAMLESS_DRAW_CFG = {
      *  (px) ≈ the carve's own corridor reach (PORTAL_EDGE_INSET 90 + a
      *  step), so the overdrawn road ends where the carved ground does. */
     wayStubPx: 120,
+    /** THE TOWN-DOOR STUBS (M2 wave 10, THE SEAM POLISH): draw the
+     *  `door: true` stub rows — an ineligible pair's drawn way meeting the
+     *  town at its REAL resolved door instead of nowhere (the derivation
+     *  always carries the rows; this gates only their paint). FLAGGED. */
+    doorStubs: true,
     /** Solid-form ink, as shade() deltas off the local mass ground (the
      *  stampInk idiom at mound scale) + the contact shadow's alpha. */
     formInk: { body: -0.05, lit: 0.16, dark: -0.2, shadowAlpha: 0.2 },
@@ -304,14 +323,64 @@ function chunkSeatsFor(dress: MassDressRead, rd: MassDressRead | null, mesh: boo
   return rec;
 }
 
+/** THE CELL COLOR LAW (M2 wave 10, THE SEAM POLISH — pass 1 extracted): one
+ *  lattice cell's ground color + shadeability as a pure function of WORLD
+ *  position. No chunk term exists in the signature, so chunk-boundary
+ *  continuity is STRUCTURAL — the seam-polish diagnosis rig measured the
+ *  baked tones stepping exactly 0 across every 720px boundary, and this
+ *  shape keeps a future chunk-relative term from ever entering the color
+ *  law unnoticed (the probe pins determinism through this export). DOM-free
+ *  on purpose: the bake turns answers into fills; headless rigs read the
+ *  same law. `dress`/`rd`/`mesh` mirror the bake's own lane gates. */
+export function tissueCellColor(sampler: TissueSampler, dress: MassDressRead | null,
+  rd: MassDressRead | null, mesh: boolean, wx: number, wy: number, seed: number):
+  { color: string; shadeable: boolean } {
+  const s = sampler(wx, wy, seed);
+  if (!s.walkable) {
+    if (dress && dress.landAt(wx, wy, seed)) {
+      // THE MESH's three-class ground (wave 9): SOLID field cells wear the
+      // full mass lean (the wall's country — this lattice verdict IS the
+      // occlusion consult's, same centers, drawn == tested); non-solid
+      // unwalkable land (the clearway verge, apron shoulders) wears the
+      // lighter verge lean — rough open ground rays cross before the
+      // bodies start.
+      const solidHere = !mesh || dress.solidAt(wx, wy, seed);
+      return {
+        color: mix(s.tone, SEAMLESS_DRAW_CFG.waterDark,
+          solidHere ? SEAMLESS_DRAW_CFG.massMix : SEAMLESS_DRAW_CFG.mesh.vergeMix),
+        shadeable: true,
+      };
+    }
+    return { color: mix(s.tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.waterMix), shadeable: false };
+  }
+  if (s.road && rd) {
+    if (!rd.landAt(wx, wy, seed)) {
+      return { color: mix(s.tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.waterMix), shadeable: false };
+    }
+    if (rd.massSansRoadAt(wx, wy, seed)) {
+      return { color: mix(s.tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.massMix), shadeable: true };
+    }
+    return { color: s.tone, shadeable: false };
+  }
+  return { color: s.road ? mix(s.tone, '#ffffff', SEAMLESS_DRAW_CFG.roadLighten) : s.tone, shadeable: false };
+}
+
 class SeamlessTissueChunks {
   /** Map insertion order as LRU (the ground.ts chunk-cache idiom). */
   private chunks = new Map<string, TissueEntry>();
   private seedRef = -1;
+  /** THE GUTTER's cache guard: entries bake at (chunk + 2×gutter)² and blit
+   *  by a gutter-inset source rect — a dial flip (the A/B lever) would read
+   *  the wrong region out of old canvases, so a changed gutter drops them. */
+  private gutterRef = -1;
   private seq = 0;
 
   count(): number { return this.chunks.size; }
-  bytes(): number { return this.chunks.size * SEAMLESS_CFG.chunkPx * SEAMLESS_CFG.chunkPx * 4; }
+  bytes(): number {
+    let b = 0;
+    for (const e of this.chunks.values()) b += e.img.width * e.img.height * 4;
+    return b;
+  }
 
   clear(): void {
     for (const e of this.chunks.values()) releaseCanvas(e.img);
@@ -327,6 +396,8 @@ class SeamlessTissueChunks {
     if (!sampler) return;
     const seed = worldSeedOf(world);
     if (seed !== this.seedRef) { this.clear(); this.seedRef = seed; }
+    const G = Math.max(0, Math.round(SEAMLESS_DRAW_CFG.seamGutterPx));
+    if (G !== this.gutterRef) { this.clear(); this.gutterRef = G; }
     // THE INTEGER-SNAP LAW (every world-keyed chunk lane): seats sit at
     // FRACTIONAL world px, and a drawImage at a fractional dest bleeds its
     // bilinear edge — a visible 1px column at every chunk boundary over
@@ -348,7 +419,16 @@ class SeamlessTissueChunks {
         if (entry) {
           this.chunks.delete(key); this.chunks.set(key, entry); // LRU touch
           entry.at = ++this.seq;
-          ctx.drawImage(entry.img, cx * C - dox, cy * C - doy);
+          // THE OVERLAP BLIT: the whole (C+2G)² canvas lands at −G, so
+          // adjacent chunks OVERLAP by 2G with byte-identical content (the
+          // gutter ring IS the neighbor's own pixels — purity). Under the
+          // scaled fractional world transform each drawImage's edge pixels
+          // are only PARTIALLY covered; without the overlap that partial
+          // coverage let the dark underlay bleed through as a seam line
+          // even when the sampled colors matched. With it, every boundary
+          // device pixel is fully covered by at least one draw, and the
+          // overlapped fringe composites same-over-same — the line dies.
+          ctx.drawImage(entry.img, cx * C - G - dox, cy * C - G - doy);
         } else {
           missing.push({ cx, cy, d2: (cx + 0.5 - ccx) ** 2 + (cy + 0.5 - ccy) ** 2 });
         }
@@ -361,7 +441,7 @@ class SeamlessTissueChunks {
         const m = missing[i];
         const img = this.bake(sampler, seed, m.cx, m.cy);
         this.chunks.set(`${m.cx},${m.cy}`, { img, at: ++this.seq });
-        ctx.drawImage(img, m.cx * C - dox, m.cy * C - doy);
+        ctx.drawImage(img, m.cx * C - G - dox, m.cy * C - G - doy); // the overlap blit
       }
     }
     // Evict past the cap — but never a chunk this very frame drew (a wide dev
@@ -390,10 +470,20 @@ class SeamlessTissueChunks {
   private bake(sampler: TissueSampler, seed: number, cx: number, cy: number): HTMLCanvasElement {
     const t0 = performance.now();
     const C = SEAMLESS_CFG.chunkPx, L = SEAMLESS_DRAW_CFG.latticePx;
-    const cells = Math.ceil(C / L);
+    // THE GUTTER (M2 wave 10, THE SEAM POLISH): the canvas carries G px of
+    // the NEIGHBORS' own content on every side — the same pure laws at the
+    // same world positions, so the ring is exactly what the adjacent chunks
+    // bake as their own edge (seam-free by purity). The blit insets it back
+    // out; edge bilinear sampling under the scaled world transform then
+    // lands on true texels instead of transparency — the tone lines die.
+    // One translate(G, G) here keeps every pass in chunk-local coordinates.
+    const G = Math.max(0, Math.round(SEAMLESS_DRAW_CFG.seamGutterPx));
+    const lo = Math.floor(-G / L), hi = Math.ceil((C + G) / L) - 1;
+    const nw = hi - lo + 1;
     const c = document.createElement('canvas');
-    c.width = C; c.height = C;
+    c.width = C + 2 * G; c.height = C + 2 * G;
     const g = c.getContext('2d')!;
+    g.translate(G, G);
     const dress = SEAMLESS_DRAW_CFG.massDress ? massDressOf(sampler) : null;
     // THE ROAD LANE (M2 wave 8) gates on its own dial AND the carried read
     // actually knowing roads (a dev-swapped older sampler stands the lane
@@ -413,49 +503,22 @@ class SeamlessTissueChunks {
     // massSansRoadAt, the sampler's own law): the opaque face strokes cover
     // the exact walkable ribbon, so only the cell's off-ribbon remainder
     // shows, wearing its true country — the 30px stair-step dies here.
-    const shadeable: boolean[] | null = dress ? new Array(cells * cells).fill(false) : null;
-    for (let j = 0; j < cells; j++) {
+    const shadeable: boolean[] | null = dress ? new Array(nw * nw).fill(false) : null;
+    for (let j = lo; j <= hi; j++) {
       const wy = cy * C + (j + 0.5) * L;
-      let runStart = 0;
+      let runStart = lo;
       let runColor = '';
-      for (let i = 0; i < cells; i++) {
+      for (let i = lo; i <= hi; i++) {
         const wx = cx * C + (i + 0.5) * L;
-        const s = sampler(wx, wy, seed);
-        let color: string;
-        if (!s.walkable) {
-          if (dress && dress.landAt(wx, wy, seed)) {
-            // THE MESH's three-class ground (wave 9): SOLID field cells wear
-            // the full mass lean (the wall's country — this lattice verdict
-            // IS the occlusion consult's, same centers, drawn == tested);
-            // non-solid unwalkable land (the clearway verge, apron
-            // shoulders) wears the lighter verge lean — rough open ground
-            // rays cross before the bodies start.
-            const solidHere = !mesh || dress.solidAt(wx, wy, seed);
-            color = mix(s.tone, SEAMLESS_DRAW_CFG.waterDark,
-              solidHere ? SEAMLESS_DRAW_CFG.massMix : SEAMLESS_DRAW_CFG.mesh.vergeMix);
-            shadeable![j * cells + i] = true;
-          } else {
-            color = mix(s.tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.waterMix);
-          }
-        } else if (s.road && rd) {
-          if (!rd.landAt(wx, wy, seed)) {
-            color = mix(s.tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.waterMix);
-          } else if (rd.massSansRoadAt(wx, wy, seed)) {
-            color = mix(s.tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.massMix);
-            shadeable![j * cells + i] = true;
-          } else {
-            color = s.tone;
-          }
-        } else {
-          color = s.road ? mix(s.tone, '#ffffff', SEAMLESS_DRAW_CFG.roadLighten) : s.tone;
-        }
-        if (color !== runColor) {
+        const cc = tissueCellColor(sampler, dress, rd, mesh, wx, wy, seed);
+        if (shadeable && cc.shadeable) shadeable[(j - lo) * nw + (i - lo)] = true;
+        if (cc.color !== runColor) {
           if (i > runStart) { g.fillStyle = runColor; g.fillRect(runStart * L, j * L, (i - runStart) * L, L); }
-          runStart = i; runColor = color;
+          runStart = i; runColor = cc.color;
         }
       }
       g.fillStyle = runColor;
-      g.fillRect(runStart * L, j * L, (cells - runStart) * L, L);
+      g.fillRect(runStart * L, j * L, (hi + 1 - runStart) * L, L);
     }
     if (dress) {
       // --- Pass 1.55: THE EDGE FADE (M2 wave 9, THE ZONE-EDGE GRADIENT) —
@@ -468,9 +531,9 @@ class SeamlessTissueChunks {
       // its mint will actually pour.
       if (mesh) {
         const MF = SEAMLESS_DRAW_CFG.mesh;
-        for (let j = 0; j < cells; j++) {
+        for (let j = lo; j <= hi; j++) {
           const wy = cy * C + (j + 0.5) * L;
-          for (let i = 0; i < cells; i++) {
+          for (let i = lo; i <= hi; i++) {
             const wx = cx * C + (i + 0.5) * L;
             if (!dress.landAt(wx, wy, seed)) continue;
             const near = dress.nearestCellAt(wx, wy);
@@ -497,7 +560,7 @@ class SeamlessTissueChunks {
           for (let nx = cx - 1; nx <= cx + 1; nx++) {
             for (const sp of chunkSeatsFor(dress, rd, mesh, seed, nx, ny).grammar) {
               const rr = sp.r * 2.2;
-              if (sp.x + rr < gx0 || sp.x - rr > gx0 + C || sp.y + rr < gy0 || sp.y - rr > gy0 + C) continue;
+              if (sp.x + rr < gx0 - G || sp.x - rr > gx0 + C + G || sp.y + rr < gy0 - G || sp.y - rr > gy0 + C + G) continue;
               const fr = new Rng(sp.varSeed);
               g.globalAlpha = sp.alpha * MF.grammarAlpha;
               g.fillStyle = sp.ink;
@@ -515,13 +578,13 @@ class SeamlessTissueChunks {
       // run-merge and re-bakes stay byte-stable. Overlay only — the blend
       // tones remain the base.
       const steps = SEAMLESS_DRAW_CFG.shadeSteps, strength = SEAMLESS_DRAW_CFG.shadeStrength;
-      for (let j = 0; j < cells; j++) {
+      for (let j = lo; j <= hi; j++) {
         const wy = cy * C + (j + 0.5) * L;
-        let runStart = 0;
+        let runStart = lo;
         let runColor = '';
-        for (let i = 0; i < cells; i++) {
+        for (let i = lo; i <= hi; i++) {
           let color = '';
-          if (shadeable![j * cells + i]) {
+          if (shadeable![(j - lo) * nw + (i - lo)]) {
             const q = Math.round(dress.shadeAt(cx * C + (i + 0.5) * L, wy, seed) * steps) / steps;
             if (q > 0) color = `rgba(255,255,255,${(q * strength).toFixed(4)})`;
             else if (q < 0) color = `rgba(0,0,0,${(-q * strength).toFixed(4)})`;
@@ -531,7 +594,7 @@ class SeamlessTissueChunks {
             runStart = i; runColor = color;
           }
         }
-        if (runColor) { g.fillStyle = runColor; g.fillRect(runStart * L, j * L, (cells - runStart) * L, L); }
+        if (runColor) { g.fillStyle = runColor; g.fillRect(runStart * L, j * L, (hi + 1 - runStart) * L, L); }
       }
       // --- Pass 2.5: THE ROAD FACE (M2 wave 8) — the ribbon drawn as the
       // zones' own roads continuing: analytic exact-ribbon strokes (the
@@ -554,7 +617,7 @@ class SeamlessTissueChunks {
           for (let nx = cx - 1; nx <= cx + 1; nx++) {
             for (const f of chunkSeatsFor(dress, rd, mesh, seed, nx, ny).forms) {
               const rr = f.r * 1.3 + 10;
-              if (f.x + rr < x0 || f.x - rr > x0 + C || f.y + rr < y0 || f.y - rr > y0 + C) continue;
+              if (f.x + rr < x0 - G || f.x - rr > x0 + C + G || f.y + rr < y0 - G || f.y - rr > y0 + C + G) continue;
               forms.push(f);
             }
           }
@@ -581,12 +644,12 @@ class SeamlessTissueChunks {
           const ns = chunkSeatsFor(dress, rd, mesh, seed, nx, ny);
           for (const s of ns.stamps) {
             const rr = s.r * SEAMLESS_DRAW_CFG.stampReachMul + 6;
-            if (s.x + rr < x0 || s.x - rr > x0 + C || s.y + rr < y0 || s.y - rr > y0 + C) continue;
+            if (s.x + rr < x0 - G || s.x - rr > x0 + C + G || s.y + rr < y0 - G || s.y - rr > y0 + C + G) continue;
             seats.push(s);
           }
           for (const s of ns.ways) {
             const rr = s.r * SEAMLESS_DRAW_CFG.stampReachMul + 6;
-            if (s.x + rr < x0 || s.x - rr > x0 + C || s.y + rr < y0 || s.y - rr > y0 + C) continue;
+            if (s.x + rr < x0 - G || s.x - rr > x0 + C + G || s.y + rr < y0 - G || s.y - rr > y0 + C + G) continue;
             seats.push(s);
           }
         }
@@ -851,7 +914,11 @@ function drawRoadFace(g: CanvasRenderingContext2D, rd: MassDressRead,
   const C = SEAMLESS_CFG.chunkPx;
   const x0 = cx * C, y0 = cy * C, x1 = x0 + C, y1 = y0 + C;
   const pad = SEAMLESS_CFG.roadHalfPx;
-  const reach = pad + 6; // stroke half-width + AA slack (the cull's honesty bound)
+  // Stroke half-width + AA slack, + THE GUTTER (M2 wave 10): reach serves
+  // only the cull windows, so widening it paints the face's slivers into
+  // the neighbor-content ring — the blit's edge texels then match the
+  // neighbor's own road pixels (the canvas clips the strokes).
+  const reach = pad + 6 + Math.max(0, Math.round(SEAMLESS_DRAW_CFG.seamGutterPx));
   // --- The tone pieces: each segment cut on its OWN arc lattice
   // (tonePiecePx), colors resolved at piece midpoints — the flank gradient
   // at draw grain. Composites are precomputed (bed = road over ground at
@@ -1391,6 +1458,9 @@ function drawZoneWayStubs(ctx: CanvasRenderingContext2D, rd: MassDressRead,
   ctx.save();
   ctx.lineCap = 'round';
   for (const st of rd.wayStubs) {
+    // THE TOWN-DOOR STUBS (M2 wave 10) ride their own flagged dial — the
+    // derivation always carries the rows; only the paint gates here.
+    if (st.door && !MF.doorStubs) continue;
     if (st.x < wx0 || st.x > wx1 || st.y < wy0 || st.y > wy1) continue;
     const bx = st.x + st.nx * MF.wayStubPx, by = st.y + st.ny * MF.wayStubPx;
     const mx = (st.x + bx) / 2, my = (st.y + by) / 2;

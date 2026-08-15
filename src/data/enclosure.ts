@@ -355,6 +355,62 @@ export const MASSDRESS_CFG = {
   salt: 0x3a55d7e5,
 } as const;
 
+/** THE STRIP RESPONSE (M2 wave 10, THE SEAM POLISH — mesh coda 5): thin
+ *  tissue strips read as plazas because the full clearway shoulder owns most
+ *  of their width, so the between's walls (stamps + the solid field) respond
+ *  to LOCAL strip width — where the two nearest claims stand close, the
+ *  shoulder tightens toward a floor and the stamp scatter biases toward the
+ *  flanks, so a narrow pass reads walled exactly where it IS walls while the
+ *  crossing's own road + aprons stay clear (the plaza law untouched). The
+ *  WALKABLE margins (roadHalfPx, mouthApronPx) are the law's ground and this
+ *  response never reads them — it moves only the dress/occlusion shoulder,
+ *  and drawn == tested rides along because every consumer folds ONE field.
+ *  Deliberately a MUTABLE object (the SIGHT_VEIL_SOLID idiom) so the probes
+ *  can A/B the response against the flat law in place. ALL DIALS FLAGGED
+ *  (unblessed; her word moves them). */
+export const MASSDRESS_STRIP: {
+  enabled: boolean;
+  /** Local gap (px, nearest-two-claims rect distance sum) at/below which the
+   *  shoulder sits at its floor — full tightening. */
+  gapTightPx: number;
+  /** Gap at/above which the response stands down (the full shoulderPx). */
+  gapWidePx: number;
+  /** The tightened shoulder's floor (px). LAW BOUND: must stay ≥ the solid
+   *  lattice's half-diagonal (solidCellPx/2·√2 ≈ 21.3) so no solid cell's
+   *  drawn mass can ever overlap the walkable ribbon (probe-pinned). */
+  shoulderFloorPx: number;
+  /** Stamp-position pull toward the nearest claim's rim at full tightness
+   *  (0..1 of the distance; 0 = the uniform scatter verbatim). */
+  stampFlankPull: number;
+} = {
+  enabled: true,
+  gapTightPx: 170,
+  gapWidePx: 340,
+  shoulderFloorPx: 24,
+  stampFlankPull: 0.65,
+};
+
+/** THE STRIP RESPONSE's tightness at a local gap: 0 at/above gapWidePx
+ *  (stand down), 1 at/below gapTightPx (full), linear between. Pure. */
+export function stripTightness(gapPx: number): number {
+  if (!MASSDRESS_STRIP.enabled || !Number.isFinite(gapPx)) return 0;
+  const { gapTightPx, gapWidePx } = MASSDRESS_STRIP;
+  if (gapPx >= gapWidePx) return 0;
+  if (gapPx <= gapTightPx) return 1;
+  return (gapWidePx - gapPx) / (gapWidePx - gapTightPx);
+}
+
+/** The clearway shoulder at a local gap: shoulderPx wide, easing to the
+ *  floor as the strip narrows — monotone nondecreasing in gap, clamped to
+ *  [shoulderFloorPx, shoulderPx] BY CONSTRUCTION (the road bins register at
+ *  the full shoulder, so a tightened read is always bin-valid). Pure. */
+export function stripShoulderPx(gapPx: number): number {
+  const t = stripTightness(gapPx);
+  if (t <= 0) return MASSDRESS_CFG.shoulderPx;
+  const floor = Math.min(MASSDRESS_STRIP.shoulderFloorPx, MASSDRESS_CFG.shoulderPx);
+  return MASSDRESS_CFG.shoulderPx - (MASSDRESS_CFG.shoulderPx - floor) * t;
+}
+
 /** Stamp-vocabulary → mass-kit row template (THE MASS DERIVATION's map — the
  *  border-body map's broader sibling: the between wants the tileset's WHOLE
  *  texture, not one fence body, so every matching stamp row contributes a

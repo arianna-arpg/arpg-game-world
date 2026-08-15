@@ -80,8 +80,8 @@ import type { World } from '../engine/world';
 import type { ZoneDef } from '../data/zones';
 import { Rng } from '../core/rng';
 import { PORTAL_EDGE_INSET } from '../engine/worldgen';
-import { MASSDRESS_CFG, ROADDRESS_CFG, ROAD_TONE_DEFAULT, WAYSIDE_GLYPHS,
-  massClassFor, massDensityFor, massKitFor } from '../data/enclosure';
+import { MASSDRESS_CFG, MASSDRESS_STRIP, ROADDRESS_CFG, ROAD_TONE_DEFAULT, WAYSIDE_GLYPHS,
+  massClassFor, massDensityFor, massKitFor, stripShoulderPx, stripTightness } from '../data/enclosure';
 import { PARTITION_CFG, SEAMLESS_CFG, type CellRect, type TissueSample, type TissueSampler } from './seamless';
 import { borderAgreedPoint, foldCells, type CellSeat } from './cells';
 import { mapToPx, pxToMap } from './coords';
@@ -352,10 +352,31 @@ export function buildTissueSampler(world: World): TissueSampler {
   // (perpendicular BY the seat formula — doorWayFor's own geometry). Pure
   // capture, no rng; eligibility mirrors the routing's own gate (towns keep
   // their doors — no stub pretends a way into sealed ground).
+  // THE TOWN-DOOR LANE (M2 wave 10, THE SEAM POLISH — ribbon coda 6 + mesh
+  // coda 7): an INELIGIBLE pair keeps its chord and its doors, but its drawn
+  // way met the town's rim wherever the chord happened to cross — off any
+  // door. Each ineligible END that resolves a def exit row toward its
+  // partner now grows ONE stub at that door's rim mouth, pointing mouth →
+  // seat (the SAME doorWayFor read the routing uses for eligible pairs —
+  // the def exit's resolved seat over the fold cell, the town's one drawn
+  // frame), marked `door: true` so the painter can gate the lane. The LOOK
+  // meets the door; nothing walkable changes (towns stay doors by law), and
+  // a doorless end (a one-sided link's silent half) grows nothing.
   const wayStubs: WayStub[] = [];
   for (const [za, zb] of segPairs) {
-    if (!world.seamlessResidentEligible(za) || !world.seamlessResidentEligible(zb)) continue;
     const ca = fold.get(za.id), cb = fold.get(zb.id);
+    if (!world.seamlessResidentEligible(za) || !world.seamlessResidentEligible(zb)) {
+      for (const [z, partner, cell] of [[za, zb, ca], [zb, za, cb]] as const) {
+        if (!cell) continue;
+        const w = doorWayFor(z, partner.id, cell);
+        if (!w) continue;
+        const dx = w.seat.x - w.mouth.x, dy = w.seat.y - w.mouth.y;
+        const len = Math.hypot(dx, dy);
+        if (len < 1e-6) continue;
+        wayStubs.push({ x: w.mouth.x, y: w.mouth.y, nx: dx / len, ny: dy / len, door: true });
+      }
+      continue;
+    }
     if (!ca || !cb) continue;
     const p = borderAgreedPoint(ca, cb);
     if (p) {
@@ -498,10 +519,35 @@ export function buildTissueSampler(world: World): TissueSampler {
    *  are excluded with margin), so no stamp can ever seed on walkable
    *  ground. Cliff-steep between counts (mass is mass); the sea does not
    *  (it wears water, not country). */
+  // THE STRIP RESPONSE's local gap (M2 wave 10, THE SEAM POLISH): the sum of
+  // the two nearest claims' rect distances — between two facing rims that IS
+  // the strip's local width; in wedges and open country it grows fast, so
+  // the response stands down there by arithmetic. Infinity when fewer than
+  // two cells stand (nothing to be between). One pass, allocation-free.
+  const gapAt = (x: number, y: number): number => {
+    if (nCells < 2) return Infinity;
+    let d1 = Infinity, d2 = Infinity;
+    for (let i = 0; i < nCells; i++) {
+      const d = rectDistToCell(i, x, y);
+      if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) { d2 = d; }
+    }
+    return d1 + d2;
+  };
   const massAt = (x: number, y: number, worldSeed: number): boolean => {
     if (!landAt(x, y, worldSeed)) return false;
     if (insideAnyCell(x, y)) return false;
-    if (roadWithin(x, y, pad + MASSDRESS_CFG.shoulderPx)) return false;
+    if (roadWithin(x, y, pad + MASSDRESS_CFG.shoulderPx)) {
+      // THE STRIP RESPONSE (M2 wave 10): inside the FULL shoulder the verdict
+      // consults the local strip width — a thin pass tightens its clearway
+      // shoulder toward the flagged floor so the flanks stand as walls
+      // (drawn mass AND the solid field together — one fold, every consumer).
+      // The walkable ribbon itself is pad + floor ≥ pad + the quantize
+      // margin, so no drawn wall can ever touch walkable ground. Wide
+      // country short-circuits above without ever paying the gap fold.
+      if (!MASSDRESS_STRIP.enabled) return false;
+      if (roadWithin(x, y, pad + Math.min(MASSDRESS_STRIP.shoulderFloorPx, MASSDRESS_CFG.shoulderPx))) return false;
+      if (roadWithin(x, y, pad + stripShoulderPx(gapAt(x, y)))) return false;
+    }
     if (apronWithin(x, y, PARTITION_CFG.mouthApronPx + MASSDRESS_CFG.shoulderPx)) return false;
     return true;
   };
@@ -645,7 +691,38 @@ export function buildTissueSampler(world: World): TissueSampler {
     if (insideAnyCell(x, y)) return false;
     if (apronWithin(x, y, PARTITION_CFG.mouthApronPx + MASSDRESS_CFG.shoulderPx)) return false;
     if (roadWithin(x, y, pad + ROADDRESS_CFG.waysideRoadGap + bodyR)) return false;
-    return roadWithin(x, y, pad + MASSDRESS_CFG.shoulderPx);
+    // THE ONE SHOULDER under THE STRIP RESPONSE (M2 wave 10): the wayside
+    // band ends where the mass begins — BOTH read stripShoulderPx over the
+    // same gap fold, so the two dress bands keep partitioning the roadside
+    // by arithmetic even where a thin strip tightens the line (a seat past
+    // the tightened shoulder is the mass stamps' ground now, and refuses).
+    const sh = MASSDRESS_STRIP.enabled ? stripShoulderPx(gapAt(x, y)) : MASSDRESS_CFG.shoulderPx;
+    return roadWithin(x, y, pad + sh);
+  };
+  // THE FLANK BIAS (M2 wave 10, THE SEAM POLISH): where the strip runs thin,
+  // the stamp scatter's uniform positions mostly land on excluded corridor
+  // ground and the walls read bare — this read pulls a rolled position
+  // toward the NEAREST claim's rim by stampFlankPull × the local tightness,
+  // so the surviving flank slivers seed densely and the thin pass reads
+  // walled. Pure f(capture, position) — no rng, so the fork law and every
+  // determinism pin hold; identity when the response stands down (wide
+  // country and the dial-off lane keep today's maps byte-identically). The
+  // pull target is a boundary point of a convex rect from an exterior
+  // point, so a pulled seat can never enter the cell (massAt still gates).
+  const stampBiasAt = (x: number, y: number): { x: number; y: number } => {
+    if (!MASSDRESS_STRIP.enabled || MASSDRESS_STRIP.stampFlankPull <= 0 || nCells < 2) return { x, y };
+    let i1 = -1, d1 = Infinity, d2 = Infinity;
+    for (let i = 0; i < nCells; i++) {
+      const d = rectDistToCell(i, x, y);
+      if (d < d1) { d2 = d1; d1 = d; i1 = i; } else if (d < d2) { d2 = d; }
+    }
+    if (i1 < 0 || d1 <= 0) return { x, y }; // inside a claim — not the scatter's ground
+    const t = stripTightness(d1 + d2);
+    if (t <= 0) return { x, y };
+    const pull = Math.min(0.95, MASSDRESS_STRIP.stampFlankPull) * t;
+    const rx = Math.min(cx1[i1], Math.max(cx0[i1], x));
+    const ry = Math.min(cy1[i1], Math.max(cy0[i1], y));
+    return { x: x + (rx - x) * pull, y: y + (ry - y) * pull };
   };
 
   const sampler: TissueSampler = (x: number, y: number, worldSeed: number): TissueSample => {
@@ -681,7 +758,7 @@ export function buildTissueSampler(world: World): TissueSampler {
   (sampler as DressedTissueSampler).massDress = {
     massAt, landAt, shadeAt, flanksAt,
     roadSegsForChunk, roadToneAt, massSansRoadAt, shoulderSeatAt,
-    solidAt, nearestCellAt, wayStubs,
+    solidAt, nearestCellAt, wayStubs, gapAt, stampBiasAt,
     floorToneOf: (zoneId: string) => floorByZone.get(zoneId) ?? null,
     grammarInksOf: (zoneId: string) => inksByZone.get(zoneId) ?? EMPTY_INKS,
   };
@@ -752,8 +829,24 @@ export interface MassDressRead {
   /** THE ZONE-SIDE WAY stubs: one row per crossing end (agreed point or
    *  door mouth), unit normal pointing INWARD along the carve's own
    *  perpendicular — the painter overdraws the road's in-zone continuation
-   *  from these (drawn == the grid's carved corridor direction). */
+   *  from these (drawn == the grid's carved corridor direction). Rows with
+   *  `door: true` are THE TOWN-DOOR LANE (M2 wave 10): an ineligible pair's
+   *  resolved def doors, so the drawn way meets the town where its door
+   *  actually stands (look only — towns stay doors by law). */
   wayStubs: readonly WayStub[];
+  // --- THE SEAM POLISH READS (M2 wave 10) — optional on purpose: an older
+  // carried read (a dev swap, a foreign probe literal) stands the strip
+  // response and the flank bias down structurally, the null-seam law at
+  // field grain. -----------------------------------------------------------
+  /** THE STRIP RESPONSE's local gap: the two nearest claims' rect-distance
+   *  sum (the strip's local width between facing rims; Infinity when fewer
+   *  than two cells stand). The massAt/shoulderSeatAt shoulder folds and
+   *  the probe oracles read the SAME measure. */
+  gapAt?(x: number, y: number): number;
+  /** THE FLANK BIAS: a stamp attempt's rolled position pulled toward the
+   *  nearest claim's rim by the local tightness — identity where the
+   *  response stands down. Pure per (capture, position); no rng. */
+  stampBiasAt?(x: number, y: number): { x: number; y: number };
   /** The zone theme's own ground fill at a cell (the edge-fade apron's
    *  target color), or null for a theme-less def. */
   floorToneOf(zoneId: string): string | null;
@@ -763,8 +856,10 @@ export interface MassDressRead {
 }
 
 /** One zone-side way stub (see MassDressRead.wayStubs): world-px crossing
- *  point + the unit inward normal. Length is the painter's dial. */
-export interface WayStub { x: number; y: number; nx: number; ny: number }
+ *  point + the unit inward normal. Length is the painter's dial. `door`
+ *  marks THE TOWN-DOOR LANE's rows (an ineligible pair's resolved def
+ *  door — the painter gates them on its own flagged dial). */
+export interface WayStub { x: number; y: number; nx: number; ny: number; door?: true }
 
 /** A sampler that carries the dress read (buildTissueSampler's product). */
 export interface DressedTissueSampler extends TissueSampler { massDress: MassDressRead }
@@ -811,11 +906,18 @@ export function massStampSeatsForChunk(dress: MassDressRead, worldSeed: number,
   const seats: MassStampSeat[] = [];
   for (let i = 0; i < MASSDRESS_CFG.stampAttempts; i++) {
     const r = new Rng((base + Math.imul(i + 1, 0xc2b2ae35)) >>> 0);
-    const x = cx * C + r.next() * C;
-    const y = cy * C + r.next() * C;
+    const rx = cx * C + r.next() * C;
+    const ry = cy * C + r.next() * C;
     // THE DENSITY ROLL (M2 wave 9) draws in fixed ledger position — before
     // any test, so the attempt's later draws never shift as gates evolve.
     const acceptRoll = r.next();
+    // THE FLANK BIAS (M2 wave 10, THE SEAM POLISH): the rolled position
+    // deterministically pulled toward the nearest claim's rim where the
+    // strip runs thin — no roll consumed, so the ledger and the fork law
+    // hold, and wide country (or the dial off) keeps today's positions
+    // byte-identically. Every gate below tests the BIASED seat.
+    const bp = dress.stampBiasAt?.(rx, ry);
+    const x = bp?.x ?? rx, y = bp?.y ?? ry;
     if (!dress.massAt(x, y, seed)) continue;
     // THE SOLID GATE (M2 wave 9): a body stands only where the SOLID FIELD
     // answers true at the seat's own lattice cell — a drawn trunk can never
