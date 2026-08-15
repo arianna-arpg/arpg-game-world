@@ -26,7 +26,7 @@
 //   npx tsx balance/probe_sightveil.ts
 
 import {
-  SightVeil, SIGHT_VEIL_GEO, castLen,
+  SightVeil, SIGHT_VEIL_GEO, SIGHT_VEIL_SOLID, castLen,
   edgeShadowPath, edgeShadowForEye, discShadowPath, rectShadowPath,
   type OccEdge, type PathSink, type SightView,
 } from '../src/render/vis/sightVeil';
@@ -34,6 +34,7 @@ import { VIS_CFG } from '../src/render/vis/visConfig';
 import { sightShadowFrac, type Doodad } from '../src/engine/levelgen';
 import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
+import { setTissueSampler, type TissueSampler } from '../src/world/seamless';
 
 let pass = 0, fail = 0;
 function check(name: string, ok: boolean, detail = ''): void {
@@ -731,6 +732,116 @@ console.log('— B5. THE VEIL ACROSS BORDERS: neighbor walls cast, tissue stays 
     inner.nbMemo.size === 0
     && Math.abs(veil.occludedAt(behindRun) - ctrl.occludedAt(behindRun)) < 1e-9,
     `memo ${inner.nbMemo.size}, occ ${veil.occludedAt(behindRun)}`);
+}
+
+console.log('— B6. THE SOLID BETWEEN: the mesh\'s field occludes, the corridor stays open —');
+{
+  // M2 wave 9 (her occlusion ruling): un-owned tissue whose SOLID FIELD
+  // answers true occludes in the query march AND emits boundary faces into
+  // the drawn sheet — standing in a carved corridor you SEE the walls of
+  // country, not past them. The field arrives via the tissue sampler's
+  // carried read (duck-typed off getTissueSampler); this rig installs a
+  // STUB sampler carrying a half-plane field (solid north of world y
+  // 19850 — active-local y < −150 at the B5 seat geometry), so every
+  // verdict has an exact oracle. Probe literals WITHOUT the stub (all the
+  // rigs above) stand down structurally — their pins are this rig's
+  // control.
+  const rF = VIS_CFG.sightVeil.regionStrength;
+  const EYE = { x: 2200, y: 300 };
+  const mkActiveWalk = (): GridWalkField => {
+    const w = new GridWalkField(2400, 1600, 30);
+    w.fillRect(0, 0, 2400, 1600, true);
+    return w;
+  };
+  const nbWalk6 = new GridWalkField(1200, 1600, 30);
+  nbWalk6.fillRect(0, 0, 1200, 1600, true);
+  const nbMint6 = { layout: { walk: nbWalk6, doodads: [] as Doodad[] } };
+  const mkView6 = (sim: boolean): SightView => {
+    const v: SightView = {
+      player: { pos: { x: EYE.x, y: EYE.y } },
+      walk: mkActiveWalk(), zone: { id: 'act' }, doodads: [] as Doodad[],
+      doodadsNear: () => [] as Doodad[], doodadRev: 1,
+      seamless: true,
+      seamlessRegions: [
+        { zoneId: 'act', originPx: { x: 10000, y: 20000 } },
+        { zoneId: 'nb', originPx: { x: 12400, y: 20000 } },
+      ],
+      seamlessMints: new Map([['nb', nbMint6]]),
+    };
+    if (sim) v.sim = { biomeField: { fieldSeed: 7 } };
+    return v;
+  };
+  const stub = ((): TissueSampler => {
+    const fn = (() => ({ walkable: true, tone: '#000000', road: false })) as unknown as TissueSampler;
+    (fn as unknown as { massDress: { solidAt(x: number, y: number, s: number): boolean } }).massDress = {
+      solidAt: (_x: number, y: number) => y < 19850,
+    };
+    return fn;
+  })();
+  setTissueSampler(stub);
+
+  const veil = new SightVeil();
+  veil.update(mkView6(true), 0, 1280, 800);
+  const inner6 = veil as unknown as { edges: OccEdge[] };
+  const solidT = { x: 2250, y: -400 };  // beyond the field boundary (solid country)
+  const openT = { x: 2250, y: -80 };    // open tissue south of the boundary
+
+  check('B6: solid tissue occludes in the march (the field is the one truth)',
+    Math.abs(veil.occludedAt(solidT) - rF) < 1e-9, `${veil.occludedAt(solidT)}`);
+  check('B6: open tissue still reads clear (the corridor law survives)',
+    veil.occludedAt(openT) === 0, `${veil.occludedAt(openT)}`);
+  check('B6: an elevated target clears the between\'s ground scrub (the band law)',
+    veil.occludedAt(solidT, 1) === 0, `${veil.occludedAt(solidT, 1)}`);
+  // THE FRINGE FACE: the field's lattice boundary (solid rows end at world
+  // y 19860 → active-local −140) emits a merged bottom face spanning the
+  // witness column.
+  const fringe = inner6.edges.find(e => e.ny === 1 && Math.abs(e.ay + 140) < 0.5
+    && Math.abs(e.ay - e.by) < 1e-9 && e.ax <= 2250 && e.bx >= 2250);
+  check('B6: the drawn sheet grows a boundary face at the mass edge (−140, the lattice\'s own line)',
+    !!fringe, fringe ? `face ${fringe.ax.toFixed(0)}..${fringe.bx.toFixed(0)} @ ${fringe.ay}` : `${inner6.edges.length} edges`);
+  const sink6 = new CollectSink();
+  for (const e of inner6.edges) edgeShadowForEye(sink6, e, EYE.x, EYE.y, 2000, 0, 0, 1);
+  check('B6: drawn == tested (the sheet paints the solid witness, spares the open one)',
+    inside(sink6.polys, solidT.x, solidT.y) && !inside(sink6.polys, openT.x, openT.y));
+
+  // THE DIAL: off restores the wave-8 tissue-open posture (march + faces).
+  SIGHT_VEIL_SOLID.enabled = false;
+  veil.update(mkView6(true), 0, 1280, 800);
+  check('B6: dial-off restores open tissue (march clear, fringe gone)',
+    veil.occludedAt(solidT) === 0
+    && !inner6.edges.some(e => e.ny === 1 && Math.abs(e.ay + 140) < 0.5),
+    `${veil.occludedAt(solidT)}`);
+  SIGHT_VEIL_SOLID.enabled = true;
+
+  // STRUCTURAL STAND-DOWNS: a view without the seed lane, and a world
+  // without an installed sampler, both read the wave-8 posture — the rigs
+  // above (sampler-less literals) are safe BY CONSTRUCTION.
+  const veilNoSim = new SightVeil();
+  veilNoSim.update(mkView6(false), 0, 1280, 800);
+  check('B6: a view without the seed lane stands the solid lane down (probe-literal safety)',
+    veilNoSim.occludedAt(solidT) === 0, `${veilNoSim.occludedAt(solidT)}`);
+  setTissueSampler(null);
+  const veilNoSampler = new SightVeil();
+  veilNoSampler.update(mkView6(true), 0, 1280, 800);
+  check('B6: no installed sampler stands the solid lane down (the null-seam law)',
+    veilNoSampler.occludedAt(solidT) === 0, `${veilNoSampler.occludedAt(solidT)}`);
+
+  // THE GRIDLESS AMENDMENT (found live on a gridless deepwood active): the
+  // between's occlusion is the TISSUE's truth, not the layout's — with no
+  // active grid the march and the fringe still stand (the engine ray never
+  // needed the active grid either; drawn == tested across the pair).
+  setTissueSampler(stub);
+  const veilNoGrid = new SightVeil();
+  const vg = mkView6(true);
+  vg.walk = null;
+  veilNoGrid.update(vg, 0, 1280, 800);
+  const gEdges = (veilNoGrid as unknown as { edges: OccEdge[] }).edges;
+  check('B6: a GRIDLESS active still darkens solid between (march + fringe — the tissue\'s own truth)',
+    Math.abs(veilNoGrid.occludedAt(solidT) - rF) < 1e-9
+    && veilNoGrid.occludedAt(openT) === 0
+    && gEdges.some(e => e.ny === 1 && Math.abs(e.ay + 140) < 0.5),
+    `occ ${veilNoGrid.occludedAt(solidT)} / open ${veilNoGrid.occludedAt(openT)}, edges ${gEdges.length}`);
+  setTissueSampler(null);
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

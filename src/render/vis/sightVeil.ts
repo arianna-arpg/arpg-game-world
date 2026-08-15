@@ -117,6 +117,8 @@ import { LOS_CFG } from '../../engine/los';
 import { tierElevOf } from '../../engine/tiers';
 import { GridWalkField } from '../../world/gridWalk';
 import { regionKind } from '../../world/regions';
+import { getTissueSampler } from '../../world/seamless';
+import { TISSUE_CFG } from '../../world/tissue';
 
 interface Pt { x: number; y: number }
 
@@ -138,6 +140,11 @@ export interface SightView {
   seamless?: boolean;
   seamlessRegions?: readonly { zoneId: string; originPx: { x: number; y: number } }[];
   seamlessMints?: { get(zoneId: string): SeamlessVeilMint | undefined };
+  /** THE SOLID BETWEEN's seed lane (M2 wave 9 — the mesh): the field seed
+   *  the tissue sampler answers under. World satisfies it as it stands;
+   *  absent (probe literals, discrete play), the solid lane is
+   *  structurally inert. */
+  sim?: { biomeField: { fieldSeed: number } };
 }
 
 /** The sliver of a resident neighbor's mint the veil reads (structural —
@@ -258,6 +265,30 @@ export const SIGHT_VEIL_GEO = {
   castFarFloor: 160,
 } as const;
 
+/** THE SOLID BETWEEN (M2 wave 9 — THE MESH; the veil's half of her
+ *  occlusion ruling, dialed here by the SIGHT_VEIL_GEO fabric-owns-its-dial
+ *  idiom): with the cross-border lane standing, un-owned tissue whose SOLID
+ *  FIELD answers true occludes in the query march AND emits boundary faces
+ *  into the drawn sheet at the mass edge — standing in a carved corridor
+ *  you SEE the flanking walls of country, not past them, and the dark
+ *  begins exactly where the tissue painter draws the mass (drawn == tested
+ *  through the one carried field). Off restores the wave-8 tissue-open
+ *  posture without touching the cross-border lane. Mutable on purpose —
+ *  the probe's A/B lever (the LOS_CFG.crossBorder idiom).
+ *  [FLAGGED dial — awaiting blessing.] */
+export const SIGHT_VEIL_SOLID = { enabled: true };
+
+/** The tissue sampler's carried solid read, duck-typed (the engine ray's
+ *  own idiom — this pass never imports the sampler's builder). */
+function tissueSolidRead(): ((x: number, y: number, worldSeed: number) => boolean) | null {
+  const s = getTissueSampler() as
+    | (ReturnType<typeof getTissueSampler> & { massDress?: { solidAt?: unknown } })
+    | null;
+  const fn = s?.massDress?.solidAt;
+  return typeof fn === 'function'
+    ? fn as (x: number, y: number, worldSeed: number) => boolean : null;
+}
+
 /** THE ONE doodad-shadow length resolver (world px past the body) — draw()
  *  and occludedAt() both ride it, so drawn and tested can never disagree
  *  about where a shadow ends. `s` is the body's graded strength: a soft
@@ -333,6 +364,13 @@ export class SightVeil {
    *  (discrete load, run end) prunes everything. */
   private nbs: NbRef[] = [];
   private nbMemo = new Map<string, NbMemo>();
+  /** THE SOLID BETWEEN (M2 wave 9): the active seat's world origin (the
+   *  march + fringe translate through it), the resolved solid read (null =
+   *  lane inert), and its seed. */
+  private nbOx = 0;
+  private nbOy = 0;
+  private solidFn: ((x: number, y: number, worldSeed: number) => boolean) | null = null;
+  private solidSeed = 0;
 
   constructor() {
     // The steward row (instance caches register at construction — the
@@ -421,6 +459,17 @@ export class SightVeil {
     // a handful of compares. Discrete play: structurally empty, free.
     const nbChanged = this.resolveNeighbors(view);
 
+    // THE SOLID BETWEEN (M2 wave 9): resolve the tissue sampler's carried
+    // solid field — only with the cross-border fold standing and a seed
+    // lane offered (probe literals and discrete play stand down free). A
+    // changed read (a sampler rebuild at an admission beat) re-extracts
+    // the fringe with the wall faces it now answers for.
+    let solidFn: ((x: number, y: number, worldSeed: number) => boolean) | null = null;
+    if (SIGHT_VEIL_SOLID.enabled && this.nbs.length && view.sim) solidFn = tissueSolidRead();
+    const solidChanged = solidFn !== this.solidFn;
+    this.solidFn = solidFn;
+    this.solidSeed = (view.sim?.biomeField.fieldSeed ?? 0) >>> 0;
+
     // Doodad silhouettes: re-gather when the hero crosses a bucket, the
     // doodad list changes (identity/length/rev), or the reach outgrows the
     // last sweep. Between rebuilds this costs nothing per frame.
@@ -450,17 +499,38 @@ export class SightVeil {
       const gbx = Math.floor(p.x / g.cellSize), gby = Math.floor(p.y / g.cellSize);
       if (g !== this.gridRef || gbx !== this.gridBx || gby !== this.gridBy
         || g.version !== this.gridV || this.radius > this.gridR || hullChanged
-        || heroLifted || nbChanged) {
+        || heroLifted || nbChanged || solidChanged) {
         this.extractEdges(g);
         this.gridRef = g; this.gridBx = gbx; this.gridBy = gby;
         this.gridV = g.version; this.gridR = this.radius + GATHER_PAD;
       }
-    } else if (this.gridRef) {
-      // No active grid = no region veil at all (neighbor edges fold inside
-      // extractEdges, so they stand down WITH it — and the query march
-      // gates on gridRef the same way: drawn == tested in the degenerate).
-      this.gridRef = null;
-      this.edges.length = 0;
+    } else {
+      // No active grid = no ACTIVE region veil (its walls don't exist) —
+      // but THE SOLID BETWEEN is the TISSUE's truth, not the layout's
+      // (M2 wave 9's amendment to the degenerate law): a gridless open
+      // zone still faces solid country, and the engine ray already
+      // refuses those lines, so the veil must darken them too (drawn ==
+      // tested across the pair). The fringe extracts alone on the same
+      // cadence class (hero bucket at the lattice grain, radius growth,
+      // fold/read changes); neighbor edges still fold via the memos
+      // inside extractSolidFringe's caller? — no: without a grid there
+      // is no extractEdges pass, so the nb edge fold rides here too.
+      if (this.gridRef) { this.gridRef = null; this.edges.length = 0; this.gridBx = 1e9; }
+      if (this.solidFn) {
+        const L = TISSUE_CFG.solidCellPx;
+        const gbx = Math.floor(p.x / L), gby = Math.floor(p.y / L);
+        if (gbx !== this.gridBx || gby !== this.gridBy || this.radius > this.gridR
+          || heroLifted || nbChanged || solidChanged) {
+          this.edges.length = 0;
+          const reach = this.radius + GATHER_PAD;
+          this.foldNeighborEdges(reach);
+          this.extractSolidFringe(reach, null);
+          this.gridBx = gbx; this.gridBy = gby; this.gridR = reach;
+        }
+      } else if (this.edges.length) {
+        this.edges.length = 0;
+        this.gridBx = 1e9;
+      }
     }
   }
 
@@ -586,10 +656,20 @@ export class SightVeil {
       }
       SightVeil.mergeGridFaces(solid, w, h, x0, y0, cs, 1, this.edges);
     }
-    // THE CROSS-BORDER GATHER: resident neighbors' wall faces join at the
-    // same reach, by SEGMENT distance (a merged run's midpoint can stand far
-    // beyond reach while its near end shadows the border — center distance
-    // would drop the exact walls this lane exists to draw).
+    // THE CROSS-BORDER GATHER + THE SOLID FRINGE fold in at the tail (both
+    // also serve the gridless-active lane — update()'s own call sites).
+    // The grid rides as a PARAMETER: this.gridRef is assigned only after
+    // this extraction returns, so reading the field here would consult the
+    // previous zone's grid on the first extraction after a swap.
+    this.foldNeighborEdges(reach);
+    this.extractSolidFringe(reach, g);
+  }
+
+  /** Resident neighbors' wall faces join at the given reach, by SEGMENT
+   *  distance (a merged run's midpoint can stand far beyond reach while
+   *  its near end shadows the border — center distance would drop the
+   *  exact walls this lane exists to draw). */
+  private foldNeighborEdges(reach: number): void {
     for (const nb of this.nbs) {
       const ex = this.px - nb.dx, ey = this.py - nb.dy; // the eye, neighbor-local
       for (const e of nb.memo.edges) {
@@ -605,6 +685,57 @@ export class SightVeil {
           bx: e.bx + nb.dx, by: e.by + nb.dy, nx: e.nx, ny: e.ny,
         });
       }
+    }
+  }
+
+  /** THE SOLID FRINGE (M2 wave 9, THE SOLID BETWEEN): the between's own
+   *  wall faces — the SOLID FIELD's boundary at the draw lattice, merged
+   *  through the ONE merge law, so the drawn sheet darkens behind exactly
+   *  the mass edges the tissue painter fills (standing in a carved
+   *  corridor you SEE the walls, and nothing past them). Only un-owned
+   *  tissue cells consult the field (active + neighbor grounds own their
+   *  own faces; a GRIDLESS active zone skips no window cells — the field
+   *  itself answers false inside every captured cell, so the skip is an
+   *  optimization, never a law); the window boundary reads SOLID (the
+   *  active window's own rule — no phantom face at the reach rim); a
+   *  lifted eye (heroEye at or above the tissue's story band) stands the
+   *  whole fringe down — the butte hero sees over the between's scrub,
+   *  march and faces agreeing through the same band law. */
+  private extractSolidFringe(reach: number, g: GridWalkField | null): void {
+    if (!this.solidFn || !this.nbs.length
+      || this.heroT + LOS_CFG.elev.eye >= LOS_CFG.elev.doodadBand) return;
+    const L = TISSUE_CFG.solidCellPx;
+    const wpx = this.px + this.nbOx, wpy = this.py + this.nbOy; // the eye, world px
+    const i0 = Math.floor((wpx - reach) / L), i1 = Math.floor((wpx + reach) / L);
+    const j0 = Math.floor((wpy - reach) / L), j1 = Math.floor((wpy + reach) / L);
+    const w2 = i1 - i0 + 1, h2 = j1 - j0 + 1;
+    const gwA = g ? g.cols * g.cellSize : 0, ghA = g ? g.rows * g.cellSize : 0;
+    const mask = new Uint8Array(w2 * h2);
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const cxw = (i + 0.5) * L, cyw = (j + 0.5) * L;   // cell center, world
+        const ax2 = cxw - this.nbOx, ay2 = cyw - this.nbOy; // active-local
+        if (ax2 >= 0 && ay2 >= 0 && ax2 < gwA && ay2 < ghA) continue; // active ground
+        let owned = false;
+        for (const nb of this.nbs) {
+          const m = nb.memo;
+          if (!m.grid) continue;
+          const lx = ax2 - nb.dx, ly = ay2 - nb.dy;
+          if (lx < 0 || ly < 0 || lx >= m.gw || ly >= m.gh) continue;
+          owned = true;
+          break;
+        }
+        if (owned) continue;
+        if (this.solidFn(cxw, cyw, this.solidSeed)) mask[(j - j0) * w2 + (i - i0)] = 1;
+      }
+    }
+    const start = this.edges.length;
+    SightVeil.mergeGridFaces(mask, w2, h2, i0, j0, L, 1, this.edges);
+    // mergeGridFaces emitted world-lattice px — translate to active-local.
+    for (let k = start; k < this.edges.length; k++) {
+      const e = this.edges[k];
+      e.ax -= this.nbOx; e.ay -= this.nbOy;
+      e.bx -= this.nbOx; e.by -= this.nbOy;
     }
   }
 
@@ -676,6 +807,9 @@ export class SightVeil {
         if (s.zoneId === zid) { ax = s.originPx.x; ay = s.originPx.y; seats = view.seamlessRegions; break; }
       }
     }
+    // THE SOLID BETWEEN rides the same origin (active-local + origin =
+    // world — the march and the fringe both translate through it).
+    this.nbOx = ax; this.nbOy = ay;
     // First pass: does the standing fold still match? (allocation-free)
     let n = 0, same = true;
     if (seats && mints) {
@@ -863,17 +997,21 @@ export class SightVeil {
         }
       }
     }
-    if (this.regionF > f && this.gridRef) {
+    if (this.regionF > f && (this.gridRef || (this.solidFn && this.nbs.length))) {
       // Half-cell march, start cell excused — the castRay grid idiom. The
       // hull law joins the march exactly as it joins the extraction; THE
       // ELEVATION LAW lerps the ray's height eye → target (castRay's rule).
+      // M2 wave 9's gridless amendment: with no active grid the march still
+      // runs when THE SOLID BETWEEN stands (solidFn + the fold) — the
+      // between's occlusion is the tissue's truth, not the layout's; the
+      // active extent then owns no samples and the field rules the rest.
       const g = this.gridRef;
       const len = Math.sqrt(len2);
-      const step = g.cellSize / 2;
+      const step = (g ? g.cellSize : TISSUE_CFG.solidCellPx) / 2;
       const limit = Math.min(len, this.radius);
       const eye = LOS_CFG.elev.eye;
       const hFrom = this.heroT + eye;
-      if (!this.nbs.length) {
+      if (g && !this.nbs.length) {
         // Discrete play (and the dial off): today's march, verbatim —
         // regionAt's out-of-grid 'wall' answer included (nothing stands
         // past a discrete zone's rim for it to misread).
@@ -891,32 +1029,46 @@ export class SightVeil {
       } else {
         // THE SEAMLESS MARCH (the veil across borders): every sample reads
         // the grid that OWNS its ground — the active grid inside its own
-        // extent (today's law verbatim), a resident neighbor's grid inside
-        // its span at the seat offset (its roofs conceal — the away hull),
-        // and NO grid (the connective tissue) reads OPEN: away open ground
-        // contributes no occlusion. Beyond-extent samples no longer take
-        // regionAt's out-of-grid 'wall' answer — that read darkened the
-        // whole neighbor country (the administrative sweep this lane kills).
-        const gw = g.cols * g.cellSize, gh = g.rows * g.cellSize;
+        // extent (today's law verbatim; a gridless active owns no samples),
+        // a resident neighbor's grid inside its span at the seat offset
+        // (its roofs conceal — the away hull), and NO grid (the connective
+        // tissue) reads OPEN unless THE SOLID BETWEEN answers: away open
+        // ground contributes no occlusion. Beyond-extent samples no longer
+        // take regionAt's out-of-grid 'wall' answer — that read darkened
+        // the whole neighbor country (the administrative sweep this lane
+        // kills).
+        const gw = g ? g.cols * g.cellSize : 0, gh = g ? g.rows * g.cellSize : 0;
         const hTo = (targetElev ?? this.floorElevAt(pos.x, pos.y, g, gw, gh)) + eye;
         for (let s = step; s < limit; s += step) {
           const t = s / len;
           const wx = px + qx * t, wy = py + qy * t;
           const rayH = hFrom + (hTo - hFrom) * t;
           let hit = false;
-          if (wx >= 0 && wy >= 0 && wx < gw && wy < gh) {
+          if (g && wx >= 0 && wy >= 0 && wx < gw && wy < gh) {
             const sb = sightBlockOf(g.regionAt(wx, wy));
             hit = (sb.b && (sb.e === null || rayH < sb.e)) || this.concealedAt(wx, wy);
           } else {
+            let owned = false;
             for (const nb of this.nbs) {
               const m = nb.memo;
               if (!m.grid) continue;
               const lx = wx - nb.dx, ly = wy - nb.dy;
               if (lx < 0 || ly < 0 || lx >= m.gw || ly >= m.gh) continue;
+              owned = true;
               const sb = sightBlockOf(m.grid.regionAt(lx, ly));
               hit = (sb.b && (sb.e === null || rayH < sb.e))
                 || SightVeil.nbRoofAt(m.roofs, lx, ly);
               break; // spans tile without overlap (the partition law)
+            }
+            // THE SOLID BETWEEN (M2 wave 9): un-owned tissue occludes where
+            // its SOLID FIELD answers true — the query dies at the same
+            // drawn lattice the sheet's fringe faces stand on (drawn ==
+            // tested); open tissue keeps reading clear. The band law lets
+            // an elevated line clear the between's ground-story scrub.
+            if (!hit && !owned && this.solidFn
+              && rayH < LOS_CFG.elev.doodadBand
+              && this.solidFn(wx + this.nbOx, wy + this.nbOy, this.solidSeed)) {
+              hit = true;
             }
           }
           if (hit) {
@@ -934,10 +1086,10 @@ export class SightVeil {
 
   /** The floor story a WORLD point sits on, routed by owning grid (the
    *  seamless march's hTo when the caller gave no story): the active grid
-   *  inside its extent (today's read), a resident neighbor's inside its
-   *  span, the tissue ground floor 0. */
-  private floorElevAt(x: number, y: number, g: GridWalkField, gw: number, gh: number): number {
-    if (x >= 0 && y >= 0 && x < gw && y < gh) return tierElevOf(g.regionAt(x, y)) ?? 0;
+   *  inside its extent (today's read; a gridless active owns none), a
+   *  resident neighbor's inside its span, the tissue ground floor 0. */
+  private floorElevAt(x: number, y: number, g: GridWalkField | null, gw: number, gh: number): number {
+    if (g && x >= 0 && y >= 0 && x < gw && y < gh) return tierElevOf(g.regionAt(x, y)) ?? 0;
     for (const nb of this.nbs) {
       const m = nb.memo;
       if (!m.grid) continue;

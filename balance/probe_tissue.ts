@@ -129,10 +129,11 @@ import { elevationAt } from '../src/world/relief';
 import { PARTITION_CFG, SEAMLESS_CFG, getTissueSampler, setTissueSampler, type CellRect } from '../src/world/seamless';
 import { borderAgreedPoint, foldCells, type CellSeat } from '../src/world/cells';
 import { PORTAL_EDGE_INSET } from '../src/engine/worldgen';
-import { TISSUE_CFG, buildTissueSampler, massDressOf, massStampSeatsForChunk,
-  waysideSeatsForChunk, type MassStampSeat, type TissueRoadSeg } from '../src/world/tissue';
+import { TISSUE_CFG, buildTissueSampler, grammarSeatsForChunk, massDressOf,
+  massStampSeatsForChunk, solidFormsForChunk, waysideSeatsForChunk,
+  type MassDressRead, type MassStampSeat, type TissueRoadSeg } from '../src/world/tissue';
 import { MASSDRESS_CFG, MASS_KITS, MASS_KIT_DEFAULT, MASS_STAMP_GLYPHS,
-  ROADDRESS_CFG, ROAD_TONE_DEFAULT, WAYSIDE_GLYPHS, massKitFor } from '../src/data/enclosure';
+  ROADDRESS_CFG, ROAD_TONE_DEFAULT, WAYSIDE_GLYPHS, massDensityFor, massKitFor } from '../src/data/enclosure';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -1471,6 +1472,307 @@ function monotoneAB(tones: string[], a: string, b: string): boolean {
 
     for (const id of rtIds) delete world.zoneMap[id];
   }
+}
+
+// -------------------------------------------------------------------------- N
+{
+  // THE MESH (M2 wave 9) — THE SOLID FIELD + the gradient reads + the way
+  // stubs (her occlusion ruling: "what isn't traversable wouldn't actually
+  // be viewable either" — the field below is the ONE truth the ray consult,
+  // the veil march, the projectile verdict and the painter's mass tone all
+  // read, quantized at the draw lattice's own 30px grain).
+  const dN = massDressOf(s1);
+  const dN2 = massDressOf(s2);
+  check('N0: the built sampler carries the mesh reads (solid field, gradient anchors, way stubs)',
+    !!dN && typeof dN.solidAt === 'function' && typeof dN.nearestCellAt === 'function'
+    && Array.isArray(dN.wayStubs) && typeof dN.floorToneOf === 'function'
+    && typeof dN.grammarInksOf === 'function');
+  if (dN && dN2) {
+    const L = TISSUE_CFG.solidCellPx;
+    const [aN, bN] = pairs[0];
+    const paN = mapToPx(aN.map), pbN = mapToPx(bN.map);
+    const mxN = (paN.x + pbN.x) / 2, myN = (paN.y + pbN.y) / 2;
+
+    // N1 — THE QUANTIZE LAW + determinism: solidAt is massAt at the owning
+    // lattice cell's CENTER, so every point inside one cell answers as one
+    // (the painter samples the same centers — drawn == tested BY this law),
+    // and two independent builders answer byte-identically.
+    let qN = 0, qBad = 0, qDet = 0, solidSeen = 0, openSeen = 0;
+    for (let k = 0; k < 2400; k++) {
+      const ang = k * 2.399963229728653;
+      const r = 300 + (k / 2400) * 11000;
+      const x = mxN + Math.cos(ang) * r, y = myN + Math.sin(ang) * r;
+      const cx = (Math.floor(x / L) + 0.5) * L, cyv = (Math.floor(y / L) + 0.5) * L;
+      const want = dN.massAt(cx, cyv, seed);
+      if (want) solidSeen++; else openSeen++;
+      for (const [ox, oy] of [[0, 0], [0.31, -0.27], [-0.44, 0.12], [0.05, 0.45]]) {
+        const px2 = cx + ox * L * 0.98, py2 = cyv + oy * L * 0.98;
+        qN++;
+        if (dN.solidAt(px2, py2, seed) !== want) qBad++;
+        if (dN2.solidAt(px2, py2, seed) !== want) qDet++;
+      }
+    }
+    check('N1: solidAt is massAt at the owning cell center — one answer per lattice cell',
+      qN >= 9000 && qBad === 0, `${qBad}/${qN} disagreed`);
+    check('N1: two builders\' solid fields answer byte-identically', qDet === 0, `${qDet}/${qN}`);
+    check('N1: both classes stood in the battery (solid AND open ground)',
+      solidSeen >= 50 && openSeen >= 50, `solid ${solidSeen}, open ${openSeen}`);
+
+    // N2 — SOLID ⊆ UNWALKABLE at the field's own grain: every solid cell's
+    // center refuses feet through the sampler (the subset law survives the
+    // quantize — occlusion never outruns the refusal).
+    let sBadN = 0, sSolidN = 0;
+    for (let k = 0; k < 2400; k += 3) {
+      const ang = k * 2.399963229728653;
+      const r = 300 + (k / 2400) * 11000;
+      const cx = (Math.floor((mxN + Math.cos(ang) * r) / L) + 0.5) * L;
+      const cyv = (Math.floor((myN + Math.sin(ang) * r) / L) + 0.5) * L;
+      if (!dN.solidAt(cx, cyv, seed)) continue;
+      sSolidN++;
+      if (s1(cx, cyv, seed).walkable) sBadN++;
+    }
+    check('N2: solid ground is never walkable through the sampler (occlusion ⊆ refusal)',
+      sSolidN >= 20 && sBadN === 0, `${sBadN}/${sSolidN}`);
+
+    // N3 — THE CORRIDOR STAYS OPEN SKY: along every captured road segment
+    // (the bins' own lists), the ribbon and its shoulder margin hold no
+    // solid cell — sight and shot thread every crossing the feet can (the
+    // wave-7 open-tissue law's true core, restated at the field's grain).
+    // Offsets stay 22px (half-diagonal of a lattice cell) inside the
+    // pad+shoulder reach, so the owning centers are massAt-false by
+    // arithmetic.
+    let corrN = 0, corrBad = 0;
+    {
+      const CC = SEAMLESS_CFG.chunkPx;
+      const segsSeen = new Set<string>();
+      for (let cyC = Math.floor((myN - 6000) / CC); cyC <= Math.floor((myN + 6000) / CC); cyC++) {
+        for (let cxC = Math.floor((mxN - 6000) / CC); cxC <= Math.floor((mxN + 6000) / CC); cxC++) {
+          for (const sg of dN.roadSegsForChunk(cxC, cyC)) {
+            const key = `${sg.ax},${sg.ay},${sg.bx},${sg.by}`;
+            if (segsSeen.has(key)) continue;
+            segsSeen.add(key);
+            const len = Math.hypot(sg.bx - sg.ax, sg.by - sg.ay);
+            if (len < 1) continue;
+            const ux = (sg.bx - sg.ax) / len, uy = (sg.by - sg.ay) / len;
+            for (let t = 0; t <= len; t += 90) {
+              for (const off of [0, -30, 30, -70, 70]) {
+                const px2 = sg.ax + ux * t - uy * off, py2 = sg.ay + uy * t + ux * off;
+                corrN++;
+                if (dN.solidAt(px2, py2, seed)) corrBad++;
+              }
+            }
+          }
+        }
+      }
+    }
+    check('N3: no solid cell inside any corridor + shoulder margin (the ways stay open sky)',
+      corrN >= 100 && corrBad === 0, `${corrBad}/${corrN} solid`);
+
+    // N4 — THE DENSITY LEVER (the named jungle-vs-desert dial), unit-pinned
+    // on hand-built flat dresses so geography can't confound the counts:
+    // the same fixed streams seat ~massDensityFor() of their attempts, and
+    // every seat draws from the flank's own kit.
+    const mkFlat = (tileset: string): MassDressRead => ({
+      massAt: () => true,
+      landAt: () => true,
+      shadeAt: () => 0,
+      flanksAt: () => [{ zoneId: 'flat', tileset, weight: 1 }],
+      roadSegsForChunk: () => [],
+      roadToneAt: () => '#000000',
+      massSansRoadAt: () => false,
+      shoulderSeatAt: () => false,
+      solidAt: () => true,
+      nearestCellAt: () => null,
+      wayStubs: [],
+      floorToneOf: () => null,
+      grammarInksOf: () => [],
+    });
+    const countSeats = (d: MassDressRead): { stamps: number; forms: number; kinds: Set<string> } => {
+      let stamps = 0, forms = 0;
+      const kinds = new Set<string>();
+      for (let cxC = 0; cxC < 8; cxC++) {
+        for (const st of massStampSeatsForChunk(d, seed, cxC, 0)) { stamps++; kinds.add(st.kind); }
+        forms += solidFormsForChunk(d, seed, cxC, 0).length;
+      }
+      return { stamps, forms, kinds };
+    };
+    const jungleN = countSeats(mkFlat('jungle'));
+    const desertN = countSeats(mkFlat('desert'));
+    const budgetN = 8 * MASSDRESS_CFG.stampAttempts;
+    check('N4: jungle packs, desert breathes (the authored density lever moves the fill)',
+      jungleN.stamps > desertN.stamps * 2 && desertN.stamps > 0,
+      `jungle ${jungleN.stamps} vs desert ${desertN.stamps} of ${budgetN} attempts`);
+    check('N4: seat shares track the authored densities (±0.12 of the dial)',
+      Math.abs(jungleN.stamps / budgetN - massDensityFor('jungle')) < 0.12
+      && Math.abs(desertN.stamps / budgetN - massDensityFor('desert')) < 0.12,
+      `jungle ${(jungleN.stamps / budgetN).toFixed(2)} vs ${massDensityFor('jungle')}, `
+      + `desert ${(desertN.stamps / budgetN).toFixed(2)} vs ${massDensityFor('desert')}`);
+    const jungleKitN = new Set(massKitFor('jungle').map(r2 => r2.kind));
+    check('N4: every dense-fill seat draws from the flank\'s own kit',
+      [...jungleN.kinds].every(k2 => jungleKitN.has(k2)), [...jungleN.kinds].join(','));
+    check('N4: forms follow the same lever (large structure thins with the country)',
+      jungleN.forms > desertN.forms && desertN.forms >= 0,
+      `jungle ${jungleN.forms} vs desert ${desertN.forms}`);
+
+    // N5 — THE FOOTPRINT LAW on a half-plane dress (massAt = x < X0): no
+    // accepted form's rim ring may cross the boundary — a form can never
+    // overhang ground the field calls open (the independent inequality is
+    // the oracle, not the helper's own test).
+    {
+      const X0 = 4 * SEAMLESS_CFG.chunkPx;
+      const half: MassDressRead = { ...mkFlat('jungle'), massAt: (x: number) => x < X0, solidAt: (x: number) => x < X0 };
+      let formsN = 0, overhang = 0, pastLine = 0;
+      for (let cxC = 0; cxC < 8; cxC++) {
+        for (const f of solidFormsForChunk(half, seed, cxC, 0)) {
+          formsN++;
+          if (f.x >= X0) pastLine++;
+          if (f.x + f.r * 0.85 >= X0) overhang++;
+        }
+      }
+      check('N5: no solid form crosses the field boundary (the footprint law)',
+        formsN >= 3 && pastLine === 0 && overhang === 0,
+        `${formsN} forms, ${overhang} overhang, ${pastLine} past the line`);
+    }
+
+    // N6 — THE GRAMMAR SPECKLE reads: seats stand only inside the blend
+    // band of a cell, alpha follows the band falloff, inks are real theme
+    // hexes, and two builders agree byte-identically.
+    {
+      let gN = 0, gBadBand = 0, gBadAlpha = 0, gBadInk = 0, gDet = 0;
+      const CC = SEAMLESS_CFG.chunkPx;
+      for (let cyC = Math.floor((myN - 3000) / CC); cyC <= Math.floor((myN + 3000) / CC); cyC++) {
+        for (let cxC = Math.floor((mxN - 3000) / CC); cxC <= Math.floor((mxN + 3000) / CC); cxC++) {
+          const l1 = grammarSeatsForChunk(dN, seed, cxC, cyC);
+          if (JSON.stringify(l1) !== JSON.stringify(grammarSeatsForChunk(dN2, seed, cxC, cyC))) gDet++;
+          for (const g2 of l1) {
+            gN++;
+            const near = dN.nearestCellAt(g2.x, g2.y);
+            if (!near || near.d >= PARTITION_CFG.blendBandPx) gBadBand++;
+            else if (Math.abs(g2.alpha - (1 - near.d / PARTITION_CFG.blendBandPx)) > 1e-9) gBadAlpha++;
+            if (!hexRgb(g2.ink)) gBadInk++;
+          }
+        }
+      }
+      check('N6: grammar seats stand inside the band, alpha = the band falloff, inks are theme hexes',
+        gN >= 30 && gBadBand === 0 && gBadAlpha === 0 && gBadInk === 0,
+        `${gN} seats; band ${gBadBand}, alpha ${gBadAlpha}, ink ${gBadInk}`);
+      check('N6: two builders\' grammar seats agree byte-identically', gDet === 0, `${gDet} chunks differ`);
+    }
+
+    // N7 — THE WAY STUBS: a synthetic eligible ABUTTING pair grows exactly
+    // two stubs at its agreed point, opposite unit normals on the border's
+    // own axis; the eligible NON-ABUTTING pair grows one stub per door
+    // mouth pointing inward (the oracle mouth, the M-rig twin); the
+    // seedless control pair grows NONE (towns keep their doors). Stubs are
+    // dryness-free (pure fold + exits — no land hunt needed).
+    {
+      const [tplA0, tplB0] = pairs[0];
+      world.zoneMap['tissue_mesh_ab_a'] = {
+        ...tplB0, id: 'tissue_mesh_ab_a', map: { x: 5200, y: 4200 }, seed: 515151,
+        exits: [{ to: 'tissue_mesh_ab_b', side: 'e', at: 0.4 }],
+      };
+      world.zoneMap['tissue_mesh_ab_b'] = {
+        ...tplB0, id: 'tissue_mesh_ab_b', map: { x: 5286, y: 4230 }, seed: 515152,
+        exits: [{ to: 'tissue_mesh_ab_a', side: 'w', at: 0.6 }],
+      };
+      world.zoneMap['tissue_mesh_na_a'] = {
+        ...tplB0, id: 'tissue_mesh_na_a', map: { x: 5200, y: 4560 }, seed: 515153,
+        exits: [{ to: 'tissue_mesh_na_b', side: 'e', at: 0.3 }],
+      };
+      world.zoneMap['tissue_mesh_na_b'] = {
+        ...tplB0, id: 'tissue_mesh_na_b', map: { x: 5370, y: 4560 }, seed: 515154,
+        exits: [{ to: 'tissue_mesh_na_a', side: 'w', at: 0.7 }],
+      };
+      world.zoneMap['tissue_mesh_ch_a'] = {
+        ...tplA0, id: 'tissue_mesh_ch_a', map: { x: 5200, y: 3900 },
+        exits: [{ to: 'tissue_mesh_ch_b', side: 'e' }],
+      };
+      world.zoneMap['tissue_mesh_ch_b'] = {
+        ...tplB0, id: 'tissue_mesh_ch_b', map: { x: 5286, y: 3900 },
+        exits: [{ to: 'tissue_mesh_ch_a', side: 'w' }],
+      };
+      const meshIds = ['tissue_mesh_ab_a', 'tissue_mesh_ab_b', 'tissue_mesh_na_a',
+        'tissue_mesh_na_b', 'tissue_mesh_ch_a', 'tissue_mesh_ch_b'];
+      const s9 = buildTissueSampler(world);
+      const s9b = buildTissueSampler(world);
+      const d9 = massDressOf(s9)!, d9b = massDressOf(s9b)!;
+      const fold9 = foldCells(cellRosterOf(world.zoneMap).map(z => ({ id: z.id, ...mapToPx(z.map) })));
+      const cAB_a = fold9.get('tissue_mesh_ab_a')!, cAB_b = fold9.get('tissue_mesh_ab_b')!;
+      const p9 = borderAgreedPoint(cAB_a, cAB_b);
+      check('N7: the AB fixture abuts (the fold oracle)', p9 !== null);
+      let unitBad = 0;
+      for (const st of d9.wayStubs) {
+        if (Math.abs(Math.hypot(st.nx, st.ny) - 1) > 1e-9) unitBad++;
+      }
+      check('N7: every stub wears a unit inward normal', unitBad === 0, `${unitBad}/${d9.wayStubs.length}`);
+      if (p9) {
+        const atP = d9.wayStubs.filter(st =>
+          Math.abs(st.x - p9.x) < 1e-6 && Math.abs(st.y - p9.y) < 1e-6);
+        const axis = p9.side === 'e' || p9.side === 'w' ? 'x' : 'y';
+        check('N7: the abutting crossing grows TWO stubs at its agreed point, opposed on the border axis',
+          atP.length === 2
+          && (axis === 'x' ? Math.abs(atP[0].nx) === 1 && Math.abs(atP[1].nx) === 1 && atP[0].nx === -atP[1].nx
+            : Math.abs(atP[0].ny) === 1 && Math.abs(atP[1].ny) === 1 && atP[0].ny === -atP[1].ny),
+          `${atP.length} stubs at P (side ${p9.side})`);
+      }
+      // The NA doors: the oracle mouth (the M rig's doorWayOracle twin,
+      // inlined for the two fixture ends).
+      const doorOracle9 = (id: string, destId: string): { seat: { x: number; y: number }; mouth: { x: number; y: number } } | null => {
+        const z = world.zoneMap[id];
+        const cell = fold9.get(id);
+        if (!cell) return null;
+        const e = z.exits.find(ex => ex.to === destId);
+        if (!e) return null;
+        const w = cell.x1 - cell.x0, h = cell.y1 - cell.y0;
+        const t = e.at ?? 0.5, lo = PORTAL_EDGE_INSET;
+        const ax = Math.min(w - lo, Math.max(lo, w * t));
+        const ay = Math.min(h - lo, Math.max(lo, h * t));
+        const seat = e.side === 'n' ? { x: ax, y: lo } : e.side === 's' ? { x: ax, y: h - lo }
+          : e.side === 'w' ? { x: lo, y: ay } : { x: w - lo, y: ay };
+        const mouth = e.side === 'n' ? { x: seat.x, y: 0 } : e.side === 's' ? { x: seat.x, y: h }
+          : e.side === 'w' ? { x: 0, y: seat.y } : { x: w, y: seat.y };
+        return { seat: { x: cell.x0 + seat.x, y: cell.y0 + seat.y },
+          mouth: { x: cell.x0 + mouth.x, y: cell.y0 + mouth.y } };
+      };
+      const wNa = doorOracle9('tissue_mesh_na_a', 'tissue_mesh_na_b');
+      const wNb = doorOracle9('tissue_mesh_na_b', 'tissue_mesh_na_a');
+      check('N7: both NA door oracles derive', wNa !== null && wNb !== null);
+      if (wNa && wNb) {
+        const stubAt = (m: { x: number; y: number }): typeof d9.wayStubs[number] | undefined =>
+          d9.wayStubs.find(st => Math.abs(st.x - m.x) < 1e-6 && Math.abs(st.y - m.y) < 1e-6);
+        const sA = stubAt(wNa.mouth), sB = stubAt(wNb.mouth);
+        const inward = (st: { nx: number; ny: number } | undefined, w2: { seat: { x: number; y: number }; mouth: { x: number; y: number } }): boolean => {
+          if (!st) return false;
+          const dx = w2.seat.x - w2.mouth.x, dy = w2.seat.y - w2.mouth.y;
+          const len = Math.hypot(dx, dy);
+          return Math.abs(st.nx - dx / len) < 1e-9 && Math.abs(st.ny - dy / len) < 1e-9;
+        };
+        check('N7: each NA door mouth wears one stub pointing mouth → seat (the carve\'s own perpendicular)',
+          inward(sA, wNa) && inward(sB, wNb));
+      }
+      // The seedless control: no stub near its would-be agreed point.
+      const cCH_a = fold9.get('tissue_mesh_ch_a'), cCH_b = fold9.get('tissue_mesh_ch_b');
+      const pCH = cCH_a && cCH_b ? borderAgreedPoint(cCH_a, cCH_b) : null;
+      check('N7: the ineligible pair grows NO stub (towns keep their doors)',
+        pCH !== null && !d9.wayStubs.some(st =>
+          Math.abs(st.x - pCH.x) < 1 && Math.abs(st.y - pCH.y) < 1));
+      check('N7: stubs are deterministic across builders',
+        JSON.stringify(d9.wayStubs) === JSON.stringify(d9b.wayStubs));
+      // N8 — the gradient anchors: the fixture cells answer nearestCellAt
+      // with themselves inside their own claim, and the theme reads carry
+      // real hexes (the capture is minted data, not live state).
+      const inA9 = d9.nearestCellAt((cAB_a.x0 + cAB_a.x1) / 2, (cAB_a.y0 + cAB_a.y1) / 2);
+      check('N8: inside a claim the nearest cell is the claim itself at d 0',
+        inA9?.zoneId === 'tissue_mesh_ab_a' && inA9.d === 0, JSON.stringify(inA9));
+      const fl9 = d9.floorToneOf('tissue_mesh_ab_a');
+      const inks9 = d9.grammarInksOf('tissue_mesh_ab_a');
+      check('N8: the fixture\'s theme floor + grammar inks captured as hexes',
+        (fl9 === null || !!hexRgb(fl9)) && inks9.every(i2 => !!hexRgb(i2)),
+        `floor ${fl9}, inks ${inks9.length}`);
+      for (const id of meshIds) delete world.zoneMap[id];
+    }
+  }
+  check('N: the mesh rig installed NOTHING — the seam stays null', getTissueSampler() === null);
 }
 
 // ---------------------------------------------------------------- E (part 2)

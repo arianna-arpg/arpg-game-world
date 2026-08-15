@@ -322,8 +322,25 @@ export const MASSDRESS_CFG = {
   shoulderPx: 40,
   /** Stamp attempts per 720px tissue chunk (fixed count — skips on
    *  non-mass ground never shift a neighbor's roll; density on mass scales
-   *  with the mass's own share of the chunk). */
-  stampAttempts: 26,
+   *  with the mass's own share of the chunk). M2 wave 9 THE SOLID FILL:
+   *  raised from the sparse 26 so the between reads genuinely FULL — each
+   *  attempt then rolls acceptance against the flanks' own MASS_DENSITY
+   *  (below), so jungle packs near every attempt and desert keeps its
+   *  emptiness from the same fixed budget. */
+  stampAttempts: 96,
+  /** THE SOLID FORMS (M2 wave 9): large mass-form attempts per chunk — the
+   *  massif fabric's blob vocabulary as DRAWN forms (crag mounds, hedge
+   *  banks) under the stamp scatter, so the between carries large-scale
+   *  structure, not only bodies. Same fixed-count fork law; each rolls the
+   *  blended density like the stamps. */
+  formAttempts: 6,
+  /** Solid-form radius band [min, max] px (the whole footprint must stand
+   *  on dressable mass — buildTissueSampler's own footprint test). */
+  formR: [60, 150] as [number, number],
+  /** The form streams' salt (chunk-keyed forks off the world seed — a
+   *  separate stream from the stamps, so densifying one never re-rolls
+   *  the other). */
+  formSalt: 0x9d2c5681,
   /** THE ONE SUN: the direction the light comes FROM, unit vector in world
    *  axes (screen up-left — the doodad painters' own lit-side convention).
    *  Every mass consumer shades with this, so between-mass and a future
@@ -384,6 +401,53 @@ export const MASS_KIT_DEFAULT: MassStampRow[] = [
   { kind: 'rock', radius: [14, 26], weight: 2 },
   { kind: 'brush', radius: [9, 15], weight: 1 },
 ];
+
+/** THE MASS DENSITY (M2 wave 9, THE SOLID FILL) — per-tileset acceptance
+ *  probability for the between's dense fill (stamps AND forms): the fraction
+ *  of the fixed attempt budget a country actually seats, so jungle's between
+ *  packs into a genuine thicket wall while desert's stays honestly sparse
+ *  from the SAME streams (the named jungle-denser-than-desert lever). At a
+ *  blended flank the acceptance is the weight-law fold of the flanks' own
+ *  densities. An authored voice, never derived — a country's emptiness is
+ *  authorship, not an accident of its stamp tally. ALL ROWS + THE DEFAULT
+ *  FLAGGED (unblessed; her word moves them). */
+export const MASS_DENSITY: Record<string, number> = {
+  jungle: 0.95,
+  deepwood: 0.9,
+  forest: 0.85,
+  mangrove_tangle: 0.9,
+  marsh: 0.75,
+  mire: 0.7,
+  meadow: 0.65,
+  grassland: 0.6,
+  farmland: 0.55,
+  downs: 0.55,
+  tundra: 0.4,
+  desert: 0.28,
+  dunes: 0.28,
+  beach: 0.35,
+  strand: 0.35,
+};
+export const MASS_DENSITY_DEFAULT = 0.6;
+
+/** Resolve a tileset's mass density: authored ▷ the default. Pure. */
+export function massDensityFor(tilesetId: string | undefined): number {
+  return (tilesetId && MASS_DENSITY[tilesetId]) || MASS_DENSITY_DEFAULT;
+}
+
+/** THE FORM CLASS (M2 wave 9): the texture class a tileset's SOLID FORMS
+ *  wear — grown country mounds in hedge-bank green, stone country in crag —
+ *  by the kit's own dominant texture (ENCLOSURE_CLASS_OF over massKitFor,
+ *  simple dominance at 0.5: forms follow the country's stronger voice, not
+ *  the border treatment's stricter massif threshold). Pure f(registry). */
+export function massClassFor(tilesetId: string | undefined): 'grown' | 'stone' {
+  let grown = 0, stone = 0;
+  for (const r of massKitFor(tilesetId)) {
+    if (ENCLOSURE_CLASS_OF[r.kind] === 'grown') grown += r.weight;
+    else stone += r.weight;
+  }
+  return grown >= stone && grown > 0 ? 'grown' : 'stone';
+}
 
 // ---------------------------------------------------------------------------
 // THE ROAD DRESS (seamless M2 wave 8) — the mass-dress pass's coda-3 debt:

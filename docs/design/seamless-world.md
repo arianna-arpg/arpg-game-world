@@ -945,3 +945,189 @@ buildTissueSampler's capture (src/world/tissue.ts); every consumer rides.*
   Existing rigs A–L byte-untouched (the boot web's one pair is
   ineligible, so its chord stands — proven by the census before a line
   moved).
+
+### THE DROWSY EVENTS (M2 wave 9 — movement record, 2026-08-14)
+
+*Her transients ruling's alive-when-away half, built ("we want to simulate
+so that the world really feels alive… it doesn't necessarily have to be an
+exact 1-to-1, but I would certainly like for the world to flow"): an away
+ADJACENT region's event life keeps running while the player stands
+elsewhere. Wave 8b carried events ACROSS the seam (THE CARRY); this wave
+makes them live BEYOND it. All behind `world.seamless`; dials FLAGGED
+(`SEAMLESS_EVENTS` in world.ts: driveEverySec 1.5 / driveSubstepSec 0.4 /
+maxCatchupSec 8 / entryBeat / wheelArrivePx 40 / heelDistPx 64).*
+
+- **THE CENSUS FIRST** (the commission's order — every active-zone event
+  driver classed): TICKS AWAY — the theater fabric (runs, pours, the dwell
+  lattice), warband marches, invasion arrivals; ALREADY LAWFUL, untouched —
+  migrant wheeling (the straggler wheel is unconditional and walks tagged
+  bodies in the active frame), occurrence clocks (the world-clock watermark
+  settles absence spans at arrival by exact arithmetic), every package
+  overlay's MAP half (sim.update runs regardless); ACTIVE-ONLY BY LAW,
+  documented — zone objectives + contest (the player is the contest),
+  encounters/extraction/borough (player-triggered, arrival-placed),
+  package stream pours + their discovery beats (ledger stamps are
+  player-met facts; seats read player position), the lite/creep/fog/track
+  zone fabrics (zone-scoped pools), and all announcements/FX.
+- **THE LIVING EVENT STATE** (`SeamlessRegionEvents`): each away region's
+  theater cluster (runs, dwell clock, pour ledger, visit ordinal, spots,
+  budget) + march ledgers + queued invasion arrivals, kept ZONE-LOCAL —
+  THE ZONE-LOCAL LEDGER LAW: the active frame IS the active zone's local
+  frame, so the rebase stash (old active → state) and the promote adopt
+  (state → new active) are both identity moves and no payload coordinate
+  ever shifts; only BODIES commute between frames (the standing shift
+  law), and the re-fit position policy already preserves region-local
+  seats. Born at population (with the discrete ENTRY BEAT rolled fresh,
+  muted, its bodies joining the population batch) or at the rebase stash;
+  adopted whole by the promote; dead with its region's bodies at every
+  bank (door / demotion / recede) — one delete beside the bank's sweep.
+- **THE EVENT SLICE**: on a quiet ring beat that stood no population
+  roster, ONE due region's bookkeeping drives (least-recently-driven,
+  driveEverySec-paced) under the population slice's scoped swap widened
+  to the whole zone-identity + theater cluster + THE ACTORS ARRAY — the
+  region's bodies shuttle into their zone-local frame for the beat (tags
+  cleared, the one shift helper both ways) so every mover clamp, crowd
+  shoulder and placement law reads the region's own ground; texts +
+  flashes swap to throwaways (away announcements are nobody's frame).
+  dt-COMPENSATED: the beat settles the whole wall span since the last
+  drive (capped), substepped so kind ticks that move bodies never tunnel
+  (the swept-beat law); the dwell lattice therefore accrues TRUE wall
+  time — an away zone breathes at the standing cadence, and a quick
+  return meets the zone's one continuing life. THE DRIVE CONTEXT caches
+  the swap's derived furniture (arena, placed exits, walk views, the
+  throwaway doodad copy) per mint record — the per-beat derivation was
+  the whole cost (4.8ms → 0.09ms mean measured).
+- **THE MARCH WHEEL**: drowsy march bodies (theater columns — carts and
+  prey included — and warband packs) walk their patrol routes at TRUE
+  pace in the active frame every tick, the migrant straggler wheel's
+  exact precedent (engine-moved; moveActor keeps collision + the foreign
+  confine honest; waypoints are actor-side state the one shift helper
+  already carries). The wheel is these bodies' whole mind while un-roused
+  (`seamlessDrowsyGate` stands their brains down — no AI double-drive);
+  pain rouses them back to the AI mid-fight. Probe-measured EXACT rate
+  parity: away 95px/s vs live 95px/s.
+- **THE ADOPT KILLS THE STACK** (the softcrossing coda 4): a rebase into
+  a member whose event state stands ADOPTS the whole cluster — the same
+  run objects continue from their away positions, the visit ordinal never
+  re-mints, NO entry beat re-rolls — so quick re-crossings meet the
+  zone's one continuing life, never a second first-impression (RIG N4
+  pins bodies + runs + visit stable across a double re-crossing).
+- **ARRIVALS RIDE** (her ruling's heart): an invasion host reaching an
+  away RESIDENT region queues on its event state and marches in on the
+  next drive beat — visible across the border — instead of being
+  silently dropped; the player's own arrival drains any still-pending
+  hosts into the standing spawn path.
+- **THE DRESS REPLANT** (the softcrossing coda 2): survivor-latched
+  materializers that plant runtime furniture re-stand it — the conclave's
+  pentagram at the ring's own centroid, the Bonewright's grave ring
+  around its planted stand, the world-boss lair throne under the
+  survivor — each through the def's own seeded placement derivation,
+  each only when missing (RIG N6 pins plant-once).
+- **NON-ENEMY EVENT BODIES** (the softcrossing coda 3, resolved): theater
+  march members are team-'enemy' by spawnEventActor's law (carts and prey
+  included), so they already tag and cross — their march LEDGERS now
+  survive via the stash/adopt, and the demote-tag predicate widened to
+  march-ledger membership regardless of team (future-proofing the first
+  neutral member). The remaining named classes keep the door law with
+  documented refusals: procession carts (a LOSEABLE zone objective — the
+  contest law's ground), borough folk/refugees + extraction nodes
+  (encounter fabric — player-triggered, arrival-placed by construction).
+- **COST** (scratch_soak_drowsyevents, parked populated stand, marches
+  walking, 3000 ticks, A/B): drive beats 0.09ms mean (0.01ms/tick
+  amortized), wheel 0.03ms/tick, whole-lane delta p50 −0.12ms — the
+  event slice costs measurement noise, far inside the drowsy tide's own
+  +5.7ms envelope.
+- **PROBES**: probe_seamless grew RIG N (24 checks): the away entry beat
+  seats a march with its population · the march advances between slices ·
+  the away dwell clock accrues ≈ wall time · the scoping pin · the
+  arrival adopts (same run object, same lead, no visit bump, world-seat
+  continuity, no doubles) · away/live rate parity within the stated band
+  (measured exact) · double re-crossing stacks nothing · the replant
+  plants once at the centroid · THE MODE LAW (discrete builds no state,
+  wheels no body). J1c re-aimed to sample the ROUTED way through the
+  public carried read (the routed-ribbon coda 1) — oblique stagings can
+  no longer flake the lane, and the pin STRENGTHENED (walkable AND road).
+
+### M2 movement — THE MESH (wave 9, 2026-08-14; the solid-world commission)
+
+Her ruling, near-verbatim: *"it's fine to occlude sight and arrows and the
+like, as long as the between is actually solid in appearance. I would
+almost want the between to truly be a mesh that links the zones, and the
+unlinked portion is filled in with actual massif or doodads, which would
+genuinely fill an enclosure and effectively carve the zones out… What
+isn't traversable wouldn't actually be viewable either."* Plus her items
+1 + 3: the transition ground must gradient into the zones' own graphics,
+and the invisible-wall read must become a visually honest mechanism.
+
+- **THE SOLID FIELD (the one derived truth)**: `solidAt` on the tissue
+  sampler's carried read (world/tissue.ts) — `massAt` quantized at the
+  draw lattice's own 30px cells (`TISSUE_CFG.solidCellPx`;
+  `SEAMLESS_DRAW_CFG.latticePx` now BINDS to it), memoized per (seed,
+  cell). The painter's pass-1 mass verdict samples the SAME centers, so
+  the country that draws as solid mass is EXACTLY the country that stops
+  rays — drawn == tested at one grain BY CONSTRUCTION. The clearway
+  shoulder and mouth aprons are massAt-false, so every corridor plus its
+  verge stays open sky: the walls start where the packed bodies start.
+  FIVE consumers read the field: feet (already refusing via the walkable
+  law), the ray march, the veil, the painter — and the projectile sweep
+  via the DEFERRED world.ts consult (below).
+- **THE SOLID FILL (dense country)**: `MASSDRESS_CFG.stampAttempts` 26 →
+  96 with per-tileset acceptance `MASS_DENSITY` (`massDensityFor`,
+  data/enclosure.ts — jungle 0.95 packs a thicket wall, desert 0.28
+  breathes; the weight-law blend rules wedges), plus THE SOLID FORMS
+  (`solidFormsForChunk` — crag mounds / hedge banks at 60–150px on their
+  own salted stream, whole-footprint massAt-tested so no form overhangs a
+  corridor) drawn UNDER the stamp scatter. Stamps now also gate on the
+  solid field, so no drawn trunk stands on ray-open ground. THE SEAT MEMO
+  (painter-side, the massdress coda-4 cut) pays each chunk's derivation
+  once — the 3×3 gather reuses it.
+- **THE OCCLUSION (her condition honored)**: castRay's tissue lane
+  (engine/los.ts) consults the field for un-owned out-of-arena samples —
+  solid between blocks BOTH channels at its drawn lattice surface, per
+  channel behind `LOS_CFG.crossBorder.solidShot`/`solidSight`; open
+  tissue (corridors, aprons, verge) stays open — the wave-7 "never blocks
+  as a line" core survives, RE-STATED. Elevation rides the doodad band
+  law at story 0 (a butte line clears the scrub). The sight veil
+  (render/vis/sightVeil.ts, `SIGHT_VEIL_SOLID`) marches the same field
+  AND emits THE SOLID FRINGE — boundary faces at the field's lattice
+  edges through the ONE mergeGridFaces law — so standing in a corridor
+  you SEE the walls, and the dark begins exactly where the mass draws.
+- **THE ZONE-EDGE GRADIENT (her item 1)**: THE EDGE FADE bakes each
+  zone's own theme FLOOR tone into the tissue as an apron outside its
+  cell rect (full at the rect, gone by 96px — the arena-rect seam melts
+  without touching a zone pixel; unminted claims pre-echo their future
+  ground), and THE GRAMMAR SPECKLE flecks the flanks' own theme inks
+  (grass/tree, mud/sand) through the weight law's falloff
+  (`grammarSeatsForChunk`). Both captured at build as minted data.
+- **THE ZONE-SIDE WAY (ribbon coda 4b)**: `wayStubs` on the carried read
+  — one row per crossing end (agreed point or door mouth), unit normal
+  along the carve's own perpendicular; drawSeamlessCountry overdraws the
+  road-face bed+worn grammar `wayStubPx` (120) inward OVER every ground
+  and UNDER every body, so the carved in-zone corridor finally WEARS its
+  road and the way no longer reads as ending at the border.
+- **THE ROAD-TONE SWEEP**: 55 `theme.road` rows authored in
+  data/tilesets.ts (every surface-frontier tileset that lacked one; the
+  registry's own eligibility filter is the scope; palettes from each
+  country's own ground language, one line each, ALL FLAGGED) — the
+  in-zone gravelPath and the tissue ribbon now slide through the same
+  authored color between countries.
+- **THE DEFERRED WORLD.TS CONSULT (the masonry-gate precedent)**: the
+  projectile sweep's away lane must eat tier-0 flights where the solid
+  field answers true (`!owner` today means `continue` — open sky). The
+  exact hunk is reported in the pass memory
+  (seamless-mesh-pass.md) with probe_seamlesslos RIG H already ARMED: the
+  rig flies a real bolt down a solid-blocked line with a dial-off CONTROL
+  flight — it reports PENDING while the consult is un-landed, pins death
+  at castRay's own distance once it lands, and fails on any death
+  elsewhere.
+- **PROBES**: probe_tissue grew RIG N (115 → 139: the quantize law ×9600,
+  solid ⊆ unwalkable, corridors hold no solid cell, the density lever
+  jungle-vs-desert on flat-dress unit fixtures, the form footprint law on
+  a half-plane oracle, grammar band/alpha/ink pins, way stubs at agreed
+  points + door mouths + the ineligible refusal, determinism ×2 builders)
+  · probe_seamlesslos re-aimed RIG C to OPEN tissue (the re-statement) and
+  grew RIGs G+H (a pure-tissue ray dies at the field boundary ±24px both
+  channels, per-channel dial A/B, the story-1 band law, the armed flight
+  pin) · probe_sightveil grew RIG B6 (march occludes solid / spares open,
+  the fringe face at the exact lattice line, drawn==tested via the sheet's
+  own edges, dial + seed-lane + null-sampler stand-downs).

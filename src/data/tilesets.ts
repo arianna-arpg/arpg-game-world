@@ -301,6 +301,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Gloomwood', 'Brierwood', 'Mossdark', 'Thornveil', 'Murkroot', 'Feywild', 'Duskbough', 'Tanglewood', 'Shadowmoss', 'Rootdark', 'Witchwood', 'Nightroot', 'Bramblewick', 'Grimwillow', 'Eldergloom', 'Owlmurk', 'Fenshadow', 'Mistbriar'],
     nameSecond: ['Hollow', 'Reach', 'Warrens', 'Glade', 'Crossing', 'Depths', 'Thicket', 'Tangle', 'Shade', 'Boughs', 'Hush', 'Snarl', 'Covert', 'Verge', 'Stand', 'Underwood'],
     theme: {
+      road: '#42381f', // FLAGGED (mesh road-tone sweep): shade-beaten earth
       // The GROVE floor flourishes — greens over greens, barely any black
       // (palette + light bias) — while its NIGHTS run forest-deep. The floor
       // SAMPLES BY POSITION too: banks darken wet toward every water/bog
@@ -451,6 +452,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Bracken', 'Harrow', 'Greywether', 'Wold', 'Mistle', 'Cairn', 'Whinny', 'Old Meadow', 'Shepherd’s', 'Thorn', 'Fallow', 'Drover’s', 'Weathered', 'Barrowman’s'],
     nameSecond: ['Downs', 'Moor', 'Wolds', 'Leas', 'Heath', 'Fells', 'Commons', 'Folds', 'Acres', 'Pastures', 'Rise', 'Balks'],
     theme: {
+      road: '#4a463a', // FLAGGED (mesh road-tone sweep): chalk-and-flint track
       dayLight: 1.12,
       nightDark: 0.8,
       // Heath floor: dry greens over bruised browns, lifted where the open
@@ -776,6 +778,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Wheatlea', 'Millbrook', 'Barleigh', 'Croftmere', 'Tithe', 'Oxbow', 'Greenlea', 'Fallowdene', 'Hedgeford', 'Drover’s', 'Harrowmill', 'Goodman’s'],
     nameSecond: ['Fields', 'Furlongs', 'Crofts', 'Acres', 'Lanes', 'Commons', 'Holdings', 'Fallows', 'Hedgerows', 'Reach', 'Steading', 'Grange'],
     theme: {
+      road: '#4e4634', // FLAGGED (mesh road-tone sweep): hedgerow lane
       dayLight: 1.14,
       nightDark: 0.82,
       // Worked earth: green rows ripening to gold, lifted along the open
@@ -970,6 +973,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Coppergate', 'Tallow', 'Lantern', 'Cinder', 'Wethervane', 'Guilder’s', 'Old King’s', 'Pauper’s', 'Silverstitch', 'Cordwainer’s', 'Bellfound', 'Ledgerman’s'],
     nameSecond: ['Ward', 'Rows', 'Quarter', 'Walk', 'Shambles', 'Terraces', 'Close', 'Yards', 'Circus', 'Gateside', 'Commons', 'Steps'],
     theme: {
+      road: '#3e3a36', // FLAGGED (mesh road-tone sweep): cobbled way
       dayLight: 1.06,
       nightDark: 0.94,
       // Paved greys warmed by lamp gold; the brick mass reads warm against
@@ -1296,6 +1300,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Devil’s', 'Kestrel', 'Split', 'Red', 'Thousand', 'Watcher’s', 'Broken', 'Old Giant’s'],
     nameSecond: ['Needles', 'Buttes', 'Tables', 'Spires', 'Stacks', 'Mesas'],
     theme: {
+      road: '#524a38', // FLAGGED (mesh road-tone sweep): scree-packed switchback
       dayLight: 1.1,
       nightDark: 0.85,
       ground: {
@@ -2177,6 +2182,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Silent', 'Whitewood', 'Frostpine', 'Snowveil', 'Winterdeep', 'Rimewood', 'Palegrove', 'Hoarwood', 'Stillfall', 'Coldbough', 'Evergloam', 'Firshadow', 'Icebough', 'Drifthollow'],
     nameSecond: ['Taiga', 'Firwood', 'Pines', 'Timberland', 'Woods', 'Stands', 'Thickets', 'Wilds', 'Forest', 'Boughs', 'Snowwood', 'Hollow'],
     theme: {
+      road: '#5c6c76', // FLAGGED (mesh road-tone sweep): trodden frost track
       nightDark: 0.74,
       heat: 0,
       // Frozen needle-litter under snow-light: cold slate rising to frost-
@@ -2284,6 +2290,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Frostbitten', 'Howling', 'Pale', 'Glacial', 'Whitemourn', 'Rimebound', 'Frostfell', 'Hoarfrost', 'Bitterwind', 'Snowbound', 'Wintermourn', 'Bleakhold', 'Sleetborn', 'Coldcairn', 'Stormriven', 'Frostshard', 'Iceveil', 'Numbing'],
     nameSecond: ['Expanse', 'Steppes', 'Wastes', 'Drifts', 'Pass', 'Fields', 'Tundra', 'Floes', 'Hollow', 'Verge', 'Barrens', 'Plateau', 'Hinterland', 'Snowfields', 'Reach', 'Tarn'],
     theme: {
+      road: '#68808e', // FLAGGED (mesh road-tone sweep): ice-packed trail
       dayLight: 1.12,
       heat: 0.05,
       // Glacial chasms are MOUTHS (the pitfall fabric): fall past a lip and
@@ -2393,6 +2400,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Cinder', 'Ashen', 'Smoldering', 'Charred', 'Molten', 'Sootveil', 'Emberfall', 'Ashfall', 'Scorchwind', 'Cindergrey', 'Smokeveil', 'Ashmoor', 'Pyreborn', 'Charwood', 'Embergloom', 'Slagborn', 'Sootfall', 'Burning'],
     nameSecond: ['Barrens', 'Flats', 'Scar', 'Caldera', 'Expanse', 'Fields', 'Wastes', 'Ashlands', 'Cinders', 'Smolder', 'Drift', 'Scorch', 'Pyre', 'Hollow', 'Reach', 'Char'],
     theme: {
+      road: '#3e2c1e', // FLAGGED (mesh road-tone sweep): cinder-packed way
       heat: 0.95,
       ambientFx: [{ kind: 'heatHaze', intensity: 0.5, color: '#ffd0a0' }],
       ground: { scale: 1.5, stretchX: 1.3, strength: 1.2, speckles: 0.8 },
@@ -2519,6 +2527,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunscoured', 'Bone-Dry', 'Wind-Carved', 'Scorchsand', 'Sunbaked', 'Duneshift', 'Heat-Hazed', 'Sandlorn', 'Blistering', 'Dustchoke', 'Goldwaste', 'Suncracked', 'Parched', 'Vulture-Watched', 'Cracked-Earth', 'Longshadow'],
     nameSecond: ['Reach', 'Flats', 'Wastes', 'Hollow', 'Barrens', 'Drift', 'Scour', 'Basin', 'Sprawl', 'Span', 'Verge', 'Fringe', 'Steppe', 'Scrub'],
     theme: {
+      road: '#8a744e', // FLAGGED (mesh road-tone sweep): caravan-packed sand
       dayLight: 1.6,
       heat: 1,
       swelter: 0.85,
@@ -2673,6 +2682,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Mirage', 'Glasswaste', 'Witherglass', 'Burnglass', 'Saltcrack', 'Endless', 'Shifting', 'Trackless', 'Sun-Drowned', 'Golden', 'Wandering', 'Thirstlong', 'Duneheart', 'Sandveil', 'Farshimmer', 'Wind-Written'],
     nameSecond: ['Erg', 'Sands', 'Dunes', 'Expanse', 'Sea', 'Swells', 'Leagues', 'Crossing', 'Immensity', 'Deep', 'Waves', 'Horizon'],
     theme: {
+      road: '#947c50', // FLAGGED (mesh road-tone sweep): caravan-packed sand
       dayLight: 1.65,
       heat: 1.05,
       swelter: 1,
@@ -2809,6 +2819,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Saltcrack', 'Glasswaste', 'Suncracked', 'Burnglass', 'Witherglass', 'Bleachbone', 'Blinding', 'Dead-Lake', 'Shatterpan', 'Whitefire', 'Cracklace', 'Stillheat'],
     nameSecond: ['Pan', 'Flats', 'Glass', 'Mirror', 'Bed', 'Blind', 'Table', 'Waste', 'Floor', 'Shimmer'],
     theme: {
+      road: '#a89468', // FLAGGED (mesh road-tone sweep): salt-crust track
       dayLight: 1.75,
       heat: 1.1,
       swelter: 1.2,
@@ -2933,6 +2944,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Seething', 'Burrowed', 'Thrumming', 'Chittering', 'Brood-Warm', 'Wax-Sealed', 'Resin-Weeping', 'Carapace', 'Hollow-Sung', 'Humming', 'Chitin-Choked', 'Ten-Thousand'],
     nameSecond: ['Warrens', 'Seethe', 'Nests', 'Combs', 'Broodlands', 'Mounds', 'Cradle', 'Undersand', 'Hollows', 'Ground'],
     theme: {
+      road: '#8a7048', // FLAGGED (mesh road-tone sweep): waxsand trail
       dayLight: 1.5,
       heat: 0.95,
       swelter: 0.8,
@@ -3054,6 +3066,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Redstone', 'Sunspire', 'Dust-Carved', 'Old Kiln', 'Windshear', 'Highshelf', 'Cracked-Crown', 'Vulture-Rock', 'Sandworn', 'Ochre', 'Broketable', 'Longmesa', 'Scorchstone', 'Dry-Terrace'],
     nameSecond: ['Tables', 'Mesas', 'Terraces', 'Stands', 'Shelves', 'Tablelands', 'Crowns', 'Steps', 'Benches', 'Rises', 'Courts'],
     theme: {
+      road: '#6a5a3c', // FLAGGED (mesh road-tone sweep): mesa dust road
       dayLight: 1.55,
       heat: 1,
       swelter: 0.8,
@@ -3259,6 +3272,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Ringstone', 'Drywell', 'Lastwater', 'Sunwalled', 'Hundredgate', 'Old Dynast', 'Kilnbrick', 'Threshold', 'Gatewatch', 'Palmshade', 'Cistern', 'Doverook', 'Emberwall', 'Wellward'],
     nameSecond: ['Courts', 'Rings', 'Walls', 'Wells', 'Yards', 'Closes', 'Gardens', 'Enclosures', 'Gates', 'Belt', 'Marches'],
     theme: {
+      road: '#665838', // FLAGGED (mesh road-tone sweep): court dust road
       dayLight: 1.5,
       heat: 1,
       swelter: 0.75,
@@ -3984,6 +3998,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunken', 'Rotreek', 'Fenmire', 'Blackwater', 'Drownreed', 'Quagmire', 'Stillwater', 'Murkwallow', 'Reekbrack', 'Sludgewater', 'Greenrot', 'Cessmire', 'Gloomwrack', 'Dankmoor', 'Wetrot', 'Slimewater', 'Foulmere', 'Bogshade'],
     nameSecond: ['Bog', 'Fen', 'Marsh', 'Sloughs', 'Swale', 'Lowland', 'Sump', 'Wetland', 'Quag', 'Reeds', 'Shallows', 'Sink', 'Morass', 'Hollow', 'Reach', 'Mudflat'],
     theme: {
+      road: '#38341f', // FLAGGED (mesh road-tone sweep): peat plank-way
       // Peaty olive loam, wet-fading to drowned black at every pool rim —
       // the blackwater face's whole read is its margins.
       ground: {
@@ -4118,6 +4133,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Blasted', 'Hellcracked', 'Ruinous', 'Riftburnt', 'Hateforged', 'Sundered', 'Warshorn', 'Chainscored', 'Godpierced', 'Wretched', 'Desolate', 'Damnedmarch', 'Hatelit', 'Ashbroken', 'Brimstone', 'Cracked', 'Flayed', 'Unhealed'],
     nameSecond: ['Waste', 'Scar', 'Reach', 'Ruin', 'Sprawl', 'Crackland', 'Wreckage', 'Hollow', 'Desolation', 'Span', 'Wound', 'March', 'Rent', 'Verge', 'Fields', 'Toll'],
     theme: {
+      road: '#38222a', // FLAGGED (mesh road-tone sweep): ashglass track
       // A DIMMER land than the volcanic country's bright eruption light —
       // the wound leeches the day (volcanic runs dayLight 1.15; this is the
       // opposite pole of the same dial).
@@ -4286,6 +4302,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Shelled', 'Cratered', 'Churned', 'Bombarded', 'Shotfallen', 'Pocked', 'Hammered', 'Beaten', 'Rutted', 'Grinding', 'Screaming', 'Broken'],
     nameSecond: ['Fields', 'Advance', 'March', 'Reach', 'Ground', 'Downs', 'Salient', 'Approach', 'Mile', 'Verge'],
     theme: {
+      road: '#3a2c22', // FLAGGED (mesh road-tone sweep): war-churned way
       // Scorched umber under a dim iron sky — rust-orange accent (the
       // wasteland keeps hate-green; the two underworld war faces must
       // never be mistaken for each other at a glance).
@@ -4401,6 +4418,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Iron', 'Grinding', 'Thundering', 'Roaring', 'Sleepless', 'Burning', 'Advancing', 'Besieging', 'Howling', 'Unbroken'],
     nameSecond: ['Line', 'Siegeworks', 'Batteries', 'Gunline', 'Emplacement', 'Muster', 'Offensive', 'Front', 'Barrage', 'Grind'],
     theme: {
+      road: '#342620', // FLAGGED (mesh road-tone sweep): shell-packed mud
       dayLight: 0.92, nightDark: 0.8, ambientDark: 0.14,
       ambientFx: [{ kind: 'motes', intensity: 0.5, color: '#ff8a4a' }],
       ground: {
@@ -4581,6 +4599,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Outer', 'Sundered', 'Screaming', 'Forsaken', 'Chainscarred', 'Ashen', 'Howling', 'Nailed', 'Godless', 'Smoldering', 'Harrowed', 'Iron-Staked', 'Cindered', 'Abyssal', 'Unhallowed', 'Flayed', 'Embertorn', 'Wailing'],
     nameSecond: ['Steppes', 'Marches', 'Plains', 'Reaches', 'Waste', 'Approach', 'Threshold', 'Expanse', 'Scarlands', 'Fields', 'Verge', 'Descent', 'Flats', 'Outlands', 'Span', 'Steps'],
     theme: {
+      road: '#442e1c', // FLAGGED (mesh road-tone sweep): scorched march
       heat: 0.9, dayLight: 0.92, nightDark: 0.8, ambientDark: 0.18,
       // Hell's pits go DEEPER into hell (the pitfall fabric): an abyssal
       // rent is a mouth of the marches' own underdark.
@@ -4692,6 +4711,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Caulbound', 'Amniotic', 'Blackvein', 'Chrysalid', 'Nerveworn', 'Sunless', 'Weeping', 'Umbilic', 'Pale-Lit', 'Meatgrown'],
     nameSecond: ['Sprawl', 'Warrens', 'Fold', 'Womb', 'Reach', 'Hollows', 'Nave', 'Depths', 'Gullet', 'Cradle'],
     theme: {
+      road: '#352a3c', // FLAGGED (mesh road-tone sweep): vein-pressed path
       heat: 0.62, dayLight: 0.7, nightDark: 0.85, ambientDark: 0.28,
       ambientFx: [
         { kind: 'motes', intensity: 0.3, color: '#8a6ab0' },
@@ -4798,6 +4818,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Molten', 'Burning', 'Weeping', 'Sunless', 'Blistered', 'Chained', 'Slagbound', 'Scalding', 'Dolorous', 'Smokewreathed', 'Cindershot', 'Seething', 'Forgelit', 'Wailing', 'Cauterized', 'Tolling'],
     nameSecond: ['Banks', 'Reach', 'Meander', 'Course', 'Shallows', 'Crossing', 'Strand', 'Bend', 'Confluence', 'Channel', 'Run', 'Narrows', 'Fords', 'Verge', 'Toll'],
     theme: {
+      road: '#3a2414', // FLAGGED (mesh road-tone sweep): clinker causeway
       heat: 1, dayLight: 0.9, nightDark: 0.82, ambientDark: 0.22,
       // The river lights itself: heavier embers on the wind, deeper shimmer.
       ambientFx: [
@@ -5026,6 +5047,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Durance', 'Halls', 'Oubliettes', 'Galleries', 'Vaults', 'Cloisters', 'Cells', 'Depths', 'Courts', 'Chambers', 'Warrens', 'Reliquaries'],
     nameSecond: ['of Hate', 'of Anguish', 'of the Flayed', 'of Chains', 'of the Silent', 'of Sorrow', 'of the Council', 'of Penance', 'of the Hooded', 'of Wailing', 'of the Kept', 'of Spite'],
     theme: {
+      road: '#2e2b38', // FLAGGED (mesh road-tone sweep): worn flagstones
       // Deep interior dark — the citadel lights its own halls (hate-green
       // braziers, the idol's gaze); day never reaches here.
       heat: 0.4, dayLight: 0.85, nightDark: 0.85, ambientDark: 0.45,
@@ -5191,6 +5213,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Forsaken', 'Mouldering', 'Sepulchral', 'Grave-Still', 'Ossuary', 'Tombshadow', 'Gravecold', 'Bonewreathed', 'Restless', 'Coffinwood', 'Palewatch', 'Sunkengrave', 'Gloomtomb', 'Ash-Interred', 'Mortwood', 'Wraithgrey', 'Cryptgloom', 'Deathwatch'],
     nameSecond: ['Crypt', 'Necropolis', 'Barrows', 'Catacomb', 'Tombs', 'Restless Field', 'Sepulchre', 'Graveyard', 'Mausoleum', 'Vaults', 'Boneyard', 'Reliquary', 'Charnel', 'Hollow', 'Tomb-Row', 'Gravefield'],
     theme: {
+      road: '#302e3a', // FLAGGED (mesh road-tone sweep): processional flags
       // Grave-mist pools among the headstones and FEEDS the dead (mistfed).
       fog: { banks: [1, 2], kinds: [{ id: 'grave_mist' }] },
       // THE GRAVE MITES (the colony pass): the crypt floor's skittering
@@ -5498,6 +5521,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunbleached', 'Saltworn', 'Tide-Carved', 'Driftwood', 'Coral', 'Surf-Beaten', 'Foamcrest', 'Seawind', 'Brinewashed', 'Pearl-Strewn', 'Wracklittered', 'Sandscoured', 'Glittering', 'Spraylashed', 'Shellbound', 'Tidefall', 'Saltgrass', 'Lowtide'],
     nameSecond: ['Shore', 'Coast', 'Strand', 'Shallows', 'Cove', 'Bar', 'Beach', 'Reach', 'Spit', 'Foreshore', 'Tideline', 'Sands', 'Bay', 'Inlet', 'Surf', 'Margin'],
     theme: {
+      road: '#9a8a5e', // FLAGGED (mesh road-tone sweep): tide-packed sand
       dayLight: 1.35,
       heat: 0.75,
       // Sun-bleached scrub soil behind the strandline; the tideline earns a
@@ -5579,6 +5603,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunlit', 'Wildflower', 'Greenhollow', 'Honeybrook', 'Dappled', 'Springmoor', 'Cloverhill', 'Larksong', 'Daisychain', 'Goldengrass', 'Breezy', 'Sweetgrass', 'Buttercup', 'Gentlebrook', 'Verdant', 'Mossglen', 'Petalfall', 'Hazysun'],
     nameSecond: ['Meadow', 'Glade', 'Pasture', 'Vale', 'Downs', 'Greens', 'Lea', 'Field', 'Heath', 'Commons', 'Bloom', 'Reach', 'Dell', 'Sward', 'Clearing', 'Holt'],
     theme: {
+      road: '#4c422c', // FLAGGED (mesh road-tone sweep): cart-track loam
       // Pond margins darken wet; the sward between scattered crowns lifts
       // sunlit (positional palette sampling — a meadow IS its clearings).
       ground: {
@@ -5745,6 +5770,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Glimmer', 'Lantern', 'Firefly', 'Duskglow', 'Everlight', 'Winkfield', 'Shimmermoss', 'Nightbloom', 'Gleamwillow', 'Softlight', 'Sparkfen', 'Emberfly'],
     nameSecond: ['Vale', 'Dell', 'Hollow', 'Glade', 'Bottoms', 'Meads', 'Dingle', 'Combe', 'Nook', 'Run'],
     theme: {
+      road: '#463e28', // FLAGGED (mesh road-tone sweep): glimmer loam track
       // Mossy low country: cool greens that darken wet at every mere and
       // lift where the glades open. Its nights stay READABLE on purpose —
       // the dark is the canvas the light show is painted on.
@@ -5849,6 +5875,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       overgrowth: [0.04, 0.22],
     },
     theme: {
+      road: '#403620', // FLAGGED (mesh road-tone sweep): root-beaten earth
       ground: {
         palette: ['#0c190b', '#122811', '#1a3a17', '#24491e', '#2e5926'], bias: 0.6, alpha: 0.58,
         coast: { reach: 85, shift: -0.34, kinds: ['water', 'deep_water', 'bog', 'swamp'] },
@@ -6086,6 +6113,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Petalwake', 'Overbloom', 'Nodding', 'Hundredbloom', 'Sunwide', 'Corolla', 'Tenderkept', 'Bright-Crown', 'Pollenfall', 'Wide-Open', 'Gold-Heart', 'Dewbright'],
     nameSecond: ['Petalfields', 'Acre', 'Plot', 'Blooms', 'Stands', 'Swathe', 'Verge', 'Ground', 'Spread', 'Beds', 'Garden', 'Reach'],
     theme: {
+      road: '#4a4226', // FLAGGED (mesh road-tone sweep): petal-strewn lane
       ground: {
         palette: ['#15200d', '#203014', '#2c421b', '#3c5724', '#4c6a2e'], bias: 0.6, alpha: 0.5,
         coast: { reach: 90, shift: -0.36 },
@@ -6243,6 +6271,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Stalkwood', 'Bolted', 'Understem', 'Tallgrown', 'Greenshaft', 'Swaying', 'Deepbloom', 'Shadowpetal', 'Cane-Dark', 'Rustling', 'Stemshade', 'Highstem'],
     nameSecond: ['Stalks', 'Wood', 'Stems', 'Canes', 'Shade', 'Rows', 'Tangle', 'Deeps', 'Stand', 'Aisle', 'Thicket', 'Country'],
     theme: {
+      road: '#443a24', // FLAGGED (mesh road-tone sweep): stalk-floor trail
       ground: {
         palette: ['#101a0b', '#182610', '#223417', '#2e451e', '#3a5626'], bias: 0.55, alpha: 0.5,
         clearing: { reach: 110, lift: 0.16 },
@@ -6412,6 +6441,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Tenders', 'Trellised', 'Potted', 'Boarded', 'Kept', 'Rowbound', 'The Long', 'Espalier', 'Terracotta', 'Old-Work', 'Twine-Tied', 'Furrowed'],
     nameSecond: ['Rows', 'Beds', 'Plots', 'Terraces', 'Frames', 'Planters', 'Walks', 'Yards', 'Allotment', 'Workings', 'Furrows', 'Ranks'],
     theme: {
+      road: '#443826', // FLAGGED (mesh road-tone sweep): tended row-path
       ground: {
         palette: ['#171509', '#25200e', '#332c14', '#3f381c', '#4c4424'], bias: 0.55, alpha: 0.5,
         clearing: { reach: 120, lift: 0.18 },
@@ -6556,6 +6586,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Mulchreach', 'Rotturn', 'The Turned', 'Wormrich', 'Blackloam', 'Heaped', 'Steaming', 'The Spent', 'Leafgrave', 'Castings', 'Old-Season', 'Sourgold'],
     nameSecond: ['Mulch', 'Heaps', 'Margins', 'Middens', 'Loam', 'Beds', 'Leavings', 'Compost', 'Rot', 'Ground', 'Turnings', 'Verge'],
     theme: {
+      road: '#3a2e1c', // FLAGGED (mesh road-tone sweep): mulch-pressed way
       ground: {
         palette: ['#140f08', '#1f180c', '#2a2010', '#352a15', '#40331a'], bias: 0.5, alpha: 0.55,
         // The margin's water IS bog and mud (the wet rot face) — the default
@@ -7048,6 +7079,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Lonely', 'Storm-Girt', 'Castaway', 'Far-Flung', 'Mistbound', 'Wave-Worn', 'Forsaken', 'Tideringed', 'Solitary', 'Gull-Haunted', 'Windswept', 'Lost', 'Saltcrowned', 'Far-Drifted', 'Brinegirt', 'Sundered', 'Forlorn', 'Sea-Locked'],
     nameSecond: ['Isle', 'Cay', 'Spit', 'Headland', 'Atoll', 'Holm', 'Islet', 'Reef', 'Skerry', 'Promontory', 'Shoal', 'Point', 'Cape', 'Sandbar', 'Ait', 'Eyot'],
     theme: {
+      road: '#94886a', // FLAGGED (mesh road-tone sweep): shell-sand track
       // Isle turf over dune-soil (a green lean the bare beach lacks), and a
       // wet fade hugging the lagoon rims — 7-11 shallows pours make this THE
       // tideline country: the ellipse isle finally reads ringed by its sea.
@@ -7124,6 +7156,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Longshore', 'Greybeach', 'Tidemark', 'Saltgrass', 'Windshell', 'Dunegrass', 'Palegull', 'Wrackline', 'Foamwhite', 'Lowwater', 'Shellsand', 'Marramgrown', 'Driftwood', 'Slackwater', 'Herongrey', 'Tern-Called'],
     nameSecond: ['Strand', 'Foreshore', 'Shore', 'Sands', 'Tideline', 'Reach', 'Spit', 'Beach', 'Flats', 'Margin', 'Bar', 'Shelf', 'Verge', 'Walk'],
     theme: {
+      road: '#988a60', // FLAGGED (mesh road-tone sweep): dune-packed way
       dayLight: 1.3,
       ground: {
         scale: 2.0, stretchX: 1.7, strength: 1.1, speckles: 0.55,
@@ -7240,6 +7273,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Saltcrack', 'Palewhite', 'Bittern', 'Dryreef', 'Bonewater', 'Cracklepan', 'Glarewhite', 'Deadwrack', 'Brinemirror', 'Saltrimed', 'Whalefall', 'Lowdrained', 'Crustwalk', 'Stillbrine', 'Ebbforgot', 'Shimmerpan'],
     nameSecond: ['Flats', 'Pans', 'Hardpan', 'Seabed', 'Shelf', 'Basin', 'Lows', 'Barrens', 'Expanse', 'Bed', 'Reach', 'Waste', 'Floor', 'Drain'],
     theme: {
+      road: '#a09678', // FLAGGED (mesh road-tone sweep): brine-crust track
       dayLight: 1.45,
       ambientFx: [{ kind: 'heatHaze', intensity: 0.45 }],
       // The pan must READ as bleached crust: a pale high-bias floor with
@@ -7358,6 +7392,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Rootbound', 'Blackwater', 'Stiltwood', 'Tanglebrack', 'Silttide', 'Snagroot', 'Greenveil', 'Lowbranch', 'Eelgrass', 'Mudwalk', 'Proproot', 'Hissreed', 'Slackbrack', 'Drownwood', 'Coilhome', 'Heronshade'],
     nameSecond: ['Tangle', 'Mangrove', 'Backwater', 'Channels', 'Roots', 'Slough', 'Galleries', 'Brack', 'Maze', 'Shallows', 'Warren', 'Weave', 'Stilts', 'Bayou'],
     theme: {
+      road: '#3e3826', // FLAGGED (mesh road-tone sweep): root-board way
       nightDark: 0.72,
       fog: { banks: [1, 2], kinds: [{ id: 'river_mist', weight: 2 }, { id: 'mist' }] },
       ground: {
@@ -7481,6 +7516,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Halfsunk', 'Greyswell', 'Undertow', 'Coldwash', 'Deepreach', 'Sunkfield', 'Tidegrave', 'Drownstone', 'Farwade', 'Seaswallow', 'Duskwater', 'Lastland', 'Palebreak', 'Foamgrave', 'Downshelf', 'Brineheart'],
     nameSecond: ['Margin', 'Shallows', 'Drowning', 'Wash', 'Swale', 'Threshold', 'Steps', 'Descent', 'Verge', 'Fathoms', 'Crossing', 'Shoals', 'Brink', 'Ebb'],
     theme: {
+      road: '#6a6a54', // FLAGGED (mesh road-tone sweep): silt-packed berm
       dayLight: 1.15,
       ground: {
         scale: 1.9, stretchX: 1.5, strength: 1.15, speckles: 0.45,
@@ -8663,6 +8699,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunken', 'Abyssal', 'Drowned', 'Fathomless', 'Tide-Lost', 'Lightless', 'Pressuredark', 'Brineblack', 'Leviathan', 'Pelagic', 'Sunless', 'Cold-Crushed', 'Hadal', 'Stillwater', 'Deepswell', 'Saltgloom', 'Trenchborn', 'Drownward'],
     nameSecond: ['Deep', 'Trench', 'Shelf', 'Reach', 'Sound', 'Gulf', 'Abyss', 'Fathoms', 'Current', 'Depths', 'Hollow', 'Sink', 'Drift', 'Brine', 'Maw', 'Shoals'],
     theme: {
+      road: '#24404e', // FLAGGED (mesh road-tone sweep): cleared seabed lane
       ambientFx: [{ kind: 'caustics' }, { kind: 'bubbles' }],
       // The seabed's trenches DROP (the pitfall fabric): below the deep
       // there are hollows still — the drowned strata's own ladder.
@@ -8841,6 +8878,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Craggy', 'Windswept', 'Stoneback', 'Highreach', 'Granite', 'Cloudbound', 'Rugged', 'Skyworn', 'Bleakcrag', 'Frostcap', 'Eagle-Haunted', 'Hewnstone', 'Loftbound', 'Grey-Peaked', 'Stormcrest', 'Boulderfall', 'Wind-Scoured', 'Stark'],
     nameSecond: ['Pass', 'Crags', 'Bluffs', 'Heights', 'Ridge', 'Tor', 'Summit', 'Escarp', 'Defile', 'Cairn', 'Peaks', 'Spur', 'Scree', 'Cliffs', 'Saddle', 'Overlook'],
     theme: {
+      road: '#4a4536', // FLAGGED (mesh road-tone sweep): stone-packed track
       floor: '#13130f', grid: '#1d1c16', border: '#5a5240',
       obstacle: '#3a3528', obstacleEdge: '#6a6048', accent: '#c8b890',
       wall: '#4a4436', mud: '#3a3428', tree: '#2a4636',
@@ -8979,6 +9017,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Pinebound', 'Whispering', 'Bouldered', 'Green-Shouldered', 'Mistfoot', 'Old-Drove', 'Shadowed', 'Bracken', 'Stonefoot', 'Windbreak', 'Cairnfoot', 'Timberline'],
     nameSecond: ['Foothills', 'Approach', 'Slopes', 'Shoulders', 'Rise', 'Drove', 'Skirts', 'Vale', 'Benches', 'Climb'],
     theme: {
+      road: '#4c4838', // FLAGGED (mesh road-tone sweep): drover's track
       floor: '#12140e', grid: '#1c1e15', border: '#5a5e46',
       obstacle: '#3a3d2c', obstacleEdge: '#6a6e50', accent: '#b8cc90',
       wall: '#4a4a38', mud: '#3a3828', tree: '#2a4a34',
@@ -9120,6 +9159,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sheer', 'Howling', 'Broken', 'Hanging', 'Windcut', 'Scarred', 'Vertiginous', 'Boulder-Run', 'Goat-Track', 'White-Knuckle', 'Cloudworn', 'Slipstone'],
     nameSecond: ['Overpass', 'Ledges', 'Scarps', 'Shelves', 'Traverse', 'Switchbacks', 'Crossing', 'Gorge-Way', 'Cornice', 'Spans'],
     theme: {
+      road: '#40444c', // FLAGGED (mesh road-tone sweep): spandeck way
       dayLight: 1.15,
       // THE GORGE IS A DOOR (the pitfall fabric): a lost footing drops one
       // stratum into the mountain's galleries — with full shove credit.
@@ -9292,6 +9332,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Whitecrowned', 'Howling', 'Glacial', 'Snowblind', 'Auroral', 'Icebound', 'Wind-Scoured', 'Frostveiled', 'Silent', 'Cloudpiercing'],
     nameSecond: ['Crown', 'Summit', 'Peak', 'Cap', 'Fields', 'Cornice', 'Heights', 'Roof', 'Shoulder', 'Spire'],
     theme: {
+      road: '#7c92a0', // FLAGGED (mesh road-tone sweep): packed-snow trail
       // THE WHITEOUT: blizzard light is diffuse — few hard casts, and the
       // faint ones washed (the shadow governor's per-zone lever; also what
       // keeps the summit off the vsync knee its snow wash rode).
@@ -9444,6 +9485,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Barecrowned', 'Sunstruck', 'Grey', 'Thornwind', 'Old', 'Wind-Bitten', 'Krummholz', 'Stony', 'Beacon', 'Khan-Held'],
     nameSecond: ['Crown', 'Summit', 'Fell', 'Top', 'Bald', 'Heights', 'Table', 'Dome', 'Seat', 'Plateau'],
     theme: {
+      road: '#4a4638', // FLAGGED (mesh road-tone sweep): scree road
       windchill: 0.75,
       dayLight: 1.2,
       pitfall: { kind: 'descend' },
@@ -9556,6 +9598,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Skyreach', 'Worldcrown', 'Last', 'Highmost', 'Stairhewn', 'Cloudcrown', 'Eagle’s', 'Thunderhead', 'Pilgrim’s', 'Windworn'],
     nameSecond: ['Pinnacle', 'Peak', 'Ascent', 'Spire', 'Summit', 'Stair', 'Aerie', 'Horn', 'Apex', 'Reach'],
     theme: {
+      road: '#464234', // FLAGGED (mesh road-tone sweep): crag track
       windchill: 0.9,
       dayLight: 1.25,
       nightDark: 0.6,
@@ -9644,6 +9687,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Fetid', 'Sunken', 'Miremost', 'Rotbound', 'Stagnant', 'Murkwater', 'Reekwallow', 'Foulreek', 'Dankreed', 'Slumpwater', 'Gnatswarm', 'Greenscum', 'Cloywater', 'Sodden', 'Bogrot', 'Stillreek', 'Mudchurn', 'Drearmoor'],
     nameSecond: ['Marsh', 'Fen', 'Mire', 'Bog', 'Sump', 'Wetland', 'Slough', 'Quag', 'Reeds', 'Morass', 'Lowwater', 'Shallows', 'Mudflat', 'Sink', 'Hollow', 'Mere'],
     theme: {
+      road: '#3c3a24', // FLAGGED (mesh road-tone sweep): reed plank-way
       nightDark: 0.72,
       fog: { banks: [2, 3], kinds: [{ id: 'river_mist', weight: 2 }, { id: 'mist' }] },
       // Cold fen-green (greyer, wetter kin of the mire's olive): drowned
@@ -9782,6 +9826,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Pulsing', 'Writhing', 'Fleshborn', 'Gorged', 'Throbbing', 'Visceral', 'Sinewed', 'Bilegorged', 'Tumorous', 'Marrow-Deep', 'Quivering', 'Membranous', 'Engorged', 'Pus-Slick', 'Heartbound', 'Glistening', 'Distended', 'Wet-Walled'],
     nameSecond: ['Hollow', 'Womb', 'Maw', 'Warren', 'Gullet', 'Cavity', 'Innards', 'Chamber', 'Sac', 'Viscera', 'Atrium', 'Sinew', 'Antrum'],
     theme: {
+      road: '#4c2430', // FLAGGED (mesh road-tone sweep): worn tissue path
       ambientDark: 0.35,
       nightDark: 0.6,
       floor: '#180a10', grid: '#2a141a', border: '#7a3340',
@@ -9876,6 +9921,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       fleshTubeW: [52, 84], fleshLoops: [3, 5],
     },
     theme: {
+      road: '#521f2c', // FLAGGED (mesh road-tone sweep): clotted way
       ambientDark: 0.32,
       nightDark: 0.58,
       floor: '#1c060e', grid: '#2e0c18', border: '#8a3644',
@@ -10000,6 +10046,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       fleshTract: { segments: [4, 6], bulbR: [110, 170], tubeW: [44, 62], doorChance: 0.85, doorDwell: 0.45 },
     },
     theme: {
+      road: '#4a3a16', // FLAGGED (mesh road-tone sweep): bile-stained walk
       ambientDark: 0.4,
       nightDark: 0.65,
       floor: '#120d06', grid: '#241a0c', border: '#8a7a34',
@@ -10133,6 +10180,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       },
     },
     theme: {
+      road: '#43333e', // FLAGGED (mesh road-tone sweep): rheum-worn path
       ambientDark: 0.38,
       nightDark: 0.62,
       floor: '#141016', grid: '#241c26', border: '#8a7a4a',
@@ -10233,6 +10281,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Riven', 'Sunken', 'Pale', 'Windworn', 'Echoing', 'Yawning', 'Cracked', 'Hollowfoot', 'Stonemazed', 'Gulf-Cut', 'Weathered', 'Karstborn'],
     nameSecond: ['Reach', 'Karst', 'Clefts', 'Gulfs', 'Maze', 'Scars', 'Pavement', 'Rents', 'Crossing', 'Steps'],
     theme: {
+      road: '#4e4a3e', // FLAGGED (mesh road-tone sweep): limestone track
       dayLight: 1.25,
       // THE GORGE IS A DOOR (the pitfall fabric): the Reach's chasm maze
       // drops into the karst's own galleries — the cave-richest country
@@ -10394,6 +10443,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Petrified', 'Silent', 'Grey', 'Unfalling', 'Stone-Crowned', 'Lichened', 'Watchful', 'Fossil', 'Breathless', 'Elder', 'Ashen', 'Ringing'],
     nameSecond: ['Weald', 'Wood', 'Stand', 'Grove', 'Forest', 'Boles', 'Crowns', 'Thicket', 'Copse', 'Hall'],
     theme: {
+      road: '#484438', // FLAGGED (mesh road-tone sweep): stone-bole way
       dayLight: 1.05, nightDark: 0.7,
       ambientFx: [{ kind: 'motes', intensity: 0.4, color: '#b8b0a0' }],
       // THE GAZE, pointed at the Karst ladder: watcher stones build
@@ -10503,6 +10553,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Prismatic', 'Shardbound', 'Glittering', 'Faceted', 'Resonant', 'Lucent', 'Refractive', 'Gleaming', 'Crystalline', 'Spectral', 'Glassgrown', 'Iridescent', 'Singing', 'Brilliant', 'Geodebound', 'Glasswrought', 'Sparkling', 'Light-Riven'],
     nameSecond: ['Geode', 'Spires', 'Lattice', 'Vault', 'Reach', 'Hollow', 'Shards', 'Facets', 'Cluster', 'Prism', 'Spindle', 'Fields', 'Cavern', 'Array', 'Bloom', 'Drift'],
     theme: {
+      road: '#2c3a52', // FLAGGED (mesh road-tone sweep): shard-paved way
       ambientDark: 0.3,
       // Crystal country cracks DEEP (the pitfall fabric): chasms descend.
       pitfall: { kind: 'descend' },
@@ -10640,6 +10691,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Erupting', 'Molten', 'Scorched', 'Cinderborn', 'Magmatic', 'Searing', 'Smokebelching', 'Fumarole', 'Ashveiled', 'Pyroclastic', 'Sulfur-Reeked', 'Lavaborn', 'Glowembered', 'Boiling', 'Cracked-Earth', 'Emberspewn', 'Furnace-Hot', 'Blistering'],
     nameSecond: ['Caldera', 'Vents', 'Crucible', 'Flows', 'Furnace', 'Maw', 'Fissure', 'Cinderfield', 'Lavaflats', 'Smokes', 'Pyre', 'Cone', 'Scoria', 'Hollow', 'Burn', 'Vent-Field'],
     theme: {
+      road: '#382318', // FLAGGED (mesh road-tone sweep): basalt cinder path
       dayLight: 1.15,
       heat: 1,
       // A volcanic chasm opens onto the country's own underworks (the
@@ -10717,6 +10769,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Wyrmscoured', 'Coilgraven', 'Scalefall', 'Slagbound', 'Emberscale', 'Wyrmshadow', 'Greatcoil', 'Hoardash', 'Kilnwarm', 'Scorchscale', 'Undercoil', 'Moltbound'],
     nameSecond: ['Wyrmfields', 'Coilings', 'Slagfields', 'Scalebeds', 'Kilnlands', 'Wyrmwake', 'Cinderbeds', 'Coilfields', 'Moltfields', 'Broodground'],
     theme: {
+      road: '#3c2a1c', // FLAGGED (mesh road-tone sweep): scale-worn track
       dayLight: 1.05,
       heat: 1,
       ambientFx: [{ kind: 'heatHaze', intensity: 0.35, color: '#ffc090' }],
@@ -10785,6 +10838,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sporebound', 'Mycelial', 'Fruiting', 'Rotcap', 'Luminous', 'Creeping', 'Hyphal', 'Glowcap', 'Mouldgrown', 'Spore-Choked', 'Fungal', 'Damprot', 'Capshadow', 'Bloomrot', 'Pulsefungus', 'Veilspore', 'Mushroomed', 'Softrot'],
     nameSecond: ['Bloom', 'Hollow', 'Warren', 'Thicket', 'Grotto', 'Spread', 'Flush', 'Tangle', 'Sprawl', 'Mat', 'Patch', 'Colony', 'Reach', 'Mire', 'Beds', 'Veil'],
     theme: {
+      road: '#3e2f52', // FLAGGED (mesh road-tone sweep): spore-trodden way
       ambientDark: 0.25,
       nightDark: 0.72,
       floor: '#150c1c', grid: '#221432', border: '#6a4a8a',
@@ -10859,6 +10913,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunlit', 'Windswept', 'Verdant', 'Rolling', 'Emerald', 'Goldengrass', 'Wildflower', 'Open', 'Boundless', 'Whispergrass', 'Far-Reaching', 'Sunwashed', 'Breezy', 'Tallgrass', 'Endless', 'Sweeping', 'Lark-Sung', 'Greenswept'],
     nameSecond: ['Fields', 'Meadows', 'Expanse', 'Greens', 'Pastures', 'Lowlands', 'Reach', 'Plains', 'Prairie', 'Steppe', 'Sprawl', 'Veldt', 'Downs', 'Grasslands', 'Range', 'Heath'],
     theme: {
+      road: '#4e4429', // FLAGGED (mesh road-tone sweep): sward cart-track
       floor: '#16260f', grid: '#1f3416', border: '#3f6a28',
       obstacle: '#4a4438', obstacleEdge: '#6e6450', accent: '#bfe878',
       mud: '#3a3320', grass: '#4f8c34', wall: '#1c3312',

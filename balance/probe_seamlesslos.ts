@@ -50,9 +50,12 @@
 // ---------------------------------------------------------------------------
 
 import { vec } from '../src/core/math';
-import { borderAgreedPoint } from '../src/world/cells';
+import { borderAgreedPoint, foldCells } from '../src/world/cells';
+import { mapToPx } from '../src/world/coords';
 import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
+import { getTissueSampler } from '../src/world/seamless';
+import { massDressOf } from '../src/world/tissue';
 import { castRay, LOS_CFG } from '../src/engine/los';
 import { blocksProjectiles, blocksSightOf, type Doodad } from '../src/engine/levelgen';
 import { coordDist } from '../src/world/coords';
@@ -338,10 +341,18 @@ check('B3 a neighbor\'s blocksShot GRID cell stops the routed ray (kind \'region
 // --- RIG C: THE TISSUE -------------------------------------------------------
 
 {
-  // A PURE-TISSUE segment: both endpoints beyond the rim, every sample in
+  // An OPEN-TISSUE segment: both endpoints beyond the rim, every sample in
   // NO member's cell (inflated by the doodad fold's own reach so a rim
-  // body's poking surface can't confound the pin) — the between itself is
-  // what this rig reads, not the active zone's own rim dress.
+  // body's poking surface can't confound the pin) AND off the SOLID FIELD
+  // — M2 wave 9 RE-STATED this rig's law under her occlusion ruling: the
+  // between's impassable mass now BLOCKS rays at its drawn surface (RIG G
+  // owns that half), so the wave-7 "no owner = open sky" pin narrows to
+  // its true core — OPEN tissue (the road corridors, the mouth aprons, the
+  // clearway verge) never blocks, and the border never blocks as a LINE.
+  const dressC = massDressOf(getTissueSampler());
+  const fieldSeed = ws.sim.biomeField.fieldSeed >>> 0;
+  const solidC = (wx: number, wy: number): boolean =>
+    !!dressC && typeof dressC.solidAt === 'function' && dressC.solidAt(wx, wy, fieldSeed);
   const cells = ws.seamlessRegions
     .map(s => ws.seamlessMints.get(s.zoneId)?.cell)
     .filter((c): c is NonNullable<typeof c> => !!c);
@@ -353,14 +364,17 @@ check('B3 a neighbor\'s blocksShot GRID cell stops the routed ray (kind \'region
       const wx = x + seatA.originPx.x, wy = y + seatA.originPx.y;
       if (cells.some(c => wx >= c.x0 - pad && wx <= c.x1 + pad
         && wy >= c.y0 - pad && wy <= c.y1 + pad)) return false;
+      if (solidC(wx, wy)) return false; // the solid between is RIG G's lane
     }
     return true;
   };
   // Lattice hunt: any anchor in the ring band around the arena whose
-  // outward segment (away from the arena center) stays clear — the wedges
-  // between cells are tissue even when the spokes all graze somebody.
+  // outward segment (away from the arena center) stays clear — then the
+  // STRIP-CORRIDOR fallback: a non-abutting linked pair's mouth-to-mouth
+  // way is open tissue BY CONSTRUCTION (road ribbon through the strip),
+  // and a both-endpoints-out ray anywhere on the web still routes.
   let tissueLine: { from: { x: number; y: number }; to: { x: number; y: number } } | null = null;
-  let tissuePad = 0;
+  let tissueHow = '';
   for (const pad of [LOS_CFG.crossBorder.ownerPad + 48, 48]) {
     for (let gy = -1200; gy <= h + 1200 && !tissueLine; gy += 160) {
       for (let gx = -1200; gx <= w + 1200; gx += 160) {
@@ -369,17 +383,62 @@ check('B3 a neighbor\'s blocksShot GRID cell stops the routed ray (kind \'region
         const from = { x: gx, y: gy };
         const to = { x: gx + (ux / ul) * 420, y: gy + (uy / ul) * 420 };
         if (insideArena(from)) continue;
-        if (segClear(from, to, pad)) { tissueLine = { from, to }; tissuePad = pad; break; }
+        if (segClear(from, to, pad)) { tissueLine = { from, to }; tissueHow = `lattice, pad ${pad}px`; break; }
       }
     }
     if (tissueLine) break;
   }
-  check('C0 a pure-tissue segment clear of every member cell exists', !!tissueLine,
-    tissueLine ? `clearance pad ${tissuePad}px` : '');
+  if (!tissueLine) {
+    // The strip class: hunt any eligible non-abutting linked pair; its
+    // corridor's strip piece is open tissue end to end (probe_tissue M2's
+    // own walked law), so a segment along it — nudged inside the mouths —
+    // is the honest open-tissue witness far from the arena.
+    // Cells come from the probe's own fold over the partition's surface
+    // roster (the probe_tissue twin — far pairs hold no mint to read from).
+    const foldC = foldCells(Object.values(ws.zoneMap)
+      .filter(z => (z.dimension ?? 'surface') === 'surface' && z.caveDepth == null && !z.pocket && !z.floating)
+      .map(z => ({ id: z.id, ...mapToPx(z.map) })));
+    outer: for (const a of Object.values(ws.zoneMap)) {
+      if (!ws.seamlessResidentEligible(a)) continue;
+      for (const e of a.exits) {
+        if (e.to === '?' || e.crossDim || a.id >= e.to) continue;
+        const b = ws.zoneMap[e.to];
+        if (!b || !ws.seamlessResidentEligible(b)) continue;
+        const ca = foldC.get(a.id) ?? null;
+        const cb = foldC.get(b.id) ?? null;
+        if (!ca || !cb || borderAgreedPoint(ca, cb)) continue;
+        // both door mouths via the def-side formula (the tissue capture's own)
+        const mouthOf = (z: ZoneDef, destId: string, cell: { x0: number; y0: number; x1: number; y1: number }): { x: number; y: number } | null => {
+          const ex = z.exits.find(x2 => x2.to === destId && !x2.crossDim);
+          if (!ex) return null;
+          const cw = cell.x1 - cell.x0, ch = cell.y1 - cell.y0;
+          const t = ex.at ?? 0.5;
+          const sx = ex.side === 'w' ? 90 : ex.side === 'e' ? cw - 90 : Math.min(cw - 90, Math.max(90, cw * t));
+          const sy = ex.side === 'n' ? 90 : ex.side === 's' ? ch - 90 : Math.min(ch - 90, Math.max(90, ch * t));
+          return {
+            x: cell.x0 + (ex.side === 'w' ? 0 : ex.side === 'e' ? cw : sx),
+            y: cell.y0 + (ex.side === 'n' ? 0 : ex.side === 's' ? ch : sy),
+          };
+        };
+        const ma = mouthOf(a, b.id, ca), mb = mouthOf(b, a.id, cb);
+        if (!ma || !mb) continue;
+        const dx = mb.x - ma.x, dy = mb.y - ma.y;
+        const len = Math.hypot(dx, dy);
+        if (len < 140) continue;
+        const t0 = 40 / len, t1 = 1 - 40 / len;
+        const from = aL(ma.x + dx * t0, ma.y + dy * t0);
+        const to = aL(ma.x + dx * t1, ma.y + dy * t1);
+        if (insideArena(from) || insideArena(to)) continue;
+        if (segClear(from, to, 0)) { tissueLine = { from, to }; tissueHow = `strip ${a.id}↔${b.id}`; break outer; }
+      }
+    }
+  }
+  check('C0 an OPEN-tissue segment clear of every member cell exists', !!tissueLine,
+    tissueLine ? tissueHow : 'VACUOUS-adjacent: no open tissue found in the window (all-abutting web)');
   if (tissueLine) {
     const openShot = castRay(ws, tissueLine.from, tissueLine.to, 'shot') === null;
     const openSight = castRay(ws, tissueLine.from, tissueLine.to, 'sight') === null;
-    check('C1 the tissue reads OPEN to both ray families (no owner = open sky)',
+    check('C1 OPEN tissue reads OPEN to both ray families (the border never blocks as a line)',
       openShot && openSight, `shot ${openShot}, sight ${openSight}`);
     LOS_CFG.crossBorder.shot = false;
     LOS_CFG.crossBorder.sight = false;
@@ -631,6 +690,168 @@ if (priest && lockedAtMouth && mouthSeats) {
   LOS_CFG.crossBorder.sight = true;
   check('F2 a seamless world\'s interior rays answer identically with the dials off (the both-inside early reject)',
     inOn === inOff);
+}
+
+// --- RIG G: THE SOLID BETWEEN (M2 wave 9 — her occlusion ruling) -------------
+// Un-owned tissue whose SOLID FIELD answers true blocks BOTH channels at its
+// drawn lattice surface (the same carried field the tissue painter fills as
+// impassable mass — drawn == tested through one read); the per-channel
+// solid dials restore the wave-7 tissue-open posture; an elevated ray sails
+// over the between's ground-story scrub (the doodad band law).
+
+interface SolidRayFind {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  oracleD: number;
+  hit: NonNullable<ReturnType<typeof castRay>>;
+}
+let solidFind: SolidRayFind | null = null;
+{
+  const dressG = massDressOf(getTissueSampler());
+  const fieldSeedG = ws.sim.biomeField.fieldSeed >>> 0;
+  check('G0 the installed sampler carries the solid field',
+    !!dressG && typeof dressG.solidAt === 'function');
+  if (dressG && typeof dressG.solidAt === 'function') {
+    const cellsG = ws.seamlessRegions
+      .map(s => ws.seamlessMints.get(s.zoneId)?.cell)
+      .filter((c): c is NonNullable<typeof c> => !!c);
+    const ownedG = (wx: number, wy: number): boolean =>
+      cellsG.some(c => wx >= c.x0 && wx <= c.x1 && wy >= c.y0 && wy <= c.y1);
+    // The hunt: PURE-TISSUE rays — an open-tissue anchor aimed into
+    // adjacent solid tissue, every fine-march sample out-of-arena and in
+    // no member's cell (the active rim's own dress can never confound the
+    // pin), accepted only when castRay AGREES within the march + lattice
+    // grain — the drawn==tested pin IS the hunt.
+    const w = ws.arena.w, h = ws.arena.h;
+    const anchors: Array<{ x: number; y: number }> = [];
+    const targets: Array<{ x: number; y: number }> = [];
+    for (let gy = -1400; gy <= h + 1400; gy += 120) {
+      for (let gx = -1400; gx <= w + 1400; gx += 120) {
+        if (insideArena({ x: gx, y: gy })) continue;
+        const wx = gx + seatA.originPx.x, wy = gy + seatA.originPx.y;
+        if (ownedG(wx, wy)) continue;
+        if (dressG.solidAt(wx, wy, fieldSeedG)) {
+          if (targets.length < 400) targets.push({ x: gx, y: gy });
+        } else if (anchors.length < 400) {
+          anchors.push({ x: gx, y: gy });
+        }
+      }
+    }
+    // Two passes: prefer a NEAR boundary (oracleD ≤ 300 — rig H's flight
+    // must out-range it decisively), then any.
+    hunt: for (const maxOracle of [300, 1e9]) {
+      for (const from of anchors) {
+        for (const tg of targets) {
+          const dx = tg.x - from.x, dy = tg.y - from.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < 60 || dist > 520) continue;
+          const ux = dx / dist, uy = dy / dist;
+          let oracleD = -1, pure = true;
+          for (let d = 6; d <= dist + 140; d += 6) {
+            const px2 = from.x + ux * d, py2 = from.y + uy * d;
+            if (insideArena({ x: px2, y: py2 })) { pure = false; break; }
+            const wx = px2 + seatA.originPx.x, wy = py2 + seatA.originPx.y;
+            if (ownedG(wx, wy)) { pure = false; break; }
+            if (oracleD < 0 && dressG.solidAt(wx, wy, fieldSeedG)) oracleD = d;
+          }
+          if (!pure || oracleD < 0 || oracleD > maxOracle) continue;
+          const to = { x: from.x + ux * (oracleD + 140), y: from.y + uy * (oracleD + 140) };
+          const hit = castRay(ws, from, to, 'shot');
+          if (!hit || hit.kind !== 'region') continue;
+          if (Math.abs(hit.d - oracleD) > 24) continue;
+          solidFind = { from, to, oracleD, hit };
+          break hunt;
+        }
+      }
+    }
+    check('G1 a ray dies at the solid between\'s drawn surface (kind \'region\', at the field boundary)',
+      !!solidFind,
+      solidFind ? `hit d ${solidFind.hit.d.toFixed(1)} vs oracle ${solidFind.oracleD} (±24)`
+        : 'no solid-first ray found around this arena (mouth-riddled rim?)');
+    if (solidFind) {
+      const sightHit = castRay(ws, solidFind.from, solidFind.to, 'sight');
+      check('G1b the sight channel dies on the same line at the same surface',
+        !!sightHit && sightHit.kind === 'region' && Math.abs(sightHit.d - solidFind.hit.d) <= 16,
+        sightHit ? `sight d ${sightHit.d.toFixed(1)}` : 'sight stayed open');
+      check('G2 the hold-fire read agrees (lineOfFire refuses the solid line)',
+        !ws.lineOfFire(solidFind.from, solidFind.to));
+      LOS_CFG.crossBorder.solidShot = false;
+      const openShot = castRay(ws, solidFind.from, solidFind.to, 'shot') === null;
+      const fireOpen = ws.lineOfFire(solidFind.from, solidFind.to);
+      LOS_CFG.crossBorder.solidShot = true;
+      LOS_CFG.crossBorder.solidSight = false;
+      const openSight = castRay(ws, solidFind.from, solidFind.to, 'sight') === null;
+      LOS_CFG.crossBorder.solidSight = true;
+      check('G3 the per-channel solid dials restore the tissue-open posture (the wave-7 A/B)',
+        openShot && fireOpen && openSight,
+        `shot ${openShot}, fire ${fireOpen}, sight ${openSight}`);
+      const elevated = castRay(ws, solidFind.from, solidFind.to, 'shot',
+        { from: 1 + LOS_CFG.elev.eye, to: 1 + LOS_CFG.elev.eye });
+      check('G4 a story-1 line clears the between\'s ground scrub (the doodad band law)',
+        elevated === null, elevated ? `hit d ${elevated.d.toFixed(1)}` : '');
+    }
+  }
+}
+
+// --- RIG H: THE FLIGHT INTO THE BETWEEN (the DEFERRED world.ts consult) ------
+// The projectile sweep's tissue verdict is a world.ts hunk (the masonry-gate
+// precedent — the coordinator lands it): a tier-0 bolt into SOLID between
+// must die at the same drawn surface castRay answers. This rig ARMS ITSELF:
+// while the consult is un-landed the bolt lawfully SAILS past the boundary
+// (reported PENDING, not red); once it lands, the pin demands death at
+// castRay's own distance — and a death anywhere ELSE fails either way.
+{
+  if (solidFind) {
+    const gunner = ws.createMonster('plaguefather', 3, 'enemy');
+    ws.actors.push(gunner);
+    const kitH = gunner.skills.find(s => s?.def.id === 'venom_bolt') ?? gunner.skills.find(s => !!s);
+    if (kitH) {
+      const fly = (): { gone: boolean; deadD: number } => {
+        const before = ws.projectiles.length;
+        const angH = Math.atan2(solidFind!.to.y - solidFind!.from.y, solidFind!.to.x - solidFind!.from.x);
+        ws.spawnProjectile(gunner, kitH, vec(solidFind!.from.x, solidFind!.from.y), angH);
+        const bolt = ws.projectiles.length > before ? ws.projectiles[ws.projectiles.length - 1] : null;
+        let last = bolt ? { x: bolt.pos.x, y: bolt.pos.y } : null;
+        let beats = 0;
+        while (bolt && ws.projectiles.includes(bolt) && beats < 80) {
+          last = { x: bolt.pos.x, y: bolt.pos.y };
+          for (const a of ws.actors) updateAI(a, ws, DT);
+          ws.update(DT);
+          beats++;
+        }
+        return {
+          gone: !!bolt && !ws.projectiles.includes(bolt),
+          deadD: last ? Math.hypot(last.x - solidFind!.from.x, last.y - solidFind!.from.y) : NaN,
+        };
+      };
+      // THE CONTROL FLIGHT disambiguates: with the solid dial OFF the same
+      // line must fly FARTHER (range/other deaths land in the same place
+      // both ways — only the landed consult moves with the dial). While
+      // the world.ts consult is un-landed, on ≈ off and the rig reports
+      // PENDING instead of red; a dial-insensitive death AT the boundary
+      // (a range coincidence) is PENDING too, never a false LANDED.
+      const on = fly();
+      LOS_CFG.crossBorder.solidShot = false;
+      const off = fly();
+      LOS_CFG.crossBorder.solidShot = true;
+      const dialMoved = off.deadD > on.deadD + 60;
+      const landedDeath = on.gone && Math.abs(on.deadD - solidFind.hit.d) <= 34 && dialMoved;
+      const pendingSail = !dialMoved && Math.abs(on.deadD - off.deadD) <= 40;
+      check('H1 the bolt into solid between dies at castRay\'s surface — or flies dial-blind while the world.ts consult is PENDING',
+        landedDeath || pendingSail,
+        landedDeath
+          ? `LANDED: died at ${on.deadD.toFixed(1)} vs ray ${solidFind.hit.d.toFixed(1)}; dial-off flew to ${off.deadD.toFixed(1)}`
+          : pendingSail
+            ? `PENDING the coordinator's world.ts consult — dial-blind flight to ${on.deadD.toFixed(1)} (ray says ${solidFind.hit.d.toFixed(1)})`
+            : `on ${on.deadD.toFixed(1)} / off ${off.deadD.toFixed(1)} vs ray ${solidFind.hit.d.toFixed(1)} — neither landed nor a lawful pending`);
+    } else {
+      check('H1 the bolt into solid between dies at castRay\'s surface — or flies dial-blind while the world.ts consult is PENDING',
+        false, 'no kit instance on the staged gunner');
+    }
+  } else {
+    check('H1 the bolt into solid between dies at castRay\'s surface — or flies dial-blind while the world.ts consult is PENDING',
+      true, 'VACUOUS: no solid-first ray stood (G1)');
+  }
 }
 
 console.log(fails === 0 ? '\nprobe_seamlesslos: ALL GREEN' : `\nprobe_seamlesslos: ${fails} FAILURE(S)`);

@@ -80,7 +80,8 @@ import type { World } from '../engine/world';
 import type { ZoneDef } from '../data/zones';
 import { Rng } from '../core/rng';
 import { PORTAL_EDGE_INSET } from '../engine/worldgen';
-import { MASSDRESS_CFG, ROADDRESS_CFG, ROAD_TONE_DEFAULT, WAYSIDE_GLYPHS, massKitFor } from '../data/enclosure';
+import { MASSDRESS_CFG, ROADDRESS_CFG, ROAD_TONE_DEFAULT, WAYSIDE_GLYPHS,
+  massClassFor, massDensityFor, massKitFor } from '../data/enclosure';
 import { PARTITION_CFG, SEAMLESS_CFG, type CellRect, type TissueSample, type TissueSampler } from './seamless';
 import { borderAgreedPoint, foldCells, type CellSeat } from './cells';
 import { mapToPx, pxToMap } from './coords';
@@ -102,6 +103,13 @@ export const TISSUE_CFG = {
   slopeStepUnits: 1,
   slopeMax: 0.004,
   fallbackTone: '#3d4351',
+  /** THE SOLID FIELD's lattice grain (px) — M2 wave 9 (THE MESH): the one
+   *  cell size the between's OCCLUSION truth is quantized at. It is the
+   *  tissue painter's own sample lattice (SEAMLESS_DRAW_CFG.latticePx binds
+   *  to it), so the ray consult, the veil march, the projectile sweep and
+   *  the drawn mass tone all read ONE field at ONE grain — drawn == tested
+   *  BY CONSTRUCTION, at the walk grid's own 30px class. */
+  solidCellPx: 30,
 } as const;
 
 /** One road segment of a linked pair's ROUTED way, in world px — the
@@ -216,6 +224,13 @@ export function buildTissueSampler(world: World): TissueSampler {
    *  parsed once (rgb triples for the weight fold). */
   const cellRoadRgb = new Float64Array(nCells * 3);
   const roadDefaultRgb = parseHex(ROAD_TONE_DEFAULT)!;
+  /** THE GRAMMAR CAPTURE (M2 wave 9, THE ZONE-EDGE GRADIENT): each cell's
+   *  own ground-language inks — the zone theme's FLOOR (the ground its bake
+   *  actually paints, for the baked edge-fade apron) and up to two organic
+   *  flecking inks (grass/tree + mud/sand — the wash the zone's own ground
+   *  texture speaks in). Seed-independent minted data, captured once. */
+  const floorByZone = new Map<string, string>();
+  const inksByZone = new Map<string, readonly string[]>();
   for (let i = 0; i < nCells; i++) {
     const z = cellZones[i];
     const c = fold.get(z.id)!;
@@ -226,6 +241,15 @@ export function buildTissueSampler(world: World): TissueSampler {
     cellTileset[i] = z.tileset;
     const rr = (z.theme?.road && parseHex(z.theme.road)) || roadDefaultRgb;
     cellRoadRgb[i * 3] = rr[0]; cellRoadRgb[i * 3 + 1] = rr[1]; cellRoadRgb[i * 3 + 2] = rr[2];
+    const th = z.theme;
+    if (th) {
+      if (th.floor && parseHex(th.floor)) floorByZone.set(z.id, th.floor);
+      const inks: string[] = [];
+      const a = th.grass ?? th.tree, b = th.mud ?? th.sand;
+      if (a && parseHex(a)) inks.push(a);
+      if (b && parseHex(b)) inks.push(b);
+      if (inks.length) inksByZone.set(z.id, inks);
+    }
   }
 
   // --- THE ROUTED WAY (M2 wave 8b — her feel report: "the transitions don't
@@ -316,12 +340,39 @@ export function buildTissueSampler(world: World): TissueSampler {
   // ground keeps its DOOR — no crossing, no apron; the town's border stays
   // solid). Pure capture — graph data + the fold, no rng.
   const aprons: Array<{ x: number; y: number }> = [];
+  // THE ZONE-SIDE WAY (M2 wave 9, THE MESH): one drawn-road STUB per crossing
+  // end, pointing INWARD from the crossing point along the carve's own
+  // perpendicular — the routed ribbon stops at a resident cell's edge because
+  // the zone's bake owns its pixels, so the way read as ENDING at the border
+  // (the routed-ribbon pass's coda 4b); the painter overdraws these stubs
+  // over the zone grounds so the carved in-zone corridor WEARS its road.
+  // Abutting pairs: two stubs at the agreed point (one into each cell, along
+  // the shared border's normal — the direction seamlessCarveMouths carves).
+  // Non-abutting pairs: one stub per door mouth, pointing mouth → seat
+  // (perpendicular BY the seat formula — doorWayFor's own geometry). Pure
+  // capture, no rng; eligibility mirrors the routing's own gate (towns keep
+  // their doors — no stub pretends a way into sealed ground).
+  const wayStubs: WayStub[] = [];
   for (const [za, zb] of segPairs) {
     if (!world.seamlessResidentEligible(za) || !world.seamlessResidentEligible(zb)) continue;
     const ca = fold.get(za.id), cb = fold.get(zb.id);
     if (!ca || !cb) continue;
     const p = borderAgreedPoint(ca, cb);
-    if (p) aprons.push({ x: p.x, y: p.y });
+    if (p) {
+      aprons.push({ x: p.x, y: p.y });
+      const n = p.side === 'e' ? { x: 1, y: 0 } : p.side === 'w' ? { x: -1, y: 0 }
+        : p.side === 's' ? { x: 0, y: 1 } : { x: 0, y: -1 };
+      wayStubs.push({ x: p.x, y: p.y, nx: -n.x, ny: -n.y }); // into A
+      wayStubs.push({ x: p.x, y: p.y, nx: n.x, ny: n.y });   // into B
+      continue;
+    }
+    for (const w of [doorWayFor(za, zb.id, ca), doorWayFor(zb, za.id, cb)]) {
+      if (!w) continue;
+      const dx = w.seat.x - w.mouth.x, dy = w.seat.y - w.mouth.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-6) continue;
+      wayStubs.push({ x: w.mouth.x, y: w.mouth.y, nx: dx / len, ny: dy / len });
+    }
   }
 
   // The per-seed resolved-tone memo (rgb triples; almost always one seed a
@@ -453,6 +504,47 @@ export function buildTissueSampler(world: World): TissueSampler {
     if (roadWithin(x, y, pad + MASSDRESS_CFG.shoulderPx)) return false;
     if (apronWithin(x, y, PARTITION_CFG.mouthApronPx + MASSDRESS_CFG.shoulderPx)) return false;
     return true;
+  };
+  // --- THE SOLID FIELD (M2 wave 9, THE MESH — her ruling: "what isn't
+  // traversable wouldn't actually be viewable either"): the between's ONE
+  // occlusion truth — massAt quantized to the draw lattice's own cell
+  // (solidCellPx), sampled at the cell CENTER that owns the point. The
+  // tissue painter's pass-1 mass verdict samples the SAME centers, so the
+  // country that draws as solid mass is EXACTLY the country that stops rays,
+  // flights and the veil — drawn == tested at one grain, by construction.
+  // The clearway shoulder and the mouth aprons are massAt-false, so the
+  // corridor plus its verge stay open sky and the walls START where the
+  // packed bodies start. Memoized per (seed, cell) — the invisible-cache
+  // law holds (pure re-derivation on any miss); the ray consult, the veil
+  // march and the painter all warm ONE memo through the carried read.
+  let solidSeedRef = -1;
+  const solidMemo = new Map<number, boolean>();
+  const solidAt = (x: number, y: number, worldSeed: number): boolean => {
+    const seed = worldSeed >>> 0;
+    const L = TISSUE_CFG.solidCellPx;
+    const i = Math.floor(x / L), j = Math.floor(y / L);
+    const cx = (i + 0.5) * L, cy = (j + 0.5) * L;
+    if (i < -8192 || i >= 8192 || j < -8192 || j >= 8192) return massAt(cx, cy, seed);
+    if (seed !== solidSeedRef) { solidMemo.clear(); solidSeedRef = seed; }
+    const key = (i + 8192) * 16384 + (j + 8192);
+    const hit = solidMemo.get(key);
+    if (hit !== undefined) return hit;
+    if (solidMemo.size > 150000) solidMemo.clear(); // session bound; re-warm is cheap
+    const v = massAt(cx, cy, seed);
+    solidMemo.set(key, v);
+    return v;
+  };
+  /** THE NEAREST CELL (the edge-fade apron's read): the closest captured
+   *  cell at a point with its rect distance (0 inside) — the gradient's own
+   *  anchor. Ties break by lowest index (canonical — capture order is the
+   *  zoneMap's own, stable per graph). */
+  const nearestCellAt = (x: number, y: number): { zoneId: string; tileset?: string; d: number } | null => {
+    let bi = -1, bd = Infinity;
+    for (let i = 0; i < nCells; i++) {
+      const d = rectDistToCell(i, x, y);
+      if (d < bd) { bd = d; bi = i; }
+    }
+    return bi < 0 ? null : { zoneId: cellIds[bi], tileset: cellTileset[bi], d: bd };
   };
   /** Signed hillshade in [-1, 1] under THE ONE SUN (MASSDRESS_CFG.lightDir):
    *  >0 = the ground slopes up toward the light (lit face), <0 = away
@@ -589,9 +681,15 @@ export function buildTissueSampler(world: World): TissueSampler {
   (sampler as DressedTissueSampler).massDress = {
     massAt, landAt, shadeAt, flanksAt,
     roadSegsForChunk, roadToneAt, massSansRoadAt, shoulderSeatAt,
+    solidAt, nearestCellAt, wayStubs,
+    floorToneOf: (zoneId: string) => floorByZone.get(zoneId) ?? null,
+    grammarInksOf: (zoneId: string) => inksByZone.get(zoneId) ?? EMPTY_INKS,
   };
   return sampler;
 }
+
+/** The ink-less cell's shared empty answer (identity-stable). */
+const EMPTY_INKS: readonly string[] = Object.freeze([]);
 
 /** The road-less chunk's shared empty answer (identity-stable). */
 const EMPTY_SEGS: readonly TissueRoadSeg[] = Object.freeze([]);
@@ -642,7 +740,31 @@ export interface MassDressRead {
    *  buildTissueSampler — off ribbon and aprons, outside cells, in THE ONE
    *  SHOULDER the mass stamps stop at). */
   shoulderSeatAt(x: number, y: number, worldSeed: number, bodyR: number): boolean;
+  // --- THE MESH READS (M2 wave 9) — the solid field + the gradient's own. --
+  /** THE SOLID FIELD: massAt quantized at the draw lattice's cell centers
+   *  (TISSUE_CFG.solidCellPx) — the between's ONE occlusion truth, consulted
+   *  by the ray march, the veil, the projectile sweep and the painter alike
+   *  (drawn == tested at one grain). Memoized; pure per (capture, seed). */
+  solidAt(x: number, y: number, worldSeed: number): boolean;
+  /** The nearest captured cell + its rect distance (0 inside) — the
+   *  zone-edge gradient's anchor. Null only on a cell-less capture. */
+  nearestCellAt(x: number, y: number): { zoneId: string; tileset?: string; d: number } | null;
+  /** THE ZONE-SIDE WAY stubs: one row per crossing end (agreed point or
+   *  door mouth), unit normal pointing INWARD along the carve's own
+   *  perpendicular — the painter overdraws the road's in-zone continuation
+   *  from these (drawn == the grid's carved corridor direction). */
+  wayStubs: readonly WayStub[];
+  /** The zone theme's own ground fill at a cell (the edge-fade apron's
+   *  target color), or null for a theme-less def. */
+  floorToneOf(zoneId: string): string | null;
+  /** The zone theme's organic flecking inks (grass/tree, mud/sand) — the
+   *  grammar speckle's palette; empty for a theme-less def. */
+  grammarInksOf(zoneId: string): readonly string[];
 }
+
+/** One zone-side way stub (see MassDressRead.wayStubs): world-px crossing
+ *  point + the unit inward normal. Length is the painter's dial. */
+export interface WayStub { x: number; y: number; nx: number; ny: number }
 
 /** A sampler that carries the dress read (buildTissueSampler's product). */
 export interface DressedTissueSampler extends TissueSampler { massDress: MassDressRead }
@@ -691,9 +813,27 @@ export function massStampSeatsForChunk(dress: MassDressRead, worldSeed: number,
     const r = new Rng((base + Math.imul(i + 1, 0xc2b2ae35)) >>> 0);
     const x = cx * C + r.next() * C;
     const y = cy * C + r.next() * C;
+    // THE DENSITY ROLL (M2 wave 9) draws in fixed ledger position — before
+    // any test, so the attempt's later draws never shift as gates evolve.
+    const acceptRoll = r.next();
     if (!dress.massAt(x, y, seed)) continue;
+    // THE SOLID GATE (M2 wave 9): a body stands only where the SOLID FIELD
+    // answers true at the seat's own lattice cell — a drawn trunk can never
+    // stand on ray-open ground (drawn == tested at body grain; the boundary
+    // thins by at most half a lattice cell, an honest verge).
+    if (!dress.solidAt(x, y, seed)) continue;
     const flanks = dress.flanksAt(x, y, seed);
     const flank = flanks.length ? r.weighted(flanks) : null;
+    // THE DENSE FILL's acceptance: the flanks' own authored densities under
+    // the ONE WEIGHT LAW — jungle packs, desert breathes, a wedge blends.
+    let density = 0, wSum = 0;
+    if (flanks.length) {
+      for (const f of flanks) { density += f.weight * massDensityFor(f.tileset); wSum += f.weight; }
+      density /= wSum;
+    } else {
+      density = massDensityFor(undefined);
+    }
+    if (acceptRoll >= density) continue;
     const kit = massKitFor(flank?.tileset);
     const row = r.weighted(kit);
     seats.push({
@@ -706,6 +846,136 @@ export function massStampSeatsForChunk(dress: MassDressRead, worldSeed: number,
   }
   return seats;
 }
+
+/** One SOLID FORM the mass painter will draw (M2 wave 9): a large mass body
+ *  — a crag mound or a hedge bank — under the stamp scatter, giving the
+ *  between large-scale structure. `cls` picks the texture family
+ *  (massClassFor — the flank's own dominant class). */
+export interface SolidForm {
+  x: number;
+  y: number;
+  r: number;
+  cls: 'grown' | 'stone';
+  varSeed: number;
+}
+
+/**
+ * THE SOLID FORMS' seat derivation (M2 wave 9) — massStampSeatsForChunk's
+ * large-body sibling on its OWN salted stream (formSalt — densifying one
+ * lane never re-rolls the other): per chunk, up to formAttempts large forms,
+ * each accepted only where its WHOLE footprint stands on dressable mass
+ * (center + a mid ring + a rim ring all massAt — a form can never overhang
+ * the corridor, the verge, a cell or the sea) and its seat cell is SOLID,
+ * then rolled against the flanks' blended density like the stamps. The form
+ * is DRAWN texture on the field, never its own occluder — the SOLID FIELD
+ * remains the one truth the rays consult; forms only make it read as walls.
+ * Deterministic per (dress capture, worldSeed, cx, cy); DOM-free.
+ */
+export function solidFormsForChunk(dress: MassDressRead, worldSeed: number,
+  cx: number, cy: number): SolidForm[] {
+  const seed = worldSeed >>> 0;
+  const C = SEAMLESS_CFG.chunkPx;
+  const base = (Math.imul(cx, 0x9e3779b1) ^ Math.imul(cy, 0x85ebca6b) ^ seed ^ MASSDRESS_CFG.formSalt) >>> 0;
+  const forms: SolidForm[] = [];
+  for (let i = 0; i < MASSDRESS_CFG.formAttempts; i++) {
+    const r = new Rng((base + Math.imul(i + 1, 0xc2b2ae35)) >>> 0);
+    const x = cx * C + r.next() * C;
+    const y = cy * C + r.next() * C;
+    const fr = r.range(MASSDRESS_CFG.formR[0], MASSDRESS_CFG.formR[1]);
+    const acceptRoll = r.next();
+    if (!dress.massAt(x, y, seed) || !dress.solidAt(x, y, seed)) continue;
+    // The footprint test: rim ring at 0.85r (8 spokes) + mid ring at 0.45r
+    // (4 spokes) all on dressable mass — the excluded shapes (cells, ribbon
+    // capsules, apron discs) are convex, so a hole poking past the sampled
+    // spokes is bounded by the spoke gap (< the corridor's own width).
+    let clear = true;
+    for (let k = 0; k < 8 && clear; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      if (!dress.massAt(x + Math.cos(a) * fr * 0.85, y + Math.sin(a) * fr * 0.85, seed)) clear = false;
+    }
+    for (let k = 0; k < 4 && clear; k++) {
+      const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
+      if (!dress.massAt(x + Math.cos(a) * fr * 0.45, y + Math.sin(a) * fr * 0.45, seed)) clear = false;
+    }
+    if (!clear) continue;
+    const flanks = dress.flanksAt(x, y, seed);
+    const flank = flanks.length ? r.weighted(flanks) : null;
+    let density = 0, wSum = 0;
+    if (flanks.length) {
+      for (const f of flanks) { density += f.weight * massDensityFor(f.tileset); wSum += f.weight; }
+      density /= wSum;
+    } else {
+      density = massDensityFor(undefined);
+    }
+    if (acceptRoll >= density) continue;
+    forms.push({
+      x, y, r: fr,
+      cls: massClassFor(flank?.tileset),
+      varSeed: Math.floor(r.next() * 4294967296) >>> 0,
+    });
+  }
+  return forms;
+}
+
+/** One grammar-speckle seat (M2 wave 9, THE ZONE-EDGE GRADIENT): a small
+ *  fleck of a flanking zone's own theme ink, alpha-faded by the cell's rect
+ *  distance — the zone's ground language sampled at tissue grain. */
+export interface GrammarSeat {
+  x: number;
+  y: number;
+  r: number;
+  ink: string;
+  alpha: number;
+  varSeed: number;
+}
+
+/**
+ * THE GRAMMAR SPECKLE's seat derivation (M2 wave 9) — the zone-edge
+ * gradient's texture half, the same chunk-keyed per-attempt fork idiom on
+ * its own salt: candidates roll position, pick a voicing flank by the ONE
+ * WEIGHT LAW's weights, draw an ink from that zone's own theme (grass/tree,
+ * mud/sand — grammarInksOf), and stand at alpha = 1 − d/blendBandPx of the
+ * NEAREST cell (full voice at the border and across an unminted cell's own
+ * ground, silent past the band). Land only; the sea keeps its wash. Roads
+ * paint over their ribbon later, so the verge and the mass wear the wash.
+ * Deterministic per (dress capture, worldSeed, cx, cy); DOM-free.
+ */
+export function grammarSeatsForChunk(dress: MassDressRead, worldSeed: number,
+  cx: number, cy: number): GrammarSeat[] {
+  const seed = worldSeed >>> 0;
+  const C = SEAMLESS_CFG.chunkPx;
+  const base = (Math.imul(cx, 0x9e3779b1) ^ Math.imul(cy, 0x85ebca6b) ^ seed ^ GRAMMAR_SALT) >>> 0;
+  const band = PARTITION_CFG.blendBandPx;
+  const seats: GrammarSeat[] = [];
+  for (let i = 0; i < GRAMMAR_ATTEMPTS; i++) {
+    const r = new Rng((base + Math.imul(i + 1, 0xc2b2ae35)) >>> 0);
+    const x = cx * C + r.next() * C;
+    const y = cy * C + r.next() * C;
+    const inkRoll = r.next();
+    const rr = r.range(2.2, 5.2);
+    const varSeed = Math.floor(r.next() * 4294967296) >>> 0;
+    if (!dress.landAt(x, y, seed)) continue;
+    const near = dress.nearestCellAt(x, y);
+    if (!near || near.d >= band) continue;
+    const flanks = dress.flanksAt(x, y, seed);
+    if (!flanks.length) continue;
+    const flank = r.weighted(flanks);
+    const inks = dress.grammarInksOf(flank.zoneId);
+    if (!inks.length) continue;
+    seats.push({
+      x, y, r: rr,
+      ink: inks[Math.min(inks.length - 1, Math.floor(inkRoll * inks.length))],
+      alpha: 1 - near.d / band,
+      varSeed,
+    });
+  }
+  return seats;
+}
+
+/** The grammar stream's fixed dials (FLAGGED — the speckle's cadence; the
+ *  painter's alpha/look dials live in SEAMLESS_DRAW_CFG.mesh). */
+const GRAMMAR_ATTEMPTS = 70;
+const GRAMMAR_SALT = 0x6b7f3a19;
 
 /**
  * THE WAYSIDE DRESS's seat derivation (M2 wave 8) — the road's shoulder

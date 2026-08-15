@@ -66,8 +66,9 @@ import type { ZoneDef } from '../../data/zones';
 import type { Doodad } from '../../engine/levelgen';
 import type { SeamlessMint, World } from '../../engine/world';
 import { getTissueSampler, SEAMLESS_CFG, type RegionSeat, type TissueSampler } from '../../world/seamless';
-import { massDressOf, massStampSeatsForChunk, waysideSeatsForChunk,
-  type MassDressRead, type MassStampSeat } from '../../world/tissue';
+import { grammarSeatsForChunk, massDressOf, massStampSeatsForChunk, solidFormsForChunk,
+  TISSUE_CFG, waysideSeatsForChunk,
+  type GrammarSeat, type MassDressRead, type MassStampSeat, type SolidForm } from '../../world/tissue';
 import { activePieces, type BoundsPiece } from '../../world/shape';
 import { registerVisCache } from './caches';
 import { hash01, mix, shade } from './color';
@@ -83,8 +84,11 @@ import { VIS_ABLATE, VIS_CFG } from './visConfig';
  *  one shared dark so every biome's coast reads as the same sea. */
 export const SEAMLESS_DRAW_CFG = {
   /** Tissue sample lattice inside a chunk, px (720/30 = 24 cells exactly).
-   *  Coarser = cheaper bakes; finer = smoother biome borders. */
-  latticePx: 30,
+   *  Coarser = cheaper bakes; finer = smoother biome borders. M2 wave 9:
+   *  BOUND to the SOLID FIELD's own grain (TISSUE_CFG.solidCellPx) — the
+   *  painter's mass verdict and the occlusion consult read ONE lattice, so
+   *  drawn == tested survives any retune of either BY CONSTRUCTION. */
+  latticePx: TISSUE_CFG.solidCellPx,
   /** LRU cap on live tissue chunks (ground.ts maxChunks idiom: 60 × 448²
    *  ≈ 48MB there; 24 × 720² ≈ 50MB here — the same byte class). */
   maxTissueChunks: 24,
@@ -190,6 +194,42 @@ export const SEAMLESS_DRAW_CFG = {
     kerbStepPx: 11,
     kerbInsetPx: 3,
   },
+  // --- THE MESH (M2 wave 9) — the solid fill's look, the zone-edge
+  // gradient and the zone-side way (her feel-report items 1+3 + the
+  // occlusion ruling's look half). World-grain halves (the density
+  // registry, form dials, speckle cadence) live in data/enclosure.ts +
+  // world/tissue.ts. ALL FLAGGED (unblessed; her word moves them). --------
+  mesh: {
+    /** Master dial: the wave-9 mesh PASSES (the verge class, the edge-fade
+     *  apron, the grammar speckle, the solid forms, the way stubs) — off,
+     *  or a sampler whose carried read predates the mesh, stands them down
+     *  structurally. The densified stamp scatter itself rides
+     *  MASSDRESS_CFG.stampAttempts + MASS_DENSITY (data dials, not this
+     *  one), so dial-off is the wave-9-passes A/B, not a byte-exact wave-8
+     *  restoration. Draw-only: the occlusion consult rides its own dials
+     *  (LOS_CFG.crossBorder + the veil's SIGHT_VEIL_SOLID). */
+    enabled: true,
+    /** Non-walkable land OUTSIDE the solid field (the clearway verge, the
+     *  apron shoulders, boundary quantize slack) leans toward waterDark by
+     *  this — lighter than massMix, so the fringe before the wall of bodies
+     *  reads as rough OPEN ground (rays cross it; feet still refuse). */
+    vergeMix: 0.3,
+    /** THE EDGE FADE: the baked floor-tone apron around each cell rect —
+     *  the tissue absorbs the zone's own ground color across this reach
+     *  (full at the rect, gone by edgeFadePx), so the arena-rect seam melts
+     *  while the zone bake itself stays untouched. */
+    edgeFadePx: 96,
+    edgeFadeAlpha: 0.5,
+    /** THE GRAMMAR SPECKLE's paint alpha (× each seat's own band falloff). */
+    grammarAlpha: 0.5,
+    /** THE ZONE-SIDE WAY: drawn stub length inward from the crossing point
+     *  (px) ≈ the carve's own corridor reach (PORTAL_EDGE_INSET 90 + a
+     *  step), so the overdrawn road ends where the carved ground does. */
+    wayStubPx: 120,
+    /** Solid-form ink, as shade() deltas off the local mass ground (the
+     *  stampInk idiom at mound scale) + the contact shadow's alpha. */
+    formInk: { body: -0.05, lit: 0.16, dark: -0.2, shadowAlpha: 0.2 },
+  },
 } as const;
 
 /** The seed lane the engine itself reads for climate/continents
@@ -225,6 +265,44 @@ function activeSeatOf(world: World): RegionSeat | null {
 // ---------------------------------------------------------------------------
 
 interface TissueEntry { img: HTMLCanvasElement; at: number }
+
+/** THE SEAT MEMO (M2 wave 9 — the mass-dress pass's named coda-4 cut, paid
+ *  now that the fill is dense): every per-chunk seat derivation (stamps,
+ *  wayside, forms, grammar) is pure f(capture, seed, chunk), and the bake's
+ *  3×3 gather asked each neighbor NINE times across adjacent bakes — at the
+ *  dense fill's attempt counts that re-derivation is the bake's biggest
+ *  line. One LRU-bounded memo per chunk; seed change or a dial A/B clears
+ *  it (seamlessTissueReset — dials are constants in a session by law).
+ *  Painter-side only on purpose: the exported helpers stay pure and the
+ *  probes assert through the UNMEMOIZED lanes. */
+interface ChunkSeats {
+  stamps: MassStampSeat[];
+  ways: MassStampSeat[];
+  forms: SolidForm[];
+  grammar: GrammarSeat[];
+}
+const seatMemo = new Map<string, ChunkSeats>();
+let seatMemoSeed = -1;
+function chunkSeatsFor(dress: MassDressRead, rd: MassDressRead | null, mesh: boolean,
+  seed: number, cx: number, cy: number): ChunkSeats {
+  if (seed !== seatMemoSeed) { seatMemo.clear(); seatMemoSeed = seed; }
+  const key = `${cx},${cy}`;
+  const hit = seatMemo.get(key);
+  if (hit) { seatMemo.delete(key); seatMemo.set(key, hit); return hit; } // LRU touch
+  const rec: ChunkSeats = {
+    stamps: massStampSeatsForChunk(dress, seed, cx, cy),
+    ways: rd ? waysideSeatsForChunk(rd, seed, cx, cy) : [],
+    forms: mesh ? solidFormsForChunk(dress, seed, cx, cy) : [],
+    grammar: mesh ? grammarSeatsForChunk(dress, seed, cx, cy) : [],
+  };
+  seatMemo.set(key, rec);
+  while (seatMemo.size > 220) { // bound session growth, never the view
+    const oldest = seatMemo.keys().next().value;
+    if (oldest === undefined) break;
+    seatMemo.delete(oldest);
+  }
+  return rec;
+}
 
 class SeamlessTissueChunks {
   /** Map insertion order as LRU (the ground.ts chunk-cache idiom). */
@@ -323,6 +401,10 @@ class SeamlessTissueChunks {
     const rd: MassDressRead | null =
       dress && SEAMLESS_DRAW_CFG.roadDress && typeof dress.roadSegsForChunk === 'function'
         ? dress : null;
+    // THE MESH LANE (M2 wave 9) gates the same way — dial + the carried
+    // read actually knowing the solid field and the gradient anchors.
+    const mesh = !!dress && SEAMLESS_DRAW_CFG.mesh.enabled
+      && typeof dress.solidAt === 'function' && typeof dress.nearestCellAt === 'function';
     // --- Pass 1: the flat tone fill (run-merged rows). Land mass leans
     // lighter than the sea when dressing (massMix vs waterMix) so the
     // texture above it reads; the shadeable lattice is remembered. With the
@@ -342,7 +424,15 @@ class SeamlessTissueChunks {
         let color: string;
         if (!s.walkable) {
           if (dress && dress.landAt(wx, wy, seed)) {
-            color = mix(s.tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.massMix);
+            // THE MESH's three-class ground (wave 9): SOLID field cells wear
+            // the full mass lean (the wall's country — this lattice verdict
+            // IS the occlusion consult's, same centers, drawn == tested);
+            // non-solid unwalkable land (the clearway verge, apron
+            // shoulders) wears the lighter verge lean — rough open ground
+            // rays cross before the bodies start.
+            const solidHere = !mesh || dress.solidAt(wx, wy, seed);
+            color = mix(s.tone, SEAMLESS_DRAW_CFG.waterDark,
+              solidHere ? SEAMLESS_DRAW_CFG.massMix : SEAMLESS_DRAW_CFG.mesh.vergeMix);
             shadeable![j * cells + i] = true;
           } else {
             color = mix(s.tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.waterMix);
@@ -368,6 +458,58 @@ class SeamlessTissueChunks {
       g.fillRect(runStart * L, j * L, (cells - runStart) * L, L);
     }
     if (dress) {
+      // --- Pass 1.55: THE EDGE FADE (M2 wave 9, THE ZONE-EDGE GRADIENT) —
+      // every land lattice cell within edgeFadePx of a captured cell rect
+      // absorbs that zone's own theme FLOOR tone, full at the rect and gone
+      // by the reach: the tissue meets each arena-rect bake already wearing
+      // the zone's ground color, so the hard seam melts without touching a
+      // single zone pixel. Inside an UNMINTED cell (d = 0, no bake standing)
+      // the wash covers the whole claim — far country pre-echoes the ground
+      // its mint will actually pour.
+      if (mesh) {
+        const MF = SEAMLESS_DRAW_CFG.mesh;
+        for (let j = 0; j < cells; j++) {
+          const wy = cy * C + (j + 0.5) * L;
+          for (let i = 0; i < cells; i++) {
+            const wx = cx * C + (i + 0.5) * L;
+            if (!dress.landAt(wx, wy, seed)) continue;
+            const near = dress.nearestCellAt(wx, wy);
+            if (!near || near.d >= MF.edgeFadePx) continue;
+            const floor = dress.floorToneOf(near.zoneId);
+            if (!floor) continue;
+            g.globalAlpha = MF.edgeFadeAlpha * (1 - near.d / MF.edgeFadePx);
+            g.fillStyle = floor;
+            g.fillRect(i * L, j * L, L, L);
+          }
+        }
+        g.globalAlpha = 1;
+      }
+      // --- Pass 1.6: THE GRAMMAR SPECKLE (M2 wave 9) — the flanking zones'
+      // own theme inks flecked over the band (and over unminted claims),
+      // seats from the pure helper via THE SEAT MEMO, gathered 3×3 so a
+      // seam-straddling fleck paints whole on both sides.
+      if (mesh) {
+        const MF = SEAMLESS_DRAW_CFG.mesh;
+        const gx0 = cx * C, gy0 = cy * C;
+        g.save();
+        g.translate(-gx0, -gy0);
+        for (let ny = cy - 1; ny <= cy + 1; ny++) {
+          for (let nx = cx - 1; nx <= cx + 1; nx++) {
+            for (const sp of chunkSeatsFor(dress, rd, mesh, seed, nx, ny).grammar) {
+              const rr = sp.r * 2.2;
+              if (sp.x + rr < gx0 || sp.x - rr > gx0 + C || sp.y + rr < gy0 || sp.y - rr > gy0 + C) continue;
+              const fr = new Rng(sp.varSeed);
+              g.globalAlpha = sp.alpha * MF.grammarAlpha;
+              g.fillStyle = sp.ink;
+              blob(g, sp.x, sp.y, sp.r);
+              blob(g, sp.x + fr.range(-0.8, 0.8) * sp.r, sp.y + fr.range(-0.6, 0.6) * sp.r,
+                fr.range(0.4, 0.7) * sp.r);
+            }
+          }
+        }
+        g.globalAlpha = 1;
+        g.restore();
+      }
       // --- Pass 2: THE RELIEF SHADE — signed hillshade off the dress read
       // (the ONE SUN in MASSDRESS_CFG), quantized to shadeSteps so rows
       // run-merge and re-bakes stay byte-stable. Overlay only — the blend
@@ -400,6 +542,29 @@ class SeamlessTissueChunks {
       // re-jags the smooth edge; before the stamps so a rim tree's canopy
       // may honestly overhang the way.
       if (rd) drawRoadFace(g, rd, sampler, seed, cx, cy);
+      // --- Pass 2.7: THE SOLID FORMS (M2 wave 9) — the large mass bodies
+      // under the stamp scatter (crag mounds, hedge banks): ground-scale
+      // structure first, standing bodies on top. Same 3×3 memo gather;
+      // y-sorted among themselves (terrain before bodies is the painter's
+      // own layering truth).
+      const x0 = cx * C, y0 = cy * C;
+      if (mesh) {
+        const forms: SolidForm[] = [];
+        for (let ny = cy - 1; ny <= cy + 1; ny++) {
+          for (let nx = cx - 1; nx <= cx + 1; nx++) {
+            for (const f of chunkSeatsFor(dress, rd, mesh, seed, nx, ny).forms) {
+              const rr = f.r * 1.3 + 10;
+              if (f.x + rr < x0 || f.x - rr > x0 + C || f.y + rr < y0 || f.y - rr > y0 + C) continue;
+              forms.push(f);
+            }
+          }
+        }
+        forms.sort((a, b) => a.y - b.y || a.x - b.x);
+        g.save();
+        g.translate(-x0, -y0);
+        for (const f of forms) drawSolidForm(g, sampler, seed, f);
+        g.restore();
+      }
       // --- Pass 3: THE STAMP SCATTER — this chunk's seats plus every
       // neighbor seat whose paint reach crosses the seam, y-sorted (the
       // painter's order, canonical), drawn as texture glyphs inked off the
@@ -407,18 +572,19 @@ class SeamlessTissueChunks {
       // the ground's — one country, no foreign palette). THE WAYSIDE DRESS
       // (M2 wave 8) rides the same gather: shoulder-band glyph seats from
       // the road lane's own pure helper, merged into the one y-sort so the
-      // verge and the mass interleave honestly.
+      // verge and the mass interleave honestly. All lists via THE SEAT MEMO
+      // (wave 9 — the dense fill made the 3×3 re-derivation the bake's
+      // biggest line; the memo pays it once per chunk).
       const seats: MassStampSeat[] = [];
-      const x0 = cx * C, y0 = cy * C;
       for (let ny = cy - 1; ny <= cy + 1; ny++) {
         for (let nx = cx - 1; nx <= cx + 1; nx++) {
-          for (const s of massStampSeatsForChunk(dress, seed, nx, ny)) {
+          const ns = chunkSeatsFor(dress, rd, mesh, seed, nx, ny);
+          for (const s of ns.stamps) {
             const rr = s.r * SEAMLESS_DRAW_CFG.stampReachMul + 6;
             if (s.x + rr < x0 || s.x - rr > x0 + C || s.y + rr < y0 || s.y - rr > y0 + C) continue;
             seats.push(s);
           }
-          if (!rd) continue;
-          for (const s of waysideSeatsForChunk(rd, seed, nx, ny)) {
+          for (const s of ns.ways) {
             const rr = s.r * SEAMLESS_DRAW_CFG.stampReachMul + 6;
             if (s.x + rr < x0 || s.x - rr > x0 + C || s.y + rr < y0 || s.y - rr > y0 + C) continue;
             seats.push(s);
@@ -596,6 +762,71 @@ function drawMassStamp(g: CanvasRenderingContext2D, sampler: TissueSampler,
   (MASS_GLYPHS[s.kind] ?? MASS_GLYPHS.rock)(g, inks, s.x, s.y, s.r, new Rng(s.varSeed));
 }
 
+/** One SOLID FORM (M2 wave 9): a large mass body under the stamp scatter —
+ *  'stone' stacks faceted crag masses lit toward THE ONE SUN, 'grown' banks
+ *  clustered canopy lobes with lit crowns. Ink derives from the seat's own
+ *  blend tone under the mass lean (the tone-local law at mound scale);
+ *  every wobble rides the seat's forked varSeed, byte-stable forever. */
+function drawSolidForm(g: CanvasRenderingContext2D, sampler: TissueSampler,
+  seed: number, f: SolidForm): void {
+  const ink = SEAMLESS_DRAW_CFG.mesh.formInk;
+  const base = mix(sampler(f.x, f.y, seed).tone, SEAMLESS_DRAW_CFG.waterDark, SEAMLESS_DRAW_CFG.massMix);
+  const body = shade(base, ink.body), lit = shade(base, ink.lit), dark = shade(base, ink.dark);
+  const rng = new Rng(f.varSeed);
+  const [lx, ly] = MASSDRESS_CFG.lightDir;
+  g.fillStyle = `rgba(0,0,0,${ink.shadowAlpha})`;
+  g.beginPath();
+  g.ellipse(f.x, f.y + f.r * 0.12, f.r * 0.95, f.r * 0.55, 0, 0, Math.PI * 2);
+  g.fill();
+  if (f.cls === 'grown') {
+    g.fillStyle = dark;
+    blob(g, f.x - lx * f.r * 0.16, f.y - ly * f.r * 0.16, f.r * 0.98);
+    g.fillStyle = body;
+    const lobes = rng.int(6, 9);
+    for (let k = 0; k < lobes; k++) {
+      const a = rng.range(0, Math.PI * 2), d = rng.range(0.15, 0.62) * f.r;
+      blob(g, f.x + Math.cos(a) * d, f.y + Math.sin(a) * d * 0.8, rng.range(0.3, 0.5) * f.r);
+    }
+    g.fillStyle = lit;
+    const crowns = rng.int(2, 4);
+    for (let k = 0; k < crowns; k++) {
+      const a = rng.range(0, Math.PI * 2), d = rng.range(0, 0.45) * f.r;
+      blob(g, f.x + lx * f.r * 0.22 + Math.cos(a) * d,
+        f.y + ly * f.r * 0.22 + Math.sin(a) * d * 0.8, rng.range(0.14, 0.24) * f.r);
+    }
+  } else {
+    const parts = rng.int(2, 3);
+    for (let p = 0; p < parts; p++) {
+      const pr = f.r * (1 - p * 0.28);
+      const px2 = f.x + rng.range(-0.18, 0.18) * f.r;
+      const py2 = f.y - p * f.r * 0.22 + rng.range(-0.1, 0.1) * f.r;
+      const n = rng.int(5, 7);
+      const pts: Array<[number, number]> = [];
+      const a0 = rng.range(0, Math.PI * 2);
+      for (let k = 0; k < n; k++) {
+        const a = a0 + (k / n) * Math.PI * 2;
+        const wr = pr * rng.range(0.66, 1);
+        pts.push([px2 + Math.cos(a) * wr, py2 + Math.sin(a) * wr * 0.78]);
+      }
+      g.fillStyle = p === 0 ? dark : body;
+      g.beginPath();
+      g.moveTo(pts[0][0], pts[0][1]);
+      for (let k = 1; k < n; k++) g.lineTo(pts[k][0], pts[k][1]);
+      g.closePath(); g.fill();
+      let bi = 0, bs = -Infinity;
+      for (let k = 0; k < n; k++) {
+        const sc = (pts[k][0] - px2) * lx + (pts[k][1] - py2) * ly;
+        if (sc > bs) { bs = sc; bi = k; }
+      }
+      const q0 = pts[(bi + n - 1) % n], q1 = pts[bi], q2 = pts[(bi + 1) % n];
+      g.fillStyle = lit;
+      g.beginPath(); g.moveTo(px2, py2);
+      g.lineTo(q0[0], q0[1]); g.lineTo(q1[0], q1[1]); g.lineTo(q2[0], q2[1]);
+      g.closePath(); g.fill();
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // THE ROAD FACE (M2 wave 8) — the ribbon drawn as the zones' own roads
 // continuing. THE EXACT-RIBBON LAW: the walkable verdict (segDist ≤
@@ -732,12 +963,15 @@ export function seamlessTissueDressStats(): { n: number; p50: number; max: numbe
     dress: !!SEAMLESS_DRAW_CFG.massDress,
   };
 }
-/** Dev/A-B lever: drop every baked tissue chunk (and the clock) so a dial
- *  change re-bakes the view in place — never needed by play (the caches are
- *  seed-keyed and the dials are constants in a session). */
+/** Dev/A-B lever: drop every baked tissue chunk (and the clock, and the
+ *  wave-9 seat memo) so a dial change re-bakes the view in place — never
+ *  needed by play (the caches are seed-keyed and the dials are constants in
+ *  a session). */
 export function seamlessTissueReset(): void {
   tissue.clear();
   dressBakeMs.length = 0;
+  seatMemo.clear();
+  seatMemoSeed = -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -1100,11 +1334,80 @@ export function drawSeamlessCountry(ctx: CanvasRenderingContext2D, world: World,
   clipOutsideMember(ctx, az.w, az.h, ell, null);
   for (const pc of activePieces(az)) clipOutsideMember(ctx, az.w, az.h, ell, pc);
   tissue.draw(ctx, world, seat.originPx.x, seat.originPx.y, camX, camY, vw, vh);
-  bodies.beginFrame(); // one bake purse + eviction floor across every seat
   for (const s of world.seamlessRegions) {
     if (s.zoneId === world.zone.id) continue;
     ground.drawSeamlessAway(ctx, world, s, seat.originPx.x, seat.originPx.y, camX, camY, vw, vh);
+  }
+  ctx.restore();
+  // THE ZONE-SIDE WAY (M2 wave 9): the carved in-zone corridors wear their
+  // drawn road from every crossing point inward — overdrawn OVER every
+  // ground (the active zone's included: this pass runs UNclipped, and the
+  // zone bakes themselves stay untouched) and UNDER every body (away body
+  // chunks below; the live doodad pass follows drawFloor). The stubs lie
+  // inside cells by construction, so no member clip is needed.
+  {
+    const sampler = getTissueSampler();
+    const rd = sampler ? massDressOf(sampler) : null;
+    if (rd && sampler && SEAMLESS_DRAW_CFG.mesh.enabled && SEAMLESS_DRAW_CFG.roadDress
+      && Array.isArray((rd as Partial<MassDressRead>).wayStubs)) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(camX, camY, vw, vh);
+      ctx.clip();
+      drawZoneWayStubs(ctx, rd, sampler, worldSeedOf(world),
+        seat.originPx.x, seat.originPx.y, camX, camY, vw, vh);
+      ctx.restore();
+    }
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(camX, camY, vw, vh);
+  ctx.clip();
+  clipOutsideMember(ctx, az.w, az.h, ell, null);
+  for (const pc of activePieces(az)) clipOutsideMember(ctx, az.w, az.h, ell, pc);
+  bodies.beginFrame(); // one bake purse + eviction floor across every seat
+  for (const s of world.seamlessRegions) {
+    if (s.zoneId === world.zone.id) continue;
     bodies.draw(ctx, world, s, seat.originPx.x, seat.originPx.y, camX, camY, vw, vh);
+  }
+  ctx.restore();
+}
+
+/** THE ZONE-SIDE WAY's strokes: for every in-view stub, the road face's own
+ *  bed + worn grammar (round caps, the ribbon's exact width) from the
+ *  crossing point inward — tone from roadToneAt at the stub's midpoint, so
+ *  the overdraw continues the tissue ribbon's color seamlessly at the
+ *  mouth. Zone-local coords (world − active origin): the caller's transform
+ *  is the world transform. */
+function drawZoneWayStubs(ctx: CanvasRenderingContext2D, rd: MassDressRead,
+  sampler: TissueSampler, seed: number, originX: number, originY: number,
+  camX: number, camY: number, vw: number, vh: number): void {
+  const MF = SEAMLESS_DRAW_CFG.mesh;
+  const RF = SEAMLESS_DRAW_CFG.roadFace;
+  const pad = SEAMLESS_CFG.roadHalfPx;
+  const margin = MF.wayStubPx + pad + 8;
+  const wx0 = camX + originX - margin, wy0 = camY + originY - margin;
+  const wx1 = camX + vw + originX + margin, wy1 = camY + vh + originY + margin;
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (const st of rd.wayStubs) {
+    if (st.x < wx0 || st.x > wx1 || st.y < wy0 || st.y > wy1) continue;
+    const bx = st.x + st.nx * MF.wayStubPx, by = st.y + st.ny * MF.wayStubPx;
+    const mx = (st.x + bx) / 2, my = (st.y + by) / 2;
+    const road = rd.roadToneAt(mx, my, seed);
+    const bed = mix(sampler(mx, my, seed).tone, road, RF.bedAlpha);
+    ctx.strokeStyle = bed;
+    ctx.lineWidth = pad * 2;
+    ctx.beginPath();
+    ctx.moveTo(st.x - originX, st.y - originY);
+    ctx.lineTo(bx - originX, by - originY);
+    ctx.stroke();
+    ctx.strokeStyle = mix(bed, shade(road, RF.wornShade), RF.wornAlpha);
+    ctx.lineWidth = Math.max(8, (pad - RF.wornInsetPx) * 2);
+    ctx.beginPath();
+    ctx.moveTo(st.x - originX, st.y - originY);
+    ctx.lineTo(bx - originX, by - originY);
+    ctx.stroke();
   }
   ctx.restore();
 }

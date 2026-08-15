@@ -58,6 +58,7 @@ import { rayShapeT } from './shapes';
 import { regionKind } from '../world/regions';
 import { GridWalkField } from '../world/gridWalk';
 import type { WalkField } from '../world/walk';
+import { getTissueSampler } from '../world/seamless';
 import { SPATIAL_CFG } from './spatial';
 import { tierElevOf } from './tiers';
 
@@ -99,6 +100,11 @@ export interface OccEnv {
   arena?: { w: number; h: number };
   seamlessRegions?: readonly SeamlessRaySeat[];
   seamlessMints?: { get(zoneId: string): SeamlessRayMint | undefined };
+  /** THE SOLID BETWEEN's seed lane (M2 wave 9 — the mesh): the world-field
+   *  seed the tissue sampler answers under. World satisfies it as it stands
+   *  (World.sim.biomeField.fieldSeed); absent, the solid consult stands
+   *  down structurally and tissue reads open (the wave-7 posture). */
+  sim?: { biomeField: { fieldSeed: number } };
 }
 
 export interface RayHit {
@@ -217,8 +223,19 @@ export const LOS_CFG = {
    *  (px) for surfaces poking past their own cell line; `bodyPad` the
    *  per-body bbox slack (px) over the doodad's radius in the neighbor
    *  fold — both prune-only (rayShapeT stays the exact judge).
+   *  `solidShot`/`solidSight` (M2 wave 9 — THE MESH, her occlusion
+   *  ruling): un-owned tissue whose SOLID FIELD answers true blocks that
+   *  channel at its drawn lattice surface — the same carried field the
+   *  tissue painter fills as impassable mass, so sight and shot die
+   *  exactly where the walls of country draw (drawn == tested); OPEN
+   *  tissue (road corridors, mouth aprons, the clearway verge) stays
+   *  open sky, the wave-7 law's true core. False restores that
+   *  channel's tissue-open posture without touching the routing. The
+   *  projectile sweep's own tissue verdict reads solidShot, so hold-fire
+   *  and the arrow can never disagree in the between.
    *  [FLAGGED dials — awaiting blessing.] */
-  crossBorder: { shot: true, sight: true, ownerPad: 96, bodyPad: 12 },
+  crossBorder: { shot: true, sight: true, ownerPad: 96, bodyPad: 12,
+    solidShot: true, solidSight: true },
 };
 
 /** One resident neighbor resolved for a routed ray: its cell in ACTIVE-local
@@ -230,7 +247,29 @@ interface RayOwner {
   grid: GridWalkField | null;
   doodads: readonly Doodad[];
 }
-interface RayOwners { aw: number; ah: number; owners: RayOwner[] }
+interface RayOwners {
+  aw: number; ah: number; owners: RayOwner[];
+  /** THE SOLID BETWEEN's consult (M2 wave 9): the tissue sampler's carried
+   *  solid field, world-px args — null when the channel's solid dial is
+   *  off, no sampler stands, the carried read predates the mesh, or the env
+   *  offers no seed lane (structural stand-down: tissue reads open). `ox`/
+   *  `oy` are the active seat's world origin (active-local + origin =
+   *  world), `seed` the field seed the sampler answers under. */
+  solid: ((x: number, y: number, worldSeed: number) => boolean) | null;
+  ox: number; oy: number; seed: number;
+}
+
+/** The tissue sampler's carried solid read, structurally (the OccEnv idiom:
+ *  los.ts never imports the tissue module — the world/seamless seam is a
+ *  pure leaf, and the carry is duck-read off the installed sampler). */
+function tissueSolidRead(): ((x: number, y: number, worldSeed: number) => boolean) | null {
+  const s = getTissueSampler() as
+    | (ReturnType<typeof getTissueSampler> & { massDress?: { solidAt?: unknown } })
+    | null;
+  const fn = s?.massDress?.solidAt;
+  return typeof fn === 'function'
+    ? fn as (x: number, y: number, worldSeed: number) => boolean : null;
+}
 
 /** THE CROSS-BORDER ROUTING's per-ray gate + owner fold (the projectile
  *  sweep's seamlessProjOwnerAt at ray grain). Null on EVERY inactive path —
@@ -274,7 +313,14 @@ function seamlessRayOwners(
       doodads: m.layout.doodads,
     });
   }
-  return owners.length ? { aw, ah, owners } : null;
+  if (!owners.length) return null;
+  const solidDial = channel === 'shot' ? cb.solidShot : cb.solidSight;
+  return {
+    aw, ah, owners,
+    solid: solidDial && env.sim ? tissueSolidRead() : null,
+    ox, oy,
+    seed: (env.sim?.biomeField.fieldSeed ?? 0) >>> 0,
+  };
 }
 
 /** First blocker along from→to on the given channel, or null when clear.
@@ -371,7 +417,8 @@ export function castRay(
       const t = s / len;
       const x = from.x + dx * t, y = from.y + dy * t;
       let kId: string | null = null;
-      if (x >= 0 && x <= ring.aw && y >= 0 && y <= ring.ah) {
+      const inArena = x >= 0 && x <= ring.aw && y >= 0 && y <= ring.ah;
+      if (inArena) {
         if (g) kId = g.regionAt(x, y);
       } else {
         for (const own of ring.owners) {
@@ -380,7 +427,25 @@ export function castRay(
           break; // cells tile without overlap (the partition law)
         }
       }
-      if (kId === null) continue; // tissue / gridless ground: open sky
+      if (kId === null) {
+        // THE SOLID BETWEEN (M2 wave 9 — her occlusion ruling): un-owned
+        // tissue blocks where its SOLID FIELD answers true — the same
+        // quantized lattice the tissue painter fills as impassable mass, so
+        // the ray dies exactly at the drawn wall of country (drawn ==
+        // tested at one grain). Open tissue — the road corridors, the mouth
+        // aprons, the clearway verge — stays open sky (the wave-7 law's
+        // true core: the between never blocks as a LINE, only as drawn
+        // mass). Ground-story country: an elevated ray sails over the
+        // between's scrub exactly as it clears a story-0 body (the doodad
+        // band law at the tissue's own floor).
+        if (!inArena && ring.solid
+          && !(elev && elev.from + (elev.to - elev.from) * t >= band)
+          && ring.solid(x + ring.ox, y + ring.oy, ring.seed)) {
+          if (t < bestT) { bestT = t; kind = 'region'; }
+          break;
+        }
+        continue; // open tissue / gridless ground: open sky
+      }
       const k = regionKind(kId);
       if (channel === 'shot' ? k?.blocksShot : k?.blocksSight) {
         if (elev) {
