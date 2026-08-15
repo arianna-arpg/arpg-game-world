@@ -38,6 +38,7 @@ import {
 import { MONSTERS } from '../src/data/monsters';
 import { STRUCTURES } from '../src/data/structures';
 import { collectMarkers } from '../src/world/mapMarkers';
+import { collectAttention } from '../src/world/attention';
 import { holdGateDoor, holdSeatCell, holdStructureIn } from '../src/world/harborholds';
 import { cellKind, continentSeedFrom } from '../src/world/continents';
 import { clearSeaMemo, seaOfCell, type Sea } from '../src/world/seas';
@@ -361,36 +362,56 @@ seedGlobalRandom(0x40b0);
           postHoldWrits(): void;
           spawnHoldBesieger(cls: unknown, ward: unknown): void;
           kill(a: unknown, silent?: boolean, killer?: unknown): void;
-          countedEnemies(): { tag?: string; rarity?: string; owner?: unknown }[];
+          countedEnemies(): { tag?: string; rarity?: string; owner?: unknown; dead?: boolean }[];
+          createMonster(id: string, level: number, team: string): World['actors'][number];
         };
         // THE WRIT BOARD: planted at rung 1+ at the quay; posts named
         // promoted marks on the cove's living foes, then rests — or refuses
-        // honestly when the water keeps no quarry.
+        // honestly when the water keeps no quarry. BOTH branches run every
+        // seed: the cove is emptied for the refusal, then quarry is planted
+        // for the post (a seed-dependent branch pins nothing).
         check('D: the writ board stands at the open quay', w.doodads.some(d => d.kind === 'bounty_board'));
         const hold2 = az.harborhold!;
-        const quarry = wAny.countedEnemies().filter(a =>
-          a.tag !== 'bounty_mark' && (a.rarity ?? 'normal') === 'normal' && !a.owner).length;
+        for (const q of wAny.countedEnemies()) q.dead = true;
+        wAny.postHoldWrits();
+        check('D: a quiet cove refuses writs honestly (no cooldown spent)',
+          w.actors.filter(a => a.tag === 'bounty_mark' && !a.dead).length === 0
+          && hold2.writsAt === undefined, 'cove emptied first');
+        for (let i = 0; i < 3; i++) {
+          const q = wAny.createMonster('plains_wolf', Math.max(1, pz.level), 'enemy');
+          q.tag = undefined; // shed the def's ambient 'predator' role — writs want COUNTED foes
+          q.pos.x = w.player.pos.x + 180 + i * 40;
+          q.pos.y = w.player.pos.y + 180;
+          w.actors.push(q);
+        }
         wAny.postHoldWrits();
         const marks = w.actors.filter(a => a.tag === 'bounty_mark' && !a.dead);
-        if (quarry > 0) {
-          check('D: writs post onto living foes (named, promoted, tagged)',
-            marks.length > 0 && marks.every(m => (m.rarity ?? 'normal') !== 'normal' && !!m.name),
-            `${marks.length} marks over ${quarry} quarry`);
-          check('D: the board rests (writsAt persisted on the anchor state)',
-            hold2.writsAt !== undefined && hold2.writsAt > w.time);
-          const markCount = marks.length;
-          wAny.postHoldWrits();
-          check('D: a resting board refuses a second posting',
-            w.actors.filter(a => a.tag === 'bounty_mark' && !a.dead).length === markCount);
-          if (marks[0]) {
-            const before = w.ledger.bounty_writs_claimed ?? 0;
-            wAny.kill(marks[0], false, w.player);
-            check('D: a claimed writ pays the standard ledger row',
-              (w.ledger.bounty_writs_claimed ?? 0) === before + 1);
-          }
-        } else {
-          check('D: a quiet cove refuses writs honestly (no cooldown spent)',
-            marks.length === 0 && hold2.writsAt === undefined, 'no quarry in the cove');
+        check('D: writs post onto living foes (named, promoted, tagged)',
+          marks.length > 0 && marks.every(m => (m.rarity ?? 'normal') !== 'normal' && !!m.name),
+          `${marks.length} marks over 3 quarry`);
+        check('D: the board rests (writsAt persisted on the anchor state)',
+          hold2.writsAt !== undefined && hold2.writsAt > w.time);
+        const markCount = marks.length;
+        wAny.postHoldWrits();
+        check('D: a resting board refuses a second posting',
+          w.actors.filter(a => a.tag === 'bounty_mark' && !a.dead).length === markCount);
+        // THE CHEVRON LANE: the view tags board writs (board: true, the
+        // lane flag) and speaks every posted mark; the attention pass
+        // points at each from the moment it is posted — the board lane
+        // never waits on the objective lane's stragglers law
+        // (HARBORHOLD_CFG.writs.chevronAll).
+        const bv = w.bountyView();
+        check('D: bountyView speaks the board lane whole (board flag, remaining = posted)',
+          !!bv && bv.board === true && bv.remaining === markCount && bv.marks.length === markCount,
+          `remaining ${bv?.remaining ?? 'null'} over ${markCount} posted`);
+        check('D: posted writs chevron immediately (the always-on board lane)',
+          collectAttention(w).filter(p => p.id.startsWith('bounty_mark_')).length === markCount,
+          `${collectAttention(w).filter(p => p.id.startsWith('bounty_mark_')).length}/${markCount} pointed`);
+        if (marks[0]) {
+          const before = w.ledger.bounty_writs_claimed ?? 0;
+          wAny.kill(marks[0], false, w.player);
+          check('D: a claimed writ pays the standard ledger row',
+            (w.ledger.bounty_writs_claimed ?? 0) === before + 1);
         }
         // THE CAMP WATCH (at the anchor): besieged plants the dormant watch
         // at its posts; reopening retires it quietly.

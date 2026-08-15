@@ -381,8 +381,11 @@ export const HARBORHOLD_CFG = {
   /** THE BOUNTY BOARD (service 'bounty_board'): a dwell at the plaza board
    *  posts writs on the coast's LIVING foes — named, rarity-promoted marks
    *  paying the standard writ claim (the bounty fabric's tag-keyed kill
-   *  row + bounty_writs_claimed). Then the board rests. */
-  writs: { count: [2, 3] as [number, number], cooldownSec: 420, rarity: 'rare', stacks: 1 },
+   *  row + bounty_writs_claimed). Then the board rests. chevronAll: posted
+   *  writs edge-chevron from the moment the board stamps them — a writ is a
+   *  purchase of names on a whole coast, so it shows immediately instead of
+   *  riding the zone objective's last-stragglers law (false restores that). */
+  writs: { count: [2, 3] as [number, number], cooldownSec: 420, rarity: 'rare', stacks: 1, chevronAll: true },
 
   /** THE LOCAL TIDE (per-biome seasoning rows folded into every siege table
    *  when the port stands on that coast — a gloaming shore sends gloamborn;

@@ -1539,6 +1539,11 @@ export class Renderer {
       const pulse = 0.72 + 0.28 * Math.sin(t * 5);
       ctx.save();
       ctx.translate(cx, cy);
+      // ONE global size dial (ATTENTION_CFG.chevronScale): the whole assembly
+      // — wedge, disc, glyph, label — scales about the clamped edge anchor,
+      // so shrinking it never moves where a pointer sits or what wins the cap.
+      const k = ATTENTION_CFG.chevronScale;
+      if (k !== 1) ctx.scale(k, k);
       // The chevron: a small wedge just past the disc, aimed along the true bearing.
       ctx.rotate(ang);
       ctx.globalAlpha = 0.92 * pulse;

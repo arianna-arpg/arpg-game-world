@@ -42335,13 +42335,24 @@ export class World {
    *  WHOEVER posted them — the 'bounty' zone objective's own quarry (silent
    *  once the objective is done) or the harborhold plaza board's writs
    *  (postHoldWrits tags the same 'bounty_mark' grammar on any coast), so
-   *  board writs are never invisible to the chevron pass. */
-  bountyView(): { remaining: number; marks: { pos: Vec2; name: string }[] } | null {
+   *  board writs are never invisible to the chevron pass.
+   *
+   *  THE LANE FLAG: `board` says WHICH lane these marks are — true for the
+   *  plaza board's posted writs, false for the zone objective's own quarry —
+   *  so the attention pass can give each lane its own appearance law. The
+   *  zone's objective kind IS the lane: the two can never share a zone
+   *  (hold anchors mint objective 'clear' at ensureSeaPorts, ports are
+   *  objective 'none' by registry, and only hold zones carry a board), and
+   *  reading the lane off the zone survives Zone Memory for free — a
+   *  remembered writ needs no memo rider. A future poster that mixes lanes
+   *  in one zone should stamp the lane per mark at post time instead, and
+   *  widen this flag to per-mark grain. */
+  bountyView(): { remaining: number; board: boolean; marks: { pos: Vec2; name: string }[] } | null {
     const isObjective = this.zone.objective.kind === 'bounty';
     if (isObjective && this.objectiveDone) return null;
     const marks = this.actors.filter(a => !a.dead && a.tag === 'bounty_mark');
     if (!isObjective && !marks.length) return null;
-    return { remaining: marks.length, marks: marks.map(a => ({ pos: a.pos, name: a.name })) };
+    return { remaining: marks.length, board: !isObjective, marks: marks.map(a => ({ pos: a.pos, name: a.name })) };
   }
 
   /** The live PROCESSION, for the attention fabric + the HUD: the cart's

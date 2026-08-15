@@ -45,6 +45,12 @@ export const ATTENTION_CFG = {
   /** Points within this many px of the viewport edge (world-space, projected)
    *  count as "visible" and draw no pointer — the world visuals own them. */
   onScreenSlack: 24,
+  /** GLOBAL draw scale on every pointer's whole assembly — wedge, disc,
+   *  glyph and label shrink together around the clamped edge point (screen
+   *  POSITION, per-source z and colors untouched). 1 = the original size;
+   *  under 1 the pointers read at a glance without shouting over the scene.
+   *  FLAGGED: 0.8 unblessed. */
+  chevronScale: 0.8,
 };
 
 const SOURCES: AttentionSource[] = [];

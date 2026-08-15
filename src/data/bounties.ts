@@ -14,15 +14,18 @@
 // tags and HP all ride ZoneEnemyMemo).
 //
 // Per-writ kill beat rides the shared kill-handler fabric (below); the
-// off-screen chevron only points once the LAST few marks remain — a hunt is
-// a hunt, not a checklist, but the final stragglers must never be pixel-
-// hunting.
+// off-screen chevron speaks per LANE — the zone objective's own quarry only
+// points once the LAST few marks remain (a hunt is a hunt, not a checklist,
+// but the final stragglers must never be pixel-hunting), while the harborhold
+// plaza board's posted writs point from the moment they are stamped
+// (HARBORHOLD_CFG.writs.chevronAll — a writ is a purchase of names).
 // ---------------------------------------------------------------------------
 
 import { registerKillHandler } from '../engine/killHandlers';
 import type { MonsterRarity } from '../engine/rarity';
 import type { World } from '../engine/world';
 import { registerAttentionSource, type AttentionPoint } from '../world/attention';
+import { HARBORHOLD_CFG } from './harborholds';
 
 export const BOUNTY_CFG = {
   /** How many writs the zone posts (rolled per visit off the layout rng —
@@ -35,7 +38,8 @@ export const BOUNTY_CFG = {
    *  The zone's completion bounty still pays the real reward. */
   perMarkXp: { base: 12, perLevel: 4 },
   /** The chevron holds its tongue until this few marks remain — the hunt
-   *  stays a hunt; only the last stragglers get pointed at. */
+   *  stays a hunt; only the last stragglers get pointed at. The ZONE
+   *  OBJECTIVE lane's law; board writs have their own (writs.chevronAll). */
   chevronWhenRemaining: 2,
   /** Writ palette (texts, flashes, chevrons). */
   accent: '#e8a84a',
@@ -56,15 +60,20 @@ registerKillHandler({
   },
 });
 
-// The last stragglers: once the hunt is nearly done, the remaining marks get
-// edge chevrons (name as label — you know exactly who still owes the writ).
-// bountyView speaks for EVERY writ wearing the 'bounty_mark' tag — the zone
-// objective's own quarry AND the harborhold plaza board's posted writs
-// (postHoldWrits, the same grammar on any coast) — so board writs share the
-// same stragglers law instead of roaming invisible.
+// The writ chevrons, per LANE (bountyView's board flag says which these are):
+//  - ZONE OBJECTIVE quarry keeps the stragglers law — silent until the last
+//    chevronWhenRemaining marks, then edge chevrons with the name as label
+//    (you know exactly who still owes the writ).
+//  - BOARD WRITS (the harborhold plaza board, postHoldWrits) point from the
+//    moment they are posted: the player dwelt at the board and paid its
+//    cooldown for names on a whole coast — hiding them until the stragglers
+//    reads as "the writ never took". writs.chevronAll false restores the
+//    shared stragglers law.
 registerAttentionSource((world: World): AttentionPoint[] => {
   const v = world.bountyView();
-  if (!v || v.remaining === 0 || v.remaining > BOUNTY_CFG.chevronWhenRemaining) return [];
+  if (!v || v.remaining === 0) return [];
+  const always = v.board && HARBORHOLD_CFG.writs.chevronAll;
+  if (!always && v.remaining > BOUNTY_CFG.chevronWhenRemaining) return [];
   return v.marks.map((m, i) => ({
     id: `bounty_mark_${i}`, pos: m.pos, color: BOUNTY_CFG.accent, glyph: '☠',
     label: m.name, z: 1,
