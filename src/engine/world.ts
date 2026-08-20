@@ -26,7 +26,7 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, treeNodeOf, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, treeNodeOf, treeNodeRefusal, treePointsSpent, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst,
   type SkillRarity,
@@ -3010,6 +3010,19 @@ export class World {
    *  indirection as the Caravanner — World can't import the UI). */
   salvageDwellRequested = false;
   private salvageGate = new Dwell();
+  /** ONE-SHOT: the Sacrificial Font dwell — the main loop opens the Font
+   *  screen (Merge / Convert / Reset; docs/design/skill-modes.md §7). */
+  fontDwellRequested = false;
+  private fontGate = new Dwell();
+  /** THE MILESTONE POPUP QUEUE (skill-mode trees, M1): band completions
+   *  bank a pip per (seat, skill); the sweep offers ONE popup at the next
+   *  DISCIPLINED CALM (the swapRefusal predicate — never mid-combat) and
+   *  consumes the row. The drawer's waiting-pip stays the derived truth;
+   *  the popup is a courtesy layer (panels' TREE_POPUP_ENABLED dial). */
+  treePopupRequested = false;
+  treePopupSeatId = 'p0';
+  treePopupSkillId = '';
+  private pendingTreePips = new Map<string, string[]>();
   /** ONE-SHOT: the Oracle-stone dwell (same idiom). */
   oracleDwellRequested = false;
   private oracleGate = new Dwell();
@@ -3022,6 +3035,7 @@ export class World {
    *  outside couch play (the scan checks the local hero first). */
   vendorDwellSeatId = 'p0';
   salvageDwellSeatId = 'p0';
+  fontDwellSeatId = 'p0';
   oracleDwellSeatId = 'p0';
   trackerDwellSeatId = 'p0';
   /** WHO lingered at the Caravanner (same idiom, party-travel lane): the menu
@@ -20378,6 +20392,21 @@ export class World {
       if (!inst || !def) continue;
       (inst.grafts ??= []).push({ def, level: s.graft.level ?? 1 });
     }
+    // THE SKILL-MODE TREES (M1): a spent node's `graft` payload injects
+    // here — derived exactly like the passive lane above (never saved; the
+    // Font reset re-derives it away). Authored per-skill, so fit is the
+    // AUTHOR's warrant (boot validation warns); the no-second-copy law
+    // still yields to a socketed or earlier-grafted twin.
+    for (const inst of m.knownSkills.values()) {
+      for (const nid of inst.treeNodes ?? []) {
+        const g = treeNodeOf(inst.def, nid)?.graft;
+        const def = g ? SUPPORTS[g.support] : undefined;
+        if (!def) continue; // warn-degrade: an unknown support grants silence
+        if (inst.sockets.some(s => s?.def.id === def.id)
+          || inst.grafts?.some(r => r.def.id === def.id)) continue;
+        (inst.grafts ??= []).push({ def, level: g!.level ?? 1 });
+      }
+    }
     // THE WORN GRAFT (slotgraft_<slot>_<gem> — engine/skills.ts): modifier
     // sources bind a granted gem to a BAR SEAT; the player aims it by
     // binding skills (bindSkill re-derives). Candidates come from a prefix
@@ -20850,6 +20879,9 @@ export class World {
     const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
     if (!this.spendAbilityEssence(seat, cost, 'fontreset:' + skillId)) return false;
     inst.treeNodes = undefined;
+    // The refund is FULL-TREE by law (never node-wise — partial refunds
+    // breed prerequisite paradoxes); the derived graft lane unmakes with it.
+    this.recalcSeat(seat);
     this.charDirty = true;
     this.text(vec(p.pos.x, p.pos.y - 20), 'the font unmakes the choice', '#b06bd4', 13);
     return true;
@@ -21540,6 +21572,44 @@ export class World {
   salvageHint(): { pos: Vec2; text: string } | null {
     if (!this.nearSalvage()) return null;
     return { pos: vec(SALVAGE_SITE.x, SALVAGE_SITE.y), text: 'Linger to work the salvage bench.' };
+  }
+
+  /** Linger at a Sacrificial Font → open the Font screen (the salvage
+   *  bench's flag idiom verbatim: one ask per approach, stepping out of
+   *  range re-arms the latch). */
+  private updateFont(dt: number): void {
+    const near = this.localHumanSeats().filter(s =>
+      !s.actor.dead && !s.actor.downed && this.nearFont(s));
+    const ready = near.find(s => this.seatIdle(s));
+    if (!this.fontGate.fire(!!ready, near.length > 0, dt, SALVAGE_CFG.stationDwell)) return;
+    this.fontDwellRequested = true;
+    this.fontDwellSeatId = ready!.id;
+  }
+
+  /** THE MILESTONE POPUP SWEEP (skill-mode trees, M1): a banked pip waits
+   *  for the seat's DISCIPLINED CALM — the same swapRefusal predicate that
+   *  gates the spend itself, so the popup can never offer what the hands
+   *  would refuse (never mid-combat; sanctuary is instant calm). One offer
+   *  per firing; the row is consumed — the drawer's pip keeps the truth. */
+  private updateTreePips(): void {
+    if (this.treePopupRequested) return;
+    for (const seat of this.localHumanSeats()) {
+      const queue = this.pendingTreePips.get(seat.id);
+      if (!queue?.length) continue;
+      if (seat.actor.dead || seat.actor.downed) continue;
+      if (this.swapRefusal(seat, 'socket') !== null) continue;
+      const skillId = queue.shift()!;
+      if (!queue.length) this.pendingTreePips.delete(seat.id);
+      // The skill may have been unlearned (or the point spent from the
+      // drawer) while the pip waited — offer only what still has an
+      // unspent point to place.
+      const inst = seat.meta.knownSkills.get(skillId);
+      if (!inst?.def.tree || treePointsSpent(inst) >= bandPointsAt(inst.level)) continue;
+      this.treePopupRequested = true;
+      this.treePopupSeatId = seat.id;
+      this.treePopupSkillId = skillId;
+      return;
+    }
   }
 
   // -------------------------------------------------------- tracker's camp ---
@@ -24852,6 +24922,18 @@ export class World {
     if (!inst || inst.level >= skillMaxLevel(inst.def)) return false;
     if (!this.spendAbilityEssence(seat, skillLevelAbilityCost(inst.level + 1), 'abilvl:' + skillId)) return false;
     inst.level++;
+    // A COMPLETED BAND mints an Ability point (bandPointsAt — derived,
+    // never stored). A tree-wearing skill banks the milestone pip; the
+    // popup waits for the disciplined calm (updateTreePips).
+    if (inst.def.tree && bandPointsAt(inst.level) > bandPointsAt(inst.level - 1)) {
+      const queue = this.pendingTreePips.get(seat.id) ?? [];
+      if (!queue.includes(skillId)) {
+        queue.push(skillId);
+        this.pendingTreePips.set(seat.id, queue);
+      }
+      this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 32),
+        `${inst.def.name}: an Ability point awakens`, '#d8b86a', 12);
+    }
     this.charDirty = true;
     return true;
   }
@@ -25491,6 +25573,17 @@ export class World {
             if (slot >= 0) target.sockets[slot] = { def: SUPPORTS[g.support], level: supLevel };
           }
         }
+      }
+    }
+    // THE MONSTER PIN (skill-mode trees, M1): a kit may pin spent tree
+    // nodes per skill — the ONE validation seam applies (structure only;
+    // an authored pin is the def's warrant, no level budget), and every
+    // cast-path read resolves through the views, so the telegraph draws
+    // exactly what the resolve fires. Capability only: no def wears it yet.
+    if (def.skillTrees) {
+      for (const inst of a.skills) {
+        const pin = inst ? def.skillTrees[inst.def.id] : undefined;
+        if (inst && pin?.length) inst.treeNodes = validTreeNodes(inst.def, pin);
       }
     }
     // BOONS (MonsterBoon): spawn-rolled options from the SAME choice pools
@@ -28312,32 +28405,36 @@ export class World {
       `attuned: ${def.name}`, '#a8d8a0', 12);
   }
 
-  /** THE SKILL-MODE TREES (M0 — docs/design/skill-modes.md): spend/replace
-   *  the ONE tree pick on a known skill instance. The gates, in order: the
-   *  node must exist on the def's own tree (untrusted ids no-op), the pick
-   *  row must be OPEN (inst.level ≥ tree.level — RAW level, never
-   *  effective: a fork is a commitment, not a loan from +level gear), and
-   *  the surgery obeys THE FIELD DISCIPLINE through the standing
-   *  swapRefusal words (sanctuary waives — the workshop law; M0 has no
-   *  hard lock, so re-picking under discipline is legal until M1's
-   *  first-point-seals rule). Exclusivity BY CONSTRUCTION: the state is
-   *  replaced whole, never appended. Rides the requestMeta intent lane, so
-   *  a co-op client's panel works untrusted like every meta mutation. */
+  /** THE SKILL-MODE TREES (M1 — docs/design/skill-modes.md §3): SPEND one
+   *  Ability point on a tree node. The gates, in order: the node must
+   *  exist on the def's own tree (untrusted ids no-op), an already-spent
+   *  node no-ops silently, then THE ONE SPEND PREDICATE (treeNodeRefusal:
+   *  the level seal on RAW inst.level, THE HARD BRANCH LOCK — the first
+   *  point into a branch seals the rival entirely, neutrals exempt — the
+   *  rung chain, and the bandPointsAt budget), then THE FIELD DISCIPLINE
+   *  through the standing swapRefusal words (sanctuary waives — the
+   *  workshop law). The spend APPENDS — un-choosing is the Font's reset
+   *  ritual alone (fontResetTree), never a re-pick. recalcSeat re-derives
+   *  the graft lane (a node's `graft` payload injects there). Rides the
+   *  requestMeta intent lane, so a co-op client's panel works untrusted
+   *  like every meta mutation. */
   pickTreeNode(skillId: string, nodeId: string, seat: Seat = this.localSeat): void {
     const inst = seat.meta.knownSkills.get(skillId);
-    const tree = inst?.def.tree;
-    if (!inst || !tree) return;
+    if (!inst?.def.tree) return;
     const node = treeNodeOf(inst.def, nodeId);
     if (!node) return;
+    if (inst.treeNodes?.includes(nodeId)) return; // already walked
     const at = seat.actor.pos;
-    if (inst.level < tree.level) {
-      this.text(vec(at.x, at.y - 20), `the path opens at level ${tree.level}`, '#8a8678', 11);
+    const sealed = treeNodeRefusal(inst, nodeId);
+    if (sealed) {
+      this.text(vec(at.x, at.y - 20), sealed, '#8a8678', 11);
       return;
     }
-    if (inst.treeNodes?.length === 1 && inst.treeNodes[0] === nodeId) return; // already walked
     const why = this.swapRefusal(seat, 'socket');
     if (why) { this.failNote(seat.actor, skillId + ':treepick', why); return; }
-    inst.treeNodes = [nodeId];
+    inst.treeNodes = [...(inst.treeNodes ?? []), nodeId];
+    // A spent point may carry a graft — the derived lane rebuilds now.
+    this.recalcSeat(seat);
     this.charDirty = true;
     this.text(vec(at.x, at.y - 20), node.name, inst.def.color, 12);
   }
@@ -28849,6 +28946,8 @@ export class World {
     // A pierced press leaves the body alone: the shoulders stay square to
     // the cast/dash they belong to — only the wrist moves.
     if (!pierced) caster.facing = angleTo(caster.pos, aim);
+    // (Skill-mode audit: castMode is deliberately OFF the tree whitelist —
+    // this def read is exempt until the heavy_strike wave adopts it.)
     const mode = def.castMode ?? 'cast';
 
     // USE-CHARGES: the press spends one round off the bank (canUse already
@@ -28902,10 +29001,14 @@ export class World {
       st.comboIdx = 1;
     }
 
+    // THE RESOLVED CHANNEL (skill-mode audit, M1): ONE binding for the
+    // whole channel block — a spent tree node's ramp/rampMove fold here;
+    // unpicked instances get the def's own object back by reference.
+    const chan = instanceChannel(inst);
     // RITUAL GROUND (channelPersist): the channel CONVERTS to a cast that
     // PLANTS a channeler at the mark — the held beam persists at the
     // location, independent of the caster (constructs exempt: no nesting).
-    if (mode === 'channel' && def.channel && !caster.construct
+    if (mode === 'channel' && chan && !caster.construct
       && caster.sheet.get('channelPersist', skillContextTags(def), instanceMods(inst)) > 0) {
       caster.payCost(caster.skillCost(inst));
       caster.facing = angleTo(caster.pos, aim);
@@ -28924,7 +29027,10 @@ export class World {
     // powerbank), fired on the caster's schedule at fill-scaled power.
     // Cast speed still fills the bank; the gem's premium stretches the
     // full-bank time past the honest bar. Instants, channels and sub-0.3s
-    // flicks refuse the conversion (nothing worth banking).
+    // flicks refuse the conversion (nothing worth banking). EVERY field
+    // below binds — movement included (the move law reads this same spec:
+    // the gather trades the bar's rooting for a slowed channel walk; ruled
+    // 2026-08-20, probe_skillmodes THE GATHER'S STRIDE).
     let gather: ChannelSpec | undefined;
     if (mode === 'cast' && !def.concentration && def.useTime >= 0.3) {
       const g = socketSpec(inst, 'gather');
@@ -28945,8 +29051,8 @@ export class World {
     }
 
     // Channels pay per pulse (inside updateCasting), everything else now.
-    if (gather || (mode === 'channel' && def.channel)) {
-      const chSpec = gather ?? def.channel!;
+    if (gather || (mode === 'channel' && chan)) {
+      const chSpec = gather ?? chan!;
       const total = Math.max(0.1, chSpec.interval / caster.speedFactor(inst));
       const cc = this.consumeChargeCost(caster, inst);
       caster.casting = {
@@ -32401,6 +32507,9 @@ export class World {
       patrol?: Vec2[];
     }): void {
     const def = inst.def;
+    // (Skill-mode audit: projectile-family fields — pierce/forks/fire —
+    // are off the M1 whitelist; the piercing_arrow/fireball waves adopt
+    // this read behind the view when they land.)
     if (def.delivery.type !== 'projectile') return;
     const d: ProjectileDelivery = def.delivery;
     const tags = skillContextTags(def);
@@ -33306,7 +33415,9 @@ export class World {
     overrides?: { monsterId?: string; pos?: Vec2; delivery?: SummonDelivery; dmgMult?: number },
   ): Actor | null {
     // A support's summon graft (Vessel of Shadow) supplies the delivery when
-    // the host skill's own isn't a summon.
+    // the host skill's own isn't a summon. (Skill-mode audit: summon fields
+    // are off the M1 whitelist — the summon_skeleton/flame_totem waves
+    // adopt this read behind the view when they land.)
     const d = overrides?.delivery ?? inst.def.delivery;
     if (d.type !== 'summon') return null;
     const tags = skillContextTags(inst.def);
@@ -40683,6 +40794,10 @@ export class World {
     this.updateCampfire(dt);
     // The salvage bench opens the break/craft menu on a dwell (same flag idiom).
     this.updateSalvage(dt);
+    // A Sacrificial Font opens the Font screen on a dwell (same flag idiom).
+    this.updateFont(dt);
+    // A banked Ability-point pip offers its popup at the next disciplined calm.
+    this.updateTreePips();
     // The Oracle stone opens the communion menu on a dwell.
     this.updateOracle(dt);
     // The Tracker's fire opens the Bestiary on a dwell.
@@ -46722,7 +46837,7 @@ export class World {
       // design, and breaking it is the player's counterplay. Brim
       // channels (innate or a Gathered Casting conversion) hold to the
       // BRIM: a monster releases at full power or not at all.
-      const chSpec = cs.mode === 'channel' ? (cs.gather ?? def.channel) : undefined;
+      const chSpec = cs.mode === 'channel' ? (cs.gather ?? instanceChannel(cs.inst)) : undefined;
       cs.aiHold ??= chSpec?.release?.requireFull
         ? (chSpec.maxHold ?? 4) + 0.5
         : chSpec?.brim
@@ -46901,8 +47016,9 @@ export class World {
       }
       case 'channel': {
         // A Gathered Casting conversion runs on its SYNTHESIZED spec —
-        // the def itself has no channel to read.
-        const ch = cs.gather ?? def.channel!;
+        // the def itself has no channel to read. (Skill-mode audit: the
+        // resolved view folds a spent node's ramps; the gather wins whole.)
+        const ch = cs.gather ?? instanceChannel(cs.inst)!;
         cs.channelTime = (cs.channelTime ?? 0) + dt;
         // CAPPED CHANNEL: the gather has a ceiling — the hold force-
         // releases at maxHold (× effectDuration), payload and all. The
@@ -53535,7 +53651,11 @@ export class World {
       if (a.casting.mode === 'channel') {
         // channelMobility (Walking Meditation) can unlock even an IMMOBILE
         // channel — invest hard enough and you stroll mid-maelstrom.
-        return a.casting.inst.def.channel?.move === 'immobile'
+        // THE GATHER'S STRIDE (ruled 2026-08-20): the LIVE spec binds here
+        // exactly as it does at the pulse clock — a Gathered Casting
+        // conversion walks by its own synthesized words (move 'slowed'),
+        // never by the def the conversion replaced. One resolution, one law.
+        return (a.casting.gather ?? instanceChannel(a.casting.inst))?.move === 'immobile'
           && this.channelMobility(a, a.casting.inst) <= 0;
       }
       if (a.casting.mode === 'guard') return false;
@@ -53597,7 +53717,14 @@ export class World {
     // the channelMobility stat (immobile 0 / slowed factor / normal 1, + stat).
     let channelFactor = 1;
     if (a.casting?.mode === 'channel') {
-      const ch = a.casting.inst.def.channel;
+      // THE GATHER'S STRIDE (ruled 2026-08-20): the LIVE spec — the
+      // gather conversion's synthesized words win over the def's, the
+      // same `cs.gather ?? view` resolution the pulse machinery rides. A
+      // gathering caster walks SLOWED (its authored 0.5), not free: the
+      // conversion trades the bar's rooting for the channel bargain, and
+      // channelMobility investment opens it further. (A spent tree node's
+      // rampMove rides this same read — the skill-mode audit's view.)
+      const ch = a.casting.gather ?? instanceChannel(a.casting.inst);
       const base = ch?.move === 'immobile' ? 0 : ch?.move === 'slowed' ? (ch.moveFactor ?? 0.5) : 1;
       // rampMove: the held channel DRAGS (negative per — Undertow's
       // maelstrom slowly anchors its own bearer) or FREES (positive — the

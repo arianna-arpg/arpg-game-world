@@ -296,8 +296,11 @@ export function rebuildSkill(s: SavedSkill): SkillInstance | null {
   if (s.granted) inst.granted = true;
   if (s.attunedForm && MONSTERS[s.attunedForm]) inst.attunedForm = s.attunedForm;
   // THE SKILL-MODE TREES: picks survive the round trip; orphans (a renamed
-  // node id, a retired tree) drop with a console note — the attunedForm law.
-  if (s.treeNodes?.length) inst.treeNodes = validTreeNodes(def, s.treeNodes);
+  // node id, a retired tree), structure breaks (a rival-branch id, a broken
+  // rung chain) and over-budget tails (the level carries the bandPointsAt
+  // trim) drop with a console note — the attunedForm law. An M0-era save's
+  // single rung-1 pick loads as a 1-point spend, costless by construction.
+  if (s.treeNodes?.length) inst.treeNodes = validTreeNodes(def, s.treeNodes, s.level);
   if (s.locked) inst.locked = true; // the keeper's mark (salvageLock) survives
   inst.sockets = s.sockets.map(sock => {
     if (!sock) return null;

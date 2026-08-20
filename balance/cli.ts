@@ -30,7 +30,8 @@ import { entryClassId, entryLabel, entryLevel } from '../src/sim/builds';
 import { BUILDS } from '../src/sim/data/builds';
 import { PANELS, expandPanel, type ResolvedTarget } from '../src/sim/data/panels';
 import {
-  COMPAT_CFG, compatCensus, explainPair, hostExpressionCensus, makeProbeSession, pairKey,
+  COMPAT_CFG, compatCensus, explainPair, hostExpressionCensus, hostIdOf, hostTreeNodes,
+  ledgerSkillIds, makeProbeSession, pairKey,
   runCompatMatrix,
   type HostExpressionBaseline, type HostMuteClass,
   type MatrixOpts, type MatrixResult, type PairDeepResult, type PairExplain, type PairProbeResult,
@@ -443,6 +444,12 @@ function sweepSkills(args: Args): void {
   // Net: fire is not shown to be mis-tuned. Any future fire claim must cite a
   // --droppable run, and must not compare across cooldown classes on this lane.
   const droppableOnly = !!args.flags.droppable;
+  // --modes: THE BRANCH AXIS (skill-mode trees, M1) — each tree-wearing
+  // skill also ranks its branch TERMINAL allocations as their own rows
+  // (`skill@branch`, the census/ledger convention; exact cover makes the
+  // allocation deterministic). Unpicked rows stay byte-identical either
+  // way (the transparency law) — the flag only widens the roster.
+  const withModes = !!args.flags.modes;
   let skippedNoDrop = 0;
   const rigs: { skillId: string; build: BuildSpec }[] = [];
   for (const [id, def] of Object.entries(SKILLS)) {
@@ -451,17 +458,26 @@ function sweepSkills(args: Args): void {
     if (filter && !id.includes(filter)) continue;
     if (droppableOnly && def.noDrop) { skippedNoDrop++; continue; }
     const classId = classOverride || (tags.includes('spell') ? 'magician' : 'warrior');
-    rigs.push({
-      skillId: id,
-      build: {
-        id: `sweep_${id}_l${level}`,
-        label: `solo ${id} @ L${level} (gem ${gemLevel})`,
-        classId,
-        level,
-        attributes: SWEEP_ATTRIBUTES,
-        skills: [{ id, level: gemLevel }],
-      },
-    });
+    const hosts: { hostId: string; treeNodes?: string[] }[] = [{ hostId: id }];
+    if (withModes) {
+      for (const b of def.tree?.branches ?? []) {
+        const hostId = hostIdOf(id, b.id);
+        hosts.push({ hostId, treeNodes: hostTreeNodes(hostId) });
+      }
+    }
+    for (const h of hosts) {
+      rigs.push({
+        skillId: h.hostId,
+        build: {
+          id: `sweep_${h.hostId}_l${level}`,
+          label: `solo ${h.hostId} @ L${level} (gem ${gemLevel})`,
+          classId,
+          level,
+          attributes: SWEEP_ATTRIBUTES,
+          skills: [{ id, level: gemLevel, ...(h.treeNodes ? { treeNodes: h.treeNodes } : {}) }],
+        },
+      });
+    }
   }
 
   const defs: ScenarioDef[] = [];
@@ -875,8 +891,9 @@ function loadLedger(p: string, announceMissing: boolean): { ledger: SupportLedge
     return { ledger: emptyLedger(), existed: false };
   }
   const ledger = JSON.parse(fs.readFileSync(p, 'utf8')) as SupportLedger;
+  // ledgerSkillIds, never raw SKILLS keys: `skill@branch` rows are live ids.
   const issues = validateLedger(ledger, {
-    skills: new Set(Object.keys(SKILLS)), supports: new Set(Object.keys(SUPPORTS)),
+    skills: ledgerSkillIds(), supports: new Set(Object.keys(SUPPORTS)),
   });
   for (const i of issues) console.log(`  ledger lint: ${i}`);
   return { ledger, existed: true };
@@ -1033,8 +1050,11 @@ function gateAgainstLedger(args: Args, observed: ObservedMatrix, ledgerPath: str
     + (check.outOfScopeSuspects.length ? ` · outside this slice: ${check.outOfScopeSuspects.length}` : ''));
 
   if (args.flags.reconcile) {
+    // ledgerSkillIds, never raw SKILLS keys — the registry guard would
+    // otherwise DELETE every `skill@branch` row as a dead id (the
+    // 2026-08-20 gather-slice bite; probe_skillmodes section L pins it).
     const rec = reconcileLedger(ledger, observed, today(), {
-      skills: new Set(Object.keys(SKILLS)), supports: new Set(Object.keys(SUPPORTS)),
+      skills: ledgerSkillIds(), supports: new Set(Object.keys(SUPPORTS)),
     });
     saveLedger(ledgerPath, rec.ledger);
     console.log(`\nLedger reconciled → ${ledgerPath}`);
@@ -1221,7 +1241,7 @@ function matrixLedger(args: Args): void {
     for (const r of oldest.slice(0, 5)) console.log(`    ${r.since}  ${r.kind.padEnd(9)} ${r.skill} + ${r.support}`);
   }
   const issues = validateLedger(ledger, {
-    skills: new Set(Object.keys(SKILLS)), supports: new Set(Object.keys(SUPPORTS)),
+    skills: ledgerSkillIds(), supports: new Set(Object.keys(SUPPORTS)),
   });
   if (issues.length) {
     console.log(`  lint (${issues.length}):`);

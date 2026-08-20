@@ -33,7 +33,7 @@ import { SUPPORTS } from '../data/supports';
 import { MONSTERS } from '../data/monsters';
 import { PASSIVE_NODES } from '../data/passives';
 import { sanitizeChoices, sanitizeGrafts } from '../data/passiveChoices';
-import { makeSkillInstance, type SkillInstance, type SupportInstance, type SkillRarity } from '../engine/skills';
+import { makeSkillInstance, validTreeNodes, type SkillInstance, type SupportInstance, type SkillRarity } from '../engine/skills';
 import { rebuildItem } from '../engine/itemgen';
 import { ITEM_RARITIES, type ItemInstance } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
@@ -215,7 +215,11 @@ export interface SeatW {
  *  otherwise (the derived-bit idiom; the client renders 🔒 and computes its
  *  toggle asks from it — the host stays the authority). */
 export interface SupportInstW { id: string; lvl: number; lk?: 1; }
-export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; }
+/** `tn` = THE SKILL-MODE TREE picks (spent node ids, spend order) — absent
+ *  when unpicked (the sparse idiom); the client rehydrates through
+ *  validTreeNodes so its tooltip/pip/panel read the same truth the host
+ *  spends (orphans from a version-skewed host drop with a note). */
+export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; tn?: string[]; }
 /** The client OWN-seat build: enough to render the char-sheet / skill-book / tree
  *  and re-derive the stat sheet (recalcSeat) on the client. */
 export interface SeatMetaW {
@@ -256,6 +260,7 @@ const skillInstW = (s: SkillInstance): SkillInstW => ({
   mark: s.state?.markPos ?? undefined,
   g: s.granted || undefined,
   lk: s.locked ? 1 : undefined,
+  tn: s.treeNodes?.length ? [...s.treeNodes] : undefined,
 });
 
 /** Host: serialize one seat's build/progression for its owning client.
@@ -305,6 +310,9 @@ const rehydrateSkill = (w: SkillInstW): SkillInstance | null => {
   if (w.mark) inst.state = { markPos: w.mark };
   if (w.g) inst.granted = true;
   if (w.lk) inst.locked = true; // the keeper's mark (salvageLock)
+  // Untrusted wire → the one validation seam (structure + budget), so the
+  // client's panels can never render a state the host would refuse.
+  if (w.tn?.length) inst.treeNodes = validTreeNodes(def, w.tn, w.lvl);
   return inst;
 };
 

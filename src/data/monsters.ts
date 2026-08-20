@@ -519,6 +519,13 @@ export interface MonsterDef {
   sympathy?: string[];
   /** Skill ids from the shared catalog. */
   skills: string[];
+  /** THE MONSTER PIN (skill-mode trees, M1 — capability; no def wears it
+   *  yet): spent tree-node ids per kit skill (the cadenced-kin law — a
+   *  pinned mind drums the SAME branches players earn). Resolved through
+   *  validTreeNodes at kit mint and read through the resolved views
+   *  everywhere — the telegraph draws the pinned arc, never the base.
+   *  Authoring one is a DESIGN call (nettle_dervish stays hers). */
+  skillTrees?: Record<string, string[]>;
   xp: number;
   /** GEAR loot-table override (LOOT_TABLES id). Omitted ⇒ the kill path uses
    *  DROP_CFG defaults (boss table for bosses, chance-gated world table

@@ -57,12 +57,16 @@ function mintSkill(spec: BuildSkillSpec, warnings: string[]): SkillInstance | nu
   }
   const inst = makeSkillInstance(def, level, sockets);
   inst.rarity = rarity;
-  // THE SKILL-MODE TREES: a build row may pin the pick. One validation
-  // seam with the save loader (validTreeNodes) — orphans warn and drop.
+  // THE SKILL-MODE TREES: a build row may pin spent nodes. One validation
+  // seam with the save loader (validTreeNodes) — orphans and structure
+  // breaks (rival branch, broken rung chain) warn and drop; the LEVEL
+  // budget is deliberately NOT passed (the hypothesis-lever doctrine: the
+  // sim may pin a terminal allocation at any gem level — the matrix's
+  // @branch hosts ride this; structure is grammar, budget is economy).
   if (spec.treeNodes?.length) {
     const kept = validTreeNodes(def, spec.treeNodes);
     if ((kept?.length ?? 0) < spec.treeNodes.length) {
-      warnings.push(`skill '${spec.id}': orphaned tree node id(s) among ${JSON.stringify(spec.treeNodes)} — dropped`);
+      warnings.push(`skill '${spec.id}': orphaned/ill-structured tree node id(s) among ${JSON.stringify(spec.treeNodes)} — dropped`);
     }
     if (kept) {
       inst.treeNodes = kept;

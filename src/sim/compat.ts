@@ -177,6 +177,59 @@ const skillLookup = (id: string): SkillDef | undefined => SKILLS[id];
  *  shard bookkeeping): `skill|support`. */
 export const pairKey = (skill: string, support: string): string => `${skill}|${support}`;
 
+// --- THE BRANCH AXIS (skill-mode trees, M1) ---------------------------------
+// A moded skill enumerates BEYOND its bare row: one census host per branch
+// TERMINAL ALLOCATION — the full walked branch + the neutral, the exact
+// cover's deterministic end state — under the `skill@branch` ledger
+// convention (exactly two extra rows per moded skill). The probe lane
+// resolves a host id back to (base def, pinned treeNodes); gem levels stay
+// the standard probe levels (below-milestone allocations ride the sim's
+// hypothesis-lever doctrine — structure is grammar, budget is economy).
+
+/** `skill@branch` — the census/ledger host id for a terminal allocation. */
+export const hostIdOf = (skillId: string, branchId?: string): string =>
+  branchId ? `${skillId}@${branchId}` : skillId;
+
+/** Parse a census host id. Plain ids pass through with no branch. */
+export function parseHostId(hostId: string): { skillId: string; branchId?: string } {
+  const at = hostId.indexOf('@');
+  return at === -1
+    ? { skillId: hostId }
+    : { skillId: hostId.slice(0, at), branchId: hostId.slice(at + 1) };
+}
+
+/** The BASE def behind a census host id (undefined = unknown skill). */
+export const hostDefOf = (hostId: string): SkillDef | undefined =>
+  SKILLS[parseHostId(hostId).skillId];
+
+/** The ledger's valid SKILL-ID universe: every registry id PLUS every
+ *  tree-wearer's `skill@branch` terminal host (the census's own
+ *  expansion). The reconcile's registry guard and the ledger lint MUST
+ *  read through this — raw SKILLS keys would read every branch row as a
+ *  dead id and a reconcile would silently delete it (the 2026-08-20
+ *  gather-slice bite: eight fresh @branch rows retired as "resolved"). */
+export function ledgerSkillIds(): Set<string> {
+  const out = new Set(Object.keys(SKILLS));
+  for (const s of Object.values(SKILLS)) {
+    for (const b of s.tree?.branches ?? []) out.add(hostIdOf(s.id, b.id));
+  }
+  return out;
+}
+
+/** The terminal allocation a `skill@branch` host pins: the branch's rungs
+ *  in order + the neutral (a legal spend order by construction). Plain
+ *  ids — and unknown branches — answer undefined. */
+export function hostTreeNodes(hostId: string): string[] | undefined {
+  const { skillId, branchId } = parseHostId(hostId);
+  if (!branchId) return undefined;
+  const def = SKILLS[skillId];
+  const branch = def?.tree?.branches.find(b => b.id === branchId);
+  if (!branch) return undefined;
+  const ids = branch.rungs.map(n => n.id);
+  if (def!.tree!.neutral) ids.push(def!.tree!.neutral.id);
+  return ids;
+}
+
 /** Refused-pair mechanical-affinity screen. Exclusion-tag refusals are
  *  deliberate design; only tag-ABSENCE refusals with mechanical proof are
  *  suspects. Shared by the census and the pair dossier — one truth. */
@@ -199,9 +252,13 @@ export function suspectEvidence(def: SkillDef, sup: SupportDef): { tag: string; 
 /** The whole catalog through the real gate. `skillFilter`/`supportFilter`
  *  narrow by substring (the CLI's --filter/--support). */
 export function compatCensus(skillFilter = '', supportFilter = ''): CensusResult {
+  // THE BRANCH AXIS: a moded skill contributes its bare id AND one
+  // `skill@branch` host per branch terminal allocation (exact cover makes
+  // the allocation deterministic — two extra hosts per moded skill).
   const skills = Object.values(SKILLS)
     .filter(s => !s.noDrop && (!skillFilter || s.id.includes(skillFilter)))
-    .map(s => s.id).sort();
+    .flatMap(s => [s.id, ...(s.tree?.branches ?? []).map(b => hostIdOf(s.id, b.id))])
+    .sort();
   const supports = Object.keys(SUPPORTS)
     .filter(id => !supportFilter || id.includes(supportFilter)).sort();
   const rows: CensusRow[] = [];
@@ -209,11 +266,15 @@ export function compatCensus(skillFilter = '', supportFilter = ''): CensusResult
   for (const supportId of supports) {
     const sup = SUPPORTS[supportId];
     for (const skillId of skills) {
-      const def = SKILLS[skillId];
+      const def = hostDefOf(skillId)!;
       // A bare instance — pairs that only fit through ANOTHER gem's grants
       // are loadout-time compositions, deliberately out of census scope
-      // (same stance as the boot validator).
+      // (same stance as the boot validator). A @branch host gates on the
+      // ALLOCATED instance — a tree graft/mod that opens a mechanism opens
+      // its sockets on that host's rows.
       const inst = makeSkillInstance(def, 1, 3);
+      const pinned = hostTreeNodes(skillId);
+      if (pinned) inst.treeNodes = pinned;
       const crew = summonCrewOf(def.delivery.type === 'summon' ? def.delivery : undefined,
         id => MONSTERS[id], id => SKILLS[id]);
       const host = supportFitsInst(sup, inst);
@@ -597,16 +658,24 @@ export function probeBuild(
    *  rides here in place of the reference attack. */
   refIdOverride?: string,
 ): BuildSpec {
-  const def = SKILLS[skillId];
+  // THE BRANCH AXIS: a `skill@branch` host builds its BASE skill with the
+  // terminal allocation pinned (builds.ts validates through the one seam).
+  const { skillId: baseId } = parseHostId(skillId);
+  const pinned = hostTreeNodes(skillId);
+  const def = SKILLS[baseId];
   const level = opts.level ?? COMPAT_CFG.level;
   const gemLevel = opts.gemLevel ?? gemLevelAt(level);
   const tags = def.tags as readonly string[];
   const classId = tags.includes('spell') ? 'magician' : 'warrior';
   const skills: BuildSpec['skills'] = [
-    { id: skillId, level: gemLevel, rarity: 'rare', supports: supports.length ? supports : undefined },
+    {
+      id: baseId, level: gemLevel, rarity: 'rare',
+      supports: supports.length ? supports : undefined,
+      ...(pinned ? { treeNodes: pinned } : {}),
+    },
   ];
   const ref = refIdOverride ?? referenceAttackId();
-  if (mode === 'escort' && skillId !== ref) skills.push({ id: ref, level: gemLevel });
+  if (mode === 'escort' && baseId !== ref) skills.push({ id: ref, level: gemLevel });
   // FOUNT SEEDING (BuildSpec.charges): orbPickup-banked economies never fill
   // in a probe — no orb ever falls in the arena — so a drink-shaped host
   // read byte-identical with EVERY gem it carried (the 2026-07-14 flask-lane
@@ -645,7 +714,9 @@ export function probeScenario(
     graze?: boolean; comboDiet?: boolean;
   },
 ): ScenarioDef {
-  const def = SKILLS[skillId];
+  // THE BRANCH AXIS: shape decisions read the BASE def (tags/delivery — an
+  // allocation can move neither); probeBuild pins the terminal nodes.
+  const def = hostDefOf(skillId);
   if (!def) throw new Error(`compat: unknown skill '${skillId}'`);
   if (support && !SUPPORTS[support.id]) throw new Error(`compat: unknown support '${support.id}'`);
   const sup = support ? SUPPORTS[support.id] : undefined;
@@ -685,7 +756,7 @@ export function probeScenario(
   // shape-keyed bare shares the world) and the combo pilot round-robins
   // host + fillers so comboVaried can arm on the host's own press.
   if (comboDiet) {
-    const [f1, f2] = dietFillerIds(skillId);
+    const [f1, f2] = dietFillerIds(parseHostId(skillId).skillId);
     const gl = opts.gemLevel ?? gemLevelAt(opts.level ?? COMPAT_CFG.level);
     for (const fid of [f1, f2]) {
       if (!build.skills.some(s => s.id === fid)) {
@@ -1668,7 +1739,7 @@ export function probePair(sess: ProbeSession, row: CensusRow): PairProbeRun {
   if (row.fit === 'refused') {
     throw new Error(`compat: probePair on refused pair ${row.skillId} + ${row.supportId}`);
   }
-  const def = SKILLS[row.skillId];
+  const def = hostDefOf(row.skillId)!; // @branch hosts resolve to their base def
   const sup = SUPPORTS[row.supportId];
   const shape = pairShapeFor(def, sup, row.fit);
   // PROBE-POLICY escalation (small-chance payloads): both runs stretch the
@@ -2016,8 +2087,9 @@ export interface FitExplain {
   agrees: boolean;
 }
 
-export function explainFit(def: SkillDef, sup: SupportDef): FitExplain {
+export function explainFit(def: SkillDef, sup: SupportDef, treeNodes?: string[]): FitExplain {
   const inst = makeSkillInstance(def, 1, 3);
+  if (treeNodes?.length) inst.treeNodes = treeNodes; // @branch hosts explain allocated
   const host = supportFitsInst(sup, inst);
   const tags = def.tags as readonly string[];
   const requires = (sup.requiresTags ?? []).map(t => ({ tag: t as string, present: tags.includes(t) }));
@@ -2329,12 +2401,13 @@ export function explainPair(
   sess: ProbeSession, skillId: string, supportId: string,
   run: { probes: boolean; deep: boolean },
 ): PairExplain {
-  const def = SKILLS[skillId];
+  // THE BRANCH AXIS: `skill@branch` dossiers explain the ALLOCATED host.
+  const def = hostDefOf(skillId);
   if (!def) throw new Error(`compat: unknown skill '${skillId}'`);
   const sup = SUPPORTS[supportId];
   if (!sup) throw new Error(`compat: unknown support '${supportId}'`);
 
-  const fit = explainFit(def, sup);
+  const fit = explainFit(def, sup, hostTreeNodes(skillId));
   const unread = unreadPayloadRows(sup, def, skillLookup).map(r => ({ key: String(r.key), site: r.site }));
   const blindRules = BLINDNESS_RULES.filter(r => r.when(def, sup)).map(r => r.note);
   const x: PairExplain = { skillId, supportId, fit, unread, blindRules, prescriptions: [] };

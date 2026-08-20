@@ -335,6 +335,39 @@ standing order are untouched (the drop INDEX counts mints, not levels).
   M0's wild_strike rows):** a branch's `over` re-pins EVERY field of its
   identity — including values that happen to equal today's base — so the
   branch survives a rescale moving the base row out from under it.
+  **AS BUILT (M1, 2026-08-20 — the tree fabric):** the full grammar
+  (`SkillTreeSpec.neutral`, node `mods` folded in `instanceInnateMods` —
+  every stat read covered free — and node `graft` rebuilt at recalcSeat,
+  derived never saved); the whitelist grew ONE audited lane —
+  `over.channel.{ramp,rampMove}` behind the new `instanceChannel` view
+  (useSkill's channel start, the pulse loop, the AI hold, movementLocked/
+  moveActor's stride law, the renderer's channel bar — the gather
+  conversion still wins whole); `castMode` deliberately NOT adopted (the
+  heavy_strike wave's road; exemption comments at the read sites, the
+  full audit table lives at the whitelist in engine/skills.ts). Spending:
+  `pickTreeNode` = spend-one-point against `bandPointsAt` under
+  `treeNodeRefusal` (THE ONE SPEND PREDICATE — level seal, THE HARD LOCK
+  with the sealed path's own name, the rung chain, the budget; panels
+  speak the same words), append-only — un-choosing is `fontResetTree`
+  alone; `validTreeNodes` grew structure (rival-branch + rung-chain
+  drops) and an optional level-budget trim (character saves + the co-op
+  wire pass level; sim builds deliberately don't — the hypothesis
+  lever). THE M0 FOLD probe-pinned costless. The M0 audit finds landed:
+  the enemy telegraph reads `instanceDelivery` (a MonsterDef pin draws
+  true) and `MonsterDef.skillTrees` is the pin CAPABILITY (validated at
+  boot + kit mint; nobody wears it — nettle_dervish stays hers);
+  unlearn/relearn retention probe-pinned. Co-op: `SkillInstW.tn` ships
+  picks, rehydrated through the one seam. wild_strike = the full
+  exemplar (rungs 2–3 + neutral, every payload A/B-measured at the rig
+  grain incl. the stride lane; ⚠ all numbers unblessed). QA: the census
+  branch axis landed (`skill@branch` terminals — the debut reconcile
+  banked +10 open cost_only twins / −14 blind-drift retirements),
+  `sweep skills --modes`, the smoke rows re-pinned at gem-20 terminals
+  (baseline untouched — the transparency law holds at macro grain),
+  probe_skillmodes grown to 66 checks (A–L). The milestone popup is a
+  DIAL-gated layer (`TREE_POPUP_ENABLED`, panels.ts) fed by the world's
+  disciplined-calm sweep; the Font SCREEN (§7's tabs) stands as its own
+  dwell-opened station panel.
 - **`SkillInstance` state:** spent-node ids, sparse-serialized (the
   `attunedForm` idiom: validated on load, orphaned picks drop with a
   console note). Branch = derived. Wallet counters ride the account/run
@@ -393,9 +426,14 @@ standing order are untouched (the drop INDEX counts mints, not levels).
   dial unblessed — the blessing pass owns the numbers.** The dedicated
   Font SCREEN (§7's tabs) is deliberate M1 UI debt: M-ECON ships the
   recipes as affordances in the standing panels.
-- **M1 — the tree fabric.** The schema, the resolved-view audit (the long
-  pole), the hard lock + Font reset, the matrix/census branch axis, the
-  drawer's tree panels. Effort: L.
+- **M1 — the tree fabric: BUILT (2026-08-20, chip task_64536b8c).** The
+  full grammar + point spending under the hard lock (the M0 fold costless,
+  probe-pinned), the resolved-view audit (channel lane adopted; the audit
+  table at the whitelist), the Font screen + milestone popup, the drawer
+  tree panels + bar pip + tooltip line, the census/matrix branch axis with
+  its debut reconcile, the monster-pin capability, the full wild_strike
+  exemplar with per-rung A/B tables (§8's M1 as-built block carries the
+  detail; ⚠ every number unblessed — the blessing pass owns them).
 - **M2 — the catalog, in waves.** The twelve pairs become trees; every
   rung earns its A/B row before numbers bless; coverage is curated forever
   (576 droppable skills). Effort: M per wave, measurement-shaped.

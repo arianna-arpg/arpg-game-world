@@ -46,6 +46,31 @@ claims a human can re-check with one command. You do not freelance.
 - After ANY data edit: `npx tsc --noEmit` must stay clean and
   `npm run sim -- run --suite smoke` must pass before you claim the fix.
 
+## THE BRANCH AXIS (skill-mode trees, M1 — 2026-08-20)
+
+A moded skill (SkillDef.tree) enumerates as THREE census hosts: its bare id
+plus one `skill@branch` host per branch TERMINAL ALLOCATION (the walked
+branch + the neutral — exact cover makes it deterministic; exactly two
+extra rows per moded skill). The ledger keys them as ordinary skill ids
+(`wild_strike@sprinkler`); `matrix explain wild_strike@duelist <gem>` and
+every check/shard/resume flag work unchanged — the probe lane resolves the
+host id to its base def + pinned treeNodes internally (sim/compat.ts:
+hostIdOf/parseHostId/hostTreeNodes). Facts to hold:
+
+- A gem verdict may DIFFER between the bare host and an allocation (a tree
+  graft/mod can open a mechanism); identical cost_only/inert twins across
+  all three hosts usually share ONE cause — explain the BASE pair first.
+- An unpicked tree is byte-transparent (probe-pinned), so a bare host's
+  verdicts never move just because a tree was authored; if a bare row
+  flips at a tree landing, suspect the landing, not the axis.
+- The A/B DISTINCTNESS of branches (do they PLAY differently) is the
+  measurement pass's job (balance/scratch_skillmodes_ab.ts), never yours —
+  the matrix only proves byte-liveness (the kindred-metric clause).
+- Debut reconcile 2026-08-20: +10 open (8 `wild_strike@*` cost_only twins
+  of the mana_floor family + 2 base rows the ledger predated) · −14
+  retired (base wild_strike inert rows re-measuring blind under
+  since-landed blindness rules — drift retirements, not fixes).
+
 ## Honesty rules
 
 - A sliced run's claims are sliced claims — state coverage (probed/scope/

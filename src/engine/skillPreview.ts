@@ -31,7 +31,7 @@
 import type { Actor } from './actor';
 import { skillDamageBands } from './damage';
 import {
-  instanceMods, skillContextTags, skillCooldownSeconds, socketSpec,
+  instanceDelivery, instanceMods, skillContextTags, skillCooldownSeconds, socketSpec,
   type SkillInstance,
 } from './skills';
 import { STATUS_DEFS, tuneAilmentChance } from './status';
@@ -144,8 +144,9 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   // ---- how many things this cast puts in the world -------------------------
   // Each mirrors its cast site's own expression (world.ts useSkill), so a
   // support that bumps the count moves this row by exactly what it will move
-  // in play.
-  const d = def.delivery;
+  // in play. (Skill-mode audit: the resolved view — a picked branch's
+  // folded fields preview as they will fire.)
+  const d = instanceDelivery(inst);
   if (d.type === 'projectile') {
     const bonus = Math.round(get('projectileCount'));
     const baseCount = typeof d.count === 'number' ? d.count : undefined;

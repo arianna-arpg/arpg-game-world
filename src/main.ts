@@ -901,6 +901,7 @@ function handleLocalPanels(): void {
     if (ui.caravanOpen) { ui.closeCaravan(); return; }
     if (ui.vendorOpen) { ui.closeVendor(); return; }
     if (ui.salvageOpen) { ui.closeSalvage(); return; }
+    if (ui.fontOpen) { ui.closeFont(); return; }
     if (ui.oracleOpen) { ui.closeOracle(); return; }
     if (ui.bestiaryOpen) { ui.closeBestiary(); return; }
     if (ui.sailOpen) { ui.closeSail(); return; }
@@ -1539,6 +1540,18 @@ function tick(now: number): void {
       if (world.salvageDwellRequested && !ui.escapeMenuOpen) {
         world.salvageDwellRequested = false;
         if (!ui.salvageOpen) ui.showSalvage(world.salvageDwellSeatId);
+      }
+      // A Sacrificial Font dwell asks to open the Font screen (Merge /
+      // Convert / Reset — skill-mode trees M1).
+      if (world.fontDwellRequested && !ui.escapeMenuOpen) {
+        world.fontDwellRequested = false;
+        if (!ui.fontOpen) ui.showFont(world.fontDwellSeatId);
+      }
+      // A banked Ability point's popup, offered at the disciplined calm the
+      // world's own sweep found (never mid-combat).
+      if (world.treePopupRequested && !ui.escapeMenuOpen) {
+        world.treePopupRequested = false;
+        ui.showTreePopup(world.treePopupSeatId, world.treePopupSkillId);
       }
       // The HARBOR BOARD dwell (a port's notice board) asks to open the
       // harbor menu — hearsay, passage down the lanes, charts. (The dock

@@ -4331,15 +4331,61 @@ export const DEFAULT_LEVELING: Modifier[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// THE SKILL-MODE TREES (docs/design/skill-modes.md — M0, the spike): a
-// per-skill miniature tree of MUTUALLY-EXCLUSIVE branches, picked per
-// INSTANCE at a level milestone. M0 ships the schema seed — two branches ×
-// one rung, payload = TYPED WHITELISTED spec overrides — authored on
-// wild_strike alone; M1 grows rungs 2–3, the neutral node, node mods, the
-// hard branch lock and the full read audit. Names are plain DATA (renames
-// are one-line edits forever). THE TRANSPARENCY LAW: an unpicked instance
-// is byte-identical to a def with no tree at all — the resolvers below
-// return the def's own objects untouched until a pick exists.
+// THE SKILL-MODE TREES (docs/design/skill-modes.md — M1, the tree fabric):
+// a per-skill miniature tree of MUTUALLY-EXCLUSIVE branches, spent per
+// INSTANCE with Ability points (bandPointsAt — one per completed band).
+// The grammar: two branches × three rungs (rung order = the prerequisite
+// chain) + ONE neutral node, P = D + N exact cover; THE HARD BRANCH LOCK —
+// the first point into a branch seals the rival entirely (neutrals
+// exempt; branch DERIVED from spent nodes, never stored). Node payloads:
+// TYPED WHITELISTED `over` spec overrides + skill-local `mods` (folded in
+// instanceInnateMods — every stat read sees them free) + an optional
+// `graft` (the passive-choice hybrid: a support injected without a
+// socket, rebuilt at recalcSeat like every graft lane). Names are plain
+// DATA (renames are one-line edits forever). THE TRANSPARENCY LAW: an
+// unpicked instance is byte-identical to a def with no tree at all — the
+// resolvers below return the def's own objects untouched until a pick
+// exists. Un-choosing is the Sacrificial Font's reset ritual alone
+// (World.fontResetTree — full-tree, band-priced).
+//
+// THE M1 RESOLVED-VIEW AUDIT (every def.delivery / channel / aim /
+// castMode read in the cast path — adopted behind a view, or exempted
+// with its reason; the whitelist below may only grow alongside this
+// table):
+//   ADOPTED (the view is the read):
+//   · executeSkill body            — world.ts `const d = instanceDelivery(inst)`,
+//     ONE binding (M0); zone-payload re-entries pass it via overrides.delivery.
+//   · useSkill channel start       — world.ts `instanceChannel(inst)` feeds the
+//     minted CastState (interval/windup honest).
+//   · updateCasting channel case   — world.ts `cs.gather ?? instanceChannel(...)`
+//     (pulse clock, ramps, brim; the gather conversion still wins whole —
+//     the socket-graft-wins precedent from instanceAim).
+//   · AI channel hold              — world.ts same view (requireFull/brim holds).
+//   · movementLocked / moveActor   — world.ts channel move law + rampMove ride
+//     `cs.gather ?? the view` (THE GATHER'S STRIDE ruling, 2026-08-20: the
+//     conversion's synthesized spec binds movement exactly as it binds the
+//     pulse clock — a gathering caster walks its authored 'slowed', and
+//     channelMobility opens it; the audit surfaced the dead fields, the
+//     ruling made them live).
+//   · the enemy telegraph          — renderer.ts wedge reads instanceDelivery
+//     (the M0 find; a MonsterDef tree pin now draws what it tests).
+//   · the channel HUD bar          — renderer.ts same view.
+//   · aim resolution               — instanceAim (M0), the only def.aim read.
+//   · tooltips/previews            — skillPreview.ts + panels read the views
+//     (display honesty; picked numbers never lie).
+//   EXEMPT (reason at the class grain; individual sites carry no boilerplate):
+//   · delivery.type / castMode CLASSIFICATION reads (toggle checks, trigger
+//     eligibility, mimicry, AI heuristics, sim census/compat, graft read
+//     sites) — the whitelist can never move `type` or `castMode`: overrides
+//     modify fields WITHIN a delivery, never the kind of thing a skill is.
+//     castMode joins the whitelist only with its own audited adoption (the
+//     heavy_strike Flurry wave).
+//   · non-whitelisted FIELD reads (summon counts, dash width/phase, aura
+//     spec, pierce/forks/fire, ground pulse/cascade, delivery.range) — each
+//     is a named M2 road; its adopting wave moves its read sites behind the
+//     sibling views (instanceSummon/instanceCascadePlan/… already seam most).
+//   · def-only contexts (drop rolling, boot validation, bestiary/book) —
+//     no instance exists; picks are per-instance by design.
 // ---------------------------------------------------------------------------
 
 export interface SkillTreeNode {
@@ -4349,44 +4395,71 @@ export interface SkillTreeNode {
   id: string;
   name: string;
   description?: string;
-  /** TYPED WHITELISTED spec overrides — the M0 whitelist is exactly the
-   *  measured pair-1 payload: the cone/melee wedge width and the
-   *  random-sector wander. M1 widens the list field by audited field;
-   *  never add a field here without adopting its cast-path read sites. */
+  /** TYPED WHITELISTED spec overrides — grown ONLY alongside the audit
+   *  table above; never add a field here without adopting its cast-path
+   *  read sites. THE RE-PIN LAW (authoring): every rung re-pins EVERY
+   *  field of its branch identity — including values equal to today's
+   *  base — so the branch survives a rescale moving the base row. */
   over?: {
     /** delivery.arcDeg replacement (cone/melee deliveries only). */
     arcDeg?: number;
     /** aim.random.spreadDeg replacement (random-sector aims only). */
     spreadDeg?: number;
+    /** ChannelSpec field replacements, folded onto the def's own channel
+     *  (M1 adoption: the damage ramp and the stride ramp — pairs 4/5's
+     *  fields, audited through instanceChannel). A channel override on a
+     *  channel-less skill is an authoring error (boot validation warns);
+     *  it resolves inert, never conjures a channel. */
+    channel?: { ramp?: RampSpec; rampMove?: RampSpec };
   };
+  /** Skill-local modifiers granted while this node is spent — folded in
+   *  instanceInnateMods, so every stat read (damage, costs, speeds,
+   *  previews) sees them with zero adoption cost. */
+  mods?: Modifier[];
+  /** The passive-choice hybrid: a support gem injected socket-free while
+   *  this node is spent (SkillInstance.grafts — derived at recalcSeat,
+   *  never saved; the no-second-copy law yields to a socketed twin).
+   *  Validated at boot (warn-degrade: an unknown support grants silence). */
+  graft?: { support: string; level?: number };
 }
 
 export interface SkillTreeBranch {
   id: string;
   name: string;
   description?: string;
-  /** Rung rows, the identity commitment first. M0 ships rung 1 only. */
+  /** Rung rows in PREREQUISITE ORDER — rung 1 is the identity commitment
+   *  (placing it IS the lock), rungs 2–3 the deepenings; the exact-cover
+   *  grammar wants SKILL_LEVEL_BANDS.length − 1 of them per branch. */
   rungs: SkillTreeNode[];
 }
 
 export interface SkillTreeSpec {
   /** The pick opens at inst.level ≥ this (RAW level — points + essence;
    *  never effective level: a fork is a commitment, not a loan from
-   *  +level gear). Authored per skill; 5 is the settled convention
-   *  (SKILL_LEVEL_BANDS[0] once M-ECON lands the array). */
+   *  +level gear). Authored per skill; SKILL_LEVEL_BANDS[0] is the
+   *  settled convention. */
   level: number;
   branches: SkillTreeBranch[];
+  /** The ONE identity-free utility node — pickable any time a point is
+   *  free, exempt from the hard lock and the rung chain; completes the
+   *  exact cover (P = D + N). */
+  neutral?: SkillTreeNode;
 }
 
-/** Find one tree node by id across every branch (undefined = orphan). */
+/** Find one tree node by id across every branch and the neutral
+ *  (undefined = orphan). */
 export function treeNodeOf(def: SkillDef, nodeId: string): SkillTreeNode | undefined {
-  for (const b of def.tree?.branches ?? []) {
+  const t = def.tree;
+  if (!t) return undefined;
+  if (t.neutral?.id === nodeId) return t.neutral;
+  for (const b of t.branches) {
     for (const n of b.rungs) if (n.id === nodeId) return n;
   }
   return undefined;
 }
 
-/** The branch a node belongs to (the panel's lit state; M1's lock reads it). */
+/** The branch a node belongs to — undefined for the neutral (that absence
+ *  IS the lock exemption) and for orphans. */
 export function treeBranchOfNode(def: SkillDef, nodeId: string): SkillTreeBranch | undefined {
   for (const b of def.tree?.branches ?? []) {
     if (b.rungs.some(n => n.id === nodeId)) return b;
@@ -4394,30 +4467,144 @@ export function treeBranchOfNode(def: SkillDef, nodeId: string): SkillTreeBranch
   return undefined;
 }
 
-/** Drop tree-pick ids that no longer name a node on this def (the
- *  attunedForm idiom: validated on load, orphans drop with a console
- *  note). ONE seam for every loader — the character save and the sim's
- *  build minting alike. */
-export function validTreeNodes(def: SkillDef, ids: readonly string[]): string[] | undefined {
-  const kept = ids.filter(id => {
-    const ok = !!treeNodeOf(def, id);
-    if (!ok) console.warn(`[skill tree] '${def.id}': dropped orphaned pick '${id}' (no such node)`);
-    return ok;
-  });
+/** The branch this instance is COMMITTED to — derived from spent nodes,
+ *  never stored (the orphan-drop law handles authored renames free).
+ *  Undefined until a branch node is spent (neutral-only spends commit
+ *  nothing). */
+export function treeSpentBranch(inst: SkillInstance): SkillTreeBranch | undefined {
+  for (const id of inst.treeNodes ?? []) {
+    const b = treeBranchOfNode(inst.def, id);
+    if (b) return b;
+  }
+  return undefined;
+}
+
+/** Ability points SPENT on this instance (one per spent node). */
+export function treePointsSpent(inst: SkillInstance): number {
+  return inst.treeNodes?.length ?? 0;
+}
+
+/** THE ONE SPEND PREDICATE (the swapRefusal idiom — engine gate and panel
+ *  chips speak the same words): why this node cannot be spent right now,
+ *  or null when it can. Already-spent nodes are the caller's no-op check
+ *  (inst.treeNodes.includes), not a refusal. Order: the level seal, the
+ *  hard lock, the rung chain, the point budget — so a sealed branch says
+ *  "sealed" rather than "no point free". Field discipline (swapRefusal)
+ *  stays the World's own gate on top. */
+export function treeNodeRefusal(inst: SkillInstance, nodeId: string): string | null {
+  const tree = inst.def.tree;
+  if (!tree) return 'no such path';
+  const node = treeNodeOf(inst.def, nodeId);
+  if (!node) return 'no such path';
+  if (inst.level < tree.level) return `the path opens at level ${tree.level}`;
+  const branch = treeBranchOfNode(inst.def, nodeId);
+  if (branch) {
+    const committed = treeSpentBranch(inst);
+    if (committed && committed.id !== branch.id) {
+      return `${branch.name}'s path is sealed`;
+    }
+    const idx = branch.rungs.findIndex(n => n.id === nodeId);
+    for (let i = 0; i < idx; i++) {
+      if (!inst.treeNodes?.includes(branch.rungs[i].id)) {
+        return `${branch.rungs[i].name} comes first`;
+      }
+    }
+  }
+  if (treePointsSpent(inst) >= bandPointsAt(inst.level)) {
+    const next = SKILL_LEVEL_BANDS.find(b => b > inst.level);
+    return next !== undefined
+      ? `no Ability point free — the next comes at level ${next}`
+      : 'every Ability point is spent';
+  }
+  return null;
+}
+
+/** THE ONE VALIDATION SEAM for every loader — the character save, the
+ *  co-op wire and the sim's build minting alike (the attunedForm idiom:
+ *  orphans and structure breaks drop with a console note, never a throw).
+ *  Enforced in id order: orphan drop, the hard lock (the first
+ *  branch-bearing id fixes the branch; rival-branch ids drop), the rung
+ *  chain (a rung without its predecessors drops), and — when `level` is
+ *  given — the point budget (bandPointsAt trims the tail). The sim's
+ *  hypothesis lever passes no level: structure is grammar, budget is
+ *  economy. */
+export function validTreeNodes(
+  def: SkillDef, ids: readonly string[], level?: number,
+): string[] | undefined {
+  const note = (id: string, why: string): void =>
+    console.warn(`[skill tree] '${def.id}': dropped pick '${id}' (${why})`);
+  const kept: string[] = [];
+  let branchId: string | undefined;
+  for (const id of ids) {
+    const node = treeNodeOf(def, id);
+    if (!node) { note(id, 'no such node'); continue; }
+    if (kept.includes(id)) { note(id, 'duplicate'); continue; }
+    const b = treeBranchOfNode(def, id);
+    if (b) {
+      if (branchId !== undefined && b.id !== branchId) {
+        note(id, `rival branch — '${branchId}' holds the lock`); continue;
+      }
+      const idx = b.rungs.findIndex(n => n.id === id);
+      if (b.rungs.slice(0, idx).some(n => !kept.includes(n.id))) {
+        note(id, 'rung chain broken — a predecessor is missing'); continue;
+      }
+      branchId = b.id;
+    }
+    kept.push(id);
+  }
+  if (level !== undefined) {
+    const budget = bandPointsAt(level);
+    while (kept.length > budget) note(kept.pop()!, `over budget (${budget} point${budget === 1 ? '' : 's'} at level ${level})`);
+  }
   return kept.length ? kept : undefined;
 }
 
-/** The folded spec overrides of every spent node (M0: at most one). An
- *  unpicked instance answers undefined at the cost of one null check. */
+/** The folded spec overrides of every spent node (later spends win field
+ *  by field; the channel sub-object merges likewise — rungs re-pin their
+ *  identity, so order is authored moot). An unpicked instance answers
+ *  undefined at the cost of one null check. */
 export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | undefined {
   const ids = inst.treeNodes;
   if (!ids || ids.length === 0) return undefined;
   let out: SkillTreeNode['over'] | undefined;
   for (const id of ids) {
     const over = treeNodeOf(inst.def, id)?.over;
-    if (over) out = out ? { ...out, ...over } : over;
+    if (!over) continue;
+    out = out
+      ? {
+        ...out, ...over,
+        ...(out.channel || over.channel
+          ? { channel: { ...out.channel, ...over.channel } } : {}),
+      }
+      : over;
   }
   return out;
+}
+
+/** Skill-local mods from every spent node — joined in instanceInnateMods
+ *  (the one fold), so damage/cost/speed/preview reads all see them.
+ *  Undefined until a mod-bearing node is spent (transparency: zero cost). */
+export function instanceTreeMods(inst: SkillInstance): Modifier[] | undefined {
+  const ids = inst.treeNodes;
+  if (!ids || ids.length === 0) return undefined;
+  let out: Modifier[] | undefined;
+  for (const id of ids) {
+    const mods = treeNodeOf(inst.def, id)?.mods;
+    if (mods?.length) (out ??= []).push(...mods);
+  }
+  return out;
+}
+
+/** THE RESOLVED CHANNEL (the M1 audit's channel lane): a spent node's
+ *  channel overrides fold onto a COPY of the def's own spec; unpicked —
+ *  or channel-less — instances return the def's object untouched
+ *  (byte-identical by construction). A Gathered Casting conversion still
+ *  wins whole at its call sites (cs.gather ?? this view). */
+export function instanceChannel(inst: SkillInstance): ChannelSpec | undefined {
+  const base = inst.def.channel;
+  if (!base) return base;
+  const over = instanceTreeOver(inst)?.channel;
+  return over ? { ...base, ...over } : base;
 }
 
 /** Is the pick row OPEN for this instance (the level milestone)? */
@@ -5581,6 +5768,11 @@ export function instanceInnateMods(inst: SkillInstance): Modifier[] {
   const out: Modifier[] = [];
   if (inst.def.innateMods) out.push(...inst.def.innateMods);
   if (inst.extraMods) out.push(...inst.extraMods);
+  // THE SKILL-MODE TREES (M1): spent nodes' skill-local mods join the
+  // instance's own lane — one fold, every stat read covered. Unpicked
+  // instances pay one null check (the transparency law).
+  const treeMods = instanceTreeMods(inst);
+  if (treeMods) out.push(...treeMods);
   const eff = effectiveSkillLevel(inst);
   const perLevel = inst.def.leveling?.perLevel ?? DEFAULT_LEVELING;
   const lv = eff - 1;

@@ -17,9 +17,9 @@ import { SHEET_VITALS, sheetTabs, statBlurbOf } from '../data/sheet';
 import { resistValue } from '../engine/damage';
 import { chargeLabel } from '../engine/charges';
 import {
-  crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, essenceTierForLevel, instanceChargeCost, SKILL_RARITIES, skillCooldownSeconds, skillMaxLevel,
-  supportFitsInst, supportFitsInstOrCrew, supportMaxLevel,
-  type SkillDef, type SkillInstance, type SkillRarity, type SupportInstance,
+  bandPointsAt, crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, essenceTierForLevel, instanceChargeCost, SKILL_LEVEL_BANDS, SKILL_RARITIES, skillCooldownSeconds, skillMaxLevel,
+  supportFitsInst, supportFitsInstOrCrew, supportMaxLevel, treeNodeRefusal, treeSpentBranch,
+  type SkillDef, type SkillInstance, type SkillRarity, type SkillTreeNode, type SupportInstance,
 } from '../engine/skills';
 import { MAX_LEARNED_SKILLS } from '../engine/world';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
@@ -141,6 +141,12 @@ export interface RunReckoning {
  *  prologue drill + Waking House tutorial took over teaching the binds
  *  (updateHintBar). Flip true to restore the standing crib sheet. */
 const HINT_BAR_ENABLED = false;
+
+/** THE MILESTONE POPUP layer (skill-mode trees, M1 — §7, DIAL): a banked
+ *  Ability point offers its popup at the next disciplined calm (the world
+ *  queues; updateTreePips fires the request — never mid-combat). Off = the
+ *  drawer's waiting-pip stays the only messenger. */
+const TREE_POPUP_ENABLED = true;
 
 /** Item-category glyphs — bag tiles and the drag fabric's ghost chip share
  *  one vocabulary (a lifted thing looks like the tile it left). */
@@ -319,6 +325,7 @@ export class UI {
   private worldMap = document.getElementById('world-map')!;
   private caravanMenu = document.getElementById('caravan-menu')!;
   private salvageMenu = document.getElementById('salvage-menu')!;
+  private fontMenu = document.getElementById('font-menu')!;
   private oracleMenu = document.getElementById('oracle-menu')!;
   private bestiaryMenu = document.getElementById('bestiary-menu')!;
   private vendorMenu = document.getElementById('vendor-menu')!;
@@ -428,6 +435,9 @@ export class UI {
    *  left edge of the inventory — the whole build in one glance. Remembers
    *  its state across panel closes, satchel-style. */
   private buildFlapOpen = false;
+  /** Skill-mode tree panels the user has manually unfolded (a waiting
+   *  point holds a tree open regardless — the pip law). */
+  private skillTreeOpen = new Set<string>();
   // (The flap's TUTORIAL GLOW carries no UI state of its own — like the
   //  Skill Gems tab's, it reads LIVE off World.mireilleGiftLesson each
   //  render: glowing while the bar step pends and the drawer is closed,
@@ -462,6 +472,9 @@ export class UI {
   private craftTargetUid: number | null = null;
   oracleOpen = false;
   private oracleTargetUid: number | null = null;
+  /** The Sacrificial Font's recipe screen (skill-mode trees, M1 — §7). */
+  fontOpen = false;
+  private fontTab: 'merge' | 'convert' | 'reset' = 'merge';
   /** The Tracker's book: which leaf is open, and which page is under the thumb. */
   bestiaryOpen = false;
   private bestiaryPage = 0;
@@ -791,6 +804,7 @@ export class UI {
       || owned(this.worldMap, this.mapOpen)
       || owned(this.vendorMenu, this.vendorOpen)
       || owned(this.salvageMenu, this.salvageOpen)
+      || owned(this.fontMenu, this.fontOpen)
       || owned(this.oracleMenu, this.oracleOpen)
       || owned(this.bestiaryMenu, this.bestiaryOpen);
   }
@@ -814,6 +828,7 @@ export class UI {
     if (this.mapOpen && owned(this.worldMap)) this.toggleMap();
     if (this.vendorOpen && owned(this.vendorMenu)) this.closeVendor();
     if (this.salvageOpen && owned(this.salvageMenu)) this.closeSalvage();
+    if (this.fontOpen && owned(this.fontMenu)) this.closeFont();
     if (this.oracleOpen && owned(this.oracleMenu)) this.closeOracle();
     if (this.bestiaryOpen && owned(this.bestiaryMenu)) this.closeBestiary();
   }
@@ -833,6 +848,7 @@ export class UI {
     if (this.caravanOpen && mine(this.caravanMenu)) { this.closeCaravan(); return true; }
     if (this.vendorOpen && mine(this.vendorMenu)) { this.closeVendor(); return true; }
     if (this.salvageOpen && mine(this.salvageMenu)) { this.closeSalvage(); return true; }
+    if (this.fontOpen && mine(this.fontMenu)) { this.closeFont(); return true; }
     if (this.oracleOpen && mine(this.oracleMenu)) { this.closeOracle(); return true; }
     if (this.bestiaryOpen && mine(this.bestiaryMenu)) { this.closeBestiary(); return true; }
     if (hostOwned && this.sailOpen) { this.closeSail(); return true; }
@@ -1192,8 +1208,11 @@ export class UI {
     const d = inst.def;
     const preview = previewSkill(seat.actor, inst);
     const charge = this.chargeCostText(inst);
+    // The tooltip's FIRST LINE names the picked branch (skill-mode trees,
+    // §7 — at-a-glance identity beside the bar pip).
+    const branch = treeSpentBranch(inst);
     return {
-      title: `${d.name} — Lv ${inst.level}`,
+      title: `${d.name} — Lv ${inst.level}${branch ? ` · ${branch.name}` : ''}`,
       description: d.description + this.previewRowsHtml(preview.rows, extended),
       meta: d.tags.join(' · ') + (charge ? ` · ${charge}` : ''),
       wide: extended && preview.hasDetail,
@@ -3033,6 +3052,223 @@ export class UI {
     hideTooltip();
   }
 
+  // ------------------------------------------------- the Sacrificial Font ---
+  // THE FONT SCREEN (skill-mode trees M1 — docs/design/skill-modes.md §5/§7,
+  // the M-ECON UI debt paid): the station's dedicated panel. Three recipe
+  // tabs — MERGE (triples fuse up a rarity), CONVERT (essence tiers up/down),
+  // RESET (the tree-respec ritual) — every row a DETERMINISTIC PREVIEW LINE
+  // of exactly what the recipe will do, refusals in the standing words (the
+  // keeper's mark, the field discipline). The engine recipes are the gates
+  // (fontMergeSkill / fontConvertEssence / fontResetTree); this panel only
+  // speaks them. The drawer's inline affordances stand — this screen is the
+  // station's own face on the same intents.
+
+  showFont(seatId?: string): void {
+    this.ownPanel(this.fontMenu, this.couchSeatFor(seatId));
+    this.fontOpen = true;
+    this.fontMenu.classList.remove('hidden');
+    this.refreshFont();
+  }
+
+  closeFont(): void {
+    this.fontOpen = false;
+    this.fontMenu.classList.add('hidden');
+    hideTooltip();
+  }
+
+  refreshFont(): void {
+    if (!this.fontOpen) return;
+    const world = this.getWorld();
+    const seat = this.panelSeat(this.fontMenu);
+    const m = seat.meta;
+    // Walking away closes the screen (the station panels' proximity law).
+    if (!world.nearFont(seat)) { this.closeFont(); return; }
+
+    const tabBtn = (id: typeof this.fontTab, label: string): string =>
+      `<button class="book-tab ${this.fontTab === id ? 'active' : ''}" data-fonttab="${id}">${label}</button>`;
+    const wallet = ABILITY_ESSENCES.map(d =>
+      `<span style="color:${d.color};margin-right:8px" title="${d.label}">${d.glyph} ${m.abilityEssences[d.id] ?? 0}</span>`).join('');
+
+    let body = '';
+    if (this.fontTab === 'merge') {
+      // Eligible copies per (skill × rarity) — the engine recipe's own
+      // filters (locked/granted never count), highest level first so the
+      // preview names the level the merge will KEEP.
+      const groups = new Map<string, { def: SkillDef; rarity: SkillRarity; levels: number[]; barred: number }>();
+      for (const g of m.skillInv) {
+        const r = (g.rarity ?? 'common') as SkillRarity;
+        const k = `${g.def.id}:${r}`;
+        const row = groups.get(k) ?? { def: g.def, rarity: r, levels: [], barred: 0 };
+        if (g.locked || g.granted) row.barred++;
+        else row.levels.push(g.level);
+        groups.set(k, row);
+      }
+      const ladder = Object.keys(SKILL_RARITIES) as SkillRarity[];
+      const rows = [...groups.values()]
+        .filter(g => FONT_CFG.merge[g.rarity] !== undefined && ladder.indexOf(g.rarity) < ladder.length - 1)
+        .sort((a, b) => b.levels.length - a.levels.length || a.def.name.localeCompare(b.def.name))
+        .map(g => {
+          const need = FONT_CFG.merge[g.rarity]!;
+          const next = ladder[ladder.indexOf(g.rarity) + 1];
+          const kept = g.levels.length ? Math.max(...g.levels.slice(0, need)) : 0;
+          const ready = g.levels.length >= need;
+          const preview = ready
+            ? `${need}× ${g.def.name} (${SKILL_RARITIES[g.rarity].label}) → 1× ${g.def.name} (${SKILL_RARITIES[next].label}), level ${kept} kept`
+            : `${g.levels.length}/${need} carried — the font asks ${need} alike`;
+          const barredNote = g.barred
+            ? ` <span style="color:#8a8678">(+${g.barred} under the keeper's mark 🔒 — the font refuses them)</span>` : '';
+          return `<div class="skill-entry" style="border-left:3px solid ${SKILL_RARITIES[g.rarity].color}">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <span style="font-size:11px;color:${ready ? '#e8dcc8' : '#8a8678'}">${preview}${barredNote}</span>
+              <button data-fontmerge="${g.def.id}:${g.rarity}" ${ready ? '' : 'disabled'}>Reforge</button>
+            </div>
+            <div style="font-size:9px;color:#6a6478">socketed supports return to the bag before the inputs burn; the highest input level is kept.</div>
+          </div>`;
+        }).join('');
+      body = rows || `<div style="color:#8a8678;font-size:11px">Nothing fusible carried. The font fuses
+        ${Object.entries(FONT_CFG.merge).map(([r, n]) => `${n}× ${SKILL_RARITIES[r as SkillRarity].label}`).join(' · ')}
+        copies of the SAME skill into one of the next rarity.</div>`;
+    } else if (this.fontTab === 'convert') {
+      body = ABILITY_ESSENCES.slice(0, -1).map((lo, i) => {
+        const hi = ABILITY_ESSENCES[i + 1];
+        const canUp = (m.abilityEssences[lo.id] ?? 0) >= FONT_CFG.convertUp;
+        const canDown = (m.abilityEssences[hi.id] ?? 0) >= 1;
+        return `<div class="skill-entry" style="border-left:3px solid ${hi.color}">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <span style="font-size:11px">${FONT_CFG.convertUp}× <span style="color:${lo.color}">${lo.glyph} ${lo.label}</span>
+              → 1× <span style="color:${hi.color}">${hi.glyph} ${hi.label}</span></span>
+            <button data-fontconv="${lo.tier}:up" ${canUp ? '' : 'disabled'}>Refine</button>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:2px">
+            <span style="font-size:11px">1× <span style="color:${hi.color}">${hi.glyph} ${hi.label}</span>
+              → ${FONT_CFG.convertDown}× <span style="color:${lo.color}">${lo.glyph} ${lo.label}</span></span>
+            <button data-fontconv="${hi.tier}:down" ${canDown ? '' : 'disabled'}>Break down</button>
+          </div>
+        </div>`;
+      }).join('')
+        + `<div style="font-size:9px;color:#6a6478;margin-top:4px">Deliberately lossy both ways — conversion never beats farming at depth.</div>`;
+    } else {
+      const why = world.swapRefusal(seat, 'socket');
+      const rows = [...m.knownSkills.values()]
+        .filter(inst => inst.treeNodes?.length)
+        .map(inst => {
+          const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
+          const dd = abilityEssenceOfTier(cost.tier);
+          const afford = world.canAffordAbilityEssence(seat, cost);
+          const branch = treeSpentBranch(inst);
+          const n = inst.treeNodes!.length;
+          const preview = `${inst.def.name} — ${branch ? `the ${branch.name} path, ` : ''}${n} spent point${n === 1 ? '' : 's'} refunded for ${cost.count}× ${dd.label}`;
+          const refusal = why ?? (afford ? null : `the ritual asks ${cost.count}× ${dd.label}`);
+          return `<div class="skill-entry" style="border-left:3px solid ${inst.def.color}">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <span style="font-size:11px">${preview}</span>
+              <button data-fontreset="${inst.def.id}" ${refusal ? `disabled title="${refusal}"` : ''}>
+                ↺ Unmake (${this.abilityCostText(cost)})</button>
+            </div>
+            ${refusal ? `<div style="font-size:9px;color:#8a8678">${refusal}</div>` : ''}
+          </div>`;
+        }).join('');
+      body = rows || `<div style="color:#8a8678;font-size:11px">No spent Ability points to unmake.
+        The ritual refunds a skill's WHOLE tree (never node-wise), priced in its current band.</div>`;
+    }
+
+    this.fontMenu.innerHTML = `
+      <h2 style="color:#b06bd4">Sacrificial Font</h2>
+      <div style="font-size:11px;color:#8a8678;margin-bottom:6px">
+        Gems merged, essences broken, choices unmade. &nbsp;${wallet}</div>
+      <div class="book-tabs" style="margin-bottom:8px">
+        ${tabBtn('merge', 'Merge')}${tabBtn('convert', 'Convert')}${tabBtn('reset', 'Reset')}
+      </div>
+      ${body}
+      <div style="margin-top:8px"><button data-fontclose>Leave the font</button></div>`;
+
+    const q = <T extends HTMLElement>(sel: string): T[] => [...this.fontMenu.querySelectorAll<T>(sel)];
+    q<HTMLButtonElement>('button[data-fonttab]').forEach(btn => btn.addEventListener('click', () => {
+      this.fontTab = btn.dataset.fonttab as typeof this.fontTab;
+      this.refreshFont();
+    }));
+    q<HTMLButtonElement>('button[data-fontmerge]').forEach(btn => btn.addEventListener('click', () => {
+      const [skillId, rarity] = btn.dataset.fontmerge!.split(':');
+      this.getWorld().requestMeta({ t: 'fontMerge', skillId, rarity: rarity as SkillRarity });
+      this.refreshFont();
+      if (this.inventoryOpen) this.refreshInventory();
+    }));
+    q<HTMLButtonElement>('button[data-fontconv]').forEach(btn => btn.addEventListener('click', () => {
+      const [tier, dir] = btn.dataset.fontconv!.split(':');
+      this.getWorld().requestMeta({ t: 'fontConvert', tier: Number(tier), dir: dir as 'up' | 'down' });
+      this.refreshFont();
+      if (this.inventoryOpen) this.refreshInventory();
+    }));
+    q<HTMLButtonElement>('button[data-fontreset]').forEach(btn => btn.addEventListener('click', () => {
+      this.getWorld().requestMeta({ t: 'fontReset', skillId: btn.dataset.fontreset! });
+      this.refreshFont();
+      if (this.inventoryOpen) this.refreshInventory();
+    }));
+    this.fontMenu.querySelector<HTMLButtonElement>('[data-fontclose]')?.addEventListener('click', () => this.closeFont());
+  }
+
+  // ---------------------------------------------- the milestone tree popup ---
+  // (skill-mode trees M1 — §7, the Calling precedent): offered by the world's
+  // updateTreePips sweep at a DISCIPLINED CALM only, one skill per offer.
+  // Chips speak THE ONE SPEND PREDICATE; "Later" dismisses — the drawer's
+  // waiting-pip keeps the truth either way. DIAL: TREE_POPUP_ENABLED.
+
+  private treePopup: HTMLDivElement | null = null;
+
+  closeTreePopup(): void {
+    this.treePopup?.remove();
+    this.treePopup = null;
+  }
+
+  showTreePopup(seatId: string, skillId: string): void {
+    if (!TREE_POPUP_ENABLED || this.treePopup) return;
+    const world = this.getWorld();
+    const seat = this.couchSeatFor(seatId);
+    const inst = seat.meta.knownSkills.get(skillId);
+    const tree = inst?.def.tree;
+    if (!inst || !tree) return;
+    const spent = inst.treeNodes ?? [];
+    const free = Math.max(0, bandPointsAt(inst.level) - spent.length);
+    if (!free) return;
+    const chip = (node: SkillTreeNode, branchName?: string): string => {
+      if (spent.includes(node.id) || treeNodeRefusal(inst, node.id) !== null) return '';
+      return `<button data-poppick="${node.id}" class="gem-chip"
+        style="display:block;width:100%;margin:4px 0;padding:8px 10px;text-align:left;border-color:${inst.def.color}"
+        title="${node.description ?? node.name}">
+        ${branchName ? `<span style="color:#8a8678">${branchName} · </span>` : ''}<b>${node.name}</b>
+        ${node.description ? `<div style="font-size:10px;color:#a8a494">${node.description}</div>` : ''}
+      </button>`;
+    };
+    const chips = [
+      ...tree.branches.flatMap(b => b.rungs.map(n => chip(n, b.name))),
+      ...(tree.neutral ? [chip(tree.neutral, 'neutral')] : []),
+    ].join('');
+    if (!chips) return; // nothing spendable right now (sealed under the lock)
+    const pop = document.createElement('div');
+    pop.className = 'panel';
+    pop.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);'
+      + 'width:360px;max-width:92vw;z-index:60;font-size:12px';
+    pop.innerHTML = `
+      <h2 style="color:#d8b86a">An Ability Point Awakens</h2>
+      <div style="font-size:11px;color:#a8a494;margin-bottom:6px">
+        <b style="color:${inst.def.color}">${inst.def.name}</b> has grown into a choice
+        (${spent.length}/${bandPointsAt(inst.level)} points placed).
+        ${treeSpentBranch(inst) ? '' : 'The first point into a branch SEALS the other path.'}</div>
+      ${chips}
+      <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end">
+        <button data-poplater>Later (the drawer keeps the pip)</button>
+      </div>`;
+    document.body.appendChild(pop);
+    this.treePopup = pop;
+    pop.querySelectorAll<HTMLButtonElement>('button[data-poppick]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'pickTreeNode', skillId, nodeId: btn.dataset.poppick! });
+        this.closeTreePopup();
+        if (this.inventoryOpen) this.refreshInventory();
+      }));
+    pop.querySelector<HTMLButtonElement>('[data-poplater]')?.addEventListener('click', () => this.closeTreePopup());
+  }
+
   /** Is the breaker's hammer up? (Salvage panel open on its salvage tab,
    *  mode armed.) The INVENTORY half additionally demands both panels
    *  belong to the same couch seat — see salvageLaneFor. */
@@ -4416,44 +4652,89 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
           ${chips || `<span style="color:#8a8678">no arts captured: take a studied kind's blow</span>`}
         </div>`;
       }
-      // THE SKILL-MODE TREE (M0 — docs/design/skill-modes.md): the minimal
-      // two-chip pick row. Sealed (chips visible, greyed) until the
-      // milestone level; the pick — and any re-pick, M1 brings the hard
-      // lock — is camp surgery behind the standing swapRefusal words. The
-      // engine gate is World.pickTreeNode's; these chips only speak it.
+      // THE SKILL-MODE TREE PANEL (M1 — docs/design/skill-modes.md §7): a
+      // collapsible per-skill miniature tree. The level bar wears band
+      // tick-marks, a waiting-PIP marks an unspent Ability point (and
+      // auto-opens the tree), two branch columns fan from a root with the
+      // sealed side greyed in its refusal words, the neutral sits beneath.
+      // Every chip speaks THE ONE SPEND PREDICATE (treeNodeRefusal) plus
+      // the field discipline; the engine gate is World.pickTreeNode's —
+      // these chips only speak it. Chunky buttons: couch lens + pad law.
       let modeRow = '';
       if (def.tree) {
         const tree = def.tree;
         const open = inst.level >= tree.level;
-        const pickWhy = open ? world.swapRefusal(seat, 'socket') : null;
-        const picked = inst.treeNodes?.[0];
-        const chips = tree.branches.map(b => {
-          const node = b.rungs[0];
-          if (!node) return '';
-          const isPicked = picked === node.id;
-          const dis = !open || (!!pickWhy && !isPicked);
-          const title = `${node.description ?? b.description ?? node.name}${
-            !open ? ` — the path opens at Lv ${tree.level}.`
-              : pickWhy && !isPicked ? ` — ${pickWhy}.`
-                : isPicked ? ' — walked.' : ''}`;
+        const spent = inst.treeNodes ?? [];
+        const budget = bandPointsAt(inst.level);
+        const free = Math.max(0, budget - spent.length);
+        const discipline = world.swapRefusal(seat, 'socket');
+        const committed = treeSpentBranch(inst);
+        const expanded = open && (this.skillTreeOpen.has(def.id) || free > 0);
+        const pip = free > 0
+          ? `<span title="${free} Ability point${free === 1 ? '' : 's'} waiting" style="color:#ffd700">◉ ${free}</span>`
+          : '';
+        // The LEVEL BAR: filled to inst.level, a tick at every band end —
+        // each completed band is a minted point (bandPointsAt).
+        const maxBand = SKILL_LEVEL_BANDS[SKILL_LEVEL_BANDS.length - 1];
+        const ticks = SKILL_LEVEL_BANDS.map(b => `
+          <span style="position:absolute;left:${(b / maxBand) * 100}%;top:-2px;width:1px;height:9px;
+            background:${inst.level >= b ? '#ffd700' : '#5a5668'}"></span>`).join('');
+        const levelBar = `
+          <span style="position:relative;display:inline-block;width:110px;height:5px;
+            background:#241d2e;border:1px solid #4a4458;border-radius:2px;vertical-align:middle;margin:0 6px">
+            <span style="position:absolute;left:0;top:0;height:100%;width:${Math.min(100, (inst.level / maxBand) * 100)}%;
+              background:${def.color};opacity:0.75"></span>${ticks}
+          </span>`;
+        // One chip per node — spent ◈ in the skill's color; spendable lit;
+        // refused greyed with the predicate's own words in the title.
+        const chip = (node: SkillTreeNode, wide = false): string => {
+          const isSpent = spent.includes(node.id);
+          const why = isSpent ? null : (treeNodeRefusal(inst, node.id) ?? discipline);
+          const dis = isSpent || !!why;
+          const title = `${node.description ?? node.name}${
+            isSpent ? ' — walked.' : why ? ` — ${why}.` : ' — spend a point here.'}`;
           return `<button class="gem-chip" data-modepick="${def.id}:${node.id}"
-            style="border-color:${isPicked ? def.color : '#4a4458'}${open ? '' : ';opacity:0.55'}"
-            ${dis ? 'disabled' : ''} title="${title}">${node.name}${isPicked ? ' ◈' : ''}</button>`;
-        }).join('');
-        // THE FONT'S RESET RITUAL (FONT_CFG.reset): unmake the pick, priced
-        // in the skill's current band — stands only beside a font.
-        const resetChip = (inst.treeNodes?.length && world.nearFont()) ? (() => {
+            style="display:block;width:${wide ? '100%' : 'auto'};margin:2px 0;text-align:left;
+              border-color:${isSpent ? def.color : why ? '#3a3444' : '#d8b86a'};
+              ${isSpent ? '' : why ? 'opacity:0.5;' : ''}"
+            ${dis ? 'disabled' : ''} title="${title}">${isSpent ? '◈ ' : ''}${node.name}</button>`;
+        };
+        // A branch column: name (sealed names grey), its rungs root-first.
+        const col = (b: (typeof tree.branches)[number]): string => {
+          const sealedBy = committed && committed.id !== b.id;
+          return `<div style="flex:1 1 0;min-width:0;${sealedBy ? 'opacity:0.55' : ''}">
+            <div style="color:${sealedBy ? '#6a6478' : def.color};font-size:10px;margin-bottom:1px"
+              title="${b.description ?? b.name}${sealedBy ? ` — ${b.name}'s path is sealed.` : ''}">
+              ${sealedBy ? '🔒 ' : ''}${b.name}</div>
+            ${b.rungs.map(n => chip(n, true)).join('')}
+          </div>`;
+        };
+        // THE FONT'S RESET RITUAL (FONT_CFG.reset): unmake the whole tree,
+        // priced in the skill's current band — stands only beside a font.
+        const resetChip = (spent.length && world.nearFont()) ? (() => {
           const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
-          const d = abilityEssenceOfTier(cost.tier);
+          const dd = abilityEssenceOfTier(cost.tier);
           const afford = world.canAffordAbilityEssence(seat, cost);
           return `<button class="gem-chip" data-fontreset="${def.id}" ${afford ? '' : 'disabled'}
-            title="Sacrificial Font: unmake this skill's choice for ${cost.count}× ${d.label}.">
+            title="Sacrificial Font: unmake ALL of this skill's spent points for ${cost.count}× ${dd.label} (the full-tree ritual — never node-wise).">
             ↺ Reset (${this.abilityCostText(cost)})</button>`;
         })() : '';
-        modeRow = `<div style="margin-top:3px;font-size:10px">
-          <span style="color:#d8b86a">Branch:</span> ${chips}${resetChip}
-          ${open ? '' : `<span style="color:#6a6478">— opens at Lv ${tree.level}</span>`}
-        </div>`;
+        const header = `
+          <div style="font-size:10px;color:#d8b86a">
+            ${open ? `<button data-treeflap="${def.id}" ${free > 0 ? 'disabled' : ''}
+              title="${free > 0 ? 'A waiting point holds the tree open' : expanded ? 'Fold the tree away' : 'Open the tree'}"
+              style="background:none;border:none;color:#d8b86a;cursor:var(--cursor-point, pointer);padding:0;font-size:10px">
+              ${expanded ? '▾' : '▸'}</button>` : ''}
+            Tree: ${committed ? `<span style="color:${def.color}">${committed.name}</span>` : open ? 'unchosen' : ''}
+            ${levelBar}<span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span> ${pip}
+            ${open ? '' : `<span style="color:#6a6478">— the path opens at Lv ${tree.level}</span>`}
+          </div>`;
+        const body = expanded ? `
+          <div style="display:flex;gap:6px;margin-top:2px">${tree.branches.map(col).join('')}</div>
+          ${tree.neutral ? `<div style="margin-top:2px;font-size:10px;color:#8a8678">
+            neutral — lock-free: ${chip(tree.neutral)}</div>` : ''}
+          ${resetChip ? `<div style="margin-top:2px">${resetChip}</div>` : ''}` : '';
+        modeRow = `<div style="margin-top:3px">${header}${body}</div>`;
       }
       // Grafts riding THIS skill (chips mirror sockets; ✕ unbinds) + the
       // landing button while a lifted graft is looking for its carrier.
@@ -4544,6 +4825,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       refresh();
     }));
     // THE FONT'S RESET RITUAL: unmake a skill's tree pick (band-priced).
+    // Tree fold/unfold (render-local state; the pip law wins while a
+    // point waits — the button disables itself then).
+    q<HTMLButtonElement>('button[data-treeflap]').forEach(btn => btn.addEventListener('click', () => {
+      const id = btn.dataset.treeflap!;
+      if (this.skillTreeOpen.has(id)) this.skillTreeOpen.delete(id); else this.skillTreeOpen.add(id);
+      refresh();
+    }));
     q<HTMLButtonElement>('button[data-fontreset]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'fontReset', skillId: btn.dataset.fontreset! }); refresh();
     }));
@@ -7534,6 +7822,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     this.salvageOpen = false;
     this.craftTargetUid = null;
     this.salvageMenu.classList.add('hidden');
+    this.fontOpen = false;
+    this.fontMenu.classList.add('hidden');
     this.oracleOpen = false;
     this.oracleTargetUid = null;
     this.oracleMenu.classList.add('hidden');
@@ -7547,6 +7837,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     delete this.boroughMenu.dataset.drop;
     this.treeOpen = false;
     this.closeChoicePopup();
+    this.closeTreePopup();
     this.mapOpen = false;
     this.caravanOpen = false;
     this.mercOpen = false;

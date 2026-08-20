@@ -12,7 +12,7 @@ import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
 import {
   CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf,
-  supportFits, supportFitsInst,
+  supportFits, supportFitsInst, treeNodeOf, SKILL_LEVEL_BANDS,
   type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec,
 } from '../engine/skills';
 import { GRAFT_READ_SITES, rowUnreadBy, supportCarriesRow, type GraftReadRow } from './graftReadSites';
@@ -2584,6 +2584,72 @@ export function validateContent(): void {
     }
   }
   if (!MODE_BY_ID[DEFAULT_MODE_ID]) warn(`modes: default '${DEFAULT_MODE_ID}' missing from the registry`);
+
+  // THE SKILL-MODE TREES (M1 — docs/design/skill-modes.md §3/§8): every
+  // tree-wearing def obeys the exact-cover grammar (2 branches ×
+  // (bands − 1) rungs + one neutral; P = D + N), node ids stay unique,
+  // `over` stays on the audited whitelist AND lands on a delivery/aim/
+  // channel that can read it (a mis-aimed override resolves inert — warn
+  // here, never in a player's face), node mods name real stats, and
+  // grafts name live supports (the validatePassiveChoices warn-degrade
+  // idiom). Monster tree PINS resolve against the kit's own defs.
+  {
+    const rungsWanted = SKILL_LEVEL_BANDS.length - 1;
+    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel']);
+    const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
+    for (const def of Object.values(SKILLS)) {
+      const t = def.tree;
+      if (!t) continue;
+      const at = `skill ${def.id} tree`;
+      if (t.level < 1) warn(`${at}: milestone level ${t.level} < 1`);
+      if (t.branches.length !== 2) warn(`${at}: ${t.branches.length} branches — the grammar wants 2`);
+      if (!t.neutral) warn(`${at}: no neutral node — the exact cover (P = D + N) wants one`);
+      const seen = new Set<string>();
+      const nodes: { n: (typeof t.branches)[number]['rungs'][number]; where: string }[] = [];
+      for (const b of t.branches) {
+        if (b.rungs.length !== rungsWanted) {
+          warn(`${at}/${b.id}: ${b.rungs.length} rungs — the exact cover wants ${rungsWanted}`);
+        }
+        for (const n of b.rungs) nodes.push({ n, where: b.id });
+      }
+      if (t.neutral) nodes.push({ n: t.neutral, where: 'neutral' });
+      for (const { n, where } of nodes) {
+        if (seen.has(n.id)) warn(`${at}/${where}: duplicate node id '${n.id}'`);
+        seen.add(n.id);
+        for (const k of Object.keys(n.over ?? {})) {
+          if (!OVER_KEYS.has(k)) warn(`${at}/${n.id}: over.${k} is off the audited whitelist`);
+        }
+        for (const k of Object.keys(n.over?.channel ?? {})) {
+          if (!OVER_CHANNEL_KEYS.has(k)) warn(`${at}/${n.id}: over.channel.${k} is off the audited whitelist`);
+        }
+        if (n.over?.arcDeg !== undefined && def.delivery.type !== 'cone' && def.delivery.type !== 'melee') {
+          warn(`${at}/${n.id}: over.arcDeg on a '${def.delivery.type}' delivery — resolves inert`);
+        }
+        if (n.over?.spreadDeg !== undefined && !def.aim?.random) {
+          warn(`${at}/${n.id}: over.spreadDeg without a random-sector aim — resolves inert`);
+        }
+        if (n.over?.channel && !def.channel) {
+          warn(`${at}/${n.id}: channel overrides on a channel-less skill — resolve inert`);
+        }
+        for (const m of n.mods ?? []) {
+          if (!STAT_DEFS[m.stat]) warn(`${at}/${n.id}: mod references unknown stat '${m.stat}'`);
+        }
+        if (n.graft && !SUPPORTS[n.graft.support]) {
+          warn(`${at}/${n.id}: grafts unknown support '${n.graft.support}' (grants silence)`);
+        }
+      }
+    }
+    for (const mdef of Object.values(MONSTERS)) {
+      for (const [sid, pins] of Object.entries(mdef.skillTrees ?? {})) {
+        const sdef = SKILLS[sid];
+        if (!sdef) { warn(`monster ${mdef.id}: skillTrees pins unknown skill '${sid}'`); continue; }
+        if (!mdef.skills.includes(sid)) warn(`monster ${mdef.id}: skillTrees pins '${sid}' which its kit never carries`);
+        for (const nid of pins) {
+          if (!treeNodeOf(sdef, nid)) warn(`monster ${mdef.id}: skillTrees pin '${sid}:${nid}' names no node`);
+        }
+      }
+    }
+  }
 
   // CHOICE NODES: deals resolve, pools are unambiguous, character-unique
   // groups aren't oversubscribed, grafts name live supports (the sweeps

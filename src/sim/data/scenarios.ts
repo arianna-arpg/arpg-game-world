@@ -392,18 +392,29 @@ add(matchupDuel('ironbell_burst_l12', 'primeval_ironbell',
 // through the real engine), and the committed smoke BASELINE deliberately
 // does NOT know these ids — compareSuites skips unbaselined rows, so THE
 // TRANSPARENCY LAW stays gated on the standing scenarios alone.
+// M1 RE-PIN (2026-08-20): the rows now carry the FULL-TREE terminal
+// allocations (three rungs + the neutral — the exact cover's end state) at
+// gem level 20, the budget-true seat (bandPointsAt(20) = 4). The M0-era
+// single-pick @ gem 7 numbers above stand as that era's record; the rung
+// A/B tables live in balance/scratch_skillmodes_ab.ts.
 for (const mode of [
-  { node: 'ws_sprinkler', tag: 'sprinkler', dummies: 5, lane: 'pack (5-dummy surround ring)' },
-  { node: 'ws_duelist', tag: 'duelist', dummies: 1, lane: 'solo (the dummyDps convention)' },
+  {
+    nodes: ['ws_sprinkler', 'ws_cloudburst', 'ws_monsoon', 'ws_economy'],
+    tag: 'sprinkler', dummies: 5, lane: 'pack (5-dummy surround ring)',
+  },
+  {
+    nodes: ['ws_duelist', 'ws_firm_wrist', 'ws_long_point', 'ws_economy'],
+    tag: 'duelist', dummies: 1, lane: 'solo (the dummyDps convention)',
+  },
 ]) {
   add({
     id: `skillmode_${mode.tag}_${mode.dummies > 1 ? 'pack' : 'solo'}_l20`,
-    label: `Skill-mode spike — wild_strike ${mode.tag}, ${mode.lane}`,
+    label: `Skill-mode terminal — wild_strike ${mode.tag} walked, ${mode.lane}`,
     build: {
       id: `modes_ws_${mode.tag}_l20`,
-      label: `Swashbuckler L20, wild_strike alone — ${mode.tag} pick`,
+      label: `Swashbuckler L20, wild_strike alone — the ${mode.tag} branch walked + neutral`,
       classId: 'swashbuckler', level: 20,
-      skills: [{ id: 'wild_strike', level: 7, treeNodes: [mode.node] }],
+      skills: [{ id: 'wild_strike', level: 20, treeNodes: mode.nodes }],
       bar: ['wild_strike'],
       passives: greedyPassives('swashbuckler', 20),
     },
@@ -412,17 +423,19 @@ for (const mode of [
     duration: 30,
     stop: 'duration',
     notes: mode.dummies > 1
-      ? 'dps_dummy headline, measured 2026-08-20 ≈ 41±16: the runner RINGS the '
-        + 'five dummies in a full surround under the live pilot — a harder ask '
-        + 'than the scratch\'s stand-still front-ring (171.3). Both are true; '
-        + 'drift reads against ≈41 here, against the scratch table there. '
-        + 'M-ECON re-measure (2026-08-20, growth 0.12→0.08 at gem 7): ≈ 36±14 '
-        + '— the uniform ×0.88 deep-band trim, geometry untouched.'
-      : 'dps_dummy headline, measured 2026-08-20 ≈ 107±9 — right on the '
-        + 'scratch\'s 108.7 (the solo lanes share their geometry). The branch '
-        + 'trade vs the sibling skillmode_ row: solo ceiling vs pack coverage. '
-        + 'M-ECON re-measure (2026-08-20, growth 0.12→0.08 at gem 7): ≈ 94±8 '
-        + '— the same ×0.88 trim; the trade\'s shape holds.',
+      ? 'dps_dummy headline. M0 single-pick @ gem 7 read ≈ 41±16 (live-pilot '
+        + 'SURROUND — harder than the scratch front-ring), ≈ 36±14 after the '
+        + 'M-ECON growth trim. M1 re-pin (2026-08-20): full terminal at gem '
+        + '20 — measured ≈ 66±22 here (the surround lane; the scratch\'s '
+        + 'stand-still FRONT-RING twin reads 264.7 — both true, drift reads '
+        + 'against each in its own lane). Geometry unchanged: 5/5 victims.'
+      : 'dps_dummy headline. M0 single-pick @ gem 7 read ≈ 107±9, ≈ 94±8 '
+        + 'after the M-ECON growth trim. M1 re-pin (2026-08-20): full '
+        + 'terminal at gem 20 — measured ≈ 224±31 here (the scratch\'s '
+        + 'stand-still twin reads 244.8; gem-20 growth + Firm Wrist + the '
+        + 'Long Point ramp compound the line). The branch trade vs the '
+        + 'sibling row holds: solo ceiling vs pack coverage, 1 victim by '
+        + 'deterministic geometry.',
   });
 }
 

@@ -6,7 +6,7 @@
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { instanceChargeCost, instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES } from '../engine/skills';
+import { bandPointsAt, instanceChannel, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treePointsSpent, treeSpentBranch } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
@@ -5191,7 +5191,11 @@ export class Renderer {
     // Toggleable (Settings.castTelegraphs).
     if (a.team === 'enemy' && a.casting && (this.getSettings?.().castTelegraphs ?? true)) {
       const fc = a.casting;
-      const del = fc.inst.def.delivery;
+      // THE RESOLVED VIEW (skill-mode audit, M1 — the M0 find): the wedge
+      // reads what the resolve will fire. A MonsterDef tree pin (or a
+      // possessed body's picked kit) now draws its true arc — the
+      // telegraph can never lie about a branch.
+      const del = instanceDelivery(fc.inst);
       // Channels breathe with the pulse clock; bar casts firm once.
       const prog = fc.mode === 'channel'
         ? (fc.total > 0 ? clamp(1 - Math.max(0, fc.pulseTimer ?? 0) / fc.total, 0, 1) : 1)
@@ -5311,7 +5315,7 @@ export class Renderer {
         // bar (the overcharge stacked-bar idiom): the gather's walk to
         // its ceiling, gold the instant it truly finishes. Enemies wear
         // it too — the whole room reads the doom-cast burning in.
-        const chSpec = cs.gather ?? cs.inst.def.channel;
+        const chSpec = cs.gather ?? instanceChannel(cs.inst); // the resolved view (skill-mode audit)
         let holdFrac: number | null = null;
         if (chSpec?.brim) {
           holdFrac = a.brims?.get(cs.inst.def.id)?.fill ?? 0;
@@ -6761,6 +6765,39 @@ export class Renderer {
                 ctx.stroke();
               }
             }
+          }
+        }
+        // THE BRANCH PIP (skill-mode trees, M1 — §7, the beatPips look
+        // idiom): bottom-RIGHT corner. A WAITING Ability point wears the
+        // gold dot (the actionable signal wins the corner); a committed
+        // branch wears a small two-prong fork in the skill's color. The
+        // tooltip's first line names the branch — this pip only flags it.
+        if (def.tree && inst.level >= def.tree.level) {
+          const px2 = x + slot - 8, py2 = by + slot - 8;
+          if (treePointsSpent(inst) < bandPointsAt(inst.level)) {
+            ctx.beginPath();
+            ctx.arc(px2, py2, 3.2, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(8,8,12,0.85)';
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(px2, py2, 2.2, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffd700';
+            ctx.fill();
+          } else if (treeSpentBranch(inst)) {
+            ctx.strokeStyle = 'rgba(8,8,12,0.85)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(px2, py2 + 3); ctx.lineTo(px2, py2);
+            ctx.lineTo(px2 - 3, py2 - 3);
+            ctx.moveTo(px2, py2); ctx.lineTo(px2 + 3, py2 - 3);
+            ctx.stroke();
+            ctx.strokeStyle = def.color;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(px2, py2 + 3); ctx.lineTo(px2, py2);
+            ctx.lineTo(px2 - 3, py2 - 3);
+            ctx.moveTo(px2, py2); ctx.lineTo(px2 + 3, py2 - 3);
+            ctx.stroke();
           }
         }
         // SELF-STACK ticks (World.selfStacksOf): the skill's OWN pile as

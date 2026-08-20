@@ -2072,13 +2072,16 @@ export const SKILLS: Record<string, SkillDef> = {
     aim: { random: { offsetDeg: 0, spreadDeg: 90 } },
     baseDamage: { physical: [8, 13] },
     delivery: { type: 'cone', range: 150, arcDeg: 30 },
-    // THE SKILL-MODE TREE, M0 spike (docs/design/skill-modes.md §4 pair 1,
-    // 2026-08-19): the two MEASURED rung-1 payloads behind the level-5
-    // pick — pack coverage vs solo ceiling at equal cadence. Overrides pin
-    // BOTH fields per branch (the Sprinkler re-pins arcDeg 30 on purpose:
-    // the branch identity must not drift if a rescale moves the base row).
-    // ⚠ Numbers directional from the batch-54 A/B table, unblessed — she
-    // blesses at landing. Names are data; renames are one-line edits.
+    // THE SKILL-MODE TREE, M1's full exemplar (docs/design/skill-modes.md
+    // §3-§4 pair 1, 2026-08-20): rungs 1-3 per branch + the neutral — the
+    // exact-cover grammar (4 points at cap = one walked branch + the
+    // neutral). Rung 1 is the MEASURED identity commitment (M0's payloads,
+    // untouched); rungs 2-3 deepen it in its own character, each an A/B
+    // row at the wildstrike rig grain (balance/scratch_skillmodes_ab.ts).
+    // THE RE-PIN LAW: every rung re-pins arcDeg + spreadDeg — the branch
+    // identity must not drift if a rescale moves the base row. ⚠ All
+    // numbers directional, unblessed — she blesses at landing. Names are
+    // data; renames are one-line edits.
     tree: {
       level: 5,
       branches: [
@@ -2086,21 +2089,68 @@ export const SKILLS: Record<string, SkillDef> = {
           id: 'sprinkler', name: 'The Sprinkler',
           description: 'The whirl unchained: slivers wander a 130° fan — '
             + 'the whole pack feels the rain, one throat rarely does.',
-          rungs: [{
-            id: 'ws_sprinkler', name: 'The Sprinkler',
-            over: { arcDeg: 30, spreadDeg: 130 },
-          }],
+          rungs: [
+            {
+              id: 'ws_sprinkler', name: 'The Sprinkler',
+              description: 'Slivers wander a 130° fan.',
+              over: { arcDeg: 30, spreadDeg: 130 },
+            },
+            {
+              id: 'ws_cloudburst', name: 'The Cloudburst',
+              description: 'The drumbeat quickens — 12% faster slivers: '
+                + 'more rain on every throat in the fan.',
+              over: { arcDeg: 30, spreadDeg: 130 },
+              mods: [{ stat: 'attackSpeed', kind: 'increased', value: 0.12 }],
+            },
+            {
+              id: 'ws_monsoon', name: 'The Monsoon',
+              description: 'The dance unchained: the longer the whirl '
+                + 'holds, the freer the stride — rain that RUNS.',
+              over: {
+                arcDeg: 30, spreadDeg: 130,
+                channel: { rampMove: { per: 0.08, max: 0.5 } },
+              },
+            },
+          ],
         },
         {
           id: 'duelist', name: 'The Duelist',
           description: 'The point finds one throat: a 16° sliver held to a '
             + '24° line — dead-ahead sustain, the crowd goes untouched.',
-          rungs: [{
-            id: 'ws_duelist', name: 'The Duelist',
-            over: { arcDeg: 16, spreadDeg: 24 },
-          }],
+          rungs: [
+            {
+              id: 'ws_duelist', name: 'The Duelist',
+              description: 'A 16° sliver held to a 24° line.',
+              over: { arcDeg: 16, spreadDeg: 24 },
+            },
+            {
+              id: 'ws_firm_wrist', name: 'The Firm Wrist',
+              description: 'The point drives deeper — 18% harder, and one '
+                + 'sliver in twelve finds the artery.',
+              over: { arcDeg: 16, spreadDeg: 24 },
+              mods: [
+                { stat: 'damage', kind: 'increased', value: 0.18 },
+                { stat: 'critChance', kind: 'flat', value: 0.07 },
+              ],
+            },
+            {
+              id: 'ws_long_point', name: 'The Long Point',
+              description: 'Commitment compounds: the held line bites 6% '
+                + 'deeper each second, to nearly half again.',
+              over: {
+                arcDeg: 16, spreadDeg: 24,
+                channel: { ramp: { per: 0.06, max: 0.45 } },
+              },
+            },
+          ],
         },
       ],
+      neutral: {
+        id: 'ws_economy', name: 'Economy of Motion',
+        description: 'Footwork either way: the channel drags the stride '
+          + 'less (70% → 85% of full speed).',
+        mods: [{ stat: 'channelMobility', kind: 'flat', value: 0.15 }],
+      },
     },
     effects: [
       { type: 'damage' },
