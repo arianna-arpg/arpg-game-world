@@ -159,6 +159,10 @@ export interface SavedZoneMemory {
   pyreCharges?: number[];
   digCharges?: number[];
   occSprung?: number[];
+  /** THE RESOURCE HARVEST (engine/harvest.ts): spent flags per node in
+   *  placement order (harvestSpent — 1 = the rite was armed; a shattered
+   *  node stays shattered for the memory's life). */
+  harvestSpent?: number[];
   /** PROCESSION zones: the escort's stand at capture (see the engine's
    *  ZoneMemory.procession — lost flag, cart spot + life, march origin,
    *  pinned crossing). */

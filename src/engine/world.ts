@@ -79,6 +79,10 @@ import { LEYLINE_CFG } from '../data/leyline';
 import { RIFT_CFG } from '../data/rifts';
 import { PYRE_CFG } from '../data/pyres';
 import { DIG_CFG } from '../data/digsites';
+import {
+  HARVEST_CFG, harvestPayout, harvestSeqFor, harvestWindowFor,
+} from './harvest';
+import { HARVEST_HUSK_KIND, harvestRowsFor, type HarvestNodeDef } from '../data/harvest';
 import type { ContestRecoupSpec, ContestSpec } from '../data/objectives';
 import { PROCESSION_CFG } from '../data/processions';
 import { BOUNTY_CFG } from '../data/bounties';
@@ -2166,6 +2170,10 @@ interface ZoneMemory {
    *  field re-deriving from its survivors would shrink its own ask. */
   cullKills?: number;
   cullNeed?: number;
+  /** THE RESOURCE HARVEST (engine/harvest.ts): spent flags per node in
+   *  placement order (1 = the rite was armed — shattered stays shattered;
+   *  objective-independent, the occSprung idiom). */
+  harvestSpent?: number[];
 }
 
 /** One CONTEST-LAW hold fixture (a survey stone, rift seal, pyre bowl, or
@@ -2176,6 +2184,23 @@ interface ZoneMemory {
  *  was contested) — transient like `pourAt`, never saved: the debt is a
  *  live-siege courtesy, not a ledger. */
 interface HoldFixture { pos: Vec2; charge: number; doodad: Doodad; pourAt: number; recoup: number }
+
+/** One RESOURCE-HARVEST node standing in the zone (engine/harvest.ts — the
+ *  fixture discipline: placed at load on a salted stream, spent flags ride
+ *  Zone Memory index-aligned). `spent` stamps at ARM — a rite begun is a
+ *  node committed, whatever the entry earns. */
+interface HarvestNode { pos: Vec2; def: HarvestNodeDef; doodad: Doodad; spent: boolean }
+
+/** One live RITE (the QTE session): the seat entering it, the node it will
+ *  settle, the seeded sequence (bar-slot indices), the running tally, and
+ *  the RAW-second window. `held` = the world froze for it (solo — the
+ *  allowHold policy); `missT` is a render-only shake clock. */
+interface HarvestSession {
+  seatId: string; ix: number; seq: number[];
+  done: number; misses: number;
+  left: number; window: number;
+  held: boolean; missT: number;
+}
 
 /** The live, in-zone runtime of a Conclave RITUAL SITE — the pentagram + its ring
  *  of stationary cultists in the zone the player stands in. The ConclaveField
@@ -3314,6 +3339,15 @@ export class World {
   private rifts: HoldFixture[] = [];
   private pyres: HoldFixture[] = [];
   private digs: HoldFixture[] = [];
+  /** THE RESOURCE HARVEST (engine/harvest.ts + data/harvest.ts): this zone's
+   *  gatherable nodes (spent flags ride Zone Memory: harvestSpent), the live
+   *  RITES (one per seat at most), and the per-seat arming dwells. */
+  private harvestNodes: HarvestNode[] = [];
+  private harvestSessions: HarvestSession[] = [];
+  private harvestDwell = new Map<string, { ix: number; t: number }>();
+  /** Standing consent OFFERS (seat id → node ix), rebuilt every sweep —
+   *  the 'press' consent mode's transient truth (never saved, never wired). */
+  private harvestOffer = new Map<string, number>();
   /** THE OCCURRENCE FABRIC (engine/occurrences.ts): this zone's live sites —
    *  armed spots invisible by construction, sprung spots wearing their
    *  wound/fixture. Zone-local; sprung flags ride Zone Memory (occSprung). */
@@ -4154,6 +4188,14 @@ export class World {
       // client's prediction history stays trimmed and never replays stale inputs.
       if (inp?.seq !== undefined) this.lastInputSeq.set(seat.id, inp.seq);
       if (a.dead || a.downed) continue;
+      // THE HARVEST RITE (engine/harvest.ts, THE INPUT LAW): a seat
+      // mid-sequence speaks to the rite alone — its slot presses land as
+      // SYMBOLS through harvestFeed and its whole gameplay intent
+      // (movement, casts, aim) is swallowed here, BEFORE the timeflow
+      // bend, so the couch/co-op branch (world unfrozen) is exactly as
+      // deaf as the solo freeze. A bound skill can never fire off a
+      // sequence key.
+      if (this.harvestFeed(seat, inp)) continue;
       // THE TIMEFLOW BEND (engine/timeflow.ts): a held seat's intent is
       // inert — a stasis'd (or menu-paused) hero neither moves nor casts;
       // the DOM menus above stay live, and the seq ack above already kept
@@ -5613,6 +5655,10 @@ export class World {
     // zero the pool, pour the theme's ambient swarms on their own salted
     // stream, re-field the carried roster — same boot discipline again.
     this.bootLite(def, pois);
+    // THE RESOURCE HARVEST (engine/harvest.ts): the biome's gatherable
+    // nodes stand up on their own salted stream — the same boot discipline,
+    // placed LAST so every prior lane's pool draws stay byte-frozen.
+    this.bootHarvest(def, pois, memory);
     // Walled camps post their guards — each watch is a squad.
     if (def.packs) {
       for (const c of layout.camps) {
@@ -15595,6 +15641,10 @@ export class World {
       // fabric seats on tenant tables, not on the zone's ask).
       ...(this.occs.length
         ? { occSprung: this.occs.map(s => s.state === 'sprung' ? 1 : 0) } : {}),
+      // Harvest spent flags in placement order (objective-independent, the
+      // occSprung idiom — a shattered node stays shattered).
+      ...(this.harvestNodes.length
+        ? { harvestSpent: this.harvestNodes.map(n => n.spent ? 1 : 0) } : {}),
       ...(procession ? { procession } : {}),
       ...(z.objective.kind === 'offering' && this.offering
         ? { altarOffered: this.offering.offered } : {}),
@@ -15914,6 +15964,7 @@ export class World {
       ...(m.pyreCharges ? { pyreCharges: [...m.pyreCharges] } : {}),
       ...(m.digCharges ? { digCharges: [...m.digCharges] } : {}),
       ...(m.occSprung ? { occSprung: [...m.occSprung] } : {}),
+      ...(m.harvestSpent ? { harvestSpent: [...m.harvestSpent] } : {}),
       ...(m.procession ? { procession: { ...m.procession } } : {}),
       ...(m.altarOffered !== undefined ? { altarOffered: m.altarOffered } : {}),
       ...(m.cullKills !== undefined ? { cullKills: m.cullKills } : {}),
@@ -16143,6 +16194,9 @@ export class World {
           ? { digCharges: m.digCharges.map(c => typeof c === 'number' && Number.isFinite(c) ? Math.max(0, c) : 0) } : {}),
         ...(Array.isArray(m.occSprung)
           ? { occSprung: m.occSprung.map(c => typeof c === 'number' && c > 0 ? 1 : 0) } : {}),
+        // Harvest spent flags: honest 0/1 only (the occSprung scrub).
+        ...(Array.isArray(m.harvestSpent)
+          ? { harvestSpent: m.harvestSpent.map(c => typeof c === 'number' && c > 0 ? 1 : 0) } : {}),
         ...(procMemo ? { procession: procMemo } : {}),
         ...(typeof m.altarOffered === 'number' && Number.isFinite(m.altarOffered)
           ? { altarOffered: Math.max(0, Math.floor(m.altarOffered)) } : {}),
@@ -20589,17 +20643,26 @@ export class World {
    *  waives everything: the workshop law — fall back to town and swap on a
    *  whim at the rack. The foe scan mirrors the merc-parley's (non-passive,
    *  non-untargetable): the training dummies never count BY CONSTRUCTION. */
+  /** A live foe that can actually PRESS within the discipline's foeRadius:
+   *  enemy team, targetable, and ARMED — a body with an empty kit and no
+   *  spawner womb (the meadow hare, the ant file) is prey underfoot, not a
+   *  threat, and refuses nothing (structural, never a name list). ONE scan
+   *  for every calm-gated dwell: the field discipline's swap gate and the
+   *  harvest rite's arming gate read the same truth. */
+  private pressingFoeNear(at: Vec2): boolean {
+    const r = SWAP_DISCIPLINE_CFG.foeRadius;
+    if (r <= 0) return false;
+    return this.actors.some(a =>
+      a.team === 'enemy' && !a.dead && !a.passive && !a.untargetable
+      && (a.skills.some(s => s) || (a.defId ? !!MONSTERS[a.defId]?.spawner : false))
+      && dist(a.pos, at) <= r);
+  }
+
   swapRefusal(seat: Seat, kind: 'unlearn' | 'socket' | 'unsocket', skillId?: string): string | null {
     const cfg = SWAP_DISCIPLINE_CFG;
     if (cfg.sanctuaryWaives && this.zone.objective?.kind === 'safe') return null;
     if (this.time - this.lastCombatAt < cfg.calmSec) return 'the blood is still hot';
-    if (cfg.foeRadius > 0) {
-      const at = seat.actor.pos;
-      const foe = this.actors.some(a =>
-        a.team === 'enemy' && !a.dead && !a.passive && !a.untargetable
-        && dist(a.pos, at) <= cfg.foeRadius);
-      if (foe) return 'foes press too near';
-    }
+    if (this.pressingFoeNear(seat.actor.pos)) return 'foes press too near';
     if (kind === 'unlearn' && skillId) {
       const hero = this.seatHero(seat);
       if (cfg.unlearnOffCooldown && hero.cooldowns.has(skillId)) return 'its clock still turns';
@@ -24947,7 +25010,15 @@ export class World {
       case 'unequipItem': this.unequipItem(seat, action.slot, action.x, action.y); break;
       case 'moveItem': this.moveBagItem(seat, action.uid, action.x, action.y); break;
       case 'dropItem': this.dropGearFromBag(seat, action.uid); break;
-      case 'pickupItem': this.pickupNearestGear(seat); break;
+      case 'pickupItem':
+        // THE HARVEST CONSENT (engine/harvest.ts): the interact verb is
+        // contextual — mid-rite the press is the rite's silence (the input
+        // law's meta face); at an offered node it BEGINS the rite; only
+        // otherwise does it stay the gear grab.
+        if (this.harvestSessions.some(s => s.seatId === seat.id)) break;
+        if (this.harvestConsent(seat)) break;
+        this.pickupNearestGear(seat);
+        break;
       case 'salvageItem': this.salvageItem(seat, action.uid, action.lane); break;
       case 'salvageSkill': this.salvageSkillGem(seat, action.index, action.lane); break;
       case 'salvageSupport': this.salvageSupportGem(seat, action.index, action.lane); break;
@@ -34152,6 +34223,57 @@ export class World {
    *  re-deals it fresh past the TTL. The one refusal (the validator's
    *  scenery contract, data/validate.ts): never a body that would COUNT
    *  toward objectives — a load-time lane must not silently wall a clear. */
+  /** THE RESOURCE HARVEST's boot (engine/harvest.ts + data/harvest.ts) —
+   *  the puzzle placer's exact discipline: a SALTED stream over the zone
+   *  seed (never layout/spawn rng), fixtures at leftover POIs, spent flags
+   *  resumed index-aligned from Zone Memory (harvestSpent). Placed LAST
+   *  among the pool's consumers so every earlier lane stays byte-frozen.
+   *  Sanctuaries and spoils-sealed ground stand NO nodes — the rest zone
+   *  law and the commission's own lean (a node whose drop would seal is a
+   *  trap, not a reward); countries with no data/harvest.ts row stay bare
+   *  by authorship. */
+  private bootHarvest(def: ZoneDef, pois: Vec2[], memory?: ZoneMemory | null): void {
+    // A rite never crosses a boundary: the node was committed at arm and
+    // the leaving capture kept it spent — the entry itself dies unpaid.
+    if (this.harvestSessions.some(s => s.held)) this.timeflow.release('harvest');
+    this.harvestSessions = [];
+    this.harvestDwell.clear();
+    this.harvestOffer.clear();
+    this.harvestNodes = [];
+    if (def.objective.kind === 'safe' || def.spoils === 'none') return;
+    const rows = harvestRowsFor(def.biome, def.tileset);
+    if (!rows.length) return;
+    const rng = new Rng((this.currentZoneSeed ^ HARVEST_CFG.salt) >>> 0);
+    // Fixed stream shape (the fog-bank law): the stand roll and the count
+    // draw before any placement, hit or miss alike.
+    const stands = rng.next() < HARVEST_CFG.chance;
+    const n = rng.int(HARVEST_CFG.count[0], HARVEST_CFG.count[1]);
+    if (!stands) return;
+    const spent = memory?.harvestSpent;
+    for (let i = 0; i < n; i++) {
+      const row = this.harvestRowPick(rows, rng);
+      const at = this.interactSpot(pois, rng, 620, HARVEST_CFG.portalClear);
+      const pos = this.clampPos(vec(at.x, at.y), HARVEST_CFG.nodeRadius);
+      const isSpent = (spent?.[i] ?? 0) > 0;
+      const d: Doodad = {
+        pos: vec(pos.x, pos.y), radius: HARVEST_CFG.nodeRadius,
+        kind: isSpent ? HARVEST_HUSK_KIND : row.kind,
+      };
+      this.doodads.push(d);
+      this.harvestNodes.push({ pos: vec(pos.x, pos.y), def: row, doodad: d, spent: isSpent });
+    }
+  }
+
+  /** Weighted pick among a zone's admitted harvest rows — exactly ONE
+   *  stream draw per call, so the boot's shape stays fixed. */
+  private harvestRowPick(rows: HarvestNodeDef[], rng: Rng): HarvestNodeDef {
+    let total = 0;
+    for (const r of rows) total += r.weight ?? 1;
+    let roll = rng.next() * total;
+    for (const r of rows) { roll -= r.weight ?? 1; if (roll <= 0) return r; }
+    return rows[rows.length - 1];
+  }
+
   private bootScenery(def: ZoneDef, pois: Vec2[]): void {
     const rows = def.scenery ?? [];
     if (!rows.length) return;
@@ -40277,6 +40399,11 @@ export class World {
     // stops the sim under itself; the reckoning frees one actor) and must
     // keep sequencing through them. It yields to 'menu' holds internally.
     if (this.scene) updateScene(this, rawDt);
+    // THE RESOURCE HARVEST driver breathes on the same RAW clock — a rite's
+    // window must close through the very freeze it stands (the anti-memorize
+    // law: no hold, its own included, buys reading time). Arming rides the
+    // scaled dt inside, so a held world commits no new nodes.
+    this.updateHarvest(rawDt, dt);
     if (dt <= 0) return;
     this.time += dt;
     // Fresh actor-grid epoch: the AI phase just moved monsters (kernels call
@@ -49833,6 +49960,227 @@ export class World {
       if (!this.procReady(striker, proc)) continue;
       this.executeProc(proc, striker, null, null, 0);
     }
+  }
+
+  // ------------------------------------------------------------ the harvest --
+
+  /** THE RESOURCE HARVEST driver (engine/harvest.ts) — called on the RAW
+   *  clock beside the scene director: a rite's window burns through any
+   *  freeze, its own included (pausing can never buy reading time — the
+   *  anti-memorize law's floor). The SCALED dt rides alongside so arming
+   *  only accrues while the world is live. */
+  private updateHarvest(rawDt: number, dt: number): void {
+    // Live rites: expiry settles at whatever the entry banked — the node
+    // was committed at arm; accuracy is the only open question.
+    for (let i = this.harvestSessions.length - 1; i >= 0; i--) {
+      const s = this.harvestSessions[i];
+      s.missT = Math.max(0, s.missT - rawDt);
+      s.left -= rawDt;
+      if (s.left <= 0) this.harvestSettle(s, 'expiry');
+    }
+    this.harvestOffer.clear();
+    if (dt <= 0 || !this.harvestNodes.length) return;
+    // THE ARMING SCAN: local human hands only — the hero's seat and couch
+    // pads arm their own rites; mercs and remote peers never arm (no wire
+    // prompt exists to speak their binds).
+    for (const seat of this.localHumanSeats()) {
+      if (this.harvestSessions.some(s => s.seatId === seat.id)) continue;
+      const a = seat.actor;
+      if (a.dead || a.downed) { this.harvestDwell.delete(seat.id); continue; }
+      let ix = -1;
+      let best = Infinity;
+      for (let k = 0; k < this.harvestNodes.length; k++) {
+        const n = this.harvestNodes[k];
+        if (n.spent) continue;
+        const g = dist(a.pos, n.pos);
+        if (g <= HARVEST_CFG.armRadius + a.radius && g < best) { best = g; ix = k; }
+      }
+      if (ix < 0) { this.harvestDwell.delete(seat.id); continue; }
+      // THE CAMP HABIT (the field discipline's own calm law, ONE config —
+      // SWAP_DISCIPLINE_CFG, never a fork): a rite begins only with the
+      // blood cold and no foe pressing. Until then the node just glints —
+      // nothing is committed by walking a battle past it, no accidental
+      // freeze can hijack a fight, and a co-op harvester is never
+      // deafened (input law) with teeth already at their throat.
+      if (this.time - this.lastCombatAt < SWAP_DISCIPLINE_CFG.calmSec) {
+        this.harvestDwell.delete(seat.id);
+        continue;
+      }
+      if (this.pressingFoeNear(a.pos)) {
+        this.harvestDwell.delete(seat.id);
+        continue;
+      }
+      // THE CONSENT DIAL (HARVEST_CFG.consent): 'press' stands an OFFER —
+      // the drawn ask names the live interact bind, and applyAction's
+      // pickup verb begins the rite (a one-shot commitment is a deliberate
+      // press; the probe fleet's frozen-rig class dies with the accident).
+      // 'dwell' is the commission's letter: armSec of standing begins it.
+      if (HARVEST_CFG.consent === 'press') {
+        this.harvestOffer.set(seat.id, ix);
+        continue;
+      }
+      const d = this.harvestDwell.get(seat.id);
+      const t = (d && d.ix === ix ? d.t : 0) + dt;
+      if (t >= HARVEST_CFG.armSec) {
+        this.harvestDwell.delete(seat.id);
+        this.harvestArm(seat, ix);
+      } else {
+        this.harvestDwell.set(seat.id, { ix, t });
+      }
+    }
+  }
+
+  /** THE CONSENT PRESS (applyAction 'pickupItem' — the contextual interact
+   *  verb): begin the offered rite for this seat. True = the press was the
+   *  rite's (the gear pickup stays untouched elsewhere). */
+  private harvestConsent(seat: Seat): boolean {
+    const ix = this.harvestOffer.get(seat.id);
+    if (ix === undefined) return false;
+    const node = this.harvestNodes[ix];
+    if (!node || node.spent) return false;
+    this.harvestOffer.delete(seat.id);
+    this.harvestArm(seat, ix);
+    return true;
+  }
+
+  /** Begin the rite: the node is COMMITTED (spent stamps at ARM — quitting,
+   *  reloading or walking away can never re-roll what the arm revealed),
+   *  the seeded sequence deals (harvestSeqFor — pure f(world seed × zone ×
+   *  node spot)), and, where the pause menu's own solo-only policy admits
+   *  it, the 'harvest' surface (TIME_CFG.surfaces) freezes the world
+   *  around the entry. In co-op the policy refuses and the rite runs
+   *  UNPAUSED — the input law still holds through harvestFeed. */
+  private harvestArm(seat: Seat, ix: number): void {
+    const node = this.harvestNodes[ix];
+    if (!node || node.spent) return;
+    node.spent = true;
+    const seq = harvestSeqFor(this.manifest.seed, this.zone.id, node.pos, this.zone.level);
+    const window = harvestWindowFor(seq.length);
+    const held = this.timeflow.allowHold({ id: 'harvest', scale: 0, kind: 'harvest' })
+      && this.timeflow.holdSurface('harvest');
+    this.harvestSessions.push({
+      seatId: seat.id, ix, seq, done: 0, misses: 0,
+      left: window, window, held, missT: 0,
+    });
+  }
+
+  /** THE INPUT LAW's artery gate (applyInputs): true = this seat is
+   *  mid-rite — its slot presses land as SYMBOLS (right slot advances,
+   *  any other slot is a MISS) and the rest of its intent is swallowed by
+   *  the caller. The last correct press settles on the spot: unpause is
+   *  immediate at completion. */
+  private harvestFeed(seat: Seat, inp: PlayerInput | null | undefined): boolean {
+    const s = this.harvestSessions.find(x => x.seatId === seat.id);
+    if (!s) return false;
+    if (inp) {
+      for (let i = 0; i < inp.edge.length; i++) {
+        if (!inp.edge[i]) continue;
+        if (i === s.seq[s.done]) {
+          s.done++;
+          if (s.done >= s.seq.length) { this.harvestSettle(s, 'complete'); break; }
+        } else {
+          s.misses++;
+          s.missT = 0.3;
+        }
+      }
+    }
+    return true;
+  }
+
+  /** Settle a rite (completion or expiry — accuracy is the whole
+   *  difference): release the freeze IMMEDIATELY, SHATTER the node — the
+   *  brittle pop grammar, visual only: flash ring + shard sparks + the
+   *  husk face, never text — and pay accuracy × difficulty essence through
+   *  the standing drop path (sealed ground never boots nodes, and
+   *  dropEssenceAt would refuse regardless — the spoils law's two belts). */
+  private harvestSettle(s: HarvestSession, _why: 'complete' | 'expiry'): void {
+    const at = this.harvestSessions.indexOf(s);
+    if (at < 0) return;
+    this.harvestSessions.splice(at, 1);
+    if (s.held) this.timeflow.release('harvest');
+    this.harvestDwell.delete(s.seatId);
+    const node = this.harvestNodes[s.ix];
+    if (!node) return;
+    const d = node.doodad;
+    d.kind = HARVEST_HUSK_KIND;
+    this.markDoodadsChanged();
+    const col = node.def.accent;
+    this.flashes.push({
+      pos: vec(node.pos.x, node.pos.y), radius: d.radius * 2.6, color: col,
+      life: 0.35, maxLife: 0.35,
+    });
+    for (let k = 0; k < 3; k++) {
+      this.flashes.push({
+        pos: vec(node.pos.x + rand(-16, 16), node.pos.y + rand(-14, 14)),
+        radius: rand(6, 12), color: col, life: 0.5, maxLife: 0.5,
+      });
+    }
+    for (const p of harvestPayout(this.zone.level, s.done, s.misses, s.seq.length)) {
+      this.dropEssenceAt(vec(node.pos.x, node.pos.y), p);
+    }
+  }
+
+  /** THE ANTI-MEMORIZE LAW's toggle gate: true while a rite's world-freeze
+   *  stands — ui/panels.ts showEscapeMenu refuses through this, so the
+   *  pause can never hold the prompt still for free reading. (Co-op rites
+   *  never freeze, and there the pause menu holds nothing either — the
+   *  law's substance is the HOLD.) */
+  harvestPauseLocked(): boolean {
+    return this.harvestSessions.some(s => s.held);
+  }
+
+  /** The refusal's one voice — engine-owned words, floated over the
+   *  harvester (panels calls it when the toggle refuses). */
+  harvestPauseRefused(): void {
+    const s = this.harvestSessions.find(x => x.held);
+    const seat = s ? this.seats.find(x => x.id === s.seatId) : undefined;
+    const at = seat?.actor.pos ?? this.player.pos;
+    this.text(vec(at.x, at.y - 34), 'the rite holds your hands — see it through', '#c8e8c0', 12);
+  }
+
+  /** Render view (render/renderer.ts drawHarvest): standing nodes with
+   *  their arming arcs + live rites with prompt state. Derived scalars
+   *  only — the tell-wire idiom; null when the zone carries neither. */
+  harvestView(): {
+    nodes: {
+      x: number; y: number; r: number; spent: boolean; accent: string;
+      armFrac: number; offered: boolean; offeredPad: boolean;
+    }[];
+    rites: {
+      x: number; y: number; steps: number[]; done: number;
+      left: number; window: number; accent: string; pad: boolean; missT: number;
+    }[];
+  } | null {
+    if (!this.harvestNodes.length && !this.harvestSessions.length) return null;
+    const arms = new Map<number, number>();
+    for (const d of this.harvestDwell.values()) {
+      arms.set(d.ix, Math.max(arms.get(d.ix) ?? 0, d.t / HARVEST_CFG.armSec));
+    }
+    // Which nodes stand OFFERED, and whether the offering seat is a pad
+    // (the couch guest's chip speaks its own device).
+    const offers = new Map<number, boolean>();
+    for (const [sid, ix] of this.harvestOffer) {
+      const seat = this.seats.find(x => x.id === sid);
+      offers.set(ix, (offers.get(ix) ?? false) || !!seat?.couch);
+    }
+    return {
+      nodes: this.harvestNodes.map((n, ix) => ({
+        x: n.pos.x, y: n.pos.y, r: n.doodad.radius, spent: n.spent,
+        accent: n.def.accent, armFrac: Math.min(1, arms.get(ix) ?? 0),
+        offered: offers.has(ix), offeredPad: offers.get(ix) ?? false,
+      })),
+      rites: this.harvestSessions.map(s => {
+        const seat = this.seats.find(x => x.id === s.seatId);
+        const a = seat?.actor ?? this.player;
+        const node = this.harvestNodes[s.ix];
+        return {
+          x: a.pos.x, y: a.pos.y - a.radius, steps: s.seq, done: s.done,
+          left: s.left, window: s.window,
+          accent: node?.def.accent ?? '#e8e0c8',
+          pad: !!seat?.couch, missT: s.missT,
+        };
+      }),
+    };
   }
 
   /** BRITTLE doodads (DoodadRule.brittle): lifeless breakables. 'touch' and

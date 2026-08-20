@@ -1091,7 +1091,13 @@ withSeededRandom(0x0bec7a, () => {
       // the Barrow Watch claims — the resident beat the guest, U13's lesson
       // again. 818183 mints bare cull ground, proven through this rig's own
       // run at its own span position.)
-      const zid = stage(818183, 39, { kind: 'clear', adopt: true });
+      // (Re-measured again at THE RESOURCE HARVEST, 2026-08-15: the node
+      // boot (World.bootHarvest) stands biome doodads in every visited zone
+      // and the stream shifted a third time — 818183 (and 818184) re-seated
+      // onto lair-claimed ground, the resident beat the guest, U13's lesson
+      // once more. 818185 mints bare cull ground, proven through this rig's
+      // own run at its own span position.)
+      const zid = stage(818185, 39, { kind: 'clear', adopt: true });
       check('U11a the hand-back guest seats', ff.devIgnite(w.devOverlayView(), zid) === true);
       w.loadZone(zid);
       check('U11b adopted at load', w.zone.objective.kind === 'package');

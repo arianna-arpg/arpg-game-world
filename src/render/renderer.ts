@@ -53,6 +53,7 @@ import { QUEST_GIVER_IDS } from '../quests/defs';
 const RENDER_CULL_PAD = 150;
 import { roofStyle } from '../data/structures';
 import { DEFAULT_KEYBINDS, keyDisplay, resolveBindTokens, type ActionId, type Settings } from '../meta/settings';
+import { HARVEST_SLOT_ACTIONS } from '../engine/harvest';
 import { UI_SCALE_CFG } from '../ui/uiScale';
 import { Z_LADDER } from '../ui/zorder';
 import { padDisplay } from '../core/gamepad';
@@ -696,6 +697,7 @@ export class Renderer {
       this.drawEliteNameHover(world); // cursor nameplate — same layer, same concealment rule
       this.drawTexts(world);
       this.drawSceneHeroHud(world); // scene fabric: hero-seated teaching bar + prompt (world-space)
+      this.drawHarvest(world);      // harvest rites: node glints + live-bind symbol chips (world-space)
       if (world.devHitboxes) this.drawHitboxOverlay(world); // dev truth-layer: surfaces + forms as outlines
       this.drawPadReticle(world);    // the pad's visible cursor — LAST, above canopy and roof
       wc.restore();
@@ -1369,6 +1371,113 @@ export class Renderer {
       ctx.lineWidth = 1;
       ctx.strokeRect(bx, by, bw, bh);
     }
+  }
+
+  /** THE RESOURCE HARVEST (engine/harvest.ts, World.harvestView): standing
+   *  nodes wear a soft accent glint (an accruing arm fills its arc); a live
+   *  RITE prints its SYMBOL CHIPS + window bar above the harvester. Each
+   *  chip resolves through the LIVE binds ('{bind:…}' — keyboard keys, pad
+   *  buttons; a couch guest's prompt always speaks its own pad), so a
+   *  rebind re-labels the rite the same frame. Word-layer pass — the
+   *  prompt composites above the veils, the standing law for
+   *  world-anchored text. Rite animation clocks ride the session's own
+   *  RAW window (r.left), never world.time — the prompt stays alive
+   *  through the solo freeze it stands in. */
+  private drawHarvest(world: World): void {
+    const v = world.harvestView();
+    if (!v) return;
+    const { ctx } = this;
+    const t = world.time;
+    const s = this.getSettings?.();
+    for (const n of v.nodes) {
+      if (n.spent) continue;
+      ctx.globalAlpha = 0.26 + 0.1 * Math.sin(t * 2.2 + n.x * 0.013);
+      ctx.strokeStyle = n.accent;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 7, 0, Math.PI * 2); ctx.stroke();
+      if (n.armFrac > 0) {
+        ctx.globalAlpha = 0.9;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r + 7, -Math.PI / 2, -Math.PI / 2 + n.armFrac * Math.PI * 2);
+        ctx.stroke();
+      }
+      if (n.offered) {
+        // THE CONSENT ASK — the live interact bind over the node (a couch
+        // pad's offer speaks its own device), firming with a slow pulse.
+        const label = s
+          ? resolveBindTokens('{bind:pickup}', s, n.offeredPad || (this.getPadActive?.() ?? false))
+          : 'F';
+        ctx.font = 'bold 11px Verdana';
+        const cw = Math.max(16, ctx.measureText(label).width + 10);
+        const cx = n.x, cy = n.y - n.r - 16;
+        ctx.globalAlpha = 0.82 + 0.12 * Math.sin(t * 4);
+        ctx.fillStyle = 'rgba(10,10,14,0.82)';
+        ctx.fillRect(cx - cw / 2, cy - 9, cw, 16);
+        ctx.strokeStyle = n.accent;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx - cw / 2, cy - 9, cw, 16);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = n.accent;
+        ctx.fillText(label, cx, cy);
+        ctx.textBaseline = 'alphabetic';
+      }
+      ctx.globalAlpha = 1;
+    }
+    for (const r of v.rites) {
+      const pad = r.pad || (this.getPadActive?.() ?? false);
+      ctx.font = 'bold 12px Verdana';
+      const labels = r.steps.map(ix => {
+        const act = HARVEST_SLOT_ACTIONS[ix] ?? 'skillSlot2';
+        return s ? resolveBindTokens(`{bind:${act}}`, s, pad) : act;
+      });
+      const chipH = 18, gap = 4, padX = 6;
+      const chipWs = labels.map(l => Math.max(chipH, ctx.measureText(l).width + padX * 2));
+      let total = -gap;
+      for (const cw of chipWs) total += cw + gap;
+      // A miss SHAKES the whole prompt (visual, never text — the word).
+      const shake = r.missT > 0 ? Math.sin(r.missT * 60) * 3 * (r.missT / 0.3) : 0;
+      let x = r.x - total / 2 + shake;
+      const y = r.y - 46;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (let i = 0; i < labels.length; i++) {
+        const done = i < r.done, cur = i === r.done;
+        ctx.globalAlpha = done ? 0.35 : cur ? 1 : 0.7;
+        ctx.fillStyle = 'rgba(10,10,14,0.78)';
+        ctx.fillRect(x, y - chipH / 2, chipWs[i], chipH);
+        ctx.strokeStyle = cur ? r.accent : 'rgba(200,200,190,0.4)';
+        ctx.lineWidth = cur ? 2 : 1;
+        if (cur) {
+          const pulse = 1 + 0.1 * Math.sin(r.left * 9);
+          ctx.save();
+          ctx.translate(x + chipWs[i] / 2, y);
+          ctx.scale(pulse, pulse);
+          ctx.strokeRect(-chipWs[i] / 2, -chipH / 2, chipWs[i], chipH);
+          ctx.restore();
+        } else {
+          ctx.strokeRect(x, y - chipH / 2, chipWs[i], chipH);
+        }
+        ctx.fillStyle = done ? '#8a8678' : cur ? r.accent : '#e8e0c8';
+        ctx.fillText(labels[i], x + chipWs[i] / 2, y + 1);
+        x += chipWs[i] + gap;
+      }
+      // The closing window, reddening at the last quarter.
+      const frac = Math.max(0, Math.min(1, r.left / r.window));
+      const bw = Math.max(90, total), bh = 5;
+      const bx = r.x - bw / 2 + shake, by = y + chipH / 2 + 5;
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = frac < 0.25 ? '#d05050' : r.accent;
+      ctx.fillRect(bx, by, bw * frac, bh);
+      ctx.strokeStyle = '#0a0a0e';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx, by, bw, bh);
+      ctx.textBaseline = 'alphabetic';
+    }
+    ctx.globalAlpha = 1;
   }
 
   /** THE SCENE FABRIC's top HUD seat (engine/scenes.ts, SceneHudSeat

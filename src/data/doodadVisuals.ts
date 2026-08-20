@@ -2682,6 +2682,56 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'scree', order: 37, params: { color: '#7a6e58' },
   },
 
+  // --- THE RESOURCE HARVEST (data/harvest.ts) — gatherable nodes, one look
+  // per country family (the reskin doctrine: existing painters, local tones);
+  // harvest_husk is the shared shattered face every node breaks into.
+  harvest_amberbole: {
+    painter: 'pod', order: 52, shadow: 0.45,
+    params: { body: '#8a6224', glow: '#ffd062', aspectY: 1.15, glowY: -0.15, glowR: 0.45, pulseRate: 0.5 },
+    light: { radius: -1.7, color: '#ffc862', intensity: 0.11, flicker: 0.5 },
+  },
+  harvest_gloomcap: {
+    painter: 'toadstools', order: 47,
+    params: { cap: '#4e7a86', speck: '#a8e8d8' },
+  },
+  harvest_geode: {
+    painter: 'shard', order: 51, bakeWhole: 'static', shadow: 0.45,
+    params: { points: 5, color: '#6a4aa8', material: 'crystal', coreGlow: { color: '#d8c8ff' } },
+    light: { radius: -2.2, color: '#b89aff', intensity: 0.2, flicker: 1.1 },
+  },
+  harvest_sunstone: {
+    painter: 'shard', order: 51, bakeWhole: 'static', shadow: 0.45,
+    params: { points: 4, color: '#c89040', material: 'crystal', coreGlow: { color: '#ffe8a8' } },
+  },
+  harvest_frostvein: {
+    painter: 'shard', order: 51, bakeWhole: 'static', shadow: 0.45,
+    params: { points: 4, color: '#8ab4d0', material: 'ice', coreGlow: { color: '#e8f6ff' } },
+  },
+  harvest_marrowheap: {
+    painter: 'bones', order: 51, params: { color: '#ded2b8' },
+  },
+  harvest_cinderbloom: {
+    painter: 'vent', order: 51, shadow: 0.35,
+    params: { rim: '#4a3226', throat: '#1c1210', hot: '#ff9a50', core: '#ffe8c8' },
+    light: { radius: -2.4, color: '#ff9a50', intensity: 0.26, flicker: 2.4 },
+  },
+  harvest_tideglass: {
+    painter: 'shard', order: 51, bakeWhole: 'static', shadow: 0.4,
+    params: { points: 4, color: '#7ab8b0', material: 'crystal', coreGlow: { color: '#e8fff8' } },
+  },
+  harvest_cropstone: {
+    painter: 'gourds', order: 51, shadow: 0.35,
+    params: { color: '#c88e2e', stem: '#5a6a30', vine: '#3c4a26' },
+  },
+  harvest_aetherbloom: {
+    painter: 'pod', order: 52, shadow: 0.35,
+    params: { body: '#c8b878', glow: '#fff0b8', aspectY: 1.2, glowY: -0.18, glowR: 0.5, pulseRate: 0.7 },
+    light: { radius: -2.0, color: '#fff0b8', intensity: 0.18, flicker: 0.7 },
+  },
+  harvest_husk: {
+    painter: 'scree', order: 37, params: { color: '#6e675c' },
+  },
+
   // --- The AETHERIAL kit (vis/paintersAether.ts — the cloud shelves) --------
   cloud_billow: {
     painter: 'cloudBillow', order: 44, shadow: 0.25,

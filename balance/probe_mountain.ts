@@ -483,7 +483,20 @@ const DT = 1 / 60;
   let boredZone: string | null = null;
   for (let i = 0; i < 10 && !boredZone; i++) {
     const face = i % 2 ? 'stonecrown' : 'foothills';
-    const id = world.devMintTileset(face, 0, 9);
+    // PINNED mints (2026-08-15, THE RESOURCE HARVEST pass): unpinned, this
+    // rig rode the GLOBAL stream's position after sections 1-9 — any fabric
+    // that changes upstream draw counts (the harvest's bootHarvest node
+    // doodads did) re-rolled the tor faces here, and one drifted roll
+    // landed a PRE-EXISTING seed-dependent hole: pure generation could deal
+    // an odd culvert_stair count (2/141 pinned mints in a registry-off
+    // scan — a rolled clearSite landmark footprint swallowed a mouth's
+    // stair; see balance/scratch_harvest_mountain.ts /
+    // balance/scratch_stairloss.ts). Pinning makes the rig a function of
+    // nothing but these seeds; the assertions below stand at full strength.
+    // The hole itself is CLOSED (same day): bore mouths now RESERVE their
+    // aprons and their stairs wear `keep`, which clearSite honors — the
+    // registry-off scan re-ran 136 tors, zero odd.
+    const id = world.devMintTileset(face, 0, 9, { seed: 0x51ab00 + i * 977 });
     if (!id || !world.devTravelTo(id)) continue;
     const zd = world.zoneMap[world.zone.id];
     if (zd?.tiers?.label === 'the hollow tors') boredZone = id;

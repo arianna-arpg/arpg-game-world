@@ -125,6 +125,18 @@ export const TIME_CFG = {
       scale: 0, kind: 'menu',
       hud: { tint: 'rgba(18,24,38,0.30)', label: 'time holds' },
     },
+    // THE RESOURCE HARVEST's rite (engine/harvest.ts HARVEST_CFG, driver
+    // on World.updateHarvest) — a world freeze OUTSIDE the menu mode: kind
+    // 'harvest', so the pause menu's releaseKind('menu') sweeps never touch
+    // it and the pause toggle can refuse while it stands (the anti-memorize
+    // law, World.harvestPauseLocked). The driver applies the menu holds'
+    // own solo-only allowHold policy itself before engaging — a shared
+    // world plays the rite UNPAUSED. Deleting the row lets the rite run in
+    // real time everywhere; the hud wash mirrors HARVEST_CFG.hud.
+    'harvest': {
+      scale: 0, kind: 'harvest',
+      hud: { tint: 'rgba(14,22,16,0.30)', label: 'the harvest holds' },
+    },
   } as Record<string, { scale: number; kind?: string; hud?: TimeHudSpec }>,
 } as const;
 

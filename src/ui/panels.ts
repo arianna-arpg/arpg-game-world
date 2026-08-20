@@ -6390,6 +6390,15 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  allowHold policy (wired in main.ts) refuses the hold in live co-op —
    *  a shared world is never one player's to stop. */
   showEscapeMenu(): void {
+    // THE HARVEST PAUSE LAW (engine/harvest.ts): while a rite's world-freeze
+    // stands the pause toggle REFUSES — a pause atop the freeze would hold
+    // the sequence prompt still for free reading (the anti-memorize law).
+    // One engine predicate + one engine voice; every road to the menu
+    // (Escape, pad START) funnels through here.
+    if (this.getWorld().harvestPauseLocked()) {
+      this.getWorld().harvestPauseRefused();
+      return;
+    }
     this.escapeMenuOpen = true;
     this.getWorld().timeflow.holdSurface('menu:escape');
     const root = this.escapeMenu;
