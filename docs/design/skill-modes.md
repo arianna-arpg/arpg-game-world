@@ -366,8 +366,8 @@ standing order are untouched (the drop INDEX counts mints, not levels).
 
 ## 9. Build movements
 
-- **M0 — the spike: BUILT (2026-08-19/20, chip task_55133192 —
-  uncommitted, awaiting the coordinator).** wild_strike's fork at level 5
+- **M0 — the spike: BUILT + LANDED @ 25fb7a4 (2026-08-19/20, chip
+  task_55133192).** wild_strike's fork at level 5
   (ws_sprinkler 30/130 vs ws_duelist 16/24, numbers unblessed), the
   resolved view bound ONCE in executeSkill, the panel pick row behind the
   standing refusal words, both endpoints re-measured on the landed base
@@ -376,13 +376,23 @@ standing order are untouched (the drop INDEX counts mints, not levels).
   unpicked ≡ tree-field-deleted, same-seed fingerprints identical) and at
   macro grain (baseline unmoved). Landing detail + traps in the
   `skillmodes-design-pass` memory.
-- **M-ECON — the economy (WITH the rescale #12's gates).** Cap 20 + the
-  bands array + Ability Essence I–IV (drops, floors, wallet, pickups) +
-  point retirement + the Font repurpose + the vendor sell lane + the
-  Skills-drawer rename. Includes the growth-curve re-author, the threshold
-  re-seat audit, sim band redefinition — rescale-lane work by the boundary
-  law, so it opens the rescale or lands beside it. Migration: clean break
-  acceptable (ruled). Effort: L.
+- **M-ECON — the economy: BUILT + LANDED @ dc6e2cf (2026-08-20, chip
+  task_ff8f3465; ran WITH the rescale #12's gates as charted).** As built:
+  `SKILL_LEVEL_BANDS [5,10,15,20]` derives cap, tiers (half-open) and
+  points; Ability Essence I–IV wallet family (floors, the forked-trickle
+  kill roll on its own Rng, vendor sell lane by wares rung); preLevel
+  retired; THE POINT LANE DEAD with a costless probe-pinned grandfather;
+  the Font's merge/convert/reset recipes live with the keeper's-mark
+  refusal, socket auto-return and highest-level-kept from the first
+  commit; the drawer reads "Skills" with a wallet-glyph readout;
+  `skillLevelEssenceCost` retired into `skillLevelAbilityCost` /
+  `supportLevelAbilityCost` (supports keep cap 5). Growth trimmed
+  0.12→0.08 (L20 sweep ×0.879 uniform, monsters ride the same curve,
+  baseline unmoved); the threshold re-seat audit KEPT all 51 seats —
+  over-cap authoring now means past 20, a lane that opens empty. **Every
+  dial unblessed — the blessing pass owns the numbers.** The dedicated
+  Font SCREEN (§7's tabs) is deliberate M1 UI debt: M-ECON ships the
+  recipes as affordances in the standing panels.
 - **M1 — the tree fabric.** The schema, the resolved-view audit (the long
   pole), the hard lock + Font reset, the matrix/census branch axis, the
   drawer's tree panels. Effort: L.
