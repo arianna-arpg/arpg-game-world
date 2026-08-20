@@ -665,10 +665,9 @@ export const CLASS_CFG = {
 // --- Shared progression rules ----------------------------------------------
 
 export const PROGRESSION = {
-  /** Skill points level skills and support gems. They do NOT come from
-   *  leveling up — they're earned by sacrificing skill gems at a font. */
-  skillPointsPerLevel: 0,
-  /** Passive points: spent on the passive tree (attributes live there). */
+  /** Passive points: spent on the passive tree (attributes live there).
+   *  The level-up beat grants ONLY this — skill/support levels are fed by
+   *  Ability Essences (data/essences.ts; the skill-point lane retired). */
   passivePointsPerLevel: 1,
   lifePerLevel: 4,
   manaPerLevel: 4,

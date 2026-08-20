@@ -24,7 +24,7 @@ import {
 } from '../engine/skills';
 import { SLOT_BY_ID } from '../engine/items';
 import { rollItem } from '../engine/itemgen';
-import { emptyEssences, type PlayerMeta, type World } from '../engine/world';
+import { emptyAbilityEssences, emptyEssences, type PlayerMeta, type World } from '../engine/world';
 import { applySavedCharacter } from '../meta/character';
 import { DEFAULT_MODE_ID } from '../meta/modes';
 import { classById } from './arena';
@@ -242,7 +242,6 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
     attrs: { ...classDef.attributes, ...(spec.attributes ?? {}) } as PlayerMeta['attrs'], // recomputed by recalcPlayer
     xp: 0,
     xpNeeded: PROGRESSION.xpForLevel(spec.level),
-    skillPoints: 0,
     passivePoints: Math.max(0, spec.level * PROGRESSION.passivePointsPerLevel + 1 - allocated.size - extraPicks),
     allocated,
     choices,
@@ -253,10 +252,10 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
     knownSkills,
     inventory: [],
     skillInv: [],
-    offerings: 0,
     items: [],
     equipped,
     essences: emptyEssences(),
+    abilityEssences: emptyAbilityEssences(),
     vestiges: {},
     modeId: DEFAULT_MODE_ID,
     modeStage: 0,

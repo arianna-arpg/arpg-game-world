@@ -215,6 +215,11 @@ export interface VendorDef {
   /** false = THE TRADE GATE never binds this counter (the delver: echoes are
    *  earned in-descent, outside the essence economy by construction). */
   tradeGate?: false;
+  /** A DEEP counter for the Ability Essence sell lane (data/essences.ts
+   *  ABILITY_ESSENCE_CFG.vendor): the broader-wares rung ladder is waived —
+   *  the chandler's port prosperity and the delver's resolved dive WERE the
+   *  gate, so deep territory sells its own tier outright. */
+  essenceDeep?: boolean;
   /** The persisted hold's key — default the vendor id (town singletons). A
    *  per-site counter (a future delver hold) would scope itself
    *  `${id}@${w.zone.id}`; the worldstate sanitizer already tolerates both
@@ -254,6 +259,7 @@ export const VENDORS: VendorDef[] = [
     buyT: 'buyChandler',
     headline: w => `restock ${fmtRestock(w.vendorRestockAt - w.time)}`,
     holds: { locks: true, commission: true },
+    essenceDeep: true,
   },
   {
     id: 'delver', label: "THE DELVER'S WARES", accent: '#7fe0d8', bg: 'rgba(127,224,216,0.06)',
@@ -269,5 +275,6 @@ export const VENDORS: VendorDef[] = [
     buyT: 'buyDelver',
     headline: w => `deepest seen: Depth ${w.delverDepthReached()}`,
     entryLock: (w, e) => w.delverEntryRefusal(e),
+    essenceDeep: true,
   },
 ];

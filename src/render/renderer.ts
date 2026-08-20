@@ -9,7 +9,7 @@ import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
 import { instanceChargeCost, instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
-import { ESSENCES } from '../data/essences';
+import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
 import { STATUS_DEFS, type StatusDef } from '../engine/status';
 import { toneTint } from '../engine/tuning';
 import { STANCE_PLANT_TIME, shellArcFactor, type Actor } from '../engine/actor';
@@ -23,7 +23,7 @@ import { ORB_DEFS } from '../data/orbs';
 import { RUNE_INFO } from '../data/invocations';
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
 import { COMBO_CFG, comboProgress, comboStat } from '../engine/sequence';
-import { CORPSE_CFG, LOW_LIFE_FLASH_SEC, OFFERINGS_PER_POINT, SNOW_CFG } from '../engine/world';
+import { CORPSE_CFG, LOW_LIFE_FLASH_SEC, SNOW_CFG } from '../engine/world';
 import type { Seat, World } from '../engine/world';
 import { ATTENTION_CFG, collectAttention } from '../world/attention';
 import {
@@ -5634,10 +5634,12 @@ export class Renderer {
         ctx.restore();
         continue;
       }
-      if (item.kind === 'essence') {
+      if (item.kind === 'essence' || item.kind === 'abilityEssence') {
         // Currency underfoot: the essence's own glyph in its tint, with a
         // count tag when the packet is fat — reads as a trail mid-chase.
-        const e = ESSENCES[item.essence];
+        // Ability Essence packets share the exact draw (their registry
+        // carries its own glyph/color — the same look levers apply).
+        const e = item.kind === 'essence' ? ESSENCES[item.essence] : abilityEssenceOfTier(item.tier);
         ctx.save();
         ctx.font = `bold ${D.essenceFont}px Verdana`;
         ctx.textAlign = 'center';
@@ -7265,11 +7267,8 @@ export class Renderer {
       ctx.fillText(`${m.passivePoints} passive point${m.passivePoints > 1 ? 's' : ''} — press ${hintKey('panelTree')}`, x, hintY);
       hintY += 18;
     }
-    if (m.skillPoints > 0) {
-      ctx.fillStyle = '#7ec8a0';
-      ctx.fillText(`${m.skillPoints} skill point${m.skillPoints > 1 ? 's' : ''} — press ${hintKey('panelInv')}`, x, hintY);
-      hintY += 18;
-    }
+    // (The skill-point nudge retired with the point lane — skill levels are
+    // Ability-Essence-fed; the Skills drawer's wallet readout owns that story.)
     if (worldInfo && world.mireilleXpBuff > 0) {
       const t = Math.ceil(world.mireilleXpBuff);
       ctx.fillStyle = '#a0d8a0';
@@ -7285,7 +7284,7 @@ export class Renderer {
       }
       if (world.nearFont()) {
         ctx.fillStyle = '#b06bd4';
-        ctx.fillText(`Sacrificial Font — offer skill gems in the Build drawer (${this.actionKey('panelInv')}) · ${m.offerings}/${OFFERINGS_PER_POINT}`, x, hintY);
+        ctx.fillText(`Sacrificial Font — merge gems, convert essence, unmake choices (${this.actionKey('panelInv')})`, x, hintY);
       }
     }
   }

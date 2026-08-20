@@ -1026,7 +1026,7 @@ export interface MonsterDef {
    *  never touched, a solid blow shakes one piece loose (0.4s icd), and
    *  death spills everything — loot is never lost, only CHASED. Pair with
    *  BehaviorSpec.seek {what:'loot'} so it noses toward shinies while idle. */
-  looter?: { kinds?: ('skill' | 'support' | 'gear' | 'vestige' | 'essence')[]; reach?: number };
+  looter?: { kinds?: ('skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence')[]; reach?: number };
   /** ESSENCE SPILL (data/essences.ts): striking this body shakes essence
    *  packets onto the ground — the loot-goblin gold-trail beat on OUR
    *  currency. A fixed budget (trail + death pile always sum the same),

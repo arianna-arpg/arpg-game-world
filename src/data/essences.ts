@@ -15,7 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ItemRarity } from '../engine/items';
-import type { SkillRarity } from '../engine/skills';
+import { SKILL_LEVEL_BANDS, essenceTierForLevel, type SkillRarity } from '../engine/skills';
 
 export type EssenceId = 'coarse' | 'glimmering' | 'brilliant' | 'pristine';
 
@@ -231,16 +231,157 @@ export const SELL_CFG = {
   supportMul: 2,
 };
 
-/** The essence cost to raise a skill/support TO `targetLevel` — the single
- *  adjustable curve. Banded by depth so early growth spends the common tint
- *  and deep mastery demands the rare ones; retune freely (flat same-color,
- *  mixed costs, whatever) without touching engine or UI. */
-export function skillLevelEssenceCost(targetLevel: number): EssenceCost {
-  if (targetLevel <= 5) return { essence: 'coarse', count: 2 + targetLevel * 2 };
-  if (targetLevel <= 10) return { essence: 'glimmering', count: (targetLevel - 4) * 2 };
-  if (targetLevel <= 15) return { essence: 'brilliant', count: (targetLevel - 9) * 2 };
-  return { essence: 'pristine', count: Math.max(2, (targetLevel - 14) * 2) };
+// ---------------------------------------------------------------------------
+// ABILITY ESSENCES — the skill-leveling currency (docs/design/skill-modes.md
+// §2, M-ECON). A DEDICATED wallet-counter family, never bag items — her
+// dopamine ruling: the drop is an EVENT with a name, a color, a floater and
+// a zone floor, so deep country advertises itself by what falls there. The
+// tier count DERIVES from SKILL_LEVEL_BANDS (one tier per band — flip the
+// array and this registry re-mints itself); the color ladder mirrors the
+// four-step register the game already speaks (tints / rarities). Working
+// names are numerals I–IV; adjective names stay open for a naming pass
+// (ids are stable — labels are presentation).
+// ---------------------------------------------------------------------------
+
+export interface AbilityEssenceDef {
+  /** Stable id ('ability1'…) — wallets and saves key on it; renames are
+   *  label edits, never id edits. */
+  id: string;
+  /** 1-based tier — the band it feeds (half-open: essenceTierForLevel). */
+  tier: number;
+  label: string;
+  color: string;
+  glyph: string;
 }
+
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+
+/** The tier LOOK ladder — colors mirror the tint/rarity four-step; a fifth
+ *  band (Shape A) would want a fifth row (the zip below clamps to the last
+ *  rather than crash, so the array stays the one lever). */
+const ABILITY_TIER_LOOKS = [
+  { color: '#b8b8b8', glyph: '◇' },
+  { color: '#7a9ae8', glyph: '◈' },
+  { color: '#e8d44a', glyph: '❖' },
+  { color: '#e87a3a', glyph: '✷' },
+];
+
+/** The registry — one def per band, DERIVED from SKILL_LEVEL_BANDS. */
+export const ABILITY_ESSENCES: AbilityEssenceDef[] = SKILL_LEVEL_BANDS.map((_, i) => {
+  const look = ABILITY_TIER_LOOKS[Math.min(i, ABILITY_TIER_LOOKS.length - 1)];
+  return {
+    id: `ability${i + 1}`,
+    tier: i + 1,
+    label: `Ability Essence ${ROMAN[i] ?? String(i + 1)}`,
+    color: look.color,
+    glyph: look.glyph,
+  };
+});
+
+/** Tier (1-based) → def. The fold is total: out-of-range clamps. */
+export function abilityEssenceOfTier(tier: number): AbilityEssenceDef {
+  return ABILITY_ESSENCES[Math.max(0, Math.min(ABILITY_ESSENCES.length - 1, tier - 1))];
+}
+
+/** An Ability-Essence price: `count` essences of `tier`. */
+export interface AbilityCost { tier: number; count: number; }
+
+/** Every dial of the Ability Essence economy in one place. ALL NUMBERS ARE
+ *  DIALS (unblessed — M-ECON proposes, she blesses at landing). */
+export const ABILITY_ESSENCE_CFG = {
+  /** The leveling cost curve: count = base + perStep × (steps into the
+   *  band). Under 5-wide bands that reads 4/6/8/10/12 across a band —
+   *  the OLD tint curve's shape (skillLevelEssenceCost, retired by
+   *  M-ECON) re-targeted onto the dedicated family. supportMul prices
+   *  support-gem levels from the same family ("as magic ×2", the
+   *  SELL_CFG.supportMul idiom — supports cap at 5, all inside band I). */
+  cost: { base: 2, perStep: 2, supportMul: 2 },
+  /** ZONE-LEVEL DROP FLOORS per tier (the minDropLevel / Descent
+   *  depth-lock idiom): tier i mints only on ground of at least this
+   *  level. Seeded at each band's ENTRY level (1/6/11/16 — the first
+   *  level the tier feeds INTO); kept explicit so a tier can be pushed
+   *  deeper on taste. Length must match the band count (probe-pinned). */
+  floors: [1, 6, 11, 16] as readonly number[],
+  /** Kill-path drop chance per credited kill (the killGemChance idiom;
+   *  scaled by the kill-path bounty exactly as gems are). */
+  killChance: 0.03,
+  /** Whole essences per drop packet [min, max]. */
+  count: [1, 2] as readonly [number, number],
+  /** THE TIER GRADIENT: among the tiers the ground's level clears, each
+   *  DEEPER eligible tier weighs this much more than the step below it —
+   *  deep ground pays mostly its own band while new-gem (level-1) feeding
+   *  keeps every lower tier trickling. */
+  deeperBias: 2.2,
+  /** THE VENDOR SELL LANE (the charter's §6 — Brandt and kin SELL Ability
+   *  Essences priced in tints; sell-direction ONLY, no buy-back: the
+   *  refinement fiction made literal, and never a free exchange rate). */
+  vendor: {
+    /** Tint price per ONE essence, by tier — mirror-rung: tier i asks the
+     *  ladder's own i-th tint. */
+    prices: [
+      { essence: 'coarse', count: 2 },
+      { essence: 'glimmering', count: 2 },
+      { essence: 'brilliant', count: 3 },
+      { essence: 'pristine', count: 3 },
+    ] as readonly EssenceCost[],
+    /** Owned BROADER-WARES rungs needed per tier (0 = the base counter) —
+     *  the availability ladder ECHOES the drop floors (ruled): I–II at
+     *  the base counter, III behind rung 2, IV behind rung 3 (the
+     *  gatework rung). */
+    rungNeeded: [0, 0, 2, 3] as readonly number[],
+    /** DEEP counters (VendorDef.essenceDeep — the chandler's port, the
+     *  delver's shaft) waive the rung ladder: their own access was the
+     *  gate ("IV deep territory"). */
+    deepWaives: true,
+  },
+} as const;
+
+/** The Ability-Essence cost to raise a SKILL to `targetLevel` — THE cost
+ *  policy, one function (the retired tint curve's shape carried over:
+ *  banded tier + a within-band ramp). Gated to the tier's band by
+ *  construction: the tier IS the band the step lands in. */
+export function skillLevelAbilityCost(targetLevel: number): AbilityCost {
+  const tier = essenceTierForLevel(targetLevel);
+  const bandStart = tier <= 1 ? 1 : SKILL_LEVEL_BANDS[tier - 2];
+  const step = Math.max(1, targetLevel - bandStart);
+  const c = ABILITY_ESSENCE_CFG.cost;
+  return { tier, count: c.base + c.perStep * step };
+}
+
+/** Support-gem levels price from the SAME family at the supportMul —
+ *  cap 5 keeps every step inside band I (tier-I essences, the low-tier
+ *  fall-through her ruling asked for). */
+export function supportLevelAbilityCost(targetLevel: number): AbilityCost {
+  const c = skillLevelAbilityCost(targetLevel);
+  return { tier: c.tier, count: Math.ceil(c.count * ABILITY_ESSENCE_CFG.cost.supportMul) };
+}
+
+// ------------------------------------------------------ the Sacrificial Font ---
+
+/** THE FONT'S RECIPES (docs/design/skill-modes.md §5 — the repurposed
+ *  Sacrificial Font: gems merged, essences broken, choices unmade; its old
+ *  gems→points lane died with the point economy). Station grammar: dwell →
+ *  deterministic recipes, no restock clock. ALL NUMBERS ARE DIALS. */
+export const FONT_CFG = {
+  /** MERGE: N× same skill, same rarity → 1 at +1 rarity, per RUNG (her
+   *  sketch: "3 whites→blue, 5 blues→yellow" — the ladder escalates).
+   *  Laws (first-commit, engine-enforced): merged gem keeps the HIGHEST
+   *  input level; socketed supports AUTO-RETURN to the bag before inputs
+   *  burn; the keeper's mark (locked) refuses exactly as it refuses
+   *  salvage; granted sparks never count; strict same-skill. */
+  merge: { common: 3, magic: 4, rare: 5 } as Partial<Record<SkillRarity, number>>,
+  /** CONVERT, per rung: UP consumes `convertUp` of tier N for 1 of N+1;
+   *  DOWN consumes 1 of tier N for `convertDown` of N−1. Deliberately
+   *  LOSSY both ways round (2 < 3 — the PoE map-vendor valve): conversion
+   *  never beats farming at depth, an inequality the probe pins. */
+  convertUp: 3,
+  convertDown: 2,
+  /** RESET: the tree-respec ritual — clears one skill's spent picks,
+   *  priced in the skill's CURRENT band ("one Essence III to reset a
+   *  level-14 skill: a consideration, never a wall"). M1's full-tree
+   *  resets consume this same seam. */
+  reset: { count: 1 },
+} as const;
 
 /** BRANDT'S SHELF (the buy lane) — rolled GEAR on the counter beside his
  *  gems. Price = the item's SELL value × markup in coarse, PLUS (magic and

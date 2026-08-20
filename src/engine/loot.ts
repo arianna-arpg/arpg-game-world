@@ -113,9 +113,8 @@ export const GEM_DROP_CFG = {
    *  (Brandt leans fresh too — browsing him is deterministic catalog
    *  access). 1 = off. */
   carriedMult: 0.25,
-  /** Deep-zone PRE-LEVELED skill gems: past minZone, this chance rolls the
-   *  gem's level up to 1 + zoneLevel/levelDiv (the old world.ts literals). */
-  preLevel: { chance: 0.2, minZone: 4, levelDiv: 3 },
+  // (The deep-zone preLevel roll retired with M-ECON: gems always drop at
+  // level 1 — leveling is the Ability Essence economy's job.)
 };
 
 /** Weighted vestige pick from the registry — the kill path and every

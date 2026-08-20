@@ -5,6 +5,7 @@
 // vocation playtest row (instant grant + the live spending-gate toggle).
 // ---------------------------------------------------------------------------
 
+import { ABILITY_ESSENCES } from '../../data/essences';
 import { SKILLS } from '../../data/skills';
 import { SUPPORTS } from '../../data/supports';
 import { VOCATION_CFG, VOCATION_LIST } from '../../data/vocations';
@@ -37,11 +38,13 @@ export const gemsTab: DevTabDef = {
       for (let i = 0; i < n; i++) w.grantXp(Math.max(1, w.meta.xpNeeded - w.meta.xp));
       flash(`+${n} level${n > 1 ? 's' : ''} → now level ${w.player.level}`);
     };
-    const grantSkillPts = (n: number): void => {
+    const grantAbilityEss = (n: number): void => {
       const w = runActive();
       if (!w) { flash('start a run first'); return; }
-      w.meta.skillPoints += n;
-      flash(`+${n} skill point${n > 1 ? 's' : ''} (${w.meta.skillPoints} total) — open the Skill Book`);
+      // Every tier at once — the cheat's job is to unblock testing, not to
+      // model the economy (the wallet is the Skills drawer's readout).
+      for (const d of ABILITY_ESSENCES) w.meta.abilityEssences[d.id] = (w.meta.abilityEssences[d.id] ?? 0) + n;
+      flash(`+${n} of every Ability Essence — open the Skills drawer`);
     };
     const grantPassivePts = (n: number): void => {
       const w = runActive();
@@ -58,8 +61,8 @@ export const gemsTab: DevTabDef = {
     cheats.append(
       btn('+1 Lvl', () => grantLevels(1)),
       btn('+5 Lvl', () => grantLevels(5)),
-      btn('+1 Skill Pt', () => grantSkillPts(1)),
-      btn('+10 Skill Pt', () => grantSkillPts(10)),
+      btn('+1 Abl Ess', () => grantAbilityEss(1)),
+      btn('+10 Abl Ess', () => grantAbilityEss(10)),
       btn('+1 Passive Pt', () => grantPassivePts(1)),
       btn('+1 Voc Pt', () => grantVocationPts(1)),
     );

@@ -60,7 +60,11 @@ export class NullInput implements PlayerInputSource {
 export type MetaAction =
   | { t: 'learn'; index: number }                              // skillInv idx → known
   | { t: 'unlearn'; skillId: string }                          // known → skillInv
-  | { t: 'sacrifice'; index: number }                          // skillInv idx → font
+  // THE SACRIFICIAL FONT (data/essences.ts FONT_CFG — merge / convert / reset):
+  | { t: 'fontMerge'; skillId: string; rarity: 'common' | 'magic' | 'rare' | 'legendary' } // N alike → 1 at +1 rarity
+  | { t: 'fontConvert'; tier: number; dir: 'up' | 'down' }     // Ability Essence tier up/down (wallet math)
+  | { t: 'fontReset'; skillId: string }                        // unmake a skill's tree picks (band-priced)
+  | { t: 'buyAbilityEss'; vendor: string; tier: number }       // the vendors' Ability Essence sell lane
   | { t: 'buyVendor'; index: number }                          // vendorStock idx
   | { t: 'buyChandler'; index: number }                        // chandlerStock idx (a harborhold's port counter)
   | { t: 'buyDelver'; index: number }                          // descentStock idx (Echoes)
@@ -68,9 +72,10 @@ export type MetaAction =
   // place/release the standing gem commission (null = release).
   | { t: 'vendorLock'; vendor: string; index: number; on: boolean }
   | { t: 'vendorCommission'; vendor: string; gem: { kind: 'skill' | 'support'; id: string } | null }
-  | { t: 'levelSkill'; skillId: string; pay?: 'points' | 'essence' }
-  | { t: 'levelSupportInv'; index: number; pay?: 'points' | 'essence' } // loose support gem
-  | { t: 'levelSupportSocket'; skillId: string; socket: number; pay?: 'points' | 'essence' } // socketed support
+  // Level-ups pay Ability Essences — the ONE lane (the point lane retired).
+  | { t: 'levelSkill'; skillId: string }
+  | { t: 'levelSupportInv'; index: number }                    // loose support gem
+  | { t: 'levelSupportSocket'; skillId: string; socket: number } // socketed support
   | { t: 'reacquireSkill'; skillId: string }                   // re-kindle a lost class starter (GRANTED copy)
   | { t: 'attuneSpectre'; skillId: string; formId: string }    // grimoire: bind a mastered bestiary form ('' releases)
   | { t: 'mimicSelect'; sid: string }                          // mimicry: select a captured art (engine/mimic.ts bank)

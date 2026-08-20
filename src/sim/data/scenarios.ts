@@ -415,10 +415,14 @@ for (const mode of [
       ? 'dps_dummy headline, measured 2026-08-20 ≈ 41±16: the runner RINGS the '
         + 'five dummies in a full surround under the live pilot — a harder ask '
         + 'than the scratch\'s stand-still front-ring (171.3). Both are true; '
-        + 'drift reads against ≈41 here, against the scratch table there.'
+        + 'drift reads against ≈41 here, against the scratch table there. '
+        + 'M-ECON re-measure (2026-08-20, growth 0.12→0.08 at gem 7): ≈ 36±14 '
+        + '— the uniform ×0.88 deep-band trim, geometry untouched.'
       : 'dps_dummy headline, measured 2026-08-20 ≈ 107±9 — right on the '
         + 'scratch\'s 108.7 (the solo lanes share their geometry). The branch '
-        + 'trade vs the sibling skillmode_ row: solo ceiling vs pack coverage.',
+        + 'trade vs the sibling skillmode_ row: solo ceiling vs pack coverage. '
+        + 'M-ECON re-measure (2026-08-20, growth 0.12→0.08 at gem 7): ≈ 94±8 '
+        + '— the same ×0.88 trim; the trade\'s shape holds.',
   });
 }
 

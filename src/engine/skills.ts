@@ -4282,11 +4282,52 @@ export interface SkillThreshold {
   mods: Modifier[];
 }
 
-export const MAX_SKILL_LEVEL = 10;
+/** THE ONE ARRAY (docs/design/skill-modes.md §2 — Shape B locked): band END
+ *  levels, ascending. EVERYTHING derives — the soft cap (the last entry),
+ *  the Ability Essence tier count (the length; data/essences.ts zips its
+ *  registry off this), half-open band membership (essenceTierForLevel:
+ *  tier I feeds steps into 2–5, II into 6–10, …) and the Ability-point-
+ *  per-band-completion count (bandPointsAt). Flip the array and the whole
+ *  economy re-derives (Shape A = [4,8,12,16,20] stays one edit away) —
+ *  but P (points at cap = the length) couples to every authored tree
+ *  budget once M2 lands, so move it EARLY or never. */
+export const SKILL_LEVEL_BANDS: readonly number[] = [5, 10, 15, 20];
 
-/** Used by damage skills that don't declare their own leveling. */
+/** The SOFT cap — the point/essence SPEND ceiling, derived from the array.
+ *  Effective level stays structurally uncapped (effectiveSkillLevel):
+ *  +level investment compounds perLevel growth and unlocks thresholds past
+ *  this line forever; over-cap authoring now means past-20. */
+export const MAX_SKILL_LEVEL = SKILL_LEVEL_BANDS[SKILL_LEVEL_BANDS.length - 1];
+
+/** The Ability Essence TIER (1-based) that feeds a step INTO `targetLevel` —
+ *  the half-open band law: tier I pays levels 2–5, tier II 6–10, … Asked
+ *  past the last band (no spend ever is — the cap gates first) it answers
+ *  the top tier, so the fold is total. */
+export function essenceTierForLevel(targetLevel: number): number {
+  for (let i = 0; i < SKILL_LEVEL_BANDS.length; i++) {
+    if (targetLevel <= SKILL_LEVEL_BANDS[i]) return i + 1;
+  }
+  return SKILL_LEVEL_BANDS.length;
+}
+
+/** Ability points EARNED at a skill level — one per COMPLETED band
+ *  (5/10/15/20 → 1/2/3/4 under Shape B). DERIVED, never stored (the
+ *  branch-state law); M1's trees spend them. Reads the RAW instance level:
+ *  a point is a commitment the skill grew into, never a loan from +level
+ *  gear (the charter's reach ruling). */
+export function bandPointsAt(level: number): number {
+  let n = 0;
+  for (const b of SKILL_LEVEL_BANDS) if (level >= b) n++;
+  return n;
+}
+
+/** Used by damage skills that don't declare their own leveling.
+ *  RE-AUTHORED for the 20-cap journey (M-ECON — was 0.12, tuned when the
+ *  cap was 10): the fully-walked cap lands +152% where the old cap landed
+ *  +108%, and deep effective investment (+gear, +gem levels) compounds
+ *  from there without the old curve's runaway. DIAL, unblessed. */
 export const DEFAULT_LEVELING: Modifier[] = [
-  { stat: 'damage', kind: 'increased', value: 0.12 },
+  { stat: 'damage', kind: 'increased', value: 0.08 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -4897,9 +4938,6 @@ export interface SkillInstance {
    *  value is minted — zero salvage essence, zero font offerings — so the
    *  softlock rescue hatch can never become a currency loop. */
   granted?: boolean;
-  /** Levels bought with ESSENCE (vs skill points). Excluded from the font's
-   *  point refund on sacrifice — no essence→points arbitrage. */
-  essenceLevels?: number;
   /** THE KEEPER'S MARK (salvageLock intent): a locked carried gem refuses
    *  salvage on BOTH lanes and every salvageBulk sweep passes it by. */
   locked?: boolean;

@@ -20,6 +20,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { CLASSES } from '../src/data/classes';
+import { ABILITY_ESSENCE_CFG, ABILITY_ESSENCES } from '../src/data/essences';
 import { MONSTERS } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
@@ -1357,7 +1358,19 @@ function cmdAuditDrops(args: Args): void {
   for (const e of expectations) {
     console.log(`  ${e.tier.padEnd(10)} ${String(e.gearRolls).padStart(10)} ${String(e.itemsPerKill).padStart(12)} ${(e.gemChance * 100).toFixed(0).padStart(6)} ${(e.vestigeChance * 100).toFixed(0).padStart(9)}`);
   }
-  fs.writeFileSync(path.join(dir, 'drops.json'), JSON.stringify({ ...audit, expectations }, null, 2));
+  // THE ABILITY ESSENCE TRICKLE (M-ECON, ABILITY_ESSENCE_CFG): the skill-food
+  // lane's per-kill expectation beside the gem/vestige lanes — chance × mean
+  // packet, tier floors + the deep gradient, all read from the one config.
+  const ae = ABILITY_ESSENCE_CFG;
+  const aeMean = (ae.count[0] + ae.count[1]) / 2;
+  const aeTrickle = {
+    chance: ae.killChance, meanPacket: aeMean,
+    floors: ABILITY_ESSENCES.map((d, i) => ({ tier: d.label, minZone: ae.floors[i] ?? 0 })),
+    deeperBias: ae.deeperBias,
+  };
+  console.log(`\nAbility Essence trickle (ABILITY_ESSENCE_CFG): ${(ae.killChance * 100).toFixed(1)}%/kill × ${aeMean} mean essences`
+    + ` — floors ${aeTrickle.floors.map(f => `${f.tier.replace('Ability Essence ', '')}@z${f.minZone}`).join(' ')}, deep bias ×${ae.deeperBias}/tier`);
+  fs.writeFileSync(path.join(dir, 'drops.json'), JSON.stringify({ ...audit, expectations, abilityEssenceTrickle: aeTrickle }, null, 2));
   console.log(`\nReport: ${dir}`);
 }
 

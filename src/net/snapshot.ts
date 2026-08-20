@@ -26,7 +26,7 @@ import type { PartSpec } from '../render/vis/parts';
 import type { ZoneTheme } from '../data/zones';
 import { hullOf, type ZoneShape } from '../world/shape';
 import { GridWalkField, type PackedWalk } from '../world/gridWalk';
-import { emptyEssences } from '../engine/world';
+import { emptyAbilityEssences, emptyEssences } from '../engine/world';
 import type { World, Seat, VendorEntry } from '../engine/world';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
@@ -37,7 +37,7 @@ import { makeSkillInstance, type SkillInstance, type SupportInstance, type Skill
 import { rebuildItem } from '../engine/itemgen';
 import { ITEM_RARITIES, type ItemInstance } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
-import { ESSENCES } from '../data/essences';
+import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
 import type { Attributes } from '../engine/stats';
 import { COMBO_CFG, comboProgress } from '../engine/sequence';
 import { GRAB_VERB_LABEL } from '../engine/grab';
@@ -156,7 +156,7 @@ export interface CastW {
 export interface ProjW { p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
 /** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; }
-export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence'; color: string; rarity?: string; name?: string; vid?: string; eid?: string; cnt?: number; }
+export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; vid?: string; eid?: string; tid?: number; cnt?: number; }
 /** kind is an ORB_DEFS registry id — the client renders from the registry. */
 export interface OrbW { p: Vec2W; bob: number; life: number; kind: string; }
 export interface TextW { p: Vec2W; life: number; maxLife: number; size: number; color: string; text: string;
@@ -215,13 +215,13 @@ export interface SeatW {
  *  otherwise (the derived-bit idiom; the client renders 🔒 and computes its
  *  toggle asks from it — the host stays the authority). */
 export interface SupportInstW { id: string; lvl: number; lk?: 1; }
-export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; eLv?: number; lk?: 1; }
+export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; }
 /** The client OWN-seat build: enough to render the char-sheet / skill-book / tree
  *  and re-derive the stat sheet (recalcSeat) on the client. */
 export interface SeatMetaW {
   level: number;
   xp: number; xpNeeded: number;
-  skillPoints: number; passivePoints: number; offerings: number;
+  passivePoints: number;
   vocationPoints: number;
   vocations: string[];              // granted vocations (center-tree render + gates)
   baseAttrs: Attributes;            // recalcSeat derives `attrs` from this + allocated
@@ -242,6 +242,8 @@ export interface SeatMetaW {
   gear?: { items: ItemInstance[]; equipped: Record<string, ItemInstance> };
   /** Essence wallet (salvage currency), per essence id. */
   ess?: Record<string, number>;
+  /** Ability Essence wallet (skill food), per tier id. */
+  abil?: Record<string, number>;
   /** Vestige wallet (socket material), per vestige id. */
   vest?: Record<string, number>;
 }
@@ -252,7 +254,7 @@ const skillInstW = (s: SkillInstance): SkillInstW => ({
   id: s.def.id, lvl: s.level, rarity: s.rarity,
   sockets: s.sockets.map(x => (x ? supW(x) : null)),
   mark: s.state?.markPos ?? undefined,
-  g: s.granted || undefined, eLv: s.essenceLevels || undefined,
+  g: s.granted || undefined,
   lk: s.locked ? 1 : undefined,
 });
 
@@ -266,7 +268,7 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
   return {
     level: hero.level,
     xp: m.xp, xpNeeded: m.xpNeeded,
-    skillPoints: m.skillPoints, passivePoints: m.passivePoints, offerings: m.offerings,
+    passivePoints: m.passivePoints,
     vocationPoints: m.vocationPoints,
     vocations: [...m.vocations],
     baseAttrs: { ...m.baseAttrs },
@@ -285,6 +287,7 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
       ),
     },
     ess: { ...m.essences },
+    abil: { ...m.abilityEssences },
     vest: { ...m.vestiges },
   };
 }
@@ -301,7 +304,6 @@ const rehydrateSkill = (w: SkillInstW): SkillInstance | null => {
   inst.sockets = w.sockets.map(s => (s ? rehydrateSupport(s) : null));
   if (w.mark) inst.state = { markPos: w.mark };
   if (w.g) inst.granted = true;
-  if (w.eLv) inst.essenceLevels = w.eLv;
   if (w.lk) inst.locked = true; // the keeper's mark (salvageLock)
   return inst;
 };
@@ -348,7 +350,7 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
   const m = seat.meta;
   seat.actor.level = w.level;
   m.xp = w.xp; m.xpNeeded = w.xpNeeded;
-  m.skillPoints = w.skillPoints; m.passivePoints = w.passivePoints; m.offerings = w.offerings;
+  m.passivePoints = w.passivePoints;
   // Tolerant of a host one wire-version behind (fields absent from old JSON).
   m.vocationPoints = w.vocationPoints ?? 0;
   m.vocations = [...(w.vocations ?? [])];
@@ -372,6 +374,7 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
     if (item) m.equipped[slot] = item;
   }
   m.essences = { ...emptyEssences(), ...(w.ess ?? {}) };
+  m.abilityEssences = { ...emptyAbilityEssences(), ...(w.abil ?? {}) };
   m.vestiges = { ...(w.vest ?? {}) };
   // Rebuild the action bar from slot ids → the (just-rehydrated) learned instances.
   seat.actor.skills = w.bar.map(id => (id ? (known.get(id) ?? null) : null));
@@ -689,13 +692,15 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
         : d.item.kind === 'gear' ? ITEM_RARITIES[d.item.item.rarity].color
         : d.item.kind === 'vestige' ? (VESTIGES[d.item.id]?.color ?? '#b06bd4')
         : d.item.kind === 'essence' ? ESSENCES[d.item.essence].color
+        : d.item.kind === 'abilityEssence' ? abilityEssenceOfTier(d.item.tier).color
         : d.item.inst.def.color,
       rarity: d.item.kind === 'skill' ? (d.item.inst.rarity ?? 'common')
         : d.item.kind === 'gear' ? d.item.item.rarity : undefined,
       name: d.item.kind === 'gear' ? d.item.item.name : undefined,
       vid: d.item.kind === 'vestige' ? d.item.id : undefined,
       eid: d.item.kind === 'essence' ? d.item.essence : undefined,
-      cnt: d.item.kind === 'essence' ? d.item.count : undefined,
+      tid: d.item.kind === 'abilityEssence' ? d.item.tier : undefined,
+      cnt: d.item.kind === 'essence' || d.item.kind === 'abilityEssence' ? d.item.count : undefined,
     })),
     orbs: world.orbs.map(o => ({ p: v2(o.pos), bob: o.bob, life: o.life, kind: o.kind })),
     texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind })),
@@ -1187,7 +1192,9 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
           ? { kind: 'vestige', id: d.vid ?? '', count: 1 }
           : d.kind === 'essence'
             ? { kind: 'essence', essence: d.eid ?? 'coarse', count: d.cnt ?? 1 }
-            : { kind: 'skill', inst: { def: { color: d.color }, rarity: d.rarity ?? 'common' } },
+            : d.kind === 'abilityEssence'
+              ? { kind: 'abilityEssence', tier: d.tid ?? 1, count: d.cnt ?? 1 }
+              : { kind: 'skill', inst: { def: { color: d.color }, rarity: d.rarity ?? 'common' } },
   })) as unknown as World['drops'];
   world.orbs = snap.orbs.map(o => ({ pos: { x: o.p[0], y: o.p[1] }, bob: o.bob, life: o.life, kind: o.kind, amount: 0 })) as unknown as World['orbs'];
   world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k })) as unknown as World['texts'];

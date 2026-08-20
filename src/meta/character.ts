@@ -22,7 +22,7 @@ import {
 import { rebuildItem } from '../engine/itemgen';
 import type { ItemInstance } from '../engine/items';
 import type { Attributes } from '../engine/stats';
-import { emptyEssences, type PlayerMeta, type Seat, type World } from '../engine/world';
+import { emptyAbilityEssences, emptyEssences, type PlayerMeta, type Seat, type World } from '../engine/world';
 import type { ExpeditionManifest } from '../packages/manifest';
 import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable, saveRefused } from './persistence';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
@@ -44,11 +44,9 @@ interface SavedSocket {
 interface SavedSkill {
   skillId: string; level: number; rarity: SkillRarity;
   sockets: (SavedSocket | null)[];
-  /** GRANTED (reacquired starter — worthless to salvage/sacrifice) and the
-   *  essence-bought level count (excluded from font refunds). Optional →
-   *  older saves load unchanged. */
+  /** GRANTED (reacquired starter — worthless everywhere value is minted).
+   *  Optional → older saves load unchanged. */
   granted?: boolean;
-  essenceLevels?: number;
   /** THE KEEPER'S MARK (salvageLock) — see SavedSocket. */
   locked?: boolean;
   /** THE GRIMOIRE: the bestiary form this instance is attuned to (a monster
@@ -67,7 +65,7 @@ export interface CharacterSave {
   name?: string;
   baseAttrs: Attributes;
   xp: number; xpNeeded: number;
-  skillPoints: number; passivePoints: number;
+  passivePoints: number;
   allocated: string[];
   /** Choice-node picks (data/passiveChoices.ts), keyed by node id. Optional →
    *  pre-choice saves load unchanged; rebuilt registry-tolerantly (a renamed
@@ -95,9 +93,12 @@ export interface CharacterSave {
   equipped?: Record<string, ItemInstance>;
   /** Salvage-currency wallet (per essence id). Optional → pre-essence saves. */
   essences?: Record<string, number>;
+  /** Ability Essence wallet (skill food, per tier id). Optional → pre-M-ECON
+   *  saves load with an empty wallet (the costless grandfather: levels ride
+   *  the gems themselves; the retired point/offering fields are ignored). */
+  abilityEssences?: Record<string, number>;
   /** Vestige wallet (socket material, per vestige id). Optional. */
   vestiges?: Record<string, number>;
-  offerings: number;
   /** TAMED COMPANIONS (the Hunter's bond): re-fielded beside the keeper on
    *  resume, downed state included. Optional → older saves load unchanged;
    *  a removed def simply releases that bond. */
@@ -163,7 +164,6 @@ const saveSkill = (i: SkillInstance): SavedSkill => ({
   skillId: i.def.id, level: i.level, rarity: i.rarity ?? 'common',
   sockets: i.sockets.map(s => s ? saveSocket(s) : null),
   ...(i.granted ? { granted: true } : {}),
-  ...(i.essenceLevels ? { essenceLevels: i.essenceLevels } : {}),
   ...(i.attunedForm ? { attunedForm: i.attunedForm } : {}),
   ...(i.treeNodes?.length ? { treeNodes: [...i.treeNodes] } : {}),
   ...(i.locked ? { locked: true } : {}),
@@ -195,7 +195,7 @@ export function serializeCharacter(world: World): CharacterSave {
     name: m.name,
     baseAttrs: { ...m.baseAttrs },
     xp: m.xp, xpNeeded: m.xpNeeded,
-    skillPoints: m.skillPoints, passivePoints: m.passivePoints,
+    passivePoints: m.passivePoints,
     allocated: [...m.allocated],
     choices: Object.fromEntries(Object.entries(m.choices).map(([k, v]) => [k, [...v]])),
     realmPoints: { ...m.realmPoints },
@@ -210,8 +210,8 @@ export function serializeCharacter(world: World): CharacterSave {
       Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
     ),
     essences: { ...m.essences },
+    abilityEssences: { ...m.abilityEssences },
     vestiges: { ...m.vestiges },
-    offerings: m.offerings,
     companions: [
       ...world.actors
         .filter(a => a.companion && !a.dead && a.owner === hero && a.defId)
@@ -294,7 +294,6 @@ export function rebuildSkill(s: SavedSkill): SkillInstance | null {
   const inst = makeSkillInstance(def, s.level, Math.max(1, s.sockets.length));
   inst.rarity = s.rarity;
   if (s.granted) inst.granted = true;
-  if (s.essenceLevels) inst.essenceLevels = s.essenceLevels;
   if (s.attunedForm && MONSTERS[s.attunedForm]) inst.attunedForm = s.attunedForm;
   // THE SKILL-MODE TREES: picks survive the round trip; orphans (a renamed
   // node id, a retired tree) drop with a console note — the attunedForm law.
@@ -355,16 +354,17 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
     baseAttrs: { ...save.baseAttrs },
     attrs: { ...save.baseAttrs }, // recomputed by recalcSeat inside the adopt
     xp: save.xp, xpNeeded: save.xpNeeded,
-    skillPoints: save.skillPoints, passivePoints: save.passivePoints,
+    passivePoints: save.passivePoints,
     allocated,
     choices,
     realmPoints: { ...(save.realmPoints ?? {}) },
     grafts: sanitizeGrafts(save.grafts, allocated, choices, PASSIVE_NODES, id => knownSkills.has(id)),
     vocations: [...(save.vocations ?? [])],
     vocationPoints: save.vocationPoints ?? 0,
-    knownSkills, inventory, skillInv, offerings: save.offerings,
+    knownSkills, inventory, skillInv,
     items, equipped,
     essences: { ...emptyEssences(), ...(save.essences ?? {}) },
+    abilityEssences: { ...emptyAbilityEssences(), ...(save.abilityEssences ?? {}) },
     vestiges: { ...(save.vestiges ?? {}) },
     // The SAVE is the authority on the life-contract — createPlayer's stamp is
     // only for fresh characters. Pre-mode saves load as plain mortals; a save
@@ -639,7 +639,7 @@ export function serializeCouchGuest(
     name: m.name,
     baseAttrs: { ...m.baseAttrs },
     xp: m.xp, xpNeeded: m.xpNeeded,
-    skillPoints: m.skillPoints, passivePoints: m.passivePoints,
+    passivePoints: m.passivePoints,
     allocated: [...m.allocated],
     choices: Object.fromEntries(Object.entries(m.choices).map(([k, v]) => [k, [...v]])),
     realmPoints: { ...m.realmPoints },
@@ -654,8 +654,8 @@ export function serializeCouchGuest(
       Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
     ),
     essences: { ...m.essences },
+    abilityEssences: { ...m.abilityEssences },
     vestiges: { ...m.vestiges },
-    offerings: m.offerings,
     companions: [...(dormant.companions ?? [])],
     bar: hero.skills.map(s => s ? s.def.id : null),
     level: hero.level,

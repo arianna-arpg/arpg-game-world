@@ -28,7 +28,8 @@ import { runAIActions } from './aiActions';
 import {
   convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, treeNodeOf, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
-  skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
+  skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst,
+  type SkillRarity,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
   BAR_SLOTS, MAX_SUPPORT_LEVEL, parseSlotGraftStat, SLOTGRAFT_PREFIX, SWAP_DISCIPLINE_CFG,
   type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GroundCascadeSpec, type GroundPulseSpec, type GuardBashSpec,
@@ -42,10 +43,13 @@ import { evalCurve, type CurveKind } from './curves';
 import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
 import { compileItemMods, itemLevelReq, rebuildItem, rollItem } from './itemgen';
 import {
-  ESSENCES, ESSENCE_IDS, ESSENCE_SPILL_CFG, essenceUnitsForValue, LEDGER_ESSENCE_TOUCHED,
-  rollSpillPacket, skillLevelEssenceCost, spendWalletMortalValue, spillBudget,
+  ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier,
+  ESSENCES, ESSENCE_IDS, ESSENCE_SPILL_CFG, essenceUnitsForValue, FONT_CFG,
+  LEDGER_ESSENCE_TOUCHED,
+  rollSpillPacket, skillLevelAbilityCost, spendWalletMortalValue, spillBudget,
+  supportLevelAbilityCost,
   VENDOR_ESSENCE_PRICE, VENDOR_ITEM_CFG, VENDOR_SUPPORT_PRICE, walletBreakdown, walletMortalValue,
-  type EssenceCost, type EssenceId, type EssenceSpillSpec,
+  type AbilityCost, type EssenceCost, type EssenceId, type EssenceSpillSpec,
 } from '../data/essences';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemInstance, type ItemRarity } from './items';
 import { DROP_CFG, GEM_DROP_CFG, resolveLootTable, rollVestigeId } from './loot';
@@ -1328,7 +1332,8 @@ export type DropItem =
   | { kind: 'skill'; inst: SkillInstance }
   | { kind: 'gear'; item: ItemInstance }
   | { kind: 'vestige'; id: string; count: number }
-  | { kind: 'essence'; essence: EssenceId; count: number };
+  | { kind: 'essence'; essence: EssenceId; count: number }
+  | { kind: 'abilityEssence'; tier: number; count: number };
 
 export interface GemDrop {
   pos: Vec2;
@@ -1462,7 +1467,7 @@ const isLane = (l: unknown): l is 'break' | 'sell' | undefined =>
  *  are additionally neutralized at the registry lookups, e.g. allocateNode.) */
 function isValidMetaAction(a: MetaAction): boolean {
   switch (a.t) {
-    case 'learn': case 'sacrifice': case 'buyVendor': case 'buyChandler': case 'buyDelver':
+    case 'learn': case 'buyVendor': case 'buyChandler': case 'buyDelver':
     case 'levelSupportInv': case 'dropSkill': case 'dropSupport':
       return isIdx(a.index);
     case 'socket': return isIdx(a.index) && isStr(a.skillId);
@@ -1472,7 +1477,16 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'mimicSelect': return isStr(a.sid);
     case 'pickTreeNode': return isStr(a.skillId) && isStr(a.nodeId);
     case 'untameCompanion': return isIdx(a.actorId);
-    case 'levelSkill': return isStr(a.skillId) && (a.pay === undefined || a.pay === 'points' || a.pay === 'essence');
+    case 'levelSkill': return isStr(a.skillId);
+    // THE SACRIFICIAL FONT's recipes (data/essences.ts FONT_CFG): rarities
+    // are a closed vocabulary, tiers untrusted client integers (the
+    // mutators re-clamp against the live registry).
+    case 'fontMerge': return isStr(a.skillId)
+      && (['common', 'magic', 'rare', 'legendary'] as const).includes(a.rarity);
+    case 'fontConvert': return isIdx(a.tier) && (a.dir === 'up' || a.dir === 'down');
+    case 'fontReset': return isStr(a.skillId);
+    // The vendors' Ability Essence sell lane — counter id + tier.
+    case 'buyAbilityEss': return isStr(a.vendor) && isIdx(a.tier);
     case 'allocate': return isStr(a.nodeId) && (a.optionId === undefined || isStr(a.optionId));
     case 'bindGraft': return isStr(a.key) && (a.skillId === null || isStr(a.skillId));
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
@@ -1522,9 +1536,6 @@ function isValidMetaAction(a: MetaAction): boolean {
   }
 }
 
-/** Skill gems sacrificed at a font per skill point earned. */
-export const OFFERINGS_PER_POINT = 3;
-
 export interface PlayerMeta {
   classDef: ClassDef;
   /** THE NAME (Naming, meta/nemesis.ts): the player-given name — or the class
@@ -1538,7 +1549,6 @@ export interface PlayerMeta {
   attrs: Attributes;
   xp: number;
   xpNeeded: number;
-  skillPoints: number;
   passivePoints: number;
   allocated: Set<string>;
   /** CHOICE NODES: the option ids picked per allocated choice node (see
@@ -1570,8 +1580,6 @@ export interface PlayerMeta {
   inventory: SupportInstance[];
   /** Skill gems carried but not learned — loot, fodder, and options. */
   skillInv: SkillInstance[];
-  /** Skill gems fed to a Sacrificial Font toward the next skill point. */
-  offerings: number;
   /** GEAR bag — the tetris grid; every entry carries its cell x/y. */
   items: ItemInstance[];
   /** GEAR worn on the doll, by EQUIP_SLOTS id. Each slot syncs one
@@ -1581,6 +1589,10 @@ export interface PlayerMeta {
    *  rest of the bag — lost to death (knowledge persists on the account as
    *  craftLore; the raw material does not). */
   essences: Record<EssenceId, number>;
+  /** ABILITY ESSENCES (data/essences.ts ABILITY_ESSENCES) — the skill-
+   *  leveling currency, per tier id. Wallet counters, never bag items;
+   *  carried and lost to death exactly like the tints. */
+  abilityEssences: Record<string, number>;
   /** VESTIGES (socket material) — stackable, satchel-borne, consumed on
    *  socketing. Lost to death like every other carried material. */
   vestiges: Record<string, number>;
@@ -1597,6 +1609,12 @@ export interface PlayerMeta {
 /** A zeroed essence wallet (fresh seats, wire fallbacks). */
 export function emptyEssences(): Record<EssenceId, number> {
   return Object.fromEntries(ESSENCE_IDS.map(id => [id, 0])) as Record<EssenceId, number>;
+}
+
+/** A zeroed Ability-Essence wallet — keyed by registry id, so a re-derived
+ *  tier roster (the bands array moved) mints the right shape everywhere. */
+export function emptyAbilityEssences(): Record<string, number> {
+  return Object.fromEntries(ABILITY_ESSENCES.map(d => [d.id, 0]));
 }
 
 /** A PLAYER SEAT — one controllable hero in the run. Bundles the per-player
@@ -3211,11 +3229,13 @@ export class World {
   shrines: Shrine[] = [];
   altars: Altar[] = [];
   chests: Chest[] = [];
-  /** Sacrificial Fonts: feed skill gems, harvest skill points. */
+  /** Sacrificial Fonts: merge gems, convert Ability Essence, unmake tree
+   *  picks (the M-ECON recipes — fontMergeSkill/fontConvertEssence/
+   *  fontResetTree; the old gems→points lane died with the point economy). */
   fonts: { pos: Vec2 }[] = [];
   /** Brandt's wares: skill gems (and, once unlocked, support gems) on a
    *  TIME-BASED restock — refreshed by the world clock, not by re-entering
-   *  town. Priced in skill points. Size + restock speed scale with account
+   *  town. Priced in essence. Size + restock speed scale with account
    *  features (see buildVendorStock/restockVendor). */
   vendorStock: VendorEntry[] = [];
   /** This zone's waypoint (if it has one). */
@@ -3651,7 +3671,6 @@ export class World {
       attrs: { ...classDef.attributes },
       xp: 0,
       xpNeeded: PROGRESSION.xpForLevel(1),
-      skillPoints: 0,
       passivePoints: 1,
       allocated: new Set([classStartNode(classDef.id)]),
       choices: {},
@@ -3662,10 +3681,10 @@ export class World {
       knownSkills: new Map(),
       inventory: [],
       skillInv: [],
-      offerings: 0,
       items: [],
       equipped: {},
       essences: emptyEssences(),
+      abilityEssences: emptyAbilityEssences(),
       vestiges: {},
       // Ally seats are mode-less passengers of the host's run; only the LOCAL
       // hero's mode drives the death flow (createPlayer stamps the real one).
@@ -4496,9 +4515,10 @@ export class World {
   }
 
   /** What a survived death TAKES: the whole carry (bag + doll + carried gems +
-   *  materials + font offerings), mirroring exactly what a mortal wipe loses —
-   *  minus what recordDeath just banked onto the corpse. The BUILD (learned
-   *  skills with their sockets, bar, passives, vocations, level) is untouched. */
+   *  materials, both essence wallets), mirroring exactly what a mortal wipe
+   *  loses — minus what recordDeath just banked onto the corpse. The BUILD
+   *  (learned skills with their sockets, bar, passives, vocations, level) is
+   *  untouched. */
   private stripCarryOnDeath(): void { this.stripCarryOf(this.localSeat); }
 
   /** The seat-general strip (the local wipe above; a couch guest's vessel
@@ -4510,8 +4530,8 @@ export class World {
     m.skillInv = [];
     m.inventory = [];
     m.essences = emptyEssences();
+    m.abilityEssences = emptyAbilityEssences();
     m.vestiges = {};
-    m.offerings = 0;
     this.recalcSeat(seat); // the doll's gear sources vanish from the sheet
     this.markMetaDirty(seat);
   }
@@ -20469,7 +20489,8 @@ export class World {
       m.xp -= m.xpNeeded;
       p.level++;
       m.xpNeeded = PROGRESSION.xpForLevel(p.level);
-      m.skillPoints += PROGRESSION.skillPointsPerLevel;
+      // The level-up beat grants the PASSIVE point only (the skill-point
+      // lane retired with M-ECON — skill levels are Ability-Essence-fed).
       m.passivePoints += PROGRESSION.passivePointsPerLevel;
       this.recalcSeat(seat);
       // A DOWNED seat banks XP and levels, but must NOT auto-heal off 0 — only an
@@ -20732,41 +20753,105 @@ export class World {
     return true;
   }
 
-  /**
-   * Feed a carried skill gem to a Sacrificial Font. Every OFFERINGS_PER_POINT
-   * gems become a skill point — and a leveled gem refunds the points that
-   * were invested in it, so a build you walk away from pays you back.
-   */
-  sacrificeSkill(invIndex: number, seat: Seat = this.localSeat): boolean {
+  // --- THE SACRIFICIAL FONT (docs/design/skill-modes.md §5) -----------------
+  // Repurposed by M-ECON: gems merged, essences broken, choices unmade — the
+  // old gems→points lane died with the point economy. Station grammar:
+  // proximity (nearFont) → deterministic recipes, no restock clock.
+
+  /** MERGE (FONT_CFG.merge): N carried copies of the SAME skill at the SAME
+   *  rarity fuse into ONE at the next rarity rung. The laws, all engine-
+   *  enforced: the merged gem keeps the HIGHEST input level (investment
+   *  never silently vaporizes — the N highest-leveled eligible copies are
+   *  the ones consumed); socketed supports are pried back into the bag
+   *  BEFORE the inputs burn; THE KEEPER'S MARK (locked) refuses exactly as
+   *  it refuses salvage; granted sparks never count (the rescue hatch is
+   *  not a mint); strict same-skill. */
+  fontMergeSkill(skillId: string, rarity: SkillRarity, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
     const p = seat.actor;
-    const inst = m.skillInv[invIndex];
-    if (!inst || !this.nearFont(seat)) return false;
-    m.skillInv.splice(invIndex, 1);
-    // Socketed supports are pried out, never burned.
-    for (const s of inst.sockets) if (s) m.inventory.push(s);
-    // A GRANTED spark (reacquired class starter) burns to nothing: no
-    // offering, no refund — the rescue hatch is not a mint.
-    if (inst.granted) {
-      this.text(p.pos, 'the font takes the granted spark — and gives nothing', '#8a8678', 12);
-      return true;
+    if (!this.nearFont(seat)) return false;
+    const need = FONT_CFG.merge[rarity];
+    if (!need) return false; // the top rung has no next step
+    const ladder = Object.keys(SKILL_RARITIES) as SkillRarity[];
+    const next = ladder[ladder.indexOf(rarity) + 1];
+    if (!next) return false;
+    // Eligible copies, highest level first (stable: ties keep bag order).
+    const pool = m.skillInv
+      .map((inst, idx) => ({ inst, idx }))
+      .filter(r => r.inst.def.id === skillId && (r.inst.rarity ?? 'common') === rarity
+        && !r.inst.locked && !r.inst.granted)
+      .sort((a, b) => b.inst.level - a.inst.level || a.idx - b.idx);
+    if (pool.length < need) {
+      this.failNote(p, 'fontmerge:' + skillId, `the font asks ${need} alike`);
+      return false;
     }
-    // Essence-bought levels never refund POINTS (no cross-currency arbitrage).
-    const refund = inst.level - 1 - (inst.essenceLevels ?? 0);
-    if (refund > 0) m.skillPoints += refund;
-    m.offerings++;
-    if (m.offerings >= OFFERINGS_PER_POINT) {
-      m.offerings -= OFFERINGS_PER_POINT;
-      m.skillPoints++;
-      this.text(vec(p.pos.x, p.pos.y - 40),
-        'the font grants a skill point!', '#b06bd4', 15);
+    const taken = pool.slice(0, need);
+    const kept = Math.max(...taken.map(r => r.inst.level));
+    // Pry supports out first, then burn the inputs (splice deepest-first so
+    // the recorded indices stay true while the bag shrinks).
+    for (const r of taken) for (const s of r.inst.sockets) if (s) m.inventory.push(s);
+    for (const r of [...taken].sort((a, b) => b.idx - a.idx)) m.skillInv.splice(r.idx, 1);
+    const def = taken[0].inst.def;
+    const merged = makeSkillGem(def, kept, next);
+    m.skillInv.push(merged);
+    this.charDirty = true;
+    this.text(vec(p.pos.x, p.pos.y - 40),
+      `${def.name} reforged — ${SKILL_RARITIES[next].label}, level ${kept} kept`,
+      SKILL_RARITIES[next].color, 14);
+    return true;
+  }
+
+  /** CONVERT (FONT_CFG.convertUp/Down): Ability Essence tier up/down —
+   *  wallet math, deliberately LOSSY both ways round (the PoE map-vendor
+   *  valve: conversion never beats farming at depth). */
+  fontConvertEssence(tier: number, dir: 'up' | 'down', seat: Seat = this.localSeat): boolean {
+    const m = seat.meta;
+    const p = seat.actor;
+    if (!this.nearFont(seat)) return false;
+    if (!Number.isInteger(tier) || tier < 1 || tier > ABILITY_ESSENCES.length) return false;
+    const from = abilityEssenceOfTier(tier);
+    if (dir === 'up') {
+      if (tier + 1 > ABILITY_ESSENCES.length) return false;
+      const to = abilityEssenceOfTier(tier + 1);
+      if ((m.abilityEssences[from.id] ?? 0) < FONT_CFG.convertUp) {
+        this.failNote(p, 'fontconv:' + from.id, `the font asks ${FONT_CFG.convertUp}× ${from.label}`);
+        return false;
+      }
+      m.abilityEssences[from.id] = (m.abilityEssences[from.id] ?? 0) - FONT_CFG.convertUp;
+      m.abilityEssences[to.id] = (m.abilityEssences[to.id] ?? 0) + 1;
+      this.text(p.pos, `${FONT_CFG.convertUp}× ${from.glyph} → 1× ${to.glyph} ${to.label}`, to.color, 12);
     } else {
-      this.text(p.pos, `offering accepted (${m.offerings}/${OFFERINGS_PER_POINT})`, '#b06bd4', 12);
+      if (tier - 1 < 1) return false;
+      const to = abilityEssenceOfTier(tier - 1);
+      if ((m.abilityEssences[from.id] ?? 0) < 1) {
+        this.failNote(p, 'fontconv:' + from.id, `no ${from.label} to break`);
+        return false;
+      }
+      m.abilityEssences[from.id] = (m.abilityEssences[from.id] ?? 0) - 1;
+      m.abilityEssences[to.id] = (m.abilityEssences[to.id] ?? 0) + FONT_CFG.convertDown;
+      this.text(p.pos, `1× ${from.glyph} → ${FONT_CFG.convertDown}× ${to.glyph} ${to.label}`, to.color, 12);
     }
-    if (refund > 0) {
-      this.text(vec(p.pos.x, p.pos.y - 22),
-        `${refund} invested point${refund > 1 ? 's' : ''} returned`, '#7ec8a0', 12);
-    }
+    this.charDirty = true;
+    return true;
+  }
+
+  /** RESET (FONT_CFG.reset): the tree-respec ritual — unmakes ONE skill's
+   *  spent picks (M0's branch pick today; M1's full trees consume this same
+   *  seam), priced in the skill's CURRENT band. Camp surgery: the standing
+   *  swapRefusal words gate it in the field, sanctuary waives. */
+  fontResetTree(skillId: string, seat: Seat = this.localSeat): boolean {
+    const m = seat.meta;
+    const p = seat.actor;
+    if (!this.nearFont(seat)) return false;
+    const inst = m.knownSkills.get(skillId);
+    if (!inst || !inst.treeNodes?.length) return false;
+    const why = this.swapRefusal(seat, 'socket');
+    if (why) { this.failNote(p, skillId + ':fontreset', why); return false; }
+    const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
+    if (!this.spendAbilityEssence(seat, cost, 'fontreset:' + skillId)) return false;
+    inst.treeNodes = undefined;
+    this.charDirty = true;
+    this.text(vec(p.pos.x, p.pos.y - 20), 'the font unmakes the choice', '#b06bd4', 13);
     return true;
   }
 
@@ -20867,6 +20952,86 @@ export class World {
     this.drops.push({ pos, item: { kind: 'essence', essence: gain.essence, count: gain.count }, bob: rand(0, Math.PI * 2) });
   }
 
+  // --- ABILITY ESSENCES (data/essences.ts ABILITY_ESSENCES) ------------------
+  // The skill-leveling currency: wallet counters fed by zone-floored world
+  // drops (the dopamine ruling — a drop is an EVENT) and the vendors' sell
+  // lane; spent by levelUpSkill/levelUpSupport and the font's recipes.
+
+  canAffordAbilityEssence(seat: Seat, cost: AbilityCost): boolean {
+    const def = abilityEssenceOfTier(cost.tier);
+    return (seat.meta.abilityEssences[def.id] ?? 0) >= cost.count;
+  }
+
+  /** Spend from the Ability wallet — strict tier, no cross-tier change (the
+   *  font's CONVERT recipe is the only bridge, deliberately lossy). */
+  spendAbilityEssence(seat: Seat, cost: AbilityCost, noteKey: string): boolean {
+    const def = abilityEssenceOfTier(cost.tier);
+    const have = seat.meta.abilityEssences[def.id] ?? 0;
+    if (have < cost.count) {
+      this.failNote(seat.actor, noteKey, `needs ${cost.count}× ${def.label}`);
+      return false;
+    }
+    seat.meta.abilityEssences[def.id] = have - cost.count;
+    this.markMetaDirty(seat);
+    return true;
+  }
+
+  /** Bank a gained packet: wallet, floater, pickup feed, wire — the
+   *  grantEssence idiom on the dedicated family. */
+  grantAbilityEssence(seat: Seat, tier: number, count: number): void {
+    if (count <= 0) return;
+    const def = abilityEssenceOfTier(tier);
+    seat.meta.abilityEssences[def.id] = (seat.meta.abilityEssences[def.id] ?? 0) + count;
+    this.text(seat.actor.pos, `+${count} ${def.label}`, def.color, 12, 'gains');
+    notePickup(this.pickupFeed, seat.id, def.label, def.color, this.time, count);
+    this.markMetaDirty(seat);
+  }
+
+  /** Shed an Ability Essence packet on the ground — vacuumed on touch like
+   *  the tints. THE DROP IS AN EVENT: the mint floats the tier's name in
+   *  its color (the dropGemAt idiom), so the moment reads from across the
+   *  room; the pickup feed banks the quiet ledger row. `rng` lets the kill
+   *  path scatter off its own fork (below); direct mints default global. */
+  dropAbilityEssenceAt(at: Vec2, tier: number, count: number, rng: () => number = Math.random): void {
+    if (this.spoilsSealed()) return; // THE SPOILS LAW — minted wealth
+    if (count <= 0) return;
+    const def = abilityEssenceOfTier(tier);
+    const s = ESSENCE_SPILL_CFG.scatter;
+    const pos = this.clampPos(vec(at.x + (rng() * 2 - 1) * s, at.y + (rng() * 2 - 1) * s), 10);
+    this.drops.push({ pos, item: { kind: 'abilityEssence', tier: def.tier, count }, bob: rng() * Math.PI * 2 });
+    this.text(at, `${def.label}!`, def.color, 14, 'drop', FLOAT_CFG.dropNameSec);
+  }
+
+  /** THE FORKED TRICKLE: the kill-path roll draws from its OWN salted
+   *  stream (core/rng.ts Rng off the manifest seed) — a new loot trickle
+   *  must never re-seat every seeded fixture downstream of a kill by
+   *  moving the GLOBAL stream (levers change counts, never maps). */
+  private abilityDropRng?: Rng;
+
+  /** The kill-path Ability Essence roll (ABILITY_ESSENCE_CFG): chance per
+   *  credited kill × the kill's bounty, tier drawn from the floors the
+   *  ground's level clears under THE TIER GRADIENT (each deeper eligible
+   *  tier outweighs the step below it — deep country pays mostly its own
+   *  band while the level-1 gem economy keeps every lower tier alive). */
+  private rollAbilityEssenceDrop(at: Vec2, bounty: number): void {
+    const cfg = ABILITY_ESSENCE_CFG;
+    const rng = this.abilityDropRng ??= new Rng((this.manifest.seed ^ hashStr('abilitytrickle')) >>> 0);
+    if (!rng.chance(cfg.killChance * bounty)) return;
+    const lvl = this.zone.level;
+    let top = -1;
+    for (let i = 0; i < cfg.floors.length && i < ABILITY_ESSENCES.length; i++) {
+      if (lvl >= cfg.floors[i]) top = i;
+    }
+    if (top < 0) return; // ground below every floor mints nothing
+    let total = 0;
+    const weights: number[] = [];
+    for (let i = 0; i <= top; i++) { weights[i] = Math.pow(cfg.deeperBias, i); total += weights[i]; }
+    let r = rng.next() * total;
+    let tierIdx = top;
+    for (let i = 0; i <= top; i++) { r -= weights[i]; if (r <= 0) { tierIdx = i; break; } }
+    this.dropAbilityEssenceAt(at, tierIdx + 1, rng.int(cfg.count[0], cfg.count[1]), () => rng.next());
+  }
+
   /** Bank landed damage toward a spill bearer's next shed (MonsterDef
    *  .essenceSpill). One shed per cooldown window keeps the trail readable;
    *  banked overflow simply WAITS — the death true-up in kill() always pays
@@ -20958,6 +21123,46 @@ export class World {
     // Persist only the genuine LOCAL hero (the host / single-player) to disk. A
     // render-shell CLIENT (clientActionHook set) must NEVER saveCharacter — its
     // optimistic-predicted shell meta would clobber the client's OWN save slot.
+    if (seat === this.localSeat && !this.clientActionHook) saveCharacter(this);
+    return true;
+  }
+
+  /** THE ABILITY-ESSENCE SELL LANE's per-tier refusal (the swapRefusal
+   *  shape): why this counter cannot sell this tier right now, or null when
+   *  open. ONE predicate — the buy handler refuses through it and the panel
+   *  disables through it. Availability rides the BROADER-WARES ladder
+   *  (ABILITY_ESSENCE_CFG.vendor.rungNeeded — the drop floors' echo, ruled);
+   *  DEEP counters (VendorDef.essenceDeep) waive the ladder: their own
+   *  access was the gate. The trade gate stays its own read, as everywhere. */
+  abilityEssTierRefusal(v: VendorDef, tier: number): string | null {
+    const cfg = ABILITY_ESSENCE_CFG.vendor;
+    if (!Number.isInteger(tier) || tier < 1 || tier > ABILITY_ESSENCES.length) return 'no such essence';
+    if (cfg.deepWaives && v.essenceDeep) return null;
+    const need = cfg.rungNeeded[tier - 1] ?? 0;
+    if (this.waresRungsOwned() < need) return `broader wares (rung ${need}) would stock it`;
+    return null;
+  }
+
+  /** Buy ONE Ability Essence of `tier` at a counter — the vendors' SELL
+   *  lane (sell-direction only, no buy-back: tints in, skill food out; the
+   *  refinement fiction made literal). Priced in the mirror-rung tint
+   *  (ABILITY_ESSENCE_CFG.vendor.prices); the trade gate fronts it as it
+   *  fronts everything. */
+  buyAbilityEssence(vendorId: string, tier: number, seat: Seat = this.localSeat): boolean {
+    const v = VENDORS.find(x => x.id === vendorId);
+    if (!v || !v.near(this, seat)) return false;
+    const refusal = this.vendorTradeRefusal(v);
+    if (refusal) { this.failNote(seat.actor, 'vendortrade', refusal); return false; }
+    const why = this.abilityEssTierRefusal(v, tier);
+    if (why) { this.failNote(seat.actor, 'abiless:' + tier, why); return false; }
+    const price = ABILITY_ESSENCE_CFG.vendor.prices[tier - 1];
+    if (!price) return false;
+    if (!this.canAffordEssence(seat, price)) {
+      this.failNote(seat.actor, 'abiless:' + tier, `needs ${price.count}× ${ESSENCES[price.essence].label}`);
+      return false;
+    }
+    seat.meta.essences[price.essence] -= price.count;
+    this.grantAbilityEssence(seat, tier, 1);
     if (seat === this.localSeat && !this.clientActionHook) saveCharacter(this);
     return true;
   }
@@ -23467,7 +23672,7 @@ export class World {
       baseAttrs: { ...snapshot.baseAttrs },
       attrs: { ...snapshot.baseAttrs },
       xp: 0, xpNeeded: PROGRESSION.xpForLevel(targetLevel),
-      skillPoints: 0, passivePoints: 0,
+      passivePoints: 0,
       allocated,
       // Choices survive normalization only where their node survived the
       // budget trim (a pick on a trimmed node would be a phantom grant).
@@ -23480,9 +23685,9 @@ export class World {
       vocations: [...(snapshot.vocations ?? [])],
       vocationPoints: 0,
       knownSkills,
-      inventory: [], skillInv: [], offerings: 0,
+      inventory: [], skillInv: [],
       items: [], equipped,
-      essences: emptyEssences(), vestiges: {},
+      essences: emptyEssences(), abilityEssences: emptyAbilityEssences(), vestiges: {},
       modeId: DEFAULT_MODE_ID, modeStage: 0, charId: '',
     };
   }
@@ -24637,37 +24842,28 @@ export class World {
     }
   }
 
-  /** Level up an unlocked skill — a skill point, or (pay:'essence') the
-   *  salvage-currency curve (skillLevelEssenceCost; the WHOLE cost policy is
-   *  that one config function). Essence-bought levels are tracked so the
-   *  font never refunds them as points. */
-  levelUpSkill(skillId: string, seat: Seat = this.localSeat, pay: 'points' | 'essence' = 'points'): boolean {
+  /** Level up an unlocked skill — Ability Essences, the ONE pay lane
+   *  (skillLevelAbilityCost: the whole cost policy is that one config
+   *  function; the tier IS the band the step lands in, so the wallet gate
+   *  enforces the half-open band law by construction). */
+  levelUpSkill(skillId: string, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
     const inst = m.knownSkills.get(skillId);
     if (!inst || inst.level >= skillMaxLevel(inst.def)) return false;
-    if (pay === 'essence') {
-      if (!this.spendEssence(seat, skillLevelEssenceCost(inst.level + 1), 'esslvl:' + skillId)) return false;
-      inst.essenceLevels = (inst.essenceLevels ?? 0) + 1;
-    } else {
-      if (m.skillPoints < 1) return false;
-      m.skillPoints--;
-    }
+    if (!this.spendAbilityEssence(seat, skillLevelAbilityCost(inst.level + 1), 'abilvl:' + skillId)) return false;
     inst.level++;
+    this.charDirty = true;
     return true;
   }
 
-  /** Level up a support gem (socketed or carried) — point or essence path.
+  /** Level up a support gem (socketed or carried) — the same family falls
+   *  through at the supportMul (cap 5 keeps every step in the first band).
    *  The gem ref must belong to `seat`'s meta — applyAction resolves it. */
-  levelUpSupport(gem: SupportInstance, seat: Seat = this.localSeat, pay: 'points' | 'essence' = 'points'): boolean {
-    const m = seat.meta;
+  levelUpSupport(gem: SupportInstance, seat: Seat = this.localSeat): boolean {
     if (gem.level >= supportMaxLevel(gem.def)) return false;
-    if (pay === 'essence') {
-      if (!this.spendEssence(seat, skillLevelEssenceCost(gem.level + 1), 'esslvl:' + gem.def.id)) return false;
-    } else {
-      if (m.skillPoints < 1) return false;
-      m.skillPoints--;
-    }
+    if (!this.spendAbilityEssence(seat, supportLevelAbilityCost(gem.level + 1), 'abilvl:' + gem.def.id)) return false;
     gem.level++;
+    this.charDirty = true;
     return true;
   }
 
@@ -24971,23 +25167,26 @@ export class World {
       case 'mimicSelect': this.mimicSelectFor(action.sid, seat); break;
       case 'pickTreeNode': this.pickTreeNode(action.skillId, action.nodeId, seat); break;
       case 'untameCompanion': this.releaseCompanion(action.actorId, seat); break;
-      case 'sacrifice': this.sacrificeSkill(action.index, seat); break;
+      case 'fontMerge': this.fontMergeSkill(action.skillId, action.rarity, seat); break;
+      case 'fontConvert': this.fontConvertEssence(action.tier, action.dir, seat); break;
+      case 'fontReset': this.fontResetTree(action.skillId, seat); break;
+      case 'buyAbilityEss': this.buyAbilityEssence(action.vendor, action.tier, seat); break;
       case 'buyVendor': this.buyVendorGem(action.index, seat); break;
       case 'buyChandler': this.buyChandlerGem(action.index, seat); break;
       case 'buyDelver': this.buyDelverGem(action.index, seat); break;
       case 'vendorLock': this.setVendorLock(action.vendor, action.index, action.on, seat); break;
       case 'vendorCommission': this.setVendorCommission(action.vendor, action.gem, seat); break;
-      case 'levelSkill': this.levelUpSkill(action.skillId, seat, action.pay ?? 'points'); break;
+      case 'levelSkill': this.levelUpSkill(action.skillId, seat); break;
       case 'levelSupportInv': {
         const gem = seat.meta.inventory[action.index];
-        if (gem) this.levelUpSupport(gem, seat, action.pay ?? 'points');
+        if (gem) this.levelUpSupport(gem, seat);
         break;
       }
       case 'levelSupportSocket': {
         const inst = seat.meta.knownSkills.get(action.skillId);
         const gem = inst?.sockets[action.socket];
         if (gem) {
-          this.levelUpSupport(gem, seat, action.pay ?? 'points');
+          this.levelUpSupport(gem, seat);
           // Forwarded copies bake the carrier's level — re-mint so bodies
           // already on the field feel the level-up too.
           if (inst) this.resyncMinionSupports(inst);
@@ -39207,17 +39406,17 @@ export class World {
       && (d.minDropLevel ?? 0) <= atLevel);
   }
 
+  /** DROP-AT-1 (docs/design/skill-modes.md §2, ruled): every skill gem
+   *  mints at level 1 — leveling is the Ability Essence economy's job, so
+   *  a find is a SHAPE (skill × rarity), never a pre-walked ladder. (The
+   *  old GEM_DROP_CFG.preLevel deep-zone roll retired with M-ECON.) */
   rollSkillGem(bias?: SkillTag[], atLevel = this.zone.level): SkillInstance {
     const pool = this.skillDropPool(atLevel);
     const owned = this.carriedGemIds().skills;
     const skillDef = this.pickGem(pool, s => s.tags, s => s.dropWeight ?? 100, bias,
       s => owned.has(s.id)) ?? pick(pool);
     const rarity = rollSkillRarity(Math.random());
-    const pl = GEM_DROP_CFG.preLevel;
-    const level = 1 + (this.zone.level >= pl.minZone && chance(pl.chance)
-      ? randInt(1, Math.max(1, Math.floor(this.zone.level / pl.levelDiv)))
-      : 0);
-    return makeSkillGem(skillDef, level, rarity);
+    return makeSkillGem(skillDef, 1, rarity);
   }
 
   /** Pick a support gem from the UNLOCKED pool (weighted, bracketed,
@@ -39806,6 +40005,15 @@ export class World {
    *  case, rolled pieces in the wares grid). ONE fold; vendorSize and the
    *  gear shelf both read it, so a rung can never widen one face and not
    *  the other. */
+  /** How many BROADER-WARES rungs the keeper's account owns — the Ability
+   *  Essence sell lane's availability read (rungNeeded), beside the fold
+   *  below that widens the shelves. */
+  waresRungsOwned(): number {
+    let n = 0;
+    for (const r of VENDOR_CFG.wares.ladder) if (featureEnabled(this.account, r.flag)) n++;
+    return n;
+  }
+
   private waresBonus(): { gems: number; gear: number } {
     let gems = 0, gear = 0;
     for (const r of VENDOR_CFG.wares.ladder) {
@@ -40416,6 +40624,8 @@ export class World {
       const vid = rollVestigeId();
       if (vid) this.dropVestigeAt(actor.pos, vid);
     }
+    // ABILITY ESSENCES — the skill-food trickle (zone-floored, tier-graded).
+    this.rollAbilityEssenceDrop(actor.pos, bounty);
   }
 
   // --------------------------------------------------------------- update ---
@@ -47805,6 +48015,14 @@ export class World {
         const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude);
         if (!seat) continue;
         this.grantEssence(seat, { essence: drop.item.essence, count: drop.item.count });
+        this.drops.splice(i, 1);
+        continue;
+      }
+      // ABILITY ESSENCE packets vacuum the same way — skill food to the wallet.
+      if (drop.item.kind === 'abilityEssence') {
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude);
+        if (!seat) continue;
+        this.grantAbilityEssence(seat, drop.item.tier, drop.item.count);
         this.drops.splice(i, 1);
         continue;
       }

@@ -17,17 +17,21 @@ import { SHEET_VITALS, sheetTabs, statBlurbOf } from '../data/sheet';
 import { resistValue } from '../engine/damage';
 import { chargeLabel } from '../engine/charges';
 import {
-  crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, instanceChargeCost, SKILL_RARITIES, skillCooldownSeconds, skillMaxLevel,
+  crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, essenceTierForLevel, instanceChargeCost, SKILL_RARITIES, skillCooldownSeconds, skillMaxLevel,
   supportFitsInst, supportFitsInstOrCrew, supportMaxLevel,
-  type SkillDef, type SkillInstance, type SupportInstance,
+  type SkillDef, type SkillInstance, type SkillRarity, type SupportInstance,
 } from '../engine/skills';
-import { MAX_LEARNED_SKILLS, OFFERINGS_PER_POINT } from '../engine/world';
+import { MAX_LEARNED_SKILLS } from '../engine/world';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
 import { canPlaceAt, overlappingItems } from '../engine/inventory';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, type ModCompareRow } from '../engine/itemgen';
 import { ITEM_BASES } from '../data/itembases';
-import { ESSENCES, ESSENCE_IDS, essenceUnitsForValue, skillLevelEssenceCost, type EssenceCost, type EssenceId } from '../data/essences';
+import {
+  ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier, ESSENCES, ESSENCE_IDS,
+  essenceUnitsForValue, FONT_CFG, skillLevelAbilityCost, supportLevelAbilityCost,
+  type AbilityCost, type EssenceCost, type EssenceId,
+} from '../data/essences';
 import {
   CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseProgress, expertiseRank,
   salvageItemYield, salvageSkillYield, salvageSupportYield,
@@ -1202,15 +1206,24 @@ export class UI {
     return `<span style="color:${e.color}" title="${e.label}">${cost.count}${e.glyph}</span>`;
   }
 
-  /** The essence-pay Level Up button (skills + supports share the curve).
-   *  Affordability reads the INVENTORY panel's owner (the build drawer's home). */
-  private essLevelBtn(attr: string, level: number, atMax: boolean): string {
-    const cost = skillLevelEssenceCost(level + 1);
-    const afford = this.getWorld().canAffordEssence(this.panelSeat(this.inventory), cost);
-    return `<button ${attr} ${!afford || atMax ? 'disabled' : ''}
-      title="Level up by spending ${cost.count}× ${ESSENCES[cost.essence].label}">
-      Level Up (${this.essCostText(cost)})</button>`;
+  /** 'N◈' cost chip for an Ability-Essence price, colored + titled by tier. */
+  private abilityCostText(cost: AbilityCost): string {
+    const d = abilityEssenceOfTier(cost.tier);
+    return `<span style="color:${d.color}" title="${d.label}">${cost.count}${d.glyph}</span>`;
   }
+
+  /** The Level Up button — Ability Essences, the ONE pay lane (skills and
+   *  supports share the banded curve; supports at the supportMul).
+   *  Affordability reads the INVENTORY panel's owner (the drawer's home). */
+  private abilityLevelBtn(attr: string, level: number, atMax: boolean, support = false): string {
+    const cost = support ? supportLevelAbilityCost(level + 1) : skillLevelAbilityCost(level + 1);
+    const afford = this.getWorld().canAffordAbilityEssence(this.panelSeat(this.inventory), cost);
+    const d = abilityEssenceOfTier(cost.tier);
+    return `<button ${attr} ${!afford || atMax ? 'disabled' : ''}
+      title="Level up by spending ${cost.count}× ${d.label}">
+      Level Up (${this.abilityCostText(cost)})</button>`;
+  }
+
 
   /** The seat's essence wallet as colored chips (sheet + station headers).
    *  Seat-explicit: the stations pass their panel's owner (couch lens). */
@@ -2147,8 +2160,7 @@ export class UI {
         <div style="font-size:9px;color:#6a6478">starters: ${starterChips}</div>
       </div>
       <div style="font-size:11px;margin-bottom:6px">
-        <span style="color:#ffd700">${m.passivePoints} passive</span> ·
-        <span style="color:#7ec8a0">${m.skillPoints} skill</span>${vocPts} points available
+        <span style="color:#ffd700">${m.passivePoints} passive</span>${vocPts} points available
       </div>
       <h3>Attributes <span style="color:#8a8678;font-weight:normal">(allocated on the passive tree: P)</span></h3>
       ${attrRows}
@@ -2258,9 +2270,7 @@ export class UI {
               ${gem.locked ? `${lockBadge} ` : ''}<span style="color:#8a8678;font-weight:normal;font-size:10px">support gem</span></div>
             <div class="desc">${gem.def.description}</div>
             <div class="bind-btns">
-              <button data-invlvl="${idx}" ${m.skillPoints < 1 || gem.level >= supportMaxLevel(gem.def) ? 'disabled' : ''}>
-                Level Up (1 pt)</button>
-              ${this.essLevelBtn(`data-invlvl-ess="${idx}"`, gem.level, gem.level >= supportMaxLevel(gem.def))}
+              ${this.abilityLevelBtn(`data-invlvl="${idx}"`, gem.level, gem.level >= supportMaxLevel(gem.def), true)}
               <button data-drop-support="${idx}" title="Drop this gem on the ground (any nearby player can pick it up)">Drop</button>
               ${socketLabel} ${targets}
             </div>
@@ -2292,6 +2302,17 @@ export class UI {
     }
 
     const nearFont = world.nearFont();
+    // THE FONT'S MERGE LANE (FONT_CFG.merge): eligible copies per (skill ×
+    // rarity) group — locked (the keeper's mark) and granted sparks never
+    // count, exactly as the engine recipe refuses them.
+    const mergeGroups = new Map<string, number>();
+    if (nearFont) {
+      for (const g of m.skillInv) {
+        if (g.locked || g.granted) continue;
+        const k = `${g.def.id}:${g.rarity ?? 'common'}`;
+        mergeGroups.set(k, (mergeGroups.get(k) ?? 0) + 1);
+      }
+    }
     // (The Brandt/Delver counters moved to the dedicated VENDOR screen —
     // dwell at a stocked counter to open it; data/vendors.ts is the registry.)
     const slotsFull = m.knownSkills.size >= MAX_LEARNED_SKILLS;
@@ -2315,13 +2336,25 @@ export class UI {
           <div class="bind-btns">
             <button data-learn="${idx}" ${blocker ? 'disabled' : ''}>
               Learn${blocker ? ` (${blocker})` : ''}</button>
-            ${nearFont ? `<button data-sacrifice="${idx}">Sacrifice${inst.level > 1 ? ` (+${inst.level - 1} pt back)` : ''}</button>` : ''}
+            ${(() => {
+              if (!nearFont) return '';
+              const r = inst.rarity ?? 'common';
+              const need = FONT_CFG.merge[r];
+              if (!need) return '';
+              const ladder = Object.keys(SKILL_RARITIES) as SkillRarity[];
+              const next = ladder[ladder.indexOf(r) + 1];
+              if (!next) return '';
+              const have = mergeGroups.get(`${def.id}:${r}`) ?? 0;
+              return `<button data-fontmerge="${def.id}:${r}" ${have < need || inst.locked || inst.granted ? 'disabled' : ''}
+                title="Sacrificial Font: fuse ${need}× ${def.name} (${SKILL_RARITIES[r].label}) into ONE ${SKILL_RARITIES[next].label} — highest level kept, socketed supports returned to the bag.${have < need ? ` You carry ${have} eligible (locked and granted never count).` : ''}">
+                Merge ${need}× → ${SKILL_RARITIES[next].label}</button>`;
+            })()}
             <button data-drop-skill="${idx}" title="Drop this gem on the ground (any nearby player can pick it up)">Drop</button>
           </div>
         </div>`;
     }).join('') || `<div style="color:#8a8678;font-size:11px">
       No skill gems carried. Monsters drop them; rarity decides their sockets (1-4).
-      ${nearFont ? '' : 'Find a Sacrificial Font to trade unwanted gems for skill points.'}</div>`;
+      ${nearFont ? '' : 'A Sacrificial Font can fuse triple copies into a higher rarity.'}</div>`;
     return skillGems;
   }
 
@@ -2332,14 +2365,12 @@ export class UI {
     q<HTMLButtonElement>('button[data-learn]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'learn', index: Number(btn.dataset.learn) }); refresh();
     }));
-    q<HTMLButtonElement>('button[data-sacrifice]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'sacrifice', index: Number(btn.dataset.sacrifice) }); refresh();
+    q<HTMLButtonElement>('button[data-fontmerge]').forEach(btn => btn.addEventListener('click', () => {
+      const [skillId, rarity] = btn.dataset.fontmerge!.split(':');
+      world.requestMeta({ t: 'fontMerge', skillId, rarity: rarity as SkillRarity }); refresh();
     }));
     q<HTMLButtonElement>('button[data-invlvl]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'levelSupportInv', index: Number(btn.dataset.invlvl) }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-invlvl-ess]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'levelSupportInv', index: Number(btn.dataset.invlvlEss), pay: 'essence' }); refresh();
     }));
     q<HTMLButtonElement>('button[data-drop-skill]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'dropSkill', index: Number(btn.dataset.dropSkill) }); refresh();
@@ -2690,7 +2721,32 @@ export class UI {
         style="position:absolute;left:-27px;top:56px;writing-mode:vertical-rl;text-orientation:mixed;
         padding:12px 4px;font-size:11px;letter-spacing:1px;background:#241d2e;color:#c8a8ff;
         border:1px solid #4a3a5a;border-right:none;border-radius:6px 0 0 6px;cursor:var(--cursor-point, pointer);z-index:4">
-        📖 BUILD ${this.buildFlapOpen ? '▸' : '◂'}</button>`;
+        📖 SKILLS ${this.buildFlapOpen ? '▸' : '◂'}</button>`;
+    // The header's readout is the Ability wallet (nonzero tiers as glyph
+    // chips — the pts counter retired with the point economy; DIAL).
+    const walletChips = ABILITY_ESSENCES
+      .filter(d => (m.abilityEssences[d.id] ?? 0) > 0)
+      .map(d => `<span style="color:${d.color}" title="${d.label}">${m.abilityEssences[d.id]}${d.glyph}</span>`)
+      .join(' ');
+    // THE FONT'S CONVERT STRIP (FONT_CFG.convertUp/Down): tier up/down per
+    // rung, wallet-gated — stands only beside a Sacrificial Font.
+    const convertStrip = wf ? `
+      <div style="flex:0 0 auto;font-size:10px;color:#b06bd4;margin-bottom:6px;
+        border-bottom:1px solid var(--panel-border);padding-bottom:5px">
+        FONT · convert essence:
+        ${ABILITY_ESSENCES.slice(0, -1).map((lo, i) => {
+          const hi = ABILITY_ESSENCES[i + 1];
+          const canUp = (m.abilityEssences[lo.id] ?? 0) >= FONT_CFG.convertUp;
+          const canDown = (m.abilityEssences[hi.id] ?? 0) >= 1;
+          return `
+            <button data-fontconv="${lo.tier}:up" ${canUp ? '' : 'disabled'}
+              title="${FONT_CFG.convertUp}× ${lo.label} → 1× ${hi.label}">
+              ${FONT_CFG.convertUp}<span style="color:${lo.color}">${lo.glyph}</span>→<span style="color:${hi.color}">${hi.glyph}</span></button>
+            <button data-fontconv="${hi.tier}:down" ${canDown ? '' : 'disabled'}
+              title="1× ${hi.label} → ${FONT_CFG.convertDown}× ${lo.label}">
+              1<span style="color:${hi.color}">${hi.glyph}</span>→${FONT_CFG.convertDown}<span style="color:${lo.color}">${lo.glyph}</span></button>`;
+        }).join('')}
+      </div>` : '';
     const drawer = this.buildFlapOpen ? `
       <div style="position:absolute;right:100%;top:0;margin-right:2px;width:360px;
         max-height:calc(100vh - 220px);display:flex;flex-direction:column;z-index:3;
@@ -2698,10 +2754,11 @@ export class UI {
         box-shadow:-6px 5px 22px rgba(0,0,0,0.6);padding:10px 12px">
         <div style="flex:0 0 auto;color:var(--gold);font-size:12px;letter-spacing:1.2px;text-transform:uppercase;
           border-bottom:1px solid var(--panel-border);padding-bottom:5px;margin-bottom:6px">
-          📖 Build — <span style="color:#7ec8a0">${m.skillPoints} pts</span>
+          📖 Skills ${walletChips ? `— ${walletChips}` : ''}
           <span style="float:right;color:#b06bd4;font-size:10px;letter-spacing:0">
-            ${wf ? 'FONT NEARBY · ' : ''}offerings ${m.offerings}/${OFFERINGS_PER_POINT}</span>
+            ${wf ? 'FONT NEARBY' : ''}</span>
         </div>
+        ${convertStrip}
         <div class="build-scroll" style="flex:1 1 auto;overflow-y:auto;font-size:12px;padding-right:4px">
           ${this.learnedListHtml()}
         </div>
@@ -2800,6 +2857,13 @@ export class UI {
     });
     if (this.buildFlapOpen) {
       this.wireLearnedList(this.inventory, () => this.refreshInventory());
+      // THE FONT'S CONVERT STRIP (drawer chrome, outside the learned list).
+      this.inventory.querySelectorAll<HTMLButtonElement>('button[data-fontconv]').forEach(btn =>
+        btn.addEventListener('click', () => {
+          const [tier, dir] = btn.dataset.fontconv!.split(':');
+          this.getWorld().requestMeta({ t: 'fontConvert', tier: Number(tier), dir: dir as 'up' | 'down' });
+          this.refreshInventory();
+        }));
     }
 
     const salv = this.salvageLaneFor(this.inventory);
@@ -4072,6 +4136,22 @@ export class UI {
       const tradeStrip = tradeRefusal
         ? `<div style="margin:4px 0;padding:5px 7px;border:1px dashed #8a6a3a88;border-radius:4px;color:#c8a86a;font-size:11px">🔒 ${esc(tradeRefusal)}</div>`
         : '';
+      // THE ABILITY-ESSENCE SELL LANE (ABILITY_ESSENCE_CFG.vendor): tier
+      // chips priced in tints, sell-direction only. Availability by wares
+      // rung (deep counters waive) through the engine's OWN refusal
+      // predicate — the panel and the buy handler can never disagree.
+      const essStrip = `<div style="margin:2px 0 6px;font-size:10px;color:#8a8678">
+        Ability Essence:
+        ${ABILITY_ESSENCES.map(d => {
+          const price = ABILITY_ESSENCE_CFG.vendor.prices[d.tier - 1];
+          if (!price) return '';
+          const why = world.abilityEssTierRefusal(v, d.tier);
+          const afford = world.canAffordEssence(seat, price);
+          return `<button data-vabuy="${v.id}:${d.tier}" ${tradeRefusal || why || !afford ? 'disabled' : ''}
+            title="${why ? esc(why) : `1× ${d.label} for ${price.count}× ${ESSENCES[price.essence].label}`}">
+            <span style="color:${d.color}">${d.glyph}${d.label.split(' ').pop()}</span> (${this.essCostText(price)})${why ? ' 🔒' : ''}</button>`;
+        }).join('')}
+      </div>`;
       const body = tabSealed(activeSpec)
         ? `<div style="padding:16px 10px;color:#8a8678;font-size:11px;text-align:center;line-height:1.5">🔒 ${esc(VENDOR_CFG.tabs.gemsSealedCopy)}</div>`
         : activeSpec.id === 'gems'
@@ -4082,6 +4162,7 @@ export class UI {
           <div style="color:${v.accent};font-weight:bold;font-size:12px;margin-bottom:4px">
             ${v.label}${v.headline ? ` <span data-vheadline="${v.id}" style="opacity:0.7;font-size:10px;font-weight:normal">· ${v.headline(world)}</span>` : ''}${reserveBadge}</div>
           ${tradeStrip}
+          ${essStrip}
           ${tabStrip}
           ${body}
         </div>`;
@@ -4104,6 +4185,12 @@ export class UI {
       // buyT IS the intent literal — pass it through (a new counter's intent
       // needs no dispatch edit here, only its union arm + world handler).
       world.requestMeta({ t: vendor.buyT, index: Number(idx) });
+      refresh();
+    }));
+    // The Ability Essence sell lane — one unit per click, tier by counter.
+    q<HTMLButtonElement>('button[data-vabuy]').forEach(btn => btn.addEventListener('click', () => {
+      const [vid, tier] = btn.dataset.vabuy!.split(':');
+      world.requestMeta({ t: 'buyAbilityEss', vendor: vid, tier: Number(tier) });
       refresh();
     }));
     // THE PATRON'S HOLD: the toggle reads the row's CURRENT held state and
@@ -4283,10 +4370,9 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
         <span class="gem-chip" style="border-color:${s.def.color}"
           title="${s.def.description}${crewTip(s)}">
           ${s.def.name}${crewMark(s)} <b>L${s.level}</b>
-          <button data-gemlvl="${def.id}:${i}" ${m.skillPoints < 1 || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}>+</button>
-          <button data-gemlvl-ess="${def.id}:${i}"
-            ${!this.getWorld().canAffordEssence(seat, skillLevelEssenceCost(s.level + 1)) || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}
-            title="Level up for ${skillLevelEssenceCost(s.level + 1).count}× ${ESSENCES[skillLevelEssenceCost(s.level + 1).essence].label}">+${ESSENCES[skillLevelEssenceCost(s.level + 1).essence].glyph}</button>
+          <button data-gemlvl="${def.id}:${i}"
+            ${!this.getWorld().canAffordAbilityEssence(seat, supportLevelAbilityCost(s.level + 1)) || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}
+            title="Level up for ${supportLevelAbilityCost(s.level + 1).count}× ${abilityEssenceOfTier(supportLevelAbilityCost(s.level + 1).tier).label}">+${abilityEssenceOfTier(supportLevelAbilityCost(s.level + 1).tier).glyph}</button>
           <button data-unsocket="${def.id}:${i}" ${unsocketWhy ? `disabled title="${unsocketWhy}"` : ''}>✕</button>
         </span>` : `<span class="gem-chip empty">empty socket</span>`).join('');
       const eff = effectiveSkillLevel(inst);
@@ -4354,8 +4440,18 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
             style="border-color:${isPicked ? def.color : '#4a4458'}${open ? '' : ';opacity:0.55'}"
             ${dis ? 'disabled' : ''} title="${title}">${node.name}${isPicked ? ' ◈' : ''}</button>`;
         }).join('');
+        // THE FONT'S RESET RITUAL (FONT_CFG.reset): unmake the pick, priced
+        // in the skill's current band — stands only beside a font.
+        const resetChip = (inst.treeNodes?.length && world.nearFont()) ? (() => {
+          const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
+          const d = abilityEssenceOfTier(cost.tier);
+          const afford = world.canAffordAbilityEssence(seat, cost);
+          return `<button class="gem-chip" data-fontreset="${def.id}" ${afford ? '' : 'disabled'}
+            title="Sacrificial Font: unmake this skill's choice for ${cost.count}× ${d.label}.">
+            ↺ Reset (${this.abilityCostText(cost)})</button>`;
+        })() : '';
         modeRow = `<div style="margin-top:3px;font-size:10px">
-          <span style="color:#d8b86a">Branch:</span> ${chips}
+          <span style="color:#d8b86a">Branch:</span> ${chips}${resetChip}
           ${open ? '' : `<span style="color:#6a6478">— opens at Lv ${tree.level}</span>`}
         </div>`;
       }
@@ -4394,9 +4490,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           </div>
           <div class="tags">${def.tags.join(' · ')}</div>
           <div class="bind-btns">
-            <button data-levelup="${def.id}" ${m.skillPoints < 1 || inst.level >= maxLv ? 'disabled' : ''}>
-              Level Up (1 pt)</button>
-            ${this.essLevelBtn(`data-levelup-ess="${def.id}"`, inst.level, inst.level >= maxLv)}
+            ${this.abilityLevelBtn(`data-levelup="${def.id}"`, inst.level, inst.level >= maxLv)}
             ${binds}
             ${(() => {
               const why = world.swapRefusal(seat, 'unlearn', def.id);
@@ -4449,14 +4543,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       world.requestMeta({ t: 'levelSupportSocket', skillId, socket: Number(sock) });
       refresh();
     }));
-    // Essence-pay level-ups (the salvage loop feeding back into the build).
-    q<HTMLButtonElement>('button[data-levelup-ess]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'levelSkill', skillId: btn.dataset.levelupEss!, pay: 'essence' }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-gemlvl-ess]').forEach(btn => btn.addEventListener('click', () => {
-      const [skillId, sock] = btn.dataset.gemlvlEss!.split(':');
-      world.requestMeta({ t: 'levelSupportSocket', skillId, socket: Number(sock), pay: 'essence' });
-      refresh();
+    // THE FONT'S RESET RITUAL: unmake a skill's tree pick (band-priced).
+    q<HTMLButtonElement>('button[data-fontreset]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'fontReset', skillId: btn.dataset.fontreset! }); refresh();
     }));
     q<HTMLButtonElement>('button[data-unsocket]').forEach(btn => btn.addEventListener('click', () => {
       const [skillId, sock] = btn.dataset.unsocket!.split(':');
