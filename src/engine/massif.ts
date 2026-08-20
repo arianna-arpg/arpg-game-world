@@ -1362,7 +1362,16 @@ export function boreMassifTunnels(ctx: GenCtx, def: ZoneDef, grid: GridWalkField
       }
       for (const e of ends) {
         grid.fillRegion(e.mouth.x - cs, e.mouth.y - cs, e.mouth.x + cs, e.mouth.y + cs, mouthId);
-        ctx.doodads.push({ pos: vec(e.mouth.x, e.mouth.y), radius: 16, kind: 'culvert_stair', rot: e.out + Math.PI });
+        // THE MOUTH IS A DOOR: reserve its apron so everything that routes
+        // around reservations (landmark darts, structure siting, composition
+        // anchors) keeps its footprints off a working tier crossing — and
+        // KEEP-tag the stair so even a footprint corner that laps the apron
+        // (siting probes a 0.8r disc; a clearSite splice clears the full
+        // square) can never swallow the door's one visible tell. Before
+        // both, a rolled clearSite landmark ate a mouth's culvert_stair on
+        // 2/141 pinned mints — the odd-stairs class, closed here.
+        ctx.reserved.push({ pos: vec(e.mouth.x, e.mouth.y), radius: cs * 2.2 });
+        ctx.doodads.push({ pos: vec(e.mouth.x, e.mouth.y), radius: 16, kind: 'culvert_stair', rot: e.out + Math.PI, keep: true });
       }
       bored++;
       break;

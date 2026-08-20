@@ -7594,6 +7594,13 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
   if (def.clearSite) {
     for (let i = ctx.doodads.length - 1; i >= 0; i--) {
       const d = ctx.doodads[i];
+      // Authored keeps survive the clearing — the aligned-contract lesson
+      // (portal-clear / void-sweep / clearway all honor the same waiver): a
+      // recipe's FUNCTIONAL fixture (a bore mouth's culvert_stair, any
+      // future keep-tagged door furniture) must never be silently swallowed
+      // by a rolled footprint whose siting probe (a 0.8r disc) passed while
+      // the square's corner lapped the piece.
+      if (d.keep) continue;
       // The FULL square footprint, not the inner disc: a lake builder's lobes
       // can reach the rect's corners, and a survivor there ends up standing
       // in the poured liquid (the dune-country fulgurite lesson).
