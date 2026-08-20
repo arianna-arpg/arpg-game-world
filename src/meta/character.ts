@@ -16,7 +16,7 @@ import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { MONSTERS } from '../data/monsters';
 import {
-  makeSkillInstance,
+  makeSkillInstance, validTreeNodes,
   type SkillInstance, type SupportInstance, type SkillRarity,
 } from '../engine/skills';
 import { rebuildItem } from '../engine/itemgen';
@@ -54,6 +54,10 @@ interface SavedSkill {
   /** THE GRIMOIRE: the bestiary form this instance is attuned to (a monster
    *  def id; rebuilt tolerantly — a removed def drops the attunement). */
   attunedForm?: string;
+  /** THE SKILL-MODE TREES: spent tree-node ids (M0: the one rung-1 pick).
+   *  Optional → older saves load unchanged; validated on load — an id no
+   *  longer on the def's tree drops with a console note. */
+  treeNodes?: string[];
 }
 export interface CharacterSave {
   schemaVersion: number;
@@ -161,6 +165,7 @@ const saveSkill = (i: SkillInstance): SavedSkill => ({
   ...(i.granted ? { granted: true } : {}),
   ...(i.essenceLevels ? { essenceLevels: i.essenceLevels } : {}),
   ...(i.attunedForm ? { attunedForm: i.attunedForm } : {}),
+  ...(i.treeNodes?.length ? { treeNodes: [...i.treeNodes] } : {}),
   ...(i.locked ? { locked: true } : {}),
 });
 
@@ -291,6 +296,9 @@ export function rebuildSkill(s: SavedSkill): SkillInstance | null {
   if (s.granted) inst.granted = true;
   if (s.essenceLevels) inst.essenceLevels = s.essenceLevels;
   if (s.attunedForm && MONSTERS[s.attunedForm]) inst.attunedForm = s.attunedForm;
+  // THE SKILL-MODE TREES: picks survive the round trip; orphans (a renamed
+  // node id, a retired tree) drop with a console note — the attunedForm law.
+  if (s.treeNodes?.length) inst.treeNodes = validTreeNodes(def, s.treeNodes);
   if (s.locked) inst.locked = true; // the keeper's mark (salvageLock) survives
   inst.sockets = s.sockets.map(sock => {
     if (!sock) return null;

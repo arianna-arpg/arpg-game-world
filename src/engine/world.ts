@@ -26,7 +26,7 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, treeNodeOf, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
@@ -1470,6 +1470,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'unlearn': case 'reacquireSkill': return isStr(a.skillId);
     case 'attuneSpectre': return isStr(a.skillId) && isStr(a.formId);
     case 'mimicSelect': return isStr(a.sid);
+    case 'pickTreeNode': return isStr(a.skillId) && isStr(a.nodeId);
     case 'untameCompanion': return isIdx(a.actorId);
     case 'levelSkill': return isStr(a.skillId) && (a.pay === undefined || a.pay === 'points' || a.pay === 'essence');
     case 'allocate': return isStr(a.nodeId) && (a.optionId === undefined || isStr(a.optionId));
@@ -24968,6 +24969,7 @@ export class World {
       case 'unlearn': this.unlearnSkill(action.skillId, seat); break;
       case 'attuneSpectre': this.attuneSpectre(action.skillId, action.formId, seat); break;
       case 'mimicSelect': this.mimicSelectFor(action.sid, seat); break;
+      case 'pickTreeNode': this.pickTreeNode(action.skillId, action.nodeId, seat); break;
       case 'untameCompanion': this.releaseCompanion(action.actorId, seat); break;
       case 'sacrifice': this.sacrificeSkill(action.index, seat); break;
       case 'buyVendor': this.buyVendorGem(action.index, seat); break;
@@ -28111,6 +28113,36 @@ export class World {
       `attuned: ${def.name}`, '#a8d8a0', 12);
   }
 
+  /** THE SKILL-MODE TREES (M0 — docs/design/skill-modes.md): spend/replace
+   *  the ONE tree pick on a known skill instance. The gates, in order: the
+   *  node must exist on the def's own tree (untrusted ids no-op), the pick
+   *  row must be OPEN (inst.level ≥ tree.level — RAW level, never
+   *  effective: a fork is a commitment, not a loan from +level gear), and
+   *  the surgery obeys THE FIELD DISCIPLINE through the standing
+   *  swapRefusal words (sanctuary waives — the workshop law; M0 has no
+   *  hard lock, so re-picking under discipline is legal until M1's
+   *  first-point-seals rule). Exclusivity BY CONSTRUCTION: the state is
+   *  replaced whole, never appended. Rides the requestMeta intent lane, so
+   *  a co-op client's panel works untrusted like every meta mutation. */
+  pickTreeNode(skillId: string, nodeId: string, seat: Seat = this.localSeat): void {
+    const inst = seat.meta.knownSkills.get(skillId);
+    const tree = inst?.def.tree;
+    if (!inst || !tree) return;
+    const node = treeNodeOf(inst.def, nodeId);
+    if (!node) return;
+    const at = seat.actor.pos;
+    if (inst.level < tree.level) {
+      this.text(vec(at.x, at.y - 20), `the path opens at level ${tree.level}`, '#8a8678', 11);
+      return;
+    }
+    if (inst.treeNodes?.length === 1 && inst.treeNodes[0] === nodeId) return; // already walked
+    const why = this.swapRefusal(seat, 'socket');
+    if (why) { this.failNote(seat.actor, skillId + ':treepick', why); return; }
+    inst.treeNodes = [nodeId];
+    this.charDirty = true;
+    this.text(vec(at.x, at.y - 20), node.name, inst.def.color, 12);
+  }
+
   /** THE LIFELINE RULE (borrowed unlife): a body conjured by a PLAYER-SIDE
    *  conjurer that is not itself a seat — a spectre'd grave shaman raising
    *  from corpses, a raised broodmother laying nests, a turret that summons
@@ -29391,7 +29423,11 @@ export class World {
       return true;
     }
 
-    const d = def.delivery;
+    // THE SKILL-MODE SEAM (M0): the cast's delivery reads through the
+    // resolved view — a spent tree node's typed overrides fold in; an
+    // unpicked instance gets the def's own object back, byte-identical by
+    // construction. ONE binding covers every delivery read below.
+    const d = instanceDelivery(inst);
     let aoeScale = caster.sheet.get('aoeRadius', tags, extra) * (opts.aoeMult ?? 1);
     // PER-CAST VARIANCE (VarianceSpec.aoe): the whole footprint rolls
     // ONCE per cast — impact, linger, envelope anchors and cascades all

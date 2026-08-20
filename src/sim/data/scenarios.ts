@@ -12,6 +12,7 @@ import { SKILLS } from '../../data/skills';
 import { STARTER_CLASSES } from '../../meta/account';
 import type { MonsterRarity } from '../../engine/rarity';
 import type { PilotSpec, ScenarioDef } from '../types';
+import { greedyPassives } from './builds';
 
 /** How a human plays the class, derived from its OWN bar: a spell-led kit
  *  kites at range, an attack-led kit closes in. Re-bar a class and its sim
@@ -377,6 +378,50 @@ add(matchupDuel('ironbell_rot_l12', 'primeval_ironbell',
 add(matchupDuel('ironbell_burst_l12', 'primeval_ironbell',
   { level: 12, pilot: pilotFor('magician'), duration: 240 }));
 
+// THE SKILL-MODE SPIKE (M0 — docs/design/skill-modes.md §9): wild_strike's
+// two measured rung-1 branches, each on its identity lane — the Sprinkler
+// against a 5-dummy surround ring, the Duelist against the solo dummy.
+// Re-measured 2026-08-19 on the LANDED base row (cost 1 / arc 30 / spread
+// 90) at L20 bare, gap 70, 30s × seeds 11/23/37
+// (balance/scratch_skillmodes_ab.ts — pick == def-mutation byte-exact):
+//   base      (arc 30/spread  90): solo  54.4 · pack 193.9 — 5/5 victims
+//   sprinkler (arc 30/spread 130): solo  32.2 · pack 171.3 — 5/5 victims
+//   duelist   (arc 16/spread  24): solo 108.7 · pack 108.7 — 1 victim
+// These rows exist for VISIBILITY (`run --suite smoke` prints them); the
+// hard pins live in balance/probe_skillmodes.ts (arc + sector measured
+// through the real engine), and the committed smoke BASELINE deliberately
+// does NOT know these ids — compareSuites skips unbaselined rows, so THE
+// TRANSPARENCY LAW stays gated on the standing scenarios alone.
+for (const mode of [
+  { node: 'ws_sprinkler', tag: 'sprinkler', dummies: 5, lane: 'pack (5-dummy surround ring)' },
+  { node: 'ws_duelist', tag: 'duelist', dummies: 1, lane: 'solo (the dummyDps convention)' },
+]) {
+  add({
+    id: `skillmode_${mode.tag}_${mode.dummies > 1 ? 'pack' : 'solo'}_l20`,
+    label: `Skill-mode spike — wild_strike ${mode.tag}, ${mode.lane}`,
+    build: {
+      id: `modes_ws_${mode.tag}_l20`,
+      label: `Swashbuckler L20, wild_strike alone — ${mode.tag} pick`,
+      classId: 'swashbuckler', level: 20,
+      skills: [{ id: 'wild_strike', level: 7, treeNodes: [mode.node] }],
+      bar: ['wild_strike'],
+      passives: greedyPassives('swashbuckler', 20),
+    },
+    pilot: { kind: 'brawler' },
+    waves: [{ monsters: [{ id: 'target_dummy', level: 1, count: mode.dummies }], distance: 70 }],
+    duration: 30,
+    stop: 'duration',
+    notes: mode.dummies > 1
+      ? 'dps_dummy headline, measured 2026-08-20 ≈ 41±16: the runner RINGS the '
+        + 'five dummies in a full surround under the live pilot — a harder ask '
+        + 'than the scratch\'s stand-still front-ring (171.3). Both are true; '
+        + 'drift reads against ≈41 here, against the scratch table there.'
+      : 'dps_dummy headline, measured 2026-08-20 ≈ 107±9 — right on the '
+        + 'scratch\'s 108.7 (the solo lanes share their geometry). The branch '
+        + 'trade vs the sibling skillmode_ row: solo ceiling vs pack coverage.',
+  });
+}
+
 // ------------------------------------------------------------------ suites --
 
 /** Named bundles: the unit a balance pass (or a CI gate) runs. */
@@ -386,6 +431,10 @@ export const SUITES: Record<string, string[]> = {
     'dummy_dps_warrior_l1',
     'ttk_parity_warrior_l5',
     'ttk_parity_magician_l5',
+    // THE SKILL-MODE SPIKE rows (M0): visibility, not gate — the committed
+    // baseline predates them and compareSuites skips unbaselined ids.
+    'skillmode_sprinkler_pack_l20',
+    'skillmode_duelist_solo_l20',
   ],
   /** The three starter classes across the early bands. */
   starters: STARTER_CLASSES.flatMap(c => [

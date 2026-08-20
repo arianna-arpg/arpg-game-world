@@ -353,10 +353,32 @@ export const HOST_COST_STATS: ReadonlySet<string> = new Set([
 ]);
 
 /** The aim transform a use obeys: a socketed support's graft wins over the
- *  skill's own (one transform per use — they don't stack). */
+ *  skill's own (one transform per use — they don't stack). THE SKILL-MODE
+ *  SEAM (M0): a spent tree node may re-sector the skill's OWN random aim —
+ *  the graft above still wins, and an unpicked instance returns the def's
+ *  object untouched (byte-identical by construction). */
 export function instanceAim(inst: SkillInstance): AimSpec | undefined {
   for (const s of hostSockets(inst)) if (s.def.aim) return s.def.aim;
-  return inst.def.aim;
+  const base = inst.def.aim;
+  const spreadOver = instanceTreeOver(inst)?.spreadDeg;
+  if (spreadOver !== undefined && base?.random) {
+    return { ...base, random: { ...base.random, spreadDeg: spreadOver } };
+  }
+  return base;
+}
+
+/** THE RESOLVED DELIVERY (the skill-mode seam, M0 — M1's audit template):
+ *  the def stays FROZEN; a spent tree node's typed `over` fields fold onto
+ *  a copy here. Unpicked instances return the def's own delivery object
+ *  untouched — byte-identical by construction, zero allocation. The cast
+ *  path reads delivery through THIS view (executeSkill's one binding). */
+export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
+  const d = inst.def.delivery;
+  const over = instanceTreeOver(inst);
+  if (over?.arcDeg !== undefined && (d.type === 'cone' || d.type === 'melee')) {
+    return { ...d, arcDeg: over.arcDeg };
+  }
+  return d;
 }
 
 /** Seconds between the beats of a META CHAIN — the breath each order gets
@@ -4036,6 +4058,11 @@ export interface SkillDef {
    *  11 does something new" seam. Mechanic-warping stats welcome. */
   thresholds?: SkillThreshold[];
 
+  /** THE SKILL-MODE TREE (M0 seed — docs/design/skill-modes.md): mutually-
+   *  exclusive branches picked per INSTANCE at a level milestone (see
+   *  SkillTreeSpec). Unpicked = the def verbatim, by construction. */
+  tree?: SkillTreeSpec;
+
   /** A DAMAGE POOL this skill banks and releases (see DamagePoolSpec —
    *  Venomous Aura, Detonation). Pool skills GATE on their bank: greyed and
    *  unusable while below `min`. */
@@ -4261,6 +4288,101 @@ export const MAX_SKILL_LEVEL = 10;
 export const DEFAULT_LEVELING: Modifier[] = [
   { stat: 'damage', kind: 'increased', value: 0.12 },
 ];
+
+// ---------------------------------------------------------------------------
+// THE SKILL-MODE TREES (docs/design/skill-modes.md — M0, the spike): a
+// per-skill miniature tree of MUTUALLY-EXCLUSIVE branches, picked per
+// INSTANCE at a level milestone. M0 ships the schema seed — two branches ×
+// one rung, payload = TYPED WHITELISTED spec overrides — authored on
+// wild_strike alone; M1 grows rungs 2–3, the neutral node, node mods, the
+// hard branch lock and the full read audit. Names are plain DATA (renames
+// are one-line edits forever). THE TRANSPARENCY LAW: an unpicked instance
+// is byte-identical to a def with no tree at all — the resolvers below
+// return the def's own objects untouched until a pick exists.
+// ---------------------------------------------------------------------------
+
+export interface SkillTreeNode {
+  /** Node id — persisted on the instance (SkillInstance.treeNodes), so
+   *  renaming an id orphans saved picks (they drop with a console note —
+   *  the attunedForm idiom). */
+  id: string;
+  name: string;
+  description?: string;
+  /** TYPED WHITELISTED spec overrides — the M0 whitelist is exactly the
+   *  measured pair-1 payload: the cone/melee wedge width and the
+   *  random-sector wander. M1 widens the list field by audited field;
+   *  never add a field here without adopting its cast-path read sites. */
+  over?: {
+    /** delivery.arcDeg replacement (cone/melee deliveries only). */
+    arcDeg?: number;
+    /** aim.random.spreadDeg replacement (random-sector aims only). */
+    spreadDeg?: number;
+  };
+}
+
+export interface SkillTreeBranch {
+  id: string;
+  name: string;
+  description?: string;
+  /** Rung rows, the identity commitment first. M0 ships rung 1 only. */
+  rungs: SkillTreeNode[];
+}
+
+export interface SkillTreeSpec {
+  /** The pick opens at inst.level ≥ this (RAW level — points + essence;
+   *  never effective level: a fork is a commitment, not a loan from
+   *  +level gear). Authored per skill; 5 is the settled convention
+   *  (SKILL_LEVEL_BANDS[0] once M-ECON lands the array). */
+  level: number;
+  branches: SkillTreeBranch[];
+}
+
+/** Find one tree node by id across every branch (undefined = orphan). */
+export function treeNodeOf(def: SkillDef, nodeId: string): SkillTreeNode | undefined {
+  for (const b of def.tree?.branches ?? []) {
+    for (const n of b.rungs) if (n.id === nodeId) return n;
+  }
+  return undefined;
+}
+
+/** The branch a node belongs to (the panel's lit state; M1's lock reads it). */
+export function treeBranchOfNode(def: SkillDef, nodeId: string): SkillTreeBranch | undefined {
+  for (const b of def.tree?.branches ?? []) {
+    if (b.rungs.some(n => n.id === nodeId)) return b;
+  }
+  return undefined;
+}
+
+/** Drop tree-pick ids that no longer name a node on this def (the
+ *  attunedForm idiom: validated on load, orphans drop with a console
+ *  note). ONE seam for every loader — the character save and the sim's
+ *  build minting alike. */
+export function validTreeNodes(def: SkillDef, ids: readonly string[]): string[] | undefined {
+  const kept = ids.filter(id => {
+    const ok = !!treeNodeOf(def, id);
+    if (!ok) console.warn(`[skill tree] '${def.id}': dropped orphaned pick '${id}' (no such node)`);
+    return ok;
+  });
+  return kept.length ? kept : undefined;
+}
+
+/** The folded spec overrides of every spent node (M0: at most one). An
+ *  unpicked instance answers undefined at the cost of one null check. */
+export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | undefined {
+  const ids = inst.treeNodes;
+  if (!ids || ids.length === 0) return undefined;
+  let out: SkillTreeNode['over'] | undefined;
+  for (const id of ids) {
+    const over = treeNodeOf(inst.def, id)?.over;
+    if (over) out = out ? { ...out, ...over } : over;
+  }
+  return out;
+}
+
+/** Is the pick row OPEN for this instance (the level milestone)? */
+export function treePickOpen(inst: SkillInstance): boolean {
+  return !!inst.def.tree && inst.level >= inst.def.tree.level;
+}
 
 // ---------------------------------------------------------------------------
 // Support gems — skill modifiers. Dropped by slain monsters, socketed into
@@ -4766,6 +4888,11 @@ export interface SkillInstance {
    *  World.attuneSpectre — mastery-gated — and serialized with the
    *  character; per INSTANCE, never per character. */
   attunedForm?: string;
+  /** THE SKILL-MODE TREES: spent tree-node ids (M0: at most ONE — the
+   *  rung-1 pick; exclusivity is the mutator's law, World.pickTreeNode).
+   *  Sparse-serialized with the character (the attunedForm idiom):
+   *  validated on load, orphaned ids drop with a console note. */
+  treeNodes?: string[];
   /** GRANTED: a reacquired class-starter spark. Worth NOTHING everywhere
    *  value is minted — zero salvage essence, zero font offerings — so the
    *  softlock rescue hatch can never become a currency loop. */

@@ -4330,6 +4330,35 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
           ${chips || `<span style="color:#8a8678">no arts captured: take a studied kind's blow</span>`}
         </div>`;
       }
+      // THE SKILL-MODE TREE (M0 — docs/design/skill-modes.md): the minimal
+      // two-chip pick row. Sealed (chips visible, greyed) until the
+      // milestone level; the pick — and any re-pick, M1 brings the hard
+      // lock — is camp surgery behind the standing swapRefusal words. The
+      // engine gate is World.pickTreeNode's; these chips only speak it.
+      let modeRow = '';
+      if (def.tree) {
+        const tree = def.tree;
+        const open = inst.level >= tree.level;
+        const pickWhy = open ? world.swapRefusal(seat, 'socket') : null;
+        const picked = inst.treeNodes?.[0];
+        const chips = tree.branches.map(b => {
+          const node = b.rungs[0];
+          if (!node) return '';
+          const isPicked = picked === node.id;
+          const dis = !open || (!!pickWhy && !isPicked);
+          const title = `${node.description ?? b.description ?? node.name}${
+            !open ? ` — the path opens at Lv ${tree.level}.`
+              : pickWhy && !isPicked ? ` — ${pickWhy}.`
+                : isPicked ? ' — walked.' : ''}`;
+          return `<button class="gem-chip" data-modepick="${def.id}:${node.id}"
+            style="border-color:${isPicked ? def.color : '#4a4458'}${open ? '' : ';opacity:0.55'}"
+            ${dis ? 'disabled' : ''} title="${title}">${node.name}${isPicked ? ' ◈' : ''}</button>`;
+        }).join('');
+        modeRow = `<div style="margin-top:3px;font-size:10px">
+          <span style="color:#d8b86a">Branch:</span> ${chips}
+          ${open ? '' : `<span style="color:#6a6478">— opens at Lv ${tree.level}</span>`}
+        </div>`;
+      }
       // Grafts riding THIS skill (chips mirror sockets; ✕ unbinds) + the
       // landing button while a lifted graft is looking for its carrier.
       // WORN grafts join the row: live ones name their gear seat in the
@@ -4378,6 +4407,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           ${graftRow}
           ${grimoire}
           ${mimicRow}
+          ${modeRow}
         </div>`;
     }).join('') || '<div style="color:#8a8678;font-size:11px">Nothing learned. Skills drop from monsters; learn them from the Inventory (I) → Skill Gems tab.</div>';
   }
@@ -4397,6 +4427,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // Mimic repertoire chips: pick the form this press wears.
     q<HTMLButtonElement>('button[data-mimicsel]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'mimicSelect', sid: btn.dataset.mimicsel! });
+      refresh();
+    }));
+    // Skill-mode tree chips: spend/replace the pick (host-authoritative
+    // via the pickTreeNode intent — the engine gate speaks the refusals).
+    q<HTMLButtonElement>('button[data-modepick]').forEach(btn => btn.addEventListener('click', () => {
+      const [skillId, nodeId] = btn.dataset.modepick!.split(':');
+      world.requestMeta({ t: 'pickTreeNode', skillId, nodeId });
       refresh();
     }));
     // (Grimoire attunement wires nowhere here anymore — binding is the

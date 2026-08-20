@@ -46,6 +46,11 @@ export interface BuildSkillSpec {
   rarity?: SkillRarity;
   /** Socketed support gems, in socket order. */
   supports?: { id: string; level?: number }[];
+  /** THE SKILL-MODE TREES: spent tree-node ids (M0: the one rung-1 pick).
+   *  Validated at mint like the save loader — orphans warn and drop; a
+   *  pick below the def's milestone level warns but simulates (the
+   *  hypothesis-lever doctrine). */
+  treeNodes?: string[];
 }
 
 /** A complete character on paper. */

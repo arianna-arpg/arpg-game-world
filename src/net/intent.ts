@@ -74,6 +74,7 @@ export type MetaAction =
   | { t: 'reacquireSkill'; skillId: string }                   // re-kindle a lost class starter (GRANTED copy)
   | { t: 'attuneSpectre'; skillId: string; formId: string }    // grimoire: bind a mastered bestiary form ('' releases)
   | { t: 'mimicSelect'; sid: string }                          // mimicry: select a captured art (engine/mimic.ts bank)
+  | { t: 'pickTreeNode'; skillId: string; nodeId: string }     // skill-mode tree: spend/replace the pick (World.pickTreeNode)
   | { t: 'untameCompanion'; actorId: number }                  // the Tracker's release counter
   | { t: 'socket'; index: number; skillId: string }            // inv gem → skill socket
   | { t: 'unsocket'; skillId: string; socket: number }

@@ -2072,6 +2072,36 @@ export const SKILLS: Record<string, SkillDef> = {
     aim: { random: { offsetDeg: 0, spreadDeg: 90 } },
     baseDamage: { physical: [8, 13] },
     delivery: { type: 'cone', range: 150, arcDeg: 30 },
+    // THE SKILL-MODE TREE, M0 spike (docs/design/skill-modes.md §4 pair 1,
+    // 2026-08-19): the two MEASURED rung-1 payloads behind the level-5
+    // pick — pack coverage vs solo ceiling at equal cadence. Overrides pin
+    // BOTH fields per branch (the Sprinkler re-pins arcDeg 30 on purpose:
+    // the branch identity must not drift if a rescale moves the base row).
+    // ⚠ Numbers directional from the batch-54 A/B table, unblessed — she
+    // blesses at landing. Names are data; renames are one-line edits.
+    tree: {
+      level: 5,
+      branches: [
+        {
+          id: 'sprinkler', name: 'The Sprinkler',
+          description: 'The whirl unchained: slivers wander a 130° fan — '
+            + 'the whole pack feels the rain, one throat rarely does.',
+          rungs: [{
+            id: 'ws_sprinkler', name: 'The Sprinkler',
+            over: { arcDeg: 30, spreadDeg: 130 },
+          }],
+        },
+        {
+          id: 'duelist', name: 'The Duelist',
+          description: 'The point finds one throat: a 16° sliver held to a '
+            + '24° line — dead-ahead sustain, the crowd goes untouched.',
+          rungs: [{
+            id: 'ws_duelist', name: 'The Duelist',
+            over: { arcDeg: 16, spreadDeg: 24 },
+          }],
+        },
+      ],
+    },
     effects: [
       { type: 'damage' },
       { type: 'status', status: 'bleed', chance: 0.2, magnitude: 0.25 },

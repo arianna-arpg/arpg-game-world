@@ -19,6 +19,7 @@ import { choiceLockReason, graftSourcesOf } from '../data/passiveChoices';
 import { MAIN_REALM, realmOf } from '../data/passiveRealms';
 import {
   SKILL_RARITIES, makeSkillInstance, summonCrewOf, supportFitsInstOrCrew, skillMaxLevel,
+  validTreeNodes,
   type SkillInstance, type SkillRarity, type SupportInstance,
 } from '../engine/skills';
 import { SLOT_BY_ID } from '../engine/items';
@@ -56,6 +57,20 @@ function mintSkill(spec: BuildSkillSpec, warnings: string[]): SkillInstance | nu
   }
   const inst = makeSkillInstance(def, level, sockets);
   inst.rarity = rarity;
+  // THE SKILL-MODE TREES: a build row may pin the pick. One validation
+  // seam with the save loader (validTreeNodes) — orphans warn and drop.
+  if (spec.treeNodes?.length) {
+    const kept = validTreeNodes(def, spec.treeNodes);
+    if ((kept?.length ?? 0) < spec.treeNodes.length) {
+      warnings.push(`skill '${spec.id}': orphaned tree node id(s) among ${JSON.stringify(spec.treeNodes)} — dropped`);
+    }
+    if (kept) {
+      inst.treeNodes = kept;
+      if (def.tree && level < def.tree.level) {
+        warnings.push(`skill '${spec.id}' carries a tree pick below its level-${def.tree.level} milestone (simulated anyway — hypothesis lever)`);
+      }
+    }
+  }
   supports.slice(0, sockets).forEach((s, i) => {
     const sdef = SUPPORTS[s.id];
     if (!sdef) {
