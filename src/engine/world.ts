@@ -31076,7 +31076,24 @@ export class World {
           caster.summonToggles.set(def.id, { inst, reserved: reserve });
           const first = Math.min(slots,
             d.count + Math.round(caster.sheet.get('summonCount', tags, extra)));
-          for (let i = 0; i < first; i++) this.spawnMinion(caster, inst, { dmgMult: useMult });
+          // A sequencing gem ("scattered in sequence") holds on toggled
+          // contracts too: the ON-fill emerges through the SAME grammar
+          // the plain path uses below — first body now, the rest on the
+          // standing beat. Bare toggles keep the one-frame muster. The
+          // reconciler counts the still-emerging bodies as already owed
+          // (updateSummonContracts), so a stagger never double-queues
+          // respawns; dismissSummonToggle purges the trickle with the
+          // contract, so a dead toggle never keeps birthing.
+          const seqFill = caster.sheet.get('summonSequence', tags, extra) > 0;
+          if (seqFill && first > 1) {
+            this.spawnMinion(caster, inst, { dmgMult: useMult });
+            this.pendingSummons.push({
+              caster, inst, remaining: first - 1, timer: 0.35, interval: 0.35,
+              mult: useMult,
+            });
+          } else {
+            for (let i = 0; i < first; i++) this.spawnMinion(caster, inst, { dmgMult: useMult });
+          }
           break;
         }
         const total = d.count + Math.round(caster.sheet.get('summonCount', tags, extra));
@@ -33159,6 +33176,13 @@ export class World {
     for (let i = this.pendingRespawns.length - 1; i >= 0; i--) {
       const pr = this.pendingRespawns[i];
       if (pr.caster === owner && pr.inst.def.id === skillId) this.pendingRespawns.splice(i, 1);
+    }
+    // A sequenced ON-fill still emerging dies with the contract — every
+    // ending funnels through here (the OFF-press, the radio-button pool
+    // swap, unlearn, owner death), so a dead toggle never keeps birthing.
+    for (let i = this.pendingSummons.length - 1; i >= 0; i--) {
+      const ps = this.pendingSummons[i];
+      if (ps.caster === owner && ps.inst.def.id === skillId) this.pendingSummons.splice(i, 1);
     }
     owner.reservedMana = Math.max(0, owner.reservedMana - t.reserved);
   }
@@ -47889,6 +47913,13 @@ export class World {
         let queued = 0;
         for (const pr of this.pendingRespawns) {
           if (pr.caster === a && pr.inst.def.id === id) queued++;
+        }
+        // Bodies of a sequenced ON-fill still emerging are ALREADY owed:
+        // uncounted, this sweep would queue respawn twins for minions that
+        // are simply still walking out, and their maturing would churn the
+        // roster through spawnMinion's cap eviction.
+        for (const ps of this.pendingSummons) {
+          if (ps.caster === a && ps.inst.def.id === id) queued += ps.remaining;
         }
         for (let i = slots - alive - queued; i > 0; i--) {
           this.pendingRespawns.push({
