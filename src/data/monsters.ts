@@ -4750,12 +4750,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#6a9838', shape: 'hexagon', radius: 17, look: 'goblin_brute',
     base: { life: 110, moveSpeed: 110, accuracy: 95, armor: 30, mana: 60, manaRegen: 6 },
     skills: ['heavy_strike', 'sunder'],
-    // Its kit EVOLVES with level (the demo of MonsterDef.grants): a low brute just
-    // cleaves; a veteran's cleave flurries (Multistrike) then chains (Reverberation),
-    // and an elder gains War Cry. Both supports require 'melee' — which cleave has.
+    // Its kit EVOLVES with level (the demo of MonsterDef.grants): a veteran's
+    // heavy strike flurries (Multistrike) then rings out (Reverberation), and
+    // an elder gains War Cry. Both supports require 'melee' — heavy_strike has
+    // it, and sunder's ground cascade never reaches the melee-branch reverb
+    // read, so the strike is the one honest host.
     grants: [
-      { atLevel: 10, support: 'multistrike', on: 'cleave' },
-      { atLevel: 40, support: 'reverberation', on: 'cleave' },
+      { atLevel: 10, support: 'multistrike', on: 'heavy_strike' },
+      { atLevel: 40, support: 'reverberation', on: 'heavy_strike' },
       { atLevel: 50, skill: 'war_cry' },
     ],
     xp: 24,
@@ -10281,7 +10283,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.0,
     turnSpeed: 4,
     scaling: { life: { incPerLevel: 0.07 } },
-    grants: [{ atLevel: 12, support: 'multistrike', on: 'heavy_strike', chance: 0.6 }],
+    // The drill-flurry: multistrike wants 'melee', and claw is the kit's one
+    // melee verb (whirlaxe is a thrown axe) — the suit that closes with you
+    // remembers its fists.
+    grants: [{ atLevel: 12, support: 'multistrike', on: 'claw', chance: 0.6 }],
     carry: { rarity: 'rare' },
     presence: { from: 9, fadeIn: 4 },
     // The crown ladder: the armory empties at half — including one flight
@@ -17468,6 +17473,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['rising_knell', 'ground_slam'],
     xp: 120, bossBar: true,
     faction: 'undead',
+    // The Host's whole MI wardrobe hung on the rank and file until now — the
+    // champion joins the barrow hoard (the warboss note tells the pattern).
+    // ⚠ theme seat unblessed.
+    infrequentTheme: 'undead',
     presence: { from: 13, fadeIn: 5 },
     scaling: { life: { incPerLevel: 0.09 } },
     heft: 1.6, turnSpeed: 2.4,
@@ -19871,8 +19880,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'sapbleeder', name: 'Sapbleeder',
     color: '#7a6a3a', shape: 'oval', radius: 17, material: 'verdant', look: 'sapbleeder',
     heft: 1.15,
-    base: { life: 146, moveSpeed: 150, accuracy: 100, evasion: 55, mana: 0, poise: 25 },
-    mods: [mod('physicalRes', 'flat', 0.15)],
+    // The armor seat is the old mod('physicalRes', 0.15) re-seated: no
+    // physical-resist lane exists (RES_STAT.physical is null — armor IS the
+    // physical lane), and 25 ≈ that 15% against band-typical hits at k=6.
+    // ⚠ armor 25 unblessed.
+    base: { life: 146, moveSpeed: 150, accuracy: 100, evasion: 55, armor: 25, mana: 0, poise: 25 },
     // THE JET: the wake trail fired FORWARD — same amber, same `mired`. The
     // denial school's verb, spent to buy back the gap it lives on.
     skills: ['claw', 'sap_jet'], xp: 28,
