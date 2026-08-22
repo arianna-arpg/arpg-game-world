@@ -605,6 +605,25 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { rim: '#3a4a4e', throat: '#152226', hot: '#7fd0e8', core: '#e8fbff' },
     light: { radius: -2.6, color: '#9fe0f0', intensity: 0.3, flicker: 2.8 },
   },
+  // THE TIMED GEYSER's mouth (engine/geysers.ts beat_vent — the Scald
+  // Basin's beat fixture; painter REUSED, the charred-snag doctrine): a
+  // travertine-rimmed spring pool in the basin's mineral palette — visibly
+  // NOT the marsh's dark solid vent nor the Ascent's sky_geyser (the
+  // namespace-triple distinctness, charter card 7). The live broil/column
+  // draw in render/vis/geyserLayer.ts off the same pure clock the engine
+  // tests — this row is only the standing mouth.
+  beat_vent: {
+    painter: 'vent', order: 49, longShadow: 0.3,
+    params: { rim: '#b8ad92', throat: '#1e4a50', hot: '#54c8d8', core: '#eafcff' },
+    light: { radius: -2.2, color: '#a8ecf4', intensity: 0.22, flicker: 1.6 },
+  },
+  // The lob comets' drying splash (World.plantImpactDress via the geyser
+  // burst fan): the shell pock re-tinted wet — dark scald ring, mineral
+  // rim, steam-cyan heart. Transient by construction (evap).
+  scald_pock: {
+    painter: 'shellPock', order: 24,
+    params: { char: '#31413e', rim: 'theme:obstacle|#8f8a76', ember: '#7fd8dc' },
+  },
   bone_pile: { painter: 'bones', order: 51, params: { color: '#d8cdb8' } },
   brazier: {
     painter: 'campfire', order: 53, shadow: 0.5, longShadow: 0.6,

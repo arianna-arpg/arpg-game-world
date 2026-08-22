@@ -89,6 +89,24 @@ export const WEATHER_FX: Partial<Record<WeatherKind, WeatherFxDef>> = {
   // Near-horizontal grit — the sky moving sideways. The wind fabric supplies
   // the shove; this supplies the reason you believe it.
   sandstorm: { form: 'streak', count: 110, vel: [-380, 90], len: 16, alpha: 0.4, color: '#d8b878', fadeIn: 2.5 },
+  // THE SCALD MIST (data/scald.ts — the Scald Basin's own air): fog's bank
+  // grammar in steam white, slow and low — the country breathing.
+  scald_mist: { form: 'bank', count: 10, vel: [14, -4], size: 200, alpha: 0.18, color: '#dbe8ea', fadeIn: 8 },
+  // THE SURGE HOUR's steam (data/scald.ts scald_surge_steam — event-pinned
+  // off the geyser surge, never sky-born): the mist's own look, denser and
+  // RISING — the basin's air thickening as the vents run hot.
+  scald_surge_steam: { form: 'bank', count: 18, vel: [10, -11], size: 230, alpha: 0.26, color: '#e6f2f4', fadeIn: 6 },
+  // MINERAL RAIN (data/scald.ts): a light pretty fall in pool-cyan that
+  // leaves prism-sheen pocks (its dress row) — spectacle-grade, petalfall's
+  // model in water color.
+  mineral_rain: { form: 'streak', count: 60, vel: [-60, 420], len: 10, alpha: 0.3, color: '#a8e0e8', fadeIn: 5 },
+  // THE CINDERWIND (data/scald.ts — the Char's fire weather): ember streaks
+  // torn sideways on the wind — the sandstorm's grammar in ember orange,
+  // under a faint hot veil that deepens toward the front's heart.
+  cinderwind: {
+    form: 'streak', count: 80, vel: [-340, 60], len: 9, alpha: 0.42, color: '#ff9a4a',
+    fadeIn: 3, veil: { alpha: 0.2, inner: 0.36 },
+  },
   // The white wind: snow moving SIDEWAYS — the sandstorm's streak grammar in
   // pale ice (the flake row above is the gentle sibling; this one bites).
   blizzard: { form: 'streak', count: 120, vel: [-400, 140], len: 15, alpha: 0.5, color: '#e8f4ff', fadeIn: 2 },

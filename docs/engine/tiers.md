@@ -160,6 +160,19 @@ stateless adapter, one per story, built at zone load from
   (`sewer_duct`) and under blocks (`sewer_under_wall`), covered exposure.
   Orphan-proof: a leg lays only where every cell is duct-able. The street
   grates still mint the DEEP sewerworks below both layers.
+- **The cistern** (`data/cistern.ts`, the grotto form's second lane —
+  `docs/engine/cistern.md`): the moonlit mere's set-piece chamber under the
+  scald LAKE, seated by a NEW seat law — `UnderGrottoSpec.seat: 'offered'`
+  takes the discs a recipe held out (`GenCtx.underSeats`: the lake's great
+  shoal, `engine/lake.ts`) instead of hunting, clamps the chamber to fit
+  wholly beneath the offered disc, and refuses byte-flat otherwise (the
+  hunt branch is draw-identical — the mere mints as before);
+  `courtSeat: 'brink'` seats the lane's lair court on a shore cell touching
+  the pool (default `'waterline'` = the mere's); `UnderTierSpec.
+  ledgerOnDescend` books a run-ledger key the first time a seat's body takes
+  the lane's crossing down (`laneLedgerOnDescend`, read at World's ladder
+  toggle). THE SEAL's audit answered: the GRID region-sense path is
+  tier-blind, so story rows stay gameplay-field-free by law.
 
 ## Rim duels (ZoneTiers.rimDuels)
 Open-exposure zones may allow cross-tier hostility — SIGHT mediates

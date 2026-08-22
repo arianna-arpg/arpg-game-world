@@ -94,6 +94,14 @@ build axis, never ambience. Shipped consumers:
   Blade-and-Vein — the SAME registry rules, so the payoff text over a duel
   names a grammar the player can earn. Their `beatPips` look part (live,
   kindling in sequence) is the at-a-glance grammar-tell.
+- **The metronome lean** (the Scald Basin, M3 coda): `tempo_drummer` drums
+  the Kettle Tattoo (repeat 4 → a `cast` payoff, a scalding vent burst at
+  its own feet), `clock_crab` ticks the Tick-Snap (repeat 3 → a heavy snap)
+  — kit that fires strictly on a DRAWN beat. Their pips are a TELL off the
+  `combo:<rule>` source (`data/combos.ts` registers it — THE HONEST MEASURE:
+  casts struck / casts to close, consume-aware; `beatPips` reads
+  `params.fill` as a meter), never a free-running clock face: three lit,
+  and the next strike is the big one. `docs/engine/tells.md`.
 
 ## The starter conditions
 

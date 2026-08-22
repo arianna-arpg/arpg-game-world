@@ -1055,8 +1055,12 @@ withSeededRandom(0x0bec7a, () => {
     // U10 THE RE-ARM (the package's own re-trigger law, no second lifecycle):
     // walking out mid-run tears only the zone-run; the seat survives, the ask
     // stands, and re-entry re-arms the dormant origin.
+    // (Stage seed re-measured at THE SCALD BASIN M1, 2026-08-21, was 808080:
+    // BIOME_FIELD grew the scald row, so the seeded world's field re-dealt
+    // and 808080's/808081's mints re-rolled onto ground whose re-entry no
+    // longer re-armed the guest dormant — 808082 stages the re-arm clean.)
     {
-      const zid = stage(808080, 37, { kind: 'clear', adopt: true });
+      const zid = stage(808082, 37, { kind: 'clear', adopt: true });
       check('U10a the re-arm guest seats', ff.devIgnite(w.devOverlayView(), zid) === true);
       w.loadZone(zid);
       const stamped = JSON.stringify(w.zone.objective);

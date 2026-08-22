@@ -117,6 +117,13 @@ export type ProcEffect =
    *  event the mote is honest lamplight (the lightwell fabric's law:
    *  the sweep feeds only meters that exist). */
   | { type: 'kindle'; kind: string }
+  /** VENTS a registered FOG BANK (engine/fog.ts FOG_BANKS — the `vent`
+   *  skill effect's kind) where the trigger landed: at the struck/slain
+   *  body, else at the owner. The kindle case's sibling aimed at the fog
+   *  fabric — area denial by SIGHT (a bank wearing occludesSight stops
+   *  eyes; shots still fly). The bank's own row bounds the litter: it is
+   *  mortal and short (the transience doctrine). */
+  | { type: 'vent'; bank: string; radius: number; duration: number }
   /** CASTS a catalog skill from the proc's site — the RIDER grammar's
    *  payload as a first-class effect (one shared executor, world.ts
    *  castProcPayload). THE SIGNATURE LANE rides this: a Monster
@@ -251,6 +258,19 @@ export const PROCS: Record<string, ProcDef> = {
     id: 'thunderstruck', name: 'Thunderstruck',
     color: '#ffe14a', trigger: 'hit',
     effect: { type: 'explosion', damageScale: 0.5, radius: 80 },
+  },
+
+  // THE FLASHED KETTLE (THE SCALD KIT K2 — the Vaporize support's payload):
+  // a landed blow flashes the water it touched into a short bank of steam
+  // where it struck. Area denial by SIGHT, never by damage — the white
+  // breaks the ranged lock and hides what stands in it (both ways: the veil
+  // rule). icd-gated so a fast weapon fogs the room at a readable pace, and
+  // the bank is small and brief: the kettle flashes, it does not smother.
+  // Every number a DIAL.
+  vaporize: {
+    id: 'vaporize', name: 'Vaporize',
+    color: '#eef6f8', trigger: 'hit', icd: 2.5, oncePerCast: true,
+    effect: { type: 'vent', bank: 'steam', radius: 66, duration: 4 },
   },
 
   corpsefire: {

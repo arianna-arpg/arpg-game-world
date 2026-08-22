@@ -263,7 +263,11 @@ const cast = (w: ReturnType<typeof makeSimWorld>, id: string, pace = 1.2): void 
 
 // --- 8) The registry weave ---------------------------------------------------
 {
-  const ownerScoped = new Set(['buff', 'restore', 'heal', 'gainCharge', 'burst', 'fortify', 'cooldown', 'delayedBurst']);
+  // 'cast' (THE SIGNATURE LANE's effect) sites at the OWNER when no target
+  // stands (castProcPayload) — combos fire targetless, so a cast payoff is
+  // owner-scoped by construction (the metronome kin's kettle burst / snap;
+  // the same set validate.ts's targetShaped net permits).
+  const ownerScoped = new Set(['buff', 'restore', 'heal', 'gainCharge', 'burst', 'fortify', 'cooldown', 'delayedBurst', 'cast']);
   for (const rule of COMBO_LIST) {
     const kinds = [rule.seq, rule.counts, rule.vary, rule.repeat].filter(Boolean).length;
     check(`weave: ${rule.id} — stat seated, family resolved, one pattern, owner-scoped payoff`,

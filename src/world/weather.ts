@@ -153,7 +153,19 @@ export interface WeatherDef {
    *  midnight glitter brighter than dusk — the one night the star-bridges'
    *  neighbours may also stand. Read only by the radiance scalar. */
   radiance?: { mul?: number; floor?: number };
+  /** THE WET SKY (the scald kit's wet read, sky half — World.updateWetSky):
+   *  bodies standing under OPEN SKY beneath this front read as RAIN-WET
+   *  (Actor.rainWet → Actor.isWet), the same wetness the water rows' stand
+   *  states give — under scald, wet is the vulnerability (StatusDef.bank
+   *  .wetMul). Rain, storm and the basin's mineral rain wear it; fog, snow,
+   *  ash and the event palls do not. Pure data: a future shock-on-wet reads
+   *  the same flag. */
+  wets?: true;
 }
+
+/** THE WET SKY's dials (World.updateWetSky): how often the stamp sweeps and
+ *  the front intensity below which a drizzle's edge does not wet. DIAL. */
+export const WET_SKY = { sweepSec: 0.2, minIntensity: 0.25 } as const;
 
 /** The registry of record — one row per weather kind. Every consumer is a
  *  WEATHER_DEFS[kind].<field> lookup (no code branches on a specific kind),
@@ -166,9 +178,11 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     wind: 0.4, skyWeight: { day: 3, dusk: 2, night: 1, dawn: 2 },
     // Wet country's rains settle in — modest: rain is everyone's sky.
     lingerGeo: { moisture: { min: 0.55, mul: 1.15 } },
+    wets: true,
   },
   storm: {
     radiance: { mul: 0.5 },
+    wets: true,
     label: 'Storm', color: '#6a5ab0', countMul: 1.25, factionMul: { elemental: 1.8 },
     // The sky calls lightning down at random — more often the harder it rages.
     strike: { skillId: 'storm_call', radius: 80, telegraph: 0.7, ratePerSec: 1.3 },

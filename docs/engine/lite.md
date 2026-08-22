@@ -259,3 +259,28 @@ under a fixed seed; capacity exhaustion (spawns refuse gracefully, never
 overwrite). `npm run perf -- --lite=N` is the forensics lever (pours N stress
 bodies around the hero in every swept zone — prints the frame ledger, never
 gates); the committed sewerworks pour rides the ordinary gated sweep.
+
+## THE BEAT CLAUSE + THE VENT SEAT (the steam-wisp tide — Scald Basin M3)
+
+`LiteCond.surge` is the radiance clauses' structural sibling: `true` holds
+only while THE SURGE HOUR holds over the zone's geyser field
+(`World.geyserSurge()` — `docs/engine/geysers.md`; pure f(world clock, zone
+key), so seats and resumes agree), `false` only in the calm between. All
+clauses AND together; a row with no surge clause reads exactly as before
+(`World.liteCondHeld` is the ONE evaluator — the grove's tides byte-
+identical). A zone with no geyser field never holds `true`.
+
+`LiteSwarmRow.seat: 'vents'` seats each pocket AT one of the zone's geyser
+vents (count-rolled and authored alike — the field is the truth): the
+heart is the vent's mouth, the scatter a vent-sized ring
+(`LITE_CFG.ventSeat.scatter`), and NO burrow tell (the vent IS the mark).
+Vent-seated rows are deferred past `bootGeysers` onto their own salted lane
+(`World.bootLiteVentSeats`, `LITE_CFG.ventSeat.salt`) so the POI stream
+keeps its exact shape; pockets SEAT whether or not their hour holds (the
+conditioned pour's law) and a vent-less zone seats nothing.
+
+Debut: the Scald Basin's **steam-wisp tide** (`steam_wisp` — the faintest
+scald on contact, 1 ply, dies to any area verb) poured off the vents while
+the surge holds and receding after (the recede clears `poured` — the
+grove's rule — so the next surge raises the same seats; never exterminated
+by its own clock). No announce: the steam IS the announcement.

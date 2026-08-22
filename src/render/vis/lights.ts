@@ -238,8 +238,11 @@ export class LightLayer {
     // them out of the cap. Dead bodies shed nothing; a concealed body
     // (StatusDef.conceals — the swallowed) keeps its light swallowed too.
     for (const a of world.actors) {
-      if (a.dead || !a.defId) continue;
-      const spec = MONSTERS[a.defId]?.light;
+      if (a.dead) continue;
+      // THE CARRIED LAMP at actor grain first (Actor.carriedLamp — a lantern
+      // handed to ONE body by a fabric: the terrace pilgrim), then the kind's
+      // own lamp (MonsterDef.light). Same LightSpec, same breath.
+      const spec = a.carriedLamp ?? (a.defId ? MONSTERS[a.defId]?.light : undefined);
       if (!spec) continue;
       const br = breathe(spec.radiance);
       if (br <= 0.02) continue;

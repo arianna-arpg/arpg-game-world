@@ -588,4 +588,22 @@ registerLandmarkBuilder('den_mouth', (b) => {
     console.warn(`[lairs] den_mouth landmark '${b.def.id}' has no mouthKind param — an apron with no door`);
   }
   b.interior = apron;
+  // THE LIQUID SEAT ON A REGION (the cistern court — the wellspring's law
+  // without a pour): a mouth seated at a waterline may name the region kind
+  // it stands IN (`liquidSeat`), and every apron cell the grid already
+  // paints that kind becomes THE LIQUID SEAT (LandmarkSpawns.where 'liquid')
+  // — a dweller whose whole identity is being in the water (the crone,
+  // rooted) boots IN it, never wilted on the shore. Pours nothing, paints
+  // nothing; absent = the classic apron (no liquid exposed).
+  const liquidSeat = b.param<string | undefined>('liquidSeat', undefined);
+  if (liquidSeat) {
+    const wet = frame(b);
+    for (let cy = 0; cy < wet.rows; cy++) {
+      for (let cx = 0; cx < wet.cols; cx++) {
+        const c = wet.center(cx, cy);
+        if (b.grid.regionAt?.(c.x, c.y) === liquidSeat) wet.set(cx, cy, true);
+      }
+    }
+    if (wet.count() > 0) b.liquid = wet;
+  }
 });

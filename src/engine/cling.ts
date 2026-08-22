@@ -122,6 +122,14 @@ export interface ClingSpec {
   /** THE BURROW: sunk host-blind riding with the shake-out window (see
    *  BurrowSpec). An empty object opts in at the CLING_CFG.burrow dials. */
   burrow?: BurrowSpec;
+  /** THE FLOP (the burrow's pop-out WITHOUT the host-blindness): a SHAKEN
+   *  rider is tossed `toss` (random bearing) into a LONGER re-latch wait
+   *  (`grace`) and wears `status` for exactly that wait — the vulnerable
+   *  beat the host's shake earns against a perched, VISIBLE rider (the
+   *  vent lamprey's flop: shaken off, it flails on the ground before it
+   *  may re-latch). Defaults CLING_CFG.flop; burrow wins where both are
+   *  authored. Every other release keeps the classic short hop. */
+  flop?: { grace?: number; toss?: number; status?: string };
 }
 
 /** A live ride (Actor.clingTo). `ang` is the seat bearing in WORLD space —
@@ -175,6 +183,9 @@ export const CLING_CFG = {
    *  `sink` above), the shake pop-out scatter distance, and the re-burrow
    *  wait — the vulnerability window the shaking host earns. */
   burrow: { sink: 0.92, grace: 2.2, toss: 54 },
+  /** THE FLOP's dials (ClingSpec.flop): the shake pop-out's re-latch wait
+   *  and scatter for a perched rider that flails instead of burrowing. */
+  flop: { grace: 2.4, toss: 44 },
 } as const;
 
 /** Seats a victim's body offers (size-scaled, capped). */

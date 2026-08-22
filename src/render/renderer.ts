@@ -82,6 +82,7 @@ import { CanopyEyes, type EyedGroup } from './vis/canopyEyes';
 import { WallEyes } from './vis/wallEyes';
 import { RoomVeil } from './vis/roomVeil';
 import { SightVeil } from './vis/sightVeil';
+import { dressFading, softDryFace } from './vis/dressFade';
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawSkyField, drawWeatherFx, skyGeoOf, skyRawIntensity, WEATHER_FX, type SkyFieldView, type SkyGeo } from './vis/weatherFx';
@@ -89,6 +90,10 @@ import { drawFogLayer } from './vis/fogLayer';
 import { drawCreepLayer } from './vis/creepLayer';
 import { drawFluxLayer } from './vis/fluxLayer';
 import { drawTrackLanes, drawTrackRiders, drawTrackWarnArcs } from './vis/trackLayer';
+import { drawGeyserBroil, drawGeyserColumns } from './vis/geyserLayer';
+import { drawVentRideBroil, drawVentRideJets } from './vis/ventRideLayer'; // THE VENT-RIDE (the scald kit): the cast's broil + the flight's jet
+import { drawLakeBroil } from './vis/lakeLayer';
+import { boilRamp, drawBoilCells, groundedCellsIn } from './vis/boilLayer'; // THE GROUNDED STRIKE's telegraph (the crone's boil)
 import { drawTrapworkTells } from './vis/trapLayer';
 import { drawEffectVoice } from './vis/effectVoice';
 import { riderSurface as trackRiderSurface, trackPose } from '../engine/tracks';
@@ -597,6 +602,20 @@ export class Renderer {
     if (world.tracks.length && !VIS_ABLATE.has('tracks')) {
       drawTrackWarnArcs(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
     }
+    // THE BROIL (vis/geyserLayer.ts): the geyser fabric's drawn warning —
+    // the water itself roiling under actors, off the same pure clock the
+    // column sweep and the dodge-AI read (drawn == tested).
+    if (world.geysers && !VIS_ABLATE.has('geysers')) {
+      drawGeyserBroil(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
+    }
+    // THE VENT-RIDE's broil (vis/ventRideLayer.ts — LeapDelivery.vent): a
+    // vent-leaper's wind-up roils the ground under its OWN feet — the same
+    // roil word the vents wear, the same read the dodge-minds take. Under
+    // actors like every ground telegraph; no geyser field required (a
+    // vent-rider carries its column anywhere — THE NO-LOCK LAW).
+    if (!VIS_ABLATE.has('geysers')) {
+      drawVentRideBroil(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
+    }
     // TRAPWORK TELLS (vis/trapLayer.ts): hidden triggers resolve close-up
     // for the LOCAL hero — the keen eye at a walk spots the odd flagstone.
     if (world.trapworks.length && !VIS_ABLATE.has('tracks')) {
@@ -635,6 +654,18 @@ export class Renderer {
       for (const a of world.actors) if (!a.dead && a.nemesis) this.drawNemesisMark(a);
     }
     this.drawProjectiles(world);
+    // THE COLUMN + THE PLUME + THE LOB COMETS (vis/geyserLayer.ts): the
+    // spout wraps whoever stands in it, so it draws OVER bodies — and
+    // UNDER the sight veil, so a column behind a wall hides whole.
+    if (world.geysers && !VIS_ABLATE.has('geysers')) {
+      drawGeyserColumns(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
+    }
+    // THE VENT-RIDE's jet (vis/ventRideLayer.ts): the steam column a rising
+    // vent-leaper left at its departure, drawn OVER bodies like the vents'
+    // own spouts, UNDER the veil.
+    if (!VIS_ABLATE.has('geysers')) {
+      drawVentRideJets(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
+    }
     // THE SIGHT VEIL (vis/sightVeil.ts): positional occlusion — everything
     // the hero's eye cannot reach past a sight-blocking body veils dark with
     // the ground it stands on. OVER actors/projectiles (what a wall hides is
@@ -1925,15 +1956,25 @@ export class Renderer {
       const spec = def.vignette;
       if (!spec) continue;                               // absent == identical
       const cur = p.survival.get(def.id);
-      if (cur === undefined || cur >= def.max) continue; // untouched / full
+      // FILL-polarity rows (the scorch bar) mirror: the bad end is FULL, so
+      // the peril fraction inverts and `startFrac` reads engage-ABOVE. THE
+      // SEVERITY WASH: a fill row never cooks (no ramp clock exists for it,
+      // by construction), so it wears only the STEADY half of the grammar —
+      // alpha and reach by meter fraction alone, the colour deepening as
+      // the bar climbs; the last-gasp squeeze and the ramp flush are the
+      // DYING grammar of a drain row and never draw here.
+      const fill = def.polarity === 'fill';
+      if (cur === undefined || (fill ? cur <= 0 : cur >= def.max)) continue; // untouched / at the good end
       if (!world.survivalRowVisible(def.id)) continue;   // held → parked with its bar
-      const frac = clamp(cur / def.max, 0, 1);
-      if (frac >= spec.startFrac) continue;              // above the engagement line
-      const sev = Math.pow(1 - frac / spec.startFrac, C.curve); // 0 at the line … 1 empty
+      const rawFrac = clamp(cur / def.max, 0, 1);
+      const frac = fill ? 1 - rawFrac : rawFrac;         // peril-mirrored: low = bad
+      const startFrac = fill ? 1 - spec.startFrac : spec.startFrac;
+      if (frac >= startFrac) continue;                   // above the engagement line
+      const sev = Math.pow(1 - frac / startFrac, C.curve); // 0 at the line … 1 at doom
       const steady = C.alphaFloor + (spec.maxAlpha - C.alphaFloor) * sev;
       // The squeeze: a smooth swell quickening as the meter runs out.
       let squeeze = 0;
-      const depth = clamp(1 - frac / C.pulse.startFrac, 0, 1);
+      const depth = fill ? 0 : clamp(1 - frac / C.pulse.startFrac, 0, 1);
       if (pulseOn && depth > 0) {
         const period = C.pulse.periodFrom + (C.pulse.periodTo - C.pulse.periodFrom) * depth;
         this.survVeilPhase = (this.survVeilPhase + dt / period) % 1;
@@ -1942,7 +1983,7 @@ export class Renderer {
       }
       // The ramp made visible: how long this meter has run empty, over the
       // row's own damage-ramp seconds (a rampless row deepens at once).
-      const since = p.underflowSince?.[def.id];
+      const since = fill ? undefined : p.underflowSince?.[def.id];
       const rampT = since === undefined ? 0
         : def.underflowRampSecs ? clamp((world.time - since) / def.underflowRampSecs, 0, 1) : 1;
       const a = steady * (1 + C.pulse.alphaBoost * squeeze);
@@ -1952,8 +1993,9 @@ export class Renderer {
       const flush = Math.min(1, C.pulse.flushMix * squeeze + C.underflow.flushMix * rampT);
       const innerQ = qFrac(inner);
       const flushQ = qFrac(flush, 0.1);
-      const mid = blendRgb(spec.mid, spec.flush, flushQ);
-      const edge = blendRgb(spec.edge, spec.flush, flushQ * 0.6);
+      const flushHex = spec.flush ?? spec.mid;             // a fill row's severity wash never flushes
+      const mid = blendRgb(spec.mid, flushHex, flushQ);
+      const edge = blendRgb(spec.edge, flushHex, flushQ * 0.6);
       drawEdgeOverlay(this.ctx, this.canvas.width, this.canvas.height, {
         key: `survveil|${def.id}|${innerQ}|${flushQ}`, innerFrac: innerQ,
         stops: [[0, `rgba(${mid},0)`], [C.midStop, `rgba(${mid},${C.midAlpha})`], [1, `rgba(${edge},1)`]],
@@ -2370,6 +2412,7 @@ export class Renderer {
     const r0 = Math.max(0, Math.floor(this.cam.y / cell));
     const r1 = Math.min(wf.rows, Math.ceil((this.cam.y + vh) / cell));
     let soulsFill: string | null = null;
+    let broilSeen = false;
     for (let cy = r0; cy < r1; cy++) {
       for (let cx = c0; cx < c1; cx++) {
         const id = wf.regionAt((cx + 0.5) * cell, (cy + 0.5) * cell);
@@ -2379,6 +2422,14 @@ export class Renderer {
         let alpha = vis.alpha ?? 1;
         if (vis.animate === 'pulse') alpha *= 0.6 + 0.4 * Math.sin(tMs / 650 + cx * 0.3 + cy * 0.3);
         else if (vis.animate === 'drift') alpha *= 0.8 + 0.2 * Math.sin(tMs / 900 + cx * 0.2);
+        // BROIL (THE BROIL LAW's permanent face — the lake's refused deep,
+        // engine/lake.ts): the wash SIMMERS in slow broad swells, and the
+        // lake pass below (vis/lakeLayer.ts) seats the geyser fabric's own
+        // roil over these same cells — one drawn word, held forever.
+        else if (vis.animate === 'broil') {
+          alpha *= 0.82 + 0.18 * Math.sin(tMs / 1400 + cx * 0.13 + cy * 0.09);
+          broilSeen = true;
+        }
         // SHIMMER (the frail cloud): a quick, cell-desynced glitter — the wash
         // itself is the warning, so it has to LIVE, not sit like paint.
         else if (vis.animate === 'shimmer') alpha *= 0.55 + 0.45 * Math.sin(tMs / 480 + (cx * 7 + cy * 13) * 0.53);
@@ -2403,6 +2454,9 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
     if (soulsFill) this.drawSoulsUnderSurface(wf, world.time);
+    // THE LAKE'S PERMANENT BROIL (vis/lakeLayer.ts): roil seats read off the
+    // same grid cells the wash just painted and movement refuses.
+    if (broilSeen && !VIS_ABLATE.has('lakebroil')) drawLakeBroil(ctx, wf, world.time, this.cam.x, this.cam.y, vw, vh);
   }
 
   /** THE UNDER-SURFACE (animate:'souls' — the River of Souls' living deep):
@@ -2823,6 +2877,36 @@ export class Renderer {
     }
   }
 
+  /** THE SOFT DRY (vis/dressFade.ts): cosmetic dress doodads mid-evaporation
+   *  (blast pocks, non-solid weather dress) draw as THEMSELVES through one
+   *  continuous alpha + drawn-scale ease, so the engine's deliberately
+   *  quantized shrink (World.EVAP — the chunk baker's perf law, untouched)
+   *  reads as a smooth dissolve and the minRadius retirement lands
+   *  invisible. Drawn == tested holds at this seam BY CONSTRUCTION: the
+   *  router admits only surfaceless pieces — no collision, no ground
+   *  effect — so the eased pixels have no tested truth to disagree with.
+   *  Like the felled pass, a drying piece leaves the shadow/blend lanes
+   *  (a dissolving pock throws no fresh dark; today's qualifying kinds
+   *  carry neither anyway). */
+  private drawDryingDress(env: PaintEnv, drying: readonly Doodad[], def: DoodadVisualDef | undefined): void {
+    const { ctx } = this;
+    for (const d of drying) {
+      const face = softDryFace(d, this.frameDt);
+      if (face.alpha <= VIS_CFG.dressFade.skipBelow) continue;
+      ctx.save();
+      ctx.globalAlpha *= face.alpha;
+      if (face.scale < 1) {
+        ctx.translate(d.pos.x, d.pos.y);
+        ctx.scale(face.scale, face.scale);
+        ctx.translate(-d.pos.x, -d.pos.y);
+      }
+      if (!def) PAINTERS.fallback(env, [d], { painter: 'fallback', order: 50 });
+      else if (def.bakeWhole && VIS_CFG.ground.bakeDoodads) paintBakedWhole(env, [d], def);
+      else (PAINTERS[def.painter] ?? PAINTERS.fallback)(env, [d], def);
+      ctx.restore();
+    }
+  }
+
   private drawDoodads(world: World): void {
     const { ctx } = this;
     // Per-zone shadow art direction (ZoneTheme.shadows) folds over the
@@ -2871,6 +2955,13 @@ export class Renderer {
       if (anyFelled && g.list.some(d => d.felled)) {
         this.drawFelledDoodads(env, g.list.filter(d => d.felled), g.def, world.time);
         list = g.list.filter(d => !d.felled);
+        if (!list.length) continue;
+      }
+      // THE SOFT DRY (vis/dressFade.ts): cosmetic dress mid-evaporation
+      // leaves the normal lane and draws through the eased pass instead.
+      if (list.some(dressFading)) {
+        this.drawDryingDress(env, list.filter(dressFading), g.def);
+        list = list.filter(d => !dressFading(d));
         if (!list.length) continue;
       }
       if (!g.def) {
@@ -3963,12 +4054,34 @@ export class Renderer {
       ctx.beginPath();
       this.traceAoe(z.pos.x, z.pos.y, z.radius, z.shape, z.facing, z.arcRad);
       if (!z.exploded) {
-        // Telegraph: filling outline.
+        // Telegraph: filling outline (a GROUNDED strike keeps only a
+        // whisper of the disc — the roil below is its word).
         ctx.strokeStyle = z.color;
-        ctx.globalAlpha = 0.7;
-        ctx.lineWidth = 2;
+        ctx.globalAlpha = z.onGround ? 0.26 : 0.7;
+        ctx.lineWidth = z.onGround ? 1.2 : 2;
         ctx.stroke();
-        if (z.edgeFrac) {
+        if (z.onGround) {
+          // THE GROUNDED STRIKE's telegraph (StormDelivery.onGround — the
+          // Cistern Crone's boil, THE BROIL LAW as a boss verb): the water
+          // BROILS, not the ring — the geyser fabric's one roil over exactly
+          // the disc's cells that wear a named ground (render/vis/boilLayer.ts,
+          // the same cells World.updateZones will bite; the dry shore inside
+          // the ring stays unroiled because it stays spared), the ramp piling
+          // up as the countdown runs out. Drawn on the caster's own story only
+          // — the lid over a cistern shows a surface walker nothing of the
+          // water below.
+          if (world.walk instanceof GridWalkField && (world.player?.tier ?? 0) === (z.caster.tier ?? 0)) {
+            const wfz = world.walk;
+            const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
+            const cells = groundedCellsIn(wfz, z.pos, z.radius, z.onGround,
+              { x0: this.cam.x - wfz.cell, y0: this.cam.y - wfz.cell, x1: this.cam.x + vw + wfz.cell, y1: this.cam.y + vh + wfz.cell });
+            const fuse = (z.inst.def.delivery as { telegraph?: number }).telegraph ?? 1;
+            ctx.save();
+            drawBoilCells(ctx, cells, wfz.cell, boilRamp(z.delay, fuse), world.time);
+            ctx.restore();
+            ctx.globalAlpha = 1;
+          }
+        } else if (z.edgeFrac) {
           // EDGE BAND (the inheritance law): only the ring that will
           // bite washes — the safe eye stays clean at the telegraph,
           // matching the detonation's spare test (drawn == tested).
@@ -4511,6 +4624,10 @@ export class Renderer {
     // WORN BODY FX (StatusDef.bodyFx — the contagion's visible-infection law)
     // collected in the same pass: the first declaring status dresses the body.
     let bodyFx: StatusDef['bodyFx'];
+    // THE BANK READ (StatusDef.bodyFx.byBank): a banked status dresses its
+    // body BY its worn fraction (ActiveStatus.bankFrac — the wire's `bk`):
+    // nothing at no bank, a faint blister at one blow, steaming near the cap.
+    let bodyFxBank = 1;
     for (const s of a.statuses) {
       const sd = STATUS_DEFS[s.id];
       if (sd?.conceals) {
@@ -4520,7 +4637,10 @@ export class Renderer {
       if (sd?.ghostAlpha !== undefined && sd.ghostAlpha < statusGhost) {
         statusGhost = sd.ghostAlpha;
       }
-      if (sd?.bodyFx && !bodyFx) bodyFx = sd.bodyFx;
+      if (sd?.bodyFx && !bodyFx) {
+        bodyFx = sd.bodyFx;
+        bodyFxBank = sd.bodyFx.byBank ? Math.max(0, Math.min(1, s.bankFrac ?? 0)) : 1;
+      }
     }
 
     // THE TIER FABRIC (engine/tiers.ts), COVERED exposure: the other layer
@@ -4580,6 +4700,10 @@ export class Renderer {
     if (a.leap) {
       const t = 1 - a.leap.timer / a.leap.total;
       const s = 1 + 0.55 * Math.sin(Math.PI * Math.min(1, Math.max(0, t)));
+      // THE VENT-RIDE (LeapState.vent): the body RIDES THE COLUMN — lifted
+      // screen-up along the arc (the traversal rise's lift, combat scale)
+      // over its grounded shadow, so the flight reads as a launch, not a hop.
+      if (a.leap.vent) ctx.translate(0, -VIS_CFG.ventRide.lift * Math.sin(Math.PI * Math.min(1, Math.max(0, t))));
       ctx.scale(s, s);
     }
     // SPAWN-IN: a mid-play arrival (summon, construct, offering effigy,
@@ -4784,18 +4908,20 @@ export class Renderer {
     // the rim to a pop (the adrenal froth). All phases derive from the sim
     // clock + the actor id (no render-side rng — the beatless doctrine), and
     // co-op clients resolve the same rows from their own status registry.
-    if (bodyFx) {
+    if (bodyFx && bodyFxBank > 0) {
       const t = world.time, seed = a.id * 0.7;
       if (bodyFx.glow) {
         const breathe = 0.8 + 0.2 * Math.sin(t * 2.4 + seed);
         drawGlow(ctx, 0, a.radius * 0.25, a.radius * (bodyFx.glowScale ?? 1.9),
-          bodyFx.glow, Math.min(baseAlpha, (bodyFx.glowAlpha ?? 0.22) * breathe));
+          bodyFx.glow, Math.min(baseAlpha, (bodyFx.glowAlpha ?? 0.22) * breathe * bodyFxBank));
       }
       if (bodyFx.motes) {
         ctx.fillStyle = bodyFx.moteColor ?? bodyFx.glow ?? '#8fd24a';
         if (bodyFx.motes === 'fume') {
-          // Wisps: born near the crown, rising, thinning, looping.
-          for (let i = 0; i < 3; i++) {
+          // Wisps: born near the crown, rising, thinning, looping — a banked
+          // wound steams by its fraction (one wisp at a faint bank, three full).
+          const nWisps = bodyFxBank < 1 ? Math.max(1, Math.round(3 * bodyFxBank)) : 3;
+          for (let i = 0; i < nWisps; i++) {
             const cyc = t * 0.45 + i * 0.37 + seed;
             const ph = ((cyc % 1) + 1) % 1;
             const wob = Math.sin(t * 2.2 + i * 1.9 + seed) * 3;
@@ -7435,15 +7561,25 @@ export class Renderer {
     const base = ORB_ARCS.endurance + ORB_ARCS.captionPad + 20;
     for (const def of Object.values(SURVIVAL_RESOURCES)) {
       const cur = p.survival.get(def.id);
-      if (cur === undefined || cur >= def.max) continue; // full / inactive → hidden
+      // FILL-polarity rows (the scorch bar) hide at EMPTY (their good end)
+      // and draw the meter's own value — the higher the bar, the more
+      // scorched (her inversion); the danger tint fires near FULL instead.
+      const fill = def.polarity === 'fill';
+      if (cur === undefined || (fill ? cur <= 0 : cur >= def.max)) continue; // at the good end → hidden
       if (!world.survivalRowVisible(def.id)) continue;   // held → parked out of sight
       const frac = clamp(cur / def.max, 0, 1);
+      const peril = fill ? 1 - frac : frac;              // low = danger, both polarities
       const bw = orbR * 1.4, bh = 8, x = cx - bw / 2, y = orbY - orbR - base - dy;
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x, y, bw, bh);
-      ctx.fillStyle = frac < 0.34 ? '#e85050' : def.color; ctx.fillRect(x, y, bw * frac, bh);
+      ctx.fillStyle = peril < 0.34 ? '#e85050' : def.color; ctx.fillRect(x, y, bw * frac, bh);
       ctx.strokeStyle = '#3a3a52'; ctx.lineWidth = 1; ctx.strokeRect(x, y, bw, bh);
       ctx.fillStyle = '#9aa6b8'; ctx.font = '9px Verdana'; ctx.textAlign = 'center';
-      ctx.fillText(def.label, cx, y - 2);
+      // THE SEVERITY READOUT (SurvivalResourceDef.readout — fill rows): the
+      // caption names the price the bar wears right now ('Scorch · −20% fire
+      // res'), read off the same def the sheet wears; rows without one keep
+      // the bare label.
+      const readout = def.readout?.(cur) ?? '';
+      ctx.fillText(readout ? `${def.label} · ${readout}` : def.label, cx, y - 2);
       dy += bh + 16;
     }
   }

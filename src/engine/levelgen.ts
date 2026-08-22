@@ -22,6 +22,7 @@ import { dist, vec, type Vec2 } from '../core/math';
 import { shapeBoundR, type HitShape } from './shapes';
 import type { TrackSpec, TrackPayload } from './tracks';
 import type { TrapworkSpec } from './trapworks';
+import type { GeyserSpec } from './geysers'; // authoredVents — the geyser fabric's authoring seam
 import { rockSurfaceOf, type RockFormSpec } from './rockForms';
 import type { AmbushSpec } from './actor';
 import { Rng } from '../core/rng';
@@ -65,7 +66,7 @@ export type KnownDoodadKind =
   | 'road'      // ground overlay: a walkable gravel path — a mild move-speed boost (no status)
   // Biome-expansion terrain (batch 6)
   | 'sand'      // ground overlay: wind-blown grit that slows like mud
-  | 'heat_shimmer' // ground overlay: wavering desert air — stacks sunscorch (World.updateHeat)
+  | 'heat_shimmer' // ground overlay: wavering desert air — the scorch bar's fast feed lane (World.updateScorch)
   // (fog_bank RETIRED: volumetric fog is the LIVING fog fabric now — roaming
   //  banks on ZoneTheme.fog, engine/fog.ts — not a stamped doodad.)
   // The doodad kingdom (round 4): biome furniture with playstyle edges.
@@ -93,6 +94,7 @@ export type KnownDoodadKind =
   | 'mirage_caravan' // a laden train at rest… until you hail it
   | 'web'       // sticky sheet — slows like mire (spider country)
   | 'geyser'    // scalding vent mouth — steams and glows (marsh/tundra)
+  | 'beat_vent' // THE TIMED GEYSER (engine/geysers.ts): the eruption fixture's mouth — NOT the static kind above
   | 'snowdrift' // wind-piled powder — decoration (tundra)
   | 'bone_pile' // scattered remains — decoration (crypts, lairs)
   | 'brazier'   // a standing fire bowl — LIGHT in the dark (crypts, camps)
@@ -500,6 +502,13 @@ export interface Doodad {
    *  evaporate option; carried ON the doodad so a revisit within the
    *  zone's memory TTL resumes the drying where it left off. */
   evap?: { t: number; rate: number };
+  /** WORLD CLOCK at which this RUNTIME ground was laid (the creep fabric's
+   *  convert stamps write it) — the regrowth cycle's age read
+   *  (World.updateCharRegrowth: ash relaxes toward the green flush on this
+   *  clock). Absent = authored at mint, aged from the zone's own clock
+   *  (ZoneMemory.charBorn). Never persisted: a re-entered zone re-mints
+   *  its authored ground and its runtime stamps are gone. */
+  laidAt?: number;
   /** THE RAMPAGE FABRIC (engine/rampage.ts): this piece is CRUSHED FLAT —
    *  temporarily. The blocking trio below (blocksMovement/-Projectiles/
    *  -SightOf) and the drawn shadow read a felled piece as DOWN, the
@@ -810,6 +819,15 @@ export interface GeneratedLayout {
    *  lays plates, rays, runways and grooves with full room/corridor
    *  knowledge). World.loadZone places them; sprung state is transient. */
   trapworks?: TrapworkSpec[];
+  /** AUTHORED VENTS (the geyser fabric, engine/geysers.ts): GeyserSpec rows a
+   *  recipe/builder seated at generation (the lake's offshore metronome).
+   *  World.bootGeysers anchors them on the zone's salted stream beside the
+   *  theme's own count-rolled vents; transient like the field. */
+  authoredVents?: GeyserSpec[];
+  /** THE BOSS SEAT (GenCtx.bossSeat): where a 'boss' objective stands its
+   *  ask when the recipe names one — World.loadZone spawns the boss there
+   *  instead of a far point (the vent cauldron seats its maw IN the vent). */
+  bossSeat?: Vec2;
   /** SEALED ANNEX FACES (the growing zone — Secrets Movement II): one row
    *  per dormant BoundsPiece the mint rolled, seated by stampAnnexFaces.
    *  The world consumes these (World.annexReveal) — carve, furnish, memory. */
@@ -1026,6 +1044,15 @@ export interface DoodadRule {
    *  a number = that radius in world units. Lit fires only — a cold fire
    *  ring is a ledger, not a hearth. */
   warms?: number | true;
+  /** ROOF-GRADE SHELTER (World.underRoofAt): bodies inside this kind's FULL
+   *  disc count as UNDER A ROOF — sky-borne strikes pass over them
+   *  (Zone.spareRoofed: the burn rain, storm bolts, meteors), the gale
+   *  becalms in its lee, the heat-shade holds. Drawn == tested at the full
+   *  radius: an overhang's LIP reaches past its solid body (bodyScale), so
+   *  you stand UNDER the shelf, never in it. One data flag per kind; the
+   *  Scald Basin's sinter_overhang is the debut (the burn rain's roofed
+   *  counterplay — charter §4a). */
+  shelter?: boolean;
   /** Renderer occlusion (fake-2D depth): when the LOCAL hero stands within
    *  `radius + pad` of this doodad, its draw fades toward `alpha` so the
    *  character reads through the canopy. Data-driven per kind. */
@@ -2251,6 +2278,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   cactus:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 30, forbidOn: ['water', 'chasm'] },
   web:       { overlap: 'ground', walkOnly: true },
   geyser:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 48, forbidOn: ['water', 'chasm'] },
+  // THE TIMED GEYSER's mouth (engine/geysers.ts — the beat fixture, NOT the
+  // static kind above): non-blocking on purpose — standing in the throat
+  // when it blows is the country's honest worst idea, so the throat must be
+  // standable. Placed at zone LOAD by the fabric's own law (it MAY stand in
+  // shallows, which the static kind's forbidOn forbids); never gen-stamped.
+  beat_vent: { overlap: 'ground', walkOnly: true },
   snowdrift: { overlap: 'ground', pour: {} },
   bone_pile: { overlap: 'ground', walkOnly: true },
   brazier:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 40, warms: true },
@@ -2909,6 +2942,28 @@ export interface GenCtx {
   /** TRAPWORK MECHANISMS a builder/pass authored (the trapworks fabric):
    *  surfaced on GeneratedLayout.trapworks the same way. */
   trapworks?: TrapworkSpec[];
+  /** AUTHORED VENTS a recipe/builder seated (the geyser fabric's authoring
+   *  seam — engine/geysers.ts GeyserSpec): surfaced on
+   *  GeneratedLayout.authoredVents the same way; World.bootGeysers anchors
+   *  each (its own band — the metronome law, or the shared current bands
+   *  when the row says so). The lake's offshore great vent is the debut.
+   *  `(ctx.authoredVents ??= []).push()` — absent on every ventless layout. */
+  authoredVents?: GeyserSpec[];
+  /** THE OFFERED SEATS (the under-tier fabric, engine/tiers.ts): ground a
+   *  recipe HOLDS OUT to the under-tier tail — a disc it minted big enough
+   *  to hold a story beneath (the lake's great shoal, engine/lake.ts). A
+   *  grotto lane whose spec says `seat: 'offered'` carves ONLY under one of
+   *  these (in order; none standing = no story, byte-flat); hunting lanes
+   *  ignore them. Gen-internal: never surfaced on GeneratedLayout.
+   *  `(ctx.underSeats ??= []).push()` — absent on every recipe that offers
+   *  nothing, zero cost, zero rng. */
+  underSeats?: { pos: Vec2; r: number }[];
+  /** THE BOSS SEAT a recipe authored (the unmade vault's dais, generalized):
+   *  a 'boss' objective spawns its ask HERE instead of a random far point —
+   *  the den recipe that seats its apex IN the heart vent (the vent cauldron,
+   *  engine/ventcauldron.ts) names the seat and the ask stands on it.
+   *  Surfaced on GeneratedLayout.bossSeat; absent = the far-point law. */
+  bossSeat?: Vec2;
   /** ROOM/CORRIDOR TRUTH a recipe RECORDED for the trapworks gen pass
    *  (interiorGen's layInteriorTrapworks, seated via registerTrapPass): set by
    *  roomsLayout — pure bookkeeping of geometry already drawn, zero rng — and
@@ -4977,6 +5032,8 @@ export function generateLayout(
     annexes: ctx.annexes,
     tracks: ctx.tracks,
     trapworks: ctx.trapworks,
+    authoredVents: ctx.authoredVents,
+    bossSeat: ctx.bossSeat,
   };
 }
 
@@ -6380,7 +6437,7 @@ registerStamp('grove', (ctx) => stampGrove(ctx));
 registerStamp('grass', (ctx) => stampBlob(ctx, 'grass', [16, 54], [4, 8], false));
 registerStamp('brush', (ctx) => stampBlob(ctx, 'brush', [20, 56], [3, 6], false));
 registerStamp('sand', (ctx) => stampBlob(ctx, 'sand', [24, 72], [5, 9], false));
-// Desert heat: shimmering-air patches (sunscorch fields — World.updateHeat).
+// Desert heat: shimmering-air patches (scorch-bar feed fields — World.updateScorch).
 registerStamp('heat_shimmer', (ctx, spec) => stampBlob(ctx, 'heat_shimmer', spec.radius ?? [40, 85], [2, 4], false));
 /** THE DOOR GUARANTEE's forced seat (the cave ladder's precedent at the
  *  generateLayout tail, generalized to the STAMP moment — batch 25): a

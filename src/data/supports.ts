@@ -5531,6 +5531,107 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('apply_sear', 'flat', 0.025)],
     weight: 5, minDropLevel: 12,
   },
+
+  // --- THE SCALD KIT K2 — the gem side (charter docs/design/scald-kit.md
+  // v3 §3; the skills are data/skills.ts' K2 block). THE NO-LOCK LAW binds
+  // each: wet is everywhere water is, a bank is pure mechanics, a movement
+  // skill is a movement skill, occlusion is universal, and a tunable body
+  // stands in half a dozen countries. Acquisition rides sup_scald + THE GEM
+  // FLOOR. Every number a DIAL. -------------------------------------------
+
+  // SCALD — BOILING POINT (the conditional hit-rider): your fire scalds
+  // WET targets. The applyWet_<status> family's debut — apply_'s
+  // water-conditional twin, rolled in the same resolveHit sweep against
+  // Actor.isWet (wading / swimming / soaked / rain-wet), so it arms in a
+  // river, under a rainstorm, on a shore, or behind your own Kettle Burst.
+  // Gated on the 'strikes' FLOOR like every hit-rider: a never-hitting host
+  // refuses honestly and the refusal self-lifts the moment anything makes
+  // the host strike.
+  boiling_point: {
+    id: 'boiling_point', name: 'Boiling Point',
+    requiresMechanisms: ['strikes'],
+    description: 'This skill\'s hits SCALD anything wet: a 60% chance against a target that is'
+      + ' wading, swimming, soaked or rain-drenched, and nothing at all against a dry one. The'
+      + ' scald banks like any other — soak them first and it bites half again as hard.',
+    color: '#9fe4ea', requiresTags: ['attack', 'spell'],
+    mods: [mod('applyWet_scalded', 'flat', 0.6)],
+    perLevel: [mod('applyWet_scalded', 'flat', 0.06)],
+    weight: 5, minDropLevel: 4,
+  },
+
+  // PRESSURE — PRESSURE SEAL (the magazine graft, Deep Reserves' grammar
+  // wearing the basin's temper): stands a bank up on a host with none and
+  // makes it a PATIENT one — it fills only while you hold ground and bleeds
+  // while you run. Gated on 'bankless' (the honest floor: instanceUseCharges
+  // gives a native bank or a munition the slot, so the graft would ride
+  // inert — the refusal is "one economy per slot" spoken at socket time,
+  // and it self-lifts when the munition gem beside it leaves).
+  pressure_seal: {
+    id: 'pressure_seal', name: 'Pressure Seal',
+    requiresMechanisms: ['bankless'],
+    description: 'Seals a 2-round PRESSURE bank onto a skill with none, 3 in all with this'
+      + ' gem\'s own charge. The rounds build only while you stand your ground and bleed away'
+      + ' while you move. A cooldown skill carries them as a magazine; a free skill gains an'
+      + ' EMPOWER bank, each round spent for a 25% stronger cast and dry casts plain.',
+    color: '#c8e8e4',
+    useChargeGraft: { rounds: 2, recharge: 3.5, empower: 0.25, still: { bleed: 0.4 } },
+    mods: [mod('skillCharges', 'flat', 1)],
+    perLevel: [mod('skillChargeRate', 'increased', 0.04)],
+    weight: 5, minDropLevel: 6,
+  },
+
+  // GEYSER-STEP — AFTERSPRAY (THE DEPARTURE SPLASH): your movement skills
+  // erupt at the point you LEFT — the decoy's hot cousin, Dive Bomb's
+  // one-ended sibling (departSplash pays at the launch alone, and the two
+  // stats SUM for a build carrying both). Owner-safe by construction: it is
+  // an ordinary skill hit through the ordinary pipeline, so allies standing
+  // where you were are untouched — a player's spray is not terrain.
+  afterspray: {
+    id: 'afterspray', name: 'Afterspray',
+    description: 'The ground you leave answers: movement skills spray boiling water at their'
+      + ' DEPARTURE point for 55% of the skill\'s damage. Allies standing there are never'
+      + ' touched — the spray is yours, not the terrain\'s.',
+    color: '#d9f7fb', requiresTags: ['movement'],
+    grantsTags: ['aoe'],
+    mods: [mod('departSplash', 'flat', 0.55)],
+    perLevel: [mod('departSplash', 'flat', 0.1)],
+    weight: 5, minDropLevel: 5,
+  },
+
+  // STEAM — VAPORIZE (area denial by SIGHT, never by damage): your fire
+  // casts flash the water they touch into a brief steam bank where they
+  // land. The proc's own icd paces it; the bank is small and short (the
+  // transience doctrine — the kettle flashes, it does not smother). Gated
+  // on 'strikes' like every hit-trigger rider.
+  vaporize: {
+    id: 'vaporize', name: 'Vaporize',
+    requiresMechanisms: ['strikes'],
+    description: 'This skill\'s blows flash the water they touch: a bank of dense steam vents'
+      + ' where it struck, at most once every few seconds. Sight stops at the white — theirs'
+      + ' and yours — while shots fly through it untouched.',
+    color: '#eef6f8', requiresTags: ['attack', 'spell'],
+    mods: [mod('proc_vaporize', 'flat', 1)],
+    perLevel: [mod('effectDuration', 'increased', 0.06)],
+    weight: 4, minDropLevel: 6,
+  },
+
+  // PRISM — MINERAL TUNING (THE FAVORED PULSE): the attunement fabric's
+  // player-side lever. A tunable body you re-tune stops being neutral: the
+  // wash it pulses SPARES your enemies and runs longer on your side, so the
+  // prism snail (or any crystal, chord node or resonant elemental) fights
+  // for the build that tuned it. Gated on 'strikes' — the tone comes from a
+  // LANDED blow, so a never-hitting host has nothing to tune with.
+  mineral_tuning: {
+    id: 'mineral_tuning', name: 'Mineral Tuning',
+    requiresMechanisms: ['strikes'],
+    description: 'When this skill re-tunes a crystalline body, the attunement it pulses takes'
+      + ' YOUR side: your enemies are spared the wash entirely, and you and your allies wear'
+      + ' it 60% longer.',
+    color: '#d8d0b8', requiresTags: ['attack', 'spell'],
+    mods: [mod('tuneFavor', 'flat', 0.6)],
+    perLevel: [mod('tuneFavor', 'flat', 0.1)],
+    weight: 4, minDropLevel: 7,
+  },
 };
 
 export const SUPPORT_LIST: SupportDef[] = Object.values(SUPPORTS);

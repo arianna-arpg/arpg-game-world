@@ -59,6 +59,15 @@ export interface RayElev { from: number; to: number }
 export interface OccEnv {
   doodadsAt(x: number, y: number): readonly Doodad[];
   walk: WalkField | null;
+  /** THE VAPOR RIDE (optional): an OPAQUE MEDIUM sample for the 'sight'
+   *  channel — true where eyes cannot pass (a planted steam bank's live
+   *  lobes: engine/fog.ts FogBankDef.occludesSight → FogField.occludesAt).
+   *  Sampled along the segment at the doodad cadence, START INCLUDED (the
+   *  veil rule: inside the white you are blind both ways); the first opaque
+   *  sample stops the ray as kind 'medium'. Shots never consult it (steam
+   *  is not a wall). Absent or always-false == the legacy ray, byte for
+   *  byte. */
+  opaqueAt?(x: number, y: number): boolean;
 }
 
 export interface RayHit {
@@ -66,8 +75,8 @@ export interface RayHit {
   y: number;
   /** Distance from the ray origin to the hit, px. */
   d: number;
-  /** What stopped it. */
-  kind: 'doodad' | 'region';
+  /** What stopped it ('medium' = an opaque vapor sample — eyes only). */
+  kind: 'doodad' | 'region' | 'medium';
 }
 
 /** The occlusion fabric's modular thresholds + delivery defaults (the
@@ -190,8 +199,16 @@ export function castRay(
   // reads exactly as the pixels promise. Start-inside blocks at t=0 (the
   // veil rule) on every shape.
   const steps = Math.ceil(len / SPATIAL_CFG.queryPad);
+  // THE VAPOR RIDE: the 'sight' channel samples the env's opaque medium at
+  // the same cadence — the first swallowed sample stops the eye (start
+  // included: the veil rule). Shots never ask; an env without the hook or
+  // with no medium standing pays one optional-call check per sample.
+  const opaque = channel === 'sight' && env.opaqueAt !== undefined;
   for (let i = 0; i <= steps; i++) {
     const ts = steps > 0 ? i / steps : 0;
+    if (opaque && ts < bestT && env.opaqueAt!(from.x + dx * ts, from.y + dy * ts)) {
+      bestT = ts; kind = 'medium';
+    }
     for (const o of env.doodadsAt(from.x + dx * ts, from.y + dy * ts)) {
       if (channel === 'shot' ? !blocksProjectiles(o) : !blocksSightOf(o)) continue;
       const t = rayShapeT(hitSurfaceOf(o, channel), o.pos.x, o.pos.y, from.x, from.y, dx, dy);

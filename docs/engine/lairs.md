@@ -231,6 +231,45 @@ package defs), with `HIGH_COURT` zeniths and apexes exempt as *reserved* by
 the registry's own reserves-and-remnants doctrine. The next composite that
 loses its door is named at probe time, not by a grep years later.
 
+## Wave seven — THE GREAT GEYSER (the Scald Basin's den: beat-as-boss)
+
+The scald country's den (`docs/engine/greatgeyser.md`; lane
+`src/data/greatgeyser.ts`): a surface seat (scald, level 8+, chance 0.14)
+resolving to the `vent_den_mouth` landmark — the den_mouth grammar PLUS one
+authored GREAT vent beside the door (the geyser fabric's authoring seam:
+the country's LOUDEST vent, so the den is found by ear and eye, never a map
+mark) — whose `geyser_maw` door mints the Great Geyser: the `ventcauldron`
+recipe (a basin sunk into rock, terraces ringing ONE great vent at the heart
+on a boss-tempo clock, THE BOSS SEAT on the vent — `GenCtx.bossSeat`, the
+unmade vault's dais generalized). Its law is **THE VENT DWELLER**
+(`MonsterDef.ventDweller`, `engine/ventDweller.ts`): **THE GEYSERMAW** lives
+IN the heart vent — submerged (outside time, undrawn, unhittable) between
+beats, breaching as the column clears for a window, sinking again — its
+presence a pure function of the vent's clock, the window clamped under THE
+NO-TAG LAW, the rise gated behind a SEEN column. Faction `geyserkin` (the
+tribe's god-in-the-vent — diplomacy-silent); pays `lair_hoard`; stamps
+`great_geyser_entered` / `geysermaw_slain`. Probe `balance/probe_den.ts`.
+
+## Wave eight — THE CISTERN CRONE (the underLane rung's second row)
+
+The scald lake's lair (`docs/engine/cistern.md`; lane + row
+`src/data/cistern.ts`): a seat on the `underLane` rung — `biomes ['scald']` ×
+`tilesets ['sulphur_pools']` × `underLane: 'cistern'` × level 8+ × chance 0.6
+(raised, the mere court's precedent) — resolved ONLY by the cistern lane's
+carve, the grotto the lake mints a GREAT SHOAL for (`engine/lake.ts` holds the
+seat out as `GenCtx.underSeats`; the chamber sinks wholly beneath it). The
+landmark `crone_court` is den_mouth on the story (`siteTier: 1`) with an
+INERT font (no door — the pool is the destination) and **THE LIQUID SEAT ON A
+REGION** (`params.liquidSeat: 'cistern_water'` — the den_mouth builder
+exposes every rect cell the grid paints that kind as its liquid seat, so
+`spawns.where: 'liquid'` seats the crone IN her pool, exactly one). THE
+CISTERN CRONE: a scalded naiad-crone, faction coven, ROOTED on `cistern_water`
+(the wellspring's grammar — THE GRID ROOT lets a painted region root a body),
+whose BOIL is THE GROUNDED STRIKE (`StormDelivery.onGround`: the pool broils,
+then the water itself scalds whoever stands IN it; the shore inside the ring
+stays dry). Pays `lair_hoard`; the lane stamps `cistern_entered`. Probe
+`balance/probe_cistern.ts`.
+
 ## QA
 
 `balance/probe_lairs.ts` — registry weave, the seat fold's pure law

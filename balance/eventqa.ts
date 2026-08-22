@@ -62,6 +62,8 @@ import '../src/data/garden';
 import '../src/data/grove';
 import '../src/data/theater'; // THE THEATER FABRIC's defaults (before warfront — kind priority is registration order)
 import '../src/data/warfront';
+import '../src/data/scald';
+import '../src/data/pilgrimage'; // THE TERRACE PILGRIMAGE theater kind + rows (the scald coda)
 import '../src/data/compositions';
 // The living-terrain registries main.ts loads (fog banks, creep kinds): a def
 // validate() that checks FOG_BANKS/CREEPS must see the same game the player
@@ -83,6 +85,7 @@ import { validateRadianceCond } from '../src/world/radiance';
 import { WorldSim, packageLookups } from '../src/world/sim';
 import { BIOMES } from '../src/world/biomes';
 import { FACTIONS, MONSTERS } from '../src/data/monsters';
+import { TILESETS } from '../src/data/tilesets'; // THE FACE AXIS census (theater rows naming faces)
 import { IncursionField, INCURSION_ARCHETYPES } from '../src/packages/overlays/incursion';
 import { Rng } from '../src/core/rng';
 import { START_ZONE, ZONES, type ZoneDef } from '../src/data/zones';
@@ -562,6 +565,17 @@ console.log('eventqa: the theater registry');
     }
     for (const f of r.factions ?? []) {
       assert(!!FACTIONS[f], 'theater', `row '${r.id}' names faction '${f}'`);
+    }
+    // THE FACE AXIS (TheaterRow.tilesets): a row that claims faces names REAL
+    // tilesets, each standing in the biomes it also claims (a terrace row on
+    // farmland ground would never play — drift, not texture).
+    for (const tsId of r.tilesets ?? []) {
+      const ts = TILESETS[tsId];
+      assert(!!ts, 'theater', `row '${r.id}' names tileset '${tsId}'`);
+      if (ts && r.biomes) {
+        assert(!!ts.biome && r.biomes.includes(ts.biome), 'theater',
+          `row '${r.id}' face '${tsId}' stands in one of its biomes [${r.biomes.join(', ')}]`);
+      }
     }
     for (const w of validateRadianceCond(`theater row '${r.id}'`, r.when)) {
       fail('theater', w);

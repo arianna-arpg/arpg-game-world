@@ -38,6 +38,7 @@ import { mixHex } from '../core/math';
 import type { PartSpec } from '../render/vis/parts';
 import type { ActorAdorn } from './actor';
 import { packDriveOf } from './pack';
+import type { CastRecord } from './sequence';
 import { STATUS_DEFS } from './status';
 
 // --- config ----------------------------------------------------------------
@@ -218,6 +219,13 @@ export interface TellBody {
   aiPrey?: readonly string[];
   /** Where the body stands (the `creep` source's sample point). */
   pos?: { x: number; y: number };
+  // --- THE CADENCE LANE (the metronome kin — data/combos.ts registers the
+  // `combo:<rule>` source): the recent-cast ring, the per-rule firing
+  // ledger and the sheet's comboWindow read, exactly as the combo matcher
+  // sees them (drawn == tested: the pips ARE the count). All OPTIONAL.
+  castRing?: readonly CastRecord[] | null;
+  comboFire?: { get(id: string): { at: number; seq: number } | undefined } | null;
+  sheet?: { get(stat: string): number };
 }
 
 /** The narrow world view (the clock, the sky's light, the living ground). */
@@ -228,6 +236,11 @@ export interface TellWorld {
    *  kind when `kind` is undefined (World supplies the fabric's own
    *  gameplay predicate, so drawn == tested rides through unchanged). */
   creepCoverAt?(kind: string | undefined, x: number, y: number): number;
+  /** THE PRESSURE LANE (the scald kit — card 6: the magazine IS the bank):
+   *  a body's kit skill's live use-charge bank as {count, max} — World
+   *  reads the SAME instance the scripted cast spends (aiKitInstance) and
+   *  the same bank useSkill spends. Absent = 0. */
+  kitRounds?(body: TellBody, skillId: string): { count: number; max: number } | undefined;
 }
 
 /** One state source: (body, world, arg-after-colon) → raw reading. Raw may
@@ -420,6 +433,15 @@ export const TELL_SOURCES: Record<string, TellSource> = {
    *  membrane drawn under the feet is the membrane the tell reports. */
   creep: (a, w, arg) =>
     (a.pos && w.creepCoverAt ? w.creepCoverAt(arg, a.pos.x, a.pos.y) : 0),
+  /** THE PRESSURE GAUGE (the scald kit — card 6): a kit skill's banked
+   *  use-charges as a 0..1 fill ('rounds:<skillId>') — the magazine /
+   *  empower grammar IS the bank, no new resource; the spout-hopper's jet
+   *  legs and the lancer's pressure-pack read it (a full pack = the
+   *  finisher is loaded). Reads the SAME bank useSkill spends from. */
+  rounds: (a, w, arg) => {
+    const r = arg && w.kitRounds ? w.kitRounds(a, arg) : undefined;
+    return r && r.max > 0 ? r.count / r.max : 0;
+  },
 };
 
 /** Extend the vocabulary (packages register their own state reads). */

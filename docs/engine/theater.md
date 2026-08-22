@@ -313,3 +313,17 @@ Movement one (2e305b5) founded the fabric; movement two (this pass) landed
 THE CAST above — all five ratified members. Adding a sixth occurrence
 remains ONE `registerTheaterKind` + row lines; a new faction's funeral or
 watch change is row data alone.
+
+**THE TERRACE PILGRIMAGE** (the Scald Basin's M3 coda — `data/pilgrimage.ts`
++ the pure leaf `engine/pilgrimage.ts`, docs `docs/engine/pilgrimage.md`,
+probe `balance/probe_pilgrimage.ts`) is the first country-owned kind to GROW
+the fabric, by two generic seams: **THE FACE AXIS** (`TheaterRow.tilesets`
+over `TheaterContext.tileset` — a row may claim one face of a biome; omitted
+abstains) and **THE LOCAL CLOCK GATE** (`TheaterKindDef.ready(world, ctx)` —
+a kind whose WHEN is a clock the zone itself keeps declines a beat it could
+not form on BEFORE the draw, spending no seat and shifting no draw, every
+stream being keyed per beat). The kind itself: a lantern-bearing geyserkin
+column on the pass-through march grammar that halts at the loudest vent's
+brim (the march goal parked; the kind owns its halts) timed to the surge
+hour it only READS (her cue law), lays drying offerings through
+`World.plantDressAt`, and disperses — all four gates by construction.

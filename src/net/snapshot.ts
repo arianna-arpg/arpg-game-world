@@ -129,7 +129,7 @@ export interface ActorW {
   auras?: AuraW[];             // emanating aura fields
   con?: { kind: string; domeRadius?: number };  // construct (dome bubble)
   fuse?: number;               // armed bomber fuse
-  leap?: { timer: number; total: number };       // airborne leap (body swell)
+  leap?: { timer: number; total: number; vent?: number };  // airborne leap (body swell; `vent` = the vent-ride's column radius — the steam jet draws)
   /** Snake/worm trailing segments. SEGMENT-FABRIC extras ride only when
    *  live (bosses, briefly): `ht` = hittable chain (solid draw + hitbox
    *  overlay truth), `wd` = torn-segment bitmask (torn draws/tests smaller),
@@ -138,7 +138,10 @@ export interface ActorW {
   worm?: { seg: Vec2W[]; taper: number; ht?: 1; wd?: number; sf?: number[] };
 }
 
-export interface StatusW { id: string; stacks: number; }
+/** `bk` = THE BANK READ (StatusDef.bank — ActiveStatus.bankFrac, 0..1 at
+ *  two decimals): the derived scalar the body FX scale by (the tells-wire
+ *  idiom — never the bank's source numbers). Absent = no bank worn. */
+export interface StatusW { id: string; stacks: number; bk?: number; }
 export interface AuraW { c: string; r: number; sh: number; }
 /** A cast in progress — the few fields the renderer's cast bar + guard arc read. */
 export interface CastW {
@@ -148,6 +151,10 @@ export interface CastW {
   guardArc?: number;           // guard spec arcDeg (mode === 'guard')
   /** Guard bash tic: live arming line + inverted contract (mode 'guard'). */
   bashAt?: number; bashLow?: boolean;
+  /** THE VENT-RIDE's broil (LeapDelivery.vent): the column radius a casting
+   *  vent-leaper will erupt at take-off — the client draws the same roil
+   *  under the caster's feet (render/vis/ventRideLayer.ts). */
+  vent?: number;
 }
 
 /** `a` = flight age (sim seconds): the deterministic phase clock the form
@@ -589,10 +596,17 @@ function actorToW(a: Actor): ActorW {
     }
   }
   if (a.absorb > 0) w.ab = Math.round(a.absorb);
-  if (a.statuses.length) w.st = a.statuses.map(s => ({ id: s.id, stacks: s.stacks }));
+  if (a.statuses.length) {
+    w.st = a.statuses.map(s => s.bankFrac !== undefined
+      ? { id: s.id, stacks: s.stacks, bk: Math.round(s.bankFrac * 100) / 100 }
+      : { id: s.id, stacks: s.stacks });
+  }
   if (a.casting) {
     const cs = a.casting;
     const cw: CastW = { c: cs.inst.def.color, mode: cs.mode, total: cs.total, elapsed: cs.elapsed };
+    // THE VENT-RIDE's broil rides the cast wire (the client draws the roil).
+    const cd = cs.inst.def.delivery;
+    if (cd.type === 'leap' && cd.vent) cw.vent = cd.vent.columnR;
     if (cs.pulseTimer !== undefined) cw.pulseTimer = cs.pulseTimer;
     if (cs.shield !== undefined) cw.shield = cs.shield;
     if (cs.maxShield !== undefined) cw.maxShield = cs.maxShield;
@@ -609,7 +623,11 @@ function actorToW(a: Actor): ActorW {
   }
   if (a.construct) w.con = { kind: a.construct.kind, domeRadius: a.construct.domeRadius };
   if (a.fuse !== undefined) w.fuse = a.fuse;
-  if (a.leap) w.leap = { timer: a.leap.timer, total: a.leap.total };
+  if (a.leap) {
+    w.leap = a.leap.vent
+      ? { timer: a.leap.timer, total: a.leap.total, vent: a.leap.vent.columnR }
+      : { timer: a.leap.timer, total: a.leap.total };
+  }
   if (a.worm) {
     w.worm = { seg: a.worm.segments.map(v2), taper: a.worm.taper };
     // SEGMENT FABRIC: hittable/torn/flash state rides only while present.
@@ -1122,9 +1140,13 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // Reconstruct the FX sub-objects the renderer draws (stand-in nested objects
     // so renderer.ts stays untouched). Absent → cleared → that FX simply skips.
     a.statuses.length = 0;
-    if (aw.st) for (const s of aw.st) a.statuses.push({ id: s.id, remaining: 99, stacks: s.stacks, dps: 0, sourceName: '' });
+    if (aw.st) for (const s of aw.st) a.statuses.push({ id: s.id, remaining: 99, stacks: s.stacks, dps: 0, sourceName: '', bankFrac: s.bk });
     a.casting = aw.cast ? ({
-      inst: { def: { color: aw.cast.c, guard: aw.cast.guardArc !== undefined ? { arcDeg: aw.cast.guardArc } : undefined } },
+      // THE VENT-RIDE's broil: the client's cast stub carries the column
+      // radius as a leap delivery with a vent, so the roil layer reads one
+      // shape on both sides of the wire.
+      inst: { def: { color: aw.cast.c, guard: aw.cast.guardArc !== undefined ? { arcDeg: aw.cast.guardArc } : undefined,
+        delivery: aw.cast.vent !== undefined ? { type: 'leap', vent: { columnR: aw.cast.vent } } : undefined } },
       mode: aw.cast.mode, total: aw.cast.total, elapsed: aw.cast.elapsed,
       pulseTimer: aw.cast.pulseTimer, shield: aw.cast.shield, maxShield: aw.cast.maxShield,
       indicatorAt: aw.cast.indicatorAt, presses: aw.cast.presses, channelTime: aw.cast.channelTime,
@@ -1135,7 +1157,10 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     if (aw.auras) aw.auras.forEach((au, i) => a!.activeAuras.set('a' + i, ({ inst: { def: { color: au.c } }, radius: au.r, shape: au.sh } as unknown as ActiveAura)));
     a.construct = aw.con ? ({ kind: aw.con.kind, domeRadius: aw.con.domeRadius } as unknown as ConstructState) : undefined;
     a.fuse = aw.fuse;
-    a.leap = aw.leap ? ({ timer: aw.leap.timer, total: aw.leap.total } as unknown as LeapState) : undefined;
+    a.leap = aw.leap
+      ? ({ timer: aw.leap.timer, total: aw.leap.total,
+        vent: aw.leap.vent !== undefined ? { columnR: aw.leap.vent } : undefined } as unknown as LeapState)
+      : undefined;
     if (aw.worm) {
       // Interpolate the trailing segments the same way the head (a.pos) is lerped,
       // so the body tracks the smoothly-gliding head instead of stepping at 20Hz.

@@ -303,3 +303,17 @@ deterrence, relish, beeline gating, profile interning + insurance
 agreement, convex-nav sensing incl. deep-water cores, the behavioral
 wolf-dry/worm-bathes arc, and the veto with its heedless-holds /
 lemming-falls controls).
+
+## THE VAPOR RIDE (the scald kit, 2026-08-21 — `docs/engine/scaldkit.md`)
+
+The `'sight'` channel may meet an OPAQUE MEDIUM: `OccEnv.opaqueAt?(x, y)`
+(World → `FogField.occludesAt` — the live lobes of any fog kind wearing
+`FogBankDef.occludesSight`, the planted `steam` bank) is sampled along the
+segment at the doodad cadence, START INCLUDED (the veil rule — inside the
+white you are blind both ways); the first swallowed sample stops the eye as
+`RayHit.kind 'medium'`. Shots never ask (steam is not a wall), so the
+`'shot'` channel is byte-identical; an env without the hook, or with no
+occluding bank standing, pays one optional-call check per sample. Every
+consumer of `lineOfSight` / `sightClipD` — AI perception, the watch fans,
+hostile targeting's refusal lanes — loses a body the white has swallowed,
+which is the whole point of planting it.

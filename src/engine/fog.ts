@@ -130,6 +130,15 @@ export interface FogBankDef {
   grants?: readonly FogGrant[];
   /** Ground this kind clings to / rolls along. */
   haunt?: FogHaunt;
+  /** THE VAPOR RIDE (the scald kit's steam): this kind's LIVE lobes are an
+   *  OPAQUE MEDIUM to the 'sight' channel — castRay samples
+   *  FogField.occludesAt along every eye line (OccEnv.opaqueAt), so AI
+   *  perception, the watch fabric's fans and hostile targeting all lose a
+   *  body the white has swallowed, and the body inside strikes out of it.
+   *  Shots still fly (steam is not a wall); the hit density is the same
+   *  honesty floor the grants read (drawn == tested). A kind without it
+   *  veils by status only (fogveiled), as before. */
+  occludesSight?: true;
 }
 
 /** What a zone breathes — lives on ZoneTheme.fog. Counts roll once per
@@ -233,6 +242,10 @@ export interface FogBank {
   tangent: number | null;
   /** Sky-born banks exist only while a fog front covers the zone. */
   skyBorn: boolean;
+  /** A PLANTED bank (the 'vent' skill effect — FogField.plantBank): stood up
+   *  at a fixed seat by a cast, MORTAL — it dissipates at life's end and is
+   *  spliced out, never re-gathered elsewhere (a cast plants steam once). */
+  mortal?: true;
   seeds: FogLobeSeed[];
   /** Live lobe states, refreshed each update; arrays reused (no GC churn). */
   live: FogLobeState[];
@@ -301,7 +314,72 @@ export class FogField {
       bound: reach,
     };
     this.banks.push(bank);
+    if (def.occludesSight) this.occluders++;
     return bank;
+  }
+
+  /** PLANT a bank of `def` at a FIXED seat (the 'vent' skill effect — the
+   *  scald kit's steam): reach and life are the cast's (area / duration
+   *  mods already folded by the caller), the lobes roll on the field's own
+   *  stream like every bank's, the heading is the kind's drift (a planted
+   *  steam bank barely moves), and the bank is MORTAL — it dissipates at
+   *  life's end and leaves. No anchor scoring: a cast puts steam where the
+   *  cast resolved. */
+  plantBank(def: FogBankDef, at: { x: number; y: number }, reach: number, life: number): FogBank {
+    const d = FOG_CFG.def;
+    const pos = {
+      x: Math.min(this.w - 8, Math.max(8, at.x)),
+      y: Math.min(this.h - 8, Math.max(8, at.y)),
+    };
+    const lobeN = this.rng.int(...(def.lobes ?? d.lobes));
+    const seeds: FogLobeSeed[] = [];
+    for (let i = 0; i < lobeN; i++) {
+      seeds.push({
+        ang: this.rng.range(0, Math.PI * 2),
+        distFrac: i === 0 ? 0.12 : 0.25 + 0.75 * Math.sqrt(this.rng.next()),
+        rFrac: this.rng.range(0.34, 0.62),
+        phase: this.rng.range(0, Math.PI * 2),
+        swirlMul: this.rng.range(0.55, 1.45) * (this.rng.next() < 0.5 ? -1 : 1),
+      });
+    }
+    const bank: FogBank = {
+      def,
+      pos,
+      heading: this.rng.range(0, Math.PI * 2),
+      reach: Math.max(20, reach),
+      driftSpeed: this.rng.range(...(def.drift ?? d.drift)),
+      age: 0,
+      life: Math.max(1, life),
+      fade: 0,
+      tangent: null,
+      skyBorn: false,
+      mortal: true,
+      seeds,
+      live: seeds.map(() => ({ x: pos.x, y: pos.y, r: 0, a: 0 })),
+      bound: reach,
+    };
+    this.banks.push(bank);
+    if (def.occludesSight) this.occluders++;
+    return bank;
+  }
+
+  /** Live banks whose kind OCCLUDES SIGHT (FogBankDef.occludesSight) — the
+   *  castRay fast path: with none standing, the opaque-medium sample costs
+   *  one integer read per ray. Maintained at plant/spawn and splice. */
+  occluders = 0;
+
+  /** THE VAPOR RIDE's sample (OccEnv.opaqueAt): is this point inside the
+   *  LIVE lobes (at the honesty floor) of a sight-occluding bank? The same
+   *  bankCovers predicate the grants read — drawn == tested == unseen. */
+  occludesAt(x: number, y: number): boolean {
+    if (this.occluders <= 0) return false;
+    for (const b of this.banks) {
+      if (!b.def.occludesSight) continue;
+      const dx = b.pos.x - x, dy = b.pos.y - y;
+      if (dx * dx + dy * dy > b.bound * b.bound) continue;
+      if (this.bankCovers(b, x, y, 0)) return true;
+    }
+    return false;
   }
 
   /** Score anchor candidates toward haunted ground; derive the local chain
@@ -377,7 +455,14 @@ export class FogField {
       const b = this.banks[i];
       b.age += dt;
       if (b.age >= b.life) {
-        if (b.skyBorn && sky > wantSky) { this.banks.splice(i, 1); sky--; continue; }
+        // A PLANTED bank dies where it stood (the 'vent' effect's steam —
+        // a cast plants once, never re-gathers); sky-born surplus retires.
+        if (b.mortal || (b.skyBorn && sky > wantSky)) {
+          this.banks.splice(i, 1);
+          if (b.skyBorn) sky--;
+          if (b.def.occludesSight) this.occluders = Math.max(0, this.occluders - 1);
+          continue;
+        }
         this.regather(b);
         continue;
       }

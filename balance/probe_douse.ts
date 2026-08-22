@@ -10,7 +10,7 @@
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
-import { regionKind, DOUSE_CFG } from '../src/world/regions';
+import { regionKind, DOUSE_CFG, SURVIVAL_RESOURCES } from '../src/world/regions';
 import { resistValue } from '../src/engine/damage';
 import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { doodadRuleOf } from '../src/engine/levelgen';
@@ -86,12 +86,22 @@ world.addTempGround(SUN, 'water', 90, 600);
 // flyingBase, not flying: the flag is RE-DERIVED each status tick from
 // flyingBase || worn flight statuses — the innate half is the settable one.
 p.flyingBase = true;
-const flyingStacks = scorchStacks();
+// THE SCORCH BAR refit (scald charter §10, probe_scorch): ambient-baked
+// scorch is a fill-polarity METER now, and its out-of-source decay
+// breathes it down everywhere — the ruled shape that RETIRED the old
+// hold-forever. The pin here is the INSURANCE itself: the douse never
+// acts on a flier. Six douse beats would have emptied this bar outright;
+// the baseline decay takes ~regen × 1.5s — a bar still standing past the
+// decay floor proves the water never touched it.
+const flyingBar = world.scorchOf(p);
 step(1.5);
-check('insured: airborne over water, nothing quenches', scorchStacks() === flyingStacks, `${flyingStacks} held`);
+check('insured: airborne over water, the douse never acts (only the baseline decay moves the bar)',
+  world.scorchOf(p) > 0 && world.scorchOf(p) > flyingBar - SURVIVAL_RESOURCES.scorch.regen * 1.5 - 0.15,
+  `bar ${flyingBar.toFixed(2)} → ${world.scorchOf(p).toFixed(2)}`);
 p.flyingBase = false;
 step(1.5);
-check('insured: landing in the same pool quenches after all', scorchStacks() === 0);
+check('insured: landing in the same pool quenches after all',
+  scorchStacks() === 0 && world.scorchOf(p) === 0);
 
 // --- 5) no phantom mercy: dry ground and the brine both hold the stacks ----
 p.pos = { ...BRINE };

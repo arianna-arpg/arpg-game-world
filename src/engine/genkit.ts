@@ -420,6 +420,12 @@ export function liquidIds(): string[] { return Object.keys(LIQUIDS); }
 registerLiquid('water', { doodad: 'water' });
 registerLiquid('shallows', { doodad: 'water', shallow: true });
 registerLiquid('deep_water', { region: 'deep_water' });          // swim + breath drain
+// THE LAKE TYPE's generic waters (engine/lake.ts — its pinned defaults): the
+// wadeable shelf ring and the refused deep middle (the `eject` row, never a
+// fall — world/regions.ts lake_deep). The sulphur debut registers its own
+// 'sulphur' / 'sulphur_deep' twins from its kit (data/scald.ts).
+registerLiquid('lake_shallows', { region: 'lake_shallows' });    // the lake shelf: wade, never swim
+registerLiquid('lake_deep', { region: 'lake_deep' });            // the lake's refused middle: shots pass, bodies don't
 registerLiquid('lava', { doodad: 'lava' });                       // crossable melt: cooks the uninsured
 registerLiquid('magma_core', { doodad: 'magma_core' });           // the WALL: impassable slag (caldera spirals)
 registerLiquid('bog', { doodad: 'bog' });                         // poison on entry

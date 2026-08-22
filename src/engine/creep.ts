@@ -375,6 +375,52 @@ export interface FrontSpawnRow {
    *  so this leaf keeps its zero-import doctrine; world/radiance's
    *  RadianceCond satisfies it. */
   when?: FrontCond;
+  /** THE IGNITION DIAL (charter §5, card 8 — backlog #206's deliberately
+   *  RESERVED seam, opened as a PER-LANE opt-in): sustained typed damage
+   *  (default fire) landing on ground that holds this lane's FUEL (the
+   *  def's own consume fuel kinds, or `fuels`) births a SECTION of this
+   *  lane's kind at the blast — capped (`max` concurrent ignition-born
+   *  sections), paced (`cooldown`, zone-wide), cooled by the def's own
+   *  quench lever and starving on the def's own affinity map like any
+   *  wave (it can never spread past the row's map). THE GLOBAL DEFAULT
+   *  STAYS OFF: a lane without this row — every other lane in the game —
+   *  keeps "player casts never ignite fronts" by construction, and the
+   *  feed/stoke levers keep their deliberately-high thresholds (the
+   *  "never a fire build's bellows" clause survives). Authored ONLY where
+   *  the country wants to burn (the Char). The kindling meter DECAYS
+   *  (CREEP_CFG.front.ignition.decay), so a stray splash never lights
+   *  and a fire build must PRESS to start a blaze. */
+  ignition?: IgnitionSpec;
+  /** THE ESCAPE SEAM (this header's long-named chase, bound): under an
+   *  'escape' objective the world fields this lane's FIRST wave AT THE
+   *  PARTY'S HEELS — behind the landing, marching the way in
+   *  (World.loadZone → CreepField.fieldHeels) — instead of from the zone
+   *  rim; every other objective fields the lane normally, and later waves
+   *  (`waves`) arrive as ever. The front IS the pursuer. */
+  heels?: true;
+}
+
+/** THE IGNITION DIAL's row (FrontSpawnRow.ignition). Every number a DIAL. */
+export interface IgnitionSpec {
+  /** Damage that lights ONE section (summed over `types`, decaying between
+   *  blows — sustained fire, never a stray splash). */
+  power: number;
+  /** Damage types that kindle (default ['fire']). */
+  types?: readonly string[];
+  /** Fuel tags that may be lit (default: the def's own consume rows' fuels
+   *  — what the fire EATS is what the fire can START on). */
+  fuels?: readonly string[];
+  /** A blast must land within this of a standing fueled piece (beyond its
+   *  own radius) to kindle at all (default CREEP_CFG.front.ignition.near). */
+  near?: number;
+  /** Concurrent ignition-born sections of this lane (default
+   *  CREEP_CFG.front.ignition.max). */
+  max?: number;
+  /** Seconds between births, zone-wide for this lane (default
+   *  CREEP_CFG.front.ignition.cooldown). */
+  cooldown?: number;
+  /** Born section reach roll (default: the lane's `reach`, else the def's). */
+  reach?: [number, number];
 }
 
 /** The structural twin of world/radiance's RadianceCond — the leaf's own
@@ -432,6 +478,13 @@ export interface CreepTerrain {
   /** One floating arrival line on every seat (FrontSpawnRow.announce —
    *  the wildlife arrival-line idiom). Absent = silent waves everywhere. */
   announce?(text: string, color?: string): void;
+  /** THE CASTER-LESS BASELINE for a granted DoT status (World answers
+   *  baselineStatusDps at the zone's level): the dps a skin's grant lands
+   *  with, so a terrain burn (flamewreathed, starfire, the scald) actually
+   *  TICKS instead of wearing its label at 0 — the fog/ground-effect lane's
+   *  own law, finally reaching the membrane. Absent (a bare harness) = 0,
+   *  the classic label-only dress. */
+  statusDps?(id: string): number;
 }
 
 /** The registry of record. A new creep kind is one registerCreep row —
@@ -617,6 +670,28 @@ export function validateCreep(
       if (f.announce && !f.announce.text) {
         bad.push(`${owner}: front lane '${f.id}' announce with empty text`);
       }
+      // THE IGNITION DIAL (FrontSpawnRow.ignition): a lit lane must name
+      // real types, real fuels (something a DoodadRule actually declares —
+      // else the dial can never kindle), sane caps.
+      if (f.ignition) {
+        const ig = f.ignition;
+        if (!fin(ig.power) || !(ig.power > 0)) bad.push(`${owner}: front lane '${f.id}' ignition.power must be > 0`);
+        for (const t of ig.types ?? ['fire']) {
+          if (lookups && !lookups.isDamageType(t)) bad.push(`${owner}: front lane '${f.id}' ignition names unknown damage type '${t}'`);
+        }
+        const fuels = ig.fuels ?? def.front?.consume?.map(c => c.fuel) ?? [];
+        if (!fuels.length) bad.push(`${owner}: front lane '${f.id}' ignition with nothing to light (no fuels, and the row eats nothing)`);
+        for (const fu of fuels) {
+          if (lookups && !lookups.fuelTags.has(fu)) bad.push(`${owner}: front lane '${f.id}' ignition fuel '${fu}' — no DoodadRule declares it`);
+        }
+        if (ig.max !== undefined && !(ig.max >= 1)) bad.push(`${owner}: front lane '${f.id}' ignition.max wants >= 1`);
+        if (ig.cooldown !== undefined && !(ig.cooldown >= 0)) bad.push(`${owner}: front lane '${f.id}' ignition.cooldown wants >= 0`);
+        if (ig.near !== undefined && !(ig.near >= 0)) bad.push(`${owner}: front lane '${f.id}' ignition.near wants >= 0`);
+        if (ig.reach && !(ig.reach[0] > 0 && ig.reach[1] >= ig.reach[0])) bad.push(`${owner}: front lane '${f.id}' ignition.reach wants 0 < lo <= hi`);
+      }
+      if (f.heels && f.line === 'span') {
+        bad.push(`${owner}: front lane '${f.id}' heels on a 'span' lane — the heel wave is a picket (drop heels or the span)`);
+      }
     }
     // Aquatic owners growing sea-forsworn kinds: the build refuses them
     // structurally — warn so authored specs never carry dead rows.
@@ -762,6 +837,18 @@ export const CREEP_CFG = {
     /** travel.taper's floor: the surge never quite stalls before it
      *  disperses — pressure dying, not brakes. */
     travelTaperFloor: 0.22,
+    /** THE IGNITION DIAL's shared grammar (FrontSpawnRow.ignition — per-lane
+     *  opt-in; these are the fabric's own paces; the lane row carries the
+     *  power). `decay` = kindling meter fraction lost per second (a meter
+     *  at 1 lights; a single sub-power blow bleeds away); `near` = how far
+     *  past a fueled piece's own radius a blast still kindles it; `max` /
+     *  `cooldown` = concurrent ignition-born sections per lane / seconds
+     *  between births. */
+    ignition: { decay: 0.35, near: 48, max: 2, cooldown: 8 },
+    /** THE ESCAPE SEAM (FrontSpawnRow.heels): how far BEHIND the party's
+     *  landing the heel picket is born (units) — close enough to read as
+     *  pursuit, far enough that the first step is not already inside it. */
+    heelsBack: 170,
     /** Spanning waves (line 'span'): the guaranteed clear corridor's
      *  default width (world units of truly rim-free lane), how far in
      *  from the flanks a corridor may roll (fraction of the crossing —
@@ -905,6 +992,9 @@ export interface FrontRun {
    *  The WORLD consumes this plan exactly once (ridersMounted). */
   riderPlan: { monster: string; ang: number }[] | null;
   ridersMounted: boolean;
+  /** THE IGNITION DIAL: this section was LIT by damage (igniteAt) rather
+   *  than fielded by a wave — counts against its lane's concurrent cap. */
+  ignited?: true;
 }
 
 export interface CreepSource {
@@ -942,6 +1032,11 @@ interface FrontLane {
    *  respawn is owed. */
   pending: boolean;
   timer: number;
+  /** THE IGNITION DIAL's kindling meter (0..1 of the row's power; decays)
+   *  and the zone-wide birth cooldown clock — lanes without an ignition
+   *  row never move either. */
+  kindle: number;
+  igniteReadyAt: number;
 }
 
 export class CreepField {
@@ -959,6 +1054,14 @@ export class CreepField {
   /** True once any live source carries a quench/feed lever — the damage
    *  tap's early-out (a zone with no fronts pays nothing per hit). */
   quenchable = false;
+  /** True once any installed lane carries an ignition row — the damage
+   *  tap's early-out for igniteAt (a zone without the dial pays nothing
+   *  per hit; the global default-off, structurally). */
+  ignitable = false;
+  /** Private xorshift for ignition-born bearings (never the placement
+   *  stream — a player's casts must not be able to move the zone's own
+   *  wave rolls). Seeded per field from the stream ONCE at construction. */
+  private igniteRoll = 0x2545f491;
 
   /** Live lane count — chance rolls may have thinned the authored rows
    *  (buildZoneCreep asks before keeping an otherwise-empty field). */
@@ -996,7 +1099,9 @@ export class CreepField {
       this.lanes.push({
         row, idx: this.lanes.length, live: 0, pending: true,
         timer: this.rng.range(...(row.delay ?? fd.delay)),
+        kindle: 0, igniteReadyAt: 0,
       });
+      if (row.ignition) this.ignitable = true;
     }
   }
 
@@ -1312,6 +1417,122 @@ export class CreepField {
     return drank;
   }
 
+  /** One private xorshift step for ignition-born rolls (bearing, reach) —
+   *  a player's blows must never move the zone's own wave stream. */
+  private igniteRollNext(): number {
+    let s = this.igniteRoll;
+    s ^= s << 13; s >>>= 0;
+    s ^= s >> 17;
+    s ^= s << 5; s >>>= 0;
+    this.igniteRoll = s || 0x2545f491;
+    return s / 0xffffffff;
+  }
+
+  /** THE IGNITION DIAL's tap (FrontSpawnRow.ignition — the per-lane opt-in
+   *  that opened backlog #206's reserved seam): typed damage landing on the
+   *  world KINDLES every lane wearing the dial — only in the lane's named
+   *  types, only where a piece of that lane's FUEL stands under the blast
+   *  (no fuel, no fire), the meter decaying between blows — and a meter
+   *  that reaches the row's power BIRTHS one section of the lane's kind at
+   *  the blast (bearing + reach on the private stream), under the lane's
+   *  concurrent cap and cooldown. The born section is an ordinary marching
+   *  source of the SAME def: the same affinity map, the same quench lever,
+   *  the same starve gutter — it can never spread where its row would not.
+   *  Callers early-out on `ignitable` (a zone without the dial pays nothing
+   *  per hit — the global default-off, structurally); returns sections
+   *  born (0 = nothing happened). */
+  igniteAt(x: number, y: number, r: number, amounts: Readonly<Record<string, number>>, now: number): number {
+    if (!this.ignitable || !this.terrain) return 0;
+    const fd = CREEP_CFG.front.ignition;
+    let born = 0;
+    for (const lane of this.lanes) {
+      const ig = lane.row.ignition;
+      if (!ig) continue;
+      const def = CREEPS[lane.row.id];
+      if (!def?.front) continue;
+      let sum = 0;
+      for (const t of ig.types ?? ['fire']) sum += amounts[t] ?? 0;
+      if (sum <= 0) continue;
+      // FUEL under the blast — the lane's own fuel set (default: what its
+      // front EATS; what the fire eats is what the fire can start on).
+      const fuels = ig.fuels ?? def.front.consume?.map(c => c.fuel) ?? [];
+      if (!fuels.length) continue;
+      let fueled = false;
+      this.terrain.eachFuelNear(x, y, r + (ig.near ?? fd.near), (fuel) => {
+        if (!fueled && fuels.includes(fuel)) fueled = true;
+      });
+      if (!fueled) continue;
+      lane.kindle = Math.min(1.5, lane.kindle + sum / ig.power);
+      if (lane.kindle < 1 || now < lane.igniteReadyAt) continue;
+      // THE CONCURRENT CAP: ignition-born sections of THIS lane still alive.
+      let lit = 0;
+      for (const s of this.sources) {
+        if (s.front?.ignited && s.front.rowIdx === lane.idx && s.state !== 'recede') lit++;
+      }
+      if (lit >= (ig.max ?? fd.max)) continue;
+      const rb = ig.reach ?? lane.row.reach;
+      const reach = rb ? rb[0] + (rb[1] - rb[0]) * this.igniteRollNext() : undefined;
+      const src = this.addSource(def, x, y, {
+        bornFrac: CREEP_CFG.front.lineBorn,
+        ...(reach !== undefined ? { reach } : {}),
+      });
+      if (!src) continue; // a saturated field refuses the blaze politely
+      this.attachFront(src, this.igniteRollNext() * Math.PI * 2, lane.idx);
+      src.front!.ignited = true;
+      lane.live++;
+      lane.kindle = 0;
+      lane.igniteReadyAt = now + (ig.cooldown ?? fd.cooldown);
+      born++;
+    }
+    return born;
+  }
+
+  /** THE ESCAPE SEAM (FrontSpawnRow.heels): field every PENDING heels
+   *  lane's first wave NOW — a picket line CENTRED on (x, y) (behind the
+   *  party's landing), every section marching `bearing` (the way in) —
+   *  the lane's own timer spent; later waves (`waves`) keep the rim law.
+   *  The world calls this once per load under an 'escape' objective
+   *  (World.loadZone); other objectives never do. Returns sections fielded. */
+  fieldHeels(x: number, y: number, bearing: number): number {
+    const fd = CREEP_CFG.front;
+    const d = CREEP_CFG.def;
+    let fielded = 0;
+    for (const lane of this.lanes) {
+      const row = lane.row;
+      if (!row.heels || !lane.pending) continue;
+      const def = CREEPS[row.id];
+      if (!def?.front) continue;
+      lane.pending = false;
+      lane.timer = 0;
+      const reachBand = row.reach ?? def.reach ?? d.reach;
+      const band = (reachBand[0] + reachBand[1]) / 2;
+      const sMul = row.spacing ?? fd.lineSpacing;
+      const stMul = Math.max(1, def.front.stretch ?? 1);
+      const n = this.rng.int(...(Array.isArray(row.line) ? row.line : fd.line));
+      const px = -Math.sin(bearing), py = Math.cos(bearing);
+      const jitter = row.jitter ?? fd.bearingJitter;
+      let got = 0;
+      for (let i = 0; i < n; i++) {
+        const off = (i - (n - 1) / 2) * band * sMul * stMul;
+        const sx = Math.min(this.w - 8, Math.max(8, x + px * off));
+        const sy = Math.min(this.h - 8, Math.max(8, y + py * off));
+        const reach = row.reach ? this.rng.range(row.reach[0], row.reach[1]) : undefined;
+        const src = this.addSource(def, sx, sy, {
+          bornFrac: fd.lineBorn,
+          ...(reach !== undefined ? { reach } : {}),
+        });
+        if (!src) break; // saturated — the chase arrives short
+        this.attachFront(src, jitter > 0 ? bearing + this.rng.range(-jitter, jitter) : bearing, lane.idx);
+        lane.live++;
+        got++;
+      }
+      if (got > 0 && row.announce) this.terrain?.announce?.(row.announce.text, row.announce.color);
+      if (lane.live === 0 && row.waves) { lane.pending = true; lane.timer = this.rng.range(...row.waves); }
+      fielded += got;
+    }
+    return fielded;
+  }
+
   /** Is this point on one of the section's cached live way discs? The
    *  yieldWays mask — cover, grants, drag and the drawn skin all ask HERE. */
   private wayMasked(run: FrontRun, x: number, y: number): boolean {
@@ -1552,6 +1773,9 @@ export class CreepField {
     // WAITS at the door, timer spent, and fields the wave the moment its
     // condition holds again).
     for (const lane of this.lanes) {
+      // THE IGNITION DIAL's meter bleeds between blows — sustained fire
+      // lights, a stray splash never does (lanes without the row hold 0).
+      if (lane.kindle > 0) lane.kindle = Math.max(0, lane.kindle - lane.kindle * CREEP_CFG.front.ignition.decay * dt);
       if (!lane.pending) continue;
       lane.timer -= dt;
       if (lane.timer > 0) continue;
@@ -1901,7 +2125,7 @@ export class CreepField {
             if (this.now - (m.get(key) ?? -Infinity) < g.every) continue;
             m.set(key, this.now);
           }
-          a.applyStatus(g.status, 0, 1, CREEP_CFG.sourceLabel);
+          a.applyStatus(g.status, this.terrain?.statusDps?.(g.status) ?? 0, 1, CREEP_CFG.sourceLabel);
         }
       }
     }

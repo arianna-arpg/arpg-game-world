@@ -71,11 +71,13 @@ import { MELDS } from './melds';
 import { BIOMES, isAquaticBiome } from '../world/biomes';
 import { CLIMATE_AXES, validateClimateSpecs } from '../world/climate';
 import { validateWeather } from '../world/weather';
-import { validateFog } from '../engine/fog';
+import { FOG_BANKS, validateFog } from '../engine/fog';
 import './fog'; // side-effect: the fog bank defs register before validation
 import './garden'; // side-effect: the Garden kit's kinds register before validation
 import './catacombs'; // side-effect: the second under-country's kinds register before validation
 import './merelake'; // side-effect: the moonlit mere's kinds register before validation
+import './cistern'; // side-effect: the cistern's kinds (the scald lake's grotto lane) register before validation
+import './scald'; // side-effect: the Scald Basin kit's kinds + weather register before validation
 import './lonecrypt'; // side-effect: the lone crypt kit's kinds register before validation
 import { CREEPS, validateCreep } from '../engine/creep';
 import { validateReserves } from '../engine/reserves';
@@ -173,6 +175,10 @@ export function validateContent(): void {
       if (damaging && !r.underflowText) warn(`survival '${r.id}': underflow damage with no underflowText — the doom is nameless`);
       if (r.underflowRampTo !== undefined && !(r.underflowRampSecs && r.underflowRampSecs > 0)) warn(`survival '${r.id}': underflowRampTo without a positive underflowRampSecs`);
       if (r.underflowRampTo !== undefined && r.underflowRampTo < r.underflowPctLifePerSec) warn(`survival '${r.id}': ramp peak ${r.underflowRampTo} below the starting rate`);
+      // A FILL row NEVER COOKS (the scorch law — her ruling): its bad end is a
+      // worn state, never a life tick; World.feedSurvival has no ramp path, so
+      // underflow damage authored on a fill row would be a silent lie.
+      if (r.polarity === 'fill' && damaging) warn(`survival '${r.id}': a fill-polarity row never cooks — underflow damage authored here is inert (the bar's price is its bands)`);
       if (!(r.max > 0)) warn(`survival '${r.id}': max must be > 0`);
     }
   }
@@ -1172,6 +1178,48 @@ export function validateContent(): void {
         if (!STATUS_DEFS[g.status]) warn(`${row.src}: grant names unknown status '${g.status}'`);
       }
     }
+    // THE SCALD KIT's nets (data/scaldkit.ts): a `vent` plants a REGISTERED
+    // fog bank, a `rupture` spends a status that CARRIES a bank (a rupture
+    // of an un-banked status is a no-op by construction — name it), and a
+    // vent-ride leap's column has reach.
+    for (const fx of def.effects) {
+      if (fx.type === 'vent' && !FOG_BANKS[fx.bank]) warn(`skill '${def.id}': vent names unregistered fog bank '${fx.bank}'`);
+      if (fx.type === 'rupture') {
+        const sd = STATUS_DEFS[fx.status];
+        if (!sd) warn(`skill '${def.id}': rupture names unknown status '${fx.status}'`);
+        else if (!sd.bank) warn(`skill '${def.id}': rupture of '${fx.status}', a status with no StatusDef.bank — nothing banks, nothing bursts`);
+        if (!(fx.fraction > 0)) warn(`skill '${def.id}': rupture fraction ${fx.fraction} spends nothing`);
+      }
+    }
+    if (def.delivery.type === 'leap' && def.delivery.vent && !(def.delivery.vent.columnR > 0)) {
+      warn(`skill '${def.id}': vent-ride columnR must be > 0`);
+    }
+    // K2's twins of the same net: a dash's STEAM TRAIL names a registered
+    // bank with real reach, and a still-tempered bank has a clock its bleed
+    // can read (a manual magazine neither builds nor bleeds).
+    if (def.delivery.type === 'dash' && def.delivery.trailVent) {
+      const tv = def.delivery.trailVent;
+      if (!FOG_BANKS[tv.bank]) warn(`skill '${def.id}': trailVent names unregistered fog bank '${tv.bank}'`);
+      if (!(tv.radius > 0) || !(tv.duration > 0)) warn(`skill '${def.id}': trailVent needs a positive radius and duration`);
+    }
+    if (def.useCharges?.still) {
+      const mag = def.useCharges.magazine;
+      const clocked = (def.useCharges.recharge ?? 0) > 0
+        || (mag && mag !== true && mag.drip && def.cooldown > 0);
+      if (!clocked) {
+        warn(`skill '${def.id}': useCharges.still on a bank with no clock (no recharge, no drip magazine) — it can neither build nor bleed`);
+      }
+    }
+  }
+
+  // THE PROC PAYLOAD's own vent net (the skill net's twin — a proc that
+  // plants a fog bank must name a REGISTERED one, else the trigger fires
+  // into a warning at runtime instead of at boot).
+  for (const p of Object.values(PROCS)) {
+    if (p.effect.type === 'vent') {
+      if (!FOG_BANKS[p.effect.bank]) warn(`proc '${p.id}': vent names unregistered fog bank '${p.effect.bank}'`);
+      if (!(p.effect.radius > 0) || !(p.effect.duration > 0)) warn(`proc '${p.id}': vent needs a positive radius and duration`);
+    }
   }
 
   // STRUCTURES: plans resolve their legend, generators exist (and a fixed-seed
@@ -2083,8 +2131,10 @@ export function validateContent(): void {
       }
       // A host-scoped reload only finds its bank when MINTED for a host
       // (convert/meta) or when the skill banks its own rounds — dropped as
-      // a gem and bar-cast, it racks nothing.
-      if (fx.type === 'restoreSkillCharges' && fx.scope !== 'all'
+      // a gem and bar-cast, it racks nothing. ('all' sweeps every bank;
+      // 'still' sweeps THE PATIENT BANKS — both find their banks on any
+      // bar, so neither needs a host.)
+      if (fx.type === 'restoreSkillCharges' && fx.scope !== 'all' && fx.scope !== 'still'
         && !s.useCharges && !s.noDrop) {
         warn(`skill ${s.id}: host-scoped restoreSkillCharges on a droppable skill with no own bank — mark it noDrop (a convert/meta payload) or scope it 'all'`);
       }

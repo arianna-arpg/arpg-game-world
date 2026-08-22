@@ -2787,7 +2787,11 @@ const step = (secs: number): void => {
   // shipped ask — the N3.8 bar).
   {
     // The measured configuration verbatim (the batch-30 sweep's fold ladder
-    // ran under exactly these seeds; hits at 954004/954020/954026).
+    // ran under exactly these seeds; hits at 954004/954020/954026 off base
+    // 954001). Re-measured at THE SCALD BASIN M1, 2026-08-21 — BIOME_FIELD
+    // grew the scald row, so every seeded world's field re-dealt where the
+    // warm∧damp∧low claim holds and base 954001's window lost its hit (the
+    // budget never widens — the base moves): base 954101 hits at boot 2.
     seedGlobalRandom(0xa10f);
     const w = makeSimWorld('warrior', 0x1a28);
     w.player.invulnerable = true;
@@ -2811,7 +2815,7 @@ const step = (secs: number): void => {
     };
     let found: { zoneId: string; cm: WatchCm } | null = null;
     for (let i = 0; i < 12 && !found; i++) {
-      const zid = w.devMintTileset('pinnacle', i, 16, { seed: 954001 + i });
+      const zid = w.devMintTileset('pinnacle', i, 16, { seed: 954101 + i });
       if (!zid) continue;
       const cm = innards.caveEntrances.find(en => en.kind === 'horn_gate');
       if (cm) found = { zoneId: zid, cm };
@@ -3066,9 +3070,12 @@ const step = (secs: number): void => {
     // try budget (the budget never widens — the base moves), base 954501
     // hits at boot 24 = 954525; re-measured at WAVE TWELVE, 2026-08-07 —
     // the pinnacle table grew the peak_roc row, so the same window's pack
-    // TYPE picks re-dealt and the first crown moved up to boot 15): 954516.
+    // TYPE picks re-dealt and the first crown moved up to boot 15): 954516;
+    // re-measured at THE SCALD BASIN M1, 2026-08-21 — BIOME_FIELD grew the
+    // scald row, so every seeded world's field re-dealt where the warm∧damp
+    // ∧low claim holds and the first crown moved up to boot 6): 954507.
     check('T5 a real pinnacle mint carries the crown (the fold at placeZoneAt, the ladder pin)',
-      hitSeed === 954516, hitSeed ? `hit=${hitSeed}` : 'no hit in 26 seeds');
+      hitSeed === 954507, hitSeed ? `hit=${hitSeed}` : 'no hit in 26 seeds');
     if (hitSeed) {
       const lc = lw.actors.find(a => a.defId === 'stormcrown_caller' && !a.dead)!;
       const thegns = lw.actors.filter(a => a.defId === 'levin_thegn' && !a.dead);

@@ -1016,6 +1016,32 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     when: (_def, sup) => supModsStat(sup, ['ambushBonus', 'stealthRegen']),
   },
   {
+    // THE WET RIDER (applyWet_<status> — THE SCALD KIT K2's Boiling Point):
+    // the chance rolls ONLY against a WET body (Actor.isWet — a wading /
+    // swimming / soaked / rain-drenched target). No probe stands its bodies
+    // in water, under a rain front, or behind a soaking splash, so the whole
+    // family reads inert under every standard pilot while working perfectly
+    // in any river, storm or shoreline. Delete this row the day a WET probe
+    // shape exists (a wading pack, a rain-front scenario) and the class
+    // re-enters measurement automatically. The pair-level application means
+    // an EFFECTIVE reading is never touched by this row — if some host DOES
+    // soak its own targets (Kettle Burst does), the measurement stands.
+    note: 'wet-conditional rider (applyWet_<status>) — no probe stands a target in water, rain or a soaking splash, so the chance never rolls',
+    when: (_def, sup) => [...sup.mods, ...(sup.perLevel ?? [])]
+      .some(m => m.stat.startsWith('applyWet_')),
+  },
+  {
+    // THE FAVORED PULSE (tuneFavor — THE SCALD KIT K2's Mineral Tuning):
+    // the payload reads ONLY when the struck body is TUNABLE
+    // (MonsterDef.tune — a crystal, a chord node, the prism kin), because
+    // it reshapes the attunement wash that body pulses. No probe pack
+    // fields a tunable body, so the condition is never raised at all.
+    // Delete this row the day a crystal joins a probe pack and the class
+    // re-enters measurement automatically.
+    note: 'attunement-conditional payload (tuneFavor) — no probe pack fields a TUNABLE body (MonsterDef.tune), so no tone change ever happens',
+    when: (_def, sup) => supModsStat(sup, ['tuneFavor']),
+  },
+  {
     // Homing self-acquires (the wall-aim lane measures it); GUIDED flight
     // steers toward the LIVE cursor, and every probe aim is static — there
     // is nothing to steer. Delete when a cursor-steering pilot ships.

@@ -185,7 +185,11 @@ function provoke(s: Stage, victim: Actor): boolean {
   return victim.aiAwakened && victim.life > 0;
 }
 
-const world = makeWorld(0x9a7e);
+// World seed re-measured at THE SCALD BASIN M1, 2026-08-21 (was 0x9a7e):
+// BIOME_FIELD grew the scald row, so the seeded world's field re-dealt and
+// 0x9a7e's staged toll gate no longer put the warden in the crew's reach
+// within C7's window — 0x9a7f stages the whole ladder A–D clean.
+const world = makeWorld(0x9a7f);
 const first = stage(world);
 check('rig: a toll gate stands on hostable ground', !!first, stagedZone ?? 'no host found');
 

@@ -4089,15 +4089,26 @@ const beatPips: PartPainter = (ctx, r, spec, pal, t) => {
   const ramp = rampFor(spec, pal, 'glow');
   const n = Math.max(2, Math.round(P(spec, 'n', 3)));
   const rate = P(spec, 'rate', 1.6);
+  // THE HONEST MEASURE: when a TELL feeds this part (the tells fabric's
+  // `params.fill` — data/combos.ts's `combo:<rule>` source), the pips are a
+  // METER, not a clock face: the first round(fill × n) stand lit — the
+  // count struck so far toward the grammar's close — the newest pulsing.
+  // Drawn == tested: the pip that reads lit IS the cast in the ring. A
+  // fill-less part keeps the free-running kindle (byte-identical).
+  const fill = P(spec, 'fill', -1);
+  const metered = fill >= 0;
+  const litN = metered ? Math.round(Math.min(1, fill) * n) : 0;
   place(ctx, r, spec, (c, R) => {
     const span = Math.PI * 0.5;
-    const beat = t === undefined ? -1 : Math.floor(t * rate) % n;
+    const beat = metered || t === undefined ? -1 : Math.floor(t * rate) % n;
     const frac = t === undefined ? 0 : (t * rate) % 1;
     for (let i = 0; i < n; i++) {
       const a = -span / 2 + (i / (n - 1)) * span;
       const px = Math.cos(a) * R * 0.85;
       const py = Math.sin(a) * R * 0.85;
-      const live = i === beat ? Math.max(0, 1 - frac) : 0;
+      const live = metered
+        ? (i < litN ? (i === litN - 1 ? 0.7 + 0.3 * Math.abs(Math.sin((t ?? 0) * 5)) : 1) : 0)
+        : (i === beat ? Math.max(0, 1 - frac) : 0);
       c.fillStyle = withAlpha(ramp.base, 0.35 + live * 0.65);
       c.beginPath();
       c.arc(px, py, R * (0.1 + live * 0.06), 0, Math.PI * 2);
@@ -5205,6 +5216,308 @@ const candles: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+// ====================================================== THE SCALD KIT (K1)
+// THE NEW-PIECES PREFERENCE (her word at the kit charter's walk): when a
+// theme wants a part that does not exist, BUILD it — new pieces compound
+// across the bestiary. The geyserkin's sinter weaponry, the pressure organs
+// of the kettle kin, and a body made of steam (charter docs/design/
+// scald-kit.md §5; wearers in data/looks.ts).
+
+/** THE SINTER LANCE — the scald lancer's spear: a long haft tipped with a
+ *  pale travertine CRUST (a mineral head, not a metal one — the basin forges
+ *  nothing), a bead-ring of sinter behind the tip, a steam gleam at the
+ *  point. params: len (default 1.3, tip at +X), w (haft width, default
+ *  0.07). Wear it lowered (y) like the trident. */
+const sinterLance: PartPainter = (ctx, r, spec, pal) => {
+  const bone = pal.bone;
+  const len = P(spec, 'len', 1.3);
+  const w = P(spec, 'w', 0.07);
+  place(ctx, r, spec, (c, R) => {
+    const y = R * 0.6;
+    const tipX = R * len;
+    const headX = tipX - R * 0.42;
+    // Haft.
+    c.strokeStyle = pal.wood.base;
+    c.lineWidth = Math.max(1.5, R * w);
+    c.beginPath(); c.moveTo(-R * 0.45, y); c.lineTo(headX, y); c.stroke();
+    // The sinter bead-ring where head meets haft (three pale beads).
+    for (let i = 0; i < 3; i++) {
+      const bx = headX - R * 0.05 - i * R * 0.09;
+      c.fillStyle = i % 2 ? bone.light : bone.base;
+      c.beginPath(); c.arc(bx, y, Math.max(1.2, R * 0.06), 0, Math.PI * 2); c.fill();
+      c.strokeStyle = withAlpha(bone.outline, 0.6); c.lineWidth = 1; c.stroke();
+    }
+    // The crust head: a long pale spearhead with a mineral facet line.
+    c.fillStyle = bone.light;
+    c.beginPath();
+    c.moveTo(headX, y - R * 0.1);
+    c.lineTo(tipX, y);
+    c.lineTo(headX, y + R * 0.1);
+    c.lineTo(headX + R * 0.08, y);
+    c.closePath();
+    c.fill();
+    c.strokeStyle = withAlpha(bone.outline, 0.75);
+    c.lineWidth = 1;
+    c.stroke();
+    c.strokeStyle = withAlpha(bone.shadow, 0.6);
+    c.beginPath(); c.moveTo(headX + R * 0.08, y); c.lineTo(tipX - R * 0.06, y); c.stroke();
+    // The steam gleam at the point.
+    c.fillStyle = withAlpha('#eafcff', 0.75);
+    c.beginPath(); c.arc(tipX - R * 0.05, y, Math.max(1, R * 0.045), 0, Math.PI * 2); c.fill();
+  });
+};
+
+/** THE PRESSURE-PACK — a back-worn sinter tank with a gauge: a banded
+ *  cylinder across the shoulders, a nozzle aft, and a round GAUGE whose
+ *  needle and hot wash read `params.fill` (the tells fabric's 'rounds:'
+ *  read — a full pack is a loaded finisher). Static bakes show an empty
+ *  gauge. params: fill (0..1), w (tank half-length, default 0.62). */
+const pressurePack: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  const fill = Math.max(0, Math.min(1, P(spec, 'fill', 0)));
+  const hw = P(spec, 'w', 0.62);
+  place(ctx, r, spec, (c, R) => {
+    const tk = R * 0.24; // tank half-height
+    // The tank: a rounded bar across the back.
+    c.fillStyle = ramp.base;
+    c.beginPath();
+    c.moveTo(-tk * 0.3, -R * hw); c.lineTo(tk * 0.3, -R * hw); c.lineTo(tk * 0.3, R * hw); c.lineTo(-tk * 0.3, R * hw); c.closePath();
+    c.fill();
+    c.beginPath(); c.arc(0, -R * hw, tk * 0.3, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(0, R * hw, tk * 0.3, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = withAlpha(ramp.outline, 0.7); c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(-tk * 0.3, -R * hw); c.lineTo(-tk * 0.3, R * hw); c.stroke();
+    c.beginPath(); c.moveTo(tk * 0.3, -R * hw); c.lineTo(tk * 0.3, R * hw); c.stroke();
+    // Bands.
+    c.strokeStyle = withAlpha(ramp.shadow, 0.8);
+    c.lineWidth = Math.max(1, R * 0.04);
+    for (const b of [-0.35, 0, 0.35]) {
+      c.beginPath(); c.moveTo(-tk * 0.34, R * hw * b); c.lineTo(tk * 0.34, R * hw * b); c.stroke();
+    }
+    // The nozzle aft (−X).
+    c.fillStyle = ramp.shadow;
+    c.beginPath(); c.moveTo(-tk * 0.3, -R * 0.08); c.lineTo(-tk * 0.9, -R * 0.05); c.lineTo(-tk * 0.9, R * 0.05); c.lineTo(-tk * 0.3, R * 0.08); c.closePath(); c.fill();
+    // The gauge: a dial over the tank's heart, needle sweeping with the fill,
+    // the face washing hot as the pack fills.
+    const gr = Math.max(2, R * 0.17);
+    c.fillStyle = withAlpha('#ffffff', 0.85);
+    c.beginPath(); c.arc(0, 0, gr, 0, Math.PI * 2); c.fill();
+    if (fill > 0.02) {
+      c.fillStyle = withAlpha('#ff8a3a', 0.18 + 0.5 * fill);
+      c.beginPath(); c.arc(0, 0, gr, 0, Math.PI * 2); c.fill();
+    }
+    c.strokeStyle = withAlpha(ramp.outline, 0.9); c.lineWidth = 1;
+    c.beginPath(); c.arc(0, 0, gr, 0, Math.PI * 2); c.stroke();
+    const ang = -Math.PI * 0.75 + fill * Math.PI * 1.5; // empty = 7 o'clock, full = 5 o'clock
+    c.strokeStyle = '#2a1a12'; c.lineWidth = Math.max(1, R * 0.035);
+    c.beginPath(); c.moveTo(0, 0); c.lineTo(Math.cos(ang) * gr * 0.8, Math.sin(ang) * gr * 0.8); c.stroke();
+    if (fill >= 0.95) {
+      // Loaded: the gauge rings hot.
+      c.strokeStyle = withAlpha('#ffb070', 0.9); c.lineWidth = 2;
+      c.beginPath(); c.arc(0, 0, gr + 1.5, 0, Math.PI * 2); c.stroke();
+    }
+  });
+};
+
+/** THE VAPOR BODY — a body MADE of steam (the vaporling): a stack of soft
+ *  translucent lobes that drift and breathe around the heart, no outline,
+ *  the rim wisping away. A LIVE part (drift by clock) that still bakes as
+ *  a soft cloud. params: n (lobes, default 6), alpha (peak, default 0.55). */
+const vaporBody: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const col = spec.color ?? pal.accent.light;
+  const n = Math.round(P(spec, 'n', 6));
+  const peak = P(spec, 'alpha', 0.55);
+  place(ctx, r, spec, (c, R) => {
+    // The heart: densest, slightly forward.
+    c.fillStyle = withAlpha(col, peak);
+    c.beginPath(); c.ellipse(R * 0.05, 0, R * 0.62, R * 0.52, 0, 0, Math.PI * 2); c.fill();
+    for (let i = 0; i < n; i++) {
+      const ang = hash01(i, 311) * Math.PI * 2 + Math.sin(t * 0.6 + i * 1.3) * 0.35;
+      const d = R * (0.28 + 0.32 * hash01(i, 313)) * (1 + 0.12 * Math.sin(t * 1.1 + i));
+      const lr = R * (0.3 + 0.22 * hash01(i, 317)) * (1 + 0.1 * Math.sin(t * 0.9 + i * 2.1));
+      c.fillStyle = withAlpha(col, peak * (0.5 + 0.3 * hash01(i, 331)));
+      c.beginPath(); c.ellipse(Math.cos(ang) * d, Math.sin(ang) * d, lr, lr * 0.82, 0, 0, Math.PI * 2); c.fill();
+    }
+    // The rim wisps: thin, peeling off the body's edge.
+    c.fillStyle = withAlpha('#ffffff', peak * 0.4);
+    for (let i = 0; i < 4; i++) {
+      const cyc = ((t * 0.5 + hash01(i, 337)) % 1 + 1) % 1;
+      const ang = hash01(i, 347) * Math.PI * 2;
+      const d = R * (0.8 + cyc * 0.5);
+      c.beginPath(); c.arc(Math.cos(ang) * d, Math.sin(ang) * d, R * 0.12 * (1 - cyc) + 0.6, 0, Math.PI * 2); c.fill();
+    }
+  });
+};
+
+/** THE STEAM TRAIL — puffs peeling off a body's wake (−X): a LIVE part that
+ *  streams back and thins. params: n (puffs, default 4), len (trail reach in
+ *  body radii, default 1.4). */
+const steamTrail: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const col = spec.color ?? pal.accent.light;
+  const n = Math.round(P(spec, 'n', 4));
+  const len = P(spec, 'len', 1.4);
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const cycle = 1.6 + hash01(i, 401) * 0.9;
+      const ph = (((t / cycle) + hash01(i, 409)) % 1 + 1) % 1;
+      const x = -R * (0.5 + ph * len);
+      const y = (hash01(i, 419) - 0.5) * R * 0.7 + Math.sin(t * 1.7 + i) * R * 0.08;
+      const swell = Math.sin(ph * Math.PI);
+      c.fillStyle = withAlpha(col, 0.42 * swell);
+      c.beginPath(); c.arc(x, y, Math.max(0.8, R * (0.1 + 0.16 * ph)), 0, Math.PI * 2); c.fill();
+    }
+  });
+};
+
+/** THE PRESSURE BLADDER — a veined, translucent pressure organ that FILLS
+ *  (the kettle bladder's whole body; the fillSac's hotter cousin): the
+ *  membrane with visible veins, a NOZZLE at +X, hot fluid rising AREA-honest
+ *  (radius ∝ √fill) with a glow, the veins reddening and the wall straining
+ *  taut near the brim — "back off" at a glance. params: fill (0..1), ry
+ *  (height ratio, default 0.86), fluid (color override, default hot). */
+const pressureBladder: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  const fill = Math.max(0, Math.min(1, P(spec, 'fill', 0)));
+  const ry = P(spec, 'ry', 0.86);
+  const fluidC = PS(spec, 'fluid') ?? '#ff9a4a';
+  place(ctx, r, spec, (c, R) => {
+    const membrane = (): void => { c.beginPath(); c.ellipse(0, 0, R, R * ry, 0, 0, Math.PI * 2); };
+    // The nozzle at +X (a short stubby spout).
+    c.fillStyle = ramp.shadow;
+    c.beginPath(); c.moveTo(R * 0.85, -R * 0.14); c.lineTo(R * 1.18, -R * 0.08); c.lineTo(R * 1.18, R * 0.08); c.lineTo(R * 0.85, R * 0.14); c.closePath(); c.fill();
+    // The slack membrane.
+    membrane();
+    c.fillStyle = withAlpha(ramp.base, 0.2 + 0.1 * fill);
+    c.fill();
+    // The hot contents: area-honest, glowing.
+    if (fill > 0.02) {
+      const fr = Math.sqrt(fill) * 0.92;
+      const sx = Math.sin(t * 1.9) * R * 0.04 * (1 - fill);
+      c.save();
+      membrane(); c.clip();
+      c.fillStyle = withAlpha(fluidC, 0.55 + 0.3 * fill);
+      c.beginPath(); c.ellipse(sx, 0, R * fr, R * ry * fr, 0, 0, Math.PI * 2); c.fill();
+      c.fillStyle = withAlpha('#ffe0b0', 0.25 + 0.2 * fill);
+      c.beginPath(); c.ellipse(sx - R * fr * 0.25, -R * ry * fr * 0.3, R * fr * 0.3, R * ry * fr * 0.2, 0, 0, Math.PI * 2); c.fill();
+      c.restore();
+    }
+    // The veins: a web over the membrane, reddening with the fill.
+    c.strokeStyle = withAlpha(fill > 0.5 ? '#c83a3a' : ramp.shadow, 0.35 + 0.45 * fill);
+    c.lineWidth = Math.max(0.8, R * 0.04);
+    for (let i = 0; i < 5; i++) {
+      const a0 = hash01(i, 503) * Math.PI * 2;
+      const a1 = a0 + 0.9 + hash01(i, 509) * 0.8;
+      c.beginPath();
+      c.moveTo(Math.cos(a0) * R * 0.3, Math.sin(a0) * R * ry * 0.3);
+      c.quadraticCurveTo(Math.cos((a0 + a1) / 2) * R * 0.65, Math.sin((a0 + a1) / 2) * R * ry * 0.65,
+        Math.cos(a1) * R * 0.95, Math.sin(a1) * R * ry * 0.95);
+      c.stroke();
+    }
+    // The wall: strains taut, then rings hot at the brim.
+    membrane();
+    c.strokeStyle = withAlpha(ramp.outline, 0.6 + 0.3 * fill);
+    c.lineWidth = 1.2 + fill;
+    c.stroke();
+    if (fill >= 0.85) {
+      membrane();
+      c.strokeStyle = withAlpha('#ffd0a0', (fill - 0.85) / 0.15 * 0.85);
+      c.lineWidth = 2.6;
+      c.stroke();
+    }
+  });
+};
+
+/** THE SPOUT ORGAN — a dorsal spout (the spout-hopper's vent): a short
+ *  funnel rising from the back with a steam curl at its lip. Wear at the
+ *  back (x −0.3..−0.5); the tells 'part' channel scales/fades it with the
+ *  rounds read. params: lip (funnel width, default 0.34). */
+const spoutOrgan: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  const lip = P(spec, 'lip', 0.34);
+  place(ctx, r, spec, (c, R) => {
+    // The funnel: a cone seen from above — a ring with a dark throat.
+    c.fillStyle = ramp.base;
+    c.beginPath(); c.ellipse(0, 0, R * lip, R * lip * 0.8, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = withAlpha(ramp.outline, 0.8); c.lineWidth = 1.2; c.stroke();
+    c.fillStyle = withAlpha('#1a2a2c', 0.85);
+    c.beginPath(); c.ellipse(0, 0, R * lip * 0.45, R * lip * 0.36, 0, 0, Math.PI * 2); c.fill();
+    // The steam curl at the lip (a slow puff).
+    const cyc = ((t * 0.7) % 1 + 1) % 1;
+    c.fillStyle = withAlpha('#f0fbfd', 0.5 * (1 - cyc));
+    c.beginPath(); c.arc(R * 0.1 * cyc, -R * lip * (0.6 + cyc * 0.8), R * lip * (0.25 + 0.3 * cyc), 0, Math.PI * 2); c.fill();
+  });
+};
+
+/** THE STEAM-JET LEGS — legs with nozzled hocks (the spout-hopper's stilts):
+ *  `n` leg stubs splayed at the sides, each ending in a small jet that PUFFS
+ *  steam at an intensity of `params.fill` (the tells fabric's 'rounds:' read
+ *  — banked hops show as live jets; dry legs stand cold). LIVE. params: n
+ *  (default 4), fill (0..1, default 0). */
+const steamJetLegs: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const n = Math.round(P(spec, 'n', 4));
+  const fill = Math.max(0, Math.min(1, P(spec, 'fill', 0)));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const side = i % 2 ? 1 : -1;
+      const k = Math.floor(i / 2) - (n / 2 - 1) / 2;
+      const hipX = R * 0.25 * k;
+      const hipY = side * R * 0.5;
+      const footX = hipX - R * 0.35;
+      const footY = side * R * 1.1;
+      // The leg: a bent stilt.
+      c.strokeStyle = ramp.shadow;
+      c.lineWidth = Math.max(1.4, R * 0.12);
+      c.lineCap = 'round';
+      c.beginPath(); c.moveTo(hipX, hipY); c.lineTo(hipX + R * 0.15, side * R * 0.85); c.lineTo(footX, footY); c.stroke();
+      // The hock nozzle.
+      c.fillStyle = ramp.light;
+      c.beginPath(); c.arc(hipX + R * 0.15, side * R * 0.85, Math.max(1.2, R * 0.1), 0, Math.PI * 2); c.fill();
+      // The jet: a puff streaming back (−X) from the nozzle, by the fill.
+      if (fill > 0.05) {
+        const ph = (((t * 1.6) + i * 0.23) % 1 + 1) % 1;
+        c.fillStyle = withAlpha('#eef9fb', 0.55 * fill * (1 - ph));
+        c.beginPath();
+        c.arc(hipX + R * 0.15 - ph * R * 0.55, side * R * (0.85 + ph * 0.25), Math.max(0.8, R * (0.06 + 0.12 * ph)), 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+  });
+};
+
+/** THE SINTER PLATES — mineral plate armor (the terrace warden): overlapping
+ *  travertine scutes banded across the back, facet-lined, a crust that takes
+ *  the color it is given (the tells 'part' channel re-draws it in the worn
+ *  attunement's tone — the plates wear the last blow). params: n (bands,
+ *  default 5), spread (half-width in radii, default 0.8). */
+const sinterPlates: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  const n = Math.round(P(spec, 'n', 5));
+  const spread = P(spec, 'spread', 0.8);
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const u = n > 1 ? i / (n - 1) : 0.5;
+      const x = R * (0.45 - u * 1.05);
+      const hw = R * spread * (0.55 + 0.45 * Math.sin(Math.PI * (0.15 + 0.7 * u)));
+      // One banded plate: a shallow arc across the back, facet-lit.
+      c.fillStyle = i % 2 ? ramp.base : ramp.light;
+      c.beginPath();
+      c.moveTo(x + R * 0.16, -hw);
+      c.quadraticCurveTo(x + R * 0.3, 0, x + R * 0.16, hw);
+      c.lineTo(x - R * 0.08, hw * 0.92);
+      c.quadraticCurveTo(x + R * 0.04, 0, x - R * 0.08, -hw * 0.92);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.7);
+      c.lineWidth = 1;
+      c.stroke();
+      // The facet line.
+      c.strokeStyle = withAlpha(ramp.shadow, 0.45);
+      c.beginPath(); c.moveTo(x + R * 0.1, -hw * 0.6); c.lineTo(x + R * 0.1, hw * 0.6); c.stroke();
+    }
+  });
+};
+
 export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
@@ -5244,6 +5557,9 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   writheMass, hatchPores,
   howdahRig, mortarMaw,
   trebuchetRig, trebuchetArm, shotHopper,
+  // THE SCALD KIT (K1 — the new pieces): the geyserkin's sinter weaponry,
+  // the kettle kin's pressure organs, the vaporling's body of steam.
+  sinterLance, pressurePack, vaporBody, steamTrail, pressureBladder, spoutOrgan, steamJetLegs, sinterPlates,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

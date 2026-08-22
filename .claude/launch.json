@@ -905,6 +905,146 @@
       ],
       "port": 5174,
       "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa62",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5172",
+        "--strictPort"
+      ],
+      "port": 5172,
+      "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa63",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5170",
+        "--strictPort"
+      ],
+      "port": 5170,
+      "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa64",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5168",
+        "--strictPort"
+      ],
+      "port": 5168,
+      "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa65",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5166",
+        "--strictPort"
+      ],
+      "port": 5166,
+      "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa66",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5164",
+        "--strictPort"
+      ],
+      "port": 5164,
+      "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa67",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5162",
+        "--strictPort"
+      ],
+      "port": 5162,
+      "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa68",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5161",
+        "--strictPort"
+      ],
+      "port": 5161,
+      "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa69",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5160",
+        "--strictPort"
+      ],
+      "port": 5160,
+      "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa70",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5159",
+        "--strictPort"
+      ],
+      "port": 5159,
+      "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa71",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5158",
+        "--strictPort"
+      ],
+      "port": 5158,
+      "autoPort": false
     }
   ]
 }

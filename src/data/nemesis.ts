@@ -300,6 +300,22 @@ const CINDER_KIN: SagaPools = {
   ],
 };
 
+// THE KETTLE TONGUE — the geyserkin of the Scald Basin (data/scald.ts):
+// names boiled out of the springs, grudges counted in eruptions.
+const KETTLE_KIN: SagaPools = {
+  first: [
+    'Sintrell', 'Kettlemar', 'Roilvan', 'Fumessa', 'Brimhollow', 'Scaldric',
+    'Travertia', 'Seethwyn', 'Plumella', 'Hissrak', 'Spoutmund', 'Simmeret',
+  ],
+  epithets: [
+    'Who Counts the Beat', 'of the Third Band', 'the Twice-Scalded', 'Steam-Sworn',
+    'Who Stepped Off in Time', 'of the White Terraces', 'the Sinter-Crowned', 'Who Waits on the Current',
+    'the Unboiled', 'of the Great Spout', 'Mist-Shrouded', 'the Patient Kettle',
+    // THE SCALD KIT's kin (K1): the lancers, the hoppers, the ones who hunt the white.
+    'Who Rides the Spout', 'Sinter-Lanced', 'Who Struck Out of the White',
+  ],
+};
+
 // THE WINDS TONGUE — every air that owns a name: gale djinn, the
 // zephyrid rookeries, the sirocco's mirage courts.
 const WINDS_KIN: SagaPools = {
@@ -497,6 +513,8 @@ export const NEMESIS_NAMES = {
     rimebound: WINTERTHEGN_KIN,
     emberkin: CINDER_KIN,
     smoulder: CINDER_KIN,
+    // The Scald Basin's beat-readers speak their own kettle (data/scald.ts).
+    geyserkin: KETTLE_KIN,
     galekin: WINDS_KIN,
     zephyrid: WINDS_KIN,
     sirocco: WINDS_KIN,

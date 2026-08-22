@@ -74,6 +74,14 @@ pass name `'fog'`; knobs in `VIS_CFG.fog`.
 - `FogGrant` can grow damage-over-time fumes (a dps resolver seam is noted
   in `dressOccupants`) — today's grants are pure statuses.
 - Packages may spawn banks directly (`field.spawnBank(def)`) for event fog.
+- CASTS may PLANT banks (the scald kit, `docs/engine/scaldkit.md`): the
+  `vent` SkillEffect → `World.plantVent` → `FogField.plantBank(def, at,
+  reach, life)` — a fixed seat, the cast's reach/life, MORTAL (dies at
+  life's end, never re-gathers). `FogBankDef.occludesSight` makes a kind
+  an OPAQUE MEDIUM to the `'sight'` ray (`FogField.occludesAt` ←
+  `World.opaqueAt` ← `castRay`'s sample — THE VAPOR RIDE): eyes stop at
+  the white, shots still fly. The `steam` kind (data/scaldkit.ts) is the
+  debut; `FogField.occluders` keeps the no-bank path one integer read.
 - Monster fog-seeking: `FogField.nearestBank` is the steering query — the
   `x_seek_fog` AI action (data/fog.ts, registerAIAction — no engine edits)
   rides it: the gloomling's blink back into the murk. Its landed siblings:

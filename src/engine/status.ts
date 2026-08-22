@@ -216,7 +216,54 @@ export interface StatusDef {
     glowAlpha?: number;
     motes?: 'fume' | 'bubbles';
     moteColor?: string;
+    /** THE BANK READ (StatusDef.bank — the scald kit): scale the glow's
+     *  alpha and the mote skin by the worn instance's bank fraction
+     *  (ActiveStatus.bankFrac), so a banked wound READS on the body — a
+     *  faint blister at one application, a steaming one near the cap. The
+     *  afflicted can manage what they can see (show-don't-tell). */
+    byBank?: true;
   };
+  /** THE BANK (THE RUPTURE LAW — the scald kit, 2026-08-21): this status is
+   *  a RESOURCE. An AUTHORED application (one carrying a casterId — a skill
+   *  hit, a proc rider, a kit verb) ADDS its magnitude (dps) to the standing
+   *  instance instead of refreshing or seizing it, so the wound BANKS with
+   *  every blow; `capMul` caps the bank at capMul × the strongest single
+   *  application that fed it (ActiveStatus.bankPeak), `duration` is the
+   *  banked wound's standing clock (× the applier's effectDuration) so a
+   *  kit's scald stands long enough to be MANAGED — decayed, cleansed,
+   *  RUPTURED (the 'rupture' SkillEffect spends a fraction of the bank as a
+   *  burst of the status's element). CASTER-LESS applications — ground
+   *  rows, creep grants, fog, weather, the scald runoff — keep the row's
+   *  own policy and duration untouched (absent == identical for every
+   *  standing terrain sting; probe-pinned). THE WET FOLD: `wetMul` scales
+   *  an authored application onto a WET body (Actor.isWet — the
+   *  WET_STAND_STATUSES stand states or the rain-wet sky stamp); dry
+   *  baseline exact. Generic by construction: any status may declare a
+   *  bank and any rupturer may spend it. */
+  bank?: {
+    /** Cap on the bank, as a multiple of the strongest single application. */
+    capMul: number;
+    /** Standing duration (seconds) of an AUTHORED application (scaled by
+     *  the applier's effectDuration like any other). Default: def.duration. */
+    duration?: number;
+    /** THE WET FOLD multiplier on applications onto wet bodies (default 1). */
+    wetMul?: number;
+  };
+}
+
+/** THE WET READ's stand half (StatusDef.bank.wetMul — the scald fold): a
+ *  body wearing any of these reads as WET. `soaked` is the splash's own
+ *  marker (Kettle Burst wets what it hits); the rest are the water rows'
+ *  stand states. The sky half is Actor.rainWet (World.updateWetSky). */
+export const WET_STAND_STATUSES: readonly string[] = ['wading', 'swimming', 'soaked'];
+
+/** The worn bank as a 0..1 read — dps over the cap the instance's own peak
+ *  sets. Pure; the renderer, the wire and the probes read this one number
+ *  (the tells-wire idiom: derived scalar, never source state). */
+export function bankFracOf(s: { dps: number; bankPeak?: number }, def: StatusDef | undefined): number {
+  const cap = def?.bank?.capMul ?? 0;
+  if (!cap || !s.bankPeak || s.bankPeak <= 0) return 0;
+  return Math.max(0, Math.min(1, s.dps / (s.bankPeak * cap)));
 }
 
 /** GLOBAL AILMENT BASELINE TUNING — the "physical damage is physical damage"
@@ -257,6 +304,38 @@ export const TAUNT_CFG = {
    *  turn (ignoreTaunt bosses). Folded beside the damageVs family. */
   offTargetLess: 0.3,
 } as const;
+
+/** THE SCORCH EROSION — THE SCORCH BAR's whole effect (scald-basin charter
+ *  §10, her fourth/fifth-walk rulings): the bar is a PROGRESSIVE debuff,
+ *  never a cook. Each `sunscorched` stack — and on a bar CARRIER one stack
+ *  == one bar unit (THE EIGHTHS: a stack per eighth of the bar, eight at
+ *  full) — strips this much fire resistance; the higher the bar, the more
+ *  severe the scorch, the more fire resistance is gone (−5%/unit → −40%
+ *  at the full eight). FACTION-BLIND: the band wears on WHOEVER carries the
+ *  bar, so a basking kin's warm window is also its fire-vulnerable window by
+ *  construction (the charter's basker; the M1 consumer reads World.scorchOf).
+ *  DIAL — her word at the fifth walk: "−5% each, up to −40% at eight being
+ *  fine" (a first-pass number she has nodded at; she blesses via
+ *  playthroughs). The sunscorched def authors its mod FROM this, and
+ *  scorchErosionAt reads it back off the def itself (drawn == tested: the
+ *  HUD readout and the sheet agree by construction). */
+export const SCORCH_EROSION = {
+  /** Fire resistance stripped per sunscorched stack (== per scorch-bar unit). */
+  fireResPerUnit: 0.05,
+} as const;
+
+/** The fire-res erosion a scorch bar of `units` wears — the quantized band's
+ *  per-stack fireRes mod × the worn stacks (floor(units), clamped by the
+ *  def's maxStacks), read off the sunscorched def itself so a re-dial of
+ *  the mod, the cap, or the band can never desync a readout from the sheet.
+ *  Returns a POSITIVE fraction (0.2 = 20% stripped); 0 below the first unit. */
+export function scorchErosionAt(units: number): number {
+  const def = STATUS_DEFS.sunscorched;
+  const stacks = Math.min(def.maxStacks ?? 99, Math.floor(units + 1e-6));
+  if (stacks <= 0) return 0;
+  const per = def.mods?.filter(m => m.stat === 'fireRes' && m.kind === 'flat').reduce((s, m) => s - m.value, 0) ?? 0;
+  return per * (def.modsPerStack ? stacks : 1);
+}
 
 export const STATUS_DEFS: Record<string, StatusDef> = {
   burn: {
@@ -372,24 +451,37 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Canopied', color: '#4e7a3c', duration: 1.2,
     mods: [mod('detectability', 'more', -0.35)],
   },
-  /** DESERT HEAT (World.updateHeat): shimmer fields — and, in swelter
-   *  country, bare daylight — bake stacks on; shade (a canopy, a roof, the
-   *  night) dwindles them. Each stack erodes fire resistance — the desert
-   *  softens you up for its burns — and AT THE CAP the buildup ladder
-   *  consumes them into HEATSTROKE: the sun finally wins a round. The world
-   *  manages stacks directly; duration is only a safety TTL. */
+  /** DESERT HEAT — TWO LANES, one status. AMBIENT (World.updateScorch, THE
+   *  SCORCH BAR): shimmer fields — and, in swelter country, bare daylight —
+   *  feed the scorch survival meter, and this status is worn as the bar's
+   *  quantized BAND (stacks = the bar's whole units; the band sync manages
+   *  stacks directly — duration is only a safety TTL); shade/night/water
+   *  bleed the bar at the old cadences. COMBAT (skills, the Sun & Sand
+   *  gems): applied stacks on bar-less bodies ride this def exactly as
+   *  ever — stacking to the cap, where the buildup ladder consumes them
+   *  into HEATSTROKE (on a bar CARRIER a combat stack absorbs into the
+   *  meter instead — heat is heat). Each stack erodes fire resistance —
+   *  the desert softens you up for its burns — and on a carrier that
+   *  erosion IS the bar's whole effect (SCORCH_EROSION: the progressive
+   *  spine — the higher the bar, the more fire res is gone; never a cook). */
   sunscorched: {
     label: 'Sunscorched', color: '#ffb64a', duration: 8,
     element: 'fire',
     stacking: true, maxStacks: 8, buildup: { into: 'heatstroke' },
-    mods: [mod('fireRes', 'flat', -0.05)],
+    mods: [mod('fireRes', 'flat', -SCORCH_EROSION.fireResPerUnit)],
     modsPerStack: true,
   },
   /** What sunscorched builds into at cap (the chill→frozen ladder in fire):
    *  a hard SLOW, never a stun — you keep fighting, you stop striding, and
-   *  the desert makes you pay for every league you refused to respect.
-   *  Consuming the stacks also resets the fire-res erosion: the ladder
-   *  breathes instead of compounding. */
+   *  the desert makes you pay for every league you refused to respect. On
+   *  the COMBAT lane the buildup consume still resets the fire-res erosion
+   *  (the ladder breathes instead of compounding); on a scorch-bar CARRIER
+   *  this is the FULL-STATE band instead — worn while the meter sits at
+   *  max (the legacy desert-cap feel: a SLOW, never a cook — the bar drains
+   *  no life at any height, her fourth-walk ruling; kept at full by her
+   *  fifth-walk word, retired with ONE line: drop the heatstroke row from
+   *  SURVIVAL_RESOURCES.scorch.bands), lifting the moment relief pulls the
+   *  bar off the ceiling. */
   heatstroke: {
     label: 'Heatstroke', color: '#ff7a3a', duration: 5,
     element: 'fire',
@@ -1341,6 +1433,27 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     beneficial: true,
     ghostAlpha: 0.45,
   },
+  // THE VENT DWELLER's two worn states (engine/ventDweller.ts — the Scald
+  // Basin's Geysermaw): SUBMERGED = the body hangs INSIDE its vent, outside
+  // time — timeScale 0 (no thinking, no casting, no cooldowns burning, no
+  // DoTs), concealed (not drawn: the vent stands quiet or broiling), the
+  // world stamping untargetable + invulnerable beside it; SINKING = the
+  // window's ghosted tail (legibility only — hittable to the end; the tells
+  // fabric reads it). Both BENEFICIAL (the dweller's own law — never an
+  // affliction, never eaten by a cleanse), powerInert, worn and stripped by
+  // World.updateVentDwellers off the vent's pure clock — the duration is a
+  // safety net, never the truth.
+  vent_submerged: {
+    label: 'Submerged', color: '#2f8f9c', duration: 3600,
+    beneficial: true, powerInert: true,
+    timeScale: 0, conceals: true,
+    mods: [mod('insightSap', 'flat', 1)],
+  },
+  vent_sinking: {
+    label: 'Sinking', color: '#2f8f9c', duration: 3600,
+    beneficial: true, powerInert: true,
+    ghostAlpha: 0.5,
+  },
 
   living_bomb: {
     label: 'Living Bomb', color: '#ff6a2a', duration: 2.5,
@@ -1448,6 +1561,75 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Brine-Burned', color: '#9fd8c8', duration: 1,
     element: 'chaos', dotType: 'chaos', stackPolicy: 'strongest',
   },
+  // THE SCALD BASIN's pool sting (data/scald.ts sulphur_pool — the brine's
+  // hot cousin): the caustic spring's own row, fire-typed so fire res
+  // answers it, on the terrain-sting lesson above — its OWN id, and the
+  // screen-fx registry deliberately holds NO row for it (a pool rim must
+  // sting, never read as the renderer breaking).
+  sulphur_sting: {
+    label: 'Sulphur-Stung', color: '#d8e04a', duration: 1,
+    element: 'fire', dotType: 'fire', stackPolicy: 'strongest',
+  },
+  // SCALDED (M2b — the downstream's sting): the runoff's wash and the burn
+  // rain's landing, on the caster-less baseline lane — fire-typed so fire
+  // res answers it (and the scorch bar's own erosion bites harder on a
+  // warmed body: the compounding law), short and refreshed while you stand
+  // the wash. The sulphur_sting family: its OWN id, and deliberately NO
+  // screen-fx row (the terrain-stings rule).
+  scalded: {
+    label: 'Scalded', color: '#9fe4ea', duration: 1.2,
+    element: 'fire', dotType: 'fire', stackPolicy: 'strongest',
+    baseline: { dps: 4, perLevel: 1.3 },
+    // THE SCALD BANK (the scald kit K1 — THE RUPTURE LAW, charter
+    // docs/design/scald-kit.md §3.1): an AUTHORED scald (the lancer's bolt,
+    // the kettleback's burst, the geyser-step's splash) BANKS — magnitude
+    // accumulates per blow up to capMul × the strongest application, stands
+    // `duration` seconds, banks ×wetMul onto wet bodies (the inverted douse
+    // law: under scald, wet is the vulnerability), and a 'rupture' verb
+    // spends a fraction of it as a fire burst. Terrain stings (this row's
+    // own 1.2s refresh) are untouched by the bank law. The bank READS on
+    // the body (bodyFx.byBank — a blister glow + rising steam scaled by the
+    // fraction). All DIAL.
+    bank: { capMul: 4, duration: 5, wetMul: 1.5 },
+    bodyFx: { glow: '#ff9a5a', glowScale: 1.6, glowAlpha: 0.3, motes: 'fume', moteColor: '#eafcff', byBank: true },
+  },
+  // SOAKED (the scald kit — the splash's wetness): wet from a dousing
+  // splash (Kettle Burst, the bladder's vent): a short plain marker that
+  // reads as WET for the scald bank's fold (WET_STAND_STATUSES) — the
+  // self-enabling combo: the burst wets you, the follow-up scald banks
+  // harder. No mods; cleanse-harmless; refresh idiom.
+  soaked: {
+    label: 'Soaked', color: '#bfe8f0', duration: 3,
+  },
+  // THE FLOP (ClingSpec.flop — the vent lamprey, M2b): a shaken rider flails
+  // on the ground for its re-latch wait — slow and SOFT: the vulnerable beat
+  // the host's shake earned. Duration == CLING_CFG.flop.grace by data (the
+  // status IS the window). Not beneficial — cleanse-harmless either way.
+  lamprey_flop: {
+    label: 'Flopping', color: '#c8e8f0', duration: 2.4,
+    mods: [mod('moveSpeed', 'more', -0.6), mod('damageTaken', 'more', 0.35)],
+  },
+
+  // THE BASKER's two worn states (data/scald.ts scald_basker — the
+  // cold-blooded plated lounger whose temper is THE SCORCH BAR read
+  // entity-side): World.updateScaldHeat wears exactly one off the body's
+  // own meter (the band-sync idiom — set directly, the duration is only a
+  // safety TTL). COOL = placid and ARMORED (plates sealed: slow, dull,
+  // hard to hurt); WARM = fierce and SOFT (plates open: fast, hard-hitting,
+  // takes more) — counterplay both directions, and because the bar strips
+  // fire res on whoever wears it, the warm window is ALSO the
+  // fire-vulnerable window by construction (charter §8/§10). All DIAL.
+  basking_torpor: {
+    label: 'Torpid', color: '#6a8a90', duration: 1, beneficial: true,
+    mods: [mod('moveSpeed', 'more', -0.35), mod('attackSpeed', 'more', -0.3), mod('castSpeed', 'more', -0.3),
+      mod('damageTaken', 'more', -0.4)],
+  },
+  basking_fury: {
+    label: 'Basking Fury', color: '#ff8a3a', duration: 1, beneficial: true,
+    mods: [mod('moveSpeed', 'more', 0.35), mod('attackSpeed', 'more', 0.35), mod('damage', 'more', 0.4),
+      mod('damageTaken', 'more', 0.25)],
+    bodyFx: { glow: '#ff8a3a', glowScale: 1.7, glowAlpha: 0.2 },
+  },
   slippery: {
     label: 'Slippery', color: '#bfe8ff', duration: 0.7,
     mods: [mod('traction', 'more', -0.85)],
@@ -1523,6 +1705,16 @@ for (const [id, def] of Object.entries(STATUS_DEFS)) {
   STAT_DEFS['apply_' + id] = {
     label: `Chance to apply ${def.label}`, base: 0, min: 0, max: 1, percent: true,
   };
+  // THE WET RIDER (THE SCALD KIT K2 — Boiling Point): apply_<id>'s
+  // water-conditional twin — "chance to apply <status> on hit to WET
+  // targets" (Actor.isWet: wading / swimming / soaked / rain-wet). Rolled
+  // at the same resolveHit sweep as apply_ (world.ts — the two families
+  // merge in STATUS_IDS order, so an un-wet target and an un-armed sheet
+  // walk the RNG stream exactly as before); generic over every status,
+  // since "chill wet targets" is as honest a gem as "scald them".
+  STAT_DEFS['applyWet_' + id] = {
+    label: `Chance to apply ${def.label} to wet targets`, base: 0, min: 0, max: 1, percent: true,
+  };
   STAT_DEFS['damageVs_' + id] = {
     label: `Damage vs ${def.label} (per stack)`, base: 0, percent: true,
   };
@@ -1573,6 +1765,13 @@ export interface ActiveStatus {
   /** WEAK SPOT band on the victim's health bar, as fractions of max life
    *  (stamped at application from StatusDef.weakSpot). */
   window?: { lo: number; hi: number };
+  /** THE BAND WATERMARK (fill-polarity survival meters — the scorch bar):
+   *  the stack count World.syncSurvivalBands last WROTE for this status.
+   *  The absorb law reads it to tell foreign stacks (a combat scorch
+   *  landed by another hand — those climb the bar) from the sync's own
+   *  quantized read (which must simply follow the bar down as it bleeds).
+   *  Never set on ordinary combat statuses; transient like every status. */
+  bandStacks?: number;
   /** BRAND ZAP clock (StatusDef.zapNearby): world time of the next lash. */
   zapAt?: number;
   /** MADNESS clock (StatusDef.lashOut): world time of the next strike. */
@@ -1595,4 +1794,11 @@ export interface ActiveStatus {
    *  paid out INSTANTLY by the next DoT tick through the ordinary typed
    *  pipeline (mitigation discipline, DoT text, kill handling all standard). */
   popAcc?: number;
+  /** THE BANK (StatusDef.bank): the strongest single AUTHORED application
+   *  that fed this instance — the cap's ruler (capMul × this). */
+  bankPeak?: number;
+  /** THE BANK READ: the worn fraction 0..1 (bankFracOf), restamped wherever
+   *  the bank moves (application, rupture) — the renderer's and the wire's
+   *  one derived scalar; clients carry it verbatim. */
+  bankFrac?: number;
 }

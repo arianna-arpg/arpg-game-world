@@ -27,8 +27,9 @@
 // To add a grammar: one entry here. No engine changes.
 // ---------------------------------------------------------------------------
 
-import { comboStat, type ComboRuleDef } from '../engine/sequence';
+import { comboProgress, comboStat, type ComboRuleDef } from '../engine/sequence';
 import { mod, STAT_DEFS } from '../engine/stats';
+import { registerTellSource } from '../engine/tells';
 
 export const COMBO_RULES: Record<string, ComboRuleDef> = {
 
@@ -167,9 +168,57 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
     },
   },
 
+  // --- THE METRONOME LEAN (the Scald Basin's M3 coda — charter §8b) --------
+  // The cadenced-kin grammar leaned into hard: kin whose KIT fires strictly
+  // on their own DRAWN beat, so the duel is rhythm-reading in the country
+  // that already taught the skill (the geysers keep time; so do these).
+  // Their beat pips are a TELL (data/monsters.ts `combo:<rule>` — THE HONEST
+  // MEASURE: the pip that reads lit IS the cast in the ring), never a
+  // free-running clock face: three lit, and the next strike is the big one.
+  // THE KETTLE TATTOO — the geyserkin tempo-drummer's four-count: the SAME
+  // attack four times running closes the tattoo, and a scalding vent bursts
+  // up under the drummer — the geyser's column + shove, called by rhythm.
+  kettle_tattoo: {
+    id: 'kettle_tattoo', name: 'Kettle Tattoo', color: '#e8d06a',
+    blurb: 'Land the SAME attack four times running to close the tattoo: a scalding vent bursts up around you — fire damage, a burn chance, and the blast throws foes clear.',
+    repeat: { n: 4 },
+    gate: { anyTags: ['attack'] },
+    within: 8, icd: 1,
+    effect: { type: 'cast', cast: { skillId: 'tempo_vent_burst', count: [1, 1], at: 'self' } },
+  },
+  // THE TICK-SNAP — the clockcrab's three-count: two ticks of the claw wind
+  // the spring, the third SNAPS (a heavy cone bite that throws).
+  tick_snap: {
+    id: 'tick_snap', name: 'Tick-Snap', color: '#f0d890',
+    blurb: 'Land the SAME attack three times running to wind the spring: the third closes with a heavy snap — physical damage in a cone that throws foes back.',
+    repeat: { n: 3 },
+    gate: { anyTags: ['attack'] },
+    within: 6, icd: 0.75,
+    effect: { type: 'cast', cast: { skillId: 'crab_snap', count: [1, 1], at: 'self' } },
+  },
+
 };
 
 export const COMBO_LIST: ComboRuleDef[] = Object.values(COMBO_RULES);
+
+// THE HONEST MEASURE — the `combo:<ruleId>` TELL SOURCE (engine/tells.ts
+// open registry): progress toward a granted grammar, 0..1 = casts struck /
+// casts to close, read off the SAME ring the matcher reads and CONSUME-AWARE
+// (casts a firing already spent no longer count — the ring never mutates,
+// so the spent line is the rule's last firing seq). Worn on a `beatPips`
+// part channel the pips become a meter: drawn == tested. Monster-side the
+// cadenced kin wear it (the Scald Basin's metronome lean); player-side any
+// future HUD-less tell could. Resolves 0 for bodies carrying no ring.
+registerTellSource('combo', (a, w, arg) => {
+  const rule = arg ? COMBO_RULES[arg] : undefined;
+  const ring = a.castRing;
+  if (!rule || !ring || !ring.length) return 0;
+  const fire = a.comboFire?.get(rule.id);
+  const live = fire && !rule.overlap ? ring.filter(r => r.seq > fire.seq) : ring;
+  if (!live.length) return 0;
+  const { lit, len } = comboProgress(live, rule, w.time, a.sheet?.get('comboWindow') ?? 1);
+  return len > 0 ? Math.max(0, Math.min(1, lit / len)) : 0;
+});
 
 // Register every grammar's equip stat with a DISPLAY identity (the
 // proc_<id> idiom): any surface printing a Modifier renders "Grammar:

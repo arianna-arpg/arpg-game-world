@@ -115,7 +115,56 @@ export const GEM_DROP_CFG = {
   carriedMult: 0.25,
   // (The deep-zone preLevel roll retired with M-ECON: gems always drop at
   // level 1 — leveling is the Ability Essence economy's job.)
+  /** THE GEM FLOOR's lean (GEM_FLOORS — THE SCALD KIT K2): a gem the
+   *  CURRENT zone's country floors into the pool rolls at this multiple of
+   *  its weight while you stand there — "deep zones advertise themselves by
+   *  what falls there". 1 = floored gems drop at their plain weight. */
+  floorMult: 2,
 };
+
+// --- THE GEM FLOOR (THE SCALD KIT K2 — charter §4 "found in the country,
+// owned everywhere") ---------------------------------------------------------
+// A country may FLOOR gems into the kill-path drop pool of its own ground:
+// while the player stands in a zone whose tileset a floor row names, the
+// row's skill/support gems drop THERE even before the account has unlocked
+// them (the account-wide pool — isSkillUnlockedForDrop — stays the law
+// everywhere else, and the vendor shelf / the standing order's odds never
+// read a floor: only the mint path does, World.dropGemAt → rollSkillGem).
+// The NO-LOCK LAW's acquisition half: found in the scald, then everywhere
+// once the ledger opens the pool. Registry, never literals: a new country's
+// floor is one registerGemFloor row in its own data leaf.
+export interface GemFloorDef {
+  id: string;
+  /** TilesetDef ids whose zones floor these gems. */
+  tilesets: readonly string[];
+  skills?: readonly string[];
+  supports?: readonly string[];
+}
+export const GEM_FLOORS: Record<string, GemFloorDef> = {};
+export function registerGemFloor(def: GemFloorDef): void {
+  GEM_FLOORS[def.id] = def;
+  gemFloorCache.clear();
+}
+/** The floor standing on a tileset — every row naming it, merged. Cached
+ *  per tileset id (rebuilt when a row registers); empty sets for unfloored
+ *  ground, so the hot drop path pays one Map read. */
+export interface GemFloor { skills: ReadonlySet<string>; supports: ReadonlySet<string> }
+const EMPTY_FLOOR: GemFloor = { skills: new Set(), supports: new Set() };
+const gemFloorCache = new Map<string, GemFloor>();
+export function gemFloorFor(tilesetId: string | undefined): GemFloor {
+  if (!tilesetId) return EMPTY_FLOOR;
+  let f = gemFloorCache.get(tilesetId);
+  if (f) return f;
+  const skills = new Set<string>(), supports = new Set<string>();
+  for (const row of Object.values(GEM_FLOORS)) {
+    if (!row.tilesets.includes(tilesetId)) continue;
+    for (const id of row.skills ?? []) skills.add(id);
+    for (const id of row.supports ?? []) supports.add(id);
+  }
+  f = skills.size || supports.size ? { skills, supports } : EMPTY_FLOOR;
+  gemFloorCache.set(tilesetId, f);
+  return f;
+}
 
 /** Weighted vestige pick from the registry — the kill path and every
  *  loot table share the one distribution. */

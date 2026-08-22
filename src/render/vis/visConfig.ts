@@ -840,6 +840,15 @@ export const VIS_CFG = {
     },
   },
 
+  /** THE VENT-RIDE (vis/ventRideLayer.ts — LeapDelivery.vent, the scald
+   *  kit's geyser-step family): the cast's broil mouth as a fraction of the
+   *  column radius, the screen-up LIFT the rising body rides at the arc's
+   *  apex (px), and the share of the flight the departure jet still stands
+   *  (the column collapses behind the leaper). Presentation only — the
+   *  tested column is the engine's (LeapDelivery.vent.columnR). Ablate
+   *  pass name: 'geysers' (the vents' own). */
+  ventRide: { broilMouthFrac: 0.55, lift: 30, jetFrac: 0.55 },
+
   /** THE FOG LAYER (vis/fogLayer.ts — the render half of engine/fog.ts).
    *  Lobe alphas/motion come from the sim (one truth with the hit test);
    *  these knobs only shape presentation. Ablate pass name: 'fog'. */
@@ -990,6 +999,23 @@ export const VIS_CFG = {
      *  into noise PATCHES (world units per noise cell below); the rest
      *  sift them thin and even. */
     patchyChance: 0.65, patchScale: 380,
+  },
+
+  /** THE SOFT DRY (vis/dressFade.ts): COSMETIC dress doodads mid-evaporation
+   *  (blast pocks, non-solid weather dress) ease out in the DRAW — one
+   *  continuous alpha + drawn-scale ramp over the engine's deliberately
+   *  quantized shrink (World.EVAP, untouched), hitting ~0 before the
+   *  minRadius retirement so the splice lands invisible. */
+  dressFade: {
+    /** Seconds of remaining evap life over which alpha dissolves to 0. */
+    easeSec: 1.4,
+    /** Max alpha fall per second (glides the cap's dry-NOW stamp); the
+     *  deadline-honest floor in softDryFace still lands 0 by splice time. */
+    fadeRate: 1.5,
+    /** Max drawn-scale fall per second (same glide, size channel). */
+    scaleRate: 1.2,
+    /** Faces at or below this alpha skip the draw entirely. */
+    skipBelow: 0.02,
   },
 
   /** WALL EYES (vis/wallEyes.ts + ground.ts bakeWallEyes): the flesh

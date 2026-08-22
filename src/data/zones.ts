@@ -24,6 +24,7 @@ import type { FluxSpec } from '../engine/flux';
 import type { RecoveryPolicy } from '../world/regions';
 import type { SpanRowSpec } from '../engine/spans';
 import type { TrackSpec } from '../engine/tracks';
+import type { ZoneGeyserSpec } from '../engine/geysers';
 import type { TrapworkSpec } from '../engine/trapworks';
 import type { ZoneLiteSpec } from '../engine/lite';
 import { dimensionDef } from '../world/dimensions';
@@ -799,6 +800,21 @@ export interface ZoneTheme {
    *  under the blade there). Rider poses derive from the shared clock —
    *  deterministic across seats and resumes by construction. */
   tracks?: TrackSpec[];
+  /** TIMED GEYSER VENTS (the geyser fabric, engine/geysers.ts): how many
+   *  beat_vent fixtures of each class this zone stands up at LOAD, and how
+   *  many CURRENT BANDS the mint deals (vents in a band erupt together on
+   *  the band's mint-rolled clock — the underground-current fiction).
+   *  Placed on a SALTED stream (never moves layout/spawn rng — the
+   *  fog-bank discipline); eruption state is a pure function of the synced
+   *  clock, so seats and resumes agree by construction. No spec = no
+   *  vents, byte-identical. */
+  geysers?: ZoneGeyserSpec;
+  /** THE REGROWTH CYCLE (data/scald.ts REGROWTH_CFG — World.updateCharRegrowth):
+   *  this zone's ASHFIELD relaxes toward the green flush and then the meadow
+   *  over minutes, fire-followers standing up through the ash — the Char's
+   *  honest second half (charter §5), zone-memory-persisted. Opt-in per
+   *  theme: everywhere else a wildfire's ash stays ash (byte-identical). */
+  regrowth?: true;
   /** TRAPWORK MECHANISMS (engine/trapworks.ts) for FIXED layouts — plates,
    *  triplines and their wired effects at authored coordinates; generated
    *  zones author trapworks from their own gen pass instead (plates seated
@@ -814,11 +830,13 @@ export interface ZoneTheme {
    *  theme keeps a permanent snow floor and lets snowfall deepen it; a hot
    *  one sheds cover in moments. Future thermal systems read the same dial. */
   heat?: number;
-  /** OPEN-SUN SWELTER (World.updateHeat): zones that declare this bake
-   *  sunscorch stacks under bare daylight — no shimmer pocket required —
-   *  scaled by the zone's own baked climate temperature. The desert
+  /** OPEN-SUN SWELTER (World.updateScorch — THE SCORCH BAR's ambient
+   *  source): zones that declare this feed the scorch survival meter under
+   *  bare daylight — no shimmer pocket required — scaled by the zone's own
+   *  baked climate temperature; the worn sunscorch stacks are the bar's
+   *  derived bands, at the exact old cadences (THE REFIT LAW). The desert
    *  country's tax: unshaded daylight is the hazard, shade/night/water the
-   *  relief, shimmer fields the fast lane. 0/absent = only shimmer bakes
+   *  relief, shimmer fields the fast lane. 0/absent = only shimmer feeds
    *  (every non-desert biome, byte-identical). ~0.85 waste, 1 erg,
    *  1.2 glasspan. All cadence math in HEAT_CFG. */
   swelter?: number;

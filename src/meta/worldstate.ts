@@ -177,6 +177,12 @@ export interface SavedZoneMemory {
   /** SOLVED riddle run-ids (the puzzle fabric) — solved stays solved for
    *  the memory's life; never gates progression. */
   puzzlesDone?: string[];
+  /** THE REGROWTH CYCLE's authored clock (the Scald Basin's Char,
+   *  World.updateCharRegrowth): the world time the zone's authored burn
+   *  ground was 'born' — a walked Char zone is visibly further along its
+   *  ash → flush → meadow cycle when you return (world time keeps counting
+   *  while you are away). One number; lives and dies with the memory. */
+  charBorn?: number;
 }
 
 /** The procession rider, plain JSON (mirrors the engine's shape). */

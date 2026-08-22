@@ -102,6 +102,21 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
     ],
   },
   {
+    // THE DEPARTURE SPLASH (THE SCALD KIT K2 — the Afterspray support):
+    // moveExplode's one-ended sibling, read at World.moveBlast with phase
+    // 'depart'. The three departures the engine actually pays: a dash's
+    // launch, a blink's vanish-point, a leap's take-off. Deliberately NOT
+    // the arrival (that is moveExplode's whole lane) and not the
+    // movement-TAGGED bodies that never travel — the moveTrail row below
+    // names that same residue.
+    kind: 'stat', key: 'departSplash',
+    deliveries: ['dash', 'blink', 'leap'],
+    site: 'World.moveBlast(phase: \'depart\') — the dash launch, the blink vanish-point, the leap take-off',
+    inertOk: [
+      { support: 'afterspray', why: `movement-TAGGED bodies that do not themselves travel (temporal_pad, gate_shift, mark, gyre_hurl) — the same residue the moveTrail row names; the 'aoe' grant still lands for the gems beside it`, since: '2026-08-21' },
+    ],
+  },
+  {
     kind: 'stat', key: 'moveTrail',
     deliveries: ['dash', 'blink', 'leap', 'self'],
     // 2026-07-22: dash odometers, blink departure+arrival, leap launch+

@@ -26,6 +26,7 @@ import {
 import { gateLevelNeeds, gateMet, gateRowLabel, gateRowMet, type GateRow } from './gates';
 import { VENDOR_CFG } from '../data/vendors';
 import { LEDGER_ESSENCE_TOUCHED } from '../data/essences';
+import { SCALD_KIT_UNLOCK_LEDGERS } from '../data/scaldkit';
 // Pure fabric leaves (no engine cycle): the HARD-LESSON ledger keys the
 // discovery web reads — seized by a grip, sprung a trap with your own feet.
 import { LEDGER_SEIZED } from '../engine/grab';
@@ -586,6 +587,20 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_siegecraft', kind: 'skill', cost: 180, reqLedger: 'ordnance_yard_entered', label: 'Skill Pool: Siegecraft',
     description: 'Hellbore Mortar may drop. The Ordnance Yard taught you what a gun needs: somewhere to stand, something to feed it, and someone it hates.',
     payload: { skillIds: ['hellbore_mortar'] } },
+  // THE SCALD (THE SCALD KIT K2 — charter docs/design/scald-kit.md §4,
+  // ratified): the basin's own arts, ALREADY FOUND. Its ground floors these
+  // gems into its drops (data/scaldkit.ts THE GEM FLOOR — you meet them in
+  // the terraces long before you own them); this row is the OTHER half of
+  // the no-lock law — it carries them into the account-wide pool, so a
+  // scald gem drops in the desert, in the grove, at Brandt's counter and on
+  // the standing order's shelf. THE GATEWORK's ANY-OF (SCALD_KIT_UNLOCK
+  // _LEDGERS): the Great Geyser's mouth, the Geysermaw itself, or the
+  // Cistern's descent — whichever road you crossed first is your tuition.
+  { id: 'gem_skills_scald', kind: 'skill', cost: 190,
+    reqAnyOf: SCALD_KIT_UNLOCK_LEDGERS.map(ledger => ({ ledger })) as readonly GateRow[],
+    tease: true, label: 'Skill Pool: the Scald',
+    description: 'Scalding Lash, Kettle Burst, Boil Over, Head of Steam, Blowhole, Geyser-Step, Vent Hop, Vent Veil may drop anywhere. The basin taught you what water does to fire: nothing at all, and everything to whoever is standing in it.',
+    payload: { skillIds: ['scalding_lash', 'kettle_burst', 'boil_over', 'head_of_steam', 'blowhole', 'geyser_step', 'vent_hop', 'vent_veil'] } },
   // THE MIMIC'S LESSON (engine/mimic.ts — the blue-mage lane): surfaced the
   // way the idea itself arrives — by killing ONE chest that pretended to be
   // treasure. The bestiary ledger IS the gate (bestiaryKey contract), so
@@ -639,6 +654,13 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'sup_scentcraft', kind: 'support', cost: 140, reqLedger: 'nest_entered', label: 'Support Pool: Scentcraft',
     description: 'Heavy Musk, Candied Scent, Startling Reek may drop. What clings, what tempts, what routs.',
     payload: { supportIds: ['heavy_musk', 'candied_scent', 'startling_reek'] } },
+  // THE SCALD's gem side (THE SCALD KIT K2) — the same ANY-OF tuition as the
+  // skill pool above, sequenced behind it: the arts first, then the gems
+  // that temper them.
+  { id: 'sup_scald', kind: 'support', cost: 150, requiresUnlock: 'gem_skills_scald', tease: true,
+    label: 'Support Pool: the Scald',
+    description: 'Boiling Point, Pressure Seal, Afterspray, Vaporize, Mineral Tuning may drop anywhere. The basin\'s tempers: what boils, what waits, what it leaves behind.',
+    payload: { supportIds: ['boiling_point', 'pressure_seal', 'afterspray', 'vaporize', 'mineral_tuning'] } },
   { id: 'sup_echoes', kind: 'support', cost: 200, reqLevel: 1, label: 'Support Pool: Echoes',
     description: 'Phantasmal Echo, Ancestral Call, Vessel of Shadow, Synchronicity may drop.',
     payload: { supportIds: ['phantasmal_echo', 'ancestral_call', 'vessel_of_shadow', 'synchronicity'] } },

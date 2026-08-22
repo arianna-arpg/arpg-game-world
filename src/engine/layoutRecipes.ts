@@ -12,6 +12,11 @@
 //              mid-course, D2 Act 5), or a plain forded river
 //   expanse    wide-open country: heavy decoration + landmark headroom
 //   lakelands  great lakes + sparse rock packs (pure composition proof)
+//   lakeshore  THE LAKE zone type (engine/lake.ts — registered from its own
+//              leaf; `lake` itself is the furniture landmark's id): one vast
+//              wobble-rimmed water stamp the zone conforms to — the walkable
+//              ring, the wadeable shelf + isles, the refused (or swimmable)
+//              deep; the Scald Basin's sulphur heart
 //   metropolis a street lattice with building plots — intact (roofed plan
 //              houses) or ruined (broken walls + rubble) by `ruined`
 //
@@ -19,6 +24,8 @@
 // universal reachability invariant backstops whatever composition follows.
 // ---------------------------------------------------------------------------
 
+import './lake'; // side-effect: registers the 'lake' recipe (its own leaf — the massif/settled idiom)
+import './ventcauldron'; // side-effect: registers the 'ventcauldron' den recipe (the great geyser's cauldron — its own leaf)
 import { vec, type Vec2 } from '../core/math';
 import { Rng } from '../core/rng';
 import type { ExitRoadSpec, ZoneDef } from '../data/zones';

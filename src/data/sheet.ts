@@ -171,12 +171,12 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       // Triggers & procs
       'triggerChance', 'triggerThreshold', 'triggerPower', 'procDepth',
       // Movement casting
-      'castMobility', 'moveExplode', 'moveTrail',
+      'castMobility', 'moveExplode', 'moveTrail', 'departSplash',
       // Field interplay & oddments
       'conduction', 'suffusion', 'poolCap', 'embedIcd', 'tetherWidth',
       'bashPower', 'bashFloor', 'bashInvert',
       'durationAuraCap', 'auraEsRecharge', 'auraEsDelay',
-      'reflex', 'thirstless',
+      'reflex', 'thirstless', 'tuneFavor',
       'pourPower_surge', 'pourPower_settle', 'pourPct_surge', 'pourPct_settle', 'pourPrime',
       'remnantChance', 'remnantOnCast',
       // Borrowed kits — the mimic's stolen arts and the possession seam's
@@ -232,6 +232,7 @@ export const SHEET_VITALS: string[] = ['life', 'mana', 'moveSpeed'];
 export interface SheetFamilySeat { prefix: string; cat: string; blurb: string }
 export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
   { prefix: 'apply_', cat: 'offense', blurb: 'Chance your hits inflict this status.' },
+  { prefix: 'applyWet_', cat: 'offense', blurb: 'Chance your hits inflict this status on a WET target — wading, swimming, soaked or rain-drenched — and nothing at all on a dry one.' },
   { prefix: 'damageVs_', cat: 'offense', blurb: 'Increased damage per stack of this status already on the target.' },
   { prefix: 'popPower_', cat: 'offense', blurb: 'Scales the burst a reapplication detonates from this status.' },
   { prefix: 'convert_', cat: 'offense', blurb: 'A fraction of one damage type dealt as another instead: conversion, not addition.' },
@@ -643,6 +644,7 @@ const STAT_BLURBS: Record<string, string> = {
   castMobility: 'Lets you walk while casting.',
   moveExplode: 'Your movement skills explode at their start and end points.',
   moveTrail: 'Your dashes leave a burning trail.',
+  departSplash: 'Your movement skills erupt at the point you LEFT, never where you land.',
   conduction: 'Projectiles passing through elemental fields inherit the element.',
   suffusion: 'Projectiles crossing YOUR ground effects carry them onward: the field re-blooms where the flight ends.',
   poolCap: 'Raises the caps of your banked damage pools.',
@@ -656,6 +658,7 @@ const STAT_BLURBS: Record<string, string> = {
   auraEsDelay: 'Your auras shorten allied energy-shield recharge delays.',
   reflex: 'The skill fires THROUGH your own casts, channels and dashes without disturbing them.',
   thirstless: 'Thirst gates are waived: a brimming pool no longer refuses the drink.',
+  tuneFavor: 'A crystalline body YOU re-tune takes your side: its attunement spares your enemies and holds longer on your allies.',
   pourPower_surge: 'Scales the SURGE half of your two-stream pours: the fast slug of percent-of-maximum at the front of a drink.',
   pourPower_settle: 'Scales the SETTLE half of your two-stream pours: the long mend behind the surge.',
   pourPct_surge: 'Adds flat percent-of-maximum to the surge lane of your pours. The surge never grows with skill level; this is its investment road.',

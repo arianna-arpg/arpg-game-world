@@ -5366,8 +5366,8 @@ const mawPit: GroupPainter = (env, group, def) => {
 };
 
 /** HEAT SHIMMER — wavering desert air: rising serpentine heat-lines and a
- *  faint hot lens over the ground. Barely-there by design; the sunscorch
- *  stacks it feeds are the teeth (World.updateHeat). */
+ *  faint hot lens over the ground. Barely-there by design; the scorch bar
+ *  it feeds is the teeth (World.updateScorch). */
 const shimmer: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { color?: ColorSpec };
   const { ctx, time } = env;

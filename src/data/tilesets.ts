@@ -9755,6 +9755,522 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'pyres', weight: 1.5 }],  // will-o-wisp country: light that ISN'T lying
   },
 
+  // ==========================================================================
+  // THE SCALD BASIN — the country of the kept beat (charter
+  // docs/design/scald-basin.md; M1 THE COUNTRY): a hydrothermal basin where
+  // the deep heat arrives as WATER — geysers erupting on a learnable beat
+  // (engine/geysers.ts), sinter terraces, mudpots, steam, a burn flank, a
+  // sulphur heart. Staged rim → heart by depthAffinity (the garden/desert
+  // model): SINTER TERRACES {to:.35} → GEYSER FIELDS {to:.72} (M0's spike
+  // face, promoted) → THE CHAR flank band {from:.30,to:.85} (the
+  // glimmervale threading model) → SULPHUR POOLS heart {from:.65}, with THE
+  // STEAM GALLERIES below (the caveFace pool). Palette per charter §7:
+  // MINERAL PRISMATICS — travertine white, pool cyan-to-orange banding,
+  // sulphur yellow, steam white — never char/ember/basalt (the Char alone
+  // wears its burn, as regrowth country, not volcanic ground). Kit in
+  // data/scald.ts; kin in data/monsters.ts (faction 'geyserkin'); docs in
+  // docs/engine/scald.md. Every number is a DIAL (unblessed).
+  // ==========================================================================
+
+  // THE SINTER TERRACES — the mineral gate (rim): travertine shelves and
+  // prism pools in banded color, shallow and gentle — the country's beauty
+  // shot and its tutorial: small hiss-vents keep a fast, harmless beat you
+  // learn for free.
+  sinter_terraces: {
+    id: 'sinter_terraces', biome: 'scald',
+    // THE COUNTRY STAGING: the rim — the doorstep, thinning fast once the
+    // fields properly begin.
+    depthAffinity: { to: 0.35, fadeOut: 0.12 },
+    nameFirst: ['Sinter', 'Travertine', 'Whiteshelf', 'Prismwater', 'Terraced', 'Milkwater', 'Opaline', 'Rimstone', 'Pearlcrust', 'Morningsteam'],
+    nameSecond: ['Terraces', 'Shelves', 'Stairs', 'Pools', 'Steps', 'Benches', 'Springs'],
+    theme: {
+      floor: '#6a6450', grid: '#5a5446', border: '#a09a86',
+      obstacle: '#8a8470', obstacleEdge: '#cfc8b4', accent: '#e8d06a',
+      water: '#2f97a4', mud: '#5a4a36', sand: '#cfc6aa', tree: '#5a6a3a',
+      ground: {
+        scale: 1.1, strength: 1.0, bias: 0.6, alpha: 0.5,
+        // Pale crusts rising to white shelves; brightening toward the pools.
+        palette: ['#4a4538', '#6a6450', '#8d8872', '#b4ae96', '#d8d0b8'],
+        coast: { reach: 90, shift: 0.35, kinds: ['water', 'prism_pool'] },
+      },
+      fog: { banks: [1, 2], kinds: [{ id: 'mist' }] },
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.3 }],
+      heat: 1,
+      // The free tutorial: hiss vents keep a fast harmless beat; one or two
+      // true geysers so the lesson has a point.
+      geysers: { hiss: [6, 10], geyser: [1, 2], bands: [2, 3] },
+      // THE STEAM-WISP TIDE (M3 coda): thinner on the gentle rim.
+      lite: {
+        swarms: [{
+          monsterId: 'steam_wisp', pockets: [2, 4], size: [6, 10],
+          seat: 'vents', when: { surge: true },
+          regen: { rate: 2.0, quietSec: 4, calmRadius: 110 },
+        }],
+      },
+    },
+    sizeW: [2300, 3200], sizeH: [1600, 2300], ellipseChance: 0.25,
+    compositions: [
+      { composition: 'terrace_stair', chance: 0.5 },
+      { composition: 'kettle_flat', chance: 0.15 },
+    ],
+    layout: [
+      { kind: 'prism_pool', count: [4, 7] },
+      { kind: 'sinter_shelf', count: [5, 9] },
+      { kind: 'mudpot', count: [1, 2] },
+      { kind: 'sinter_cone', count: [1, 2] },
+      { kind: 'steam_pocket', count: [2, 4] },
+      { kind: 'water', count: [1, 2], radius: [40, 80] },
+      { kind: 'reeds', count: [1, 3] },
+      { kind: 'rocks', count: [1, 2] },
+    ],
+    packs: {
+      count: [3, 5], size: [2, 4],
+      table: [
+        { id: 'stilt_strider', weight: 3 },
+        { id: 'mudpot_skipper', weight: 3 },
+        { id: 'kettleback', weight: 2, presence: { from: 4, fadeIn: 2 } },
+        { id: 'vent_shaman', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'scald_basker', weight: 1, presence: { from: 8, fadeIn: 3 } },
+        // M2b — the terraces' mineral tank: the prism snail re-tunes to your
+        // blows and pulses the color back (the attunement fabric, wild).
+        { id: 'prism_snail', weight: 2, presence: { from: 3, fadeIn: 2 } },
+        // M3 coda — the clockcrab's three-count is the rim's rhythm tutor
+        // (the free lesson beside the hiss vents); a rare drummer deeper.
+        { id: 'clock_crab', weight: 3 },
+        { id: 'tempo_drummer', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        // THE SCALD KIT K1 — wave 3 on the rim: spout-hoppers skirmish the
+        // terraces (the geyser-step's monster half taught early), the
+        // terrace warden stands the prism pools (PRISM's armored face).
+        { id: 'spout_hopper', weight: 2, presence: { from: 3, fadeIn: 2 } },
+        { id: 'terrace_warden', weight: 2, presence: { from: 6, fadeIn: 3 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'bounty', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+    ],
+  },
+
+  // THE GEYSER FIELDS — the signature face (M0's spike face, PROMOTED at M1:
+  // biome + staging): the beat at full grammar — vent families on THE
+  // CURRENT BANDS (engine/geysers.ts), the broil telegraph, the column,
+  // spectacle downstream (burn rain + runoff are M2's). Bright water on
+  // pale crusts — the land's light is the SKY's, scattered through steam
+  // (the §7 inversion of volcanic's own glow). Packs a shade sparser than
+  // the wild countries: the terrain is the roster's front rank here.
+  geyser_fields: {
+    id: 'geyser_fields', biome: 'scald',
+    // THE COUNTRY STAGING: the broad middle — fading IN past the terraces'
+    // gate (the rim reads as the terraces, never a coin flip) and thinning
+    // toward the heart, where the sulphur pools take over (the Char threads
+    // the band between).
+    depthAffinity: { from: 0.3, fadeIn: 0.22, to: 0.72, fadeOut: 0.15 },
+    nameFirst: ['Seething', 'Steaming', 'Sinterbound', 'Hissing', 'Roiling', 'Whitecrust', 'Kettledeep', 'Springline', 'Mudpot', 'Vaporlaced'],
+    nameSecond: ['Fields', 'Springs', 'Terraces', 'Basin', 'Flats', 'Vents', 'Pans', 'Kettles'],
+    theme: {
+      floor: '#474034', grid: '#3a352a', border: '#8a8168',
+      obstacle: '#5c584a', obstacleEdge: '#8f8a76', accent: '#e8d06a',
+      water: '#2f97a4', mud: '#4e4432', sand: '#a3947a', tree: '#5a6a3a',
+      ground: {
+        scale: 1.2, strength: 1.05, bias: 0.52, alpha: 0.5,
+        // Travertine banding: peat-dark seams rising to white-crust shelves.
+        palette: ['#2c281f', '#3e382a', '#565040', '#6f6753', '#8d8266'],
+        coast: { reach: 80, shift: 0.3, kinds: ['water', 'prism_pool', 'sulphur_pool'] },
+      },
+      // Steam is the country's air: living mist banks + a mild shimmer (the
+      // true 'scald_mist' FRONT now rides the biome's climate, data/scald.ts).
+      fog: { banks: [2, 3], kinds: [{ id: 'mist' }] },
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.45 }],
+      heat: 1,
+      // THE BEAT (engine/geysers.ts): the face's whole argument. Vent
+      // counts per class + the current-band deal — all DIAL, locked as
+      // shipped at her fourth walk.
+      geysers: { hiss: [5, 8], geyser: [6, 9], great: [1, 2], bands: [3, 4] },
+      // THE STEAM-WISP TIDE (M3 coda — her cascade: surge → eruptions →
+      // steam → wisps): vapor motes poured OFF THE VENTS while THE SURGE
+      // HOUR holds (`when: { surge: true }` — the beat clause, engine/
+      // lite.ts) and receding after; pockets seat at the vents at boot
+      // regardless (the conditioned pour's law; `seat: 'vents'`). No
+      // announce — the steam IS the announcement (show-don't-tell).
+      lite: {
+        swarms: [{
+          monsterId: 'steam_wisp', pockets: [3, 5], size: [10, 16],
+          seat: 'vents', when: { surge: true },
+          regen: { rate: 2.4, quietSec: 4, calmRadius: 110 },
+        }],
+      },
+    },
+    sizeW: [2400, 3200], sizeH: [1800, 2400], ellipseChance: 0.2,
+    compositions: [
+      { composition: 'terrace_stair', chance: 0.12 },
+      { composition: 'kettle_flat', chance: 0.18 },
+    ],
+    layout: [
+      // Open ground on purpose — the field must READ. Pools are the
+      // springs the vents stand among; pale furniture stays sparse.
+      { kind: 'water', count: [3, 5], radius: [40, 90] },
+      { kind: 'sulphur_pool', count: [1, 3] },
+      { kind: 'prism_pool', count: [1, 2] },
+      { kind: 'sinter_shelf', count: [2, 4] },
+      { kind: 'steam_pocket', count: [2, 4] },
+      { kind: 'sinter_cone', count: [1, 2] },
+      { kind: 'reeds', count: [2, 4] },
+      { kind: 'standing_stone', count: [1, 2] },
+      { kind: 'dead_tree', count: [1, 3] },
+      { kind: 'stump', count: [0, 2] },
+      // THE SHELTER SEATS (M2b): sinter overhangs — dry seats under the
+      // great vents' burn rain (DoodadRule.shelter → spareRoofed).
+      { kind: 'sinter_overhang', count: [2, 4] },
+    ],
+    packs: {
+      count: [4, 6], size: [3, 5],
+      table: [
+        { id: 'vent_shaman', weight: 3 },
+        { id: 'stilt_strider', weight: 3 },
+        { id: 'kettleback', weight: 2 },
+        { id: 'mudpot_skipper', weight: 2 },
+        { id: 'scald_basker', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'marsh_adder', weight: 1, presence: { to: 14, fadeOut: 6 } },
+        // M2b — the downstream's kin: the matron's clutches hatch under the
+        // rain, the lampreys latch out of the pools, the wallower holds one.
+        { id: 'brood_matron', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'vent_lamprey', weight: 2 },
+        { id: 'scald_wallower', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        // M3 coda — THE METRONOME LEAN: the drummer's four-count and the
+        // clockcrab's three-count, kit on a drawn beat (rhythm-reading).
+        { id: 'tempo_drummer', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'clock_crab', weight: 2 },
+        // THE SCALD KIT K1 — wave 3 in the fields: the lancers' ranged line
+        // (bank, then rupture), spout-hoppers skirmishing the vents, a kettle
+        // bladder or two swelling at the pool rims, the vaporling in the
+        // steam between them.
+        { id: 'scald_lancer', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'spout_hopper', weight: 2, presence: { from: 3, fadeIn: 2 } },
+        { id: 'kettle_bladder', weight: 1, presence: { from: 4, fadeIn: 3 } },
+        { id: 'vaporling', weight: 1, presence: { from: 4, fadeIn: 3 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 1 },
+      { kind: 'bounty', weight: 1 },
+      { kind: 'escape', weight: 1 },
+    ],
+  },
+
+  // THE CHAR — the burn region as a FLANK BAND (the glimmervale threading
+  // model; charter §5 — ruled a REGION within the country, never its own
+  // biome): where the vents torch the dry scrub. M1 = LOOK + PACKS ONLY:
+  // char-black ground, ember rim light, regrowth green threading through
+  // the ash; the wildfire fronts, the ignition dial, cinderwind and the
+  // regrowth cycle are M2's teeth (data/creeps.ts' shipped wildfire row
+  // stands untouched). Fire country that only burns is volcanic with extra
+  // steps — the green is the point.
+  char_reach: {
+    id: 'char_reach', biome: 'scald',
+    // THE COUNTRY STAGING: a flank band threading the middle, never the rim
+    // and never the heart.
+    depthAffinity: { from: 0.30, fadeIn: 0.12, to: 0.85, fadeOut: 0.1 },
+    nameFirst: ['Charred', 'Smouldering', 'Blackened', 'Scorchfield', 'Sootblown', 'Burnt', 'Sootline', 'Kindled', 'Tinderbrake', 'Firebreak'],
+    nameSecond: ['Reach', 'Scrub', 'Flats', 'Brakes', 'Heath', 'Verge', 'Margin'],
+    theme: {
+      floor: '#2a2420', grid: '#1e1a16', border: '#4a4038',
+      obstacle: '#3a332c', obstacleEdge: '#5c5246', accent: '#ff7a3a',
+      water: '#2f7a84', mud: '#2e2620', sand: '#6a5e4a', tree: '#4a5a30', grass: '#6a8a3a',
+      ground: {
+        scale: 1.3, strength: 1.1, bias: 0.42, alpha: 0.55,
+        // Char-black ground with the regrowth's green threads rising through.
+        palette: ['#15120f', '#241f1a', '#3a332a', '#4f5a38', '#6c8a46'],
+        coast: { reach: 70, shift: -0.2 },
+      },
+      fog: { banks: [0, 1], kinds: [{ id: 'mist' }] },
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.4, color: '#ffb08a' }],
+      heat: 1,
+      geysers: { hiss: [2, 4], geyser: [2, 3], bands: [2, 3] },
+      // THE STEAM-WISP TIDE (M3 coda): a thin tide off the Char's few vents.
+      lite: {
+        swarms: [{
+          monsterId: 'steam_wisp', pockets: [1, 2], size: [6, 10],
+          seat: 'vents', when: { surge: true },
+          regen: { rate: 2.0, quietSec: 4, calmRadius: 110 },
+        }],
+      },
+      // THE CHAR'S TEETH (M2b — charter §5): the SHIPPED wildfire row
+      // (data/creeps.ts, numbers untouched) given a HOME — two lanes:
+      //  · THE STANDING BURN: a picket most visits, returning waves, and
+      //    THE IGNITION DIAL on it (FrontSpawnRow.ignition — sustained fire
+      //    into the scrub's fuel births a section: arson is terrain-legal
+      //    HERE and nowhere else; every other wildfire lane in the game
+      //    keeps "casts never ignite"). `heels`: under the escape objective
+      //    this lane's first wave fields at the party's heels — the
+      //    ignition-CHASE face (the creep fabric's long-named seam, bound).
+      //  · THE CINDERWIND LANE (`when: weather cinderwind` — the cometfall's
+      //    gate precedent keyed to the Char's own fire weather): under it
+      //    the fronts come faster, wider, and light easier — the lean-up.
+      creep: {
+        pockets: [0, 0], kinds: [],
+        fronts: [
+          {
+            id: 'wildfire', line: [2, 3], delay: [18, 34], waves: [50, 90], bearing: 'roll',
+            announce: { text: 'the scrub catches!', color: '#ffb547' },
+            ignition: { power: 220, max: 2, cooldown: 8 },
+            heels: true,
+          },
+          {
+            id: 'wildfire', line: [3, 4], delay: [6, 14], waves: [22, 40], bearing: 'roll',
+            when: { weather: ['cinderwind'] },
+            announce: { text: 'the cinderwind drives the fire!', color: '#ff9a4a' },
+            ignition: { power: 160, max: 3, cooldown: 6 },
+          },
+        ],
+      },
+      // THE REGROWTH CYCLE runs here (and only here — ZoneTheme.regrowth):
+      // the authored ash below ages toward the flush and the meadow.
+      regrowth: true,
+    },
+    sizeW: [2400, 3300], sizeH: [1600, 2300], ellipseChance: 0.2,
+    layout: [
+      // Ground first (the volcanic doctrine): the burn, then the snags —
+      // and THE REGROWTH CYCLE's authored stages (M2b, data/scald.ts
+      // REGROWTH_CFG): ash laid at mint ages toward the green flush and the
+      // meadow on the zone's own clock (charBorn), the fire-followers stand
+      // up in it as kindling, and the fronts eat the cycle back to ash.
+      { kind: 'cinder', count: [3, 5] },
+      { kind: 'ashfield', count: [2, 4] },
+      { kind: 'regrowth_flush', count: [1, 3] },
+      { kind: 'fireweed', count: [2, 5] },
+      { kind: 'sulphur_pool', count: [0, 1] },
+      { kind: 'steam_pocket', count: [1, 2] },
+      { kind: 'ember_fissure', count: [1, 3] },
+      { kind: 'dead_tree', count: [3, 6] },
+      { kind: 'stump', count: [1, 2] },
+      { kind: 'grass', count: [2, 4] },
+      { kind: 'scree', count: [1, 2] },
+      { kind: 'rocks', count: [1, 2] },
+    ],
+    packs: {
+      count: [4, 6], size: [3, 5],
+      table: [
+        { id: 'scald_basker', weight: 3 },
+        { id: 'cinder_jackal', weight: 3 },
+        { id: 'vent_shaman', weight: 2 },
+        { id: 'kettleback', weight: 1 },
+        { id: 'stilt_strider', weight: 1 },
+        { id: 'mudpot_skipper', weight: 1 },
+        // THE SCALD KIT K1 — wave 3 on the flank: the lancers range the
+        // burn (a dry country: their bolts bank at the dry baseline).
+        { id: 'scald_lancer', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'escape', weight: 2 },
+      { kind: 'spawners', weight: 1 },
+    ],
+  },
+
+  // THE SULPHUR POOLS — the caustic yellow heart: pool-pocked ground as
+  // CONTAINED hazards (the sulphur_pool region row, data/scald.ts — wade it
+  // and it stings, stand near it and the scorch bar climbs), geysers dotting
+  // the landscape among them, the great vents' metronome. THE LAKE zone type
+  // mints here at M2 (the conform law) — this face is the heart WITHOUT the
+  // lake.
+  sulphur_pools: {
+    id: 'sulphur_pools', biome: 'scald',
+    // THE COUNTRY STAGING: the heart — the pools claim the deep interior.
+    depthAffinity: { from: 0.65, fadeIn: 0.18 },
+    // THE LAKE (charter §6 — M2a, card 1 ratified): the heart face PINS the
+    // lake recipe (id `lakeshore` — THE UNIQUE-ID LAW gives `lake` to the
+    // furniture landmark) the way the karst faces pin theirs (forceLayout
+    // outranks the biome's allowedLayouts roll; a river COURSE crossing the
+    // heart still outranks the face — standing law). One vast wobble-rimmed
+    // sulphur lake the zone conforms to: the walkable RING carries the
+    // exits, a wadeable caustic SHELF (`sulphur` → the sulphur_shelf row:
+    // wading + the sting + the scorch feed, no douse) rings the BOILING DEEP
+    // (`deepPolicy: 'block'` → `sulphur_deep`: refused as ground, drawn as
+    // water wearing THE BROIL forever, shots and sight passing), isles and
+    // spits reach inward, the waterline wears the kit's crusts + terrace
+    // stairs, and ONE landmark-grade `great` vent stands offshore on its own
+    // isle — the lake's metronome (GenCtx.authoredVents → bootGeysers). Zone
+    // size runs LARGE (geography, not a pond in a field — the lakelands
+    // recipe owns ponds). Every number a DIAL (engine/lake.ts LAKE_CFG).
+    forceLayout: 'lakeshore',
+    layoutParams: {
+      lakeLiquid: 'sulphur', deepPolicy: 'block', deepLiquid: 'sulphur_deep',
+      isles: [3, 5], lakeVent: 'great',
+      lakeShore: [
+        { kind: 'sulphur_crust', count: [10, 16], radius: [24, 44] },
+        { kind: 'sinter_shelf', count: [6, 10], radius: [26, 44] },
+        { kind: 'steam_pocket', count: [4, 7], radius: [18, 30] },
+      ],
+      lakeTerraces: { cluster: 'sinter_terrace', count: [2, 3] },
+      // THE CISTERN (M3 — data/cistern.ts; charter §0 seventh walk: "give the
+      // scald its own distinct sort of side zone"): the lake's secret
+      // under-story — the moonlit mere's grotto lane under the GREAT SHOAL
+      // the lake mints for it (engine/lake.ts LAKE_CFG.shoal — offered to the
+      // tail, the chamber seats ONLY beneath it; one well + stair on the
+      // shoal, reached by wading the shelf). The chance is the well's
+      // rarity — a DIAL, raised above the mere's "occasionally" (0.14): the
+      // lake is the country's heart and the cistern is its side zone.
+      underTier: 'cistern', underTierChance: 0.3,
+    },
+    nameFirst: ['Sulphur', 'Brimstone', 'Yellowcrust', 'Caustic', 'Simmering', 'Vitriol', 'Sourwater', 'Bittergreen', 'Brimfume', 'Reeking'],
+    nameSecond: ['Pools', 'Pans', 'Kettles', 'Heart', 'Hollows', 'Seeps', 'Fumaroles'],
+    theme: {
+      floor: '#5a5a34', grid: '#4a4a2a', border: '#9a9a5a',
+      obstacle: '#6a6a40', obstacleEdge: '#a8a868', accent: '#e8e04a',
+      water: '#3c9a8c', mud: '#4e4a2c', sand: '#b8b070', tree: '#6a7a3a',
+      ground: {
+        scale: 1.2, strength: 1.1, bias: 0.55, alpha: 0.5,
+        // The yellow bloom: crust tones brightening toward the pools.
+        palette: ['#2e2c1c', '#4a4828', '#6c6a34', '#8e8c44', '#b4b060'],
+        coast: { reach: 80, shift: 0.3, kinds: ['water', 'sulphur_pool'] },
+      },
+      fog: { banks: [2, 3], kinds: [{ id: 'mist' }] },
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.55, color: '#e8f0a0' }],
+      heat: 1,
+      geysers: { hiss: [3, 5], geyser: [5, 8], great: [1, 2], bands: [3, 4] },
+      // THE STEAM-WISP TIDE (M3 coda): off the vents while the surge holds.
+      lite: {
+        swarms: [{
+          monsterId: 'steam_wisp', pockets: [3, 5], size: [10, 16],
+          seat: 'vents', when: { surge: true },
+          regen: { rate: 2.4, quietSec: 4, calmRadius: 110 },
+        }],
+      },
+    },
+    // LARGE (the lake law — DIAL): the ring must read as country, the water
+    // as geography. ellipseChance stands — the recipe conforms to either rim.
+    sizeW: [3600, 4600], sizeH: [2600, 3400], ellipseChance: 0.2,
+    compositions: [
+      { composition: 'kettle_flat', chance: 0.3 },
+    ],
+    layout: [
+      { kind: 'cluster', cluster: 'sulphur_pocks', count: [2, 3] },
+      { kind: 'sulphur_pool', count: [3, 6] },
+      { kind: 'sulphur_crust', count: [4, 7] },
+      { kind: 'mudpot', count: [2, 4] },
+      { kind: 'sinter_cone', count: [1, 3] },
+      { kind: 'steam_pocket', count: [3, 5] },
+      { kind: 'prism_pool', count: [1, 2] },
+      { kind: 'water', count: [1, 2], radius: [40, 80] },
+      { kind: 'reeds', count: [1, 2] },
+      // THE SHELTER SEATS (M2b): sinter overhangs — dry seats under the
+      // great vents' burn rain (DoodadRule.shelter → spareRoofed).
+      { kind: 'sinter_overhang', count: [2, 4] },
+    ],
+    packs: {
+      count: [4, 6], size: [3, 5],
+      table: [
+        { id: 'kettleback', weight: 3 },
+        { id: 'scald_basker', weight: 3 },
+        { id: 'vent_shaman', weight: 2 },
+        { id: 'stilt_strider', weight: 2 },
+        { id: 'mudpot_skipper', weight: 2 },
+        // M2b — the heart's kin: matrons in the warm pools, snails on the
+        // crusts, wallowers holding the kettles, lampreys in the shallows.
+        { id: 'brood_matron', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'prism_snail', weight: 2 },
+        { id: 'scald_wallower', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'vent_lamprey', weight: 1 },
+        // M3 coda — the metronome lean in the heart: drummers, a crab or two.
+        { id: 'tempo_drummer', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'clock_crab', weight: 1 },
+        // THE SCALD KIT K1 — wave 3 in the heart: bladders swell at the pool
+        // rims (the accumulator's scald face), vaporlings hunt the steam,
+        // wardens hold the crusts, a lancer line behind them.
+        { id: 'kettle_bladder', weight: 2, presence: { from: 4, fadeIn: 3 } },
+        { id: 'vaporling', weight: 2, presence: { from: 4, fadeIn: 3 } },
+        { id: 'terrace_warden', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'scald_lancer', weight: 1, presence: { from: 5, fadeIn: 3 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 1 },
+      { kind: 'bounty', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+    ],
+  },
+
+  // THE STEAM GALLERIES — the country's underside (the magma_gallery model:
+  // the caveFace pool, weighted by the surface ANCHOR biome): scalded
+  // conduits, blind steam, the pressure that feeds the beat above. Hiss
+  // vents keep time in the dark; the pools stand in the gallery floors.
+  steam_galleries: {
+    id: 'steam_galleries', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    caveFace: {
+      strata: { stops: [[1, 0.3], [2, 0.7], [3, 1], [4, 0.8]] },
+      biomes: { scald: 8, marsh: 1.5, '*': 0.4 },
+    },
+    caveLayouts: { plains: 4, winding: 2, rooms: 2 },
+    nameFirst: ['Steaming', 'Vaporous', 'Hissing', 'Blindsteam', 'Dripping', 'Scalded', 'Fuming', 'Wetstone', 'Kettlebore', 'Pressured'],
+    nameSecond: ['Galleries', 'Conduits', 'Bores', 'Throats', 'Vaults', 'Drains'],
+    theme: {
+      floor: '#2a3230', grid: '#1e2624', border: '#5a6a66',
+      obstacle: '#3a4844', obstacleEdge: '#6c807a', accent: '#8fd8d4',
+      water: '#1e6a74', mud: '#2a2e28', sand: '#6a7068', tree: '#3a4a3a',
+      ambientDark: 0.5,
+      ground: {
+        scale: 0.9, strength: 1.0, bias: 0.48, alpha: 0.55,
+        palette: ['#141a18', '#223230', '#34484a', '#4a6462', '#6c8a86'],
+        coast: { reach: 60, shift: 0.3, kinds: ['water', 'prism_pool', 'sulphur_pool'] },
+      },
+      fog: { banks: [2, 3], kinds: [{ id: 'mist' }] },
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.35 }],
+      heat: 1,
+      geysers: { hiss: [4, 7], geyser: [2, 4], bands: [2, 3] },
+      // THE STEAM-WISP TIDE (M3 coda): under shelter there is no surge
+      // steam FRONT (the skyFront law), but the tide still pours off the
+      // gallery vents while the hour holds.
+      lite: {
+        swarms: [{
+          monsterId: 'steam_wisp', pockets: [2, 3], size: [8, 12],
+          seat: 'vents', when: { surge: true },
+          regen: { rate: 2.0, quietSec: 4, calmRadius: 110 },
+        }],
+      },
+    },
+    sizeW: [1150, 1600], sizeH: [880, 1250],
+    layout: [
+      { kind: 'sulphur_pool', count: [2, 4] },
+      { kind: 'prism_pool', count: [1, 2] },
+      { kind: 'mudpot', count: [1, 2] },
+      { kind: 'sinter_shelf', count: [2, 4] },
+      { kind: 'steam_pocket', count: [3, 5] },
+      { kind: 'flowstone', count: [1, 3] },
+      { kind: 'rimstone_pool', count: [1, 2] },
+      { kind: 'rocks', count: [2, 4] },
+    ],
+    packs: {
+      count: [3, 5], size: [2, 4],
+      table: [
+        { id: 'kettleback', weight: 3 },
+        { id: 'mudpot_skipper', weight: 2 },
+        { id: 'vent_shaman', weight: 1 },
+        { id: 'stilt_strider', weight: 1 },
+        { id: 'scald_basker', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        // M3 coda — clockcrabs tick in the dark galleries.
+        { id: 'clock_crab', weight: 2 },
+        // THE SCALD KIT K1 — wave 3 below: vaporlings in the gallery steam,
+        // a bladder in the dark pools.
+        { id: 'vaporling', weight: 2, presence: { from: 4, fadeIn: 3 } },
+        { id: 'kettle_bladder', weight: 1, presence: { from: 4, fadeIn: 3 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 4 },
+      { kind: 'spawners', weight: 1 },
+    ],
+  },
+
   // --- THE FLESH COUNTRY (four faces, one biome tag) -------------------------
   // The flesh is a BODY, not a tileset: four frontier faces share the 'flesh'
   // biome tag and the ONE circular flesh recipe (fleshLayout), each dialing it
@@ -13286,6 +13802,92 @@ export const TILESETS: Record<string, TilesetDef> = {
     spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
     objectives: [{ kind: 'clear', weight: 1 }],
   },
+
+  // THE GREAT GEYSER — THE SCALD BASIN's den (M3; charter card 4 ratified:
+  // "THE GREAT GEYSER den with THE GEYSERMAW — beat-as-boss"; kit
+  // data/greatgeyser.ts, recipe engine/ventcauldron.ts, the dweller
+  // engine/ventDweller.ts): a steam-choked CAULDRON sunk into the rock —
+  // sinter terraces ringing ONE great vent at the heart, the den's metronome
+  // (a boss-tempo clock rolled per mint) and the Geysermaw's home; sulphur
+  // pools between the shelves, overhangs for the rain's dry seats, the
+  // geyserkin and the wave-1/2 kin on the floor between beats. frontier:false
+  // (minted only by the geyser_maw door); perfProbe joins the sweep; OPEN SKY
+  // (the cauldron is a sunken basin, not a cave — steam rises to real
+  // weather; the sidezone mint stamps def.sky the way the roost does).
+  great_geyser: {
+    id: 'great_geyser', frontier: false, perfProbe: true,
+    sky: 'open',
+    forceLayout: 'ventcauldron',
+    layoutParams: {
+      cauldronVent: 'great', cauldronVentPeriod: [32, 44],
+      cauldronRing: 0.44, cauldronTerraces: [2, 3], cauldronPools: [4, 7],
+      cauldronPrism: [2, 4], cauldronShelters: [3, 5], cauldronPockets: [4, 6],
+    },
+    nameFirst: ['Great', 'Boiling', 'Kettle', 'Thunderspout', 'Whitethroat', 'Oldsteam', 'Roaring', 'Sinterthroat', 'Pressure', 'Deepkettle'],
+    nameSecond: ['Geyser', 'Throat', 'Cauldron', 'Kettle', 'Spout', 'Maw', 'Basin', 'Well'],
+    theme: {
+      floor: '#4e5a58', grid: '#3e4a48', border: '#9aa8a4',
+      obstacle: '#5c6a66', obstacleEdge: '#9cb0aa', accent: '#9fe0e8',
+      water: '#2f97a4', mud: '#4e4a36', sand: '#b8b8a0', tree: '#5a6a3a',
+      wall: '#5c6a66',
+      ground: {
+        scale: 1.1, strength: 1.05, bias: 0.56, alpha: 0.5,
+        // The cauldron's floor: wet dark stone rising to white sinter crusts
+        // toward the terraces, brightening toward the pools.
+        palette: ['#263230', '#3a4a46', '#5c6c66', '#8e9c92', '#d0d8cc'],
+        coast: { reach: 90, shift: 0.35, kinds: ['water', 'prism_pool', 'sulphur_pool'] },
+      },
+      // Steam-choked: thick living mist banks + a strong shimmer.
+      fog: { banks: [3, 4], kinds: [{ id: 'mist' }] },
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.6 }],
+      heat: 1,
+      // THE FLOOR'S OWN BEAT around the heart: hiss + geysers on the current
+      // bands (the authored great vent at the heart is the recipe's — its own
+      // band, the metronome law). The floor is never quiet between the maw's
+      // windows (THE NO-TAG LAW's "the floor stays busy").
+      geysers: { hiss: [3, 5], geyser: [2, 4], bands: [2, 3] },
+    },
+    sizeW: [1700, 2200], sizeH: [1300, 1700], ellipseChance: 0,
+    layout: [
+      { kind: 'sinter_shelf', count: [2, 4] },
+      { kind: 'steam_pocket', count: [2, 4] },
+      { kind: 'sinter_cone', count: [1, 2] },
+      { kind: 'sulphur_crust', count: [1, 3] },
+      { kind: 'mudpot', count: [0, 2] },
+      { kind: 'rocks', count: [1, 3], radius: [14, 26] },
+    ],
+    variants: [
+      // The prism gallery: the terraces at their most jeweled — pools in
+      // banded color, crust everywhere.
+      { name: 'the prism gallery', layout: [
+        { kind: 'prism_pool', count: [2, 4] },
+        { kind: 'sinter_shelf', count: [3, 5] },
+        { kind: 'steam_pocket', count: [2, 3] },
+        { kind: 'sinter_cone', count: [1, 2] },
+      ] },
+      // The sulphur throat: the heart's caustic face — more pools, more
+      // crust, the yellow bloom.
+      { name: 'the sulphur throat', layout: [
+        { kind: 'sulphur_crust', count: [3, 5] },
+        { kind: 'mudpot', count: [1, 3] },
+        { kind: 'steam_pocket', count: [3, 5] },
+        { kind: 'rocks', count: [1, 2], radius: [14, 24] },
+      ] },
+    ],
+    packs: {
+      count: [3, 5], size: [2, 4],
+      table: [
+        { id: 'vent_shaman', weight: 3 },
+        { id: 'stilt_strider', weight: 2 },
+        { id: 'kettleback', weight: 2 },
+        { id: 'brood_matron', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'vent_lamprey', weight: 2 },
+        { id: 'scald_basker', weight: 1, presence: { from: 8, fadeIn: 3 } },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective (the maw)
+    objectives: [{ kind: 'clear', weight: 1 }],
+  },
 };
 
 // --- THE PLAIN FACES RESTATED (the dead-base-face heal, 2026-08-03) ----------
@@ -13658,6 +14260,12 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   ocular:         { title: 'The Ocular',        blurb: 'The watching place: a socketed amphitheater of swaying stalks and eye-studded walls, every iris drearily on you. Press close and they flinch shut; linger seen and the country answers.' },
   crystal:        { title: 'Crystal Fields',    blurb: 'Prismatic shard-fields where the crystals themselves fire off random laser beams: a place that keeps you moving or gets you cut.' },
   volcanic:       { title: 'Volcanic Caldera',  blurb: 'An erupting caldera whose vents periodically lob arcing lava-orbs that splatter down into spreading pools of fire.' },
+  // THE SCALD BASIN (data/scald.ts) — the country of the kept beat.
+  sinter_terraces: { title: 'The Sinter Terraces', blurb: 'The basin\'s mineral gate: travertine shelves stepped around prism pools in banded color, shallow and gentle — and small hiss-vents keeping a fast, harmless beat you learn for free.' },
+  geyser_fields:  { title: 'The Geyser Fields',  blurb: 'The country of the kept beat: vent families erupting TOGETHER on underground currents you can learn, the water itself broiling two breaths before each column — safe almost always, lethal on schedule.' },
+  char_reach:     { title: 'The Char',           blurb: 'The basin\'s burn flank: where the vents torch the dry scrub — char-black ground, ember-lit rents, and the regrowth\'s green threading back through the ash.' },
+  sulphur_pools:  { title: 'The Sulphur Pools',  blurb: 'The caustic yellow heart: pool-pocked ground that scalds the wader and warms whoever lingers at the rim, geysers dotting the crust among the kettles, the great vents keeping the loudest time.' },
+  steam_galleries: { title: 'The Steam Galleries', blurb: 'The basin\'s underside: scalded conduits and blind steam under the pressure that feeds the beat above — hiss vents keeping time in the dark, the pools standing in the gallery floors.' },
   mycelia:        { title: 'Mycelia',           blurb: 'A bioluminescent fungal warren: towering caps, puffing spore-pods and a glowing hyphal carpet where the slow Bloom makes its home.' },
   grassland:      { title: 'Grasslands',        blurb: 'Wide-open windblown grass: no trees, no water, no void, just an exploration-leaning breadth that rewards running the field.' },
   aether:         { title: 'The Aetherial',     blurb: "The Host's first sky-shelf: cloud ground that dissolves under your feet, the world far below waiting to catch you where you drop." },

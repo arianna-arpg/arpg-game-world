@@ -127,6 +127,14 @@ export interface LiteCond {
   weather?: string[];
   /** Hold during these day phases. */
   phases?: ('dawn' | 'day' | 'dusk' | 'night')[];
+  /** THE BEAT CLAUSE — the radiance clauses' structural sibling: `true`
+   *  holds only while THE SURGE HOUR holds over the zone's geyser field
+   *  (engine/geysers.ts surgeWindowNear via World.geyserSurge — pure
+   *  f(world clock, zone key), so seats and resumes agree), `false` only
+   *  in the calm between surges. A zone with no geyser field never holds
+   *  `true`. Debut: the Scald Basin's steam-wisp tide (surge → eruptions →
+   *  steam → wisps, her cascade), seated at the vents (LiteSwarmRow.seat). */
+  surge?: boolean;
 }
 
 /** One pour row: `pockets` clusters of `size` bodies each, seated on the
@@ -137,6 +145,14 @@ export interface LiteSwarmRow {
   size: [number, number];
   /** Whether this zone pours at all (default 1). */
   chance?: number;
+  /** WHERE the pockets seat (default 'pois' — the leftover-POI stream).
+   *  'vents' seats each pocket AT one of the zone's geyser vents (engine/
+   *  geysers.ts — count-rolled and authored alike; the heart is the mouth,
+   *  the scatter a vent-sized ring, no burrow tell — the vent IS the mark),
+   *  on its own salted lane after the field stands (World.bootLiteVentSeats)
+   *  so the POI stream keeps its exact shape; a vent-less zone seats
+   *  nothing. Debut: the steam-wisp tide pouring off the vents. */
+  seat?: 'pois' | 'vents';
   /** THE CONDITIONED POUR — this row's bodies stand only while the
    *  condition holds. Pockets still SEAT at boot (same salted draws, held
    *  or not — the stream's shape is sacred); out of its hour a pocket
@@ -216,6 +232,10 @@ export const LITE_CFG = {
   /** Pocket seating: reach off the leftover-POI stream, portal clearance,
    *  scatter radius around a pocket heart (the throng pocket idiom). */
   pour: { reach: 680, portalClear: 220, scatter: 46 },
+  /** THE VENT SEAT (LiteSwarmRow.seat 'vents'): the lane's own salt (xor'd
+   *  over the pour salt — the POI stream never moves) and the scatter ring
+   *  around a vent's mouth. */
+  ventSeat: { salt: 0x3a91c7, scatter: 58 },
   /** Steering: velocity chase rate, separation push (px/s at full overlap),
    *  weave figure-eight (rad/s + px amplitude), hash-noise heading wobble
    *  (radians) and its re-roll rate (Hz), per-body speed jitter (±frac). */

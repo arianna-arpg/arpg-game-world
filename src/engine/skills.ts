@@ -1853,6 +1853,16 @@ export interface StormDelivery {
    *  true lightning (a levinfall, the weather's own storm_call) never
    *  needs a key and 'bolt' stays reserved to it. */
   fx?: string;
+  /** THE GROUNDED STRIKE (the Cistern Crone's boil — THE BROIL LAW as a
+   *  boss verb): each strike bites ONLY bodies standing on one of these
+   *  region kinds (the walk grid's own cell under the victim — the same
+   *  read the region-sense stamps) — the WATER boils, the shore beside it
+   *  does not. Drawn == tested: the telegraph draws the geyser fabric's
+   *  one roil over exactly the disc's cells of these kinds (the shore
+   *  inside the ring stays unroiled), and the landing spares everyone
+   *  else. Absent = the ordinary disc. Data for any ground that should
+   *  turn lethal on a clock (a blood tide, a riptide). */
+  onGround?: string[];
 }
 
 export interface DashDelivery {
@@ -1870,6 +1880,14 @@ export interface DashDelivery {
    *  a full DropZoneSpec: envelopes breathe each drop, durationBySpeed
    *  reads the DASH's pace. */
   trailZone?: DropZoneSpec;
+  /** THE STEAM TRAIL (THE SCALD KIT K2 — Vent Hop): the dash PLANTS a
+   *  registered fog bank (FOG_BANKS id — the `vent` effect's kind) every
+   *  `spacing` units of travel (default 90), reach × area modifiers, life ×
+   *  effectDuration — the Fire Walker trail grammar with a STEAM BANK
+   *  instead of burning ground: a hot line of white behind you that eyes
+   *  stop at (FogBankDef.occludesSight) and shots fly through. Plants
+   *  through World.plantVent, so a boundless arena plants nothing. */
+  trailVent?: { bank: string; radius: number; duration: number; spacing?: number };
   /** PHASING dash (the Iai draw): the launch grants the 'phasing' STATUS
    *  for the dash's flight (+ a breath) — the body passes THROUGH the
    *  crowd regardless of mass or poise (separateActors already honors the
@@ -1937,6 +1955,19 @@ export interface LeapDelivery {
    *  stooping flock is dodgeable by everything that reads telegraphs.
    *  `true` uses the skill's own color. */
   telegraph?: boolean | { color?: string };
+  /** THE VENT-RIDE (the scald kit's GEYSER-STEP family): the leap RIDES A
+   *  COLUMN. The cast's wind-up (useTime) is a drawn BROIL under the
+   *  caster's own feet — the geyser fabric's one roil word, read by the
+   *  player's eyes and by dodge-minds (imminentThreatTo) alike; at take-off
+   *  the departure point ERUPTS: the skill's own hit lands on every enemy
+   *  inside `columnR` (× `scale`, default 0.6 — the column is the smaller
+   *  half, the landing the slam), through the ordinary pipeline (owner-safe
+   *  — a player's vent is not terrain), and the flight draws the steam jet
+   *  under the rising body. THE NO-TAG LAW holds by construction: a vent-
+   *  rider RELOCATES — it never hovers. Monsters wear it first (the vent-
+   *  shaman's escape, the spout-hopper); the player's Geyser-Step rides the
+   *  same field (THE MIRROR LAW). */
+  vent?: { columnR: number; scale?: number };
 }
 
 /** Stateful Mark/Recall: first use marks the aim point and the skill
@@ -2169,8 +2200,14 @@ export interface ConstructDelivery {
    *  summon, a blast, any catalog entry: fully configurable). Defend it
    *  while it matures. onBreak decides a violent death: 'fizzle' (default
    *  — the egg dies quietly; Broodpod) or 'hatch' (destruction sets it
-   *  off; the Nitrocask powder rule). */
-  hatch?: { skillId: string; onBreak?: 'fizzle' | 'hatch' };
+   *  off; the Nitrocask powder rule). `onScorch` is THE WARM HATCH: the
+   *  pod hatches EARLY the moment its OWN scorch bar (World.scorchOf —
+   *  the scald sources: the burn rain's landings, the runoff's wash, an
+   *  erupting column, a pool's warmth) reaches this many units — eggs
+   *  incubated by heat (the shallows brood matron's clutches, charter
+   *  §8: every great eruption is followed by something small and hungry
+   *  downstream). Absent = the clock alone decides. */
+  hatch?: { skillId: string; onBreak?: 'fizzle' | 'hatch'; onScorch?: number };
   /** BREAKABLE BY DESIGN (the conjured-object game): the construct joins
    *  its OWNER's hostile pool — the owner's own hits (skills, zones,
    *  projectiles: everything) can strike it, demolishing at ownerMult ×
@@ -3025,12 +3062,15 @@ export function instanceUseCharges(inst: SkillInstance): SkillDef['useCharges'] 
   for (const s of hostSockets(inst)) {
     const g = s.def.useChargeGraft;
     if (g) {
+      // THE PATIENT BANK temper rides the granted bank whole (Pressure
+      // Seal — THE SCALD KIT K2): still-gated clock, motion bleed.
+      const still = g.still ? { still: g.still } : {};
       return inst.def.cooldown > 0
         // The DRIP magazine (the user's one-per-clock call): each cycle of
         // the host's own cooldown returns ONE round — bankable for a
         // burst, never an override of a long clock.
-        ? { max: g.rounds, magazine: { refill: 1, drip: true } }
-        : { max: g.rounds, recharge: g.recharge, empower: g.empower };
+        ? { max: g.rounds, magazine: { refill: 1, drip: true }, ...still }
+        : { max: g.rounds, recharge: g.recharge, empower: g.empower, ...still };
     }
   }
   return undefined;
@@ -3333,7 +3373,12 @@ export interface WhistleCompanionEffect {
 export interface RestoreSkillChargesEffect {
   type: 'restoreSkillCharges';
   amount?: number;
-  scope?: 'host' | 'all';
+  /** 'host' (default) = the pressed skill's own bank; 'all' = every
+   *  equipped bank (the bandolier); 'still' = THE PATIENT BANKS only — every
+   *  equipped bank wearing useCharges.still (THE SCALD KIT K2: Head of
+   *  Steam's channel feeds the PRESSURE family's banks and nothing else —
+   *  flasks and guns keep their own clocks). */
+  scope?: 'host' | 'all' | 'still';
 }
 
 /** MIMIC SELECTION (engine/mimic.ts): step the caster's selected captured
@@ -3509,6 +3554,45 @@ export interface KindleEffect {
   type: 'kindle';
   /** Lightwell doodad kind (must wear a LIGHTWELLS row + a light spec). */
   kind: string;
+}
+
+/** PLANTS A FOG BANK (engine/fog.ts — the scald kit's STEAM family; the
+ *  lightwell-planting effect's sibling aimed at the fog fabric): a
+ *  REGISTERED FogBankDef kind stood up at the resolution point — ground
+ *  deliveries at the target, everything else where the skill resolved —
+ *  with `radius` × area mods as its reach and `duration` × effectDuration
+ *  as its life; a planted bank is MORTAL (it dissipates at life's end, never
+ *  re-gathers). What the bank DOES is the kind's own row: its grants, its
+ *  color, and — for steam — `occludesSight` (eyes stop at the white through
+ *  the one castRay 'sight' ride: ranged kin lose the lock, the hunter
+ *  inside strikes out of it). */
+export interface VentEffect {
+  type: 'vent';
+  /** FOG_BANKS id (validated at boot — a vent must name a registered bank). */
+  bank: string;
+  /** Reach (world units) before area modifiers. */
+  radius: number;
+  /** Life (seconds) before effectDuration modifiers. */
+  duration: number;
+}
+
+/** RUPTURES A BANKED STATUS (THE RUPTURE LAW — the scald kit; StatusDef.bank):
+ *  on each target hit, consume `fraction` (0..1) of the target's banked
+ *  instance of `status` and deal it NOW as a burst of that status's own
+ *  element — the remaining banked DoT (dps × stacks × seconds left) × the
+ *  fraction × `mul` — mitigated like any typed blow, credited to the
+ *  rupturer (kills included). Never over-consumes: the burst is a share of
+ *  what stands, the instance keeps the rest (a full fraction expunges it),
+ *  and a target with no bank takes nothing extra. Generic: any banked
+ *  status may be spent this way (the afflictionYield / detonate grammars'
+ *  kin). Monsters wear it first (the scald lancer's charged throw); the
+ *  player's payoff verb is the kit's second movement. */
+export interface RuptureEffect {
+  type: 'rupture';
+  status: string;
+  fraction: number;
+  /** Burst multiplier on the consumed share (default 1). */
+  mul?: number;
 }
 
 /** POURS A SWARM (engine/lite.ts — THE LITE TIER): pool bodies of a lite
@@ -3840,7 +3924,7 @@ export type SkillEffect =
   | RestoreSkillChargesEffect | ConjureEffect | KindleEffect | ThrongDirectEffect
   | GrabSeizeEffect | GrabThrowEffect | MimicSelectEffect
   | PossessEffect | PossessEndEffect | ShapeshiftEffect | LitePourEffect
-  | LureEffect;
+  | LureEffect | VentEffect | RuptureEffect;
 
 // --- The skill definition ---------------------------------------------------
 
@@ -3914,6 +3998,23 @@ export interface SkillDef {
      *  demanding it. Pairs naturally with `recharge`; authorable natively
      *  here or granted by a gem (useChargeGraft on a cooldown-less host). */
     empower?: number;
+    /** THE PATIENT BANK (THE SCALD KIT K2 — the PRESSURE family's temper):
+     *  the bank's recovery clock (trickle or drip) advances ONLY while the
+     *  bearer stands still (Actor.skillBankStill — no step, no dash, no
+     *  flight for a short grace), and MOTION BLEEDS rounds off it at
+     *  `bleed` rounds per second (fractional, carried on the bank's own
+     *  timer — the half-round you lose by shifting your feet). The
+     *  basker's patience as a player economy: hold ground to build a head
+     *  of steam, move and it hisses away. Absent = the classic clock. */
+    still?: { bleed: number };
+    /** THE VENT PRESS (THE SCALD KIT K2 — Blowhole): the press SPENDS THE
+     *  WHOLE BANK at once and the cast GROWS by the rounds spent — a storm
+     *  fires that many MORE strikes, a projectile that many more shots,
+     *  any other delivery resolves that many extra times (the stepsFromBank
+     *  law, spending all). A DRY press casts PLAIN — never refused, never
+     *  converted (the empower law's dry clause): the hot spit is always
+     *  there, the columns are what you banked. */
+    ventAll?: true;
   };
   /** Combo resource consumption: requires and spends charges on use.
    *  'all' consumes everything (min `minimum`); damagePerCharge is a
@@ -4702,7 +4803,13 @@ export interface SupportDef {
    *  Native banks and munition conversions win (one economy per slot,
    *  instanceUseCharges' first-wins order); the gem's ordinary mods
    *  (skillCharges / skillChargeRate) then deepen WHATEVER bank stands. */
-  useChargeGraft?: { rounds: number; recharge: number; empower: number };
+  useChargeGraft?: {
+    rounds: number; recharge: number; empower: number;
+    /** THE PATIENT BANK temper on the granted bank (THE SCALD KIT K2 —
+     *  Pressure Seal): the stood-up bank builds ONLY while the bearer stands
+     *  still and bleeds while they move (SkillDef.useCharges.still). */
+    still?: { bleed: number };
+  };
   /** A DEVOUR graft (Ravenous Pact): minions of the host skill EAT the
    *  owner's other minions on a beat for healing and a feast-buff (see
    *  DevourSpec — the apex economy, grafted onto any summon). */
@@ -5515,6 +5622,17 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
    *  (the user's stealth ruling — refuse, never contort). */
   displaces: inst => inst.def.delivery.type === 'dash'
     || inst.def.delivery.type === 'blink' || inst.def.delivery.type === 'leap',
+  /** A BANKLESS host (THE SCALD KIT K2 — the bank-granting gems' honest
+   *  floor): the instance carries NO native use-charge economy — no
+   *  SkillDef.useCharges, no socketed munition conversion — so a granted
+   *  bank (useChargeGraft) would actually STAND (instanceUseCharges'
+   *  first-wins order: a native bank or a munition wins the slot, and the
+   *  graft rides inert). Structural and permanent for a banked host by
+   *  construction (no gem removes a native bank): the refusal is the
+   *  "one economy per slot" law spoken at socket time instead of a silent
+   *  no-op; it self-lifts the moment the munition gem beside it leaves. */
+  bankless: inst => !inst.def.useCharges
+    && !hostSockets(inst).some(s => s.def.munition !== undefined),
   /** A TRUE GUARD (2026-08-03, her word on the bank): the instance owns a
    *  MOMENT the answering blow can pay on — the guardBash grammar's five
    *  payout lanes (world.ts): a held stance's release/break (castMode

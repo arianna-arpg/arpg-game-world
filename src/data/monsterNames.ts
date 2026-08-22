@@ -271,6 +271,21 @@ const CINDER_TONGUE: TonguePools = {
   ],
 };
 
+// THE KETTLE TONGUE — the geyserkin of the Scald Basin (data/scald.ts; the
+// beat-readers who step off a vent one breath before it blows): names
+// boiled out of the springs, epithets counted in eruptions.
+const KETTLE_TONGUE: TonguePools = {
+  prefixes: ['Sinter', 'Kettle', 'Scald', 'Fume', 'Roil', 'Spring', 'Travert', 'Steam', 'Brim', 'Simmer'],
+  suffixes: ['spout', 'hiss', 'seethe', 'plume', 'crust', 'boil', 'wisp', 'bubble', 'vent', 'well'],
+  epithets: [
+    'Who Counts the Beat', 'of the Third Band', 'the Twice-Scalded', 'Steam-Sworn',
+    'Who Stepped Off in Time', 'of the White Terraces', 'the Sinter-Crowned', 'Who Waits on the Current',
+    'the Unboiled', 'of the Great Spout', 'Mist-Shrouded', 'the Patient Kettle',
+    // THE SCALD KIT's kin (K1): the lancers, the hoppers, the ones who hunt the white.
+    'Who Rides the Spout', 'Sinter-Lanced', 'Who Struck Out of the White',
+  ],
+};
+
 // THE WINDS TONGUE — every air that owns a name: the gale djinn, the sky
 // fauna of the zephyrid rookeries, the sirocco's mirage courts. Named
 // for what the weather did.
@@ -477,6 +492,8 @@ export const MONSTER_NAMES = {
     rimebound: WINTERTHEGN_TONGUE,
     emberkin: CINDER_TONGUE,
     smoulder: CINDER_TONGUE,
+    // The Scald Basin's beat-readers speak their own kettle (data/scald.ts).
+    geyserkin: KETTLE_TONGUE,
     galekin: WINDS_TONGUE,
     zephyrid: WINDS_TONGUE,
     sirocco: WINDS_TONGUE,

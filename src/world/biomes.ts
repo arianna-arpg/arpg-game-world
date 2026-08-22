@@ -751,6 +751,30 @@ export const BIOMES: Record<string, BiomeInfo> = {
       // two melts (the isthmus recipe, poured in lava), and the cauldron that
       // went cold and filled — a spiral ramp down into deep water.
       { landmark: 'lava_isthmus', chance: 0.14 }, { landmark: 'flooded_caldera', chance: 0.1 }] },
+  // THE SCALD BASIN (charter docs/design/scald-basin.md — the country of the
+  // kept beat): a hydrothermal basin where the deep heat never reaches the
+  // surface as melt — it arrives as WATER. Geysers erupting on a learnable
+  // beat (engine/geysers.ts), sinter terraces in mineral prismatics, a burn
+  // flank (the Char), a sulphur heart. THE VOLCANIC INVERSE by claim: warm ∧
+  // damp (never scorching-dry) ∧ the LOW ground — the marsh's hollow claim,
+  // a basin, where the traced rivers die — so the two fire countries never
+  // share a seat (charter §7). Patron: the GEYSERKIN, a diplomacy-silent
+  // debut (the jotun/coven law: monster defs + tongue rows in both mills, no
+  // war roster). Weight 1.5 reads as a DISCOVERY, not a belt (between the
+  // butteland's 1.2 and the garden's 1.7); spacing 84 = a country you walk
+  // INTO. Faces stage by depthAffinity in data/tilesets.ts (sinter terraces
+  // rim → geyser fields → the Char flank → sulphur pools heart; the steam
+  // galleries below) — kit in data/scald.ts. Every number a DIAL.
+  scald: { patronFaction: 'geyserkin', mapColor: '#8fd8d4', label: 'The Scald Basin', spacing: 84,
+    climate: { temperature: 'warm', moisture: 'damp', elevation: { to: 0.5, fadeOut: 0.14 } },
+    // Steam wisps and a sinter shelf on the verge: neighbors see the steam
+    // before the ground turns (data/scald.ts registers it).
+    meld: 'scald_meld',
+    // Open ground on purpose — the field must READ for the beat to read
+    // (the faces carry their own furniture; no face pins a recipe in M1).
+    allowedLayouts: { plains: 1 },
+    landmarks: [{ landmark: 'lake', chance: 0.18 }, { landmark: 'lake_island', chance: 0.08 },
+      { landmark: 'sinkhole', chance: 0.08 }] },
   // MYCELIA — a bioluminescent fungal warren (biome:'mycelia' → the carved fungal-grotto
   // layout). The dormant HOME of the Mycelia spore-bloom (its 'fungal' patron springs from
   // the tileset packs). eventDensityMul 0.7 = the quiet home (the bloom suppresses events as
@@ -1086,6 +1110,12 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
 
   { biome: 'crystal', weight: 1.2 },
   { biome: 'volcanic', weight: 1.3 },
+  // 1.5: THE SCALD BASIN — a staged COUNTRY (four faces + a cave face need
+  // the acreage) that should still read as a discovery, not a belt: between
+  // the butteland's spectacle weight and the garden's country weight. Its
+  // warm∧damp∧LOW claim keeps it out of the volcanic's scorching heights
+  // and the marsh's cool hollows alike (charter §2; DIAL).
+  { biome: 'scald', weight: 1.5 },
   { biome: 'mycelia', weight: 1.2 }, // rare fungal regions — the dormant homes the bloom collapses to
   // 2.2: the COURTLANDS — the conditioned-equilibrium doctrine on a RIM:
   // the moisture claim hugs the desert's own wetter verge, and the

@@ -77,6 +77,11 @@ export interface TheaterContext {
   /** The zone's biome, when it has one — the lever for BIOME-flavored kinds
    *  (the war column) whose ground has no faction OWNER to read. */
   biome?: string;
+  /** THE FACE AXIS: the zone's tileset id (its FACE within a country —
+   *  zone-standing truth, never lifecycle), so a row may claim one face of
+   *  a biome and abstain from its others (the terrace pilgrimage climbs the
+   *  sinter terraces, not the sulphur heart). */
+  tileset?: string;
   /** Hostile factions staking the zone, dominant first (faction.contestants). */
   contestants: string[];
   /** A faction whose war host is pressing this zone right now, if any. */
@@ -118,6 +123,15 @@ export interface TheaterKindDef {
    *  rows (the funeral reads its cortege's faction from row.params — the
    *  war-column idiom without a kind per faction). */
   cast(ctx: TheaterContext, row?: TheaterRow): { primary: string; secondary?: string | null } | null;
+  /** THE LOCAL CLOCK GATE: a kind whose WHEN is a clock the ZONE ITSELF
+   *  keeps (a fixture's pure schedule — the geyser field's surge hour, the
+   *  terrace pilgrimage's cue) declares it here and DECLINES a beat it
+   *  could not honestly form on, BEFORE the draw. Read-only over the zone's
+   *  standing truth (THE LOCAL GATE — never world lifecycle, never a write),
+   *  and a declined beat costs nothing: every kind's stream is keyed per
+   *  beat, so the next kind in priority draws exactly what it always would
+   *  (a rows-eligible kind that could not form no longer eats the seat). */
+  ready?(world: World, ctx: TheaterContext): boolean;
   /** Default per-kind dials; row.params spread over these. */
   params?: Record<string, unknown>;
   /** Additive kinds: default per-visit pour cap (row.pourCap overrides;
@@ -152,6 +166,10 @@ export interface TheaterRow {
   biomes?: string[];
   /** Owner-faction filter (the row plays only on this faction's ground). */
   factions?: string[];
+  /** THE FACE AXIS: tileset ids this row claims (a biome's faces — the
+   *  terrace pilgrimage names the terraces and the fields, not the heart);
+   *  AND with the other axes, omitted abstains like the rest. */
+  tilesets?: string[];
   grounds?: TheaterGround[];
   /** WHEN — the hour/weather/radiance gate (world/radiance.ts). The old
    *  chanceNight/chanceDay literals live here now, as phase rows. */
@@ -294,6 +312,7 @@ export function theaterRowEligible(
   held: (cond: RadianceCond | undefined) => boolean,
 ): boolean {
   if (row.biomes && !(ctx.biome && row.biomes.includes(ctx.biome))) return false;
+  if (row.tilesets && !(ctx.tileset && row.tilesets.includes(ctx.tileset))) return false; // THE FACE AXIS
   if (row.factions && !(ctx.owner && row.factions.includes(ctx.owner))) return false;
   if (row.grounds) {
     const ok = row.grounds.some(g =>
@@ -424,6 +443,9 @@ export function runTheaterBeat(world: World, o: TheaterBeatOpts): ActiveTheaterR
     if (!eventAllowed(def.id, world.zone)) continue;
     if (o.live.filter(r => !r.done && r.kind === def.id).length >= THEATER_CFG.concurrency.sameKindMax) continue;
     if (!theaterNeedsMet(def, o.ctx, o.stance)) continue;
+    // THE LOCAL CLOCK GATE: a kind that answers to a zone-kept clock declines
+    // the beats it could not form on — no seat spent, no draw shifted.
+    if (def.ready && !def.ready(world, o.ctx)) continue;
     const rows = theaterRowsFor(def.id).filter(r => theaterRowEligible(r, o.ctx, o.held));
     if (!rows.length) continue;
     // The kind's own stream — minted only once authored rows stand (an

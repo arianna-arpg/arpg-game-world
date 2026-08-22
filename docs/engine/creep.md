@@ -152,20 +152,38 @@ row ever needs them).
 **Anti-goals (load-bearing).** There is NO reaction matrix: a front names
 only the types it cares about, unlisted types are silence (probe-pinned:
 fire does nothing to the flood). Player casts never ignite fronts or
-terrain that isn't already burning — **ignition-by-player-damage is a
-reserved seam, default OFF everywhere**, to be added (if ever) as a per-row
-/ per-zone opt-in so fire builds never become a liability.
+terrain that isn't already burning — **the global default is OFF
+everywhere** — except where a LANE ROW opts in: **THE IGNITION DIAL**
+(`FrontSpawnRow.ignition`, `IgnitionSpec` — the Scald Basin's Char is the
+debut, charter card 8). A lit lane arms `CreepField.ignitable`; the
+world's blast taps (`frontSplash` + the ownerless blast) then call
+`igniteAt(x, y, r, amounts, now)`: damage of the row's named types landing
+where a piece of the lane's FUEL stands (default = the def's consume fuels;
+no fuel, no fire) fills a per-lane kindling meter that DECAYS
+(`CREEP_CFG.front.ignition.decay`); at the row's `power` one section of the
+lane's kind is born at the blast (bearing/reach on a private xorshift —
+never the placement stream), under the lane's `max` concurrent
+ignition-born sections and `cooldown`. The born section is the SAME def —
+same affinity, quench, starve — so it never spreads past the row's map.
+Zones without the dial pay nothing per hit; every feed/stoke lever keeps
+its deliberately-high threshold.
 
-**Reserved seams, named.**
-- *Escape-chase event*: bind an `ObjectiveSpec` `'escape'` zone to a lane
-  (or `addFront` from the event) — the front IS the pursuer. Nothing built
-  yet; the spawn rows and `addFront` are the whole contract it needs.
+**Reserved seams, named — and the ones now bound.**
+- *Escape-chase* — BOUND (M2b): `FrontSpawnRow.heels` — under an
+  `'escape'` objective `World.loadZone` calls `CreepField.fieldHeels(x, y,
+  bearing)`, fielding every pending heels lane's FIRST wave as a picket
+  behind the party's landing, marching the way in; later waves keep the
+  rim law. The front IS the pursuer.
 - *Attunement ice-jackpot*: enough cold poured into a floodcrest section
   tunes it briefly SOLID into standable ice — belongs to the attunement
-  fabric (`engine/tuning.ts`, in flight in a co-session) and should land
-  there, reading `quench` intake off this fabric rather than adding a lever
-  here.
-- *Ignition opt-in*: see anti-goals above.
+  fabric (`engine/tuning.ts`) and should land there, reading `quench`
+  intake off this fabric rather than adding a lever here.
+- *Ignition opt-in* — OPENED (M2b): see the anti-goals above.
+- *The caster-less baseline* — CLOSED (M2b): the leaf applied every grant
+  at dps 0, so a granted DoT (`flamewreathed`, `starfire`, `scalded`) wore
+  its label and never ticked. `CreepTerrain.statusDps(id)` (World answers
+  `baselineStatusDps(id, zone.level)` — the ground-effect lane's own law)
+  now lands it at the row's baseline; bare harnesses keep 0.
 
 **Co-op note.** Creep still never serializes (transience contract), and
 front state (runtime quench, consumed doodads, wake stamps) is

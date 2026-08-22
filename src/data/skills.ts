@@ -13986,6 +13986,732 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 48, weight: 2 },
   },
 
+  // --- THE SCALD BASIN's kit verbs (data/scald.ts; charter §8) ---------------
+  // THE VENT CALL (the geyserkin vent-shaman): a live vent called up UNDER
+  // your feet — the under-enemy storm (atEnemies, castRange 0: the caller
+  // is the storm's centre, the strikes plant under whoever stands inside
+  // its reach), an HONEST telegraph ring, then the column: fire, a burn
+  // chance, and the blast throws you clear — the geyser's own grammar in a
+  // hand. Every number a DIAL.
+  scald_vent_storm: {
+    id: 'scald_vent_storm', name: 'Vent Call', noDrop: true,
+    description: 'The shaman calls a live vent up under your feet: a ring shows where the'
+      + ' ground will blow, then a column of scalding steam bursts from it — fire damage,'
+      + ' a 40% chance to burn, and the blast throws you clear.',
+    tags: ['spell', 'fire', 'aoe', 'storm'], color: '#8fd8d4',
+    manaCost: 14, cooldown: 4.5, useTime: 0.9,
+    baseDamage: { fire: [11, 18] },
+    delivery: {
+      type: 'storm', count: [1, 2], interval: 0.3, areaRadius: 360, hitRadius: 44,
+      castRange: 0, atEnemies: true, scatter: 14, telegraph: 1.4,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.4 },
+      { type: 'knockback', strength: 160 },
+    ],
+    ai: { range: 340, weight: 3, keepDistance: 240 },
+  },
+  // THE SCALD JET (the kettleback): the banked steam vented all around it
+  // at the brim of its gauge — reserved OUT of the rotation by the brain
+  // (the full sac is the only warning).
+  scald_jet: {
+    id: 'scald_jet', name: 'Scald Jet', noDrop: true,
+    description: 'The kettleback vents its banked steam in a scalding burst all around it:'
+      + ' fire damage and a 50% chance to burn.',
+    tags: ['attack', 'fire', 'aoe'], color: '#eef6f8',
+    manaCost: 0, cooldown: 3, useTime: 0.5,
+    baseDamage: { fire: [10, 17] },
+    delivery: { type: 'nova', radius: 90 },
+    effects: [{ type: 'damage' }, { type: 'status', status: 'burn', chance: 0.5 }],
+    ai: { range: 80, weight: 1 },
+  },
+  // THE STILT SPEAR (the stilt-strider): a spear-fisher's thrust from stilt
+  // height — reach, a narrow arc.
+  stilt_spear: {
+    id: 'stilt_spear', name: 'Stilt Spear', noDrop: true,
+    description: 'A long spear-fisher\'s thrust from stilt height — physical damage with reach.',
+    tags: ['attack', 'melee', 'physical'], color: '#a8c8b8',
+    manaCost: 0, cooldown: 0, useTime: 0.85,
+    baseDamage: { physical: [7, 11] },
+    delivery: { type: 'melee', range: 66, arcDeg: 40 },
+    effects: [{ type: 'damage' }],
+    ai: { range: 72, weight: 2 },
+  },
+
+  // --- THE SCALD KIT K1 (charter docs/design/scald-kit.md — the monster side
+  // + the geyser-step spike; data/scaldkit.ts the census). THE SCALD family
+  // banks `scalded` (StatusDef.bank: magnitude accumulates per blow, ×1.5 on
+  // a wet body, a 5s managed wound) and RUPTURES it; STEAM plants a bank
+  // (the `vent` effect); GEYSER-STEP rides a column (LeapDelivery.vent).
+  // Monster verbs are noDrop kit-parts (THE MIRROR LAW: every player piece
+  // has a wearer here first); the one player piece is GEYSER-STEP (her
+  // spike). Every number a DIAL. -------------------------------------------
+  // STEAM VENT (vent_shaman, vaporling): a steam BANK planted at the
+  // caster's own feet — the fog fabric's kind (not the crone's conjured
+  // cloud, `steam_veil`, which veils her court by status alone): eyes stop
+  // at the white (THE VAPOR RIDE), occupants read as fog-veiled;
+  // concealment as a castable. (K2's player Steam Veil plants the same
+  // bank — at the aim.)
+  steam_vent: {
+    id: 'steam_vent', name: 'Steam Vent', noDrop: true,
+    description: 'Vents a bank of dense steam where the caster stands: sight stops at the white'
+      + ' (ranged foes lose their lock) and everything inside it reads fog-veiled.',
+    tags: ['spell', 'fire', 'duration'], color: '#eef6f8',
+    manaCost: 10, cooldown: 12, useTime: 0.5,
+    delivery: { type: 'self' },
+    effects: [{ type: 'vent', bank: 'steam', radius: 90, duration: 9 }],
+    ai: { range: 260, weight: 1 },
+  },
+  // VENT-RIDE (vent_shaman — the escape; the geyser-step's monster half):
+  // a leap that plants a vent under the caster — the broil under its feet
+  // for the wind-up (drawn; dodge-readable), the column at take-off (fire +
+  // a banked scald on whoever hugged it), the ride out. Cast AWAY from the
+  // target by the shaman's rule. NO-TAG: it relocates, never hovers.
+  vent_ride: {
+    id: 'vent_ride', name: 'Vent-Ride', noDrop: true,
+    description: 'The shaman calls a vent up under its own feet — the water broils, then the'
+      + ' column throws it clear: fire damage and a scald to whoever stood in the steam, and'
+      + ' the shaman lands out of reach.',
+    tags: ['spell', 'fire', 'aoe', 'movement'], color: '#8fd8d4',
+    manaCost: 12, cooldown: 8, useTime: 0.45,
+    baseDamage: { fire: [8, 13] },
+    delivery: { type: 'leap', range: 300, airTime: 0.5, radius: 50, vent: { columnR: 44, scale: 1 } },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 1, magnitude: 0.5 },
+    ],
+    ai: { range: 110, weight: 1 },
+  },
+  // SHELL BURST (kettleback — its big hit at the brim): a ground nova of
+  // boiling water — fire, a banked scald, and the splash SOAKS what it hits
+  // (the `soaked` marker reads as wet for the bank fold), so the NEXT scald
+  // banks ×1.5: the self-enabling combo. (K2's rename: the PLAYER's own
+  // ground nova took the clean "Kettle Burst" name and id — the book can
+  // never print one name for two arts.)
+  kettleback_burst: {
+    id: 'kettleback_burst', name: 'Shell Burst', noDrop: true,
+    description: 'The kettleback empties its shell in a burst of boiling water all around it:'
+      + ' fire damage, a scald that banks, and everything caught is left SOAKED — the next'
+      + ' scald bites harder on a wet body.',
+    tags: ['attack', 'fire', 'aoe'], color: '#d9f7fb',
+    manaCost: 0, cooldown: 3, useTime: 0.6,
+    baseDamage: { fire: [12, 19] },
+    delivery: { type: 'nova', radius: 100 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 1, magnitude: 0.55 },
+      { type: 'status', status: 'soaked', chance: 1 },
+      { type: 'knockback', strength: 120 },
+    ],
+    ai: { range: 90, weight: 1 },
+  },
+  // SCALDING LUNGE (stilt_strider): a reaching thrust with boiling water on
+  // the spear — fire + a banked scald; the wading prey pays the wet fold.
+  scalding_lunge: {
+    id: 'scalding_lunge', name: 'Scalding Lunge', noDrop: true,
+    description: 'A reaching spear-thrust from stilt height with boiling water on the blade —'
+      + ' fire damage and a scald that banks (harder on a wet target).',
+    tags: ['attack', 'melee', 'fire'], color: '#9fe4ea',
+    manaCost: 0, cooldown: 4, useTime: 0.7,
+    baseDamage: { fire: [8, 13] },
+    delivery: { type: 'melee', range: 84, arcDeg: 30 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 1, magnitude: 0.5 },
+    ],
+    ai: { range: 90, weight: 2 },
+  },
+  // SINTER LANCE (scald_lancer — the bank verb): a thrown sinter bolt that
+  // BANKS scald on the mark (×1.5 wet). Its rotation.
+  sinter_lance: {
+    id: 'sinter_lance', name: 'Sinter Lance', noDrop: true,
+    description: 'A thrown lance tipped in boiling sinter — fire damage and a scald that BANKS'
+      + ' with every hit (harder on a wet target).',
+    tags: ['attack', 'projectile', 'fire'], color: '#b8d8cc',
+    manaCost: 0, cooldown: 1.4, useTime: 0.7,
+    baseDamage: { fire: [7, 12] },
+    delivery: { type: 'projectile', speed: 520, range: 380, radius: 7 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 1, magnitude: 0.5 },
+    ],
+    ai: { range: 360, weight: 3, keepDistance: 220 },
+  },
+  // PRESSURE THROW (scald_lancer — the RUPTURE verb, the tribe's finisher):
+  // a charged lance that RUPTURES the mark's banked scald — 60% of the bank
+  // bursts as fire NOW (mitigated, credited to the lancer), the rest keeps
+  // burning; no bank, no burst (the hit still lands). One round in the pack
+  // (useCharges — a magazine that rebuilds slowly; the worn pressure-pack
+  // gauge reads it — THE PRESSURE GAUGE read).
+  pressure_throw: {
+    id: 'pressure_throw', name: 'Pressure Throw', noDrop: true,
+    description: 'A charged lance hurled with the pack\'s whole head of steam: fire damage, and'
+      + ' it RUPTURES the mark\'s banked scald — a share of the wound bursts at once.',
+    tags: ['attack', 'projectile', 'fire'], color: '#ff9a5a',
+    manaCost: 0, cooldown: 2, useTime: 0.9,
+    useCharges: { max: 1, recharge: 9 },
+    baseDamage: { fire: [10, 16] },
+    delivery: { type: 'projectile', speed: 560, range: 380, radius: 8 },
+    effects: [
+      { type: 'damage' },
+      { type: 'rupture', status: 'scalded', fraction: 0.6 },
+    ],
+    ai: { range: 360, weight: 1, keepDistance: 220 },
+  },
+  // VAPOR LASH (vaporling): a hot lash out of the white — fire + a banked
+  // scald at melee reach.
+  vapor_lash: {
+    id: 'vapor_lash', name: 'Vapor Lash', noDrop: true,
+    description: 'A lash of scalding vapor out of the steam — fire damage and a scald that banks.',
+    tags: ['attack', 'melee', 'fire'], color: '#e4f2f4',
+    manaCost: 0, cooldown: 0.4, useTime: 0.55,
+    baseDamage: { fire: [6, 10] },
+    delivery: { type: 'melee', range: 52, arcDeg: 90 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 0.8, magnitude: 0.45 },
+    ],
+    ai: { range: 56, weight: 2 },
+  },
+  // BLADDER VENT (kettle_bladder — the brim): the whole bladder as a wide
+  // nova of boiling water — fire, a HEAVY banked scald, and the splash
+  // soaks (the follow-up banks wet). Reserved for the brim rule.
+  bladder_vent: {
+    id: 'bladder_vent', name: 'Bladder Vent', noDrop: true,
+    description: 'The bladder bursts — boiling water all around: fire damage, a heavy scald'
+      + ' that banks, and everything caught is left soaked.',
+    tags: ['attack', 'fire', 'aoe'], color: '#ff9a4a',
+    manaCost: 0, cooldown: 4, useTime: 0.45,
+    baseDamage: { fire: [14, 22] },
+    delivery: { type: 'nova', radius: 130 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 1, magnitude: 0.8 },
+      { type: 'status', status: 'soaked', chance: 1 },
+      { type: 'knockback', strength: 140 },
+    ],
+    ai: { range: 120, weight: 1 },
+  },
+  // SPOUT HOP (spout_hopper — the geyser-step's skirmish half): the vent-
+  // ride as a MAGAZINE — two hops in the pot that rebuild slowly (the rounds
+  // ARE the bank; the jet legs read them). The column at take-off scalds
+  // lightly; the landing is a small slam.
+  spout_hop: {
+    id: 'spout_hop', name: 'Spout Hop', noDrop: true,
+    description: 'The hopper vents a spout under its own feet and rides it — the ground broils,'
+      + ' the column scalds whoever stood there, and the hopper lands on its mark.',
+    tags: ['attack', 'fire', 'aoe', 'movement'], color: '#a8d0c4',
+    manaCost: 0, cooldown: 1.5, useTime: 0.4,
+    useCharges: { max: 2, recharge: 7 },
+    baseDamage: { fire: [5, 9] },
+    delivery: { type: 'leap', range: 300, airTime: 0.42, radius: 40, vent: { columnR: 34, scale: 0.8 } },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 0.8, magnitude: 0.4 },
+    ],
+    ai: { range: 280, weight: 1 },
+  },
+  // HOPPER JAB (spout_hopper): the on-foot poke.
+  hopper_jab: {
+    id: 'hopper_jab', name: 'Hopper Jab', noDrop: true,
+    description: 'A quick jab of the hopper\'s sinter pick — physical damage.',
+    tags: ['attack', 'melee', 'physical'], color: '#a8d0c4',
+    manaCost: 0, cooldown: 0, useTime: 0.55,
+    baseDamage: { physical: [5, 8] },
+    delivery: { type: 'melee', range: 46, arcDeg: 80 },
+    effects: [{ type: 'damage' }],
+    ai: { range: 52, weight: 2 },
+  },
+  // MINERAL SLAM (terrace_warden): a heavy plated blow — physical, a short
+  // stagger of a shove. The warden's color comes from YOU (tune).
+  mineral_slam: {
+    id: 'mineral_slam', name: 'Mineral Slam', noDrop: true,
+    description: 'A heavy slam of the warden\'s plated claw — physical damage and a shove.',
+    tags: ['attack', 'melee', 'physical'], color: '#d8d0b8',
+    manaCost: 0, cooldown: 3.5, useTime: 0.9,
+    baseDamage: { physical: [12, 19] },
+    delivery: { type: 'melee', range: 58, arcDeg: 100 },
+    effects: [{ type: 'damage' }, { type: 'knockback', strength: 110 }],
+    ai: { range: 62, weight: 2 },
+  },
+  // GEYSER-STEP — THE PLAYER SPIKE (her word: "actually sounds incredible
+  // and I really want to see how that ends up playing out in-game"; pulled
+  // forward from K2). A LEAP that RIDES A COLUMN: the wind-up (0.35s) is a
+  // drawn broil under your own feet, the take-off erupts the departure
+  // point (fire + a banked scald on enemies in the column — the column is
+  // the smaller half), the flight rides lifted on the steam jet, and the
+  // landing splashes boiling water: fire + a scald that BANKS (×1.5 on a wet
+  // target). OWNER-SAFE (card 4): a player skill is not terrain — allies
+  // unhurt. Movement-tagged (refuses from a saddle — the mounts law). THE
+  // NO-LOCK LAW: a leap + a fire splash works anywhere; the basin's wet
+  // ground is where it SHINES. Single-mode (trees are the skill-modes
+  // waves'). ACQUISITION (K2, wired): the scald faces FLOOR it into their
+  // own drops (data/scaldkit.ts THE GEM FLOOR — found where it is taught),
+  // and the `gem_skills_scald` Vault row carries it into the account-wide
+  // pool once any scald ledger stands. The dev Gems tab still lists it, as
+  // it lists every skill — that lane was never the gate.
+  geyser_step: {
+    id: 'geyser_step', name: 'Geyser-Step',
+    description: 'Call a vent up under your feet and RIDE it: the ground broils for a breath,'
+      + ' the column erupts (fire damage and a scald to enemies standing in it) and throws you'
+      + ' to the target point, where you land in a splash of boiling water — fire damage and a'
+      + ' scald that BANKS with every application, harder on a wet target. Allies are never'
+      + ' scalded.',
+    tags: ['spell', 'fire', 'aoe', 'movement'], color: '#9fe4ea',
+    manaCost: 11, cooldown: 5, useTime: 0.35,
+    baseDamage: { fire: [9, 15] },
+    delivery: { type: 'leap', range: 340, airTime: 0.5, radius: 84, vent: { columnR: 40, scale: 0.6 } },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 1, magnitude: 0.5 },
+    ],
+    requirements: { willpower: 14 },
+    minDropLevel: 6,
+    ai: { range: 320, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.04)] },
+  },
+
+  // --- THE SCALD KIT K2 — THE PLAYER PIECES (charter docs/design/
+  // scald-kit.md v3 §3 the five families, §3.1 THE RUPTURE LAW, §7 the
+  // roster cut: SCALD + PRESSURE + GEYSER-STEP as skills, STEAM light,
+  // PRISM as supports/vestiges). Single-mode first-pass — the mode trees
+  // are the skill-modes waves' (§6). THE NO-LOCK LAW binds every piece:
+  // fire is everywhere, wet is everywhere water is (a river, a rainstorm,
+  // a shore, a sewer channel), occlusion is universal, a bank is pure
+  // mechanics, a leap is a leap — the basin is where they SHINE, never the
+  // only place they work. THE MIRROR LAW holds the other way: every piece
+  // here has a scald monster wearer the player met first (K1). Acquisition
+  // is the ledger's (the GEM FLOOR in data/scaldkit.ts + gem_skills_scald
+  // in meta/unlocks.ts). Every number a DIAL. ---------------------------
+
+  // SCALD ① — SCALDING LASH (the family's BANK verb): a whipped arc of
+  // boiling water. The scald it lays BANKS (StatusDef.bank — each
+  // application adds to the standing wound up to capMul × its strongest
+  // blow), and a WET target banks ×1.5, so the shore-fighter's opener is
+  // to fight where the water is. NO-LOCK: a fire cone that festers is a
+  // weapon in any country; the wet fold is the basin's dividend.
+  scalding_lash: {
+    id: 'scalding_lash', name: 'Scalding Lash',
+    description: 'Whip an arc of boiling water across everything in front of you: fire damage'
+      + ' and a scald that BANKS — every scald you land adds to the same wound instead of'
+      + ' replacing it, and it bites half again as hard on a WET target.',
+    tags: ['attack', 'melee', 'fire', 'aoe'], color: '#9fe4ea',
+    manaCost: 6, cooldown: 0, useTime: 0.55,
+    baseDamage: { fire: [8, 13] },
+    delivery: { type: 'cone', range: 120, arcDeg: 75 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 1, magnitude: 0.5 },
+    ],
+    requirements: { strength: 12, willpower: 10 },
+    minDropLevel: 3,
+    ai: { range: 110, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
+  // SCALD ② — KETTLE BURST (the self-enabling combo; the kettleback's
+  // Shell Burst in a player's hand — THE MIRROR LAW): a ground-target nova
+  // of boiling water that banks a scald AND leaves everything caught
+  // SOAKED, so the NEXT scald into that crowd banks ×1.5. Cast it anywhere
+  // and you have made your own shore.
+  kettle_burst: {
+    id: 'kettle_burst', name: 'Kettle Burst',
+    description: 'Burst a kettle of boiling water over the ground you mark: fire damage, a'
+      + ' scald that banks, and everything caught is left SOAKED for a few seconds — so every'
+      + ' scald you land next bites half again as hard. Bring your own water.',
+    tags: ['spell', 'fire', 'aoe'], color: '#d9f7fb',
+    manaCost: 12, cooldown: 3, useTime: 0.5,
+    baseDamage: { fire: [10, 16] },
+    delivery: { type: 'ground', radius: 96, castRange: 300 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 1, magnitude: 0.45 },
+      { type: 'status', status: 'soaked', chance: 1 },
+    ],
+    requirements: { willpower: 14 },
+    minDropLevel: 5,
+    ai: { range: 280, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.09), mod('aoeRadius', 'increased', 0.03)] },
+  },
+
+  // SCALD ③ — BOIL OVER (THE RUPTURE LAW's player payoff, charter §3.1):
+  // the family's SPEND. A marked body's banked scald is consumed — the
+  // share bursts NOW as fire, mitigated and credited like any blow (a
+  // killing burst pays your XP) — and the splash carries the lance to the
+  // crowd packed around it. Never over-consumes (the fraction clamps);
+  // with no bank standing it is simply a hot lance, which is the honest
+  // floor: the two-verb family asks you to bank before you spend.
+  boil_over: {
+    id: 'boil_over', name: 'Boil Over',
+    description: 'Bring a marked body\'s banked scald to the boil: fire damage, and 60% of the'
+      + ' scald it has banked BURSTS at once as fire (the rest keeps burning). With nothing'
+      + ' banked it is only the lance — bank the wound first, then spend it.',
+    tags: ['spell', 'fire', 'duration'], color: '#ff9a5a',
+    manaCost: 14, cooldown: 5, useTime: 0.5,
+    baseDamage: { fire: [9, 14] },
+    targeting: { target: 'enemy', castRange: 420 },
+    delivery: { type: 'target', splash: 70 },
+    effects: [
+      { type: 'damage' },
+      { type: 'rupture', status: 'scalded', fraction: 0.6 },
+    ],
+    requirements: { willpower: 16 },
+    minDropLevel: 7,
+    ai: { range: 400, weight: 2, keepDistance: 200 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.09)] },
+  },
+
+  // PRESSURE ① — HEAD OF STEAM (the basker's patience as a player stance;
+  // card 6: NO new resource — the magazine/empower grammar IS the bank). A
+  // channel that pours rounds into every PATIENT BANK you carry
+  // (useCharges.still — the PRESSURE family's own temper: those banks fill
+  // only while you hold ground and BLEED while you run). Stand and fill;
+  // move and hiss it away. NO-LOCK: a charge bank is pure mechanics.
+  head_of_steam: {
+    id: 'head_of_steam', name: 'Head of Steam',
+    description: 'CHANNELED: hold your ground and build pressure — every beat pours a round'
+      + ' into every pressure bank you carry. Those banks fill only while you stand still and'
+      + ' bleed away while you move; this is how you fill them fast.',
+    tags: ['spell', 'fire', 'channel', 'duration'], color: '#c8e8e4',
+    manaCost: 4, cooldown: 0, useTime: 0,
+    castMode: 'channel',
+    channel: { interval: 0.7, move: 'immobile', trackAim: false },
+    delivery: { type: 'self' },
+    effects: [
+      { type: 'restoreSkillCharges', amount: 1, scope: 'still' },
+    ],
+    requirements: { willpower: 12 },
+    minDropLevel: 6,
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.04)] },
+  },
+
+  // PRESSURE ② — BLOWHOLE (the spend: THE VENT PRESS): the whole bank goes
+  // at once and every round banked is ONE MORE COLUMN erupting under a
+  // marked body (the storm's atEnemies grammar — an honest telegraph disc,
+  // then the geysers). A DRY press still spits: the plain hot column is
+  // always there, the storm is what your patience bought.
+  blowhole: {
+    id: 'blowhole', name: 'Blowhole',
+    description: 'Vent everything at once: a ring shows the ground, then geyser columns erupt'
+      + ' under the enemies inside it — fire damage and a banked scald each. Every pressure'
+      + ' round you have banked is ONE MORE COLUMN; venting dry is a single hot spit.',
+    tags: ['spell', 'fire', 'aoe', 'storm'], color: '#8fd8d4',
+    manaCost: 16, cooldown: 0, useTime: 0.6,
+    useCharges: { max: 4, recharge: 4, ventAll: true, still: { bleed: 0.5 } },
+    baseDamage: { fire: [11, 17] },
+    delivery: {
+      type: 'storm', count: 1, interval: 0.18, areaRadius: 260, hitRadius: 52,
+      castRange: 340, atEnemies: true, scatter: 12, telegraph: 0.9,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 1, magnitude: 0.45 },
+      { type: 'knockback', strength: 90 },
+    ],
+    requirements: { willpower: 16, strength: 10 },
+    minDropLevel: 8,
+    ai: { range: 320, weight: 2, keepDistance: 220 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.09)] },
+  },
+
+  // GEYSER-STEP ② — VENT HOP (the short dash beside Geyser-Step's leap):
+  // the Fire Walker trail grammar with a STEAM BANK instead of burning
+  // ground (DashDelivery.trailVent) — a hot white line behind you that
+  // eyes STOP at (the vapor ride: ranged kin lose the lock) while shots
+  // still fly through. The escape that closes the room's sightlines behind
+  // it.
+  vent_hop: {
+    id: 'vent_hop', name: 'Vent Hop',
+    description: 'Hop a short way on a jet of steam, venting banks of dense white behind you:'
+      + ' sight stops at the steam (ranged foes lose their lock on whatever stands in it) and'
+      + ' the corridor you crossed is scalded.',
+    tags: ['spell', 'fire', 'movement', 'instant'], color: '#c8e8e4',
+    manaCost: 8, cooldown: 4, useTime: 0,
+    baseDamage: { fire: [5, 9] },
+    delivery: {
+      type: 'dash', distance: 230, speed: 900, width: 56,
+      trailVent: { bank: 'steam', radius: 62, duration: 5, spacing: 80 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 1, magnitude: 0.4 },
+    ],
+    requirements: { dexterity: 12, willpower: 10 },
+    minDropLevel: 4,
+    ai: { range: 240, weight: 1 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.08)] },
+  },
+
+  // STEAM — VENT VEIL (the player's plant; the vent-shaman's Steam Vent in
+  // your own hand — THE MIRROR LAW. Distinct from the Cistern Crone's
+  // `steam_veil`, which is a CONJURED cloud of the cloud-craft fabric:
+  // this one plants the fog fabric's registered STEAM BANK, the kind that
+  // truly stops eyes.) Concealment as a castable, aimed where you point.
+  vent_veil: {
+    id: 'vent_veil', name: 'Vent Veil',
+    description: 'Vent a bank of dense steam where you point: sight STOPS at the white — ranged'
+      + ' foes lose their lock, and anything inside reads fog-veiled — while shots still fly'
+      + ' through it. Cover is a place you make.',
+    tags: ['spell', 'fire', 'duration', 'aoe'], color: '#eef6f8',
+    manaCost: 10, cooldown: 9, useTime: 0.4,
+    delivery: { type: 'ground', radius: 100, castRange: 320, noImpact: true },
+    effects: [
+      { type: 'vent', bank: 'steam', radius: 100, duration: 9 },
+    ],
+    requirements: { willpower: 12 },
+    minDropLevel: 4,
+    ai: { range: 260, weight: 1 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.06), mod('aoeRadius', 'increased', 0.03)] },
+  },
+
+  // --- M3 coda: THE METRONOME LEAN (charter §8b — the cadenced kin) -------
+  // THE KETTLE STAMP (the geyserkin tempo-drummer): a light stamp of the
+  // beater — the drummer's ONE verb, drummed on its own count. Four in a row
+  // close the Kettle Tattoo grammar (data/combos.ts) and the fourth lands
+  // the vent burst; the beat pips (a tell — the honest measure) count them.
+  tempo_stamp: {
+    id: 'tempo_stamp', name: 'Kettle Stamp', noDrop: true,
+    description: 'A light stamp of the drummer\'s beater — physical damage; four in a row close the Kettle Tattoo.',
+    tags: ['attack', 'melee', 'physical'], color: '#d8d0b8',
+    manaCost: 0, cooldown: 0.9, useTime: 0.5,
+    baseDamage: { physical: [4, 7] },
+    delivery: { type: 'melee', range: 48, arcDeg: 100 },
+    effects: [{ type: 'damage' }],
+    ai: { range: 54, weight: 2 },
+  },
+  // THE TATTOO BURST — the tattoo's close (a combo payoff cast at the
+  // drummer's own feet, never on its bar): the geyser's grammar in a hand —
+  // a scalding column all around, fire, a burn chance, the blast throws.
+  // (K2's rename: the tattoo's close was a second "Kettle Burst" in the
+  // book — the player's gem holds that name; the drummer's payoff is named
+  // for the measure it closes.)
+  tempo_vent_burst: {
+    id: 'tempo_vent_burst', name: 'Tattoo Burst', noDrop: true,
+    description: 'A scalding vent bursts up around the drummer: fire damage, a 35% chance to burn, and the blast throws foes clear.',
+    tags: ['attack', 'fire', 'aoe'], color: '#eef6f8',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { fire: [9, 15] },
+    delivery: { type: 'nova', radius: 84 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.35 },
+      { type: 'knockback', strength: 150 },
+    ],
+  },
+  // THE CRAB TICK (the clockcrab): a small pinch — two wind the spring.
+  crab_tick: {
+    id: 'crab_tick', name: 'Crab Tick', noDrop: true,
+    description: 'A quick tick of the claw — physical damage; three in a row wind the Tick-Snap.',
+    tags: ['attack', 'melee', 'physical'], color: '#c8c0a0',
+    manaCost: 0, cooldown: 0.7, useTime: 0.45,
+    baseDamage: { physical: [3, 5] },
+    delivery: { type: 'melee', range: 40, arcDeg: 70 },
+    effects: [{ type: 'damage' }],
+    ai: { range: 46, weight: 2 },
+  },
+  // THE CRAB SNAP — the spring let go (the tick-snap's payoff, cast at the
+  // crab's own facing): a heavy cone bite that throws.
+  crab_snap: {
+    id: 'crab_snap', name: 'Crab Snap', noDrop: true,
+    description: 'The wound spring lets go: a heavy snap of the claw — physical damage in a cone that throws foes back.',
+    tags: ['attack', 'melee', 'physical'], color: '#f0d890',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { physical: [11, 17] },
+    delivery: { type: 'melee', range: 56, arcDeg: 90 },
+    effects: [{ type: 'damage' }, { type: 'knockback', strength: 130 }],
+  },
+
+  // --- M3: THE CISTERN CRONE's kit (data/cistern.ts; data/monsters.ts) --------
+  // THE BOIL (her verb — THE BROIL LAW as a boss verb): the cistern's pool
+  // turns LETHAL in a telegraphed window. A single GROUNDED storm strike
+  // centred on the crone (castRange 0, no scatter) whose landing bites ONLY
+  // bodies standing on `cistern_water` (StormDelivery.onGround — the dry
+  // shore inside the ring is spared) after ~2s in which the water VISIBLY
+  // BROILS (render/vis/boilLayer.ts draws the geyser fabric's one roil over
+  // exactly the cells the landing will bite — drawn == tested). Heavy fire,
+  // the scald sting (the tide the minnows frenzy on, the warmth the matrons'
+  // clutches hatch on), and the water THROWS you clear. Every number a DIAL.
+  cistern_boil: {
+    id: 'cistern_boil', name: 'The Boil', noDrop: true,
+    description: 'The crone stirs her cistern: the pool broils for two breaths, then the'
+      + ' water itself turns lethal — heavy fire damage and a scald to everyone standing IN'
+      + ' it, and the boil throws them clear. The shore beside the pool stays dry.',
+    tags: ['spell', 'fire', 'aoe', 'storm'], color: '#bff0e6',
+    manaCost: 20, cooldown: 9, useTime: 0.8,
+    baseDamage: { fire: [26, 40] },
+    delivery: {
+      type: 'storm', count: [1, 1], interval: 0, areaRadius: 0, hitRadius: 170,
+      castRange: 0, telegraph: 2.2,
+      onGround: ['cistern_water'],
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 1 },
+      { type: 'knockback', strength: 140 },
+    ],
+    ai: { range: 200, weight: 4 },
+  },
+  // THE SCALD UNDERTOW: the wellspring naiad's lash in the basin's register
+  // — a line of scalding current that seizes and REELS the catch back into
+  // the pool she is rooted in. Struggle out, or fight her standing in it.
+  scald_undertow: {
+    id: 'scald_undertow', name: 'Scald Undertow', noDrop: true,
+    description: 'A line of scalding current: the first body it strikes takes fire damage and'
+      + ' is seized in a DRAG grip, reeled back toward the crone and the pool she stands in.'
+      + ' Struggling breaks the hold like any other; where you stand when it snaps is the'
+      + ' lesson.',
+    tags: ['spell', 'projectile', 'fire', 'grab'], color: '#9fe0d4',
+    manaCost: 9, cooldown: 8, useTime: 0.55,
+    baseDamage: { fire: [7, 12] },
+    delivery: { type: 'projectile', speed: 560, radius: 8, range: 320, shape: 'line' },
+    effects: [
+      { type: 'damage' },
+      { type: 'grabSeize', grab: { verb: 'drag', breakMult: 1.1 } },
+    ],
+    ai: { range: 300, weight: 3, keepDistance: 140 },
+  },
+  // THE STEAM VEIL: she breathes a standing cloud of steam over herself and
+  // her court (the conjure grammar — the cloud-craft fabric; fog-veiled:
+  // detectability down while inside, the fog fabric's own word). Reads as
+  // weather, not a spell: the show-don't-tell law's concealment.
+  steam_veil: {
+    id: 'steam_veil', name: 'Steam Veil', noDrop: true,
+    description: 'The crone breathes out a standing cloud of steam: she and her court are'
+      + ' FOG-VEILED while they stand inside it, harder to mark and harder to hit.',
+    tags: ['spell', 'aoe', 'duration', 'buff'], color: '#e6f0ee',
+    manaCost: 16, cooldown: 14, useTime: 0.6,
+    delivery: { type: 'self' },
+    effects: [
+      { type: 'conjure', radius: 90, duration: 7, look: '#e6f0ee', grants: [{ status: 'fogveiled', side: 'allies' }] },
+    ],
+    ai: { range: 360, weight: 1.5 },
+  },
+
+  // --- M2b: THE CHAR'S TEETH + THE DOWNSTREAM + FAUNA WAVE 2 (data/scald.ts) --
+  // THE BURN RAIN's droplet (engine/geysers.ts GEYSER_CFG.rain — World.burnRain
+  // fires it BY THE FIXTURE at a great vent's burst edge through the weather
+  // strike's casterless posture; hitAll / spareDormant / spareRoofed ride as
+  // zone data): a scalding splash — fire + the scalded sting. No hand ever
+  // casts it (noDrop, no ai hint: it is terrain, not a spell).
+  scald_rain_drop: {
+    id: 'scald_rain_drop', name: 'Burn Rain', noDrop: true,
+    description: 'A great geyser\'s thrown water lands scalding: fire damage in a small splash'
+      + ' and a scald on whoever stands under it. Terrain, not a spell — it spares no banner;'
+      + ' a roof or a sinter overhang is the only dry seat.',
+    tags: ['spell', 'fire', 'aoe'], color: '#8fd8d4',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { fire: [9, 15] },
+    delivery: { type: 'ground', radius: 34, castRange: 600, delay: 0.8, occlusion: 'free' },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 1 },
+    ],
+  },
+  // THE CINDERWIND's falling cinder (data/scald.ts — the weather strike row:
+  // a sparse sky hazard through the shared strike machinery; roofs shelter).
+  cinder_fall: {
+    id: 'cinder_fall', name: 'Falling Cinder', noDrop: true,
+    description: 'A wind-borne cinder lands burning: fire damage in a small area with a 30%'
+      + ' chance to burn. Roofs and overhangs shelter from it.',
+    tags: ['spell', 'fire', 'aoe'], color: '#ff9a4a',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { fire: [6, 10] },
+    delivery: { type: 'ground', radius: 44, castRange: 600, delay: 0.7, occlusion: 'free' },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.3 },
+    ],
+  },
+  // THE SHALLOWS BROOD MATRON's clutch (the formic matriarch's pod grammar):
+  // egg pods laid at her feet that incubate on the clock — OR hatch EARLY the
+  // moment WARMTH finds them (hatch.onScorch — the warm hatch: the burn
+  // rain's landing, the runoff's wash, a column's heat, a pool's rim). Every
+  // great eruption is followed by something small and hungry downstream.
+  lay_brood_clutch: {
+    id: 'lay_brood_clutch', name: 'Lay Brood Clutch', noDrop: true,
+    description: 'Seeds a clutch of eggs in the warm shallows, up to 3 standing at once. A clutch'
+      + ' that survives 28 seconds hatches 2 scald spawn — and scalding water hatches it at once.',
+    tags: ['spell', 'summon', 'minion', 'duration', 'totem'], color: '#9fe0e8',
+    manaCost: 12, cooldown: 9, useTime: 0.9,
+    delivery: {
+      type: 'construct', kind: 'pod', look: 'brood_clutch',
+      range: 0, duration: 28, maxActive: 3, life: 40, placeRange: 90,
+      hatch: { skillId: 'brood_clutch_hatch', onScorch: 1.6 },
+    },
+    effects: [],
+    ai: { range: 220, weight: 2, keepDistance: 140 },
+  },
+  brood_clutch_hatch: {
+    id: 'brood_clutch_hatch', name: 'The Clutch Hatches', noDrop: true,
+    description: 'Bursts a brood clutch into 2 scald spawn, up to a shared cap of 8 — small,'
+      + ' fast, and hungry, and gone again within the minute.',
+    tags: ['spell', 'summon', 'minion'], color: '#9fe0e8',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    delivery: { type: 'summon', monsterId: 'scald_spawn', count: 2, maxActive: 8, duration: 45 },
+    effects: [],
+  },
+  // THE WALLOW's reach (the pool-bound tank — the demeanor shelf): a long
+  // scalding sweep from the wallow. Reach, never pursuit — the fight has a
+  // door, and this is the arm that reaches through it.
+  wallow_reach: {
+    id: 'wallow_reach', name: 'Wallow Reach', noDrop: true,
+    description: 'A long sweeping blow from the wallow: physical and fire damage with reach,'
+      + ' and a 35% chance to scald.',
+    tags: ['attack', 'melee', 'physical', 'fire'], color: '#8aa89a',
+    manaCost: 0, cooldown: 0, useTime: 0.95,
+    baseDamage: { physical: [9, 14], fire: [4, 7] },
+    delivery: { type: 'melee', range: 118, arcDeg: 55 },
+    effects: [{ type: 'damage' }, { type: 'status', status: 'scalded', chance: 0.35 }],
+    ai: { range: 124, weight: 3 },
+  },
+
+  // --- M3: THE GEYSERMAW's verbs (the great geyser den's apex — data/greatgeyser.ts,
+  // engine/ventDweller.ts). The maw lives IN the heart vent and fights only in
+  // its window; its kit is the country's own grammar at boss scale: THE COLUMN
+  // (a live vent called up under you — the shaman's vent-call, wider, harder:
+  // an honest ring, then the column and the throw) and THE SCALD SPRAY (the
+  // burn rain's grammar, thrown by a body — a scatter of scalding droplets over
+  // your ground, each a ring you can read). Both noDrop kit pieces; the gulp
+  // (the gorge gulper's own row) is the third verb. Every number a DIAL.
+  geysermaw_column: {
+    id: 'geysermaw_column', name: 'Column Call', noDrop: true,
+    description: 'The Geysermaw calls the basin\'s own throat up under your feet: a ring shows'
+      + ' where the floor will blow, then a great column of scalding steam bursts from it —'
+      + ' fire damage, a scald, and the blast throws you clear.',
+    tags: ['spell', 'fire', 'aoe', 'storm'], color: '#9fe0e8',
+    manaCost: 22, cooldown: 7, useTime: 1.0,
+    baseDamage: { fire: [24, 36] },
+    delivery: {
+      type: 'storm', count: [1, 1], interval: 0, areaRadius: 900, hitRadius: 62,
+      castRange: 0, atEnemies: true, scatter: 0, telegraph: 1.6,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 1 },
+      { type: 'knockback', strength: 300 },
+    ],
+    ai: { range: 880, weight: 3 },
+  },
+  geysermaw_spray: {
+    id: 'geysermaw_spray', name: 'Scald Spray', noDrop: true,
+    description: 'The Geysermaw throws a mouthful of the boiling basin over your ground: a'
+      + ' scatter of scalding droplets, each a ring, each fire damage and a scald where it'
+      + ' lands. Step between them.',
+    tags: ['spell', 'fire', 'aoe', 'storm'], color: '#9fe0e8',
+    manaCost: 26, cooldown: 9, useTime: 1.2,
+    baseDamage: { fire: [10, 16] },
+    delivery: {
+      type: 'storm', count: [6, 9], interval: 0.12, areaRadius: 700, hitRadius: 40,
+      castRange: 0, atEnemies: true, scatter: 150, telegraph: 0.9,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'scalded', chance: 1 },
+    ],
+    ai: { range: 680, weight: 2 },
+  },
+
   // --- THE MANTID SCHOOL's verbs (the Readers — enemies whose POSTURE is
   // the information; engine/tells.ts 'casting'/'feinting'/'foecast'). Five
   // stances, five noDrop kit pieces; the numbers are deliberately modest —

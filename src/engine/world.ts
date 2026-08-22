@@ -13,7 +13,7 @@ import { DiscIndex } from './spatial';
 import { ActorGrid } from './actorGrid';
 import { erraticTurn, spinOffset, weaveOffset, weaveVel } from './flight';
 import { mod, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
-import { baselineStatusDps, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
+import { baselineStatusDps, bankFracOf, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
 import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingState, type GainEvent, type MonsterPartDef, type Team } from './actor';
 import { EventBus } from './eventbus';
 import { Party } from './party';
@@ -24,7 +24,7 @@ import { DEFENSE_CFG } from './defense';
 import { MASS_CFG, impactFrac, impactScale, shoveAuthority } from './mass';
 import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, obedienceOf, ROUSE_RULES } from './ai';
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
-import { runAIActions } from './aiActions';
+import { aiKitInstance, runAIActions } from './aiActions';
 import {
   convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, treeNodeOf, treeNodeRefusal, treePointsSpent, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
@@ -52,7 +52,7 @@ import {
   type AbilityCost, type EssenceCost, type EssenceId, type EssenceSpillSpec,
 } from '../data/essences';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemInstance, type ItemRarity } from './items';
-import { DROP_CFG, GEM_DROP_CFG, resolveLootTable, rollVestigeId } from './loot';
+import { DROP_CFG, GEM_DROP_CFG, resolveLootTable, rollVestigeId, gemFloorFor, type GemFloor } from './loot';
 import { epitaphFor, VESTIGES } from '../data/vestiges';
 import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
@@ -101,7 +101,7 @@ import {
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
 import { canSquish, SQUISH_CFG, squishSpecOf } from './squish';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
-import { landingTier, linkFlipTier, makeTierNav, makeTierView, resolveTierCrossing, storyTable, tierElevOf, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
+import { landingTier, laneLedgerOnDescend, linkFlipTier, makeTierNav, makeTierView, resolveTierCrossing, storyTable, tierElevOf, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { liquidOf } from './genkit';
@@ -165,14 +165,21 @@ import { eventLevel as resolveEventLevel } from '../world/levelField';
 import { factionAllowed } from '../world/zonePolicy';
 import type { WalkField, PathProfile } from '../world/walk';
 import { GridWalkField, WALK_CFG } from '../world/gridWalk';
-import { regionKind, survivalResource, survivalEaseStat, SURVIVAL_EASE_CAP, doodadGroundIds, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec } from '../world/regions';
+import { regionKind, survivalResource, survivalEaseStat, survivalBandMeter, SURVIVAL_EASE_CAP, doodadGroundIds, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec, type SurvivalResourceDef } from '../world/regions';
 import { continentAt, continentSeedFrom, type ContinentInfo } from '../world/continents';
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, veilSpecOf, type VeilPatch } from './veil';
 import { registerDoodadFamily, doodadFamilyBits, doodadFamilyIndex, doodadFamilyEpoch, doodadFamilyCount } from './doodadFamilies';
-import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField } from './fog';
+import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField, type FogBank } from './fog';
 import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, crestPoint, type FrontConsumeRow } from './creep';
 import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackArcFrac, trackDone, trackPending, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
+import {
+  anchorVent, cometFanOf, columnPayload, fieldSurgeWindow, GEYSER_CFG, lintGeyserSpec, nextSurgeAfter,
+  rainFanOf, rollGeyserField, seatVent, ventDownstream, ventReadAt, ventSpill,
+  type GeyserField, type GeyserSpec, type GeyserSurgeRead, type PlacedVent,
+} from './geysers';
+import { dwellerPhaseAt, lintVentDweller, VENT_DWELLER_CFG, type DwellerPhase } from './ventDweller';
+import { REGROWTH_CFG, SCALD_CFG, type BaskSpec } from '../data/scald';
 import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { bootOccSites, driveOccSites, OCC_CFG, reviveOccSite, seedOccClockMarks, wakeRousedResidents, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
@@ -305,7 +312,7 @@ import { edgeBlockAt } from '../world/edgeBlocks';
 import type { WorldBossField, WorldBossMint } from '../packages/overlays/worldboss';
 import { eventTargetable, holdfastHostable } from '../world/zonePolicy';
 import type { InvasionHost } from '../world/invasion';
-import { WEATHER_DEFS, type WeatherFront, type WeatherStrike } from '../world/weather';
+import { WEATHER_DEFS, WET_SKY, type WeatherFront, type WeatherStrike } from '../world/weather';
 import { eventFrontFor } from './eventWeather';
 import { WEATHER_DRESS_CFG, dressPlanFor, rollDressPieces } from './weatherDress';
 import { dayCycle, inPhases } from '../world/daynight';
@@ -672,13 +679,21 @@ export const SCENERY_CFG = {
  *  lane's draw order. */
 const FARPOINT_SALT = 0x7a4f0d;
 
-/** DESERT HEAT tunables (World.updateHeat): the sunscorch cadence. The stack
- *  cap and per-stack fire-res erosion live on the STATUS DEF (sunscorched);
- *  the cap's consequence lives on its buildup ladder (heatstroke). */
+/** DESERT HEAT tunables (World.updateScorch — THE SCORCH BAR's ambient
+ *  lanes): the sunscorch cadence. ONE bar unit == ONE legacy stack, so
+ *  these per-stack cadences ARE the bar's per-unit rates — THE REFIT LAW
+ *  (the desert feels identical, only visible now) holds by construction
+ *  and probe_scorch pins it. The stack cap is the scorch row's max
+ *  (world/regions.ts); per-stack fire-res erosion stays on the STATUS DEF
+ *  (sunscorched — worn as the bar's band; SCORCH_EROSION is the dial) and
+ *  IS the bar's whole effect; the full state wears heatstroke's slow —
+ *  never a cook (her fourth-walk ruling: no life tick at any height). The
+ *  def's own buildup ladder still serves stacks earned OUTSIDE the bar
+ *  (the combat lane). */
 export const HEAT_CFG = {
-  /** Seconds per stack gained while standing in a heat shimmer, unshaded. */
+  /** Seconds per unit gained while standing in a heat shimmer, unshaded. */
   stackEvery: 1.4,
-  /** Seconds per stack shed while in shade (canopy, roof, or night). */
+  /** Seconds per unit shed while in shade (canopy, roof, or night). */
   dwindleEvery: 0.9,
   /** OPEN-SUN base cadence (ZoneTheme.swelter zones): seconds per stack at
    *  swelter 1 in a temperate-baked zone. Effective cadence =
@@ -1188,6 +1203,12 @@ interface Zone {
    *  radius × edgeFrac stand in the safe eye, exactly as at the
    *  original strike. Drawn == tested: the flash carries it too. */
   edgeFrac?: number;
+  /** THE GROUNDED STRIKE (StormDelivery.onGround — the Cistern Crone's
+   *  boil): the landing bites only victims whose grid cell wears one of
+   *  these region kinds — the water boils, the shore inside the ring does
+   *  not. The telegraph draws the roil over exactly those cells (drawn ==
+   *  tested); unset = the ordinary disc. */
+  onGround?: string[];
   /** LINGERING FUME (GroundDelivery.exposure): per-occupant CONTINUOUS
    *  dwell, seconds — ticks bite only past `after`; leaving clears the
    *  lungs (the madden dwell pattern, frame-accurate). */
@@ -1803,7 +1824,8 @@ registerConvertRule('chargesEmpty', (caster, inst) => {
   const uc = instanceUseCharges(inst);
   // Empower banks never present the reload face: a dry press casts PLAIN
   // (the hybrid family's whole point — fuel, not ammunition).
-  return !!uc && uc.empower === undefined && caster.skillChargeBank(inst).count <= 0;
+  // (A VENT PRESS — useCharges.ventAll — never converts: dry, it spits plain.)
+  return !!uc && uc.empower === undefined && !uc.ventAll && caster.skillChargeBank(inst).count <= 0;
 });
 // THE 'seatAway' CONVERSION RULE (the possession seam, engine/possess.ts):
 // while the PRESSING BODY's seat is riding away from home, the granting gem
@@ -2193,6 +2215,11 @@ interface ZoneMemory {
    *  placement order (1 = the rite was armed — shattered stays shattered;
    *  objective-independent, the occSprung idiom). */
   harvestSpent?: number[];
+  /** THE REGROWTH CYCLE's authored clock (World.updateCharRegrowth — the
+   *  Scald Basin's Char): the world time this zone's authored burn ground
+   *  was born; ash → flush → meadow age off it, so a walked Char zone is
+   *  visibly further along when you return. Objective-independent. */
+  charBorn?: number;
 }
 
 /** One CONTEST-LAW hold fixture (a survey stone, rift seal, pyre bowl, or
@@ -3329,6 +3356,9 @@ export class World {
    *  boot: the announce waits with the tide — fired once, at the first
    *  regrowth sweep that finds the hour held. Zone-local. */
   private liteWhenAnnounces: { when: LiteCond; text: string; color?: string }[] = [];
+  /** THE VENT SEAT's deferred rows (LiteSwarmRow.seat 'vents'): stashed by
+   *  bootLite, seated by bootLiteVentSeats once the geyser field stands. */
+  private liteVentRows: LiteSwarmRow[] = [];
   private liteRegenClock = 0;
   /** Colony anchors already registered (actor ids — an extinct pocket's
    *  dead anchor never re-registers). */
@@ -4969,6 +4999,10 @@ export class World {
     const memory = !def.boundless && this.zoneMemoryFresh(zoneId) ? this.zoneMemory.get(zoneId)! : null;
     const layoutSeed = memory?.seed ?? def.seed ?? rollSeed();
     this.currentZoneSeed = layoutSeed;
+    // THE REGROWTH CYCLE's authored clock (updateCharRegrowth): remembered
+    // ground keeps its age across the leaving; fresh ground is born now.
+    this.charBorn = memory?.charBorn ?? this.time;
+    this.charRegrowAcc = 0;
     this.farPointDraws = 0; // the seeded-fallback lane replays from the top
     const rng = new Rng(layoutSeed);
     // CRUSADE WORKS ride the REAL structure pipeline: a held zone's tier
@@ -5508,6 +5542,12 @@ export class World {
             bossId: o.id, anchor: vec(dais.x, dais.y),
             rect: { x0: m, y0: m, x1: this.arena.w - m, y1: this.arena.h - m },
           };
+        } else if (layout.bossSeat) {
+          // THE BOSS SEAT (GeneratedLayout.bossSeat — the dais law, generalized):
+          // the recipe named where its ask stands — the vent cauldron seats
+          // its maw IN the heart vent (engine/ventcauldron.ts); the dweller
+          // sweep then finds that vent from the body's own seat.
+          boss.pos = this.clampPos(vec(layout.bossSeat.x, layout.bossSeat.y), boss.radius);
         } else {
           boss.pos = this.clampPos(this.farPoint(720), boss.radius);
         }
@@ -5694,6 +5734,20 @@ export class World {
     // nodes stand up on their own salted stream — the same boot discipline,
     // placed LAST so every prior lane's pool draws stay byte-frozen.
     this.bootHarvest(def, pois, memory);
+    // THE GEYSER FABRIC (engine/geysers.ts): timed vents + their current
+    // bands stand up on their own salted stream — appended AFTER the lanes
+    // above so their draws stay byte-frozen (the harvest seat's own law).
+    // Authored rows (GeneratedLayout.authoredVents — the lake's metronome)
+    // ride in beside the theme's counts.
+    this.bootGeysers(def, pois, layout.authoredVents);
+    // THE VENT SEAT (LiteSwarmRow.seat 'vents' — the steam-wisp tide): the
+    // lite rows bootLite deferred seat at the vents that now stand, on
+    // their own salted lane (no POI draw moved).
+    this.bootLiteVentSeats();
+    // THE ESCAPE SEAM (FrontSpawnRow.heels): under an 'escape' objective the
+    // Char's chase lanes field at the party's heels the moment the zone
+    // stands (creep field + party placement both done above).
+    this.bootEscapeChase();
     // Walled camps post their guards — each watch is a squad.
     if (def.packs) {
       for (const c of layout.camps) {
@@ -11032,11 +11086,15 @@ export class World {
       if (!cs || cs.mode === 'channel' || cs.mode === 'guard') continue;
       const eta = cs.total - cs.elapsed;
       if (eta <= 0.08 || eta > BEHAVIOR_CFG.dodgeHorizon) continue;
-      const del = cs.inst.def.delivery as { type: string; radius?: number };
-      if (del.type !== 'ground' && del.type !== 'nova') continue;
-      if (!del.radius) continue;
-      const at = del.type === 'nova' ? e.pos : cs.aim;
-      const r = del.radius + pad;
+      const del = cs.inst.def.delivery as { type: string; radius?: number; vent?: { columnR: number } };
+      // THE VENT-RIDE's broil (LeapDelivery.vent): a vent-leaper's wind-up is
+      // a column-to-be under its own feet — the dodge-mind reads the same
+      // drawn roil the eyes do (drawn == tested) and steps off it.
+      const ventR = del.type === 'leap' && del.vent ? del.vent.columnR : undefined;
+      if (del.type !== 'ground' && del.type !== 'nova' && ventR === undefined) continue;
+      if (!del.radius && ventR === undefined) continue;
+      const at = del.type === 'nova' || ventR !== undefined ? e.pos : cs.aim;
+      const r = (ventR ?? del.radius ?? 0) + pad;
       if (dist(actor.pos, at) > r) continue;
       if (!best || eta < best.eta) {
         best = { ref: cs, pos: vec(at.x, at.y), radius: r, eta,
@@ -11086,6 +11144,24 @@ export class World {
             best = { ref: r, pos: vec(pose.x, pose.y), radius: reach + pad, eta: t };
           }
           break; // first cover is the read — later samples only age it
+        }
+      }
+    }
+    // GEYSER VENTS (the geyser fabric): a broiling vent's coming column is
+    // a threat like any un-exploded disc — the dodge-mind reads the SAME
+    // pure resolver the drawn broil rises from (drawn == tested; the vent
+    // object is the stable ref, so the read rolls once per telegraph). The
+    // dodge horizon clips the ~2s broil to its last stretch — the locals
+    // step off "one breath before", exactly the charter's tell.
+    if (this.geysers) {
+      for (const v of this.geysers.vents) {
+        const r = GEYSER_CFG.classes[v.cls].columnR + pad;
+        if (dist(actor.pos, v.pos) > r) continue;
+        const read = ventReadAt(this.geysers, v, this.time, this.geyserMode);
+        const eta = read.phase === 'erupt' ? 0.05 : read.toBurst;
+        if (eta > BEHAVIOR_CFG.dodgeHorizon) continue;
+        if (!best || eta < best.eta) {
+          best = { ref: v, pos: vec(v.pos.x, v.pos.y), radius: r, eta };
         }
       }
     }
@@ -12199,6 +12275,7 @@ export class World {
     return {
       owner: owner.faction, ownerPower: owner.power,
       biome: this.zone.biome,
+      tileset: this.zone.tileset, // THE FACE AXIS (TheaterRow.tilesets) — zone-standing truth
       contestants: fac.contestants(this.zone.id),
       invader: host?.faction ?? null,
       hasCamps: this.theaterSpots.camps.length > 0,
@@ -14561,6 +14638,47 @@ export class World {
     this.text(vec(at.x, at.y - 14), 'kindled', '#ffd890', 11);
   }
 
+  /** PLANT A FOG BANK (the 'vent' skill effect — the scald kit's steam): a
+   *  registered FogBankDef stood up at the resolution point through the ONE
+   *  fog seam every fog-bringer uses (fogEnsure — the field's own salted
+   *  stream, never the layout's), reach × area mods, life × effectDuration,
+   *  MORTAL (FogField.plantBank). The bank's own row does the rest — its
+   *  grants and, for steam, its sight occlusion (FogBankDef.occludesSight →
+   *  World.opaqueAt → castRay). An unregistered bank id warns and plants
+   *  nothing; a boundless arena (no fog field) plants nothing. */
+  plantVent(fx: { bank: string; radius: number; duration: number }, at: Vec2, aoeScale: number, durScale: number): FogBank | null {
+    const def = FOG_BANKS[fx.bank];
+    if (!def) { console.warn(`[vent] unregistered fog bank '${fx.bank}'`); return null; }
+    const fog = this.fogEnsure();
+    if (!fog) return null;
+    const bank = fog.plantBank(def, at, fx.radius * Math.sqrt(Math.max(0.01, aoeScale)), fx.duration * Math.max(0.1, durScale));
+    this.flashes.push({ pos: vec(at.x, at.y), radius: bank.reach * 0.6, color: def.color ?? '#eef6f8', life: 0.35, maxLife: 0.35 });
+    return bank;
+  }
+
+  /** THE VAPOR RIDE's env hook (engine/los.ts OccEnv.opaqueAt): the zone's
+   *  sight-occluding fog lobes. One integer read when no such bank stands. */
+  opaqueAt(x: number, y: number): boolean {
+    return this.fog !== null && this.fog.occluders > 0 && this.fog.occludesAt(x, y);
+  }
+
+  /** THE PRESSURE GAUGE read (the tells fabric's 'rounds:<skillId>' source —
+   *  TellWorld.kitRounds): a body's kit skill's live use-charge bank as
+   *  {count, max}. Reads the SAME instance a scripted cast spends
+   *  (aiKitInstance — minted on first read, cached on the body) and the
+   *  same bank useSkill spends (skillChargeBank / skillChargeCap), so the
+   *  worn gauge and the spend can never disagree. A body banned from the
+   *  skill, or a skill with no use-charges, reads nothing. */
+  kitRounds(body: { id: number }, skillId: string): { count: number; max: number } | undefined {
+    const actor = body as Actor;
+    if (typeof actor.skillChargeBank !== 'function') return undefined;
+    const inst = aiKitInstance(actor, skillId);
+    if (!inst) return undefined;
+    const max = actor.skillChargeCap(inst);
+    if (max <= 0) return undefined;
+    return { count: actor.skillChargeBank(inst).count, max };
+  }
+
   /** The lightwell sweep: residents feed, pools drain PER RESIDENT (two
    *  heroes empty one well twice as fast — deliberate co-op pressure), and
    *  monsters with MonsterDef.wellDrain drink the light from the dark's side
@@ -15689,6 +15807,9 @@ export class World {
       // re-enters them through kind.solved — proof, not homework).
       ...(this.puzzles.some(r => r.done)
         ? { puzzlesDone: this.puzzles.filter(r => r.done).map(r => r.id) } : {}),
+      // The regrowth cycle's authored clock (objective-independent; one
+      // number — the ground's age survives the leaving).
+      ...(this.charBorn !== undefined ? { charBorn: this.charBorn } : {}),
     };
   }
 
@@ -16005,6 +16126,7 @@ export class World {
       ...(m.cullKills !== undefined ? { cullKills: m.cullKills } : {}),
       ...(m.cullNeed !== undefined ? { cullNeed: m.cullNeed } : {}),
       ...(m.puzzlesDone ? { puzzlesDone: [...m.puzzlesDone] } : {}),
+      ...(m.charBorn !== undefined ? { charBorn: m.charBorn } : {}),
     });
     // THE ROW GRAIN (memorySaveMemo above): stored rows reuse by OBJECT
     // IDENTITY under the replace-only law — a recapture (leave), an
@@ -16242,6 +16364,10 @@ export class World {
         ...(Array.isArray(m.puzzlesDone)
           ? { puzzlesDone: m.puzzlesDone.filter((x): x is string => typeof x === 'string') }
           : {}),
+        // The regrowth cycle's clock: a finite world time, else dropped
+        // (a fresh entry re-ages from now — the ground is merely younger).
+        ...(typeof m.charBorn === 'number' && Number.isFinite(m.charBorn)
+          ? { charBorn: m.charBorn } : {}),
       });
     }
     // Quests: active entries whose def AND zone both still stand; the
@@ -16664,6 +16790,16 @@ export class World {
     }
     const seats = this.seats.filter(s => !s.actor.dead).map(s => s.actor);
     return seats.length ? pick(seats) : null;
+  }
+
+  /** THE DRESS SEAM (public): plant ONE drying dress piece through the same
+   *  plantImpactDress→evap path every blast pock rides (the transience
+   *  doctrine — capped per zone, dries away, never persisted). Fabrics that
+   *  lay a ground beat outside a delivery (the terrace pilgrimage's
+   *  prism-crust offerings at the brim — data/pilgrimage.ts) come in here;
+   *  the chokepoint stays one. */
+  plantDressAt(pos: Vec2, radius: number, spec: ImpactDressSpec): void {
+    this.plantImpactDress({ pos: vec(pos.x, pos.y), radius, impactDress: spec });
   }
 
   /** IMPACT DRESS (ImpactDressSpec): the detonation pocks the ground — a
@@ -26980,9 +27116,15 @@ export class World {
     this.liteHasTrample = false;
     this.liteMinTrampleSpeed = Infinity;
     const spec = def.theme.lite;
+    this.liteVentRows = [];
     if (spec?.swarms.length) {
       const rng = new Rng((this.currentZoneSeed ^ LITE_CFG.salt) >>> 0);
       for (const row of spec.swarms) {
+        // THE VENT SEAT (LiteSwarmRow.seat 'vents'): a row that seats AT the
+        // zone's geyser vents is deferred past bootGeysers (the vents do not
+        // stand yet) onto its own salted lane — bootLiteVentSeats — and
+        // spends NOTHING here, so the POI stream keeps its exact shape.
+        if (row.seat === 'vents') { this.liteVentRows.push(row); continue; }
         const has = rng.next() < (row.chance ?? 1);
         const pockets = rng.int(row.pockets[0], row.pockets[1]);
         // THE CONDITIONED POUR (LiteSwarmRow.when): an out-of-hour row still
@@ -26990,7 +27132,7 @@ export class World {
         // draws are sacred — held or not, every roll happens), but pours no
         // bodies yet; the regrowth sweep raises the tide when the hour
         // comes, and the announce waits with it (liteWhenAnnounces).
-        const held = !row.when || this.radianceCondHeld(row.when);
+        const held = this.liteCondHeld(row.when);
         let poured = false;
         for (let p = 0; p < pockets; p++) {
           const heart = this.interactSpot(pois, rng, LITE_CFG.pour.reach, LITE_CFG.pour.portalClear);
@@ -27544,10 +27686,86 @@ export class World {
       : (row.regen ?? kindRegen ?? (row.when ? {} : undefined));
     if (!regen) return -2;
     const pk = this.litePockets.length;
-    const p = this.litePocketPush(regen, kindIdx, heart.x, heart.y, cap, 0, undefined);
+    const vents = row.seat === 'vents';
+    const p = this.litePocketPush(regen, kindIdx, heart.x, heart.y, cap, 0,
+      vents ? LITE_CFG.ventSeat.scatter : undefined);
     if (row.when) p.when = row.when;
-    this.litePlantBurrow(pk, heart.x, heart.y, row.burrowKind);
+    // A VENT-seated pocket wears no burrow: the vent mouth IS its mark (the
+    // steam you see rising is the heart you would exterminate).
+    if (!vents) this.litePlantBurrow(pk, heart.x, heart.y, row.burrowKind);
     return pk;
+  }
+
+  /** THE POUR'S HOUR, evaluated (LiteCond — engine/lite.ts): the radiance
+   *  clauses through the ONE radiance gate, plus the structural `surge`
+   *  clause — THE SURGE HOUR (geyserSurge): `true` holds only while the
+   *  basin's vents run hot, `false` only in the calm between. A row with no
+   *  surge clause reads exactly as before (the grove's tides, byte-identical). */
+  liteCondHeld(cond: LiteCond | undefined): boolean {
+    if (!cond) return true;
+    if (cond.surge !== undefined && (this.geyserSurge()?.held ?? false) !== cond.surge) return false;
+    return this.radianceCondHeld(cond);
+  }
+
+  /** THE VENT SEAT (LiteSwarmRow.seat 'vents' — the steam-wisp tide's lane,
+   *  charter §8): the rows bootLite deferred seat their pockets AT the
+   *  zone's placed vents (count-rolled AND authored — the field is the
+   *  truth), on their own salted lane (LITE_CFG.ventSeat.salt — the POI
+   *  stream untouched), the pocket heart = the vent's mouth, scatter a
+   *  vent-sized ring. Pockets SEAT whether or not their hour holds (the
+   *  conditioned pour's law); a held row pours at once. Called right after
+   *  bootGeysers; a vent-less zone seats nothing. */
+  private bootLiteVentSeats(): void {
+    const rows = this.liteVentRows;
+    this.liteVentRows = [];
+    const f = this.geysers;
+    if (!rows.length || !f || !f.vents.length) return;
+    const pool = this.lite;
+    const rng = new Rng((this.currentZoneSeed ^ LITE_CFG.salt ^ LITE_CFG.ventSeat.salt) >>> 0);
+    for (const row of rows) {
+      const has = rng.next() < (row.chance ?? 1);
+      const want = Math.min(f.vents.length, rng.int(row.pockets[0], row.pockets[1]));
+      // Distinct vents, a seeded partial shuffle (every draw happens, minted or not).
+      const order = f.vents.map((_, i) => i);
+      for (let i = 0; i < want; i++) {
+        const j = i + rng.int(0, order.length - 1 - i);
+        const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+      }
+      const held = this.liteCondHeld(row.when);
+      let poured = false;
+      for (let i = 0; i < want; i++) {
+        const v = f.vents[order[i]];
+        const heart = vec(v.pos.x, v.pos.y);
+        const n = rng.int(row.size[0], row.size[1]);
+        let pk = -1;
+        for (let s = 0; s < n; s++) {
+          const ang = rng.range(0, Math.PI * 2);
+          const d = rng.range(4, LITE_CFG.ventSeat.scatter);
+          if (!has) continue;
+          const kindIdx = this.liteKindOf(row.monsterId);
+          if (kindIdx < 0) continue;
+          if (pk === -1) pk = this.litePocketEnsure(row, kindIdx, heart, n);
+          if (!held) continue;
+          const bx = heart.x + Math.cos(ang) * d, by = heart.y + Math.sin(ang) * d;
+          const open = this.liteOpenAt(bx, by);
+          if (pool.spawn(kindIdx, open ? bx : heart.x, open ? by : heart.y, 0, 0,
+            this.liteKinds[kindIdx].plies0, pk >= 0 ? pk : -1) >= 0) {
+            poured = true;
+            if (pk >= 0) {
+              this.litePockets[pk].poured = true;
+              this.litePockets[pk].live++;
+            }
+          }
+        }
+      }
+      if (poured && row.announce) {
+        for (const s of this.seats) {
+          this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), row.announce, row.announceColor ?? '#c8a878', 13);
+        }
+      } else if (has && !held && row.when && row.announce) {
+        this.liteWhenAnnounces.push({ when: row.when, text: row.announce, color: row.announceColor });
+      }
+    }
   }
 
   /** THE BURROW TELL: ambient regen hearts wear a findable mark — the
@@ -27650,7 +27868,7 @@ export class World {
     if (this.liteWhenAnnounces.length) {
       const still: { when: LiteCond; text: string; color?: string }[] = [];
       for (const an of this.liteWhenAnnounces) {
-        if (this.radianceCondHeld(an.when)) {
+        if (this.liteCondHeld(an.when)) {
           for (const s of this.seats) {
             this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), an.text, an.color ?? '#c8a878', 13);
           }
@@ -27687,7 +27905,7 @@ export class World {
       if (p.extinct) continue;
       // THE POUR'S HOUR (LiteSwarmRow.when → LitePocket.when): resolved
       // once per pocket per sweep — everything below branches on it.
-      const held = !p.when || this.radianceCondHeld(p.when);
+      const held = this.liteCondHeld(p.when);
       if (p.anchorId) {
         const anchor = this.actorById(p.anchorId);
         if (!anchor || anchor.dead) { this.litePocketExtinct(pk, p); continue; }
@@ -27923,8 +28141,13 @@ export class World {
     const ride = a.clingTo;
     a.clingTo = undefined;
     const bur = cause === 'shake' ? a.cling?.burrow : undefined;
+    // THE FLOP (ClingSpec.flop): the pop-out for a perched, visible rider —
+    // the shake alone earns it; burrow wins where both are authored.
+    const flop = cause === 'shake' && !bur ? a.cling?.flop : undefined;
     a.clingCooldownUntil = this.time
-      + (bur ? bur.grace ?? CLING_CFG.burrow.grace : CLING_CFG.reattachGrace);
+      + (bur ? bur.grace ?? CLING_CFG.burrow.grace
+        : flop ? flop.grace ?? CLING_CFG.flop.grace
+          : CLING_CFG.reattachGrace);
     // The burrow marker dies with the ride (refresh-driven, but a half-
     // second of ghost body would be a lie — the grab-release law).
     for (let i = a.statuses.length - 1; i >= 0; i--) {
@@ -27934,12 +28157,17 @@ export class World {
       }
     }
     if (!ride) return;
-    const ang = bur ? rand(0, Math.PI * 2) : ride.ang;
-    const hop = bur ? bur.toss ?? CLING_CFG.burrow.toss : CLING_CFG.detachHop;
+    const ang = (bur || flop) ? rand(0, Math.PI * 2) : ride.ang;
+    const hop = bur ? bur.toss ?? CLING_CFG.burrow.toss
+      : flop ? flop.toss ?? CLING_CFG.flop.toss
+        : CLING_CFG.detachHop;
     a.pos = this.clampPos(vec(
       a.pos.x + Math.cos(ang) * hop,
       a.pos.y + Math.sin(ang) * hop), a.radius);
-    if (bur) {
+    // The flop's worn beat: the status row's own duration IS the window
+    // (data keeps it aligned with the grace — the lamprey's flail).
+    if (flop?.status && STATUS_DEFS[flop.status]) a.applyStatus(flop.status, 0, 1, 'the flop');
+    if (bur || flop) {
       // The pop-out reads: a body flung clear of the flesh it was inside.
       this.flashes.push({
         pos: vec(a.pos.x, a.pos.y), radius: a.radius + 6,
@@ -28964,7 +29192,17 @@ export class World {
     // presses never touch it; executeSkill skips magazine stamps entirely),
     // flagging the bank so expiry pours the refill in updateTimers.
     let roundMult = 1;
-    if (useCharges?.empower !== undefined) {
+    // THE VENT PRESS (useCharges.ventAll — THE SCALD KIT K2's Blowhole): the
+    // press SPENDS THE WHOLE BANK and hands the count to the cast, which
+    // grows by it (executeSkill opts.ventRounds — storm strikes, projectile
+    // shots, or extra resolutions); a dry press casts plain (canUse never
+    // refused it, the convert face never presented — the empower law).
+    let ventRounds: number | undefined;
+    if (useCharges?.ventAll) {
+      const bank = caster.skillChargeBank(inst);
+      ventRounds = bank.count;
+      bank.count = 0;
+    } else if (useCharges?.empower !== undefined) {
       // THE EMPOWER BANK: a round in the pot is DRUNK for MORE on this
       // use; a dry press casts plain — never refused, never converted,
       // never finalRoundDamage (that lever belongs to true ammunition).
@@ -29220,6 +29458,7 @@ export class World {
         targetInfo: targetInfo ?? undefined, dmgMult: baseMult, paidCost: paid,
         chargesSpent: cc.consumed,
         repeat: bankSteps,
+        ventRounds,
         primed: primed || undefined,
       });
       // A REFLEX that pierced paces on its own clock and stamps NO recovery
@@ -29239,6 +29478,7 @@ export class World {
       indicatorAt: effMode === 'timed' ? rand(0.3, 0.85) : undefined,
       presses: effMode === 'multitude' ? 1 : undefined,
       paidCost: paid,
+      ventRounds,
     };
     return true;
   }
@@ -29346,6 +29586,11 @@ export class World {
        *  self-payload BANKS instead of applying (released whole by the
        *  first life-damage event; see releasePrimedPours). */
       primed?: boolean;
+      /** THE VENT PRESS (useCharges.ventAll — THE SCALD KIT K2): rounds the
+       *  press spent from its bank — COUNT deliveries (storm strikes,
+       *  projectile shots) add them to their count; every other delivery
+       *  resolves that many EXTRA times through the multitude train. */
+      ventRounds?: number;
     } = {},
   ): boolean {
     const def = inst.def;
@@ -29581,8 +29826,15 @@ export class World {
       }
     }
 
+    // THE VENT PRESS (useCharges.ventAll — THE SCALD KIT K2): the rounds the
+    // press spent GROW the cast. COUNT deliveries fold them into their own
+    // count below (storm strikes, projectile shots — more columns, more
+    // bolts); every other delivery resolves that many EXTRA times through
+    // the multitude train (the stepsFromBank law, spending all).
+    const ventRounds = opts.ventRounds ?? 0;
+    const ventCounts = def.delivery.type === 'storm' || def.delivery.type === 'projectile';
     // Multitude strikes: one full resolution per press.
-    const repeats = Math.max(1, opts.repeat ?? 1);
+    const repeats = Math.max(1, opts.repeat ?? 1) + (ventCounts ? 0 : ventRounds);
     if (repeats > 1) {
       // MOVEMENT MULTITUDE (Flickerstep): presses become a staggered TRAIN,
       // not a synchronous loop — N same-frame blinks collapse into one jump
@@ -29597,12 +29849,12 @@ export class World {
           scaleStep: caster.sheet.get('repeatScale', tags, extra),
           retarget: caster.sheet.get('repeatRetarget', tags, extra) > 0,
         });
-        return this.executeSkill(caster, inst, aim, { ...opts, repeat: 1 });
+        return this.executeSkill(caster, inst, aim, { ...opts, repeat: 1, ventRounds: ventCounts ? opts.ventRounds : 0 });
       }
       let ok = true;
       for (let i = 0; i < repeats; i++) {
         ok = this.executeSkill(caster, inst, aim,
-          { ...opts, repeat: 1, noCooldown: i > 0 || opts.noCooldown }) && ok;
+          { ...opts, repeat: 1, noCooldown: i > 0 || opts.noCooldown, ventRounds: ventCounts ? opts.ventRounds : 0 }) && ok;
       }
       return ok;
     }
@@ -29843,6 +30095,8 @@ export class World {
       case 'projectile': {
         let count = rollCount(d.count, Math.round(caster.sheet.get('projectileCount', tags, extra)))
           + (opts.bonusProjectiles ?? 0)
+          // THE VENT PRESS's spent rounds (useCharges.ventAll): more shots.
+          + ventRounds
           // Charge-fed volleys (Gyre Hurl): every charge burned is a blade.
           + Math.round((instanceChargeCost(inst)?.projectilesPerCharge ?? 0) * (opts.chargesSpent ?? 0))
           // A wagon-fed corpse volley (Volatile Cinders): every extra body
@@ -30453,6 +30707,12 @@ export class World {
           // fabric): pool scales with effectDuration, reach with area.
           if (fx.type === 'kindle') {
             this.plantKindle(caster, fx.kind, at, aoeScale, caster.sheet.get('effectDuration', tags, extra));
+            continue;
+          }
+          // A PLANTED STEAM BANK goes where you point it (the 'vent' effect —
+          // the fog fabric): reach with area, life with effectDuration.
+          if (fx.type === 'vent') {
+            this.plantVent(fx, at, aoeScale, caster.sheet.get('effectDuration', tags, extra));
             continue;
           }
           if (fx.type === 'conjure') {
@@ -31158,7 +31418,9 @@ export class World {
                 caster.pos.y + Math.sin(caster.facing) * d.castRange);
         const at = this.clampPos(this.skillOcclusion(caster, inst) === 'blocked'
           ? this.clipShot(caster.pos, wantAt, caster.tier) : wantAt, 10);
-        const strikes = rollCount(d.count, Math.round(caster.sheet.get('stormCount', tags, extra)));
+        // (+ the VENT PRESS's spent rounds — Blowhole: every banked round is
+        // one more column, the storm's own count shift.)
+        const strikes = rollCount(d.count, Math.round(caster.sheet.get('stormCount', tags, extra)) + ventRounds);
         // stormImmediate is a FRACTION: that share of the strikes crashes
         // down up-front (nearest enemies first via the sparkfield sort),
         // the rest keep the cadence. 1 = the old all-at-once flag.
@@ -31239,6 +31501,7 @@ export class World {
             delay0: d.lob && !arming ? zDelay : undefined,
             impactDress: d.impactDress,
             fx: d.fx, // THE EFFECT VOICE: the delivery names its landing
+            onGround: d.onGround, // THE GROUNDED STRIKE: the water boils, the shore does not
 
             armed: arming || undefined,
             armSeq: arming ? this.sparkSeq++ : undefined,
@@ -31310,6 +31573,20 @@ export class World {
           d.trailZone ?? (mt > 0
             ? { radius: 32, duration: 2.2, tickInterval: 0.4, damageScale: mt }
             : undefined);
+        // THE STEAM TRAIL (DashDelivery.trailVent — THE SCALD KIT K2's Vent
+        // Hop): the run plants a registered FOG BANK every `spacing` units,
+        // the Fire Walker trail grammar aimed at the fog fabric. Reach and
+        // life are resolved HERE with the cast's own context (the travel
+        // ticks carry no tags/extra), the conjure-trail stash's idiom.
+        (caster as Actor & { dashVentSpec?: { bank: string; radius: number; duration: number; spacing: number } }).dashVentSpec =
+          d.trailVent
+            ? {
+              bank: d.trailVent.bank,
+              radius: d.trailVent.radius * aoeScale,
+              duration: d.trailVent.duration * caster.sheet.get('effectDuration', tags, extra),
+              spacing: Math.max(20, d.trailVent.spacing ?? 90),
+            }
+            : undefined;
         // Zephyr Step / Cloudborne: a conjure-trail spec from the delivery
         // OR the cloudTrail stat — the dash lays standing cloud as it
         // travels (sky-road over conjurable void, wind-lane vapor over
@@ -31328,8 +31605,9 @@ export class World {
               ? { look: (baseCT as { look?: string }).look } : {}),
           }
           : undefined;
-        // Dive Bomb: the launch point erupts.
-        this.moveBlast(caster, inst, caster.pos);
+        // Dive Bomb: the launch point erupts (and THE DEPARTURE SPLASH —
+        // the Afterspray support — pays here alone).
+        this.moveBlast(caster, inst, caster.pos, 'depart');
         break;
       }
 
@@ -31376,8 +31654,9 @@ export class World {
           this.mintTrailPatch(caster, inst, spec, caster.pos, caster.facing);
           this.mintTrailPatch(caster, inst, spec, dest, caster.facing);
         }
-        // Dive Bomb: erupt where you vanish...
-        this.moveBlast(caster, inst, caster.pos);
+        // Dive Bomb: erupt where you vanish... (THE DEPARTURE SPLASH — the
+        // Afterspray support — pays at this end alone).
+        this.moveBlast(caster, inst, caster.pos, 'depart');
         if (d.delay && d.delay > 0) {
           this.pendingBlinks.push({ actor: caster, dest, timer: d.delay, color: def.color, inst });
           this.flashes.push({ pos: vec(dest.x, dest.y), radius: caster.radius * 1.6, color: def.color, life: d.delay, maxLife: d.delay });
@@ -31431,10 +31710,32 @@ export class World {
           telegraph: d.telegraph
             ? { color: (typeof d.telegraph === 'object' ? d.telegraph.color : undefined) ?? def.color }
             : undefined,
+          // THE VENT-RIDE (LeapDelivery.vent): the flight remembers its
+          // column so the renderer draws the steam jet under the rising body.
+          vent: d.vent ? { columnR: d.vent.columnR * aoeScale } : undefined,
         };
         caster.untargetable = true; // airborne: nothing can touch them
         caster.dash = null;
         caster.useLock = Math.max(caster.useLock, d.airTime + 0.1);
+        // THE VENT-RIDE's take-off: the departure point ERUPTS — the skill's
+        // own hit on every enemy standing in the column (× the vent's scale:
+        // the column is the smaller half, the landing the slam), the bells
+        // rung, the flash drawn at the tested disc. Owner-safe through the
+        // ordinary pipeline (enemiesOf): a player's vent is not terrain.
+        // The dodge-minds read the broil through imminentThreatTo during the
+        // cast, so a body that stayed chose to.
+        if (d.vent) {
+          const vr = d.vent.columnR * aoeScale;
+          const vScale = useMult * (d.vent.scale ?? 0.6);
+          for (const e of this.enemiesOf(caster)) {
+            if (dist(caster.pos, e.pos) - e.radius <= vr) this.resolveHit(caster, inst, e, vScale);
+          }
+          this.strikeSurfaces(caster, caster.pos, vr);
+          this.flashes.push({
+            pos: vec(caster.pos.x, caster.pos.y), radius: vr,
+            color: '#d9f7fb', life: 0.35, maxLife: 0.35,
+          });
+        }
         // Cloudborne: the take-off point keeps a cloud underfoot — leap
         // OFF a fraying pad and leave yourself a way back (the landing is
         // already confined to standing ground).
@@ -31452,8 +31753,9 @@ export class World {
         if (mtLeap > 0) {
           this.mintTrailPatch(caster, inst, this.statTrailSpec(mtLeap), caster.pos, caster.facing);
         }
-        // Dive Bomb: the take-off point erupts.
-        this.moveBlast(caster, inst, caster.pos);
+        // Dive Bomb: the take-off point erupts (and THE DEPARTURE SPLASH —
+        // the Afterspray support — pays here alone).
+        this.moveBlast(caster, inst, caster.pos, 'depart');
         break;
       }
 
@@ -31842,6 +32144,12 @@ export class World {
         const banks: SkillInstance[] = [];
         if (fx.scope === 'all') {
           for (const s of caster.skills) if (s && instanceUseCharges(s)) banks.push(s);
+        } else if (fx.scope === 'still') {
+          // THE PATIENT BANKS only (THE SCALD KIT K2 — Head of Steam feeds
+          // the PRESSURE family and nothing else): every equipped bank
+          // wearing useCharges.still, native or grafted. Flasks and guns
+          // keep their own clocks.
+          for (const s of caster.skills) if (s && instanceUseCharges(s)?.still) banks.push(s);
         } else {
           const host = inst.hostSkillId
             ? caster.skills.find(s => s?.def.id === inst.hostSkillId)
@@ -31861,12 +32169,15 @@ export class World {
           loaded += add;
         }
         if (loaded > 0) {
-          this.text(vec(caster.pos.x, caster.pos.y - 20), 'loaded', def.color, 11);
+          // (A PATIENT pour says nothing: the bank's own pips and the
+          // pressure gauge ARE the read — show, don't tell. Every other
+          // rack still announces itself.)
+          if (fx.scope !== 'still') this.text(vec(caster.pos.x, caster.pos.y - 20), 'loaded', def.color, 11);
           // A per-beat CHANNEL reload that tops its (single) host releases
           // the hands — the drum is full, the pulses stop themselves.
           const cs = caster.casting;
           if (cs && cs.inst === inst && cs.mode === 'channel'
-            && fx.scope !== 'all' && banks.length
+            && (fx.scope ?? 'host') === 'host' && banks.length
             && caster.skillChargeBank(banks[0]).count >= caster.skillChargeCap(banks[0])) {
             cs.held = false;
           }
@@ -31947,6 +32258,12 @@ export class World {
       // resolved (ground deliveries plant at the target, in the case block).
       if (fx.type === 'kindle' && d.type !== 'ground') {
         this.plantKindle(caster, fx.kind, origin, aoeScale, durScale);
+      }
+      // A PLANTED STEAM BANK from any non-ground delivery stands where the
+      // skill resolved (ground deliveries plant at the target, above) — a
+      // self-cast veils the caster's own feet, a leap's vent its departure.
+      if (fx.type === 'vent' && d.type !== 'ground') {
+        this.plantVent(fx, origin, aoeScale, durScale);
       }
       // A POURED SWARM (engine/lite.ts): pool bodies stand at the
       // resolution point — the nest's vent, the shepherd's call. A
@@ -34489,7 +34806,7 @@ export class World {
    *  hit. Puzzles listen to every change (World.puzzleTuned — the chord
    *  riddles); resonate() is the NOISE sibling (struck stone turns heads),
    *  this one is the COLOR. */
-  private attuneCrystal(a: Actor, tone: DamageType, striker?: Actor | null): void {
+  private attuneCrystal(a: Actor, tone: DamageType, striker?: Actor | null, strikeInst?: SkillInstance | null): void {
     const spec = a.tune;
     if (!spec || a.tone === tone) return;
     const prev = a.tone;
@@ -34504,10 +34821,24 @@ export class World {
       const radius = (spec.pulse === false ? undefined : spec.pulse?.radius)
         ?? TUNE_CFG.pulseRadius;
       const sdef = STATUS_DEFS[attunedStatus(tone)];
-      const scale = washFor / Math.max(0.01, sdef?.duration ?? washFor);
+      // THE FAVORED PULSE (tuneFavor — the Mineral Tuning support, THE SCALD
+      // KIT K2): a striker who invested in the stone takes the crystal's
+      // side. The wash it authored SPARES that striker's enemies and runs
+      // ×(1 + favor) longer on their allies — the prism snail fights FOR the
+      // build that tuned it. Unfavored strikes keep the fabric's own law
+      // (the crystal doesn't take sides), byte for byte. Read with the
+      // STRIKING INSTANCE's own context, so a socketed gem's skill-local
+      // mods are in scope exactly like every other rider on that blow.
+      const favor = striker
+        ? striker.sheet.get('tuneFavor',
+          strikeInst ? skillContextTags(strikeInst.def, grantedTags(strikeInst)) : undefined,
+          strikeInst ? instanceMods(strikeInst) : undefined)
+        : 0;
+      const scale = washFor * (1 + Math.max(0, favor)) / Math.max(0.01, sdef?.duration ?? washFor);
       for (const x of this.actorsNear(a.pos.x, a.pos.y, a.radius + radius + 64, this.attuneScratch)) {
         if (x === a || x.dead || x.downed || x.construct || x.passive) continue;
         if (dist(x.pos, a.pos) - x.radius > a.radius + radius) continue;
+        if (favor > 0 && striker && this.hostileTo(striker, x)) continue;
         x.applyStatus(attunedStatus(tone), 0, scale, 'attunement');
         this.flashes.push({
           pos: vec(x.pos.x, x.pos.y), radius: x.radius + 5,
@@ -34532,11 +34863,14 @@ export class World {
    *  (pre-forgo tone — magnitude was rebated, color was not) and queues an
    *  enrolled puzzle node's knock, wounded or not. Evaded and blocked hits
    *  never arrive here — those refusals stand. */
-  private knockFixtures(caster: Actor, target: Actor, tone: DamageType | null, wounding: boolean): void {
+  private knockFixtures(caster: Actor, target: Actor, tone: DamageType | null, wounding: boolean,
+    inst?: SkillInstance | null): void {
     if (target.dead) return;
     if (tone && target.tune && !target.untargetable && tone !== target.tone
       && !target.tune.locked && toneAccepted(target.tune, tone)) {
-      this.attuneCrystal(target, tone, caster);
+      // The striking INSTANCE rides along so skill-local tuning grafts
+      // (Mineral Tuning) are in scope at the pulse — the blow's own gems.
+      this.attuneCrystal(target, tone, caster, inst);
     }
     if (target.puzzleNode) this.puzzleStruck(target, caster, wounding);
   }
@@ -35815,10 +36149,17 @@ export class World {
     return { radius: 32, duration: 2.2, tickInterval: 0.4, damageScale: mt };
   }
 
-  private moveBlast(caster: Actor, inst: SkillInstance, at: Vec2): void {
+  /** The movement eruption. `phase` names WHICH end of the flight this is —
+   *  'depart' (the launch/vanish point) or 'arrive' (the landing/arrival) —
+   *  so THE DEPARTURE SPLASH (departSplash, the Afterspray support — THE
+   *  SCALD KIT K2) can pay at the launch alone while Dive Bomb's moveExplode
+   *  keeps paying at both. The two scales SUM at a departure: a build
+   *  carrying both erupts once, harder. */
+  private moveBlast(caster: Actor, inst: SkillInstance, at: Vec2, phase: 'depart' | 'arrive' = 'arrive'): void {
     const tags = skillContextTags(inst.def, grantedTags(inst));
     const extra = instanceMods(inst);
-    const scale = caster.sheet.get('moveExplode', tags, extra);
+    const scale = caster.sheet.get('moveExplode', tags, extra)
+      + (phase === 'depart' ? caster.sheet.get('departSplash', tags, extra) : 0);
     if (scale <= 0) return;
     const radius = 85 * caster.sheet.get('aoeRadius', tags, extra);
     for (const e of this.enemiesOf(caster)) {
@@ -36236,6 +36577,9 @@ export class World {
     // The ownerless lane carries its type in hand — a marching skin under
     // the blast drinks it directly (quench/feed, FrontSpec levers).
     if (this.creep?.quenchable) this.creep.damageSkin(pos.x, pos.y, radius, { [type]: dmg });
+    // THE IGNITION DIAL (FrontSpawnRow.ignition): the same blast KINDLES
+    // a lit lane's fuel under it — null-cost everywhere the dial is off.
+    if (this.creep?.ignitable) this.creep.igniteAt(pos.x, pos.y, radius, { [type]: dmg }, this.time);
   }
 
   // --- DEATH BURST: the telegraphed coalesce → implode / tracking-orb on enemy death ---
@@ -36722,7 +37066,7 @@ export class World {
         // wound, not the contact — so enrolled fixtures still ring and
         // tunable bodies still take the color (the bell needn't bleed).
         // Evades and blocks stayed refusals above: those never landed.
-        this.knockFixtures(caster, target, struckTone, false);
+        this.knockFixtures(caster, target, struckTone, false, inst);
         return;
       }
       // THE MIMIC CAPTURE (engine/mimic.ts): a LANDED enemy art teaches a
@@ -37037,7 +37381,7 @@ export class World {
       // unaccepted tones wash past; physical is a tone like any other, so
       // battering an attuned crystal back to its ground state —
       // "shattering the attunement" — is a deliberate act.
-      this.knockFixtures(caster, target, struckTone, dealt > 0);
+      this.knockFixtures(caster, target, struckTone, dealt > 0, inst);
       // CONTAGION (SkillDef/SupportDef.contagion): the struck victim may
       // become the next CAST SITE — after a telegraphed beat the skill (or
       // a named payload) RELEASES from the victim, attributed to the
@@ -37379,6 +37723,10 @@ export class World {
         // this one ally (one bond per caster; newest wins).
         target.addBuff(fx, durScale, 0, inst.def.tags);
         if (fx.bond) caster.bond = { targetId: target.id, buffId: fx.id };
+      } else if (fx.type === 'rupture') {
+        // THE RUPTURE (THE RUPTURE LAW — StatusDef.bank): spend a fraction
+        // of the target's BANKED status as a burst of its own element, NOW.
+        this.ruptureBank(caster, target, fx.status, fx.fraction, fx.mul ?? 1, tags, extra);
       } else if (fx.type === 'status') {
         // AILMENT RESISTANCE (victim-side, element-tagged): Purity of Fire
         // shrugs ignites; Purity of Elements shrugs the lot.
@@ -37619,9 +37967,25 @@ export class World {
     // registry outgrew the loop: ~130 ids × a full uncacheable resolution
     // (`extra` defeats the memo) ran on every landed hit to find the two an
     // ailment build actually carries.
+    // THE WET RIDER (applyWet_<status> — THE SCALD KIT K2's Boiling Point):
+    // the conditional half of the family above, folded into the SAME sweep
+    // so the RNG stream keeps its order (the armed lists merge in
+    // STATUS_IDS order; an un-armed sheet costs one empty-list read, and a
+    // DRY target never rolls at all — the chance is simply absent). Wet is
+    // the standing read (Actor.isWet: wading / swimming / soaked / rain-wet
+    // — the scald fold's own truth), so a river, a rainstorm and a shore all
+    // arm it exactly as the basin's pools do.
+    const wetHere = dealt > 0 && target.isWet();
     if (dealt > 0) {
-      for (const sid of caster.sheet.armedFamily('apply_', STATUS_IDS, extra)) {
-        const ch = caster.sheet.get('apply_' + sid, tags, extra);
+      const wetArmed = wetHere
+        ? caster.sheet.armedFamily('applyWet_', STATUS_IDS, extra) : [];
+      const applyArmed = caster.sheet.armedFamily('apply_', STATUS_IDS, extra);
+      const armedIds = wetArmed.length
+        ? STATUS_IDS.filter(id => applyArmed.includes(id) || wetArmed.includes(id))
+        : applyArmed;
+      for (const sid of armedIds) {
+        const ch = caster.sheet.get('apply_' + sid, tags, extra)
+          + (wetHere ? caster.sheet.get('applyWet_' + sid, tags, extra) : 0);
         if (ch <= 0 || !chance(Math.min(1, ch + bonusChance))) continue;
         const sdef = STATUS_DEFS[sid];
         const dps = sdef.dotType
@@ -38499,6 +38863,17 @@ export class World {
         this.spawnLightwell(fx.kind, vec(at.x, at.y));
         break;
       }
+      // A VENTED BANK (THE SCALD KIT K2 — Vaporize): the trigger plants a
+      // registered fog bank where it landed (the struck body, else the
+      // owner) — the kindle case's sibling aimed at the fog fabric, so any
+      // proc/rider/fortune that names a bank lays area denial by SIGHT.
+      // The bank's own row bounds the litter (it is mortal and short).
+      case 'vent': {
+        const at = target ? target.pos : caster.pos;
+        this.plantVent({ bank: fx.bank, radius: fx.radius, duration: fx.duration },
+          vec(at.x, at.y), 1, caster.sheet.get('effectDuration'));
+        break;
+      }
       // THE CAST PAYLOAD (the signature lane, data/procs.ts): play a
       // catalog skill from the proc's site — the rider grammar's payload
       // as a first-class effect, one depth deeper like every consequence.
@@ -38764,6 +39139,43 @@ export class World {
   }
 
   /** A rupturing status detonates around its (surviving) victim. */
+  /** THE RUPTURE (the 'rupture' SkillEffect — StatusDef.bank, the scald
+   *  kit's RUPTURE LAW): consume `fraction` of the victim's banked instance
+   *  of `statusId` and deal it NOW as a burst of the status's own element —
+   *  the remaining banked DoT (dps × stacks × seconds left) × fraction ×
+   *  mul, mitigated like any typed blow against the rupturer, credited to
+   *  the rupturer (a killing burst is its kill). Never over-consumes: the
+   *  fraction clamps to [0,1], the instance keeps the rest (its magnitude
+   *  shrinks by the share spent; a whole-fraction rupture expunges it), the
+   *  bank read restamps, and a victim with no such instance takes nothing.
+   *  Returns the life the burst landed (0 = nothing to spend). */
+  ruptureBank(caster: Actor, victim: Actor, statusId: string, fraction: number, mul: number,
+    tags?: Set<SkillTag>, extra?: Modifier[]): number {
+    const s = victim.statuses.find(x => x.id === statusId);
+    const sdef = STATUS_DEFS[statusId];
+    if (!s || !sdef || victim.dead || victim.invulnerable) return 0;
+    const f = Math.max(0, Math.min(1, fraction));
+    const banked = s.dps * s.stacks * Math.max(0, s.remaining);
+    if (f <= 0 || banked <= 0) return 0;
+    const el: DamageType = sdef.dotType ?? sdef.element ?? 'fire';
+    const burst = banked * f * Math.max(0, mul);
+    // Spend first (the verb is the spend; the burst is what it pays out).
+    s.dps *= 1 - f;
+    if (f >= 1 || s.dps < 0.05) victim.endStatus(statusId);
+    else s.bankFrac = bankFracOf(s, sdef);
+    const taken = mitigateTyped(victim, { [el]: burst }, { attacker: caster, tags, extra });
+    this.flashes.push({
+      pos: vec(victim.pos.x, victim.pos.y), radius: victim.radius + 18,
+      color: sdef.color, life: 0.3, maxLife: 0.3,
+    });
+    if (taken <= 0) return 0;
+    victim.life -= taken;
+    victim.hitFlash = 0.15;
+    this.text(vec(victim.pos.x, victim.pos.y - 14), Math.round(taken).toString(), sdef.color, 13);
+    if (victim.life <= 0 && !victim.dead) this.kill(victim, false, caster);
+    return taken;
+  }
+
   private ruptureStatus(victim: Actor, s: ActiveStatus): void {
     const type: DamageType = s.ruptureType ?? 'chaos';
     const radius = 90;
@@ -39528,27 +39940,43 @@ export class World {
    *  even if the unlocked set were somehow emptied; it only keeps the
    *  contract (a non-empty pool, since no starter is noDrop). ONE filter
    *  serves the roller and THE STANDING ORDER's odds. */
-  private skillDropPool(atLevel: number): SkillDef[] {
-    let pool = SKILL_LIST.filter(s => !s.noDrop && isSkillUnlockedForDrop(this.account, s.id)
+  private skillDropPool(atLevel: number, floor?: GemFloor): SkillDef[] {
+    let pool = SKILL_LIST.filter(s => !s.noDrop
+      && (isSkillUnlockedForDrop(this.account, s.id) || !!floor?.skills.has(s.id))
       && (s.minDropLevel ?? 0) <= atLevel);
     if (pool.length === 0) pool = SKILL_LIST.filter(s => !s.noDrop && STARTER_SKILLS.includes(s.id));
     return pool;
   }
 
   /** The support-gem drop POOL at a bracket (may be empty — nothing unlocked). */
-  private supportDropPool(atLevel: number): SupportDef[] {
-    return SUPPORT_LIST.filter(d => isSupportUnlockedForDrop(this.account, d.id)
+  private supportDropPool(atLevel: number, floor?: GemFloor): SupportDef[] {
+    return SUPPORT_LIST.filter(d =>
+      (isSupportUnlockedForDrop(this.account, d.id) || !!floor?.supports.has(d.id))
       && (d.minDropLevel ?? 0) <= atLevel);
+  }
+
+  /** THE GEM FLOOR (engine/loot.ts GEM_FLOORS — THE SCALD KIT K2, charter
+   *  §4): the gems THIS ZONE's country floors into the kill-path pool —
+   *  "deep zones advertise themselves by what falls there". The MINT path
+   *  alone reads it (dropGemAt → rollSkillGem / rollSupportDropGated): the
+   *  vendor shelf, the standing order's odds and every other pool consumer
+   *  keep the account-wide law, so a floor is a place to FIND a gem, never
+   *  a second economy. Floored gems also roll at ×floorMult weight — the
+   *  country leans toward its own. */
+  private zoneGemFloor(): GemFloor | undefined {
+    return gemFloorFor(this.zone.tileset);
   }
 
   /** DROP-AT-1 (docs/design/skill-modes.md §2, ruled): every skill gem
    *  mints at level 1 — leveling is the Ability Essence economy's job, so
    *  a find is a SHAPE (skill × rarity), never a pre-walked ladder. (The
    *  old GEM_DROP_CFG.preLevel deep-zone roll retired with M-ECON.) */
-  rollSkillGem(bias?: SkillTag[], atLevel = this.zone.level): SkillInstance {
-    const pool = this.skillDropPool(atLevel);
+  rollSkillGem(bias?: SkillTag[], atLevel = this.zone.level, floor?: GemFloor): SkillInstance {
+    const pool = this.skillDropPool(atLevel, floor);
     const owned = this.carriedGemIds().skills;
-    const skillDef = this.pickGem(pool, s => s.tags, s => s.dropWeight ?? 100, bias,
+    const skillDef = this.pickGem(pool, s => s.tags,
+      // THE GEM FLOOR's lean: the country's own gems roll at ×floorMult here.
+      s => (s.dropWeight ?? 100) * (floor?.skills.has(s.id) ? GEM_DROP_CFG.floorMult : 1), bias,
       s => owned.has(s.id)) ?? pick(pool);
     const rarity = rollSkillRarity(Math.random());
     return makeSkillGem(skillDef, 1, rarity);
@@ -39556,10 +39984,11 @@ export class World {
 
   /** Pick a support gem from the UNLOCKED pool (weighted, bracketed,
    *  bias-aware — dropTags default to what the gem sockets into), or null. */
-  private rollSupportDropGated(bias?: SkillTag[], atLevel = this.zone.level): SupportDef | null {
-    const pool = this.supportDropPool(atLevel);
+  private rollSupportDropGated(bias?: SkillTag[], atLevel = this.zone.level, floor?: GemFloor): SupportDef | null {
+    const pool = this.supportDropPool(atLevel, floor);
     const owned = this.carriedGemIds().supports;
-    return this.pickGem(pool, d => d.dropTags ?? d.requiresTags ?? [], d => d.weight, bias,
+    return this.pickGem(pool, d => d.dropTags ?? d.requiresTags ?? [],
+      d => d.weight * (floor?.supports.has(d.id) ? GEM_DROP_CFG.floorMult : 1), bias,
       d => owned.has(d.id));
   }
 
@@ -39615,15 +40044,18 @@ export class World {
     // (a quest's payout is earned of the writ, not of this ground).
     if (!owed && this.spoilsSealed()) return;
     const pos = this.clampPos(vec(at.x + rand(-20, 20), at.y + rand(-20, 20)), 10);
+    // THE GEM FLOOR (charter §4): this ground's country may floor its own
+    // gems into the mint — found in the scald before the account owns them.
+    const floor = this.zoneGemFloor();
     const dropSkill = (): void => {
-      const inst = this.rollSkillGem(bias);
+      const inst = this.rollSkillGem(bias, this.zone.level, floor);
       this.noteGemDrop(inst.def.id, inst.rarity);
       this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
       this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15,
         'drop', FLOAT_CFG.dropNameSec);
     };
     if (chance(GEM_DROP_CFG.skillShare)) { dropSkill(); return; }
-    const gemDef = this.rollSupportDropGated(bias);
+    const gemDef = this.rollSupportDropGated(bias, this.zone.level, floor);
     if (!gemDef) { dropSkill(); return; } // no supports unlocked → a skill gem instead
     this.noteGemDrop(gemDef.id);
     this.drops.push({ pos, item: { kind: 'support', gem: { def: gemDef, level: 1 } }, bob: rand(0, Math.PI * 2) });
@@ -41499,7 +41931,13 @@ export class World {
         const root = MONSTERS[a.defId]?.rooted;
         if (root) {
           const on = standsRooted(root, a.pos, {
-            groundKind: a.groundKind,
+            // THE GRID ROOT (the cistern crone): a body standing on a
+            // PAINTED region (the cistern's water, the soulriver's sea —
+            // the walk grid's own cell, stamped beside the doodad ground
+            // by the region-sense sweep) roots on it exactly as on a
+            // poured disc; the doodad ground keeps precedence where both
+            // stand. Absent rows read undefined as before.
+            groundKind: a.groundKind ?? a.gridRegion,
             creepCover: this.creep ? (k, x, y) => this.creep!.coverOf(k, x, y) : undefined,
           });
           if (on) a.rootedOffAt = 0;
@@ -41754,6 +42192,19 @@ export class World {
             });
           }
         }
+        // THE STEAM TRAIL (DashDelivery.trailVent — Vent Hop): a fog bank
+        // planted every `spacing` units of travel, the conjure trail's
+        // sibling (reach + life already folded at the cast).
+        const ventSpec = (a as Actor & { dashVentSpec?: { bank: string; radius: number; duration: number; spacing: number } }).dashVentSpec;
+        if (ventSpec) {
+          const vc = a as Actor & { ventTrailDist?: number };
+          vc.ventTrailDist = (vc.ventTrailDist ?? 1e9) + step;
+          if (vc.ventTrailDist >= ventSpec.spacing) {
+            vc.ventTrailDist = 0;
+            this.plantVent({ bank: ventSpec.bank, radius: ventSpec.radius, duration: ventSpec.duration },
+              vec(a.pos.x, a.pos.y), 1, 1);
+          }
+        }
         const trail = (a as Actor & { dashTrailSpec?: DropZoneSpec }).dashTrailSpec;
         if (inst && trail) {
           const carrier = a as Actor & { trailDist?: number };
@@ -41973,15 +42424,20 @@ export class World {
     this.updatePendingBursts();
     this.updatePendingContagions();
     this.updateTerrainEffects(dt);
-    this.updateHeat(dt);
+    this.updateScorch(dt);
     this.updateWindchill(dt);
     this.updateGaze(dt);
     this.updateFog(dt);
+    this.updateWetSky(dt);
     this.updateCreep(dt);
     this.updateCollapse(dt);
     this.updateFlux(dt);
     this.updateSpans(dt);
     this.updateTracks(dt);
+    this.updateGeysers(dt);
+    this.updateVentDwellers(dt);
+    this.updateScaldHeat(dt); // THE SCALD HEAT SWEEP (data/scald.ts): the scorch bar's hazard sources + THE BASKER
+    this.updateCharRegrowth(dt); // THE REGROWTH CYCLE (data/scald.ts REGROWTH_CFG): ash → flush → meadow, minutes-grade
     this.updateSoulriver(dt);
     this.updateTrapworks(dt);
     this.conjured?.update(dt, this.actors);
@@ -45035,11 +45491,34 @@ export class World {
   /** THE DOUSE BEAT (region sweep tail — ground as CURE): while a douse row
    *  holds an actor, shed one stack of each listed status per beat. Brisk
    *  relief by design; the row's text floats as the last stack lifts, and
-   *  the clock parks while there is nothing to quench. */
+   *  the clock parks while there is nothing to quench. THE BANDED BLEED
+   *  (the scorch bar): a listed status that is a derived BAND of a
+   *  fill-polarity meter the actor carries douses the METER instead — one
+   *  unit per beat per meter (a unit IS the old stack, so the cadence is
+   *  unchanged), the band sync lowering the worn statuses in step; the
+   *  float fires as the meter empties (the old last-stack moment). On a
+   *  bar-less body (a combat-scorched monster) the listed statuses shed
+   *  exactly as they always did. */
   private douseTimers = new Map<number, number>();
-  private douseSweep(a: Actor, dt: number): void {
+  private douseSweep(a: Actor, dt: number, drained: Set<string>): void {
     const row = this.douseRowAt(a);
-    if (!row || !a.statuses.some(s => row.statuses.includes(s.id))) {
+    let meterQuench = false;
+    if (row) {
+      for (const id of row.statuses) {
+        const m = survivalBandMeter(id);
+        if (m && (a.survival?.get(m.id) ?? 0) > 0) {
+          // The douse lane OWNS a held banded meter's whole recovery (every
+          // frame, not just beat frames): relief is the beat's one-unit
+          // cadence EXACTLY — the hold stamp parks the fabric's baseline
+          // decay so nothing double-moves the meter.
+          drained.add(m.id);
+          (a.survivalHeldAt ??= {})[m.id] = this.time;
+          meterQuench = true;
+        }
+      }
+    }
+    const quenchable = !!row && (meterQuench || a.statuses.some(s => row.statuses.includes(s.id)));
+    if (!row || !quenchable) {
       this.douseTimers.delete(a.id);
       return;
     }
@@ -45047,7 +45526,27 @@ export class World {
     if (t < (row.every ?? DOUSE_CFG.every)) { this.douseTimers.set(a.id, t); return; }
     this.douseTimers.set(a.id, 0);
     let lifted = false;
+    const bled = new Set<string>();
     for (const id of row.statuses) {
+      const meter = survivalBandMeter(id);
+      if (meter && a.survival?.get(meter.id) !== undefined) {
+        if (bled.has(meter.id)) continue; // one unit per beat per METER
+        bled.add(meter.id);
+        const cur = a.survival.get(meter.id)!;
+        const v = Math.max(0, cur - 1);
+        if (v <= 0) {
+          a.survival.delete(meter.id);
+          if (cur > 0) lifted = true; // the final quench — the old last-stack float
+          // The whole-unit jump can cross from ≥1 straight to retirement,
+          // skipping the sub-1 read the carriers sweep clears bands from —
+          // clear the worn bands NOW (idempotent, the one writer).
+          this.syncSurvivalBands(a, meter, 0);
+        } else {
+          a.survival.set(meter.id, v);
+        }
+        drained.add(meter.id); // this frame's baseline decay stands down
+        continue;
+      }
       const st = a.statuses.find(x => x.id === id);
       if (!st) continue;
       this.shedStatusStack(a, st);
@@ -45058,35 +45557,48 @@ export class World {
     }
   }
 
-  /** DESERT HEAT — the sunscorch loop. TWO lanes bake stacks on (each
-   *  eroding fire resistance; at the cap the buildup ladder converts them
-   *  into HEATSTROKE): the fast lane is standing in a heat-shimmer field;
-   *  the slow lane is BARE DAYLIGHT itself in any zone whose theme declares
-   *  `swelter` (the desert country) — cadence scaled by the zone's baked
-   *  climate temperature, so the erg's hot heart cooks faster than its rim.
-   *  SHADE dwindles stacks — a canopy crown (palms, awnings), a roof, or
-   *  night — and WATER outdoes shade (RegionKind.douses, the region
-   *  fabric's refuge lane): a douse row underfoot suppresses both bake
-   *  lanes here while its own beat sheds the stacks faster than shade
-   *  ever could. In swelter country there is no neutral ground while the sun is
-   *  up: you are baking or you are sheltering — that is the commitment the
-   *  biome asks. Elsewhere, no shimmer and no shade = the heat holds
-   *  (byte-identical to the old loop). Player seats only (monsters live
-   *  here). All cadence knobs in HEAT_CFG. */
-  private heatTimers = new Map<number, number>();
-  private updateHeat(dt: number): void {
+  /** THE SCORCH BAR — the desert's heat as the survival fabric's first
+   *  FILL-polarity meter (scald-basin charter §10; the `scorch` row in
+   *  world/regions.ts). TWO ambient lanes FEED the bar — one unit == one
+   *  legacy sunscorch stack, so every onset and relief cadence survives
+   *  the old stack loop's refit EXACTLY (THE REFIT LAW: the desert feels
+   *  identical, only VISIBLE now — probe_scorch pins it): the fast lane is
+   *  standing in a heat-shimmer field; the slow lane is BARE DAYLIGHT
+   *  itself in any zone whose theme declares `swelter` (the desert
+   *  country) — rate scaled by the zone's baked climate temperature, so
+   *  the erg's hot heart cooks faster than its rim. SHADE bleeds the bar
+   *  at the old dwindle cadence — a canopy crown (palms, awnings), a roof,
+   *  or night — and WATER outdoes shade (RegionKind.douses): a douse row
+   *  underfoot suppresses both feed lanes while the douse beat bleeds the
+   *  bar faster than shade ever could. Anywhere neither lane speaks, the
+   *  row's own out-of-source decay breathes the bar out (regenSurvival —
+   *  the one place the old hold-forever neutral branch gave ground, ruled
+   *  in by the charter: "the scald empties between mistakes"). In swelter
+   *  country there is no neutral ground while the sun is up: you are
+   *  baking or you are sheltering. The ambient lanes are player-seats only
+   *  (monsters live here); the BAND SYNC below runs for EVERY carrier —
+   *  the entity seam (World.scorchFeed) the scald country's hazards and
+   *  THE BASKER's own read ride. The worn statuses (sunscorched /
+   *  heatstroke) are derived BANDS of the bar, so the douse lists, the
+   *  per-stack fire-res erosion and the apply_/damageVs_ combat economy
+   *  all keep their meaning — and that erosion IS the bar's whole price
+   *  (THE PROGRESSIVE SPINE: the higher the bar, the more fire res is gone;
+   *  full wears heatstroke's slow; the bar itself never drains life — her
+   *  fourth-walk ruling, the cook deleted). Cadences in HEAT_CFG; the
+   *  erosion dial is SCORCH_EROSION (engine/status.ts). */
+  private updateScorch(dt: number): void {
     const swelter = this.zone.theme.swelter ?? 0;
     const sunUp = swelter > 0 && dayCycle(this.time).light > HEAT_CFG.sunUpMin;
     // The zone's baked climate temperature (worldgen geo) — 0.5 when unbaked.
     const bakedT = this.zoneMap[this.zone.id]?.geo?.climate?.temperature ?? 0.5;
-    const sunEvery = sunUp
-      ? HEAT_CFG.sunStackEvery / (swelter * (HEAT_CFG.tempBase + HEAT_CFG.tempGain * bakedT))
-      : Infinity;
+    // Units per second under bare sun — the old per-stack cadence inverted.
+    const sunRate = sunUp
+      ? (swelter * (HEAT_CFG.tempBase + HEAT_CFG.tempGain * bakedT)) / HEAT_CFG.sunStackEvery
+      : 0;
     for (const s of this.seats) {
       const a = s.actor;
       if (a.dead || a.downed) continue;
-      const scorch = a.statuses.find(x => x.id === 'sunscorched');
-      let t = (this.heatTimers.get(a.id) ?? 0) + dt;
+      const cur = a.survival?.get('scorch') ?? 0;
       // The shimmer check rides the same spatial buckets terrain uses.
       let inField = false;
       for (const d of this.doodadsAt(a.pos.x, a.pos.y)) {
@@ -45095,33 +45607,138 @@ export class World {
           break;
         }
       }
+      if (!inField && sunRate <= 0 && cur <= 0) continue; // nothing feeding, nothing worn
       const shaded = this.isShaded(a);
       // WATER IS REFUGE: ground that douses the scorch never bakes it —
-      // both heat lanes hold while a douse row holds you (the shedding
+      // both feed lanes hold while a douse row holds you (the bleeding
       // itself is the region sweep's douse beat, on its own faster clock).
       const doused = this.douseRowAt(a)?.statuses.includes('sunscorched') ?? false;
-      const bakeEvery = doused ? Infinity : inField ? HEAT_CFG.stackEvery : sunEvery;
-      if (bakeEvery < Infinity && !shaded) {
-        if (t >= bakeEvery) {
-          t = 0;
-          a.applyStatus('sunscorched', 0, 1, 'the desert sun');
-          if ((a.statuses.find(x => x.id === 'sunscorched')?.stacks ?? 0) === 1) {
-            this.text(vec(a.pos.x, a.pos.y - a.radius - 6), 'sunscorched!', '#ffb64a', 12);
-          }
+      const rate = doused ? 0 : inField ? 1 / HEAT_CFG.stackEvery : sunRate;
+      if (rate > 0 && !shaded) {
+        const before = cur;
+        this.feedSurvival(a, 'scorch', rate * dt);
+        if (before < 1 && (a.survival?.get('scorch') ?? 0) >= 1) {
+          this.text(vec(a.pos.x, a.pos.y - a.radius - 6), 'sunscorched!', '#ffb64a', 12);
         }
-      } else if (scorch && shaded) {
-        if (t >= HEAT_CFG.dwindleEvery) {
-          t = 0;
-          this.shedStatusStack(a, scorch);
-        }
-      } else {
-        t = Math.min(t, Math.max(HEAT_CFG.stackEvery, HEAT_CFG.dwindleEvery));
+      } else if (shaded && cur > 0) {
+        // SHADE BLEEDS at the old dwindle cadence. The hold stamp parks the
+        // baseline decay this frame, so shade relief stays EXACTLY
+        // 1/dwindleEvery — as it always was.
+        const v = Math.max(0, cur - dt / HEAT_CFG.dwindleEvery);
+        if (v <= 0) a.survival!.delete('scorch');
+        else a.survival!.set('scorch', v);
+        (a.survivalHeldAt ??= {}).scorch = this.time;
       }
-      // While any stacks remain, the world owns the clock (the def duration
-      // is only a safety TTL for stacks earned some other way).
-      if (scorch && scorch.stacks > 0) scorch.remaining = Math.max(scorch.remaining, 2.5);
-      this.heatTimers.set(a.id, t);
+      // Neither lane → the row's own decay (regenSurvival) breathes it out.
     }
+    // THE CARRIERS SWEEP — every carrier, player or monster (the entity
+    // seam): first the OUT-OF-SOURCE DECAY (the fabric owns its meter's
+    // recovery — the terrain sweep's grounds early-out must never freeze a
+    // bar carried into a barren zone; feed, shade and the douse each stamp
+    // survivalHeldAt, the ONE hold law, so no lane ever double-moves it),
+    // then the BAND SYNC: the worn statuses as derived windows of the bar.
+    const def = survivalResource('scorch');
+    if (def) {
+      for (const a of this.actors) {
+        if (a.dead || a.downed) continue;
+        let v = a.survival?.get('scorch');
+        if (v === undefined) continue;
+        const held = a.survivalHeldAt?.scorch;
+        if (v > 0 && (held === undefined || this.time - held >= 0.12)) {
+          v = Math.max(0, v - def.regen * dt);
+          if (v <= 0) a.survival!.delete('scorch');
+          else a.survival!.set('scorch', v);
+        }
+        this.syncSurvivalBands(a, def, v);
+      }
+    }
+  }
+
+  /** THE SCORCH SEAM (public — the scald country's hazard sources and any
+   *  future fill-source): feed an actor's scorch bar `units` (one unit ==
+   *  one legacy sunscorch stack). Instant chunks (an eruption column's
+   *  flash of heat) and continuous trickles (rate × dt, passed per frame)
+   *  both land here; the ease law prices both, entities and players alike.
+   *  Desert ambience never routes through this — updateScorch owns it.
+   *  THE FACTION-BLIND PRICE: the bar's effect is the fire-res erosion its
+   *  band wears (SCORCH_EROSION) on WHOEVER carries it — feed a basking kin
+   *  and its warm window is ALSO its fire-vulnerable window by construction
+   *  (the charter's basker; its consumer is the M1 country's, reading
+   *  scorchOf). Nothing here drains life: a fed bar heats, never cooks. */
+  scorchFeed(a: Actor, units: number): void {
+    this.feedSurvival(a, 'scorch', units);
+  }
+
+  /** The scorch bar's read (THE BASKER's enrage, tells, any consumer):
+   *  0 = untouched. One unit == one legacy sunscorch stack. The worn price
+   *  at any read is scorchErosionAt(value) — the same number the carrier's
+   *  sheet wears (drawn == tested); signature stable, M1 reads it. */
+  scorchOf(a: Actor): number {
+    return a.survival?.get('scorch') ?? 0;
+  }
+
+  /** THE BAND SYNC's one writer: wear a fill-meter's statuses as derived
+   *  windows of the bar (SurvivalResourceDef.bands). Stacks are SET
+   *  directly — never via applyStatus — so a def's buildup ladder stays
+   *  the law for stacks earned OUTSIDE the bar (the combat lane's monster
+   *  scorch pops heatstroke at cap exactly as before), while a carrier's
+   *  worn read can never fight the meter. THE ABSORB LAW: stacks landed on
+   *  a carrier by OTHER hands (a combat scorch on a scald-warmed body)
+   *  climb the bar instead of being stomped by the sync — heat is heat. */
+  private syncSurvivalBands(a: Actor, def: SurvivalResourceDef, v: number): void {
+    for (const band of def.bands ?? []) {
+      const sdef = STATUS_DEFS[band.status];
+      if (!sdef) continue;
+      const existing = a.statuses.find(x => x.id === band.status);
+      let want: number;
+      if (band.stacksPerUnit) {
+        const cap = sdef.maxStacks ?? 99;
+        // Foreign stacks = anything above THE BAND WATERMARK (what the sync
+        // itself last wrote — ActiveStatus.bandStacks): those climb the bar.
+        // Stacks the bar granted and is now bleeding back down are the
+        // watermark's own and absorb nothing (the shade-shed regression).
+        const surplus = existing ? existing.stacks - (existing.bandStacks ?? 0) : 0;
+        if (surplus > 0) {
+          v = Math.min(def.max, v + surplus);
+          a.survival!.set(def.id, v);
+        }
+        want = v >= band.from - 1e-6 ? Math.min(cap, Math.floor(v + 1e-6)) : 0;
+      } else {
+        want = v >= band.from - 1e-6 ? 1 : 0;
+      }
+      if (want <= 0) {
+        if (existing) {
+          a.statuses.splice(a.statuses.indexOf(existing), 1);
+          a.sheet.removeSource('status:' + band.status);
+        }
+        continue;
+      }
+      if (!existing) {
+        a.statuses.push({ id: band.status, remaining: 2.5, total: 2.5, stacks: want, dps: 0, sourceName: def.label, bandStacks: want });
+        this.syncBandSheet(a, band.status, want, 1);
+      } else {
+        if (existing.stacks !== want) {
+          existing.stacks = want;
+          this.syncBandSheet(a, band.status, want, existing.power ?? 1);
+        }
+        existing.bandStacks = want;
+        // The world owns the clock while the band is worn (the def duration
+        // is only a safety TTL for stacks earned some other way).
+        existing.remaining = Math.max(existing.remaining, 2.5);
+      }
+    }
+  }
+
+  /** The band sync's sheet refold — the shedStatusStack/applyStatus law,
+   *  one mirror: per-stack mods scale by the worn count (and any absorbed
+   *  application's power crank). */
+  private syncBandSheet(a: Actor, id: string, stacks: number, power: number): void {
+    const sdef = STATUS_DEFS[id];
+    if (!sdef?.mods) return;
+    const mult = (sdef.modsPerStack ? stacks : 1) * power;
+    a.sheet.setSource('status:' + id, mult !== 1
+      ? sdef.mods.map(m => ({ ...m, value: m.value * mult }))
+      : sdef.mods);
   }
 
   /** MOUNTAIN COLD — swelter's high-country inverse (ZoneTheme.windchill;
@@ -45362,6 +45979,621 @@ export class World {
       if (doodadRuleOf(d.kind).contact) {
         this.contactHazards.push({ d, gate: prior.get(d) ?? new Map() });
       }
+    }
+  }
+
+  /** THE GEYSER FABRIC (engine/geysers.ts): this zone's timed vents.
+   *  Eruption state is a PURE FUNCTION of the synced clock (ventReadAt), so
+   *  the field is the whole state — rebuilt each loadZone from
+   *  ZoneTheme.geysers on the salted stream, never serialized. Dev-inspect
+   *  via __game.world().geysers. */
+  geysers: GeyserField | null = null;
+  /** THE A/B DEV LEVER (her M0 walk compares the two feels live): 'bands'
+   *  = THE CURRENT BANDS, her ruled default — every vent in a band erupts
+   *  together on the band's mint-rolled clock; 'solo' = the per-vent
+   *  polyrhythm it replaced. BOTH parameter sets are rolled at mint, so
+   *  flipping this mid-zone re-rolls nothing (the anti-bombard law holds
+   *  under the lever). Dev-only; solo play never touches it. */
+  geyserMode: 'bands' | 'solo' = 'bands';
+  private geyserSweepAcc = 0;
+
+  /** THE SURGE HOUR's zone-level read (engine/geysers.ts surgeWindowNear —
+   *  pure f(world clock, zone key), so every seat and resume agree): the
+   *  window near now and whether the hour HOLDS, or null (no field / a
+   *  key-less field). THE one predicate the wisp pour's `when: { surge }`
+   *  (liteCondHeld), the steam front (data/scald.ts), the dev readout and
+   *  the probes consult. Never announced — no omen, no map mark, no
+   *  floater: the broils quicken and the steam thickens, that is all. */
+  geyserSurge(): GeyserSurgeRead | null {
+    const f = this.geysers;
+    if (!f) return null;
+    const win = fieldSurgeWindow(f, this.time);
+    const key = f.surgeKey;
+    if (win) return { held: this.time < win.t1, t0: win.t0, t1: win.t1, forced: !!f.surgeForce, next: null };
+    if (key === undefined) return null;
+    return { held: false, t0: 0, t1: 0, forced: false, next: nextSurgeAfter(key, this.time).t0 };
+  }
+
+  /** DEV ONLY (the A/B lever's sibling): hold THE SURGE HOUR open on the
+   *  standing field from now (`on`) or hand it back (`off`). The field reads
+   *  the forced window through the same pure tide math; releasing hands
+   *  back at once (a dev jump — solo play never touches this). */
+  geyserSurgeForce(on: boolean): void {
+    const f = this.geysers;
+    if (!f) return;
+    f.surgeForce = on ? { c: 0xfff, t0: this.time, t1: Infinity } : null;
+  }
+  /** Comets mid-flight (render draws the arc off the pure clock; this list
+   *  only schedules the LANDING side effects — splash + drying pock).
+   *  Runtime-only, never persisted: a resume mid-flight just misses that
+   *  fan's pocks (transient dress — the ground forgets anyway). */
+  private geyserPocks: { at: number; x: number; y: number }[] = [];
+
+  /** Stand the zone's vents up at LOAD (the fog/creep/puzzle discipline: a
+   *  SALTED stream over the zone seed — zero layout/spawn rng moved, zero
+   *  genqa surface; every visit and every seat re-derives the same field).
+   *  Placement law is the fixture's OWN: vents may stand in shallows
+   *  (isWalkable passes wading ground — Southsun's water-borne spouts);
+   *  greats take landmark-grade clearance; a seat that can't clear its
+   *  tries is dropped (counts are dials, not promises). Each vent plants a
+   *  'beat_vent' mouth doodad — the drawn fixture the broil rises from. */
+  private bootGeysers(def: ZoneDef, pois: Vec2[], authored?: GeyserSpec[]): void {
+    this.geysers = null;
+    this.geyserSweepAcc = 0;
+    this.geyserPocks = [];
+    const spec = def.theme.geysers;
+    if (!spec && !authored?.length) return;
+    if (spec) for (const g of lintGeyserSpec(spec, def.id)) console.warn(`[geysers] ${g}`);
+    const rng = new Rng((this.currentZoneSeed ^ GEYSER_CFG.salt) >>> 0);
+    // The zone seed is THE SURGE HOUR's key (surgeWindowNear): the long
+    // clock's per-zone phase — pure, so every seat and resume agree.
+    const field = rollGeyserField(rng, spec ?? {}, (this.currentZoneSeed ^ GEYSER_CFG.surge.salt) >>> 0);
+    const P = GEYSER_CFG.place;
+    const seated: Vec2[] = [];
+    const clearSeat = (x: number, y: number, mouthR: number): boolean => {
+      if (this.walk && !this.walk.isWalkable(x, y)) return false;
+      if (this.pointInSolid(x, y, mouthR)) return false;
+      for (const s of seated) {
+        if (Math.hypot(s.x - x, s.y - y) < P.minSep) return false;
+      }
+      return true;
+    };
+    // AUTHORED ROWS first (GeneratedLayout.authoredVents — the geyser
+    // fabric's authoring seam; the lake's offshore metronome is the debut):
+    // a row with its own clock, or any unshared row, is an ANCHOR (its own
+    // private band — the metronome law); a `shared` row without a clock
+    // seats on the current-band partition like a count-rolled vent. The
+    // seat is the recipe's promise — it must still be clear (walkable, not
+    // in a solid, spaced) or the row is dropped loudly.
+    for (const row of authored ?? []) {
+      if (!clearSeat(row.pos.x, row.pos.y, GEYSER_CFG.mouthR[row.cls])) {
+        console.warn(`[geysers] '${def.id}': authored ${row.cls} vent at ${Math.round(row.pos.x)},${Math.round(row.pos.y)} has no clear seat — dropped`);
+        continue;
+      }
+      if (row.shared && row.period === undefined && row.phase === undefined) {
+        seatVent(field, rng, vec(row.pos.x, row.pos.y), row.cls);
+      } else {
+        anchorVent(field, rng, vec(row.pos.x, row.pos.y), row.cls,
+          row.period !== undefined || row.phase !== undefined ? { period: row.period, phase: row.phase } : undefined);
+      }
+      seated.push(vec(row.pos.x, row.pos.y));
+    }
+    // THE METRONOMES next: each great vent is its OWN band anchor at a
+    // landmark-grade seat (the charter's "one or two per zone" law).
+    const nGreat = spec?.great ? rng.int(spec.great[0], spec.great[1]) : 0;
+    for (let i = 0; i < nGreat; i++) {
+      const at = this.interactSpot(pois, rng, 700, P.greatClear);
+      if (!clearSeat(at.x, at.y, GEYSER_CFG.mouthR.great)) continue;
+      anchorVent(field, rng, vec(at.x, at.y), 'great');
+      seated.push(at);
+    }
+    // The shared-band population: cluster hearts off the leftover-POI
+    // stream, vents scattered around each heart on the same stream — a
+    // heart's spray reads as one spring line once its band surges.
+    for (const cls of ['geyser', 'hiss'] as const) {
+      const band = spec?.[cls];
+      if (!band) continue;
+      const want = rng.int(band[0], band[1]);
+      let heart: Vec2 | null = null;
+      let onHeart = 0;
+      for (let i = 0; i < want; i++) {
+        if (!heart || onHeart >= 4) {
+          heart = this.interactSpot(pois, rng, P.heartReach, P.portalClear);
+          onHeart = 0;
+        }
+        let placed = false;
+        for (let t = 0; t < P.tries && !placed; t++) {
+          const ang = rng.range(0, Math.PI * 2);
+          const d = rng.range(P.scatter[0], P.scatter[1]);
+          const x = heart.x + Math.cos(ang) * d, y = heart.y + Math.sin(ang) * d;
+          if (!clearSeat(x, y, GEYSER_CFG.mouthR[cls])) continue;
+          seatVent(field, rng, vec(x, y), cls);
+          seated.push(vec(x, y));
+          placed = true;
+        }
+        onHeart++;
+      }
+    }
+    if (!field.vents.length) return;
+    // The drawn mouths: one non-blocking fixture doodad per vent (kind
+    // 'beat_vent' — NOT the static marsh 'geyser', the namespace law).
+    // Transient like the field: re-derived per load, never in layouts.
+    for (const v of field.vents) {
+      const d: Doodad = {
+        pos: vec(v.pos.x, v.pos.y), radius: GEYSER_CFG.mouthR[v.cls],
+        kind: 'beat_vent' as DoodadKind, rot: rng.range(0, Math.PI * 2),
+      };
+      normalizeDoodadBound(d);
+      this.doodads.push(d);
+      this.markDoodadsChanged(d);
+    }
+    this.geysers = field;
+  }
+
+  /** The engine half of the beat: land due comet pocks, then sweep live
+   *  columns through the ONE hazard-payload grammar. The burst EDGE (per
+   *  vent, per cycle — spectacle + comet scheduling) is detected off the
+   *  pure read's cycle ordinal with the tracks fabric's cosmetic-state
+   *  idiom (lastK: never persisted; a resume inits to the current ordinal
+   *  so no retroactive bursts fire). Everything tested here samples the
+   *  same resolver the renderer and the dodge-AI read — drawn == tested. */
+  private updateGeysers(dt: number): void {
+    const f = this.geysers;
+    if (!f) return;
+    // Comet landings due — the transience fabric plants the drying pock
+    // (plantImpactDress: walkable check, per-zone cap, evap hand-off).
+    for (let i = this.geyserPocks.length - 1; i >= 0; i--) {
+      const p = this.geyserPocks[i];
+      if (this.time < p.at) continue;
+      this.geyserPocks.splice(i, 1);
+      this.flashes.push({ pos: vec(p.x, p.y), radius: GEYSER_CFG.comet.splashR, color: '#bfeaf4', life: 0.3, maxLife: 0.3 });
+      this.plantImpactDress({
+        pos: vec(p.x, p.y), radius: GEYSER_CFG.comet.splashR,
+        impactDress: { kind: 'scald_pock', evapAfter: [GEYSER_CFG.comet.pockDwell[0], GEYSER_CFG.comet.pockDwell[1]] },
+      });
+    }
+    this.geyserSweepAcc += dt;
+    if (this.geyserSweepAcc < GEYSER_CFG.applyEvery) return;
+    this.geyserSweepAcc = 0;
+    for (let vi = 0; vi < f.vents.length; vi++) {
+      const v = f.vents[vi];
+      const read = ventReadAt(f, v, this.time, this.geyserMode);
+      // THE BURST EDGE keys on the burst's CLOCK TIME (VentRead.burstAt),
+      // not the ordinal: THE SURGE HOUR's tide hand-offs step `k`, and a
+      // burst is a burst whatever regime struck it. Resume/first frame:
+      // the burst in flight is remembered, never re-fired (no retro burst).
+      if (read.phase === 'erupt') {
+        if (v.lastBurstAt === undefined) {
+          v.lastBurstAt = read.burstAt;
+        } else if (read.burstAt > v.lastBurstAt + 0.25) {
+          v.lastBurstAt = read.burstAt;
+          this.geyserBurstFx(v, vi, read.k, read.surge);
+        }
+      } else if (v.lastBurstAt === undefined) {
+        v.lastBurstAt = -1e9;                // quiet at first sight: the next burst fires
+      }
+      if (read.phase !== 'erupt') continue;
+      // THE COLUMN: a strike at the vent's own seat — candidates culled to
+      // the disc, payload through sweepHazardSurface with NO owner:
+      // uncredited environment, faction-blind, sleepers + airborne spared
+      // by the grammar's defaults. One eruption = one hit per body (ICD).
+      const cls = GEYSER_CFG.classes[v.cls];
+      let cand: Actor[] | null = null;
+      for (const a of this.actors) {
+        if (a.dead) continue;
+        if (Math.abs(a.pos.x - v.pos.x) > cls.columnR + a.radius
+          || Math.abs(a.pos.y - v.pos.y) > cls.columnR + a.radius) continue;
+        (cand ??= []).push(a);
+      }
+      if (!cand) continue;
+      this.sweepHazardSurface(v.pos.x, v.pos.y, { kind: 'circle', r: cls.columnR }, 0,
+        columnPayload(v.cls), v.gate, undefined, cand);
+    }
+  }
+
+  /** One burst's world-side spectacle: the base splash + shake, and the
+   *  cycle's comet fan scheduled to LAND after the throw's flight (pure
+   *  per-cycle hash — every seat deals the same fan; the render layer draws
+   *  the arcs from the same hash off the same clock). */
+  private geyserBurstFx(v: PlacedVent, ventIdx: number, k: number, surge = false): void {
+    const cls = GEYSER_CFG.classes[v.cls];
+    this.flashes.push({
+      pos: vec(v.pos.x, v.pos.y), radius: cls.columnR * 1.25,
+      color: '#dff6fb', life: 0.35, maxLife: 0.35,
+    });
+    if (v.cls !== 'hiss') this.shake = Math.max(this.shake, Math.min(2.2, cls.columnR * 0.02));
+    // THE DOWNSTREAM (charter §4, card 2 — resolved per vent at seat time):
+    // spectacle is unconditional; on a vent that RAINS the comets LAND as
+    // teeth (burnRain — each lob zone draws its own comet, so the hashed
+    // render fan stands down there: one drawn word, one landing); the
+    // runoff pours from the spill side. Everything else keeps M0's
+    // render-only fan + drying pocks.
+    const ds = ventDownstream(v);
+    if (ds.rain) {
+      // THE SURGE HOUR: great vents rain MORE on tide beats (rainMul).
+      this.burnRain(v, ventIdx, k, surge ? GEYSER_CFG.surge.rainMul : 1);
+    } else {
+      for (const c of cometFanOf(v, ventIdx, k)) {
+        this.geyserPocks.push({ at: this.time + GEYSER_CFG.rainDelay, x: c.x, y: c.y });
+      }
+    }
+    if (ds.runoff) this.pourRunoff(v);
+  }
+
+  /** THE BURN RAIN (charter §4a — the trebuchet grammar with NO GUN): a
+   *  great vent's comets LAND as teeth — one telegraphed SKY-BORNE zone per
+   *  droplet, fired BY THE FIXTURE at the burst edge through the weather
+   *  strike's casterless posture (the 'Storm' body: untargetable,
+   *  invulnerable — nothing to silence, nothing to break; uncredited
+   *  environment, faction-blind): hitAll / spareDormant / spareRoofed (the
+   *  sentry law + SHELTER as the counterplay — a sinter overhang is a dry
+   *  seat), landing rainDelay after the column (the throw arrives), honest
+   *  landing rings + the lob comet drawn from the plume (StormDelivery's
+   *  lob idiom as zone data), scald pocks on impact (plantImpactDress — the
+   *  transience doctrine), and each landing FEEDS the scorch bar of the
+   *  grounded bodies under it (M-HEAT's "the burn rain's hits" source).
+   *  The fan is rainFanOf — a pure per-cycle hash, downwind-biased off
+   *  windAt at the burst, so weather and rain agree and every seat deals
+   *  the same drops. STRICT periodicity: nothing here rolls per beat. */
+  private burnRain(v: PlacedVent, ventIdx: number, k: number, countMul = 1): void {
+    const R = GEYSER_CFG.rain;
+    const skill = SKILLS[R.skillId];
+    if (!skill) return;
+    if (!this.stormCaster) {
+      const c = new Actor('Storm', 'player', vec(0, 0));
+      c.untargetable = true;
+      c.invulnerable = true;
+      this.stormCaster = c;
+    }
+    const caster = this.stormCaster;
+    caster.level = Math.max(1, this.zone.level);
+    caster.pos = vec(v.pos.x, v.pos.y);
+    const inst = makeSkillInstance(skill, 1 + Math.floor(this.zone.level / 3));
+    const apex = vec(v.pos.x, v.pos.y - (GEYSER_CFG.classes[v.cls].columnR * 2.4 + 36));
+    for (const c of rainFanOf(v, ventIdx, k, this.windAt(v.pos), countMul)) {
+      const at = this.clampPos(vec(c.x, c.y), 10);
+      this.zones.push({
+        pos: at, radius: R.dropletR, caster, inst, color: skill.color,
+        delay: GEYSER_CFG.rainDelay, delay0: GEYSER_CFG.rainDelay, exploded: false, linger: 0,
+        tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
+        dmgMult: 1, depth: 1, hitAll: true, spareDormant: true, spareRoofed: true,
+        lobFrom: apex, lobArc: 0.4, fx: 'blast',
+        impactDress: { kind: 'scald_pock', evapAfter: [R.pockDwell[0], R.pockDwell[1]] },
+        onImpact: () => this.rainScorch(at, R.dropletR),
+      });
+    }
+  }
+
+  /** A droplet's landing WARMS the grounded bodies under it (the scorch
+   *  bar's rain source — faction-blind through the ONE seam, the sky
+   *  posture's own spares: airborne, dormant and ROOFED bodies take none). */
+  private rainScorch(at: Vec2, r: number): void {
+    for (const a of this.actors) {
+      if (a.dead || a.downed || a.flying || isDormant(a)) continue;
+      const reach = r + a.radius;
+      if (Math.abs(a.pos.x - at.x) > reach || Math.abs(a.pos.y - at.y) > reach) continue;
+      if (Math.hypot(a.pos.x - at.x, a.pos.y - at.y) > reach) continue;
+      if (this.underRoofAt(a.pos)) continue;
+      this.scorchFeed(a, GEYSER_CFG.rain.scorchUnits);
+    }
+  }
+
+  /** THE RUNOFF (charter §4c): the great vent's spent water poured from its
+   *  SPILL SIDE (spillBearing — pure per seat: the same side every beat)
+   *  as ONE marching section of the scald_runoff row (data/scald.ts:
+   *  travel = a finite run that disperses, flow = the vessel bore hugging
+   *  channels, convert.fade = an evaporating scald sheen — the transience
+   *  doctrine), born just past the mouth, through the creep fabric's
+   *  runtime seam (addFront — the tracks fabric's cosmetic-state idiom at
+   *  the burst edge: never retroactive on a resume). The safe side of a
+   *  vent is uphill of its spill. */
+  private pourRunoff(v: PlacedVent): void {
+    const R = GEYSER_CFG.runoff;
+    const def = CREEPS[R.kind];
+    if (!def?.front) return;
+    const field = this.creepEnsure();
+    if (!field) return;
+    const off = GEYSER_CFG.mouthR[v.cls] * R.offset;
+    const spill = ventSpill(v);
+    field.addFront(def, v.pos.x + Math.cos(spill) * off, v.pos.y + Math.sin(spill) * off, spill,
+      { reach: rand(R.reach[0], R.reach[1]), bornFrac: 0.5 });
+  }
+
+  /** THE ESCAPE SEAM (FrontSpawnRow.heels — creep.ts's long-named chase,
+   *  bound): under an 'escape' objective, every heels lane fields its first
+   *  wave AT THE PARTY'S HEELS — a picket CREEP_CFG.front.heelsBack behind
+   *  the landing, marching the way in (entry → the zone's heart) — the
+   *  moment the zone stands. The front IS the pursuer; the way out is the
+   *  objective. Other objectives never call this. */
+  private bootEscapeChase(): void {
+    if (this.zone.objective.kind !== 'escape' || !this.creep) return;
+    const p = this.player;
+    const bearing = Math.atan2(this.arena.h / 2 - p.pos.y, this.arena.w / 2 - p.pos.x);
+    const back = CREEP_CFG.front.heelsBack;
+    this.creep.fieldHeels(p.pos.x - Math.cos(bearing) * back, p.pos.y - Math.sin(bearing) * back, bearing);
+  }
+
+  /** THE VENT DWELLER sweep (engine/ventDweller.ts — MonsterDef.ventDweller;
+   *  the Scald Basin's Geysermaw): every `sweepEvery` seconds each living
+   *  dweller reads its HOME vent's pure clock (ventReadAt — the one resolver
+   *  the drawn broil, the column and the dodge-AI read) and WEARS the phase
+   *  the read says. UNDER = submerged: the vent_submerged status (timeScale
+   *  0 + conceals — outside time, undrawn), untargetable + invulnerable,
+   *  pinned to the mouth every sweep, its unfired telegraphs dying with the
+   *  dive and any held catch released. UP = breached: the states stripped
+   *  and `spawnedAt` re-stamped so the renderer's spawn-in GROWS the body out
+   *  of the water — the rise. SINKING = the window's ghosted tail
+   *  (vent_sinking — the tells fabric reads it; hittable to the end). Phase
+   *  flips fire the spectacle + the announce; a body's FIRST read (a fresh
+   *  spawn, a resume) wears its state silently — no retroactive breach (the
+   *  updateGeysers lastK idiom). The home vent is the nearest vent within
+   *  reach of the seat the body was placed on — the den recipe's boss seat
+   *  IS its heart vent (bootGeysers anchors the authored row there); a
+   *  dweller with no vent in reach stands as an ordinary body (loud, once).
+   *  Memory rides a WeakMap keyed by the actor — nothing persists, nothing
+   *  leaks across zones; drawn == tested both ways by construction. */
+  private readonly ventDwellers = new WeakMap<Actor, { vent: number; phase: DwellerPhase | null; columnSeenAt: number }>();
+  private ventDwellAcc = 0;
+  private updateVentDwellers(dt: number): void {
+    this.ventDwellAcc += dt;
+    if (this.ventDwellAcc < VENT_DWELLER_CFG.sweepEvery) return;
+    this.ventDwellAcc = 0;
+    const f = this.geysers;
+    const SUB = VENT_DWELLER_CFG.submergedStatus, SINK = VENT_DWELLER_CFG.sinkingStatus;
+    for (const a of this.actors) {
+      if (a.dead) continue;
+      const spec = a.defId ? MONSTERS[a.defId]?.ventDweller : undefined;
+      if (!spec) continue;
+      let st = this.ventDwellers.get(a);
+      if (!st) {
+        // THE HOME VENT: the nearest vent in reach of the seat it was placed on.
+        const reach = spec.reach ?? VENT_DWELLER_CFG.homeReach;
+        let best = -1, bd = Infinity;
+        if (f) {
+          for (let i = 0; i < f.vents.length; i++) {
+            const d = dist(f.vents[i].pos, a.pos);
+            if (d <= reach && d < bd) { bd = d; best = i; }
+          }
+        }
+        st = { vent: best, phase: null, columnSeenAt: -Infinity };
+        this.ventDwellers.set(a, st);
+        if (best < 0) {
+          console.warn(`[ventDweller] '${a.defId}' in '${this.zone.id}' finds no vent within ${reach} of its seat — it stands as an ordinary body`);
+          continue;
+        }
+        // ROOTED IN THE VENT: never walks off it, never shoved off it (its
+        // own column's authorless shove included).
+        a.anchored = true;
+        const home = f!.vents[best];
+        const read0 = ventReadAt(f!, home, this.time, this.geyserMode);
+        // THE SEEN COLUMN's first witness: the base clock's burst is a real
+        // burst by construction (a resume mid-window rises at once); a tide
+        // read (the surge hour's hand-offs can reset a count without a
+        // column) is trusted only once a beat is SEEN.
+        st.columnSeenAt = read0.surge ? -Infinity : this.time - read0.sinceBurst;
+        for (const g of lintVentDweller(spec, read0.period, `${a.defId} @ ${this.zone.id}`, GEYSER_CFG.classes[home.cls].eruptSec)) {
+          console.warn(`[ventDweller] ${g}`);
+        }
+      }
+      if (st.vent < 0 || !f) continue;
+      const v = f.vents[st.vent];
+      if (!v) continue;
+      const read = ventReadAt(f, v, this.time, this.geyserMode);
+      if (read.phase === 'erupt') st.columnSeenAt = this.time; // the column, witnessed
+      const phase = dwellerPhaseAt(read, spec, GEYSER_CFG.classes[v.cls].eruptSec, { columnSeenAt: st.columnSeenAt, now: this.time });
+      if (phase === 'under') { a.pos.x = v.pos.x; a.pos.y = v.pos.y; } // pinned — a shove while under moves nothing
+      if (phase === st.phase) continue;
+      const first = st.phase === null;
+      st.phase = phase;
+      if (phase === 'under') {
+        // SUBMERGE: the body hangs inside the vent, outside time.
+        if (a.gripping) this.grabRelease(a);
+        a.casting = null;
+        for (let i = this.zones.length - 1; i >= 0; i--) {
+          const z = this.zones[i];
+          if (z.caster === a && !z.exploded) this.zones.splice(i, 1); // its unfired telegraphs die with the dive
+        }
+        a.endStatus(SINK);
+        a.applyStatus(SUB, 0, 1, 'the vent');
+        a.untargetable = true;
+        a.invulnerable = true;
+        if (!first) {
+          this.flashes.push({ pos: vec(v.pos.x, v.pos.y), radius: a.radius * 1.6, color: VENT_DWELLER_CFG.color, life: 0.45, maxLife: 0.45 });
+          if (spec.sinkText) this.text(vec(v.pos.x, v.pos.y - a.radius - 12), spec.sinkText, VENT_DWELLER_CFG.color, 13);
+        }
+        continue;
+      }
+      a.endStatus(SUB);
+      a.untargetable = false;
+      a.invulnerable = false;
+      if (phase === 'sinking') {
+        a.applyStatus(SINK, 0, 1, 'the vent');
+        continue;
+      }
+      a.endStatus(SINK);
+      if (!first) {
+        // THE BREACH: the rise (the spawn-in scale-up re-stamped), the splash, the word.
+        a.spawnedAt = this.time;
+        this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius * VENT_DWELLER_CFG.breachFlashMul, color: VENT_DWELLER_CFG.color, life: 0.5, maxLife: 0.5 });
+        this.shake = Math.max(this.shake, VENT_DWELLER_CFG.breachShake);
+        if (spec.breachText) this.text(vec(a.pos.x, a.pos.y - a.radius - 16), spec.breachText, VENT_DWELLER_CFG.color, 15);
+      }
+    }
+  }
+
+  /** THE SCALD HEAT SWEEP (data/scald.ts SCALD_CFG — the scorch bar's hazard
+   *  sources, charter §10; M1 THE COUNTRY): every `sweepEvery` seconds, feed
+   *  the scorch meter of every GROUNDED body standing (1) an ERUPTING
+   *  column's disc, (2) a BROILING/erupting vent's mouth (hot ground), or
+   *  (3) within reach of a SULPHUR POOL's rim — entities and players alike
+   *  through the ONE seam (scorchFeed: the ease law prices it, the hold law
+   *  stands the decay down while fed). Reads the geyser fabric's own pure
+   *  resolver (ventReadAt — drawn == tested: the broil you SEE is the heat
+   *  you take) and touches nothing in the column's damage lane; scald mist
+   *  feeds nothing (concealment stays pure). Then THE BASKER
+   *  (MonsterDef.bask): one of its two worn states off the body's own meter.
+   *  Fliers are spared — airborne bodies stand no ground. */
+  private scaldHeatAcc = 0;
+  private updateScaldHeat(dt: number): void {
+    this.scaldHeatAcc += dt;
+    if (this.scaldHeatAcc < SCALD_CFG.sweepEvery) return;
+    const step = this.scaldHeatAcc;
+    this.scaldHeatAcc = 0;
+    // (1)+(2): the live vents — erupting columns and broiling mouths.
+    let hot: { x: number; y: number; r: number; perSec: number }[] | null = null;
+    const f = this.geysers;
+    if (f) {
+      for (const v of f.vents) {
+        const read = ventReadAt(f, v, this.time, this.geyserMode);
+        if (read.phase === 'quiet') continue;
+        if (read.phase === 'erupt') {
+          (hot ??= []).push({ x: v.pos.x, y: v.pos.y, r: GEYSER_CFG.classes[v.cls].columnR, perSec: SCALD_CFG.column[v.cls] });
+        } else {
+          (hot ??= []).push({ x: v.pos.x, y: v.pos.y, r: GEYSER_CFG.mouthR[v.cls], perSec: SCALD_CFG.mouth.broilPerSec });
+        }
+      }
+    }
+    // (3): the sulphur pools standing in this zone (the doodad list IS the
+    // ground's truth — a planted pool counts the moment it stands).
+    let pools: Doodad[] | null = null;
+    for (const d of this.doodads) if (d.kind === 'sulphur_pool') (pools ??= []).push(d);
+    // (4): THE RUNOFF's live wash (GEYSER_CFG.runoff.kind — the scald run
+    // a great vent pours downstream): a body standing live cover warms on
+    // the same seam (the downstream lane the brood clutches hatch on).
+    const runoffKind = GEYSER_CFG.runoff.kind;
+    const runoff = this.creep && this.creep.sources.some(s => s.def.id === runoffKind && s.cur >= CREEP_CFG.minReach)
+      ? this.creep : null;
+    const runoffFloor = CREEPS[runoffKind]?.hitFloor ?? CREEP_CFG.hitFloor;
+    for (const a of this.actors) {
+      if (a.dead || a.downed) continue;
+      if (!a.flying && (hot || pools || runoff)) {
+        let rate = 0;
+        if (runoff && runoff.coverOf(runoffKind, a.pos.x, a.pos.y, a.radius * 0.5) >= runoffFloor) {
+          rate += SCALD_CFG.runoff.perSec;
+        }
+        if (hot) {
+          for (const h of hot) {
+            const reach = h.r + a.radius;
+            if (Math.abs(a.pos.x - h.x) > reach || Math.abs(a.pos.y - h.y) > reach) continue;
+            if (Math.hypot(a.pos.x - h.x, a.pos.y - h.y) <= reach) rate += h.perSec;
+          }
+        }
+        if (pools) {
+          for (const p of pools) {
+            const reach = p.radius + SCALD_CFG.pool.reach + a.radius;
+            if (Math.abs(a.pos.x - p.pos.x) > reach || Math.abs(a.pos.y - p.pos.y) > reach) continue;
+            if (Math.hypot(a.pos.x - p.pos.x, a.pos.y - p.pos.y) <= reach) { rate += SCALD_CFG.pool.perSec; break; }
+          }
+        }
+        if (rate > 0) this.scorchFeed(a, Math.min(SCALD_CFG.maxPerSec, rate) * step);
+      }
+      // THE BASKER (MonsterDef.bask) — the def's spec, read off the id.
+      const bask = a.defId ? MONSTERS[a.defId]?.bask : undefined;
+      if (bask) this.updateBask(a, bask, step);
+      // THE WARM HATCH (ConstructDelivery.hatch.onScorch): a pod whose own
+      // bar reached its threshold — the burn rain's landing, the runoff's
+      // wash, a column, a pool's rim — hatches EARLY (the shallows brood
+      // matron's clutches; every great eruption followed by something
+      // small and hungry downstream). The payload fires now; the shell
+      // retires on the ordinary expiry path next tick.
+      const hatch = a.construct?.hatch;
+      if (hatch?.onScorch !== undefined && a.lifespan !== undefined && a.lifespan > 0.02
+        && this.scorchOf(a) >= hatch.onScorch) {
+        this.hatchPod(a);
+        a.lifespan = 0.01;
+      }
+    }
+  }
+
+  /** THE REGROWTH CYCLE (data/scald.ts REGROWTH_CFG — the Char's honest
+   *  second half, charter §5): ASHFIELD relaxes toward THE GREEN FLUSH and
+   *  then THE MEADOW over minutes — drawn ecology, no text. Age reads ONE
+   *  clock per piece: a runtime stamp's own `laidAt` (the wildfire's wake),
+   *  else the zone's authored clock (`charBorn`, zone-memory-persisted —
+   *  a walked Char zone is visibly further along when you return, world
+   *  time counting while you are away). Stage 1 swaps the ground kind in
+   *  place (ash → regrowth_flush: the tint band); stage 2 swaps again (→
+   *  regrowth_meadow) and stands FIRE-FOLLOWER flora up around it through
+   *  the dress/evap fabric (fireweed — kindling fuel: the next fire eats
+   *  it; the wildfire's own ashfield affinity starves on fresh burn; the
+   *  loop closes on standing law). Cadenced, budgeted, attributed. Zones
+   *  with no ash pay one scan per sweep. */
+  private charRegrowAcc = 0;
+  private charBorn: number | undefined;
+  private updateCharRegrowth(dt: number): void {
+    if (!this.zone.theme.regrowth) return; // opt-in per theme (ZoneTheme.regrowth): elsewhere ash stays ash
+    this.charRegrowAcc += dt;
+    if (this.charRegrowAcc < REGROWTH_CFG.sweepEvery) return;
+    this.charRegrowAcc = 0;
+    const R = REGROWTH_CFG;
+    let budget = R.perSweep;
+    for (const d of this.doodads) {
+      if (budget <= 0) break;
+      if (d.gone || d.evap) continue;
+      const stage = d.kind === R.ash ? 0 : d.kind === R.flush ? 1 : -1;
+      if (stage < 0) continue;
+      const age = this.time - (d.laidAt ?? this.charBorn ?? this.time);
+      if (stage === 0 && age >= R.flushAfter) {
+        d.kind = R.flush as DoodadKind;
+        this.markDoodadsChanged(d);
+        budget--;
+      } else if (stage === 1 && age >= R.meadowAfter) {
+        d.kind = R.meadow as DoodadKind;
+        this.markDoodadsChanged(d);
+        budget--;
+        // THE FIRE-FOLLOWERS: flora standing up through the ash — runtime
+        // dress on the evap fabric (planted small, drying away after a long
+        // dwell so the meadow is never a permanent repaint).
+        const n = randInt(R.flora.count[0], R.flora.count[1]);
+        for (let i = 0; i < n; i++) {
+          const ang = rand(0, Math.PI * 2);
+          const dd = rand(0.2, 0.85) * d.radius;
+          const x = d.pos.x + Math.cos(ang) * dd, y = d.pos.y + Math.sin(ang) * dd;
+          if (this.walk && !this.walk.isWalkable(x, y)) continue;
+          if (this.pointInSolid(x, y, 6)) continue;
+          const f: Doodad = {
+            pos: vec(x, y), radius: rand(R.flora.radius[0], R.flora.radius[1]),
+            kind: R.flora.kind as DoodadKind, rot: rand(0, Math.PI * 2),
+            evap: { t: rand(R.flora.dwell[0], R.flora.dwell[1]), rate: R.flora.evapRate },
+          };
+          normalizeDoodadBound(f);
+          this.doodads.push(f);
+          this.evaporating.push(f);
+          this.markDoodadsChanged(f);
+        }
+      }
+    }
+  }
+
+  /** THE BASKER's worn state (data/scald.ts BaskSpec): cold's answer bleeds
+   *  the bar while the quench status is worn; then exactly ONE of cool/warm
+   *  is worn off the meter with hysteresis (warm engages at `warmAt`, settles
+   *  below `coolAt`) — set directly, never via applyStatus (the band-sync
+   *  idiom: the world owns the clock; the def duration is only a safety TTL
+   *  the sweep keeps re-stamping). Drawn == tested: the tells fabric reads
+   *  the bar's own sunscorched band, the same meter this switch reads. */
+  private updateBask(a: Actor, bask: BaskSpec, dt: number): void {
+    let bar = this.scorchOf(a);
+    if (bask.quench && bar > 0 && a.statuses.some(s => s.id === bask.quench!.status)) {
+      bar = Math.max(0, bar - bask.quench.perSec * dt);
+      if (bar <= 0) a.survival?.delete('scorch'); else a.survival!.set('scorch', bar);
+    }
+    const warmNow = a.statuses.some(s => s.id === bask.warmStatus);
+    const wantWarm = warmNow ? bar > bask.coolAt : bar >= bask.warmAt;
+    const wear = wantWarm ? bask.warmStatus : bask.coolStatus;
+    const shed = wantWarm ? bask.coolStatus : bask.warmStatus;
+    const old = a.statuses.find(s => s.id === shed);
+    if (old) {
+      a.statuses.splice(a.statuses.indexOf(old), 1);
+      a.sheet.removeSource('status:' + shed);
+    }
+    const cur = a.statuses.find(s => s.id === wear);
+    if (!cur) {
+      if (!STATUS_DEFS[wear]) return;
+      a.statuses.push({ id: wear, remaining: SCALD_CFG.baskTtl, total: SCALD_CFG.baskTtl, stacks: 1, dps: 0, sourceName: 'basking' });
+      this.syncBandSheet(a, wear, 1, 1);
+    } else {
+      cur.remaining = Math.max(cur.remaining, SCALD_CFG.baskTtl);
     }
   }
 
@@ -46055,6 +47287,7 @@ export class World {
           pos: vec(px, py),
           radius: r, kind: ground, ...(shallow ? { shallow: true } : {}),
           ...(fade ? { evap: { t: fade.after, rate: fade.rate } } : {}),
+          laidAt: this.time, // the regrowth cycle's age read (updateCharRegrowth)
         };
         this.doodads.push(d);
         if (GROUND_KINDS.includes(d.kind)) this.grounds.push(d);
@@ -46089,6 +47322,11 @@ export class World {
       // structural FrontCond is radiance's own shape (the cast is the
       // zero-import doctrine's price, paid once here).
       condHeld: (c) => this.radianceCondHeld(c as RadianceCond),
+      // THE CASTER-LESS BASELINE (CreepTerrain.statusDps): a skin's granted
+      // DoT lands at the status row's own baseline for this zone's level
+      // (the ground-effect lane's law) — the wildfire's wreath, the comet's
+      // sear and the runoff's scald all TICK instead of wearing a 0-dps label.
+      statusDps: (id) => baselineStatusDps(id, Math.max(1, this.zone.level)),
       // A fielding wave's arrival line (FrontSpawnRow.announce), on every
       // seat — the wildlife arrival-line idiom.
       announce: (text, color) => {
@@ -46134,8 +47372,14 @@ export class World {
    *  site; null-cost while no live front carries a lever, and the roll is
    *  the ordinary one (the same dice a victim would see). */
   private frontSplash(caster: Actor | null, inst: SkillInstance | null | undefined, at: Vec2, reach: number): void {
-    if (!caster || !inst || !this.creep?.quenchable) return;
-    this.creep.damageSkin(at.x, at.y, reach, rollSkillDamage(caster, inst).amounts);
+    if (!caster || !inst || !this.creep || (!this.creep.quenchable && !this.creep.ignitable)) return;
+    const amounts = rollSkillDamage(caster, inst).amounts;
+    if (this.creep.quenchable) this.creep.damageSkin(at.x, at.y, reach, amounts);
+    // THE IGNITION DIAL (FrontSpawnRow.ignition): sustained fire into a lit
+    // lane's FUEL births a section — authored per lane (the Char), null-
+    // cost everywhere the dial is off (the global default: player casts
+    // never ignite fronts).
+    if (this.creep.ignitable) this.creep.igniteAt(at.x, at.y, reach, amounts, this.time);
   }
 
   /** The runtime seam every package/monster fog-bringer uses: get the zone's
@@ -46165,6 +47409,33 @@ export class World {
     const f = this.skyFront();
     const k = f?.kind === 'fog' ? f.intensity : 0;
     this.fog.update(dt, this.time, k, this.actors);
+  }
+
+  /** THE RAIN-WET STAMP (the scald kit's wet read, sky half): every live
+   *  body standing under OPEN SKY beneath a front whose WeatherDef wears
+   *  `wets` (rain, storm, the basin's mineral rain) at a readable intensity
+   *  is rain-wet (Actor.rainWet → Actor.isWet → StatusDef.bank.wetMul).
+   *  Roofs read dry (underRoofAt — structures and shelter overhangs);
+   *  sheltered zones read dry through skyFront's own sky law. Cadenced
+   *  (WET_SKY.sweepSec): the stamp is a slow truth. With no wetting front
+   *  the sweep clears in one pass and then costs one read per frame. */
+  private wetSkyAcc = 0;
+  private wetSkyStood = false;
+  private updateWetSky(dt: number): void {
+    this.wetSkyAcc += dt;
+    if (this.wetSkyAcc < WET_SKY.sweepSec) return;
+    this.wetSkyAcc = 0;
+    const f = this.skyFront();
+    const wetting = !!f && !!WEATHER_DEFS[f.kind]?.wets && f.intensity >= WET_SKY.minIntensity;
+    if (!wetting) {
+      if (this.wetSkyStood) { for (const a of this.actors) a.rainWet = false; this.wetSkyStood = false; }
+      return;
+    }
+    this.wetSkyStood = true;
+    for (const a of this.actors) {
+      if (a.dead) { a.rainWet = false; continue; }
+      a.rainWet = !this.underRoofAt(a.pos);
+    }
   }
 
   /** Tick the creep field: fronts advance/recoil (bound hearts watched) +
@@ -46407,7 +47678,17 @@ export class World {
   /** INDOORS: under any placed structure's roof rect. Heat-shade ends here,
    *  and so does the gale (windAt) — courtyards stay open sky. */
   underRoofAt(pos: Vec2): boolean {
-    return this.roofedStructureAt(pos) !== null;
+    if (this.roofedStructureAt(pos) !== null) return true;
+    // ROOF-GRADE SHELTER (DoodadRule.shelter): a standing overhang's FULL
+    // disc is a roof — drawn == tested at the lip (the burn rain's roofed
+    // counterplay, the gale's lee, the heat-shade). A felled or gone piece
+    // shelters nothing.
+    for (const d of this.doodadsAt(pos.x, pos.y)) {
+      if (d.gone || d.felled || !doodadRuleOf(d.kind).shelter) continue;
+      const dx = pos.x - d.pos.x, dy = pos.y - d.pos.y;
+      if (dx * dx + dy * dy <= d.radius * d.radius) return true;
+    }
+    return false;
   }
 
   /** The placed structure whose roof covers this point (null in the open —
@@ -46482,7 +47763,7 @@ export class World {
       // cleared and nothing drained.
       if ((a.deckUntil ?? 0) > this.time) {
         a.groundKind = undefined; a.gridRegion = undefined;
-        this.douseSweep(a, dt);
+        this.douseSweep(a, dt, drained);
         this.regenSurvival(a, drained, dt);
         continue;
       }
@@ -46512,8 +47793,9 @@ export class World {
       }
       // THE DOUSE BEAT — ground as cure (RegionKind.douses): with both
       // region sources freshly stamped, the refuge lane sheds what the
-      // row under this body names.
-      this.douseSweep(a, dt);
+      // row under this body names (banded meters bleed instead — the set
+      // tells the regen tail whose baseline decay stands down).
+      this.douseSweep(a, dt, drained);
       this.regenSurvival(a, drained, dt);
     }
   }
@@ -46532,7 +47814,13 @@ export class World {
       const held = a.survivalHeldAt?.[res];
       if (held !== undefined && this.time - held < 0.12) continue;
       const sd = survivalResource(res);
-      if (sd && val < sd.max) a.survival.set(res, Math.min(sd.max, val + sd.regen * dt));
+      if (!sd) continue;
+      // FILL rows recover toward EMPTY, and their OWN fabric runs that
+      // decay (the scorch bar: updateScorch's carriers sweep — which runs
+      // even where this sweep's grounds early-out stands down). Regen
+      // toward max would be poison for a fill meter; skip outright.
+      if (sd.polarity === 'fill') continue;
+      if (val < sd.max) a.survival.set(res, Math.min(sd.max, val + sd.regen * dt));
     }
   }
 
@@ -46578,9 +47866,16 @@ export class World {
     }
     // Environmental-survival drain (deep_water → breath); empty → drown. Only the
     // player seats breathe — the creatures that dwell in the depths are adapted to it.
+    // A FILL-polarity resource routes to the mirror: the row's `drain` FEEDS
+    // the meter toward its bad end (the seam a sulphur-shallows row will
+    // wear — no shipped row uses it yet).
     if (def.survival && this.seatOf(a)) {
       drained.add(def.survival.resource);
-      this.drainSurvival(a, def.survival.resource, def.survival.drain, dt);
+      if (survivalResource(def.survival.resource)?.polarity === 'fill') {
+        this.feedSurvival(a, def.survival.resource, def.survival.drain * dt);
+      } else {
+        this.drainSurvival(a, def.survival.resource, def.survival.drain, dt);
+      }
     }
     def.onStand?.(a, this, dt);
   }
@@ -46596,6 +47891,28 @@ export class World {
     if (ease <= 0) return rate;
     const def = survivalResource(resource);
     return rate * (1 - Math.min(def?.easeCap ?? SURVIVAL_EASE_CAP, ease));
+  }
+
+  /** THE FILL DRIVE — drainSurvival's polarity mirror (fill rows: the
+   *  scorch bar): move a meter TOWARD its bad end (max) by `amount` units,
+   *  eased through the SAME survivalEase_<id> fold (the ease law slows the
+   *  RISE, capped by the row — slowed, never stopped), and stamp
+   *  survivalHeldAt so the baseline decay stands down against an active
+   *  source. THAT IS ALL IT DOES: a fill row NEVER COOKS (her fourth-walk
+   *  ruling — the full-state lethal ramp that once mirrored the underflow
+   *  grammar here is DELETED, not dialled to zero). FULL is a worn STATE
+   *  (the row's bands — the scorch bar's heatstroke slow) and a progressive
+   *  price the bands carry (the fire-res erosion), never a life tick; the
+   *  underflow* family stays drain-row grammar (validate.ts refuses it on a
+   *  fill row). Entities and seats alike — nothing is seat-gated because
+   *  nothing here can hurt. */
+  private feedSurvival(a: Actor, resource: string, amount: number): void {
+    const def = survivalResource(resource);
+    if (!def || amount <= 0) return;
+    if (!a.survival) a.survival = new Map();
+    const v = Math.min(def.max, (a.survival.get(resource) ?? 0) + this.survivalDrainRate(a, resource, amount));
+    a.survival.set(resource, v);
+    (a.survivalHeldAt ??= {})[resource] = this.time;
   }
 
   /** Drain a survival resource; at 0 apply its underflow damage (drowning). */
@@ -47478,6 +48795,7 @@ export class World {
             targetInfo,
             paidCost: cs.paidCost,
             chargesSpent: cs.chargesSpent,
+            ventRounds: cs.ventRounds,
           });
         }
       }
@@ -49756,6 +51074,16 @@ export class World {
           if (z.pulse) z.pulse.next = this.time + z.pulse.delay;
           for (const victim of this.zoneVictims(z)) {
             if (!inAoe(z.pos, z.radius, z.shape, z.facing, victim.pos, victim.radius, z.arcRad)) continue;
+            // THE GROUNDED STRIKE (StormDelivery.onGround — the crone's
+            // boil): only a body whose own grid cell wears a named ground
+            // is bitten — the same read the region-sense stamps (the cell
+            // under the centre, the wading truth); the shore inside the
+            // ring stays dry. Drawn == tested: the telegraph roils exactly
+            // these cells (render/vis/boilLayer.ts groundedCellsIn).
+            if (z.onGround) {
+              const gk = this.walk?.regionAt?.(victim.pos.x, victim.pos.y);
+              if (!gk || !z.onGround.includes(gk)) continue;
+            }
             // EDGE BAND (the inheritance law): a sequel wearing the
             // strike's edgeOnly spares the eye exactly as the strike did.
             if (z.edgeFrac && dist(z.pos, victim.pos) + victim.radius < z.radius * z.edgeFrac) continue;
@@ -53190,8 +54518,18 @@ export class World {
       const linkK = this.walk.regionAt(a.pos.x, a.pos.y);
       const onLink = tierLinkOf(linkK);
       if (onLink && !a.onTierLink) {
+        const storyBefore = a.tier;
         a.tier = linkFlipTier(linkK, a.tier);
         a.aiTierGoal = undefined; // crossed — any chase goal is spent
+        // THE DESCENT LEDGER (UnderTierSpec.ledgerOnDescend — the cistern's
+        // `cistern_entered`): a hero's body going DOWN a lane's crossing for
+        // the first time stamps the lane's key on the run ledger (merged to
+        // the account on death) — the sidezone fabric's ledgerOnEnter for a
+        // story that has no door. Seats only; monsters keep no book.
+        if (storyBefore === 0 && a.tier >= 1 && this.seatOf(a)) {
+          const key = laneLedgerOnDescend(this.zone.tiers?.lane);
+          if (key) bumpLedger(this.ledger, key);
+        }
         // THE PURSUIT STAMP (the tier chase): whoever was hunting THIS body
         // watched it take the stair — hand every engaged pursuer in earshot
         // the crossing as a goal; walking onto it flips them through, and

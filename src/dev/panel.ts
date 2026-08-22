@@ -32,6 +32,7 @@ import { entityTab } from './tabs/entity';
 import { holdsTab } from './tabs/holds';
 import { perfTab } from './tabs/perf';
 import { watchTab } from './tabs/watch';
+import { geysersTab } from './tabs/geysers';
 
 /** What the shell hands every tab at build time. */
 export interface DevTabCtx {
@@ -53,7 +54,7 @@ export interface DevTabDef {
 }
 
 /** THE TAB REGISTRY — order is display order. */
-const DEV_TABS: DevTabDef[] = [gemsTab, itemsTab, eventsTab, locationTab, accountTab, throngTab, comboTab, grabTab, liteTab, possessTab, entityTab, holdsTab, perfTab, watchTab];
+const DEV_TABS: DevTabDef[] = [gemsTab, itemsTab, eventsTab, locationTab, accountTab, throngTab, comboTab, grabTab, liteTab, possessTab, entityTab, holdsTab, perfTab, watchTab, geysersTab];
 
 let mounted = false;
 

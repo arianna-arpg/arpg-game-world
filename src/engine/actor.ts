@@ -36,6 +36,7 @@ import type { MonsterRarity } from './rarity';
 import type { ItemInstance } from './items';
 import type { DeathBurstDef, WormLookSpec, WormWoundSpec } from '../data/monsters';
 import type { PartSpec } from '../render/vis/parts';
+import type { LightSpec } from '../render/vis/painters'; // the carried lamp's spec (Actor.carriedLamp)
 import type { TellDress, TellSpec } from './tells';
 import type { PackAggregate } from './pack';
 import type { TrailPoint, WatchFanMode, WatchSpec } from './watch';
@@ -129,6 +130,10 @@ export interface CastingState {
   /** Combo charges the press CONSUMED (chargeCost) — perCharge effects
    *  (flask pours, Soul Glut's fragments) scale with it at resolution. */
   chargesSpent?: number;
+  /** THE VENT PRESS (useCharges.ventAll — THE SCALD KIT K2): the rounds the
+   *  press SPENT from its bank, carried to the bar's completion so the cast
+   *  grows by them (executeSkill opts.ventRounds). */
+  ventRounds?: number;
   /** INVOCATION weave clock: held channels bank one rune per second. */
   runeTick?: number;
   /** CAST-WHILE-HOLDING metronome: counts down to the next channelBeat /
@@ -195,11 +200,15 @@ export function shellArcFactor(
  *  ride its own bar into the bonus. Once planted, casting sustains the
  *  stance (rooted casting is the fantasy); moving still breaks it. */
 export const STANCE_PLANT_TIME = 1.0;
+/** THE PATIENT BANK's grace (useCharges.still — THE SCALD KIT K2): seconds a
+ *  body must have stood (no step, no dash, no flight) before a still-tempered
+ *  bank's clock resumes; below it the bank reads MOVING and bleeds. DIAL. */
+export const BANK_STILL_GRACE = 0.15;
 export const STANCE_MOVE_WINDOW = 0.15;
 /** Seconds a staggered wound takes to finish landing (staggerFrac /
  *  Mortis Seal) — the drain re-levels to clear on this schedule. */
 export const STAGGER_WINDOW = 3;
-import { STATUS_DEFS, type ActiveStatus } from './status';
+import { STATUS_DEFS, WET_STAND_STATUSES, bankFracOf, type ActiveStatus } from './status';
 
 /** Behavior of a deployed construct (totem / sentry / trap / mine / pylon). */
 export interface ConstructState {
@@ -230,7 +239,7 @@ export interface ConstructState {
   /** kind 'pod' (Broodpod / Nitrocask): the payload hatched when the
    *  incubation (= the construct's lifespan) matures — and, with onBreak
    *  'hatch', when the pod is broken early. */
-  hatch?: { skillId: string; onBreak?: 'fizzle' | 'hatch' };
+  hatch?: { skillId: string; onBreak?: 'fizzle' | 'hatch'; onScorch?: number };
   // kind 'echo' — the ghost's act model and bookkeeping:
   /** Behavior flags (hover turret / strike ghost / mimic clone). */
   echo?: EchoRiderSpec;
@@ -425,6 +434,10 @@ export interface LeapState {
    *  `dest` for the whole flight — drawn where it WILL land, read by the
    *  player's eyes and by dodge-minds through imminentThreatTo alike. */
   telegraph?: { color: string };
+  /** THE VENT-RIDE (LeapDelivery.vent): the column this flight rode — the
+   *  renderer draws the steam jet under the rising body for the flight's
+   *  first stretch (render/vis/ventRideLayer.ts); ships on the leap wire. */
+  vent?: { columnR: number };
 }
 
 export interface ActiveBuff {
@@ -963,6 +976,14 @@ export class Actor {
   patrolIdx?: number;
   /** Actor id of the patrol leader a follower heels to. */
   patrolFollow?: number;
+  /** THE CARRIED LAMP at ACTOR grain (the grove's MonsterDef.light grammar,
+   *  handed to ONE body at runtime — the terrace pilgrim's prism-crust
+   *  lantern): the dynamic light layer reads it BEFORE the def's own lamp
+   *  (render/vis/lights.ts). Same LightSpec as doodads — negative radius =
+   *  × body radius, flicker breathes, `radiance` lerps it on the sky. Any
+   *  fabric may stamp it (the extraParts tack's sibling); dead bodies shed
+   *  nothing, concealment swallows it. Host-local (not wired). */
+  carriedLamp?: LightSpec;
   /** THE BOMBARDMENT FABRIC (engine/bombard.ts): this standing gun's next
    *  shot time on the world clock. Unset = the gun hasn't ranged in yet
    *  (World.updateBombardment rolls the opening delay on first sight). */
@@ -1040,6 +1061,12 @@ export class Actor {
   groundKind?: string;
   /** The GRID region kind underfoot last frame (Phase 3 void/deep_water/air). */
   gridRegion?: string;
+  /** THE RAIN-WET STAMP (World.updateWetSky — the scald kit's wet read, sky
+   *  half): true while this body stands UNDER OPEN SKY beneath a front
+   *  whose WeatherDef wears `wets` (rain, storm, the basin's mineral rain)
+   *  — roofs and sheltered zones read dry. Read by isWet() beside the
+   *  stand states; cadenced, never persisted. */
+  rainWet = false;
   /** World time of the last boundary recovery (fall/eject) — debounces repeated
    *  fall damage while held against a void edge. */
   lastFall?: number;
@@ -2344,7 +2371,15 @@ export class Actor {
     // AFFLICTION RECOVERY (victim-side): hostile statuses run out faster —
     // the defender's twin of the attacker's effectDuration.
     const expiry = def.beneficial ? 1 : this.sheet.get('afflictionExpiry');
-    const duration = def.duration * durationScale / expiry;
+    // THE BANK LAW (StatusDef.bank — the scald kit): only an AUTHORED
+    // application (a casterId — a body's blow, never the ground's sting)
+    // banks. Such an application stands the bank's own duration and folds
+    // ×wetMul onto a WET body (the stand states / the rain-wet stamp) — the
+    // dry baseline is exact, and caster-less rows read exactly as before.
+    const banking = !!def.bank && opts?.casterId !== undefined;
+    if (banking && def.bank!.wetMul !== undefined && this.isWet()) dps *= def.bank!.wetMul;
+    const baseDur = banking && def.bank!.duration !== undefined ? def.bank!.duration : def.duration;
+    const duration = baseDur * durationScale / expiry;
     const existing = this.statuses.find(s => s.id === id);
     // ARMED (rupture-bearing) statuses run a FIXED FUSE: re-application never
     // postpones the blast — the timer set when the keg was armed runs down no
@@ -2358,7 +2393,19 @@ export class Actor {
     // (see ActiveStatus.power). Folded into the mods refold at the tail —
     // per-stack and flat mods alike scale by the strongest crank landed.
     const power = Math.max(0, opts?.power ?? 1);
-    if (existing && def.stacking) {
+    if (existing && banking && !fixedFuse) {
+      // THE BANK ACCUMULATES (THE RUPTURE LAW): an authored blow ADDS its
+      // magnitude to the standing wound — capped at capMul × the strongest
+      // single application that ever fed it — and the clock stands to the
+      // longer of what remains and the bank's own duration. A terrain-born
+      // instance (no peak yet) starts banking from this blow's own peak.
+      const peak = Math.max(existing.bankPeak ?? 0, dps);
+      existing.bankPeak = peak;
+      existing.dps = Math.min(existing.dps + dps, peak * def.bank!.capMul);
+      existing.remaining = Math.max(existing.remaining, duration);
+      existing.total = Math.max(existing.total ?? 0, existing.remaining);
+      existing.bankFrac = bankFracOf(existing, def);
+    } else if (existing && def.stacking) {
       if (existing.stacks < cap) existing.stacks++;
       if (!fixedFuse) existing.remaining = duration;
       existing.dps = Math.max(existing.dps, dps);
@@ -2405,6 +2452,9 @@ export class Actor {
         brood: opts?.brood,
         leech: opts?.leech,
         total: duration,
+        // THE BANK's first deposit: this blow is the peak, the read 1/capMul.
+        bankPeak: banking ? dps : undefined,
+        bankFrac: banking && def.bank ? bankFracOf({ dps, bankPeak: dps }, def) : undefined,
         // WEAK SPOT: the window paints just below the CURRENT wound.
         window: def.weakSpot ? (() => {
           const frac = this.life / Math.max(1, this.maxLife());
@@ -2886,6 +2936,27 @@ export class Actor {
           ? (uc.magazine.refill ?? cap) : cap;
         st.count = Math.min(cap, st.count + refill);
       }
+      // THE PATIENT BANK (useCharges.still — THE SCALD KIT K2, the
+      // PRESSURE family): while the bearer MOVES the bank BLEEDS —
+      // `bleed` rounds per second, fractional, carried on the bank's own
+      // timer (the timer counts seconds toward the next round, so a bleed
+      // subtracts bleed × period seconds per second and a timer driven
+      // below zero costs a whole round and carries the remainder) — and
+      // the recovery clock below does not run; it resumes the moment the
+      // body has stood past BANK_STILL_GRACE. A manual magazine (no
+      // trickle, no drip) has no clock to read the bleed against and
+      // neither builds nor bleeds here.
+      if (uc.still && !this.skillBankStill()) {
+        const mag0 = uc.magazine;
+        const period = uc.recharge
+          ?? (mag0 && mag0 !== true && mag0.drip ? inst!.def.cooldown : 0);
+        if (period > 0 && (st.count > 0 || st.timer > 0)) {
+          st.timer -= dt * uc.still.bleed * period;
+          while (st.timer < 0 && st.count > 0) { st.count -= 1; st.timer += period; }
+          if (st.timer < 0) st.timer = 0;
+        }
+        continue;
+      }
       if (st.count >= cap) { st.timer = 0; continue; }
       // THE DRIP RELOAD (magazine {drip} — Deep Reserves' one-per-clock
       // law): below cap the reload cycles on the host's own cooldown,
@@ -3129,6 +3200,16 @@ export class Actor {
 
   /** The live use-charge bank for a skill (seeded FULL on first touch —
    *  a fresh bar starts loaded). */
+  /** THE WET READ (StatusDef.bank.wetMul — the scald fold): wet by stand
+   *  state (WET_STAND_STATUSES — wading, swimming, the splash's soaked) or
+   *  by the sky (rainWet). One predicate: the bank fold, the probes, and
+   *  any future shock-on-wet read it. */
+  isWet(): boolean {
+    if (this.rainWet) return true;
+    for (const s of this.statuses) if (WET_STAND_STATUSES.includes(s.id)) return true;
+    return false;
+  }
+
   skillChargeBank(inst: SkillInstance): { count: number; timer: number; reloading?: boolean } {
     let st = this.skillChargeState.get(inst.def.id);
     if (!st) {
@@ -3136,6 +3217,16 @@ export class Actor {
       this.skillChargeState.set(inst.def.id, st);
     }
     return st;
+  }
+
+  /** THE PATIENT BANK's stillness read (useCharges.still — THE SCALD KIT
+   *  K2): the body has stood past BANK_STILL_GRACE — no step (moveActor
+   *  zeroes idleFor), no dash, no flight, no live shove (the same
+   *  accumulator the stationary/moving conditions ride). One read for the
+   *  recovery gate, the bleed, and any HUD that wants to say why the bank
+   *  is hissing. */
+  skillBankStill(): boolean {
+    return this.idleFor >= BANK_STILL_GRACE && !this.dash && !this.leap;
   }
 
   /** Effective use-charge maximum: spec max + the skillCharges stat
@@ -3521,7 +3612,9 @@ export class Actor {
     // press casts plain (the hybrid family never gates).
     {
       const uc = instanceUseCharges(inst);
-      if (uc && uc.empower === undefined && this.skillChargeBank(inst).count <= 0) return false;
+      // (A VENT PRESS — useCharges.ventAll — casts plain when dry: the
+      // empower law's dry clause; THE SCALD KIT K2's Blowhole.)
+      if (uc && uc.empower === undefined && !uc.ventAll && this.skillChargeBank(inst).count <= 0) return false;
     }
     // THE RESERVE PRICE (engine/reserves.ts): a pool too dry to pay this
     // cast refuses HERE — the same affordability read the mana line below

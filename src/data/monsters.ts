@@ -27,6 +27,8 @@ import type { WatchSpec } from '../engine/watch';
 import type { PlySpec } from '../engine/plies';
 import type { ReserveSpec } from '../engine/reserves';
 import type { RootedSpec } from '../engine/rooted';
+import type { BaskSpec } from './scald';
+import type { VentDwellerSpec } from '../engine/ventDweller';
 import type { ColonySpec, LiteSpec } from '../engine/lite';
 import type { LightSpec } from '../render/vis/painters';
 import type { PortraitTune } from '../render/vis/portrait';
@@ -207,6 +209,15 @@ export const SPENT_SLUMP_BUFF: BuffEffect = {
 export const SPENT_SLUMP: TellSpec[] = [
   { source: 'buff:spent_slump', steps: 1, portrait: 0, channel: { kind: 'lean', amp: ACCUM_CFG.slump.lean } },
 ];
+
+/** THE WALLOW's settle (scald_wallower, M2b — the demeanor shelf's pool-
+ *  bound tank): worn while you stand out of its reach — slow and hard to
+ *  hurt, the door visibly shut (its tells lean + tint off this buff); it
+ *  runs out the moment you step back in. Duration ≈ the rule's re-arm. */
+export const WALLOW_SETTLE_BUFF: BuffEffect = {
+  type: 'buff', id: 'wallow_settle', duration: 2.5,
+  mods: [mod('moveSpeed', 'more', -0.5), mod('damageTaken', 'more', -0.3)],
+};
 
 /** The glutton's drag while the bank runs high (reapplied on a beat by its
  *  waddle rule, so spending the bank frees the feet within one lapse). */
@@ -973,6 +984,23 @@ export interface MonsterDef {
    *  allegiance; worm bodies are tender along every trailing segment.
    *  The D2 desert-scorpion law. `true` = all defaults. */
   squish?: true | SquishSpec;
+  /** THE BASKER (data/scald.ts BaskSpec — World.updateScaldHeat): this
+   *  body's temper IS THE SCORCH BAR read entity-side — exactly one of two
+   *  worn states off its OWN meter (cool = placid and armored, warm = fierce
+   *  and soft, hysteresis between), cold's answer bleeding it early. The
+   *  bar strips fire res on whoever wears it, so the warm window is also
+   *  the fire-vulnerable window by construction. Any kind can bask. */
+  bask?: BaskSpec;
+  /** THE VENT DWELLER (engine/ventDweller.ts — World.updateVentDwellers):
+   *  this body lives IN its home beat_vent — SUBMERGED between beats
+   *  (untargetable, invulnerable, concealed, its own clock stopped, pinned
+   *  to the mouth), BREACHING as the vent's column clears, up for the spec's
+   *  window, sinking again (the tells fabric reads the ghosted tail). Its
+   *  presence is a pure function of the vent's clock (ventReadAt) — never a
+   *  timer of its own — so every seat and every resume agree; THE NO-TAG LAW
+   *  clamps the window (windowOf) so the fight never stalls. Any kind can
+   *  dwell; the Geysermaw is the debut. */
+  ventDweller?: VentDwellerSpec;
   /** CARRIED GEAR — the Hollowborn's contract: the body spawns WEARING one
    *  real rolled item (createMonster mints it at the body's level) and its
    *  credited kill drops EXACTLY that piece instead of a gear-table roll.
@@ -1266,6 +1294,20 @@ export interface WildlifeRow {
  *  their brains' TargetSpec.prey — the meadow stages its own dramas whether
  *  or not you watch. A new biome's fauna is a new row, never new code. */
 export const WILDLIFE: Record<string, WildlifeRow[]> = {
+  // THE SCALD BASIN (data/scald.ts): newts sunning at the prism rims, spring
+  // moths over the terraces, and the gulls wheeling over the pools — pure
+  // NON-COMBAT ambience, zero chase (her second-walk ruling; the broil is
+  // the honest warning, never the birds). Skipper files pepper the kettles.
+  scald: [
+    { id: 'pool_newt', chance: 0.6, count: [2, 4], near: 'prism_pool' },
+    { id: 'spring_moth', chance: 0.5, count: [3, 6] },
+    { id: 'scald_gull', chance: 0.45, count: [3, 5] },
+    { id: 'mudpot_skipper', chance: 0.35, count: [1, 2], near: 'mudpot' },
+    { id: 'reed_frog', chance: 0.3, count: [2, 3], near: 'water' },
+    // THE TIDE-LOCKED FRENZY (M2b): a shoal placid in the warm pools until
+    // the downstream passes — critter texture that bites in its window.
+    { id: 'kettle_minnow', chance: 0.55, count: [4, 7], near: 'sulphur_pool' },
+  ],
   plains: [
     { id: 'meadow_hare', chance: 0.75, count: [3, 5] },
     { id: 'plains_wolf', chance: 0.4, count: [2, 3] },
@@ -21731,6 +21773,843 @@ export const MONSTERS: Record<string, MonsterDef> = {
       perception: { arcDeg: 360, rearMul: 1 },
       move: { style: 'juke', hookEvery: [0.5, 0.9], hookArc: 0.9, freezeChance: 0.5, freeze: [0.7, 1.4] },
       tempo: { kite: 2.4, windedFor: [0.9, 1.3] },
+    },
+  },
+
+  // ==========================================================================
+  // THE SCALD BASIN — fauna wave 1 (charter docs/design/scald-basin.md §8/§8b;
+  // kit data/scald.ts, faces data/tilesets.ts, docs docs/engine/scald.md).
+  // What lives in boiling water: THE GEYSERKIN — the tribe that reads the
+  // beat (diplomacy-silent: defs + tongue rows, no war roster — the
+  // jotun/coven law) — and the wilds beside them. THE NO-TAG LAW binds every
+  // demeanor here: nobody hovers at the engagement boundary for ever —
+  // kiters carry a FINITE kite budget, lurkers a commit range. THE
+  // SHOW-DON'T-TELL LAW: state reads from drawn phenomena (the steam gauge,
+  // the ember flush, the posture), never floaters. Every number a DIAL.
+  // ==========================================================================
+
+  // THE VENT-SHAMAN (the geyser-shepherd — kin that fight WITH the clock):
+  // plants a live vent under your feet (scald_vent_storm — an honest ring,
+  // then the column), and VISIBLY steps off a real vent a breath before it
+  // blows — the dodge read (BehaviorSpec.dodge → imminentThreatTo speaks the
+  // geyser resolver): the tribe TEACHES the beat by surviving it. The
+  // caster's kite budget is authored finite (NO-TAG).
+  vent_shaman: {
+    id: 'vent_shaman', name: 'Geyserkin Vent-Shaman',
+    color: '#8fd8d4', shape: 'pentagon', radius: 12, material: 'scale', look: 'vent_shaman',
+    base: { life: 58, moveSpeed: 118, accuracy: 98, evasion: 40, mana: 110, manaRegen: 7 },
+    mods: [mod('fireRes', 'flat', 0.5)],
+    // THE SCALD KIT (K1, charter docs/design/scald-kit.md §5): the shaman
+    // gains STEAM VEIL (a planted steam bank at its own feet — the `vent`
+    // effect; eyes stop at the white, THE VAPOR RIDE) and the VENT-RIDE
+    // escape (`vent_ride` — a leap that plants a vent under itself: the
+    // drawn broil for the wind-up, the column at take-off, the ride out of
+    // melee; cast AWAY from the target). THE MIRROR LAW: the shaman teaches
+    // the broil before Geyser-Step asks you to trust it. NO-TAG: it
+    // RELOCATES — the leap lands, it never hovers; its kite stays finite.
+    skills: ['scald_vent_storm', 'firebolt', 'steam_vent', 'vent_ride'], xp: 24,
+    faction: 'geyserkin',
+    gemBias: ['fire', 'spell'],
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    brain: {
+      type: 'caster',
+      behavior: { dodge: { chance: 1, reaction: [0.05, 0.2], exit: 'away' } },
+      tempo: { kite: 2.4, windedFor: [1.0, 1.5] },
+      // The two kit verbs stay OUT of the weighted roll (the rotation is the
+      // vent call + the bolt); the rules cast them when the moment asks.
+      skillUse: { mode: 'priority', order: ['scald_vent_storm', 'firebolt'] },
+      rules: [
+        // Crowded: RIDE OUT — the broil under its own feet, then the column.
+        { when: { distUnder: 96 }, cooldown: 9, actions: [{ do: 'cast', skill: 'vent_ride', at: 'awayFromTarget', force: true }] },
+        // Pressed and hurt: VEIL — a steam bank where it stands.
+        { when: { lifeBelow: 0.55, distUnder: 260 }, cooldown: 14, actions: [{ do: 'cast', skill: 'steam_vent', force: true }] },
+      ],
+    },
+  },
+  // THE STILT-STRIDER: the shallows sentry — long-legged, wading the pool
+  // fields on watch (the watch fabric's SWEEP posture, the cone drawn),
+  // spear-fishing what the eruptions stun. Wading suspends nothing for it
+  // (the pools are its ground); a hero's own wading breaks the scent line.
+  stilt_strider: {
+    id: 'stilt_strider', name: 'Geyserkin Stilt-Strider',
+    color: '#a8c8b8', shape: 'triangle', radius: 12, material: 'scale', look: 'stilt_strider',
+    base: { life: 64, moveSpeed: 140, accuracy: 104, evasion: 48, mana: 0 },
+    // THE SCALD KIT (K1): + the SCALDING LUNGE — a reaching thrust from the
+    // stilts that lands boiling water on the spear (fire + a banked scald;
+    // the sentry's sting on whoever it catches wading — the wet fold).
+    skills: ['stilt_spear', 'scalding_lunge'], xp: 18,
+    faction: 'geyserkin',
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    detection: 1.25,
+    post: true,
+    watch: { sweep: { arcDeg: 140, sec: 6 }, riseSec: 1.6, searchSec: 6, fan: 'show' },
+    brain: {
+      type: 'basic',
+      perception: { arcDeg: 80, rearMul: 0.25, alertShout: 380, memory: 5 },
+    },
+    tells: [
+      { source: 'watch', channel: { kind: 'glow', color: '#9fe0e8', max: 0.45 } },
+      { source: 'watch', band: [0.5, 1], channel: { kind: 'lean', amp: 0.6 } },
+    ],
+  },
+  // THE KETTLEBACK: a travertine-armored crab squatting the pools. Its worn
+  // shell-gauge visibly FILLS with steam (drive:steam → the fillSac tell on
+  // a back the look leaves bare — the mire_leech law) before it vents a
+  // scald jet at the brim: the sac that reads full IS full, and the jet is
+  // reserved OUT of its rotation so the full gauge is the only warning.
+  // Squish-proof by heft — it is the treader of skippers, never the trodden.
+  kettleback: {
+    id: 'kettleback', name: 'Kettleback',
+    color: '#d8d0b8', shape: 'oval', radius: 14, material: 'chitin', look: 'kettleback',
+    base: { life: 96, moveSpeed: 78, accuracy: 96, armor: 60, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.6)],
+    heft: 1.8,
+    // THE SCALD KIT (K1): + SHELL BURST as its BIG hit (K2 renamed it off
+    // the player gem's "Kettle Burst" — one collision, one word). At the
+    // brim the sac empties as a ground nova of boiling water (fire, a
+    // banked scald, and the splash SOAKS what it hits so the follow-up
+    // scald banks ×wet — the self-enabling combo); the jet stays the
+    // half-full poke.
+    skills: ['claw', 'scald_jet', 'kettleback_burst'], xp: 20,
+    faction: 'beast', tags: ['beast'],
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    turnSpeed: 3.2,
+    tells: [
+      {
+        source: 'drive:steam', curve: 'smooth',
+        channel: {
+          kind: 'part',
+          part: { kind: 'fillSac', x: -0.5, scale: 0.95, color: '#e8f4f4', params: { fluid: '#f4fbfb' } },
+          scale: [0.7, 1.15],
+        },
+      },
+      { source: 'drive:steam', band: [0.6, 1], portrait: 0, channel: { kind: 'scale', amp: 0.1 } },
+      ...SPENT_SLUMP,
+    ],
+    brain: {
+      type: 'basic',
+      move: { style: 'approach' },
+      drives: { steam: { rise: 0.12, onHurt: 0.08 } },
+      skillUse: { mode: 'priority', order: ['claw'] },
+      rules: [
+        // THE BRIM: the whole sac as SHELL BURST (the scald kit's big hit).
+        {
+          when: { drive: { id: 'steam', above: 0.95 }, distUnder: 110 },
+          cooldown: 2.5,
+          actions: [
+            { do: 'cast', skill: 'kettleback_burst', force: true },
+            { do: 'drive', id: 'steam', add: -1 },
+            { do: 'buff', buff: SPENT_SLUMP_BUFF },
+          ],
+        },
+        // Half-full and crowded: the jet spends a share (the smaller poke).
+        {
+          when: { drive: { id: 'steam', above: 0.5, below: 0.9 }, distUnder: 80 },
+          cooldown: 4,
+          actions: [
+            { do: 'cast', skill: 'scald_jet', force: true },
+            { do: 'drive', id: 'steam', add: -0.4 },
+          ],
+        },
+      ],
+    },
+  },
+  // THE MUDPOT SKIPPER: ankle-high hoppers peppering the mud flats IN FILES
+  // (the ant-trail law — the worm machinery as a drawn file), dying
+  // underfoot at true skipper scale (THE SQUISH FABRIC). Critter-tagged
+  // texture that bites: it never gates a clear.
+  mudpot_skipper: {
+    id: 'mudpot_skipper', name: 'Mudpot Skipper',
+    color: '#8a9a5a', shape: 'oval', radius: 4, material: 'scale', look: 'mudpot_skipper',
+    base: { life: 7, moveSpeed: 150, evasion: 45, mana: 0 },
+    skills: ['claw'], xp: 2, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.5, drops: 0,
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    worm: { length: 6, spacing: 8, taper: 0.95 },
+    packSize: [2, 3],
+    squish: { ratio: 1.6, text: 'splat!' },
+    brain: { type: 'swarm', move: { style: 'skitter', dart: [0.2, 0.4], pause: [0.15, 0.4] } },
+  },
+  // --- M3 coda: THE STEAM-WISP TIDE + THE METRONOME LEAN (charter §8/§8b) ---
+  // THE STEAM WISP: the tide itself — a drifting vapor mote poured by the
+  // dozen off the vents WHILE THE SURGE HOUR holds (ZoneTheme.lite rows with
+  // `when: { surge: true }` + `seat: 'vents'` — engine/lite.ts; her cascade:
+  // surge → eruptions → steam → wisps) and receding after. The faintest
+  // scald on contact (DIAL — wading a thick tide stings), dies to any area
+  // verb (1 ply), conceals only by being steam (render translucence). The
+  // swarm is the beat made visible.
+  steam_wisp: {
+    id: 'steam_wisp', name: 'Steam Wisp',
+    color: '#e6f4f6', shape: 'oval', radius: 6, material: 'ethereal', look: 'steam_wisp',
+    base: { life: 3, moveSpeed: 64, evasion: 30, mana: 0 },
+    skills: [], xp: 1, tag: 'critter', faction: 'geyserkin', tags: ['beast'],
+    drops: 0,
+    flier: true, levitates: true,
+    plies: { count: 1 },
+    lite: { contact: { damage: 1, type: 'fire', countCap: 3 }, aggro: 160, weave: 1.8, erratic: 1.5, separation: 0.8 },
+    scaleVariance: [0.8, 1.3],
+    detection: 0.2,
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 100, duration: [0.8, 1.4] } },
+      move: { style: 'juke', hookEvery: [0.4, 0.9], hookArc: 1.3, freezeChance: 0.2, freeze: [0.2, 0.5] },
+    },
+  },
+  // THE TEMPO-DRUMMER (the geyserkin's metronome): its whole kit is ONE
+  // stamp, drummed on a four-count — the same attack four times running
+  // closes the Kettle Tattoo grammar (data/combos.ts, mods-granted: the
+  // cadenced-kin law) and the fourth lands a scalding vent burst at its
+  // feet. The beat pips are a TELL off `combo:kettle_tattoo` (THE HONEST
+  // MEASURE — the pip that reads lit IS the stamp in the ring): three lit,
+  // and the next stamp is the burst. THE NO-TAG LAW: it commits on its beat
+  // (approach, no stand-off, no kite) — rhythm-reading, never tag.
+  tempo_drummer: {
+    id: 'tempo_drummer', name: 'Geyserkin Tempo-Drummer',
+    color: '#9ccfca', shape: 'pentagon', radius: 13, material: 'scale', look: 'tempo_drummer',
+    base: { life: 74, moveSpeed: 112, accuracy: 100, armor: 20, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.5), mod('combo_kettle_tattoo', 'flat', 1)],
+    skills: ['tempo_stamp'], xp: 26,
+    faction: 'geyserkin',
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    tells: [{
+      source: 'combo:kettle_tattoo', steps: 4, portrait: 0.75,
+      channel: { kind: 'part', part: { kind: 'beatPips', x: -0.6, color: '#e8d06a', scale: 0.95, params: { n: 4 } } },
+    }],
+    brain: { type: 'basic', move: { style: 'approach' } },
+  },
+  // THE CLOCKCRAB (the terraces' small metronome, wild): a mineral-crusted
+  // crab whose claw TICKS on a three-count — two ticks wind the spring, the
+  // third snaps (Tick-Snap, data/combos.ts). Its pips are the same honest
+  // measure; the kettleback is the tank, this is the clock. Commits on its
+  // beat (NO-TAG).
+  clock_crab: {
+    id: 'clock_crab', name: 'Clockcrab',
+    color: '#c8c0a0', shape: 'oval', radius: 9, material: 'chitin', look: 'clock_crab',
+    base: { life: 40, moveSpeed: 96, accuracy: 96, armor: 35, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.4), mod('combo_tick_snap', 'flat', 1)],
+    heft: 1.2,
+    skills: ['crab_tick'], xp: 12,
+    faction: 'beast', tags: ['beast'],
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    turnSpeed: 3,
+    tells: [{
+      source: 'combo:tick_snap', steps: 3, portrait: 0.67,
+      channel: { kind: 'part', part: { kind: 'beatPips', x: -0.55, color: '#f0d890', scale: 0.85, params: { n: 3 } } },
+    }],
+    brain: { type: 'basic', move: { style: 'approach' } },
+  },
+  // THE BASKER (her pitch): a cold-blooded plated lounger. Torpid and
+  // near-sealed while COOL (basking_torpor: slow, curled, armored — a placid
+  // threat that lurks and commits when you look away), it WARMS off
+  // eruptions, broiling mouths and its pools through THE SCORCH BAR
+  // entity-side (World.updateScaldHeat feeds; MonsterDef.bask reads), and at
+  // the warm band it ENRAGES and its plates open (basking_fury: fierce AND
+  // soft) — then burns down and settles. Cold damage QUENCHES it early
+  // (onHitByType cold → chill; the bask spec bleeds the bar while chilled):
+  // fight it cold, or bait the window and ride it. The tells draw the
+  // ember flush + the hunker off 'status:sunscorched' — the bar's own worn
+  // band, the SAME map the sweep reads (drawn == tested). It relishes the
+  // pools (pathCosts < 1) and sits on the beat where it can.
+  scald_basker: {
+    id: 'scald_basker', name: 'Basker',
+    color: '#9a8a6a', shape: 'oval', radius: 15, material: 'scale', look: 'scald_basker',
+    base: { life: 150, moveSpeed: 96, accuracy: 100, armor: 45, mana: 40, manaRegen: 4 },
+    mods: [mod('fireRes', 'flat', 0.5), mod('coldRes', 'flat', -0.3)],
+    heft: 1.5,
+    skills: ['claw', 'heavy_strike'], xp: 30,
+    faction: 'beast', tags: ['beast'],
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    pathCosts: { sulphur_pool: 0.5, prism_pool: 0.6 },
+    turnSpeed: 3.0,
+    bask: {
+      warmAt: 2.5, coolAt: 0.8,
+      warmStatus: 'basking_fury', coolStatus: 'basking_torpor',
+      quench: { status: 'chill', perSec: 2.5 },
+    },
+    onHitByType: { cold: { status: 'chill', chance: 1 } },
+    tells: [
+      { source: 'status:sunscorched', band: [0, 0.75], curve: 'smooth', channel: { kind: 'tint', color: '#ff7a3a', max: 0.45 } },
+      { source: 'status:sunscorched', band: [0.1, 0.5], curve: 'smooth', channel: { kind: 'lean', amp: 0.8 } },
+    ],
+    brain: {
+      type: 'basic',
+      move: { style: 'lurk', commitRange: 220 },
+      rules: [
+        { when: { hasStatus: 'basking_fury' }, use: { move: { style: 'direct', pace: 1 }, skillUse: { cadence: [0.1, 0.3] } } },
+      ],
+    },
+  },
+  // --- Ambient garnish (pure ambience — critter-tagged, zero chase) --------
+  // Pool newts sunning at the prism rims — spooked, they slip under.
+  pool_newt: {
+    id: 'pool_newt', name: 'Pool Newt',
+    color: '#d8a050', shape: 'oval', radius: 6, material: 'scale', look: 'pool_newt',
+    base: { life: 7, moveSpeed: 150, evasion: 70, mana: 0 },
+    mods: [mod('detectability', 'more', -0.6)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.15, drops: 0,
+    scaleVariance: [0.8, 1.2],
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    refuge: { kind: 'prism_pool', text: 'slips under!', fx: 'plunge' },
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 120, duration: [1.0, 1.8] } },
+      move: { style: 'juke', hookEvery: [0.35, 0.7], hookArc: 1.1, freezeChance: 0.45, freeze: [0.6, 1.4] },
+    },
+  },
+  // Snow-white spring moths over the terraces.
+  spring_moth: {
+    id: 'spring_moth', name: 'Spring Moth',
+    color: '#f4f0e0', shape: 'diamond', radius: 5, material: 'chitin', look: 'spring_moth',
+    base: { life: 4, moveSpeed: 140, evasion: 80, mana: 0 },
+    mods: [mod('detectability', 'more', -0.6)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.1, drops: 0,
+    scaleVariance: [0.8, 1.2],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 80, duration: [0.6, 1.2] } },
+      move: { style: 'juke', hookEvery: [0.3, 0.6], hookArc: 1.3 },
+      behavior: { flock: { kin: 'def', radius: 140, cohesion: 0.6, alignment: 0.6, separation: 1.0, weave: 1.8, erratic: 1.0 } },
+    },
+  },
+  // THE GULLS (ruled KEPT as pure non-combat ambience): wheeling over the
+  // pools — flavor, never the warning system (THE BROIL LAW carries that).
+  scald_gull: {
+    id: 'scald_gull', name: 'Spring Gull',
+    color: '#eef2f4', shape: 'kite', radius: 8, material: 'fur', look: 'scald_gull',
+    base: { life: 10, moveSpeed: 180, evasion: 70, mana: 0 },
+    mods: [mod('detectability', 'more', -0.5)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.2, drops: 0,
+    scaleVariance: [0.9, 1.15],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 70, duration: [0.6, 1.2] } },
+      move: { style: 'juke', hookEvery: [0.5, 0.9], hookArc: 0.9 },
+      behavior: { flock: { kin: 'def', radius: 200, cohesion: 0.8, alignment: 0.9, separation: 1.1, weave: 1.4, erratic: 0.6 } },
+    },
+  },
+
+  // ==========================================================================
+  // M2b — FAUNA WAVE 2 (charter §8/§8b): the downstream's kin and three
+  // debuts from the RATIFIED demeanor shelf. THE NO-TAG LAW binds every
+  // stand-off (commit or truly quit by a clock); THE SHOW-DON'T-TELL LAW
+  // binds every state read (the prowl IS the opportunist's tell, the settle
+  // IS the wallow's shut door, the laid clutch IS the matron's threat).
+  // Every number a DIAL.
+  // ==========================================================================
+
+  // THE SHALLOWS BROOD MATRON: a heavy pool-wader that seeds egg clutches in
+  // the warm shallows (lay_brood_clutch — the formic matriarch's pod grammar)
+  // and lets THE BASIN hatch them: a clutch matures on the clock, or hatches
+  // EARLY the moment warmth finds it — the burn rain lands on it, the runoff
+  // washes it, a column cooks it (hatch.onScorch — the warm hatch, World.
+  // updateScaldHeat). Every great eruption is followed by something small
+  // and hungry downstream. Relishes the pools; a slow, stubborn body.
+  brood_matron: {
+    id: 'brood_matron', name: 'Shallows Brood Matron',
+    color: '#7aa8a0', shape: 'oval', radius: 16, material: 'scale', look: 'brood_matron',
+    base: { life: 170, moveSpeed: 82, accuracy: 100, armor: 30, mana: 90, manaRegen: 6 },
+    mods: [mod('fireRes', 'flat', 0.5)],
+    heft: 1.4,
+    skills: ['claw', 'lay_brood_clutch'], xp: 34,
+    faction: 'beast', tags: ['beast'],
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    pathCosts: { sulphur_pool: 0.5, prism_pool: 0.5, water: 0.7 },
+    turnSpeed: 3.2,
+    brain: { type: 'basic', move: { style: 'approach' } },
+  },
+  // THE SCALD SPAWN: what the clutch hatches — small, fast, hungry, gone
+  // within the minute (the hatch summon's own duration). Minions of the
+  // matron through the summon pipeline, so her death never unmakes a brood
+  // already loose.
+  scald_spawn: {
+    id: 'scald_spawn', name: 'Scald Spawn',
+    color: '#9fd8d4', shape: 'oval', radius: 7, material: 'scale', look: 'scald_spawn',
+    base: { life: 22, moveSpeed: 165, accuracy: 92, evasion: 35, mana: 0 },
+    skills: ['claw'], xp: 3,
+    faction: 'beast', tags: ['beast'],
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    brain: { type: 'swarm' },
+  },
+  // THE VENT LAMPREY (the cling fabric): a boil-slick eel that LATCHES and
+  // CHEWS — a credited fire gnaw through the swallow-digest grammar — riding
+  // until the victim's shake; shaken off it FLOPS (ClingSpec.flop: tossed
+  // clear, slow and soft for its whole re-latch wait — the vulnerable beat
+  // the shake earns) before it may latch again. Perched and VISIBLE the
+  // whole ride (no burrow: the host can scrape it too). Hunts in small
+  // knots out of the pools.
+  vent_lamprey: {
+    id: 'vent_lamprey', name: 'Vent Lamprey',
+    color: '#5a7a88', shape: 'oval', radius: 8, material: 'slime', look: 'vent_lamprey',
+    base: { life: 30, moveSpeed: 172, accuracy: 90, evasion: 45, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.6)],
+    skills: ['claw'], xp: 9,
+    faction: 'beast', tags: ['beast'],
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    pathCosts: { sulphur_pool: 0.6, prism_pool: 0.6, water: 0.7 },
+    packSize: [2, 4],
+    cling: {
+      shakeSec: [3, 4.5],
+      gnaw: { dps: 6, type: 'fire' },
+      flop: { grace: 2.4, toss: 44, status: 'lamprey_flop' },
+    },
+    brain: { type: 'swarm' },
+  },
+  // THE PRISM SNAIL (the attunement fabric's first WILD wearer): a slow
+  // mineral-crusted tank whose crust RE-TUNES to the last blow's dominant
+  // tone (tune: {} — the open re-tuner; it wears the tone as its status) and
+  // PULSES it back onto everyone near on every change (attuned_<tone>,
+  // friend and foe alike): the terraces' colors, weaponized. A full
+  // exoskeleton shell knits between your bursts — break it through the
+  // window, and mind what color you hit it with.
+  prism_snail: {
+    id: 'prism_snail', name: 'Prism Snail',
+    color: '#cfe8ec', shape: 'oval', radius: 14, material: 'crystal', look: 'prism_snail',
+    base: { life: 140, moveSpeed: 46, accuracy: 96, armor: 40, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.3), mod('coldRes', 'flat', 0.3), mod('lightningRes', 'flat', 0.3)],
+    heft: 1.6,
+    skills: ['claw'], xp: 26,
+    faction: 'beast', tags: ['beast'],
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    turnSpeed: 2.4,
+    shellGuard: { side: 'all', max: 70, regenDelay: 5 },
+    tune: {},
+    brain: { type: 'basic', move: { style: 'approach' } },
+  },
+  // THE WALLOW (the demeanor shelf — RATIFIED): a territorial tank that will
+  // NOT leave its pool: terrain-bound to a sulphur pool (habitat — hard-
+  // confined; posted), fighting entirely from the wallow with REACH
+  // (wallow_reach), and the moment you step out of that reach it SETTLES
+  // back into the wallow (the rule: hold + the settle buff — slow, hard to
+  // hurt, the door visibly shut; the tells lean + tint it). The fight has
+  // a DOOR and both sides can see it: it never runs, YOU choose to. NO-TAG
+  // by construction — it is never at the boundary; it is IN its wallow,
+  // reaching or settled.
+  scald_wallower: {
+    id: 'scald_wallower', name: 'Sulphur Wallower',
+    color: '#7a8a6a', shape: 'oval', radius: 18, material: 'scale', look: 'scald_wallower',
+    base: { life: 240, moveSpeed: 70, accuracy: 104, armor: 50, poise: 40, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.7)],
+    heft: 2.0,
+    skills: ['wallow_reach'], xp: 40,
+    faction: 'beast', tags: ['beast'],
+    habitat: { kind: 'sulphur_pool', minRadius: 26, grace: 54 },
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    post: true,
+    turnSpeed: 2.8,
+    vision: { arcDeg: 360, rearMul: 1 },
+    tells: [
+      { source: 'buff:wallow_settle', steps: 1, portrait: 0, channel: { kind: 'lean', amp: 0.9 } },
+      { source: 'buff:wallow_settle', steps: 1, portrait: 0, channel: { kind: 'tint', color: '#4a5a50', max: 0.35 } },
+    ],
+    brain: {
+      type: 'basic',
+      move: { style: 'approach' },
+      rules: [{
+        // THE DOOR: out of the reach → it settles (hold + the settle buff,
+        // re-armed every beat the rule holds); back in reach → the rule
+        // lapses, the buff runs out, it rises and reaches again.
+        when: { distOver: 150 },
+        hold: [1.2, 1.8], cooldown: 0.5,
+        use: { move: { style: 'hold' } },
+        actions: [{ do: 'buff', buff: WALLOW_SETTLE_BUFF }],
+      }],
+    },
+  },
+  // THE TIDE-LOCKED FRENZY (the demeanor shelf — RATIFIED): kettle minnows,
+  // a shoal in the warm pools — PLACID (critter-tagged texture: low
+  // detection, juking away, objective-exempt) until the downstream PASSES:
+  // the runoff's wash or the burn rain's landing scalds the shoal (the
+  // `scalded` row — the frenzy drive jumps on it) and for a short window
+  // they are everywhere at once, a feeding frenzy over the wake, before the
+  // drive decays and they settle again. The beat pulsing APPETITE, not
+  // just danger (the brood-hatch's sibling demeanor).
+  kettle_minnow: {
+    id: 'kettle_minnow', name: 'Kettle Minnow',
+    color: '#8ab8b0', shape: 'oval', radius: 5, material: 'scale', look: 'kettle_minnow',
+    base: { life: 9, moveSpeed: 178, accuracy: 90, evasion: 55, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('detectability', 'more', -0.4)],
+    skills: ['claw'], xp: 2, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.35, drops: 0,
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    pathCosts: { sulphur_pool: 0.4, prism_pool: 0.4, water: 0.5 },
+    packSize: [4, 7],
+    scaleVariance: [0.85, 1.15],
+    brain: {
+      type: 'swarm',
+      move: { style: 'juke', hookEvery: [0.3, 0.6], hookArc: 1.2, freezeChance: 0.2, freeze: [0.3, 0.7] },
+      drives: { frenzy: { rise: -0.09 } },
+      rules: [
+        // The downstream passes: the scald on the shoal is the trigger.
+        { when: { hasStatus: 'scalded' }, cooldown: 0.4, actions: [{ do: 'drive', id: 'frenzy', add: 1 }] },
+        // THE FRENZY WINDOW: everything in reach is food — fast and direct
+        // while the meter holds, placid again as it bleeds away.
+        {
+          when: { drive: { id: 'frenzy', above: 0.25 } },
+          use: { move: { style: 'direct', pace: 1.4 }, target: { detectMul: 3 }, skillUse: { cadence: [0.15, 0.35] } },
+        },
+      ],
+    },
+  },
+  // THE OPPORTUNIST WITH A CEILING (the demeanor shelf — RATIFIED AS
+  // AMENDED; THE NO-TAG LAW): the Char's scavenger. It stands off at a wide
+  // VISIBLE circling radius (prowl — the stand-off IS the tell) and COMMITS
+  // when you are mid-mistake — scalded, scorched, mired, wading, mid-cast —
+  // but it carries a LOCKED CEILING on the stand-off (sinceEngaged 9s, DIAL)
+  // and converges by that clock regardless of how healthy you stay;
+  // opportunity only pulls the commit EARLIER, never postpones it. Melee-
+  // friendly by construction: when it comes, it comes TO you, and it never
+  // hovers at the boundary. Hunts critters when idle.
+  cinder_jackal: {
+    id: 'cinder_jackal', name: 'Cinder Jackal',
+    color: '#6a5a4e', shape: 'triangle', radius: 11, material: 'fur', look: 'cinder_jackal',
+    base: { life: 70, moveSpeed: 176, accuracy: 104, evasion: 50, mana: 24, manaRegen: 3 },
+    mods: [mod('fireRes', 'flat', 0.35)],
+    skills: ['claw', 'heavy_strike'], xp: 22,
+    faction: 'beast', tags: ['beast'],
+    packSize: [2, 3],
+    detection: 1.3,
+    brain: {
+      type: 'basic',
+      move: { style: 'prowl', ring: 330 },
+      target: { prey: ['critter'] },
+      rules: [
+        // THE MISTAKES (opportunity pulls the commit earlier):
+        { when: { targetHasStatus: 'scalded' }, hold: [2.5, 4], cooldown: 1, use: { move: { style: 'direct', pace: 1.35 } } },
+        { when: { targetHasStatus: 'sunscorched' }, hold: [2.5, 4], cooldown: 1, use: { move: { style: 'direct', pace: 1.35 } } },
+        { when: { targetHasStatus: 'mired' }, hold: [2.5, 4], cooldown: 1, use: { move: { style: 'direct', pace: 1.35 } } },
+        { when: { targetHasStatus: 'wading' }, hold: [2.5, 4], cooldown: 1, use: { move: { style: 'direct', pace: 1.35 } } },
+        { when: { targetCasting: 0.35, distUnder: 420 }, hold: [1.5, 2.5], cooldown: 2, use: { move: { style: 'direct', pace: 1.35 } } },
+        // THE CEILING (NO-TAG): past this many seconds of stand-off the
+        // commit is unconditional and stays for the engagement — it
+        // converges against a perfectly healthy target, on the clock.
+        { when: { sinceEngaged: 9 }, use: { move: { style: 'direct', pace: 1.25 } } },
+      ],
+    },
+  },
+
+  // ==========================================================================
+  // THE SCALD KIT K1 — FAUNA WAVE 3 (charter docs/design/scald-kit.md §3/§5;
+  // data/scaldkit.ts the census). Five debuts, each on ONE standing fabric
+  // and each wearing one of the kit's FAMILIES (THE MIRROR LAW: the player
+  // sees every verb on a monster before owning it): the scald lancer (SCALD —
+  // banks, then RUPTURES), the vaporling (STEAM — lives in the white), the
+  // kettle bladder (PRESSURE — the accumulator family's scald face), the
+  // spout-hopper (GEYSER-STEP — rides its own vent), the terrace warden
+  // (PRISM — the attunement fabric in sinter armor). THE NEW-PIECES
+  // PREFERENCE: their looks wear NEW painters (render/vis/parts.ts — the
+  // sinter lance, the pressure-pack, the vapor body + steam trail, the
+  // pressure bladder, the spout organ + steam-jet legs, the sinter plates).
+  // THE NO-TAG LAW binds every demeanor; every number a DIAL.
+  // ==========================================================================
+
+  // THE SCALD LANCER (geyserkin — the tribe's ranged line; SCALD's two
+  // verbs in one body): its sinter bolts BANK scald (the status accumulates
+  // per blow, ×1.5 onto a wet target — the wet fold), and its CHARGED throw
+  // RUPTURES the bank — a share of the banked wound bursts as fire NOW (the
+  // tribe's finisher). The finisher is a magazine round (rounds rebuild
+  // slowly) and its worn PRESSURE-PACK gauge reads it ('rounds:' — THE
+  // PRESSURE GAUGE read): a full pack says the finisher is loaded. The
+  // rule: throw when the target is banked (targetHasStatus scalded) and the
+  // pack is full. Kite finite (NO-TAG).
+  scald_lancer: {
+    id: 'scald_lancer', name: 'Geyserkin Scald Lancer',
+    color: '#b8d8cc', shape: 'triangle', radius: 12, material: 'scale', look: 'scald_lancer',
+    base: { life: 66, moveSpeed: 128, accuracy: 106, evasion: 44, mana: 80, manaRegen: 6 },
+    mods: [mod('fireRes', 'flat', 0.5)],
+    skills: ['sinter_lance', 'pressure_throw'], xp: 26,
+    faction: 'geyserkin',
+    presence: { from: 5, fadeIn: 3 },
+    gemBias: ['fire', 'attack', 'projectile'],
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    tells: [
+      // THE PRESSURE-PACK: its gauge needle and hot wash read the finisher's
+      // bank — the same rounds useSkill spends (drawn == tested).
+      {
+        source: 'rounds:pressure_throw', steps: 4,
+        channel: {
+          kind: 'part',
+          part: { kind: 'pressurePack', x: -0.42, scale: 0.8, color: '#d8d0b8' },
+        },
+      },
+    ],
+    brain: {
+      type: 'skirmish', withdraw: 1.2,
+      tempo: { kite: 2.2, windedFor: [0.9, 1.4] },
+      skillUse: { mode: 'priority', order: ['sinter_lance'] },
+      rules: [
+        // THE FINISHER: a banked target + a loaded pack → rupture the bank.
+        { when: { targetHasStatus: 'scalded', distUnder: 360 }, cooldown: 3, actions: [{ do: 'cast', skill: 'pressure_throw', force: true }] },
+      ],
+    },
+  },
+  // THE VAPORLING (beast — STEAM's lurker): a body MADE of steam that lives
+  // INSIDE steam banks and strikes out of the white. It hunts by your
+  // FOOTFALL: the watch fabric's SLEEP posture (a standing vapor is asleep —
+  // a runner wakes it fast, a creeper slowly; fan hidden) with short eyes
+  // (detection) — sound, not sight, finds you. With no bank around it
+  // PLANTS its own (steam_vent — the `vent` effect; the lacksStatus
+  // condition reads its own `fogveiled`: "am I in the white?") and slips
+  // back into the nearest bank between strikes (x_seek_fog). Its lash is a
+  // hot melee blow that banks scald. Thin, quick, hard to see.
+  vaporling: {
+    id: 'vaporling', name: 'Vaporling',
+    color: '#e4f2f4', shape: 'circle', radius: 11, material: 'slime', look: 'vaporling',
+    base: { life: 44, moveSpeed: 150, accuracy: 100, evasion: 60, mana: 40, manaRegen: 5 },
+    mods: [mod('fireRes', 'flat', 0.7), mod('detectability', 'more', -0.45)],
+    skills: ['vapor_lash', 'steam_vent'], xp: 20,
+    faction: 'beast', tags: ['beast'],
+    presence: { from: 4, fadeIn: 3 },
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    detection: 0.6,
+    vision: { arcDeg: 360, rearMul: 1 },
+    watch: { sleep: true, riseSec: 1.1, decaySec: 5, searchSec: 4, fan: 'hide' },
+    brain: {
+      type: 'basic',
+      move: { style: 'lurk', commitRange: 150 },
+      skillUse: { mode: 'priority', order: ['vapor_lash'] },
+      rules: [
+        // No white around it → plant its own (a breath of steam to hunt from).
+        { when: { ext: { lacksStatus: 'fogveiled' }, distOver: 70 }, cooldown: 9, actions: [{ do: 'cast', skill: 'steam_vent', force: true }] },
+        // Between strikes: slip back into the nearest bank.
+        { when: { ext: { lacksStatus: 'fogveiled' }, distOver: 120 }, cooldown: 4, actions: [{ do: 'x_seek_fog' }] },
+      ],
+    },
+  },
+  // THE KETTLE BLADDER (beast — PRESSURE's accumulator face; the deepsea
+  // polyp's surface cousin): a pressure polyp whose whole body is a visible
+  // BLADDER that FILLS (drive:pressure rises on the clock and on every hurt
+  // — the tells fabric's `fill` gauge on the new pressureBladder part: veins
+  // redden, the wall strains) and BURSTS at the brim — a wide nova of
+  // boiling water (bladder_vent: fire, a heavy banked scald, and it SOAKS
+  // the splash — the follow-up banks ×wet) — then slumps and starts over.
+  // "Pop it early or back off at the brim": killing it mid-fill costs only
+  // its modest death-burst (the early pop is the safe play); the full vent
+  // is the mistake. Rooted in place (a polyp: moveSpeed 0, posted).
+  kettle_bladder: {
+    id: 'kettle_bladder', name: 'Kettle Bladder',
+    color: '#e8c8a8', shape: 'circle', radius: 14, material: 'flesh', look: 'kettle_bladder',
+    base: { life: 88, moveSpeed: 0, accuracy: 100, armor: 20, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.8)],
+    heft: 1.4,
+    skills: ['bladder_vent'], xp: 18,
+    faction: 'beast', tags: ['beast'],
+    presence: { from: 4, fadeIn: 3 },
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    post: true,
+    turnSpeed: 2.5,
+    // The early pop: a small scald burst — the SAFE outcome.
+    deathBurst: { mode: 'implode', damageFrac: 0.2, radius: 70, damageType: 'fire', coalesce: 0.5 },
+    tells: [
+      // THE BLADDER: the body IS the gauge (fill + the strain + a swell).
+      {
+        source: 'drive:pressure', curve: 'smooth',
+        channel: {
+          kind: 'part',
+          part: { kind: 'pressureBladder', scale: 1.0, color: '#e8c8a8', params: { fluid: '#ff9a4a' } },
+          scale: [0.85, 1.15],
+        },
+      },
+      { source: 'drive:pressure', band: [0.7, 1], portrait: 0, channel: { kind: 'glow', color: '#ff9a4a', max: 0.4 } },
+      ...SPENT_SLUMP,
+    ],
+    brain: {
+      type: 'basic',
+      move: { style: 'hold' },
+      drives: { pressure: { rise: 0.055, onHurt: 0.1 } },
+      skillUse: { mode: 'priority', order: [] },
+      rules: [{
+        when: { drive: { id: 'pressure', above: 0.97 } },
+        cooldown: 2,
+        actions: [
+          { do: 'cast', skill: 'bladder_vent', force: true },
+          { do: 'drive', id: 'pressure', add: -1 },
+          { do: 'buff', buff: SPENT_SLUMP_BUFF },
+        ],
+      }],
+    },
+  },
+  // THE SPOUT-HOPPER (geyserkin — GEYSER-STEP's skirmisher): a small kin
+  // that rides its OWN vent — `spout_hop` is the vent-ride leap (the broil
+  // under its feet, the column at take-off, the ride), a MAGAZINE of two
+  // hops that rebuild slowly (useCharges — the rounds ARE the bank); its
+  // steam-jet legs puff by the banked rounds ('rounds:spout_hop' — THE
+  // PRESSURE GAUGE read: live jets = hops in the pot, cold legs = grounded).
+  // Hop in, jab, hop out — and when the pot is dry it must fight on foot
+  // (NO-TAG: a dry hopper commits; it cannot hover).
+  spout_hopper: {
+    id: 'spout_hopper', name: 'Geyserkin Spout-Hopper',
+    color: '#a8d0c4', shape: 'pentagon', radius: 10, material: 'scale', look: 'spout_hopper',
+    base: { life: 48, moveSpeed: 146, accuracy: 102, evasion: 52, mana: 30, manaRegen: 4 },
+    mods: [mod('fireRes', 'flat', 0.5)],
+    skills: ['hopper_jab', 'spout_hop'], xp: 20,
+    faction: 'geyserkin',
+    presence: { from: 3, fadeIn: 2 },
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    packSize: [2, 3],
+    tells: [
+      // THE JET LEGS: steam puffs by the banked hops — the same rounds the
+      // hop spends (drawn == tested).
+      {
+        source: 'rounds:spout_hop', steps: 2,
+        channel: {
+          kind: 'part',
+          part: { kind: 'steamJetLegs', scale: 1.0, color: '#6a9a94', params: { n: 4 } },
+        },
+      },
+    ],
+    brain: {
+      type: 'skirmish', withdraw: 1.1,
+      tempo: { kite: 1.6, windedFor: [0.8, 1.2] },
+      skillUse: { mode: 'priority', order: ['hopper_jab'] },
+      rules: [
+        // THE HOP IN: far and loaded → ride the column onto the target.
+        { when: { distOver: 150, distUnder: 300 }, cooldown: 5, actions: [{ do: 'cast', skill: 'spout_hop', force: true }] },
+        // THE HOP OUT: hurt and crowded → ride away (a second round).
+        { when: { lifeBelow: 0.5, distUnder: 70 }, cooldown: 6, actions: [{ do: 'cast', skill: 'spout_hop', at: 'awayFromTarget', force: true }] },
+      ],
+    },
+  },
+  // THE TERRACE WARDEN (beast — PRISM's armored face): a mineral-armored
+  // kettleback cousin wearing `tune` — its SINTER PLATES take the color of
+  // the last blow's tone (the attunement fabric re-tunes it and the tells
+  // re-draw the plates in the worn tone — drawn == the status it wears) and
+  // PULSE it onto everyone near on every change (attuned_<tone>, friend and
+  // foe). Slow, heavy, a shell that knits between bursts — break it through
+  // the window, and mind what color you hit it with.
+  terrace_warden: {
+    id: 'terrace_warden', name: 'Terrace Warden',
+    color: '#d8d0b8', shape: 'oval', radius: 15, material: 'crystal', look: 'terrace_warden',
+    base: { life: 160, moveSpeed: 64, accuracy: 100, armor: 70, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.4), mod('coldRes', 'flat', 0.4), mod('lightningRes', 'flat', 0.4)],
+    heft: 1.9,
+    skills: ['claw', 'mineral_slam'], xp: 30,
+    faction: 'beast', tags: ['beast'],
+    presence: { from: 6, fadeIn: 3 },
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    turnSpeed: 2.6,
+    shellGuard: { side: 'all', max: 60, regenDelay: 5 },
+    tune: {},
+    tells: [
+      // THE PLATES TAKE THE TONE: one row per tone, each re-drawing the sinter
+      // plates in that tone's color while the body wears it (the attunement
+      // fabric's own status — drawn == tested; physical = the bare plates).
+      { source: 'status:attuned_fire', steps: 1, portrait: 0, channel: { kind: 'part', part: { kind: 'sinterPlates', x: -0.1, scale: 1.0, color: '#ff7a3a' }, alpha: [0, 0.85] } },
+      { source: 'status:attuned_cold', steps: 1, portrait: 0, channel: { kind: 'part', part: { kind: 'sinterPlates', x: -0.1, scale: 1.0, color: '#7ec8ff' }, alpha: [0, 0.85] } },
+      { source: 'status:attuned_lightning', steps: 1, portrait: 0, channel: { kind: 'part', part: { kind: 'sinterPlates', x: -0.1, scale: 1.0, color: '#ffe85a' }, alpha: [0, 0.85] } },
+      { source: 'status:attuned_chaos', steps: 1, portrait: 0, channel: { kind: 'part', part: { kind: 'sinterPlates', x: -0.1, scale: 1.0, color: '#b06bd4' }, alpha: [0, 0.85] } },
+    ],
+    brain: { type: 'basic', move: { style: 'approach' } },
+  },
+
+  // ==========================================================================
+  // M3 — THE GEYSERMAW: THE GREAT GEYSER den's apex (data/greatgeyser.ts;
+  // engine/ventDweller.ts; charter §8: "lives IN the great geyser and is only
+  // ABOVE ground around eruptions — the beat as a boss mechanic: the window
+  // is the fight"). A vast mineral-crusted maw ROOTED in the heart vent
+  // (moveSpeed 0 — it IS the vent's resident; the dweller sweep anchors it so
+  // its own column never shoves it): SUBMERGED between beats (untargetable,
+  // unhittable, no threat — the mouth stands quiet or broiling; THE BROIL LAW
+  // is its emergence tell), it BREACHES as the column clears and fights for
+  // the window (ventDweller.upSec — DIAL), then sinks with a ghosted tell the
+  // tells fabric draws. THE NO-TAG LAW: the submerge is a WINDOW, never a
+  // flee — windowOf clamps the cadence so the fight never stalls. Its kit is
+  // the country's grammar at boss scale: the column call (its own vent under
+  // you), the scald spray (the burn rain thrown by a body), the gulp (the
+  // gorge gulper's row — swallowed, then spat at your friends), and the
+  // wallow's long reach. Faction geyserkin — the tribe's god-in-the-vent
+  // (diplomacy-silent, the charter's debut law). Den-boss tier (the
+  // false_sovereign model, never a world boss); pays the lean lair_hoard +
+  // stamps geysermaw_slain (data/greatgeyser.ts). Every number a DIAL.
+  // ==========================================================================
+  geysermaw: {
+    id: 'geysermaw', name: 'the Geysermaw',
+    color: '#9fe0e8', shape: 'circle', radius: 30, material: 'scale', look: 'geysermaw',
+    heft: 2.4, boss: true,
+    base: { life: 760, moveSpeed: 0, accuracy: 106, armor: 38, poise: 110, mana: 140, manaRegen: 9 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.3)],
+    skills: ['geysermaw_column', 'geysermaw_spray', 'gulp', 'wallow_reach'], xp: 330, loot: 'lair_hoard',
+    faction: 'geyserkin', tags: ['beast'],
+    immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
+    grabbable: false, possessable: false,
+    turnSpeed: 2.4,
+    ventDweller: {
+      upSec: 14, sinkSec: 1.4,
+      breachText: 'the Geysermaw BREACHES!',
+      sinkText: 'the maw sinks into the throat…',
+    },
+    // THE SINKING TELL: the window's tail read off the worn state the sweep
+    // stamps (drawn == tested — the lean and the cooling tint say "it is
+    // going", and the ghosted body says the same).
+    tells: [
+      { source: 'status:vent_sinking', steps: 1, portrait: 0, channel: { kind: 'lean', amp: 1.0 } },
+      { source: 'status:vent_sinking', steps: 1, portrait: 0, channel: { kind: 'tint', color: '#2f8f9c', max: 0.5 } },
+    ],
+    brain: {
+      type: 'basic',
+      behavior: { castArc: 0.8, reaction: [0.2, 0.45] },
+      drives: { wrath: { rise: -0.05, onHurt: 0.07 } },
+      rules: [{
+        when: { drive: { id: 'wrath', above: 0.6 } },
+        announce: 'the throat ROARS — the Geysermaw spends the whole basin!',
+        use: { skillUse: { cadence: [0.1, 0.25] } },
+      }],
+    },
+  },
+
+  // ==========================================================================
+  // M3 — THE CISTERN CRONE (charter §8 "the Cistern Crone" line / §13 M3; the
+  // lair data/cistern.ts — the lake's under-story, the moonlit mere's grotto
+  // form on the basin seat). A scalded naiad-crone claiming the cistern
+  // beneath the lake's great shoal; her court the brood matrons and the
+  // shoal. The wellspring naiad's grammar (ROOTED on her water — in it she is
+  // the argument, hauled out she is a pale sketch and the wilt is DRAWN) in
+  // the coven's register (faction coven — the hex tongue in both mills; her
+  // beast court reads neutral). Lair alpha tier, NOT a boss (bossBar for
+  // the marquee; the mere_sovereign / naiad model). THE NO-TAG LAW: she
+  // never hovers — a finite kite budget; rooted, she commits or the fight
+  // comes to her, and her duty post walks her home to the pool. Every
+  // number a DIAL.
+  // ==========================================================================
+  cistern_crone: {
+    id: 'cistern_crone', name: 'the Cistern Crone',
+    color: '#9fd8c8', shape: 'kite', radius: 14, material: 'ethereal', look: 'cistern_crone',
+    bossBar: true,
+    base: { life: 330, moveSpeed: 118, accuracy: 104, evasion: 45, mana: 160, manaRegen: 10, insight: 25 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.3)],
+    // THE BOIL (the grounded strike — the pool scalds on a telegraphed
+    // clock), the undertow that reels you INTO the pool, the steam veil that
+    // hides her court, a firebolt for the shore-stander, claws for the rest.
+    skills: ['cistern_boil', 'scald_undertow', 'steam_veil', 'firebolt', 'claw'],
+    xp: 230, loot: 'lair_hoard',
+    faction: 'coven',
+    post: true,
+    rooted: {
+      ground: ['cistern_water'],
+      mods: [
+        mod('damage', 'increased', 0.35), mod('damageTaken', 'more', -0.25),
+        mod('lifeRegen', 'flat', 6), mod('castSpeed', 'increased', 0.2),
+      ],
+      off: [mod('damageTaken', 'more', 0.2)],
+      note: 'torn from the pool!', noteOn: 'the cistern takes her back',
+    },
+    tells: [
+      // In her pool she runs steam-lit; dragged out, the color drains and she
+      // visibly slackens (the naiad's thrive/wilt grammar, in scald water).
+      { source: 'rooted', steps: 1, portrait: 1, channel: { kind: 'glow', color: '#bfe8d8', max: 0.35 } },
+      { source: 'rooted', band: [1, 0], steps: 1, portrait: 0, channel: { kind: 'tint', color: '#8a9490', max: 0.5 } },
+      { source: 'rooted', band: [1, 0], steps: 1, portrait: 0, channel: { kind: 'lean', amp: -0.4 } },
+    ],
+    brain: {
+      type: 'caster',
+      behavior: { castArc: 0.85, reaction: [0.25, 0.6] },
+      // THE NO-TAG LAW: the kite budget is FINITE — she stands off only so
+      // long, then stands her ground in the pool (the shaman's law).
+      tempo: { kite: 2.2, windedFor: [1.2, 1.8] },
     },
   },
 };

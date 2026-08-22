@@ -123,6 +123,52 @@ export const VESTIGE_LIST: VestigeDef[] = [
   },
   // The Aetherial's own remembered name — carried down by whoever survives
   // the crossing. Boots remember the causeway; helm the halo's arithmetic.
+  // --- THE SCALD BASIN's mineral register (THE SCALD KIT K2 — the PRISM
+  // family's player side, charter §3.5: supports and vestiges first). Four
+  // words the terraces deposit: the crust that builds in layers, the stone
+  // the water lays down, the yellow that stings, and the acid that eats.
+  // NO-LOCK by construction — a vestige line works wherever the gear is
+  // worn. Every number a DIAL.
+  {
+    // SINTER — what a hot spring leaves behind: layer on layer, hardening.
+    id: 'sinter', name: 'Sinter, Vestige of the Crust', glyph: 'ᛊ', color: '#d8d0b8', weight: 60,
+    effects: {
+      chest: [{ stat: 'armor', kind: 'flat', value: 45 }, { stat: 'fireRes', kind: 'flat', value: 0.06 }],
+      gloves: [{ stat: 'applyWet_scalded', kind: 'flat', value: 0.15 }],
+      boots: [{ stat: 'poise', kind: 'flat', value: 18 }],
+      default: [{ stat: 'fireRes', kind: 'flat', value: 0.08 }],
+    },
+  },
+  {
+    // TRAVERTINE — the terrace stone itself: banded, patient, load-bearing.
+    id: 'travertine', name: 'Travertine, Vestige of the Terrace', glyph: 'ᛏ', color: '#e8dcc0', weight: 55,
+    effects: {
+      chest: [{ stat: 'life', kind: 'flat', value: 18 }, { stat: 'poise', kind: 'flat', value: 22 }],
+      helmet: [{ stat: 'insight', kind: 'flat', value: 18 }],
+      boots: [{ stat: 'moveSpeed', kind: 'increased', value: 0.05, when: 'stationary' }],
+      default: [{ stat: 'armor', kind: 'flat', value: 26 }],
+    },
+  },
+  {
+    // SULPHUR — the yellow rim of every pool: it stings what stands in it.
+    id: 'sulphur', name: 'Sulphur, Vestige of the Rim', glyph: 'ᛥ', color: '#e8d24a', weight: 50,
+    effects: {
+      gloves: [{ stat: 'addedFire', kind: 'flat', value: 4 }],
+      weapon: [{ stat: 'apply_scalded', kind: 'flat', value: 0.1 }],
+      amulet: [{ stat: 'damage', kind: 'increased', value: 0.07, tags: ['fire'] }],
+      default: [{ stat: 'damage', kind: 'increased', value: 0.05, tags: ['fire'] }],
+    },
+  },
+  {
+    // VITRIOL — the acid the ground brews: it eats what armour is left.
+    id: 'vitriol', name: 'Vitriol, Vestige of the Brew', glyph: 'ᚹ', color: '#a8d05a', weight: 45,
+    effects: {
+      gloves: [{ stat: 'addedChaos', kind: 'flat', value: 3 }],
+      weapon: [{ stat: 'armorPen', kind: 'flat', value: 0.1 }],
+      helmet: [{ stat: 'chaosRes', kind: 'flat', value: 0.08 }],
+      default: [{ stat: 'armorPen', kind: 'flat', value: 0.06 }],
+    },
+  },
   {
     id: 'seraphiel', name: 'Seraphiel, Vestige of the Host', glyph: 'ᛋ', color: '#ffe9a8', weight: 42,
     effects: {
@@ -222,6 +268,27 @@ export const EPITAPH_LIST: EpitaphDef[] = [
       { stat: 'apply_winded', kind: 'flat', value: 0.08 },
     ],
     flavor: 'Two winds arguing over one house.',
+  },
+  // --- The basin's words (THE SCALD KIT K2 — the mineral register written
+  // whole). Each reads as its country does: the grip that boils the water
+  // it touches, and the stair that stands where the ground is hostile. --
+  {
+    id: 'scalding_grip', name: 'Scalding Grip', sequence: ['sulphur', 'thal'], categories: ['gloves'],
+    effects: [
+      { stat: 'applyWet_scalded', kind: 'flat', value: 0.25 },
+      { stat: 'addedFire', kind: 'flat', value: 5 },
+      { stat: 'damage', kind: 'increased', value: 0.08, tags: ['fire'] },
+    ],
+    flavor: 'Everything it holds comes to the boil.',
+  },
+  {
+    id: 'terrace_stair', name: 'Terrace Stair', sequence: ['travertine', 'sinter'], categories: ['boots'],
+    effects: [
+      { stat: 'armor', kind: 'flat', value: 40 },
+      { stat: 'fireRes', kind: 'flat', value: 0.1 },
+      { stat: 'poise', kind: 'flat', value: 25 },
+    ],
+    flavor: 'The water built the steps on its way down. Use them.',
   },
 ];
 

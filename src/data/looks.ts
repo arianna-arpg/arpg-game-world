@@ -9888,6 +9888,334 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#e8e8e0', params: { spread: 0.4, dist: 0.5, size: 0.07 } },
     ],
   },
+
+  // --- THE SCALD BASIN (data/scald.ts; faction 'geyserkin') -----------------
+  /** The vent-shaman: a mineral-robed caller, sinter staff, steam on the
+   *  breath — the tribe's beat-reader. */
+  vent_shaman: {
+    parts: [
+      { kind: 'robe', color: '#6a9a94', scale: 1.0 },
+      { kind: 'hood', color: '#4a7a78', x: 0.2, scale: 0.85 },
+      { kind: 'staff', color: '#d8d0b8' },
+      { kind: 'runes', color: '#bfe8f0', scale: 0.8, params: { n: 3 } },
+      { kind: 'eyes', color: '#eafcff', params: { spread: 0.3, dist: 0.6, size: 0.09 } },
+    ],
+    live: [{ kind: 'breathPuff', color: '#e8f4f4', x: 0.4, scale: 0.8 }],
+  },
+  /** The stilt-strider: stilt legs, a spear-fisher's trident, a pale crest. */
+  stilt_strider: {
+    parts: [
+      { kind: 'legs', scale: 1.3, params: { n: 2 } },
+      { kind: 'torso', scale: 0.8 },
+      { kind: 'scutes', scale: 0.75 },
+      { kind: 'trident', params: { len: 1.15 } },
+      { kind: 'crest', x: 0.1, scale: 0.7, color: '#9fe0e8' },
+      { kind: 'eyes', color: '#eafcff', params: { spread: 0.3, dist: 0.62, size: 0.09 } },
+    ],
+  },
+  /** The kettleback: a travertine-armored pool crab — shell dome, stalked
+   *  eyes, heavy claws; the BACK deliberately bare (the mire_leech law): the
+   *  steam gauge rides there as a TELL (drive:steam → fillSac), so the field
+   *  and the book both read the live meter. */
+  kettleback: {
+    parts: [
+      { kind: 'carapace', scale: 0.95, color: '#d8d0b8' },
+      { kind: 'armorPlates', scale: 0.9, color: '#e8e0c8', params: { n: 4 } },
+      { kind: 'legs', scale: 0.9, params: { n: 6 } },
+      { kind: 'pincers', scale: 1.05 },
+      { kind: 'eyestalks', scale: 0.8 },
+    ],
+    shadowScale: 0.95,
+  },
+  /** One skipper of the marching file (the trailing file is the worm body). */
+  mudpot_skipper: {
+    parts: [
+      { kind: 'blob', scale: 0.85, params: { irr: 0.14, seed: 217 } },
+      { kind: 'fins', scale: 0.6 },
+      { kind: 'legs', scale: 0.6, params: { n: 2 } },
+      { kind: 'eyes', color: '#f0e8a0', params: { spread: 0.6, dist: 0.5, size: 0.14 } },
+    ],
+  },
+  /** THE STEAM WISP (M3 coda — the surge's tide): a translucent vapor mote,
+   *  a soft halo, trailing steam threads — the steam read, nothing more. */
+  steam_wisp: {
+    parts: [
+      { kind: 'disc', scale: 0.55, role: 'glow', alpha: 0.55 },
+      { kind: 'halo', scale: 1.15, alpha: 0.3 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.7, color: '#f4fbfc', params: { n: 3 } }],
+  },
+  /** THE TEMPO-DRUMMER (M3 coda — the metronome lean): the tribe's robe +
+   *  hood, a kettle-drum slung at the back (the keg), the beater, four
+   *  runes. The beat pips are a TELL (data/monsters.ts) — never a static
+   *  part here, so the pips that show are the pips that count. */
+  tempo_drummer: {
+    parts: [
+      { kind: 'robe', color: '#5f8f8a', scale: 1.0 },
+      { kind: 'hood', color: '#467572', x: 0.2, scale: 0.8 },
+      { kind: 'keg', color: '#c8b890', x: -0.38, scale: 0.7 },
+      { kind: 'mace', color: '#d8d0b8', scale: 0.7 },
+      { kind: 'runes', color: '#e8d06a', scale: 0.7, params: { n: 4 } },
+      { kind: 'eyes', color: '#eafcff', params: { spread: 0.3, dist: 0.6, size: 0.09 } },
+    ],
+    live: [{ kind: 'breathPuff', color: '#e8f4f4', x: 0.4, scale: 0.7 }],
+  },
+  /** THE CLOCKCRAB (M3 coda): a small crusted crab — carapace, three
+   *  plates, six legs, the big ticking pincers, eyestalks. Pips are a tell. */
+  clock_crab: {
+    parts: [
+      { kind: 'carapace', scale: 0.9, color: '#c8c0a0' },
+      { kind: 'armorPlates', scale: 0.8, color: '#ddd5b5', params: { n: 3 } },
+      { kind: 'legs', scale: 0.85, params: { n: 6 } },
+      { kind: 'pincers', scale: 1.15 },
+      { kind: 'eyestalks', scale: 0.75 },
+    ],
+    shadowScale: 0.9,
+  },
+  /** The basker: a plated cold-blooded lounger — shell, plates, a low head,
+   *  a heavy tail. The ember flush and the hunker are TELLS off the scorch
+   *  bar's own band (data/monsters.ts scald_basker). */
+  scald_basker: {
+    parts: [
+      { kind: 'carapace', scale: 1.0, color: '#9a8a6a' },
+      { kind: 'armorPlates', scale: 1.0, color: '#b8a888', params: { n: 5 } },
+      { kind: 'legs', scale: 0.8, params: { n: 4 } },
+      { kind: 'tail', params: { len: 0.9 } },
+      { kind: 'serpentHead', scale: 0.8, color: '#a89878' },
+      { kind: 'eyes', color: '#ffd080', params: { spread: 0.28, dist: 0.7, size: 0.1 } },
+    ],
+    shadowScale: 1.0,
+  },
+  /** A pool newt: a dollop with a tail, sunning at the prism rims. */
+  pool_newt: {
+    parts: [
+      { kind: 'blob', scale: 0.8, params: { irr: 0.12, seed: 311 } },
+      { kind: 'spots', params: { n: 4 } },
+      { kind: 'legs', scale: 0.6, params: { n: 4 } },
+      { kind: 'tail', params: { len: 0.7 } },
+      { kind: 'eyes', color: '#f0e8a0', params: { spread: 0.5, dist: 0.5, size: 0.12 } },
+    ],
+  },
+  /** A spring moth: white wings over the terraces. */
+  spring_moth: {
+    parts: [
+      { kind: 'disc', scale: 0.6 },
+      { kind: 'mothWings', color: '#f4f0e0', scale: 1.0 },
+      { kind: 'antennae', scale: 0.8 },
+    ],
+  },
+  /** The spring gull: the harbor gull's bones, wheeling over the pools. */
+  scald_gull: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'featherWings', color: '#c8d4d8', scale: 0.95, alpha: 0.95 },
+      { kind: 'tailFeathers', scale: 0.65 },
+      { kind: 'beak', x: 0.45, scale: 0.55, color: '#e8b048' },
+    ],
+  },
+  // --- M2b: FAUNA WAVE 2 (data/monsters.ts — the downstream's kin + the shelf) --
+  /** The brood matron: a broad wader — shell dome, fins, a low serpent head,
+   *  the pale egg sacs on her back (the clutch she lays is the threat). */
+  brood_matron: {
+    parts: [
+      { kind: 'carapace', scale: 1.0, color: '#7aa8a0' },
+      { kind: 'fins', scale: 0.9, color: '#5a8a84' },
+      { kind: 'legs', scale: 0.8, params: { n: 4 } },
+      { kind: 'serpentHead', scale: 0.75, color: '#6a9890' },
+      { kind: 'bloatSacs', x: -0.4, scale: 0.6, color: '#bfe8e0' },
+      { kind: 'eyes', color: '#eafcff', params: { spread: 0.3, dist: 0.66, size: 0.1 } },
+    ],
+    shadowScale: 1.0,
+  },
+  /** A scald spawn: a newt-dollop with fins and a whip tail. */
+  scald_spawn: {
+    parts: [
+      { kind: 'blob', scale: 0.85, params: { irr: 0.16, seed: 533 } },
+      { kind: 'fins', scale: 0.6 },
+      { kind: 'tail', params: { len: 0.8 } },
+      { kind: 'eyes', color: '#ffd080', params: { spread: 0.55, dist: 0.5, size: 0.14 } },
+    ],
+  },
+  /** The vent lamprey: an eel's head with the rasping maw ring, a long tail,
+   *  slick fins, the wet trail. */
+  vent_lamprey: {
+    parts: [
+      { kind: 'serpentHead', scale: 0.8, color: '#6a8a98' },
+      { kind: 'mawRing', x: 0.45, scale: 0.5, color: '#2a1a1e' },
+      { kind: 'tail', params: { len: 1.1 } },
+      { kind: 'fins', scale: 0.5, color: '#8fb8c8' },
+      { kind: 'slimeTrail', scale: 0.6, color: '#bfe8f0' },
+    ],
+  },
+  /** THE CISTERN CRONE (M3 — data/cistern.ts): the wellspring naiad's current
+   *  gone old and scalded — rags over the veils of water, a deep hood, the
+   *  reaching talons, gauze where a body would be, and the steam that never
+   *  leaves her (the rooted glow floods her in the pool; dragged out she is
+   *  this pale sketch under the rags). */
+  cistern_crone: {
+    parts: [
+      { kind: 'disc', scale: 0.78, alpha: 0.8 },
+      { kind: 'veilSashes', scale: 1.0, alpha: 0.85 },
+      { kind: 'tatters', scale: 0.9, role: 'dark', params: { n: 4 } },
+      { kind: 'soulGauze', scale: 0.85, alpha: 0.7 },
+      { kind: 'claws', x: 0.2, scale: 0.85, params: { len: 0.5, talons: 3 } },
+      { kind: 'hood', x: 0.3, scale: 0.9, params: { eyes: true } },
+      { kind: 'eyes', color: '#e8ff9a', params: { spread: 0.32, dist: 0.6, size: 0.09 } },
+    ],
+    live: [{ kind: 'puffMotes', scale: 0.8, params: { n: 3 } }],
+  },
+  /** The prism snail: a soft foot under a spiral shell crusted in mineral
+   *  growths — the crust is what re-tunes (the body tint is the tone's). */
+  prism_snail: {
+    parts: [
+      { kind: 'blob', scale: 0.7, color: '#9ab8b4', params: { irr: 0.12, seed: 611 } },
+      { kind: 'shellSpiral', x: -0.25, scale: 1.05, color: '#cfe8ec' },
+      { kind: 'crystalGrowths', x: -0.25, scale: 0.7, color: '#e8f6ff' },
+      { kind: 'eyestalks', x: 0.3, scale: 0.7 },
+      { kind: 'slimeTrail', scale: 0.7, color: '#d8f4f8' },
+    ],
+    shadowScale: 0.95,
+  },
+  /** The sulphur wallower: a plated, humped pool-tank with tusks — the settle
+   *  (lean + tint) is a TELL off its wallow_settle buff. */
+  scald_wallower: {
+    parts: [
+      { kind: 'carapace', scale: 1.05, color: '#7a8a6a' },
+      { kind: 'armorPlates', scale: 1.0, color: '#94a488', params: { n: 5 } },
+      { kind: 'hump', x: -0.2, scale: 0.7 },
+      { kind: 'legs', scale: 0.75, params: { n: 4 } },
+      { kind: 'serpentHead', scale: 0.85, color: '#8a9a7a' },
+      { kind: 'tusks', scale: 0.6, color: '#e8e0c8' },
+      { kind: 'eyes', color: '#e8c060', params: { spread: 0.28, dist: 0.72, size: 0.1 } },
+    ],
+    shadowScale: 1.05,
+  },
+  /** A kettle minnow: a striped sliver with fins and a tail. */
+  kettle_minnow: {
+    parts: [
+      { kind: 'blob', scale: 0.8, params: { irr: 0.1, seed: 377 } },
+      { kind: 'fins', scale: 0.55 },
+      { kind: 'tail', params: { len: 0.7 } },
+      { kind: 'stripes', color: '#5a8a84', params: { n: 3 } },
+      { kind: 'eyes', color: '#f0e8a0', params: { spread: 0.5, dist: 0.55, size: 0.13 } },
+    ],
+  },
+  /** The cinder jackal: a lean ash-coated dog — the prowl is its whole tell. */
+  cinder_jackal: {
+    parts: [
+      { kind: 'torso', scale: 0.9, color: '#6a5a4e' },
+      { kind: 'legs', scale: 0.85, params: { n: 4 } },
+      { kind: 'snout', scale: 0.8, color: '#5a4a40' },
+      { kind: 'ears', scale: 0.9 },
+      { kind: 'tail', params: { len: 0.9 } },
+      { kind: 'mane', scale: 0.5, color: '#3a2e28' },
+      { kind: 'eyes', color: '#ffb060', params: { spread: 0.3, dist: 0.62, size: 0.1 } },
+    ],
+  },
+  // --- THE SCALD KIT K1: FAUNA WAVE 3 (data/monsters.ts; charter docs/design/
+  // scald-kit.md §5 — THE NEW-PIECES PREFERENCE: each debut wears a NEW
+  // painter from render/vis/parts.ts) --------------------------------------
+  /** The scald lancer: a geyserkin spear-thrower — torso, scutes, long legs,
+   *  THE SINTER LANCE (new) lowered at the side; the back bare for the
+   *  PRESSURE-PACK (new) the tells fabric wears there off 'rounds:' (the
+   *  finisher's gauge — a full pack is a loaded throw). */
+  scald_lancer: {
+    parts: [
+      { kind: 'legs', scale: 1.1, params: { n: 2 } },
+      { kind: 'torso', scale: 0.82, color: '#8fb8ac' },
+      { kind: 'scutes', scale: 0.7 },
+      { kind: 'sinterLance', params: { len: 1.35 } },
+      { kind: 'crest', x: 0.12, scale: 0.6, color: '#bfe8f0' },
+      { kind: 'eyes', color: '#eafcff', params: { spread: 0.3, dist: 0.62, size: 0.09 } },
+    ],
+  },
+  /** The vaporling: a body MADE of steam — THE VAPOR BODY (new, live:
+   *  lobes that drift and breathe) with a STEAM TRAIL (new) streaming off
+   *  its wake, two pale eyes the only solid thing in it. */
+  vaporling: {
+    parts: [
+      { kind: 'vaporBody', color: '#e4f2f4', params: { n: 6, alpha: 0.5 } },
+      { kind: 'eyes', color: '#9fe0e8', params: { spread: 0.34, dist: 0.5, size: 0.11 } },
+    ],
+    live: [
+      { kind: 'vaporBody', color: '#f4fbfb', params: { n: 4, alpha: 0.22 } },
+      { kind: 'steamTrail', color: '#eef6f8', params: { n: 4, len: 1.5 } },
+    ],
+    shadowScale: 0.6,
+  },
+  /** The kettle bladder: a pressure polyp — a stalk foot under THE PRESSURE
+   *  BLADDER (new): the tells fabric draws the bladder itself off
+   *  drive:pressure (fill, veins, strain), so the bake shows the slack organ
+   *  and the field shows the live one. Rooted; no legs. */
+  kettle_bladder: {
+    parts: [
+      { kind: 'blob', scale: 0.6, color: '#a88868', params: { irr: 0.14, seed: 771 } },
+      { kind: 'roots', scale: 0.7, color: '#8a6a50' },
+      { kind: 'pressureBladder', scale: 0.98, color: '#e8c8a8', params: { fluid: '#ff9a4a' } },
+    ],
+    shadowScale: 0.9,
+  },
+  /** The spout-hopper: a small geyserkin on STEAM-JET LEGS (new — the tells
+   *  fabric puffs them by the banked hops), a SPOUT ORGAN (new) on its back
+   *  curling steam, a light torso, a pale crest. */
+  spout_hopper: {
+    parts: [
+      { kind: 'steamJetLegs', scale: 1.0, color: '#6a9a94', params: { n: 4 } },
+      { kind: 'torso', scale: 0.74, color: '#8fb8ac' },
+      { kind: 'spoutOrgan', x: -0.35, scale: 0.9, color: '#d8d0b8', params: { lip: 0.36 } },
+      { kind: 'crest', x: 0.14, scale: 0.55, color: '#bfe8f0' },
+      { kind: 'eyes', color: '#eafcff', params: { spread: 0.32, dist: 0.6, size: 0.1 } },
+    ],
+    // The spout's curl breathes per frame (the funnel is baked above).
+    live: [{ kind: 'steamTrail', x: -0.4, color: '#eef6f8', params: { n: 2, len: 0.7 } }],
+  },
+  /** The terrace warden: a kettleback cousin in SINTER PLATES (new) — a
+   *  travertine dome, the plates banded across the back (the tells fabric
+   *  re-draws them in the worn attunement's tone), heavy legs, pincers,
+   *  stalked eyes. */
+  terrace_warden: {
+    parts: [
+      { kind: 'carapace', scale: 0.98, color: '#d8d0b8' },
+      { kind: 'sinterPlates', x: -0.1, scale: 1.0, color: '#e8e0c8', params: { n: 5 } },
+      { kind: 'legs', scale: 0.9, params: { n: 6 } },
+      { kind: 'pincers', scale: 1.0 },
+      { kind: 'crystalGrowths', x: -0.3, scale: 0.5, color: '#e8f6ff' },
+      { kind: 'eyestalks', scale: 0.75 },
+    ],
+    shadowScale: 0.95,
+  },
+  /** THE GEYSERMAW (M3 — the great geyser den's apex, a vent dweller): a
+   *  vast sinter-crusted maw seen from above as it breaches — the body a
+   *  mineral dome, crusted with crystal, a gill frill at the rim, the ring
+   *  of teeth that IS the mouth, and the gullet working while it holds a
+   *  catch (the gulper idiom). The rise and the sinking are the fabric's
+   *  (spawnedAt scale-up, the ghosted tail) — the look is the body. */
+  geysermaw: {
+    parts: [
+      { kind: 'blob', scale: 1.08, color: '#7aa8a8', params: { irr: 0.16, seed: 4421 } },
+      { kind: 'scutes', scale: 1.0, color: '#d8e8e4', alpha: 0.9 },
+      { kind: 'crystalGrowths', scale: 0.72, color: '#bfeff4', alpha: 0.8 },
+      { kind: 'gillFrill', scale: 0.95, color: '#9fe0e8', alpha: 0.85 },
+      { kind: 'mawRing', scale: 0.92 },
+      { kind: 'fangs', x: 0.32, scale: 0.9 },
+      { kind: 'eyes', color: '#ffe6a0', params: { spread: 0.52, dist: 0.34, size: 0.09 } },
+    ],
+    live: [
+      { kind: 'breathPuff', x: 0.42, scale: 1.3 },
+      { kind: 'gulletSac', y: 0.1, scale: 0.8, params: { rate: 0.5 } },
+    ],
+    shadowScale: 1.1,
+  },
+  /** The brood clutch (lay_brood_clutch's pod construct): three pale eggs in
+   *  the shallows — the grub_egg grammar in the basin's teal. */
+  brood_clutch: {
+    parts: [
+      { kind: 'egg', x: 0.15, y: 0.1, scale: 0.55, color: '#bfe8e0' },
+      { kind: 'egg', x: -0.18, y: -0.06, scale: 0.5, color: '#a8d8d0' },
+      { kind: 'egg', x: 0.0, y: -0.22, scale: 0.42, color: '#cfeee8' },
+    ],
+    shadowScale: 0.6,
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

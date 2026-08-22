@@ -25,6 +25,7 @@
 import type { Actor } from '../engine/actor';
 import type { World } from '../engine/world';
 import type { DamageType } from '../engine/stats';
+import { scorchErosionAt } from '../engine/status';
 
 /** How much a recovery/collision outcome hurts. */
 export interface DamageSpec {
@@ -99,8 +100,13 @@ export interface RegionVisualSpec {
    *  'souls' is the LIVING WATER (the River of Souls): the deep's fill
    *  breathes slow, and the renderer drifts pale under-surface FIGURES —
    *  faces, reaching hands, long streaks — through the covered cells
-   *  (alive, on the very precipice of death). */
-  animate?: 'shimmer' | 'pulse' | 'drift' | 'prism' | 'souls';
+   *  (alive, on the very precipice of death). 'broil' is THE BROIL LAW's
+   *  permanent face (the lake's refused deep, engine/lake.ts): the wash
+   *  simmers and the renderer's lake pass (render/vis/lakeLayer.ts) draws
+   *  the geyser fabric's OWN roil — the same drawn word a vent wears for
+   *  two seconds before it bursts, worn here forever — on a seat lattice
+   *  read off the SAME regionAt cells movement refuses (drawn == tested). */
+  animate?: 'shimmer' | 'pulse' | 'drift' | 'prism' | 'souls' | 'broil';
   /** BOUNDARY EDGE: painted on every side facing walkable ground so the
    *  region's rim READS at a glance — a flesh wall's pale membrane, the
    *  mycelium's luminous weave. Bakes with the ground chunks; `width` in
@@ -370,13 +376,77 @@ export interface SurvivalResourceDef {
    *  meter wears as it drains — breath's asphyxiation blue is the debut.
    *  Omit = no veil; a spec-less row draws nothing (absent == identical). */
   vignette?: SurvivalVignetteSpec;
+  /** THE POLARITY (the scorch bar's law — absent = 'drain', every older row
+   *  byte-identical): a 'fill' row RISES toward its bad end. The grammar
+   *  mirrors: sources FEED it (World.feedSurvival — the ease law slows the
+   *  RISE), `regen` is the out-of-source DECAY back toward empty, and
+   *  `vignette.startFrac` reads as the fraction the veil engages ABOVE.
+   *  A FILL ROW NEVER COOKS (her fourth-walk ruling, the scorch law): its
+   *  bad end is a worn STATE — the `bands` — and a progressive price the
+   *  bands carry, never a life tick; the underflow* family is DRAIN-row
+   *  grammar (a timer into drowning) and is inert on a fill row (validated
+   *  at boot so the contradiction can never ship quietly). THE COMPOSITION
+   *  LAW: the bars multiply (scorch by day, the light meter by night under a
+   *  Gloaming) and each keeps its own texture — a future fill row brings a
+   *  NEW consequence, never a clone. Empty is the healthy state; the HUD
+   *  hides an empty fill bar the way it hides a full drain bar. */
+  polarity?: 'drain' | 'fill';
+  /** THE BAND LAW (fill rows): statuses WORN AS derived windows of the
+   *  meter itself, so every standing consumer of the status — douse lists,
+   *  per-stack mods, damageVs_* lanes — keeps its meaning while the bar
+   *  becomes the one truth. World.syncSurvivalBands manages them directly
+   *  (never via applyStatus, so a def's buildup ladder stays the law for
+   *  stacks earned OUTSIDE the bar); the douse beat bleeds the METER one
+   *  unit per beat on carriers instead of shedding the derived status. */
+  bands?: SurvivalBandRow[];
+  /** THE SEVERITY READOUT (fill rows — show-don't-tell's one permitted
+   *  number): the HUD bar's caption beside the label, a pure function of
+   *  the meter value — the scorch bar prints the fire-res erosion its
+   *  worn band strips ('−20% fire res'), read off the SAME def the sheet
+   *  wears (scorchErosionAt — drawn == tested). Empty string = label only. */
+  readout?: (value: number) => string;
+}
+
+/** One worn band of a fill-polarity survival meter (SurvivalResourceDef.bands). */
+export interface SurvivalBandRow {
+  /** The status this band wears (a StatusDef id). */
+  status: string;
+  /** Meter value at which the band engages (worn while value ≥ from − ε). */
+  from: number;
+  /** Stacking band: worn stacks = floor(meter value), clamped by the status
+   *  def's own maxStacks — the meter's quantized read, so per-stack mods
+   *  (sunscorch's fire-res erosion) ride the bar exactly as they rode the
+   *  old stack ladder. */
+  stacksPerUnit?: boolean;
+}
+
+/** The fill-polarity meter a banded status belongs to, if any (memoized off
+ *  the registry): the douse loop and the ambient heat lanes route a banded
+ *  status's relief into its METER on carriers — one law, no id literals. */
+let bandMeterMemo: Map<string, SurvivalResourceDef> | null = null;
+export function survivalBandMeter(statusId: string): SurvivalResourceDef | undefined {
+  if (!bandMeterMemo) {
+    bandMeterMemo = new Map();
+    for (const def of Object.values(SURVIVAL_RESOURCES)) {
+      for (const b of def.bands ?? []) bandMeterMemo.set(b.status, def);
+    }
+  }
+  return bandMeterMemo.get(statusId);
 }
 
 /** THE SURVIVAL VEIL's row half — IDENTITY only (colours, the engagement
  *  line, the peak depth). The shared grammar — closing-in geometry, the
  *  last-gasp squeeze, the underflow deepening — is global in
- *  VIS_CFG.survivalVignette, so a future warmth meter buys the whole effect
- *  with one spec here. Screen-anchored BY LAW: like every status overlay it
+ *  VIS_CFG.survivalVignette, so a new meter buys the whole effect with one
+ *  spec here (the scorch bar's warm-red spent the reserved seat; a future
+ *  cold bar buys it the same way — for a fill-polarity row `startFrac` is
+ *  the fraction the veil engages ABOVE, and the wash deepens toward FULL).
+ *  THE SEVERITY WASH (fill rows): the squeeze and the ramp flush are the
+ *  DYING grammar of a drain row — a fill row never cooks, so its veil is
+ *  steady: alpha and reach by meter fraction alone, the colour deepening
+ *  with the bar (the wash's depth IS the severity read;
+ *  renderer.drawSurvivalVignette keys this on polarity).
+ *  Screen-anchored BY LAW: like every status overlay it
  *  happens TO the player (the anchored sky's explicit exemption,
  *  `veil.anchor: 'view'`) — never a place in the world. */
 export interface SurvivalVignetteSpec {
@@ -385,8 +455,10 @@ export interface SurvivalVignetteSpec {
   /** The pooled screen-corner rim — the deep end of the wash. Hex. */
   edge: string;
   /** The flush the last-gasp squeeze (and the underflow ramp) lends both —
-   *  breath's pale oxygen-starved cyan. Hex. */
-  flush: string;
+   *  breath's pale oxygen-starved cyan. Hex. Drain-row grammar: a fill
+   *  row's severity wash never flushes, so it may omit it (absent → the
+   *  wash's own `mid`, should a drain row ever leave it out). */
+  flush?: string;
   /** Meter fraction where the veil engages (0.5 = below half). Above it the
    *  veil draws nothing at all. */
   startFrac: number;
@@ -433,6 +505,43 @@ export const SURVIVAL_RESOURCES: Record<string, SurvivalResourceDef> = {
   // ramp's shape, crueler: linger and it takes you whole. The HUD readout
   // draws this meter for free (it loops this table).
   soul: { id: 'soul', label: 'Soul', max: 10, regen: 2.5, underflowPctLifePerSec: 0.06, underflowRampTo: 0.3, underflowRampSecs: 8, underflowText: 'the river takes hold!', underflowTextColor: '#9fd8ec', color: '#9fd8ec' },
+  // THE SCORCH BAR (scald-basin charter §10 — her ruled shape, 2026-08-20,
+  // re-shaped at the fourth walk + sealed at the fifth, 2026-08-21): the
+  // desert's heat mechanic STANDARDIZED as the fabric's first FILL-polarity
+  // meter — the higher the bar, the more scorched the body. ONE UNIT == ONE
+  // legacy sunscorch stack (max 8 = the old stack cap), so every onset and
+  // relief cadence survives the refit EXACTLY (THE REFIT LAW — the desert
+  // feels identical, only visible now; probe_scorch pins it). The AMBIENT
+  // lanes live in World.updateScorch (swelter sun + shimmer fields, players
+  // only — monsters live there); hazard sources (the scald country's
+  // eruptions, pool proximity — the sibling geyser chip) land through
+  // World.scorchFeed, entities included. THE PROGRESSIVE SPINE — the bar's
+  // WHOLE effect: the BANDS wear the standing statuses off the bar —
+  // sunscorched = the meter's quantized read (THE EIGHTHS: a stack per
+  // eighth of the bar, each stripping SCORCH_EROSION.fireResPerUnit fire
+  // res — −5%/unit → −40% at the full eight; the combat lane's
+  // apply_/damageVs_ economy untouched), heatstroke = the full-state SLOW
+  // (the legacy cap feel; kept by her word, retired by deleting its row).
+  // NEVER A COOK: the bar drains no life at any height — the underflow*
+  // family stays silent here by ruling (a fill row is an accumulator into
+  // erosion, deliberately NOT the breath/light shape of a timer into doom;
+  // THE COMPOSITION LAW multiplies the two textures, scorch by day × light
+  // by night). `regen` is the out-of-source decay — slower than shade's
+  // bleed on purpose (shade, night and the water douse stay the true
+  // reliefs). `readout` is the HUD caption — the erosion the bar wears,
+  // read off the sunscorched def itself. Vignette = the SEVERITY WASH
+  // (engages above startFrac, deepens to full, no dying squeeze). ALL
+  // numbers DIAL (unblessed — she blesses via playthroughs).
+  scorch: {
+    id: 'scorch', label: 'Scorch', polarity: 'fill', max: 8, regen: 0.35,
+    underflowPctLifePerSec: 0, color: '#ffb64a',
+    bands: [
+      { status: 'sunscorched', from: 1, stacksPerUnit: true },
+      { status: 'heatstroke', from: 8 }, // == max: the full-state band (the slow — ONE line to retire)
+    ],
+    readout: v => { const e = scorchErosionAt(v); return e > 0 ? `−${Math.round(e * 100)}% fire res` : ''; },
+    vignette: { mid: '#e06a2a', edge: '#5a1406', startFrac: 0.55, maxAlpha: 0.5 },
+  },
 };
 
 export function survivalResource(id: string): SurvivalResourceDef | undefined { return SURVIVAL_RESOURCES[id]; }
@@ -930,6 +1039,29 @@ registerRegion({
   // Fully submerged = fully quenched (the douse lane, water's own row echoed).
   douses: { statuses: ['sunscorched', 'heatstroke'], text: 'the water quenches…' },
   visual: { fill: '#0c2740', alpha: 0.55, animate: 'drift' },
+});
+// THE LAKE TYPE's GENERIC WATERS (engine/lake.ts — the recipe's pinned
+// defaults; the sulphur debut pours its own rows from data/scald.ts):
+//   lake_shallows — the wadeable SHELF ringing a generic lake's deep: the
+//     water row's own grammar (wading, the wet seat, the douse) as a GRID
+//     region with a drawn face (the doodad 'water' row has none), blot-
+//     baked so the shoreline sinks into the land instead of stamping.
+//   lake_deep — THE DEEP-MIDDLE REFUSAL under deepPolicy 'block': not
+//     walkable, not blocking (a shot and a sight line sail across — the
+//     lake's occlusion-free firing lane), and an EJECT boundary (a step in
+//     is shoved back out — "too deep": never a fall, because fall-family
+//     policies become pit DESCENDS under ground (pitPolicyFor) and a lake
+//     must keep its meaning everywhere). Jump/blink displacement crosses it
+//     like a chasm. A cold deep that drifts; the sulphur twin BROILS.
+registerRegion({ id: 'lake_shallows', walkable: true, blocks: false, label: 'the shallows',
+  standStatus: 'wading', surfaceWake: 'ripple', pathCost: 1.8, severity: 20,
+  douses: { statuses: ['sunscorched', 'heatstroke'], every: 0.25, text: 'the water quenches…' },
+  visual: { fill: '#2f7e98', alpha: 0.42, blot: true } });
+registerRegion({
+  id: 'lake_deep', walkable: false, blocks: false, label: 'the deep',
+  boundaryPolicy: { kind: 'eject', to: 'edge', damage: { amount: 0, pctMaxLife: 0.06, type: 'physical', canKill: false } },
+  crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
+  visual: { fill: '#0f3550', alpha: 0.7, animate: 'drift', edge: { color: '#8fc8d8', width: 4 } },
 });
 // FLESH: a writhing organic chamber floor (the flesh biome's circular chambers).
 // Walkable; a pulsing red visual makes the ground throb like living tissue.

@@ -19,7 +19,14 @@ import { MOUNT_CFG, mountAccepts, seatPos } from './mounts';
 import type { World } from './world';
 
 /** Mint (and cache) a skill instance for scripted casts — leveled like the
- *  monster's own kit (createMonster's formula), so choreography scales. */
+ *  monster's own kit (createMonster's formula), so choreography scales.
+ *  Exported as `aiKitInstance` for the ONE other reader of a body's kit
+ *  instances — the tells fabric's PRESSURE GAUGE (World.kitRounds reads the
+ *  use-charge bank of the SAME instance the scripted cast will spend; the
+ *  gauge and the spend can never disagree). */
+export function aiKitInstance(actor: Actor, skillId: string): SkillInstance | null {
+  return mintInst(actor, skillId);
+}
 function mintInst(actor: Actor, skillId: string): SkillInstance | null {
   // breakDisables reaches CHOREOGRAPHY here: every scripted verb that
   // fires a skill (cast / ring / nova) mints through this one gate, so a

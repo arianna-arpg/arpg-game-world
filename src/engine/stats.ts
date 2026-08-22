@@ -963,6 +963,16 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** > 0: dashes leave a burning trail dealing this damage fraction
    *  (Fire Walker support — Trailblaze as a graft). */
   moveTrail:      { label: 'Movement Trail', base: 0 },
+  /** > 0: movement skills ERUPT at their DEPARTURE point only, dealing this
+   *  fraction of the skill's damage (THE DEPARTURE SPLASH — the Afterspray
+   *  support, THE SCALD KIT K2; moveExplode's one-ended cousin, read at the
+   *  same World.moveBlast site with phase 'depart'). */
+  departSplash:   { label: 'Departure Splash', base: 0 },
+  /** > 0: THE FAVORED PULSE (Mineral Tuning, THE SCALD KIT K2): a tunable
+   *  body YOU re-tune pulses its attunement onto your side only — your
+   *  enemies are spared the wash — and the wash your side receives lasts
+   *  ×(1 + this). Read at World.attuneCrystal off the striker's sheet. */
+  tuneFavor:      { label: 'Favored Attunement', base: 0 },
 
   // Stat-granted parry (Perfect Timing support — any guard skill)
   /** Parry window in seconds granted to guard skills lacking their own. */

@@ -689,6 +689,12 @@ export interface UnderTierSpec {
    *  span target (ZoneTheme.spans swaps full/ebbing/drained on its
    *  RadianceCond), so the wet-by-night law rides standing machinery. */
   grotto?: UnderGrottoSpec;
+  /** THE DESCENT LEDGER (the cistern's debut): a run-ledger key bumped the
+   *  moment a hero's body first takes this lane's crossing DOWN into the
+   *  story (World's ladder toggle — `bumpLedger`, the sidezone fabric's
+   *  `ledgerOnEnter` for a story with no door; merged to the account on
+   *  death like every run key). Absent = byte-identical. */
+  ledgerOnDescend?: string;
 }
 
 /** The set-piece chamber a grotto lane carves. Every field is data; every
@@ -714,6 +720,22 @@ export interface UnderGrottoSpec {
    *  forcing lever). The lair fold itself is engine/lairs.ts's, verbatim:
    *  rows claim the land, the grotto is merely where the claim can stand. */
   lairBias?: number;
+  /** WHERE the chamber may seat. 'hunt' (default — the mere): a random
+   *  hunt for a wholly-boreable disc anywhere in the arena. 'offered' (the
+   *  cistern): ONLY under a seat the recipe HELD OUT (GenCtx.underSeats —
+   *  the lake's great shoal), tried in offer order; the chamber is clamped
+   *  to fit under the offered disc (its wobbled rim never leaves it), and
+   *  the lane's own `forbid` + the boreable law still judge every cell —
+   *  a seat the water clipped short refuses honestly, byte-flat. */
+  seat?: 'hunt' | 'offered';
+  /** WHERE the lane's lair court seats on the shore. 'waterline' (default
+   *  — the mere): the inner shore band (within ~2.5 cells of the pool),
+   *  farthest from the stair. 'brink' (the cistern): a shore cell TOUCHING
+   *  the pool (a 4-neighbour wears the water), farthest from the stair —
+   *  so a mouth that names the pool as its liquid seat (den_mouth
+   *  `liquidSeat`) stands at the lip and its dweller boots IN the water.
+   *  Falls back to the waterline, then any snug shore (the standing law). */
+  courtSeat?: 'waterline' | 'brink';
 }
 
 /** The lane registry — an OPEN vocabulary (the registerLayout idiom). */
@@ -721,6 +743,14 @@ export const UNDER_TIER_LANES: Record<string, UnderTierSpec> = {};
 
 export function registerUnderTier(id: string, spec: UnderTierSpec): void {
   UNDER_TIER_LANES[id] = spec;
+}
+
+/** THE DESCENT LEDGER's read (UnderTierSpec.ledgerOnDescend): the run-ledger
+ *  key a lane stamps when a hero first goes DOWN its crossing, or undefined
+ *  for lanes (and unknown lanes) that keep no book. Pure; the world's
+ *  ladder toggle is the one caller. */
+export function laneLedgerOnDescend(lane: string | undefined): string | undefined {
+  return lane ? UNDER_TIER_LANES[lane]?.ledgerOnDescend : undefined;
 }
 
 // THE SEWER LANE — the debut, registered with the classic constants so the
@@ -882,42 +912,75 @@ function carveUnderGrotto(
   const amp = cs * ctx.rng.range(0.8, 1.5);
   const wob = (th: number): number =>
     amp * (Math.sin(th * 3 + wob1) * 0.55 + Math.sin(th * 7 + wob2) * 0.3 + Math.sin(th * 13 + wob3) * 0.15);
-  const wR = Math.max(cs * 2, R * (g.waterFrac ?? G.waterFrac));
+  const wRof = (Rc: number): number => Math.max(cs * 2, Rc * (g.waterFrac ?? G.waterFrac));
+  let wR = wRof(R);
   let shoreCells: Vec2[] = [], waterCells: Vec2[] = [];
   let at: Vec2 | null = null;
-  for (let t = 0; t < G.seatTries && !at; t++) {
-    const p = vec(
-      ctx.rng.range(200 + R, ctx.arena.w - 200 - R),
-      ctx.rng.range(200 + R, ctx.arena.h - 200 - R),
-    );
-    if (Math.hypot(p.x - ctx.entry.x, p.y - ctx.entry.y) < G.entryClear + R) continue;
-    if (!seatInArena(def, ctx.arena, p)) continue;
-    let ok = true;
-    for (const [dx, dy] of [[R, 0], [-R, 0], [0, R], [0, -R]] as const) {
-      if (!seatInArena(def, ctx.arena, vec(p.x + dx, p.y + dy))) { ok = false; break; }
+  // Rim-honest at the compass points, clear of the arrival — one gate for
+  // both seat modes (a hunted disc and an offered one keep the same law).
+  const seatStands = (p: Vec2, Rc: number): boolean => {
+    if (Math.hypot(p.x - ctx.entry.x, p.y - ctx.entry.y) < G.entryClear + Rc) return false;
+    if (!seatInArena(def, ctx.arena, p)) return false;
+    for (const [dx, dy] of [[Rc, 0], [-Rc, 0], [0, Rc], [0, -Rc]] as const) {
+      if (!seatInArena(def, ctx.arena, vec(p.x + dx, p.y + dy))) return false;
     }
-    if (!ok) continue;
-    // Classify the disc WITHOUT painting (the all-or-nothing law).
+    return true;
+  };
+  // Classify the disc WITHOUT painting (the all-or-nothing law): null when
+  // any cell under the wobbled rim is not boreable or the chamber is too
+  // small to be a chamber.
+  const classifyAt = (p: Vec2, Rc: number): { shore: Vec2[]; water: Vec2[] } | null => {
+    const wRc = wRof(Rc);
     const shore: Vec2[] = [], water: Vec2[] = [];
-    const gx0 = Math.max(1, Math.floor((p.x - R - amp) / cs));
-    const gx1 = Math.min(Math.floor(ctx.arena.w / cs) - 2, Math.ceil((p.x + R + amp) / cs));
-    const gy0 = Math.max(1, Math.floor((p.y - R - amp) / cs));
-    const gy1 = Math.min(Math.floor(ctx.arena.h / cs) - 2, Math.ceil((p.y + R + amp) / cs));
-    for (let gy = gy0; gy <= gy1 && ok; gy++) {
+    const gx0 = Math.max(1, Math.floor((p.x - Rc - amp) / cs));
+    const gx1 = Math.min(Math.floor(ctx.arena.w / cs) - 2, Math.ceil((p.x + Rc + amp) / cs));
+    const gy0 = Math.max(1, Math.floor((p.y - Rc - amp) / cs));
+    const gy1 = Math.min(Math.floor(ctx.arena.h / cs) - 2, Math.ceil((p.y + Rc + amp) / cs));
+    for (let gy = gy0; gy <= gy1; gy++) {
       for (let gx = gx0; gx <= gx1; gx++) {
         const x = gx * cs + cs / 2, y = gy * cs + cs / 2;
         const dx = x - p.x, dy = y - p.y;
         const d = Math.hypot(dx, dy);
         const th = Math.atan2(dy, dx);
-        const rim = R + wob(th);
+        const rim = Rc + wob(th);
         if (d > rim) continue;
-        if (!boreable(grid.regionAt?.(x, y))) { ok = false; break; }
-        const wRim = Math.min(wR + wob(th) * 0.5, rim - cs * G.shoreRing);
+        if (!boreable(grid.regionAt?.(x, y))) return null;
+        const wRim = Math.min(wRc + wob(th) * 0.5, rim - cs * G.shoreRing);
         if (d <= wRim) water.push(vec(x, y)); else shore.push(vec(x, y));
       }
     }
-    if (!ok || water.length < 4 || shore.length < 12) continue;
-    at = p; shoreCells = shore; waterCells = water;
+    if (water.length < 4 || shore.length < 12) return null;
+    return { shore, water };
+  };
+  if (g.seat === 'offered') {
+    // THE OFFERED SEAT (the cistern under the lake's great shoal): no hunt
+    // and no draw — the recipe held these discs out (GenCtx.underSeats), in
+    // order; the chamber SHRINKS to fit wholly under the offered disc
+    // (rolled R, clamped so the wobbled rim stays inside it) and refuses a
+    // seat it cannot fit at the lane's own smallest chamber — honestly,
+    // byte-flat. The boreable law still judges every cell, so a shoal the
+    // water clipped short refuses like any holed ground.
+    for (const s of ctx.underSeats ?? []) {
+      const Rc = Math.min(R, s.r - amp - cs);
+      if (Rc < rBand[0] || Rc < cs * 5) continue;
+      if (!seatStands(s.pos, Rc)) continue;
+      const c = classifyAt(s.pos, Rc);
+      if (!c) continue;
+      at = vec(s.pos.x, s.pos.y); R = Rc; wR = wRof(Rc);
+      shoreCells = c.shore; waterCells = c.water;
+      break;
+    }
+  } else {
+    for (let t = 0; t < G.seatTries && !at; t++) {
+      const p = vec(
+        ctx.rng.range(200 + R, ctx.arena.w - 200 - R),
+        ctx.rng.range(200 + R, ctx.arena.h - 200 - R),
+      );
+      if (!seatStands(p, R)) continue;
+      const c = classifyAt(p, R);
+      if (!c) continue;
+      at = p; shoreCells = c.shore; waterCells = c.water;
+    }
   }
   if (!at) return;
   const heart: Vec2 = at; // the seated chamber center (const for the closures below)
@@ -987,9 +1050,17 @@ function carveUnderGrotto(
       };
       const waterline = shoreCells.filter(c =>
         Math.hypot(c.x - heart.x, c.y - heart.y) <= wR + cs * 2.5);
+      // THE BRINK (UnderGrottoSpec.courtSeat 'brink' — the cistern): shore
+      // cells TOUCHING the pool, so a mouth naming the pool as its liquid
+      // seat stands at the lip; tried first, the waterline and any snug
+      // shore the standing fallbacks. Default 'waterline' = byte-identical.
+      const brink = g.courtSeat === 'brink'
+        ? shoreCells.filter(c => [[cs, 0], [-cs, 0], [0, cs], [0, -cs]].some(([dx, dy]) =>
+          grid.regionAt?.(c.x + dx, c.y + dy) === g.water))
+        : [];
       let seat: Vec2 | null = null;
       let far = -1;
-      for (const pool of [waterline.filter(snug), shoreCells.filter(snug)]) {
+      for (const pool of [brink.filter(snug), waterline.filter(snug), shoreCells.filter(snug)]) {
         for (const c of pool) {
           const d = Math.hypot(c.x - well.x, c.y - well.y);
           if (d < G.lairSeatClear) continue;

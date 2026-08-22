@@ -68,6 +68,7 @@ tells: [{
 | `casting` / `casting:<skillId>` | own REAL bar progress (held channel = 1; **a bluffed bar reads 0 by law**) | 0..1 |
 | `feinting` | a bluffed bar in flight (`BehaviorSpec.feint`) | 0 / 1 |
 | `foecast` | seconds left on the TARGET's bar (`aiFoeCastSec`, stamped by the AI tick) | **raw — band required** |
+| `combo:<ruleId>` | THE HONEST MEASURE — casts struck / casts to close a granted grammar, read off the SAME ring the matcher reads and consume-aware (registered by `data/combos.ts`; worn on a `beatPips` part the pips become a meter — the Scald Basin's metronome kin) | 0..1 |
 
 Parameterized ids split on `:` — an exact registered id wins over the
 prefix lane, so a package may override `drive:dread` wholesale. Unknown

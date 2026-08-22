@@ -74,9 +74,11 @@ import '../src/data/settled';
 import '../src/data/garden';
 import '../src/data/catacombs';
 import '../src/data/merelake';
+import '../src/data/cistern';
 import '../src/data/lonecrypt';
 import '../src/data/grove';
 import '../src/data/warfront';
+import '../src/data/scald';
 import '../src/data/compositions';
 
 import { Rng } from '../src/core/rng';

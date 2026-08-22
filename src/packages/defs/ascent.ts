@@ -35,6 +35,7 @@ const ASCENT_SURGE: AscentSurge = {
   geyserChance: 0.14,       // ~1-in-7 eligible zones vent (seeded per zone)
   geyserBiomes: [           // geothermal + open country — where the deep water boils
     'tundra', 'volcanic', 'marsh', 'highland', 'field', 'steppe', 'meadow',
+    'scald', // THE SCALD BASIN (data/scald.ts): the launch country — where the deep water literally boils
   ],
   shelfLevelBonus: 2,       // the crossing runs hotter than the land below
   shelfTrickle: [10, 16],   // the Host keeps coming while the floor keeps going

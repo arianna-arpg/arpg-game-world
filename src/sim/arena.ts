@@ -31,10 +31,15 @@ import '../data/settled';
 import '../data/garden';
 import '../data/catacombs';
 import '../data/merelake';
+import '../data/cistern';
 import '../data/lonecrypt';
 import '../data/grove';
 import '../data/theater'; // THE THEATER FABRIC's defaults (before warfront — kind priority is registration order)
 import '../data/warfront';
+import '../data/scald'; // the Scald Basin kit (pool rows, mineral furniture, the meld, its weather)
+import '../data/greatgeyser'; // THE GREAT GEYSER den lane (the mouth, the lair seat, the Geysermaw's ledger)
+import '../data/scaldkit'; // THE SCALD KIT K1 (the steam bank, the lacksStatus condition, the kit census)
+import '../data/pilgrimage'; // THE TERRACE PILGRIMAGE theater kind + rows (after data/theater — registration order is priority)
 import '../data/compositions';
 import '../data/fog';
 import '../data/creeps';
