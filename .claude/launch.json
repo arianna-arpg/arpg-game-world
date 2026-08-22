@@ -1045,6 +1045,20 @@
       ],
       "port": 5158,
       "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa72",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5157",
+        "--strictPort"
+      ],
+      "port": 5157,
+      "autoPort": false
     }
   ]
 }

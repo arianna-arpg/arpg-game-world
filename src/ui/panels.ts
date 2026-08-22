@@ -146,6 +146,10 @@ const HINT_BAR_ENABLED = false;
  *  Ability point offers its popup at the next disciplined calm (the world
  *  queues; updateTreePips fires the request — never mid-combat). Off = the
  *  drawer's waiting-pip stays the only messenger. */
+/** THE CLOSE GLYPH keeps the inventory's top-right corner (closeGlyphHtml),
+ *  so the essence satchel button — and the drop-down hanging under it —
+ *  sit this many px in from the panel's right edge. */
+const SATCHEL_RIGHT_PX = 46;
 const TREE_POPUP_ENABLED = true;
 
 /** Item-category glyphs — bag tiles and the drag fabric's ghost chip share
@@ -680,6 +684,37 @@ export class UI {
     });
     this.installGearDnd();
 
+    // THE CLOSE GLYPH's wire (closeGlyphHtml): ONE delegated click per root,
+    // so a rebuilt template keeps its glyph live. Owned panels close for
+    // their OWNER — the couch guest's ✕ closes the guest's bag: the toggle
+    // with the owner's seat id IS the keyed close, byte for byte.
+    const panelClosers: Array<[HTMLElement, () => void]> = [
+      [this.charSheet, () => this.toggleCharSheet(this.panelSeatIds.get(this.charSheet))],
+      [this.inventory, () => this.toggleInventory(this.panelSeatIds.get(this.inventory))],
+      [this.passiveTree, () => this.toggleTree(this.panelSeatIds.get(this.passiveTree))],
+      [this.worldMap, () => this.toggleMap()],
+      [this.vendorMenu, () => this.closeVendor()],
+      [this.salvageMenu, () => this.closeSalvage()],
+      [this.fontMenu, () => this.closeFont()],
+      [this.oracleMenu, () => this.closeOracle()],
+      [this.bestiaryMenu, () => this.closeBestiary()],
+      [this.boroughMenu, () => this.closeBorough()],
+      [this.caravanMenu, () => this.closeCaravan()],
+      [this.sailMenu, () => this.closeSail()],
+      [this.holdMenu, () => this.closeHold()],
+      [this.mercMenu, () => this.closeMercMenu()],
+      [this.vocationMenu, () => this.closeVocationMenu()],
+      [this.escapeMenu, () => this.hideEscapeMenu()],
+    ];
+    for (const [root, close] of panelClosers) {
+      root.addEventListener('click', (e) => {
+        if (!(e.target instanceof Element) || !e.target.closest('[data-panel-x]')) return;
+        e.preventDefault();
+        e.stopPropagation(); // the glyph is the whole verb — no row behind it may also fire
+        close();
+      });
+    }
+
     // THE PRESS GUARD (see the field): armed on every panel the 0.5s
     // auto-refresh rebuilds, capture-phase so no child handler can hide a
     // press from it. Release listens on the WINDOW — pointer captures retarget
@@ -763,6 +798,20 @@ export class UI {
     this.panelHtml.set(el, html);
     el.innerHTML = html;
     return true;
+  }
+
+  /** THE CLOSE GLYPH — the (x) every closeable panel wears in its top-right
+   *  corner (index.html .panel-x): the mouse/touch twin of Esc. Templates
+   *  place it FIRST (a zero-height sticky row, so it displaces nothing and
+   *  rides a scrolling panel); the click is DELEGATED per root through the
+   *  panelClosers ledger in the constructor, so a template rebuild never
+   *  loses the wire, and every close walks the panel's OWN close path (the
+   *  toggle for the keyed four, close* for the dialogs — the vocation offer
+   *  still DECLINES, the vendor still sheds its verbs, the bag still cancels
+   *  its drag). `title` names what the press does where it is more than a
+   *  plain close. */
+  private closeGlyphHtml(title = 'Close (Esc)'): string {
+    return `<div class="panel-x-row"><button type="button" class="panel-x" data-panel-x title="${title}" aria-label="Close">✕</button></div>`;
   }
 
   // --- THE COUCH LENS (data/couch.ts) ---------------------------------------
@@ -2175,7 +2224,7 @@ export class UI {
     const html = `
       <div style="position:sticky;top:-14px;z-index:2;background:var(--panel-bg);
         margin:-14px -14px 8px;padding:14px 14px 5px;border-bottom:1px solid var(--panel-border)">
-        <h2 style="border-bottom:none;margin:0;padding-bottom:2px"><span data-tip="class" style="cursor:var(--cursor-help, help);border-bottom:1px dotted var(--gold)">${m.classDef.name}</span>${vocTitle} — Level ${p.level}</h2>
+        ${this.closeGlyphHtml()}<h2 style="border-bottom:none;margin:0;padding-bottom:2px"><span data-tip="class" style="cursor:var(--cursor-help, help);border-bottom:1px dotted var(--gold)">${m.classDef.name}</span>${vocTitle} — Level ${p.level}</h2>
         <div style="font-size:9px;color:#6a6478">starters: ${starterChips}</div>
       </div>
       <div style="font-size:11px;margin-bottom:6px">
@@ -2687,11 +2736,11 @@ export class UI {
     // The SATCHEL: a little pouch flap on the panel's edge holding the
     // essence wallet — click to flip it open/closed.
     const satchel = `
-      <button data-satchel style="position:absolute;top:10px;right:14px;font-size:11px;
+      <button data-satchel style="position:absolute;top:10px;right:${SATCHEL_RIGHT_PX}px;font-size:11px;
         background:#241d2e;border:1px solid #4a3a5a;border-radius:6px 6px 2px 2px;padding:3px 9px;cursor:var(--cursor-point, pointer)"
         title="Essence satchel (salvage currency, dies with you)">🎒 ${this.satchelOpen ? '▾' : '▸'}</button>
       ${this.satchelOpen ? `
-        <div style="position:absolute;top:38px;right:14px;z-index:3;background:#1b1524;
+        <div style="position:absolute;top:38px;right:${SATCHEL_RIGHT_PX}px;z-index:3;background:#1b1524;
           border:1px solid #4a3a5a;border-radius:6px 2px 6px 6px;padding:8px 12px;box-shadow:0 3px 14px rgba(0,0,0,0.6)">
           ${ESSENCE_IDS.map(id => {
             const e = ESSENCES[id];
@@ -2838,7 +2887,7 @@ export class UI {
     // overflow-y would otherwise compute overflow-x to auto and grow a
     // phantom horizontal bar under the fold.
     const frameMin = Math.ceil(dollRowsFor(EQUIP_SLOTS.filter(s => s.enabled && DOLL_SEATS[s.id])) * 34) + 48;
-    this.inventory.innerHTML = `${drawer}${drawerHandle}${satchel}<h2>Inventory</h2>${tabs}
+    this.inventory.innerHTML = `${drawer}${drawerHandle}${satchel}${this.closeGlyphHtml()}<h2>Inventory</h2>${tabs}
       <div class="inv-scroll" style="min-height:min(${frameMin}px, calc(100vh - 240px));max-height:calc(100vh - 240px);overflow-y:auto;overflow-x:hidden">${body}</div>`;
     const scrollEl = this.inventory.querySelector<HTMLElement>('.inv-scroll');
     if (scrollEl && sameTab) scrollEl.scrollTop = prevScroll;
@@ -3173,7 +3222,7 @@ export class UI {
     }
 
     this.fontMenu.innerHTML = `
-      <h2 style="color:#b06bd4">Sacrificial Font</h2>
+      ${this.closeGlyphHtml()}<h2 style="color:#b06bd4">Sacrificial Font</h2>
       <div style="font-size:11px;color:#8a8678;margin-bottom:6px">
         Gems merged, essences broken, choices unmade. &nbsp;${wallet}</div>
       <div class="book-tabs" style="margin-bottom:8px">
@@ -3249,7 +3298,7 @@ export class UI {
     pop.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);'
       + 'width:360px;max-width:92vw;z-index:60;font-size:12px';
     pop.innerHTML = `
-      <h2 style="color:#d8b86a">An Ability Point Awakens</h2>
+      ${this.closeGlyphHtml('Later')}<h2 style="color:#d8b86a">An Ability Point Awakens</h2>
       <div style="font-size:11px;color:#a8a494;margin-bottom:6px">
         <b style="color:${inst.def.color}">${inst.def.name}</b> has grown into a choice
         (${spent.length}/${bandPointsAt(inst.level)} points placed).
@@ -3267,6 +3316,7 @@ export class UI {
         if (this.inventoryOpen) this.refreshInventory();
       }));
     pop.querySelector<HTMLButtonElement>('[data-poplater]')?.addEventListener('click', () => this.closeTreePopup());
+    pop.querySelector<HTMLButtonElement>('[data-panel-x]')?.addEventListener('click', () => this.closeTreePopup()); // the close glyph (closeGlyphHtml) = Later
   }
 
   /** Is the breaker's hammer up? (Salvage panel open on its salvage tab,
@@ -3488,7 +3538,7 @@ export class UI {
         <h3>Expertise <span style="color:#8a8678;font-weight:normal;font-size:10px">— only salvaged lines at or ABOVE your next tier teach you anything</span></h3>${loreRows}`;
     }
 
-    this.salvageMenu.innerHTML = `<h2>Salvage Station</h2>${tabs}${body}
+    this.salvageMenu.innerHTML = `${this.closeGlyphHtml()}<h2>Salvage Station</h2>${tabs}${body}
       <div class="bind-btns" style="margin-top:8px"><button data-salv-close>Step away</button></div>`;
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.salvageMenu.querySelectorAll<T>(sel)];
@@ -3837,7 +3887,7 @@ export class UI {
       </div>` : '';
 
     this.bestiaryMenu.innerHTML = `
-      <h2 style="margin-bottom:2px">The Tracker's Bestiary</h2>
+      ${this.closeGlyphHtml()}<h2 style="margin-bottom:2px">The Tracker's Bestiary</h2>
       <div style="color:#8a8678;font-size:10px;margin-bottom:6px">
         ${totals.sighted} of ${totals.pages} kinds sighted · ${totals.mastered} mastered; knowledge is the account's, and outlives you.
       </div>
@@ -3935,7 +3985,7 @@ export class UI {
         A communed line rerolls within what this item could legally carry, then SEALS forever. Trace well.</div>`;
     }
     this.oracleMenu.innerHTML = `
-      <h2>The Oracle Stone</h2>
+      ${this.closeGlyphHtml()}<h2>The Oracle Stone</h2>
       <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
         ${this.essWallet()}</div>
       <h3>Piece</h3><div class="bind-btns">${targetRows}</div>
@@ -4062,7 +4112,7 @@ export class UI {
     // The whole panel is a drop target: drag a bag piece onto it to gift it.
     this.boroughMenu.dataset.drop = `armFolk:${v.folk.id}`;
     this.boroughMenu.innerHTML = `
-      <h3 style="color:#e8c87a">⌂ Arm ${v.folk.name}</h3>
+      ${this.closeGlyphHtml()}<h3 style="color:#e8c87a">⌂ Arm ${v.folk.name}</h3>
       <div style="font-size:12px;color:#b8b4a4;margin-bottom:6px">
         ${stage} &nbsp;·&nbsp; folk standing: <b>${v.folkAlive}/${v.folkTotal}</b>
         &nbsp;·&nbsp; ${v.folk.name}: ${lifePct}% &nbsp;·&nbsp; gifts ${v.gifts}/${v.maxGifts}
@@ -4405,7 +4455,7 @@ export class UI {
     }).join('') || '<div style="color:#8a8678;font-size:11px">No counter at hand; find a vendor and linger.</div>';
 
     this.vendorMenu.innerHTML = `
-      <h2>Vendors</h2>
+      ${this.closeGlyphHtml()}<h2>Vendors</h2>
       <div style="margin-bottom:6px">${this.essWallet()}</div>
       ${sections}
       <div class="bind-btns" style="margin-top:8px"><button data-vendor-close>Step away</button></div>`;
@@ -5072,7 +5122,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         style="--realm-color:${r.color ?? '#c8a84b'}" title="${r.blurb ?? ''}">${r.label}</button>`).join('')}</div>` : '';
     this.passiveTree.innerHTML = `
       ${realmTabs}
-      <h2>${activeRealm && this.treeRealm !== MAIN_REALM ? activeRealm.label : 'Passive Tree'} — ${poolChip}${vocChips}
+      ${this.closeGlyphHtml()}<h2>${activeRealm && this.treeRealm !== MAIN_REALM ? activeRealm.label : 'Passive Tree'} — ${poolChip}${vocChips}
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal">
           <input id="tree-search" class="tree-search" type="text" placeholder="search nodes…"
             value="${esc(this.treeSearch)}" title="Matches node names, descriptions, and granted lines — hits glow, the rest dims.">
@@ -5478,7 +5528,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       : '';
     const hereSea = world.seaNameOf(world.zone);
     const hereTier = world.zone.portTier === 'haven' ? 'the haven of ' : '';
-    this.sailMenu.innerHTML = `<h2>The Harbor${hereSea ? ` — ${esc(hereTier + hereSea)}` : ''}</h2>`
+    this.sailMenu.innerHTML = `${this.closeGlyphHtml()}<h2>The Harbor${hereSea ? ` — ${esc(hereTier + hereSea)}` : ''}</h2>`
       + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"Every water keeps its harbors, friend, and its harbors keep its secrets."</div>`
       + rows
       + `<div class="skill-entry"><div class="name">Chart a course</div>`
@@ -5560,7 +5610,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
               ${!h.canRestore ? `<span class="tags">your essence is worth ${world.mortalValueOf()}</span>` : ''}</div>
           </div>`
         : `<div class="skill-entry"><div class="desc">The town keeps its own peace: walk in. Defended sieges raise its standing; a lost one burns it.</div></div>`;
-    this.holdMenu.innerHTML = `<h2>${esc(h.name)} <span class="tags">· ${esc(h.clsLabel)}</span></h2>`
+    this.holdMenu.innerHTML = `${this.closeGlyphHtml()}<h2>${esc(h.name)} <span class="tags">· ${esc(h.clsLabel)}</span></h2>`
       + `<div class="desc" style="margin:-4px 0 6px 0">${stateLine}</div>`
       + `<div class="desc" style="margin:0 0 8px 0">Standing: ${pips}`
       + ` <span class="tags">· ${h.defenses} defended · ${h.falls} lost</span></div>`
@@ -5596,7 +5646,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         </div>`;
       }).join('')
       : `<div class="skill-entry"><div class="desc">The Caravanner has no roads for you yet; return when you've travelled farther.</div></div>`;
-    this.caravanMenu.innerHTML = `<h2>The Caravan</h2>`
+    this.caravanMenu.innerHTML = `${this.closeGlyphHtml()}<h2>The Caravan</h2>`
       + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"I know the safe roads, friend. Name where you're bound and my wagons will see you there, and back again."</div>`
       + rows
       + `<div class="bind-btns" style="margin-top:10px"><button data-caravan-close>Close</button></div>`;
@@ -5704,7 +5754,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const pitch = post.pitch ?? (post.port
       ? '"Green blades, fair rates, no questions off the boat. The veterans keep to the wilds, and so does the retiring."'
       : '"Every blade here has a story. Buy one, or become one."');
-    this.mercMenu.innerHTML = `<h2>${esc(title)}</h2>`
+    this.mercMenu.innerHTML = `${this.closeGlyphHtml()}<h2>${esc(title)}</h2>`
       + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">${esc(pitch)}</div>`
       + contract + rows + retire
       + `<div class="bind-btns" style="margin-top:10px"><button data-merc-close>Close</button></div>`;
@@ -5776,7 +5826,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // patter covers the ordinary chains.
     const flavor = offers.find(o => o.flavor)?.flavor
       ?? '"Not work this time, traveller. A VOCATION. Finish its trials and the heart of the star opens to you. One calling per lifetime; choose it well."';
-    this.vocationMenu.innerHTML = `<h2>A Calling</h2>`
+    this.vocationMenu.innerHTML = `${this.closeGlyphHtml('Decline the offer (Esc)')}<h2>A Calling</h2>`
       + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">${esc(flavor)}</div>`
       + rows
       + `<div class="desc" style="margin-top:8px;color:#8a8678">Completing a vocation unlocks its trials for EVERY future hero, whatever their class. Vocation points spend only inside its tree${offers.length ? '' : ''}; press P to see the star.</div>`
@@ -6168,7 +6218,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // audits (an overlay-authored <title> inside a transparent group is inert
     // markup: no hit target, no tooltip).
     const html = `
-      <h2>World Map
+      ${this.closeGlyphHtml()}<h2>World Map
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal">
           <span class="map-zoom-grp">
             <button class="map-zoom" data-mz="out" title="zoom out">−</button>
@@ -6299,7 +6349,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // the top twice a second) — same pattern as the map's #map-aside.
     const prevScroll = this.worldMap.querySelector<HTMLElement>('#quest-scroll')?.scrollTop ?? 0;
     const html = `
-      <h2>Quest Journal</h2>
+      ${this.closeGlyphHtml()}<h2>Quest Journal</h2>
       ${this.mapTabsHtml()}
       <div id="quest-scroll" style="overflow-y:auto;max-height:64vh;padding:2px 4px 8px 2px">
         <h3 style="font-size:12px;color:#c8a8e8;margin:4px 0 6px 0">Active (${log.active.length})</h3>
@@ -6847,7 +6897,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       const couchLeaveRow = this.onCouchLeave && couchSeated > 0
         ? '<button id="esc-couch-leave">Local Co-op: Guest Leaves</button>' : '';
       root.innerHTML = `
-        <h1>Paused</h1>
+        ${this.closeGlyphHtml('Resume (Esc)')}<h1>Paused</h1>
         <div class="esc-btns">
           <button id="esc-resume">Resume</button>
           ${couchRow}${couchLeaveRow}
@@ -6886,7 +6936,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       document.getElementById('esc-close')!.addEventListener('click', () => {
         try { window.close(); } catch { /* browsers block closing non-script-opened tabs */ }
         root.innerHTML = `
-          <h1>Progress Saved</h1>
+          ${this.closeGlyphHtml('Resume (Esc)')}<h1>Progress Saved</h1>
           <div class="acct-head">Your account and character are saved. Close this browser tab to exit.</div>
           <div class="esc-btns"><button id="esc-back2">Back</button></div>`;
         document.getElementById('esc-back2')!.addEventListener('click', showMain);
@@ -7154,7 +7204,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies only, the classic elite read. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
       </div>`;
     root.innerHTML = `
-      <h1>Options</h1>
+      ${this.closeGlyphHtml('Resume (Esc)')}<h1>Options</h1>
       ${tabStrip}
       ${tab === 'controls' ? controlsTab
         : tab === 'controller' ? controllerTab

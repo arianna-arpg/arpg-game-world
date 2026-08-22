@@ -182,6 +182,15 @@ export class Renderer {
   private uiW = 0;
   private uiH = 0;
   private uiMouse = { x: -1, y: -1 };
+  /** THE PRESSABLE BAR (drawn == tested): every HUD skill-slot rect as THIS
+   *  frame drew it, in CSS pixels — main.ts hit-tests a mouse press (and a
+   *  touch, one day) against these, never a re-derivation, so a UI-scale
+   *  notch, a render-scale step or a couch flank anchor can never make the
+   *  hand and the eye disagree. Rebuilt every drawHud; seatId names whose
+   *  bar (the mouse serves only the local hero's). */
+  hudSlotRects: { seatId: string; slot: number; x: number; y: number; w: number; h: number }[] = [];
+  /** virtual (uiW×uiH) → CSS-pixel factor for the current frame (render()). */
+  private uiToCss = 1;
   /** The PAD's assisted aim (world point + soft-lock target id), fed by main
    *  each frame while the pad owns the reticle; null = mouse aim, no reticle.
    *  Doubles as "where is the cursor, really" for aim-anchored affordances
@@ -761,6 +770,9 @@ export class Renderer {
     const surfH = crest ? this.overlay.height : h;
     const mScale = crest ? this.pixelScale : 1;
     this.uiW = surfW / us; this.uiH = surfH / us;
+    // CSS px per virtual unit: the surface spans the window's CSS width
+    // (resize() pins canvas.style.width = innerWidth on both surfaces).
+    this.uiToCss = us * (window.innerWidth / Math.max(1, surfW));
     this.uiMouse.x = this.hudMouse.x / mScale / us; this.uiMouse.y = this.hudMouse.y / mScale / us;
     this.onCrest(crest, () => this.uiPass(us, () => {
       this.drawTimeflow(world);     // held-time wash + banner (engine/timeflow.ts hud specs)
@@ -6586,6 +6598,7 @@ export class Renderer {
   }
 
   private drawHud(world: World): void {
+    this.hudSlotRects.length = 0; // THE PRESSABLE BAR's ledger — this frame's rects only
     // THE COUCH DISPATCH (data/couch.ts): solo draws the one classic centered
     // cluster — byte-identical. With guests seated, each local seat's cluster
     // anchors to its own flank (guest bars read pad glyphs, guest identity
@@ -6789,6 +6802,21 @@ export class Renderer {
       ctx.lineWidth = runningOn ? 2.5 : 1.5;
       ctx.fillRect(x, by, slot, slot);
       ctx.strokeRect(x, by, slot, slot);
+      // THE PRESSABLE BAR: publish this slot's rect (CSS px) for the press
+      // hit test, and rim the slot under the mouse so the bar reads as
+      // pressable before the hand commits.
+      {
+        const k = this.uiToCss;
+        this.hudSlotRects.push({ seatId: seat.id, slot: i, x: x * k, y: by * k, w: slot * k, h: slot * k });
+        const barHover = seat === world.localSeat
+          && this.uiMouse.x >= x && this.uiMouse.x < x + slot
+          && this.uiMouse.y >= by && this.uiMouse.y < by + slot;
+        if (barHover) {
+          ctx.strokeStyle = runningOn ? '#e8d08b' : '#8a86b8';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x + 1.5, by + 1.5, slot - 3, slot - 3);
+        }
+      }
       if (inst) {
         const def = inst.def;
         // THE SLOT'S FACE: a converted skill (SkillDef.convert — a full

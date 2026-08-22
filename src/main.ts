@@ -192,6 +192,24 @@ let padAimView: { x: number; y: number; lockId: number | null } | null = null;
 // reticle truly was instead of flipping to wherever the arrow sat parked. It
 // melts with mouse travel until arrow and aim are one and the arrow returns.
 let mouseHandoff: { x: number; y: number } | null = null;
+// THE PRESSABLE BAR (renderer.hudSlotRects — drawn == tested): a mouse press
+// that lands on the hero's own bar slot becomes THAT slot's press for as long
+// as the button stays down (held casts channel, guards hold), and the LMB's
+// own slot-0 contribution is withheld for the press — pressing a button must
+// never also swing the primary. The press AIMS where the hero faces, at the
+// pad's mid reach, bent by the aim assist at full strength (the stick's own
+// aim law: the cursor is on the bar, not on the battlefield). A touch rides
+// the same seam — a tap is a press — so the bar is the first HUD surface a
+// thumb can work (docs/design/mobile-touch.md).
+let barPress: { slot: number; lock: number | null } | null = null;
+/** The LOCAL hero's bar slot under a CSS-pixel point, or null. */
+function hudSlotAt(cssX: number, cssY: number): number | null {
+  for (const r of renderer.hudSlotRects) {
+    if (r.seatId !== world.localSeat.id) continue;
+    if (cssX >= r.x && cssX < r.x + r.w && cssY >= r.y && cssY < r.y + r.h) return r.slot;
+  }
+  return null;
+}
 
 /** The one gate for drawing the in-world game reticle (and hiding the OS
  *  arrow): live play, no menus/pointer, a hero who can act. Both the renderer
@@ -734,6 +752,14 @@ function readLocalInput(dt: number): PlayerInput | null {
   // not gameplay intent (Ⓐ under an inventory must never also swing a sword).
   // The keyboard/mouse half keeps flowing either way.
   const padLive = !padPointer.active;
+  // THE PRESSABLE BAR's press: armed on the mouse's down edge over a slot,
+  // released with the button. (CSS px = buffer px ÷ the render-scale seam.)
+  let barEdge = false;
+  if (input.lmbPressed) {
+    const slotHit = hudSlotAt(input.mouse.x / input.pointerScale, input.mouse.y / input.pointerScale);
+    if (slotHit !== null) { barPress = { slot: slotHit, lock: null }; barEdge = true; }
+  }
+  if (barPress && !input.lmb) barPress = null;
   let dx = 0, dy = 0;
   if (input.keys.has(kb.moveUp) || (padLive && pad.isDown(pb.moveUp))) dy -= 1;
   if (input.keys.has(kb.moveDown) || (padLive && pad.isDown(pb.moveDown))) dy += 1;
@@ -812,6 +838,18 @@ function readLocalInput(dt: number): PlayerInput | null {
     }
   }
 
+  // THE PRESSABLE BAR's aim: the cursor sits on the bar, so the press aims
+  // where the hero FACES at the pad's mid reach, bent by the assist at full
+  // strength (the held lock persists across the press, the pad's own law).
+  if (barPress && !(aimSource === 'pad' && padLive)) {
+    const t = padTuning();
+    const reach = pad.aimReach(0.5, t);
+    const raw = { x: p.pos.x + Math.cos(p.facing) * reach, y: p.pos.y + Math.sin(p.facing) * reach };
+    const assisted = assistAim(world, p, raw, barPress.lock, 1);
+    barPress.lock = assisted.targetId;
+    aim = { x: assisted.x, y: assisted.y };
+  }
+
   // Slots 0/1 are LMB/RMB (fixed) — on a pad they're ordinary binds; slots
   // 2–7 merge the rebindable keys with their pad buttons. Keyboard OR pad,
   // per slot, per frame — the intent downstream can't tell which spoke.
@@ -821,12 +859,12 @@ function readLocalInput(dt: number): PlayerInput | null {
   ] as const;
   const skillKeys = [kb.skillSlot2, kb.skillSlot3, kb.skillSlot4, kb.skillSlot5, kb.skillSlot6, kb.skillSlot7];
   const held = [
-    input.lmb || (padLive && pad.isDown(pb.skillSlot0)),
+    (input.lmb && !barPress) || (padLive && pad.isDown(pb.skillSlot0)),
     input.rmb || (padLive && pad.isDown(pb.skillSlot1)),
     ...skillKeys.map((k, i) => input.keys.has(k) || (padLive && pad.isDown(pb[slotActs[i + 2]]))),
   ];
   const edge = [
-    input.lmbPressed || (padLive && pad.justPressed(pb.skillSlot0)),
+    (input.lmbPressed && !barPress) || (padLive && pad.justPressed(pb.skillSlot0)),
     input.rmbPressed || (padLive && pad.justPressed(pb.skillSlot1)),
     ...skillKeys.map((k, i) => {
       const fromKey = input.justPressed(k);
@@ -834,6 +872,12 @@ function readLocalInput(dt: number): PlayerInput | null {
       return fromKey || fromPad;
     }),
   ];
+  // THE PRESSABLE BAR lands on its slot: held for the button's whole hold,
+  // an edge on the frame it went down (the same shape a key delivers).
+  if (barPress && barPress.slot < held.length) {
+    held[barPress.slot] = true;
+    if (barEdge) edge[barPress.slot] = true;
+  }
   // THE UNARMED-FLOOR opt-out (Settings.improvisedStrike): declined, an
   // EMPTY slot's press never leaves this client — the world's floor rule
   // (World.applyInputs' null-slot branch) stays universal; the refusal is
