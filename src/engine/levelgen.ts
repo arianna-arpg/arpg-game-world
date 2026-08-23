@@ -1847,8 +1847,13 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // their announcements — the crumble SHOWS and the rubble REMAINS (the
   // BrittleSpec.remains lever); the notice is the look itself (the clean
   // strata, the fissures), never a floating line. Pay stands untouched.
+  // THE ROW LAW (the dissolution grammar's coda): NO breakable pops the bare
+  // ring — every brittle kind wears a motion; the quiet faces GIVE WAY as
+  // stone into the rubble that remains (adopted), the dwell-gated ones
+  // cracking over the press first.
   crumbling_wall: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24,
-    brittle: { on: ['near', 'hit'], reach: 46, carve: 40, orbChance: 0.15, remains: 'face_rubble', color: '#8a8276' } },
+    brittle: { on: ['near', 'hit'], reach: 46, carve: 40, orbChance: 0.15, remains: 'face_rubble', color: '#8a8276' },
+    dissolve: { motion: 'giveway', material: 'stone' } },
   // THE DISSOLUTION GRAMMAR (D0): the hidden face GIVES WAY — a drawn crack
   // grows at the stand point over the press (preCrack: the knock made
   // visible), then the strata drop as themselves into the rubble that
@@ -1868,9 +1873,11 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     brittle: { on: ['hit'], remains: 'face_rubble', color: '#8a8276' },
     dissolve: { motion: 'giveway', material: 'stone', preCrack: true } }, // THE DISSOLUTION GRAMMAR: the visual-first crumble, drawn
   fitted_face: { overlap: 'solid', blocksMove: true, blocksShot: true,
-    brittle: { on: ['near'], reach: 34, dwell: 1.25, remains: 'face_rubble', color: '#d8c890' } },
+    brittle: { on: ['near'], reach: 34, dwell: 1.25, remains: 'face_rubble', color: '#d8c890' },
+    dissolve: { motion: 'giveway', material: 'stone', preCrack: true } },
   draft_seam: { overlap: 'solid', blocksMove: true, blocksShot: true,
-    brittle: { on: ['near'], reach: 60, dwell: 0.55, remains: 'face_rubble', color: '#a8b4c0' } },
+    brittle: { on: ['near'], reach: 60, dwell: 0.55, remains: 'face_rubble', color: '#a8b4c0' },
+    dissolve: { motion: 'giveway', material: 'stone', preCrack: true } },
   // What a reveal face leaves: a low spill of broken facing stone. Inert by
   // law — the wreck must never re-block the mouth it just opened.
   face_rubble: { overlap: 'inert', spacing: 0 },
@@ -1975,7 +1982,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // carve on the spec: the HOLLOW knows its own shape. QUIET (Movement III):
   // the look is the notice, the rubble is the aftermath — no words.
   hollow_seam: { overlap: 'solid', blocksMove: true, blocksShot: true,
-    brittle: { on: ['hit', 'near'], reach: 34, dwell: 1.1, remains: 'face_rubble', color: '#d8c890' } },
+    brittle: { on: ['hit', 'near'], reach: 34, dwell: 1.1, remains: 'face_rubble', color: '#d8c890' },
+    dissolve: { motion: 'giveway', material: 'stone', preCrack: true } }, // THE ROW LAW: the seam cracks over the press, then gives way; openHollow carves as ever
   // A revealed way DOWN (data/sidezones.ts 'crevice_shaft'): the wall was
   // hiding a whole further cave — one stratum deeper, face-rolled fresh.
   crevice_shaft: { overlap: 'trigger', spacing: 20 },
@@ -2738,7 +2746,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // QUIET (Movement III): the cut litter remains; no words.
   verdure_face: { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: true, spacing: 40,
     brittle: { on: ['hit'], carve: 52, orbChance: 0.5, gemChance: 0.28,
-      remains: 'verdure_litter', color: '#5f8a34' } },
+      remains: 'verdure_litter', color: '#5f8a34' },
+    dissolve: { material: 'verdure' } }, // THE ROW LAW: the knot gives way as verdure strata into the litter that remains
   // What a cut face leaves: chopped stems and fallen fronds on the new floor.
   verdure_litter: { overlap: 'inert', spacing: 0 },
   // The curtain: walk THROUGH it freely — but neither you nor they see past

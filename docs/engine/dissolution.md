@@ -217,6 +217,15 @@ burst/lobes/debris_pulp/wetpop · light → dissolve/none/no debris/haze.
   face on a live pop), N (the soul cage's wisp + shatter); probe_fleshkit's
   A1–A3 re-homed on the dissolve law; the dev ring scales its radius with the
   count (fifty-five kinds now stand).
+- **THE ROW LAW (the coda)** — NO breakable pops the bare ring: the six brittle
+  kinds that still did are rowed (`crumbling_wall` stone give-way; `fitted_face`
+  / `draft_seam` / `hollow_seam` stone give-way + the pre-crack over their dwells,
+  the hollow's own carve untouched, the rubble remains adopted; `verdure_face`
+  verdure give-way into its litter; `comet_shard` warm crystal facets).
+  probe_dissolve B5 pins it: every brittle kind carries a dissolve row. The
+  wider SHOW/TELL census — every remaining floater, the generic ring's 265
+  users, the AI announces, and the ladder of movements that follow this grammar
+  (THE EMERGENCE GRAMMAR first) — is `docs/design/show-dont-tell.md`.
 
 ## The D0 set (converted, lines retired) and the tail
 

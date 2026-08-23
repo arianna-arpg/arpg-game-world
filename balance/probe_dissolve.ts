@@ -202,6 +202,11 @@ type Priv = {
   // break that wants to be FELT gets a motion, never a line.
   check('B4 THE SHOW LAW: zero brittle rules carry a text/warn line (every break shows)', unconverted.length === 0,
     unconverted.sort().join(', '));
+  // THE ROW LAW (the coda): every brittle kind wears a motion — the bare
+  // ring never pops a breakable again (the faces, the seams, the comet).
+  const unrowed = doodadRuleKinds().filter(k => { const r = doodadRuleOf(k as DoodadKind); return !!r.brittle && !r.dissolve; });
+  check('B5 THE ROW LAW: every brittle kind carries a dissolve row (no breakable pops the bare ring)', unrowed.length === 0,
+    unrowed.sort().join(', '));
   info(`B  ${unconverted.length} text-carrying breakable(s) not yet converted (D1's tail): ${unconverted.sort().join(', ')}`);
 }
 

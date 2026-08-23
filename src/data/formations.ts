@@ -1413,6 +1413,7 @@ registerDoodadRule('sundial_gnomon', { overlap: 'solid', blocksMove: true, spaci
 registerDoodadRule('orrery_stand', { overlap: 'solid', blocksMove: true, spacing: 90 });
 registerDoodadRule('comet_shard', {
   overlap: 'solid', spacing: 64, brittle: { on: ['hit'] },
+  dissolve: { material: 'crystal', debrisLook: { color: '#ffe0b8' } }, // THE ROW LAW: the fallen star shatters into warm facets
 });
 registerDoodadRule('nightbloom_tuft', { overlap: 'ground', spacing: 34 });
 // Tethered star-paper over the gaps — the one dressing allowed off standing
