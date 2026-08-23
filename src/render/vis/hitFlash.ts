@@ -125,11 +125,15 @@ function compositeWhite(img: HTMLCanvasElement): HTMLCanvasElement {
  *  classic sprite untouched. */
 function bodyTintSprite(look: BodyLook, tint: string): HTMLCanvasElement {
   const half = spriteHalf(look.radius);
+  // baked() hands the painter a CENTERED origin — draw at (-half, -half)
+  // like every sibling bake (bodyFlashSprite, bodyRimSprite), or the
+  // silhouette lands clipped off-canvas and the tint flash draws as a
+  // displaced quarter-chip beside the body instead of on it.
   return baked(`bodyTint|` + tint + '|' + bodyKey(look), half * 2, half * 2, (ctx) => {
-    ctx.drawImage(bodyFlashSprite(look), 0, 0);
+    ctx.drawImage(bodyFlashSprite(look), -half, -half);
     ctx.globalCompositeOperation = 'source-in';
     ctx.fillStyle = tint;
-    ctx.fillRect(0, 0, half * 2, half * 2);
+    ctx.fillRect(-half, -half, half * 2, half * 2);
     ctx.globalCompositeOperation = 'source-over';
   });
 }
