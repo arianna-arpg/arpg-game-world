@@ -84,6 +84,7 @@ import { RoomVeil } from './vis/roomVeil';
 import { SightVeil } from './vis/sightVeil';
 import { dressFading, softDryFace } from './vis/dressFade';
 import { dissolveDebrisAlpha, drawDissolveCracks, drawDissolves } from './vis/dissolveLayer'; // THE DISSOLUTION GRAMMAR's fragment engine (+ the litter painter + break voices register)
+import { drawEmergences, emergePoseOf } from './vis/emergeLayer'; // THE EMERGENCE GRAMMAR's ground share + the arriving body's pose
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawSkyField, drawWeatherFx, skyGeoOf, skyRawIntensity, WEATHER_FX, type SkyFieldView, type SkyGeo } from './vis/weatherFx';
@@ -589,6 +590,7 @@ export class Renderer {
     if (!VIS_ABLATE.has('doodads')) {
       drawDissolves(this.ctx, world, this.cam.x, this.cam.y, vw, vh); // sweeps its set cache, then returns on an empty list
       drawDissolveCracks(this.ctx, world);
+      drawEmergences(this.ctx, world, this.cam.x, this.cam.y, vw, vh); // THE EMERGENCE GRAMMAR: slits + flung grains under the arriving bodies
     }
     // TRACK RIDERS: the moving hazards, posed from the shared clock through
     // the one painter registry — over the ground and grooves, under actors.
@@ -4706,8 +4708,13 @@ export class Renderer {
     // leap swell so an airborne leaper's shadow stays put while the body rises.
     // A MOUNTED rider casts none: its seat floats on the steed's back, and
     // the steed's own shadow is the pair's contact with the ground.
+    // THE EMERGENCE GRAMMAR (vis/emergeLayer.ts): an ARRIVING body draws
+    // through its motion's pose — the rise's climb through a clipped ground
+    // line, the burst's overshoot, the condense's alpha-in, the drop's fall
+    // — its shadow growing with it; the hold's untargetable never ghosts it.
+    const epose = world.emergences.length ? emergePoseOf(world, a) : null;
     if (a.mountId === undefined) {
-      drawShadow(ctx, 0, 0, a.radius, (a.untargetable ? 0.4 : 1) * (tpose ? Math.max(0.05, tpose.shadow) : 1));
+      drawShadow(ctx, 0, 0, a.radius, (a.untargetable && !epose ? 0.4 : 1) * (tpose ? Math.max(0.05, tpose.shadow) : 1) * (epose ? epose.shadow : 1));
     }
     // The hero wears a soft class-colored ground halo — you find yourself in a
     // brawl by presence, not by hunting the cursor.
@@ -4738,7 +4745,19 @@ export class Renderer {
     // SPAWN-IN: a mid-play arrival (summon, construct, offering effigy,
     // hatch, streamer) GROWS into the world over a breath. Zone-load
     // population is exempt — its stamp rides the zone's own entry beat.
-    if (a.spawnedAt >= 0 && a.spawnedAt > world.zoneEnteredAt + 1) {
+    if (epose) {
+      // The ground line clips BEFORE the pose's own offset (a rising body
+      // climbs through a fixed line); then the climb/fall/overshoot/lean.
+      if (epose.clipBelow !== null) {
+        const R4 = a.radius * 4;
+        ctx.beginPath();
+        ctx.rect(-R4, -R4 * 2, R4 * 2, R4 * 2 + epose.clipBelow);
+        ctx.clip();
+      }
+      ctx.translate(epose.dx, epose.dy);
+      if (epose.shear) ctx.transform(1, 0, epose.shear, 1, 0, 0);
+      if (epose.sx !== 1 || epose.sy !== 1) ctx.scale(epose.sx, epose.sy);
+    } else if (a.spawnedAt >= 0 && a.spawnedAt > world.zoneEnteredAt + 1) {
       const bt = (world.time - a.spawnedAt) / VIS_CFG.body.spawnInSeconds;
       if (bt >= 0 && bt < 1) {
         const from = VIS_CFG.body.spawnInFrom;
@@ -4746,7 +4765,8 @@ export class Renderer {
         ctx.scale(s, s);
       }
     }
-    if (a.untargetable) ctx.globalAlpha = 0.55;
+    if (a.untargetable && !epose) ctx.globalAlpha = 0.55;
+    if (epose) ctx.globalAlpha = epose.alpha; // the arrival owns its own fade-in
     if (tpose) ctx.globalAlpha = 1; // a traversal's rise stays solid — cinema, not stealth
     if (a.sheet.get('invisible') > 0) ctx.globalAlpha = 0.3;
     else if (a.sheet.get('detectability') < 1) ctx.globalAlpha = 0.55;

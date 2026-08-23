@@ -242,7 +242,7 @@ registerLandmark({
       { id: 'great_gnasher', weight: 1, presence: { from: 8, fadeIn: 3 } },
     ],
     count: [4, 7], where: 'interior',
-    ambush: { radius: 150, visible: true, pack: 400, announce: 'the pen springs!' },
+    ambush: { radius: 150, visible: true, pack: 400 }, // the penned herd STIRS when sprung (THE EMERGENCE GRAMMAR) — the caption retired
   },
   poi: true,
 });

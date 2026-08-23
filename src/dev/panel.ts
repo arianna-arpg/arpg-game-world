@@ -34,6 +34,7 @@ import { perfTab } from './tabs/perf';
 import { watchTab } from './tabs/watch';
 import { geysersTab } from './tabs/geysers';
 import { dissolveTab } from './tabs/dissolve'; // THE DISSOLUTION GRAMMAR's gauge lever (D0)
+import { emergeTab } from './tabs/emerge'; // THE EMERGENCE GRAMMAR's gauge lever (M-EMERGE)
 
 /** What the shell hands every tab at build time. */
 export interface DevTabCtx {
@@ -55,7 +56,7 @@ export interface DevTabDef {
 }
 
 /** THE TAB REGISTRY — order is display order. */
-const DEV_TABS: DevTabDef[] = [gemsTab, itemsTab, eventsTab, locationTab, accountTab, throngTab, comboTab, grabTab, liteTab, possessTab, entityTab, holdsTab, perfTab, watchTab, geysersTab, dissolveTab];
+const DEV_TABS: DevTabDef[] = [gemsTab, itemsTab, eventsTab, locationTab, accountTab, throngTab, comboTab, grabTab, liteTab, possessTab, entityTab, holdsTab, perfTab, watchTab, geysersTab, dissolveTab, emergeTab];
 
 let mounted = false;
 

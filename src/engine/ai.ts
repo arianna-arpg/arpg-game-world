@@ -437,6 +437,9 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   if (actor.postSpec) actor.aiPostFacing ??= actor.facing;
   // An ARMED ambusher IS scenery — no scheming until the world springs it.
   if (actor.ambushArmed) return;
+  // AN ARRIVING body (THE EMERGENCE GRAMMAR — World.emergeBody's hold) is
+  // still climbing out / condensing / falling in: no thinking until released.
+  if (actor.emergeUntil !== undefined && actor.emergeUntil > world.time) return;
   // A BURROWED body is underground — stepBurrow owns it until the eruption.
   if (actor.burrow) return;
   // Scenery doesn't scheme: barrels, caches and townsfolk hold still.

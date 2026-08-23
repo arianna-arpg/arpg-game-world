@@ -10,6 +10,7 @@
 import { DAMAGE_COLOR, gaugeMod, mod, type Modifier, type DamageType, type SkillTag } from '../engine/stats';
 import type { BuffEffect } from '../engine/skills';
 import type { ActorAdorn, ActorShape, AmbushSpec, BrainDef, MonsterPartDef, PostSpec } from '../engine/actor';
+import type { EmergeSpec } from '../engine/emerge'; // THE EMERGENCE GRAMMAR — MonsterDef.emerge / AmbushSpec.emerge
 import type { BrainTuning, PhaseDef } from '../engine/brain';
 import type { CurveKind } from '../engine/curves';
 import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
@@ -1022,6 +1023,13 @@ export interface MonsterDef {
    *  one event. Spawner rows (landmark spawns) can arm INSTANCES of kinds
    *  that roam free elsewhere. */
   ambush?: AmbushSpec;
+  /** THE EMERGENCE GRAMMAR (engine/emerge.ts — docs/engine/emergence.md): HOW
+   *  this kind ARRIVES whenever a body is minted mid-play in view (an ambush
+   *  springing, a wake bursting out of a breakable, a raised corpse, a
+   *  pour): a motion / ground / grain row folded over the seat's derived
+   *  ground. Absent = derived (the sand rises, the water surfaces, a host
+   *  bursts out). An AmbushSpec.emerge row wins over this one. */
+  emerge?: EmergeSpec;
   /** SHELL GUARD — a directional ABSORB worn as anatomy (the entity's own
    *  guard, not a skill): hits arriving through the covered arc soak into a
    *  breakable pool that REGROWS after `regenDelay` quiet seconds. side
@@ -2734,7 +2742,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'undead',
     heft: 2.4,
     grabbable: false,
-    ambush: { radius: 160, announce: 'the casket lid shifts…' },
+    ambush: { radius: 160, emerge: { motion: 'burstout' } },
     brain: { type: 'basic' },
   },
   /** The gravedigger who never clocked off: a lantern-lit shade that puts
@@ -4293,7 +4301,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 30,
     heft: 2.2,
     grabbable: false,
-    ambush: { radius: 150, announce: 'the bloom leans…' },
+    ambush: { radius: 150, emerge: { motion: 'stir' } },
     brain: { type: 'basic', target: { prey: ['critter'] } },
     gemBias: ['chaos', 'duration'],
   },
@@ -6842,7 +6850,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw', 'panther_pounce'], xp: 12,
     faction: 'junglekin',
     // Scenery until you're past it — the brush you didn't cut.
-    ambush: { radius: 130, announce: 'the ferns move…' },
+    ambush: { radius: 130, emerge: { ground: 'verdure' } },
     aggro: { fury: 1.2, waver: 1.1 },
     gemBias: ['physical', 'melee'],
     presence: { to: 18, fadeOut: 8 },
@@ -6934,7 +6942,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'junglekin',
     // Furniture until the halls are trespassed — the statue that was never
     // a statue (the sunken ruins' own warden).
-    ambush: { radius: 150, announce: 'the old stone wakes…' },
+    ambush: { radius: 150, emerge: { motion: 'stir' } },
     aggro: { fixation: 1.8, fury: 0.5, waver: 0.3 },
     gemBias: ['physical', 'melee'],
     presence: { from: 10, fadeIn: 4 },
@@ -6998,7 +7006,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#5a9a94', shape: 'oval', radius: 15, material: 'chitin', look: 'reef_lurcher',
     base: { life: 85, moveSpeed: 105, accuracy: 90, armor: 20, mana: 25, manaRegen: 2 },
     skills: ['claw', 'drowning_grasp'], xp: 20,
-    ambush: { radius: 150, announce: 'the reef MOVES…' },
+    ambush: { radius: 150, emerge: { motion: 'surface' } },
     // Patient stone until stepped past; holds its grudge like a barnacle.
     aggro: { fury: 1.3, waver: 0.6 },
     brain: { type: 'assassin' },
@@ -8751,7 +8759,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 85, moveSpeed: 34, accuracy: 96, armor: 15, poise: 25, mana: 10, manaRegen: 2 },
     mods: [mod('chaosRes', 'flat', 0.4)],
     skills: ['claw', 'tendril_lash'], xp: 18, faction: 'caulborn',
-    ambush: { radius: 130, announce: 'one of the pods is walking…' },
+    ambush: { radius: 130, emerge: { motion: 'burstout' } },
     detection: 0.9,
     brain: {
       type: 'swarm',
@@ -8767,7 +8775,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 140, moveSpeed: 0, accuracy: 108, armor: 25, poise: 60, mana: 30, manaRegen: 3 },
     mods: [mod('chaosRes', 'flat', 0.5), mod('damageTaken', 'more', -0.15)],
     skills: ['caul_lash'], xp: 30, faction: 'caulborn',
-    ambush: { radius: 150, announce: 'the ground unknots…' },
+    ambush: { radius: 150, emerge: { ground: 'flesh' } },
     turnSpeed: 3.2,
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 1.1, brain: { type: 'basic' },
@@ -8783,7 +8791,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.4), mod('coldRes', 'flat', 0.2)],
     skills: ['tongue_reel', 'devouring_maw'], xp: 52, faction: 'caulborn',
     presence: { from: 10, fadeIn: 4 },
-    ambush: { radius: 210, announce: 'the floor is salivating…' },
+    ambush: { radius: 210, emerge: { ground: 'flesh' } },
     turnSpeed: 2.6,
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 1.2, brain: { type: 'basic' },
@@ -9552,7 +9560,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['lash_roots', 'claw'], xp: 26, faction: 'carven', tags: ['plant'],
     shellGuard: { side: 'front', max: 70, arcDeg: 160, regenDelay: 5 },
     habitat: { kind: 'pumpkin_patch', minRadius: 10, grace: 36 },
-    ambush: { radius: 110, announce: 'the patch was never asleep!' },
+    ambush: { radius: 110, emerge: { motion: 'stir' } },
     vision: { arcDeg: 360 }, // it has no face until it opens
     detection: 1.0,
     brain: { type: 'juggernaut' },
@@ -9567,7 +9575,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 66, moveSpeed: 135, evasion: 115, mana: 60, manaRegen: 6 },
     mods: [mod('fireRes', 'flat', -0.35), mod('chaosRes', 'flat', 0.25)],
     skills: ['claw', 'summon_crows'], xp: 24, faction: 'carven', tags: ['plant'],
-    ambush: { radius: 135, announce: 'the scarecrow turns its head…' },
+    ambush: { radius: 135, emerge: { motion: 'stir' } },
     post: true,
     tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['dusk', 'night'], mods: [mod('evasion', 'increased', 0.35), mod('attackSpeed', 'more', 0.12)] },
@@ -9677,7 +9685,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // Furniture-bound: never a clear-objective seat (the root_wraith rule —
     // a body confined to a blocking doodad must not hold the door shut).
     noObjective: true,
-    ambush: { radius: 100, announce: 'the dust sheet BILLOWS…' },
+    ambush: { radius: 100, emerge: { motion: 'stir' } },
     levitates: true,
     detection: 1.1,
     brain: {
@@ -10055,7 +10063,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 16,
     faction: 'mirrorkin', tags: ['construct'],
     detection: 1.2,
-    ambush: { radius: 120, announce: 'the glass wakes!' },
+    ambush: { radius: 120, emerge: { ground: 'light' } },
     // A mirror is hard to hit and reads your wind-ups — it was WATCHING.
     brain: {
       type: 'skirmish', withdraw: 1.1,
@@ -12021,7 +12029,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['mimic_flash', 'glimmer_pulse', 'beguiling_glow'], xp: 140,
     faction: 'wild', tags: ['beast'],
     boss: true, drops: 2,
-    ambush: { radius: 150, announce: 'the light was never kin…' },
+    ambush: { radius: 150, emerge: { ground: 'light' } },
     light: { radius: -5, color: '#e8f8b0', intensity: 0.7, flicker: 1.6 },
     detection: 1.2,
     brain: {
@@ -12204,7 +12212,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('coldRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.3)],
     skills: ['undertow', 'claw', 'frostbolt'], xp: 55,
     habitat: { kind: 'water', minRadius: 55, grace: 30 },
-    ambush: { radius: 170, announce: 'the water erupts!' },
+    ambush: { radius: 170, emerge: { motion: 'surface' } },
     turnSpeed: 3.4,
     scaleVariance: [0.9, 1.3], scaleStats: true,
     scaling: { life: { incPerLevel: 0.06 } },
@@ -12225,7 +12233,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // body confined to a BLOCKING doodad must never hold a clear objective
     // shut — a build that cannot reach the trunk soft-locks the zone.
     noObjective: true,
-    ambush: { radius: 130, announce: 'the roots wake!' },
+    ambush: { radius: 130 },
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 1.0, brain: { type: 'basic' },
   },
@@ -12293,7 +12301,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.5)],
     skills: ['bile_spray', 'gut_hurl'], xp: 28,
     habitat: { kind: 'mud', minRadius: 40, grace: 26 },
-    ambush: { radius: 120, announce: 'the mire opens!' },
+    ambush: { radius: 120, emerge: { ground: 'mire' } },
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 1.0, brain: { type: 'basic' },
   },
@@ -12393,7 +12401,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     immuneGround: ['lava', 'magma_core'],
     skills: ['magma_lob'], xp: 42,
     habitat: { kind: 'lava', minRadius: 44, grace: 26 },
-    ambush: { radius: 165, announce: 'the melt boils!' },
+    ambush: { radius: 165, emerge: { motion: 'surface', ground: 'lava' } },
     turnSpeed: 2.6,
     scaleVariance: [0.9, 1.25], scaleStats: true,
     vision: { arcDeg: 360, rearMul: 1 },
@@ -12413,7 +12421,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['void_hook'], xp: 46,
     habitat: { kind: 'chasm', minRadius: 38, grace: 34 },
     noObjective: true,
-    ambush: { radius: 175, announce: 'something stirs in the dark below…' },
+    ambush: { radius: 175, emerge: { motion: 'surface', ground: 'water' } },
     turnSpeed: 2.8,
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 1.2, brain: { type: 'basic' },
@@ -12705,7 +12713,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['mirespume'], xp: 34,
     habitat: { kind: 'bog', minRadius: 38, grace: 30 },
     wake: { skillId: 'venom_seep', everyDist: 64 },
-    ambush: { radius: 150, announce: 'the bog heaves upright!' },
+    ambush: { radius: 150, emerge: { ground: 'mire' } },
     turnSpeed: 3.0,
     scaleVariance: [0.9, 1.25], scaleStats: true,
     scaling: { life: { incPerLevel: 0.05 } },
@@ -13226,7 +13234,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#b0a890', shape: 'oval', radius: 7, material: 'metal', look: 'jaw_snare',
     base: { life: 18, moveSpeed: 0, armor: 30, mana: 0 },
     skills: ['snap_shut'], xp: 3,
-    ambush: { radius: 42, announce: 'SNAP!' },
+    ambush: { radius: 42, emerge: { motion: 'stir', voice: 'dust' } },
     noNemesis: true, drops: 0,
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 2.0, brain: { type: 'basic' },
@@ -13572,7 +13580,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
         burst: { radius: 95, damageFrac: 0.035, type: 'chaos', color: '#9fe07a' },
       },
     },
-    ambush: { radius: 560, announce: 'The ground HEAVES: Vhorun rises!' },
+    ambush: { radius: 560 },
     scaling: { life: { incPerLevel: 0.15 } },
     parts: [
       { monster: 'primeval_wyrm_maw', dx: 1.35, dy: 0, lifeFrac: 0.4, breakDamage: 0.16 },
@@ -13909,7 +13917,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 780, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
     detection: 1.6, vision: { arcDeg: 360, rearMul: 1 }, turnSpeed: 2.0,
     habitat: { kind: 'husk_throne', grace: 52 },
-    ambush: { radius: 380, announce: 'The husk SPLITS along old seams: Velketh wakes!' },
+    ambush: { radius: 380, emerge: { motion: 'burstout' } },
     scaling: { life: { incPerLevel: 0.15 } },
     parts: [
       {
@@ -14817,7 +14825,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'sirocco',
     gemBias: ['physical', 'melee'],
     presence: { from: 8, fadeIn: 4 },
-    ambush: { radius: 140, announce: 'the light bends wrong…' },
+    ambush: { radius: 140, emerge: { ground: 'light' } },
     brain: { type: 'assassin' },
   },
 
@@ -14870,7 +14878,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     gemBias: ['physical'],
     presence: { from: 8, fadeIn: 4 },
     scaleVariance: [0.85, 1.35], scaleStats: true,
-    ambush: { radius: 150, announce: 'the sand swells underfoot…' },
+    ambush: { radius: 150, emerge: { ground: 'sand' } },
     brain: { type: 'juggernaut' },
   },
 
@@ -16221,7 +16229,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['blinding_ichor', 'talon_rake'],
     xp: 26,
     faction: 'bloomkin',
-    ambush: { radius: 46 },
+    ambush: { radius: 46, emerge: { motion: 'stir' } },
     brain: { type: 'assassin', withdraw: 1.1 },
   },
 
@@ -16490,7 +16498,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['lash_roots', 'claw'],
     xp: 26,
     faction: 'junglekin',
-    ambush: { radius: 44 },
+    ambush: { radius: 44, emerge: { motion: 'drop' } },
     brain: { type: 'assassin', withdraw: 1.2 },
   },
 
@@ -21150,7 +21158,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('coldRes', 'flat', 0.5)],
     skills: ['tongue_reel', 'gulp'], xp: 40,
     heft: 1.4,
-    ambush: { radius: 155, announce: 'the terrace shifts…' },
+    ambush: { radius: 155, emerge: { ground: 'stone' } },
     aggro: { fury: 1.2, waver: 0.7 },
     brain: { type: 'basic' },
     detection: 0.95,

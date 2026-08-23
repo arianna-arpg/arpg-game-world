@@ -257,7 +257,7 @@ hazards 15 · spills/tolls 15), MOVE ~150 (world news → the feed), KEEP ~300
 
 | movement | axis | what lands | lines retired | effort |
 |---|---|---|---|---|
-| **M-EMERGE** — THE EMERGENCE GRAMMAR | N | `engine/emerge.ts` + `vis/emergeLayer.ts` (the dissolve's mirror: RISE / BURST-OUT / CONDENSE / SURFACE / DROP / STIR, ground × host), `MonsterDef.emerge` + `BrittleSpawn`/ambush reading it, `springAmbush` + the brittle WAKE + burrow emerge + rift pours + seal manifests as consumers; the ring leaves every spawn path | ~60 | ~1 session |
+| **M-EMERGE** — THE EMERGENCE GRAMMAR — **BUILT** (`engine/emerge.ts`, `docs/engine/emergence.md`, probe_emerge) | N | `engine/emerge.ts` + `vis/emergeLayer.ts` (the dissolve's mirror: RISE / BURST-OUT / CONDENSE / SURFACE / DROP / STIR, ground × host), `MonsterDef.emerge` + `BrittleSpawn`/ambush reading it, `springAmbush` + the brittle WAKE + burrow emerge + rift pours + seal manifests as consumers; the ring leaves every spawn path | ~60 | ~1 session |
 | **M-STATUS** — THE STATUS VOICE + the worn-face audit | P | `StatusDef.voice` family resolver, ~8 voices, the environment statuses' worn faces audited (which show, which only tell), grip/time/mental captions retired | ~30 | ~1 session |
 | **M-NEWS** — off the head, onto the feed | W | the world-news floaters re-seated on the notice feed (channels), the counters/refusals onto the prompt/objective HUD seam; no animation | ~150 (moved) | ~½ session |
 | **M-TOLL + M-SPILL** | N | resonance rings = lure radius (drawn == tested); corpses tumble; chest lids; 'drops loot!' retired | ~15 | ~½ session |
@@ -272,7 +272,26 @@ tomorrow).
 
 ---
 
-## 6. Built in this pass (the coda — THE ROW LAW)
+## 6. Built (the coda — THE ROW LAW; then M-EMERGE)
+
+**M-EMERGE — THE EMERGENCE GRAMMAR (built after this census, the first rung):**
+`engine/emerge.ts` (six motions: rise · burstout · condense · surface · drop · stir;
+thirteen ground rows; the pure fold + the ground derivation region → country),
+`World.emergeBody` (the one entry: the hold — untargetable + unthinking for the
+motion's life, drawn == tested — the voice on the flash, the cap's honest
+degrade) hooked in `springAmbush` (the ambush row's override; visible sleepers
+STIR; the pack chain arrives per kin), the brittle WAKE (host lane), the
+hiveborn / brood / raised-dead births, and the encounter pours;
+`render/vis/emergeLayer.ts` (the slit + the grains; the arriving body's pose in
+`drawActor` — the clipped climb, the overshoot, the alpha-in, the fall); the
+captions RETIRED: `AmbushSpec.announce` (29 lines across monsters/formations/lairs/
+landmarks — 25 re-authored as `emerge` overrides: the casket bursts out, the patch
+stirs, the light condenses, the sandmaw rises through sand) and
+`BrittleSpawn.text` (7), plus 'hiveborn!' / 'brood!' / 'risen!' / 'ambush!'.
+Dev → Emerge (the ring of six, re-play any motion, the read). Probe
+`balance/probe_emerge.ts` (31 pins). See `docs/engine/emergence.md`.
+
+**THE ROW LAW (the coda):**
 
 The six brittle kinds that still popped the bare ring are rowed: `crumbling_wall`
 (stone give-way; the carve at the instant), `fitted_face` / `draft_seam` /

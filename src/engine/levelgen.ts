@@ -1219,9 +1219,12 @@ export interface BrittleSpawn {
   monster: string;
   count?: [number, number];
   chance?: number;
-  text?: string;
   /** Pool weight (array form only; default 1). */
   w?: number;
+  // THE EMERGENCE GRAMMAR (engine/emerge.ts): a wake's bodies BURST OUT of
+  // the breaking host (World.emergeBody, host lane) — the old per-row
+  // caption ("the dead wake!") retired with the motion; a def-level
+  // MonsterDef.emerge row may still re-shape the arrival.
 }
 
 export interface BrittleSpec {
@@ -1926,14 +1929,14 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // is the ambush's announce, not the break's (D1's tail).
   burial_urn: { overlap: 'inert', spacing: 22,
     brittle: { on: ['hit', 'touch'], orbChance: 0.55, gemChance: 0.12, color: '#b8a890',
-      spawn: { monster: 'skeleton_warrior', count: [1, 2], chance: 0.22, text: 'the dead wake!' } },
+      spawn: { monster: 'skeleton_warrior', count: [1, 2], chance: 0.22 } },
     dissolve: { material: 'ceramic' } },
   // The kilnhoard's treasury vessel (the colossal wyrm's floor): pays a
   // little better than grave clay and its tenants are LIVE COALS — smash
   // greedily and the spill fights back, right beside the sleeping coils.
   kiln_urn: { overlap: 'inert', spacing: 22,
     brittle: { on: ['hit', 'touch'], orbChance: 0.5, gemChance: 0.14, color: '#d88a4a',
-      spawn: { monster: 'ashling', count: [1, 2], chance: 0.15, text: 'embers spill out!' } },
+      spawn: { monster: 'ashling', count: [1, 2], chance: 0.15 } },
     dissolve: { material: 'ceramic' } },
   crystal_cluster: { overlap: 'solid', blocksMove: true, spacing: 34, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
     brittle: { on: ['hit'], gemChance: 0.3, orbChance: 0.35, color: '#7fc0f0' },
@@ -2027,7 +2030,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   caul_sac: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26,
     forbidOn: ['water', 'lava', 'chasm', 'gore'],
     brittle: { on: ['hit', 'near'], reach: 26, orbChance: 0.12, color: '#9a72c8',
-      spawn: { monster: 'caul_tick', count: [1, 2], chance: 0.18, text: 'something skitters out!' } },
+      spawn: { monster: 'caul_tick', count: [1, 2], chance: 0.18 } },
     dissolve: { material: 'pod', debrisLook: { color: '#6a4a8a' } } }, // THE DISSOLUTION GRAMMAR (D1): the sac bursts as lobes; the wake's own line stands
   caul_eyes: { overlap: 'inert', spacing: 44 },
   // THE DUNE SEA's crest comb (dunefield recipe): pure ridge ART riding the
@@ -2091,9 +2094,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     brittle: { on: ['near'], reach: 120, color: '#bfe8f0',
       pop: { haze: 1, radius: 170, life: 0.85 },
       spawn: [
-        { monster: 'dune_stalker', count: [2, 3], chance: 0.45, w: 3, text: 'the sand rises hunting!' },
-        { monster: 'mirage_dancer', count: [2, 3], chance: 0.45, w: 1.5, text: 'the Court steps out of the heat!' },
-        { monster: 'salt_husk', count: [2, 4], chance: 0.45, w: 1.5, text: 'the caravan\'s crew never left—' },
+        { monster: 'dune_stalker', count: [2, 3], chance: 0.45, w: 3 },
+        { monster: 'mirage_dancer', count: [2, 3], chance: 0.45, w: 1.5 },
+        { monster: 'salt_husk', count: [2, 4], chance: 0.45, w: 1.5 },
       ] } },
   // The maw is GROUND (nothing to trip on — the reel is the obstacle):
   // hazardGround keeps ambient spawns off the lip, the auto-attached effect
@@ -2739,7 +2742,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   jungle_brush: { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: true, spacing: 30,
     forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
     brittle: { on: ['hit'], orbChance: 0.1, color: '#4f7a2c',
-      spawn: { monster: 'fern_stalker', count: [1, 1], chance: 0.07, text: 'the brush erupts!' } },
+      spawn: { monster: 'fern_stalker', count: [1, 1], chance: 0.07 } },
     dissolve: { material: 'verdure' } }, // THE DISSOLUTION GRAMMAR (D1): the brush GIVES WAY as strata and leaves the cut's own litter; the line retired
   // The face-cut pays like a secret wall but HIDES like nothing — the tell is
   // the wall itself: cut the knot and the pop carves a pocket INTO the verdure.

@@ -101,6 +101,10 @@ import {
 // THE DISSOLUTION GRAMMAR (engine/dissolve.ts — docs/engine/dissolution.md):
 // the ONE resolver + the seeded rolls the break records ride.
 import { DISSOLVE_CFG, dissolveFor, dissolveRollRange, dissolveSeedOf, resolveDissolve, type ResolvedDissolve } from './dissolve';
+import {
+  EMERGE_CFG, emergeFor, emergeGroundFor, emergeSeedOf,
+  type EmergeGroundId, type EmergeSpec, type ResolvedEmerge,
+} from './emerge'; // THE EMERGENCE GRAMMAR — the arrival's pure leaf (World.emergeBody)
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
 import { canSquish, SQUISH_CFG, squishSpecOf } from './squish';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
@@ -1280,6 +1284,19 @@ export interface DissolveBreak {
   debris: Doodad | null;
 }
 
+/** THE EMERGENCE GRAMMAR's live arrival (World.emergences — the flash idiom,
+ *  pruned by life): which body arrives, where it was at the instant, the
+ *  folded spec and the seat-hash seed. The renderer poses the body and
+ *  scatters the grains off (seed, age) alone; nothing here is tested state
+ *  beyond the hold it names on the actor; it never persists or rides the
+ *  wire. */
+export interface EmergeRecord {
+  actorId: number; pos: Vec2; radius: number; seed: number; spec: ResolvedEmerge;
+  at: number; life: number; maxLife: number;
+  /** The hold was taken (untargetable + unthinking) — released at expiry. */
+  held: boolean;
+}
+
 interface Flash {
   pos: Vec2; radius: number; color: string; life: number; maxLife: number;
   arc?: { facing: number; arcRad: number };
@@ -2446,6 +2463,8 @@ export class World {
   flashes: Flash[] = [];
   /** THE DISSOLUTION GRAMMAR's live break records (see dissolveBreak). */
   dissolves: DissolveBreak[] = [];
+  /** THE EMERGENCE GRAMMAR's live arrivals (engine/emerge.ts; World.emergeBody). */
+  emergences: EmergeRecord[] = [];
   drops: GemDrop[] = [];
   orbs: ResourceOrb[] = [];
   remnants: Remnant[] = [];
@@ -4850,6 +4869,7 @@ export class World {
     this.texts = [];
     this.flashes = [];
     this.dissolves = []; // THE DISSOLUTION GRAMMAR: motions are zone-local after-images
+    this.emergences = []; // THE EMERGENCE GRAMMAR: arrivals are zone-local too
     this.dissolveFloorCracks = []; // … and so is a failing floor's telegraph
     this.pendingBursts = [];
     this.drops = [];
@@ -7348,6 +7368,7 @@ export class World {
       m.pos = this.clampPos(vec(e.pos.x + Math.cos(ang) * r, e.pos.y + Math.sin(ang) * r), m.radius);
       e.spawned.add(m.id);
       this.actors.push(m);
+      this.emergeBody(m, {}); // THE EMERGENCE GRAMMAR: a pour's bodies arrive by the ground they stand on
     }
   }
 
@@ -33476,7 +33497,7 @@ export class World {
       crawler.pos = this.clampPos(
         vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), crawler.radius);
       this.actors.push(crawler);
-      this.text(crawler.pos, 'hiveborn!', '#a8c860', 11);
+      this.emergeBody(crawler, { host: true }); // THE EMERGENCE GRAMMAR: the crawler bursts out of the eaten body
     }
   }
 
@@ -36857,8 +36878,11 @@ export class World {
     a.untargetable = false;
     a.sheet.setSource('ambush', []);
     const spec = a.ambushSpec ?? (a.defId ? MONSTERS[a.defId]?.ambush : undefined);
-    this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius * 2.6, color: a.color, life: 0.4, maxLife: 0.4 });
-    if (!quiet) this.text(vec(a.pos.x, a.pos.y - 24), spec?.announce ?? 'ambush!', '#e8c86a', 13);
+    // THE EMERGENCE GRAMMAR: the reveal IS the drawing — the body rises
+    // through its ground / condenses / stirs (the ambush row's override, the
+    // def's row, the seat's ground); the old ring + caption retired. A
+    // visible ambusher (already standing) stirs rather than climbs.
+    this.emergeBody(a, { spec: spec?.emerge ?? (spec?.visible ? { motion: 'stir' } : undefined) });
     if (spec?.pack) {
       for (const k of this.actors) {
         if (k === a || k.dead || !k.ambushArmed || k.team !== a.team) continue;
@@ -39764,8 +39788,7 @@ export class World {
           if (spawn.duration) minion.lifespan = spawn.duration;
           minion.pos = this.clampPos(vec(actor.pos.x, actor.pos.y), minion.radius);
           this.actors.push(minion);
-          this.flashes.push({ pos: vec(minion.pos.x, minion.pos.y), radius: 22, color: '#7ec850', life: 0.3, maxLife: 0.3 });
-          this.text(minion.pos, 'risen!', '#7ec850', 11);
+          this.emergeBody(minion, {}); // THE EMERGENCE GRAMMAR: the raised dead climb out of the ground they fell on
         }
       }
     }
@@ -41860,7 +41883,7 @@ export class World {
         hatch.pos = this.clampPos(
           vec(a.pos.x + rand(-24, 24), a.pos.y + rand(-24, 24)), hatch.radius);
         this.actors.push(hatch);
-        this.text(hatch.pos, 'brood!', '#7ec850', 11);
+        this.emergeBody(hatch, { host: true }); // THE EMERGENCE GRAMMAR: the broodling bursts out of its parent
       }
       // DOT LEECH: banked ticks flow home to the APPLIER as healing —
       // "5% of bleed damage leeched as life", paid quietly on the beat.
@@ -42586,6 +42609,9 @@ export class World {
       this.dissolves[i].life -= dt;
       if (this.dissolves[i].life <= 0) this.dissolves.splice(i, 1);
     }
+    // THE EMERGENCE GRAMMAR's arrivals age on the same beat; an expired hold
+    // RELEASES its body (targetable + thinking again — drawn == tested).
+    if (this.emergences.length) this.updateEmergences(dt);
     // THE FLOOR PRE-CRACK rows retire at their plant clock (the view drops
     // them too — this keeps a headless world tidy; gated on the empty case).
     if (this.dissolveFloorCracks.length) {
@@ -52176,8 +52202,8 @@ export class World {
         const m = this.createMonster(sp.monster, Math.max(1, this.zone.level), 'enemy');
         m.pos = this.clampPos(vec(d.pos.x + rand(-22, 22), d.pos.y + rand(-22, 22)), m.radius);
         this.actors.push(m);
+        this.emergeBody(m, { host: true }); // THE EMERGENCE GRAMMAR: the wake BURSTS OUT of the breaking host
       }
-      if (n > 0 && sp.text) this.text(vec(d.pos.x, d.pos.y - 28), sp.text, color, 12);
     }
     // THE SHALLOW GRAVE: the wreck spills BODIES, not the living — raisable
     // fuel for the corpse economy (the charnel kit's necromancer bait; a
@@ -52202,6 +52228,132 @@ export class World {
     // after-image): hand the body to the fragment engine. A row's REMAINS
     // is the debris lane's input (adopted, never a second pile).
     if (dissolveRow) this.dissolveBreak(d, dissolveRow, strikeAt ?? null, remainsDoodad);
+  }
+
+  // ------------------------------------------------ THE EMERGENCE GRAMMAR
+  // (engine/emerge.ts — docs/engine/emergence.md): a body ARRIVES as a
+  // drawing — the dissolve's mirror. The engine's share: ONE entry
+  // (emergeBody) that folds the arrival's rows over the seat's ground, stamps
+  // a record the renderer animates off (seed, age), lets the arrival's flash
+  // speak the voice, and HOLDS the body (untargetable + unthinking — drawn
+  // == tested) for exactly the motion's life; the prune releases it. Past
+  // the cap the body simply stands (THE HONEST DEGRADE).
+
+  /** The ground an arrival at `p` comes through — the doodad ground / grid
+   *  region under the seat first, else the country's own (pure fold). */
+  emergeGroundAt(p: Vec2, tier = 0): EmergeGroundId {
+    const g = this.groundAt(p, tier)?.kind;
+    const gk = g ?? this.walk?.regionAt?.(p.x, p.y);
+    return emergeGroundFor(this.zone.biome, gk);
+  }
+
+  /** THE ONE ENTRY — `a` has just been placed (or sprung) at its seat. `host`
+   *  = it leaves a breaking body (burst-out by default); `spec` = the
+   *  instance row (an AmbushSpec.emerge) folded over the def's own row and
+   *  the derived ground. Returns the record, or null when nothing plays (no
+   *  motion resolvable, or the cap). The caption retires: consumers speak
+   *  no line where this plays. */
+  emergeBody(a: Actor, opts: { host?: boolean; spec?: EmergeSpec; ground?: EmergeGroundId } = {}): EmergeRecord | null {
+    if (a.dead) return null;
+    const def = a.defId ? MONSTERS[a.defId] : undefined;
+    const ground = opts.ground ?? this.emergeGroundAt(a.pos, a.tier);
+    const spec = emergeFor([opts.spec, def?.emerge], ground, !!opts.host);
+    if (!spec) return null;
+    // The arrival's accent rides the pop channel: the voice, or the haze ring.
+    this.flashes.push({
+      pos: vec(a.pos.x, a.pos.y), radius: a.radius * 2.2, color: a.color, life: 0.35, maxLife: 0.35,
+      ...(spec.haze ? { haze: spec.haze } : spec.voice ? { fx: spec.voice } : {}),
+    });
+    if (this.emergences.length >= EMERGE_CFG.maxLive) return null;
+    const seed = emergeSeedOf(a.pos.x, a.pos.y, a.id);
+    const rec: EmergeRecord = {
+      actorId: a.id, pos: vec(a.pos.x, a.pos.y), radius: a.radius, seed, spec,
+      at: this.time, life: spec.life, maxLife: spec.life, held: spec.hold,
+    };
+    if (spec.hold) {
+      a.emergeHeldTargetable = a.untargetable;
+      a.untargetable = true;
+      a.emergeUntil = this.time + spec.life;
+    }
+    this.emergences.push(rec);
+    return rec;
+  }
+
+  /** DEV (her walk — dev/tabs/emerge.ts): stand one ARMED ambusher per
+   *  motion in a ring around the hero — walk into each and watch it arrive
+   *  (rise / burst-out / condense / surface / drop / stir; the ring's own
+   *  ground paints the grains). Dev-only; zone re-entry re-mints. */
+  devEmergeRing(defId = 'skeleton_warrior'): string[] {
+    const motions = ['rise', 'burstout', 'condense', 'surface', 'drop', 'stir'];
+    const p = this.player;
+    const stood: string[] = [];
+    for (let i = 0; i < motions.length; i++) {
+      const ang = (i / motions.length) * Math.PI * 2;
+      const at = this.clampPos(vec(p.pos.x + Math.cos(ang) * 230, p.pos.y + Math.sin(ang) * 230), 16);
+      if (this.pointInSolid(at.x, at.y, 16)) continue;
+      const m = this.createMonster(defId, Math.max(1, this.zone.level), 'enemy');
+      m.pos = at;
+      this.actors.push(m);
+      m.ambushSpec = { radius: 90, emerge: { motion: motions[i] } }; // the instance lane: the spec rides the body, then arms
+      this.armAmbush(m, m.ambushSpec);
+      stood.push(motions[i]);
+    }
+    return stood;
+  }
+
+  /** DEV: re-play an arrival on the nearest living monster (a forced motion,
+   *  or its own row over the seat's ground). Returns what played. */
+  devEmergeNearest(motion: string | null, reach = 360): string | null {
+    const p = this.player;
+    let best: Actor | null = null, bd = Infinity;
+    for (const a of this.actors) {
+      if (a.dead || a.team === p.team || a.passive || a.emergeUntil !== undefined) continue;
+      const d = dist(a.pos, p.pos);
+      if (d < bd && d <= reach) { bd = d; best = a; }
+    }
+    if (!best) return null;
+    const rec = this.emergeBody(best, motion ? { spec: { motion } } : {});
+    return rec ? best.name + ' → ' + rec.spec.motion + (rec.spec.ground ? ' (' + rec.spec.ground + ')' : '') : null;
+  }
+
+  /** DEV readout: live arrivals vs the cap, the ground under the hero, the
+   *  nearest body's folded row. */
+  devEmergeInfo(): { live: number; cap: number; ground: string; nearest: { name: string; spec: ResolvedEmerge | null } | null } {
+    const p = this.player;
+    let best: Actor | null = null, bd = Infinity;
+    for (const a of this.actors) {
+      if (a.dead || a.team === p.team || a.passive) continue;
+      const d = dist(a.pos, p.pos);
+      if (d < bd && d <= 360) { bd = d; best = a; }
+    }
+    const ground = this.emergeGroundAt(p.pos, p.tier);
+    return {
+      live: this.emergences.length, cap: EMERGE_CFG.maxLive, ground,
+      nearest: best ? { name: best.name, spec: emergeFor([best.ambushSpec?.emerge, best.defId ? MONSTERS[best.defId]?.emerge : undefined], ground, false) } : null,
+    };
+  }
+
+  /** The live arrival of a body (the renderer's pose read); undefined once
+   *  released. A tiny list — a linear scan. */
+  emergeOf(a: Actor): EmergeRecord | undefined {
+    for (const r of this.emergences) if (r.actorId === a.id) return r;
+    return undefined;
+  }
+
+  /** Age the arrivals; an expired hold RELEASES its body. */
+  private updateEmergences(dt: number): void {
+    for (let i = this.emergences.length - 1; i >= 0; i--) {
+      const r = this.emergences[i];
+      r.life -= dt;
+      if (r.life > 0) continue;
+      this.emergences.splice(i, 1);
+      if (!r.held) continue;
+      const a = this.actorById(r.actorId);
+      if (!a) continue;
+      a.untargetable = a.emergeHeldTargetable ?? false;
+      a.emergeHeldTargetable = undefined;
+      a.emergeUntil = undefined;
+    }
   }
 
   // ------------------------------------------------ THE DISSOLUTION GRAMMAR

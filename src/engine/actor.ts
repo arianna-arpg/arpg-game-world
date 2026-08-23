@@ -374,7 +374,12 @@ export interface MonsterPartDef {
  *  event, not a trickle. */
 export interface AmbushSpec {
   radius: number;
-  announce?: string;
+  /** THE EMERGENCE GRAMMAR (engine/emerge.ts): HOW this ambusher arrives when
+   *  sprung — a motion / ground override over the def's own row and the
+   *  seat's derived ground (the sand rises, the light condenses, the patch
+   *  stirs). The spring's old caption (announce) retired with it: the
+   *  arrival is the sentence. */
+  emerge?: EmergeSpec;
   /** Wait in the open (no invisibility, still targetable; wounds spring). */
   visible?: boolean;
   /** Chain-spring every armed body within this radius (the herd law). */
@@ -386,6 +391,7 @@ export interface AmbushSpec {
 // their historical import path.
 export type { BrainDef, BrainType, BrainPhase, BrainImpulse, PostSpec, FlockSpec } from './brain';
 import type { BrainDef, BrainType, BrainTuning, CommandState, FlockSpec, PostSpec } from './brain';
+import type { EmergeSpec } from './emerge'; // THE EMERGENCE GRAMMAR — AmbushSpec.emerge
 
 /** A worm/snake body: trailing segments that follow the head. The base
  *  fields are the legacy render-only trail; the SEGMENT-FABRIC fields
@@ -1412,6 +1418,12 @@ export class Actor {
    *  over the def's spec, so the SAME kind can wait coiled in a pen here
    *  and roam free everywhere else. */
   ambushSpec?: AmbushSpec;
+  /** THE EMERGENCE GRAMMAR's hold (World.emergeBody): world-clock until which
+   *  this body is still ARRIVING — untargetable, unthinking, drawn through
+   *  the motion's pose (drawn == tested). Undefined once released. */
+  emergeUntil?: number;
+  /** What `untargetable` was before the hold took it (restored at release). */
+  emergeHeldTargetable?: boolean;
   /** SHELL GUARD (MonsterDef.shellGuard, a toggled rear-guard aura, or a
    *  guard-skill graft): the directional absorb pool + its break/regrow
    *  state. `fromAura` names the installing skill so the toggle-off (or

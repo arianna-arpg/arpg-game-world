@@ -1322,6 +1322,18 @@ export const VIS_CFG = {
     },
   },
 
+  /** THE EMERGENCE GRAMMAR's render dials (vis/emergeLayer.ts — the drawn
+   *  half of engine/emerge.ts; the motions, the hold, the grounds and the
+   *  cap live THERE as EMERGE_CFG). All DIALS, unblessed. Ablate: 'doodads'. */
+  emerge: {
+    /** THE SLIT (rise / surface): the dark opening at the feet. */
+    slit: { color: '#120e0c', alpha: 0.62, rimAlpha: 0.28 },
+    /** Grain size band (px) and the pale lit rim on clods/grit. */
+    grain: { size: [1.4, 3.6], rimAlpha: 0.35 },
+    /** The condense motes' glow alpha. */
+    moteGlow: 0.5,
+  },
+
   /** THE DISSOLUTION GRAMMAR's render dials (vis/dissolveLayer.ts — the
    *  fragment engine over the pure leaf engine/dissolve.ts; the motion
    *  kinematics + cuts + the cap + the debris fade live THERE as

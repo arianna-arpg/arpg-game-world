@@ -125,7 +125,7 @@ registerLandmark({
       { id: 'hill_giant', weight: 1 },
     ],
     count: [1, 1], where: 'interior',
-    ambush: { radius: 170, visible: true, pack: 320, announce: 'the cairn stirs; the giant wakes!' },
+    ambush: { radius: 170, visible: true, pack: 320 }, // the cairn STIRS when sprung (THE EMERGENCE GRAMMAR) — the caption retired
   },
 });
 
@@ -2338,7 +2338,7 @@ registerLandmark({
       { id: 'levin_thegn', weight: 1 },
     ],
     count: [2, 4], where: 'interior',
-    ambush: { radius: 150, visible: true, pack: 320, announce: 'the crown stands as one — the storm court holds!' },
+    ambush: { radius: 150, visible: true, pack: 320 }, // the court STIRS as one when sprung (THE EMERGENCE GRAMMAR) — the caption retired
   },
 });
 

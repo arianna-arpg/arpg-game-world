@@ -1737,7 +1737,7 @@ registerLandmark({
       { id: 'resonant_shardling', weight: 3 },
     ],
     count: [3, 5], where: 'interior',
-    ambush: { radius: 160, visible: true, pack: 300, announce: 'the geode stirs — its facets are awake!' },
+    ambush: { radius: 160, visible: true, pack: 300 }, // the sleepers STIR when sprung (THE EMERGENCE GRAMMAR) — the caption retired
   },
 });
 
