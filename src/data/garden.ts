@@ -73,7 +73,8 @@ registerStamp('wildgrass_blade', stampSingle('wildgrass_blade', [26, 40]));
 // is an empty standing skin; only the palette is chitin.
 registerDoodadRule('molt_husk', {
   overlap: 'solid', blocksMove: true, spacing: 30, bodyScale: 0.4,
-  brittle: { on: ['hit'], orbChance: 0.05, text: 'the old skin crumbles…', color: '#c8cf9a' },
+  brittle: { on: ['hit'], orbChance: 0.05, color: '#c8cf9a' },
+  dissolve: { material: 'bone', debrisLook: { color: '#b8c090', shape: 'scrap' } }, // THE DISSOLUTION GRAMMAR (D1): the old skin crumbles as chitin strata; flakes remain; the line retired
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
 });
 registerStamp('molt_husk', stampSingle('molt_husk', [14, 20]));
@@ -90,14 +91,16 @@ registerStamp('leaf_mulch', stampSingle('leaf_mulch', [22, 36]));
 // A seed pod: the year's crop, still holding. Cracks like what it is.
 registerDoodadRule('seed_pod', {
   overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 30,
-  brittle: { on: ['hit'], text: 'the pod spills its seed', color: '#c8b06a', orbChance: 0.3, gemChance: 0.04 },
+  brittle: { on: ['hit'], color: '#c8b06a', orbChance: 0.3, gemChance: 0.04 },
+  dissolve: { material: 'pod', debrisLook: { color: '#a8925a' } }, // THE DISSOLUTION GRAMMAR (D1): the pod bursts and spills — the seed is the orb; the line retired
 });
 registerStamp('seed_pod', stampSingle('seed_pod', [12, 18]));
 
 // A bud knot: next spring, wound tight. Pops green when struck.
 registerDoodadRule('bud_knot', {
   overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 24,
-  brittle: { on: ['hit'], text: 'the bud bursts unripe', color: '#8ac86a', orbChance: 0.2 },
+  brittle: { on: ['hit'], color: '#8ac86a', orbChance: 0.2 },
+  dissolve: { material: 'pod', debrisLook: { color: '#5a8a44' } }, // THE DISSOLUTION GRAMMAR (D1): the bud bursts green; the line retired
 });
 registerStamp('bud_knot', stampSingle('bud_knot', [10, 15]));
 
@@ -106,7 +109,8 @@ registerStamp('bud_knot', stampSingle('bud_knot', [10, 15]));
 registerDoodadRule('dew_bead', {
   overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 34,
   sightShadow: { mul: 0.3, softR: 22 },
-  brittle: { on: ['hit'], text: 'the dewdrop lets go', color: '#bfe8ff' },
+  brittle: { on: ['hit'], color: '#bfe8ff' },
+  dissolve: { material: 'pod', debris: false, pieces: [3, 4] }, // THE DISSOLUTION GRAMMAR (D1): the drop lets go of its shape — lobes of water fly and are gone, nothing remains; the line retired
 });
 registerStamp('dew_bead', stampSingle('dew_bead', [10, 16]));
 

@@ -758,16 +758,21 @@ registerFormation({
 registerDoodadRule('powder_keg', {
   overlap: 'inert', spacing: 24,
   brittle: {
-    on: ['hit'], text: 'the keg goes up!', color: '#ff8a4a',
+    on: ['hit'], color: '#ff8a4a',
     fume: { skillId: 'infernal_rift', radius: 80, linger: 0.8, dmgMult: 2.2, delay: 0.65, color: '#ff8a4a', fx: 'blast' },
   },
+  // THE DISSOLUTION GRAMMAR (D1): the keg splits open as staves (wood lobes)
+  // a beat before its fuse speaks the blast — charred splinters remain; the
+  // line retired.
+  dissolve: { material: 'wood', motion: 'burst', pieces: [4, 6], debrisLook: { color: '#2a2018' } },
 });
 registerDoodadRule('munition_cache', {
   overlap: 'inert', spacing: 26,
   brittle: {
-    on: ['hit'], orbChance: 0.3, gemChance: 0.12, text: 'the charges split!', color: '#e8b060',
+    on: ['hit'], orbChance: 0.3, gemChance: 0.12, color: '#e8b060',
     fume: { skillId: 'infernal_rift', radius: 52, linger: 0.6, dmgMult: 1.1, delay: 0.5, color: '#ff9a5a', fx: 'blast' },
   },
+  dissolve: { material: 'wood', motion: 'burst', pieces: [4, 6], debrisLook: { color: '#2a2018' } }, // THE DISSOLUTION GRAMMAR (D1): the bundle splits as staves; the fuse as ever; the line retired
 });
 registerDoodadRule('shot_stack', {
   overlap: 'solid', blocksMove: true, spacing: 26,
@@ -800,18 +805,18 @@ registerDoodadRule('plague_cart', {
   overlap: 'solid', blocksMove: true, spacing: 46,
   forbidOn: ['water', 'lava', 'chasm'],
   brittle: {
-    on: ['hit'], orbChance: 0.1, gemChance: 0.06,
-    text: 'the cart breaks apart!', color: '#8a7a58',
+    on: ['hit'], orbChance: 0.1, gemChance: 0.06, color: '#8a7a58',
     corpses: { monster: 'zombie', count: [2, 3], text: 'the load spills out!' },
   },
+  dissolve: { material: 'wood', motion: 'shatter', pieces: [6, 9] }, // THE DISSOLUTION GRAMMAR (D1): the dray breaks apart AS wood; the load's own line stands
 });
 registerDoodadRule('shallow_grave', {
   overlap: 'ground', spacing: 32,
   brittle: {
-    on: ['hit'], orbChance: 0.08,
-    text: 'the grave breaks open!', color: '#8a7a5e',
+    on: ['hit'], orbChance: 0.08, color: '#8a7a5e',
     corpses: { monster: 'zombie', count: [1, 2], chance: 0.9, text: 'the earth gives up its dead!' },
   },
+  dissolve: { material: 'earth', debrisLook: { color: '#4c4030' } }, // THE DISSOLUTION GRAMMAR (D1): the mound crumbles open as dark soil; the spill's own line stands
 });
 // THE CARRION MIDDEN (the accumulator family's larder): a heaped kill-mound
 // in scavenger country — struck, it SPILLS raisable meat (the shallow
@@ -822,10 +827,10 @@ registerDoodadRule('shallow_grave', {
 registerDoodadRule('carrion_midden', {
   overlap: 'ground', spacing: 34,
   brittle: {
-    on: ['hit'], orbChance: 0.06,
-    text: 'the midden spills open!', color: '#9a8a6a',
+    on: ['hit'], orbChance: 0.06, color: '#9a8a6a',
     corpses: { monster: 'taiga_elk', count: [1, 2], chance: 0.9, text: 'the heap gives up its meat!' },
   },
+  dissolve: { material: 'bone' }, // THE DISSOLUTION GRAMMAR (D1): the heap crumbles as bone strata, chips remain; the spill's own line stands
 });
 // Tileset layouts speak in STAMPS — the kit's kinds join the vocabulary.
 registerStamp('shallow_grave', stampSingle('shallow_grave', [11, 15]));
@@ -938,7 +943,8 @@ registerFormation({
 // works shed — the story of a battery row told in three kinds.
 registerDoodadRule('charge_cell', {
   overlap: 'inert', spacing: 24,
-  brittle: { on: ['hit', 'touch'], orbChance: 0.65, text: 'the cell discharges!', color: '#7fd8c8' },
+  brittle: { on: ['hit', 'touch'], orbChance: 0.65, color: '#7fd8c8' },
+  dissolve: { material: 'crystal' }, // THE DISSOLUTION GRAMMAR (D1): the cell shatters into facets; the discharge is the orb; the line retired
 });
 registerDoodadRule('rune_capacitor', {
   overlap: 'solid', blocksMove: true, spacing: 30,
@@ -972,18 +978,21 @@ registerDoodadRule('shield_rack', {
   overlap: 'solid', blocksMove: true, spacing: 26, bodyScale: 0.5,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
   surface: { hw: 2.1, hh: 0.35 }, // the fishing rack's rail line (fracs ride the 0.5 body radius)
-  brittle: { on: ['hit'], orbChance: 0.12, text: 'the rack clatters apart!', color: '#c8b088' },
+  brittle: { on: ['hit'], orbChance: 0.12, color: '#c8b088' },
+  dissolve: { material: 'wood' }, // THE DISSOLUTION GRAMMAR (D1): the rail gives way as strata; splinters remain; the line retired
 });
 registerDoodadRule('sparring_dummy', {
   overlap: 'solid', blocksMove: true, spacing: 24,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
   surface: { hw: 0.85, hh: 0.35 }, // the scarecrow coat band; the cross-arms stay thin air
-  brittle: { on: ['hit'], orbChance: 0.05, text: 'straw flies!', color: '#d8c890' },
+  brittle: { on: ['hit'], orbChance: 0.05, color: '#d8c890' },
+  dissolve: { material: 'cloth', debrisLook: { color: '#c8b060', shape: 'scrap' } }, // THE DISSOLUTION GRAMMAR (D1): the dummy bursts — straw tatters fly and remain; the line retired
 });
 registerDoodadRule('war_drum', {
   overlap: 'solid', blocksMove: true, spacing: 24,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
-  brittle: { on: ['hit'], text: 'BOOM.', color: '#e8a860' },
+  brittle: { on: ['hit'], color: '#e8a860' },
+  dissolve: { material: 'wood', motion: 'shatter', pieces: [5, 8] }, // THE DISSOLUTION GRAMMAR (D1): the drum shatters AS wood; the line retired
 });
 registerDoodadRule('palisade_spikes', {
   overlap: 'solid', blocksMove: true, spacing: 20,
@@ -1033,12 +1042,16 @@ registerDoodadRule('stone_cistern', {
 registerDoodadRule('votive_basin', {
   overlap: 'solid', blocksMove: true, spacing: 26,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
-  brittle: { on: ['hit'], orbChance: 0.1, text: 'the basin cracks: what it held runs out!', color: '#8ad0c8' },
+  brittle: { on: ['hit'], orbChance: 0.1, color: '#8ad0c8' },
+  // THE DISSOLUTION GRAMMAR (D1): the bowl cracks apart as stone and what it
+  // held runs out — the wet voice on the pop; the line retired.
+  dissolve: { material: 'stone', motion: 'shatter', pieces: [5, 8], voice: 'wetpop' },
 });
 registerDoodadRule('offering_urns', {
   overlap: 'solid', blocksMove: true, spacing: 24,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
-  brittle: { on: ['hit'], orbChance: 0.15, text: 'the urns spill their keeping!', color: '#c8b088' },
+  brittle: { on: ['hit'], orbChance: 0.15, color: '#c8b088' },
+  dissolve: { material: 'ceramic' }, // THE DISSOLUTION GRAMMAR (D1): the urns shatter AS clay; the keeping is the orb; the line retired
 });
 // The runnel is a GLOW UNDERFOOT (inert, walkable — the clay_pots class):
 // a gutter that still remembers what it carried.
@@ -1091,7 +1104,8 @@ registerDoodadRule('ruin_plinth', {
   overlap: 'solid', blocksMove: true, spacing: 26,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
   surface: { hw: 0.7, hh: 0.42 }, // the slab painter's monolith base
-  brittle: { on: ['hit'], orbChance: 0.1, text: 'the plinth crumbles!', color: '#a8a08e' },
+  brittle: { on: ['hit'], orbChance: 0.1, color: '#a8a08e' },
+  dissolve: { material: 'stone' }, // THE DISSOLUTION GRAMMAR (D1): the plinth crumbles AS stone; the line retired
 });
 
 // The collapsed colonnade: column drums down a long line, a fist and the
@@ -1235,8 +1249,10 @@ registerFormation({
 registerDoodadRule('lantern_totem', {
   overlap: 'solid', blocksMove: true, spacing: 70, bodyScale: 0.35,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
-  // Struck totems gutter out the way lone lanterns do — the light is the loot.
-  brittle: { on: ['hit'], orbChance: 0.3, text: 'the totem gutters out…', color: '#ffb44a' },
+  // Struck totems burst the way lone lanterns do — the gourd's lobes fly, the
+  // light dies with the body, the loot is the spill (THE DISSOLUTION GRAMMAR D1).
+  brittle: { on: ['hit'], orbChance: 0.3, color: '#ffb44a' },
+  dissolve: { material: 'pod', debrisLook: { color: '#d8722a' } },
 });
 registerDoodadRule('wicker_effigy', {
   overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 130, bodyScale: 0.4,
@@ -1304,7 +1320,8 @@ registerDoodadRule('still_effigy', {
 registerDoodadRule('slumped_shell', {
   overlap: 'solid', blocksMove: true, spacing: 40, bodyScale: 0.35,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
-  brittle: { on: ['hit'], text: 'the shell folds…', color: '#7a7290' },
+  brittle: { on: ['hit'], color: '#7a7290' },
+  dissolve: { material: 'cloth', motion: 'crumble', cut: 'strata', debrisLook: { color: '#5a5470', shape: 'scrap' } }, // THE DISSOLUTION GRAMMAR (D1): the shell FOLDS — strata slump, tatters remain; the line retired
 });
 registerStamp('still_effigy', stampSingle('still_effigy', [20, 26]));
 registerStamp('slumped_shell', stampSingle('slumped_shell', [12, 15]));
@@ -1759,10 +1776,10 @@ registerDoodadRule('scald_polyp', {
   forbidOn: ['chasm'],
   habitat: { near: ['water', 'tide_pool', 'brine_sink'] },
   brittle: {
-    on: ['hit', 'near'], reach: 30,
-    text: 'the polyp scalds!', color: '#8fd8c8',
+    on: ['hit', 'near'], reach: 30, color: '#8fd8c8',
     fume: { radius: 74, linger: 2.8, dmgMult: 0.75, color: '#8fd8c8', fx: 'sporeburst' },
   },
+  dissolve: { material: 'pod', debrisLook: { color: '#6e7a66' } }, // THE DISSOLUTION GRAMMAR (D1): the polyp bursts as lobes; the murk as ever; the line retired
 });
 
 // THE NEEDLE CORAL — the shelf's launch collector: walk-through on purpose

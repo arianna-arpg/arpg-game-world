@@ -42,6 +42,12 @@
 //      (render/vis/effectVoice.ts); the grammar adds voices, never a second
 //      flash system.
 //
+// D1 — THE TAIL: every remaining text-carrying breakable converted (the
+// census is now THE SHOW LAW — no brittle rule speaks a caption), THE DEBRIS
+// FACE (DissolveSpec.debrisLook → Doodad.litterLook: one litter kind reads as
+// what broke — the per-family harvest husks), the materials iron / cloth /
+// verdure + bone's own chips, and the trapworks floor's drawn pre-crack.
+//
 // All numbers below are DIALS (unblessed — her gauge walk blesses; see
 // memory dissolution-d0-pass).
 // ---------------------------------------------------------------------------
@@ -57,12 +63,26 @@ export type DissolveCutId = 'shards' | 'strata' | 'facets' | 'lobes' | 'none' | 
  *  any key a future pass registers into the table). */
 export type DissolveMaterialId =
   | 'ceramic' | 'glass' | 'crystal' | 'ice' | 'stone' | 'earth' | 'wood' | 'bone' | 'salt' | 'pod' | 'light'
+  | 'iron' | 'cloth' | 'verdure'
   | (string & {});
 
 /** The debris dwell-then-dry (Doodad.evap): `after` = seconds standing
  *  before the contraction starts (seeded inside the band — no global rng
  *  draw), `rate` = units/sec the evap sweep shrinks at. */
 export interface DissolveFade { after: [number, number]; rate?: number }
+
+/** The `litter` debris painter's grain shapes (render/vis/dissolveLayer.ts):
+ *  clay SHERDS, glass/ice GLINTS, rock SCREE, wood SPLINTERS, wet PULP, BONE
+ *  chips, cloth/leather/hide SCRAPS. Open: a future painter shape is one case. */
+export type LitterShape = 'sherd' | 'glint' | 'scree' | 'splinter' | 'pulp' | 'bone' | 'scrap' | (string & {});
+
+/** THE DEBRIS FACE (D1): a per-row look the generic `litter` debris wears —
+ *  its grain color and shape — stamped onto the debris doodad at the break
+ *  (Doodad.litterLook, runtime-only) so ONE debris kind reads as what broke:
+ *  the per-family harvest husks (amber sherds, rime glints, marrow chips),
+ *  a charred keg's staves, a grave's dark soil. Absent = the debris kind's
+ *  own visual row. */
+export interface DebrisLook { color?: string; shape?: LitterShape }
 
 /** ONE DATA ROW PER CONSUMER (DoodadRule.dissolve). A kind names only its
  *  motion (or only its material) and inherits the rest — THE MATERIAL_NATURE
@@ -90,6 +110,10 @@ export interface DissolveSpec {
   debris?: string | false;
   /** Debris radius as a fraction of the body radius. */
   debrisRadius?: number;
+  /** THE DEBRIS FACE: the grain color/shape the debris wears when its kind
+   *  paints through the generic `litter` painter (per-family husks, charred
+   *  staves, dark soil) — stamped on the debris doodad at the break. */
+  debrisLook?: DebrisLook;
   /** The debris' dwell-then-dry; `false` = the pile outlasts the visit. */
   fade?: DissolveFade | false;
   /** The effect voice the break's flash speaks; `false` = the classic body
@@ -118,6 +142,7 @@ export interface ResolvedDissolve {
   spin: number;
   debris: string | false;
   debrisRadius: number;
+  debrisLook: DebrisLook | null;
   fade: DissolveFade | false;
   voice: string | false;
   haze: number;
@@ -469,11 +494,19 @@ export const DISSOLVE_MATERIALS: Record<string, Partial<DissolveSpec> & { motion
   ice:     { motion: 'shatter', cut: 'shards', pieces: [7, 11], fling: 3.0, debris: 'debris_rime', voice: 'sparkle' },
   stone:   { motion: 'crumble', cut: 'strata', debris: 'debris_rubble', voice: 'dust' },
   earth:   { motion: 'crumble', cut: 'strata', debris: 'debris_rubble', voice: 'dust' },
-  bone:    { motion: 'crumble', cut: 'strata', debris: 'debris_rubble', voice: 'dust' },
+  bone:    { motion: 'crumble', cut: 'strata', debris: 'debris_bone', voice: 'dust' },
   salt:    { motion: 'crumble', cut: 'facets', debris: 'debris_rubble', voice: 'dust' },
   wood:    { motion: 'giveway', cut: 'strata', debris: 'debris_splinters', voice: 'dust' },
   pod:     { motion: 'burst', cut: 'lobes', debris: 'debris_pulp', voice: 'wetpop' },
   light:   { motion: 'dissolve', cut: 'none', debris: false, voice: false, haze: 1 },
+  // D1 — THE TAIL's materials. IRON: snares, cages, bossed steel — few hard
+  // pieces, bent scraps left dark. CLOTH: packs, dummies, hides, slumped
+  // coats — soft lobes, tatters left. VERDURE: the undergrowth's doors —
+  // brush and coils part as strata and leave the jungle face's own litter.
+  iron:    { motion: 'shatter', cut: 'shards', pieces: [4, 7], fling: 2.2, spin: 4,
+             debris: 'debris_scraps', debrisLook: { color: '#3a3632', shape: 'sherd' }, voice: 'dust' },
+  cloth:   { motion: 'burst', cut: 'lobes', pieces: [3, 5], fling: 1.2, debris: 'debris_scraps', voice: 'dust' },
+  verdure: { motion: 'giveway', cut: 'strata', pieces: [5, 8], debris: 'verdure_litter', voice: 'dust' },
 };
 
 /** Back-compat alias the charter names (`DISSOLVE_DEFAULTS[material]`). */
@@ -507,6 +540,7 @@ export function resolveDissolve(row: DissolveSpec | undefined | null): ResolvedD
     spin: pick('spin') ?? mo.spin ?? B.spin,
     debris: pick('debris') ?? mo.debris,
     debrisRadius: pick('debrisRadius') ?? B.debrisRadius,
+    debrisLook: pick('debrisLook') ?? null,
     fade: pick('fade') ?? B.fade,
     voice: pick('voice') ?? mo.voice,
     haze: pick('haze') ?? mo.haze ?? B.haze,

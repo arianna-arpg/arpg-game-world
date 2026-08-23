@@ -175,6 +175,49 @@ burst/lobes/debris_pulp/wetpop · light → dissolve/none/no debris/haze.
   `npm run genqa` (the debris kinds carry rules + visual rows; nothing stamps
   them), `npm run sim -- run --suite smoke` + `baseline check`.
 
+## D1 — THE TAIL (built): the grammar at full reach
+
+- **Every text-carrying breakable converted** — the forty the D0 census named
+  (the geode, the veins, the still, the lanterns and the totem, the stone tree
+  and the watcher, the kit spill and the smugglers' cache, the flesh kit's
+  stalk/seal/polyp/eyes, the sac, the caul, the soul cage, the coil, the brush,
+  the snare, the sky/storm/mirror glass, the charge cell, the war camp's rack/
+  dummy/drum, the plinth and the basin and the offering urns, the slumped
+  shell, the molt husk, the garden's pod/bud/dew bead, the charnel kit's cart/
+  grave/midden, the keg and the munitions) — each a `dissolve` row, its
+  caption gone in the same commit. THE RETIREMENT CENSUS is now **THE SHOW
+  LAW** (rig B4): ZERO brittle rules carry a text/warn line — a future
+  breakable that wants to be felt gets a motion, never a caption. Spawn/
+  corpse lines ("the dead wake!", "the load spills out!") are the wake's own
+  announce, not the break's, and stand.
+- **THE FLOOR PRE-CRACK** — the trapworks false floor's telegraph: `World.
+  collapseFloor` opens a FLOOR LEDGER row per doomed cell (`dissolveFloorCracks`,
+  expiring at the plant); `dissolveFloorCrackView()` derives the renderer's rows
+  (cell heart, radius, the telegraph's fraction, a seat-hash seed) and
+  `drawDissolveCracks` strokes both ledgers through the ONE arm law; the plant
+  speaks the dust voice on the pop channel (clients too); "the floor gives
+  way —" retired. The collapse/pit law fires at the clock exactly as before.
+- **THE DEBRIS FACE** — `DissolveSpec.debrisLook { color?, shape? }` (a row > material
+  field; resolved `debrisLook`) is stamped onto the debris doodad at the break as
+  `Doodad.litterLook` (runtime-only); the `litter` painter reads it per piece, so
+  ONE litter kind reads as what broke. **The per-family harvest husk faces**
+  (the harvest pass's banked coda) close here: `HarvestNodeDef.husk` rides the
+  nodes' row as the debris face (amber sherds, rime glints, marrow chips,
+  wet caps…); `harvest_husk` paints through `litter` (grey scree bare), and the
+  harvest boot's spent re-place stamps the look too. Also: the charred keg's
+  staves, a grave's dark soil, each flesh kind's own meat tone.
+- **New pieces**: materials `iron` (shatter → dark sherd scraps), `cloth` (burst →
+  tatters), `verdure` (give way → the jungle face's own `verdure_litter`), and
+  `bone` now leaves `debris_bone`; debris kinds `debris_bone` / `debris_scraps` (litter
+  shapes `bone` / `scrap`); the `wisp` voice — THE PRECISION TEST applied: the soul
+  cage's line carried information ("a soul slips free"), so the release is
+  DRAWN (a pale mote slipping up and away over the pop's own longer flash,
+  `brittle.pop.life`) before the line goes.
+- Probe rigs L (the floor pre-crack over the real trap clock), M (the debris
+  face on a live pop), N (the soul cage's wisp + shatter); probe_fleshkit's
+  A1–A3 re-homed on the dissolve law; the dev ring scales its radius with the
+  count (fifty-five kinds now stand).
+
 ## The D0 set (converted, lines retired) and the tail
 
 D0: `burial_urn` / `kiln_urn` / `clay_pots` (shatter — her urn ruling),
@@ -183,11 +226,9 @@ D0: `burial_urn` / `kiln_urn` / `clay_pots` (shatter — her urn ruling),
 the creak; the collapse/pit law untouched), the harvest nodes (crumble into
 the husk), `gas_pod` / `burst_sac` / `puffcap_cluster` (burst; fume fires as
 ever), `mirage_oasis` / `mirage_bastion` / `mirage_caravan` (dissolve; haze
-kept; spawn pool untouched). D1 (the tail the census names): the geode, the
-veins, the still, the lantern, the stone tree and the watcher, the kit spill,
-the stalk/seal/polyp/eyes bursts, the soul cage (its informative line needs a
-DRAWN mote first), the coil, the brush, the snare, the sky/storm/mirror glass,
-the trapworks `collapseFloor`. Each converts with its line in the same commit.
+kept; spawn pool untouched). D1 (built — see above): the whole tail, the trapworks floor, the debris
+face, the new materials/pieces/voice. The census now fails on ANY captioned
+breakable (THE SHOW LAW).
 
 ## Dials (ALL unblessed — her gauge walk)
 

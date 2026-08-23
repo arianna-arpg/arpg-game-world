@@ -4,8 +4,9 @@
 //
 // Her purpose for the whole pass is a GAUGE — "exactly how well those would
 // all look" — so this tab lets her meet every motion in one visit:
-//   THE RING   — stand the D0 set (every brittle kind carrying a dissolve row,
-//                discovered from the registry) in a ring around the hero;
+//   THE RING   — stand every brittle kind carrying a dissolve row (the D0
+//                gauge set + D1's tail, discovered from the registry) in a
+//                ring around the hero;
 //                walk to each and break it the way play breaks it.
 //   THE NEAREST — force any motion on the nearest body (a tree may shatter,
 //                a pot may dissolve) — or play its own row.
@@ -38,7 +39,7 @@ export const dissolveTab: DevTabDef = {
     };
 
     // ------------------------------------------------------------- ring --
-    const ringHead = section('Break one of each (the D0 set stands in a ring around you)');
+    const ringHead = section('Break one of each (every rowed brittle kind stands in a ring around you — D0 + D1)');
     const ringRow = hrow();
     ringRow.append(btn('Stand the ring ▶', () => {
       const w = runActive();

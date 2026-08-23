@@ -26,7 +26,7 @@
 
 import {
   dissolveCells, dissolveCrackLines, dissolvePose, dissolveSettleAlpha, dissolveStrikeUnit,
-  type DissolveCell,
+  type DissolveCell, type LitterShape,
 } from '../../engine/dissolve';
 import type { DissolveBreak, World } from '../../engine/world';
 import type { Doodad } from '../../engine/levelgen';
@@ -230,18 +230,27 @@ export function dissolveDebrisAlpha(d: Doodad, world: World): number {
  *  creak made visible; no text). Empty view = no cost. */
 export function drawDissolveCracks(ctx: CanvasRenderingContext2D, world: World): void {
   const rows = world.dissolveCrackView();
-  if (!rows.length) return;
+  const floor = world.dissolveFloorCrackView(); // D1: the trapworks false floor's doomed cells
+  if (!rows.length && !floor.length) return;
   const cfg = VIS_CFG.dissolve.crack;
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+  // Both ledgers stroke through the ONE arm law: a pressed face cracks from
+  // the stand point; a failing floor cell cracks from its heart.
+  const seats: { x: number; y: number; r: number; frac: number; seed: number; from: { x: number; y: number } }[] = [];
   for (const row of rows) {
     const d = row.d;
-    const r = d.radius;
-    const from = dissolveStrikeUnit(d.pos.x, d.pos.y, r, row.from.x, row.from.y);
-    const lines = dissolveCrackLines(row.seed, row.frac, from);
+    seats.push({ x: d.pos.x, y: d.pos.y, r: d.radius, frac: row.frac, seed: row.seed,
+      from: dissolveStrikeUnit(d.pos.x, d.pos.y, d.radius, row.from.x, row.from.y) });
+  }
+  for (const c of floor) seats.push({ x: c.pos.x, y: c.pos.y, r: c.radius, frac: c.frac, seed: c.seed, from: { x: 0, y: 0 } });
+  for (const seat of seats) {
+    const d = { pos: { x: seat.x, y: seat.y } };
+    const r = seat.r;
+    const lines = dissolveCrackLines(seat.seed, seat.frac, seat.from);
     const w = Math.max(1, Math.min(3, cfg.width * (r / 24)));
-    const a = cfg.alpha * (0.35 + 0.65 * row.frac);
+    const a = cfg.alpha * (0.35 + 0.65 * seat.frac);
     for (const pts of lines) {
       // A pale lip beside the dark line — the crack reads on dark stone too.
       ctx.strokeStyle = cfg.highlight;
@@ -275,12 +284,17 @@ const TAU = Math.PI * 2;
  *  pile reads as what broke (clay SHERDS, glass GLINTS, rock SCREE, wood
  *  SPLINTERS, wet PULP). Seeded per seat, time-free. */
 const litter: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { color?: ColorSpec; shape?: 'sherd' | 'glint' | 'scree' | 'splinter' | 'pulp' };
+  const p = (def.params ?? {}) as { color?: ColorSpec; shape?: LitterShape };
   const { ctx, theme } = env;
-  const base = resolveColor(p.color, theme, theme.obstacle);
-  const shape = p.shape ?? 'scree';
+  const baseDef = resolveColor(p.color, theme, theme.obstacle);
+  const shapeDef: LitterShape = p.shape ?? 'scree';
   const L = VIS_CFG.dissolve.litter;
   for (const d of group) {
+    // THE DEBRIS FACE (D1): a piece stamped with its row's look wears it —
+    // one litter kind reads as what broke (per-family husks, charred staves).
+    const look = d.litterLook;
+    const base = look?.color ? resolveColor(look.color, theme, theme.obstacle) : baseDef;
+    const shape: LitterShape = look?.shape ?? shapeDef;
     const seed = ((d.pos.x * 17 + d.pos.y * 23) | 0) >>> 0;
     // The ground's dusting under the pile (pulp leaves a wet ring instead).
     ctx.globalAlpha = shape === 'pulp' ? 0.2 : 0.12;
@@ -365,6 +379,42 @@ const litter: GroupPainter = (env, group, def) => {
           ctx.beginPath();
           ctx.ellipse(s * 0.15, s * 0.1, s * 0.45, s * 0.35, 0, 0, TAU);
           ctx.fill();
+          break;
+        }
+        case 'bone': {
+          // A marrow chip: a pale knuckle of bone, a dark socket at one end.
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = tone;
+          ctx.beginPath();
+          ctx.ellipse(-s * 0.2, 0, s * 1.15, s * 0.42, 0, 0, TAU);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(s * 0.85, 0, s * 0.5, 0, TAU);
+          ctx.fill();
+          ctx.globalAlpha = 0.55;
+          ctx.fillStyle = shade(base, -0.45);
+          ctx.beginPath();
+          ctx.arc(s * 0.95, -s * 0.1, s * 0.18, 0, TAU);
+          ctx.fill();
+          break;
+        }
+        case 'scrap': {
+          // A tatter: a ragged quad of cloth / leather / hide, one torn edge.
+          ctx.globalAlpha = 0.85;
+          ctx.fillStyle = tone;
+          ctx.beginPath();
+          ctx.moveTo(-s * 1.1, -s * 0.5);
+          ctx.lineTo(s * 0.9, -s * 0.7);
+          ctx.lineTo(s * 1.1, s * 0.3);
+          ctx.lineTo(s * 0.2, s * 0.75);
+          ctx.lineTo(-s * 0.4, s * 0.4);
+          ctx.lineTo(-s * 1.2, s * 0.6);
+          ctx.closePath();
+          ctx.fill();
+          ctx.globalAlpha = 0.45;
+          ctx.strokeStyle = shade(base, -0.4);
+          ctx.lineWidth = 0.7;
+          ctx.stroke();
           break;
         }
         default: {
@@ -497,4 +547,37 @@ registerEffectVoice('wetpop', (ctx, f, t) => {
     ctx.arc(x, y, 1.2 + 1.4 * sv(seed, i, 10), 0, TAU);
     ctx.fill();
   }
+});
+
+/** 'wisp' (D1) — a pale mote slipping free and rising (the soul cage): the
+ *  information the retired line carried ("a soul slips free"), DRAWN — it
+ *  rides the pop's own longer flash (brittle.pop.life), sways as it climbs,
+ *  trails a few fading beads, and is gone with the flash. */
+registerEffectVoice('wisp', (ctx, f, t) => {
+  const cfg = VIS_CFG.dissolve.voices.wisp;
+  const seed = flashSeed(f);
+  const k = 1 - t; // 0 at birth → 1 at death
+  const rise = f.radius * cfg.rise * (1 - (1 - k) * (1 - k));
+  const swayAt = (u: number): number => Math.sin(u * Math.PI * 2 * cfg.sways + seed * 0.01) * f.radius * 0.12 * u;
+  const x = f.pos.x + swayAt(k), y = f.pos.y - rise;
+  const core = Math.max(1.2, f.radius * cfg.core * (0.7 + 0.3 * Math.sin(k * 14 + seed)));
+  // The trail: fading beads along the path already risen.
+  for (let i = 1; i <= cfg.trail; i++) {
+    const u = i / (cfg.trail + 1);
+    const kk = Math.max(0, k - u * 0.25);
+    const tx = f.pos.x + swayAt(kk), ty = f.pos.y - f.radius * cfg.rise * (1 - (1 - kk) * (1 - kk));
+    ctx.fillStyle = withAlpha(shade(f.color, 0.3), t * 0.35 * (1 - u));
+    ctx.beginPath();
+    ctx.arc(tx, ty, core * (0.8 - 0.4 * u), 0, TAU);
+    ctx.fill();
+  }
+  // The halo, then the mote.
+  ctx.fillStyle = withAlpha(shade(f.color, 0.2), t * cfg.haloAlpha);
+  ctx.beginPath();
+  ctx.arc(x, y, core * 2.6, 0, TAU);
+  ctx.fill();
+  ctx.fillStyle = withAlpha(shade(f.color, 0.75), Math.min(1, t * 1.4));
+  ctx.beginPath();
+  ctx.arc(x, y, core, 0, TAU);
+  ctx.fill();
 });

@@ -1561,6 +1561,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   debris_splinters: { painter: 'litter', order: 37, params: { color: '#6a5236', shape: 'splinter' } },
   debris_pulp:      { painter: 'litter', order: 37, params: { color: '#7a8a48', shape: 'pulp' } },
   debris_rime:      { painter: 'litter', order: 37, params: { color: '#bcd4e2', shape: 'glint' } },
+  debris_bone:      { painter: 'litter', order: 37, params: { color: '#cfc4a8', shape: 'bone' } },   // D1: marrow chips
+  debris_scraps:    { painter: 'litter', order: 37, params: { color: '#6e6650', shape: 'scrap' } },  // D1: cloth / leather / hide tatters, bent iron
   // --- Brittle wave 2: hazard breakables ------------------------------------
   // A decayed crossing: the plank painter saying 'rot' — missing boards over
   // the dark, a split seam, moss on the rails. Order matches sound bridges.
@@ -2759,8 +2761,11 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { body: '#c8b878', glow: '#fff0b8', aspectY: 1.2, glowY: -0.18, glowR: 0.5, pulseRate: 0.7 },
     light: { radius: -2.0, color: '#fff0b8', intensity: 0.18, flicker: 0.7 },
   },
+  // THE DEBRIS FACE (the dissolution grammar D1): the husk paints through the
+  // litter painter so each family's look (HarvestNodeDef.husk → Doodad.
+  // litterLook) tints the ONE husk kind — grey scree only for a bare piece.
   harvest_husk: {
-    painter: 'scree', order: 37, params: { color: '#6e675c' },
+    painter: 'litter', order: 37, params: { color: '#6e675c', shape: 'scree' },
   },
 
   // --- The AETHERIAL kit (vis/paintersAether.ts — the cloud shelves) --------

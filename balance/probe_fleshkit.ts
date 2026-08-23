@@ -84,12 +84,15 @@ const mk = (kind: string, x = 0, y = 0): Doodad => ({ pos: vec(x, y), radius: 15
 {
   const stalk = doodadRuleOf('eye_stalk');
   const knot = doodadRuleOf('ocular_knot');
-  check('A1 the stalk wears its own brittle row (hit-poppable)',
-    !!stalk.brittle && stalk.brittle.on.includes('hit') && !!stalk.brittle.text);
-  check('A2 the flavor is the stalk\'s own, not the knot\'s',
-    !!stalk.brittle?.text && stalk.brittle.text !== knot.brittle?.text);
-  check('A3 the knot\'s row stands unchanged (the crumbling-wall idiom)',
-    knot.brittle?.on.includes('hit') === true && knot.brittle?.text === 'the eyes burst!');
+  // THE DISSOLUTION GRAMMAR (D1): the gaze pair BREAKS AS A DRAWING — each wears
+  // a dissolve row (meat lobes in its own tone) and NO caption (the no-text law).
+  check('A1 the stalk wears its own brittle row (hit-poppable) and a dissolve row, no caption',
+    !!stalk.brittle && stalk.brittle.on.includes('hit') && !stalk.brittle.text && !!stalk.dissolve);
+  check('A2 the stalk and the knot each wear their OWN debris face (meat tones of their own)',
+    !!stalk.dissolve?.debrisLook?.color && !!knot.dissolve?.debrisLook?.color
+    && stalk.dissolve.debrisLook.color !== knot.dissolve.debrisLook.color);
+  check("A3 the knot's row stands hit-poppable and text-free (the crumbling-wall idiom under the no-text law)",
+    knot.brittle?.on.includes('hit') === true && !knot.brittle?.text && !!knot.dissolve);
 
   // THE CENSUS: every doodad kind ANY gaze reads (base themes + variant theme
   // patches) is hit-poppable — the half-poppable gap can never reopen

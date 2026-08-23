@@ -2002,6 +2002,14 @@ const DEV_DISSOLVE_RING_RADIUS: Record<string, number> = {
   clay_pots: 16, burial_urn: 18, kiln_urn: 18, glass_shard: 22, crystal_cluster: 26, icicle_cluster: 24,
   secret_wall: 28, cracked_face: 28, rotten_bridge: 30, gas_pod: 18, burst_sac: 18, puffcap_cluster: 16,
   mirage_oasis: 64, mirage_bastion: 52, mirage_caravan: 52,
+  // D1 — the dissolve ring's tail radii (default 20 for the rest).
+  geode_shell: 26, petrified_tree: 24, watcher_stone: 22, plague_cart: 26, shallow_grave: 22, carrion_midden: 22,
+  jungle_brush: 22, vine_coil: 18, dew_bead: 12, seed_pod: 14, bud_knot: 12, powder_keg: 13, munition_cache: 14,
+  lantern_totem: 14, soul_cage: 16, rusted_snare: 14, charge_cell: 12, crystal_vein: 18, alembic: 14, shield_rack: 18,
+  war_drum: 16, sparring_dummy: 16, slumped_shell: 14, votive_basin: 18, offering_urns: 16, ruin_plinth: 18,
+  skyglass_spur: 22, stormglass_shard: 22, mirrorglass_shard: 18, scald_polyp: 16, gas_polyp: 16, membrane_seal: 22,
+  eye_stalk: 18, ocular_knot: 18, caul_sac: 16, venom_bloom: 14, spelunker_pack: 12, smuggler_cache: 12, molt_husk: 16,
+  jack_o_lantern: 14,
 };
                                  // (a rotten span is MANY planks — each board's first
                                  // tread must not stack the same creak into unreadable
@@ -4842,6 +4850,7 @@ export class World {
     this.texts = [];
     this.flashes = [];
     this.dissolves = []; // THE DISSOLUTION GRAMMAR: motions are zone-local after-images
+    this.dissolveFloorCracks = []; // … and so is a failing floor's telegraph
     this.pendingBursts = [];
     this.drops = [];
     this.orbs = [];
@@ -34993,6 +35002,9 @@ export class World {
       const d: Doodad = {
         pos: vec(pos.x, pos.y), radius: HARVEST_CFG.nodeRadius,
         kind: isSpent ? HARVEST_HUSK_KIND : row.kind,
+        // THE DEBRIS FACE (the dissolution grammar D1): a re-placed spent
+        // node wears its family's husk look, as the live crumble stamped it.
+        ...(isSpent && row.husk ? { litterLook: row.husk } : {}),
       };
       this.doodads.push(d);
       this.harvestNodes.push({ pos: vec(pos.x, pos.y), def: row, doodad: d, spent: isSpent });
@@ -42574,6 +42586,13 @@ export class World {
       this.dissolves[i].life -= dt;
       if (this.dissolves[i].life <= 0) this.dissolves.splice(i, 1);
     }
+    // THE FLOOR PRE-CRACK rows retire at their plant clock (the view drops
+    // them too — this keeps a headless world tidy; gated on the empty case).
+    if (this.dissolveFloorCracks.length) {
+      for (let i = this.dissolveFloorCracks.length - 1; i >= 0; i--) {
+        if (this.time >= this.dissolveFloorCracks[i].until) this.dissolveFloorCracks.splice(i, 1);
+      }
+    }
 
     // Sweep the dead (keep every player-kind seat — the local hero for the death
     // screen, and downed/dead co-op allies so they can still be revived / linger).
@@ -46836,6 +46855,9 @@ export class World {
       this.markDoodadsChanged();
       for (const d of made) {
         this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius + 10, color: '#141019', life: 0.5, maxLife: 0.5 });
+        // THE DISSOLUTION GRAMMAR (D1): the drop speaks the dust voice (one
+        // accent channel — the floor's own give-way breath; clients too).
+        this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius * 1.6, color: '#8a7a5c', life: 0.45, maxLife: 0.45, fx: 'dust' });
       }
       this.shake = Math.max(this.shake, 1.6);
       if (visualOnly) return;
@@ -46850,12 +46872,18 @@ export class World {
       }
     };
     if (delaySec <= 0) { plant(); return; }
-    // The crumble telegraph: the shiver the dash escapes.
+    // The crumble telegraph: the shiver the dash escapes — and, THE
+    // DISSOLUTION GRAMMAR (D1), the DRAWN PRE-CRACK: every doomed cell cracks
+    // from its heart over the delay (dissolveFloorCrackView — the caption
+    // "the floor gives way" retired; the crack IS the sentence).
     for (const c of cells) {
       this.flashes.push({ pos: vec(c.x, c.y), radius: (c.r ?? 26) * 0.9, color: '#8a7a5c', life: delaySec, maxLife: delaySec });
     }
     if (cells.length) {
-      this.text(vec(cells[0].x, cells[0].y - 18), 'the floor gives way —', '#c8b892', 12);
+      this.dissolveFloorCracks.push({
+        cells: cells.map(c => ({ x: c.x, y: c.y, r: c.r ?? 26 })),
+        at: this.time, until: this.time + delaySec,
+      });
     }
     this.trapDeferred.push({ at: this.time + delaySec, run: plant });
   }
@@ -52192,6 +52220,10 @@ export class World {
    *  with the stand/strike point the drawn crack grows from (the FIRST
    *  press — the spot the player learns by). Entries leave on pop / zone. */
   private dissolveCracks = new Map<Doodad, Vec2>();
+  /** THE FLOOR PRE-CRACK ledger (D1 — the trapworks false floor): doomed
+   *  cells cracking from their hearts over the collapse telegraph; a row
+   *  expires at `until` (the plant). Zone-local, never persisted. */
+  private dissolveFloorCracks: { cells: { x: number; y: number; r: number }[]; at: number; until: number }[] = [];
   /** DEV: a forced spec the next pop plays (the gauge tab's per-motion
    *  trigger — "shatter the nearest"); null in play, always. */
   private dissolveOverride: ResolvedDissolve | null = null;
@@ -52225,6 +52257,9 @@ export class World {
     if (debris) {
       debris.dissolveDebris = true;
       debris.laidAt = this.time;
+      // THE DEBRIS FACE (D1): the row's look rides the piece — one litter
+      // kind reads as what broke (the per-family husks, a charred keg).
+      if (spec.debrisLook) debris.litterLook = spec.debrisLook;
       if (spec.fade && !debris.evap) {
         debris.evap = {
           t: dissolveRollRange(seed, spec.fade.after, 72),
@@ -52264,10 +52299,28 @@ export class World {
     return out;
   }
 
-  /** DEV (her gauge walk — dev/tabs/dissolve.ts): stand the D0 set — every
-   *  BRITTLE kind carrying a dissolve row — in a ring around the hero on
-   *  clear ground. Returns the kinds stood. Dev-only: zone re-entry re-mints
-   *  the authored ground; the ring is never persisted. */
+  /** THE FLOOR PRE-CRACK's render view (D1): every doomed false-floor cell
+   *  mid-telegraph with its crack fraction (0 → 1 across the delay) and a
+   *  seat-hash seed; rows whose clock has run out are dropped here. Empty
+   *  while no floor is failing (the common case — no cost). */
+  dissolveFloorCrackView(): { pos: Vec2; radius: number; frac: number; seed: number }[] {
+    if (!this.dissolveFloorCracks.length) return [];
+    const out: { pos: Vec2; radius: number; frac: number; seed: number }[] = [];
+    for (let i = this.dissolveFloorCracks.length - 1; i >= 0; i--) {
+      const row = this.dissolveFloorCracks[i];
+      if (this.time >= row.until) { this.dissolveFloorCracks.splice(i, 1); continue; }
+      const frac = Math.min(1, Math.max(0, (this.time - row.at) / Math.max(1e-3, row.until - row.at)));
+      for (const c of row.cells) {
+        out.push({ pos: vec(c.x, c.y), radius: c.r, frac, seed: dissolveSeedOf(c.x, c.y, 'ruin_floor_gap') });
+      }
+    }
+    return out;
+  }
+
+  /** DEV (her gauge walk — dev/tabs/dissolve.ts): stand every BRITTLE kind
+   *  carrying a dissolve row (the D0 gauge set + D1's tail) in a ring around
+   *  the hero on clear ground. Returns the kinds stood. Dev-only: zone
+   *  re-entry re-mints the authored ground; the ring is never persisted. */
   devDissolveRing(): string[] {
     const kinds = doodadRuleKinds()
       .filter(k => { const r = doodadRuleOf(k); return !!r.brittle && !!r.dissolve; })
@@ -52281,7 +52334,10 @@ export class World {
       const radius = DEV_DISSOLVE_RING_RADIUS[kind] ?? 20;
       // Stand each body just outside its own 'near' reach, so the walk
       // toward it is the trigger (the mirage pops at 120; a pot at a step).
-      const reach = Math.max(170, (rule.brittle?.reach ?? 0) + 50 + radius);
+      // The ring's radius scales with the count (D1 grew it past fifty
+      // kinds), so neighbours never crowd: ~64 units of arc per body.
+      const ringR = Math.max(170, (n * 64) / (Math.PI * 2));
+      const reach = Math.max(ringR, (rule.brittle?.reach ?? 0) + 50 + radius);
       const ang = (i / n) * Math.PI * 2;
       const at = this.clampPos(vec(p.pos.x + Math.cos(ang) * reach, p.pos.y + Math.sin(ang) * reach), radius);
       if (this.pointInSolid(at.x, at.y, radius)) continue;
@@ -52367,7 +52423,8 @@ export class World {
     let debris = 0;
     for (const d of this.doodads) if (d.dissolveDebris && !d.gone) debris++;
     return {
-      live: this.dissolves.length, cap: DISSOLVE_CFG.maxLive, debris, cracks: this.dissolveCracks.size,
+      live: this.dissolves.length, cap: DISSOLVE_CFG.maxLive, debris,
+      cracks: this.dissolveCracks.size + this.dissolveFloorCrackView().length,
       nearest: best ? { kind: best.kind, spec: dissolveFor(best.kind) } : null,
     };
   }

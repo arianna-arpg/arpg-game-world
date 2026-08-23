@@ -36,6 +36,15 @@
 //      litter painter and the three break voices are registered, every D0
 //      voice resolves, the settle ramp is 0→1 monotone.
 //   K. Zone (re)load clears the records and the ledger.
+//   D1 — THE TAIL: B3/B4 every D1 kind rowed + THE SHOW LAW (zero captioned
+//      breakables anywhere); A11–A13 the iron/cloth/verdure/bone materials +
+//      THE DEBRIS FACE fold; G6 the husk wears its family look;
+//   L. THE FLOOR PRE-CRACK — the trapworks false floor's telegraph opens the
+//      floor ledger, the crack fraction rides the real trap clock, the plant
+//      lands the gaps + the dust voice, the caption is retired, arms pure;
+//   M. THE DEBRIS FACE on a live pop (the pack's leather tatters);
+//   N. THE PRECISION TEST — the soul cage shatters as iron and its longer
+//      flash speaks the wisp (the release drawn before the line went).
 // Run: npx tsx balance/probe_dissolve.ts
 // ---------------------------------------------------------------------------
 
@@ -75,10 +84,30 @@ const D0_SET = [
   'secret_wall', 'cracked_face', 'rotten_bridge', 'gas_pod', 'burst_sac', 'puffcap_cluster',
   'mirage_oasis', 'mirage_bastion', 'mirage_caravan',
 ];
+// D1 — THE TAIL: every remaining text-carrying breakable, converted with its
+// line retired (the census is now THE SHOW LAW — rig B4).
+const D1_SET = [
+  'alembic', 'bud_knot', 'carrion_midden', 'caul_sac', 'charge_cell', 'crystal_vein', 'dew_bead', 'eye_stalk',
+  'gas_polyp', 'geode_shell', 'jack_o_lantern', 'jungle_brush', 'lantern_totem', 'membrane_seal', 'mirrorglass_shard',
+  'molt_husk', 'munition_cache', 'ocular_knot', 'offering_urns', 'petrified_tree', 'plague_cart', 'powder_keg',
+  'ruin_plinth', 'rusted_snare', 'scald_polyp', 'seed_pod', 'shallow_grave', 'shield_rack', 'skyglass_spur',
+  'slumped_shell', 'smuggler_cache', 'soul_cage', 'sparring_dummy', 'spelunker_pack', 'stormglass_shard',
+  'venom_bloom', 'vine_coil', 'votive_basin', 'war_drum', 'watcher_stone',
+];
 const RETIRED_LINES = [
   'the urn shatters!', 'the urn cracks!', 'crash!', 'the glass sings apart!', 'the lattice shatters!', 'shatter!',
   'the planks creak…', 'the span gives way!', 'the pod ruptures!', 'the sac bursts!', 'puff!',
   'the water was never there…', 'the walls scatter into heat…', 'it was never a caravan—',
+  // D1
+  'the geode splits!', 'the vein cracks loose!', 'the bloom bursts!', 'SNAP!', 'the still shatters!',
+  'the lantern gutters…', 'the stone tree shatters!', 'the watcher cracks!', 'the glass sings apart', 'the stalk bursts!',
+  'the seal bursts!', 'the polyp belches!', 'the eyes burst!', 'the cage splits — a soul slips free',
+  'the skyglass sings apart!', 'the stormglass rings apart!', 'you hack through!', 'the coil parts!', 'the keg goes up!',
+  'the charges split!', 'the cart breaks apart!', 'the grave breaks open!', 'the midden spills open!',
+  'the cell discharges!', 'the rack clatters apart!', 'straw flies!', 'BOOM.', 'the basin cracks: what it held runs out!',
+  'the urns spill their keeping!', 'the plinth crumbles!', 'the totem gutters out…', 'the shell folds…',
+  'the polyp scalds!', 'the old skin crumbles…', 'the pod spills its seed', 'the bud bursts unripe', 'the dewdrop lets go',
+  'the floor gives way —',
 ];
 
 // The probe's own QA kinds: a fast-fading ceramic (the completion rig) — the
@@ -93,6 +122,7 @@ type Priv = {
   harvestNodes: { pos: { x: number; y: number }; def: (typeof HARVEST_NODES)[number]; doodad: Doodad; spent: boolean }[];
   harvestSessions: unknown[];
   harvestSettle: (s: unknown, why: 'complete' | 'expiry') => void;
+  strikeSurfaces: (striker: unknown, at: { x: number; y: number }, reach: number) => void;
 };
 
 // ------------------------------------------------- A. the fold
@@ -112,7 +142,7 @@ type Priv = {
     && r.debris === 'debris_glass' && r.fling === DISSOLVE_MATERIALS.glass.fling);
   check('A4 absent / unknown rows resolve null (the engine plays no motion; the classic pop stands)',
     resolveDissolve(undefined) === null && resolveDissolve({ motion: 'unravel' }) === null
-    && resolveDissolve({ material: 'cloth' }) === null);
+    && resolveDissolve({ material: 'wax' }) === null);
   const light = resolveDissolve({ material: 'light' });
   check('A5 light dissolves: cut none, no debris, no voice, haze on', !!light && light.motion === 'dissolve'
     && light.cut === 'none' && light.debris === false && light.voice === false && light.haze === 1);
@@ -135,6 +165,19 @@ type Priv = {
   check('A10 the harvest nodes CRUMBLE with no second pile (debris false — the husk is adopted) and a minutes-grade fade',
     !!nodeSpec && nodeSpec.motion === 'crumble' && nodeSpec.debris === false
     && nodeSpec.fade !== false && nodeSpec.fade.after[0] >= 120);
+  // D1 — the tail's materials + THE DEBRIS FACE.
+  const iron = resolveDissolve({ material: 'iron' }), cloth = resolveDissolve({ material: 'cloth' });
+  const verdure = resolveDissolve({ material: 'verdure' }), bone = resolveDissolve({ material: 'bone' });
+  check('A11 the D1 materials resolve whole: iron shatters to dark scraps · cloth bursts to tatters · verdure gives way to the cut litter · bone leaves chips',
+    !!iron && iron.motion === 'shatter' && iron.debris === 'debris_scraps' && iron.debrisLook?.shape === 'sherd'
+    && !!cloth && cloth.motion === 'burst' && cloth.cut === 'lobes' && cloth.debris === 'debris_scraps'
+    && !!verdure && verdure.motion === 'giveway' && verdure.debris === 'verdure_litter'
+    && !!bone && bone.debris === 'debris_bone');
+  const unresolvedD1 = D1_SET.filter(k => !dissolveFor(k as DoodadKind));
+  check('A12 every D1 kind resolves a whole spec through dissolveFor', unresolvedD1.length === 0, unresolvedD1.join(', '));
+  const keg = dissolveFor('powder_keg'), husk = dissolveFor(HARVEST_NODES.find(r => r.id === 'geode')!.kind as DoodadKind);
+  check('A13 THE DEBRIS FACE rides the fold: a row look (the charred keg) and a per-family husk look resolve; a bare row resolves null',
+    keg?.debrisLook?.color === '#2a2018' && husk?.debrisLook?.shape === 'glint' && dissolveFor('clay_pots')?.debrisLook === null);
 }
 
 // ------------------------------------------------- B. the retirement census
@@ -152,6 +195,13 @@ type Priv = {
     offenders.length === 0, offenders.join(', '));
   const bare = D0_SET.filter(k => !doodadRuleOf(k as DoodadKind).dissolve);
   check('B2 every D0 kind carries a dissolve row', bare.length === 0, bare.join(', '));
+  const bareD1 = D1_SET.filter(k => !doodadRuleOf(k as DoodadKind).dissolve);
+  check('B3 every D1 kind carries a dissolve row (the tail converted)', bareD1.length === 0, bareD1.join(', '));
+  // THE SHOW LAW (D1 — her PRECISION CLAUSE made executable for every
+  // breakable): no brittle rule anywhere speaks a caption or a creak — a
+  // break that wants to be FELT gets a motion, never a line.
+  check('B4 THE SHOW LAW: zero brittle rules carry a text/warn line (every break shows)', unconverted.length === 0,
+    unconverted.sort().join(', '));
   info(`B  ${unconverted.length} text-carrying breakable(s) not yet converted (D1's tail): ${unconverted.sort().join(', ')}`);
 }
 
@@ -324,6 +374,9 @@ const settle = (n = 1): void => { for (let i = 0; i < n; i++) w.update(DT); };
     `${w.drops.length - dropsBefore} vs ${want}`);
   check('G5 the husk still reads as the node\'s husk for the harvest fabric (kind pinned by probe_harvest too)',
     priv.harvestNodes[ix].doodad.kind === HARVEST_HUSK_KIND);
+  check('G6 THE DEBRIS FACE: the husk wears its FAMILY look (one husk kind, tinted per family — the per-biome husk coda closed)',
+    !!def.husk && !!nodeD.litterLook && nodeD.litterLook.color === def.husk.color && nodeD.litterLook.shape === def.husk.shape,
+    nodeD.litterLook ? `${nodeD.litterLook.color} ${nodeD.litterLook.shape}` : 'no look');
 }
 
 // ------------------------------------------------- H. the mirage parity
@@ -388,12 +441,12 @@ const settle = (n = 1): void => { for (let i = 0; i < n; i++) w.update(DT); };
 
 // ------------------------------------------------- J. the pieces
 {
-  const debrisKinds = ['debris_clay', 'debris_glass', 'debris_rubble', 'debris_splinters', 'debris_pulp', 'debris_rime'];
+  const debrisKinds = ['debris_clay', 'debris_glass', 'debris_rubble', 'debris_splinters', 'debris_pulp', 'debris_rime', 'debris_bone', 'debris_scraps'];
   const missing = debrisKinds.filter(k => !doodadRuleOf(k as DoodadKind) || doodadRuleOf(k as DoodadKind).overlap !== 'inert'
     || !DOODAD_VISUALS[k] || DOODAD_VISUALS[k].painter !== 'litter');
   check('J1 every debris kind carries an INERT rule and a `litter` visual row', missing.length === 0, missing.join(', '));
-  check('J2 the litter painter and the three break voices are registered (dust / sparkle / wetpop)',
-    typeof PAINTERS.litter === 'function' && !!effectVoiceOf('dust') && !!effectVoiceOf('sparkle') && !!effectVoiceOf('wetpop'));
+  check('J2 the litter painter and the four break voices are registered (dust / sparkle / wetpop / wisp)',
+    typeof PAINTERS.litter === 'function' && !!effectVoiceOf('dust') && !!effectVoiceOf('sparkle') && !!effectVoiceOf('wetpop') && !!effectVoiceOf('wisp'));
   const voicesBad: string[] = [];
   const debrisBad: string[] = [];
   for (const k of doodadRuleKinds()) {
@@ -411,8 +464,8 @@ const settle = (n = 1): void => { for (let i = 0; i < n; i++) w.update(DT); };
   check('J5 the settle ramp runs 0 → 1, monotone', dissolveSettleAlpha(0, life) === 0 && dissolveSettleAlpha(life, life) === 1 && mono);
   // Every painted D0 kind has a visual row (the bitmap's source) — the cut
   // needs a painter to cut.
-  const unpainted = D0_SET.filter(k => !DOODAD_VISUALS[k]);
-  check('J6 every D0 kind has a visual row (the fragment engine\'s bitmap source)', unpainted.length === 0, unpainted.join(', '));
+  const unpainted = [...D0_SET, ...D1_SET].filter(k => !DOODAD_VISUALS[k]);
+  check('J6 every D0 + D1 kind has a visual row (the fragment engine\'s bitmap source)', unpainted.length === 0, unpainted.join(', '));
 }
 
 // ------------------------------------------------- K. zone reload clears
@@ -423,6 +476,58 @@ const settle = (n = 1): void => { for (let i = 0; i < n; i++) w.update(DT); };
   w.loadZone(SIM_ARENA_ID);
   check('K1 a zone (re)load clears the break records and the pre-crack ledger (zone-local after-images)',
     had && w.dissolves.length === 0 && w.dissolveCrackView().length === 0);
+}
+
+// ------------------------------------------------- L. THE FLOOR PRE-CRACK (D1 — the trapworks false floor)
+{
+  const textsBefore = w.texts.length;
+  const at = vec(hero.pos.x + 140, hero.pos.y + 140);
+  w.collapseFloor([{ x: at.x, y: at.y, r: 26 }, { x: at.x + 40, y: at.y, r: 26 }], 0.8, undefined);
+  let view = w.dissolveFloorCrackView();
+  check('L1 the telegraph opens the FLOOR ledger: one row per doomed cell, cracking from its heart, fraction at 0',
+    view.length === 2 && view.every(v => v.frac >= 0 && v.frac < 0.05 && v.radius === 26));
+  const seedL = view[0]?.seed ?? 1;
+  settle(24);
+  view = w.dissolveFloorCrackView();
+  const fracMid = view[0]?.frac ?? -1;
+  check('L2 the crack grows across the delay (drawn == the telegraph clock)', view.length === 2 && fracMid > 0.35 && fracMid < 0.65,
+    `frac ${fracMid.toFixed(3)}`);
+  check('L3 NO TEXT: the caption "the floor gives way" is retired', !w.texts.slice(textsBefore).some(t => t.text.includes('floor gives way')));
+  const flashesBefore = w.flashes.length;
+  settle(30);
+  const gaps = w.doodads.filter(d => d.kind === 'ruin_floor_gap' && !d.gone && Math.abs(d.pos.y - at.y) < 1 && d.pos.x >= at.x - 1 && d.pos.x <= at.x + 41);
+  check('L4 the plant lands at the clock: the gaps stand (drawn == tested — the pit law fires as ever) and the ledger closes',
+    gaps.length === 2 && w.dissolveFloorCrackView().length === 0, `gaps ${gaps.length}`);
+  check('L5 the drop speaks the dust voice on the pop channel (one accent channel)',
+    w.flashes.slice(flashesBefore).some(f => (f as { fx?: string }).fx === 'dust'));
+  const armsA = dissolveCrackLines(seedL, 0.5, { x: 0, y: 0 }), armsB = dissolveCrackLines(seedL, 0.5, { x: 0, y: 0 });
+  check('L6 the floor crack arms are pure f(seed, frac) from the cell heart', armsA.length > 0 && JSON.stringify(armsA) === JSON.stringify(armsB));
+}
+
+// ------------------------------------------------- M. THE DEBRIS FACE (D1 — one litter kind reads as what broke)
+{
+  const at = vec(hero.pos.x + 10, hero.pos.y - 10);
+  const pack = place('spelunker_pack', at.x, at.y, 12);
+  const look = dissolveFor('spelunker_pack')!.debrisLook;
+  settle(2);
+  const scraps = w.doodads.find(d => d.kind === 'debris_scraps' && Math.hypot(d.pos.x - at.x, d.pos.y - at.y) < 1);
+  check('M1 the pack near-pops into its tatters (cloth → debris_scraps) stamped with the ROW look (leather)',
+    pack.gone === true && !!scraps && !!look && !!scraps.litterLook && scraps.litterLook.color === look.color && look.color === '#8a7048',
+    scraps ? `look ${scraps.litterLook?.color}` : 'no scraps');
+  check('M2 a MATERIAL-level face rides the fold (iron leaves dark sherd scraps)', dissolveFor('rusted_snare')?.debrisLook?.shape === 'sherd');
+}
+
+// ------------------------------------------------- N. THE PRECISION TEST (D1 — the soul cage's release, drawn)
+{
+  const at = vec(hero.pos.x + 60, hero.pos.y + 60);
+  const cage = place('soul_cage', at.x, at.y, 16);
+  const flashesBefore = w.flashes.length;
+  w.dissolves.length = 0;
+  priv.strikeSurfaces(hero, at, 30);
+  const fl = w.flashes.slice(flashesBefore).find(f => (f as { fx?: string }).fx === 'wisp');
+  check('N1 the cage shatters as iron and its pop speaks the WISP voice on a longer flash (the soul slipping free, drawn)',
+    cage.gone === true && !!fl && fl.maxLife >= 1.0 && w.dissolves.some(r => r.kind === 'soul_cage' && r.spec.motion === 'shatter'),
+    fl ? `flash life ${fl.maxLife}` : 'no wisp flash');
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

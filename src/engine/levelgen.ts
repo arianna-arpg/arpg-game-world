@@ -23,7 +23,7 @@ import { shapeBoundR, type HitShape } from './shapes';
 import type { TrackSpec, TrackPayload } from './tracks';
 import type { TrapworkSpec } from './trapworks';
 import type { GeyserSpec } from './geysers'; // authoredVents — the geyser fabric's authoring seam
-import type { DissolveSpec } from './dissolve'; // THE DISSOLUTION GRAMMAR — DoodadRule.dissolve (the break motion row)
+import type { DebrisLook, DissolveSpec } from './dissolve'; // THE DISSOLUTION GRAMMAR — DoodadRule.dissolve (the break motion row) + Doodad.litterLook (the debris face)
 import { rockSurfaceOf, type RockFormSpec } from './rockForms';
 import type { AmbushSpec } from './actor';
 import { Rng } from '../core/rng';
@@ -256,6 +256,7 @@ export type KnownDoodadKind =
   // THE DISSOLUTION GRAMMAR's debris (engine/dissolve.ts): what a break's
   // fragments settle into — inert, pushed at the instant, fading via evap
   | 'debris_clay' | 'debris_glass' | 'debris_rubble' | 'debris_splinters' | 'debris_pulp' | 'debris_rime'
+  | 'debris_bone' | 'debris_scraps' // D1: marrow chips; cloth/leather/hide/bent-iron tatters
   // The brittle kit, wave 2 (hazard breakables — pop effects on BrittleSpec)
   | 'rotten_bridge'  // a decayed span: footing that remembers every crossing, then drops you
   | 'gas_pod'        // a bloated marsh bladder: ruptures into a lingering fume
@@ -547,6 +548,13 @@ export interface Doodad {
    *  it by this tag), drawn fading IN as the fragments land. Same law as
    *  blastDress: runtime-only, never persisted, never in layouts. */
   dissolveDebris?: true;
+  /** THE DEBRIS FACE (THE DISSOLUTION GRAMMAR D1 — DissolveSpec.debrisLook):
+   *  the grain color/shape this debris piece wears when its kind paints
+   *  through the generic litter painter — stamped by World.dissolveBreak
+   *  (and the harvest boot's spent re-place) so ONE litter kind reads as
+   *  what broke: amber sherds, rime glints, marrow chips, charred staves.
+   *  Runtime-only, never persisted, never in layouts. */
+  litterLook?: DebrisLook;
   /** EVENT DRESS tag — the OPEN sibling of weatherDress for world-event
    *  scenes: the id of the event whose scene planted this piece (the Drove's
    *  collapsed pen rails; any future event names itself the same way). Same
@@ -1877,6 +1885,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   debris_splinters: { overlap: 'inert', spacing: 0 },
   debris_pulp:      { overlap: 'inert', spacing: 0 },
   debris_rime:      { overlap: 'inert', spacing: 0 },
+  debris_bone:      { overlap: 'inert', spacing: 0 }, // D1: what bone heaps, middens and husks leave
+  debris_scraps:    { overlap: 'inert', spacing: 0 }, // D1: cloth / leather / hide tatters, bent iron
   // WAVE 2 — hazard breakables, every consequence pure BrittleSpec data.
   // The rotten span is FOOTING (ground + spans): it creaks at first tread,
   // remembers every crossing, and drops whoever lingers into the fall
@@ -1930,7 +1940,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
     resonance: { text: 'the spire sings…', color: '#9fd8ff' } },
   geode_shell: { overlap: 'solid', blocksMove: true, spacing: 60, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
-    brittle: { on: ['hit'], gemChance: 0.6, orbChance: 0.3, text: 'the geode splits!', color: '#9fd8ff' } },
+    brittle: { on: ['hit'], gemChance: 0.6, orbChance: 0.3, color: '#9fd8ff' },
+    dissolve: { material: 'crystal' } }, // THE DISSOLUTION GRAMMAR (D1): the bowl splits into facets; the line retired
   icicle_cluster: { overlap: 'solid', blocksMove: true, spacing: 26, forbidOn: ['water', 'lava'],
     brittle: { on: ['hit', 'near'], reach: 30, orbChance: 0.25, color: '#bfe0f0' },
     dissolve: { material: 'ice' } }, // THE DISSOLUTION GRAMMAR (D0): the icicles shatter; the line retired
@@ -1947,10 +1958,15 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   rimstone_pool: { overlap: 'ground', forbidOn: ['lava', 'chasm'] },
   glowworm_veil: { overlap: 'inert', spacing: 40 },
   crystal_vein: { overlap: 'ground', spacing: 30, forbidOn: ['water', 'lava', 'chasm'],
-    brittle: { on: ['hit'], gemChance: 0.5, orbChance: 0.2, text: 'the vein cracks loose!', color: '#7fc0f0' } },
+    brittle: { on: ['hit'], gemChance: 0.5, orbChance: 0.2, color: '#7fc0f0' },
+    dissolve: { material: 'crystal' } }, // THE DISSOLUTION GRAMMAR (D1): the vein cracks loose AS facets; the line retired
   guano_heap: { overlap: 'ground', forbidOn: ['water', 'lava'] },
+  // THE DISSOLUTION GRAMMAR (D1): the pack bursts open as leather lobes and
+  // leaves its tatters — the SPILL is the drop itself (gems + orbs landing
+  // at the seat are the drawing); the line retired.
   spelunker_pack: { overlap: 'inert', spacing: 30,
-    brittle: { on: ['hit', 'near'], reach: 30, gemChance: 0.85, orbChance: 0.5, text: 'someone\'s kit spills open…', color: '#c8a86a' } },
+    brittle: { on: ['hit', 'near'], reach: 30, gemChance: 0.85, orbChance: 0.5, color: '#c8a86a' },
+    dissolve: { material: 'cloth', debrisLook: { color: '#8a7048' } } },
   basalt_column: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 44,
     forbidOn: ['water', 'chasm'], rockForm: { cluster: 0.5 } },
   // THE HOLLOWS FABRIC: the seam is the pocket's one honest tell — cracked
@@ -1974,16 +1990,20 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   marsh_wisp: { overlap: 'inert', spacing: 34 },
   peat_mound: { overlap: 'solid', blocksMove: true, spacing: 28, forbidOn: ['water', 'lava', 'chasm'] },
   venom_bloom: { overlap: 'inert', spacing: 24,
-    brittle: { on: ['hit', 'near'], reach: 32, text: 'the bloom bursts!', color: '#a8d05a',
-      fume: { skillId: 'venom_seep', radius: 62, linger: 3.4, dmgMult: 0.8, color: '#a8d05a', fx: 'sporeburst' } } },
+    brittle: { on: ['hit', 'near'], reach: 32, color: '#a8d05a',
+      fume: { skillId: 'venom_seep', radius: 62, linger: 3.4, dmgMult: 0.8, color: '#a8d05a', fx: 'sporeburst' } },
+    dissolve: { material: 'pod', debrisLook: { color: '#4a5e2c' } } }, // THE DISSOLUTION GRAMMAR (D1): the bloom bursts as lobes; the fume as ever; the line retired
   // The parity-pass wayside kit: ley furniture and one honest hazard. The
   // snare is the trapper's craft left in the world — pure BrittleSpec, the
   // collapse damage billing whoever springs it (rotten_bridge's grammar).
   chronolith: { overlap: 'solid', blocksMove: true, spacing: 36, forbidOn: ['water', 'lava', 'chasm'] },
   meditation_cairn: { overlap: 'inert', spacing: 30 },
+  // THE DISSOLUTION GRAMMAR (D1): the snare SNAPS as iron — a few hard shards
+  // flung, bent scraps left dark; the collapse toll bills as ever; the line retired.
   rusted_snare: { overlap: 'inert', spacing: 26,
-    brittle: { on: ['touch', 'hit'], text: 'SNAP!', color: '#a89078',
-      collapse: { damage: { pctMaxLife: 0.08 } } } },
+    brittle: { on: ['touch', 'hit'], color: '#a89078',
+      collapse: { damage: { pctMaxLife: 0.08 } } },
+    dissolve: { material: 'iron', pieces: [3, 5] } },
   // THE CAUL KIT — the terrain-that-fights doctrine, both lanes: fixed-point
   // menace on the doodad-effect registry (maw_pit's reel), eruption on the
   // brittle lane (caul_sac's ticks), and everything KILLABLE walks the actor
@@ -1998,9 +2018,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // objects (brittle.spawn: the doodad→actor bridge, the urn's contract).
   caul_sac: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26,
     forbidOn: ['water', 'lava', 'chasm', 'gore'],
-    brittle: { on: ['hit', 'near'], reach: 26, orbChance: 0.12,
-      text: 'the sac bursts!', color: '#9a72c8',
-      spawn: { monster: 'caul_tick', count: [1, 2], chance: 0.18, text: 'something skitters out!' } } },
+    brittle: { on: ['hit', 'near'], reach: 26, orbChance: 0.12, color: '#9a72c8',
+      spawn: { monster: 'caul_tick', count: [1, 2], chance: 0.18, text: 'something skitters out!' } },
+    dissolve: { material: 'pod', debrisLook: { color: '#6a4a8a' } } }, // THE DISSOLUTION GRAMMAR (D1): the sac bursts as lobes; the wake's own line stands
   caul_eyes: { overlap: 'inert', spacing: 44 },
   // THE DUNE SEA's crest comb (dunefield recipe): pure ridge ART riding the
   // duneface region cells — the REGION is the collision truth, so the comb
@@ -2080,7 +2100,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // — terrain feeding the whole drinking economy through the ordinary
   // scoop: pours, flask sips and orbPickup procs all ride the same orb.
   alembic: { overlap: 'inert', spacing: 40,
-    brittle: { on: ['hit', 'touch'], orbChance: 0.65, text: 'the still shatters!', color: '#b8d8e8' } },
+    brittle: { on: ['hit', 'touch'], orbChance: 0.65, color: '#b8d8e8' },
+    dissolve: { material: 'glass' } }, // THE DISSOLUTION GRAMMAR (D1): the still shatters AS glass; the line retired
   herb_rack: { overlap: 'solid', blocksMove: true, spacing: 55, bodyScale: 0.5,
     surface: { hw: 2.1, hh: 0.35 } }, // the fishing rack's rail line, hung with greens
   cauldron: { overlap: 'solid', blocksMove: true, spacing: 70 },
@@ -2112,8 +2133,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // The Gloamwood croft kit: a walkable gourd tangle, its lone carved
   // cousin (inert, candle-lit, pops), and the hanged road's gibbets.
   pumpkin_patch: { overlap: 'ground', walkOnly: true, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  // THE DISSOLUTION GRAMMAR (D1): the carved gourd BURSTS as lobes of itself
+  // and its candle dies with the body (the light spec leaves with the kind);
+  // orange pulp remains; the line retired.
   jack_o_lantern: { overlap: 'inert', spacing: 44,
-    brittle: { on: ['hit'], orbChance: 0.3, text: 'the lantern gutters…', color: '#ffb44a' } },
+    brittle: { on: ['hit'], orbChance: 0.3, color: '#ffb44a' },
+    dissolve: { material: 'pod', debrisLook: { color: '#d8722a' } } },
   hanging_cage: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 110, bodyScale: 0.4, forbidOn: ['water', 'lava', 'chasm'] },
   /** A forest ELDER: a huge crown over a thick bole — the dense-forest
    *  anchor (whole packs ambush beneath one). Veiled: even a lone elder's
@@ -2134,8 +2159,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   petrified_tree: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18,
     occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3, veil: {},
     forbidOn: ['water', 'lava', 'chasm'],
-    brittle: { on: ['hit'], text: 'the stone tree shatters!', color: '#b8b2a4', orbChance: 0.06,
+    brittle: { on: ['hit'], color: '#b8b2a4', orbChance: 0.06,
       fume: { skillId: 'stone_shards', radius: 54, linger: 2.2, tickInterval: 0.4, dmgMult: 0.55, color: '#9a948a', fx: 'shatter' } },
+    dissolve: { material: 'stone', motion: 'shatter' }, // THE DISSOLUTION GRAMMAR (D1): the stone tree shatters AS stone; the squall as ever; the line retired
     resonance: {} },
   petrified_elder: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 80,
     occlude: { pad: 14, alpha: 0.25 }, bodyScale: 0.22, veil: {},
@@ -2149,7 +2175,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
    *  tradeoff is the mechanic), listed in the weald's theme.gaze kinds. */
   watcher_stone: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 46,
     forbidOn: ['water', 'lava', 'chasm'],
-    brittle: { on: ['hit'], text: 'the watcher cracks!', color: '#9a948a', orbChance: 0.2 },
+    brittle: { on: ['hit'], color: '#9a948a', orbChance: 0.2 },
+    dissolve: { material: 'stone', motion: 'shatter' }, // THE DISSOLUTION GRAMMAR (D1): the watcher cracks apart AS stone; its toll still rings
     resonance: { radius: 520, text: 'the watcher rings…' } },
   // Winter clutter (the taiga's furniture).
   ice_spike: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24 },
@@ -2240,7 +2267,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   mirrorglass_shard: {
     overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 60, bodyScale: 0.5,
     forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
-    brittle: { on: ['hit'], text: 'the glass sings apart', color: '#dbe6ee' },
+    brittle: { on: ['hit'], color: '#dbe6ee' },
+    dissolve: { material: 'glass' }, // THE DISSOLUTION GRAMMAR (D1): the practice glass sings apart AS glass; the line retired
   },
   // THE SKEP WAKES: any strike that plays the surfaces TOLLS the hive
   // (resonance — the doodad-native noise fabric): the hum lures the idle,
@@ -2504,7 +2532,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // both poppable): the gaze lane's live filter drops a burst stalk, and the
   // fell lane refuses it from here on (breakables BREAK, their own spoils law).
   eye_stalk: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 46, forbidOn: ['water', 'lava', 'chasm'],
-    brittle: { on: ['hit'], text: 'the stalk bursts!', color: '#d8b04a' } },
+    brittle: { on: ['hit'], color: '#d8b04a' },
+    dissolve: { material: 'pod', debrisLook: { color: '#8a3848' } } }, // THE DISSOLUTION GRAMMAR (D1): the stalk bursts as meat; the line retired
   rib_arch:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 50, forbidOn: ['water', 'lava', 'chasm'] },
   // The tooth arc is an OFFSET C (gum ring 0.66r, outer stroke 0.82r) — a
   // centered rect can't hug it, so it keeps a disc snugged to the drawn arc.
@@ -2521,20 +2550,23 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // not walk or shoot through — until it pops (urn-grammar: press in or
   // strike). Sometimes the pocket paid to be sealed.
   membrane_seal: { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: false,
-    brittle: { on: ['hit', 'near'], reach: 26, text: 'the seal bursts!', color: '#c86a72',
-      orbChance: 0.25, gemChance: 0.08 } },
+    brittle: { on: ['hit', 'near'], reach: 26, color: '#c86a72',
+      orbChance: 0.25, gemChance: 0.08 },
+    dissolve: { material: 'pod', debrisLook: { color: '#b06a72' } } }, // THE DISSOLUTION GRAMMAR (D1): the skin drum bursts as lobes; the line retired
   chyme_pool:   { overlap: 'ground', walkOnly: true, pour: {} },
   // The polyp rides the hazard-breakable grammar (gas_pod's sour cousin) —
   // pop it at range or wear the belch.
   gas_polyp:    { overlap: 'inert', spacing: 44,
-    brittle: { on: ['hit', 'near'], reach: 34, text: 'the polyp belches!', color: '#a8b86a',
-      fume: { radius: 72, linger: 3.0, dmgMult: 0.7, color: '#a8b86a', fx: 'sporeburst' } } },
+    brittle: { on: ['hit', 'near'], reach: 34, color: '#a8b86a',
+      fume: { radius: 72, linger: 3.0, dmgMult: 0.7, color: '#a8b86a', fx: 'sporeburst' } },
+    dissolve: { material: 'pod' } }, // THE DISSOLUTION GRAMMAR (D1): the polyp bursts; the belch as ever; the line retired
   villus_bed:   { overlap: 'ground', walkOnly: true },
   gut_knuckle:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 52, forbidOn: ['water', 'lava', 'chasm'] },
   // Burst the eyes and the wall stops watching: a SOLID brittle (the
   // crumbling_wall idiom) — the gaze lane's live filter drops it on pop.
   ocular_knot:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 46, forbidOn: ['water', 'lava', 'chasm'],
-    brittle: { on: ['hit'], text: 'the eyes burst!', color: '#d8b04a' } },
+    brittle: { on: ['hit'], color: '#d8b04a' },
+    dissolve: { material: 'pod', debrisLook: { color: '#5e2030' } } }, // THE DISSOLUTION GRAMMAR (D1): the eyes burst as meat; the line retired
   lash_bed:     { overlap: 'ground', walkOnly: true },
   weep_spring:  { overlap: 'ground', walkOnly: true, pour: {} },
   colossal_heart: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 80 },
@@ -2596,7 +2628,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     // The forge painter draws UNSPUN (no rot read): slag plinth + iron block.
     surface: { hw: 1.05, hh: 0.6, orient: 'fixed' } },
   soul_cage:     { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 84, bodyScale: 0.4, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
-    brittle: { on: ['hit'], text: 'the cage splits — a soul slips free', color: '#9fd4ff', orbChance: 0.12 } },
+    // THE DISSOLUTION GRAMMAR (D1) — THE PRECISION TEST: the line carried
+    // information (a soul is released), so the release is DRAWN before the
+    // line goes: the cage shatters as iron and the pop's own longer flash
+    // speaks the 'wisp' voice — a pale mote slipping up and away.
+    brittle: { on: ['hit'], color: '#9fd4ff', orbChance: 0.12, pop: { life: 1.1 } },
+    dissolve: { material: 'iron', voice: 'wisp' } },
   demon_banner:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 88, bodyScale: 0.35, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   pyre_heap:     { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 96, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   // The boundary-gate + durance kit: the arch is a walk-UNDER span (its stone
@@ -2660,7 +2697,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   sky_lantern:    { overlap: 'ground', spacing: 56, voidOk: true },
   mist_font:      { overlap: 'solid', spacing: 120, blocksMove: true, blocksShot: false },
   skyglass_spur:  { overlap: 'solid', spacing: 72, blocksMove: true, blocksShot: false,
-    brittle: { on: ['hit'], text: 'the skyglass sings apart!', color: '#cfe8f8' } },
+    brittle: { on: ['hit'], color: '#cfe8f8' },
+    dissolve: { material: 'glass' } }, // THE DISSOLUTION GRAMMAR (D1): the skyglass sings apart AS glass; the line retired
   // THE SPEED PAD axis (status_wash): stand in the plume, walk quicker —
   // the whole pad/font/choke family is one DoodadRule.effect row per kind.
   // Spacing stays modest: the torn lattices are CRAMPED, and a spacing that
@@ -2675,7 +2713,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // (the found-not-taught doctrine).
   mist_pool:        { overlap: 'ground', spacing: 60 },
   stormglass_shard: { overlap: 'solid', spacing: 76, blocksMove: true, blocksShot: false,
-    brittle: { on: ['hit'], text: 'the stormglass rings apart!', color: '#e8f0c8' } },
+    brittle: { on: ['hit'], color: '#e8f0c8' },
+    dissolve: { material: 'glass' } }, // THE DISSOLUTION GRAMMAR (D1): the stormglass rings apart AS glass; the line retired
   haven_stone:      { overlap: 'solid', spacing: 150, blocksMove: true, blocksShot: false,
     effect: { id: 'status_wash', statusId: 'cloudhaven', interval: 0.8, radius: 52, chance: 1, power: 2.5 } },
   chime_stand:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 64, bodyScale: 0.85 },
@@ -2691,8 +2730,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // and the monster crashing through after you all open the same way.
   jungle_brush: { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: true, spacing: 30,
     forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
-    brittle: { on: ['hit'], orbChance: 0.1, text: 'you hack through!', color: '#4f7a2c',
-      spawn: { monster: 'fern_stalker', count: [1, 1], chance: 0.07, text: 'the brush erupts!' } } },
+    brittle: { on: ['hit'], orbChance: 0.1, color: '#4f7a2c',
+      spawn: { monster: 'fern_stalker', count: [1, 1], chance: 0.07, text: 'the brush erupts!' } },
+    dissolve: { material: 'verdure' } }, // THE DISSOLUTION GRAMMAR (D1): the brush GIVES WAY as strata and leaves the cut's own litter; the line retired
   // The face-cut pays like a secret wall but HIDES like nothing — the tell is
   // the wall itself: cut the knot and the pop carves a pocket INTO the verdure.
   // QUIET (Movement III): the cut litter remains; no words.
@@ -2724,7 +2764,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   vine_coil: { overlap: 'solid', blocksMove: true, blocksShot: false, blocksSight: false,
     forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
     surface: { hw: 1.3, hh: 0.6, orient: 'rot' },
-    brittle: { on: ['hit'], orbChance: 0.12, text: 'the coil parts!', color: '#5f8a34' } },
+    brittle: { on: ['hit'], orbChance: 0.12, color: '#5f8a34' },
+    dissolve: { material: 'verdure', pieces: [3, 5] } }, // THE DISSOLUTION GRAMMAR (D1): the coil parts as a few strata; the line retired
 };
 
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx

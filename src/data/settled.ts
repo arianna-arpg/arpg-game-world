@@ -213,7 +213,8 @@ registerDoodadRule('culvert_stair', { overlap: 'inert', spacing: 40 });
 // the sewer carver — street players never see it, duct runners farm it.
 registerDoodadRule('smuggler_cache', {
   overlap: 'inert', spacing: 60,
-  brittle: { on: ['hit', 'near'], reach: 30, gemChance: 0.9, orbChance: 0.6, text: 'a smuggler’s stash spills open…', color: '#8ac8a0' },
+  brittle: { on: ['hit', 'near'], reach: 30, gemChance: 0.9, orbChance: 0.6, color: '#8ac8a0' },
+  dissolve: { material: 'cloth', debrisLook: { color: '#3a4a3e' } }, // THE DISSOLUTION GRAMMAR (D1): the bundle bursts its straps — the spill is the drop; the line retired
 });
 registerStamp('smuggler_cache', stampSingle('smuggler_cache', [10, 13]));
 

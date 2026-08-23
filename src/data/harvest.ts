@@ -17,6 +17,7 @@
 // ---------------------------------------------------------------------------
 
 import { registerDoodadRule } from '../engine/levelgen';
+import type { DebrisLook } from '../engine/dissolve'; // THE DEBRIS FACE — the per-family husk look
 
 export interface HarvestNodeDef {
   id: string;
@@ -30,6 +31,11 @@ export interface HarvestNodeDef {
   weight?: number;
   /** The family's voice: prompt chips, arming ring, shatter flash. */
   accent: string;
+  /** THE DEBRIS FACE (the dissolution grammar D1 — DissolveSpec.debrisLook):
+   *  the look the ONE husk kind wears when THIS family crumbles — amber
+   *  sherds, rime glints, marrow chips — stamped on the husk doodad at the
+   *  settle (and at a spent re-place). Absent = the bare grey husk. */
+  husk?: DebrisLook;
 }
 
 /** The shared shattered face every node breaks into (the husk stays — the
@@ -39,52 +45,52 @@ export const HARVEST_HUSK_KIND = 'harvest_husk';
 export const HARVEST_NODES: HarvestNodeDef[] = [
   // Living amber, weeping from the green countries' old wood.
   {
-    id: 'amberbole', kind: 'harvest_amberbole', accent: '#ffd062',
+    id: 'amberbole', kind: 'harvest_amberbole', accent: '#ffd062', husk: { color: '#b07a2a', shape: 'sherd' },
     biomes: ['grove', 'forest', 'jungle', 'taiga', 'garden'],
   },
   // Pale-glowing caps in the haunted and rotting damp.
   {
-    id: 'gloomcap', kind: 'harvest_gloomcap', accent: '#a8e8d8',
+    id: 'gloomcap', kind: 'harvest_gloomcap', accent: '#a8e8d8', husk: { color: '#6a8a80', shape: 'pulp' },
     biomes: ['gloamwood', 'mycelia', 'marsh', 'caul'],
   },
   // Amethyst geodes in the underworld's and the deep karst's veins.
   {
-    id: 'geode', kind: 'harvest_geode', accent: '#c8a8ff',
+    id: 'geode', kind: 'harvest_geode', accent: '#c8a8ff', husk: { color: '#b090e0', shape: 'glint' },
     biomes: ['crystal', 'cavern', 'karst', 'rift', 'durance'],
   },
   // Sun-baked stone that keeps the day's heat in the dry countries.
   {
-    id: 'sunstone', kind: 'harvest_sunstone', accent: '#ffd890',
+    id: 'sunstone', kind: 'harvest_sunstone', accent: '#ffd890', husk: { color: '#c8a060', shape: 'scree' },
     biomes: ['desert', 'steppes', 'butteland', 'beach'],
   },
   // Ice-bound ore veins under the white countries.
   {
-    id: 'frostvein', kind: 'harvest_frostvein', accent: '#bfe8ff',
+    id: 'frostvein', kind: 'harvest_frostvein', accent: '#bfe8ff', husk: { color: '#bcd4e2', shape: 'glint' },
     biomes: ['tundra', 'highland'],
   },
   // The dead countries' marrow-rich heaps.
   {
-    id: 'marrowheap', kind: 'harvest_marrowheap', accent: '#ded2b8',
+    id: 'marrowheap', kind: 'harvest_marrowheap', accent: '#ded2b8', husk: { color: '#d8ccb0', shape: 'bone' },
     biomes: ['grave', 'ossuary', 'sepulcher', 'ruin', 'flesh'],
   },
   // Ember-hearted blooms on the burning ground.
   {
-    id: 'cinderbloom', kind: 'harvest_cinderbloom', accent: '#ff9a50',
+    id: 'cinderbloom', kind: 'harvest_cinderbloom', accent: '#ff9a50', husk: { color: '#7a3a22', shape: 'pulp' },
     biomes: ['volcanic', 'flame', 'warfront'],
   },
   // Sea-fused glass along the wet margins.
   {
-    id: 'tideglass', kind: 'harvest_tideglass', accent: '#a8e8e0',
+    id: 'tideglass', kind: 'harvest_tideglass', accent: '#a8e8e0', husk: { color: '#9ad8d0', shape: 'glint' },
     biomes: ['isle', 'littoral', 'deepsea', 'river'],
   },
   // The worked countries' heavy fruit and field-stones.
   {
-    id: 'cropstone', kind: 'harvest_cropstone', accent: '#d8a848',
+    id: 'cropstone', kind: 'harvest_cropstone', accent: '#d8a848', husk: { color: '#a89058', shape: 'scree' },
     biomes: ['field', 'downs', 'farmland', 'manor'],
   },
   // Luminous blooms on the high shelves.
   {
-    id: 'aetherbloom', kind: 'harvest_aetherbloom', accent: '#fff0b8',
+    id: 'aetherbloom', kind: 'harvest_aetherbloom', accent: '#fff0b8', husk: { color: '#e8e0b0', shape: 'pulp' },
     biomes: [
       'aether', 'aether_sanctum', 'aether_spires', 'aether_drift',
       'aether_vesper', 'aether_bastion', 'aether_civitas',
@@ -105,13 +111,14 @@ export function harvestRowsFor(biome?: string, tileset?: string): HarvestNodeDef
 // THE DISSOLUTION GRAMMAR (engine/dissolve.ts): a spent node CRUMBLES as
 // itself — the fragments slump into the husk, which IS the debris (no second
 // pile; World.harvestSettle adopts the husk doodad as the break's debris) and
-// fades eventually, minutes-grade (her word; DIAL — the per-biome husk face is
-// the banked coda, closed by a per-row `dissolve.debris` whenever it lands).
+// fades eventually, minutes-grade (her word; DIAL). The per-biome husk face
+// (the harvest pass's banked coda) closed in D1: the row's `husk` look rides the
+// spec as THE DEBRIS FACE — one husk kind, tinted per family.
 for (const row of HARVEST_NODES) {
   registerDoodadRule(row.kind, {
     overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 260,
     forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
-    dissolve: { motion: 'crumble', material: 'stone', debris: false, fade: { after: [150, 240], rate: 6 } },
+    dissolve: { motion: 'crumble', material: 'stone', debris: false, fade: { after: [150, 240], rate: 6 }, debrisLook: row.husk },
   });
 }
 registerDoodadRule(HARVEST_HUSK_KIND, {

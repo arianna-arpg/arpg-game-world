@@ -1352,6 +1352,11 @@ export const VIS_CFG = {
       sparkle: { scale: 0.95, glints: 9, winkAlpha: 0.5 },
       /** 'wetpop' — a wet ring + droplets (pods, sacs, caps). */
       wetpop: { scale: 0.8, drops: 6, ringAlpha: 0.4 },
+      /** 'wisp' (D1) — a pale mote slipping free and rising over the pop's
+       *  own longer flash (the soul cage: the retired line's information,
+       *  drawn): rise in flash radii, sways along the climb, core size as a
+       *  radius fraction, trail beads, halo alpha. */
+      wisp: { rise: 2.4, sways: 1.5, core: 0.16, trail: 4, haloAlpha: 0.22 },
     },
   },
 } as const;
