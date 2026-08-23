@@ -1697,9 +1697,14 @@ const step = (secs: number): void => {
   // the keyed entry draws re-rolled per-seed event seating, shifting this
   // long-lived world's wander-jitter stream — under the old seed's staging
   // the lazy pairing sweep was still mid-mint at the rig's 1.0s window. The
-  // claim is structural; a cold hunt_gate boot pairs within 1s.)
+  // claim is structural; a cold hunt_gate boot pairs within 1s. Re-pinned
+  // 81007 → 81008 at M-NEWS, 2026-08-22: the world-news floaters left the head
+  // for the notice feed and a floater's seat jitter was a GLOBAL rng draw
+  // (World.text rolls rand(-10,10)), so every seeded entry that used to
+  // announce draws one fewer — 81007's staging no longer pairs inside the
+  // window (nor by 3s), 81008 pairs within 1s (scan 81007–81012: 08/11/12 pair).)
   {
-    liveDen('hunt_gate', 81007);
+    liveDen('hunt_gate', 81008);
     check('P5 the gate mints the Hunt\'s Rest (boss ask, sealed rung)',
       String(w.zone.name).includes("Hunt's Rest")
       && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'hollow_huntsman'
@@ -3073,9 +3078,13 @@ const step = (secs: number): void => {
     // TYPE picks re-dealt and the first crown moved up to boot 15): 954516;
     // re-measured at THE SCALD BASIN M1, 2026-08-21 — BIOME_FIELD grew the
     // scald row, so every seeded world's field re-dealt where the warm∧damp
-    // ∧low claim holds and the first crown moved up to boot 6): 954507.
+    // ∧low claim holds and the first crown moved up to boot 6): 954507;
+    // re-measured at M-NEWS, 2026-08-22 — the world-news floaters left the head
+    // for the notice feed, and a floater's seat jitter was a GLOBAL rng draw
+    // (World.text rolls rand(-10,10)), so every seeded entry that used to
+    // announce now draws one fewer and the first crown moved to boot 15): 954516.
     check('T5 a real pinnacle mint carries the crown (the fold at placeZoneAt, the ladder pin)',
-      hitSeed === 954507, hitSeed ? `hit=${hitSeed}` : 'no hit in 26 seeds');
+      hitSeed === 954516, hitSeed ? `hit=${hitSeed}` : 'no hit in 26 seeds');
     if (hitSeed) {
       const lc = lw.actors.find(a => a.defId === 'stormcrown_caller' && !a.dead)!;
       const thegns = lw.actors.filter(a => a.defId === 'levin_thegn' && !a.dead);

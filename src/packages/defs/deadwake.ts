@@ -24,7 +24,6 @@
 // without touching the engine.
 // ---------------------------------------------------------------------------
 
-import { vec } from '../../core/math';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { DeadwakeField, type DeadwakeSurge } from '../overlays/deadwake';
 import type { ContentPackage } from '../types';
@@ -207,8 +206,6 @@ registerKillHandler({
       ctx.grantXp(Math.round(rr.xpBase + ctx.zone.level * rr.xpPerLevel));
       for (let i = 0; i < rr.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      routed ? 'The Deadwake breaks, and its tide recedes!' : 'The undead host-leader falls!',
-      '#c8a8e8', 18);
+    ctx.notice(routed ? 'The Deadwake breaks, and its tide recedes!' : 'The undead host-leader falls!', '#c8a8e8', 18, 'events');
   },
 });

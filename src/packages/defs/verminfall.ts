@@ -108,8 +108,7 @@ registerKillHandler({
         Math.max(1, ctx.zone.level + surge.kingLevelBonus), ctx.actor.pos);
       king.tag = 'rat_king_manifest';
       ctx.flash(ctx.actor.pos, 130, surge.color, 0.7);
-      ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 44),
-        'The warren SCREAMS, and the RAT KING rises!', surge.color, 17);
+      ctx.notice('The warren SCREAMS, and the RAT KING rises!', surge.color, 17, 'events');
     } else {
       ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 36),
         `The nest splits; ${res.remaining} warren${res.remaining === 1 ? '' : 's'} still seethe${res.remaining === 1 ? 's' : ''}…`, VERMIN_COLOR, 13);
@@ -132,8 +131,7 @@ registerKillHandler({
       ctx.grantXp(Math.round(surge.reward.xpBase + ctx.zone.level * surge.reward.xpPerLevel));
       for (let i = 0; i < surge.reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 44),
-      'The King is dead. The warren empties, and the town breathes easier.', surge?.color ?? VERMIN_COLOR, 17);
+    ctx.notice('The King is dead. The warren empties, and the town breathes easier.', surge?.color ?? VERMIN_COLOR, 17, 'events');
   },
 });
 

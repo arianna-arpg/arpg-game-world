@@ -74,11 +74,9 @@ registerKillHandler({
     const n = uf.flaredCount(), total = cfg.wards.length;
     const label = cfg.wards.find(w => w.id === ward)?.label ?? 'a talisman';
     ctx.flash(vec(ctx.actor.pos.x, ctx.actor.pos.y), 150, cfg.gold, 0.8);
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 60),
-      n >= total
+    ctx.notice(n >= total
         ? `${label} flares: the LAST seal! The Regent's door stands open!`
-        : `${label} flares on the Regent's door, ${n}/${total}`,
-      cfg.gold, 16);
+        : `${label} flares on the Regent's door, ${n}/${total}`, cfg.gold, 16, 'events');
   },
 });
 
@@ -93,9 +91,7 @@ registerKillHandler({
     uf.onRegentSlain();
     ctx.bumpLedger('regent_slain');
     ctx.flash(vec(ctx.actor.pos.x, ctx.actor.pos.y), 220, UNSEALING_SURGE.gold, 1);
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 70),
-      'The Sand Regent is UNMADE, and the dynasty\'s throne stands empty!',
-      '#ffd890', 18);
+    ctx.notice('The Sand Regent is UNMADE, and the dynasty\'s throne stands empty!', '#ffd890', 18, 'events');
   },
 });
 

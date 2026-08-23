@@ -21,11 +21,10 @@ import {
   registerStamp, stampSingle,
 } from '../engine/levelgen';
 import {
-  registerTheaterKind, registerTheaterRow, THEATER_CFG,
+  registerTheaterKind, registerTheaterRow,
   type ActiveTheaterRun, type TheaterSpots,
 } from '../engine/theater';
 import { FACTIONS } from './monsters';
-import { vec } from '../core/math';
 import type { World } from '../engine/world';
 
 // --- THE SIEGE FURNITURE -----------------------------------------------------
@@ -220,8 +219,7 @@ registerTheaterKind({
       f.pos = w.clampNear(route[0], p.followJitter);
       f.patrolFollow = lead.id;
     }
-    w.text(vec(w.player.pos.x, w.player.pos.y + THEATER_CFG.announce.dy),
-      'a grind-column on the march', '#e8823a', 14);
+    w.notice('a grind-column on the march', '#e8823a', 14, 'world');
   },
   tick: (w: World, run: ActiveTheaterRun) => {
     // Column troops are ordinary bounties; breaking it ends the march quietly.

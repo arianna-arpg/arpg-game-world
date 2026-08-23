@@ -128,8 +128,7 @@ registerKillHandler({
     if (r.brokeNow) {
       ctx.bumpLedger('swarming_broken');
       ctx.flash(vec(ctx.actor.pos.x, ctx.actor.pos.y), 160, SEETHE_AMBER, 0.8);
-      ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 60),
-        'The wing BREAKS, and the Swarming turns for home, spent!', '#ffd890', 17);
+      ctx.notice('The wing BREAKS, and the Swarming turns for home, spent!', '#ffd890', 17, 'events');
     }
   },
 });

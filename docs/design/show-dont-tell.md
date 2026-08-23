@@ -259,7 +259,7 @@ hazards 15 · spills/tolls 15), MOVE ~150 (world news → the feed), KEEP ~300
 |---|---|---|---|---|
 | **M-EMERGE** — THE EMERGENCE GRAMMAR — **BUILT** (`engine/emerge.ts`, `docs/engine/emergence.md`, probe_emerge) | N | `engine/emerge.ts` + `vis/emergeLayer.ts` (the dissolve's mirror: RISE / BURST-OUT / CONDENSE / SURFACE / DROP / STIR, ground × host), `MonsterDef.emerge` + `BrittleSpawn`/ambush reading it, `springAmbush` + the brittle WAKE + burrow emerge + rift pours + seal manifests as consumers; the ring leaves every spawn path | ~60 | ~1 session |
 | **M-STATUS** — THE STATUS VOICE — **BUILT** (`engine/statusVoice.ts`, `docs/engine/statusvoice.md`, probe_statusvoice; the worn-face audit stays a listing) | P | `StatusDef.voice` family resolver, ~8 voices, the environment statuses' worn faces audited (which show, which only tell), grip/time/mental captions retired | ~30 | ~1 session |
-| **M-NEWS** — off the head, onto the feed | W | the world-news floaters re-seated on the notice feed (channels), the counters/refusals onto the prompt/objective HUD seam; no animation | ~150 (moved) | ~½ session |
+| **M-NEWS** — off the head, onto the feed — **BUILT** (`World.notice` / `KillCtx.notice`, 121 lines re-seated, probe_newsmove) | W | the world-news floaters re-seated on the notice feed (channels), the counters/refusals onto the prompt/objective HUD seam; no animation | ~150 (moved) | ~½ session |
 | **M-TOLL + M-SPILL** | N | resonance rings = lure radius (drawn == tested); corpses tumble; chest lids; 'drops loot!' retired | ~15 | ~½ session |
 | **M-HIT/DEATH** — the ring's variety | N | THE HIT VOICE (by damage type) + THE DEATH VOICE (by material) + THE ARROW'S END (by form) | 0 (rings replaced) | ~1 session |
 | **M-CRY** — drawn twins for combat cries | N | parry spark, block glint, evade blur, immune ring…; the cries stay kinded | 0 | ~½ session |
@@ -307,6 +307,16 @@ undying · hex drawn/sheathed · the guise breaks · primed · marked · cleanse
 rung clean · winded). Probe `balance/probe_statusvoice.ts`. The census at HEAD: 141
 statuses → wink 93 (the authoring tail) · flare 11 · spatter 8 · spiral 8 ·
 none 5 · flecks 4 · stars 4 · rime 3 · ripple 3 · spark 2.
+
+**M-NEWS — THE NEWS MOVE (built third):** `World.notice(text, color?, size?,
+channel = 'world')` (→ `pushNotice` on the feed; the wire already ships it) and
+`KillCtx.notice`; 84 world-news floaters in world.ts re-seated by channel (events
+55 · war 10 · civic 9 · world 10 — packages igniting/ending, the hunt chases,
+factions, sieges, seas/harbors, quests, omens, nemesis), the 9 theater
+arrival/ending lines (world), and 28 event epilogues in packages/kill handlers
+(ctx.notice — events/war/civic). The head keeps what is AT the head: the
+refusals/readouts (the prompt seam, later), the grab/hazard/objective lines,
+VOCATION / LEVEL UP, the gains. Probe `balance/probe_newsmove.ts`.
 
 **THE ROW LAW (the coda):**
 

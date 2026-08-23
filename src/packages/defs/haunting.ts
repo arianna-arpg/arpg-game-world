@@ -21,7 +21,6 @@
 // ---------------------------------------------------------------------------
 
 import { registerKillHandler } from '../../engine/killHandlers';
-import { vec } from '../../core/math';
 import { HauntField, type HauntSurge } from '../overlays/haunting';
 import type { ContentPackage } from '../types';
 
@@ -95,8 +94,7 @@ registerKillHandler({
       Math.max(1, ctx.zone.level + info.bossLevelBonus), ctx.actor.pos);
     boss.tag = 'wailing_one';
     ctx.flash(ctx.actor.pos, 120, info.color, 0.6);
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 44),
-      'The anchor shatters, and the WAILING ONE manifests!', '#d8e0f0', 17);
+    ctx.notice('The anchor shatters, and the WAILING ONE manifests!', '#d8e0f0', 17, 'events');
     ctx.bumpLedger('haunt_anchors_broken');
   },
 });
@@ -113,8 +111,7 @@ registerKillHandler({
     ctx.dropGemAt(ctx.actor.pos);
     ctx.dropGemAt(ctx.actor.pos);
     ctx.bumpLedger('haunts_lifted');
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 44),
-      'The wailing stills. The grief releases this ground.', '#d8e0f0', 17);
+    ctx.notice('The wailing stills. The grief releases this ground.', '#d8e0f0', 17, 'events');
   },
 });
 

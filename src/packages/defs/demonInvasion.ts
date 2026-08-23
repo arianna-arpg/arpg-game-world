@@ -16,7 +16,6 @@
 // invasion TYPE (or a bespoke sub-faction) is one more entry here — pure data.
 // ---------------------------------------------------------------------------
 
-import { vec } from '../../core/math';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { WEATHER_DEFS } from '../../world/weather';
 import type { DemonSurge, InvasionStage, InvasionType } from '../encounters';
@@ -225,7 +224,6 @@ registerKillHandler({
     ctx.grantXp(Math.round((220 + ctx.zone.level * 44) * mul));
     const gems = 2 + Math.floor(mul);
     for (let i = 0; i < gems; i++) ctx.dropGemAt(ctx.actor.pos);
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      `The invasion is broken! (×${mul.toFixed(1)} spoils)`, '#ffd700', 18);
+    ctx.notice(`The invasion is broken! (×${mul.toFixed(1)} spoils)`, '#ffd700', 18, 'events');
   },
 });

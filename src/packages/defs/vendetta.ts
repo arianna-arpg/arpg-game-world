@@ -19,7 +19,6 @@
 // zone policy — which is the point: reprisal is emergence, not scaffolding.
 // ---------------------------------------------------------------------------
 
-import { vec } from '../../core/math';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { registerWorldDrive } from '../../world/drives';
 import { VendettaField, type VendettaSurge } from '../overlays/vendetta';
@@ -121,7 +120,6 @@ registerKillHandler({
     const gems = r.gems + Math.floor(settled.rewardMul - 1);
     for (let i = 0; i < gems; i++) ctx.dropGemAt(ctx.actor.pos);
     if (settled.rivalPaid) ctx.sim.reputation.add(settled.rivalPaid, r.rivalRep);
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      `The warrant-holder falls, and the writ is settled!`, '#ffd700', 18);
+    ctx.notice(`The warrant-holder falls, and the writ is settled!`, '#ffd700', 18, 'events');
   },
 });

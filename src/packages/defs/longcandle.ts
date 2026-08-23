@@ -16,7 +16,6 @@
 // by nature, and fire lights them up (waxlight). One vocabulary, two courts.
 // ---------------------------------------------------------------------------
 
-import { vec } from '../../core/math';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { LongCandleField, type LongCandleSurge } from '../overlays/longcandle';
 import type { ContentPackage, FactionSpec } from '../types';
@@ -105,8 +104,7 @@ registerKillHandler({
   tag: 'candle_shrine',
   run: ctx => {
     ctx.bumpLedger('candle_shrines_snuffed');
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 32),
-      'The candle gutters out. The dark leans in…', WAX_COLOR, 13);
+    ctx.notice('The candle gutters out. The dark leans in…', WAX_COLOR, 13, 'events');
   },
 });
 

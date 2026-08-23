@@ -54,6 +54,9 @@ export interface KillCtx {
    *  nothing (resolveLootTable's law); packages should validate their ids. */
   dropLootTable(tableId: string, at: Vec2): void;
   text(at: Vec2, msg: string, color: string, size?: number): void;
+  /** World news (an event's epilogue, a front turning) onto THE NOTICE
+   *  FEED — screen-anchored, channel-muted; never a floater at a body. */
+  notice(msg: string, color?: string, size?: number, channel?: string): void;
   /** Run-ledger bump. KEYS ARE CROSS-FILE CONTRACTS — unlock predicates read
    *  them verbatim (hunt tiers, Warbands' crowned_killed, the Conclave's
    *  eldritch_repelled...); never rename one. */
@@ -185,8 +188,7 @@ registerKillHandler({
     ctx.sim.warlord.onWarlordKilled(ctx.actor.faction!, ctx.time, ctx.simView());
     ctx.bumpLedger('warlords_killed'); // → unlocks Demon Invasions
     const fname = (FACTIONS[ctx.actor.faction!]?.name ?? ctx.actor.faction!).replace(/^the /, '');
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 40),
-      `${fname} warlord slain! Their power breaks.`, '#ffd700', 18);
+    ctx.notice(`${fname} warlord slain! Their power breaks.`, '#ffd700', 18, 'war');
   },
 });
 
@@ -211,8 +213,7 @@ registerKillHandler({
   when: ctx => BROODMOTHER_KINDS.has(ctx.actor.defId ?? ''),
   run: ctx => {
     ctx.bumpLedger('broodmothers_slain');
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 40),
-      'The brood-mother falls — and the swarm keeps humming.', '#b8c84a', 15);
+    ctx.notice('The brood-mother falls — and the swarm keeps humming.', '#b8c84a', 15, 'events');
   },
 });
 
@@ -231,8 +232,7 @@ registerKillHandler({
     // The epicenter falls, the skin EVERYWHERE recoils — the blightgrowth
     // the incursion's events grew here visibly lets go of the floor.
     ctx.cleanseCreepAt(ctx.actor.pos, 1e9);
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      `The Eldritch presence recoils! (×${mul.toFixed(1)} spoils)`, '#7fce6a', 20);
+    ctx.notice(`The Eldritch presence recoils! (×${mul.toFixed(1)} spoils)`, '#7fce6a', 20, 'events');
   },
 });
 
@@ -275,7 +275,6 @@ registerKillHandler({
   run: ctx => {
     ctx.bumpLedger('manor_lady_faced');
     ctx.dropGemAt(ctx.actor.pos);
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 40),
-      'The house exhales. Somewhere below, a door unlocks itself.', '#d8c8f0', 16);
+    ctx.notice('The house exhales. Somewhere below, a door unlocks itself.', '#d8c8f0', 16, 'events');
   },
 });

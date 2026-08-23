@@ -18,7 +18,6 @@
 // patron + the network's spawn. The whole mechanic is DATA on MYCELIA_SURGE.
 // ---------------------------------------------------------------------------
 
-import { vec } from '../../core/math';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import { CREEPS } from '../../engine/creep';
 import { registerKillHandler } from '../../engine/killHandlers';
@@ -207,7 +206,6 @@ registerKillHandler({
       ctx.grantXp(Math.round(myc.reward.xpBase + ctx.zone.level * myc.reward.xpPerLevel));
       for (let i = 0; i < myc.reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      'The Heartbloom bursts, and the web withers back into its root!', myc?.color ?? BLOOM_VIOLET.color, 18);
+    ctx.notice('The Heartbloom bursts, and the web withers back into its root!', myc?.color ?? BLOOM_VIOLET.color, 18, 'events');
   },
 });

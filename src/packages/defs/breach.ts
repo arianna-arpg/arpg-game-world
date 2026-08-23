@@ -16,7 +16,6 @@
 // a standing way into that lord's domain, where its VESSEL waits.
 // ---------------------------------------------------------------------------
 
-import { vec } from '../../core/math';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { courtLord, registerCourtLord } from '../courts';
 import type { EncounterDef } from '../encounters';
@@ -229,8 +228,7 @@ registerKillHandler({
     ctx.bumpLedger('breach_vessels_slain');
     ctx.grantXp(260 + ctx.zone.level * 46);
     for (let i = 0; i < 3; i++) ctx.dropGemAt(ctx.actor.pos);
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      'The vessel shatters, and its lord recoils behind the veil!', '#d9a3ff', 18);
+    ctx.notice('The vessel shatters, and its lord recoils behind the veil!', '#d9a3ff', 18, 'events');
   },
 });
 

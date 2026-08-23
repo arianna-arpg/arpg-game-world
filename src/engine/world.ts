@@ -4833,8 +4833,7 @@ export class World {
       // active tides, reset the cycle, and the icon vanishes (the cycle begins anew).
       if (this.sim.deadwakeField?.necropolisInfo()?.defeated) {
         this.sim.deadwakeField.cullNecropolis();
-        this.text(vec(this.player.pos.x, this.player.pos.y - 100),
-          'The Necropolis crumbles behind you — the tides disperse, the cycle begins anew.', '#e8dcb0', 17);
+        this.notice('The Necropolis crumbles behind you — the tides disperse, the cycle begins anew.', '#e8dcb0', 17, 'events');
       }
     }
     this.entryFrom = from ?? null;
@@ -5160,8 +5159,7 @@ export class World {
       const seaName = this.seaNameOf(def);
       if (!this.ledger.first_port_found) {
         bumpLedger(this.ledger, 'first_port_found');
-        this.text(vec(this.player.pos.x, this.player.pos.y - 128),
-          `you have found ${seaName ?? 'the sea'} — the dock casts off, the board knows the water`, '#7fd0ff', 16);
+        this.notice(`you have found ${seaName ?? 'the sea'} — the dock casts off, the board knows the water`, '#7fd0ff', 16, 'world');
       }
       if (def.seaId && !this.seasSeen.has(def.seaId)) {
         this.seasSeen.add(def.seaId);
@@ -5173,8 +5171,7 @@ export class World {
     // untethered river is one river, met again — the first meeting speaks).
     if (isSoulriverId(def.id) && !this.ledger.soul_river_found) {
       bumpLedger(this.ledger, 'soul_river_found');
-      this.text(vec(this.player.pos.x, this.player.pos.y - 128),
-        'the River of Souls — board the Pale Ferry; the dead pour this way through every country of the deep', '#9fd8ec', 16);
+      this.notice('the River of Souls — board the Pale Ferry; the dead pour this way through every country of the deep', '#9fd8ec', 16, 'world');
     }
     // THE BREACH (bottom of the cave ladder): the torn way into the Underworld.
     this.breachPos = null;
@@ -6756,8 +6753,7 @@ export class World {
       this.promoteRarity(warrant, spec.warrant.promote);
       warrant.xpValue = Math.max(warrant.xpValue, spec.warrant.xpFloor);
     }
-    this.text(vec(this.player.pos.x, this.player.pos.y - 90),
-      `${spec.tierLabel} — hunters spring the ambush!`, spec.color, 16);
+    this.notice(`${spec.tierLabel} — hunters spring the ambush!`, spec.color, 16, 'events');
   }
 
   /** The Hunt's per-zone work: drop a footprint to read (while the beast is
@@ -8808,7 +8804,7 @@ export class World {
     }
     this.caveReturn = null; // the breach consumes the ladder — you cross, not climb
     this.caveStack.length = 0;
-    this.text(vec(this.player.pos.x, this.player.pos.y - 30), 'the world tears open…', dim.color, 15);
+    this.notice('the world tears open…', dim.color, 15, 'events');
     this.loadZone(gateId);
   }
 
@@ -9566,8 +9562,7 @@ export class World {
           // surveyAround's own refresh; no waiting for the next zone load).
           if (news) this.refreshExitLabels();
           const line = o.lines.length ? omenLine(o, o.lines[0], here) : 'something waits out there';
-          this.text(vec(this.player.pos.x, this.player.pos.y - 110),
-            `${line} — it is marked on your map.`, o.color ?? OMEN_CFG.color, OMEN_CFG.size + 1);
+          this.notice(`${line} — it is marked on your map.`, o.color ?? OMEN_CFG.color, OMEN_CFG.size + 1, 'world');
         }
         continue;
       }
@@ -10984,9 +10979,7 @@ export class World {
       // THE ARRIVAL LINE (WildlifeRow.announce): an EVENT row tells the
       // heroes it landed — the "something stirs in this zone" beat, pure data.
       if (w.announce && landed > 0) {
-        for (const s of this.seats) {
-          this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), w.announce, '#e8c84a', 13);
-        }
+        this.notice(w.announce, '#e8c84a', 13, 'war'); // THE NOTICE FEED: once for the world, not once per seat
       }
     }
   }
@@ -12557,8 +12550,7 @@ export class World {
    *  (the flee goal + speed/damage-reduction mods are already set by the phase). */
   private onBeastFleeBegin(actor: Actor, _exit: ZoneExit | null): void {
     if (actor.tag !== 'hunt_beast') return;
-    this.text(vec(this.player.pos.x, this.player.pos.y - 104),
-      'The beast breaks for the next zone — run it down!', '#d8a83a', 15);
+    this.notice('The beast breaks for the next zone — run it down!', '#d8a83a', 15, 'events');
   }
 
   /** The Hunt beast reached its exit: resolve the destination zone (generating the
@@ -12624,14 +12616,10 @@ export class World {
           if (step === 'locate' || !dest) {
             const where = dest ?? this.zone.id;
             hf.locateBeast(where);
-            this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-              `The beast is cornered in ${this.zoneMap[where]?.name ?? where} — close in! (M)`,
-              '#d8a83a', 16);
+            this.notice(`The beast is cornered in ${this.zoneMap[where]?.name ?? where} — close in! (M)`, '#d8a83a', 16, 'events');
           } else {
             hf.relocateTrack(dest);
-            this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-              `Fresher tracks lead to ${this.zoneMap[dest]?.name ?? dest} — follow them! (M)`,
-              '#d8a83a', 16);
+            this.notice(`Fresher tracks lead to ${this.zoneMap[dest]?.name ?? dest} — follow them! (M)`, '#d8a83a', 16, 'events');
           }
         }
       } else {
@@ -12698,8 +12686,7 @@ export class World {
       this.beginFissure(this.fractureRun, 'The fracture surfaces here — run it down!');
       // The surface announce above draws at the fissure (likely off-screen);
       // tell the PLAYER where to run, in their own field of view.
-      this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-        `The fracture has surfaced to the ${this.bearingOf(this.player.pos, at)} — run it down! (M)`, info.color, 15);
+      this.notice(`The fracture has surfaced to the ${this.bearingOf(this.player.pos, at)} — run it down! (M)`, info.color, 15, 'events');
     }
   }
 
@@ -12968,7 +12955,7 @@ export class World {
     if (!ff || !run) return;
     const at = run.chasm ?? run.head;
     this.flashes.push({ pos: vec(at.x, at.y), radius: 90, color: '#5a3a8a', life: 0.5, maxLife: 0.5 });
-    this.text(vec(this.player.pos.x, this.player.pos.y - 60), 'The fracture seals shut — too slow.', '#9a7ad0', 15);
+    this.notice('The fracture seals shut — too slow.', '#9a7ad0', 15, 'events');
     ff.endFracture();
     run.phase = 'done';
     this.clearFractureRun(true);
@@ -13724,8 +13711,7 @@ export class World {
         const parent = def.exits[0]?.to;
         if (parent && uf.foundTomb(parent, def.id)) {
           bumpLedger(this.ledger, 'unsealing_tomb_found');
-          this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-            'You have found the REGENT\'S TOMB — the map remembers it', cfg.gold, 17);
+          this.notice('You have found the REGENT\'S TOMB — the map remembers it', cfg.gold, 17, 'world');
         }
         // The door at the deep end, its talisman arc facing the way in.
         const at = this.findUnsealingSpot(cfg.door.radius + cfg.door.brazierRing);
@@ -13787,8 +13773,7 @@ export class World {
               g.pos = this.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-70, 70)), g.radius);
               this.actors.push(g);
             }
-            this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-              `${m.name} keeps this vault — its fall flares ${ward.label}`, cfg.gold, 15);
+            this.notice(`${m.name} keeps this vault — its fall flares ${ward.label}`, cfg.gold, 15, 'events');
           }
         }
       }
@@ -14009,7 +13994,7 @@ export class World {
     const defId = cfg.minibossIds[rng.int(0, cfg.minibossIds.length - 1)] ?? cfg.minibossIds[0];
     af.acceptQuest(zoneId, defId);
     const zn = this.zoneMap[zoneId]?.name ?? 'the wilds';
-    this.text(vec(this.player.pos.x, this.player.pos.y - 50), `Slay the undead at ${zn}, then return. (M)`, '#9ad0b0', 16);
+    this.notice(`Slay the undead at ${zn}, then return. (M)`, '#9ad0b0', 16, 'civic');
   }
 
   /** Graft a chosen part: advance the build, flash the site, and — if it completed
@@ -14333,7 +14318,7 @@ export class World {
     if (!this.player.survival) this.player.survival = new Map();
     this.player.survival.set('light', df.surge().lightMax);
     this.descentSpawnTimer = 0;
-    this.text(vec(this.player.pos.x, this.player.pos.y - 44), 'You descend into the dark…', '#7fe0d8', 16);
+    this.notice('You descend into the dark…', '#7fe0d8', 16, 'world');
   }
 
   /** Leave the abyss: bank Echoes (full on a voluntary climb, ×keptOnDeath when the
@@ -14374,8 +14359,7 @@ export class World {
     const msg = reason === 'climb' ? 'You climb back into the light.'
       : reason === 'consumed' ? 'The dark consumes you — you scramble out.'
       : 'You are dragged from the deep.';
-    this.text(vec(this.player.pos.x, this.player.pos.y - 50),
-      `${msg}  The Delver's counter opens.`, '#7fe0d8', 16);
+    this.notice(`${msg}  The Delver's counter opens.`, '#7fe0d8', 16, 'civic');
     // The haul lands in the ONE economy — every player seat paid in full
     // (the XP-share law's generosity); floats + wallet sync ride
     // grantEssence itself, so the payout explains itself on screen.
@@ -15924,8 +15908,7 @@ export class World {
    *  cleared zones stay UNLOCKED — only the enemies + terrain refresh. */
   refreshZones(): void {
     this.zoneMemory.clear();
-    this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-      'You bank the campfire — the wilds stir anew.', '#ffb84a', 16);
+    this.notice('You bank the campfire — the wilds stir anew.', '#ffb84a', 16, 'world');
     this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 120, color: '#ff9a3a', life: 0.7, maxLife: 0.7 });
   }
 
@@ -16642,12 +16625,9 @@ export class World {
       }
     });
     if (multi) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 70),
-        `${FACTIONS[order[0]]?.name ?? order[0]} contests ${FACTIONS[order[1]]?.name ?? order[1]}!`,
-        '#e85050', 15);
+      this.notice(`${FACTIONS[order[0]]?.name ?? order[0]} contests ${FACTIONS[order[1]]?.name ?? order[1]}!`, '#e85050', 15, 'war');
     } else {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 70),
-        `${FACTIONS[order[0]]?.name ?? order[0]} invades!`, '#e8a050', 15);
+      this.notice(`${FACTIONS[order[0]]?.name ?? order[0]} invades!`, '#e8a050', 15, 'war');
     }
   }
 
@@ -16970,8 +16950,7 @@ export class World {
         const mp = vec(at.x + rand(-120, 120), at.y + rand(-120, 120));
         this.flashes.push({ pos: mp, radius: 34 + rand(0, 30), color: info.color, life: 0.45 + rand(0, 0.5), maxLife: 1 });
       }
-      this.text(vec(this.player.pos.x, this.player.pos.y - 84),
-        `${info.type.label} ERUPTS — ${champName} descends in a storm of fire!`, info.color, 19);
+      this.notice(`${info.type.label} ERUPTS — ${champName} descends in a storm of fire!`, info.color, 19, 'events');
     } else {
       this.text(vec(at.x, at.y - 50),
         lord ? `${info.type.label} — ${lord.short}, ${lord.epithet}, sends his marshal!`
@@ -17202,9 +17181,7 @@ export class World {
       this.actors.push(m);
     }
     if (spec.announce) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-        spec.announce.replace('{name}', MONSTERS[bossId]?.name ?? boss.name),
-        spec.announceColor ?? '#e86a4a', 18);
+      this.notice(spec.announce.replace('{name}', MONSTERS[bossId]?.name ?? boss.name), spec.announceColor ?? '#e86a4a', 18, 'events');
     }
     return boss;
   }
@@ -17272,8 +17249,7 @@ export class World {
     // The last seal: the ward falls, the boss manifests.
     const boss = ward.boss;
     this.arenaWard = null;
-    this.text(vec(this.player.pos.x, this.player.pos.y - 80),
-      ward.spec.announceAll ?? 'The last seal breaks — the warded one manifests!', '#ffd700', 18);
+    this.notice(ward.spec.announceAll ?? 'The last seal breaks — the warded one manifests!', '#ffd700', 18, 'events');
     this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 170, color: '#ff6a3a', life: 0.9, maxLife: 0.9 });
     const manifested = this.spawnArenaBoss(boss);
     if (this.arenaCrowd) this.arenaCrowd.bossId = manifested?.id ?? null; // the stands turn to watch
@@ -17387,8 +17363,7 @@ export class World {
     }
     this.flashes.push({ pos: vec(center.x, center.y), radius: 110, color: info.color, life: 0.6, maxLife: 0.6 });
     const fname = (roster.name ?? info.faction).replace(/^the /, '');
-    this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-      `${fname} — ${info.label} crusade ground!`, info.color, 16);
+    this.notice(`${fname} — ${info.label} crusade ground!`, info.color, 16, 'war');
   }
 
   /** THE CRUSADE WORKS AS FIXTURES: compute this held zone's tier structures
@@ -17521,8 +17496,7 @@ export class World {
     if (pz && MONSTERS[pz.bossDefId]) {
       this.spawnPatientZero(pz);
     } else if (roster?.table?.length) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 80),
-        strain?.arrive ?? 'The air here is thick with rot…', cfg.color, 15);
+      this.notice(strain?.arrive ?? 'The air here is thick with rot…', cfg.color, 15, 'events');
     }
   }
 
@@ -17825,9 +17799,8 @@ export class World {
       this.text(vec(boss.pos.x, boss.pos.y - 60),
         `${boss.name} holds his court here — break the winter!`, cfg.color, 18);
     } else if (roster?.table?.length) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 80),
-        info.thawing ? 'The frost here is in retreat — the court covers its withdrawal…'
-          : 'The winter holds this land — the air itself bites…', cfg.color, 15);
+      this.notice(info.thawing ? 'The frost here is in retreat — the court covers its withdrawal…'
+          : 'The winter holds this land — the air itself bites…', cfg.color, 15, 'events');
     }
   }
 
@@ -17894,8 +17867,7 @@ export class World {
       this.text(vec(king.pos.x, king.pos.y - 60),
         `${king.name} still walks the broken warren!`, cfg.color, 18);
     } else if (info.nestsRemaining > 0) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 80),
-        'The ground here is riddled with warrens…', cfg.color, 15);
+      this.notice('The ground here is riddled with warrens…', cfg.color, 15, 'events');
     }
   }
 
@@ -17954,8 +17926,7 @@ export class World {
       : info.vigil
         ? 'The Wax Court processes here — candle-shrines hold the dark open.'
         : 'The Parliament convenes — the dark here is a chamber in session.';
-    this.text(vec(this.player.pos.x, this.player.pos.y - 80), line,
-      info.vigil ? cfg.waxColor : cfg.umbralColor, 15);
+    this.notice(line, info.vigil ? cfg.waxColor : cfg.umbralColor, 15, 'events');
   }
 
   // ------------------------------------------------------- starfall materialize
@@ -18002,8 +17973,7 @@ export class World {
       heart.pos = this.clampPos(this.farPoint(500, true), heart.radius);
       this.actors.push(heart);
     }
-    this.text(vec(this.player.pos.x, this.player.pos.y - 80),
-      'The sky is coming down in crystal — and something grew where it landed…', cfg.color, 15);
+    this.notice('The sky is coming down in crystal — and something grew where it landed…', cfg.color, 15, 'events');
   }
 
   /** The composed EVENT-density multiplier for a zone: the per-zone (encounterDensity)
@@ -18082,8 +18052,7 @@ export class World {
       this.text(vec(boss.pos.x, boss.pos.y - 60),
         `${boss.name} pulses at the bloom's heart — strike it to collapse the spread!`, cfg.color, 18);
     } else if (roster?.table?.length) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 80),
-        'Spores choke the air — the Bloom has taken this ground…', cfg.color, 15);
+      this.notice('Spores choke the air — the Bloom has taken this ground…', cfg.color, 15, 'events');
     }
   }
 
@@ -18142,7 +18111,7 @@ export class World {
     const df = this.sim.deepwinterField;
     if (!df) return;
     for (const line of df.consumeNews()) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 90), line, df.surge().color, 16);
+      this.notice(line, df.surge().color, 16, 'events');
     }
     const want = new Set<string>(df.convertedZones());
     const wcfg = df.surge();
@@ -18214,8 +18183,7 @@ export class World {
     for (const at of df.drainEbbed()) {
       const def = this.zoneMap[this.zone.id];
       if (def && coordDist(def.map, at) <= df.surge().radius) {
-        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-          df.surge().ebbText, df.surge().color ?? '#7a5aa6', 18);
+        this.notice(df.surge().ebbText, df.surge().color ?? '#7a5aa6', 18, 'events');
       }
     }
     if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
@@ -18230,8 +18198,7 @@ export class World {
       bumpLedger(this.ledger, 'deadwake_seen'); // surfaces the Vault tuning
       this.spawnDeadwakeLeader(info);
       this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 150, color: info.color, life: 0.8, maxLife: 0.8 });
-      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-        `An undead tide pours into ${this.zone.name} — the Deadwake breaks!`, info.color, 18);
+      this.notice(`An undead tide pours into ${this.zone.name} — the Deadwake breaks!`, info.color, 18, 'events');
     }
     // The relentless STREAM: refill toward the strength-scaled live cap on a cadence.
     const cfg = df.surge();
@@ -18292,9 +18259,7 @@ export class World {
         boss.life = Math.max(1, boss.maxLife() * clamp(info.bossLifeFrac, 0.02, 1)); // PRESERVED wounds
         boss.pos = this.findFreeSpot(this.clampPos(this.farPoint(520), 24), boss.radius);
         this.actors.push(boss);
-        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-          `An unfinished grief holds ${this.zone.name} — the WAILING ONE walks${info.bossLifeFrac < 1 ? ', still wounded' : ''}.`,
-          info.color, 18);
+        this.notice(`An unfinished grief holds ${this.zone.name} — the WAILING ONE walks${info.bossLifeFrac < 1 ? ', still wounded' : ''}.`, info.color, 18, 'events');
       } else {
         // The anchor stands where you'll FIND it, not on your toes.
         const at = this.clampPos(this.farPoint(520), 24);
@@ -18305,9 +18270,7 @@ export class World {
         }
         anchor.pos = this.findFreeSpot(at, anchor.radius);
         this.actors.push(anchor);
-        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-          `A grief holds ${this.zone.name} — find its anchor${info.anchorLifeFrac < 1 ? ' (already cracked)' : ''}.`,
-          info.color, 18);
+        this.notice(`A grief holds ${this.zone.name} — find its anchor${info.anchorLifeFrac < 1 ? ' (already cracked)' : ''}.`, info.color, 18, 'events');
       }
     }
     // The slow pour: one apparition at a time toward the dread ceiling. While
@@ -18338,8 +18301,7 @@ export class World {
       swept++;
     }
     if (swept) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-        'The light comes — the grief and its shades fade from this ground…', color, 17);
+      this.notice('The light comes — the grief and its shades fade from this ground…', color, 17, 'events');
     }
     this.hauntStreamTimer = 0;
   }
@@ -18379,11 +18341,9 @@ export class World {
       this.materializedStrayings.add(info.id);
       bumpLedger(this.ledger, 'straying_seen');
       this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
-      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-        info.phase === 'overrun'
+      this.notice(info.phase === 'overrun'
           ? `${this.zone.name} has gone feral — the fold is broken here.`
-          : `The fold has gone astray in ${this.zone.name} — a bell calls it away. Walk the strays home.`,
-        info.color, 18);
+          : `The fold has gone astray in ${this.zone.name} — a bell calls it away. Walk the strays home.`, info.color, 18, 'events');
     }
 
     // A lost fold needs no scene — the ground just wears the feral hold
@@ -18455,8 +18415,7 @@ export class World {
           a.aiPost = undefined;
         }
         this.flashes.push({ pos: vec(sc.rally.x, sc.rally.y), radius: 150, color: info.color, life: 0.8, maxLife: 0.8 });
-        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-          'THE BELL TURNS — the changed march on the steading!', info.color, 18);
+        this.notice('THE BELL TURNS — the changed march on the steading!', info.color, 18, 'events');
       } else if (info.phase === 'relieved') {
         this.strayingRelief(sf, info.id, info.color, lvl, 'The call breaks — the strays remember themselves.');
         return;
@@ -18466,8 +18425,7 @@ export class World {
           if (!a.dead) this.slipAway(a, '', info.color);
         }
         bumpLedger(this.ledger, 'strayings_overrun');
-        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-          'The bell recedes — the changed go with it. The fields run feral.', info.color, 18);
+        this.notice('The bell recedes — the changed go with it. The fields run feral.', info.color, 18, 'events');
         this.strayScene = null;
         return;
       }
@@ -18620,7 +18578,7 @@ export class World {
       for (let i = 0; i < cfg.reward.reliefGems; i++) this.dropGemAt(vec(sc.fold.x, sc.fold.y));
     }
     bumpLedger(this.ledger, 'strayings_relieved');
-    this.text(vec(this.player.pos.x, this.player.pos.y - 92), line, color, 18);
+    this.notice(line, color, 18, 'events');
     sf.resolve(id);
     this.strayScene = null;
   }
@@ -18697,11 +18655,9 @@ export class World {
       this.materializedDroves.add(info.id);
       bumpLedger(this.ledger, 'drove_seen');
       this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
-      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-        info.phase === 'scattered'
+      this.notice(info.phase === 'scattered'
           ? `The fold of ${this.zone.name} is gone — scavengers range the shires.`
-          : `A pen gave way in ${this.zone.name} — drive the fold back to it ALIVE.`,
-        info.color, 18);
+          : `A pen gave way in ${this.zone.name} — drive the fold back to it ALIVE.`, info.color, 18, 'events');
     }
 
     // A scattered fold needs no scene — the ground just wears the scavenger
@@ -18773,8 +18729,7 @@ export class World {
         return;
       } else if (info.phase === 'scattered') {
         bumpLedger(this.ledger, 'droves_scattered');
-        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-          'The last head is lost. The fold is gone — scavengers range the shires.', info.color, 18);
+        this.notice('The last head is lost. The fold is gone — scavengers range the shires.', info.color, 18, 'events');
         this.evapDroveDress(2, 30);
         this.droveScene = null;
         return;
@@ -18889,8 +18844,7 @@ export class World {
       this.droveDressChecked = this.zone.id;
     }
     bumpLedger(this.ledger, 'droves_gathered');
-    this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-      'The fold is gathered — the reeve settles up.', color, 18);
+    this.notice('The fold is gathered — the reeve settles up.', color, 18, 'events');
     df.resolve(id);
     this.droveScene = null;
   }
@@ -19032,9 +18986,7 @@ export class World {
       f.noteSeen(info.id);
       bumpLedger(this.ledger, 'quickenings_seen');
       this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 140, color: cfg.color, life: 0.8, maxLife: 0.8 });
-      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-        `The ground here runs QUICK — level ${info.level} while the window holds. Reap it.`,
-        cfg.color, 18);
+      this.notice(`The ground here runs QUICK — level ${info.level} while the window holds. Reap it.`, cfg.color, 18, 'events');
     }
 
     // THE KIN PULSE: every living enemy on quick ground wears the mark.
@@ -19061,8 +19013,7 @@ export class World {
       m.pos = this.findFreeSpot(this.clampPos(this.farPoint(520), 60), m.radius);
       this.promoteRarity(m, 'champion');
       this.actors.push(m);
-      this.text(vec(this.player.pos.x, this.player.pos.y - 70),
-        cfg.echo.announce.replace('{zone}', this.zone.name), cfg.color, 16);
+      this.notice(cfg.echo.announce.replace('{zone}', this.zone.name), cfg.color, 16, 'events');
     }
   }
 
@@ -19100,11 +19051,9 @@ export class World {
       this.materializedWisplights.add(info.id);
       bumpLedger(this.ledger, 'wisplights_seen');
       this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: col, life: 0.7, maxLife: 0.7 });
-      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-        info.ridden > 0 && info.standing === 0 && info.kindled === 0
+      this.notice(info.ridden > 0 && info.standing === 0 && info.kindled === 0
           ? `Something ridden waits in ${this.zone.name} — a light found a body here.`
-          : `Lights wait in the reeds of ${this.zone.name}. Touch one, and see.`,
-        col, 18);
+          : `Lights wait in the reeds of ${this.zone.name}. Touch one, and see.`, col, 18, 'events');
     }
 
     // STAGE (fresh entry, or a fresh gathering): roll the kinds ONCE, stand
@@ -19460,13 +19409,9 @@ export class World {
       const name = this.zoneMap[a.zoneId]?.name ?? 'charted ground';
       if (a.kind === 'converted') {
         bumpLedger(this.ledger, 'long_night_converted');
-        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-          `Three nights fed — ${name} belongs to the Court now. Burn its coach by day.`,
-          lnf.surge().color, 17);
+        this.notice(`Three nights fed — ${name} belongs to the Court now. Burn its coach by day.`, lnf.surge().color, 17, 'events');
       } else {
-        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-          `The COUNTESS takes court at ${name} — the Long Night deepens.`,
-          lnf.surge().color, 18);
+        this.notice(`The COUNTESS takes court at ${name} — the Long Night deepens.`, lnf.surge().color, 18, 'events');
       }
     }
     this.reconcileLongNightWarps();
@@ -19499,11 +19444,9 @@ export class World {
       coach.pos = this.findFreeSpot(this.clampPos(this.farPoint(520), 24), coach.radius);
       this.actors.push(coach);
       this.flashes.push({ pos: vec(coach.pos.x, coach.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
-      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-        info.converted
+      this.notice(info.converted
           ? `The Court holds ${this.zone.name} — its coach stands gloom-warded. Burn it by day.`
-          : `A gloom coach is parked in ${this.zone.name} — the Court is feeding here (night ${Math.min(info.fedNights + 1, info.nightsToConvert)} of ${info.nightsToConvert}).`,
-        info.color, 17);
+          : `A gloom coach is parked in ${this.zone.name} — the Court is feeding here (night ${Math.min(info.fedNights + 1, info.nightsToConvert)} of ${info.nightsToConvert}).`, info.color, 17, 'events');
       // A SEATED COURT: the Countess walks her most-fed estate, crowned.
       if (info.countessHere && MONSTERS[info.countessId]) {
         const boss = this.createMonster(info.countessId,
@@ -19515,9 +19458,7 @@ export class World {
         this.promoteRarity(boss, 'crowned');
         boss.pos = this.findFreeSpot(this.clampPos(this.farPoint(420), 24), boss.radius);
         this.actors.push(boss);
-        this.text(vec(this.player.pos.x, this.player.pos.y - 72),
-          `The COUNTESS holds court here${info.countessLifeFrac < 1 ? ', still wounded' : ''} — break it and the Long Night breaks.`,
-          info.color, 18);
+        this.notice(`The COUNTESS holds court here${info.countessLifeFrac < 1 ? ', still wounded' : ''} — break it and the Long Night breaks.`, info.color, 18, 'events');
       }
     }
     // THE POUR: Court bodies stream in ONLY through the dark hours — by day
@@ -19684,8 +19625,7 @@ export class World {
       this.materializedMigrations.add(info.id);
       bumpLedger(this.ledger, 'migration_seen'); // surfaces the Vault tuning
       this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 140, color: info.color, life: 0.7, maxLife: 0.7 });
-      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-        `A great herd crosses ${this.zone.name} — give them room…`, info.color, 17);
+      this.notice(`A great herd crosses ${this.zone.name} — give them room…`, info.color, 17, 'events');
     }
     // Wheel the neutral, un-roused herd across the zone toward the far exit (ai.ts holds
     // them dormant; the engine is what moves them — a flowing migration, not a milling mob).
@@ -19851,9 +19791,7 @@ export class World {
       this.actors.push(node);
     }
     if (info.standing > 0) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 80),
-        `The sand hums — ${info.standing} hive throat${info.standing === 1 ? '' : 's'} stand here (${info.tally}/${info.threshold} and the swarm wings)`,
-        info.color, 15);
+      this.notice(`The sand hums — ${info.standing} hive throat${info.standing === 1 ? '' : 's'} stand here (${info.tally}/${info.threshold} and the swarm wings)`, info.color, 15, 'events');
     }
   }
 
@@ -19874,8 +19812,7 @@ export class World {
       cache.pos = this.clampPos(this.farPoint(380), cache.radius);
       this.actors.push(cache);
     }
-    this.text(vec(this.player.pos.x, this.player.pos.y - 80),
-      'Amber glistens in the swarm\'s wake…', '#f0c060', 14);
+    this.notice('Amber glistens in the swarm\'s wake…', '#f0c060', 14, 'events');
   }
 
   /** Pour the wing through a covered zone: a HOSTILE directional stream —
@@ -19893,8 +19830,7 @@ export class World {
       this.materializedSwarmings.add(info.id);
       bumpLedger(this.ledger, 'swarming_seen');
       this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 150, color: info.color, life: 0.8, maxLife: 0.8 });
-      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-        `The sky crawls — the Swarming pours over ${this.zone.name}!`, info.color, 17);
+      this.notice(`The sky crawls — the Swarming pours over ${this.zone.name}!`, info.color, 17, 'events');
     }
     if (this.swarmHeadcount() >= info.streamCap) { this.swarmStreamTimer = sf.surge().streamInterval; return; }
     this.swarmStreamTimer -= dt;
@@ -20019,7 +19955,7 @@ export class World {
       this.brigandLingerLeft -= dt;
       if (this.brigandLingerLeft <= 0) {
         this.brigandsDrifting = true;
-        this.text(vec(this.player.pos.x, this.player.pos.y - 80), 'The brigands drift on, seeking easier marks…', '#d8a24a', 14);
+        this.notice('The brigands drift on, seeking easier marks…', '#d8a24a', 14, 'events');
       }
     }
     let announced = false; // one "they close in!" per pass, not per roused brigand
@@ -20174,8 +20110,7 @@ export class World {
       }
       this.wbWalls.delete(key);
       if (list.length) {
-        this.text(vec(this.player.pos.x, this.player.pos.y - 80),
-          'the coils crumble — the pass is open!', '#c8a03c', 15);
+        this.notice('the coils crumble — the pass is open!', '#c8a03c', 15, 'events');
       }
     }
   }
@@ -20316,7 +20251,7 @@ export class World {
       this.text(vec(at.x, at.y - 44), 'A gate to the Necropolis yawns open!', '#e8dcb0', 18);
     } else if (!near && this.necropolisPortals.length) {
       this.necropolisPortals.length = 0; // the seat drifted on — the gate closes
-      this.text(vec(this.player.pos.x, this.player.pos.y - 90), 'The Necropolis drifts beyond reach…', '#b0a888', 15);
+      this.notice('The Necropolis drifts beyond reach…', '#b0a888', 15, 'events');
     }
   }
 
@@ -22203,8 +22138,7 @@ export class World {
     this.chartsBought.add(o.id); // the paid once-guard — rides the save
     this.omenRevealed.add(o.id);
     this.surveyAround(z, H.chartReveal);
-    this.text(vec(this.player.pos.x, this.player.pos.y - 84),
-      'The chart is inked — far country is marked on your map.', '#7fd0ff', 15);
+    this.notice('The chart is inked — far country is marked on your map.', '#7fd0ff', 15, 'civic');
   }
 
   // --- THE HARBORHOLD (data/harborholds.ts + world/harborholds.ts) ------------
@@ -22336,8 +22270,7 @@ export class World {
     this.refreshHoldServices(def);
     // The discovery beat: the first meeting with a besieged harbor says so.
     if (hold.state === 'besieged' && !hold.defenses && !hold.falls) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 106),
-        `${def.name} stands besieged — sound the horn at the gate to break it`, '#e8a050', 15);
+      this.notice(`${def.name} stands besieged — sound the horn at the gate to break it`, '#e8a050', 15, 'war');
     }
   }
 
@@ -22586,15 +22519,13 @@ export class World {
     const W = HARBORHOLD_CFG.writs;
     if (hold.writsAt !== undefined && this.time < hold.writsAt) {
       const left = Math.ceil((hold.writsAt - this.time) / 60);
-      this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-        `the board rests — fresh writs in ${left} minute${left === 1 ? '' : 's'}`, '#c8b048', 13);
+      this.notice(`the board rests — fresh writs in ${left} minute${left === 1 ? '' : 's'}`, '#c8b048', 13, 'civic');
       return;
     }
     const eligible = this.countedEnemies().filter(a =>
       a.tag !== 'bounty_mark' && (a.rarity ?? 'normal') === 'normal' && !a.owner);
     if (!eligible.length) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-        'the coast is quiet — no quarry worth a writ', '#c8b048', 13);
+      this.notice('the coast is quiet — no quarry worth a writ', '#c8b048', 13, 'civic');
       return;
     }
     const n = Math.min(eligible.length, this.encRng.int(W.count[0], W.count[1]));
@@ -22618,8 +22549,7 @@ export class World {
     if (!posted) return;
     hold.writsAt = this.time + W.cooldownSec;
     this.charDirty = true;
-    this.text(vec(this.player.pos.x, this.player.pos.y - 84),
-      `${posted} writ${posted === 1 ? '' : 's'} posted — the coast wants clearing`, '#e8a84a', 15);
+    this.notice(`${posted} writ${posted === 1 ? '' : 's'} posted — the coast wants clearing`, '#e8a84a', 15, 'civic');
     this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 90, color: '#e8a84a', life: 0.5, maxLife: 0.5 });
   }
 
@@ -22914,8 +22844,7 @@ export class World {
     hold.rebuildAt = undefined;
     this.refreshHoldDress(def);
     this.refreshHoldServices(def);
-    this.text(vec(this.player.pos.x, this.player.pos.y - 84),
-      `${def.name} is raised from its ashes — break the siege to open its gates`, '#7fd0ff', 15);
+    this.notice(`${def.name} is raised from its ashes — break the siege to open its gates`, '#7fd0ff', 15, 'war');
   }
 
   /** THE LIFECYCLE SWEEP — every hold in the minted world ticks on world
@@ -22936,8 +22865,7 @@ export class World {
         if (def.id === this.zone.id) {
           this.refreshHoldDress(def);
           this.refreshHoldServices(def);
-          this.text(vec(this.player.pos.x, this.player.pos.y - 84),
-            `${def.name} stands rebuilt — and besieged anew`, '#e8a050', 14);
+          this.notice(`${def.name} stands rebuilt — and besieged anew`, '#e8a050', 14, 'war');
         }
         continue;
       }
@@ -22952,11 +22880,9 @@ export class World {
           if (def.id === this.zone.id) {
             this.refreshHoldDress(def);
             this.refreshHoldServices(def);
-            this.text(vec(this.player.pos.x, this.player.pos.y - 84),
-              `${def.name} is besieged — sound the horn!`, '#e85050', 16);
+            this.notice(`${def.name} is besieged — sound the horn!`, '#e85050', 16, 'war');
           } else if (this.visible(def)) {
-            this.text(vec(this.player.pos.x, this.player.pos.y - 108),
-              `word comes: ${def.name} is under siege`, '#e8a050', 14);
+            this.notice(`word comes: ${def.name} is under siege`, '#e8a050', 14, 'war');
           }
         }
         continue;
@@ -22965,8 +22891,7 @@ export class World {
         if (this.holdDefense?.zoneId === def.id) continue; // the muster paused it (belt)
         this.fellHold(def, def.id === this.zone.id ? 'the siege overruns the walls — the harbor burns' : null);
         if (def.id !== this.zone.id && this.visible(def)) {
-          this.text(vec(this.player.pos.x, this.player.pos.y - 108),
-            `${def.name} has fallen to the tide`, '#e85050', 14);
+          this.notice(`${def.name} has fallen to the tide`, '#e85050', 14, 'war');
         }
       }
     }
@@ -23154,8 +23079,7 @@ export class World {
     // The party's boats bob alongside — seats AND the carried court (THE
     // PARTY-LANDING LAW; open water: unclamped, the sea has no walls).
     this.landPartyAt(this.player.pos, { spread: 70, band: [-70, 70], clamp: false });
-    this.text(vec(this.player.pos.x, this.player.pos.y - 40),
-      `you cast off aboard the ${this.voyage.ship.name} — sail for any shore, linger to land`, '#7fd0ff', 15);
+    this.notice(`you cast off aboard the ${this.voyage.ship.name} — sail for any shore, linger to land`, '#7fd0ff', 15, 'world');
   }
 
   /** Stream the CONTINENT FIELD around the boat as coastline collision: each
@@ -23372,8 +23296,7 @@ export class World {
     if (!this.wraithsailSighted && dNodes <= wf.surge().sightRadius) {
       this.wraithsailSighted = true;
       bumpLedger(this.ledger, 'wraithsail_seen');
-      this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-        'a ghost sail crosses the horizon — the WRAITHSAIL is abroad', '#7ad8d8', 16);
+      this.notice('a ghost sail crosses the horizon — the WRAITHSAIL is abroad', '#7ad8d8', 16, 'events');
     }
   }
 
@@ -23423,8 +23346,7 @@ export class World {
     }
     this.caveReturn = { zoneId: this.zone.id, pos: vec(this.player.pos.x, this.player.pos.y), entryFrom: this.entryFrom };
     this.loadZone(ids.deck, this.zone.id); // deliberately NO onNodeCharted — her decks are off-graph
-    this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-      'you come alongside and board the WRAITHSAIL — her crew keeps the old courtesies', '#7ad8d8', 17);
+    this.notice('you come alongside and board the WRAITHSAIL — her crew keeps the old courtesies', '#7ad8d8', 17, 'events');
     this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
   }
 
@@ -23453,14 +23375,12 @@ export class World {
         a.pos = this.findFreeSpot(this.clampPos(this.clampNear(at, 150), 24), a.radius);
       }
       this.flashes.push({ pos: vec(at.x, at.y), radius: 140, color: dock.color, life: 0.8, maxLife: 0.8 });
-      this.text(vec(this.player.pos.x, this.player.pos.y - 70),
-        `the WRAITHSAIL lies alongside ${this.zone.name} — the Drowned Court walks ashore!`, '#bfe8ec', 18);
+      this.notice(`the WRAITHSAIL lies alongside ${this.zone.name} — the Drowned Court walks ashore!`, '#bfe8ec', 18, 'events');
     } else if (!this.actors.some(a => !a.dead && a.tag === 'wraithsail_ashore')) {
       // The party is broken to the last — she wants no more of this harbor.
       if (wf.onPartyBroken(this.zone.id)) {
         bumpLedger(this.ledger, 'wraithsail_repelled');
-        this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-          'the court is driven back to the water — the Wraithsail slips her mooring', '#bfe8ec', 16);
+        this.notice('the court is driven back to the water — the Wraithsail slips her mooring', '#bfe8ec', 16, 'events');
       }
     }
   }
@@ -23537,10 +23457,9 @@ export class World {
     // that surfaces the Brigantine); an ordinary coast keeps the plain line.
     const isleDef = isleId ? VOYAGE_ISLANDS[this.islandDefIdOf(dest) ?? ''] : undefined;
     if (isleId) bumpLedger(this.ledger, 'islands_landed');
-    this.text(vec(this.player.pos.x, this.player.pos.y - 40),
-      `you make landfall — ${dest.name}`, '#7fd0ff', 15);
+    this.notice(`you make landfall — ${dest.name}`, '#7fd0ff', 15, 'world');
     if (isleDef?.blurb) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 66), isleDef.blurb, '#9ad0e8', 13);
+      this.notice(isleDef.blurb, '#9ad0e8', 13, 'world');
     }
   }
 
@@ -24361,8 +24280,7 @@ export class World {
       const n = formNemesis(saga, a.defId!, a.faction ?? '', 'escaped', Math.random,
         { name: this.distinctNameOf(a), bornRarity: a.rarity });
       formed++;
-      this.text(vec(this.player.pos.x, this.player.pos.y - 40),
-        `Something you left alive will remember the name ${this.meta.name}.`, '#c8a84b', 13);
+      this.notice(`Something you left alive will remember the name ${this.meta.name}.`, '#c8a84b', 13, 'events');
       this.events.emit('nemesis/formed', { saga: sagaKey(this.meta.name), nemesis: n.name, deed: 'escaped' });
       this.sagaDirty(true);
     }
@@ -24418,7 +24336,7 @@ export class World {
     rec.lastSeenAt = Date.now();
     const hunts = watch.role === 'merc'
       ? `hunts your hireling, ${watch.name}` : `remembers the name ${watch.name}`;
-    this.text(vec(this.player.pos.x, this.player.pos.y - 44), `${a.name} ${hunts}.`, rank.tint, 15);
+    this.notice(`${a.name} ${hunts}.`, rank.tint, 15, 'events');
     this.text(vec(a.pos.x, a.pos.y - a.radius - 14), '…found you.', rank.tint, 12);
     this.events.emit('nemesis/manifested', { saga: sagaKey(watch.name), nemesis: rec.name });
     this.sagaDirty();
@@ -24440,8 +24358,7 @@ export class World {
       if (!announced.has(a.faction)) {
         announced.add(a.faction);
         const fac = (FACTIONS[a.faction]?.name ?? a.faction).replace(/^the /, '');
-        this.text(vec(this.player.pos.x, this.player.pos.y - 58),
-          tier.entryLine.replace('{faction}', fac).replace('{name}', this.meta.name), '#c88888', 13);
+        this.notice(tier.entryLine.replace('{faction}', fac).replace('{name}', this.meta.name), '#c88888', 13, 'events');
       }
     }
   }
@@ -24899,8 +24816,7 @@ export class World {
     // Name the bearing from the actual placement (band placement has no fixed compass).
     const ddx = target.x - from.map.x, ddy = target.y - from.map.y;
     const dirName = Math.abs(ddx) > Math.abs(ddy) ? (ddx > 0 ? 'east' : 'west') : (ddy > 0 ? 'south' : 'north');
-    this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-      `Quest: ${q.offerLabel} — head ${dirName}.`, '#c8a8e8', 16);
+    this.notice(`Quest: ${q.offerLabel} — head ${dirName}.`, '#c8a8e8', 16, 'civic');
   }
 
   /** Find a map coord where the radial LEVEL field reaches `targetLevel`, stepping
@@ -24931,8 +24847,7 @@ export class World {
     if (q?.turnIn) {
       if (!aq.fieldDone) {
         aq.fieldDone = true;
-        this.text(vec(this.player.pos.x, this.player.pos.y - 86),
-          q.turnIn.prompt ?? 'Objective complete — return to the quartermaster to claim your reward.', '#ffd700', 16);
+        this.notice(q.turnIn.prompt ?? 'Objective complete — return to the quartermaster to claim your reward.', '#ffd700', 16, 'civic');
       }
       return;
     }
@@ -24979,8 +24894,7 @@ export class World {
           (this.account.ledger[questDoneKey(aq.questId)] ?? 0) + 1;
         this.accountDirty = true;
       }
-      this.text(vec(this.player.pos.x, this.player.pos.y - 86),
-        `Quest complete: ${q.offerLabel}!`, '#ffd700', 18);
+      this.notice(`Quest complete: ${q.offerLabel}!`, '#ffd700', 18, 'civic');
     }
     this.completedQuests.add(aq.questId);
     this.activeQuests.splice(idx, 1);
@@ -39268,6 +39182,7 @@ export class World {
         }
       },
       text: (at, msg, color, size) => this.text(at, msg, color, size),
+      notice: (msg, color, size, channel) => this.notice(msg, color, size, channel), // world news → THE NOTICE FEED
       bumpLedger: (key, by) => bumpLedger(this.ledger, key, by),
       bumpAccountLedger: (key, by = 1, flush = false) => {
         const cur = this.account.ledger[key] ?? 0;
@@ -41507,8 +41422,7 @@ export class World {
         // Announce only invasions of the plane the player stands in — a hell
         // rift tearing while you walk the surface stays hell's own business.
         if ((dfDim ?? 'surface') === (this.zone.dimension ?? 'surface')) {
-          this.text(vec(this.player.pos.x, this.player.pos.y - 90),
-            'A demon-blighted rift tears open in the distance!', '#e8503c', 15);
+          this.notice('A demon-blighted rift tears open in the distance!', '#e8503c', 15, 'events');
         }
       }
       dfi.mintRequests.length = 0;
@@ -41532,7 +41446,7 @@ export class World {
     const ig = this.sim.conclaveField?.takeIgnition();
     if (ig) {
       const info = this.sim.incursionField.ignite(ig.archetype, ig.origin, Math.max(this.zone.level, this.player.level));
-      if (info) this.text(vec(this.player.pos.x, this.player.pos.y - 110), info.announce, info.color, 18);
+      if (info) this.notice(info.announce, info.color, 18, 'events');
     }
     // Drain incursion mints: a CLUSTER of hidden (concealed + floating) epicenter
     // zones far from the charted frontier — the map neither draws them nor zooms to
@@ -41654,10 +41568,8 @@ export class World {
       if (!nearPlayer) continue;
       connectFloatingZone(z, this.zoneMap, new Rng((this.manifest.seed ^ hashStr(z.id)) >>> 0));
       this.sim.onNodeCharted(z, this.simView()); // now on the graph — seed its territory
-      this.text(vec(this.player.pos.x, this.player.pos.y - 90),
-        z.id.startsWith('demon_') ? 'A path opens toward the demon rift!'
-          : 'A path opens toward your quest!',
-        '#c8a8e8', 15);
+      this.notice(z.id.startsWith('demon_') ? 'A path opens toward the demon rift!'
+          : 'A path opens toward your quest!', '#c8a8e8', 15, 'world');
     }
 
     // LIVE EXITS: any of the drains above (a demon mint's linkBack + weave, a
@@ -53579,8 +53491,7 @@ export class World {
             this.flashes.push({ pos: vec(cart.pos.x, cart.pos.y), radius: 90, color: PROCESSION_CFG.smoke, life: 0.7, maxLife: 0.7 });
           }
           pr.cartId = null;
-          this.text(vec(this.player.pos.x, this.player.pos.y - 50),
-            'The caravan is lost — its bounty with it.', '#d05050', 16);
+          this.notice('The caravan is lost — its bounty with it.', '#d05050', 16, 'events');
           return;
         }
         if (!pr.rolling) {
@@ -55441,6 +55352,16 @@ export class World {
    *  per-kind curation (world/bulletins.ts registerFloatKind — the renderer
    *  gates the draw; unkinded lines always show); `life` is its stand time in
    *  seconds (drop names stand longer than damage ticks by design). */
+  /** THE NOTICE — world news onto THE NOTICE FEED (world/bulletins.ts): a
+   *  screen-anchored, channel-muted line for what happens OFF-SCREEN or at
+   *  the scale of the world (a package igniting, a siege two zones over, a
+   *  sea found, a quest opening) — never a floater over the hero's head
+   *  (the show-don't-tell axis: the head is for what is AT the head).
+   *  Channels: world (the catch-all) · events · war · civic. */
+  notice(text: string, color?: string, size?: number, channel: string = 'world'): void {
+    pushNotice(this.notices, { text, color, size, channel }, this.time);
+  }
+
   text(at: Vec2, text: string, color: string, size = 13, kind?: string, life = 1): void {
     this.texts.push({
       pos: vec(at.x + rand(-10, 10), at.y - 16), text, color,

@@ -31,7 +31,6 @@
 // knob on the surge below.
 // ---------------------------------------------------------------------------
 
-import { vec } from '../../core/math';
 import { FOG_BANKS } from '../../engine/fog';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { WEATHER_DEFS } from '../../world/weather';
@@ -147,8 +146,6 @@ registerKillHandler({
       ctx.grantXp(Math.round(dw.reward.xpBase + ctx.zone.level * dw.reward.xpPerLevel));
       for (let i = 0; i < dw.reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      broken ? 'The Winter King falls, and the frost begins its retreat!' : 'The Winter King falls!',
-      dw?.color ?? FROST_COLOR, 18);
+    ctx.notice(broken ? 'The Winter King falls, and the frost begins its retreat!' : 'The Winter King falls!', dw?.color ?? FROST_COLOR, 18, 'events');
   },
 });

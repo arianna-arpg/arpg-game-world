@@ -23,7 +23,6 @@
 // ---------------------------------------------------------------------------
 
 import { registerKillHandler } from '../../engine/killHandlers';
-import { vec } from '../../core/math';
 import { MONSTER_NAMES } from '../../data/monsterNames';
 import { NEMESIS_NAMES } from '../../data/nemesis';
 import { registerLord, type UnderworldLordDef } from '../lords';
@@ -293,7 +292,7 @@ registerKillHandler({
     ctx.bumpLedger('hell_marshals_slain');
     ctx.grantXp(Math.round(160 + ctx.zone.level * 30));
     ctx.dropGemAt(ctx.actor.pos);
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 48), 'The push collapses!', '#e8b060', 15);
+    ctx.notice('The push collapses!', '#e8b060', 15, 'events');
   },
 });
 
@@ -307,6 +306,6 @@ registerKillHandler({
     ctx.bumpAccountLedger('hell_lords_slain', 1, true);
     ctx.grantXp(Math.round(340 + ctx.zone.level * 56));
     for (let i = 0; i < 4; i++) ctx.dropGemAt(ctx.actor.pos);
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 60), 'CAST DOWN, and the war does not even pause.', '#ffd700', 19);
+    ctx.notice('CAST DOWN, and the war does not even pause.', '#ffd700', 19, 'events');
   },
 });

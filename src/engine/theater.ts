@@ -398,8 +398,7 @@ export class ActiveTheaterRun {
    *  there is no payout verb on a theater run, by law. */
   end(msg: string, color: string): void {
     this.done = true;
-    const p = this.world.player.pos;
-    this.world.text(vec(p.x, p.y + THEATER_CFG.announce.endDy), msg, color, 14);
+    this.world.notice(msg, color, 14, 'world'); // THE NOTICE FEED: a theater's ending is world news, not a floater at the head
   }
 }
 

@@ -32,7 +32,6 @@
 // All escalation is DATA on the surge below; the Vault tunes purely via pressure.
 // ---------------------------------------------------------------------------
 
-import { vec } from '../../core/math';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { CrusadeField, type CrusadeSurge } from '../overlays/crusade';
 import type { ContentPackage, FactionSpec } from '../types';
@@ -270,7 +269,6 @@ registerKillHandler({
     ctx.bumpLedger('crusade_zones_cleared');
     ctx.grantXp(Math.round((150 + ctx.zone.level * 30) * mul));
     for (let i = 0; i < 1 + Math.floor(mul); i++) ctx.dropGemAt(ctx.actor.pos);
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      `The crusade is driven from ${ctx.zone.name}! (×${mul.toFixed(1)} spoils)`, '#ffd700', 18);
+    ctx.notice(`The crusade is driven from ${ctx.zone.name}! (×${mul.toFixed(1)} spoils)`, '#ffd700', 18, 'war');
   },
 });

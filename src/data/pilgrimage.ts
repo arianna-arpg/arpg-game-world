@@ -353,8 +353,7 @@ registerTheaterKind({
       route, setOut: w.time, pace: pace0, nextSolve: 0, nextStep: 0, offered: false,
       forced: run.data.forced as PilgrimageState['forced'],
     } satisfies PilgrimageState;
-    w.text(vec(w.player.pos.x, w.player.pos.y + THEATER_CFG.announce.dy),
-      'a lantern line sets out across the terraces', '#ffd9a0', 14);
+    w.notice('a lantern line sets out across the terraces', '#ffd9a0', 14, 'world');
   },
   tick: (w: World, run: ActiveTheaterRun) => {
     const S = stateOf(run);

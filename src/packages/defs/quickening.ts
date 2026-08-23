@@ -175,7 +175,6 @@ registerKillHandler({
       for (let i = 0; i < reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
     ctx.flash(ctx.actor.pos, 180, SURGE_GILT, 0.9);
-    ctx.text({ x: ctx.actor.pos.x, y: ctx.actor.pos.y - 48 },
-      'The echo breaks; the surge howls on without it.', SURGE_GILT, 17);
+    ctx.notice('The echo breaks; the surge howls on without it.', SURGE_GILT, 17, 'events');
   },
 });

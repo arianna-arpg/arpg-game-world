@@ -20,7 +20,6 @@
 // DATA on the surge below, so it tunes + extends without touching the engine.
 // ---------------------------------------------------------------------------
 
-import { vec } from '../../core/math';
 import { registerCreep } from '../../engine/creep';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { STATUS_DEFS } from '../../engine/status';
@@ -236,7 +235,6 @@ registerKillHandler({
       ctx.grantXp(Math.round(cgn.reward.xpBase + ctx.zone.level * cgn.reward.xpPerLevel));
       for (let i = 0; i < cgn.reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      'Patient Zero falls, and the contagion begins to recede!', cgn?.color ?? '#8fd24a', 18);
+    ctx.notice('Patient Zero falls, and the contagion begins to recede!', cgn?.color ?? '#8fd24a', 18, 'events');
   },
 });

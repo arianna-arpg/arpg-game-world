@@ -27,7 +27,7 @@
 import { angleTo, dist, vec, type Vec2 } from '../core/math';
 import {
   marchEndpoints, marchSpawn, marchTick, registerTheaterKind, registerTheaterRow,
-  roadWaypoints, THEATER_CFG,
+  roadWaypoints,
   type ActiveTheaterRun, type MarchState, type TheaterSpots,
 } from '../engine/theater';
 import { FACTIONS } from './monsters';
@@ -82,8 +82,7 @@ registerTheaterKind({
       if (!d) break;
       d.pos = w.clampNear(camp, p.defenderJitter);
     }
-    w.text(vec(w.player.pos.x, w.player.pos.y + THEATER_CFG.announce.dy),
-      `${shortName(run.primary)} besiege ${shortName(run.secondary!)}!`, '#e85050', 15);
+    w.notice(`${shortName(run.primary)} besiege ${shortName(run.secondary!)}!`, '#e85050', 15, 'world');
   },
   tick: (w: World, run: ActiveTheaterRun) => {
     // ARCLESS: either side spent = the fight is over. No payout, no toast —
@@ -134,8 +133,7 @@ registerTheaterKind({
       f.pos = w.clampNear(route[0], p.followJitter);
       f.patrolFollow = lead.id;
     }
-    w.text(vec(w.player.pos.x, w.player.pos.y + THEATER_CFG.announce.dy),
-      `a ${shortName(run.primary)} patrol`, '#c8b06b', 14);
+    w.notice(`a ${shortName(run.primary)} patrol`, '#c8b06b', 14, 'world');
   },
   tick: (w: World, run: ActiveTheaterRun) => {
     // The patrol is simply faction troops; clearing them ends it quietly.
@@ -193,8 +191,7 @@ registerTheaterKind({
       leadJitter: p.leadJitter, followJitter: p.followJitter,
     });
     if (!lead) return;
-    w.text(vec(w.player.pos.x, w.player.pos.y + THEATER_CFG.announce.dy),
-      `a ${shortName(run.primary)} column passes through`, '#c8b06b', 14);
+    w.notice(`a ${shortName(run.primary)} column passes through`, '#c8b06b', 14, 'world');
   },
   tick: (w: World, run: ActiveTheaterRun) => { marchTick(w, run); },
 });
@@ -247,8 +244,7 @@ registerTheaterKind({
       speedMul: p.speedMul, followJitter: 44,
     });
     if (!lead) return;
-    w.text(vec(w.player.pos.x, w.player.pos.y + THEATER_CFG.announce.dy),
-      'a funeral procession winds past', '#b0a8d0', 14);
+    w.notice('a funeral procession winds past', '#b0a8d0', 14, 'world');
   },
   tick: (w: World, run: ActiveTheaterRun) => { marchTick(w, run); },
 });
@@ -297,8 +293,7 @@ registerTheaterKind({
         leadJitter: 90, followJitter: 60,
       });
     }
-    w.text(vec(w.player.pos.x, w.player.pos.y + THEATER_CFG.announce.dy),
-      'a hunted herd breaks past — something follows', '#c8a850', 14);
+    w.notice('a hunted herd breaks past — something follows', '#c8a850', 14, 'world');
   },
   tick: (w: World, run: ActiveTheaterRun) => { marchTick(w, run); },
 });
@@ -367,8 +362,7 @@ registerTheaterKind({
       // the guards; a dead cart counts as gone like any member.
       (run.data.marches as MarchState[])[0]?.ids.push(cart.id);
     }
-    w.text(vec(w.player.pos.x, w.player.pos.y + THEATER_CFG.announce.dy),
-      'a freehold cart takes the lane', '#d8b46a', 14);
+    w.notice('a freehold cart takes the lane', '#d8b46a', 14, 'world');
   },
   tick: (w: World, run: ActiveTheaterRun, dt: number) => {
     const p = run.params<CartGuardParams>();
