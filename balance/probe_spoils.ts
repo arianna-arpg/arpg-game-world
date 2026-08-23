@@ -71,6 +71,9 @@ const W = w as unknown as {
   actors: Actor[];
   dropAmalgamPart(af: unknown, partId: string, at: { x: number; y: number }): void;
   rollSkillGem(): unknown;
+  // THE RESIDENCE (M1): the grant chokepoint + the uid discard.
+  grantSkillGemItem(seat: unknown, inst: unknown): { uid: number } | null;
+  dropGearFromBag(seat: unknown, uid: number): void;
 };
 
 // Force every kill-path CHANCE gate wide open: on sealed ground even a
@@ -136,10 +139,11 @@ const discard = rollItem({ ilvl: PROBE_LEVEL });
 if (discard) w.dropGearAt(at(), discard, 'seat_probe');
 check('OWNED discard (droppedBy) lands on sealed ground', W.drops.length === n + 1);
 n = W.drops.length;
-const seat = W.localSeat as { meta: { skillInv: unknown[] } };
-seat.meta.skillInv.push(W.rollSkillGem());
-w.dropFromInventory(W.localSeat as never, 'skill', seat.meta.skillInv.length - 1);
-check('OWNED dropFromInventory lands on sealed ground', W.drops.length === n + 1);
+// THE RESIDENCE (M1): the discard rides the bag wrapper — grant the gem as
+// its item, then drop it by uid (the wrapper unwraps as it falls).
+const gemItem = W.grantSkillGemItem(W.localSeat, W.rollSkillGem());
+W.dropGearFromBag(W.localSeat, gemItem!.uid);
+check('OWNED gem discard lands on sealed ground', W.drops.length === n + 1);
 n = W.drops.length;
 const snatched = rollItem({ ilvl: PROBE_LEVEL });
 slay('pit_mauler', m => {

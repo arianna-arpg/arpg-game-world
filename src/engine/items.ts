@@ -51,7 +51,7 @@
 // types from here, itemgen.ts composes both; same layering as skills.ts).
 // ---------------------------------------------------------------------------
 
-import { SKILL_RARITIES } from './skills';
+import { SKILL_RARITIES, type SkillRarity } from './skills';
 import { ATTRIBUTES, STAT_DEFS, type AttributeId, type ConditionId, type ModKind, type SkillTag } from './stats';
 
 // ------------------------------------------------------------- rarities ----
@@ -82,7 +82,11 @@ export const ITEM_RARITY_IDS = Object.keys(ITEM_RARITIES) as ItemRarity[];
 export type ItemCategory =
   | 'helmet' | 'chest' | 'gloves' | 'boots' | 'legs' | 'belt'
   | 'amulet' | 'ring'
-  | 'weapon' | 'offhand' | 'quiver';
+  | 'weapon' | 'offhand' | 'quiver'
+  // THE RESIDENCE (skill-items charter M1): loose skill/support gems live in
+  // the one bag as 1×1 wrapper items. No doll slot accepts 'gem' — a memory
+  // is learned (rack seat) or socketed, never worn.
+  | 'gem';
 
 /** One wearable slot on the doll. Two ring slots are two SLOTS accepting one
  *  CATEGORY — the registry, not code, decides how many of anything you wear.
@@ -287,6 +291,41 @@ export interface AffixRollState {
   locked?: boolean;
 }
 
+// ---------------------------------------------------------------- gems -----
+// THE RESIDENCE (skill-items charter M1, docs/design/skill-items.md §1): a
+// loose gem is a 1×1 ItemInstance whose `gem` field carries the whole
+// progression truth in SAVED form — the SavedSkill/SavedSocket idiom from
+// meta/character.ts — so the wrapper keeps ItemInstance's pure-JSON law and
+// saves/wire/corpse all ride the standing gear lanes verbatim. Learning
+// rebuilds the live SkillInstance (engine/gemitems.ts is the one pack/unpack
+// seam); THE KEEPER'S MARK lives on the WRAPPER (ItemInstance.locked) while
+// loose and transfers to the instance at learn — one lock, one truth.
+
+/** One socketed support riding a loose skill gem's cargo. */
+export interface GemSocketRow { supportId: string; level: number; locked?: boolean }
+
+export interface SkillGemPayload {
+  kind: 'skill';
+  skillId: string;
+  level: number;
+  rarity: SkillRarity;
+  sockets: (GemSocketRow | null)[];
+  /** GRANTED (reacquired class starter — worthless wherever value mints). */
+  granted?: boolean;
+  /** THE GRIMOIRE: attuned bestiary form (validated on rebuild). */
+  attunedForm?: string;
+  /** THE SKILL-MODE TREES: spent node ids (validated at learn). */
+  treeNodes?: string[];
+}
+
+export interface SupportGemPayload {
+  kind: 'support';
+  supportId: string;
+  level: number;
+}
+
+export type GemPayload = SkillGemPayload | SupportGemPayload;
+
 /** A live item — PURE JSON (ids + numbers only), which makes it the save
  *  shape, the corpse shape, and the wire shape all at once. */
 export interface ItemInstance {
@@ -324,6 +363,10 @@ export interface ItemInstance {
    *  breaker's hammer on BOTH lanes and every salvageBulk sweep passes it
    *  by. Rides the instance verbatim through saves and the co-op wire. */
   locked?: boolean;
+  /** THE RESIDENCE (skill-items M1): a loose gem's cargo. Present exactly on
+   *  the skill_gem/support_gem wrapper bases; pure JSON like everything else
+   *  here. engine/gemitems.ts is the one pack/unpack/validate seam. */
+  gem?: GemPayload;
 }
 
 // ---------------------------------------------------------------- config ---

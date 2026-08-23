@@ -44,8 +44,9 @@ const w: World = makeSimWorld('warrior', 0xd15c);
 const seat = w.localSeat;
 const hero = seat.actor;
 const bagMultistrike = (): number => {
-  seat.meta.inventory.push({ def: SUPPORTS['multistrike'], level: 1 });
-  return seat.meta.inventory.length - 1;
+  // THE RESIDENCE (M1): the loose gem is a bag wrapper item — the uid is
+  // its address (a refused socket leaves the item bagged, same uid).
+  return w.grantSupportGemItem(seat, { def: SUPPORTS['multistrike'], level: 1 })!.uid;
 };
 const spawnAt = (defId: string, dx: number): Actor => {
   w.devGrabSpawn(defId);
@@ -72,9 +73,12 @@ hero.cooldowns.set('war_cry', 5);
 check('A: even a ticking clock unlearns in sanctuary',
   w.unlearnSkill('war_cry', seat));
 hero.cooldowns.delete('war_cry');
-check('A: …and relearns', w.learnSkill(seat.meta.skillInv.findIndex(i => i.def.id === 'war_cry'), seat));
+check('A: …and relearns', w.learnSkill(
+  seat.meta.items.find(i => i.gem?.kind === 'skill' && i.gem.skillId === 'war_cry')!.uid, seat));
 foeA.dead = true;
-seat.meta.inventory.pop();
+// shed the unsocketed multistrike wrapper (rig A's leftovers)
+const msLeft = seat.meta.items.find(i => i.gem?.kind === 'support');
+if (msLeft) seat.meta.items.splice(seat.meta.items.indexOf(msLeft), 1);
 
 // ----------------------------------------------------- B. INTO THE FIELD
 const field = Object.values(w.zoneMap).find(z =>
@@ -94,11 +98,10 @@ check('C: a fresh blow refuses all three surgeries, in its own words',
   w.swapRefusal(seat, 'socket') === 'the blood is still hot'
   && w.swapRefusal(seat, 'unsocket') === 'the blood is still hot'
   && w.swapRefusal(seat, 'unlearn', 'cleave') === 'the blood is still hot');
-const bagIdx = bagMultistrike();
-const bagBefore = seat.meta.inventory.length;
+const bagUid = bagMultistrike();
 check('C: the refused socket leaves the gem bagged',
-  w.socketSupport(bagIdx, 'cleave', seat) === false
-  && seat.meta.inventory.length === bagBefore
+  w.socketSupport(bagUid, 'cleave', seat) === false
+  && seat.meta.items.some(i => i.uid === bagUid)
   && !seat.meta.knownSkills.get('cleave')!.sockets.some(s => s?.def.id === 'multistrike'));
 check('C: the refused unlearn keeps the book whole',
   w.unlearnSkill('cleave', seat) === false && seat.meta.knownSkills.has('cleave'));

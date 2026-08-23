@@ -144,8 +144,8 @@ function containment(
     check('C: the warrior knows cleave', false);
   } else {
     const before = skillDamageBands(p, cleave).total.hi;
-    seat.meta.inventory.push({ def: SUPPORTS['brutality'] ?? SUPPORTS['added_fire'], level: 1 });
-    const socketed = w.socketSupport(seat.meta.inventory.length - 1, 'cleave', seat);
+    const gemItem = w.grantSupportGemItem(seat, { def: SUPPORTS['brutality'] ?? SUPPORTS['added_fire'], level: 1 });
+    const socketed = !!gemItem && w.socketSupport(gemItem.uid, 'cleave', seat);
     if (!socketed) {
       check('C: the test gem sockets into cleave', false);
     } else {

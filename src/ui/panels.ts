@@ -18,11 +18,11 @@ import { resistValue } from '../engine/damage';
 import { chargeLabel } from '../engine/charges';
 import {
   bandPointsAt, crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, essenceTierForLevel, instanceChargeCost, SKILL_LEVEL_BANDS, SKILL_RARITIES, skillCooldownSeconds, skillMaxLevel,
-  supportFitsInst, supportFitsInstOrCrew, supportMaxLevel, treeNodeRefusal, treeSpentBranch,
+  supportFitsInstOrCrew, supportMaxLevel, treeNodeRefusal, treeSpentBranch,
   type SkillDef, type SkillInstance, type SkillRarity, type SkillTreeNode, type SupportInstance,
 } from '../engine/skills';
-import { MAX_LEARNED_SKILLS } from '../engine/world';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
+import { findBagGem, gemInitials, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
 import { canPlaceAt, overlappingItems } from '../engine/inventory';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, type ModCompareRow } from '../engine/itemgen';
@@ -240,6 +240,34 @@ const CATEGORY_GLYPHS: Record<string, string> = {
   ring: '💍', amulet: '📿', weapon: '⚔', offhand: '🛡', quiver: '🏹',
 };
 
+// --- THE RESIDENCE (skill-items M1): gem-tile look helpers -----------------
+
+/** A gem wrapper tile's border color: the skill's own rarity ladder, or the
+ *  support's def color (supports carry no rarity — the def IS the tint). */
+const gemTileColorOf = (item: ItemInstance): string => {
+  const sp = skillGemPayloadOf(item);
+  if (sp) return SKILL_RARITIES[sp.rarity].color;
+  const gp = supportGemPayloadOf(item);
+  const def = gp ? SUPPORTS[gp.supportId] : null;
+  return def?.color ?? '#b8b8b8';
+};
+
+/** THE ICON LAW (walk-1): the tile face IS the hotbar icon at 1×1 — the
+ *  skill's color swatch wearing its initials (one icon truth, no second
+ *  art). Supports wear the same face in their def color. */
+const gemTileFaceHtml = (item: ItemInstance): string => {
+  const sp = skillGemPayloadOf(item);
+  const gp = supportGemPayloadOf(item);
+  const def = sp ? SKILLS[sp.skillId] : gp ? SUPPORTS[gp.supportId] : null;
+  if (!def) return '?';
+  const color = 'color' in def && def.color ? def.color : '#b8b8b8';
+  const lvl = sp?.level ?? gp?.level ?? 1;
+  return `<span style="display:flex;align-items:center;justify-content:center;
+      width:22px;height:22px;border-radius:3px;background:${color};opacity:0.9;
+      color:#0a0a0e;font-weight:bold;font-size:9px;font-family:Verdana">${gemInitials(def.name)}</span>
+    <span style="position:absolute;bottom:0;left:2px;font-size:8px;line-height:9px;color:#e8dcc8;text-shadow:0 0 2px #000">${lvl}</span>`;
+};
+
 /** The SCRAP-WHEEL cursor (vendor salvage mode): a gear glyph rendered into
  *  an SVG data-URI, crosshair fallback where custom cursors are refused. */
 const SCRAP_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
@@ -447,12 +475,8 @@ export class UI {
   //  render: glowing while the bar step pends and the drawer is closed,
   //  quiet the moment the lesson advances or latches LIVED. An early idle
   //  browse can't silence a step that hasn't been walked yet.)
-  /** THE UNIFIED INVENTORY's tab: gear grid, carried skill gems, or loose
-   *  support gems — one panel, one key, zero overlapping windows. */
-  invTab: 'gear' | 'skills' | 'gems' = 'gear';
-  /** Tab last RENDERED — scroll restores only within the same tab (the
-   *  skill book's golden rule, applied here). */
-  private lastInvTab: 'gear' | 'skills' | 'gems' | null = null;
+  // (THE RESIDENCE, skill-items M1: the inventory's gem tabs retired — loose
+  //  gems are 1×1 bag items on the one gear face; invTab died with them.)
   /** The floating CHOICE-NODE popup (appended to body — it must ride above
    *  the SVG and survive nothing: every refresh/pan/close dismisses it). */
   private choicePopup: HTMLDivElement | null = null;
@@ -590,8 +614,8 @@ export class UI {
   private treeBox = { minX: 0, minY: 0, w: 1000, h: 1000 };
   /** True while the Escape menu / rebind overlay is up — gameplay input pauses. */
   escapeMenuOpen = false;
-  // (The book is single-view now — its old gem tabs live on the Inventory
-  // panel as invTab; see that field's scroll-restore discipline.)
+  // (The book is single-view now; the inventory is too — the old gem tabs
+  // retired with THE RESIDENCE: loose gems are bag items, skill-items M1.)
   /** DEV passive-tree editor hook: invoked at the end of every refreshTree so the
    *  editor can re-attach its select/drag/link handlers to the freshly-drawn SVG
    *  (set by mountPassiveEditor when DEV.passiveTreeEditor is on; else unused). */
@@ -960,6 +984,14 @@ export class UI {
         if (!item) return null;
         const m = world().meta;
         const from = Object.keys(m.equipped).find(s => m.equipped[s]?.uid === item.uid) ?? 'bag';
+        // THE RESIDENCE: a gem wrapper's ghost speaks its gem (skill color ◆).
+        if (item.gem) {
+          const color = gemTileColorOf(item);
+          return {
+            kind: 'gearItem', arg, label: item.name, data: { from },
+            ghostHtml: `<span style="color:${color}">◆ ${item.name}</span>`,
+          };
+        }
         const cat = ITEM_BASES[item.baseId]?.category ?? 'ring';
         const color = ITEM_RARITIES[item.rarity].color;
         return {
@@ -983,33 +1015,8 @@ export class UI {
         };
       },
     });
-    // Carried gem rows (skill & support tabs) — draggable to the world to
-    // discard; identity rides the payload so a shifted index never drops the
-    // wrong gem. Press-drag only: the rows are dense with button verbs.
-    registerDragSource({
-      kind: 'skillGem',
-      payload: (arg) => {
-        const inst = world().meta.skillInv[Number(arg)];
-        if (!inst) return null;
-        return {
-          kind: 'skillGem', arg, label: inst.def.name,
-          data: { defId: inst.def.id, level: inst.level },
-          ghostHtml: `<span style="color:${SKILL_RARITIES[inst.rarity ?? 'common'].color}">◆ ${inst.def.name}</span>`,
-        };
-      },
-    });
-    registerDragSource({
-      kind: 'supportGem',
-      payload: (arg) => {
-        const gem = world().meta.inventory[Number(arg)];
-        if (!gem) return null;
-        return {
-          kind: 'supportGem', arg, label: gem.def.name,
-          data: { defId: gem.def.id, level: gem.level },
-          ghostHtml: `<span style="color:${gem.def.color}">◆ ${gem.def.name}</span>`,
-        };
-      },
-    });
+    // (THE RESIDENCE, M1: the old skillGem/supportGem row sources retired —
+    // loose gems are bag tiles now and lift as ordinary gearItem payloads.)
 
     // TARGETS ----------------------------------------------------------------
     // Empty bag cells: the payload's ORIGIN cell lands here (click-place
@@ -1107,27 +1114,14 @@ export class UI {
     });
     // THE WORLD: the game canvas takes gear and gems alike — dragging a thing
     // out of the panel onto the ground drops it at your feet (the oldest ARPG
-    // gesture there is). Gems re-resolve by identity in case the list shifted
-    // under a slow carry.
+    // gesture there is). One address space now (M1): everything drops by uid,
+    // and a gem wrapper unwraps as it falls (the ground speaks bare gems) —
+    // the old index-drift re-resolve hack died with the index.
     registerDropTarget({
       kind: 'ground',
-      accepts: (p) => p.kind === 'gearItem' || p.kind === 'skillGem' || p.kind === 'supportGem',
+      accepts: (p) => p.kind === 'gearItem',
       drop: (p) => {
-        const w = world();
-        if (p.kind === 'gearItem') {
-          w.requestMeta({ t: 'dropItem', uid: Number(p.arg) });
-        } else {
-          const d = p.data as { defId?: string; level?: number } | undefined;
-          const list: { def: { id: string }; level: number }[] =
-            p.kind === 'skillGem' ? w.meta.skillInv : w.meta.inventory;
-          let idx = Number(p.arg);
-          if (list[idx]?.def.id !== d?.defId || list[idx]?.level !== d?.level) {
-            idx = list.findIndex(g => g.def.id === d?.defId && g.level === d?.level);
-          }
-          if (idx < 0) return; // vanished mid-carry (learned/salvaged) — abandon
-          w.requestMeta(p.kind === 'skillGem'
-            ? { t: 'dropSkill', index: idx } : { t: 'dropSupport', index: idx });
-        }
+        world().requestMeta({ t: 'dropItem', uid: Number(p.arg) });
         gearRefresh();
       },
     });
@@ -1170,44 +1164,68 @@ export class UI {
         };
       },
     });
-    // A learned-but-unseated skill lifts from the holding strip.
-    registerDragSource({
-      kind: 'rackSkill',
-      clickLift: true,
-      payload: (arg) => {
-        const inst = this.panelSeat(this.inventory).meta.knownSkills.get(arg);
-        if (!inst) return null;
-        return {
-          kind: 'rackSkill', arg, label: inst.def.name,
-          ghostHtml: `<span style="color:${inst.def.color}">◆ ${inst.def.name}</span>`,
-        };
-      },
-    });
+    // The bag skill tile a gearItem payload carries, when it is one — the
+    // LEARN gesture's freight test (THE RESIDENCE: learn = drag skill tile
+    // onto a rack seat).
+    const payloadSkillGem = (pl: { kind: string; arg: string }): ItemInstance | null => {
+      if (pl.kind !== 'gearItem') return null;
+      const seat = this.panelSeat(this.inventory);
+      const item = seat.meta.items.find(i => i.uid === Number(pl.arg));
+      return item?.gem?.kind === 'skill' ? item : null;
+    };
     // Rack seats take both payloads: seat→seat exchanges through the ONE
     // atomic swapSkillSlots intent (occupied swaps, empty moves — same
-    // verb), strip→seat binds (an occupied seat's sitter returns to the
-    // strip: bindSkill's ordinary overwrite). Reordering is UNGATED —
-    // choosing a seat is play, not surgery (the skills.ts ruling).
+    // verb); a bag SKILL tile LEARNS into the seat (learn = seat, card 8 —
+    // an occupied seat is a REPLACE: the engine runs the sitter's full
+    // unlearn gates and refuses with its own words). A duplicate pre-dims
+    // the affordance; the engine stays the authority. Reordering is
+    // UNGATED — choosing a seat is play, not surgery (the skills.ts ruling).
     registerDropTarget({
       kind: 'rackSeat',
-      accepts: (pl, arg) =>
-        (pl.kind === 'rackSeat' && pl.arg !== arg) || pl.kind === 'rackSkill',
+      accepts: (pl, arg) => {
+        if (pl.kind === 'rackSeat') return pl.arg !== arg;
+        const item = payloadSkillGem(pl);
+        if (!item || item.gem?.kind !== 'skill') return false;
+        return !this.panelSeat(this.inventory).meta.knownSkills.has(item.gem.skillId);
+      },
       drop: (pl, arg) => {
         if (pl.kind === 'rackSeat') {
           this.getWorld().requestMeta({ t: 'swapSkillSlots', a: Number(pl.arg), b: Number(arg) });
         } else {
-          this.getWorld().requestMeta({ t: 'bindSkill', slot: Number(arg), skillId: pl.arg });
+          this.getWorld().requestMeta({ t: 'learn', uid: Number(pl.arg), slot: Number(arg) });
         }
         refresh();
       },
     });
-    // The strip itself: a seat dropped here UNSEATS (learned stays learned
-    // — the skill waits in the strip until M1 unifies learned = seated).
+    // The strip under the rack: a seat dropped here UNLEARNS — the skill
+    // returns to the pack as its item (learned = seated has no shelf
+    // between; the engine refuses on a full bag with its own note).
     registerDropTarget({
       kind: 'rackFree',
       accepts: (pl) => pl.kind === 'rackSeat',
       drop: (pl) => {
-        this.getWorld().requestMeta({ t: 'bindSkill', slot: Number(pl.arg), skillId: null });
+        const inst = heroOf().skills[Number(pl.arg)];
+        if (inst) this.getWorld().requestMeta({ t: 'unlearn', skillId: inst.def.id });
+        refresh();
+      },
+    });
+    // THE SOCKET GESTURE (charter §1): a bag SUPPORT tile dropped onto a
+    // skill row in the Build drawer sockets into its first free socket —
+    // the engine's crew-aware gate + field discipline speak all refusals.
+    registerDropTarget({
+      kind: 'gemSock',
+      accepts: (pl, skillId) => {
+        if (pl.kind !== 'gearItem') return false;
+        const seat = this.panelSeat(this.inventory);
+        const item = seat.meta.items.find(i => i.uid === Number(pl.arg));
+        if (item?.gem?.kind !== 'support') return false;
+        const sup = SUPPORTS[item.gem.supportId];
+        const inst = seat.meta.knownSkills.get(skillId);
+        if (!sup || !inst || !inst.sockets.includes(null)) return false;
+        return supportFitsInstOrCrew(sup, inst, this.getWorld().summonCrewSkills(inst));
+      },
+      drop: (pl, skillId) => {
+        this.getWorld().requestMeta({ t: 'socket', uid: Number(pl.arg), skillId });
         refresh();
       },
     });
@@ -1483,8 +1501,6 @@ export class UI {
     this.hoveredZone = null;
     this.pinnedZone = null;
     this.oceanCache = null;
-    this.invTab = 'gear';
-    this.lastInvTab = null;
   }
 
   showClassSelect(onPick: (def: ClassDef, modeId?: string, name?: string) => void): void {
@@ -2282,7 +2298,7 @@ export class UI {
     const starterChips = m.classDef.bar.filter((s): s is string => !!s).map(sid => {
       const def = SKILLS[sid];
       if (!def) return '';
-      const carried = m.knownSkills.has(sid) || m.skillInv.some(i => i.def.id === sid);
+      const carried = m.knownSkills.has(sid) || !!findBagGem(m.items, 'skill', sid);
       return `<span style="display:inline-block;margin:0 5px 0 0;font-size:9px;color:${carried ? '#6a6478' : def.color}"
         title="${def.name}${carried ? ' — carried' : ' — LOST: ↺ re-kindles a granted copy (worthless to salvage or the font)'}">
         ${def.name}${carried ? '' : ` <button data-reacquire="${sid}" style="font-size:9px;padding:0 4px" title="re-kindle (granted)">↺</button>`}</span>`;
@@ -2342,186 +2358,6 @@ export class UI {
       <span style="color:#8a8678;font-size:10px">· ${inst.sockets.length} socket${inst.sockets.length > 1 ? 's' : ''}</span>`;
   }
 
-  /** The CARRIED-GEM inventories (moved here from the skill book — one
-   *  inventory panel, tabs instead of overlapping windows). 'skills' also
-   *  hosts the contextual counters (Brandt / the Delver) since buying puts
-   *  gems into exactly these bags. `salv` = the armed salvage lane, if any:
-   *  under it each row is that lane's surface (break at the bench, sell at
-   *  a counter's wheel). */
-  private gemInventoryHtml(kind: 'skills' | 'gems', salv: 'break' | 'sell' | null = null): string {
-    const world = this.getWorld();
-    const invSeat = this.panelSeat(this.inventory);
-    const m = invSeat.meta;
-    // THE KEEPER'S MARK badge (right-click toggles it — wired in
-    // wireInventory's lockBind, both modes, every tab).
-    const lockBadge = '<span style="font-size:10px" title="Locked: salvage refuses it, sweeps skip it (right-click to unlock)">🔒</span>';
-    if (kind === 'gems') {
-      // Under an armed lane (the bench's hammer, a counter's wheel): each
-      // row IS that lane's surface — action buttons stand down, the yield
-      // prints inline, a locked row keeps still and says why.
-      if (salv) {
-        const glyph = salv === 'sell' ? '⚙' : '⚒';
-        const tool = salv === 'sell' ? 'the wheel' : 'the hammer';
-        const doWord = salv === 'sell' ? 'sell for' : 'break into';
-        return m.inventory.map((gem, idx) => {
-          const y = salv === 'sell' ? sellSupportYield(gem) : salvageSupportYield(gem);
-          return `
-          <div class="skill-entry" data-salv-sup="${idx}" data-lock-sup="${idx}"
-            style="border-left:3px solid ${gem.def.color};cursor:inherit">
-            <div class="name">${gem.def.name} <span style="color:#ffd700">Lv ${gem.level}</span>
-              ${gem.locked ? lockBadge : ''}</div>
-            <div class="desc" style="color:${gem.locked ? '#8a8678' : '#e8c87a'}">
-              ${glyph} ${gem.locked ? `locked — ${tool} passes it by` : `click to ${doWord} ${this.essCostText(y)}`}</div>
-          </div>`;
-        }).join('') || `<div style="color:#8a8678;font-size:11px">No loose support gems to ${salv === 'sell' ? 'sell' : 'break'}.</div>`;
-      }
-      // THE FIELD DISCIPLINE: one predicate, the engine's own words — the
-      // buttons refuse exactly when the mutation would (sanctuary waives).
-      const swapWhy = world.swapRefusal(invSeat, 'socket');
-      return m.inventory.map((gem, idx) => {
-        // Crew-aware targets: a gem may board a summon skill purely for what
-        // the minted minions cast — mark those so the player knows the
-        // payload rides the crew, and name the skills it boards.
-        const targets = [...m.knownSkills.values()]
-          .filter(inst => inst.sockets.includes(null)
-            && supportFitsInstOrCrew(gem.def, inst, world.summonCrewSkills(inst)))
-          .map(inst => {
-            if (supportFitsInst(gem.def, inst)) {
-              return `<button data-socket="${idx}:${inst.def.id}" ${swapWhy ? `disabled title="${swapWhy}"` : ''}>${inst.def.name}</button>`;
-            }
-            const served = crewSkillsServed(gem.def, inst, world.summonCrewSkills(inst));
-            const boards = served === 'unknowable' || served === null
-              ? 'whatever you raise'
-              : served.map(def => def.name).join(', ');
-            const doorNote = crewBoardingOpen(inst) ? ''
-              : ' Dormant until Resonance rides this skill.';
-            return `<button data-socket="${idx}:${inst.def.id}" ${swapWhy ? 'disabled' : ''}
-              title="${swapWhy ? `${swapWhy}. ` : ''}Boards the crew: forwarded to the minions' own skills (${boards}).${doorNote}">${inst.def.name} ⤳</button>`;
-          })
-          .join('') || '<span style="color:#8a8678">no socketable skill</span>';
-        const socketLabel = swapWhy
-          ? `Socket into <span style="color:#c08a68">(${swapWhy})</span>:` : 'Socket into:';
-        return `
-          <div class="skill-entry" data-drag="supportGem:${idx}" data-lock-sup="${idx}" style="border-left:3px solid ${gem.def.color}">
-            <div class="name">${gem.def.name} <span style="color:#ffd700">Lv ${gem.level}</span>
-              ${gem.locked ? `${lockBadge} ` : ''}<span style="color:#8a8678;font-weight:normal;font-size:10px">support gem</span></div>
-            <div class="desc">${gem.def.description}</div>
-            <div class="bind-btns">
-              ${this.abilityLevelBtn(`data-invlvl="${idx}"`, gem.level, gem.level >= supportMaxLevel(gem.def), true)}
-              <button data-drop-support="${idx}" title="Drop this gem on the ground (any nearby player can pick it up)">Drop</button>
-              ${socketLabel} ${targets}
-            </div>
-          </div>`;
-      }).join('') || '<div style="color:#8a8678;font-size:11px">Slain monsters drop support gems; walk over one to collect it.</div>';
-    }
-
-    // Under an armed lane: skill-gem rows as its surfaces (same shape as the
-    // supports above; a granted spark says plainly it yields nothing).
-    if (salv) {
-      const glyph = salv === 'sell' ? '⚙' : '⚒';
-      const tool = salv === 'sell' ? 'the wheel' : 'the hammer';
-      const doWord = salv === 'sell' ? 'sell for' : 'break into';
-      const nothingWord = salv === 'sell' ? 'sells for' : 'breaks into';
-      return m.skillInv.map((inst, idx) => {
-        const y = salv === 'sell' ? sellSkillYield(inst) : salvageSkillYield(inst);
-        const socketed = inst.sockets.some(s => s);
-        return `
-        <div class="skill-entry" data-salv-skill="${idx}" data-lock-skill="${idx}"
-          style="border-left:3px solid ${SKILL_RARITIES[inst.rarity ?? 'common'].color};cursor:inherit">
-          <div class="name">${inst.def.name} <span style="color:#ffd700">Lv ${inst.level}</span> ${this.rarityTagHtml(inst)}
-            ${inst.locked ? lockBadge : ''}${inst.granted ? ' <span style="color:#8a8678;font-size:10px">(granted)</span>' : ''}</div>
-          <div class="desc" style="color:${inst.locked ? '#8a8678' : y ? '#e8c87a' : '#8a8678'}">
-            ${glyph} ${inst.locked ? `locked — ${tool} passes it by`
-              : y ? `click to ${doWord} ${this.essCostText(y)}${socketed ? ' (socketed gems are pried out, not lost)' : ''}`
-              : `${nothingWord} NOTHING (granted spark) — a click still deletes it`}</div>
-        </div>`;
-      }).join('') || `<div style="color:#8a8678;font-size:11px">No skill gems to ${salv === 'sell' ? 'sell' : 'break'}.</div>`;
-    }
-
-    const nearFont = world.nearFont();
-    // THE FONT'S MERGE LANE (FONT_CFG.merge): eligible copies per (skill ×
-    // rarity) group — locked (the keeper's mark) and granted sparks never
-    // count, exactly as the engine recipe refuses them.
-    const mergeGroups = new Map<string, number>();
-    if (nearFont) {
-      for (const g of m.skillInv) {
-        if (g.locked || g.granted) continue;
-        const k = `${g.def.id}:${g.rarity ?? 'common'}`;
-        mergeGroups.set(k, (mergeGroups.get(k) ?? 0) + 1);
-      }
-    }
-    // (The Brandt/Delver counters moved to the dedicated VENDOR screen —
-    // dwell at a stocked counter to open it; data/vendors.ts is the registry.)
-    const slotsFull = m.knownSkills.size >= MAX_LEARNED_SKILLS;
-    const skillGems = m.skillInv.map((inst, idx) => {
-      const def = inst.def;
-      const ok = meetsRequirements(world, def, invSeat);
-      const dupe = m.knownSkills.has(def.id);
-      const reqText = def.requirements
-        ? Object.entries(def.requirements).map(([a, n]) => {
-            const met = (m.attrs[a as AttributeId] ?? 0) >= (n ?? 0);
-            return `<span style="color:${met ? '#6fc06f' : '#d05050'}">${ATTRIBUTES[a as AttributeId].short} ${n}</span>`;
-          }).join(', ')
-        : 'No requirements';
-      const blocker = dupe ? 'already learned' : slotsFull ? 'all slots full' : !ok ? 'requirements unmet' : '';
-      return `
-        <div class="skill-entry" data-drag="skillGem:${idx}" data-lock-skill="${idx}" style="border-left:3px solid ${SKILL_RARITIES[inst.rarity ?? 'common'].color}">
-          <div class="name">${def.name} <span style="color:#ffd700">Lv ${inst.level}</span> ${this.rarityTagHtml(inst)}${inst.locked ? ` ${lockBadge}` : ''}</div>
-          <div class="tags">${def.tags.join(' · ')}</div>
-          <div class="desc">${def.description}</div>
-          <div class="req">Requires: ${reqText}</div>
-          <div class="bind-btns">
-            <button data-learn="${idx}" ${blocker ? 'disabled' : ''}>
-              Learn${blocker ? ` (${blocker})` : ''}</button>
-            ${(() => {
-              if (!nearFont) return '';
-              const r = inst.rarity ?? 'common';
-              const need = FONT_CFG.merge[r];
-              if (!need) return '';
-              const ladder = Object.keys(SKILL_RARITIES) as SkillRarity[];
-              const next = ladder[ladder.indexOf(r) + 1];
-              if (!next) return '';
-              const have = mergeGroups.get(`${def.id}:${r}`) ?? 0;
-              return `<button data-fontmerge="${def.id}:${r}" ${have < need || inst.locked || inst.granted ? 'disabled' : ''}
-                title="Sacrificial Font: fuse ${need}× ${def.name} (${SKILL_RARITIES[r].label}) into ONE ${SKILL_RARITIES[next].label} — highest level kept, socketed supports returned to the bag.${have < need ? ` You carry ${have} eligible (locked and granted never count).` : ''}">
-                Merge ${need}× → ${SKILL_RARITIES[next].label}</button>`;
-            })()}
-            <button data-drop-skill="${idx}" title="Drop this gem on the ground (any nearby player can pick it up)">Drop</button>
-          </div>
-        </div>`;
-    }).join('') || `<div style="color:#8a8678;font-size:11px">
-      No skill gems carried. Monsters drop them; rarity decides their sockets (1-4).
-      ${nearFont ? '' : 'A Sacrificial Font can fuse triple copies into a higher rarity.'}</div>`;
-    return skillGems;
-  }
-
-  /** Wire the carried-gem lists' buttons (whichever container renders them). */
-  private wireGemInventory(container: HTMLElement, refresh: () => void): void {
-    const world = this.getWorld();
-    const q = <T extends HTMLElement>(sel: string): T[] => [...container.querySelectorAll<T>(sel)];
-    q<HTMLButtonElement>('button[data-learn]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'learn', index: Number(btn.dataset.learn) }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-fontmerge]').forEach(btn => btn.addEventListener('click', () => {
-      const [skillId, rarity] = btn.dataset.fontmerge!.split(':');
-      world.requestMeta({ t: 'fontMerge', skillId, rarity: rarity as SkillRarity }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-invlvl]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'levelSupportInv', index: Number(btn.dataset.invlvl) }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-drop-skill]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'dropSkill', index: Number(btn.dataset.dropSkill) }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-drop-support]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'dropSupport', index: Number(btn.dataset.dropSupport) }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-socket]').forEach(btn => btn.addEventListener('click', () => {
-      const [idx, skillId] = btn.dataset.socket!.split(':');
-      world.requestMeta({ t: 'socket', index: Number(idx), skillId });
-      refresh();
-    }));
-  }
-
   toggleInventory(seatId?: string): void {
     const seat = this.couchSeatFor(seatId);
     // Open for ANOTHER local seat → take ownership (the couch contention rule).
@@ -2532,12 +2368,9 @@ export class UI {
     }
     this.inventoryOpen = !this.inventoryOpen;
     if (this.inventoryOpen) this.ownPanel(this.inventory, seat);
-    // THE LESSON'S HAND ON THE TAB: while Mireille's gift sits carried and
-    // unlearned, the inventory OPENS on the Skill Gems tab — the very step
-    // her directions name — instead of wherever the player last browsed.
-    // Lesson-scoped only: a graduated account (flasks dealt at spawn) and
-    // any hero past the learn step get the panel exactly as they left it.
-    if (this.inventoryOpen && this.getWorld().mireilleGiftLesson() === 'learn') this.invTab = 'skills';
+    // (The lesson's old hand on the Skill Gems tab retired with the tab —
+    // the gift flasks glow as BAG TILES now, on the one face, and the
+    // SKILLS flap + empty rack seats carry the gesture the rest of the way.)
     this.inventory.classList.toggle('hidden', !this.inventoryOpen);
     if (this.inventoryOpen) this.refreshInventory();
     else { dndCancel(); hideTooltip(); } // a ghost never outlives its surface
@@ -2610,6 +2443,8 @@ export class UI {
   private itemTooltip(uid: number, extended?: boolean, seat: Seat = this.getWorld().localSeat, salv: 'break' | 'sell' | null = null): TooltipContent | null {
     const item = this.findItem(uid, seat);
     if (!item) return null;
+    // THE RESIDENCE (M1): a gem wrapper's card speaks the gem, not the steel.
+    if (item.gem) return this.gemItemTooltip(item, seat, salv);
     const d = describeItem(item);
     const lines: string[] = [`<div style="color:#9a94a8;font-size:10px">${d.baseLine}</div>`];
     if (item.locked) {
@@ -2663,6 +2498,86 @@ export class UI {
     };
   }
 
+  /** THE MEMORY CARD (skill-items M1): the gem wrapper's tooltip — kind
+   *  label per walk-1 ("Skill Memory"/"Support Memory"), the gem's own
+   *  rarity/level/sockets/requirements, the armed salvage lane's price, and
+   *  the gesture hints. Every line derives live from the payload + defs. */
+  private gemItemTooltip(item: ItemInstance, seat: Seat, salv: 'break' | 'sell' | null): TooltipContent | null {
+    const world = this.getWorld();
+    const m = seat.meta;
+    const lines: string[] = [];
+    const inBag = m.items.some(i => i.uid === item.uid);
+    if (item.locked) {
+      lines.push('<div style="color:#c8a84b">🔒 Locked — salvage refuses it, sweeps skip it (right-click to unlock)</div>');
+    }
+    const sp = skillGemPayloadOf(item);
+    if (sp) {
+      const def = SKILLS[sp.skillId];
+      if (!def) return null;
+      const r = SKILL_RARITIES[sp.rarity];
+      if (!item.locked && salv && inBag) {
+        const inst = skillOfGemItem(item);
+        const y = inst ? (salv === 'sell' ? sellSkillYield(inst) : salvageSkillYield(inst)) : null;
+        lines.unshift(`<div style="color:#e8c87a;font-weight:bold">${salv === 'sell' ? '⚙' : '⚒'} ${y
+          ? `Click to ${salv === 'sell' ? 'sell for' : 'break into'} ${this.essCostText(y)}`
+          : `the granted spark ${salv === 'sell' ? 'sells for' : 'breaks into'} NOTHING — a click still deletes it`}</div>`);
+      }
+      lines.push(`<div style="color:#9a94a8;font-size:10px">Skill Memory · <span style="color:${r.color};font-weight:bold">${r.label}</span> · ${sp.sockets.length} socket${sp.sockets.length === 1 ? '' : 's'}${sp.granted ? ' · <span style="color:#8a8678">granted</span>' : ''}</div>`);
+      lines.push(`<div style="color:#8a8678;font-size:10px">${def.tags.join(' · ')}</div>`);
+      lines.push(`<div>${def.description}</div>`);
+      const socketed = sp.sockets.filter((s): s is NonNullable<typeof s> => !!s);
+      if (socketed.length) {
+        lines.push(`<div style="color:#b8a2e8;font-size:10px">Socketed: ${socketed
+          .map(s => `${SUPPORTS[s.supportId]?.name ?? s.supportId} L${s.level}`).join(' · ')}</div>`);
+      }
+      const reqText = def.requirements
+        ? Object.entries(def.requirements).map(([a, n]) => {
+            const met = (m.attrs[a as AttributeId] ?? 0) >= (n ?? 0);
+            return `<span style="color:${met ? '#6fc06f' : '#d05050'}">${ATTRIBUTES[a as AttributeId].short} ${n}</span>`;
+          }).join(', ')
+        : 'none';
+      lines.push(`<div style="color:#9a94a8;font-size:10px">Requires: ${reqText}</div>`);
+      if (inBag && !salv) {
+        const dupe = m.knownSkills.has(sp.skillId);
+        lines.push(`<div style="color:#c8a84b;font-size:10px;margin-top:3px">${dupe
+          ? 'already learned — fodder for the Font, or a trade'
+          : 'drag onto a rack seat (SKILLS flap) to learn · double-click = first free seat'}</div>`);
+      }
+      return {
+        title: `<span style="color:${r.color}">${def.name}</span> <span style="color:#ffd700;font-size:11px">Lv ${sp.level}</span>`,
+        description: lines.join(''),
+        meta: `Skill Memory · ${r.label}`,
+      };
+    }
+    const gp = supportGemPayloadOf(item);
+    if (!gp) return null;
+    const def = SUPPORTS[gp.supportId];
+    if (!def) return null;
+    if (!item.locked && salv && inBag) {
+      const gem = supportOfGemItem(item);
+      const y = gem ? (salv === 'sell' ? sellSupportYield(gem) : salvageSupportYield(gem)) : null;
+      if (y) {
+        lines.unshift(`<div style="color:#e8c87a;font-weight:bold">${salv === 'sell' ? '⚙' : '⚒'} Click to ${salv === 'sell' ? 'sell for' : 'break into'} ${this.essCostText(y)}</div>`);
+      }
+    }
+    lines.push('<div style="color:#9a94a8;font-size:10px">Support Memory</div>');
+    lines.push(`<div>${def.description}</div>`);
+    if (inBag && !salv) {
+      const hosts = [...m.knownSkills.values()]
+        .filter(inst => inst.sockets.includes(null)
+          && supportFitsInstOrCrew(def, inst, world.summonCrewSkills(inst)))
+        .map(inst => inst.def.name);
+      lines.push(`<div style="color:#c8a84b;font-size:10px;margin-top:3px">${hosts.length
+        ? `drag onto a skill in the SKILLS flap to socket it — fits: ${hosts.join(', ')}`
+        : 'no learned skill has a free, fitting socket right now'}</div>`);
+    }
+    return {
+      title: `<span style="color:${def.color}">${def.name}</span> <span style="color:#ffd700;font-size:11px">Lv ${gp.level}</span>`,
+      description: lines.join(''),
+      meta: 'Support Memory',
+    };
+  }
+
   /** Vestige card — the per-category grant table derives LIVE from the def,
    *  so every copy reads identically and retunes never stale. */
   private vestigeTooltip(id: string): TooltipContent | null {
@@ -2683,6 +2598,7 @@ export class UI {
     // (No mid-drag freeze: the fabric's gestures ride data attributes that
     // survive innerHTML rebuilds — a re-render mid-carry re-earns its marks
     // on the next beat. The old native drag needed the world to hold still.)
+    const world = this.getWorld();
     const invSeat = this.panelSeat(this.inventory);
     const m = invSeat.meta;
     const CELL = 34;
@@ -2785,14 +2701,45 @@ export class UI {
     // inlays forgivingly). The fabric's .dnd-src mark dims a lifted tile.
     // Under an armed lane a tile trades its lift for the lane's click
     // (data-salv-uid) — locked tiles keep still and say why.
+    // GEM WRAPPERS (THE RESIDENCE, M1) draw THE ICON LAW's face — the
+    // skill's hotbar swatch + initials at 1×1, bordered in the gem's own
+    // ladder color — and glow with Mireille's lesson while a gift flask
+    // waits unseated (the per-item bag glow; the tab glow died with the tab).
+    const lessonSkills = world.mireilleGiftLesson() === 'learn' ? world.mireilleLessonSkills() : [];
     const tiles = m.items.map(i => {
       if (i.x === undefined || i.y === undefined) return '';
       const s = itemGridSize(i);
-      const r = ITEM_RARITIES[i.rarity];
-      const cat = ITEM_BASES[i.baseId]?.category ?? 'ring';
       const verb = breaking
         ? `data-salv-uid="${i.uid}"`
         : `data-drag="gearItem:${i.uid}"`;
+      if (i.gem) {
+        const color = gemTileColorOf(i);
+        const sp = skillGemPayloadOf(i);
+        const gp = supportGemPayloadOf(i);
+        const teach = !!sp && lessonSkills.includes(sp.skillId);
+        // The loose support's level-up: the same Ability-Essence feed the
+        // drawer serves socketed gems, as a corner pip (inner control — the
+        // fabric never lifts through it).
+        const gd = gp ? SUPPORTS[gp.supportId] : null;
+        const cost = gd ? supportLevelAbilityCost(gp!.level + 1) : null;
+        const canLvl = !!(gd && gp && !breaking && gp.level < supportMaxLevel(gd)
+          && this.getWorld().canAffordAbilityEssence(this.panelSeat(this.inventory), cost!));
+        const lvlBtn = canLvl
+          ? `<button data-gemlvl-inv="${i.uid}" title="Level up for ${cost!.count}× ${abilityEssenceOfTier(cost!.tier).label}"
+              style="position:absolute;bottom:-1px;right:0;font-size:9px;line-height:10px;padding:0 2px;
+              background:#241d2e;border:1px solid #4a3a5a;border-radius:3px;color:#c8a8ff;cursor:var(--cursor-point, pointer)">+</button>`
+          : '';
+        return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
+          ${verb} data-drop="gearTile:${i.uid}" ${sp ? `data-gem-skill="${i.uid}"` : ''}
+          class="${teach ? 'tut-glow' : ''}"
+          style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
+          width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#1c1626;
+          border:2px solid ${color};border-radius:3px;cursor:${breaking ? 'inherit' : 'var(--cursor-point, pointer)'};box-sizing:border-box;
+          display:flex;align-items:center;justify-content:center;
+          ${sp?.rarity === 'legendary' ? `box-shadow:0 0 10px ${color};` : ''}">${gemTileFaceHtml(i)}${lockPip(i.locked)}${lvlBtn}</div>`;
+      }
+      const r = ITEM_RARITIES[i.rarity];
+      const cat = ITEM_BASES[i.baseId]?.category ?? 'ring';
       return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
         ${verb} data-drop="gearTile:${i.uid}"
         style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
@@ -2851,7 +2798,9 @@ export class UI {
     // once the loop has been walked — this run, a past character, or
     // undone again by choice (unlearn, unbind) — these stay quiet forever.
     const lesson = this.getWorld().mireilleGiftLesson();
-    const flapGlow = lesson === 'bar' && !this.buildFlapOpen;
+    // Under learned = seated (M1) BOTH steps end at the rack — the flap is
+    // the road there, so it glows while either pends and the drawer is shut.
+    const flapGlow = lesson !== null && !this.buildFlapOpen;
     // THE COUCH FLANK: the drawer (and its handle) pop AWAY from the screen
     // edge the panel docks against — a couch-LEFT guest's drawer opens
     // rightward instead of clipping off-screen; the classic centered (and
@@ -2938,26 +2887,16 @@ export class UI {
         </div>
       </div>`;
 
-    // ONE inventory, tabbed: the gear grid and the carried gem bags share the
-    // panel (and the key) instead of overlapping as separate windows.
-    const tabBtn = (id: 'gear' | 'skills' | 'gems', label: string): string =>
-      `<button class="book-tab ${this.invTab === id ? 'active' : ''}${
-        lesson === 'learn' && id === 'skills' && this.invTab !== 'skills' ? ' tut-glow' : ''
-      }" data-invtab="${id}">${label}</button>`;
-    const tabs = `<div class="book-tabs" style="margin-bottom:8px">
-      ${tabBtn('gear', `Gear (${m.items.length})`)}
-      ${tabBtn('skills', `Skill Gems (${m.skillInv.length})`)}
-      ${tabBtn('gems', `Support Gems (${m.inventory.length})`)}
-    </div>`;
-    const body = this.invTab === 'gear' ? gearBody : this.gemInventoryHtml(this.invTab, salv);
+    // THE ONE BAG (skill-items M1): the gem tabs retired — gear tiles and
+    // gem wrappers share the one grid, and the pane is the single gear face.
+    const body = gearBody;
 
-    // Same-tab scroll restore (the golden rule — a re-render must never
-    // yank a list to the top mid-read). The panel itself no longer scrolls
-    // (the drawer hangs OUTSIDE it); the inner wrapper does, and the
-    // drawer's own list keeps its offset too.
+    // Scroll restore (the golden rule — a re-render must never yank a list
+    // to the top mid-read). The panel itself no longer scrolls (the drawer
+    // hangs OUTSIDE it); the inner wrapper does, and the drawer's own list
+    // keeps its offset too.
     const prevScroll = this.inventory.querySelector<HTMLElement>('.inv-scroll')?.scrollTop ?? 0;
     const prevBuildScroll = this.inventory.querySelector<HTMLElement>('.build-scroll')?.scrollTop ?? 0;
-    const sameTab = this.lastInvTab === this.invTab;
     // THE ANCHORED FRAME: the scroll wrapper holds the GEAR tab's height
     // (derived from the doll itself) on EVERY tab, clamped to the viewport —
     // an empty gem tab no longer collapses the pane, so the Build flap and
@@ -2966,13 +2905,12 @@ export class UI {
     // overflow-y would otherwise compute overflow-x to auto and grow a
     // phantom horizontal bar under the fold.
     const frameMin = Math.ceil(dollRowsFor(EQUIP_SLOTS.filter(s => s.enabled && DOLL_SEATS[s.id])) * 34) + 48;
-    this.inventory.innerHTML = `${drawer}${drawerHandle}${satchel}${this.closeGlyphHtml()}<h2>Inventory</h2>${tabs}
+    this.inventory.innerHTML = `${drawer}${drawerHandle}${satchel}${this.closeGlyphHtml()}<h2>Inventory</h2>
       <div class="inv-scroll" style="min-height:min(${frameMin}px, calc(100vh - 240px));max-height:calc(100vh - 240px);overflow-y:auto;overflow-x:hidden">${body}</div>`;
     const scrollEl = this.inventory.querySelector<HTMLElement>('.inv-scroll');
-    if (scrollEl && sameTab) scrollEl.scrollTop = prevScroll;
+    if (scrollEl) scrollEl.scrollTop = prevScroll;
     const buildEl = this.inventory.querySelector<HTMLElement>('.build-scroll');
     if (buildEl) buildEl.scrollTop = prevBuildScroll;
-    this.lastInvTab = this.invTab;
     this.wireInventory();
     this.paintPortraitsIn(this.inventory); // the build flap's Spectre chip
     this.applyBreakChrome();
@@ -2991,12 +2929,7 @@ export class UI {
       this.satchelOpen = !this.satchelOpen;
       this.refreshInventory();
     });
-    q<HTMLButtonElement>('button[data-invtab]').forEach(btn => btn.addEventListener('click', () => {
-      this.invTab = btn.dataset.invtab as typeof this.invTab;
-      dndCancel(); // a carry has no meaning across a tab flip
-      this.refreshInventory();
-    }));
-    // The Build drawer rides EVERY tab (its handle hangs on the panel edge):
+    // The Build drawer (its handle hangs on the panel edge):
     // toggle + — when open — the learned list's full management wiring.
     this.inventory.querySelector<HTMLButtonElement>('[data-buildflap]')?.addEventListener('click', () => {
       this.buildFlapOpen = !this.buildFlapOpen;
@@ -3016,74 +2949,32 @@ export class UI {
     const salv = this.salvageLaneFor(this.inventory);
     const seatMeta = this.panelSeat(this.inventory).meta;
     // THE KEEPER'S MARK: right-click (button-2 press) toggles the salvage
-    // lock on anything carried — bag tiles, worn chips, gem rows; every
-    // tab, hammer up or down. The dnd fabric's own button-2 (cancel a
-    // carry) runs first at document capture and stops propagation, so a
-    // carry-cancel never doubles as a lock flip; dndCarried() is the belt
-    // to that suspender.
-    const lockBind = (
-      attr: string, kind: 'item' | 'skill' | 'support',
-      find: (el: HTMLElement) => { id: number; locked?: boolean } | null,
-    ): void => {
-      q<HTMLElement>(`[${attr}]`).forEach(el => el.addEventListener('pointerdown', ev => {
-        if (ev.button !== 2 || dndCarried()) return;
-        const hit = find(el);
-        if (!hit) return;
-        ev.preventDefault();
-        ev.stopPropagation();
-        world.requestMeta({ t: 'salvageLock', kind, id: hit.id, on: !hit.locked });
-        this.refreshInventory();
-        if (this.salvageOpen) this.refreshSalvage(); // sweep counts moved
-        if (this.vendorOpen) this.refreshVendor(); // a counter's cluster counts too
-      }));
-    };
-    lockBind('data-lock-uid', 'item', el => {
+    // lock on anything carried — bag tiles (gear AND gem wrappers), worn
+    // chips; hammer up or down. ONE uid address space (M1). The dnd
+    // fabric's own button-2 (cancel a carry) runs first at document capture
+    // and stops propagation, so a carry-cancel never doubles as a lock
+    // flip; dndCarried() is the belt to that suspender.
+    q<HTMLElement>('[data-lock-uid]').forEach(el => el.addEventListener('pointerdown', ev => {
+      if (ev.button !== 2 || dndCarried()) return;
       const uid = Number(el.dataset.lockUid);
       const it = seatMeta.items.find(i => i.uid === uid)
         ?? Object.values(seatMeta.equipped).find(i => i?.uid === uid);
-      return it ? { id: uid, locked: it.locked } : null;
-    });
-    lockBind('data-lock-skill', 'skill', el => {
-      const idx = Number(el.dataset.lockSkill);
-      const inst = seatMeta.skillInv[idx];
-      return inst ? { id: idx, locked: inst.locked } : null;
-    });
-    lockBind('data-lock-sup', 'support', el => {
-      const idx = Number(el.dataset.lockSup);
-      const gem = seatMeta.inventory[idx];
-      return gem ? { id: idx, locked: gem.locked } : null;
-    });
+      if (!it) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      world.requestMeta({ t: 'salvageLock', uid, on: !it.locked });
+      this.refreshInventory();
+      if (this.salvageOpen) this.refreshSalvage(); // sweep counts moved
+      if (this.vendorOpen) this.refreshVendor(); // a counter's cluster counts too
+    }));
 
-    // The gem tabs re-use the shared list wiring (learning moves gems into
-    // knownSkills — the drawer re-renders with the same refresh).
-    if (this.invTab !== 'gear') {
-      this.wireGemInventory(this.inventory, () => this.refreshInventory());
-      // Under an armed lane the rows themselves are its surfaces (their
-      // action buttons stood down in gemInventoryHtml — one verb per mode).
-      if (salv) {
-        q<HTMLElement>('[data-salv-skill]').forEach(el => el.addEventListener('click', ev => {
-          if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey || dndCarried()) return;
-          const idx = Number(el.dataset.salvSkill);
-          if (seatMeta.skillInv[idx]?.locked) return; // the row says why
-          world.requestMeta({ t: 'salvageSkill', index: idx, lane: salv });
-          hideTooltip();
-          this.refreshInventory();
-          this.refreshSalvage();
-          this.refreshVendor();
-        }));
-        q<HTMLElement>('[data-salv-sup]').forEach(el => el.addEventListener('click', ev => {
-          if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey || dndCarried()) return;
-          const idx = Number(el.dataset.salvSup);
-          if (seatMeta.inventory[idx]?.locked) return;
-          world.requestMeta({ t: 'salvageSupport', index: idx, lane: salv });
-          hideTooltip();
-          this.refreshInventory();
-          this.refreshSalvage();
-          this.refreshVendor();
-        }));
-      }
-      return; // no gear handlers to attach on gem tabs
-    }
+    // THE LOOSE LEVEL-UP: a support wrapper's corner + feeds the same
+    // Ability-Essence lane the drawer serves socketed gems (inner control —
+    // the fabric never lifts through it).
+    q<HTMLButtonElement>('button[data-gemlvl-inv]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'levelSupportInv', uid: Number(btn.dataset.gemlvlInv) });
+      this.refreshInventory();
+    }));
 
     // THE HAMMER'S BITE (or the wheel's): while a lane is armed, a plain
     // click on a bag tile salvages it down that lane (the lift verb stood
@@ -3116,6 +3007,17 @@ export class UI {
       });
       el.addEventListener('dblclick', () => {
         if (salv) return; // one verb under an armed lane — the click salvaged it
+        // THE RESIDENCE: a skill wrapper's double-click LEARNS into the
+        // first free seat (the gear equip's exact mirror — one symmetry).
+        const item = seatMeta.items.find(i => i.uid === uid);
+        if (item?.gem) {
+          if (item.gem.kind === 'skill') {
+            world.requestMeta({ t: 'learn', uid });
+            this.refreshInventory();
+            this.refreshCharSheet();
+          }
+          return; // supports have no slotless verb — drag them to a socket
+        }
         world.requestMeta({ t: 'equipItem', uid });
         this.refreshInventory();
         this.refreshCharSheet();
@@ -3219,16 +3121,19 @@ export class UI {
 
     let body = '';
     if (this.fontTab === 'merge') {
-      // Eligible copies per (skill × rarity) — the engine recipe's own
-      // filters (locked/granted never count), highest level first so the
-      // preview names the level the merge will KEEP.
+      // Eligible copies per (skill × rarity) among the BAG's gem wrappers
+      // (THE RESIDENCE) — the engine recipe's own filters (locked/granted
+      // never count), highest level first so the preview names the level
+      // the merge will KEEP.
       const groups = new Map<string, { def: SkillDef; rarity: SkillRarity; levels: number[]; barred: number }>();
-      for (const g of m.skillInv) {
-        const r = (g.rarity ?? 'common') as SkillRarity;
-        const k = `${g.def.id}:${r}`;
-        const row = groups.get(k) ?? { def: g.def, rarity: r, levels: [], barred: 0 };
-        if (g.locked || g.granted) row.barred++;
-        else row.levels.push(g.level);
+      for (const item of m.items) {
+        const p = skillGemPayloadOf(item);
+        const def = p ? SKILLS[p.skillId] : null;
+        if (!p || !def) continue;
+        const k = `${p.skillId}:${p.rarity}`;
+        const row = groups.get(k) ?? { def, rarity: p.rarity, levels: [], barred: 0 };
+        if (item.locked || p.granted) row.barred++;
+        else row.levels.push(p.level);
         groups.set(k, row);
       }
       const ladder = Object.keys(SKILL_RARITIES) as SkillRarity[];
@@ -3455,12 +3360,21 @@ export class UI {
     const skillY = sell ? sellSkillYield : salvageSkillYield;
     const supY = sell ? sellSupportYield : salvageSupportYield;
     const verb = sell ? 'Sell' : 'Break';
-    const gearAll = m.items.filter(i => !i.locked);
-    const gearLocked = m.items.length - gearAll.length;
-    const skillAll = m.skillInv.filter(s => !s.locked && !s.granted);
-    const skillLocked = m.skillInv.filter(s => s.locked).length;
-    const supAll = m.inventory.filter(g => !g.locked);
-    const supLocked = m.inventory.length - supAll.length;
+    // THE ONE BAG (M1): gear tiles and gem wrappers share m.items — the
+    // sweeps split them exactly as the host's salvageBulk filters do.
+    const gemItems = m.items.filter(i => i.gem);
+    const gearItems = m.items.filter(i => !i.gem);
+    const gearAll = gearItems.filter(i => !i.locked);
+    const gearLocked = gearItems.length - gearAll.length;
+    const skillRows = gemItems.flatMap(i => {
+      const p = skillGemPayloadOf(i);
+      return p ? [{ item: i, p }] : [];
+    });
+    const skillAll = skillRows.filter(r => !r.item.locked && !r.p.granted);
+    const skillLocked = skillRows.filter(r => r.item.locked).length;
+    const supRows = gemItems.filter(i => i.gem?.kind === 'support');
+    const supAll = supRows.filter(i => !i.locked);
+    const supLocked = supRows.length - supAll.length;
     const bulkBtn = (
       cat: 'item' | 'skill' | 'support', label: string,
       yields: (EssenceCost | null)[], rarity?: string, color?: string,
@@ -3498,16 +3412,17 @@ export class UI {
             'item', ITEM_RARITIES[r].label, gearAll.filter(i => i.rarity === r).map(itemY),
             r, ITEM_RARITIES[r].color)).join('')}
         </div>
-        <h3>Skill Gems${keptNote(skillLocked)}</h3>
+        <h3>Skill Memories${keptNote(skillLocked)}</h3>
         <div class="bind-btns">
-          ${bulkBtn('skill', `${verb} all`, skillAll.map(skillY))}
+          ${bulkBtn('skill', `${verb} all`, skillAll.flatMap(r => { const inst = skillOfGemItem(r.item); return inst ? [skillY(inst)] : []; }))}
           ${(['common', 'magic', 'rare', 'legendary'] as const).map(r => bulkBtn(
-            'skill', SKILL_RARITIES[r].label, skillAll.filter(s => (s.rarity ?? 'common') === r).map(skillY),
+            'skill', SKILL_RARITIES[r].label,
+            skillAll.filter(row => row.p.rarity === r).flatMap(row => { const inst = skillOfGemItem(row.item); return inst ? [skillY(inst)] : []; }),
             r, SKILL_RARITIES[r].color)).join('')}
         </div>
-        <h3>Support Gems${keptNote(supLocked)}</h3>
+        <h3>Support Memories${keptNote(supLocked)}</h3>
         <div class="bind-btns">
-          ${bulkBtn('support', `${verb} all`, supAll.map(supY))}
+          ${bulkBtn('support', `${verb} all`, supAll.flatMap(i => { const g = supportOfGemItem(i); return g ? [supY(g)] : []; }))}
         </div>`;
   }
 
@@ -4703,7 +4618,9 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
     // (mireilleGiftLesson/mireilleLessonSkills), so a seated flask quiets
     // the instant it lands, and a lived lesson never re-lights here over
     // a later unseat.
-    const lessonSkills = world.mireilleGiftLesson() === 'bar' ? world.mireilleLessonSkills() : [];
+    // Under learned = seated (M1) both lesson steps end at the rack: while
+    // EITHER pends, the empty seats glow as the landing for the gift flask.
+    const lessonSkills = world.mireilleGiftLesson() !== null ? world.mireilleLessonSkills() : [];
     // THE RACK OF EIGHT (skill-items charter M0 — docs/design/skill-items.md
     // §2, uncommitted): the drawer's headline surface. The bar's own array
     // drawn WHOLE — all BAR_SLOTS seats, empty ones as empty sockets, so
@@ -4730,40 +4647,39 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
         </div>`;
       }
       const sd = seated.def;
+      // THE ICON LAW (M1): the seat wears the skill's hotbar face — the
+      // color swatch + initials the canvas bar prints, at seat scale.
       return `<div data-drag="rackSeat:${slot}" data-drop="rackSeat:${slot}"
         data-tip="skill" data-skill-id="${sd.id}"
         style="position:relative;height:46px;border:1px solid ${sd.color};border-radius:5px;
           background:#241d2e;padding:3px 5px;overflow:hidden;cursor:var(--cursor-point, pointer)">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <span style="font-size:8px;color:var(--gold)">${label}</span>
-          <button data-rackunbind="${slot}" title="Unseat ${sd.name} — it stays learned, in the strip below"
+          <button data-rackunbind="${slot}" title="Unlearn ${sd.name} — it returns to your pack as its Memory"
             style="background:none;border:none;color:#6a6478;cursor:var(--cursor-point, pointer);
               font-size:9px;padding:0 1px;line-height:1">✕</button>
         </div>
-        <div style="font-size:10px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sd.name}</div>
-        <div style="font-size:8px;color:#8a8678">Lv ${seated.level}</div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+            width:15px;height:15px;border-radius:2px;background:${sd.color};opacity:0.9;
+            color:#0a0a0e;font-weight:bold;font-size:7px;font-family:Verdana">${gemInitials(sd.name)}</span>
+          <span style="min-width:0">
+            <span style="display:block;font-size:10px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sd.name}</span>
+            <span style="display:block;font-size:8px;color:#8a8678">Lv ${seated.level}</span>
+          </span>
+        </div>
       </div>`;
     });
-    // THE HOLDING STRIP — learned-but-unseated skills wait here until M1
-    // unifies learned = seated; the strip is also the UNSEAT drop (drag a
-    // seated skill onto it to clear its seat).
-    const unseated = [...m.knownSkills.values()]
-      .filter(inst => !bar.some(s => s?.def.id === inst.def.id));
-    const stripChips = unseated.map(inst => {
-      const teach = lessonSkills.includes(inst.def.id);
-      return `<span class="gem-chip ${teach ? 'tut-glow' : ''}" data-drag="rackSkill:${inst.def.id}"
-        data-tip="skill" data-skill-id="${inst.def.id}"
-        style="border-color:${inst.def.color};cursor:var(--cursor-point, pointer)">◆ ${inst.def.name} <b>L${inst.level}</b></span>`;
-    }).join('');
+    // LEARNED = SEATED (M1): the holding strip's chips retired — the strip
+    // itself survives as the UNLEARN drop (a seated skill dropped here
+    // returns to the pack as its Memory item; the engine refuses a full bag).
     const rackHtml = `
       <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:5px">${seatTiles.join('')}</div>
       <div data-drop="rackFree" style="margin:5px 0 8px;padding:3px 5px;border:1px dashed #35304a;
         border-radius:5px;font-size:10px;color:#8a8678;min-height:20px">
-        ${stripChips
-          ? `<span style="color:#b8a2e8">Unseated:</span> ${stripChips}`
-          : m.knownSkills.size
-            ? `<span style="color:#5a5668">every learned skill is seated — drag seats to reorder, drop one here to unseat it</span>`
-            : `<span style="color:#5a5668">the eight seats above are your whole hand — learned skills seat there</span>`}
+        ${m.knownSkills.size
+          ? `<span style="color:#5a5668">drag seats to reorder · drop a seat here (or press its ✕) to unlearn — the skill returns to your pack</span>`
+          : `<span style="color:#5a5668">the eight seats above are your whole hand — drag a Skill Memory from your pack onto one to learn it</span>`}
       </div>`;
     // THE FIELD DISCIPLINE, spoken at the button (the engine gate's words):
     // unsocket shares one verdict; unlearn adds its per-skill clock below.
@@ -4954,7 +4870,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         : `<span style="font-size:9px;color:#6a6478;margin-left:4px"
             title="Learned but not on the bar — drag it from the strip onto a rack seat above">unseated</span>`;
       return `
-        <div class="skill-entry" data-tip="skill" data-skill-id="${def.id}" style="border-left:3px solid ${def.color}">
+        <div class="skill-entry" data-tip="skill" data-skill-id="${def.id}" data-drop="gemSock:${def.id}" style="border-left:3px solid ${def.color}">
           <div class="name">${def.name} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
             ${reached.map(t => `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#2a2438;color:#c8a8ff;margin-left:4px" title="Lv ${t.level} threshold">${t.label}</span>`).join('')}
             ${nextThresh ? `<span style="font-size:9px;color:#6a6478;margin-left:4px">Lv ${nextThresh.level}: ${nextThresh.label}</span>` : ''}
@@ -4995,8 +4911,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // this is the one click verb a seat carries, UNGATED like every seat
     // choice; the fabric's inner-control courtesy keeps its press from
     // ever reading as a lift.
+    // LEARNED = SEATED (M1): the seat's ✕ UNLEARNS — the skill returns to
+    // the pack as its Memory item (the engine refuses a full bag honestly).
     q<HTMLButtonElement>('button[data-rackunbind]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'bindSkill', slot: Number(btn.dataset.rackunbind), skillId: null });
+      const hero = this.getWorld().seatHero(this.panelSeat(this.inventory));
+      const inst = hero.skills[Number(btn.dataset.rackunbind)];
+      if (inst) world.requestMeta({ t: 'unlearn', skillId: inst.def.id });
       refresh();
     }));
     // Mimic repertoire chips: pick the form this press wears.

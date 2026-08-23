@@ -254,8 +254,6 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
     vocations: [],
     vocationPoints: 0,
     knownSkills,
-    inventory: [],
-    skillInv: [],
     items: [],
     equipped,
     essences: emptyEssences(),

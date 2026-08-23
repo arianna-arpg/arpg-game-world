@@ -74,8 +74,8 @@ const settle = (): void => {
 };
 const step = (frames: number): void => { for (let i = 0; i < frames; i++) w.update(DT); };
 const learn = (skillId: string): boolean => {
-  seat.meta.skillInv.push(makeSkillInstance(SKILLS[skillId], 1, 1));
-  return w.learnSkill(seat.meta.skillInv.findIndex(i => i.def.id === skillId), seat);
+  const item = w.grantSkillGemItem(seat, makeSkillInstance(SKILLS[skillId], 1, 1));
+  return !!item && w.learnSkill(item.uid, seat);
 };
 /** Lane ledgers, NaN-sentineled while closed so reads fail soft. */
 const odm = () => hero.overdrive.mana ?? { debt: NaN, idle: NaN };
@@ -331,12 +331,12 @@ check('J: the life lane closes', hero.overdrive.life === undefined
   const seat2 = r2.seat;
   const hero2 = r2.hero;
   const aim2 = () => vec(hero2.pos.x + 60, hero2.pos.y);
-  seat2.meta.skillInv.push(makeSkillInstance(SKILLS['overclock'], 1, 1));
+  const oc2Item = w2.grantSkillGemItem(seat2, makeSkillInstance(SKILLS['overclock'], 1, 1));
   check('K: the flow rig learns overclock',
-    w2.learnSkill(seat2.meta.skillInv.findIndex(i => i.def.id === 'overclock'), seat2));
-  seat2.meta.inventory.push({ def: SUPPORTS['controlled_burn'], level: 1 });
+    !!oc2Item && w2.learnSkill(oc2Item.uid, seat2));
+  const cb2Item = w2.grantSupportGemItem(seat2, { def: SUPPORTS['controlled_burn'], level: 1 });
   check('K: the trickle gem sockets into the toggle',
-    w2.socketSupport(seat2.meta.inventory.length - 1, 'overclock', seat2) === true);
+    !!cb2Item && w2.socketSupport(cb2Item.uid, 'overclock', seat2) === true);
   const oc2 = seat2.meta.knownSkills.get('overclock')!;
   hero2.mana = hero2.maxMana();
   check('K: the gemmed toggle stands', w2.useSkill(hero2, oc2, aim2()) === true);
@@ -378,8 +378,8 @@ check('J: the life lane closes', hero.overdrive.life === undefined
 // -------------------- L. DETERMINISM (seeded — byte-identical trajectory)
 const traj = (seed: number): string => {
   const r = mkRig(seed);
-  r.seat.meta.skillInv.push(makeSkillInstance(SKILLS['overclock'], 1, 1));
-  r.w.learnSkill(r.seat.meta.skillInv.findIndex(i => i.def.id === 'overclock'), r.seat);
+  const ocItem = r.w.grantSkillGemItem(r.seat, makeSkillInstance(SKILLS['overclock'], 1, 1))!;
+  r.w.learnSkill(ocItem.uid, r.seat);
   const t = r.seat.meta.knownSkills.get('overclock')!;
   const at = () => vec(r.hero.pos.x + 60, r.hero.pos.y);
   r.hero.mana = r.hero.maxMana();

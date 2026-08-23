@@ -66,9 +66,12 @@ const settle = (): void => {
   hero.mana = hero.maxMana();
   w.time += 10;
 };
+// THE RESIDENCE (M1): bag() mints the gem's wrapper item and answers its
+// UID — learnSkill's new address. A refused learn leaves the item bagged,
+// so the same uid re-learns after the attributes rise (rig A's shape).
 const bag = (skillId: string): number => {
-  seat.meta.skillInv.push(makeSkillInstance(SKILLS[skillId], 1, 1));
-  return seat.meta.skillInv.findIndex(i => i.def.id === skillId);
+  const item = w.grantSkillGemItem(seat, makeSkillInstance(SKILLS[skillId], 1, 1));
+  return item!.uid;
 };
 const step = (sec: number): void => {
   const dt = 1 / 60;
@@ -213,9 +216,9 @@ check('H: a quick requirement-bearing trigger host derives from the catalog',
   !!quick, quick?.id ?? 'none');
 setAll(40);
 check('H: the host learns', w.learnSkill(bag(quick!.id), seat) === true);
-seat.meta.inventory.push({ def: codt, level: 1 });
+const codtItem = w.grantSupportGemItem(seat, { def: codt, level: 1 });
 check('H: the trigger gem sockets',
-  w.socketSupport(seat.meta.inventory.length - 1, quick!.id, seat) === true);
+  !!codtItem && w.socketSupport(codtItem.uid, quick!.id, seat) === true);
 const armed = seat.meta.knownSkills.get(quick!.id)!;
 hero.skills[3] = armed; // the bar seat the trigger artery scans
 setAll(0); // the respec: the armed host is now unmet

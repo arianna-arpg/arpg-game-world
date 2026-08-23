@@ -35,6 +35,7 @@ import { PASSIVE_NODES } from '../data/passives';
 import { sanitizeChoices, sanitizeGrafts } from '../data/passiveChoices';
 import { makeSkillInstance, validTreeNodes, type SkillInstance, type SupportInstance, type SkillRarity } from '../engine/skills';
 import { rebuildItem } from '../engine/itemgen';
+import { rebuildAnyItem } from '../engine/gemitems';
 import { ITEM_RARITIES, type ItemInstance } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
@@ -243,8 +244,9 @@ export interface SeatMetaW {
   realmPoints?: Record<string, number>;
   grafts?: Record<string, string | null>;
   known: Record<string, SkillInstW>;
-  inv: SupportInstW[];              // loose support gems
-  skillInv: SkillInstW[];          // carried skill gems
+  // THE RESIDENCE (skill-items M1): loose gems ride `gear.items` as their
+  // 1×1 wrapper items (pure JSON, payload included) — the old inv/skillInv
+  // arms retired with the side arrays they mirrored.
   bar: (string | null)[];          // bar slot → learned skill id
   /** GEAR: bag + doll. ItemInstances are already pure JSON (ids + rolls —
    *  never def bodies), so the instance IS the wire shape; rebuildItem
@@ -289,8 +291,6 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
     realmPoints: { ...m.realmPoints },
     grafts: { ...m.grafts },
     known: Object.fromEntries([...m.knownSkills].map(([id, inst]) => [id, skillInstW(inst)])),
-    inv: m.inventory.map(supW),
-    skillInv: m.skillInv.map(skillInstW),
     bar: hero.skills.map(s => (s ? s.def.id : null)),
     gear: {
       items: m.items.map(i => ({ ...i })),
@@ -379,10 +379,9 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
   m.knownSkills = known;
   // Graft bindings resolve against the freshly rehydrated book + allocation.
   m.grafts = sanitizeGrafts(w.grafts, m.allocated, m.choices, PASSIVE_NODES, id => known.has(id));
-  m.inventory = w.inv.map(rehydrateSupport).filter((x): x is SupportInstance => !!x);
-  m.skillInv = w.skillInv.map(rehydrateSkill).filter((x): x is SkillInstance => !!x);
-  // GEAR: re-validate every instance against the client's live registries.
-  m.items = (w.gear?.items ?? []).map(rebuildItem).filter((x): x is ItemInstance => !!x);
+  // THE ONE BAG: gear tiles and gem wrappers alike — re-validate every
+  // instance (payloads included) against the client's live registries.
+  m.items = (w.gear?.items ?? []).map(rebuildAnyItem).filter((x): x is ItemInstance => !!x);
   m.equipped = {};
   for (const [slot, it] of Object.entries(w.gear?.equipped ?? {})) {
     const item = rebuildItem(it);

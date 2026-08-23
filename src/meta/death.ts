@@ -54,12 +54,12 @@ export interface LootPayload { items: SavedLoot[]; }
 /** Which sources of the character's carry are captured into the corpse. NOT
  *  hardcoded so the design can change (drop no skills, drop items instead). */
 export interface DeathLootPolicy {
-  /** The Learned Skills tab: bar gems WITH their socketed supports. */
+  /** The rack: learned gems WITH their socketed supports. */
   knownSkills: boolean;
-  /** Unsocketed skill-gem backpack. */
-  skillInv: boolean;
-  /** Unsocketed support gems. */
-  inventory: boolean;
+  /** THE RESIDENCE (skill-items M1): the carried bag — gear tiles AND loose
+   *  gem wrappers alike (the old skillInv/inventory lanes fold in here; a
+   *  wrapper rides the 'gear' loot arm verbatim, payload and all). */
+  bagItems: boolean;
   /** EQUIPPED gear (the doll — never the carried bag). */
   equipment: boolean;
   // FUTURE: bagItems?: boolean; currency?: boolean; relics?: boolean; …
@@ -69,8 +69,7 @@ export interface DeathLootPolicy {
  *  the carried bag are lost to the death. Tune freely; this is the single knob. */
 export const DEFAULT_LOOT_POLICY: DeathLootPolicy = {
   knownSkills: false,
-  skillInv: false,
-  inventory: false,
+  bagItems: false,
   equipment: true,
 };
 
@@ -112,8 +111,15 @@ export function skillToLoot(inst: SkillInstance): SavedLoot {
 export function captureLoot(meta: PlayerMeta, policy: DeathLootPolicy = DEFAULT_LOOT_POLICY): LootPayload {
   const items: SavedLoot[] = [];
   if (policy.knownSkills) for (const inst of meta.knownSkills.values()) items.push(skillToLoot(inst));
-  if (policy.skillInv) for (const inst of meta.skillInv) items.push(skillToLoot(inst));
-  if (policy.inventory) for (const g of meta.inventory) items.push({ kind: 'support', supportId: g.def.id, level: g.level });
+  // The bag lane: gear tiles and gem wrappers together — the wrapper's pure
+  // JSON payload rides the 'gear' arm, and the reclaim's rebuild validates
+  // it like any load (rebuildAnyItem in engine/gemitems.ts).
+  if (policy.bagItems) {
+    for (const bagged of meta.items) {
+      const { x: _bx, y: _by, ...item } = bagged; // a corpse item has no bag cell
+      items.push({ kind: 'gear', item });
+    }
+  }
   if (policy.equipment) {
     for (const worn of Object.values(meta.equipped)) {
       if (!worn) continue;

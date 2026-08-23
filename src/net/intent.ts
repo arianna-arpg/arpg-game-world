@@ -58,8 +58,12 @@ export class NullInput implements PlayerInputSource {
  *  Addresses are by index/id (never object refs — those don't cross the wire);
  *  the host resolves them inside the target seat's meta. */
 export type MetaAction =
-  | { t: 'learn'; index: number }                              // skillInv idx → known
-  | { t: 'unlearn'; skillId: string }                          // known → skillInv
+  // THE RESIDENCE (skill-items M1): loose gems are 1×1 bag ITEMS — every
+  // loose-gem intent addresses the wrapper by uid (the gear address space);
+  // learn seats (learned = seated; slot omitted = first free), unlearn
+  // mints the wrapper back into the bag (x/y = an aimed cell, unequip-law).
+  | { t: 'learn'; uid: number; slot?: number }                 // bag skill item → rack seat
+  | { t: 'unlearn'; skillId: string; x?: number; y?: number }  // seat → bag item
   // THE SACRIFICIAL FONT (data/essences.ts FONT_CFG — merge / convert / reset):
   | { t: 'fontMerge'; skillId: string; rarity: 'common' | 'magic' | 'rare' | 'legendary' } // N alike → 1 at +1 rarity
   | { t: 'fontConvert'; tier: number; dir: 'up' | 'down' }     // Ability Essence tier up/down (wallet math)
@@ -74,21 +78,19 @@ export type MetaAction =
   | { t: 'vendorCommission'; vendor: string; gem: { kind: 'skill' | 'support'; id: string } | null }
   // Level-ups pay Ability Essences — the ONE lane (the point lane retired).
   | { t: 'levelSkill'; skillId: string }
-  | { t: 'levelSupportInv'; index: number }                    // loose support gem
+  | { t: 'levelSupportInv'; uid: number }                      // loose support gem (bag item)
   | { t: 'levelSupportSocket'; skillId: string; socket: number } // socketed support
   | { t: 'reacquireSkill'; skillId: string }                   // re-kindle a lost class starter (GRANTED copy)
   | { t: 'attuneSpectre'; skillId: string; formId: string }    // grimoire: bind a mastered bestiary form ('' releases)
   | { t: 'mimicSelect'; sid: string }                          // mimicry: select a captured art (engine/mimic.ts bank)
   | { t: 'pickTreeNode'; skillId: string; nodeId: string }     // skill-mode tree: spend/replace the pick (World.pickTreeNode)
   | { t: 'untameCompanion'; actorId: number }                  // the Tracker's release counter
-  | { t: 'socket'; index: number; skillId: string }            // inv gem → skill socket
-  | { t: 'unsocket'; skillId: string; socket: number }
+  | { t: 'socket'; uid: number; skillId: string }              // bag support item → skill socket
+  | { t: 'unsocket'; skillId: string; socket: number }         // socket → bag item (needs room)
   | { t: 'allocate'; nodeId: string; optionId?: string } // optionId: choice-node pick (data/passiveChoices.ts)
   | { t: 'bindGraft'; key: string; skillId: string | null } // graft key → carrier skill (null unbinds)
-  | { t: 'bindSkill'; slot: number; skillId: string | null }   // action-bar slot
+  | { t: 'bindSkill'; slot: number; skillId: string | null }   // action-bar slot (internal re-seat; unlearn is the unseat)
   | { t: 'swapSkillSlots'; a: number; b: number }              // THE RACK's reorder: exchange two bar seats atomically
-  | { t: 'dropSkill'; index: number }                          // skillInv idx → world
-  | { t: 'dropSupport'; index: number }                        // inventory idx → world
   | { t: 'caravanTo'; band: number }                           // Caravan: escort to band N (0 = home)
   | { t: 'harborChart'; omen: string }                         // Harbor board: buy the chart of a rumored seat (credits → survey pulse)
   | { t: 'holdMuster' }                                        // Harborhold: sound the horn — arm the standing zone's siege defense
@@ -104,18 +106,17 @@ export type MetaAction =
   // SALVAGE (dwell-gated, TWO LANES): 'break' at the bench pays the rarity's
   // essence + craft lore; 'sell' at a scrap counter pays coarse volume only.
   // Absent lane = legacy pick (bench when near, else counter).
-  | { t: 'salvageItem'; uid: number; lane?: 'break' | 'sell' } // bag gear → essence (+ lore on 'break')
-  | { t: 'salvageSkill'; index: number; lane?: 'break' | 'sell' }  // skillInv gem (granted: nothing)
-  | { t: 'salvageSupport'; index: number; lane?: 'break' | 'sell' } // loose support
+  | { t: 'salvageItem'; uid: number; lane?: 'break' | 'sell' } // bag gear OR gem wrapper → essence (+ lore on 'break', gear only)
   // THE SWEEP (salvageBulk): break/sell one whole CATEGORY in a blow,
   // optionally narrowed to a rarity ('legendary' is the gem-side orange).
+  // 'item' = gear tiles; 'skill'/'support' = the bag's gem wrappers.
   // Locked things and granted sparks are skipped host-side.
   | { t: 'salvageBulk'; cat: 'item' | 'skill' | 'support';
       rarity?: 'common' | 'magic' | 'rare' | 'unique' | 'legendary'; lane?: 'break' | 'sell' }
-  // THE KEEPER'S MARK (salvageLock): flip the salvage lock on a carried
-  // thing — gear by uid (bag OR doll — the mark rides the piece), carried
-  // gems by index. Pure bookkeeping; no station gate.
-  | { t: 'salvageLock'; kind: 'item' | 'skill' | 'support'; id: number; on: boolean }
+  // THE KEEPER'S MARK (salvageLock): flip the salvage lock on any carried
+  // thing by uid — gear (bag OR doll) and gem wrappers share the one
+  // address space now (M1). Pure bookkeeping; no station gate.
+  | { t: 'salvageLock'; uid: number; on: boolean }
   | { t: 'craftAffix'; uid: number; affixId: string; score?: number } // essence + SMITHING score → a studied affix
   | { t: 'rerollAffix'; uid: number; affix: number; score: number }   // Oracle COMMUNION: reroll + seal one line
   // SOCKETS & VESTIGES (deterministic craft):

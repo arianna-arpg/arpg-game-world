@@ -20,9 +20,11 @@ import {
   type SkillInstance, type SupportInstance, type SkillRarity,
 } from '../engine/skills';
 import { rebuildItem } from '../engine/itemgen';
+import { makeSkillGemItem, makeSupportGemItem, rebuildAnyItem } from '../engine/gemitems';
+import { autoPlace } from '../engine/inventory';
 import type { ItemInstance } from '../engine/items';
 import type { Attributes } from '../engine/stats';
-import { emptyAbilityEssences, emptyEssences, type PlayerMeta, type Seat, type World } from '../engine/world';
+import { emptyAbilityEssences, emptyEssences, MAX_LEARNED_SKILLS, type PlayerMeta, type Seat, type World } from '../engine/world';
 import type { ExpeditionManifest } from '../packages/manifest';
 import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable, saveRefused } from './persistence';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
@@ -83,8 +85,13 @@ export interface CharacterSave {
   vocations?: string[];
   vocationPoints?: number;
   knownSkills: SavedSkill[];
-  skillInv: SavedSkill[];
-  inventory: SavedSocket[]; // unsocketed support gems
+  /** LEGACY (pre-M1 saves): loose gems as side arrays. Current builds write
+   *  NEITHER — THE RESIDENCE (skill-items M1) folds loose gems into `items`
+   *  as 1×1 wrapper ItemInstances; on load these rows wrap and auto-place
+   *  into the bag best-effort (overflow drops with a console note — her
+   *  standing saves-disposable ruling covers the edge). */
+  skillInv?: SavedSkill[];
+  inventory?: SavedSocket[];
   /** GEAR: bag + doll. ItemInstances are already pure JSON (base/affix ids +
    *  0..1 rolls), so they serialize verbatim and rebuildItem re-validates
    *  against live registries on load (unknown base → item dropped; unknown
@@ -203,8 +210,8 @@ export function serializeCharacter(world: World): CharacterSave {
     vocations: [...m.vocations],
     vocationPoints: m.vocationPoints,
     knownSkills: [...m.knownSkills.values()].map(saveSkill),
-    skillInv: m.skillInv.map(saveSkill),
-    inventory: m.inventory.map(saveSocket),
+    // THE RESIDENCE (skill-items M1): loose gems ride `items` as wrapper
+    // ItemInstances (pure JSON, payload included) — no side arrays written.
     items: m.items.map(i => ({ ...i })),
     equipped: Object.fromEntries(
       Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
@@ -324,22 +331,32 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
     const inst = rebuildSkill(ss);
     if (inst) knownSkills.set(inst.def.id, inst);
   }
-  const skillInv = save.skillInv
-    .map(rebuildSkill)
-    .filter((x): x is SkillInstance => x !== null);
-  const inventory = save.inventory
-    .map(s => {
-      const d = SUPPORTS[s.supportId];
-      // The keeper's mark (salvageLock) rides the rebuilt gem.
-      return d ? ({ def: d, level: s.level, ...(s.locked ? { locked: true } : {}) } as SupportInstance) : null;
-    })
-    .filter((x): x is SupportInstance => x !== null);
-
-  // GEAR: rebuild every saved item against the live registries (tolerant —
-  // a removed base drops the item, a removed affix drops the line).
+  // THE ONE BAG: rebuild every saved item — gear tiles AND gem wrappers —
+  // against the live registries (tolerant: a removed base or an unresolvable
+  // gem payload drops the item, a removed affix drops the line).
   const items = (save.items ?? [])
-    .map(rebuildItem)
+    .map(rebuildAnyItem)
     .filter((x): x is ItemInstance => x !== null);
+
+  // LEGACY FOLD (pre-M1 saves): the old loose-gem side arrays wrap into bag
+  // items best-effort. Overflow drops with a console note — saves are
+  // disposable by her standing ruling; nothing better than best-effort is
+  // owed, but silence would be worse.
+  let legacyDropped = 0;
+  for (const ss of save.skillInv ?? []) {
+    const inst = rebuildSkill(ss);
+    if (!inst) continue;
+    if (!autoPlace(items, makeSkillGemItem(inst))) legacyDropped++;
+  }
+  for (const s of save.inventory ?? []) {
+    const d = SUPPORTS[s.supportId];
+    if (!d) continue;
+    const gem: SupportInstance = { def: d, level: s.level, ...(s.locked ? { locked: true } : {}) };
+    if (!autoPlace(items, makeSupportGemItem(gem))) legacyDropped++;
+  }
+  if (legacyDropped > 0) {
+    console.warn(`[character] legacy loose gems: ${legacyDropped} dropped — no bag room while folding a pre-M1 save`);
+  }
   const equipped: Partial<Record<string, ItemInstance>> = {};
   for (const [slot, it] of Object.entries(save.equipped ?? {})) {
     const item = rebuildItem(it);
@@ -364,7 +381,7 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
     grafts: sanitizeGrafts(save.grafts, allocated, choices, PASSIVE_NODES, id => knownSkills.has(id)),
     vocations: [...(save.vocations ?? [])],
     vocationPoints: save.vocationPoints ?? 0,
-    knownSkills, inventory, skillInv,
+    knownSkills,
     items, equipped,
     essences: { ...emptyEssences(), ...(save.essences ?? {}) },
     abilityEssences: { ...emptyAbilityEssences(), ...(save.abilityEssences ?? {}) },
@@ -389,7 +406,19 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
   world.ledger = { ...(save.ledger ?? {}) }; // restore per-run trigger counters
   world.completedObjectives = new Set(save.completedObjectives ?? []);
   world.charDeaths = built.deaths;
-  world.adoptSavedMeta(built.meta, save.bar, save.level);
+  // THE SEATED HEAL (learned = seated, skill-items M1): an M0-era save may
+  // carry known skills off the bar — invisible under the rack law. Seat
+  // them into free seats here, on the REAL resume lane only (the sim's
+  // adoptSavedMeta injection stays byte-untouched — builds choose their
+  // own bar and the census must never notice).
+  const bar = [...save.bar];
+  while (bar.length < MAX_LEARNED_SKILLS) bar.push(null);
+  for (const id of built.meta.knownSkills.keys()) {
+    if (bar.includes(id)) continue;
+    const free = bar.findIndex(s => s === null);
+    if (free >= 0) bar[free] = id;
+  }
+  world.adoptSavedMeta(built.meta, bar, save.level);
   // Re-field the saved COMPANY (already paid + pool-marked). The legacy
   // single-contract field folds in as a one-blade company (old saves).
   for (const m of save.mercenaries ?? (save.mercenary?.snapshot ? [save.mercenary] : [])) {
@@ -650,8 +679,7 @@ export function serializeCouchGuest(
     vocations: [...m.vocations],
     vocationPoints: m.vocationPoints,
     knownSkills: [...m.knownSkills.values()].map(saveSkill),
-    skillInv: m.skillInv.map(saveSkill),
-    inventory: m.inventory.map(saveSocket),
+    // THE RESIDENCE: loose gems ride `items` (the run-save's own law).
     items: m.items.map(i => ({ ...i })),
     equipped: Object.fromEntries(
       Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),

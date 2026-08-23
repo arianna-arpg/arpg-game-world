@@ -41,6 +41,11 @@ import {
 import { BOMBARD_CFG, type BombardSpec } from './bombard';
 import { evalCurve, type CurveKind } from './curves';
 import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
+import {
+  bagGemItems, findBagGem, freeCellCount, makeSkillGemItem, makeSupportGemItem,
+  rebuildAnyItem, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf,
+  supportOfGemItem, writeBackSupportGem,
+} from './gemitems';
 import { compileItemMods, itemLevelReq, rebuildItem, rollItem } from './itemgen';
 import {
   ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier,
@@ -1535,12 +1540,18 @@ const isLane = (l: unknown): l is 'break' | 'sell' | undefined =>
  *  are additionally neutralized at the registry lookups, e.g. allocateNode.) */
 function isValidMetaAction(a: MetaAction): boolean {
   switch (a.t) {
-    case 'learn': case 'buyVendor': case 'buyChandler': case 'buyDelver':
-    case 'levelSupportInv': case 'dropSkill': case 'dropSupport':
+    case 'buyVendor': case 'buyChandler': case 'buyDelver':
       return isIdx(a.index);
-    case 'socket': return isIdx(a.index) && isStr(a.skillId);
+    // THE RESIDENCE (skill-items M1): loose gems are bag ITEMS — learn,
+    // socket-in, and the loose level-up all address the wrapper by uid.
+    case 'learn': return isIdx(a.uid) && (a.slot === undefined || isIdx(a.slot));
+    case 'levelSupportInv': return isIdx(a.uid);
+    case 'socket': return isIdx(a.uid) && isStr(a.skillId);
     case 'levelSupportSocket': case 'unsocket': return isStr(a.skillId) && isIdx(a.socket);
-    case 'unlearn': case 'reacquireSkill': return isStr(a.skillId);
+    case 'unlearn':
+      return isStr(a.skillId)
+        && ((a.x === undefined && a.y === undefined) || (isIdx(a.x) && isIdx(a.y)));
+    case 'reacquireSkill': return isStr(a.skillId);
     case 'attuneSpectre': return isStr(a.skillId) && isStr(a.formId);
     case 'mimicSelect': return isStr(a.sid);
     case 'pickTreeNode': return isStr(a.skillId) && isStr(a.nodeId);
@@ -1579,17 +1590,16 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'dropItem': return isIdx(a.uid);
     case 'salvageItem': return isIdx(a.uid) && isLane(a.lane);
     case 'pickupItem': return true;
-    case 'salvageSkill': case 'salvageSupport': return isIdx(a.index) && isLane(a.lane);
     // THE SWEEP + THE KEEPER'S MARK (salvageBulk / salvageLock): categories
-    // and rarities are closed vocabularies; ids untrusted client numbers.
+    // and rarities are closed vocabularies; the lock rides item uids alone
+    // now (gem wrappers are bag items — one address space, M1).
     case 'salvageBulk':
       return (a.cat === 'item' || a.cat === 'skill' || a.cat === 'support')
         && (a.rarity === undefined
           || (['common', 'magic', 'rare', 'unique', 'legendary'] as const).includes(a.rarity))
         && isLane(a.lane);
     case 'salvageLock':
-      return (a.kind === 'item' || a.kind === 'skill' || a.kind === 'support')
-        && isIdx(a.id) && typeof a.on === 'boolean';
+      return isIdx(a.uid) && typeof a.on === 'boolean';
     case 'craftAffix':
       return isIdx(a.uid) && isStr(a.affixId)
         && (a.score === undefined || (typeof a.score === 'number' && Number.isFinite(a.score)));
@@ -1643,13 +1653,16 @@ export interface PlayerMeta {
    *  future QuestReward.vocationPoints source), spent in world.allocateNode. */
   vocationPoints: number;
   /** LEARNED skills (max MAX_LEARNED_SKILLS), keyed by skill id. Bar slots
-   *  reference these. Learning is free; the limit is the cost. */
+   *  reference these. LEARNED = SEATED (skill-items charter card 8): every
+   *  learned skill occupies a rack seat; learning is the seating gesture and
+   *  unlearning mints the gem back into the bag. The Map survives as the
+   *  derived index of the seat array — the LAW is one residence, not one
+   *  variable (charter §9.14). */
   knownSkills: Map<string, SkillInstance>;
-  /** Unsocketed support gems. */
-  inventory: SupportInstance[];
-  /** Skill gems carried but not learned — loot, fodder, and options. */
-  skillInv: SkillInstance[];
-  /** GEAR bag — the tetris grid; every entry carries its cell x/y. */
+  /** THE one bag — the tetris grid; every entry carries its cell x/y.
+   *  THE RESIDENCE (skill-items M1): loose skill/support gems live HERE as
+   *  1×1 wrapper items (ItemInstance.gem — engine/gemitems.ts); the old
+   *  unbounded skillInv/inventory side arrays are retired. */
   items: ItemInstance[];
   /** GEAR worn on the doll, by EQUIP_SLOTS id. Each slot syncs one
    *  attributable StatSheet source ('gear:<slot>') in recalcSeat. */
@@ -1929,10 +1942,10 @@ interface MireilleLessonStep {
   pendingSkills: (w: World) => string[];
 }
 const MIREILLE_LESSON_STEPS: MireilleLessonStep[] = [
-  { // press a carried gift gem to memory (the Skill Gems tab)
+  { // seat a carried gift flask ITEM onto the rack (learn = seat, M1)
     id: 'learn',
     pendingSkills: w => MIREILLE_GIFT_SKILLS.filter(id => !w.meta.knownSkills.has(id)
-      && w.meta.skillInv.some(i => i.def.id === id)),
+      && !!findBagGem(w.meta.items, 'skill', id)),
   },
   { // set a learned gift flask onto the action bar (the BUILD flap)
     id: 'bar',
@@ -3790,8 +3803,6 @@ export class World {
       vocations: [],
       vocationPoints: 0,
       knownSkills: new Map(),
-      inventory: [],
-      skillInv: [],
       items: [],
       equipped: {},
       essences: emptyEssences(),
@@ -4635,10 +4646,8 @@ export class World {
    *  paying its own covenant on a party wipe). */
   private stripCarryOf(seat: Seat): void {
     const m = seat.meta;
-    m.items = [];
+    m.items = []; // gem wrappers ride the bag — one wipe covers them (M1)
     m.equipped = {};
-    m.skillInv = [];
-    m.inventory = [];
     m.essences = emptyEssences();
     m.abilityEssences = emptyAbilityEssences();
     m.vestiges = {};
@@ -13574,17 +13583,18 @@ export class World {
       return true;
     }
     if (u.kind === 'pay-gem') {
-      const inv = seat.meta.inventory;
-      if (inv.length === 0) {
+      // THE RESIDENCE: loose supports are bag wrapper items now.
+      const loose = seat.meta.items.filter(i => i.gem?.kind === 'support');
+      if (loose.length === 0) {
         this.text(seat.actor.pos, 'the wardens sneer — you carry nothing worth taking', '#d05050', 13);
         return false; // no loose gems → the gate stays sealed (find another road)
       }
-      const idx = Math.floor(rand(0, inv.length)); // random-take: the warden chooses
-      const gem = inv[idx];
-      inv.splice(idx, 1); // the warden TAKES it (consumed, not dropped to the ground)
+      const pick = loose[Math.floor(rand(0, loose.length))]; // random-take: the warden chooses
+      const gem = supportOfGemItem(pick);
+      removeFromBag(seat.meta.items, pick.uid); // the warden TAKES it (consumed, not dropped)
       this.markMetaDirty(seat);
       if (seat === this.localSeat && !this.clientActionHook) saveCharacter(this);
-      this.text(keeper.pos, `the wardens take your ${gem.def.name}`, gem.def.color, 14);
+      this.text(keeper.pos, `the wardens take your ${gem?.def.name ?? pick.name}`, gem?.def.color ?? '#c8a04a', 14);
       this.openHoldfastExit('the toll is paid — the gate opens!');
       return true;
     }
@@ -14546,7 +14556,11 @@ export class World {
       this.failNote(seat.actor, 'delver:' + index, `needs ${short.count}× ${ESSENCES[short.essence].label}`);
       return false;
     }
-    if (entry.kind === 'item' && !autoPlace(m.items, entry.item)) {
+    // THE RESIDENCE: fit-before-spend for gems too (buyVendorGem's law).
+    const landed = entry.kind === 'item' ? autoPlace(m.items, entry.item)
+      : entry.kind === 'skill' ? !!autoPlace(m.items, makeSkillGemItem(entry.inst))
+      : !!autoPlace(m.items, makeSupportGemItem(entry.gem));
+    if (!landed) {
       this.failNote(seat.actor, 'bagfull', 'inventory full');
       return false;
     }
@@ -14554,10 +14568,8 @@ export class World {
     this.descentStock.splice(index, 1); // the map holds this same array — the purchase persists
     this.vendorBought('delver', entry, seat, this.descentStock); // holdless — the market stamp alone
     if (entry.kind === 'skill') {
-      m.skillInv.push(entry.inst);
       this.text(seat.actor.pos, `bought ${entry.inst.def.name}`, '#7fe0d8', 13);
     } else if (entry.kind === 'support') {
-      m.inventory.push(entry.gem);
       this.text(seat.actor.pos, `bought ${entry.gem.def.name}`, '#7fe0d8', 13);
     } else {
       this.text(seat.actor.pos, `bought ${entry.item.name}`, ITEM_RARITIES[entry.item.rarity].color, 13);
@@ -20780,19 +20792,109 @@ export class World {
     return this.reqShortfall(inst.def.id, seat);
   }
 
+  // --- THE RESIDENCE (skill-items charter M1) — the gem grant chokepoints --
+  // Every path that hands the player a loose gem routes through these two:
+  // vendor buys, Mireille's gift, the veteran deal, the skill graft, the
+  // rescue hatch, unlearn, unsocket, the Font's pried sockets, ground
+  // pickup, dev spawns. A full bag REFUSES (failNote 'bagfull' — the gear
+  // precedent) unless the caller opts into the ground spill; nothing is
+  // ever silently lost.
+
+  /** Mint a loose SKILL gem into the seat's bag as its 1×1 wrapper item.
+   *  Returns the item, or null on a full bag (refusal noted; `spill` drops
+   *  it at the seat's feet instead — owed, never lost). */
+  grantSkillGemItem(seat: Seat, inst: SkillInstance, spill = false): ItemInstance | null {
+    const item = makeSkillGemItem(inst);
+    if (!autoPlace(seat.meta.items, item)) {
+      if (spill) {
+        this.drops.push({
+          pos: this.clampPos(vec(seat.actor.pos.x + rand(-14, 14), seat.actor.pos.y + rand(-14, 14)), 10),
+          item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2),
+        });
+        this.text(seat.actor.pos, 'your pack is full — it falls at your feet', '#c08a68', 12);
+        return null;
+      }
+      this.failNote(seat.actor, 'bagfull', 'inventory full');
+      return null;
+    }
+    this.markMetaDirty(seat);
+    return item;
+  }
+
+  /** Mint a loose SUPPORT gem into the seat's bag (same contract as above). */
+  grantSupportGemItem(seat: Seat, gem: SupportInstance, spill = false): ItemInstance | null {
+    const item = makeSupportGemItem(gem);
+    if (!autoPlace(seat.meta.items, item)) {
+      if (spill) {
+        this.drops.push({
+          pos: this.clampPos(vec(seat.actor.pos.x + rand(-14, 14), seat.actor.pos.y + rand(-14, 14)), 10),
+          item: { kind: 'support', gem }, bob: rand(0, Math.PI * 2),
+        });
+        this.text(seat.actor.pos, 'your pack is full — it falls at your feet', '#c08a68', 12);
+        return null;
+      }
+      this.failNote(seat.actor, 'bagfull', 'inventory full');
+      return null;
+    }
+    this.markMetaDirty(seat);
+    return item;
+  }
+
   /**
-   * Learn a skill gem from the inventory. Free — the cost is the slot:
-   * only MAX_LEARNED_SKILLS may be learned at once.
+   * Learn a skill from its bag wrapper item (addressed by uid — THE
+   * RESIDENCE's learn gesture: drag the tile onto a rack seat). LEARNED =
+   * SEATED (charter card 8): the instance leaves the bag and takes the given
+   * seat — `slot` omitted picks the first free one. The gates carry
+   * verbatim: duplicate, attribute requirements, and the cap (structural
+   * now — no free seat, no learning). Dropping onto an OCCUPIED seat is a
+   * replace: the sitter unlearns into the just-freed cell first, through
+   * its own full gates (overdrive debt, field discipline, bag room).
    */
-  learnSkill(invIndex: number, seat: Seat = this.localSeat): boolean {
+  learnSkill(uid: number, seat: Seat = this.localSeat, slot?: number): boolean {
     const m = seat.meta;
-    const inst = m.skillInv[invIndex];
+    const p = this.seatHero(seat);
+    const item = this.bagItem(seat, uid);
+    if (!item || item.gem?.kind !== 'skill') return false;
+    if (m.knownSkills.has(item.gem.skillId)) {
+      this.failNote(p, 'learn:' + uid, 'already learned');
+      return false;
+    }
+    const inst = skillOfGemItem(item);
     if (!inst) return false;
-    if (m.knownSkills.size >= MAX_LEARNED_SKILLS) return false;
-    if (m.knownSkills.has(inst.def.id)) return false;
-    if (!this.meetsRequirements(inst.def.id, seat)) return false;
-    m.skillInv.splice(invIndex, 1);
+    if (!this.meetsRequirements(inst.def.id, seat)) {
+      this.failNote(p, 'learn:' + uid, 'requirements unmet');
+      return false;
+    }
+    const at = slot ?? p.skills.findIndex(s => s === null);
+    if (at < 0 || at >= p.skills.length) {
+      if (slot === undefined) { this.failNote(p, 'learn:' + uid, 'every seat is taken'); }
+      return false;
+    }
+    const sitter = p.skills[at];
+    // THE STRUCTURAL CAP: seats ARE the count — a REPLACE onto an occupied
+    // seat never grows it, so only a fresh seat meets the cap's belt.
+    if (!sitter && m.knownSkills.size >= MAX_LEARNED_SKILLS) {
+      this.failNote(p, 'learn:' + uid, 'every seat is taken');
+      return false;
+    }
+    if (sitter) {
+      // THE REPLACE: pull the incoming tile out first so the sitter's
+      // unlearn is guaranteed a cell (1×1 into the freed 1×1); a refused
+      // unlearn (debt, discipline) re-seats the tile exactly where it was.
+      const ox = item.x, oy = item.y;
+      removeFromBag(m.items, uid);
+      if (!this.unlearnSkill(sitter.def.id, seat)) {
+        if (ox !== undefined && oy !== undefined) placeAt(m.items, item, ox, oy);
+        else autoPlace(m.items, item);
+        return false;
+      }
+    } else {
+      removeFromBag(m.items, uid);
+    }
     m.knownSkills.set(inst.def.id, inst);
+    p.skills[at] = inst;
+    // Worn slot grafts re-derive against the new sitter (bindSkill's law).
+    this.rebindWornGrafts(seat, [inst]);
     // A REMEMBERED BOND answers the relearning: companions stashed when
     // this skill was unlearned return DOWNED at the keeper's side — the
     // revival is owed, the exploit stays closed, the pet stays yours.
@@ -20801,6 +20903,7 @@ export class World {
       this.stashedCompanions = this.stashedCompanions.filter(s => s.skillId !== inst.def.id);
       this.restoreCompanions(stashed.map(s => ({ ...s, downed: true })), seat.actor);
     }
+    this.markMetaDirty(seat);
     return true;
   }
 
@@ -20818,12 +20921,11 @@ export class World {
     const seat = this.localSeat;
     const m = seat.meta;
     const gem = makeSkillGem(def, 1, 'common');
-    m.skillInv.push(gem);
-    if (!m.knownSkills.has(skillId) && this.learnSkill(m.skillInv.length - 1, seat)) {
-      const bar = seat.actor.skills;
-      const free = bar.findIndex(s => s === null);
-      if (free >= 0) this.bindSkill(free, skillId, seat);
-    }
+    // THE RESIDENCE: the graft's gem lands as a bag item (ground spill on a
+    // full pack — a run's first breath is never silently shorted), and a
+    // kit with a free seat learns it in the one gesture (learn = seat).
+    const item = this.grantSkillGemItem(seat, gem, true);
+    if (item && !m.knownSkills.has(skillId)) this.learnSkill(item.uid, seat);
     this.recalcSeat(seat);
     this.markMetaDirty(seat);
     this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 30),
@@ -20868,10 +20970,14 @@ export class World {
   }
 
   /**
-   * Unlearn a skill back into the inventory — level and socketed supports
-   * ride along, so experimentation costs nothing but the swap.
+   * Unlearn a skill back into the BAG (THE RESIDENCE: unseating mints the
+   * gem's 1×1 wrapper item — level and socketed supports ride along, so
+   * experimentation costs nothing but the swap). REFUSES BEFORE MUTATING:
+   * a full bag leaves the skill learned and seated (failNote 'bagfull');
+   * `x`/`y` aim an exact cell (the drag onto the grid — fails blocked,
+   * exactly the unequip law).
    */
-  unlearnSkill(skillId: string, seat: Seat = this.localSeat): boolean {
+  unlearnSkill(skillId: string, seat: Seat = this.localSeat, x?: number, y?: number): boolean {
     const m = seat.meta;
     const p = seat.actor;
     const inst = m.knownSkills.get(skillId);
@@ -20894,6 +21000,19 @@ export class World {
       const why = this.swapRefusal(seat, 'unlearn', skillId);
       if (why) { this.failNote(p, skillId + ':discipline', why); return false; }
     }
+    // THE ROOM LAW: the wrapper must land before anything unwinds — grafts
+    // are stripped at PACK time below, so build the item from a graftless
+    // read (grafts are derived state; recalcSeat rebuilds them anyway).
+    inst.grafts = undefined;
+    const item = makeSkillGemItem(inst);
+    const placed = (x !== undefined && y !== undefined)
+      ? placeAt(m.items, item, x, y)
+      : autoPlace(m.items, item);
+    if (!placed) {
+      this.failNote(p, skillId + ':bagfull',
+        x !== undefined ? 'no room there' : 'no room in the bag');
+      return false;
+    }
     m.knownSkills.delete(skillId);
     for (let i = 0; i < p.skills.length; i++) {
       if (p.skills[i]?.def.id === skillId) p.skills[i] = null;
@@ -20912,11 +21031,7 @@ export class World {
       c.companion = false; // past the down-intercept: this death is real
       this.kill(c, true);
     }
-    // Grafts are DERIVED state and stay with the book, not the bag: strip
-    // them as the instance leaves (recalcSeat can no longer reach it), so
-    // an inventory card never shows a stale bound power.
-    inst.grafts = undefined;
-    m.skillInv.push(inst);
+    this.markMetaDirty(seat);
     // MIREILLE'S LESSON, inverted with intent: nobody walks a gift flask
     // BACK to the bag without commanding the whole loop the lesson teaches.
     // The lesson counts LIVED — the player's choice to unlearn must never
@@ -20949,25 +21064,35 @@ export class World {
     const ladder = Object.keys(SKILL_RARITIES) as SkillRarity[];
     const next = ladder[ladder.indexOf(rarity) + 1];
     if (!next) return false;
-    // Eligible copies, highest level first (stable: ties keep bag order).
-    const pool = m.skillInv
-      .map((inst, idx) => ({ inst, idx }))
-      .filter(r => r.inst.def.id === skillId && (r.inst.rarity ?? 'common') === rarity
-        && !r.inst.locked && !r.inst.granted)
-      .sort((a, b) => b.inst.level - a.inst.level || a.idx - b.idx);
+    // Eligible copies among the bag's gem items, highest level first
+    // (stable: ties keep bag order). THE RESIDENCE: fodder occupies real
+    // cells until this very moment — the pressure the charter priced in.
+    const pool = bagGemItems(m.items)
+      .map((item, idx) => ({ item, p: skillGemPayloadOf(item), idx }))
+      .filter(r => r.p && r.p.skillId === skillId && r.p.rarity === rarity
+        && !r.item.locked && !r.p.granted)
+      .sort((a, b) => b.p!.level - a.p!.level || a.idx - b.idx);
     if (pool.length < need) {
       this.failNote(p, 'fontmerge:' + skillId, `the font asks ${need} alike`);
       return false;
     }
     const taken = pool.slice(0, need);
-    const kept = Math.max(...taken.map(r => r.inst.level));
-    // Pry supports out first, then burn the inputs (splice deepest-first so
-    // the recorded indices stay true while the bag shrinks).
-    for (const r of taken) for (const s of r.inst.sockets) if (s) m.inventory.push(s);
-    for (const r of [...taken].sort((a, b) => b.idx - a.idx)) m.skillInv.splice(r.idx, 1);
-    const def = taken[0].inst.def;
+    const kept = Math.max(...taken.map(r => r.p!.level));
+    // Burn the inputs FIRST (frees `need` cells — the merged gem and most
+    // pried supports are guaranteed ground to land on), then pry each
+    // input's socketed supports back into the bag; whatever the pack
+    // cannot hold spills at your feet (owed — never lost, never silent).
+    const pried: SupportInstance[] = [];
+    for (const r of taken) {
+      const inst = skillOfGemItem(r.item);
+      if (inst) for (const s of inst.sockets) if (s) pried.push(s);
+      removeFromBag(m.items, r.item.uid);
+    }
+    const def = SKILLS[skillId];
+    if (!def) return false;
     const merged = makeSkillGem(def, kept, next);
-    m.skillInv.push(merged);
+    this.grantSkillGemItem(seat, merged, true);
+    for (const s of pried) this.grantSupportGemItem(seat, s, true);
     this.charDirty = true;
     this.text(vec(p.pos.x, p.pos.y - 40),
       `${def.name} reforged — ${SKILL_RARITIES[next].label}, level ${kept} kept`,
@@ -21280,7 +21405,13 @@ export class World {
       this.failNote(seat.actor, 'vendor:' + index, `needs ${short.count}× ${ESSENCES[short.essence].label}`);
       return false;
     }
-    if (entry.kind === 'item' && !autoPlace(m.items, entry.item)) {
+    // THE RESIDENCE: every ware — gear tile or gem wrapper — must FIT the
+    // bag before a single essence moves (a full bag refuses the sale,
+    // never eats the price).
+    const landed = entry.kind === 'item' ? autoPlace(m.items, entry.item)
+      : entry.kind === 'skill' ? !!autoPlace(m.items, makeSkillGemItem(entry.inst))
+      : !!autoPlace(m.items, makeSupportGemItem(entry.gem));
+    if (!landed) {
       this.failNote(seat.actor, 'bagfull', 'inventory full');
       return false;
     }
@@ -21288,10 +21419,8 @@ export class World {
     this.vendorStock.splice(index, 1);
     this.vendorBought('brandt', entry, seat, this.vendorStock);
     if (entry.kind === 'skill') {
-      m.skillInv.push(entry.inst);
       this.text(seat.actor.pos, `bought ${entry.inst.def.name}`, '#e8c87a', 13);
     } else if (entry.kind === 'support') {
-      m.inventory.push(entry.gem);
       this.text(seat.actor.pos, `bought ${entry.gem.def.name}`, '#e8c87a', 13);
     } else {
       this.text(seat.actor.pos, `bought ${entry.item.name}`, ITEM_RARITIES[entry.item.rarity].color, 13);
@@ -21380,7 +21509,7 @@ export class World {
     if (this.ledger[MIREILLE_GIFT_LEDGER]) return false;
     return MIREILLE_GIFT_SKILLS.some(id => !!SKILLS[id]
       && !this.meta.knownSkills.has(id)
-      && !this.meta.skillInv.some(i => i.def.id === id));
+      && !findBagGem(this.meta.items, 'skill', id));
   }
 
   /** The gift-taught LOOP, read back for her directions: the first lesson
@@ -21480,8 +21609,8 @@ export class World {
     // keyboard/controller binds — resolveBindTokens, meta/settings.ts — so
     // her directions can never name a key the player rebound away.)
     const lesson = this.mireilleGiftLesson();
-    if (lesson === 'learn') return 'Open your inventory ({bind:panelInv}), love — find your flasks under Skill Gems. Press them to memory.';
-    if (lesson === 'bar') return 'Now set them to your bar, dear — the BUILD flap on your inventory\'s edge. A flask out of reach is no flask at all.';
+    if (lesson === 'learn') return 'Open your inventory ({bind:panelInv}), love — your flasks are in your pack. Press them into your skill rack (the SKILLS flap on the edge).';
+    if (lesson === 'bar') return 'Now set them to your bar, dear — the SKILLS flap on your inventory\'s edge. A flask out of reach is no flask at all.';
     if (!this.mireilleUnlocked()) return 'No free innstay — unlock my care in the Vault.';
     return null;
   }
@@ -21503,17 +21632,23 @@ export class World {
     // inventory→learn→bar loop every gem they'll ever loot follows. Teaching
     // by doing, not by doing-for.
     if (this.mireilleGiftOwed()) {
-      let gifted = false;
-      for (const sid of MIREILLE_GIFT_SKILLS) {
-        if (!SKILLS[sid] || this.meta.knownSkills.has(sid)
-          || this.meta.skillInv.some(i => i.def.id === sid)) continue;
-        // Her authored generosity: a MAGIC gem — above the class kit's floor.
-        this.meta.skillInv.push(makeSkillGem(SKILLS[sid], 1, 'magic'));
-        gifted = true;
-      }
-      if (gifted) {
+      // THE RESIDENCE: her flasks land as bag ITEMS now — and the gift is
+      // ALL-OR-NOTHING: the ledger must never stamp with a flask refused
+      // to a full pack (a half-gift would orphan the other forever).
+      // Wrappers are 1×1, so free cells >= gaps guarantees the whole hand.
+      const owed = MIREILLE_GIFT_SKILLS.filter(sid => SKILLS[sid]
+        && !this.meta.knownSkills.has(sid)
+        && !findBagGem(this.meta.items, 'skill', sid));
+      if (owed.length && freeCellCount(this.meta.items) < owed.length) {
+        this.text(vec(p.pos.x, p.pos.y - 22),
+          'Your pack is full, love — make room and come back.', '#d8b87a', 13);
+      } else if (owed.length) {
+        for (const sid of owed) {
+          // Her authored generosity: a MAGIC gem — above the class kit's floor.
+          this.grantSkillGemItem(this.localSeat, makeSkillGem(SKILLS[sid], 1, 'magic'));
+        }
         bumpLedger(this.ledger, MIREILLE_GIFT_LEDGER);
-        did = true; parts.push('two flasks, into your hands');
+        did = true; parts.push('two flasks, into your pack');
         this.text(vec(p.pos.x, p.pos.y - 22), 'Open your inventory ({bind:panelInv}), love.', '#d8b87a', 13);
       }
     }
@@ -21633,13 +21768,14 @@ export class World {
     const p = this.player;
     for (const sid of MIREILLE_GIFT_SKILLS) {
       if (!SKILLS[sid] || this.meta.knownSkills.has(sid)
-        || this.meta.skillInv.some(i => i.def.id === sid)) continue;
-      this.meta.skillInv.push(makeSkillGem(SKILLS[sid], 1, 'magic'));
-      // The real learn gate (cap, requirements). A refusal leaves the gem
-      // carried — Mireille's talk line picks the lesson up, nothing is lost.
-      if (!this.learnSkill(this.meta.skillInv.length - 1)) continue;
-      const slot = p.skills.findIndex(s => s === null);
-      if (slot >= 0) this.bindSkill(slot, sid);
+        || findBagGem(this.meta.items, 'skill', sid)) continue;
+      // THE RESIDENCE: the flask lands as a bag item (a fresh spawn's bag is
+      // empty — the spill lane is a formality), then the ONE learn gesture
+      // seats it (learn = seat; cap and requirements are the real gates). A
+      // refusal leaves the item carried — Mireille's talk line picks the
+      // lesson up, nothing is lost.
+      const item = this.grantSkillGemItem(this.localSeat, makeSkillGem(SKILLS[sid], 1, 'magic'), true);
+      if (!item || !this.learnSkill(item.uid)) continue;
       // Brimming from the first breath — the same top-up her reward pours.
       const known = this.meta.knownSkills.get(sid);
       for (const cg of known?.def.chargeGain ?? []) {
@@ -23884,7 +24020,6 @@ export class World {
       vocations: [...(snapshot.vocations ?? [])],
       vocationPoints: 0,
       knownSkills,
-      inventory: [], skillInv: [],
       items: [], equipped,
       essences: emptyEssences(), abilityEssences: emptyAbilityEssences(), vestiges: {},
       modeId: DEFAULT_MODE_ID, modeStage: 0, charId: '',
@@ -25019,12 +25154,23 @@ export class World {
   private dropSavedLoot(at: Vec2, it: SavedLoot): void {
     const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10);
     if (it.kind === 'gear') {
-      // The EXACT worn item — same uid, same rolls; rebuildItem re-validates
-      // against live registries (a patched-out base simply stays lost).
+      // The EXACT worn item — same uid, same rolls; rebuildAnyItem
+      // re-validates against live registries (a patched-out base simply
+      // stays lost), gem payloads included: a wrapper in a loot payload
+      // (a future bagItems policy) UNWRAPS as it falls — the ground speaks
+      // bare gems (THE RESIDENCE).
       // OWED: reclaiming what death took is the player's own property coming
       // home — it lands even where THE SPOILS LAW seals local mints.
-      const item = rebuildItem(it.item);
-      if (item) this.dropGearAt(at, item, undefined, true);
+      const item = rebuildAnyItem(it.item);
+      if (!item) return;
+      if (item.gem) {
+        const inst = skillOfGemItem(item);
+        if (inst) { this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) }); return; }
+        const gem = supportOfGemItem(item);
+        if (gem) this.drops.push({ pos, item: { kind: 'support', gem }, bob: rand(0, Math.PI * 2) });
+        return;
+      }
+      this.dropGearAt(at, item, undefined, true);
       return;
     }
     if (it.kind === 'skill') {
@@ -25081,26 +25227,31 @@ export class World {
     const m = seat.meta;
     if (!m.classDef.bar.includes(skillId)) return false;
     if (m.knownSkills.has(skillId)) return false;
-    if (m.skillInv.some(i => i.def.id === skillId)) return false;
+    if (findBagGem(m.items, 'skill', skillId)) return false;
     const def = SKILLS[skillId];
     if (!def) return false;
     // The hatch re-kindles AT the kit tier — never a socket upgrade over
     // the starter it replaces (lose-and-rekindle must stay worthless).
     const inst = makeSkillGem(def, 1, CLASS_KIT_RARITY);
     inst.granted = true;
-    m.skillInv.push(inst);
+    // THE RESIDENCE: the spark is a bag item now — a full pack refuses the
+    // hatch honestly (failNote 'bagfull') instead of minting into the void.
+    if (!this.grantSkillGemItem(seat, inst)) return false;
     this.text(seat.actor.pos, `${def.name} re-kindled`, '#b06bd4', 13);
     this.markMetaDirty(seat);
     return true;
   }
 
-  /** Socket an inventory gem into a known skill's first free socket. The
-   *  gate is CREW-AWARE: a gem may board a summon skill purely because the
-   *  minted minions cast something it fits — Splitting sockets into Summon
-   *  Skeleton Archer for the bow the bones carry. */
-  socketSupport(invIndex: number, skillId: string, seat: Seat = this.localSeat): boolean {
+  /** Socket a BAG support gem (by its wrapper item's uid — THE RESIDENCE's
+   *  socket gesture: drag the tile onto a socket pip) into a known skill's
+   *  first free socket. The gate is CREW-AWARE: a gem may board a summon
+   *  skill purely because the minted minions cast something it fits —
+   *  Splitting sockets into Summon Skeleton Archer for the bow the bones
+   *  carry. */
+  socketSupport(uid: number, skillId: string, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
-    const gem = m.inventory[invIndex];
+    const item = this.bagItem(seat, uid);
+    const gem = item ? supportOfGemItem(item) : null;
     const inst = m.knownSkills.get(skillId);
     if (!gem || !inst || !supportFitsInstOrCrew(gem.def, inst, this.summonCrewSkills(inst))) return false;
     const free = inst.sockets.indexOf(null);
@@ -25111,16 +25262,19 @@ export class World {
       if (why) { this.failNote(seat.actor, skillId + ':discipline', why); return false; }
     }
     inst.sockets[free] = gem;
-    m.inventory.splice(invIndex, 1);
+    removeFromBag(m.items, uid);
     // Worn slot grafts re-derive against the new socket: a duplicate worn
     // copy yields to the real stone, and a dormant worn gem WAKES the
     // moment this socket grants the mechanism it was refused for.
     this.recalcSeat(seat);
     this.resyncMinionSupports(inst);
+    this.markMetaDirty(seat);
     return true;
   }
 
-  /** Pull a gem back out of a skill into the inventory (free). */
+  /** Pull a gem back out of a skill into the BAG (free — but the wrapper
+   *  needs a cell: a full bag REFUSES before the socket empties, the
+   *  charter's mutate-last law). */
   unsocketSupport(skillId: string, socketIndex: number, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
     const inst = m.knownSkills.get(skillId);
@@ -25131,8 +25285,8 @@ export class World {
       const why = this.swapRefusal(seat, 'unsocket', skillId);
       if (why) { this.failNote(seat.actor, skillId + ':discipline', why); return false; }
     }
+    if (!this.grantSupportGemItem(seat, gem)) return false; // bagfull — noted
     inst.sockets[socketIndex] = null;
-    m.inventory.push(gem);
     // Re-derive worn slot grafts: a worn copy that yielded to this stone
     // returns, and a worn gem whose mechanism LEFT with it goes dormant.
     this.recalcSeat(seat);
@@ -25385,8 +25539,8 @@ export class World {
   applyAction(seat: Seat, action: MetaAction): void {
     if (!isValidMetaAction(action)) return;
     switch (action.t) {
-      case 'learn': this.learnSkill(action.index, seat); break;
-      case 'unlearn': this.unlearnSkill(action.skillId, seat); break;
+      case 'learn': this.learnSkill(action.uid, seat, action.slot); break;
+      case 'unlearn': this.unlearnSkill(action.skillId, seat, action.x, action.y); break;
       case 'attuneSpectre': this.attuneSpectre(action.skillId, action.formId, seat); break;
       case 'mimicSelect': this.mimicSelectFor(action.sid, seat); break;
       case 'pickTreeNode': this.pickTreeNode(action.skillId, action.nodeId, seat); break;
@@ -25402,8 +25556,14 @@ export class World {
       case 'vendorCommission': this.setVendorCommission(action.vendor, action.gem, seat); break;
       case 'levelSkill': this.levelUpSkill(action.skillId, seat); break;
       case 'levelSupportInv': {
-        const gem = seat.meta.inventory[action.index];
-        if (gem) this.levelUpSupport(gem, seat);
+        // THE RESIDENCE: a loose support levels through its wrapper item —
+        // unwrap, feed, fold the new level back into the payload.
+        const item = this.bagItem(seat, action.uid);
+        const gem = item ? supportOfGemItem(item) : null;
+        if (item && gem) {
+          this.levelUpSupport(gem, seat);
+          writeBackSupportGem(item, gem);
+        }
         break;
       }
       case 'levelSupportSocket': {
@@ -25418,14 +25578,12 @@ export class World {
         break;
       }
       case 'reacquireSkill': this.reacquireSkill(action.skillId, seat); break;
-      case 'socket': this.socketSupport(action.index, action.skillId, seat); break;
+      case 'socket': this.socketSupport(action.uid, action.skillId, seat); break;
       case 'unsocket': this.unsocketSupport(action.skillId, action.socket, seat); break;
       case 'allocate': this.allocateNode(action.nodeId, seat, action.optionId); break;
       case 'bindGraft': this.bindGraft(action.key, action.skillId, seat); break;
       case 'bindSkill': this.bindSkill(action.slot, action.skillId, seat); break;
       case 'swapSkillSlots': this.swapSkillSlots(action.a, action.b, seat); break;
-      case 'dropSkill': this.dropFromInventory(seat, 'skill', action.index); break;
-      case 'dropSupport': this.dropFromInventory(seat, 'support', action.index); break;
       case 'caravanTo': this.startCaravan(action.band, seat); break;
       case 'harborChart': this.buyHarborChart(action.omen, seat); break;
       case 'holdMuster': this.beginHoldMuster(); break;
@@ -25446,10 +25604,8 @@ export class World {
         this.pickupNearestGear(seat);
         break;
       case 'salvageItem': this.salvageItem(seat, action.uid, action.lane); break;
-      case 'salvageSkill': this.salvageSkillGem(seat, action.index, action.lane); break;
-      case 'salvageSupport': this.salvageSupportGem(seat, action.index, action.lane); break;
       case 'salvageBulk': this.salvageBulk(seat, action.cat, action.rarity, action.lane); break;
-      case 'salvageLock': this.salvageLockSet(seat, action.kind, action.id, action.on); break;
+      case 'salvageLock': this.salvageLockSet(seat, action.uid, action.on); break;
       case 'craftAffix': this.craftAffix(seat, action.uid, action.affixId, action.score ?? 0); break;
       case 'rerollAffix': this.rerollAffix(seat, action.uid, action.affix, action.score); break;
       case 'socketVestige': this.socketVestige(seat, action.uid, action.socket, action.vestigeId); break;
@@ -40028,8 +40184,16 @@ export class World {
     };
     for (const seat of this.seats) {
       for (const inst of seat.actor.skills) take(inst);
-      for (const inst of seat.meta.skillInv) take(inst);
-      for (const gem of seat.meta.inventory) supports.add(gem.def.id);
+      // THE RESIDENCE: loose gems ride the bag as wrapper items now.
+      for (const item of bagGemItems(seat.meta.items)) {
+        const sp = skillGemPayloadOf(item);
+        if (sp) {
+          skills.add(sp.skillId);
+          for (const row of sp.sockets) if (row) supports.add(row.supportId);
+        }
+        const gp = supportGemPayloadOf(item);
+        if (gp) supports.add(gp.supportId);
+      }
     }
     return { skills, supports };
   }
@@ -40085,28 +40249,30 @@ export class World {
     this.text(at, `${gemDef.name}!`, gemDef.color, 14, 'drop', FLOAT_CFG.dropNameSec);
   }
 
-  /** DROP-A-GEM (discard / co-op drop-trade): eject the EXACT carried gem from a
-   *  seat's inventory onto the ground (NOT a re-roll — the real instance, level +
-   *  sockets intact). Any seat can then run it over (pickupSeat). A short grace
-   *  keeps the dropper from instantly re-grabbing it. Returns the dropped item, or
-   *  null if the slot was empty. */
-  dropFromInventory(seat: Seat, kind: 'skill' | 'support', index: number): DropItem | null {
+  /** DROP-A-GEM (discard / co-op drop-trade): eject the EXACT gem riding a
+   *  bag wrapper item onto the ground (NOT a re-roll — the real cargo, level
+   *  + sockets intact). THE RESIDENCE keeps the GROUND speaking bare gems:
+   *  the wrapper unwraps as it falls; pickup re-wraps. A short grace keeps
+   *  the dropper from instantly re-grabbing it. Returns the ground drop, or
+   *  null if the uid wasn't a bag gem. */
+  private dropGemFromBag(seat: Seat, uid: number): DropItem | null {
     const m = seat.meta;
     const p = seat.actor;
+    const wrapped = this.bagItem(seat, uid);
+    if (!wrapped?.gem) return null;
     let item: DropItem;
-    if (kind === 'skill') {
-      const inst = m.skillInv[index];
+    if (wrapped.gem.kind === 'skill') {
+      const inst = skillOfGemItem(wrapped);
       if (!inst) return null;
-      m.skillInv.splice(index, 1);
       item = { kind: 'skill', inst };
       this.text(p.pos, `dropped ${inst.def.name}`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 13, 'pickup');
     } else {
-      const gem = m.inventory[index];
+      const gem = supportOfGemItem(wrapped);
       if (!gem) return null;
-      m.inventory.splice(index, 1);
       item = { kind: 'support', gem };
       this.text(p.pos, `dropped ${gem.def.name}`, gem.def.color, 13, 'pickup');
     }
+    removeFromBag(m.items, uid);
     const pos = this.clampPos(vec(p.pos.x + rand(-14, 14), p.pos.y + rand(-14, 14)), 10);
     this.drops.push({ pos, item, bob: rand(0, Math.PI * 2), grace: DROP_PICKUP_GRACE, droppedBy: seat.id });
     this.markMetaDirty(seat);
@@ -40219,9 +40385,11 @@ export class World {
   }
 
   /** Discard gear to the ground — from the bag OR straight off the body
-   *  (a worn piece dragged onto the world sheds its stats as it falls). */
+   *  (a worn piece dragged onto the world sheds its stats as it falls).
+   *  A gem wrapper UNWRAPS as it falls (the ground speaks bare gems). */
   dropGearFromBag(seat: Seat, uid: number): void {
     const m = seat.meta;
+    if (this.bagItem(seat, uid)?.gem) { this.dropGemFromBag(seat, uid); return; }
     const fromSlot = this.wornSlotOf(seat, uid);
     let item: ItemInstance | undefined;
     if (fromSlot) {
@@ -40411,17 +40579,47 @@ export class World {
     return taught;
   }
 
+  /** The break/sell CORE for one bag GEM wrapper (already vetted: in the
+   *  bag, not locked): removes it, pries a skill gem's socketed supports
+   *  back into the bag (overflow spills at the feet — never lost), and pays
+   *  the gem lane's essence. Granted sparks yield nothing on EITHER lane —
+   *  deleted outright, exactly as promised. */
+  private breakOneGemItem(seat: Seat, item: ItemInstance, mode: 'break' | 'sell'): void {
+    const m = seat.meta;
+    if (item.gem?.kind === 'skill') {
+      const inst = skillOfGemItem(item);
+      removeFromBag(m.items, item.uid);
+      if (!inst) return;
+      for (const s of inst.sockets) if (s) this.grantSupportGemItem(seat, s, true);
+      const yieldd = mode === 'break' ? salvageSkillYield(inst) : sellSkillYield(inst);
+      if (yieldd) this.grantEssence(seat, yieldd);
+      else this.text(seat.actor.pos, 'the granted spark breaks into nothing', '#8a8678', 12);
+    } else if (item.gem?.kind === 'support') {
+      const gem = supportOfGemItem(item);
+      removeFromBag(m.items, item.uid);
+      if (!gem) return;
+      this.grantEssence(seat, mode === 'break' ? salvageSupportYield(gem) : sellSupportYield(gem));
+    }
+  }
+
   /** Break (bench) or sell (counter) a BAG item — the lane decides the tint:
    *  the bench pays the rarity's essence AND studies each line into lore;
-   *  selling pays coarse volume and teaches nothing. Worn gear must be
-   *  unequipped first — a deliberate two-step, no accidental doll salvage —
-   *  and a locked piece (THE KEEPER'S MARK) refuses either lane. */
+   *  selling pays coarse volume and teaches nothing. GEM WRAPPERS ride the
+   *  same click down their own yield lane (no lore — memories are not
+   *  steel). Worn gear must be unequipped first — a deliberate two-step, no
+   *  accidental doll salvage — and a locked piece (THE KEEPER'S MARK)
+   *  refuses either lane. */
   salvageItem(seat: Seat, uid: number, lane?: 'break' | 'sell'): void {
     const mode = this.salvageLane(seat, lane);
     if (!mode) return;
     const item = this.bagItem(seat, uid);
     if (!item) return;
     if (item.locked) { this.lockedRefusal(seat); return; }
+    if (item.gem) {
+      this.breakOneGemItem(seat, item, mode);
+      this.markMetaDirty(seat);
+      return;
+    }
     const taught = this.breakOneItem(seat, item, mode);
     for (const t of taught.filter(x => x.rankedUp)) {
       this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26),
@@ -40430,37 +40628,6 @@ export class World {
     if (mode === 'break' && this.metaProgressionActive()) {
       saveAccount(this.account); // lore is account knowledge — survive the run
     }
-    this.markMetaDirty(seat);
-  }
-
-  /** Break/sell a CARRIED skill gem (skillInv). Granted sparks yield nothing
-   *  on EITHER lane — deleted outright, exactly as promised. Sockets are
-   *  pried out first; a locked gem (THE KEEPER'S MARK) refuses. */
-  salvageSkillGem(seat: Seat, index: number, lane?: 'break' | 'sell'): void {
-    const mode = this.salvageLane(seat, lane);
-    if (!mode) return;
-    const m = seat.meta;
-    const inst = m.skillInv[index];
-    if (!inst) return;
-    if (inst.locked) { this.lockedRefusal(seat); return; }
-    m.skillInv.splice(index, 1);
-    for (const s of inst.sockets) if (s) m.inventory.push(s);
-    const yieldd = mode === 'break' ? salvageSkillYield(inst) : sellSkillYield(inst);
-    if (yieldd) this.grantEssence(seat, yieldd);
-    else this.text(seat.actor.pos, 'the granted spark breaks into nothing', '#8a8678', 12);
-    this.markMetaDirty(seat);
-  }
-
-  /** Break/sell a loose support gem (inventory). Locked gems refuse. */
-  salvageSupportGem(seat: Seat, index: number, lane?: 'break' | 'sell'): void {
-    const mode = this.salvageLane(seat, lane);
-    if (!mode) return;
-    const m = seat.meta;
-    const gem = m.inventory[index];
-    if (!gem) return;
-    if (gem.locked) { this.lockedRefusal(seat); return; }
-    m.inventory.splice(index, 1);
-    this.grantEssence(seat, mode === 'break' ? salvageSupportYield(gem) : sellSupportYield(gem));
     this.markMetaDirty(seat);
   }
 
@@ -40484,7 +40651,9 @@ export class World {
     const ranked: string[] = [];
     if (cat === 'item') {
       // Snapshot the eligible set first — breakOneItem splices the bag.
-      const targets = m.items.filter(i => !i.locked && (!rarity || i.rarity === rarity));
+      // GEM WRAPPERS sit out of the gear sweep: they are their own
+      // categories below (a "break all gear" blow never eats the memories).
+      const targets = m.items.filter(i => !i.gem && !i.locked && (!rarity || i.rarity === rarity));
       for (const item of targets) {
         const taught = this.breakOneItem(seat, item, mode);
         ranked.push(...taught.filter(t => t.rankedUp).map(t => t.family));
@@ -40494,26 +40663,16 @@ export class World {
         saveAccount(this.account); // one write for the whole sweep
       }
     } else if (cat === 'skill') {
-      const targets = m.skillInv.filter(s => !s.locked && !s.granted
-        && (!rarity || (s.rarity ?? 'common') === rarity));
-      for (const inst of targets) {
-        const at = m.skillInv.indexOf(inst);
-        if (at < 0) continue;
-        m.skillInv.splice(at, 1);
-        for (const s of inst.sockets) if (s) m.inventory.push(s);
-        const y = mode === 'break' ? salvageSkillYield(inst) : sellSkillYield(inst);
-        if (y) this.grantEssence(seat, y);
-        broke++;
-      }
+      // The rarity filter reads the PAYLOAD's own ladder (the wrapper's
+      // item-rarity is display grain — 'legendary' lives on the gem).
+      const targets = m.items.filter(i => {
+        const p = skillGemPayloadOf(i);
+        return p && !i.locked && !p.granted && (!rarity || p.rarity === rarity);
+      });
+      for (const item of targets) { this.breakOneGemItem(seat, item, mode); broke++; }
     } else {
-      const targets = m.inventory.filter(g => !g.locked);
-      for (const gem of targets) {
-        const at = m.inventory.indexOf(gem);
-        if (at < 0) continue;
-        m.inventory.splice(at, 1);
-        this.grantEssence(seat, mode === 'break' ? salvageSupportYield(gem) : sellSupportYield(gem));
-        broke++;
-      }
+      const targets = m.items.filter(i => i.gem?.kind === 'support' && !i.locked);
+      for (const item of targets) { this.breakOneGemItem(seat, item, mode); broke++; }
     }
     if (broke > 0) {
       const chips = ESSENCE_IDS
@@ -40531,27 +40690,20 @@ export class World {
     this.markMetaDirty(seat);
   }
 
-  /** THE KEEPER'S MARK (salvageLock) — flip the salvage lock on a carried
-   *  thing: gear by uid (bag OR doll — the mark rides the piece through
-   *  equip/unequip), carried gems by index. Pure bookkeeping: no station
-   *  gate, works anywhere, persists with the save. A locked thing refuses
-   *  the hammer on both lanes and every salvageBulk sweep skips it. */
-  salvageLockSet(seat: Seat, kind: 'item' | 'skill' | 'support', id: number, on: boolean): void {
+  /** THE KEEPER'S MARK (salvageLock) — flip the salvage lock on any carried
+   *  thing by uid: gear (bag OR doll — the mark rides the piece through
+   *  equip/unequip) and gem wrappers alike (M1's one address space; the
+   *  wrapper's lock IS the gem's lock while loose). Pure bookkeeping: no
+   *  station gate, works anywhere, persists with the save. A locked thing
+   *  refuses the hammer on both lanes and every salvageBulk sweep skips it. */
+  salvageLockSet(seat: Seat, uid: number, on: boolean): void {
     const m = seat.meta;
-    const mark = (thing: { locked?: boolean } | undefined): void => {
-      if (!thing) return;
-      if (on) thing.locked = true;
-      else delete thing.locked;
-      this.markMetaDirty(seat);
-    };
-    if (kind === 'item') {
-      mark(m.items.find(i => i.uid === id)
-        ?? Object.values(m.equipped).find(i => i?.uid === id));
-    } else if (kind === 'skill') {
-      mark(m.skillInv[id]);
-    } else {
-      mark(m.inventory[id]);
-    }
+    const thing = m.items.find(i => i.uid === uid)
+      ?? Object.values(m.equipped).find(i => i?.uid === uid);
+    if (!thing) return;
+    if (on) thing.locked = true;
+    else delete thing.locked;
+    this.markMetaDirty(seat);
   }
 
   /** Crafted-affix capacity for this account (the Vault can widen it). */
@@ -41137,7 +41289,11 @@ export class World {
       this.failNote(seat.actor, 'chandler:' + index, `needs ${short.count}× ${ESSENCES[short.essence].label}`);
       return false;
     }
-    if (entry.kind === 'item' && !autoPlace(m.items, entry.item)) {
+    // THE RESIDENCE: fit-before-spend for gems too (buyVendorGem's law).
+    const landed = entry.kind === 'item' ? autoPlace(m.items, entry.item)
+      : entry.kind === 'skill' ? !!autoPlace(m.items, makeSkillGemItem(entry.inst))
+      : !!autoPlace(m.items, makeSupportGemItem(entry.gem));
+    if (!landed) {
       this.failNote(seat.actor, 'bagfull', 'inventory full');
       return false;
     }
@@ -41145,10 +41301,8 @@ export class World {
     this.chandlerStock.splice(index, 1);
     this.vendorBought('chandler', entry, seat, this.chandlerStock);
     if (entry.kind === 'skill') {
-      m.skillInv.push(entry.inst);
       this.text(seat.actor.pos, `bought ${entry.inst.def.name}`, '#e8c87a', 13);
     } else if (entry.kind === 'support') {
-      m.inventory.push(entry.gem);
       this.text(seat.actor.pos, `bought ${entry.gem.def.name}`, '#e8c87a', 13);
     } else {
       this.text(seat.actor.pos, `bought ${entry.item.name}`, ITEM_RARITIES[entry.item.rarity].color, 13);
@@ -49554,20 +49708,31 @@ export class World {
       const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gem, exclude);
       if (!seat) continue;
       const item = drop.item;
+      // THE RESIDENCE: a vacuumed gem WRAPS into its 1×1 bag item — and for
+      // the first time gems compete for space: a full bag leaves it lying
+      // with the gear lane's throttled note (never silently eaten).
       if (item.kind === 'support') {
-        seat.meta.inventory.push(item.gem);
+        const wrapped = makeSupportGemItem(item.gem);
+        if (!autoPlace(seat.meta.items, wrapped)) {
+          this.failNote(seat.actor, 'bagfull', 'inventory full');
+          continue;
+        }
         this.text(seat.actor.pos, `${item.gem.def.name} (support)`, item.gem.def.color, 13, 'pickup');
         notePickup(this.pickupFeed, seat.id,
-          `${item.gem.def.name} (Support)`, item.gem.def.color, this.time);
+          `${item.gem.def.name} (Support Memory)`, item.gem.def.color, this.time);
       } else {
-        seat.meta.skillInv.push(item.inst);
+        const wrapped = makeSkillGemItem(item.inst);
+        if (!autoPlace(seat.meta.items, wrapped)) {
+          this.failNote(seat.actor, 'bagfull', 'inventory full');
+          continue;
+        }
         const rarity = SKILL_RARITIES[item.inst.rarity ?? 'common'];
         this.text(seat.actor.pos,
           `${item.inst.def.name} (${rarity.label.toLowerCase()} skill)`, rarity.color, 14, 'pickup');
         notePickup(this.pickupFeed, seat.id,
           `${item.inst.def.name} (${rarity.label})`, rarity.color, this.time);
       }
-      // CO-OP: the picked-up gem entered this seat's inventory → re-replicate it.
+      // CO-OP: the picked-up gem entered this seat's bag → re-replicate it.
       this.markMetaDirty(seat);
       this.drops.splice(i, 1);
     }

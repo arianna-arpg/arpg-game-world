@@ -36,10 +36,14 @@ const step = (w: World, s: number): void => {
   const dt = 1 / 60;
   for (let t = 0; t < s; t += dt) w.update(dt);
 };
-const learn = (w: World, sid: string): boolean =>
-  w.learnSkill(w.meta.skillInv.findIndex(i => i.def.id === sid));
-const bindFree = (w: World, sid: string): boolean =>
-  w.bindSkill(w.player.skills.findIndex(s => s === null), sid);
+// THE RESIDENCE (M1): a carried gift is a bag WRAPPER item; learn = seat
+// (learnSkill takes the wrapper's uid and the skill lands barred).
+const bagFlask = (w: World, sid: string) =>
+  w.meta.items.find(i => i.gem?.kind === 'skill' && i.gem.skillId === sid);
+const learn = (w: World, sid: string): boolean => {
+  const item = bagFlask(w, sid);
+  return !!item && w.learnSkill(item.uid);
+};
 const barSlotOf = (w: World, sid: string): number =>
   w.player.skills.findIndex(s => s?.def.id === sid);
 // The key-grain read, flattened for equality checks (registry order:
@@ -48,7 +52,7 @@ const subjects = (w: World): string => w.mireilleLessonSkills().join(',');
 // The gift's own shape, dealt directly (mireilleService's hand-over) for the
 // worlds that don't walk the dwell.
 const giveDirect = (w: World): void => {
-  for (const sid of FLASKS) w.meta.skillInv.push(makeSkillInstance(SKILLS[sid]!, 1, 0));
+  for (const sid of FLASKS) w.grantSkillGemItem(w.localSeat, makeSkillInstance(SKILLS[sid]!, 1, 0));
   bumpLedger(w.ledger, GIFT);
 };
 
@@ -58,12 +62,12 @@ bootSimEngine();
 const A = makeSimWorld('tamer', 24601);
 check('A0: no lesson before her arc begins', A.mireilleGiftLesson() === null);
 // Arc scoping: a wild-loot flask gem is just a gem — no gift, no lesson.
-A.meta.skillInv.push(makeSkillInstance(SKILLS['life_flask']!, 1, 0));
+const wildFlask = A.grantSkillGemItem(A.localSeat, makeSkillInstance(SKILLS['life_flask']!, 1, 0))!;
 check('A0b: a wild carried flask gem rolls no lesson (arc-scoped)',
   A.mireilleGiftLesson() === null);
 check('A0c: and names no subjects (key-grain glows stay dark too)',
   subjects(A) === '', `subjects=[${subjects(A)}]`);
-A.meta.skillInv.pop();
+A.meta.items.splice(A.meta.items.findIndex(i => i.uid === wildFlask.uid), 1);
 
 // Mireille herself, spawned the way town does (createMonster + push), close
 // enough to dwell — open-air, so her 'roof' reach degrades to sight.
@@ -71,28 +75,25 @@ const mireille = A.createMonster('townsfolk_innkeep', 1, 'player');
 mireille.pos = { x: A.player.pos.x + 60, y: A.player.pos.y };
 A.actors.push(mireille);
 step(A, 1.5); // idle dwell ≥ MIREILLE_DWELL → the welcome gift
-check('A1: the dwell hands over both gift gems',
-  FLASKS.every(sid => A.meta.skillInv.some(i => i.def.id === sid)),
-  `skillInv=[${A.meta.skillInv.map(i => i.def.id).join(',')}]`);
+check('A1: the dwell hands over both gift gems (bag wrapper items now)',
+  FLASKS.every(sid => !!bagFlask(A, sid)),
+  `bag=[${A.meta.items.filter(i => i.gem?.kind === 'skill').map(i => i.name).join(',')}]`);
 check('A1b: the hand-over is ledgered', (A.ledger[GIFT] ?? 0) >= 1);
 check('A1c: lesson opens on the learn step', A.mireilleGiftLesson() === 'learn');
 check('A1d: the learn step names both carried gifts as its subjects',
   subjects(A) === 'life_flask,mana_flask', `subjects=[${subjects(A)}]`);
 
-check('A2: learning one flask keeps the learn step (one still carried)',
+check('A2: seating one flask keeps the learn step (one still carried)',
   learn(A, 'life_flask') && A.mireilleGiftLesson() === 'learn');
 check('A2b: the subjects narrow to the flask still carried',
   subjects(A) === 'mana_flask', `subjects=[${subjects(A)}]`);
-check('A3: learning the second advances to the bar step',
-  learn(A, 'mana_flask') && A.mireilleGiftLesson() === 'bar');
-check('A3b: the bar step names both learned, unbarred flasks (both rows light their free keys)',
-  subjects(A) === 'life_flask,mana_flask', `subjects=[${subjects(A)}]`);
-check('A4: barring one flask keeps the bar step (one still unbound) — mid-arc teaching persists',
-  bindFree(A, 'life_flask') && A.mireilleGiftLesson() === 'bar');
-check('A4b: the barred flask leaves the subjects — its keys quiet, its twin still glows',
-  subjects(A) === 'mana_flask', `subjects=[${subjects(A)}]`);
-check('A5: barring the second completes the lesson',
-  bindFree(A, 'mana_flask') && A.mireilleGiftLesson() === null);
+// LEARNED = SEATED (M1): learning IS barring — seating the second flask
+// completes the whole lesson in the one gesture (the bar step's pending
+// state is unreachable by construction; the step row survives as a belt).
+check('A3: seating the second completes the lesson (learn = seat = barred)',
+  learn(A, 'mana_flask') && A.mireilleGiftLesson() === null);
+check('A3b: both flasks stand on the bar — the seat IS the bar slot',
+  FLASKS.every(sid => barSlotOf(A, sid) >= 0));
 check('A5c: no subjects survive the close', subjects(A) === '', `subjects=[${subjects(A)}]`);
 
 step(A, 0.2); // updateMireille: the belt ledgers the close + graduation + the brim
@@ -150,7 +151,8 @@ check('C2b: that mastery graduates the account too',
 // === D) gems traded away: the end-state belt closes the lesson =============
 const D = makeSimWorld('tamer', 24604);
 giveDirect(D);
-D.meta.skillInv.length = 0; // sold, dropped, sacrificed — gone is gone
+// sold, dropped, sacrificed — gone is gone (sweep the gem wrappers)
+D.meta.items = D.meta.items.filter(i => !i.gem);
 step(D, 0.2);
 check('D1: a hero who trades the gift away owes no lesson',
   D.mireilleGiftLesson() === null && (D.ledger[LIVED] ?? 0) >= 1);

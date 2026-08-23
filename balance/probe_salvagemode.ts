@@ -100,7 +100,7 @@ check('A: the bench answers (nearSalvage)', w.nearSalvage());
 const keepMe = mint('rare');
 const breakMe = mint('common');
 m.items.push(keepMe, breakMe);
-w.salvageLockSet(w.localSeat, 'item', keepMe.uid, true);
+w.salvageLockSet(w.localSeat, keepMe.uid, true);
 check('A: the mark lands on the item', keepMe.locked === true);
 
 let before = wallet(w);
@@ -115,7 +115,7 @@ check('A: an unlocked piece breaks for its previewed yield',
   !m.items.some(i => i.uid === breakMe.uid)
   && sameWallet(walletDelta(before, wallet(w)), sumYields([breakYield])));
 
-w.salvageLockSet(w.localSeat, 'item', keepMe.uid, false);
+w.salvageLockSet(w.localSeat, keepMe.uid, false);
 check('A: unlocking clears the mark (delete, not false)', keepMe.locked === undefined);
 w.salvageItem(w.localSeat, keepMe.uid, 'break');
 check('A: an unlocked mark salvages again', !m.items.some(i => i.uid === keepMe.uid));
@@ -124,7 +124,7 @@ check('A: an unlocked mark salvages again', !m.items.some(i => i.uid === keepMe.
 const bagB = [mint('common'), mint('common'), mint('magic'), mint('rare'), mint('magic')];
 const lockedB = bagB[3]; // the rare stays home
 m.items.push(...bagB);
-w.salvageLockSet(w.localSeat, 'item', lockedB.uid, true);
+w.salvageLockSet(w.localSeat, lockedB.uid, true);
 const expectB = sumYields(bagB.filter(i => i !== lockedB).map(salvageItemYield));
 before = wallet(w);
 w.salvageBulk(w.localSeat, 'item', undefined, 'break');
@@ -145,6 +145,8 @@ check('B: the narrowed sweep pays only those pieces',
   sameWallet(walletDelta(before, wallet(w)), sumYields(bagC.slice(0, 2).map(salvageItemYield))));
 
 // ------------------------------------------------- C. GEMS UNDER THE SWEEP
+// THE RESIDENCE (M1): loose gems are bag WRAPPER items — the sweeps address
+// their payload kinds; the keeper's mark rides the wrapper by uid.
 const plain = makeSkillInstance(skillDef, 3, 2);
 plain.rarity = 'magic';
 plain.sockets[0] = { def: supDef, level: 2 } as SupportInstance;
@@ -152,27 +154,35 @@ const granted = makeSkillInstance(skillDef, 1, 1);
 granted.granted = true;
 const lockedGem = makeSkillInstance(skillDef, 5, 1);
 lockedGem.rarity = 'rare';
-m.skillInv.push(plain, granted, lockedGem);
-w.salvageLockSet(w.localSeat, 'skill', m.skillInv.indexOf(lockedGem), true);
-const looseBefore = m.inventory.length;
+const plainItem = w.grantSkillGemItem(w.localSeat, plain)!;
+const grantedItem = w.grantSkillGemItem(w.localSeat, granted)!;
+const lockedGemItem = w.grantSkillGemItem(w.localSeat, lockedGem)!;
+w.salvageLockSet(w.localSeat, lockedGemItem.uid, true);
+const supWrappers = (): number => m.items.filter(i => i.gem?.kind === 'support').length;
+const looseBefore = supWrappers();
 const expectC = sumYields([salvageSkillYield(plain)]);
 before = wallet(w);
 w.salvageBulk(w.localSeat, 'skill', undefined, 'break');
 check('C: the skill sweep breaks the plain gem only (granted + locked stand)',
-  !m.skillInv.includes(plain) && m.skillInv.includes(granted) && m.skillInv.includes(lockedGem));
-check('C: the pried socket survives into the loose bag',
-  m.inventory.length === looseBefore + 1 && m.inventory.some(g => g.def === supDef && g.level === 2));
+  !m.items.some(i => i.uid === plainItem.uid)
+  && m.items.some(i => i.uid === grantedItem.uid)
+  && m.items.some(i => i.uid === lockedGemItem.uid));
+check('C: the pried socket survives into the bag as its own wrapper',
+  supWrappers() === looseBefore + 1
+  && m.items.some(i => i.gem?.kind === 'support' && i.gem.supportId === supDef.id
+    && (i.gem as { level: number }).level === 2));
 check('C: the skill sweep pays the plain gem alone',
   sameWallet(walletDelta(before, wallet(w)), expectC));
 
-const looseKeep = { def: supDef, level: 4, locked: true } as SupportInstance;
-const looseGo = { def: supDef, level: 1 } as SupportInstance;
-m.inventory.push(looseKeep, looseGo);
-const expectD = sumYields(m.inventory.filter(g => !g.locked).map(salvageSupportYield));
+const looseKeepItem = w.grantSupportGemItem(w.localSeat, { def: supDef, level: 4, locked: true } as SupportInstance)!;
+w.grantSupportGemItem(w.localSeat, { def: supDef, level: 1 } as SupportInstance);
+const expectD = sumYields(m.items
+  .filter(i => i.gem?.kind === 'support' && !i.locked)
+  .map(i => salvageSupportYield({ def: supDef, level: (i.gem as { level: number }).level } as SupportInstance)));
 before = wallet(w);
 w.salvageBulk(w.localSeat, 'support', undefined, 'break');
 check('C: the support sweep spares the locked gem',
-  m.inventory.length === 1 && m.inventory[0] === looseKeep);
+  supWrappers() === 1 && m.items.some(i => i.uid === looseKeepItem.uid));
 check('C: the support sweep pays every unlocked gem',
   sameWallet(walletDelta(before, wallet(w)), expectD));
 
@@ -185,7 +195,7 @@ w.salvageBulk(w.localSeat, 'item', undefined, 'break');
 check('D: a worn piece is out of every salvage reach (doll untouched, wallet unmoved on its account)',
   m.equipped['helmet'] === worn);
 // The doll-side mark: lock while worn, move to the bag, the sweep still skips.
-w.salvageLockSet(w.localSeat, 'item', worn.uid, true);
+w.salvageLockSet(w.localSeat, worn.uid, true);
 check('D: the mark lands on a WORN piece by uid', worn.locked === true);
 delete m.equipped['helmet'];
 m.items.push(worn);
@@ -208,16 +218,18 @@ if (rebuilt) {
     rm.items.find(i => i.uid === worn.uid)?.locked === true
     && rm.items.find(i => i.uid === lockedB.uid)?.locked === true
     && rm.items.find(i => i.uid === freeItem.uid)?.locked === undefined);
-  check('E: the skill gem\'s mark rides SavedSkill',
-    rm.skillInv.some(s => s.locked === true)
-    && rm.skillInv.filter(s => s.locked).length === 1);
-  check('E: the loose support\'s mark rides SavedSocket',
-    rm.inventory.some(g => g.locked === true && g.level === 4));
+  // THE RESIDENCE (M1): gem marks ride their WRAPPERS through `items` —
+  // one lock law, one save lane, byte-for-byte with gear.
+  check('E: the skill gem\'s mark rides its wrapper through the save',
+    rm.items.filter(i => i.gem?.kind === 'skill' && i.locked).length === 1);
+  check('E: the loose support\'s mark rides its wrapper through the save',
+    rm.items.some(i => i.gem?.kind === 'support' && i.locked
+      && (i.gem as { level: number }).level === 4));
 }
 const wire = serializeSeatMeta(w.localSeat);
-check('E: the wire ships lk:1 on locked carried gems and nothing else',
-  wire.skillInv.filter(s => s.lk === 1).length === 1
-  && wire.inv.filter(g => g.lk === 1).length === 1
+check('E: the wire ships the marks on gem wrappers and worn gear alike',
+  wire.gear!.items.filter(i => i.gem?.kind === 'skill' && i.locked).length === 1
+  && wire.gear!.items.filter(i => i.gem?.kind === 'support' && i.locked).length === 1
   && wire.gear!.items.find(i => i.uid === worn.uid)?.locked === true);
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');

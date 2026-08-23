@@ -104,17 +104,20 @@ export const gemsTab: DevTabDef = {
     list.style.overflowY = 'auto';
     list.style.flex = '1';
 
+    // THE RESIDENCE (skill-items M1): dev spawns mint the 1×1 wrapper items
+    // through the same grant chokepoint every real path uses — a full bag
+    // refuses honestly here too.
     const spawnSkill = (id: string): void => {
       const w = runActive();
       if (!w) { flash('start a run first'); return; }
-      w.meta.skillInv.push(makeSkillGem(SKILLS[id], levelOf(), SPAWN_RARITY));
-      flash(`+ ${SKILLS[id].name} (lv ${levelOf()}) → Skills tab`);
+      const ok = w.grantSkillGemItem(w.localSeat, makeSkillGem(SKILLS[id], levelOf(), SPAWN_RARITY));
+      flash(ok ? `+ ${SKILLS[id].name} (lv ${levelOf()}) → pack` : 'bag full — make room first');
     };
     const spawnSupport = (id: string): void => {
       const w = runActive();
       if (!w) { flash('start a run first'); return; }
-      w.meta.inventory.push({ def: SUPPORTS[id], level: levelOf() });
-      flash(`+ ${SUPPORTS[id].name} (lv ${levelOf()}) → gem bag`);
+      const ok = w.grantSupportGemItem(w.localSeat, { def: SUPPORTS[id], level: levelOf() });
+      flash(ok ? `+ ${SUPPORTS[id].name} (lv ${levelOf()}) → pack` : 'bag full — make room first');
     };
     list.append(section(`Skills (${Object.keys(SKILLS).length})`));
     for (const [id, def] of Object.entries(SKILLS)) {

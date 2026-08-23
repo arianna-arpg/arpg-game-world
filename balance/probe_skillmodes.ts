@@ -520,13 +520,18 @@ inst.treeNodes = ['ws_duelist', 'ws_firm_wrist'];
 inst.level = 10;
 {
   const ok = w.unlearnSkill('wild_strike', seat);
-  const bagged = seat.meta.skillInv[seat.meta.skillInv.length - 1];
-  check('G: unlearn moves the WHOLE instance to the bag — spends ride along',
-    ok && bagged === inst && JSON.stringify(bagged.treeNodes) === JSON.stringify(['ws_duelist', 'ws_firm_wrist']));
-  const learned = w.learnSkill(seat.meta.skillInv.length - 1, seat);
+  // THE RESIDENCE (M1): unlearning mints the bag WRAPPER item — the whole
+  // progression truth (level, picks) rides its payload; instance identity
+  // retired with the side array, payload fidelity is the new law.
+  const baggedItem = seat.meta.items.find(i => i.gem?.kind === 'skill' && i.gem.skillId === 'wild_strike');
+  const payload = baggedItem?.gem?.kind === 'skill' ? baggedItem.gem : null;
+  check('G: unlearn moves the WHOLE gem to the bag — spends ride along',
+    ok && !!payload && payload.level === 10
+    && JSON.stringify(payload.treeNodes) === JSON.stringify(['ws_duelist', 'ws_firm_wrist']));
+  const learned = !!baggedItem && w.learnSkill(baggedItem.uid, seat);
   const back = seat.meta.knownSkills.get('wild_strike');
-  check('G: relearn returns the same instance — the picks survive the round trip',
-    learned && back === inst && JSON.stringify(back?.treeNodes) === JSON.stringify(['ws_duelist', 'ws_firm_wrist']));
+  check('G: relearn rebuilds the gem whole — the picks survive the round trip',
+    learned && back?.level === 10 && JSON.stringify(back?.treeNodes) === JSON.stringify(['ws_duelist', 'ws_firm_wrist']));
 }
 
 // --------------------- H. THE MONSTER PIN CAPABILITY ----------------------

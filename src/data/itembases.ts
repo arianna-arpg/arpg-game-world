@@ -31,6 +31,7 @@ export const CATEGORY_SIZE: Record<ItemCategory, { w: number; h: number }> = {
   weapon: { w: 2, h: 4 },
   offhand:{ w: 2, h: 3 },
   quiver: { w: 2, h: 3 },
+  gem:    { w: 1, h: 1 },
 };
 
 // ----------------------------------------------- armour family generation --
@@ -257,6 +258,22 @@ export const BASE_LIST: ItemBaseDef[] = [
   // "% increased" affixes then scale.
   jewel('amulet_agate', 'Agate Amulet', 'amulet', [line('poise', 'flat', [10, 18])], 25, { defense: 1.6 }),
   jewel('ring_moonstone', 'Moonstone Ring', 'ring', [line('insight', 'flat', [6, 12])], 30, { defense: 1.3, ranger: 1.2 }),
+
+  // THE RESIDENCE (skill-items charter M1): the two gem WRAPPER bases —
+  // loose skills and supports live in the one bag as 1×1 items carrying a
+  // GemPayload. The base name is the KIND label (walk-1's Memory family);
+  // the ITEM'S name is the skill's own ("Whirlwind", never "Memory of…").
+  // dropWeight 0 + the categoryless slot keep them out of every gear roll:
+  // gem items mint only through engine/gemitems.ts (drops stay bare gems on
+  // the ground — the bag alone speaks the wrapper).
+  {
+    id: 'skill_gem', name: 'Skill Memory', category: 'gem',
+    w: 1, h: 1, tags: ['gem', 'skill'], dropWeight: 0,
+  },
+  {
+    id: 'support_gem', name: 'Support Memory', category: 'gem',
+    w: 1, h: 1, tags: ['gem', 'support'], dropWeight: 0,
+  },
 ];
 
 export const ITEM_BASES: Record<string, ItemBaseDef> =

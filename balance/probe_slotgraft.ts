@@ -128,8 +128,8 @@ w.bindSkill(2, 'war_cry', seat); // restore the default hand
 check('D: restored hand rides again', liveRow()?.state === 'live');
 
 // -------------------------------------------------- E. THE YIELD LAW
-seat.meta.inventory.push({ def: SUPPORTS['multistrike'], level: 1 });
-check('E: a real stone sockets', w.socketSupport(seat.meta.inventory.length - 1, 'cleave', seat));
+const msItem = w.grantSupportGemItem(seat, { def: SUPPORTS['multistrike'], level: 1 });
+check('E: a real stone sockets', !!msItem && w.socketSupport(msItem.uid, 'cleave', seat));
 check('E: the worn copy yields to it (no double-fold)',
   liveRow()?.state === 'duplicate'
   && cleave.grafts?.some(g => g.def.id === 'multistrike') !== true
@@ -139,7 +139,10 @@ check('E: unsocketing wakes the worn copy again',
   w.unsocketSupport('cleave', msIdx, seat)
   && liveRow()?.state === 'live'
   && cleave.grafts?.some(g => g.def.id === 'multistrike') === true);
-seat.meta.inventory.pop(); // drop the loose stone; the worn graft stays
+{ // drop the loose stone's wrapper; the worn graft stays
+  const loose = seat.meta.items.find(i => i.gem?.kind === 'support');
+  if (loose) seat.meta.items.splice(seat.meta.items.indexOf(loose), 1);
+}
 
 // ------------------------------------------------- F. THE LEVEL FOLD
 const ring = rollItem({
@@ -197,7 +200,9 @@ const w2cleave = w2.localSeat.meta.knownSkills.get('cleave')!;
 check('I: unlearning strips derived grafts from the departing instance',
   w2.unlearnSkill('cleave', w2.localSeat)
   && w2cleave.grafts === undefined
-  && w2.localSeat.meta.skillInv.includes(w2cleave));
+  // THE RESIDENCE (M1): the bag holds the WRAPPER (graftless payload —
+  // grafts are derived state and never pack), not the live instance.
+  && w2.localSeat.meta.items.some(i => i.gem?.kind === 'skill' && i.gem.skillId === 'cleave'));
 
 // ------------------------------------------------- J. THE CREW SEAT
 // (2026-07-30) A worn graft on a SUMMON skill is a full crew citizen:
@@ -209,9 +214,9 @@ check('I: unlearning strips derived grafts from the departing instance',
 const w3: World = makeSimWorld('warrior', 0x51a9);
 const seat3 = w3.localSeat;
 seat3.meta.attrs.willpower = 20; // raise_dead asks willpower 14 (learn gate reads allocated attrs)
-seat3.meta.skillInv.push(makeSkillInstance(SKILLS.raise_dead, 1, 3));
+const raiseItem = w3.grantSkillGemItem(seat3, makeSkillInstance(SKILLS.raise_dead, 1, 3));
 check('J: the summon learns and takes the seat',
-  w3.learnSkill(seat3.meta.skillInv.length - 1, seat3)
+  !!raiseItem && w3.learnSkill(raiseItem.uid, seat3)
   && w3.bindSkill(0, 'raise_dead', seat3));
 const raise3 = seat3.meta.knownSkills.get('raise_dead')!;
 const row3 = (gem: string) => (seat3.wornGrafts ?? []).find(r => r.def.id === gem);
@@ -253,8 +258,8 @@ check('J: a worn Faultfinder opens the worn crack gem aboard the crew (grafts co
 const reaperBills = () => instanceMods(raise3).filter(m =>
   HOST_COST_STATS.has(m.stat) && m.kind === 'more' && m.value === 0.15).length;
 check('J: no key, no bill (a dormant door costs nothing)', reaperBills() === 0);
-seat3.meta.inventory.push({ def: SUPPORTS['resonance'], level: 1 });
-check('J: the boarding key sockets', w3.socketSupport(seat3.meta.inventory.length - 1, 'raise_dead', seat3));
+const resItem = w3.grantSupportGemItem(seat3, { def: SUPPORTS['resonance'], level: 1 });
+check('J: the boarding key sockets', !!resItem && w3.socketSupport(resItem.uid, 'raise_dead', seat3));
 check('J: the WORN rider bills the host cast through the open door (the crew tax, worn lane)',
   reaperBills() === 1, `manaCost more 0.15 ×${reaperBills()}`);
 // THE FIXPOINT PIN (2026-07-30): swap the rings so the DEPENDENT scans

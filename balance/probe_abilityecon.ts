@@ -48,7 +48,7 @@ import { SUPPORTS } from '../src/data/supports';
 import {
   bandPointsAt, essenceTierForLevel, makeSkillGem, MAX_SKILL_LEVEL,
   SKILL_LEVEL_BANDS, SKILL_RARITIES, supportMaxLevel,
-  type SkillRarity, type SupportInstance,
+  type SkillRarity,
 } from '../src/engine/skills';
 import {
   ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier, FONT_CFG,
@@ -144,58 +144,66 @@ for (const d of ABILITY_ESSENCES) wallet[d.id] = 999;
 levelSkill();
 check('B: the soft cap refuses spending (effective growth is investment\'s road)',
   inst.level === MAX_SKILL_LEVEL);
-// Supports fall through: same family, supportMul, cap 5.
-const gem: SupportInstance = { def: SUPPORTS.splitting, level: 1 };
-m.inventory.push(gem);
-const gemIdx = m.inventory.length - 1;
+// Supports fall through: same family, supportMul, cap 5. THE RESIDENCE
+// (M1): the loose support is a bag wrapper — levelSupportInv addresses its
+// uid and writes the new level back into the payload.
+const gemItem = w.grantSupportGemItem(seat, { def: SUPPORTS.splitting, level: 1 })!;
+const gemLvl = (): number => (gemItem.gem as { level: number }).level;
 for (const d of ABILITY_ESSENCES) wallet[d.id] = 0;
-w.applyAction(seat, { t: 'levelSupportInv', index: gemIdx });
-check('B: a support with an empty wallet refuses', gem.level === 1);
+w.applyAction(seat, { t: 'levelSupportInv', uid: gemItem.uid });
+check('B: a support with an empty wallet refuses', gemLvl() === 1);
 const supCost = supportLevelAbilityCost(2);
 wallet[idOf(supCost.tier)] = supCost.count;
-w.applyAction(seat, { t: 'levelSupportInv', index: gemIdx });
+w.applyAction(seat, { t: 'levelSupportInv', uid: gemItem.uid });
 check('B: the support levels from tier I at the supportMul',
-  gem.level === 2 && wallet[idOf(supCost.tier)] === 0);
-gem.level = supportMaxLevel(gem.def);
+  gemLvl() === 2 && wallet[idOf(supCost.tier)] === 0);
+(gemItem.gem as { level: number }).level = supportMaxLevel(SUPPORTS.splitting);
 wallet[idOf(1)] = 999;
-w.applyAction(seat, { t: 'levelSupportInv', index: gemIdx });
-check('B: the support cap (5) still refuses', gem.level === supportMaxLevel(gem.def));
+w.applyAction(seat, { t: 'levelSupportInv', uid: gemItem.uid });
+check('B: the support cap (5) still refuses', gemLvl() === supportMaxLevel(SUPPORTS.splitting));
 
 // ------------------------------------------------ C. THE FONT: MERGE ------
 // The arena mints no font — stand one at the hero's feet (the recipe's gate
 // is nearFont, pure proximity + reach).
 w.fonts.push({ pos: { x: seat.actor.pos.x, y: seat.actor.pos.y } });
 const ladder = Object.keys(SKILL_RARITIES) as SkillRarity[];
-const bagIds = (): string => m.skillInv.map(g =>
-  `${g.def.id}:${g.rarity}:L${g.level}${g.locked ? ':lk' : ''}${g.granted ? ':gr' : ''}`).sort().join('|');
+// THE RESIDENCE (M1): the bag's gem wrappers ARE the merge pool — reads go
+// through the payloads (the wrapper's lock stands in for the instance's).
+type SkillPay = { skillId: string; rarity: string; level: number; granted?: boolean; sockets: unknown[] };
+const skillPays = () => m.items.flatMap(i => i.gem?.kind === 'skill' ? [{ item: i, p: i.gem as unknown as SkillPay }] : []);
+const supCount = (): number => m.items.filter(i => i.gem?.kind === 'support').length;
+const bagIds = (): string => skillPays().map(({ item, p }) =>
+  `${p.skillId}:${p.rarity}:L${p.level}${item.locked ? ':lk' : ''}${p.granted ? ':gr' : ''}`).sort().join('|');
 {
-  m.skillInv.length = 0;
+  m.items = m.items.filter(i => !i.gem);
   const a = makeSkillGem(SKILLS.fireball, 3, 'common');
   const b = makeSkillGem(SKILLS.fireball, 1, 'common');
   const c = makeSkillGem(SKILLS.fireball, 1, 'common');
   b.sockets[0] = { def: SUPPORTS.splitting, level: 2 }; // pried out, never burned
   const locked = makeSkillGem(SKILLS.fireball, 9, 'common');
-  locked.locked = true; // the keeper's mark
+  locked.locked = true; // the keeper's mark (rides the wrapper)
   const granted = makeSkillGem(SKILLS.fireball, 1, 'common');
   granted.granted = true; // the rescue hatch is not a mint
-  m.skillInv.push(a, b, c, locked, granted);
-  const invBefore = m.inventory.length;
+  for (const g of [a, b, c, locked, granted]) w.grantSkillGemItem(seat, g);
+  const invBefore = supCount();
   w.applyAction(seat, { t: 'fontMerge', skillId: 'fireball', rarity: 'common' });
-  const merged = m.skillInv.find(g => g.rarity === 'magic');
+  const merged = skillPays().find(r => r.p.rarity === 'magic')?.p;
   check('C: 3 alike fuse into ONE at +1 rarity (sockets = the new rung\'s)',
-    !!merged && m.skillInv.length === 3
+    !!merged && skillPays().length === 3
     && merged.sockets.length === SKILL_RARITIES.magic.sockets);
   check('C: the merged gem keeps the HIGHEST input level', merged?.level === 3);
   check('C: socketed supports pried back to the bag before the burn',
-    m.inventory.length === invBefore + 1);
+    supCount() === invBefore + 1);
   check('C: the keeper\'s mark refused as input — the locked copy stands',
-    m.skillInv.some(g => g.locked && g.level === 9));
-  check('C: the granted spark refused as input', m.skillInv.some(g => g.granted));
+    skillPays().some(r => r.item.locked && r.p.level === 9));
+  check('C: the granted spark refused as input', skillPays().some(r => r.p.granted));
   const before = bagIds();
   w.applyAction(seat, { t: 'fontMerge', skillId: 'fireball', rarity: 'common' });
   check('C: a short group refuses WHOLE (nothing eaten)', bagIds() === before);
   const leg = makeSkillGem(SKILLS.fireball, 2, 'legendary');
-  m.skillInv.push(leg, makeSkillGem(SKILLS.fireball, 1, 'legendary'), makeSkillGem(SKILLS.fireball, 1, 'legendary'));
+  for (const g of [leg, makeSkillGem(SKILLS.fireball, 1, 'legendary'), makeSkillGem(SKILLS.fireball, 1, 'legendary')]) {
+    w.grantSkillGemItem(seat, g);
+  }
   const withLeg = bagIds();
   w.applyAction(seat, { t: 'fontMerge', skillId: 'fireball', rarity: 'legendary' });
   check('C: the top rung has no next step', bagIds() === withLeg);
@@ -209,14 +217,17 @@ const mergeRun = (seed: number): string => {
     const ww: World = makeSimWorld('swashbuckler', seed);
     const s2 = ww.localSeat;
     ww.fonts.push({ pos: { x: s2.actor.pos.x, y: s2.actor.pos.y } });
-    s2.meta.skillInv.length = 0;
-    s2.meta.skillInv.push(
+    s2.meta.items = s2.meta.items.filter(i => !i.gem);
+    for (const g of [
       makeSkillGem(SKILLS.fireball, 4, 'common'),
       makeSkillGem(SKILLS.fireball, 2, 'common'),
       makeSkillGem(SKILLS.fireball, 2, 'common'),
-      makeSkillGem(SKILLS.fireball, 1, 'common'));
+      makeSkillGem(SKILLS.fireball, 1, 'common'),
+    ]) ww.grantSkillGemItem(s2, g);
     ww.applyAction(s2, { t: 'fontMerge', skillId: 'fireball', rarity: 'common' });
-    return s2.meta.skillInv.map(g => `${g.def.id}:${g.rarity}:L${g.level}:s${g.sockets.length}`).sort().join('|');
+    return s2.meta.items
+      .flatMap(i => i.gem?.kind === 'skill' ? [i.gem] : [])
+      .map(p => `${p.skillId}:${p.rarity}:L${p.level}:s${p.sockets.length}`).sort().join('|');
   } finally { restore(); }
 };
 check('C: the recipe is deterministic (two fresh worlds agree byte-for-byte)',

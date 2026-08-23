@@ -316,8 +316,8 @@ check('census: the family outgrew the loop it was written for',
   const gem = SUPPORTS['serrated_edge'];
   const gemStat = gem.mods.find(m => m.stat.startsWith('apply_'))!.stat;
   const gemStatus = gemStat.slice('apply_'.length);
-  seat.meta.inventory.push({ def: gem, level: 1 });
-  const socketed = w.socketSupport(seat.meta.inventory.length - 1, 'cleave', seat);
+  const gemItem = w.grantSupportGemItem(seat, { def: gem, level: 1 });
+  const socketed = !!gemItem && w.socketSupport(gemItem.uid, 'cleave', seat);
   const extra = instanceMods(cleave);
   const armed = hero.sheet.armedFamily('apply_', STATUS_IDS, extra);
   check('E1: a REAL socketed gem arms its status through instanceMods',

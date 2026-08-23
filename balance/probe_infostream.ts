@@ -132,13 +132,13 @@ const check = (name: string, ok: boolean, detail = ''): void => {
     w.drops.push({ pos: { x: w.player.pos.x, y: w.player.pos.y }, item: { kind: 'support', gem: { def: sup, level: 1 } }, bob: 0 });
   };
   dropSup(); step(0.6);
-  const row1 = w.pickupFeed.find(e => e.seatId === seatId && e.label === `${sup.name} (Support)`);
-  check('C6: a vacuumed gem writes its feed row ("Name (Support)")', !!row1 && row1.count === 1,
+  const row1 = w.pickupFeed.find(e => e.seatId === seatId && e.label === `${sup.name} (Support Memory)`);
+  check('C6: a vacuumed gem writes its feed row ("Name (Support Memory)" — the Memory family, skill-items M1)', !!row1 && row1.count === 1,
     row1 ? `${row1.label} x${row1.count}` : 'no row');
   check('C7: the overhead pickup line wears kind \'pickup\' (hidden by default, feed keeps the ledger)',
     w.texts.some(t => t.kind === 'pickup'));
   dropSup(); step(0.6);
-  const rows = w.pickupFeed.filter(e => e.seatId === seatId && e.label === `${sup.name} (Support)`);
+  const rows = w.pickupFeed.filter(e => e.seatId === seatId && e.label === `${sup.name} (Support Memory)`);
   check('C8: the second identical pickup COALESCES live (one row, x2)',
     rows.length === 1 && rows[0].count === 2, `${rows.length} rows, x${rows[0]?.count}`);
 
@@ -180,14 +180,14 @@ const check = (name: string, ok: boolean, detail = ''): void => {
   w.dropGemAt(w.player.pos); // keep a fresh 'drop' float alive across the trip
   step(0.15);
   const preNotices = w.notices.length;
-  const preRow = w.pickupFeed.find(e => e.seatId === seatId && e.label === `${sup.name} (Support)`);
+  const preRow = w.pickupFeed.find(e => e.seatId === seatId && e.label === `${sup.name} (Support Memory)`);
   const snap = serializeSnapshot(w, 0);
   check('C12: the snapshot ships kinds + both feeds',
     (snap.texts ?? []).some(t => t.k === 'drop')
     && (snap.no ?? []).some(n => n.text === 'wire line' && n.ch === 'war')
-    && (snap.pfd ?? []).some(p => p.s === seatId && p.l === `${sup.name} (Support)` && p.n === 2));
+    && (snap.pfd ?? []).some(p => p.s === seatId && p.l === `${sup.name} (Support Memory)` && p.n === 2));
   applySnapshot(w, snap, null, 1);
-  const postRow = w.pickupFeed.find(e => e.seatId === seatId && e.label === `${sup.name} (Support)`);
+  const postRow = w.pickupFeed.find(e => e.seatId === seatId && e.label === `${sup.name} (Support Memory)`);
   check('C13: applySnapshot rebuilds notices, feed rows and float kinds exactly',
     w.notices.length === preNotices
     && !!postRow && !!preRow && postRow.count === preRow.count && postRow.bornAt === preRow.bornAt

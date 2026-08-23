@@ -258,10 +258,14 @@ check('A: the purchase stamps the market ledger',
   // A DISCARD moves owned goods — never a mint. (Pick the minted gem up
   // first: updateDrops is the pickup path; shortcut straight to the bag.)
   const afterMint = snapshot();
-  if (minted.item.kind === 'skill') wC.localSeat.meta.skillInv.push(minted.item.inst);
-  else if (minted.item.kind === 'support') wC.localSeat.meta.inventory.push(minted.item.gem);
+  // THE RESIDENCE (M1): the shortcut to the bag is the grant chokepoint;
+  // the discard drops the wrapper by uid (unwrapping as it falls).
+  const granted = minted.item.kind === 'skill'
+    ? wC.grantSkillGemItem(wC.localSeat, minted.item.inst)
+    : minted.item.kind === 'support'
+      ? wC.grantSupportGemItem(wC.localSeat, minted.item.gem) : null;
   wC.drops.pop();
-  wC.dropFromInventory(wC.localSeat, minted.item.kind === 'skill' ? 'skill' : 'support', 0);
+  if (granted) wC.dropGearFromBag(wC.localSeat, granted.uid);
   check('C: a player discard never feeds the index', snapshot() === afterMint);
 
   // A counter purchase moves stock — never a mint.
