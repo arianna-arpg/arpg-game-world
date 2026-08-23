@@ -806,7 +806,7 @@ registerDoodadRule('plague_cart', {
   forbidOn: ['water', 'lava', 'chasm'],
   brittle: {
     on: ['hit'], orbChance: 0.1, gemChance: 0.06, color: '#8a7a58',
-    corpses: { monster: 'zombie', count: [2, 3], text: 'the load spills out!' },
+    corpses: { monster: 'zombie', count: [2, 3] },
   },
   dissolve: { material: 'wood', motion: 'shatter', pieces: [6, 9] }, // THE DISSOLUTION GRAMMAR (D1): the dray breaks apart AS wood; the load's own line stands
 });
@@ -814,7 +814,7 @@ registerDoodadRule('shallow_grave', {
   overlap: 'ground', spacing: 32,
   brittle: {
     on: ['hit'], orbChance: 0.08, color: '#8a7a5e',
-    corpses: { monster: 'zombie', count: [1, 2], chance: 0.9, text: 'the earth gives up its dead!' },
+    corpses: { monster: 'zombie', count: [1, 2], chance: 0.9 },
   },
   dissolve: { material: 'earth', debrisLook: { color: '#4c4030' } }, // THE DISSOLUTION GRAMMAR (D1): the mound crumbles open as dark soil; the spill's own line stands
 });
@@ -828,7 +828,7 @@ registerDoodadRule('carrion_midden', {
   overlap: 'ground', spacing: 34,
   brittle: {
     on: ['hit'], orbChance: 0.06, color: '#9a8a6a',
-    corpses: { monster: 'taiga_elk', count: [1, 2], chance: 0.9, text: 'the heap gives up its meat!' },
+    corpses: { monster: 'taiga_elk', count: [1, 2], chance: 0.9 },
   },
   dissolve: { material: 'bone' }, // THE DISSOLUTION GRAMMAR (D1): the heap crumbles as bone strata, chips remain; the spill's own line stands
 });

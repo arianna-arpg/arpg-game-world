@@ -260,7 +260,7 @@ hazards 15 · spills/tolls 15), MOVE ~150 (world news → the feed), KEEP ~300
 | **M-EMERGE** — THE EMERGENCE GRAMMAR — **BUILT** (`engine/emerge.ts`, `docs/engine/emergence.md`, probe_emerge) | N | `engine/emerge.ts` + `vis/emergeLayer.ts` (the dissolve's mirror: RISE / BURST-OUT / CONDENSE / SURFACE / DROP / STIR, ground × host), `MonsterDef.emerge` + `BrittleSpawn`/ambush reading it, `springAmbush` + the brittle WAKE + burrow emerge + rift pours + seal manifests as consumers; the ring leaves every spawn path | ~60 | ~1 session |
 | **M-STATUS** — THE STATUS VOICE — **BUILT** (`engine/statusVoice.ts`, `docs/engine/statusvoice.md`, probe_statusvoice; the worn-face audit stays a listing) | P | `StatusDef.voice` family resolver, ~8 voices, the environment statuses' worn faces audited (which show, which only tell), grip/time/mental captions retired | ~30 | ~1 session |
 | **M-NEWS** — off the head, onto the feed — **BUILT** (`World.notice` / `KillCtx.notice`, 121 lines re-seated, probe_newsmove) | W | the world-news floaters re-seated on the notice feed (channels), the counters/refusals onto the prompt/objective HUD seam; no animation | ~150 (moved) | ~½ session |
-| **M-TOLL + M-SPILL** | N | resonance rings = lure radius (drawn == tested); corpses tumble; chest lids; 'drops loot!' retired | ~15 | ~½ session |
+| **M-TOLL + M-SPILL** — **BUILT** (`render/vis/worldVoices.ts`, `docs/engine/tollspill.md`, probe_tollspill) | N | resonance rings = lure radius (drawn == tested); corpses tumble; chest lids; 'drops loot!' retired | ~15 | ~½ session |
 | **M-HIT/DEATH** — the ring's variety | N | THE HIT VOICE (by damage type) + THE DEATH VOICE (by material) + THE ARROW'S END (by form) | 0 (rings replaced) | ~1 session |
 | **M-CRY** — drawn twins for combat cries | N | parry spark, block glint, evade blur, immune ring…; the cries stay kinded | 0 | ~½ session |
 
@@ -317,6 +317,15 @@ arrival/ending lines (world), and 28 event epilogues in packages/kill handlers
 (ctx.notice — events/war/civic). The head keeps what is AT the head: the
 refusals/readouts (the prompt seam, later), the grab/hazard/objective lines,
 VOCATION / LEVEL UP, the gains. Probe `balance/probe_newsmove.ts`.
+
+**M-TOLL + M-SPILL (built fourth):** the toll's ring now spans EXACTLY the lure
+reach (drawn == tested) through the `toll` voice (the skep `thrum`s); the attunement
+wash wears `tune`; corpses spilled from a breakable TUMBLE from the host seat to
+their own (`Corpse.laidAt/from`, the pure `corpseTumblePose`); the chest lid swings
+(`Chest.openedAt`) and the mimic bursts out of its chest; the captions retired: the
+five resonance lines + `ResonanceSpec.text`, "attuned to …!", the three spill lines +
+`corpses.text`, drops loot! · the purse bursts! · spoils! · the hoard spills! · the
+chest opens! · MIMIC!. Probe `balance/probe_tollspill.ts`; `docs/engine/tollspill.md`.
 
 **THE ROW LAW (the coda):**
 

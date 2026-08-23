@@ -60,9 +60,9 @@ export const TUNE_CFG = {
    *  as "until retuned" (statuses are the one dressing lane — nameplate,
    *  co-op wire, fx — so the body wears its tone as an ordinary buff). */
   holdScale: 9999,
-  /** Floating text on a tone change ("attuned to fire!"). */
-  text: (tone: DamageType): string =>
-    tone === 'physical' ? 'the attunement shatters!' : `attuned to ${tone}!`,
+  // (M-TOLL: the tone-change caption retired — the wash ring wears the 'tune'
+  //  voice in the tone's tint and the body wears its attuned_<tone> status,
+  //  whose own status voice speaks on the body.)
 } as const;
 
 /** The status a tone grants/wears — one registered row per damage type. */

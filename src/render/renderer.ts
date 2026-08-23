@@ -86,6 +86,7 @@ import { dressFading, softDryFace } from './vis/dressFade';
 import { dissolveDebrisAlpha, drawDissolveCracks, drawDissolves } from './vis/dissolveLayer'; // THE DISSOLUTION GRAMMAR's fragment engine (+ the litter painter + break voices register)
 import { drawEmergences, emergePoseOf } from './vis/emergeLayer'; // THE EMERGENCE GRAMMAR's ground share + the arriving body's pose
 import { drawStatusVoices } from './vis/statusVoiceLayer'; // THE STATUS VOICE — every landing accents its body (+ the nine family voices register)
+import { corpseTumblePose } from './vis/worldVoices'; // THE WORLD'S OWN VOICES (toll / thrum / tune register) + the spilled body's tumble
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawSkyField, drawWeatherFx, skyGeoOf, skyRawIntensity, WEATHER_FX, type SkyFieldView, type SkyGeo } from './vis/weatherFx';
@@ -3597,9 +3598,14 @@ export class Renderer {
       ctx.lineWidth = 2;
       ctx.fillRect(x - 14, y - 10, 28, 20);
       ctx.strokeRect(x - 14, y - 10, 28, 20);
-      // Lid
+      // Lid — M-SPILL: it SWINGS on open (lifts and thins over chestLid.seconds
+      // off c.openedAt, the engine's clock), then sits open; no caption.
+      const lidAge = c.opened && c.openedAt !== undefined ? world.time - c.openedAt : Infinity;
+      const lu = Math.max(0, Math.min(1, lidAge / VIS_CFG.chestLid.seconds));
+      const lidH = c.opened ? 8 - 4 * lu : 8;
+      const lidLift = c.opened ? Math.sin(Math.PI * lu) * VIS_CFG.chestLid.lift : 0;
       ctx.fillStyle = c.opened ? '#46351e' : '#8a6a3a';
-      ctx.fillRect(x - 14, y - 10, 28, c.opened ? 4 : 8);
+      ctx.fillRect(x - 14, y - 10 - lidLift, 28, lidH);
       if (!c.opened) {
         if (c.kind === 'objective' && !world.objectiveDone) {
           // chained until the zone yields
@@ -5724,12 +5730,20 @@ export class Renderer {
    *  a field of mixed dead still reads. */
   private drawCorpses(world: World): void {
     const { ctx } = this;
-    for (const c of world.corpses) {
-      const def = MONSTERS[c.defId];
+    for (const c0 of world.corpses) {
+      const def = MONSTERS[c0.defId];
       const size = Math.min(15, 6 + (def?.radius ?? 10) * 0.4);
-      const frac = Math.min(1, c.remaining / CORPSE_CFG.duration); // 1 = fresh
-      const alpha = Math.min(1, c.remaining / 2) * 0.8;
+      const frac = Math.min(1, c0.remaining / CORPSE_CFG.duration); // 1 = fresh
+      const alpha = Math.min(1, c0.remaining / 2) * 0.8;
       const sink = 0.72 + 0.28 * frac; // the ground slowly takes it back
+      // M-SPILL (vis/worldVoices.ts): a body spilled out of a breaking host
+      // TUMBLES from the host's seat to its own over a short arc — drawn here
+      // as a posed copy (the tested corpse sits at c0.pos from the instant).
+      const tumbling = c0.laidAt !== undefined && !!c0.from && world.time - c0.laidAt < VIS_CFG.corpseTumble.seconds;
+      const tp = tumbling ? corpseTumblePose(world.time - c0.laidAt!, c0.from!, c0.pos, size) : null;
+      const c = tp ? { ...c0, pos: { x: tp.x, y: tp.y } } : c0;
+      ctx.save();
+      if (tp) { ctx.translate(tp.x, tp.y); ctx.rotate(tp.rot); ctx.translate(-tp.x, -tp.y); }
       // The settle-stain beneath.
       ctx.globalAlpha = alpha * 0.4;
       ctx.fillStyle = '#2c1a1e';
@@ -5769,6 +5783,7 @@ export class Renderer {
         ctx.fill();
       }
       ctx.globalAlpha = 1;
+      ctx.restore();
     }
   }
 

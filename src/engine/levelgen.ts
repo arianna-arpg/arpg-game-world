@@ -1249,7 +1249,9 @@ export interface BrittleSpec {
   /** Spill raisable CORPSES (the shallow grave / the plague cart): fuel for
    *  the corpse economy, minted like Exhume's (CORPSE_CFG stand-in life).
    *  `monster` is the defId the bodies claim to be. */
-  corpses?: { monster: string; count: [number, number]; chance?: number; text?: string };
+  corpses?: { monster: string; count: [number, number]; chance?: number };
+  // (M-SPILL: the spill's old caption retired — the bodies TUMBLE out of the
+  //  breaking host, a drawn arc from the seat — docs/design/show-dont-tell.md §3c.)
   /** Carve the walk grid open in this radius on break — a crumbling plug
    *  unblocks itself; a secret wall carves INTO the wall face behind it. */
   carve?: number;
@@ -1316,9 +1318,12 @@ export interface ResonanceSpec {
   radius?: number;
   /** Seconds this one stone won't ring again (default RESONANCE_CFG.cooldown). */
   cooldown?: number;
-  /** Flavor spoken at the stone on each toll. */
-  text?: string;
-  /** Toll tint — the ring flash + text color (default limestone grey). */
+  /** THE TOLL's voice (THE EFFECT VOICE): 'toll' (thin rings expanding to
+   *  the lure reach — drawn == tested) by default; 'thrum' for a buzzing
+   *  body (the skep). The old caption ("the spire sings…") retired — the
+   *  rings ARE the toll (docs/design/show-dont-tell.md §3d, M-TOLL). */
+  voice?: string;
+  /** Toll tint — the ring's color (default limestone grey). */
   color?: string;
 }
 
@@ -1948,7 +1953,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // treasure pot: crack the bowl, keep what glitters.
   crystal_spire: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 150, bodyScale: 0.55,
     forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
-    resonance: { text: 'the spire sings…', color: '#9fd8ff' } },
+    resonance: { color: '#9fd8ff' } },
   geode_shell: { overlap: 'solid', blocksMove: true, spacing: 60, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
     brittle: { on: ['hit'], gemChance: 0.6, orbChance: 0.3, color: '#9fd8ff' },
     dissolve: { material: 'crystal' } }, // THE DISSOLUTION GRAMMAR (D1): the bowl splits into facets; the line retired
@@ -2177,7 +2182,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   petrified_elder: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 80,
     occlude: { pad: 14, alpha: 0.25 }, bodyScale: 0.22, veil: {},
     forbidOn: ['water', 'lava', 'chasm'],
-    resonance: { radius: 560, text: 'the elder tolls…' } },
+    resonance: { radius: 560 } },
   petrified_trunk: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26,
     forbidOn: ['water', 'lava', 'chasm'], surface: { hw: 1.9, hh: 0.55 },
     resonance: { radius: 420 } },
@@ -2188,7 +2193,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     forbidOn: ['water', 'lava', 'chasm'],
     brittle: { on: ['hit'], color: '#9a948a', orbChance: 0.2 },
     dissolve: { material: 'stone', motion: 'shatter' }, // THE DISSOLUTION GRAMMAR (D1): the watcher cracks apart AS stone; its toll still rings
-    resonance: { radius: 520, text: 'the watcher rings…' } },
+    resonance: { radius: 520 } },
   // Winter clutter (the taiga's furniture).
   ice_spike: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24 },
   snowman:   { overlap: 'solid', blocksMove: true, spacing: 60 },
@@ -2249,7 +2254,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // The widdershin court's dressing (the confusion family's landmarks).
   witch_bell: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 120, bodyScale: 0.35,
     forbidOn: ['water', 'lava', 'chasm'],
-    resonance: { radius: 420, text: 'the bell stirs, unstruck…' } },
+    resonance: { radius: 420 } },
   mazing_stone: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 60,
     forbidOn: ['water', 'lava', 'chasm'] },
   coach_wreck:  { overlap: 'solid', blocksMove: true, spacing: 90, surface: { hw: 0.9, hh: 0.55, angle: 0.15 }, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
@@ -2287,7 +2292,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // lock on the offender. The skep itself is the trigger; the bees are
   // the answer (skep_bee: habitat-bound with a territory-wide grace).
   beehive:   { overlap: 'solid', blocksMove: true, spacing: 75,
-    resonance: { radius: 420, text: 'the skep thrums with fury…', color: '#e0b048' } },
+    resonance: { radius: 420, color: '#e0b048', voice: 'thrum' } }, // the skep BUZZES its toll (M-TOLL)
   // THE THICKET MENDS ITS OWN (thicket_heal — the ally direction's first row):
   // the bramble quietly restores the grove's wounded kin while you fight them.
   // BOTH halves are load-bearing — target 'ally' without a faction matches

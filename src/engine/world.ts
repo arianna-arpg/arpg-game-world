@@ -392,6 +392,8 @@ export interface Chest {
   /** It was never a chest. Revealed (and removed) at the moment of truth. */
   mimic: boolean;
   opened: boolean;
+  /** M-SPILL: the world clock at the open — the renderer swings the lid off it. */
+  openedAt?: number;
   /** timed: seconds of standing presence left to pick the lock. */
   lockTime: number;
   maxLock: number;
@@ -663,6 +665,8 @@ export const RESONANCE_CFG = {
   lurePace: 1.1,
   lureStandoff: 52,
   lureLinger: 3.5,
+  /** THE TOLL's drawn life (seconds) — the rings expand to the lure reach. */
+  tollLife: 0.9,
 };
 
 /** AMBIENT SCENERY-ACTOR tunables (World.bootScenery — ZoneDef.scenery
@@ -1449,6 +1453,11 @@ export interface Corpse {
   level: number;
   maxLife: number;
   remaining: number;
+  /** M-SPILL (show-dont-tell §3c): a body SPILLED out of a breaking host
+   *  tumbles from the host's seat to its own over a short arc — the renderer
+   *  poses a fresh corpse off (laidAt, from); both runtime-only. */
+  laidAt?: number;
+  from?: Vec2;
 }
 
 /** What a skill's targeting spec resolved to. */
@@ -34753,10 +34762,13 @@ export class World {
       a.alertUntil = Math.max(a.alertUntil, this.time + RESONANCE_CFG.alertFor * alertScale(a));
       a.alertFrom ??= vec(o.pos.x, o.pos.y);
     }
-    this.text(o.pos, spec.text ?? 'the stone rings…', tint, 12);
+    // THE TOLL (M-TOLL — show-dont-tell §3d): the rings expand to EXACTLY the
+    // lure reach (drawn == tested — the caption never gave that), in the
+    // stone's tint, through the 'toll' voice (or the row's own — the skep
+    // thrums); the old line retired.
     this.flashes.push({
-      pos: vec(o.pos.x, o.pos.y), radius: Math.min(90, o.radius + 26),
-      color: tint, life: 0.3, maxLife: 0.3,
+      pos: vec(o.pos.x, o.pos.y), radius,
+      color: tint, life: RESONANCE_CFG.tollLife, maxLife: RESONANCE_CFG.tollLife, fx: spec.voice ?? 'toll',
     });
   }
 
@@ -34812,10 +34824,9 @@ export class World {
       }
       this.flashes.push({
         pos: vec(a.pos.x, a.pos.y), radius: a.radius + radius,
-        color: tint, life: 0.3, maxLife: 0.3,
+        color: tint, life: 0.45, maxLife: 0.45, fx: 'tune', // M-TOLL: the wash ring in the tone's tint (the reach is the ring)
       });
     }
-    this.text(vec(a.pos.x, a.pos.y - a.radius - 8), TUNE_CFG.text(tone), tint, 12);
     this.flashes.push({
       pos: vec(a.pos.x, a.pos.y), radius: a.radius + 12,
       color: tint, life: 0.25, maxLife: 0.25,
@@ -37132,8 +37143,7 @@ export class World {
           pos: vec(target.pos.x + rand(-20, 20), target.pos.y + rand(-20, 20)),
           item, bob: rand(0, Math.PI * 2),
         });
-        this.text(vec(target.pos.x, target.pos.y - 20), 'drops loot!', '#e8c84a', 13);
-      }
+        }
       // THE WOUNDED PURSE (MonsterDef.essenceSpill): landed damage banks
       // toward shed essence packets — the currency trail of the chase.
       if (dealt > 0 && target.defId) {
@@ -39821,8 +39831,7 @@ export class World {
         for (let k = 0; k < owed; k++) this.dropEssenceAt(actor.pos, rollSpillPacket(actor.level, spillDef));
         if (owed > 0) {
           actor.essenceSpilled += owed;
-          this.text(vec(actor.pos.x, actor.pos.y - 20), 'the purse bursts!', '#e8c84a', 14);
-        }
+          }
       }
       // A dead looter's sack SPILLS in full — nothing it snatched is ever
       // lost; the chase always pays out (grief-proof by construction).
@@ -47932,6 +47941,7 @@ export class World {
   /** Burst a chest open: gems and a swig of resources. */
   private openChest(c: Chest): void {
     c.opened = true;
+    c.openedAt = this.time; // M-SPILL: the lid swings (the renderer's own clock read)
     this.dropGemAt(c.pos);
     this.dropGemAt(c.pos);
     // THE THEMED CACHE (Chest.rarity — a tinted toll's promise): one rolled
@@ -47940,15 +47950,13 @@ export class World {
     if (c.rarity) {
       const item = rollItem({ ilvl: Math.max(1, this.zone.level), rarityWeights: { [c.rarity]: 1 } });
       if (item) {
-        this.dropGearAt(vec(c.pos.x, c.pos.y + 8), item);
-        this.text(vec(c.pos.x, c.pos.y - 38), `${ITEM_RARITIES[c.rarity].label} spoils!`, ITEM_RARITIES[c.rarity].color, 13);
+        this.dropGearAt(vec(c.pos.x, c.pos.y + 8), item); // the glyph's own rarity color is the read (M-SPILL: no caption)
       }
     }
     for (let i = 0; i < 2; i++) {
       this.shedOrb(chance(0.5) ? 'life' : 'mana', c.pos, { scatter: 22, life: 14 });
     }
-    this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 50, color: '#e8c87a', life: 0.4, maxLife: 0.4 });
-    this.text(vec(c.pos.x, c.pos.y - 22), 'the chest opens!', '#e8c87a', 14);
+    this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 50, color: '#e8c87a', life: 0.4, maxLife: 0.4, fx: 'sparkle' }); // M-SPILL: the lid + the glints, no caption
   }
 
   private updateChests(dt: number): void {
@@ -47972,8 +47980,7 @@ export class World {
             const m = this.createMonster(FIXTURE_IDS.mimic, Math.max(1, this.zone.level), 'enemy');
             m.pos = this.clampPos(vec(c.pos.x, c.pos.y), m.radius);
             this.actors.push(m);
-            this.text(vec(c.pos.x, c.pos.y - 20), 'MIMIC!', '#ff5050', 18);
-            this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 40, color: '#ff5050', life: 0.35, maxLife: 0.35 });
+            this.emergeBody(m, { host: true }); // THE EMERGENCE GRAMMAR: it was never a chest — the mimic BURSTS OUT of it (no caption)
           } else {
             this.chests.push(c); // keep it for the renderer's opened state
             this.openChest(c);
@@ -52108,9 +52115,9 @@ export class World {
           defId: br.corpses.monster, level: lvl,
           maxLife: CORPSE_CFG.mint.life + lvl * CORPSE_CFG.mint.lifePerLevel,
           remaining: CORPSE_CFG.duration,
+          laidAt: this.time, from: vec(d.pos.x, d.pos.y), // M-SPILL: the body TUMBLES out of the host (no caption)
         });
       }
-      if (n > 0 && br.corpses.text) this.text(vec(d.pos.x, d.pos.y - 28), br.corpses.text, color, 12);
     }
     // THE DISSOLUTION GRAMMAR — after every tested consequence above has
     // fired exactly as before (drawn == tested at the instant; the motion is

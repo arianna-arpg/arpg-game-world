@@ -395,7 +395,7 @@ const step = (w: World, seconds: number): void => {
   check('the skep is a trigger: beehive wears an authored resonance row',
     !!doodadRuleOf('beehive').resonance
     && (doodadRuleOf('beehive').resonance?.radius ?? 0) >= 300
-    && !!doodadRuleOf('beehive').resonance?.text);
+    && doodadRuleOf('beehive').resonance?.voice === 'thrum'); // M-TOLL: the skep's toll THRUMS (its own voice) — the caption retired
   check('the soft-lock law: skep_bee wears noObjective for its blocking ground',
     MONSTERS.skep_bee.noObjective === true
     && !(doodadRuleOf('beehive').blocksMove && !MONSTERS.skep_bee.noObjective));

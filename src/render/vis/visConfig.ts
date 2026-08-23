@@ -1322,6 +1322,21 @@ export const VIS_CFG = {
     },
   },
 
+  /** THE WORLD'S OWN VOICES (vis/worldVoices.ts — M-TOLL/M-SPILL): the toll
+   *  that rings to the lure reach, the skep's thrum, the attunement wash;
+   *  plus the spilled corpse's tumble and the chest lid. All DIALS, unblessed. */
+  worldVoices: {
+    toll:  { rings: 3, spacing: 0.22, width: 1.3, alpha: 0.55, squash: 0.72, winkAlpha: 0.7 },
+    thrum: { pulses: 3, rate: 3, reach: 0.28, alpha: 0.6, dots: 7 },
+    tune:  { alpha: 0.7, motes: 8 },
+  },
+  /** A spilled body's arc from the host's seat to its own: seconds, the arc
+   *  height as a multiple of the corpse size, the spins along the way. */
+  corpseTumble: { seconds: 0.45, arc: 1.6, spins: 0.75 },
+  /** The chest lid's swing on open: seconds, the lift (px) it rises before
+   *  settling open. */
+  chestLid: { seconds: 0.35, lift: 7 },
+
   /** THE STATUS VOICE's render dials (vis/statusVoiceLayer.ts — the drawn
    *  half of engine/statusVoice.ts; the life / reach / cap live THERE as
    *  STATUS_VOICE_CFG). Nine family voices; all DIALS, unblessed. */

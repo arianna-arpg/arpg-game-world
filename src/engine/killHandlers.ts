@@ -158,8 +158,7 @@ registerKillHandler({
   id: 'scamp_hoard',
   when: ctx => ctx.actor.tag === 'gilded_hoard' && ctx.credit,
   run: ctx => {
-    for (let i = 0; i < 3; i++) ctx.dropGemAt(ctx.actor.pos);
-    ctx.text(ctx.actor.pos, 'the hoard spills!', '#e8c84a', 16);
+    for (let i = 0; i < 3; i++) ctx.dropGemAt(ctx.actor.pos); // the gems spilling ARE the read (M-SPILL: no caption)
   },
 });
 
