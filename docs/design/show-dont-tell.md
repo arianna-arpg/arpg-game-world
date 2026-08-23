@@ -258,7 +258,7 @@ hazards 15 · spills/tolls 15), MOVE ~150 (world news → the feed), KEEP ~300
 | movement | axis | what lands | lines retired | effort |
 |---|---|---|---|---|
 | **M-EMERGE** — THE EMERGENCE GRAMMAR — **BUILT** (`engine/emerge.ts`, `docs/engine/emergence.md`, probe_emerge) | N | `engine/emerge.ts` + `vis/emergeLayer.ts` (the dissolve's mirror: RISE / BURST-OUT / CONDENSE / SURFACE / DROP / STIR, ground × host), `MonsterDef.emerge` + `BrittleSpawn`/ambush reading it, `springAmbush` + the brittle WAKE + burrow emerge + rift pours + seal manifests as consumers; the ring leaves every spawn path | ~60 | ~1 session |
-| **M-STATUS** — THE STATUS VOICE + the worn-face audit | P | `StatusDef.voice` family resolver, ~8 voices, the environment statuses' worn faces audited (which show, which only tell), grip/time/mental captions retired | ~30 | ~1 session |
+| **M-STATUS** — THE STATUS VOICE — **BUILT** (`engine/statusVoice.ts`, `docs/engine/statusvoice.md`, probe_statusvoice; the worn-face audit stays a listing) | P | `StatusDef.voice` family resolver, ~8 voices, the environment statuses' worn faces audited (which show, which only tell), grip/time/mental captions retired | ~30 | ~1 session |
 | **M-NEWS** — off the head, onto the feed | W | the world-news floaters re-seated on the notice feed (channels), the counters/refusals onto the prompt/objective HUD seam; no animation | ~150 (moved) | ~½ session |
 | **M-TOLL + M-SPILL** | N | resonance rings = lure radius (drawn == tested); corpses tumble; chest lids; 'drops loot!' retired | ~15 | ~½ session |
 | **M-HIT/DEATH** — the ring's variety | N | THE HIT VOICE (by damage type) + THE DEATH VOICE (by material) + THE ARROW'S END (by form) | 0 (rings replaced) | ~1 session |
@@ -290,6 +290,23 @@ stirs, the light condenses, the sandmaw rises through sand) and
 `BrittleSpawn.text` (7), plus 'hiveborn!' / 'brood!' / 'risen!' / 'ambush!'.
 Dev → Emerge (the ring of six, re-play any motion, the read). Probe
 `balance/probe_emerge.ts` (31 pins). See `docs/engine/emergence.md`.
+
+**M-STATUS — THE STATUS VOICE (built next):** `engine/statusVoice.ts` (the family
+resolver — time → ripple; the element: cold rime / fire flare / lightning
+spark / chaos spatter / physical flecks; hard CC → stars; the mind → spiral;
+a blessing → wink; `StatusDef.voice` wins; self-drawing states speak none — and
+the pure frame-diff law) + `render/vis/statusVoiceLayer.ts` (render-side detection of
+every FRESH status on every drawn body, the accent drawn ON and following the
+body, the nine voices registered into THE EFFECT VOICE); 21 player-axis
+captions RETIRED (chilled to the bone · sunscorched · befuddled · maddened ·
+possessed · corrupted · SEEN/beheld · carried · torn free · broke free · the
+grip breaks · UNHORSED · FRENZY · contagion · transfused · swallowed by the
+dark · over the edge · renewing · time stops/bends) and 15 rule-name cries
+KINDED `combat` (addled · dominated · snatched · time slips · DOOM · TRANSGRESSION ·
+undying · hex drawn/sheathed · the guise breaks · primed · marked · cleansed ·
+rung clean · winded). Probe `balance/probe_statusvoice.ts`. The census at HEAD: 141
+statuses → wink 93 (the authoring tail) · flare 11 · spatter 8 · spiral 8 ·
+none 5 · flecks 4 · stars 4 · rime 3 · ripple 3 · spark 2.
 
 **THE ROW LAW (the coda):**
 

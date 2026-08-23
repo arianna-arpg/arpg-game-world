@@ -118,6 +118,12 @@ export interface StatusDef {
    *  their own truths, and it ships to co-op clients on the ordinary
    *  status wire. */
   ghostAlpha?: number;
+  /** THE STATUS VOICE (engine/statusVoice.ts — the show-don't-tell ladder):
+   *  the effect voice this status speaks the instant it LANDS on a body
+   *  (drawn ON the body by render/vis/statusVoiceLayer.ts); absent = derived
+   *  from the def's nature (by element, hard CC, the mind, time, blessing);
+   *  false = none (a state that draws itself). */
+  voice?: string | false;
   /** IMPALE personality: the status's banked `rupture` DISCHARGES into
    *  the bearer's NEXT qualifying top-level hit as its own separate
    *  mitigated blow (then the status is spent) — instead of waiting for

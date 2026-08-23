@@ -85,6 +85,7 @@ import { SightVeil } from './vis/sightVeil';
 import { dressFading, softDryFace } from './vis/dressFade';
 import { dissolveDebrisAlpha, drawDissolveCracks, drawDissolves } from './vis/dissolveLayer'; // THE DISSOLUTION GRAMMAR's fragment engine (+ the litter painter + break voices register)
 import { drawEmergences, emergePoseOf } from './vis/emergeLayer'; // THE EMERGENCE GRAMMAR's ground share + the arriving body's pose
+import { drawStatusVoices } from './vis/statusVoiceLayer'; // THE STATUS VOICE — every landing accents its body (+ the nine family voices register)
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawSkyField, drawWeatherFx, skyGeoOf, skyRawIntensity, WEATHER_FX, type SkyFieldView, type SkyGeo } from './vis/weatherFx';
@@ -671,6 +672,10 @@ export class Renderer {
       this.drawLite(world, vw, vh);
       for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a, world.time);
       for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
+      // THE STATUS VOICE (vis/statusVoiceLayer.ts): what just LANDED on a
+      // body is drawn ON it — the frame-diff of each body's statuses plays
+      // the family voice over the body; off-screen landings stay silent.
+      drawStatusVoices(this.ctx, world, this.frameDt, this.cam.x, this.cam.y, vw, vh);
       for (const a of world.actors) if (!a.dead && a.nemesis) this.drawNemesisMark(a);
     }
     this.drawProjectiles(world);

@@ -4187,7 +4187,6 @@ export class World {
       guestSlot: -1, gemId: inst.def.id,
     };
     this.seatEmbody(seat, target, ride, possessPowerFactor(spec, 'possess', powBonus), guard, inst);
-    this.text(vec(target.pos.x, target.pos.y - target.radius - 12), 'possessed!', '#b8a8e8', 14);
     this.flashes.push({
       pos: vec(target.pos.x, target.pos.y), radius: target.radius + 14,
       color: '#b8a8e8', life: 0.35, maxLife: 0.35,
@@ -11844,7 +11843,6 @@ export class World {
     this.mountUnlink(r);
     r.applyStatus(MOUNT_CFG.unhorse.status, 0, 1, 'Unhorsed');
     this.pushActor(r, rand(0, Math.PI * 2), MOUNT_CFG.unhorse.push);
-    this.text(vec(r.pos.x, r.pos.y - r.radius - 10), 'UNHORSED', MOUNT_CFG.unhorse.color, 13);
     this.flashes.push({
       pos: vec(m.pos.x, m.pos.y), radius: m.radius * 1.4,
       color: MOUNT_CFG.unhorse.color, life: 0.3, maxLife: 0.3,
@@ -11914,7 +11912,6 @@ export class World {
               mod('moveSpeed', 'more', 0.3),
             ],
           });
-          this.text(vec(a.pos.x, a.pos.y - 16), 'FRENZY!', '#ff5050', 13);
         }
       }
       const p = spec.morale?.panicOnAllyDeath;
@@ -15204,7 +15201,6 @@ export class World {
       f.skills.push(makeSkillInstance(SKILLS[cfg.grantSkill], 1 + Math.floor((f.level - 1) / 4)));
     }
     this.flashes.push({ pos: vec(f.pos.x, f.pos.y), radius: f.radius * 2.2, color: '#7fce6a', life: 0.4, maxLife: 0.4 });
-    this.text(vec(f.pos.x, f.pos.y - f.radius - 6), 'corrupted!', '#7fce6a', 11);
   }
 
   /** EVENT: sprout ensnaring tentacle-field ground patches away from the player —
@@ -26085,7 +26081,7 @@ export class World {
         if (dist(a.pos, d.pos) > reach) continue;
         (a.lootSack ??= []).push(d.item);
         this.drops.splice(i, 1);
-        this.text(vec(a.pos.x, a.pos.y - 16), 'snatched!', '#e8c84a', 12);
+        this.text(vec(a.pos.x, a.pos.y - 16), 'snatched!', '#e8c84a', 12, 'combat');
       }
     }
   }
@@ -28273,12 +28269,10 @@ export class World {
       if (!v || v.dead || a.dead || v.heldBy !== a.id) { this.grabRelease(a); continue; }
       // THE RELEASE LADDER — CC, sever, struggle, patience (grab.ts docs).
       if (GRAB_CFG.release.onHardCC && a.isStunned()) {
-        this.text(v.pos, 'torn free!', '#a8d8a0', 12);
         this.grabRelease(a);
         continue;
       }
       if (hold.severed >= (hold.spec.severFrac ?? GRAB_CFG.break.severFrac)) {
-        this.text(v.pos, 'torn free!', '#a8d8a0', 12);
         this.grabRelease(a);
         continue;
       }
@@ -28293,7 +28287,6 @@ export class World {
           this.text(a.pos, Math.round(taken).toString(), DAMAGE_COLOR.physical, 13);
           if (a.life <= 0 && !a.dead) this.kill(a, false, v);
         }
-        this.text(v.pos, 'broke free!', '#a8d8a0', 12);
         this.grabRelease(a);
         continue;
       }
@@ -29041,7 +29034,6 @@ export class World {
         // power, capped under certainty (a hex is a risk, never a lock).
         if (sd?.interruptChance && chance(Math.min(0.9, sd.interruptChance * (s.power ?? 1)))) {
           caster.applyStatus('stun', 0, 0.75, sd.label);
-          this.text(caster.pos, 'befuddled!', '#c878b8', 12);
           return false;
         }
       }
@@ -29075,7 +29067,7 @@ export class World {
         if (caster.aiActionInsts) for (const k of caster.aiActionInsts.values()) admit(k);
         if (pool.length) {
           const sub = pool[Math.min(pool.length - 1, Math.floor(rand(0, pool.length)))];
-          this.text(vec(caster.pos.x, caster.pos.y - 16), 'addled!', sd.color, 12);
+          this.text(vec(caster.pos.x, caster.pos.y - 16), 'addled!', sd.color, 12, 'combat');
           this.scrambleLatch = true;
           const ok = this.useSkill(caster, sub, aim, seatPress);
           this.scrambleLatch = false;
@@ -29144,7 +29136,7 @@ export class World {
           if (!seatPress) return false;
           caster.reservedMana = Math.max(0, caster.reservedMana - drawn.reserved);
           caster.hexToggles.delete(def.id);
-          this.text(caster.pos, 'hex sheathed', def.color, 11);
+          this.text(caster.pos, 'hex sheathed', def.color, 11, 'combat');
           caster.useLock = 0.25;
           return true;
         }
@@ -29156,7 +29148,7 @@ export class World {
         caster.payCost(caster.skillCost(inst));
         caster.reservedMana += reserve;
         caster.hexToggles.set(def.id, { inst, reserved: reserve });
-        this.text(caster.pos, 'hex drawn', def.color, 11);
+        this.text(caster.pos, 'hex drawn', def.color, 11, 'combat');
         caster.useLock = 0.25;
         return true;
       }
@@ -29607,8 +29599,6 @@ export class World {
         label: label ?? 'time bends',
       },
     });
-    this.text(vec(caster.pos.x, caster.pos.y - 26),
-      spec.scale <= 0 ? 'time stops!' : 'time bends!', '#a8ecf0', 14);
   }
 
   /**
@@ -30037,7 +30027,7 @@ export class World {
     if (opts.primed) {
       caster.primedPours.push({ skillId: def.id, chargesSpent: opts.chargesSpent ?? 0 });
       // Copy FLAGGED for Arianna's word (the smallest honest float).
-      this.text(caster.pos, 'primed', def.color, 11);
+      this.text(caster.pos, 'primed', def.color, 11, 'combat');
       return true;
     }
 
@@ -31833,7 +31823,7 @@ export class World {
             caster.pos.y + Math.sin(caster.facing) * dd), 10);
           st.markPos = { x: at.x, y: at.y };
           this.flashes.push({ pos: vec(at.x, at.y), radius: 20, color: def.color, life: 0.4, maxLife: 0.4 });
-          this.text(at, 'marked', def.color, 11);
+          this.text(at, 'marked', def.color, 11, 'combat');
         }
         break;
       }
@@ -32551,7 +32541,7 @@ export class World {
           else caster.cooldowns.set(id, left);
           wound++;
         }
-        if (wound > 0) this.text(caster.pos, 'time slips', '#8ae0e8', 12);
+        if (wound > 0) this.text(caster.pos, 'time slips', '#8ae0e8', 12, 'combat');
       }
       // TRANSGRESSION: mid-guard, the blue bar becomes shield — past max.
       if (fx.type === 'guardSurge' && caster.casting?.mode === 'guard') {
@@ -32561,7 +32551,7 @@ export class World {
           const cs2 = caster.casting;
           cs2.shield = (cs2.shield ?? 0) + spend * fx.ratio;
           cs2.maxShield = Math.max(cs2.maxShield ?? 1, cs2.shield);
-          this.text(caster.pos, 'TRANSGRESSION!', '#8ab8d8', 14);
+          this.text(caster.pos, 'TRANSGRESSION!', '#8ab8d8', 14, 'combat');
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius: caster.radius + 16,
             color: '#8ab8d8', life: 0.3, maxLife: 0.3,
@@ -35633,7 +35623,6 @@ export class World {
     // A hard enough shove ON a holder tears its hold loose first (a pair
     // never rides a launch); the stumble itself then lands normally.
     if (target.gripping && strength >= GRAB_CFG.release.shove) {
-      this.text(target.pos, 'the grip breaks!', '#a8d8a0', 12);
       this.grabRelease(target);
     }
     // A latched rider is SCRAPED LOOSE by any real shove (the latch's
@@ -36424,7 +36413,6 @@ export class World {
       target.restoreStreams.push({
         resource: 'life', perSec: total / hot.seconds, remaining: total,
       });
-      if (!quiet) this.text(target.pos, 'renewing', '#7ec88a', 11);
       return 0;
     }
     const landed = target.healBy(raw);
@@ -36511,7 +36499,7 @@ export class World {
       }
       stripped++;
     }
-    if (stripped > 0) this.text(target.pos, 'cleansed', '#a8e8d8', 12);
+    if (stripped > 0) this.text(target.pos, 'cleansed', '#a8e8d8', 12, 'combat');
     return stripped;
   }
 
@@ -36547,7 +36535,7 @@ export class World {
       }
       rung++;
     }
-    if (rung > 0) this.text(target.pos, 'rung clean', '#d8c8a0', 12);
+    if (rung > 0) this.text(target.pos, 'rung clean', '#d8c8a0', 12, 'combat');
     return rung;
   }
 
@@ -36980,7 +36968,7 @@ export class World {
     if (caster.possession?.guiseFaction && !caster.possession.guiseBroken && target !== caster) {
       caster.possession.guiseBroken = true;
       this.text(vec(caster.pos.x, caster.pos.y - caster.radius - 10),
-        'the guise breaks!', '#b8a8e8', 12);
+        'the guise breaks!', '#b8a8e8', 12, 'combat');
     }
     const extra = instanceMods(inst);
     // THE DIN (the watch fabric): a resolved blow RINGS — noiseOnHit is a
@@ -37483,7 +37471,6 @@ export class World {
               pos: vec(target.pos.x, target.pos.y), radius: target.radius + 14,
               color: SKILLS[sid].color, life: delay, maxLife: delay, edgeFrac: 0.9,
             });
-            this.text(vec(target.pos.x, target.pos.y - 24), 'contagion!', SKILLS[sid].color, 11);
           }
         }
       }
@@ -37503,7 +37490,6 @@ export class World {
           }
           if (best) {
             this.transplantStatus(best, s, 'Carrier Strain', strain);
-            this.text(best.pos, 'carried!', STATUS_DEFS[s.id]?.color ?? def.color, 11);
           }
         }
       }
@@ -37584,7 +37570,7 @@ export class World {
             thrall.lifespan = dom.duration;
             thrall.pos = this.clampPos(vec(target.pos.x, target.pos.y), thrall.radius);
             this.actors.push(thrall);
-            this.text(thrall.pos, 'dominated!', '#e8d44a', 13);
+            this.text(thrall.pos, 'dominated!', '#e8d44a', 13, 'combat');
             this.flashes.push({
               pos: vec(thrall.pos.x, thrall.pos.y), radius: thrall.radius + 14,
               color: '#e8d44a', life: 0.35, maxLife: 0.35,
@@ -37978,7 +37964,6 @@ export class World {
               spread++;
             }
             if (spread > 0) {
-              this.text(vec(target.pos.x, target.pos.y - 20), 'contagion!', def.color, 12);
               this.flashes.push({
                 pos: vec(target.pos.x, target.pos.y), radius,
                 color: def.color, life: 0.3, maxLife: 0.3,
@@ -38010,7 +37995,6 @@ export class World {
               caster.sheet.removeSource('status:' + s.id);
             }
           }
-          this.text(vec(target.pos.x, target.pos.y - 20), 'transfused!', def.color, 13);
           this.flashes.push({
             pos: vec(target.pos.x, target.pos.y), radius: (fx.splash ?? 60),
             color: def.color, life: 0.3, maxLife: 0.3,
@@ -38290,7 +38274,7 @@ export class World {
         if (s.rupture && STATUS_DEFS[s.id]?.cullsAtLethal) armed += s.rupture;
       }
       if (armed > 0 && armed >= target.life) {
-        this.text(vec(target.pos.x, target.pos.y - 16), 'DOOM!', '#7a48c8', 16);
+        this.text(vec(target.pos.x, target.pos.y - 16), 'DOOM!', '#7a48c8', 16, 'combat');
         for (let si = target.statuses.length - 1; si >= 0; si--) {
           const s = target.statuses[si];
           if (!s.rupture || !STATUS_DEFS[s.id]?.cullsAtLethal) continue;
@@ -39737,7 +39721,7 @@ export class World {
       actor.life = Math.max(1, actor.maxLife() * 0.25);
       actor.lifespan = actor.undyingTime;
       this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.5, color: '#b8a0e0', life: 0.35, maxLife: 0.35 });
-      this.text(actor.pos, 'undying!', '#b8a0e0', 12);
+      this.text(actor.pos, 'undying!', '#b8a0e0', 12, 'combat');
       return;
     }
 
@@ -42443,7 +42427,6 @@ export class World {
               a.tier = land;
               a.pos = this.clampPos(vec(rawX, rawY), a.radius, undefined, { mover: a });
               a.applyStatus('stun', 0, TIER_CFG.fallStunSec, 'the fall');
-              this.text(vec(a.pos.x, a.pos.y - 20), 'over the edge!', '#c8b8a0', 13);
               p.vx *= 0.4; p.vy *= 0.4;
             }
           }
@@ -44202,7 +44185,6 @@ export class World {
     // the shover like any killer — knockback into the pit IS the kill.
     const shover = a.push?.caster && !a.push.caster.dead ? a.push.caster : undefined;
     this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius + 14, color: '#141019', life: 0.4, maxLife: 0.4 });
-    this.text(vec(a.pos.x, a.pos.y - 22), 'swallowed by the dark!', '#9a8ab8', 12);
     this.kill(a, false, shover);
   }
 
@@ -45700,7 +45682,6 @@ export class World {
         const before = cur;
         this.feedSurvival(a, 'scorch', rate * dt);
         if (before < 1 && (a.survival?.get('scorch') ?? 0) >= 1) {
-          this.text(vec(a.pos.x, a.pos.y - a.radius - 6), 'sunscorched!', '#ffb64a', 12);
         }
       } else if (shaded && cur > 0) {
         // SHADE BLEEDS at the old dwindle cadence. The hold stamp parks the
@@ -45875,7 +45856,6 @@ export class World {
           t = 0;
           a.applyStatus('chill', 0, 1, 'the mountain cold');
           if ((a.statuses.find(x => x.id === 'chill')?.stacks ?? 0) === 1) {
-            this.text(vec(a.pos.x, a.pos.y - a.radius - 6), 'chilled to the bone!', '#7ad4ff', 12);
           }
         }
         // While exposed the world owns the chill's clock (slow cadences must
@@ -45963,11 +45943,9 @@ export class World {
           const wasMarked = !!markId && a.statuses.some(x => x.id === markId);
           a.applyStatus(statusId, 0, 1, 'the watching walls');
           if ((a.statuses.find(x => x.id === statusId)?.stacks ?? 0) === 1 && !wasMarked) {
-            this.text(vec(a.pos.x, a.pos.y - a.radius - 6), 'beheld…', '#d8b04a', 12);
           }
           // The ladder tipped — the country KNOWS. Tell its own.
           if (markId && !wasMarked && a.statuses.some(x => x.id === markId)) {
-            this.text(vec(a.pos.x, a.pos.y - a.radius - 10), 'SEEN!', '#f0c860', 15);
             this.setLure(`gaze#${a.id}`, a.pos, spec.lureRadius ?? GAZE_CFG.lureRadius,
               GAZE_CFG.lurePace, GAZE_CFG.lureStandoff, GAZE_CFG.lureLinger);
           }
@@ -51585,7 +51563,6 @@ export class World {
               if (dwelt >= z.madden.after && !v.statuses.some(s => s.id === 'maddened')) {
                 v.applyStatus('maddened', baselineStatusDps('maddened', this.zone.level),
                   1, z.inst.def.name, { casterId: z.caster.id });
-                this.text(v.pos, 'maddened!', '#d84a9a', 12);
               }
             }
           }

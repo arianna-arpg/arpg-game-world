@@ -1322,6 +1322,21 @@ export const VIS_CFG = {
     },
   },
 
+  /** THE STATUS VOICE's render dials (vis/statusVoiceLayer.ts — the drawn
+   *  half of engine/statusVoice.ts; the life / reach / cap live THERE as
+   *  STATUS_VOICE_CFG). Nine family voices; all DIALS, unblessed. */
+  statusVoice: {
+    rime:    { ringAlpha: 0.7, ticks: 8 },
+    flare:   { alpha: 0.75, sparks: 4 },
+    spark:   { alpha: 0.9, segs: 5 },
+    spatter: { alpha: 0.8, blobs: 6 },
+    flecks:  { alpha: 0.85, count: 6 },
+    spiral:  { alpha: 0.8, turns: 2 },
+    stars:   { alpha: 0.9, count: 3, spin: 5 },
+    ripple:  { alpha: 0.7 },
+    wink:    { alpha: 0.7 },
+  },
+
   /** THE EMERGENCE GRAMMAR's render dials (vis/emergeLayer.ts — the drawn
    *  half of engine/emerge.ts; the motions, the hold, the grounds and the
    *  cap live THERE as EMERGE_CFG). All DIALS, unblessed. Ablate: 'doodads'. */
