@@ -236,11 +236,11 @@ registry is open; the grammar adds voices, never a second flash system):
 
 | family (sites) | today | the vocabulary it wants | variety axis |
 |---|---|---|---|
-| deaths (`kill` 9, `updateDeathBursts`) | one disc per death + the corpse fabric | **THE DEATH VOICE** — by the body's MATERIAL_NATURE: flesh (a dark spatter), bone (a clatter of chips — the grammar's shatter), crystal/construct (facets — the grammar's shatter AS the body), light/ghost (a dissolve), swarm/lite (a scatter) | material |
-| hits (`resolveHit` 8) | one disc per landed blow | **THE HIT VOICE** — by damage TYPE: physical chip-spray, fire flare, cold rime-burst, lightning zap (exists), poison splat, holy wink, void tear | damage type |
+| deaths (`kill` 9, `updateDeathBursts`) — **BUILT** (THE DEATH VOICE, `engine/bodyVoices.ts`) | one disc per death + the corpse fabric | **THE DEATH VOICE** — by the body's MATERIAL_NATURE: flesh (a dark spatter), bone (a clatter of chips — the grammar's shatter), crystal/construct (facets — the grammar's shatter AS the body), light/ghost (a dissolve), swarm/lite (a scatter) | material |
+| hits (`resolveHit` 8) — **BUILT** (THE HIT VOICE at impacts + THE HIT TINT on the body flash) | one disc per landed blow | **THE HIT VOICE** — by damage TYPE: physical chip-spray, fire flare, cold rime-burst, lightning zap (exists), poison splat, holy wink, void tear | damage type |
 | casts (`executeSkill` 17) | a disc in the skill's color | **THE CAST VOICE** — by element + delivery (a ground stamp, a beam flare, a nova ring, a summon circle) | element × delivery |
 | procs (`executeProc` 7) | a disc in the proc's color | the proc's own family (leech = a red draw-in, chain = the link, shatter = the grammar) | proc family |
-| projectile ends (`updateProjectiles` 11) | a disc at expiry/impact | **THE ARROW'S END** — by projectile FORM: a shaft skitters and stands, a bolt fizzles, an orb pops wet, a shard shatters (the grammar's cut over the projectile's own drawn form) | projectile form |
+| projectile ends (`updateProjectiles` 11) — **half built** (the impact speaks the blow's TYPE; the by-FORM skitter/fizzle/pop stays open) | a disc at expiry/impact | **THE ARROW'S END** — by projectile FORM: a shaft skitters and stands, a bolt fizzles, an orb pops wet, a shard shatters (the grammar's cut over the projectile's own drawn form) | projectile form |
 | fixtures (`updateObjective` 6 + ~30 fabric sites) | a disc at the fixture | the fixture's OWN voice: the leyline hum ring (= its reach), the altar's feed (a draw-in), the procession's smoke, the spire's flare (exists) | fixture kind |
 | arrivals (springAmbush, spawns, seals, rifts, scenes ~60) | a disc + a line | **THE EMERGENCE GRAMMAR** (§3b) | ground × host |
 | statuses (apply sites ~30) | a disc + a line | **THE STATUS VOICE** (§3e) | status family |
@@ -261,7 +261,7 @@ hazards 15 · spills/tolls 15), MOVE ~150 (world news → the feed), KEEP ~300
 | **M-STATUS** — THE STATUS VOICE — **BUILT** (`engine/statusVoice.ts`, `docs/engine/statusvoice.md`, probe_statusvoice; the worn-face audit stays a listing) | P | `StatusDef.voice` family resolver, ~8 voices, the environment statuses' worn faces audited (which show, which only tell), grip/time/mental captions retired | ~30 | ~1 session |
 | **M-NEWS** — off the head, onto the feed — **BUILT** (`World.notice` / `KillCtx.notice`, 121 lines re-seated, probe_newsmove) | W | the world-news floaters re-seated on the notice feed (channels), the counters/refusals onto the prompt/objective HUD seam; no animation | ~150 (moved) | ~½ session |
 | **M-TOLL + M-SPILL** — **BUILT** (`render/vis/worldVoices.ts`, `docs/engine/tollspill.md`, probe_tollspill) | N | resonance rings = lure radius (drawn == tested); corpses tumble; chest lids; 'drops loot!' retired | ~15 | ~½ session |
-| **M-HIT/DEATH** — the ring's variety | N | THE HIT VOICE (by damage type) + THE DEATH VOICE (by material) + THE ARROW'S END (by form) | 0 (rings replaced) | ~1 session |
+| **M-HIT/DEATH** — the ring's variety — **BUILT** (`engine/bodyVoices.ts`, `docs/engine/bodyvoices.md`, probe_bodyvoices; THE ARROW'S END by FORM stays open) | N | THE HIT VOICE (by damage type) + THE DEATH VOICE (by material) + THE ARROW'S END (by form) | 0 (rings replaced) | ~1 session |
 | **M-CRY** — drawn twins for combat cries | N | parry spark, block glint, evade blur, immune ring…; the cries stay kinded | 0 | ~½ session |
 
 M-EMERGE first: it is the largest N-axis debt, it reuses the dissolution
@@ -338,6 +338,24 @@ B5 pins THE ROW LAW: every brittle kind carries a dissolve row. With THE SHOW LA
 (B4) no breakable anywhere speaks or pops bare.
 
 ---
+
+**M-HIT/DEATH — THE BODY'S VOICES (built after M-TOLL/SPILL):**
+`engine/bodyVoices.ts` — `BODY_VOICE_CFG`: THE DEATH VOICE by the body's
+MATERIAL_NATURE id (flesh/fur/scale spatter · chitin/bone fleck · slime wet-pops ·
+verdant/cloth/wood/stone/metal dust · crystal/ice sparkle · ember flares ·
+ethereal/void/cosmic wisp; every id NAMED, the unknown falls to the dust — THE
+FALLBACK LAW), THE HIT VOICE by the blow's dominant damage TYPE (fire flare · cold
+rime · lightning spark · chaos spatter · a plain shaft flecks a body, dusts a
+wall), THE HIT TINT (the body flash wears the type's color — physical stays the
+plain white flash). Seats: `World.kill` (actor + part + worm segment) speak
+`deathVoiceOf`; the projectile's body hit speaks the VICTIM's freshly stamped
+`Actor.hitFlashType` (the rolled truth — `applyHit` stamps it beside the flash
+clock via `dominantTypeOf(packet.amounts)`), wall stops speak the skill's
+heaviest base lane (`skillBaseTypeOf`); the renderer tints the baked body flash
+(`bodyTintSprite`, source-in over the bake; 'outline' mode + white skip the
+tint). Every voice is a REGISTERED voice (probe A1/B3 — no silent ring). OPEN:
+THE ARROW'S END by projectile FORM (the shaft that skitters and stands, the orb
+that pops wet) — the §4 row's other half; THE CAST VOICE / proc voices untouched.
 
 ## 7. Cards for her word (no blocking fork — the ladder can start at M-EMERGE)
 

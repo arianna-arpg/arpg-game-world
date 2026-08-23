@@ -13,6 +13,7 @@
 // order, but every number on it is investable, debuffable, and per-actor.
 // ---------------------------------------------------------------------------
 
+import { dominantTypeOf } from './bodyVoices'; // THE HIT TINT — the landing stamps the blow's type
 import { chance, clamp, rand } from '../core/math';
 import {
   DAMAGE_TYPES, addedDamageStat, conversionStat,
@@ -757,6 +758,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // feeds the gate its residue inside the block branch).
   if (plyEats(attacker, target, total, packet)) {
     target.hitFlash = 0.12;
+    target.hitFlashType = dominantTypeOf(packet.amounts); // THE HIT TINT
     return {
       evaded: false, immune: false, blocked: false, total: 0,
       crit: packet.crit, poiseBroke: out.poiseBroke, plyEaten: true,
@@ -764,6 +766,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   }
   target.life -= total;
   target.hitFlash = 0.15;
+  target.hitFlashType = dominantTypeOf(packet.amounts); // THE HIT TINT (engine/bodyVoices.ts): the blow's type colors the body's flash
   // SEGMENT FABRIC: the landed blow marks the struck body — the coil that
   // took it flashes, and its wound pool drains by exactly what the shared
   // pool lost (one blow, one deduction, one attribution).

@@ -87,6 +87,7 @@ import { dissolveDebrisAlpha, drawDissolveCracks, drawDissolves } from './vis/di
 import { drawEmergences, emergePoseOf } from './vis/emergeLayer'; // THE EMERGENCE GRAMMAR's ground share + the arriving body's pose
 import { drawStatusVoices } from './vis/statusVoiceLayer'; // THE STATUS VOICE — every landing accents its body (+ the nine family voices register)
 import { corpseTumblePose } from './vis/worldVoices'; // THE WORLD'S OWN VOICES (toll / thrum / tune register) + the spilled body's tumble
+import { hitTintOf } from '../engine/bodyVoices'; // THE HIT TINT — the body flash in the blow's own color
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawSkyField, drawWeatherFx, skyGeoOf, skyRawIntensity, WEATHER_FX, type SkyFieldView, type SkyGeo } from './vis/weatherFx';
@@ -4916,7 +4917,7 @@ export class Renderer {
     // THE HIT FLASH rides the body's own pose — a white wash or rim OVER
     // the bake, never a swap: tints, live parts and worn gauges keep
     // speaking beneath it, and baseAlpha already folds every fade lane.
-    if (flashA > 0) drawBodyHitFlash(ctx, look, baseAlpha * flashA);
+    if (flashA > 0) drawBodyHitFlash(ctx, look, baseAlpha * flashA, hitTintOf(a.hitFlashType)); // THE HIT TINT: the blow's type colors the flash
     // Animated look parts (wisps, flames) ride in the same facing space.
     if (lookDef?.live) drawLiveParts(ctx, look, lookDef, world.time);
     if (rot !== 0) ctx.rotate(-rot);

@@ -120,14 +120,35 @@ function compositeWhite(img: HTMLCanvasElement): HTMLCanvasElement {
  *  sprite was just blitted in (translation, breathe, rotation applied), so
  *  the overlay covers exactly the pixels the body drew; `alpha` arrives
  *  pre-folded with the body's own baseAlpha — the fade lanes compose free. */
+/** THE HIT TINT (engine/bodyVoices.ts): the flash silhouette in the blow's
+ *  own color — baked once per (look, tint) like every sprite; white = the
+ *  classic sprite untouched. */
+function bodyTintSprite(look: BodyLook, tint: string): HTMLCanvasElement {
+  const half = spriteHalf(look.radius);
+  return baked(`bodyTint|` + tint + '|' + bodyKey(look), half * 2, half * 2, (ctx) => {
+    ctx.drawImage(bodyFlashSprite(look), 0, 0);
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = tint;
+    ctx.fillRect(0, 0, half * 2, half * 2);
+    ctx.globalCompositeOperation = 'source-over';
+  });
+}
+
 export function drawBodyHitFlash(
-  ctx: CanvasRenderingContext2D, look: BodyLook, alpha: number,
+  ctx: CanvasRenderingContext2D, look: BodyLook, alpha: number, tint?: string,
 ): void {
   if (alpha <= 0) return;
   const half = spriteHalf(look.radius);
   const prev = ctx.globalAlpha;
   ctx.globalAlpha = alpha;
   const hf = VIS_CFG.hitFlash;
+  // THE HIT TINT: a typed blow colors the flash (fire warm, cold pale blue,
+  // lightning gold, chaos green); physical / unknown keep the white.
+  if (tint && tint !== '#ffffff' && hf.mode !== 'outline') {
+    ctx.drawImage(bodyTintSprite(look, tint), -half, -half);
+    ctx.globalAlpha = prev;
+    return;
+  }
   if (hf.mode === 'outline') {
     ctx.drawImage(bodyRimSprite(look), -half, -half);
   } else if (hf.impl === 'composite') {

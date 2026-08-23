@@ -105,6 +105,7 @@ import {
   EMERGE_CFG, emergeFor, emergeGroundFor, emergeSeedOf,
   type EmergeGroundId, type EmergeSpec, type ResolvedEmerge,
 } from './emerge'; // THE EMERGENCE GRAMMAR — the arrival's pure leaf (World.emergeBody)
+import { deathVoiceOf, hitVoiceOf, skillBaseTypeOf } from './bodyVoices'; // THE BODY'S VOICES — a death by material, an impact by type (M-HIT/DEATH)
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
 import { canSquish, SQUISH_CFG, squishSpecOf } from './squish';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
@@ -39523,7 +39524,8 @@ export class World {
         part.dead = true;
         part.partLink = undefined;
         this.flashes.push({
-          pos: vec(part.pos.x, part.pos.y), radius: part.radius * 1.3,
+        fx: deathVoiceOf(part.material ?? actor.material), // THE DEATH VOICE — the part dies as its own material
+        pos: vec(part.pos.x, part.pos.y), radius: part.radius * 1.3,
           color: part.color, life: 0.3, maxLife: 0.3,
         });
       }
@@ -39539,7 +39541,8 @@ export class World {
       for (let i = 0; i < actor.worm.segments.length; i++) {
         const s = actor.worm.segments[i];
         this.flashes.push({
-          pos: vec(s.x, s.y), radius: segR(actor, i) + 6,
+        fx: deathVoiceOf(actor.material), // THE DEATH VOICE along every coil
+        pos: vec(s.x, s.y), radius: segR(actor, i) + 6,
           color: actor.color, life: 0.25 + i * 0.045, maxLife: 0.25 + i * 0.045,
         });
       }
@@ -39859,9 +39862,12 @@ export class World {
         if (this.corpses.length > CORPSE_CFG.max) this.corpses.shift();
       }
     }
+    // THE DEATH VOICE (engine/bodyVoices.ts): a body dies as what it is made
+    // of — flesh spatters, bone flecks, crystal sparkles, the ethereal wisps
+    // — never the one pale ring.
     this.flashes.push({
       pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.6,
-      color: actor.color, life: 0.4, maxLife: 0.4,
+      color: actor.color, life: 0.4, maxLife: 0.4, fx: deathVoiceOf(actor.material),
     });
   }
 
@@ -50285,7 +50291,7 @@ export class World {
           // beside a closed door's slab line instead of dying on the old
           // breach-spanning circle.
           if (shapeContains(hitSurfaceOf(o, 'shot'), o.pos.x, o.pos.y, p.pos.x, p.pos.y, this.projNose(p) + 1e-9)) {
-            this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.15, maxLife: 0.15 });
+          this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') }); // THE ARROW'S END on a surface: its type's voice, a shaft dusts
             if (p.bounces && p.bounces > 0) {
               p.bounces--;
               const surf = hitSurfaceOf(o, 'shot');
@@ -50342,7 +50348,7 @@ export class World {
           // cliff) still stop it. tierElevOf answers null for true walls.
           const shotElev = tierElevOf(kId);
           if (k?.blocksShot && !((p.tier ?? 0) >= 1 && shotElev !== null && shotElev <= (p.tier ?? 0))) {
-            this.flashes.push({ pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.15, maxLife: 0.15 });
+          this.flashes.push({ pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') }); // THE ARROW'S END on a wall
             if (p.bounces && p.bounces > 0) {
               p.bounces--;
               // Axis reflection: whichever component walked into the wall
@@ -50596,7 +50602,8 @@ export class World {
             }
             noteBodyHit(enemy, bodyTouch.seg);
             this.resolveHit(p.caster, p.inst, enemy, p.mult, 0, hitFlat);
-            this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.15, maxLife: 0.15 });
+            // THE HIT VOICE (engine/bodyVoices.ts): the impact speaks the blow's type — fire flares, cold crackles, lightning sparks, chaos spatters, a shaft flecks the body.
+            this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(enemy.hitFlashType ?? p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'body') });
             // SHATTER: the first impact flings a fan of shard projectiles
             // onward, raking the cone behind the victim. A skill's INNATE
             // shatter (Ice Spear) and the projShrapnel stat (the Shrapnel

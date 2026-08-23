@@ -1312,6 +1312,9 @@ export class Actor {
   owner?: Actor;          // set for minions
   aiCooldown = 0;         // small delay between AI decisions
   hitFlash = 0;           // render feedback timer
+  /** THE HIT TINT (engine/bodyVoices.ts): the dominant damage type of the last
+   *  landed blow — the renderer tints the hit flash by it. Runtime-only. */
+  hitFlashType?: DamageType;
   /** WANING PRESENCE (0..1): a generic render-only fade channel — the body
    *  pulses toward transparent as it rises (VIS_CFG.body.waneDepth/waneRate).
    *  The OWNING system re-stamps it every frame (the Haunting's dawn-wane);
