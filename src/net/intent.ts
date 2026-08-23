@@ -86,6 +86,7 @@ export type MetaAction =
   | { t: 'allocate'; nodeId: string; optionId?: string } // optionId: choice-node pick (data/passiveChoices.ts)
   | { t: 'bindGraft'; key: string; skillId: string | null } // graft key → carrier skill (null unbinds)
   | { t: 'bindSkill'; slot: number; skillId: string | null }   // action-bar slot
+  | { t: 'swapSkillSlots'; a: number; b: number }              // THE RACK's reorder: exchange two bar seats atomically
   | { t: 'dropSkill'; index: number }                          // skillInv idx → world
   | { t: 'dropSupport'; index: number }                        // inventory idx → world
   | { t: 'caravanTo'; band: number }                           // Caravan: escort to band N (0 = home)

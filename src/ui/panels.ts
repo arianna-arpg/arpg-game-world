@@ -683,6 +683,7 @@ export class UI {
       },
     });
     this.installGearDnd();
+    this.installRackDnd();
 
     // THE CLOSE GLYPH's wire (closeGlyphHtml): ONE delegated click per root,
     // so a rebuilt template keeps its glyph live. Owned panels close for
@@ -1140,6 +1141,74 @@ export class UI {
         world().requestMeta({ t: 'armFolkItem', folkId: Number(arg), uid: Number(p.arg) });
         this.refreshBorough();
         gearRefresh();
+      },
+    });
+  }
+
+  /** THE RACK's drag fabric (skill-items charter M0 — the Build drawer's
+   *  eight-seat rack): seats lift their seated skill and take seat/strip
+   *  payloads; the holding strip takes seats back (unseat). Every landing
+   *  routes through requestMeta like any gesture — the couch action latch
+   *  stamps the owning seat during the drop's dispatch, so a guest's
+   *  drawer reorders the GUEST's bar. Reads aim at the HERO body
+   *  (seatHero — the bar bindSkill/swapSkillSlots actually edit), so the
+   *  rack can never draw one bar and mutate another. */
+  private installRackDnd(): void {
+    const heroOf = () => this.getWorld().seatHero(this.panelSeat(this.inventory));
+    const refresh = (): void => this.refreshInventory();
+    // A SEATED skill lifts from its seat — press-drag or click-lift alike
+    // (the unseat ✕ inside is an inner control: its clicks never lift).
+    registerDragSource({
+      kind: 'rackSeat',
+      clickLift: true,
+      payload: (arg) => {
+        const inst = heroOf().skills[Number(arg)];
+        if (!inst) return null;
+        return {
+          kind: 'rackSeat', arg, label: inst.def.name, data: { defId: inst.def.id },
+          ghostHtml: `<span style="color:${inst.def.color}">◆ ${inst.def.name}</span>`,
+        };
+      },
+    });
+    // A learned-but-unseated skill lifts from the holding strip.
+    registerDragSource({
+      kind: 'rackSkill',
+      clickLift: true,
+      payload: (arg) => {
+        const inst = this.panelSeat(this.inventory).meta.knownSkills.get(arg);
+        if (!inst) return null;
+        return {
+          kind: 'rackSkill', arg, label: inst.def.name,
+          ghostHtml: `<span style="color:${inst.def.color}">◆ ${inst.def.name}</span>`,
+        };
+      },
+    });
+    // Rack seats take both payloads: seat→seat exchanges through the ONE
+    // atomic swapSkillSlots intent (occupied swaps, empty moves — same
+    // verb), strip→seat binds (an occupied seat's sitter returns to the
+    // strip: bindSkill's ordinary overwrite). Reordering is UNGATED —
+    // choosing a seat is play, not surgery (the skills.ts ruling).
+    registerDropTarget({
+      kind: 'rackSeat',
+      accepts: (pl, arg) =>
+        (pl.kind === 'rackSeat' && pl.arg !== arg) || pl.kind === 'rackSkill',
+      drop: (pl, arg) => {
+        if (pl.kind === 'rackSeat') {
+          this.getWorld().requestMeta({ t: 'swapSkillSlots', a: Number(pl.arg), b: Number(arg) });
+        } else {
+          this.getWorld().requestMeta({ t: 'bindSkill', slot: Number(arg), skillId: pl.arg });
+        }
+        refresh();
+      },
+    });
+    // The strip itself: a seat dropped here UNSEATS (learned stays learned
+    // — the skill waits in the strip until M1 unifies learned = seated).
+    registerDropTarget({
+      kind: 'rackFree',
+      accepts: (pl) => pl.kind === 'rackSeat',
+      drop: (pl) => {
+        this.getWorld().requestMeta({ t: 'bindSkill', slot: Number(pl.arg), skillId: null });
+        refresh();
       },
     });
   }
@@ -2775,21 +2844,30 @@ export class UI {
     // MIREILLE'S LESSON, read from its one source of truth (the world): at
     // the 'learn' step the Skill Gems TAB glows from any other tab; at the
     // 'bar' step the flap handle glows while the drawer is CLOSED, then the
-    // unbound slot keys inside take over (learnedListHtml) — one mechanism,
-    // three surfaces, each live off the same read every render. The glow
-    // always marks the lesson's next click — and the lesson LATCHES LIVED
-    // in the ledgers (World.mireilleGiftLesson), so once the loop has been
-    // walked — this run, a past character, or undone again by choice
-    // (unlearn, unbind) — these stay quiet forever after.
+    // rack's empty seats inside take over (learnedListHtml's teachSeat) —
+    // one mechanism, three surfaces, each live off the same read every
+    // render. The glow always marks the lesson's next click — and the
+    // lesson LATCHES LIVED in the ledgers (World.mireilleGiftLesson), so
+    // once the loop has been walked — this run, a past character, or
+    // undone again by choice (unlearn, unbind) — these stay quiet forever.
     const lesson = this.getWorld().mireilleGiftLesson();
     const flapGlow = lesson === 'bar' && !this.buildFlapOpen;
+    // THE COUCH FLANK: the drawer (and its handle) pop AWAY from the screen
+    // edge the panel docks against — a couch-LEFT guest's drawer opens
+    // rightward instead of clipping off-screen; the classic centered (and
+    // couch-right) panel keeps its leftward pop. The drawer docks with its
+    // opener wherever the opener sits.
+    const drawerFlank = this.inventory.classList.contains('couch-left') ? 'right' : 'left';
+    const flankCss = drawerFlank === 'left'
+      ? 'left:-27px;border-right:none;border-radius:6px 0 0 6px'
+      : 'right:-27px;border-left:none;border-radius:0 6px 6px 0';
     const drawerHandle = `
       <button data-buildflap class="${flapGlow ? 'tut-glow' : ''}"
         title="Your learned skills: the whole build, full management"
-        style="position:absolute;left:-27px;top:56px;writing-mode:vertical-rl;text-orientation:mixed;
+        style="position:absolute;top:56px;writing-mode:vertical-rl;text-orientation:mixed;
         padding:12px 4px;font-size:11px;letter-spacing:1px;background:#241d2e;color:#c8a8ff;
-        border:1px solid #4a3a5a;border-right:none;border-radius:6px 0 0 6px;cursor:var(--cursor-point, pointer);z-index:4">
-        📖 SKILLS ${this.buildFlapOpen ? '▸' : '◂'}</button>`;
+        border:1px solid #4a3a5a;${flankCss};cursor:var(--cursor-point, pointer);z-index:4">
+        📖 SKILLS ${(this.buildFlapOpen ? drawerFlank === 'left' : drawerFlank === 'right') ? '▸' : '◂'}</button>`;
     // The header's readout is the Ability wallet (nonzero tiers as glyph
     // chips — the pts counter retired with the point economy; DIAL).
     const walletChips = ABILITY_ESSENCES
@@ -2816,10 +2894,11 @@ export class UI {
         }).join('')}
       </div>` : '';
     const drawer = this.buildFlapOpen ? `
-      <div style="position:absolute;right:100%;top:0;margin-right:2px;width:360px;
+      <div style="position:absolute;${drawerFlank === 'left'
+        ? 'right:100%;margin-right:2px;border-radius:6px 0 0 6px;box-shadow:-6px 5px 22px rgba(0,0,0,0.6)'
+        : 'left:100%;margin-left:2px;border-radius:0 6px 6px 0;box-shadow:6px 5px 22px rgba(0,0,0,0.6)'};top:0;width:360px;
         max-height:calc(100vh - 220px);display:flex;flex-direction:column;z-index:3;
-        background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:6px 0 0 6px;
-        box-shadow:-6px 5px 22px rgba(0,0,0,0.6);padding:10px 12px">
+        background:var(--panel-bg);border:1px solid var(--panel-border);padding:10px 12px">
         <div style="flex:0 0 auto;color:var(--gold);font-size:12px;letter-spacing:1.2px;text-transform:uppercase;
           border-bottom:1px solid var(--panel-border);padding-bottom:5px;margin-bottom:6px">
           📖 Skills ${walletChips ? `— ${walletChips}` : ''}
@@ -4613,29 +4692,85 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
         ${bankChips}` : ''}
         ${wornRows.length ? `<span style="color:#b8a2e8;font-size:10px">Worn:</span> ${wornChips}` : ''}
       </div>` : '';
-    // MIREILLE'S LESSON at KEY grain: while the bar step pends, each gift
-    // flask still off the bar lights the UNBOUND slot keys it could land on
-    // — the same live, latched read as the tab and flap glows (the flap
-    // stops glowing once opened; these carry the next click the rest of the
-    // way). Occupied keys stay dark on purpose: the lesson teaches a free
-    // key, never an overwrite. Latch and step both live in the world
-    // (mireilleGiftLesson/mireilleLessonSkills), so a barred flask's row
-    // quiets the instant it lands, and a lived lesson never re-lights here
-    // over a later unbind.
+    // MIREILLE'S LESSON at SEAT grain: while the bar step pends, every
+    // EMPTY rack seat glows as the landing (teachSeat below — the old
+    // unbound slot-key glow, moved onto the rack) and each gift flask
+    // still off the bar glows in the holding strip — the same live,
+    // latched read as the tab and flap glows (the flap stops glowing once
+    // opened; these carry the next gesture the rest of the way). Occupied
+    // seats stay dark on purpose: the lesson teaches a free seat, never
+    // an overwrite. Latch and step both live in the world
+    // (mireilleGiftLesson/mireilleLessonSkills), so a seated flask quiets
+    // the instant it lands, and a lived lesson never re-lights here over
+    // a later unseat.
     const lessonSkills = world.mireilleGiftLesson() === 'bar' ? world.mireilleLessonSkills() : [];
+    // THE RACK OF EIGHT (skill-items charter M0 — docs/design/skill-items.md
+    // §2, uncommitted): the drawer's headline surface. The bar's own array
+    // drawn WHOLE — all BAR_SLOTS seats, empty ones as empty sockets, so
+    // the cap of eight reads at a glance. Geometry 2×4 (seats 0–3 top,
+    // 4–7 bottom — card 5's standing ruling; the canvas HUD stays 1×8,
+    // THE HUD-FOLLOWS LAW is the charter's recorded debt). Reads the HERO
+    // body's bar (seatHero — the array bindSkill/swapSkillSlots actually
+    // edit), so drawn == mutated even while possessed. Seats are
+    // drag-fabric citizens (installRackDnd): drag a seated skill between
+    // seats to reorder — occupied SWAPS, empty moves — and drag a
+    // holding-strip chip onto a seat to bind it there.
+    const bar = world.seatHero(seat).skills;
+    const labels = this.slotLabels();
+    const seatTiles = labels.map((label, slot) => {
+      const seated = bar[slot] ?? null;
+      if (!seated) {
+        const teachSeat = lessonSkills.length > 0;
+        return `<div data-drop="rackSeat:${slot}" class="${teachSeat ? 'tut-glow' : ''}"
+          title="Empty seat ${label} — drag a skill here to bind it"
+          style="height:46px;border:1px dashed #4a4458;border-radius:5px;background:#1c1626;
+            display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px">
+          <span style="font-size:9px;color:#8a8678">${label}</span>
+          <span style="font-size:12px;color:#3f3950;line-height:1">◇</span>
+        </div>`;
+      }
+      const sd = seated.def;
+      return `<div data-drag="rackSeat:${slot}" data-drop="rackSeat:${slot}"
+        data-tip="skill" data-skill-id="${sd.id}"
+        style="position:relative;height:46px;border:1px solid ${sd.color};border-radius:5px;
+          background:#241d2e;padding:3px 5px;overflow:hidden;cursor:var(--cursor-point, pointer)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span style="font-size:8px;color:var(--gold)">${label}</span>
+          <button data-rackunbind="${slot}" title="Unseat ${sd.name} — it stays learned, in the strip below"
+            style="background:none;border:none;color:#6a6478;cursor:var(--cursor-point, pointer);
+              font-size:9px;padding:0 1px;line-height:1">✕</button>
+        </div>
+        <div style="font-size:10px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sd.name}</div>
+        <div style="font-size:8px;color:#8a8678">Lv ${seated.level}</div>
+      </div>`;
+    });
+    // THE HOLDING STRIP — learned-but-unseated skills wait here until M1
+    // unifies learned = seated; the strip is also the UNSEAT drop (drag a
+    // seated skill onto it to clear its seat).
+    const unseated = [...m.knownSkills.values()]
+      .filter(inst => !bar.some(s => s?.def.id === inst.def.id));
+    const stripChips = unseated.map(inst => {
+      const teach = lessonSkills.includes(inst.def.id);
+      return `<span class="gem-chip ${teach ? 'tut-glow' : ''}" data-drag="rackSkill:${inst.def.id}"
+        data-tip="skill" data-skill-id="${inst.def.id}"
+        style="border-color:${inst.def.color};cursor:var(--cursor-point, pointer)">◆ ${inst.def.name} <b>L${inst.level}</b></span>`;
+    }).join('');
+    const rackHtml = `
+      <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:5px">${seatTiles.join('')}</div>
+      <div data-drop="rackFree" style="margin:5px 0 8px;padding:3px 5px;border:1px dashed #35304a;
+        border-radius:5px;font-size:10px;color:#8a8678;min-height:20px">
+        ${stripChips
+          ? `<span style="color:#b8a2e8">Unseated:</span> ${stripChips}`
+          : m.knownSkills.size
+            ? `<span style="color:#5a5668">every learned skill is seated — drag seats to reorder, drop one here to unseat it</span>`
+            : `<span style="color:#5a5668">the eight seats above are your whole hand — learned skills seat there</span>`}
+      </div>`;
     // THE FIELD DISCIPLINE, spoken at the button (the engine gate's words):
     // unsocket shares one verdict; unlearn adds its per-skill clock below.
     const unsocketWhy = world.swapRefusal(seat, 'unsocket');
-    return graftBank + [...m.knownSkills.values()].map(inst => {
+    const rows = [...m.knownSkills.values()].map(inst => {
       const def = inst.def;
       const maxLv = skillMaxLevel(def);
-      const teachRow = lessonSkills.includes(def.id);
-      const binds = this.slotLabels().map((label, slot) => {
-        const bound = p.skills[slot]?.def.id === def.id;
-        const teachKey = teachRow && !p.skills[slot];
-        return `<button data-bind="${def.id}" data-slot="${slot}"
-          class="${bound ? 'bound' : ''}${teachKey ? ' tut-glow' : ''}">${label}</button>`;
-      }).join('');
       // Mark gems that BOARD THE CREW (forwarded into the minions' own
       // skills) so the lane is legible — independent of whether the gem
       // also serves the summon lane. crewSkillsServed composes granted
@@ -4809,12 +4944,21 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
             ✦ ${r.def.name} <b>L${r.level}</b> — dormant</span>`).join('')}
           ${this.liftedGraftKey ? `<button class="graft-land" data-graft-bind="${def.id}">⊕ graft here</button>` : ''}
         </div>` : '';
+      // The seat tag: WHERE this skill sits on the bar (its live bind
+      // label), or its unseated state — the association the retired
+      // per-row slot-key strip carried (the rack above is the binder now).
+      const seatIdx = bar.findIndex(s => s?.def.id === def.id);
+      const rackSeatTag = seatIdx >= 0
+        ? `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#4a3c14;color:var(--gold);margin-left:4px"
+            title="Seated on the bar — press ${labels[seatIdx]}">⌖ ${labels[seatIdx]}</span>`
+        : `<span style="font-size:9px;color:#6a6478;margin-left:4px"
+            title="Learned but not on the bar — drag it from the strip onto a rack seat above">unseated</span>`;
       return `
         <div class="skill-entry" data-tip="skill" data-skill-id="${def.id}" style="border-left:3px solid ${def.color}">
           <div class="name">${def.name} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
             ${reached.map(t => `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#2a2438;color:#c8a8ff;margin-left:4px" title="Lv ${t.level} threshold">${t.label}</span>`).join('')}
             ${nextThresh ? `<span style="font-size:9px;color:#6a6478;margin-left:4px">Lv ${nextThresh.level}: ${nextThresh.label}</span>` : ''}
-            ${this.rarityTagHtml(inst)}
+            ${this.rarityTagHtml(inst)}${rackSeatTag}
             <span style="color:#8a8678;font-weight:normal;font-size:10px">
               ${this.costText(p.skillCost(inst))}${def.cooldown
                 ? `, ${this.cdText(skillCooldownSeconds(p, inst))} cd` : ''}</span>
@@ -4822,7 +4966,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <div class="tags">${def.tags.join(' · ')}</div>
           <div class="bind-btns">
             ${this.abilityLevelBtn(`data-levelup="${def.id}"`, inst.level, inst.level >= maxLv)}
-            ${binds}
             ${(() => {
               const why = world.swapRefusal(seat, 'unlearn', def.id);
               return `<button data-unlearn="${def.id}" ${why ? `disabled title="${why}"` : ''}>Unlearn${why ? ` (${why})` : ''}</button>`;
@@ -4834,7 +4977,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           ${mimicRow}
           ${modeRow}
         </div>`;
-    }).join('') || '<div style="color:#8a8678;font-size:11px">Nothing learned. Skills drop from monsters; learn them from the Inventory (I) → Skill Gems tab.</div>';
+    }).join('');
+    return rackHtml + graftBank + (rows
+      || '<div style="color:#8a8678;font-size:11px">Nothing learned. Skills drop from monsters; learn them from the Inventory (I) → Skill Gems tab.</div>');
   }
 
   /** Wire the learned-list buttons in whichever container rendered it. */
@@ -4845,8 +4990,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // single-player it applies immediately to the local seat; on a render-shell
     // CLIENT it ships the intent to the host (which mutates OUR seat + replicates
     // back). The UI reconciles on the next snapshot either way.
-    q<HTMLButtonElement>('button[data-bind]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'bindSkill', slot: Number(btn.dataset.slot), skillId: btn.dataset.bind! });
+    // THE RACK's unseat ✕ (seat → holding strip; the learned state keeps).
+    // Binding and reorder belong to the drag fabric (installRackDnd) —
+    // this is the one click verb a seat carries, UNGATED like every seat
+    // choice; the fabric's inner-control courtesy keeps its press from
+    // ever reading as a lift.
+    q<HTMLButtonElement>('button[data-rackunbind]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'bindSkill', slot: Number(btn.dataset.rackunbind), skillId: null });
       refresh();
     }));
     // Mimic repertoire chips: pick the form this press wears.

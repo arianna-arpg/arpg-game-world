@@ -1559,6 +1559,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'bindGraft': return isStr(a.key) && (a.skillId === null || isStr(a.skillId));
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
     case 'bindSkill': return isIdx(a.slot) && (a.skillId === null || isStr(a.skillId));
+    case 'swapSkillSlots': return isIdx(a.a) && isIdx(a.b);
     case 'caravanTo': return isIdx(a.band); // band 0 = home; N = a band index
     case 'harborChart': return isStr(a.omen); // the rumored seat's omen id
     case 'holdMuster': return true;  // the standing zone's harborhold — no payload
@@ -25304,6 +25305,24 @@ export class World {
     return true;
   }
 
+  /** THE RACK's reorder (skill-items charter M0): exchange the contents of
+   *  two bar seats in ONE atomic move — dropping a seated skill onto an
+   *  occupied seat SWAPS (bindSkill alone would silently evict the sitter
+   *  to nowhere), onto an empty seat it simply moves. Ungated like binding
+   *  itself: choosing a seat is play, not surgery (the standing ruling
+   *  beside SWAP_DISCIPLINE_CFG). Worn slot grafts re-aim by construction —
+   *  the same re-derivation every bar mutation rides. */
+  swapSkillSlots(a: number, b: number, seat: Seat = this.localSeat): boolean {
+    const p = this.seatHero(seat);
+    if (a === b || a < 0 || b < 0 || a >= p.skills.length || b >= p.skills.length) return false;
+    const ia = p.skills[a], ib = p.skills[b];
+    if (!ia && !ib) return true; // two empty seats — nothing moves
+    p.skills[a] = ib;
+    p.skills[b] = ia;
+    this.rebindWornGrafts(seat, [ia, ib]);
+    return true;
+  }
+
   /** Bar mutations move WORN slot grafts (they bind to the SEAT, never the
    *  skill): re-derive the graft lane, then re-mint forwarded copies on the
    *  hosts the move touched — bindGraft's exact law, aimed by position. */
@@ -25404,6 +25423,7 @@ export class World {
       case 'allocate': this.allocateNode(action.nodeId, seat, action.optionId); break;
       case 'bindGraft': this.bindGraft(action.key, action.skillId, seat); break;
       case 'bindSkill': this.bindSkill(action.slot, action.skillId, seat); break;
+      case 'swapSkillSlots': this.swapSkillSlots(action.a, action.b, seat); break;
       case 'dropSkill': this.dropFromInventory(seat, 'skill', action.index); break;
       case 'dropSupport': this.dropFromInventory(seat, 'support', action.index); break;
       case 'caravanTo': this.startCaravan(action.band, seat); break;
