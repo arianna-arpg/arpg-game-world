@@ -105,7 +105,7 @@ import {
   EMERGE_CFG, emergeFor, emergeGroundFor, emergeSeedOf,
   type EmergeGroundId, type EmergeSpec, type ResolvedEmerge,
 } from './emerge'; // THE EMERGENCE GRAMMAR — the arrival's pure leaf (World.emergeBody)
-import { deathVoiceOf, hitVoiceOf, skillBaseTypeOf } from './bodyVoices'; // THE BODY'S VOICES — a death by material, an impact by type (M-HIT/DEATH)
+import { deathVoiceOf, dominantTypeOf, hitVoiceOf, skillBaseTypeOf } from './bodyVoices'; // THE BODY'S VOICES — a death by material, an impact by type (M-HIT/DEATH)
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
 import { canSquish, SQUISH_CFG, squishSpecOf } from './squish';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
@@ -15428,6 +15428,7 @@ export class World {
     if (taken <= 0 || victim.invulnerable) return;
     victim.life -= taken;
     victim.hitFlash = 0.15;
+    victim.hitFlashType = 'physical';
     this.text(victim.pos, Math.round(taken).toString(), '#6ac860', 12);
     this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: eff.radius * 0.7, color: '#6ac860', life: 0.22, maxLife: 0.22 });
     if (victim.life <= 0 && !victim.dead) this.kill(victim);
@@ -15467,6 +15468,7 @@ export class World {
     const taken = eff.power * (1 - resistValue(victim, 'chaos')) * victim.sheet.get('damageTaken');
     victim.life -= taken;
     victim.hitFlash = 0.15;
+    victim.hitFlashType = 'chaos';
     this.pushActor(victim, angleTo(d.pos, victim.pos), 60);
     this.text(victim.pos, Math.round(taken).toString(), '#7fce6a', 13);
     this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: eff.radius * 0.8, color: '#7fce6a', life: 0.3, maxLife: 0.3 });
@@ -15496,6 +15498,7 @@ export class World {
     const taken = (eff.power + this.zone.level * 0.9) * (1 - resistValue(victim, 'physical')) * victim.sheet.get('damageTaken');
     victim.life -= taken;
     victim.hitFlash = 0.15;
+    victim.hitFlashType = 'physical';
     this.text(vec(victim.pos.x, victim.pos.y - 14), Math.round(taken).toString(), '#b46a8a', 13);
     this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius * 1.3, color: '#b46a8a', life: 0.3, maxLife: 0.3 });
     if (victim.life <= 0 && !victim.dead) this.kill(victim);
@@ -15510,6 +15513,7 @@ export class World {
     const taken = (eff.power + this.zone.level * 0.8) * (1 - resistValue(victim, 'chaos')) * victim.sheet.get('damageTaken');
     victim.life -= taken;
     victim.hitFlash = 0.15;
+    victim.hitFlashType = 'chaos';
     this.text(vec(victim.pos.x, victim.pos.y - 14), Math.round(taken).toString(), '#a06ad8', 12);
     this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: eff.radius * 0.85, color: '#a06ad8', life: 0.3, maxLife: 0.3 });
     if (victim.life <= 0 && !victim.dead) this.kill(victim);
@@ -15539,6 +15543,7 @@ export class World {
       const taken = dmg * (1 - (resistValue(a, element) || 0)) * a.sheet.get('damageTaken');
       a.life -= taken;
       a.hitFlash = 0.15;
+      a.hitFlashType = element;
       this.text(vec(a.pos.x, a.pos.y - 14), Math.round(taken).toString(), col, 12);
       if (a.life <= 0 && !a.dead) this.kill(a);
     }
@@ -15664,6 +15669,7 @@ export class World {
       if (heat <= 0) continue;
       a.life -= heat;
       a.hitFlash = 0.1;
+      a.hitFlashType = element;
       this.flashes.push({
         pos: vec(a.pos.x, a.pos.y), radius: a.radius + 6,
         color: col, life: 0.18, maxLife: 0.18,
@@ -27414,10 +27420,12 @@ export class World {
         }
       }
       v.hitFlash = 0.12;
+      v.hitFlashType = domType;
       return;
     }
     v.life -= taken;
     v.hitFlash = 0.15;
+    v.hitFlashType = domType;
     if (taken > 0.5) this.text(v.pos, Math.round(taken).toString(), DAMAGE_COLOR[domType], 11);
     if (v.life <= 0 && !v.dead) this.kill(v, false, credit);
   }
@@ -28074,6 +28082,7 @@ export class World {
             if (taken > 0) {
               v.life -= taken;
               v.hitFlash = 0.12;
+              v.hitFlashType = type;
               if (taken >= 1) {
                 this.text(v.pos, Math.round(taken).toString(), DAMAGE_COLOR[type], 11);
               }
@@ -28208,6 +28217,7 @@ export class World {
           const taken = mitigateTyped(a, { physical: burst * a.maxLife() });
           a.life -= taken;
           a.hitFlash = 0.15;
+          a.hitFlashType = 'physical';
           this.text(a.pos, Math.round(taken).toString(), DAMAGE_COLOR.physical, 13);
           if (a.life <= 0 && !a.dead) this.kill(a, false, v);
         }
@@ -32329,6 +32339,7 @@ export class World {
             if (taken > 0) {
               e.life -= taken;
               e.hitFlash = 0.12;
+              e.hitFlashType = s.ruptureType ?? 'physical';
               this.text(e.pos, Math.round(taken).toString(), STATUS_DEFS[s.id]?.color ?? '#c8ccd8', 12);
               if (e.life <= 0 && !e.dead) this.kill(e, false, caster);
             }
@@ -33158,6 +33169,7 @@ export class World {
           if (taken > 0) {
             e.life -= taken;
             e.hitFlash = 0.1;
+            e.hitFlashType = dominantTypeOf(tick);
             stampSegFlash(e, touch.seg);
             this.accumulateDotText(e, taken, TETHER_TICK);
             if (e.life <= 0 && !e.dead) this.kill(e, false, t.owner);
@@ -34546,6 +34558,7 @@ export class World {
     if (spec.lapse === 'landDamage') {
       bearer.life -= due;
       bearer.hitFlash = 0.2;
+      bearer.hitFlashType = undefined; // raw arrears — the flash reads white
       this.text(bearer.pos, `arrears due: ${Math.round(due)}`, '#d05050', 13);
       if (bearer.life <= 0 && !bearer.dead) this.kill(bearer);
     } else if (spec.lapse === 'ventMana') {
@@ -35392,6 +35405,7 @@ export class World {
       const counter = rawDamage * counterMult * attacker.sheet.get('damageTaken');
       attacker.life -= counter;
       attacker.hitFlash = 0.15;
+      attacker.hitFlashType = undefined; // raw riposte — the flash reads white
       this.cry(vec(guardian.pos.x + Math.cos(guardian.facing) * (guardian.radius + 10), guardian.pos.y + Math.sin(guardian.facing) * (guardian.radius + 10)), 'PARRY!', '#ffd700', 15, 'clash', 16, guardian.facing); // the spark at the weapon
       this.text(attacker.pos, Math.round(counter).toString(), '#ffd700', 14);
       this.flashes.push({
@@ -35611,6 +35625,7 @@ export class World {
     const poiseFrac = MASS_CFG.impact.poiseFrac;
     if (poiseFrac > 0) a.damagePoise(frac * poiseFrac * a.maxPoise(), caster);
     a.hitFlash = 0.15;
+    a.hitFlashType = 'physical';
     this.flashes.push({
       pos: vec(a.pos.x, a.pos.y), radius: a.radius + 12,
       color: '#c8b8a0', life: 0.22, maxLife: 0.22,
@@ -35664,6 +35679,7 @@ export class World {
           const poiseFrac = MASS_CFG.impact.poiseFrac;
           if (poiseFrac > 0) b.damagePoise(frac * poiseFrac * b.maxPoise(), casterLive);
           b.hitFlash = 0.15;
+          b.hitFlashType = 'physical';
           this.text(b.pos, Math.round(taken).toString(), DAMAGE_COLOR.physical, 13);
           if (out.clamped) this.text(vec(b.pos.x, b.pos.y - 20), 'capped', '#9ab0c8', 12);
           if (b.life <= 0 && !b.dead) this.kill(b, false, casterLive);
@@ -36510,6 +36526,7 @@ export class World {
     const dealt = total * attacker.sheet.get('damageTaken');
     attacker.life -= dealt;
     attacker.hitFlash = 0.1;
+    attacker.hitFlashType = undefined; // raw thorns — the flash reads white
     this.text(attacker.pos, Math.round(dealt).toString(), '#d88a50', 11);
     if (attacker.life <= 0 && !attacker.dead) this.kill(attacker);
   }
@@ -36539,6 +36556,7 @@ export class World {
       const taken = mitigateTyped(e, { [type]: dmg }, { out });
       e.life -= taken;
       e.hitFlash = 0.15;
+      e.hitFlashType = type;
       this.text(e.pos, Math.round(taken).toString(), color, 14);
       // The burst lane prints its own number, so it carries its own capped
       // read — this is the resolveHit-bypassing path the cap must still
@@ -37445,6 +37463,7 @@ export class World {
           if (taken > 0) {
             target.life -= taken;
             target.hitFlash = 0.12;
+            target.hitFlashType = s.ruptureType ?? 'physical';
             this.text(vec(target.pos.x, target.pos.y - 26),
               'IMPALED ' + Math.round(taken), STATUS_DEFS[s.id]?.color ?? '#c8ccd8', 13, 'combat'); // a number — kinded, no twin
             if (target.life <= 0 && !target.dead) this.kill(target, false, caster);
@@ -37529,6 +37548,7 @@ export class World {
             for (const m of pack) {
               m.life -= per;
               m.hitFlash = 0.1;
+              m.hitFlashType = undefined; // shared wound, no blow — white
               if (m.life <= 0 && !m.dead) this.kill(m);
             }
           }
@@ -37598,6 +37618,7 @@ export class World {
       if (amt > 0) {
         target.life -= amt;
         target.hitFlash = 0.15;
+        target.hitFlashType = elem;
         this.text(vec(target.pos.x, target.pos.y - 12), Math.round(amt).toString(), '#ffe14a', 13);
       }
     }
@@ -38783,6 +38804,7 @@ export class World {
           if (landed <= 0 || enemy.invulnerable) continue;
           enemy.life -= landed;
           enemy.hitFlash = 0.15;
+          enemy.hitFlashType = fx.damage;
           this.text(enemy.pos, Math.round(landed).toString(), proc.color, 12);
           // The burst emptied a shield: the victim's esBreak reactions
           // fire one link deeper (this damage IS proc output). Poise
@@ -39070,6 +39092,7 @@ export class World {
           if (landed <= 0 || a.invulnerable) continue;
           a.life -= landed;
           a.hitFlash = 0.15;
+          a.hitFlashType = b.fx.damage.type;
           this.text(a.pos, Math.round(landed).toString(), b.color, 12);
           if (a.esBroke) {
             a.esBroke = false;
@@ -39145,6 +39168,7 @@ export class World {
     if (taken <= 0) return 0;
     victim.life -= taken;
     victim.hitFlash = 0.15;
+    victim.hitFlashType = el;
     this.text(vec(victim.pos.x, victim.pos.y - 14), Math.round(taken).toString(), sdef.color, 13);
     if (victim.life <= 0 && !victim.dead) this.kill(victim, false, caster);
     return taken;
@@ -39162,6 +39186,7 @@ export class World {
       if (e.invulnerable || amount <= 0) continue;
       e.life -= amount;
       e.hitFlash = 0.15;
+      e.hitFlashType = type;
       this.text(e.pos, Math.round(amount).toString(), '#b06bd4', 12);
       if (e.life <= 0 && !e.dead) this.kill(e);
     }
@@ -42019,6 +42044,7 @@ export class World {
           if (taken > 0) {
             kin.life -= taken;
             kin.hitFlash = 0.1;
+            kin.hitFlashType = el;
             this.accumulateDotText(kin, taken, zn.interval);
             if (kin.life <= 0 && !kin.dead) this.kill(kin);
             lashed = true;
@@ -42054,6 +42080,7 @@ export class World {
         if (taken > 0) {
           prey.life -= taken;
           prey.hitFlash = 0.12;
+          prey.hitFlashType = 'physical';
           this.text(prey.pos, Math.round(taken).toString(), '#d84a9a', 12);
           if (prey.life <= 0 && !prey.dead) this.kill(prey);
         }
@@ -45193,6 +45220,7 @@ export class World {
               if (taken > 0) {
                 e.life -= taken;
                 e.hitFlash = 0.1;
+                e.hitFlashType = b.type ?? 'physical';
                 this.text(vec(e.pos.x, e.pos.y - 12), Math.round(taken).toString(), b.color ?? '#ffd24a', 11);
                 if (e.life <= 0 && !e.dead) this.kill(e, false, a);
               }
@@ -47170,6 +47198,7 @@ export class World {
         const taken = mitigateTyped(a, { [payload.hit.type]: dmg }, { out });
         a.life -= taken;
         a.hitFlash = 0.15;
+        a.hitFlashType = payload.hit.type;
         this.text(a.pos, Math.round(taken).toString(), DAMAGE_COLOR[payload.hit.type], 14);
         if (out.clamped) this.text(vec(a.pos.x, a.pos.y - 20), 'capped', '#9ab0c8', 12);
         if (a.life <= 0 && !a.dead) this.kill(a, false, owner);
@@ -47854,7 +47883,7 @@ export class World {
       const dmg = (sd.dps + (sd.dpsPerLevel ?? 0) * this.zone.level) * (1 - res) * dt;
       if (dmg > 0) {
         a.life -= dmg;
-        if (chance(dt * 2.5)) a.hitFlash = 0.12;
+        if (chance(dt * 2.5)) { a.hitFlash = 0.12; a.hitFlashType = sd.type; }
         if (a.life <= 0 && !a.dead) this.kill(a);
       }
     }
@@ -50485,6 +50514,7 @@ export class World {
             if (taken > 0) {
               e.life -= taken;
               e.hitFlash = 0.1;
+              e.hitFlashType = dominantTypeOf(tick);
               this.accumulateDotText(e, taken, PROJ_AURA_TICK);
               if (e.life <= 0 && !e.dead) this.kill(e, false, p.caster);
             }

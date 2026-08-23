@@ -697,11 +697,13 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
       // shield; the blow got past the rim, so the ply pays, not the bar).
       if (plyEats(attacker, target, leaked, packet)) {
         target.hitFlash = 0.12;
+        target.hitFlashType = dominantTypeOf(packet.amounts);
         return { evaded: false, immune: false, blocked: true, total: 0,
           crit: false, poiseBroke: out.poiseBroke, plyEaten: true };
       }
       target.life -= leaked;
       target.hitFlash = 0.1;
+      target.hitFlashType = dominantTypeOf(packet.amounts);
       if (leaked > 0 && segHit !== undefined && segHit >= 0) {
         stampSegFlash(target, segHit);
         if (feedWound(target, segHit, leaked)) (target.segTears ??= []).push(segHit);
