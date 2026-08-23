@@ -160,7 +160,9 @@ the D2/PoE readability vocabulary); KEEP them kinded, but each earns a DRAWN
 TWIN so the cry can be muted without losing the read: parry = a spark at the
 weapon, block = a shield glint, evade = a body blur, immune = a flat grey ring,
 guard broken = the shield's own shatter (the grammar), crit = the number's own
-size/color (exists). Lowest priority — she can mute today.
+size/color (exists). Lowest priority — she can mute today. **BUILT (M-CRY):** every
+cry now rides `World.cry` — kinded `combat` + a drawn twin (clash / glint / blur /
+ward new; shatter / wink / ripple borrowed); ART WITNESSED/CAPTURED moved to the feed.
 
 ### 3g. THE NUMBERS — precision, KEEP
 Damage / heal / xp / gains / '+1' / '×n' / 'fed n/m' / 'arrow n/cap' /
@@ -262,7 +264,7 @@ hazards 15 · spills/tolls 15), MOVE ~150 (world news → the feed), KEEP ~300
 | **M-NEWS** — off the head, onto the feed — **BUILT** (`World.notice` / `KillCtx.notice`, 121 lines re-seated, probe_newsmove) | W | the world-news floaters re-seated on the notice feed (channels), the counters/refusals onto the prompt/objective HUD seam; no animation | ~150 (moved) | ~½ session |
 | **M-TOLL + M-SPILL** — **BUILT** (`render/vis/worldVoices.ts`, `docs/engine/tollspill.md`, probe_tollspill) | N | resonance rings = lure radius (drawn == tested); corpses tumble; chest lids; 'drops loot!' retired | ~15 | ~½ session |
 | **M-HIT/DEATH** — the ring's variety — **BUILT** (`engine/bodyVoices.ts`, `docs/engine/bodyvoices.md`, probe_bodyvoices; THE ARROW'S END by FORM stays open) | N | THE HIT VOICE (by damage type) + THE DEATH VOICE (by material) + THE ARROW'S END (by form) | 0 (rings replaced) | ~1 session |
-| **M-CRY** — drawn twins for combat cries | N | parry spark, block glint, evade blur, immune ring…; the cries stay kinded | 0 | ~½ session |
+| **M-CRY** — drawn twins for combat cries — **BUILT** (`World.cry` + `render/vis/cryVoices.ts`, `docs/engine/cryvoices.md`, probe_cryvoices; THE LADDER IS COMPLETE) | N | parry spark, block glint, evade blur, immune ring…; the cries stay kinded | 0 | ~½ session |
 
 M-EMERGE first: it is the largest N-axis debt, it reuses the dissolution
 grammar's engine halves (bitmaps, cuts, kinematics, voices, the debris face for
@@ -356,6 +358,21 @@ heaviest base lane (`skillBaseTypeOf`); the renderer tints the baked body flash
 tint). Every voice is a REGISTERED voice (probe A1/B3 — no silent ring). OPEN:
 THE ARROW'S END by projectile FORM (the shaft that skitters and stands, the orb
 that pops wet) — the §4 row's other half; THE CAST VOICE / proc voices untouched.
+
+**M-CRY — THE CRY VOICES (built last — the ladder is complete):**
+`World.cry(at, text, color, size, fx?, radius?, facing?)` — ONE combat-kinded
+floater (mutable per `Settings.floatKinds`) + ONE flash wearing an effect voice
+at the same seat; sixteen bare un-kinded cry seats converted, every §3f cry now
+kinded. `render/vis/cryVoices.ts` registers four new voices — clash (the parry's
+weapon spark, seated at the guardian's weapon point), glint (the shield's sweeping
+highlight — 'blocked' reuses its own flash, block!/shield bash! at the shield),
+blur (the evader's trailing ghosts, facing carried), ward (the flat grey ring of
+immune/resisted/POISED) — and borrows shatter (guard broken / SHELL BREAKS /
+BROKEN), wink (Perfect/Flawless/release/On the spark/crit mend/crit affliction),
+ripple (aftershock); numbers (IMPALED n) kinded with no twin. ART WITNESSED /
+ART CAPTURED moved OFF the head onto the notice feed (a ledger note is news).
+Dials `VIS_CFG.cryVoice` (unblessed). OPEN after the ladder: THE ARROW'S END by
+FORM, THE CAST VOICE, the proc voices (§4) — and her walk's misses.
 
 ## 7. Cards for her word (no blocking fork — the ladder can start at M-EMERGE)
 

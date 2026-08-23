@@ -29484,7 +29484,7 @@ export class World {
       cs.pressUsed = true;
       if (frac >= 0.72) {
         cs.empowered = 1 + (timing?.bonus ?? 0.7);
-        this.text(caster.pos, 'Perfect!', '#ffd700', 14);
+        this.cry(caster.pos, 'Perfect!', '#ffd700', 14, 'wink');
         // The made window IS an event — skill expression as a trigger.
         this.rollTriggers(caster, 'flawless',
           { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
@@ -29493,7 +29493,7 @@ export class World {
       cs.pressUsed = true;
       if (cs.indicatorAt !== undefined && Math.abs(frac - cs.indicatorAt) <= 0.08) {
         cs.empowered = 1 + (timing?.bonus ?? 1.2);
-        this.text(caster.pos, 'Flawless!', '#ffd700', 14);
+        this.cry(caster.pos, 'Flawless!', '#ffd700', 14, 'wink');
         this.rollTriggers(caster, 'flawless',
           { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
       }
@@ -32633,8 +32633,7 @@ export class World {
         if (dist(p.pos, caster.pos) > p.mimicWitnessR) continue;
         if (!this.lineOfSight(p.pos, caster.pos, p.tier, caster.tier)) continue;
         if (mimicCapture(this, p, caster, def)) {
-          this.text(vec(p.pos.x, p.pos.y - 30),
-            `ART WITNESSED: ${def.name}`, '#c8a0e8', 14);
+          this.notice(`ART WITNESSED: ${def.name}`, '#c8a0e8', 14, 'world'); // off the head, onto the feed (M-CRY: a ledger note is news)
         }
       }
     }
@@ -35268,7 +35267,7 @@ export class World {
     const at = z.seg
       ? vec((z.seg.ax + z.seg.bx) / 2, (z.seg.ay + z.seg.by) / 2)
       : vec(z.pos.x, z.pos.y);
-    this.text(at, 'aftershock!', z.color, 12);
+    this.cry(at, 'aftershock!', z.color, 12, 'ripple', 18);
     this.flashes.push({ pos: vec(at.x, at.y), radius, color: z.color, life: 0.3, maxLife: 0.3 });
     for (const v of this.zoneVictims(z)) {
       const nb = bodyWhere(v, (bp, br) => dist(at, bp) - br <= radius);
@@ -35351,7 +35350,7 @@ export class World {
     sg.pool -= absorb;
     if (sg.pool <= 0) {
       sg.broken = true;
-      this.text(vec(victim.pos.x, victim.pos.y - 20), 'SHELL BREAKS!', '#ffd27a', 15);
+      this.cry(victim.pos, 'SHELL BREAKS!', '#ffd27a', 15, 'shatter', victim.radius + 6);
       this.flashes.push({ pos: vec(victim.pos.x, victim.pos.y), radius: victim.radius * 2, color: sg.color, life: 0.35, maxLife: 0.35 });
     }
     if (absorb >= raw) {
@@ -35393,7 +35392,7 @@ export class World {
       const counter = rawDamage * counterMult * attacker.sheet.get('damageTaken');
       attacker.life -= counter;
       attacker.hitFlash = 0.15;
-      this.text(vec(guardian.pos.x, guardian.pos.y - 18), 'PARRY!', '#ffd700', 15);
+      this.cry(vec(guardian.pos.x + Math.cos(guardian.facing) * (guardian.radius + 10), guardian.pos.y + Math.sin(guardian.facing) * (guardian.radius + 10)), 'PARRY!', '#ffd700', 15, 'clash', 16, guardian.facing); // the spark at the weapon
       this.text(attacker.pos, Math.round(counter).toString(), '#ffd700', 14);
       this.flashes.push({
         pos: vec(attacker.pos.x, attacker.pos.y), radius: attacker.radius + 10,
@@ -35421,9 +35420,9 @@ export class World {
       pos: vec(
         guardian.pos.x + Math.cos(guardian.facing) * (guardian.radius + 10),
         guardian.pos.y + Math.sin(guardian.facing) * (guardian.radius + 10)),
-      radius: 16, color: cs.inst.def.color, life: 0.15, maxLife: 0.15,
+      radius: 16, color: cs.inst.def.color, life: 0.15, maxLife: 0.15, fx: 'glint', facing: guardian.facing, // THE CRY's drawn twin (M-CRY): the shield glints
     });
-    this.text(guardian.pos, 'blocked', '#8ab8d8', 11);
+    this.text(guardian.pos, 'blocked', '#8ab8d8', 11, 'combat');
     this.applyThorns(guardian, attacker);
     this.tapCharges(guardian, 'block');
     // CAST-ON-BLOCK trigger gems answer the raised-shield block too.
@@ -35432,7 +35431,7 @@ export class World {
       guardian.casting = null;
       guardian.useLock = 0.3;
       if (cs.inst.def.cooldown > 0) guardian.cooldowns.set(cs.inst.def.id, cs.inst.def.cooldown);
-      this.text(guardian.pos, 'guard broken!', '#d05050', 14);
+      this.cry(guardian.pos, 'guard broken!', '#d05050', 14, 'shatter', guardian.radius + 8);
       // Ice Shield's dying burst: a broken shield spends its FULL absorbed
       // capacity as the payload — with the stance's EFFECTIVE bash, innate
       // or socket-grafted (and the inverted contract agrees: a broken wall
@@ -35507,7 +35506,7 @@ export class World {
       life: 0.25, maxLife: 0.25,
       ...(fullCircle ? {} : { arc: { facing: a.facing, arcRad } }),
     });
-    this.text(vec(a.pos.x, a.pos.y - 20), 'shield bash!', inst.def.color, 13);
+    this.cry(vec(a.pos.x + Math.cos(a.facing) * (a.radius + 10), a.pos.y + Math.sin(a.facing) * (a.radius + 10)), 'shield bash!', inst.def.color, 13, 'glint', 16, a.facing);
   }
 
   /**
@@ -36315,7 +36314,7 @@ export class World {
     const extra = instanceMods(inst);
     if (!chance(caster.sheet.get('critChance', tags, extra))) return 1;
     const mult = caster.sheet.get('critMulti', tags, extra);
-    if (at) this.text(vec(at.x, at.y - 12), 'crit mend!', '#ffd24a', 12);
+    if (at) this.cry(at, 'crit mend!', '#ffd24a', 12, 'wink');
     return mult;
   }
 
@@ -37017,7 +37016,7 @@ export class World {
       const result = applyHit(caster, target, packet);
       wasCrit = result.crit;
       if (result.evaded) {
-        this.text(target.pos, 'evade', '#9ab0c8', 12, 'combat');
+        this.cry(target.pos, 'evade', '#9ab0c8', 12, 'blur', target.radius, target.facing); // the body's trailing ghosts
         // The evader's rewards: the deterministic lifeOnEvade floor plus
         // their own 'evade' procs (global sheet — golden rule 3).
         const mend = target.sheet.get('lifeOnEvade');
@@ -37026,7 +37025,7 @@ export class World {
         return; // an evaded attack applies nothing
       }
       if (result.blocked) {
-        this.text(target.pos, 'block!', '#8ab8d8', 12, 'combat');
+        this.cry(target.pos, 'block!', '#8ab8d8', 12, 'glint', target.radius + 6, target.facing);
         this.applyThorns(target, caster);
         if (depth === 0) this.tapCharges(target, 'block');
         const mend = target.sheet.get('lifeOnBlock');
@@ -37042,7 +37041,7 @@ export class World {
         return; // a passively blocked hit applies nothing either
       }
       if (result.immune) {
-        this.text(target.pos, 'immune', '#9ab0c8', 12);
+        this.cry(target.pos, 'immune', '#9ab0c8', 12, 'ward', target.radius + 8); // the flat grey ring
         // THE KNOCK LAW: the blow CONNECTED — invulnerability zeroed the
         // wound, not the contact — so enrolled fixtures still ring and
         // tunable bodies still take the color (the bell needn't bleed).
@@ -37057,8 +37056,7 @@ export class World {
       if (target.kind === 'player' && caster.team === 'enemy') {
         mimicRefreshWatch(target, this.time);
         if (target.mimicWatch && mimicCapture(this, target, caster, def)) {
-          this.text(vec(target.pos.x, target.pos.y - 30),
-            `ART CAPTURED: ${def.name}`, '#c8a0e8', 14);
+          this.notice(`ART CAPTURED: ${def.name}`, '#c8a0e8', 14, 'world'); // off the head, onto the feed
         }
       }
       dealt = result.total;
@@ -37448,7 +37446,7 @@ export class World {
             target.life -= taken;
             target.hitFlash = 0.12;
             this.text(vec(target.pos.x, target.pos.y - 26),
-              'IMPALED ' + Math.round(taken), STATUS_DEFS[s.id]?.color ?? '#c8ccd8', 13);
+              'IMPALED ' + Math.round(taken), STATUS_DEFS[s.id]?.color ?? '#c8ccd8', 13, 'combat'); // a number — kinded, no twin
             if (target.life <= 0 && !target.dead) this.kill(target, false, caster);
           }
         }
@@ -37712,7 +37710,7 @@ export class World {
         const shrug = target.sheet.get('ailmentResist',
           el ? new Set<SkillTag>([el]) : undefined);
         if (shrug > 0 && chance(shrug)) {
-          this.text(target.pos, 'resisted', '#9ab0c8', 11);
+          this.cry(target.pos, 'resisted', '#9ab0c8', 11, 'ward', target.radius + 8);
           continue;
         }
         // GLOBAL BASELINE TUNING: incidental (sub-identity-threshold) authored
@@ -37779,7 +37777,7 @@ export class World {
               const cm = caster.sheet.get('critMulti', tags, extra);
               dpsOut *= cm;
               if (rupture !== undefined) rupture *= cm;
-              this.text(vec(target.pos.x, target.pos.y - 16), 'crit affliction!', '#ffd24a', 12);
+              this.cry(target.pos, 'crit affliction!', '#ffd24a', 12, 'wink');
             }
           }
           // durationOverride: a FIXED clock (Flash Freeze's unscalable
@@ -38664,7 +38662,7 @@ export class World {
   sweepDefenseEvents(a: Actor, depth = 0): void {
     if (a.poiseJustBroke) {
       a.poiseJustBroke = false;
-      this.text(vec(a.pos.x, a.pos.y - 24), 'BROKEN!', '#d8b06a', 15);
+      this.cry(a.pos, 'BROKEN!', '#d8b06a', 15, 'shatter', a.radius + 6); // the poise shell's own shatter
       this.flashes.push({
         pos: vec(a.pos.x, a.pos.y), radius: a.radius + 12,
         color: '#d8b06a', life: 0.3, maxLife: 0.3,
@@ -38678,7 +38676,7 @@ export class World {
     }
     if (a.poiseJustRearmed) {
       a.poiseJustRearmed = false;
-      this.text(vec(a.pos.x, a.pos.y - 24), 'POISED', '#d8b06a', 12);
+      this.cry(a.pos, 'POISED', '#d8b06a', 12, 'ward', a.radius + 8);
       this.rollOwnProcs(a, 'poiseRearmed', { depth });
     }
     if (a.esRechargeJustStarted) {
@@ -48747,9 +48745,9 @@ export class World {
             chargesSpent: cs.chargesSpent,
           });
           if (strikeMult > 1) {
-            this.text(a.pos, timing?.kind === 'timed' ? 'Flawless release!' : 'Perfect release!', '#ffd700', 14);
+            this.cry(a.pos, timing?.kind === 'timed' ? 'Flawless release!' : 'Perfect release!', '#ffd700', 14, 'wink');
           }
-          if (spark) this.text(a.pos, 'On the spark!', '#ffd700', 13);
+          if (spark) this.cry(a.pos, 'On the spark!', '#ffd700', 13, 'wink');
         }
         break;
       }
@@ -55374,6 +55372,16 @@ export class World {
    *  Channels: world (the catch-all) · events · war · civic. */
   notice(text: string, color?: string, size?: number, channel: string = 'world'): void {
     pushNotice(this.notices, { text, color, size, channel }, this.time);
+  }
+
+  /** THE CRY (show-don't-tell §3f, M-CRY): a combat cry is a `combat`-kinded
+   *  floater (mutable per Settings.floatKinds) PLUS its drawn twin — a flash
+   *  wearing an effect voice at the same seat (vis/cryVoices.ts: clash /
+   *  glint / blur / ward, or any registered voice), so the read survives the
+   *  mute. `fx` undefined = kind-only (a number, or a cry with no drawable). */
+  cry(at: Vec2, text: string, color: string, size = 13, fx?: string, radius = 14, facing?: number): void {
+    this.text(at, text, color, size, 'combat');
+    if (fx) this.flashes.push({ pos: vec(at.x, at.y), radius, color, life: 0.22, maxLife: 0.22, fx, ...(facing === undefined ? {} : { facing }) });
   }
 
   text(at: Vec2, text: string, color: string, size = 13, kind?: string, life = 1): void {

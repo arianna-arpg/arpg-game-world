@@ -1330,6 +1330,16 @@ export const VIS_CFG = {
     thrum: { pulses: 3, rate: 3, reach: 0.28, alpha: 0.6, dots: 7 },
     tune:  { alpha: 0.7, motes: 8 },
   },
+  /** THE CRY VOICES (vis/cryVoices.ts — the drawn twins of the combat cries,
+   *  show-don't-tell §3f / M-CRY): clash = the parry's weapon spark, glint =
+   *  the shield's sweeping highlight, blur = the evader's trailing ghosts,
+   *  ward = the flat grey ring of immunity/resistance. All DIALS, unblessed. */
+  cryVoice: {
+    clash: { scale: 1.1, width: 2.2, core: 0.28, tilt: 0.2, alpha: 0.95 },
+    glint: { scale: 1, width: 2, arc: 0.9, sweep: 1.6, alpha: 0.9 },
+    blur:  { ghosts: 3, step: 0.55, alpha: 0.45 },
+    ward:  { color: '#b8bcc4', width: 1.6, ticks: 6, tickLen: 3, alpha: 0.75 },
+  },
   /** A spilled body's arc from the host's seat to its own: seconds, the arc
    *  height as a multiple of the corpse size, the spins along the way. */
   corpseTumble: { seconds: 0.45, arc: 1.6, spins: 0.75 },
