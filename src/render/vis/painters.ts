@@ -10181,6 +10181,20 @@ export function wholeKindSprite(def: DoodadVisualDef, theme: ZoneTheme,
  *  upright convention. */
 const PAINTER_IGNORES_ROT: Record<string, boolean> = { trunk: true, kelp: true };
 
+/** The whole-doodad sprite VARIANT a bakeWhole kind blits at this seat — the
+ *  ONE derivation paintBakedWhole draws by, exported so THE DISSOLUTION
+ *  GRAMMAR's fragment engine (vis/dissolveLayer.ts) cuts the EXACT sprite
+ *  the player was looking at (drawn == broken). */
+export function wholeVariantOf(o: Doodad): number {
+  return (hash01(o.pos.x * 0.531, o.pos.y * 0.877) * CROWN_VARIANTS) | 0;
+}
+
+/** Does this bakeWhole painter honor the instance's own rot at blit (the
+ *  dissolve layer's bitmap must rotate exactly as the blit did)? */
+export function wholeSpriteSpins(def: DoodadVisualDef): boolean {
+  return !PAINTER_IGNORES_ROT[def.painter];
+}
+
 /** Blit a bakeWhole kind group: one image per doodad, sway (if declared) as
  *  a whole-sprite shear — the tuft recipe, generalized to any ground kind
  *  whose painter is time-free (or whose only time input is sway). */
@@ -10191,7 +10205,7 @@ export function paintBakedWhole(env: PaintEnv, group: readonly Doodad[],
   const spins = !PAINTER_IGNORES_ROT[def.painter];
   ctx.globalAlpha = 1;
   for (const o of group) {
-    const variant = (hash01(o.pos.x * 0.531, o.pos.y * 0.877) * CROWN_VARIANTS) | 0;
+    const variant = wholeVariantOf(o);
     const spr = wholeKindSprite(def, theme, o.radius, variant);
     const rq = Math.max(6, Math.round(o.radius / 4) * 4);
     const scale = o.radius / rq;

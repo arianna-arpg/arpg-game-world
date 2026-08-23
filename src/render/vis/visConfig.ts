@@ -1321,6 +1321,39 @@ export const VIS_CFG = {
       drops: 5,
     },
   },
+
+  /** THE DISSOLUTION GRAMMAR's render dials (vis/dissolveLayer.ts — the
+   *  fragment engine over the pure leaf engine/dissolve.ts; the motion
+   *  kinematics + cuts + the cap + the debris fade live THERE as
+   *  DISSOLVE_CFG — these shape presentation only). All DIALS, unblessed
+   *  (her gauge walk). Ablate: 'doodads'. */
+  dissolve: {
+    /** Fragments at or below this alpha skip the draw. */
+    skipBelow: 0.03,
+    /** One-shot bitmap resolution (canvas px per world unit) for live-
+     *  painted kinds — 2 keeps fragments crisp at the camera's usual zoom. */
+    bitmapRes: 2,
+    /** A faint ground shadow under every flying fragment (alpha mul; 0 =
+     *  none) — the piece reads as LIFTED while it flies. */
+    fragmentShadow: 0.18,
+    /** THE PRE-CRACK (give-way kinds mid-dwell): crack line color, peak
+     *  alpha at full dwell, line width (px at radius 24; scales). */
+    crack: { color: '#1a1612', alpha: 0.78, width: 1.6, highlight: 'rgba(255,255,255,0.22)' },
+    /** The debris `litter` painter: grains per radius unit, grain size band
+     *  (px), the glint shape's sparkle alpha. */
+    litter: { density: 0.42, size: [1.6, 4.4], glintAlpha: 0.55 },
+    /** The three break voices (registered by the dissolve layer through the
+     *  effect-voice registry — ONE accent channel): */
+    voices: {
+      /** 'dust' — a low settling breath + a few grit flecks (crumble, give
+       *  way, ceramic): no plume, no hot core. */
+      dust: { scale: 0.9, alpha: 0.34, flecks: 5 },
+      /** 'sparkle' — glints and a cold wink (glass, crystal, ice). */
+      sparkle: { scale: 0.95, glints: 9, winkAlpha: 0.5 },
+      /** 'wetpop' — a wet ring + droplets (pods, sacs, caps). */
+      wetpop: { scale: 0.8, drops: 6, ringAlpha: 0.4 },
+    },
+  },
 } as const;
 
 // --- DEV FORENSICS (perf-harness levers — src/dev/perf.ts) ------------------

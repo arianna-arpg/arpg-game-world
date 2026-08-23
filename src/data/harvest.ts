@@ -102,10 +102,16 @@ export function harvestRowsFor(biome?: string, tileset?: string): HarvestNodeDef
 // The bodies: LOW standing objects — walk around, shoot over — placed with
 // the fixture discipline's spacing; never on liquid or over a drop. The husk
 // is loose rubble (nothing re-flows; the footprint stays walkable-around).
+// THE DISSOLUTION GRAMMAR (engine/dissolve.ts): a spent node CRUMBLES as
+// itself — the fragments slump into the husk, which IS the debris (no second
+// pile; World.harvestSettle adopts the husk doodad as the break's debris) and
+// fades eventually, minutes-grade (her word; DIAL — the per-biome husk face is
+// the banked coda, closed by a per-row `dissolve.debris` whenever it lands).
 for (const row of HARVEST_NODES) {
   registerDoodadRule(row.kind, {
     overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 260,
     forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    dissolve: { motion: 'crumble', material: 'stone', debris: false, fade: { after: [150, 240], rate: 6 } },
   });
 }
 registerDoodadRule(HARVEST_HUSK_KIND, {

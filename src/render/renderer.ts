@@ -83,6 +83,7 @@ import { WallEyes } from './vis/wallEyes';
 import { RoomVeil } from './vis/roomVeil';
 import { SightVeil } from './vis/sightVeil';
 import { dressFading, softDryFace } from './vis/dressFade';
+import { dissolveDebrisAlpha, drawDissolveCracks, drawDissolves } from './vis/dissolveLayer'; // THE DISSOLUTION GRAMMAR's fragment engine (+ the litter painter + break voices register)
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawSkyField, drawWeatherFx, skyGeoOf, skyRawIntensity, WEATHER_FX, type SkyFieldView, type SkyGeo } from './vis/weatherFx';
@@ -581,6 +582,14 @@ export class Renderer {
     // draws ON TOP of the tunnel floor it stands in.
     this.drawTierVeil(world, vw, vh);
     if (!VIS_ABLATE.has('doodads')) this.drawDoodads(world);
+    // THE DISSOLUTION GRAMMAR (vis/dissolveLayer.ts): the flying fragments of
+    // every live break — over the ground and the standing furniture, under
+    // bodies — plus the pre-crack growing on pressed give-way faces. Both gate
+    // on empty state first: zero cost while nothing breaks.
+    if (!VIS_ABLATE.has('doodads')) {
+      drawDissolves(this.ctx, world, this.cam.x, this.cam.y, vw, vh); // sweeps its set cache, then returns on an empty list
+      drawDissolveCracks(this.ctx, world);
+    }
     // TRACK RIDERS: the moving hazards, posed from the shared clock through
     // the one painter registry — over the ground and grooves, under actors.
     if (world.tracks.length && !VIS_ABLATE.has('tracks')) {
@@ -2904,9 +2913,12 @@ export class Renderer {
     const { ctx } = this;
     for (const d of drying) {
       const face = softDryFace(d, this.frameDt);
-      if (face.alpha <= VIS_CFG.dressFade.skipBelow) continue;
+      // THE DISSOLUTION GRAMMAR's settle: debris fades IN as its break's
+      // fragments land (1 once no live break claims the piece).
+      const dissolveSettle = d.dissolveDebris ? dissolveDebrisAlpha(d, env.world) : 1;
+      if (face.alpha * dissolveSettle <= VIS_CFG.dressFade.skipBelow) continue;
       ctx.save();
-      ctx.globalAlpha *= face.alpha;
+      ctx.globalAlpha *= face.alpha * dissolveSettle;
       if (face.scale < 1) {
         ctx.translate(d.pos.x, d.pos.y);
         ctx.scale(face.scale, face.scale);
@@ -2971,9 +2983,14 @@ export class Renderer {
       }
       // THE SOFT DRY (vis/dressFade.ts): cosmetic dress mid-evaporation
       // leaves the normal lane and draws through the eased pass instead.
-      if (list.some(dressFading)) {
-        this.drawDryingDress(env, list.filter(dressFading), g.def);
-        list = list.filter(d => !dressFading(d));
+      // THE DISSOLUTION GRAMMAR's SETTLE rides the same eased pass: a debris
+      // piece whose break still flies draws fading IN (dissolveDebrisAlpha);
+      // with no live break the predicate is one length read (zero cost).
+      const settling = (d: Doodad): boolean =>
+        !!d.dissolveDebris && world.dissolves.length > 0 && dissolveDebrisAlpha(d, world) < 1;
+      if (list.some(d => dressFading(d) || settling(d))) {
+        this.drawDryingDress(env, list.filter(d => dressFading(d) || settling(d)), g.def);
+        list = list.filter(d => !dressFading(d) && !settling(d));
         if (!list.length) continue;
       }
       if (!g.def) {

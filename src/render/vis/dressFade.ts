@@ -68,7 +68,10 @@ function cosmeticKind(kind: string): boolean {
  *  the soft-dry pass should draw eased instead of the normal lane? */
 export function dressFading(d: Doodad): boolean {
   if (!d.evap || d.gone) return false;
-  if (!d.blastDress && !d.weatherDress) return false; // route by the transience tags only
+  // Route by the transience tags only (blast pocks, weather dress, and THE
+  // DISSOLUTION GRAMMAR's settled debris — engine/dissolve.ts: the pile a
+  // break left, non-blocking by rule, fading through this same ease).
+  if (!d.blastDress && !d.weatherDress && !d.dissolveDebris) return false;
   return cosmeticKind(d.kind);
 }
 

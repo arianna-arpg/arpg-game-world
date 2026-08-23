@@ -1549,6 +1549,18 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // The verdure cut's wreck: chopped stems and fallen fronds (the jungle
   // face's remains — same law, green voice).
   verdure_litter: { painter: 'scree', order: 37, params: { color: '#4a662a' } },
+  // --- THE DISSOLUTION GRAMMAR's DEBRIS (engine/dissolve.ts; the `litter`
+  // painter registers from render/vis/dissolveLayer.ts — THE NEW-PIECES
+  // PREFERENCE: one painter, a `shape` per material, so the pile reads as
+  // what broke — clay sherds, glass glints, rock scree, wood splinters, wet
+  // pulp, rime). Ground-order, no blend bed (a drying piece must not re-bake
+  // its chunk at every contraction step — the boulder_rubble law).
+  debris_clay:      { painter: 'litter', order: 37, params: { color: '#9a8672', shape: 'sherd' } },
+  debris_glass:     { painter: 'litter', order: 37, params: { color: '#c8dcdc', shape: 'glint' } },
+  debris_rubble:    { painter: 'litter', order: 37, params: { color: 'theme:obstacle|#8a8276', shape: 'scree' } },
+  debris_splinters: { painter: 'litter', order: 37, params: { color: '#6a5236', shape: 'splinter' } },
+  debris_pulp:      { painter: 'litter', order: 37, params: { color: '#7a8a48', shape: 'pulp' } },
+  debris_rime:      { painter: 'litter', order: 37, params: { color: '#bcd4e2', shape: 'glint' } },
   // --- Brittle wave 2: hazard breakables ------------------------------------
   // A decayed crossing: the plank painter saying 'rot' — missing boards over
   // the dark, a split seam, moss on the rails. Order matches sound bridges.

@@ -93,11 +93,14 @@ import { BOUNTY_CFG } from '../data/bounties';
 import { ADOPT_CFG, CLEAR_CFG, CONTEST_CFG, OFFERING_CFG, STRAGGLER_CFG, maybeAdoptObjective, packageAskRow, pressureRampAt, pressureRampCadence, ventureAskRow } from '../data/objectives';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
-  blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
+  blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleKinds, doodadRuleOf, generateLayout,
   hitSurfaceOf, normalizeDoodadBound, pitRegionOf,
   type BrittleSpec, type Doodad, type DoodadEffect, type DoodadKind, type PlacedStructure, type PlacedSlot,
   type ResonanceSpec,
 } from './levelgen';
+// THE DISSOLUTION GRAMMAR (engine/dissolve.ts — docs/engine/dissolution.md):
+// the ONE resolver + the seeded rolls the break records ride.
+import { DISSOLVE_CFG, dissolveFor, dissolveRollRange, dissolveSeedOf, resolveDissolve, type ResolvedDissolve } from './dissolve';
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
 import { canSquish, SQUISH_CFG, squishSpecOf } from './squish';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
@@ -1260,6 +1263,23 @@ interface FloatingText {
   kind?: string;
 }
 
+/** THE DISSOLUTION GRAMMAR's live break record (World.dissolves — the flash
+ *  idiom, pruned by `life`): what broke and where (its LOOK as it stood —
+ *  kind/pos/radius/rot/dir/tier, read before any kind swap), the folded
+ *  spec and the position-hash seed, the strike point, and the DEBRIS piece
+ *  the fragments settle into (already standing — pushed or adopted at the
+ *  instant). The renderer (render/vis/dissolveLayer.ts) animates it off
+ *  (seed, age) alone; nothing here is tested state; it never persists and
+ *  never rides the wire. */
+export interface DissolveBreak {
+  kind: DoodadKind; pos: Vec2; radius: number; rot?: number; dir?: number; tier?: number;
+  seed: number; spec: ResolvedDissolve; strike: Vec2;
+  /** World clock at the break (the motion's age = world.time − at). */
+  at: number;
+  life: number; maxLife: number;
+  debris: Doodad | null;
+}
+
 interface Flash {
   pos: Vec2; radius: number; color: string; life: number; maxLife: number;
   arc?: { facing: number; arcRad: number };
@@ -1976,6 +1996,13 @@ const DEEPWINTER_FROZEN_LIQUID = 'ice';
 const CORPSE_RADIUS = 110;       // how close to your old corpse to begin reclaiming
 const CORPSE_DWELL = 1.0;        // seconds dwelling to reclaim (recovering the dead is deliberate)
 const BRITTLE_WARN_EVERY = 4;    // seconds between repeats of ONE brittle warn line
+/** DEV (THE DISSOLUTION GRAMMAR's gauge ring — World.devDissolveRing): the
+ *  body radius each D0 kind stands at; unlisted kinds take 20. Dev-only. */
+const DEV_DISSOLVE_RING_RADIUS: Record<string, number> = {
+  clay_pots: 16, burial_urn: 18, kiln_urn: 18, glass_shard: 22, crystal_cluster: 26, icicle_cluster: 24,
+  secret_wall: 28, cracked_face: 28, rotten_bridge: 30, gas_pod: 18, burst_sac: 18, puffcap_cluster: 16,
+  mirage_oasis: 64, mirage_bastion: 52, mirage_caravan: 52,
+};
                                  // (a rotten span is MANY planks — each board's first
                                  // tread must not stack the same creak into unreadable
                                  // spam; BrittleSpec.warnEvery overrides per spec)
@@ -2409,6 +2436,8 @@ export class World {
    *  construction: the canvas composites under the DOM). */
   pickupFeed: PickupFeedEntry[] = [];
   flashes: Flash[] = [];
+  /** THE DISSOLUTION GRAMMAR's live break records (see dissolveBreak). */
+  dissolves: DissolveBreak[] = [];
   drops: GemDrop[] = [];
   orbs: ResourceOrb[] = [];
   remnants: Remnant[] = [];
@@ -4795,6 +4824,7 @@ export class World {
     this.realmDwellKey = ''; // dwell-to-enter-a-realm-gate resets too
     this.doorDwellId = '';  // dwell-to-open-a-door resets too (doors rebuild)
     this.brittleWarnAt.clear(); // a fresh zone's spans get their first creak at once
+    this.dissolveCracks.clear(); // the pre-crack ledger is zone-local (THE DISSOLUTION GRAMMAR)
     this.arenaWard = null;  // a ward ritual is zone-local (re-raised on realm entry)
     this.wardDwellSeal = null;
     this.arenaCrowd = null; // the stands are zone-local too
@@ -4811,6 +4841,7 @@ export class World {
     this.tethers = [];
     this.texts = [];
     this.flashes = [];
+    this.dissolves = []; // THE DISSOLUTION GRAMMAR: motions are zone-local after-images
     this.pendingBursts = [];
     this.drops = [];
     this.orbs = [];
@@ -34761,7 +34792,7 @@ export class World {
       if (rule.resonance) this.resonate(o, rule.resonance);
       const br = rule.brittle;
       if (!br || !br.on.includes('hit')) continue;
-      this.popBrittle(o, striker);
+      this.popBrittle(o, striker, at); // `at` = the blow's seat (the dissolution grammar's strike point)
     }
     // THE LITE TIER (engine/lite.ts): the same strike CARVES THE POOL with
     // the delivery's exact geometry — every verb that plays the surfaces
@@ -42537,6 +42568,12 @@ export class World {
       this.flashes[i].life -= dt;
       if (this.flashes[i].life <= 0) this.flashes.splice(i, 1);
     }
+    // THE DISSOLUTION GRAMMAR's break records age on the same beat (zero
+    // cost while none stand — the common case).
+    for (let i = this.dissolves.length - 1; i >= 0; i--) {
+      this.dissolves[i].life -= dt;
+      if (this.dissolves[i].life <= 0) this.dissolves.splice(i, 1);
+    }
 
     // Sweep the dead (keep every player-kind seat — the local hero for the death
     // screen, and downed/dead co-op allies so they can still be revived / linger).
@@ -50288,7 +50325,7 @@ export class World {
           const br = doodadRuleOf(o.kind).brittle;
           if (br && !o.gone && br.on.includes('hit')
             && this.projTouches(p, o.pos.x, o.pos.y, o.radius)) {
-            this.popBrittle(o, p.caster ?? null);
+            this.popBrittle(o, p.caster ?? null, p.pos); // the arrow's seat = the strike point
           }
           if (!blocksProjectiles(o)) continue;
           if (o.gone) continue; // popped this very step — nothing left to hit
@@ -51831,8 +51868,14 @@ export class World {
     const node = this.harvestNodes[s.ix];
     if (!node) return;
     const d = node.doodad;
+    const dissolveLook = { kind: d.kind, pos: vec(d.pos.x, d.pos.y), radius: d.radius, rot: d.rot, tier: d.tier };
     d.kind = HARVEST_HUSK_KIND;
     this.markDoodadsChanged();
+    // THE DISSOLUTION GRAMMAR: the node CRUMBLES as itself into its husk —
+    // the husk IS the debris (adopted: tagged, fading on the row's own dial);
+    // the payout below stands untouched (no rng draw here — seeded rolls).
+    const ds = dissolveFor(dissolveLook.kind);
+    if (ds) this.dissolveBreak(dissolveLook, ds, null, d);
     const col = node.def.accent;
     this.flashes.push({
       pos: vec(node.pos.x, node.pos.y), radius: d.radius * 2.6, color: col,
@@ -51927,14 +51970,16 @@ export class World {
         const br = doodadRuleOf(d.kind).brittle;
         if (!br || d.gone) continue;
         const gap = dist(a.pos, d.pos);
+        // The body's own seat is the STRIKE point (the dissolution grammar's
+        // crack/fling radiate from where the boot or the press landed).
         if (br.on.includes('touch') && gap <= a.radius + d.radius + 2) {
-          if (!br.dwell) { this.popBrittle(d, a); continue; }
-          this.brittleAccrue(d, br, dt);
+          if (!br.dwell) { this.popBrittle(d, a, a.pos); continue; }
+          this.brittleAccrue(d, br, dt, a.pos);
           continue;
         }
         if (br.on.includes('near') && gap <= (br.reach ?? 40) + a.radius) {
-          if (!br.dwell) { this.popBrittle(d, a); continue; }
-          this.brittleAccrue(d, br, dt);
+          if (!br.dwell) { this.popBrittle(d, a, a.pos); continue; }
+          this.brittleAccrue(d, br, dt, a.pos);
         }
       }
     }
@@ -51947,7 +51992,7 @@ export class World {
    *  line (brittleWarnAt): every plank of a span carries its own clock, but
    *  the same words speak at most once per warnEvery window, so the player
    *  can actually read them. Clocks accrue silently either way. */
-  private brittleAccrue(d: Doodad, br: BrittleSpec, dt: number): void {
+  private brittleAccrue(d: Doodad, br: BrittleSpec, dt: number, from?: Vec2): void {
     const prev = this.brittleDwell.get(d);
     if (prev === undefined && br.warn) {
       const last = this.brittleWarnAt.get(br.warn) ?? -Infinity;
@@ -51956,9 +52001,18 @@ export class World {
         this.text(vec(d.pos.x, d.pos.y - 12), br.warn, br.color ?? '#c8b89a', 11);
       }
     }
+    // THE PRE-CRACK ledger (THE DISSOLUTION GRAMMAR): a dwell that starts on
+    // a crack-drawing kind remembers WHERE the press began — the drawn crack
+    // grows from there (dissolveCrackView), the creak made visible; the
+    // ledger's point is also the break's strike point when the clock runs out.
+    if (prev === undefined && from && dissolveFor(d.kind)?.preCrack) {
+      this.dissolveCracks.set(d, vec(from.x, from.y));
+    }
     const t = (prev ?? 0) + dt;
-    if (t >= (br.dwell ?? 0)) { this.brittleDwell.delete(d); this.popBrittle(d); }
-    else this.brittleDwell.set(d, t);
+    if (t >= (br.dwell ?? 0)) {
+      this.brittleDwell.delete(d);
+      this.popBrittle(d, undefined, this.dissolveCracks.get(d) ?? from ?? null);
+    } else this.brittleDwell.set(d, t);
   }
 
   /** A lifeless breakable gives way: FX + spill + optional grid carve. The
@@ -51967,13 +52021,14 @@ export class World {
    *  whoever's blow (or boot) did it, when a body is known — the 'surface'
    *  proc trigger rolls on them (cutting through the world is an act with
    *  its own rewards; a timer-pop names nobody and rolls nothing). */
-  private popBrittle(d: Doodad, striker?: Actor | null): void {
+  private popBrittle(d: Doodad, striker?: Actor | null, strikeAt?: Vec2 | null): void {
     if (d.gone) return;
     // A breaking resonant stone TOLLS as it goes (near/touch/dwell pops reach
     // here without passing strikeSurfaces; the cooldown dedupes hit-pops).
     const res = doodadRuleOf(d.kind).resonance;
     if (res) this.resonate(d, res);
     d.gone = true;
+    this.dissolveCracks.delete(d); // a popped body's pre-crack ledger entry leaves with it
     const i = this.doodads.indexOf(d);
     if (i >= 0) this.doodads.splice(i, 1);
     // Bump the rev EXPLICITLY: a pop followed by a same-frame push can net the
@@ -52004,10 +52059,15 @@ export class World {
     // POP DRESS (brittle.pop): reshape the break flash — the mirage kit
     // trades the pale blast for the heat-haze ring. Absent = the stock read.
     const fx = br.pop;
+    // THE DISSOLUTION GRAMMAR's row (a dev override may force a motion): its
+    // VOICE rides THIS flash — ONE accent channel; the haze ring keeps the
+    // mirage kit's breath (a dissolve speaks no voice over it).
+    const dissolveRow = this.dissolveOverride ?? dissolveFor(d.kind);
     this.flashes.push({
       pos: vec(d.pos.x, d.pos.y), radius: fx?.radius ?? d.radius * 2.2, color,
       life: fx?.life ?? 0.3, maxLife: fx?.life ?? 0.3,
       ...(fx?.haze ? { haze: fx.haze } : {}),
+      ...(dissolveRow && dissolveRow.voice && !fx?.haze ? { fx: dissolveRow.voice } : {}),
     });
     if (br.text) this.text(vec(d.pos.x, d.pos.y - 14), br.text, color, 12);
     if (br.orbChance && chance(br.orbChance)) {
@@ -52017,11 +52077,13 @@ export class World {
     // THE REMAINS (the quiet reclass): the wreck leaves its own pile — the
     // crumble SHOWS and the dust STAYS. Pushed after the splice; the rev
     // bump below covers the same-frame length-net window.
+    let remainsDoodad: Doodad | null = null; // the dissolution grammar adopts it as the debris
     if (br.remains) {
-      this.doodads.push({
+      remainsDoodad = {
         pos: vec(d.pos.x, d.pos.y), radius: Math.max(10, d.radius * 0.85),
         kind: br.remains, rot: rand(0, Math.PI * 2),
-      });
+      };
+      this.doodads.push(remainsDoodad);
       this.markDoodadsChanged();
     }
     if (br.carve && this.walk instanceof GridWalkField) {
@@ -52107,6 +52169,207 @@ export class World {
       }
       if (n > 0 && br.corpses.text) this.text(vec(d.pos.x, d.pos.y - 28), br.corpses.text, color, 12);
     }
+    // THE DISSOLUTION GRAMMAR — after every tested consequence above has
+    // fired exactly as before (drawn == tested at the instant; the motion is
+    // after-image): hand the body to the fragment engine. A row's REMAINS
+    // is the debris lane's input (adopted, never a second pile).
+    if (dissolveRow) this.dissolveBreak(d, dissolveRow, strikeAt ?? null, remainsDoodad);
+  }
+
+  // ------------------------------------------------ THE DISSOLUTION GRAMMAR
+  // (engine/dissolve.ts — docs/engine/dissolution.md): a break is a sentence
+  // the drawing speaks. The engine's share is small and honest: at the break
+  // INSTANT — after every tested consequence (the splice, the carve, the
+  // remains, the spawn/fume/collapse) has fired exactly as before — it
+  // stamps ONE record the renderer animates off a pure clock, pushes the
+  // DEBRIS doodad the fragments settle into (non-blocking by rule, present
+  // from the instant, handed to evap per the kind's fade), and lets the
+  // pop's own flash speak the accent voice. Nothing tested ever waits for
+  // the animation; past the concurrency cap the motion is simply skipped
+  // (the debris + the voice still land — THE HONEST DEGRADE).
+
+  /** THE PRE-CRACK ledger: dwell-gated breakables whose clock has started,
+   *  with the stand/strike point the drawn crack grows from (the FIRST
+   *  press — the spot the player learns by). Entries leave on pop / zone. */
+  private dissolveCracks = new Map<Doodad, Vec2>();
+  /** DEV: a forced spec the next pop plays (the gauge tab's per-motion
+   *  trigger — "shatter the nearest"); null in play, always. */
+  private dissolveOverride: ResolvedDissolve | null = null;
+
+  /** THE ONE ENTRY — a body came apart. `body` is the broken doodad's LOOK
+   *  (kind/pos/radius/rot/dir/tier — read BEFORE any kind swap), `spec` the
+   *  folded row, `strikeAt` where the blow/boot/press landed (null = the
+   *  body's own seat), `adopt` an EXISTING piece that IS the settle (the
+   *  brittle remains, the harvest husk) — else the spec's debris kind is
+   *  pushed here. Seeded rolls only — no global rng draw moves (the pop's
+   *  own stream stays byte-identical). Returns the record, or null past the
+   *  cap (THE HONEST DEGRADE — the debris + voice already landed). */
+  dissolveBreak(body: { kind: DoodadKind; pos: Vec2; radius: number; rot?: number; dir?: number; tier?: number },
+    spec: ResolvedDissolve, strikeAt: Vec2 | null, adopt?: Doodad | null): DissolveBreak | null {
+    const seed = dissolveSeedOf(body.pos.x, body.pos.y, body.kind);
+    // THE DEBRIS — present from the instant (drawn == tested: non-blocking
+    // by rule, nothing waits). An adopted piece is tagged and handed to evap
+    // per the spec; else the spec's kind is pushed.
+    let debris: Doodad | null = adopt ?? null;
+    if (!debris && spec.debris) {
+      debris = {
+        pos: vec(body.pos.x, body.pos.y),
+        radius: Math.max(8, body.radius * spec.debrisRadius),
+        kind: spec.debris as DoodadKind,
+        rot: dissolveRollRange(seed, [0, Math.PI * 2], 71),
+      };
+      if (body.tier !== undefined) debris.tier = body.tier;
+      normalizeDoodadBound(debris);
+      this.doodads.push(debris);
+    }
+    if (debris) {
+      debris.dissolveDebris = true;
+      debris.laidAt = this.time;
+      if (spec.fade && !debris.evap) {
+        debris.evap = {
+          t: dissolveRollRange(seed, spec.fade.after, 72),
+          rate: spec.fade.rate ?? DISSOLVE_CFG.base.fade.rate,
+        };
+        this.evaporating.push(debris);
+      }
+      this.markDoodadsChanged(debris);
+    }
+    // THE CAP — past it no motion record (the debris above and the voice on
+    // the pop's own flash still land).
+    if (this.dissolves.length >= DISSOLVE_CFG.maxLive) return null;
+    const rec: DissolveBreak = {
+      kind: body.kind, pos: vec(body.pos.x, body.pos.y), radius: body.radius,
+      rot: body.rot, dir: body.dir, tier: body.tier,
+      seed, spec, strike: strikeAt ? vec(strikeAt.x, strikeAt.y) : vec(body.pos.x, body.pos.y),
+      at: this.time, life: spec.life, maxLife: spec.life, debris,
+    };
+    this.dissolves.push(rec);
+    return rec;
+  }
+
+  /** THE PRE-CRACK's render view (the tell-wire idiom — derived scalars):
+   *  every dwell-gated breakable whose clock is running and whose row asks
+   *  for the drawn crack, with its dwell fraction and the point it grows
+   *  from. Empty while nothing is pressed (the common case — no cost). */
+  dissolveCrackView(): { d: Doodad; frac: number; from: Vec2; seed: number }[] {
+    if (!this.dissolveCracks.size) return [];
+    const out: { d: Doodad; frac: number; from: Vec2; seed: number }[] = [];
+    for (const [d, from] of this.dissolveCracks) {
+      if (d.gone) { this.dissolveCracks.delete(d); continue; }
+      const br = doodadRuleOf(d.kind).brittle;
+      const t = this.brittleDwell.get(d) ?? 0;
+      if (!br?.dwell || t <= 0) continue;
+      out.push({ d, frac: Math.min(1, t / br.dwell), from, seed: dissolveSeedOf(d.pos.x, d.pos.y, d.kind) });
+    }
+    return out;
+  }
+
+  /** DEV (her gauge walk — dev/tabs/dissolve.ts): stand the D0 set — every
+   *  BRITTLE kind carrying a dissolve row — in a ring around the hero on
+   *  clear ground. Returns the kinds stood. Dev-only: zone re-entry re-mints
+   *  the authored ground; the ring is never persisted. */
+  devDissolveRing(): string[] {
+    const kinds = doodadRuleKinds()
+      .filter(k => { const r = doodadRuleOf(k); return !!r.brittle && !!r.dissolve; })
+      .sort();
+    const p = this.player;
+    const stood: string[] = [];
+    const n = kinds.length;
+    for (let i = 0; i < n; i++) {
+      const kind = kinds[i];
+      const rule = doodadRuleOf(kind);
+      const radius = DEV_DISSOLVE_RING_RADIUS[kind] ?? 20;
+      // Stand each body just outside its own 'near' reach, so the walk
+      // toward it is the trigger (the mirage pops at 120; a pot at a step).
+      const reach = Math.max(170, (rule.brittle?.reach ?? 0) + 50 + radius);
+      const ang = (i / n) * Math.PI * 2;
+      const at = this.clampPos(vec(p.pos.x + Math.cos(ang) * reach, p.pos.y + Math.sin(ang) * reach), radius);
+      if (this.pointInSolid(at.x, at.y, radius)) continue;
+      const d: Doodad = {
+        pos: at, radius, kind: kind as DoodadKind, rot: 0,
+        ...(rule.spans ? { dir: ang + Math.PI / 2 } : {}),
+      };
+      normalizeDoodadBound(d);
+      this.doodads.push(d);
+      stood.push(kind);
+    }
+    if (stood.length) this.markDoodadsChanged();
+    return stood;
+  }
+
+  /** DEV: break the nearest body within `reach` of the hero. `motion`
+   *  FORCES a motion on ANY doodad (a tree may shatter for the gauge); null
+   *  plays the kind's own row (a kind without one refuses). Brittle kinds
+   *  break through the REAL pop path (carve/spawn/fume as in play); others
+   *  are spliced and dissolved directly (dev-only — zone re-entry re-mints). */
+  devDissolveNearest(motion: string | null, reach = 320): string | null {
+    const p = this.player;
+    let best: Doodad | null = null, bd = Infinity;
+    for (const d of this.doodadsNear(p.pos.x, p.pos.y, reach)) {
+      if (d.gone || d.dissolveDebris) continue;
+      const rule = doodadRuleOf(d.kind);
+      if (rule.overlap === 'ground' && !rule.brittle) continue; // ground washes are not bodies
+      if (!motion && !rule.dissolve) continue;
+      const g = dist(p.pos, d.pos) - d.radius;
+      if (g < bd) { bd = g; best = d; }
+    }
+    if (!best) return null;
+    return this.devDissolveOne(best, motion);
+  }
+
+  /** DEV: break every dissolve-rowed body in view (the cap's honest degrade
+   *  shows past DISSOLVE_CFG.maxLive). Returns the count broken. */
+  devDissolveAllInView(reach = 720): number {
+    const p = this.player;
+    const picks = this.doodadsNear(p.pos.x, p.pos.y, reach)
+      .filter(d => !d.gone && !d.dissolveDebris && !!doodadRuleOf(d.kind).dissolve);
+    let n = 0;
+    for (const d of picks) if (this.devDissolveOne(d, null)) n++;
+    return n;
+  }
+
+  private devDissolveOne(d: Doodad, motion: string | null): string | null {
+    const rule = doodadRuleOf(d.kind);
+    const spec = motion ? resolveDissolve({ ...(rule.dissolve ?? {}), motion }) : dissolveFor(d.kind);
+    if (!spec) return null;
+    const p = this.player;
+    if (rule.brittle) {
+      this.dissolveOverride = motion ? spec : null;
+      try { this.popBrittle(d, p, p.pos); } finally { this.dissolveOverride = null; }
+      return `${d.kind} → ${spec.motion}`;
+    }
+    // Not brittle: splice + dissolve (the dev lane's own pop).
+    d.gone = true;
+    const i = this.doodads.indexOf(d);
+    if (i >= 0) this.doodads.splice(i, 1);
+    this.markDoodadsChanged();
+    this.flashes.push({
+      pos: vec(d.pos.x, d.pos.y), radius: d.radius * 2.2, color: '#c8b89a', life: 0.3, maxLife: 0.3,
+      ...(spec.haze ? { haze: spec.haze } : spec.voice ? { fx: spec.voice } : {}),
+    });
+    this.dissolveBreak(d, spec, p.pos, null);
+    return `${d.kind} → ${spec.motion}`;
+  }
+
+  /** DEV readout: live motions vs the cap, standing debris, running
+   *  pre-cracks, the nearest body's resolved row. */
+  devDissolveInfo(): {
+    live: number; cap: number; debris: number; cracks: number;
+    nearest: { kind: string; spec: ResolvedDissolve | null } | null;
+  } {
+    const p = this.player;
+    let best: Doodad | null = null, bd = Infinity;
+    for (const d of this.doodadsNear(p.pos.x, p.pos.y, 320)) {
+      if (d.gone || d.dissolveDebris) continue;
+      const g = dist(p.pos, d.pos) - d.radius;
+      if (g < bd) { bd = g; best = d; }
+    }
+    let debris = 0;
+    for (const d of this.doodads) if (d.dissolveDebris && !d.gone) debris++;
+    return {
+      live: this.dissolves.length, cap: DISSOLVE_CFG.maxLive, debris, cracks: this.dissolveCracks.size,
+      nearest: best ? { kind: best.kind, spec: dissolveFor(best.kind) } : null,
+    };
   }
 
   /** A SECRET HOLLOW gives way (the hollows fabric): carve the recorded rect
