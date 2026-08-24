@@ -12,7 +12,7 @@ import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, rand
 import { DiscIndex } from './spatial';
 import { ActorGrid } from './actorGrid';
 import { erraticTurn, spinOffset, weaveOffset, weaveVel } from './flight';
-import { mod, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
+import { mod, type AttributeId, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, bankFracOf, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
 import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingState, type GainEvent, type MonsterPartDef, type Team } from './actor';
 import { EventBus } from './eventbus';
@@ -47,9 +47,10 @@ import {
   supportOfGemItem, writeBackSupportGem,
 } from './gemitems';
 import {
-  MEMORY_CFG, findRoughMemoryItem, makeRoughMemoryItem, memoryGroups,
-  memoryUnitsOf, mergeRoughMemory, pickSeeded, rollSeededRarity,
-  type MemoryRecallResult, type MemoryRecallViewData,
+  MEMORY_CFG, MEMORY_KIND_IDS, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE,
+  facetRng, findMemoryItem, makeMemoryItem, memoryFacetAttrs, memoryGroups,
+  memoryKindOf, memoryUnitsOf, mergeMemory, pickSeeded, rollSeededRarity,
+  type MemoryKind, type MemoryRecallResult, type MemoryRecallViewData,
 } from './memories';
 import { compileItemMods, itemLevelReq, rebuildItem, rollItem } from './itemgen';
 import {
@@ -58,7 +59,7 @@ import {
   LEDGER_ESSENCE_TOUCHED,
   rollSpillPacket, skillLevelAbilityCost, spendWalletMortalValue, spillBudget,
   supportLevelAbilityCost,
-  VENDOR_ESSENCE_PRICE, VENDOR_ITEM_CFG, VENDOR_SUPPORT_PRICE, walletBreakdown, walletMortalValue,
+  VENDOR_ESSENCE_PRICE, VENDOR_ITEM_CFG, VENDOR_MEMORY_PRICE, VENDOR_SUPPORT_PRICE, walletBreakdown, walletMortalValue,
   type AbilityCost, type EssenceCost, type EssenceId, type EssenceSpillSpec,
 } from '../data/essences';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemInstance, type ItemRarity, type RoughMemoryUnit } from './items';
@@ -1578,7 +1579,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'swapSkillSlots': return isIdx(a.a) && isIdx(a.b);
     // THE STONE (skill-items M2): the pouch wrapper by uid + the dropper
     // group's def id (untrusted — the recall re-resolves both in-seat).
-    case 'recallMemory': return isIdx(a.uid) && isStr(a.dropper);
+    case 'recallMemory': return isIdx(a.uid) && isStr(a.dropper) && (a.facet === undefined || isStr(a.facet));
     case 'caravanTo': return isIdx(a.band); // band 0 = home; N = a band index
     case 'harborChart': return isStr(a.omen); // the rumored seat's omen id
     case 'holdMuster': return true;  // the standing zone's harborhold — no payload
@@ -14279,11 +14280,14 @@ export class World {
         }
         return st.depthRungs[st.depthRungs.length - 1].depth;
       };
-      // Gems mirror Brandt's shelf gate for supports — normalize means the
-      // SAME rules, the depth locks merely layer on top.
+      // Gems mirror Brandt's shelf gates — normalize means the SAME rules
+      // (true gems stock once THE MEMORY COUNTER opens them, supports once
+      // that's unlocked; skill-items M3), the depth locks merely layer on
+      // top. Minted-once law: a rung bought mid-run reaches the NEXT shaft.
       const sellSupports = featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
       const lvl = this.vendorGemLevel();
-      for (let i = 0; i < st.gems; i++) {
+      const gemCount = this.vendorGemsOpen() ? st.gems : 0;
+      for (let i = 0; i < gemCount; i++) {
         const depth = rollRung();
         let e: VendorEntry;
         const sd = sellSupports && Math.random() < VENDOR_CFG.supportShare
@@ -14543,19 +14547,16 @@ export class World {
   }
 
   /** Buy one of the Delver's wares — NORMALIZED to the town counters
-   *  (buyChandlerGem's exact contract: trade gate, gem case, essence
-   *  prices, bag fit before a single essence moves), plus the shelf's own
-   *  DEPTH LOCK. */
+   *  (buyChandlerGem's exact contract: trade gate, essence prices, bag fit
+   *  before a single essence moves), plus the shelf's own DEPTH LOCK. */
   buyDelverGem(index: number, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
     const entry = this.descentStock[index];
     if (!entry || !this.delverShopOpen(seat)) return false;
     const refusal = this.vendorTradeRefusal();
     if (refusal) { this.failNote(seat.actor, 'vendortrade', refusal); return false; }
-    if (entry.kind !== 'item' && !this.vendorGemsOpen()) {
-      this.failNote(seat.actor, 'vendorgems', VENDOR_CFG.tabs.gemsSealedNote);
-      return false;
-    }
+    // (The gem case's face-seal retired with the one-shelf fold — the
+    // delver's shelf gates its gem rolls at MINT, mirroring the town law.)
     const lock = this.delverEntryRefusal(entry);
     if (lock) { this.failNote(seat.actor, 'delver:' + index, lock); return false; }
     const price = this.vendorPrice(entry);
@@ -14564,8 +14565,10 @@ export class World {
       this.failNote(seat.actor, 'delver:' + index, `needs ${short.count}× ${ESSENCES[short.essence].label}`);
       return false;
     }
-    // THE RESIDENCE: fit-before-spend for gems too (buyVendorGem's law).
-    const landed = entry.kind === 'item' ? autoPlace(m.items, entry.item)
+    // THE RESIDENCE: fit-before-spend for gems too (buyVendorGem's law) —
+    // and a bought Memory stack merges onto its standing pouch first.
+    const landed = entry.kind === 'item'
+      ? (this.tryMergeMemoryItem(seat, entry.item) || autoPlace(m.items, entry.item))
       : entry.kind === 'skill' ? !!autoPlace(m.items, makeSkillGemItem(entry.inst))
       : !!autoPlace(m.items, makeSupportGemItem(entry.gem));
     if (!landed) {
@@ -21380,11 +21383,20 @@ export class World {
   }
 
   /** The essence price on one of Brandt's wares: gems off the static tables,
-   *  rolled GEAR through the quality-priced mixture (crafting.ts
-   *  vendorItemPrice — coarse × markup + the rarity's own tint). Always a
-   *  LIST of costs; single-tint prices are just lists of one. */
+   *  MEMORY POUCH stacks per unit off their own dial (skill-items M3 —
+   *  VENDOR_MEMORY_PRICE × the stack's unit count), rolled GEAR through the
+   *  quality-priced mixture (crafting.ts vendorItemPrice — coarse × markup
+   *  + the rarity's own tint). Always a LIST of costs; single-tint prices
+   *  are just lists of one. */
   vendorPrice(entry: VendorEntry): EssenceCost[] {
-    if (entry.kind === 'item') return vendorItemPrice(entry.item);
+    if (entry.kind === 'item') {
+      const memKind = memoryKindOf(entry.item);
+      if (memKind) {
+        const per = VENDOR_MEMORY_PRICE[memKind];
+        return [{ essence: per.essence, count: per.count * (entry.item.mem?.length ?? 1) }];
+      }
+      return vendorItemPrice(entry.item);
+    }
     return entry.kind === 'skill'
       ? [VENDOR_ESSENCE_PRICE[entry.inst.rarity ?? 'common']]
       : [VENDOR_SUPPORT_PRICE];
@@ -21397,14 +21409,13 @@ export class World {
     const m = seat.meta;
     const entry = this.vendorStock[index];
     if (!entry || !this.nearSmith(seat)) return false;
-    // THE TRADE GATE + THE GEM CASE — the panel disables through these SAME
-    // predicates; refusals mutate nothing and speak the config's own words.
+    // THE TRADE GATE — the panel disables through this SAME predicate;
+    // refusals mutate nothing and speak the config's own words. (The gem
+    // case's face-seal retired with the one-shelf fold, skill-items M3:
+    // FEATURE.VENDOR_GEMS gates the true-gem STOCK in buildVendorStock —
+    // what stands on the shelf is honestly buyable.)
     const refusal = this.vendorTradeRefusal();
     if (refusal) { this.failNote(seat.actor, 'vendortrade', refusal); return false; }
-    if (entry.kind !== 'item' && !this.vendorGemsOpen()) {
-      this.failNote(seat.actor, 'vendorgems', VENDOR_CFG.tabs.gemsSealedNote);
-      return false;
-    }
     const price = this.vendorPrice(entry);
     // Affordability first (names the missing tint), then bag space for gear,
     // THEN the spend — order matters: no partial deductions, no eaten fees.
@@ -21415,8 +21426,11 @@ export class World {
     }
     // THE RESIDENCE: every ware — gear tile or gem wrapper — must FIT the
     // bag before a single essence moves (a full bag refuses the sale,
-    // never eats the price).
-    const landed = entry.kind === 'item' ? autoPlace(m.items, entry.item)
+    // never eats the price). A bought MEMORY stack merges onto the seat's
+    // standing pouch of its kind first (the pickup's own law — no second
+    // tile ever forms).
+    const landed = entry.kind === 'item'
+      ? (this.tryMergeMemoryItem(seat, entry.item) || autoPlace(m.items, entry.item))
       : entry.kind === 'skill' ? !!autoPlace(m.items, makeSkillGemItem(entry.inst))
       : !!autoPlace(m.items, makeSupportGemItem(entry.gem));
     if (!landed) {
@@ -25592,7 +25606,7 @@ export class World {
       case 'bindGraft': this.bindGraft(action.key, action.skillId, seat); break;
       case 'bindSkill': this.bindSkill(action.slot, action.skillId, seat); break;
       case 'swapSkillSlots': this.swapSkillSlots(action.a, action.b, seat); break;
-      case 'recallMemory': this.recallRoughMemory(seat, action.uid, action.dropper); break;
+      case 'recallMemory': this.recallMemory(seat, action.uid, action.dropper, action.facet); break;
       case 'caravanTo': this.startCaravan(action.band, seat); break;
       case 'harborChart': this.buyHarborChart(action.omen, seat); break;
       case 'holdMuster': this.beginHoldMuster(); break;
@@ -40244,7 +40258,7 @@ export class World {
    *  float, already spent at HEAD count) — so the global Math.random
    *  stream is byte-identical whatever GEM_DROP_CFG.memoryShare says, and
    *  the seeded sim can never notice the dial (probe-pinned). */
-  dropGemAt(at: Vec2, bias?: SkillTag[], owed = false, memoryFrom?: string): void {
+  dropGemAt(at: Vec2, bias?: SkillTag[], owed = false, memoryFrom?: string, memoryKind: MemoryKind = 'rough'): void {
     // THE SPOILS LAW: sealed ground refuses the mint — except OWED pay
     // (a quest's payout is earned of the writ, not of this ground).
     if (!owed && this.spoilsSealed()) return;
@@ -40255,7 +40269,7 @@ export class World {
     const dropSkill = (): void => {
       const inst = this.rollSkillGem(bias, this.zone.level, floor);
       const bobF = Math.random(); // rand(0, 2π)'s own draw, raw — the seed site
-      if (memoryFrom) { this.dropMemoryUnit(pos, at, memoryFrom, bobF); return; }
+      if (memoryFrom) { this.dropMemoryUnit(pos, at, memoryFrom, bobF, memoryKind); return; }
       this.noteGemDrop(inst.def.id, inst.rarity);
       this.drops.push({ pos, item: { kind: 'skill', inst }, bob: bobF * Math.PI * 2 });
       this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15,
@@ -40265,40 +40279,43 @@ export class World {
     const gemDef = this.rollSupportDropGated(bias, this.zone.level, floor);
     if (!gemDef) { dropSkill(); return; } // no supports unlocked → a skill gem instead
     const bobF = Math.random();
-    if (memoryFrom) { this.dropMemoryUnit(pos, at, memoryFrom, bobF); return; }
+    if (memoryFrom) { this.dropMemoryUnit(pos, at, memoryFrom, bobF, memoryKind); return; }
     this.noteGemDrop(gemDef.id);
     this.drops.push({ pos, item: { kind: 'support', gem: { def: gemDef, level: 1 } }, bob: bobF * Math.PI * 2 });
     this.text(at, `${gemDef.name}!`, gemDef.color, 14, 'drop', FLOAT_CFG.dropNameSec);
   }
 
-  /** THE STONE's ground mint: one Rough Memory unit sealed around its
-   *  foreordained seed, riding the GEAR drop lane whole (the pouch item IS
-   *  the drop — pickup auto-merges it onto the standing tile). NOT a gem
+  /** THE STONE's ground mint: one Memory unit sealed around its foreordained
+   *  seed, riding the GEAR drop lane whole (the pouch item IS the drop —
+   *  pickup auto-merges it onto the standing tile of its KIND). NOT a gem
    *  mint: THE MINT LAW stamps at the RECALL, where the gem actually
    *  enters the world. One text call, like the gem it replaced (the float
    *  fabric draws jitter per call — parity is the law here). */
-  private dropMemoryUnit(pos: Vec2, at: Vec2, dropperId: string, seedF: number): void {
+  private dropMemoryUnit(pos: Vec2, at: Vec2, dropperId: string, seedF: number, kind: MemoryKind): void {
     const unit: RoughMemoryUnit = { d: dropperId, s: (seedF * 4294967296) >>> 0 };
-    this.drops.push({ pos, item: { kind: 'gear', item: makeRoughMemoryItem([unit]) }, bob: seedF * Math.PI * 2 });
-    this.text(at, 'Rough Memory!', MEMORY_CFG.color, 14, 'drop', FLOAT_CFG.dropNameSec);
+    this.drops.push({ pos, item: { kind: 'gear', item: makeMemoryItem(kind, [unit]) }, bob: seedF * Math.PI * 2 });
+    this.text(at, `${MEMORY_KINDS[kind].name}!`, MEMORY_KINDS[kind].color, 14, 'drop', FLOAT_CFG.dropNameSec);
   }
 
   /** The pouch pickup's one float + feed line (the count IS the news). */
-  private noteMemoryPickup(seat: Seat, total: number): void {
-    this.text(seat.actor.pos, `Rough Memory (×${total})`, MEMORY_CFG.color, 13, 'pickup');
-    notePickup(this.pickupFeed, seat.id, `Rough Memory (×${total})`, MEMORY_CFG.color, this.time);
+  private noteMemoryPickup(seat: Seat, kind: MemoryKind, total: number): void {
+    const k = MEMORY_KINDS[kind];
+    this.text(seat.actor.pos, `${k.name} (×${total})`, k.color, 13, 'pickup');
+    notePickup(this.pickupFeed, seat.id, `${k.name} (×${total})`, k.color, this.time);
   }
 
-  /** THE POUCH SHAPE (skill-items M2, §3b): a picked-up Rough Memory drop
-   *  MERGES onto the seat's standing pouch tile — one tile per kind, ever
-   *  (auto-merged, no second cell). False when no pouch stands: the drop
-   *  then autoPlaces whole and its own tile BECOMES the pouch. */
-  private tryMergeRoughMemory(seat: Seat, item: ItemInstance): boolean {
-    if (!item.mem) return false;
-    const pouch = findRoughMemoryItem(seat.meta.items);
+  /** THE POUCH SHAPE (skill-items M2/M3, §3b): a picked-up Memory drop
+   *  MERGES onto the seat's standing pouch tile of the SAME KIND — one tile
+   *  per kind, ever (auto-merged, no second cell; the two kinds stand side
+   *  by side). False when no pouch of that kind stands: the drop then
+   *  autoPlaces whole and its own tile BECOMES the pouch. */
+  private tryMergeMemoryItem(seat: Seat, item: ItemInstance): boolean {
+    const kind = memoryKindOf(item);
+    if (!kind || !item.mem) return false;
+    const pouch = findMemoryItem(seat.meta.items, kind);
     if (!pouch) return false;
-    mergeRoughMemory(pouch, item.mem);
-    this.noteMemoryPickup(seat, pouch.mem!.length);
+    mergeMemory(pouch, item.mem);
+    this.noteMemoryPickup(seat, kind, pouch.mem!.length);
     this.markMetaDirty(seat);
     return true;
   }
@@ -40324,12 +40341,32 @@ export class World {
    *  and rarity table. Weights come from gemWeights — the ONE drop-policy
    *  formula — with carried omitted (card 9: cuts WAIVE the carried lean);
    *  only the die differs (the unit's own Rng, the commission precedent).
-   *  Reload replays the identical find; pool growth is progression. */
-  private resolveMemoryCut(seat: Seat, unit: RoughMemoryUnit):
+   *  Reload replays the identical find; pool growth is progression.
+   *
+   *  THE TRUED CUT (M3, §4 lane 2): a FACET forks the substream per facet
+   *  off the one sealed seed (facetRng — outcome = f(unit.s, facet)) and
+   *  replaces the lean ladder whole: SKILLS ONLY (supports carry no
+   *  attributes — the skillShare split never rolls), the pool partitioned
+   *  to skills whose requirements name the chosen triad's attributes,
+   *  falling back to the WHOLE unlocked pool when the partition is empty
+   *  (THE UNLOCKED-POOL LAW's own fallback, her rule). Rarity keeps the
+   *  boss-provenance lean — the stone still remembers WHO. */
+  private resolveMemoryCut(seat: Seat, unit: RoughMemoryUnit, facet?: AttributeId):
       { kind: 'skill'; def: SkillDef; rarity: SkillRarity } | { kind: 'support'; def: SupportDef } {
-    const rng = new Rng(unit.s);
     const mdef = MONSTERS[unit.d];
     const lvl = Math.max(this.zone.level, seat.actor.level);
+    if (facet !== undefined) {
+      const rng = facetRng(unit.s, facet);
+      const attrs = memoryFacetAttrs(facet) ?? [];
+      const pool = this.skillDropPool(lvl);
+      const banner = pool.filter(s => attrs.some(a => (s.requirements?.[a] ?? 0) > 0));
+      const lane = banner.length > 0 ? banner : pool;
+      const w = this.gemWeights(lane, s => s.tags, s => s.dropWeight ?? 100);
+      const def = pickSeeded(lane, w, rng)!;
+      const rarity = rollSeededRarity(rng, mdef?.boss ? MEMORY_CFG.bossRarityLean : undefined);
+      return { kind: 'skill', def, rarity };
+    }
+    const rng = new Rng(unit.s);
     const wantSkill = rng.next() < GEM_DROP_CFG.skillShare;
     if (!wantSkill) {
       const spool = this.supportDropPool(lvl);
@@ -40355,20 +40392,33 @@ export class World {
     return { kind: 'skill', def, rarity };
   }
 
-  /** THE RECALL (skill-items M2, §3b): consume ONE unit of `dropperId` from
-   *  the pouch `uid` — oldest first (FIFO within the group; scum-neutral,
-   *  every unit's grant is its own sealed seed) — and mint its foreordained
-   *  gem straight into the bag. Refusals consume NOTHING: THE SPOILS LAW
-   *  (a recall is a genuine mint) and THE ROOM LAW ("no room to hold what
-   *  returns" — though the LAST unit's grant may land in the cell the
-   *  retiring pouch itself frees). Every grant stamps the drop index (THE
-   *  MINT LAW — the Standing Order and the deed gate keep counting). */
-  recallRoughMemory(seat: Seat, uid: number, dropperId: string): MemoryRecallResult | null {
+  /** THE RECALL (skill-items M2/M3, §3b): consume ONE unit of `dropperId`
+   *  from the pouch `uid` — oldest first (FIFO within the group;
+   *  scum-neutral, every unit's grant is its own sealed seed) — and mint
+   *  its foreordained gem straight into the bag. A PREFORMED pouch demands
+   *  the FACET first (three triad cards, walk-2 ruled) — no facet, no
+   *  recall, nothing consumed; a rough pouch ignores the field. Refusals
+   *  consume NOTHING: THE SPOILS LAW (a recall is a genuine mint) and THE
+   *  ROOM LAW ("no room to hold what returns" — though the LAST unit's
+   *  grant may land in the cell the retiring pouch itself frees). Every
+   *  grant stamps the drop index (THE MINT LAW — the Standing Order and
+   *  the deed gate keep counting). */
+  recallMemory(seat: Seat, uid: number, dropperId: string, facet?: string): MemoryRecallResult | null {
     const pouch = this.bagItem(seat, uid);
     const units = pouch ? memoryUnitsOf(pouch) : null;
-    if (!pouch || !units) return null;
+    const memKind = pouch ? memoryKindOf(pouch) : null;
+    if (!pouch || !units || !memKind) return null;
     const idx = units.findIndex(u => u.d === dropperId);
     if (idx < 0) return null;
+    // THE FACET gate (the banner lane): a preformed recall names its triad
+    // by the LEAD attribute id, validated against the live registry — a
+    // stale or foreign facet refuses before anything moves.
+    const wantFacet = MEMORY_KINDS[memKind].facets;
+    const facetId = wantFacet ? facet : undefined;
+    if (wantFacet && (facetId === undefined || memoryFacetAttrs(facetId) === null)) {
+      this.text(seat.actor.pos, MEMORY_CFG.strings.noFacet, '#c08a68', 12);
+      return null;
+    }
     if (this.spoilsSealed()) {
       this.text(seat.actor.pos, MEMORY_CFG.strings.sealed, '#c08a68', 12);
       return null;
@@ -40386,7 +40436,7 @@ export class World {
       const at = seat.meta.items.indexOf(pouch);
       if (at >= 0) seat.meta.items.splice(at, 1);
     } else pouch.mem = rest;
-    const cut = this.resolveMemoryCut(seat, unit);
+    const cut = this.resolveMemoryCut(seat, unit, facetId as AttributeId | undefined);
     let item: ItemInstance;
     let color: string;
     if (cut.kind === 'skill') {
@@ -40418,11 +40468,16 @@ export class World {
 
   /** THE RECALL panel's whole face (§3b), derived LIVE at ask time — THE
    *  LIVE-REGISTRY MANDATE: groups in first-appearance order (= the order
-   *  FIFO consumes), each wearing its lean rung's honest chips. */
+   *  FIFO consumes), each wearing its lean rung's honest chips. A PREFORMED
+   *  pouch's rows carry NO chips (rung 'wide', by construction): the facet
+   *  cards are its odds face — the panel derives them from memoryFacets(),
+   *  the exact fold the trued cut rolls. */
   memoryRecallView(seat: Seat, uid: number): MemoryRecallViewData | null {
     const pouch = this.bagItem(seat, uid);
     const units = pouch ? memoryUnitsOf(pouch) : null;
-    if (!pouch || !units) return null;
+    const memKind = pouch ? memoryKindOf(pouch) : null;
+    if (!pouch || !units || !memKind) return null;
+    const facets = MEMORY_KINDS[memKind].facets;
     const lvl = Math.max(this.zone.level, seat.actor.level);
     const pool = this.skillDropPool(lvl);
     const refusal = this.spoilsSealed() ? MEMORY_CFG.strings.sealed
@@ -40430,14 +40485,18 @@ export class World {
       : null;
     const groups = memoryGroups(units).map(g => {
       const def = MONSTERS[g.d];
-      const lean = this.memoryLeanOf(def, pool);
+      // The banner lane never reads the dropper's leans — its rows stand
+      // wide and the facet decides (drawn == rolled, both ways).
+      const lean = facets ? { rung: 'wide' as const, kit: [] } : this.memoryLeanOf(def, pool);
+      const name = def?.name
+        ?? (g.d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : g.d);
       return {
-        d: g.d, name: def?.name ?? g.d, count: g.count, rung: lean.rung,
+        d: g.d, name, count: g.count, rung: lean.rung,
         kit: lean.kit.map(s => ({ id: s.id, name: s.name, color: s.color, mult: MEMORY_CFG.kitMult })),
         tags: lean.rung === 'bias' ? [...(def?.gemBias ?? [])] : [],
       };
     });
-    return { uid: pouch.uid, total: units.length, groups, refusal };
+    return { uid: pouch.uid, kind: memKind, total: units.length, groups, refusal };
   }
 
   /** DROP-A-GEM (discard / co-op drop-trade): eject the EXACT gem riding a
@@ -40710,7 +40769,7 @@ export class World {
     if (drop.item.kind !== 'gear') return;
     const item = drop.item.item;
     // THE STONE (M2): a lying pouch (a full bag left it) still merges free.
-    if (item.mem && this.tryMergeRoughMemory(seat, item)) {
+    if (item.mem && this.tryMergeMemoryItem(seat, item)) {
       this.drops.splice(bestIdx, 1);
       return;
     }
@@ -40720,7 +40779,7 @@ export class World {
     }
     this.drops.splice(bestIdx, 1);
     if (item.mem) {
-      this.noteMemoryPickup(seat, item.mem.length);
+      this.noteMemoryPickup(seat, memoryKindOf(item) ?? 'rough', item.mem.length);
       this.markMetaDirty(seat);
       return;
     }
@@ -41003,40 +41062,61 @@ export class World {
     return VENDOR_CFG.trade.hint;
   }
 
-  /** THE GEM CASE — is the skill/support tab open at default-tabbed counters
-   *  (FEATURE.VENDOR_GEMS)? The engine gate for gem purchases and the
-   *  panel's tab seal read this ONE predicate. Keeper's account, as above. */
+  /** THE MEMORY COUNTER (skill-items M3 — the gem case's face-seal retired):
+   *  does the account's rung join TRUE gems to the one shelf? The STOCK
+   *  builders read this ONE predicate (buildVendorStock + mintDelverStock)
+   *  — the stock is the gate now; what stands on a shelf is honestly
+   *  buyable. Keeper's account, as above. */
   vendorGemsOpen(): boolean {
     return featureEnabled(this.account, FEATURE.VENDOR_GEMS);
   }
 
   /** THE COUNTER GLASS pack — deterministic display cells for a counter's
-   *  GEAR rows: first-fit in STOCK ORDER over the counter's board
-   *  (VendorDef.grid ?? VENDOR_CFG.gearGrid), the player bag's own cell law
-   *  through the same pure helpers. Packs SCRATCH copies (a shelf item owns
-   *  no bag cell — the buyer's autoPlace writes the real one), keyed by item
-   *  uid, so both co-op sides pack their replicated arrays to the identical
-   *  glass. Gear that cannot seat reports in `overflow` for the panel to
-   *  list honestly — though the probe derives the worst case from the
-   *  catalog and fails the build before content can outgrow the glass. */
+   *  WHOLE shelf (skill-items M3, the one face): first-fit in STOCK ORDER
+   *  over the counter's board (VendorDef.grid ?? VENDOR_CFG.gearGrid), the
+   *  player bag's own cell law through the same pure helpers. GEAR rows
+   *  (Memory pouches included) seat by footprint, keyed by item uid in
+   *  `cells`; GEM rows (skill/support entries — no item body) seat as 1×1
+   *  ghost tiles keyed by STOCK INDEX in `gemCells`. Packs SCRATCH copies
+   *  (a shelf item owns no bag cell — the buyer's autoPlace writes the
+   *  real one), so both co-op sides pack their replicated arrays to the
+   *  identical glass. What cannot seat reports in `overflow` (item uids) /
+   *  `gemOverflow` (stock indices) for the panel to list honestly — though
+   *  the probe derives the worst case from the catalog and fails the build
+   *  before content can outgrow the glass. */
   vendorGridPack(stock: readonly VendorEntry[], board?: { w: number; h: number }): {
     cells: Map<number, { x: number; y: number }>;
+    gemCells: Map<number, { x: number; y: number }>;
     board: { w: number; h: number };
     overflow: number[];
+    gemOverflow: number[];
   } {
     const b = board ?? VENDOR_CFG.gearGrid;
     const scratch: ItemInstance[] = [];
     const cells = new Map<number, { x: number; y: number }>();
+    const gemCells = new Map<number, { x: number; y: number }>();
     const overflow: number[] = [];
-    for (const e of stock) {
-      if (e.kind !== 'item') continue;
-      const ghost: ItemInstance = { ...e.item };
-      delete ghost.x;
-      delete ghost.y;
-      if (autoPlace(scratch, ghost, b)) cells.set(e.item.uid, { x: ghost.x!, y: ghost.y! });
-      else overflow.push(e.item.uid);
-    }
-    return { cells, board: b, overflow };
+    const gemOverflow: number[] = [];
+    stock.forEach((e, idx) => {
+      if (e.kind === 'item') {
+        const ghost: ItemInstance = { ...e.item };
+        delete ghost.x;
+        delete ghost.y;
+        if (autoPlace(scratch, ghost, b)) cells.set(e.item.uid, { x: ghost.x!, y: ghost.y! });
+        else overflow.push(e.item.uid);
+        return;
+      }
+      // A gem row's ghost: a negative pseudo-uid 1×1 on the gem wrapper
+      // base — display seating only, never a real item (the wrapper mints
+      // at the BUY, exactly as before the fold).
+      const ghost: ItemInstance = {
+        uid: -(idx + 1), baseId: 'skill_gem', ilvl: 1, tier: 1, rarity: 'common',
+        name: '', baseRoll: 0, implicitRolls: [], affixes: [],
+      };
+      if (autoPlace(scratch, ghost, b)) gemCells.set(idx, { x: ghost.x!, y: ghost.y! });
+      else gemOverflow.push(idx);
+    });
+    return { cells, gemCells, board: b, overflow, gemOverflow };
   }
 
   // --- THE PATRON'S HOLD (data/vendors.ts VENDOR_CFG) -----------------------
@@ -41136,24 +41216,42 @@ export class World {
     return this.overlayHold(key, withSeededRandom(seed, () => this.buildVendorStock()));
   }
 
-  /** Roll a fresh counter: skill gems, support gems once that's unlocked —
-   *  and the TRUE-VENDOR SHELF: rolled gear at the buyer's level, rarity
-   *  weighted per VENDOR_ITEM_CFG, priced by quality in mixed essence.
-   *  Both faces widen through the ONE broader-wares fold (waresBonus).
-   *  `opts` lets an arm site stand down a face it does not deal — the
-   *  delver's counter is gems alone (its VendorDef lists one tab; rolling
-   *  gear its buy lane refuses would be a shelf of lies). */
+  /** Roll a fresh counter onto the ONE shelf (skill-items M3, §6 — the
+   *  gem-case face is retired): MEMORY POUCHES stock from the first day
+   *  (VENDOR_CFG.pouches — her "standard shop" ask; units wear the TRADED
+   *  provenance, seeds off the shelf's own foreordained stream), TRUE gems
+   *  join once THE MEMORY COUNTER opens the slots (vendorGemsOpen — the
+   *  FEATURE.VENDOR_GEMS rung re-aimed from face-seal to stock share),
+   *  support gems once that's unlocked — and the TRUE-VENDOR SHELF: rolled
+   *  gear at the buyer's level, rarity weighted per VENDOR_ITEM_CFG,
+   *  priced by quality in mixed essence. Both halves widen through the ONE
+   *  broader-wares fold (waresBonus). `opts` lets an arm site stand down a
+   *  half it does not deal (pouches ride the gems half). */
   buildVendorStock(opts?: { gems?: boolean; gear?: boolean }): VendorEntry[] {
     const out: VendorEntry[] = [];
     const sellSupports = featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
     const lvl = this.vendorGemLevel();
     if (opts?.gems !== false) {
-      for (let i = 0; i < this.vendorSize(); i++) {
-        if (sellSupports && Math.random() < VENDOR_CFG.supportShare) {
-          const sd = this.rollSupportDropGated(undefined, lvl);
-          if (sd) { out.push({ kind: 'support', gem: { def: sd, level: 1 } }); continue; }
+      // The standard offering: one stack per pouch kind, unit counts by
+      // dial. Seeds draw from the CURRENT stream — under armVendorStock's
+      // seeded swap that makes every unit's grant a pure function of
+      // (world seed, counter, beat): reload or re-entry meets the same
+      // sealed futures (THE FOREORDAINED SHELF, extended to the pouches).
+      for (const kind of MEMORY_KIND_IDS) {
+        const n = VENDOR_CFG.pouches[kind];
+        if (n <= 0) continue;
+        const units: RoughMemoryUnit[] = Array.from({ length: n }, () =>
+          ({ d: MEMORY_TRADED_PROVENANCE, s: (Math.random() * 4294967296) >>> 0 }));
+        out.push({ kind: 'item', item: makeMemoryItem(kind, units) });
+      }
+      if (this.vendorGemsOpen()) {
+        for (let i = 0; i < this.vendorSize(); i++) {
+          if (sellSupports && Math.random() < VENDOR_CFG.supportShare) {
+            const sd = this.rollSupportDropGated(undefined, lvl);
+            if (sd) { out.push({ kind: 'support', gem: { def: sd, level: 1 } }); continue; }
+          }
+          out.push({ kind: 'skill', inst: this.rollSkillGem(undefined, lvl) });
         }
-        out.push({ kind: 'skill', inst: this.rollSkillGem(undefined, lvl) });
       }
     }
     if (opts?.gear !== false) {
@@ -41483,22 +41581,20 @@ export class World {
     const m = seat.meta;
     const entry = this.chandlerStock[index];
     if (!entry || !this.nearChandler(seat)) return false;
-    // THE TRADE GATE + THE GEM CASE — buyVendorGem's exact reads (the delver
-    // alone stands outside both: tradeGate false, a bare gems tab).
+    // THE TRADE GATE — buyVendorGem's exact read (the gem case's face-seal
+    // retired with the one-shelf fold; the stock builder is the gate now).
     const refusal = this.vendorTradeRefusal();
     if (refusal) { this.failNote(seat.actor, 'vendortrade', refusal); return false; }
-    if (entry.kind !== 'item' && !this.vendorGemsOpen()) {
-      this.failNote(seat.actor, 'vendorgems', VENDOR_CFG.tabs.gemsSealedNote);
-      return false;
-    }
     const price = this.vendorPrice(entry);
     const short = price.find(c => !this.canAffordEssence(seat, c));
     if (short) {
       this.failNote(seat.actor, 'chandler:' + index, `needs ${short.count}× ${ESSENCES[short.essence].label}`);
       return false;
     }
-    // THE RESIDENCE: fit-before-spend for gems too (buyVendorGem's law).
-    const landed = entry.kind === 'item' ? autoPlace(m.items, entry.item)
+    // THE RESIDENCE: fit-before-spend for gems too (buyVendorGem's law) —
+    // and a bought Memory stack merges onto its standing pouch first.
+    const landed = entry.kind === 'item'
+      ? (this.tryMergeMemoryItem(seat, entry.item) || autoPlace(m.items, entry.item))
       : entry.kind === 'skill' ? !!autoPlace(m.items, makeSkillGemItem(entry.inst))
       : !!autoPlace(m.items, makeSupportGemItem(entry.gem));
     if (!landed) {
@@ -41546,16 +41642,20 @@ export class World {
     // untouched underneath.
     const bounty = (this.zone.bounty ?? 1)
       * (this.sim.overlayFor<QuickeningField>('quickening', this.zone.dimension)?.bountyMulAt(this.zone.id) ?? 1);
-    // THE STONE (skill-items M2): a DIAL share of the kill-path TRICKLE
-    // mints a Rough Memory instead of a direct gem (GEM_DROP_CFG.memoryShare
-    // — direct drops persist rarer, lane 3 of the four). Only the chance
-    // trickle converts: per-def drops, bosses, elite bonus rolls and every
-    // table payout stay direct by construction. ONE draw decides hit AND
-    // lane (r < p·share ⊂ r < p — given a hit, P(memory) = share exactly),
-    // and dropGemAt's memory lane spends the gem lane's exact draws — the
-    // stream is byte-identical whatever the dial says (the seeded sim's
+    // THE STONE (skill-items M2/M3): a DIAL share of the kill-path TRICKLE
+    // mints a Memory instead of a direct gem (GEM_DROP_CFG.memoryShare —
+    // direct drops persist rarer, lane 3 of the four), and a DIAL share of
+    // THAT mints the PREFORMED banner pouch (preformedShare — the trued
+    // cut's find). Only the chance trickle converts: per-def drops, bosses,
+    // elite bonus rolls and every table payout stay direct by construction.
+    // ONE draw decides hit AND lane AND kind — nested intervals
+    // (r < p·share·preShare ⊂ r < p·share ⊂ r < p: given a hit, P(memory)
+    // = share; given a memory, P(preformed) = preShare, exactly) — and
+    // dropGemAt's memory lane spends the gem lane's exact draws, so the
+    // stream is byte-identical whatever either dial says (the seeded sim's
     // determinism is construction, not luck; probe-pinned).
     let memoryOf: string | undefined;
+    let memoryKind: MemoryKind = 'rough';
     let count: number;
     if (def?.drops !== undefined) count = def.drops;
     else if (def?.boss) count = DROP_CFG.bossGemDrops;
@@ -41563,9 +41663,12 @@ export class World {
       const p = DROP_CFG.killGemChance * bounty;
       const r = Math.random();
       count = r < p ? 1 : 0;
-      if (count && actor.defId && r < p * GEM_DROP_CFG.memoryShare) memoryOf = actor.defId;
+      if (count && actor.defId && r < p * GEM_DROP_CFG.memoryShare) {
+        memoryOf = actor.defId;
+        if (r < p * GEM_DROP_CFG.memoryShare * GEM_DROP_CFG.preformedShare) memoryKind = 'preformed';
+      }
     }
-    for (let i = 0; i < count; i++) this.dropGemAt(actor.pos, def?.gemBias, false, memoryOf);
+    for (let i = 0; i < count; i++) this.dropGemAt(actor.pos, def?.gemBias, false, memoryOf, memoryKind);
     // GEAR: loot tables. Per-monster hoard > boss table > chance-gated world
     // table; elite leaders add bonus rolls (crowned promote to the apex table).
     // CARRIED GEAR (the Hollowborn) REPLACES the base branch outright: the
@@ -49912,22 +50015,22 @@ export class World {
         this.drops.splice(i, 1);
         continue;
       }
-      // THE STONE (skill-items M2): a ROUGH MEMORY drop vacuums like the gem
+      // THE STONE (skill-items M2/M3): a MEMORY drop vacuums like the gem
       // it replaced — unconditional, at the gem's own touch ring, never the
       // gear key-gate (the pouch is the gem lane's item; pickup timing and
       // draw count match the gem byte-for-byte, the sim-stream law). It
-      // MERGES onto the seat's standing pouch tile (no second cell) or
-      // autoPlaces as the first pickup; a full bag leaves it lying.
+      // MERGES onto the seat's standing pouch tile of its KIND (no second
+      // cell) or autoPlaces as the first pickup; a full bag leaves it lying.
       if (drop.item.kind === 'gear' && drop.item.item.mem) {
         const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gem, exclude);
         if (!seat) continue;
         const item = drop.item.item;
-        if (this.tryMergeRoughMemory(seat, item)) { this.drops.splice(i, 1); continue; }
+        if (this.tryMergeMemoryItem(seat, item)) { this.drops.splice(i, 1); continue; }
         if (!autoPlace(seat.meta.items, item)) {
           this.failNote(seat.actor, 'bagfull', 'inventory full');
           continue;
         }
-        this.noteMemoryPickup(seat, item.mem!.length);
+        this.noteMemoryPickup(seat, memoryKindOf(item) ?? 'rough', item.mem!.length);
         this.markMetaDirty(seat);
         this.drops.splice(i, 1);
         continue;

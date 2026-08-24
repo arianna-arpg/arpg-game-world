@@ -374,10 +374,11 @@ export interface ItemInstance {
    *  the skill_gem/support_gem wrapper bases; pure JSON like everything else
    *  here. engine/gemitems.ts is the one pack/unpack/validate seam. */
   gem?: GemPayload;
-  /** THE STONE (skill-items M2): the Rough Memory pouch's units, append-
-   *  ordered (the array IS the count — the ONE stacking item; gems never
-   *  stack). Present exactly on the 'rough_memory' base; engine/memories.ts
-   *  is the seam. Mutations REPLACE the array (snapshot-alias safety). */
+  /** THE STONE (skill-items M2/M3): a Memory pouch's units, append-ordered
+   *  (the array IS the count — the ONE stacking family; gems never stack).
+   *  Present exactly on the MEMORY_KINDS bases ('rough_memory' /
+   *  'preformed_memory'); engine/memories.ts is the seam. Mutations
+   *  REPLACE the array (snapshot-alias safety). */
   mem?: RoughMemoryUnit[];
 }
 

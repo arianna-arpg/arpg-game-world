@@ -84,9 +84,12 @@ const leaveTown = (w: World): void => {
   w.loadZone(away.id);
 };
 const fund = (w: World): void => { for (const id of ESSENCE_IDS) w.localSeat.meta.essences[id] = 99999; };
-/** Open the market's meta gates (THE TRADE GATE + THE GEM CASE) so rigs that
- *  are not ABOUT those laws can buy freely — rig E owns the laws themselves.
- *  Neither flag touches a stock roll, so seeded determinism is unmoved. */
+/** Open the market's meta gates (THE TRADE GATE + THE MEMORY COUNTER) so
+ *  rigs that are not ABOUT those laws can buy freely — rig E owns the laws
+ *  themselves. VENDOR_GEMS shapes the STOCK now (skill-items M3: the rung
+ *  re-aimed from face-seal to true-gem share), so this runs BEFORE the
+ *  town entry arms the shelf — every rig's armed shelf includes the gems
+ *  it reads, deterministically per (seed, counter, beat, account). */
 const openMarket = (w: World): void => {
   w.account.features.add(FEATURE.SALVAGE_STATION);
   w.account.features.add(FEATURE.VENDOR_GEMS);
@@ -408,17 +411,33 @@ check('A: the purchase stamps the market ledger',
 }
 
 // ------------------------------------------------ E. THE MARKET CHAIN
-// The trade gate, the gem case, the broader-wares fold, the counter glass,
-// and the gatework avenues — the user's meta-progression as one walk.
+// The trade gate, THE MEMORY COUNTER's stock-side gating (skill-items M3 —
+// the one shelf: pouches from the first day, true gems join at the rung),
+// the broader-wares fold, the counter glass, and the gatework avenues.
 {
   seedGlobalRandom(0x77e2);
   const wE = makeSimWorld('warrior', 0x3e11);
   enterTown(wE);
   fund(wE);
+  const isPouch = (e: VendorEntry): boolean => e.kind === 'item' && !!e.item.mem;
+  const counts = (w: World): { pouches: number; gems: number; gear: number } => ({
+    pouches: w.vendorStock.filter(isPouch).length,
+    gems: w.vendorStock.filter(e => e.kind !== 'item').length,
+    gear: w.vendorStock.filter(e => e.kind === 'item' && !e.item.mem).length,
+  });
+  const pouchKinds = (Object.keys(VENDOR_CFG.pouches) as (keyof typeof VENDOR_CFG.pouches)[])
+    .filter(k => VENDOR_CFG.pouches[k] > 0);
+
+  // --- THE ONE SHELF, fresh: pouches + gear stand; the true gems WAIT on
+  // the Memory Counter (the rung re-aimed from face-seal to stock share).
+  const fresh = counts(wE);
+  check('E: the fresh shelf = pouches (per dial) + gear, ZERO true gems (stock-side gating)',
+    fresh.pouches === pouchKinds.length && fresh.gems === 0 && fresh.gear === VENDOR_ITEM_CFG.slots,
+    `p${fresh.pouches} g${fresh.gems} r${fresh.gear}`);
 
   // --- THE TRADE GATE: a bare account browses freely and buys NOTHING.
-  const gearIdx = wE.vendorStock.findIndex(e => e.kind === 'item');
-  const gemIdx = wE.vendorStock.findIndex(e => e.kind !== 'item');
+  const gearIdx = wE.vendorStock.findIndex(e => e.kind === 'item' && !e.item.mem);
+  const pouchIdx = wE.vendorStock.findIndex(isPouch);
   const stockLen = wE.vendorStock.length;
   const coarseBefore = wE.localSeat.meta.essences.coarse;
   check('E: the trade gate speaks while the station is unowned',
@@ -427,60 +446,66 @@ check('A: the purchase stamps the market ledger',
     gearIdx >= 0 && wE.buyVendorGem(gearIdx) === false
     && wE.vendorStock.length === stockLen
     && wE.localSeat.meta.essences.coarse === coarseBefore);
-  check('E: a gated counter refuses GEMS the same', gemIdx >= 0 && wE.buyVendorGem(gemIdx) === false);
+  check('E: a gated counter refuses the POUCHES the same',
+    pouchIdx >= 0 && wE.buyVendorGem(pouchIdx) === false);
 
-  // --- The station opens TRADE; the gem case stays shut on its own law.
+  // --- The station opens TRADE; pouches + gear sell at once (the standard
+  // offering asks no further rung); the true gems still wait on their own.
   wE.account.features.add(FEATURE.SALVAGE_STATION);
   check('E: the salvage station opens the trade gate', wE.vendorTradeRefusal() === null);
-  check('E: gear now sells', wE.buyVendorGem(wE.vendorStock.findIndex(e => e.kind === 'item')) === true);
-  check('E: the gem case still refuses without its own unlock',
-    wE.vendorGemsOpen() === false
-    && wE.buyVendorGem(wE.vendorStock.findIndex(e => e.kind !== 'item')) === false);
+  check('E: gear now sells',
+    wE.buyVendorGem(wE.vendorStock.findIndex(e => e.kind === 'item' && !e.item.mem)) === true);
+  check('E: a pouch sells from the first day (her standard-shop ask)',
+    wE.buyVendorGem(wE.vendorStock.findIndex(isPouch)) === true);
+  check('E: the true gems still wait on the Memory Counter (none stocked to buy)',
+    wE.vendorGemsOpen() === false && counts(wE).gems === 0);
   wE.account.features.add(FEATURE.VENDOR_GEMS);
-  check('E: the gem counter unlock opens the case',
-    wE.vendorGemsOpen() === true
-    && wE.buyVendorGem(wE.vendorStock.findIndex(e => e.kind !== 'item')) === true);
+  wE.restockVendor(); // the rung joins the slots at the shelf's own re-arm
+  check('E: the Memory Counter rung joins vendorSize() true-gem slots to the one shelf',
+    wE.vendorGemsOpen() === true && counts(wE).gems === VENDOR_CFG.wares.baseGems);
+  check('E: a true gem sells through the one face',
+    wE.buyVendorGem(wE.vendorStock.findIndex(e => e.kind !== 'item')) === true);
 
-  // --- THE BROADER-WARES FOLD: both faces widen per the ladder's own rows
-  // (expectations DERIVED from config — nothing here counts to three).
-  const countKinds = (w: World): { gems: number; gear: number } => ({
-    gems: w.vendorStock.filter(e => e.kind !== 'item').length,
-    gear: w.vendorStock.filter(e => e.kind === 'item').length,
-  });
+  // --- THE BROADER-WARES FOLD: both halves widen per the ladder's own rows
+  // (expectations DERIVED from config — nothing here counts to three); the
+  // pouch offering stands CONSTANT (dial-owned, rung-free).
   wE.restockVendor();
-  const base = countKinds(wE);
+  const base = counts(wE);
   check('E: the bare shelf is the configured base',
     base.gems === VENDOR_CFG.wares.baseGems && base.gear === VENDOR_ITEM_CFG.slots,
     `gems ${base.gems} gear ${base.gear}`);
   for (const r of VENDOR_CFG.wares.ladder) wE.account.features.add(r.flag);
   wE.restockVendor();
-  const wide = countKinds(wE);
+  const wide = counts(wE);
   const expGems = VENDOR_CFG.wares.baseGems + VENDOR_CFG.wares.ladder.reduce((n, r) => n + r.gems, 0);
   const expGear = VENDOR_ITEM_CFG.slots + VENDOR_CFG.wares.ladder.reduce((n, r) => n + r.gear, 0);
-  check('E: the full ladder widens BOTH faces by its own numbers',
-    wide.gems === expGems && wide.gear === expGear,
+  check('E: the full ladder widens BOTH halves by its own numbers (pouches constant)',
+    wide.gems === expGems && wide.gear === expGear && wide.pouches === pouchKinds.length,
     `gems ${wide.gems}/${expGems} gear ${wide.gear}/${expGear}`);
 
-  // --- THE COUNTER GLASS: every piece seats, deterministically, and the
-  // board provably holds the WORST case (widest ladder × largest base) —
-  // the capacity law derived from the catalog, so content that outgrows
-  // the glass fails HERE, never silently in a panel.
+  // --- THE COUNTER GLASS: every ware seats — gear by footprint, gem finds
+  // and pouch stacks as 1×1 tiles — deterministically, and the board
+  // provably holds the WORST case (widest ladder × largest base + every
+  // 1×1) — the capacity law derived from the catalog, so content that
+  // outgrows the glass fails HERE, never silently in a panel.
   const pack1 = wE.vendorGridPack(wE.vendorStock);
   const pack2 = wE.vendorGridPack(wE.vendorStock);
-  check('E: the glass seats every rolled piece', pack1.overflow.length === 0,
-    `${pack1.cells.size} seated`);
+  check('E: the glass seats every ware (gear + gems + pouches)',
+    pack1.overflow.length === 0 && pack1.gemOverflow.length === 0,
+    `${pack1.cells.size} item + ${pack1.gemCells.size} gem tiles`);
   check('E: the pack is deterministic (same stock, same glass)',
-    JSON.stringify([...pack1.cells.entries()]) === JSON.stringify([...pack2.cells.entries()]));
+    JSON.stringify([...pack1.cells.entries()]) === JSON.stringify([...pack2.cells.entries()])
+    && JSON.stringify([...pack1.gemCells.entries()]) === JSON.stringify([...pack2.gemCells.entries()]));
   const maxFoot = Object.values(ITEM_BASES).reduce((m, b) => Math.max(m, (b.w ?? 1) * (b.h ?? 1)), 1);
   check('E: the capacity law — the glass holds the worst case the catalog can roll',
-    expGear * maxFoot <= VENDOR_CFG.gearGrid.w * VENDOR_CFG.gearGrid.h,
-    `${expGear} pieces × ${maxFoot} cells ≤ ${VENDOR_CFG.gearGrid.w * VENDOR_CFG.gearGrid.h}`);
+    expGear * maxFoot + expGems + pouchKinds.length <= VENDOR_CFG.gearGrid.w * VENDOR_CFG.gearGrid.h,
+    `${expGear}×${maxFoot} + ${expGems} + ${pouchKinds.length} ≤ ${VENDOR_CFG.gearGrid.w * VENDOR_CFG.gearGrid.h}`);
 
-  // --- The single-face builders (the delver's gems-only counter).
-  check('E: a gems-only build rolls no gear',
-    wE.buildVendorStock({ gear: false }).every(e => e.kind !== 'item'));
-  check('E: a gear-only build rolls no gems',
-    wE.buildVendorStock({ gems: false }).every(e => e.kind === 'item'));
+  // --- The single-half builders (arm sites standing down a half).
+  check('E: a gems-half build rolls no gear (the pouches ride the gems half)',
+    wE.buildVendorStock({ gear: false }).every(e => e.kind !== 'item' || !!e.item.mem));
+  check('E: a gear-only build rolls neither gems nor pouches',
+    wE.buildVendorStock({ gems: false }).every(e => e.kind === 'item' && !e.item.mem));
 }
 
 // ------------------------------------------------ F. THE GATEWORK AVENUES

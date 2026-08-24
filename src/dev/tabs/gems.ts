@@ -46,16 +46,17 @@ export const gemsTab: DevTabDef = {
       for (const d of ABILITY_ESSENCES) w.meta.abilityEssences[d.id] = (w.meta.abilityEssences[d.id] ?? 0) + n;
       flash(`+${n} of every Memory Essence — open the Skills drawer`);
     };
-    // THE STONE (skill-items M2): drop Rough Memory units at the hero's
-    // feet through the REAL mint (dropGemAt's memory lane — seed, spoils
-    // law, vacuum merge all genuine). The spread covers the lean ladder's
-    // three rungs: a kit teacher, a bias-only body, a wide-pool body.
-    const grantRoughMem = (n: number): void => {
+    // THE STONE (skill-items M2/M3): drop Memory units at the hero's feet
+    // through the REAL mint (dropGemAt's memory lane — seed, spoils law,
+    // vacuum merge all genuine). The rough spread covers the lean ladder's
+    // three rungs: a kit teacher, a bias-only body, a wide-pool body; the
+    // preformed lane exercises THE FACET recall.
+    const grantMem = (n: number, kind: 'rough' | 'preformed'): void => {
       const w = runActive();
       if (!w) { flash('start a run first'); return; }
       const spread = ['crypt_lich', 'skeleton_archer', 'zombie'];
-      for (let i = 0; i < n; i++) w.dropGemAt(w.player.pos, undefined, false, spread[i % spread.length]);
-      flash(`+${n} Rough Memory drops at your feet (lich/archer/zombie spread)`);
+      for (let i = 0; i < n; i++) w.dropGemAt(w.player.pos, undefined, false, spread[i % spread.length], kind);
+      flash(`+${n} ${kind === 'rough' ? 'Rough' : 'Preformed'} Memory drops at your feet (lich/archer/zombie spread)`);
     };
     const grantPassivePts = (n: number): void => {
       const w = runActive();
@@ -74,7 +75,8 @@ export const gemsTab: DevTabDef = {
       btn('+5 Lvl', () => grantLevels(5)),
       btn('+1 Mem Ess', () => grantAbilityEss(1)),
       btn('+10 Mem Ess', () => grantAbilityEss(10)),
-      btn('+6 Rough Mem', () => grantRoughMem(6)),
+      btn('+6 Rough Mem', () => grantMem(6, 'rough')),
+      btn('+3 Preformed', () => grantMem(3, 'preformed')),
       btn('+1 Passive Pt', () => grantPassivePts(1)),
       btn('+1 Voc Pt', () => grantVocationPts(1)),
     );

@@ -23,7 +23,10 @@ import {
 } from '../engine/skills';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
 import { findBagGem, gemInitials, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
-import { MEMORY_CFG, memoryGroups, type MemoryRecallResult } from '../engine/memories';
+import {
+  MEMORY_CFG, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE, memoryFacets,
+  memoryGroups, memoryKindOf, type MemoryKind, type MemoryRecallResult,
+} from '../engine/memories';
 import { GEM_DROP_CFG } from '../engine/loot';
 import { canPlaceAt, overlappingItems } from '../engine/inventory';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
@@ -114,7 +117,7 @@ import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
 import { bindTooltips, hideTooltip, TIP_CFG, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
-import { VENDORS, VENDOR_CFG, type VendorDef, type VendorTabSpec } from '../data/vendors';
+import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
 import { oracleRerollCost } from '../data/essences';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
@@ -506,9 +509,15 @@ export class UI {
   /** The Sacrificial Font's recipe screen (skill-mode trees, M1 — §7). */
   fontOpen = false;
   private fontTab: 'merge' | 'convert' | 'reset' = 'merge';
-  /** THE RECALL (skill-items M2, §3b): the Rough Memory pouch's picker. */
+  /** THE RECALL (skill-items M2/M3, §3b): the Memory pouches' picker. */
   recallOpen = false;
   private recallUid = 0;
+  /** The open pouch's KIND (last seen — outlives the pouch for the spent
+   *  panel's header) and, on a Preformed pouch, THE FACET the player has
+   *  committed to (a triad's lead attribute id; null until chosen — the
+   *  RECALL buttons arm only once it is). */
+  private recallKind: MemoryKind = 'rough';
+  private recallFacet: string | null = null;
   /** THE REVEAL rows: dropper id → the grant its row last flipped to. */
   private recallReveals = new Map<string, { name: string; color: string; sockets: number }>();
   /** Found-flash marks: freshly-recalled bag uids → flash-until (ms). */
@@ -530,10 +539,6 @@ export class UI {
   /** THE STANDING ORDER picker: which counter's pane is open + its filter. */
   private vendorCommOpen: string | null = null;
   private vendorCommQuery = '';
-  /** THE COUNTER TABS — each counter remembers its open face for the session
-   *  (per vendor id; absent = the def's first tab, the Wares grid at
-   *  default-tabbed counters). */
-  private vendorTabSel: Record<string, string> = {};
   /** The vendor screen's live ticker (countdown in place; repaint on restock). */
   private vendorTicker: number | null = null;
   private vendorTickerRestockAt = 0;
@@ -663,7 +668,10 @@ export class UI {
     { extend: true });
     bindTooltips(this.salvageMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.salvageMenu)) : null, { extend: true });
     bindTooltips(this.oracleMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.oracleMenu)) : null, { extend: true });
-    bindTooltips(this.vendorMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.vendorMenu)) : null, { extend: true });
+    bindTooltips(this.vendorMenu, (el, ext) =>
+      el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.vendorMenu))
+        : el.dataset.tip === 'vgem' ? this.vendorGemTooltip(el.dataset.vgem!) : null,
+    { extend: true });
     bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
     // THE VAULT reads compact — kind, name, price — and keeps each unlock's
     // full story in the shared tooltip behind a HOVER-INTENT dwell: the wall
@@ -2398,9 +2406,11 @@ export class UI {
     const m = seat.meta;
     return m.items.find(i => i.uid === uid)
       ?? Object.values(m.equipped).find(i => i?.uid === uid)
-      // Brandt's shelf: counter gear carries the same rich tooltip (and the
-      // on-swap comparison against what you wear) BEFORE you buy it.
-      ?? w.vendorStock.flatMap(e => (e.kind === 'item' ? [e.item] : [])).find(i => i.uid === uid);
+      // The counters' shelves: shelf gear (Memory pouches included) carries
+      // the same rich tooltip (and the on-swap comparison against what you
+      // wear) BEFORE you buy it — every counter's stock, one law.
+      ?? [...w.vendorStock, ...w.chandlerStock, ...w.descentStock]
+        .flatMap(e => (e.kind === 'item' ? [e.item] : [])).find(i => i.uid === uid);
   }
 
   /** The candidate slots an UNWORN item could swap into that hold something
@@ -2514,30 +2524,78 @@ export class UI {
     };
   }
 
-  /** THE POUCH CARD (skill-items M2, §3b): precision only — kind, total,
-   *  the composition's top groups, newest marked; the gesture hints. */
+  /** THE POUCH CARD (skill-items M2/M3, §3b): precision only — kind, total,
+   *  the composition's top groups, newest marked; the gesture hints. Serves
+   *  both pouch kinds off MEMORY_KINDS (the Preformed card names its facet
+   *  law — skills only, the choice interposes at the recall). */
   private memTooltip(item: ItemInstance): TooltipContent | null {
     const units = item.mem!;
+    const kind = memoryKindOf(item) ?? 'rough';
+    const k = MEMORY_KINDS[kind];
     const groups = memoryGroups(units);
+    const dropperName = (d: string): string =>
+      MONSTERS[d]?.name ?? (d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : d);
     const lines: string[] = [];
     if (item.locked) {
       lines.push('<div style="color:#c8a84b">🔒 Locked — sweeps skip it (right-click to unlock)</div>');
     }
-    lines.push(`<div style="color:#9a94a8;font-size:10px">Rough Memory · <span style="color:${MEMORY_CFG.color}">×${units.length} held</span></div>`);
+    lines.push(`<div style="color:#9a94a8;font-size:10px">${k.name} · <span style="color:${k.color}">×${units.length} held</span></div>`);
+    if (k.facets) {
+      lines.push('<div style="color:#c8bce0;font-size:10px">committed before the recall: choose a FACET (one attribute triad) — the grant is a skill of that facet</div>');
+    }
     const top = groups.slice(0, MEMORY_CFG.tooltipGroups);
     for (const g of top) {
-      lines.push(`<div style="color:#c8bce0;font-size:10px">×${g.count} — ${MONSTERS[g.d]?.name ?? g.d}</div>`);
+      lines.push(`<div style="color:#c8bce0;font-size:10px">×${g.count} — ${dropperName(g.d)}</div>`);
     }
     if (groups.length > top.length) {
       const rest = groups.length - top.length;
       lines.push(`<div style="color:#5a5668;font-size:10px">…and ${rest} other ${rest === 1 ? 'kind' : 'kinds'}</div>`);
     }
-    lines.push(`<div style="color:#8a8678;font-size:10px">newest: ${MONSTERS[units[units.length - 1].d]?.name ?? units[units.length - 1].d}</div>`);
+    lines.push(`<div style="color:#8a8678;font-size:10px">newest: ${dropperName(units[units.length - 1].d)}</div>`);
     lines.push('<div style="color:#c8a84b;font-size:10px;margin-top:3px">double-click to open the Recall · shift-click drops the stack whole</div>');
     return {
-      title: `<span style="color:${MEMORY_CFG.color}">Rough Memory</span>`,
+      title: `<span style="color:${k.color}">${k.name}</span>`,
       description: lines.join(''),
       meta: `×${units.length} · each unit sealed at its drop`,
+    };
+  }
+
+  /** THE COUNTER GEM CARD (skill-items M3 — the one shelf's 1×1 gem tiles):
+   *  the LIVE stock entry's card, resolved by "<vendorId>:<idx>" at hover
+   *  time — kind label per walk-1, rarity/level/tags, the price, and the
+   *  reserve/lock state. The glass tile is too small to speak; this card
+   *  is its voice (the old gem-tab list rows retired with the fold). */
+  private vendorGemTooltip(key: string): TooltipContent | null {
+    const [vid, idxs] = key.split(':');
+    const v = VENDORS.find(x => x.id === vid);
+    if (!v) return null;
+    const world = this.getWorld();
+    const stock = v.stock(world);
+    const e = stock[Number(idxs)];
+    if (!e || e.kind === 'item') return null;
+    const price = v.priceOf(world, e);
+    const priceHtml = (price.essences ?? []).map(c => this.essCostText(c)).join(' + ');
+    const heldRow = v.holds?.locks ? world.vendorEntryHold(world.vendorHoldKey(v), e) : undefined;
+    const entryLock = v.entryLock?.(world, e) ?? null;
+    const lines: string[] = [];
+    if (e.kind === 'skill') {
+      const r = SKILL_RARITIES[e.inst.rarity ?? 'common'];
+      lines.push(`<div style="color:#9a94a8;font-size:10px">Skill Memory · <span style="color:${r.color}">${r.label}</span> · Lv ${e.inst.level} · ${'◆'.repeat(r.sockets)}</div>`);
+      lines.push(`<div style="color:#8a8678;font-size:10px">${e.inst.def.tags.join(' · ')}</div>`);
+    } else {
+      lines.push(`<div style="color:#9a94a8;font-size:10px">Support Memory · Lv ${e.gem.level}</div>`);
+    }
+    if (heldRow) {
+      lines.push(`<div style="color:#7fe0d8;font-size:10px">${heldRow.commission ? 'the standing order\'s find — reserved for you' : 'reserved — rides every restock until bought or released'}</div>`);
+    }
+    if (entryLock) lines.push(`<div style="color:#8a8678;font-size:10px">🔒 ${esc(entryLock)}</div>`);
+    lines.push(`<div style="color:#e8c87a;font-size:10px;margin-top:3px">click to buy — ${priceHtml}</div>`);
+    const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
+    const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
+    return {
+      title: `<span style="color:${col}">${name}</span>`,
+      description: lines.join(''),
+      meta: e.kind === 'skill' ? 'skill' : 'support',
     };
   }
 
@@ -2763,21 +2821,23 @@ export class UI {
       const verb = breaking
         ? `data-salv-uid="${i.uid}"`
         : `data-drag="gearItem:${i.uid}"`;
-      // THE STONE (M2, §3b): the pouch tile — one fixed face in the memory
-      // color (no rarity border: units carry no rarity until recalled), the
-      // count badge wearing the total. Double-click opens THE RECALL; the
-      // salvage lane never touches it (the engine refuses too).
+      // THE STONE (M2/M3, §3b): the pouch tile — one fixed face in its
+      // KIND's color and glyph (no rarity border: units carry no rarity
+      // until recalled), the count badge wearing the total. Double-click
+      // opens THE RECALL; the salvage lane never touches it (the engine
+      // refuses too).
       if (i.mem) {
+        const mk = MEMORY_KINDS[memoryKindOf(i) ?? 'rough'];
         return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
           ${breaking ? '' : `data-drag="gearItem:${i.uid}"`} data-drop="gearTile:${i.uid}"
           style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
           width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#1c1626;
-          border:2px solid ${MEMORY_CFG.color};border-radius:3px;cursor:var(--cursor-point, pointer);box-sizing:border-box;
+          border:2px solid ${mk.color};border-radius:3px;cursor:var(--cursor-point, pointer);box-sizing:border-box;
           display:flex;align-items:center;justify-content:center">
-          <span style="width:22px;height:22px;border-radius:4px;background:${MEMORY_CFG.color}22;border:1px solid ${MEMORY_CFG.color};
-            display:flex;align-items:center;justify-content:center;font-size:11px;color:${MEMORY_CFG.color}">✦</span>
+          <span style="width:22px;height:22px;border-radius:4px;background:${mk.color}22;border:1px solid ${mk.color};
+            display:flex;align-items:center;justify-content:center;font-size:11px;color:${mk.color}">${mk.glyph}</span>
           <span style="position:absolute;bottom:-1px;right:0;font-size:9px;line-height:10px;padding:0 2px;
-            background:#241d2e;border:1px solid ${MEMORY_CFG.color};border-radius:3px;color:#e8e0f8">${i.mem.length}</span>
+            background:#241d2e;border:1px solid ${mk.color};border-radius:3px;color:#e8e0f8">${i.mem.length}</span>
           ${lockPip(i.locked)}</div>`;
       }
       if (i.gem) {
@@ -3180,16 +3240,20 @@ export class UI {
     hideTooltip();
   }
 
-  // --- THE RECALL (skill-items M2, docs/design/skill-items.md §3b) ----------
-  // The pouch's picker: rows grouped by dropper (portrait + name + ×count),
+  // --- THE RECALL (skill-items M2/M3, docs/design/skill-items.md §3b) -------
+  // The pouches' picker: rows grouped by dropper (portrait + name + ×count),
   // THE LEAN CHIPS restating the exact derived weights the cut will roll
   // (drawn == rolled — the view and the roller share World.memoryLeanOf),
   // one press = one unit (FIFO within the group), the reveal as an event.
+  // A PREFORMED pouch interposes THE FACET choice (three triad cards, each
+  // naming its triad's three attributes — the cards double as attribute
+  // teaching, walk-2 ruled) before the RECALL buttons arm.
 
   showRecall(uid: number, seatId?: string): void {
     this.ownPanel(this.recallMenu, this.couchSeatFor(seatId));
     this.recallOpen = true;
     this.recallUid = uid;
+    this.recallFacet = null;
     this.recallReveals.clear();
     this.recallMenu.classList.remove('hidden');
     this.refreshRecall();
@@ -3210,9 +3274,32 @@ export class UI {
     // still owe their showing (the pouch SPENT itself: the last grants
     // stand until the player closes the panel).
     if (!view && this.recallReveals.size === 0) { this.closeRecall(); return; }
+    if (view) this.recallKind = view.kind;
+    const mk = MEMORY_KINDS[this.recallKind];
     const groups = view?.groups ?? [];
     const total = view?.total ?? 0;
     const refusal = view?.refusal ?? null;
+    // THE FACET (M3, §4 lane 2 — walk-2 ruled): a Preformed pouch arms its
+    // RECALL buttons only once a triad is committed. The three cards derive
+    // LIVE from the attribute registry (memoryFacets — the exact fold the
+    // trued cut rolls) and TEACH: each names its triad's three attributes.
+    const needsFacet = mk.facets;
+    const facetChosen = !needsFacet || this.recallFacet !== null;
+    const facetStrip = needsFacet && view ? `
+      <div style="display:flex;gap:6px;margin:4px 0 6px">
+        ${memoryFacets().map(f => {
+          const sel = this.recallFacet === f.id;
+          return `<button data-mem-facet="${f.id}" style="flex:1;text-align:left;padding:5px 7px;
+            background:${sel ? '#2e2538' : '#1c1824'};border:1px solid ${sel ? mk.color : '#3a3644'};
+            border-radius:4px;cursor:var(--cursor-point, pointer)">
+            <div style="font-size:11px;font-weight:bold;color:${sel ? mk.color : '#d8d0c0'}">${f.label}</div>
+            <div style="font-size:9px;color:#9a94a8">${f.attrs.map(a => a.label).join(' · ')}</div>
+          </button>`;
+        }).join('')}
+      </div>
+      <div style="font-size:10px;color:#8a8678;margin-bottom:4px">${facetChosen
+        ? `committed to <span style="color:${mk.color}">${memoryFacets().find(f => f.id === this.recallFacet)?.label ?? ''}</span> — the recall grants a skill of that facet's attributes`
+        : 'commit to a FACET: the recall grants a skill asking those attributes (skills only — supports hold no attribute)'}</div>` : '';
     const chipStyle = 'display:inline-flex;align-items:center;gap:3px;padding:1px 5px;margin:1px 2px;'
       + 'background:#241d2e;border:1px solid #4a3a5a;border-radius:8px;font-size:9px';
     const revealHtml = (reveal: { name: string; color: string; sockets: number }): string =>
@@ -3231,19 +3318,21 @@ export class UI {
       // shows its gemBias tag chips at the standing ×2.5; neither → the
       // wide pool, plain. The engine derived these from the same fold the
       // cut rolls.
-      const chips = g.rung === 'kit'
-        ? g.kit.map(c => `<span style="${chipStyle}" title="${c.name} — ×${c.mult} lean">
-            <span style="width:12px;height:12px;border-radius:2px;background:${c.color}33;border:1px solid ${c.color};
-              display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${c.color}">${gemInitials(c.name)}</span>
-            <span style="color:#c8bce0">×${c.mult}</span></span>`).join('')
-        : g.rung === 'bias'
-          ? g.tags.map(t => `<span style="${chipStyle}" title="gem tag lean — ×${GEM_DROP_CFG.biasMult}">
-              <span style="color:#b8a2e8">#${t}</span><span style="color:#c8bce0">×${GEM_DROP_CFG.biasMult}</span></span>`).join('')
-          : `<span style="color:#5a5668;font-size:9px">the wide pool</span>`;
+      const chips = needsFacet
+        ? `<span style="color:#5a5668;font-size:9px">the committed facet decides</span>`
+        : g.rung === 'kit'
+          ? g.kit.map(c => `<span style="${chipStyle}" title="${c.name} — ×${c.mult} lean">
+              <span style="width:12px;height:12px;border-radius:2px;background:${c.color}33;border:1px solid ${c.color};
+                display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${c.color}">${gemInitials(c.name)}</span>
+              <span style="color:#c8bce0">×${c.mult}</span></span>`).join('')
+          : g.rung === 'bias'
+            ? g.tags.map(t => `<span style="${chipStyle}" title="gem tag lean — ×${GEM_DROP_CFG.biasMult}">
+                <span style="color:#b8a2e8">#${t}</span><span style="color:#c8bce0">×${GEM_DROP_CFG.biasMult}</span></span>`).join('')
+            : `<span style="color:#5a5668;font-size:9px">the wide pool</span>`;
       // THE REVEAL (§3b): the row flips to the granted skill — icon, name,
       // rarity color, socket pips — until the next press re-arms it.
       const revealLine = reveal ? revealHtml(reveal) : '';
-      const canRecall = !refusal;
+      const canRecall = !refusal && facetChosen;
       return `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #2a2634">
         ${portraitOf(def)}
         <div style="flex:1;min-width:0">
@@ -3251,8 +3340,9 @@ export class UI {
           <div>${chips}</div>${revealLine}
         </div>
         <button data-mem-recall="${g.d}" ${canRecall ? '' : 'disabled'}
+          ${canRecall || refusal ? '' : `title="${esc(MEMORY_CFG.strings.noFacet)}"`}
           style="padding:4px 10px;font-size:10px;background:${canRecall ? '#2a2138' : '#1a1722'};
-          border:1px solid ${canRecall ? MEMORY_CFG.color : '#3a3644'};border-radius:4px;
+          border:1px solid ${canRecall ? mk.color : '#3a3644'};border-radius:4px;
           color:${canRecall ? '#e8e0f8' : '#5a5668'};cursor:var(--cursor-point, pointer)">RECALL</button>
       </div>`;
     }).join('');
@@ -3272,10 +3362,17 @@ export class UI {
         </div>`;
       }).join('');
     this.recallMenu.innerHTML = `${this.closeGlyphHtml()}
-      <h3 style="margin:2px 0 2px;color:${MEMORY_CFG.color}">Rough Memories <span style="color:#9a94a8;font-size:11px">×${total} held</span></h3>
+      <h3 style="margin:2px 0 2px;color:${mk.color}">${mk.name.replace(/Memory$/, 'Memories')} <span style="color:#9a94a8;font-size:11px">×${total} held</span></h3>
       <div style="font-size:10px;color:#8a8678;margin-bottom:4px">each recall returns ONE memory of that body — oldest first, sealed at the drop</div>
+      ${facetStrip}
       ${refusal ? `<div style="color:#c08a68;font-size:11px;margin-bottom:4px">${refusal}</div>` : ''}
       ${rows || '<div style="color:#5a5668;font-size:11px">nothing held</div>'}${spent}`;
+    this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-facet]').forEach(el => {
+      el.addEventListener('click', () => {
+        this.recallFacet = el.dataset.memFacet!;
+        this.refreshRecall();
+      });
+    });
     this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-recall]').forEach(el => {
       el.addEventListener('click', () => {
         const dropper = el.dataset.memRecall!;
@@ -3283,7 +3380,8 @@ export class UI {
         // The handshake: clear, dispatch, read back — a refused recall
         // (room/seal raced the panel) leaves null and flips nothing.
         w.memoryRecallLast = null;
-        w.requestMeta({ t: 'recallMemory', uid: this.recallUid, dropper });
+        w.requestMeta({ t: 'recallMemory', uid: this.recallUid, dropper,
+          ...(needsFacet && this.recallFacet ? { facet: this.recallFacet } : {}) });
         // (cast: TS narrows the field to null across the dispatch, but the
         // seat-scoped applyAction inside requestMeta just rewrote it)
         const got = w.memoryRecallLast as (MemoryRecallResult & { seat: string }) | null;
@@ -4410,24 +4508,15 @@ export class UI {
       const lockedCount = hold?.locks.filter(r => !r.commission).length ?? 0;
       const stock = v.stock(world);
 
-      // THE TRADE GATE + THE GEM CASE — the engine's own predicates (a NET
-      // client reads the snapshot mirror: the keeper's market, the keeper's
-      // law; absent fields on an older host read as open).
+      // THE TRADE GATE — the engine's own predicate (a NET client reads the
+      // snapshot mirror: the keeper's market, the keeper's law; absent
+      // fields on an older host read as open). The gem case's FACE seal
+      // retired with the one-shelf fold (skill-items M3): what stands in
+      // the stock is honestly buyable — FEATURE.VENDOR_GEMS gates the
+      // true-gem share at the stock builder now.
       const tradeRefusal = isClient
         ? (world.netVendorTradeOpen === false ? VENDOR_CFG.trade.hint : null)
         : world.vendorTradeRefusal(v);
-      const gemsOpen = isClient ? world.netVendorGemsOpen !== false : world.vendorGemsOpen();
-      const tabSealed = (t: VendorTabSpec): boolean =>
-        !!t.unlock && (t.unlock === FEATURE.VENDOR_GEMS
-          ? !gemsOpen
-          : !featureEnabled(world.account, t.unlock));
-
-      // THE COUNTER TABS (VendorDef.tabs ?? VENDOR_CFG.tabs.default): the
-      // Wares grid first, the Gems case beside it — a sealed face stays
-      // VISIBLE and clickable (its body explains itself and names the key).
-      const tabs = v.tabs ?? VENDOR_CFG.tabs.default;
-      const chosen = this.vendorTabSel[v.id];
-      const tabId = tabs.some(t => t.id === chosen) ? chosen : tabs[0].id;
 
       // --- shared per-entry pieces (indices are STOCK indices — the buy and
       // lock intents speak the one array both faces draw from) --------------
@@ -4442,9 +4531,6 @@ export class UI {
         return { afford, priceHtml };
       };
       const entryLockOf = (e: VendorEntry): string | null => v.entryLock?.(world, e) ?? null;
-      const lockChip = (e: VendorEntry, lock: string | null): string => lock
-        ? `<span style="color:#8a8678;font-size:9px;border:1px solid #8a867866;border-radius:3px;padding:0 3px;margin-left:4px;vertical-align:middle" title="${esc(lock)}">🔒${e.depthReq ? ` DEPTH ${e.depthReq}` : ''}</span>`
-        : '';
       const lockTitleFor = (heldRow: VendorHoldRow | undefined, atCap: boolean): string => heldRow
         ? (heldRow.commission
           ? 'Release the standing order\'s find (the watch resumes; the slot re-rolls next restock)'
@@ -4452,44 +4538,12 @@ export class UI {
         : atCap ? `The reserve ledger holds ${lockCap}; release one first`
         : 'Reserve this slot: it will not re-roll until bought or released';
 
-      // --- THE GEM CASE rows (skill/support entries, list rows as ever) -----
-      const gemRows = stock.map((e, idx) => {
-        if (e.kind === 'item') return '';
-        const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
-        const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
-        const lvHtml = `<span style="color:#ffd700">Lv ${e.kind === 'skill' ? e.inst.level : e.gem.level}</span>`;
-        const tags = e.kind === 'skill' ? e.inst.def.tags.join(' · ') : 'support gem';
-        const tag = e.kind === 'skill' ? this.rarityTagHtml(e.inst) : '';
-        const { afford, priceHtml } = priceBits(e);
-        const entryLock = entryLockOf(e);
-        const heldRow = canLock ? world.vendorEntryHold(holdKey, e) : undefined;
-        const badge = (heldRow
-          ? (heldRow.commission
-            ? '<span style="color:#7fe0d8;font-size:9px;border:1px solid #7fe0d866;border-radius:3px;padding:0 3px;margin-left:4px;vertical-align:middle">STANDING ORDER</span>'
-            : `<span style="color:${v.accent};font-size:9px;border:1px solid ${v.accent}66;border-radius:3px;padding:0 3px;margin-left:4px;vertical-align:middle">RESERVED</span>`)
-          : '') + lockChip(e, entryLock);
-        const atCap = !heldRow && lockedCount >= lockCap;
-        const lockBtn = canLock && (lockCap > 0 || heldRow)
-          ? `<button data-vlock="${v.id}:${idx}" ${atCap ? 'disabled' : ''} style="min-width:30px"
-              title="${lockTitleFor(heldRow, atCap)}">${heldRow ? '🔒' : '🔓'}</button>`
-          : '';
-        const canBuy = afford && !tradeRefusal && !entryLock;
-        const buyTitle = entryLock ?? tradeRefusal;
-        return `
-          <div class="skill-entry" style="border-left:3px solid ${col}${heldRow ? `;background:${v.accent}12` : ''}${entryLock ? ';opacity:0.65' : ''}">
-            <div class="name">${name} ${lvHtml} ${tag}${badge}</div>
-            <div class="tags">${tags}</div>
-            <div class="bind-btns">
-              ${lockBtn}
-              <button data-vbuy="${v.id}:${idx}" ${canBuy ? '' : 'disabled'} ${buyTitle ? `title="${esc(buyTitle)}"` : ''}>
-                Buy (${priceHtml})${canBuy || buyTitle ? '' : ' — not enough'}</button>
-            </div>
-          </div>`;
-      }).join('') || '<div style="color:#8a8678;font-size:11px">Sold out; come back after the restock.</div>';
-
-      // --- THE COUNTER GLASS (gear entries as a packed grid — the player
-      // bag's own cell law: footprints, rarity borders, the full item
-      // tooltip on hover; click the glass to buy, the corner pip reserves).
+      // --- THE COUNTER GLASS — the ONE face (skill-items M3, §6): the
+      // whole shelf packs into the grid through the bag's own cell law —
+      // gear by footprint, Memory pouches and gem finds as 1×1 tiles, side
+      // by side. Hover for the full story; click the glass to buy, the
+      // corner pip reserves. (The gems tab, its seal, and the list rows
+      // retired with the fold.)
       const waresGrid = ((): string => {
         const CELL = 34;
         const pack = world.vendorGridPack(stock, v.grid);
@@ -4503,16 +4557,49 @@ export class UI {
         }
         let tiles = '';
         let overflowRows = '';
-        let gearCount = 0;
         stock.forEach((e, idx) => {
-          if (e.kind !== 'item') return;
-          gearCount++;
-          const i = e.item;
           const { afford, priceHtml } = priceBits(e);
           const entryLock = entryLockOf(e);
           const heldRow = canLock ? world.vendorEntryHold(holdKey, e) : undefined;
           const atCap = !heldRow && lockedCount >= lockCap;
           const canBuy = afford && !tradeRefusal && !entryLock;
+          const lockPip = canLock && (lockCap > 0 || heldRow)
+            ? `<button data-vlock="${v.id}:${idx}" ${atCap ? 'disabled' : ''} title="${lockTitleFor(heldRow, atCap)}"
+                style="position:absolute;top:-1px;right:-1px;z-index:2;font-size:9px;line-height:1;padding:1px 2px;
+                background:#141019cc;border:1px solid ${heldRow ? v.accent : '#3a3644'};border-radius:0 3px 0 3px;cursor:var(--cursor-point, pointer)">${heldRow ? '🔒' : '🔓'}</button>`
+            : '';
+          const badge = heldRow
+            ? `<div style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:8px;color:${heldRow.commission ? '#7fe0d8' : v.accent}">${heldRow.commission ? 'ORDER' : 'RESERVED'}</div>`
+            : entryLock
+              ? `<div style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:8px;color:#8a8678">🔒${e.depthReq ? ` D${e.depthReq}` : ''}</div>`
+              : '';
+          if (e.kind !== 'item') {
+            // A GEM find: a 1×1 tile wearing the gem's own color + initials
+            // (THE ICON LAW's counter face); the rich card rides the vgem
+            // tooltip lane off the LIVE stock entry.
+            const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
+            const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
+            const at = pack.gemCells.get(idx);
+            if (!at) {
+              overflowRows += `
+                <div class="skill-entry" style="border-left:3px solid ${col}" data-tip="vgem" data-vgem="${v.id}:${idx}">
+                  <div class="name" style="color:${col}">${name}</div>
+                  <div class="bind-btns"><button data-vbuy="${v.id}:${idx}" ${canBuy ? '' : 'disabled'}>Buy (${priceHtml})</button></div>
+                </div>`;
+              return;
+            }
+            tiles += `<div data-tip="vgem" data-vgem="${v.id}:${idx}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
+              style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
+              width:${CELL - 2}px;height:${CELL - 2}px;background:#1c1626;
+              border:2px solid ${heldRow ? v.accent : col};border-radius:3px;cursor:${canBuy ? 'var(--cursor-point, pointer)' : 'var(--cursor-default, default)'};box-sizing:border-box;
+              display:flex;align-items:center;justify-content:center;
+              ${e.kind === 'skill' && e.inst.rarity === 'legendary' ? `box-shadow:0 0 10px ${col};` : ''}${canBuy ? '' : 'opacity:0.55;'}">
+              <span style="width:22px;height:22px;border-radius:4px;background:${col}33;border:1px solid ${col};
+                display:flex;align-items:center;justify-content:center;font-size:8px;color:${col}">${gemInitials(name)}</span>
+              ${lockPip}${badge}</div>`;
+            return;
+          }
+          const i = e.item;
           const at = pack.cells.get(i.uid);
           if (!at) {
             // The glass genuinely overflowed (the probe should have caught
@@ -4527,30 +4614,30 @@ export class UI {
           const s = itemGridSize(i);
           const r = ITEM_RARITIES[i.rarity];
           const cat = ITEM_BASES[i.baseId]?.category ?? 'ring';
-          const lockPip = canLock && (lockCap > 0 || heldRow)
-            ? `<button data-vlock="${v.id}:${idx}" ${atCap ? 'disabled' : ''} title="${lockTitleFor(heldRow, atCap)}"
-                style="position:absolute;top:-1px;right:-1px;z-index:2;font-size:9px;line-height:1;padding:1px 2px;
-                background:#141019cc;border:1px solid ${heldRow ? v.accent : '#3a3644'};border-radius:0 3px 0 3px;cursor:var(--cursor-point, pointer)">${heldRow ? '🔒' : '🔓'}</button>`
-            : '';
-          const badge = heldRow
-            ? `<div style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:8px;color:${heldRow.commission ? '#7fe0d8' : v.accent}">${heldRow.commission ? 'ORDER' : 'RESERVED'}</div>`
-            : entryLock
-              ? `<div style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:8px;color:#8a8678">🔒${e.depthReq ? ` D${e.depthReq}` : ''}</div>`
-              : '';
+          // A MEMORY POUCH stack wears its kind's own face (color, glyph,
+          // the unit-count badge) — the bag tile's counter twin.
+          const mkind = memoryKindOf(i);
+          const mk = mkind ? MEMORY_KINDS[mkind] : null;
+          const face = mk
+            ? `<span style="width:22px;height:22px;border-radius:4px;background:${mk.color}22;border:1px solid ${mk.color};
+                display:flex;align-items:center;justify-content:center;font-size:11px;color:${mk.color}">${mk.glyph}</span>
+              <span style="position:absolute;bottom:1px;right:1px;font-size:9px;line-height:10px;padding:0 2px;
+                background:#241d2e;border:1px solid ${mk.color};border-radius:3px;color:#e8e0f8">${i.mem!.length}</span>`
+            : (CATEGORY_GLYPHS[cat] ?? '?');
           tiles += `<div data-tip="item" data-item-uid="${i.uid}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
             title="${entryLock ? esc(entryLock) : tradeRefusal ? esc(tradeRefusal) : afford ? `Buy: ${esc(i.name)}` : 'Not enough essence'}"
             style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
-            width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;
-            border:2px solid ${heldRow ? v.accent : r.color};border-radius:3px;cursor:${canBuy ? 'var(--cursor-point, pointer)' : 'var(--cursor-default, default)'};box-sizing:border-box;
+            width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:${mk ? '#1c1626' : '#221e2c'};
+            border:2px solid ${heldRow ? v.accent : (mk ? mk.color : r.color)};border-radius:3px;cursor:${canBuy ? 'var(--cursor-point, pointer)' : 'var(--cursor-default, default)'};box-sizing:border-box;
             display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
-            ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}${canBuy ? '' : 'opacity:0.55;'}">${CATEGORY_GLYPHS[cat] ?? '?'}${lockPip}${badge}</div>`;
+            ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}${canBuy ? '' : 'opacity:0.55;'}">${face}${lockPip}${badge}</div>`;
         });
-        const empty = gearCount === 0
-          ? '<div style="color:#8a8678;font-size:11px;margin-top:4px">The glass stands empty; come back after the restock.</div>' : '';
+        const empty = stock.length === 0
+          ? '<div style="color:#8a8678;font-size:11px;margin-top:4px">The shelf stands empty; come back after the restock.</div>' : '';
         return `
           <div style="position:relative;width:${b.w * CELL}px;height:${b.h * CELL}px;margin-top:2px">${cells}${tiles}</div>
           ${overflowRows}${empty}
-          <div style="margin-top:4px;color:#8a8678;font-size:10px">hover a piece for its full story · click it to buy${canLock && lockCap > 0 ? ' · the corner pip reserves it' : ''}</div>`;
+          <div style="margin-top:4px;color:#8a8678;font-size:10px">hover a ware for its full story · click it to buy${canLock && lockCap > 0 ? ' · the corner pip reserves it' : ''}</div>`;
       })();
 
       // THE STANDING ORDER strip (feature-gated; the Vault sells discovery,
@@ -4594,21 +4681,8 @@ export class UI {
       const reserveBadge = canLock && lockCap > 0
         ? ` <span style="opacity:0.8;font-size:10px;font-weight:normal">· 🔒 ${lockedCount}/${lockCap} reserved</span>`
         : '';
-      // THE COUNTER TABS, drawn: face labels wear their stock counts; a
-      // sealed face wears the lock instead (clickable — its body names the
-      // key). One tab = no strip (the delver's bare gems counter).
-      const tabStrip = tabs.length > 1 ? `<div class="book-tabs" style="margin:2px 0 6px">${tabs.map(t => {
-        const sealedT = tabSealed(t);
-        const label = t.id === 'wares' ? 'Wares' : 'Gems';
-        const n = t.id === 'wares'
-          ? stock.filter(e => e.kind === 'item').length
-          : stock.filter(e => e.kind !== 'item').length;
-        return `<button class="book-tab${t.id === tabId ? ' active' : ''}" data-vtabsel="${v.id}:${t.id}"
-          title="${sealedT ? esc(VENDOR_CFG.tabs.gemsSealedCopy) : label}">${label}${sealedT ? ' 🔒' : ` <span style="opacity:.7">(${n})</span>`}</button>`;
-      }).join('')}</div>` : '';
-      const activeSpec = tabs.find(t => t.id === tabId) ?? tabs[0];
-      // THE TRADE GATE strip: above the faces — the whole counter explains
-      // its shut till once, whichever face is open.
+      // THE TRADE GATE strip: above the shelf — the whole counter explains
+      // its shut till once.
       const tradeStrip = tradeRefusal
         ? `<div style="margin:4px 0;padding:5px 7px;border:1px dashed #8a6a3a88;border-radius:4px;color:#c8a86a;font-size:11px">🔒 ${esc(tradeRefusal)}</div>`
         : '';
@@ -4628,18 +4702,16 @@ export class UI {
             <span style="color:${d.color}">${d.glyph}${d.label.split(' ').pop()}</span> (${this.essCostText(price)})${why ? ' 🔒' : ''}</button>`;
         }).join('')}
       </div>`;
-      const body = tabSealed(activeSpec)
-        ? `<div style="padding:16px 10px;color:#8a8678;font-size:11px;text-align:center;line-height:1.5">🔒 ${esc(VENDOR_CFG.tabs.gemsSealedCopy)}</div>`
-        : activeSpec.id === 'gems'
-          ? `${gemRows}${commStrip}`
-          : `${waresGrid}${scrap}`;
+      // THE ONE FACE (M3): the packed glass, THE STANDING ORDER strip
+      // re-homed beneath it (the gems tab it lived in retired), the scrap
+      // wheel last.
+      const body = `${waresGrid}${commStrip}${scrap}`;
       return `
         <div style="border:1px solid ${v.accent}44;border-radius:4px;padding:8px;margin-bottom:10px;background:${v.bg}">
           <div style="color:${v.accent};font-weight:bold;font-size:12px;margin-bottom:4px">
             ${v.label}${v.headline ? ` <span data-vheadline="${v.id}" style="opacity:0.7;font-size:10px;font-weight:normal">· ${v.headline(world)}</span>` : ''}${reserveBadge}</div>
           ${tradeStrip}
           ${essStrip}
-          ${tabStrip}
           ${body}
         </div>`;
     }).join('') || '<div style="color:#8a8678;font-size:11px">No counter at hand; find a vendor and linger.</div>';
@@ -4683,12 +4755,6 @@ export class UI {
       const on = !(entry && world.vendorEntryHold(world.vendorHoldKey(vendor), entry));
       world.requestMeta({ t: 'vendorLock', vendor: vid, index: Number(idx), on });
       refresh();
-    }));
-    // THE COUNTER TABS: remember the face per counter, repaint.
-    q<HTMLButtonElement>('button[data-vtabsel]').forEach(btn => btn.addEventListener('click', () => {
-      const [vid, tabId] = btn.dataset.vtabsel!.split(':');
-      this.vendorTabSel[vid] = tabId;
-      this.refreshVendor();
     }));
     q<HTMLButtonElement>('button[data-vcomm-open]').forEach(btn => btn.addEventListener('click', () => {
       this.vendorCommOpen = btn.dataset.vcommOpen!;

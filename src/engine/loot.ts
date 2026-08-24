@@ -112,6 +112,14 @@ export const GEM_DROP_CFG = {
    *  GEM_FLOORS ground, quest pay and the class kit all stay direct by
    *  construction. */
   memoryShare: 0.65,
+  /** THE TRUED CUT's drop split (skill-items M3, §4 lane 2): the share of
+   *  the MEMORY lane (the memoryShare slice above) that mints a PREFORMED
+   *  Memory instead of a Rough one — the banner pouch should read as a
+   *  FIND, so it rides well below half. Nested inside the one kill-trickle
+   *  draw exactly as memoryShare is (r < p·share·preformedShare ⊂
+   *  r < p·share ⊂ r < p): given a memory, P(preformed) = this dial, and
+   *  the global stream stays byte-identical whatever it says. */
+  preformedShare: 0.16,
   /** THE FRESH-FIND LEAN — the catalog-agency lever. A gem the party
    *  already CARRIES (any seat: bag, bar, or socketed) rolls at this
    *  fraction of its weight, so a growing catalog keeps surfacing gems

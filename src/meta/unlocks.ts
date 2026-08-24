@@ -710,20 +710,22 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     requiresUnlock: i === 0 ? 'feat_salvage_station' : `feat_vendor_wares_${i}`,
     ...(rung.gate ? { reqAnyOf: rung.gate, tease: true } : {}),
     label: `Broader Wares ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
-    description: `Every counter stocks wider: +${rung.gems} gem slot${rung.gems === 1 ? '' : 's'} behind the gem case and +${rung.gear} rolled piece${rung.gear === 1 ? '' : 's'} in the wares grid. One purchase, every market your line will ever trade in.`,
+    description: `Every counter stocks wider: +${rung.gems} Memory slot${rung.gems === 1 ? '' : 's'} on the one shelf (they fill once the Memory Counter opens) and +${rung.gear} rolled piece${rung.gear === 1 ? '' : 's'} in the glass beside them. One purchase, every market your line will ever trade in.`,
     payload: { flag: rung.flag },
   })),
-  // THE GEM COUNTER — the skill/support tab, sealed at every default-tabbed
-  // counter until owned (VENDOR_CFG.tabs.default): the panel shows the tab
-  // shuttered and names this row; buying it opens the case account-wide.
+  // THE MEMORY COUNTER (skill-items M3 — the gem-case FACE retired; §6's
+  // re-aim): the rung now gates the shelf's TRUE-GEM share in
+  // buildVendorStock — Rough/Preformed pouches stock from the first day
+  // (the standard offering), and buying this rung joins the direct Skill
+  // Memory finds to the same one shelf, account-wide.
   { id: 'feat_vendor_gems', kind: 'feature', cost: 120, reqLevel: 0,
     requiresUnlock: 'feat_vendor_wares_1',
-    label: 'The Gem Counter',
-    description: 'The counters\' shuttered gem case opens: every market stocks skill gems behind glass, account-wide. Support gems and the deeper counter services grow from here.',
+    label: 'The Memory Counter',
+    description: 'Every counter\'s shelf grows its true finds: direct Skill Memories stock in the glass beside the pouches, account-wide. Support Memories and the deeper counter services grow from here.',
     payload: { flag: FEATURE.VENDOR_GEMS } },
   // (Chain-gated only, like every market rung — the stray account-level gate
   // it wore before the gatework re-parented it was pre-chain residue.)
-  { id: 'feat_brandt_supports', kind: 'feature', cost: 80,  reqLevel: 0, requiresUnlock: 'feat_vendor_gems', label: 'Gem Counter: Supports', description: 'The gem case also stocks support gems.', payload: { flag: FEATURE.BRANDT_SELL_SUPPORTS } },
+  { id: 'feat_brandt_supports', kind: 'feature', cost: 80,  reqLevel: 0, requiresUnlock: 'feat_vendor_gems', label: 'Memory Counter: Supports', description: 'The counters\' Memory slots also deal Support Memories.', payload: { flag: FEATURE.BRANDT_SELL_SUPPORTS } },
   // THE RUSH LADDER — derived from VENDOR_CFG.restock.ladder (the beat law's
   // own home): each rung CUTS the counters' restock beat by its row's
   // seconds. Rung 1 keeps the legacy brandt_fast_restock flag (the old 15s
@@ -766,8 +768,8 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     counter (LEDGER_VENDOR_BOUGHT: you can only reserve at a market
   //     you've traded in); each rung requires the last. ---------------------
   // Rung 1 now stands at the chain's far end (the user's meta-progression:
-  // width first, then the gem case, then the right to HOLD) — it requires
-  // the Gem Counter AND a Broader Wares rung owned, plus the standing
+  // width first, then the Memory Counter, then the right to HOLD) — it
+  // requires the Memory Counter AND a Broader Wares rung owned, plus the standing
   // discovery law (LEDGER_VENDOR_BOUGHT: you can only reserve at a market
   // you've traded in), and TEASES once the chain is walked: the card hangs
   // sealed until the first purchase stamps the ledger.
@@ -794,9 +796,9 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'feat_vendor_commission', kind: 'feature', cost: VENDOR_CFG.commission.cost, reqLevel: 0,
     requiresUnlock: 'feat_vendor_lock_1', tease: true,
     reqAnyOf: [{ ledgerPrefix: LEDGER_GEMDROP_PREFIX, n: VENDOR_CFG.commission.need,
-                 label: `a gem your line has seen drop ${VENDOR_CFG.commission.need}+ times` }],
+                 label: `a Memory your line has seen drop ${VENDOR_CFG.commission.need}+ times` }],
     label: 'The Standing Order: Commission',
-    description: `Name a gem your line has seen drop ${VENDOR_CFG.commission.need}+ times (the drop index counts only true finds) and the counter WATCHES for it: every restock that passes while you're away is resolved at the shelf's own odds, and a hit waits for you, reserved. One standing order per counter; fulfilled on purchase.`,
+    description: `Name a Memory your line has seen drop ${VENDOR_CFG.commission.need}+ times (the drop index counts only true finds) and the counter WATCHES for it: every restock that passes while you're away is resolved at the shelf's own odds, and a hit waits for you, reserved. One standing order per counter; fulfilled on purchase.`,
     payload: { flag: FEATURE.VENDOR_COMMISSION } },
 
   // --- Town-building: the Quest Package (surfaces once any character reaches L5)

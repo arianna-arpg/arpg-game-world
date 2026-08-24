@@ -1032,23 +1032,29 @@ we verify changes.
   `WorldStateSave.vendorHolds` (keep-what-stands sanitizer; empty is NOT
   load-bearing) — docs in `docs/engine/vendors.md`, probe
   `balance/probe_vendorlocker.ts`.
-  THE COUNTER GLASS + THE MARKET CHAIN (2026-07-22): every counter renders
-  TWO FACES (`VendorDef.tabs ?? VENDOR_CFG.tabs.default`) — the WARES grid
-  (rolled gear packed D2-style by `World.vendorGridPack` through the
-  player bag's own board-parameterized cell law; deterministic, display-
-  only, capacity probe-derived from the catalog's worst case; tiles buy on
-  click, a corner pip reserves) opens first, and the GEMS case stands
-  SEALED account-wide until THE GEM COUNTER unlock (`FEATURE.VENDOR_GEMS`;
-  sealed face visible + naming the Vault row); THE TRADE GATE
+  THE COUNTER GLASS + THE MARKET CHAIN (2026-07-22; ONE-SHELF fold
+  2026-08-23, skill-items M3): every counter renders ONE FACE — the whole
+  shelf packed D2-style by `World.vendorGridPack` through the player bag's
+  own board-parameterized cell law (gear by footprint; gem finds + the
+  Memory pouches as 1×1 tiles; deterministic, display-only, capacity
+  probe-derived from the catalog's worst case; tiles buy on click, a
+  corner pip reserves, the Standing Order strip beneath). The tabs + the
+  gem case's FACE seal are RETIRED: `FEATURE.VENDOR_GEMS` (THE MEMORY
+  COUNTER) re-aims to the shelf's TRUE-GEM share at the STOCK builders
+  (`buildVendorStock` + `mintDelverStock` read `vendorGemsOpen` — what
+  stands is honestly buyable), while Rough/Preformed Memory pouches stock
+  from the first day (`VENDOR_CFG.pouches`, TRADED-provenance units on the
+  foreordained beat stream, per-unit `VENDOR_MEMORY_PRICE`, bought stacks
+  merge onto the standing bag pouch); THE TRADE GATE
   (`VENDOR_CFG.trade`, `World.vendorTradeRefusal` — the swapRefusal shape,
   ONE predicate for engine refusals and panel disables) shuts ALL
   purchasing until the Salvage Station is owned (browsing free); the
   BROADER-WARES ladder (`VENDOR_CFG.wares.ladder` — rung rows carry
   {gems, gear, gate?}; rung 1 wears the legacy brandt_extra_gems flag)
-  widens BOTH faces through the ONE `waresBonus` fold; the delver's echo
-  shelf opts out of everything by data (gems-only tabs, tradeGate false).
-  Co-op: THE KEEPER'S GATE — all three read the world-keeper's account,
-  mirrored to clients via snapshot verdict bits.
+  widens BOTH halves through the ONE `waresBonus` fold; the delver keeps
+  tradeGate/entryLock by data. Co-op: THE KEEPER'S GATE — all reads ride
+  the world-keeper's account, mirrored to clients via snapshot verdict
+  bits.
   THE BEAT LAW (2026-07-22): ONE counter clock — restockSeconds() =
   VENDOR_CFG.restock.baseSec (300) − owned RUSH rungs (derived "Rush Order"
   rows; legacy brandt_fast_restock = rung 1), floored at minSec; the live

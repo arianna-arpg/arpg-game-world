@@ -27,7 +27,7 @@ import type { Actor } from '../src/engine/actor';
 import { resetActorIdCounter } from '../src/engine/actor';
 import type { ZoneDef } from '../src/data/zones';
 import { TILESETS } from '../src/data/tilesets';
-import { makeAccount } from '../src/meta/account';
+import { FEATURE, makeAccount } from '../src/meta/account';
 import { buildManifest } from '../src/packages/manifest';
 import { bootSimEngine, classById, SIM_ARENA_ID } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -90,6 +90,10 @@ function makeDescentWorld(seed: number): World {
   resetActorIdCounter();
   const account = makeAccount();
   for (const c of CLASSES) account.unlockedClasses.add(c.id);
+  // THE MEMORY COUNTER (skill-items M3): the delver's shelf mirrors the
+  // town law — true gems mint only once the rung is owned. These rigs are
+  // ABOUT the shelf's grammar (counts, locks, determinism), so own it.
+  account.features.add(FEATURE.VENDOR_GEMS);
   const manifest = buildManifest(account, seed);
   // The QUIET expedition, except the one package under test.
   for (const p of manifest.packages) p.enabled = p.id === 'descent';

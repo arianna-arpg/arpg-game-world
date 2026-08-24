@@ -620,11 +620,26 @@ retired, index→uid intents, learned=seated with REPLACE, bagfull refusals,
 ICON-LAW tiles, legacy-save fold), M2 @ `fe3d072` (the Rough Memory pouch,
 the foreordained recall under the walk-2 laws, `memoryShare` 0.65 of the
 kill trickle, the Memory Essence rename). The charter itself landed @
-`e162b25` — no longer untracked. **M3's chip fired at the M2 push** (the
-Preformed banner + the one-shelf counter fold); M4 queues at M3's landing.
-**Owed her: the combined M0+M1+M2 in-browser walk** — every dial unblessed
-(`memoryShare`, the kit-lean mult, pouch drop rates, tile faces, the pouch
-face, the "+" pip).
+`e162b25` — no longer untracked. **M3 LANDED (2026-08-23, the same day):**
+THE PREFORMED MEMORY (its own stacking tile; `preformedShare` of the memory
+trickle inside the ONE spent draw — stream-silent by the M2 construction;
+the RECALL interposes THE FACET's three triad cards, DERIVED from the
+attribute registry's own triads — `ATTRIBUTE_TRIADS`, never hardcoded;
+skills-only, per-facet substreams off the sealed seed, the facet partition
+over the unlocked pool with the true-random-over-unlocked fallback; mint +
+room laws verbatim) and THE COUNTER's one-shelf fold (§6's table as ruled:
+the gems tab / `FEATURE.VENDOR_GEMS` face-seal retired — the rung re-aims
+to the shelf's TRUE-GEM share in `buildVendorStock`; Rough + Preformed
+pouches stock from the first day at per-unit `VENDOR_MEMORY_PRICE` dials,
+TRADED provenance, merging onto the standing bag pouch; the glass packs
+gear + gem 1×1s + pouches on the one face, the Standing Order strip
+re-homed beneath it, `commissionOdds`/`vendorSize()` untouched; the
+delver's mint mirrors the gem gate; the gatework re-aims — the Memory
+Counter — with no orphans). M4 (THE LESSON) now queues.
+**Owed her: the combined M0+M1+M2+M3 in-browser walk** — every dial
+unblessed (`memoryShare`, `preformedShare`, the kit-lean mult, pouch drop
+rates + prices + shelf counts, tile faces, the pouch face, the facet-card
+look, the "+" pip).
 
 ---
 

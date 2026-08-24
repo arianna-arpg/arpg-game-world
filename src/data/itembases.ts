@@ -274,13 +274,20 @@ export const BASE_LIST: ItemBaseDef[] = [
     id: 'support_gem', name: 'Support Memory', category: 'gem',
     w: 1, h: 1, tags: ['gem', 'support'], dropWeight: 0,
   },
-  // THE STONE (skill-items charter M2): the ROUGH MEMORY pouch — the ONE
-  // stacking 1×1 tile (its `mem` units array is the count; auto-minted at
-  // first pickup, auto-merged ever after). dropWeight 0 keeps it out of
-  // every gear roll: it mints only through the kill-path conversion
-  // (world.rollDrops → dropGemAt's memory lane, engine/memories.ts).
+  // THE STONE (skill-items charter M2+M3): the MEMORY pouches — one
+  // stacking 1×1 tile per kind (the `mem` units array is the count;
+  // auto-minted at first pickup, auto-merged ever after). dropWeight 0
+  // keeps them out of every gear roll: tiles mint only through the
+  // kill-path conversion (world.rollDrops → dropGemAt's memory lane) and
+  // the counter's shelf (engine/memories.ts is the seam).
   {
     id: 'rough_memory', name: 'Rough Memory', category: 'gem',
+    w: 1, h: 1, tags: ['gem', 'memory'], dropWeight: 0,
+  },
+  // M3, §4 lane 2 THE TRUED CUT: the banner pouch — rarer by the drop
+  // split (GEM_DROP_CFG.preformedShare), recall interposes THE FACET.
+  {
+    id: 'preformed_memory', name: 'Preformed Memory', category: 'gem',
     w: 1, h: 1, tags: ['gem', 'memory'], dropWeight: 0,
   },
 ];

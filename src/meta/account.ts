@@ -127,19 +127,20 @@ export const FEATURE = {
   VENDOR_LOCK_2: 'vendor_lock_2',
   VENDOR_LOCK_3: 'vendor_lock_3',
   /** THE BROADER-WARES FAMILY (data/vendors.ts VENDOR_CFG.wares.ladder):
-   *  each owned rung widens EVERY counter's stock — gem slots on the Gems
-   *  tab AND rolled pieces in the Wares grid, per the rung's own numbers.
+   *  each owned rung widens EVERY counter's stock — true-gem slots AND
+   *  rolled pieces on the one shelf, per the rung's own numbers.
    *  Rung 1 wears the LEGACY flag below (accounts that bought "Brandt: +2
    *  Wares" own rung 1 outright — ownership rides flags, never catalog
    *  ids); later rungs may carry GATEWORK avenues (meta/gates.ts): the
    *  unlocks OF the unlocks are data on the ladder row. */
   VENDOR_WARES_2: 'vendor_wares_2',
   VENDOR_WARES_3: 'vendor_wares_3',
-  /** THE GEM COUNTER: opens the skill/support TAB at every counter whose
-   *  tab spec wears this lock (VENDOR_CFG.tabs.default — brandt, the
-   *  chandler, every future default-tabbed market; the delver's echo shelf
-   *  deliberately never wears it). Until owned, the tab shows sealed —
-   *  visible, named, and pointing at the Vault. */
+  /** THE MEMORY COUNTER (skill-items M3 — re-aimed from the retired gem-case
+   *  FACE to the shelf's true-gem STOCK share): while unowned, counters
+   *  stock Memory pouches + gear only; owning it joins the direct
+   *  skill/support Memory finds to the one shelf (buildVendorStock +
+   *  mintDelverStock read World.vendorGemsOpen — the stock builder IS the
+   *  gate now). */
   VENDOR_GEMS: 'vendor_gems',
   /** THE RUSH LADDER rung 2 (VENDOR_CFG.restock.ladder — rung 1 wears the
    *  legacy BRANDT_FAST_RESTOCK above): each owned rung CUTS the counters'

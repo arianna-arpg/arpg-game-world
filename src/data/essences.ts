@@ -15,6 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ItemRarity } from '../engine/items';
+import type { MemoryKind } from '../engine/memories';
 import { SKILL_LEVEL_BANDS, essenceTierForLevel, type SkillRarity } from '../engine/skills';
 
 export type EssenceId = 'coarse' | 'glimmering' | 'brilliant' | 'pristine';
@@ -420,6 +421,16 @@ export const VENDOR_ESSENCE_PRICE: Record<SkillRarity, EssenceCost> = {
 
 /** Support gems on the counter (no rarity of their own) price as magic. */
 export const VENDOR_SUPPORT_PRICE: EssenceCost = { essence: 'glimmering', count: 3 };
+
+/** THE MEMORY POUCHES on the counter (skill-items M3 — the one shelf's
+ *  standard offering): price PER UNIT, folded by the stack's unit count at
+ *  the till (a ×3 rough stack costs three units' worth). DIALS, unblessed:
+ *  a rough unit is a lottery ticket priced under a common gem; the
+ *  preformed unit is aimed and rarer, priced like a magic find. */
+export const VENDOR_MEMORY_PRICE: Record<MemoryKind, EssenceCost> = {
+  rough: { essence: 'coarse', count: 3 },
+  preformed: { essence: 'glimmering', count: 2 },
+};
 
 /** The Oracle's fee for communing over (rerolling) one affix, by the item's
  *  rarity — the stone charges what the piece is worth. */

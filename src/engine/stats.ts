@@ -1990,6 +1990,32 @@ export const ATTRIBUTES: Record<AttributeId, AttributeDef> = {
 
 export const ATTRIBUTE_IDS = Object.keys(ATTRIBUTES) as AttributeId[];
 
+/** One TRIAD of the attribute registry: the raw-force attribute that OPENS
+ *  it plus its execution/resilience siblings, in declaration order. */
+export interface AttributeTriad {
+  /** The triad's raw attribute (group 'force') — its stable id. */
+  lead: AttributeId;
+  /** The triad whole, lead first (declaration order). */
+  members: AttributeId[];
+}
+
+/** THE TRIADS, DERIVED (skill-items charter M3 — the Preformed Memory's
+ *  facet grain, walk-2 ruled): the registry's own declaration order IS the
+ *  grouping — each 'force' attribute opens a triad and its 'execution' /
+ *  'resilience' siblings follow it; 'life' (vitality, universal) stands
+ *  outside every triad. Derived live from ATTRIBUTES so an attribute edit
+ *  flows through (THE LIVE-REGISTRY MANDATE) — never a hardcoded list. */
+export const ATTRIBUTE_TRIADS: readonly AttributeTriad[] = (() => {
+  const out: AttributeTriad[] = [];
+  for (const id of Object.keys(ATTRIBUTES) as AttributeId[]) {
+    const g = ATTRIBUTES[id].group;
+    if (g === 'life') continue;
+    if (g === 'force') out.push({ lead: id, members: [id] });
+    else out[out.length - 1]?.members.push(id);
+  }
+  return out;
+})();
+
 /** Is this open stat name a registered ATTRIBUTE id? Gear/vestige mod lines
  *  may grant attributes (+12 Strength); those lines route through the one
  *  Actor.setAttributes artery, never the StatSheet — this guard is how the

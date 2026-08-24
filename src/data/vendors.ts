@@ -15,6 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import type { EssenceCost } from './essences';
+import type { MemoryKind } from '../engine/memories';
 import type { Seat, VendorEntry, World } from '../engine/world';
 import { FEATURE } from '../meta/account';
 import type { GateRow } from '../meta/gates';
@@ -30,20 +31,13 @@ import type { GateRow } from '../meta/gates';
 export interface WaresRung {
   flag: string;
   cost: number;
-  /** Gem slots this rung adds to the Gems tab's shelf. */
+  /** True-gem slots this rung adds to the counter's ONE shelf (skill-items
+   *  M3 — live once THE MEMORY COUNTER opens them; vendorSize folds it). */
   gems: number;
-  /** Rolled gear pieces this rung adds to the Wares grid. */
+  /** Rolled gear pieces this rung adds to the shelf's glass. */
   gear: number;
   /** GATEWORK avenues (any-of) that must open before this rung sells. */
   gate?: readonly GateRow[];
-}
-
-/** A counter tab: the face the panel renders. `unlock` seals the tab behind
- *  an account feature flag — sealed tabs stay VISIBLE (a named, clickable
- *  face that says where the key is sold); absent = open from the first day. */
-export interface VendorTabSpec {
-  id: 'wares' | 'gems';
-  unlock?: string;
 }
 
 /** THE PATRON'S HOLD — every counter-hold tunable in one place (the MERC_CFG
@@ -108,24 +102,26 @@ export const VENDOR_CFG = {
         gate: [{ level: 15 }, { vocation: true }, { quest: true }] },
     ] as readonly WaresRung[],
   },
-  /** THE COUNTER GLASS: every counter's rolled GEAR packs into a real grid
-   *  (the player bag's own cell law — footprints, first-fit, drawn == held),
-   *  these dims for every counter unless a VendorDef.grid overrides. Sized
-   *  so the widest ladder + the largest base footprint can NEVER overflow —
-   *  balance/probe_vendorlocker.ts derives the worst case from the catalog
-   *  and fails the build if content outgrows the glass. */
-  gearGrid: { w: 12, h: 6 },
-  /** The default tab faces (VendorDef.tabs overrides per counter): the Wares
-   *  grid opens first — equippable goods are the counter's first face — and
-   *  the Gems tab stands SEALED until the account owns THE GEM COUNTER
-   *  (FEATURE.VENDOR_GEMS): visible, named, pointing at the Vault. */
-  tabs: {
-    default: [{ id: 'wares' }, { id: 'gems', unlock: FEATURE.VENDOR_GEMS }] as readonly VendorTabSpec[],
-    gemsSealedCopy: 'The gem case is shuttered, its glass dark. The Vault\'s GEM COUNTER unlock opens it at every market you\'ll ever trade in.',
-    /** The terse float the ENGINE refuses a sealed-case buy with (failNote —
-     *  the panel face carries the long copy above; two surfaces, one config). */
-    gemsSealedNote: 'the gem case is sealed',
-  },
+  /** THE COUNTER GLASS: every counter's whole shelf packs into a real grid
+   *  (the player bag's own cell law — footprints, first-fit, drawn == held):
+   *  rolled gear by footprint, gem finds and Memory pouches as 1×1 tiles,
+   *  side by side on the ONE face (skill-items M3 — the tabs and the gem
+   *  case's seal retired; FEATURE.VENDOR_GEMS gates the true-gem STOCK
+   *  now, never a face). These dims serve every counter unless a
+   *  VendorDef.grid overrides. Sized so the widest ladder + the largest
+   *  base footprint can NEVER overflow — balance/probe_vendorlocker.ts
+   *  derives the worst case from the catalog and fails the build if
+   *  content outgrows the glass. */
+  gearGrid: { w: 12, h: 7 },
+  /** THE MEMORY POUCHES on the shelf (skill-items M3, §6 — her "standard
+   *  shop" ask): units per restock stack, one stack per kind, stocked from
+   *  the FIRST day (no rung gates the pouches; the true-gem slots are what
+   *  THE MEMORY COUNTER opens). 0 stands a kind down. Units mint with the
+   *  TRADED provenance (no monster forged them — the wild lean honestly
+   *  reads wide; the banner's facet choice is untouched) on the shelf's
+   *  own foreordained beat stream. Priced per unit in
+   *  data/essences.ts VENDOR_MEMORY_PRICE. */
+  pouches: { rough: 3, preformed: 1 } as Record<MemoryKind, number>,
   lock: {
     /** The reserve LADDER: each owned Vault rung grants one more lockable
      *  slot at every holding counter (the cap = owned rungs, counted across
@@ -205,11 +201,6 @@ export interface VendorDef {
   entryLock?(w: World, e: VendorEntry): string | null;
   /** THE PATRON'S HOLD capabilities (absent = plain counter, nothing persists). */
   holds?: VendorHoldCaps;
-  /** The counter's tab faces (absent = VENDOR_CFG.tabs.default: the Wares
-   *  grid + the sealed Gems tab). A counter that deals only in gems lists
-   *  one face and, by listing it BARE, opts out of the account seal — the
-   *  delver's echo shelf. */
-  tabs?: readonly VendorTabSpec[];
   /** The Wares grid dims (absent = VENDOR_CFG.gearGrid). */
   grid?: { w: number; h: number };
   /** false = THE TRADE GATE never binds this counter (the delver: echoes are
@@ -266,9 +257,10 @@ export const VENDORS: VendorDef[] = [
     // THE PROVING LAW rides near(): the counter EXISTS only once this
     // shaft's own descent has resolved — so the dwell never opens a
     // pre-dive panel and the buy handler shares the same gate. NORMALIZED
-    // otherwise to the town counters: default tabs (wares grid + the
-    // sealed gem case), the standard trade gate, ordinary essence prices —
-    // the DEPTH LOCKS (entryLock) are the delver's own layer on top.
+    // otherwise to the town counters: the one shelf (true gems live once
+    // THE MEMORY COUNTER opens them), the standard trade gate, ordinary
+    // essence prices — the DEPTH LOCKS (entryLock) are the delver's own
+    // layer on top.
     near: (w, seat) => w.delverShopOpen(seat),
     stock: w => w.descentStock,
     priceOf: (w, e) => ({ essences: w.vendorPrice(e) }),
