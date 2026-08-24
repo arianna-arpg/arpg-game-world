@@ -612,12 +612,19 @@ M1 must precede M2 (stones grant items — they need somewhere honest to
 land); M3 leans on M2's stones existing; M4 is polish-grain and rides last.
 M0 may run concurrent with M1 groundwork if sessions allow.
 
-**The commissioning ledger:** walk 1 fired M0 + M1. **M0 LANDED @ f13fca3
-the same day** (the build session: the rack, the `swapSkillSlots` intent,
-the holding strip, seat glow; seat tiles speak names until M1 brings THE
-ICON LAW) and was **pushed at her ask** — her in-browser walk is owed.
-**Walk 2 met the pouch gauge and fired M2's chip** (build after M1 lands —
-stones grant items).
+**The commissioning ledger:** walk 1 fired M0 + M1; walk 2 met the pouch
+gauge and fired M2. **All three are LANDED + PUSHED (2026-08-23):** M0 @
+`f13fca3` (the rack, `swapSkillSlots`, seat glow), M1 @ `dcf1378` (gems as
+1×1 Memory items through one `gemitems.ts` seam, `skillInv`/`inventory`
+retired, index→uid intents, learned=seated with REPLACE, bagfull refusals,
+ICON-LAW tiles, legacy-save fold), M2 @ `fe3d072` (the Rough Memory pouch,
+the foreordained recall under the walk-2 laws, `memoryShare` 0.65 of the
+kill trickle, the Memory Essence rename). The charter itself landed @
+`e162b25` — no longer untracked. **M3's chip fired at the M2 push** (the
+Preformed banner + the one-shelf counter fold); M4 queues at M3's landing.
+**Owed her: the combined M0+M1+M2 in-browser walk** — every dial unblessed
+(`memoryShare`, the kit-lean mult, pouch drop rates, tile faces, the pouch
+face, the "+" pip).
 
 ---
 
