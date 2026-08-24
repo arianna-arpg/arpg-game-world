@@ -23,6 +23,8 @@ import {
 } from '../engine/skills';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
 import { findBagGem, gemInitials, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
+import { MEMORY_CFG, memoryGroups, type MemoryRecallResult } from '../engine/memories';
+import { GEM_DROP_CFG } from '../engine/loot';
 import { canPlaceAt, overlappingItems } from '../engine/inventory';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, type ModCompareRow } from '../engine/itemgen';
@@ -358,6 +360,7 @@ export class UI {
   private caravanMenu = document.getElementById('caravan-menu')!;
   private salvageMenu = document.getElementById('salvage-menu')!;
   private fontMenu = document.getElementById('font-menu')!;
+  private recallMenu = document.getElementById('recall-menu')!;
   private oracleMenu = document.getElementById('oracle-menu')!;
   private bestiaryMenu = document.getElementById('bestiary-menu')!;
   private vendorMenu = document.getElementById('vendor-menu')!;
@@ -503,6 +506,13 @@ export class UI {
   /** The Sacrificial Font's recipe screen (skill-mode trees, M1 — §7). */
   fontOpen = false;
   private fontTab: 'merge' | 'convert' | 'reset' = 'merge';
+  /** THE RECALL (skill-items M2, §3b): the Rough Memory pouch's picker. */
+  recallOpen = false;
+  private recallUid = 0;
+  /** THE REVEAL rows: dropper id → the grant its row last flipped to. */
+  private recallReveals = new Map<string, { name: string; color: string; sockets: number }>();
+  /** Found-flash marks: freshly-recalled bag uids → flash-until (ms). */
+  private memFlash = new Map<number, number>();
   /** The Tracker's book: which leaf is open, and which page is under the thumb. */
   bestiaryOpen = false;
   private bestiaryPage = 0;
@@ -721,6 +731,7 @@ export class UI {
       [this.vendorMenu, () => this.closeVendor()],
       [this.salvageMenu, () => this.closeSalvage()],
       [this.fontMenu, () => this.closeFont()],
+      [this.recallMenu, () => this.closeRecall()],
       [this.oracleMenu, () => this.closeOracle()],
       [this.bestiaryMenu, () => this.closeBestiary()],
       [this.boroughMenu, () => this.closeBorough()],
@@ -781,7 +792,7 @@ export class UI {
     const couchOwnerOf = (t: EventTarget | null): string | null => {
       if (!(t instanceof Node)) return null;
       for (const el of [this.charSheet, this.inventory, this.passiveTree, this.vendorMenu,
-        this.salvageMenu, this.oracleMenu, this.bestiaryMenu, this.caravanMenu]) {
+        this.salvageMenu, this.oracleMenu, this.bestiaryMenu, this.caravanMenu, this.recallMenu]) {
         if (el.contains(t)) {
           const id = this.panelSeatIds.get(el);
           return id && id !== this.getWorld().localSeat.id ? id : null;
@@ -879,6 +890,7 @@ export class UI {
       || owned(this.vendorMenu, this.vendorOpen)
       || owned(this.salvageMenu, this.salvageOpen)
       || owned(this.fontMenu, this.fontOpen)
+      || owned(this.recallMenu, this.recallOpen)
       || owned(this.oracleMenu, this.oracleOpen)
       || owned(this.bestiaryMenu, this.bestiaryOpen);
   }
@@ -903,6 +915,7 @@ export class UI {
     if (this.vendorOpen && owned(this.vendorMenu)) this.closeVendor();
     if (this.salvageOpen && owned(this.salvageMenu)) this.closeSalvage();
     if (this.fontOpen && owned(this.fontMenu)) this.closeFont();
+    if (this.recallOpen && owned(this.recallMenu)) this.closeRecall();
     if (this.oracleOpen && owned(this.oracleMenu)) this.closeOracle();
     if (this.bestiaryOpen && owned(this.bestiaryMenu)) this.closeBestiary();
   }
@@ -923,6 +936,7 @@ export class UI {
     if (this.vendorOpen && mine(this.vendorMenu)) { this.closeVendor(); return true; }
     if (this.salvageOpen && mine(this.salvageMenu)) { this.closeSalvage(); return true; }
     if (this.fontOpen && mine(this.fontMenu)) { this.closeFont(); return true; }
+    if (this.recallOpen && mine(this.recallMenu)) { this.closeRecall(); return true; }
     if (this.oracleOpen && mine(this.oracleMenu)) { this.closeOracle(); return true; }
     if (this.bestiaryOpen && mine(this.bestiaryMenu)) { this.closeBestiary(); return true; }
     if (hostOwned && this.sailOpen) { this.closeSail(); return true; }
@@ -2445,6 +2459,8 @@ export class UI {
     if (!item) return null;
     // THE RESIDENCE (M1): a gem wrapper's card speaks the gem, not the steel.
     if (item.gem) return this.gemItemTooltip(item, seat, salv);
+    // THE STONE (M2): the pouch's card speaks the composition.
+    if (item.mem) return this.memTooltip(item);
     const d = describeItem(item);
     const lines: string[] = [`<div style="color:#9a94a8;font-size:10px">${d.baseLine}</div>`];
     if (item.locked) {
@@ -2495,6 +2511,33 @@ export class UI {
       title: `<span style="color:${d.color}">${d.epitaph ? `${d.epitaph.name}: ` : ''}${d.title}</span>`,
       description: lines.join(''),
       meta: `${d.reqLine} · ${ITEM_RARITIES[item.rarity].label}${compareHint}`,
+    };
+  }
+
+  /** THE POUCH CARD (skill-items M2, §3b): precision only — kind, total,
+   *  the composition's top groups, newest marked; the gesture hints. */
+  private memTooltip(item: ItemInstance): TooltipContent | null {
+    const units = item.mem!;
+    const groups = memoryGroups(units);
+    const lines: string[] = [];
+    if (item.locked) {
+      lines.push('<div style="color:#c8a84b">🔒 Locked — sweeps skip it (right-click to unlock)</div>');
+    }
+    lines.push(`<div style="color:#9a94a8;font-size:10px">Rough Memory · <span style="color:${MEMORY_CFG.color}">×${units.length} held</span></div>`);
+    const top = groups.slice(0, MEMORY_CFG.tooltipGroups);
+    for (const g of top) {
+      lines.push(`<div style="color:#c8bce0;font-size:10px">×${g.count} — ${MONSTERS[g.d]?.name ?? g.d}</div>`);
+    }
+    if (groups.length > top.length) {
+      const rest = groups.length - top.length;
+      lines.push(`<div style="color:#5a5668;font-size:10px">…and ${rest} other ${rest === 1 ? 'kind' : 'kinds'}</div>`);
+    }
+    lines.push(`<div style="color:#8a8678;font-size:10px">newest: ${MONSTERS[units[units.length - 1].d]?.name ?? units[units.length - 1].d}</div>`);
+    lines.push('<div style="color:#c8a84b;font-size:10px;margin-top:3px">double-click to open the Recall · shift-click drops the stack whole</div>');
+    return {
+      title: `<span style="color:${MEMORY_CFG.color}">Rough Memory</span>`,
+      description: lines.join(''),
+      meta: `×${units.length} · each unit sealed at its drop`,
     };
   }
 
@@ -2706,12 +2749,37 @@ export class UI {
     // ladder color — and glow with Mireille's lesson while a gift flask
     // waits unseated (the per-item bag glow; the tab glow died with the tab).
     const lessonSkills = world.mireilleGiftLesson() === 'learn' ? world.mireilleLessonSkills() : [];
+    // THE REVEAL's found-flash (skill-items M2): a freshly-recalled gem's
+    // tile announces itself for a beat; stale marks prune themselves here.
+    const flashOf = (uid: number): string => {
+      const until = this.memFlash.get(uid);
+      if (!until) return '';
+      if (Date.now() > until) { this.memFlash.delete(uid); return ''; }
+      return ' memflash';
+    };
     const tiles = m.items.map(i => {
       if (i.x === undefined || i.y === undefined) return '';
       const s = itemGridSize(i);
       const verb = breaking
         ? `data-salv-uid="${i.uid}"`
         : `data-drag="gearItem:${i.uid}"`;
+      // THE STONE (M2, §3b): the pouch tile — one fixed face in the memory
+      // color (no rarity border: units carry no rarity until recalled), the
+      // count badge wearing the total. Double-click opens THE RECALL; the
+      // salvage lane never touches it (the engine refuses too).
+      if (i.mem) {
+        return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
+          ${breaking ? '' : `data-drag="gearItem:${i.uid}"`} data-drop="gearTile:${i.uid}"
+          style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
+          width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#1c1626;
+          border:2px solid ${MEMORY_CFG.color};border-radius:3px;cursor:var(--cursor-point, pointer);box-sizing:border-box;
+          display:flex;align-items:center;justify-content:center">
+          <span style="width:22px;height:22px;border-radius:4px;background:${MEMORY_CFG.color}22;border:1px solid ${MEMORY_CFG.color};
+            display:flex;align-items:center;justify-content:center;font-size:11px;color:${MEMORY_CFG.color}">✦</span>
+          <span style="position:absolute;bottom:-1px;right:0;font-size:9px;line-height:10px;padding:0 2px;
+            background:#241d2e;border:1px solid ${MEMORY_CFG.color};border-radius:3px;color:#e8e0f8">${i.mem.length}</span>
+          ${lockPip(i.locked)}</div>`;
+      }
       if (i.gem) {
         const color = gemTileColorOf(i);
         const sp = skillGemPayloadOf(i);
@@ -2731,7 +2799,7 @@ export class UI {
           : '';
         return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
           ${verb} data-drop="gearTile:${i.uid}" ${sp ? `data-gem-skill="${i.uid}"` : ''}
-          class="${teach ? 'tut-glow' : ''}"
+          class="${teach ? 'tut-glow' : ''}${flashOf(i.uid)}"
           style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
           width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#1c1626;
           border:2px solid ${color};border-radius:3px;cursor:${breaking ? 'inherit' : 'var(--cursor-point, pointer)'};box-sizing:border-box;
@@ -3007,9 +3075,15 @@ export class UI {
       });
       el.addEventListener('dblclick', () => {
         if (salv) return; // one verb under an armed lane — the click salvaged it
+        const item = seatMeta.items.find(i => i.uid === uid);
+        // THE STONE (M2, §3b): the pouch's double-click opens THE RECALL,
+        // owned by this bag's seat (the couch lens carries through).
+        if (item?.mem) {
+          this.showRecall(uid, this.panelSeatIds.get(this.inventory));
+          return;
+        }
         // THE RESIDENCE: a skill wrapper's double-click LEARNS into the
         // first free seat (the gear equip's exact mirror — one symmetry).
-        const item = seatMeta.items.find(i => i.uid === uid);
         if (item?.gem) {
           if (item.gem.kind === 'skill') {
             world.requestMeta({ t: 'learn', uid });
@@ -3104,6 +3178,128 @@ export class UI {
     this.fontOpen = false;
     this.fontMenu.classList.add('hidden');
     hideTooltip();
+  }
+
+  // --- THE RECALL (skill-items M2, docs/design/skill-items.md §3b) ----------
+  // The pouch's picker: rows grouped by dropper (portrait + name + ×count),
+  // THE LEAN CHIPS restating the exact derived weights the cut will roll
+  // (drawn == rolled — the view and the roller share World.memoryLeanOf),
+  // one press = one unit (FIFO within the group), the reveal as an event.
+
+  showRecall(uid: number, seatId?: string): void {
+    this.ownPanel(this.recallMenu, this.couchSeatFor(seatId));
+    this.recallOpen = true;
+    this.recallUid = uid;
+    this.recallReveals.clear();
+    this.recallMenu.classList.remove('hidden');
+    this.refreshRecall();
+  }
+
+  closeRecall(): void {
+    this.recallOpen = false;
+    this.recallMenu.classList.add('hidden');
+    hideTooltip();
+  }
+
+  refreshRecall(): void {
+    if (!this.recallOpen) return;
+    const world = this.getWorld();
+    const seat = this.panelSeat(this.recallMenu);
+    const view = world.memoryRecallView(seat, this.recallUid);
+    // The pouch left the bag — the panel follows it out, UNLESS reveals
+    // still owe their showing (the pouch SPENT itself: the last grants
+    // stand until the player closes the panel).
+    if (!view && this.recallReveals.size === 0) { this.closeRecall(); return; }
+    const groups = view?.groups ?? [];
+    const total = view?.total ?? 0;
+    const refusal = view?.refusal ?? null;
+    const chipStyle = 'display:inline-flex;align-items:center;gap:3px;padding:1px 5px;margin:1px 2px;'
+      + 'background:#241d2e;border:1px solid #4a3a5a;border-radius:8px;font-size:9px';
+    const revealHtml = (reveal: { name: string; color: string; sockets: number }): string =>
+      `<div style="margin-top:2px;font-size:10px;color:${reveal.color}">
+        <span style="display:inline-flex;width:14px;height:14px;border-radius:2px;background:${reveal.color}33;border:1px solid ${reveal.color};
+          align-items:center;justify-content:center;font-size:6px;vertical-align:middle">${gemInitials(reveal.name)}</span>
+        ${reveal.name}${reveal.sockets ? ` <span style="color:#9a94a8">${'◆'.repeat(reveal.sockets)}</span>` : ''}</div>`;
+    const portraitOf = (def: MonsterDef | undefined): string => def
+      ? this.monsterPortraitHtml(def, false, 30)
+      : '<span style="width:30px;text-align:center;color:#5a5668">?</span>';
+    const rows = groups.map(g => {
+      const def = MONSTERS[g.d];
+      const reveal = this.recallReveals.get(g.d);
+      // THE LEAN CHIPS — the row's honest odds face (§3b): the kit skills
+      // as their own icon chips × the kit mult; a kit that teaches nothing
+      // shows its gemBias tag chips at the standing ×2.5; neither → the
+      // wide pool, plain. The engine derived these from the same fold the
+      // cut rolls.
+      const chips = g.rung === 'kit'
+        ? g.kit.map(c => `<span style="${chipStyle}" title="${c.name} — ×${c.mult} lean">
+            <span style="width:12px;height:12px;border-radius:2px;background:${c.color}33;border:1px solid ${c.color};
+              display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${c.color}">${gemInitials(c.name)}</span>
+            <span style="color:#c8bce0">×${c.mult}</span></span>`).join('')
+        : g.rung === 'bias'
+          ? g.tags.map(t => `<span style="${chipStyle}" title="gem tag lean — ×${GEM_DROP_CFG.biasMult}">
+              <span style="color:#b8a2e8">#${t}</span><span style="color:#c8bce0">×${GEM_DROP_CFG.biasMult}</span></span>`).join('')
+          : `<span style="color:#5a5668;font-size:9px">the wide pool</span>`;
+      // THE REVEAL (§3b): the row flips to the granted skill — icon, name,
+      // rarity color, socket pips — until the next press re-arms it.
+      const revealLine = reveal ? revealHtml(reveal) : '';
+      const canRecall = !refusal;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #2a2634">
+        ${portraitOf(def)}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;color:#e0d8c8">${g.name} <span style="color:#9a94a8">×${g.count}</span></div>
+          <div>${chips}</div>${revealLine}
+        </div>
+        <button data-mem-recall="${g.d}" ${canRecall ? '' : 'disabled'}
+          style="padding:4px 10px;font-size:10px;background:${canRecall ? '#2a2138' : '#1a1722'};
+          border:1px solid ${canRecall ? MEMORY_CFG.color : '#3a3644'};border-radius:4px;
+          color:${canRecall ? '#e8e0f8' : '#5a5668'};cursor:var(--cursor-point, pointer)">RECALL</button>
+      </div>`;
+    }).join('');
+    // A SPENT group keeps its reveal row (portrait + the grant, no button):
+    // the last unit's answer must outlive the group it emptied, or the
+    // reveal event eats itself.
+    const spent = [...this.recallReveals.entries()]
+      .filter(([d]) => !groups.some(g => g.d === d))
+      .map(([d, reveal]) => {
+        const def = MONSTERS[d];
+        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #2a2634;opacity:0.8">
+          ${portraitOf(def)}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;color:#8a8678">${def?.name ?? d} <span style="color:#5a5668">— spent</span></div>
+            ${revealHtml(reveal)}
+          </div>
+        </div>`;
+      }).join('');
+    this.recallMenu.innerHTML = `${this.closeGlyphHtml()}
+      <h3 style="margin:2px 0 2px;color:${MEMORY_CFG.color}">Rough Memories <span style="color:#9a94a8;font-size:11px">×${total} held</span></h3>
+      <div style="font-size:10px;color:#8a8678;margin-bottom:4px">each recall returns ONE memory of that body — oldest first, sealed at the drop</div>
+      ${refusal ? `<div style="color:#c08a68;font-size:11px;margin-bottom:4px">${refusal}</div>` : ''}
+      ${rows || '<div style="color:#5a5668;font-size:11px">nothing held</div>'}${spent}`;
+    this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-recall]').forEach(el => {
+      el.addEventListener('click', () => {
+        const dropper = el.dataset.memRecall!;
+        const w = this.getWorld();
+        // The handshake: clear, dispatch, read back — a refused recall
+        // (room/seal raced the panel) leaves null and flips nothing.
+        w.memoryRecallLast = null;
+        w.requestMeta({ t: 'recallMemory', uid: this.recallUid, dropper });
+        // (cast: TS narrows the field to null across the dispatch, but the
+        // seat-scoped applyAction inside requestMeta just rewrote it)
+        const got = w.memoryRecallLast as (MemoryRecallResult & { seat: string }) | null;
+        if (got && got.seat === this.panelSeat(this.recallMenu).id) {
+          this.recallReveals.set(dropper, {
+            name: got.name,
+            color: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].color : (SUPPORTS[got.id]?.color ?? '#b8b8b8'),
+            sockets: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].sockets : 0,
+          });
+          this.memFlash.set(got.itemUid, Date.now() + 1700);
+        }
+        this.refreshRecall();
+        if (this.inventoryOpen) this.refreshInventory();
+      });
+    });
+    this.paintPortraitsIn(this.recallMenu);
   }
 
   refreshFont(): void {
@@ -4421,7 +4617,7 @@ export class UI {
       // rung (deep counters waive) through the engine's OWN refusal
       // predicate — the panel and the buy handler can never disagree.
       const essStrip = `<div style="margin:2px 0 6px;font-size:10px;color:#8a8678">
-        Ability Essence:
+        Memory Essence:
         ${ABILITY_ESSENCES.map(d => {
           const price = ABILITY_ESSENCE_CFG.vendor.prices[d.tier - 1];
           if (!price) return '';
@@ -7944,6 +8140,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     this.salvageMenu.classList.add('hidden');
     this.fontOpen = false;
     this.fontMenu.classList.add('hidden');
+    this.recallOpen = false;
+    this.recallMenu.classList.add('hidden');
     this.oracleOpen = false;
     this.oracleTargetUid = null;
     this.oracleMenu.classList.add('hidden');

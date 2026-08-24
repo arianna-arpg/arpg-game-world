@@ -326,6 +326,13 @@ export interface SupportGemPayload {
 
 export type GemPayload = SkillGemPayload | SupportGemPayload;
 
+/** THE STONE (skill-items M2): one Rough Memory unit — the dropper's def id
+ *  and the foreordained seed, NOTHING else (THE LIVE-REGISTRY MANDATE:
+ *  everything else re-derives at recall time from the standing registries,
+ *  so an unlock-package edit flows through with zero data churn). Compact
+ *  keys on purpose — a pouch may hold hundreds and rides saves/wire whole. */
+export interface RoughMemoryUnit { d: string; s: number }
+
 /** A live item — PURE JSON (ids + numbers only), which makes it the save
  *  shape, the corpse shape, and the wire shape all at once. */
 export interface ItemInstance {
@@ -367,6 +374,11 @@ export interface ItemInstance {
    *  the skill_gem/support_gem wrapper bases; pure JSON like everything else
    *  here. engine/gemitems.ts is the one pack/unpack/validate seam. */
   gem?: GemPayload;
+  /** THE STONE (skill-items M2): the Rough Memory pouch's units, append-
+   *  ordered (the array IS the count — the ONE stacking item; gems never
+   *  stack). Present exactly on the 'rough_memory' base; engine/memories.ts
+   *  is the seam. Mutations REPLACE the array (snapshot-alias safety). */
+  mem?: RoughMemoryUnit[];
 }
 
 // ---------------------------------------------------------------- config ---

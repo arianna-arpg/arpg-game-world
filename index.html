@@ -205,6 +205,13 @@
       from { box-shadow: 0 0 4px 1px rgba(200, 168, 255, 0.30); border-color: #7a5aa0; }
       to   { box-shadow: 0 0 15px 4px rgba(200, 168, 255, 0.85); border-color: #e0c8ff; color: #f0e4ff; }
     }
+    /* THE REVEAL's found-flash (skill-items M2): a freshly-recalled gem's
+       bag tile announces itself for a beat, then settles. */
+    .memflash { animation: memflash 0.55s ease-in-out 3 alternate; }
+    @keyframes memflash {
+      from { box-shadow: 0 0 4px 1px rgba(184, 154, 224, 0.35); }
+      to   { box-shadow: 0 0 16px 5px rgba(184, 154, 224, 0.95); }
+    }
 
     /* Support gem sockets */
     .sockets { margin-top: 6px; display: flex; gap: 5px; flex-wrap: wrap; }
@@ -345,7 +352,7 @@
     .class-card .cskills { font-size: 10px; color: var(--gold); margin-top: 4px; }
 
     /* Account / unlock screen */
-    #caravan-menu, #sail-menu, #hold-menu, #vocation-menu, #salvage-menu, #oracle-menu, #vendor-menu, #merc-menu, #bestiary-menu, #font-menu, #borough-menu {
+    #caravan-menu, #sail-menu, #hold-menu, #vocation-menu, #salvage-menu, #oracle-menu, #vendor-menu, #merc-menu, #bestiary-menu, #font-menu, #borough-menu, #recall-menu {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 420px; max-width: calc(92vw / var(--ui-scale)); max-height: calc(80vh / var(--ui-scale));
       overflow-y: auto; font-size: 12px;
@@ -356,6 +363,8 @@
     #salvage-menu { width: 540px; max-height: calc(84vh / var(--ui-scale)); }
     /* The Sacrificial Font's recipe screen (skill-mode trees, M1). */
     #font-menu { width: 540px; max-height: calc(84vh / var(--ui-scale)); }
+    /* THE RECALL (skill-items M2) — the Rough Memory pouch's picker. */
+    #recall-menu { width: 470px; max-height: calc(84vh / var(--ui-scale)); }
     #oracle-menu { width: 520px; max-height: calc(84vh / var(--ui-scale)); }
     #vendor-menu { width: 540px; max-height: calc(84vh / var(--ui-scale)); }
     /* The Tracker's book spreads two facing columns. */
@@ -748,6 +757,7 @@
   <div id="merc-menu" class="panel hidden"></div>
   <div id="salvage-menu" class="panel hidden"></div>
  <div id="font-menu" class="panel hidden"></div>
+  <div id="recall-menu" class="panel hidden"></div>
   <div id="oracle-menu" class="panel hidden"></div>
   <div id="bestiary-menu" class="panel hidden"></div>
   <div id="vendor-menu" class="panel hidden"></div>

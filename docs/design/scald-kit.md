@@ -225,7 +225,7 @@ shines · monster wearers (standing + wave-3 proposals).
 ## 4. Acquisition — found in the country, owned everywhere
 
 The skill-modes economy is the frame (`docs/design/skill-modes.md`: gems
-drop at level 1, Ability Essence levels them, vendors sell by rung). Three
+drop at level 1, Memory Essence (the renamed Ability Essence) levels them, vendors sell by rung). Three
 routes stand in the repo; the recommendation blends them:
 
 1. **Scald-floored drops** — the country's loot rows carry its gems first

@@ -314,7 +314,7 @@ check('C: the highest-N inputs burn — the L1 straggler survives the fuse',
     && count(ABILITY_ESSENCES.length) > count(1),
     `IV×${count(4)} vs I×${count(1)} over ${seen.length}`);
   check('F: the mint FLOATS the tier\'s name — the drop is an EVENT',
-    w.texts.some(t => t.text.includes('Ability Essence')));
+    w.texts.some(t => t.text.includes('Memory Essence'))); // the label renamed with skill-items M2 (card 10)
   (w.zone as { level: number }).level = zl;
 
   // The vacuum: a packet at the hero's feet reaches the wallet through the

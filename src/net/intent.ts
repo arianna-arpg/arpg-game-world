@@ -91,6 +91,7 @@ export type MetaAction =
   | { t: 'bindGraft'; key: string; skillId: string | null } // graft key → carrier skill (null unbinds)
   | { t: 'bindSkill'; slot: number; skillId: string | null }   // action-bar slot (internal re-seat; unlearn is the unseat)
   | { t: 'swapSkillSlots'; a: number; b: number }              // THE RACK's reorder: exchange two bar seats atomically
+  | { t: 'recallMemory'; uid: number; dropper: string }        // THE STONE: recall ONE unit of a dropper group from the pouch item (FIFO)
   | { t: 'caravanTo'; band: number }                           // Caravan: escort to band N (0 = home)
   | { t: 'harborChart'; omen: string }                         // Harbor board: buy the chart of a rumored seat (credits → survey pulse)
   | { t: 'holdMuster' }                                        // Harborhold: sound the horn — arm the standing zone's siege defense

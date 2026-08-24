@@ -272,7 +272,13 @@ export const ABILITY_ESSENCES: AbilityEssenceDef[] = SKILL_LEVEL_BANDS.map((_, i
   return {
     id: `ability${i + 1}`,
     tier: i + 1,
-    label: `Ability Essence ${ROMAN[i] ?? String(i + 1)}`,
+    // THE COHESION RENAME (skill-items M2, card 10 — LOCKED at walk 2):
+    // the player-facing label is "Memory Essence" — the currency is the
+    // refined form of the same substance the world drops (Memories refine
+    // into Memory Essence; feeding it deepens the skill). Identifiers,
+    // save keys ('ability1'…) and every code name stay — labels are
+    // presentation (the header's own law).
+    label: `Memory Essence ${ROMAN[i] ?? String(i + 1)}`,
     color: look.color,
     glyph: look.glyph,
   };

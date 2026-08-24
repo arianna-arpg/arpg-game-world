@@ -44,7 +44,18 @@ export const gemsTab: DevTabDef = {
       // Every tier at once — the cheat's job is to unblock testing, not to
       // model the economy (the wallet is the Skills drawer's readout).
       for (const d of ABILITY_ESSENCES) w.meta.abilityEssences[d.id] = (w.meta.abilityEssences[d.id] ?? 0) + n;
-      flash(`+${n} of every Ability Essence — open the Skills drawer`);
+      flash(`+${n} of every Memory Essence — open the Skills drawer`);
+    };
+    // THE STONE (skill-items M2): drop Rough Memory units at the hero's
+    // feet through the REAL mint (dropGemAt's memory lane — seed, spoils
+    // law, vacuum merge all genuine). The spread covers the lean ladder's
+    // three rungs: a kit teacher, a bias-only body, a wide-pool body.
+    const grantRoughMem = (n: number): void => {
+      const w = runActive();
+      if (!w) { flash('start a run first'); return; }
+      const spread = ['crypt_lich', 'skeleton_archer', 'zombie'];
+      for (let i = 0; i < n; i++) w.dropGemAt(w.player.pos, undefined, false, spread[i % spread.length]);
+      flash(`+${n} Rough Memory drops at your feet (lich/archer/zombie spread)`);
     };
     const grantPassivePts = (n: number): void => {
       const w = runActive();
@@ -61,8 +72,9 @@ export const gemsTab: DevTabDef = {
     cheats.append(
       btn('+1 Lvl', () => grantLevels(1)),
       btn('+5 Lvl', () => grantLevels(5)),
-      btn('+1 Abl Ess', () => grantAbilityEss(1)),
-      btn('+10 Abl Ess', () => grantAbilityEss(10)),
+      btn('+1 Mem Ess', () => grantAbilityEss(1)),
+      btn('+10 Mem Ess', () => grantAbilityEss(10)),
+      btn('+6 Rough Mem', () => grantRoughMem(6)),
       btn('+1 Passive Pt', () => grantPassivePts(1)),
       btn('+1 Voc Pt', () => grantVocationPts(1)),
     );

@@ -1388,8 +1388,8 @@ function cmdAuditDrops(args: Args): void {
     floors: ABILITY_ESSENCES.map((d, i) => ({ tier: d.label, minZone: ae.floors[i] ?? 0 })),
     deeperBias: ae.deeperBias,
   };
-  console.log(`\nAbility Essence trickle (ABILITY_ESSENCE_CFG): ${(ae.killChance * 100).toFixed(1)}%/kill × ${aeMean} mean essences`
-    + ` — floors ${aeTrickle.floors.map(f => `${f.tier.replace('Ability Essence ', '')}@z${f.minZone}`).join(' ')}, deep bias ×${ae.deeperBias}/tier`);
+  console.log(`\nMemory Essence trickle (ABILITY_ESSENCE_CFG): ${(ae.killChance * 100).toFixed(1)}%/kill × ${aeMean} mean essences`
+    + ` — floors ${aeTrickle.floors.map(f => `${f.tier.replace('Memory Essence ', '')}@z${f.minZone}`).join(' ')}, deep bias ×${ae.deeperBias}/tier`);
   fs.writeFileSync(path.join(dir, 'drops.json'), JSON.stringify({ ...audit, expectations, abilityEssenceTrickle: aeTrickle }, null, 2));
   console.log(`\nReport: ${dir}`);
 }

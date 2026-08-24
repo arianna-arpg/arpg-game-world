@@ -22,7 +22,7 @@ measured proof the trade is real (§4).
 |---|---|
 | Skill level cap | 10 → **20 SOFT cap**; effective level stays **uncapped** — no numeric clamp, "+Skill level" investment is a first-class endgame axis |
 | Gem drops | **Always level 1** (the `GEM_DROP_CFG.preLevel` deep-zone roll retires; supports already drop `{level: 1}`) |
-| Leveling currency | **Ability Essence I–IV** — a DEDICATED wallet-counter family (never bag items), zone-floored world drops + vendor-sold |
+| Leveling currency | **Memory Essence I–IV** (renamed from Ability Essence at skill-items M2, card 10 — ids/save keys unchanged) — a DEDICATED wallet-counter family (never bag items), zone-floored world drops + vendor-sold |
 | The bands | **`SKILL_LEVEL_BANDS = [5, 10, 15, 20]`** — Shape B locked: tier N feeds levels inside band N; ONE array, everything derives |
 | Ability points | **One per band completion** (levels 5/10/15/20) = 4 at cap |
 | The trees | **2 branches × 3 rungs + 1 neutral; P = D + N exact cover; HARD BRANCH LOCK** (first point seals the rival branch; neutrals exempt) |
@@ -52,7 +52,7 @@ the **threshold re-seat audit** (rows authored at 11 as "over-cap" become
 mid-band; over-cap authoring moves past 20 — a new teasing lane); the sim's
 band definitions (the L1/5/10/20 powercurve tables are the before-picture).
 
-### Ability Essence I–IV
+### Memory Essence I–IV (né Ability Essence — the skill-items card-10 rename; labels only)
 
 A **dedicated currency family** — her dopamine ruling, verbatim-near: a
 unified currency risks *"less of a spike… 'okay, time to convert and
@@ -65,7 +65,7 @@ zones advertise themselves by what falls there.
   drop-form precedent; no tetris pressure, no stacking question.
 - **The name keeps "Essence" deliberately** — the game's identity register,
   three voices of one metaphysic: raw tints (Coarse→Pristine — the material
-  the world breaks into), **Ability Essences** (I–IV — the refined form,
+  the world breaks into), **Memory Essences** (I–IV — the refined form,
   skill food), Mortal Essence (the reckoning's fold). The vendor sell lane
   IS the refinement fiction. Tier colors mirror the four-step ladder the
   game already speaks everywhere (rarities and tints share it). **DIAL:**
@@ -255,14 +255,14 @@ choices unmade:
   (`locked` extends — the accidental-merge horror story is closed
   structurally); **strict same-skill** (576-skill catalog makes triples a
   real chase; the gemdrop-ledger/commission lane is the aimed supply).
-- **CONVERT:** Ability Essence tier up/down (wallet math): down pays out
+- **CONVERT:** Memory Essence tier up/down (wallet math): down pays out
   generously (IV → 3× I — **DIAL**), up costs per-rung (3:1 — **DIAL**).
   Deliberately lossy end-to-end (the PoE map-vendor valve): conversion
   never beats farming at depth — an inequality the economy audit can pin.
 - **RESET:** the tree respec ritual (§3).
 
 **The division-of-labor law:** vendors convert BETWEEN economies (tints →
-Ability Essences, §6); the Font converts WITHIN them (tiers, rarities,
+Memory Essences, §6); the Font converts WITHIN them (tiers, rarities,
 choices). Co-op attribution follows the standing personal-economy station
 laws (per-seat dwell).
 
@@ -273,7 +273,7 @@ the Font as the **passive-point respec altar** too — planned-passes #25.
 
 ## 6. Vendors — the sell lane (ruled, wave 3)
 
-Brandt and kin **SELL Ability Essences priced in tints** — the direct
+Brandt and kin **SELL Memory Essences priced in tints** — the direct
 conversion seam, and the refinement fiction made literal. **Sell-direction
 only** (no buy-back, or the loop becomes a free exchange rate).
 
@@ -412,7 +412,7 @@ standing order are untouched (the drop INDEX counts mints, not levels).
 - **M-ECON — the economy: BUILT + LANDED @ dc6e2cf (2026-08-20, chip
   task_ff8f3465; ran WITH the rescale #12's gates as charted).** As built:
   `SKILL_LEVEL_BANDS [5,10,15,20]` derives cap, tiers (half-open) and
-  points; Ability Essence I–IV wallet family (floors, the forked-trickle
+  points; Memory Essence I–IV wallet family (floors, the forked-trickle
   kill roll on its own Rng, vendor sell lane by wares rung); preLevel
   retired; THE POINT LANE DEAD with a costless probe-pinned grandfather;
   the Font's merge/convert/reset recipes live with the keeper's-mark

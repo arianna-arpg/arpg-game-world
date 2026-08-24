@@ -46,6 +46,11 @@ import {
   rebuildAnyItem, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf,
   supportOfGemItem, writeBackSupportGem,
 } from './gemitems';
+import {
+  MEMORY_CFG, findRoughMemoryItem, makeRoughMemoryItem, memoryGroups,
+  memoryUnitsOf, mergeRoughMemory, pickSeeded, rollSeededRarity,
+  type MemoryRecallResult, type MemoryRecallViewData,
+} from './memories';
 import { compileItemMods, itemLevelReq, rebuildItem, rollItem } from './itemgen';
 import {
   ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier,
@@ -56,7 +61,7 @@ import {
   VENDOR_ESSENCE_PRICE, VENDOR_ITEM_CFG, VENDOR_SUPPORT_PRICE, walletBreakdown, walletMortalValue,
   type AbilityCost, type EssenceCost, type EssenceId, type EssenceSpillSpec,
 } from '../data/essences';
-import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemInstance, type ItemRarity } from './items';
+import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemInstance, type ItemRarity, type RoughMemoryUnit } from './items';
 import { DROP_CFG, GEM_DROP_CFG, resolveLootTable, rollVestigeId, gemFloorFor, type GemFloor } from './loot';
 import { epitaphFor, VESTIGES } from '../data/vestiges';
 import { MONSTER_THEMES } from '../data/infrequents';
@@ -1571,6 +1576,9 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
     case 'bindSkill': return isIdx(a.slot) && (a.skillId === null || isStr(a.skillId));
     case 'swapSkillSlots': return isIdx(a.a) && isIdx(a.b);
+    // THE STONE (skill-items M2): the pouch wrapper by uid + the dropper
+    // group's def id (untrusted — the recall re-resolves both in-seat).
+    case 'recallMemory': return isIdx(a.uid) && isStr(a.dropper);
     case 'caravanTo': return isIdx(a.band); // band 0 = home; N = a band index
     case 'harborChart': return isStr(a.omen); // the rumored seat's omen id
     case 'holdMuster': return true;  // the standing zone's harborhold — no payload
@@ -25584,6 +25592,7 @@ export class World {
       case 'bindGraft': this.bindGraft(action.key, action.skillId, seat); break;
       case 'bindSkill': this.bindSkill(action.slot, action.skillId, seat); break;
       case 'swapSkillSlots': this.swapSkillSlots(action.a, action.b, seat); break;
+      case 'recallMemory': this.recallRoughMemory(seat, action.uid, action.dropper); break;
       case 'caravanTo': this.startCaravan(action.band, seat); break;
       case 'harborChart': this.buyHarborChart(action.omen, seat); break;
       case 'holdMuster': this.beginHoldMuster(); break;
@@ -40225,8 +40234,17 @@ export class World {
   }
 
   /** Drop one random gem (skill or support) at a point — gated by account
-   *  unlocks; `bias` is the killer's gemBias (the shaman-drops-caster rule). */
-  dropGemAt(at: Vec2, bias?: SkillTag[], owed = false): void {
+   *  unlocks; `bias` is the killer's gemBias (the shaman-drops-caster rule).
+   *
+   *  THE STONE (skill-items M2): `memoryFrom` converts the droplet into a
+   *  ROUGH MEMORY unit of that dropper instead — same spoils seal, same
+   *  ground. THE STREAM LAW: the memory lane consumes EXACTLY the draws
+   *  the gem lane consumes (the gem still rolls, its identity discarded;
+   *  the unit's foreordained seed is derived from the bob draw's own
+   *  float, already spent at HEAD count) — so the global Math.random
+   *  stream is byte-identical whatever GEM_DROP_CFG.memoryShare says, and
+   *  the seeded sim can never notice the dial (probe-pinned). */
+  dropGemAt(at: Vec2, bias?: SkillTag[], owed = false, memoryFrom?: string): void {
     // THE SPOILS LAW: sealed ground refuses the mint — except OWED pay
     // (a quest's payout is earned of the writ, not of this ground).
     if (!owed && this.spoilsSealed()) return;
@@ -40236,17 +40254,190 @@ export class World {
     const floor = this.zoneGemFloor();
     const dropSkill = (): void => {
       const inst = this.rollSkillGem(bias, this.zone.level, floor);
+      const bobF = Math.random(); // rand(0, 2π)'s own draw, raw — the seed site
+      if (memoryFrom) { this.dropMemoryUnit(pos, at, memoryFrom, bobF); return; }
       this.noteGemDrop(inst.def.id, inst.rarity);
-      this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
+      this.drops.push({ pos, item: { kind: 'skill', inst }, bob: bobF * Math.PI * 2 });
       this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15,
         'drop', FLOAT_CFG.dropNameSec);
     };
     if (chance(GEM_DROP_CFG.skillShare)) { dropSkill(); return; }
     const gemDef = this.rollSupportDropGated(bias, this.zone.level, floor);
     if (!gemDef) { dropSkill(); return; } // no supports unlocked → a skill gem instead
+    const bobF = Math.random();
+    if (memoryFrom) { this.dropMemoryUnit(pos, at, memoryFrom, bobF); return; }
     this.noteGemDrop(gemDef.id);
-    this.drops.push({ pos, item: { kind: 'support', gem: { def: gemDef, level: 1 } }, bob: rand(0, Math.PI * 2) });
+    this.drops.push({ pos, item: { kind: 'support', gem: { def: gemDef, level: 1 } }, bob: bobF * Math.PI * 2 });
     this.text(at, `${gemDef.name}!`, gemDef.color, 14, 'drop', FLOAT_CFG.dropNameSec);
+  }
+
+  /** THE STONE's ground mint: one Rough Memory unit sealed around its
+   *  foreordained seed, riding the GEAR drop lane whole (the pouch item IS
+   *  the drop — pickup auto-merges it onto the standing tile). NOT a gem
+   *  mint: THE MINT LAW stamps at the RECALL, where the gem actually
+   *  enters the world. One text call, like the gem it replaced (the float
+   *  fabric draws jitter per call — parity is the law here). */
+  private dropMemoryUnit(pos: Vec2, at: Vec2, dropperId: string, seedF: number): void {
+    const unit: RoughMemoryUnit = { d: dropperId, s: (seedF * 4294967296) >>> 0 };
+    this.drops.push({ pos, item: { kind: 'gear', item: makeRoughMemoryItem([unit]) }, bob: seedF * Math.PI * 2 });
+    this.text(at, 'Rough Memory!', MEMORY_CFG.color, 14, 'drop', FLOAT_CFG.dropNameSec);
+  }
+
+  /** The pouch pickup's one float + feed line (the count IS the news). */
+  private noteMemoryPickup(seat: Seat, total: number): void {
+    this.text(seat.actor.pos, `Rough Memory (×${total})`, MEMORY_CFG.color, 13, 'pickup');
+    notePickup(this.pickupFeed, seat.id, `Rough Memory (×${total})`, MEMORY_CFG.color, this.time);
+  }
+
+  /** THE POUCH SHAPE (skill-items M2, §3b): a picked-up Rough Memory drop
+   *  MERGES onto the seat's standing pouch tile — one tile per kind, ever
+   *  (auto-merged, no second cell). False when no pouch stands: the drop
+   *  then autoPlaces whole and its own tile BECOMES the pouch. */
+  private tryMergeRoughMemory(seat: Seat, item: ItemInstance): boolean {
+    if (!item.mem) return false;
+    const pouch = findRoughMemoryItem(seat.meta.items);
+    if (!pouch) return false;
+    mergeRoughMemory(pouch, item.mem);
+    this.noteMemoryPickup(seat, pouch.mem!.length);
+    this.markMetaDirty(seat);
+    return true;
+  }
+
+  /** THE LEAN LADDER's rung for one dropper def over the CURRENT unlocked
+   *  pool (§4 — strict fallback, one rung per stone): kit ∩ pool → 'kit';
+   *  else an authored gemBias → 'bias'; else 'wide'. THE UNLOCKED-POOL LAW
+   *  lives in the ∩ itself: a kit skill the account has not unlocked simply
+   *  does not lean. ONE derivation serves the cut and the panel's chips —
+   *  drawn == rolled by shared construction. */
+  private memoryLeanOf(def: MonsterDef | undefined, pool: SkillDef[]): { rung: 'kit' | 'bias' | 'wide'; kit: SkillDef[] } {
+    const ids = new Set(pool.map(s => s.id));
+    const kit = [...new Set(def?.skills ?? [])].filter(id => ids.has(id)).map(id => SKILLS[id]);
+    if (kit.length) return { rung: 'kit', kit };
+    if (def?.gemBias?.length) return { rung: 'bias', kit: [] };
+    return { rung: 'wide', kit: [] };
+  }
+
+  /** THE FOREORDAINED CUT (§3): the whole grant as a pure function of the
+   *  unit's sealed seed over the LIVE registries — the dropper's def, the
+   *  account-unlocked pools at the recaller's bracket (the vendor 'shopper'
+   *  idiom; GEM_FLOORS never reach a recall), the standing skillShare split
+   *  and rarity table. Weights come from gemWeights — the ONE drop-policy
+   *  formula — with carried omitted (card 9: cuts WAIVE the carried lean);
+   *  only the die differs (the unit's own Rng, the commission precedent).
+   *  Reload replays the identical find; pool growth is progression. */
+  private resolveMemoryCut(seat: Seat, unit: RoughMemoryUnit):
+      { kind: 'skill'; def: SkillDef; rarity: SkillRarity } | { kind: 'support'; def: SupportDef } {
+    const rng = new Rng(unit.s);
+    const mdef = MONSTERS[unit.d];
+    const lvl = Math.max(this.zone.level, seat.actor.level);
+    const wantSkill = rng.next() < GEM_DROP_CFG.skillShare;
+    if (!wantSkill) {
+      const spool = this.supportDropPool(lvl);
+      if (spool.length > 0) {
+        // Supports never ride the kit rung (kits are skills) — they lean by
+        // the def's gemBias where one is authored, the dropGemAt shape.
+        const w = this.gemWeights(spool, d => d.dropTags ?? d.requiresTags ?? [], d => d.weight, mdef?.gemBias);
+        return { kind: 'support', def: pickSeeded(spool, w, rng)! };
+      }
+      // no supports unlocked → a skill grant instead (the dropGemAt precedent)
+    }
+    const pool = this.skillDropPool(lvl);
+    const lean = this.memoryLeanOf(mdef, pool);
+    const kitIds = new Set(lean.kit.map(s => s.id));
+    const w = lean.rung === 'kit'
+      ? this.gemWeights(pool, s => s.tags, s => (s.dropWeight ?? 100) * (kitIds.has(s.id) ? MEMORY_CFG.kitMult : 1))
+      : this.gemWeights(pool, s => s.tags, s => s.dropWeight ?? 100, lean.rung === 'bias' ? mdef?.gemBias : undefined);
+    const def = pickSeeded(pool, w, rng)!;
+    // Rarity at the cut: the standing table, seeded; boss provenance leans
+    // it (DEF-grain by law — the unit stores only { d, s }, and an actor's
+    // rolled elite tier is not derivable from its def).
+    const rarity = rollSeededRarity(rng, mdef?.boss ? MEMORY_CFG.bossRarityLean : undefined);
+    return { kind: 'skill', def, rarity };
+  }
+
+  /** THE RECALL (skill-items M2, §3b): consume ONE unit of `dropperId` from
+   *  the pouch `uid` — oldest first (FIFO within the group; scum-neutral,
+   *  every unit's grant is its own sealed seed) — and mint its foreordained
+   *  gem straight into the bag. Refusals consume NOTHING: THE SPOILS LAW
+   *  (a recall is a genuine mint) and THE ROOM LAW ("no room to hold what
+   *  returns" — though the LAST unit's grant may land in the cell the
+   *  retiring pouch itself frees). Every grant stamps the drop index (THE
+   *  MINT LAW — the Standing Order and the deed gate keep counting). */
+  recallRoughMemory(seat: Seat, uid: number, dropperId: string): MemoryRecallResult | null {
+    const pouch = this.bagItem(seat, uid);
+    const units = pouch ? memoryUnitsOf(pouch) : null;
+    if (!pouch || !units) return null;
+    const idx = units.findIndex(u => u.d === dropperId);
+    if (idx < 0) return null;
+    if (this.spoilsSealed()) {
+      this.text(seat.actor.pos, MEMORY_CFG.strings.sealed, '#c08a68', 12);
+      return null;
+    }
+    const frees = units.length === 1 ? 1 : 0;
+    if (freeCellCount(seat.meta.items) + frees < 1) {
+      this.text(seat.actor.pos, MEMORY_CFG.strings.noRoom, '#c08a68', 12);
+      return null;
+    }
+    const unit = units[idx];
+    // Consume by REPLACING the array (never splicing in place — saves and
+    // the wire shallow-copy items; a fresh array can't reach a snapshot).
+    const rest = units.filter((_, i) => i !== idx);
+    if (rest.length === 0) {
+      const at = seat.meta.items.indexOf(pouch);
+      if (at >= 0) seat.meta.items.splice(at, 1);
+    } else pouch.mem = rest;
+    const cut = this.resolveMemoryCut(seat, unit);
+    let item: ItemInstance;
+    let color: string;
+    if (cut.kind === 'skill') {
+      const inst = makeSkillGem(cut.def, 1, cut.rarity);
+      this.noteGemDrop(inst.def.id, inst.rarity); // THE MINT LAW
+      item = makeSkillGemItem(inst);
+      color = SKILL_RARITIES[cut.rarity].color;
+    } else {
+      this.noteGemDrop(cut.def.id); // THE MINT LAW
+      item = makeSupportGemItem({ def: cut.def, level: 1 });
+      color = cut.def.color;
+    }
+    autoPlace(seat.meta.items, item); // guaranteed: 1×1 + the room check above
+    this.text(seat.actor.pos, `${item.name}!`, color, 14, 'drop', FLOAT_CFG.dropNameSec);
+    notePickup(this.pickupFeed, seat.id, `${item.name} (recalled)`, color, this.time);
+    this.markMetaDirty(seat);
+    const res: MemoryRecallResult = {
+      kind: cut.kind, id: cut.def.id, name: item.name, itemUid: item.uid,
+      ...(cut.kind === 'skill' ? { rarity: cut.rarity } : {}),
+    };
+    this.memoryRecallLast = { ...res, seat: seat.id };
+    return res;
+  }
+
+  /** THE REVEAL's last grant (per requestMeta round-trip — the panel reads
+   *  it synchronously after its intent lands; co-op clients converge via
+   *  the optimistic apply + the authoritative snapshot). */
+  memoryRecallLast: (MemoryRecallResult & { seat: string }) | null = null;
+
+  /** THE RECALL panel's whole face (§3b), derived LIVE at ask time — THE
+   *  LIVE-REGISTRY MANDATE: groups in first-appearance order (= the order
+   *  FIFO consumes), each wearing its lean rung's honest chips. */
+  memoryRecallView(seat: Seat, uid: number): MemoryRecallViewData | null {
+    const pouch = this.bagItem(seat, uid);
+    const units = pouch ? memoryUnitsOf(pouch) : null;
+    if (!pouch || !units) return null;
+    const lvl = Math.max(this.zone.level, seat.actor.level);
+    const pool = this.skillDropPool(lvl);
+    const refusal = this.spoilsSealed() ? MEMORY_CFG.strings.sealed
+      : freeCellCount(seat.meta.items) + (units.length === 1 ? 1 : 0) < 1 ? MEMORY_CFG.strings.noRoom
+      : null;
+    const groups = memoryGroups(units).map(g => {
+      const def = MONSTERS[g.d];
+      const lean = this.memoryLeanOf(def, pool);
+      return {
+        d: g.d, name: def?.name ?? g.d, count: g.count, rung: lean.rung,
+        kit: lean.kit.map(s => ({ id: s.id, name: s.name, color: s.color, mult: MEMORY_CFG.kitMult })),
+        tags: lean.rung === 'bias' ? [...(def?.gemBias ?? [])] : [],
+      };
+    });
+    return { uid: pouch.uid, total: units.length, groups, refusal };
   }
 
   /** DROP-A-GEM (discard / co-op drop-trade): eject the EXACT gem riding a
@@ -40518,11 +40709,21 @@ export class World {
     const drop = this.drops[bestIdx];
     if (drop.item.kind !== 'gear') return;
     const item = drop.item.item;
+    // THE STONE (M2): a lying pouch (a full bag left it) still merges free.
+    if (item.mem && this.tryMergeRoughMemory(seat, item)) {
+      this.drops.splice(bestIdx, 1);
+      return;
+    }
     if (!autoPlace(seat.meta.items, item)) {
       this.failNote(p, 'bagfull', 'inventory full');
       return;
     }
     this.drops.splice(bestIdx, 1);
+    if (item.mem) {
+      this.noteMemoryPickup(seat, item.mem.length);
+      this.markMetaDirty(seat);
+      return;
+    }
     const kRar = ITEM_RARITIES[item.rarity];
     this.text(p.pos, item.name, kRar.color, 13, 'pickup');
     notePickup(this.pickupFeed, seat.id, `${item.name} (${kRar.label})`, kRar.color, this.time);
@@ -40615,6 +40816,12 @@ export class World {
     const item = this.bagItem(seat, uid);
     if (!item) return;
     if (item.locked) { this.lockedRefusal(seat); return; }
+    // THE STONE (M2): the pouch never salvages — its units are potential,
+    // not steel (recall them, or shift-click drops the stack whole).
+    if (item.mem) {
+      this.text(seat.actor.pos, MEMORY_CFG.strings.noSalvage, '#c08a68', 12);
+      return;
+    }
     if (item.gem) {
       this.breakOneGemItem(seat, item, mode);
       this.markMetaDirty(seat);
@@ -40653,7 +40860,8 @@ export class World {
       // Snapshot the eligible set first — breakOneItem splices the bag.
       // GEM WRAPPERS sit out of the gear sweep: they are their own
       // categories below (a "break all gear" blow never eats the memories).
-      const targets = m.items.filter(i => !i.gem && !i.locked && (!rarity || i.rarity === rarity));
+      // The ROUGH MEMORY pouch (M2) sits out of EVERY sweep likewise.
+      const targets = m.items.filter(i => !i.gem && !i.mem && !i.locked && (!rarity || i.rarity === rarity));
       for (const item of targets) {
         const taught = this.breakOneItem(seat, item, mode);
         ranked.push(...taught.filter(t => t.rankedUp).map(t => t.family));
@@ -41338,8 +41546,26 @@ export class World {
     // untouched underneath.
     const bounty = (this.zone.bounty ?? 1)
       * (this.sim.overlayFor<QuickeningField>('quickening', this.zone.dimension)?.bountyMulAt(this.zone.id) ?? 1);
-    const count = def?.drops ?? (def?.boss ? DROP_CFG.bossGemDrops : chance(DROP_CFG.killGemChance * bounty) ? 1 : 0);
-    for (let i = 0; i < count; i++) this.dropGemAt(actor.pos, def?.gemBias);
+    // THE STONE (skill-items M2): a DIAL share of the kill-path TRICKLE
+    // mints a Rough Memory instead of a direct gem (GEM_DROP_CFG.memoryShare
+    // — direct drops persist rarer, lane 3 of the four). Only the chance
+    // trickle converts: per-def drops, bosses, elite bonus rolls and every
+    // table payout stay direct by construction. ONE draw decides hit AND
+    // lane (r < p·share ⊂ r < p — given a hit, P(memory) = share exactly),
+    // and dropGemAt's memory lane spends the gem lane's exact draws — the
+    // stream is byte-identical whatever the dial says (the seeded sim's
+    // determinism is construction, not luck; probe-pinned).
+    let memoryOf: string | undefined;
+    let count: number;
+    if (def?.drops !== undefined) count = def.drops;
+    else if (def?.boss) count = DROP_CFG.bossGemDrops;
+    else {
+      const p = DROP_CFG.killGemChance * bounty;
+      const r = Math.random();
+      count = r < p ? 1 : 0;
+      if (count && actor.defId && r < p * GEM_DROP_CFG.memoryShare) memoryOf = actor.defId;
+    }
+    for (let i = 0; i < count; i++) this.dropGemAt(actor.pos, def?.gemBias, false, memoryOf);
     // GEAR: loot tables. Per-monster hoard > boss table > chance-gated world
     // table; elite leaders add bonus rolls (crowned promote to the apex table).
     // CARRIED GEAR (the Hollowborn) REPLACES the base branch outright: the
@@ -49683,6 +49909,26 @@ export class World {
         const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude);
         if (!seat) continue;
         this.grantAbilityEssence(seat, drop.item.tier, drop.item.count);
+        this.drops.splice(i, 1);
+        continue;
+      }
+      // THE STONE (skill-items M2): a ROUGH MEMORY drop vacuums like the gem
+      // it replaced — unconditional, at the gem's own touch ring, never the
+      // gear key-gate (the pouch is the gem lane's item; pickup timing and
+      // draw count match the gem byte-for-byte, the sim-stream law). It
+      // MERGES onto the seat's standing pouch tile (no second cell) or
+      // autoPlaces as the first pickup; a full bag leaves it lying.
+      if (drop.item.kind === 'gear' && drop.item.item.mem) {
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gem, exclude);
+        if (!seat) continue;
+        const item = drop.item.item;
+        if (this.tryMergeRoughMemory(seat, item)) { this.drops.splice(i, 1); continue; }
+        if (!autoPlace(seat.meta.items, item)) {
+          this.failNote(seat.actor, 'bagfull', 'inventory full');
+          continue;
+        }
+        this.noteMemoryPickup(seat, item.mem!.length);
+        this.markMetaDirty(seat);
         this.drops.splice(i, 1);
         continue;
       }

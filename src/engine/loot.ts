@@ -104,6 +104,14 @@ export const GEM_DROP_CFG = {
   /** Skill-vs-support split of the generic gem droplet (world.dropGemAt):
    *  this fraction lands as a SKILL gem, the rest as a support. */
   skillShare: 0.4,
+  /** THE STONE (skill-items M2): the share of the kill-path gem TRICKLE
+   *  (the killGemChance lane alone) that mints a ROUGH MEMORY unit instead
+   *  of a direct gem — direct drops persist rarer (lane 3 of the four).
+   *  The guaranteed paths never convert: bosses, per-def drops, elite
+   *  bonus rolls, loot-table 'gem' payouts, Bonewright fixed spoils,
+   *  GEM_FLOORS ground, quest pay and the class kit all stay direct by
+   *  construction. */
+  memoryShare: 0.65,
   /** THE FRESH-FIND LEAN — the catalog-agency lever. A gem the party
    *  already CARRIES (any seat: bag, bar, or socketed) rolls at this
    *  fraction of its weight, so a growing catalog keeps surfacing gems
