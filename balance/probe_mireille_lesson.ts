@@ -1,22 +1,29 @@
 // ---------------------------------------------------------------------------
 // ONE-OFF PROBE — MIREILLE'S FLASK LESSON latches COMPLETED on the real
-// engine: the gift arc end to end (dwell hand-over, learn, bar, brim reward,
-// account graduation), then every way a finished lesson must STAY finished —
-// unbinding a flask, unlearning both, a veteran deal on a graduated account,
-// mid-lesson unlearn as agency, gems traded away, and a legacy resumed save.
-// The lesson state is a LEDGER fact (world.ts MIREILLE_LESSON_STEPS): no
-// teaching surface — tab glow, flap glow, the unbound-slot-key glows, talk
-// line, open-on-Skill-Gems — may ever re-light over the player's own build
-// choices. The step's SUBJECTS (mireilleLessonSkills — which gift skills
-// still want the move; the key-grain read behind the drawer's slot-key
-// glows) must track the arc one flask at a time and wear the same latch.
+// engine: the gift arc end to end (dwell hand-over as magic-rarity bag
+// ITEMS, the one seat gesture, brim reward, account graduation), then every
+// way a finished lesson must STAY finished — unbinding a flask, unlearning
+// both, a veteran deal on a graduated account, mid-lesson unlearn as
+// agency, the gift traded away, and a legacy resumed save. The lesson
+// state is a LEDGER fact (world.ts MIREILLE_LESSON_STEPS — ONE 'learn'
+// row since M4: learn = seat = barred): no teaching surface — the flask
+// bag-tile glows, the SKILLS flap glow, the empty rack-seat glows, her
+// talk line — may ever re-light over the player's own build choices. The
+// step's SUBJECTS (mireilleLessonSkills — which gift skills still want
+// the move; the grain behind the per-item bag glow) must track the arc
+// one flask at a time and wear the same latch. M4 adds: THE GIFT'S
+// BAGFULL (all-or-nothing, refuse-before-mutating, her beat consumed) and
+// THE VAULT CHAIN (LEDGER_FLASK_LESSON opens feat_mireille_life; the
+// Bestiary road hangs off the care chain untouched by the rework).
 // Run: npx tsx balance/probe_mireille_lesson.ts
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { makeSkillInstance } from '../src/engine/skills';
 import { SKILLS } from '../src/data/skills';
-import { LEDGER_FLASK_LESSON } from '../src/meta/account';
+import { freeCellCount, skillGemPayloadOf } from '../src/engine/gemitems';
+import { FEATURE, LEDGER_FLASK_LESSON } from '../src/meta/account';
+import { UNLOCK_CATALOG, isUnlockVisible } from '../src/meta/unlocks';
 import { bumpLedger } from '../src/packages/ledger';
 import type { World } from '../src/engine/world';
 
@@ -78,18 +85,26 @@ step(A, 1.5); // idle dwell ≥ MIREILLE_DWELL → the welcome gift
 check('A1: the dwell hands over both gift gems (bag wrapper items now)',
   FLASKS.every(sid => !!bagFlask(A, sid)),
   `bag=[${A.meta.items.filter(i => i.gem?.kind === 'skill').map(i => i.name).join(',')}]`);
+check('A1-rarity: her authored generosity — both wrappers carry MAGIC gems',
+  FLASKS.every(sid => skillGemPayloadOf(bagFlask(A, sid)!)?.rarity === 'magic'));
 check('A1b: the hand-over is ledgered', (A.ledger[GIFT] ?? 0) >= 1);
 check('A1c: lesson opens on the learn step', A.mireilleGiftLesson() === 'learn');
 check('A1d: the learn step names both carried gifts as its subjects',
   subjects(A) === 'life_flask,mana_flask', `subjects=[${subjects(A)}]`);
+// THE VOICE (M4): her directions speak the pack→rack register — the
+// register is pinned, never the sentence (her exact words stay hers).
+const learnPrompt = A.innkeepPrompt() ?? '';
+check('A1e: her learn-step line points pack → rack',
+  learnPrompt.includes('pack') && learnPrompt.includes('rack'),
+  `prompt="${learnPrompt}"`);
 
 check('A2: seating one flask keeps the learn step (one still carried)',
   learn(A, 'life_flask') && A.mireilleGiftLesson() === 'learn');
 check('A2b: the subjects narrow to the flask still carried',
   subjects(A) === 'mana_flask', `subjects=[${subjects(A)}]`);
-// LEARNED = SEATED (M1): learning IS barring — seating the second flask
-// completes the whole lesson in the one gesture (the bar step's pending
-// state is unreachable by construction; the step row survives as a belt).
+// LEARNED = SEATED: learning IS barring — seating the second flask
+// completes the whole lesson in the one gesture (M4 collapsed the old
+// 'bar' row outright: its pending state was unreachable by construction).
 check('A3: seating the second completes the lesson (learn = seat = barred)',
   learn(A, 'mana_flask') && A.mireilleGiftLesson() === null);
 check('A3b: both flasks stand on the bar — the seat IS the bar slot',
@@ -169,6 +184,54 @@ check('E1: an old save with the fill marker reads LIVED (no bar-step nag)',
 step(E, 0.2);
 check('E1b: and graduates the account on resume',
   (E.account.ledger[LEDGER_FLASK_LESSON] ?? 0) >= 1);
+
+// === F) THE GIFT'S BAGFULL (M4): all-or-nothing, refuse-before-mutating ====
+// The gift is a bag grant now, so it can be REFUSED — and a half-gift
+// would orphan the other flask forever. One free cell for a two-flask
+// hand must grant NOTHING, ledger NOTHING, and keep the gift OWED; her
+// refusal consumes the dwell beat (once per cooldown, never per frame).
+const F = makeSimWorld('tamer', 24607);
+const fMireille = F.createMonster('townsfolk_innkeep', 1, 'player');
+fMireille.pos = { x: F.player.pos.x + 60, y: F.player.pos.y };
+F.actors.push(fMireille);
+while (freeCellCount(F.meta.items) > 1) {
+  if (!F.grantSkillGemItem(F.localSeat, makeSkillInstance(SKILLS['fireball']!, 1, 0))) break;
+}
+check('F0: the rig packed the bag to ONE free cell', freeCellCount(F.meta.items) === 1);
+step(F, 1.5); // the dwell fires — and must refuse the whole hand
+check('F1: a one-cell pack refuses the WHOLE gift (no half-hand)',
+  FLASKS.every(sid => !bagFlask(F, sid)) && freeCellCount(F.meta.items) === 1);
+check('F1b: nothing is ledgered — the gift stays owed',
+  !(F.ledger[GIFT] ?? 0) && F.mireilleGiftOwed());
+check('F1c: no lesson opens over a refused gift', F.mireilleGiftLesson() === null);
+// Make room (two cells) and wait out her beat: the same dwell now lands both.
+const filler = F.meta.items.find(i => i.gem?.kind === 'skill' && i.gem.skillId === 'fireball')!;
+F.meta.items.splice(F.meta.items.indexOf(filler), 1);
+step(F, 6.5); // cooldown (5s) + dwell
+check('F2: with room made, the next beat hands over BOTH flasks',
+  FLASKS.every(sid => !!bagFlask(F, sid)) && (F.ledger[GIFT] ?? 0) >= 1);
+check('F2b: and the lesson opens as ever', F.mireilleGiftLesson() === 'learn');
+
+// === G) THE VAULT CHAIN (M4's ledger law): the rework moves no gates ======
+// feat_mireille_life hangs on LEDGER_FLASK_LESSON — the same account key
+// the belt stamps at both-flasks-seated — and the Bestiary road
+// (feat_tracker) hangs off the care chain above it.
+const lifeRow = UNLOCK_CATALOG.find(u => u.id === 'feat_mireille_life')!;
+const trackerRow = UNLOCK_CATALOG.find(u => u.id === 'feat_tracker')!;
+check('G0: rig A\'s walked lesson opened the chain head on its own account',
+  isUnlockVisible(A.account, lifeRow));
+const G = makeSimWorld('tamer', 24608);
+check('G1: a fresh account\'s Vault breathes no word of her chain',
+  !isUnlockVisible(G.account, lifeRow) && !isUnlockVisible(G.account, trackerRow));
+G.account.ledger[LEDGER_FLASK_LESSON] = 1;
+check('G2: the lesson stamp alone surfaces feat_mireille_life',
+  isUnlockVisible(G.account, lifeRow));
+check('G2b: the Tracker still waits behind the care chain',
+  !isUnlockVisible(G.account, trackerRow));
+G.account.features.add(FEATURE.MIREILLE_HEAL_LIFE);
+G.account.features.add(FEATURE.MIREILLE_HEAL_MANA);
+check('G3: owned care opens the Bestiary road (feat_tracker surfaces)',
+  isUnlockVisible(G.account, trackerRow));
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASS');
 process.exit(failed ? 1 : 0);

@@ -1937,42 +1937,40 @@ const MIREILLE_COOLDOWN = 5;     // seconds before she'll heal again
  *  so selling the gems can never farm her kindness. */
 const MIREILLE_GIFT_SKILLS = ['life_flask', 'mana_flask'];
 const MIREILLE_GIFT_LEDGER = 'mireille_flasks_given';
-/** One teachable move in the gem loop Mireille's gift walks the player
+/** One teachable move in the Memory loop Mireille's gift walks the player
  *  through: `pendingSkills` is the live read for WHICH gift skills still
  *  want the move made on the hero's actual state (empty = step resolved).
- *  Directions, glows and the inventory's open-on-Skill-Gems default all
- *  key off the step id (mireilleGiftLesson); per-skill surfaces — the
- *  unbound slot keys a still-unbarred flask could land on — key off the
- *  subject ids (mireilleLessonSkills). A new teachable move is one row
- *  here, no surface edits. */
+ *  Directions and glows key off the step id (mireilleGiftLesson);
+ *  per-skill surfaces — the glowing flask BAG TILES — key off the subject
+ *  ids (mireilleLessonSkills). A new teachable move is one row here, no
+ *  surface edits. THE ONE GESTURE (skill-items M4): under learned = seated
+ *  the old 'bar' row's pending state was unreachable by construction
+ *  (knowing IS sitting on the rack), so the ladder is the single 'learn'
+ *  row — drag the flask tile onto a rack seat and the whole lesson is
+ *  that one act. */
 interface MireilleLessonStep {
-  id: 'learn' | 'bar';
+  id: 'learn';
   /** Live read: the gift skills this move still wants demonstrating on. */
   pendingSkills: (w: World) => string[];
 }
 const MIREILLE_LESSON_STEPS: MireilleLessonStep[] = [
-  { // seat a carried gift flask ITEM onto the rack (learn = seat, M1)
+  { // seat each carried gift flask ITEM onto the rack (learn = seat = barred)
     id: 'learn',
     pendingSkills: w => MIREILLE_GIFT_SKILLS.filter(id => !w.meta.knownSkills.has(id)
       && !!findBagGem(w.meta.items, 'skill', id)),
   },
-  { // set a learned gift flask onto the action bar (the BUILD flap)
-    id: 'bar',
-    pendingSkills: w => MIREILLE_GIFT_SKILLS.filter(id => w.meta.knownSkills.has(id)
-      && !w.player.skills.some(s => s?.def.id === id)),
-  },
 ];
 /** THE LESSON LIVED — COMPLETION IS A LEDGER FACT, NEVER RE-DERIVED. This
- *  run key stamps at the moments the lesson CLOSES: every step resolved at
- *  once (flasks learned and barred — or the gems traded away), or the gift
+ *  run key stamps at the moments the lesson CLOSES: the one step resolved
+ *  (both flasks seated — or the gift traded away), or the gift
  *  deliberately INVERTED (unlearnSkill on a gift flask: nobody walks a
  *  skill back to the bag without commanding the whole loop). Once stamped
  *  — or the reward paid, or the account graduated — the lesson reads
  *  LIVED forever: unbinding or unlearning a flask afterwards is the
- *  player's own build choice, and no glow, talk line, or tab-yank ever
- *  re-opens a finished lesson over it. Mid-arc the steps stay LIVE on
- *  purpose (bar one of two flasks and the directions keep pointing at the
- *  other): teaching persists until the loop truly closes once. */
+ *  player's own build choice, and no glow or talk line ever re-opens a
+ *  finished lesson over it. Mid-arc the step stays LIVE on purpose (seat
+ *  one of two flasks and the directions keep pointing at the other):
+ *  teaching persists until the loop truly closes once. */
 const MIREILLE_LESSON_LEDGER = 'mireille_lesson_lived';
 /** THE LESSON'S REWARD: the first time her flasks sit LEARNED and ON THE
  *  BAR, Mireille tops both founts to the brim — once per character (run
@@ -13646,7 +13644,7 @@ export class World {
     const u = gdef?.unlock;
     const price = gdef && u?.kind === 'pay-currency' && u.currency === 'mortal'
       ? holdfastTollLabel(gdef, this.zone.level, META_CURRENCY_LABEL)
-      : 'a gem';
+      : 'a Memory';
     const pitch = site ? this.holdfastPocketPitch(site.zoneId, site.lockId) : null;
     return {
       pos: vec(k.pos.x, k.pos.y - 34),
@@ -21534,20 +21532,20 @@ export class World {
       && !findBagGem(this.meta.items, 'skill', id));
   }
 
-  /** The gift-taught LOOP, read back for her directions: the first lesson
-   *  step still PENDING (gift gem carried unlearned → 'learn'; learned but
-   *  off the action bar → 'bar'), null once the lesson is LIVED. PUBLIC —
-   *  the lesson state is the one source of truth every teaching surface
-   *  reads: her talk line (innkeepPrompt), the inventory's
-   *  open-on-Skill-Gems default and the Skill Gems tab + BUILD flap +
-   *  unbound-slot-key glows (ui/panels.ts, with mireilleLessonSkills for
-   *  the per-skill grain). LATCHED SHUT by the ledgers (MIREILLE_LESSON_STEPS):
-   *  once every step has been demonstrated — or the reward paid, or the
-   *  account graduated — this is null FOREVER, so unlearning or unbinding
-   *  a flask later reads as the build choice it is, never as the tutorial
-   *  re-opening. Scoped to her arc: before the gift is handed over there
-   *  is no lesson, only gems. */
-  mireilleGiftLesson(): 'learn' | 'bar' | null {
+  /** The gift-taught LOOP, read back for her directions: the lesson's one
+   *  step while it still PENDS (a gift flask carried in the pack, not yet
+   *  seated — learn = seat = barred, the one gesture), null once the
+   *  lesson is LIVED. PUBLIC — the lesson state is the one source of truth
+   *  every teaching surface reads: her talk line (innkeepPrompt) and the
+   *  glow trio in ui/panels.ts (each carried gift flask's BAG TILE, the
+   *  SKILLS flap while the drawer is shut, the empty rack seats as the
+   *  landing — mireilleLessonSkills for the per-skill grain). LATCHED SHUT
+   *  by the ledgers: once the loop has been walked — or the reward paid,
+   *  or the account graduated — this is null FOREVER, so unlearning or
+   *  unbinding a flask later reads as the build choice it is, never as
+   *  the tutorial re-opening. Scoped to her arc: before the gift is
+   *  handed over there is no lesson, only Memories. */
+  mireilleGiftLesson(): 'learn' | null {
     if (this.mireilleLessonLived()) return null;
     if (!this.ledger[MIREILLE_GIFT_LEDGER]) return null;
     return this.mireilleLessonStep();
@@ -21555,10 +21553,10 @@ export class World {
 
   /** The CURRENT lesson step's SUBJECTS: which gift skills still want the
    *  move mireilleGiftLesson() is pointing at — the per-skill grain a
-   *  surface marks rows and keys with (today: each still-unbarred flask's
-   *  row lights its unbound slot keys in the BUILD drawer). Wears the same
-   *  latch as the step read: a lived lesson — or none owed — reads EMPTY,
-   *  so a per-skill glow can no more outlive the lesson than the tab's. */
+   *  surface marks rows and keys with (today: each carried gift flask's
+   *  bag tile glows — the first per-item bag glow). Wears the same latch
+   *  as the step read: a lived lesson — or none owed — reads EMPTY, so a
+   *  per-skill glow can never outlive the lesson. */
   mireilleLessonSkills(): string[] {
     const step = this.mireilleGiftLesson();
     if (step === null) return [];
@@ -21581,7 +21579,7 @@ export class World {
    *  reading this raw truth (she brims the founts only when the flasks
    *  really sit learned and barred); every TEACHING surface reads the
    *  latched mireilleGiftLesson() instead. */
-  private mireilleLessonStep(): 'learn' | 'bar' | null {
+  private mireilleLessonStep(): 'learn' | null {
     for (const s of MIREILLE_LESSON_STEPS) if (s.pendingSkills(this).length) return s.id;
     return null;
   }
@@ -21607,10 +21605,10 @@ export class World {
 
   /** The innkeep's prompt above her head while the player is near (renderer):
    *  the welcome-gift invitation while the flasks are still owed, then her
-   *  DIRECTIONS through the gem loop the gift teaches, else the locked-care
-   *  note until any of her Vault services unlock. ROLE-BOUND like its
-   *  caravanner/bonewright/delver siblings — any body a package dresses in
-   *  npcRole 'innkeep' gets the prompt, no renderer edit. */
+   *  DIRECTIONS through the Memory loop the gift teaches, else the
+   *  locked-care note until any of her Vault services unlock. ROLE-BOUND
+   *  like its caravanner/bonewright/delver siblings — any body a package
+   *  dresses in npcRole 'innkeep' gets the prompt, no renderer edit. */
   innkeepPrompt(): string | null {
     if (!this.nearMireille()) return null;
     // ('{name}' resolves at the DISPLAY surface against the live hero —
@@ -21625,21 +21623,20 @@ export class World {
       ? '{name}, is it? Come here — I keep flasks for new faces.'
       : 'Come here, dear — I keep flasks for new faces.';
     // The handed gift TEACHES: she names the player's own next move in the
-    // one loop every skill gem follows — and the line clears the moment
-    // they make it. An in-universe tutorial: no popup, no forced hand.
+    // one loop every Memory follows — and the line clears the moment they
+    // make it. An in-universe tutorial: no popup, no forced hand.
     // ('{bind:…}' tokens resolve at the DISPLAY surface against the LIVE
     // keyboard/controller binds — resolveBindTokens, meta/settings.ts — so
     // her directions can never name a key the player rebound away.)
     const lesson = this.mireilleGiftLesson();
-    if (lesson === 'learn') return 'Open your inventory ({bind:panelInv}), love — your flasks are in your pack. Press them into your skill rack (the SKILLS flap on the edge).';
-    if (lesson === 'bar') return 'Now set them to your bar, dear — the SKILLS flap on your inventory\'s edge. A flask out of reach is no flask at all.';
+    if (lesson === 'learn') return 'Find your flasks in your pack ({bind:panelInv}), love — two little Memories. Press them into your skill rack (the SKILLS flap on the edge).';
     if (!this.mireilleUnlocked()) return 'No free innstay — unlock my care in the Vault.';
     return null;
   }
 
   /** Mireille's service, by which of her unlocks the account owns: restore LIFE,
    *  restore MANA, and/or grant a 5-minute +5% experience blessing — plus her
-   *  WELCOME GIFT (both flask gems HANDED OVER, first dwell, no unlock) and, with
+   *  WELCOME GIFT (both flask Memories HANDED OVER, first dwell, no unlock) and, with
    *  a resource's care unlocked, a full REPLENISH of every known orb-fed fount
    *  of that resource (an any-orb catalyst fount counts for both). Returns true
    *  if anything was actually given (so the dwell consumes its cooldown). */
@@ -21649,10 +21646,10 @@ export class World {
     const parts: string[] = [];
     // THE WELCOME GIFT — once per character (the run ledger remembers), and
     // only the gaps: a copy already known or carried is never duplicated.
-    // The gems land in the HAND (skillInv), not on the bar: the hero equips
-    // them THEMSELVES, with Mireille's talk directing each step — the same
-    // inventory→learn→bar loop every gem they'll ever loot follows. Teaching
-    // by doing, not by doing-for.
+    // The flasks land as bag ITEMS, not on the rack: the hero seats them
+    // THEMSELVES, with Mireille's talk directing the move — the same
+    // pack→seat loop every Memory they'll ever loot follows. Teaching by
+    // doing, not by doing-for.
     if (this.mireilleGiftOwed()) {
       // THE RESIDENCE: her flasks land as bag ITEMS now — and the gift is
       // ALL-OR-NOTHING: the ledger must never stamp with a flask refused
@@ -21664,6 +21661,9 @@ export class World {
       if (owed.length && freeCellCount(this.meta.items) < owed.length) {
         this.text(vec(p.pos.x, p.pos.y - 22),
           'Your pack is full, love — make room and come back.', '#d8b87a', 13);
+        // The refusal consumes her beat (nothing was given, so the caller
+        // won't): she asks once per cooldown, never once per frame.
+        this.mireilleCd = MIREILLE_COOLDOWN;
       } else if (owed.length) {
         for (const sid of owed) {
           // Her authored generosity: a MAGIC gem — above the class kit's floor.
@@ -41455,7 +41455,7 @@ export class World {
       return false;
     }
     if (this.commissionOdds(gem) <= 0) {
-      this.failNote(seat.actor, 'vcomm:' + key, 'this counter cannot roll that gem yet');
+      this.failNote(seat.actor, 'vcomm:' + key, 'this counter cannot roll that Memory yet');
       return false;
     }
     hold.commission = { kind: gem.kind, id: gem.id };

@@ -477,8 +477,8 @@ export class UI {
    *  point holds a tree open regardless — the pip law). */
   private skillTreeOpen = new Set<string>();
   // (The flap's TUTORIAL GLOW carries no UI state of its own — like the
-  //  Skill Gems tab's, it reads LIVE off World.mireilleGiftLesson each
-  //  render: glowing while the bar step pends and the drawer is closed,
+  //  flask bag tiles', it reads LIVE off World.mireilleGiftLesson each
+  //  render: glowing while the lesson pends and the drawer is closed,
   //  quiet the moment the lesson advances or latches LIVED. An early idle
   //  browse can't silence a step that hasn't been walked yet.)
   // (THE RESIDENCE, skill-items M1: the inventory's gem tabs retired — loose
@@ -1680,7 +1680,7 @@ export class UI {
           ? ` &nbsp;·&nbsp; ${undiscovered.length} undiscovered` : ''} &nbsp;(re-deals each new run)</div>
       <div class="subtitle">
         A random hand is dealt each run from the classes your account has unlocked.
-        Class Slots widen the hand; Class unlocks (each bundling its thematic gems)
+        Class Slots widen the hand; Class unlocks (each bundling its thematic skills)
         deepen the pool, and every class you realize opens its Vocation.
         Classes are only starting points; the tree and every skill stay open to any build.
         Pick a class to begin; tune the world mix under Event Weights first if you like.
@@ -2301,7 +2301,7 @@ export class UI {
     const tabNotes = !active ? ''
       : (active.rows.length === 0
         ? `<div style="color:#8a8678;font-size:10px;padding:4px 0 2px">Nothing invested here yet;
-            gear, passives and gems that touch these stats will appear as rows.</div>` : '')
+            gear, passives and Memories that touch these stats will appear as rows.</div>` : '')
       + (!this.charShowAll && active.hidden > 0
         ? `<div style="color:#6a6478;font-size:9px;margin-top:5px">${active.hidden} untouched
             stat${active.hidden === 1 ? '' : 's'} not shown; “show unused” lists the whole shelf.</div>` : '');
@@ -2916,18 +2916,19 @@ export class UI {
     // the gear layout never shifts an inch) with the full learned-skills
     // management view. State persists like the satchel's.
     const wf = this.getWorld().nearFont();
-    // MIREILLE'S LESSON, read from its one source of truth (the world): at
-    // the 'learn' step the Skill Gems TAB glows from any other tab; at the
-    // 'bar' step the flap handle glows while the drawer is CLOSED, then the
-    // rack's empty seats inside take over (learnedListHtml's teachSeat) —
-    // one mechanism, three surfaces, each live off the same read every
-    // render. The glow always marks the lesson's next click — and the
-    // lesson LATCHES LIVED in the ledgers (World.mireilleGiftLesson), so
-    // once the loop has been walked — this run, a past character, or
+    // MIREILLE'S LESSON, read from its one source of truth (the world):
+    // while the one 'learn' step pends the carried flask BAG TILES glow
+    // (the per-item glow above), the flap handle glows while the drawer is
+    // CLOSED, then the rack's empty seats inside take over (learnedListHtml's
+    // teachSeat) — one mechanism, three surfaces, each live off the same
+    // read every render. The glow always marks the lesson's next click —
+    // and the lesson LATCHES LIVED in the ledgers (World.mireilleGiftLesson),
+    // so once the loop has been walked — this run, a past character, or
     // undone again by choice (unlearn, unbind) — these stay quiet forever.
     const lesson = this.getWorld().mireilleGiftLesson();
-    // Under learned = seated (M1) BOTH steps end at the rack — the flap is
-    // the road there, so it glows while either pends and the drawer is shut.
+    // Learn = seat = barred (the one gesture): the lesson ends at the rack —
+    // the flap is the road there, so it glows while the step pends and the
+    // drawer is shut.
     const flapGlow = lesson !== null && !this.buildFlapOpen;
     // THE COUCH FLANK: the drawer (and its handle) pop AWAY from the screen
     // edge the panel docks against — a couch-LEFT guest's drawer opens
@@ -3326,7 +3327,7 @@ export class UI {
                 display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${c.color}">${gemInitials(c.name)}</span>
               <span style="color:#c8bce0">×${c.mult}</span></span>`).join('')
           : g.rung === 'bias'
-            ? g.tags.map(t => `<span style="${chipStyle}" title="gem tag lean — ×${GEM_DROP_CFG.biasMult}">
+            ? g.tags.map(t => `<span style="${chipStyle}" title="tag lean — ×${GEM_DROP_CFG.biasMult}">
                 <span style="color:#b8a2e8">#${t}</span><span style="color:#c8bce0">×${GEM_DROP_CFG.biasMult}</span></span>`).join('')
             : `<span style="color:#5a5668;font-size:9px">the wide pool</span>`;
       // THE REVEAL (§3b): the row flips to the granted skill — icon, name,
@@ -3502,7 +3503,7 @@ export class UI {
     this.fontMenu.innerHTML = `
       ${this.closeGlyphHtml()}<h2 style="color:#b06bd4">Sacrificial Font</h2>
       <div style="font-size:11px;color:#8a8678;margin-bottom:6px">
-        Gems merged, essences broken, choices unmade. &nbsp;${wallet}</div>
+        Memories merged, essences broken, choices unmade. &nbsp;${wallet}</div>
       <div class="book-tabs" style="margin-bottom:8px">
         ${tabBtn('merge', 'Merge')}${tabBtn('convert', 'Convert')}${tabBtn('reset', 'Reset')}
       </div>
@@ -4479,7 +4480,7 @@ export class UI {
           <button data-vcomm-close>Close</button>
         </div>
         <div style="max-height:180px;overflow-y:auto">
-          ${shown.map(line).join('') || `<div style="color:#8a8678;font-size:11px">The index knows nothing by that name; gems are indexed as they actually DROP (${need} finds name one).</div>`}
+          ${shown.map(line).join('') || `<div style="color:#8a8678;font-size:11px">The index knows nothing by that name; Memories are indexed as they actually DROP (${need} finds name one).</div>`}
         </div>
         ${rows.length > CAP ? `<div style="color:#8a8678;font-size:10px;margin-top:3px">…${rows.length - CAP} more; refine the search.</div>` : ''}
       </div>`;
@@ -4869,19 +4870,15 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
         ${bankChips}` : ''}
         ${wornRows.length ? `<span style="color:#b8a2e8;font-size:10px">Worn:</span> ${wornChips}` : ''}
       </div>` : '';
-    // MIREILLE'S LESSON at SEAT grain: while the bar step pends, every
-    // EMPTY rack seat glows as the landing (teachSeat below — the old
-    // unbound slot-key glow, moved onto the rack) and each gift flask
-    // still off the bar glows in the holding strip — the same live,
-    // latched read as the tab and flap glows (the flap stops glowing once
-    // opened; these carry the next gesture the rest of the way). Occupied
-    // seats stay dark on purpose: the lesson teaches a free seat, never
-    // an overwrite. Latch and step both live in the world
-    // (mireilleGiftLesson/mireilleLessonSkills), so a seated flask quiets
-    // the instant it lands, and a lived lesson never re-lights here over
-    // a later unseat.
-    // Under learned = seated (M1) both lesson steps end at the rack: while
-    // EITHER pends, the empty seats glow as the landing for the gift flask.
+    // MIREILLE'S LESSON at SEAT grain: while the one 'learn' step pends,
+    // every EMPTY rack seat glows as the landing (teachSeat below) — the
+    // same live, latched read as the bag-tile and flap glows (the flap
+    // stops glowing once opened; these carry the gesture the rest of the
+    // way). Occupied seats stay dark on purpose: the lesson teaches a
+    // free seat, never an overwrite. Latch and step both live in the
+    // world (mireilleGiftLesson/mireilleLessonSkills), so a seated flask
+    // quiets the instant it lands, and a lived lesson never re-lights
+    // here over a later unseat.
     const lessonSkills = world.mireilleGiftLesson() !== null ? world.mireilleLessonSkills() : [];
     // THE RACK OF EIGHT (skill-items charter M0 — docs/design/skill-items.md
     // §2, uncommitted): the drawer's headline surface. The bar's own array
@@ -5117,7 +5114,7 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
           ${wornHere.filter(r => r.state !== 'live').map(r => `<span class="gem-chip graft-chip" style="border-color:#4a4458;opacity:0.62"
             title="${r.def.description}
 Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
-              ? 'this gem is already socketed here; the worn copy yields.'
+              ? 'this Memory is already socketed here; the worn copy yields.'
               : 'it does not fit this skill; a socketed gem granting the mechanism would wake it, or seat a fitting skill here.'}">
             ✦ ${r.def.name} <b>L${r.level}</b> — dormant</span>`).join('')}
           ${this.liftedGraftKey ? `<button class="graft-land" data-graft-bind="${def.id}">⊕ graft here</button>` : ''}
@@ -5157,7 +5154,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         </div>`;
     }).join('');
     return rackHtml + graftBank + (rows
-      || '<div style="color:#8a8678;font-size:11px">Nothing learned. Skills drop from monsters; learn them from the Inventory (I) → Skill Gems tab.</div>');
+      || '<div style="color:#8a8678;font-size:11px">Nothing seated. Skill Memories drop from monsters — press one from your pack into an empty seat above.</div>');
   }
 
   /** Wire the learned-list buttons in whichever container rendered it. */

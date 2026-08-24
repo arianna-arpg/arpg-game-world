@@ -813,7 +813,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     practicing, the town offers somewhere to practice it. ---------------
   { id: 'feat_target_dummy', kind: 'feature', cost: 50, reqLevel: 0, reqLedger: LEDGER_LEGENDARY_SKILL_DROP,
     label: 'Training Dummy: Town',
-    description: 'That legendary gem deserves better than guesswork. A practice dummy stands in Lastlight: an immortal target to pummel and test your skills, effects, ailments, and modifiers against.',
+    description: 'That legendary Memory deserves better than guesswork. A practice dummy stands in Lastlight: an immortal target to pummel and test your skills, effects, ailments, and modifiers against.',
     payload: { flag: FEATURE.TARGET_DUMMY } },
 
   // --- Campfire — THE DEED GATE: earned by WANDERING (LEDGER_ZONES_EXPLORED,
@@ -836,7 +836,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     the trade gate's key, nearly free by design. ------------------------
   { id: 'feat_salvage_station', kind: 'feature', cost: 1, reqLevel: 0, reqLedger: LEDGER_ESSENCE_TOUCHED,
     label: 'Salvage Station: Town',
-    description: 'That strange residue has a name: ESSENCE. A breaker\'s bench is raised in Lastlight; dwell there to BREAK gear and carried gems into their rarity\'s essence (coarse, glimmering, brilliant, pristine), studying every affix broken. The same wisdom teaches Brandt to BUY SCRAP at his counter, paying Coarse Essence by an item\'s overall quality: sell for volume, break for the deep tints and the lore. Spend essence levelling skills, at counters, and crafting studied affixes onto your gear.',
+    description: 'That strange residue has a name: ESSENCE. A breaker\'s bench is raised in Lastlight; dwell there to BREAK gear and carried Memories into their rarity\'s essence (coarse, glimmering, brilliant, pristine), studying every affix broken. The same wisdom teaches Brandt to BUY SCRAP at his counter, paying Coarse Essence by an item\'s overall quality: sell for volume, break for the deep tints and the lore. Spend essence levelling skills, at counters, and crafting studied affixes onto your gear.',
     payload: { flag: FEATURE.SALVAGE_STATION } },
   { id: 'feat_craft_second', kind: 'feature', cost: 400, reqLevel: 0, reqLedger: 'reached_level_15', requiresFeature: FEATURE.SALVAGE_STATION,
     label: 'Salvage Station: Twin Anvils',
@@ -932,8 +932,8 @@ export const UNLOCK_CATALOG: Unlockable[] = [
 
   // --- Master gem unlock: everything obtainable (a deliberate, expensive flip) -
   { id: 'feat_unlock_all_gems', kind: 'feature', cost: 500, reqLevel: 2,
-    label: 'Grand Codex: Unlock All Gems',
-    description: 'EVERY skill and support gem becomes obtainable (drops, chests, Brandt), including anything added in the future. One deliberate unlock so new content is always reachable. (Classes are unlocked apart; each Class bundle also widens the roll at character select.)',
+    label: 'Grand Codex: Unlock All Memories',
+    description: 'EVERY Skill and Support Memory becomes obtainable (drops, chests, Brandt), including anything added in the future. One deliberate unlock so new content is always reachable. (Classes are unlocked apart; each Class bundle also widens the roll at character select.)',
     payload: { flag: FEATURE.UNLOCK_ALL_GEMS } },
 
   // --- THE SKILL GRAFT: the veteran's essence valve — a REPEATABLE charge
@@ -945,7 +945,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'skill_graft', kind: 'graft', cost: SKILL_GRAFT_COST,
     requiresUnlock: 'feat_unlock_all_gems',
     label: 'Skill Grafting',
-    description: 'Buy a SKILL GRAFT charge: at your next run\'s start, choose any skill your account has unlocked, and its gem — at its plainest cut (level 1, common) — rides in beside your class\'s own kit, learned where your young hands can hold it, packed where they cannot. The charge arms and spends only when a run begins with a chosen skill; decline the pick and it simply carries on to a later run. Return here for another once it\'s spent — the shelf never empties: this is where a full Vault keeps growing.',
+    description: 'Buy a SKILL GRAFT charge: at your next run\'s start, choose any skill your account has unlocked, and its Memory — at its plainest cut (level 1, common) — rides in beside your class\'s own kit, learned where your young hands can hold it, packed where they cannot. The charge arms and spends only when a run begins with a chosen skill; decline the pick and it simply carries on to a later run. Return here for another once it\'s spent — the shelf never empties: this is where a full Vault keeps growing.',
     payload: {} },
 ];
 
@@ -1244,9 +1244,9 @@ export const VAULT_TABS: readonly VaultTabDef[] = [
     emptyNote: 'No class purchases are open right now; classes surface through deeds, levels, and hard lessons. The rumors below point at the deeds.',
   },
   {
-    id: 'gems', label: 'Gems', kinds: ['skill', 'support', 'graft'],
-    blurb: 'Skill and support pools: buy one and its gems join the drop tables (and the town counters) for every character after, forever. Skill Grafts arm a chosen gem onto your next run\'s start.',
-    emptyNote: 'No gem pools on the shelf right now; some surface with account levels, others only once the world has taught them.',
+    id: 'gems', label: 'Memories', kinds: ['skill', 'support', 'graft'],
+    blurb: 'Skill and support pools: buy one and its skills join the drop tables (and the town counters) for every character after, forever. Skill Grafts arm a chosen skill onto your next run\'s start.',
+    emptyNote: 'No Memory pools on the shelf right now; some surface with account levels, others only once the world has taught them.',
   },
   {
     id: 'town', label: 'Town', kinds: ['feature'], fallback: true,
