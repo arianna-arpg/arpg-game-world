@@ -3744,6 +3744,12 @@ export class World {
   private mireilleCd = 0;
   /** Seconds left on Mireille's +5% experience blessing (a town pitstop buff). */
   mireilleXpBuff = 0;
+  /** THE AFTERGLOW: set the moment her lesson's brim reward pays, cleared
+   *  when the player steps out of her reach. While it holds, her prompt is
+   *  the warm send-off — never a mid-breath pivot from teacher into the
+   *  locked-care pitch; that standing line waits for the NEXT visit. A
+   *  moment, not a state: transient by design, never saved. */
+  private mireilleAfterglow = false;
 
   constructor(account: Account, manifest: ExpeditionManifest) {
     this.account = account;
@@ -21630,6 +21636,10 @@ export class World {
     // her directions can never name a key the player rebound away.)
     const lesson = this.mireilleGiftLesson();
     if (lesson === 'learn') return 'Find your flasks in your pack ({bind:panelInv}), love — two little Memories. Press them into your skill rack (the SKILLS flap on the edge).';
+    // THE AFTERGLOW (set at the brim reward, cleared when the player steps
+    // out of her reach): the finished lesson closes on her send-off, and
+    // the locked-care line below waits for the next visit.
+    if (this.mireilleAfterglow) return 'Well set, love — a sip when it hurts, that\'s what they\'re for. Off with you now; the world\'s less kind than I am.';
     if (!this.mireilleUnlocked()) return 'No free innstay — unlock my care in the Vault.';
     return null;
   }
@@ -21712,6 +21722,11 @@ export class World {
    *  then a cooldown. No keypress — walk into her or stay near. */
   private updateMireille(dt: number): void {
     if (this.mireilleCd > 0) this.mireilleCd -= dt;
+    // THE AFTERGLOW clears the moment the player steps out of her reach —
+    // the send-off is said to a present guest, and the return visit meets
+    // her standing lines. (Flag-gated so the extra scan only runs during
+    // the brief window itself.)
+    if (this.mireilleAfterglow && this.getMireille() === null) this.mireilleAfterglow = false;
     // THE END-STATE BELT: with her gift handed over and no step still
     // pending — flasks learned and barred, or the gems traded away — the
     // lesson CLOSES, and the close is LEDGERED (a resumed save that lived
@@ -21754,6 +21769,11 @@ export class World {
         }
       }
       this.text(p.pos, 'Mireille: there, love — full to the brim.', '#a0d8a0', 14);
+      // THE AFTERGLOW: her send-off replaces the locked-care pitch until
+      // the player steps away — no mid-breath pivot from teacher to
+      // landlady. Only a lesson that truly ended with a SEATED flask earns
+      // it; the traded-away close keeps her standing line instead.
+      this.mireilleAfterglow = MIREILLE_GIFT_SKILLS.some(sid => this.meta.knownSkills.has(sid));
     }
     // Dwell only builds toward an AVAILABLE service: not while dead, away from
     // her, or while the player is acting. Her WELCOME GIFT (the flasks) needs

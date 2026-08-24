@@ -12,9 +12,11 @@
 // step's SUBJECTS (mireilleLessonSkills — which gift skills still want
 // the move; the grain behind the per-item bag glow) must track the arc
 // one flask at a time and wear the same latch. M4 adds: THE GIFT'S
-// BAGFULL (all-or-nothing, refuse-before-mutating, her beat consumed) and
+// BAGFULL (all-or-nothing, refuse-before-mutating, her beat consumed),
 // THE VAULT CHAIN (LEDGER_FLASK_LESSON opens feat_mireille_life; the
-// Bestiary road hangs off the care chain untouched by the rework).
+// Bestiary road hangs off the care chain untouched by the rework), and
+// THE AFTERGLOW (the brim's send-off holds until the player steps away —
+// the locked-care pitch waits for the return visit).
 // Run: npx tsx balance/probe_mireille_lesson.ts
 // ---------------------------------------------------------------------------
 
@@ -119,6 +121,19 @@ check('A6b: her reward brims the founts (fill ledgered)',
   (A.ledger['mireille_flasks_filled'] ?? 0) >= 1
   && (A.player.charges.get('flask_life') ?? 0) > 0,
   `flask_life=${A.player.charges.get('flask_life') ?? 0}`);
+
+// THE AFTERGLOW (M4 tail): the closed lesson never pivots mid-breath into
+// the locked-care pitch — her prompt is the warm send-off until the player
+// steps out of her reach, and the standing line waits for the return visit.
+const after = A.innkeepPrompt() ?? '';
+check('A6c: after the brim her line is the send-off, not the innstay pitch',
+  after.length > 0 && !after.includes('innstay'), `prompt="${after}"`);
+const homeX = A.player.pos.x, homeY = A.player.pos.y;
+A.player.pos.x += 600; step(A, 0.3); // step out of her reach — afterglow clears
+A.player.pos.x = homeX; A.player.pos.y = homeY; step(A, 0.3);
+const back = A.innkeepPrompt() ?? '';
+check('A6d: the return visit meets her standing line (afterglow cleared)',
+  back.includes('innstay'), `prompt="${back}"`);
 
 // THE REPORTED BUG: un-equipping a flask must never re-open the lesson.
 A.bindSkill(barSlotOf(A, 'life_flask'), null);
