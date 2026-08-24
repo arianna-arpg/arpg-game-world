@@ -72,7 +72,7 @@ import { portraitSubjectOf, portraitTile, type PortraitSubject } from './vis/por
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { drawRuneRing } from './vis/runeRing';
 import { registerVisCache, trimVisCaches } from './vis/caches';
-import { resolveSpeech, revealedChars, wrapSpeech, resolveNameTokens, type SpeechStyle } from './vis/speech';
+import { resolveSpeech, revealedChars, wrapSpeech, resolveNameTokens, dodgeSpeechBox, type SpeechStyle, type SpeechRect } from './vis/speech';
 import { drawEdgeOverlay, qFrac, qChan } from './vis/overlays';
 import { canvasCap, canvasCapsReport } from './vis/canvasCaps';
 import { GroundRenderer } from './vis/ground';
@@ -288,6 +288,19 @@ export class Renderer {
    *  talk (resolveNameTokens, vis/speech.ts) — so a renamed hero, or a fresh
    *  run's, re-addresses every line the same frame. */
   getPlayerName?: () => string;
+
+  /** Wired by main.ts (same altitude as getSettings): THE OBSTRUCTION
+   *  CENSUS — CSS-pixel rects of every open DOM pane standing over the
+   *  canvas (UI.obstructionRects). The speech fabric's PLACEMENT LAW reads
+   *  it so a talk bubble slides out from under an open inventory instead of
+   *  being silently swallowed (vis/speech.ts dodgeSpeechBox). Absent or
+   *  empty = nothing to dodge, bubbles untouched by construction. */
+  uiObstructions?: () => { x: number; y: number; w: number; h: number }[];
+
+  /** The word layer's css↔world mapping for THIS frame (stamped where the
+   *  word pass sets its transform): world→css is (p - o) * z, so a DOM rect
+   *  converts to world as css/z + o. Speech's dodge is the consumer. */
+  private wordView = { z: 1, ox: 0, oy: 0 };
 
   /** Live keybind label for one action — every HUD hint that names a key
    *  goes through this, so hints can never drift from a rebind (the retired
@@ -746,6 +759,14 @@ export class Renderer {
     this.overlay.style.display = crest ? '' : 'none';
     if (crest) this.octx.clearRect(0, 0, this.overlay.width, this.overlay.height);
     const wordZ = crest ? z / this.pixelScale : z;
+    // The word layer's css↔world mapping, stamped beside the transform it
+    // mirrors: both surfaces pin style.width = innerWidth, so css-per-world
+    // is wordZ × (cssW / active buffer W) — the crest overlay carries native
+    // pixels (ratio 1), the main canvas its render-scale buffer.
+    this.wordView = {
+      z: crest ? wordZ : wordZ * (window.innerWidth / Math.max(1, this.canvas.width)),
+      ox: this.cam.x - shx, oy: this.cam.y - shy,
+    };
     this.onCrest(crest, () => {
       const wc = this.ctx;
       wc.save();
@@ -3288,6 +3309,39 @@ export class Renderer {
     const { ctx } = this;
     const typingOn = this.getSettings?.().speechTyping ?? true;
     const spoke = new Set<object>();
+    // THE PLACEMENT LAW (vis/speech.ts dodgeSpeechBox): the open DOM panes'
+    // rects, converted css→world through this frame's word-layer mapping —
+    // fetched once per frame, and only while someone is actually speaking.
+    const wv = this.wordView;
+    const toWorldRect = (r: { x: number; y: number; w: number; h: number }): SpeechRect => ({
+      x: r.x / wv.z + wv.ox, y: r.y / wv.z + wv.oy, w: r.w / wv.z, h: r.h / wv.z,
+    });
+    const panes: SpeechRect[] = (this.uiObstructions?.() ?? []).map(toWorldRect);
+    if (panes.length) {
+      // The canvas HOTBAR is UI too: while panes are open (the only time a
+      // dodge can throw a bubble to the screen's bottom), each seat's slot
+      // cluster joins the obstacle set — grouped per seat so couch flanks
+      // stay two islands, never one wall. hudSlotRects is last frame's
+      // ledger by construction (the HUD pass draws after the word layer) —
+      // the toScreen standing tolerance, at most one frame stale. With no
+      // panes open the set stays empty and placement is byte-identical.
+      const bySeat = new Map<string, { x: number; y: number; w: number; h: number }>();
+      for (const r of this.hudSlotRects) {
+        const u = bySeat.get(r.seatId);
+        if (!u) { bySeat.set(r.seatId, { x: r.x, y: r.y, w: r.w, h: r.h }); continue; }
+        const x2 = Math.max(u.x + u.w, r.x + r.w), y2 = Math.max(u.y + u.h, r.y + r.h);
+        u.x = Math.min(u.x, r.x); u.y = Math.min(u.y, r.y);
+        u.w = x2 - u.x; u.h = y2 - u.y;
+      }
+      for (const u of bySeat.values()) panes.push(toWorldRect(u));
+    }
+    const dodgeView: SpeechRect | null = panes.length ? (() => {
+      const e = VIS_CFG.speech.dodge.edge;
+      return {
+        x: wv.ox + e, y: wv.oy + e,
+        w: window.innerWidth / wv.z - e * 2, h: window.innerHeight / wv.z - e * 2,
+      };
+    })() : null;
     ctx.save();
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -3334,14 +3388,42 @@ export class Renderer {
       const tipX = s.a.pos.x, tipY = s.a.pos.y - s.a.radius - t.lift;
       const top = tipY - t.tailH - boxH;
       const left = tipX - boxW / 2;
+      // THE PLACEMENT LAW: with panes open, the bubble (tail band included)
+      // slides to clean ground; with none, bx/by === left/top by construction.
+      let bx = left, by = top;
+      if (dodgeView) {
+        const p = dodgeSpeechBox({ x: left, y: top, w: boxW, h: boxH + t.tailH },
+          panes, dodgeView, VIS_CFG.speech.dodge.margin);
+        bx = p.x; by = p.y;
+      }
+      // ATTRIBUTION: while the speaker's tip stays below the (possibly slid)
+      // box, the tail wedge stretches to it — who talks stays readable. Slid
+      // past the speaker's row the wedge degenerates and a thin accent
+      // leader carries the eye to the speaker instead.
+      const tailTip = tipY > by + boxH + 1;
       ctx.globalAlpha = reveal;
-      this.speechBubblePath(left, top, boxW, boxH, t.cornerR, tipX, tipY, t.tailW, t.tailH);
+      this.speechBubblePath(bx, by, boxW, boxH, t.cornerR,
+        tailTip ? tipX : bx + boxW / 2, tailTip ? tipY : by + boxH, t.tailW, t.tailH);
       ctx.fillStyle = t.bg;
       ctx.fill();
       ctx.globalAlpha = reveal * t.edgeAlpha;
       ctx.strokeStyle = s.color;
       ctx.lineWidth = 1;
       ctx.stroke();
+      if (!tailTip) {
+        // The leader: from where the box's edge faces the speaker, to them.
+        const cx = bx + boxW / 2, cy = by + boxH / 2;
+        const dx = tipX - cx, dy = tipY - cy;
+        const sx = dx !== 0 ? (dx > 0 ? (bx + boxW - cx) / dx : (bx - cx) / dx) : Infinity;
+        const sy = dy !== 0 ? (dy > 0 ? (by + boxH - cy) / dy : (by - cy) / dy) : Infinity;
+        const frac = Math.min(sx, sy);
+        if (isFinite(frac) && frac > 0 && frac < 1) {
+          ctx.beginPath();
+          ctx.moveTo(cx + dx * frac, cy + dy * frac);
+          ctx.lineTo(tipX, tipY);
+          ctx.stroke();
+        }
+      }
       ctx.globalAlpha = reveal;
       ctx.fillStyle = s.color;
       let before = 0; // chars consumed by earlier lines (+1 per break)
@@ -3355,7 +3437,7 @@ export class Renderer {
         let out = ln.slice(0, vis);
         // The caret blinks on the arriving glyph — sim clock, like the reveal.
         if (frontHere && t.typing.caret && Math.floor(world.time * 3) % 2 === 0) out += '|';
-        ctx.fillText(out, left + t.padX, top + t.padY + (i + 0.5) * t.lineHeight);
+        ctx.fillText(out, bx + t.padX, by + t.padY + (i + 0.5) * t.lineHeight);
       }
     }
     ctx.globalAlpha = 1;

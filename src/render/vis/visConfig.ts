@@ -277,6 +277,20 @@ export const VIS_CFG = {
       pauseComma: 0.09,
       caret: true,
     },
+    /** THE PLACEMENT LAW (vis/speech.ts dodgeSpeechBox): a bubble whose
+     *  ground an open DOM pane covers (inventory, the SKILLS drawer, a
+     *  counter menu) SLIDES to visible screen instead of being swallowed —
+     *  the pane stays whole, the words stay read, the tail stretches to
+     *  keep the speaker attributed. The renderer reads the panes through
+     *  the UI's obstruction census (uiObstructions); with none open the
+     *  bubble is untouched by construction. Units are world px, like every
+     *  other speech dial. */
+    dodge: {
+      /** Clearance kept between a slid bubble and any pane edge. */
+      margin: 10,
+      /** The screen-edge inset a slid bubble must stay inside. */
+      edge: 8,
+    },
   },
 
   /** GROUND DROPS (renderer drawDrops) — gem/gear diamond half-sizes, glow

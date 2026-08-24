@@ -35,7 +35,7 @@
 
 import {
   resolveSpeech, revealedChars, revealBudget, wrapSpeech, resolveNameTokens,
-  type SpeechTuning,
+  dodgeSpeechBox, type SpeechRect, type SpeechTuning,
 } from '../src/render/vis/speech';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { bumpLedger } from '../src/packages/ledger';
@@ -330,6 +330,84 @@ console.log('G. THE RENOWN GATE (heroKnown — the name arrives with the deed, r
       lines.every(l => proxy(l) <= VIS_CFG.speech.maxWidth || !l.includes(' '))
       && lines.join(' ') === line, `${lines.length} lines`);
   }
+}
+
+// --- H. PLACEMENT LAW (dodgeSpeechBox) --------------------------------------
+// A bubble under an open DOM pane slides to visible ground: unobstructed is
+// untouched byte-identical, slid boxes stand margin-clear of EVERY pane and
+// inside the view, the nearest clean candidate wins, and a fully-covered
+// view moves nothing (a hidden bubble beats one squatting on a pane).
+console.log('H. PLACEMENT LAW');
+{
+  const view: SpeechRect = { x: 0, y: 0, w: 1000, h: 600 };
+  const m = 10;
+  const clearOf = (p: { x: number; y: number }, box: SpeechRect, obs: SpeechRect[]): boolean =>
+    obs.every(o => p.x + box.w <= o.x - m || p.x >= o.x + o.w + m
+      || p.y + box.h <= o.y - m || p.y >= o.y + o.h + m);
+  const inView = (p: { x: number; y: number }, box: SpeechRect): boolean =>
+    p.x >= view.x && p.y >= view.y
+    && p.x + box.w <= view.x + view.w && p.y + box.h <= view.y + view.h;
+
+  // H1: unobstructed → byte-identical position (panes elsewhere on screen).
+  const box: SpeechRect = { x: 120, y: 80, w: 160, h: 60 };
+  const far: SpeechRect[] = [{ x: 700, y: 300, w: 250, h: 250 }];
+  const h1 = dodgeSpeechBox(box, far, view, m);
+  check('H1 unobstructed is untouched', h1.x === box.x && h1.y === box.y);
+
+  // H2: a centered pane over the box → slid clean of it, inside the view.
+  const pane: SpeechRect = { x: 300, y: 100, w: 400, h: 400 };
+  const under: SpeechRect = { x: 420, y: 250, w: 160, h: 60 };
+  const h2 = dodgeSpeechBox(under, [pane], view, m);
+  check('H2 an obstructed box slides clean of the pane',
+    clearOf(h2, under, [pane]) && inView(h2, under),
+    `→ (${h2.x},${h2.y})`);
+
+  // H3: nearest wins — a box near the pane's LEFT edge exits leftward.
+  const nearLeft: SpeechRect = { x: 310, y: 250, w: 160, h: 60 };
+  const h3 = dodgeSpeechBox(nearLeft, [pane], view, m);
+  check('H3 the nearest clean candidate wins (left exit for a left-lean box)',
+    h3.x + nearLeft.w <= pane.x - m && h3.y === nearLeft.y,
+    `→ (${h3.x},${h3.y})`);
+
+  // H4: two panes (inventory + flanking drawer) → clean of BOTH at once.
+  const drawer: SpeechRect = { x: 60, y: 120, w: 230, h: 360 };
+  const h4 = dodgeSpeechBox(under, [pane, drawer], view, m);
+  check('H4 two panes: the slide clears both (the union wall)',
+    clearOf(h4, under, [pane, drawer]) && inView(h4, under),
+    `→ (${h4.x},${h4.y})`);
+
+  // H5: panes covering the whole view → no clean ground, no move.
+  const wall: SpeechRect[] = [{ x: -50, y: -50, w: 1100, h: 700 }];
+  const h5 = dodgeSpeechBox(under, wall, view, m);
+  check('H5 no clean ground moves nothing', h5.x === under.x && h5.y === under.y);
+
+  // H6: the margin is honored — the slid edge sits >= margin off the pane.
+  const gap = Math.min(
+    Math.abs(pane.x - (h2.x + under.w)), Math.abs(h2.x - (pane.x + pane.w)),
+    Math.abs(pane.y - (h2.y + under.h)), Math.abs(h2.y - (pane.y + pane.h)));
+  check('H6 the slid box keeps the margin clearance', gap >= m, `gap=${gap}`);
+
+  // H7: the shipped dials exist and stay sane.
+  const d = VIS_CFG.speech.dodge;
+  check('H7 shipped dodge dials are sane', d.margin >= 0 && d.edge >= 0);
+
+  // H8: THE CORNER CASE (the live regression that grew the lattice) — a
+  // centered pane, a flanking drawer, and a bottom hotbar leave clean
+  // ground ONLY in a corner pocket no single-axis slide can reach (below
+  // the pane AND past the drawer); the lattice must find it. Shape taken
+  // from the real 1280×720 screen: inventory + SKILLS drawer + hotbar.
+  const screen: SpeechRect = { x: 8, y: 8, w: 1264, h: 704 };
+  const inv: SpeechRect = { x: 604, y: 56, w: 660, h: 398 };
+  const drw: SpeechRect = { x: 243, y: 57, w: 360, h: 499 };
+  const bar: SpeechRect = { x: 403, y: 628, w: 474, h: 54 };
+  const bub: SpeechRect = { x: 448, y: 194, w: 228, h: 117 };
+  const h8 = dodgeSpeechBox(bub, [inv, drw, bar], screen, m);
+  const clean = clearOf(h8, bub, [inv, drw, bar]);
+  check('H8 the corner pocket is found (two-axis slide)',
+    clean && (h8.x !== bub.x || h8.y !== bub.y)
+    && h8.x >= screen.x && h8.y >= screen.y
+    && h8.x + bub.w <= screen.x + screen.w && h8.y + bub.h <= screen.y + screen.h,
+    `→ (${Math.round(h8.x)},${Math.round(h8.y)})`);
 }
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} passed, ${fail} failed`);

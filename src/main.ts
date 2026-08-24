@@ -367,6 +367,10 @@ ui.getPadActive = padActiveNow;
 // — no per-line churn, and no future line can leak a name the world has not
 // yet learned.
 renderer.getPlayerName = () => world.heroKnown() ? world.meta.name : '';
+// THE OBSTRUCTION CENSUS: the open DOM panes' rects, handed to the speech
+// fabric's PLACEMENT LAW (drawSpeeches → dodgeSpeechBox) so a talk bubble
+// slides out from under an open inventory instead of being swallowed.
+renderer.uiObstructions = () => ui.obstructionRects();
 
 let running = false;
 let deathShown = false;

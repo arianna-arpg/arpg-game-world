@@ -24,6 +24,13 @@
 //             '{bind:…}' expansion in Renderer.resolveText — one token
 //             grammar); a missing name degrades to an honest word, never a
 //             raw brace.
+//   PLACE   — a bubble that would draw UNDER an open DOM pane (inventory,
+//             the SKILLS drawer, a counter menu) SLIDES to visible ground
+//             instead of being silently swallowed — the pane stays whole,
+//             the words stay read, the tail keeps pointing at the speaker
+//             (dodgeSpeechBox; the renderer feeds it the panes' rects
+//             through the UI's obstruction census). Unobstructed bubbles
+//             are untouched BY CONSTRUCTION — no panes open, no change.
 // ---------------------------------------------------------------------------
 
 /** The typewriter's own dials (VIS_CFG.speech.typing is the shipped base). */
@@ -167,4 +174,62 @@ const NAME_TOKEN_RE = /\{name\}/g;
 export function resolveNameTokens(text: string, name?: string): string {
   if (!text.includes('{name}')) return text;
   return text.replace(NAME_TOKEN_RE, name?.trim() || 'Traveller');
+}
+
+/** An axis-aligned rect in whatever space the caller works in (the renderer
+ *  hands world units; the probe hands plain numbers). */
+export interface SpeechRect { x: number; y: number; w: number; h: number }
+
+const rectsOverlap = (a: SpeechRect, b: SpeechRect, m: number): boolean =>
+  a.x < b.x + b.w + m && a.x + a.w > b.x - m
+  && a.y < b.y + b.h + m && a.y + a.h > b.y - m;
+
+/** THE PLACEMENT LAW — dodgeSpeechBox: where a talk bubble stands when open
+ *  DOM panes cover its ground. Pure geometry, no DOM:
+ *    - UNOBSTRUCTED IS UNTOUCHED: a box clear of every obstacle returns its
+ *      own position byte-identical — with no panes open the fabric cannot
+ *      change a pixel.
+ *    - THE LATTICE: an obstructed box tries the candidate lattice — its own
+ *      coordinate and every pane's `margin`-clear edge exit, per axis,
+ *      CROSSED (one- and two-axis slides alike: real screens leave their
+ *      free ground in corners — below one pane AND beside another — that
+ *      no single-axis slide can reach). Every candidate is clamped inside
+ *      `view` and must stand clear of EVERY obstacle to count.
+ *    - NEAREST WINS: among clean candidates the one displaced least from
+ *      the true anchor is chosen — the bubble stays as close to its
+ *      speaker as the panes allow.
+ *    - NO GROUND, NO MOVE: when nothing clean exists (panes cover the whole
+ *      view) the original position returns — a hidden bubble beats a bubble
+ *      squatting ON a pane, which would trade one obscured surface for
+ *      another (the player-visibility symmetry this law exists to keep).
+ *  The caller passes `view` already shrunk by its edge margin; `margin` is
+ *  the clearance kept between the box and any pane edge. Cost is bounded:
+ *  (2n+1)² candidates × n overlap tests for n obstacles, and it runs only
+ *  for a bubble a pane actually covers. */
+export function dodgeSpeechBox(box: SpeechRect, obstacles: readonly SpeechRect[],
+  view: SpeechRect, margin: number): { x: number; y: number } {
+  const home = { x: box.x, y: box.y };
+  if (!obstacles.some(o => rectsOverlap(box, o, margin))) return home;
+  const clampView = (x: number, y: number): { x: number; y: number } => ({
+    x: Math.min(Math.max(x, view.x), view.x + Math.max(0, view.w - box.w)),
+    y: Math.min(Math.max(y, view.y), view.y + Math.max(0, view.h - box.h)),
+  });
+  const xs = new Set<number>([home.x]);
+  const ys = new Set<number>([home.y]);
+  for (const o of obstacles) {
+    xs.add(o.x - margin - box.w); xs.add(o.x + o.w + margin);
+    ys.add(o.y - margin - box.h); ys.add(o.y + o.h + margin);
+  }
+  let best: { x: number; y: number } | null = null;
+  let bestCost = Infinity;
+  for (const cx of xs) {
+    for (const cy of ys) {
+      const p = clampView(cx, cy);
+      const placed = { x: p.x, y: p.y, w: box.w, h: box.h };
+      if (obstacles.some(ob => rectsOverlap(placed, ob, margin))) continue;
+      const cost = (p.x - home.x) ** 2 + (p.y - home.y) ** 2;
+      if (cost < bestCost) { bestCost = cost; best = p; }
+    }
+  }
+  return best ?? home;
 }

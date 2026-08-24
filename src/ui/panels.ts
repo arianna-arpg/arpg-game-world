@@ -2398,6 +2398,32 @@ export class UI {
     else { dndCancel(); hideTooltip(); } // a ghost never outlives its surface
   }
 
+  /** THE OBSTRUCTION CENSUS — the CSS-pixel rects of every open DOM pane
+   *  standing over the canvas, read live each frame by the speech fabric's
+   *  PLACEMENT LAW (renderer.uiObstructions → vis/speech.ts dodgeSpeechBox)
+   *  so a talk bubble slides out from under an open inventory instead of
+   *  being silently swallowed. The roster is the panelClosers ledger's own
+   *  roots plus the popped-out SKILLS drawer (which overflows its root's
+   *  box, so it wears its own data-build-drawer hook); couch-flanked panels
+   *  measure wherever they dock, by construction. A hidden pane measures
+   *  zero and drops out — no state, no bookkeeping. */
+  obstructionRects(): { x: number; y: number; w: number; h: number }[] {
+    const out: { x: number; y: number; w: number; h: number }[] = [];
+    const add = (el: Element | null): void => {
+      if (!el || el.classList.contains('hidden')) return;
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) return; // closed panes measure zero
+      out.push({ x: r.left, y: r.top, w: r.width, h: r.height });
+    };
+    for (const el of [this.charSheet, this.inventory, this.passiveTree,
+      this.worldMap, this.vendorMenu, this.salvageMenu, this.fontMenu,
+      this.recallMenu, this.oracleMenu, this.bestiaryMenu, this.boroughMenu,
+      this.caravanMenu, this.sailMenu, this.holdMenu, this.mercMenu,
+      this.vocationMenu, this.escapeMenu]) add(el);
+    add(document.querySelector('[data-build-drawer]'));
+    return out;
+  }
+
   /** An item anywhere on a LOCAL seat — bag or doll (tooltips serve both).
    *  Seat-explicit for the couch lens; item uids are globally unique, so a
    *  wrong-seat miss is a null, never a mistaken identity. */
@@ -2972,7 +2998,7 @@ export class UI {
         }).join('')}
       </div>` : '';
     const drawer = this.buildFlapOpen ? `
-      <div style="position:absolute;${drawerFlank === 'left'
+      <div data-build-drawer style="position:absolute;${drawerFlank === 'left'
         ? 'right:100%;margin-right:2px;border-radius:6px 0 0 6px;box-shadow:-6px 5px 22px rgba(0,0,0,0.6)'
         : 'left:100%;margin-left:2px;border-radius:0 6px 6px 0;box-shadow:6px 5px 22px rgba(0,0,0,0.6)'};top:0;width:360px;
         max-height:calc(100vh - 220px);display:flex;flex-direction:column;z-index:3;
