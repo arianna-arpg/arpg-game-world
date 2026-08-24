@@ -635,7 +635,8 @@ TRADED provenance, merging onto the standing bag pouch; the glass packs
 gear + gem 1×1s + pouches on the one face, the Standing Order strip
 re-homed beneath it, `commissionOdds`/`vendorSize()` untouched; the
 delver's mint mirrors the gem gate; the gatework re-aims — the Memory
-Counter — with no orphans). M4 (THE LESSON) now queues.
+Counter — with no orphans). M3 pushed at its landing; **M4's chip (THE
+LESSON) fired at the M3 push — the charter's last movement.**
 **Owed her: the combined M0+M1+M2+M3 in-browser walk** — every dial
 unblessed (`memoryShare`, `preformedShare`, the kit-lean mult, pouch drop
 rates + prices + shelf counts, tile faces, the pouch face, the facet-card
