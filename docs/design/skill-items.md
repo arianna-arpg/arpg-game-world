@@ -635,12 +635,26 @@ TRADED provenance, merging onto the standing bag pouch; the glass packs
 gear + gem 1×1s + pouches on the one face, the Standing Order strip
 re-homed beneath it, `commissionOdds`/`vendorSize()` untouched; the
 delver's mint mirrors the gem gate; the gatework re-aims — the Memory
-Counter — with no orphans). M3 pushed at its landing; **M4's chip (THE
-LESSON) fired at the M3 push — the charter's last movement.**
-**Owed her: the combined M0+M1+M2+M3 in-browser walk** — every dial
+Counter — with no orphans). M3 pushed at its landing; M4's chip (THE
+LESSON) fired at the M3 push — the charter's last movement. **M4 LANDED @
+`48f5956` (2026-08-24) — the charter is fully built:** the lesson ladder
+collapsed to the single 'learn' row (the old 'bar' row's pending state was
+unreachable under learned = seated — the seat gesture IS the whole
+lesson), her directions rewritten to the pack→rack register with the
+Memory-family words, the gift's bagfull refusal made beat-honest (her
+cooldown consumes on refusal — once per beat, never per frame), the
+gem-era copy M1–M3 missed swept into the Memory voice (the dead Skill
+Gems tab pointer, the Vault 'Gems' tab label → Memories, the Grand Codex
+row, the Font headline, counter/socket notes, the holdfast toll fallback),
+and `LEDGER_FLASK_LESSON` pinned to the same closing moment —
+`probe_mireille_lesson` grew rigs F (all-or-nothing bagfull gift) and G
+(the Mireille Vault chain) plus magic-rarity and voice-register pins, and
+the fresh-account flow was live-walked end to end (dwell gift → glowing
+bag tiles → drag-seat both → account graduation → Field Care surfaces).
+**Owed her: the combined M0+M1+M2+M3+M4 in-browser walk** — every dial
 unblessed (`memoryShare`, `preformedShare`, the kit-lean mult, pouch drop
 rates + prices + shelf counts, tile faces, the pouch face, the facet-card
-look, the "+" pip).
+look, the "+" pip, her rewritten talk lines).
 
 ---
 
