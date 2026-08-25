@@ -24,12 +24,18 @@
 // ---------------------------------------------------------------------------
 
 import type { Rng } from '../core/rng';
+import type { ItemCategory } from '../engine/items';
+import type { MemoryKind } from '../engine/memories';
 import type { World } from '../engine/world';
 import type { QuestDef } from '../quests/types';
 import { QUEST_CATEGORY_COLORS } from '../quests/types';
+import { registerOmenSource } from '../world/omens';
 import type { OverlayView } from '../world/overlay';
 import { pickSeat, type SeatTuning } from '../world/seats';
 import { ESSENCES, essenceUnitsForValue, type EssenceCost, type EssenceId } from './essences';
+import { ITEM_BASES } from './itembases';
+import { SKILLS } from './skills';
+import { UNIQUE_LIST } from './uniques';
 import { OBJECTIVE_READS, type ZoneDef } from './zones';
 
 /** ⚠ EVERY number here is UNBLESSED (2026-08-24) — the charter's open dials;
@@ -69,28 +75,112 @@ export const BOUNTY_BOARD_CFG = {
    *  Mortal-Essence worth), minted as ONE tint chosen by the zone's level
    *  (the harvest fabric's tierAt idiom, index-aligned with ESSENCE_IDS). */
   pay: { base: 6, perLevel: 1.6, tierAt: [0, 8, 16, 26] as readonly number[] },
+  /** THE ERRAND kind (M1) — "reach the place". Target: standing UNVISITED
+   *  ground, a heavy thumb on the veiled frontier (the exploration ask);
+   *  entry is the deed. THE VEIL is per-posting flavor (walk-1 card 4):
+   *  the default face keeps discovery the ask (an aging OMEN, no lift);
+   *  `liftShare` of postings roll the deed-lift face instead. */
+  errand: {
+    seat: { range: { min: 140, max: 720 }, knownMul: 0.4, unknownMul: 2, veiledMul: 3, prefer: 'flat' } as SeatTuning,
+    band: { below: 5, above: 5 },
+    liftShare: 0.25,
+  },
+  /** THE CULL kind (M1) — "kill the named": the writ grammar sent remote.
+   *  On first entry with the hand held, the board posts `count` writ marks
+   *  through the standing promote-and-name path; done = all claimed
+   *  (credited on the posting itself, so the read works from anywhere and
+   *  survives wipes — a re-entry re-posts the remainder, self-healing).
+   *  Targets never overlap the writ fabric's own boards: zones whose
+   *  OBJECTIVE is 'bounty' and harborhold ground are excluded, so every
+   *  mark in a cull zone belongs to the posting (the mixed-lane guard). */
+  cull: {
+    seat: { range: { min: 1, max: 520 }, knownMul: 1.2, unknownMul: 1, veiledMul: 0.6, prefer: 'flat' } as SeatTuning,
+    band: { below: 6, above: 3 },
+    count: [3, 5] as [number, number],
+  },
+  /** THE PAY LANES (M1 — her reward-targeting agency): each posting rolls
+   *  ONE lane at the arm, weights below; the card prints the exact pay
+   *  (the visible price law). Unique lane: unseen uniques POST (ruled) and
+   *  R2 is split named/category (her amendment — "a unique ring"). */
+  lanes: {
+    weights: { essence: 0.55, pouch: 0.2, lot: 0.15, unique: 0.1 },
+    unique: {
+      namedShare: 0.5,
+      /** Category-face pool (filtered at arm to categories that actually
+       *  hold a unique at the target's level — never a hollow card). */
+      categories: ['ring', 'amulet', 'belt', 'boots', 'gloves', 'helmet', 'chest', 'weapon', 'offhand'] as readonly ItemCategory[],
+      /** Named pool reaches this many levels above the target zone. */
+      reachAbove: 2,
+    },
+    lot: {
+      count: [2, 3] as [number, number],
+      rarityWeights: { common: 0, magic: 45, rare: 55 },
+      categories: ['weapon', 'chest', 'helmet', 'gloves', 'boots', 'belt', 'ring', 'amulet', 'offhand'] as readonly ItemCategory[],
+    },
+    pouch: { roughCount: [3, 5] as [number, number] },
+    /** The gem face rides the pouch lane's weight: this share of pouch-lane
+     *  rolls names a TRUE skill Memory from the account's own drop pool at
+     *  the target's level (THE MINT LAW stamps it at pay). */
+    gemShare: 0.35,
+  },
+  /** The errand's omen (the findability guarantee without the veil lift):
+   *  whispered near, revealed close, aging wider — the omen fabric's own
+   *  dials. */
+  omen: { whisper: 150, reveal: 70, widenPerMin: 8 },
+  /** Slate composition: no kind may take more than this many of the
+   *  slate's seats (the diversity guarantee, card 6's shape). */
+  slate: { maxPerKind: 2 },
 } as const;
+
+/** ONE pay lane per posting (the visible price law: the card prints the
+ *  exact pay). `essence` is R1; `unique` is R2's two faces (named by id, or
+ *  a category — "a unique ring", her amendment); `lot` is R3 (a seeded
+ *  assortment); `pouch`/`gem` are R4's two faces (Memory units, or a named
+ *  TRUE skill Memory under THE MINT LAW). Exactly one field is set. */
+export interface BountyPay {
+  essence?: EssenceCost[];
+  unique?: { id?: string; category?: ItemCategory };
+  lot?: { count: number; category: ItemCategory };
+  pouch?: { kind: MemoryKind; count: number };
+  gem?: { id: string };
+}
 
 /** One generated posting — the persisted instance (pure JSON; the derived
  *  QuestDef is rebuilt from this + the registries at read time, the
  *  live-registry mandate). `failed` is THE FAIL LANE's latch (horizon open
- *  — walk 1): it resolves at the board like a turn-in, paying nothing. */
+ *  — walk 1): it resolves at the board like a turn-in, paying nothing.
+ *  `face` is the errand's veil flavor ('omen' default / 'lift' minority);
+ *  `acceptAt` feeds the omen's aging; `cull` is the cull kind's own claim
+ *  ledger (credited at the kill chokepoint — readable from anywhere,
+ *  wipe-proof: re-entry re-posts the remainder). */
 export interface BountyPosting {
   id: string;
   kind: string;
   boardId: string;
   zoneId: string;
   beat: number;
-  pay: { essence: EssenceCost[] };
+  pay: BountyPay;
   failed?: boolean;
+  face?: 'omen' | 'lift';
+  acceptAt?: number;
+  cull?: { count: number; claimed: number };
 }
 
 /** Deep-copy a posting (save writes; slate snapshots). */
 export function clonePosting(p: BountyPosting): BountyPosting {
   return {
     id: p.id, kind: p.kind, boardId: p.boardId, zoneId: p.zoneId, beat: p.beat,
-    pay: { essence: p.pay.essence.map(c => ({ ...c })) },
+    pay: {
+      ...(p.pay.essence ? { essence: p.pay.essence.map(c => ({ ...c })) } : {}),
+      ...(p.pay.unique ? { unique: { ...p.pay.unique } } : {}),
+      ...(p.pay.lot ? { lot: { ...p.pay.lot } } : {}),
+      ...(p.pay.pouch ? { pouch: { ...p.pay.pouch } } : {}),
+      ...(p.pay.gem ? { gem: { ...p.pay.gem } } : {}),
+    },
     ...(p.failed ? { failed: true } : {}),
+    ...(p.face ? { face: p.face } : {}),
+    ...(p.acceptAt !== undefined ? { acceptAt: p.acceptAt } : {}),
+    ...(p.cull ? { cull: { ...p.cull } } : {}),
   };
 }
 
@@ -102,6 +192,13 @@ export interface BountyRollHost {
   /** Zone ids whose objective is already complete (a charge never posts
    *  finished work). */
   objectiveDone(zoneId: string): boolean;
+  /** Ground the player's feet have walked (the errand's exclusion — an
+   *  entered zone can never be an exploration ask). */
+  visited(zoneId: string): boolean;
+  /** Name a TRUE skill Memory from the account's own drop pool at this
+   *  level (the R4 gem face — the pool law stays in one place, World's).
+   *  Null when the pool is empty. */
+  pickGemId(level: number, rng: Rng): string | null;
   playerLevel: number;
   boardId: string;
   beat: number;
@@ -145,10 +242,83 @@ export function bountyChargePay(zoneLevel: number): EssenceCost[] {
   return [{ essence: id, count: essenceUnitsForValue(id, value) }];
 }
 
+/** The named-unique pool at a target level (arm-time selection; unseen
+ *  uniques POST — ruled). */
+export function bountyUniquePool(level: number): { id: string; name: string; weight: number }[] {
+  const reach = level + BOUNTY_BOARD_CFG.lanes.unique.reachAbove;
+  return UNIQUE_LIST.filter(u => (u.minIlvl ?? 0) <= reach)
+    .map(u => ({ id: u.id, name: u.name, weight: u.weight ?? 100 }));
+}
+
+/** Category-face pool at a target level — only categories that actually
+ *  hold a rollable unique there (never a hollow card). */
+export function bountyUniqueCategories(level: number): ItemCategory[] {
+  const reach = level + BOUNTY_BOARD_CFG.lanes.unique.reachAbove;
+  return BOUNTY_BOARD_CFG.lanes.unique.categories.filter(cat =>
+    UNIQUE_LIST.some(u => (u.minIlvl ?? 0) <= reach
+      && ITEM_BASES[u.baseId]?.category === cat));
+}
+
+/** Roll ONE pay lane for a posting (seeded — part of the foreordained
+ *  arm). Falls back down the ladder to essence whenever a richer lane's
+ *  pool is empty at this level, so a card never prints a hollow pay. */
+export function rollBountyPay(host: BountyRollHost, rng: Rng, level: number): BountyPay {
+  const L = BOUNTY_BOARD_CFG.lanes;
+  const w = L.weights;
+  const total = w.essence + w.pouch + w.lot + w.unique;
+  let r = rng.next() * Math.max(0.0001, total);
+  let lane: 'essence' | 'pouch' | 'lot' | 'unique' = 'essence';
+  for (const [k, wv] of [['essence', w.essence], ['pouch', w.pouch], ['lot', w.lot], ['unique', w.unique]] as const) {
+    r -= wv;
+    if (r <= 0) { lane = k; break; }
+  }
+  if (lane === 'unique') {
+    const named = rng.next() < L.unique.namedShare;
+    if (named) {
+      const pool = bountyUniquePool(level);
+      if (pool.length) {
+        let t = 0;
+        for (const u of pool) t += u.weight;
+        let x = rng.next() * t;
+        let pick = pool[pool.length - 1];
+        for (const u of pool) { x -= u.weight; if (x <= 0) { pick = u; break; } }
+        return { unique: { id: pick.id } };
+      }
+    }
+    const cats = bountyUniqueCategories(level);
+    if (cats.length) return { unique: { category: cats[rng.int(0, cats.length - 1)] } };
+    lane = 'lot'; // no unique stands at this level — fall down the ladder
+  }
+  if (lane === 'lot') {
+    const cats = L.lot.categories;
+    return {
+      lot: {
+        count: rng.int(L.lot.count[0], L.lot.count[1]),
+        category: cats[rng.int(0, cats.length - 1)],
+      },
+    };
+  }
+  if (lane === 'pouch') {
+    if (rng.next() < L.gemShare) {
+      const id = host.pickGemId(level, rng);
+      if (id) return { gem: { id } };
+    }
+    return { pouch: { kind: 'rough', count: rng.int(L.pouch.roughCount[0], L.pouch.roughCount[1]) } };
+  }
+  return { essence: bountyChargePay(level) };
+}
+
 /** One line describing a pay spec (card faces + notices — the visible
  *  price law: the exact pay, printed). */
-export function describeBountyPay(pay: BountyPosting['pay']): string {
-  return pay.essence.map(c => `${c.count} ${ESSENCES[c.essence].label}`).join(' · ');
+export function describeBountyPay(pay: BountyPay): string {
+  if (pay.unique) {
+    if (pay.unique.id) return `the unique: ${UNIQUE_LIST.find(u => u.id === pay.unique!.id)?.name ?? pay.unique.id}`;
+    return `a unique ${pay.unique.category}`;
+  }
+  if (pay.lot) return `${pay.lot.count} rare-grade ${pay.lot.category} pieces`;
+  if (pay.gem) return `the skill Memory: ${SKILLS[pay.gem.id]?.name ?? pay.gem.id}`;
+  if (pay.pouch) return `${pay.pouch.count} Rough Memory units`;
+  return (pay.essence ?? []).map(c => `${c.count} ${ESSENCES[c.essence].label}`).join(' · ') || 'nothing';
 }
 
 // --- K2 · THE CHARGE — "complete the objective of the place" ---------------
@@ -169,11 +339,11 @@ registerBountyKind({
     if (!z) return null;
     return {
       id: `bounty_${host.beat}_${host.seq}`, kind: 'charge', boardId: host.boardId,
-      zoneId: z.id, beat: host.beat, pay: { essence: bountyChargePay(z.level) },
+      zoneId: z.id, beat: host.beat, pay: {},
     };
   },
   done: (world, p) => world.objectiveDoneAt(p.zoneId),
-  // No failed() read at M0: a charge's ground re-arms on revisit, so no
+  // No failed() read here: a charge's ground re-arms on revisit, so no
   // PERMANENT failure case exists at this grain today — the lane stands
   // structurally (BountyPosting.failed + the board's acknowledgment) per
   // walk 1's horizon-open ruling, waiting for a kind that can truly fail.
@@ -188,6 +358,89 @@ registerBountyKind({
     };
   },
 });
+
+// --- K1 · THE ERRAND — "reach the place" (M1) ------------------------------
+registerBountyKind({
+  id: 'errand',
+  weight: 1,
+  roll(host, rng, taken) {
+    const cfg = BOUNTY_BOARD_CFG.errand;
+    const z = pickSeat(host.view, {
+      event: 'bountyboard',
+      ...cfg.seat,
+      filter: zz => !taken.has(zz.id)
+        && !host.visited(zz.id)
+        && zz.level >= host.playerLevel - cfg.band.below
+        && zz.level <= host.playerLevel + cfg.band.above,
+    }, rng);
+    if (!z) return null;
+    return {
+      id: `bounty_${host.beat}_${host.seq}`, kind: 'errand', boardId: host.boardId,
+      zoneId: z.id, beat: host.beat, pay: {},
+      // THE VEIL is per-posting flavor (card 4, ruled): default = the omen
+      // face, discovery stays the ask; a minority rolls the deed-lift.
+      face: rng.next() < cfg.liftShare ? 'lift' : 'omen',
+    };
+  },
+  done: (world, p) => world.visited.has(p.zoneId),
+  annulled: (world, p) => world.zoneMap[p.zoneId] ? null : 'the ground is gone from every chart',
+  copy(world, p) {
+    const z = world.zoneMap[p.zoneId];
+    if (!z) return { title: 'The Errand', ask: 'the ground is gone' };
+    return {
+      title: `The Errand: ${z.name}`,
+      ask: `Reach ${z.name} (level ${z.level}) — entry is the deed.`,
+    };
+  },
+});
+
+// --- K3 · THE CULL — "kill the named" (M1: the writ grammar sent remote) ---
+registerBountyKind({
+  id: 'cull',
+  weight: 1,
+  roll(host, rng, taken) {
+    const cfg = BOUNTY_BOARD_CFG.cull;
+    const z = pickSeat(host.view, {
+      event: 'bountyboard',
+      ...cfg.seat,
+      // THE MIXED-LANE GUARD: never a zone whose own objective posts writs,
+      // never harborhold ground (the plaza board) — every mark in a cull
+      // zone then belongs to the posting, and bountyView's per-zone lane
+      // inference stays honest without a per-mark stamp.
+      filter: zz => !taken.has(zz.id)
+        && !host.objectiveDone(zz.id)
+        && zz.objective.kind !== 'bounty'
+        && !zz.harborhold && !zz.holdAnchor
+        && !!zz.packs?.table?.length
+        && zz.level >= host.playerLevel - cfg.band.below
+        && zz.level <= host.playerLevel + cfg.band.above,
+    }, rng);
+    if (!z) return null;
+    return {
+      id: `bounty_${host.beat}_${host.seq}`, kind: 'cull', boardId: host.boardId,
+      zoneId: z.id, beat: host.beat, pay: {},
+      cull: { count: rng.int(cfg.count[0], cfg.count[1]), claimed: 0 },
+    };
+  },
+  done: (_world, p) => !!p.cull && p.cull.claimed >= p.cull.count,
+  annulled: (world, p) => world.zoneMap[p.zoneId] ? null : 'the ground is gone from every chart',
+  copy(world, p) {
+    const z = world.zoneMap[p.zoneId];
+    const n = p.cull?.count ?? 0;
+    const left = Math.max(0, n - (p.cull?.claimed ?? 0));
+    if (!z) return { title: 'The Cull', ask: 'the ground is gone' };
+    return {
+      title: `The Cull: ${z.name}`,
+      ask: `Put down ${n} marked quarry in ${z.name} (level ${z.level})`
+        + (p.cull && p.cull.claimed > 0 ? ` — ${left} still stand.` : ' — the marks post at your arrival.'),
+    };
+  },
+});
+
+// THE ERRAND'S OMEN (the findability guarantee without the veil lift): every
+// omen-face errand in hand whispers its bearing and finally reveals its seat
+// — the omen fabric verbatim, aging from the accept.
+registerOmenSource((world: World) => world.bountyOmens());
 
 /** The board-giver sentinel: no NPC carries this id, so the standing
  *  quest-giver dwell can never offer or pay a posting — the board's own
@@ -211,10 +464,13 @@ export function postingQuestDef(p: BountyPosting, world: World): QuestDef {
       tileset: z?.tileset ?? 'field', direction: 'e',
       level: z?.level ?? 1, objective: z?.objective ?? { kind: 'clear' },
     },
-    reward: { essence: p.pay.essence },
+    // The essence lane pays through the standing QuestReward field; every
+    // richer lane (unique/lot/pouch/gem) pays through the payout site's
+    // bounty branch (World.payBountyLanes) — never both.
+    reward: { ...(p.pay.essence ? { essence: p.pay.essence } : {}) },
     turnIn: {
       giver: BOUNTY_BOARD_GIVER,
-      prompt: 'The charge is met — return to the bounty board to claim the pay.',
+      prompt: 'The ask is met — return to the bounty board to claim the pay.',
     },
   };
 }

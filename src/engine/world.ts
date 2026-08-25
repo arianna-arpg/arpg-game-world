@@ -153,7 +153,7 @@ import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
 import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, TRACKER_SITE, RECRUITER_SITE, BOUNTY_BOARD_SITE, FONT_SITE } from '../data/townBuild';
 import {
-  BOUNTY_BOARD_CFG, BOUNTY_KINDS, clonePosting, describeBountyPay, postingQuestDef,
+  BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyChargePay, clonePosting, describeBountyPay, postingQuestDef, rollBountyPay,
   type BountyPosting, type BountyRollHost,
 } from '../data/bountyboard';
 // Also a side-effect import: pulling these registers the bestiary's recording
@@ -5975,6 +5975,19 @@ export class World {
     // left (cleared stays cleared; survivors keep their wounds + positions).
     this.zoneGenTagging = false;
     if (memory) this.restoreZoneEnemies(memory);
+    // THE CULL's marks (bounty board M1): a held cull posting targeting
+    // THIS zone posts its quarry through the promote-and-name grammar —
+    // AFTER the memory swap, or a remembered re-entry would swallow the
+    // fresh marks (the posting is usually taken after the ground was first
+    // walked, so the memo knows none). Only the REMAINDER posts (count −
+    // claimed − standing), so wiped ground, remembered ground and fresh
+    // ground all deal the hunt back honestly — the claim ledger rides the
+    // POSTING, never the population. (Marks may re-mint with fresh names
+    // between visits; the ledger, not the fiction, is the law here.)
+    this.seedCullMarks(def, rng);
+    // THE ERRAND's deed is the walk itself: arriving in a held errand's
+    // zone flips the hand ready and speaks the withhold prompt.
+    this.noteBountyArrivals(def);
     // THE OCCURRENCE FABRIC (engine/occurrences.ts): adopt the mint's planted
     // triggers — armed spots carry NO standing state (invisible by
     // construction); a remembered SPRUNG spot re-stands its seeded wound +
@@ -22044,13 +22057,15 @@ export class World {
     if (this.bountyArmedBeat === beat) return;
     const boardId = BOUNTY_BOARD_CFG.boardId;
     const rng = new Rng((this.manifest.seed ^ hashStr(`bountyboard:${boardId}:${beat}`)) >>> 0);
-    const rows = Object.values(BOUNTY_KINDS);
+    const allRows = Object.values(BOUNTY_KINDS);
     const taken = new Set<string>(this.bountyHands.map(h => h.zoneId));
     const view = this.simView();
     const offers: BountyPosting[] = [];
-    for (let i = 0; i < BOUNTY_BOARD_CFG.offers && rows.length; i++) {
-      // Weighted kind pick (one row at M0; the registry law stands for the
-      // M1 spread — a new kind is one registerBountyKind row).
+    const perKind: Record<string, number> = {};
+    for (let i = 0; i < BOUNTY_BOARD_CFG.offers && allRows.length; i++) {
+      // Weighted kind pick under THE DIVERSITY CAP (slate.maxPerKind —
+      // card 6's shape): a kind at its cap leaves the draw.
+      const rows = allRows.filter(r => (perKind[r.id] ?? 0) < BOUNTY_BOARD_CFG.slate.maxPerKind);
       let total = 0;
       for (const r of rows) total += Math.max(0, r.weight);
       if (total <= 0) break;
@@ -22059,16 +22074,40 @@ export class World {
       for (const r of rows) { pick -= Math.max(0, r.weight); if (pick <= 0) { row = r; break; } }
       const host: BountyRollHost = {
         view, zoneMap: this.zoneMap, objectiveDone: id => this.objectiveDoneAt(id),
+        visited: id => this.visited.has(id),
+        pickGemId: (lvl, r) => this.pickBountyGemId(lvl, r),
         playerLevel: this.player.level, boardId, beat, seq: i,
       };
       const p = row.roll(host, rng, taken);
       if (!p) continue; // no honest target for this seat — the slate runs short
+      // THE PAY LANE rolls at the arm, off the TARGET's level (the visible
+      // price law: the card prints exactly what the turn-in will mint).
+      p.pay = rollBountyPay(host, rng, this.zoneMap[p.zoneId]?.level ?? this.player.level);
       taken.add(p.zoneId);
+      perKind[row.id] = (perKind[row.id] ?? 0) + 1;
       offers.push(p);
     }
     this.bountyOffers = offers;
     this.bountyArmedBeat = beat;
     this.charDirty = true;
+  }
+
+  /** Name a TRUE skill Memory from the account's own drop pool at this
+   *  level — the R4 gem face's selection (the roller's own pool + weights,
+   *  the commission-odds law: the board deals only what could drop). */
+  private pickBountyGemId(level: number, rng: Rng): string | null {
+    const pool = this.skillDropPool(level);
+    if (!pool.length) return null;
+    const w = this.gemWeights(pool, s => s.tags, s => s.dropWeight ?? 100);
+    let total = 0;
+    for (const x of w) total += x;
+    if (total <= 0) return null;
+    let r = rng.next() * total;
+    for (let i = 0; i < pool.length; i++) {
+      r -= w[i];
+      if (r <= 0) return pool[i].id;
+    }
+    return pool[pool.length - 1].id;
   }
 
   /** THE ANNUL RECONCILE (charter §4): offers whose target the world already
@@ -22123,8 +22162,13 @@ export class World {
     this.bountyOffers.splice(i, 1);
     this.bountyHands.push(p);
     this.activeQuests.push({ questId: p.id, zoneId: p.zoneId, fieldDone: false });
+    // THE CLAIM LANE's veil, per kind and face (walk-1 card 4): a charge or
+    // a lift-face errand TELLS you the way; the omen-face errand keeps
+    // discovery the ask — no lift, an aging omen instead (bountyOmens).
+    p.acceptAt = this.time;
+    const lifts = p.kind !== 'errand' || p.face === 'lift';
     const z = this.zoneMap[p.zoneId];
-    if (z?.veiled) {
+    if (lifts && z?.veiled) {
       z.veiled = false;
       this.refreshExitLabels();
     }
@@ -22175,10 +22219,98 @@ export class World {
       return false;
     }
     const aq = this.activeQuests.find(e => e.questId === id);
-    if (aq) this.onQuestZoneCleared(aq); // pays + stamps (the bounty branch)
+    if (aq) this.onQuestZoneCleared(aq); // pays essence + stamps (the bounty branch)
+    // The richer lanes (unique/lot/pouch/gem) pay HERE with the turning
+    // seat in hand (the pouch merges into that seat's bag) — the payout
+    // site's branch owns the stamps + the essence lane.
+    this.payBountyLanes(p, seat);
     this.bountyHands = this.bountyHands.filter(h => h.id !== id);
     this.charDirty = true;
     return true;
+  }
+
+  /** THE ERRAND'S OMENS (data/bountyboard.ts registers the source): every
+   *  omen-face errand in hand, unwalked, whispers its bearing — aging from
+   *  the accept — and finally REVEALS its seat up close (the omen pass's
+   *  own unveil): the findability guarantee without the veil lift. */
+  bountyOmens(): Omen[] {
+    const out: Omen[] = [];
+    for (const p of this.bountyHands) {
+      if (p.kind !== 'errand' || p.face === 'lift') continue;
+      if (this.visited.has(p.zoneId)) continue;
+      const z = this.zoneMap[p.zoneId];
+      if (!z) continue;
+      const O = BOUNTY_BOARD_CFG.omen;
+      out.push({
+        id: `bounty_omen_${p.id}`,
+        at: { x: z.map.x, y: z.map.y },
+        zoneId: p.zoneId,
+        color: BOUNTY_BOARD_CFG.accent,
+        lines: ['the board\'s mark lies {bearing}, {dist}'],
+        whisper: O.whisper, reveal: O.reveal, widenPerMin: O.widenPerMin,
+        age: Math.max(0, this.time - (p.acceptAt ?? this.time)),
+        dimension: z.dimension,
+      });
+    }
+    return out;
+  }
+
+  /** Pay a posting's NON-ESSENCE lane at the turn-in (the essence lane
+   *  rides the standing QuestReward field through the one payout site).
+   *  Seeded per posting — the reveal replays on a reload; every ground
+   *  mint is OWED (the writ's pay, not the ground's); the gem face stamps
+   *  THE MINT LAW so the drop index keeps feeding the Standing Order. */
+  private payBountyLanes(p: BountyPosting, seat: Seat): void {
+    const pay = p.pay;
+    if (!pay.unique && !pay.lot && !pay.pouch && !pay.gem) return;
+    const rng = new Rng((this.manifest.seed ^ hashStr(`bountypay:${p.id}`)) >>> 0);
+    const rf = (): number => rng.next();
+    const ilvl = Math.max(1, this.zoneMap[p.zoneId]?.level ?? this.player.level);
+    const at = seat.actor.pos;
+    const fallback = (): void => {
+      // A pool emptied between arm and pay (a registry edit mid-run):
+      // never a silent nothing — essence covers the card's worth, said.
+      for (const c of bountyChargePay(ilvl)) this.dropEssenceAt(at, c);
+      this.notice('The promised piece is gone from the world — the board pays in essence.', BOUNTY_BOARD_CFG.accent, 14, 'civic');
+    };
+    if (pay.unique) {
+      const item = rollItem(pay.unique.id
+        ? { ilvl, uniqueId: pay.unique.id, rng: rf }
+        : { ilvl, rarity: 'unique', category: pay.unique.category, rng: rf });
+      if (item) this.dropGearAt(at, item, undefined, true);
+      else fallback();
+      return;
+    }
+    if (pay.lot) {
+      let landed = 0;
+      for (let i = 0; i < pay.lot.count; i++) {
+        const item = rollItem({
+          ilvl, category: pay.lot.category, rng: rf,
+          rarityWeights: BOUNTY_BOARD_CFG.lanes.lot.rarityWeights,
+        });
+        if (item) { this.dropGearAt(vec(at.x + rand(-24, 24), at.y + rand(-24, 24)), item, undefined, true); landed++; }
+      }
+      if (!landed) fallback();
+      return;
+    }
+    if (pay.gem) {
+      const def = SKILLS[pay.gem.id];
+      if (!def) { fallback(); return; }
+      const inst = makeSkillGem(def, 1, rollSkillRarity(rng.next()));
+      this.dropGearAt(at, makeSkillGemItem(inst), undefined, true);
+      // THE MINT LAW: a board-paid Memory is a genuine mint site — the
+      // drop index feeds, the Standing Order keeps its food.
+      this.noteGemDrop(def.id, inst.rarity);
+      return;
+    }
+    if (pay.pouch) {
+      const units = Array.from({ length: pay.pouch.count }, () =>
+        ({ d: MEMORY_TRADED_PROVENANCE, s: (rng.next() * 0xffffffff) >>> 0 }));
+      const item = makeMemoryItem(pay.pouch.kind, units);
+      // Merge onto the standing bag pouch (the vendor-buy law); a full bag
+      // spills it owed at the feet — never lost.
+      if (!this.tryMergeMemoryItem(seat, item)) this.dropGearAt(at, item, undefined, true);
+    }
   }
 
   /** The postings panel's whole read (render-ready — copy from the kind
@@ -22204,6 +22336,62 @@ export class World {
         return { ...face(p), state };
       }),
     };
+  }
+
+  /** Post a held cull posting's marks into ITS zone (loadZone, inside the
+   *  Zone Memory tagging window — the objective-writ grammar verbatim:
+   *  promote, nemesis-name, dedupe, tag). Posts only the REMAINDER
+   *  (count − claimed − standing), so wiped ground re-deals and the hunt
+   *  can always finish. */
+  private seedCullMarks(def: ZoneDef, rng: { int(a: number, b: number): number; next(): number }): void {
+    for (const p of this.bountyHands) {
+      if (p.kind !== 'cull' || p.zoneId !== def.id || !p.cull) continue;
+      const standing = this.actors.filter(a => !a.dead && a.tag === 'bounty_mark').length;
+      const need = Math.max(0, p.cull.count - p.cull.claimed - standing);
+      if (!need) continue;
+      const { table } = this.effectiveSpawn(def, this.baseTable(def));
+      const eligible = table.filter(en => {
+        const md = MONSTERS[en.id];
+        return !!md && !md.passive && !md.noObjective && !md.spawner && !md.npcRole;
+      });
+      for (let i = 0; i < need; i++) {
+        let m: Actor | null;
+        if (eligible.length) {
+          const type = this.weightedPick(eligible, Math.max(1, def.level));
+          m = this.createMonster(type, Math.max(1, def.level), 'enemy');
+          m.pos = this.spawnPoint(24);
+          this.actors.push(m);
+        } else {
+          m = this.countedEnemies().find(a =>
+            a.tag !== 'bounty_mark' && (a.rarity ?? 'normal') === 'normal') ?? null;
+          if (!m) break;
+        }
+        this.promoteRarityStacked(m, BOUNTY_CFG.rarity, BOUNTY_CFG.stacks);
+        const fac = m.faction ?? (m.defId ? MONSTERS[m.defId]?.faction : undefined) ?? '';
+        let name = mintNemesisName(fac, () => rng.next());
+        for (let tries = 0; tries < 4 && this.actors.some(a => a !== m && a.tag === 'bounty_mark' && a.name === name); tries++) {
+          name = mintNemesisName(fac, () => rng.next());
+        }
+        m.name = name;
+        m.tag = 'bounty_mark';
+      }
+    }
+  }
+
+  /** The errand's arrival note (loadZone): entry IS the deed — the hand
+   *  flips ready and the withhold prompt speaks (the field-clear hook's
+   *  twin for a kind whose predicate is the walk itself). */
+  private noteBountyArrivals(def: ZoneDef): void {
+    for (const p of this.bountyHands) {
+      if (p.kind !== 'errand' || p.zoneId !== def.id) continue;
+      const aq = this.activeQuests.find(e => e.questId === p.id);
+      if (aq && !aq.fieldDone) {
+        aq.fieldDone = true;
+        this.notice(this.questDefOf(p.id)?.turnIn?.prompt
+          ?? 'The ask is met — return to the bounty board to claim the pay.', BOUNTY_BOARD_CFG.accent, 16, 'civic');
+        this.charDirty = true;
+      }
+    }
   }
 
   /** Linger at the board → arm this beat's slate + open the postings panel
@@ -39919,6 +40107,30 @@ export class World {
       run: () => {
         const cu = this.cull!;
         cu.kills = Math.min(cu.need, cu.kills + 1);
+      },
+    },
+    // THE CULL's claim (bounty board M1): a felled mark credits the held
+    // posting targeting THIS zone — the ledger rides the POSTING itself
+    // (readable from anywhere, wipe-proof; the mixed-lane guard keeps
+    // every mark here the posting's own). Any hand's kill counts — the
+    // writ's honesty; the per-mark XP beat still rides the shared
+    // 'bounty_writ_claim' row in data/bounties.ts.
+    {
+      id: 'bounty_cull_claim',
+      tag: 'bounty_mark',
+      when: () => this.bountyHands.some(h =>
+        h.kind === 'cull' && h.zoneId === this.zone.id && !!h.cull && h.cull.claimed < h.cull.count),
+      run: () => {
+        const p = this.bountyHands.find(h =>
+          h.kind === 'cull' && h.zoneId === this.zone.id && !!h.cull && h.cull.claimed < h.cull.count)!;
+        p.cull!.claimed++;
+        this.charDirty = true;
+        if (p.cull!.claimed >= p.cull!.count) {
+          const aq = this.activeQuests.find(e => e.questId === p.id);
+          if (aq && !aq.fieldDone) aq.fieldDone = true;
+          this.notice(this.questDefOf(p.id)?.turnIn?.prompt
+            ?? 'The ask is met — return to the bounty board to claim the pay.', BOUNTY_BOARD_CFG.accent, 16, 'civic');
+        }
       },
     },
     // DESCENT — THE DEEP LEDGER: a slain brood-member banks essence UNITS

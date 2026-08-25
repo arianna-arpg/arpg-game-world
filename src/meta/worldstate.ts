@@ -622,15 +622,45 @@ export function sanitizeBountyBoard(
     if (typeof x.id !== 'string' || typeof x.kind !== 'string' || !BOUNTY_KINDS[x.kind]) return null;
     if (typeof x.boardId !== 'string' || typeof x.zoneId !== 'string' || !zones[x.zoneId]) return null;
     if (!isFiniteNum(x.beat)) return null;
-    const essence = Array.isArray(x.pay?.essence)
-      ? x.pay.essence.filter(c => c && typeof c === 'object'
+    // ONE pay lane survives sanitation (the visible price law's save half);
+    // a posting whose pay no longer stands drops whole (keep-what-stands).
+    const raw = x.pay ?? {};
+    let pay: BountyPosting['pay'] | null = null;
+    if (Array.isArray(raw.essence)) {
+      const essence = raw.essence.filter(c => c && typeof c === 'object'
         && typeof c.essence === 'string' && isFiniteNum(c.count) && c.count > 0)
-        .map(c => ({ essence: c.essence, count: Math.floor(c.count) }))
-      : [];
+        .map(c => ({ essence: c.essence, count: Math.floor(c.count) }));
+      if (essence.length) pay = { essence };
+    } else if (raw.unique && typeof raw.unique === 'object'
+      && (typeof raw.unique.id === 'string' || typeof raw.unique.category === 'string')) {
+      pay = {
+        unique: {
+          ...(typeof raw.unique.id === 'string' ? { id: raw.unique.id } : {}),
+          ...(typeof raw.unique.category === 'string' ? { category: raw.unique.category } : {}),
+        },
+      };
+    } else if (raw.lot && typeof raw.lot === 'object'
+      && isFiniteNum(raw.lot.count) && raw.lot.count > 0 && typeof raw.lot.category === 'string') {
+      pay = { lot: { count: Math.floor(raw.lot.count), category: raw.lot.category } };
+    } else if (raw.gem && typeof raw.gem === 'object' && typeof raw.gem.id === 'string' && SKILLS[raw.gem.id]) {
+      pay = { gem: { id: raw.gem.id } };
+    } else if (raw.pouch && typeof raw.pouch === 'object'
+      && isFiniteNum(raw.pouch.count) && raw.pouch.count > 0
+      && (raw.pouch.kind === 'rough' || raw.pouch.kind === 'preformed')) {
+      pay = { pouch: { kind: raw.pouch.kind, count: Math.floor(raw.pouch.count) } };
+    }
+    if (!pay) return null;
+    const cull = x.cull && typeof x.cull === 'object'
+      && isFiniteNum(x.cull.count) && x.cull.count > 0 && isFiniteNum(x.cull.claimed)
+      ? { count: Math.floor(x.cull.count), claimed: Math.max(0, Math.floor(x.cull.claimed)) }
+      : undefined;
     return {
       id: x.id, kind: x.kind, boardId: x.boardId, zoneId: x.zoneId,
-      beat: Math.floor(x.beat), pay: { essence },
+      beat: Math.floor(x.beat), pay,
       ...(x.failed === true ? { failed: true } : {}),
+      ...(x.face === 'omen' || x.face === 'lift' ? { face: x.face } : {}),
+      ...(isFiniteNum(x.acceptAt) ? { acceptAt: Math.max(0, x.acceptAt) } : {}),
+      ...(cull ? { cull } : {}),
     };
   };
   const offers = Array.isArray(bb.offers)

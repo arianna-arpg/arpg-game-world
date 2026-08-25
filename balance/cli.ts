@@ -20,7 +20,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { CLASSES } from '../src/data/classes';
-import { ABILITY_ESSENCE_CFG, ABILITY_ESSENCES } from '../src/data/essences';
+import { ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, ESSENCES } from '../src/data/essences';
+import { BOUNTY_BOARD_CFG, bountyChargePay, bountyUniqueCategories, bountyUniquePool } from '../src/data/bountyboard';
 import { MONSTERS } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
@@ -1303,7 +1304,44 @@ function cmdAudit(args: Args): void {
   else if (what === 'textures') auditTextures(args);
   else if (what === 'affixes') cmdAuditAffixes(args);
   else if (what === 'drops') cmdAuditDrops(args);
-  else throw new Error(`audit supports 'monsters', 'textures', 'affixes' or 'drops' (got '${what}')`);
+  else if (what === 'bounties') cmdAuditBounties(args);
+  else throw new Error(`audit supports 'monsters', 'textures', 'affixes', 'drops' or 'bounties' (got '${what}')`);
+}
+
+/** THE BOUNTY BOARD's pay under the microscope (docs/design/bounty-board.md
+ *  M1 — the economy-audit board lane): per level band, the essence fold's
+ *  worth, the pay-lane weights, and each richer lane's POOL at that level
+ *  (named uniques in reach, honest unique categories, lot/pouch dials) —
+ *  the dial-review instrument for her walks. Pure data reads: the same
+ *  functions the arm rolls through. */
+function cmdAuditBounties(args: Args): void {
+  bootSimEngine();
+  const ilvls = csvNums(str(args.flags.ilvls, ''));
+  const bands = ilvls.length ? ilvls : [2, 6, 12, 20, 30, 40];
+  const CFG = BOUNTY_BOARD_CFG;
+  const w = CFG.lanes.weights;
+  const wTotal = w.essence + w.pouch + w.lot + w.unique;
+  console.log(`THE BOUNTY BOARD — beat ${CFG.beatSec}s · ${CFG.offers} offers · maxPerKind ${CFG.slate.maxPerKind}`);
+  console.log(`lane weights: essence ${(w.essence / wTotal * 100).toFixed(0)}% · pouch ${(w.pouch / wTotal * 100).toFixed(0)}%`
+    + ` (gem face ${(CFG.lanes.gemShare * 100).toFixed(0)}% of those) · lot ${(w.lot / wTotal * 100).toFixed(0)}%`
+    + ` · unique ${(w.unique / wTotal * 100).toFixed(0)}% (named ${(CFG.lanes.unique.namedShare * 100).toFixed(0)}%)`);
+  console.log(`kind bands: charge −${CFG.charge.band.below}/+${CFG.charge.band.above}`
+    + ` · errand −${CFG.errand.band.below}/+${CFG.errand.band.above} (lift face ${(CFG.errand.liftShare * 100).toFixed(0)}%)`
+    + ` · cull −${CFG.cull.band.below}/+${CFG.cull.band.above} ×[${CFG.cull.count[0]},${CFG.cull.count[1]}]`);
+  for (const lvl of bands) {
+    const essence = bountyChargePay(lvl);
+    const uniques = bountyUniquePool(lvl);
+    const cats = bountyUniqueCategories(lvl);
+    console.log(`\nzone level ${lvl}:`);
+    console.log(`  essence pay: ${essence.map(c => `${c.count} ${c.essence}`).join(' · ')}`
+      + ` (≈${essence.reduce((s, c) => s + c.count * ESSENCES[c.essence].mortalWorth, 0)} ME)`);
+    console.log(`  named-unique pool: ${uniques.length} in reach (+${CFG.lanes.unique.reachAbove})`
+      + (uniques.length ? ` — e.g. ${uniques.slice(0, 3).map(u => u.name).join(', ')}` : ' ⚠ lane falls to lot'));
+    console.log(`  unique categories honest here: ${cats.length ? cats.join(', ') : '— none ⚠'}`);
+    console.log(`  lot: ${CFG.lanes.lot.count[0]}–${CFG.lanes.lot.count[1]} pieces`
+      + ` (weights ${Object.entries(CFG.lanes.lot.rarityWeights).map(([r, x]) => `${r} ${x}`).join('/')})`
+      + ` · pouch: ${CFG.lanes.pouch.roughCount[0]}–${CFG.lanes.pouch.roughCount[1]} Rough units`);
+  }
 }
 
 /** ITEM GENERATION under the microscope: N mints per ilvl band through the
