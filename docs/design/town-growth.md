@@ -7,8 +7,16 @@ locations and literally, physically expanding the town zone as more
 functionality becomes unlocked."* Her named stations: the caravanner, the
 training dummies, the bestiary, the salvage station, the runic station,
 the font, the vendoring, and the bounty board. T0 (the immediate fixes)
-LANDED @ `fb732ca`; T1 awaits her word on the cards. Anything marked
-**DIAL** is a build-time lever; every number is unblessed.
+LANDED @ `fb732ca`. **WALK 1 (2026-08-24, the same day): RATIFIED — "this
+is the exact direction that it was headed in originally. I'm in agreement
+with the proposals here." Card 1 RULED: count-based tiers ("a good
+starting point"). Card 6 RULED WANTED: per-tier dressing rows — "I
+definitely would want the per-tier dressing rows to expand as the town
+itself grows with the proposed ladder shape" (T2 promoted from optional
+to committed content). Cards 2–5 stand as their recommended options by
+the blessing — un-walked individually, re-openable at T1's walk. T1 is
+PARKED at her word: the bounty board's chips continue first.** Anything
+marked **DIAL** is a build-time lever; every number is unblessed.
 
 > **THE LEAD FINDINGS.**
 >
@@ -163,4 +171,7 @@ station's own dwell verb and radius.
 - **T2 — THE LOOK.** Per-tier dressing rows; her gauge walk. Effort S–M.
 
 **The commissioning ledger:** T0 landed with this charter (2026-08-24).
-T1 fires at her word on cards 1–4.
+Walk 1 (same day) RATIFIED the shape — card 1 count-based, card 6
+dressing WANTED (T2 committed), cards 2–5 standing as recommended — and
+PARKED T1 behind the bounty board's remaining movements; T1 fires when
+she calls the town back up.
