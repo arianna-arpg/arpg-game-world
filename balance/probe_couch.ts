@@ -358,6 +358,13 @@ const CAM = COUCH_CFG.camera;
   check('caravan: it stays silent for the seat standing a zone away (seat-scoped)',
     w.caravanPrompt(w.localSeat) === null && w.caravanPrompt() === null);
 
+  // THE ARRIVAL LATCH (town-growth T0): a teleported setup must arm
+  // honestly — the dwell fires only after its disc is observed EMPTY once,
+  // so step the guest out for a frame, then walk back in (the real
+  // approach every player makes).
+  guest.actor.pos = vec(400, 400);
+  w.updateCaravan(0.05);
+  guest.actor.pos = vec(940, 920);
   // The dwell: only the guest is at the escort, so the guest's linger fires it
   // — and the stamp records WHO asked (the arena is not town, so it's the
   // wilds lane: port home, no menu).
@@ -410,6 +417,12 @@ const CAM = COUCH_CFG.camera;
   w.actors.push(npc);
   check('caravan solo: the prompt answers with no seat argument at all',
     w.caravanPrompt() !== null);
+  // THE ARRIVAL LATCH: arm with one observed-empty frame (the npc was
+  // planted at the hero's elbow — a teleport, not an approach).
+  const homeX = w.player.pos.x;
+  w.player.pos = vec(w.player.pos.x - 600, w.player.pos.y);
+  w.updateCaravan(0.05);
+  w.player.pos = vec(homeX, w.player.pos.y);
   for (let i = 0; i < 20 && !w.caravanReturnRequested; i++) w.updateCaravan(0.1);
   check('caravan solo: the hero\'s linger fires and stamps p0 (byte-identical)',
     w.caravanReturnRequested && w.caravanDwellSeatId === 'p0' && !w.couchActive());
