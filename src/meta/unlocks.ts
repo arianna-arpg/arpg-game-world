@@ -807,6 +807,18 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'A quartermaster settles in Lastlight, posting hunts into the wilds (quest chains).',
     payload: { flag: FEATURE.QUEST_GIVER } },
 
+  // --- THE BOUNTY BOARD (docs/design/bounty-board.md M0): generated,
+  //     player-SELECTED postings on a beat — take one in hand, meet its ask
+  //     out in the world, and turn it in back at the board for the printed
+  //     pay. Teased sealed with its avenues (whichever road crosses first:
+  //     any quest seen through, or level 10). Cost + gates are DIALS. -------
+  { id: 'feat_bounty_board', kind: 'feature', cost: 120, reqLevel: 0, tease: true,
+    reqAnyOf: [{ quest: true, label: 'any quest seen through' },
+               { level: 10, label: 'reach level 10' }],
+    label: 'Bounty Board: Town',
+    description: 'A posting board is raised in Lastlight. Its slate refreshes on its own clock with work drawn from the living world — dwell to read the postings, take ONE in hand, and return to the board when the deed is done: the pay is printed on the card, and the next slate waits where you collect.',
+    payload: { flag: FEATURE.BOUNTY_BOARD } },
+
   // --- Training Dummy — THE DEED GATE: surfaces on the account's first
   //     LEGENDARY skill gem (LEDGER_LEGENDARY_SKILL_DROP, stamped at the
   //     mint chokepoint): the moment you finally hold a skill worth

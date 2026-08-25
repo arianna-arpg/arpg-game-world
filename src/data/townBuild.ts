@@ -53,6 +53,13 @@ export const ORACLE_SITE = { x: 1080, y: 1010 };
  *  a table, a banner, a body). */
 export const RECRUITER_SITE = { x: 1350, y: 560 };
 
+/** Where THE BOUNTY BOARD stands — the town's central green, clear of the
+ *  road lines (the east portal way), the counter aprons, and every other
+ *  station's dwell disc (THE REGISTER RIDER: the board must read at plaza
+ *  scale and wall nothing off). Shared by the fixture and the World's
+ *  nearBountyBoard dwell check. */
+export const BOUNTY_BOARD_SITE = { x: 770, y: 460 };
+
 export const TOWN_ADDITIONS: TownAddition[] = [
   // The Quest Package: a quartermaster's house raised in the town's expanded
   // south-east quarter (clear of the original cottages so it never walls one in).
@@ -88,6 +95,13 @@ export const TOWN_ADDITIONS: TownAddition[] = [
   {
     feature: FEATURE.SALVAGE_STATION,
     fixtures: [{ structure: 'salvage_bench', x: SALVAGE_SITE.x, y: SALVAGE_SITE.y }],
+  },
+  // THE BOUNTY BOARD — the central green. Dwell at the post for the slate
+  // of generated postings (the World reads proximity to BOUNTY_BOARD_SITE).
+  // Inside the base footprint: no grow needed (the salvage-bench precedent).
+  {
+    feature: FEATURE.BOUNTY_BOARD,
+    fixtures: [{ structure: 'bounty_post', x: BOUNTY_BOARD_SITE.x, y: BOUNTY_BOARD_SITE.y }],
   },
   // The Tracker's camp — the west edge. Dwell by the fire for the BESTIARY
   // (the World reads proximity to TRACKER_SITE; the NPC spawns there too).

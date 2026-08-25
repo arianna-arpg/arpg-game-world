@@ -94,6 +94,9 @@ export type MetaAction =
   | { t: 'recallMemory'; uid: number; dropper: string; facet?: string } // THE STONE: recall ONE unit of a dropper group from the pouch item (FIFO); facet = the Preformed pouch's chosen triad (its lead attribute id)
   | { t: 'caravanTo'; band: number }                           // Caravan: escort to band N (0 = home)
   | { t: 'harborChart'; omen: string }                         // Harbor board: buy the chart of a rumored seat (credits → survey pulse)
+  | { t: 'bountyAccept'; id: string }                          // Bounty board: take a posting off the slate (THE ONE-HAND LAW, folded per board)
+  | { t: 'bountyAbandon'; id: string }                         // Bounty board: forfeit a taken posting (the hand frees; it never returns to the slate)
+  | { t: 'bountyTurnIn'; id: string }                          // Bounty board: turn a done/failed hand in AT the board (the payout point — walk-1's collect)
   | { t: 'holdMuster' }                                        // Harborhold: sound the horn — arm the standing zone's siege defense
   | { t: 'holdRestore' }                                       // Harborhold: pay the Mortal Essence restoration at a fallen hold's wreckage
   | { t: 'payToll'; index: number }                            // Holdfast: pay the keeper's toll (essence/gem per the guardian's UnlockSpec; index = legacy wire shape)

@@ -641,6 +641,24 @@ export const STRUCTURES: Record<string, StructureDef> = {
     ],
   },
 
+  // THE BOUNTY BOARD's post: the board itself (the standing bounty_board
+  // doodad — painter + amber lamp already in doodadVisuals), a lantern to
+  // read by, a bench to wait on. Dwelling here opens the postings panel
+  // (the World reads proximity to BOUNTY_BOARD_SITE in townBuild.ts).
+  // THE REGISTER RIDER (charter walk 1): the look + siting are M0
+  // acceptance gauges — her in-browser walk blesses them.
+  bounty_post: {
+    id: 'bounty_post', halfW: 56, halfH: 46,
+    props: [
+      { kind: 'bounty_board', x: 0, y: -8, radius: 16 },
+      { kind: 'lantern_post', x: 36, y: 10, radius: 7 },
+      { kind: 'bench', x: -34, y: 18, radius: 10 },
+    ],
+    breakables: [
+      { id: 'crate', x: 38, y: -32 },
+    ],
+  },
+
   // The Oracle Stone: a ring of leaning monoliths. Dwelling here opens the
   // communion (affix-reroll) menu — the World reads proximity to ORACLE_SITE.
   oracle_site: {

@@ -20,7 +20,6 @@
 // ---------------------------------------------------------------------------
 
 import { START_ZONE } from '../data/zones';
-import { QUESTS } from '../quests/defs';
 import type { World } from '../engine/world';
 
 export interface MapMarker {
@@ -77,7 +76,9 @@ registerMarkerSource((world): MapMarker[] => {
   const out: MapMarker[] = [];
   const ready: string[] = []; // labels of field-done turn-in quests (one shared town pin)
   for (const aq of world.activeQuests) {
-    const q = QUESTS[aq.questId];
+    // questDefOf: generated bounty postings mark their claimed ground too
+    // (the resolver seam — the board's "?" and the shared "!" ride free).
+    const q = world.questDefOf(aq.questId);
     if (aq.fieldDone && q?.turnIn) { ready.push(q.offerLabel); continue; }
     const node = world.zoneMap[aq.zoneId];
     if (!node) continue;

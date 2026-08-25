@@ -151,7 +151,11 @@ import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, p
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
-import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, TRACKER_SITE, RECRUITER_SITE } from '../data/townBuild';
+import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, TRACKER_SITE, RECRUITER_SITE, BOUNTY_BOARD_SITE } from '../data/townBuild';
+import {
+  BOUNTY_BOARD_CFG, BOUNTY_KINDS, clonePosting, describeBountyPay, postingQuestDef,
+  type BountyPosting, type BountyRollHost,
+} from '../data/bountyboard';
 // Also a side-effect import: pulling these registers the bestiary's recording
 // kill-rule at boot (the knowledge accrues whether or not the book is read).
 import { BESTIARY_CFG, bestiaryEligible, bestiaryKey, bestiaryKills, bestiaryThreshold, spectreAttunable } from '../data/bestiary';
@@ -354,6 +358,7 @@ import {
   classLevelLedgerKey, gemDropKey, LEDGER_GEMDROP_TOTAL, LEDGER_VENDOR_BOUGHT,
   LEDGER_CRAFTS_UNLOCKED, LEDGER_LEGENDARY_SKILL_DROP, LEDGER_ZONES_EXPLORED,
   questDoneKey, reachedLevelKey,
+  LEDGER_BOUNTY_DONE, bountyDoneKindKey,
   type Account,
 } from '../meta/account';
 import { gateMet } from '../meta/gates';
@@ -386,7 +391,7 @@ import { saveAccount, saveAccountDurable } from '../meta/persistence';
 import { SIM_TAP } from './tap';
 import { captureLoot, skillToLoot, DEATH_SCHEMA, MAX_DEATH_RECORDS, CORPSE_MATCH_RADIUS, type DeathRecord, type SavedLoot } from '../meta/death';
 import {
-  WORLD_SCHEMA_VERSION, WORLDSTATE_CFG, sanitizeEnemyMemo, sanitizeMercSheets, sanitizeProcessionMemo,
+  WORLD_SCHEMA_VERSION, WORLDSTATE_CFG, sanitizeBountyBoard, sanitizeEnemyMemo, sanitizeMercSheets, sanitizeProcessionMemo,
   sanitizeVendorHolds, sanitizeWorldZones,
   type ResumeSpawn, type SavedPlayerSpot, type SavedZoneMemory, type VendorHoldSave, type WorldStateSave,
 } from '../meta/worldstate';
@@ -1582,6 +1587,11 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'recallMemory': return isIdx(a.uid) && isStr(a.dropper) && (a.facet === undefined || isStr(a.facet));
     case 'caravanTo': return isIdx(a.band); // band 0 = home; N = a band index
     case 'harborChart': return isStr(a.omen); // the rumored seat's omen id
+    // THE BOUNTY BOARD: posting ids are untrusted strings — every handler
+    // re-resolves them against the live slate/hands and no-ops on a miss.
+    case 'bountyAccept': return isStr(a.id);
+    case 'bountyAbandon': return isStr(a.id);
+    case 'bountyTurnIn': return isStr(a.id);
     case 'holdMuster': return true;  // the standing zone's harborhold — no payload
     case 'holdRestore': return true; // ditto (price re-derived host-side from data)
     // THE PATRON'S HOLD: vendor is a registry id, index an untrusted shelf
@@ -3124,6 +3134,25 @@ export class World {
    *  indirection as the Caravanner — World can't import the UI). */
   salvageDwellRequested = false;
   private salvageGate = new Dwell();
+  /** THE BOUNTY BOARD (docs/design/bounty-board.md M0): the beat's slate of
+   *  generated postings — persisted state, never a derivation (the pool is
+   *  the LIVE world; see WorldStateSave.bountyBoard). */
+  bountyOffers: BountyPosting[] = [];
+  /** THE TAKEN HANDS — accepted postings (each one's quest half is an
+   *  ordinary activeQuests row). An ARRAY by law even though THE ONE-HAND
+   *  cap holds it at one today: the cap FOLDS per issuing board
+   *  (Posting.boardId), so regional boards + per-board hands (the writ
+   *  kinship, post-M4) are a dial's turn — never hardcode the singular
+   *  (walk-1's ruling). */
+  bountyHands: BountyPosting[] = [];
+  /** Which board BEAT the slate was last armed at (the standing-slate law:
+   *  re-arm only on a turned beat; -1 = never armed). */
+  private bountyArmedBeat = -1;
+  private bountyGate = new Dwell();
+  /** ONE-SHOT: the bounty board's dwell — the main loop opens the postings
+   *  panel (the salvage bench's flag idiom verbatim). */
+  bountyDwellRequested = false;
+  bountyDwellSeatId = 'p0';
   /** ONE-SHOT: the Sacrificial Font dwell — the main loop opens the Font
    *  screen (Merge / Convert / Reset; docs/design/skill-modes.md §7). */
   fontDwellRequested = false;
@@ -16323,6 +16352,15 @@ export class World {
       // Harbor charts PAID for (omen ids) — the board's persisted once-guard
       // (absent when none: nothing bought is not load-bearing).
       ...(this.chartsBought.size ? { chartsBought: [...this.chartsBought] } : {}),
+      // THE BOUNTY BOARD's standing slate + taken hands — persisted, never
+      // re-derived (the live-world pool law; charter §4).
+      ...(this.bountyOffers.length || this.bountyHands.length ? {
+        bountyBoard: {
+          armedBeat: this.bountyArmedBeat,
+          offers: this.bountyOffers.map(clonePosting),
+          ...(this.bountyHands.length ? { hands: this.bountyHands.map(clonePosting) } : {}),
+        },
+      } : {}),
     };
   }
 
@@ -16454,13 +16492,32 @@ export class World {
           ? { charBorn: m.charBorn } : {}),
       });
     }
+    // THE BOUNTY BOARD's slate stands up BEFORE the quest filter runs —
+    // questDefOf resolves a taken posting's generated def only while its
+    // hand is seated (the resolver seam; docs/design/bounty-board.md §2:
+    // without this order every accepted bounty silently dies on reload).
+    const bb = sanitizeBountyBoard(ws.bountyBoard, healed);
+    this.bountyArmedBeat = bb?.armedBeat ?? -1;
+    this.bountyOffers = bb?.offers ?? [];
+    this.bountyHands = bb?.hands ?? [];
     // Quests: active entries whose def AND zone both still stand; the
-    // completed set rides verbatim (stale ids gate nothing — QUESTS lookups
-    // simply miss them).
+    // completed set rides verbatim (stale ids gate nothing — questDefOf
+    // lookups simply miss them).
     this.activeQuests = (ws.quests?.active ?? [])
-      .filter(q => q && typeof q.questId === 'string' && QUESTS[q.questId]
+      .filter(q => q && typeof q.questId === 'string' && this.questDefOf(q.questId)
         && typeof q.zoneId === 'string' && healed[q.zoneId])
       .map(q => ({ questId: q.questId, zoneId: q.zoneId, fieldDone: !!q.fieldDone }));
+    // A hand whose quest row a stale save dropped re-seats it (the row is
+    // derivable from the posting — fieldDone re-reads off the kind's own
+    // done() so the withhold notice never replays a finished ask).
+    for (const h of this.bountyHands) {
+      if (!this.activeQuests.some(e => e.questId === h.id)) {
+        this.activeQuests.push({
+          questId: h.id, zoneId: h.zoneId,
+          fieldDone: BOUNTY_KINDS[h.kind]?.done(this, h) ?? false,
+        });
+      }
+    }
     this.completedQuests = new Set(
       (ws.quests?.completed ?? []).filter((id): id is string => typeof id === 'string'));
     // THE MUSTER-ROLL LAW: the locked officer sheets stand back up (registry-
@@ -21897,6 +21954,251 @@ export class World {
     return { pos: vec(SALVAGE_SITE.x, SALVAGE_SITE.y), text: 'Linger to work the salvage bench.' };
   }
 
+  // ------------------------------------------------------- the bounty board -
+  //  docs/design/bounty-board.md M0 — generated, player-selected postings on
+  //  the board's own beat. A posting is persisted data; the taken hand rides
+  //  the quest fabric through questDefOf ("the same primitive with a
+  //  different giver"); pay resolves at THE TURN-IN back at the board.
+
+  bountyBoardUnlocked(): boolean {
+    return featureEnabled(this.account, FEATURE.BOUNTY_BOARD);
+  }
+
+  /** At the board? (Feature owned + in town + near BOUNTY_BOARD_SITE.) */
+  nearBountyBoard(seat: Seat = this.localSeat): boolean {
+    return this.bountyBoardUnlocked()
+      && this.zone.id === START_ZONE
+      && dist(seat.actor.pos, vec(BOUNTY_BOARD_SITE.x, BOUNTY_BOARD_SITE.y)) <= BOUNTY_BOARD_CFG.dwell.radius
+      && this.dwellReachable(seat.actor.pos, vec(BOUNTY_BOARD_SITE.x, BOUNTY_BOARD_SITE.y));
+  }
+
+  /** The board's prompt while the player is near (renderer), or null. */
+  bountyBoardHint(): { pos: Vec2; text: string } | null {
+    if (!this.nearBountyBoard()) return null;
+    return { pos: vec(BOUNTY_BOARD_SITE.x, BOUNTY_BOARD_SITE.y), text: 'Linger to read the postings.' };
+  }
+
+  /** THE BEAT's quantum — the board's OWN clock (never the vendor restock
+   *  quantum: a Rush Order rung must not re-pace the board). Future board
+   *  rush rungs subtract here, floored at the config's minimum. */
+  bountyBeatSeconds(): number {
+    return Math.max(BOUNTY_BOARD_CFG.minBeatSec, BOUNTY_BOARD_CFG.beatSec);
+  }
+
+  private bountyBeat(): number {
+    return Math.floor(this.time / this.bountyBeatSeconds());
+  }
+
+  /** Has this zone's objective been completed this run? The bounty kinds'
+   *  one public completion read (the predicate is the law — a pure read
+   *  over the same record the exit unseal consults). */
+  objectiveDoneAt(zoneId: string): boolean {
+    return this.completedObjectives.has(zoneId);
+  }
+
+  /** THE RESOLVER SEAM (charter §2): every quest lookup that must also see
+   *  GENERATED postings routes here — the static registry first, then the
+   *  taken hands' derived defs (offers hold no quest rows, so only hands
+   *  resolve). The save's quest filter rides this, which is why the board's
+   *  slate stands up BEFORE it in adoptWorldState. */
+  questDefOf(id: string): QuestDef | undefined {
+    const q = QUESTS[id];
+    if (q) return q;
+    const p = this.bountyHands.find(h => h.id === id);
+    return p ? postingQuestDef(p, this) : undefined;
+  }
+
+  /** ARM the slate for the current beat (the standing-slate law: a turned
+   *  beat re-deals whole; the same beat keeps the persisted slate — reloads
+   *  and re-dwells meet the SAME postings). Seeded (worldSeed, board, beat)
+   *  on its own Rng instance, so no other stream's die ever moves. */
+  armBountyBoard(): void {
+    this.reconcileBounties();
+    const beat = this.bountyBeat();
+    if (this.bountyArmedBeat === beat) return;
+    const boardId = BOUNTY_BOARD_CFG.boardId;
+    const rng = new Rng((this.manifest.seed ^ hashStr(`bountyboard:${boardId}:${beat}`)) >>> 0);
+    const rows = Object.values(BOUNTY_KINDS);
+    const taken = new Set<string>(this.bountyHands.map(h => h.zoneId));
+    const view = this.simView();
+    const offers: BountyPosting[] = [];
+    for (let i = 0; i < BOUNTY_BOARD_CFG.offers && rows.length; i++) {
+      // Weighted kind pick (one row at M0; the registry law stands for the
+      // M1 spread — a new kind is one registerBountyKind row).
+      let total = 0;
+      for (const r of rows) total += Math.max(0, r.weight);
+      if (total <= 0) break;
+      let pick = rng.next() * total;
+      let row = rows[rows.length - 1];
+      for (const r of rows) { pick -= Math.max(0, r.weight); if (pick <= 0) { row = r; break; } }
+      const host: BountyRollHost = {
+        view, zoneMap: this.zoneMap, objectiveDone: id => this.objectiveDoneAt(id),
+        playerLevel: this.player.level, boardId, beat, seq: i,
+      };
+      const p = row.roll(host, rng, taken);
+      if (!p) continue; // no honest target for this seat — the slate runs short
+      taken.add(p.zoneId);
+      offers.push(p);
+    }
+    this.bountyOffers = offers;
+    this.bountyArmedBeat = beat;
+    this.charDirty = true;
+  }
+
+  /** THE ANNUL RECONCILE (charter §4): offers whose target the world already
+   *  resolved are struck (done work is never advertised); a taken hand whose
+   *  ask is GONE annuls in the field with its courtesy — done and failed
+   *  hands WAIT for the board instead (the turn-in cycle, walk-1's collect
+   *  + fail rulings). Never a silently dead posting. */
+  private reconcileBounties(): void {
+    this.bountyOffers = this.bountyOffers.filter(p => {
+      const row = BOUNTY_KINDS[p.kind];
+      if (!row) return false;
+      if (row.annulled?.(this, p)) return false;
+      if (row.done(this, p)) return false;
+      return true;
+    });
+    for (const p of [...this.bountyHands]) {
+      const row = BOUNTY_KINDS[p.kind];
+      const reason = row ? row.annulled?.(this, p) ?? null : 'the posting no longer reads';
+      if (!reason) continue;
+      this.bountyHands = this.bountyHands.filter(h => h.id !== p.id);
+      const ai = this.activeQuests.findIndex(e => e.questId === p.id);
+      if (ai >= 0) this.activeQuests.splice(ai, 1);
+      this.notice(`The bounty is annulled — ${reason}. The hand is free.`, BOUNTY_BOARD_CFG.accent, 15, 'civic');
+      this.charDirty = true;
+    }
+  }
+
+  /** ACCEPT a posting off the slate: THE ONE-HAND LAW folded PER BOARD (the
+   *  unhardcoded shape — today's single board collapses to the global cap),
+   *  the stale-offer race struck WITH its reason, and the claim lane's veil
+   *  lift (a charge on veiled ground tells you the way — ruled; the errand
+   *  kind alone will keep discovery the ask). */
+  acceptBounty(id: string, _seat: Seat = this.localSeat): boolean {
+    this.reconcileBounties();
+    const i = this.bountyOffers.findIndex(p => p.id === id);
+    if (i < 0) return false;
+    const p = this.bountyOffers[i];
+    const row = BOUNTY_KINDS[p.kind];
+    if (!row) return false;
+    const cap = QUEST_CATEGORY_CAPS.bounty ?? 1;
+    if (this.bountyHands.filter(h => h.boardId === p.boardId).length >= cap) {
+      this.notice('One bounty in hand at a time — see the taken work through first.', BOUNTY_BOARD_CFG.accent, 14, 'civic');
+      return false;
+    }
+    const reason = row.annulled?.(this, p) ?? (row.done(this, p) ? 'the work is already done' : null);
+    if (reason) {
+      this.bountyOffers.splice(i, 1);
+      this.notice(`The posting is struck — ${reason}.`, BOUNTY_BOARD_CFG.accent, 14, 'civic');
+      this.charDirty = true;
+      return false;
+    }
+    this.bountyOffers.splice(i, 1);
+    this.bountyHands.push(p);
+    this.activeQuests.push({ questId: p.id, zoneId: p.zoneId, fieldDone: false });
+    const z = this.zoneMap[p.zoneId];
+    if (z?.veiled) {
+      z.veiled = false;
+      this.refreshExitLabels();
+    }
+    bumpLedger(this.ledger, 'bounties_accepted');
+    const c = row.copy(this, p);
+    this.notice(`Bounty taken: ${c.title}. Pay on return: ${describeBountyPay(p.pay)}.`, BOUNTY_BOARD_CFG.accent, 16, 'civic');
+    this.charDirty = true;
+    return true;
+  }
+
+  /** ABANDON a taken posting: the hand frees, the posting is forfeit (it
+   *  does not return to the slate — the world moved on), no penalty. */
+  abandonBounty(id: string, _seat: Seat = this.localSeat): boolean {
+    const p = this.bountyHands.find(h => h.id === id);
+    if (!p) return false;
+    this.bountyHands = this.bountyHands.filter(h => h.id !== id);
+    const ai = this.activeQuests.findIndex(e => e.questId === id);
+    if (ai >= 0) this.activeQuests.splice(ai, 1);
+    bumpLedger(this.ledger, 'bounties_abandoned');
+    this.notice('The posting is forfeit — the board keeps its silence.', BOUNTY_BOARD_CFG.accent, 14, 'civic');
+    this.charDirty = true;
+    return true;
+  }
+
+  /** THE TURN-IN (walk-1's collect ruling — the board is the payout point):
+   *  a DONE hand pays through the one quest payout site (the shared-stamp
+   *  branch + the essence lane land there); a FAILED hand is acknowledged —
+   *  no pay, the hand frees, the slate stands ready ("the same outcome
+   *  patterns", her words). An unfinished hand is refused with the ask. */
+  turnInBounty(id: string, seat: Seat = this.localSeat): boolean {
+    if (!this.nearBountyBoard(seat)) return false;
+    const p = this.bountyHands.find(h => h.id === id);
+    if (!p) return false;
+    const row = BOUNTY_KINDS[p.kind];
+    if (!row) return false;
+    const failed = p.failed === true || (row.failed?.(this, p) ?? false);
+    if (failed) {
+      this.bountyHands = this.bountyHands.filter(h => h.id !== id);
+      const ai = this.activeQuests.findIndex(e => e.questId === id);
+      if (ai >= 0) this.activeQuests.splice(ai, 1);
+      bumpLedger(this.ledger, 'bounties_failed');
+      this.notice('The board takes the failed posting back — no pay, no debt.', BOUNTY_BOARD_CFG.accent, 15, 'civic');
+      this.charDirty = true;
+      return true;
+    }
+    if (!row.done(this, p)) {
+      this.notice('The work stands unfinished — the ask is printed on the card.', BOUNTY_BOARD_CFG.accent, 14, 'civic');
+      return false;
+    }
+    const aq = this.activeQuests.find(e => e.questId === id);
+    if (aq) this.onQuestZoneCleared(aq); // pays + stamps (the bounty branch)
+    this.bountyHands = this.bountyHands.filter(h => h.id !== id);
+    this.charDirty = true;
+    return true;
+  }
+
+  /** The postings panel's whole read (render-ready — copy from the kind
+   *  rows' precision register, the pay printed, the countdown on the
+   *  lattice boundary: one clock with the arm). */
+  bountyBoardView(): {
+    countdown: number;
+    offers: { id: string; title: string; ask: string; pay: string }[];
+    hands: { id: string; title: string; ask: string; pay: string; state: 'afield' | 'ready' | 'failed' }[];
+  } {
+    const face = (p: BountyPosting): { id: string; title: string; ask: string; pay: string } => {
+      const c = BOUNTY_KINDS[p.kind]?.copy(this, p) ?? { title: p.id, ask: '' };
+      return { id: p.id, title: c.title, ask: c.ask, pay: describeBountyPay(p.pay) };
+    };
+    return {
+      countdown: (this.bountyBeat() + 1) * this.bountyBeatSeconds() - this.time,
+      offers: this.bountyOffers.map(face),
+      hands: this.bountyHands.map(p => {
+        const row = BOUNTY_KINDS[p.kind];
+        const state: 'afield' | 'ready' | 'failed' =
+          (p.failed === true || (row?.failed?.(this, p) ?? false)) ? 'failed'
+            : (row?.done(this, p) ?? false) ? 'ready' : 'afield';
+        return { ...face(p), state };
+      }),
+    };
+  }
+
+  /** Linger at the board → arm this beat's slate + open the postings panel
+   *  (the salvage bench's flag idiom verbatim). */
+  private updateBountyBoard(dt: number): void {
+    const near = this.localHumanSeats().filter(s =>
+      !s.actor.dead && !s.actor.downed && this.nearBountyBoard(s));
+    // THE LIVE EDGE (the vendor restock's law): while anyone stands at the
+    // board, a TURNED beat re-deals the slate in place — host only (a net
+    // client's snapshot is its whole truth; it never rolls its own slate).
+    if (near.length > 0 && !this.clientActionHook
+      && this.bountyArmedBeat >= 0 && this.bountyArmedBeat !== this.bountyBeat()) {
+      this.armBountyBoard();
+    }
+    const ready = near.find(s => this.seatIdle(s));
+    if (!this.bountyGate.fire(!!ready, near.length > 0, dt, BOUNTY_BOARD_CFG.dwell.sec)) return;
+    if (!this.clientActionHook) this.armBountyBoard();
+    this.bountyDwellRequested = true;
+    this.bountyDwellSeatId = ready!.id;
+  }
+
   /** Linger at a Sacrificial Font → open the Font screen (the salvage
    *  bench's flag idiom verbatim: one ask per approach, stepping out of
    *  range re-arms the latch). */
@@ -24632,19 +24934,22 @@ export class World {
   /** Active quests that are FIELD-DONE and whose turn-in giver is present right now —
    *  the queue the giver pays out, lowest offer-level FIRST. */
   private pendingTurnIns(): { questId: string; zoneId: string; fieldDone: boolean }[] {
+    // questDefOf: generated bounty postings resolve too, but their giver is
+    // the board sentinel no NPC carries — giverPresent excludes them, so
+    // the board's own panel stays their whole counter (by construction).
     return this.activeQuests
       .filter(e => {
-        const q = QUESTS[e.questId];
+        const q = this.questDefOf(e.questId);
         return e.fieldDone && q?.turnIn && this.giverPresent(q.turnIn.giver) !== null;
       })
-      .sort((a, b) => (QUESTS[a.questId]?.offerAtLevel ?? 0) - (QUESTS[b.questId]?.offerAtLevel ?? 0));
+      .sort((a, b) => (this.questDefOf(a.questId)?.offerAtLevel ?? 0) - (this.questDefOf(b.questId)?.offerAtLevel ?? 0));
   }
 
   /** Active-quest count per category (for the per-category active caps). */
   private activeCategoryCounts(): Record<string, number> {
     const c: Record<string, number> = {};
     for (const e of this.activeQuests) {
-      const cat = QUESTS[e.questId]?.category ?? DEFAULT_QUEST_CATEGORY;
+      const cat = this.questDefOf(e.questId)?.category ?? DEFAULT_QUEST_CATEGORY;
       c[cat] = (c[cat] ?? 0) + 1;
     }
     return c;
@@ -24923,7 +25228,7 @@ export class World {
     completed: { id: string; label: string; category: QuestCategory }[];
   } {
     const active = this.activeQuests.map(e => {
-      const q = QUESTS[e.questId];
+      const q = this.questDefOf(e.questId); // generated postings resolve too
       const z = this.zoneMap[e.zoneId];
       return {
         id: e.questId, label: q?.offerLabel ?? e.questId,
@@ -25037,7 +25342,7 @@ export class World {
   private onQuestZoneFieldCleared(zoneId: string): void {
     const aq = this.activeQuests.find(e => e.zoneId === zoneId);
     if (!aq) return;
-    const q = QUESTS[aq.questId];
+    const q = this.questDefOf(aq.questId);
     if (q?.turnIn) {
       if (!aq.fieldDone) {
         aq.fieldDone = true;
@@ -25053,12 +25358,21 @@ export class World {
   private onQuestZoneCleared(aq: { questId: string; zoneId: string; fieldDone: boolean }): void {
     const idx = this.activeQuests.indexOf(aq);
     if (idx < 0) return;
-    const q = QUESTS[aq.questId];
+    const q = this.questDefOf(aq.questId);
+    // A GENERATED posting's payout (the taken hand still seated — turnInBounty
+    // removes it after this returns): the shared-stamp branch below.
+    const posting = this.bountyHands.find(h => h.id === aq.questId) ?? null;
     if (q) {
       if (q.reward.xp) this.grantXp(q.reward.xp);
       // OWED pay: a quest's gems are earned of the writ, not of the ground
       // underfoot — they land even where THE SPOILS LAW seals local mints.
       for (let i = 0; i < (q.reward.gems ?? 0); i++) this.dropGemAt(this.player.pos, undefined, true);
+      // R1 ESSENCE (bounty board M0; any authored quest may pay it too):
+      // ground packets at the payout site. Turn-in quests pay at the giver
+      // — town for the board — so the spoils seal never bites; a future
+      // non-turn-in essence quest paying on sealed ground would need the
+      // owed lever grown onto dropEssenceAt (charter pitfall 4, recorded).
+      for (const c of q.reward.essence ?? []) this.dropEssenceAt(this.player.pos, c);
       if (q.reward.passivePoints) {
         this.meta.passivePoints += q.reward.passivePoints;
         this.text(vec(this.player.pos.x, this.player.pos.y - 64),
@@ -25076,21 +25390,41 @@ export class World {
       if (q.reward.ledger) {
         for (const [k, v] of Object.entries(q.reward.ledger)) bumpLedger(this.ledger, k, v);
       }
-      // THE QUEST LEDGER CONTRACT (meta/account.ts questDoneKey): a presence
-      // key per quest, stamped at turn-in — to the run ledger AND straight to
-      // the account under metaProgression (the grantVocation durability
-      // precedent: quit-without-death keeps the deed; the death-merge's later
-      // add is harmless, every reader tests ≥ 1). Gatework `quest` avenues
-      // read these the moment the deed lands, never a death later.
-      bumpLedger(this.ledger, questDoneKey(aq.questId));
-      if (this.metaProgressionActive()) {
-        this.account.ledger[questDoneKey(aq.questId)] =
-          (this.account.ledger[questDoneKey(aq.questId)] ?? 0) + 1;
-        this.accountDirty = true;
+      if (posting) {
+        // THE SHARED-STAMP LAW (charter §2): a GENERATED posting never
+        // stamps a per-id quest_done: key (fresh ids per posting would grow
+        // the account ledger without bound) — the shared counters carry the
+        // deed instead, run + account, same durability precedent.
+        bumpLedger(this.ledger, LEDGER_BOUNTY_DONE);
+        bumpLedger(this.ledger, bountyDoneKindKey(posting.kind));
+        if (this.metaProgressionActive()) {
+          const kk = bountyDoneKindKey(posting.kind);
+          this.account.ledger[LEDGER_BOUNTY_DONE] = (this.account.ledger[LEDGER_BOUNTY_DONE] ?? 0) + 1;
+          this.account.ledger[kk] = (this.account.ledger[kk] ?? 0) + 1;
+          this.accountDirty = true;
+        }
+        this.notice(`Bounty complete: ${q.offerLabel} — ${describeBountyPay(posting.pay)}.`,
+          BOUNTY_BOARD_CFG.accent, 18, 'civic');
+      } else {
+        // THE QUEST LEDGER CONTRACT (meta/account.ts questDoneKey): a presence
+        // key per quest, stamped at turn-in — to the run ledger AND straight to
+        // the account under metaProgression (the grantVocation durability
+        // precedent: quit-without-death keeps the deed; the death-merge's later
+        // add is harmless, every reader tests ≥ 1). Gatework `quest` avenues
+        // read these the moment the deed lands, never a death later.
+        bumpLedger(this.ledger, questDoneKey(aq.questId));
+        if (this.metaProgressionActive()) {
+          this.account.ledger[questDoneKey(aq.questId)] =
+            (this.account.ledger[questDoneKey(aq.questId)] ?? 0) + 1;
+          this.accountDirty = true;
+        }
+        this.notice(`Quest complete: ${q.offerLabel}!`, '#ffd700', 18, 'civic');
       }
-      this.notice(`Quest complete: ${q.offerLabel}!`, '#ffd700', 18, 'civic');
     }
-    this.completedQuests.add(aq.questId);
+    // Generated ids never join completedQuests: fresh ids can't re-offer
+    // anyway, and the set (journal + save) would only hoard raw posting ids
+    // — the bounty_done counters are the record (the shared-stamp law).
+    if (!posting) this.completedQuests.add(aq.questId);
     this.activeQuests.splice(idx, 1);
   }
 
@@ -25565,8 +25899,12 @@ export class World {
       // host's authoritative snapshot/zone broadcast moves the client.
       // holdMuster/holdRestore likewise: they spawn actors, flip door grids
       // and charge the account — host-only, snapshot moves the client.
+      // The bounty intents likewise: accepting lifts veils + redraws exit
+      // labels, and the slate is host-armed — forward only; the snapshot
+      // moves the client.
       if (action.t !== 'caravanTo' && action.t !== 'vocationQuest' && action.t !== 'harborChart'
-        && action.t !== 'holdMuster' && action.t !== 'holdRestore') {
+        && action.t !== 'holdMuster' && action.t !== 'holdRestore'
+        && action.t !== 'bountyAccept' && action.t !== 'bountyAbandon' && action.t !== 'bountyTurnIn') {
         this.applyAction(this.localSeat, action);
       }
     } else {
@@ -25629,6 +25967,9 @@ export class World {
       case 'recallMemory': this.recallMemory(seat, action.uid, action.dropper, action.facet); break;
       case 'caravanTo': this.startCaravan(action.band, seat); break;
       case 'harborChart': this.buyHarborChart(action.omen, seat); break;
+      case 'bountyAccept': this.acceptBounty(action.id, seat); break;
+      case 'bountyAbandon': this.abandonBounty(action.id, seat); break;
+      case 'bountyTurnIn': this.turnInBounty(action.id, seat); break;
       case 'holdMuster': this.beginHoldMuster(); break;
       case 'holdRestore': this.buyHoldRestore(seat); break;
       case 'payToll': this.payHoldfastToll(action.index, seat); break;
@@ -41776,6 +42117,8 @@ export class World {
     this.updateCampfire(dt);
     // The salvage bench opens the break/craft menu on a dwell (same flag idiom).
     this.updateSalvage(dt);
+    // The bounty board arms its beat's slate + opens the postings panel on a dwell.
+    this.updateBountyBoard(dt);
     // A Sacrificial Font opens the Font screen on a dwell (same flag idiom).
     this.updateFont(dt);
     // A banked Ability-point pip offers its popup at the next disciplined calm.

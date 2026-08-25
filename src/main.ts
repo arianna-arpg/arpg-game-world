@@ -958,6 +958,7 @@ function handleLocalPanels(): void {
     if (ui.oracleOpen) { ui.closeOracle(); return; }
     if (ui.bestiaryOpen) { ui.closeBestiary(); return; }
     if (ui.sailOpen) { ui.closeSail(); return; }
+    if (ui.bountiesOpen) { ui.closeBounties(); return; }
     if (ui.mercOpen) { ui.closeMercMenu(); return; }
     if (ui.boroughOpen) { ui.closeBorough(); return; }
     // The vocation choice menu closes through its OWN close (not hideAll):
@@ -1612,6 +1613,12 @@ function tick(now: number): void {
       if (world.harborDwellRequested && !ui.escapeMenuOpen) {
         world.harborDwellRequested = false;
         if (!ui.sailOpen) ui.showSail();
+      }
+      // THE BOUNTY BOARD dwell (Lastlight's posting board) asks to open the
+      // postings panel — the beat's slate, the taken hand, the turn-in.
+      if (world.bountyDwellRequested && !ui.escapeMenuOpen) {
+        world.bountyDwellRequested = false;
+        if (!ui.bountiesOpen) ui.showBounties(world.bountyDwellSeatId);
       }
       // The MUSTER HORN dwell (a harborhold's gate post) asks to open the
       // hold panel — the town's standing, the muster, the restoration.

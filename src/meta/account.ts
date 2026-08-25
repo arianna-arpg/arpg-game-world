@@ -152,6 +152,10 @@ export const FEATURE = {
    *  were away resolves at the true shelf odds, seeded so a reload can never
    *  re-flip a find. */
   VENDOR_COMMISSION: 'vendor_commission',
+  /** THE BOUNTY BOARD (docs/design/bounty-board.md): a posting board raised
+   *  in Lastlight — dwell to read the beat's slate of generated bounties,
+   *  take ONE in hand, and turn it in back at the board for its printed pay. */
+  BOUNTY_BOARD: 'bounty_board',
 } as const;
 
 /** Account-ledger key: lifetime deaths across every character (bumped by the
@@ -254,6 +258,16 @@ export const vocationUnlockKey = (vocId: string): string => `${LEDGER_VOCATION_P
 export const LEDGER_QUEST_DONE_PREFIX = 'quest_done:';
 export const questDoneKey = (questId: string): string => `${LEDGER_QUEST_DONE_PREFIX}${questId}`;
 export const LEDGER_QUESTS_COMPLETED = 'quests_completed';
+
+/** THE SHARED-STAMP LAW (docs/design/bounty-board.md §2): GENERATED bounty
+ *  postings never stamp per-id `quest_done:` keys (fresh ids per posting
+ *  would grow the account ledger without bound) — the payout site stamps
+ *  these SHARED counters instead, run + account, at the same turn-in
+ *  moment. Gatework gates on the prefix ("N bounties of any kind") or a
+ *  kind's own key ("N charges seen through"). */
+export const LEDGER_BOUNTY_DONE = 'bounty_done';
+export const LEDGER_BOUNTY_DONE_PREFIX = 'bounty_done:';
+export const bountyDoneKindKey = (kind: string): string => `${LEDGER_BOUNTY_DONE_PREFIX}${kind}`;
 
 /** First disk save slot the character ROSTER may use (0/1/2 are account /
  *  run-character / settings). Lives here (not modes.ts) so deserialization can

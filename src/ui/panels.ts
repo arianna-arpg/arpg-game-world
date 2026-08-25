@@ -110,14 +110,15 @@ import {
 import { bound, defaultEnabledFor } from '../packages/manifest';
 import { isConfigured, PACKAGES } from '../packages/registry';
 import type { ContentPackage } from '../packages/types';
-import { QUEST_CATEGORY_COLORS, type QuestCategory } from '../quests/types';
+import { QUEST_CATEGORY_CAPS, QUEST_CATEGORY_COLORS, type QuestCategory } from '../quests/types';
 import { objectiveRead, objectiveSeals, type ZoneDef } from '../data/zones';
 import { underSpanPolicyOf } from '../data/underspans';
 import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
 import { bindTooltips, hideTooltip, TIP_CFG, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
-import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
+import { VENDORS, VENDOR_CFG, fmtRestock, type VendorDef } from '../data/vendors';
+import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
 import { oracleRerollCost } from '../data/essences';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
@@ -368,6 +369,7 @@ export class UI {
   private bestiaryMenu = document.getElementById('bestiary-menu')!;
   private vendorMenu = document.getElementById('vendor-menu')!;
   private boroughMenu = document.getElementById('borough-menu')!;
+  private bountyMenu = document.getElementById('bounty-menu')!;
   private sailMenu = document.getElementById('sail-menu')!;
   private holdMenu = document.getElementById('hold-menu')!;
   private vocationMenu = document.getElementById('vocation-menu')!;
@@ -544,6 +546,11 @@ export class UI {
   private vendorTickerRestockAt = 0;
   /** A minigame overlay is running — the panels beneath hold still. */
   private minigameActive = false;
+  /** THE BOUNTY BOARD's postings panel (docs/design/bounty-board.md M0). */
+  bountiesOpen = false;
+  /** Its live ticker (countdown in place; repaint when the slate turns). */
+  private bountyTicker: number | null = null;
+  private bountyFingerprint = '';
   sailOpen = false;
   holdOpen = false;
   vocationOpen = false;
@@ -743,6 +750,7 @@ export class UI {
       [this.oracleMenu, () => this.closeOracle()],
       [this.bestiaryMenu, () => this.closeBestiary()],
       [this.boroughMenu, () => this.closeBorough()],
+      [this.bountyMenu, () => this.closeBounties()],
       [this.caravanMenu, () => this.closeCaravan()],
       [this.sailMenu, () => this.closeSail()],
       [this.holdMenu, () => this.closeHold()],
@@ -800,7 +808,8 @@ export class UI {
     const couchOwnerOf = (t: EventTarget | null): string | null => {
       if (!(t instanceof Node)) return null;
       for (const el of [this.charSheet, this.inventory, this.passiveTree, this.vendorMenu,
-        this.salvageMenu, this.oracleMenu, this.bestiaryMenu, this.caravanMenu, this.recallMenu]) {
+        this.salvageMenu, this.oracleMenu, this.bestiaryMenu, this.caravanMenu, this.recallMenu,
+        this.bountyMenu]) {
         if (el.contains(t)) {
           const id = this.panelSeatIds.get(el);
           return id && id !== this.getWorld().localSeat.id ? id : null;
@@ -2418,7 +2427,7 @@ export class UI {
     for (const el of [this.charSheet, this.inventory, this.passiveTree,
       this.worldMap, this.vendorMenu, this.salvageMenu, this.fontMenu,
       this.recallMenu, this.oracleMenu, this.bestiaryMenu, this.boroughMenu,
-      this.caravanMenu, this.sailMenu, this.holdMenu, this.mercMenu,
+      this.bountyMenu, this.caravanMenu, this.sailMenu, this.holdMenu, this.mercMenu,
       this.vocationMenu, this.escapeMenu]) add(el);
     add(document.querySelector('[data-build-drawer]'));
     return out;
@@ -5910,6 +5919,101 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.sailMenu.querySelector<HTMLButtonElement>('button[data-sail-close]')?.addEventListener('click', () => this.closeSail());
   }
 
+  // ------------------------------------------------------- the bounty board
+
+  /** Open THE BOUNTY BOARD's postings panel (the board's dwell asked —
+   *  docs/design/bounty-board.md M0). Couch-routed like every station. */
+  showBounties(seatId?: string): void {
+    this.hideAll();
+    this.ownPanel(this.bountyMenu, this.couchSeatFor(seatId));
+    this.bountiesOpen = true;
+    this.bountyMenu.classList.remove('hidden');
+    this.refreshBounties();
+    // The live ticker: countdown in place; full repaint when the slate or a
+    // hand's state turns (the vendor counter's ticker idiom).
+    if (this.bountyTicker === null) {
+      this.bountyTicker = window.setInterval(() => {
+        if (!this.bountiesOpen) return;
+        const v = this.getWorld().bountyBoardView();
+        const fp = v.offers.map(o => o.id).join('|') + '#' + v.hands.map(h => h.id + h.state).join('|');
+        if (fp !== this.bountyFingerprint) { this.refreshBounties(); return; }
+        const el = this.bountyMenu.querySelector<HTMLElement>('[data-bounty-countdown]');
+        if (el) el.textContent = fmtRestock(v.countdown);
+      }, 500);
+    }
+  }
+
+  closeBounties(): void {
+    this.bountiesOpen = false;
+    this.bountyMenu.classList.add('hidden');
+    if (this.bountyTicker !== null) { window.clearInterval(this.bountyTicker); this.bountyTicker = null; }
+  }
+
+  refreshBounties(): void {
+    if (!this.bountiesOpen) return;
+    const world = this.getWorld();
+    const v = world.bountyBoardView();
+    this.bountyFingerprint = v.offers.map(o => o.id).join('|') + '#' + v.hands.map(h => h.id + h.state).join('|');
+    const accent = BOUNTY_BOARD_CFG.accent;
+    const cap = QUEST_CATEGORY_CAPS.bounty ?? 1;
+    const handFull = v.hands.length >= cap;
+    // THE TAKEN HAND(s): state speaks plainly — afield / ready / failed.
+    const handsHtml = v.hands.length
+      ? `<h3 style="margin:10px 0 4px 0;color:${accent}">In hand</h3>` + v.hands.map(h => {
+        const state = h.state === 'ready' ? 'the work is done — turn it in'
+          : h.state === 'failed' ? 'the ask failed — hand it back'
+            : 'afield — the ask stands';
+        const verb = h.state === 'ready' ? `Turn in · ${esc(h.pay)}`
+          : h.state === 'failed' ? 'Hand it back' : null;
+        return `<div class="skill-entry">
+          <div class="name">${esc(h.title)}</div>
+          <div class="desc">${esc(h.ask)}</div>
+          <div class="desc" style="font-style:italic">${esc(state)}</div>
+          <div class="bind-btns">
+            ${verb ? `<button data-bounty-turnin="${esc(h.id)}">${verb}</button>` : ''}
+            <button data-bounty-abandon="${esc(h.id)}">Abandon</button>
+          </div>
+        </div>`;
+      }).join('')
+      : '';
+    // THE SLATE: the beat's offers, pay printed (the visible price law).
+    const offersHtml = v.offers.length
+      ? v.offers.map(o => `<div class="skill-entry">
+          <div class="name">${esc(o.title)}</div>
+          <div class="desc">${esc(o.ask)}</div>
+          <div class="desc">Pay: ${esc(o.pay)}</div>
+          <div class="bind-btns"><button data-bounty-accept="${esc(o.id)}"${handFull ? ' disabled title="One bounty in hand at a time."' : ''}>Accept</button></div>
+        </div>`).join('')
+      : `<div class="skill-entry"><div class="desc">The board hangs bare this beat — the wilds owe no work.</div></div>`;
+    this.bountyMenu.innerHTML = `${this.closeGlyphHtml()}<h2>The Bounty Board</h2>`
+      + `<div class="desc" style="margin:-4px 0 8px 0;font-style:italic">Work posted from the living world — take one in hand, meet its ask, return to collect.</div>`
+      + handsHtml
+      + `<h3 style="margin:10px 0 4px 0">The slate (${v.offers.length}) · new postings <span data-bounty-countdown>${fmtRestock(v.countdown)}</span></h3>`
+      + offersHtml
+      + `<div class="bind-btns" style="margin-top:10px"><button data-bounty-close>Close</button></div>`;
+    // Seat routing rides THE COUCH ACTION LATCH (a press inside a
+    // guest-owned panel stamps uiActionSeatId) — no per-call seat plumbing.
+    this.bountyMenu.querySelectorAll<HTMLButtonElement>('button[data-bounty-accept]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'bountyAccept', id: btn.dataset.bountyAccept! });
+        this.refreshBounties();
+      });
+    });
+    this.bountyMenu.querySelectorAll<HTMLButtonElement>('button[data-bounty-turnin]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'bountyTurnIn', id: btn.dataset.bountyTurnin! });
+        this.refreshBounties();
+      });
+    });
+    this.bountyMenu.querySelectorAll<HTMLButtonElement>('button[data-bounty-abandon]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'bountyAbandon', id: btn.dataset.bountyAbandon! });
+        this.refreshBounties();
+      });
+    });
+    this.bountyMenu.querySelector<HTMLButtonElement>('button[data-bounty-close]')?.addEventListener('click', () => this.closeBounties());
+  }
+
   // ----------------------------------------------------------- harborhold panel
 
   /** Open the HARBORHOLD panel (the muster horn's dwell asked): the town's
@@ -8242,6 +8346,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     this.boroughFolkId = -1;
     this.boroughMenu.classList.add('hidden');
     delete this.boroughMenu.dataset.drop;
+    this.bountiesOpen = false;
+    this.bountyMenu.classList.add('hidden');
     this.treeOpen = false;
     this.closeChoicePopup();
     this.closeTreePopup();

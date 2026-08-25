@@ -37,6 +37,7 @@ import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { SKILL_RARITIES } from '../engine/skills';
 import type { SavedLoot } from './death';
+import { BOUNTY_KINDS, type BountyPosting } from '../data/bountyboard';
 
 export const WORLD_SCHEMA_VERSION = 1;
 
@@ -317,6 +318,25 @@ export interface WorldStateSave {
    *  reveal memory stays transient by design. Omen ids, not zone ids: stale
    *  ones gate nothing. Absent = nothing bought (not load-bearing). */
   chartsBought?: string[];
+  /** THE BOUNTY BOARD's standing slate (docs/design/bounty-board.md §4):
+   *  the armed beat + the beat's offers + the taken hand. PERSISTED, never
+   *  re-derived — the board's candidate pool is the LIVE world (a boss
+   *  died, an event resolved), so a load-time re-roll would silently deal
+   *  a different hand: the one deliberate divergence from the vendor
+   *  shelf's transient stock. Absent = nothing armed (not load-bearing). */
+  bountyBoard?: BountyBoardSave;
+}
+
+/** The bounty board's persisted state. Postings are pure JSON
+ *  (data/bountyboard.ts BountyPosting); each taken hand's quest half rides
+ *  ws.quests.active like any quest row and re-resolves through
+ *  World.questDefOf at load. `hands` is an ARRAY by the per-board law
+ *  (walk 1: the one-hand cap folds per board — never a hardcoded
+ *  singular in any save shape). */
+export interface BountyBoardSave {
+  armedBeat: number;
+  offers: BountyPosting[];
+  hands?: BountyPosting[];
 }
 
 /** One reserved shelf row: WHERE it sits (the slot index the overlay
@@ -582,4 +602,44 @@ export function sanitizeVendorHolds(
     };
   }
   return out;
+}
+
+/** Stand THE BOUNTY BOARD's slate back up (keep-what-stands, never throws).
+ *  A posting must name a registered KIND (a row that left the registry
+ *  drops), a zone that survived the cull, and a well-formed pay; the
+ *  active posting drops by the same law (its ws.quests row then drops too
+ *  — World.questDefOf can no longer resolve it). Nothing re-rolls here:
+ *  the slate is persisted state, not a derivation (the live-world pool
+ *  divergence — see WorldStateSave.bountyBoard). */
+export function sanitizeBountyBoard(
+  raw: unknown, zones: Record<string, ZoneDef>,
+): BountyBoardSave | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const bb = raw as BountyBoardSave;
+  const posting = (p: unknown): BountyPosting | null => {
+    const x = p as BountyPosting | null;
+    if (!x || typeof x !== 'object') return null;
+    if (typeof x.id !== 'string' || typeof x.kind !== 'string' || !BOUNTY_KINDS[x.kind]) return null;
+    if (typeof x.boardId !== 'string' || typeof x.zoneId !== 'string' || !zones[x.zoneId]) return null;
+    if (!isFiniteNum(x.beat)) return null;
+    const essence = Array.isArray(x.pay?.essence)
+      ? x.pay.essence.filter(c => c && typeof c === 'object'
+        && typeof c.essence === 'string' && isFiniteNum(c.count) && c.count > 0)
+        .map(c => ({ essence: c.essence, count: Math.floor(c.count) }))
+      : [];
+    return {
+      id: x.id, kind: x.kind, boardId: x.boardId, zoneId: x.zoneId,
+      beat: Math.floor(x.beat), pay: { essence },
+      ...(x.failed === true ? { failed: true } : {}),
+    };
+  };
+  const offers = Array.isArray(bb.offers)
+    ? bb.offers.map(posting).filter((p): p is BountyPosting => p !== null) : [];
+  const hands = Array.isArray(bb.hands)
+    ? bb.hands.map(posting).filter((p): p is BountyPosting => p !== null) : [];
+  if (!offers.length && !hands.length) return null;
+  return {
+    armedBeat: isFiniteNum(bb.armedBeat) ? Math.floor(bb.armedBeat) : -1,
+    offers, ...(hands.length ? { hands } : {}),
+  };
 }

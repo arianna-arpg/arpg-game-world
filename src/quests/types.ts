@@ -10,6 +10,7 @@
 // different giver. Pure leaf: imports only data TYPES, never the engine.
 // ---------------------------------------------------------------------------
 
+import type { EssenceCost } from '../data/essences';
 import type { ObjectiveSpec, PackSpec } from '../data/zones';
 
 /** What KIND of quest this is — drives how many may be held at once (the giver only
@@ -26,7 +27,12 @@ export type QuestCategory = 'campaign' | 'bounty' | 'odyssey' | 'vocation';
  *  configurable data — retune without touching the dwell logic. */
 export const QUEST_CATEGORY_CAPS: Record<QuestCategory, number | null> = {
   campaign: null, // the authored chains aren't capped
-  bounty: 2,      // board work: hold a couple at a time (configurable default)
+  /** THE ONE-HAND LAW (docs/design/bounty-board.md, walk 1): one active
+   *  bounty. The constant is the dial; the board's accept FOLDS the cap
+   *  per issuing board (Posting.boardId), so today's single Lastlight
+   *  board collapses to this global 1 and regional boards (the writ
+   *  kinship) become a dial's turn — never hardcode the singular. */
+  bounty: 1,
   odyssey: 1,     // one grand questline at a time
   vocation: 1,    // one vocation step in flight at a time (the chain is sequential anyway)
 };
@@ -85,6 +91,9 @@ export interface QuestZoneSpec {
 export interface QuestReward {
   xp?: number;
   gems?: number;
+  /** Essence tints paid on completion (ground packets at the payout site —
+   *  the bounty board's R1 lane; any authored quest may pay them too). */
+  essence?: EssenceCost[];
   /** Skill/passive points granted on completion (paid into the player's meta,
    *  the same pool a level-up grants). Optional → existing quests unaffected. */
   passivePoints?: number;
