@@ -151,7 +151,7 @@ import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, p
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
-import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, TRACKER_SITE, RECRUITER_SITE, BOUNTY_BOARD_SITE } from '../data/townBuild';
+import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, TRACKER_SITE, RECRUITER_SITE, BOUNTY_BOARD_SITE, FONT_SITE } from '../data/townBuild';
 import {
   BOUNTY_BOARD_CFG, BOUNTY_KINDS, clonePosting, describeBountyPay, postingQuestDef,
   type BountyPosting, type BountyRollHost,
@@ -6130,11 +6130,17 @@ export class World {
       }
     }
 
+    // THE ARRIVAL LATCH re-arms per zone: every station must see its disc
+    // EMPTY once before its dwell may fire (stationDwellArmed).
+    this.stationArmed.clear();
     // A Sacrificial Font (always lit in town; a find elsewhere — never in a special arena).
+    // The town seat is a REAL site (townBuild.ts FONT_SITE — shared with
+    // nearFont's reach), not the old centre-plaza formula: the centre is
+    // the waypoint + bounty board's working ground.
     this.fonts = [];
     if (def.id === START_ZONE || (!def.special && o.kind !== 'waves' && o.kind !== 'safe' && rng.chance(0.3))) {
       const at = def.id === START_ZONE
-        ? vec(this.arena.w / 2 + 90, this.arena.h / 2 - 40)
+        ? vec(FONT_SITE.x, FONT_SITE.y)
         : (pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
           : this.farPoint(450, false, this.seededDraw()));
       this.fonts.push({ pos: this.clampPos(vec(at.x, at.y), 18) });
@@ -21895,11 +21901,30 @@ export class World {
       && this.dwellReachable(this.player.pos, vec(CAMPFIRE_SITE.x, CAMPFIRE_SITE.y));
   }
 
+  /** THE ARRIVAL LATCH (docs/design/town-growth.md T0): a station's dwell
+   *  may not fire until its disc has been observed EMPTY once since the
+   *  zone loaded — entering a zone can drop the feet straight onto a
+   *  station (the south portal onto the campfire, a waypoint inside the
+   *  board's reach), and standing still must never auto-fire it under the
+   *  arrival. Spatial truth, not an entry hook: arming requires an
+   *  observed empty frame, so it is immune to WHERE or WHEN the spawn
+   *  lands (portals, resumes, sail landings, repositions). Step out once
+   *  and the station serves as ever. Cleared per zone load. */
+  private stationArmed = new Set<string>();
+  private stationDwellArmed(key: string, engaged: boolean): boolean {
+    if (!engaged) { this.stationArmed.add(key); return false; }
+    return this.stationArmed.has(key);
+  }
+
   /** Lingering by the campfire REFRESHES the wilds after a short dwell (mirrors
-   *  Mireille). No keypress — stand by the fire. */
+   *  Mireille). No keypress — stand by the fire. The arrival latch guards it
+   *  hardest of all: its dwell RESETS THE WILDS, so a south-portal arrival
+   *  parked on the fire must never fire it (her walk's report). */
   private updateCampfire(dt: number): void {
     if (this.campfireCd > 0) this.campfireCd -= dt;
-    if (this.player.dead || this.player.downed || !this.playerIdle() || !this.nearCampfire()) {
+    const near = !this.player.dead && !this.player.downed && this.nearCampfire();
+    const armed = this.stationDwellArmed('campfire', near);
+    if (!near || !armed || !this.playerIdle()) {
       this.campfireDwell = 0;
       return;
     }
@@ -21942,8 +21967,9 @@ export class World {
     // (local hero checked first — solo is order-identical, see localHumanSeats).
     const near = this.localHumanSeats().filter(s =>
       !s.actor.dead && !s.actor.downed && this.nearSalvage(s));
+    const armed = this.stationDwellArmed('salvage', near.length > 0);
     const ready = near.find(s => this.seatIdle(s));
-    if (!this.salvageGate.fire(!!ready, near.length > 0, dt, SALVAGE_CFG.stationDwell)) return;
+    if (!this.salvageGate.fire(!!ready && armed, near.length > 0 && armed, dt, SALVAGE_CFG.stationDwell)) return;
     this.salvageDwellRequested = true;
     this.salvageDwellSeatId = ready!.id;
   }
@@ -22192,8 +22218,12 @@ export class World {
       && this.bountyArmedBeat >= 0 && this.bountyArmedBeat !== this.bountyBeat()) {
       this.armBountyBoard();
     }
+    // The arrival latch matters here: the GROWN town's waypoint stands
+    // inside the board's dwell disc — coming home must never auto-open
+    // the postings under the arriving feet.
+    const armed = this.stationDwellArmed('bounty', near.length > 0);
     const ready = near.find(s => this.seatIdle(s));
-    if (!this.bountyGate.fire(!!ready, near.length > 0, dt, BOUNTY_BOARD_CFG.dwell.sec)) return;
+    if (!this.bountyGate.fire(!!ready && armed, near.length > 0 && armed, dt, BOUNTY_BOARD_CFG.dwell.sec)) return;
     if (!this.clientActionHook) this.armBountyBoard();
     this.bountyDwellRequested = true;
     this.bountyDwellSeatId = ready!.id;
@@ -22205,8 +22235,9 @@ export class World {
   private updateFont(dt: number): void {
     const near = this.localHumanSeats().filter(s =>
       !s.actor.dead && !s.actor.downed && this.nearFont(s));
+    const armed = this.stationDwellArmed('font', near.length > 0);
     const ready = near.find(s => this.seatIdle(s));
-    if (!this.fontGate.fire(!!ready, near.length > 0, dt, SALVAGE_CFG.stationDwell)) return;
+    if (!this.fontGate.fire(!!ready && armed, near.length > 0 && armed, dt, SALVAGE_CFG.stationDwell)) return;
     this.fontDwellRequested = true;
     this.fontDwellSeatId = ready!.id;
   }
@@ -22252,8 +22283,9 @@ export class World {
   private updateTracker(dt: number): void {
     const near = this.localHumanSeats().filter(s =>
       !s.actor.dead && !s.actor.downed && this.nearTracker(s));
+    const armed = this.stationDwellArmed('tracker', near.length > 0);
     const ready = near.find(s => this.seatIdle(s));
-    if (!this.trackerGate.fire(!!ready, near.length > 0, dt, SALVAGE_CFG.stationDwell)) return;
+    if (!this.trackerGate.fire(!!ready && armed, near.length > 0 && armed, dt, SALVAGE_CFG.stationDwell)) return;
     this.trackerDwellRequested = true;
     this.trackerDwellSeatId = ready!.id;
   }
@@ -22277,8 +22309,9 @@ export class World {
   private updateOracle(dt: number): void {
     const near = this.localHumanSeats().filter(s =>
       !s.actor.dead && !s.actor.downed && this.nearOracle(s));
+    const armed = this.stationDwellArmed('oracle', near.length > 0);
     const ready = near.find(s => this.seatIdle(s));
-    if (!this.oracleGate.fire(!!ready, near.length > 0, dt, SALVAGE_CFG.stationDwell)) return;
+    if (!this.oracleGate.fire(!!ready && armed, near.length > 0 && armed, dt, SALVAGE_CFG.stationDwell)) return;
     this.oracleDwellRequested = true;
     this.oracleDwellSeatId = ready!.id;
   }
@@ -23994,10 +24027,11 @@ export class World {
     // (local hero checked first — solo is order-identical, see localHumanSeats).
     const near = this.localHumanSeats().filter(s =>
       !s.actor.dead && !s.actor.downed && this.nearCaravan(s));
+    const armed = this.stationDwellArmed('caravan', near.length > 0);
     const ready = near.find(s => this.seatIdle(s));
     // Fires ONCE per approach (consumed until every hand steps OUT of range)
     // — so closing the menu while still standing here won't re-open it.
-    if (!this.caravanGate.fire(!!ready, near.length > 0, dt, CARAVAN_DWELL)) return;
+    if (!this.caravanGate.fire(!!ready && armed, near.length > 0 && armed, dt, CARAVAN_DWELL)) return;
     this.caravanDwellSeatId = ready!.id; // WHO asked — the menu + the band pick follow
     if (this.zone.id === START_ZONE) {
       this.caravanDwellRequested = true; // in town: the main loop opens the band menu

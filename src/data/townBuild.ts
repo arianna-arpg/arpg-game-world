@@ -60,6 +60,16 @@ export const RECRUITER_SITE = { x: 1350, y: 560 };
  *  nearBountyBoard dwell check. */
 export const BOUNTY_BOARD_SITE = { x: 770, y: 460 };
 
+/** Where the SACRIFICIAL FONT stands in town — the east green, off the
+ *  market road between the inn and the recruiter's corner. A REAL site
+ *  (shared by the loadZone seat and nearFont's dwell) replacing the old
+ *  centre-plaza formula (arena/2 + 90, −40), which landed the Font
+ *  nineteen pixels off the bounty board in the base town — the centre is
+ *  a working plaza (waypoint + board), not spare ground. Clear ≥180 of
+ *  every fixture, site, and the waypoint in BOTH town sizes; the arrival
+ *  latch covers the east door's residual reach. */
+export const FONT_SITE = { x: 1130, y: 440 };
+
 export const TOWN_ADDITIONS: TownAddition[] = [
   // The Quest Package: a quartermaster's house raised in the town's expanded
   // south-east quarter (clear of the original cottages so it never walls one in).
