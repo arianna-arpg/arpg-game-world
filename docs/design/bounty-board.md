@@ -11,6 +11,13 @@ anchors name files + symbols — line numbers drift. Backlog ancestry: the
 board was carded as **#356** in the attention-policy round (the
 "bounty-board-as-chevron-patron" coupling; see `world/attention.ts` and the
 chevron-temper pass) — this charter is that card grown to a system.
+**WALK 1 (2026-08-24, the same day): RATIFIED — "This looks great as a
+first pass." All ten cards RULED (§11 carries the verdicts; the walk table
+follows §0). Amendments folded through: the collect RE-RULED to the board
+turn-in (§6), the slate opens at FIVE (§4/§13), R2 split named/category
+(§6), THE FAIL LANE beside the annul (§4), the one-hand law's per-board
+future encoded unhardcoded (§2), the board's look + siting made M0 riders
+(§3). No movement fired — M0 awaits her go.**
 
 > **THE LEAD FINDINGS, before anything else.**
 >
@@ -84,6 +91,22 @@ chevron-temper pass) — this charter is that card grown to a system.
 | 8 | **The board derives from the live world** — "nearly its own content package that derives its content from the plethora of other content packages": a world boss standing during a refresh can post as a kill bounty. |
 | 9 | **A bounty can SPAWN its event** — "close a fracture in X zone" spawns that fracture for the bounty, independent of however many already ride the map — the board as an event-density lever. |
 | 10 | **The system's purpose is agency**: direct the player's focus, and let them target specific reward structures. |
+
+### The walk (2026-08-24 — the same day, her verdicts)
+
+| card | verdict |
+|---|---|
+| the charter | **RATIFIED** — "This looks great as a first pass." |
+| 1 · the name | **RULED: THE BOUNTY BOARD + the writ layering** — "this is fine and coheres throughout." Rider, hers: the board OBJECT needs "a nice visual… and that Lastlight really has enough space for it to register appropriately while not blocking anything off" — §3's REGISTER RIDER, an M0 acceptance gauge |
+| 2 · the hand | **RULED: one active**; co-op takes "whichever is easiest to implement" → the standing world-scoped shape (the party's hand). THE PER-BOARD IMPLICATION recorded with card 10 (her word): the future is likely one-per-board — "let's go ahead with locking it to one active bounty for right now, with the IMPLICATION that we may want to revise this in the future and to not deliberately hardcode it in place" — §2 encodes the unhardcoded shape |
+| 3 · the collect | **RE-RULED: TURN-IN AT THE BOARD** — pay lands when the player returns and turns in. Her reasoning: the return home is wanted, and the cycle is unbroken — turn-in and next-pickup are ONE trip ("receiving payout upon completion means that a player would then have to navigate back to town to get a new bounty anyways") |
+| 4 · the errand's veil | **RULED: per-posting flavor, default = discovery stays the ask** (the omen face); a minority of postings may roll the deed-lift face |
+| 5 · the annul + THE FAIL | **RULED as recommended**; her extension: keep the FAILURE horizon open ("I'm actually not quite sure of a situation in which it would fail, but it's best to keep the horizon open and assume that it potentially could") — a failed bounty resolves like a turn-in: "treated the same… both would simply require navigation back to the board either way, which grants the same outcome patterns" — return, the board acknowledges, no pay, the next slate offers |
+| 6 · the slate | **RULED: shape as proposed; opens at FIVE** — "ensure that this can be adjusted easily as we do walks" (the one-dial law) |
+| 7 · the component fork | **RULED: the own-charter road** — "this will likely also be quite different and will require a new minigame" (the smith/rune minigame register — recorded in the fork's scope) |
+| 8 · the unique pool | **RULED: unseen uniques post.** Amendment: R2 SPLITS — named uniques AND unique CATEGORIES ("a unique ring") — targeted farming without the name |
+| 9 · the summons roster | **RULED as recommended** (fractures → hunt + worldboss → breach where its shape fits) |
+| 10 · the writ kinship | **RULED WANTED** — "I would actually love to see the writ kinship… this is a great idea"; a committed future movement, not launch; carries the per-board-hand implication (card 2) |
 
 ---
 
@@ -170,11 +193,19 @@ carries that existing `zoneId`. What the accept does in the claim lane:
 - The MINT lane stays available to kinds that want a fresh arena (a future
   "purge the spur" bounty is one `QuestZoneSpec` away — nothing new).
 
-**THE ONE-HAND LAW (her ask 4).** `QUEST_CATEGORY_CAPS.bounty` re-dials
-2 → **1** — a one-line change in `quests/types.ts`; the cap constant stays
-the dial. Quests are world-scoped (`activeQuests` is World state), so in
-co-op the hand is the PARTY's hand — the standing quest shape, recorded in
-§9's co-op law rather than invented around.
+**THE ONE-HAND LAW (her ask 4; walk 1 ruled).** `QUEST_CATEGORY_CAPS.bounty`
+re-dials 2 → **1** — a one-line change in `quests/types.ts`; the cap
+constant stays the dial. Quests are world-scoped (`activeQuests` is World
+state), so in co-op the hand is the PARTY's hand — the standing quest
+shape, which is also the easiest lane (her walk-1 word: "whichever is
+easiest to implement"). **THE PER-BOARD IMPLICATION (walk 1, with card
+10):** once regional boards exist (the writ kinship, ruled WANTED), the
+hand is likely ONE PER BOARD — so the singular is never hardcoded: the
+accepted bounty RECORDS its issuing board (`Posting.boardId`), the cap
+check FOLDS active hands per board (today's one-board world collapses the
+fold to her global 1), and no intent, wire row, or save shape assumes
+exactly-one. Revising to per-board hands must be a dial's turn, never a
+rewrite.
 
 **Repeatability + THE SHARED-STAMP LAW.** Generated ids are fresh per
 posting (`bounty_<beat>_<n>`), so `completedQuests` never blocks re-offers
@@ -207,6 +238,15 @@ kind as a prop, whose painter and lamp already exist in
 `doodadVisuals.ts`), folded into the per-run town def by `expandedTown` at
 World construction. No engine edits; Lastlight is not a hold, so
 `updateWritBoard`'s hold-state gate never collides with the prop.
+
+**THE REGISTER RIDER (walk 1, card 1 — an M0 acceptance gauge, not
+polish).** The board must READ as itself: the standing `bounty_board`
+painter + amber lamp is the floor, not the ceiling — M0 gives the
+Lastlight instance a look pass (posted-paper dress, a silhouette that
+carries at plaza scale) and a SITE chosen for clearance: open ground off
+the road lines and counter aprons, the dwell radius overlapping no other
+station's, nothing walled off behind or beneath it. Her in-browser gauge
+of the look + the siting gates M0's close.
 
 **The dwell → panel chain.** The harbor-board wiring, renamed: a `Dwell`
 gate at the site (radius/дwell **DIAL**, the `CARAVAN_DWELL 0.9` register)
@@ -258,6 +298,17 @@ The vendor beat laws, re-instanced on the board's own, slower clock:
   with a courtesy notice, the hand frees, no penalty (card 5). Never a
   silently dead posting — the standing order's own law ("refuses WITH the
   reason, never a silently dead order").
+- **THE FAIL LANE (walk 1, beside the annul)**: a bounty CAN fail, and the
+  horizon stays open even where no case is named today — every kind may
+  declare a `failed()` read (the real case shipping already: a CHARGE on
+  failable ground — the caravan robbed, the escape lost; `objectiveLost`
+  stands). A failed bounty resolves LIKE A TURN-IN (her rule: "treated the
+  same… both would simply require navigation back to the board either
+  way, which grants the same outcome patterns"): the player returns, the
+  board acknowledges, no pay, the hand frees at the dwell, the slate
+  offers the next. One cycle for every ending except the world's own
+  annul (which frees in the field with its courtesy — nothing to bring
+  home).
 
 ---
 
@@ -284,8 +335,11 @@ exist):
   `pickSeat` (`veiledMul` heavy, range envelope **DIAL**) — veiled halo
   ground is fully woven and linked by the forechart's own law ("only the
   map is blind"), so reachability is structural, no new guarantee needed.
-  Accept registers an OMEN (whisper + aging reveal, §8), NOT a veil lift
-  (card 4). Done: `visited.has(zoneId)` — entry is the deed.
+  THE VEIL is per-posting FLAVOR (card 4, ruled): the DEFAULT face keeps
+  discovery the ask — accept registers an OMEN (whisper + aging reveal,
+  §8), no lift; a minority face rolls the deed-lift instead (the way
+  draws), its share a **DIAL**. Done: `visited.has(zoneId)` — entry is
+  the deed.
 - **K2 · THE CHARGE** — *"complete the objective of the place."* Target: a
   standing zone with a completable objective (seat filter excludes
   `safe/none/escape` kinds and event-quiet ground; the `OBJECTIVE_SEALS` /
@@ -295,7 +349,10 @@ exist):
   `onQuestZoneFieldCleared` hook fires for free at the clear (it is
   already independent of the zone's one-time bounty latch, by comment and
   by construction). The objective VARIETY is the content: twenty authored
-  kinds today, every future kind joins the pool the day it ships.
+  kinds today, every future kind joins the pool the day it ships. Failable
+  ground is real here (the caravan robbed, the escape lost —
+  `objectiveLost` stands today): a failed charge ends through §4's fail
+  lane.
 - **K3 · THE CULL** — *"kill the named."* The writ grammar goes remote: on
   first ENTRY to the target zone with the bounty in hand, the board posts
   K writ marks through the standing promote-and-name path
@@ -349,7 +406,14 @@ theater; `engine/theater.ts` is untouched by every movement here.
 ## 6. THE PAY — reward lanes on the owed law
 
 An open lane registry mirrored by data — the posting stores a `pay` spec;
-one executor routes it at the payout site. All ground mints ride THE OWED
+one executor routes it at THE TURN-IN (walk 1's collect re-rule): pay
+lands when the player returns to the board and turns in — the standing
+`QuestTurnIn` withhold lane (`fieldDone`, the "!" return marker with its
+"Return to claim" copy, the turn-ins-first dwell order in
+`updateQuestGiver`) becomes the bounty DEFAULT, giver = the board. Her
+reasoning, encoded: the return home is wanted, and the cycle stays whole —
+the same dwell pays the finished bounty and offers the next slate, one
+trip. All ground mints land at the board's feet through THE OWED
 LANE (`dropGemAt(..., owed)` / `dropGearAt(..., owed)` — the exact comment
 already in the engine: *"a quest's payout is earned of the writ, not of
 this ground"*); wallet grants (`grantEssence`, `grantAbilityEssence`)
@@ -357,12 +421,15 @@ never consult the spoils seal at all.
 
 - **R1 · ESSENCE** — `EssenceCost[]` into the tint wallet, and/or Memory
   Essence tiers (`grantAbilityEssence`). The floor lane, always available.
-- **R2 · THE NAMED UNIQUE** — `rollItem({ uniqueId })`, the item NAMED on
-  the card (her reward-targeting agency, literal). Pool: level-banded from
-  `UNIQUE_LIST` weights (**DIAL**: whether the board may post uniques the
-  account has never seen — recommended YES; the board is a discovery
-  surface, and the standing-order's known-only law exists because a
-  commission is player-AIMED while a posting is board-DEALT).
+- **R2 · THE UNIQUE — two faces (walk 1's split).** (a) NAMED:
+  `rollItem({ uniqueId })`, the item named on the card — her
+  reward-targeting agency, literal. (b) THE CATEGORY (her amendment): "a
+  unique ring" — `rollItem({ rarity: 'unique', category })`, the standing
+  `LootEntry` 'unique' arm's own optional-category shape: targeted
+  farming without the name, the mystery kept. Pool: level-banded from
+  `UNIQUE_LIST` weights; unseen uniques POST (ruled — the board deals,
+  the player aims by choosing among dealt cards; the card names or
+  categorizes what the account may never have met).
 - **R3 · THE GEAR LOT** — "a specific assortment": a seeded lot described
   precisely on the card, built from the standing rollers —
   `resolveLootTable` ids (its header invited us), `withFamily` forced
@@ -533,64 +600,65 @@ strike-through instead of a lie.
 
 ## 11. DECISION CARDS (her word wanted)
 
-1. **THE NAME.** Recommended: THE BOUNTY BOARD / bounties, the writ
-   vocabulary layered beneath (§1's nesting law), "commission" kept as
-   panel flavor. Alternates: the Commission Board (her word as the noun) ·
-   a fresh register (the Charter Stone, the Postings). The census (§1) is
-   the ruling's ground.
-2. **THE HAND.** One active bounty (her law) — party-scoped, because
-   quests are world-scoped by standing shape. Alternate: per-hero hands in
-   co-op (a real divergence from the quest fabric — priced only if wanted).
-   The cap constant stays the dial either way.
-3. **THE COLLECT.** Recommended: pay lands AT COMPLETION, where you stand
-   (owed drops + wallet grants — no dead walk home; the chase continues).
-   Alternate: `turnIn` at the board (the withhold lane exists today and
-   makes the board a hearth — at the cost of a walk after every deed).
-   Per-kind override stays possible either way (the fabric has both).
-4. **THE ERRAND'S VEIL.** Recommended: accept registers an aging OMEN,
-   never lifts the veil — discovery stays the ask. Alternate: the standard
-   deed lift (the way draws, the mystery dies). Could be per-posting
-   flavor (**DIAL**) if she wants both faces on the slate.
-5. **THE ANNUL.** Recommended: courtesy notice, hand frees, no penalty, no
-   refund concept (nothing was paid), struck offers stay struck for the
-   beat. Alternates: partial consolation pay on world-resolved K4 targets
-   ("someone claimed it first — the board pays a finder's cut") — flavor,
-   priced later.
-6. **THE SLATE SHAPE.** Offer count X (proposal 4), beat length (proposal
-   900s), kind-diversity guarantee (at most one per kind), weights — all
-   **DIALs**, but the SHAPE (fixed count, whole-slate re-roll, taken hand
-   immune) wants her word once.
-7. **THE COMPONENT FORK.** Recommended: reserve the R5 lane now, commission
-   the component economy as its own mini-charter (bench-catalyst direction
-   sketched in §6), board becomes its first faucet at that charter's M0.
-   Alternate: a minimal debut inside this charter's M4 (named ids, no
-   consumers yet — honest but hollow until the bench learns them).
-8. **THE UNIQUE POOL.** May the board post uniques the account has never
-   seen drop? Recommended YES (the board deals, the player aims by
-   CHOOSING among dealt cards — discovery preserved because the card
-   names it). Alternate: known-only (the drop-index law extended from
-   commissions).
-9. **THE SUMMONS ROSTER.** Which sources ship the ignite verb at M3 —
-   fractures (her example, hook live) recommended first; hunt + worldboss
-   next; breach where its encounter shape fits. Her pick orders the
-   roster.
-10. **THE WRIT KINSHIP** (recorded seat, not launch): should harborhold
-    plaza boards someday OFFER postings from the same registry (regional
-    boards reading a shared slate)? Nothing here forecloses it; the hold
-    board keeps its local writ soul today.
+1. **THE NAME — RULED (walk 1): THE BOUNTY BOARD.** The writ vocabulary
+   layered beneath (§1's nesting law) — "this is fine and coheres
+   throughout"; "commission" stays panel flavor. Her rider became §3's
+   REGISTER RIDER: the board object's look + Lastlight siting are M0
+   acceptance gauges.
+2. **THE HAND — RULED (walk 1).** One active bounty; co-op takes the
+   easiest lane = the standing world-scoped shape (the party's hand). THE
+   PER-BOARD IMPLICATION encoded in §2: lock 1 today, never hardcode the
+   singular — per-board hands (with card 10's kinship) must be a dial's
+   turn later.
+3. **THE COLLECT — RE-RULED (walk 1): TURN-IN AT THE BOARD.** The
+   `QuestTurnIn` withhold lane is the bounty default (§6) — the return
+   home is wanted, and turn-in + next-pickup are one trip; instant field
+   pay retired as the recommendation.
+4. **THE ERRAND'S VEIL — RULED (walk 1): per-posting flavor.** Default =
+   the omen face, discovery stays the ask; the deed-lift face rolls on a
+   minority share (**DIAL**) — §5 K1.
+5. **THE ANNUL — RULED (walk 1)** as recommended (courtesy, hand frees in
+   the field, no penalty, struck offers stay struck). THE FAIL LANE added
+   beside it (§4): failure resolves like a turn-in — return, acknowledge,
+   no pay, next slate — the horizon kept open even where no failure case
+   is named today.
+6. **THE SLATE SHAPE — RULED (walk 1).** As proposed — fixed count,
+   whole-slate re-roll on the beat, taken hand immune — opening at
+   **FIVE** offers; the count is ONE dial, adjusted at walks.
+7. **THE COMPONENT FORK — RULED (walk 1): the own-charter road.** The
+   R5 lane reserved here; the component economy charters separately —
+   her scope note recorded: it "will likely also be quite different and
+   will require a new minigame" (the smith/rune minigame register in
+   `CRAFT_CFG` is the standing kin).
+8. **THE UNIQUE POOL — RULED (walk 1).** Unseen uniques POST; and R2
+   SPLITS into named uniques + unique CATEGORIES ("a unique ring") — §6's
+   two faces, targeted farming with or without the name.
+9. **THE SUMMONS ROSTER — RULED (walk 1)** as recommended: fractures
+   first (her example, hook live), hunt + worldboss next, breach where
+   its encounter shape fits.
+10. **THE WRIT KINSHIP — RULED WANTED (walk 1).** Regional boards reading
+    the shared posting registry graduate from a recorded seat to a
+    COMMITTED future movement (post-M4) — "I would actually love to see
+    the writ kinship" — carrying the per-board hand (card 2). The hold
+    board keeps its local writ soul at launch; nothing built forecloses
+    the growth.
 
 ---
 
 ## 12. BUILD MOVEMENTS (each awaits her go; order argued below)
 
-- **M0 — THE BOARD STANDS** (gauge-first). The catalog row + residence +
-  dwell→panel + the beat-armed persisted slate + accept/abandon intents +
-  THE ONE-HAND cap at 1 + ONE kind (K2 THE CHARGE — the simplest honest
-  predicate, riding hooks that already fire) + R1 essence pay through the
-  owed/wallet lanes + the shared-stamp law + journal/map guidance free.
-  Walkable end to end in one sitting: unlock, dwell, read four cards,
-  accept, clear the zone, get paid. Probe (`balance/probe_bountyboard.ts`)
-  + roster row SAME commit. Effort M.
+- **M0 — THE BOARD STANDS** (gauge-first). The catalog row + residence
+  under THE REGISTER RIDER (the look pass + clearance siting — her
+  in-browser gauge closes the movement) + dwell→panel + the beat-armed
+  persisted slate (FIVE offers) + accept/abandon intents + THE ONE-HAND
+  cap at 1 in the unhardcoded per-board shape + ONE kind (K2 THE CHARGE —
+  the simplest honest predicate, riding hooks that already fire) + R1
+  essence pay through THE TURN-IN at the board (the withhold lane —
+  ruled) + the fail lane's board acknowledgment + the shared-stamp law +
+  journal/map guidance free. Walkable end to end in one sitting: unlock,
+  dwell, read five cards, accept, clear the zone, walk home, turn in, get
+  paid, take the next. Probe (`balance/probe_bountyboard.ts`) + roster
+  row SAME commit. Effort M.
 - **M1 — THE SPREAD.** K1 THE ERRAND (omen lane) + K3 THE CULL (the writ
   grammar remote, per-mark lane stamp, eventKey credit) + reward lanes
   R2/R3/R4 + the posting card faces (precision copy, the visible price) +
@@ -609,18 +677,26 @@ strike-through instead of a lie.
 smallest honest scale before the spread); M1 needs M0's slate; M2's census
 registry precedes M3's ignite verbs on the same rows; M4 rides last behind
 its fork. M1 and M2 could run concurrent across sessions (disjoint files)
-if the chips are cut that way.
+if the chips are cut that way. **A committed post-M4 movement (walk 1,
+card 10): THE KINSHIP** — regional boards on the shared registry, the
+per-board hand fold turned live.
+
+**The commissioning ledger:** walk 1 (2026-08-24) ratified the charter and
+ruled all ten cards; NO movement fired — M0 awaits her go.
 
 ---
 
 ## 13. OPEN DIALS (build-time levers — no rulings pending)
 
-`beatSec` (900) · offer count (4) + per-rung growth · kind weights + the
-diversity guarantee · per-kind `SeatTuning` envelopes (errand range/veil
-weights, charge bands, cull K counts) · the pay magnitude fold (per-kind
-toll, distance bands, level scaling) · unique/lot/memory lane weights ·
-board gate rows + cost + growth-rung costs · dwell radius/seconds · the
-panel accent + chevron glyph · summons cap + per-source headroom floor ·
-annul courtesy strings · the cull's writ count band · omen
-whisper/reveal/widen numbers · `QUEST_CATEGORY_CAPS.bounty` (=1, her law,
-still a constant).
+`beatSec` (900) · offer count (**5**, her walk-1 number — one dial,
+re-tuned at walks) + per-rung growth · kind weights + the diversity
+guarantee · the errand's deed-lift face share · per-kind `SeatTuning`
+envelopes (errand range/veil weights, charge bands, cull K counts) · the
+pay magnitude fold (per-kind toll, distance bands, level scaling) ·
+unique lane weights (named vs category, and the category table) ·
+lot/memory lane weights · board gate rows + cost + growth-rung costs ·
+dwell radius/seconds · the panel accent + chevron glyph · summons cap +
+per-source headroom floor · annul + fail courtesy strings · the cull's
+writ count band · omen whisper/reveal/widen numbers ·
+`QUEST_CATEGORY_CAPS.bounty` (=1, her law, folded per board — §2's
+unhardcoded shape).
