@@ -682,7 +682,19 @@ card 10): THE KINSHIP** — regional boards on the shared registry, the
 per-board hand fold turned live.
 
 **The commissioning ledger:** walk 1 (2026-08-24) ratified the charter and
-ruled all ten cards; NO movement fired — M0 awaits her go.
+ruled all ten cards; **M0 fired at her go the same day and LANDED @
+`7f19fe0`** — the resolver seam (`World.questDefOf`), the persisted
+beat-armed slate, the per-board one-hand fold, THE CHARGE kind, the
+turn-in pay through the one payout site under the shared-stamp law, the
+residence + dwell→panel chain, `probe_bountyboard.ts` (35 checks) + its
+roster row in the same commit; every gate green (check clean, probe lane
+157/157, smoke baseline unmoved) and the full loop live-walked in-browser
+(five named postings → accept → complete → turn in → the printed pay).
+**Owed her: THE REGISTER RIDER's in-browser gauge** — the board's look at
+plaza scale + the siting (clearance-verified numerically: only the post's
+own dressing inside the dwell disc; her eye closes it) — plus every dial
+unblessed (beat 900s, five offers, the pay fold, the band, the gate rows).
+M1 fires at her word.
 
 ---
 
