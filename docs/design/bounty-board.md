@@ -694,7 +694,26 @@ roster row in the same commit; every gate green (check clean, probe lane
 plaza scale + the siting (clearance-verified numerically: only the post's
 own dressing inside the dwell disc; her eye closes it) — plus every dial
 unblessed (beat 900s, five offers, the pay fold, the band, the gate rows).
-M1 fires at her word.
+**M1 THE SPREAD fired at her pivot-back and LANDED @ `5450046`
+(2026-08-24):** the kind-mixed slate under THE DIVERSITY CAP; K1 THE
+ERRAND (per-posting veil flavor as ruled — the default omen face whispers
+an aging, revealing omen and lifts nothing; entry is the deed) and K3 THE
+CULL (the writ grammar remote: marks post at arrival AFTER the
+zone-memory swap, remainder-only and self-healing; claims credit the
+POSTING at the kill chokepoint; THE MIXED-LANE GUARD keeps cull targets
+off writ-objective/harborhold ground); THE PAY LANES rolled at the arm
+off the target's level — essence · Rough pouches · the gem face (a TRUE
+Memory from the account's own pool, THE MINT LAW stamped at pay) · the
+gear lot · the unique lane split named/category (her amendment), all
+minted owed at the turn-in with the never-silent essence fallback; and
+`audit bounties` (the dial-review instrument) joins the harness. Probe
+grown to 56 checks (rigs G/H/I + kind-aware B–D); every gate green; the
+live slate deals all three kinds with precise pay faces ("the unique:
+The Miser's Loop" · "the skill Memory: Chain Lightning" · "2 rare-grade
+amulet pieces"). Audit's first observation for her walks: no
+weapon/offhand unique stands in reach at low-mid levels, so the category
+face honestly never offers them there. **M2 THE ANSWER fires at her
+word.**
 
 ---
 
