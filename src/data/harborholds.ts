@@ -432,7 +432,8 @@ export function mintHoldState(cls: HoldClassDef): HarborholdState {
   return { cls: cls.id, state: 'besieged', prosperity: 0, defenses: 0, falls: 0 };
 }
 
-/** The Mortal Essence restoration price at a zone level. */
+/** The restoration price at a zone level — Essence VALUE at the mortal
+ *  exchange (paid from the carried wallet, mixed tints at strict rates). */
 export function holdRestoreCost(cls: HoldClassDef, zoneLevel: number): number {
   return Math.round(cls.restoreCostBase + cls.restoreCostPerLevel * Math.max(1, zoneLevel));
 }

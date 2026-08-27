@@ -26,11 +26,12 @@ export interface EssenceDef {
   color: string;
   /** Display glyph (HUD chips, costs). */
   glyph: string;
-  /** THE MORTAL EXCHANGE — this essence's worth in Mortal Essence, the ONE
+  /** THE MORTAL EXCHANGE — this essence's worth in exchange units, the ONE
    *  strict conversion every surface speaks through: the run-end RECKONING
-   *  appraises the carried wallet at these rates, and every in-run service
-   *  priced in Mortal Essence (holdfast tolls, harbor charts, hold
-   *  restorations, merc hires) drains the wallet at the same rates. A new
+   *  appraises the carried wallet at these rates into Mortal Essence, and
+   *  every in-run service priced in Essence value (holdfast tolls, harbor
+   *  charts, hold restorations, merc hires — ESSENCE_VALUE_LABEL faces)
+   *  drains the wallet at the same rates. A new
    *  essence tier declares its worth here and joins everything at once.
    *  THE CHANGE LAW: the cheapest tier must be worth exactly 1 so a spend
    *  that breaks a deep tint can always refund exact change (probe-pinned:
@@ -48,6 +49,18 @@ export const ESSENCES: Record<EssenceId, EssenceDef> = {
 export const ESSENCE_IDS = Object.keys(ESSENCES) as EssenceId[];
 
 // ---------------------------------------------------- the mortal exchange ---
+
+/** THE DENOMINATION LAW (2026-08-26): a mid-run service PRICES IN ESSENCE —
+ *  the carried currency it actually drains — and only the run-end RECKONING
+ *  and the Vault speak of Mortal Essence (META_CURRENCY_LABEL, the account
+ *  currency minted there and sealed there). The old faces quoted mid-run
+ *  tolls "in Mortal Essence", which players can no longer carry mid-run
+ *  since the seal law landed — the words promised a currency the wallet
+ *  cannot hold. One unit of value = one Coarse Essence (THE CHANGE LAW pins
+ *  it at worth 1), so "40 Essence" means any mix of tints appraising to 40
+ *  at the exchange below. Every mid-run price face prints through THIS
+ *  constant; META_CURRENCY_LABEL never appears on a mid-run price again. */
+export const ESSENCE_VALUE_LABEL = 'Essence';
 
 /** A carried essence wallet, appraised in Mortal Essence — the strict fold
  *  (count × mortalWorth per tier) both the run-end reckoning and every

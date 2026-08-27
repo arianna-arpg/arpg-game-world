@@ -24,7 +24,8 @@
 // ---------------------------------------------------------------------------
 
 import {
-  ESSENCES, ESSENCE_IDS, ESSENCE_OF_RARITY, essenceUnitsForValue, LEDGER_ESSENCE_TOUCHED,
+  ESSENCES, ESSENCE_IDS, ESSENCE_OF_RARITY, ESSENCE_VALUE_LABEL, essenceUnitsForValue,
+  LEDGER_ESSENCE_TOUCHED,
   spendWalletMortalValue, walletBreakdown, walletMortalValue, type EssenceId,
 } from '../src/data/essences';
 import {
@@ -250,11 +251,16 @@ const wallet = (w: Partial<Record<EssenceId, number>>): Record<EssenceId, number
     tinted.every(d => {
       const t = d.unlock.tint!;
       if (!ESSENCES[t]) return false;
-      const label = holdfastTollLabel(d, 12, 'MORTAL');
+      const label = holdfastTollLabel(d, 12);
       return label.includes(ESSENCES[t].label) && label.startsWith(`${holdfastTollCost(d, 12)}×`);
     }));
-  check('tolls: an untinted gate still quotes the mixed-wallet coin',
-    holdfastTollLabel(HOLDFAST_DEFS[0], 5, 'MORTAL').endsWith('MORTAL'));
+  // THE DENOMINATION LAW (2026-08-26): a mid-run toll prices in ESSENCE —
+  // the carried currency the pay path actually drains — never in Mortal
+  // Essence, which exists only between a run's end and its reckoning's seal.
+  check('tolls: an untinted gate quotes the carried coin (the denomination law)',
+    holdfastTollLabel(HOLDFAST_DEFS[0], 5).endsWith(ESSENCE_VALUE_LABEL));
+  check('tolls: no toll label ever quotes the account currency',
+    HOLDFAST_DEFS.every(d => !holdfastTollLabel(d, 9).includes('Mortal')));
   // THE THEMED ANSWER: each tinted gate's promised cache rarity matches the
   // essence↔rarity canon (the tint IS the reward's tier, spoken twice).
   check('tolls: the themed cache honors the essence↔rarity canon (pristine → unique)',

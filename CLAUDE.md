@@ -830,7 +830,10 @@ we verify changes.
   a mortal run seats a fresh disposable hero; an IMMORTAL run seats another
   roster vessel (gated on a second immortal slot) which persists to its own
   slot and PAYS ITS OWN COVENANT on a wipe (own-ring corpse + carry strip +
-  stage advance — never a cheaper death). THE SOLO INVARIANT: with no couch
+  stage advance — or, undying, THE FALL: the card stamped with its frozen
+  resurrection fee, the Vault's first-tab Fallen shelf the road back
+  (docs/meta/reckoning.md, probe balance/probe_resurrection.ts) — never a
+  cheaper death). THE SOLO INVARIANT: with no couch
   seats every branch short-circuits — solo is byte-identical, and the pause
   menu grows the join row only with ≥2 controllers connected. Dials in
   `COUCH_CFG`; docs `docs/engine/couch.md`; probe `balance/probe_couch.ts`.

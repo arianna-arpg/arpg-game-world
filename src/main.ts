@@ -76,7 +76,8 @@ import { mountGlyphForge } from './dev/glyphForge';
 import { loadWorkshopSync, reconcileWorkshopFromDisk } from './meta/workshop';
 import { perfSweep, type PerfSweepOpts, type PerfSweepReport } from './dev/perf';
 import {
-  applyCredits, isClassUnlocked, LEDGER_ACCOUNT_DEATHS, RUN_RECORD_SCHEMA,
+  applyCredits, isClassUnlocked, LEDGER_ACCOUNT_DEATHS, META_CURRENCY_LABEL,
+  RUN_RECORD_SCHEMA,
   recordRun, renownForRun, runStanding, type Account, type RunRecord,
 } from './meta/account';
 import {
@@ -499,6 +500,14 @@ function restoreWorldState(world: World, save: CharacterSave): void {
  *  Async (disk-first load); a missing/corrupt slot just returns to the menu —
  *  the entry stays listed, deletion is only ever the player's deliberate call. */
 function resumeRosterChar(entry: RosterEntry): void {
+  // THE FALLEN LOCK (the resurrection covenant): a fallen vessel cannot be
+  // played — the menu row already refuses, this is the belt behind it (and
+  // behind any stale handler holding an old card).
+  if (entry.fallen) {
+    ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar,
+      `${entry.name} lies fallen — resurrect them in the Vault (${entry.fallen.fee} ${META_CURRENCY_LABEL}).`);
+    return;
+  }
   void (async (): Promise<void> => {
     couchReset();
     const save = await loadRosterSave(entry.slot);
@@ -1102,11 +1111,19 @@ function couchChoices(): CouchJoinChoice[] {
       disabled: 'Unlock another Immortal vessel slot in the Vault to bring a second vessel to the couch.',
     }];
   }
-  const rows = account.roster.filter(r => r.modeId === mode.id && r.charId !== world.meta.charId);
+  // THE FALLEN LOCK: a fallen vessel cannot couch-join — the covenant gates
+  // every entry into play, not just the solo resume.
+  const rows = account.roster.filter(r =>
+    r.modeId === mode.id && r.charId !== world.meta.charId && !r.fallen);
   if (!rows.length) {
+    const fallenOnly = account.roster.some(r =>
+      r.modeId === mode.id && r.charId !== world.meta.charId && r.fallen);
     return [{
-      key: 'none', title: 'No second vessel sworn', color: '#8a8678', sub: '',
-      disabled: 'Swear another Immortal from the start menu first — the couch seats an existing vessel.',
+      key: 'none', color: '#8a8678', sub: '',
+      title: fallenOnly ? 'Every other vessel lies fallen' : 'No second vessel sworn',
+      disabled: fallenOnly
+        ? 'Resurrect a vessel in the Vault first — a fallen Immortal cannot take the couch.'
+        : 'Swear another Immortal from the start menu first — the couch seats an existing vessel.',
     }];
   }
   return rows.map(r => ({
@@ -1830,7 +1847,12 @@ function hostTail(dt: number): void {
     // price of getting there. Read before the wipe below; the wallets die
     // with the run either way.
     const stage = world.modeStageDef();
-    const reck = world.reckonRunEssence();
+    // THE FALL (runEndReason 'fall' — the resurrection covenant): the wallet
+    // was already stripped by the in-world banking, so the epilogue reads
+    // the appraisal beginModeFall stashed PRE-strip (rows honest, minted at
+    // the stage's own rate) instead of re-reckoning empty seats.
+    const fell = world.runEndReason === 'fall' && !!world.fallReckoning;
+    const reck = fell ? world.fallReckoning! : world.reckonRunEssence();
     applyCredits(account, reck.minted);
     // THE CHRONICLE: every meta-progressing conclusion is a row on the
     // account's own leaderboard — the mint on one axis, the journey score
@@ -1854,10 +1876,14 @@ function hostTail(dt: number): void {
     if (stage.metaProgression) mergeLedger(account.ledger, world.ledger);
     // CORPSE RUN + the lifetime death tally: only an actual death (not a
     // forfeit) records a corpse or counts toward death-gated unlocks — both
-    // captured BEFORE clearCharacter wipes the gems.
+    // captured BEFORE clearCharacter wipes the gems. A FALL already banked
+    // its corpse in-world (beginModeFall — pre-strip, own ring); only the
+    // tally arm applies here, stage-honest (moot for the sealed Undying).
     if (world.runEndReason === 'death') {
       world.recordDeath();
       if (stage.countsAccountDeath) bumpLedger(account.ledger, LEDGER_ACCOUNT_DEATHS);
+    } else if (world.runEndReason === 'fall' && stage.countsAccountDeath) {
+      bumpLedger(account.ledger, LEDGER_ACCOUNT_DEATHS);
     }
     // ANY conclusion — death, forfeit, retirement — ends the merc contract:
     // the veteran returns to the pool, waiting on some future outpost.
@@ -1865,8 +1891,17 @@ function hostTail(dt: number): void {
     // Durable write (sendBeacon) so the death record survives a tab-close on
     // the death screen, matching clearCharacter's durable wipe.
     saveAccountDurable(account);
-    clearCharacter();
-    ui.setContinueSave(null);   // the run is wiped — no Continue after death
+    // THE VESSEL KEEPS (roster-saved modes): a fall ends the run but never
+    // the character — persist the sanctuary-standing vessel to its OWN slot
+    // (the fallen card beside it) and leave the shared Continue slot alone:
+    // it belongs to whatever mortal run is suspended there. Mortal
+    // conclusions keep the historical wipe.
+    if (modeById(world.meta.modeId).save === 'roster') {
+      persistRun(account, world);
+    } else {
+      clearCharacter();
+      ui.setContinueSave(null); // the run is wiped — no Continue after death
+    }
     ui.resetClassRoster();      // the next run deals a fresh class hand
     // THE RUN'S EPILOGUE: the death screen reads the appraisal, then leads
     // STRAIGHT into the reckoning (the Vault as the run's closing prompt) —
@@ -1876,6 +1911,7 @@ function hostTail(dt: number): void {
     ui.showDeath({
       rows: reck.rows, carried: reck.carried, mult: reck.mult, minted: reck.minted,
       renown, standing: record ? runStanding(account, record) : null,
+      ...(fell ? { zoneName: world.fallReckoning!.zoneName } : {}),
     }, onDeathDismiss);
     // PAUSE the host loop — the run is over, so it must stop ticking + broadcasting
     // the dead world. startGame / startAsClient re-enable it for the next run.

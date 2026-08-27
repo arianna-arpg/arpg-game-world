@@ -540,10 +540,20 @@ export function deserializeAccount(s: AccountSave): Account | null {
     deaths: (s.deaths ?? []).filter(d => d?.schema === DEATH_SCHEMA).slice(-MAX_DEATH_RECORDS),
     // Per-ENTRY sanity filter, same stance as deaths: a malformed roster card
     // is dropped (its slot file simply goes unlisted), never a wipe or a crash.
-    roster: (s.roster ?? []).filter(r =>
-      typeof r?.charId === 'string' && r.charId.length > 0
-      && typeof r.modeId === 'string'
-      && typeof r.slot === 'number' && r.slot >= ROSTER_SLOT_BASE),
+    // THE FALLEN stamp (the resurrection covenant) heals FAIL-OPEN: a stamp
+    // whose fee is not a positive finite number is shed — corrupt data may
+    // never brick a vessel behind an unpayable or NaN debt.
+    roster: (s.roster ?? [])
+      .filter(r =>
+        typeof r?.charId === 'string' && r.charId.length > 0
+        && typeof r.modeId === 'string'
+        && typeof r.slot === 'number' && r.slot >= ROSTER_SLOT_BASE)
+      .map(r => {
+        if (!r.fallen) return r;
+        const fee = Math.floor(Number(r.fallen.fee));
+        if (!Number.isFinite(fee) || fee <= 0) { const { fallen: _shed, ...rest } = r; return rest; }
+        return { ...r, fallen: { fee, at: Number(r.fallen.at) || 0, level: Math.max(1, Math.floor(Number(r.fallen.level) || 1)) } };
+      }),
     // Same per-entry schema stance for retired heroes — a merc-format change
     // sheds stale veterans without ever wiping credits or the account.
     mercRoster: (s.mercRoster ?? []).filter(m =>

@@ -161,10 +161,11 @@ export const MERC_CFG = {
    *  will ever offer. */
   recruiter: { offers: [2, 3] as [number, number] },
 
-  /** Hire pricing (Mortal Essence): base + perLevel × the patron's level;
-   *  veterans of the wake carry a premium. Spending is open to every mode —
-   *  a sealed Undying character can HIRE but never EARN, so its retainers
-   *  are always fed by someone's mortal runs. */
+  /** Hire pricing (Essence VALUE at the mortal exchange — paid from the
+   *  carried wallet): base + perLevel × the patron's level; veterans of the
+   *  wake carry a premium. Spending is open to every mode — a sealed
+   *  Undying character can HIRE but never EARN account wealth, so deep
+   *  pockets are still built by playing. */
   hireCostBase: 40,
   hireCostPerLevel: 6,
   retiredCostMult: 1.5,

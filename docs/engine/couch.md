@@ -180,10 +180,17 @@ sim baseline gate (no gated metric moved), and the live rig.
   exit, run end, the durable quit flush.
 - THE GUEST COVENANT: a party wipe costs a guest vessel exactly what dying at
   home would — its own corpse (into `couchDeaths`, spawning when that vessel
-  is next played), the whole carry strip, the stage advance — banked in
+  is next played), the whole carry strip, the stage advance — and, for an
+  UNDYING guest, THE FALL (the resurrection covenant, docs/meta/reckoning.md):
+  its roster card is stamped with its own frozen resurrection fee — banked in
   `bankCouchWipe()` beside the host's own banking. Account-level writes
   (tithe, ledger merge, death tally) are NOT repeated: one account, one
-  payment. The couch is never a cheaper way to die.
+  payment. The couch is never a cheaper way to die. A FALLEN vessel cannot
+  join a later couch (`couchChoices` filters it — the Vault is the road
+  back); THE GRANDFATHER CLAUSE: when the host's stage survives the wipe
+  (the sworn crossing), a freshly-fallen guest keeps its seat for the rest
+  of THAT session — the couch doesn't eject a sibling mid-evening — and a
+  second wipe dies no deeper (the first stamp stands).
 - Leave: the pause row, run end, or menu exit — vessel saved first, seat
   removed, pad freed, the frame narrows home on its own smoothing.
 

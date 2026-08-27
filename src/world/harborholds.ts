@@ -173,7 +173,7 @@ registerMarkerSource((world: World): MapMarker[] => {
         id: `hold:${def.id}`, coord: at, glyph: '🔥', r: 7,
         fill: '#2a1a10', stroke: '#9a6a3a', text: '#e8b07a',
         title: `${def.name} — a ${label} burned`,
-        detail: 'It rebuilds on its own clock — or Mortal Essence raises it today.',
+        detail: 'It rebuilds on its own clock — or carried Essence raises it today.',
         fog: 'charted', z: 18, dimension: def.dimension,
       });
     } else {

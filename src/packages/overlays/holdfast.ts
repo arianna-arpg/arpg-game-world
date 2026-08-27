@@ -21,7 +21,6 @@ import { Rng } from '../../core/rng';
 import { registerVentureAsk } from '../../data/objectives';
 import type { ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
-import { META_CURRENCY_LABEL } from '../../meta/account';
 import { holdfastHostable } from '../../world/zonePolicy';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
@@ -291,7 +290,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   // keeper prompt speaks through): what the ask actually buys.
   const level = world.zoneMap[zoneId]?.level ?? 1;
   const ask = def && def.unlock.kind === 'pay-currency' && def.unlock.currency === 'mortal'
-    ? `the wardens ask ${holdfastTollLabel(def, level, META_CURRENCY_LABEL)}`
+    ? `the wardens ask ${holdfastTollLabel(def, level)}`
     : 'deal with the guardians';
   const pitch = world.holdfastPocketPitch(zoneId, info.lockId);
   return [{
@@ -363,7 +362,7 @@ registerVentureAsk({
       };
     }
     const ask = gdef.unlock.kind === 'pay-currency' && gdef.unlock.currency === 'mortal'
-      ? `the wardens ask ${holdfastTollLabel(gdef, def.level, META_CURRENCY_LABEL)}`
+      ? `the wardens ask ${holdfastTollLabel(gdef, def.level)}`
       : 'the wardens ask a gem';
     return { verdict: 'standing' as const, pos, label: `Open ${gdef.name} — ${ask}` };
   },

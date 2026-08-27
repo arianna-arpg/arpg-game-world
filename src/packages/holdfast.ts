@@ -4,7 +4,7 @@
 // On entering an UNCHARTED zone there's a chance a fortified, LOCKED bonus exit is
 // raised in addition to the normal exits — a side path you must EARN. A guardian
 // faction holds the gate (the Bandit toll-wardens are the first), and an UNLOCK
-// condition opens it (pay Mortal Essence, surrender a gem, cull a faction, clear an
+// condition opens it (pay carried Essence, surrender a gem, cull a faction, clear an
 // adjacent event…). Each guardian + condition + reward is one HoldfastDef literal, so
 // a new holdfast (a Goblin camp on a cave, a temple gate, a seraphic vigil) is PURE DATA.
 //
@@ -23,7 +23,7 @@
 
 import type { ExitRoadSpec } from '../data/zones';
 import type { PostSpec } from '../engine/brain';
-import { ESSENCES, type EssenceId } from '../data/essences';
+import { ESSENCE_VALUE_LABEL, ESSENCES, type EssenceId } from '../data/essences';
 import type { ItemRarity } from '../engine/items';
 
 /** HOW a holdfast opens. Implemented: 'pay-currency' (currency 'mortal') and
@@ -72,10 +72,11 @@ export function unlockImplemented(u: UnlockSpec): boolean {
 }
 
 /** The toll a pay-currency guardian asks at a zone level: cost +
- *  costPerLevel × level, floored at 1. UNITS follow the def: Mortal Essence
- *  of mixed wallet value, or — under UnlockSpec.tint — units of that one
- *  essence. Pure def math — the prompt, the pay path, and the zone-info
- *  panel all price through this one gate. */
+ *  costPerLevel × level, floored at 1. UNITS follow the def: carried
+ *  Essence of mixed wallet value (at the mortal exchange's rates), or —
+ *  under UnlockSpec.tint — units of that one essence. Pure def math — the
+ *  prompt, the pay path, and the zone-info panel all price through this
+ *  one gate. */
 export function holdfastTollCost(def: HoldfastDef, zoneLevel: number): number {
   const u = def.unlock;
   return Math.max(1, Math.round((u.cost ?? 0) + (u.costPerLevel ?? 0) * Math.max(1, zoneLevel)));
@@ -83,12 +84,14 @@ export function holdfastTollCost(def: HoldfastDef, zoneLevel: number): number {
 
 /** The toll's spoken price — ONE formatter for the keeper prompt, the
  *  refusal, and the zone-info ask, so a tinted gate can never be quoted in
- *  the wrong coin. `mortalLabel` is META_CURRENCY_LABEL (passed in so this
- *  leaf never imports the meta layer). */
-export function holdfastTollLabel(def: HoldfastDef, zoneLevel: number, mortalLabel: string): string {
+ *  the wrong coin. THE DENOMINATION LAW (data/essences.ts): mid-run tolls
+ *  price in ESSENCE — the carried currency the pay path actually drains —
+ *  never in Mortal Essence, which exists only between a run's end and its
+ *  reckoning's seal. */
+export function holdfastTollLabel(def: HoldfastDef, zoneLevel: number): string {
   const n = holdfastTollCost(def, zoneLevel);
   const tint = def.unlock.tint;
-  return tint ? `${n}× ${ESSENCES[tint].label}` : `${n} ${mortalLabel}`;
+  return tint ? `${n}× ${ESSENCES[tint].label}` : `${n} ${ESSENCE_VALUE_LABEL}`;
 }
 
 export interface RewardSpec {
@@ -292,7 +295,7 @@ export const BANDIT_TOLLGATE: HoldfastDef = {
 // --- the DURANCE TITHE-GATE: the underworld guardian ----------------------------
 //
 // Hell's own toll: a fiend crew squatting a durance-masonry gate, asking the
-// only coin a mortal carries that demons want — Mortal Essence, by the point.
+// only coin a mortal carries that demons want — mortal-wrung Essence, by the point.
 // Same fabric as the bandits (dormant-neutral tag, wound-rouse, slaughter
 // gamble), different plane, steeper price, richer ground.
 

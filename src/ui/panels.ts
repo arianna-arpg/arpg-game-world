@@ -34,7 +34,7 @@ import { compareItemMods, describeItem, itemGridSize, type ModCompareRow } from 
 import { ITEM_BASES } from '../data/itembases';
 import {
   ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier, ESSENCES, ESSENCE_IDS,
-  essenceUnitsForValue, FONT_CFG, skillLevelAbilityCost, supportLevelAbilityCost,
+  ESSENCE_VALUE_LABEL, essenceUnitsForValue, FONT_CFG, skillLevelAbilityCost, supportLevelAbilityCost,
   type AbilityCost, type EssenceCost, type EssenceId,
 } from '../data/essences';
 import {
@@ -88,7 +88,7 @@ import {
 import {
   allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, INVEST_CFG, investedToward,
   investUnlock, isClassDiscovered, isUnlockOwned, maxSlotCount, remainingCost,
-  sealedUnlocks, undiscoveredClassUnlocks,
+  resurrectUnlockId, sealedUnlocks, undiscoveredClassUnlocks, unlockCompleted,
   VAULT_KIND_LABELS, vaultKindOrder, vaultSeatOf, vaultShelfCensus, vaultStripVisible,
   type Unlockable,
 } from '../meta/unlocks';
@@ -141,6 +141,10 @@ export interface RunReckoning {
   minted: number;
   renown: number;
   standing: { byEssence: number; byRenown: number; of: number } | null;
+  /** THE FALL's true ground (a 'fall' conclusion stands the vessel back in
+   *  the sanctuary before the epilogue reads the world — this remembers
+   *  where it actually died). Absent = read world.zone. */
+  zoneName?: string;
 }
 
 /** The bottom keybind strip's one switch — retired by default since the
@@ -1783,8 +1787,9 @@ export class UI {
       if (put <= 0) return;
       const row = visitLog.get(u.id) ?? { label: u.label, put: 0, done: false };
       row.put += put;
-      // A graft is never "owned" — its completion is the ARMED charge.
-      row.done = isUnlockOwned(acc, u) || (u.kind === 'graft' && acc.skillGraft);
+      // The service kinds are never "owned" — completion is the state
+      // change (armed charge, cleared fallen stamp): unlockCompleted.
+      row.done = unlockCompleted(acc, u);
       visitLog.set(u.id, row);
     };
     // The store keeps your place PER AISLE ('_flat' = the young store's one
@@ -1825,6 +1830,8 @@ export class UI {
       // is ever out of reach, only further away. The bar is rendered even
       // at zero so a live pour can fill it without a re-render (the hold
       // must never lose its button mid-press).
+      // The button's one word by kind: a resurrection is called what it is.
+      const buyVerb = (u: Unlockable): string => u.kind === 'resurrect' ? 'Resurrect' : 'Unlock';
       const cardHtml = (u: Unlockable): string => {
         const inv = investedToward(acc, u);
         const rem = remainingCost(acc, u);
@@ -1836,8 +1843,8 @@ export class UI {
               <div class="uname">${u.label}</div>
               <div class="uinvest"><i style="width:${pct}%"></i></div>
               <button data-invest="${u.id}" ${canPour ? '' : 'disabled'}
-                title="Click to unlock outright when your essence covers it. Hold to INVEST a piece at a time — invested essence stays across runs, and the unlock completes when the full cost stands.">${
-                inv > 0 ? `Unlock — ${rem} more` : `Unlock — ${u.cost}`}</button>
+                title="Click to ${buyVerb(u).toLowerCase()} outright when your essence covers it. Hold to INVEST a piece at a time — invested essence stays across runs, and the ${u.kind === 'resurrect' ? 'vessel rises' : 'unlock completes'} when the full cost stands.">${
+                inv > 0 ? `${buyVerb(u)} — ${rem} more` : `${buyVerb(u)} — ${u.cost}`}</button>
             </div>`;
       };
       const ownedCardHtml = (u: Unlockable): string => `
@@ -2003,7 +2010,7 @@ export class UI {
         const id = btn.dataset.invest!;
         const findU = (): Unlockable | undefined => availableUnlocks(acc).find(x => x.id === id);
         const updateFaces = (u: Unlockable): void => {
-          btn.textContent = `Unlock — ${remainingCost(acc, u)} more`;
+          btn.textContent = `${u.kind === 'resurrect' ? 'Resurrect' : 'Unlock'} — ${remainingCost(acc, u)} more`;
           const bar = btn.parentElement?.querySelector<HTMLElement>('.uinvest i');
           if (bar && u.cost > 0) bar.style.width = `${Math.round((investedToward(acc, u) / u.cost) * 100)}%`;
           const cred = document.getElementById('vault-cred');
@@ -2011,11 +2018,12 @@ export class UI {
         };
         const doneToast = (u: Unlockable): string => u.kind === 'graft'
           ? `⚔ ${u.label} — a charge awaits your next run's start`
-          : `✦ ${u.label} — UNLOCKED`;
-        // "This pour finished": ownership for the permanent kinds, the armed
-        // charge for the repeatable one (which is never owned).
-        const completed = (u: Unlockable): boolean =>
-          isUnlockOwned(acc, u) || (u.kind === 'graft' && acc.skillGraft);
+          : u.kind === 'resurrect'
+            ? `✦ ${u.label} — RISEN: the vessel wakes in Lastlight`
+            : `✦ ${u.label} — UNLOCKED`;
+        // "This pour finished": ownership for the permanent kinds, the state
+        // change for the service kinds (unlockCompleted — the one predicate).
+        const completed = (u: Unlockable): boolean => unlockCompleted(acc, u);
         const settle = (poured: boolean, done?: Unlockable): void => {
           if (pourTimer) { window.clearInterval(pourTimer); pourTimer = 0; }
           if (!poured) return;
@@ -2177,9 +2185,10 @@ export class UI {
    *  copy). Serves Available and Owned alike — the meta line carries the
    *  price or the ✓. */
   private unlockTooltip(id: string): TooltipContent | null {
-    const u = allUnlockables().find(x => x.id === id);
-    if (!u) return null;
     const acc = this.getAccount();
+    // Account pass: the dynamic Fallen-shelf entries live only there.
+    const u = allUnlockables(acc).find(x => x.id === id);
+    if (!u) return null;
     const owned = isUnlockOwned(acc, u);
     const inv = investedToward(acc, u);
     const req = u.reqLevel ? ` · req account level ${u.reqLevel}` : '';
@@ -6065,7 +6074,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       : h.state === 'fallen'
         ? `<div class="skill-entry"><div class="name">Raise it from the ashes</div>
             <div class="desc">Masons, pitch and pilings, paid now: the walls stand today (besieged still: the defense is yours to make).</div>
-            <div class="bind-btns"><button data-hold-restore ${h.canRestore ? '' : 'disabled'}>Restore — ${h.restoreCost} ${META_CURRENCY_LABEL}</button>
+            <div class="bind-btns"><button data-hold-restore ${h.canRestore ? '' : 'disabled'}>Restore — ${h.restoreCost} ${ESSENCE_VALUE_LABEL}</button>
               ${!h.canRestore ? `<span class="tags">your essence is worth ${world.mortalValueOf()}</span>` : ''}</div>
           </div>`
         : `<div class="skill-entry"><div class="desc">The town keeps its own peace: walk in. Defended sieges raise its standing; a lost one burns it.</div></div>`;
@@ -6178,7 +6187,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <div class="bind-btns"><button data-merc-hire="${i}" ${full || !afford || blocked ? 'disabled' : ''}>
             Hire — ${tint
               ? `${tintUnits}× <span style="color:${ESSENCES[tint].color}">${ESSENCES[tint].glyph} ${ESSENCES[tint].label}</span>`
-              : `${cost} ${META_CURRENCY_LABEL}`}</button>
+              : `${cost} ${ESSENCE_VALUE_LABEL}`}</button>
             ${blocked ? `<span class="tags" style="color:#b8a0e0">${esc(blocked)}</span>`
               : !afford && !full ? `<span class="tags">${tint
                 ? `you carry ${world.meta.essences[tint] ?? 0}× ${ESSENCES[tint].glyph}`
@@ -7069,11 +7078,17 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const acc = this.getAccount();
     // RETIREMENT is the death flow wearing its good clothes: same appraisal,
     // same reckoning — but the character walked, and the copy says so.
+    // THE FALL (the resurrection covenant) is the death flow keeping the
+    // body: the vessel persists, fallen, and the copy points at the Vault.
     const retired = world.runEndReason === 'retire';
-    const title = retired ? 'RETIRED FROM THE WAKE' : 'YOU HAVE DIED';
+    const fell = world.runEndReason === 'fall';
+    const fallFee = fell
+      ? acc.roster.find(r => r.charId === world.meta.charId)?.fallen?.fee ?? null
+      : null;
+    const title = retired ? 'RETIRED FROM THE WAKE' : fell ? 'THE VESSEL FALLS' : 'YOU HAVE DIED';
     const deed = retired
       ? `hangs up the blade at ${world.zone.name}, and joins the mercenary roster (${acc.mercRoster.length} retired)`
-      : `fell in ${world.zone.name}`;
+      : `fell in ${reck.zoneName ?? world.zone.name}`;
     const who = world.meta.name !== world.meta.classDef.name ? `${esc(world.meta.name)} — ` : '';
     const rowHtml = (r: { id: EssenceId; count: number; worth: number; value: number }): string => {
       const e = ESSENCES[r.id];
@@ -7101,6 +7116,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         ${world.visited.size} zones explored &nbsp;·&nbsp; ${world.kills} kills
         &nbsp;·&nbsp; Renown ${reck.renown}</div>
       ${retired ? `<div style="margin-top:6px;color:#b8a0e0">Some future run will find them at an outpost, sword-arm for hire.</div>` : ''}
+      ${fell ? `<div style="margin-top:6px;color:#b8a0e0">The covenant holds what death cannot keep: the vessel waits in Lastlight, fallen${
+        fallFee !== null ? `, and <b>${fallFee} ${META_CURRENCY_LABEL}</b> resurrects it` : ''}.
+        Pour it at the Vault's Fallen shelf — your mortal runs' harvests, invested across as many reckonings as it takes.</div>` : ''}
       <div class="reck-table">
         <div class="reck-head">THE APPRAISAL — carried essence, at the mortal exchange</div>
         ${rows}${multRow}
@@ -7110,7 +7128,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       ${standingLine}
       <div style="margin-top:6px;color:var(--text-dim);font-size:12px">
         What you assign at the Reckoning is kept forever; what you leave does not cross to the next run.</div>
-      <button id="reckon-btn">${reck.minted > 0 ? `The Reckoning — assign your ${META_CURRENCY_LABEL}` : retired ? 'Onward' : 'Rise Again'}</button>`;
+      <button id="reckon-btn">${reck.minted > 0 ? `The Reckoning — assign your ${META_CURRENCY_LABEL}` : retired || fell ? 'Onward' : 'Rise Again'}</button>`;
     this.deathScreen.classList.remove('hidden');
 
     // A short count-up on the minted total — the appraisal landing. The
@@ -8067,13 +8085,20 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     // is Continue-as plus a deliberate release (✕, confirmed, durable wipe).
     const rosterRows = acc.roster.map(e => {
       const mode = modeById(e.modeId);
-      const badge = stageOf(e.modeId, e.stage).badge ?? mode.name.toUpperCase();
+      // THE FALLEN LOCK (the resurrection covenant): a fallen vessel's row
+      // stays listed — dimmed, badged FALLEN, its fee printed — but leads to
+      // the Vault's words instead of a run until the resurrection is paid.
+      const fallen = !!e.fallen;
+      const badge = fallen ? 'FALLEN' : stageOf(e.modeId, e.stage).badge ?? mode.name.toUpperCase();
+      const bColor = fallen ? '#e85050' : mode.color;
       return `
         <div style="display:flex;gap:6px">
-          <button class="sm-roster-go" data-cid="${esc(e.charId)}" style="flex:1 1 auto;text-align:left">
+          <button class="sm-roster-go" data-cid="${esc(e.charId)}" style="flex:1 1 auto;text-align:left${fallen ? ';opacity:.6' : ''}"
+            ${fallen ? `title="Fallen — resurrect in the Vault (${e.fallen!.fee} ${META_CURRENCY_LABEL}, invested across runs)"` : ''}>
             ⟢ ${esc(e.name)} — Level ${e.level}
-            <span style="font-size:10px;color:${mode.color};border:1px solid ${mode.color};
-              border-radius:6px;padding:0 5px;margin-left:6px">${badge}</span></button>
+            <span style="font-size:10px;color:${bColor};border:1px solid ${bColor};
+              border-radius:6px;padding:0 5px;margin-left:6px">${badge}</span>${fallen
+              ? `<span style="font-size:10px;color:#a8a494;margin-left:6px">☠ ${e.fallen!.fee} ${META_CURRENCY_LABEL} to resurrect</span>` : ''}</button>
           <button class="sm-roster-del" data-cid="${esc(e.charId)}" style="flex:0 0 auto"
             title="Release this vessel: the character is permanently discarded">✕</button>
         </div>`;
@@ -8109,6 +8134,13 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       btn.addEventListener('click', () => {
         const entry = this.getAccount().roster.find(r => r.charId === btn.dataset.cid);
         if (!entry || !h.onRoster) return;
+        // A fallen vessel never launches: the menu re-renders with the
+        // covenant's words (main.ts's resume path is the belt behind this).
+        if (entry.fallen) {
+          h.notice = `${entry.name} lies fallen — resurrect them in the Vault (${entry.fallen.fee} ${META_CURRENCY_LABEL}).`;
+          this.renderStartMenu();
+          return;
+        }
         this.startMenu.classList.add('hidden');
         h.onRoster(entry);
       });
@@ -8121,6 +8153,9 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         const e = roster[i];
         if (!window.confirm(`Release ${e.name} (Level ${e.level})? The vessel and everything it carries are permanently discarded.`)) return;
         roster.splice(i, 1);
+        // A released fallen vessel takes its half-poured resurrection with
+        // it — the invested essence was that vessel's and dies with it.
+        delete this.getAccount().invested[resurrectUnlockId(e.charId)];
         wipeRosterSlot(e.slot);  // durable — the slot must not resurrect on next boot
         this.saveAccount();
         this.renderStartMenu();

@@ -2,8 +2,10 @@
 // HOLDFAST — fortified, LOCKED bonus exits raised in the wilds (a net-new package).
 //
 // On entering an uncharted zone there's a chance a guardian faction raises a sealed
-// bonus exit — a purchased side-pocket you must EARN. The toll is MORTAL ESSENCE
-// (the account meta-currency): pay the wardens and the gate opens onto a rich
+// bonus exit — a purchased side-pocket you must EARN. The toll is CARRIED ESSENCE
+// (the run currency, mixed tints at the mortal exchange's strict rates — never
+// Mortal Essence, which exists only between a run's end and its reckoning's
+// seal): pay the wardens and the gate opens onto a rich
 // dead-end pocket (boosted drops, a guaranteed cave under the camp) whose only
 // road leads back through the gate; or cut the wardens down and gamble on the gate
 // bursting (it usually won't). Discovered in play (runs at defaults from a low
@@ -163,7 +165,7 @@ export const HOLDFAST: ContentPackage = {
   id: 'holdfast',
   label: 'Holdfast',
   color: '#c8a04a',
-  blurb: 'The wilds are not empty. Press into uncharted ground and you may find a fortified gate barring a hidden side-pocket, raised by guardians who hold the road and ask a price in Mortal Essence. Pay, and the gate opens onto rich ground: fatter spoils, and always something under the camp worth the digging. Cut the wardens down instead and the gate will likely stay shut, the pocket lost. Pay, fight, or walk on; the toll is yours to weigh.',
+  blurb: 'The wilds are not empty. Press into uncharted ground and you may find a fortified gate barring a hidden side-pocket, raised by guardians who hold the road and ask a toll of carried Essence. Pay, and the gate opens onto rich ground: fatter spoils, and always something under the camp worth the digging. Cut the wardens down instead and the gate will likely stay shut, the pocket lost. Pay, fight, or walk on; the toll is yours to weigh.',
   cost: 110,
   // DISCOVERED in play (runs at defaults from a low level); the Vault unlock gates TUNING.
   unlock: {

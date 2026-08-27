@@ -370,7 +370,7 @@ import { gateMet } from '../meta/gates';
 // runtime cycle).
 import { catalogLevelMilestones } from '../meta/unlocks';
 import {
-  modeById, stageOf, DEFAULT_MODE_ID, FADE_DEFAULTS,
+  modeById, resurrectFee, stageOf, DEFAULT_MODE_ID, FADE_DEFAULTS,
   type CharacterModeDef, type ModeStageDef,
 } from '../meta/modes';
 import {
@@ -3619,6 +3619,16 @@ export class World {
   scene: SceneRuntime | null = null;
   /** Essence paid by the most recent mode death (the wake-text receipt). */
   private lastRespawnPayout = 0;
+  /** THE FALL's appraisal, read BEFORE the strip took the wallets (plus the
+   *  ground the vessel actually fell on — the wake-in-town persist below
+   *  moves the world to the sanctuary before main.ts reads the epilogue).
+   *  Set only by beginModeFall; main.ts's gameOver block shows THIS to the
+   *  death screen for a 'fall' conclusion instead of re-reckoning the
+   *  already-stripped seats. */
+  fallReckoning: {
+    rows: { id: EssenceId; count: number; worth: number; value: number }[];
+    carried: number; mult: number; minted: number; zoneName: string;
+  } | null = null;
   // --- the MERCENARY MARKET (meta/mercs.ts) --------------------------------
   /** This zone's outpost, if one seeded here (per-zone-load transient).
    *  `port: true` = a HARBORHOLD's captain (template-only sheet, no
@@ -4621,13 +4631,16 @@ export class World {
 
   /** The party has no one left standing — conclude per context, in order:
    *  the Descent resurfaces (the deep spits you out, never a run end), a
+   *  falling covenant fells the vessel (run over, no wipe), a
    *  death-surviving mode stage respawns, and permadeath ends the run. */
   private concludeWipe(): void {
     if (this.descentRun) { this.resurfaceFromDescent('died'); return; }
     // The world remembers the fall BEFORE the mode decides what it costs —
     // an Undying death feeds the saga exactly as a mortal one does.
     this.recordNemesisFall();
-    if (this.modeStageDef().onDeath !== 'end') { this.beginModeRespawn(); return; }
+    const onDeath = this.modeStageDef().onDeath;
+    if (onDeath === 'fall') { this.beginModeFall(); return; }
+    if (onDeath !== 'end') { this.beginModeRespawn(); return; }
     this.onRunEnded(this.runEndReason);
   }
 
@@ -4676,6 +4689,82 @@ export class World {
     // 7. The dark takes the screen; update() wakes the character once it's full.
     this.pendingRespawn = { phase: 'out', t: 0 };
     this.events.emit('player/modeDeath', { stage: stage.id, earned });
+  }
+
+  /** THE FALL (onDeath 'fall' — the resurrection covenant, meta/modes.ts):
+   *  an Undying death is banked IN FULL like any covenant death — the
+   *  appraisal read pre-strip (the death screen must show what the covenant
+   *  took), the own-ring corpse, the whole carry strip — and then, instead
+   *  of a wake, the vessel FALLS: its roster card is stamped with a
+   *  resurrection fee frozen at this moment (resurrectFee — vessel level ×
+   *  the account's weight), the party is stood back up IN THE SANCTUARY so
+   *  the persisted save is a healthy vessel awaiting its resurrection (the
+   *  resume policy can never wake a risen vessel back into the pack that
+   *  killed it), and the run ENDS ('fall') — main.ts persists the vessel to
+   *  its roster slot and skips the mortal wipe. Couch guest vessels pay
+   *  their own covenants exactly as at any wipe (an undying guest falls
+   *  beside its host). Everything of consequence lands HERE, atomically —
+   *  the death screen after it is pure epilogue. */
+  private beginModeFall(): void {
+    const stage = this.modeStageDef();
+    // 1. THE APPRAISAL, pre-strip, with the ground it happened on: the fall
+    //    mints at the stage's own rate (0 for the Undying — the covenant
+    //    pays the account nothing) but the death screen still shows the
+    //    wallet the covenant took. main.ts applies the mint, not us — the
+    //    run is ending, so the ordinary epilogue owns the account writes.
+    const reck = this.reckonRunEssence();
+    this.fallReckoning = { ...reck, zoneName: this.zone.name };
+    this.lastRespawnPayout = 0;
+    // 2. THE LEDGER: stage-driven, exactly as a survived death banks it
+    //    (moot for the sealed Undying — kept stage-honest for any future
+    //    falling stage still inside the account loop).
+    if (stage.metaProgression) mergeLedger(this.account.ledger, this.ledger);
+    this.accountDirty = true;
+    // 3. THE CORPSE + THE PRICE: captured before the strip, routed by the
+    //    dying stage's ring (self-only for the Undying), then the carry
+    //    goes — bag, doll, both essence wallets — while the build walks on.
+    this.recordDeath();
+    this.stripCarryOnDeath();
+    // 4. THE STAMP: the card falls (fee frozen now; first stamp stands).
+    this.fellVessel(this.localSeat);
+    // 5. THE GUEST COVENANT: couch vessels pay their own way — an undying
+    //    guest's card falls beside the host's (bankCouchWipe's fall arm).
+    this.bankCouchWipe();
+    // 6. THE STANDING SAVE: every seat back on its feet in the sanctuary,
+    //    statuses shed, resources full — the save main.ts is about to write
+    //    is the vessel resurrection wakes, not a corpse in a monster den.
+    for (const s of this.seats) {
+      s.actor.dead = false;
+      s.actor.downed = false;
+      s.actor.casting = null;
+      for (const id of new Set(s.actor.statuses.map(st => st.id))) s.actor.endStatus(id);
+      s.reviveDwellBy.clear();
+    }
+    this.loadZone(START_ZONE);
+    const p = this.player;
+    for (const s of this.seats) {
+      if (s.actor !== p) s.actor.pos = this.clampPos(vec(p.pos.x + rand(-60, 60), p.pos.y + rand(30, 70)), s.actor.radius);
+      s.actor.fillResources();
+    }
+    this.charDirty = true;
+    this.events.emit('player/modeDeath', { stage: stage.id, earned: 0 });
+    // 7. The run is over — 'fall', so main.ts's epilogue keeps the vessel.
+    this.onRunEnded('fall');
+  }
+
+  /** Stamp a seat's roster card FALLEN (the resurrection covenant): the fee
+   *  is frozen HERE — the vessel's level × the account's weight at the
+   *  moment of the fall (resurrectFee) — so later account growth never
+   *  inflates a standing debt and a mid-investment price can never move.
+   *  An already-fallen card keeps its first stamp (a fallen guest playing
+   *  out a grandfathered session dies no deeper); an orphan vessel (no
+   *  card) has nothing to stamp — its save was already unreachable. */
+  private fellVessel(seat: Seat): void {
+    const entry = this.account.roster.find(r => r.charId === seat.meta.charId);
+    if (!entry || entry.fallen) return;
+    const level = this.seatHero(seat).level;
+    entry.fallen = { fee: resurrectFee(level, this.account.level), at: Date.now(), level };
+    this.accountDirty = true;
   }
 
   /** What a survived death TAKES: the whole carry (bag + doll + carried gems +
@@ -4810,11 +4899,17 @@ export class World {
 
   /** THE GUEST COVENANT (data/couch.ts lane law): a party wipe costs a couch
    *  guest's persistent vessel exactly what dying at home would — its own
-   *  corpse, the carry strip, the stage advance — so the couch is never a
-   *  cheaper way to die. Account-level writes (the tithe, the ledger merge,
-   *  the death tally) are NOT repeated: one account, one run, one payment —
-   *  the host character's banking already made them. Disposable mortal-lane
-   *  guests carry no vessel and bank nothing. */
+   *  corpse, the carry strip, the stage advance, and (an undying guest) THE
+   *  FALL: its card is stamped with its own resurrection fee — so the couch
+   *  is never a cheaper way to die. Account-level writes (the tithe, the
+   *  ledger merge, the death tally) are NOT repeated: one account, one run,
+   *  one payment — the host character's banking already made them.
+   *  Disposable mortal-lane guests carry no vessel and bank nothing.
+   *  THE GRANDFATHER CLAUSE: when the HOST's stage survives the wipe (the
+   *  sworn crossing) a freshly-fallen guest keeps its seat for the rest of
+   *  THIS session — the couch doesn't eject a sibling mid-evening — but the
+   *  stamped card locks the vessel out of every session after; a second
+   *  wipe dies no deeper (fellVessel keeps the first stamp). */
   private bankCouchWipe(): void {
     for (const s of this.seats) {
       if (!s.couch?.charId) continue;
@@ -4823,6 +4918,8 @@ export class World {
       this.stripCarryOf(s);
       if (stage.onDeath === 'advance') {
         s.meta.modeStage = Math.min(s.meta.modeStage + 1, modeById(s.meta.modeId).stages.length - 1);
+      } else if (stage.onDeath === 'fall') {
+        this.fellVessel(s);
       }
       this.couchDirty = true; // main.ts persists the vessel promptly
     }
@@ -13599,10 +13696,12 @@ export class World {
   }
 
   /** Pay the toll and open the gate — the unlock resolves by the guardian's
-   *  UnlockSpec: 'pay-currency' (mortal) debits the ACCOUNT's Mortal Essence
-   *  (holdfastTollCost — the mid-run essence dump); 'pay-gem' random-take
-   *  seizes one loose support gem from the paying seat. Host-authoritative
-   *  (a client routes via the payToll intent). `index` is legacy wire shape. */
+   *  UnlockSpec: 'pay-currency' (mortal) drains the paying seat's CARRIED
+   *  Essence at the mortal exchange (holdfastTollCost — the mid-run essence
+   *  dump; THE DENOMINATION LAW: the face prices in Essence); 'pay-gem'
+   *  random-take seizes one loose support gem from the paying seat.
+   *  Host-authoritative (a client routes via the payToll intent). `index`
+   *  is legacy wire shape. */
   payHoldfastToll(_index: number, seat: Seat = this.localSeat): boolean {
     const site = this.holdfastSite;
     const hf = this.sim.holdfastField;
@@ -13622,7 +13721,7 @@ export class World {
       // accepts ONE essence and no other, counted in that tint's own units;
       // the plain gate takes mixed wallet value at the strict rates.
       const cost = holdfastTollCost(gdef, this.zone.level);
-      const ask = holdfastTollLabel(gdef, this.zone.level, META_CURRENCY_LABEL);
+      const ask = holdfastTollLabel(gdef, this.zone.level);
       if (u.tint) {
         if ((seat.meta.essences[u.tint] ?? 0) < cost) {
           this.text(seat.actor.pos,
@@ -13635,7 +13734,7 @@ export class World {
       } else {
         if (this.mortalValueOf(seat) < cost) {
           this.text(seat.actor.pos,
-            `the wardens want essence worth ${cost} ${META_CURRENCY_LABEL} — come back richer`, '#d05050', 13);
+            `the wardens want essence worth ${cost} — come back richer`, '#d05050', 13);
           return false;
         }
         if (!this.spendMortalValue(seat, cost, 'holdfast:toll')) return false;
@@ -13698,7 +13797,7 @@ export class World {
     const gdef = site ? this.sim.holdfastField?.def(site.defId) : null;
     const u = gdef?.unlock;
     const price = gdef && u?.kind === 'pay-currency' && u.currency === 'mortal'
-      ? holdfastTollLabel(gdef, this.zone.level, META_CURRENCY_LABEL)
+      ? holdfastTollLabel(gdef, this.zone.level)
       : 'a Memory';
     const pitch = site ? this.holdfastPocketPitch(site.zoneId, site.lockId) : null;
     return {
@@ -21257,12 +21356,16 @@ export class World {
 
   // --- THE MORTAL EXCHANGE (data/essences.ts mortalWorth) --------------------
   //
-  // "Mortal Essence" mid-run IS the carried wallet, appraised at the strict
-  // exchange: every service priced in Mortal Essence (holdfast tolls, harbor
-  // charts, hold restorations, merc hires) drains the paying seat's essence
-  // at the same rates the run-end RECKONING mints at — one conversion table,
-  // every surface. The account's credits field holds value only between a
-  // run's end and its reckoning's seal, never during play.
+  // Mid-run wealth IS the carried wallet, appraised at the strict exchange:
+  // every value-priced service (holdfast tolls, harbor charts, hold
+  // restorations, merc hires) drains the paying seat's essence at the same
+  // rates the run-end RECKONING mints at — one conversion table, every
+  // surface. THE DENOMINATION LAW (data/essences.ts ESSENCE_VALUE_LABEL):
+  // those services PRICE IN ESSENCE — the currency they actually take —
+  // and "Mortal Essence" is spoken only at the reckoning and in the Vault:
+  // the account's credits field holds value only between a run's end and
+  // its reckoning's seal, never during play, so a mid-run price quoted in
+  // it would name a currency the player cannot carry.
 
   /** A seat's carried essence, appraised in Mortal Essence. */
   mortalValueOf(seat: Seat = this.localSeat): number {
@@ -21276,7 +21379,7 @@ export class World {
   spendMortalValue(seat: Seat, price: number, noteKey: string): boolean {
     if (!spendWalletMortalValue(seat.meta.essences, price)) {
       this.failNote(seat.actor, noteKey,
-        `needs essence worth ${price} ${META_CURRENCY_LABEL} — you carry ${this.mortalValueOf(seat)}`);
+        `needs essence worth ${price} — you carry ${this.mortalValueOf(seat)}`);
       return false;
     }
     this.markMetaDirty(seat);
@@ -22897,7 +23000,7 @@ export class World {
     const price = Math.max(H.chartPriceMin, Math.round(coordDist(o.at, this.zone.map) * H.chartPricePerDist));
     if (this.mortalValueOf(seat) < price) {
       this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-        `the chart is essence worth ${price} ${META_CURRENCY_LABEL} — beyond your carry`, '#e8a050', 14);
+        `the chart asks essence worth ${price} — beyond your carry`, '#e8a050', 14);
       return;
     }
     if (!this.spendMortalValue(seat, price, 'harbor:chart')) return;
@@ -22914,7 +23017,7 @@ export class World {
   // OPENED by breaking the siege — THE MUSTER, discrete waves poured through
   // the extraction swarm director's grammar and fixated on the QUAY WARD at
   // the gate — and FELLED by losing one (fires, sealed gates, a rebuild
-  // clock, or a Mortal Essence restoration at the wreckage). PROSPERITY
+  // clock, or a carried-Essence restoration at the wreckage). PROSPERITY
   // climbs with each defended siege and gates the service rows (the
   // patronage ladder: finding a harbor opens the map, defending it opens
   // the town). The LIVE defense is transient by design — never persisted,
@@ -23589,9 +23692,9 @@ export class World {
     }
   }
 
-  /** THE RESTORATION (the 'holdRestore' intent): Mortal Essence buys the
+  /** THE RESTORATION (the 'holdRestore' intent): carried Essence buys the
    *  rebuild forward — masons, pitch and pilings, paid at the wreckage from
-   *  the paying seat's carried essence (the mortal exchange). The hold
+   *  the paying seat's wallet (the mortal exchange). The hold
    *  stands back up BESIEGED: the coast's foes crept in while it burned,
    *  and the defense is still yours to win. */
   buyHoldRestore(seat: Seat = this.localSeat): void {
@@ -23602,7 +23705,7 @@ export class World {
     const price = holdRestoreCost(cls, Math.max(1, def.level));
     if (this.mortalValueOf(seat) < price) {
       this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-        `the restoration is essence worth ${price} ${META_CURRENCY_LABEL} — beyond your carry`, '#e8a050', 14);
+        `the restoration asks essence worth ${price} — beyond your carry`, '#e8a050', 14);
       return;
     }
     if (!this.spendMortalValue(seat, price, 'hold:restore')) return;
@@ -24796,7 +24899,7 @@ export class World {
       }
     } else if (this.mortalValueOf(seat) < cost) {
       this.text(vec(this.player.pos.x, this.player.pos.y - 30),
-        `The captain wants essence worth ${cost} ${META_CURRENCY_LABEL}.`, '#c8b048', 13);
+        `The captain wants essence worth ${cost}.`, '#c8b048', 13);
       return false;
     }
     const snapshot = offer.kind === 'retired'
@@ -44034,7 +44137,7 @@ export class World {
             this.wardDwellSeal = null;
           }
         }
-        // HOLDFAST: dwell beside the toll keeper to pay (Mortal Essence, or a gem
+        // HOLDFAST: dwell beside the toll keeper to pay (carried Essence, or a gem
         // seized at random — the guardian's UnlockSpec decides). Only while the gate
         // is sealed + the wardens un-roused — drawing steel cancels the parley. A
         // CONSUMED latch ('done') keeps it from re-firing while you stand; it re-arms

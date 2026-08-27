@@ -24,7 +24,26 @@
 //              carry lost. Stage "Undying": outside the account loop —
 //              deaths pay nothing, merge nothing, count nothing; corpses stay
 //              self-only; the character persists across sessions in an
-//              account ROSTER slot, played purely for the joy of playing.
+//              account ROSTER slot.
+//
+//              THE RESURRECTION COVENANT (2026-08-26, her ruling): an
+//              Undying death is no longer a free wake — it FELLS the vessel
+//              (onDeath 'fall'). The death still pays the full covenant
+//              (own-ring corpse, carry strip — never a cheaper death), and
+//              then the run ENDS without a character wipe: the vessel
+//              persists in its roster slot, stamped FALLEN on its account
+//              card with a resurrection fee priced by resurrectFee (vessel
+//              level × the account's own weight, frozen at the moment of
+//              the fall). A fallen vessel cannot begin, resume, or couch-
+//              join a run; it hangs on the Vault's FALLEN shelf (the
+//              store's first tab) as a dynamic 'resurrect' unlock — poured
+//              full across any number of mortal reckonings through the
+//              standing partial-investment lane — and the completed pour
+//              clears the stamp: the vessel wakes in Lastlight, exactly as
+//              it fell (stripped, but whole). Immortality is thus truly
+//              permanent, while every death remains a real setback AND the
+//              perpetual Mortal Essence dump: an Undying line is fed
+//              forever by its keeper's mortal runs.
 //
 // The INTERACTION-SCOPE rule the Immortal design turns on: an Undying
 // character exchanges nothing with the mortal economy — its corpses live in
@@ -54,8 +73,14 @@ export interface ModeStageDef {
   deathPayoutMult: number;
   /** What a lethal party wipe FROM this stage does: 'end' = permadeath (the
    *  classic death screen + character wipe), 'advance' = step to the next
-   *  stage and respawn, 'stay' = respawn on this stage forever. */
-  onDeath: 'end' | 'advance' | 'stay';
+   *  stage and respawn, 'stay' = respawn on this stage forever, 'fall' =
+   *  THE RESURRECTION COVENANT — bank the death in full (corpse per ring,
+   *  carry strip), stamp the vessel's roster card FALLEN with a
+   *  resurrectFee, and END the run WITHOUT the character wipe: the save
+   *  persists (standing in the sanctuary, ready for its resurrection),
+   *  but the vessel is locked out of play until the fee is poured full at
+   *  the Vault's Fallen shelf (meta/unlocks.ts kind 'resurrect'). */
+  onDeath: 'end' | 'advance' | 'stay' | 'fall';
   /** Presentation for a non-ending death: the slow fade-to-black-and-wake.
    *  ('screen' is implied for onDeath:'end' — main.ts owns that flow.) */
   deathSequence: 'screen' | 'fade';
@@ -130,6 +155,32 @@ export const IMMORTAL_CFG = {
   fadeInSec: 1.6,
 } as const;
 
+/** THE RESURRECTION COVENANT's price curve (her ruling 2026-08-26; ALL
+ *  NUMBERS ARE DIALS, unblessed). The fee scales with the vessel's own
+ *  strength (perLevel — a deep build is dearer to call back) AND with the
+ *  account's weight (perAccountLevel — a rich line pays rich prices, so
+ *  the dump never trivializes), and is FROZEN at the moment of the fall
+ *  (stamped on the roster card): later account levels never inflate a
+ *  standing debt, and a mid-investment fee can never move underfoot. */
+export const RESURRECT_CFG = {
+  /** The floor — a young vessel is cheap to call back. */
+  base: 30,
+  /** Mortal Essence per vessel level. */
+  perLevel: 6,
+  /** The account's own weight: fee × (1 + this × account level). */
+  perAccountLevel: 0.05,
+} as const;
+
+/** The resurrection fee for a vessel of `charLevel` on an account of
+ *  `accountLevel` — THE price policy, one function (world.ts stamps it at
+ *  the fall; nothing else ever computes it). */
+export function resurrectFee(charLevel: number, accountLevel: number): number {
+  const c = RESURRECT_CFG;
+  return Math.max(1, Math.round(
+    (c.base + c.perLevel * Math.max(1, charLevel))
+    * (1 + c.perAccountLevel * Math.max(0, accountLevel))));
+}
+
 export const FADE_DEFAULTS = {
   fadeOutSec: IMMORTAL_CFG.fadeOutSec,
   holdSec: IMMORTAL_CFG.holdSec,
@@ -162,8 +213,9 @@ export const MODES: CharacterModeDef[] = [
     name: 'Immortal',
     blurb: 'A covenant against the dark: your first death seals you outside '
       + 'the mortal ledger — you wake in town, build intact, carry lost. '
-      + 'Deaths thereafter feed the account nothing; the character is yours, '
-      + 'across sessions, for as long as you keep the vessel.',
+      + 'The character is yours, across sessions, forever — but deaths '
+      + 'thereafter FELL the vessel, and only Mortal Essence from your '
+      + 'mortal line, poured at the Vault, calls it back.',
     color: '#b8a0e0',
     unlockFlag: FEATURE.IMMORTAL,
     save: 'roster',
@@ -192,7 +244,12 @@ export const MODES: CharacterModeDef[] = [
         badge: 'UNDYING',
         metaProgression: false,
         deathPayoutMult: 0,
-        onDeath: 'stay',
+        // THE RESURRECTION COVENANT: an Undying death fells the vessel —
+        // banked in full, run over, no wipe; the Vault's Fallen shelf is
+        // the only road back. (The wakeText below is the CROSSING's — the
+        // sworn death advances here before the wake prints, so this stage
+        // owns the immortalizing wake's words; a fall itself never wakes.)
+        onDeath: 'fall',
         deathSequence: 'fade',
         corpseRing: 'own',
         corpseSource: 'own',
@@ -247,6 +304,17 @@ export interface RosterEntry {
   /** Mode-stage index at last save (drives the SWORN/UNDYING roster chip). */
   stage: number;
   savedAt: number;
+  /** THE RESURRECTION COVENANT (onDeath 'fall'): present = the vessel is
+   *  FALLEN — locked out of starting, resuming, and couch-joining until the
+   *  fee is poured full at the Vault's Fallen shelf, which deletes this
+   *  stamp. Lives on the ACCOUNT card (not the character save) because both
+   *  the fall and the resurrection are account-side transactions: the
+   *  account pays, the account gates the roster — the slot save stays the
+   *  untouched vessel, standing in the sanctuary exactly as resurrection
+   *  will wake it. `fee` is FROZEN at the fall (resurrectFee at that
+   *  moment); `level` is the vessel's level when it fell (display);
+   *  `at` wall-clock ms. */
+  fallen?: { fee: number; at: number; level: number };
 }
 
 /** How many roster vessels this account may hold for a mode. */

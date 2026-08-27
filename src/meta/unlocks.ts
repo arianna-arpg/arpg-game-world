@@ -98,7 +98,14 @@ export type Unlockable =
   // Account.skillGraft for the NEXT run's start, where the player picks one
   // unlocked skill to ride the class kit at its plainest cut; the run's
   // beginning consumes the charge and the entry returns to the shelf.
-  | (UnlockBase & { kind: 'graft'; payload: Record<string, never> });
+  | (UnlockBase & { kind: 'graft'; payload: Record<string, never> })
+  // THE RESURRECTION COVENANT (meta/modes.ts onDeath 'fall'): one DYNAMIC
+  // entry per FALLEN roster vessel — never owned (the graft's lifecycle:
+  // completion is a state change elsewhere), priced at the fee FROZEN on
+  // the card at the fall, poured full across any number of reckonings
+  // through the standing investment lane; the grant clears the card's
+  // fallen stamp and the entry leaves the shelf with it.
+  | (UnlockBase & { kind: 'resurrect'; payload: { charId: string } });
 
 /** Class SLOTS, data-driven and ordered ascending — the HAND SIZE at character
  *  select (the hand itself is dealt at random from the account's UNLOCKED
@@ -885,8 +892,10 @@ export const UNLOCK_CATALOG: Unlockable[] = [
       + 'Unlocks the IMMORTAL mode at character select: a sworn character plays the wake as any '
       + 'other, until its first death, which pays a reduced essence tithe and seals it OUTSIDE '
       + 'the mortal ledger. It wakes in town, build intact, carry lost; it persists across '
-      + 'sessions in an account vessel; its later deaths feed the account nothing, and its '
-      + 'corpses are visible only to itself. A life kept purely for the playing of it.',
+      + 'sessions in an account vessel; its corpses are visible only to itself, and its deeds '
+      + 'feed the account nothing. The character itself is never lost — but each later death '
+      + 'FELLS the vessel, and only Mortal Essence from your mortal runs, poured at the Vault, '
+      + 'calls it back.',
     payload: { flag: FEATURE.IMMORTAL } },
   { id: 'feat_immortal_slot_2', kind: 'feature', cost: 200, reqLevel: 0,
     requiresUnlock: 'feat_immortal',
@@ -1026,7 +1035,31 @@ export function isUnlockOwned(a: Account, u: Unlockable): boolean {
     // armed state hides the entry instead (isUnlockVisible), so the shelf
     // reads honestly in both phases: buyable, or standing down until spent.
     case 'graft':   return false;
+    // A resurrection is a SERVICE, never a possession — completion clears
+    // the card's fallen stamp, which retires the entry through visibility.
+    case 'resurrect': return false;
   }
+}
+
+/** THE FALLEN SHELF's stock (the resurrection covenant, meta/modes.ts):
+ *  one entry per roster vessel standing FALLEN, priced at the fee frozen on
+ *  its card. Dynamic like the package rows — but ACCOUNT-derived, so only
+ *  the account-passing folds (availableUnlocks, the census, the tooltip)
+ *  ever see them; the static-catalog consumers (validation, the milestone
+ *  derivation, account-less probes) are untouched by construction. */
+export const resurrectUnlockId = (charId: string): string => `resurrect_${charId}`;
+
+function resurrectUnlockables(a: Account): Unlockable[] {
+  return a.roster.filter(r => r.fallen).map(r => ({
+    id: resurrectUnlockId(r.charId), kind: 'resurrect' as const,
+    label: `${r.name} — Level ${r.fallen!.level}`,
+    description: `An Immortal vessel, fallen. The covenant holds what death cannot keep: `
+      + `pour Mortal Essence from your mortal line to resurrect this character — partial `
+      + `investment stays across runs, and when the full fee stands the vessel wakes in `
+      + `Lastlight, exactly as it fell (its build whole; its carry went to its own corpse).`,
+    cost: r.fallen!.fee,
+    payload: { charId: r.charId },
+  }));
 }
 
 /** Content-package configuration purchases, generated from the registry: one
@@ -1058,9 +1091,11 @@ function packageUnlockables(): Unlockable[] {
   return out;
 }
 
-/** Static catalog + the dynamic package purchases. */
-export function allUnlockables(): Unlockable[] {
-  return [...UNLOCK_CATALOG, ...packageUnlockables()];
+/** Static catalog + the dynamic package purchases — plus, when an account
+ *  is handed over, its own FALLEN-vessel resurrections (account-derived
+ *  stock; account-less callers keep the pure static view). */
+export function allUnlockables(a?: Account): Unlockable[] {
+  return [...UNLOCK_CATALOG, ...packageUnlockables(), ...(a ? resurrectUnlockables(a) : [])];
 }
 
 /** Is this unlock visible/purchasable yet (its gate met)? Static entries gate on
@@ -1070,6 +1105,13 @@ export function isUnlockVisible(a: Account, u: Unlockable): boolean {
   // A graft stands down while its charge is ARMED (bought, unspent): the
   // shelf offers it again only once a run's beginning consumes the charge.
   if (u.kind === 'graft' && a.skillGraft) return false;
+  // A resurrection stands only while its vessel still lies FALLEN — the
+  // grant clears the stamp, and a released (deleted) vessel takes its
+  // entry with it. Read LIVE off the roster so a stale captured entry
+  // (the pour's own held card) can never double-charge a risen vessel.
+  if (u.kind === 'resurrect') {
+    return !!a.roster.find(r => r.charId === u.payload.charId)?.fallen;
+  }
   if (u.kind !== 'package') return staticGateMet(a, u);
   const pkg = PACKAGE_BY_ID[u.payload.packageId];
   if (!pkg) return false;
@@ -1199,9 +1241,21 @@ export function catalogLevelMilestones(): number[] {
   return levelMilestoneCache = [...out].sort((x, y) => x - y);
 }
 
-/** Entries the player can SEE in the Vault (gate met, not owned). */
+/** Entries the player can SEE in the Vault (gate met, not owned) — the
+ *  account pass folds its own dynamic stock (fallen-vessel resurrections)
+ *  onto the shelf beside the static catalog. */
 export function availableUnlocks(a: Account): Unlockable[] {
-  return allUnlockables().filter(u => isUnlockVisible(a, u) && !isUnlockOwned(a, u));
+  return allUnlockables(a).filter(u => isUnlockVisible(a, u) && !isUnlockOwned(a, u));
+}
+
+/** "This pour finished" — ownership for the permanent kinds, the state
+ *  change for the service kinds (the graft's armed charge, a resurrection's
+ *  cleared stamp, which is never "owned"). ONE predicate for the Vault's
+ *  completion toasts and the seal log — the panels never re-derive it. */
+export function unlockCompleted(a: Account, u: Unlockable): boolean {
+  if (u.kind === 'graft') return a.skillGraft;
+  if (u.kind === 'resurrect') return !a.roster.find(r => r.charId === u.payload.charId)?.fallen;
+  return isUnlockOwned(a, u);
 }
 
 /** Packages the player can't tune YET (unlock unmet, not purchased), shown with
@@ -1251,6 +1305,15 @@ export interface VaultTabDef {
 
 export const VAULT_TABS: readonly VaultTabDef[] = [
   {
+    // THE FALLEN SHELF — deliberately FIRST (her ruling 2026-08-26: dead
+    // Immortal vessels lead the end-of-run Vault): the mystery law keeps it
+    // invisible until a vessel actually lies fallen, so the store's first
+    // face is also its rarest.
+    id: 'fallen', label: 'Fallen', kinds: ['resurrect'],
+    blurb: 'Immortal vessels death has taken hold of. Pour Mortal Essence from your mortal runs to resurrect one — partial investment keeps across runs, and the vessel wakes in Lastlight the moment its full fee stands.',
+    emptyNote: 'No vessel lies fallen. May it stay that way.',
+  },
+  {
     id: 'classes', label: 'Classes', kinds: ['slot', 'class'], rumors: true,
     blurb: 'The hand and the pool: Class Slots widen how many classes each deal offers, Class bundles deepen the pool the hand is dealt from. Rumors whisper at classes the world has not introduced yet.',
     emptyNote: 'No class purchases are open right now; classes surface through deeds, levels, and hard lessons. The rumors below point at the deeds.',
@@ -1282,7 +1345,7 @@ export const VAULT_TABS: readonly VaultTabDef[] = [
 export const VAULT_KIND_LABELS: Record<UnlockKind, string> = {
   slot: 'Class Slots', class: 'Classes', skill: 'Skill Pools',
   support: 'Support Pools', feature: 'Town & Features', package: 'World Events',
-  graft: 'Skill Grafts',
+  graft: 'Skill Grafts', resurrect: 'Fallen Vessel',
 };
 
 /** The shelf a kind sits on — its explicit seat first, else the fallback
@@ -1438,6 +1501,14 @@ function grantUnlock(a: Account, u: Unlockable): void {
     case 'feature': a.features.add(u.payload.flag); break;
     case 'package': a.packageUnlocks.add(u.payload.tierId ?? u.payload.packageId); break;
     case 'graft':   a.skillGraft = true; break;
+    case 'resurrect': {
+      // THE RESURRECTION: clear the card's fallen stamp — the vessel is
+      // playable again the moment the pour completes (its slot save was
+      // never touched: it stands in the sanctuary exactly as it fell).
+      const entry = a.roster.find(r => r.charId === u.payload.charId);
+      if (entry) delete entry.fallen;
+      break;
+    }
   }
 }
 
