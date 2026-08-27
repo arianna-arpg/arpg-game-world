@@ -153,7 +153,8 @@ import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
 import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, TRACKER_SITE, RECRUITER_SITE, BOUNTY_BOARD_SITE, FONT_SITE } from '../data/townBuild';
 import {
-  BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyChargePay, clonePosting, describeBountyPay, postingQuestDef, rollBountyPay,
+  BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyChargePay, bountySourceRows, clonePosting, describeBountyPay, postingQuestDef, rollBountyPay,
+  type BountyTargetRef,
   type BountyPosting, type BountyRollHost,
 } from '../data/bountyboard';
 // Also a side-effect import: pulling these registers the bestiary's recording
@@ -22060,6 +22061,21 @@ export class World {
     const allRows = Object.values(BOUNTY_KINDS);
     const taken = new Set<string>(this.bountyHands.map(h => h.zoneId));
     const view = this.simView();
+    // THE ANSWER pool (M2 K4): every source's live census in sorted-row
+    // order, each ref's resolution-ledger baseline read AT THE ARM (the
+    // delta law's zero). Gathered once — one truth for every seat's draw.
+    let answersMemo: { source: string; ref: BountyTargetRef; base: number }[] | null = null;
+    const answers = (): { source: string; ref: BountyTargetRef; base: number }[] => {
+      if (!answersMemo) {
+        answersMemo = [];
+        for (const row of bountySourceRows()) {
+          for (const ref of row.census(this)) {
+            answersMemo.push({ source: row.id, ref, base: ref.ledger ? (this.ledger[ref.ledger] ?? 0) : 0 });
+          }
+        }
+      }
+      return answersMemo;
+    };
     const offers: BountyPosting[] = [];
     const perKind: Record<string, number> = {};
     for (let i = 0; i < BOUNTY_BOARD_CFG.offers && allRows.length; i++) {
@@ -22076,6 +22092,7 @@ export class World {
         view, zoneMap: this.zoneMap, objectiveDone: id => this.objectiveDoneAt(id),
         visited: id => this.visited.has(id),
         pickGemId: (lvl, r) => this.pickBountyGemId(lvl, r),
+        answers,
         playerLevel: this.player.level, boardId, beat, seq: i,
       };
       const p = row.roll(host, rng, taken);
@@ -22394,11 +22411,42 @@ export class World {
     }
   }
 
+  /** THE FIELD WATCH (M2 — the annul reconcile's full honesty, charter §4):
+   *  K4's done flips ANYWHERE (the boss slain, the hold opened, the
+   *  fracture sealed) — no zone hook fires for it — and the world's own
+   *  annul frees IN THE FIELD with its courtesy (the apparition's stay ran
+   *  out). One cadenced sweep serves both: flip the hand's fieldDone + the
+   *  return prompt the moment its predicate turns, then reconcile — which
+   *  also keeps an OPEN slate live (a dead offer leaves the panel's next
+   *  repaint instead of waiting to be clicked). Host-only; idle while no
+   *  hand stands and nobody reads the board. */
+  private bountyWatchAccum = 0;
+  private watchBountyHands(dt: number, nearBoard: boolean): void {
+    if (this.clientActionHook) return;
+    if (!this.bountyHands.length && !(nearBoard && this.bountyOffers.length)) return;
+    this.bountyWatchAccum += dt;
+    if (this.bountyWatchAccum < 2) return;
+    this.bountyWatchAccum = 0;
+    for (const p of this.bountyHands) {
+      const row = BOUNTY_KINDS[p.kind];
+      const aq = this.activeQuests.find(e => e.questId === p.id);
+      if (!row || !aq || aq.fieldDone) continue;
+      if (p.failed || row.failed?.(this, p)) continue;
+      if (!row.done(this, p)) continue;
+      aq.fieldDone = true;
+      this.notice(this.questDefOf(p.id)?.turnIn?.prompt
+        ?? 'The ask is met — return to the bounty board to claim the pay.', BOUNTY_BOARD_CFG.accent, 16, 'civic');
+      this.charDirty = true;
+    }
+    this.reconcileBounties();
+  }
+
   /** Linger at the board → arm this beat's slate + open the postings panel
    *  (the salvage bench's flag idiom verbatim). */
   private updateBountyBoard(dt: number): void {
     const near = this.localHumanSeats().filter(s =>
       !s.actor.dead && !s.actor.downed && this.nearBountyBoard(s));
+    this.watchBountyHands(dt, near.length > 0);
     // THE LIVE EDGE (the vendor restock's law): while anyone stands at the
     // board, a TURNED beat re-deals the slate in place — host only (a net
     // client's snapshot is its whole truth; it never rolls its own slate).

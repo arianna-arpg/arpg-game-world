@@ -712,8 +712,38 @@ live slate deals all three kinds with precise pay faces ("the unique:
 The Miser's Loop" · "the skill Memory: Chain Lightning" · "2 rare-grade
 amulet pieces"). Audit's first observation for her walks: no
 weapon/offhand unique stands in reach at low-mid levels, so the category
-face honestly never offers them there. **M2 THE ANSWER fires at her
-word.**
+face honestly never offers them there. **M2 THE ANSWER fired at her
+"continue" and LANDED (2026-08-26):** `registerBountySource` +
+`BOUNTY_SOURCES` (data/bountyboard.ts — the registerPackageAsk sibling,
+rows sorted for import-order independence) with the four live lanes
+registered from their OWN modules under the compounding law (zero board
+edits): the worldboss DECREE (defs/worldboss.ts — serpents with a standing
+fight seat, apparitions herald-or-present, enthroned lairs; resolution =
+the kill row's own `worldboss_slain_<def>` stamp), the fracture
+(overlays/fractures.ts — `fractures_sealed`), the revealed hunt
+(overlays/hunt.ts — an unfound trail never posts; `hunt_beasts_slain`),
+and the harborhold MUSTER (data/harborholds.ts — found besieged anchors
+only; resolved = the hold's own `state === 'open'`, the fall = a true
+FAIL read that resolves at the board with no pay and never annuls). K4
+THE ANSWER joins the kind registry: the roll draws from the census (no
+seat search — the world already placed these asks) under its own wider
+band, the posting carries the claim (source + key + frozen copy + the
+at-arm ledger baseline — the arm baseline IS the at-accept baseline by
+construction, since the reconcile strikes any offer whose ask dies before
+it is taken), THE DELTA LAW reads done, and the card re-reads the live
+census so a diverted fracture's ask follows it. THE FIELD WATCH
+(`watchBountyHands`, a 2s cadence on the board's own update) grows the
+annul reconcile to full honesty: a K4 hand flips ready ANYWHERE the
+moment its predicate turns (no zone hook fires for a world event), the
+world's own annul frees the hand IN THE FIELD with its courtesy, and an
+open slate's dead offers leave at the panel's next repaint. The
+sanitizer's answer branch drops a claim whose source left the registry
+(the kinds' own law). Probe grown to 71 checks (rigs J — a
+probe-registered source driving the REAL arm/accept/delta/watch/annul/
+strike loop — and K — the four lanes + the muster's full state walk +
+the answer sanitizer); every gate green (check clean, probe lane
+157/157, smoke baseline unmoved). **M3 THE SUMMONS fires at her word**
+(the `ignite` hook already stands empty on the row).
 
 ---
 

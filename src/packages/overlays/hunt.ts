@@ -32,7 +32,8 @@
 
 import { clamp } from '../../core/math';
 import { Rng } from '../../core/rng';
-import { FACTIONS } from '../../data/monsters';
+import { registerBountySource } from '../../data/bountyboard';
+import { FACTIONS, MONSTERS } from '../../data/monsters';
 import { registerEventFront } from '../../engine/eventWeather';
 import type { World } from '../../engine/world';
 import { registerAttentionSource, type AttentionPoint } from '../../world/attention';
@@ -438,6 +439,28 @@ registerMarkerSource((world: World): MapMarker[] => {
     glyph, fill: '#241c08', stroke: h.color, text: h.color, r: 10,
     title: 'A great beast prowls here: the Hunt', fog: 'always', z: 18,
   }];
+});
+
+// --- the bounty board's census row (M2 K4 — the compounding law: registered
+// from the package's own module, zero board edits). Only a REVEALED, living
+// quarry is an answerable ask — an unfound trail is the hunt fabric's own
+// exploration, and a bounty on it would spoil the find. Resolution is the
+// kill row's hunt_beasts_slain stamp, read by the board's delta law; a
+// migrating beast's card follows it live (the kind's copy re-reads here).
+registerBountySource({
+  id: 'hunt',
+  census(world: World) {
+    const h = world.sim.huntField?.peek();
+    if (!h || !h.revealed || h.lifeFrac <= 0) return [];
+    const z = world.zoneMap[h.currentZoneId];
+    if (!z) return [];
+    const name = MONSTERS[h.beastDefId]?.name ?? 'the great beast';
+    return [{
+      key: `hunt:${h.id}`, zoneId: h.currentZoneId, name,
+      ask: `${name} is run to ground at ${z.name} — bring the great beast down.`,
+      ledger: 'hunt_beasts_slain',
+    }];
+  },
 });
 
 // --- in-zone attention pointers (world/attention.ts — same zero-edit contract) --

@@ -37,7 +37,7 @@ import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { SKILL_RARITIES } from '../engine/skills';
 import type { SavedLoot } from './death';
-import { BOUNTY_KINDS, type BountyPosting } from '../data/bountyboard';
+import { BOUNTY_KINDS, BOUNTY_SOURCES, type BountyPosting } from '../data/bountyboard';
 
 export const WORLD_SCHEMA_VERSION = 1;
 
@@ -654,6 +654,20 @@ export function sanitizeBountyBoard(
       && isFiniteNum(x.cull.count) && x.cull.count > 0 && isFiniteNum(x.cull.claimed)
       ? { count: Math.floor(x.cull.count), claimed: Math.max(0, Math.floor(x.cull.claimed)) }
       : undefined;
+    // THE ANSWER's claim (M2 K4): the named SOURCE must still stand in the
+    // registry (the same law as kinds — a row that left drops its
+    // postings), the copy strings must read, the baseline must count.
+    const answer = x.answer && typeof x.answer === 'object'
+      && typeof x.answer.source === 'string' && !!BOUNTY_SOURCES[x.answer.source]
+      && typeof x.answer.key === 'string' && typeof x.answer.name === 'string'
+      && typeof x.answer.ask === 'string' && isFiniteNum(x.answer.base)
+      ? {
+        source: x.answer.source, key: x.answer.key, name: x.answer.name, ask: x.answer.ask,
+        ...(typeof x.answer.title === 'string' ? { title: x.answer.title } : {}),
+        ...(typeof x.answer.ledger === 'string' ? { ledger: x.answer.ledger } : {}),
+        base: Math.max(0, Math.floor(x.answer.base)),
+      } : undefined;
+    if (x.kind === 'answer' && !answer) return null; // a K4 posting IS its claim
     return {
       id: x.id, kind: x.kind, boardId: x.boardId, zoneId: x.zoneId,
       beat: Math.floor(x.beat), pay,
@@ -661,6 +675,7 @@ export function sanitizeBountyBoard(
       ...(x.face === 'omen' || x.face === 'lift' ? { face: x.face } : {}),
       ...(isFiniteNum(x.acceptAt) ? { acceptAt: Math.max(0, x.acceptAt) } : {}),
       ...(cull ? { cull } : {}),
+      ...(answer ? { answer } : {}),
     };
   };
   const offers = Array.isArray(bb.offers)

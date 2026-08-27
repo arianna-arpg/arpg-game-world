@@ -31,6 +31,8 @@
 
 import type { PresenceEntry } from '../engine/presence';
 import { registerGenPin } from '../engine/genPins';
+import { registerBountySource, type BountyTargetRef } from './bountyboard';
+import type { World } from '../engine/world';
 
 /** THE PERSISTED STATE — rides ZoneDef.harborhold verbatim into the world
  *  save (pure JSON; the zones array is the store). IDENTITY (which class,
@@ -461,3 +463,28 @@ export function sanitizeHoldState(raw: unknown): HarborholdState | null {
     ...(num(r.writsAt) !== undefined ? { writsAt: num(r.writsAt) } : {}),
   };
 }
+
+// --- the bounty board's MUSTER row (M2 K4 — the compounding law: registered
+// from the fabric's own module, zero board edits). Every FOUND, besieged
+// hold anchor is an answerable ask; the resolution is the hold's own
+// standing state (state === 'open' — the muster broken through), and the
+// fall is a true FAIL read: the board acknowledges it like a turn-in, no
+// pay, per walk-1's ruling. Veiled anchors stay off the slate — a siege the
+// chart has not found is not the board's to tell.
+registerBountySource({
+  id: 'harborhold',
+  census(world: World): BountyTargetRef[] {
+    const out: BountyTargetRef[] = [];
+    for (const z of Object.values(world.zoneMap)) {
+      if (!z.harborhold || z.harborhold.state !== 'besieged' || z.veiled) continue;
+      out.push({
+        key: `hold:${z.id}`, zoneId: z.id, name: z.name,
+        title: `The Muster: ${z.name}`,
+        ask: `${z.name} stands besieged — sound the muster at the quay ward, and break the waves.`,
+      });
+    }
+    return out;
+  },
+  resolved: (world, p) => world.zoneMap[p.zoneId]?.harborhold?.state === 'open',
+  failed: (world, p) => world.zoneMap[p.zoneId]?.harborhold?.state === 'fallen',
+});

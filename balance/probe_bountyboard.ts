@@ -34,6 +34,21 @@
 //      and never throws.
 //   F. THE ABANDON: the hand frees, the row goes, the posting never
 //      returns to the slate.
+//   G/H/I (M1): THE ERRAND's omen face + entry-deed; THE CULL's remote writ
+//      marks + posting-credited claims; THE PAY LANES minting at the turn-in.
+//   J (M2): THE SOURCE REGISTRY + K4 THE ANSWER — a probe-registered source
+//      row (the open-registry law: extensibility is the truth) feeds the
+//      REAL arm; the posting carries the claim (source/key/copy/baseline),
+//      THE DELTA LAW reads done off the resolution ledger, THE FIELD WATCH
+//      flips the hand ready ANYWHERE (no zone hook) and annuls a departed
+//      ask in the field with its courtesy; a resolved-before-taken offer is
+//      struck at the arm's reconcile.
+//   K (M2): THE LIVE LANES — worldboss/fractures/hunt/harborhold rows all
+//      registered (sorted, censuses clean on a bare world); the harborhold
+//      deep walk (besieged → census, veiled → filtered, open → resolved,
+//      fallen → the FAIL read that never annuls and resolves at the board
+//      with no pay); the sanitizer's answer branch (unknown source drops,
+//      a K4 posting without its claim drops whole).
 // Run: npx tsx balance/probe_bountyboard.ts
 // ---------------------------------------------------------------------------
 
@@ -41,9 +56,11 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { FEATURE, LEDGER_BOUNTY_DONE, bountyDoneKindKey, makeAccount } from '../src/meta/account';
 import {
-  BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyUniqueCategories, bountyUniquePool,
-  describeBountyPay, type BountyPosting,
+  BOUNTY_BOARD_CFG, BOUNTY_KINDS, BOUNTY_SOURCES, bountySourceRows,
+  bountyUniqueCategories, bountyUniquePool, describeBountyPay,
+  registerBountySource, type BountyPosting, type BountyTargetRef,
 } from '../src/data/bountyboard';
+import { HOLD_CLASSES, mintHoldState } from '../src/data/harborholds';
 import { BOUNTY_BOARD_SITE, expandedTown } from '../src/data/townBuild';
 import { STRUCTURES } from '../src/data/structures';
 import { QUEST_CATEGORY_CAPS } from '../src/quests/types';
@@ -114,9 +131,10 @@ check('B: every offer is honest (zone stands, kind-law holds, band, pay printed,
     const z = wB.zoneMap[p.zoneId];
     if (!z || p.boardId !== BOUNTY_BOARD_CFG.boardId) return false;
     const paySet = !!(p.pay.essence?.length || p.pay.unique || p.pay.lot || p.pay.pouch || p.pay.gem);
-    if (!paySet || z.objective.kind === 'safe') return false;
+    if (!paySet || (z.objective.kind === 'safe' && p.kind !== 'answer')) return false;
     const band = p.kind === 'charge' ? BOUNTY_BOARD_CFG.charge.band
-      : p.kind === 'errand' ? BOUNTY_BOARD_CFG.errand.band : BOUNTY_BOARD_CFG.cull.band;
+      : p.kind === 'errand' ? BOUNTY_BOARD_CFG.errand.band
+      : p.kind === 'answer' ? BOUNTY_BOARD_CFG.answer.band : BOUNTY_BOARD_CFG.cull.band;
     if (z.level < wB.player.level - band.below || z.level > wB.player.level + band.above) return false;
     if (p.kind === 'charge') {
       return !BOUNTY_BOARD_CFG.charge.refuse.includes(z.objective.kind) && !wB.objectiveDoneAt(p.zoneId);
@@ -125,6 +143,13 @@ check('B: every offer is honest (zone stands, kind-law holds, band, pay printed,
     if (p.kind === 'cull') {
       return z.objective.kind !== 'bounty' && !z.harborhold && !z.holdAnchor
         && !!p.cull && p.cull.count > 0 && p.cull.claimed === 0;
+    }
+    if (p.kind === 'answer') {
+      // A dealt answer names a registered source whose census still stands
+      // behind it (the bare world's censuses are empty, so an answer here
+      // means a live ask truly stood — verify the claim, never assume).
+      return !!p.answer && !!BOUNTY_SOURCES[p.answer.source]
+        && BOUNTY_SOURCES[p.answer.source].census(wB).some(r => r.key === p.answer!.key);
     }
     return false;
   }));
@@ -375,6 +400,170 @@ parkAtBoard(wI);
     describeBountyPay({ lot: { count: 3, category: 'boots' } }).includes('3')
     && describeBountyPay({ pouch: { kind: 'rough', count: 4 } }).includes('4 Rough Memory')
     && describeBountyPay({ unique: { category: 'ring' } }) === 'a unique ring');
+}
+
+// ---------------- J. THE SOURCE REGISTRY + K4 THE ANSWER (M2: the census)
+// A probe-registered source row drives the REAL loop end to end — the open
+// registry is the law (extensibility is the truth), and the probe's own row
+// exercises exactly what a package's row rides. Registered HERE (after the
+// earlier rigs ran) so their seeded draws stay untouched.
+seedGlobalRandom(0xa45e);
+const wJ = mkWorld();
+const censusJ: BountyTargetRef[] = [];
+registerBountySource({
+  id: 'probe_source',
+  census: () => [...censusJ],
+});
+{
+  // A standing, banded target for the census (the board's own country).
+  const cfgJ = BOUNTY_BOARD_CFG.answer.band;
+  const tz = Object.values(wJ.zoneMap).find(z =>
+    z.id !== START_ZONE && !z.boundless
+    && z.level >= wJ.player.level - cfgJ.below && z.level <= wJ.player.level + cfgJ.above)!;
+  censusJ.push({
+    key: 't1', zoneId: tz.id, name: 'the Probe Sovereign',
+    title: 'The Decree: the Probe Sovereign',
+    ask: 'Put the probe sovereign down where it stands.',
+    ledger: 'probe_resolved',
+  });
+  let ans: BountyPosting | undefined;
+  for (let b = 0; b < 12 && !ans; b++) {
+    wJ.time = b * wJ.bountyBeatSeconds();
+    wJ.armBountyBoard();
+    ans = wJ.bountyOffers.find(p => p.kind === 'answer' && p.answer?.source === 'probe_source');
+  }
+  check('J: the registry feeds the arm (an answer posting deals off the census)',
+    !!ans, ans ? `${ans.id}@${ans.zoneId}` : 'none in 12 beats');
+  if (!ans) throw new Error('no answer posting dealt in 12 beats');
+  check('J: the posting carries the claim (source, key, copy, the arm baseline)',
+    ans.zoneId === tz.id && ans.answer!.key === 't1' && ans.answer!.base === 0
+    && ans.answer!.ledger === 'probe_resolved' && ans.answer!.name === 'the Probe Sovereign');
+  check('J: the card speaks the census\'s own register (title override live)',
+    BOUNTY_KINDS.answer.copy(wJ, ans).title === 'The Decree: the Probe Sovereign'
+    && BOUNTY_KINDS.answer.copy(wJ, ans).ask.includes('probe sovereign'));
+  check('J: the accept takes the hand', wJ.acceptBounty(ans.id) === true
+    && wJ.activeQuests.some(e => e.questId === ans!.id));
+  check('J: THE DELTA LAW — unresolved reads unresolved', BOUNTY_KINDS.answer.done(wJ, ans) === false);
+  wJ.ledger.probe_resolved = (wJ.ledger.probe_resolved ?? 0) + 1;
+  check('J: THE DELTA LAW — a bump past the baseline reads resolved',
+    BOUNTY_KINDS.answer.done(wJ, ans) === true);
+  const aqJ = wJ.activeQuests.find(e => e.questId === ans!.id)!;
+  check('J: the hand is not yet flipped (the watch has not swept)', aqJ.fieldDone !== true);
+  for (let i = 0; i < 80; i++) wJ.update(1 / 30);
+  check('J: THE FIELD WATCH flips the hand ready ANYWHERE (no zone hook fired)',
+    aqJ.fieldDone === true);
+  parkAtBoard(wJ);
+  const stampJ = wJ.ledger[bountyDoneKindKey('answer')] ?? 0;
+  check('J: the turn-in pays and stamps the kind', wJ.turnInBounty(ans.id) === true
+    && wJ.bountyHands.length === 0
+    && (wJ.ledger[bountyDoneKindKey('answer')] ?? 0) === stampJ + 1);
+  // THE FIELD ANNUL: a second ask departs unresolved while in hand — the
+  // watch frees it in the field with the courtesy, no board visit.
+  censusJ.push({
+    key: 't2', zoneId: tz.id, name: 'the Departing Guest',
+    ask: 'Answer the departing guest.', ledger: 'probe_resolved',
+  });
+  let ans2: BountyPosting | undefined;
+  for (let b = 13; b < 26 && !ans2; b++) {
+    wJ.time = b * wJ.bountyBeatSeconds();
+    wJ.armBountyBoard();
+    ans2 = wJ.bountyOffers.find(p => p.kind === 'answer' && p.answer?.key === 't2');
+  }
+  check('J: a second ask deals', !!ans2, ans2 ? ans2.id : 'none in 13 beats');
+  if (ans2) {
+    check('J: taken in hand', wJ.acceptBounty(ans2.id) === true);
+    censusJ.length = 0; // the guest departs, unresolved
+    for (let i = 0; i < 80; i++) wJ.update(1 / 30);
+    check('J: THE FIELD ANNUL frees the hand where it stands (courtesy, no penalty)',
+      wJ.bountyHands.length === 0 && !wJ.activeQuests.some(e => e.questId === ans2!.id));
+  }
+  // THE STRIKE: an offer whose ask resolves before it is taken leaves the
+  // slate at the arm's reconcile (done work is never advertised).
+  censusJ.push({
+    key: 't3', zoneId: tz.id, name: 'the Already-Answered',
+    ask: 'Answer what another hand already answered.', ledger: 'probe_resolved',
+  });
+  let ans3: BountyPosting | undefined;
+  for (let b = 27; b < 40 && !ans3; b++) {
+    wJ.time = b * wJ.bountyBeatSeconds();
+    wJ.armBountyBoard();
+    ans3 = wJ.bountyOffers.find(p => p.kind === 'answer' && p.answer?.key === 't3');
+  }
+  check('J: a third ask deals as an offer', !!ans3, ans3 ? ans3.id : 'none in 13 beats');
+  if (ans3) {
+    wJ.ledger.probe_resolved = (wJ.ledger.probe_resolved ?? 0) + 1; // resolved by "another hand"
+    wJ.armBountyBoard(); // same beat: the reconcile at the head strikes it
+    check('J: THE STRIKE — a resolved-before-taken offer leaves the slate',
+      !wJ.bountyOffers.some(p => p.id === ans3!.id));
+  }
+  censusJ.length = 0;
+}
+
+// ------------------- K. THE LIVE LANES + THE MUSTER's fail read (M2)
+seedGlobalRandom(0xbead);
+const wK = mkWorld();
+{
+  const rows = bountySourceRows().map(r => r.id);
+  check('K: the four live lanes are registered (the compounding law)',
+    ['fractures', 'harborhold', 'hunt', 'worldboss'].every(id => !!BOUNTY_SOURCES[id]));
+  check('K: rows read in registration-independent order (sorted by id)',
+    rows.join(',') === [...rows].sort().join(','));
+  check('K: every census runs clean on a bare world',
+    bountySourceRows().every(r => Array.isArray(r.census(wK))));
+  // The harborhold deep walk: a minted siege joins the census the moment it
+  // is FOUND, resolves on the muster's own standing state, and FAILS —
+  // never annuls — on the fall (walk-1's fail ruling, the board's
+  // acknowledgment with no pay).
+  const zH = Object.values(wK.zoneMap).find(z => z.id !== START_ZONE && !z.boundless)!;
+  zH.harborhold = mintHoldState(Object.values(HOLD_CLASSES)[0]);
+  zH.veiled = false;
+  const holdRow = BOUNTY_SOURCES.harborhold;
+  check('K: a found, besieged hold stands in the muster census',
+    holdRow.census(wK).some(r => r.key === `hold:${zH.id}` && r.zoneId === zH.id));
+  zH.veiled = true;
+  check('K: a veiled siege stays off the slate (not the board\'s to tell)',
+    !holdRow.census(wK).some(r => r.key === `hold:${zH.id}`));
+  zH.veiled = false;
+  const pH: BountyPosting = {
+    id: 'bounty_test_hold', kind: 'answer', boardId: 'lastlight',
+    zoneId: zH.id, beat: 0, pay: { essence: [{ essence: 'coarse', count: 4 }] },
+    answer: { source: 'harborhold', key: `hold:${zH.id}`, name: zH.name, ask: 'Break the siege.', base: 0 },
+  };
+  wK.bountyHands.push(pH);
+  wK.activeQuests.push({ questId: pH.id, zoneId: pH.zoneId, fieldDone: false });
+  check('K: besieged = the ask stands (not done, not annulled)',
+    BOUNTY_KINDS.answer.done(wK, pH) === false && (BOUNTY_KINDS.answer.annulled?.(wK, pH) ?? null) === null);
+  zH.harborhold.state = 'open';
+  check('K: the muster broken through reads RESOLVED (the standing-state law)',
+    BOUNTY_KINDS.answer.done(wK, pH) === true);
+  zH.harborhold.state = 'fallen';
+  check('K: the fall reads FAILED — and never annuls, though the census is gone',
+    BOUNTY_KINDS.answer.done(wK, pH) === false
+    && (BOUNTY_KINDS.answer.failed?.(wK, pH) ?? false) === true
+    && (BOUNTY_KINDS.answer.annulled?.(wK, pH) ?? null) === null);
+  parkAtBoard(wK);
+  const failsK = wK.ledger.bounties_failed ?? 0;
+  const dropsK = wK.drops.length;
+  check('K: the failed muster resolves at the board — acknowledged, no pay',
+    wK.turnInBounty(pH.id) === true && wK.bountyHands.length === 0
+    && wK.drops.length === dropsK && (wK.ledger.bounties_failed ?? 0) === failsK + 1);
+  // The sanitizer's answer branch (keep-what-stands).
+  const goodAnswer = {
+    id: 'a1', kind: 'answer', boardId: 'lastlight', zoneId: zH.id, beat: 0,
+    pay: { essence: [{ essence: 'coarse', count: 2 }] },
+    answer: { source: 'harborhold', key: `hold:${zH.id}`, name: zH.name, ask: 'x', title: 'The Muster', ledger: 'l', base: 3 },
+  };
+  const saneK = sanitizeBountyBoard({
+    armedBeat: 0,
+    offers: [
+      goodAnswer,
+      { ...goodAnswer, id: 'a2', answer: { ...goodAnswer.answer, source: 'no_such_source' } },
+      { ...goodAnswer, id: 'a3', answer: undefined },
+    ],
+  }, wK.zoneMap);
+  check('K: the sanitizer keeps the sound claim and drops the unsound whole',
+    !!saneK && saneK.offers.length === 1 && saneK.offers[0].id === 'a1'
+    && saneK.offers[0].answer?.title === 'The Muster' && saneK.offers[0].answer?.base === 3);
 }
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);

@@ -123,6 +123,13 @@ export const BOUNTY_BOARD_CFG = {
      *  the target's level (THE MINT LAW stamps it at pay). */
     gemShare: 0.35,
   },
+  /** THE ANSWER kind (M2) — "resolve what stands": targets drawn from the
+   *  live census (BOUNTY_SOURCES — worldboss decrees, the fracture, the
+   *  revealed hunt, a besieged harborhold's muster). Events are the world's
+   *  own scale, so the band opens wider than the minted-ground kinds. */
+  answer: {
+    band: { below: 8, above: 6 },
+  },
   /** The errand's omen (the findability guarantee without the veil lift):
    *  whispered near, revealed close, aging wider — the omen fabric's own
    *  dials. */
@@ -164,6 +171,15 @@ export interface BountyPosting {
   face?: 'omen' | 'lift';
   acceptAt?: number;
   cull?: { count: number; claimed: number };
+  /** THE ANSWER's claim (M2 K4): the source row + the target's stable key,
+   *  with the card copy frozen at the arm (the census churns; the card must
+   *  still read after the target moves or leaves) and `base` = the source's
+   *  resolution-ledger count AT THE ARM. The delta law: a later bump past
+   *  the baseline reads as resolved — and because the reconcile strikes any
+   *  offer whose ask dies before it is taken, the arm baseline IS the
+   *  at-accept baseline by construction. Sources with a standing-state read
+   *  (the harborhold's 'open') omit `ledger`. */
+  answer?: { source: string; key: string; name: string; ask: string; title?: string; ledger?: string; base: number };
 }
 
 /** Deep-copy a posting (save writes; slate snapshots). */
@@ -181,7 +197,70 @@ export function clonePosting(p: BountyPosting): BountyPosting {
     ...(p.face ? { face: p.face } : {}),
     ...(p.acceptAt !== undefined ? { acceptAt: p.acceptAt } : {}),
     ...(p.cull ? { cull: { ...p.cull } } : {}),
+    ...(p.answer ? { answer: { ...p.answer } } : {}),
   };
+}
+
+// ---------------------------------------------------------------------------
+// THE SOURCE REGISTRY (M2 — charter §7, the live-world reader): the
+// world-grain sibling of registerPackageAsk. A source row publishes a live
+// CENSUS of answerable asks; THE COMPOUNDING LAW is the whole point — the
+// board never hardcodes a package list. Every fabric that registers a row
+// becomes board content the day it ships (rows live in the fabric's own
+// module, registered on import — the registerMarkerSource contract; zero
+// edits here), and every future fabric is one row from being a posting.
+// ---------------------------------------------------------------------------
+
+/** One answerable ask, read from the live world at census time. */
+export interface BountyTargetRef {
+  /** Stable instance key within the source ('wb:<id>', 'hold:<zoneId>') —
+   *  the posting's claim; a ref gone from the census reads as departed. */
+  key: string;
+  /** Where the ask stands (the posting's zone: markers, band, pay fold). */
+  zoneId: string;
+  /** The target's noun, precision register (card + courtesy notices). */
+  name: string;
+  /** The ask spoken plainly — one line, no captions. */
+  ask: string;
+  /** Card title override (the worldboss lane speaks as THE DECREE); absent
+   *  = "The Answer: <name>". */
+  title?: string;
+  /** Run-ledger key whose count baselines at the arm — a later bump past
+   *  the baseline reads as resolved (the delta law). Sources resolved by a
+   *  standing-state read (the harborhold) omit it and answer resolved(). */
+  ledger?: string;
+}
+
+/** One live-census source — registered from the owning fabric's module. */
+export interface BountySourceRow {
+  id: string;
+  /** The live census: every answerable ask this source stands behind right
+   *  now. A pure read (never ignites, never mutates); empty when the
+   *  package is absent or quiet. */
+  census(world: World): BountyTargetRef[];
+  /** The standing-state resolution read, for sources without a resolution
+   *  ledger (the harborhold's `state === 'open'`). Refs that carry `ledger`
+   *  never consult this — the kind's own delta law answers first. */
+  resolved?(world: World, p: BountyPosting): boolean;
+  /** The fail read (the hold FELL) — resolves at the board like a turn-in,
+   *  no pay, per walk-1's fail ruling. A live read, never a latch. */
+  failed?(world: World, p: BountyPosting): boolean;
+  /** M3 (THE SUMMONS): the directed ignite verb — devIgnite promoted to a
+   *  first-class registry hook. Unused by M2's census lane. */
+  ignite?(world: World, zoneId: string): boolean;
+}
+
+export const BOUNTY_SOURCES: Record<string, BountySourceRow> = {};
+
+export function registerBountySource(row: BountySourceRow): void {
+  BOUNTY_SOURCES[row.id] = row; // HMR-safe: replace by id
+}
+
+/** Rows in registration-independent order (sorted by id — the
+ *  registerPackageAsk determinism law: the census pool, and so the seeded
+ *  slate, never depends on import order). */
+export function bountySourceRows(): BountySourceRow[] {
+  return Object.values(BOUNTY_SOURCES).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 /** What a kind's roll may read — a narrow host so rolls stay pure over the
@@ -199,6 +278,11 @@ export interface BountyRollHost {
    *  level (the R4 gem face — the pool law stays in one place, World's).
    *  Null when the pool is empty. */
   pickGemId(level: number, rng: Rng): string | null;
+  /** THE ANSWER pool (M2 K4): every source's live census, gathered in
+   *  sorted-row order with each ref's resolution-ledger baseline already
+   *  read (World assembles it at the arm — the roll stays a pure fold
+   *  over the host). */
+  answers(): { source: string; ref: BountyTargetRef; base: number }[];
   playerLevel: number;
   boardId: string;
   beat: number;
@@ -434,6 +518,79 @@ registerBountyKind({
       ask: `Put down ${n} marked quarry in ${z.name} (level ${z.level})`
         + (p.cull && p.cull.claimed > 0 ? ` — ${left} still stand.` : ' — the marks post at your arrival.'),
     };
+  },
+});
+
+// --- K4 · THE ANSWER — "resolve what stands" (M2: the live census) ---------
+registerBountyKind({
+  id: 'answer',
+  weight: 1,
+  roll(host, rng, taken) {
+    const cfg = BOUNTY_BOARD_CFG.answer;
+    // The pool is the census itself (no seat search — the world already
+    // placed these asks); the band keeps absurd decrees off a young slate.
+    const pool = host.answers().filter(a => {
+      const z = host.zoneMap[a.ref.zoneId];
+      if (!z || taken.has(a.ref.zoneId)) return false;
+      return z.level >= host.playerLevel - cfg.band.below
+        && z.level <= host.playerLevel + cfg.band.above;
+    });
+    if (!pool.length) return null;
+    const a = pool[rng.int(0, pool.length - 1)];
+    return {
+      id: `bounty_${host.beat}_${host.seq}`, kind: 'answer', boardId: host.boardId,
+      zoneId: a.ref.zoneId, beat: host.beat, pay: {},
+      answer: {
+        source: a.source, key: a.ref.key, name: a.ref.name, ask: a.ref.ask,
+        ...(a.ref.title ? { title: a.ref.title } : {}),
+        ...(a.ref.ledger ? { ledger: a.ref.ledger } : {}),
+        base: a.base,
+      },
+    };
+  },
+  // THE DELTA LAW: a ref carrying a resolution ledger reads done when the
+  // count moves past the arm baseline (worldboss_slain_<def>,
+  // fractures_sealed, hunt_beasts_slain — whoever in the party lands it);
+  // ledgerless refs ask their source's standing-state read (the hold open).
+  done(world, p) {
+    const a = p.answer;
+    if (!a) return false;
+    const src = BOUNTY_SOURCES[a.source];
+    if (!src) return false;
+    if (a.ledger) return (world.ledger[a.ledger] ?? 0) > a.base;
+    return src.resolved?.(world, p) ?? false;
+  },
+  failed(world, p) {
+    const a = p.answer;
+    const src = a ? BOUNTY_SOURCES[a.source] : undefined;
+    return src?.failed?.(world, p) ?? false;
+  },
+  // Departed-unresolved ANNULS (the apparition's stay ran out, the hunt
+  // waned): the courtesy in the field, the hand freed, no penalty. A
+  // resolved ask never annuls (it pays), and a FAILED one never annuls
+  // either — the fail lane resolves at the board (walk-1's ruling), even
+  // while its census entry is gone.
+  annulled(world, p) {
+    const a = p.answer;
+    if (!a) return 'the posting no longer reads';
+    const src = BOUNTY_SOURCES[a.source];
+    if (!src) return 'its source is gone from the world';
+    if (BOUNTY_KINDS.answer.done(world, p)) return null;
+    if (src.failed?.(world, p)) return null;
+    if (!src.census(world).some(r => r.key === a.key)) {
+      return `${a.name} is gone — the world moved on`;
+    }
+    return null;
+  },
+  // THE LIVE CARD: while the target still stands, the census's own line
+  // speaks (a diverted fracture's card follows it to fresh ground); once
+  // gone, the arm's frozen copy still reads while the reconcile settles.
+  copy(world, p) {
+    const a = p.answer;
+    if (!a) return { title: 'The Answer', ask: 'the posting no longer reads' };
+    const live = BOUNTY_SOURCES[a.source]?.census(world).find(r => r.key === a.key);
+    const title = live?.title ?? a.title ?? `The Answer: ${live?.name ?? a.name}`;
+    return { title, ask: live?.ask ?? a.ask };
   },
 });
 

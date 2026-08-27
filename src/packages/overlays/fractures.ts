@@ -27,6 +27,7 @@
 import { clamp } from '../../core/math';
 import { Rng } from '../../core/rng';
 import type { ArenaSpec } from '../../data/arenas';
+import { registerBountySource } from '../../data/bountyboard';
 import { FACTIONS } from '../../data/monsters';
 import { registerPackageAsk } from '../../data/objectives';
 import type { World } from '../../engine/world';
@@ -475,6 +476,28 @@ registerMarkerSource((world: World): MapMarker[] => {
     });
   }
   return out;
+});
+
+// --- the bounty board's census row (M2 K4 — the compounding law: registered
+// from the package's own module, zero board edits). The standing fracture is
+// one answerable ask; sealing it anywhere bumps fractures_sealed, and the
+// board's delta law reads the resolution. The card follows a divert live
+// (the kind's copy re-reads this census), so the ask never points at spent
+// ground while the run still tears onward.
+registerBountySource({
+  id: 'fractures',
+  census(world: World) {
+    const f = world.sim.fractureField?.peek();
+    if (!f) return [];
+    const z = world.zoneMap[f.zoneId];
+    if (!z) return [];
+    return [{
+      key: `fracture:${f.id}`, zoneId: f.zoneId, name: 'the fracture',
+      title: 'The Answer: the fracture',
+      ask: `The earth tears open at ${z.name} — run the fracture down wherever it flees, and seal it.`,
+      ledger: 'fractures_sealed',
+    }];
+  },
 });
 
 // --- in-zone attention pointers (world/attention.ts — same zero-edit contract) --

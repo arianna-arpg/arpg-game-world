@@ -37,6 +37,7 @@ import { LOOT_TABLES } from '../../data/loottables';
 import { registerDoodadRule } from '../../engine/levelgen';
 import { registerKillHandler } from '../../engine/killHandlers';
 import type { World } from '../../engine/world';
+import { registerBountySource, type BountyTargetRef } from '../../data/bountyboard';
 import { registerBulletinSource } from '../../world/bulletins';
 import { registerEdgeBlockSource } from '../../world/edgeBlocks';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
@@ -327,6 +328,51 @@ registerMarkerSource((world: World): MapMarker[] => {
     }
   }
   return out;
+});
+
+// --- the bounty board's DECREE (M2 K4 — the census row; the compounding law:
+// registered on import from the package's own module, zero board edits).
+// Every sovereign UP right now is an answerable ask; resolution is the kill
+// row's own worldboss_slain_<def> stamp, read by the board's delta law.
+registerBountySource({
+  id: 'worldboss',
+  census(world: World): BountyTargetRef[] {
+    const out: BountyTargetRef[] = [];
+    for (const f of world.sim.worldBossFieldsAll()) {
+      for (const s of f.peekSerpents()) {
+        // The fight seat: the minted arena, or — THE SETTLED GROUND — the
+        // rest zone once it settles. A slithering serpent has no seat yet:
+        // no honest ask stands until the head can be met.
+        const seat = s.arenaZoneId ?? (s.phase === 'settled' ? s.restZoneId : null);
+        if (!seat) continue;
+        out.push({
+          key: `wb:${s.id}`, zoneId: seat, name: s.def.name,
+          title: `The Decree: ${s.def.name}`,
+          ask: `Strike off the head of ${s.def.name} where it coils — the roads stand sealed behind it.`,
+          ledger: `worldboss_slain_${s.def.id}`,
+        });
+      }
+      for (const a of f.peekApparitions()) {
+        out.push({
+          key: `wb:${a.id}`, zoneId: a.zoneId, name: a.def.name,
+          title: `The Decree: ${a.def.name}`,
+          ask: a.state === 'herald'
+            ? `${a.def.name} breaches soon — meet it where it lands and put it down before it departs.`
+            : `${a.def.name} stands now, and will not stand long — put it down.`,
+          ledger: `worldboss_slain_${a.def.id}`,
+        });
+      }
+      for (const l of f.peekLairs()) {
+        out.push({
+          key: `wb:${l.id}`, zoneId: l.lairZoneId ?? l.hostZoneId, name: l.def.name,
+          title: `The Decree: ${l.def.name}`,
+          ask: `${l.def.name} sits enthroned within — enter, and end its reign.`,
+          ledger: `worldboss_slain_${l.def.id}`,
+        });
+      }
+    }
+    return out;
+  },
 });
 
 // --- zone-info rows (the side box) ---------------------------------------------
