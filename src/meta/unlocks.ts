@@ -498,6 +498,22 @@ function classBundleEntry(b: ClassBundleDef): Unlockable {
 export const SKILL_GRAFT_COST = 120;
 
 export const UNLOCK_CATALOG: Unlockable[] = [
+  // --- THE BOUNTY BOARD — THE FIRST WRIT (docs/design/bounty-first-writ.md
+  //     W0, her ruling): the account's FIRST door, seated at the catalog's
+  //     head and priced at ZERO — the board is the faucet that funds the
+  //     whole town ladder (its essence pay buys the Salvage Station, the
+  //     station opens Brandt through the Trade Gate), so the first Vault
+  //     visit teaches the store by claiming it. Ungated by design: THE
+  //     DEATH LESSON (ui/panels.ts vault render) glows this row while it
+  //     stands unowned — ownership IS the lesson's graduation. Generated,
+  //     player-SELECTED postings on a beat: take one in hand, meet its ask
+  //     out in the world, and turn it in back at the board for the printed
+  //     pay (docs/design/bounty-board.md). ---------------------------------
+  { id: 'feat_bounty_board', kind: 'feature', cost: 0, reqLevel: 0,
+    label: 'Bounty Board: Town',
+    description: 'A posting board raised in Lastlight, free for the claiming. Its slate refreshes on its own clock with work drawn from the living world — dwell to read the postings, take ONE in hand, and return to the board when the deed is done: the pay is printed on the card, and the next slate waits where you collect.',
+    payload: { flag: FEATURE.BOUNTY_BOARD } },
+
   // --- Class slots: a bigger HAND at character select, bought in sequence ----
   // THE MOOT LAW (reqClasses): each tier also waits for the class POOL to be
   // deep enough to fill the hand it sells — a 4th slot over 3 classes deals
@@ -813,18 +829,6 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     label: 'Quest Package: Town Expansion',
     description: 'A quartermaster settles in Lastlight, posting hunts into the wilds (quest chains).',
     payload: { flag: FEATURE.QUEST_GIVER } },
-
-  // --- THE BOUNTY BOARD (docs/design/bounty-board.md M0): generated,
-  //     player-SELECTED postings on a beat — take one in hand, meet its ask
-  //     out in the world, and turn it in back at the board for the printed
-  //     pay. Teased sealed with its avenues (whichever road crosses first:
-  //     any quest seen through, or level 10). Cost + gates are DIALS. -------
-  { id: 'feat_bounty_board', kind: 'feature', cost: 120, reqLevel: 0, tease: true,
-    reqAnyOf: [{ quest: true, label: 'any quest seen through' },
-               { level: 10, label: 'reach level 10' }],
-    label: 'Bounty Board: Town',
-    description: 'A posting board is raised in Lastlight. Its slate refreshes on its own clock with work drawn from the living world — dwell to read the postings, take ONE in hand, and return to the board when the deed is done: the pay is printed on the card, and the next slate waits where you collect.',
-    payload: { flag: FEATURE.BOUNTY_BOARD } },
 
   // --- Training Dummy — THE DEED GATE: surfaces on the account's first
   //     LEGENDARY skill gem (LEDGER_LEGENDARY_SKILL_DROP, stamped at the

@@ -171,7 +171,9 @@ const wallet = (w: Partial<Record<EssenceId, number>>): Record<EssenceId, number
 {
   const a = makeAccount();
   applyCredits(a, 320);
-  const u = availableUnlocks(a)[0];
+  // Any row with a REAL cost (the catalog head is the first writ's free
+  // board now — a 0-cost row absorbs no investment, by design).
+  const u = availableUnlocks(a).find(x => x.cost > 0)!;
   investUnlock(a, u, 20);
   const lifetime = a.lifetimeCredits;
   const passed = sealReckoning(a);
@@ -216,7 +218,8 @@ const wallet = (w: Partial<Record<EssenceId, number>>): Record<EssenceId, number
 {
   const a = makeAccount();
   applyCredits(a, 100);
-  const u = availableUnlocks(a)[0];
+  // A real-cost row (the free first-writ board absorbs no investment).
+  const u = availableUnlocks(a).find(x => x.cost > 0)!;
   investUnlock(a, u, 15);
   recordRun(a, {
     schema: RUN_RECORD_SCHEMA, at: 42, name: 'ser probe', classId: 'rogue',

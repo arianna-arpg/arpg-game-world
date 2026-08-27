@@ -1781,6 +1781,18 @@ export class UI {
     // never crosses between runs). A Vault opened empty is plain browsing.
     const creditsAtOpen = acc.credits;
     let reckoningSealed = false;
+    // THE DEATH LESSON (docs/design/bounty-first-writ.md §2 — the Mireille
+    // laws on the account screen): live exactly while the board stands
+    // unowned — ownership IS the graduation, no completion key. The full
+    // talk shows for ONE visit (the prompted-once stamp, captured at open
+    // so tab flips inside the visit keep it); afterwards the row's glow
+    // carries the teaching alone, until the claim closes it for good.
+    const boardLessonTalk = !featureEnabled(acc, FEATURE.BOUNTY_BOARD)
+      && !acc.ledger.bounty_lesson_prompted;
+    if (boardLessonTalk) {
+      acc.ledger.bounty_lesson_prompted = 1;
+      this.saveAccount();
+    }
     // What THIS visit poured, for the seal prompt's honest summary.
     const visitLog = new Map<string, { label: string; put: number; done: boolean }>();
     const logPour = (u: Unlockable, put: number): void => {
@@ -1832,19 +1844,26 @@ export class UI {
       // must never lose its button mid-press).
       // The button's one word by kind: a resurrection is called what it is.
       const buyVerb = (u: Unlockable): string => u.kind === 'resurrect' ? 'Resurrect' : 'Unlock';
+      // THE DEATH LESSON's glow: while the board stands unowned, its row
+      // wears the tutorial pulse (the gift-flask class — one lesson look).
+      const lessonGlowId = !featureEnabled(acc, FEATURE.BOUNTY_BOARD) ? 'feat_bounty_board' : '';
       const cardHtml = (u: Unlockable): string => {
         const inv = investedToward(acc, u);
         const rem = remainingCost(acc, u);
+        // A FREE row (the zero-cost first door) is claimed by the same
+        // click law — the button must stand enabled at an empty purse.
+        const free = rem <= 0;
         const canPour = acc.credits > 0 && rem > 0;
         const pct = u.cost > 0 ? Math.round((inv / u.cost) * 100) : 0;
         return `
-            <div class="unlock-card" data-tip="unlock" data-unlock-id="${u.id}">
+            <div class="unlock-card${u.id === lessonGlowId ? ' tut-glow' : ''}" data-tip="unlock" data-unlock-id="${u.id}">
               <div class="ukind">${VAULT_KIND_LABELS[u.kind]}${u.reqLevel ? ` · req acct lv ${u.reqLevel}` : ''}</div>
               <div class="uname">${u.label}</div>
               <div class="uinvest"><i style="width:${pct}%"></i></div>
-              <button data-invest="${u.id}" ${canPour ? '' : 'disabled'}
-                title="Click to ${buyVerb(u).toLowerCase()} outright when your essence covers it. Hold to INVEST a piece at a time — invested essence stays across runs, and the ${u.kind === 'resurrect' ? 'vessel rises' : 'unlock completes'} when the full cost stands.">${
-                inv > 0 ? `${buyVerb(u)} — ${rem} more` : `${buyVerb(u)} — ${u.cost}`}</button>
+              <button data-invest="${u.id}" ${(canPour || free) ? '' : 'disabled'}
+                title="${free ? 'This one costs nothing — click to claim it.'
+                  : `Click to ${buyVerb(u).toLowerCase()} outright when your essence covers it. Hold to INVEST a piece at a time — invested essence stays across runs, and the ${u.kind === 'resurrect' ? 'vessel rises' : 'unlock completes'} when the full cost stands.`}">${
+                free ? 'Claim — free' : inv > 0 ? `${buyVerb(u)} — ${rem} more` : `${buyVerb(u)} — ${u.cost}`}</button>
             </div>`;
       };
       const ownedCardHtml = (u: Unlockable): string => `
@@ -1973,6 +1992,7 @@ export class UI {
               ? ` <span style="color:#e8b06a;font-size:11px">— this run's harvest: what is not assigned does not keep</span>` : ''}
             &nbsp;·&nbsp; ${acc.lifetimeCredits} lifetime
             &nbsp;·&nbsp; <span style="color:var(--text-dim);font-size:11px">hold a card's button to invest · rest on it for its full story</span></div>
+          ${boardLessonTalk && !featureEnabled(acc, FEATURE.BOUNTY_BOARD) ? `<div class="vault-lesson">Every run ends here: what you carried home became ${META_CURRENCY_LABEL}, and ${META_CURRENCY_LABEL} buys the town's standing services — they persist, run after run.<br>The <b>Bounty Board</b> asks nothing. Claim it free, and Lastlight raises a posting board whose work pays the very essence this Vault spends.</div>` : ''}
           ${tabStrip}
         </div>
         <div class="vault-body">${body}</div>
@@ -5966,6 +5986,15 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const accent = BOUNTY_BOARD_CFG.accent;
     const cap = QUEST_CATEGORY_CAPS.bounty ?? 1;
     const handFull = v.hands.length >= cap;
+    // THE BOARD LESSON (docs/design/bounty-first-writ.md §3 — the board
+    // speaks for itself, card 4): live reads only, never latches. While the
+    // account has never accepted a bounty, the accept path glows and one
+    // direction line teaches the take; while the FIRST writ is in hand, one
+    // closing line points the way out and back. The first accept's standing
+    // ledger stamp closes the lesson forever — no new key.
+    const lessonTake = world.bountyLessonLive();
+    const lessonReturn = !lessonTake && v.hands.length > 0
+      && (world.ledger.bounties_accepted ?? 0) + (world.account.ledger.bounties_accepted ?? 0) === 1;
     // THE TAKEN HAND(s): state speaks plainly — afield / ready / failed.
     const handsHtml = v.hands.length
       ? `<h3 style="margin:10px 0 4px 0;color:${accent}">In hand</h3>` + v.hands.map(h => {
@@ -5991,11 +6020,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <div class="name">${esc(o.title)}</div>
           <div class="desc">${esc(o.ask)}</div>
           <div class="desc">Pay: ${esc(o.pay)}</div>
-          <div class="bind-btns"><button data-bounty-accept="${esc(o.id)}"${handFull ? ' disabled title="One bounty in hand at a time."' : ''}>Accept</button></div>
+          <div class="bind-btns"><button data-bounty-accept="${esc(o.id)}"${handFull ? ' disabled title="One bounty in hand at a time."' : ''}${lessonTake && !handFull ? ' class="tut-glow"' : ''}>Accept</button></div>
         </div>`).join('')
       : `<div class="skill-entry"><div class="desc">The board hangs bare this beat — the wilds owe no work.</div></div>`;
     this.bountyMenu.innerHTML = `${this.closeGlyphHtml()}<h2>The Bounty Board</h2>`
       + `<div class="desc" style="margin:-4px 0 8px 0;font-style:italic">Work posted from the living world — take one in hand, meet its ask, return to collect.</div>`
+      + (lessonTake ? `<div class="bounty-lesson">Each card is one piece of work: the ask, and the pay, printed plainly. Take ONE in hand — the board holds the rest for whoever comes next.</div>` : '')
+      + (lessonReturn ? `<div class="bounty-lesson">The writ rides with you now — the journal keeps its page, the map keeps the way. Meet the ask, then return here to collect.</div>` : '')
       + handsHtml
       + `<h3 style="margin:10px 0 4px 0">The slate (${v.offers.length}) · new postings <span data-bounty-countdown>${fmtRestock(v.countdown)}</span></h3>`
       + offersHtml

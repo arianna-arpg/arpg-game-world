@@ -654,6 +654,10 @@ export function sanitizeBountyBoard(
       && isFiniteNum(x.cull.count) && x.cull.count > 0 && isFiniteNum(x.cull.claimed)
       ? { count: Math.floor(x.cull.count), claimed: Math.max(0, Math.floor(x.cull.claimed)) }
       : undefined;
+    const gather = x.gather && typeof x.gather === 'object'
+      && isFiniteNum(x.gather.count) && x.gather.count > 0 && isFiniteNum(x.gather.claimed)
+      ? { count: Math.floor(x.gather.count), claimed: Math.max(0, Math.floor(x.gather.claimed)) }
+      : undefined;
     // THE ANSWER's claim (M2 K4): the named SOURCE must still stand in the
     // registry (the same law as kinds — a row that left drops its
     // postings), the copy strings must read, the baseline must count.
@@ -675,6 +679,7 @@ export function sanitizeBountyBoard(
       ...(x.face === 'omen' || x.face === 'lift' ? { face: x.face } : {}),
       ...(isFiniteNum(x.acceptAt) ? { acceptAt: Math.max(0, x.acceptAt) } : {}),
       ...(cull ? { cull } : {}),
+      ...(gather ? { gather } : {}),
       ...(answer ? { answer } : {}),
     };
   };

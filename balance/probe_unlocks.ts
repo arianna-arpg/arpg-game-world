@@ -400,11 +400,18 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
     family.every(u => !isUnlockVisible(a, u)));
   check('introduction: the census carries no family stock before the lesson',
     vaultShelfCensus(a).every(c => c.stock.every(u => !family.some(f => f.id === u.id))));
-  // The user's exact fantasy, pinned: with Mireille waiting on her lesson,
-  // a truly fresh account has NO Town shelf at all — the first town feature
-  // the world introduces is the first the store ever mentions.
-  check('introduction: a fresh account has no Town shelf to read (the mystery law compounds)',
-    !vaultShelfCensus(a).find(c => c.tab.id === 'town')!.visible);
+  // THE FIRST WRIT (docs/design/bounty-first-writ.md, her 2026-08-26
+  // ruling) supersedes the old no-Town-shelf fantasy: the Bounty Board is
+  // the account's FIRST door — free, ungated, seated at the catalog head —
+  // so a truly fresh account reads a Town shelf holding EXACTLY that one
+  // row. The mystery law still compounds past it: nothing else leaks
+  // until the world introduces it.
+  {
+    const town = vaultShelfCensus(a).find(c => c.tab.id === 'town')!;
+    check('introduction: a fresh Town shelf holds exactly the free board row (the first door; the mystery law holds past it)',
+      town.visible && town.stock.length === 1
+      && town.stock[0].id === 'feat_bounty_board' && town.stock[0].cost === 0);
+  }
   a.ledger[LEDGER_FLASK_LESSON] = 1;
   a.credits = 1000;
   // Visible AND unowned — the shopping read (isUnlockVisible keeps owned

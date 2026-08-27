@@ -33,6 +33,7 @@ import { registerOmenSource } from '../world/omens';
 import type { OverlayView } from '../world/overlay';
 import { pickSeat, type SeatTuning } from '../world/seats';
 import { ESSENCES, essenceUnitsForValue, type EssenceCost, type EssenceId } from './essences';
+import { harvestRowsFor } from './harvest';
 import { ITEM_BASES } from './itembases';
 import { SKILLS } from './skills';
 import { UNIQUE_LIST } from './uniques';
@@ -130,6 +131,17 @@ export const BOUNTY_BOARD_CFG = {
   answer: {
     band: { below: 8, above: 6 },
   },
+  /** THE GATHER kind (first-writ W2) — "bring in the land's yield": target
+   *  ground whose country stands gatherable kinds (the harvest fabric's
+   *  own row read); the writ PLANTS what the ground lacks at arrival
+   *  (World.seedGatherNodes — the cull's remote-writ law), so a chance-
+   *  missed ambient stand can never strand the ask. Known-leaning seat:
+   *  gathering is a walk-back activity, not an exploration. */
+  gather: {
+    seat: { range: { min: 1, max: 480 }, knownMul: 1.2, unknownMul: 1, veiledMul: 0.5, prefer: 'flat' } as SeatTuning,
+    band: { below: 6, above: 3 },
+    count: [2, 3] as [number, number],
+  },
   /** The errand's omen (the findability guarantee without the veil lift):
    *  whispered near, revealed close, aging wider — the omen fabric's own
    *  dials. */
@@ -137,6 +149,24 @@ export const BOUNTY_BOARD_CFG = {
   /** Slate composition: no kind may take more than this many of the
    *  slate's seats (the diversity guarantee, card 6's shape). */
   slate: { maxPerKind: 2 },
+  /** THE STARTER BAND's dials (docs/design/bounty-first-writ.md §4, walk
+   *  cards 1+2 coupled): the young board's whole lever surface. `offers`
+   *  is her one-to-three; `youngBelow` is how many bounties turned in
+   *  (run + account) before the tutorial pinning relaxes to the one
+   *  perpetual anchor; `kinds` are the band's weight overrides (0 = off
+   *  the young slate — no decrees, no errands until the board is met). */
+  starter: {
+    offers: 2,
+    anchorZone: 'crossroads',
+    youngLedger: 'bounty_done',
+    youngBelow: 3,
+    /** The gather joins the band wherever the ground fits — the Crossroads
+     *  itself carries no harvest rows today, so the young pinned face
+     *  honestly refuses there and the anchor retry deals charge/cull (an
+     *  observation for her walk, not a hack). */
+    kinds: { charge: 1, cull: 1, gather: 1, errand: 0, answer: 0 } as Record<string, number>,
+    lanes: { essence: 1, pouch: 0, lot: 0, unique: 0 },
+  },
 } as const;
 
 /** ONE pay lane per posting (the visible price law: the card prints the
@@ -171,6 +201,10 @@ export interface BountyPosting {
   face?: 'omen' | 'lift';
   acceptAt?: number;
   cull?: { count: number; claimed: number };
+  /** THE GATHER's claim ledger (first-writ W2 — the cull's shape on the
+   *  harvest fabric): credited at World.harvestSettle, readable anywhere,
+   *  wipe-proof; re-entry re-plants the remainder (seedGatherNodes). */
+  gather?: { count: number; claimed: number };
   /** THE ANSWER's claim (M2 K4): the source row + the target's stable key,
    *  with the card copy frozen at the arm (the census churns; the card must
    *  still read after the target moves or leaves) and `base` = the source's
@@ -197,6 +231,7 @@ export function clonePosting(p: BountyPosting): BountyPosting {
     ...(p.face ? { face: p.face } : {}),
     ...(p.acceptAt !== undefined ? { acceptAt: p.acceptAt } : {}),
     ...(p.cull ? { cull: { ...p.cull } } : {}),
+    ...(p.gather ? { gather: { ...p.gather } } : {}),
     ...(p.answer ? { answer: { ...p.answer } } : {}),
   };
 }
@@ -256,6 +291,62 @@ export function registerBountySource(row: BountySourceRow): void {
   BOUNTY_SOURCES[row.id] = row; // HMR-safe: replace by id
 }
 
+// ---------------------------------------------------------------------------
+// THE BANDS (docs/design/bounty-first-writ.md §4 — the slate's lever
+// surface): a band row is a live predicate plus overrides, folded over the
+// standing dials at the arm. The FIRST live row wins; no band live = the
+// standing config, byte-identical. The debut STARTER band is walk cards 1+2
+// coupled: per run while the Crossroads stands uncleared (her caveat
+// recorded — an aggregated walk may re-rule the predicate to account-young;
+// that re-rule is this one `while` line), the slate deals small and pays
+// only essence, with THE ANCHOR pinning the Crossroads — every seat while
+// the account is YOUNG (the tutorial phase), ONE seat in perpetuity after
+// ("so that it isn't the only option available", her words).
+// ---------------------------------------------------------------------------
+
+export interface BountyBandRow {
+  id: string;
+  /** The live predicate — a pure read over the run's world; first live
+   *  row wins the arm. */
+  while(world: World): boolean;
+  /** Slate-size override (absent = BOUNTY_BOARD_CFG.offers). */
+  offers?: number;
+  /** Kind-weight overrides (0 = off this band's slate; an absent kind
+   *  keeps its registry weight). */
+  kinds?: Record<string, number>;
+  /** Pay-lane weight overrides (the rollBountyPay fold). */
+  lanes?: { essence: number; pouch: number; lot: number; unique: number };
+  /** THE ANCHOR: pin the FIRST seat's target to this zone in perpetuity —
+   *  and while the account reads YOUNG (run + account ledger under the
+   *  threshold), pin EVERY seat. Pinned seats trade the one-posting-per-
+   *  zone law for one-KIND-per-zone (distinct faces on the same ground
+   *  are distinct asks) and bypass the level band (the pin names the
+   *  ground on purpose); every structural honesty check stands. */
+  anchor?: { zoneId: string; youngLedger: string; youngBelow: number };
+}
+
+export const BOUNTY_BANDS: BountyBandRow[] = [
+  {
+    id: 'starter',
+    while: w => !w.objectiveDoneAt(BOUNTY_BOARD_CFG.starter.anchorZone),
+    offers: BOUNTY_BOARD_CFG.starter.offers,
+    kinds: BOUNTY_BOARD_CFG.starter.kinds,
+    lanes: BOUNTY_BOARD_CFG.starter.lanes,
+    anchor: {
+      zoneId: BOUNTY_BOARD_CFG.starter.anchorZone,
+      youngLedger: BOUNTY_BOARD_CFG.starter.youngLedger,
+      youngBelow: BOUNTY_BOARD_CFG.starter.youngBelow,
+    },
+  },
+];
+
+/** The arm's band resolve — first live row wins, none = the standing
+ *  config. A pure read (bands never write). */
+export function liveBountyBand(world: World): BountyBandRow | null {
+  for (const b of BOUNTY_BANDS) if (b.while(world)) return b;
+  return null;
+}
+
 /** Rows in registration-independent order (sorted by id — the
  *  registerPackageAsk determinism law: the census pool, and so the seeded
  *  slate, never depends on import order). */
@@ -283,6 +374,12 @@ export interface BountyRollHost {
    *  read (World assembles it at the arm — the roll stays a pure fold
    *  over the host). */
   answers(): { source: string; ref: BountyTargetRef; base: number }[];
+  /** THE PIN (the starter band's anchor — W1): when set, the roll must
+   *  target exactly this zone or return null. A pinned roll bypasses the
+   *  level band (the pin names the ground on purpose) but keeps every
+   *  structural honesty check — a kind that cannot honestly ask here
+   *  refuses, and the arm tries the next kind. */
+  pin?: string;
   playerLevel: number;
   boardId: string;
   beat: number;
@@ -345,10 +442,15 @@ export function bountyUniqueCategories(level: number): ItemCategory[] {
 
 /** Roll ONE pay lane for a posting (seeded — part of the foreordained
  *  arm). Falls back down the ladder to essence whenever a richer lane's
- *  pool is empty at this level, so a card never prints a hollow pay. */
-export function rollBountyPay(host: BountyRollHost, rng: Rng, level: number): BountyPay {
+ *  pool is empty at this level, so a card never prints a hollow pay.
+ *  `weights` overrides the standing lane weights (the band fold — the
+ *  starter band's essence-only slate rides this one parameter). */
+export function rollBountyPay(
+  host: BountyRollHost, rng: Rng, level: number,
+  weights?: { essence: number; pouch: number; lot: number; unique: number },
+): BountyPay {
   const L = BOUNTY_BOARD_CFG.lanes;
-  const w = L.weights;
+  const w = weights ?? L.weights;
   const total = w.essence + w.pouch + w.lot + w.unique;
   let r = rng.next() * Math.max(0.0001, total);
   let lane: 'essence' | 'pouch' | 'lot' | 'unique' = 'essence';
@@ -411,15 +513,19 @@ registerBountyKind({
   weight: 1,
   roll(host, rng, taken) {
     const cfg = BOUNTY_BOARD_CFG.charge;
-    const z = pickSeat(host.view, {
-      event: 'bountyboard',
-      ...cfg.seat,
-      filter: zz => !taken.has(zz.id)
-        && !host.objectiveDone(zz.id)
-        && !cfg.refuse.includes(zz.objective.kind)
-        && zz.level >= host.playerLevel - cfg.band.below
-        && zz.level <= host.playerLevel + cfg.band.above,
-    }, rng);
+    // The structural honesty checks (a pinned roll keeps these; only the
+    // level band and the seat search belong to the unpinned path).
+    const ok = (zz: ZoneDef): boolean => !host.objectiveDone(zz.id)
+      && !cfg.refuse.includes(zz.objective.kind);
+    const z = host.pin
+      ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) ? host.zoneMap[host.pin] : null)
+      : pickSeat(host.view, {
+        event: 'bountyboard',
+        ...cfg.seat,
+        filter: zz => !taken.has(zz.id) && ok(zz)
+          && zz.level >= host.playerLevel - cfg.band.below
+          && zz.level <= host.playerLevel + cfg.band.above,
+      }, rng);
     if (!z) return null;
     return {
       id: `bounty_${host.beat}_${host.seq}`, kind: 'charge', boardId: host.boardId,
@@ -449,14 +555,18 @@ registerBountyKind({
   weight: 1,
   roll(host, rng, taken) {
     const cfg = BOUNTY_BOARD_CFG.errand;
-    const z = pickSeat(host.view, {
-      event: 'bountyboard',
-      ...cfg.seat,
-      filter: zz => !taken.has(zz.id)
-        && !host.visited(zz.id)
-        && zz.level >= host.playerLevel - cfg.band.below
-        && zz.level <= host.playerLevel + cfg.band.above,
-    }, rng);
+    // An errand's unwalked-ground ask is structural: a pinned errand on
+    // walked ground honestly refuses (the pin passes to the next kind).
+    const z = host.pin
+      ? (host.zoneMap[host.pin] && !host.visited(host.pin) ? host.zoneMap[host.pin] : null)
+      : pickSeat(host.view, {
+        event: 'bountyboard',
+        ...cfg.seat,
+        filter: zz => !taken.has(zz.id)
+          && !host.visited(zz.id)
+          && zz.level >= host.playerLevel - cfg.band.below
+          && zz.level <= host.playerLevel + cfg.band.above,
+      }, rng);
     if (!z) return null;
     return {
       id: `bounty_${host.beat}_${host.seq}`, kind: 'errand', boardId: host.boardId,
@@ -484,21 +594,23 @@ registerBountyKind({
   weight: 1,
   roll(host, rng, taken) {
     const cfg = BOUNTY_BOARD_CFG.cull;
-    const z = pickSeat(host.view, {
-      event: 'bountyboard',
-      ...cfg.seat,
-      // THE MIXED-LANE GUARD: never a zone whose own objective posts writs,
-      // never harborhold ground (the plaza board) — every mark in a cull
-      // zone then belongs to the posting, and bountyView's per-zone lane
-      // inference stays honest without a per-mark stamp.
-      filter: zz => !taken.has(zz.id)
-        && !host.objectiveDone(zz.id)
-        && zz.objective.kind !== 'bounty'
-        && !zz.harborhold && !zz.holdAnchor
-        && !!zz.packs?.table?.length
-        && zz.level >= host.playerLevel - cfg.band.below
-        && zz.level <= host.playerLevel + cfg.band.above,
-    }, rng);
+    // THE MIXED-LANE GUARD is structural (a pinned cull keeps it): never a
+    // zone whose own objective posts writs, never harborhold ground — every
+    // mark in a cull zone then belongs to the posting, and bountyView's
+    // per-zone lane inference stays honest without a per-mark stamp.
+    const ok = (zz: ZoneDef): boolean => !host.objectiveDone(zz.id)
+      && zz.objective.kind !== 'bounty'
+      && !zz.harborhold && !zz.holdAnchor
+      && !!zz.packs?.table?.length;
+    const z = host.pin
+      ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) ? host.zoneMap[host.pin] : null)
+      : pickSeat(host.view, {
+        event: 'bountyboard',
+        ...cfg.seat,
+        filter: zz => !taken.has(zz.id) && ok(zz)
+          && zz.level >= host.playerLevel - cfg.band.below
+          && zz.level <= host.playerLevel + cfg.band.above,
+      }, rng);
     if (!z) return null;
     return {
       id: `bounty_${host.beat}_${host.seq}`, kind: 'cull', boardId: host.boardId,
@@ -521,6 +633,52 @@ registerBountyKind({
   },
 });
 
+// --- K6 · THE GATHER — "bring in the land's yield" (first-writ W2) ---------
+registerBountyKind({
+  id: 'gather',
+  weight: 1,
+  roll(host, rng, taken) {
+    const cfg = BOUNTY_BOARD_CFG.gather;
+    // The fit is the harvest fabric's own row read (the lair predicate
+    // idiom): only ground whose country stands gatherable KINDS may be
+    // asked — the writ then plants what the ground lacks at arrival
+    // (World.seedGatherNodes, the cull's remote-writ law), so a chance-
+    // missed ambient stand can never strand the ask. Safe and spoils-
+    // sealed ground never harvests (bootHarvest's own refusals).
+    const ok = (zz: ZoneDef): boolean => zz.objective.kind !== 'safe'
+      && zz.spoils !== 'none'
+      && harvestRowsFor(zz.biome, zz.tileset).length > 0;
+    const z = host.pin
+      ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) ? host.zoneMap[host.pin] : null)
+      : pickSeat(host.view, {
+        event: 'bountyboard',
+        ...cfg.seat,
+        filter: zz => !taken.has(zz.id) && ok(zz)
+          && zz.level >= host.playerLevel - cfg.band.below
+          && zz.level <= host.playerLevel + cfg.band.above,
+      }, rng);
+    if (!z) return null;
+    return {
+      id: `bounty_${host.beat}_${host.seq}`, kind: 'gather', boardId: host.boardId,
+      zoneId: z.id, beat: host.beat, pay: {},
+      gather: { count: rng.int(cfg.count[0], cfg.count[1]), claimed: 0 },
+    };
+  },
+  done: (_world, p) => !!p.gather && p.gather.claimed >= p.gather.count,
+  annulled: (world, p) => world.zoneMap[p.zoneId] ? null : 'the ground is gone from every chart',
+  copy(world, p) {
+    const z = world.zoneMap[p.zoneId];
+    const n = p.gather?.count ?? 0;
+    const left = Math.max(0, n - (p.gather?.claimed ?? 0));
+    if (!z) return { title: 'The Gather', ask: 'the ground is gone' };
+    return {
+      title: `The Gather: ${z.name}`,
+      ask: `Bring in ${n} of the land's yield from ${z.name} (level ${z.level})`
+        + (p.gather && p.gather.claimed > 0 ? ` — ${left} still stand.` : ' — the writ plants what the ground lacks.'),
+    };
+  },
+});
+
 // --- K4 · THE ANSWER — "resolve what stands" (M2: the live census) ---------
 registerBountyKind({
   id: 'answer',
@@ -529,9 +687,12 @@ registerBountyKind({
     const cfg = BOUNTY_BOARD_CFG.answer;
     // The pool is the census itself (no seat search — the world already
     // placed these asks); the band keeps absurd decrees off a young slate.
+    // A pinned roll narrows to asks standing ON the pin, band bypassed.
     const pool = host.answers().filter(a => {
       const z = host.zoneMap[a.ref.zoneId];
-      if (!z || taken.has(a.ref.zoneId)) return false;
+      if (!z) return false;
+      if (host.pin) return a.ref.zoneId === host.pin;
+      if (taken.has(a.ref.zoneId)) return false;
       return z.level >= host.playerLevel - cfg.band.below
         && z.level <= host.playerLevel + cfg.band.above;
     });

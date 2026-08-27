@@ -201,6 +201,15 @@
        The animation origin outranks inline styles, so the pulse rides even
        inline-styled buttons untouched. */
     .tut-glow { animation: tut-glow 1.05s ease-in-out infinite alternate; }
+    /* THE FIRST WRIT's lesson lines (docs/design/bounty-first-writ.md):
+       the death lesson's one-visit talk on the Vault head, and the board
+       lesson's direction lines on the postings panel — the board's own
+       voice, amber like its badge (card 4: the board speaks for itself). */
+    .vault-lesson, .bounty-lesson {
+      border-left: 3px solid #d8a03c; background: rgba(216, 160, 60, 0.08);
+      color: #e8c88a; padding: 6px 10px; margin: 8px 0; font-size: 12px;
+      line-height: 1.5;
+    }
     @keyframes tut-glow {
       from { box-shadow: 0 0 4px 1px rgba(200, 168, 255, 0.30); border-color: #7a5aa0; }
       to   { box-shadow: 0 0 15px 4px rgba(200, 168, 255, 0.85); border-color: #e0c8ff; color: #f0e4ff; }

@@ -49,18 +49,32 @@
 //      fallen → the FAIL read that never annuls and resolves at the board
 //      with no pay); the sanitizer's answer branch (unknown source drops,
 //      a K4 posting without its claim drops whole).
+//   L (first-writ W0): THE OPEN DOOR — cost 0, ungated, catalog HEAD, the
+//      empty-purse claim — and the board lesson's live read (never accepted
+//      = live; the M0 accept stamp closes it forever, no new key).
+//   M (first-writ W1): THE STARTER BAND — live per run while the Crossroads
+//      stands uncleared; young = every seat pinned, essence-only, distinct
+//      kinds; mature = one perpetual anchor + near-ground; the cleared
+//      Crossroads expires the band structurally.
+//   N (first-writ W2): THE GATHER — the fit is the harvest fabric's row
+//      read; arrival plants the writ's remainder (the remote-writ law); a
+//      REAL rite settled through the standing machinery credits the
+//      POSTING at the chokepoint and the hand turns in at the board.
 // Run: npx tsx balance/probe_bountyboard.ts
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
-import { FEATURE, LEDGER_BOUNTY_DONE, bountyDoneKindKey, makeAccount } from '../src/meta/account';
+import { FEATURE, LEDGER_BOUNTY_DONE, bountyDoneKindKey, featureEnabled, makeAccount } from '../src/meta/account';
+import { applyUnlock, availableUnlocks } from '../src/meta/unlocks';
 import {
   BOUNTY_BOARD_CFG, BOUNTY_KINDS, BOUNTY_SOURCES, bountySourceRows,
-  bountyUniqueCategories, bountyUniquePool, describeBountyPay,
+  bountyUniqueCategories, bountyUniquePool, describeBountyPay, liveBountyBand,
   registerBountySource, type BountyPosting, type BountyTargetRef,
 } from '../src/data/bountyboard';
 import { HOLD_CLASSES, mintHoldState } from '../src/data/harborholds';
+import { harvestRowsFor } from '../src/data/harvest';
+import { HARVEST_CFG, harvestSeqFor } from '../src/engine/harvest';
 import { BOUNTY_BOARD_SITE, expandedTown } from '../src/data/townBuild';
 import { STRUCTURES } from '../src/data/structures';
 import { QUEST_CATEGORY_CAPS } from '../src/quests/types';
@@ -91,6 +105,10 @@ const mkWorld = (): World => {
   // a boot-bare map holds one eligible zone and the slate would run short.
   w.loadZone('crossroads');
   w.loadZone(START_ZONE);
+  // THE STARTER BAND stands down for the standing-grammar rigs (W1 — the
+  // fresh-run default IS the band, by design): stamp the Crossroads met.
+  // Rig M walks the band itself on an ungraduated world.
+  w.completedObjectives.add('crossroads');
   return w;
 };
 
@@ -150,6 +168,10 @@ check('B: every offer is honest (zone stands, kind-law holds, band, pay printed,
       // means a live ask truly stood — verify the claim, never assume).
       return !!p.answer && !!BOUNTY_SOURCES[p.answer.source]
         && BOUNTY_SOURCES[p.answer.source].census(wB).some(r => r.key === p.answer!.key);
+    }
+    if (p.kind === 'gather') {
+      return z.spoils !== 'none' && harvestRowsFor(z.biome, z.tileset).length > 0
+        && !!p.gather && p.gather.count > 0 && p.gather.claimed === 0;
     }
     return false;
   }));
@@ -564,6 +586,146 @@ const wK = mkWorld();
   check('K: the sanitizer keeps the sound claim and drops the unsound whole',
     !!saneK && saneK.offers.length === 1 && saneK.offers[0].id === 'a1'
     && saneK.offers[0].answer?.title === 'The Muster' && saneK.offers[0].answer?.base === 3);
+}
+
+// ------------- L. THE FIRST WRIT W0 — the open door + the lessons' reads
+// (docs/design/bounty-first-writ.md §§1-3, her walk: the board is the
+// account's FIRST door at cost zero; both lessons live on standing
+// ownership/ledger facts — no new completion keys.)
+{
+  const row = allUnlockables().find(u => u.id === 'feat_bounty_board');
+  check('L: the first door costs nothing and stands ungated',
+    !!row && row.cost === 0 && row.tease !== true && !row.reqAnyOf && !row.reqLedger && !row.requiresUnlock);
+  check('L: the row seats at the catalog HEAD', allUnlockables()[0]?.id === 'feat_bounty_board');
+  const bare = makeAccount();
+  check('L: a bare account\'s first Vault visit offers it FIRST',
+    availableUnlocks(bare)[0]?.id === 'feat_bounty_board');
+  check('L: an empty purse claims it outright (the zero-cost settle path)',
+    bare.credits === 0 && row !== undefined && applyUnlock(bare, row) === true
+    && featureEnabled(bare, FEATURE.BOUNTY_BOARD));
+  // THE BOARD LESSON: live exactly while the account has never accepted —
+  // the M0 accept stamp closes it forever, run or account, no new key.
+  seedGlobalRandom(0x1e550);
+  const wL = mkWorld();
+  check('L: the board lesson reads live on a never-accepted account',
+    wL.bountyLessonLive() === true);
+  wL.armBountyBoard();
+  const lOffer = wL.bountyOffers[0];
+  check('L: the first accept closes the lesson (the standing stamp)',
+    !!lOffer && wL.acceptBounty(lOffer.id) === true && wL.bountyLessonLive() === false);
+  const wL2 = mkWorld();
+  wL2.account.ledger.bounties_accepted = 1; // a graduated account, fresh run
+  check('L: a graduated account never re-opens it', wL2.bountyLessonLive() === false);
+}
+
+// ------------- M. THE STARTER BAND (W1 — the young board's small hand;
+// docs/design/bounty-first-writ.md §4, walk cards 1+2 coupled: per run
+// while the Crossroads stands uncleared, essence-only; every seat pinned
+// while the account is YOUNG, one perpetual anchor writ after; the band
+// EXPIRES structurally when the Crossroads falls.)
+seedGlobalRandom(0xba4d);
+{
+  const S = BOUNTY_BOARD_CFG.starter;
+  const wM = makeSimWorld('warrior', SEED ^ 0xb1);
+  openBoard(wM);
+  wM.loadZone('crossroads');
+  wM.loadZone(START_ZONE);
+  check('M: a fresh run reads the starter band live (the crossroads stands)',
+    liveBountyBand(wM)?.id === 'starter');
+  wM.player.level = 15; // the pin must bypass the level band — the ground is named on purpose
+  wM.armBountyBoard();
+  check('M: the young slate deals small',
+    wM.bountyOffers.length > 0 && wM.bountyOffers.length <= S.offers,
+  `${wM.bountyOffers.length}/${S.offers}`);
+  check('M: YOUNG — every seat pins the anchor, one kind each (distinct faces)',
+    wM.bountyOffers.every(p => p.zoneId === S.anchorZone)
+    && new Set(wM.bountyOffers.map(p => p.kind)).size === wM.bountyOffers.length);
+  check('M: the young slate pays ONLY essence',
+    wM.bountyOffers.every(p => !!p.pay.essence?.length
+      && !p.pay.unique && !p.pay.lot && !p.pay.pouch && !p.pay.gem));
+  check('M: decrees and errands stay off the young slate (band kind weights)',
+    wM.bountyOffers.every(p => p.kind === 'charge' || p.kind === 'cull' || p.kind === 'gather'));
+  // MATURE: the turned-in threshold met → ONE perpetual anchor writ, the
+  // remainder near-ground ("so that it isn't the only option available").
+  wM.account.ledger[S.youngLedger] = S.youngBelow;
+  wM.time += wM.bountyBeatSeconds();
+  wM.armBountyBoard();
+  const anchored = wM.bountyOffers.filter(p => p.zoneId === S.anchorZone);
+  check('M: MATURE — exactly one perpetual anchor writ', anchored.length === 1,
+    `${anchored.length} of ${wM.bountyOffers.length} on ${S.anchorZone}`);
+  check('M: the mature band still pays only essence',
+    wM.bountyOffers.every(p => !!p.pay.essence?.length));
+  // THE STRUCTURAL HANDOFF: the Crossroads cleared → the band expires and
+  // the full grammar returns on the next turned beat.
+  wM.completedObjectives.add('crossroads');
+  check('M: the cleared crossroads expires the band', liveBountyBand(wM) === null);
+  wM.time += wM.bountyBeatSeconds();
+  wM.armBountyBoard();
+  check('M: the full grammar returns (standing offer cap, no anchor law)',
+    wM.bountyOffers.length > 0 && wM.bountyOffers.length <= BOUNTY_BOARD_CFG.offers);
+}
+
+// ------------- N. THE GATHER (first-writ W2 — the remote-writ law on the
+// harvest fabric: the writ plants what the ground lacks, a settled rite
+// credits the posting at the chokepoint, and the hand turns in.)
+seedGlobalRandom(0x6a7e);
+{
+  check('N: the gather kind is registered', !!BOUNTY_KINDS.gather);
+  const wN = mkWorld();
+  interface NInt {
+    manifest: { seed: number };
+    harvestNodes: { pos: { x: number; y: number }; spent: boolean }[];
+    actors: { team: string; dead: boolean; skills: unknown[]; pos: { x: number; y: number } }[];
+  }
+  const WN = wN as unknown as NInt;
+  const fit = Object.values(wN.zoneMap).find(z => z.id !== START_ZONE && !z.boundless
+    && z.objective.kind !== 'safe' && z.spoils !== 'none'
+    && harvestRowsFor(z.biome, z.tileset).length > 0);
+  check('N: charted country holds gatherable ground (the fabric\'s own fit)',
+    !!fit, fit ? `${fit.id} (${fit.tileset ?? fit.biome})` : 'none charted');
+  if (fit) {
+    const pN: BountyPosting = {
+      id: 'bounty_test_gather', kind: 'gather', boardId: 'lastlight',
+      zoneId: fit.id, beat: 0, pay: { essence: [{ essence: 'coarse', count: 3 }] },
+      gather: { count: 2, claimed: 0 },
+    };
+    wN.bountyHands.push(pN);
+    wN.activeQuests.push({ questId: pN.id, zoneId: pN.zoneId, fieldDone: false });
+    wN.loadZone(fit.id);
+    const live = (): number => WN.harvestNodes.filter(n => !n.spent).length;
+    check('N: arrival plants the writ\'s remainder (the remote-writ law)',
+      live() >= pN.gather!.count, `${live()} live nodes for ${pN.gather!.count}`);
+    // ONE real rite settles the last claim: prime the ledger to count−1,
+    // then drive the standing machinery whole (probe_harvest's recipe —
+    // stand calm, take the consent, enter the seeded sequence).
+    pN.gather!.claimed = pN.gather!.count - 1;
+    const node = WN.harvestNodes.find(n => !n.spent)!;
+    const banish = (): void => {
+      for (const a of WN.actors) {
+        if (a.team === 'enemy' && !a.dead && a.skills.some(s => s)) { a.pos.x = 60; a.pos.y = 60; }
+      }
+    };
+    wN.player.pos.x = node.pos.x + 20;
+    wN.player.pos.y = node.pos.y;
+    for (let i = 0; i < 45; i++) { banish(); wN.update(0.1); }
+    if (HARVEST_CFG.consent === 'press') wN.applyAction(wN.localSeat, { t: 'pickupItem' });
+    const seq = harvestSeqFor(WN.manifest.seed, fit.id, node.pos, fit.level);
+    const press = (slot: number): void => {
+      const held = Array(8).fill(false) as boolean[];
+      const edge = Array(8).fill(false) as boolean[];
+      held[slot] = true; edge[slot] = true;
+      wN.applyInputs(new Map([['p0', { dx: 0, dy: 0, aim: { x: wN.player.pos.x + 40, y: wN.player.pos.y }, held, edge }]]), 0.05);
+    };
+    for (const s of seq) press(s);
+    check('N: the settled rite credits the POSTING at the chokepoint',
+      pN.gather!.claimed === pN.gather!.count
+      && BOUNTY_KINDS.gather.done(wN, pN) === true
+      && wN.activeQuests.find(e => e.questId === pN.id)?.fieldDone === true);
+    wN.loadZone(START_ZONE);
+    parkAtBoard(wN);
+    check('N: the gather turns in at the board', wN.turnInBounty(pN.id) === true
+      && wN.bountyHands.length === 0);
+  }
 }
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);

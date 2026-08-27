@@ -21,7 +21,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { CLASSES } from '../src/data/classes';
 import { ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, ESSENCES } from '../src/data/essences';
-import { BOUNTY_BOARD_CFG, bountyChargePay, bountyUniqueCategories, bountyUniquePool } from '../src/data/bountyboard';
+import { BOUNTY_BANDS, BOUNTY_BOARD_CFG, bountyChargePay, bountyUniqueCategories, bountyUniquePool } from '../src/data/bountyboard';
 import { MONSTERS } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
@@ -1327,7 +1327,17 @@ function cmdAuditBounties(args: Args): void {
     + ` · unique ${(w.unique / wTotal * 100).toFixed(0)}% (named ${(CFG.lanes.unique.namedShare * 100).toFixed(0)}%)`);
   console.log(`kind bands: charge −${CFG.charge.band.below}/+${CFG.charge.band.above}`
     + ` · errand −${CFG.errand.band.below}/+${CFG.errand.band.above} (lift face ${(CFG.errand.liftShare * 100).toFixed(0)}%)`
-    + ` · cull −${CFG.cull.band.below}/+${CFG.cull.band.above} ×[${CFG.cull.count[0]},${CFG.cull.count[1]}]`);
+    + ` · cull −${CFG.cull.band.below}/+${CFG.cull.band.above} ×[${CFG.cull.count[0]},${CFG.cull.count[1]}]`
+    + ` · answer −${CFG.answer.band.below}/+${CFG.answer.band.above}`
+    + ` · gather −${CFG.gather.band.below}/+${CFG.gather.band.above} ×[${CFG.gather.count[0]},${CFG.gather.count[1]}]`);
+  // THE BANDS (docs/design/bounty-first-writ.md §4 — the young board's
+  // lever surface, static print: predicates are run-state reads).
+  for (const b of BOUNTY_BANDS) {
+    const kinds = b.kinds ? Object.entries(b.kinds).map(([k, x]) => `${k} ${x}`).join('/') : '(registry weights)';
+    const lanes = b.lanes ? Object.entries(b.lanes).filter(([, x]) => x > 0).map(([k]) => k).join('+') : '(standing lanes)';
+    console.log(`band '${b.id}': offers ${b.offers ?? CFG.offers} · kinds ${kinds} · pay ${lanes}`
+      + (b.anchor ? ` · anchor ${b.anchor.zoneId} (all seats while ${b.anchor.youngLedger} < ${b.anchor.youngBelow}, then one)` : ''));
+  }
   for (const lvl of bands) {
     const essence = bountyChargePay(lvl);
     const uniques = bountyUniquePool(lvl);

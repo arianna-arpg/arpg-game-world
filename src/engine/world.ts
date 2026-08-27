@@ -153,8 +153,8 @@ import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
 import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, TRACKER_SITE, RECRUITER_SITE, BOUNTY_BOARD_SITE, FONT_SITE } from '../data/townBuild';
 import {
-  BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyChargePay, bountySourceRows, clonePosting, describeBountyPay, postingQuestDef, rollBountyPay,
-  type BountyTargetRef,
+  BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyChargePay, bountySourceRows, clonePosting, describeBountyPay, liveBountyBand, postingQuestDef, rollBountyPay,
+  type BountyKindRow, type BountyTargetRef,
   type BountyPosting, type BountyRollHost,
 } from '../data/bountyboard';
 // Also a side-effect import: pulling these registers the bestiary's recording
@@ -6083,6 +6083,10 @@ export class World {
     // POSTING, never the population. (Marks may re-mint with fresh names
     // between visits; the ledger, not the fiction, is the law here.)
     this.seedCullMarks(def, rng);
+    // THE GATHER's ground (first-writ W2): a held gather posting targeting
+    // this zone plants its remainder of nodes — the cull's remote-writ law
+    // on the harvest fabric.
+    this.seedGatherNodes(def, pois);
     // THE ERRAND's deed is the walk itself: arriving in a held errand's
     // zone flips the hand ready and speaks the withhold prompt.
     this.noteBountyArrivals(def);
@@ -22107,6 +22111,16 @@ export class World {
     return featureEnabled(this.account, FEATURE.BOUNTY_BOARD);
   }
 
+  /** THE BOARD LESSON's live read (docs/design/bounty-first-writ.md §3 —
+   *  the Mireille law: completion is a ledger fact, never a latch). Live
+   *  exactly while the account has never accepted a bounty — the M0 accept
+   *  stamp closes it forever across run + account, no new key. The panel
+   *  wears the glow + direction lines while this reads true. */
+  bountyLessonLive(): boolean {
+    return (this.ledger.bounties_accepted ?? 0)
+      + (this.account.ledger.bounties_accepted ?? 0) === 0;
+  }
+
   /** At the board? (Feature owned + in town + near BOUNTY_BOARD_SITE.) */
   nearBountyBoard(seat: Seat = this.localSeat): boolean {
     return this.bountyBoardUnlocked()
@@ -22179,32 +22193,75 @@ export class World {
       }
       return answersMemo;
     };
+    // THE BAND FOLD (docs/design/bounty-first-writ.md §4): the first live
+    // band's overrides fold over the standing dials — slate size, kind
+    // weights, pay lanes, THE ANCHOR. No band live = the standing config,
+    // byte-identical. THE ANCHOR (walk cards 1+2 coupled): the first seat
+    // pins to the anchor zone in perpetuity; while the account reads YOUNG
+    // (run + account ledger under the threshold), EVERY seat pins — the
+    // tutorial phase, relaxing to one ritual writ once the board is met.
+    const band = liveBountyBand(this);
+    const anchor = band?.anchor;
+    const young = !!anchor
+      && (this.ledger[anchor.youngLedger] ?? 0) + (this.account.ledger[anchor.youngLedger] ?? 0)
+        < anchor.youngBelow;
+    const offerCap = band?.offers ?? BOUNTY_BOARD_CFG.offers;
+    const weightOf = (r: BountyKindRow): number => Math.max(0, band?.kinds?.[r.id] ?? r.weight);
+    const draw = (pool: BountyKindRow[]): BountyKindRow | null => {
+      let total = 0;
+      for (const r of pool) total += weightOf(r);
+      if (total <= 0) return null;
+      let x = rng.next() * total;
+      for (const r of pool) { x -= weightOf(r); if (x <= 0) return r; }
+      return pool[pool.length - 1];
+    };
     const offers: BountyPosting[] = [];
     const perKind: Record<string, number> = {};
-    for (let i = 0; i < BOUNTY_BOARD_CFG.offers && allRows.length; i++) {
+    for (let i = 0; i < offerCap && allRows.length; i++) {
+      const pin = anchor && (young || i === 0) ? anchor.zoneId : undefined;
       // Weighted kind pick under THE DIVERSITY CAP (slate.maxPerKind —
-      // card 6's shape): a kind at its cap leaves the draw.
-      const rows = allRows.filter(r => (perKind[r.id] ?? 0) < BOUNTY_BOARD_CFG.slate.maxPerKind);
-      let total = 0;
-      for (const r of rows) total += Math.max(0, r.weight);
-      if (total <= 0) break;
-      let pick = rng.next() * total;
-      let row = rows[rows.length - 1];
-      for (const r of rows) { pick -= Math.max(0, r.weight); if (pick <= 0) { row = r; break; } }
+      // card 6's shape): a kind at its cap leaves the draw. Pinned seats
+      // trade the one-posting-per-zone law for one-KIND-per-zone (distinct
+      // faces on the same ground are distinct asks — slate and hand both).
+      const rows = allRows.filter(r => (perKind[r.id] ?? 0) < BOUNTY_BOARD_CFG.slate.maxPerKind
+        && weightOf(r) > 0
+        && (!pin || (!offers.some(o => o.kind === r.id && o.zoneId === pin)
+          && !this.bountyHands.some(h => h.kind === r.id && h.zoneId === pin))));
       const host: BountyRollHost = {
         view, zoneMap: this.zoneMap, objectiveDone: id => this.objectiveDoneAt(id),
         visited: id => this.visited.has(id),
         pickGemId: (lvl, r) => this.pickBountyGemId(lvl, r),
         answers,
+        ...(pin ? { pin } : {}),
         playerLevel: this.player.level, boardId, beat, seq: i,
       };
-      const p = row.roll(host, rng, taken);
+      let p: BountyPosting | null = null;
+      let rowId = '';
+      if (pin) {
+        // THE ANCHOR RETRY: weighted draws without replacement — an unlucky
+        // first kind (a cull with no packs to mark) must not waste the
+        // anchor seat while another kind can honestly ask here.
+        const pool = [...rows];
+        while (pool.length && !p) {
+          const r = draw(pool);
+          if (!r) break;
+          pool.splice(pool.indexOf(r), 1);
+          p = r.roll(host, rng, taken);
+          rowId = r.id;
+        }
+      } else {
+        const row = draw(rows);
+        if (!row) break;
+        p = row.roll(host, rng, taken);
+        rowId = row.id;
+      }
       if (!p) continue; // no honest target for this seat — the slate runs short
       // THE PAY LANE rolls at the arm, off the TARGET's level (the visible
-      // price law: the card prints exactly what the turn-in will mint).
-      p.pay = rollBountyPay(host, rng, this.zoneMap[p.zoneId]?.level ?? this.player.level);
+      // price law: the card prints exactly what the turn-in will mint);
+      // the band's lane override folds here (the starter's essence-only).
+      p.pay = rollBountyPay(host, rng, this.zoneMap[p.zoneId]?.level ?? this.player.level, band?.lanes);
       taken.add(p.zoneId);
-      perKind[row.id] = (perKind[row.id] ?? 0) + 1;
+      perKind[rowId] = (perKind[rowId] ?? 0) + 1;
       offers.push(p);
     }
     this.bountyOffers = offers;
@@ -22495,6 +22552,40 @@ export class World {
         m.name = name;
         m.tag = 'bounty_mark';
       }
+    }
+  }
+
+  /** THE GATHER's ground (first-writ W2 — the cull's remote-writ law on
+   *  the harvest fabric): a held gather posting targeting THIS zone plants
+   *  its own nodes AFTER the memory swap — remainder-only (count − claimed
+   *  − standing live), so fresh, remembered and half-worked ground all
+   *  deal the work back honestly; the claim ledger rides the POSTING.
+   *  Planted nodes are the country's own kinds on a posting-forked stream
+   *  (never the zone's mint stream — a held writ must not re-deal another
+   *  system's draws) and ride the standing rite machinery whole: arming,
+   *  the rite, the payout, the zone-memory spent flags. */
+  private seedGatherNodes(def: ZoneDef, pois: Vec2[]): void {
+    for (const p of this.bountyHands) {
+      if (p.kind !== 'gather' || p.zoneId !== def.id || !p.gather) continue;
+      if (p.gather.claimed >= p.gather.count) continue;
+      if (def.objective.kind === 'safe' || def.spoils === 'none') continue;
+      const rows = harvestRowsFor(def.biome, def.tileset);
+      if (!rows.length) continue; // structurally excluded at the roll; belt and braces
+      const live = this.harvestNodes.filter(n => !n.spent).length;
+      const need = Math.max(0, p.gather.count - p.gather.claimed - live);
+      if (!need) continue;
+      const grng = new Rng((this.currentZoneSeed ^ HARVEST_CFG.salt ^ hashStr(p.id)) >>> 0);
+      for (let i = 0; i < need; i++) {
+        const row = this.harvestRowPick(rows, grng);
+        const at = this.interactSpot(pois, grng, 620, HARVEST_CFG.portalClear);
+        const pos = this.clampPos(vec(at.x, at.y), HARVEST_CFG.nodeRadius);
+        const d: Doodad = {
+          pos: vec(pos.x, pos.y), radius: HARVEST_CFG.nodeRadius, kind: row.kind,
+        };
+        this.doodads.push(d);
+        this.harvestNodes.push({ pos: vec(pos.x, pos.y), def: row, doodad: d, spent: false });
+      }
+      this.markDoodadsChanged();
     }
   }
 
@@ -53168,6 +53259,23 @@ export class World {
     }
     for (const p of harvestPayout(this.zone.level, s.done, s.misses, s.seq.length)) {
       this.dropEssenceAt(vec(node.pos.x, node.pos.y), p);
+    }
+    // THE GATHER's claim (bounty first-writ W2 — the cull-claim law on the
+    // harvest fabric): a settled rite in a held gather posting's zone
+    // credits the POSTING. Expiry settles count too — the node is spent
+    // either way and the accuracy already scaled the pour, so a missed
+    // window can never strand the writ behind a finite stand.
+    const gp = this.bountyHands.find(h =>
+      h.kind === 'gather' && h.zoneId === this.zone.id && !!h.gather && h.gather.claimed < h.gather.count);
+    if (gp) {
+      gp.gather!.claimed++;
+      this.charDirty = true;
+      if (gp.gather!.claimed >= gp.gather!.count) {
+        const aq = this.activeQuests.find(e => e.questId === gp.id);
+        if (aq && !aq.fieldDone) aq.fieldDone = true;
+        this.notice(this.questDefOf(gp.id)?.turnIn?.prompt
+          ?? 'The ask is met — return to the bounty board to claim the pay.', BOUNTY_BOARD_CFG.accent, 16, 'civic');
+      }
     }
   }
 

@@ -41,6 +41,30 @@ parked behind it at her word.
    quarry in it, or harvest a node in it — a straightforward first deed
    that flows into exploration with the account fed either way.
 
+### The walk (2026-08-26 — same day, her verdicts)
+
+Ratified whole ("this looks good"); all four cards ruled:
+
+- **Card 1 → (a) per run, Crossroads-uncleared** — with a RECORDED
+  CAVEAT, her words: "we might want to adjust this to be account-young
+  only depending on how annoyed I get while playing and having to
+  re-clear the Crossroads multiple times… move ahead with per run and an
+  aggregated walk will truly determine it." The band vocabulary keeps the
+  re-rule a one-line predicate swap.
+- **Card 2 → (c), COUPLED with card 1 as a two-phase anchor**: the
+  per-run band stands in perpetuity, and WITHIN it — while the account is
+  YOUNG, every seat pins to the Crossroads; once the account matures
+  ("after a few runs"), ONE pinned Crossroads anchor remains per slate
+  and the remainder deals near-ground, "so that it isn't the only option
+  available." The perpetual Crossroads writ is the ritual; the young
+  phase is the tutorial.
+- **Card 3 → (a) build K6 in this commission as its own movement** — her
+  note recorded: the gather "is really something that the Bounty Board
+  should already be building towards"; nothing else is in flight on the
+  harvest fabric, so it lands here without stepping on toes.
+- **Card 4 → (a) the board speaks for itself** — "most reminiscent of
+  the tutorial and would bring it to parity."
+
 **The timeline, stated precisely** (the prologue is a SCENE, not a run —
 the covenant fells, never kills): prologue (Ghorvane) → wake in the Waking
 House → Mireille's gift lesson (flasks/inventory) → the first REAL run →
@@ -316,8 +340,47 @@ lessons; W2 slots behind W1's pinning lever. M3 THE SUMMONS stays parked
 behind this side piece at her word.
 
 **The commissioning ledger:** charter drafted 2026-08-26 at her
-commission; cards 1–4 open — the walk rules them, movements fire at her
-go. Walk artifact (mirror):
+commission; walk 1 the same day ruled all four cards (§0's walk table)
+and **W0+W1+W2 fired at her go and LANDED together (2026-08-26).**
+W0 THE OPEN DOOR: the catalog row moved to `UNLOCK_CATALOG`'s head at
+cost 0, ungated (the tease's teaching job superseded); the free claim
+rides the standing click law (`applyUnlock`'s rem-0 settle path — the
+card face reads "Claim — free", enabled at an empty purse); THE DEATH
+LESSON on the vault render (visit-scoped talk captured at open, stamped
+`bounty_lesson_prompted` once, dropping live at the claim; the row wears
+the gift-flask `tut-glow` until owned) and THE BOARD LESSON on the
+postings panel (`World.bountyLessonLive` — live exactly while
+`bounties_accepted` reads zero run+account; the take line + glowing
+accepts while live, the return line while the FIRST writ rides).
+W1 THE STARTER BAND: `BountyBandRow`/`BOUNTY_BANDS`/`liveBountyBand`
+(first live row wins; none = the standing config byte-identical) folded
+at the arm — offers/kinds/lanes overrides + THE ANCHOR per the coupled
+ruling (every seat pinned while `bounty_done` run+account <
+`youngBelow`, ONE in perpetuity after); pinned seats bypass the level
+band, keep every structural check, retry across kinds weighted without
+replacement, and trade zone-uniqueness for KIND-uniqueness (distinct
+faces on one ground are distinct asks). W2 THE GATHER: K6 rides the
+harvest fabric's own row read (`harvestRowsFor` — the fit is the
+predicate; the Crossroads carries no rows today, so the young pinned
+face honestly refuses there and the retry deals charge/cull — an
+observation for her walk); THE REMOTE-WRIT LAW plants the writ's
+remainder at arrival (`World.seedGatherNodes`, posting-forked stream,
+after the memory swap) and `harvestSettle` credits the POSTING (expiry
+settles count too — a missed window can never strand a finite stand).
+`audit bounties` prints the band rows + the gather band. Probe grown to
+100 checks (rigs L/M/N + the reshape: `mkWorld` graduates past the band,
+rig M walks it whole, rig N settles a REAL rite through the standing
+machinery); probe_unlocks' no-Town-shelf fantasy re-pinned to the new
+truth (a fresh shelf holds exactly the free board row) and
+probe_reckoning's invest fixtures aim at real-cost rows. Every gate
+green (check clean, probe lane 157/157 with two named J6 flakes, smoke
+baseline unmoved) and the whole arc LIVE-WALKED in-browser: strip →
+Vault banner + glowing row + "Claim — free" → claim (zero essence
+moved, toast) → fresh run → dwell → take line + glowing accepts → the
+young slate (2 writs, both Crossroads, charge+cull, 8 Coarse each) →
+accept (lesson closes, return line) → turn-in pays → the band expires →
+the next beat deals the full grammar with The Gather standing in it.
+Walk artifact (mirror):
 https://claude.ai/code/artifact/f83d84c5-4a6d-4716-9b64-9d4e1ff03626
 
 ---
