@@ -304,6 +304,22 @@ export function validateContent(): void {
     }
     if (!hasLandmark('glacial_heart')) warn(`deepwinter: 'glacial_heart' landmark unregistered — the heart graft would mint nothing`);
     if (!hasLandmarkBuilder('glacial_heart')) warn(`deepwinter: 'glacial_heart' builder unregistered`);
+    // THE CLUTCH net (engine/clutch.ts): a birth of a kind that does not
+    // exist mints nothing — and a birth naming NOTHING (no monsterId, no
+    // pool) is a typo, not a style. Support grafts walk the same net.
+    {
+      const checkBirth = (owner: string,
+        fx: { monsterId?: string; pool?: { id: string }[]; count?: [number, number] }): void => {
+        const ids = [...(fx.monsterId ? [fx.monsterId] : []), ...(fx.pool ?? []).map(r => r.id)];
+        if (!ids.length) warn(`birth: ${owner} names no monsterId and no pool — nothing would mint`);
+        for (const id of ids) if (!MONSTERS[id]) warn(`birth: ${owner} births unknown monster '${id}'`);
+        if (fx.count && fx.count[0] > fx.count[1]) warn(`birth: ${owner} count lo > hi`);
+      };
+      for (const s of Object.values(SKILLS)) {
+        for (const fx of s.effects ?? []) if (fx.type === 'birth') checkBirth(`skill ${s.id}`, fx);
+      }
+      for (const sup of Object.values(SUPPORTS)) if (sup.birth) checkBirth(`support ${sup.id}`, sup.birth);
+    }
   }
 
   // THE TRAPWORKS FABRIC (engine/trapworks.ts + data/trapworks.ts): authored

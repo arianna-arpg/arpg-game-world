@@ -1638,6 +1638,28 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  // THE CLUTCH FABRIC's gem half (engine/clutch.ts — SupportDef.birth):
+  // the host's LANDINGS bear. Distinct from Summon Phantasm's hit-proc by
+  // the whole premise: no victim is needed — every place the delivery
+  // RESOLVES (each storm strike's ring, a flight's end however it ends,
+  // the aimed ground) claws a broodling out of the dirt. The 'landing'
+  // mechanism refuses hosts with nowhere to stand (auras, self-rites,
+  // summons), and the refusal self-lifts by delivery shape, never a list.
+  broodbearer: {
+    id: 'broodbearer', name: 'Broodbearer',
+    requiresMechanisms: ['landing'],
+    description: 'This skill\'s landings BEAR: where it resolves — each storm strike\'s ring, a'
+      + ' flight\'s end however it ends, the aimed ground — a broodling claws out and hunts for'
+      + ' you for 8 seconds, up to 2 alive. The blow needs no victim; the ground itself is the'
+      + ' womb.',
+    color: '#c08a5a', requiresTags: ['attack', 'spell'],
+    grantsTags: ['minion'],
+    birth: { type: 'birth', monsterId: 'broodling', duration: 8, cap: 2 },
+    mods: [],
+    perLevel: [mod('minionDamage', 'increased', 0.08)],
+    weight: 5, minDropLevel: 4,
+  },
+
   // SAINTED ASH (the boss-viable on-kill shape): kills with the socketed
   // skill bloom into a consecrated burst. The engine's killProcOnHit rule
   // keeps it alive against bosses — on-kill rolls on plain hits vs elite

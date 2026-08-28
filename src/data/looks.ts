@@ -4885,6 +4885,45 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 0.9,
   },
+  // THE CLUTCH FABRIC's mothers (engine/clutch.ts). THE ACCUMULATOR LAW:
+  // the clutch-sac SEAT stays bare here — the fillSac rides the defs'
+  // tells, so an empty womb honestly wears an empty body.
+  vile_broodmother: {
+    parts: [
+      { kind: 'blob', scale: 1.04, params: { irr: 0.2, seed: 733 } },
+      { kind: 'fleshFolds', params: { n: 5 } },
+      { kind: 'horns', x: 0.32, scale: 0.5, role: 'bone' },
+      { kind: 'eyes', color: '#ffd8a0', params: { n: 2, spread: 0.32, dist: 0.58, size: 0.08 } },
+      { kind: 'maw', x: 0.55, scale: 0.7 },
+    ],
+    shadowScale: 0.9,
+  },
+  // The Host's sexton: robe, hood, and the lantern he digs by.
+  barrow_gravemaker: {
+    parts: [
+      { kind: 'robe', role: 'cloth' },
+      { kind: 'hood', role: 'dark' },
+      { kind: 'skull', x: 0.28, scale: 0.62, role: 'bone' },
+      { kind: 'lantern', x: -0.45, y: 0.42, scale: 0.5 },
+    ],
+  },
+  // The kennel-boy: goblin face forward, the crated litter on his back.
+  goblin_whelpsling: {
+    parts: [
+      { kind: 'ears', scale: 0.9 },
+      { kind: 'snout', x: 0.5, scale: 0.65 },
+      { kind: 'eyes', color: '#ffe8a0', params: { n: 2, spread: 0.3, dist: 0.5, size: 0.09 } },
+      { kind: 'crateBox', x: -0.55, y: -0.12, scale: 0.85, role: 'wood' },
+    ],
+  },
+  // Cinderwisp's hit-born servant: a mote of living flame.
+  cinder_sprite: {
+    parts: [
+      { kind: 'wisps', scale: 0.95, role: 'glow' },
+      { kind: 'emberSparks', scale: 0.85 },
+    ],
+    shadowScale: 0.5,
+  },
   /** The Charnel Glutton (THE GORGER): all paunch and maw under an escort
    *  of flies — the bile paunch itself is the tell (drive:gorge). */
   charnel_glutton: {

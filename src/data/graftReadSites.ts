@@ -72,6 +72,15 @@ export const defCarriesStat = (def: SkillDef, stat: string): boolean =>
 // mechanism's doc and lands family by family as designed features.
 export const GRAFT_READ_SITES: GraftReadRow[] = [
   {
+    kind: 'graft', key: 'birth',
+    // THE CLUTCH FABRIC (engine/clutch.ts): read ONCE per delivery at its
+    // landing site through instanceBirth — storm strike detonations,
+    // projectile flight ends, ground targets. The 'landing' mechanism
+    // already gates the gem's census to exactly these shapes.
+    deliveries: ['projectile', 'storm', 'ground'],
+    site: 'World.birthAt (landing sites: storm strike detonations, flight ends, ground targets)',
+  },
+  {
     kind: 'stat', key: 'aoeShape',
     // 2026-07-21 (the sigil-on-the-swing pass): MELEE joined the read —
     // the plain swing re-geometries through inAoe when a sigil overrides

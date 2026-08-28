@@ -501,6 +501,28 @@ we verify changes.
   debut = the ant trail at TRUE ant scale + the sand scorpion at
   `ratio: 1.6` — docs in `docs/engine/squish.md`, probe
   `balance/probe_squish.ts`).
+  THE CLUTCH FABRIC (engine/clutch.ts — bodies as PAYLOADS of blows): the
+  generic `birth` SkillEffect mints REAL monsters/minions at a delivery's
+  resolution point — ground targets, EVERY storm strike's ring (the
+  Vile-Mother mortar: stamped on the strike zone, executed at detonation),
+  a flight's honest end, or — `onHit` — the struck body itself (resolveHit,
+  dealt>0, the flame that leaves a living spark in the wound).
+  `instanceBirth` is the ONE read (native row wins over the
+  `SupportDef.birth` graft — the kindred rule) and `World.birthAt` the ONE
+  executor: player-team casters mint ordinary minions through spawnMinion
+  (synthetic summon delivery — roster caps, owner bake, lifespans,
+  the unlearn sweep, all standing law), enemy casters mint permanent kin
+  at the MOTHER'S level (`Actor.bornOf` census behind THE CLUTCH CAP — at
+  cap the sac lands wet, never evicts; noBounty by the conjured-stream
+  law, `bounty:'full'` the dial; pool rows breathe through presence
+  envelopes at the caster's level; findFreeSpot seats, emergence reads).
+  The 'landing' SUPPORT_MECHANISM gates graft gems structurally
+  (projectile/storm/ground). Debuts: vile_broodmother (demon — the
+  bloat-mother drive grammar aimed downrange, fillSac tell) → vile_spawn,
+  barrow_gravemaker (undead — the pool REUSES zombie/skeleton kin),
+  goblin_whelpsling → gnasher_whelp, the Cinderwisp player skill
+  (hit-gated sprite birth) + the Broodbearer landing gem — docs in
+  `docs/engine/clutch.md`; probe `balance/probe_clutch.ts`.
   THE DEFENSE-TEXTURE DOCTRINE (signature pools ship EMPTY): poise /
   insight / energy shield are authored identities, never ambience —
   attributes only SCALE them (1%/pt), bases come from gear defense

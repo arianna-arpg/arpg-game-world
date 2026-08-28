@@ -22,6 +22,7 @@ import type { ChronoSpec } from './timeflow';
 import type { ThrongSourceRow, ThrongSpec } from './throng';
 import type { GrabHandoffSpec, GrabSpec } from './grab';
 import type { PossessSpec, ShiftSpec } from './possess';
+import type { BirthEffect } from './clutch';
 import type { PartSpec } from '../render/vis/parts';
 
 // --- Deliveries: how the skill reaches its targets -------------------------
@@ -2138,6 +2139,18 @@ export function instanceSummon(inst: SkillInstance): SummonDelivery | undefined 
   return undefined;
 }
 
+/** THE ONE BIRTH READ (THE CLUTCH FABRIC — engine/clutch.ts): the instance's
+ *  effective `birth` row — the skill's own effect first (the kindred rule:
+ *  the native lane wins the slot), else the first socketed graft
+ *  (SupportDef.birth — Broodbearer teaches a birthless landing to bear).
+ *  Every delivery executes the resolved row ONCE at its own landing site
+ *  (World.birthAt), so a native + a graft can never double-mint. */
+export function instanceBirth(inst: SkillInstance): BirthEffect | undefined {
+  const own = inst.def.effects.find((e): e is BirthEffect => e.type === 'birth');
+  if (own) return own;
+  return socketSpec(inst, 'birth');
+}
+
 export interface ConstructDelivery {
   type: 'construct';
   kind: ConstructKind;
@@ -3924,7 +3937,7 @@ export type SkillEffect =
   | RestoreSkillChargesEffect | ConjureEffect | KindleEffect | ThrongDirectEffect
   | GrabSeizeEffect | GrabThrowEffect | MimicSelectEffect
   | PossessEffect | PossessEndEffect | ShapeshiftEffect | LitePourEffect
-  | LureEffect | VentEffect | RuptureEffect;
+  | LureEffect | VentEffect | RuptureEffect | BirthEffect;
 
 // --- The skill definition ---------------------------------------------------
 
@@ -4911,6 +4924,12 @@ export interface SupportDef {
    *  brood per use (the ghost variant pairs it with an imposed cooldown
    *  via addedCooldown mods). Capped alive per caster. */
   corpseSpawn?: { monsterId: string; perCorpse?: true; count?: number; duration: number; max: number };
+  /** BIRTH GRAFT (THE CLUTCH FABRIC — engine/clutch.ts): the host's
+   *  LANDINGS bear — a body stands where the delivery resolved (each storm
+   *  strike's ring, a flight's honest end, the ground target). Read through
+   *  instanceBirth (native birth effects win the slot); gate the gem with
+   *  requiresMechanisms ['landing']. */
+  birth?: BirthEffect;
   /** RANDOM WEAK AURA: each minion of the host is born wearing ONE aura
    *  rolled from this pool, shared with allies in its radius. */
   minionAuraPool?: AuraSpec[];
@@ -5374,7 +5393,7 @@ const MINION_RIDABLE_FIELD_LIST = [
   'tether', 'aim', 'constructFx', 'devour',
   'fissureVolatile', 'fissureAftershock', 'fissureRoulette',
   'fissureReclose', 'fissurePath', 'meleeFissure',
-  'spreadOnHit', 'breakableGraft', 'massGraft', 'corpseSpawn', 'minionAuraPool',
+  'spreadOnHit', 'breakableGraft', 'massGraft', 'corpseSpawn', 'birth', 'minionAuraPool',
   'dominate', 'sacrifice', 'healField', 'spawnBuff', 'zoneEmit', 'madden',
   'releaseOrder', 'healOverTime', 'chargeGain', 'brood', 'minionAura',
   'trail', 'fissureTrail', 'targeting', 'turret', 'cascade', 'pulse',
@@ -5715,6 +5734,21 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
   pour: (inst, param) =>
     inst.def.effects.some(e => e.type === 'restoreOverTime'
       && (!param || e.lane === param)),
+  /** A LANDING host (THE CLUTCH FABRIC): the delivery resolves at a POINT
+   *  in the world a birth can stand on — a flight's end, a strike's ring,
+   *  a ground target. The gate for gems whose payload stands AT the
+   *  landing (SupportDef.birth): auras, self-buffs, guards and summons
+   *  refuse honestly — they land nowhere. A flight that lives AT THE HAND
+   *  has no landing either: an orbiting blade wears out mid-circle and a
+   *  caught axe comes home — both retire through their own bespoke ends,
+   *  never the honest-end payout (the matrix's own finding, 2026-08-28).
+   *  Structural and self-lifting by delivery shape, never a skill list. */
+  landing: inst => {
+    const d = inst.def.delivery;
+    if (d.type === 'storm' || d.type === 'ground') return true;
+    if (d.type !== 'projectile') return false;
+    return !d.trajectory?.orbit && !d.catchSpot;
+  },
 };
 
 /** Resolve one requiresMechanisms entry — 'name' or 'name:param' (the

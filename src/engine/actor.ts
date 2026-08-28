@@ -1561,6 +1561,14 @@ export class Actor {
    *  drops, no orbs. The summoner is the prize; its spawn is just weather.
    *  Closes the leave-the-summoner-alive farming exploit. */
   noBounty = false;
+  /** THE CLUTCH FABRIC (engine/clutch.ts): the id of the caster whose
+   *  `birth` effect minted this body — the live-children census behind THE
+   *  CLUTCH CAP (enemy lane only; player births ride the minion roster's
+   *  own owner/sourceSkillId law instead). A numeric id on purpose: never
+   *  an Actor ref (a dead mother must not be kept alive by her brood, and
+   *  ownerless children keep co-op party scaling). Transient — mid-fight
+   *  births are never zone-memory citizens. */
+  bornOf?: number;
   /** LIVE BURROW (the {do:'burrow'} verb): submerge → travel underground as
    *  a dust line → telegraphed EMERGENCE hit. Untargetable throughout. */
   burrow?: {

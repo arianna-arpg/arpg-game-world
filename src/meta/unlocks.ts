@@ -543,6 +543,11 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_echoes', kind: 'skill', cost: 180, reqLevel: 1, label: 'Skill Pool: Echoes',
     description: 'Mirage Archer and Shadow Clone may drop.',
     payload: { skillIds: ['mirage_archer', 'shadow_clone'] } },
+  // THE CLUTCH (engine/clutch.ts): the flame that leaves something living
+  // in the wound — the birth fabric's player half.
+  { id: 'gem_skills_clutch', kind: 'skill', cost: 160, reqLevel: 1, label: 'Skill Pool: the Clutch',
+    description: 'Cinderwisp may drop. A landed ember leaves a cinder sprite burning in the wound.',
+    payload: { skillIds: ['cinderwisp'] } },
   { id: 'gem_skills_covenants', kind: 'skill', cost: 160, reqLevel: 1, label: 'Skill Pool: Covenants',
     description: 'Convocation, Overclock, Blood Mortgage may drop.',
     payload: { skillIds: ['convocation', 'overclock', 'blood_mortgage'] } },
@@ -688,6 +693,9 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'sup_echoes', kind: 'support', cost: 200, reqLevel: 1, label: 'Support Pool: Echoes',
     description: 'Phantasmal Echo, Ancestral Call, Vessel of Shadow, Synchronicity may drop.',
     payload: { supportIds: ['phantasmal_echo', 'ancestral_call', 'vessel_of_shadow', 'synchronicity'] } },
+  { id: 'sup_clutch', kind: 'support', cost: 150, reqLevel: 1, label: 'Support Pool: the Clutch',
+    description: 'Broodbearer may drop. Landings that bear: the ground itself is the womb.',
+    payload: { supportIds: ['broodbearer'] } },
   { id: 'sup_fragments', kind: 'support', cost: 150, reqLevel: 1, label: 'Support Pool: Fragments',
     description: 'Fragmentation, Bulwark Shards, Rage Remnant may drop.',
     payload: { supportIds: ['fragmentation', 'bulwark_shards', 'rage_remnants'] } },

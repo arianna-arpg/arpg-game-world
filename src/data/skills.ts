@@ -572,6 +572,33 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('addedFire', 'flat', 1.5)] },
   },
 
+  // THE CLUTCH FABRIC's player half (engine/clutch.ts): a projectile whose
+  // LANDED blow births a minion out of the wound — the hit-gated `birth`
+  // lane (a flight that dies in the dirt breeds nothing). The sprite is an
+  // ordinary summon citizen: minion investment, roster caps and lifespans
+  // are all the standing law, and minion gems socket by the tag.
+  cinderwisp: {
+    id: 'cinderwisp', name: 'Cinderwisp',
+    description: 'Fling a slow ember dealing fire damage with a 15% chance to burn. A blow that'
+      + ' LANDS leaves a cinder sprite smouldering in the wound — a darting servant that spits'
+      + ' firebolts for 10 seconds, up to 2 alive. A flight that ends in the dirt breeds'
+      + ' nothing.',
+    tags: ['spell', 'fire', 'projectile', 'minion'], color: '#ffa050',
+    manaCost: 14, cooldown: 0, useTime: 0.8,
+    baseDamage: { fire: [8, 13] },
+    delivery: { type: 'projectile', speed: 300, radius: 7, range: 460 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.15, magnitude: 0.25 },
+      // The sprite CONDENSES out of the struck body (the light motion) —
+      // never out of a spent ember in the dirt (onHit: resolveHit's gate).
+      { type: 'birth', onHit: true, monsterId: 'cinder_sprite', duration: 10, cap: 2, emerge: { motion: 'condense' } },
+    ],
+    requirements: { intelligence: 14 },
+    ai: { range: 420, weight: 2, keepDistance: 240 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.12), mod('damage', 'increased', 0.06)] },
+  },
+
   flame_wave: {
     id: 'flame_wave', name: 'Flame Wave',
     description: 'Sweep a sheet of fire damage across a long cone in front of you: 16% chance'
@@ -813,6 +840,83 @@ export const SKILLS: Record<string, SkillDef> = {
     requirements: { intelligence: 16, strength: 12 },
     ai: { range: 400, weight: 2, keepDistance: 300 },
     leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.12)] },
+  },
+
+  // --- THE CLUTCH MORTARS (THE CLUTCH FABRIC — engine/clutch.ts) ------------
+  //
+  // The mothers' kit: storm-lobbed shells whose landings BIRTH (the `birth`
+  // effect at every strike's ring — World.birthAt). Each rings its landing
+  // first (telegraph + the drawn lob comet), wounds where it bursts, and
+  // stands its brood up through the emergence grammar (the ground under the
+  // ring picks the motion — grave-earth RISES, a crate splinters). Kit
+  // skills by the trebuchet law: noDrop, free, ai-hinted.
+
+  vile_clutch: {
+    id: 'vile_clutch', name: 'Vile Clutch',
+    description: 'Lobs a gravid sac that rings its landing, bursts for physical and chaos'
+      + ' damage, and births 1-2 vile spawn in the ring — up to 8 of her brood alive at once.',
+    tags: ['spell', 'aoe', 'storm'], color: '#c05a6a',
+    noDrop: true, // a womb's spasm, not a hand — never a gem
+    manaCost: 0, cooldown: 3, useTime: 0.9,
+    baseDamage: { physical: [7, 11], chaos: [5, 9] },
+    delivery: {
+      type: 'storm', count: [1, 2], interval: 0.35, areaRadius: 55, hitRadius: 26,
+      castRange: 520, telegraph: 0.9, lob: { arc: 0.45 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'birth', monsterId: 'vile_spawn', count: [1, 2], cap: 8 },
+    ],
+    ai: { range: 470, weight: 3, keepDistance: 180 },
+  },
+
+  gravecast: {
+    id: 'gravecast', name: 'Gravecast',
+    description: 'Hurls a clod of grave-earth that rings its landing and breaks for physical'
+      + ' damage — and the dead RISE in the ring: which dead depends on how deep the country'
+      + ' runs. Up to 6 of the sexton\'s risen stand at once.',
+    tags: ['spell', 'aoe', 'storm'], color: '#c8c0a8',
+    noDrop: true, // the sexton's shovel-arm, never a gem
+    manaCost: 0, cooldown: 6, useTime: 1.0,
+    baseDamage: { physical: [9, 14] },
+    delivery: {
+      type: 'storm', count: [1, 1], interval: 0, areaRadius: 40, hitRadius: 30,
+      castRange: 500, telegraph: 1.0, lob: { arc: 0.5 },
+    },
+    effects: [
+      { type: 'damage' },
+      // The pool breathes at HER level (presence envelopes): shamble while
+      // the graves are young, worthier dead as the country deepens.
+      {
+        type: 'birth', cap: 6, count: [1, 1],
+        pool: [
+          { id: 'zombie', weight: 3, presence: { to: 14, fadeOut: 8 } },
+          { id: 'skeleton_warrior', weight: 2 },
+          { id: 'skeleton_archer', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        ],
+      },
+    ],
+    ai: { range: 460, weight: 3, keepDistance: 200 },
+  },
+
+  whelp_toss: {
+    id: 'whelp_toss', name: 'Whelp Toss',
+    description: 'Heaves a nailed crate that rings its landing and splinters for physical'
+      + ' damage, spilling 2-3 gnasher whelps where it breaks — up to 6 of the litter loose'
+      + ' at once.',
+    tags: ['attack', 'aoe', 'storm'], color: '#a8a862',
+    noDrop: true, // the kennel-boy's throw, never a gem
+    manaCost: 0, cooldown: 7, useTime: 0.8,
+    baseDamage: { physical: [8, 13] },
+    delivery: {
+      type: 'storm', count: [1, 1], interval: 0, areaRadius: 30, hitRadius: 24,
+      castRange: 460, telegraph: 0.7, lob: { arc: 0.55 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'birth', monsterId: 'gnasher_whelp', count: [2, 3], cap: 6 },
+    ],
+    ai: { range: 430, weight: 3, keepDistance: 190 },
   },
 
   levinshot_volley: {

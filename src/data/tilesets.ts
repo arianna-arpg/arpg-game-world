@@ -743,6 +743,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'crypt_warden', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'barrow_wight', weight: 2, presence: { from: 9, fadeIn: 4 } },
         { id: 'vacant_shell', weight: 1.5, presence: { to: 16, fadeOut: 7 } },
+        { id: 'barrow_gravemaker', weight: 1, presence: { from: 6, fadeIn: 3 } }, // THE CLUTCH: the sexton
+
         { id: 'poltergeist', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'hex_weaver', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'bone_serpent', weight: 1, presence: { from: 11, fadeIn: 5 } },
@@ -4367,6 +4369,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'dread_fiend', weight: 2, presence: { from: 9, fadeIn: 4 } },
         { id: 'bombard_demon', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'grind_bannerman', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        // THE CLUTCH (engine/clutch.ts): the walking womb behind the line —
+        // her lobbed sacs birth the vanguard you wade through.
+        { id: 'vile_broodmother', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'siege_hulk', weight: 1, presence: { from: 14, fadeIn: 6 } },
         { id: 'brimstone_cantor', weight: 1, presence: { from: 12, fadeIn: 5 } },
         { id: 'chained_tormentor', weight: 1, presence: { from: 16, fadeIn: 6 } },
@@ -4654,6 +4659,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'hellhound', weight: 3 },
         { id: 'cinder_fiend', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'searing_spawn', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'vile_broodmother', weight: 1, presence: { from: 9, fadeIn: 4 } }, // THE CLUTCH: the walking womb
         // The steppes are dread country: the heavy Legion walks earlier here.
         { id: 'dread_fiend', weight: 2, presence: { from: 12, fadeIn: 5 } },
         { id: 'chained_tormentor', weight: 2, presence: { from: 16, fadeIn: 5 } },
@@ -5228,6 +5234,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'zombie', weight: 2, presence: { to: 22, fadeOut: 12 } },
         // The rival customer: it eats the bodies your detonations wanted.
         { id: 'charnel_ghoul', weight: 2 },
+        // THE CLUTCH (engine/clutch.ts): the sexton — his thrown clods RAISE
+        // where they land, and which dead answer deepens with the country.
+        { id: 'barrow_gravemaker', weight: 1, presence: { from: 6, fadeIn: 3 } },
         // THE GORGER (the accumulator family): the ghoul's fat cousin —
         // it BANKS the graveyard's easy dead toward the burst you can read.
         { id: 'charnel_glutton', weight: 2, presence: { from: 3, fadeIn: 2 } },

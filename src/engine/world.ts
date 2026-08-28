@@ -26,7 +26,7 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { aiKitInstance, runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, treeNodeOf, treeNodeRefusal, treePointsSpent, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, treeNodeOf, treeNodeRefusal, treePointsSpent, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst,
   type SkillRarity,
@@ -38,6 +38,7 @@ import {
   type ProjTrailSpec, type FissureTrailSpec, type DropZoneSpec, type LedgerSpec, type SkillInstance, type SummonDelivery, type SupportDef, type SupportInstance,
   type TetherSpec, type ConduitSpec, type ImpactDressSpec,
 } from './skills';
+import { birthCount, CLUTCH_CFG, type BirthEffect } from './clutch';
 import { BOMBARD_CFG, type BombardSpec } from './bombard';
 import { evalCurve, type CurveKind } from './curves';
 import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
@@ -1165,6 +1166,11 @@ interface Zone {
   fx?: string;
   /** Fired ONCE when this zone explodes (a meteor crater spitting a demon). */
   onImpact?: () => void;
+  /** THE CLUTCH FABRIC (engine/clutch.ts): a birth-bearing storm strike —
+   *  the detonation births bodies in its ring (World.birthAt; stamped at
+   *  the storm mint from instanceBirth, run once — `exploded` guards
+   *  re-entry, pulse afterlives never re-mint). */
+  birth?: BirthEffect;
   /** SWEEP semantics (present = active): ids already struck — the zone is a
    *  moving HIT SURFACE, damage per crossing, once per zone life (Reap). */
   struck?: Set<number>;
@@ -32220,6 +32226,14 @@ export class World {
             }
           }
         }
+        // A BIRTH goes where you point it (THE CLUTCH FABRIC — engine/
+        // clutch.ts): bodies stand at the ground target, the kindle/vent
+        // law. instanceBirth reads the native row first, else the socketed
+        // graft; onHit rows wait for resolveHit instead.
+        {
+          const gb = instanceBirth(inst);
+          if (gb && !gb.onHit) this.birthAt(caster, inst, gb, at);
+        }
         const isCurse = def.tags.includes('curse');
         const curseAllies = isCurse && caster.sheet.get('hedonism', tags, extra) > 0;
         // EXCLUSIVE placements (Netherfissure): the new wound extinguishes
@@ -32955,6 +32969,14 @@ export class World {
           for (let k = 1; k < stN; k++) { stSpan += gap; gap = Math.max(0.05, gap * stStep); }
           for (const q of stQueue) stSpan += q.delay;
         }
+        // THE CLUTCH FABRIC: a birth-bearing storm births at EVERY strike's
+        // own landing (the mortar law — the shell is a womb). Stamped on
+        // the strike zone, executed at its detonation; onHit rows ride
+        // resolveHit's per-victim gate instead of the ring.
+        const strikeBirth = (() => {
+          const b = instanceBirth(inst);
+          return b && !b.onHit ? b : undefined;
+        })();
         for (let i = 0; i < strikes; i++) {
           const ang = rand(0, Math.PI * 2);
           const r = Math.sqrt(Math.random()) * d.areaRadius * aoeScale;
@@ -32980,6 +33002,7 @@ export class World {
             lobArc: d.lob?.arc,
             delay0: d.lob && !arming ? zDelay : undefined,
             impactDress: d.impactDress,
+            birth: strikeBirth, // THE CLUTCH FABRIC: the landing is a womb
             fx: d.fx, // THE EFFECT VOICE: the delivery names its landing
             onGround: d.onGround, // THE GROUNDED STRIKE: the water boils, the shore does not
 
@@ -34008,6 +34031,20 @@ export class World {
       }
     }
 
+    // A BIRTH from any remaining delivery stands where the skill resolved
+    // (THE CLUTCH FABRIC — the kindle/vent law's third sibling): ground
+    // births at the target (its case block), storms at every strike's ring
+    // (stamped there), projectiles at the flight's end (the sweep's hook),
+    // and onHit rows at resolveHit's per-victim gate — so this generic
+    // origin lane serves only the rest (novas, dashes, self-rites).
+    {
+      const cb = instanceBirth(inst);
+      if (cb && !cb.onHit && d.type !== 'ground' && d.type !== 'storm'
+        && d.type !== 'projectile') {
+        this.birthAt(caster, inst, cb, origin);
+      }
+    }
+
     // Repeats & salvos: Multistrike / Spell Echo / Cascade re-executions,
     // plus Unleash seals banked while the skill rested. ECHO RIDERS are
     // exempt: an echo is already a repeat (an ancestral ghost swings ONCE,
@@ -34896,6 +34933,74 @@ export class World {
       return Math.hypot(pos.x - cx, pos.y - cy) <= z.radius + radius;
     }
     return inAoe(z.pos, z.radius, z.shape, z.facing, pos, radius, z.arcRad);
+  }
+
+  /** THE CLUTCH FABRIC (engine/clutch.ts): bodies born at a delivery's
+   *  landing — the ONE executor every site calls (ground targets, storm
+   *  strike rings, flight ends, struck bodies). Forks ONCE on the caster's
+   *  team: player-side births are ordinary minions through spawnMinion (a
+   *  synthetic summon delivery — the Vessel-of-Shadow graft idiom: roster
+   *  caps, owner-stat bake, socket forwarding, lifespans × effectDuration,
+   *  noBounty, all standing law); enemy births are permanent kin at the
+   *  MOTHER'S level through createMonster (ownerless — co-op party scale
+   *  arrives free), capped by the live bornOf census (at cap the sac lands
+   *  wet — no eviction: a vanguard holds a wall, it never rotates one),
+   *  placed by findFreeSpot (an impact point can sit inside a rock blob),
+   *  paying no bounty by the conjured-stream law unless the spec says
+   *  otherwise. Every arrival plays the emergence grammar. */
+  birthAt(caster: Actor, inst: SkillInstance, fx: BirthEffect, at: Vec2,
+    opts?: { host?: boolean }): Actor[] {
+    const born: Actor[] = [];
+    const n = birthCount(fx, (lo, hi) => randInt(lo, hi));
+    if (n <= 0) return born;
+    const scatter = fx.scatter ?? CLUTCH_CFG.scatter;
+    const playerSide = caster.team === 'player';
+    for (let i = 0; i < n; i++) {
+      const id = fx.pool?.length
+        ? this.weightedPick(fx.pool, caster.level)
+        : fx.monsterId;
+      if (!id || !MONSTERS[id]) continue;
+      const seat = vec(at.x + rand(-scatter, scatter), at.y + rand(-scatter, scatter));
+      let m: Actor | null;
+      if (playerSide) {
+        m = this.spawnMinion(caster, inst, {
+          monsterId: id, pos: seat,
+          delivery: {
+            type: 'summon', monsterId: id, count: 1,
+            maxActive: fx.cap ?? CLUTCH_CFG.minionCap,
+            ...(fx.duration !== undefined ? { duration: fx.duration } : {}),
+          },
+        });
+      } else {
+        // THE CLUTCH CAP: the live bornOf census — at cap the birth simply
+        // does not happen (the blast still landed; the sac lands wet).
+        const cap = fx.cap ?? CLUTCH_CFG.cap;
+        if (this.actors.filter(a => !a.dead && a.bornOf === caster.id).length >= cap) break;
+        m = this.createMonster(id, caster.level, caster.team);
+        m.bornOf = caster.id;
+        if (caster.faction) m.faction = caster.faction;
+        if (fx.bounty !== 'full') m.noBounty = true;
+        if (fx.tag) m.tag = fx.tag;
+        m.pos = this.findFreeSpot(seat, m.radius, m.tier);
+        this.actors.push(m);
+      }
+      if (!m) continue;
+      born.push(m);
+      // THE ARRIVAL: births READ — the ground under the landing derives
+      // the motion; onHit births burst OUT of the struck body; the spec's
+      // own emerge row overrides both (a fire sprite condenses).
+      this.emergeBody(m, {
+        ...(fx.emerge ? { spec: fx.emerge } : {}),
+        ...(opts?.host ? { host: true } : {}),
+      });
+    }
+    if (born.length) {
+      this.flashes.push({
+        pos: vec(at.x, at.y), radius: CLUTCH_CFG.flash.radius,
+        color: inst.def.color, life: CLUTCH_CFG.flash.life, maxLife: CLUTCH_CFG.flash.life,
+      });
+    }
+    return born;
   }
 
   /** HIVEBORN (SupportDef.corpseSpawn): bodies consumed by the host skill
@@ -39383,6 +39488,14 @@ export class World {
             scatter: 8, amount: fx.amount, life: 8,
             homeTo: caster.owner ?? caster, clamp: false,
           });
+        }
+      } else if (fx.type === 'birth') {
+        // THE CLUTCH FABRIC's hit-gated lane: an onHit birth bursts out of
+        // the struck body — landed top-level blows only (the siphonOrb
+        // convention: splash, procs and sub-hits never mint). Rows without
+        // onHit resolve at their delivery's landing site instead.
+        if (fx.onHit && dealt > 0 && depth === 0 && !caster.dead) {
+          this.birthAt(caster, inst, fx, vec(target.pos.x, target.pos.y), { host: true });
         }
       } else if (fx.type === 'spreadStatus') {
         // EPIDEMIC (status puppeteering): everything riding the struck
@@ -52874,6 +52987,15 @@ export class World {
               });
             }
           }
+          // A BIRTH on a flight (THE CLUTCH FABRIC): bodies stand where the
+          // flight ENDED — every honest end, the litePour law. onHit rows
+          // wait for resolveHit's per-victim gate (the sprite bursts from
+          // the wound, never from a spent arrow in the dirt); a dissolved
+          // flight (eaten by a dome) births nothing, the sequel's own law.
+          {
+            const fb = instanceBirth(p.inst);
+            if (fb && !fb.onHit && !p.dissolved) this.birthAt(p.caster, p.inst, fb, p.pos);
+          }
           // THE DIN (the watch fabric): a noisy flight RINGS where it ends —
           // wall, floor, range's edge or the body that stopped it — so a
           // thrown bolt is a LURE any watcher in earshot walks to (noiseAt
@@ -53000,6 +53122,10 @@ export class World {
             fx: z.fx,
           });
           z.onImpact?.(); // a meteor crater spits a demon / leaves a corpse
+          // THE CLUTCH FABRIC: a birth-bearing strike's landing is a womb —
+          // bodies stand in the blast ring (a dead mother's shells land
+          // barren, the litePour law's living-caster gate).
+          if (z.birth && !z.caster.dead) this.birthAt(z.caster, z.inst, z.birth, z.pos);
           if (z.impactDress) this.plantImpactDress(z); // the blast pocks the ground (drying)
           // THUNDERMARK: one marker firing PULLS THE WHOLE SET — every
           // living kin marker's telegraph collapses to a quick ripple.

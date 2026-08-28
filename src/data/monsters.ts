@@ -2345,6 +2345,19 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'swarm' },
   },
 
+  // THE CINDER SPRITE (THE CLUTCH FABRIC's player half — Cinderwisp's
+  // hit-born servant): a mote of living flame condensed out of the wound,
+  // briefly yours. An ordinary minion by construction: minion investment,
+  // roster caps and lifespans are all the standing law.
+  cinder_sprite: {
+    id: 'cinder_sprite', name: 'Cinder Sprite',
+    color: '#ffb066', shape: 'diamond', radius: 7, material: 'ember', look: 'cinder_sprite',
+    base: { life: 26, moveSpeed: 155, accuracy: 88, mana: 40, manaRegen: 6 },
+    mods: [mod('fireRes', 'flat', 0.75)],
+    skills: ['firebolt'], xp: 0,
+    noNemesis: true,
+    brain: { type: 'caster', tempo: { kite: 1.6, windedFor: [0.8, 1.2] } },
+  },
   // The broken shard's teeth (Pain Hounds): fast, burning, briefly alive.
   pain_hound: {
     id: 'pain_hound', name: 'Pain Hound',
@@ -2615,6 +2628,26 @@ export const MONSTERS: Record<string, MonsterDef> = {
       { source: 'watch', channel: { kind: 'glow', color: '#8fd8a8', max: 0.5 } },
       { source: 'watch', band: [0.5, 1], channel: { kind: 'lean', amp: 0.6 } },
     ],
+  },
+  // THE GRAVEMAKER (THE CLUTCH FABRIC — engine/clutch.ts): the Host's
+  // sexton walks the line hurling grave-earth — the clod rings its landing
+  // and the dead RISE in the ring. The birth is a POOL through the
+  // presence envelopes at HER level (zombies while the graves are young,
+  // worthier dead as the country deepens — the brood breathes with the
+  // mother), and the emergence grammar plays the rise for free.
+  barrow_gravemaker: {
+    id: 'barrow_gravemaker', name: 'Barrow Gravemaker',
+    color: '#c8c0a8', shape: 'pentagon', radius: 15, material: 'bone', look: 'barrow_gravemaker',
+    base: { life: 120, moveSpeed: 72, accuracy: 94, mana: 90, manaRegen: 5 },
+    skills: ['claw', 'gravecast'], xp: 36,
+    faction: 'undead',
+    presence: { from: 6, fadeIn: 3 },
+    packSize: [1, 1], turnSpeed: 3.5,
+    brain: {
+      type: 'caster',
+      tempo: { kite: 2.2, windedFor: [1.0, 1.5] },
+      skillUse: { mode: 'priority', order: ['gravecast', 'claw'] },
+    },
   },
   /** THE DROWSING: genuinely asleep on its heap — eyes SHUT (the sight
    *  cone collapses to the drawn hearing ring), woken by footfalls, and
@@ -4624,6 +4657,65 @@ export const MONSTERS: Record<string, MonsterDef> = {
     noNemesis: true, remains: false,
     base: { life: 100, moveSpeed: 0, armor: 30, evasion: 0 },
     skills: [], xp: 0, drops: 0, faction: 'demon',
+  },
+  // THE VILE BROODMOTHER (THE CLUTCH FABRIC's flagship — engine/clutch.ts):
+  // the Legion's WALKING womb beside its standing guns. The clutch-sac
+  // fills on its own clock (the accumulator law: the fill IS the tell) and
+  // at term she LOBS it — the mortar rings its landing, bursts, and the
+  // spawn stand up in the ring (World.birthAt: live brood capped, no
+  // bounty — SHE is the prize). Kill her early or wade the vanguard.
+  vile_broodmother: {
+    id: 'vile_broodmother', name: 'Vile Broodmother',
+    color: '#b05a6a', shape: 'oval', radius: 17, material: 'flesh', look: 'vile_broodmother',
+    base: { life: 165, moveSpeed: 64, accuracy: 92, poise: 35, mana: 60, manaRegen: 4 },
+    skills: ['claw', 'vile_clutch'], xp: 40,
+    faction: 'demon',
+    gemBias: ['minion', 'spell'],
+    presence: { from: 8, fadeIn: 4 },
+    packSize: [1, 2], heft: 1.4, turnSpeed: 3.2,
+    tells: [
+      // The clutch-sac: fill + strain ride the SAME drive the lobbing rule
+      // reads (drawn == tested — a full sac IS a shot coming).
+      {
+        source: 'drive:brood',
+        channel: {
+          kind: 'part',
+          part: { kind: 'fillSac', x: -0.25, scale: 1.15, color: '#d89aa8', params: { fluid: '#c05a6a', ry: 0.85 } },
+          scale: [0.85, 1.25],
+        },
+      },
+      // Near term the whole body swells (portrait 0: the book shows the
+      // half-full sac on an unswollen frame — the bloat-mother idiom).
+      { source: 'drive:brood', band: [0.6, 1], portrait: 0, channel: { kind: 'scale', amp: 0.1 } },
+      ...SPENT_SLUMP,
+    ],
+    brain: {
+      type: 'basic',
+      drives: { brood: { rise: 0.055, start: [0.25, 0.6] } },
+      // The laying stays OUT of the weighted roll: claw is the rotation,
+      // THE TERM is the rule (the bloat-mother grammar aimed downrange —
+      // the cast flies at her target through the ordinary aim read).
+      skillUse: { mode: 'priority', order: ['claw'] },
+      rules: [{
+        when: { drive: { id: 'brood', above: 0.97 } },
+        cooldown: 4,
+        actions: [
+          { do: 'cast', skill: 'vile_clutch', force: true },
+          { do: 'drive', id: 'brood', add: -1 },
+          { do: 'buff', buff: SPENT_SLUMP_BUFF },
+        ],
+      }],
+    },
+  },
+  // The clutch itself: born AT the shell's ring, capped alive per mother,
+  // paying nothing (the conjured-stream law — the mother is the prize).
+  vile_spawn: {
+    id: 'vile_spawn', name: 'Vile Spawn',
+    color: '#c06a5a', shape: 'circle', radius: 8, material: 'flesh', look: 'mite',
+    base: { life: 15, moveSpeed: 175, accuracy: 75, evasion: 45, mana: 0 },
+    skills: ['claw'], xp: 2, drops: 0,
+    faction: 'demon', noNemesis: true,
+    brain: { type: 'swarm' },
   },
   // The player's planted gun (hellbore_mortar): a wheeled iron carriage
   // wearing the SAME fabric — the assist law shells whoever presses its
@@ -18519,6 +18611,35 @@ export const MONSTERS: Record<string, MonsterDef> = {
       }],
     },
   },
+  // THE WHELPSLING (THE CLUTCH FABRIC — engine/clutch.ts): the warband's
+  // kennel-boy hurls a crated whelp over the line — the crate rings its
+  // landing, breaks, and the litter pours out biting. Goblin logistics:
+  // the vanguard is THROWN, not led.
+  goblin_whelpsling: {
+    id: 'goblin_whelpsling', name: 'Goblin Whelpsling',
+    color: '#7a9a4a', shape: 'pentagon', radius: 12, look: 'goblin_whelpsling',
+    base: { life: 85, moveSpeed: 105, accuracy: 88, evasion: 55, mana: 50, manaRegen: 4 },
+    skills: ['claw', 'whelp_toss'], xp: 26,
+    faction: 'goblin',
+    presence: { from: 5, fadeIn: 3 },
+    turnSpeed: 4,
+    brain: {
+      type: 'caster',
+      behavior: { dodge: { chance: 0.7, reaction: [0.1, 0.25] } },
+      tempo: { kite: 2.6, windedFor: [0.8, 1.3] },
+      skillUse: { mode: 'priority', order: ['whelp_toss', 'claw'] },
+    },
+  },
+  // The crated litter: gnasher pups young enough to throw, old enough to
+  // bite. Born at the crate's ring, capped alive per slinger.
+  gnasher_whelp: {
+    id: 'gnasher_whelp', name: 'Gnasher Whelp',
+    color: '#a8a862', shape: 'triangle', radius: 8, material: 'fur', look: 'gnasher_hopper',
+    base: { life: 18, moveSpeed: 185, accuracy: 80, evasion: 50, mana: 0 },
+    skills: ['claw'], xp: 3, drops: 0,
+    faction: 'goblin', tags: ['beast'], noNemesis: true,
+    brain: { type: 'swarm' },
+  },
   // The great gnasher: the one the prodders brag about — a boulder of
   // mouth that lands where you were confident.
   great_gnasher: {
@@ -22963,6 +23084,8 @@ export const FACTIONS: Record<string, {
       { id: 'goblin_wolfrider', weight: 2, presence: { from: 6, fadeIn: 3 } },
       { id: 'hobgoblin_taskmaster', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'troll_bridgewarden', weight: 1, presence: { from: 10, fadeIn: 5 } },
+      // THE CLUTCH: the thrown vanguard — crates of whelps over the line.
+      { id: 'goblin_whelpsling', weight: 1, presence: { from: 5, fadeIn: 3 } },
       // The champion (high court pass): the marquee bar without the boss
       // classification — the warband's loudest argument, rarely.
       { id: 'goblin_warboss', weight: 0.5, presence: { from: 12, fadeIn: 5 } },
@@ -23000,6 +23123,8 @@ export const FACTIONS: Record<string, {
       { id: 'poltergeist', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'barrow_wight', weight: 1, presence: { from: 10, fadeIn: 5 } },
       { id: 'banshee', weight: 1, presence: { from: 14, fadeIn: 6 } },
+      // THE CLUTCH: the sexton's thrown graves — the dead rise where they land.
+      { id: 'barrow_gravemaker', weight: 1, presence: { from: 6, fadeIn: 3 } },
       // The cistern-tenders: the conduit pass's wing — the warden's wall
       // drinks its own poise; the acolyte's blood pays for its thread.
       { id: 'cistern_warden', weight: 1, presence: { from: 7, fadeIn: 4 } },
@@ -23415,6 +23540,8 @@ export const FACTIONS: Record<string, {
       // The siege line: fragile darters that blink, then take cover on a
       // hulk's back or in a tower crown — a garrison worth breaking up.
       { id: 'finger_mage', weight: 2, presence: { from: 10, fadeIn: 4 } },
+      // THE CLUTCH: the walking womb in the war line (the vanguard mother).
+      { id: 'vile_broodmother', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'demonkin_darter', weight: 2, presence: { from: 12, fadeIn: 4 } },
       { id: 'siege_hulk', weight: 1, presence: { from: 16, fadeIn: 6 } },
       // The deep-war muster: the horde variety that ARRIVES above ~20.
