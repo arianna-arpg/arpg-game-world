@@ -68,6 +68,14 @@
 //      fractures-enabled world deals the summons, the accept tears the
 //      earth at the posted zone through devIgnite (promoted), the census
 //      and fractureIn agree, the seal resolves, the board pays.
+//   P (M4): the growth rungs (derived rows, the reach/broader folds, the
+//      young law outranking BROADER) + the chevron patron.
+//   Q (her adjustments): THE TURN-IN REFRESH (a resolved hand re-deals
+//      NOW under the slate-key law — fresh ids, persisted seq, the beat
+//      as the no-acceptance fallback; abandons never fish the deal) and
+//      THE POSTING PIN (capacity = Reserved Postings rungs; pinned
+//      offers ride beat and refresh alike; the pin holds the seat, never
+//      the truth).
 // Run: npx tsx balance/probe_bountyboard.ts
 // ---------------------------------------------------------------------------
 
@@ -962,6 +970,86 @@ seedGlobalRandom(0x9401);
     pP.gather!.claimed = pP.gather!.count;
     check('P: the met ask quiets the chevrons', wP.bountyAttention().length === 0);
   }
+}
+
+// ---- Q. THE TURN-IN REFRESH + THE POSTING PIN (her adjustments, 08-26)
+seedGlobalRandom(0x4e5e);
+{
+  const wQ = mkWorld();
+  wQ.player.level = 8; // open the band — full slates for the churn rigs
+  wQ.armBountyBoard();
+  const ids = (): string => wQ.bountyOffers.map(p => p.id).join('|');
+  const slate0 = ids();
+  // A resolved hand re-deals NOW — no beat turned, fresh ids (the
+  // slate-key law: a same-beat refresh can never re-mint a standing id).
+  const zQ = Object.values(wQ.zoneMap).find(z =>
+    z.id !== START_ZONE && !z.boundless && z.objective.kind !== 'safe')!;
+  const mkHand = (n: number): BountyPosting => {
+    const p: BountyPosting = {
+      id: `bounty_test_rq${n}`, kind: 'charge', boardId: 'lastlight',
+      zoneId: zQ.id, beat: 0, pay: { essence: [{ essence: 'coarse', count: 2 }] },
+    };
+    wQ.bountyHands.push(p);
+    wQ.activeQuests.push({ questId: p.id, zoneId: p.zoneId, fieldDone: true });
+    return p;
+  };
+  wQ.completedObjectives.add(zQ.id);
+  parkAtBoard(wQ);
+  const t0 = wQ.time;
+  const h1 = mkHand(1);
+  check('Q: the turn-in re-deals the slate NOW (no beat turned, fresh ids)',
+    wQ.turnInBounty(h1.id) === true && wQ.time === t0
+    && ids() !== slate0 && wQ.bountyOffers.length > 0
+    && wQ.bountyOffers.every(p => !slate0.includes(p.id)));
+  const slate1 = ids();
+  // The refresh is foreordained: the persisted seq rides the save.
+  const wsQ = wQ.serializeWorldState();
+  check('Q: the refresh seq persists (the foreordained re-deal)',
+    wsQ.bountyBoard?.refreshSeq === 1);
+  // An ABANDON never refreshes (no deal-fishing): accept then abandon —
+  // no new ids appear.
+  const acc = wQ.bountyOffers[0];
+  check('Q: accept + abandon leaves the slate alone (no deal-fishing)',
+    wQ.acceptBounty(acc.id) === true && wQ.abandonBounty(acc.id) === true
+    && ids() === slate1.split('|').filter(x => x !== acc.id).join('|'));
+  // THE POSTING PIN: refused at zero capacity, held through re-deals with
+  // a rung owned, released on the toggle, struck by the world regardless.
+  check('Q: the pin refuses at zero capacity (the Vault sells the service)',
+    wQ.bountyLockCapacity() === 0 && wQ.setBountyLock(wQ.bountyOffers[0].id, true) === false);
+  wQ.account.features.add(BOUNTY_BOARD_CFG.lock.ladder[0].flag);
+  const pinTarget = wQ.bountyOffers[0];
+  check('Q: one rung = one pin; the second lock is refused',
+    wQ.bountyLockCapacity() === 1
+    && wQ.setBountyLock(pinTarget.id, true) === true
+    && (wQ.bountyOffers.length < 2 || wQ.setBountyLock(wQ.bountyOffers[1].id, true) === false));
+  wQ.time += wQ.bountyBeatSeconds();
+  wQ.armBountyBoard();
+  check('Q: the pinned posting rides the beat\'s re-deal (the vendor-hold law)',
+    wQ.bountyOffers.some(p => p.id === pinTarget.id && p.locked === true)
+    && wQ.bountyOffers.length > 1);
+  const h2 = mkHand(2);
+  check('Q: the pinned posting rides the turn-in refresh too',
+    wQ.turnInBounty(h2.id) === true
+    && wQ.bountyOffers.some(p => p.id === pinTarget.id));
+  check('Q: the release frees the pin', wQ.setBountyLock(pinTarget.id, false) === true
+    && wQ.bountyOffers.find(p => p.id === pinTarget.id)?.locked === undefined);
+  // The pin holds a SEAT, never the truth: a pinned charge whose work is
+  // already done is struck by the reconcile like any other.
+  const deadPin = wQ.bountyOffers.find(p => p.kind === 'charge');
+  if (deadPin) {
+    wQ.setBountyLock(deadPin.id, true);
+    wQ.completedObjectives.add(deadPin.zoneId);
+    wQ.armBountyBoard(); // same beat — the reconcile at the head
+    check('Q: a dead pinned ask is struck regardless (the seat, never the truth)',
+      !wQ.bountyOffers.some(p => p.id === deadPin.id));
+  }
+  // The catalog rows: chained + deed-gated (the Reserved Wares kinship).
+  const l1 = allUnlockables().find(u => u.id === 'feat_bounty_lock_1');
+  const l2 = allUnlockables().find(u => u.id === 'feat_bounty_lock_2');
+  check('Q: the Reserved Postings rows derive from the ladder',
+    !!l1 && !!l2 && l1.requiresUnlock === 'feat_bounty_board'
+    && l1.reqLedger === 'bounty_done' && l2.requiresUnlock === 'feat_bounty_lock_1'
+    && l1.cost === BOUNTY_BOARD_CFG.lock.ladder[0].cost);
 }
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);

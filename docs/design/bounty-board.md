@@ -791,6 +791,42 @@ ladder is the natural first, at what prosperity rung; whether regional
 slates lean local ground; the per-board cap fold's dial) and awaits her
 word on those before it builds.
 
+**HER ADJUSTMENTS (2026-08-26, post-M4 — landed together):**
+**THE TURN-IN REFRESH** — a hand RESOLVED at the board (paid, or
+failed-acknowledged per walk-1's same-outcome ruling) re-deals the slate
+NOW: completing work is what keeps the board fresh, and the beat lattice
+stays the no-acceptance fallback (an idle slate still turns on the
+clock, so nobody is ever locked out; the lattice itself is untouched —
+countdown, tick and seeds keep their law). Forfeits never refresh — an
+abandon must not fish the deal. The forced deal is as foreordained as a
+beat's: a persisted `refreshSeq` joins the arm's seed (seq 0 keeps the
+M0-exact derivation, so old saves and standing probes meet unchanged
+slates until a resolution actually fires) and THE SLATE-KEY LAW joins it
+to the posting ids (`bounty_3r2_0`) so a same-beat refresh can never
+re-mint an id a standing hand already wears. **THE POSTING PIN** — the
+Patron's Hold brought to the board: `BOUNTY_BOARD_CFG.lock.ladder`
+derives the Reserved Postings catalog rows (rung 1 deed-gated on
+`bounty_done`, chained after — the Reserved Wares kinship); capacity =
+owned rungs, one pin each. A pinned OFFER rides every re-deal — the
+beat's turn and the turn-in refresh alike — carried by the arm (kept
+rows seed the diversity/zone bookkeeping so fresh deals fill honestly
+around them) until accepted, released, or STRUCK by the world's own
+reconcile: the pin holds a SEAT, never the truth — a dead ask still
+leaves. Persisted on the posting (`locked`), toggled at the panel
+(pin/release faces with the free-pin count), host-routed
+(`bountyLock`). Probe grown to 156 checks (rig Q: the now-deal under
+the slate-key law, the persisted seq, no deal-fishing by abandon, pin
+capacity/carry/release, the dead-pin strike, the derived rows). THE
+ZONE-INTERACTION INQUIRY answered in the ledger's terms: nothing
+soft-locks today — the cull and the gather ADD to cleared ground by
+construction (the remote-writ law posts marks and plants nodes at
+arrival, remainder-only), while a charge or errand whose work
+pre-resolved is STRUCK at the accept with its courtesy (never dealt on
+done ground, never accepted into a dead ask); the charge deliberately
+does NOT re-arm a cleared zone's objective — the objective belongs to
+the zone, and the additive lanes are the cull/gather/summons by
+design.
+
 ---
 
 ## 13. OPEN DIALS (build-time levers — no rulings pending)

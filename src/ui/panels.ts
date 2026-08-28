@@ -5964,7 +5964,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       this.bountyTicker = window.setInterval(() => {
         if (!this.bountiesOpen) return;
         const v = this.getWorld().bountyBoardView();
-        const fp = v.offers.map(o => o.id).join('|') + '#' + v.hands.map(h => h.id + h.state).join('|');
+        const fp = v.offers.map(o => o.id + (o.locked ? 'L' : '')).join('|') + '#' + v.hands.map(h => h.id + h.state).join('|');
         if (fp !== this.bountyFingerprint) { this.refreshBounties(); return; }
         const el = this.bountyMenu.querySelector<HTMLElement>('[data-bounty-countdown]');
         if (el) el.textContent = fmtRestock(v.countdown);
@@ -5982,7 +5982,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!this.bountiesOpen) return;
     const world = this.getWorld();
     const v = world.bountyBoardView();
-    this.bountyFingerprint = v.offers.map(o => o.id).join('|') + '#' + v.hands.map(h => h.id + h.state).join('|');
+    this.bountyFingerprint = v.offers.map(o => o.id + (o.locked ? 'L' : '')).join('|') + '#' + v.hands.map(h => h.id + h.state).join('|');
     const accent = BOUNTY_BOARD_CFG.accent;
     const cap = QUEST_CATEGORY_CAPS.bounty ?? 1;
     const handFull = v.hands.length >= cap;
@@ -6015,12 +6015,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       }).join('')
       : '';
     // THE SLATE: the beat's offers, pay printed (the visible price law).
+    // THE POSTING PIN (her adjustment): with any Reserved Postings rung
+    // owned, every card wears a pin toggle — a pinned posting holds its
+    // seat through fresh deals (beat and turn-in refresh alike).
+    const pinCap = world.bountyLockCapacity();
+    const pinned = v.offers.filter(o => o.locked).length;
     const offersHtml = v.offers.length
       ? v.offers.map(o => `<div class="skill-entry">
-          <div class="name">${esc(o.title)}</div>
+          <div class="name">${esc(o.title)}${o.locked ? ` <span style="color:${accent};font-size:11px" title="Pinned — this posting holds its seat through fresh deals until taken or released.">📌 held</span>` : ''}</div>
           <div class="desc">${esc(o.ask)}</div>
           <div class="desc">Pay: ${esc(o.pay)}</div>
-          <div class="bind-btns"><button data-bounty-accept="${esc(o.id)}"${handFull ? ' disabled title="One bounty in hand at a time."' : ''}${lessonTake && !handFull ? ' class="tut-glow"' : ''}>Accept</button></div>
+          <div class="bind-btns"><button data-bounty-accept="${esc(o.id)}"${handFull ? ' disabled title="One bounty in hand at a time."' : ''}${lessonTake && !handFull ? ' class="tut-glow"' : ''}>Accept</button>${
+            pinCap > 0 ? `<button data-bounty-lock="${esc(o.id)}" data-locked="${o.locked ? '1' : ''}"${!o.locked && pinned >= pinCap ? ' disabled title="Every reserve pin is spoken for — release one first."' : ` title="${o.locked ? 'Release the pin — the next deal may replace this posting.' : 'Pin this posting — it holds its seat through fresh deals until taken or released.'}"`}>${o.locked ? 'Release' : `Pin (${pinCap - pinned} free)`}</button>` : ''}</div>
         </div>`).join('')
       : `<div class="skill-entry"><div class="desc">The board hangs bare this beat — the wilds owe no work.</div></div>`;
     this.bountyMenu.innerHTML = `${this.closeGlyphHtml()}<h2>The Bounty Board</h2>`
@@ -6036,6 +6042,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.bountyMenu.querySelectorAll<HTMLButtonElement>('button[data-bounty-accept]').forEach(btn => {
       btn.addEventListener('click', () => {
         world.requestMeta({ t: 'bountyAccept', id: btn.dataset.bountyAccept! });
+        this.refreshBounties();
+      });
+    });
+    this.bountyMenu.querySelectorAll<HTMLButtonElement>('button[data-bounty-lock]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'bountyLock', id: btn.dataset.bountyLock!, locked: !btn.dataset.locked });
         this.refreshBounties();
       });
     });

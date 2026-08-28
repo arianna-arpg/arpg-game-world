@@ -1596,6 +1596,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'bountyAccept': return isStr(a.id);
     case 'bountyAbandon': return isStr(a.id);
     case 'bountyTurnIn': return isStr(a.id);
+    case 'bountyLock': return isStr(a.id) && typeof a.locked === 'boolean';
     case 'holdMuster': return true;  // the standing zone's harborhold — no payload
     case 'holdRestore': return true; // ditto (price re-derived host-side from data)
     // THE PATRON'S HOLD: vendor is a registry id, index an untrusted shelf
@@ -3149,6 +3150,11 @@ export class World {
    *  kinship, post-M4) are a dial's turn — never hardcode the singular
    *  (walk-1's ruling). */
   bountyHands: BountyPosting[] = [];
+  /** THE TURN-IN REFRESH's seed limb (persisted): every hand RESOLVED at
+   *  the board re-deals the slate NOW, and this counter joins the arm's
+   *  seed so the forced deal is as foreordained as a beat's — a reload
+   *  replays the identical refreshed slate. */
+  private bountyRefreshSeq = 0;
   /** Which board BEAT the slate was last armed at (the standing-slate law:
    *  re-arm only on a turned beat; -1 = never armed). */
   private bountyArmedBeat = -1;
@@ -16485,6 +16491,7 @@ export class World {
           armedBeat: this.bountyArmedBeat,
           offers: this.bountyOffers.map(clonePosting),
           ...(this.bountyHands.length ? { hands: this.bountyHands.map(clonePosting) } : {}),
+          ...(this.bountyRefreshSeq > 0 ? { refreshSeq: this.bountyRefreshSeq } : {}),
         },
       } : {}),
     };
@@ -16626,6 +16633,7 @@ export class World {
     this.bountyArmedBeat = bb?.armedBeat ?? -1;
     this.bountyOffers = bb?.offers ?? [];
     this.bountyHands = bb?.hands ?? [];
+    this.bountyRefreshSeq = bb?.refreshSeq ?? 0;
     // Quests: active entries whose def AND zone both still stand; the
     // completed set rides verbatim (stale ids gate nothing — questDefOf
     // lookups simply miss them).
@@ -22221,7 +22229,15 @@ export class World {
     const beat = this.bountyBeat();
     if (this.bountyArmedBeat === beat) return;
     const boardId = BOUNTY_BOARD_CFG.boardId;
-    const rng = new Rng((this.manifest.seed ^ hashStr(`bountyboard:${boardId}:${beat}`)) >>> 0);
+    // THE TURN-IN REFRESH's seed limb rides only once it has ever fired
+    // (seq 0 keeps the M0-exact derivation — old saves and standing
+    // probes meet unchanged slates until a resolution actually refreshes).
+    const seedKey = `bountyboard:${boardId}:${beat}`
+      + (this.bountyRefreshSeq > 0 ? `:${this.bountyRefreshSeq}` : '');
+    // The id limb (never colliding with a standing hand's id after a
+    // same-beat refresh — the slate-key law).
+    const slateKey = `${beat}` + (this.bountyRefreshSeq > 0 ? `r${this.bountyRefreshSeq}` : '');
+    const rng = new Rng((this.manifest.seed ^ hashStr(seedKey)) >>> 0);
     const allRows = Object.values(BOUNTY_KINDS);
     const taken = new Set<string>(this.bountyHands.map(h => h.zoneId));
     const view = this.simView();
@@ -22266,9 +22282,20 @@ export class World {
       for (const r of pool) { x -= weightOf(r); if (x <= 0) return r; }
       return pool[pool.length - 1];
     };
-    const offers: BountyPosting[] = [];
+    // THE POSTING PIN's carry (her adjustment — the vendor-hold law): a
+    // PINNED offer rides every re-deal, beat turn and turn-in refresh
+    // alike, until accepted, released, or struck. The reconcile above
+    // already removed dead pinned offers (the pin holds a seat, never the
+    // truth); the kept rows seed the diversity/zone bookkeeping so fresh
+    // deals fill honestly around them.
+    const offers: BountyPosting[] = this.bountyOffers.filter(o => o.locked);
     const perKind: Record<string, number> = {};
-    for (let i = 0; i < offerCap && allRows.length; i++) {
+    for (const o of offers) {
+      perKind[o.kind] = (perKind[o.kind] ?? 0) + 1;
+      taken.add(o.zoneId);
+    }
+    const freshSeats = Math.max(0, offerCap - offers.length);
+    for (let i = 0; i < freshSeats && allRows.length; i++) {
       const pin = anchor && (young || i === 0) ? anchor.zoneId : undefined;
       const host: BountyRollHost = {
         view, zoneMap: this.zoneMap, objectiveDone: id => this.objectiveDoneAt(id),
@@ -22284,7 +22311,7 @@ export class World {
           + this.bountyHands.filter(h => h.kind === 'summons' && h.answer?.source === src).length,
         reach,
         ...(pin ? { pin } : {}),
-        playerLevel: this.player.level, boardId, beat, seq: i,
+        playerLevel: this.player.level, boardId, beat, slateKey, seq: i,
       };
       // Weighted kind pick under THE DIVERSITY CAP (slate.maxPerKind —
       // card 6's shape): a kind at its cap leaves the draw, and so does a
@@ -22429,6 +22456,55 @@ export class World {
     return true;
   }
 
+  /** THE TURN-IN REFRESH (her adjustment, 2026-08-26): a hand RESOLVED at
+   *  the board — paid or failed-acknowledged — re-deals the slate NOW, so
+   *  completing work is what keeps the board fresh; the beat lattice
+   *  stays the no-acceptance fallback (an idle slate still turns on the
+   *  clock, so nobody is ever locked out). Forfeits never refresh — an
+   *  abandon must not fish the deal. The forced deal is as foreordained
+   *  as a beat's: the persisted refreshSeq joins the seed, so a reload
+   *  replays the identical refreshed slate; pinned offers ride it (the
+   *  posting-pin carry). */
+  private refreshBountySlate(): void {
+    if (this.clientActionHook) return;
+    this.bountyRefreshSeq++;
+    this.bountyArmedBeat = -1; // force past the standing-slate guard
+    this.armBountyBoard();
+  }
+
+  /** THE POSTING PIN's capacity — owned Reserved Postings rungs. */
+  bountyLockCapacity(): number {
+    let n = 0;
+    for (const r of BOUNTY_BOARD_CFG.lock.ladder) {
+      if (featureEnabled(this.account, r.flag)) n++;
+    }
+    return n;
+  }
+
+  /** Toggle THE POSTING PIN on a standing offer (host-routed intent).
+   *  Locking asks a free pin (capacity − standing pins); releasing is
+   *  always free. The pin holds a SEAT through re-deals, never the truth
+   *  — the reconcile still strikes a dead ask, pinned or not. */
+  setBountyLock(id: string, locked: boolean, _seat: Seat = this.localSeat): boolean {
+    const p = this.bountyOffers.find(o => o.id === id);
+    if (!p) return false;
+    if (!locked) {
+      if (p.locked) { delete p.locked; this.charDirty = true; }
+      return true;
+    }
+    if (p.locked) return true;
+    const pinned = this.bountyOffers.filter(o => o.locked).length;
+    if (pinned >= this.bountyLockCapacity()) {
+      this.notice(this.bountyLockCapacity() === 0
+        ? 'The board holds no reserve pins — the Vault sells the service.'
+        : 'Every reserve pin is spoken for — release one first.', BOUNTY_BOARD_CFG.accent, 14, 'civic');
+      return false;
+    }
+    p.locked = true;
+    this.charDirty = true;
+    return true;
+  }
+
   /** ABANDON a taken posting: the hand frees, the posting is forfeit (it
    *  does not return to the slate — the world moved on), no penalty. */
   abandonBounty(id: string, _seat: Seat = this.localSeat): boolean {
@@ -22462,6 +22538,9 @@ export class World {
       bumpLedger(this.ledger, 'bounties_failed');
       this.notice('The board takes the failed posting back — no pay, no debt.', BOUNTY_BOARD_CFG.accent, 15, 'civic');
       this.charDirty = true;
+      // The fail lane resolves LIKE a turn-in (walk-1's ruling) — the
+      // refresh rides both endings.
+      this.refreshBountySlate();
       return true;
     }
     if (!row.done(this, p)) {
@@ -22476,6 +22555,9 @@ export class World {
     this.payBountyLanes(p, seat);
     this.bountyHands = this.bountyHands.filter(h => h.id !== id);
     this.charDirty = true;
+    // THE TURN-IN REFRESH: the collected hand re-deals the slate — the
+    // same dwell pays the finished work and offers the fresh hand.
+    this.refreshBountySlate();
     return true;
   }
 
@@ -22568,12 +22650,15 @@ export class World {
    *  lattice boundary: one clock with the arm). */
   bountyBoardView(): {
     countdown: number;
-    offers: { id: string; title: string; ask: string; pay: string }[];
+    offers: { id: string; title: string; ask: string; pay: string; locked?: boolean }[];
     hands: { id: string; title: string; ask: string; pay: string; state: 'afield' | 'ready' | 'failed' }[];
   } {
-    const face = (p: BountyPosting): { id: string; title: string; ask: string; pay: string } => {
+    const face = (p: BountyPosting): { id: string; title: string; ask: string; pay: string; locked?: boolean } => {
       const c = BOUNTY_KINDS[p.kind]?.copy(this, p) ?? { title: p.id, ask: '' };
-      return { id: p.id, title: c.title, ask: c.ask, pay: describeBountyPay(p.pay) };
+      return {
+        id: p.id, title: c.title, ask: c.ask, pay: describeBountyPay(p.pay),
+        ...(p.locked ? { locked: true } : {}),
+      };
     };
     return {
       countdown: (this.bountyBeat() + 1) * this.bountyBeatSeconds() - this.time,
@@ -26441,7 +26526,8 @@ export class World {
       // moves the client.
       if (action.t !== 'caravanTo' && action.t !== 'vocationQuest' && action.t !== 'harborChart'
         && action.t !== 'holdMuster' && action.t !== 'holdRestore'
-        && action.t !== 'bountyAccept' && action.t !== 'bountyAbandon' && action.t !== 'bountyTurnIn') {
+        && action.t !== 'bountyAccept' && action.t !== 'bountyAbandon' && action.t !== 'bountyTurnIn'
+        && action.t !== 'bountyLock') {
         this.applyAction(this.localSeat, action);
       }
     } else {
@@ -26507,6 +26593,7 @@ export class World {
       case 'bountyAccept': this.acceptBounty(action.id, seat); break;
       case 'bountyAbandon': this.abandonBounty(action.id, seat); break;
       case 'bountyTurnIn': this.turnInBounty(action.id, seat); break;
+      case 'bountyLock': this.setBountyLock(action.id, action.locked, seat); break;
       case 'holdMuster': this.beginHoldMuster(); break;
       case 'holdRestore': this.buyHoldRestore(seat); break;
       case 'payToll': this.payHoldfastToll(action.index, seat); break;

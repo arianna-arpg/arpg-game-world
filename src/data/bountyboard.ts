@@ -187,6 +187,19 @@ export const BOUNTY_BOARD_CFG = {
    *  answers and summonses ride their own fixtures' standing pointers —
    *  the board adds a source, never the policy rework. */
   chevron: { glyph: '✦' },
+  /** THE POSTING PIN (her adjustment, 2026-08-26 — the Patron's Hold
+   *  brought to the board): a Vault ladder of reserve pins. A PINNED
+   *  offer rides every re-deal — the beat's turn and the turn-in refresh
+   *  alike — until accepted, released, or struck by the world's own
+   *  reconcile (the pin holds a SEAT, never the truth: a dead ask still
+   *  strikes). Capacity = owned rungs; unlocks.ts derives the catalog
+   *  rows (Reserved Postings — the Reserved Wares kinship). */
+  lock: {
+    ladder: [
+      { flag: 'bounty_lock_1', cost: 100 },
+      { flag: 'bounty_lock_2', cost: 200 },
+    ] as readonly { flag: string; cost: number }[],
+  },
   /** THE STARTER BAND's dials (docs/design/bounty-first-writ.md §4, walk
    *  cards 1+2 coupled): the young board's whole lever surface. `offers`
    *  is her one-to-three; `youngBelow` is how many bounties turned in
@@ -240,6 +253,10 @@ export interface BountyPosting {
   face?: 'omen' | 'lift';
   acceptAt?: number;
   cull?: { count: number; claimed: number };
+  /** THE POSTING PIN (her adjustment): a pinned OFFER rides every re-deal
+   *  until accepted, released, or struck by the world (persisted — the
+   *  vendor-hold law: the same posting, not a re-roll). */
+  locked?: boolean;
   /** THE GATHER's claim ledger (first-writ W2 — the cull's shape on the
    *  harvest fabric): credited at World.harvestSettle, readable anywhere,
    *  wipe-proof; re-entry re-plants the remainder (seedGatherNodes). */
@@ -268,6 +285,7 @@ export function clonePosting(p: BountyPosting): BountyPosting {
     },
     ...(p.failed ? { failed: true } : {}),
     ...(p.face ? { face: p.face } : {}),
+    ...(p.locked ? { locked: true } : {}),
     ...(p.acceptAt !== undefined ? { acceptAt: p.acceptAt } : {}),
     ...(p.cull ? { cull: { ...p.cull } } : {}),
     ...(p.gather ? { gather: { ...p.gather } } : {}),
@@ -447,6 +465,10 @@ export interface BountyRollHost {
   playerLevel: number;
   boardId: string;
   beat: number;
+  /** THE SLATE KEY (id derivation): the beat, plus the turn-in refresh's
+   *  limb when one has fired this beat ('3' or '3r2') — a refreshed deal
+   *  can never re-mint an id a standing hand already wears. */
+  slateKey: string;
   /** Posting index within this slate (id derivation — ids stay unique). */
   seq: number;
 }
@@ -604,7 +626,7 @@ registerBountyKind({
       }, rng);
     if (!z) return null;
     return {
-      id: `bounty_${host.beat}_${host.seq}`, kind: 'charge', boardId: host.boardId,
+      id: `bounty_${host.slateKey}_${host.seq}`, kind: 'charge', boardId: host.boardId,
       zoneId: z.id, beat: host.beat, pay: {},
     };
   },
@@ -647,7 +669,7 @@ registerBountyKind({
       }, rng);
     if (!z) return null;
     return {
-      id: `bounty_${host.beat}_${host.seq}`, kind: 'errand', boardId: host.boardId,
+      id: `bounty_${host.slateKey}_${host.seq}`, kind: 'errand', boardId: host.boardId,
       zoneId: z.id, beat: host.beat, pay: {},
       // THE VEIL is per-posting flavor (card 4, ruled): default = the omen
       // face, discovery stays the ask; a minority rolls the deed-lift.
@@ -693,7 +715,7 @@ registerBountyKind({
       }, rng);
     if (!z) return null;
     return {
-      id: `bounty_${host.beat}_${host.seq}`, kind: 'cull', boardId: host.boardId,
+      id: `bounty_${host.slateKey}_${host.seq}`, kind: 'cull', boardId: host.boardId,
       zoneId: z.id, beat: host.beat, pay: {},
       cull: { count: rng.int(cfg.count[0], cfg.count[1]), claimed: 0 },
     };
@@ -741,7 +763,7 @@ registerBountyKind({
       }, rng);
     if (!z) return null;
     return {
-      id: `bounty_${host.beat}_${host.seq}`, kind: 'gather', boardId: host.boardId,
+      id: `bounty_${host.slateKey}_${host.seq}`, kind: 'gather', boardId: host.boardId,
       zoneId: z.id, beat: host.beat, pay: {},
       gather: { count: rng.int(cfg.count[0], cfg.count[1]), claimed: 0 },
     };
@@ -791,7 +813,7 @@ registerBountyKind({
       }, rng);
     if (!z) return null;
     return {
-      id: `bounty_${host.beat}_${host.seq}`, kind: 'summons', boardId: host.boardId,
+      id: `bounty_${host.slateKey}_${host.seq}`, kind: 'summons', boardId: host.boardId,
       zoneId: z.id, beat: host.beat, pay: {},
       answer: {
         source, key: '', name: face.name,
@@ -875,7 +897,7 @@ registerBountyKind({
     if (!pool.length) return null;
     const a = pool[rng.int(0, pool.length - 1)];
     return {
-      id: `bounty_${host.beat}_${host.seq}`, kind: 'answer', boardId: host.boardId,
+      id: `bounty_${host.slateKey}_${host.seq}`, kind: 'answer', boardId: host.boardId,
       zoneId: a.ref.zoneId, beat: host.beat, pay: {},
       answer: {
         source: a.source, key: a.ref.key, name: a.ref.name, ask: a.ref.ask,

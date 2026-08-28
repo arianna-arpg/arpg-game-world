@@ -337,6 +337,9 @@ export interface BountyBoardSave {
   armedBeat: number;
   offers: BountyPosting[];
   hands?: BountyPosting[];
+  /** THE TURN-IN REFRESH's persisted seed limb (absent = 0 — no
+   *  resolution has ever refreshed this board). */
+  refreshSeq?: number;
 }
 
 /** One reserved shelf row: WHERE it sits (the slot index the overlay
@@ -678,6 +681,7 @@ export function sanitizeBountyBoard(
       beat: Math.floor(x.beat), pay,
       ...(x.failed === true ? { failed: true } : {}),
       ...(x.face === 'omen' || x.face === 'lift' ? { face: x.face } : {}),
+      ...(x.locked === true ? { locked: true } : {}),
       ...(isFiniteNum(x.acceptAt) ? { acceptAt: Math.max(0, x.acceptAt) } : {}),
       ...(cull ? { cull } : {}),
       ...(gather ? { gather } : {}),
@@ -692,5 +696,7 @@ export function sanitizeBountyBoard(
   return {
     armedBeat: isFiniteNum(bb.armedBeat) ? Math.floor(bb.armedBeat) : -1,
     offers, ...(hands.length ? { hands } : {}),
+    ...(isFiniteNum(bb.refreshSeq) && bb.refreshSeq > 0
+      ? { refreshSeq: Math.floor(bb.refreshSeq) } : {}),
   };
 }

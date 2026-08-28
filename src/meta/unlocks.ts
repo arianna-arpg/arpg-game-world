@@ -855,6 +855,18 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: `The board's writs reach ${Math.round((rung.mul - 1) * 100)}% farther afield — deeper country, richer asks, longer walks home.`,
     payload: { flag: rung.flag },
   })),
+  // THE POSTING PIN (her adjustment — the Reserved Wares kinship on the
+  // board): each rung is one reserve pin; a pinned offer rides every
+  // re-deal — the beat's turn and the turn-in refresh alike — until
+  // accepted, released, or struck by the world's own reconcile.
+  ...BOUNTY_BOARD_CFG.lock.ladder.map((rung, i): Unlockable => ({
+    id: `feat_bounty_lock_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
+    requiresUnlock: i === 0 ? 'feat_bounty_board' : `feat_bounty_lock_${i}`,
+    ...(i === 0 ? { reqLedger: 'bounty_done' } : {}),
+    label: `Reserved Postings ${['I', 'II', 'III'][i] ?? i + 1}`,
+    description: 'One reserve pin at the bounty board: a pinned posting holds its seat through every fresh deal until you take it or let it go — a dead ask still leaves (the pin holds the seat, never the truth).',
+    payload: { flag: rung.flag },
+  })),
 
   // --- Training Dummy — THE DEED GATE: surfaces on the account's first
   //     LEGENDARY skill gem (LEDGER_LEGENDARY_SKILL_DROP, stamped at the

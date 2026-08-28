@@ -97,6 +97,7 @@ export type MetaAction =
   | { t: 'bountyAccept'; id: string }                          // Bounty board: take a posting off the slate (THE ONE-HAND LAW, folded per board)
   | { t: 'bountyAbandon'; id: string }                         // Bounty board: forfeit a taken posting (the hand frees; it never returns to the slate)
   | { t: 'bountyTurnIn'; id: string }                          // Bounty board: turn a done/failed hand in AT the board (the payout point — walk-1's collect)
+  | { t: 'bountyLock'; id: string; locked: boolean }           // Bounty board: THE POSTING PIN — hold/release an offer through re-deals (capacity = Reserved Postings rungs)
   | { t: 'holdMuster' }                                        // Harborhold: sound the horn — arm the standing zone's siege defense
   | { t: 'holdRestore' }                                       // Harborhold: pay the carried-Essence restoration at a fallen hold's wreckage
   | { t: 'payToll'; index: number }                            // Holdfast: pay the keeper's toll (essence/gem per the guardian's UnlockSpec; index = legacy wire shape)

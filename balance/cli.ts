@@ -1333,6 +1333,8 @@ function cmdAuditBounties(args: Args): void {
     + ` · summons −${CFG.summons.band.below}/+${CFG.summons.band.above} cap ${CFG.summons.cap}/source`);
   const summonable = bountySourceRows().filter(r => !!r.summons).map(r => r.id);
   console.log(`summonable sources: ${summonable.length ? summonable.join(', ') : '— none registered'}`);
+  console.log(`reserve pins: ${CFG.lock.ladder.length} rung(s) (${CFG.lock.ladder.map(r => r.cost).join('/')} ME)`
+    + ` · refresh: every turn-in re-deals; the ${CFG.beatSec}s beat is the no-acceptance fallback`);
   // THE BANDS (docs/design/bounty-first-writ.md §4 — the young board's
   // lever surface, static print: predicates are run-state reads).
   for (const b of BOUNTY_BANDS) {
