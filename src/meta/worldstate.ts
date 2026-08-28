@@ -655,6 +655,11 @@ export function sanitizeBountyBoard(
       && isFiniteNum(raw.pouch.count) && raw.pouch.count > 0
       && (raw.pouch.kind === 'rough' || raw.pouch.kind === 'preformed')) {
       pay = { pouch: { kind: raw.pouch.kind, count: Math.floor(raw.pouch.count) } };
+    } else if (raw.craft && typeof raw.craft === 'object'
+      && typeof raw.craft.category === 'string'
+      && isFiniteNum(raw.craft.tier) && raw.craft.tier > 0) {
+      // R5 THE SMITH'S WRIT (the steady hand).
+      pay = { craft: { category: raw.craft.category, tier: Math.floor(raw.craft.tier) } };
     }
     if (!pay) return null;
     const cull = x.cull && typeof x.cull === 'object'

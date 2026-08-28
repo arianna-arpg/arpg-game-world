@@ -950,6 +950,9 @@ function handleLocalPanels(): void {
   //   4. a clear screen: NOW Esc is the pause menu.
   if (input.justPressed('escape')) {
     if (ui.minigameRunning()) return;
+    // THE FORGE's step-away (the steady hand): a tracing hand's Esc cancels
+    // the trace — the writ endures — before any menu opens over the bench.
+    if (world.traceActive(world.localSeat.id)) { world.requestMeta({ t: 'forgeCancel' }); return; }
     if (ui.escapeMenuOpen) { ui.hideEscapeMenu(); return; }
     // The couch join overlay dismisses like any dialog — one press, gone.
     if (ui.couchJoinOpen) { closeCouchJoin(); return; }

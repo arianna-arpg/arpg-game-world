@@ -137,6 +137,15 @@ export const TIME_CFG = {
       scale: 0, kind: 'harvest',
       hud: { tint: 'rgba(14,22,16,0.30)', label: 'the harvest holds' },
     },
+    // THE TRACE (engine/trace.ts, docs/design/steady-hand.md) — the steady
+    // hand's own freeze, the rite's twin: solo-only through the same
+    // allowHold policy (a shared world traces unpaused), kind 'trace' so
+    // the menu sweeps never touch it. No pause refusal — the shape is
+    // visible and tests the hand, not the memory.
+    'trace': {
+      scale: 0, kind: 'trace',
+      hud: { tint: 'rgba(24,18,10,0.30)', label: 'the hand holds' },
+    },
   } as Record<string, { scale: number; kind?: string; hud?: TimeHudSpec }>,
 } as const;
 

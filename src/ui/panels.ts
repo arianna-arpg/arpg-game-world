@@ -4783,13 +4783,45 @@ export class UI {
         </div>`;
     }).join('') || '<div style="color:#8a8678;font-size:11px">No counter at hand; find a vendor and linger.</div>';
 
+
+    // THE FORGE (the steady hand — docs/design/steady-hand.md T1): with a
+    // smith's writ in the bag, Brandt's counter grows the bench: pick the
+    // exact base within the writ's category (walk card 2a) and trace it.
+    // The device truth for card 5's one multiply is the same pad read the
+    // prompts speak (getPadActive).
+    const writs = world.forgeWrits(seat);
+    const tierName = (t: number): string => ['I', 'II', 'III', 'IV'][t - 1] ?? String(t);
+    const forgeHtml = writs.length ? `<h3 style="margin:10px 0 4px 0">The Forge — trace the piece</h3>`
+      + writs.map(w => {
+        const bases = world.forgeBases(w.uid, seat);
+        const resting = w.restSec > 0;
+        return `<div class="skill-entry">
+          <div class="name">Smith's Writ — a ${esc(w.category)} piece, tier ${tierName(w.tier)}</div>
+          <div class="desc">Pick the base, then trace its line at the tier's band — the steadier the hand, the finer the piece. It always forges; the hand buys the quality.${resting ? ` The ruined line rests ${Math.ceil(w.restSec)}s.` : ''}</div>
+          <div class="bind-btns"><select data-forge-base="${w.uid}">${bases.map(b => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('')}</select>
+          <button data-forge-begin="${w.uid}"${resting || !bases.length ? ' disabled' : ''}>Trace it</button></div>
+        </div>`;
+      }).join('') : '';
+
     this.vendorMenu.innerHTML = `
       ${this.closeGlyphHtml()}<h2>Vendors</h2>
       <div style="margin-bottom:6px">${this.essWallet()}</div>
       ${sections}
+      ${forgeHtml}
       <div class="bind-btns" style="margin-top:8px"><button data-vendor-close>Step away</button></div>`;
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.vendorMenu.querySelectorAll<T>(sel)];
+    for (const btn of [...this.vendorMenu.querySelectorAll<HTMLButtonElement>('button[data-forge-begin]')]) {
+      btn.addEventListener('click', () => {
+        const uid = Number(btn.dataset.forgeBegin);
+        const sel = this.vendorMenu.querySelector<HTMLSelectElement>(`select[data-forge-base="${uid}"]`);
+        if (!sel?.value) return;
+        this.getWorld().requestMeta({ t: 'forgeBegin', writUid: uid, baseId: sel.value, pad: this.getPadActive?.() ?? false });
+        // The bench takes the hand — the panel steps aside so the line is clear.
+        this.closeVendor();
+      });
+    }
+
     const refresh = (): void => { this.refreshVendor(); this.refreshInventory(); };
     // Buy rides list buttons AND the glass's tiles alike — one attribute,
     // one handler (the selector is deliberately element-agnostic).

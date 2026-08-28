@@ -380,6 +380,12 @@ export interface ItemInstance {
    *  'preformed_memory'); engine/memories.ts is the seam. Mutations
    *  REPLACE the array (snapshot-alias safety). */
   mem?: RoughMemoryUnit[];
+  /** THE SMITH'S WRIT (the steady hand — docs/design/steady-hand.md): a
+   *  bounty-paid craft credit. Present exactly on the 'smith_writ' base;
+   *  redeemed at Brandt's Forge face by TRACING the piece — the writ is
+   *  consumed only at the verdict's mint (atomic; an aborted trace keeps
+   *  it). Never stacks; 1×1 by its base's own grid. */
+  writ?: { category: ItemCategory; tier: number };
 }
 
 // ---------------------------------------------------------------- config ---

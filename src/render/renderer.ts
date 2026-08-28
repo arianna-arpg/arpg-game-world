@@ -778,6 +778,7 @@ export class Renderer {
       this.drawTexts(world);
       this.drawSceneHeroHud(world); // scene fabric: hero-seated teaching bar + prompt (world-space)
       this.drawHarvest(world);      // harvest rites: node glints + live-bind symbol chips (world-space)
+    this.drawTrace(world);        // the forge's steady hand: outline + band + laid ink (world-space)
       if (world.devHitboxes) this.drawHitboxOverlay(world); // dev truth-layer: surfaces + forms as outlines
       this.drawPadReticle(world);    // the pad's visible cursor — LAST, above canopy and roof
       wc.restore();
@@ -1466,6 +1467,85 @@ export class Renderer {
    *  world-anchored text. Rite animation clocks ride the session's own
    *  RAW window (r.left), never world.time — the prompt stays alive
    *  through the solo freeze it stands in. */
+  /** THE TRACE (engine/trace.ts + docs/design/steady-hand.md): the forge's
+   *  outline, its tolerance band, and the laid ink — drawn from the SAME
+   *  geometry the session measures (World.traceView — drawn == tested by
+   *  construction). World-space like the rites' own chips. */
+  private drawTrace(world: World): void {
+    const v = world.traceView();
+    if (!v || v.pts.length < 2) return;
+    const { ctx } = this;
+    const amber = '#e0b060';
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    // the band corridor
+    ctx.globalAlpha = 0.22;
+    ctx.strokeStyle = '#c8b078';
+    ctx.lineWidth = v.band * 2;
+    ctx.beginPath();
+    ctx.moveTo(v.pts[0].x, v.pts[0].y);
+    for (let i = 1; i < v.pts.length; i++) ctx.lineTo(v.pts[i].x, v.pts[i].y);
+    ctx.stroke();
+    // the outline (dashed) + the reached portion (solid amber)
+    ctx.globalAlpha = 0.85;
+    ctx.setLineDash([7, 6]);
+    ctx.strokeStyle = '#8a7648';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(v.pts[0].x, v.pts[0].y);
+    for (let i = 1; i < v.pts.length; i++) ctx.lineTo(v.pts[i].x, v.pts[i].y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (v.frontier > 0) {
+      ctx.strokeStyle = amber;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(v.pts[0].x, v.pts[0].y);
+      for (let i = 1; i <= v.frontier && i < v.pts.length; i++) ctx.lineTo(v.pts[i].x, v.pts[i].y);
+      ctx.stroke();
+    }
+    // the start mark
+    ctx.fillStyle = amber;
+    ctx.beginPath();
+    ctx.arc(v.pts[0].x, v.pts[0].y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    // the laid ink
+    for (let k = 1; k < v.ink.length; k++) {
+      const a = v.ink[k - 1];
+      const b = v.ink[k];
+      if (Math.hypot(b.x - a.x, b.y - a.y) > 40) continue;
+      ctx.globalAlpha = 0.75;
+      ctx.strokeStyle = b.in ? '#9adf7a' : '#e06a4a';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+    // the readout chip + the live-bind prompt (the rites' own register)
+    const s2 = this.getSettings?.();
+    const bind = s2 ? resolveBindTokens('{bind:skillSlot0}', s2, this.getPadActive?.() ?? false) : 'LMB';
+    const line = v.outside ? 'the pen has left the band — find your way back'
+      : `hold ${bind} and trace · Esc steps away`;
+    const read = `${Math.round(v.progress * 100)}% · hand ${Math.round(v.accuracy * 100)}%` +
+      (v.slipCap > 0 ? ` · slips ${v.slips}/${v.slipCap}` : (v.slips ? ` · slips ${v.slips}` : ''));
+    const top = v.pts.reduce((m, p) => Math.min(m, p.y), Infinity) - 26;
+    const cx = v.pts.reduce((m, p) => m + p.x, 0) / v.pts.length;
+    ctx.globalAlpha = 0.9;
+    ctx.font = 'bold 12px Verdana';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(12,10,8,0.8)';
+    const w1 = Math.max(ctx.measureText(line).width, ctx.measureText(read).width) + 16;
+    ctx.fillRect(cx - w1 / 2, top - 30, w1, 34);
+    ctx.fillStyle = amber;
+    ctx.fillText(read, cx, top - 17);
+    ctx.fillStyle = v.outside ? '#e06a4a' : '#e8dcc0';
+    ctx.fillText(line, cx, top - 3);
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
+
   private drawHarvest(world: World): void {
     const v = world.harvestView();
     if (!v) return;

@@ -105,7 +105,7 @@ export const BOUNTY_BOARD_CFG = {
    *  (the visible price law). Unique lane: unseen uniques POST (ruled) and
    *  R2 is split named/category (her amendment — "a unique ring"). */
   lanes: {
-    weights: { essence: 0.55, pouch: 0.2, lot: 0.15, unique: 0.1 },
+    weights: { essence: 0.5, pouch: 0.18, lot: 0.12, unique: 0.1, craft: 0.1 },
     unique: {
       namedShare: 0.5,
       /** Category-face pool (filtered at arm to categories that actually
@@ -124,6 +124,24 @@ export const BOUNTY_BOARD_CFG = {
      *  rolls names a TRUE skill Memory from the account's own drop pool at
      *  the target's level (THE MINT LAW stamps it at pay). */
     gemShare: 0.35,
+    /** R5 THE SMITH'S WRIT (the steady hand): the craft credit's tier
+     *  ladder — the target zone's level buys the tier (the pay fold's own
+     *  tierAt idiom); the tier buys the trace's band (TRACE_CFG). The
+     *  category pool is the outline library's own gamut. */
+    craft: {
+      tierAt: [0, 8, 16, 26] as readonly number[],
+      /** The gamut is the categories that STAND bases today — weapon and
+       *  offhand are reserved shapes with no bases anywhere in the game
+       *  yet (the roller's pool is empty for them; the M1 audit's own
+       *  observation), and the roll below re-filters against the live
+       *  registry regardless (never a hollow card). */
+      categories: ['helmet', 'chest', 'gloves', 'boots', 'legs', 'belt', 'ring', 'amulet'] as readonly ItemCategory[],
+      /** THE VERDICT FOLD (walk card 1 — the hybrid): the mint always
+       *  lands; accuracy buys the quality — rare weight = accuracy×100,
+       *  magic floored, plus an accuracy-scaled ilvl bonus. The high-tier
+       *  slip cap lives in TRACE_CFG (hybridAtTier). */
+      forge: { magicFloor: 10, ilvlBonusMax: 2 },
+    },
   },
   /** THE ANSWER kind (M2) — "resolve what stands": targets drawn from the
    *  live census (BOUNTY_SOURCES — worldboss decrees, the fracture, the
@@ -232,7 +250,7 @@ export const BOUNTY_BOARD_CFG = {
      *  observation for her walk, not a hack). Young boards never summon
      *  or decree — the world's own events wait for the full grammar. */
     kinds: { charge: 1, cull: 1, gather: 1, errand: 0, answer: 0, summons: 0 } as Record<string, number>,
-    lanes: { essence: 1, pouch: 0, lot: 0, unique: 0 },
+    lanes: { essence: 1, pouch: 0, lot: 0, unique: 0, craft: 0 },
   },
 } as const;
 
@@ -243,6 +261,10 @@ export const BOUNTY_BOARD_CFG = {
  *  TRUE skill Memory under THE MINT LAW). Exactly one field is set. */
 export interface BountyPay {
   essence?: EssenceCost[];
+  /** R5 — THE SMITH'S WRIT (the steady hand): a craft credit, minted as
+   *  a 1×1 writ item at the turn-in; redeemed at Brandt by tracing the
+   *  piece at the tier's band. */
+  craft?: { category: ItemCategory; tier: number };
   unique?: { id?: string; category?: ItemCategory };
   lot?: { count: number; category: ItemCategory };
   pouch?: { kind: MemoryKind; count: number };
@@ -297,6 +319,7 @@ export function clonePosting(p: BountyPosting): BountyPosting {
       ...(p.pay.lot ? { lot: { ...p.pay.lot } } : {}),
       ...(p.pay.pouch ? { pouch: { ...p.pay.pouch } } : {}),
       ...(p.pay.gem ? { gem: { ...p.pay.gem } } : {}),
+      ...(p.pay.craft ? { craft: { ...p.pay.craft } } : {}),
     },
     ...(p.failed ? { failed: true } : {}),
     ...(p.face ? { face: p.face } : {}),
@@ -407,7 +430,7 @@ export interface BountyBandRow {
    *  keeps its registry weight). */
   kinds?: Record<string, number>;
   /** Pay-lane weight overrides (the rollBountyPay fold). */
-  lanes?: { essence: number; pouch: number; lot: number; unique: number };
+  lanes?: { essence: number; pouch: number; lot: number; unique: number; craft: number };
   /** THE ANCHOR: pin the FIRST seat's target to this zone in perpetuity —
    *  and while the account reads YOUNG (run + account ledger under the
    *  threshold), pin EVERY seat. Pinned seats trade the one-posting-per-
@@ -578,16 +601,29 @@ export function bountyUniqueCategories(level: number): ItemCategory[] {
  *  starter band's essence-only slate rides this one parameter). */
 export function rollBountyPay(
   host: BountyRollHost, rng: Rng, level: number,
-  weights?: { essence: number; pouch: number; lot: number; unique: number },
+  weights?: { essence: number; pouch: number; lot: number; unique: number; craft: number },
 ): BountyPay {
   const L = BOUNTY_BOARD_CFG.lanes;
   const w = weights ?? L.weights;
-  const total = w.essence + w.pouch + w.lot + w.unique;
+  const total = w.essence + w.pouch + w.lot + w.unique + (w.craft ?? 0);
   let r = rng.next() * Math.max(0.0001, total);
-  let lane: 'essence' | 'pouch' | 'lot' | 'unique' = 'essence';
-  for (const [k, wv] of [['essence', w.essence], ['pouch', w.pouch], ['lot', w.lot], ['unique', w.unique]] as const) {
+  let lane: 'essence' | 'pouch' | 'lot' | 'unique' | 'craft' = 'essence';
+  for (const [k, wv] of [['essence', w.essence], ['pouch', w.pouch], ['lot', w.lot], ['unique', w.unique], ['craft', w.craft ?? 0]] as const) {
     r -= wv;
     if (r <= 0) { lane = k; break; }
+  }
+  if (lane === 'craft') {
+    // R5 THE SMITH'S WRIT: a seeded category off the outline gamut + the
+    // tier off the target's level (the tierAt ladder) — the card prints
+    // both (the visible price law), and the trace's band derives from the
+    // tier at the bench (TRACE_CFG.tierBands).
+    const C = L.craft;
+    let tier = 1;
+    for (let t = 0; t < C.tierAt.length; t++) if (level >= C.tierAt[t]) tier = t + 1;
+    // Never a hollow card: only categories with a STANDING base may post.
+    const cats = C.categories.filter(c => Object.values(ITEM_BASES).some(b => b.category === c));
+    if (!cats.length) return { essence: bountyChargePay(level) };
+    return { craft: { category: cats[rng.int(0, cats.length - 1)], tier } };
   }
   if (lane === 'unique') {
     const named = rng.next() < L.unique.namedShare;
@@ -628,6 +664,7 @@ export function rollBountyPay(
 /** One line describing a pay spec (card faces + notices — the visible
  *  price law: the exact pay, printed). */
 export function describeBountyPay(pay: BountyPay): string {
+  if (pay.craft) return `a smith's writ: a ${pay.craft.category} piece, tier ${['I', 'II', 'III', 'IV'][pay.craft.tier - 1] ?? pay.craft.tier}`;
   if (pay.unique) {
     if (pay.unique.id) return `the unique: ${UNIQUE_LIST.find(u => u.id === pay.unique!.id)?.name ?? pay.unique.id}`;
     return `a unique ${pay.unique.category}`;

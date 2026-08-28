@@ -284,6 +284,14 @@ export const BASE_LIST: ItemBaseDef[] = [
     id: 'rough_memory', name: 'Rough Memory', category: 'gem',
     w: 1, h: 1, tags: ['gem', 'memory'], dropWeight: 0,
   },
+  // THE SMITH'S WRIT (the steady hand): the bounty board's craft credit —
+  // a 1×1 carried paper, spent at Brandt's Forge by tracing the piece.
+  // Never drops from the world (dropWeight 0 — minted only by the pay
+  // lane); the writ payload rides ItemInstance.writ.
+  {
+    id: 'smith_writ', name: "Smith's Writ", category: 'gem',
+    w: 1, h: 1, tags: ['writ'], dropWeight: 0,
+  },
   // M3, §4 lane 2 THE TRUED CUT: the banner pouch — rarer by the drop
   // split (GEM_DROP_CFG.preformedShare), recall interposes THE FACET.
   {

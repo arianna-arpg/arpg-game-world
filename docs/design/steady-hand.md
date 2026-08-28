@@ -229,6 +229,72 @@ commission (the fork's true shape revealed: crafting, not components);
 cards 1–7 open — the walk rules them; the walk artifact carries a
 PLAYABLE band demo so the widths are felt, not imagined.
 
+### The walk (2026-08-26 — "I absolutely love that initial bench demo,
+this is very close to what I had in mind"; all seven cards ruled)
+
+- **Card 1 → (c) THE HYBRID** — her reasoning: it contains the others.
+  The floor is (a) verbatim — always-mint, accuracy folds quality —
+  and HIGH tiers add the slip cap that hard-fails ("technically a
+  pass/fail at high tiers, with an always-mint floor"); a failed
+  high-tier trace keeps the writ and retries after a cooldown. Which
+  tier turns the cap on, the cap count, and the cooldown are DIALS.
+- **Card 2 → (a) for now, with TWO recorded futures**: pick the base
+  at the bench within the writ's category + tier reach (the reach
+  clamp is the standing guard — a late base can never come off an
+  early writ). Recorded, hers: (c) may become the truer shape once
+  base availability itself refines by level; and (b) — the writ
+  NAMING the exact base — is "an amazing use case" as a deliberate
+  premium face (an advanced player forging a desired base early), a
+  future pay variant, not launch.
+- **Card 3 → (a) the 1×1 bag item**, starting there — torn against an
+  invisible pouch-style credit (the essence-pouch vein); her ruling:
+  "the 1×1 bag item would require more functionality, so let's start
+  there and we can trim away if it feels worse."
+- **Card 4 → (a) band width alone, leaning** — and her ask answered in
+  the walk artifact: the demo grew a DETAIL selector (I silhouette /
+  II working piece / III masterwork line — guard + pommel, visor,
+  serrations, filigree) so (b) can be felt against (a) before the
+  final word. The engine carries variants as plain shape data either
+  way — the ruling moves no code.
+- **Card 5 → (a), ruled at her delegation** ("I'll leave this one up
+  to you"): the per-device band multiplier costs ONE multiply at the
+  session's begin (the spec's band is premultiplied by the seat's
+  device dial) — no meaningful complexity, so the honest option wins.
+  Pad ×1.3, a DIAL, unblessed.
+- **Card 6 → (a)** — slips drain accuracy; the high-tier cap arrives
+  through card 1's hybrid, never as a separate grammar.
+- **Card 7 → (a)** — the consumer seam reserved now; implementation
+  focuses on the crafting consumer ("focus implementation on the
+  particular crafting-oriented version for now").
+
+**T0 + T1 fired on the walk's implementation language ("let's start
+there") and LANDED (2026-08-26):** engine/trace.ts (the pure session —
+byte-deterministic over fed samples, monotonic frontier, band-normalized
+accuracy, soft slips, THE HYBRID's cap per card 1c, the device fold as
+card 5's one multiply) + data/traceShapes.ts (nine authored category
+outlines + the blade/shield held for the reserved weapon future) + the
+'trace' TimeHold surface + the World forge host (traceFeed at the
+applyInputs artery — the input law beside the rite's; forgeBegin/Cancel
+host-routed with the calm law; the settle folds accuracy into
+rarityWeights + an ilvl bonus and drops the piece OWED; a failed
+high-tier trace RESTS the enduring writ) + the writ item (1×1
+'smith_writ' base, payload on ItemInstance.writ, minted owed by the
+craft pay lane) + Brandt's Forge face (pick the base, trace it; Esc
+steps away) + the renderer's world-anchored overlay (drawn == tested:
+the band drawn IS the band measured). Probe balance/probe_trace.ts (25
+checks + roster row same commit); every gate green. TWO findings
+recorded: **weapon and offhand are RESERVED categories** — no bases
+exist anywhere in the game (the M1 audit's "no weapon uniques" was the
+symptom) — so the writ gamut trues to the eight standing categories
+(+legs) with a live-registry filter (never a hollow card), and the
+blade/shield outlines wait ready; and ★CLOSED-SHAPE-DOUBLES-THE-TAIL —
+an authored shape that already closes itself wearing closed:true minted
+duplicate trailing path points the strict nearest-point tie-break could
+never advance onto (the frontier stalled one short of done) —
+buildTracePath now drops degenerate segments, absorbing the authoring
+quirk. **Card 4's final word stays open on the demo's detail exhibit;
+T2 polish at her go.**
+
 ---
 
 ## 8. OPEN DIALS (build-time levers — no rulings pending)

@@ -172,7 +172,7 @@ check('B: every offer is honest (zone stands, kind-law holds, band, pay printed,
   wB.bountyOffers.every(p => {
     const z = wB.zoneMap[p.zoneId];
     if (!z || p.boardId !== BOUNTY_BOARD_CFG.boardId) return false;
-    const paySet = !!(p.pay.essence?.length || p.pay.unique || p.pay.lot || p.pay.pouch || p.pay.gem);
+    const paySet = !!(p.pay.essence?.length || p.pay.unique || p.pay.lot || p.pay.pouch || p.pay.gem || p.pay.craft);
     if (!paySet || (z.objective.kind === 'safe' && p.kind !== 'answer')) return false;
     const band = p.kind === 'charge' ? BOUNTY_BOARD_CFG.charge.band
       : p.kind === 'errand' ? BOUNTY_BOARD_CFG.errand.band

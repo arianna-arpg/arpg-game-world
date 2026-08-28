@@ -99,6 +99,8 @@ export type MetaAction =
   | { t: 'bountyTurnIn'; id: string }                          // Bounty board: turn a done/failed hand in AT the board (the payout point — walk-1's collect)
   | { t: 'bountyLock'; id: string; locked: boolean }           // Bounty board: THE POSTING PIN — hold/release an offer through re-deals (capacity = Reserved Postings rungs)
   | { t: 'bountyCoastWrits' }                                  // Quay board: post the coast's writs (the harborhold writ lane, now the panel's button)
+  | { t: 'forgeBegin'; writUid: number; baseId: string; pad: boolean } // The forge (steady-hand): begin tracing a smith's writ at the chosen base; pad = the UI's device truth (card 5's one multiply)
+  | { t: 'forgeCancel' }                                       // The forge: step away mid-trace — the writ endures (atomic redemption)
   | { t: 'holdMuster' }                                        // Harborhold: sound the horn — arm the standing zone's siege defense
   | { t: 'holdRestore' }                                       // Harborhold: pay the carried-Essence restoration at a fallen hold's wreckage
   | { t: 'payToll'; index: number }                            // Holdfast: pay the keeper's toll (essence/gem per the guardian's UnlockSpec; index = legacy wire shape)

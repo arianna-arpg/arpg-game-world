@@ -52,7 +52,7 @@ import {
   memoryKindOf, memoryUnitsOf, mergeMemory, pickSeeded, rollSeededRarity,
   type MemoryKind, type MemoryRecallResult, type MemoryRecallViewData,
 } from './memories';
-import { compileItemMods, itemLevelReq, rebuildItem, rollItem } from './itemgen';
+import { nextItemUid, compileItemMods, itemLevelReq, rebuildItem, rollItem } from './itemgen';
 import {
   ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier,
   ESSENCES, ESSENCE_IDS, ESSENCE_SPILL_CFG, essenceUnitsForValue, FONT_CFG,
@@ -62,7 +62,7 @@ import {
   VENDOR_ESSENCE_PRICE, VENDOR_ITEM_CFG, VENDOR_MEMORY_PRICE, VENDOR_SUPPORT_PRICE, walletBreakdown, walletMortalValue,
   type AbilityCost, type EssenceCost, type EssenceId, type EssenceSpillSpec,
 } from '../data/essences';
-import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemInstance, type ItemRarity, type RoughMemoryUnit } from './items';
+import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemCategory, type ItemInstance, type ItemRarity, type RoughMemoryUnit } from './items';
 import { DROP_CFG, GEM_DROP_CFG, resolveLootTable, rollVestigeId, gemFloorFor, type GemFloor } from './loot';
 import { epitaphFor, VESTIGES } from '../data/vestiges';
 import { MONSTER_THEMES } from '../data/infrequents';
@@ -157,6 +157,11 @@ import {
   type BountyKindRow, type BountyTargetRef,
 } from '../data/bountyboard';
 import type { AttentionPoint } from '../world/attention';
+import {
+  TRACE_CFG, buildTracePath, freshTraceState, traceBandFor, traceFeed as traceFeedStep,
+  traceSlipCapFor, traceVerdict, type TracePath, type TraceState,
+} from './trace';
+import { traceShapeForCategory } from '../data/traceShapes';
 import {
   type BountyPosting, type BountyRollHost,
 } from '../data/bountyboard';
@@ -1598,6 +1603,8 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'bountyTurnIn': return isStr(a.id);
     case 'bountyLock': return isStr(a.id) && typeof a.locked === 'boolean';
     case 'bountyCoastWrits': return true;
+    case 'forgeBegin': return typeof a.writUid === 'number' && isStr(a.baseId) && typeof a.pad === 'boolean';
+    case 'forgeCancel': return true;
     case 'holdMuster': return true;  // the standing zone's harborhold — no payload
     case 'holdRestore': return true; // ditto (price re-derived host-side from data)
     // THE PATRON'S HOLD: vendor is a registry id, index an untrusted shelf
@@ -4401,6 +4408,10 @@ export class World {
       // deaf as the solo freeze. A bound skill can never fire off a
       // sequence key.
       if (this.harvestFeed(seat, inp)) continue;
+      // THE TRACE (engine/trace.ts, the same input law): a forging seat's
+      // aim is the pen and its intent belongs to the line — swallowed here
+      // for the identical reason, before the timeflow bend.
+      if (this.traceFeed(seat, inp)) continue;
       // THE TIMEFLOW BEND (engine/timeflow.ts): a held seat's intent is
       // inert — a stasis'd (or menu-paused) hero neither moves nor casts;
       // the DOM menus above stay live, and the seq ack above already kept
@@ -5961,6 +5972,8 @@ export class World {
     // nodes stand up on their own salted stream — the same boot discipline,
     // placed LAST so every prior lane's pool draws stay byte-frozen.
     this.bootHarvest(def, pois, memory);
+    // A trace never crosses a boundary either — the writ endures.
+    this.traceAbortAll();
     // THE GEYSER FABRIC (engine/geysers.ts): timed vents + their current
     // bands stand up on their own salted stream — appended AFTER the lanes
     // above so their draws stay byte-frozen (the harvest seat's own law).
@@ -22204,6 +22217,187 @@ export class World {
     return mul;
   }
 
+  // ------------------------------------------------------------- the forge -
+  //  THE TRACE + THE SMITH'S WRIT (engine/trace.ts + data/traceShapes.ts —
+  //  docs/design/steady-hand.md T0/T1): the bounty board's craft credit,
+  //  redeemed at Brandt by TRACING the piece. The session math is the pure
+  //  fabric's; this host is the CRAFTING CONSUMER — it builds the path at
+  //  the smith's bench, swallows the tracing seat's intent (the input law),
+  //  holds a solo world (the rite's pause policy), and folds the verdict
+  //  into the mint (walk card 1's hybrid: always-mint below the ceiling,
+  //  the slip cap failing only the high tiers — writ kept, a rest clock).
+
+  private traceRuns: {
+    seatId: string; path: TracePath; state: TraceState; held: boolean;
+    writUid: number; baseId: string; tier: number; ilvl: number; slipCap: number;
+  }[] = [];
+  /** Failed high-tier traces REST per writ (card 1c's retry cooldown). */
+  private traceRests = new Map<number, number>();
+
+  traceActive(seatId?: string): boolean {
+    return this.traceRuns.some(r => seatId === undefined || r.seatId === seatId);
+  }
+
+  /** The Forge face's writ shelf (panels): every writ a seat carries, with
+   *  its rest clock (0 = forgeable now). */
+  forgeWrits(seat: Seat = this.localSeat): { uid: number; category: ItemCategory; tier: number; ilvl: number; restSec: number }[] {
+    const out: { uid: number; category: ItemCategory; tier: number; ilvl: number; restSec: number }[] = [];
+    for (const it of seat.meta.items) {
+      if (!it.writ) continue;
+      out.push({
+        uid: it.uid, category: it.writ.category, tier: it.writ.tier, ilvl: it.ilvl,
+        restSec: Math.max(0, (this.traceRests.get(it.uid) ?? 0) - this.time),
+      });
+    }
+    return out;
+  }
+
+  /** The base pool a writ may forge — the writ's own category (card 2a:
+   *  the player aims the exact base at the bench; tier refinement of the
+   *  pool itself is the card's recorded future). */
+  forgeBases(writUid: number, seat: Seat = this.localSeat): { id: string; name: string }[] {
+    const it = seat.meta.items.find(x => x.uid === writUid);
+    if (!it?.writ) return [];
+    return Object.values(ITEM_BASES)
+      .filter(b => b.category === it.writ!.category)
+      .map(b => ({ id: b.id, name: b.name }));
+  }
+
+  /** BEGIN a forge trace (the host-routed intent): validates the writ, the
+   *  base, the rest clock, and the rite's own calm law, then raises the
+   *  outline at the smith's bench and takes the seat's hand (the input
+   *  law). `pad` is the UI layer's device truth — card 5's one multiply. */
+  forgeBegin(writUid: number, baseId: string, pad: boolean, seat: Seat = this.localSeat): boolean {
+    if (this.traceRuns.some(r => r.seatId === seat.id)) return false;
+    const it = seat.meta.items.find(x => x.uid === writUid);
+    if (!it?.writ) return false;
+    const rest = (this.traceRests.get(writUid) ?? 0) - this.time;
+    if (rest > 0) {
+      this.notice(`The ruined line still smarts — the writ rests ${Math.ceil(rest)}s more.`, BOUNTY_BOARD_CFG.accent, 13, 'civic');
+      return false;
+    }
+    if (!this.forgeBases(writUid, seat).some(b => b.id === baseId)) return false;
+    // The rite's own calm law: no forging with the blood hot or teeth near.
+    if (this.time - this.lastCombatAt < SWAP_DISCIPLINE_CFG.calmSec && this.zone.objective.kind !== 'safe') {
+      this.notice('The hand is not steady yet — let the blood cool.', BOUNTY_BOARD_CFG.accent, 13, 'civic');
+      return false;
+    }
+    if (this.pressingFoeNear(seat.actor.pos)) return false;
+    const shape = traceShapeForCategory(it.writ.category);
+    const band = traceBandFor(it.writ.tier, pad ? 'pad' : 'mouse');
+    const path = buildTracePath(shape, seat.actor.pos.x, seat.actor.pos.y - 40 - TRACE_CFG.drawSize / 2, band);
+    // THE PAUSE LAW (the rite's policy verbatim): solo holds, shared runs.
+    const held = this.timeflow.allowHold({ id: 'trace', scale: 0, kind: 'trace' })
+      && this.timeflow.holdSurface('trace');
+    this.traceRuns.push({
+      seatId: seat.id, path, state: freshTraceState(), held,
+      writUid, baseId, tier: it.writ.tier, ilvl: it.ilvl,
+      slipCap: traceSlipCapFor(it.writ.tier),
+    });
+    return true;
+  }
+
+  /** Step away mid-trace (Esc / the panel): the writ endures, nothing
+   *  mints — atomic redemption. */
+  forgeCancel(seat: Seat = this.localSeat): boolean {
+    const i = this.traceRuns.findIndex(r => r.seatId === seat.id);
+    if (i < 0) return false;
+    if (this.traceRuns[i].held) this.timeflow.release('trace');
+    this.traceRuns.splice(i, 1);
+    this.notice('The hand steps away — the writ endures.', BOUNTY_BOARD_CFG.accent, 13, 'civic');
+    return true;
+  }
+
+  /** THE INPUT LAW's artery gate: true = this seat is mid-trace — its aim
+   *  is the pen, holding the primary bind draws, and the rest of its
+   *  intent is swallowed by the caller. Settlement is immediate at the
+   *  path's end (or the high-tier cap's buzz). */
+  private traceFeed(seat: Seat, inp: PlayerInput | null | undefined): boolean {
+    const r = this.traceRuns.find(x => x.seatId === seat.id);
+    if (!r) return false;
+    if (inp) {
+      traceFeedStep(r.path, r.state, inp.aim.x, inp.aim.y, !!inp.held[0], r.slipCap);
+      if (r.state.done || r.state.failed) this.traceSettle(r);
+    }
+    return true;
+  }
+
+  /** The settle: the verdict folds into the mint (card 1's hybrid). DONE —
+   *  the writ is consumed and the piece lands OWED at the feet, accuracy
+   *  buying rarity weight + an ilvl bonus; FAILED (the high-tier cap) —
+   *  the writ endures and rests. */
+  private traceSettle(r: { seatId: string; path: TracePath; state: TraceState; held: boolean; writUid: number; baseId: string; tier: number; ilvl: number; slipCap: number }): void {
+    const i = this.traceRuns.indexOf(r);
+    if (i < 0) return;
+    this.traceRuns.splice(i, 1);
+    if (r.held) this.timeflow.release('trace');
+    const seat = this.seats.find(s => s.id === r.seatId) ?? this.localSeat;
+    const v = traceVerdict(r.path, r.state);
+    if (r.state.failed) {
+      this.traceRests.set(r.writUid, this.time + TRACE_CFG.failCooldownSec);
+      this.notice(`The hand slipped once too often — the piece is ruined; the writ endures (rests ${TRACE_CFG.failCooldownSec}s).`, BOUNTY_BOARD_CFG.accent, 15, 'civic');
+      this.charDirty = true;
+      return;
+    }
+    const it = seat.meta.items.find(x => x.uid === r.writUid);
+    if (!it?.writ) return; // the writ left the bag mid-trace — nothing to honor
+    seat.meta.items = seat.meta.items.filter(x => x.uid !== r.writUid);
+    const F = BOUNTY_BOARD_CFG.lanes.craft.forge;
+    const rng = new Rng((this.manifest.seed ^ hashStr(`forge:${r.writUid}`)) >>> 0);
+    const rare = Math.round(v.accuracy * 100);
+    const item = rollItem({
+      ilvl: Math.max(1, r.ilvl + Math.round(v.accuracy * F.ilvlBonusMax)),
+      baseId: r.baseId, rng: () => rng.next(),
+      rarityWeights: { common: 0, magic: Math.max(F.magicFloor, 100 - rare), rare },
+    });
+    if (item) this.dropGearAt(vec(seat.actor.pos.x, seat.actor.pos.y + 24), item, undefined, true);
+    bumpLedger(this.ledger, 'writs_forged');
+    const face = v.accuracy >= 0.92 ? 'a masterwork hand'
+      : v.accuracy >= 0.75 ? 'a fine hand'
+        : v.accuracy >= 0.5 ? 'a steady-enough hand' : 'a shaking hand';
+    this.notice(`FORGED — ${face} (${Math.round(v.accuracy * 100)}%).`, BOUNTY_BOARD_CFG.accent, 16, 'civic');
+    this.charDirty = true;
+  }
+
+  /** Safety sweep (per frame, cheap): a tracer who died, downed, or lost
+   *  the run's seat aborts — the writ endures. Zone changes sweep in
+   *  loadZone beside the harvest's own reset. */
+  private updateTraces(): void {
+    for (const r of [...this.traceRuns]) {
+      const seat = this.seats.find(s => s.id === r.seatId);
+      if (!seat || seat.actor.dead || seat.actor.downed) {
+        if (r.held) this.timeflow.release('trace');
+        this.traceRuns.splice(this.traceRuns.indexOf(r), 1);
+      }
+    }
+  }
+
+  /** Abort every trace (zone change / run end) — writs endure. */
+  traceAbortAll(): void {
+    for (const r of this.traceRuns) if (r.held) this.timeflow.release('trace');
+    this.traceRuns = [];
+  }
+
+  /** The renderer's view (drawTrace — the tell-wire idiom: derived
+   *  scalars + the geometry the session itself measures; drawn == tested
+   *  by construction). Null when no LOCAL trace stands. */
+  traceView(): {
+    pts: { x: number; y: number }[]; band: number;
+    ink: { x: number; y: number; in: boolean }[];
+    frontier: number; progress: number; accuracy: number; slips: number;
+    slipCap: number; outside: boolean;
+  } | null {
+    const localIds = new Set(this.localHumanSeats().map(s => s.id));
+    const r = this.traceRuns.find(x => localIds.has(x.seatId));
+    if (!r) return null;
+    const v = traceVerdict(r.path, r.state);
+    return {
+      pts: r.path.pts, band: r.path.band, ink: r.state.ink,
+      frontier: r.state.frontier, progress: v.progress, accuracy: v.accuracy,
+      slips: v.slips, slipCap: r.slipCap, outside: r.state.outside,
+    };
+  }
+
   /** THE CHEVRON PATRON (M4 — charter §8): the board's own edge pointers
    *  in the target zone. Today: a held gather's unspent nodes in the
    *  board's accent — the one ask with no standing pointer of its own
@@ -22676,7 +22870,7 @@ export class World {
    *  THE MINT LAW so the drop index keeps feeding the Standing Order. */
   private payBountyLanes(p: BountyPosting, seat: Seat): void {
     const pay = p.pay;
-    if (!pay.unique && !pay.lot && !pay.pouch && !pay.gem) return;
+    if (!pay.unique && !pay.lot && !pay.pouch && !pay.gem && !pay.craft) return;
     const rng = new Rng((this.manifest.seed ^ hashStr(`bountypay:${p.id}`)) >>> 0);
     const rf = (): number => rng.next();
     const ilvl = Math.max(1, this.zoneMap[p.zoneId]?.level ?? this.player.level);
@@ -22715,6 +22909,20 @@ export class World {
       // THE MINT LAW: a board-paid Memory is a genuine mint site — the
       // drop index feeds, the Standing Order keeps its food.
       this.noteGemDrop(def.id, inst.rarity);
+      return;
+    }
+    if (pay.craft) {
+      // R5 THE SMITH'S WRIT: the credit itself mints as a 1×1 carried
+      // paper (walk card 3a) — ilvl = the target's level (the forge's own
+      // mint reads it back), payload on ItemInstance.writ. Owed like every
+      // board pay; the bag is the bench's shelf.
+      const it: ItemInstance = {
+        uid: nextItemUid(), baseId: 'smith_writ', ilvl, tier: pay.craft.tier,
+        rarity: 'common', name: `Smith's Writ: ${pay.craft.category}`,
+        baseRoll: 0, implicitRolls: [], affixes: [],
+        writ: { category: pay.craft.category, tier: pay.craft.tier },
+      };
+      this.dropGearAt(at, it, undefined, true);
       return;
     }
     if (pay.pouch) {
@@ -26612,7 +26820,8 @@ export class World {
       if (action.t !== 'caravanTo' && action.t !== 'vocationQuest' && action.t !== 'harborChart'
         && action.t !== 'holdMuster' && action.t !== 'holdRestore'
         && action.t !== 'bountyAccept' && action.t !== 'bountyAbandon' && action.t !== 'bountyTurnIn'
-        && action.t !== 'bountyLock' && action.t !== 'bountyCoastWrits') {
+        && action.t !== 'bountyLock' && action.t !== 'bountyCoastWrits'
+        && action.t !== 'forgeBegin' && action.t !== 'forgeCancel') {
         this.applyAction(this.localSeat, action);
       }
     } else {
@@ -26679,6 +26888,8 @@ export class World {
       case 'bountyAbandon': this.abandonBounty(action.id, seat); break;
       case 'bountyTurnIn': this.turnInBounty(action.id, seat); break;
       case 'bountyLock': this.setBountyLock(action.id, action.locked, seat); break;
+      case 'forgeBegin': this.forgeBegin(action.writUid, action.baseId, action.pad, seat); break;
+      case 'forgeCancel': this.forgeCancel(seat); break;
       case 'bountyCoastWrits':
         // The quay panel's Coast Writs button — the standing writ grammar,
         // self-guarded (cooldown + open hold + eligible quarry).
@@ -42857,6 +43068,8 @@ export class World {
     this.updateSalvage(dt);
     // The bounty board arms its beat's slate + opens the postings panel on a dwell.
     this.updateBountyBoard(dt);
+    // The forge's safety sweep (a dead or downed hand drops the pen).
+    this.updateTraces();
     // A Sacrificial Font opens the Font screen on a dwell (same flag idiom).
     this.updateFont(dt);
     // A banked Ability-point pip offers its popup at the next disciplined calm.
