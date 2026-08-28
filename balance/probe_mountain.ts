@@ -26,6 +26,7 @@ import { STATUS_DEFS } from '../src/engine/status';
 import { MONSTERS } from '../src/data/monsters';
 import { LOOKS } from '../src/data/looks';
 import { regionKind } from '../src/world/regions';
+import { FORECHART_CFG } from '../src/world/forechart';
 import { BIOMES } from '../src/world/biomes';
 import { WEATHER_DEFS } from '../src/world/weather';
 
@@ -570,6 +571,14 @@ const DT = 1 / 60;
 
   const NOON = 48, MIDNIGHT = 168;
   const world = makeSimWorld('warrior', 38001);
+  // THE PARKED-PLAYER PIN (the governor-pin precedent): the forechart
+  // resolves '?' frontiers around a parked body, and a link landing on the
+  // staged overpass mid-rig legitimately RE-CARVES its mouths on re-entry
+  // (exits are generateLayout inputs) — the deck re-deals and the linger
+  // rig chases moved spans. The door is the subject, not the background
+  // charting, so the sweep stands down for this rig (directed dev mints
+  // never needed it). Content additions must not re-deal this rig's world.
+  FORECHART_CFG.enabled = false;
   const wa = world as unknown as Record<string, any>;
   const p = world.player;
   const spanCells: { x: number; y: number }[] = [];
