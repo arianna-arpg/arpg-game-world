@@ -207,6 +207,15 @@ export interface ItemBaseDef {
   affinity?: Record<string, number>;
   /** Identity lines rolled at EVERY rarity (a Coral Ring is always life). */
   implicits?: RangedLineDef[];
+  /** THE COMPLEXITY CLASS (the steady hand, walk 2 — her horizontal axis:
+   *  intricacy, never strength): 1 plain · 2 fine · 3 ornate. Absent =
+   *  DERIVED from what the base IS (defense-lane count for armour, the
+   *  implicit count for jewelry — baseComplexityOf), so today's pure
+   *  mixes read plain, the hybrid textures read fine, and the ornate
+   *  class stands EMPTY until her exotic-base pass authors it (a fire-
+   *  for-physical blade, a resistance-baseline plate) — the writ's high
+   *  class and the masterwork trace lines turn on that day, by data. */
+  complexity?: number;
   /** Optional per-tier display names replacing the generic tier prefixes. */
   namesByTier?: string[];
   /** Weight within its category's drop pool (0 = never drops naturally). */
@@ -384,8 +393,20 @@ export interface ItemInstance {
    *  bounty-paid craft credit. Present exactly on the 'smith_writ' base;
    *  redeemed at Brandt's Forge face by TRACING the piece — the writ is
    *  consumed only at the verdict's mint (atomic; an aborted trace keeps
-   *  it). Never stacks; 1×1 by its base's own grid. */
-  writ?: { category: ItemCategory; tier: number };
+   *  it). COMPLEXITY is the named class (walk 2 — a pre-walk-2 writ's
+   *  `tier` folds in tolerantly at every read). Never stacks; 1×1 by its
+   *  base's own grid. */
+  writ?: { category: ItemCategory; complexity: number };
+}
+
+/** THE COMPLEXITY READ (the steady hand): a base's class — authored, or
+ *  derived from its own intricacy (defense lanes, then implicits), clamped
+ *  to the three named classes. */
+export function baseComplexityOf(base: ItemBaseDef): number {
+  if (base.complexity !== undefined) return Math.max(1, Math.min(3, Math.floor(base.complexity)));
+  const lanes = base.defense ? Object.keys(base.defense).length : 0;
+  const derived = lanes > 0 ? lanes : (base.implicits?.length ?? 1);
+  return Math.max(1, Math.min(3, derived));
 }
 
 // ---------------------------------------------------------------- config ---

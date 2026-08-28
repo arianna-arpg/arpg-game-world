@@ -292,8 +292,39 @@ an authored shape that already closes itself wearing closed:true minted
 duplicate trailing path points the strict nearest-point tie-break could
 never advance onto (the frontier stalled one short of done) —
 buildTracePath now drops degenerate segments, absorbing the authoring
-quirk. **Card 4's final word stays open on the demo's detail exhibit;
-T2 polish at her go.**
+quirk. **WALK 2 (2026-08-26, her fusion of cards 2 + 4 — THE COMPLEXITY LAW,
+landed the same day):** the walk-2 ruling replaces 'tier' outright —
+"tier implies genuine strength" — with COMPLEXITY, a HORIZONTAL axis:
+a higher-complexity base is more INTRICATE, never point-for-point
+stronger (her PoE base-item register: a fire-for-physical blade, a
+resistance-baseline plate — trades, not upgrades). The bounty CARD
+names the class ("a medium-complexity chest piece"), so CHOOSING THE
+BOUNTY IS CHOOSING THE COMPLEXITY; the writ narrows the bench to bases
+OF that class (card 2 lands as (c)); the player picks the base within
+it; and the SHAPE is more complex because the ITEM is (card 4 fused:
+the fine and ornate lines are ADDITIVE by authoring law — the pen
+finishes the plain outline then draws the detail as a continuation,
+so more intricate = more line BY CONSTRUCTION). Built:
+`ItemBaseDef.complexity` with THE DERIVED READ (`baseComplexityOf` —
+defense-lane count for armour, implicit count for jewelry; an authored
+override wins), so today's pure mixes read plain, the hybrid textures
+read fine, and THE ORNATE CLASS STANDS EMPTY until her exotic-base
+pass authors it — high-complexity writs and the masterwork lines (and
+the hybrid's slip-cap buzz, which arms at class 3) all turn on THAT
+DAY, by data; the writ re-axed {category, complexity} end to end
+(pay lane, card face, item payload, bench pool, band, shape ladder)
+with pre-walk-2 `tier` payloads folded in tolerantly at every read;
+the level ladder (`complexityAt` 0/10/22) unlocks which classes may
+POST, the class itself staying horizontal; per-class shape ladders
+(helm/cuirass/ring fine+ornate authored; a class without its own line
+falls DOWN the ladder); the bands gentle to 26/22/18 (the difficulty
+lives in the line itself — her stated logic). Probe grown to 34
+checks (rig C: the derived read, the standing-pair roll, the named
+card face, the narrowed bench, the legacy fold; the line-length law
+pinned on true resampled length). The demo relabeled to the
+complexity axis. Every gate green. **T2 polish at her go; the
+exotic-base pass is her future commission — the ornate class waits
+for it, armed.**
 
 ---
 

@@ -62,7 +62,7 @@ import {
   VENDOR_ESSENCE_PRICE, VENDOR_ITEM_CFG, VENDOR_MEMORY_PRICE, VENDOR_SUPPORT_PRICE, walletBreakdown, walletMortalValue,
   type AbilityCost, type EssenceCost, type EssenceId, type EssenceSpillSpec,
 } from '../data/essences';
-import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemCategory, type ItemInstance, type ItemRarity, type RoughMemoryUnit } from './items';
+import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, baseComplexityOf, slotsForCategory, socketCap, type ItemCategory, type ItemInstance, type ItemRarity, type RoughMemoryUnit } from './items';
 import { DROP_CFG, GEM_DROP_CFG, resolveLootTable, rollVestigeId, gemFloorFor, type GemFloor } from './loot';
 import { epitaphFor, VESTIGES } from '../data/vestiges';
 import { MONSTER_THEMES } from '../data/infrequents';
@@ -22229,7 +22229,7 @@ export class World {
 
   private traceRuns: {
     seatId: string; path: TracePath; state: TraceState; held: boolean;
-    writUid: number; baseId: string; tier: number; ilvl: number; slipCap: number;
+    writUid: number; baseId: string; complexity: number; ilvl: number; slipCap: number;
   }[] = [];
   /** Failed high-tier traces REST per writ (card 1c's retry cooldown). */
   private traceRests = new Map<number, number>();
@@ -22240,12 +22240,14 @@ export class World {
 
   /** The Forge face's writ shelf (panels): every writ a seat carries, with
    *  its rest clock (0 = forgeable now). */
-  forgeWrits(seat: Seat = this.localSeat): { uid: number; category: ItemCategory; tier: number; ilvl: number; restSec: number }[] {
-    const out: { uid: number; category: ItemCategory; tier: number; ilvl: number; restSec: number }[] = [];
+  forgeWrits(seat: Seat = this.localSeat): { uid: number; category: ItemCategory; complexity: number; ilvl: number; restSec: number }[] {
+    const out: { uid: number; category: ItemCategory; complexity: number; ilvl: number; restSec: number }[] = [];
     for (const it of seat.meta.items) {
       if (!it.writ) continue;
+      // A pre-walk-2 writ carried `tier` — read it as the class (tolerant).
+      const complexity = it.writ.complexity ?? (it.writ as { tier?: number }).tier ?? 1;
       out.push({
-        uid: it.uid, category: it.writ.category, tier: it.writ.tier, ilvl: it.ilvl,
+        uid: it.uid, category: it.writ.category, complexity, ilvl: it.ilvl,
         restSec: Math.max(0, (this.traceRests.get(it.uid) ?? 0) - this.time),
       });
     }
@@ -22258,9 +22260,15 @@ export class World {
   forgeBases(writUid: number, seat: Seat = this.localSeat): { id: string; name: string }[] {
     const it = seat.meta.items.find(x => x.uid === writUid);
     if (!it?.writ) return [];
-    return Object.values(ITEM_BASES)
-      .filter(b => b.category === it.writ!.category)
-      .map(b => ({ id: b.id, name: b.name }));
+    const complexity = it.writ.complexity ?? (it.writ as { tier?: number }).tier ?? 1;
+    // THE CLASS NARROWS THE BENCH (walk 2, card 2c): the writ's named
+    // complexity picks the pool; the player picks the base within it.
+    const pool = Object.values(ITEM_BASES)
+      .filter(b => b.category === it.writ!.category && baseComplexityOf(b) === complexity);
+    // A legacy writ whose class stands empty falls to the whole category
+    // (never a dead credit).
+    const rows = pool.length ? pool : Object.values(ITEM_BASES).filter(b => b.category === it.writ!.category);
+    return rows.map(b => ({ id: b.id, name: b.name }));
   }
 
   /** BEGIN a forge trace (the host-routed intent): validates the writ, the
@@ -22283,16 +22291,17 @@ export class World {
       return false;
     }
     if (this.pressingFoeNear(seat.actor.pos)) return false;
-    const shape = traceShapeForCategory(it.writ.category);
-    const band = traceBandFor(it.writ.tier, pad ? 'pad' : 'mouse');
+    const complexity = it.writ.complexity ?? (it.writ as { tier?: number }).tier ?? 1;
+    const shape = traceShapeForCategory(it.writ.category, complexity);
+    const band = traceBandFor(complexity, pad ? 'pad' : 'mouse');
     const path = buildTracePath(shape, seat.actor.pos.x, seat.actor.pos.y - 40 - TRACE_CFG.drawSize / 2, band);
     // THE PAUSE LAW (the rite's policy verbatim): solo holds, shared runs.
     const held = this.timeflow.allowHold({ id: 'trace', scale: 0, kind: 'trace' })
       && this.timeflow.holdSurface('trace');
     this.traceRuns.push({
       seatId: seat.id, path, state: freshTraceState(), held,
-      writUid, baseId, tier: it.writ.tier, ilvl: it.ilvl,
-      slipCap: traceSlipCapFor(it.writ.tier),
+      writUid, baseId, complexity, ilvl: it.ilvl,
+      slipCap: traceSlipCapFor(complexity),
     });
     return true;
   }
@@ -22326,7 +22335,7 @@ export class World {
    *  the writ is consumed and the piece lands OWED at the feet, accuracy
    *  buying rarity weight + an ilvl bonus; FAILED (the high-tier cap) —
    *  the writ endures and rests. */
-  private traceSettle(r: { seatId: string; path: TracePath; state: TraceState; held: boolean; writUid: number; baseId: string; tier: number; ilvl: number; slipCap: number }): void {
+  private traceSettle(r: { seatId: string; path: TracePath; state: TraceState; held: boolean; writUid: number; baseId: string; complexity: number; ilvl: number; slipCap: number }): void {
     const i = this.traceRuns.indexOf(r);
     if (i < 0) return;
     this.traceRuns.splice(i, 1);
@@ -22917,10 +22926,11 @@ export class World {
       // mint reads it back), payload on ItemInstance.writ. Owed like every
       // board pay; the bag is the bench's shelf.
       const it: ItemInstance = {
-        uid: nextItemUid(), baseId: 'smith_writ', ilvl, tier: pay.craft.tier,
-        rarity: 'common', name: `Smith's Writ: ${pay.craft.category}`,
+        uid: nextItemUid(), baseId: 'smith_writ', ilvl, tier: 1,
+        rarity: 'common',
+        name: `Smith's Writ: ${['low', 'medium', 'high'][pay.craft.complexity - 1] ?? 'low'}-complexity ${pay.craft.category}`,
         baseRoll: 0, implicitRolls: [], affixes: [],
-        writ: { category: pay.craft.category, tier: pay.craft.tier },
+        writ: { category: pay.craft.category, complexity: pay.craft.complexity },
       };
       this.dropGearAt(at, it, undefined, true);
       return;

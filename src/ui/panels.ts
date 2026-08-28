@@ -4790,14 +4790,14 @@ export class UI {
     // The device truth for card 5's one multiply is the same pad read the
     // prompts speak (getPadActive).
     const writs = world.forgeWrits(seat);
-    const tierName = (t: number): string => ['I', 'II', 'III', 'IV'][t - 1] ?? String(t);
+    const cxName = (c: number): string => ['low', 'medium', 'high'][c - 1] ?? 'low';
     const forgeHtml = writs.length ? `<h3 style="margin:10px 0 4px 0">The Forge — trace the piece</h3>`
       + writs.map(w => {
         const bases = world.forgeBases(w.uid, seat);
         const resting = w.restSec > 0;
         return `<div class="skill-entry">
-          <div class="name">Smith's Writ — a ${esc(w.category)} piece, tier ${tierName(w.tier)}</div>
-          <div class="desc">Pick the base, then trace its line at the tier's band — the steadier the hand, the finer the piece. It always forges; the hand buys the quality.${resting ? ` The ruined line rests ${Math.ceil(w.restSec)}s.` : ''}</div>
+          <div class="name">Smith's Writ — a ${cxName(w.complexity)}-complexity ${esc(w.category)} piece</div>
+          <div class="desc">Pick the base of the writ's class, then trace its line — the more intricate the piece, the more line there is to hold. The steadier the hand, the finer the roll. It always forges; the hand buys the quality.${resting ? ` The ruined line rests ${Math.ceil(w.restSec)}s.` : ''}</div>
           <div class="bind-btns"><select data-forge-base="${w.uid}">${bases.map(b => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('')}</select>
           <button data-forge-begin="${w.uid}"${resting || !bases.length ? ' disabled' : ''}>Trace it</button></div>
         </div>`;

@@ -24,7 +24,7 @@
 // ---------------------------------------------------------------------------
 
 import type { Rng } from '../core/rng';
-import type { ItemCategory } from '../engine/items';
+import { baseComplexityOf, type ItemCategory } from '../engine/items';
 import type { MemoryKind } from '../engine/memories';
 import type { World } from '../engine/world';
 import type { QuestDef } from '../quests/types';
@@ -129,17 +129,20 @@ export const BOUNTY_BOARD_CFG = {
      *  tierAt idiom); the tier buys the trace's band (TRACE_CFG). The
      *  category pool is the outline library's own gamut. */
     craft: {
-      tierAt: [0, 8, 16, 26] as readonly number[],
       /** The gamut is the categories that STAND bases today — weapon and
        *  offhand are reserved shapes with no bases anywhere in the game
        *  yet (the roller's pool is empty for them; the M1 audit's own
        *  observation), and the roll below re-filters against the live
        *  registry regardless (never a hollow card). */
       categories: ['helmet', 'chest', 'gloves', 'boots', 'legs', 'belt', 'ring', 'amulet'] as readonly ItemCategory[],
+      /** The level ladder UNLOCKING the classes (index = class − 1): a
+       *  deeper target may deal a more intricate writ — the class itself
+       *  stays horizontal (walk 2's word). */
+      complexityAt: [0, 10, 22] as readonly number[],
       /** THE VERDICT FOLD (walk card 1 — the hybrid): the mint always
        *  lands; accuracy buys the quality — rare weight = accuracy×100,
-       *  magic floored, plus an accuracy-scaled ilvl bonus. The high-tier
-       *  slip cap lives in TRACE_CFG (hybridAtTier). */
+       *  magic floored, plus an accuracy-scaled ilvl bonus. The high-
+       *  complexity slip cap lives in TRACE_CFG (hybridAtComplexity). */
       forge: { magicFloor: 10, ilvlBonusMax: 2 },
     },
   },
@@ -261,10 +264,14 @@ export const BOUNTY_BOARD_CFG = {
  *  TRUE skill Memory under THE MINT LAW). Exactly one field is set. */
 export interface BountyPay {
   essence?: EssenceCost[];
-  /** R5 — THE SMITH'S WRIT (the steady hand): a craft credit, minted as
-   *  a 1×1 writ item at the turn-in; redeemed at Brandt by tracing the
-   *  piece at the tier's band. */
-  craft?: { category: ItemCategory; tier: number };
+  /** R5 — THE SMITH'S WRIT (the steady hand, walk 2): a craft credit,
+   *  minted as a 1×1 writ item at the turn-in; redeemed at Brandt by
+   *  tracing the piece. COMPLEXITY is the named axis (her horizontal
+   *  ruling — intricacy, never strength): the CARD prints it, choosing
+   *  the bounty IS choosing the class, and the writ narrows the bench to
+   *  bases OF that class (card 2c) — the shape is more complex because
+   *  the item is. */
+  craft?: { category: ItemCategory; complexity: number };
   unique?: { id?: string; category?: ItemCategory };
   lot?: { count: number; category: ItemCategory };
   pouch?: { kind: MemoryKind; count: number };
@@ -618,12 +625,22 @@ export function rollBountyPay(
     // both (the visible price law), and the trace's band derives from the
     // tier at the bench (TRACE_CFG.tierBands).
     const C = L.craft;
-    let tier = 1;
-    for (let t = 0; t < C.tierAt.length; t++) if (level >= C.tierAt[t]) tier = t + 1;
-    // Never a hollow card: only categories with a STANDING base may post.
-    const cats = C.categories.filter(c => Object.values(ITEM_BASES).some(b => b.category === c));
-    if (!cats.length) return { essence: bountyChargePay(level) };
-    return { craft: { category: cats[rng.int(0, cats.length - 1)], tier } };
+    let maxC = 1;
+    for (let t = 0; t < C.complexityAt.length; t++) if (level >= C.complexityAt[t]) maxC = t + 1;
+    // Never a hollow card: only (category, complexity) pairs with a
+    // STANDING base may post — the class derives from what each base IS
+    // (baseComplexityOf), so the ornate class opens the day her exotic
+    // bases land, by data.
+    const pairs: { category: ItemCategory; complexity: number }[] = [];
+    for (const c of C.categories) {
+      for (let k = 1; k <= maxC; k++) {
+        if (Object.values(ITEM_BASES).some(b => b.category === c && baseComplexityOf(b) === k)) {
+          pairs.push({ category: c, complexity: k });
+        }
+      }
+    }
+    if (!pairs.length) return { essence: bountyChargePay(level) };
+    return { craft: { ...pairs[rng.int(0, pairs.length - 1)] } };
   }
   if (lane === 'unique') {
     const named = rng.next() < L.unique.namedShare;
@@ -664,7 +681,7 @@ export function rollBountyPay(
 /** One line describing a pay spec (card faces + notices — the visible
  *  price law: the exact pay, printed). */
 export function describeBountyPay(pay: BountyPay): string {
-  if (pay.craft) return `a smith's writ: a ${pay.craft.category} piece, tier ${['I', 'II', 'III', 'IV'][pay.craft.tier - 1] ?? pay.craft.tier}`;
+  if (pay.craft) return `a smith's writ: a ${['low', 'medium', 'high'][pay.craft.complexity - 1] ?? 'low'}-complexity ${pay.craft.category} piece`;
   if (pay.unique) {
     if (pay.unique.id) return `the unique: ${UNIQUE_LIST.find(u => u.id === pay.unique!.id)?.name ?? pay.unique.id}`;
     return `a unique ${pay.unique.category}`;

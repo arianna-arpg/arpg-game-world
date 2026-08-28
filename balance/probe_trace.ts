@@ -29,6 +29,8 @@ import {
   traceSlipCapFor, traceVerdict,
 } from '../src/engine/trace';
 import { CATEGORY_SHAPES, TRACE_SHAPES, traceShapeForCategory } from '../src/data/traceShapes';
+import { ITEM_BASES } from '../src/data/itembases';
+import { baseComplexityOf } from '../src/engine/items';
 import { BOUNTY_BOARD_CFG, describeBountyPay, type BountyPosting } from '../src/data/bountyboard';
 import { BOUNTY_BOARD_SITE } from '../src/data/townBuild';
 import { START_ZONE } from '../src/data/zones';
@@ -105,14 +107,23 @@ bootSimEngine();
     stC.slips === 3 && stC.failed);
   // Device parity (card 5a, ruled at her delegation): one multiply.
   check('A: the device fold is one multiply; the tier ladder clamps',
-    traceBandFor(1, 'pad') === TRACE_CFG.tierBands[0] * TRACE_CFG.deviceBandMul.pad
-    && traceBandFor(99, 'mouse') === TRACE_CFG.tierBands[TRACE_CFG.tierBands.length - 1]
-    && traceSlipCapFor(TRACE_CFG.hybridAtTier - 1) === 0
-    && traceSlipCapFor(TRACE_CFG.hybridAtTier) === TRACE_CFG.slipCap);
+    traceBandFor(1, 'pad') === TRACE_CFG.complexityBands[0] * TRACE_CFG.deviceBandMul.pad
+    && traceBandFor(99, 'mouse') === TRACE_CFG.complexityBands[TRACE_CFG.complexityBands.length - 1]
+    && traceSlipCapFor(TRACE_CFG.hybridAtComplexity - 1) === 0
+    && traceSlipCapFor(TRACE_CFG.hybridAtComplexity) === TRACE_CFG.slipCap);
   // The outline library covers the writ's whole gamut.
-  check('A: every writ category resolves an authored outline',
+  check('A: every writ category resolves an outline at EVERY class (the ladder falls back)',
     BOUNTY_BOARD_CFG.lanes.craft.categories.every(c =>
-      !!CATEGORY_SHAPES[c] && !!traceShapeForCategory(c)));
+      !!CATEGORY_SHAPES[c] && [1, 2, 3].every(k => !!traceShapeForCategory(c, k))));
+  const lineLen = (cat: 'helmet' | 'ring', k: number): number =>
+    buildTracePath(traceShapeForCategory(cat, k), 0, 0, 10).pts.length;
+  check('A: the fine and ornate lines are LONGER than the plain (walk 2 — the complexity IS the line)',
+    lineLen('helmet', 2) > lineLen('helmet', 1)
+    && lineLen('helmet', 3) > lineLen('helmet', 2)
+    && lineLen('ring', 2) > lineLen('ring', 1)
+    && lineLen('ring', 3) > lineLen('ring', 2));
+  check('A: a class without its own line falls DOWN the ladder (boots ornate → plain)',
+    traceShapeForCategory('boots', 3).id === traceShapeForCategory('boots', 1).id);
 }
 
 // ------------------------------------------------- B. the writ loop
@@ -140,7 +151,7 @@ w.player.level = 8;
     z.id !== START_ZONE && z.id !== 'crossroads' && !z.boundless && z.objective.kind !== 'safe')!;
   const pB: BountyPosting = {
     id: 'bounty_test_writ', kind: 'charge', boardId: 'lastlight',
-    zoneId: zB.id, beat: 0, pay: { craft: { category: 'ring', tier: 1 } },
+    zoneId: zB.id, beat: 0, pay: { craft: { category: 'ring', complexity: 1 } },
   };
   w.bountyHands.push(pB);
   w.activeQuests.push({ questId: pB.id, zoneId: pB.zoneId, fieldDone: true });
@@ -155,7 +166,7 @@ w.player.level = 8;
       && (it as { item: ItemInstance }).item.writ !== undefined) as { item: ItemInstance } | undefined;
   check('B: the writ carries its payload + the earn-level',
     !!writDrop && writDrop.item.writ!.category === 'ring'
-    && writDrop.item.writ!.tier === 1 && writDrop.item.ilvl >= 1);
+    && writDrop.item.writ!.complexity === 1 && writDrop.item.ilvl >= 1);
   if (!writDrop) throw new Error('no writ minted');
   // Into the bag; the Forge face reads it.
   const writ = writDrop.item;
@@ -195,9 +206,9 @@ w.player.level = 8;
   forged ? `${forged.item.rarity} ${forged.item.name}` : 'none');
   // THE HIGH-TIER FAIL: the cap buzzes, the writ endures and RESTS.
   const writHi: ItemInstance = {
-    uid: 999901, baseId: 'smith_writ', ilvl: 20, tier: TRACE_CFG.hybridAtTier,
+    uid: 999901, baseId: 'smith_writ', ilvl: 20, tier: 1,
     rarity: 'common', name: "Smith's Writ: chest", baseRoll: 0, implicitRolls: [], affixes: [],
-    writ: { category: 'chest', tier: TRACE_CFG.hybridAtTier },
+    writ: { category: 'chest', complexity: TRACE_CFG.hybridAtComplexity },
   };
   w.localSeat.meta.items.push(writHi);
   const basesHi = w.forgeBases(writHi.uid);
@@ -219,13 +230,62 @@ w.player.level = 8;
     w.forgeBegin(writHi.uid, basesHi[0].id, true) === true);
   check('B: the pad hand traces at the wider band (card 5\'s one multiply)',
     Math.abs(w.traceView()!.band
-      - traceBandFor(TRACE_CFG.hybridAtTier, 'pad')) < 1e-9);
+      - traceBandFor(TRACE_CFG.hybridAtComplexity, 'pad')) < 1e-9);
   check('B: the cancel steps away — the writ endures', w.forgeCancel() === true
     && !w.traceActive() && w.localSeat.meta.items.some(it => it.uid === writHi.uid));
   check('B: a fresh begin sweeps on the zone change (atomic abort)',
     w.forgeBegin(writHi.uid, basesHi[0].id, false) === true
     && (w.loadZone('crossroads'), !w.traceActive())
     && w.localSeat.meta.items.some(it => it.uid === writHi.uid));
+}
+
+// ------------------------------------- C. THE COMPLEXITY LAW (walk 2)
+{
+  // The derived read: pure mixes are plain, hybrid textures fine; an
+  // authored override wins; the ornate class stands empty until her
+  // exotic-base pass — so the writ roll must never offer it.
+  const armor = Object.values(ITEM_BASES).filter(b => b.category === 'chest');
+  check('C: chest bases span plain and fine by DERIVATION (mix lanes)',
+    armor.some(b => baseComplexityOf(b) === 1) && armor.some(b => baseComplexityOf(b) === 2));
+  check('C: an authored override outranks the derivation',
+    baseComplexityOf({ ...armor[0], complexity: 3 }) === 3);
+  const stand = (cat: string, k: number): boolean =>
+    Object.values(ITEM_BASES).some(b => b.category === cat && baseComplexityOf(b) === k);
+  seedGlobalRandom(0xc0de);
+  const wC = makeSimWorld('warrior', 0xc4af7);
+  wC.account.features.add(FEATURE.BOUNTY_BOARD);
+  wC.loadZone('crossroads');
+  wC.loadZone(START_ZONE);
+  wC.completedObjectives.add('crossroads');
+  wC.player.level = 10; // classes 1-2 open (3 stands empty until the ornate bases); the young halo still seats
+  const seen: { category: string; complexity: number }[] = [];
+  for (let b = 0; b < 24; b++) {
+    wC.time = b * wC.bountyBeatSeconds();
+    wC.armBountyBoard();
+    for (const o of wC.bountyOffers) if (o.pay.craft) seen.push(o.pay.craft);
+  }
+  check('C: every dealt writ names a STANDING (category, complexity) pair',
+    seen.length > 0 && seen.every(c => stand(c.category, c.complexity)),
+  `${seen.length} writs dealt`);
+  check('C: the card speaks the named complexity (choosing the bounty IS choosing the class)',
+    describeBountyPay({ craft: { category: 'chest', complexity: 2 } })
+      === "a smith's writ: a medium-complexity chest piece");
+  // The class narrows the bench (card 2c); a legacy tier payload reads.
+  const writFine: ItemInstance = {
+    uid: 999902, baseId: 'smith_writ', ilvl: 12, tier: 1, rarity: 'common',
+    name: 'w', baseRoll: 0, implicitRolls: [], affixes: [],
+    writ: { category: 'chest', complexity: 2 },
+  };
+  wC.localSeat.meta.items.push(writFine);
+  const fineBases = wC.forgeBases(writFine.uid);
+  check("C: the writ's class narrows the bench to its OWN bases",
+    fineBases.length > 0 && fineBases.every(x =>
+      baseComplexityOf(ITEM_BASES[x.id]) === 2));
+  const writLegacy = { ...writFine, uid: 999903, writ: { category: 'chest', tier: 1 } } as unknown as ItemInstance;
+  wC.localSeat.meta.items.push(writLegacy);
+  check('C: a pre-walk-2 tier payload folds in as the class (tolerance)',
+    wC.forgeWrits().some(x => x.uid === 999903 && x.complexity === 1)
+    && wC.forgeBases(999903).every(x => baseComplexityOf(ITEM_BASES[x.id]) === 1));
 }
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);

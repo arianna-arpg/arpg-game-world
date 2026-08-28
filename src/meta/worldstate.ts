@@ -656,10 +656,13 @@ export function sanitizeBountyBoard(
       && (raw.pouch.kind === 'rough' || raw.pouch.kind === 'preformed')) {
       pay = { pouch: { kind: raw.pouch.kind, count: Math.floor(raw.pouch.count) } };
     } else if (raw.craft && typeof raw.craft === 'object'
-      && typeof raw.craft.category === 'string'
-      && isFiniteNum(raw.craft.tier) && raw.craft.tier > 0) {
-      // R5 THE SMITH'S WRIT (the steady hand).
-      pay = { craft: { category: raw.craft.category, tier: Math.floor(raw.craft.tier) } };
+      && typeof raw.craft.category === 'string') {
+      // R5 THE SMITH'S WRIT (the steady hand, walk 2 — COMPLEXITY is the
+      // axis; a pre-walk-2 posting's `tier` folds in as the class).
+      const cx = raw.craft.complexity ?? (raw.craft as { tier?: number }).tier;
+      if (isFiniteNum(cx) && (cx as number) > 0) {
+        pay = { craft: { category: raw.craft.category, complexity: Math.floor(cx as number) } };
+      }
     }
     if (!pay) return null;
     const cull = x.cull && typeof x.cull === 'object'

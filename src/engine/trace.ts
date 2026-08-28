@@ -35,13 +35,18 @@ import type { TraceShape } from '../data/traceShapes';
 /** Central levers. ⚠ EVERY number here is UNBLESSED (2026-08-26) — her
  *  walks retune them; the shapes are the commitment. */
 export const TRACE_CFG = {
-  /** The tier's band half-widths, WORLD units (index = tier-1; the walk's
-   *  demo slider made these felt). Tier past the ladder clamps to last. */
-  tierBands: [26, 20, 14, 9] as readonly number[],
-  /** THE HYBRID's ceiling (walk card 1c): from this tier UP, a slip cap
-   *  arms — more slips than `slipCap` FAILS the trace (writ kept, retry
-   *  after `failCooldownSec`). Below it, slips only pay accuracy. */
-  hybridAtTier: 3,
+  /** THE COMPLEXITY CLASSES' band half-widths, WORLD units (index =
+   *  complexity-1; the walk's demo made these felt). Complexity is her
+   *  horizontal axis — the DIFFICULTY lives mostly in the LINE ITSELF
+   *  (an ornate base traces an ornate outline), so the bands tighten
+   *  only gently. Past the ladder clamps to last. */
+  complexityBands: [26, 22, 18] as readonly number[],
+  /** THE HYBRID's ceiling (walk card 1c): from this COMPLEXITY up, a slip
+   *  cap arms — more slips than `slipCap` FAILS the trace (writ kept,
+   *  retry after `failCooldownSec`). Below it, slips only pay accuracy.
+   *  (Class 3 stands empty until the ornate bases land — the buzz waits
+   *  with them.) */
+  hybridAtComplexity: 3,
   slipCap: 3,
   failCooldownSec: 20,
   /** Accuracy paid per slip (a fraction of the accumulated pool — the
@@ -173,14 +178,15 @@ export function traceVerdict(path: TracePath, st: TraceState): TraceVerdict {
   };
 }
 
-/** The tier's effective band (device mul folded — card 5's one multiply). */
-export function traceBandFor(tier: number, device: 'mouse' | 'pad'): number {
-  const bands = TRACE_CFG.tierBands;
-  const base = bands[Math.max(0, Math.min(bands.length - 1, tier - 1))];
+/** The complexity class's effective band (device mul folded — card 5's
+ *  one multiply). */
+export function traceBandFor(complexity: number, device: 'mouse' | 'pad'): number {
+  const bands = TRACE_CFG.complexityBands;
+  const base = bands[Math.max(0, Math.min(bands.length - 1, complexity - 1))];
   return base * (TRACE_CFG.deviceBandMul[device] ?? 1);
 }
 
-/** Does this tier arm the hybrid's slip cap (card 1c)? 0 = uncapped. */
-export function traceSlipCapFor(tier: number): number {
-  return tier >= TRACE_CFG.hybridAtTier ? TRACE_CFG.slipCap : 0;
+/** Does this complexity arm the hybrid's slip cap (card 1c)? 0 = uncapped. */
+export function traceSlipCapFor(complexity: number): number {
+  return complexity >= TRACE_CFG.hybridAtComplexity ? TRACE_CFG.slipCap : 0;
 }
