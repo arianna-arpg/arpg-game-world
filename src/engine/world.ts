@@ -1597,6 +1597,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'bountyAbandon': return isStr(a.id);
     case 'bountyTurnIn': return isStr(a.id);
     case 'bountyLock': return isStr(a.id) && typeof a.locked === 'boolean';
+    case 'bountyCoastWrits': return true;
     case 'holdMuster': return true;  // the standing zone's harborhold — no payload
     case 'holdRestore': return true; // ditto (price re-derived host-side from data)
     // THE PATRON'S HOLD: vendor is a registry id, index an untrusted shelf
@@ -3150,19 +3151,20 @@ export class World {
    *  kinship, post-M4) are a dial's turn — never hardcode the singular
    *  (walk-1's ruling). */
   bountyHands: BountyPosting[] = [];
-  /** THE TURN-IN REFRESH's seed limb (persisted): every hand RESOLVED at
-   *  the board re-deals the slate NOW, and this counter joins the arm's
-   *  seed so the forced deal is as foreordained as a beat's — a reload
-   *  replays the identical refreshed slate. */
-  private bountyRefreshSeq = 0;
-  /** Which board BEAT the slate was last armed at (the standing-slate law:
-   *  re-arm only on a turned beat; -1 = never armed). */
-  private bountyArmedBeat = -1;
+  /** THE KINSHIP's per-board bookkeeping (walk 2 — regional boards on the
+   *  shared registry): each board's last-armed beat (the standing-slate
+   *  law) and its TURN-IN REFRESH seed limb (persisted — a resolution
+   *  re-deals that board NOW; the counter joins the arm's seed so the
+   *  forced deal is as foreordained as a beat's). Board ids ARE home zone
+   *  ids ('lastlight', a quay's port zone id). */
+  private bountyBoardState: Record<string, { armedBeat: number; refreshSeq: number }> = {};
   private bountyGate = new Dwell();
   /** ONE-SHOT: the bounty board's dwell — the main loop opens the postings
    *  panel (the salvage bench's flag idiom verbatim). */
   bountyDwellRequested = false;
   bountyDwellSeatId = 'p0';
+  /** Which board the dwell fired at (the panel scopes to it). */
+  bountyDwellBoardId: string = BOUNTY_BOARD_CFG.boardId;
   /** ONE-SHOT: the Sacrificial Font dwell — the main loop opens the Font
    *  screen (Merge / Convert / Reset; docs/design/skill-modes.md §7). */
   fontDwellRequested = false;
@@ -16488,10 +16490,16 @@ export class World {
       // re-derived (the live-world pool law; charter §4).
       ...(this.bountyOffers.length || this.bountyHands.length ? {
         bountyBoard: {
-          armedBeat: this.bountyArmedBeat,
+          armedBeat: this.boardStateOf(BOUNTY_BOARD_CFG.boardId).armedBeat,
           offers: this.bountyOffers.map(clonePosting),
           ...(this.bountyHands.length ? { hands: this.bountyHands.map(clonePosting) } : {}),
-          ...(this.bountyRefreshSeq > 0 ? { refreshSeq: this.bountyRefreshSeq } : {}),
+          ...(this.boardStateOf(BOUNTY_BOARD_CFG.boardId).refreshSeq > 0 ? { refreshSeq: this.boardStateOf(BOUNTY_BOARD_CFG.boardId).refreshSeq } : {}),
+          // THE KINSHIP: every regional board's own bookkeeping (the legacy
+          // top-level pair stays the Lastlight mirror for older readers).
+          ...(Object.keys(this.bountyBoardState).some(k => k !== BOUNTY_BOARD_CFG.boardId)
+            ? { boards: Object.fromEntries(Object.entries(this.bountyBoardState)
+              .filter(([k]) => k !== BOUNTY_BOARD_CFG.boardId)
+              .map(([k, v]) => [k, { armedBeat: v.armedBeat, ...(v.refreshSeq > 0 ? { refreshSeq: v.refreshSeq } : {}) }])) } : {}),
         },
       } : {}),
     };
@@ -16630,10 +16638,14 @@ export class World {
     // hand is seated (the resolver seam; docs/design/bounty-board.md §2:
     // without this order every accepted bounty silently dies on reload).
     const bb = sanitizeBountyBoard(ws.bountyBoard, healed);
-    this.bountyArmedBeat = bb?.armedBeat ?? -1;
+    this.bountyBoardState = {};
+    this.boardStateOf(BOUNTY_BOARD_CFG.boardId).armedBeat = bb?.armedBeat ?? -1;
+    this.boardStateOf(BOUNTY_BOARD_CFG.boardId).refreshSeq = bb?.refreshSeq ?? 0;
+    for (const [k, v] of Object.entries(bb?.boards ?? {})) {
+      this.bountyBoardState[k] = { armedBeat: v.armedBeat, refreshSeq: v.refreshSeq ?? 0 };
+    }
     this.bountyOffers = bb?.offers ?? [];
     this.bountyHands = bb?.hands ?? [];
-    this.bountyRefreshSeq = bb?.refreshSeq ?? 0;
     // Quests: active entries whose def AND zone both still stand; the
     // completed set rides verbatim (stale ids gate nothing — questDefOf
     // lookups simply miss them).
@@ -22132,18 +22144,36 @@ export class World {
       + (this.account.ledger.bounties_accepted ?? 0) === 0;
   }
 
-  /** At the board? (Feature owned + in town + near BOUNTY_BOARD_SITE.) */
-  nearBountyBoard(seat: Seat = this.localSeat): boolean {
-    return this.bountyBoardUnlocked()
-      && this.zone.id === START_ZONE
-      && dist(seat.actor.pos, vec(BOUNTY_BOARD_SITE.x, BOUNTY_BOARD_SITE.y)) <= BOUNTY_BOARD_CFG.dwell.radius
-      && this.dwellReachable(seat.actor.pos, vec(BOUNTY_BOARD_SITE.x, BOUNTY_BOARD_SITE.y));
+  /** THE BOARDS HERE (the kinship): every board standing in the CURRENT
+   *  zone with its counter position — Lastlight's site, or the quay's own
+   *  planted `bounty_board` service doodad (the residence the harborhold
+   *  service ladder seats). Board ids ARE home zone ids. */
+  bountyBoardsHere(): { id: string; pos: Vec2 }[] {
+    const out: { id: string; pos: Vec2 }[] = [];
+    if (this.bountyBoardUnlocked() && this.zone.id === START_ZONE) {
+      out.push({ id: BOUNTY_BOARD_CFG.boardId, pos: vec(BOUNTY_BOARD_SITE.x, BOUNTY_BOARD_SITE.y) });
+    }
+    if (this.zone.holdAnchor && this.bountyBoardRoster().some(b => b.id === this.zone.id)) {
+      const d = this.doodads.find(x => x.kind === 'bounty_board');
+      if (d) out.push({ id: this.zone.id, pos: vec(d.pos.x, d.pos.y) });
+    }
+    return out;
+  }
+
+  /** At a board? (Any board standing HERE within its dwell reach; pass
+   *  `boardId` to ask about one board specifically — the turn-in gate
+   *  asks about the HAND's own board.) */
+  nearBountyBoard(seat: Seat = this.localSeat, boardId?: string): boolean {
+    return this.bountyBoardsHere().some(b => (boardId === undefined || b.id === boardId)
+      && dist(seat.actor.pos, b.pos) <= BOUNTY_BOARD_CFG.dwell.radius
+      && this.dwellReachable(seat.actor.pos, b.pos));
   }
 
   /** The board's prompt while the player is near (renderer), or null. */
   bountyBoardHint(): { pos: Vec2; text: string } | null {
-    if (!this.nearBountyBoard()) return null;
-    return { pos: vec(BOUNTY_BOARD_SITE.x, BOUNTY_BOARD_SITE.y), text: 'Linger to read the postings.' };
+    const b = this.bountyBoardsHere().find(x => this.nearBountyBoard(this.localSeat, x.id));
+    if (!b) return null;
+    return { pos: b.pos, text: 'Linger to read the postings.' };
   }
 
   /** THE BEAT's quantum — the board's OWN clock (never the vendor restock
@@ -22220,26 +22250,70 @@ export class World {
     return p ? postingQuestDef(p, this) : undefined;
   }
 
-  /** ARM the slate for the current beat (the standing-slate law: a turned
-   *  beat re-deals whole; the same beat keeps the persisted slate — reloads
-   *  and re-dwells meet the SAME postings). Seeded (worldSeed, board, beat)
-   *  on its own Rng instance, so no other stream's die ever moves. */
-  armBountyBoard(): void {
+  /** THE BOARD ROSTER (the kinship): every standing board — Lastlight's
+   *  (the feature), plus each port zone whose paired hold stands OPEN with
+   *  the `bounty_board` service active (the quay's own service ladder is
+   *  the rung — data/harborholds.ts). A board's id IS its home zone id. */
+  bountyBoardRoster(): { id: string; homeZoneId: string }[] {
+    const out: { id: string; homeZoneId: string }[] = [];
+    if (this.bountyBoardUnlocked()) out.push({ id: BOUNTY_BOARD_CFG.boardId, homeZoneId: START_ZONE });
+    for (const z of Object.values(this.zoneMap)) {
+      if (!z.holdAnchor) continue;
+      const anchor = this.zoneMap[z.holdAnchor];
+      const hold = anchor?.harborhold;
+      if (!hold || hold.state !== 'open') continue;
+      const cls = holdClassOf(hold);
+      if (!holdActiveServices(cls, hold.prosperity).some(sv => sv.id === 'bounty_board')) continue;
+      out.push({ id: z.id, homeZoneId: z.id });
+    }
+    return out;
+  }
+
+  private boardStateOf(boardId: string): { armedBeat: number; refreshSeq: number } {
+    return this.bountyBoardState[boardId] ??= { armedBeat: -1, refreshSeq: 0 };
+  }
+
+  /** ARM one board's slate for the current beat (the standing-slate law: a
+   *  turned beat re-deals whole; the same beat keeps the persisted slate —
+   *  reloads and re-dwells meet the SAME postings). Seeded (worldSeed,
+   *  board, beat) on its own Rng instance, so no other stream's die ever
+   *  moves. THE KINSHIP: per-board state, LOCALIZED seats (distances
+   *  measure from the board's home — her ruling), cross-board (kind,zone)
+   *  dedupe with THE JUICING LEAN on overlapped ground, and the board's
+   *  own band scope (the starter band is Lastlight's alone). */
+  armBountyBoard(boardId: string = BOUNTY_BOARD_CFG.boardId): void {
     this.reconcileBounties();
     const beat = this.bountyBeat();
-    if (this.bountyArmedBeat === beat) return;
-    const boardId = BOUNTY_BOARD_CFG.boardId;
+    const bs = this.boardStateOf(boardId);
+    if (bs.armedBeat === beat) return;
+    const home = this.bountyBoardRoster().find(b => b.id === boardId)?.homeZoneId ?? START_ZONE;
     // THE TURN-IN REFRESH's seed limb rides only once it has ever fired
     // (seq 0 keeps the M0-exact derivation — old saves and standing
     // probes meet unchanged slates until a resolution actually refreshes).
     const seedKey = `bountyboard:${boardId}:${beat}`
-      + (this.bountyRefreshSeq > 0 ? `:${this.bountyRefreshSeq}` : '');
+      + (bs.refreshSeq > 0 ? `:${bs.refreshSeq}` : '');
     // The id limb (never colliding with a standing hand's id after a
-    // same-beat refresh — the slate-key law).
-    const slateKey = `${beat}` + (this.bountyRefreshSeq > 0 ? `r${this.bountyRefreshSeq}` : '');
+    // same-beat refresh, nor across boards — the slate-key law).
+    const slateKey = (boardId === BOUNTY_BOARD_CFG.boardId ? `${beat}` : `${boardId}_${beat}`)
+      + (bs.refreshSeq > 0 ? `r${bs.refreshSeq}` : '');
     const rng = new Rng((this.manifest.seed ^ hashStr(seedKey)) >>> 0);
     const allRows = Object.values(BOUNTY_KINDS);
-    const taken = new Set<string>(this.bountyHands.map(h => h.zoneId));
+    // Zone-uniqueness holds WITHIN a board's slate + its own hands; other
+    // boards' postings dedupe at (kind, zone) grain instead — different
+    // kinds stacking one zone is the JUICE (bounties ADD), the same ask
+    // twice would pay twice for one deed.
+    const taken = new Set<string>(this.bountyHands.filter(h => h.boardId === boardId).map(h => h.zoneId));
+    // The arming board's own OUTGOING unlocked offers are dead (this deal
+    // replaces them) — only other boards' postings, this board's KEPT
+    // pins, and every taken hand stand as claims.
+    const kindClaimed = (kind: string, zoneId: string): boolean =>
+      this.bountyOffers.some(o => o.kind === kind && o.zoneId === zoneId
+        && (o.boardId !== boardId || o.locked))
+      || this.bountyHands.some(h => h.kind === kind && h.zoneId === zoneId);
+    const lean = (zoneId: string): number =>
+      (this.bountyOffers.some(o => o.boardId !== boardId && o.zoneId === zoneId)
+        || this.bountyHands.some(h => h.boardId !== boardId && h.zoneId === zoneId))
+        ? BOUNTY_BOARD_CFG.kinship.overlapLean : 1;
     const view = this.simView();
     // THE ANSWER pool (M2 K4): every source's live census in sorted-row
     // order, each ref's resolution-ledger baseline read AT THE ARM (the
@@ -22263,7 +22337,7 @@ export class World {
     // pins to the anchor zone in perpetuity; while the account reads YOUNG
     // (run + account ledger under the threshold), EVERY seat pins — the
     // tutorial phase, relaxing to one ritual writ once the board is met.
-    const band = liveBountyBand(this);
+    const band = liveBountyBand(this, boardId);
     const anchor = band?.anchor;
     const young = !!anchor
       && (this.ledger[anchor.youngLedger] ?? 0) + (this.account.ledger[anchor.youngLedger] ?? 0)
@@ -22288,7 +22362,7 @@ export class World {
     // already removed dead pinned offers (the pin holds a seat, never the
     // truth); the kept rows seed the diversity/zone bookkeeping so fresh
     // deals fill honestly around them.
-    const offers: BountyPosting[] = this.bountyOffers.filter(o => o.locked);
+    const offers: BountyPosting[] = this.bountyOffers.filter(o => o.locked && o.boardId === boardId);
     const perKind: Record<string, number> = {};
     for (const o of offers) {
       perKind[o.kind] = (perKind[o.kind] ?? 0) + 1;
@@ -22310,6 +22384,8 @@ export class World {
           offers.filter(o => o.kind === 'summons' && o.answer?.source === src).length
           + this.bountyHands.filter(h => h.kind === 'summons' && h.answer?.source === src).length,
         reach,
+        // THE KINSHIP: localization + the juicing lean + the dedupe.
+        boardZoneId: home, lean, kindClaimed,
         ...(pin ? { pin } : {}),
         playerLevel: this.player.level, boardId, beat, slateKey, seq: i,
       };
@@ -22353,8 +22429,10 @@ export class World {
       perKind[rowId] = (perKind[rowId] ?? 0) + 1;
       offers.push(p);
     }
-    this.bountyOffers = offers;
-    this.bountyArmedBeat = beat;
+    // THE MERGE (the kinship): this board's fresh slate replaces only its
+    // own postings — every other board's standing offers ride untouched.
+    this.bountyOffers = [...this.bountyOffers.filter(o => o.boardId !== boardId), ...offers];
+    bs.armedBeat = beat;
     this.charDirty = true;
   }
 
@@ -22465,11 +22543,12 @@ export class World {
    *  as a beat's: the persisted refreshSeq joins the seed, so a reload
    *  replays the identical refreshed slate; pinned offers ride it (the
    *  posting-pin carry). */
-  private refreshBountySlate(): void {
+  private refreshBountySlate(boardId: string): void {
     if (this.clientActionHook) return;
-    this.bountyRefreshSeq++;
-    this.bountyArmedBeat = -1; // force past the standing-slate guard
-    this.armBountyBoard();
+    const bs = this.boardStateOf(boardId);
+    bs.refreshSeq++;
+    bs.armedBeat = -1; // force past the standing-slate guard
+    this.armBountyBoard(boardId);
   }
 
   /** THE POSTING PIN's capacity — owned Reserved Postings rungs. */
@@ -22525,9 +22604,11 @@ export class World {
    *  no pay, the hand frees, the slate stands ready ("the same outcome
    *  patterns", her words). An unfinished hand is refused with the ask. */
   turnInBounty(id: string, seat: Seat = this.localSeat): boolean {
-    if (!this.nearBountyBoard(seat)) return false;
     const p = this.bountyHands.find(h => h.id === id);
     if (!p) return false;
+    // THE KINSHIP: a hand turns in at ITS OWN board — the writ walks home
+    // to where it was posted (one hand per board, one payout counter each).
+    if (!this.nearBountyBoard(seat, p.boardId)) return false;
     const row = BOUNTY_KINDS[p.kind];
     if (!row) return false;
     const failed = p.failed === true || (row.failed?.(this, p) ?? false);
@@ -22539,8 +22620,8 @@ export class World {
       this.notice('The board takes the failed posting back — no pay, no debt.', BOUNTY_BOARD_CFG.accent, 15, 'civic');
       this.charDirty = true;
       // The fail lane resolves LIKE a turn-in (walk-1's ruling) — the
-      // refresh rides both endings.
-      this.refreshBountySlate();
+      // refresh rides both endings; only the resolving board re-deals.
+      this.refreshBountySlate(p.boardId);
       return true;
     }
     if (!row.done(this, p)) {
@@ -22555,9 +22636,10 @@ export class World {
     this.payBountyLanes(p, seat);
     this.bountyHands = this.bountyHands.filter(h => h.id !== id);
     this.charDirty = true;
-    // THE TURN-IN REFRESH: the collected hand re-deals the slate — the
-    // same dwell pays the finished work and offers the fresh hand.
-    this.refreshBountySlate();
+    // THE TURN-IN REFRESH: the collected hand re-deals ITS board's slate
+    // — the same dwell pays the finished work and offers the fresh hand;
+    // every other board's slate stands (the shared beat is the clock).
+    this.refreshBountySlate(p.boardId);
     return true;
   }
 
@@ -22648,10 +22730,14 @@ export class World {
   /** The postings panel's whole read (render-ready — copy from the kind
    *  rows' precision register, the pay printed, the countdown on the
    *  lattice boundary: one clock with the arm). */
-  bountyBoardView(): {
+  bountyBoardView(boardId: string = BOUNTY_BOARD_CFG.boardId): {
     countdown: number;
     offers: { id: string; title: string; ask: string; pay: string; locked?: boolean }[];
     hands: { id: string; title: string; ask: string; pay: string; state: 'afield' | 'ready' | 'failed' }[];
+    /** THE COAST WRITS (a quay board only): the local writ lane's rest
+     *  clock — 0 = postable now (the panel's button drives the standing
+     *  postHoldWrits grammar). Absent off harborhold ground. */
+    coastWrits?: { restSec: number };
   } {
     const face = (p: BountyPosting): { id: string; title: string; ask: string; pay: string; locked?: boolean } => {
       const c = BOUNTY_KINDS[p.kind]?.copy(this, p) ?? { title: p.id, ask: '' };
@@ -22660,10 +22746,14 @@ export class World {
         ...(p.locked ? { locked: true } : {}),
       };
     };
+    const hold = this.zone.holdAnchor ? this.zoneMap[this.zone.holdAnchor]?.harborhold : undefined;
+    const writs = boardId !== BOUNTY_BOARD_CFG.boardId && boardId === this.zone.id && hold?.state === 'open'
+      ? { restSec: Math.max(0, (hold.writsAt ?? 0) - this.time) } : undefined;
     return {
       countdown: (this.bountyBeat() + 1) * this.bountyBeatSeconds() - this.time,
-      offers: this.bountyOffers.map(face),
-      hands: this.bountyHands.map(p => {
+      ...(writs ? { coastWrits: writs } : {}),
+      offers: this.bountyOffers.filter(o => o.boardId === boardId).map(face),
+      hands: this.bountyHands.filter(h => h.boardId === boardId).map(p => {
         const row = BOUNTY_KINDS[p.kind];
         const state: 'afield' | 'ready' | 'failed' =
           (p.failed === true || (row?.failed?.(this, p) ?? false)) ? 'failed'
@@ -22802,9 +22892,13 @@ export class World {
     // THE LIVE EDGE (the vendor restock's law): while anyone stands at the
     // board, a TURNED beat re-deals the slate in place — host only (a net
     // client's snapshot is its whole truth; it never rolls its own slate).
-    if (near.length > 0 && !this.clientActionHook
-      && this.bountyArmedBeat >= 0 && this.bountyArmedBeat !== this.bountyBeat()) {
-      this.armBountyBoard();
+    const here = this.bountyBoardsHere();
+    for (const b of here) {
+      const bs = this.boardStateOf(b.id);
+      if (near.length > 0 && !this.clientActionHook
+        && bs.armedBeat >= 0 && bs.armedBeat !== this.bountyBeat()) {
+        this.armBountyBoard(b.id);
+      }
     }
     // The arrival latch matters here: the GROWN town's waypoint stands
     // inside the board's dwell disc — coming home must never auto-open
@@ -22812,9 +22906,15 @@ export class World {
     const armed = this.stationDwellArmed('bounty', near.length > 0);
     const ready = near.find(s => this.seatIdle(s));
     if (!this.bountyGate.fire(!!ready && armed, near.length > 0 && armed, dt, BOUNTY_BOARD_CFG.dwell.sec)) return;
-    if (!this.clientActionHook) this.armBountyBoard();
+    // THE KINSHIP: the dwell fires at whichever board here the ready seat
+    // stands in reach of — the panel scopes to it (one board per zone
+    // today: Lastlight's, or the quay's).
+    const at = here.find(b => this.nearBountyBoard(ready!, b.id)) ?? here[0];
+    if (!at) return;
+    if (!this.clientActionHook) this.armBountyBoard(at.id);
     this.bountyDwellRequested = true;
     this.bountyDwellSeatId = ready!.id;
+    this.bountyDwellBoardId = at.id;
   }
 
   /** Linger at a Sacrificial Font → open the Font screen (the salvage
@@ -23608,25 +23708,10 @@ export class World {
     this.holdDwellRequested = true;
   }
 
-  private writGate = new Dwell();
-
-  /** THE BOUNTY BOARD (service 'bounty_board'): a dwell at the plaza board
-   *  posts writs on the coast's LIVING foes — the bounty fabric's own
-   *  grammar (rarity promotion + a minted name + the 'bounty_mark' tag,
-   *  paying the standard per-kill claim) — then the board rests
-   *  (HARBORHOLD_CFG.writs.cooldownSec, persisted on the hold state). */
-  private updateWritBoard(dt: number): void {
-    if (this.gameOver || this.clientActionHook) return;
-    const hold = this.holdStateFor(this.zone);
-    if (!hold || hold.state !== 'open') return;
-    const board = this.doodads.find(d => d.kind === 'bounty_board');
-    if (!board) return;
-    const M = HARBORHOLD_CFG.muster;
-    const engaged = dist(this.player.pos, board.pos) <= M.radius
-      && this.dwellReachable(this.player.pos, board.pos);
-    if (!this.writGate.fire(engaged && this.playerIdle(), engaged, dt, M.dwellSec)) return;
-    this.postHoldWrits();
-  }
+  // (THE WRIT DWELL RETIRED at the kinship: the quay board's dwell opens
+  // the postings panel now, and the coast-writ lane rides the panel's own
+  // button through the standing postHoldWrits grammar — one doodad, one
+  // counter, two services.)
 
   /** Post the writs: up to writs.count living, normal-rarity, counted foes
    *  in this zone each become a NAMED, promoted mark. No eligible quarry =
@@ -26527,7 +26612,7 @@ export class World {
       if (action.t !== 'caravanTo' && action.t !== 'vocationQuest' && action.t !== 'harborChart'
         && action.t !== 'holdMuster' && action.t !== 'holdRestore'
         && action.t !== 'bountyAccept' && action.t !== 'bountyAbandon' && action.t !== 'bountyTurnIn'
-        && action.t !== 'bountyLock') {
+        && action.t !== 'bountyLock' && action.t !== 'bountyCoastWrits') {
         this.applyAction(this.localSeat, action);
       }
     } else {
@@ -26594,6 +26679,11 @@ export class World {
       case 'bountyAbandon': this.abandonBounty(action.id, seat); break;
       case 'bountyTurnIn': this.turnInBounty(action.id, seat); break;
       case 'bountyLock': this.setBountyLock(action.id, action.locked, seat); break;
+      case 'bountyCoastWrits':
+        // The quay panel's Coast Writs button — the standing writ grammar,
+        // self-guarded (cooldown + open hold + eligible quarry).
+        if (this.bountyBoardsHere().some(b => b.id !== BOUNTY_BOARD_CFG.boardId)) this.postHoldWrits();
+        break;
       case 'holdMuster': this.beginHoldMuster(); break;
       case 'holdRestore': this.buyHoldRestore(seat); break;
       case 'payToll': this.payHoldfastToll(action.index, seat); break;
@@ -42787,7 +42877,6 @@ export class World {
     // live defense, and the world-wide lifecycle sweep (rebuilds, recurring
     // sieges, deadlines).
     this.updateMusterHorn(dt);
-    this.updateWritBoard(dt);
     this.updateHoldDefense(dt);
     this.updateHarborholds();
     // The quartermaster hands you a hunt for lingering (auto-accept on dwell).

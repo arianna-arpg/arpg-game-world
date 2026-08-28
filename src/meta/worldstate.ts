@@ -338,8 +338,12 @@ export interface BountyBoardSave {
   offers: BountyPosting[];
   hands?: BountyPosting[];
   /** THE TURN-IN REFRESH's persisted seed limb (absent = 0 — no
-   *  resolution has ever refreshed this board). */
+   *  resolution has ever refreshed this board). The top-level pair is
+   *  the LASTLIGHT board's (the legacy shape, kept verbatim). */
   refreshSeq?: number;
+  /** THE KINSHIP: every REGIONAL board's own bookkeeping, keyed by board
+   *  id (= its home zone id). Absent = no regional board has ever armed. */
+  boards?: Record<string, { armedBeat: number; refreshSeq?: number }>;
 }
 
 /** One reserved shelf row: WHERE it sits (the slot index the overlay
@@ -693,10 +697,19 @@ export function sanitizeBountyBoard(
   const hands = Array.isArray(bb.hands)
     ? bb.hands.map(posting).filter((p): p is BountyPosting => p !== null) : [];
   if (!offers.length && !hands.length) return null;
+  const boards: Record<string, { armedBeat: number; refreshSeq?: number }> = {};
+  for (const [k, v] of Object.entries(bb.boards ?? {})) {
+    if (typeof k !== 'string' || !v || typeof v !== 'object' || !isFiniteNum(v.armedBeat)) continue;
+    boards[k] = {
+      armedBeat: Math.floor(v.armedBeat),
+      ...(isFiniteNum(v.refreshSeq) && v.refreshSeq > 0 ? { refreshSeq: Math.floor(v.refreshSeq) } : {}),
+    };
+  }
   return {
     armedBeat: isFiniteNum(bb.armedBeat) ? Math.floor(bb.armedBeat) : -1,
     offers, ...(hands.length ? { hands } : {}),
     ...(isFiniteNum(bb.refreshSeq) && bb.refreshSeq > 0
       ? { refreshSeq: Math.floor(bb.refreshSeq) } : {}),
+    ...(Object.keys(boards).length ? { boards } : {}),
   };
 }

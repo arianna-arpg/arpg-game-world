@@ -200,6 +200,21 @@ export const BOUNTY_BOARD_CFG = {
       { flag: 'bounty_lock_2', cost: 200 },
     ] as readonly { flag: string; cost: number }[],
   },
+  /** THE KINSHIP (walk 2, her rulings — 2026-08-26): regional boards on
+   *  the shared registry. Boards ALWAYS localize (seats measure from the
+   *  board's own home — the exploration + regional-flavor ruling); ONE
+   *  hand per board (the M0 per-board fold turned live — stockpiling
+   *  across boards rewards the traveler); ONE shared beat lattice for
+   *  every board (legibility — the turn-in refresh re-deals a board's
+   *  slate and NEVER moves the clock); and THE JUICING LEAN — a zone
+   *  already holding another board's postings weighs `overlapLean` in
+   *  fresh seats (different kinds stack; bounties ADD, so overlap JUICES
+   *  the ground — her turbocharge seed). The harborhold residence is the
+   *  quay's own `bounty_board` service row (data/harborholds.ts, at
+   *  prosperity 1 — the rung is that row's dial). */
+  kinship: {
+    overlapLean: 1.5,
+  },
   /** THE STARTER BAND's dials (docs/design/bounty-first-writ.md §4, walk
    *  cards 1+2 coupled): the young board's whole lever surface. `offers`
    *  is her one-to-three; `youngBelow` is how many bounties turned in
@@ -379,6 +394,10 @@ export function registerBountySource(row: BountySourceRow): void {
 
 export interface BountyBandRow {
   id: string;
+  /** The board this band governs (absent = every board). The starter
+   *  band is Lastlight's own — a quay board across the sea must never
+   *  pin the Crossroads (the kinship's board scope). */
+  board?: string;
   /** The live predicate — a pure read over the run's world; first live
    *  row wins the arm. */
   while(world: World): boolean;
@@ -401,6 +420,7 @@ export interface BountyBandRow {
 export const BOUNTY_BANDS: BountyBandRow[] = [
   {
     id: 'starter',
+    board: 'lastlight',
     while: w => !w.objectiveDoneAt(BOUNTY_BOARD_CFG.starter.anchorZone),
     offers: BOUNTY_BOARD_CFG.starter.offers,
     kinds: BOUNTY_BOARD_CFG.starter.kinds,
@@ -413,10 +433,13 @@ export const BOUNTY_BANDS: BountyBandRow[] = [
   },
 ];
 
-/** The arm's band resolve — first live row wins, none = the standing
- *  config. A pure read (bands never write). */
-export function liveBountyBand(world: World): BountyBandRow | null {
-  for (const b of BOUNTY_BANDS) if (b.while(world)) return b;
+/** The arm's band resolve — first live row FOR THIS BOARD wins, none =
+ *  the standing config. A pure read (bands never write). */
+export function liveBountyBand(world: World, boardId: string = BOUNTY_BOARD_CFG.boardId): BountyBandRow | null {
+  for (const b of BOUNTY_BANDS) {
+    if (b.board !== undefined && b.board !== boardId) continue;
+    if (b.while(world)) return b;
+  }
   return null;
 }
 
@@ -456,6 +479,18 @@ export interface BountyRollHost {
   /** THE FARTHER fold (M4): the owned growth rungs' reach multiplier —
    *  every kind's seat range.max stretches by it (1 = the standing reach). */
   reach: number;
+  /** THE KINSHIP's localization ref (her ruling: boards ALWAYS localize):
+   *  the arming board's own home zone — every seat measures from here,
+   *  never from the hero. */
+  boardZoneId: string;
+  /** THE JUICING LEAN: the weight multiplier for a zone already holding
+   *  another board's postings (her turbocharge seed — different kinds ADD
+   *  features to one zone). 1 for unclaimed ground. */
+  lean(zoneId: string): number;
+  /** THE CROSS-BOARD DEDUPE: is this exact (kind, zone) already posted or
+   *  in hand ANYWHERE? Different kinds may stack one zone (the juice);
+   *  the same ask must never pay twice for one deed. */
+  kindClaimed(kind: string, zoneId: string): boolean;
   /** THE SUMMONABLE roster (M3 K5): source ids whose summons face stands
    *  with room to breathe RIGHT NOW (headroom read at the arm). */
   igniteReady(): string[];
@@ -612,7 +647,8 @@ registerBountyKind({
     // The structural honesty checks (a pinned roll keeps these; only the
     // level band and the seat search belong to the unpinned path).
     const ok = (zz: ZoneDef): boolean => !host.objectiveDone(zz.id)
-      && !cfg.refuse.includes(zz.objective.kind);
+      && !cfg.refuse.includes(zz.objective.kind)
+      && !host.kindClaimed('charge', zz.id);
     const z = host.pin
       ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) ? host.zoneMap[host.pin] : null)
       : pickSeat(host.view, {
@@ -620,6 +656,12 @@ registerBountyKind({
         ...cfg.seat,
         // THE FARTHER fold (M4): owned reach rungs stretch the writ's range.
         range: { min: cfg.seat.range!.min, max: Math.round(cfg.seat.range!.max! * host.reach) },
+        // THE KINSHIP (her rulings): every board LOCALIZES — distances
+        // measure from the board's own home, never the hero — and THE
+        // JUICING LEAN weighs ground other boards' postings already hold
+        // (different kinds ADD features to one zone; same kinds dedupe).
+        from: host.boardZoneId,
+        weigh: zz => host.lean(zz.id),
         filter: zz => !taken.has(zz.id) && ok(zz)
           && zz.level >= host.playerLevel - cfg.band.below
           && zz.level <= host.playerLevel + cfg.band.above,
@@ -656,14 +698,21 @@ registerBountyKind({
     // An errand's unwalked-ground ask is structural: a pinned errand on
     // walked ground honestly refuses (the pin passes to the next kind).
     const z = host.pin
-      ? (host.zoneMap[host.pin] && !host.visited(host.pin) ? host.zoneMap[host.pin] : null)
+      ? (host.zoneMap[host.pin] && !host.visited(host.pin) && !host.kindClaimed('errand', host.pin) ? host.zoneMap[host.pin] : null)
       : pickSeat(host.view, {
         event: 'bountyboard',
         ...cfg.seat,
         // THE FARTHER fold (M4): owned reach rungs stretch the writ's range.
         range: { min: cfg.seat.range!.min, max: Math.round(cfg.seat.range!.max! * host.reach) },
+        // THE KINSHIP (her rulings): every board LOCALIZES — distances
+        // measure from the board's own home, never the hero — and THE
+        // JUICING LEAN weighs ground other boards' postings already hold
+        // (different kinds ADD features to one zone; same kinds dedupe).
+        from: host.boardZoneId,
+        weigh: zz => host.lean(zz.id),
         filter: zz => !taken.has(zz.id)
           && !host.visited(zz.id)
+          && !host.kindClaimed('errand', zz.id)
           && zz.level >= host.playerLevel - cfg.band.below
           && zz.level <= host.playerLevel + cfg.band.above,
       }, rng);
@@ -701,7 +750,8 @@ registerBountyKind({
     const ok = (zz: ZoneDef): boolean => !host.objectiveDone(zz.id)
       && zz.objective.kind !== 'bounty'
       && !zz.harborhold && !zz.holdAnchor
-      && !!zz.packs?.table?.length;
+      && !!zz.packs?.table?.length
+      && !host.kindClaimed('cull', zz.id);
     const z = host.pin
       ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) ? host.zoneMap[host.pin] : null)
       : pickSeat(host.view, {
@@ -709,6 +759,12 @@ registerBountyKind({
         ...cfg.seat,
         // THE FARTHER fold (M4): owned reach rungs stretch the writ's range.
         range: { min: cfg.seat.range!.min, max: Math.round(cfg.seat.range!.max! * host.reach) },
+        // THE KINSHIP (her rulings): every board LOCALIZES — distances
+        // measure from the board's own home, never the hero — and THE
+        // JUICING LEAN weighs ground other boards' postings already hold
+        // (different kinds ADD features to one zone; same kinds dedupe).
+        from: host.boardZoneId,
+        weigh: zz => host.lean(zz.id),
         filter: zz => !taken.has(zz.id) && ok(zz)
           && zz.level >= host.playerLevel - cfg.band.below
           && zz.level <= host.playerLevel + cfg.band.above,
@@ -749,7 +805,8 @@ registerBountyKind({
     // sealed ground never harvests (bootHarvest's own refusals).
     const ok = (zz: ZoneDef): boolean => zz.objective.kind !== 'safe'
       && zz.spoils !== 'none'
-      && harvestRowsFor(zz.biome, zz.tileset).length > 0;
+      && harvestRowsFor(zz.biome, zz.tileset).length > 0
+      && !host.kindClaimed('gather', zz.id);
     const z = host.pin
       ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) ? host.zoneMap[host.pin] : null)
       : pickSeat(host.view, {
@@ -757,6 +814,12 @@ registerBountyKind({
         ...cfg.seat,
         // THE FARTHER fold (M4): owned reach rungs stretch the writ's range.
         range: { min: cfg.seat.range!.min, max: Math.round(cfg.seat.range!.max! * host.reach) },
+        // THE KINSHIP (her rulings): every board LOCALIZES — distances
+        // measure from the board's own home, never the hero — and THE
+        // JUICING LEAN weighs ground other boards' postings already hold
+        // (different kinds ADD features to one zone; same kinds dedupe).
+        from: host.boardZoneId,
+        weigh: zz => host.lean(zz.id),
         filter: zz => !taken.has(zz.id) && ok(zz)
           && zz.level >= host.playerLevel - cfg.band.below
           && zz.level <= host.playerLevel + cfg.band.above,
@@ -799,7 +862,7 @@ registerBountyKind({
     const source = srcs[rng.int(0, srcs.length - 1)];
     const face = BOUNTY_SOURCES[source]?.summons;
     if (!face) return null;
-    const ok = (zz: ZoneDef): boolean => face.fit?.(zz) ?? true;
+    const ok = (zz: ZoneDef): boolean => (face.fit?.(zz) ?? true) && !host.kindClaimed('summons', zz.id);
     const z = host.pin
       ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) ? host.zoneMap[host.pin] : null)
       : pickSeat(host.view, {
@@ -807,6 +870,12 @@ registerBountyKind({
         ...cfg.seat,
         // THE FARTHER fold (M4): owned reach rungs stretch the writ's range.
         range: { min: cfg.seat.range!.min, max: Math.round(cfg.seat.range!.max! * host.reach) },
+        // THE KINSHIP (her rulings): every board LOCALIZES — distances
+        // measure from the board's own home, never the hero — and THE
+        // JUICING LEAN weighs ground other boards' postings already hold
+        // (different kinds ADD features to one zone; same kinds dedupe).
+        from: host.boardZoneId,
+        weigh: zz => host.lean(zz.id),
         filter: zz => !taken.has(zz.id) && ok(zz)
           && zz.level >= host.playerLevel - cfg.band.below
           && zz.level <= host.playerLevel + cfg.band.above,
@@ -889,6 +958,7 @@ registerBountyKind({
     const pool = host.answers().filter(a => {
       const z = host.zoneMap[a.ref.zoneId];
       if (!z) return false;
+      if (host.kindClaimed('answer', a.ref.zoneId)) return false;
       if (host.pin) return a.ref.zoneId === host.pin;
       if (taken.has(a.ref.zoneId)) return false;
       return z.level >= host.playerLevel - cfg.band.below

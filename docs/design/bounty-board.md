@@ -827,6 +827,38 @@ does NOT re-arm a cleared zone's objective — the objective belongs to
 the zone, and the additive lanes are the cull/gather/summons by
 design.
 
+**THE KINSHIP — walk 2 ruled all four opens and it LANDED (2026-08-26,
+the post-M4 committed movement made real):** her rulings — harbors
+first (the quay's own `bounty_board` service row, already authored at
+prosperity 1, IS the residence — the rung is that row's dial); boards
+ALWAYS LOCALIZE ("arranged around its own region rather than the hero"
+— exploration + regional flavor); ONE HAND PER BOARD (the stockpile —
+"ample opportunities that may overlap to further enhance a given zone");
+ONE SHARED BEAT for every board (legibility — and her clock caveat is
+the shipped law: the turn-in refresh re-deals a board's SLATE and never
+moves the lattice; with many boards each resolution refreshes only the
+board it happened at, all countdowns reading the same world-clock
+boundary). Built: board ids ARE home zone ids; `bountyBoardRoster`
+(Lastlight + every port zone whose OPEN anchor hold serves
+bounty_board) + `bountyBoardsHere` (the quay's planted service doodad is
+the counter — its old writ-dwell RETIRED, the coast-writ lane now the
+panel's own button through the standing postHoldWrits grammar);
+per-board armedBeat/refreshSeq (the save's `boards` record; the legacy
+top-level pair stays the Lastlight mirror); the seat fabric grew ONE
+generic lever (`SeatSpec.from` — distances measure from a named zone;
+every kind's roll passes the board's home); THE JUICING LEAN (her
+turbocharge seed): cross-board zone-uniqueness RELAXES to (kind, zone)
+grain — different kinds stacking one zone is the juice, bounties ADD —
+with `kinship.overlapLean` (1.5, DIAL) weighing already-claimed ground
+UP in fresh seats, while the same ask can never pay twice for one deed;
+the starter band scopes to Lastlight alone (`BountyBandRow.board` — a
+quay across the sea never pins the Crossroads); the turn-in gate walks
+each writ home to its own counter. Probe grown to 170 checks (rig R).
+Every gate green. The board's whole commission now stands: M0–M4, the
+first writ, the adjustments, the kinship — remaining only THE COMPONENT
+fork (its own charter, at her commission) and her gauge over every
+dial.
+
 ---
 
 ## 13. OPEN DIALS (build-time levers — no rulings pending)

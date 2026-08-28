@@ -374,6 +374,8 @@ export class UI {
   private vendorMenu = document.getElementById('vendor-menu')!;
   private boroughMenu = document.getElementById('borough-menu')!;
   private bountyMenu = document.getElementById('bounty-menu')!;
+  /** THE KINSHIP: which board this panel reads (set at the dwell). */
+  private bountyBoardId = 'lastlight';
   private sailMenu = document.getElementById('sail-menu')!;
   private holdMenu = document.getElementById('hold-menu')!;
   private vocationMenu = document.getElementById('vocation-menu')!;
@@ -5952,10 +5954,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   /** Open THE BOUNTY BOARD's postings panel (the board's dwell asked —
    *  docs/design/bounty-board.md M0). Couch-routed like every station. */
-  showBounties(seatId?: string): void {
+  showBounties(seatId?: string, boardId?: string): void {
     this.hideAll();
     this.ownPanel(this.bountyMenu, this.couchSeatFor(seatId));
     this.bountiesOpen = true;
+    this.bountyBoardId = boardId ?? this.getWorld().bountyDwellBoardId;
     this.bountyMenu.classList.remove('hidden');
     this.refreshBounties();
     // The live ticker: countdown in place; full repaint when the slate or a
@@ -5963,7 +5966,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (this.bountyTicker === null) {
       this.bountyTicker = window.setInterval(() => {
         if (!this.bountiesOpen) return;
-        const v = this.getWorld().bountyBoardView();
+        const v = this.getWorld().bountyBoardView(this.bountyBoardId);
         const fp = v.offers.map(o => o.id + (o.locked ? 'L' : '')).join('|') + '#' + v.hands.map(h => h.id + h.state).join('|');
         if (fp !== this.bountyFingerprint) { this.refreshBounties(); return; }
         const el = this.bountyMenu.querySelector<HTMLElement>('[data-bounty-countdown]');
@@ -5981,7 +5984,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   refreshBounties(): void {
     if (!this.bountiesOpen) return;
     const world = this.getWorld();
-    const v = world.bountyBoardView();
+    const v = world.bountyBoardView(this.bountyBoardId);
     this.bountyFingerprint = v.offers.map(o => o.id + (o.locked ? 'L' : '')).join('|') + '#' + v.hands.map(h => h.id + h.state).join('|');
     const accent = BOUNTY_BOARD_CFG.accent;
     const cap = QUEST_CATEGORY_CAPS.bounty ?? 1;
@@ -6036,6 +6039,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       + handsHtml
       + `<h3 style="margin:10px 0 4px 0">The slate (${v.offers.length}) · new postings <span data-bounty-countdown>${fmtRestock(v.countdown)}</span></h3>`
       + offersHtml
+      // THE COAST WRITS (a quay board only): the harborhold writ lane's
+      // button — the board posts named marks on the coast's living foes,
+      // then rests (the standing postHoldWrits grammar + cooldown).
+      + (v.coastWrits ? `<div class="bind-btns" style="margin-top:8px"><button data-bounty-writs${v.coastWrits.restSec > 0 ? ` disabled title="the board rests — fresh writs in ${Math.ceil(v.coastWrits.restSec / 60)}m"` : ' title="Post writs on the coast\'s living foes — named marks, paid per claim."'}>Post coast writs${v.coastWrits.restSec > 0 ? ` · rests ${Math.ceil(v.coastWrits.restSec / 60)}m` : ''}</button></div>` : '')
       + `<div class="bind-btns" style="margin-top:10px"><button data-bounty-close>Close</button></div>`;
     // Seat routing rides THE COUCH ACTION LATCH (a press inside a
     // guest-owned panel stamps uiActionSeatId) — no per-call seat plumbing.
@@ -6050,6 +6057,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         world.requestMeta({ t: 'bountyLock', id: btn.dataset.bountyLock!, locked: !btn.dataset.locked });
         this.refreshBounties();
       });
+    });
+    this.bountyMenu.querySelector<HTMLButtonElement>('button[data-bounty-writs]')?.addEventListener('click', () => {
+      world.requestMeta({ t: 'bountyCoastWrits' });
+      this.refreshBounties();
     });
     this.bountyMenu.querySelectorAll<HTMLButtonElement>('button[data-bounty-turnin]').forEach(btn => {
       btn.addEventListener('click', () => {

@@ -1635,7 +1635,7 @@ function tick(now: number): void {
       // postings panel — the beat's slate, the taken hand, the turn-in.
       if (world.bountyDwellRequested && !ui.escapeMenuOpen) {
         world.bountyDwellRequested = false;
-        if (!ui.bountiesOpen) ui.showBounties(world.bountyDwellSeatId);
+        if (!ui.bountiesOpen) ui.showBounties(world.bountyDwellSeatId, world.bountyDwellBoardId);
       }
       // The MUSTER HORN dwell (a harborhold's gate post) asks to open the
       // hold panel — the town's standing, the muster, the restoration.

@@ -32,10 +32,17 @@ import { eventTargetable } from './zonePolicy';
 export interface SeatSpec {
   /** The overlay id the per-biome policy gates on (zonePolicy eventAllowed). */
   event: string;
+  /** THE REFERENCE OVERRIDE (the bounty kinship's localization lever): the
+   *  zone id distances measure FROM. Absent = the player's standing zone
+   *  (the historical behavior — most events radiate from the hero); a
+   *  regional board names its own home instead, so its slate localizes
+   *  wherever the hero happens to stand. */
+  from?: string;
   /** Node-unit distance envelope from the reference zone (the player's
-   *  standing zone). Absent bound = unbounded on that side. When the
-   *  reference can't resolve (the player is underground in an off-graph
-   *  cave), the envelope is waived for that pick — a rare, transient case. */
+   *  standing zone, or `from` when named). Absent bound = unbounded on
+   *  that side. When the reference can't resolve (the player is
+   *  underground in an off-graph cave), the envelope is waived for that
+   *  pick — a rare, transient case. */
   range?: { min?: number; max?: number };
   /** Weight on ground the player KNOWS (visited ∪ surveyed). Default 1. */
   knownMul?: number;
@@ -70,7 +77,7 @@ export type SeatTuning = Pick<SeatSpec, 'range' | 'knownMul' | 'unknownMul' | 'v
 /** The filtered candidate list (unweighted) — exposed for QA/probes and for
  *  callers that need a count ("is anywhere left to claim?"). */
 export function seatCandidates(view: OverlayView, spec: SeatSpec): ZoneDef[] {
-  const ref = view.byId[view.currentZoneId]?.map;
+  const ref = view.byId[spec.from ?? view.currentZoneId]?.map;
   const min = spec.range?.min ?? 0;
   const max = spec.range?.max ?? Infinity;
   const out: ZoneDef[] = [];
@@ -91,7 +98,7 @@ export function seatCandidates(view: OverlayView, spec: SeatSpec): ZoneDef[] {
 export function pickSeat(view: OverlayView, spec: SeatSpec, rng: Rng): ZoneDef | null {
   const cands = seatCandidates(view, spec);
   if (!cands.length) return null;
-  const ref = view.byId[view.currentZoneId]?.map;
+  const ref = view.byId[spec.from ?? view.currentZoneId]?.map;
   const min = spec.range?.min ?? 0;
   const max = spec.range?.max ?? Infinity;
   const span = Number.isFinite(max) ? Math.max(1, max - min) : 0;

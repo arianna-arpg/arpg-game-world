@@ -76,6 +76,11 @@
 //      THE POSTING PIN (capacity = Reserved Postings rungs; pinned
 //      offers ride beat and refresh alike; the pin holds the seat, never
 //      the truth).
+//   R (THE KINSHIP, walk 2): the board roster (Lastlight + open holds
+//      wearing the bounty_board service), ALWAYS-localized slates, one
+//      hand per board, the writ walking home to its own counter, the
+//      scoped turn-in refresh, one shared lattice, the regional save
+//      bookkeeping, and the starter band governing Lastlight alone.
 // Run: npx tsx balance/probe_bountyboard.ts
 // ---------------------------------------------------------------------------
 
@@ -93,6 +98,7 @@ import {
 } from '../src/data/bountyboard';
 import { HOLD_CLASSES, mintHoldState } from '../src/data/harborholds';
 import { harvestRowsFor } from '../src/data/harvest';
+import { coordDist } from '../src/world/coords';
 import { HARVEST_CFG, harvestSeqFor } from '../src/engine/harvest';
 import { BOUNTY_BOARD_SITE, expandedTown } from '../src/data/townBuild';
 import { STRUCTURES } from '../src/data/structures';
@@ -1050,6 +1056,110 @@ seedGlobalRandom(0x4e5e);
     !!l1 && !!l2 && l1.requiresUnlock === 'feat_bounty_board'
     && l1.reqLedger === 'bounty_done' && l2.requiresUnlock === 'feat_bounty_lock_1'
     && l1.cost === BOUNTY_BOARD_CFG.lock.ladder[0].cost);
+}
+
+// ------------- R. THE KINSHIP (walk 2, her rulings — regional boards on
+// the shared registry: harbors first, ALWAYS-localized slates, one hand
+// per board, one shared beat; the turn-in refresh scoped to its board.)
+seedGlobalRandom(0x4145);
+{
+  const wR = mkWorld();
+  wR.player.level = 8;
+  check('R: a bare run\'s roster is Lastlight alone',
+    wR.bountyBoardRoster().length === 1 && wR.bountyBoardRoster()[0].id === 'lastlight');
+  // Stand a quay board: an OPEN hold at prosperity 1 wearing the
+  // bounty_board service, anchored from a port zone (the pair's shape).
+  const clsR = Object.values(HOLD_CLASSES).find(c => c.services.some(s => s.id === 'bounty_board'))!;
+  check('R: a hold class carries the bounty_board service row (the residence)', !!clsR);
+  const anchorR = Object.values(wR.zoneMap).find(z =>
+    z.id !== START_ZONE && z.id !== 'crossroads' && !z.boundless && !z.holdAnchor)!;
+  const portR = Object.values(wR.zoneMap).find(z =>
+    z.id !== START_ZONE && z.id !== 'crossroads' && z.id !== anchorR.id && !z.boundless)!;
+  anchorR.harborhold = { ...mintHoldState(clsR), state: 'open', prosperity: 1 };
+  portR.holdAnchor = anchorR.id;
+  const rosterR = wR.bountyBoardRoster();
+  check('R: an open, prosperous hold seats its quay board on the roster',
+    rosterR.length === 2 && rosterR.some(b => b.id === portR.id && b.homeZoneId === portR.id));
+  check('R: a besieged hold seats NO board (the town must live first)',
+    (() => { anchorR.harborhold!.state = 'besieged';
+      const n = wR.bountyBoardRoster().length;
+      anchorR.harborhold!.state = 'open';
+      return n === 1; })());
+  // THE LOCALIZATION: the quay's slate measures from ITS OWN home — the
+  // hero stands in Lastlight the whole time.
+  wR.armBountyBoard();
+  wR.armBountyBoard(portR.id);
+  const quayOffers = (): BountyPosting[] => wR.bountyOffers.filter(o => o.boardId === portR.id);
+  const townOffers = (): BountyPosting[] => wR.bountyOffers.filter(o => o.boardId === 'lastlight');
+  check('R: the quay board deals its own slate beside Lastlight\'s',
+    quayOffers().length > 0 && townOffers().length > 0,
+  `quay ${quayOffers().length} · town ${townOffers().length}`);
+  check('R: THE LOCALIZATION — every quay writ stands within the quay\'s own reach',
+    quayOffers().every(o => coordDist(wR.zoneMap[o.zoneId].map, portR.map) <= 720 * 1.01));
+  // ONE HAND PER BOARD (her ruling — the M0 fold turned live): a hand
+  // from each board stands together; a second on the SAME board refuses.
+  const tOff = townOffers()[0];
+  const qOff = quayOffers()[0];
+  check('R: one hand from EACH board stands together (the stockpile)',
+    wR.acceptBounty(tOff.id) === true && wR.acceptBounty(qOff.id) === true
+    && wR.bountyHands.length === 2);
+  const tOff2 = townOffers()[0];
+  check('R: a second hand on the same board refuses (the per-board cap)',
+    tOff2 === undefined || (wR.acceptBounty(tOff2.id) === false && wR.bountyHands.length === 2));
+  // THE TURN-IN gate: a hand walks home to ITS OWN board — the quay's
+  // hand refuses at Lastlight's counter.
+  parkAtBoard(wR);
+  const qHand: BountyPosting = {
+    id: 'bounty_test_quay', kind: 'charge', boardId: portR.id,
+    zoneId: anchorR.id, beat: 0, pay: { essence: [{ essence: 'coarse', count: 2 }] },
+  };
+  wR.bountyHands.push(qHand);
+  wR.activeQuests.push({ questId: qHand.id, zoneId: qHand.zoneId, fieldDone: true });
+  wR.completedObjectives.add(anchorR.id);
+  check('R: a quay hand refuses Lastlight\'s counter (the writ walks home)',
+    wR.turnInBounty(qHand.id) === false && wR.bountyHands.some(h => h.id === qHand.id));
+  // THE SCOPED REFRESH: resolving a Lastlight hand re-deals Lastlight
+  // alone — the quay's standing slate rides untouched, and both boards
+  // read the ONE shared lattice.
+  const tHand: BountyPosting = {
+    id: 'bounty_test_town', kind: 'charge', boardId: 'lastlight',
+    zoneId: anchorR.id, beat: 0, pay: { essence: [{ essence: 'coarse', count: 2 }] },
+  };
+  wR.bountyHands.push(tHand);
+  wR.activeQuests.push({ questId: tHand.id, zoneId: tHand.zoneId, fieldDone: true });
+  const quayIds = quayOffers().map(o => o.id).join('|');
+  const townIds = townOffers().map(o => o.id).join('|');
+  check('R: the turn-in refreshes ITS board alone (the quay slate stands)',
+    wR.turnInBounty(tHand.id) === true
+    && quayOffers().map(o => o.id).join('|') === quayIds
+    && townOffers().map(o => o.id).join('|') !== townIds);
+  check('R: one shared lattice — both boards read the same countdown',
+    wR.bountyBoardView().countdown === wR.bountyBoardView(portR.id).countdown);
+  // THE SAVE: regional bookkeeping rides the boards record and returns.
+  const wsR = wR.serializeWorldState();
+  check('R: the save carries the quay board\'s own bookkeeping',
+    wsR.bountyBoard?.boards?.[portR.id]?.armedBeat !== undefined);
+  // THE BAND SCOPE: on a fresh (ungraduated) run the starter band governs
+  // Lastlight ALONE — a quay board deals the full grammar from its first
+  // beat (a quay across the sea must never pin the Crossroads).
+  seedGlobalRandom(0x4146);
+  const wR2 = makeSimWorld('warrior', SEED ^ 0x77);
+  openBoard(wR2);
+  wR2.loadZone('crossroads');
+  wR2.loadZone(START_ZONE);
+  const anchor2 = Object.values(wR2.zoneMap).find(z =>
+    z.id !== START_ZONE && z.id !== 'crossroads' && !z.boundless && !z.holdAnchor)!;
+  const port2 = Object.values(wR2.zoneMap).find(z =>
+    z.id !== START_ZONE && z.id !== 'crossroads' && z.id !== anchor2.id && !z.boundless)!;
+  anchor2.harborhold = { ...mintHoldState(clsR), state: 'open', prosperity: 1 };
+  port2.holdAnchor = anchor2.id;
+  wR2.armBountyBoard();
+  wR2.armBountyBoard(port2.id);
+  const town2 = wR2.bountyOffers.filter(o => o.boardId === 'lastlight');
+  const quay2 = wR2.bountyOffers.filter(o => o.boardId === port2.id);
+  check('R: the starter band governs Lastlight alone (the quay deals unbanded)',
+    town2.length > 0 && town2.every(o => o.zoneId === 'crossroads')
+    && quay2.length > 0 && quay2.some(o => o.zoneId !== 'crossroads'));
 }
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);
