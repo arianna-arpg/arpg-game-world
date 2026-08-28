@@ -857,7 +857,14 @@ each writ home to its own counter. Probe grown to 170 checks (rig R).
 Every gate green. The board's whole commission now stands: M0–M4, the
 first writ, the adjustments, the kinship — remaining only THE COMPONENT
 fork (its own charter, at her commission) and her gauge over every
-dial.
+dial. **THE FORK CHARTERED (2026-08-26, her brief — the true shape
+revealed: not components, CRAFTING):** docs/design/steady-hand.md —
+THE TRACE FABRIC (the Operation-law outline-tracing minigame, a
+general consumer-blind session; runic casting recorded as the second
+consumer) + THE SMITH'S WRIT (R5 reborn: a craft credit redeemed at
+Brandt by tracing the piece; the deviation band IS the tier). Seven
+cards open; the walk artifact carries a PLAYABLE band demo:
+https://claude.ai/code/artifact/a6b799b6-da67-45e1-897a-a046052d6b7f
 
 ---
 
