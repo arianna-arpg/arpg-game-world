@@ -742,8 +742,54 @@ sanitizer's answer branch drops a claim whose source left the registry
 probe-registered source driving the REAL arm/accept/delta/watch/annul/
 strike loop — and K — the four lanes + the muster's full state walk +
 the answer sanitizer); every gate green (check clean, probe lane
-157/157, smoke baseline unmoved). **M3 THE SUMMONS fires at her word**
-(the `ignite` hook already stands empty on the row).
+157/157, smoke baseline unmoved). **M3 THE SUMMONS fired at her word and
+LANDED (2026-08-26):** the ignite verb promoted into the source rows as
+THE SUMMONS FACE (`BountySourceRow.summons` — name/ask/ledger/headroom/
+fit/ignite; M2's empty top-level hook subsumed), fractures-first per her
+roster ruling (overlays/fractures.ts: `ignite` delegates to devIgnite —
+one verb, two callers — `fit` is the same eventTargetable every ambient
+ignition obeys, and `headroom` reads the field's one-at-a-time breath
+AND the manifest's own enablement: a disabled package still constructs
+its field, and the board must never summon what the run does not carry —
+the sim's quiet-expedition law rides the same read, a REAL honesty bug
+caught by the diagnosis). K5 joins the kinds: the roll draws a
+summonable source under `summons.cap` (per source, across slate +
+hands), THE WORLD ACT fires at the accept through the new generic
+`BountyKindRow.accept` hook (a refusal strikes with its courtesy — the
+stale-offer race law), the BORN instance's census key is captured and
+the resolution ledger baselines AT the accept (only seals the summons
+caused count), the K4 annul law then applies verbatim, and a room-filled
+OFFER strikes at the reconcile. The starter band's kinds pin summons at
+0 — young boards never summon. **M4's POLISH HALF landed the same
+commit:** THE GROWTH RUNGS derived from `BOUNTY_BOARD_CFG.growth` (the
+broader-wares doctrine — Broader Postings +1 offer/rung, Farther
+Postings ×1.35 reach/rung; rung 1 of each deed-gated on `bounty_done`,
+later rungs chained; the band's small slate outranks BROADER by law),
+the arm's STRUCTURAL AVAILABILITY read (`BountyKindRow.available` — an
+empty census or bare summonable roster leaves the DRAW instead of
+wasting the seat), THE CHEVRON PATRON (charter §8: `bountyAttention` —
+a held gather's unspent nodes point in the board's accent through the
+standing attention fold; culls keep the writ ☠ by law, events and
+objectives ride their own fabrics' pointers; glyph a DIAL), and the
+copy sweep satisfied by inspection (every card face was written and
+walked in the precision register across M0–M3). `audit bounties` prints
+the summonable roster + every band. Probe grown to 145 checks (rigs O —
+the full K5 law loop on a probe source — O2 — THE FRACTURE DEBUT: a
+fractures-enabled world deals the summons, the accept tears the earth
+open at the posted zone through the promoted verb, census + fractureIn
+agree, the seal resolves, the board pays — and P — the growth rows/
+folds, the young law outranking BROADER, the chevron patron; a diagnosed
+observation recorded: a level-1 hero's band admits only the first few
+halo zones, so the young country's full board honestly deals 3–4 — the
+level band, not a defect). Every gate green (check clean, probe lane
+158/158, smoke baseline unmoved). **The numbered movements M0–M4 are
+COMPLETE.** Remaining beyond them: THE COMPONENT (card 7's fork — its
+own charter + minigame, at her commission) and THE KINSHIP (walk-1 card
+10, ruled WANTED) — the kinship's concrete shape holds real opens
+(WHICH residences seat regional boards — the harborhold quay's service
+ladder is the natural first, at what prosperity rung; whether regional
+slates lean local ground; the per-board cap fold's dial) and awaits her
+word on those before it builds.
 
 ---
 

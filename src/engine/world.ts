@@ -155,6 +155,9 @@ import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, 
 import {
   BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyChargePay, bountySourceRows, clonePosting, describeBountyPay, liveBountyBand, postingQuestDef, rollBountyPay,
   type BountyKindRow, type BountyTargetRef,
+} from '../data/bountyboard';
+import type { AttentionPoint } from '../world/attention';
+import {
   type BountyPosting, type BountyRollHost,
 } from '../data/bountyboard';
 // Also a side-effect import: pulling these registers the bestiary's recording
@@ -22142,6 +22145,50 @@ export class World {
     return Math.max(BOUNTY_BOARD_CFG.minBeatSec, BOUNTY_BOARD_CFG.beatSec);
   }
 
+  /** THE BROADER fold (M4): owned growth rungs widen the standing slate.
+   *  The starter band's own offers override outranks it — young boards
+   *  stay small by law. */
+  private bountyBroaderBonus(): number {
+    let add = 0;
+    for (const r of BOUNTY_BOARD_CFG.growth.broader) {
+      if (featureEnabled(this.account, r.flag)) add += r.add;
+    }
+    return add;
+  }
+
+  /** THE FARTHER fold (M4): the owned reach rungs' multiplier — every
+   *  kind's seat range.max stretches by it at the arm (1 = standing). */
+  bountyReach(): number {
+    let mul = 1;
+    for (const r of BOUNTY_BOARD_CFG.growth.farther) {
+      if (featureEnabled(this.account, r.flag)) mul *= r.mul;
+    }
+    return mul;
+  }
+
+  /** THE CHEVRON PATRON (M4 — charter §8): the board's own edge pointers
+   *  in the target zone. Today: a held gather's unspent nodes in the
+   *  board's accent — the one ask with no standing pointer of its own
+   *  (culls keep the writ ☠ by law; events and objectives ride their
+   *  fabrics' chevrons). */
+  bountyAttention(): AttentionPoint[] {
+    const out: AttentionPoint[] = [];
+    for (const p of this.bountyHands) {
+      if (p.kind !== 'gather' || p.zoneId !== this.zone.id || !p.gather) continue;
+      if (p.gather.claimed >= p.gather.count) continue;
+      for (let i = 0; i < this.harvestNodes.length; i++) {
+        const n = this.harvestNodes[i];
+        if (n.spent) continue;
+        out.push({
+          id: `bounty_gather_${p.id}_${i}`, pos: { x: n.pos.x, y: n.pos.y },
+          color: BOUNTY_BOARD_CFG.accent, glyph: BOUNTY_BOARD_CFG.chevron.glyph,
+          label: 'the gather', z: 4,
+        });
+      }
+    }
+    return out;
+  }
+
   private bountyBeat(): number {
     return Math.floor(this.time / this.bountyBeatSeconds());
   }
@@ -22205,7 +22252,11 @@ export class World {
     const young = !!anchor
       && (this.ledger[anchor.youngLedger] ?? 0) + (this.account.ledger[anchor.youngLedger] ?? 0)
         < anchor.youngBelow;
-    const offerCap = band?.offers ?? BOUNTY_BOARD_CFG.offers;
+    // THE GROWTH RUNGS (M4): BROADER widens the standing slate (the band's
+    // own offers override outranks it); FARTHER stretches every roll's
+    // reach through the host.
+    const offerCap = band?.offers ?? (BOUNTY_BOARD_CFG.offers + this.bountyBroaderBonus());
+    const reach = this.bountyReach();
     const weightOf = (r: BountyKindRow): number => Math.max(0, band?.kinds?.[r.id] ?? r.weight);
     const draw = (pool: BountyKindRow[]): BountyKindRow | null => {
       let total = 0;
@@ -22219,22 +22270,33 @@ export class World {
     const perKind: Record<string, number> = {};
     for (let i = 0; i < offerCap && allRows.length; i++) {
       const pin = anchor && (young || i === 0) ? anchor.zoneId : undefined;
-      // Weighted kind pick under THE DIVERSITY CAP (slate.maxPerKind —
-      // card 6's shape): a kind at its cap leaves the draw. Pinned seats
-      // trade the one-posting-per-zone law for one-KIND-per-zone (distinct
-      // faces on the same ground are distinct asks — slate and hand both).
-      const rows = allRows.filter(r => (perKind[r.id] ?? 0) < BOUNTY_BOARD_CFG.slate.maxPerKind
-        && weightOf(r) > 0
-        && (!pin || (!offers.some(o => o.kind === r.id && o.zoneId === pin)
-          && !this.bountyHands.some(h => h.kind === r.id && h.zoneId === pin))));
       const host: BountyRollHost = {
         view, zoneMap: this.zoneMap, objectiveDone: id => this.objectiveDoneAt(id),
         visited: id => this.visited.has(id),
         pickGemId: (lvl, r) => this.pickBountyGemId(lvl, r),
         answers,
+        // THE SUMMONABLE roster (M3 K5): sources whose summons face stands
+        // with room to breathe; the cap read is live over this arm's build.
+        igniteReady: () => bountySourceRows()
+          .filter(r => !!r.summons && r.summons.headroom(this)).map(r => r.id),
+        summonsStanding: src =>
+          offers.filter(o => o.kind === 'summons' && o.answer?.source === src).length
+          + this.bountyHands.filter(h => h.kind === 'summons' && h.answer?.source === src).length,
+        reach,
         ...(pin ? { pin } : {}),
         playerLevel: this.player.level, boardId, beat, seq: i,
       };
+      // Weighted kind pick under THE DIVERSITY CAP (slate.maxPerKind —
+      // card 6's shape): a kind at its cap leaves the draw, and so does a
+      // kind with structurally NOTHING to say (M4's availability read — an
+      // empty census must not waste the seat). Pinned seats trade the
+      // one-posting-per-zone law for one-KIND-per-zone (distinct faces on
+      // the same ground are distinct asks — slate and hand both).
+      const rows = allRows.filter(r => (perKind[r.id] ?? 0) < BOUNTY_BOARD_CFG.slate.maxPerKind
+        && weightOf(r) > 0
+        && (r.available?.(host) ?? true)
+        && (!pin || (!offers.some(o => o.kind === r.id && o.zoneId === pin)
+          && !this.bountyHands.some(h => h.kind === r.id && h.zoneId === pin))));
       let p: BountyPosting | null = null;
       let rowId = '';
       if (pin) {
@@ -22333,6 +22395,17 @@ export class World {
     if (reason) {
       this.bountyOffers.splice(i, 1);
       this.notice(`The posting is struck — ${reason}.`, BOUNTY_BOARD_CFG.accent, 14, 'civic');
+      this.charDirty = true;
+      return false;
+    }
+    // THE WORLD ACT at the take (M3 — the summons' ignition): a kind may
+    // seal its accept with a world act, run BEFORE the hand seats; a
+    // refusal (the room filled between the arm and the take) strikes the
+    // posting with its courtesy — the stale-offer race law.
+    const actRefusal = row.accept?.(this, p) ?? null;
+    if (actRefusal) {
+      this.bountyOffers.splice(i, 1);
+      this.notice(`The posting is struck — ${actRefusal}.`, BOUNTY_BOARD_CFG.accent, 14, 'civic');
       this.charDirty = true;
       return false;
     }

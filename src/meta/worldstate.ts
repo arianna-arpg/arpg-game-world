@@ -671,7 +671,8 @@ export function sanitizeBountyBoard(
         ...(typeof x.answer.ledger === 'string' ? { ledger: x.answer.ledger } : {}),
         base: Math.max(0, Math.floor(x.answer.base)),
       } : undefined;
-    if (x.kind === 'answer' && !answer) return null; // a K4 posting IS its claim
+    // A K4 or K5 posting IS its claim — kind without answer drops whole.
+    if ((x.kind === 'answer' || x.kind === 'summons') && !answer) return null;
     return {
       id: x.id, kind: x.kind, boardId: x.boardId, zoneId: x.zoneId,
       beat: Math.floor(x.beat), pay,

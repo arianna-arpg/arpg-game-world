@@ -24,6 +24,7 @@ import {
   LEDGER_ZONES_EXPLORED, classLevelLedgerKey, reachedLevelKey, type Account,
 } from './account';
 import { gateLevelNeeds, gateMet, gateRowLabel, gateRowMet, type GateRow } from './gates';
+import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
 import { VENDOR_CFG } from '../data/vendors';
 import { LEDGER_ESSENCE_TOUCHED } from '../data/essences';
 import { SCALD_KIT_UNLOCK_LEDGERS } from '../data/scaldkit';
@@ -829,6 +830,31 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     label: 'Quest Package: Town Expansion',
     description: 'A quartermaster settles in Lastlight, posting hunts into the wilds (quest chains).',
     payload: { flag: FEATURE.QUEST_GIVER } },
+
+  // --- THE BOARD'S GROWTH (bounty board M4 — derived from
+  //     BOUNTY_BOARD_CFG.growth, the broader-wares doctrine: append a rung
+  //     THERE and the catalog + the arm's fold grow together): BROADER
+  //     POSTINGS widen the slate, FARTHER POSTINGS stretch the writs'
+  //     reach. Rung 1 of each gates on the first bounty ever turned in
+  //     (the board must be a habit before width means anything); later
+  //     rungs chain rung-to-rung. The starter band's small slate outranks
+  //     BROADER while it lives — young boards stay small by law. ----------
+  ...BOUNTY_BOARD_CFG.growth.broader.map((rung, i): Unlockable => ({
+    id: `feat_bounty_broader_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
+    requiresUnlock: i === 0 ? 'feat_bounty_board' : `feat_bounty_broader_${i}`,
+    ...(i === 0 ? { reqLedger: 'bounty_done' } : {}),
+    label: `Broader Postings ${['I', 'II', 'III'][i] ?? i + 1}`,
+    description: `The board deals ${rung.add} more posting${rung.add === 1 ? '' : 's'} every beat — more work to choose among, one hand at a time all the same.`,
+    payload: { flag: rung.flag },
+  })),
+  ...BOUNTY_BOARD_CFG.growth.farther.map((rung, i): Unlockable => ({
+    id: `feat_bounty_farther_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
+    requiresUnlock: i === 0 ? 'feat_bounty_board' : `feat_bounty_farther_${i}`,
+    ...(i === 0 ? { reqLedger: 'bounty_done' } : {}),
+    label: `Farther Postings ${['I', 'II', 'III'][i] ?? i + 1}`,
+    description: `The board's writs reach ${Math.round((rung.mul - 1) * 100)}% farther afield — deeper country, richer asks, longer walks home.`,
+    payload: { flag: rung.flag },
+  })),
 
   // --- Training Dummy — THE DEED GATE: surfaces on the account's first
   //     LEGENDARY skill gem (LEDGER_LEGENDARY_SKILL_DROP, stamped at the

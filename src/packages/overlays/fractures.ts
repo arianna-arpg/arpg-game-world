@@ -498,6 +498,25 @@ registerBountySource({
       ledger: 'fractures_sealed',
     }];
   },
+  // THE SUMMONS face (bounty board M3 K5 — her fractures-first roster
+  // ruling): the board plants the ask. `ignite` is devIgnite promoted to
+  // the registry (one verb, two callers — the dev panel and the board's
+  // accept); headroom is the field's own one-at-a-time law, and a run
+  // without the package reads no room, so a dead card never deals; the
+  // seat predicate is the same targetability every ambient ignition obeys.
+  summons: {
+    name: 'the fracture',
+    ask: (zone, level) => `Post the writ, and the earth TEARS open at ${zone} (level ${level}) — run the fracture down, and seal it.`,
+    ledger: 'fractures_sealed',
+    // Room = the package IN THIS RUN (the manifest's own enablement — a
+    // disabled package still constructs its field, and the board must
+    // never summon what the run does not carry; the sim's quiet-expedition
+    // law rides this same read) + the field's one-at-a-time breath.
+    headroom: w => w.manifest.packages.some(p => p.id === 'fractures' && p.enabled)
+      && !!w.sim.fractureField && !w.sim.fractureField.peek(),
+    fit: z => eventTargetable('fractures', z),
+    ignite: (w, zoneId) => w.sim.fractureField?.devIgnite(w.devOverlayView(), zoneId) ?? false,
+  },
 });
 
 // --- in-zone attention pointers (world/attention.ts — same zero-edit contract) --

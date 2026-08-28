@@ -21,7 +21,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { CLASSES } from '../src/data/classes';
 import { ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, ESSENCES } from '../src/data/essences';
-import { BOUNTY_BANDS, BOUNTY_BOARD_CFG, bountyChargePay, bountyUniqueCategories, bountyUniquePool } from '../src/data/bountyboard';
+import { BOUNTY_BANDS, BOUNTY_BOARD_CFG, bountyChargePay, bountySourceRows, bountyUniqueCategories, bountyUniquePool } from '../src/data/bountyboard';
 import { MONSTERS } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
@@ -1329,7 +1329,10 @@ function cmdAuditBounties(args: Args): void {
     + ` · errand −${CFG.errand.band.below}/+${CFG.errand.band.above} (lift face ${(CFG.errand.liftShare * 100).toFixed(0)}%)`
     + ` · cull −${CFG.cull.band.below}/+${CFG.cull.band.above} ×[${CFG.cull.count[0]},${CFG.cull.count[1]}]`
     + ` · answer −${CFG.answer.band.below}/+${CFG.answer.band.above}`
-    + ` · gather −${CFG.gather.band.below}/+${CFG.gather.band.above} ×[${CFG.gather.count[0]},${CFG.gather.count[1]}]`);
+    + ` · gather −${CFG.gather.band.below}/+${CFG.gather.band.above} ×[${CFG.gather.count[0]},${CFG.gather.count[1]}]`
+    + ` · summons −${CFG.summons.band.below}/+${CFG.summons.band.above} cap ${CFG.summons.cap}/source`);
+  const summonable = bountySourceRows().filter(r => !!r.summons).map(r => r.id);
+  console.log(`summonable sources: ${summonable.length ? summonable.join(', ') : '— none registered'}`);
   // THE BANDS (docs/design/bounty-first-writ.md §4 — the young board's
   // lever surface, static print: predicates are run-state reads).
   for (const b of BOUNTY_BANDS) {

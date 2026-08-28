@@ -29,6 +29,7 @@ import type { MemoryKind } from '../engine/memories';
 import type { World } from '../engine/world';
 import type { QuestDef } from '../quests/types';
 import { QUEST_CATEGORY_COLORS } from '../quests/types';
+import { registerAttentionSource } from '../world/attention';
 import { registerOmenSource } from '../world/omens';
 import type { OverlayView } from '../world/overlay';
 import { pickSeat, type SeatTuning } from '../world/seats';
@@ -142,6 +143,17 @@ export const BOUNTY_BOARD_CFG = {
     band: { below: 6, above: 3 },
     count: [2, 3] as [number, number],
   },
+  /** THE SUMMONS kind (M3 K5) — "the board plants the ask": a summonable
+   *  source's directed ignite, called at the ACCEPT. ADDITIVE by design
+   *  (independent of ambient event counts — her event-density lever) but
+   *  capped at `cap` standing summons per source across slate + hands;
+   *  the package's own headroom refuses at the roll. Known-leaning seat
+   *  (the ask tears open ground you can reach). */
+  summons: {
+    cap: 1,
+    seat: { range: { min: 1, max: 480 }, knownMul: 1.2, unknownMul: 1, veiledMul: 0.4, prefer: 'flat' } as SeatTuning,
+    band: { below: 6, above: 3 },
+  },
   /** The errand's omen (the findability guarantee without the veil lift):
    *  whispered near, revealed close, aging wider — the omen fabric's own
    *  dials. */
@@ -149,6 +161,32 @@ export const BOUNTY_BOARD_CFG = {
   /** Slate composition: no kind may take more than this many of the
    *  slate's seats (the diversity guarantee, card 6's shape). */
   slate: { maxPerKind: 2 },
+  /** THE GROWTH RUNGS (M4 — the gatework's board chain): BROADER POSTINGS
+   *  widen the standing slate (+offers per rung), FARTHER POSTINGS stretch
+   *  every kind's seat reach (range.max × the fold). unlocks.ts DERIVES
+   *  the catalog rows from these ladders (the broader-wares doctrine —
+   *  append a rung HERE and the catalog + the arm's fold grow together);
+   *  rung 1 of each gates on the first bounty ever turned in (the board
+   *  must be a habit before width means anything), later rungs chain.
+   *  The starter band's own offers override outranks BROADER while it
+   *  lives — young boards stay small by law. */
+  growth: {
+    broader: [
+      { flag: 'bounty_broader_1', cost: 90, add: 1 },
+      { flag: 'bounty_broader_2', cost: 180, add: 1 },
+    ] as readonly { flag: string; cost: number; add: number }[],
+    farther: [
+      { flag: 'bounty_farther_1', cost: 80, mul: 1.35 },
+      { flag: 'bounty_farther_2', cost: 160, mul: 1.35 },
+    ] as readonly { flag: string; cost: number; mul: number }[],
+  },
+  /** THE CHEVRON PATRON (M4 — charter §8): the active GATHER hand's
+   *  unspent nodes point through the standing attention fold in the
+   *  board's own accent; the glyph is a DIAL for her walk. Culls keep
+   *  the writ's ☠ (the marks ARE writs — drawn == meant); charges,
+   *  answers and summonses ride their own fixtures' standing pointers —
+   *  the board adds a source, never the policy rework. */
+  chevron: { glyph: '✦' },
   /** THE STARTER BAND's dials (docs/design/bounty-first-writ.md §4, walk
    *  cards 1+2 coupled): the young board's whole lever surface. `offers`
    *  is her one-to-three; `youngBelow` is how many bounties turned in
@@ -163,8 +201,9 @@ export const BOUNTY_BOARD_CFG = {
     /** The gather joins the band wherever the ground fits — the Crossroads
      *  itself carries no harvest rows today, so the young pinned face
      *  honestly refuses there and the anchor retry deals charge/cull (an
-     *  observation for her walk, not a hack). */
-    kinds: { charge: 1, cull: 1, gather: 1, errand: 0, answer: 0 } as Record<string, number>,
+     *  observation for her walk, not a hack). Young boards never summon
+     *  or decree — the world's own events wait for the full grammar. */
+    kinds: { charge: 1, cull: 1, gather: 1, errand: 0, answer: 0, summons: 0 } as Record<string, number>,
     lanes: { essence: 1, pouch: 0, lot: 0, unique: 0 },
   },
 } as const;
@@ -280,9 +319,25 @@ export interface BountySourceRow {
   /** The fail read (the hold FELL) — resolves at the board like a turn-in,
    *  no pay, per walk-1's fail ruling. A live read, never a latch. */
   failed?(world: World, p: BountyPosting): boolean;
-  /** M3 (THE SUMMONS): the directed ignite verb — devIgnite promoted to a
-   *  first-class registry hook. Unused by M2's census lane. */
-  ignite?(world: World, zoneId: string): boolean;
+  /** THE SUMMONS face (M3 K5 — "the board plants the ask"): declaring this
+   *  block makes the source SUMMONABLE. `ignite` is the directed verb
+   *  (devIgnite promoted to the registry — the board's accept calls it);
+   *  `headroom` is the package's own room to breathe (false = refused at
+   *  the roll AND struck at the reconcile — a package absent from the run
+   *  reads no room, so package-less worlds never deal a dead card);
+   *  `fit` is the seat predicate (the package's own targetability);
+   *  `name`/`ask` speak the precision register; `ledger` is the
+   *  resolution stamp, baselined at the ACCEPT — the instance is born
+   *  there, so only seals the summons could have caused count. */
+  summons?: {
+    name: string;
+    ask(zoneName: string, level: number): string;
+    ledger: string;
+    headroom(world: World): boolean;
+    /** The seat predicate — the package's own targetability (zone-pure). */
+    fit?(def: ZoneDef): boolean;
+    ignite(world: World, zoneId: string): boolean;
+  };
 }
 
 export const BOUNTY_SOURCES: Record<string, BountySourceRow> = {};
@@ -380,6 +435,15 @@ export interface BountyRollHost {
    *  structural honesty check — a kind that cannot honestly ask here
    *  refuses, and the arm tries the next kind. */
   pin?: string;
+  /** THE FARTHER fold (M4): the owned growth rungs' reach multiplier —
+   *  every kind's seat range.max stretches by it (1 = the standing reach). */
+  reach: number;
+  /** THE SUMMONABLE roster (M3 K5): source ids whose summons face stands
+   *  with room to breathe RIGHT NOW (headroom read at the arm). */
+  igniteReady(): string[];
+  /** Standing summons count for a source across THIS slate's dealt offers
+   *  + the taken hands (the cap law's read — live over the arm's build). */
+  summonsStanding(source: string): number;
   playerLevel: number;
   boardId: string;
   beat: number;
@@ -393,7 +457,17 @@ export interface BountyKindRow {
   id: string;
   /** Slate-roll share (M0's single kind makes this moot; the law stands). */
   weight: number;
+  /** STRUCTURAL availability (M4): a kind with nothing to say (an empty
+   *  census, a bare summonable roster) leaves the DRAW entirely instead of
+   *  wasting the seat — the slate stays as full as the world is honest.
+   *  Absent = always in the draw (seat-search misses still run short). */
+  available?(host: BountyRollHost): boolean;
   roll(host: BountyRollHost, rng: Rng, taken: Set<string>): BountyPosting | null;
+  /** THE WORLD ACT at the take (M3 — the summons' ignition): runs BEFORE
+   *  the hand seats; a returned reason REFUSES the accept and strikes the
+   *  posting with its courtesy (the stale-offer race law). May mutate the
+   *  posting (the summons stamps its born key + at-accept baseline). */
+  accept?(world: World, p: BountyPosting): string | null;
   done(world: World, p: BountyPosting): boolean;
   failed?(world: World, p: BountyPosting): boolean;
   /** A reason string ANNULS the posting (the world moved on — the reconcile's
@@ -522,6 +596,8 @@ registerBountyKind({
       : pickSeat(host.view, {
         event: 'bountyboard',
         ...cfg.seat,
+        // THE FARTHER fold (M4): owned reach rungs stretch the writ's range.
+        range: { min: cfg.seat.range!.min, max: Math.round(cfg.seat.range!.max! * host.reach) },
         filter: zz => !taken.has(zz.id) && ok(zz)
           && zz.level >= host.playerLevel - cfg.band.below
           && zz.level <= host.playerLevel + cfg.band.above,
@@ -562,6 +638,8 @@ registerBountyKind({
       : pickSeat(host.view, {
         event: 'bountyboard',
         ...cfg.seat,
+        // THE FARTHER fold (M4): owned reach rungs stretch the writ's range.
+        range: { min: cfg.seat.range!.min, max: Math.round(cfg.seat.range!.max! * host.reach) },
         filter: zz => !taken.has(zz.id)
           && !host.visited(zz.id)
           && zz.level >= host.playerLevel - cfg.band.below
@@ -607,6 +685,8 @@ registerBountyKind({
       : pickSeat(host.view, {
         event: 'bountyboard',
         ...cfg.seat,
+        // THE FARTHER fold (M4): owned reach rungs stretch the writ's range.
+        range: { min: cfg.seat.range!.min, max: Math.round(cfg.seat.range!.max! * host.reach) },
         filter: zz => !taken.has(zz.id) && ok(zz)
           && zz.level >= host.playerLevel - cfg.band.below
           && zz.level <= host.playerLevel + cfg.band.above,
@@ -653,6 +733,8 @@ registerBountyKind({
       : pickSeat(host.view, {
         event: 'bountyboard',
         ...cfg.seat,
+        // THE FARTHER fold (M4): owned reach rungs stretch the writ's range.
+        range: { min: cfg.seat.range!.min, max: Math.round(cfg.seat.range!.max! * host.reach) },
         filter: zz => !taken.has(zz.id) && ok(zz)
           && zz.level >= host.playerLevel - cfg.band.below
           && zz.level <= host.playerLevel + cfg.band.above,
@@ -679,10 +761,104 @@ registerBountyKind({
   },
 });
 
+// --- K5 · THE SUMMONS — "the board plants the ask" (M3) ---------------------
+registerBountyKind({
+  id: 'summons',
+  weight: 1,
+  available: host => host.igniteReady()
+    .some(s => host.summonsStanding(s) < BOUNTY_BOARD_CFG.summons.cap),
+  roll(host, rng, taken) {
+    const cfg = BOUNTY_BOARD_CFG.summons;
+    // A summonable source with room to breathe, under the cap (slate +
+    // hands). ADDITIVE by design: ambient event counts never gate this —
+    // only the package's own headroom and the board's own cap do.
+    const srcs = host.igniteReady().filter(s => host.summonsStanding(s) < cfg.cap);
+    if (!srcs.length) return null;
+    const source = srcs[rng.int(0, srcs.length - 1)];
+    const face = BOUNTY_SOURCES[source]?.summons;
+    if (!face) return null;
+    const ok = (zz: ZoneDef): boolean => face.fit?.(zz) ?? true;
+    const z = host.pin
+      ? (host.zoneMap[host.pin] && ok(host.zoneMap[host.pin]) ? host.zoneMap[host.pin] : null)
+      : pickSeat(host.view, {
+        event: 'bountyboard',
+        ...cfg.seat,
+        // THE FARTHER fold (M4): owned reach rungs stretch the writ's range.
+        range: { min: cfg.seat.range!.min, max: Math.round(cfg.seat.range!.max! * host.reach) },
+        filter: zz => !taken.has(zz.id) && ok(zz)
+          && zz.level >= host.playerLevel - cfg.band.below
+          && zz.level <= host.playerLevel + cfg.band.above,
+      }, rng);
+    if (!z) return null;
+    return {
+      id: `bounty_${host.beat}_${host.seq}`, kind: 'summons', boardId: host.boardId,
+      zoneId: z.id, beat: host.beat, pay: {},
+      answer: {
+        source, key: '', name: face.name,
+        ask: face.ask(z.name, z.level), ledger: face.ledger, base: 0,
+      },
+    };
+  },
+  // THE IGNITION (the world act at the take): the source's directed verb
+  // fires BEFORE the hand seats; a refusal (the room filled between the
+  // arm and the take) strikes the posting instead. On success the BORN
+  // instance's census key is captured (the K4 annul law then applies
+  // verbatim) and the resolution ledger baselines AT THE ACCEPT — only
+  // seals the summons could have caused count toward done.
+  accept(world, p) {
+    const a = p.answer;
+    const src = a ? BOUNTY_SOURCES[a.source] : undefined;
+    const face = src?.summons;
+    if (!a || !src || !face) return 'the posting no longer reads';
+    if (!face.headroom(world)) return 'the world has no room for the summons';
+    const before = new Set(src.census(world).map(r => r.key));
+    if (!face.ignite(world, p.zoneId)) return 'the summons failed to take';
+    const born = src.census(world).find(r => !before.has(r.key));
+    a.key = born?.key ?? '';
+    a.base = world.ledger[a.ledger!] ?? 0;
+    return null;
+  },
+  // Pre-accept a summons is never done (nothing is born yet — acceptAt is
+  // the accepted marker); after, the K4 delta law verbatim.
+  done(world, p) {
+    const a = p.answer;
+    if (!a || !a.ledger || p.acceptAt === undefined) return false;
+    return (world.ledger[a.ledger] ?? 0) > a.base;
+  },
+  annulled(world, p) {
+    const a = p.answer;
+    if (!a) return 'the posting no longer reads';
+    const src = BOUNTY_SOURCES[a.source];
+    const face = src?.summons;
+    if (!src || !face) return 'its source is gone from the world';
+    if (p.acceptAt === undefined) {
+      // An OFFER: struck when the room filled meanwhile (an ambient
+      // instance took the package's breath) — honestly said, no penalty.
+      return face.headroom(world) ? null : 'the world has no room for the summons';
+    }
+    if (BOUNTY_KINDS.summons.done(world, p)) return null;
+    // A born key that left the census unresolved annuls (the K4 law); a
+    // keyless ignite (census-blind source) resolves by the delta alone.
+    if (a.key && !src.census(world).some(r => r.key === a.key)) {
+      return 'the summoned ask is gone — the world moved on';
+    }
+    return null;
+  },
+  copy(world, p) {
+    const a = p.answer;
+    if (!a) return { title: 'The Summons', ask: 'the posting no longer reads' };
+    // THE LIVE CARD (the K4 law): once born, the census's own line follows
+    // the instance (a diverted fracture's card moves with it).
+    const live = a.key ? BOUNTY_SOURCES[a.source]?.census(world).find(r => r.key === a.key) : undefined;
+    return { title: `The Summons: ${a.name}`, ask: live?.ask ?? a.ask };
+  },
+});
+
 // --- K4 · THE ANSWER — "resolve what stands" (M2: the live census) ---------
 registerBountyKind({
   id: 'answer',
   weight: 1,
+  available: host => host.answers().length > 0,
   roll(host, rng, taken) {
     const cfg = BOUNTY_BOARD_CFG.answer;
     // The pool is the census itself (no seat search — the world already
@@ -759,6 +935,13 @@ registerBountyKind({
 // omen-face errand in hand whispers its bearing and finally reveals its seat
 // — the omen fabric verbatim, aging from the accept.
 registerOmenSource((world: World) => world.bountyOmens());
+
+// THE CHEVRON PATRON (M4 — charter §8's coupling): the board's own edge
+// pointers in the target zone, through the standing attention fold. Today
+// that is the gather's unspent nodes — the one ask with no standing pointer
+// of its own; every other kind's target already speaks (writ ☠ by law,
+// event fabrics' own chevrons, the objective's guidance).
+registerAttentionSource((world: World) => world.bountyAttention());
 
 /** The board-giver sentinel: no NPC carries this id, so the standing
  *  quest-giver dwell can never offer or pay a posting — the board's own

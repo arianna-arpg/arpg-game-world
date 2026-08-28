@@ -60,11 +60,22 @@
 //      read; arrival plants the writ's remainder (the remote-writ law); a
 //      REAL rite settled through the standing machinery credits the
 //      POSTING at the chokepoint and the hand turns in at the board.
+//   O (M3): THE SUMMONS — the summonable roster (headroom at the roll, the
+//      cap across slate + hands), THE WORLD ACT at the accept (a failed
+//      ignite strikes, a room-filled offer strikes at the reconcile), the
+//      born key + at-accept baseline, the delta-law resolve, the field
+//      annul on a departed instance. O2: the REAL fracture debut — a
+//      fractures-enabled world deals the summons, the accept tears the
+//      earth at the posted zone through devIgnite (promoted), the census
+//      and fractureIn agree, the seal resolves, the board pays.
 // Run: npx tsx balance/probe_bountyboard.ts
 // ---------------------------------------------------------------------------
 
-import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
+import { bootSimEngine, classById, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
+import { resetActorIdCounter } from '../src/engine/actor';
+import { World } from '../src/engine/world';
+import { buildManifest } from '../src/packages/manifest';
 import { FEATURE, LEDGER_BOUNTY_DONE, bountyDoneKindKey, featureEnabled, makeAccount } from '../src/meta/account';
 import { applyUnlock, availableUnlocks } from '../src/meta/unlocks';
 import {
@@ -81,7 +92,6 @@ import { QUEST_CATEGORY_CAPS } from '../src/quests/types';
 import { START_ZONE, ZONES } from '../src/data/zones';
 import { allUnlockables } from '../src/meta/unlocks';
 import { sanitizeBountyBoard } from '../src/meta/worldstate';
-import type { World } from '../src/engine/world';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -172,6 +182,11 @@ check('B: every offer is honest (zone stands, kind-law holds, band, pay printed,
     if (p.kind === 'gather') {
       return z.spoils !== 'none' && harvestRowsFor(z.biome, z.tileset).length > 0
         && !!p.gather && p.gather.count > 0 && p.gather.claimed === 0;
+    }
+    if (p.kind === 'summons') {
+      // A dealt summons names a summonable source, un-ignited (key empty
+      // until the accept's world act).
+      return !!p.answer && !!BOUNTY_SOURCES[p.answer.source]?.summons && p.answer.key === '';
     }
     return false;
   }));
@@ -725,6 +740,227 @@ seedGlobalRandom(0x6a7e);
     parkAtBoard(wN);
     check('N: the gather turns in at the board', wN.turnInBounty(pN.id) === true
       && wN.bountyHands.length === 0);
+  }
+}
+
+// ------------- O. THE SUMMONS (M3 K5 — "the board plants the ask": the
+// ignite verb promoted into the source rows, the cap + refusal laws, the
+// world act at the accept, and the REAL fracture debut end to end.)
+seedGlobalRandom(0x50a0);
+{
+  check('O: the fractures source wears the summons face (fractures-first, her roster ruling)',
+    !!BOUNTY_SOURCES.fractures?.summons
+    && BOUNTY_SOURCES.fractures.summons!.ledger === 'fractures_sealed');
+  const wO = mkWorld();
+  let room = true;
+  let igniteOk = true;
+  let ignitedAt: string | null = null;
+  const censusO: BountyTargetRef[] = [];
+  registerBountySource({
+    id: 'probe_summonable',
+    census: () => [...censusO],
+    summons: {
+      name: 'the probe storm',
+      ask: (z, l) => `Call the probe storm down on ${z} (level ${l}).`,
+      ledger: 'probe_storms_stilled',
+      headroom: () => room,
+      ignite: (_w, zoneId) => {
+        if (!room || !igniteOk) return false;
+        ignitedAt = zoneId;
+        room = false; // the package's one-at-a-time breath
+        censusO.push({
+          key: `storm:${zoneId}`, zoneId, name: 'the probe storm',
+          ask: 'Still the storm where it rages.', ledger: 'probe_storms_stilled',
+        });
+        return true;
+      },
+    },
+  });
+  const dealSummons = (from: number): BountyPosting | undefined => {
+    for (let b = from; b < from + 14; b++) {
+      wO.time = b * wO.bountyBeatSeconds();
+      wO.armBountyBoard();
+      const p = wO.bountyOffers.find(o => o.kind === 'summons' && o.answer?.source === 'probe_summonable');
+      if (p) return p;
+    }
+    return undefined;
+  };
+  const sm = dealSummons(0);
+  check('O: the slate deals a summons off the summonable roster', !!sm,
+    sm ? `${sm.id}@${sm.zoneId}` : 'none in 14 beats');
+  if (!sm) throw new Error('no summons dealt');
+  check('O: pre-accept it is never done and never census-annulled (nothing is born yet)',
+    BOUNTY_KINDS.summons.done(wO, sm) === false
+    && (BOUNTY_KINDS.summons.annulled?.(wO, sm) ?? null) === null);
+  // THE ROOM-FILLED STRIKE: headroom gone while the offer stands (an
+  // ambient instance took the package's breath) → struck at the reconcile.
+  room = false;
+  wO.armBountyBoard();
+  check('O: a room-filled offer is struck at the reconcile',
+    !wO.bountyOffers.some(p => p.id === sm.id));
+  // THE ACCEPT REFUSAL: the ignite itself fails at the take → struck with
+  // the courtesy, no hand seated (the stale-offer race law).
+  room = true;
+  const smR = dealSummons(20);
+  check('O: a fresh summons deals for the refusal rig', !!smR);
+  if (smR) {
+    igniteOk = false;
+    check('O: a failed ignite REFUSES the take and strikes the posting',
+      wO.acceptBounty(smR.id) === false
+      && !wO.bountyOffers.some(p => p.id === smR.id)
+      && wO.bountyHands.length === 0);
+    igniteOk = true;
+  }
+  // THE IGNITION: the world act fires at the accept — the born key is
+  // captured and the resolution ledger baselines AT the accept (only
+  // seals the summons could have caused count).
+  const sm2 = dealSummons(40);
+  check('O: a summons deals for the ignition rig', !!sm2);
+  if (!sm2) throw new Error('no summons for the ignition rig');
+  wO.ledger.probe_storms_stilled = 5;
+  check('O: the accept IGNITES — born key captured, baseline stamped at the take',
+    wO.acceptBounty(sm2.id) === true
+    && ignitedAt === sm2.zoneId
+    && sm2.answer!.key === `storm:${sm2.zoneId}`
+    && sm2.answer!.base === 5);
+  wO.time = 60 * wO.bountyBeatSeconds();
+  wO.armBountyBoard();
+  check('O: THE CAP — a standing summoned hand blocks another for its source',
+    !wO.bountyOffers.some(p => p.kind === 'summons' && p.answer?.source === 'probe_summonable'));
+  check('O: unresolved reads unresolved past the old count', BOUNTY_KINDS.summons.done(wO, sm2) === false);
+  wO.ledger.probe_storms_stilled = 6;
+  check('O: the delta law resolves the summons', BOUNTY_KINDS.summons.done(wO, sm2) === true);
+  parkAtBoard(wO);
+  check('O: the summons turns in at the board', wO.turnInBounty(sm2.id) === true
+    && wO.bountyHands.length === 0);
+  // THE FIELD ANNUL: a summoned instance that leaves unresolved frees the
+  // hand where it stands (the K4 law verbatim on the born key).
+  room = true; censusO.length = 0;
+  const sm3 = dealSummons(70);
+  check('O: a summons deals for the annul rig', !!sm3);
+  if (sm3) {
+    check('O: taken and ignited (the storm stands in the census)',
+      wO.acceptBounty(sm3.id) === true && censusO.length === 1);
+    censusO.length = 0; // the storm passes, unresolved
+    for (let i = 0; i < 80; i++) wO.update(1 / 30);
+    check('O: THE FIELD ANNUL frees the summoned hand (courtesy, no penalty)',
+      !wO.bountyHands.some(h => h.id === sm3.id));
+  }
+}
+
+// --------- O2. THE FRACTURE DEBUT (M3 — the real package, end to end)
+seedGlobalRandom(0xf4ac);
+{
+  resetActorIdCounter();
+  const account = makeAccount();
+  account.features.add(FEATURE.BOUNTY_BOARD);
+  const manifest = buildManifest(account, 0xf4ac);
+  for (const p of manifest.packages) p.enabled = p.id === 'fractures';
+  const wF = new World(account, Object.freeze(manifest));
+  wF.createPlayer(classById('warrior'));
+  wF.loadZone('crossroads');
+  wF.loadZone(START_ZONE);
+  wF.completedObjectives.add('crossroads'); // past the starter band
+  check('O2: a fractures-enabled run reads room to breathe',
+    BOUNTY_SOURCES.fractures.summons!.headroom(wF) === true);
+  let fsm: BountyPosting | undefined;
+  for (let b = 0; b < 20 && !fsm; b++) {
+    wF.time = b * wF.bountyBeatSeconds();
+    wF.armBountyBoard();
+    fsm = wF.bountyOffers.find(o => o.kind === 'summons' && o.answer?.source === 'fractures');
+  }
+  check('O2: the board deals the fracture summons', !!fsm,
+    fsm ? `${fsm.id}@${fsm.zoneId}` : 'none in 20 beats');
+  if (fsm) {
+    const ff = wF.sim.fractureField!;
+    check('O2: THE DEBUT — the accept tears the earth open at the posted zone',
+      wF.acceptBounty(fsm.id) === true
+      && ff.peek()?.zoneId === fsm.zoneId
+      && fsm.answer!.key === `fracture:${ff.peek()!.id}`);
+    check('O2: the born fracture is the package\'s own (census + fractureIn agree — transience by construction)',
+      BOUNTY_SOURCES.fractures.census(wF).some(r => r.key === fsm!.answer!.key)
+      && !!ff.fractureIn(fsm.zoneId));
+    check('O2: headroom now reads full (one at a time, the field\'s own law)',
+      BOUNTY_SOURCES.fractures.summons!.headroom(wF) === false);
+    wF.ledger.fractures_sealed = (wF.ledger.fractures_sealed ?? 0) + 1;
+    check('O2: the seal resolves the summons (the delta law)',
+      BOUNTY_KINDS.summons.done(wF, fsm) === true);
+    wF.player.pos.x = BOUNTY_BOARD_SITE.x;
+    wF.player.pos.y = BOUNTY_BOARD_SITE.y;
+    check('O2: the summons turns in at the board', wF.turnInBounty(fsm.id) === true);
+  }
+}
+
+// ------------- P. THE GROWTH RUNGS + THE CHEVRON PATRON (M4 — polish)
+seedGlobalRandom(0x9401);
+{
+  const G = BOUNTY_BOARD_CFG.growth;
+  // The derived catalog rows: chained, first rung gated on the first
+  // bounty ever turned in (the broader-wares doctrine).
+  const b1 = allUnlockables().find(u => u.id === 'feat_bounty_broader_1');
+  const b2 = allUnlockables().find(u => u.id === 'feat_bounty_broader_2');
+  const f1 = allUnlockables().find(u => u.id === 'feat_bounty_farther_1');
+  check('P: the growth rows derive from the ladders (chained, deed-gated)',
+    !!b1 && !!b2 && !!f1
+    && b1.requiresUnlock === 'feat_bounty_board' && b1.reqLedger === 'bounty_done'
+    && b2.requiresUnlock === 'feat_bounty_broader_1'
+    && b1.cost === G.broader[0].cost && f1.cost === G.farther[0].cost);
+  // THE FOLDS: reach multiplies per owned rung; broader widens the cap.
+  const wP = mkWorld();
+  check('P: an unrung board reads standing reach', wP.bountyReach() === 1);
+  for (const r of G.farther) wP.account.features.add(r.flag);
+  const wantReach = G.farther.reduce((m, r) => m * r.mul, 1);
+  check('P: owned reach rungs multiply the writs\' range', Math.abs(wP.bountyReach() - wantReach) < 1e-9,
+    `${wP.bountyReach()} vs ${wantReach}`);
+  for (const r of G.broader) wP.account.features.add(r.flag);
+  // Seat-search misses can run any ONE beat short (M0's standing law —
+  // "the slate runs short"), and a LEVEL-1 hero's band admits only the
+  // first two or three zones of the halo (the young country is honestly
+  // small — a diagnosed truth, not a defect): open the band the
+  // structural way, then walk beats until a slate overflows the old cap.
+  wP.player.level = 8;
+  const wideCap = BOUNTY_BOARD_CFG.offers + G.broader.reduce((s, r) => s + r.add, 0);
+  let widest = 0;
+  for (let b = 0; b < 12 && widest <= BOUNTY_BOARD_CFG.offers; b++) {
+    wP.time = b * wP.bountyBeatSeconds();
+    wP.armBountyBoard();
+    widest = Math.max(widest, wP.bountyOffers.length);
+  }
+  check('P: THE BROADER fold widens the slate past the old cap',
+    widest > BOUNTY_BOARD_CFG.offers && widest <= wideCap,
+    `widest ${widest} of ${wideCap}`);
+  // The young law outranks BROADER: a banded run stays small, rungs owned
+  // or not.
+  const wPy = makeSimWorld('warrior', SEED ^ 0x9401);
+  openBoard(wPy);
+  for (const r of G.broader) wPy.account.features.add(r.flag);
+  wPy.loadZone('crossroads');
+  wPy.loadZone(START_ZONE);
+  wPy.armBountyBoard();
+  check('P: the starter band outranks BROADER (young boards stay small by law)',
+    liveBountyBand(wPy)?.id === 'starter'
+    && wPy.bountyOffers.length <= BOUNTY_BOARD_CFG.starter.offers);
+  // THE CHEVRON PATRON: a held gather's unspent nodes point in the board's
+  // accent; claimed work quiets them.
+  const fitP = Object.values(wP.zoneMap).find(z => z.id !== START_ZONE && !z.boundless
+    && z.objective.kind !== 'safe' && z.spoils !== 'none'
+    && harvestRowsFor(z.biome, z.tileset).length > 0);
+  check('P: gatherable ground stands for the chevron rig', !!fitP, fitP?.id ?? 'none');
+  if (fitP) {
+    const pP: BountyPosting = {
+      id: 'bounty_test_chev', kind: 'gather', boardId: 'lastlight',
+      zoneId: fitP.id, beat: 0, pay: { essence: [{ essence: 'coarse', count: 2 }] },
+      gather: { count: 2, claimed: 0 },
+    };
+    wP.bountyHands.push(pP);
+    wP.activeQuests.push({ questId: pP.id, zoneId: pP.zoneId, fieldDone: false });
+    wP.loadZone(fitP.id);
+    const pts = wP.bountyAttention();
+    check('P: the patron points at every unspent node, in the board\'s accent',
+      pts.length >= pP.gather!.count
+      && pts.every(a => a.color === BOUNTY_BOARD_CFG.accent && a.glyph === BOUNTY_BOARD_CFG.chevron.glyph));
+    pP.gather!.claimed = pP.gather!.count;
+    check('P: the met ask quiets the chevrons', wP.bountyAttention().length === 0);
   }
 }
 
