@@ -428,6 +428,11 @@ export class UI {
    *  glyph walks it, and null doubles as "the menu proper is showing" (so the
    *  async continue-save refresh never yanks a reader out of a subscreen). */
   private startMenuBack: (() => void) | null = null;
+  /** CLASS-SELECT BACK: armed when the screen is reached from the start menu
+   *  (the New Run press), so its ✕ glyph + Back button can return there —
+   *  the old one-way door soft-locked a player into starting a run. Null on
+   *  the co-op rejoin offers, whose Back would mean abandoning the session. */
+  private classSelectBack: (() => void) | null = null;
   /** The pending rebind keydown-capture listener (armed when a row is clicked,
    *  before a key is pressed). Tracked so it can be torn down on re-render / any
    *  navigation away — a leaked capture would swallow & silently rebind the next
@@ -772,6 +777,9 @@ export class UI {
       // (Options, the Immortal roster), which arm startMenuBack; the menu
       // proper has nothing behind it and wears no glyph.
       [this.startMenu, () => this.startMenuBack?.()],
+      // Class select likewise: the glyph walks classSelectBack when the
+      // screen was reached from the start menu (no glyph renders otherwise).
+      [this.classSelect, () => this.classSelectBack?.()],
     ];
     for (const [root, close] of panelClosers) {
       root.addEventListener('click', (e) => {
@@ -1549,7 +1557,7 @@ export class UI {
     this.oceanCache = null;
   }
 
-  showClassSelect(onPick: (def: ClassDef, modeId?: string, name?: string) => void): void {
+  showClassSelect(onPick: (def: ClassDef, modeId?: string, name?: string) => void, onBack?: () => void): void {
     // Whatever is in the name field RIGHT NOW survives every route back here
     // (mode picks, Vault detours, weight edits): the old input still exists
     // until the innerHTML rebuild below, so capture it first — belt to the
@@ -1557,6 +1565,11 @@ export class UI {
     const liveName = this.classSelect.querySelector<HTMLInputElement>('#char-name');
     if (liveName) this.pendingCharName = liveName.value;
     this.hideAll();
+    // THE WAY BACK (armed from the start menu's New Run; absent on co-op
+    // rejoin offers): without it this screen was a one-way door — a player
+    // who meant to resume a vessel or visit the Vault was soft-locked into
+    // starting a run.
+    this.classSelectBack = onBack ?? null;
     const acc = this.getAccount();
     const TEASER_COUNT = 4;
     const selectable = selectableSlotCount(acc);
@@ -1640,7 +1653,7 @@ export class UI {
     // any locked card — its rumor wall repeats every whisper.
     const rumorCard = (hint: string): string => `
       <div class="class-card locked" data-locked="true" style="opacity:.45">
-        <div class="cname" style="color:#8a8494;letter-spacing:3px">? ? ?</div>
+        <div class="cname" style="color:var(--text-dim);letter-spacing:3px">? ? ?</div>
         <div class="cdesc" style="font-style:italic">“${hint}”</div>
         <div class="class-lock">🔒 Undiscovered: the world teaches what the Vault cannot sell.</div>
       </div>`;
@@ -1671,12 +1684,12 @@ export class UI {
       return `
         <div class="mode-card" data-mode="${md.id}" data-full="${full}"
           style="flex:1 1 260px;max-width:420px;text-align:left;cursor:var(--cursor-point, pointer);padding:8px 10px;
-            border-radius:8px;background:#16121c;border:1px solid ${sel ? md.color : '#3a3644'};
+            border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid ${sel ? md.color : 'var(--panel-border)'};
             ${sel ? `box-shadow:0 0 10px ${md.color}44;` : ''}${full ? 'opacity:.45;' : ''}">
           <div style="font-weight:bold;color:${md.color}">${sel ? '◈ ' : ''}${md.name}
-            ${roster ? `<span style="float:right;font-size:10px;color:#a8a494">${used}/${cap} vessel${cap === 1 ? '' : 's'}</span>` : ''}</div>
-          <div style="font-size:10px;color:#a8a494;margin-top:2px">${md.blurb}</div>
-          ${full ? '<div style="font-size:10px;color:#d08a4b;margin-top:3px">🔒 No free vessel: unlock more in the Vault, or release one from the start menu.</div>' : ''}
+            ${roster ? `<span style="float:right;font-size:10px;color:var(--text-dim)">${used}/${cap} vessel${cap === 1 ? '' : 's'}</span>` : ''}</div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:2px">${md.blurb}</div>
+          ${full ? '<div style="font-size:10px;color:var(--gold);margin-top:3px">🔒 No free vessel: unlock more in the Vault, or release one from the main menu’s Immortal Vessels.</div>' : ''}
         </div>`;
     };
     const modeRow = modes.length > 1
@@ -1688,13 +1701,14 @@ export class UI {
     // named-for-its-class. The world's memory follows whatever ends up chosen.
     const nameValue = this.pendingCharName ?? acc.namePref ?? '';
     this.classSelect.innerHTML = `
+      ${onBack ? this.closeGlyphHtml('Back') : ''}
       <h1>${GAME_TITLE.toUpperCase()}</h1>
       <div id="name-row" style="display:flex;gap:6px;justify-content:center;align-items:center;margin:2px 0 8px 0">
-        <span style="font-size:12px;color:#c8a84b">⚜ Name</span>
+        <span style="font-size:12px;color:var(--gold)">⚜ Name</span>
         <input id="char-name" type="text" maxlength="24" spellcheck="false"
           placeholder="named for its class" value="${esc(nameValue)}"
-          style="width:220px;padding:5px 9px;font-size:13px;background:#16121c;color:#e8dcc8;
-            border:1px solid #6a5a38;border-radius:8px;outline:none;text-align:center">
+          style="width:220px;padding:5px 9px;font-size:13px;background:var(--panel-bg);color:var(--text);
+            border:1px solid var(--panel-border);border-radius:8px;outline:none;text-align:center">
         <button id="name-clear" title="Forget the name; characters go back to being named for their class"
           style="font-size:11px;padding:5px 10px">Nameless</button>
       </div>
@@ -1713,7 +1727,8 @@ export class UI {
       <div class="class-grid">${picks.map(c => classCard(c)).join('')}${teasers.map(t => classCard(t.def, lockNote(t))).join('')}${rumors.map(rumorCard).join('')}</div>
       <div class="acct-btns">
         <button id="event-weights-btn">⚙ Event Weights</button>
-        <button id="account-btn">Unlocks (Vault)</button>
+        <button id="account-btn">Vault (Unlocks)</button>
+        ${onBack ? '<button id="class-back">Back</button>' : ''}
       </div>`;
     this.classSelect.classList.remove('hidden');
 
@@ -1734,24 +1749,24 @@ export class UI {
     this.classSelect.querySelectorAll<HTMLElement>('.mode-card').forEach(el => {
       el.addEventListener('click', () => {
         if (el.dataset.full === 'true') {
-          this.showAccountScreen(() => this.showClassSelect(onPick));
+          this.showAccountScreen(() => this.showClassSelect(onPick, onBack));
           return;
         }
         this.pendingModeId = el.dataset.mode!;
-        this.showClassSelect(onPick);
+        this.showClassSelect(onPick, onBack);
       });
     });
     this.classSelect.querySelectorAll<HTMLElement>('.class-card').forEach(el => {
       el.addEventListener('click', () => {
         if (el.dataset.locked === 'true') {
-          this.showAccountScreen(() => this.showClassSelect(onPick));
+          this.showAccountScreen(() => this.showClassSelect(onPick, onBack));
           return;
         }
         // A full roster mode can't be sworn into — the card click above routes
         // to the Vault, and the pick below re-checks as the belt to that brace.
         const md = modeById(this.pendingModeId);
         if (md.save === 'roster' && rosterOf(acc, md.id).length >= rosterCapacity(acc, md)) {
-          this.showAccountScreen(() => this.showClassSelect(onPick));
+          this.showAccountScreen(() => this.showClassSelect(onPick, onBack));
           return;
         }
         // Resolve THE NAME at the moment of picking: a typed name is used and
@@ -1768,9 +1783,10 @@ export class UI {
       });
     });
     document.getElementById('account-btn')!.addEventListener('click',
-      () => this.showAccountScreen(() => this.showClassSelect(onPick)));
+      () => this.showAccountScreen(() => this.showClassSelect(onPick, onBack)));
     document.getElementById('event-weights-btn')!.addEventListener('click',
-      () => this.showExpeditionSetup(() => this.showClassSelect(onPick)));
+      () => this.showExpeditionSetup(() => this.showClassSelect(onPick, onBack)));
+    document.getElementById('class-back')?.addEventListener('click', () => onBack!());
   }
 
   /** The account / unlock store: spend credits on classes, gem pools, town
@@ -8159,7 +8175,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     if (!this.startMenu.classList.contains('hidden') && this.startHandlers && !this.startMenuBack) this.renderStartMenu();
   }
 
-  /** The launch screen: Start New / Continue / the roster / Vault / Keybinds. */
+  /** The launch screen: New Run / Continue / Immortal Vessels / Vault /
+   *  Chronicle / Options (+ Co-op). Subscreens render into the same pane. */
   showStartMenu(
     onStart: (d: ClassDef, modeId?: string) => void,
     onContinue: (s?: CharacterSave | null) => void,
@@ -8198,7 +8215,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         ? ` · <b style="color:var(--gold)">${acc.credits}</b> ${META_CURRENCY_LABEL} awaiting the Reckoning` : ''}</div>
       ${h.notice ? `<div class="acct-head" style="color:#e8b06a">${h.notice}</div>` : ''}
       <div class="esc-btns">
-        <button id="sm-start">Start New Game</button>
+        <button id="sm-start">New Run</button>
         <button id="sm-continue" ${canContinue ? '' : 'disabled'}>${canContinue ? 'Continue' : 'No Save Found'}</button>
         ${immortalsBtn}
         <button id="sm-vault"${pending ? ' style="border-color:var(--gold)"' : ''}>${pending
@@ -8208,7 +8225,10 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         ${h.onCoop ? '<button id="sm-coop">Co-op (Beta)</button>' : ''}
       </div>`;
     document.getElementById('sm-start')!.addEventListener('click', () => {
-      this.startMenu.classList.add('hidden'); this.showClassSelect(h.onStart);
+      this.startMenu.classList.add('hidden');
+      // The way back is threaded in: class select reached from here can
+      // always return (glyph or Back) instead of soft-locking into a run.
+      this.showClassSelect(h.onStart, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster));
     });
     if (h.onCoop) document.getElementById('sm-coop')!.addEventListener('click', () => h.onCoop!());
     document.getElementById('sm-continue')!.addEventListener('click', () => {

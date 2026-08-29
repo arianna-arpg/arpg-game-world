@@ -381,7 +381,7 @@
     #bestiary-menu .b-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin: 8px 0; }
     #bestiary-menu .b-row { display: flex; align-items: center; gap: 7px; padding: 3px 6px; border: 1px solid #2a2a3a; border-radius: 3px; cursor: var(--cursor-point, pointer); background: rgba(16,16,24,0.6); }
     #bestiary-menu .b-row:hover { border-color: #8a86b8; }
-    #bestiary-menu .b-row.sel { border-color: #c8a84b; }
+    #bestiary-menu .b-row.sel { border-color: var(--gold); }
     #bestiary-menu .b-row.dark { color: #55536a; cursor: var(--cursor-default, default); }
     #bestiary-menu .b-bar { height: 3px; background: #26263a; border-radius: 2px; overflow: hidden; margin-top: 2px; }
     #bestiary-menu .b-bar i { display: block; height: 100%; background: #8ab06a; }
@@ -549,7 +549,7 @@
     }
     #start-menu .sm-roster-name { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
     #start-menu .sm-roster-sub { font-size: 10px; color: var(--text-dim); }
-    #start-menu .sm-roster-fee { font-size: 10px; color: #a8a494; }
+    #start-menu .sm-roster-fee { font-size: 10px; color: var(--text-dim); }
     #start-menu .esc-btns .sm-roster-del {
       position: absolute; top: -7px; right: -7px; width: 21px; height: 21px; padding: 0; margin: 0;
       display: flex; align-items: center; justify-content: center;
@@ -756,7 +756,7 @@
        padding / margin are left untouched, so only the graphic is unified. ---- */
     #start-menu .esc-btns button, #escape-menu .esc-btns button,
     #account-screen .acct-btns button, #expedition-setup .acct-btns button,
-    #class-select .acct-btns button, #death-screen button {
+    #class-select .acct-btns button, #death-screen button, #story-card button {
       background: linear-gradient(180deg, #30304a, #232338);
       color: var(--gold); border: 1px solid var(--gold); border-radius: 5px;
       font-size: 14px; font-family: inherit; cursor: var(--cursor-point, pointer);
@@ -765,13 +765,15 @@
     }
     #start-menu .esc-btns button:hover:not(:disabled), #escape-menu .esc-btns button:hover:not(:disabled),
     #account-screen .acct-btns button:hover:not(:disabled), #expedition-setup .acct-btns button:hover:not(:disabled),
-    #class-select .acct-btns button:hover:not(:disabled), #death-screen button:hover:not(:disabled) {
+    #class-select .acct-btns button:hover:not(:disabled), #death-screen button:hover:not(:disabled),
+    #story-card button:hover:not(:disabled) {
       background: linear-gradient(180deg, #3d3d5c, #2b2b46);
       box-shadow: 0 0 9px rgba(200,168,75,0.4);
     }
     #start-menu .esc-btns button:active:not(:disabled), #escape-menu .esc-btns button:active:not(:disabled),
     #account-screen .acct-btns button:active:not(:disabled), #expedition-setup .acct-btns button:active:not(:disabled),
-    #class-select .acct-btns button:active:not(:disabled), #death-screen button:active:not(:disabled) {
+    #class-select .acct-btns button:active:not(:disabled), #death-screen button:active:not(:disabled),
+    #story-card button:active:not(:disabled) {
       transform: translateY(1px);
     }
     #start-menu .esc-btns button:disabled, #escape-menu .esc-btns button:disabled,
