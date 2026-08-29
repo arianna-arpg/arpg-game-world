@@ -7484,14 +7484,25 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : `<button id="esc-couch" disabled>Local Co-op: press any button on ${needPads > 1 ? 'a 2nd controller' : 'a controller'}</button>`;
       const couchLeaveRow = this.onCouchLeave && couchSeated > 0
         ? '<button id="esc-couch-leave">Local Co-op: Guest Leaves</button>' : '';
+      // THE TWO DOORS, told apart at a glance and on hover: End Run FORFEITS
+      // (essence to the Reckoning, character lost); Save & Exit leaves the
+      // game with the run saved exactly as it stands (the quit flush's
+      // exact-resume promise). A co-op client owns no save — its exit is a
+      // plain Exit Game.
+      const endTitle = this.isCoopClient() ? '' : rosterMode
+        ? ' title="Save the vessel and return to the main menu"'
+        : ` title="Forfeit this run: carried essence is appraised into ${META_CURRENCY_LABEL} at the Reckoning, and the character is lost"`;
+      const closeTitle = this.isCoopClient() ? ''
+        : ` title="The run is saved exactly as it stands — ${rosterMode
+          ? 'resume it from Immortal Vessels at the main menu' : 'Continue Run resumes it'}"`;
       root.innerHTML = `
         ${this.closeGlyphHtml('Resume (Esc)')}<h1>Paused</h1>
         <div class="esc-btns">
           <button id="esc-resume">Resume</button>
           ${couchRow}${couchLeaveRow}
           <button id="esc-keys">Options</button>
-          <button id="esc-end">${this.isCoopClient() ? 'Leave Co-op' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
-          <button id="esc-close">Close Game</button>
+          <button id="esc-end"${endTitle}>${this.isCoopClient() ? 'Leave Co-op' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
+          <button id="esc-close"${closeTitle}>${this.isCoopClient() ? 'Exit Game' : 'Save & Exit'}</button>
         </div>`;
       document.getElementById('esc-resume')!.addEventListener('click', () => this.hideEscapeMenu());
       document.getElementById('esc-couch')?.addEventListener('click', () => {
@@ -8175,8 +8186,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     if (!this.startMenu.classList.contains('hidden') && this.startHandlers && !this.startMenuBack) this.renderStartMenu();
   }
 
-  /** The launch screen: New Run / Continue / Immortal Vessels / Vault /
-   *  Chronicle / Options (+ Co-op). Subscreens render into the same pane. */
+  /** The launch screen: New Run / Continue Run / Immortal Vessels / Vault /
+   *  Chronicle / Options / Exit (+ Co-op). Subscreens render into the pane. */
   showStartMenu(
     onStart: (d: ClassDef, modeId?: string) => void,
     onContinue: (s?: CharacterSave | null) => void,
@@ -8194,7 +8205,13 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     const acc = this.getAccount();
     const h = this.startHandlers!;
     this.startMenuBack = null;  // the menu proper is showing — no subscreen to back out of
-    const canContinue = !!this.continueSave;
+    // THE RESUME FACE: Continue Run says WHO it resumes on hover — the quit
+    // flush's exact-resume promise, spoken at the door.
+    const cont = this.continueSave;
+    const contWho = cont
+      ? `${cont.name ?? CLASSES.find(c => c.id === cont.classId)?.name ?? 'the character'}, Level ${cont.level}`
+      : '';
+    const canContinue = !!cont;
     // THE IMMORTAL SHELF: however many vessels the account swears, the menu
     // proper spends ONE button on them — the roster lives in its own pane
     // (renderImmortalRoster), so the option count here stays flat and no
@@ -8216,13 +8233,16 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       ${h.notice ? `<div class="acct-head" style="color:#e8b06a">${h.notice}</div>` : ''}
       <div class="esc-btns">
         <button id="sm-start">New Run</button>
-        <button id="sm-continue" ${canContinue ? '' : 'disabled'}>${canContinue ? 'Continue' : 'No Save Found'}</button>
+        <button id="sm-continue" ${canContinue
+          ? `title="Resume ${esc(contWho)} — exactly where the run left off"` : 'disabled'}>${canContinue
+          ? 'Continue Run' : 'No Run to Continue'}</button>
         ${immortalsBtn}
         <button id="sm-vault"${pending ? ' style="border-color:var(--gold)"' : ''}>${pending
           ? `Vault — assign ${acc.credits} ${META_CURRENCY_LABEL}!` : 'Vault (Unlocks)'}</button>
         <button id="sm-chronicle">Chronicle of Runs${acc.runRecords.length ? ` (${acc.runRecords.length})` : ''}</button>
         <button id="sm-keys">Options</button>
         ${h.onCoop ? '<button id="sm-coop">Co-op (Beta)</button>' : ''}
+        <button id="sm-exit">Exit Game</button>
       </div>`;
     document.getElementById('sm-start')!.addEventListener('click', () => {
       this.startMenu.classList.add('hidden');
@@ -8249,7 +8269,29 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       };
       this.renderOptions(this.startMenu, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster));
     });
+    // THE VISIBLE DOOR: full-screen and mobile players get a real exit at the
+    // menu — never only the window's own ✕. window.close() ends the desktop
+    // shell; a plain browser tab refuses it, so the fallback screen says the
+    // truth instead (everything saved, safe to close by hand).
+    document.getElementById('sm-exit')!.addEventListener('click', () => {
+      try { window.close(); } catch { /* browsers block closing non-script-opened tabs */ }
+      this.renderExitScreen();
+    });
     this.onStartMenuRender?.();
+  }
+
+  /** THE VISIBLE DOOR's browser fallback (Exit Game with window.close()
+   *  refused): everything is already saved at the menu, so say so and let the
+   *  player close the window by hand — or step Back. The desktop shell closes
+   *  before this ever shows. */
+  private renderExitScreen(): void {
+    this.startMenuBack = () => this.renderStartMenu();
+    this.startMenu.innerHTML = `
+      ${this.closeGlyphHtml('Back')}
+      <h1>SAFE TO CLOSE</h1>
+      <div class="acct-head">Your account is saved — close this window or tab to exit.</div>
+      <div class="esc-btns"><button id="sm-exit-back">Back</button></div>`;
+    document.getElementById('sm-exit-back')!.addEventListener('click', () => this.renderStartMenu());
   }
 
   /** THE IMMORTAL ROSTER PANE: account-owned characters (Immortal vessels),
