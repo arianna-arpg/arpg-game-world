@@ -8283,7 +8283,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         // A fallen vessel never launches: the roster pane re-renders with
         // the covenant's words (main.ts's resume path is the belt behind this).
         if (entry.fallen) {
-          this.renderImmortalRoster(`${entry.name} lies fallen — resurrect them in the Vault (${entry.fallen.fee} ${META_CURRENCY_LABEL}).`);
+          // esc(): the vessel name is player-typed and the notice lands in innerHTML.
+          this.renderImmortalRoster(`${esc(entry.name)} lies fallen — resurrect them in the Vault (${entry.fallen.fee} ${META_CURRENCY_LABEL}).`);
           return;
         }
         this.startMenu.classList.add('hidden');
