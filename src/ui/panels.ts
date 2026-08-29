@@ -423,6 +423,11 @@ export class UI {
      *  return through showStartMenu with no notice, which clears it. */
     notice?: string;
   } | null = null;
+  /** START-MENU SUBSCREEN BACK: set while a sub-view (Options, the Immortal
+   *  roster) is rendered into the start-menu root — the pane's delegated ✕
+   *  glyph walks it, and null doubles as "the menu proper is showing" (so the
+   *  async continue-save refresh never yanks a reader out of a subscreen). */
+  private startMenuBack: (() => void) | null = null;
   /** The pending rebind keydown-capture listener (armed when a row is clicked,
    *  before a key is pressed). Tracked so it can be torn down on re-render / any
    *  navigation away — a leaked capture would swallow & silently rebind the next
@@ -763,6 +768,10 @@ export class UI {
       [this.mercMenu, () => this.closeMercMenu()],
       [this.vocationMenu, () => this.closeVocationMenu()],
       [this.escapeMenu, () => this.hideEscapeMenu()],
+      // The start menu's glyph is BACK, not close: live only on subscreens
+      // (Options, the Immortal roster), which arm startMenuBack; the menu
+      // proper has nothing behind it and wears no glyph.
+      [this.startMenu, () => this.startMenuBack?.()],
     ];
     for (const [root, close] of panelClosers) {
       root.addEventListener('click', (e) => {
@@ -8145,7 +8154,9 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
    *  start menu can enable Continue. Null disables it. */
   setContinueSave(save: CharacterSave | null): void {
     this.continueSave = save;
-    if (!this.startMenu.classList.contains('hidden') && this.startHandlers) this.renderStartMenu();
+    // Refresh only the menu PROPER (startMenuBack null): re-rendering while a
+    // subscreen (Options, the Immortal roster) is up would yank the reader out.
+    if (!this.startMenu.classList.contains('hidden') && this.startHandlers && !this.startMenuBack) this.renderStartMenu();
   }
 
   /** The launch screen: Start New / Continue / the roster / Vault / Keybinds. */
@@ -8165,30 +8176,18 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
   private renderStartMenu(): void {
     const acc = this.getAccount();
     const h = this.startHandlers!;
+    this.startMenuBack = null;  // the menu proper is showing — no subscreen to back out of
     const canContinue = !!this.continueSave;
-    // THE ROSTER: account-owned characters (Immortal vessels), listed straight
-    // from the index cards — no slot file is read until one is chosen. Each row
-    // is Continue-as plus a deliberate release (✕, confirmed, durable wipe).
-    const rosterRows = acc.roster.map(e => {
-      const mode = modeById(e.modeId);
-      // THE FALLEN LOCK (the resurrection covenant): a fallen vessel's row
-      // stays listed — dimmed, badged FALLEN, its fee printed — but leads to
-      // the Vault's words instead of a run until the resurrection is paid.
-      const fallen = !!e.fallen;
-      const badge = fallen ? 'FALLEN' : stageOf(e.modeId, e.stage).badge ?? mode.name.toUpperCase();
-      const bColor = fallen ? '#e85050' : mode.color;
-      return `
-        <div style="display:flex;gap:6px">
-          <button class="sm-roster-go" data-cid="${esc(e.charId)}" style="flex:1 1 auto;text-align:left${fallen ? ';opacity:.6' : ''}"
-            ${fallen ? `title="Fallen — resurrect in the Vault (${e.fallen!.fee} ${META_CURRENCY_LABEL}, invested across runs)"` : ''}>
-            ⟢ ${esc(e.name)} — Level ${e.level}
-            <span style="font-size:10px;color:${bColor};border:1px solid ${bColor};
-              border-radius:6px;padding:0 5px;margin-left:6px">${badge}</span>${fallen
-              ? `<span style="font-size:10px;color:#a8a494;margin-left:6px">☠ ${e.fallen!.fee} ${META_CURRENCY_LABEL} to resurrect</span>` : ''}</button>
-          <button class="sm-roster-del" data-cid="${esc(e.charId)}" style="flex:0 0 auto"
-            title="Release this vessel: the character is permanently discarded">✕</button>
-        </div>`;
-    }).join('');
+    // THE IMMORTAL SHELF: however many vessels the account swears, the menu
+    // proper spends ONE button on them — the roster lives in its own pane
+    // (renderImmortalRoster), so the option count here stays flat and no
+    // roster row can outgrow the bounding box. A fallen vessel still calls
+    // from the label so the covenant's debt is never buried a click deep.
+    const fallenN = acc.roster.filter(e => e.fallen).length;
+    const immortalsBtn = acc.roster.length
+      ? `<button id="sm-immortals">Immortal Vessels (${acc.roster.length})${fallenN
+          ? ` <span style="font-size:10px;color:#e85050">· ${fallenN} fallen</span>` : ''}</button>`
+      : '';
     // A pending reckoning (essence standing on the account — a mid-reckoning
     // quit, or a pre-seal-law save) surfaces on the Vault button: the seal
     // law inside the Vault settles it the moment that visit closes.
@@ -8201,7 +8200,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       <div class="esc-btns">
         <button id="sm-start">Start New Game</button>
         <button id="sm-continue" ${canContinue ? '' : 'disabled'}>${canContinue ? 'Continue' : 'No Save Found'}</button>
-        ${rosterRows}
+        ${immortalsBtn}
         <button id="sm-vault"${pending ? ' style="border-color:var(--gold)"' : ''}>${pending
           ? `Vault — assign ${acc.credits} ${META_CURRENCY_LABEL}!` : 'Vault (Unlocks)'}</button>
         <button id="sm-chronicle">Chronicle of Runs${acc.runRecords.length ? ` (${acc.runRecords.length})` : ''}</button>
@@ -8216,15 +8215,75 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       if (!this.continueSave) return;
       this.startMenu.classList.add('hidden'); h.onContinue(this.continueSave);
     });
+    document.getElementById('sm-immortals')?.addEventListener('click', () => this.renderImmortalRoster());
+    document.getElementById('sm-vault')!.addEventListener('click', () =>
+      this.showAccountScreen(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
+    document.getElementById('sm-chronicle')!.addEventListener('click', () =>
+      this.showChronicle(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
+    document.getElementById('sm-keys')!.addEventListener('click', () => {
+      // Arm the pane's ✕ glyph as the Options Back twin (disarm any pending
+      // rebind capture exactly as the Back button does).
+      this.startMenuBack = () => {
+        this.disarmRebind();
+        this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster);
+      };
+      this.renderOptions(this.startMenu, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster));
+    });
+    this.onStartMenuRender?.();
+  }
+
+  /** THE IMMORTAL ROSTER PANE: account-owned characters (Immortal vessels),
+   *  listed straight from the index cards — no slot file is read until one is
+   *  chosen. Each vessel is ONE tile: the whole face resumes, and its corner
+   *  ✕ (the in-game panels' close-glyph language) is the deliberate release —
+   *  confirmed, durable wipe. Tiles pack two to a row, so the shelf grows
+   *  DOWN the pane instead of out of it. */
+  private renderImmortalRoster(notice?: string): void {
+    const acc = this.getAccount();
+    const h = this.startHandlers!;
+    this.startMenuBack = () => this.renderStartMenu();  // the pane's ✕ glyph = Back
+    const tiles = acc.roster.map(e => {
+      const mode = modeById(e.modeId);
+      // THE FALLEN LOCK (the resurrection covenant): a fallen vessel's tile
+      // stays listed — dimmed, badged FALLEN, its fee printed — but leads to
+      // the Vault's words instead of a run until the resurrection is paid.
+      const fallen = !!e.fallen;
+      const badge = fallen ? 'FALLEN' : stageOf(e.modeId, e.stage).badge ?? mode.name.toUpperCase();
+      const bColor = fallen ? '#e85050' : mode.color;
+      return `
+        <div class="sm-roster-tile${fallen ? ' fallen' : ''}">
+          <button class="sm-roster-go" data-cid="${esc(e.charId)}"
+            ${fallen ? `title="Fallen — resurrect in the Vault (${e.fallen!.fee} ${META_CURRENCY_LABEL}, invested across runs)"` : ''}>
+            <span class="sm-roster-name">⟢ ${esc(e.name)}</span>
+            <span class="sm-roster-sub">Level ${e.level}
+              <span style="font-size:10px;color:${bColor};border:1px solid ${bColor};
+                border-radius:6px;padding:0 5px;margin-left:4px">${badge}</span></span>${fallen
+              ? `<span class="sm-roster-fee">☠ ${e.fallen!.fee} ${META_CURRENCY_LABEL} to resurrect</span>` : ''}
+          </button>
+          <button class="sm-roster-del" data-cid="${esc(e.charId)}"
+            title="Release this vessel: the character is permanently discarded">✕</button>
+        </div>`;
+    }).join('');
+    const fallenN = acc.roster.filter(e => e.fallen).length;
+    this.startMenu.innerHTML = `
+      ${this.closeGlyphHtml('Back')}
+      <h1>IMMORTAL VESSELS</h1>
+      <div class="acct-head">${acc.roster.length} vessel${acc.roster.length === 1 ? '' : 's'} sworn
+        — resume one, or release it from its corner ✕.</div>
+      ${notice ? `<div class="acct-head" style="color:#e8b06a">${notice}</div>` : ''}
+      <div class="esc-btns">
+        <div class="sm-roster">${tiles}</div>
+        ${fallenN ? '<button id="sm-imm-vault">Vault — the Fallen shelf</button>' : ''}
+        <button id="sm-imm-back">Back</button>
+      </div>`;
     this.startMenu.querySelectorAll<HTMLElement>('.sm-roster-go').forEach(btn => {
       btn.addEventListener('click', () => {
         const entry = this.getAccount().roster.find(r => r.charId === btn.dataset.cid);
         if (!entry || !h.onRoster) return;
-        // A fallen vessel never launches: the menu re-renders with the
-        // covenant's words (main.ts's resume path is the belt behind this).
+        // A fallen vessel never launches: the roster pane re-renders with
+        // the covenant's words (main.ts's resume path is the belt behind this).
         if (entry.fallen) {
-          h.notice = `${entry.name} lies fallen — resurrect them in the Vault (${entry.fallen.fee} ${META_CURRENCY_LABEL}).`;
-          this.renderStartMenu();
+          this.renderImmortalRoster(`${entry.name} lies fallen — resurrect them in the Vault (${entry.fallen.fee} ${META_CURRENCY_LABEL}).`);
           return;
         }
         this.startMenu.classList.add('hidden');
@@ -8244,16 +8303,19 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         delete this.getAccount().invested[resurrectUnlockId(e.charId)];
         wipeRosterSlot(e.slot);  // durable — the slot must not resurrect on next boot
         this.saveAccount();
-        this.renderStartMenu();
+        // The last release empties the shelf — fall back to the menu proper.
+        if (this.getAccount().roster.length) this.renderImmortalRoster();
+        else this.renderStartMenu();
       });
     });
-    document.getElementById('sm-vault')!.addEventListener('click', () =>
-      this.showAccountScreen(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
-    document.getElementById('sm-chronicle')!.addEventListener('click', () =>
-      this.showChronicle(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
-    document.getElementById('sm-keys')!.addEventListener('click', () =>
-      this.renderOptions(this.startMenu, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
-    this.onStartMenuRender?.();
+    // The covenant's road, one press away while any vessel lies fallen; the
+    // Vault returns THROUGH the menu proper back to this pane.
+    document.getElementById('sm-imm-vault')?.addEventListener('click', () =>
+      this.showAccountScreen(() => {
+        this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster);
+        if (this.getAccount().roster.length) this.renderImmortalRoster();
+      }));
+    document.getElementById('sm-imm-back')!.addEventListener('click', () => this.renderStartMenu());
   }
 
   // ------------------------------------------------------- expedition setup

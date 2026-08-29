@@ -507,11 +507,18 @@
     }
     .rebind-row button:hover { background: #3a3a55; border-color: var(--gold); }
 
-    /* Start menu (launch) — reuses the escape-menu button styling */
+    /* Start menu (launch) — reuses the escape-menu button styling. THE PANE
+       HUGS ITS OPTIONS: fit-content width (the Immortal-roster QA — no row
+       may outgrow the bounding box again) + a viewport scroll cap; the denser
+       Options sub-view (#esc-back is its signature) pins the classic width. */
     #start-menu {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 460px; max-width: calc(92vw / var(--ui-scale)); text-align: center; padding: 34px;
+      width: fit-content; min-width: 360px; /* hugs the shown options — the Immortal-roster overflow QA */
+      max-width: min(540px, calc(92vw / var(--ui-scale)));
+      max-height: calc(88vh / var(--ui-scale)); overflow-y: auto;
+      text-align: center; padding: 34px;
     }
+    #start-menu:has(#esc-back) { width: 460px; } /* Options pins the pre-Immortal-shelf measure */
     #start-menu h1 { color: var(--gold); font-size: 26px; letter-spacing: 3px; margin: 0 0 8px 0; }
     #start-menu .acct-head { color: var(--text); font-size: 13px; margin-bottom: 14px; }
     #start-menu .acct-head b { color: var(--gold); }
@@ -522,6 +529,36 @@
     }
     #start-menu .esc-btns button:hover:not(:disabled) { background: #3a3a55; }
     #start-menu .esc-btns button:disabled { opacity: 0.4; cursor: var(--cursor-default, default); border-color: var(--panel-border); color: var(--text-dim); }
+
+    /* THE IMMORTAL SHELF (ui/panels.ts renderImmortalRoster): each roster
+       vessel is ONE tile wearing its release ✕ as a corner glyph — the same
+       close-glyph language as the in-game panels (.panel-x above), tinted red
+       for a destructive press — so tiles pack two to a row and the release
+       button never widens the column. */
+    #start-menu .sm-roster { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+      width: 430px; max-width: calc(92vw / var(--ui-scale) - 68px); }
+    /* min-width: 0 — without it the nowrap name's intrinsic width becomes the
+       tile's flex minimum and every tile claims its own row; the ellipsis is
+       the honest overflow answer, so the basis (200px) must rule the wrap. */
+    #start-menu .sm-roster-tile { position: relative; display: flex; flex: 1 1 200px; min-width: 0; max-width: 260px; }
+    #start-menu .sm-roster-tile.fallen .sm-roster-go { opacity: 0.6; }
+    #start-menu .esc-btns .sm-roster-go {
+      flex: 1 1 auto; width: auto; min-width: 0; min-height: 50px;
+      padding: 7px 24px 7px 11px; font-size: 12px; text-align: left;
+      display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px;
+    }
+    #start-menu .sm-roster-name { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+    #start-menu .sm-roster-sub { font-size: 10px; color: var(--text-dim); }
+    #start-menu .sm-roster-fee { font-size: 10px; color: #a8a494; }
+    #start-menu .esc-btns .sm-roster-del {
+      position: absolute; top: -7px; right: -7px; width: 21px; height: 21px; padding: 0; margin: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(20,20,30,0.92); color: var(--text-dim); border: 1px solid var(--panel-border);
+      border-radius: 50%; font-size: 10px; line-height: 1; box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    }
+    #start-menu .esc-btns .sm-roster-del:hover:not(:disabled) {
+      color: #fff; border-color: #e85050; background: #4a2430; box-shadow: 0 0 7px rgba(232,80,80,0.4);
+    }
 
     /* Floating tooltip (outside .panel so panel display rules don't hide it)
        — z-index from the UI stack law's `tooltip` rung (ui/zorder.ts). */
