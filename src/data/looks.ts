@@ -4907,14 +4907,20 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'lantern', x: -0.45, y: 0.42, scale: 0.5 },
     ],
   },
-  // The kennel-boy: goblin face forward, the crated litter on his back.
+  // The kennel-boy: goblin face forward. THE ACCUMULATOR LAW: the crate is
+  // the clutch GAUGE and rides the def's tells ('clutch' source), never the
+  // look — an empty-handed slinger honestly wears no crate.
   goblin_whelpsling: {
     parts: [
       { kind: 'ears', scale: 0.9 },
       { kind: 'snout', x: 0.5, scale: 0.65 },
       { kind: 'eyes', color: '#ffe8a0', params: { n: 2, spread: 0.3, dist: 0.5, size: 0.09 } },
-      { kind: 'crateBox', x: -0.55, y: -0.12, scale: 0.85, role: 'wood' },
     ],
+  },
+  // The laid vessel (BirthEffect.incubate's default body).
+  clutch_egg: {
+    parts: [{ kind: 'egg', scale: 1.15 }],
+    shadowScale: 0.8,
   },
   // Cinderwisp's hit-born servant: a mote of living flame.
   cinder_sprite: {

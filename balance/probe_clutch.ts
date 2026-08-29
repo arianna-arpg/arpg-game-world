@@ -32,10 +32,12 @@ import { vec, dist } from '../src/core/math';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
 import { makeSkillInstance, supportFitsInst, instanceBirth, SUPPORT_MECHANISMS } from '../src/engine/skills';
-import type { BirthEffect } from '../src/engine/clutch';
+import { CLUTCH_CFG, type BirthEffect } from '../src/engine/clutch';
+import { TELL_SOURCES } from '../src/engine/tells';
 import { MONSTERS } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
+import { LOOKS } from '../src/data/looks';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -257,6 +259,110 @@ const bornOfMother = (w: World, mother: Actor): Actor[] =>
   bare.sockets[0] = { def: SUPPORTS.broodbearer, level: 1 };
   check('kindred: a birthless host reads the graft (the gem\'s whole purpose)',
     instanceBirth(bare)?.monsterId === 'broodling');
+}
+
+// ------------------------------------------------ the orphan fates (Card 2)
+{
+  seedGlobalRandom(701);
+  const w = makeSimWorld('warrior', 701);
+  w.player.pos = vec(2200, 2200);
+  const mother = spawn(w, 'vile_broodmother', 6, 500, 500);
+  const inst = kitInst(mother, 'vile_clutch');
+  const lay = (fx: Partial<BirthEffect>, x: number): Actor[] =>
+    w.birthAt(mother, inst,
+      { type: 'birth', monsterId: 'vile_spawn', count: [1, 1], cap: 9, ...fx }, vec(x, 520));
+  const raging = lay({ orphan: 'frenzy' }, 640);
+  const routing = lay({ orphan: 'rout', monsterId: 'gnasher_whelp' }, 680);
+  const fading = lay({ orphan: 'wither' }, 720);
+  const stopping = lay({ orphan: 'die' }, 760);
+  const persisting = lay({}, 800);
+  check('orphans: five births stand, each wearing its OWN authored fate',
+    [raging, routing, fading, stopping, persisting].every(b => b.length === 1));
+  w.kill(mother);
+  check('orphans: "it depends on the mother" — frenzy rages, rout panics, wither fades, die stops, absent persists',
+    !!raging[0].buffs.get('orphan_frenzy')
+    && routing[0].statuses.some(s => s.id === CLUTCH_CFG.orphan.rout.status)
+    && fading[0].lifespan === CLUTCH_CFG.orphan.witherSec && !fading[0].dead
+    && stopping[0].dead
+    && !persisting[0].dead && !persisting[0].buffs.get('orphan_frenzy')
+    && persisting[0].lifespan === 0,
+    `frenzy=${!!raging[0].buffs.get('orphan_frenzy')} rout=${routing[0].statuses.map(s => s.id).join('/')} wither=${fading[0].lifespan} die=${stopping[0].dead}`);
+  check('orphans: THE LAST CLUTCH — her death itself births (the onDeath spasm)',
+    w.actors.filter(a => !a.dead && a.defId === 'vile_spawn' && a.bornOf === undefined).length >= 2);
+}
+
+// ---------------------------------------------------- the egg lane (Card 3)
+{
+  seedGlobalRandom(809);
+  const w = makeSimWorld('warrior', 809);
+  w.player.pos = vec(2200, 2200);
+  const mother = spawn(w, 'vile_broodmother', 6, 500, 500);
+  const inst = kitInst(mother, 'vile_clutch');
+  const fx: BirthEffect = {
+    type: 'birth', monsterId: 'vile_spawn', count: [1, 1], cap: 8,
+    incubate: { sec: 0.8 },
+  };
+  const laid = w.birthAt(mother, inst, fx, vec(700, 500));
+  check('egg: the landing lays a VESSEL, not the brood — and it holds a cap seat',
+    laid.length === 1 && laid[0].defId === 'clutch_egg' && laid[0].bornOf === mother.id
+    && !!laid[0].eggHatch && w.actors.every(a => a.defId !== 'vile_spawn'));
+  step(w, 80); // past term + a sweep beat
+  const hatched = w.actors.filter(a => !a.dead && a.defId === 'vile_spawn');
+  check('egg: at term it bursts — the brood hatch as the EGG\'S own (free recursion, the Card-5 default)',
+    laid[0].dead && hatched.length === 1 && hatched[0].bornOf === laid[0].id,
+    `hatched ${hatched.length}, bornOf ${hatched[0]?.bornOf} vs egg ${laid[0].id}`);
+  // The broken egg: nothing is ever born (the counterplay window).
+  const laid2 = w.birthAt(mother, inst, fx, vec(760, 620));
+  w.kill(laid2[0]);
+  const before = w.actors.filter(a => !a.dead && a.defId === 'vile_spawn').length;
+  step(w, 80);
+  check('egg: broken before term, nothing is born',
+    w.actors.filter(a => !a.dead && a.defId === 'vile_spawn').length === before);
+}
+
+// ---------------------------------------------------- the proc door (Card 4)
+{
+  seedGlobalRandom(907);
+  const w = makeSimWorld('warrior', 907);
+  w.player.pos = vec(600, 500);
+  const dummy = spawn(w, 'zombie', 1, 700, 500);
+  const procDef = {
+    id: 'rig_birth', name: 'Rig Birth', color: '#ffffff', trigger: 'hit',
+    effect: { type: 'birth', birth: { type: 'birth', monsterId: 'broodling', duration: 6, cap: 2 } },
+  };
+  const fire = (): void => (w as unknown as {
+    executeProc(p: unknown, c: Actor, i: null, t: Actor, d: number): void;
+  }).executeProc(procDef, w.player, null, dummy, 0);
+  fire();
+  const conscripts = (): Actor[] =>
+    w.actors.filter(a => !a.dead && a.defId === 'broodling' && a.owner === w.player);
+  check('proc door: a bare trigger births a capped, mortal minion for the keeper (no host skill)',
+    conscripts().length === 1 && conscripts()[0].sourceSkillId === '__proc:rig_birth'
+    && conscripts()[0].lifespan > 0);
+  for (let i = 0; i < 5; i++) fire();
+  check('proc door: the Forgebound census key holds the cap under a hammer',
+    conscripts().length === 2, `live ${conscripts().length}`);
+}
+
+// -------------------------------------------------- the clutch tell (Card 6)
+{
+  seedGlobalRandom(1009);
+  const w = makeSimWorld('warrior', 1009);
+  w.player.pos = vec(2200, 2200);
+  const slinger = spawn(w, 'goblin_whelpsling', 5, 500, 500);
+  const inst = kitInst(slinger, 'whelp_toss');
+  const fx = SKILLS.whelp_toss.effects.find((e): e is BirthEffect => e.type === 'birth')!;
+  const litter = w.birthAt(slinger, inst, fx, vec(650, 500));
+  const read = (): number =>
+    TELL_SOURCES.clutch(slinger as never, w as never);
+  check('clutch tell: the source reads the live litter off the SAME census the cap tests',
+    litter.length >= 2 && read() === litter.length, `read ${read()} vs ${litter.length}`);
+  w.kill(litter[0]);
+  check('clutch tell: a fallen pup empties the crate honestly (the death seam restamps)',
+    read() === litter.length - 1, `read ${read()}`);
+  check('clutch tell: the def wears it and the look stays bare (the accumulator law)',
+    (MONSTERS.goblin_whelpsling.tells ?? []).some(t => t.source === 'clutch')
+    && !(LOOKS.goblin_whelpsling.parts ?? []).some(p => p.kind === 'crateBox'));
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');

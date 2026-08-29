@@ -80,6 +80,15 @@ export type ProcEffect =
   /** SUMMONS a minion beside the struck target (Forgebound's animated
    *  weapon — the hit itself does the conscripting). Capped per caster. */
   | { type: 'summon'; monsterId: string; duration: number; max: number }
+  /** BIRTHS bodies at the proc's site (THE CLUTCH FABRIC — engine/clutch.ts
+   *  + World.birthAt): the FULL birth row played from a trigger — combo
+   *  payoffs, blocks, kills, whatever grants the proc. `at` seats it
+   *  ('target' when one stands, else the keeper's flank). Player-side
+   *  procs mint capped, mortal minions for the RESOLVED keeper through the
+   *  Forgebound census key ('__proc:<id>' — the court-credit law); enemy
+   *  proc-wearers mint kin through the ordinary clutch lane. `onHit` is
+   *  meaningless here (the trigger already decided) and is ignored. */
+  | { type: 'birth'; birth: import('../engine/clutch').BirthEffect; at?: 'target' | 'self' }
   /** Applies a STATUS to the struck target. DoT power is the status's
    *  caster-less baseline × `magnitude` (golden rule 4: never the hit's own
    *  roll) — potency/pop investment still applies at the application site. */

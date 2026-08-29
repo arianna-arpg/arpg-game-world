@@ -38,7 +38,7 @@ import {
   type ProjTrailSpec, type FissureTrailSpec, type DropZoneSpec, type LedgerSpec, type SkillInstance, type SummonDelivery, type SupportDef, type SupportInstance,
   type TetherSpec, type ConduitSpec, type ImpactDressSpec,
 } from './skills';
-import { birthCount, CLUTCH_CFG, type BirthEffect } from './clutch';
+import { birthCount, CLUTCH_CFG, ORPHAN_FRENZY, type BirthEffect } from './clutch';
 import { BOMBARD_CFG, type BombardSpec } from './bombard';
 import { evalCurve, type CurveKind } from './curves';
 import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
@@ -34947,14 +34947,21 @@ export class World {
    *  wet — no eviction: a vanguard holds a wall, it never rotates one),
    *  placed by findFreeSpot (an impact point can sit inside a rock blob),
    *  paying no bounty by the conjured-stream law unless the spec says
-   *  otherwise. Every arrival plays the emergence grammar. */
-  birthAt(caster: Actor, inst: SkillInstance, fx: BirthEffect, at: Vec2,
-    opts?: { host?: boolean }): Actor[] {
+   *  otherwise. Every arrival plays the emergence grammar. A NULL inst is
+   *  the proc door's shape (no host skill behind the trigger): player-side
+   *  it mints through the Forgebound census (opts.capKey), enemy-side
+   *  nothing changes. `fx.orphan` stamps each child's fate for the death
+   *  seam; `fx.incubate` lays an egg vessel instead (enemy lane) that
+   *  hatches through updateClutch. */
+  birthAt(caster: Actor, inst: SkillInstance | null, fx: BirthEffect, at: Vec2,
+    opts?: { host?: boolean; capKey?: string }): Actor[] {
     const born: Actor[] = [];
     const n = birthCount(fx, (lo, hi) => randInt(lo, hi));
     if (n <= 0) return born;
     const scatter = fx.scatter ?? CLUTCH_CFG.scatter;
     const playerSide = caster.team === 'player';
+    const liveBrood = (): number =>
+      this.actors.filter(a => !a.dead && a.bornOf === caster.id).length;
     for (let i = 0; i < n; i++) {
       const id = fx.pool?.length
         ? this.weightedPick(fx.pool, caster.level)
@@ -34962,7 +34969,7 @@ export class World {
       if (!id || !MONSTERS[id]) continue;
       const seat = vec(at.x + rand(-scatter, scatter), at.y + rand(-scatter, scatter));
       let m: Actor | null;
-      if (playerSide) {
+      if (playerSide && inst) {
         m = this.spawnMinion(caster, inst, {
           monsterId: id, pos: seat,
           delivery: {
@@ -34971,18 +34978,61 @@ export class World {
             ...(fx.duration !== undefined ? { duration: fx.duration } : {}),
           },
         });
+      } else if (playerSide) {
+        // INSTANCE-LESS player births (THE PROC DOOR — her Card-4 ruling):
+        // no host skill stands behind the trigger, so the Forgebound
+        // census shape carries it — capped by a synthetic source key per
+        // trigger, minted for the RESOLVED keeper, mortal, lifelined.
+        const owner = caster.owner ?? caster;
+        const key = opts?.capKey ?? '__birth';
+        const cap = fx.cap ?? CLUTCH_CFG.minionCap;
+        if (this.actors.filter(x => x.owner === owner && !x.dead
+          && x.sourceSkillId === key).length >= cap) break;
+        m = this.createMonster(id, owner.level, owner.team, owner);
+        m.sourceSkillId = key;
+        m.noBounty = true;
+        m.lifelineId = this.conjurationLifeline(owner);
+        if (fx.duration) m.lifespan = fx.duration * owner.sheet.get('effectDuration');
+        m.pos = this.findFreeSpot(seat, m.radius, m.tier);
+        this.actors.push(m);
+      } else if (fx.incubate) {
+        // THE EGG (BirthEffect.incubate — her Card-3 ruling: thematic,
+        // per-monster): the landing lays a VESSEL that holds a clutch-cap
+        // seat until term. Break it and nothing is born; at term
+        // updateClutch bursts it and the brood hatch as the EGG'S own
+        // (bornOf the egg — free recursion, the Card-5 default).
+        const cap = fx.cap ?? CLUTCH_CFG.cap;
+        if (liveBrood() >= cap) break;
+        const vessel = fx.incubate.vessel ?? CLUTCH_CFG.incubate.vessel;
+        if (!MONSTERS[vessel]) continue;
+        m = this.createMonster(vessel, caster.level, caster.team);
+        m.bornOf = caster.id;
+        if (caster.faction) m.faction = caster.faction;
+        if (fx.bounty !== 'full') m.noBounty = true;
+        if (fx.tag) m.tag = fx.tag;
+        if (fx.orphan) m.orphanFate = fx.orphan;
+        m.pos = this.findFreeSpot(seat, m.radius, m.tier);
+        const hatchFx: BirthEffect = { ...fx };
+        delete hatchFx.incubate;
+        m.eggHatch = { at: this.time + fx.incubate.sec, fx: hatchFx };
+        this.actors.push(m);
+        caster.clutchLive = liveBrood();
       } else {
         // THE CLUTCH CAP: the live bornOf census — at cap the birth simply
         // does not happen (the blast still landed; the sac lands wet).
         const cap = fx.cap ?? CLUTCH_CFG.cap;
-        if (this.actors.filter(a => !a.dead && a.bornOf === caster.id).length >= cap) break;
+        if (liveBrood() >= cap) break;
         m = this.createMonster(id, caster.level, caster.team);
         m.bornOf = caster.id;
         if (caster.faction) m.faction = caster.faction;
         if (fx.bounty !== 'full') m.noBounty = true;
         if (fx.tag) m.tag = fx.tag;
+        if (fx.orphan) m.orphanFate = fx.orphan;
         m.pos = this.findFreeSpot(seat, m.radius, m.tier);
         this.actors.push(m);
+        // The live-litter stamp (the 'clutch' tell source): the drawn
+        // crate and the tested cap read the SAME census.
+        caster.clutchLive = liveBrood();
       }
       if (!m) continue;
       born.push(m);
@@ -34997,10 +35047,73 @@ export class World {
     if (born.length) {
       this.flashes.push({
         pos: vec(at.x, at.y), radius: CLUTCH_CFG.flash.radius,
-        color: inst.def.color, life: CLUTCH_CFG.flash.life, maxLife: CLUTCH_CFG.flash.life,
+        color: inst?.def.color ?? caster.color,
+        life: CLUTCH_CFG.flash.life, maxLife: CLUTCH_CFG.flash.life,
       });
     }
     return born;
+  }
+
+  private clutchScan = 0;
+
+  /** THE CLUTCH sweep (engine/clutch.ts): eggs come to term — the hatch
+   *  births through birthAt with the EGG as mother (the brood are its own;
+   *  a broken egg simply never fires), then the spent shell dies quietly. */
+  private updateClutch(dt: number): void {
+    this.clutchScan -= dt;
+    if (this.clutchScan > 0) return;
+    this.clutchScan = 0.25;
+    for (const egg of [...this.actors]) {
+      if (egg.dead || !egg.eggHatch || this.time < egg.eggHatch.at) continue;
+      const fx = egg.eggHatch.fx;
+      egg.eggHatch = undefined;
+      this.birthAt(egg, null, fx, vec(egg.pos.x, egg.pos.y), { host: true });
+      this.kill(egg, true);
+    }
+  }
+
+  /** THE CLUTCH's death seam: (1) a fallen child restamps its mother's
+   *  live-litter tell (the 'clutch' source — the drawn crate empties off
+   *  the same bornOf census the cap reads), (2) a fallen MOTHER's living
+   *  brood meets its authored orphan fate (BirthEffect.orphan, stamped per
+   *  child — "it depends on the mother": per-spec data, never one global
+   *  law; persist is the absent default and costs nothing here). */
+  private clutchOnDeath(victim: Actor): void {
+    if (victim.bornOf !== undefined) {
+      const mother = this.actors.find(a => !a.dead && a.id === victim.bornOf);
+      if (mother?.clutchLive !== undefined) {
+        mother.clutchLive = this.actors.filter(a =>
+          !a.dead && a !== victim && a.bornOf === mother.id).length;
+      }
+    }
+    let brood: Actor[] | null = null;
+    for (const a of this.actors) {
+      if (!a.dead && a.bornOf === victim.id && a.orphanFate) (brood ??= []).push(a);
+    }
+    if (!brood) return;
+    for (const child of brood) {
+      if (child.dead) continue;
+      switch (child.orphanFate) {
+        case 'die':
+          // An extension of the mother, not a life of its own — it simply
+          // stops (quiet: its stream never paid, and never will).
+          this.kill(child, true);
+          break;
+        case 'wither':
+          child.lifespan = CLUTCH_CFG.orphan.witherSec;
+          break;
+        case 'frenzy':
+          // The mourn-rage window: killing her mid-brood has a price.
+          child.addBuff(ORPHAN_FRENZY, 1, 0);
+          break;
+        case 'rout':
+          // The panic machinery's flight (StatusDef.panic — the pups
+          // scatter through the same rout every courage spec obeys).
+          child.applyStatus(CLUTCH_CFG.orphan.rout.status, 0,
+            CLUTCH_CFG.orphan.rout.durMul, 'orphaned');
+          break;
+      }
+    }
   }
 
   /** HIVEBORN (SupportDef.corpseSpawn): bodies consumed by the host skill
@@ -40583,6 +40696,18 @@ export class World {
         this.actors.push(forged);
         break;
       }
+      case 'birth': {
+        // THE CLUTCH's proc door (engine/clutch.ts — her Card-4 ruling):
+        // the trigger is the landing. The keeper resolves as Forgebound's
+        // conscript does (the court-credit law), the census key is the
+        // proc's own, and the full birth row plays — combo payoffs,
+        // blocks, kills, whatever grants the proc.
+        const owner = caster.owner ?? caster;
+        const site = fx.at === 'self' || !target ? owner : target;
+        this.birthAt(owner, null, fx.birth, vec(site.pos.x, site.pos.y),
+          { host: !!target && site === target, capKey: '__proc:' + proc.id });
+        break;
+      }
     }
     // PROC RIDERS: stat-granted consequences bolted onto THIS proc from
     // outside (passives, gems, affixes — see ProcRiderDef). Each rider
@@ -41276,6 +41401,13 @@ export class World {
     // side did the deed. Two warring factions thinning each other out pay
     // the watcher nothing — pick off the survivors instead.
     const credit = !killer || killer.team === 'player';
+
+    // THE CLUTCH's death seam (engine/clutch.ts): a fallen child restamps
+    // its mother's live-litter tell; a fallen MOTHER's brood meets its
+    // authored orphan fate. The seam sits HERE on purpose — past every
+    // early return above (parts, doors, companions are never clutch
+    // citizens), before the bounty ladder.
+    this.clutchOnDeath(actor);
 
     // DEATH RITES (minionDeathHeal): the flock closes over the wound — the
     // deceased's kin heal a share of its life (+ flat). Duration lapses
@@ -43269,6 +43401,7 @@ export class World {
     this.updateStorm(dt);
     this.updateDemonStorm(dt);
     this.updateBombardment();
+    this.updateClutch(dt);
     this.updateDeadwakeStream(dt);
     this.updateHauntStream(dt);
     this.updateStrayingScene(dt);

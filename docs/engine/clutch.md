@@ -27,7 +27,9 @@ skill, any monster kit, any support gem, and any future door can carry.
   onHit?: true,                      // only where a blow actually LANDED
   bounty?: 'full',                   // enemy lane: opt INTO paying
   scatter?: 26, tag?: '...',         // seat jitter; event-role tag
-  emerge?: { motion: 'condense' } }  // arrival override (emergence grammar)
+  emerge?: { motion: 'condense' },   // arrival override (emergence grammar)
+  orphan?: 'die'|'wither'|'frenzy'|'rout', // the mother's death, per spec
+  incubate?: { sec, vessel? } }      // lay an EGG instead (enemy lane)
 ```
 
 ## One effect, every delivery, at its own honest landing
@@ -82,6 +84,37 @@ kept alive by her brood), faction-inherited from the caster.
   overrides both (a fire sprite condenses). Never a caption.
 - **THE LIVING-CASTER GATE** — a dead mother's airborne shells land barren
   (the litePour law's own gate, carried over).
+- **THE ORPHAN FATES** (her ruling: *"it depends on the mother"* — faction,
+  theme and role decide, so the law is PER-SPEC data, never one global
+  rule) — `orphan` stamps each child at birth; `World.clutchOnDeath`
+  applies it when the mother falls: `die` (an extension of her — it simply
+  stops, quietly), `wither` (a short clock), `frenzy` (the mourn-rage
+  window — killing her mid-brood has a price), `rout` (the panic
+  machinery's flight — `StatusDef.panic`, the same rout every courage spec
+  obeys). Absent = persist, the D2 answer, free at the death seam. The
+  last clutch is the standing AI verb (`onDeath: [{do:'summon',…}]` — the
+  broodmother's final spasm wears it).
+- **THE EGG** (her ruling: thematic, per-monster — the spider that lays on
+  what it kills) — `incubate` lays a killable VESSEL (`clutch_egg` by
+  default; `vessel` reskins) that holds a clutch-cap seat until term.
+  Break it and nothing is born; at term `updateClutch` bursts it and the
+  brood hatch as **the egg's own** (`bornOf` the egg) — which is the
+  free-recursion default at work.
+- **FREE RECURSION** (her Card-5 ruling) — a `bornOf`-carrying body births
+  unrefused; there is no generation law. Caps bound each generation, and
+  that is the whole discipline. Authored data may still choose depth by
+  simply not giving children birth kit.
+- **THE PROC DOOR** (her Card-4 ruling) — ProcEffect `{type:'birth',
+  birth, at?}`: the full birth row played from any trigger (combo payoffs
+  ride ComboRuleDef's proc payoffs, blocks ride trigger 'block', kills
+  'kill'). Player-side it mints for the RESOLVED keeper through the
+  Forgebound census key (`'__proc:<id>'` — the court-credit law); a null
+  host instance is the door's normal shape.
+- **THE CLUTCH TELL** — tell source `clutch` reads `Actor.clutchLive`,
+  stamped by birthAt and the death seam off the SAME `bornOf` census the
+  cap refuses at (drawn == capped). Debut: the whelpsling's crate is the
+  gauge — full while the litter is boxed, flat once it runs loose; the
+  crate left the LOOK entirely (the accumulator law).
 
 ## The landing mechanism (the gem's structural gate)
 
@@ -118,14 +151,14 @@ a skill list), self-lifting the day a host changes shape.
 
 - Any `MonsterDef` kit skill can carry a `birth` row — new mothers are data.
 - Any support gem can carry `SupportDef.birth` — new grafts are data.
-- A proc-effect `birth` case (the kindle/vent proc precedent) would open
-  fortunes/affix riders; unbuilt until asked.
-- `bornOf` is the census seam for future laws (orphan behavior on the
-  mother's death, mourn frenzies, brood tells via a registered 'brood'
-  tell source reading live children / cap).
+- Attuned births (the child takes the color of the blow) fold into the
+  rolled-support charter's TYPE axis (docs/design side — her call).
+- New orphan fates are one switch arm each; new vessels are one MonsterDef.
 
-## Dials (`CLUTCH_CFG` — unblessed)
+## Dials (`CLUTCH_CFG` — first-pass numbers stand, per her word)
 
 `count [1,1]` · `cap 8` (enemy) · `minionCap 2` (player default) ·
-`scatter 26` · `flash {34, 0.3s}` — plus every per-skill number in
+`scatter 26` · `flash {34, 0.3s}` · `orphan.witherSec 6` ·
+`orphan.rout {bolted, ×2}` · `orphan.frenzy {8s, +30% dmg, +20% AS/MS}` ·
+`incubate.vessel 'clutch_egg'` — plus every per-skill number in
 data/skills.ts (counts, caps, cadences, telegraphs, damage).

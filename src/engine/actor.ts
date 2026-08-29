@@ -1569,6 +1569,18 @@ export class Actor {
    *  ownerless children keep co-op party scaling). Transient — mid-fight
    *  births are never zone-memory citizens. */
   bornOf?: number;
+  /** What this body's mother's death does to it (BirthEffect.orphan,
+   *  stamped at birth — "it depends on the mother": per-spec data). Absent
+   *  = persist. Applied by World.clutchOnDeath. */
+  orphanFate?: import('./clutch').OrphanFate;
+  /** The mother's LIVE LITTER count (the 'clutch' tell source's stamp —
+   *  restamped by birthAt and the death seam off the same bornOf census
+   *  the cap reads, so the drawn crate and the tested cap are one). */
+  clutchLive?: number;
+  /** THE EGG (BirthEffect.incubate): this body is a laid vessel — at `at`
+   *  it bursts and `fx` births as the egg's own brood (World.updateClutch;
+   *  a broken egg simply never fires). */
+  eggHatch?: { at: number; fx: import('./clutch').BirthEffect };
   /** LIVE BURROW (the {do:'burrow'} verb): submerge → travel underground as
    *  a dust line → telegraphed EMERGENCE hit. Untargetable throughout. */
   burrow?: {

@@ -4705,7 +4705,23 @@ export const MONSTERS: Record<string, MonsterDef> = {
           { do: 'buff', buff: SPENT_SLUMP_BUFF },
         ],
       }],
+      // THE LAST CLUTCH (her ruling: "an onDeath summon as a last clutch
+      // could be very cool for certain monsters"): the womb's final spasm —
+      // two spawn tear free as she falls. Her death is never quiet.
+      onDeath: [{ do: 'summon', monster: 'vile_spawn', count: 2, ring: 28 }],
     },
+  },
+  // THE CLUTCH VESSEL (engine/clutch.ts BirthEffect.incubate): a laid egg —
+  // a real killable body that holds a clutch-cap seat until term; break it
+  // and nothing is born, let it sit and it bursts (the hatch is the egg's
+  // own brood — free recursion, her Card-5 default). The default vessel;
+  // per-spec `incubate.vessel` reskins it for any faction's clutch.
+  clutch_egg: {
+    id: 'clutch_egg', name: 'Clutch Egg',
+    color: '#c8b090', shape: 'oval', radius: 9, material: 'flesh', look: 'clutch_egg',
+    noNemesis: true, remains: false,
+    base: { life: 40, moveSpeed: 0, evasion: 0 },
+    skills: [], xp: 0, drops: 0,
   },
   // The clutch itself: born AT the shell's ring, capped alive per mother,
   // paying nothing (the conjured-stream law — the mother is the prize).
@@ -18623,6 +18639,21 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'goblin',
     presence: { from: 5, fadeIn: 3 },
     turnSpeed: 4,
+    tells: [
+      // The crate IS the clutch gauge (the accumulator law: the seat stays
+      // bare in the look; the tell wears it): full on his back while the
+      // litter is boxed, flattening as six run loose — the 'clutch' source
+      // reads the SAME bornOf census the cap refuses at, so the drawn
+      // crate and the wet-landing shell can never disagree.
+      {
+        source: 'clutch', band: [0, 6],
+        channel: {
+          kind: 'part',
+          part: { kind: 'crateBox', x: -0.55, y: -0.12, scale: 0.85, role: 'wood' },
+          scale: [1.05, 0.55],
+        },
+      },
+    ],
     brain: {
       type: 'caster',
       behavior: { dodge: { chance: 0.7, reaction: [0.1, 0.25] } },

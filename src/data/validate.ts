@@ -309,11 +309,15 @@ export function validateContent(): void {
     // pool) is a typo, not a style. Support grafts walk the same net.
     {
       const checkBirth = (owner: string,
-        fx: { monsterId?: string; pool?: { id: string }[]; count?: [number, number] }): void => {
+        fx: { monsterId?: string; pool?: { id: string }[]; count?: [number, number];
+          incubate?: { vessel?: string } }): void => {
         const ids = [...(fx.monsterId ? [fx.monsterId] : []), ...(fx.pool ?? []).map(r => r.id)];
         if (!ids.length) warn(`birth: ${owner} names no monsterId and no pool — nothing would mint`);
         for (const id of ids) if (!MONSTERS[id]) warn(`birth: ${owner} births unknown monster '${id}'`);
         if (fx.count && fx.count[0] > fx.count[1]) warn(`birth: ${owner} count lo > hi`);
+        if (fx.incubate?.vessel && !MONSTERS[fx.incubate.vessel]) {
+          warn(`birth: ${owner} incubates in unknown vessel '${fx.incubate.vessel}'`);
+        }
       };
       for (const s of Object.values(SKILLS)) {
         for (const fx of s.effects ?? []) if (fx.type === 'birth') checkBirth(`skill ${s.id}`, fx);

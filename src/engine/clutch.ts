@@ -63,6 +63,9 @@
 // the same row. Dials below are DIALS (unblessed — her walk blesses).
 // ============================================================================
 
+import { mod } from './stats';
+import type { BuffEffect } from './skills';
+
 /** BIRTHS BODIES AT THE RESOLUTION POINT — the `birth` SkillEffect (and the
  *  SupportDef.birth graft's payload; engine/skills.ts joins it to the
  *  unions). See the header for the per-delivery landing law. */
@@ -105,7 +108,28 @@ export interface BirthEffect {
    *  ground under the landing derives the motion — earth births RISE, water
    *  births SURFACE; onHit births burst out of the host). */
   emerge?: import('./emerge').EmergeSpec;
+  /** THE ORPHAN FATE (her ruling, 2026-08-28: "it depends on the mother" —
+   *  faction, theme, and role decide, so the law is PER-SPEC data, never
+   *  one global rule). Stamped onto each child at birth; when the mother
+   *  falls, her living brood meets it: 'die' (an extension of her, not a
+   *  life — it simply stops), 'wither' (fails on a short clock), 'frenzy'
+   *  (a mourn-rage window — killing her mid-brood is spicy), 'rout' (the
+   *  panic machinery's flight — pups scatter). Absent = persist (the D2
+   *  answer; costs nothing at the death seam). Enemy lane only — player
+   *  minions already answer to the lifeline/unlearn laws. */
+  orphan?: OrphanFate;
+  /** THE EGG (her Card-3 ruling: thematic, per-monster): the landing lays
+   *  a VESSEL instead of the brood — a real killable body that counts as a
+   *  child until term (it holds a clutch-cap seat). Break it before `sec`
+   *  and nothing is born; at term it bursts and the brood hatch as the
+   *  EGG'S own (bornOf the egg — the free-recursion default, Card 5).
+   *  `vessel` reskins the body (default CLUTCH_CFG.incubate.vessel).
+   *  Enemy lane only — the player's incubator is Broodpod's construct. */
+  incubate?: { sec: number; vessel?: string };
 }
+
+/** What a mother's death does to her living brood (BirthEffect.orphan). */
+export type OrphanFate = 'die' | 'wither' | 'frenzy' | 'rout';
 
 export const CLUTCH_CFG = {
   /** Default bodies per resolution. */
@@ -120,7 +144,30 @@ export const CLUTCH_CFG = {
   /** Birth flash: radius + life (the accent stays small — the emergence
    *  grammar is the show; the flash is the punctuation). */
   flash: { radius: 34, life: 0.3 },
+  /** THE ORPHAN FATES' numbers (BirthEffect.orphan — all dials). */
+  orphan: {
+    /** 'wither': seconds the orphaned body has left. */
+    witherSec: 6,
+    /** 'rout': the panic status worn + its duration multiplier over the
+     *  status's own base (bolted 2.4s × 2 ≈ a 5s scatter). */
+    rout: { status: 'bolted', durMul: 2 },
+    /** 'frenzy': the mourn-rage window (ORPHAN_FRENZY below). */
+    frenzy: { duration: 8, damage: 0.3, attackSpeed: 0.2, moveSpeed: 0.2 },
+  },
+  /** THE EGG's default vessel (BirthEffect.incubate). */
+  incubate: { vessel: 'clutch_egg' },
 } as const;
+
+/** The mourn-rage window ('frenzy' — one shared buff, dials above). */
+export const ORPHAN_FRENZY: BuffEffect = {
+  type: 'buff', id: 'orphan_frenzy',
+  duration: CLUTCH_CFG.orphan.frenzy.duration,
+  mods: [
+    mod('damage', 'increased', CLUTCH_CFG.orphan.frenzy.damage),
+    mod('attackSpeed', 'increased', CLUTCH_CFG.orphan.frenzy.attackSpeed),
+    mod('moveSpeed', 'increased', CLUTCH_CFG.orphan.frenzy.moveSpeed),
+  ],
+};
 
 /** Roll a birth's body count (the spec's band, else the config's). */
 export function birthCount(fx: BirthEffect, roll: (lo: number, hi: number) => number): number {

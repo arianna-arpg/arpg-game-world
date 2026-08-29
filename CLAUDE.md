@@ -521,7 +521,18 @@ we verify changes.
   bloat-mother drive grammar aimed downrange, fillSac tell) → vile_spawn,
   barrow_gravemaker (undead — the pool REUSES zombie/skeleton kin),
   goblin_whelpsling → gnasher_whelp, the Cinderwisp player skill
-  (hit-gated sprite birth) + the Broodbearer landing gem — docs in
+  (hit-gated sprite birth) + the Broodbearer landing gem. THE RULED WAVE
+  (2026-08-28, her word): `BirthEffect.orphan` per-spec fates on the
+  mother's death ('die'/'wither'/'frenzy'/'rout' — World.clutchOnDeath;
+  the rout rides StatusDef.panic; "it depends on the mother" is the law),
+  `BirthEffect.incubate` egg vessels (clutch_egg — a killable cap-seat
+  body whose term hatch is the EGG'S own brood: FREE RECURSION is the
+  standing default, caps bound each generation), the 'birth' ProcEffect
+  (combo payoffs, blocks, kills — the Forgebound census key
+  '__proc:<id>'; World.birthAt takes a null inst as the door's shape),
+  and the 'clutch' tell source (Actor.clutchLive stamped off the SAME
+  bornOf census the cap reads — the whelpsling's crate empties honestly;
+  the crate left the LOOK, the accumulator law) — docs in
   `docs/engine/clutch.md`; probe `balance/probe_clutch.ts`.
   THE DEFENSE-TEXTURE DOCTRINE (signature pools ship EMPTY): poise /
   insight / energy shield are authored identities, never ambience —

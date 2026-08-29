@@ -217,6 +217,10 @@ export interface TellBody {
    *  predation is OPEN — the same stamp World.isPrey gates hostility on,
    *  so the nose-down posture and who-counts-as-food are one fact. */
   aiPrey?: readonly string[];
+  /** THE CLUTCH (Actor.clutchLive — engine/clutch.ts): the mother's live
+   *  litter, stamped by birthAt + the death seam off the SAME bornOf
+   *  census the clutch cap reads. */
+  clutchLive?: number;
   /** Where the body stands (the `creep` source's sample point). */
   pos?: { x: number; y: number };
   // --- THE CADENCE LANE (the metronome kin — data/combos.ts registers the
@@ -248,7 +252,7 @@ export interface TellWorld {
 export type TellSource = (a: TellBody, w: TellWorld, arg?: string) => number;
 
 /** Sources whose raw reading is NOT already 0..1 — their specs must band. */
-const UNBOUNDED = new Set<string>(['charge', 'fuse', 'stored', 'foecast', 'warding', 'kin', 'brood']);
+const UNBOUNDED = new Set<string>(['charge', 'fuse', 'stored', 'foecast', 'warding', 'kin', 'brood', 'clutch']);
 
 export const TELL_SOURCES: Record<string, TellSource> = {
   /** Constant — the identity-marker lane (temperament dress: the mark IS
@@ -364,6 +368,12 @@ export const TELL_SOURCES: Record<string, TellSource> = {
    *  over her calves should read differently from one standing alone, and
    *  this is the number that says so. Unbounded: band it. */
   brood: a => a.broodNear ?? 0,
+  /** THE CLUTCH (engine/clutch.ts): living bodies BORN OF this one — the
+   *  mother's live litter, from the SAME bornOf census the clutch cap
+   *  reads (drawn == capped; birthAt and the death seam keep the stamp).
+   *  RAW count — band it ([0, 6] reads a filling clutch; invert with the
+   *  channel's scale to draw a crate that EMPTIES as the litter runs). */
+  clutch: a => a.clutchLive ?? 0,
   /** JUVENILE: rolled young at spawn (scale ≤ juvenileBelow). The identity
    *  marker for a den's small — an `always` for the young only. */
   juvenile: a => (a.juvenile ? 1 : 0),

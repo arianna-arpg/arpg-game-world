@@ -865,7 +865,9 @@ export const SKILLS: Record<string, SkillDef> = {
     },
     effects: [
       { type: 'damage' },
-      { type: 'birth', monsterId: 'vile_spawn', count: [1, 2], cap: 8 },
+      // THE ORPHAN FATE (her ruling — it depends on the mother): the spawn
+      // are her ichor given legs; her death sends them into a mourn-rage.
+      { type: 'birth', monsterId: 'vile_spawn', count: [1, 2], cap: 8, orphan: 'frenzy' },
     ],
     ai: { range: 470, weight: 3, keepDistance: 180 },
   },
@@ -914,7 +916,9 @@ export const SKILLS: Record<string, SkillDef> = {
     },
     effects: [
       { type: 'damage' },
-      { type: 'birth', monsterId: 'gnasher_whelp', count: [2, 3], cap: 6 },
+      // The litter routs when the kennel-boy falls (orphan 'rout' — the
+      // panic machinery's flight): pups scatter, they do not avenge.
+      { type: 'birth', monsterId: 'gnasher_whelp', count: [2, 3], cap: 6, orphan: 'rout' },
     ],
     ai: { range: 430, weight: 3, keepDistance: 190 },
   },
