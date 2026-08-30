@@ -42,6 +42,9 @@ interface SavedSocket {
   /** THE KEEPER'S MARK (salvageLock): the gem refuses salvage and every
    *  salvageBulk sweep skips it. Optional → older saves load unchanged. */
   locked?: boolean;
+  /** THE CUT (the support base — engine/supportbase.ts): a chassis gem's
+   *  vein roll, fixed forever. Optional → older saves load unchanged. */
+  rolled?: Record<string, string>;
 }
 interface SavedSkill {
   skillId: string; level: number; rarity: SkillRarity;
@@ -181,6 +184,9 @@ const saveSkill = (i: SkillInstance): SavedSkill => ({
 const saveSocket = (s: SupportInstance): SavedSocket => ({
   supportId: s.def.id, level: s.level,
   ...(s.locked ? { locked: true } : {}),
+  // THE CUT (the support base): fixed at the vein — the save carries it
+  // verbatim or the chase item dies at the first reload.
+  ...(s.rolled ? { rolled: { ...s.rolled } } : {}),
 });
 
 export function serializeCharacter(world: World): CharacterSave {
@@ -312,7 +318,11 @@ export function rebuildSkill(s: SavedSkill): SkillInstance | null {
   inst.sockets = s.sockets.map(sock => {
     if (!sock) return null;
     const sd = SUPPORTS[sock.supportId];
-    return sd ? ({ def: sd, level: sock.level, ...(sock.locked ? { locked: true } : {}) } as SupportInstance) : null;
+    return sd ? ({
+      def: sd, level: sock.level,
+      ...(sock.locked ? { locked: true } : {}),
+      ...(sock.rolled ? { rolled: { ...sock.rolled } } : {}),
+    } as SupportInstance) : null;
   });
   return inst;
 }

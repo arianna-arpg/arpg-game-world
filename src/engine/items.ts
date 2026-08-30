@@ -311,7 +311,12 @@ export interface AffixRollState {
 // loose and transfers to the instance at learn — one lock, one truth.
 
 /** One socketed support riding a loose skill gem's cargo. */
-export interface GemSocketRow { supportId: string; level: number; locked?: boolean }
+export interface GemSocketRow {
+  supportId: string; level: number; locked?: boolean;
+  /** THE CUT (the support base — engine/supportbase.ts): a chassis gem's
+   *  rolled rows, fixed at the vein; rides every serialization verbatim. */
+  rolled?: Record<string, string>;
+}
 
 export interface SkillGemPayload {
   kind: 'skill';
@@ -331,6 +336,8 @@ export interface SupportGemPayload {
   kind: 'support';
   supportId: string;
   level: number;
+  /** THE CUT (the support base): fixed at the vein, read in the bag. */
+  rolled?: Record<string, string>;
 }
 
 export type GemPayload = SkillGemPayload | SupportGemPayload;

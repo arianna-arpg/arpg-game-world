@@ -561,7 +561,16 @@ function sanitizeHoldLoot(raw: unknown): SavedLoot | null {
   if (l.kind === 'support') {
     if (typeof l.supportId !== 'string' || !SUPPORTS[l.supportId]) return null;
     if (!isFiniteNum(l.level)) return null;
-    return { kind: 'support', supportId: l.supportId, level: Math.max(1, Math.floor(l.level)) };
+    // THE CUT (the support base) passes through shape-checked — the
+    // sanitizer must never strip a vein roll (fixed forever, her ruling).
+    const rolled = l.rolled && typeof l.rolled === 'object' && !Array.isArray(l.rolled)
+      ? Object.fromEntries(Object.entries(l.rolled as Record<string, unknown>)
+        .filter((e): e is [string, string] => typeof e[1] === 'string'))
+      : undefined;
+    return {
+      kind: 'support', supportId: l.supportId, level: Math.max(1, Math.floor(l.level)),
+      ...(rolled && Object.keys(rolled).length ? { rolled } : {}),
+    };
   }
   if (l.kind === 'gear') {
     return l.item && typeof l.item === 'object' ? { kind: 'gear', item: l.item } : null;

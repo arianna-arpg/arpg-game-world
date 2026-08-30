@@ -23,6 +23,7 @@ import {
 } from '../engine/skills';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
 import { findBagGem, gemInitials, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
+import { veinLines } from '../engine/supportbase';
 import {
   MEMORY_CFG, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE, memoryFacets,
   memoryGroups, memoryKindOf, type MemoryKind, type MemoryRecallResult,
@@ -1276,7 +1277,9 @@ export class UI {
         const sup = SUPPORTS[item.gem.supportId];
         const inst = seat.meta.knownSkills.get(skillId);
         if (!sup || !inst || !inst.sockets.includes(null)) return false;
-        return supportFitsInstOrCrew(sup, inst, this.getWorld().summonCrewSkills(inst));
+        // THE GATE READS THE CUT (the support base): this copy's own roll
+        // decides the fit — a workable cut sockets, a hitless host refuses.
+        return supportFitsInstOrCrew(sup, inst, this.getWorld().summonCrewSkills(inst), item.gem.rolled);
       },
       drop: (pl, skillId) => {
         this.getWorld().requestMeta({ t: 'socket', uid: Number(pl.arg), skillId });
@@ -2754,6 +2757,15 @@ export class UI {
     }
     lines.push('<div style="color:#9a94a8;font-size:10px">Support Memory</div>');
     lines.push(`<div>${def.description}</div>`);
+    // THE CUT (the support base): the chase item must READ in the bag —
+    // the rolled block is the gem's whole identity, shown before any
+    // socket choice is made. Blob-less copies read the canonical cut.
+    if (def.rollBase) {
+      for (const l of veinLines(def.rollBase, gp.rolled)) {
+        lines.push(`<div style="color:#c8b06a">◈ ${l}</div>`);
+      }
+      lines.push('<div style="color:#9a94a8;font-size:10px">Cut once at the vein — fixed forever. Read it before you choose its skill.</div>');
+    }
     if (inBag && !salv) {
       const hosts = [...m.knownSkills.values()]
         .filter(inst => inst.sockets.includes(null)
@@ -5087,7 +5099,8 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
           : ' — DORMANT: would board the crew, but the door is closed. Socket Resonance to open it (no effect, no cost until then).';
       const sockets = inst.sockets.map((s, i) => s ? `
         <span class="gem-chip" style="border-color:${s.def.color}"
-          title="${s.def.description}${crewTip(s)}">
+          title="${s.def.description}${s.def.rollBase ? `
+THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}` : ''}${crewTip(s)}">
           ${s.def.name}${crewMark(s)} <b>L${s.level}</b>
           <button data-gemlvl="${def.id}:${i}"
             ${!this.getWorld().canAffordAbilityEssence(seat, supportLevelAbilityCost(s.level + 1)) || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}

@@ -1645,6 +1645,50 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // the aimed ground) claws a broodling out of the dirt. The 'landing'
   // mechanism refuses hosts with nowhere to stand (auras, self-rites,
   // summons), and the refusal self-lifts by delivery shape, never a list.
+  // THE SUPPORT BASE's debut chassis (engine/supportbase.ts — her ruling:
+  // the gem as an ITEM BASE). Every copy is CUT AT THE VEIN — trigger ×
+  // brood × clutch drawn once at the mint and fixed forever (the chase; a
+  // support's own skill-rarity sibling). In every OTHER mannerism an
+  // ordinary support: normal drop stream, normal pool row, normal socket
+  // gesture, normal essence leveling. THE CANONICAL CUT (each axis's
+  // FIRST row — steady/broodlings/single) is the census face the matrix
+  // probes and the worn-graft default. The GATE READS THE CUT: every v0
+  // trigger row is hit-fed, so a hitless host refuses whatever the roll —
+  // and a future non-hit trigger row self-lifts that refusal by data.
+  teeming_vein: {
+    id: 'teeming_vein', name: 'Teeming Vein',
+    description: 'A vein of living stone, cut once at the strike that freed it: this skill\'s'
+      + ' landed blows FEED the cut — steadily, by chance, or filling a gauge — and the vein'
+      + ' answers with a brood of its rolled kind. No two cuts need agree.',
+    color: '#b8a86a', requiresTags: ['attack', 'spell'],
+    grantsTags: ['minion'],
+    rollBase: {
+      kind: 'spawn',
+      axes: [
+        { id: 'trigger', rows: [
+          { id: 'steady', weight: 2, line: 'every landed blow bears', every: true, requiresMechanisms: ['strikes'] },
+          { id: 'gauge_quick', weight: 3, line: 'a gauge: every 9 landed blows bear', hits: 9, requiresMechanisms: ['strikes'] },
+          { id: 'gauge_slow', weight: 2, line: 'a gauge: every 14 landed blows bear', hits: 14, requiresMechanisms: ['strikes'] },
+          { id: 'chance', weight: 3, line: '12% of landed blows bear', pct: 0.12, requiresMechanisms: ['strikes'] },
+        ] },
+        { id: 'brood', rows: [
+          { id: 'broodlings', weight: 2, line: 'broodlings — skittering hunters', monsterId: 'broodling' },
+          { id: 'gnats', weight: 3, line: 'gnatlings — the cloud is the weapon', monsterId: 'gnatling' },
+          { id: 'cinders', weight: 2, line: 'cinder sprites — motes of living flame', monsterId: 'cinder_sprite' },
+          { id: 'grubs', weight: 2, line: 'marrowgrubs — they latch and chew', monsterId: 'marrowgrub' },
+        ] },
+        { id: 'clutch', rows: [
+          { id: 'single', weight: 3, line: 'one at a time (up to 3 alive)', count: 1, cap: 3 },
+          { id: 'pair', weight: 3, line: 'in pairs (up to 4 alive)', count: 2, cap: 4 },
+          { id: 'brood4', weight: 1, line: 'in broods of four (up to 6 alive)', count: 4, cap: 6 },
+        ] },
+      ],
+    },
+    mods: [],
+    perLevel: [mod('minionDamage', 'increased', 0.08)],
+    weight: 5, minDropLevel: 6,
+  },
+
   broodbearer: {
     id: 'broodbearer', name: 'Broodbearer',
     requiresMechanisms: ['landing'],

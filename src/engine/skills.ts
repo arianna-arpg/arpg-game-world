@@ -23,6 +23,7 @@ import type { ThrongSourceRow, ThrongSpec } from './throng';
 import type { GrabHandoffSpec, GrabSpec } from './grab';
 import type { PossessSpec, ShiftSpec } from './possess';
 import type { BirthEffect } from './clutch';
+import { veinMechanisms, type SupportRollBase, type SupportRolled } from './supportbase';
 import type { PartSpec } from '../render/vis/parts';
 
 // --- Deliveries: how the skill reaches its targets -------------------------
@@ -4930,6 +4931,14 @@ export interface SupportDef {
    *  instanceBirth (native birth effects win the slot); gate the gem with
    *  requiresMechanisms ['landing']. */
   birth?: BirthEffect;
+  /** THE SUPPORT BASE (engine/supportbase.ts — the gem as an ITEM BASE):
+   *  this def is a CHASSIS whose payload is CUT PER COPY at the mint site
+   *  (one weighted row per axis, fixed at the vein forever). Ordinary in
+   *  every other mannerism; blob-less instances (worn grafts, the matrix's
+   *  census, legacy copies) wear THE CANONICAL CUT — each axis's first
+   *  row. The socket gate unions the resolved cut's own
+   *  requiresMechanisms (Card D: refuse only a cut that cannot work). */
+  rollBase?: SupportRollBase;
   /** RANDOM WEAK AURA: each minion of the host is born wearing ONE aura
    *  rolled from this pool, shared with allies in its radius. */
   minionAuraPool?: AuraSpec[];
@@ -5162,6 +5171,14 @@ export const MAX_SUPPORT_LEVEL = 5;
 export interface SupportInstance {
   def: SupportDef;
   level: number;
+  /** THE CUT (rollBase chassis only — engine/supportbase.ts): rolled once
+   *  at the mint site and fixed forever; rides bag/socket/save/corpse
+   *  verbatim. Absent = the canonical cut (worn grafts, the census face,
+   *  legacy copies). */
+  rolled?: SupportRolled;
+  /** The 'gauge' trigger's live count (combat-transient — resets with the
+   *  session, like a cooldown mid-cast; deliberate, a dial if she asks). */
+  gauge?: number;
   /** FORWARDED from a summon skill's socket onto this minion-owned skill
    *  instance (world.forwardSummonSockets) — stripped and re-minted whenever
    *  the summon's sockets change. Never appears on a player-owned instance,
@@ -5393,7 +5410,7 @@ const MINION_RIDABLE_FIELD_LIST = [
   'tether', 'aim', 'constructFx', 'devour',
   'fissureVolatile', 'fissureAftershock', 'fissureRoulette',
   'fissureReclose', 'fissurePath', 'meleeFissure',
-  'spreadOnHit', 'breakableGraft', 'massGraft', 'corpseSpawn', 'birth', 'minionAuraPool',
+  'spreadOnHit', 'breakableGraft', 'massGraft', 'corpseSpawn', 'birth', 'rollBase', 'minionAuraPool',
   'dominate', 'sacrifice', 'healField', 'spawnBuff', 'zoneEmit', 'madden',
   'releaseOrder', 'healOverTime', 'chargeGain', 'brood', 'minionAura',
   'trail', 'fissureTrail', 'targeting', 'turret', 'cascade', 'pulse',
@@ -5778,9 +5795,19 @@ export function supportMechanismsFit(sup: SupportDef, inst: SkillInstance): bool
  * 'aoe' — now fits in the next socket; Austerity's levy stands a cooldown
  * up and Alacrity — which demands 'cooldown' — fits beside it.
  */
-export function supportFitsInst(sup: SupportDef, inst: SkillInstance): boolean {
+export function supportFitsInst(sup: SupportDef, inst: SkillInstance, rolled?: SupportRolled): boolean {
   if (!supportFitsTags(sup, [...inst.def.tags, ...grantedTags(inst)])) return false;
-  return supportMechanismsFit(sup, inst);
+  if (!supportMechanismsFit(sup, inst)) return false;
+  // THE GATE READS THE CUT (the support base — her Card-D ruling): a
+  // chassis gem's resolved rows add their own demands — refuse ONLY a cut
+  // that structurally cannot work on this host; the same chassis with a
+  // workable cut sockets fine. Blob-less reads the canonical cut.
+  if (sup.rollBase) {
+    for (const m of veinMechanisms(sup.rollBase, rolled)) {
+      if (!mechanismHolds(m, inst)) return false;
+    }
+  }
+  return true;
 }
 
 /** What a summon skill's CREW is known to cast at socket time: the minted
@@ -5889,8 +5916,10 @@ export function crewSkillsServed(sup: SupportDef, inst: SkillInstance, crew: Sum
  * Summon Skeleton Warrior (no projectile anywhere in the crew) but boards
  * the Archer through the bow his bones carry.
  */
-export function supportFitsInstOrCrew(sup: SupportDef, inst: SkillInstance, crew: SummonCrew): boolean {
-  return supportFitsInst(sup, inst) || crewSkillsServed(sup, inst, crew) !== null;
+export function supportFitsInstOrCrew(
+  sup: SupportDef, inst: SkillInstance, crew: SummonCrew, rolled?: SupportRolled,
+): boolean {
+  return supportFitsInst(sup, inst, rolled) || crewSkillsServed(sup, inst, crew) !== null;
 }
 
 /**

@@ -10,6 +10,7 @@ import { FACTION_TRAITS } from '../world/traits';
 import { PRESENCE_BANDS, presenceMul, type PresenceSpec } from '../engine/presence';
 import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
+import { spawnVeinOf } from '../engine/supportbase';
 import {
   CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf,
   supportFits, supportFitsInst, treeNodeOf, SKILL_LEVEL_BANDS,
@@ -323,6 +324,28 @@ export function validateContent(): void {
         for (const fx of s.effects ?? []) if (fx.type === 'birth') checkBirth(`skill ${s.id}`, fx);
       }
       for (const sup of Object.values(SUPPORTS)) if (sup.birth) checkBirth(`support ${sup.id}`, sup.birth);
+    }
+    // THE SUPPORT BASE net (engine/supportbase.ts): a chassis whose table
+    // cannot fold is a dead drop — axes and rows whole, weights positive,
+    // broods registered, clutches physical, every row READABLE (the cut is
+    // the chase; a line-less row is a lottery ticket), and the CANONICAL
+    // CUT (rows[0] — the census face) must fold to a live spec.
+    for (const sup of Object.values(SUPPORTS)) {
+      const rb = sup.rollBase;
+      if (!rb) continue;
+      if (!rb.axes.length) warn(`rollBase: ${sup.id} has no axes`);
+      for (const ax of rb.axes) {
+        if (!ax.rows.length) { warn(`rollBase: ${sup.id} axis '${ax.id}' has no rows`); continue; }
+        for (const r of ax.rows) {
+          if (!(r.weight > 0)) warn(`rollBase: ${sup.id} ${ax.id}:${r.id} weight <= 0`);
+          if (!r.line) warn(`rollBase: ${sup.id} ${ax.id}:${r.id} has no line — the cut must READ`);
+          if (r.monsterId && !MONSTERS[r.monsterId]) warn(`rollBase: ${sup.id} ${ax.id}:${r.id} births unknown '${r.monsterId}'`);
+          if (r.count !== undefined && r.cap !== undefined && r.cap < r.count) warn(`rollBase: ${sup.id} ${ax.id}:${r.id} cap < count`);
+        }
+      }
+      if (rb.kind === 'spawn' && !spawnVeinOf(rb, undefined)) {
+        warn(`rollBase: ${sup.id} canonical cut folds to NOTHING — the census face is dead`);
+      }
     }
   }
 

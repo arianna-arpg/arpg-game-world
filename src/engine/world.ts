@@ -39,6 +39,7 @@ import {
   type TetherSpec, type ConduitSpec, type ImpactDressSpec,
 } from './skills';
 import { birthCount, CLUTCH_CFG, ORPHAN_FRENZY, type BirthEffect } from './clutch';
+import { mintSupportInstance, spawnVeinOf, SUPPORTBASE_CFG } from './supportbase';
 import { BOMBARD_CFG, type BombardSpec } from './bombard';
 import { evalCurve, type CurveKind } from './curves';
 import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
@@ -14271,7 +14272,7 @@ export class World {
     if (part.drop.support && SUPPORTS[part.drop.support]) {
       const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10);
       this.noteGemDrop(part.drop.support);
-      this.drops.push({ pos, item: { kind: 'support', gem: { def: SUPPORTS[part.drop.support], level: 1 } }, bob: rand(0, Math.PI * 2) });
+      this.drops.push({ pos, item: { kind: 'support', gem: mintSupportInstance(SUPPORTS[part.drop.support], 1) }, bob: rand(0, Math.PI * 2) });
       this.text(at, `${SUPPORTS[part.drop.support].name}!`, SUPPORTS[part.drop.support].color, 14);
     }
     for (let i = 0; i < (part.drop.gems ?? 0); i++) this.dropGemAt(at);
@@ -14478,7 +14479,7 @@ export class World {
         let e: VendorEntry;
         const sd = sellSupports && Math.random() < VENDOR_CFG.supportShare
           ? this.rollSupportDropGated(undefined, lvl) : undefined;
-        if (sd) e = { kind: 'support', gem: { def: sd, level: 1 } };
+        if (sd) e = { kind: 'support', gem: mintSupportInstance(sd, 1) };
         else e = { kind: 'skill', inst: this.rollSkillGem(undefined, lvl) };
         if (depth > 0) e.depthReq = depth;
         out.push(e);
@@ -26485,7 +26486,15 @@ export class World {
       if (inst) this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
     } else {
       const def = SUPPORTS[it.supportId];
-      if (def) this.drops.push({ pos, item: { kind: 'support', gem: { def, level: it.level } }, bob: rand(0, Math.PI * 2) });
+      // REHYDRATION, never a re-mint: a saved cut rides back verbatim
+      // (fixed at the vein — the support base's whole ruling).
+      if (def) {
+        this.drops.push({
+          pos,
+          item: { kind: 'support', gem: { def, level: it.level, ...(it.rolled ? { rolled: { ...it.rolled } } : {}) } },
+          bob: rand(0, Math.PI * 2),
+        });
+      }
     }
   }
 
@@ -26560,7 +26569,7 @@ export class World {
     const item = this.bagItem(seat, uid);
     const gem = item ? supportOfGemItem(item) : null;
     const inst = m.knownSkills.get(skillId);
-    if (!gem || !inst || !supportFitsInstOrCrew(gem.def, inst, this.summonCrewSkills(inst))) return false;
+    if (!gem || !inst || !supportFitsInstOrCrew(gem.def, inst, this.summonCrewSkills(inst), gem.rolled)) return false;
     const free = inst.sockets.indexOf(null);
     if (free === -1) return false;
     // THE FIELD DISCIPLINE: socket surgery wants cold blades (sanctuary waives).
@@ -35283,9 +35292,13 @@ export class World {
         if (!socket || !supportRidesMinions(socket.def)) continue;
         for (const sk of skills) {
           if (!sk || sk.sockets.some(x => x?.def.id === socket.def.id)) continue;
-          if (!supportFitsInst(socket.def, sk)) continue;
+          if (!supportFitsInst(socket.def, sk, socket.rolled)) continue;
           sk.sockets.push({
             def: socket.def, level: socket.level, forwarded: true,
+            // THE CUT rides the crew (the support base): a forwarded copy
+            // of a chassis gem keeps its vein roll — the keeper's cut is
+            // the whole gem's identity, aboard or at home.
+            ...(socket.rolled ? { rolled: { ...socket.rolled } } : {}),
             ...(opts?.scale !== undefined && opts.scale !== 1 ? { forwardScale: opts.scale } : {}),
           });
           grew = true;
@@ -39842,6 +39855,34 @@ export class World {
     // hit-fed gauge, and the lastKill mote anchor. Top-level landed hits
     // only — echoes and riders never double-feed the gauge.
     if (dealt > 0 && depth === 0) this.throngOnHit(caster, target, wasCrit, lethal);
+    // THE SUPPORT BASE's spawn chassis (engine/supportbase.ts): rolled
+    // veins on the host's sockets — every landed top-level blow FEEDS the
+    // cut (steady / chance / gauge), and the clutch door bears the brood
+    // (capped, mortal, keeper-credited — the Forgebound census shape).
+    // Blob-less copies (worn grafts, the census probe) wear the canonical
+    // cut by the one resolveVein law.
+    if (dealt > 0 && depth === 0 && !caster.dead) {
+      for (const s of hostSockets(inst)) {
+        const base = s.def.rollBase;
+        if (!base) continue;
+        const spec = spawnVeinOf(base, s.rolled);
+        if (!spec) continue;
+        let due = false;
+        if (spec.every) due = true;
+        else if (spec.pct !== undefined) due = chance(spec.pct);
+        else if (spec.hits !== undefined) {
+          s.gauge = (s.gauge ?? 0) + 1;
+          if (s.gauge >= spec.hits) { s.gauge = 0; due = true; }
+        }
+        if (!due) continue;
+        this.birthAt(caster, null, {
+          type: 'birth', monsterId: spec.monsterId,
+          count: [spec.count, spec.count], cap: spec.cap,
+          duration: SUPPORTBASE_CFG.spawn.duration,
+        }, vec(target.pos.x, target.pos.y),
+        { host: true, capKey: `__vein:${inst.def.id}:${s.def.id}` });
+      }
+    }
     const elite = target.rarity === 'rare' || target.rarity === 'champion'
       || target.rarity === 'crowned'
       || !!(target.defId && MONSTERS[target.defId]?.boss);
@@ -42813,7 +42854,9 @@ export class World {
         for (let i = 0; i < this.vendorSize(); i++) {
           if (sellSupports && Math.random() < VENDOR_CFG.supportShare) {
             const sd = this.rollSupportDropGated(undefined, lvl);
-            if (sd) { out.push({ kind: 'support', gem: { def: sd, level: 1 } }); continue; }
+            // A chassis gem CUTS AT THE VEIN here — under armVendorStock's
+            // seeded swap, so the shelf's cuts are foreordained too.
+            if (sd) { out.push({ kind: 'support', gem: mintSupportInstance(sd, 1) }); continue; }
           }
           out.push({ kind: 'skill', inst: this.rollSkillGem(undefined, lvl) });
         }
@@ -42953,7 +42996,8 @@ export class World {
     }
     const def = SUPPORTS[c.id];
     if (!def) return null;
-    return { kind: 'support', gem: { def, level: 1 } };
+    // The standing order's find cuts on the beat's own die (foreordained).
+    return { kind: 'support', gem: mintSupportInstance(def, 1, () => rng.next()) };
   }
 
   /** Toggle a reserve on one shelf row (the vendorLock intent, validated).
@@ -43036,7 +43080,12 @@ export class World {
    *  through the same tolerant path the corpse reclaim walks). */
   private vendorEntryToLoot(e: VendorEntry): SavedLoot {
     if (e.kind === 'skill') return skillToLoot(e.inst);
-    if (e.kind === 'support') return { kind: 'support', supportId: e.gem.def.id, level: e.gem.level };
+    if (e.kind === 'support') {
+      return {
+        kind: 'support', supportId: e.gem.def.id, level: e.gem.level,
+        ...(e.gem.rolled ? { rolled: { ...e.gem.rolled } } : {}),
+      };
+    }
     const { x: _x, y: _y, ...item } = e.item; // a shelf item has no bag cell
     return { kind: 'gear', item };
   }
@@ -43048,7 +43097,10 @@ export class World {
     }
     if (it.kind === 'support') {
       const def = SUPPORTS[it.supportId];
-      return def ? { kind: 'support', gem: { def, level: it.level } } : null;
+      // Rehydration: the saved cut rides back verbatim, never re-rolled.
+      return def
+        ? { kind: 'support', gem: { def, level: it.level, ...(it.rolled ? { rolled: { ...it.rolled } } : {}) } }
+        : null;
     }
     const item = rebuildItem(it.item);
     return item ? { kind: 'item', item } : null;

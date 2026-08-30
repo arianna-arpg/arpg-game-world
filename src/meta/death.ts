@@ -34,15 +34,17 @@ export const MAX_DEATH_RECORDS = 3;
  *  zone deaths ignore this and re-match by their stable id (see world.ts). */
 export const CORPSE_MATCH_RADIUS = 40;
 
-/** A socketed support, captured by id+level (same shape as character.ts). */
-export interface SavedSocket { supportId: string; level: number; }
+/** A socketed support, captured by id+level (same shape as character.ts).
+ *  `rolled` = THE CUT (the support base — engine/supportbase.ts): a
+ *  chassis gem's vein roll, fixed forever, carried verbatim. */
+export interface SavedSocket { supportId: string; level: number; locked?: boolean; rolled?: Record<string, string> }
 
 /** One recoverable loot item. A DISCRIMINATED UNION so future kinds (equipment,
  *  currency, flasks…) are PURELY ADDITIVE — one arm here, one branch in
  *  captureLoot, one branch in the engine's drop rebuild. */
 export type SavedLoot =
   | { kind: 'skill'; skillId: string; level: number; rarity: SkillRarity; sockets: (SavedSocket | null)[] }
-  | { kind: 'support'; supportId: string; level: number }
+  | { kind: 'support'; supportId: string; level: number; rolled?: Record<string, string> }
   // Equipped gear rides VERBATIM (ItemInstance is already pure JSON — ids +
   // 0..1 rolls); the reclaim rebuilds it through rebuildItem, so a data patch
   // between death and reclaim retunes (or tolerantly drops) it like any load.
@@ -102,7 +104,9 @@ export interface DeathRecord {
 export function skillToLoot(inst: SkillInstance): SavedLoot {
   return {
     kind: 'skill', skillId: inst.def.id, level: inst.level, rarity: inst.rarity ?? 'common',
-    sockets: inst.sockets.map(s => s ? { supportId: s.def.id, level: s.level } : null),
+    sockets: inst.sockets.map(s => s
+      ? { supportId: s.def.id, level: s.level, ...(s.rolled ? { rolled: { ...s.rolled } } : {}) }
+      : null),
   };
 }
 

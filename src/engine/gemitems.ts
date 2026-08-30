@@ -91,7 +91,11 @@ export function gemItemRarityOf(p: GemPayload): ItemRarity {
 // ------------------------------------------------------------------ pack ---
 
 const packSocketRow = (s: SupportInstance | null): GemSocketRow | null => s
-  ? { supportId: s.def.id, level: s.level, ...(s.locked ? { locked: true } : {}) }
+  ? {
+    supportId: s.def.id, level: s.level,
+    ...(s.locked ? { locked: true } : {}),
+    ...(s.rolled ? { rolled: { ...s.rolled } } : {}),
+  }
   : null;
 
 export function packSkillGemPayload(inst: SkillInstance): SkillGemPayload {
@@ -108,7 +112,10 @@ export function packSkillGemPayload(inst: SkillInstance): SkillGemPayload {
 }
 
 export function packSupportGemPayload(gem: SupportInstance): SupportGemPayload {
-  return { kind: 'support', supportId: gem.def.id, level: gem.level };
+  return {
+    kind: 'support', supportId: gem.def.id, level: gem.level,
+    ...(gem.rolled ? { rolled: { ...gem.rolled } } : {}),
+  };
 }
 
 /** Wrap a live skill instance into its 1×1 bag item (no cell yet — the
@@ -163,7 +170,11 @@ export function skillOfGemItem(item: ItemInstance): SkillInstance | null {
     if (!row) return null;
     const sd = SUPPORTS[row.supportId];
     return sd
-      ? ({ def: sd, level: row.level, ...(row.locked ? { locked: true } : {}) } as SupportInstance)
+      ? ({
+        def: sd, level: row.level,
+        ...(row.locked ? { locked: true } : {}),
+        ...(row.rolled ? { rolled: { ...row.rolled } } : {}),
+      } as SupportInstance)
       : null;
   });
   return inst;
@@ -175,7 +186,11 @@ export function supportOfGemItem(item: ItemInstance): SupportInstance | null {
   if (!p) return null;
   const def = SUPPORTS[p.supportId];
   if (!def) return null;
-  return { def, level: p.level, ...(item.locked ? { locked: true } : {}) };
+  return {
+    def, level: p.level,
+    ...(item.locked ? { locked: true } : {}),
+    ...(p.rolled ? { rolled: { ...p.rolled } } : {}),
+  };
 }
 
 /** Fold a (possibly mutated) live support back into its wrapper — the

@@ -534,6 +534,23 @@ we verify changes.
   bornOf census the cap reads — the whelpsling's crate empties honestly;
   the crate left the LOOK, the accumulator law) — docs in
   `docs/engine/clutch.md`; probe `balance/probe_clutch.ts`.
+  THE SUPPORT BASE (engine/supportbase.ts — the gem as an ITEM BASE, her
+  ruling 2026-08-28): a SupportDef wearing `rollBase` is a CHASSIS whose
+  payload is CUT PER COPY at the mint site (one weighted row per axis —
+  `SupportInstance.rolled`, serialized verbatim through wrapper/socket/
+  save/corpse/vendor rows; rehydration NEVER re-rolls) and ordinary in
+  every other mannerism (normal drop stream — vendor cuts under the
+  foreordained shelf's seeded swap, the commission on its beat rng).
+  THE CANONICAL CUT (each axis's rows[0]) is the census face the no-op
+  matrix probes, the worn-graft default, and the per-axis tolerant
+  fallback for data-patched row ids; THE GATE READS THE CUT
+  (supportFitsInst's optional `rolled` — rows carry requiresMechanisms;
+  refuse only a cut that cannot work, blob-less gates canonical); the
+  'spawn' chassis folds trigger×brood×clutch into per-landed-blow births
+  through the clutch door ('__vein' census, gauge state on the socket).
+  Debut: Teeming Vein (steady/gauge/chance × broodling/gnatling/cinder/
+  marrowgrub × 1/2/4) — docs in `docs/engine/supportbase.md`; probe
+  `balance/probe_supportbase.ts`.
   THE DEFENSE-TEXTURE DOCTRINE (signature pools ship EMPTY): poise /
   insight / energy shield are authored identities, never ambience —
   attributes only SCALE them (1%/pt), bases come from gear defense
