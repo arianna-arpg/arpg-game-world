@@ -739,6 +739,19 @@
     }
     #story-card button:hover { background: #3a3a55; }
 
+    /* The Mu card (data/mu.ts — one class's card in the hub between lives):
+       the story card's ethereal chrome, sized for a single vessel's face. */
+    #mu-card {
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+      text-align: center; padding: 26px 44px; max-width: 560px; min-width: 380px;
+      background: rgba(5, 5, 10, 0.94); border-color: #2a2a3e;
+      box-shadow: 0 0 32px rgba(143, 168, 216, 0.12);
+    }
+    #mu-card .cname { font-weight: bold; }
+    #mu-card .cdesc { color: #b8b2a2; font-size: 12px; line-height: 1.45; }
+    #mu-card .cattrs { color: var(--text-dim); font-size: 11px; }
+    #mu-card .cskills { color: var(--text-dim); font-size: 10px; }
+
     /* Death screen */
     #death-screen {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -756,7 +769,8 @@
        padding / margin are left untouched, so only the graphic is unified. ---- */
     #start-menu .esc-btns button, #escape-menu .esc-btns button,
     #account-screen .acct-btns button, #expedition-setup .acct-btns button,
-    #class-select .acct-btns button, #death-screen button, #story-card button {
+    #class-select .acct-btns button, #death-screen button, #story-card button,
+    #mu-card .esc-btns button, #mu-card #mu-name-clear {
       background: linear-gradient(180deg, #30304a, #232338);
       color: var(--gold); border: 1px solid var(--gold); border-radius: 5px;
       font-size: 14px; font-family: inherit; cursor: var(--cursor-point, pointer);
@@ -766,7 +780,7 @@
     #start-menu .esc-btns button:hover:not(:disabled), #escape-menu .esc-btns button:hover:not(:disabled),
     #account-screen .acct-btns button:hover:not(:disabled), #expedition-setup .acct-btns button:hover:not(:disabled),
     #class-select .acct-btns button:hover:not(:disabled), #death-screen button:hover:not(:disabled),
-    #story-card button:hover:not(:disabled) {
+    #story-card button:hover:not(:disabled), #mu-card .esc-btns button:hover:not(:disabled) {
       background: linear-gradient(180deg, #3d3d5c, #2b2b46);
       box-shadow: 0 0 9px rgba(200,168,75,0.4);
     }
@@ -778,7 +792,7 @@
     }
     #start-menu .esc-btns button:disabled, #escape-menu .esc-btns button:disabled,
     #account-screen .acct-btns button:disabled, #expedition-setup .acct-btns button:disabled,
-    #class-select .acct-btns button:disabled {
+    #class-select .acct-btns button:disabled, #mu-card .esc-btns button:disabled {
       opacity: 0.4; cursor: var(--cursor-default, default); border-color: var(--panel-border); color: var(--text-dim); box-shadow: none;
     }
 
@@ -813,6 +827,7 @@
   <div id="bounty-menu" class="panel hidden"></div>
   <div id="death-screen" class="panel hidden"></div>
   <div id="story-card" class="panel hidden"></div>
+  <div id="mu-card" class="panel hidden"></div>
   <div id="account-screen" class="panel hidden"></div>
   <div id="escape-menu" class="panel hidden"></div>
   <div id="start-menu" class="panel hidden"></div>

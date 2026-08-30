@@ -21,22 +21,34 @@
 //   • assault   — escalating timed waves (already-hunting, the wave-frenzy
 //                 overlay) until the survival clock runs out — or the hero
 //                 falls, which fast-forwards to the next 'reckoning'/'card'.
-//   • reckoning — the cinematic fall: world held, camera pans to a mustering
-//                 executioner, the verb resolves through the REAL skill
-//                 pipeline (cast bar + telegraph honest by construction),
-//                 and the hero is FELLED, never killed (the scene intercepts
-//                 the lethal blow at the one player-death chokepoint).
+//   • reckoning — THE AGENCY FALL: a commander arrives just off-screen,
+//                 marked by the attention fabric's chevron; the world is
+//                 NEVER held. After a grace beat the verb musters through
+//                 the REAL skill pipeline (a long honest cast bar + ground
+//                 telegraph), the player is free to spend the whole windup
+//                 trying to stop it — the MERCY FLOOR makes the commander
+//                 immune below a life fraction, so damage delays, never
+//                 denies — and the hero is FELLED, never killed (the scene
+//                 intercepts the lethal blow at the one death chokepoint).
 //   • home      — teardown: back to the start-zone bedside, the staging
 //                 zone deleted from the off-graph map, completion stamped.
+//   • mu        — THE HUB BETWEEN LIVES (data/mu.ts): the hero stands as a
+//                 wisp in a zone of nothing where the class roster stands
+//                 as shaded vessels; a still linger by an awake one asks
+//                 the shell for its class card. Never completes — taking a
+//                 vessel builds the run's whole new world outside.
 //
 // THE GATE: a scene only COUNTS once lived to the end — the `ledger` key
-// stamps at the 'home' stage, while a begun-mark (`<ledger>_begun`) laid at
+// stamps at the 'home' stage (or a 'mu' stage wearing stampComplete), while
+// a begun-mark (`<ledger>_begun`) laid at
 // START keeps an ABORTED scene due: quit mid-tutorial and the next New Game
 // re-launches it from the first card. While a scene plays the shell writes
 // NO run save (the tutorial is not a run; the run begins at the wake), so
 // an abort leaves nothing to resume. Veteran accounts (any prior play)
 // never see a newly-added scene: the due test requires a virgin account
 // (engine/scenes.ts `sceneDue`); only a full account reset brings one back.
+// A `transient` scene (the standalone Mu hub) sits outside the gate whole:
+// no stamps, re-enterable forever, begun deliberately by the shell.
 //
 // Pure data leaf: no engine imports. Every number is a knob.
 // ---------------------------------------------------------------------------
@@ -156,28 +168,54 @@ export interface SceneReckoningStage extends SceneStageBase {
   verb: string;
   /** Spawn level (the reveal should read impossible, not just big). */
   level: number;
-  /** How far off the hero it stands (px). */
+  /** How far off the hero it stands (px) — just past the screen's edge, so
+   *  the MARK (the attention fabric's chevron) has a beat to say GO. */
   spawnDist: number;
-  /** Camera glide out to it (seconds, raw clock — the world is held). */
-  panSec: number;
-  /** Beat ON the mustering figure before the verb begins (drink it in). */
-  dwellSec: number;
+  /** THE AGENCY BEAT: seconds the commander stands marked — named, chevroned,
+   *  its own kit banned — before the director orders the muster. The world is
+   *  NEVER held: the tide keeps fighting, the player keeps playing, and the
+   *  whole windup is a real cast the player is free to spend trying to stop. */
+  graceSec: number;
+  /** THE MERCY FLOOR: at/below this life fraction the commander goes IMMUNE
+   *  outright (every hit prints its refusal) — bloody the muster to the bone,
+   *  the tutorial's one promise is that this cast RESOLVES. 0 = no floor. */
+  floorFrac: number;
   /** After the blast lands, seconds before the dark takes the screen. */
   blastWaitSec: number;
+  /** Center-screen callout as the commander arrives. */
+  announce?: string;
+  announceColor?: string;
 }
 export interface SceneHomeStage extends SceneStageBase { kind: 'home'; }
+/** THE MU STAGE (the hub between lives — engine/scenes.ts owns the handler,
+ *  data/mu.ts the ground + the apparitions): the hero stands as a WISP in a
+ *  zone of nothing, the class roster stands as shaded vessels, and a still
+ *  linger by an awake one asks the shell for that class's card. The stage
+ *  never completes — taking a vessel builds a whole new world outside. */
+export interface SceneMuStage extends SceneStageBase {
+  kind: 'mu';
+  /** Stamp the scene's completion ledger the moment the spirit arrives (the
+   *  prologue: the tutorial is LIVED once you die out of it — a quit from Mu
+   *  re-opens Mu on the next Begin, never the war). */
+  stampComplete?: boolean;
+}
 
 export type SceneStage =
   | SceneCardStage | SceneDrillStage | SceneClashStage
-  | SceneAssaultStage | SceneReckoningStage | SceneHomeStage
+  | SceneAssaultStage | SceneReckoningStage | SceneHomeStage | SceneMuStage
   | (SceneStageBase & Record<string, unknown>);
 
 export interface SceneDef {
   id: string;
-  /** Account-ledger key: stamped at COMPLETION (the 'home' stage) — the
-   *  scene only counts once lived whole. A begun-mark (`<ledger>_begun`)
-   *  stamps at start so an aborted scene stays due and re-launches. */
+  /** Account-ledger key: stamped at COMPLETION (the 'home' stage, or a 'mu'
+   *  stage wearing stampComplete) — the scene only counts once lived whole.
+   *  A begun-mark (`<ledger>_begun`) stamps at start so an aborted scene
+   *  stays due and re-launches. */
   ledger: string;
+  /** TRANSIENT scene (the Mu hub's standalone lane): stamps NOTHING — no
+   *  begun-mark, no completion key — and is enterable any number of times.
+   *  sceneDue never applies to one; it is begun deliberately by the shell. */
+  transient?: boolean;
   zone: SceneZoneSpec;
   stages: SceneStage[];
 }
@@ -298,25 +336,27 @@ export const PROLOGUE_SCENE: SceneDef = {
       def: 'goblin_colossus',
       verb: 'hordefathers_reckoning',
       level: 12,
-      spawnDist: 640,
-      panSec: 2.2,
-      dwellSec: 1.1,
-      blastWaitSec: 1.4,
+      spawnDist: 560,
+      graceSec: 2.2,
+      floorFrac: 0.1,
+      blastWaitSec: 1.6,
+      announce: 'the Hordefather himself comes to end the road.',
+      announceColor: '#9fdc6a',
     },
     {
       kind: 'card',
       card: {
-        title: 'THE WAKE',
+        title: 'THE HOLLOW WAKE',
         lines: [
-          'The horn. The green tide. The world going white, then nothing at all.',
-          'Strong hands lifting you out of the ruts of the road. A low voice keeping you talking while the miles went by.',
-          'You wake beneath a low roof in Lastlight, aching in every bone, owing somebody your life.',
-          'Find her. Thank her. Then decide what you mean to do about the road.',
+          'The horn. The green tide. The world going white — then nothing at all.',
+          'No road underfoot. No weight. No breath left to catch. Only a pale country of nothing, and you: a small light adrift in it.',
+          'Shapes stand in the stillness ahead — every one of them a life you might yet wear back to the world.',
+          'Drift to one. Be still. Take its hands.',
         ],
-        button: 'Wake',
+        button: 'Drift',
       },
     },
-    { kind: 'home' },
+    { kind: 'mu', stampComplete: true },
   ],
 };
 

@@ -49,6 +49,7 @@ import {
   BESTIARY_CFG, bestiaryKills, bestiaryList, bestiaryReveals,
   bestiaryThreshold, bestiaryTotals, spectreAttunable,
 } from '../data/bestiary';
+import { sceneDue } from '../engine/scenes';
 import { dndCancel, dndCarried, registerDragSource, registerDropTarget } from './dnd';
 import { applyUiScale, UI_SCALE_CFG } from './uiScale';
 import { RENDER_SCALE_CFG } from '../render/renderScale';
@@ -383,6 +384,11 @@ export class UI {
   private mercMenu = document.getElementById('merc-menu')!;
   private deathScreen = document.getElementById('death-screen')!;
   private storyCard = document.getElementById('story-card')!;
+  /** THE MU CARD (data/mu.ts — the hub between lives): one class's card,
+   *  opened by a still linger at an awake apparition. Blocking while up, so
+   *  typing a name never also walks the wisp. */
+  private muCard = document.getElementById('mu-card')!;
+  muCardOpen = false;
   private accountScreen = document.getElementById('account-screen')!;
   private escapeMenu = document.getElementById('escape-menu')!;
   private startMenu = document.getElementById('start-menu')!;
@@ -663,6 +669,11 @@ export class UI {
    *  rebuilds its innerHTML per render, so injected entries must re-inject).
    *  Set by mountEntityForge when DEV.entityForge is on; else unused. */
   onStartMenuRender?: () => void;
+  /** THE MU REROUTE (data/mu.ts): when armed by the shell, the start menu's
+   *  New Run / Begin press goes here instead of the class-select screen —
+   *  the virgin lane walks the tutorial, everyone else drifts into Mu. The
+   *  legacy screen stays whole beneath it (co-op rejoin still uses it). */
+  onBeginRun: (() => void) | null = null;
 
   constructor(
     private getWorld: () => World,
@@ -781,6 +792,9 @@ export class UI {
       // Class select likewise: the glyph walks classSelectBack when the
       // screen was reached from the start menu (no glyph renders otherwise).
       [this.classSelect, () => this.classSelectBack?.()],
+      // The Mu card's glyph steps away from the vessel — the linger re-arms
+      // on the next approach (the Dwell law's step-out).
+      [this.muCard, () => this.closeMuClassCard()],
     ];
     for (const [root, close] of panelClosers) {
       root.addEventListener('click', (e) => {
@@ -920,7 +934,7 @@ export class UI {
   blockingFor(seatId: string): boolean {
     if (this.escapeMenuOpen || this.minigameActive || this.couchJoinOpen
       || this.caravanOpen || this.mercOpen || this.sailOpen || this.holdOpen
-      || this.vocationOpen || this.boroughOpen
+      || this.vocationOpen || this.boroughOpen || this.muCardOpen
       || !this.startMenu.classList.contains('hidden')) return true;
     const owned = (el: HTMLElement, open: boolean): boolean =>
       open && (this.panelSeatIds.get(el) ?? this.getWorld().localSeat.id) === seatId;
@@ -1476,7 +1490,7 @@ export class UI {
    *  surfaces join here and every input layer follows for free. */
   uiBlocking(): boolean {
     return this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive
-      || this.couchJoinOpen
+      || this.couchJoinOpen || this.muCardOpen
       || this.caravanOpen || this.mercOpen || this.salvageOpen
       || this.oracleOpen || this.vendorOpen || this.sailOpen || this.holdOpen || this.vocationOpen
       || this.bestiaryOpen || this.boroughOpen
@@ -1533,6 +1547,118 @@ export class UI {
   hideStoryCard(): void {
     this.storyCard.classList.add('hidden');
     this.storyCard.innerHTML = '';
+  }
+
+  // ------------------------------------------------------------ the Mu card
+  // THE MU CARD (data/mu.ts): ONE class's card, opened by a still linger at
+  // an awake apparition in the hub between lives. Naming front and center,
+  // the life-contract row when a second mode is unlocked, one Wake button.
+  // Confirming resolves the name exactly like the class screen (typed name
+  // becomes the sticky preference) and hands the pick to the shell — which
+  // tears the provisional Mu world down and starts the run proper.
+
+  showMuClassCard(classId: string, onPick: (def: ClassDef, modeId?: string, name?: string) => void): void {
+    const def = CLASSES.find(c => c.id === classId);
+    if (!def) return;
+    const acc = this.getAccount();
+    this.muCardOpen = true;
+    const chips = def.bar.filter((s): s is string => !!s).map(sid => {
+      const d = SKILLS[sid];
+      return d ? `<span data-tip="cskill" data-skill-id="${sid}"
+        style="display:inline-block;padding:1px 7px;margin:1px 3px 1px 0;border:1px solid ${d.color};
+        border-radius:8px;font-size:9px;color:${d.color};cursor:var(--cursor-help, help)">${d.name}</span>` : '';
+    }).join('');
+    // The life-contract row (meta/modes.ts), compact: rendered only once a
+    // second mode is unlocked — same registry, same full-roster refusal.
+    const modes = availableModes(acc);
+    if (!modes.some(md => md.id === this.pendingModeId)) this.pendingModeId = DEFAULT_MODE_ID;
+    const picked = modeById(this.pendingModeId);
+    const pickedFull = picked.save === 'roster'
+      && rosterOf(acc, picked.id).length >= rosterCapacity(acc, picked);
+    const modeRow = modes.length > 1
+      ? `<div id="mu-mode-row" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:8px 0 2px 0">
+          ${modes.map(md => {
+    const roster = md.save === 'roster';
+    const cap = roster ? rosterCapacity(acc, md) : 0;
+    const used = roster ? rosterOf(acc, md.id).length : 0;
+    const full = roster && used >= cap;
+    const sel = this.pendingModeId === md.id;
+    return `<div class="mode-card" data-mode="${md.id}" data-full="${full}"
+      style="flex:0 1 220px;text-align:left;cursor:var(--cursor-point, pointer);padding:6px 9px;
+        border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid ${sel ? md.color : 'var(--panel-border)'};
+        ${sel ? `box-shadow:0 0 10px ${md.color}44;` : ''}${full ? 'opacity:.45;' : ''}">
+      <div style="font-weight:bold;font-size:11px;color:${md.color}">${sel ? '◈ ' : ''}${md.name}
+        ${roster ? `<span style="float:right;font-size:9px;color:var(--text-dim)">${used}/${cap}</span>` : ''}</div>
+    </div>`;
+  }).join('')}</div>`
+      : '';
+    const nameValue = this.pendingCharName ?? acc.namePref ?? '';
+    this.muCard.innerHTML = `
+      ${this.closeGlyphHtml('Step away')}
+      <div class="cname" style="color:${def.color};font-size:22px;letter-spacing:1px">${def.name}</div>
+      <div class="cdesc" style="margin:6px 0 8px 0">${def.description}</div>
+      <div class="cattrs">${ATTRIBUTE_IDS.filter(a => (def.attributes[a] ?? 0) > 0).map(a =>
+    `${ATTRIBUTES[a].short} ${def.attributes[a]}`).join(' &nbsp; ')}</div>
+      ${chips ? `<div style="margin-top:4px">${chips}</div>` : ''}
+      ${def.innateText ? `<div class="cskills" style="margin-top:4px">Innate: ${def.innateText}</div>` : ''}
+      <div id="name-row" style="display:flex;gap:6px;justify-content:center;align-items:center;margin:14px 0 4px 0">
+        <span style="font-size:12px;color:var(--gold)">⚜ Name</span>
+        <input id="mu-char-name" type="text" maxlength="24" spellcheck="false"
+          placeholder="named for its class" value="${esc(nameValue)}"
+          style="width:200px;padding:5px 9px;font-size:13px;background:var(--panel-bg);color:var(--text);
+            border:1px solid var(--panel-border);border-radius:8px;outline:none;text-align:center">
+        <button id="mu-name-clear" title="Forget the name; characters go back to being named for their class"
+          style="font-size:11px;padding:5px 10px">Nameless</button>
+      </div>
+      ${modeRow}
+      ${pickedFull ? '<div style="font-size:10px;color:var(--gold);margin-top:4px">🔒 No free vessel for this contract — release one from the main menu, or unlock more in the Vault.</div>' : ''}
+      <div class="esc-btns" style="margin-top:12px">
+        <button id="mu-wake" ${pickedFull ? 'disabled' : ''}>Wake</button>
+      </div>`;
+    this.muCard.classList.remove('hidden');
+    const nameInput = this.muCard.querySelector<HTMLInputElement>('#mu-char-name');
+    nameInput?.addEventListener('input', () => { this.pendingCharName = nameInput.value; });
+    this.muCard.querySelector<HTMLElement>('#mu-name-clear')?.addEventListener('click', () => {
+      this.pendingCharName = '';
+      if (nameInput) nameInput.value = '';
+      const a = this.getAccount();
+      if (a.namePref !== null) { a.namePref = null; this.saveAccount(); }
+    });
+    this.muCard.querySelectorAll<HTMLElement>('.mode-card').forEach(el => {
+      el.addEventListener('click', () => {
+        if (el.dataset.full !== 'true') this.pendingModeId = el.dataset.mode!;
+        this.showMuClassCard(classId, onPick); // re-render keeps the typed name
+      });
+    });
+    const confirm = (): void => {
+      // Belt to the disabled button: a full roster mode can't be sworn into.
+      const md = modeById(this.pendingModeId);
+      if (md.save === 'roster' && rosterOf(acc, md.id).length >= rosterCapacity(acc, md)) return;
+      // Resolve THE NAME at the moment of waking — the class screen's law:
+      // what the player sees in the field is what persists.
+      const typed = (nameInput?.value ?? '').trim();
+      const a = this.getAccount();
+      if ((a.namePref ?? '') !== typed) {
+        a.namePref = typed || null;
+        this.saveAccount();
+      }
+      this.closeMuClassCard();
+      onPick(def, this.pendingModeId, typed || undefined);
+    };
+    document.getElementById('mu-wake')?.addEventListener('click', confirm);
+    nameInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !pickedFull) confirm();
+    });
+    // Naming front and center: the field takes the pen the moment the card
+    // opens (movement is blocked while the card is up, so keys are safe).
+    nameInput?.focus();
+    nameInput?.select();
+  }
+
+  closeMuClassCard(): void {
+    this.muCardOpen = false;
+    this.muCard.classList.add('hidden');
+    this.muCard.innerHTML = '';
   }
 
   // ---------------------------------------------------------- class select
@@ -7502,10 +7628,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // game with the run saved exactly as it stands (the quit flush's
       // exact-resume promise). A co-op client owns no save — its exit is a
       // plain Exit Game.
-      const endTitle = this.isCoopClient() ? '' : rosterMode
-        ? ' title="Save the vessel and return to the main menu"'
-        : ` title="Forfeit this run: carried essence is appraised into ${META_CURRENCY_LABEL} at the Reckoning, and the character is lost"`;
-      const closeTitle = this.isCoopClient() ? ''
+      // A SCENE is not a run (engine/scenes.ts): while one plays — the
+      // tutorial, or Mu between lives — there is nothing to forfeit and no
+      // run save to promise. The menu door is plain and non-destructive
+      // (world.endRun mid-scene reroutes to the menu), and the exit door
+      // speaks only the account truth.
+      const sceneLive = !this.isCoopClient() && !!this.getWorld().scene;
+      const endTitle = this.isCoopClient() ? '' : sceneLive
+        ? ' title="Return to the main menu (nothing here is lost — the account is already saved)"'
+        : rosterMode
+          ? ' title="Save the vessel and return to the main menu"'
+          : ` title="Forfeit this run: carried essence is appraised into ${META_CURRENCY_LABEL} at the Reckoning, and the character is lost"`;
+      const closeTitle = this.isCoopClient() || sceneLive ? ''
         : ` title="The run is saved exactly as it stands — ${rosterMode
           ? 'resume it from Immortal Vessels at the main menu' : 'Continue Run resumes it'}"`;
       root.innerHTML = `
@@ -7514,8 +7648,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <button id="esc-resume">Resume</button>
           ${couchRow}${couchLeaveRow}
           <button id="esc-keys">Options</button>
-          <button id="esc-end"${endTitle}>${this.isCoopClient() ? 'Leave Co-op' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
-          <button id="esc-close"${closeTitle}>${this.isCoopClient() ? 'Exit Game' : 'Save & Exit'}</button>
+          <button id="esc-end"${endTitle}>${this.isCoopClient() ? 'Leave Co-op' : sceneLive ? 'Main Menu' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
+          <button id="esc-close"${closeTitle}>${this.isCoopClient() || sceneLive ? 'Exit Game' : 'Save & Exit'}</button>
         </div>`;
       document.getElementById('esc-resume')!.addEventListener('click', () => this.hideEscapeMenu());
       document.getElementById('esc-couch')?.addEventListener('click', () => {
@@ -7534,8 +7668,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           if (window.confirm('Leave this co-op session?')) { this.hideEscapeMenu(); this.onLeaveCoop(); }
           return;
         }
-        if (rosterMode) {
-          // Non-destructive: endRun() reroutes roster modes to Save & Main Menu.
+        if (sceneLive || rosterMode) {
+          // Non-destructive: endRun() reroutes scenes AND roster modes to the
+          // main menu (mid-scene there is no run to forfeit at all).
           this.hideEscapeMenu();
           this.getWorld().endRun();
           return;
@@ -8245,7 +8380,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         ? ` · <b style="color:var(--gold)">${acc.credits}</b> ${META_CURRENCY_LABEL} awaiting the Reckoning` : ''}</div>
       ${h.notice ? `<div class="acct-head" style="color:#e8b06a">${h.notice}</div>` : ''}
       <div class="esc-btns">
-        <button id="sm-start">New Run</button>
+        <button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>
         <button id="sm-continue" ${canContinue
           ? `title="Resume ${esc(contWho)} — exactly where the run left off"` : 'disabled'}>${canContinue
           ? 'Continue Run' : 'No Run to Continue'}</button>
@@ -8259,6 +8394,11 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>`;
     document.getElementById('sm-start')!.addEventListener('click', () => {
       this.startMenu.classList.add('hidden');
+      // THE MU REROUTE: when the shell armed onBeginRun, the press walks the
+      // Begin flow (virgin → the tutorial as Warrior; veteran → Mu, where the
+      // class roster stands in the world). The legacy class screen remains
+      // the fallback — and the co-op rejoin offers still use it directly.
+      if (this.onBeginRun) { this.onBeginRun(); return; }
       // The way back is threaded in: class select reached from here can
       // always return (glyph or Back) instead of soft-locking into a run.
       this.showClassSelect(h.onStart, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster));
@@ -8630,6 +8770,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     this.escapeMenu.classList.add('hidden');
     this.startMenu.classList.add('hidden');
     this.expeditionSetup.classList.add('hidden');
+    this.muCardOpen = false;
+    this.muCard.classList.add('hidden');
     this.escapeMenuOpen = false;
     // Every menu-kind timeflow hold dies with its surface — hideAll is the
     // belt under every "all panels clear" path (run start, death, resets).

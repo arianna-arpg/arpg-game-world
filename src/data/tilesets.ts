@@ -13897,6 +13897,32 @@ export const TILESETS: Record<string, TilesetDef> = {
     spawnerId: 'bone_altar', // never rolled — the den mint forces its objective (the maw)
     objectives: [{ kind: 'clear', weight: 1 }],
   },
+
+  // --- MU — the hub between lives (data/mu.ts; the scene fabric's ground) ---
+  // An ephemeral, ethereal zone of NOTHING: near-black indigo ground under
+  // drifting pale motes, no dress, no kin, no weather. Scene-minted only
+  // (frontier: false, no biome tag — it joins no pool anywhere); the layout
+  // is deliberately EMPTY so the boundless streamer has nothing to scatter —
+  // the nothing is the point. Packs/spawner/objectives are the registry's
+  // required shape, sealed off by sealStageZone before any zone breathes.
+  mu: {
+    id: 'mu', frontier: false,
+    sky: 'sheltered', // no weather reaches the space between lives
+    nameFirst: ['Mu'],
+    nameSecond: ['Mu'],
+    theme: {
+      ambientDark: 0.25,
+      floor: '#07070d', grid: '#0b0b13', border: '#1a1a2e',
+      obstacle: '#12121e', obstacleEdge: '#26263c', accent: '#8fa8d8',
+      chasm: '#020204', mud: '#0a0a12', water: '#0c1420',
+      ambientFx: [{ kind: 'motes', intensity: 0.75, color: '#9ab8dc' }],
+    },
+    sizeW: [900, 1000], sizeH: [700, 800],
+    layout: [],
+    packs: { count: [0, 0], size: [0, 0], table: [] },
+    spawnerId: 'grub_clutch', // never rolled — every Mu mint is scene-sealed
+    objectives: [{ kind: 'clear', weight: 1 }], // never rolled, same seal
+  },
 };
 
 // --- THE PLAIN FACES RESTATED (the dead-base-face heal, 2026-08-03) ----------

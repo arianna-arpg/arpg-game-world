@@ -39,15 +39,23 @@ import { START_ZONE } from '../data/zones';
 import {
   SCENES, SCENE_CFG, type SceneDef, type SceneStage, type SceneCardSpec,
   type SceneCardStage, type SceneDrillStage, type SceneClashStage,
-  type SceneAssaultStage, type SceneReckoningStage, type SceneSpawnRow,
+  type SceneAssaultStage, type SceneReckoningStage, type SceneMuStage,
+  type SceneSpawnRow, type SceneZoneSpec,
 } from '../data/scenes';
+import {
+  MU_CFG, MU_SCENE_ID, MU_ZONE, apparitionDefId, APPARITION_UNKNOWN_ID,
+} from '../data/mu';
+import { CLASSES } from '../data/classes';
 import { WAVE_CFG } from '../data/waves';
 import { mintCave } from './worldgen';
 import { makeSkillInstance } from './skills';
 import { SKILLS } from '../data/skills';
 import { doodadRuleOf, type Doodad } from './levelgen';
-import { LEDGER_FLASK_LESSON, type Account } from '../meta/account';
+import {
+  LEDGER_FLASK_LESSON, isClassUnlocked, selectableSlotCount, type Account,
+} from '../meta/account';
 import { bumpLedger } from '../packages/ledger';
+import { registerAttentionSource } from '../world/attention';
 import { Rng } from '../core/rng';
 import { vec, dist, rand, type Vec2 } from '../core/math';
 
@@ -80,6 +88,15 @@ export interface SceneRuntime {
   /** Cinematic camera override — the renderer follows this instead of the
    *  hero while set. */
   focus: Vec2 | null;
+  /** THE MARK (the agency reckoning): a live actor the attention fabric
+   *  points at while it stands — the chevron that says GO STOP HIM. The
+   *  source registered below resolves it fresh every frame; off-screen only
+   *  by the fabric's own law. Cleared on stage advance. */
+  mark: { id: number; color: string } | null;
+  /** THE HUD VEIL (the Mu stage): hide the run HUD cluster while this stage
+   *  plays — a spirit carries no life, no flasks, no bar. The scene's own
+   *  channels (bar/prompt/card) keep drawing. Cleared on stage advance. */
+  hudVeil: boolean;
   /** Pending story card (the DOM layer shows it; ack via sceneCardAck). */
   card: SceneCardSpec | null;
   cardAck: boolean;
@@ -139,7 +156,9 @@ export const sceneBegunKey = (def: SceneDef): string => `${def.ledger}_begun`;
  *  virgin account: scenes return with it.) */
 export function sceneDue(account: Account, id: string): boolean {
   const def = SCENES[id];
-  if (!def) return false;
+  // A transient scene sits outside the gate whole: never DUE (the shell
+  // begins it deliberately), never stamped, never counted.
+  if (!def || def.transient) return false;
   if (account.ledger[def.ledger] ?? 0) return false;
   if (account.ledger[sceneBegunKey(def)] ?? 0) return true;
   return account.roster.length === 0 && account.deaths.length === 0
@@ -157,8 +176,9 @@ export function sceneBegin(w: World, id: string): boolean {
   // until it is lived to the end — an abort re-launches it on the next New
   // Game. While a scene runs, the shell suppresses every run save (the
   // tutorial is not a run; the run begins at 'home'), so a mid-scene quit
-  // leaves nothing to resume into.
-  if (!(w.account.ledger[sceneBegunKey(def)] ?? 0)) {
+  // leaves nothing to resume into. A TRANSIENT scene (the Mu hub) stamps
+  // nothing at all — enterable forever, invisible to the gate.
+  if (!def.transient && !(w.account.ledger[sceneBegunKey(def)] ?? 0)) {
     bumpLedger(w.account.ledger, sceneBegunKey(def));
     w.accountDirty = true;
   }
@@ -171,13 +191,13 @@ export function sceneBegin(w: World, id: string): boolean {
     ...(def.zone.layoutType ? { layoutType: def.zone.layoutType } : {}),
     ...(def.zone.layoutParams ? { layoutParams: def.zone.layoutParams } : {}),
   });
-  sealStageZone(z, def);
+  sealStageZone(z, def.zone);
   w.caveMap[zid] = z;
   w.scene = {
     def, zoneId: zid, stageIx: 0, stageT: 0, begun: false, state: {},
     fell: false, casts: 0, bar: null, prompt: null, barAt: 'top',
-    focus: null, card: null, cardAck: false, fadeTarget: 1,
-    eventKey: `scene:${id}`,
+    focus: null, mark: null, hudVeil: false, card: null, cardAck: false,
+    fadeTarget: 1, eventKey: `scene:${id}`,
   };
   // Born under black — the first card owns the reveal.
   w.screenFade = 1;
@@ -204,14 +224,14 @@ export function sceneBegin(w: World, id: string): boolean {
  *  center; the script alone decides when you leave), no secrets asking to
  *  be found mid-cinematic. The mint's caveDepth already shelters the sky
  *  and bars every world event. */
-function sealStageZone(z: ZoneDef, def: SceneDef): void {
-  z.level = def.zone.level;
+function sealStageZone(z: ZoneDef, zone: SceneZoneSpec): void {
+  z.level = zone.level;
   z.spoils = 'none';
   z.packDensity = 0;
   z.cohort = 'authored';
   z.packs = { count: [0, 0], size: [0, 0], table: [] };
   z.exits = [];
-  if (def.zone.boundless) z.boundless = true;
+  if (zone.boundless) z.boundless = true;
   delete z.hollows;
   delete z.puzzles;
   delete z.scenery;
@@ -344,9 +364,11 @@ export function updateScene(w: World, dt: number): void {
   if (w.timeflow.heldBy('menu')) return;
   // The one screen-fade owner while a scene runs (no real death can occur
   // under the covenant, so the mode-respawn fader stays quiet by construction).
-  w.screenFade = sc.fadeTarget > w.screenFade
+  // Clamped [0,1] outright: a hostile dt (a rewound timer, a QA harness's
+  // synthetic clock meeting a live rAF) must never ramp the dark past full.
+  w.screenFade = Math.max(0, Math.min(1, sc.fadeTarget > w.screenFade
     ? Math.min(sc.fadeTarget, w.screenFade + SCENE_CFG.fade.up * dt)
-    : Math.max(sc.fadeTarget, w.screenFade - SCENE_CFG.fade.down * dt);
+    : Math.max(sc.fadeTarget, w.screenFade - SCENE_CFG.fade.down * dt)));
   // The far-field dress rides every director tick while the party stands
   // on the stage (cheap: a handful of map lookups once the ring is seeded).
   if (w.zone.id === sc.zoneId) streamSceneDress(w, sc);
@@ -371,6 +393,8 @@ export function updateScene(w: World, dt: number): void {
     sc.begun = false;
     sc.bar = null;
     sc.prompt = null;
+    sc.mark = null;
+    sc.hudVeil = false;
   }
 }
 
@@ -408,6 +432,8 @@ export function sceneInterceptFall(w: World, a: Actor): boolean {
           sc.begun = false;
           sc.bar = null;
           sc.prompt = null;
+          sc.mark = null;
+          sc.hudVeil = false;
           break;
         }
       }
@@ -457,8 +483,6 @@ function aliveOf(w: World, ids: number[]): number {
   for (const a of w.actors) if (!a.dead && ids.includes(a.id)) n++;
   return n;
 }
-
-const smooth = (t: number): number => t * t * (3 - 2 * t);
 
 // -------------------------------------------------------------- core kinds --
 
@@ -585,63 +609,75 @@ registerSceneStage('reckoning', {
   onFell: 'play',
   begin(w, sc, spec) {
     const s = spec as SceneReckoningStage;
-    // The executioner stands off in the dark — rewardless like every scene
-    // body, posted so it holds its mark until the verb.
+    // THE AGENCY BEAT: the commander arrives just past the screen's edge —
+    // rewardless like every scene body, posted so it holds its ground — and
+    // the world is NEVER held (release whatever a prior beat left standing:
+    // the stage is self-sufficient wherever the fall fast-forwards from).
+    w.timeflow.release(SCENE_CFG.holdId);
     const col = w.createMonster(s.def, s.level, 'enemy');
     const at = w.swarmEntryPoint(w.player.pos, [s.spawnDist, s.spawnDist + 60]);
     col.pos = w.clampPos(vec(at.x, at.y), col.radius);
     col.noBounty = true;
     col.eventKey = sc.eventKey;
     col.aiPost = vec(col.pos.x, col.pos.y);
+    // THE MUSTER STANDS ALONE: the whole kit is banned from the AI picker —
+    // the commander freelances nothing while the director owns the beat (a
+    // direct useSkill never reads the bans, so the ordered verb still flies).
+    for (const inst of col.skills) if (inst) (col.aiSkillBans ??= new Set()).add(inst.def.id);
     w.actors.push(col);
-    // Everyone else stands still — actor-scoped, so the world keeps drawing
-    // and the executioner's cast clock runs while the field holds its breath.
-    w.timeflow.hold({
-      id: SCENE_CFG.holdId, scale: 0, kind: 'cinematic',
-      actors: { exceptIds: [col.id] },
-    });
+    w.text(vec(col.pos.x, col.pos.y - col.radius - 26), col.name, s.announceColor ?? '#e8c87a', 17);
+    if (s.announce) {
+      w.text(vec(w.player.pos.x, w.player.pos.y - 60), s.announce, s.announceColor ?? '#c8b070', 14);
+    }
+    sc.mark = { id: col.id, color: col.color };
     sc.state.colId = col.id;
-    sc.state.from = vec(w.player.pos.x, w.player.pos.y);
     sc.state.cast = false;
     sc.state.blastAt = null;
-    sc.state.named = false;
     sc.bar = null;
     sc.prompt = null;
   },
   update(w, sc, spec, _dt) {
     const s = spec as SceneReckoningStage;
-    const st = sc.state as {
-      colId: number; from: Vec2; cast: boolean; blastAt: number | null; named: boolean;
-    };
+    const st = sc.state as { colId: number; cast: boolean; blastAt: number | null };
     const col = w.actors.find(a => a.id === st.colId);
-    if (!col || col.dead) { sc.fadeTarget = 1; return w.screenFade >= 0.995; }
-    // The pan: hero → executioner, eased, drawn == scripted (the renderer
-    // follows sc.focus while it is set).
-    const k = smooth(Math.min(1, sc.stageT / Math.max(0.01, s.panSec)));
-    sc.focus = vec(
-      st.from.x + (col.pos.x - st.from.x) * k,
-      st.from.y + (col.pos.y - st.from.y) * k,
-    );
-    if (k >= 1 && !st.named) {
-      st.named = true;
-      w.text(vec(col.pos.x, col.pos.y - col.radius - 26), col.name, '#9fdc6a', 17);
+    if (!col || col.dead) { sc.mark = null; sc.fadeTarget = 1; return w.screenFade >= 0.995; }
+    // THE MERCY FLOOR: wound the muster to the bone and no further — at the
+    // floor it goes immune outright (every later hit prints its refusal),
+    // because the tutorial's one promise is that this cast RESOLVES. Full
+    // agency to try; no way to win by damage. Delay stays real (below).
+    if (s.floorFrac > 0 && !col.invulnerable && col.life <= col.maxLife() * s.floorFrac) {
+      col.invulnerable = true;
+      w.text(vec(col.pos.x, col.pos.y - col.radius - 26), 'the muster will not be stopped', '#e8c87a', 13);
     }
-    if (!st.cast && sc.stageT >= s.panSec + s.dwellSec) {
-      st.cast = true;
-      const inst = col.skills.find(x => x?.def.id === s.verb)
-        ?? (SKILLS[s.verb] ? makeSkillInstance(SKILLS[s.verb], 1) : null);
-      if (inst) w.useSkill(col, inst, vec(col.pos.x, col.pos.y));
-      else console.warn(`[scenes] reckoning verb '${s.verb}' is not a registered skill`);
+    // Order the verb after the grace beat — a fresh instance every time, so
+    // no kit cooldown can refuse a re-muster. A refusal (mid-recovery, a
+    // stun landing the same tick) just retries next tick.
+    if (!st.cast && sc.stageT >= s.graceSec && !col.isStunned() && !col.heldBy) {
+      const inst = SKILLS[s.verb] ? makeSkillInstance(SKILLS[s.verb], 1) : null;
+      if (!inst) {
+        console.warn(`[scenes] reckoning verb '${s.verb}' is not a registered skill`);
+        st.cast = true;
+        st.blastAt = sc.stageT;
+      } else if (w.useSkill(col, inst, vec(col.pos.x, col.pos.y))) {
+        st.cast = true;
+      }
     }
     if (st.cast && st.blastAt === null && !col.casting) {
-      // The verb has resolved — the field is felled (the covenant caught the
-      // hero at the one death chokepoint; the horde it spent honestly).
-      st.blastAt = sc.stageT;
-      w.shake = Math.max(w.shake, SCENE_CFG.blastShake);
+      if (col.isStunned() || col.heldBy != null) {
+        // Interrupted — the player's honest little victory. Delay is real;
+        // denial is not: the muster re-arms the moment the body is free.
+        st.cast = false;
+      } else {
+        // The verb has resolved — the field is felled (the covenant caught
+        // the hero at the one death chokepoint; the horde it spent honestly).
+        st.blastAt = sc.stageT;
+        sc.mark = null;
+        w.shake = Math.max(w.shake, SCENE_CFG.blastShake);
+      }
     }
     if (st.blastAt !== null && sc.stageT - st.blastAt >= s.blastWaitSec) {
       sc.fadeTarget = 1;
-      if (w.screenFade >= 0.995) { sc.focus = null; return true; }
+      if (w.screenFade >= 0.995) return true;
     }
     return false;
   },
@@ -676,4 +712,212 @@ registerSceneStage('home', {
     endScene(w, sc);
     return false; // endScene nulled the runtime — nothing left to advance
   },
+});
+
+// ------------------------------------------------------- the mu stage (hub) --
+// THE HUB BETWEEN LIVES (data/mu.ts): the hero stands as a wisp in a zone of
+// nothing; the class roster stands as shaded apparitions in three arcs — the
+// dealt hand AWAKE, the unlocked remainder VEILED, the locked remainder as
+// faint unknown cowls. A still linger by an awake vessel fills the scene bar
+// and posts a CLASS REQUEST the shell polls (muTakeClassRequest) to open that
+// class's card; taking it builds the run's whole new world outside, so this
+// stage never completes and never restores anything.
+
+/** One standing apparition's live row (per-stage scratch). */
+interface MuApp {
+  id: number;
+  classId: string | null;
+  rank: 'awake' | 'veiled' | 'faint';
+  /** The commune linger (seconds engaged + still). */
+  t: number;
+  /** Latch: fired (awake) or refused (veiled) — re-arms on step-out. */
+  noted: boolean;
+}
+
+interface MuState { apps?: MuApp[]; classReq?: string | null }
+
+const muZoneId = (): string => `scene_${MU_SCENE_ID}`;
+
+/** THE HAND LAW — the class screen's exact deal, engine-side and seeded:
+ *  hand size = selectableSlotCount, dealt from the account-unlocked pool.
+ *  Seeded off the account's own history (runs + deaths), so a re-entered Mu
+ *  keeps its hand within a sitting and re-deals as the account moves on. */
+function muSpawnApparitions(w: World, sc: SceneRuntime): MuApp[] {
+  const acc = w.account;
+  const pool = CLASSES.filter(c => isClassUnlocked(acc, c.id));
+  const handN = Math.min(selectableSlotCount(acc), pool.length);
+  const seed = (MU_ZONE.seed
+    ^ Math.imul(acc.runRecords.length + 1, 0x9e3779b1)
+    ^ Math.imul(acc.deaths.length + 1, 0x85ebca6b)) >>> 0;
+  const rng = new Rng(seed);
+  const shuffled = [...pool];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(rng.next() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const awake = shuffled.slice(0, handN);
+  const veiled = shuffled.slice(handN);
+  const faintN = Math.min(MU_CFG.faintCap, CLASSES.length - pool.length);
+  const cx = w.arena.w / 2, cy = w.arena.h / 2;
+  const apps: MuApp[] = [];
+  const seat = (defId: string, classId: string | null, rank: MuApp['rank'],
+    i: number, n: number, r: number): void => {
+    const span = MU_CFG.arc.to - MU_CFG.arc.from;
+    const th = n <= 1 ? MU_CFG.arc.from + span / 2 : MU_CFG.arc.from + span * (i / (n - 1));
+    const m = w.createMonster(defId, 1, 'player');
+    m.pos = w.clampPos(vec(cx + Math.cos(th) * r, cy + Math.sin(th) * r), m.radius);
+    m.noBounty = true;
+    m.eventKey = sc.eventKey;
+    if (rank === 'veiled') m.applyStatus('mu_veiled', 0, 1, 'Mu');
+    if (rank === 'faint') m.applyStatus('mu_faint', 0, 1, 'Mu');
+    w.actors.push(m);
+    apps.push({ id: m.id, classId, rank, t: 0, noted: false });
+  };
+  awake.forEach((c, i) => seat(apparitionDefId(c.id), c.id, 'awake', i, awake.length, MU_CFG.ranks.awake));
+  veiled.forEach((c, i) => seat(apparitionDefId(c.id), c.id, 'veiled', i, veiled.length, MU_CFG.ranks.veiled));
+  for (let i = 0; i < faintN; i++) {
+    seat(APPARITION_UNKNOWN_ID, null, 'faint', i, faintN, MU_CFG.ranks.faint);
+  }
+  return apps;
+}
+
+registerSceneStage('mu', {
+  onFell: 'play',
+  begin(w, sc, spec) {
+    const s = spec as SceneMuStage;
+    w.timeflow.release(SCENE_CFG.holdId);
+    sc.focus = null;
+    sc.mark = null;
+    sc.hudVeil = true;
+    sc.barAt = 'hero';
+    // THE GROUND — two roads in, one place: the standalone hub scene IS this
+    // zone already (sceneBegin minted it); the prologue arrives from its own
+    // staging ground and mints Mu beside it, off-graph like everything else.
+    const zid = muZoneId();
+    if (w.zone.id !== zid) {
+      if (!w.caveMap[zid]) {
+        const z = mintCave(w.zone, MU_ZONE.seed, zid, MU_ZONE.tileset, {
+          name: MU_ZONE.name,
+          objective: { kind: 'none', ...(MU_ZONE.objectiveLabel ? { label: MU_ZONE.objectiveLabel } : {}) },
+          noDeeper: true,
+        });
+        sealStageZone(z, MU_ZONE);
+        w.caveMap[zid] = z;
+      }
+      w.loadZone(zid, w.zone.id);
+      // THE EMPTY-FIELD LAW again at this door — Mu opens with nobody on it.
+      for (let i = w.actors.length - 1; i >= 0; i--) {
+        if (w.actors[i].team !== 'player') w.actors.splice(i, 1);
+      }
+    }
+    // COMPLETION AT THE THRESHOLD (the prologue): the tutorial is LIVED the
+    // moment the spirit arrives — a quit from Mu re-opens Mu on the next
+    // Begin (the shell's veteran lane), never the war again.
+    if (s.stampComplete && !(w.account.ledger[sc.def.ledger] ?? 0)) {
+      bumpLedger(w.account.ledger, sc.def.ledger);
+      w.accountDirty = true;
+    }
+    // THE WISP: a small guarded light between lives — no kit, no vitals to
+    // lose, ethereal ink. Nothing here is ever restored: taking a vessel
+    // builds a whole new world, so the swap is honest by construction.
+    const p = w.player;
+    p.invulnerable = true;
+    p.untargetable = true;
+    p.life = p.maxLife();
+    p.fillResources();
+    p.casting = null;
+    p.push = null;
+    p.dash = null;
+    p.look = MU_CFG.wisp.look;
+    p.color = MU_CFG.wisp.color;
+    p.radius = MU_CFG.wisp.radius;
+    for (let i = 0; i < p.skills.length; i++) p.skills[i] = null;
+    const st = sc.state as MuState;
+    st.apps = muSpawnApparitions(w, sc);
+    st.classReq = null;
+    sc.fadeTarget = 0;
+    sc.prompt = MU_CFG.prompt;
+  },
+  update(w, sc, _spec, dt) {
+    const st = sc.state as MuState;
+    const apps = st.apps ?? [];
+    if (w.zone.id !== muZoneId()) return false;
+    const p = w.player;
+    let barSet = false;
+    let engagedAny = false;
+    for (const row of apps) {
+      const a = w.actors.find(x => x.id === row.id);
+      if (!a) continue;
+      const engaged = dist(p.pos, a.pos) <= MU_CFG.dwell.radius + a.radius;
+      if (!engaged) {
+        row.t = 0;
+        row.noted = false; // step-out re-arms the latch (the Dwell law)
+        continue;
+      }
+      engagedAny = true;
+      if (row.rank === 'faint') {
+        sc.prompt = MU_CFG.faintLine;
+        continue;
+      }
+      if (row.rank === 'veiled') {
+        if (!row.noted) {
+          row.noted = true;
+          w.text(vec(a.pos.x, a.pos.y - a.radius - 18), MU_CFG.veiledLine, '#8a86a0', 12);
+        }
+        sc.prompt = MU_CFG.veiledLine;
+        continue;
+      }
+      // AWAKE: the still linger fills the bar, then posts the class request
+      // (consumed until step-out, so a closed card never re-pops in place).
+      sc.prompt = null;
+      if (row.noted) continue;
+      if (!w.playerIdle()) {
+        row.t = 0;
+        continue;
+      }
+      row.t += dt;
+      sc.bar = { label: a.name, frac: Math.min(1, row.t / MU_CFG.dwell.sec) };
+      barSet = true;
+      if (row.t >= MU_CFG.dwell.sec) {
+        row.noted = true;
+        st.classReq = row.classId;
+        sc.bar = null;
+        barSet = false;
+      }
+    }
+    if (!barSet) sc.bar = null;
+    if (!engagedAny) sc.prompt = MU_CFG.prompt;
+    return false; // Mu never completes — the pick rebuilds the world outside.
+  },
+});
+
+/** Is the running scene sitting on its Mu stage? (The shell's label/veil
+ *  switches read this — one predicate, engine-owned.) */
+export function muStageLive(w: World): boolean {
+  return !!w.scene && w.scene.def.stages[w.scene.stageIx]?.kind === 'mu';
+}
+
+/** Take (and clear) the Mu stage's pending class request — the shell polls
+ *  this beside the dwell flags and opens that class's card. */
+export function muTakeClassRequest(w: World): string | null {
+  const sc = w.scene;
+  if (!sc) return null;
+  const st = sc.state as MuState;
+  const r = st.classReq ?? null;
+  if (r) st.classReq = null;
+  return r;
+}
+
+// THE MARK — the attention fabric's chevron on whatever body the running
+// scene marks (the agency reckoning's commander). A source, never a draw:
+// the generic edge-pointer pass renders it, and skips it while on-screen.
+registerAttentionSource((w: World) => {
+  const m = w.scene?.mark;
+  if (!m) return [];
+  const a = w.actors.find(x => x.id === m.id);
+  if (!a || a.dead) return [];
+  return [{
+    id: 'scene_mark', pos: { x: a.pos.x, y: a.pos.y },
+    color: m.color, glyph: '☠', label: a.name, z: 3,
+  }];
 });

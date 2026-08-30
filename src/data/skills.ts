@@ -211,7 +211,11 @@ export const SKILLS: Record<string, SkillDef> = {
       + ' survives; nothing near was meant to.',
     noDrop: true,
     tags: ['spell', 'aoe', 'fire', 'physical'], color: '#9fdc6a',
-    manaCost: 0, cooldown: 45, useTime: 4.6,
+    // TEN HELD BREATHS (the agency tutorial, engine/scenes.ts reckoning): the
+    // muster is a real cast the player is free to spend trying to stop — the
+    // bar is the clock, the clock is the drama. Interrupts delay, the mercy
+    // floor denies the kill, and the blast keeps its one promise.
+    manaCost: 0, cooldown: 45, useTime: 10,
     baseDamage: { physical: [340, 480], fire: [280, 420] },
     delivery: { type: 'nova', radius: 2600, affects: 'all', occlusion: 'free' },
     effects: [

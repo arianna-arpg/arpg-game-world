@@ -817,12 +817,19 @@ export class Renderer {
     this.uiMouse.x = this.hudMouse.x / mScale / us; this.uiMouse.y = this.hudMouse.y / mScale / us;
     this.onCrest(crest, () => this.uiPass(us, () => {
       this.drawTimeflow(world);     // held-time wash + banner (engine/timeflow.ts hud specs)
-      this.drawHud(world);          // orbs + bar + boss bar — last, so it stays readable
+      // THE HUD VEIL (the Mu stage, engine/scenes.ts): a spirit between lives
+      // carries no orbs, no flasks, no bar — the scene's own channels (hero
+      // bar, prompt, card) stay live through their separate passes.
+      if (!world.scene?.hudVeil) {
+        this.drawHud(world);        // orbs + bar + boss bar — last, so it stays readable
+      }
       this.drawEncounterHud(world); // breach timer bar (screen-space)
       this.drawFractureHud(world);  // fracture nested-timer bar (screen-space)
       this.drawSceneHud(world);     // scene fabric: drill/assault bar + prompt (screen-space)
-      this.drawNoticeFeed(world);   // world news, stacked at the player's anchor (info stream)
-      this.drawPickupFeed(world);   // the right-flank pickup ledger (canvas = below every DOM panel)
+      if (!world.scene?.hudVeil) {
+        this.drawNoticeFeed(world); // world news, stacked at the player's anchor (info stream)
+        this.drawPickupFeed(world); // the right-flank pickup ledger (canvas = below every DOM panel)
+      }
     }));
     this.drawAttentionPointers(world); // edge chevrons toward off-screen must-finds (world/attention.ts)
     this.drawDarknessHud(world);  // the dark's screen veil: abyss depth/haul/shaft, or the gloaming's closing eye

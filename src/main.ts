@@ -50,7 +50,8 @@ import './data/traversals'; // side-effect: registers the vertical-crossing kind
 import './data/glyphParts'; // side-effect: registers the shipped hand-drawn part kinds (the glyph roster)
 import { updateAI } from './engine/ai';
 import { World, type Seat } from './engine/world';
-import { sceneBegin, sceneCardAck, sceneDue } from './engine/scenes';
+import { sceneBegin, sceneCardAck, sceneDue, muTakeClassRequest } from './engine/scenes';
+import { MU_CFG, MU_SCENE_ID } from './data/mu';
 import { buildManifest, reconcileManifest, type ExpeditionManifest } from './packages/manifest';
 import { bumpLedger, mergeLedger } from './packages/ledger';
 import { registerAllPackageFactions } from './packages/factionGen';
@@ -92,7 +93,7 @@ import {
   type CharacterSave,
 } from './meta/character';
 import { resolveResumeSpawn } from './meta/worldstate';
-import { freeRosterSlot, mintCharId, modeById, rosterCapacity, type RosterEntry } from './meta/modes';
+import { DEFAULT_MODE_ID, freeRosterSlot, mintCharId, modeById, rosterCapacity, type RosterEntry } from './meta/modes';
 import { healMercEngagements, releaseMercsOf } from './meta/mercs';
 import type { Settings } from './meta/settings';
 
@@ -467,6 +468,39 @@ const startPicked = (d: ClassDef, modeId?: string, name?: string): void => {
   }
   startGame(d, undefined, modeId, name);
 };
+
+/** THE MU BOOT (data/mu.ts): stand a PROVISIONAL world up and drift into the
+ *  hub between lives — a transient scene on off-graph ground, so no run save
+ *  ever exists for it (the scene stand-down covers every chokepoint) and no
+ *  roster vessel is minted. The wisp strips the provisional class to nothing;
+ *  taking a vessel calls startPicked, which discards this world wholesale. */
+function startMu(): void {
+  couchReset();
+  world = adoptWorld(new World(account, Object.freeze(buildManifest(account, rollSeed()))));
+  const cls = CLASSES.find(c => c.id === MU_CFG.provisionalClass) ?? CLASSES[0];
+  world.createPlayer(cls, { modeId: DEFAULT_MODE_ID });
+  lastSentZone = '';
+  ui.resetRunView();
+  deathShown = false;
+  sceneBegin(world, MU_SCENE_ID);
+  running = true;
+}
+
+/** THE BEGIN PRESS (the start menu's one primary button): a virgin account —
+ *  or a deliberate ?prologue — walks the tutorial as the Warrior with no
+ *  class screen at all; everyone else drifts into Mu, where the class roster
+ *  stands IN the world. The legacy class screen remains beneath (co-op
+ *  rejoin offers still call it directly). */
+function beginPressed(): void {
+  const prologueDue = sceneDue(account, 'prologue')
+    || new URLSearchParams(location.search).has('prologue');
+  if (prologueDue) {
+    startPicked(CLASSES.find(c => c.id === MU_CFG.provisionalClass) ?? CLASSES[0]);
+    return;
+  }
+  startMu();
+}
+ui.onBeginRun = beginPressed;
 
 /** THE WAKEFUL WORLD: stand the saved world back up around a freshly-resumed
  *  character — adopt the save's world section (zone graph, discovery, clock,
@@ -1691,6 +1725,13 @@ function tick(now: number): void {
       } else if (!world.scene?.card && ui.storyCardOpen()) {
         ui.hideStoryCard();
       }
+      // THE MU HUB (data/mu.ts): a still linger at an awake vessel posts a
+      // class request — take it only when the card can actually open (the
+      // pause menu's hold law), and let the pick start the run proper.
+      if (!ui.escapeMenuOpen && !ui.muCardOpen) {
+        const muReq = muTakeClassRequest(world);
+        if (muReq) ui.showMuClassCard(muReq, startPicked);
+      }
       // Dwelling by the return-Caravanner IN THE WILDS ports straight home — no menu.
       pollCaravanReturn();
       // (The dock dwell now CASTS OFF into the sailing mode directly — handled
@@ -2151,7 +2192,10 @@ function onDeathDismiss(): void {
   if (coopActive()) {
     ui.showClassSelect(cls => { startGame(cls); flushRejoins(); });
   } else {
-    toStartMenu();
+    // THE LOOP CLOSES IN MU (data/mu.ts): a solo run's end drifts the player
+    // back into the hub between lives — the next vessel is a walk, not a
+    // menu. The main menu stays one Esc away from inside Mu.
+    startMu();
   }
 }
 

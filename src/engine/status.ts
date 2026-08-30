@@ -1439,6 +1439,22 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     beneficial: true,
     ghostAlpha: 0.45,
   },
+  // THE MU RANKS (data/mu.ts — the hub between lives): per-instance shading
+  // on the class apparitions. The untargetable ladder already draws every
+  // apparition at 0.55; these FLOOR it lower — mu_veiled for the unlocked
+  // pool outside the dealt hand ("not this waking"), mu_faint for the
+  // unknown cowls of the locked remainder. Pure presentation markers on
+  // scene-only bodies; the world discards them with the provisional world.
+  mu_veiled: {
+    label: 'Veiled', color: '#8a86a0', duration: 3600,
+    beneficial: true, powerInert: true,
+    ghostAlpha: 0.3,
+  },
+  mu_faint: {
+    label: 'Faint', color: '#5a5a72', duration: 3600,
+    beneficial: true, powerInert: true,
+    ghostAlpha: 0.16,
+  },
   // THE VENT DWELLER's two worn states (engine/ventDweller.ts — the Scald
   // Basin's Geysermaw): SUBMERGED = the body hangs INSIDE its vent, outside
   // time — timeScale 0 (no thinking, no casting, no cooldowns burning, no

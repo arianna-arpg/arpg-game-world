@@ -14,15 +14,26 @@
 //     footwork and casts; the assault pours already-hunting waves.
 //   • THE COVENANT — a lethal blow FELLS (life 1, guarded, fast-forwarded
 //     to the reckoning), never kills; the reckoning's verb resolves through
-//     the real pipeline and spends the horde honestly (affects 'all'); the
-//     scene ends at the START_ZONE bedside with the account graduated.
+//     the real pipeline and spends the horde honestly (affects 'all').
+//   • THE AGENCY RECKONING — the world is NEVER held: the commander stands
+//     marked (the attention fabric's chevron), its kit banned, and after the
+//     grace beat musters a TEN-second honest cast; the MERCY FLOOR makes it
+//     immune below its life fraction (damage delays, never denies).
+//   • THE HOLLOW WAKE — the prologue ends in MU, not at the bedside: the
+//     spirit stands as a wisp among the class apparitions, the completion
+//     key stamps at the threshold, and the run begins only at the pick.
 // Run: npx tsx balance/probe_scenes.ts
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld, SIM_ARENA_ID } from '../src/sim/arena';
-import { sceneDue, sceneBegin, sceneBegunKey, sceneCardAck, sceneNoteCast } from '../src/engine/scenes';
+import {
+  sceneDue, sceneBegin, sceneBegunKey, sceneCardAck, sceneNoteCast,
+  muStageLive, muTakeClassRequest,
+} from '../src/engine/scenes';
 import { PROLOGUE_SCENE } from '../src/data/scenes';
-import { START_ZONE } from '../src/data/zones';
+import { MU_CFG, APPARITION_PREFIX } from '../src/data/mu';
+import { selectableSlotCount } from '../src/meta/account';
+import { collectAttention } from '../src/world/attention';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
 
@@ -178,7 +189,7 @@ check('F1: the hero is FELLED — alive at 1, guarded, never dead or downed',
 check('F2: the fall fast-forwards the script to the reckoning',
   stageKind(w) === 'reckoning');
 
-// === G) THE RECKONING: pan, muster, the field unmade ========================
+// === G) THE AGENCY RECKONING: marked, mustered, the field unmade =============
 // The tide as it stands BEFORE the blast — dead bodies leave the actor list,
 // so the after-pin follows these ids, not the census.
 const tideIds = sceneBodies(w)
@@ -188,49 +199,73 @@ step(w, 0.2);
 const col = w.actors.find(a => a.defId === 'goblin_colossus');
 check('G1: the Hordefather stands off in the dark (rewardless like all scene bodies)',
   !!col && col.noBounty && col.eventKey === `scene:${PROLOGUE_SCENE.id}`);
-check('G2: the field holds its breath while the executioner alone moves',
-  w.timeflow.heldBy('cinematic'));
-check('G3: the cinematic eye is panning (drawn == scripted)',
-  w.scene?.focus !== null);
-check('G4: the verb musters through the REAL pipeline (a live cast on the bar)',
-  until(w, () => !!col && col.casting !== null, 5),
+check('G2: THE HOLD IS DEAD — the world keeps running while the muster stands (agency, not cinema)',
+  !w.timeflow.heldBy('cinematic') && w.scene?.focus === null);
+check('G3: THE MARK stands — the chevron source points at the commander by name',
+  w.scene?.mark?.id === col?.id
+  && collectAttention(w).some(pt => pt.id === 'scene_mark' && pt.label === col?.name));
+check('G4: the verb musters through the REAL pipeline after the grace beat',
+  until(w, () => !!col && col.casting !== null, 6),
   `casting=${String(!!col?.casting)}`);
+check('G4b: ten held breaths — the muster is a TEN-second honest cast bar',
+  (col?.casting?.total ?? 0) >= 9.5,
+  `total=${col?.casting?.total?.toFixed(1)}`);
+// THE MERCY FLOOR, mid-cast: wound it below the floor and it goes immune —
+// the player may bloody the muster, never stop it by damage.
+if (col) col.life = col.maxLife() * ((w.scene?.def.stages[w.scene.stageIx] as { floorFrac?: number })?.floorFrac ?? 0.1) * 0.5;
+step(w, 0.2);
+check('G4c: THE MERCY FLOOR — below the floor the commander is immune outright',
+  col?.invulnerable === true);
 check('G5: the blast spends the horde honestly (affects all — the tide lies dead)',
   until(w, () => tideIds.length > 0
-    && tideIds.every(id => w.actors.every(a => a.id !== id || a.dead)), 8),
+    && tideIds.every(id => w.actors.every(a => a.id !== id || a.dead)), 16),
   `tide=${tideIds.length}`);
 check('G6: the fall card follows under black',
   until(w, () => stageKind(w) === 'card' && w.screenFade >= 0.995, 6));
 check('G7: the fall card is pending',
   until(w, () => w.scene?.card != null, 2));
 
-// === H) HOME: the bedside wake, the stage deleted, the account graduated ====
+// === H) THE HOLLOW WAKE: Mu, the wisp, the vessels, the pick ================
 sceneCardAck(w);
-check('H1: the scene ends at the START_ZONE wake',
-  until(w, () => w.zone.id === START_ZONE, 4));
-step(w, 2.5); // the fade home runs out
-check('H2: the staging ground is DELETED whole (not even the session cache keeps it)',
-  w.caveMap[ZID] === undefined);
-check('H3: the scene is over and the screen is clear',
-  w.scene === null && w.screenFade <= 0.01);
-check('H4: the hero wakes whole — guards off, vitals full',
-  !p.invulnerable && !p.untargetable && p.life === p.maxLife());
-// THE BLINK LAW at the wake (the reported wall-wedge): the parting blast's
-// knockback must never ride home — the hero stands on open ground with no
-// carried impulse and can WALK.
-{
-  const at = { x: p.pos.x, y: p.pos.y };
-  for (let i = 0; i < 30; i++) w.moveActor(p, 1, 0, DT);
-  const moved = Math.hypot(p.pos.x - at.x, p.pos.y - at.y);
-  p.pos.x = at.x; p.pos.y = at.y;
-  check('H4b: no impulse crosses the zone door — the woken hero walks free',
-    p.push === null && moved > 20, `moved=${moved.toFixed(0)}px push=${String(!!p.push)}`);
-}
-check('H5: COMPLETION stamps the gate — the prologue never plays again',
+check('H1: the spirit arrives in MU (off-graph like every scene ground)',
+  until(w, () => w.zone.id === 'scene_mu', 4)
+  && !!w.caveMap['scene_mu'] && !w.zoneMap['scene_mu']);
+step(w, 2.5); // the fade-in runs out
+check('H2: the scene is STILL RUNNING — Mu never completes on its own',
+  w.scene !== null && muStageLive(w) && w.screenFade <= 0.01);
+check('H3: COMPLETION stamps at the threshold — the tutorial never replays, Mu does',
   (w.account.ledger[PROLOGUE_SCENE.ledger] ?? 0) >= 1 && !sceneDue(w.account, 'prologue'));
-check('H5b: the run begins at the wake — its first save is booked (charDirty)',
-  w.charDirty === true);
-check('H6: no scene body followed us home', sceneBodies(w).length === 0);
+check('H4: THE WISP — the hero stands as a small guarded light with no kit',
+  p.look === MU_CFG.wisp.look && p.radius === MU_CFG.wisp.radius
+  && p.invulnerable && p.untargetable && p.skills.every(s => s === null));
+check('H4b: THE HUD VEIL is up (a spirit carries no orbs, no flasks, no bar)',
+  w.scene?.hudVeil === true);
+// THE ROSTER OF VESSELS: the dealt hand stands awake, the rest of the
+// unlocked pool veiled (the sim account force-unlocks every class, so no
+// faint cowls here — probe_mu.ts covers the locked remainder).
+const apparitions = w.actors.filter(a => a.defId?.startsWith(APPARITION_PREFIX));
+const awakeN = apparitions.filter(a => !a.statuses.some(s => s.id === 'mu_veiled' || s.id === 'mu_faint')).length;
+check('H5: the vessels stand — hand awake per the class screen\'s own law',
+  awakeN === selectableSlotCount(w.account),
+  `awake=${awakeN} want=${selectableSlotCount(w.account)} total=${apparitions.length}`);
+check('H5b: every apparition is scenery with a name — passive, guarded, untargetable',
+  apparitions.length > 0 && apparitions.every(a => a.untargetable && a.invulnerable && a.team === 'player'));
+// THE PICK: drift onto an awake vessel, be still, and the class request posts.
+{
+  const awake = apparitions.find(a => !a.statuses.some(s => s.id === 'mu_veiled'));
+  check('H6a: an awake vessel stands to be asked', !!awake);
+  if (awake) {
+    p.pos.x = awake.pos.x; p.pos.y = awake.pos.y + awake.radius + 8;
+    step(w, MU_CFG.dwell.sec + 0.6);
+    const req = muTakeClassRequest(w);
+    check('H6: the still linger posts THAT class\'s request',
+      req !== null && `${APPARITION_PREFIX}${req}` === awake.defId, `req=${req}`);
+    check('H6b: the request is consumed whole (no double card)',
+      muTakeClassRequest(w) === null);
+  }
+}
+check('H7: no enemy followed the spirit into Mu',
+  w.actors.every(a => a.team !== 'enemy'));
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASS');
 process.exit(failed ? 1 : 0);
