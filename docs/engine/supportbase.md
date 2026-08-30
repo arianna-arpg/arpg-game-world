@@ -43,6 +43,25 @@ sibling).
 - **OPEN AXES** — the table is data on the def; new rows and new axes are
   content. New chassis `kind`s name new executors.
 
+## The mods chassis (the Multistrike ruling)
+
+Rows may carry `mods: Modifier[]` — the cut's own numbers, folded into
+`instanceMods` beside the def's mods under the same forward-scale law
+(overrides pass whole). A chassis with **no `kind`** is a pure-mods base:
+the rows ARE the payload, no executor runs. This is how an EXISTING gem
+converts safely — **THE IDENTITY LAW**: author the canonical cut (rows[0]
+per axis) to equal the old fixed values exactly, so every legacy copy,
+worn graft, and census probe folds byte-identical (absent == identical)
+and only fresh drops roll the spread.
+
+**Multistrike, converted**: identity (re-aim, the flurry lock, −25%
+damage) stays on the def; the STRIKES axis rolls one/two/THREE (canonical
+two) and the TEMPO axis rolls a further speed price of 0/−8/−14/−20%
+(canonical none). The premier cut — three strikes, unpriced — is the
+chase; the floor — one strike, leaden — keeps a drop from being
+"complete" at the drop. Her framing verbatim: farming for supports, in
+skill rarity's vein.
+
 ## The 'spawn' chassis (the debut executor)
 
 Folds trigger × brood × clutch into triggered births at the struck body,

@@ -549,7 +549,12 @@ we verify changes.
   'spawn' chassis folds trigger×brood×clutch into per-landed-blow births
   through the clutch door ('__vein' census, gauge state on the socket).
   Debut: Teeming Vein (steady/gauge/chance × broodling/gnatling/cinder/
-  marrowgrub × 1/2/4) — docs in `docs/engine/supportbase.md`; probe
+  marrowgrub × 1/2/4). THE MODS CHASSIS (kind-less rollBase): rows carry
+  `mods` folded into instanceMods under the forward-price law — how an
+  EXISTING gem converts under THE IDENTITY LAW (canonical cut ≡ the old
+  fixed values, byte-identical legacy; only fresh drops roll). Debut:
+  MULTISTRIKE (strikes one/two/THREE × tempo 0/−8/−14/−20% — the premier
+  cut is the chase) — docs in `docs/engine/supportbase.md`; probe
   `balance/probe_supportbase.ts`.
   THE DEFENSE-TEXTURE DOCTRINE (signature pools ship EMPTY): poise /
   insight / energy shield are authored identities, never ambience —

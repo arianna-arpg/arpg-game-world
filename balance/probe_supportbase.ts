@@ -25,9 +25,9 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { vec } from '../src/core/math';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
-import { makeSkillInstance, supportFitsInst, type SkillInstance, type SupportInstance } from '../src/engine/skills';
+import { instanceMods, makeSkillInstance, supportFitsInst, type SkillInstance, type SupportInstance } from '../src/engine/skills';
 import {
-  canonicalVein, mintSupportInstance, resolveVein, rollVein, veinLines, veinMechanisms,
+  canonicalVein, mintSupportInstance, resolveVein, rollVein, spawnVeinOf, veinLines, veinMechanisms,
 } from '../src/engine/supportbase';
 import { packSupportGemPayload, makeSupportGemItem, supportOfGemItem } from '../src/engine/gemitems';
 import { MONSTERS } from '../src/data/monsters';
@@ -167,6 +167,37 @@ const BASE = VEIN.rollBase!;
     && a.sourceSkillId === `__vein:firebolt:teeming_vein` && a.defId === 'broodling');
   check('canonical fold: a blob-less copy bears as rows[0] (steady, one broodling)',
     canonBrood.length >= 1, `broodlings ${canonBrood.length}`);
+}
+
+// ------------------------------ the mods chassis (the Multistrike ruling)
+{
+  const MS = SUPPORTS.multistrike;
+  const meleeHost = Object.values(SKILLS).find(s =>
+    s.tags.includes('melee') && !s.tags.includes('channel') && !s.noDrop)!;
+  const foldOf = (rolled?: Record<string, string>): { repeats: number; tempo: number } => {
+    const inst = makeSkillInstance(meleeHost, 1);
+    inst.sockets[0] = { def: MS, level: 1, ...(rolled ? { rolled } : {}) };
+    const mods = instanceMods(inst);
+    return {
+      repeats: mods.filter(m => m.stat === 'repeatCount').reduce((a, m) => a + m.value, 0),
+      tempo: mods.filter(m => m.stat === 'attackSpeed').reduce((a, m) => a + m.value, 0),
+    };
+  };
+  check('mods chassis: Multistrike is a chassis with NO executor kind (the rows ARE the payload)',
+    !!MS.rollBase && MS.rollBase.kind === undefined);
+  check('THE IDENTITY LAW: a blob-less copy folds EXACTLY the legacy gem (two strikes, no speed price)',
+    foldOf().repeats === 2 && foldOf().tempo === 0,
+    `repeats ${foldOf().repeats}, tempo ${foldOf().tempo}`);
+  check('the spread: the premier cut folds THREE strikes, unpriced (the chase)',
+    foldOf({ strikes: 'three', tempo: 'clean' }).repeats === 3
+    && foldOf({ strikes: 'three', tempo: 'clean' }).tempo === 0);
+  check('the spread: the floor cut folds one strike at 20% less attack speed',
+    foldOf({ strikes: 'one', tempo: 'leaden' }).repeats === 1
+    && Math.abs(foldOf({ strikes: 'one', tempo: 'leaden' }).tempo + 0.2) < 1e-9);
+  check('the vein is pure here too: rand→0 draws the canonical (legacy) cut',
+    JSON.stringify(rollVein(MS.rollBase!, () => 0)) === JSON.stringify({ strikes: 'two', tempo: 'clean' }));
+  check('a mods-only chassis is inert to the spawn hook (no executor kind, no births)',
+    spawnVeinOf(MS.rollBase!, undefined) === null);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');

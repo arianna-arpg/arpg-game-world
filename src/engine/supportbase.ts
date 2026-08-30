@@ -40,6 +40,7 @@
 // ============================================================================
 
 import type { SupportDef, SupportInstance } from './skills';
+import type { Modifier } from './stats';
 
 /** THE CUT: axis id → drawn row id. Serialized verbatim on the gem's
  *  wrapper payload, socket rows, and character-save socket rows. */
@@ -56,6 +57,12 @@ export interface SupportRollRow {
   weight: number;
   line: string;
   requiresMechanisms?: string[];
+  /** ROLLED MODIFIERS (her Multistrike ruling): the row's own numbers,
+   *  joined into instanceMods exactly like the def's mods (forwardScale
+   *  prices them, overrides pass whole). A mods-only chassis needs no
+   *  executor kind at all — the fold IS the behavior; a dropped copy is
+   *  no longer "complete" at the drop, and the premier cut is the chase. */
+  mods?: Modifier[];
   /** Trigger forms — every landed blow / a chance per blow / a gauge. */
   every?: true;
   pct?: number;
@@ -70,10 +77,12 @@ export interface SupportRollRow {
 export interface SupportRollAxis { id: string; rows: SupportRollRow[] }
 
 export interface SupportRollBase {
-  /** The chassis kind — names the executor that folds a cut into
-   *  behavior. 'spawn' (the debut): triggered births at the struck body
-   *  through the clutch door. */
-  kind: 'spawn';
+  /** The chassis kind — names the EXECUTOR that folds a cut into active
+   *  behavior. 'spawn' (the vein debut): triggered births at the struck
+   *  body through the clutch door. ABSENT = a pure-mods chassis (the
+   *  Multistrike shape): the rows' rolled modifiers are the whole payload
+   *  and no executor runs. */
+  kind?: 'spawn';
   axes: SupportRollAxis[];
 }
 
@@ -139,6 +148,20 @@ export function veinMechanisms(base: SupportRollBase, rolled?: SupportRolled): s
 /** The tooltip's rolled block — one line per axis, in axis order. */
 export function veinLines(base: SupportRollBase, rolled?: SupportRolled): string[] {
   return Object.values(resolveVein(base, rolled)).map(r => r.line);
+}
+
+/** The cut's own MODIFIERS (her Multistrike ruling) — concatenated in
+ *  axis order; instanceMods folds them beside the def's mods under the
+ *  same forward-scale law. Blob-less = the canonical cut's numbers, which
+ *  a converted legacy gem authors to equal its OLD fixed values exactly —
+ *  every existing copy, worn graft, and census probe stays byte-identical
+ *  (absent == identical), and only fresh drops roll the spread. */
+export function veinMods(base: SupportRollBase, rolled?: SupportRolled): Modifier[] {
+  const out: Modifier[] = [];
+  for (const row of Object.values(resolveVein(base, rolled))) {
+    if (row.mods) out.push(...row.mods);
+  }
+  return out;
 }
 
 /** The 'spawn' chassis's folded spec — null when the cut cannot fold (the

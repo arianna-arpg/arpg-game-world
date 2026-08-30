@@ -23,7 +23,7 @@ import type { ThrongSourceRow, ThrongSpec } from './throng';
 import type { GrabHandoffSpec, GrabSpec } from './grab';
 import type { PossessSpec, ShiftSpec } from './possess';
 import type { BirthEffect } from './clutch';
-import { veinMechanisms, type SupportRollBase, type SupportRolled } from './supportbase';
+import { veinMechanisms, veinMods, type SupportRollBase, type SupportRolled } from './supportbase';
 import type { PartSpec } from '../render/vis/parts';
 
 // --- Deliveries: how the skill reaches its targets -------------------------
@@ -5980,6 +5980,15 @@ export function instanceMods(inst: SkillInstance): Modifier[] {
     const fs = socket.forwardScale ?? 1;
     for (const m of socket.def.mods) {
       out.push(fs === 1 || m.kind === 'override' ? m : { ...m, value: m.value * fs });
+    }
+    // THE SUPPORT BASE's rolled mods (engine/supportbase.ts — the
+    // Multistrike shape): the CUT's own numbers join the fold under the
+    // same forward-price law as the def's. Blob-less copies fold the
+    // canonical cut — a converted legacy gem stays byte-identical.
+    if (socket.def.rollBase) {
+      for (const m of veinMods(socket.def.rollBase, socket.rolled)) {
+        out.push(fs === 1 || m.kind === 'override' ? m : { ...m, value: m.value * fs });
+      }
     }
     const sl = socket.level - 1;
     if (sl > 0 && socket.def.perLevel) {

@@ -4012,14 +4012,38 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   // --- Repeats & salvos ----------------------------------------------------------
 
+  // THE SUPPORT BASE conversion (her Multistrike ruling, 2026-08-28): the
+  // gem's IDENTITY (the re-aim, the lock, the 25% damage price) stays
+  // fixed on the def; the STRIKES and the further speed OFFSET are cut
+  // per copy. THE IDENTITY LAW: the canonical cut (rows[0] per axis) is
+  // EXACTLY the legacy gem — two strikes, no speed price — so every
+  // existing copy, worn graft and census probe folds byte-identical
+  // (absent == identical), and only FRESH drops roll the spread. The
+  // premier cut (THREE strikes, unpriced) is the chase; the floor (one
+  // strike, leaden) keeps a drop from ever being "complete" by default.
   multistrike: {
     id: 'multistrike', name: 'Multistrike',
-    description: 'The supported melee skill strikes two extra times in rapid succession, each'
+    description: 'The supported melee skill strikes extra times in rapid succession, each'
       + ' repeat re-aiming at the nearest enemy, and you are locked into the flurry once it'
-      + ' starts. 25% less damage.',
+      + ' starts. 25% less damage. How many strikes — and what further price the flurry'
+      + ' asks — is cut once at the vein.',
     color: '#e09858', requiresTags: ['melee'], excludeTags: ['channel'],
+    rollBase: {
+      axes: [
+        { id: 'strikes', rows: [
+          { id: 'two', weight: 3, line: 'two extra strikes', mods: [mod('repeatCount', 'flat', 2)] },
+          { id: 'one', weight: 3, line: 'one extra strike', mods: [mod('repeatCount', 'flat', 1)] },
+          { id: 'three', weight: 1, line: 'THREE extra strikes', mods: [mod('repeatCount', 'flat', 3)] },
+        ] },
+        { id: 'tempo', rows: [
+          { id: 'clean', weight: 2, line: 'the flurry asks no further price', mods: [] },
+          { id: 'light', weight: 3, line: '8% less attack speed', mods: [mod('attackSpeed', 'more', -0.08)] },
+          { id: 'heavy', weight: 3, line: '14% less attack speed', mods: [mod('attackSpeed', 'more', -0.14)] },
+          { id: 'leaden', weight: 2, line: '20% less attack speed', mods: [mod('attackSpeed', 'more', -0.2)] },
+        ] },
+      ],
+    },
     mods: [
-      mod('repeatCount', 'flat', 2),
       mod('repeatRetarget', 'override', 1),
       mod('repeatLock', 'override', 1),
       mod('damage', 'more', -0.25),
