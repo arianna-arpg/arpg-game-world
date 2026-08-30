@@ -24,6 +24,8 @@
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { updateAI } from '../src/engine/ai';
 import { FACTIONS, FIXTURE_IDS, HIGH_COURT, MONSTERS, WAVE_TABLE, WILDLIFE } from '../src/data/monsters';
+import { TUTORIAL_FACTIONS } from '../src/data/commanders';
+import { QUESTS } from '../src/quests/defs';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { LOOKS } from '../src/data/looks';
@@ -527,6 +529,19 @@ function rigComposite(id: string, dx = 340): Actor {
       for (const s of st?.spawns ?? []) add(s?.def, `scene:${sc.id}`);
       for (const wv of st?.waves ?? []) for (const s of wv?.spawns ?? []) add(s?.def, `scene:${sc.id}`);
     }
+  }
+  // 7b · THE TUTORIAL FACTIONS (data/commanders.ts) — the prologue's resolve
+  //      seats each legion's clash/tide/commander (scene rows by another
+  //      door), and the revenge chain (quests/revenge.ts) seats every quest
+  //      boss objective besides.
+  for (const row of TUTORIAL_FACTIONS) {
+    add(row.commander, `tutorial:${row.id}`);
+    add(row.clash.def, `tutorial:${row.id}`);
+    for (const wv of row.waves) for (const s of wv.spawns) add(s.def, `tutorial:${row.id}`);
+  }
+  for (const q of Object.values(QUESTS)) {
+    const o = (q as any).zone?.objective;
+    if (o?.kind === 'boss' && o.id) add(o.id, `quest:${(q as any).id}`);
   }
   // 8 · WORLD-BOSS package defs — the roamers, their passing bodies, escorts.
   for (const d of ((WORLDBOSS_SURGE as any).defs ?? []) as any[]) {

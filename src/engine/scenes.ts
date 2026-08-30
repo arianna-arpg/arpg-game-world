@@ -172,6 +172,10 @@ export function sceneDue(account: Account, id: string): boolean {
 export function sceneBegin(w: World, id: string): boolean {
   const def = SCENES[id];
   if (!def || w.scene) return false;
+  // THE RESOLVE SEAM: the runtime walks the EFFECTIVE def (the tutorial
+  // factions swap stage rows per the account's rolled legion); the gate
+  // stamps below keep reading the BASE def — id and ledger never move.
+  const eff = def.resolve ? def.resolve(w, def) : def;
   // The BEGUN mark (never the completion key): the scene doesn't COUNT
   // until it is lived to the end — an abort re-launches it on the next New
   // Game. While a scene runs, the shell suppresses every run save (the
@@ -184,17 +188,17 @@ export function sceneBegin(w: World, id: string): boolean {
   }
   const zid = `scene_${id}`;
   const parent = w.zone;
-  const z = mintCave(parent, def.zone.seed, zid, def.zone.tileset, {
-    name: def.zone.name,
-    objective: { kind: 'none', ...(def.zone.objectiveLabel ? { label: def.zone.objectiveLabel } : {}) },
+  const z = mintCave(parent, eff.zone.seed, zid, eff.zone.tileset, {
+    name: eff.zone.name,
+    objective: { kind: 'none', ...(eff.zone.objectiveLabel ? { label: eff.zone.objectiveLabel } : {}) },
     noDeeper: true,
-    ...(def.zone.layoutType ? { layoutType: def.zone.layoutType } : {}),
-    ...(def.zone.layoutParams ? { layoutParams: def.zone.layoutParams } : {}),
+    ...(eff.zone.layoutType ? { layoutType: eff.zone.layoutType } : {}),
+    ...(eff.zone.layoutParams ? { layoutParams: eff.zone.layoutParams } : {}),
   });
-  sealStageZone(z, def.zone);
+  sealStageZone(z, eff.zone);
   w.caveMap[zid] = z;
   w.scene = {
-    def, zoneId: zid, stageIx: 0, stageT: 0, begun: false, state: {},
+    def: eff, zoneId: zid, stageIx: 0, stageT: 0, begun: false, state: {},
     fell: false, casts: 0, bar: null, prompt: null, barAt: 'top',
     focus: null, mark: null, hudVeil: false, card: null, cardAck: false,
     fadeTarget: 1, eventKey: `scene:${id}`,
@@ -215,7 +219,7 @@ export function sceneBegin(w: World, id: string): boolean {
   }
   // THE FAR-FIELD DRESS: a boundless stage learns its own heart's palette
   // so the streamer can keep the country coming past the minted rim.
-  if (def.zone.boundless) w.scene.dress = buildSceneDress(w, z);
+  if (eff.zone.boundless) w.scene.dress = buildSceneDress(w, z);
   return true;
 }
 

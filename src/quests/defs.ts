@@ -6,6 +6,7 @@
 
 import type { QuestDef } from './types';
 import { vocationQuestDefs } from './vocations';
+import { revengeQuestDefs } from './revenge';
 import { registerGenPin } from '../engine/genPins';
 
 /** The Hollow Vault's arena recipe — a quest zone spec is the ONLY thing that
@@ -124,6 +125,11 @@ export const QUESTS: Record<string, QuestDef> = {
   // VOCATION CHAINS — generated from data/vocations.ts (one sequential chain
   // per vocation; class-thematic zones; the final step grants the vocation).
   ...Object.fromEntries(vocationQuestDefs().map(q => [q.id, q])),
+  // THE REVENGE CHAIN — generated per tutorial faction (quests/revenge.ts):
+  // cull the legion that ended you on the last mile, then run its Father to
+  // ground. Exactly one chain live per account (the tutorial_faction: stamp;
+  // goblin for grandfathered veterans).
+  ...Object.fromEntries(revengeQuestDefs().map(q => [q.id, q])),
 };
 
 /** Every giver defId any quest references (offer or turn-in) — the NPCs that

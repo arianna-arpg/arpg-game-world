@@ -216,6 +216,13 @@ export interface SceneDef {
    *  begun-mark, no completion key — and is enterable any number of times.
    *  sceneDue never applies to one; it is begun deliberately by the shell. */
   transient?: boolean;
+  /** THE RESOLVE SEAM (data/commanders.ts assigns the prologue's): called at
+   *  sceneBegin to produce the EFFECTIVE def the runtime walks — the tutorial
+   *  factions swap the clash/assault/reckoning rows per the account's rolled
+   *  legion. Must keep id + ledger identical (the gate stamps read the base).
+   *  Absent = the def walks as authored. (Type-only World import — the data
+   *  leaf stays engine-import-free at runtime.) */
+  resolve?: (w: import('../engine/world').World, def: SceneDef) => SceneDef;
   zone: SceneZoneSpec;
   stages: SceneStage[];
 }

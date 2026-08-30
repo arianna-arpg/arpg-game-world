@@ -26,8 +26,17 @@ import {
   sceneBegin, sceneBegunKey, sceneCardAck, sceneDue, muStageLive, muTakeClassRequest,
 } from '../src/engine/scenes';
 import { MU_SCENE, MU_CFG, APPARITION_PREFIX, APPARITION_UNKNOWN_ID, apparitionDefId } from '../src/data/mu';
-import { PROLOGUE_SCENE } from '../src/data/scenes';
+import { PROLOGUE_SCENE, type SceneReckoningStage, type SceneClashStage, type SceneAssaultStage } from '../src/data/scenes';
+import {
+  TUTORIAL_FACTIONS, LEDGER_TUTORIAL_FACTION_PREFIX, tutorialFactionKey, tutorialFactionOf,
+  rollTutorialFaction, prologueForFaction,
+} from '../src/data/commanders';
 import { CLASSES } from '../src/data/classes';
+import { MONSTERS } from '../src/data/monsters';
+import { SKILLS } from '../src/data/skills';
+import { TILESETS } from '../src/data/tilesets';
+import { QUESTS } from '../src/quests/defs';
+import { revengeCullId, revengeCommanderId, revengeTrailKey } from '../src/quests/revenge';
 import { selectableSlotCount } from '../src/meta/account';
 import { collectAttention } from '../src/world/attention';
 import type { World } from '../src/engine/world';
@@ -207,6 +216,116 @@ check('C6: the unknown cowls are NAMELESS (no npcRole — no nameplate to leak)'
     && !sceneDue(v.account, 'prologue'));
   check('F11: the wisp stands among the vessels',
     vp.look === MU_CFG.wisp.look && apparitionsOf(v).length > 0);
+}
+
+// === G) THE TUTORIAL FACTIONS (data/commanders.ts — the Fathers) =============
+{
+  // G1: table integrity — every row's bodies and verbs are REGISTERED, and
+  // every commander is Ghorvane's true sibling: a voice part whose break
+  // silences exactly the row's reckoning verb.
+  let wired = true, voiced = true, tided = true;
+  for (const row of TUTORIAL_FACTIONS) {
+    const cmd = MONSTERS[row.commander];
+    if (!cmd || !SKILLS[row.verb] || !MONSTERS[row.clash.def]) wired = false;
+    if (!cmd?.skills.includes(row.verb)) wired = false;
+    const voice = cmd?.parts?.some(p =>
+      p.breakDisables?.includes(row.verb) && !!MONSTERS[p.monster]);
+    if (!voice) voiced = false;
+    for (const wave of row.waves) {
+      for (const s of wave.spawns) if (!MONSTERS[s.def]) tided = false;
+    }
+    if (SKILLS[row.verb]?.useTime !== 10) wired = false;
+  }
+  check('G1: every legion is wired whole — commander, verb (ten breaths), clash, every wave body',
+    wired, TUTORIAL_FACTIONS.map(r => r.id).join(','));
+  check('G2: every Father carries a VOICE — the part whose break silences his reckoning',
+    voiced);
+  check('G3: every tide row names only registered kin', tided);
+  // G4: the roll — deterministic per manifest, stamped once, recalled forever.
+  const a = makeSimWorld('warrior', 47003);
+  const b = makeSimWorld('warrior', 47003);
+  const ra = rollTutorialFaction(a);
+  const rb = rollTutorialFaction(b);
+  check('G4: the roll is a pure function of the manifest seed', ra.id === rb.id, `roll=${ra.id}`);
+  check('G5: the roll stamps the account (the tutorial_faction: presence key)',
+    tutorialFactionOf(a.account.ledger) === ra.id
+    && (a.account.ledger[tutorialFactionKey(ra.id)] ?? 0) >= 1);
+  // The recall beats the dice: pre-stamp a DIFFERENT legion and the roll
+  // must bow to it (an aborted tutorial replays the same war).
+  const c = makeSimWorld('warrior', 47004);
+  const other = TUTORIAL_FACTIONS.find(r => r.id !== rollTutorialFaction(makeSimWorld('warrior', 47004)).id)!;
+  c.account.ledger[tutorialFactionKey(other.id)] = 1;
+  check('G6: a standing stamp is RECALLED, never re-rolled',
+    rollTutorialFaction(c).id === other.id);
+  // G7: the resolve swaps exactly the war stages — cards, drill and the Mu
+  // tail stay the base def's rows byte-identically.
+  const row = TUTORIAL_FACTIONS.find(r => r.id === 'demon')!;
+  const eff = prologueForFaction(row);
+  const kinds = eff.stages.map(s => s.kind);
+  const clash = eff.stages.find(s => s.kind === 'clash') as SceneClashStage;
+  const assault = eff.stages.find(s => s.kind === 'assault') as SceneAssaultStage;
+  const reck = eff.stages.find(s => s.kind === 'reckoning') as SceneReckoningStage;
+  check('G7: the resolve keeps the walk\'s shape (same stage kinds, same id + ledger)',
+    kinds.join(',') === PROLOGUE_SCENE.stages.map(s => s.kind).join(',')
+    && eff.id === PROLOGUE_SCENE.id && eff.ledger === PROLOGUE_SCENE.ledger);
+  check('G8: the war stages wear the legion — clash, tide and reckoning all re-dressed',
+    clash.spawns[0].def === row.clash.def && assault.rows === row.waves
+    && reck.def === row.commander && reck.verb === row.verb
+    && (reck.floorFrac ?? 0) > 0);
+  check('G9: the untouched stages are the base rows THEMSELVES (no silent forks)',
+    eff.stages[0] === PROLOGUE_SCENE.stages[0]
+    && eff.stages[eff.stages.length - 1] === PROLOGUE_SCENE.stages[PROLOGUE_SCENE.stages.length - 1]);
+  // G10: a live sceneBegin resolves — the runtime walks the ROLLED legion
+  // (the seam is armed everywhere via the arena's census imports;
+  // probe_scenes pins its own lane by pre-stamping the goblin recall).
+  const v = makeSimWorld('warrior', 47005);
+  sceneBegin(v, 'prologue');
+  const lived = tutorialFactionOf(v.account.ledger);
+  const vReck = v.scene!.def.stages.find(s => s.kind === 'reckoning') as SceneReckoningStage;
+  check('G10: sceneBegin walks the rolled legion\'s reckoning',
+    lived !== null && vReck.def === TUTORIAL_FACTIONS.find(r => r.id === lived)!.commander,
+    `legion=${lived}`);
+  check('G11: the prefix scan finds exactly one stamped legion',
+    Object.keys(v.account.ledger).filter(k => k.startsWith(LEDGER_TUTORIAL_FACTION_PREFIX)).length === 1);
+}
+
+// === H) THE REVENGE CHAIN (quests/revenge.ts) ================================
+{
+  let wired = true, gated = true, chained = true;
+  const mkCtx = (ledger: Record<string, number>) =>
+    ({ classId: 'warrior', vocations: [] as string[], runLedger: {}, accountLedger: ledger });
+  for (const row of TUTORIAL_FACTIONS) {
+    const cull = QUESTS[revengeCullId(row.id)];
+    const cmd = QUESTS[revengeCommanderId(row.id)];
+    if (!cull || !cmd) { wired = false; continue; }
+    if (!TILESETS[cull.zone.tileset] || !TILESETS[cmd.zone.tileset]) wired = false;
+    if (cmd.zone.objective.kind !== 'boss' || cmd.zone.objective.id !== row.commander) wired = false;
+    if (!(cull.zone.packsOverride?.table.length ?? 0)) wired = false;
+    if (cull.offerAtLevel !== 15 || cmd.offerAtLevel !== 15) wired = false;
+    // THE CHAIN: the cull's field payout is the commander hunt's door.
+    const trail = revengeTrailKey(row.id);
+    if ((cull.reward.ledger?.[trail] ?? 0) < 1 || cmd.requiresLedger !== trail) chained = false;
+    if (cull.turnIn || !cmd.turnIn) chained = false;
+    // THE GATE: this legion's stamp lights exactly this chain…
+    const stamped = mkCtx({ [tutorialFactionKey(row.id)]: 1 });
+    if (!cull.gate?.(stamped) || !cmd.gate?.(stamped)) gated = false;
+    // …and every OTHER legion's chain stays dark under it.
+    for (const other of TUTORIAL_FACTIONS) {
+      if (other.id === row.id) continue;
+      if (QUESTS[revengeCullId(other.id)]?.gate?.(stamped)) gated = false;
+    }
+  }
+  check('H1: every legion fields its whole chain — cull + commander hunt, real ground, real boss',
+    wired);
+  check('H2: THE GATE — the tutorial stamp lights exactly ONE legion\'s revenge', gated);
+  check('H3: THE CHAIN — the cull pays the trail in the field; the hunt opens on it and turns in',
+    chained);
+  check('H4: an unstamped veteran gets the goblin canon (Ghorvane was always their opening)',
+    QUESTS[revengeCullId('goblin')]?.gate?.(mkCtx({})) === true
+    && QUESTS[revengeCullId('demon')]?.gate?.(mkCtx({})) === false);
+  check('H5: the commander keeps his VOICE out here — the revenge fight\'s counterplay stands',
+    TUTORIAL_FACTIONS.every(row =>
+      MONSTERS[row.commander]?.parts?.some(p => p.breakDisables?.includes(row.verb))));
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASS');

@@ -48,6 +48,7 @@ import './data/fog'; // side-effect: registers the living fog bank kinds
 import './data/creeps'; // side-effect: registers the living creep kinds
 import './data/traversals'; // side-effect: registers the vertical-crossing kinds (sky launch/fall)
 import './data/glyphParts'; // side-effect: registers the shipped hand-drawn part kinds (the glyph roster)
+import './data/commanders'; // side-effect: the tutorial factions (the Fathers) + the prologue's resolve seam
 import { updateAI } from './engine/ai';
 import { World, type Seat } from './engine/world';
 import { sceneBegin, sceneCardAck, sceneDue, muTakeClassRequest } from './engine/scenes';

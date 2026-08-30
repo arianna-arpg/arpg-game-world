@@ -99,6 +99,11 @@ bootSimEngine();
 const w = makeSimWorld('warrior', 31010);
 const p = w.player;
 const xp0 = w.meta.xp;
+// PIN THE GOBLIN LANE: the tutorial-faction resolve (data/commanders.ts,
+// loaded by the arena's census imports) rolls a legion per manifest — this
+// rig walks the CANON goblin prologue, so pre-stamp the recall. The roll
+// itself is probe_mu.ts section G's law.
+w.account.ledger['tutorial_faction:goblin'] = 1;
 check('B0: the fresh sim account is due', sceneDue(w.account, 'prologue'));
 check('B1: sceneBegin takes', sceneBegin(w, 'prologue'));
 check('B2: begin stamps the BEGUN mark only — the scene does not COUNT yet, so an abort stays due',

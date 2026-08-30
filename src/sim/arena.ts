@@ -45,6 +45,7 @@ import '../data/fog';
 import '../data/creeps';
 import '../data/traversals';
 import '../data/glyphParts'; // the shipped glyph part kinds (looks reference them)
+import '../data/commanders'; // the tutorial factions (the Fathers) — under every census net
 import { validateContent } from '../data/validate';
 import { registerAllPackageFactions } from '../packages/factionGen';
 import { buildManifest } from '../packages/manifest';
