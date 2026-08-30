@@ -938,9 +938,10 @@ we verify changes.
   there with completion stamped AT THE THRESHOLD, and `SceneDef.transient`
   keeps the standalone hub outside every scene stamp/gate structurally.
   THE TUTORIAL FACTIONS (data/commanders.ts): the onslaught rolls ONE
-  LEGION per account — goblin/undead/beastkin/demon `TUTORIAL_FACTIONS`
-  rows, each fielding its tide + a commander-grade colossus on Ghorvane's
-  exact grammar (the Fathers: Morvhaal/Uzkharn/Mazghor, VOICE part
+  LEGION per account — SEVEN `TUTORIAL_FACTIONS` rows (goblin/undead/
+  beastkin/demon + the obscure courts carven/chitin/gnoll), each fielding
+  its tide + a commander-grade colossus on Ghorvane's exact grammar (the
+  Fathers: Morvhaal/Uzkharn/Mazghor/Wickerwane/Szikkith/Rrakhan, VOICE part
   breakDisables the reckoning, HEART part unmans) — rolled pure-f(manifest),
   stamped `tutorial_faction:<id>`, recalled forever, applied through
   `SceneDef.resolve` (sceneBegin walks the EFFECTIVE def; stamps read the

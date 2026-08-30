@@ -33,6 +33,9 @@ const REVENGE_GROUND: Record<string, { tileset: string; direction: 'n' | 'e' | '
   undead: { tileset: 'crypt', direction: 's' },
   beastkin: { tileset: 'foothills', direction: 'w' },
   demon: { tileset: 'wasteland', direction: 'n' },
+  carven: { tileset: 'tendersrows', direction: 'e' },
+  chitin: { tileset: 'marsh', direction: 's' },
+  gnoll: { tileset: 'stonecrown', direction: 'w' },
 };
 
 export const revengeCullId = (f: string): string => `revenge_cull_${f}`;

@@ -97,12 +97,15 @@ The old cinematic (world held, camera pan) is dead. The commander:
 
 ## The tutorial factions (data/commanders.ts) + the revenge chain
 
-The onslaught rolls ONE LEGION per account: `TUTORIAL_FACTIONS` rows
-(goblin / undead / beastkin / demon), each fielding its own low-tier tide
-and a commander-grade colossus on Ghorvane's exact grammar — the Fathers
-(Morvhaal the Gravefather, Uzkharn the Herdfather, Mazghor the Pyrefather),
-each with a carried VOICE part whose break silences his ten-breath reckoning
-(`breakDisables`) and a HEART part whose break unmans him. The roll is a
+The onslaught rolls ONE LEGION per account: SEVEN `TUTORIAL_FACTIONS` rows
+(goblin / undead / beastkin / demon, plus the obscure courts — carven /
+chitin / gnoll — so the tutorial reads broadly different across players),
+each fielding its own low-tier tide and a commander-grade colossus on
+Ghorvane's exact grammar — the Fathers (Morvhaal the Gravefather, Uzkharn
+the Herdfather, Mazghor the Pyrefather, Wickerwane the Harvestfather,
+Szikkith the Swarmfather, Rrakhan the Packfather), each with a carried
+VOICE part whose break silences his ten-breath reckoning (`breakDisables`)
+and a HEART part whose break unmans him. The roll is a
 pure function of the run manifest, stamps `tutorial_faction:<id>` on the
 account ledger (recalled forever — an aborted tutorial replays the same
 war), and re-dresses the prologue through `SceneDef.resolve` (the

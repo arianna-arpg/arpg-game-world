@@ -105,6 +105,30 @@ SKILLS['pyrefathers_immolation'] = fatherVerb(
   ['spell', 'aoe', 'fire', 'chaos'],
   { fire: [340, 480], chaos: [280, 420] }, 720,
 );
+SKILLS['harvestfathers_gleaning'] = fatherVerb(
+  'harvestfathers_gleaning', "Harvestfather's Gleaning", '#d8b84a',
+  'The colossus raises its tithing-lantern through a long wind-up, then the whole field'
+  + ' is gleaned in one sweep of sickle-wind. It spares nothing: friend and foe alike are'
+  + ' cut, and no wall or cover hides from the light. Everything sown is gathered.',
+  ['spell', 'aoe', 'physical', 'chaos'],
+  { physical: [340, 480], chaos: [280, 420] }, 720,
+);
+SKILLS['swarmfathers_seethe'] = fatherVerb(
+  'swarmfathers_seethe', "Swarmfather's Seethe", '#a8c84a',
+  'The colossus shrills through a long wind-up, then the whole field is stripped at once'
+  + ' under one breaking wave of the Seethe. It spares nothing: friend and foe alike are'
+  + ' eaten to the bone, and no wall or cover keeps the tide out.',
+  ['spell', 'aoe', 'chaos', 'physical'],
+  { chaos: [400, 560], physical: [220, 340] }, 720,
+);
+SKILLS['packfathers_frenzy'] = fatherVerb(
+  'packfathers_frenzy', "Packfather's Frenzy", '#c88f4a',
+  'The colossus throws back its head through a long wind-up, then the whole field is torn'
+  + ' apart in one convulsion of the pack-madness. It spares nothing: friend and foe alike'
+  + ' are savaged, and no wall or cover outruns the laughter.',
+  ['spell', 'aoe', 'physical', 'chaos'],
+  { physical: [520, 760], chaos: [140, 220] }, 800,
+);
 
 // --- THE FATHERS' LOOKS --------------------------------------------------------
 
@@ -211,6 +235,107 @@ LOOKS['pyrefather_icon'] = {
   shadowScale: 0.6,
 };
 
+/** The Harvestfather: a towering effigy of wicker, sacking and gourd the
+ *  patches raise when the tithe goes unpaid — straw-limbed, stake-shod,
+ *  grinning by lantern-light. */
+LOOKS['carven_colossus'] = {
+  parts: [
+    { kind: 'torso', scale: 1.3, role: 'wood' },
+    { kind: 'strawLimbs', scale: 1.15 },
+    { kind: 'tatters', scale: 1.0, role: 'cloth', params: { n: 4 } },
+    { kind: 'gourdHead', x: 0.05, scale: 0.85 },
+    { kind: 'spikes', scale: 0.8, role: 'wood' },
+    { kind: 'eyes', role: 'glow', params: { spread: 0.3, dist: 0.5, size: 0.08 } },
+  ],
+  live: [{ kind: 'runes', scale: 0.8, role: 'glow', params: { n: 2 } }],
+  shadowScale: 1.25,
+};
+/** The Tithing Lantern: the court's reaping-light in a wicker cradle,
+ *  lashed to the father's shoulder — what it shines on is owed. */
+LOOKS['harvestfather_lantern'] = {
+  parts: [
+    { kind: 'lantern', scale: 1.2 },
+    { kind: 'harness', scale: 0.8, role: 'cloth' },
+  ],
+  live: [{ kind: 'runes', scale: 0.7, role: 'glow', params: { n: 2 } }],
+  shadowScale: 0.55,
+};
+/** The First Gourd: the patch's oldest grin, straw-cradled. */
+LOOKS['harvestfather_gourd'] = {
+  parts: [
+    { kind: 'gourdHead', scale: 0.9 },
+    { kind: 'strawLimbs', scale: 0.6 },
+  ],
+  shadowScale: 0.6,
+};
+
+/** The Swarmfather: the Seethe's own architecture walking — a tower of
+ *  plated segments, too many eyes, too many legs. */
+LOOKS['chitin_colossus'] = {
+  parts: [
+    { kind: 'carapace', scale: 1.35 },
+    { kind: 'segmentRings', scale: 1.05 },
+    { kind: 'legs', scale: 0.95 },
+    { kind: 'mandibles', x: 0.42, scale: 1.0 },
+    { kind: 'antennae', x: 0.2, scale: 0.9 },
+    { kind: 'spikes', scale: 0.7, role: 'bone' },
+    { kind: 'eyeCluster', x: 0.2, scale: 0.8, role: 'glow' },
+  ],
+  shadowScale: 1.25,
+};
+/** The Shrill Case: a buzzing wing-case organ ridged into the father's
+ *  plates — the Seethe's one voice. */
+LOOKS['swarmfather_shrillcase'] = {
+  parts: [
+    { kind: 'carapace', scale: 0.85 },
+    { kind: 'wings', scale: 0.9, alpha: 0.7 },
+    { kind: 'antennae', x: 0.2, scale: 0.7 },
+  ],
+  shadowScale: 0.55,
+};
+/** The Egg-Clutch: the next Seethe, carried wet. */
+LOOKS['swarmfather_clutch'] = {
+  parts: [
+    { kind: 'egg', scale: 0.9 },
+    { kind: 'bloatSacs', scale: 0.7, params: { n: 3 } },
+  ],
+  shadowScale: 0.6,
+};
+
+/** The Packfather: an alpha-of-alphas draped in trophies — scarred hide,
+ *  bared fangs, a bandolier of everyone who laughed back. */
+LOOKS['gnoll_colossus'] = {
+  parts: [
+    { kind: 'torso', scale: 1.3 },
+    { kind: 'furRuff', scale: 1.1 },
+    { kind: 'mane', scale: 1.05 },
+    { kind: 'warpaint', scale: 1.0 },
+    { kind: 'fangs', x: 0.42, scale: 1.0, role: 'bone' },
+    { kind: 'claws', scale: 0.9, role: 'bone' },
+    { kind: 'bandolier', scale: 1.0, role: 'cloth' },
+    { kind: 'eyes', params: { spread: 0.34, dist: 0.5, size: 0.07 } },
+  ],
+  shadowScale: 1.25,
+};
+/** The Skin That Howls: a flayed trophy-drape that carries the pack-howl,
+ *  lashed to the father's shoulder. */
+LOOKS['packfather_skin'] = {
+  parts: [
+    { kind: 'drape', scale: 1.1, role: 'cloth' },
+    { kind: 'skull', x: 0.15, scale: 0.7, role: 'bone' },
+    { kind: 'barbs', scale: 0.6, role: 'bone' },
+  ],
+  shadowScale: 0.55,
+};
+/** The Carrion Cache: the pack's hoard, worn — bones still owed a gnawing. */
+LOOKS['packfather_cache'] = {
+  parts: [
+    { kind: 'pack', scale: 1.0, role: 'cloth' },
+    { kind: 'ribs', scale: 0.7, role: 'bone' },
+  ],
+  shadowScale: 0.6,
+};
+
 // --- THE FATHERS' BODIES -------------------------------------------------------
 // Ghorvane's chassis verbatim (base line, heft, brain, part geometry) — the
 // grammar IS the kinship. Voice part: breakDisables the reckoning (crack the
@@ -270,6 +395,15 @@ father('herd_colossus', 'Uzkharn, the Herdfather', '#a8763e', 'beastkin', 'herd_
 father('pyre_colossus', 'Mazghor, the Pyrefather', '#c04a2a', 'demon', 'pyre_colossus',
   { id: 'pyrefather_censer', name: 'the Swung Censer', color: '#d86a3a', look: 'pyrefather_censer', verb: 'pyrefathers_immolation' },
   { id: 'pyrefather_icon', name: 'the Chained Icon', color: '#a04a3a', look: 'pyrefather_icon' });
+father('carven_colossus', 'Wickerwane, the Harvestfather', '#c8a04a', 'carven', 'carven_colossus',
+  { id: 'harvestfather_lantern', name: 'the Tithing Lantern', color: '#e8c86a', look: 'harvestfather_lantern', verb: 'harvestfathers_gleaning' },
+  { id: 'harvestfather_gourd', name: 'the First Gourd', color: '#d8963e', look: 'harvestfather_gourd' });
+father('chitin_colossus', 'Szikkith, the Swarmfather', '#8fae3e', 'chitin', 'chitin_colossus',
+  { id: 'swarmfather_shrillcase', name: 'the Shrill Case', color: '#a8c84a', look: 'swarmfather_shrillcase', verb: 'swarmfathers_seethe' },
+  { id: 'swarmfather_clutch', name: 'the Egg-Clutch', color: '#c8d88f', look: 'swarmfather_clutch' });
+father('gnoll_colossus', 'Rrakhan, the Packfather', '#b0783e', 'gnoll', 'gnoll_colossus',
+  { id: 'packfather_skin', name: 'the Skin That Howls', color: '#c89a6a', look: 'packfather_skin', verb: 'packfathers_frenzy' },
+  { id: 'packfather_cache', name: 'the Carrion Cache', color: '#a88a5a', look: 'packfather_cache' });
 
 // --- THE TABLE -----------------------------------------------------------------
 
@@ -340,6 +474,48 @@ export const TUTORIAL_FACTIONS: TutorialFactionRow[] = [
       { at: 54, spawns: [{ def: 'cinder_fiend', count: 2 }, { def: 'ash_whelp', count: 5 }, { def: 'hellhound', count: 1 }], announce: 'the burning does not end.', announceColor: '#ff9a5a' },
     ],
     arrive: 'the Pyrefather himself comes to burn the road.',
+  },
+  // THE OBSCURE COURTS (her word, 2026-08-30: "the more obscure ones, so the
+  // player can really have a broad experience even within the tutorial") —
+  // the folk-horror harvest, the insect tide, the laughing packs.
+  {
+    id: 'carven', banner: 'the Carven Court', color: '#d8b84a',
+    commander: 'carven_colossus', verb: 'harvestfathers_gleaning',
+    clash: { def: 'gourdling', announce: 'something grins in the field-rows…' },
+    waves: [
+      { at: 0, spawns: [{ def: 'gourdling', count: 4 }], announce: 'the field-rows are walking, hold the road!', announceColor: '#d8b84a' },
+      { at: 13, spawns: [{ def: 'gourdling', count: 3 }, { def: 'scarecrow_watcher', count: 1 }] },
+      { at: 26, spawns: [{ def: 'lantern_sower', count: 2 }, { def: 'gourdling', count: 3 }], announce: 'lantern-light where no lantern should be…', announceColor: '#e8c86a' },
+      { at: 40, spawns: [{ def: 'patch_lurker', count: 1 }, { def: 'scarecrow_watcher', count: 2 }, { def: 'gourdling', count: 3 }] },
+      { at: 54, spawns: [{ def: 'tithe_gourd', count: 2 }, { def: 'gourdling', count: 5 }, { def: 'lantern_sower', count: 1 }], announce: 'the harvest does not end.', announceColor: '#e8c86a' },
+    ],
+    arrive: 'the Harvestfather himself comes to glean the road.',
+  },
+  {
+    id: 'chitin', banner: 'the Seethe', color: '#a8c84a',
+    commander: 'chitin_colossus', verb: 'swarmfathers_seethe',
+    clash: { def: 'chitin_skimmer', announce: 'something clicks low in the grass…' },
+    waves: [
+      { at: 0, spawns: [{ def: 'chitin_drone', count: 4 }], announce: 'the Seethe is boiling up, hold the road!', announceColor: '#a8c84a' },
+      { at: 13, spawns: [{ def: 'chitin_drone', count: 3 }, { def: 'chitin_skimmer', count: 2 }] },
+      { at: 26, spawns: [{ def: 'chitin_lancer', count: 2 }, { def: 'chitin_drone', count: 3 }], announce: 'the ground itself is crawling…', announceColor: '#c8d88f' },
+      { at: 40, spawns: [{ def: 'chitin_spitter', count: 2 }, { def: 'chitin_skimmer', count: 3 }] },
+      { at: 54, spawns: [{ def: 'chitin_lancer', count: 2 }, { def: 'chitin_spitter', count: 2 }, { def: 'chitin_drone', count: 4 }], announce: 'the Seethe does not thin.', announceColor: '#c8d88f' },
+    ],
+    arrive: 'the Swarmfather himself comes to strip the road.',
+  },
+  {
+    id: 'gnoll', banner: 'the laughing packs', color: '#c88f4a',
+    commander: 'gnoll_colossus', verb: 'packfathers_frenzy',
+    clash: { def: 'gnoll_prowler', announce: 'laughter, low and wrong, out in the dark…' },
+    waves: [
+      { at: 0, spawns: [{ def: 'gnoll_prowler', count: 3 }], announce: 'the packs have your scent, hold the road!', announceColor: '#c88f4a' },
+      { at: 13, spawns: [{ def: 'gnoll_prowler', count: 3 }, { def: 'gnoll_bonepicker', count: 1 }] },
+      { at: 26, spawns: [{ def: 'gnoll_longshot', count: 2 }, { def: 'gnoll_prowler', count: 2 }], announce: 'eyes at the firelight’s edge…', announceColor: '#d8a86a' },
+      { at: 40, spawns: [{ def: 'gnoll_butcher', count: 1 }, { def: 'gnoll_prowler', count: 3 }] },
+      { at: 54, spawns: [{ def: 'gnoll_butcher', count: 1 }, { def: 'gnoll_prowler', count: 4 }, { def: 'gnoll_longshot', count: 2 }], announce: 'the laughter never stops.', announceColor: '#d8a86a' },
+    ],
+    arrive: 'the Packfather himself comes to pick the road clean.',
   },
 ];
 
