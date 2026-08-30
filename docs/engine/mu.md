@@ -95,6 +95,30 @@ The old cinematic (world held, camera pan) is dead. The commander:
 - resolves: the `affects: 'all'` nova spends the horde and fells the hero
   through the covenant — never a death.
 
+## The tutorial factions (data/commanders.ts) + the revenge chain
+
+The onslaught rolls ONE LEGION per account: `TUTORIAL_FACTIONS` rows
+(goblin / undead / beastkin / demon), each fielding its own low-tier tide
+and a commander-grade colossus on Ghorvane's exact grammar — the Fathers
+(Morvhaal the Gravefather, Uzkharn the Herdfather, Mazghor the Pyrefather),
+each with a carried VOICE part whose break silences his ten-breath reckoning
+(`breakDisables`) and a HEART part whose break unmans him. The roll is a
+pure function of the run manifest, stamps `tutorial_faction:<id>` on the
+account ledger (recalled forever — an aborted tutorial replays the same
+war), and re-dresses the prologue through `SceneDef.resolve` (the
+open-record seam: `sceneBegin` walks the EFFECTIVE def, the gate stamps
+read the base, and a boot that never imports the module keeps the goblin
+canon — `probe_scenes.ts` pins that lane by pre-stamping the recall).
+
+THE REVENGE CHAIN (`quests/revenge.ts`, spread into `QUESTS`): at level 15
+the quartermaster offers the stamped legion's debt — a CULL of its
+war-ground (clear-frac, faction packs, pays `revenge_trail:<id>` in the
+field) and then THE LEGION COMMANDER (the very Father as a band-placed
+boss objective, level 16+1, turn-in). Exactly one chain is live per
+account via `gate(ctx.accountLedger)`; unstamped grandfathered veterans
+get the goblin canon. Out here there is no mercy floor and no director —
+the voice part is the counterplay the tutorial taught.
+
 ## Laws pinned by the probes
 
 `probe_mu.ts`: the transient gate, the wisp, the three ranks, the dwell

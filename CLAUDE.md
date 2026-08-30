@@ -913,13 +913,41 @@ we verify changes.
   lands at the bedside wake. `SceneZoneSpec.boundless` streams the stage
   with no reachable edge (the Last Mile wears it). `?prologue` re-runs
   deliberately. Debut: THE PROLOGUE ("The Last Mile")
-  — drill → goblin waves (wave-frenzy grammar) → Ghorvane the Hordefather
-  (anatomy-gamut composite, Odyssey-held: break the Warhorn and the
-  Reckoning is SILENCED) musters `hordefathers_reckoning` (nova
-  `affects: 'all'` + `occlusion: 'free'` — it spends its own horde) → the
-  Waking House wake. The bottom keybind strip is retired behind
-  `HINT_BAR_ENABLED` (ui/panels.ts). Docs `docs/engine/scenes.md`; probe
-  `balance/probe_scenes.ts`.
+  — drill → legion waves (wave-frenzy grammar) → THE AGENCY RECKONING
+  (2026-08-30, her overhaul: the cinematic hold + camera pan are DEAD — the
+  commander arrives just off-screen wearing the attention fabric's chevron
+  (`SceneRuntime.mark`), kit AI-banned, and after `graceSec` musters a
+  TEN-second honest cast the player freely spends trying to stop; THE MERCY
+  FLOOR (`floorFrac`) goes immune below 10% life — damage delays, never
+  denies — and interrupts RE-ARM the muster) → the blast fells through the
+  covenant → THE HOLLOW WAKE card → MU. The bottom keybind strip is retired
+  behind `HINT_BAR_ENABLED` (ui/panels.ts). Docs `docs/engine/scenes.md`;
+  probe `balance/probe_scenes.ts`.
+  THE MU HUB (data/mu.ts + the 'mu' core stage — docs/engine/mu.md; probe
+  `balance/probe_mu.ts`): the hub BETWEEN LIVES, played instead of menu'd —
+  the hero stands as a WISP in a boundless zone of nothing ('mu' tileset,
+  `hudVeil` hides the run HUD) where the class roster stands IN-WORLD as
+  shaded apparitions (generated `apparition_<classId>` defs wearing each
+  class's own look; THE HAND LAW keeps the class-screen economy verbatim:
+  dealt hand AWAKE, unlocked rest VEILED (`mu_veiled`), locked remainder =
+  capped nameless cowls (`mu_faint`)); a still linger opens that class's
+  card (naming front and center, one Wake) whose pick calls the same
+  startGame as ever — Lastlight bedside by construction. New Run/Begin
+  reroutes there (`UI.onBeginRun`; virgin accounts auto-Warrior into the
+  tutorial), a solo run's end drifts back there, the tutorial's death wakes
+  there with completion stamped AT THE THRESHOLD, and `SceneDef.transient`
+  keeps the standalone hub outside every scene stamp/gate structurally.
+  THE TUTORIAL FACTIONS (data/commanders.ts): the onslaught rolls ONE
+  LEGION per account — goblin/undead/beastkin/demon `TUTORIAL_FACTIONS`
+  rows, each fielding its tide + a commander-grade colossus on Ghorvane's
+  exact grammar (the Fathers: Morvhaal/Uzkharn/Mazghor, VOICE part
+  breakDisables the reckoning, HEART part unmans) — rolled pure-f(manifest),
+  stamped `tutorial_faction:<id>`, recalled forever, applied through
+  `SceneDef.resolve` (sceneBegin walks the EFFECTIVE def; stamps read the
+  base; unimported = goblin canon). THE REVENGE CHAIN (quests/revenge.ts,
+  offered L15): cull the stamped legion → hunt its Father (boss objective,
+  band-placed, NO mercy floor — the voice part is the taught counterplay);
+  exactly one chain live per account, goblin for grandfathered veterans.
   THE REFLEX FABRIC (flasks are never locked out): `SkillDef.reflex` /
   the `reflex` stat + `REFLEX_CFG` open instant presses THROUGH the
   user's own casts/dashes/recovery without disturbing them; the THIRST
