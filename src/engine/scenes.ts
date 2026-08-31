@@ -488,6 +488,15 @@ function aliveOf(w: World, ids: number[]): number {
   return n;
 }
 
+/** THE ENRAGE's surge: compress the commander's live muster to its last
+ *  breaths (the bar visibly leaps — the whole tell IS the show). */
+function surgeCast(col: Actor, s: SceneReckoningStage): void {
+  const c = col.casting;
+  if (!c || c.inst.def.id !== s.verb) return;
+  const left = Math.max(0.2, s.enrageLeftSec ?? 1.2);
+  c.elapsed = Math.max(c.elapsed, c.total - left);
+}
+
 // -------------------------------------------------------------- core kinds --
 
 registerSceneStage('card', {
@@ -642,16 +651,22 @@ registerSceneStage('reckoning', {
   },
   update(w, sc, spec, _dt) {
     const s = spec as SceneReckoningStage;
-    const st = sc.state as { colId: number; cast: boolean; blastAt: number | null };
+    const st = sc.state as { colId: number; cast: boolean; blastAt: number | null; enraged?: boolean };
     const col = w.actors.find(a => a.id === st.colId);
+    // THE DEAD-COMMANDER LANE (the mechanics-breaker's net): a Father who is
+    // somehow truly finished just fades the stage forward — the wake and Mu
+    // follow as ever. Never an immunity, never a lock, never a refusal print.
     if (!col || col.dead) { sc.mark = null; sc.fadeTarget = 1; return w.screenFade >= 0.995; }
-    // THE MERCY FLOOR: wound the muster to the bone and no further — at the
-    // floor it goes immune outright (every later hit prints its refusal),
-    // because the tutorial's one promise is that this cast RESOLVES. Full
-    // agency to try; no way to win by damage. Delay stays real (below).
-    if (s.floorFrac > 0 && !col.invulnerable && col.life <= col.maxLife() * s.floorFrac) {
-      col.invulnerable = true;
-      w.text(vec(col.pos.x, col.pos.y - col.radius - 26), 'the muster will not be stopped', '#e8c87a', 13);
+    // THE ENRAGE (show, never tell): bled below the floor, the Father does
+    // not shrug — he HURRIES. A visible fury takes him (the rally his own
+    // voice-part preaches, turned inward), the ground kicks, and the cast
+    // bar SURGES to its last breaths. He stays honestly mortal throughout;
+    // the surge simply makes finishing him a race nobody was meant to win.
+    if (s.floorFrac > 0 && !st.enraged && col.life <= col.maxLife() * s.floorFrac) {
+      st.enraged = true;
+      col.applyStatus('rally', 0, 3, 'the last breath');
+      w.shake = Math.max(w.shake, SCENE_CFG.blastShake * 0.5);
+      surgeCast(col, s);
     }
     // Order the verb after the grace beat — a fresh instance every time, so
     // no kit cooldown can refuse a re-muster. A refusal (mid-recovery, a
@@ -664,6 +679,9 @@ registerSceneStage('reckoning', {
         st.blastAt = sc.stageT;
       } else if (w.useSkill(col, inst, vec(col.pos.x, col.pos.y))) {
         st.cast = true;
+        // A muster ordered mid-fury opens already surged — the enrage
+        // survives interrupts (delay stays real, the race stays lost).
+        if (st.enraged) surgeCast(col, s);
       }
     }
     if (st.cast && st.blastAt === null && !col.casting) {
@@ -840,13 +858,37 @@ registerSceneStage('mu', {
     st.apps = muSpawnApparitions(w, sc);
     st.classReq = null;
     sc.fadeTarget = 0;
-    sc.prompt = MU_CFG.prompt;
+    // The standing instruction is a YOUNG account's line only (her word:
+    // veterans know the drift — keep the stillness for them).
+    sc.prompt = w.account.runRecords.length < MU_CFG.promptRuns ? MU_CFG.prompt : null;
   },
   update(w, sc, _spec, dt) {
     const st = sc.state as MuState;
     const apps = st.apps ?? [];
     if (w.zone.id !== muZoneId()) return false;
     const p = w.player;
+    // THE GLOBE (her word): far enough into the nothing and it WRAPS — the
+    // spirit pops out the antipode still walking the same bearing, so every
+    // long drift leads right back to the vessels. The rim is pure void (the
+    // arcs end well inside it; the motes are screen-space), so the seam is
+    // invisible by construction — the camera just keeps following a light
+    // through nothing.
+    {
+      const cx = w.arena.w / 2, cy = w.arena.h / 2;
+      const dxw = p.pos.x - cx, dyw = p.pos.y - cy;
+      const dw = Math.hypot(dxw, dyw);
+      if (dw > MU_CFG.wrap.radius) {
+        const k = MU_CFG.wrap.reentry / dw;
+        p.pos.x = cx - dxw * k;
+        p.pos.y = cy - dyw * k;
+        p.push = null;
+        p.dash = null;
+      }
+    }
+    // THE YOUNG PROMPT: the standing instruction speaks only while the
+    // account is still learning the drift (few completed runs) — a veteran's
+    // Mu keeps its stillness, and the vessels speak through approach alone.
+    const young = w.account.runRecords.length < MU_CFG.promptRuns;
     let barSet = false;
     let engagedAny = false;
     for (const row of apps) {
@@ -860,7 +902,7 @@ registerSceneStage('mu', {
       }
       engagedAny = true;
       if (row.rank === 'faint') {
-        sc.prompt = MU_CFG.faintLine;
+        if (young) sc.prompt = MU_CFG.faintLine;
         continue;
       }
       if (row.rank === 'veiled') {
@@ -868,7 +910,7 @@ registerSceneStage('mu', {
           row.noted = true;
           w.text(vec(a.pos.x, a.pos.y - a.radius - 18), MU_CFG.veiledLine, '#8a86a0', 12);
         }
-        sc.prompt = MU_CFG.veiledLine;
+        if (young) sc.prompt = MU_CFG.veiledLine;
         continue;
       }
       // AWAKE: the still linger fills the bar, then posts the class request
@@ -890,7 +932,7 @@ registerSceneStage('mu', {
       }
     }
     if (!barSet) sc.bar = null;
-    if (!engagedAny) sc.prompt = MU_CFG.prompt;
+    if (!engagedAny) sc.prompt = young ? MU_CFG.prompt : null;
     return false; // Mu never completes — the pick rebuilds the world outside.
   },
 });

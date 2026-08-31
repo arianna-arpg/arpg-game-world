@@ -199,11 +199,16 @@ check('C6: the unknown cowls are NAMELESS (no npcRole — no nameplate to leak)'
     col!.casting === null);
   check('F6: the muster RE-ARMS the moment the body is free',
     until(v, () => !!col?.casting, 3), `casting=${String(!!col?.casting)}`);
-  // THE MERCY FLOOR: below the floor the commander goes immune outright.
+  // THE ENRAGE: below the floor the commander stays MORTAL — no immunity,
+  // no refusal prints — he furies (the rally worn visibly) and the muster
+  // surges to its last breaths. Show, never tell.
   col!.life = col!.maxLife() * spec.floorFrac * 0.5;
   step(v, 0.2);
-  check('F7: THE MERCY FLOOR — immune below the floor, the cast resolves regardless',
-    col!.invulnerable === true);
+  check('F7: THE ENRAGE — mortal below the floor, rally worn, the bar surged to its last breaths',
+    col!.invulnerable === false
+    && col!.statuses.some(s => s.id === 'rally')
+    && ((col!.casting?.total ?? 0) - (col!.casting?.elapsed ?? 0)) <= 1.5,
+    `left=${((col!.casting?.total ?? 0) - (col!.casting?.elapsed ?? 0)).toFixed(2)}s`);
   check('F8: the blast fells the hero through the covenant (never a death)',
     until(v, () => sc.fell && !vp.dead && vp.invulnerable, 14),
     `fell=${String(sc.fell)} dead=${String(vp.dead)}`);
@@ -216,6 +221,57 @@ check('C6: the unknown cowls are NAMELESS (no npcRole — no nameplate to leak)'
     && !sceneDue(v.account, 'prologue'));
   check('F11: the wisp stands among the vessels',
     vp.look === MU_CFG.wisp.look && apparitionsOf(v).length > 0);
+}
+
+// THE MECHANICS-BREAKER'S LANE ("haha, we thought of that"): a Father who is
+// somehow truly finished mid-muster just fades the stage forward — the wake
+// card and Mu follow as ever. No immunity, no refusal, and above all no lock.
+{
+  const k = makeSimWorld('warrior', 47006);
+  sceneBegin(k, 'prologue');
+  const sck = k.scene!;
+  sck.stageIx = sck.def.stages.findIndex(s => s.kind === 'reckoning');
+  sck.begun = false;
+  sck.fadeTarget = 0;
+  k.screenFade = 0;
+  step(k, 0.3);
+  const spec2 = sck.def.stages[sck.stageIx] as { def: string };
+  const kc = k.actors.find(a => a.defId === spec2.def)!;
+  kc.life = 0;
+  k.kill(kc);
+  check('F12: a truly dead Father fades forward — the wake follows, never a lock',
+    until(k, () => k.scene?.card != null, 8));
+  sceneCardAck(k);
+  check('F13: …and Mu opens as ever behind it',
+    until(k, () => k.zone.id === 'scene_mu' && muStageLive(k), 5));
+}
+
+// === I) THE GLOBE + THE YOUNG PROMPT =========================================
+{
+  const cx = w.arena.w / 2, cy = w.arena.h / 2;
+  // Young: the fresh sim account has no completed runs — the drift
+  // instruction speaks while nothing is engaged.
+  p.pos.x = cx;
+  p.pos.y = cy;
+  step(w, 0.3);
+  check('I1: a YOUNG account hears the drift instruction',
+    w.scene?.prompt === MU_CFG.prompt);
+  // THE GLOBE: walk out past the rim and the nothing WRAPS — the spirit
+  // pops out the antipode, inbound, and the vessels come back to meet it.
+  p.pos.x = cx + MU_CFG.wrap.radius + 60;
+  p.pos.y = cy;
+  step(w, 0.1);
+  check('I2: past the rim the spirit pops out the antipode, headed home',
+    p.pos.x < cx
+    && Math.abs(Math.hypot(p.pos.x - cx, p.pos.y - cy) - MU_CFG.wrap.reentry) < 2,
+    `x=${(p.pos.x - cx).toFixed(0)} d=${Math.hypot(p.pos.x - cx, p.pos.y - cy).toFixed(0)}`);
+  // A VETERAN account keeps the stillness — no standing instruction.
+  w.account.runRecords.push({} as never, {} as never, {} as never);
+  p.pos.x = cx;
+  p.pos.y = cy;
+  step(w, 0.3);
+  check('I3: a VETERAN account keeps the stillness (no standing instruction)',
+    w.scene?.prompt === null);
 }
 
 // === G) THE TUTORIAL FACTIONS (data/commanders.ts — the Fathers) =============

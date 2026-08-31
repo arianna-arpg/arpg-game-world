@@ -60,6 +60,7 @@ import { padDisplay } from '../core/gamepad';
 import { collectActiveFx, collectFalterK, type ActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
 import { FACTIONS, MONSTERS } from '../data/monsters';
+import { APPARITION_ROLE, MU_CFG } from '../data/mu';
 import { PACK_CFG, packLinks, type LinkStyleOf, type PackLink } from '../engine/pack';
 import { hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
@@ -5512,7 +5513,18 @@ export class Renderer {
 
     // NPCs that fill a town role (MonsterDef.npcRole) wear their names.
     if (a.team === 'player' && a.defId && MONSTERS[a.defId]?.npcRole) {
-      this.queueLabel(a, a.name, '#e8c87a', 8, { font: '10px Verdana', stroke: false });
+      // THE VESSEL NAMES (data/mu.ts — the hub between lives): a class
+      // apparition's name HOVERS — a slow per-vessel bob, phase-split by id,
+      // the one moving thing over each still body — and a VEILED vessel's
+      // ink dims to present-but-not (ephemeral and nothing; the dealt hand
+      // alone wears the warm gold). Every other role keeps the classic seat.
+      let dy = 8;
+      let ink = '#e8c87a';
+      if (MONSTERS[a.defId].npcRole === APPARITION_ROLE) {
+        dy = 10 + Math.sin(world.time * MU_CFG.bob.hz * Math.PI * 2 + a.id * 1.7) * MU_CFG.bob.px;
+        if (a.statuses.some(s => s.id === 'mu_veiled')) ink = MU_CFG.veiledInk;
+      }
+      this.queueLabel(a, a.name, ink, dy, { font: '10px Verdana', stroke: false });
     }
 
     // The innkeep "talks" — ROLE-BOUND through world.innkeepPrompt() like its

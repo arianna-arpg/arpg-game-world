@@ -942,20 +942,30 @@ we verify changes.
   (2026-08-30, her overhaul: the cinematic hold + camera pan are DEAD — the
   commander arrives just off-screen wearing the attention fabric's chevron
   (`SceneRuntime.mark`), kit AI-banned, and after `graceSec` musters a
-  TEN-second honest cast the player freely spends trying to stop; THE MERCY
-  FLOOR (`floorFrac`) goes immune below 10% life — damage delays, never
-  denies — and interrupts RE-ARM the muster) → the blast fells through the
-  covenant → THE HOLLOW WAKE card → MU. The bottom keybind strip is retired
+  TEN-second honest cast the player freely spends trying to stop; THE
+  ENRAGE (`floorFrac` + `enrageLeftSec` — show, never tell) answers a
+  commander bled below 10%: honestly MORTAL throughout, he furies (rally
+  worn) and the bar SURGES to its last breaths, a truly-finished Father
+  just fades the stage forward (the dead-commander lane — never a lock),
+  and interrupts RE-ARM the muster) → the blast fells through the
+  covenant → THE HOLLOW WAKE card → MU. THE RUN-END FADE (main.ts
+  RUN_END_FADE): a real death never pauses the world — the epilogue books
+  instantly but the sim keeps breathing under a sinking screenFade and the
+  death screen opens over full dark (forfeit + co-op stay immediate). The bottom keybind strip is retired
   behind `HINT_BAR_ENABLED` (ui/panels.ts). Docs `docs/engine/scenes.md`;
   probe `balance/probe_scenes.ts`.
   THE MU HUB (data/mu.ts + the 'mu' core stage — docs/engine/mu.md; probe
   `balance/probe_mu.ts`): the hub BETWEEN LIVES, played instead of menu'd —
   the hero stands as a WISP in a boundless zone of nothing ('mu' tileset,
-  `hudVeil` hides the run HUD) where the class roster stands IN-WORLD as
-  shaded apparitions (generated `apparition_<classId>` defs wearing each
+  `hudVeil` hides the run HUD; THE GLOBE — `MU_CFG.wrap` pops a far walker
+  out the antipode inbound, the seam invisible over pure void, so every
+  drift leads back to the vessels) where the class roster stands IN-WORLD
+  as shaded apparitions (generated `apparition_<classId>` defs wearing each
   class's own look; THE HAND LAW keeps the class-screen economy verbatim:
-  dealt hand AWAKE, unlocked rest VEILED (`mu_veiled`), locked remainder =
-  capped nameless cowls (`mu_faint`)); a still linger opens that class's
+  dealt hand AWAKE, unlocked rest VEILED (`mu_veiled`, name ink dimmed to
+  present-but-not), locked remainder = capped nameless cowls (`mu_faint`);
+  vessel nameplates HOVER on a per-id bob and the standing drift
+  instruction speaks only to YOUNG accounts — `MU_CFG.promptRuns`); a still linger opens that class's
   card (naming front and center, one Wake) whose pick calls the same
   startGame as ever — Lastlight bedside by construction. New Run/Begin
   reroutes there (`UI.onBeginRun`; virgin accounts auto-Warrior into the

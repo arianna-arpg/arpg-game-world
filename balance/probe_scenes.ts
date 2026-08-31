@@ -215,12 +215,16 @@ check('G4: the verb musters through the REAL pipeline after the grace beat',
 check('G4b: ten held breaths — the muster is a TEN-second honest cast bar',
   (col?.casting?.total ?? 0) >= 9.5,
   `total=${col?.casting?.total?.toFixed(1)}`);
-// THE MERCY FLOOR, mid-cast: wound it below the floor and it goes immune —
-// the player may bloody the muster, never stop it by damage.
+// THE ENRAGE, mid-cast (show, never tell): bled below the floor he stays
+// honestly MORTAL — no immunity, no refusal prints — but a visible fury
+// takes him and the bar SURGES to its last breaths.
 if (col) col.life = col.maxLife() * ((w.scene?.def.stages[w.scene.stageIx] as { floorFrac?: number })?.floorFrac ?? 0.1) * 0.5;
 step(w, 0.2);
-check('G4c: THE MERCY FLOOR — below the floor the commander is immune outright',
-  col?.invulnerable === true);
+check('G4c: THE ENRAGE — below the floor he stays mortal, furies, and the bar surges',
+  col?.invulnerable === false
+  && !!col?.statuses.some(s => s.id === 'rally')
+  && ((col?.casting?.total ?? 0) - (col?.casting?.elapsed ?? 0)) <= 1.5,
+  `left=${((col?.casting?.total ?? 0) - (col?.casting?.elapsed ?? 0)).toFixed(2)}s`);
 check('G5: the blast spends the horde honestly (affects all — the tide lies dead)',
   until(w, () => tideIds.length > 0
     && tideIds.every(id => w.actors.every(a => a.id !== id || a.dead)), 16),

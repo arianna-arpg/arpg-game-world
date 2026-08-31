@@ -68,7 +68,21 @@ export const MU_CFG = {
   faintCap: 12,
   /** The commune linger: stand this close, this still, this long. */
   dwell: { radius: 78, sec: 0.9 },
-  /** The standing HUD prompt while nothing is engaged. */
+  /** THE GLOBE (her word): drift far enough into the nothing and it WRAPS —
+   *  past `radius` off the wake point you pop out the antipode at `reentry`,
+   *  still walking the same bearing, so every long walk leads right back to
+   *  the vessels. The rim is pure void (the arcs end at ranks.faint, the
+   *  motes are screen-space), so the seam is invisible by construction. */
+  wrap: { radius: 920, reentry: 880 },
+  /** The nameplates' hover — a slow per-vessel bob (px + Hz), phase-split by
+   *  actor id so the names breathe independently. */
+  bob: { px: 3, hz: 0.45 },
+  /** A VEILED vessel's name ink: present-but-not — ephemeral and nothing. */
+  veiledInk: '#5f5c74',
+  /** The standing HUD prompt while nothing is engaged — YOUNG accounts only
+   *  (fewer completed runs than this): veterans know the drift, and the
+   *  words would only crowd the stillness. */
+  promptRuns: 3,
   prompt: 'Drift near a standing vessel and be still.',
   /** A veiled vessel's refusal (dealt-hand law: not offered this waking). */
   veiledLine: 'This vessel does not stir — not this waking.',

@@ -26,10 +26,12 @@
 //                 NEVER held. After a grace beat the verb musters through
 //                 the REAL skill pipeline (a long honest cast bar + ground
 //                 telegraph), the player is free to spend the whole windup
-//                 trying to stop it — the MERCY FLOOR makes the commander
-//                 immune below a life fraction, so damage delays, never
-//                 denies — and the hero is FELLED, never killed (the scene
-//                 intercepts the lethal blow at the one death chokepoint).
+//                 trying to stop it — THE ENRAGE answers a commander bled
+//                 below his floor: a visible fury and the bar SURGING to
+//                 its last breaths (show, never tell; he stays mortal, and
+//                 a true kill just fades forward — never a lock) — and the
+//                 hero is FELLED, never killed (the scene intercepts the
+//                 lethal blow at the one death chokepoint).
 //   • home      — teardown: back to the start-zone bedside, the staging
 //                 zone deleted from the off-graph map, completion stamped.
 //   • mu        — THE HUB BETWEEN LIVES (data/mu.ts): the hero stands as a
@@ -176,10 +178,15 @@ export interface SceneReckoningStage extends SceneStageBase {
    *  NEVER held: the tide keeps fighting, the player keeps playing, and the
    *  whole windup is a real cast the player is free to spend trying to stop. */
   graceSec: number;
-  /** THE MERCY FLOOR: at/below this life fraction the commander goes IMMUNE
-   *  outright (every hit prints its refusal) — bloody the muster to the bone,
-   *  the tutorial's one promise is that this cast RESOLVES. 0 = no floor. */
+  /** THE ENRAGE (show, never tell — her word replaced the old immune floor):
+   *  at/below this life fraction the commander FURIES instead of shrugging —
+   *  a visible rally takes him and the cast bar SURGES to its last breaths
+   *  (`enrageLeftSec`). No refusal ever prints; he stays honestly mortal,
+   *  and a mechanics-breaker who somehow finishes him anyway just fades
+   *  forward (the dead-commander lane) — never a lock. 0 = no trigger. */
   floorFrac: number;
+  /** Seconds of cast left after the enrage surge (default 1.2). */
+  enrageLeftSec?: number;
   /** After the blast lands, seconds before the dark takes the screen. */
   blastWaitSec: number;
   /** Center-screen callout as the commander arrives. */
@@ -346,6 +353,7 @@ export const PROLOGUE_SCENE: SceneDef = {
       spawnDist: 560,
       graceSec: 2.2,
       floorFrac: 0.1,
+      enrageLeftSec: 1.2,
       blastWaitSec: 1.6,
       announce: 'the Hordefather himself comes to end the road.',
       announceColor: '#9fdc6a',

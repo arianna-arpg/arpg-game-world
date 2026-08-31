@@ -47,6 +47,25 @@ pale motes, `frontier: false`, no biome tag, layout deliberately empty.
 Because it is a scene, **no run save ever exists for Mu** — every run-save
 chokepoint already stands down — while account-ledger writes still flow.
 
+**THE GLOBE** (`MU_CFG.wrap`): drift far enough into the nothing and it
+wraps — past `radius` off the wake point the spirit pops out the antipode
+at `reentry`, still walking the same bearing, so every long walk leads
+right back to the vessels. The seam is invisible by construction: the rim
+is pure void (the apparition arcs end well inside it, the motes are
+screen-space, Mu streams no far dress), so the camera just keeps following
+a small light through nothing. Symbolic and practical at once — a
+perpetual place you can never actually leave, and never get lost in.
+
+**The polish laws:** vessel nameplates HOVER (a slow per-id bob,
+`MU_CFG.bob` — the one moving thing over each still body); a VEILED
+vessel's name ink dims to `MU_CFG.veiledInk` (present-but-not; the dealt
+hand alone wears the warm gold); and the standing drift instruction speaks
+only to YOUNG accounts (`MU_CFG.promptRuns` completed runs) — a veteran's
+Mu keeps its stillness. THE RUN-END FADE (main.ts `RUN_END_FADE`) closes
+the loop's other seam: a real death never pauses the world — the sim keeps
+breathing under a sinking fade, the death screen opens over full dark, and
+Mu's own drift-in is the fade back up.
+
 ## The apparitions (THE HAND LAW)
 
 Economy parity with the class screen, engine-side and seeded off the
@@ -85,9 +104,14 @@ The old cinematic (world held, camera pan) is dead. The commander:
 - musters a **ten-second honest cast** (`hordefathers_reckoning`
   `useTime: 10`) through the real pipeline — cast bar, ground telegraph,
   full player agency for the whole windup;
-- is guarded by **THE MERCY FLOOR** (`floorFrac`): at/below that life
-  fraction he goes immune outright (hits print their refusal) — damage
-  delays, never denies;
+- answers a bleeding with **THE ENRAGE** (`floorFrac` + `enrageLeftSec` —
+  show, never tell): at/below the floor he stays honestly MORTAL — no
+  immunity, no refusal prints — but a visible fury takes him (the rally his
+  own voice preaches, turned inward), the ground kicks, and the cast bar
+  SURGES to its last breaths; finishing him becomes a race nobody was meant
+  to win, and a mechanics-breaker who wins it anyway just fades the stage
+  forward (the dead-commander lane) — never a lock, only a "we thought of
+  that";
 - **re-arms on interrupt**: a stun or grab that wipes the cast is the
   player's honest little victory; the muster re-orders the moment the body
   is free (in live play the `poiseCcAvoid` roll off his 220 poise makes the
