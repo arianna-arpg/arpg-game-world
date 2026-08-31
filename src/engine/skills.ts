@@ -19,6 +19,7 @@ import { STATUS_DEFS, tuneAilmentChance } from './status';
 import type { CurveKind } from './curves';
 import type { ConjureGrant } from './flux';
 import type { ChronoSpec } from './timeflow';
+import type { UltimateSpec } from './ultimates';
 import type { ThrongSourceRow, ThrongSpec } from './throng';
 import type { GrabHandoffSpec, GrabSpec } from './grab';
 import type { PossessSpec, ShiftSpec } from './possess';
@@ -4338,6 +4339,17 @@ export interface SkillDef {
    *  caster's effectDuration. Works for monsters exactly as for players —
    *  the enemy chronomancer is one data entry. */
   chrono?: ChronoSpec;
+
+  /** THE ULTIMATE MARK (engine/ultimates.ts): this skill is a SUPER ART.
+   *  Executing it flashes THE EYECATCH — the anime cut-away pane whose
+   *  avatar is the caster's OWN live body through the portrait fabric —
+   *  and, solo policy allowing, holds the world for the beat
+   *  (ULT_CFG.holdSec; a chrono skill's beat defaults to 0 — its stop IS
+   *  the cinematic). Works for ANY caster through this one pipeline: an
+   *  enemy's super wears the same banner, and there the pane is a
+   *  TELEGRAPH. THE PRICE FLOOR (probe-pinned, never runtime-clamped):
+   *  an ultimate carries at least ULT_CFG.minCooldown of cooldown. */
+  ultimate?: UltimateSpec;
 
   /** LIFE-BOND FEED: this skill's damage feeds the caster's bond at this
    *  multiple of bondShare ("Ruin heals the bonded far more when it hits").

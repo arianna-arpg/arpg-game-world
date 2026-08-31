@@ -128,6 +128,7 @@ import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { liquidOf } from './genkit';
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
+import { eyecatchElapsed, eyecatchHoldSec, ULT_CFG, type EyecatchState } from './ultimates';
 import {
   gatherSympathyRecipients, SYMPATHY_CFG, SYMPATHY_HOOKS, SYMPATHY_LINKS,
   sympathyRelationOf, sympathyStat,
@@ -2527,6 +2528,15 @@ export class World {
    *  construction: the canvas composites under the DOM). */
   pickupFeed: PickupFeedEntry[] = [];
   flashes: Flash[] = [];
+  /** THE EYECATCH (engine/ultimates.ts): the one live super-art pane, or
+   *  null (the headless default — a sim without ultimates pays nothing).
+   *  Transient presentation state: never serialized; the co-op wire ships
+   *  it as a derived row and clients rebuild from their own registry. */
+  eyecatch: EyecatchState | null = null;
+  /** The banner throttle's ledgers (Timeflow.age stamps): per-caster and
+   *  global. Skipping a pane never skips a cast — presentation only. */
+  private ultFlashAt = new Map<number, number>();
+  private ultFlashLastAt = -Infinity;
   /** THE DISSOLUTION GRAMMAR's live break records (see dissolveBreak). */
   dissolves: DissolveBreak[] = [];
   /** THE EMERGENCE GRAMMAR's live arrivals (engine/emerge.ts; World.emergeBody). */
@@ -31130,6 +31140,39 @@ export class World {
     });
   }
 
+  /** THE EYECATCH (SkillDef.ultimate → engine/ultimates.ts): arm the
+   *  super-art pane for this cast — the caster's own body as the banner's
+   *  avatar — and, solo policy allowing (the harvest rite's law verbatim),
+   *  hold the world for the beat. THE THROTTLE ONLY SKIPS THE BANNER: a
+   *  cast never waits on (or is refused by) its own presentation. */
+  ultimateFlash(caster: Actor, def: SkillDef): void {
+    const spec = def.ultimate;
+    if (!spec) return;
+    const now = this.timeflow.age;
+    if (now - (this.ultFlashAt.get(caster.id) ?? -Infinity) < ULT_CFG.throttleSec) return;
+    if (now - this.ultFlashLastAt < ULT_CFG.globalGapSec) return;
+    this.ultFlashAt.set(caster.id, now);
+    this.ultFlashLastAt = now;
+    const side: 'ally' | 'enemy' = caster.team === 'player' ? 'ally' : 'enemy';
+    this.eyecatch = {
+      casterId: caster.id, skillId: def.id,
+      style: spec.style ?? ULT_CFG.style,
+      title: spec.title ?? def.name, sub: spec.sub,
+      tint: spec.tint ?? def.color, side,
+      t0: now, paneSec: spec.paneSec ?? ULT_CFG.paneSec,
+      avatarDefId: spec.avatarDefId,
+    };
+    // THE HELD BEAT — kind 'ultimate', never 'menu' (a menu hard-hold stops
+    // its own aging); the solo-only policy applied by hand, the trace/
+    // harvest idiom. A chrono skill's beat resolves to 0: its stop IS the
+    // cinematic, and world seconds would eat the caster's own window.
+    const holdSec = eyecatchHoldSec(spec, !!def.chrono, side);
+    if (holdSec > 0
+      && this.timeflow.allowHold({ id: 'ult:eyecatch', scale: 0, kind: 'ultimate' })) {
+      this.timeflow.hold({ id: 'ult:eyecatch', scale: 0, kind: 'ultimate', duration: holdSec });
+    }
+  }
+
   /**
    * Resolve one use of a skill: deliveries, effects, totem conversion.
    * Costs and validation already happened at press time.
@@ -31229,6 +31272,11 @@ export class World {
         this.text(vec(caster.pos.x, caster.pos.y - 22), `power ${power}`, def.color, 11);
       }
     }
+    // THE ULTIMATE MARK (SkillDef.ultimate → engine/ultimates.ts): the
+    // super art's EYECATCH — the pane, and (solo) the held beat — fires as
+    // the cast commits, for ANY caster through this one pipeline. Scheduled
+    // repeats never re-flash (the chrono law's sibling, below).
+    if (def.ultimate && !opts.noRepeat) this.ultimateFlash(caster, def);
     // CHRONOMANCY (SkillDef.chrono → engine/timeflow.ts): the cast bends
     // TIME ITSELF — a timeflow hold exempting the caster's chosen circle,
     // its span riding effectDuration investment like any other duration.
@@ -43455,6 +43503,13 @@ export class World {
     // drawing); it just stops mutating, wholesale and drift-free.
     const rawDt = dt;
     dt *= this.timeflow.beginFrame(rawDt);
+    // THE EYECATCH sweep: a spent pane is nulled a beat after it ends, so
+    // the co-op wire never ships a stale row forever (engine/ultimates.ts).
+    if (this.eyecatch
+      && eyecatchElapsed(this.eyecatch, this.timeflow.age)
+        > this.eyecatch.paneSec + ULT_CFG.expireSlackSec) {
+      this.eyecatch = null;
+    }
     // THE SCENE DIRECTOR (engine/scenes.ts) breathes on the RAW clock,
     // BEFORE the hold gate below — scenes own their freezes (a story card
     // stops the sim under itself; the reckoning frees one actor) and must

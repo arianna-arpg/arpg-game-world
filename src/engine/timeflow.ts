@@ -210,14 +210,21 @@ export class Timeflow {
     this.refold();
   }
 
-  /** Once per frame, BEFORE consuming any scale: age holds on the raw frame
-   *  seconds (unless a 'menu' hard hold has the universe stopped), expire
-   *  the due, and return the folded WORLD scale for this frame. */
+  /** Once per frame, BEFORE consuming any scale: advance the raw clock,
+   *  age holds on it (unless a 'menu' hard hold has the universe stopped),
+   *  expire the due, and return the folded WORLD scale for this frame.
+   *  `age` ticks with or without live holds — per the clock rules above it
+   *  is the fabric's RAW clock, frozen only by the true pause. (It used to
+   *  advance only while holds were live; nothing read it between holds
+   *  until the eyecatch pane and the ultimate throttle — engine/ultimates.ts
+   *  — began stamping against it, and a pane frozen under the pause menu is
+   *  exactly right: the pause stops the universe, drama included.) */
   beginFrame(rawDt: number): number {
-    if (this.holds.length) {
-      const hardMenu = this.holds.some(h => h.kind === 'menu' && h.scale <= 0);
-      if (!hardMenu) {
-        this.age += rawDt;
+    const hardMenu = this.holds.length > 0
+      && this.holds.some(h => h.kind === 'menu' && h.scale <= 0);
+    if (!hardMenu) {
+      this.age += rawDt;
+      if (this.holds.length) {
         let dropped = false;
         for (let i = this.holds.length - 1; i >= 0; i--) {
           const until = this.untils.get(this.holds[i].id);

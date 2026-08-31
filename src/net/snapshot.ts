@@ -22,6 +22,7 @@ import type { AnnexSpec, Doodad, DoodadDoor, HollowSpec, PlacedStructure } from 
 import type { HitShape } from '../engine/shapes';
 import type { TrackSpec } from '../engine/tracks';
 import type { TrapworkSpec } from '../engine/trapworks';
+import { eyecatchElapsed } from '../engine/ultimates';
 import type { PartSpec } from '../render/vis/parts';
 import type { ZoneTheme } from '../data/zones';
 import { hullOf, type ZoneShape } from '../world/shape';
@@ -430,6 +431,15 @@ export interface StateSnapshot {
   no?: NoticeW[];
   pfd?: PickupW[];
   flashes: FlashW[];
+  /** THE EYECATCH (engine/ultimates.ts) — the live super-art pane, shipped
+   *  as ELAPSED seconds (`el`) so client clocks need no shared epoch: the
+   *  client re-stamps t0 against its own timeflow age (the tell-wire idiom
+   *  — derived scalars, the pane rebuilt from the client's own registry).
+   *  Absent = no pane (older hosts read as none). */
+  ec?: {
+    ci: number; sk: string; st: string; ti: string; sb?: string;
+    tn: string; sd: 'ally' | 'enemy'; el: number; ps: number; av?: string;
+  };
   deathBursts: DeathBurstW[];
   /** Structure-door states (id → open/broken), present only when any door has
    *  flipped — rides the 20 Hz snapshot so a dropped packet SELF-HEALS on the
@@ -733,6 +743,16 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
     flashes: world.flashes.map(f => ({ p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
       fx: f.fx, bolt: f.bolt || undefined, meteor: f.meteor || undefined })),
+    ec: world.eyecatch
+      && eyecatchElapsed(world.eyecatch, world.timeflow.age) < world.eyecatch.paneSec
+      ? {
+        ci: world.eyecatch.casterId, sk: world.eyecatch.skillId,
+        st: world.eyecatch.style, ti: world.eyecatch.title, sb: world.eyecatch.sub,
+        tn: world.eyecatch.tint, sd: world.eyecatch.side,
+        el: Math.round(eyecatchElapsed(world.eyecatch, world.timeflow.age) * 1000) / 1000,
+        ps: world.eyecatch.paneSec, av: world.eyecatch.avatarDefId,
+      }
+      : undefined,
     deathBursts: world.deathBurstsView().map(b => ({
       p: v2(b.pos), ph: (b.phase === 'gather' ? 0 : 1) as 0 | 1, r: b.radius, c: b.color,
       arm: (b.arming ? 1 : 0) as 0 | 1, t: Math.round(b.t * 100) / 100, co: b.coalesce, trail: b.trail.map(v2),
@@ -1234,6 +1254,14 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
   world.flashes = snap.flashes.map(f => ({ pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
     fx: f.fx, bolt: f.bolt, meteor: f.meteor })) as unknown as World['flashes'];
+  // THE EYECATCH — re-stamped against the CLIENT's own raw clock (elapsed →
+  // local t0); an absent row clears the pane with the host's (engine/ultimates.ts).
+  world.eyecatch = snap.ec ? {
+    casterId: snap.ec.ci, skillId: snap.ec.sk, style: snap.ec.st,
+    title: snap.ec.ti, sub: snap.ec.sb, tint: snap.ec.tn, side: snap.ec.sd,
+    t0: world.timeflow.age - snap.ec.el, paneSec: snap.ec.ps,
+    avatarDefId: snap.ec.av,
+  } : null;
   // Render-only telegraph: the client draws these but never advances them (no updateDeathBursts
   // runs client-side). Only the fields drawDeathBursts touches are carried; sim fields are inert.
   // `team` rides tm (THE SPARED RING's read): absent on an old host's wire it stays undefined,

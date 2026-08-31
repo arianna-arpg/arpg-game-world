@@ -10,6 +10,7 @@
 
 import { mod, linkMod } from '../engine/stats';
 import type { SkillDef } from '../engine/skills';
+import { ULTIMATE_SKILLS } from './ultimates';
 
 export const SKILLS: Record<string, SkillDef> = {
 
@@ -16066,6 +16067,12 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 400, weight: 1.8, keepDistance: 220 },
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.06), mod('aoeRadius', 'increased', 0.04)] },
   },
+
+  // THE ULTIMATE ARTS (data/ultimates.ts → engine/ultimates.ts): super
+  // skills on super cooldowns wearing THE EYECATCH. Absorbed inside the
+  // record so every catalog consumer and the capability folds below treat
+  // them as ordinary rows.
+  ...ULTIMATE_SKILLS,
 };
 
 // THE CONSTRUCT CAPABILITY FOLD: every construct-delivery skill IS

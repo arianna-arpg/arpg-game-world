@@ -292,6 +292,34 @@ we verify changes.
   `gem_skills_fourthwall` → `sup_fourthwall`) — dials in
   `FOURTH_WALL_CFG`, docs in `docs/engine/fourthwall.md`, probe
   `balance/probe_fourthwall.ts`),
+  `ultimates.ts` (THE ULTIMATE FABRIC — super arts as data + THE EYECATCH,
+  the anime cut-away pane: `SkillDef.ultimate` marks an ordinary catalog
+  skill as a SUPER ART — executing it flashes the pane whose AVATAR is the
+  caster's OWN live body through the portrait fabric
+  (render/vis/eyecatch.ts, an OPEN style registry `registerEyecatchStyle`
+  — 'sunder' slash cut-in / 'eclipse' iris; screen-anchored by the
+  status-overlay exemption) and, solo policy allowing (the harvest rite's
+  allowHold law — co-op/couch play it over a living world), HOLDS the
+  world for the beat (kind 'ultimate', never 'menu'; a chrono skill's
+  beat defaults 0 — its stop IS the cinematic). THE LAWS: the SAME DOOR
+  (any caster through the one pipeline — an enemy's super wears the
+  banner as a TELEGRAPH, side-coded, shorter beat), THE PRICE FLOOR
+  (`ULT_CFG.minCooldown` — census-pinned authoring law, never a runtime
+  clamp), THE THROTTLE ONLY SKIPS THE BANNER (casts never wait on their
+  own presentation), DRAWN == TIMED (the pane clock is `Timeflow.age`,
+  the raw clock frozen only by a true pause — beginFrame now advances it
+  between holds per its own documented contract; `eyecatchElapsed`/
+  `eyecatchAlive` the ONE fold for renderer + sweep + probes), and the
+  wire ships the derived `ec` row (elapsed, not epochs — the tell-wire
+  idiom). Debuts (data/ultimates.ts, Vault `gem_skills_ultimates`, each
+  a COMPOSE of standing fabrics): the Hundred Partings (chrono stop +
+  tight at-enemies slash storm), Hollow Star (`pull`/`pullRadius`
+  event-horizon well + followUp collapse), the Woken Hollow (shapeshift
+  at powerFactor ABOVE 1 — the one form that is not the weaker vessel;
+  `ULTIMATE_FORMS` absorbed by monsters.ts before its registry-close
+  folds; the pane's `avatarDefId` shows the form you are becoming) —
+  dials in `ULT_CFG`, docs in `docs/engine/ultimates.md`, probe
+  `balance/probe_ultimates.ts`),
   `throng.ts` + `cling.ts` (THE THRONG FABRIC — the swarm you GATHER, the
   Pikmin/Overlord playstyle as data: `SkillDef.throng` anchors a roster of
   sight-gated wild husks CLAIMED by walking through them, acquisition as

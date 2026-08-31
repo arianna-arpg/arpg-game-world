@@ -59,7 +59,7 @@ import { Z_LADDER } from '../ui/zorder';
 import { padDisplay } from '../core/gamepad';
 import { collectActiveFx, collectFalterK, type ActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
-import { FACTIONS, MONSTERS } from '../data/monsters';
+import { FACTIONS, MONSTERS, type MonsterDef } from '../data/monsters';
 import { APPARITION_ROLE, MU_CFG } from '../data/mu';
 import { PACK_CFG, packLinks, type LinkStyleOf, type PackLink } from '../engine/pack';
 import { hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
@@ -69,7 +69,9 @@ import { drawAdornHitFlash, drawBodyHitFlash, hitFlashAlphaOf } from './vis/hitF
 import { TELL_CFG, tellDressOf } from '../engine/tells';
 import { drawWatchSense, drawWatchTrails } from './vis/watchLayer';
 import { driftColor } from './vis/colorDrift';
-import { portraitSubjectOf, portraitTile, type PortraitSubject } from './vis/portrait';
+import { drawPortraitInto, portraitSubjectOf, portraitTile, type PortraitDefLike, type PortraitSubject } from './vis/portrait';
+import { EYECATCH_STYLES } from './vis/eyecatch';
+import { eyecatchElapsed, ULT_CFG, type EyecatchState } from '../engine/ultimates';
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { drawRuneRing } from './vis/runeRing';
 import { registerVisCache, trimVisCaches } from './vis/caches';
@@ -848,6 +850,7 @@ export class Renderer {
     this.drawDarknessHud(world);  // the dark's screen veil: abyss depth/haul/shaft, or the gloaming's closing eye
     this.onCrest(crest, () => this.uiPass(us, () => {
       this.drawParty(world);        // co-op party strip (screen-space, top; ≤1 = nothing)
+      this.drawEyecatch(world);     // THE EYECATCH: the super-art pane, above the HUD (engine/ultimates.ts)
     }));
     // Covers must still cover: on the crest these two draw THERE (topmost
     // surface — one full-screen fade covers the whole composite).
@@ -2200,6 +2203,74 @@ export class Renderer {
       ctx.fillText(`· ${hud.label.toUpperCase()} ·`, this.uiW / 2, 54);
       ctx.restore();
     }
+  }
+
+  // THE EYECATCH's avatar cache — one subject + one live canvas per pane
+  // (keyed on the flash, so a new pane re-resolves; the body itself keeps
+  // animating through drawPortraitInto every frame).
+  private eyecatchKey = '';
+  private eyecatchSubject: PortraitSubject | null = null;
+  private eyecatchAvatar: HTMLCanvasElement | null = null;
+
+  /** THE EYECATCH (engine/ultimates.ts → render/vis/eyecatch.ts): the
+   *  super-art cut-away pane, drawn ABOVE the HUD and below the run-end /
+   *  traversal fades (covers must still cover). Screen-anchored by law —
+   *  the status-overlay exemption; progress rides Timeflow.age (the raw
+   *  clock, so the pane animates straight through its own held beat) while
+   *  shimmer rides performance.now (the drawTimeflow precedent). */
+  private drawEyecatch(world: World): void {
+    const st = world.eyecatch;
+    if (!st) return;
+    const t = eyecatchElapsed(st, world.timeflow.age) / st.paneSec;
+    if (t < 0 || t >= 1) return;
+    const painter = EYECATCH_STYLES[st.style] ?? EYECATCH_STYLES[ULT_CFG.style];
+    if (!painter) return;
+    const key = `${st.casterId}|${st.skillId}|${st.t0.toFixed(3)}`;
+    if (this.eyecatchKey !== key) {
+      this.eyecatchKey = key;
+      this.eyecatchSubject = this.eyecatchSubjectOf(world, st);
+    }
+    if (this.eyecatchSubject) {
+      const px = Math.max(2, Math.round(
+        Math.min(this.uiH * 0.82, 460) * VIS_CFG.portrait.oversample));
+      if (!this.eyecatchAvatar || this.eyecatchAvatar.width !== px) {
+        this.eyecatchAvatar = document.createElement('canvas');
+        this.eyecatchAvatar.width = this.eyecatchAvatar.height = px;
+      }
+      drawPortraitInto(this.eyecatchAvatar, this.eyecatchSubject, performance.now() / 1000);
+    }
+    painter(this.ctx, {
+      w: this.uiW, h: this.uiH, t, clock: performance.now() / 1000,
+      tint: st.tint, side: st.side, title: st.title, sub: st.sub,
+      avatar: this.eyecatchSubject ? this.eyecatchAvatar : null,
+    });
+  }
+
+  /** The pane's avatar subject: an authored def override wins; else the
+   *  caster's OWN live body, worn exactly as it stands — the panels'
+   *  companion-roster idiom (portrait.ts is vis-pure, so the faction horn
+   *  derivation is stamped here, exactly as drawActor makes it). */
+  private eyecatchSubjectOf(world: World, st: EyecatchState): PortraitSubject | null {
+    const defLike = (d: MonsterDef): PortraitDefLike =>
+      ({ ...d, demonHorns: !!FACTIONS[d.faction ?? '']?.nubHorns });
+    const resolvePart = (id: string): PortraitDefLike | undefined => {
+      const p = MONSTERS[id];
+      return p ? defLike(p) : undefined;
+    };
+    if (st.avatarDefId) {
+      const d = MONSTERS[st.avatarDefId];
+      return d ? portraitSubjectOf(defLike(d), { resolvePart }) : null;
+    }
+    const a = world.actors.find(x => x.id === st.casterId);
+    if (!a) return this.eyecatchSubject; // body gone mid-pane: keep the last face
+    const def = a.defId ? MONSTERS[a.defId] : undefined;
+    return portraitSubjectOf({
+      shape: a.shape, radius: a.radius, color: a.color,
+      material: a.material, adorn: a.adorn, look: a.look,
+      demonHorns: !!FACTIONS[a.faction ?? '']?.nubHorns,
+      portrait: def?.portrait, worm: def?.worm, parts: def?.parts,
+      extraParts: a.extraParts,
+    }, { resolvePart });
   }
 
   /** A screen-space wash for time of day and weather — subtle enough to keep

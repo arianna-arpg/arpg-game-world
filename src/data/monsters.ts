@@ -14,6 +14,7 @@ import type { EmergeSpec } from '../engine/emerge'; // THE EMERGENCE GRAMMAR —
 import type { BrainTuning, PhaseDef } from '../engine/brain';
 import type { CurveKind } from '../engine/curves';
 import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
+import { ULTIMATE_FORMS } from './ultimates';
 import { registerAIAction } from '../engine/aiActions';
 import { FluxPhase } from '../engine/flux';
 import type { TuneSpec } from '../engine/tuning';
@@ -23869,6 +23870,11 @@ export const WAVE_TABLE: { minWave: number; ids: string[] }[] = [
 
 /** Every 5th wave spawns this boss alongside the pack. */
 export const BOSS_ID = 'pit_lord';
+
+// THE ULTIMATE FORM BODIES (data/ultimates.ts — engine/ultimates.ts): the
+// shapeshift ultimates' worn forms join the registry HERE, before the
+// registry-close folds below sweep the whole bestiary.
+Object.assign(MONSTERS, ULTIMATE_FORMS);
 
 // --- THE BURST TELL (the kindler law over the whole bestiary) ----------------
 // A death-burst is a bomb whose countdown is the bearer's LIFE — so at

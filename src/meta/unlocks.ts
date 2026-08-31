@@ -668,6 +668,12 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_fourthwall', kind: 'skill', cost: 160, reqLevel: 1, label: 'Skill Pool: the Caged Comet',
     description: 'Caged Comet may drop. Seal the edge of your vision into a cage and be the thing that ricochets inside it.',
     payload: { skillIds: ['caged_comet'] } },
+  // THE ULTIMATE ARTS (engine/ultimates.ts — super arts on super cooldowns;
+  // the eyecatch pane is the fabric's face).
+  { id: 'gem_skills_ultimates', kind: 'skill', cost: 320, reqLevel: 12, label: 'Skill Pool: Ultimate Arts',
+    description: 'The Hundred Partings, Hollow Star and the Woken Hollow may drop. Arts too'
+      + ' large for the hand that holds them: the world stops to watch.',
+    payload: { skillIds: ['hundred_partings', 'hollow_star', 'woken_hollow'] } },
 
   // --- Support drop bundles -------------------------------------------------
   { id: 'sup_t2', kind: 'support', cost: 100, reqLevel: 0, label: 'Support Pool II',
