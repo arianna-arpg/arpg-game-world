@@ -1283,6 +1283,17 @@ export class Actor {
 
   /** Set while dashing: overrides normal movement. */
   dash: { dir: number; speed: number; remaining: number } | null = null;
+  /** THE CAROM MOTOR (the fourth wall — CaromDelivery): set while the body
+   *  is the ball. The third carried-body motor beside dash and leap —
+   *  overrides normal movement, banks off walls and the governing view
+   *  frame, ends when its worn `status` leaves the body (the ride's one
+   *  clock). Transient combat state, never snapshotted. */
+  caromRun: { dir: number; speed: number; status: string } | null = null;
+  /** THE FRAME LOCK's stamped walls (StatusDef.frameLock — the fourth
+   *  wall): the governing view frame frozen where the lock's rising edge
+   *  found it; null while no frameLock status is worn. Re-derived each
+   *  tick; transient, never snapshotted. */
+  frameLockRect: import('./fourthwall').ViewRect | null = null;
   /** Knockback in flight: a decaying VELOCITY that impulses ADD to — so
    *  overlapping blasts batter a target around instead of teleport-sliding
    *  it (see World.pushActor). Collision-respecting. */
@@ -2046,7 +2057,7 @@ export class Actor {
    *  an action START"; this asks "is any action (or interruption) STILL
    *  RUNNING". */
   isQuiescent(): boolean {
-    return !this.casting && !this.dash && !this.push && this.useLock <= 0
+    return !this.casting && !this.dash && !this.caromRun && !this.push && this.useLock <= 0
       && !this.isStunned() && this.heldBy === undefined;
   }
 
@@ -3261,7 +3272,7 @@ export class Actor {
    *  recovery gate, the bleed, and any HUD that wants to say why the bank
    *  is hissing. */
   skillBankStill(): boolean {
-    return this.idleFor >= BANK_STILL_GRACE && !this.dash && !this.leap;
+    return this.idleFor >= BANK_STILL_GRACE && !this.dash && !this.leap && !this.caromRun;
   }
 
   /** Effective use-charge maximum: spec max + the skillCharges stat

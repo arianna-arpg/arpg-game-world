@@ -96,6 +96,13 @@ export interface TrajectorySpec {
   /** TERRAIN BOUNCE (Galewisp): ricochets off rocks, walls and masonry
    *  this many times before dying — the twister that works the room. */
   bounce?: number;
+  /** FRAME REBOUND (the fourth wall — engine/fourthwall.ts): banks off the
+   *  edge of the caster's governing VIEW FRAME this many times, each
+   *  rebound re-arming the flight's range and hit ledger (the re-throw
+   *  idiom). The projFrameBounce stat deepens it exactly the way
+   *  projBounce deepens `bounce` — the kindred law; gems create the lane
+   *  from nothing on frameless flights. */
+  frameBounce?: number;
   /** RECURVE (Heartchaser): on a survived hit, this `chance` to whip
    *  around and strike the SAME victim again — × `decay` per recurve, so
    *  the miracle shots run out. The victim's hit-lock clears on the turn. */
@@ -1928,6 +1935,37 @@ export interface DashDelivery {
   };
 }
 
+/**
+ * THE CAROM MOTOR (the fourth wall — engine/fourthwall.ts): the caster
+ * becomes the ball. For `duration` seconds the body flies at a fixed
+ * `speed`, BANKING off standing walls and off the edge of its governing
+ * view frame alike (frameReflect — the one reflection the frame-rebound
+ * projectile lane shares), and pays the skill's whole payload through
+ * resolveHit at every body contact — baseDamage, effects, statuses,
+ * knockback, supports and credit all ride the one pipeline, throttled per
+ * victim by the `rehit` clock. The worn `status` (default 'caroming') is
+ * the ride's ONE clock and face: dispel it and the ride ends; its def's
+ * frameLock is what seals the camera (name a lockless status row for a
+ * free-frame carom — the lock is the status's law, never this delivery's).
+ * The dash's trail/blast grammar rides: moveBlast pays at launch and at
+ * the stop, so the movement-blast support family composes unchanged.
+ */
+export interface CaromDelivery {
+  type: 'carom';
+  /** Flight speed, units/second. */
+  speed: number;
+  /** Seconds in flight (× the caster's effectDuration). */
+  duration: number;
+  /** Per-victim re-hit clock, seconds (default FOURTH_WALL_CFG.carom.rehitSec). */
+  rehit?: number;
+  /** Damage multiplier on contact hits (default 1). */
+  contactScale?: number;
+  /** The status worn for the ride (default 'caroming'). Its StatusDef is
+   *  the extension seat: frameLock, mods, voice — all the ride's dressing
+   *  lives on the status row, as data. */
+  status?: string;
+}
+
 /** Teleportation: instant, delayed (Warp), or behind a targeted enemy. */
 export interface BlinkDelivery {
   type: 'blink';
@@ -2464,7 +2502,7 @@ export type Delivery =
   | GroundDelivery | SelfDelivery | SummonDelivery | DashDelivery
   | StormDelivery | ConstructDelivery | AuraDelivery | DetonateDelivery
   | TargetDelivery | BlinkDelivery | MarkDelivery | LeapDelivery
-  | DetonateProjectileDelivery;
+  | DetonateProjectileDelivery | CaromDelivery;
 
 // --- Cast modes: how a cast behaves between press and resolution -------------
 

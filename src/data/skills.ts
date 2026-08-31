@@ -2847,6 +2847,30 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
   },
 
+  // THE FOURTH WALL's movement debut (CaromDelivery — engine/fourthwall.ts):
+  // the frame seals, the body becomes the ball. The long cooldown is the
+  // deliberate first-pass throttle while the ride's numbers are tuned; the
+  // ride itself ends early through the one status door (dispel, stun, a
+  // grab, a willed dash — the saddle law).
+  caged_comet: {
+    id: 'caged_comet', name: 'Caged Comet',
+    description: 'Seal the edge of your vision into a cage and hurl yourself as its comet: for'
+      + ' 3 seconds you ricochet off walls and the cage\'s rim alike, striking everything you'
+      + ' touch and sailing over pits and chasms as you fly. Your view holds its ground until'
+      + ' the cage breaks.',
+    tags: ['attack', 'melee', 'movement', 'physical'], color: '#8ad0e8',
+    manaCost: 20, cooldown: 18, useTime: 0,
+    baseDamage: { physical: [14, 22] },
+    delivery: { type: 'carom', speed: 620, duration: 3 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 45 },
+    ],
+    requirements: { dexterity: 20 },
+    ai: { range: 340, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
+  },
+
   warp: {
     id: 'warp', name: 'Warp',
     description: 'Fold space toward the target point: after a 0.9-second delay, you are simply'

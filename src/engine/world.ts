@@ -12,6 +12,7 @@ import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, rand
 import { DiscIndex } from './spatial';
 import { ActorGrid } from './actorGrid';
 import { erraticTurn, spinOffset, weaveOffset, weaveVel } from './flight';
+import { FOURTH_WALL_CFG, type ViewRect, fallbackRect, frameReflect, rectCenter } from './fourthwall';
 import { mod, type AttributeId, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, bankFracOf, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
 import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingState, type GainEvent, type MonsterPartDef, type Team } from './actor';
@@ -986,6 +987,10 @@ interface Projectile {
   zig?: { timer: number; sign: number };
   /** Terrain ricochets remaining. */
   bounces?: number;
+  /** Frame rebounds remaining (the fourth wall — projFrameBounce /
+   *  TrajectorySpec.frameBounce): banks off the caster's governing view
+   *  frame, range + hit ledger re-armed per rebound (the re-throw idiom). */
+  frameBounces?: number;
   /** PHASING flight (occlusion 'free' / the phasing stat): terrain never
    *  stops it — through rock, walls and masonry like mist. */
   phase?: boolean;
@@ -4017,6 +4022,81 @@ export class World {
    *  meta mutated) — main.ts persists guest saves promptly, like charDirty. */
   couchDirty = false;
 
+  // THE FOURTH WALL (engine/fourthwall.ts): the drawn frame as a surface.
+
+  /** The frame the renderer ACTUALLY DREW, world units (camera top-left +
+   *  view dims) — republished every rendered frame (the couchConfine idiom
+   *  generalized to solo play). Null until a first draw; staleness judged
+   *  by viewFrameAt against publishGraceSec, so a hidden pane or a headless
+   *  boot degrades to the fallback instead of yanking stale walls around. */
+  viewFrame: ViewRect | null = null;
+  viewFrameAt = -1;
+
+  /** THE PUBLISH: the renderer hands back the drawn frame each rAF. */
+  publishViewFrame(x: number, y: number, w: number, h: number): void {
+    if (!(w > 0) || !(h > 0)) return;
+    if (this.viewFrame) {
+      this.viewFrame.x = x; this.viewFrame.y = y;
+      this.viewFrame.w = w; this.viewFrame.h = h;
+    } else this.viewFrame = { x, y, w, h };
+    this.viewFrameAt = this.time;
+  }
+
+  /** THE READ — the ONE resolver for "which frame governs this body": the
+   *  bearer's stamped frame LOCK first (StatusDef.frameLock), then a lock
+   *  up the owner chain (a minion shares its keeper's cage), then the live
+   *  published frame for player-team bodies, then THE FALLBACK centered on
+   *  the body's root owner. Headless play and enemy bodies are therefore
+   *  deterministic by construction — and an enemy never tests against the
+   *  PLAYER's drawn frame (fairness is structural, never special-cased). */
+  viewRectFor(body: Actor): ViewRect {
+    if (body.frameLockRect) return body.frameLockRect;
+    let root = body;
+    for (let hops = 0; root.owner && hops < 4; hops++) {
+      root = root.owner;
+      if (root.frameLockRect) return root.frameLockRect;
+    }
+    if (root.team === this.player.team && this.viewFrame
+      && this.time - this.viewFrameAt <= FOURTH_WALL_CFG.publishGraceSec) {
+      return this.viewFrame;
+    }
+    return fallbackRect(root.pos.x, root.pos.y);
+  }
+
+  /** THE LOCK's camera pin: the stamped rect center of the first local
+   *  hero wearing one (couch heroes included) — null while no lock holds.
+   *  The renderer reads it BELOW the cinematic eye (a running scene owns
+   *  the camera outright) and above the ordinary follow. */
+  frameLockFocus(): { x: number; y: number } | null {
+    for (const a of this.couchHeroes()) {
+      if (!a.dead && a.frameLockRect) return rectCenter(a.frameLockRect);
+    }
+    return null;
+  }
+
+  /** End a carom ride (the fourth wall): motor off, stashes cleared, the
+   *  ride status stripped (the ONE clock, both directions — the motor dies
+   *  when the status leaves, and ending the motor takes the status with
+   *  it), and the stop's movement-blast paid unless quiet (zone landings
+   *  and saddle seats end rides without eruptions). */
+  endCarom(a: Actor, opts?: { quiet?: boolean }): void {
+    const run = a.caromRun;
+    if (!run) return;
+    a.caromRun = null;
+    const c = a as Actor & {
+      caromSkill?: SkillInstance; caromHits?: Map<number, number>; caromRung?: Set<number>;
+    };
+    const inst = c.caromSkill;
+    c.caromSkill = undefined;
+    c.caromHits = undefined;
+    c.caromRung = undefined;
+    a.endStatus(run.status);
+    if (!opts?.quiet && inst && !a.dead) {
+      this.moveBlast(a, inst, a.pos);
+      this.dropLingerField(a, inst, a.pos);
+    }
+  }
+
   /** The local shared-screen guest seats (never the local hero's own seat). */
   couchSeats(): Seat[] { return this.seats.filter(s => s.couch); }
 
@@ -5561,11 +5641,15 @@ export class World {
     p.tier = 0;
     p.onTierLink = false;
     p.aiTierGoal = undefined;
+    this.endCarom(p, { quiet: true });
+    p.frameLockRect = null; // a surviving lock re-stamps fresh walls here
     for (const a of this.actors) {
       if (a === p) continue;
       a.dash = null;
       a.casting = null;
       a.push = null;
+      if (a.caromRun) this.endCarom(a, { quiet: true });
+      a.frameLockRect = null;
       a.tier = 0;
       a.onTierLink = false;
       a.aiTierGoal = undefined;
@@ -11907,6 +11991,7 @@ export class World {
         a.pos.y = seat.y;
         a.dash = null;
         a.push = null;
+        if (a.caromRun) this.endCarom(a, { quiet: true }); // the saddle beats the ball
         // Carried bearing: an idle rider faces where the beast runs; a
         // fighting one keeps the aim its own brain chose (the parts law).
         if (!a.aggroed) a.facing = m.facing;
@@ -31182,7 +31267,8 @@ export class World {
     // a resolved enemy REDIRECTS the movement itself — the lunge, blink or
     // leap re-aims at the prey's LIVE position, not the fumbled cursor.
     if (targetInfo?.actor && !targetInfo.actor.dead
-      && (def.delivery.type === 'dash' || def.delivery.type === 'blink' || def.delivery.type === 'leap')) {
+      && (def.delivery.type === 'dash' || def.delivery.type === 'blink'
+        || def.delivery.type === 'leap' || def.delivery.type === 'carom')) {
       aim = vec(targetInfo.actor.pos.x, targetInfo.actor.pos.y);
     }
     if (!opts.keepFacing) caster.facing = angleTo(caster.pos, aim);
@@ -31336,7 +31422,7 @@ export class World {
       // (aim never moves between them). Each beat re-aims via retarget, so
       // the banked presses spend themselves as a flicker of knives.
       const dv = def.delivery.type;
-      if (dv === 'blink' || dv === 'dash' || dv === 'leap') {
+      if (dv === 'blink' || dv === 'dash' || dv === 'leap' || dv === 'carom') {
         this.pendingRepeats.push({
           caster, inst, aim: vec(aim.x, aim.y),
           n: repeats - 1, k: 1, timer: 0.16, interval: 0.16,
@@ -33042,6 +33128,8 @@ export class World {
       }
 
       case 'dash': {
+        // A willed dash quits a live carom ride first (the saddle law).
+        if (caster.caromRun) this.endCarom(caster, { quiet: true });
         // A mirage left at the launch point that draws enemy attention.
         if (d.decoyDuration) {
           const mirage = new Actor(`${caster.name}?`, caster.team, vec(caster.pos.x, caster.pos.y));
@@ -33123,7 +33211,36 @@ export class World {
         break;
       }
 
+      case 'carom': {
+        // THE CAROM MOTOR (the fourth wall — engine/fourthwall.ts): the
+        // caster becomes the ball. The worn ride status is the ONE clock —
+        // expiry, dispel and the cleanse family all end the ride through
+        // the same door — and its def's frameLock is what seals the camera
+        // (the status's law, never this delivery's). The payload pays per
+        // contact in update() through resolveHit: baseDamage, effects,
+        // supports and credit all ride the one pipeline, the dash
+        // corridor's grammar on a per-victim rehit clock.
+        if (caster.caromRun) this.endCarom(caster, { quiet: true });
+        const caromSpeed = d.speed * (opts.speedMult ?? 1);
+        const caromDur = d.duration * caster.sheet.get('effectDuration', tags, extra);
+        const rideStatus = d.status ?? 'caroming';
+        caster.caromRun = { dir: caster.facing, speed: caromSpeed, status: rideStatus };
+        (caster as Actor & { caromSkill?: SkillInstance }).caromSkill = inst;
+        (caster as Actor & { caromHits?: Map<number, number> }).caromHits = new Map();
+        (caster as Actor & { caromRung?: Set<number> }).caromRung = new Set();
+        // effectDuration folded into the scale here — applyStatus must not
+        // fold it twice, so the ride's true seconds ride the ratio alone.
+        const rideDef = STATUS_DEFS[rideStatus];
+        if (rideDef) caster.applyStatus(rideStatus, 0, caromDur / (rideDef.duration || 1), def.name);
+        // Dive Bomb & kin: the launch pays the departure half, so the
+        // movement-blast support family composes unchanged.
+        this.moveBlast(caster, inst, caster.pos, 'depart');
+        break;
+      }
+
       case 'blink': {
+        // A willed blink quits a live carom ride first (the saddle law).
+        if (caster.caromRun) this.endCarom(caster, { quiet: true });
         let dest: Vec2;
         if (d.behindTarget && targetInfo?.actor) {
           // Shadow Step: emerge on the far side, facing the target.
@@ -33228,6 +33345,8 @@ export class World {
         };
         caster.untargetable = true; // airborne: nothing can touch them
         caster.dash = null;
+        if (caster.caromRun) this.endCarom(caster, { quiet: true }); // wings beat the ball
+
         caster.useLock = Math.max(caster.useLock, d.airTime + 0.1);
         // THE VENT-RIDE's take-off: the departure point ERUPTS — the skill's
         // own hit on every enemy standing in the column (× the vent's scale:
@@ -34487,6 +34606,12 @@ export class World {
       // — a shuttling flight never wall-bounces on top of its own weave.
       bounces: opts?.patrol?.length ? undefined
         : Math.round(caster.sheet.get('projBounce', tags, extra, t?.bounce ?? 0)) || undefined,
+      // FRAME REBOUNDS (the fourth wall) ride the same kindred shape —
+      // innate frameBounce seeds the projFrameBounce query, so Mirrored
+      // Bounds creates the lane from nothing. Patrol shuttles keep their
+      // authored geometry: no frame banking on a fixed weave.
+      frameBounces: opts?.patrol?.length ? undefined
+        : Math.round(caster.sheet.get('projFrameBounce', tags, extra, t?.frameBounce ?? 0)) || undefined,
       // PHASING (occlusion 'free' / the phasing stat, support-graftable):
       // terrain never stops this flight.
       phase: this.skillOcclusion(caster, inst) === 'free' || undefined,
@@ -44253,6 +44378,20 @@ export class World {
         }
       }
       if (a.casting) this.updateCasting(a, dt);
+      // THE FRAME LOCK re-derive (StatusDef.frameLock — the fourth wall):
+      // stamped once at the rising edge from the frame that governs the
+      // bearer THAT instant (copied — the live published rect mutates),
+      // held while any declaring status is worn, cleared at the falling
+      // edge. The flight-state idiom: status traffic is the whole law.
+      {
+        let frameLocked = false;
+        for (const s of a.statuses) {
+          if (STATUS_DEFS[s.id]?.frameLock) { frameLocked = true; break; }
+        }
+        if (frameLocked) {
+          if (!a.frameLockRect) a.frameLockRect = { ...this.viewRectFor(a) };
+        } else if (a.frameLockRect) a.frameLockRect = null;
+      }
       if (a.dash) {
         const inst = (a as Actor & { dashSkill?: SkillInstance }).dashSkill;
         const hits = (a as Actor & { dashHits?: Set<number> }).dashHits;
@@ -44394,6 +44533,67 @@ export class World {
           }
         }
       }
+      // THE CAROM MOTOR (the fourth wall — CaromDelivery): the body is the
+      // ball. The worn ride status is the ONE clock — when it leaves
+      // (expiry, dispel, cleanse) the ride ends through endCarom's single
+      // door, stop-blast paid. A grab, a saddle, hard CC, a downing and
+      // death all end it early; walls and the governing frame bank the
+      // heading through the one shared reflection (drawn == banked).
+      if (a.caromRun) {
+        const run = a.caromRun;
+        const caromC = a as Actor & {
+          caromSkill?: SkillInstance; caromHits?: Map<number, number>; caromRung?: Set<number>;
+        };
+        const inst = caromC.caromSkill;
+        if (!a.statuses.some(s => s.id === run.status) || a.dead || a.downed
+          || a.isStunned() || a.heldBy !== undefined || a.mountId !== undefined) {
+          this.endCarom(a);
+        } else {
+          const C = FOURTH_WALL_CFG.carom;
+          const spec = inst?.def.delivery.type === 'carom' ? inst.def.delivery : undefined;
+          const step = run.speed * dt;
+          const beforeX = a.pos.x, beforeY = a.pos.y;
+          const wantX = Math.cos(run.dir) * step, wantY = Math.sin(run.dir) * step;
+          this.steppedClamp(a, vec(a.pos.x + wantX, a.pos.y + wantY), a.pos);
+          // WALL BANK: whichever axis the clamp refused flips — the
+          // projectile grid-bounce's axis law at body scale, through the
+          // ONE mover every walker shares (drawn == banked, no forked
+          // collision fabric).
+          let cdx = Math.cos(run.dir), cdy = Math.sin(run.dir), banked = false;
+          if (Math.abs(wantX) > C.blockedMin
+            && (a.pos.x - beforeX) / wantX < C.blockedFrac) { cdx = -cdx; banked = true; }
+          if (Math.abs(wantY) > C.blockedMin
+            && (a.pos.y - beforeY) / wantY < C.blockedFrac) { cdy = -cdy; banked = true; }
+          if (banked) run.dir = Math.atan2(cdy, cdx);
+          // FRAME BANK: the governing rect — the stamped lock while one
+          // holds, the live drawn frame otherwise.
+          const fw = frameReflect(a.pos.x, a.pos.y, run.dir, a.radius, this.viewRectFor(a));
+          if (fw) {
+            a.pos.x = fw.x;
+            a.pos.y = fw.y;
+            run.dir = fw.dir;
+          }
+          a.facing = run.dir;
+          // CONTACT: the skill's whole payload through the one pipeline,
+          // per victim on the rehit clock (segment-aware — coils are real
+          // bodies; the corridor's noteBodyHit grammar verbatim).
+          if (inst) {
+            const rehit = spec?.rehit ?? C.rehitSec;
+            const reach = a.radius + C.contactPad;
+            for (const enemy of this.enemiesOf(a)) {
+              const nb = nearestBody(enemy, a.pos);
+              if (dist(a.pos, nb.pos) - nb.r > reach) continue;
+              if ((caromC.caromHits?.get(enemy.id) ?? -1) > this.time) continue;
+              caromC.caromHits?.set(enemy.id, this.time + rehit);
+              noteBodyHit(enemy, nb.seg);
+              this.resolveHit(a, inst, enemy, spec?.contactScale ?? 1);
+            }
+            // THE MALLET: bells rung and pots popped along the roll, once
+            // per ride (the dash corridor's own ledger law).
+            this.strikeSurfaces(a, a.pos, reach, undefined, caromC.caromRung);
+          }
+        }
+      }
       // BODY WAKE (MonsterDef.wake): the body itself SHEDS its ground
       // payload as it travels — every everyDist units of ACTUAL
       // displacement (walks, dashes, shoves alike) the named catalog skill
@@ -44522,7 +44722,7 @@ export class World {
         if (Math.hypot(p.vx, p.vy) < 40) a.push = null;
       }
       // Slippery ground: momentum carries you on even with no input.
-      if (!a.dash && !a.casting && !a.leap && a.lastMoveAt < this.time - 0.05) {
+      if (!a.dash && !a.caromRun && !a.casting && !a.leap && a.lastMoveAt < this.time - 0.05) {
         const sp = Math.hypot(a.vel.x, a.vel.y);
         if (sp > 4) {
           const traction = clamp(a.sheet.get('traction'), 0.05, 1);
@@ -45943,7 +46143,7 @@ export class World {
   private groundFallEligible(): Actor[] {
     const eligible: Actor[] = [];
     for (const a of this.actors) {
-      if (a.dead || a.flying || this.levitating(a) || a.leap || a.dash) continue;
+      if (a.dead || a.flying || this.levitating(a) || a.leap || a.dash || a.caromRun) continue;
       if (a === this.player && (this.traversal || this.pendingRespawn)) continue;
       eligible.push(a);
     }
@@ -46231,7 +46431,7 @@ export class World {
    *  nor do the floating (resolveBoundary's guard) — and the airborne sail
    *  their arcs (dash/leap answer to their own landings, the skyfall rule). */
   private routePitFall(a: Actor, policy: { damage?: DamageSpec }, pre: Vec2, forced: boolean): void {
-    if (a.flying || a.dash || a.leap) return;
+    if (a.flying || a.dash || a.leap || a.caromRun) return;
     if (a === this.player) {
       // THE LADDER RUNS OUT (PIT_CFG.dropCave.maxChain): a hollow already
       // hanging maxChain consecutive falls deep resolves the next fall as
@@ -46740,7 +46940,7 @@ export class World {
           const d2 = c.summonInst?.def.delivery;
           const propel = d2?.type === 'construct' ? d2.propel : undefined;
           if (!owner || owner.dead || !propel) break;
-          if (dist(c.pos, owner.pos) <= c.radius + owner.radius + 4 && !owner.dash) {
+          if (dist(c.pos, owner.pos) <= c.radius + owner.radius + 4 && !owner.dash && !owner.caromRun) {
             owner.dash = { dir: c.facing, speed: propel.speed, remaining: propel.distance / propel.speed };
             (owner as Actor & { dashSkill?: SkillInstance }).dashSkill = undefined;
             (owner as Actor & { dashHits?: Set<number> }).dashHits = undefined;
@@ -48945,7 +49145,7 @@ export class World {
       const presser = presserId !== undefined
         ? this.actors.find(a => a.id === presserId && !a.dead) : undefined;
       for (const a of this.actors) {
-        if (a.dead || a.downed || a.flying || a.dash || a.leap) continue;
+        if (a.dead || a.downed || a.flying || a.dash || a.leap || a.caromRun) continue;
         const g = made.find(d => dist(a.pos, d.pos) <= d.radius);
         if (!g) continue;
         const dir = Math.atan2(g.pos.y - a.pos.y, g.pos.x - a.pos.x);
@@ -49877,7 +50077,7 @@ export class World {
     for (let i = 0; i < this.actors.length; i++) {
       if (((this.terrainTick + i) & 15) !== 0) continue;
       const a = this.actors[i];
-      if (a.dead || a.construct || a.leap || a.dash || a.anchored || a.passive) continue;
+      if (a.dead || a.construct || a.leap || a.dash || a.caromRun || a.anchored || a.passive) continue;
       // The probe judges on the body's OWN story (layer sovereignty): a
       // root-duct runner under a surface trunk is not stuck — before the
       // gate, the sentinel snap-teleported it out from beneath every tree
@@ -51967,6 +52167,7 @@ export class World {
     if (def.channel || def.castMode === 'guard'
       || def.delivery.type === 'aura' || def.delivery.type === 'dash'
       || def.delivery.type === 'blink' || def.delivery.type === 'leap'
+      || def.delivery.type === 'carom'
       || def.pool || def.invokes || def.comboChain
       || (def.delivery.type === 'ground' && def.delivery.strobe)) return false;
     // Status locks still bind (a Silenced hero's spells stay silenced) and
@@ -52372,6 +52573,34 @@ export class World {
       p.pos = this.advanceProjectile(p, dt);
       // Keep `dir` pointing along actual motion for rendering & chains.
       if (p.guided && dist(prev, p.pos) > 0.5) p.dir = angleTo(prev, p.pos);
+
+      // THE FOURTH WALL's FRAME REBOUND (projFrameBounce / frameBounce):
+      // a free flight banks off the edge of its caster's governing view
+      // frame, range and hit ledger re-armed (the re-throw idiom) — the
+      // shot stays a live threat while its rebounds last. Tethered and
+      // destined flights are exempt: an orbit, a spiral, a return leg, an
+      // arc-to hook, a patrol shuttle and a catch-spot landing all own
+      // their geometry.
+      if (p.frameBounces && p.frameBounces > 0
+        && !(p.orbit > 0) && !(p.spiral > 0) && !p.returnPhase
+        && !p.destAt && !p.patrol && !p.landAt) {
+        const fw = frameReflect(p.pos.x, p.pos.y, p.guideDir, p.radius,
+          this.viewRectFor(p.caster), FOURTH_WALL_CFG.proj.edgePad);
+        if (fw) {
+          p.frameBounces--;
+          p.pos.x = fw.x;
+          p.pos.y = fw.y;
+          p.guideDir = p.dir = fw.dir;
+          p.anchor.x = fw.x;
+          p.anchor.y = fw.y;
+          p.traveled = 0;
+          p.hits.clear();
+          this.flashes.push({
+            pos: vec(fw.x, fw.y), radius: p.radius + FOURTH_WALL_CFG.proj.flashPad,
+            color: p.color, life: 0.18, maxLife: 0.18,
+          });
+        }
+      }
 
       // CATCH-SPOT ARRIVAL (Whirlaxe): the axe PLANTS as a catchable
       // embed at its marked circle — the run-over collect machinery pays
@@ -56451,7 +56680,7 @@ export class World {
       }
     }
     if (kindId === undefined) return false;
-    if (a.flying || a.dash || a.leap || this.levitating(a)) return false;
+    if (a.flying || a.dash || a.leap || a.caromRun || this.levitating(a)) return false;
     return !this.groundInsured(a, kindId);
   }
 
@@ -57058,7 +57287,7 @@ export class World {
         // keeps the rest). The airborne and the floating never trigger it —
         // a dash sails the gap it entered (its landing answers to the
         // fields' teeter, not the boundary), wings ride the wind free.
-        if (a.flying || this.levitating(a) || a.dash || a.leap) return;
+        if (a.flying || this.levitating(a) || a.dash || a.leap || a.caromRun) return;
         if (a === this.player && (this.traversal || this.pendingRespawn)) return;
         this.routeSkyFalls([a]);
         return;
@@ -57616,7 +57845,9 @@ export class World {
     // The PASSIVE lock is a volition lock — a DRIVEN body (engine-wheeled
     // scenery: the serpent's passing glimpse) has no volition to lock; the
     // engine's own hand moves it. Death, stun, dash and anchors still hold.
-    if (a.dash || a.leap || a.isStunned() || a.dead || a.anchored || (a.passive && !a.driven)) return true;
+    // The carom motor is a volition lock too — the ball has no legs; the
+    // stick feeds nothing while the ride holds (reflex flasks still fire).
+    if (a.dash || a.leap || a.caromRun || a.isStunned() || a.dead || a.anchored || (a.passive && !a.driven)) return true;
     // SEALS & FORMS: a toggled form with moveFactor 0 ROOTS its bearer
     // (Stormbind plants you) — factors above 0 slow in moveActor instead.
     for (const au of a.activeAuras.values()) {

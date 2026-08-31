@@ -663,6 +663,11 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_marrowcraft', kind: 'skill', cost: 190, reqLedgerCounts: { [bestiaryKey('charnel_ghoul')]: 1 }, label: 'Skill Pool: Marrowcraft',
     description: 'Marrowhooks may drop. The ghoul guarded its pile like a purse. It was right about the worth, wrong about the spending.',
     payload: { skillIds: ['marrowhooks'] } },
+  // THE FOURTH WALL's movement art (engine/fourthwall.ts — the frame seals,
+  // the body becomes the ball).
+  { id: 'gem_skills_fourthwall', kind: 'skill', cost: 160, reqLevel: 1, label: 'Skill Pool: the Caged Comet',
+    description: 'Caged Comet may drop. Seal the edge of your vision into a cage and be the thing that ricochets inside it.',
+    payload: { skillIds: ['caged_comet'] } },
 
   // --- Support drop bundles -------------------------------------------------
   { id: 'sup_t2', kind: 'support', cost: 100, reqLevel: 0, label: 'Support Pool II',
@@ -696,6 +701,12 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'sup_clutch', kind: 'support', cost: 150, reqLevel: 1, label: 'Support Pool: the Clutch',
     description: 'Broodbearer and Teeming Vein may drop. Landings that bear — and a gem cut once at the vein, no two alike.',
     payload: { supportIds: ['broodbearer', 'teeming_vein'] } },
+  // THE FOURTH WALL's gem side — the Scald's tuition idiom: the art first,
+  // then the temper that turns every flight into the same game.
+  { id: 'sup_fourthwall', kind: 'support', cost: 140, requiresUnlock: 'gem_skills_fourthwall', tease: true,
+    label: 'Support Pool: Mirrored Bounds',
+    description: 'Mirrored Bounds may drop. The edge of your vision turns to glass, and your shots learn to play the room.',
+    payload: { supportIds: ['mirrored_bounds'] } },
   { id: 'sup_fragments', kind: 'support', cost: 150, reqLevel: 1, label: 'Support Pool: Fragments',
     description: 'Fragmentation, Bulwark Shards, Rage Remnant may drop.',
     payload: { supportIds: ['fragmentation', 'bulwark_shards', 'rage_remnants'] } },

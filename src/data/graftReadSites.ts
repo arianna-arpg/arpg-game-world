@@ -242,6 +242,22 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
     defReads: def => defCarriesStat(def, 'lingerField'),
     site: 'instanceSizeOver (ground discs + fissure half-width walks + the lifted linger field; spawnZone pools read no envelope)',
   },
+  {
+    kind: 'stat', key: 'projFrameBounce',
+    // THE FOURTH WALL fabric (engine/fourthwall.ts): frame-rebound flight
+    // payloads (projFrameBounce) fire only when a projectile CROSSES the
+    // view frame boundary (frameReflect). Only projectile deliveries have
+    // a single flight path that can cross a frame boundary; storm/construct/
+    // summon deliveries are area-scoped, manifested, or creature-summoned —
+    // none have a "projectile trajectory" to rebound. Tagged 'projectile'
+    // skills with non-projectile deliveries (arrowfall: storm, hell_rift:
+    // construct, etc.) don't read this stat meaningfully.
+    deliveries: ['projectile'],
+    site: 'frameReflect (view frame boundary crossing — flight path rebounds off the cached frame rect)',
+    inertOk: [
+      { support: 'mirrored_bounds', why: `deliveries tagged 'projectile' but not delivery-type projectile (storm: arrowfall, construct: hell_rift/mirage_archer, summon: infernal_bombardment/summon_wraith, crew-riding: call_the_rift) — only projectile delivery types read the bounce mechanic; the tag breadth is a design decision (projectile-themed mechanics on other skills)`, since: '2026-08-31' },
+    ],
+  },
 ];
 
 // exposure / zoneGrow / zoneSizeOver are ROWED as of 2026-07-28 (above) —

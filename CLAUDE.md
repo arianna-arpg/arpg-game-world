@@ -267,6 +267,31 @@ we verify changes.
   `StatusDef.timeScale` stasis/slow statuses; world- and per-actor scales,
   solo-only menu policy via `Timeflow.allowHold` — docs in
   `docs/engine/timeflow.md`),
+  `fourthwall.ts` (THE FOURTH WALL — the camera's drawn frame as a gameplay
+  surface: the renderer PUBLISHES the frame it actually drew
+  (`World.publishViewFrame` — the couchConfine drawn==tested idiom
+  generalized to solo), `World.viewRectFor` is the ONE governing-frame
+  resolver (stamped lock → owner-chain lock → live published frame for
+  player-team bodies → the deterministic FALLBACK centered on the body's
+  root — an enemy never tests the player's drawn frame, fairness is
+  structural), `StatusDef.frameLock` freezes the walls where the status
+  found them (rising-edge stamp onto `Actor.frameLockRect`; the camera pins
+  BELOW the cinematic eye; the 'framecage' screen-fx rim is the drawn
+  tell), and `frameReflect` is the one bank math every consumer shares.
+  Consumers: the FRAME-REBOUND projectile lane
+  (`TrajectorySpec.frameBounce` seeds × the `projFrameBounce` stat — the
+  projBounce kindred shape, folded at the one spawn site; each bank re-arms
+  range + hit ledger, the re-throw idiom; the Mirrored Bounds gem) and THE
+  CAROM MOTOR (`CaromDelivery` → `Actor.caromRun`, the third carried-body
+  motor beside dash/leap: banks off walls and the frame alike through
+  steppedClamp + frameReflect, pays the skill's whole payload through
+  resolveHit on a per-victim rehit clock, the worn ride status is the ONE
+  clock both ways (dispellable by construction; its def carries the lock),
+  willed movement quits the ride — the saddle law; debut Caged Comet, 18s
+  first-pass throttle, monsters cast it through the same door; Vault rows
+  `gem_skills_fourthwall` → `sup_fourthwall`) — dials in
+  `FOURTH_WALL_CFG`, docs in `docs/engine/fourthwall.md`, probe
+  `balance/probe_fourthwall.ts`),
   `throng.ts` + `cling.ts` (THE THRONG FABRIC — the swarm you GATHER, the
   Pikmin/Overlord playstyle as data: `SkillDef.throng` anchors a roster of
   sight-gated wild husks CLAIMED by walking through them, acquisition as

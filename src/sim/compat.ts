@@ -501,6 +501,9 @@ export function rackDummyFor(sup: SupportDef | undefined): { id: string; why: st
 export const RANGE_RIG_STATS = [
   'chainCount', 'projBounce', 'pierceCount', 'forkCount', 'homingPower',
   'guidePower', 'projPulse', 'projReShatter', 'returnShrapnel', 'projInherit',
+  // The frame-rebound lane (the fourth wall): the flight needs road to
+  // REACH the fallback frame's edge before it can bank off it.
+  'projFrameBounce',
 ];
 /** Wall-scoped range payloads fire INTO the masonry: the bank and the
  *  unspent-end bloom need the flight to meet stone, and a homing flight
@@ -1408,6 +1411,21 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
       && summonCrewOf(def.delivery, id => MONSTERS[id], id => SKILLS[id]) === 'unknowable'
       && supportRidesMinions(sup)
       && !supportFitsInst(sup, makeSkillInstance(def, 1, 3)),
+  },
+  {
+    // THE FOURTH WALL fabric (engine/fourthwall.ts): frame-rebound flight
+    // payloads (projFrameBounce) fire only when a projectile CROSSES the
+    // view frame boundary. The standoff dummy probe fires FLAT projectiles
+    // from inside the fallback frame (FOURTH_WALL_CFG.fallback rect centered
+    // on the caster), so a road ending inside halfW 660 never exits the frame
+    // to rebound off it — the crossing condition is structurally unmeasurable.
+    // The 16 effective pairs (long-road flights that DO cross) + the
+    // deterministic probe_fourthwall.ts rig (vertical firebolt banking off
+    // halfH 380, 37/37 green) prove the lane is live; when a cross-frame
+    // probe shape ships, delete this row and the class re-enters measurement.
+    note: 'frame-rebound flight (projFrameBounce) fires only on a frame CROSSING — the standoff dummy probe fires FLAT projectiles from inside the fallback frame, so a road ending inside never exits it to rebound',
+    when: (def, sup) => def.delivery.type === 'projectile'
+      && supModsStat(sup, ['projFrameBounce']),
   },
 ];
 

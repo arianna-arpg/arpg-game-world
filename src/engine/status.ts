@@ -103,6 +103,16 @@ export interface StatusDef {
    *  `levitation` STAT (cloudform): a levitator floats over voids but walls
    *  still confine; a flier crosses everything. */
   flight?: true;
+  /** THE FRAME LOCK (the fourth wall — engine/fourthwall.ts): while worn,
+   *  the bearer's governing VIEW FRAME freezes where this status found it —
+   *  stamped once onto Actor.frameLockRect at the rising edge (re-derived
+   *  each tick beside the other status states, cleared when the last
+   *  frameLock status leaves), so the camera pins to the stamped rect's
+   *  center (below the cinematic eye — a running scene still owns the
+   *  camera outright) and every fourth-wall consumer tests the frozen
+   *  walls. Any status may declare it — the caroming ride does; a future
+   *  boss arena seal or duel pact is one data row away. */
+  frameLock?: true;
   /** CONCEALMENT AS A STATE: while worn, the body is not DRAWN at all —
    *  the renderer's one skip (a swallowed catch, a future burrower or
    *  submerged lurker). Pure presentation: targeting, collision and
@@ -1171,6 +1181,18 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Phasing', color: '#9ad8e8', duration: 4,
     beneficial: true,
     mods: [mod('phasing', 'flat', 1)],
+  },
+  // CAROMING — the fourth wall's ride (CaromDelivery, engine/fourthwall.ts):
+  // the ONE clock and face of the carom motor. The motor runs while this is
+  // worn and ends when it leaves — expiry, dispel, and the cleanse family
+  // all stop the ball through the same door. frameLock is the status's law,
+  // not the skill's: this row seals the camera where the cast found it;
+  // register a lockless sibling row and name it on the delivery for a
+  // free-frame carom.
+  caroming: {
+    label: 'Caroming', color: '#8ad0e8', duration: 3,
+    beneficial: true,
+    frameLock: true,
   },
   // WINDSWEPT — the geyser's uplift clinging to your heels (the sky-launch
   // traversal's landing gift): a few strides of lightness on the clouds.

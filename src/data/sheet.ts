@@ -144,7 +144,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'projectileCount', 'projectileCountChance', 'projectileSpeed', 'projectileSize',
       'pierceCount', 'chainCount', 'forkCount', 'projReturn', 'projNova', 'projPulse',
       'projShrapnel', 'projHitDetonate', 'projReShatter', 'returnShrapnel', 'projInherit',
-      'projAccel', 'projBounce', 'projRecurve',
+      'projAccel', 'projBounce', 'projFrameBounce', 'projRecurve',
       'homingPower', 'erraticPower', 'spiralPower', 'orbitPower', 'spinPower',
       'weavePower', 'guidePower',
       // Firing styles
@@ -569,6 +569,7 @@ const STAT_BLURBS: Record<string, string> = {
   projInherit: 'The fraction of a parent\'s flight character its children inherit.',
   projAccel: 'Projectiles gather (or bleed) speed over their flight.',
   projBounce: 'Projectiles ricochet off terrain before dying.',
+  projFrameBounce: 'Projectiles rebound off the edge of your vision, their range renewed each rebound.',
   projRecurve: 'Chance a surviving projectile whips around and strikes the same victim again.',
   homingPower: 'How sharply projectiles bend toward their prey.',
   erraticPower: 'Random jitter in projectile flight: chaos as a flight path.',

@@ -4843,6 +4843,21 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  // THE FOURTH WALL's trajectory lever (projFrameBounce — the frame-rebound
+  // lane): Ricochet's sibling aimed at the edge of vision instead of the
+  // masonry. One stat, read at the one spawn fold; the projectile step's
+  // frame-rebound lane re-arms range + hit ledger per rebound.
+  mirrored_bounds: {
+    id: 'mirrored_bounds', name: 'Mirrored Bounds',
+    description: 'The edge of your vision turns to glass: this skill\'s projectiles rebound off'
+      + ' it twice, their range renewed with each rebound. Stand where you want your walls —'
+      + ' composes with any flight pattern, and with Ricochet\'s masonry banks.',
+    color: '#8ad0e8', requiresTags: ['projectile'],
+    mods: [mod('projFrameBounce', 'flat', 2)],
+    perLevel: [mod('projFrameBounce', 'flat', 1)],
+    weight: 5,
+  },
+
   recurve: {
     id: 'recurve', name: 'Recurve',
     description: 'A 35% chance for this skill\'s projectiles to whip around and strike the same'

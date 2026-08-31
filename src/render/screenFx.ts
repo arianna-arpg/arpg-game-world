@@ -13,7 +13,7 @@
 
 import { STATUS_DEFS, type ActiveStatus } from '../engine/status';
 
-export type ScreenFxKind = 'vignette' | 'frost' | 'stars' | 'pall' | 'darken' | 'spin';
+export type ScreenFxKind = 'vignette' | 'frost' | 'stars' | 'pall' | 'darken' | 'spin' | 'framecage';
 
 export interface ScreenFxDef {
   kind: ScreenFxKind;
@@ -47,6 +47,12 @@ export const STATUS_FX_REGISTRY: Record<string, ScreenFxDef> = {
   chill:  { kind: 'frost', intensity: 0.55 },
   frozen: { kind: 'frost', intensity: 1.0 },
   stun:   { kind: 'stars', intensity: 0.9 },
+  // THE FRAME CAGE (the fourth wall — StatusDef.frameLock): the sealed
+  // edge of vision reads as a thin glassy rim — the wall you are about to
+  // bank off, drawn ON the wall itself. Screen-anchored BY LAW and by
+  // SUBJECT: this is the one overlay whose referent literally is the
+  // screen's edge. Any frameLock-bearing status may wear it.
+  caroming: { kind: 'framecage', intensity: 0.9 },
   // THE FLESH COUNTRY's ladders. The PALL is the vasovagal read: the world
   // desaturates and pales as faintness climbs (stack-scaled), and a swoon is
   // the full white-out drag. Deliberately beatless — the low-life vignette

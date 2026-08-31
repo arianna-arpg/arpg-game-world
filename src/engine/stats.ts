@@ -1035,6 +1035,11 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** TERRAIN RICOCHETS: bounces off rocks/walls/masonry before dying
    *  (innate TrajectorySpec.bounce seeds the query — Ricochet). */
   projBounce:     { label: 'Projectile Ricochets', base: 0, min: 0 },
+  /** FRAME REBOUNDS (the fourth wall — engine/fourthwall.ts): banks off
+   *  the edge of the caster's governing view frame, range re-armed per
+   *  rebound (innate TrajectorySpec.frameBounce seeds the query —
+   *  Mirrored Bounds). */
+  projFrameBounce: { label: 'Frame Rebounds', base: 0, min: 0 },
   /** RECURVE chance: on a survived hit, whip around and strike the SAME
    *  victim again (× the spec's decay per miracle; innate recurve.chance
    *  seeds the query — Heartchaser, the Recurve gem). */

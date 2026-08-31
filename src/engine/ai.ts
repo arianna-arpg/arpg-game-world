@@ -3269,6 +3269,7 @@ function skitterKernel(ctx: KernelCtx): void {
 function chargeKernel(ctx: KernelCtx): void {
   const { a, world, target, d, dt, spec } = ctx;
   if (a.dash) return; // mid-charge: the world carries us
+  if (a.caromRun) return; // mid-carom: the fourth wall carries us
   if (a.aiPhase === 'charge_recover') {
     a.aiTimer -= dt;
     if (a.aiTimer <= 0) a.aiPhase = '';

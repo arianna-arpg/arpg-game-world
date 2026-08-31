@@ -508,14 +508,20 @@ export class Renderer {
     // THE CINEMATIC EYE (engine/scenes.ts): a running scene may hand the
     // camera a focus of its own — the reckoning's pan is the director
     // lerping this point, so drawn == scripted with no easing forked here.
-    let focus: { x: number; y: number } = world.scene?.focus ?? world.player.pos;
+    // THE FRAME LOCK (the fourth wall — StatusDef.frameLock): a stamped
+    // lock pins the follow point to its frozen walls' center — below the
+    // cinematic eye (a running scene owns the camera outright), above the
+    // couch fit and the ordinary follow. The couch zoom still breathes;
+    // the walls stand where the lock stamped them.
+    const lockFocus = world.scene?.focus ? null : world.frameLockFocus();
+    let focus: { x: number; y: number } = world.scene?.focus ?? lockFocus ?? world.player.pos;
     if (couchOn && viewOk) {
       // The fit sees the EFFECTIVE base zoom (× pixelScale): buffer dims and
       // zoom scale together, so the stretch math is scale-invariant.
       const fit = couchFit(couchEyes.map(a => a.pos), w, h, this.baseZoom * this.pixelScale, COUCH_CFG.camera);
       this.couchStretch += (fit.stretch - this.couchStretch)
         * Math.min(1, this.frameDt * COUCH_CFG.camera.zoomLerp);
-      focus = fit.focus;
+      if (!lockFocus) focus = fit.focus; // a locked frame beats the fit's follow
     } else if (!couchOn) {
       this.couchStretch = 1; // solo: pinned exactly — the classic frame
     } // else: couch play under a degenerate view — hold the stretch as-is
@@ -538,6 +544,12 @@ export class Renderer {
     this.cam.y = camAt.y;
     world.couchConfine = couchOn && viewOk
       ? couchConfineRect(camAt, vw, vh, COUCH_CFG.camera) : null;
+    // THE FOURTH WALL's publish (engine/fourthwall.ts): the frame actually
+    // drawn, handed back every rendered frame — drawn == tested for every
+    // consumer that banks off the edge of vision (the couchConfine idiom,
+    // generalized to solo). Degenerate viewports publish nothing; the
+    // engine's staleness grace degrades reads to the fallback instead.
+    if (viewOk) world.publishViewFrame(camAt.x, camAt.y, vw, vh);
 
     // The clear IS the void: theme-tinted abyss ink (vis/voidFrame.ts), so
     // whatever the frame exposes past the rim already wears the zone's dark.
@@ -1881,6 +1893,7 @@ export class Renderer {
       }, a);
     }
     if (fx.some(f => f.def.kind === 'frost')) this.drawFrost(w, h, t);
+    if (fx.some(f => f.def.kind === 'framecage')) this.drawFrameCage(w, h, t);
     if (fx.some(f => f.def.kind === 'stars')) this.drawStunStars(w, h, t);
     if (fx.some(f => f.def.kind === 'spin')) this.drawSpin(w, h, t);
     const pall = fx.filter(f => f.def.kind === 'pall');
@@ -1927,6 +1940,22 @@ export class Renderer {
       outerFrac: 2 * (0.62 - 0.1 * kq),
       stops: [[0, 'rgba(6,4,10,0)'], [1, 'rgba(6,4,10,1)']],
     }, C.darkenFloor * k);
+  }
+
+  /** THE FRAME CAGE (the fourth wall — the 'framecage' fx kind): a thin
+   *  glassy rim hugging the screen's very edge, breathing faintly — the
+   *  sealed wall of vision the ball is about to bank off. Drawn ON its
+   *  subject: this is the one overlay whose referent IS the screen edge. */
+  private drawFrameCage(w: number, h: number, t: number): void {
+    const pulse = 0.78 + 0.22 * Math.sin(t * 5);
+    drawEdgeOverlay(this.ctx, w, h, {
+      key: 'framecage', innerFrac: 0.88,
+      stops: [
+        [0, 'rgba(138,208,232,0)'],
+        [0.82, 'rgba(138,208,232,0.10)'],
+        [1, 'rgba(170,230,250,0.55)'],
+      ],
+    }, 0.65 * pulse);
   }
 
   /** Icy edge wash + drifting snowflakes (chill / frozen). */
