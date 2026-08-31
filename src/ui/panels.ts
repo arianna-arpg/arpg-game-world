@@ -708,6 +708,10 @@ export class UI {
         : el.dataset.tip === 'vgem' ? this.vendorGemTooltip(el.dataset.vgem!) : null,
     { extend: true });
     bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
+    // THE MU CARD (data/mu.ts) speaks the same chip tongue: its skill chips
+    // carry data-tip="cskill" exactly like the class screen's — tooltips are
+    // bound PER PANEL ROOT, so the card needs its own delegation row.
+    bindTooltips(this.muCard, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
     // THE VAULT reads compact — kind, name, price — and keeps each unlock's
     // full story in the shared tooltip behind a HOVER-INTENT dwell: the wall
     // of text speaks only once the cursor has settled on a card (interest,
@@ -7405,9 +7409,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
     document.getElementById('reckon-btn')!.addEventListener('click', () => {
       this.deathScreen.classList.add('hidden');
-      // Minted nothing → there is no reckoning to hold; straight home.
+      // Minted nothing → usually straight home — EXCEPT THE DEATH LESSON
+      // (docs/design/bounty-first-writ.md §2, her word 2026-08-31): the
+      // FIRST real death walks the player into the Vault even empty-handed,
+      // so the Bounty Board's zero-cost unlock (the essence faucet) is met
+      // before "died with nothing to assign" becomes the standing habit.
+      // The Vault open itself stamps bounty_lesson_prompted (and shows the
+      // one-visit talk), so later empty deaths go straight home again; a
+      // board already owned never re-prompts.
       // (Legacy banked essence still reckons: credits > 0 arms the seal law.)
-      if (acc.credits > 0) this.showAccountScreen(onDone);
+      const lessonDue = !featureEnabled(acc, FEATURE.BOUNTY_BOARD)
+        && !(acc.ledger.bounty_lesson_prompted ?? 0);
+      if (acc.credits > 0 || lessonDue) this.showAccountScreen(onDone);
       else onDone();
     });
   }

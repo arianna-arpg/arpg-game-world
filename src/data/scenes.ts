@@ -248,6 +248,9 @@ export const SCENE_CFG = {
   panEase: 'smooth' as const,
   /** The reckoning's screen-shake at detonation. */
   blastShake: 26,
+  /** THE PATIENCE BELT: seconds past graceSec a refused muster may retry
+   *  before the stage degrades to the fade (never strand the tutorial). */
+  musterPatienceSec: 12,
   /** Drill 'move' goals ignore displacement finer than this per tick (px) —
    *  wall-grind jitter teaches nothing. */
   moveEpsilon: 0.5,

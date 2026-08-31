@@ -177,16 +177,28 @@ check('C6: the unknown cowls are NAMELESS (no npcRole — no nameplate to leak)'
   sc.fadeTarget = 0;
   v.screenFade = 0;
   step(v, 0.2);
-  const spec = sc.def.stages[ix] as { def: string; graceSec: number; floorFrac: number };
+  const spec = sc.def.stages[ix] as { def: string; verb: string; graceSec: number; floorFrac: number };
   const col = v.actors.find(a => a.defId === spec.def);
   check('F2: the commander stands — and the world is NOT held (agency, not cinema)',
     !!col && !v.timeflow.heldBy('cinematic') && sc.focus === null);
   check('F3: THE MARK — the attention chevron names him',
     sc.mark?.id === col?.id && collectAttention(v).some(pt => pt.id === 'scene_mark'));
-  check('F4: after the grace beat the muster is a live TEN-second cast',
+  // THE TEMPTATION: park the hero inside the verb's ai range so a leaky
+  // picker WOULD freelance the muster (the QA'd strand) — the ban must
+  // bind the ordinary picker, and only the director may order the verb.
+  vp.pos.x = col!.pos.x + 200;
+  vp.pos.y = col!.pos.y + 120;
+  // THE CLOCK YIELDS: pre-stamp the verb's actor-side cooldown — the
+  // director's order must clear it (no stamped clock refuses the beat).
+  col!.cooldowns.set(spec.verb, 45);
+  col!.cooldownTotals.set(spec.verb, 45);
+  check('F4: after the grace beat the muster is a live TEN-second cast (through a pre-stamped clock)',
     until(v, () => !!col?.casting, spec.graceSec + 2)
     && (col?.casting?.total ?? 0) >= 9.5,
     `total=${col?.casting?.total?.toFixed(1)}`);
+  check('F4b: THE BAN BINDS THE PICKER — the brain never pressed a banned verb itself',
+    col!.aiLastSkill == null,
+    `aiLast=${col!.aiLastSkill?.id ?? 'none'}`);
   // THE INTERRUPT RE-ARM: a stun wipes the cast (the engine's own law); the
   // director re-orders the muster once the body is free — delay, never denial.
   // Break the poise first: applyStatus shrugs hard CC by the poiseCcAvoid

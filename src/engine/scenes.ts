@@ -642,6 +642,22 @@ registerSceneStage('reckoning', {
     if (s.announce) {
       w.text(vec(w.player.pos.x, w.player.pos.y - 60), s.announce, s.announceColor ?? '#c8b070', 14);
     }
+    // THE SECOND WIND (QA, her walk 2026-08-31): a hero the tide already
+    // felled arrives GUARDED (the covenant's flags) — and a guarded body
+    // stands through the blast untouched, free to beat on an inert Father
+    // until the stage just... moves on. The whole point of this beat is
+    // that HE ends you: stand the fallen back up as he arrives — vitals
+    // whole, guards off, worth standing for — so the reckoning fells
+    // EVERYONE honestly. (A re-fall to the tide mid-muster re-guards
+    // without jumping — sc.fell stays true — and the blast still closes
+    // the stage; nobody beats on him unkillable for long.)
+    const hero = w.player;
+    if (sc.fell) {
+      hero.invulnerable = false;
+      hero.untargetable = false;
+      hero.life = hero.maxLife();
+      hero.fillResources();
+    }
     sc.mark = { id: col.id, color: col.color };
     sc.state.colId = col.id;
     sc.state.cast = false;
@@ -651,7 +667,10 @@ registerSceneStage('reckoning', {
   },
   update(w, sc, spec, _dt) {
     const s = spec as SceneReckoningStage;
-    const st = sc.state as { colId: number; cast: boolean; blastAt: number | null; enraged?: boolean };
+    const st = sc.state as {
+      colId: number; cast: boolean; blastAt: number | null;
+      enraged?: boolean; everOrdered?: boolean;
+    };
     const col = w.actors.find(a => a.id === st.colId);
     // THE DEAD-COMMANDER LANE (the mechanics-breaker's net): a Father who is
     // somehow truly finished just fades the stage forward — the wake and Mu
@@ -668,10 +687,17 @@ registerSceneStage('reckoning', {
       w.shake = Math.max(w.shake, SCENE_CFG.blastShake * 0.5);
       surgeCast(col, s);
     }
-    // Order the verb after the grace beat — a fresh instance every time, so
-    // no kit cooldown can refuse a re-muster. A refusal (mid-recovery, a
-    // stun landing the same tick) just retries next tick.
+    // Order the verb after the grace beat — a fresh instance every time,
+    // and THE CLOCK YIELDS TO THE DIRECTOR: cooldowns live ACTOR-side by
+    // def id (Actor.cooldowns), so whatever stamped the verb's clock — a
+    // press that slipped in before the ban bound, a completed earlier
+    // muster — is cleared before the order; no clock can refuse the beat.
+    // A refusal (mid-recovery, a stun landing the same tick) retries next
+    // tick.
     if (!st.cast && sc.stageT >= s.graceSec && !col.isStunned() && !col.heldBy) {
+      col.cooldowns.delete(s.verb);
+      col.cooldownTotals.delete(s.verb);
+      if (col.casting && col.casting.inst.def.id !== s.verb) col.casting = null;
       const inst = SKILLS[s.verb] ? makeSkillInstance(SKILLS[s.verb], 1) : null;
       if (!inst) {
         console.warn(`[scenes] reckoning verb '${s.verb}' is not a registered skill`);
@@ -679,10 +705,23 @@ registerSceneStage('reckoning', {
         st.blastAt = sc.stageT;
       } else if (w.useSkill(col, inst, vec(col.pos.x, col.pos.y))) {
         st.cast = true;
+        st.everOrdered = true;
         // A muster ordered mid-fury opens already surged — the enrage
         // survives interrupts (delay stays real, the race stays lost).
         if (st.enraged) surgeCast(col, s);
       }
+    }
+    // THE PATIENCE BELT (QA: the stage must NEVER strand the tutorial): a
+    // muster that has NEVER been ordered well past its grace — some lane
+    // the clears above don't cover — degrades exactly like the missing-verb
+    // lane: fade forward to the wake. Better a skipped blast than a
+    // stranded player beating on an inert Father. Gated on everOrdered:
+    // once one muster has genuinely opened, interrupts and re-arms are the
+    // machinery WORKING — the belt must never race a live re-arm.
+    if (!st.cast && !st.everOrdered && sc.stageT >= s.graceSec + SCENE_CFG.musterPatienceSec) {
+      console.warn(`[scenes] reckoning verb '${s.verb}' refused past patience — degrading to the fade`);
+      st.cast = true;
+      st.blastAt = sc.stageT;
     }
     if (st.cast && st.blastAt === null && !col.casting) {
       if (col.isStunned() || col.heldBy != null) {

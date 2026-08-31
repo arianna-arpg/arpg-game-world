@@ -204,6 +204,13 @@ step(w, 0.2);
 const col = w.actors.find(a => a.defId === 'goblin_colossus');
 check('G1: the Hordefather stands off in the dark (rewardless like all scene bodies)',
   !!col && col.noBounty && col.eventKey === `scene:${PROLOGUE_SCENE.id}`);
+// THE SECOND WIND: this walk's hero FELL to the tide (section F) and arrived
+// guarded — the reckoning stands them back up (guards off, vitals whole) so
+// the blast can end them honestly. A guarded body would stand through the
+// blast untouched, beating on an inert Father — the QA'd limp ending.
+check('G1b: THE SECOND WIND — the tide-felled hero stands back up for the Father',
+  !p.invulnerable && !p.untargetable && p.life === p.maxLife(),
+  `life=${p.life.toFixed(0)}/${p.maxLife().toFixed(0)} guard=${String(p.invulnerable)}`);
 check('G2: THE HOLD IS DEAD — the world keeps running while the muster stands (agency, not cinema)',
   !w.timeflow.heldBy('cinematic') && w.scene?.focus === null);
 check('G3: THE MARK stands — the chevron source points at the commander by name',
@@ -229,6 +236,9 @@ check('G5: the blast spends the horde honestly (affects all — the tide lies de
   until(w, () => tideIds.length > 0
     && tideIds.every(id => w.actors.every(a => a.id !== id || a.dead)), 16),
   `tide=${tideIds.length}`);
+check('G5b: the reckoning leaves the hero ENDED — felled and guarded, never standing over an inert Father',
+  p.invulnerable && p.life <= 1 && w.scene?.fell === true,
+  `life=${p.life.toFixed(0)} guard=${String(p.invulnerable)}`);
 check('G6: the fall card follows under black',
   until(w, () => stageKind(w) === 'card' && w.screenFade >= 0.995, 6));
 check('G7: the fall card is pending',

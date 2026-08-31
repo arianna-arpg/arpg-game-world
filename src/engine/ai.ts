@@ -1887,6 +1887,13 @@ function pickSkill(
   // opening; the gunner walks into weapon range to do it).
   const usable = actor.skills.filter((s): s is SkillInstance =>
     !!s && !!s.def.ai && !reserved?.has(s.def.id)
+    // THE BAN BINDS THE PICKER TOO (aiSkillBans — breakDisables' strip is
+    // its own belt, but the scene director's muster ban has ONLY this set):
+    // the scripted-action lane honored it (aiActions); the ordinary
+    // kit-picker must as well, or a banned verb simply freelances — the
+    // QA'd tutorial strand: the commander's brain pressed his own reckoning
+    // before the director's beat, and the two casts deadlocked the stage.
+    && !actor.aiSkillBans?.has(s.def.id)
     // Mid-stance the menu narrows to the combo verbs — def-declared or
     // socket-granted (Guarded Casting makes any carried spell one).
     && (!guarding || !!s.def.usableWhileGuarding || !!s.def.requiresGuard
