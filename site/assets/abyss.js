@@ -46,14 +46,16 @@
     if (!(W > 0) || !(H > 0)) return;
     var sy = window.scrollY || 0;
     ctx.clearRect(0, 0, W, H);
-    // The depth well: a breathing ether lift low on the first viewport,
-    // sinking to true dark past the rim.
-    var cx = W / 2, cy = Math.min(H, window.innerHeight) * 0.62 - sy * 0.1;
-    var breathe = 1 + 0.06 * Math.sin(t * 0.35);
-    var well = ctx.createRadialGradient(cx, cy, Math.min(W, 600) * 0.08, cx, cy, Math.max(W, 900) * 0.7);
-    well.addColorStop(0, rgba((0.055 * breathe).toFixed(3)));
-    well.addColorStop(0.45, 'rgba(0,0,0,0)');
-    well.addColorStop(1, 'rgba(2,2,6,0.5)');
+    // THE ONE GLOW (the flip, her word): the chart's own ether starlight
+    // hugging the BOTTOM of the view — a breathing lift that says there is
+    // more below. The rim past it sinks to true dark.
+    var vh = Math.min(H, window.innerHeight);
+    var cx = W / 2, cy = vh * 1.06 - sy * 0.05;
+    var breathe = 1 + 0.07 * Math.sin(t * 0.35);
+    var well = ctx.createRadialGradient(cx, cy, Math.min(W, 600) * 0.05, cx, cy, Math.max(W, 900) * 0.55);
+    well.addColorStop(0, rgba((0.13 * breathe).toFixed(3)));
+    well.addColorStop(0.55, 'rgba(0,0,0,0)');
+    well.addColorStop(1, 'rgba(2,2,6,0.45)');
     ctx.fillStyle = well;
     ctx.fillRect(0, 0, W, H);
     // The nebular lobes: vast, slow, barely there.

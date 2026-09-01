@@ -27,15 +27,11 @@ p{margin:0}
 .display{font-family:var(--font-display)}
 :focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:4px}
 
-/* subtle shared background wash — the abyss (assets/abyss.js) mounts its
-   live canvas inside this layer: the Mu pane behind every page, the ether
-   lift low on the first viewport under the accent trio's splash. */
-.bg-veil{position:fixed;inset:0;z-index:0;pointer-events:none;
-  background:
-    radial-gradient(1000px 560px at 82% -10%, rgba(79,214,196,.10), transparent 60%),
-    radial-gradient(820px 540px at 8% 6%, rgba(169,139,255,.09), transparent 62%),
-    radial-gradient(1100px 640px at 50% 112%, rgba(255,138,76,.06), transparent 60%),
-    radial-gradient(1200px 760px at 50% 96%, rgba(154,184,220,.08), transparent 62%);}
+/* shared background layer — THE FLIP (her word): no corner accent glows;
+   the abyss (assets/abyss.js) mounts its live canvas here and its ether
+   well, hugging the bottom of the view, is the ONE glow — the trio lives
+   in the sprites, and the light below says "scroll". */
+.bg-veil{position:fixed;inset:0;z-index:0;pointer-events:none;}
 .page{position:relative;z-index:1}
 
 /* ---------- nav (shared) ---------- */
