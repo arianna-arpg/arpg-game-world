@@ -3652,6 +3652,13 @@ export class World {
   pendingRespawn: { phase: 'out' | 'in'; t: number } | null = null;
   /** Full-screen black overlay 0..1 (renderer drawScreenFade). */
   screenFade = 0;
+  /** THE CONTINUOUS EYE (the Mu globe's seam law): a fabric that TELEPORTS
+   *  the local hero inside one zone (the hub's wrap) banks the displacement
+   *  here, and the renderer subtracts it from the camera it hands the
+   *  ambient-fx parallax — the drifting strata never see the jump, so a
+   *  wrap leaves no residual shift in the deep field. Reset at every zone
+   *  door (loadZone); ordinary zones never write it. */
+  ambientCamShift = vec(0, 0);
   /** THE SCENE FABRIC (engine/scenes.ts): the one running cinematic scene,
    *  or null. Its runtime carries the HUD channels the renderer reads (bar,
    *  prompt, camera focus, pending story card) — drawn state IS director
@@ -5640,6 +5647,10 @@ export class World {
     // the hero clean through the bedroom wall.
     p.push = null;
     p.dash = null;
+    // THE CONTINUOUS EYE resets at the door — parallax debt never crosses
+    // zones (see the field's own doc).
+    this.ambientCamShift.x = 0;
+    this.ambientCamShift.y = 0;
     // THE ARRIVAL STORY (the arrivalStory law, engine/tiers.ts): a zone
     // arrival lands on the GROUND story — the last zone's layer index means
     // nothing on this grid. A root-gallery runner stepping through a story-

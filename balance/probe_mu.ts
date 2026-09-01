@@ -277,6 +277,13 @@ check('C6: the unknown cowls are NAMELESS (no npcRole — no nameplate to leak)'
     p.pos.x < cx
     && Math.abs(Math.hypot(p.pos.x - cx, p.pos.y - cy) - MU_CFG.wrap.reentry) < 2,
     `x=${(p.pos.x - cx).toFixed(0)} d=${Math.hypot(p.pos.x - cx, p.pos.y - cy).toFixed(0)}`);
+  // THE CONTINUOUS EYE: the wrap banks its whole displacement, so the
+  // renderer's ambient parallax (cam − bank) never sees the jump — the
+  // abyss flows through the seam without a residual shift.
+  check('I2b: the wrap banks its displacement for the parallax strata (no seam in the deep field)',
+    Math.abs(w.ambientCamShift.x + (MU_CFG.wrap.reentry + MU_CFG.wrap.radius + 60)) < 2
+    && Math.abs(w.ambientCamShift.y) < 2,
+    `bank=${w.ambientCamShift.x.toFixed(0)},${w.ambientCamShift.y.toFixed(0)}`);
   // A VETERAN account keeps the stillness — no standing instruction.
   w.account.runRecords.push({} as never, {} as never, {} as never);
   p.pos.x = cx;

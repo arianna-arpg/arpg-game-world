@@ -2348,9 +2348,12 @@ export class Renderer {
     }
     // The zone's STANDING ambience — underwater caustics + bubble splays,
     // desert heat haze — declared on the theme (vis/ambientFx.ts). The camera
-    // rides along for the world-anchored kinds (overclouds' parallax).
+    // rides along for the world-anchored kinds (overclouds' parallax) MINUS
+    // the continuous-eye bank (World.ambientCamShift): an in-zone teleport
+    // (the Mu globe's wrap) never jolts the parallax strata.
     for (const fx of world.zone.theme.ambientFx ?? []) {
-      drawAmbientFx(ctx, fx, w, h, world.time, this.cam.x, this.cam.y);
+      drawAmbientFx(ctx, fx, w, h, world.time,
+        this.cam.x - world.ambientCamShift.x, this.cam.y - world.ambientCamShift.y);
     }
     // WIND STREAMLINES: thin wisps riding the gale across the screen — the
     // flow made faintly visible (direction + strength read at a glance).

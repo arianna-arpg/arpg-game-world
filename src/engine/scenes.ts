@@ -917,11 +917,17 @@ registerSceneStage('mu', {
       const dxw = p.pos.x - cx, dyw = p.pos.y - cy;
       const dw = Math.hypot(dxw, dyw);
       if (dw > MU_CFG.wrap.radius) {
+        const fromX = p.pos.x, fromY = p.pos.y;
         const k = MU_CFG.wrap.reentry / dw;
         p.pos.x = cx - dxw * k;
         p.pos.y = cy - dyw * k;
         p.push = null;
         p.dash = null;
+        // THE CONTINUOUS EYE: bank the teleport so the abyss's parallax
+        // strata never see it — the camera jumps, the deep field does not,
+        // and the wrap leaves no residual shift at all (her seam note).
+        w.ambientCamShift.x += p.pos.x - fromX;
+        w.ambientCamShift.y += p.pos.y - fromY;
       }
     }
     // THE YOUNG PROMPT: the standing instruction speaks only while the
