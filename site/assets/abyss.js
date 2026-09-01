@@ -47,10 +47,11 @@
     var sy = window.scrollY || 0;
     ctx.clearRect(0, 0, W, H);
     // THE ONE GLOW (the flip, her word): the chart's own ether starlight
-    // hugging the BOTTOM of the view — a breathing lift that says there is
-    // more below. The rim past it sinks to true dark.
+    // ANCHORED at the bottom of the view — pinned to the viewport exactly
+    // like the old corner radials were (no scroll coupling at all): the
+    // breathing lift that says there is more below, staying below.
     var vh = Math.min(H, window.innerHeight);
-    var cx = W / 2, cy = vh * 1.06 - sy * 0.05;
+    var cx = W / 2, cy = vh * 1.06;
     var breathe = 1 + 0.07 * Math.sin(t * 0.35);
     var well = ctx.createRadialGradient(cx, cy, Math.min(W, 600) * 0.05, cx, cy, Math.max(W, 900) * 0.55);
     well.addColorStop(0, rgba((0.13 * breathe).toFixed(3)));
