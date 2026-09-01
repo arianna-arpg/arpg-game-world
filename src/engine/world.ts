@@ -22171,12 +22171,23 @@ export class World {
    *  the lever is down: main ships it false. */
   dealLabArts(): void {
     if (!ULT_QA.active || !ULT_QA.grantArts) return;
+    const seat = this.localSeat;
+    const m = seat.meta;
+    let bumped = false;
     for (const def of Object.values(SKILLS)) {
       if (!(def.ultimate || def.gauge) || def.noDrop) continue;
-      if (this.meta.knownSkills.has(def.id)
-        || findBagGem(this.meta.items, 'skill', def.id)) continue;
-      this.grantSkillGemItem(this.localSeat, makeSkillGem(def, 1, 'magic'), true);
+      // THE LAB HERO IS BUILT TO WIELD ITS KIT: the build's BASE attributes
+      // rise to every dealt art's requirement — the learn gate and the
+      // cast-time gate both read the DERIVED meta.attrs, which recalc folds
+      // from these (a direct attrs write would not survive the next fold).
+      for (const [attr, need] of Object.entries(def.requirements ?? {})) {
+        const k = attr as keyof Attributes;
+        if ((m.baseAttrs[k] ?? 0) < (need ?? 0)) { m.baseAttrs[k] = need!; bumped = true; }
+      }
+      if (m.knownSkills.has(def.id) || findBagGem(m.items, 'skill', def.id)) continue;
+      this.grantSkillGemItem(seat, makeSkillGem(def, 1, 'magic'), true);
     }
+    if (bumped) this.recalcSeat(seat);
   }
 
   /** Is the player resting by the town campfire? (Feature owned + in town + near
