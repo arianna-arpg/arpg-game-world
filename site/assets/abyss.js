@@ -50,11 +50,21 @@
     // ANCHORED at the bottom of the view — pinned to the viewport exactly
     // like the old corner radials were (no scroll coupling at all): the
     // breathing lift that says there is more below, staying below.
+    // THE HONEST CUE (her word): the light DISSOLVES over the last stretch
+    // of scroll — a promise of more below must go dark when there is
+    // nothing below; at the page's true end (and on pages too short to
+    // scroll) only the void's rim remains.
     var vh = Math.min(H, window.innerHeight);
+    var maxScroll = Math.max(0,
+      (document.documentElement.scrollHeight || 0) - window.innerHeight);
+    var remaining = Math.max(0, maxScroll - sy);
+    var span = Math.max(1, vh * 0.9);
+    var cue = Math.min(1, remaining / span);
+    cue = cue * cue * (3 - 2 * cue); // smoothstep: a gentle going-out
     var cx = W / 2, cy = vh * 1.06;
     var breathe = 1 + 0.07 * Math.sin(t * 0.35);
     var well = ctx.createRadialGradient(cx, cy, Math.min(W, 600) * 0.05, cx, cy, Math.max(W, 900) * 0.55);
-    well.addColorStop(0, rgba((0.13 * breathe).toFixed(3)));
+    well.addColorStop(0, rgba((0.13 * breathe * cue).toFixed(3)));
     well.addColorStop(0.55, 'rgba(0,0,0,0)');
     well.addColorStop(1, 'rgba(2,2,6,0.45)');
     ctx.fillStyle = well;
@@ -90,7 +100,13 @@
   }
 
   var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (still) { paint(3.7); return; } // one considered frame, no animation
+  if (still) {
+    // One considered frame, no animation — repainted per scroll step so the
+    // honest cue (the glow dissolving at the page's end) stays true here too.
+    paint(3.7);
+    window.addEventListener('scroll', function () { paint(3.7); }, { passive: true });
+    return;
+  }
   var t0 = performance.now();
   (function loop(now) {
     paint((now - t0) / 1000);
