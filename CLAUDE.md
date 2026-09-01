@@ -297,7 +297,9 @@ we verify changes.
   skill as a SUPER ART — executing it flashes the pane whose AVATAR is the
   caster's OWN live body through the portrait fabric
   (render/vis/eyecatch.ts, an OPEN style registry `registerEyecatchStyle`
-  — 'sunder' slash cut-in / 'eclipse' iris; screen-anchored by the
+  — 'flank' fighting-game side-slice cut-in, THE DEFAULT: the world stays
+  in the shot performing the art / 'sunder' full-screen slash / 'eclipse'
+  iris; screen-anchored by the
   status-overlay exemption) and, solo policy allowing (the harvest rite's
   allowHold law — co-op/couch play it over a living world), HOLDS the
   world for the beat (kind 'ultimate', never 'menu'; a chrono skill's
@@ -309,7 +311,14 @@ we verify changes.
   own presentation), DRAWN == TIMED (the pane clock is `Timeflow.age`,
   the raw clock frozen only by a true pause — beginFrame now advances it
   between holds per its own documented contract; `eyecatchElapsed`/
-  `eyecatchAlive` the ONE fold for renderer + sweep + probes), and the
+  `eyecatchAlive` the ONE fold for renderer + sweep + probes), THE TAG
+  (the 'ultimate' SkillTag = the family's support/investment SCOPE: the
+  spec is the mark, the tag is the scope — census pins spec ⇒ tag, and
+  payload kin wear the tag markless so scaling reaches the whole art),
+  THE LAB LEVER (`ULT_QA` — QA builds cap the STAMPED cooldown + run an
+  eager banner throttle for back-to-back iteration; `?ultqa[=0]` /
+  `__game.ultqa()`; the ultimates-lab branch ships it ON, main ships it
+  false, the probe pins both regimes), and the
   wire ships the derived `ec` row (elapsed, not epochs — the tell-wire
   idiom). Debuts (data/ultimates.ts, Vault `gem_skills_ultimates`, each
   a COMPOSE of standing fabrics): the Hundred Partings (chrono stop +

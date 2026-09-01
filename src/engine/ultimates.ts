@@ -37,6 +37,14 @@
 //   · DRAWN == TIMED — the pane's clock is Timeflow.age (raw seconds, frozen
 //     only by a true pause), and eyecatchElapsed/eyecatchAlive below are the
 //     ONE fold both the renderer and the probes read.
+//   · THE SPEC IS THE MARK, THE TAG IS THE SCOPE — the 'ultimate' SkillTag
+//     (stats.ts) is the modifier/support scope for the family; every marked
+//     skill wears it (census-pinned) and payload kin (a follow-up collapse)
+//     may wear the tag WITHOUT the mark: scaling reaches the whole art, the
+//     price floor binds only the pressable face.
+//   · THE LAB LEVER (ULT_QA below) — QA builds cap the STAMPED cooldown and
+//     run an eager banner throttle so the arts re-fire back-to-back; the
+//     authored numbers are never edited, and the probes pin both regimes.
 //
 // Docs: docs/engine/ultimates.md. Probe: balance/probe_ultimates.ts.
 // ---------------------------------------------------------------------------
@@ -99,12 +107,46 @@ export const ULT_CFG = {
    *  many seconds of cooldown. Authoring law, probe-pinned — never clamped
    *  at runtime. */
   minCooldown: 45,
-  /** Default pane style when the spec names none (or an unknown id). */
-  style: 'sunder',
+  /** Default pane style when the spec names none (or an unknown id). The
+   *  'flank' fighting-game cut-in: the slice announces, the WORLD stays in
+   *  the shot performing the art ('sunder'/'eclipse' stay registered — any
+   *  spec may opt back into the full-screen movie). */
+  style: 'flank',
   /** Engine sweep: a spent pane is nulled this many seconds after it ends
    *  (keeps the wire from shipping a stale row forever). */
   expireSlackSec: 0.5,
 } as const;
+
+/** THE LAB LEVER — iteration builds want super arts back-to-back: the cap
+ *  rides the STAMPED clock (never the authored data — THE PRICE FLOOR stays
+ *  sovereign and probe-pinned) and the eager throttle re-runs the banner
+ *  nearly at will. Mutable by design: `?ultqa=0` / `__game.ultqa(false)`
+ *  restore the shipped pacing live; the probes pin the shipped law by
+ *  setting `active` false themselves, then pin THIS lever in its own rig.
+ *  LAB BRANCH DEFAULT: active — main must ship this false. */
+export const ULT_QA = {
+  active: true,
+  /** Ceiling on an ultimate's STAMPED cooldown seconds while active. */
+  cooldownCap: 3,
+  /** Eager per-caster banner window (replaces ULT_CFG.throttleSec). */
+  throttleSec: 0.6,
+  /** Eager global banner gap (replaces ULT_CFG.globalGapSec). */
+  globalGapSec: 0.25,
+};
+
+/** THE ONE FOLDS the lever rides — every consumer reads these, never the
+ *  raw configs (world.ts throttle ledgers + the cooldown stamp). */
+export function ultThrottleSec(): number {
+  return ULT_QA.active ? ULT_QA.throttleSec : ULT_CFG.throttleSec;
+}
+export function ultGlobalGapSec(): number {
+  return ULT_QA.active ? ULT_QA.globalGapSec : ULT_CFG.globalGapSec;
+}
+/** Cooldown ceiling for skills wearing the mark (Infinity = the authored
+ *  clock stands untouched). */
+export function ultCooldownCap(): number {
+  return ULT_QA.active ? ULT_QA.cooldownCap : Infinity;
+}
 
 /** Raw seconds the pane has lived — THE ONE FOLD (renderer + probes). */
 export function eyecatchElapsed(st: EyecatchState, timeflowAge: number): number {

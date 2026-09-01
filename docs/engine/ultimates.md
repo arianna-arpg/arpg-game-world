@@ -66,6 +66,20 @@ ultimate: {
   clock), so the pane shows the character *as it stands*. `avatarDefId`
   overrides with any registered def. A body gone mid-pane keeps its last
   face.
+- **THE SPEC IS THE MARK, THE TAG IS THE SCOPE.** The `'ultimate'` SkillTag
+  (stats.ts) is the family's modifier/support scope: every marked skill wears
+  it (census-pinned, spec ⇒ tag), and payload kin — Hollow Star's collapse —
+  wear the tag *without* the mark, so tag-filtered investment and
+  ultimate-scoped supports reach the whole art while the price floor and the
+  pane bind only the pressable face. There is deliberately no reverse law.
+- **THE LAB LEVER.** `ULT_QA` (mutable by design): when `active`, the
+  *stamped* cooldown of any marked skill caps at `cooldownCap` (a ceiling on
+  the fold's answer inside `stampSkillCooldown` — the authored data is never
+  edited, so THE PRICE FLOOR census holds in every regime) and the banner
+  throttles fold to the eager `throttleSec`/`globalGapSec`. Wired to
+  `?ultqa[=0]` and `__game.ultqa(on?)`. The **ultimates-lab branch ships it
+  ON** for back-to-back iteration; main must ship it false. The probe pins
+  the shipped law with the lever down, then the lever itself in its own rig.
 - **TRANSIENT, WIRED, NEVER SAVED.** `World.eyecatch` is presentation state:
   a null field in headless worlds (zero sim cost), swept
   `expireSlackSec` after the pane ends, absent from every save. The co-op
@@ -79,12 +93,22 @@ ultimate: {
 `registerEyecatchStyle(id, painter)` adds one with no renderer edits (the
 doodad-painter law, applied to drama). Dials in `EYECATCH_VIS`.
 
-- **`sunder`** — the diagonal slash cut-in: a leaning band sweeps the
-  screen, the caster rides one third, the art's name the other, speed lines
-  howl between. Ally panes enter from the left with a clean white gutter;
-  enemy panes from the right with a blood edge.
+- **`flank`** — THE DEFAULT: the fighting-game cut-in. A skewed near-solid
+  slice claims the caster's side of the screen (ally left, enemy right — the
+  P1/P2 law) while the **world stays in the shot** under a light wash,
+  performing the art beside its own announcement. The avatar rides the
+  slice, the name runs vertically along the cut edge (mirrored composition
+  on the right — nothing renders backwards), speed lines stream toward the
+  fight. Dials in `EYECATCH_VIS.flank`.
+- **`sunder`** — the full-screen diagonal slash cut-in: a leaning band
+  sweeps the screen, the caster rides one third, the art's name the other,
+  speed lines howl between. Ally panes enter from the left with a clean
+  white gutter; enemy panes from the right with a blood edge.
 - **`eclipse`** — the iris: the screen goes to a dark sky, a corona opens,
   motes fall inward, the caster stands in the eye.
+
+Any spec may opt back into a full-screen movie with `style: 'sunder'` /
+`'eclipse'`; the debuts deliberately name none and ride the default.
 
 ## The debut arts (`data/ultimates.ts`, Vault row `gem_skills_ultimates`)
 
@@ -92,11 +116,11 @@ Each debut is a COMPOSE of standing fabrics — no new engine verbs:
 
 - **the Hundred Partings** (90s) — `chrono` (scale 0, exempt caster) under a
   tight at-enemies slash storm: the world stops, fourteen cuts fall, time
-  resumes already owing. Pane `sunder`; beat 0 by the chrono rule.
+  resumes already owing. Beat 0 by the chrono rule.
 - **Hollow Star** (75s) — `GroundDelivery.pull` at event-horizon reach
   (`pullRadius` past the burn disc — the Cold Vortex lane priced up), then a
-  `followUp` collapse lands free at the same aim as the well closes. Pane
-  `eclipse`.
+  `followUp` collapse lands free at the same aim as the well closes. Its
+  collapse wears the `'ultimate'` tag markless — the scope's teaching row.
 - **the Woken Hollow** (120s) — the possession seam's `shapeshift`: wear the
   form `ult_woken_hollow` (registered via `ULTIMATE_FORMS`, absorbed by
   monsters.ts before its registry-close folds) at your own level for 14s at
@@ -108,8 +132,10 @@ Each debut is a COMPOSE of standing fabrics — no new engine verbs:
 ## Dials (`ULT_CFG`)
 
 `paneSec` 1.15 · `holdSec` 0.65 · `enemyHoldSec` 0.45 · `throttleSec` 20 ·
-`globalGapSec` 1.5 · `minCooldown` 45 · `style` 'sunder' ·
-`expireSlackSec` 0.5 — all first-pass, unblessed.
+`globalGapSec` 1.5 · `minCooldown` 45 · `style` 'flank' ·
+`expireSlackSec` 0.5 — all first-pass, unblessed. THE LAB LEVER (`ULT_QA`):
+`cooldownCap` 3 · `throttleSec` 0.6 · `globalGapSec` 0.25 — QA numbers, not
+tuning.
 
 ## Open follow-ups
 

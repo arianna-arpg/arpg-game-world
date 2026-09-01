@@ -40,7 +40,8 @@ import { vec, dist } from '../src/core/math';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
 import {
-  eyecatchAlive, eyecatchElapsed, eyecatchHoldSec, ULT_CFG, type EyecatchState,
+  eyecatchAlive, eyecatchElapsed, eyecatchHoldSec, ULT_CFG, ULT_QA,
+  ultCooldownCap, ultThrottleSec, type EyecatchState,
 } from '../src/engine/ultimates';
 import { EYECATCH_STYLES } from '../src/render/vis/eyecatch';
 import { makeSkillInstance } from '../src/engine/skills';
@@ -55,6 +56,11 @@ const check = (name: string, ok: boolean, detail = ''): void => {
 };
 
 bootSimEngine();
+
+// THE SHIPPED LAW FIRST: the lab branch defaults the iteration lever ON —
+// every rig below pins the AUTHORED pacing, so the lever stands down here
+// and gets its own rig at the tail (both regimes pinned, neither assumed).
+ULT_QA.active = false;
 
 const DT = 1 / 60;
 const step = (w: World, n = 1): void => { for (let i = 0; i < n; i++) w.update(DT); };
@@ -94,6 +100,11 @@ const spawn = (w: World, id: string, lv: number, x: number, y: number): Actor =>
     const u = d.ultimate!;
     check(`census: ${d.id} pays THE PRICE FLOOR (cooldown >= ${ULT_CFG.minCooldown})`,
       (d.cooldown ?? 0) >= ULT_CFG.minCooldown, `cooldown ${d.cooldown}`);
+    // THE SPEC IS THE MARK, THE TAG IS THE SCOPE: every marked art wears the
+    // 'ultimate' tag so scoped supports/investment find the whole family
+    // (payload kin may wear the tag WITHOUT the mark — no reverse law).
+    check(`census: ${d.id} wears the 'ultimate' tag`,
+      (d.tags ?? []).includes('ultimate'));
     check(`census: ${d.id} speaks (name + description)`,
       d.name.length > 0 && (d.description ?? '').length > 0);
     check(`census: ${d.id} style resolves (or defaults)`,
@@ -106,6 +117,8 @@ const spawn = (w: World, id: string, lv: number, x: number, y: number): Actor =>
     }
   }
   check('census: the default style itself resolves', !!EYECATCH_STYLES[ULT_CFG.style]);
+  check('census: the flank cut-in stands registered beside the movies',
+    !!EYECATCH_STYLES.flank && !!EYECATCH_STYLES.sunder && !!EYECATCH_STYLES.eclipse);
   const row = UNLOCK_CATALOG.find(u => u.id === 'gem_skills_ultimates');
   check('census: the Vault row stands (gem_skills_ultimates, kind skill)',
     !!row && row.kind === 'skill');
@@ -263,6 +276,48 @@ const spawn = (w: World, id: string, lv: number, x: number, y: number): Actor =>
     seat.actor.team === 'player');
   step(w, secs(15)); // the 14s duration lapses
   check('form: the duration hands the flesh back', seat.actor === home);
+}
+
+// --------------------------------------------------------------- the lab lever
+// ULT_QA — iteration builds cap the STAMPED clock and run the banner eagerly.
+// Pinned OFF above for every shipped-law rig; pinned ON here, then restored.
+{
+  seedGlobalRandom(71);
+  const w = makeSimWorld('warrior', 71);
+  feed(w.player);
+  ULT_QA.active = true;
+  check('lever: the folds answer the lever',
+    ultCooldownCap() === ULT_QA.cooldownCap && ultThrottleSec() === ULT_QA.throttleSec);
+  const aim = vec(w.player.pos.x + 300, w.player.pos.y);
+  check('lever: the first art casts',
+    w.useSkill(w.player, makeSkillInstance(SKILLS.hollow_star, 1, 2), aim) === true);
+  step(w, secs(0.85)); // the 0.8s bar completes; the clock stamps capped
+  check('lever: the ULTIMATE clock is capped for iteration',
+    (w.player.cooldowns.get('hollow_star') ?? 99) <= ULT_QA.cooldownCap + 0.01,
+    `cd ${(w.player.cooldowns.get('hollow_star') ?? 99).toFixed(2)}`);
+  check('lever: the first pane armed',
+    !!w.eyecatch && w.eyecatch.skillId === 'hollow_star');
+  // ride past the held beat + the eager window, then the SECOND banner runs
+  step(w, secs(Math.max(ULT_CFG.holdSec, ULT_QA.throttleSec, ULT_QA.globalGapSec) + 0.2));
+  feed(w.player);
+  check('lever: the second art casts back-to-back',
+    w.useSkill(w.player, makeSkillInstance(SKILLS.hundred_partings, 1, 2), aim) === true);
+  step(w, secs(0.45)); // the 0.4s bar completes
+  check('lever: the eager throttle re-runs the banner back-to-back',
+    !!w.eyecatch && w.eyecatch.skillId === 'hundred_partings');
+  // an ORDINARY skill's clock never crosses the lever. Step clear of the
+  // partings' swing recovery and its stop first — a refusal there is the
+  // standing cast-commitment law's business, not the lever's.
+  step(w, secs(1.3));
+  feed(w.player);
+  check('lever: a plain art casts',
+    w.useSkill(w.player, makeSkillInstance(SKILLS.teleport, 1, 2), aim) === true);
+  check('lever: a plain art\'s clock is never capped',
+    (w.player.cooldowns.get('teleport') ?? 0) > ULT_QA.cooldownCap,
+    `cd ${(w.player.cooldowns.get('teleport') ?? 0).toFixed(2)}`);
+  ULT_QA.active = false;
+  check('lever: standing down restores the shipped folds',
+    ultCooldownCap() === Infinity && ultThrottleSec() === ULT_CFG.throttleSec);
 }
 
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');

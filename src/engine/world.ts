@@ -128,7 +128,7 @@ import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { liquidOf } from './genkit';
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
-import { eyecatchElapsed, eyecatchHoldSec, ULT_CFG, type EyecatchState } from './ultimates';
+import { eyecatchElapsed, eyecatchHoldSec, ULT_CFG, ultCooldownCap, ultGlobalGapSec, ultThrottleSec, type EyecatchState } from './ultimates';
 import {
   gatherSympathyRecipients, SYMPATHY_CFG, SYMPATHY_HOOKS, SYMPATHY_LINKS,
   sympathyRelationOf, sympathyStat,
@@ -27798,7 +27798,12 @@ export class World {
   private stampSkillCooldown(caster: Actor, inst: SkillInstance, base: number): void {
     // The formula lives in skills.ts so the TOOLTIP waits on the same clock
     // it prints (skillCooldownSeconds — one resolver, two readers).
-    const cdSet = skillCooldownSeconds(caster, inst, base);
+    let cdSet = skillCooldownSeconds(caster, inst, base);
+    // THE LAB LEVER (ULT_QA, engine/ultimates.ts): iteration builds cap an
+    // ULTIMATE's stamped clock so the arts re-fire back-to-back — a ceiling
+    // on the fold's answer, never a rewrite of the authored price (THE
+    // PRICE FLOOR stays census-pinned; shipped builds cap at Infinity).
+    if (inst.def.ultimate) cdSet = Math.min(cdSet, ultCooldownCap());
     if (cdSet <= 0) return;
     caster.cooldowns.set(inst.def.id, cdSet);
     caster.cooldownTotals.set(inst.def.id, cdSet); // the HUD sweep's denominator
@@ -31160,8 +31165,10 @@ export class World {
     const spec = def.ultimate;
     if (!spec) return;
     const now = this.timeflow.age;
-    if (now - (this.ultFlashAt.get(caster.id) ?? -Infinity) < ULT_CFG.throttleSec) return;
-    if (now - this.ultFlashLastAt < ULT_CFG.globalGapSec) return;
+    // The windows fold through the lab lever (ULT_QA — iteration builds run
+    // the banner eagerly; shipped builds keep the rare-movie law).
+    if (now - (this.ultFlashAt.get(caster.id) ?? -Infinity) < ultThrottleSec()) return;
+    if (now - this.ultFlashLastAt < ultGlobalGapSec()) return;
     this.ultFlashAt.set(caster.id, now);
     this.ultFlashLastAt = now;
     const side: 'ally' | 'enemy' = caster.team === 'player' ? 'ally' : 'enemy';
