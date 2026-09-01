@@ -3,7 +3,7 @@
    Used by every page (landing, database, tree, play).
    ============================================================ */
 :root{
-  --bg:#08090e; --bg-2:#0c0e15; --panel:#11131d; --panel-2:#161926;
+  --bg:#07070d; --bg-2:#0c0e15; --panel:#11131d; --panel-2:#161926;
   --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
   --ink:#e9eaf2; --ink-dim:#a3a9bd; --ink-faint:#6b7189;
   --teal:#4fd6c4; --teal-hi:#7ff0e1; --ember:#ff8a4c; --ember-hi:#ffb277;
@@ -27,12 +27,15 @@ p{margin:0}
 .display{font-family:var(--font-display)}
 :focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:4px}
 
-/* subtle shared background wash */
+/* subtle shared background wash — the abyss (assets/abyss.js) mounts its
+   live canvas inside this layer: the Mu pane behind every page, the ether
+   lift low on the first viewport under the accent trio's splash. */
 .bg-veil{position:fixed;inset:0;z-index:0;pointer-events:none;
   background:
-    radial-gradient(1000px 560px at 82% -10%, rgba(79,214,196,.12), transparent 60%),
-    radial-gradient(820px 540px at 8% 6%, rgba(169,139,255,.10), transparent 62%),
-    radial-gradient(1100px 640px at 50% 112%, rgba(255,138,76,.07), transparent 60%);}
+    radial-gradient(1000px 560px at 82% -10%, rgba(79,214,196,.10), transparent 60%),
+    radial-gradient(820px 540px at 8% 6%, rgba(169,139,255,.09), transparent 62%),
+    radial-gradient(1100px 640px at 50% 112%, rgba(255,138,76,.06), transparent 60%),
+    radial-gradient(1200px 760px at 50% 96%, rgba(154,184,220,.08), transparent 62%);}
 .page{position:relative;z-index:1}
 
 /* ---------- nav (shared) ---------- */

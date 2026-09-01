@@ -13915,7 +13915,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       floor: '#07070d', grid: '#0b0b13', border: '#1a1a2e',
       obstacle: '#12121e', obstacleEdge: '#26263c', accent: '#8fa8d8',
       chasm: '#020204', mud: '#0a0a12', water: '#0c1420',
-      ambientFx: [{ kind: 'motes', intensity: 0.75, color: '#9ab8dc' }],
+      // THE ABYSS (her word): the ledger's header pane made infinite — the
+      // camera-anchored depth well + parallax mote strata + nebular lobes
+      // (vis/ambientFx.ts 'abyss'). With the globe wrap, an endless realm
+      // of nothing that always leads right back to the vessels.
+      ambientFx: [{ kind: 'abyss', intensity: 1, color: '#9ab8dc' }],
     },
     sizeW: [900, 1000], sizeH: [700, 800],
     layout: [],

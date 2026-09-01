@@ -56,6 +56,16 @@ screen-space, Mu streams no far dress), so the camera just keeps following
 a small light through nothing. Symbolic and practical at once — a
 perpetual place you can never actually leave, and never get lost in.
 
+**THE ABYSS** (her word — the ledger's header pane, made infinite): Mu's
+theme wears the `abyss` ambientFx kind (`render/vis/ambientFx.ts`) — a
+camera-anchored depth well (the rim sinks to true dark, a pale ether lift
+breathes low-center where the wisp stands), vast barely-there nebular
+lobes, and three parallax mote strata whose deeper layers drift slower
+against the camera — walking reads as motion through a bottomless field,
+and with the globe wrap the realm truly never ends and always leads home.
+Stateless and deterministic like every ambient kind; every number a dial
+on the painter.
+
 **The polish laws:** vessel nameplates HOVER (a slow per-id bob,
 `MU_CFG.bob` — the one moving thing over each still body); a VEILED
 vessel's name ink dims to `MU_CFG.veiledInk` (present-but-not; the dealt

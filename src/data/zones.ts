@@ -720,7 +720,7 @@ export interface ZoneTheme {
    *  verticality read) — and FIREFLIES, the grove's night writing (self-
    *  gated on the dark like the aurora: by day the row is silent).
    *  Screen-space, stateless, data-extensible. */
-  ambientFx?: { kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift' | 'overclouds' | 'fireflies' | 'seedDrift'; intensity?: number; color?: string }[];
+  ambientFx?: { kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift' | 'overclouds' | 'fireflies' | 'seedDrift' | 'abyss'; intensity?: number; color?: string }[];
   /** SIGHT-VEIL tuning (render/vis/sightVeil.ts): per-zone multipliers over
    *  the pass's global strengths (VIS_CFG.sightVeil) — `mul` scales both
    *  shadow families, `regionMul` the true-wall shadows (rampart, verdure,

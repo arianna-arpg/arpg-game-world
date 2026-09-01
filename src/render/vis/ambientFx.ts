@@ -12,7 +12,7 @@ import { dayCycle } from '../../world/daynight';
 import { hash01, withAlpha } from './color';
 
 export interface AmbientFxSpec {
-  kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift' | 'overclouds' | 'fireflies' | 'seedDrift';
+  kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift' | 'overclouds' | 'fireflies' | 'seedDrift' | 'abyss';
   /** 0..1 strength (default 1). */
   intensity?: number;
   color?: string;
@@ -39,7 +39,75 @@ export function drawAmbientFx(ctx: CanvasRenderingContext2D, spec: AmbientFxSpec
     case 'overclouds': return overclouds(ctx, w, h, t, k, spec.color ?? '#ffffff', camX, camY);
     case 'fireflies': return fireflies(ctx, w, h, t, k, spec.color ?? '#d8f078');
     case 'seedDrift': return seedDrift(ctx, w, h, t, k, spec.color ?? '#e8e6d4', camX, camY);
+    case 'abyss': return abyss(ctx, w, h, t, k, spec.color ?? '#9ab8dc', camX, camY);
   }
+}
+
+/** THE ABYSS — Mu's endless nothing (her word 2026-08-31: the ledger's
+ *  header pane, made infinite): a camera-anchored DEPTH WELL — the void
+ *  sinks toward the screen's rim while a pale ether lift breathes
+ *  low-center, where the wisp stands — beneath a few vast, barely-there
+ *  NEBULAR LOBES and THREE PARALLAX MOTE STRATA (deeper drifts slower
+ *  against the camera: walking reads as motion through a bottomless field,
+ *  and with the globe wrap the realm truly never ends and always leads
+ *  home). Deterministic from (i, t) — zero particle state; the gradients
+ *  ride the entry guard like caustics'. */
+function abyss(ctx: CanvasRenderingContext2D, w: number, h: number,
+  t: number, k: number, color: string, camX: number, camY: number): void {
+  ctx.save();
+  const wrap = (v: number, span: number): number => ((v % span) + span) % span;
+  // The depth well: one radial breath — heart lifted a touch below center,
+  // rim sinking to true dark. Screen-space by construction (it follows the
+  // camera; the abyss is wherever you look past).
+  const cx = w / 2, cy = h * 0.56;
+  const breathe = 1 + 0.06 * Math.sin(t * 0.35);
+  const well = ctx.createRadialGradient(
+    cx, cy, Math.min(w, h) * 0.1, cx, cy, Math.hypot(w, h) * 0.62);
+  well.addColorStop(0, withAlpha(color, 0.05 * k * breathe));
+  well.addColorStop(0.45, 'rgba(0,0,0,0)');
+  well.addColorStop(1, `rgba(2,2,6,${(0.55 * k).toFixed(3)})`);
+  ctx.fillStyle = well;
+  ctx.fillRect(0, 0, w, h);
+  // The nebular lobes — the deepest stratum (parallax 0.12): vast, slow,
+  // barely there; the hint that the nothing has weather of its own.
+  for (let i = 0; i < 4; i++) {
+    const r = 180 + hash01(i, 41) * 240;
+    const sx = w + r * 2, sy = h + r * 2;
+    const x = wrap(hash01(i, 43) * sx + t * (1.5 + hash01(i, 45) * 2) - camX * 0.12, sx) - r;
+    const y = wrap(hash01(i, 47) * sy + Math.sin(t * 0.05 + i * 2.1) * 30 - camY * 0.12, sy) - r;
+    const lobe = ctx.createRadialGradient(x, y, 0, x, y, r);
+    lobe.addColorStop(0, withAlpha(color, 0.035 * k));
+    lobe.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = lobe;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  // Three mote strata: deeper = slower against the camera = further into
+  // the back. Each mote wanders on its own sway and twinkles on its own
+  // clock — the ledger's still pane, breathing.
+  ctx.fillStyle = color;
+  const strata = [
+    { n: 26, par: 0.22, size: 0.9, a: 0.16, salt: 3 },
+    { n: 18, par: 0.45, size: 1.5, a: 0.24, salt: 101 },
+    { n: 10, par: 0.78, size: 2.2, a: 0.34, salt: 211 },
+  ];
+  for (const s of strata) {
+    const n = Math.round(s.n * k);
+    for (let i = 0; i < n; i++) {
+      const x = wrap(hash01(i, s.salt) * (w + 40)
+        + t * (2 + hash01(i, s.salt + 2) * 5) - camX * s.par, w + 40) - 20;
+      const y = wrap(hash01(i, s.salt + 4) * (h + 40)
+        + t * (1 + hash01(i, s.salt + 6) * 3)
+        + Math.sin(t * (0.3 + hash01(i, s.salt + 8) * 0.4) + i) * 9
+        - camY * s.par, h + 40) - 20;
+      const tw = 0.6 + 0.4 * Math.sin(t * (0.4 + hash01(i, s.salt + 10) * 0.8) + i * 1.7);
+      ctx.globalAlpha = s.a * k * tw;
+      ctx.beginPath();
+      ctx.arc(x, y, s.size * (0.8 + hash01(i, s.salt + 12) * 0.5), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
 /** SEED DRIFT — the giant dandelions letting go (the undergrowth's own
