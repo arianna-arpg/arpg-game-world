@@ -828,17 +828,14 @@ npm run <span class="g">build</span></pre>
     W=canvas.clientWidth; H=canvas.clientHeight;
     canvas.width=Math.floor(W*dpr); canvas.height=Math.floor(H*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
-    var count = Math.round(Math.min(126, Math.max(52, (W*H)/16000)));
+    var count = Math.round(Math.min(90, Math.max(38, (W*H)/22000)));
     nodes=[];
     for(var i=0;i<count;i++){
-      /* seeding biased toward the top: the far field is the dense one */
-      var y0 = H*Math.pow(Math.random(), 1.7);
       nodes.push({
-        x:Math.random()*W, y:y0,
-        /* hy = the star's home latitude: a weak spring holds each node to
-           its band so the drift can never erode the chart's tilt */
-        hy:y0,
-        vx:(Math.random()-.5)*.14, vy:(Math.random()-.5)*.12,
+        /* uniform seeding (her word: the full field back) — the TILT still
+           reads through per-depth size and pace, never through absence */
+        x:Math.random()*W, y:Math.random()*H,
+        vx:(Math.random()-.5)*.14, vy:(Math.random()-.5)*.14,
         /* dv* = disturbance from the fidget layer; decays back to pure drift */
         dvx:0, dvy:0,
         r:Math.random()*2.0+1.3,
@@ -896,42 +893,37 @@ npm run <span class="g">build</span></pre>
           a.dvx+=(ddx/dd)*bf; a.dvy+=(ddy/dd)*bf;
         }
       }
-      /* THE TILT: everything a star does scales by its nearness — far ones
-         crawl and barely answer the pointer, near ones stride and scatter. */
+      /* THE TILT: a star's pace scales by its nearness — far ones crawl,
+         near ones stride — with no restoring spring (her word: a shoved
+         node drifts on; it never bounces back and forth). */
       var asc=scaleOf(a.y);
-      /* the home-latitude spring: the chart keeps its perspective forever */
-      a.vy+=(a.hy-a.y)*.00035;
       a.x+=(a.vx+a.dvx)*asc; a.y+=(a.vy+a.dvy)*asc;
       a.dvx*=.9; a.dvy*=.9;
       if(a.x<0||a.x>W){ a.vx*=-1; a.dvx=0; a.x=a.x<0?0:W; }
       if(a.y<0||a.y>H){ a.vy*=-1; a.dvy=0; a.y=a.y<0?0:H; }
-      /* CONSTELLATION LINES live only in the near band — the far field is
-         pure disconnected stars (the chart, not a web). */
-      if(asc>.86){
-        for(var k=i+1;k<nodes.length;k++){
-          var b=nodes[k];
-          if(scaleOf(b.y)<=.86) continue;
-          var dx=a.x-b.x, dy=a.y-b.y, d=Math.sqrt(dx*dx+dy*dy);
-          if(d<LINK){
-            var al=(1-d/LINK)*.16;
-            ctx.strokeStyle='rgba(120,150,200,'+al+')';
-            ctx.lineWidth=.6;
-            ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
-          }
+      /* THE WEB (her word: the network-like, attached spritework) — links
+         everywhere, the original reach and ink. */
+      for(var k=i+1;k<nodes.length;k++){
+        var b=nodes[k], dx=a.x-b.x, dy=a.y-b.y, d=Math.sqrt(dx*dx+dy*dy);
+        if(d<LINK){
+          var al=(1-d/LINK)*.22;
+          ctx.strokeStyle='rgba(120,150,200,'+al+')';
+          ctx.lineWidth=.6;
+          ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
         }
       }
     }
-    /* stars: size, ink and halo all wear the tilt; each twinkles on its
-       own slow clock */
+    /* nodes: SIZE wears the tilt (far small, near large); ink stays close
+       to the original presence, gently graded, with a soft twinkle */
     tick+=.016;
     for(var n=0;n<nodes.length;n++){
       var p=nodes[n], sc=scaleOf(p.y);
-      var twk=.78+.22*Math.sin(tick*(.5+(n%7)*.13)+p.tw);
+      var twk=.88+.12*Math.sin(tick*(.5+(n%7)*.13)+p.tw);
       ctx.beginPath();
       ctx.fillStyle=p.c;
-      ctx.globalAlpha=(.28+.5*sc)*twk;
+      ctx.globalAlpha=(.5+.3*sc)*twk;
       ctx.arc(p.x,p.y,p.r*sc,0,6.2832); ctx.fill();
-      ctx.globalAlpha=.16*sc*twk;
+      ctx.globalAlpha=.2*(.6+.4*sc)*twk;
       ctx.arc(p.x,p.y,p.r*sc*3.6,0,6.2832); ctx.fill();
       ctx.globalAlpha=1;
     }
@@ -974,7 +966,7 @@ npm run <span class="g">build</span></pre>
     for(var n=0;n<nodes.length;n++){
       var p=nodes[n], sc=scaleOf(p.y);
       ctx.beginPath(); ctx.fillStyle=p.c;
-      ctx.globalAlpha=.22+.38*sc;
+      ctx.globalAlpha=.4+.25*sc;
       ctx.arc(p.x,p.y,p.r*sc,0,6.2832); ctx.fill(); ctx.globalAlpha=1;
     }
   }
