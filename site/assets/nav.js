@@ -34,7 +34,7 @@
   /* THE INSIGNIA: canonical geometry (ring, HOLLOW core, three points in
      teal / violet / ember). The hero lockup and the home footer carry hand-
      tuned copies of the same design; keep the three in sync. */
-  var MARK = '<svg class="hwnav-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="12" stroke="url(#hwNavGrad)" stroke-width="1.4" opacity=".9"/><path d="M16 11.6V6.2M19.8 18.2l4.7 2.7M12.2 18.2l-4.7 2.7" stroke="url(#hwNavGrad)" stroke-width="1.1" opacity=".55"/><circle cx="16" cy="16" r="4.4" stroke="url(#hwNavGrad)" stroke-width="1.5"/><circle cx="16" cy="4" r="2.2" fill="#4fd6c4"/><circle cx="26.4" cy="22" r="2.2" fill="#a98bff"/><circle cx="5.6" cy="22" r="2.2" fill="#ff8a4c"/><defs><linearGradient id="hwNavGrad" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7ff0e1"/><stop offset="1" stop-color="#a98bff"/></linearGradient></defs></svg>';
+  var MARK = '<svg class="hwnav-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="12" stroke="url(#hwNavGrad)" stroke-width="1.4" opacity=".9"/><path d="M16 11.6V6.2M19.8 18.2l4.7 2.7M12.2 18.2l-4.7 2.7" stroke="url(#hwNavGrad)" stroke-width="1.1" opacity=".55"/><circle cx="16" cy="16" r="4.4" stroke="url(#hwNavGrad)" stroke-width="1.5"/><circle cx="16" cy="4" r="2.2" fill="#4fd6c4"/><circle cx="26.4" cy="22" r="2.2" fill="#a98bff"/><circle cx="5.6" cy="22" r="2.2" fill="#ff8a4c"/><defs><linearGradient id="hwNavGrad" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#b0c6e4"/><stop offset="1" stop-color="#8fa8d8"/></linearGradient></defs></svg>';
 
   function pageLink(p) {
     var cur = p.id === page ? ' aria-current="page" class="active"' : '';
