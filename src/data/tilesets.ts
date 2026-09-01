@@ -13912,7 +13912,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameSecond: ['Mu'],
     theme: {
       ambientDark: 0.25,
-      floor: '#07070d', grid: '#0b0b13', border: '#1a1a2e',
+      // THE FEATURELESS FLOOR (her seam note): floor == grid and the mottle
+      // fully bared (ground.alpha 0, no speckle, no swing) — the void has
+      // NO tessellation to betray the globe's wrap; the abyss ambience
+      // carries every visual. You walk on nothing, seamlessly.
+      floor: '#07070d', grid: '#07070d', border: '#1a1a2e',
+      ground: { alpha: 0, speckles: 0, strength: 0 },
       obstacle: '#12121e', obstacleEdge: '#26263c', accent: '#8fa8d8',
       chasm: '#020204', mud: '#0a0a12', water: '#0c1420',
       // THE ABYSS (her word): the ledger's header pane made infinite — the
