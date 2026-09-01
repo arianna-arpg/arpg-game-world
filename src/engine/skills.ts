@@ -1466,6 +1466,12 @@ export interface NovaDelivery {
   /** 'all' also strikes allies AND the caster (Bloodlet);
    *  'allies' affects ONLY your side (blessing skills like Furor). */
   affects?: 'enemies' | 'all' | 'allies';
+  /** Spare the CASTER from its own burst (the Hordefather's horn: the
+   *  argument's author is not its audience — without this an enraged
+   *  Father at his floor dies to his own verb, and the reckoning fades
+   *  through the dead-commander lane instead of felling the field).
+   *  Default absent = the documented 'all'/'allies' self-inclusion. */
+  spareCaster?: boolean;
   /** Only the OUTER BAND hits: targets between radius×edgeOnly and radius
    *  (Shock Nova's expanding ring). */
   edgeOnly?: number;

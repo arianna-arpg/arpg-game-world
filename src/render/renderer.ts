@@ -5165,9 +5165,21 @@ export class Renderer {
       ctx.fill();
     }
     ctx.save();
+    // THE FALLEN BODY: a downed seat draws AS ITSELF crushed — the rampage
+    // fabric's fell-face read (squash + fade + a sink toward the feet), so a
+    // body out of the fight LOOKS out of the fight (the scene covenant's
+    // felled field, a co-op ally awaiting the knee). Stillness is the pose:
+    // the breathe transform stands down with it. Presentation only — the
+    // pose never touches the hitbox.
+    if (a.downed) {
+      const fp = VIS_CFG.body.fallenPose;
+      ctx.translate(0, a.radius * fp.sink);
+      ctx.scale(fp.sx, fp.sy);
+      ctx.globalAlpha *= fp.alpha;
+    }
     // Idle breathing — a live transform over the static bake. Scenery
     // (barrels, spawners) holds still; living things never quite do.
-    if (!a.passive) {
+    if (!a.passive && !a.downed) {
       const breathe = 1 + VIS_CFG.body.breatheAmp
         * Math.sin(world.time * VIS_CFG.body.breatheRate + a.id * 1.31);
       ctx.scale(breathe, breathe);

@@ -118,6 +118,11 @@ export const VIS_CFG = {
     spawnInSeconds: 0.35,
     /** The seed scale a spawn-in starts from. */
     spawnInFrom: 0.25,
+    /** THE FALLEN BODY: a downed seat's drawn pose — the rampage fabric's
+     *  fell-face read on flesh (squashed toward the ground + faded + sunk
+     *  toward the feet), stillness standing in for the breathe. Presentation
+     *  only, never the hitbox. */
+    fallenPose: { sink: 0.42, sx: 1.12, sy: 0.55, alpha: 0.85 },
     /** WANING PRESENCE (Actor.wane): the deepest transparency dip at full
      *  wane (0..1 of the body's alpha) — the pulse bottoms out at 1-this. */
     waneDepth: 0.8,

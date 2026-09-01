@@ -32064,6 +32064,12 @@ export class World {
           : d.affects === 'allies'
             ? this.actors.filter(a => !a.dead && a.team === caster.team)
             : this.enemiesOf(caster);
+        // The author is not the audience (NovaDelivery.spareCaster): a burst
+        // wearing the spare never strikes its own caster — nor the caster's
+        // CARRIED PARTS (a wound to the horn is a wound to the horn-blower:
+        // part damage bleeds to the root, and a composite would break its
+        // own voice with its own verb).
+        if (d.spareCaster) pool = pool.filter(a => a !== caster && a.partLink?.root !== caster);
         // Capped-target novas (Galvanic Reserve): the burst picks the
         // NEAREST N instead of washing the whole room — walled-off bodies
         // never consume a slot.
@@ -43617,7 +43623,12 @@ export class World {
     // single-player — where onPlayerDown already concluded this same frame —
     // never double-fires, and on !pendingRespawn so a mode respawn mid-fade
     // (every seat still flagged dead until the wake) isn't re-concluded.
-    if (!this.gameOver && !this.pendingRespawn && this.seats.length > 0
+    // THE SCENE COVENANT stands it down whole: on scripted ground the scene
+    // owns every fall — the reckoning's felled field lies DOWNED under the
+    // director's fade by design (engine/scenes.ts fellSeats), and its later
+    // stages stand the party back up; a wipe here would end a run that has
+    // not yet begun.
+    if (!this.gameOver && !this.pendingRespawn && !this.scene && this.seats.length > 0
       && !this.seats.some(s => !s.actor.dead && !s.actor.downed
         && (!s.merc || MERC_CFG.mercsCanRevive))) {
       for (const s of this.seats) { s.actor.downed = false; s.actor.dead = true; }

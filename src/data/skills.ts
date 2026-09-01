@@ -218,7 +218,10 @@ export const SKILLS: Record<string, SkillDef> = {
     // floor denies the kill, and the blast keeps its one promise.
     manaCost: 0, cooldown: 45, useTime: 10,
     baseDamage: { physical: [340, 480], fire: [280, 420] },
-    delivery: { type: 'nova', radius: 2600, affects: 'all', occlusion: 'free' },
+    // spareCaster: the horn's author is not its audience — an enraged Father
+    // at his floor must survive his own verb (else the reckoning fades
+    // through the dead-commander lane and the field is never felled).
+    delivery: { type: 'nova', radius: 2600, affects: 'all', occlusion: 'free', spareCaster: true },
     effects: [
       { type: 'damage' },
       { type: 'knockback', strength: 720 },

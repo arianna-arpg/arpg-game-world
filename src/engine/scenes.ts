@@ -416,7 +416,9 @@ function endScene(w: World, sc: SceneRuntime): void {
  *  lethal blow on scripted ground FELLS instead of kills. Returns true when
  *  the scene claimed the fall (the caller stops — no downed state, no wipe,
  *  no mode respawn). The script fast-forwards to the nearest stage that
- *  knows what a fall means (the reckoning plays it; a card narrates it). */
+ *  knows what a fall means (the reckoning plays it; a card narrates it).
+ *  (The reckoning's blast then lays the field BODILY down — fellSeats —
+ *  but that is the stage's own choice; the covenant only ever guards.) */
 export function sceneInterceptFall(w: World, a: Actor): boolean {
   const sc = w.scene;
   if (!sc) return false;
@@ -486,6 +488,31 @@ function aliveOf(w: World, ids: number[]): number {
   let n = 0;
   for (const a of w.actors) if (!a.dead && ids.includes(a.id)) n++;
   return n;
+}
+
+/** THE FELLED FIELD (her pass 2026-08-31): the reckoning's end is BODILY.
+ *  The covenant's guard alone left a "dead" hero walking, casting, and
+ *  visibly regenerating under the sinking dark — an un-death — and a runner
+ *  past the nova's rim was never touched at all. Every seat goes DOWN
+ *  through the world's own downed state, so the whole lock arrives from
+ *  standing law: applyInputs refuses the seat, regeneration refuses the
+ *  body, kill() can't re-enter the death path, and no ally stands to
+ *  revive. Life reads honest zero, the guards keep whatever still mills
+ *  around off the bodies, and the blast's own knockback still rides out
+ *  (the hurl IS the death read). The 'mu' and 'home' stages stand the
+ *  slain back up by hand — the covenant's "nobody truly dies" is intact. */
+function fellSeats(w: World, sc: SceneRuntime): void {
+  for (const seat of w.seats) {
+    const a = seat.actor;
+    if (a.dead) continue;
+    a.downed = true;
+    a.life = 0;
+    a.casting = null;
+    a.dash = null; // willed motion ends; the blast's own hurl (push) rides out
+    a.invulnerable = true;
+    a.untargetable = true;
+  }
+  sc.fell = true;
 }
 
 /** THE ENRAGE's surge: compress the commander's live muster to its last
@@ -655,27 +682,29 @@ registerSceneStage('reckoning', {
     if (sc.fell) {
       hero.invulnerable = false;
       hero.untargetable = false;
+      hero.downed = false;
       hero.life = hero.maxLife();
       hero.fillResources();
     }
     sc.mark = { id: col.id, color: col.color };
+    sc.focus = null; // the agency beat owns no camera — the eye walks only for the fire-off
     sc.state.colId = col.id;
     sc.state.cast = false;
     sc.state.blastAt = null;
     sc.bar = null;
     sc.prompt = null;
   },
-  update(w, sc, spec, _dt) {
+  update(w, sc, spec, dt) {
     const s = spec as SceneReckoningStage;
     const st = sc.state as {
       colId: number; cast: boolean; blastAt: number | null;
-      enraged?: boolean; everOrdered?: boolean;
+      enraged?: boolean; everOrdered?: boolean; panT?: number; flared?: boolean;
     };
     const col = w.actors.find(a => a.id === st.colId);
     // THE DEAD-COMMANDER LANE (the mechanics-breaker's net): a Father who is
     // somehow truly finished just fades the stage forward — the wake and Mu
     // follow as ever. Never an immunity, never a lock, never a refusal print.
-    if (!col || col.dead) { sc.mark = null; sc.fadeTarget = 1; return w.screenFade >= 0.995; }
+    if (!col || col.dead) { sc.mark = null; sc.focus = null; sc.fadeTarget = 1; return w.screenFade >= 0.995; }
     // THE ENRAGE (show, never tell): bled below the floor, the Father does
     // not shrug — he HURRIES. A visible fury takes him (the rally his own
     // voice-part preaches, turned inward), the ground kicks, and the cast
@@ -703,6 +732,7 @@ registerSceneStage('reckoning', {
         console.warn(`[scenes] reckoning verb '${s.verb}' is not a registered skill`);
         st.cast = true;
         st.blastAt = sc.stageT;
+        fellSeats(w, sc); // the degrade lane inherits the end — the card still narrates a fall
       } else if (w.useSkill(col, inst, vec(col.pos.x, col.pos.y))) {
         st.cast = true;
         st.everOrdered = true;
@@ -722,23 +752,64 @@ registerSceneStage('reckoning', {
       console.warn(`[scenes] reckoning verb '${s.verb}' refused past patience — degrading to the fade`);
       st.cast = true;
       st.blastAt = sc.stageT;
+      fellSeats(w, sc);
     }
     if (st.cast && st.blastAt === null && !col.casting) {
       if (col.isStunned() || col.heldBy != null) {
         // Interrupted — the player's honest little victory. Delay is real;
-        // denial is not: the muster re-arms the moment the body is free.
+        // denial is not: the muster re-arms the moment the body is free
+        // (and the next muster's tail flares + pans afresh).
         st.cast = false;
+        st.flared = false;
       } else {
-        // The verb has resolved — the field is felled (the covenant caught
-        // the hero at the one death chokepoint; the horde it spent honestly).
+        // The verb has resolved — the field is felled. The nova already
+        // caught everyone it reached at the one death chokepoint (the
+        // covenant's guard); the sweep makes the end BODILY for every seat
+        // — the runner past its rim included. The horde it spent honestly.
         st.blastAt = sc.stageT;
         sc.mark = null;
         w.shake = Math.max(w.shake, SCENE_CFG.blastShake);
+        fellSeats(w, sc);
       }
     }
     if (st.blastAt !== null && sc.stageT - st.blastAt >= s.blastWaitSec) {
       sc.fadeTarget = 1;
-      if (w.screenFade >= 0.995) return true;
+      if (w.screenFade >= 0.995) { sc.focus = null; return true; }
+    }
+    // THE WITNESS (her pass 2026-08-31): the fire-off is ALWAYS seen —
+    // however far the road has carried the player, the eye walks to the
+    // Father for the muster's last breaths, watches the horn fire, holds
+    // through the detonation, then comes home to the fallen body for the
+    // dark. The renderer SNAPS to sc.focus (drawn == scripted, no easing
+    // forked there), so the director walks the point itself: smoothstep
+    // out over travelSec, home at the backSec pace. An interrupt mid-pan
+    // walks the eye back the same way — the muster re-arms, and agency
+    // keeps its camera until the next tail.
+    {
+      const fp = SCENE_CFG.firePan;
+      const castLeft = col.casting && col.casting.inst.def.id === s.verb
+        ? col.casting.total - col.casting.elapsed : null;
+      const eyeOut = st.blastAt !== null
+        ? sc.stageT - st.blastAt < fp.dwellSec
+        : castLeft !== null && castLeft <= fp.leadSec;
+      // THE FLARE: the pan's first beat is the Father's own wind-up read —
+      // the enrage's fury worn visibly (now guaranteed a witness) and the
+      // ground kicking under him as the bar enters its last breaths.
+      if (eyeOut && st.blastAt === null && !st.flared) {
+        st.flared = true;
+        col.applyStatus('rally', 0, 3, 'the reckoning');
+        w.shake = Math.max(w.shake, SCENE_CFG.blastShake * 0.5);
+      }
+      const step = eyeOut ? dt : -dt * (fp.travelSec / Math.max(0.01, fp.backSec));
+      st.panT = Math.max(0, Math.min(fp.travelSec, (st.panT ?? 0) + step));
+      if (st.panT > 0) {
+        const t = st.panT / fp.travelSec;
+        const k = t * t * (3 - 2 * t); // smoothstep — the fabric's one ease
+        const home = w.player.pos;
+        sc.focus = vec(home.x + (col.pos.x - home.x) * k, home.y + (col.pos.y - home.y) * k);
+      } else if (!eyeOut) {
+        sc.focus = null; // k = 0 IS the hero — the release is seamless by construction
+      }
     }
     return false;
   },
@@ -756,6 +827,7 @@ registerSceneStage('home', {
     const p = w.player;
     p.invulnerable = false;
     p.untargetable = false;
+    p.downed = false; // the felled field's exit — a slain hero wakes standing
     p.life = p.maxLife();
     p.fillResources();
     w.loadZone(START_ZONE);
@@ -884,6 +956,7 @@ registerSceneStage('mu', {
     const p = w.player;
     p.invulnerable = true;
     p.untargetable = true;
+    p.downed = false; // the felled field's exit — a downed seat eats its own inputs (applyInputs)
     p.life = p.maxLife();
     p.fillResources();
     p.casting = null;

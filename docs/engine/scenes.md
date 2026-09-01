@@ -94,7 +94,11 @@ so drawn == scripted).
 routes through `onPlayerDown`, whose head asks `sceneInterceptFall` first —
 the hero is FELLED (life 1, invulnerable + untargetable, the script
 fast-forwards to the nearest stage declaring `onFell: 'play'`), never
-killed. No downed state, no wipe, no mode respawn, permadeath untouched.
+killed. No wipe, no mode respawn, permadeath untouched. The ALL-DOWN
+terminator (the co-op wipe belt in `World.update`) stands down whole while
+a scene runs — the scene owns every fall, and its stages stand the party
+back up (the reckoning's felled field lies downed under the director's fade
+BY DESIGN; a wipe there would end a run that has not yet begun).
 
 **Nothing on scripted ground pays**: every scene spawn is stamped
 `noBounty` (xp + loot + gems + orbs sealed whole at the kill path) and
@@ -105,14 +109,47 @@ the shared grammar of extraction/borough/harborhold assaults).
 
 ## The reckoning
 
-Spawns the executioner off in the dark (posted via `aiPost`), freezes
-everyone but it (an **actor-scoped** `kind: 'cinematic'` hold with
-`exceptIds` — the world keeps drawing and its cast clock runs), pans the
-eye, then casts its verb **through the real `useSkill` pipeline** — the
-muster bar and ground telegraph are honest by construction. The prologue's
-verb (`hordefathers_reckoning`) rides `NovaDelivery.affects: 'all'` +
-`occlusion: 'free'`: the blast spends the caster's own horde as gladly as
-its enemies, and no tree saves what the horn has claimed.
+THE AGENCY BEAT (her overhaul 2026-08-30): the world is **never held**. The
+commander arrives just past the screen's edge (posted via `aiPost`, kit
+AI-banned, marked by the attention fabric's chevron — `scene.mark`), and
+after `graceSec` the director orders its verb **through the real `useSkill`
+pipeline** — a TEN-second honest cast bar the player freely spends trying
+to stop. Interrupts delay, never deny (the muster re-arms); THE ENRAGE
+answers a commander bled below `floorFrac`: honestly mortal throughout, he
+furies (rally worn, the ground kicks) and the bar SURGES to its last
+breaths (`enrageLeftSec`). A truly-finished Father just fades the stage
+forward (the dead-commander lane — never a lock).
+
+**THE WITNESS** (her pass 2026-08-31, `SCENE_CFG.firePan`): the fire-off is
+ALWAYS seen. As the muster enters its last `leadSec` of cast, the director
+walks the cinematic eye out to the caster (smoothstep over `travelSec` —
+the renderer snaps to `scene.focus`, so the director owns the ease), the
+fury flares as the wind-up's tell, the horn fires ON SCREEN however far the
+player has run, the eye holds on the detonation for `dwellSec`, then walks
+home at the `backSec` pace — the last thing the dark takes is the player's
+own fallen body (`blastWaitSec` is sized past the walk home). An interrupt
+mid-pan walks the eye back the same way: agency keeps its camera until the
+next tail.
+
+**THE FELLED FIELD** (the same pass): the blast's end is BODILY. The nova
+catches everyone it reaches at the one death chokepoint (the covenant's
+guard), then the director's sweep (`fellSeats`) lays **every** seat down —
+the runner past the nova's rim included — through the world's own `downed`
+state, so the whole death-lock arrives from standing law: `applyInputs`
+refuses the seat, regeneration refuses the body, `kill()` can't re-enter,
+and no ally stands to revive. Life reads honest zero; the blast's own
+knockback still hurls the body (the death read); the renderer draws a
+downed seat AS ITSELF crushed (`VIS_CFG.body.fallenPose` — the rampage
+fell-face read on flesh, breathe stood down). The `'mu'` and `'home'`
+stages stand the slain back up by hand.
+
+The prologue's verb (`hordefathers_reckoning`) rides
+`NovaDelivery.affects: 'all'` + `occlusion: 'free'`: the blast spends the
+caster's own horde as gladly as its enemies, and no tree saves what the
+horn has claimed — but **`spareCaster: true`** keeps the author out of his
+own audience (him AND his carried anatomy parts): without it an enraged
+Father at his floor died to his own verb and the stage limped out through
+the dead-commander lane, unfelled and unwitnessed.
 
 The debut executioner — **Ghorvane, the Hordefather** (`goblin_colossus`,
 `data/monsters.ts`) — is a real anatomy-gamut composite held for the

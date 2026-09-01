@@ -73,7 +73,9 @@ const fatherVerb = (
   tags: types, color,
   manaCost: 0, cooldown: 45, useTime: 10,
   baseDamage,
-  delivery: { type: 'nova', radius: 2600, affects: 'all', occlusion: 'free' },
+  // spareCaster: no Father dies of his own horn (data/skills.ts, the base
+  // verb's law) — the enrage keeps its promise that HE stays the mortal one.
+  delivery: { type: 'nova', radius: 2600, affects: 'all', occlusion: 'free', spareCaster: true },
   effects: [
     { type: 'damage' },
     { type: 'knockback', strength: knockback },

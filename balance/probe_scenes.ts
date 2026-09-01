@@ -17,8 +17,14 @@
 //     the real pipeline and spends the horde honestly (affects 'all').
 //   • THE AGENCY RECKONING — the world is NEVER held: the commander stands
 //     marked (the attention fabric's chevron), its kit banned, and after the
-//     grace beat musters a TEN-second honest cast; the MERCY FLOOR makes it
-//     immune below its life fraction (damage delays, never denies).
+//     grace beat musters a TEN-second honest cast; THE ENRAGE answers a
+//     commander bled below his floor (mortal, furied, the bar surging).
+//   • THE WITNESS — the fire-off is ALWAYS seen: the eye walks to the
+//     Father for the muster's last breaths and fires on screen, however far
+//     the player has run, then comes home to the fallen body for the dark.
+//   • THE FELLED FIELD — the blast's end is BODILY: every seat goes DOWN
+//     through the world's own downed state (inputs refused, regeneration
+//     refused, life honest zero) — the runner past the nova's rim included.
 //   • THE HOLLOW WAKE — the prologue ends in MU, not at the bedside: the
 //     spirit stands as a wisp among the class apparitions, the completion
 //     key stamps at the threshold, and the run begins only at the pick.
@@ -34,6 +40,8 @@ import { PROLOGUE_SCENE } from '../src/data/scenes';
 import { MU_CFG, APPARITION_PREFIX } from '../src/data/mu';
 import { selectableSlotCount } from '../src/meta/account';
 import { collectAttention } from '../src/world/attention';
+import { vec } from '../src/core/math';
+import type { PlayerInput } from '../src/net/intent';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
 
@@ -232,13 +240,36 @@ check('G4c: THE ENRAGE — below the floor he stays mortal, furies, and the bar 
   && !!col?.statuses.some(s => s.id === 'rally')
   && ((col?.casting?.total ?? 0) - (col?.casting?.elapsed ?? 0)) <= 1.5,
   `left=${((col?.casting?.total ?? 0) - (col?.casting?.elapsed ?? 0)).toFixed(2)}s`);
+// THE WITNESS: the surge dropped the muster inside the pan's lead — the eye
+// engages, and by the travel's end it sits ON the Father (the lerp's k=1 is
+// his live seat, so drawn == scripted exactly).
+check('G4d: THE WITNESS — the eye walks out for the last breaths',
+  until(w, () => w.scene?.focus !== null, 2));
+step(w, 0.8); // past travelSec — the pan lands (the dwell holds it if the horn already fired)
+check('G4e: the eye sits on the Father for the fire-off',
+  !!w.scene?.focus && !!col
+  && Math.hypot(w.scene.focus.x - col.pos.x, w.scene.focus.y - col.pos.y) < 24,
+  `d=${w.scene?.focus && col ? Math.hypot(w.scene.focus.x - col.pos.x, w.scene.focus.y - col.pos.y).toFixed(1) : '—'}`);
 check('G5: the blast spends the horde honestly (affects all — the tide lies dead)',
   until(w, () => tideIds.length > 0
     && tideIds.every(id => w.actors.every(a => a.id !== id || a.dead)), 16),
   `tide=${tideIds.length}`);
-check('G5b: the reckoning leaves the hero ENDED — felled and guarded, never standing over an inert Father',
-  p.invulnerable && p.life <= 1 && w.scene?.fell === true,
-  `life=${p.life.toFixed(0)} guard=${String(p.invulnerable)}`);
+step(w, 0.1); // the director's next tick runs the felled-field sweep
+check('G5b: THE FELLED FIELD — the blast leaves the hero BODILY down (downed, life 0, guarded)',
+  p.downed && p.life === 0 && p.invulnerable && p.untargetable && w.scene?.fell === true,
+  `downed=${String(p.downed)} life=${p.life.toFixed(0)}`);
+// THE SLAIN LOCK rides standing law: applyInputs refuses a downed seat, so
+// a pressed stick moves nothing (no update ticks here — pure input refusal).
+{
+  const x0 = p.pos.x, y0 = p.pos.y;
+  const shove: PlayerInput = { dx: 1, dy: 0, aim: vec(p.pos.x + 100, p.pos.y), held: [], edge: [] };
+  for (let i = 0; i < 30; i++) w.applyInputs(new Map([[w.localSeat.id, shove]]), DT);
+  check('G5c: THE SLAIN LOCK — a downed seat\'s inputs are refused whole',
+    p.pos.x === x0 && p.pos.y === y0);
+}
+step(w, 1.2);
+check('G5d: the un-death is dead — no regeneration under the sinking dark',
+  p.life === 0, `life=${p.life.toFixed(2)}`);
 check('G6: the fall card follows under black',
   until(w, () => stageKind(w) === 'card' && w.screenFade >= 0.995, 6));
 check('G7: the fall card is pending',
@@ -257,6 +288,8 @@ check('H3: COMPLETION stamps at the threshold — the tutorial never replays, Mu
 check('H4: THE WISP — the hero stands as a small guarded light with no kit',
   p.look === MU_CFG.wisp.look && p.radius === MU_CFG.wisp.radius
   && p.invulnerable && p.untargetable && p.skills.every(s => s === null));
+check('H4a: the felled field\'s exit — the wisp is neither dead nor downed (inputs live again)',
+  !p.dead && !p.downed);
 check('H4b: THE HUD VEIL is up (a spirit carries no orbs, no flasks, no bar)',
   w.scene?.hudVeil === true);
 // THE ROSTER OF VESSELS: the dealt hand stands awake, the rest of the
@@ -285,6 +318,52 @@ check('H5b: every apparition is scenery with a name — passive, guarded, untarg
 }
 check('H7: no enemy followed the spirit into Mu',
   w.actors.every(a => a.team !== 'enemy'));
+
+// === I) THE RUNNER'S END: the nova has a rim, the reckoning does not ========
+// A hero who spends the whole muster RUNNING can stand past the blast's 2600
+// radius when the horn fires (the boundless ground never says no). The story
+// still ends: the sweep lays the runner bodily down, and THE WITNESS panned
+// the fire-off to their eye however far they stood.
+{
+  const w2 = makeSimWorld('warrior', 31020);
+  const p2 = w2.player;
+  w2.account.ledger['tutorial_faction:goblin'] = 1;
+  check('I0: the second walk begins', sceneBegin(w2, 'prologue'));
+  step(w2, 0.2); // the card must be SET before an ack can land (the B7 beat)
+  sceneCardAck(w2);
+  step(w2, 0.3);
+  // Sprint the drill (footwork, then the five noted strikes)…
+  for (let i = 0; i < 60 * 14; i++) { w2.moveActor(p2, 1, 0, DT); w2.update(DT); }
+  for (let i = 0; i < 5; i++) sceneNoteCast(w2);
+  step(w2, 0.2);
+  // …put the clash down and breathe into the assault…
+  const g = w2.actors.find(a => a.defId === 'goblin_skirmisher' && !a.dead);
+  if (g) { g.life = 0; w2.kill(g, false, p2); }
+  step(w2, 3.0);
+  // …then fall to the tide: the covenant fast-forwards to the reckoning.
+  p2.life = 0;
+  w2.kill(p2);
+  step(w2, 0.2);
+  const col2 = w2.actors.find(a => a.defId === 'goblin_colossus');
+  check('I1: the reckoning stands (second wind up, Father posted)',
+    stageKind(w2) === 'reckoning' && !!col2 && !p2.downed && p2.life === p2.maxLife());
+  // THE RUN: far past the nova's own reach before the muster resolves.
+  if (col2) { p2.pos.x = col2.pos.x + 4000; p2.pos.y = col2.pos.y; }
+  const far = col2 ? Math.hypot(p2.pos.x - col2.pos.x, p2.pos.y - col2.pos.y) : 0;
+  check('I2: the runner stands past the blast\'s rim', far > 3000, `d=${far.toFixed(0)}`);
+  let sawEye = false;
+  const ended = until(w2, () => {
+    if (w2.scene?.focus) sawEye = true;
+    return p2.downed;
+  }, 20);
+  check('I3: the sweep fells the runner the nova never reached (downed, life 0)',
+    ended && p2.life === 0 && w2.scene?.fell === true,
+    `downed=${String(p2.downed)} life=${p2.life.toFixed(0)}`);
+  check('I4: THE WITNESS reached them — the eye walked out for the fire-off',
+    sawEye);
+  check('I5: the fall card still follows under black',
+    until(w2, () => stageKind(w2) === 'card' && w2.screenFade >= 0.995, 6));
+}
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASS');
 process.exit(failed ? 1 : 0);

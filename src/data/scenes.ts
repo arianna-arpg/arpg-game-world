@@ -29,9 +29,16 @@
 //                 trying to stop it — THE ENRAGE answers a commander bled
 //                 below his floor: a visible fury and the bar SURGING to
 //                 its last breaths (show, never tell; he stays mortal, and
-//                 a true kill just fades forward — never a lock) — and the
-//                 hero is FELLED, never killed (the scene intercepts the
-//                 lethal blow at the one death chokepoint).
+//                 a true kill just fades forward — never a lock). THE
+//                 WITNESS (SCENE_CFG.firePan): as the muster enters its
+//                 last breaths the eye walks to the caster — the fury
+//                 flares, the horn fires ON SCREEN however far the player
+//                 has run — then home to the player's own fallen body.
+//                 THE FELLED FIELD: the blast's end is BODILY — every seat
+//                 goes DOWN through the world's own downed state (input
+//                 refused, regeneration refused, life honest zero), so the
+//                 death reads as a death; the covenant still means nobody
+//                 truly dies (Mu stands the slain back up).
 //   • home      — teardown: back to the start-zone bedside, the staging
 //                 zone deleted from the off-graph map, completion stamped.
 //   • mu        — THE HUB BETWEEN LIVES (data/mu.ts): the hero stands as a
@@ -187,7 +194,10 @@ export interface SceneReckoningStage extends SceneStageBase {
   floorFrac: number;
   /** Seconds of cast left after the enrage surge (default 1.2). */
   enrageLeftSec?: number;
-  /** After the blast lands, seconds before the dark takes the screen. */
+  /** After the blast lands, seconds before the dark takes the screen — the
+   *  funeral beat. Size it past the witness pan's dwell + walk home
+   *  (SCENE_CFG.firePan), so the eye rests on the fallen body before the
+   *  fade rises. */
   blastWaitSec: number;
   /** Center-screen callout as the commander arrives. */
   announce?: string;
@@ -244,8 +254,14 @@ export const SCENE_CFG = {
   /** Scene spawns ring the hero inside this band (px) unless a stage says
    *  otherwise — the wave-frenzy grammar's own entry ring. */
   entryBand: [340, 460] as [number, number],
-  /** Camera pan easing: smoothstep over the stage's panSec. */
-  panEase: 'smooth' as const,
+  /** THE WITNESS (the reckoning): the fire-off is ALWAYS seen. The director
+   *  walks the cinematic eye out to the caster once the muster enters its
+   *  last breaths (`leadSec` of cast remaining), smoothstepped over
+   *  `travelSec`, holds on the detonation for `dwellSec`, then walks home
+   *  at the `backSec` pace — the last thing the dark takes is the player's
+   *  own fallen body. An interrupt mid-pan walks the eye back the same way
+   *  (the muster re-arms; agency keeps its camera). */
+  firePan: { leadSec: 1.6, travelSec: 0.7, dwellSec: 0.9, backSec: 0.6 },
   /** The reckoning's screen-shake at detonation. */
   blastShake: 26,
   /** THE PATIENCE BELT: seconds past graceSec a refused muster may retry
@@ -357,7 +373,9 @@ export const PROLOGUE_SCENE: SceneDef = {
       graceSec: 2.2,
       floorFrac: 0.1,
       enrageLeftSec: 1.2,
-      blastWaitSec: 1.6,
+      // The funeral beat: the eye dwells on the detonation (~0.9), walks
+      // home (~0.6), then rests on the fallen body before the dark rises.
+      blastWaitSec: 2.4,
       announce: 'the Hordefather himself comes to end the road.',
       announceColor: '#9fdc6a',
     },
