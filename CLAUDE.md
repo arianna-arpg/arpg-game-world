@@ -329,6 +329,33 @@ we verify changes.
   folds; the pane's `avatarDefId` shows the form you are becoming) —
   dials in `ULT_CFG`, docs in `docs/engine/ultimates.md`, probe
   `balance/probe_ultimates.ts`),
+  `gauge.ts` (THE GAUGE FABRIC — skills that pay in the world's own
+  events; two resource shapes, one vocabulary: THE GAUGE (`SkillDef.gauge`
+  — a per-SKILL bank FED by the charge-tap vocabulary through the ONE
+  dispatcher `World.tapCharges` + the ONE filter chain `World.tapFires`
+  (kills, deaths near you, blows, orbs — `GaugeFeedSpec` = a ChargeGainSpec
+  minus its bank) and/or a regen clock, SPENT at the press (THE PRESS PAYS
+  — beside mana, an interrupted bar still paid), then SILENCED by a
+  lockout that takes nothing (the anti-chain law, aging on the owner's
+  own seconds); ONE READINESS — an unfilled gauge is "not ready" through
+  `Actor.unmetGate`, the same predicate a charge floor uses, so bar/AI/
+  press agree and the note reads the fill; THREE ORDINARY STATS
+  gaugeGain/gaugeNeed/gaugeLockout — base-1 multipliers registered by the
+  module, tag-scopable like any modifier; transient on
+  `SkillInstance.state`; the slot draws the bank rising as an ether meter)
+  and THE POOL (`ChargeDef.regen` — a per-ACTOR bank's BASELINE clock in
+  charges/10s beneath the standing `chargeRegen_<id>` investment, ticking
+  only while a slotted skill SPENDS it when `regenNeedsSpender` asks —
+  `Actor.spendsCharge`; spending is ordinary `chargeCost`; the Titan-Quest
+  Shade shape as one def row: `wisp`). THE PRICE FLOOR grew two shapes for
+  ultimates (gauge ≥ minGaugeNeed | pool ≥ minPoolCost). Debuts
+  (data/ultimates.ts): Grave Tide (30 souls → the horde), the Reaper's
+  Toll (8 kills, no super mark — the kill-speed build-around), Hush of the
+  Wake (the whole wisp pool), Doom Bell / Last Rites (the low-life
+  license) / Stormcrown on cooldowns; THE LAB KIT (`ULT_QA.grantArts` →
+  `World.dealLabArts`, the Mireille gift lane minus the learn) deals them
+  into a fresh bag on the lab branch — docs in `docs/engine/gauge.md`,
+  probe `balance/probe_gauge.ts`),
   `throng.ts` + `cling.ts` (THE THRONG FABRIC — the swarm you GATHER, the
   Pikmin/Overlord playstyle as data: `SkillDef.throng` anchors a roster of
   sight-gated wild husks CLAIMED by walking through them, acquisition as

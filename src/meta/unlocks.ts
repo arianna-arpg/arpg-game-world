@@ -671,9 +671,19 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   // THE ULTIMATE ARTS (engine/ultimates.ts — super arts on super cooldowns;
   // the eyecatch pane is the fabric's face).
   { id: 'gem_skills_ultimates', kind: 'skill', cost: 320, reqLevel: 12, label: 'Skill Pool: Ultimate Arts',
-    description: 'The Hundred Partings, Hollow Star and the Woken Hollow may drop. Arts too'
-      + ' large for the hand that holds them: the world stops to watch.',
-    payload: { skillIds: ['hundred_partings', 'hollow_star', 'woken_hollow'] } },
+    description: 'The Hundred Partings, Hollow Star, the Woken Hollow, Grave Tide, Doom Bell,'
+      + ' Last Rites, Stormcrown and the Hush of the Wake may drop. Arts too large for the'
+      + ' hand that holds them: the world stops to watch.',
+    payload: { skillIds: [
+      'hundred_partings', 'hollow_star', 'woken_hollow',
+      'grave_tide', 'doom_bell', 'last_rites', 'stormcrown', 'hush_of_the_wake',
+    ] } },
+  // THE GAUGE FABRIC's ordinary debut (engine/gauge.ts — an art priced in
+  // kills, no super mark): the kill-speed build-around.
+  { id: 'gem_skills_gauge', kind: 'skill', cost: 120, reqLevel: 4, label: 'Skill Pool: the Reaper\'s Toll',
+    description: 'Reaper\'s Toll may drop. Every kill is a coin; the toll rings when the purse'
+      + ' is full — and the faster you kill, the more often it rings.',
+    payload: { skillIds: ['reapers_toll'] } },
 
   // --- Support drop bundles -------------------------------------------------
   { id: 'sup_t2', kind: 'support', cost: 100, reqLevel: 0, label: 'Support Pool II',

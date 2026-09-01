@@ -127,6 +127,168 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('possessPower', 'flat', 0.02)] },
   },
 
+  // ======================= THE VAAL WAVE (engine/gauge.ts) ==================
+  // Super arts priced in the world's own events instead of seconds — and
+  // the two resource shapes the gauge fabric opens: per-skill GAUGES fed by
+  // deaths (Grave Tide, the Reaper's Toll below) and a per-actor POOL that
+  // regenerates on its own clock (Wisps → the Hush). The cooldown arts
+  // (Doom Bell, Last Rites, Stormcrown) round the roster with three more
+  // fantasies: the screen-clearing bell, the low-life comeback, the sky
+  // that spares no one.
+
+  grave_tide: {
+    id: 'grave_tide', name: 'Grave Tide',
+    description: 'Every death near you is a coin in a purse only you can spend. At thirty souls'
+      + ' — the worthy count for three — the ground gives up its tenants: eight of the dead'
+      + ' rise at your mark for 22 seconds, twelve at most. The purse takes nothing for'
+      + ' twelve seconds after you spend it.',
+    tags: ['spell', 'summon', 'minion', 'duration', 'ultimate'], color: '#cfc8b8',
+    manaCost: 40, cooldown: 0, useTime: 0.9,
+    delivery: {
+      type: 'summon',
+      pool: [{ id: 'skeleton_warrior', weight: 3 }, { id: 'zombie', weight: 2 }],
+      count: 8, maxActive: 12, duration: 22,
+    },
+    effects: [],
+    // THE GAUGE: deaths within reach feed it whether or not the blow was
+    // yours (souls rise to whoever stands closest); an elite you slay
+    // yourself counts for more. Priced in bodies — no cooldown at all.
+    gauge: {
+      need: 30, unit: 'souls', lockoutSec: 12,
+      feeds: [
+        { on: 'enemyDeath', amount: 1, radius: 420 },
+        { on: 'kill', amount: 2, eliteVictim: true },
+      ],
+    },
+    ultimate: { sub: 'they were never asleep' },
+    requirements: { willpower: 24 },
+    minDropLevel: 12, dropWeight: 8,
+    ai: { range: 400, weight: 4, keepDistance: 260 },
+    leveling: { perLevel: [mod('minionLife', 'increased', 0.12), mod('minionDamage', 'increased', 0.1)] },
+  },
+
+  doom_bell: {
+    id: 'doom_bell', name: 'Doom Bell',
+    description: 'Ring the one bell that answers every debt at once: a physical shockwave 400'
+      + ' units wide that stuns everything it reaches, throws it back, and rings louder the'
+      + ' more stand inside it.',
+    tags: ['spell', 'aoe', 'physical', 'ultimate'], color: '#c8a84b',
+    manaCost: 55, cooldown: 60, useTime: 0.6,
+    baseDamage: { physical: [40, 62] },
+    delivery: { type: 'nova', radius: 400 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'stun', chance: 1 },
+      { type: 'knockback', strength: 90 },
+    ],
+    empower: { radius: 400, dmgPerPower: 0.06 },
+    ultimate: { sub: 'every debt, at once' },
+    requirements: { strength: 24 },
+    minDropLevel: 12, dropWeight: 8,
+    ai: { range: 300, weight: 4 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
+  },
+
+  last_rites: {
+    id: 'last_rites', name: 'Last Rites',
+    description: 'Usable only below half life: read your own rites aloud. Mend 40% of your'
+      + ' maximum life, deal 35% more damage for 6 seconds, and a breath later the toll'
+      + ' lands — a physical burst that stuns whatever thought it was winning.',
+    tags: ['spell', 'buff', 'instant', 'ultimate'], color: '#b84a4a',
+    manaCost: 0, cooldown: 75, useTime: 0,
+    delivery: { type: 'self' },
+    effects: [
+      { type: 'heal', pctMax: 0.4 },
+      { type: 'buff', id: 'last_rites_fury', duration: 6, mods: [mod('damage', 'more', 0.35)] },
+    ],
+    // THE LOW-LIFE LICENSE: the thirst gate, read as a comeback — the rites
+    // are only yours to read when you are the one dying.
+    gate: { missing: { kind: 'life', pct: 0.5 }, note: 'not yet dying' },
+    followUp: { skillId: 'last_rites_toll', delay: 0.25 },
+    reflex: true,
+    ultimate: { sub: 'read them yourself' },
+    requirements: { strength: 20 },
+    minDropLevel: 12, dropWeight: 8,
+    leveling: { perLevel: [mod('healPower', 'increased', 0.08)] },
+  },
+
+  last_rites_toll: {
+    id: 'last_rites_toll', name: 'Last Rites: the Toll', noDrop: true,
+    description: 'The toll lands: a burst around the reader that stuns what it reaches.',
+    tags: ['spell', 'aoe', 'physical', 'ultimate'], color: '#b84a4a',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { physical: [50, 80] },
+    delivery: { type: 'nova', radius: 240 },
+    effects: [{ type: 'damage' }, { type: 'status', status: 'stun', chance: 1 }],
+    leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
+  },
+
+  stormcrown: {
+    id: 'stormcrown', name: 'Stormcrown',
+    description: 'Crown the sky and let it rule: 24 bolts fall across 300 units for four'
+      + ' seconds, each with a 60% chance to shock. The storm is weather, not a duel — it'
+      + ' spares no one under it: friend, foe, or you.',
+    tags: ['spell', 'lightning', 'aoe', 'storm', 'duration', 'ultimate'], color: '#ffe94a',
+    manaCost: 65, cooldown: 80, useTime: 0.7,
+    baseDamage: { lightning: [22, 44] },
+    delivery: {
+      type: 'storm', count: 24, interval: 0.16, areaRadius: 300, hitRadius: 72,
+      castRange: 480, occlusion: 'free', sky: true, telegraph: 0.4,
+    },
+    effects: [{ type: 'damage' }, { type: 'status', status: 'shock', chance: 0.6 }],
+    ultimate: { sub: 'the sky spares no one' },
+    requirements: { intelligence: 26 },
+    minDropLevel: 12, dropWeight: 8,
+    ai: { range: 440, weight: 4, keepDistance: 300 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
+  },
+
+  hush_of_the_wake: {
+    id: 'hush_of_the_wake', name: 'Hush of the Wake',
+    description: 'Spend five Wisps — one gathers every four seconds while you carry this — to'
+      + ' fall silent: 240 points of absorption for 5 seconds, half of all damage turned'
+      + ' aside for 4, a fifth of your life mended, and a quickened step to leave with.'
+      + ' Nothing reaches you here.',
+    tags: ['spell', 'buff', 'instant', 'ultimate'], color: '#8fa8d8',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    delivery: { type: 'self' },
+    effects: [
+      { type: 'absorb', amount: 240, duration: 5 },
+      { type: 'heal', pctMax: 0.2 },
+      {
+        type: 'buff', id: 'hushed', duration: 4,
+        mods: [mod('damageTaken', 'more', -0.5), mod('moveSpeed', 'increased', 0.25)],
+      },
+    ],
+    // THE POOL: the wisp bank (engine/charges.ts — regen 2.5 per 10s while
+    // a spender is carried) IS the price; the press drinks it whole.
+    chargeCost: { charge: 'wisp', amount: 5 },
+    reflex: true,
+    ultimate: { sub: 'nothing reaches you here' },
+    requirements: { willpower: 22 },
+    minDropLevel: 12, dropWeight: 8,
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.06)] },
+  },
+
+  // The gauge fabric standing ALONE — no super mark, an ordinary drop: the
+  // kill-speed build-around. Eight kills ring it; four seconds of silence.
+  reapers_toll: {
+    id: 'reapers_toll', name: 'Reaper\'s Toll',
+    description: 'Every kill you land is a coin; at eight the toll rings — a burst of chaos 170'
+      + ' units wide around you. The purse takes nothing for four seconds after it rings.'
+      + ' The faster you kill, the more often it rings.',
+    tags: ['spell', 'chaos', 'aoe'], color: '#7a5aa8',
+    manaCost: 12, cooldown: 0, useTime: 0.3,
+    baseDamage: { chaos: [18, 30] },
+    delivery: { type: 'nova', radius: 170 },
+    effects: [{ type: 'damage' }],
+    gauge: { need: 8, unit: 'souls', lockoutSec: 4, feeds: [{ on: 'kill', amount: 1 }] },
+    requirements: { intelligence: 14 },
+    minDropLevel: 6, dropWeight: 20,
+    ai: { range: 150, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
 };
 
 // THE FORM BODIES — the Woken Hollow itself: a gold revenant minted at the

@@ -98,8 +98,14 @@ const spawn = (w: World, id: string, lv: number, x: number, y: number): Actor =>
     `${marked.length} marked`);
   for (const d of marked) {
     const u = d.ultimate!;
-    check(`census: ${d.id} pays THE PRICE FLOOR (cooldown >= ${ULT_CFG.minCooldown})`,
-      (d.cooldown ?? 0) >= ULT_CFG.minCooldown, `cooldown ${d.cooldown}`);
+    // THE PRICE FLOOR, three shapes: seconds (cooldown), bodies (a gauge
+    // needing enough), or a pool drunk deep enough (chargeCost).
+    const poolCost = typeof d.chargeCost?.amount === 'number' ? d.chargeCost.amount : 0;
+    check(`census: ${d.id} pays THE PRICE FLOOR (cooldown >= ${ULT_CFG.minCooldown} | gauge >= ${ULT_CFG.minGaugeNeed} | pool >= ${ULT_CFG.minPoolCost})`,
+      (d.cooldown ?? 0) >= ULT_CFG.minCooldown
+      || (d.gauge?.need ?? 0) >= ULT_CFG.minGaugeNeed
+      || poolCost >= ULT_CFG.minPoolCost,
+      `cooldown ${d.cooldown} gauge ${d.gauge?.need ?? '-'} pool ${poolCost || '-'}`);
     // THE SPEC IS THE MARK, THE TAG IS THE SCOPE: every marked art wears the
     // 'ultimate' tag so scoped supports/investment find the whole family
     // (payload kin may wear the tag WITHOUT the mark — no reverse law).
@@ -123,7 +129,10 @@ const spawn = (w: World, id: string, lv: number, x: number, y: number): Actor =>
   check('census: the Vault row stands (gem_skills_ultimates, kind skill)',
     !!row && row.kind === 'skill');
   const ids = (row?.payload as { skillIds?: string[] } | undefined)?.skillIds ?? [];
-  check('census: the Vault row carries the debut trio', ids.length === 3);
+  const droppable = marked.filter(d => !d.noDrop && (d.dropWeight ?? 0) > 0).map(d => d.id);
+  check('census: the Vault row carries EVERY droppable ultimate art, and nothing else',
+    ids.length === droppable.length && droppable.every(id => ids.includes(id)),
+    `row ${ids.length} / droppable ${droppable.length}`);
   for (const id of ids) {
     const d = SKILLS[id];
     check(`census: Vault payload ${id} is a real, marked, droppable art`,

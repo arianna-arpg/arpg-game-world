@@ -136,6 +136,8 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       // Costs
       'manaCost', 'addedManaCost', 'addedLifeCost', 'addedCooldown',
       'costDamage_mana', 'costDamage_life',
+      // THE GAUGE FABRIC (engine/gauge.ts): the bank's terms
+      'gaugeGain', 'gaugeNeed', 'gaugeLockout',
       // Use-charges & ammunition
       'skillCharges', 'skillChargeRate', 'reloadSpeed', 'chargeCap', 'runeCap',
       // The combo grammar's timing lever

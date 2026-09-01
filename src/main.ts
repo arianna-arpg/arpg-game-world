@@ -446,6 +446,9 @@ function startGame(
   // first breath. No-op until that first graduation — and placed BEFORE
   // persistRun so the baseline snapshot already carries them.
   world.dealVeteranFlasks();
+  // THE LAB KIT (ULT_QA.grantArts — engine/ultimates.ts): iteration builds
+  // deal the ultimate + gauge debuts into the fresh bag, unlearned.
+  world.dealLabArts();
   // THE SKILL GRAFT (meta/unlocks.ts kind 'graft'): the armed charge spends
   // HERE — where the run truly begins — before the baseline save, so the
   // snapshot carries the grafted gem from the first breath. A pick without

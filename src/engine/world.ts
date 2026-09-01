@@ -128,7 +128,8 @@ import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { liquidOf } from './genkit';
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
-import { eyecatchElapsed, eyecatchHoldSec, ULT_CFG, ultCooldownCap, ultGlobalGapSec, ultThrottleSec, type EyecatchState } from './ultimates';
+import { eyecatchElapsed, eyecatchHoldSec, ULT_CFG, ULT_QA, ultCooldownCap, ultGlobalGapSec, ultThrottleSec, type EyecatchState } from './ultimates';
+import { gaugeAdd, gaugeSpend, type GaugeFeedSpec } from './gauge';
 import {
   gatherSympathyRecipients, SYMPATHY_CFG, SYMPATHY_HOOKS, SYMPATHY_LINKS,
   sympathyRelationOf, sympathyStat,
@@ -22162,6 +22163,22 @@ export class World {
     bumpLedger(this.ledger, MIREILLE_FILL_LEDGER);
   }
 
+  /** THE LAB KIT (ULT_QA.grantArts — engine/ultimates.ts): iteration builds
+   *  deal every droppable ultimate + gauge debut into the fresh bag at
+   *  first breath, UNLEARNED — the player seats what they want to try
+   *  through the real rack (learn = seat; cap and requirements stay the
+   *  gates). The Mireille gift lane verbatim, minus the learn. No-op when
+   *  the lever is down: main ships it false. */
+  dealLabArts(): void {
+    if (!ULT_QA.active || !ULT_QA.grantArts) return;
+    for (const def of Object.values(SKILLS)) {
+      if (!(def.ultimate || def.gauge) || def.noDrop) continue;
+      if (this.meta.knownSkills.has(def.id)
+        || findBagGem(this.meta.items, 'skill', def.id)) continue;
+      this.grantSkillGemItem(this.localSeat, makeSkillGem(def, 1, 'magic'), true);
+    }
+  }
+
   /** Is the player resting by the town campfire? (Feature owned + in town + near
    *  CAMPFIRE_SITE.) Drives the dwell-refresh and the renderer prompt. */
   nearCampfire(): boolean {
@@ -30927,6 +30944,10 @@ export class World {
 
     const cost = caster.skillCost(inst);
     caster.payCost(cost); // mana, then ES (Thought Siphon), then life
+    // THE GAUGE FABRIC (engine/gauge.ts): THE PRESS PAYS — the bank spends
+    // beside mana (a use is a use: an interrupted bar still spent its
+    // souls) and the lockout arms. Readiness was the gate's business above.
+    if (def.gauge) gaugeSpend(inst, caster.gaugeEff(inst)!);
     // The honesty datum for resource-as-damage: constructs' payments are
     // ceremonial (999-mana pools), so their casts carry no paidCost.
     const paid = caster.construct ? undefined : cost;
@@ -40193,8 +40214,9 @@ export class World {
     if (target.life <= 0 && !target.dead) {
       // Kill-fed taps + fragment sheds ride the killing HIT: support-granted
       // remnantDrop stats live in the skill's extra mods and are only
-      // visible from a skill-context query — this is that site.
-      this.tapCharges(caster, 'kill');
+      // visible from a skill-context query — this is that site. The victim
+      // rides along so elite-gated kill taps (and gauge feeds) can read it.
+      this.tapCharges(caster, 'kill', undefined, undefined, target);
       this.rollKillRemnants(caster, inst, target.pos);
       this.rollKillOrbs(caster, inst, target);
       // CAST-ON-KILL trigger gems ride the killing hit (chain depth from
@@ -40219,19 +40241,39 @@ export class World {
       // Steel's block-banked Riposte) merge with the skill's own — the
       // schema's promise, honored at the event taps too.
       for (const spec of instanceChargeGain(inst)) {
-        if (spec.on !== on) continue;
-        if (spec.whileToggled && !a.activeAuras.has(inst.def.id)
-          && !a.summonToggles.has(inst.def.id)) continue;
-        if (on === 'enemyDeath' && at && dist(a.pos, at) > (spec.radius ?? 360)) continue;
-        // Fount taps filter by orb kind (a Life Flask ignores mana orbs).
-        if (on === 'orbPickup' && spec.orbKind && spec.orbKind !== orbKind) continue;
-        // Elite-gated taps (Soul Harvest's boss lane): only a rare-or-better
-        // (or def-level boss) victim feeds the bank. No victim = no bank.
-        if (spec.eliteVictim && !(victim && this.isEliteVictim(victim))) continue;
-        if (spec.chance !== undefined && !chance(spec.chance)) continue;
+        if (!this.tapFires(a, inst, spec, on, at, orbKind, victim)) continue;
         a.gainCharge(spec.charge, spec.amount, spec.max, inst);
       }
+      // THE GAUGE FABRIC (engine/gauge.ts): the SAME events feed a slotted
+      // skill's own bank through the same filter chain — the Vaal-soul
+      // shape. Two gauge arts on one bar each drink the same kill.
+      const gs = inst.def.gauge;
+      if (gs?.feeds) {
+        for (const spec of gs.feeds) {
+          if (!this.tapFires(a, inst, spec, on, at, orbKind, victim)) continue;
+          gaugeAdd(inst, spec.amount, a.gaugeEff(inst)!);
+        }
+      }
     }
+  }
+
+  /** THE TAP PREDICATE — one filter chain for charge taps AND gauge feeds:
+   *  the trigger match, toggle gating, the death radius, the orb kind, the
+   *  elite victim, the chance roll (rolled last, so a filtered-out tap
+   *  never moves the stream). */
+  private tapFires(a: Actor, inst: SkillInstance, spec: GaugeFeedSpec,
+    on: GaugeFeedSpec['on'], at?: Vec2, orbKind?: string, victim?: Actor): boolean {
+    if (spec.on !== on) return false;
+    if (spec.whileToggled && !a.activeAuras.has(inst.def.id)
+      && !a.summonToggles.has(inst.def.id)) return false;
+    if (on === 'enemyDeath' && at && dist(a.pos, at) > (spec.radius ?? 360)) return false;
+    // Fount taps filter by orb kind (a Life Flask ignores mana orbs).
+    if (on === 'orbPickup' && spec.orbKind && spec.orbKind !== orbKind) return false;
+    // Elite-gated taps (Soul Harvest's boss lane): only a rare-or-better
+    // (or def-level boss) victim feeds the bank. No victim = no bank.
+    if (spec.eliteVictim && !(victim && this.isEliteVictim(victim))) return false;
+    if (spec.chance !== undefined && !chance(spec.chance)) return false;
+    return true;
   }
 
   /** The canonical ELITE predicate for victim-gated payloads: rare-or-better

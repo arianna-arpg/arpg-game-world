@@ -23,6 +23,7 @@ import type { UltimateSpec } from './ultimates';
 import type { ThrongSourceRow, ThrongSpec } from './throng';
 import type { GrabHandoffSpec, GrabSpec } from './grab';
 import type { PossessSpec, ShiftSpec } from './possess';
+import type { GaugeSpec } from './gauge'; // THE GAUGE FABRIC — SkillDef.gauge
 import type { BirthEffect } from './clutch';
 import { veinMechanisms, veinMods, type SupportRollBase, type SupportRolled } from './supportbase';
 import type { PartSpec } from '../render/vis/parts';
@@ -4237,6 +4238,17 @@ export interface SkillDef {
    *  blows stoke Rage while the toggle burns). */
   chargeGain?: ChargeGainSpec[];
 
+  /** THE GAUGE (engine/gauge.ts — the Vaal-soul shape): this skill's OWN
+   *  bank, fed by the world's events through the charge-tap vocabulary
+   *  (kills, deaths near you, blows, orbs) and/or a regen clock; the press
+   *  SPENDS `need` and arms a lockout during which the bank takes nothing.
+   *  Unfilled = "not ready" through the one gate predicate (bar greys, AI
+   *  waits, press refuses). gaugeGain / gaugeNeed / gaugeLockout are the
+   *  ordinary, tag-scopable investment stats. Pairs with `ultimate` (a
+   *  super art priced in bodies instead of seconds) or stands alone (a
+   *  kill-speed build-around). */
+  gauge?: GaugeSpec;
+
   /** GLOBAL modifiers worn while the skill sits on the bar — the passive
    *  half of a flask (Life Flask: kills may shed life orbs) or of any
    *  learned-equals-attuned skill. Synced as one merged 'equipped' sheet
@@ -5342,6 +5354,10 @@ export interface SkillInstance {
      *  main path) — the Unleash bank's rest window ENDS here, so a cast
      *  bar's own runtime never banks its own seals. */
     pressAt?: number;
+    /** THE GAUGE (engine/gauge.ts): the bank's points and the lockout's
+     *  remaining seconds. Transient — a fresh session starts empty. */
+    gauge?: number;
+    gaugeLock?: number;
     /** COMBO CHAIN cursor: the step the NEXT press casts (0 = base) and
      *  when the last press landed (the window clock). */
     comboIdx?: number;

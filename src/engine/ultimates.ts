@@ -103,10 +103,14 @@ export const ULT_CFG = {
   throttleSec: 20,
   /** Min seconds between ANY two panes — no same-beat banner pileups. */
   globalGapSec: 1.5,
-  /** THE PRICE FLOOR: a skill wearing `ultimate` must carry at least this
-   *  many seconds of cooldown. Authoring law, probe-pinned — never clamped
-   *  at runtime. */
+  /** THE PRICE FLOOR: a skill wearing `ultimate` must carry at least ONE
+   *  price — this many seconds of cooldown, OR a gauge needing at least
+   *  minGaugeNeed points (engine/gauge.ts — priced in bodies), OR a pool
+   *  spend (chargeCost) of at least minPoolCost. Authoring law,
+   *  probe-pinned — never clamped at runtime. */
   minCooldown: 45,
+  minGaugeNeed: 20,
+  minPoolCost: 5,
   /** Default pane style when the spec names none (or an unknown id). The
    *  'flank' fighting-game cut-in: the slice announces, the WORLD stays in
    *  the shot performing the art ('sunder'/'eclipse' stay registered — any
@@ -126,6 +130,9 @@ export const ULT_CFG = {
  *  LAB BRANCH DEFAULT: active — main must ship this false. */
 export const ULT_QA = {
   active: true,
+  /** THE LAB KIT: a fresh run's bag holds every droppable ultimate + gauge
+   *  debut, unlearned — seat what you want to try (World.dealLabArts). */
+  grantArts: true,
   /** Ceiling on an ultimate's STAMPED cooldown seconds while active. */
   cooldownCap: 3,
   /** Eager per-caster banner window (replaces ULT_CFG.throttleSec). */

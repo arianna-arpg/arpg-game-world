@@ -32,10 +32,12 @@ ultimate: {
   banner side-coded `'enemy'`, and in that direction the pane is a
   **telegraph**, not flair. Its held beat is shorter
   (`ULT_CFG.enemyHoldSec`) — a warning, not a movie.
-- **THE PRICE FLOOR.** A skill wearing the mark carries at least
-  `ULT_CFG.minCooldown` seconds of cooldown. An *authoring law* pinned by the
-  probe's census — never a runtime clamp; data stays sovereign, the probe is
-  the censor.
+- **THE PRICE FLOOR.** A skill wearing the mark carries at least ONE price:
+  `ULT_CFG.minCooldown` seconds of cooldown, OR a gauge needing at least
+  `minGaugeNeed` points (`docs/engine/gauge.md` — priced in bodies), OR a
+  pool spend (`chargeCost`) of at least `minPoolCost`. An *authoring law*
+  pinned by the probe's census — never a runtime clamp; data stays
+  sovereign, the probe is the censor.
 - **THE THROTTLE ONLY SKIPS THE BANNER.** Per-caster (`throttleSec`) and
   global (`globalGapSec`) ledgers keep panes rare — but a throttled flash
   never delays, dims, or refuses the cast. The art always fires whole
@@ -128,6 +130,13 @@ Each debut is a COMPOSE of standing fabrics — no new engine verbs:
   the cooldown is the price. `seatAway` converts the slot to Return to
   Flesh (the dire-wolf idiom); the pane's `avatarDefId` shows the hollow
   you are becoming.
+
+THE VAAL WAVE (the gauge fabric — `docs/engine/gauge.md`) added five more
+to the row: **Grave Tide** (30 souls — the horde), **Hush of the Wake** (the
+whole wisp pool), **Doom Bell** (60s), **Last Rites** (75s + the low-life
+license), **Stormcrown** (80s). The Vault row `gem_skills_ultimates` carries
+every droppable ultimate art (census-pinned to the catalog, so a new art
+that forgets the row fails the probe).
 
 ## Dials (`ULT_CFG`)
 
