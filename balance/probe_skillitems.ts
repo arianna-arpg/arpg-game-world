@@ -27,7 +27,6 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { SKILLS, SKILL_LIST } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { START_ZONE } from '../src/data/zones';
-import { SALVAGE_SITE } from '../src/data/townBuild';
 import { FEATURE } from '../src/meta/account';
 import { makeSkillGem, type SupportInstance } from '../src/engine/skills';
 import {
@@ -231,8 +230,8 @@ w.recalcSeat(seat);
   // gear sweep genuinely RUNS — and still spares every gem wrapper.
   w.account.features.add(FEATURE.SALVAGE_STATION);
   w.loadZone(START_ZONE);
-  w.player.pos.x = SALVAGE_SITE.x;
-  w.player.pos.y = SALVAGE_SITE.y;
+  w.player.pos.x = w.townSeat('salvage').x;
+  w.player.pos.y = w.townSeat('salvage').y;
   check('G: the bench answers', w.nearSalvage());
   const gemItem = m.items.find(i => i.gem?.kind === 'skill')
     ?? w.grantSkillGemItem(seat, makeSkillGem(SKILLS.fireball, 1, 'common'))!;

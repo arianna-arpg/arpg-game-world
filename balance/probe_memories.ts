@@ -46,7 +46,6 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { START_ZONE } from '../src/data/zones';
-import { SALVAGE_SITE } from '../src/data/townBuild';
 import { FEATURE, LEDGER_GEMDROP_TOTAL, gemDropKey, isSkillUnlockedForDrop, isSupportUnlockedForDrop } from '../src/meta/account';
 import { DROP_CFG, GEM_DROP_CFG } from '../src/engine/loot';
 import {
@@ -372,8 +371,8 @@ const resolveTwin = (unit: RoughMemoryUnit, facet?: string): { kind: string; id:
   // refuses it outright.
   w.account.features.add(FEATURE.SALVAGE_STATION);
   w.loadZone(START_ZONE);
-  w.player.pos.x = SALVAGE_SITE.x;
-  w.player.pos.y = SALVAGE_SITE.y;
+  w.player.pos.x = w.townSeat('salvage').x;
+  w.player.pos.y = w.townSeat('salvage').y;
   check('M: the bench answers', w.nearSalvage());
   const p = plantPouch([{ d: 'crypt_lich', s: 8888 }]);
   w.salvageBulk(seat, 'item', undefined, 'break');

@@ -5626,6 +5626,14 @@ export class Renderer {
       if (msg) this.queueSpeech(a, msg, '#d8b87a');
     }
 
+    // THE WARD'S RESIDENTS speak their line when you stand at their door —
+    // role-bound through world.residentPrompt() (data/boroughs.ts
+    // TOWN_RESIDENTS gives each family its words at the seat).
+    if (a.defId && MONSTERS[a.defId]?.npcRole === 'resident') {
+      const msg = world.residentPrompt(a);
+      if (msg) this.queueSpeech(a, msg, '#d8c8a8');
+    }
+
     // Any quest-giving NPC posts its offer above its head while you're near —
     // the id set derives from the QUESTS registry (quartermaster, a secret
     // vocation's shrine spirit, future field boards), never a hand list.

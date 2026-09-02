@@ -749,6 +749,35 @@ we verify changes.
   exported for composition and `healMassifWeave` guarantees one walkable
   weave — dials in `MASSIF_CFG`, docs in `docs/engine/massif.md`, probe
   `balance/probe_massif.ts`.
+  THE TOWN THAT GROWS (`data/townBuild.ts` — Lastlight as a size LADDER;
+  docs `docs/design/town-growth.md`, probe `balance/probe_towngrowth.ts`):
+  `TOWN_TIERS` (count-based on owned town-station features: hamlet →
+  village → town → township, read ONCE at World construction) × ONE site
+  table `TOWN_SITES` (every seat per rung — base buildings, the plaza's
+  waypoint, each station, the ward's cottages, the brook) behind ONE
+  resolver (`townSiteAt` / `World.townSeat`) that the fixture, the `near*`
+  dwell check, the NPC spawn and the renderer prompt ALL read (drawn ==
+  dwelt; no seat derives from the arena size — the bare `*_SITE` consts
+  are retired). Laws probe-pinned over every rung × every arrival side:
+  THE APRON LAW (no dwell disc holds an apron/portal/the waypoint), THE
+  ROAD LAW (portal → waypoint runs through no structure), THE QUARTER LAW
+  (a site keeps its compass quarter), disjoint footprints, THE CENTRE
+  CARVE (a fresh run's geometric entry is the exact centre and the
+  portal-clear cuts blocking props there — the plaza sits a fountain's
+  reach off it). THE SMITH'S YARD (bench → Brandt → stones → Font, west →
+  east, paved by THE FORGE WAY), THE INN SQUARE (`bounty_alcove` — the
+  board's unlock raises a roofed nook beside Mireille's door; legend `N`
+  = a board cell), THE BROOK (the random `river` retired for an authored
+  `course` stamp per rung — StampSpec `path`/`lay`/`spans`; the same row
+  with `lay: 'paved_way'` is a lane, and the town's TRAVELED WAYS are
+  courses resolved from sites), THE WARD (`data/boroughs.ts
+  TOWN_RESIDENTS`: families gated by the gatework on the ACCOUNT's
+  `souls_sheltered` — stamped at the refugee writer — standing at cottage
+  doors with a line through `World.residentPrompt`). THE STREAM LESSON:
+  every sim world loads the town at createPlayer and the town's spawns
+  draw from the GLOBAL stream, so a town layout change re-deals every
+  seeded rig downstream — a rig pins its deal with its own seeded span
+  AFTER the world stands (probe_pathpref's caldera, probe_persistence G).
   THE SETTLED BELT (`engine/settled.ts` + `data/settled.ts` — farmland +
   metropolis): the worked country as two recipes over the massif fabric —
   'fields' (hedgerow bodies + REAL portal roads that punch field-gates

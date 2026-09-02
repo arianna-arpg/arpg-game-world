@@ -32,7 +32,6 @@ import { CATEGORY_SHAPES, TRACE_SHAPES, traceShapeForCategory } from '../src/dat
 import { ITEM_BASES } from '../src/data/itembases';
 import { baseComplexityOf } from '../src/engine/items';
 import { BOUNTY_BOARD_CFG, describeBountyPay, type BountyPosting } from '../src/data/bountyboard';
-import { BOUNTY_BOARD_SITE } from '../src/data/townBuild';
 import { START_ZONE } from '../src/data/zones';
 import type { World } from '../src/engine/world';
 import type { ItemInstance } from '../src/engine/items';
@@ -156,8 +155,8 @@ w.player.level = 8;
   w.bountyHands.push(pB);
   w.activeQuests.push({ questId: pB.id, zoneId: pB.zoneId, fieldDone: true });
   w.completedObjectives.add(zB.id);
-  w.player.pos.x = BOUNTY_BOARD_SITE.x;
-  w.player.pos.y = BOUNTY_BOARD_SITE.y;
+  w.player.pos.x = w.townSeat('bounty_board').x;
+  w.player.pos.y = w.townSeat('bounty_board').y;
   const dropsBefore = w.drops.length;
   check('B: the turn-in mints the writ item OWED', w.turnInBounty(pB.id) === true
     && w.drops.length > dropsBefore);

@@ -1,177 +1,230 @@
-# THE GROWING TOWN — design charter v1 (Lastlight as a ladder)
+# THE TOWN THAT GROWS — Lastlight from hamlet to township (charter v2)
 
-**Status: DESIGN + T0 LANDED.** Commissioned 2026-08-24 off her M0 walk
-report — the Font/board overlap, the south-entry campfire trap, and her
-ask: *"dynamic size scaling of Lastlight as vault unlocks occur, adjusting
-locations and literally, physically expanding the town zone as more
-functionality becomes unlocked."* Her named stations: the caravanner, the
-training dummies, the bestiary, the salvage station, the runic station,
-the font, the vendoring, and the bounty board. T0 (the immediate fixes)
-LANDED @ `fb732ca`. **WALK 1 (2026-08-24, the same day): RATIFIED — "this
-is the exact direction that it was headed in originally. I'm in agreement
-with the proposals here." Card 1 RULED: count-based tiers ("a good
-starting point"). Card 6 RULED WANTED: per-tier dressing rows — "I
-definitely would want the per-tier dressing rows to expand as the town
-itself grows with the proposed ladder shape" (T2 promoted from optional
-to committed content). Cards 2–5 stand as their recommended options by
-the blessing — un-walked individually, re-openable at T1's walk. T1 is
-PARKED at her word: the bounty board's chips continue first.** Anything
-marked **DIAL** is a build-time lever; every number is unblessed.
+**Status: v2 BUILT — T1 (the tiered charter) + THE SMITH'S YARD + THE INN
+SQUARE + THE BROOK + THE WARD landed together (2026-09-01), at her call to
+"begin to adjust Lastlight itself".** v1 (2026-08-24) chartered the ladder
+and landed T0 (the Font's real site + THE ARRIVAL LATCH); walk 1 RATIFIED
+the shape (card 1 count-based, card 6 dressing WANTED) and PARKED T1 behind
+the bounty board's movements. Those movements are all landed (M0–M4, the
+first writ, the kinship), and her 2026-09-01 commission un-parked the town
+with four new asks folded in below. Anything marked **DIAL** is a build-time
+lever; every number is unblessed. The probe is
+`balance/probe_towngrowth.ts` (82 checks, on the fast lane).
 
-> **THE LEAD FINDINGS.**
+> **THE LEAD FINDINGS (v2).**
 >
-> 1. **Half the machinery exists.** `expandedTown` (data/townBuild.ts)
->    already folds per-feature fixtures into the per-run town def and
->    carries a `grow` field — but the growth is BINARY: 1400×1000 jumps to
->    1700×1200 the moment ANY grow-carrying station is owned, and never
->    again. Sites are fixed shared consts, which encodes the law any
->    dynamic system must preserve: **one truth per site** — the fixture,
->    the `near*` dwell check, and the NPC spawn all read the same const,
->    so drawn == dwelt by construction.
-> 2. **The collisions were the CENTRE FORMULAS, not the sites.** The
->    waypoint seats at `(w/2−90, h/2−40)` and the Font seated at
->    `(w/2+90, h/2−40)` — DERIVED from arena size, so they slide when the
->    town grows and squat the central green: in the base town the Font
->    landed nineteen pixels off the bounty board; in the grown town the
->    waypoint stands 104px from the board — inside its dwell disc. T0
->    retired the Font's formula into a real `FONT_SITE`; the waypoint's
->    formula still walks (exhibit A for the plaza fold, card 4).
-> 3. **THE ARRIVAL LATCH is standing law now (T0).** No station's dwell
->    may fire until its disc has been observed EMPTY once since the zone
->    loaded — spatial truth, not an entry hook, so portals, waypoint
->    arrivals, resumes, and sail landings are covered by construction.
->    The campfire's reset-the-wilds trap (her report: a south re-entry
->    parked on the fire) cannot recur from ANY entry, at any future
->    layout. Woven through campfire, salvage, font, board, oracle,
->    tracker, caravan.
-> 4. **The census: the town is genuinely full.** Eleven stations
->    (quartermaster's house, training yard + its eastward rack and
->    gauntlet line, campfire, caravan, salvage bench, tracker's camp,
->    oracle stones, recruiter's table, bounty board, Font, waypoint) over
->    six base fixtures in at most 1700×1200 — her instinct is right: the
->    ground itself must grow.
+> 1. **The old town was random where it needed to be authored.** Its water
+>    was the generic `river` stamp — a rolled disc chain whose centre
+>    derives from the ARENA SIZE, so growing the town would have moved the
+>    river through any station. The fountain was a random single. The
+>    waypoint was the last centre formula. All three are authored now: the
+>    brook is a `course` row per tier, the fountain is the plaza's, the
+>    waypoint is a site.
+> 2. **THE CENTRE CARVE is a law the plaza must obey.** A fresh run's
+>    geometric entry is the arena's exact centre, and `generateLayout` cuts
+>    every blocking prop within its portal clearance (95) of that point —
+>    the plaza's fountain vanished on every fresh run until the square was
+>    seated a fountain's reach south-east of the crossing. Probe-pinned; the
+>    party wakes at the bedside regardless (the S cell).
+> 3. **The hamlet cannot hold the whole town.** At 1400×1000, the north
+>    road runs where the smith's yard would stand and the south belongs to
+>    the training line and the road. The hamlet hosts at most ONE station
+>    (structural: the village opens by the second), so its seats are each
+>    sane alone; the CRAFTING FLOW forms from the village up — and the
+>    probe pins that reading.
+> 4. **A road law joined the apron law.** The straight way from every
+>    portal to the waypoint — whatever side the road rolls onto this run —
+>    runs through no structure and over no training body, every tier. The
+>    apron law alone let a cottage sit on the south road.
+> 5. **Boroughs already had the town-side hook.** `data/boroughs.ts`
+>    invited "town-build gates" as a population consumer; THE WARD is that
+>    consumer, riding the gatework's own avenue vocabulary and a new
+>    ACCOUNT ledger (`souls_sheltered`) stamped the moment refugees arrive.
 
 ---
 
-## 0. Her commission (2026-08-24 — the asks, encoded as direction)
+## 0. Her commission (2026-09-01 — the asks, encoded as direction)
 
-| # | ask |
-|---|---|
-| 1 | **Keep the bounty board where it stands; move the Sacrificial Font.** (LANDED — T0.) |
-| 2 | **The campfire entry trap** — a south re-entry lands on the fire and an idle player's dwell RESETS THE ZONES. (Closed structurally — T0's arrival latch.) |
-| 3 | **Dynamic size scaling of Lastlight as Vault unlocks occur** — locations adjusting, the town zone physically expanding as functionality unlocks: caravanner, training dummies, bestiary, salvage, runic station, font, vendoring, the bounty board. |
+| # | ask | where it landed |
+|---|---|---|
+| 1 | **Cluster the crafting utilities around Brandt** as one flow a player refining gear would actually walk, not scattered stations. | THE SMITH'S YARD (§1.3) |
+| 2 | **Lastlight as a town growing toward a city**, not a hamlet toward a villa: ground to explore, citizens taking up residence as Boroughs are cleared, new areas/functions as ACCOUNT progress grows. | THE SIZE LADDER to a township (§1.1) + THE WARD (§1.5) |
+| 3 | **The Bounty Board by Mireille's inn door**, its unlock raising a real LOCALE (an alcove), not one doodad. | THE INN SQUARE + `bounty_alcove` (§1.4) |
+| 4 | **Beautify; eliminate or shrink the river**, consolidate it, bridge it — movement never hindered on a town errand. | THE BROOK (§1.6) |
+| 5 | The overall THEME/LOOK (a Divinity's Reach lean, scope-caveated) — **her collaboration session**. | card 1, §4 — not built |
 
 ---
 
-## 1. THE PROPOSAL — the town as a TIERED CHARTER
+## 1. WHAT STANDS (v2)
 
-Not continuous packing, not a solver: a small ladder of hand-authored town
-STAGES, derived deterministically from the account.
+### 1.1 THE SIZE LADDER — `TOWN_TIERS` (data/townBuild.ts)
+Count-based (RULED, card 1): the town stands at the highest rung whose
+`stations` the account meets, counting every `TOWN_ADDITIONS` feature it
+owns (derived — never a second list). Order-free, every purchase pushes the
+town toward its next stage, reads ONCE at World construction (the
+tier-flicker law: a threshold crossed mid-run re-lays home next run).
 
-- **THE SIZE LADDER.** Town size derives from the COUNT of owned
-  town-station features — `TOWN_TIERS` rows in townBuild.ts, e.g.
-  `[{stations: 0, w: 1400, h: 1000}, {stations: 3, w: 1700, h: 1200},
-  {stations: 6, w: 2000, h: 1400}]` (**DIALs**; monotone by construction).
-  Count-based, not feature-specific: no ordering dependence, and every
-  unlock visibly pushes the town toward its next stage. The per-row binary
-  `grow` retires into the ladder.
-- **THE SITE TABLES.** Every station's seat becomes per-tier data —
-  `TownSiteDef { id; tiers: {x,y}[] }` — read through ONE resolver
-  (`townTier(account)` + `townSiteOf(account, id)`) that feeds everything
-  the shared consts feed today: `expandedTown`'s fixtures, the `near*`
-  dwell checks, the NPC/dummy spawns, the renderer hints. One truth per
-  site per tier — the standing law, preserved by construction. (The
-  training yard's rack + gauntlet ride their anchor as offsets, as today.)
-- **THE QUARTER LAW** (muscle memory). A station keeps its QUARTER across
-  tiers — a site may slide OUTWARD along its own compass as the town
-  grows, never cross town. The salvage bench is always north-west of
-  centre; the caravan always east. The player's mental map survives every
-  unlock even as the ground stretches.
-- **THE APRON LAW.** No station's dwell disc may contain any entry apron,
-  portal seat, or the waypoint — encoded as a VALIDATION invariant over
-  the site tables × tiers × entry sides, probe-pinned, so the campfire
-  bug's whole class can never re-enter by authoring. (The arrival latch
-  remains the runtime backstop beneath it.)
-- **THE PLAZA FOLD.** The waypoint's centre formula retires into the site
-  tables like the Font's did — the central green becomes AUTHORED civic
-  ground per tier: the waypoint (arrival), the bounty board (the work),
-  clear walking room between. Nothing else claims the centre.
-- **THE LOOK** (T2, her gauge). Growth should READ: larger tiers may add
-  dressing rows — lantern lines along the roads, fence spurs, greens —
-  authored per tier. Optional polish behind her walk.
-- **Migrations: none owed.** The town re-lays from the def at every load;
-  the def derives from the KEEPER's account (already the co-op law).
+| rung | id | stations | size | scatter × |
+|---|---|---|---|---|
+| 0 | hamlet | 0 | 1400×1000 | 1.0 |
+| 1 | village | 2 | 1700×1200 | 1.4 |
+| 2 | town | 5 | 2100×1500 | 1.8 |
+| 3 | township | 8 | 2600×1800 | 2.3 |
+
+All **DIALs**. The hamlet IS the ZONES row (size, fixtures, scatter rows —
+probe-pinned byte-equal), so anything reading `ZONES.lastlight` directly
+sees the truth. `expandedTown` clone-replaces the per-run def: the rung's
+size, the town's own fixtures at their rung seats, every owned addition's
+fixtures at THEIR sites, the base scatter scaled, plus the rung's brook and
+the traveled ways as authored `course` rows.
+
+### 1.2 THE ONE-TRUTH SITE LAW — `TOWN_SITES` + `townSiteAt`
+Every seat is a row: `{ id, quarter, tiers: (Pt|null)[], structure?,
+dwell?, press? }`. ONE resolver (`townSiteAt(tier, id)`; on the World,
+`townSeat(id, dx, dy)` = THE ONE READ) feeds the fixture raised there, the
+`near*` dwell check, the NPC/dummy spawn and the renderer's prompt — drawn
+== dwelt by construction, and no seat derives from the arena size ever
+again. A site authored short of the ladder holds its last seat above; null
+= the ground does not exist at that stage (the mill at the hamlet, the ward
+before the town). Additions reference SITES (`{ structure, site }`), not
+coordinates. The bare consts (`SALVAGE_SITE`, `BOUNTY_BOARD_SITE`,
+`FONT_SITE`…) are RETIRED — the probes park at `w.townSeat('salvage')`.
+
+**THE LAWS the probe pins over every tier × every side:**
+- **THE APRON LAW** — no station's disc contains an arrival apron (any
+  side), reaches a portal, or the waypoint's attune ring; from the village
+  up no two DWELL stations overlap (a PRESS — the Font — may: its hint
+  shows, nothing fires).
+- **THE ROAD LAW** (new) — the straight way portal → waypoint runs through
+  no raised structure (pad 20) and over no training body (a body's width),
+  every side, every tier; the plaza is the destination (walked around).
+- **THE QUARTER LAW** — a site keeps its compass quarter across the
+  ladder (the bench is always west, the inn always north-east…), sliding
+  outward, never crossing town.
+- **THE FOOTPRINTS** — no two raised structures overlap with every station
+  owned; the training line's bodies stand on open ground.
+- **THE DIALS** — the site rows' `dwell` mirrors the engine's own dial
+  (`SALVAGE_CFG.stationRadius`, `BOUNTY_BOARD_CFG.dwell.radius`), and the
+  live rig proves every `near*` verb answers AT its seat and refuses a
+  step past its dial.
+
+### 1.3 THE SMITH'S YARD — the crafting flow
+The forge's open east + south faces open onto a yard where the stations a
+player refining gear walks between stand in ORDER, west → east: **break at
+the bench (salvage) → buy/sell/craft at Brandt's counter → commune at the
+stones (oracle, reroll) → merge at the Font.** THE FORGE WAY (a paved
+`course` from beside the waypoint through Font → stones → bench) IS the
+flow, walked. Probe: the order holds and every crafting station stands
+within `YARD_REACH` (560, DIAL) of the forge at every rung from the
+village up. (The hamlet holds ≤1 station; its bench stands south of the
+forge and its stones keep a corner past the inn — the north road runs
+where the yard would be.) The future Steady-Hand trace station and the
+twin-anvils craft are Brandt's own counter — already in the yard.
+
+### 1.4 THE INN SQUARE — `bounty_alcove`
+The board's unlock now raises a LOCALE: a roofed reading nook beside
+Mireille's south door — the board pinned to the back wall under a timber
+roof (the new `N` legend char — any plan may post a board), a bench either
+side, lanterns flanking the open cobbled front, a crate. `'rooms'`
+confinement derives it UNSEALED (open front) so the room veil never wraps a
+player reading the slate; the board reads from the front by sight, and its
+side walls honestly refuse a flank read (the roof/wall law). THE INN WAY
+paves plaza → alcove front → inn door. Probe: the board stands within
+`DOOR_STRIDE` (260, DIAL) of the door at every rung, outside the inn's
+roof (her counter serves only under it), footprints disjoint.
+
+### 1.5 THE WARD — residents (data/boroughs.ts `TOWN_RESIDENTS`)
+Citizens take up residence as Boroughs are cleared. Every soul a held
+Borough sends home stamps the ACCOUNT (`LEDGER_SOULS_SHELTERED`, at the
+refugee writer beside `BoroughField.addRefugees` — the quest-turn-in
+durability precedent) while the run's population still lifts Brandt's
+shelf. Each resident row = a family: a cottage SITE in the ward (ground
+that stands from the town rung: two cottages + the green at 'town', five
+at 'township'), an open GATE in the gatework's vocabulary (any-of; the
+lifetime sheltered count is the debut avenue — a quest, a level, another
+unlock are one row each), the body at the door (`townsfolk_resident_*`,
+npcRole 'resident' = nameplate + speech bubble) and its line. World seats
+every family whose gate holds AND whose cottage this rung raises (a family
+with no house yet waits; the map pin already counts them). Nothing saves;
+the town re-lays from the account. Debut roster: Hesper Vell (3 souls),
+Tobin Ashcroft (6), Old Mauve (10), the Pell Twins (14), Sabine Rook (18)
+— names/lines/thresholds **DIALs**.
+
+### 1.6 THE BROOK — the authored course (engine/levelgen `course` stamp)
+The random `river` row is gone. Each rung authors a brook: a polyline in
+the south-west corner (between the tracker's camp and the training line),
+laid as fused water discs along exactly its points with ONE plank span
+across it (the ravine's own span idiom), and — from the village up — a
+mill on its far bank (`mill_bank`: the settled belt's live-sailed
+windmill, bales). No town errand crosses it; the bridge is the crossing to
+the bank. Probe: the water keeps clear of every station disc, every
+structure and every arrival apron at every rung; the span is laid; the
+live township lays water + bridge with no water inside any dwell disc.
+The `course` stamp is generic (StampSpec `path` / `lay` / `spans`): a
+paved lane is the same row with `lay: 'paved_way'` — the town's three
+TRAVELED WAYS are `course` rows resolved from SITES, so they follow the
+seats across the ladder with no per-tier coordinates.
+
+### 1.7 THE PLAZA (the plaza fold, card 4 as recommended)
+The waypoint's centre formula is DEAD: `plaza_square` (fountain, benches,
+lanterns) + the `waypoint` site are authored per rung, a fountain's reach
+south-east of the crossing (finding 2). Nothing else claims the centre.
 
 ---
 
 ## 2. STANDING BY CONSTRUCTION
+THE ARRIVAL LATCH (T0, beneath every station dwell) · `expandedTown`'s
+clone-replace (the static row is never mutated) · the seeded layout
+(`seed: 1187`) · every station's own dwell verb and dial · the co-op
+keeper's-account law · the S cell (a fresh run still wakes at the bedside
+at every rung — probe H0).
 
-The one-truth site law (kept, generalized) · the arrival latch (T0,
-beneath everything) · `expandedTown`'s clone-replace idiom (the resolver
-slots into it; the static ZONES row is never mutated) · the seeded town
-layout (`seed: 1187` — "the town keeps its shape; it's home") · every
-station's own dwell verb and radius.
+## 3. THE PITFALL LEDGER (v2 additions)
+6. **THE CENTRE CARVE** (finding 2) — no blocking authored prop within 95 +
+   its radius of the exact centre; the plaza's seat is pinned.
+7. **THE WAYS SWEEP** — a paved way routes solids out from under itself
+   (the clearway sweep). Ways leave the square from beside the waypoint or
+   east of the fountain; a way through the fountain square deletes its
+   benches.
+8. **THE TRAINING LINE IS 690 WIDE** — in a 1400-wide rung it must cross
+   the south road's column; the hamlet straddles the road with the line's
+   own rack→gauntlet gap, a body's width clear (probe C2).
+9. **A station's disc is its BODY's disc** — the caravanner, the
+   quartermaster and the officer stand off their seats; the apron law
+   measures the stand (read off the structure's npcs row; the officer's is
+   the World's offset, verified live).
+10. **The tracker's old stand overlapped his own camp's rock** and was
+    shoved off its seat at spawn; he stands south of the fire now.
 
----
-
-## 3. THE PITFALL LEDGER
-
-1. **The centre formulas** — any seat derived from arena size walks when
-   the town grows (the Font's nineteen-pixel collision was born exactly
-   there). The tables kill the class: every seat is authored per tier.
-2. **Split truths** — a site read from a const in one place and a table
-   in another lies to the dwell check. The resolver must be THE read;
-   the bare consts retire or become tier-0 aliases.
-3. **Tier flicker** — an account hovering at a threshold must not see
-   the town re-lay between visits mid-run; the tier reads ONCE at World
-   construction (as `expandedTown` does today), never live.
-4. **South-edge stations** — the campfire and oracle sit on the grown
-   town's south rim, where south portals land; the apron-law probe must
-   walk every tier × every possible entry side, not just today's east.
-5. **The waypoint's sanctity** — moving home's ring per tier touches the
-   deepest muscle memory in the game; card 4 wants her word before any
-   table moves it.
-
----
-
-## 4. DECISION CARDS (her word wanted)
-
-1. **THE LADDER SHAPE.** Count-based tiers (recommended: legible, no
-   ordering dependence) vs feature-specific triggers vs continuous
-   per-station scaling.
-2. **THE TIER COUNT + SIZES.** Three tiers proposed (hamlet 1400×1000 →
-   village 1700×1200 → township 2000×1400) — the numbers are **DIALs**,
-   the SHAPE (three stages) wants her word once.
-3. **RELOCATION POLICY.** THE QUARTER LAW (recommended: slide outward
-   along the compass, never cross town) vs fully fixed sites (simplest;
-   but south-rim stations stay near aprons forever) vs free re-layout
-   per tier (max flexibility, muscle memory pays).
-4. **THE WAYPOINT.** May home's ring move per tier into the plaza tables
-   (recommended — the centre becomes authored civic ground) — or is the
-   waypoint sacred where it stands, with the plaza authored around it?
-5. **THE CAMPFIRE'S VERB.** Beyond the latch: should a zone-RESETTING
-   station stay a pure dwell at all, or grow a consent press (the
-   harvest fabric's 'press' vs 'dwell' axis exists)? Recommended: keep
-   dwell + latch now; open the press only if walks still find accidents.
-6. **THE LOOK PASS** (T2). Whether growth earns per-tier dressing rows —
-   her gauge decides at T1's walk.
-
----
+## 4. DECISION CARDS (her word wanted — none of these are built)
+1. **THE LOOK / THEME.** Her collaboration session. The ground truth for
+   it: the ladder tops out at a TOWNSHIP (2600×1800, ~3.3× the hamlet's
+   area) — Divinity's Reach scale would be a different fabric (the settled
+   belt's `district` recipe: massing + boulevards, or planned blocks) laid
+   at the top rung instead of authored seats. Recommended: keep AUTHORED
+   seats through 'township' (muscle memory, the one-truth law) and, if a
+   city rung is wanted, add a FIFTH rung whose OUTER ring is a district
+   recipe around the authored core — the player builds TOWARD it.
+2. **RESIDENTS: account-lifetime vs run-scoped.** Built: the ACCOUNT's
+   sheltered count (a family that settles stays across runs — permanence).
+   Alternative: the run's population (families come and go with each
+   run's Boroughs). Recommended as built.
+3. **THE BROOK: kept vs gone.** Built: a corner brook + one span + a mill
+   from the village up. Deleting one `brook` row per rung dries the town.
+4. **THE LADDER'S TOP.** Four rungs to a township; the sizes and the
+   station counts (0/2/5/8) are DIALs.
+5. **THE ALCOVE'S ROOF.** Built roofed (a reading nook); an open-air
+   pergola is the same plan with the `.` cells made `_`.
+6. **WHAT ELSE THE WARD HOLDS.** The residents speak one line each. Open
+   seams: a resident SERVICE (a ward vendor at 10 souls, a ward writ), the
+   green as an event seat, per-rung dressing rows (card 6 of v1 — the
+   scatter scaling is the floor, the ways + mill + green the first rows).
 
 ## 5. BUILD MOVEMENTS
-
-- **T0 — THE FIXES.** LANDED @ `fb732ca`: the Font's real `FONT_SITE`
-  (east green, ≥180 clear of everything in both sizes, live-verified 361
-  from the board) + THE ARRIVAL LATCH on all seven station dwells
-  (live-verified: parked inside a disc off a fresh load fires nothing;
-  step out once and it serves).
-- **T1 — THE TIERED CHARTER.** `TOWN_TIERS` + the site tables + the
-  `townSiteOf` resolver swapped in at every read + the plaza fold (per
-  card 4) + the apron-law validation probe + roster row. Effort M.
-- **T2 — THE LOOK.** Per-tier dressing rows; her gauge walk. Effort S–M.
-
-**The commissioning ledger:** T0 landed with this charter (2026-08-24).
-Walk 1 (same day) RATIFIED the shape — card 1 count-based, card 6
-dressing WANTED (T2 committed), cards 2–5 standing as recommended — and
-PARKED T1 behind the bounty board's remaining movements; T1 fires when
-she calls the town back up.
+- **T0 — THE FIXES.** LANDED @ `fb732ca` (v1).
+- **T1 — THE TIERED CHARTER + her v2 asks.** LANDED 2026-09-01: the
+  ladder, the site tables, the resolver at every read, the plaza fold,
+  the apron/road/quarter/footprint laws probe-pinned, the smith's yard,
+  the inn-square alcove, the brook + the `course` stamp, the ward.
+- **T2 — THE LOOK.** Her session (card 1) → per-rung dressing rows, the
+  theme, a possible district rung.

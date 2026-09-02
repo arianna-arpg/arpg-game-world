@@ -156,7 +156,7 @@ import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, p
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
-import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, TRACKER_SITE, RECRUITER_SITE, BOUNTY_BOARD_SITE, FONT_SITE } from '../data/townBuild';
+import { expandedTown, townTier, townSiteAt, type TownSiteId } from '../data/townBuild';
 import {
   BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyChargePay, bountySourceRows, clonePosting, describeBountyPay, liveBountyBand, postingQuestDef, rollBountyPay,
   type BountyKindRow, type BountyTargetRef,
@@ -336,7 +336,7 @@ import type { BoroughSpec, ExtractDisperseSpec } from '../packages/encounters';
 import { gateOf } from '../packages/weighting';
 import { courtLord, courtLordForZone } from '../packages/courts';
 import type { ActiveEncounter, BoroughRuntime, VeilKnot } from './encounter';
-import { boroughVendorWeights } from '../data/boroughs';
+import { boroughVendorWeights, townResidentsHere, noteSoulsSheltered } from '../data/boroughs';
 import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarity';
 import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
 import type { OverlayView } from '../world/overlay';
@@ -381,7 +381,7 @@ import { gateMet } from '../meta/gates';
 // so a level gate authored anywhere in the catalog has a live signal BY
 // CONSTRUCTION (unlocks.ts → vendors.ts touches world only type-wise; no
 // runtime cycle).
-import { catalogLevelMilestones } from '../meta/unlocks';
+import { allUnlockables, catalogLevelMilestones, isUnlockOwned } from '../meta/unlocks';
 import {
   modeById, resurrectFee, stageOf, DEFAULT_MODE_ID, FADE_DEFAULTS,
   type CharacterModeDef, type ModeStageDef,
@@ -1962,6 +1962,7 @@ SYMPATHY_HOOKS.isNpc = a => !!a.defId && !!MONSTERS[a.defId]?.npcRole;
 export const LEDGER_HERO_RENOWNED = 'hero_renowned';
 
 const MIREILLE_RADIUS = 150;     // how close you must stand to Mireille
+const RESIDENT_RADIUS = 110;     // how close to a ward resident before they speak (townBuild residents)
 const MIREILLE_DWELL = 0.8;      // seconds lingering in radius before she heals
 const MIREILLE_COOLDOWN = 5;     // seconds before she'll heal again
 /** Her WELCOME GIFT: flask skill GEMS pressed into your hands on the first
@@ -3846,6 +3847,10 @@ export class World {
     // TOWN-BUILDING: swap the per-run town for its expanded form (account-gated
     // additions). Keyed off account.features (stable for the run) — a mid-run
     // purchase only takes effect next run, like every town feature.
+    // THE TOWN'S TIER (townBuild TOWN_TIERS) reads ONCE here — every town
+    // seat this World resolves (townSeat) rides this index, never a live
+    // count, so a threshold crossed mid-run never re-lays home between visits.
+    this.townTierIdx = townTier(account);
     this.zoneMap[START_ZONE] = expandedTown(account, this.zoneMap[START_ZONE]);
     // THE WANDERING HUB: roll where the Crossroads sits this run (a random
     // cardinal step from town) and re-deal its frontiers — the whole world
@@ -6385,6 +6390,7 @@ export class World {
     // THE ARRIVAL LATCH re-arms per zone: every station must see its disc
     // EMPTY once before its dwell may fire (stationDwellArmed).
     this.stationArmed.clear();
+    this.residentLines.clear();
     // A Sacrificial Font (always lit in town; a find elsewhere — never in a special arena).
     // The town seat is a REAL site (townBuild.ts FONT_SITE — shared with
     // nearFont's reach), not the old centre-plaza formula: the centre is
@@ -6392,7 +6398,7 @@ export class World {
     this.fonts = [];
     if (def.id === START_ZONE || (!def.special && o.kind !== 'waves' && o.kind !== 'safe' && rng.chance(0.3))) {
       const at = def.id === START_ZONE
-        ? vec(FONT_SITE.x, FONT_SITE.y)
+        ? this.townSeat('font')
         : (pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
           : this.farPoint(450, false, this.seededDraw()));
       this.fonts.push({ pos: this.clampPos(vec(at.x, at.y), 18) });
@@ -6409,7 +6415,7 @@ export class World {
     this.waypointPos = null;
     if (def.waypoint) {
       const at = def.id === START_ZONE
-        ? vec(this.arena.w / 2 - 90, this.arena.h / 2 - 40)
+        ? this.townSeat('waypoint')
         : (pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
           : this.farPoint(420, false, this.seededDraw()));
       this.waypointPos = this.clampPos(vec(at.x, at.y), 18);
@@ -6422,7 +6428,7 @@ export class World {
     // town raised for it (so the fixture + the actor line up).
     if (def.id === START_ZONE && featureEnabled(this.account, FEATURE.TARGET_DUMMY)) {
       const dummy = this.createMonster(FIXTURE_IDS.target_dummy, Math.max(1, this.player.level), 'enemy');
-      dummy.pos = this.clampPos(vec(TRAINING_YARD.x, TRAINING_YARD.y), dummy.radius);
+      dummy.pos = this.clampPos(this.townSeat('training_yard'), dummy.radius);
       this.actors.push(dummy);
       // THE TRAINING RACK: the color-coded siblings stand in a row east of
       // the post — one hard resistance each (watch a conversion change the
@@ -6433,7 +6439,7 @@ export class World {
       for (let i = 0; i < rack.length; i++) {
         const sib = this.createMonster(rack[i], Math.max(1, this.player.level), 'enemy');
         sib.pos = this.clampPos(
-          vec(TRAINING_YARD.x + 52 * (i + 1), TRAINING_YARD.y), sib.radius);
+          this.townSeat('training_yard', 52 * (i + 1), 0), sib.radius);
         this.actors.push(sib);
       }
       // THE GAUNTLET (the flight range's town twin): three plain dummies
@@ -6444,12 +6450,12 @@ export class World {
       for (let i = 0; i < 3; i++) {
         const g = this.createMonster(FIXTURE_IDS.target_dummy, Math.max(1, this.player.level), 'enemy');
         g.pos = this.clampPos(
-          vec(TRAINING_YARD.x + 340 + 130 * i, TRAINING_YARD.y), g.radius);
+          this.townSeat('training_yard', 340 + 130 * i, 0), g.radius);
         this.actors.push(g);
       }
       this.doodads.push(
-        { pos: this.clampPos(vec(TRAINING_YARD.x + 690, TRAINING_YARD.y - 16), 26), radius: 26, kind: 'rock' },
-        { pos: this.clampPos(vec(TRAINING_YARD.x + 690, TRAINING_YARD.y + 18), 26), radius: 26, kind: 'rock' },
+        { pos: this.clampPos(this.townSeat('training_yard', 690, -16), 26), radius: 26, kind: 'rock' },
+        { pos: this.clampPos(this.townSeat('training_yard', 690, 18), 26), radius: 26, kind: 'rock' },
       );
     }
     // THE TRACKER: the Bestiary's keeper camps at the west edge once his
@@ -6457,7 +6463,9 @@ export class World {
     // fixture line up at TRACKER_SITE).
     if (def.id === START_ZONE && featureEnabled(this.account, FEATURE.TRACKER)) {
       const t = this.createMonster(FIXTURE_IDS.townsfolk_tracker, 1, 'player');
-      t.pos = this.clampPos(vec(TRACKER_SITE.x + 26, TRACKER_SITE.y - 20), t.radius);
+      // South of his fire, facing it — clear of the camp's own rocks (the
+      // old north-east stand overlapped a rock and got shoved off its seat).
+      t.pos = this.clampPos(this.townSeat('tracker', 0, 34), t.radius);
       this.actors.push(t);
     }
     // THE RECRUITER'S TABLE (FEATURE.MERC_RECRUITER): the Vault's officer
@@ -6470,13 +6478,33 @@ export class World {
     if (def.id === START_ZONE && featureEnabled(this.account, FEATURE.MERC_RECRUITER)) {
       const officer = this.createMonster(FIXTURE_IDS.merc_captain, 1, 'player');
       officer.name = 'the Recruiting Officer';
-      officer.pos = this.clampPos(vec(RECRUITER_SITE.x + 24, RECRUITER_SITE.y - 18), officer.radius);
+      officer.pos = this.clampPos(this.townSeat('recruiter', 24, -18), officer.radius);
       this.actors.push(officer);
       this.doodads.push({
-        pos: this.clampPos(vec(RECRUITER_SITE.x - 20, RECRUITER_SITE.y + 14), 10),
+        pos: this.clampPos(this.townSeat('recruiter', -20, 14), 10),
         radius: 9, kind: 'merc_banner', rot: 0,
       });
       this.armLastlightRecruiter(officer, def.id);
+    }
+    // THE RESIDENTS (data/boroughs.ts TOWN_RESIDENTS): the families the
+    // Boroughs sent home stand at their cottage doors in the ward — every row
+    // whose gate the account holds AND whose cottage this tier raises. Named
+    // + given their line at the seat (the recruiting officer's rename idiom);
+    // nothing persists — the town re-lays from the account at every load.
+    if (def.id === START_ZONE) {
+      // `unlock` avenues resolve through the catalog (the gatework's closure
+      // shape — boroughs.ts stays a leaf and never imports the catalog).
+      const owned = (id: string): boolean => {
+        const u = allUnlockables().find(x => x.id === id);
+        return !!u && isUnlockOwned(this.account, u);
+      };
+      for (const { row, pos: at } of townResidentsHere(this.account, this.townTierIdx, owned)) {
+        const r = this.createMonster(row.def, 1, 'player');
+        r.name = row.name;
+        r.pos = this.clampPos(vec(at.x, at.y), r.radius);
+        this.actors.push(r);
+        this.residentLines.set(r.id, row.line);
+      }
     }
     this.text(vec(p.pos.x, p.pos.y - 46), def.name, def.theme.accent, 24);
     // If a warband is storming this ground as you arrive, you'll know it.
@@ -8365,6 +8393,14 @@ export class World {
       const souls = survivors.length * spec.refugees.populationPer;
       this.sim.boroughField?.addRefugees(souls);
       bumpLedger(this.ledger, spec.ledgerRefugees, souls);
+      // THE SHELTERED: the ACCOUNT counts them the moment they arrive (the
+      // quest-turn-in durability precedent) — Lastlight's residents
+      // (data/boroughs.ts TOWN_RESIDENTS) read this lifetime count, so a
+      // family that settles stays settled across runs.
+      if (this.metaProgressionActive()) {
+        noteSoulsSheltered(this.account, souls);
+        this.accountDirty = true;
+      }
       const xp = Math.round((spec.refugees.xpBase + spec.refugees.xpPerSurvivor * survivors.length) * e.scale.rewardMul);
       if (xp > 0) this.grantXp(xp);
       // The road out: dormant resolute walkers, wheeled by the world tick.
@@ -22195,8 +22231,8 @@ export class World {
   nearCampfire(): boolean {
     return featureEnabled(this.account, FEATURE.CAMPFIRE)
       && this.zone.id === START_ZONE
-      && dist(this.player.pos, vec(CAMPFIRE_SITE.x, CAMPFIRE_SITE.y)) <= CAMPFIRE_RADIUS
-      && this.dwellReachable(this.player.pos, vec(CAMPFIRE_SITE.x, CAMPFIRE_SITE.y));
+      && dist(this.player.pos, this.townSeat('campfire')) <= CAMPFIRE_RADIUS
+      && this.dwellReachable(this.player.pos, this.townSeat('campfire'));
   }
 
   /** THE ARRIVAL LATCH (docs/design/town-growth.md T0): a station's dwell
@@ -22209,6 +22245,50 @@ export class World {
    *  lands (portals, resumes, sail landings, repositions). Step out once
    *  and the station serves as ever. Cleared per zone load. */
   private stationArmed = new Set<string>();
+
+  /** THE TOWN'S TIER — the size-ladder rung this World's Lastlight stands
+   *  on (townBuild TOWN_TIERS), read ONCE at construction. */
+  private townTierIdx = 0;
+  townTierIndex(): number { return this.townTierIdx; }
+
+  /** THE ONE READ for every town seat (docs/design/town-growth.md — the
+   *  one-truth site law): a town site's seat at this World's tier, plus an
+   *  offset in zone units. The fixture the tier raised, this dwell check,
+   *  the NPC spawn and the renderer's prompt all resolve through HERE, so
+   *  drawn == dwelt by construction. A site that does not exist at this
+   *  stage resolves to the arena's centre with a warning — every seat the
+   *  engine reads unconditionally (font, waypoint, the stations) is authored
+   *  at every rung, probe-pinned. */
+  townSeat(id: TownSiteId, dx = 0, dy = 0): Vec2 {
+    const p = townSiteAt(this.townTierIdx, id);
+    if (!p) {
+      console.warn(`[town] site '${id}' has no seat at tier ${this.townTierIdx}`);
+      return vec(this.arena.w / 2 + dx, this.arena.h / 2 + dy);
+    }
+    return vec(p.x + dx, p.y + dy);
+  }
+
+  /** A town site's seat, or null where the tier does not raise it. */
+  townSite(id: TownSiteId): Vec2 | null {
+    const p = townSiteAt(this.townTierIdx, id);
+    return p ? vec(p.x, p.y) : null;
+  }
+
+  /** THE RESIDENTS' LINES (data/boroughs.ts TOWN_RESIDENTS): what each
+   *  seated family says when the hero stands near — keyed by actor id at
+   *  the spawn, read by residentPrompt for the renderer's speech bubble. */
+  private residentLines = new Map<number, string>();
+
+  /** A resident's line while the local hero stands within reach (the
+   *  townsfolk prompt idiom — role-bound, the renderer never names a def). */
+  residentPrompt(a: Actor): string | null {
+    const line = this.residentLines.get(a.id);
+    if (!line || a.dead) return null;
+    if (dist(a.pos, this.player.pos) > RESIDENT_RADIUS) return null;
+    if (!this.dwellReachable(this.player.pos, a.pos)) return null;
+    return line;
+  }
+
   private stationDwellArmed(key: string, engaged: boolean): boolean {
     if (!engaged) { this.stationArmed.add(key); return false; }
     return this.stationArmed.has(key);
@@ -22237,7 +22317,7 @@ export class World {
   /** The campfire's prompt while the player rests near it (renderer), or null. */
   campfireHint(): { pos: Vec2; text: string } | null {
     if (!this.nearCampfire()) return null;
-    return { pos: vec(CAMPFIRE_SITE.x, CAMPFIRE_SITE.y), text: 'Linger to refresh the wilds.' };
+    return { pos: this.townSeat('campfire'), text: 'Linger to refresh the wilds.' };
   }
 
   // ------------------------------------------------------ salvage station ----
@@ -22253,8 +22333,8 @@ export class World {
   nearSalvage(seat: Seat = this.localSeat): boolean {
     return this.salvageUnlocked()
       && this.zone.id === START_ZONE
-      && dist(seat.actor.pos, vec(SALVAGE_SITE.x, SALVAGE_SITE.y)) <= SALVAGE_CFG.stationRadius
-      && this.dwellReachable(seat.actor.pos, vec(SALVAGE_SITE.x, SALVAGE_SITE.y));
+      && dist(seat.actor.pos, this.townSeat('salvage')) <= SALVAGE_CFG.stationRadius
+      && this.dwellReachable(seat.actor.pos, this.townSeat('salvage'));
   }
 
   /** Linger at the bench → open the salvage/craft menu (flag → main loop).
@@ -22275,7 +22355,7 @@ export class World {
   /** The bench's prompt while the player is near (renderer), or null. */
   salvageHint(): { pos: Vec2; text: string } | null {
     if (!this.nearSalvage()) return null;
-    return { pos: vec(SALVAGE_SITE.x, SALVAGE_SITE.y), text: 'Linger to work the salvage bench.' };
+    return { pos: this.townSeat('salvage'), text: 'Linger to work the salvage bench.' };
   }
 
   // ------------------------------------------------------- the bounty board -
@@ -22305,7 +22385,7 @@ export class World {
   bountyBoardsHere(): { id: string; pos: Vec2 }[] {
     const out: { id: string; pos: Vec2 }[] = [];
     if (this.bountyBoardUnlocked() && this.zone.id === START_ZONE) {
-      out.push({ id: BOUNTY_BOARD_CFG.boardId, pos: vec(BOUNTY_BOARD_SITE.x, BOUNTY_BOARD_SITE.y) });
+      out.push({ id: BOUNTY_BOARD_CFG.boardId, pos: this.townSeat('bounty_board') });
     }
     if (this.zone.holdAnchor && this.bountyBoardRoster().some(b => b.id === this.zone.id)) {
       const d = this.doodads.find(x => x.kind === 'bounty_board');
@@ -23321,8 +23401,8 @@ export class World {
   nearTracker(seat: Seat = this.localSeat): boolean {
     return featureEnabled(this.account, FEATURE.TRACKER)
       && this.zone.id === START_ZONE
-      && dist(seat.actor.pos, vec(TRACKER_SITE.x, TRACKER_SITE.y)) <= SALVAGE_CFG.stationRadius
-      && this.dwellReachable(seat.actor.pos, vec(TRACKER_SITE.x, TRACKER_SITE.y));
+      && dist(seat.actor.pos, this.townSeat('tracker')) <= SALVAGE_CFG.stationRadius
+      && this.dwellReachable(seat.actor.pos, this.townSeat('tracker'));
   }
 
   /** Linger by the fire → open the BESTIARY (flag → main loop). One ask per
@@ -23340,7 +23420,7 @@ export class World {
   /** The camp's prompt while the player is near (renderer), or null. */
   trackerHint(): { pos: Vec2; text: string } | null {
     if (!this.nearTracker()) return null;
-    return { pos: vec(TRACKER_SITE.x, TRACKER_SITE.y), text: 'Linger to open the bestiary.' };
+    return { pos: this.townSeat('tracker'), text: 'Linger to open the bestiary.' };
   }
 
   // --------------------------------------------------------- oracle stone ----
@@ -23349,8 +23429,8 @@ export class World {
   nearOracle(seat: Seat = this.localSeat): boolean {
     return featureEnabled(this.account, FEATURE.ORACLE_STONE)
       && this.zone.id === START_ZONE
-      && dist(seat.actor.pos, vec(ORACLE_SITE.x, ORACLE_SITE.y)) <= SALVAGE_CFG.stationRadius
-      && this.dwellReachable(seat.actor.pos, vec(ORACLE_SITE.x, ORACLE_SITE.y));
+      && dist(seat.actor.pos, this.townSeat('oracle')) <= SALVAGE_CFG.stationRadius
+      && this.dwellReachable(seat.actor.pos, this.townSeat('oracle'));
   }
 
   private updateOracle(dt: number): void {
@@ -23365,7 +23445,7 @@ export class World {
 
   oracleHint(): { pos: Vec2; text: string } | null {
     if (!this.nearOracle()) return null;
-    return { pos: vec(ORACLE_SITE.x, ORACLE_SITE.y), text: 'Linger to commune with the stone.' };
+    return { pos: this.townSeat('oracle'), text: 'Linger to commune with the stone.' };
   }
 
   // --------------------------------------------------------------- vendors ---

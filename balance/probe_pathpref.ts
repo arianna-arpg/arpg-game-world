@@ -213,6 +213,13 @@ function calderaRig(): { w: World; gapY: number } {
 }
 {
   const { w } = calderaRig();
+  // THE SEEDED SPAN (the town-that-grows lesson, 2026-09-01): every sim
+  // world loads Lastlight at createPlayer, and the town's spawns draw from
+  // the GLOBAL stream — so any town layout change re-dealt this rig's
+  // inherited position and the wolf's idle wander led it AWAY from a prey
+  // it had not yet noticed. Re-seed AFTER the world (and its town) stands,
+  // so the pursuit's deal belongs to this rig alone. Assertions untouched.
+  seedGlobalRandom(0x77ca1d);
   const wolf = w.createMonster('plains_wolf', 5, 'enemy');
   wolf.pos = vec(w.arena.w * 0.32, w.arena.h * 0.55);
   w.actors.push(wolf);

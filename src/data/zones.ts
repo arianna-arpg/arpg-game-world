@@ -570,6 +570,16 @@ export interface StampSpec {
    *  out of the gate entirely. The mint's compose step tags untagged rows;
    *  authored rows may pre-declare. Meaningless (ignored) in unblended zones. */
   blend?: 'base' | 'with' | 'any';
+  /** AUTHORED COURSE stamps (`kind: 'course'` — engine/levelgen stampCourse):
+   *  the polyline the ground follows, in zone units. A hand-authored zone's
+   *  brook or paved lane is DATA on the row, never a roll against the arena
+   *  (the town's brook must not move when the town grows). */
+  path?: { x: number; y: number }[];
+  /** course stamps: the ground laid along the path (water, paved_way, road…). */
+  lay?: string;
+  /** course stamps over a liquid: plank spans laid ACROSS the course at these
+   *  path fractions (0..1) — the bridge the way over the brook rides. */
+  spans?: number[];
 }
 
 /** A structure CHANCE a zone rolls at generation (merged from tileset + biome
@@ -1402,29 +1412,39 @@ export const ZONES: Record<string, ZoneDef> = {
       },
     },
     seed: 1187, // the town keeps its shape — it's home
+    // THE TOWN THAT GROWS (data/townBuild.ts): this row is the HAMLET — the
+    // base rung of the size ladder. The per-run town def derives from it at
+    // World construction (expandedTown): the scatter below scales per tier,
+    // the brook + the paved ways are authored `course` rows the tier adds
+    // (the old random `river` and `fountain` stamps retired: the fountain
+    // is the plaza's, the water is the brook's — neither may re-roll against
+    // the arena when the town grows), and every fixture seat is the tier's
+    // TOWN_SITES row. The fixtures here are the base tier's authored copy,
+    // probe-pinned equal to townBaseFixtures(0).
     layout: [
       { kind: 'trees', count: [10, 10], radius: [13, 20] },
       { kind: 'grass', count: [5, 5] },
       { kind: 'flowers', count: [3, 3] },
       { kind: 'brush', count: [2, 2] },
-      { kind: 'river', count: [1, 1] },
-      { kind: 'fountain', count: [1, 1] },
       { kind: 'lantern_post', count: [5, 5] },
       { kind: 'bench', count: [3, 3] },
     ],
     fixtures: [
-      { structure: 'blacksmith', x: 450, y: 320 },
-      { structure: 'inn', x: 960, y: 300 },
-      { structure: 'house_small', x: 420, y: 700 },
-      // The spare house keeps a cellar under its boards (data/sidezones.ts):
-      // dwell the hatch INSIDE to descend. Packages may dig deeper from there.
-      { structure: 'cellar_house', x: 640, y: 760 },
-      { structure: 'wayside_camp', x: 960, y: 660 },
       // THE WAKING HOUSE (data/structures.ts): where every run opens its
       // eyes — bedside spawn cell, confined vision, one teaching door. The
       // quiet north-west, clear of the square (the perf walk arcs the
       // center; the house must never lean on the town control's meter).
       { structure: 'waking_house', x: 210, y: 180 },
+      { structure: 'blacksmith', x: 450, y: 320 },
+      { structure: 'inn', x: 960, y: 300 },
+      { structure: 'house_small', x: 420, y: 700 },
+      // The spare house keeps a cellar under its boards (data/sidezones.ts):
+      // dwell the hatch INSIDE to descend. Packages may dig deeper from there.
+      { structure: 'cellar_house', x: 200, y: 400 },
+      { structure: 'wayside_camp', x: 1010, y: 670 },
+      // THE PLAZA: the fountain square at the town's centre, the waypoint
+      // beside it (townBuild TOWN_SITES 'plaza' / 'waypoint').
+      { structure: 'plaza_square', x: 730, y: 630 },
     ],
     objective: { kind: 'safe' },
     // THE TOWN'S SMALL LIVES (the Verminfall) — authored fauna spawns even on

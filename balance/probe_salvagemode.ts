@@ -29,7 +29,6 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { FEATURE } from '../src/meta/account';
 import { START_ZONE } from '../src/data/zones';
-import { SALVAGE_SITE } from '../src/data/townBuild';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { ESSENCE_IDS, type EssenceId } from '../src/data/essences';
@@ -54,8 +53,8 @@ bootSimEngine();
 const atBench = (w: World): void => {
   w.account.features.add(FEATURE.SALVAGE_STATION);
   w.loadZone(START_ZONE);
-  w.player.pos.x = SALVAGE_SITE.x;
-  w.player.pos.y = SALVAGE_SITE.y;
+  w.player.pos.x = w.townSeat('salvage').x;
+  w.player.pos.y = w.townSeat('salvage').y;
 };
 
 /** Mint a bag item of an exact rarity (seeded stream, never null-looped

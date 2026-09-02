@@ -259,6 +259,16 @@ export const LEDGER_QUEST_DONE_PREFIX = 'quest_done:';
 export const questDoneKey = (questId: string): string => `${LEDGER_QUEST_DONE_PREFIX}${questId}`;
 export const LEDGER_QUESTS_COMPLETED = 'quests_completed';
 
+/** THE SHELTERED (docs/design/town-growth.md v2 — the residents): every soul
+ *  a held Borough sends home to Lastlight, counted for the ACCOUNT the
+ *  moment they arrive (the quest-turn-in durability precedent) beside the
+ *  run's own population (BoroughField.population, which lifts Brandt's
+ *  shelf). The residents' cottages read this lifetime count through the
+ *  gatework (data/boroughs.ts TOWN_RESIDENTS `{ ledger }` avenues): a family
+ *  that settles in Lastlight stays settled across runs — permanence, not a
+ *  run's weather. */
+export const LEDGER_SOULS_SHELTERED = 'souls_sheltered';
+
 /** THE SHARED-STAMP LAW (docs/design/bounty-board.md §2): GENERATED bounty
  *  postings never stamp per-id `quest_done:` keys (fresh ids per posting
  *  would grow the account ledger without bound) — the payout site stamps

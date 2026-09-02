@@ -415,6 +415,12 @@ void (async (): Promise<void> => {
   for (const p of manifestG.packages) p.enabled = false;
   const worldG = new World(accountG, Object.freeze(manifestG));
   worldG.createPlayer(CLASSES[0], { charId: mintCharId() });
+  // THE SEEDED SPAN (the town-that-grows lesson, 2026-09-01): createPlayer
+  // loads Lastlight, whose spawns draw from the GLOBAL stream — a town
+  // layout change re-dealt everything charted after it (the fixture fell to
+  // ~50 zones). Re-seed AFTER the town stands so this rig's growth belongs
+  // to its own span; the floor and every byte pin below are untouched.
+  seedGlobalRandom(0x6e0c4a);
   // Grow the chart through the real frontier resolution (the webperf idiom).
   const privG = worldG as unknown as { chartNeighborsOf(z: import('../src/data/zones').ZoneDef): void };
   for (let r = 0; r < 8; r++) {
