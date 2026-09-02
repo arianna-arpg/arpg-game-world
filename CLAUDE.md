@@ -1453,7 +1453,18 @@ we verify changes.
   docs in `docs/render/speech.md`; probe `balance/probe_speech.ts`.
   Tunables in `render/vis/visConfig.ts`; docs in `docs/render/README.md`.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
-  account / save / permadeath meta-layer.
+  account / save / permadeath meta-layer. THE FOLIO (`ui/folio.ts` — docs
+  `docs/ui/folio.md`, probe `balance/probe_folio.ts`): dwell dialogs that
+  would overlap bind into ONE tabbed book instead of painting over each
+  other — the first opened holds the front (THE MASTER LAW), later ones
+  arrive as shelved tabs on a thumb index seated on the front's measured
+  rect; a walked-away master yields (THE STANDING LAW), a same-arrival tie
+  fronts the nearer station (THE NEARER LAW), books never cross owners or
+  declared bays unless drawn rects truly overlap (THE MEASURED LAW),
+  companions never bind, Esc closes the FRONT leaf through its own close.
+  A new dialog enrolls with one `folioLeaf` row + one `folio.adopt` at its
+  show; the folio keeps no open flag of its own (the SELF-HEAL sync binds
+  and drops off each panel's own flag), so one dialog up is byte-identical.
 - `launcher/` — the Electron desktop shell (plain CJS, type-checked via
   `tsconfig.launcher.json`): `main.cjs` (windows, git update flow + the
   packaged DIRECT UPDATE (GitHub-Releases download → silent install →

@@ -1024,6 +1024,10 @@ function handleLocalPanels(): void {
       if (!ui.escCascadeFor(world.localSeat.id)) ui.showEscapeMenu();
       return;
     }
+    // THE FOLIO (ui/folio.ts): a book closes its FRONT leaf first — the one
+    // on screen — through that leaf's own close; the fixed list below stays
+    // as the belt for any dialog not enrolled.
+    if (ui.folioCloseFront()) return;
     if (ui.caravanOpen) { ui.closeCaravan(); return; }
     if (ui.vendorOpen) { ui.closeVendor(); return; }
     if (ui.salvageOpen) { ui.closeSalvage(); return; }
@@ -1629,6 +1633,9 @@ function tick(now: number): void {
   // COUCH: the hero's pointer wakes only on surfaces that block THE HERO'S
   // hands (a guest's open bag must not flip P1 into menu mode); solo keeps
   // the classic any-surface gate byte-identically.
+  // THE FOLIO (ui/folio.ts): reconcile the books to every dialog's own open
+  // flag — whatever path opened or closed it — and seat the thumb indexes.
+  ui.folioSync();
   padPointer.update(dt,
     (couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || !running, nowSec);
   couchTick(dt, nowSec);
