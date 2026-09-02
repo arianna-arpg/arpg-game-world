@@ -1465,6 +1465,11 @@ we verify changes.
   A new dialog enrolls with one `folioLeaf` row + one `folio.adopt` at its
   show; the folio keeps no open flag of its own (the SELF-HEAL sync binds
   and drops off each panel's own flag), so one dialog up is byte-identical.
+  THE SUITE (`data/suites.ts` + `World.stationReach`): a counter's dialog
+  SUMMONS the station dialogs that stand genuinely unlocked in the zone —
+  Brandt's counter gathers the bench + the stone as quiet tabs, their WORK
+  allowed from the counter through the ONE reach predicate every action
+  gate reads, closing with their anchor (one Esc leaves the workbench).
 - `launcher/` — the Electron desktop shell (plain CJS, type-checked via
   `tsconfig.launcher.json`): `main.cjs` (windows, git update flow + the
   packaged DIRECT UPDATE (GitHub-Releases download → silent install →

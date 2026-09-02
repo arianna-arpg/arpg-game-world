@@ -92,6 +92,7 @@ import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSele
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
 import { ATTRIBUTE_IDS, ATTRIBUTES, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { skyOf, START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
+import { SUITES, type SuiteDef, type SuiteStation } from '../data/suites';
 import { BEACON_CFG } from '../data/beacons';
 import { LEYLINE_CFG } from '../data/leyline';
 import { RIFT_CFG } from '../data/rifts';
@@ -22329,10 +22330,15 @@ export class World {
     return featureEnabled(this.account, FEATURE.SALVAGE_STATION);
   }
 
-  /** At the breaker's bench? (Feature owned + in town + near SALVAGE_SITE.) */
+  /** THE BENCH STANDS: owned + raised in this zone (the town), proximity
+   *  aside — the suite's "genuinely unlocked" read (stationStands). */
+  hasSalvage(): boolean {
+    return this.salvageUnlocked() && this.zone.id === START_ZONE;
+  }
+
+  /** At the breaker's bench? (The bench stands + near SALVAGE_SITE.) */
   nearSalvage(seat: Seat = this.localSeat): boolean {
-    return this.salvageUnlocked()
-      && this.zone.id === START_ZONE
+    return this.hasSalvage()
       && dist(seat.actor.pos, this.townSeat('salvage')) <= SALVAGE_CFG.stationRadius
       && this.dwellReachable(seat.actor.pos, this.townSeat('salvage'));
   }
@@ -23426,9 +23432,13 @@ export class World {
   // --------------------------------------------------------- oracle stone ----
 
   /** Among the standing stones? (Feature owned + in town + near ORACLE_SITE.) */
+  /** THE STONE STANDS: owned + raised in this zone, proximity aside. */
+  hasOracle(): boolean {
+    return featureEnabled(this.account, FEATURE.ORACLE_STONE) && this.zone.id === START_ZONE;
+  }
+
   nearOracle(seat: Seat = this.localSeat): boolean {
-    return featureEnabled(this.account, FEATURE.ORACLE_STONE)
-      && this.zone.id === START_ZONE
+    return this.hasOracle()
       && dist(seat.actor.pos, this.townSeat('oracle')) <= SALVAGE_CFG.stationRadius
       && this.dwellReachable(seat.actor.pos, this.townSeat('oracle'));
   }
@@ -23461,6 +23471,44 @@ export class World {
     return VENDORS.some(v => v.salvage?.(this) && v.near(this, seat));
   }
 
+  // --- THE SUITE REACH (data/suites.ts) -------------------------------------
+  // A counter's dialog summons the station dialogs that STAND here (raised +
+  // genuinely unlocked), and their WORK is allowed from the counter through
+  // ONE predicate — stationReach — that every action gate reads. The dwell
+  // reads (near*) stay physical: a station still opens by its own linger.
+
+  /** Does a summonable station stand in this zone for this account? */
+  stationStands(id: SuiteStation): boolean {
+    return id === 'salvage' ? this.hasSalvage() : this.hasOracle();
+  }
+
+  /** Is the seat physically at the station (its own dwell read)? */
+  stationNear(id: SuiteStation, seat: Seat = this.localSeat): boolean {
+    return id === 'salvage' ? this.nearSalvage(seat) : this.nearOracle(seat);
+  }
+
+  /** The suites whose anchor counter this seat stands at. */
+  suitesAt(seat: Seat = this.localSeat): SuiteDef[] {
+    return SUITES.filter(s => VENDORS.some(v =>
+      (!s.counters || s.counters.includes(v.id)) && v.near(this, seat)));
+  }
+
+  /** The stations a seat at a counter may SUMMON: members of a suite the
+   *  counter anchors, that stand in this zone — in row order, deduplicated. */
+  suiteSummons(seat: Seat = this.localSeat): SuiteStation[] {
+    const out: SuiteStation[] = [];
+    for (const s of this.suitesAt(seat)) {
+      for (const m of s.members) if (this.stationStands(m) && !out.includes(m)) out.push(m);
+    }
+    return out;
+  }
+
+  /** THE REACH LAW: may this seat WORK the station now — at the station
+   *  itself, or at a counter whose suite summons it while it stands here. */
+  stationReach(id: SuiteStation, seat: Seat = this.localSeat): boolean {
+    return this.stationNear(id, seat) || this.suiteSummons(seat).includes(id);
+  }
+
   /** Linger at a stocked counter → open the Vendor screen (flag → main).
    *  ONE ask per approach: being AT the counter (any near vendor, stocked or
    *  not) holds the latch, so a hero camped by the smith is never re-prompted
@@ -23489,7 +23537,7 @@ export class World {
    *  (host-clamped); the reroll lands within the tiers the ITEM could
    *  legally roll, lifted toward their ceiling by the score. */
   rerollAffix(seat: Seat, uid: number, affixIdx: number, score: number): void {
-    if (!this.nearOracle(seat)) return;
+    if (!this.stationReach('oracle', seat)) return;
     const m = seat.meta;
     const wornSlot = Object.keys(m.equipped).find(k => m.equipped[k]?.uid === uid);
     const item = this.bagItem(seat, uid) ?? (wornSlot ? m.equipped[wornSlot] : undefined);
@@ -42662,7 +42710,7 @@ export class World {
   /** CHISEL a socket at the bench — shares the crafted-slot budget with
    *  bench affixes (one craft per piece, Vault-widened). */
   craftSocket(seat: Seat, uid: number): void {
-    if (!this.nearSalvage(seat)) return;
+    if (!this.stationReach('salvage', seat)) return;
     const m = seat.meta;
     const wornSlot = Object.keys(m.equipped).find(k => m.equipped[k]?.uid === uid);
     const item = this.bagItem(seat, uid) ?? (wornSlot ? m.equipped[wornSlot] : undefined);
@@ -42738,7 +42786,7 @@ export class World {
    *  clients). Null when the wanted lane isn't actually at hand. */
   private salvageLane(seat: Seat, lane?: 'break' | 'sell'): 'break' | 'sell' | null {
     const want = lane ?? (this.nearSalvage(seat) ? 'break' : 'sell');
-    if (want === 'break') return this.nearSalvage(seat) ? 'break' : null;
+    if (want === 'break') return this.stationReach('salvage', seat) ? 'break' : null;
     return this.nearScrapVendor(seat) ? 'sell' : null;
   }
 
@@ -42920,7 +42968,7 @@ export class World {
    *  uniform across the whole unlocked span — expertise raises the ceiling,
    *  never guarantees it. */
   craftAffix(seat: Seat, uid: number, affixId: string, score = 0): void {
-    if (!this.nearSalvage(seat)) return;
+    if (!this.stationReach('salvage', seat)) return;
     const m = seat.meta;
     const wornSlot = Object.keys(m.equipped).find(k => m.equipped[k]?.uid === uid);
     const item = this.bagItem(seat, uid) ?? (wornSlot ? m.equipped[wornSlot] : undefined);

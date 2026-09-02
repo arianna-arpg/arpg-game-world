@@ -135,6 +135,13 @@ export interface FolioLeafSpec {
   refresh?: () => void;
 }
 
+/** THE SUITE (data/suites.ts): one member a leaf's front may SUMMON — a
+ *  standing read (does its station stand here, genuinely unlocked?) and the
+ *  member's own show path. The engine folds counters × members × stands; the
+ *  UI supplies only these two closures per station. */
+export interface FolioSuiteMember { id: string; stands: () => boolean; open: () => void; }
+export interface FolioSuiteSpec { anchor: string; members: FolioSuiteMember[]; }
+
 export interface FolioTab { id: string; title: string; front: boolean; fresh: boolean; }
 export interface FolioBookView {
   key: string;
@@ -175,6 +182,14 @@ export class FolioCore {
   /** leaf id → book key while bound. */
   private readonly bookOf = new Map<string, string>();
   private serial = 0;
+  /** Suites by anchor leaf id. */
+  private readonly suites = new Map<string, FolioSuiteSpec[]>();
+  /** member id → the anchor whose summons opened it (while it stays open). */
+  private readonly summonedBy = new Map<string, string>();
+  /** anchor id → members the player dismissed while that anchor stands. */
+  private readonly dismissed = new Map<string, Set<string>>();
+  /** The anchor whose summons is in flight — its members adopt quiet. */
+  private summoning: string | null = null;
 
   constructor(private readonly clock: () => number, private readonly cfg: FolioTuning = FOLIO_CFG) {}
 
@@ -182,6 +197,19 @@ export class FolioCore {
     if (this.leaves.has(spec.id)) throw new Error(`folio: leaf '${spec.id}' enrolled twice`);
     this.leaves.set(spec.id, spec);
   }
+
+  /** Enroll a suite: every id must already be an enrolled leaf. */
+  enrollSuite(spec: FolioSuiteSpec): void {
+    for (const id of [spec.anchor, ...spec.members.map(m => m.id)]) {
+      if (!this.leaves.has(id)) throw new Error(`folio: suite names an unenrolled leaf '${id}'`);
+    }
+    const list = this.suites.get(spec.anchor) ?? [];
+    list.push(spec);
+    this.suites.set(spec.anchor, list);
+  }
+
+  /** Was this leaf opened by an anchor's summons (and still stands so)? */
+  isSummoned(id: string): boolean { return this.summonedBy.has(id); }
 
   leaf(id: string): FolioLeafSpec | null { return this.leaves.get(id) ?? null; }
   leafIds(): string[] { return [...this.leaves.keys()]; }
@@ -205,16 +233,25 @@ export class FolioCore {
       this.books.set(fresh.key, fresh);
       this.bookOf.set(id, fresh.key);
       leaf.present(true);
+      this.summonFor(id);
       return 'solo';
     }
     book.order.push(id);
     this.bookOf.set(id, book.key);
     book.boundAt.set(id, now);
+    // THE SUMMONS ARRIVE QUIET (data/suites.ts): a member opened by its
+    // anchor lands behind and never fresh — expected, not offered — and no
+    // law brings it forward on arrival.
+    if (this.summoning !== null) {
+      this.summonedBy.set(id, this.summoning);
+      leaf.present(false);
+      return 'behind';
+    }
     const front = this.leaves.get(book.front)!;
     const takes = leaf.arrive === 'front'
       || (front.engaged !== undefined && !front.engaged())
       || this.nearerOnArrival(book, leaf, front, now);
-    if (takes) { this.setFront(book, id); return 'front'; }
+    if (takes) { this.setFront(book, id); this.summonFor(id); return 'front'; }
     book.fresh.add(id);
     leaf.present(false);
     return 'behind';
@@ -227,6 +264,7 @@ export class FolioCore {
     const book = this.books.get(key)!;
     if (book.front !== id) this.setFront(book, id);
     else book.touchedAt = this.clock();
+    this.summonFor(id);
     return true;
   }
 
@@ -257,13 +295,13 @@ export class FolioCore {
   closeAll(bookKey: string): number {
     const book = this.books.get(bookKey);
     if (!book) return 0;
-    let n = 0;
+    const before = book.order.length;
     for (const id of [...book.order]) {
       const leaf = this.leaves.get(id)!;
-      leaf.close();
-      if (!leaf.isOpen()) { this.drop(id); n++; }
+      leaf.close(); // an anchor's close may already have taken its summoned members
+      if (!leaf.isOpen() && this.bookOf.has(id)) this.drop(id);
     }
-    return n;
+    return before - (this.books.get(bookKey)?.order.length ?? 0);
   }
 
   /** Walk the tab order of the most recently touched multi-leaf book whose
@@ -341,9 +379,53 @@ export class FolioCore {
     leaf.refresh?.();
   }
 
+  /** THE SUMMONS: open every member of this anchor's suites that stands
+   *  here, is not open, and was not dismissed while this anchor stood. Each
+   *  opens through its own show path (which adopts — quiet, behind); a show
+   *  path that forgot adopt() is bound here all the same. */
+  private summonFor(anchor: string): void {
+    const suites = this.suites.get(anchor);
+    if (!suites || this.summoning !== null) return;
+    const dismissed = this.dismissed.get(anchor);
+    for (const s of suites) {
+      for (const m of s.members) {
+        const leaf = this.leaves.get(m.id);
+        if (!leaf || leaf.isOpen() || dismissed?.has(m.id) || !m.stands()) continue;
+        this.summoning = anchor;
+        try {
+          m.open();
+          if (leaf.isOpen() && !this.bookOf.has(m.id)) this.adopt(m.id);
+        } finally {
+          this.summoning = null;
+        }
+        if (leaf.isOpen()) this.summonedBy.set(m.id, anchor);
+      }
+    }
+  }
+
   private drop(id: string): void {
     const key = this.bookOf.get(id);
     if (!key) return;
+    // THE ANCHOR'S CLOSE (data/suites.ts): the members this leaf summoned
+    // leave with it, each through its own close path, before its own book
+    // bookkeeping runs — the promotion never lands on a tab about to go.
+    for (const [m, by] of [...this.summonedBy]) {
+      if (by !== id) continue;
+      this.summonedBy.delete(m);
+      const member = this.leaves.get(m);
+      if (member?.isOpen()) { member.close(); if (!member.isOpen()) this.drop(m); }
+    }
+    this.dismissed.delete(id);
+    // A summoned member closed on its own stays DISMISSED while its anchor stands.
+    const anchor = this.summonedBy.get(id);
+    if (anchor !== undefined) {
+      this.summonedBy.delete(id);
+      if (this.leaves.get(anchor)?.isOpen()) {
+        let d = this.dismissed.get(anchor);
+        if (!d) this.dismissed.set(anchor, d = new Set());
+        d.add(id);
+      }
+    }
     const book = this.books.get(key)!;
     this.bookOf.delete(id);
     book.order = book.order.filter(x => x !== id);

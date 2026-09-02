@@ -33,6 +33,21 @@
 //      dwell dialogs, each show path adopts, none of the six former hideAll()
 //      swaps survives, the couch cascade closes the seat's front leaf first,
 //      and main.ts drives the per-frame sync + the Esc hook.
+//   P. THE SUITE (core) — an anchor's front summons the standing members
+//      behind it in row order, quiet (never fresh, never the front, whatever
+//      law would front a stranger); a member that does not stand waits for
+//      its next front; a dismissed member stays dismissed while the anchor
+//      stands; the anchor's close takes its summoned members through their
+//      own close paths and never a member opened by its own dwell; an anchor
+//      arriving behind summons nothing until fronted; a member show path
+//      without adopt() is bound by the summons; closeAll counts the cascade.
+//   Q. THE SUITE REACH (the real engine, in town) — the bench and the stone
+//      STAND for an account that owns them; at Brandt's roof neither is near
+//      yet both are within reach and both are summoned; an unowned stone is
+//      neither summoned nor reachable (genuinely unlocked or nothing); at the
+//      bench nothing is summoned and the stone is out of reach; nowhere is
+//      nothing; the action gates (craftSocket, craftAffix, the break lane,
+//      rerollAffix) read THE REACH LAW while the dwell + hint stay physical.
 //
 //   npx tsx balance/probe_folio.ts
 
@@ -42,6 +57,16 @@ import {
   FolioCore, FOLIO_CFG, rectOverlapFrac,
   type FolioArrive, type FolioLeafSpec, type FolioRect,
 } from '../src/ui/folio';
+import { bootSimEngine, classById } from '../src/sim/arena';
+import { resetActorIdCounter } from '../src/engine/actor';
+import { World } from '../src/engine/world';
+import { buildManifest } from '../src/packages/manifest';
+import { CLASSES } from '../src/data/classes';
+import { FEATURE, makeAccount } from '../src/meta/account';
+import { START_ZONE } from '../src/data/zones';
+import { townStationFeatures } from '../src/data/townBuild';
+import { SUITES } from '../src/data/suites';
+import { VENDORS } from '../src/data/vendors';
 
 let pass = 0, fail = 0;
 function check(name: string, ok: boolean, detail = ''): void {
@@ -383,6 +408,132 @@ console.log('O. THE ENROLLMENT CENSUS');
   check('O7 the couch cascade closes the seat\'s front leaf first',
     /escCascadeFor\([\s\S]{0,900}?folio\.closeFront/.test(panels));
   check('O8 hideAll and hideAllFor settle the books at once', (panels.match(/this\.folio\.sync\(\)/g) ?? []).length >= 2);
+}
+
+// --- P. THE SUITE (core) ----------------------------------------------------
+console.log('P. THE SUITE (core)');
+{
+  const { core } = rig();
+  const anchor = fake(core, 'vendor');
+  const bench = fake(core, 'salvage'), stone = fake(core, 'oracle'), font = fake(core, 'font');
+  let standsFont = false;
+  const opens: Record<string, number> = { salvage: 0, oracle: 0, font: 0 };
+  const member = (f: Fake, stands: () => boolean) => ({ id: f.id, stands, open: () => { opens[f.id] = (opens[f.id] ?? 0) + 1; show(core, f); } });
+  core.enrollSuite({ anchor: 'vendor', members: [member(bench, () => true), member(stone, () => true), member(font, () => standsFont)] });
+  check('P1 the anchor opening alone summons the standing members behind it, in row order',
+    show(core, anchor) === 'solo' && ids(core, 'vendor') === 'vendor,salvage,oracle'
+    && anchor.drawn === true && bench.drawn === false && stone.drawn === false);
+  check('P2 summoned tabs arrive quiet (never fresh) and are marked summoned',
+    core.bookFor('vendor')!.tabs.every(t => !t.fresh) && core.isSummoned('salvage') && core.isSummoned('oracle') && !core.isSummoned('vendor'));
+  check('P3 a member that does not stand is not summoned', !font.open && opens.font === 0);
+  check('P4 fronting the anchor again re-opens nothing already open', core.front('vendor') && opens.salvage === 1 && opens.oracle === 1);
+  standsFont = true;
+  check('P5 a member that now stands is summoned on the next front, behind',
+    core.front('vendor') && font.open && opens.font === 1 && core.isSummoned('font') && font.drawn === false && anchor.drawn === true);
+  core.front('salvage');
+  check('P6 a summoned tab can be fronted like any tab', bench.drawn === true && anchor.drawn === false);
+  check('P7 closing it (Esc) dismisses it and promotes the anchor',
+    core.closeFront() && !bench.open && core.bookFor('vendor')!.front === 'vendor' && anchor.drawn === true && !core.isSummoned('salvage'));
+  check('P8 a dismissed member is not re-summoned while the anchor stands', core.front('vendor') && !bench.open && opens.salvage === 1);
+  check('P9 closing the anchor closes its summoned members through their own close paths',
+    core.closeFront() && !anchor.open && !stone.open && !font.open && stone.closes === 1 && font.closes === 1 && core.views().length === 0);
+  check('P10 with the anchor gone the dismissal is forgotten: a fresh anchor summons the bench again',
+    show(core, anchor) === 'solo' && bench.open && opens.salvage === 2 && ids(core, 'vendor') === 'vendor,salvage,oracle,font');
+
+  const { core: c2 } = rig();
+  const a2 = fake(c2, 'vendor'), b2 = fake(c2, 'salvage');
+  c2.enrollSuite({ anchor: 'vendor', members: [{ id: 'salvage', stands: () => true, open: () => show(c2, b2) }] });
+  show(c2, b2); show(c2, a2); c2.front('vendor');
+  check('P11 a member opened by its own dwell is never summoned and survives the anchor\'s close',
+    !c2.isSummoned('salvage') && c2.closeFront() && !a2.open && b2.open && b2.drawn === true);
+
+  const { core: c3 } = rig();
+  const master = fake(c3, 'bounties'), a3 = fake(c3, 'vendor'), b3 = fake(c3, 'salvage');
+  c3.enrollSuite({ anchor: 'vendor', members: [{ id: 'salvage', stands: () => true, open: () => show(c3, b3) }] });
+  show(c3, master);
+  check('P12 an anchor arriving behind another master summons nothing', show(c3, a3) === 'behind' && !b3.open);
+  check('P13 fronting it summons its members behind it',
+    c3.front('vendor') && b3.open && b3.drawn === false && a3.drawn === true && c3.isSummoned('salvage'));
+
+  const { core: c4 } = rig();
+  const a4 = fake(c4, 'vendor', { engaged: false }), b4 = fake(c4, 'salvage', { arrive: 'front', range: 1 });
+  c4.enrollSuite({ anchor: 'vendor', members: [{ id: 'salvage', stands: () => true, open: () => show(c4, b4) }] });
+  show(c4, a4);
+  check('P14 a summoned member never takes the front, whatever its own arrival or the anchor\'s engagement',
+    a4.drawn === true && b4.drawn === false && c4.bookFor('vendor')!.front === 'vendor');
+
+  const { core: c5 } = rig();
+  const a5 = fake(c5, 'vendor'), b5 = fake(c5, 'salvage');
+  c5.enrollSuite({ anchor: 'vendor', members: [{ id: 'salvage', stands: () => true, open: () => { b5.open = true; } }] });
+  show(c5, a5);
+  check('P15 a member whose show path forgot adopt() is bound by the summons itself, quiet',
+    c5.bookKeyOf('salvage') === c5.bookKeyOf('vendor') && b5.drawn === false && c5.isSummoned('salvage')
+    && c5.bookFor('salvage')!.tabs.every(t => !t.fresh));
+  const key5 = c5.bookKeyOf('vendor')!;
+  check('P16 closeAll counts every leaf the anchor\'s cascade took', c5.closeAll(key5) === 2 && c5.views().length === 0);
+  check('P17 a suite naming an unenrolled leaf is refused', (() => {
+    const { core: c6 } = rig();
+    fake(c6, 'vendor');
+    try { c6.enrollSuite({ anchor: 'vendor', members: [{ id: 'nope', stands: () => true, open: () => {} }] }); return false; } catch { return true; }
+  })());
+  check('P18 the summoning latch never leaks: a later stranger still arrives fresh', (() => {
+    const { core: c7 } = rig();
+    const a7 = fake(c7, 'vendor'), b7 = fake(c7, 'salvage'), s7 = fake(c7, 'bounties');
+    c7.enrollSuite({ anchor: 'vendor', members: [{ id: 'salvage', stands: () => true, open: () => show(c7, b7) }] });
+    show(c7, a7);
+    return show(c7, s7) === 'behind' && c7.bookFor('bounties')!.tabs.find(t => t.id === 'bounties')!.fresh === true;
+  })());
+}
+
+// --- Q. THE SUITE REACH (the real engine, in town) ---------------------------
+console.log('Q. THE SUITE REACH (the real engine, in town)');
+{
+  bootSimEngine();
+  resetActorIdCounter();
+  const acc = makeAccount();
+  for (const f of townStationFeatures()) acc.features.add(f);
+  for (const c of CLASSES) acc.unlockedClasses.add(c.id);
+  const manifest = buildManifest(acc, 0x0f01);
+  for (const p of manifest.packages) p.enabled = false;
+  const w = new World(acc, Object.freeze(manifest));
+  w.createPlayer(classById('warrior'));
+  w.loadZone(START_ZONE);
+  const seat = w.localSeat;
+  const at = (x: number, y: number): void => { seat.actor.pos.x = x; seat.actor.pos.y = y; };
+  const seek = (c: { x: number; y: number }, ok: () => boolean): boolean => {
+    for (let r = 0; r <= 140; r += 10) {
+      for (let a = 0; a < 360; a += 30) {
+        at(Math.round(c.x + r * Math.cos(a * Math.PI / 180)), Math.round(c.y + r * Math.sin(a * Math.PI / 180)));
+        if (ok()) return true;
+      }
+    }
+    return false;
+  };
+  check('Q0 the suite data: the crafting row anchors on a real counter and names known stations',
+    SUITES.some(s => s.id === 'crafting' && s.anchor === 'vendor' && s.members.length >= 2
+      && (s.counters ?? []).every(c => VENDORS.some(v => v.id === c))));
+  check('Q1 the bench and the stone STAND in town for an account that owns them', w.stationStands('salvage') && w.stationStands('oracle'));
+  check('Q2 a spot under Brandt\'s roof exists', seek(w.townSeat('blacksmith'), () => w.nearSmith(seat)));
+  check('Q3 at the counter: not at the bench, not at the stone, yet both within reach (THE REACH LAW)',
+    !w.nearSalvage(seat) && !w.nearOracle(seat) && w.stationReach('salvage', seat) && w.stationReach('oracle', seat));
+  check('Q4 the summons at the counter name both, in row order', w.suiteSummons(seat).join(',') === 'salvage,oracle');
+  acc.features.delete(FEATURE.ORACLE_STONE);
+  check('Q5 an unowned stone is neither summoned nor within reach — genuinely unlocked or nothing',
+    w.suiteSummons(seat).join(',') === 'salvage' && !w.stationReach('oracle', seat) && !w.stationStands('oracle'));
+  acc.features.add(FEATURE.ORACLE_STONE);
+  check('Q6 at the bench: the bench is near, the counter is not, nothing is summoned, the stone is out of reach',
+    seek(w.townSeat('salvage'), () => w.nearSalvage(seat) && !w.nearAnyVendor(seat))
+    && w.stationReach('salvage', seat) && w.suiteSummons(seat).length === 0 && !w.stationReach('oracle', seat));
+  at(-5000, -5000);
+  check('Q7 away from everything nothing is within reach', !w.stationReach('salvage', seat) && !w.stationReach('oracle', seat) && w.suiteSummons(seat).length === 0);
+  const src = readFileSync(resolve(process.cwd(), 'src/engine/world.ts'), 'utf8');
+  const gate = (fn: string, id: string): boolean =>
+    new RegExp(`\\n  ${fn}\\([^)]*\\)[^{]*\\{\\n    if \\(!this\\.stationReach\\('${id}', seat\\)\\) return;`).test(src);
+  check('Q8 the action gates read THE REACH LAW: craftSocket, craftAffix, rerollAffix',
+    gate('craftSocket', 'salvage') && gate('craftAffix', 'salvage') && gate('rerollAffix', 'oracle'));
+  check('Q9 the break lane reads it too, while the dwell and the hint stay physical',
+    src.includes("if (want === 'break') return this.stationReach('salvage', seat) ? 'break' : null;")
+    && src.includes('this.nearSalvage(s));') && src.includes('if (!this.nearSalvage()) return null;'));
 }
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} passed, ${fail} failed`);

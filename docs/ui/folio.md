@@ -104,6 +104,34 @@ bench's "the bag is the menu" pairing is a designed side-by-side. Enrolling
 them is one row each plus a `companions` list on the station leaves, once
 the Escape grammar for keyed panels ("clear them all") has been ruled.
 
+## The suite (phase two)
+
+`src/data/suites.ts` declares **suites**: station dialogs that belong
+together. A counter's dialog is an **anchor**; when it comes to the front,
+the folio **summons** every member station that **stands** in the zone
+(raised here and genuinely unlocked, `World.stationStands`) as a quiet tab
+behind it. The shipped row is the crafting suite: Brandt's counter gathers
+the breaker's bench and the Oracle stone.
+
+- **The reach law** (`World.stationReach`) is the engine half: a member's
+  work is allowed from its anchor's counter exactly as at the station
+  itself. Every action gate (`craftSocket`, `craftAffix`, the break lane,
+  `rerollAffix`) reads the one predicate; the dwell prompts and each
+  station's own opening stay physical.
+- **Summons arrive quiet** — never fresh, never the front, whatever law
+  would front a stranger.
+- **The anchor's close takes its summoned members** through their own close
+  paths: one Escape from the counter leaves the workbench. A member the
+  player dismissed stays dismissed while the anchor stands; a member opened
+  by its own dwell is never the anchor's to close.
+- **The bag's verbs follow the front**: sell under the counter, break under
+  the bench, a plain bag under the stone (`folioDrawn` gates the lanes).
+
+The world folds counters × members × stands (`World.suiteSummons`); the UI
+supplies only a show path per station (`enrollSuite` in `panels.ts`). A new
+suite is one row; a new member station is one id plus its `has*`/`near*`
+reads in `world.ts`.
+
 ## Dials (`FOLIO_CFG`)
 
 | dial | default | meaning |

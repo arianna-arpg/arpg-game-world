@@ -54,6 +54,7 @@ import { dndCancel, dndCarried, registerDragSource, registerDropTarget } from '.
 import { applyUiScale, UI_SCALE_CFG } from './uiScale';
 import { bindFolioKeys, FolioCore, FolioStrip, FOLIO_SHELVED_CLASS, installFolioStyles, type FolioLeafSpec } from './folio';
 import type { TownSiteId } from '../data/townBuild';
+import type { SuiteStation } from '../data/suites';
 import { RENDER_SCALE_CFG } from '../render/renderScale';
 import { CAMERA_MODES, cameraModeOf } from '../render/camera';
 import { FACTIONS, MONSTERS, defDensity, type MonsterDef } from '../data/monsters';
@@ -963,7 +964,15 @@ export class UI {
       const at = seat(el).actor.pos;
       return p ? Math.hypot(at.x - p.x, at.y - p.y) : null;
     };
-    const fronted = (fn: () => void) => (): void => { hideTooltip(); fn(); };
+    // A leaf coming to the front re-reads the bag: its verbs and cursor
+    // follow the FRONT station (sell under the counter, break under the
+    // bench, plain under the stone — THE SUITE's S6).
+    const fronted = (fn: () => void) => (): void => {
+      hideTooltip();
+      fn();
+      this.applyBreakChrome();
+      if (this.inventoryOpen) this.refreshInventory();
+    };
     const enroll = (spec: FolioLeafSpec): void => this.folio.enroll(spec);
     enroll(this.folioLeaf('vendor', this.vendorMenu, () => 'Vendors', () => this.vendorOpen, () => this.closeVendor(), {
       engaged: () => w().nearAnyVendor(seat(this.vendorMenu)), range: site(this.vendorMenu, 'blacksmith'),
@@ -998,6 +1007,29 @@ export class UI {
       refresh: fronted(() => this.refreshMercMenu()) }));
     enroll(this.folioLeaf('vocation', this.vocationMenu, () => 'A Calling', () => this.vocationOpen, () => this.closeVocationMenu(), {
       arrive: 'front', refresh: fronted(() => this.refreshVocationMenu()) }));
+
+    // THE SUITE (data/suites.ts): a counter's dialog SUMMONS the station
+    // dialogs that stand genuinely unlocked in this zone. The world folds
+    // counters × members × "stands here" (World.suiteSummons); the UI only
+    // knows how to open each station for the seat at the counter.
+    const stationShow: Record<SuiteStation, (seatId: string) => void> = {
+      salvage: (s) => this.showSalvage(s),
+      oracle: (s) => this.showOracle(s),
+    };
+    this.folio.enrollSuite({
+      anchor: 'vendor',
+      members: (Object.keys(stationShow) as SuiteStation[]).map(id => ({
+        id,
+        stands: () => w().suiteSummons(seat(this.vendorMenu)).includes(id),
+        open: () => {
+          stationShow[id](seat(this.vendorMenu).id);
+          // The summoned station arms its verbs on the bag (the breaker's
+          // eye) before the folio shelves it — re-read the bag off the FRONT.
+          this.applyBreakChrome();
+          if (this.inventoryOpen) this.refreshInventory();
+        },
+      })),
+    });
   }
 
   /** Once per frame (main.ts): reconcile every book against its leaves' own
@@ -1023,6 +1055,12 @@ export class UI {
     const moved = this.folio.cycle(dir, l => l.owner() === id) !== null;
     if (moved) this.folioStrip.update();
     return moved;
+  }
+
+  /** Is a panel DRAWN — not shelved behind a folio tab? The bag's verbs and
+   *  the cursor dress read the front station, never a shelved one. */
+  private folioDrawn(el: HTMLElement): boolean {
+    return !el.classList.contains(FOLIO_SHELVED_CLASS);
   }
 
   // --- THE COUCH LENS (data/couch.ts) ---------------------------------------
@@ -3959,7 +3997,7 @@ export class UI {
    *  mode armed.) The INVENTORY half additionally demands both panels
    *  belong to the same couch seat — see salvageLaneFor. */
   private breakArmed(): boolean {
-    return this.salvageOpen && this.salvageTab === 'salvage' && this.benchBreakMode;
+    return this.salvageOpen && this.salvageTab === 'salvage' && this.benchBreakMode && this.folioDrawn(this.salvageMenu);
   }
 
   /** Which salvage lane is ARMED over this panel, if any: 'break' under the
@@ -3969,7 +4007,7 @@ export class UI {
    *  the bench wins a same-seat tie: its lane studies, the wheel only pays. */
   private salvageLaneFor(panel: HTMLElement): 'break' | 'sell' | null {
     if (this.breakArmed() && this.panelSeat(this.salvageMenu) === this.panelSeat(panel)) return 'break';
-    if (this.vendorOpen && this.scrapMode && this.panelSeat(this.vendorMenu) === this.panelSeat(panel)) return 'sell';
+    if (this.vendorOpen && this.scrapMode && this.folioDrawn(this.vendorMenu) && this.panelSeat(this.vendorMenu) === this.panelSeat(panel)) return 'sell';
     return null;
   }
 
