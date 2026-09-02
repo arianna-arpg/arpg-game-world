@@ -12,9 +12,12 @@
 //   • THE REWARD SEAL — every scene spawn is noBounty (a kill pays no xp,
 //     no loot) on spoils-'none' ground; the drill counts the hero's own
 //     footwork and casts; the assault pours already-hunting waves.
-//   • THE COVENANT — a lethal blow FELLS (life 1, guarded, fast-forwarded
-//     to the reckoning), never kills; the reckoning's verb resolves through
-//     the real pipeline and spends the horde honestly (affects 'all').
+//   • THE COVENANT — a lethal blow FELLS bodily (the world's own downed
+//     state: inputs, regeneration and re-kills all refused), never kills;
+//     once no seat stands the script LANDS on the wake card after a funeral
+//     beat — every stage between is skipped, so an early death NEVER
+//     summons the Father (her ruling 2026-09-01: he is a wall reached
+//     alive), and the wake's page speaks to what was actually seen.
 //   • THE AGENCY RECKONING — the world is NEVER held: the commander stands
 //     marked (the attention fabric's chevron), its kit banned, and after the
 //     grace beat musters a TEN-second honest cast; THE ENRAGE answers a
@@ -25,6 +28,9 @@
 //   • THE FELLED FIELD — the blast's end is BODILY: every seat goes DOWN
 //     through the world's own downed state (inputs refused, regeneration
 //     refused, life honest zero) — the runner past the nova's rim included.
+//   • THE FIELD-FALL SURGE — a field the tide fells MID-muster is played in
+//     place: the live muster leaps to its last breaths and the horn still
+//     ends the road on screen over the bodies.
 //   • THE HOLLOW WAKE — the prologue ends in MU, not at the bedside: the
 //     spirit stands as a wisp among the class apparitions, the completion
 //     key stamps at the threshold, and the run begins only at the pick.
@@ -36,7 +42,9 @@ import {
   sceneDue, sceneBegin, sceneBegunKey, sceneCardAck, sceneNoteCast,
   muStageLive, muTakeClassRequest,
 } from '../src/engine/scenes';
-import { PROLOGUE_SCENE } from '../src/data/scenes';
+import {
+  PROLOGUE_SCENE, type SceneAssaultStage, type SceneCardStage, type SceneReckoningStage,
+} from '../src/data/scenes';
 import { MU_CFG, APPARITION_PREFIX } from '../src/data/mu';
 import { selectableSlotCount } from '../src/meta/account';
 import { collectAttention } from '../src/world/attention';
@@ -69,8 +77,47 @@ const sceneBodies = (w: World): Actor[] =>
   w.actors.filter(a => a.eventKey === `scene:${PROLOGUE_SCENE.id}`);
 const stageKind = (w: World): string =>
   w.scene ? String(w.scene.def.stages[w.scene.stageIx]?.kind) : '(no scene)';
+/** The prologue's wake card stage (the fall's landing) — its page objects
+ *  are shared by reference into the resolved def, so identity pins which
+ *  page the landing chose. */
+const wakeStage = PROLOGUE_SCENE.stages.find(s => s.kind === 'card' && (s as SceneCardStage).fallCard) as SceneCardStage | undefined;
+const castLeft = (a: Actor | undefined): number =>
+  a?.casting ? a.casting.total - a.casting.elapsed : Infinity;
+/** THE SLAIN LOCK rides standing law: applyInputs refuses a downed seat, so
+ *  a pressed stick moves nothing (no update ticks — pure input refusal). */
+const inputsRefused = (w: World, p: Actor): boolean => {
+  const x0 = p.pos.x, y0 = p.pos.y;
+  const shove: PlayerInput = { dx: 1, dy: 0, aim: vec(p.pos.x + 100, p.pos.y), held: [], edge: [] };
+  for (let i = 0; i < 30; i++) w.applyInputs(new Map([[w.localSeat.id, shove]]), DT);
+  return p.pos.x === x0 && p.pos.y === y0;
+};
 
 bootSimEngine();
+
+/** Walk a fresh world to the reckoning ALIVE: the card, the drill sprinted
+ *  (footwork, then the five noted strikes), the clash put down, and the
+ *  assault's clock jumped to its end — every authored wave pours on the way
+ *  out, the milling tide the Father will spend. */
+function walkToReckoning(seed: number): { w: World; p: Actor } {
+  const w = makeSimWorld('warrior', seed);
+  const p = w.player;
+  w.account.ledger['tutorial_faction:goblin'] = 1;
+  sceneBegin(w, 'prologue');
+  step(w, 0.2); // the card must be SET before an ack can land
+  sceneCardAck(w);
+  step(w, 0.3);
+  for (let i = 0; i < 60 * 14; i++) { w.moveActor(p, 1, 0, DT); w.update(DT); }
+  for (let i = 0; i < 5; i++) sceneNoteCast(w);
+  step(w, 0.2);
+  const g = w.actors.find(a => a.defId === 'goblin_skirmisher' && !a.dead);
+  if (g) { g.life = 0; w.kill(g, false, p); }
+  step(w, 3.0);
+  if (w.scene && stageKind(w) === 'assault') {
+    w.scene.stageT = (w.scene.def.stages[w.scene.stageIx] as SceneAssaultStage).surviveSec;
+    step(w, 0.1);
+  }
+  return { w, p };
+}
 
 // === A) THE GATE ===========================================================
 {
@@ -194,86 +241,33 @@ check('E3: the survival bar climbs', (w.scene?.bar?.frac ?? 0) > 0);
 check('E3b: the dawn clock hangs over the field (the assault takes the top seat)',
   w.scene?.barAt === 'top');
 
-// === F) THE COVENANT: a lethal blow fells, never kills ======================
+// === F) THE EARLY FALL: the covenant lands the script on the wake ===========
+// Her ruling 2026-09-01: a death BEFORE the Father is met never summons him.
+// The seat goes down bodily on the spot, the world breathes over the body
+// for the funeral beat, the dark rises, and the wake's page speaks to what
+// was actually seen — the reckoning stage never plays.
+const tideAtFall = sceneBodies(w).filter(a => !a.dead).length;
 p.life = 0;
 w.kill(p);
-check('F1: the hero is FELLED — alive at 1, guarded, never dead or downed',
-  !p.dead && !p.downed && p.life === 1 && p.invulnerable && p.untargetable);
-check('F2: the fall fast-forwards the script to the reckoning',
-  stageKind(w) === 'reckoning');
-
-// === G) THE AGENCY RECKONING: marked, mustered, the field unmade =============
-// The tide as it stands BEFORE the blast — dead bodies leave the actor list,
-// so the after-pin follows these ids, not the census.
-const tideIds = sceneBodies(w)
-  .filter(a => !a.dead && a.defId === 'goblin_skirmisher')
-  .map(a => a.id);
-step(w, 0.2);
-const col = w.actors.find(a => a.defId === 'goblin_colossus');
-check('G1: the Hordefather stands off in the dark (rewardless like all scene bodies)',
-  !!col && col.noBounty && col.eventKey === `scene:${PROLOGUE_SCENE.id}`);
-// THE SECOND WIND: this walk's hero FELL to the tide (section F) and arrived
-// guarded — the reckoning stands them back up (guards off, vitals whole) so
-// the blast can end them honestly. A guarded body would stand through the
-// blast untouched, beating on an inert Father — the QA'd limp ending.
-check('G1b: THE SECOND WIND — the tide-felled hero stands back up for the Father',
-  !p.invulnerable && !p.untargetable && p.life === p.maxLife(),
-  `life=${p.life.toFixed(0)}/${p.maxLife().toFixed(0)} guard=${String(p.invulnerable)}`);
-check('G2: THE HOLD IS DEAD — the world keeps running while the muster stands (agency, not cinema)',
-  !w.timeflow.heldBy('cinematic') && w.scene?.focus === null);
-check('G3: THE MARK stands — the chevron source points at the commander by name',
-  w.scene?.mark?.id === col?.id
-  && collectAttention(w).some(pt => pt.id === 'scene_mark' && pt.label === col?.name));
-check('G4: the verb musters through the REAL pipeline after the grace beat',
-  until(w, () => !!col && col.casting !== null, 6),
-  `casting=${String(!!col?.casting)}`);
-check('G4b: ten held breaths — the muster is a TEN-second honest cast bar',
-  (col?.casting?.total ?? 0) >= 9.5,
-  `total=${col?.casting?.total?.toFixed(1)}`);
-// THE ENRAGE, mid-cast (show, never tell): bled below the floor he stays
-// honestly MORTAL — no immunity, no refusal prints — but a visible fury
-// takes him and the bar SURGES to its last breaths.
-if (col) col.life = col.maxLife() * ((w.scene?.def.stages[w.scene.stageIx] as { floorFrac?: number })?.floorFrac ?? 0.1) * 0.5;
-step(w, 0.2);
-check('G4c: THE ENRAGE — below the floor he stays mortal, furies, and the bar surges',
-  col?.invulnerable === false
-  && !!col?.statuses.some(s => s.id === 'rally')
-  && ((col?.casting?.total ?? 0) - (col?.casting?.elapsed ?? 0)) <= 1.5,
-  `left=${((col?.casting?.total ?? 0) - (col?.casting?.elapsed ?? 0)).toFixed(2)}s`);
-// THE WITNESS: the surge dropped the muster inside the pan's lead — the eye
-// engages, and by the travel's end it sits ON the Father (the lerp's k=1 is
-// his live seat, so drawn == scripted exactly).
-check('G4d: THE WITNESS — the eye walks out for the last breaths',
-  until(w, () => w.scene?.focus !== null, 2));
-step(w, 0.8); // past travelSec — the pan lands (the dwell holds it if the horn already fired)
-check('G4e: the eye sits on the Father for the fire-off',
-  !!w.scene?.focus && !!col
-  && Math.hypot(w.scene.focus.x - col.pos.x, w.scene.focus.y - col.pos.y) < 24,
-  `d=${w.scene?.focus && col ? Math.hypot(w.scene.focus.x - col.pos.x, w.scene.focus.y - col.pos.y).toFixed(1) : '—'}`);
-check('G5: the blast spends the horde honestly (affects all — the tide lies dead)',
-  until(w, () => tideIds.length > 0
-    && tideIds.every(id => w.actors.every(a => a.id !== id || a.dead)), 16),
-  `tide=${tideIds.length}`);
-step(w, 0.1); // the director's next tick runs the felled-field sweep
-check('G5b: THE FELLED FIELD — the blast leaves the hero BODILY down (downed, life 0, guarded)',
-  p.downed && p.life === 0 && p.invulnerable && p.untargetable && w.scene?.fell === true,
-  `downed=${String(p.downed)} life=${p.life.toFixed(0)}`);
-// THE SLAIN LOCK rides standing law: applyInputs refuses a downed seat, so
-// a pressed stick moves nothing (no update ticks here — pure input refusal).
-{
-  const x0 = p.pos.x, y0 = p.pos.y;
-  const shove: PlayerInput = { dx: 1, dy: 0, aim: vec(p.pos.x + 100, p.pos.y), held: [], edge: [] };
-  for (let i = 0; i < 30; i++) w.applyInputs(new Map([[w.localSeat.id, shove]]), DT);
-  check('G5c: THE SLAIN LOCK — a downed seat\'s inputs are refused whole',
-    p.pos.x === x0 && p.pos.y === y0);
-}
-step(w, 1.2);
-check('G5d: the un-death is dead — no regeneration under the sinking dark',
-  p.life === 0, `life=${p.life.toFixed(2)}`);
-check('G6: the fall card follows under black',
-  until(w, () => stageKind(w) === 'card' && w.screenFade >= 0.995, 6));
-check('G7: the fall card is pending',
-  until(w, () => w.scene?.card != null, 2));
+check('F1: THE BODILY FALL — the hero goes DOWN (downed, life 0, never dead)',
+  !p.dead && p.downed && p.life === 0 && p.casting === null);
+check('F2: the script LANDS on the wake card — the reckoning is skipped whole',
+  stageKind(w) === 'card' && w.scene?.landed === true && w.scene?.fallBeat === true);
+check('F2b: the Father is never summoned by a death',
+  !w.actors.some(a => a.defId === 'goblin_colossus'));
+step(w, 0.6);
+check('F3: THE FUNERAL BEAT — the world stays in view over the body (no dark yet, the tide still milling)',
+  w.screenFade < 0.05 && w.scene?.card === null
+  && sceneBodies(w).filter(a => !a.dead).length === tideAtFall,
+  `fade=${w.screenFade.toFixed(2)} tide=${sceneBodies(w).filter(a => !a.dead).length}/${tideAtFall}`);
+check('F3b: the body is honestly dead under the beat — no regeneration, guarded from the tide',
+  p.downed && p.life === 0 && p.invulnerable && p.untargetable);
+check('F3c: the fallen seat\'s inputs are refused whole', inputsRefused(w, p));
+check('F4: past the beat the dark rises and the wake card waits',
+  until(w, () => w.scene?.card != null && w.screenFade >= 0.995, 6));
+check('F5: the landing shows THE EARLY FALL\'s page — no horn was ever heard',
+  !!wakeStage && w.scene?.card === wakeStage.fallCard,
+  `line0="${w.scene?.card?.lines[0]?.slice(0, 28)}"`);
 
 // === H) THE HOLLOW WAKE: Mu, the wisp, the vessels, the pick ================
 sceneCardAck(w);
@@ -319,50 +313,147 @@ check('H5b: every apparition is scenery with a name — passive, guarded, untarg
 check('H7: no enemy followed the spirit into Mu',
   w.actors.every(a => a.team !== 'enemy'));
 
+// === G) THE AGENCY RECKONING: reached ALIVE, marked, mustered, the field unmade
+{
+  const { w: w2, p: p2 } = walkToReckoning(31020);
+  check('G0: the Father is reached ALIVE — the assault run out, no fall on the way',
+    stageKind(w2) === 'reckoning' && !p2.downed && !p2.dead && w2.scene?.fell === false,
+    `stage=${stageKind(w2)} downed=${String(p2.downed)}`);
+  const col = w2.actors.find(a => a.defId === 'goblin_colossus');
+  // THE RIG'S GUARD: the sim hero holds the field so the muster can be
+  // watched whole (the poured tide beats on a guarded body); the guard comes
+  // OFF for the last breaths below, so the horn itself ends a mortal hero.
+  p2.invulnerable = true;
+  p2.untargetable = true;
+  // Thin the poured tide to four skirmishers — the after-pin follows these
+  // ids (dead bodies leave the actor list).
+  {
+    let kept = 0;
+    for (const a of [...w2.actors]) {
+      if (a.team !== 'enemy' || a.dead || a === col || a.partLink) continue;
+      if (a.defId === 'goblin_skirmisher' && kept < 4) { kept++; continue; }
+      a.life = 0;
+      w2.kill(a, true);
+    }
+  }
+  const tideIds = w2.actors.filter(a => !a.dead && a.defId === 'goblin_skirmisher').map(a => a.id);
+  step(w2, 0.2);
+  check('G1: the Hordefather stands off in the dark (rewardless like all scene bodies)',
+    !!col && col.noBounty && col.eventKey === `scene:${PROLOGUE_SCENE.id}`);
+  check('G2: THE HOLD IS DEAD — the world keeps running while the muster stands (agency, not cinema)',
+    !w2.timeflow.heldBy('cinematic') && w2.scene?.focus === null);
+  check('G3: THE MARK stands — the chevron source points at the commander by name',
+    w2.scene?.mark?.id === col?.id
+    && collectAttention(w2).some(pt => pt.id === 'scene_mark' && pt.label === col?.name));
+  check('G4: the verb musters through the REAL pipeline after the grace beat',
+    until(w2, () => !!col && col.casting !== null, 6),
+    `casting=${String(!!col?.casting)}`);
+  check('G4b: ten held breaths — the muster is a TEN-second honest cast bar',
+    (col?.casting?.total ?? 0) >= 9.5,
+    `total=${col?.casting?.total?.toFixed(1)}`);
+  // THE ENRAGE, mid-cast (show, never tell): bled below the floor he stays
+  // honestly MORTAL — no immunity, no refusal prints — but a visible fury
+  // takes him and the bar SURGES to its last breaths.
+  const reck = w2.scene?.def.stages[w2.scene.stageIx] as SceneReckoningStage | undefined;
+  if (col) col.life = col.maxLife() * (reck?.floorFrac ?? 0.1) * 0.5;
+  step(w2, 0.2);
+  check('G4c: THE ENRAGE — below the floor he stays mortal, furies, and the bar surges',
+    col?.invulnerable === false
+    && !!col?.statuses.some(s => s.id === 'rally')
+    && castLeft(col) <= 1.5,
+    `left=${castLeft(col).toFixed(2)}s`);
+  // THE HONEST BLOW: the rig's guard comes off for the last breaths — the
+  // horn must end a MORTAL hero itself, through the kill path.
+  p2.invulnerable = false;
+  p2.untargetable = false;
+  // THE WITNESS: the surge dropped the muster inside the pan's lead — the eye
+  // engages, and by the travel's end it sits ON the Father (the lerp's k=1 is
+  // his live seat, so drawn == scripted exactly).
+  check('G4d: THE WITNESS — the eye walks out for the last breaths',
+    until(w2, () => w2.scene?.focus !== null, 2));
+  step(w2, 0.8); // past travelSec — the pan lands (the dwell holds it if the horn already fired)
+  check('G4e: the eye sits on the Father for the fire-off',
+    !!w2.scene?.focus && !!col
+    && Math.hypot(w2.scene.focus.x - col.pos.x, w2.scene.focus.y - col.pos.y) < 24,
+    `d=${w2.scene?.focus && col ? Math.hypot(w2.scene.focus.x - col.pos.x, w2.scene.focus.y - col.pos.y).toFixed(1) : '—'}`);
+  check('G5: the blast spends the horde honestly (affects all — the tide lies dead)',
+    until(w2, () => tideIds.length > 0
+      && tideIds.every(id => w2.actors.every(a => a.id !== id || a.dead)), 16),
+    `tide=${tideIds.length}`);
+  step(w2, 0.1); // the director's next tick runs the felled-field sweep
+  check('G5a: the horn itself ended the hero — the kill path names the Father',
+    (w2 as unknown as { lastPlayerKiller: Actor | null }).lastPlayerKiller === col);
+  check('G5b: THE FELLED FIELD — the blast leaves the hero BODILY down (downed, life 0, guarded)',
+    p2.downed && p2.life === 0 && p2.invulnerable && p2.untargetable && w2.scene?.fell === true,
+    `downed=${String(p2.downed)} life=${p2.life.toFixed(0)}`);
+  check('G5c: THE SLAIN LOCK — a downed seat\'s inputs are refused whole', inputsRefused(w2, p2));
+  step(w2, 1.2);
+  check('G5d: the un-death is dead — no regeneration under the sinking dark',
+    p2.life === 0, `life=${p2.life.toFixed(2)}`);
+  check('G6: the fall card follows under black',
+    until(w2, () => stageKind(w2) === 'card' && w2.scene?.card != null && w2.screenFade >= 0.995, 6));
+  check('G6b: the AUTHORED page — the horn was heard, so the wake says so',
+    !!wakeStage && w2.scene?.card === wakeStage.card);
+}
+
 // === I) THE RUNNER'S END: the nova has a rim, the reckoning does not ========
 // A hero who spends the whole muster RUNNING can stand past the blast's 2600
 // radius when the horn fires (the boundless ground never says no). The story
 // still ends: the sweep lays the runner bodily down, and THE WITNESS panned
 // the fire-off to their eye however far they stood.
 {
-  const w2 = makeSimWorld('warrior', 31020);
-  const p2 = w2.player;
-  w2.account.ledger['tutorial_faction:goblin'] = 1;
-  check('I0: the second walk begins', sceneBegin(w2, 'prologue'));
-  step(w2, 0.2); // the card must be SET before an ack can land (the B7 beat)
-  sceneCardAck(w2);
-  step(w2, 0.3);
-  // Sprint the drill (footwork, then the five noted strikes)…
-  for (let i = 0; i < 60 * 14; i++) { w2.moveActor(p2, 1, 0, DT); w2.update(DT); }
-  for (let i = 0; i < 5; i++) sceneNoteCast(w2);
-  step(w2, 0.2);
-  // …put the clash down and breathe into the assault…
-  const g = w2.actors.find(a => a.defId === 'goblin_skirmisher' && !a.dead);
-  if (g) { g.life = 0; w2.kill(g, false, p2); }
-  step(w2, 3.0);
-  // …then fall to the tide: the covenant fast-forwards to the reckoning.
-  p2.life = 0;
-  w2.kill(p2);
-  step(w2, 0.2);
-  const col2 = w2.actors.find(a => a.defId === 'goblin_colossus');
-  check('I1: the reckoning stands (second wind up, Father posted)',
-    stageKind(w2) === 'reckoning' && !!col2 && !p2.downed && p2.life === p2.maxLife());
+  const { w: w3, p: p3 } = walkToReckoning(31030);
+  const col3 = w3.actors.find(a => a.defId === 'goblin_colossus');
+  check('I1: the reckoning stands (Father posted, hero alive)',
+    stageKind(w3) === 'reckoning' && !!col3 && !p3.downed);
   // THE RUN: far past the nova's own reach before the muster resolves.
-  if (col2) { p2.pos.x = col2.pos.x + 4000; p2.pos.y = col2.pos.y; }
-  const far = col2 ? Math.hypot(p2.pos.x - col2.pos.x, p2.pos.y - col2.pos.y) : 0;
+  if (col3) { p3.pos.x = col3.pos.x + 4000; p3.pos.y = col3.pos.y; }
+  const far = col3 ? Math.hypot(p3.pos.x - col3.pos.x, p3.pos.y - col3.pos.y) : 0;
   check('I2: the runner stands past the blast\'s rim', far > 3000, `d=${far.toFixed(0)}`);
   let sawEye = false;
-  const ended = until(w2, () => {
-    if (w2.scene?.focus) sawEye = true;
-    return p2.downed;
+  const ended = until(w3, () => {
+    if (w3.scene?.focus) sawEye = true;
+    return p3.downed;
   }, 20);
   check('I3: the sweep fells the runner the nova never reached (downed, life 0)',
-    ended && p2.life === 0 && w2.scene?.fell === true,
-    `downed=${String(p2.downed)} life=${p2.life.toFixed(0)}`);
+    ended && p3.life === 0 && w3.scene?.fell === true,
+    `downed=${String(p3.downed)} life=${p3.life.toFixed(0)}`);
   check('I4: THE WITNESS reached them — the eye walked out for the fire-off',
     sawEye);
   check('I5: the fall card still follows under black',
-    until(w2, () => stageKind(w2) === 'card' && w2.screenFade >= 0.995, 6));
+    until(w3, () => stageKind(w3) === 'card' && w3.screenFade >= 0.995, 6));
+}
+
+// === J) THE FIELD-FALL SURGE: the tide fells the field mid-muster ============
+// The Father is standing, the horn half-wound, and the tide takes the last
+// hero anyway. The covenant plays the fall IN PLACE (bodily down, the stage
+// unmoved), the live muster leaps to its last breaths — a dead field is
+// never made to wait ten breaths — and the horn still ends the road on
+// screen; the wake then says the horn was heard, because it was.
+{
+  const { w: w4, p: p4 } = walkToReckoning(31040);
+  const col4 = w4.actors.find(a => a.defId === 'goblin_colossus');
+  check('J1: the muster opens over a living field',
+    until(w4, () => !!col4?.casting, 6) && !p4.downed, `left=${castLeft(col4).toFixed(1)}`);
+  p4.life = 0;
+  w4.kill(p4);
+  check('J2: the fall is played IN PLACE — bodily down, the reckoning still the stage, the Father standing',
+    p4.downed && p4.life === 0 && stageKind(w4) === 'reckoning' && !!col4 && !col4.dead,
+    `stage=${stageKind(w4)}`);
+  step(w4, 0.1);
+  const reck4 = w4.scene?.def.stages[w4.scene.stageIx] as SceneReckoningStage | undefined;
+  check('J3: THE FIELD-FALL SURGE — the live muster leaps to its last breaths',
+    castLeft(col4) <= (reck4?.enrageLeftSec ?? 1.2) + 0.2, `left=${castLeft(col4).toFixed(2)}s`);
+  let sawEye4 = false;
+  const fired = until(w4, () => {
+    if (w4.scene?.focus) sawEye4 = true;
+    return (w4.scene?.state as { blastAt?: number | null } | undefined)?.blastAt != null;
+  }, 6);
+  check('J4: the horn still fires on screen over the bodies (the witness walked out)',
+    fired && sawEye4);
+  check('J5: the authored wake follows — the horn WAS heard',
+    until(w4, () => stageKind(w4) === 'card' && w4.scene?.card != null && w4.screenFade >= 0.995, 8)
+    && !!wakeStage && w4.scene?.card === wakeStage.card);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASS');

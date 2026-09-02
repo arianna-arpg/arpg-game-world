@@ -18,9 +18,13 @@
 //
 // THE COVENANT: nobody truly dies on scripted ground. Every player-seat
 // lethal blow routes through World.onPlayerDown, whose head asks this module
-// first (sceneInterceptFall) — the hero is FELLED (life 1, guarded, the
-// script fast-forwards to the next stage that knows what a fall means),
-// never killed. And nothing on scripted ground pays: every scene spawn is
+// first (sceneInterceptFall) — the seat is FELLED bodily (the world's own
+// downed state: inputs, regeneration and re-kills all refused), never
+// killed; once no seat stands, the script LANDS on the nearest stage that
+// narrates a wake (the card) — or plays the fall in place where a stage
+// knows how (the reckoning). A stage upstream of the fall never plays: the
+// Father is a wall you reach alive, never a summons. And nothing on
+// scripted ground pays: every scene spawn is
 // stamped noBounty (no xp, loot, gems, or orbs) on rewardless 'none'-spoils
 // ground — introductions are the whole reward.
 //
@@ -102,6 +106,14 @@ export interface SceneRuntime {
   cardAck: boolean;
   /** Director-owned screen fade target (0 world, 1 black). */
   fadeTarget: number;
+  /** THE FUNERAL BEAT: a bodily fall just landed the script on a stage —
+   *  the dark is OWED but not yet due (the world breathes over the body for
+   *  SCENE_CFG.fallWaitSec first). The landing stage clears it. */
+  fallBeat: boolean;
+  /** The current stage was reached BY A FALL from upstream — the stages
+   *  between never played (the prologue: the Father was never met). A
+   *  landing card may speak differently to it. Cleared on stage advance. */
+  landed: boolean;
   /** Stamp worn by every scene spawn — the sweepable scope. */
   eventKey: string;
   /** THE FAR-FIELD DRESS (boundless stages): the heart-sampled palette +
@@ -126,12 +138,17 @@ export interface SceneDressState {
 }
 
 /** One registered stage kind. `update` runs every raw-clock tick; return
- *  true when the stage completes. `onFell: 'play'` marks stages that know
- *  what a hero's fall means (the fall fast-forwards to the nearest one). */
+ *  true when the stage completes. `onFell` says what a felled FIELD (every
+ *  seat down) means to the stage: 'skip' — the fall passes over it (the
+ *  teaching beats); 'play' — a fall WHILE it runs is played in place, but
+ *  it is never a landing for a fall from upstream (the reckoning: the
+ *  Father is the wall you reach alive, never a summons); 'land' — the
+ *  fall's destination, the nearest one downstream (the card that narrates
+ *  the wake). */
 export interface SceneStageHandler {
   begin?(w: World, sc: SceneRuntime, spec: SceneStage): void;
   update(w: World, sc: SceneRuntime, spec: SceneStage, dt: number): boolean;
-  onFell?: 'skip' | 'play';
+  onFell?: 'skip' | 'play' | 'land';
 }
 
 const STAGES: Record<string, SceneStageHandler> = {};
@@ -201,7 +218,7 @@ export function sceneBegin(w: World, id: string): boolean {
     def: eff, zoneId: zid, stageIx: 0, stageT: 0, begun: false, state: {},
     fell: false, casts: 0, bar: null, prompt: null, barAt: 'top',
     focus: null, mark: null, hudVeil: false, card: null, cardAck: false,
-    fadeTarget: 1, eventKey: `scene:${id}`,
+    fadeTarget: 1, fallBeat: false, landed: false, eventKey: `scene:${id}`,
   };
   // Born under black — the first card owns the reveal.
   w.screenFade = 1;
@@ -399,6 +416,7 @@ export function updateScene(w: World, dt: number): void {
     sc.prompt = null;
     sc.mark = null;
     sc.hudVeil = false;
+    sc.landed = false;
   }
 }
 
@@ -414,37 +432,55 @@ function endScene(w: World, sc: SceneRuntime): void {
 
 /** THE COVENANT — called at the head of World.onPlayerDown: a player seat's
  *  lethal blow on scripted ground FELLS instead of kills. Returns true when
- *  the scene claimed the fall (the caller stops — no downed state, no wipe,
- *  no mode respawn). The script fast-forwards to the nearest stage that
- *  knows what a fall means (the reckoning plays it; a card narrates it).
- *  (The reckoning's blast then lays the field BODILY down — fellSeats —
- *  but that is the stage's own choice; the covenant only ever guards.) */
+ *  the scene claimed the fall (the caller stops — no wipe, no mode respawn).
+ *
+ *  THE BODILY FALL (her ruling 2026-09-01): the seat goes DOWN through the
+ *  world's own downed state — exactly onPlayerDown's co-op shape — so the
+ *  fall reads as a death from its first frame (inputs refused, regeneration
+ *  refused, life at zero). While another seat still stands (couch), that is
+ *  the whole story: the ordinary revive law may raise them and the scene
+ *  plays on. Once NO seat stands, the field is felled (fellSeats) and the
+ *  script answers per stage: a stage that PLAYS the fall keeps it (the
+ *  reckoning — the Father finishes the horn over the bodies); otherwise the
+ *  fall LANDS on the nearest 'land' stage downstream (the wake card) after
+ *  a funeral beat — every stage between is skipped, so a death before the
+ *  Father is met never summons him: he is the wall you reach alive, and a
+ *  player who fell to the tide got everything the road had to teach. A
+ *  scene with no landing keeps the old guard (stood up, invulnerable) —
+ *  never a stranded party. */
 export function sceneInterceptFall(w: World, a: Actor): boolean {
   const sc = w.scene;
   if (!sc) return false;
   a.dead = false;
+  a.downed = true;
+  a.life = 0;
+  a.casting = null;
+  a.dash = null;
+  const allyUp = w.seats.some(s => s.actor !== a && !s.actor.dead && !s.actor.downed);
+  if (allyUp) return true;
+  const cur = STAGES[sc.def.stages[sc.stageIx]?.kind ?? ''];
+  if (cur?.onFell === 'play' || cur?.onFell === 'land') { fellSeats(w, sc); return true; }
+  for (let i = sc.stageIx + 1; i < sc.def.stages.length; i++) {
+    if (STAGES[sc.def.stages[i]?.kind ?? '']?.onFell !== 'land') continue;
+    fellSeats(w, sc);
+    sc.stageIx = i;
+    sc.begun = false;
+    sc.bar = null;
+    sc.prompt = null;
+    sc.mark = null;
+    sc.focus = null;
+    sc.hudVeil = false;
+    sc.fallBeat = true;
+    sc.landed = true;
+    return true;
+  }
+  // No landing anywhere downstream: the old guard — stood up, guarded, the
+  // scene walks on (a downed party with nowhere to wake would be stranded).
   a.downed = false;
   a.life = 1;
-  a.casting = null;
   a.invulnerable = true;
   a.untargetable = true;
-  if (!sc.fell) {
-    sc.fell = true;
-    const cur = STAGES[sc.def.stages[sc.stageIx]?.kind ?? ''];
-    if (cur?.onFell !== 'play') {
-      for (let i = sc.stageIx + 1; i < sc.def.stages.length; i++) {
-        if (STAGES[sc.def.stages[i]?.kind ?? '']?.onFell === 'play') {
-          sc.stageIx = i;
-          sc.begun = false;
-          sc.bar = null;
-          sc.prompt = null;
-          sc.mark = null;
-          sc.hudVeil = false;
-          break;
-        }
-      }
-    }
-  }
+  sc.fell = true;
   return true;
 }
 
@@ -490,17 +526,18 @@ function aliveOf(w: World, ids: number[]): number {
   return n;
 }
 
-/** THE FELLED FIELD (her pass 2026-08-31): the reckoning's end is BODILY.
- *  The covenant's guard alone left a "dead" hero walking, casting, and
- *  visibly regenerating under the sinking dark — an un-death — and a runner
- *  past the nova's rim was never touched at all. Every seat goes DOWN
- *  through the world's own downed state, so the whole lock arrives from
- *  standing law: applyInputs refuses the seat, regeneration refuses the
- *  body, kill() can't re-enter the death path, and no ally stands to
- *  revive. Life reads honest zero, the guards keep whatever still mills
- *  around off the bodies, and the blast's own knockback still rides out
- *  (the hurl IS the death read). The 'mu' and 'home' stages stand the
- *  slain back up by hand — the covenant's "nobody truly dies" is intact. */
+/** THE FELLED FIELD (her pass 2026-08-31): a scene death is BODILY. The old
+ *  guard alone left a "dead" hero walking, casting, and visibly
+ *  regenerating under the sinking dark — an un-death — and a runner past
+ *  the nova's rim was never touched at all. Every seat goes DOWN through
+ *  the world's own downed state, so the whole lock arrives from standing
+ *  law: applyInputs refuses the seat, regeneration refuses the body,
+ *  kill() can't re-enter the death path, and no ally stands to revive.
+ *  Life reads honest zero, the guards keep whatever still mills around
+ *  off the bodies, and a blast's own knockback still rides out (the hurl
+ *  IS the death read). Called by the covenant the moment no seat stands
+ *  and by the reckoning's blast (idempotent). The 'mu' and 'home' stages
+ *  stand the slain back up by hand — "nobody truly dies" is intact. */
 function fellSeats(w: World, sc: SceneRuntime): void {
   for (const seat of w.seats) {
     const a = seat.actor;
@@ -527,17 +564,25 @@ function surgeCast(col: Actor, s: SceneReckoningStage): void {
 // -------------------------------------------------------------- core kinds --
 
 registerSceneStage('card', {
-  onFell: 'play',
+  onFell: 'land',
   begin(w, sc) {
-    sc.fadeTarget = 1;
+    // THE FUNERAL BEAT: a fall that just landed here keeps the world in view
+    // over the body for a breath before the dark is allowed to rise.
+    sc.fadeTarget = sc.fallBeat ? 0 : 1;
     sc.bar = null;
     sc.prompt = null;
   },
   update(w, sc, spec) {
     const s = spec as SceneCardStage;
+    if (sc.fallBeat) {
+      if (sc.stageT < SCENE_CFG.fallWaitSec) return false;
+      sc.fallBeat = false;
+      sc.fadeTarget = 1;
+    }
     if (w.screenFade < 0.995) return false; // the dark arrives first
     if (!sc.card) {
-      sc.card = s.card;
+      // A landing card may speak to the early fall (the Father never met).
+      sc.card = sc.landed && s.fallCard ? s.fallCard : s.card;
       sc.cardAck = false;
       // The whole sim holds under the card — a story page, not a pause menu.
       w.timeflow.hold({ id: SCENE_CFG.holdId, scale: 0, kind: 'cinematic' });
@@ -669,23 +714,8 @@ registerSceneStage('reckoning', {
     if (s.announce) {
       w.text(vec(w.player.pos.x, w.player.pos.y - 60), s.announce, s.announceColor ?? '#c8b070', 14);
     }
-    // THE SECOND WIND (QA, her walk 2026-08-31): a hero the tide already
-    // felled arrives GUARDED (the covenant's flags) — and a guarded body
-    // stands through the blast untouched, free to beat on an inert Father
-    // until the stage just... moves on. The whole point of this beat is
-    // that HE ends you: stand the fallen back up as he arrives — vitals
-    // whole, guards off, worth standing for — so the reckoning fells
-    // EVERYONE honestly. (A re-fall to the tide mid-muster re-guards
-    // without jumping — sc.fell stays true — and the blast still closes
-    // the stage; nobody beats on him unkillable for long.)
-    const hero = w.player;
-    if (sc.fell) {
-      hero.invulnerable = false;
-      hero.untargetable = false;
-      hero.downed = false;
-      hero.life = hero.maxLife();
-      hero.fillResources();
-    }
+    // Nobody arrives here felled any more: a fall upstream LANDS on the wake
+    // (the covenant's landing law) — the Father is met alive or not at all.
     sc.mark = { id: col.id, color: col.color };
     sc.focus = null; // the agency beat owns no camera — the eye walks only for the fire-off
     sc.state.colId = col.id;
@@ -699,12 +729,25 @@ registerSceneStage('reckoning', {
     const st = sc.state as {
       colId: number; cast: boolean; blastAt: number | null;
       enraged?: boolean; everOrdered?: boolean; panT?: number; flared?: boolean;
+      surged?: boolean;
     };
     const col = w.actors.find(a => a.id === st.colId);
     // THE DEAD-COMMANDER LANE (the mechanics-breaker's net): a Father who is
     // somehow truly finished just fades the stage forward — the wake and Mu
     // follow as ever. Never an immunity, never a lock, never a refusal print.
     if (!col || col.dead) { sc.mark = null; sc.focus = null; sc.fadeTarget = 1; return w.screenFade >= 0.995; }
+    // THE FIELD-FALL SURGE (her ruling 2026-09-01): the tide may fell the
+    // whole party while the Father still musters — the covenant lays them
+    // bodily down in place (this stage PLAYS the fall) and he has nothing
+    // left to wait for: the live muster surges to its last breaths, the
+    // witness walks the eye out over the bodies, and the horn still ends
+    // the road on screen. A muster ordered over a felled field opens
+    // surged (below), so the beat stays tight either way.
+    const fieldDown = !w.seats.some(s => !s.actor.dead && !s.actor.downed);
+    if (fieldDown && st.blastAt === null && !st.surged && col.casting) {
+      st.surged = true;
+      surgeCast(col, s);
+    }
     // THE ENRAGE (show, never tell): bled below the floor, the Father does
     // not shrug — he HURRIES. A visible fury takes him (the rally his own
     // voice-part preaches, turned inward), the ground kicks, and the cast
@@ -736,9 +779,10 @@ registerSceneStage('reckoning', {
       } else if (w.useSkill(col, inst, vec(col.pos.x, col.pos.y))) {
         st.cast = true;
         st.everOrdered = true;
-        // A muster ordered mid-fury opens already surged — the enrage
-        // survives interrupts (delay stays real, the race stays lost).
-        if (st.enraged) surgeCast(col, s);
+        // A muster ordered mid-fury — or over a felled field — opens already
+        // surged: the enrage survives interrupts (delay stays real, the race
+        // stays lost), and a dead field is never made to wait ten breaths.
+        if (st.enraged || fieldDown) surgeCast(col, s);
       }
     }
     // THE PATIENCE BELT (QA: the stage must NEVER strand the tutorial): a

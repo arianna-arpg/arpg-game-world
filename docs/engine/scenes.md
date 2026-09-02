@@ -91,14 +91,28 @@ so drawn == scripted).
 ## The covenant and the seal
 
 **Nobody truly dies on scripted ground**: every player-seat lethal blow
-routes through `onPlayerDown`, whose head asks `sceneInterceptFall` first —
-the hero is FELLED (life 1, invulnerable + untargetable, the script
-fast-forwards to the nearest stage declaring `onFell: 'play'`), never
-killed. No wipe, no mode respawn, permadeath untouched. The ALL-DOWN
-terminator (the co-op wipe belt in `World.update`) stands down whole while
-a scene runs — the scene owns every fall, and its stages stand the party
-back up (the reckoning's felled field lies downed under the director's fade
-BY DESIGN; a wipe there would end a run that has not yet begun).
+routes through `onPlayerDown`, whose head asks `sceneInterceptFall` first.
+THE BODILY FALL (her ruling 2026-09-01): the seat goes DOWN through the
+world's own `downed` state — exactly onPlayerDown's co-op shape — so a
+scene death reads as a death from its first frame (inputs refused,
+regeneration refused, life at zero); never killed, no wipe, no mode
+respawn, permadeath untouched. While another seat still stands (couch) the
+ordinary revive law may raise them and the scene plays on. Once NO seat
+stands, the field is felled (`fellSeats`: guards on, `scene.fell`) and the
+script answers per stage kind (`SceneStageHandler.onFell`): `'play'` keeps
+the fall in place (the reckoning — the Father finishes the horn over the
+bodies, see THE FIELD-FALL SURGE below); `'skip'` stages pass it on; the
+fall LANDS on the nearest `'land'` stage downstream (the wake card) after
+THE FUNERAL BEAT (`SCENE_CFG.fallWaitSec` — the world breathes over the
+body before the dark rises), with `scene.landed` set so a landing card may
+show its `fallCard` page instead. **Every stage between is skipped, so a
+death before the Father is met never summons him**: he is a wall you reach
+alive, and a player the tide ended got everything the road had to teach —
+the revenge chain keys off the faction stamp, never off having met him. A
+scene with no landing keeps the old guard (stood up, invulnerable) rather
+than strand a downed party. The ALL-DOWN terminator (the co-op wipe belt in
+`World.update`) stands down whole while a scene runs — the scene owns every
+fall; a wipe there would end a run that has not yet begun.
 
 **Nothing on scripted ground pays**: every scene spawn is stamped
 `noBounty` (xp + loot + gems + orbs sealed whole at the kill path) and
@@ -119,6 +133,15 @@ answers a commander bled below `floorFrac`: honestly mortal throughout, he
 furies (rally worn, the ground kicks) and the bar SURGES to its last
 breaths (`enrageLeftSec`). A truly-finished Father just fades the stage
 forward (the dead-commander lane — never a lock).
+
+**THE FIELD-FALL SURGE** (her ruling 2026-09-01): the reckoning PLAYS a
+fall in place (`onFell: 'play'`) — nobody ever arrives here felled (an
+upstream fall lands on the wake instead), but the tide may take the last
+hero while the horn is still winding. The covenant lays the field bodily
+down where it stands, the live muster surges to its last breaths (a muster
+ordered over an already-felled field opens surged), the witness walks the
+eye out over the bodies, and the horn still ends the road on screen; the
+wake that follows says the horn was heard, because it was.
 
 **THE WITNESS** (her pass 2026-08-31, `SCENE_CFG.firePan`): the fire-off is
 ALWAYS seen. As the muster enters its last `leadSec` of cast, the director

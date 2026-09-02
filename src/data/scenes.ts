@@ -14,13 +14,18 @@
 // prologue; a new beat is a kind + a handler, never a rewrite:
 //   • card      — the world holds; a full-screen story card waits for the
 //                 player's continue (DOM surface, engine-ack'd so headless
-//                 probes can walk it).
+//                 probes can walk it). THE FALL'S LANDING: a felled field
+//                 anywhere upstream lands the script here after a funeral
+//                 beat (SCENE_CFG.fallWaitSec); `fallCard` may speak to
+//                 that early fall instead of the authored card.
 //   • drill     — teach-by-doing: ordered goals (move N px, cast N times)
 //                 fill ONE progress bar riding the scene HUD channel.
 //   • clash     — spawn a scripted handful, wait for the clear, breathe.
 //   • assault   — escalating timed waves (already-hunting, the wave-frenzy
-//                 overlay) until the survival clock runs out — or the hero
-//                 falls, which fast-forwards to the next 'reckoning'/'card'.
+//                 overlay) until the survival clock runs out — or the field
+//                 falls, which LANDS the script on the wake card: the Father
+//                 is never summoned by a death (her ruling 2026-09-01 — a
+//                 player the tide ended got all the road had to teach).
 //   • reckoning — THE AGENCY FALL: a commander arrives just off-screen,
 //                 marked by the attention fabric's chevron; the world is
 //                 NEVER held. After a grace beat the verb musters through
@@ -127,7 +132,14 @@ export interface SceneZoneSpec {
 
 // --- stage specs (the open union: core kinds typed, the registry may grow) --
 export interface SceneStageBase { kind: string; }
-export interface SceneCardStage extends SceneStageBase { kind: 'card'; card: SceneCardSpec; }
+export interface SceneCardStage extends SceneStageBase {
+  kind: 'card';
+  card: SceneCardSpec;
+  /** THE EARLY FALL's page: shown instead of `card` when the script LANDED
+   *  here by a fall from upstream (the stages between never played — the
+   *  prologue's Father never met). Absent = the one authored card serves. */
+  fallCard?: SceneCardSpec;
+}
 /** Where a stage's bar + prompt sit: 'hero' rides just above the player's
  *  head (world-anchored — unmissable, and it trains the eye UPWARD toward
  *  the objectives to come), 'top' takes the encounter bar's screen seat
@@ -262,6 +274,10 @@ export const SCENE_CFG = {
    *  own fallen body. An interrupt mid-pan walks the eye back the same way
    *  (the muster re-arms; agency keeps its camera). */
   firePan: { leadSec: 1.6, travelSec: 0.7, dwellSec: 0.9, backSec: 0.6 },
+  /** THE FUNERAL BEAT: seconds the world stays in view over a felled field
+   *  before the dark rises, when the fall LANDS on a card from upstream
+   *  (the reckoning's own end sizes its beat via blastWaitSec instead). */
+  fallWaitSec: 1.8,
   /** The reckoning's screen-shake at detonation. */
   blastShake: 26,
   /** THE PATIENCE BELT: seconds past graceSec a refused muster may retry
@@ -385,6 +401,18 @@ export const PROLOGUE_SCENE: SceneDef = {
         title: 'THE HOLLOW WAKE',
         lines: [
           'The horn. The green tide. The world going white — then nothing at all.',
+          'No road underfoot. No weight. No breath left to catch. Only a pale country of nothing, and you: a small light adrift in it.',
+          'Shapes stand in the stillness ahead — every one of them a life you might yet wear back to the world.',
+          'Drift to one. Be still. Take its hands.',
+        ],
+        button: 'Drift',
+      },
+      // THE EARLY FALL (the tide ended the road before the Father came): no
+      // horn was ever heard — the first line speaks only to what was seen.
+      fallCard: {
+        title: 'THE HOLLOW WAKE',
+        lines: [
+          'The road. The grass alive with them. The world going white — then nothing at all.',
           'No road underfoot. No weight. No breath left to catch. Only a pale country of nothing, and you: a small light adrift in it.',
           'Shapes stand in the stillness ahead — every one of them a life you might yet wear back to the world.',
           'Drift to one. Be still. Take its hands.',
