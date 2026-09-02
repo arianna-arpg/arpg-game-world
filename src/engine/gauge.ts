@@ -64,6 +64,24 @@ export interface GaugeSpec {
   bankMult?: number;
   /** HUD/tooltip unit word ("souls"). */
   unit?: string;
+  /** THE PARTIAL PRESS: the skill may fire BELOW need — from `minFrac` of
+   *  need (default 0: any point at all) — spending everything banked, at
+   *  POWER = fill/need (the linear law; `floorPower` lifts the bottom of the
+   *  ramp so a one-soul press is not a joke). Power scales the use's damage
+   *  and its counts (projectiles, storm strikes, summons) and any buff
+   *  wearing `powerStacks` — full at need, never above 1 without
+   *  `overflow`. */
+  partial?: { minFrac?: number; floorPower?: number };
+  /** THE OVERFLOW: a press spends the WHOLE bank and power runs PAST 1 —
+   *  fill/need up to bankMult (the effect that keeps growing while you
+   *  keep banking). Pairs with a cooldown: the bank fills while the clock
+   *  is clear, and the bigger the bank, the bigger the blow. */
+  overflow?: true;
+  /** THE HASTENING: while THIS skill's cooldown is running, every banked
+   *  point SHAVES this many seconds off it INSTEAD of banking (the
+   *  resource hurries the clock; once the clock is clear, points bank as
+   *  usual — the two-phase art). Scaled by gaugeGain like any feed. */
+  cooldownPer?: number;
 }
 
 /** Central levers. Every consumer reads these — never inline the numbers. */
@@ -128,8 +146,29 @@ export function gaugeLockLeft(inst: SkillInstance): number {
   return Math.max(0, inst.state?.gaugeLock ?? 0);
 }
 
-export function gaugeReady(inst: SkillInstance, eff: GaugeEff): boolean {
-  return gaugeFill(inst) >= eff.need;
+/** THE FIRING FLOOR: need, or — under a partial press — minFrac of need
+ *  (at least one whole point, so an empty bank never fires). */
+export function gaugeFloor(spec: GaugeSpec, eff: GaugeEff): number {
+  if (!spec.partial) return eff.need;
+  return Math.max(1, Math.ceil(eff.need * (spec.partial.minFrac ?? 0)));
+}
+
+export function gaugeReady(inst: SkillInstance, eff: GaugeEff, spec?: GaugeSpec): boolean {
+  return gaugeFill(inst) >= (spec ? gaugeFloor(spec, eff) : eff.need);
+}
+
+/** THE POWER LAW: what a press at this fill is worth. Full (or more, with
+ *  no overflow) = 1; a partial press ramps linearly from `floorPower` at
+ *  the firing floor to 1 at need; an overflow press runs fill/need past 1
+ *  (capped by the bank itself). Pure — the HUD/tooltips read it too. */
+export function gaugePowerOf(spec: GaugeSpec, eff: GaugeEff, fill: number): number {
+  if (spec.overflow) return Math.max(0, fill / eff.need);
+  if (fill >= eff.need || !spec.partial) return 1;
+  const floor = gaugeFloor(spec, eff);
+  const fp = spec.partial.floorPower ?? (floor / eff.need);
+  if (eff.need <= floor) return 1;
+  const t = (fill - floor) / (eff.need - floor);
+  return Math.max(0, Math.min(1, fp + (1 - fp) * t));
 }
 
 /** Fill fraction 0..1 against the effective need (overflow reads full). */
@@ -148,11 +187,19 @@ export function gaugeAdd(inst: SkillInstance, amount: number, eff: GaugeEff): nu
   return next - cur;
 }
 
-/** THE PRESS PAYS: need leaves the bank, the lockout arms. */
-export function gaugeSpend(inst: SkillInstance, eff: GaugeEff): void {
+/** THE PRESS PAYS: need leaves the bank (a partial or overflow press
+ *  drinks the WHOLE bank), the lockout arms, and the press's POWER is
+ *  stamped on the instance for the execution to read (state.gaugePower —
+ *  scheduled repeats of the same use read the same stamp). Returns it. */
+export function gaugeSpend(inst: SkillInstance, spec: GaugeSpec, eff: GaugeEff): number {
   const st = (inst.state ??= {});
-  st.gauge = Math.max(0, (st.gauge ?? 0) - eff.need);
+  const fill = st.gauge ?? 0;
+  const power = gaugePowerOf(spec, eff, fill);
+  st.gauge = (spec.overflow || (spec.partial && fill < eff.need))
+    ? 0 : Math.max(0, fill - eff.need);
   st.gaugeLock = eff.lockoutSec;
+  st.gaugePower = power;
+  return power;
 }
 
 /** AGE on the owner's seconds: the lockout burns first (taking nothing),
@@ -173,4 +220,10 @@ export function gaugeTick(inst: SkillInstance, spec: GaugeSpec, eff: GaugeEff, d
 export function gaugeNote(inst: SkillInstance, spec: GaugeSpec, eff: GaugeEff): string {
   if (gaugeLocked(inst)) return GAUGE_CFG.noteLocked;
   return `${Math.floor(gaugeFill(inst))}/${eff.need} ${spec.unit ?? GAUGE_CFG.noteGathering}`;
+}
+
+/** THE HASTENING's fold: seconds a banked amount shaves off a running
+ *  cooldown (0 when the spec carries no cooldownPer). */
+export function gaugeShaveSec(spec: GaugeSpec, eff: GaugeEff, amount: number): number {
+  return spec.cooldownPer ? Math.max(0, amount * eff.gain * spec.cooldownPer) : 0;
 }

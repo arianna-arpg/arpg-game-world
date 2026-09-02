@@ -677,6 +677,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     payload: { skillIds: [
       'hundred_partings', 'hollow_star', 'woken_hollow',
       'grave_tide', 'doom_bell', 'last_rites', 'stormcrown', 'hush_of_the_wake',
+      'red_hour', 'long_cold', 'rain_of_knives', 'litany_of_dawn',
     ] } },
   // THE GAUGE FABRIC's ordinary debut (engine/gauge.ts — an art priced in
   // kills, no super mark): the kill-speed build-around.

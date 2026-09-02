@@ -37,10 +37,11 @@ import { vec } from '../src/core/math';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
 import {
-  GAUGE_CFG, gaugeAdd, gaugeEffOf, gaugeFill, gaugeLocked, gaugeSpend, gaugeTick,
+  GAUGE_CFG, gaugeAdd, gaugeEffOf, gaugeFill, gaugeFloor, gaugeLocked, gaugePowerOf,
+  gaugeSpend, gaugeTick,
 } from '../src/engine/gauge';
 import { ULT_QA } from '../src/engine/ultimates';
-import { makeSkillInstance, type SkillInstance } from '../src/engine/skills';
+import { makeSkillInstance, treeNodeRefusal, type SkillInstance } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
 import { CHARGE_DEFS } from '../src/engine/charges';
 import { SKILLS } from '../src/data/skills';
@@ -95,7 +96,7 @@ const slay = (w: World, z: Actor): boolean => {
   const eff = gaugeEffOf({ need: 8 }, 1, 2, 1);
   check('fold: a feed banks × gain', gaugeAdd(inst, 3, eff) === 6 && gaugeFill(inst) === 6);
   check('fold: the cap holds', gaugeAdd(inst, 9, eff) === 2 && gaugeFill(inst) === 8);
-  gaugeSpend(inst, eff);
+  gaugeSpend(inst, { need: 8 }, eff);
   check('fold: the press empties the bank and arms the silence',
     gaugeFill(inst) === 0 && gaugeLocked(inst));
   check('fold: a locked bank refuses whole', gaugeAdd(inst, 5, eff) === 0 && gaugeFill(inst) === 0);
@@ -309,6 +310,154 @@ const slay = (w: World, z: Actor): boolean => {
   check('crown: the cast is accepted', w.useSkill(p, makeSkillInstance(SKILLS.stormcrown, 1, 2), aim) === true);
   step(w, secs(5.5));
   check('crown: the bolts wound the field', total() < life0 - 60, `${life0.toFixed(0)} -> ${total().toFixed(0)}`);
+}
+
+// ------------------------------------------------------- the partial press
+{
+  seedGlobalRandom(37);
+  const w = makeSimWorld('magician', 37);
+  const p = w.player;
+  feed(p);
+  const tide = slotIn(p, makeSkillInstance(SKILLS.grave_tide, 1, 2));
+  const eff = p.gaugeEff(tide)!;
+  check('partial: the firing floor is a tenth of need (three souls)',
+    gaugeFloor(SKILLS.grave_tide.gauge!, eff) === 3);
+  (tide.state ??= {}).gauge = 2;
+  check('partial: two souls is still not ready', p.unmetGate(tide) !== null);
+  tide.state.gauge = 15;
+  check('partial: fifteen souls is ready', p.unmetGate(tide) === null);
+  const power = gaugePowerOf(SKILLS.grave_tide.gauge!, eff, 15);
+  check('partial: the power law ramps from the floor to full',
+    power > 0.5 && power < 0.7, power.toFixed(3));
+  check('partial: a half press casts', w.useSkill(p, tide, vec(p.pos.x + 120, p.pos.y)) === true);
+  check('partial: THE PRESS PAYS — the whole bank, and the power is stamped',
+    gaugeFill(tide) === 0 && Math.abs((tide.state?.gaugePower ?? 0) - power) < 1e-9);
+  step(w, secs(1.0));
+  const horde = w.actors.filter(a => a.owner === p && !a.dead).length;
+  check('partial: the horde scales with the power (eight × ~0.58 → five)',
+    horde === Math.max(1, Math.round(8 * power)), `${horde}`);
+}
+
+// ------------------------------------------- the overflow + the hastening
+{
+  seedGlobalRandom(41);
+  const w = makeSimWorld('warrior', 41);
+  const p = w.player;
+  feed(p); p.sheet.setBase('accuracy', 5000);
+  const hour = slotIn(p, makeSkillInstance(SKILLS.red_hour, 1, 2));
+  const fb = makeSkillInstance(SKILLS.firebolt, 1, 2);
+  const z = spawn(w, 'zombie', 1, p.pos.x + 110, p.pos.y, 5000);
+  p.cooldowns.set('red_hour', 30);
+  // Land ONE bolt and step until it truly bites (the warrior's bolt is
+  // slower than the magician's) — returns the frames stepped.
+  const land = (): number => {
+    feed(p);
+    const before = z.life;
+    w.useSkill(p, fb, vec(z.pos.x, z.pos.y));
+    let n = 0;
+    while (n < 180 && z.life >= before) { step(w); n++; }
+    step(w); n++;
+    return n;
+  };
+  const n1 = land();
+  const cd = p.cooldowns.get('red_hour') ?? 0;
+  check('hastening: a landed blow shaves the resting clock instead of banking',
+    z.life < 5000 && cd < 30 - n1 / 60 - 1.0 && gaugeFill(hour) === 0,
+    `cd ${cd.toFixed(2)} after ${n1} frames`);
+  p.cooldowns.delete('red_hour');
+  land();
+  check('hastening: with the clock clear, blows bank wrath', gaugeFill(hour) >= 1, `${gaugeFill(hour)}`);
+  (hour.state ??= {}).gauge = 24; // a double purse
+  check('overflow: a brimming purse reads power past one',
+    Math.abs(gaugePowerOf(SKILLS.red_hour.gauge!, p.gaugeEff(hour)!, 24) - 2) < 1e-9);
+  check('overflow: the Hour casts', w.useSkill(p, hour, vec(p.pos.x, p.pos.y)) === true);
+  step(w, 2);
+  const buff = p.buffs.get('red_hour');
+  check('overflow: the press wears the whole bank as stacks (10 per unit of power → 20)',
+    !!buff && buff.stacks === 20 && gaugeFill(hour) === 0, `stacks ${buff?.stacks}`);
+}
+
+// ------------------------------------------------------------ the trees
+{
+  seedGlobalRandom(43);
+  const w = makeSimWorld('magician', 43);
+  const p = w.player;
+  const tide = makeSkillInstance(SKILLS.grave_tide, 10, 2);
+  w.meta.knownSkills.set('grave_tide', tide);
+  slotIn(p, tide);
+  const need0 = p.gaugeEff(tide)!.need;
+  w.pickTreeNode('grave_tide', 'gt_soul_ledger');
+  check('tree: the neutral\'s gaugeNeed mod reaches the fold (30 → 26)',
+    (tide.treeNodes ?? []).includes('gt_soul_ledger') && p.gaugeEff(tide)!.need === Math.round(need0 * 0.85),
+    `need ${p.gaugeEff(tide)!.need}`);
+  w.pickTreeNode('grave_tide', 'gt_grave_court');
+  check('tree: a branch rung spends and seals its rival',
+    (tide.treeNodes ?? []).includes('gt_grave_court') && treeNodeRefusal(tide, 'gt_unburied') !== null);
+  for (const d of Object.values(SKILLS)) {
+    if (!d.tree || !d.ultimate) continue;
+    check(`tree census: ${d.id} obeys the exact cover (2 × 3 + neutral)`,
+      d.tree.branches.length === 2 && d.tree.branches.every(b => b.rungs.length === 3) && !!d.tree.neutral);
+  }
+}
+
+// ------------------------------------------------------------ the debuts II
+{
+  // The Long Cold — freeze, near-immunity, then the shatter
+  seedGlobalRandom(47);
+  const w = makeSimWorld('magician', 47);
+  const p = w.player;
+  feed(p); p.sheet.setBase('accuracy', 5000);
+  const zs = [spawn(w, 'zombie', 1, p.pos.x + 140, p.pos.y, 3000), spawn(w, 'zombie', 1, p.pos.x - 180, p.pos.y + 50, 3000)];
+  const life0 = zs[0].life + zs[1].life;
+  check('cold: the cast is accepted', w.useSkill(p, makeSkillInstance(SKILLS.long_cold, 1, 2), vec(p.pos.x, p.pos.y)) === true);
+  step(w, secs(0.5));
+  check('cold: the field freezes and the stillness is worn',
+    zs.every(z => z.statuses.some(s => s.id === 'frozen')) && p.buffs.has('long_cold'),
+    `frozen ${zs.filter(z => z.statuses.some(s => s.id === 'frozen')).length}`);
+  const lifeMid = zs[0].life + zs[1].life;
+  // the follow-up beat waits out the swing before its own three-second delay
+  step(w, secs(5.0));
+  check('cold: the shatter lands when the cold lets go', zs[0].life + zs[1].life < lifeMid - 40,
+    `${life0.toFixed(0)} -> ${lifeMid.toFixed(0)} -> ${(zs[0].life + zs[1].life).toFixed(0)}`);
+}
+{
+  // Rain of Knives — the partial press on a storm
+  seedGlobalRandom(53);
+  const w = makeSimWorld('rogue', 53);
+  const p = w.player;
+  feed(p); p.sheet.setBase('accuracy', 5000);
+  const rain = slotIn(p, makeSkillInstance(SKILLS.rain_of_knives, 1, 2));
+  const aim = vec(p.pos.x + 300, p.pos.y);
+  const zs = [spawn(w, 'zombie', 1, aim.x, aim.y, 4000), spawn(w, 'zombie', 1, aim.x + 50, aim.y + 40, 4000), spawn(w, 'zombie', 1, aim.x - 40, aim.y - 50, 4000)];
+  (rain.state ??= {}).gauge = 4;
+  check('knives: four marks is below the floor (five)', p.unmetGate(rain) !== null);
+  rain.state.gauge = 10;
+  check('knives: ten marks may call the rain', p.unmetGate(rain) === null);
+  const power = gaugePowerOf(SKILLS.rain_of_knives.gauge!, p.gaugeEff(rain)!, 10);
+  const life0 = zs.reduce((s, z) => s + z.life, 0);
+  check('knives: the half-rain casts', w.useSkill(p, rain, aim) === true);
+  step(w, secs(2.5));
+  check('knives: fewer marks, fewer knives — but knives', zs.reduce((s, z) => s + z.life, 0) < life0 - 30
+    && Math.abs((rain.state?.gaugePower ?? 0) - power) < 1e-9, `power ${power.toFixed(3)}`);
+}
+{
+  // Litany of Dawn — the shafts, then the mending
+  seedGlobalRandom(59);
+  const w = makeSimWorld('cleric', 59);
+  const p = w.player;
+  feed(p); p.sheet.setBase('accuracy', 5000);
+  const aim = vec(p.pos.x + 250, p.pos.y);
+  const zs = [spawn(w, 'zombie', 1, aim.x, aim.y, 3000), spawn(w, 'zombie', 1, aim.x + 60, aim.y + 30, 3000)];
+  const life0 = zs[0].life + zs[1].life;
+  p.life = p.maxLife() * 0.4;
+  const lifeAt = p.life;
+  check('dawn: the cast is accepted', w.useSkill(p, makeSkillInstance(SKILLS.litany_of_dawn, 1, 2), aim) === true);
+  step(w, secs(2.8));
+  check('dawn: the shafts wound and weaken', zs[0].life + zs[1].life < life0 - 40
+    && zs.some(z => z.statuses.some(s => s.id === 'weaken')));
+  step(w, secs(2.0));
+  check('dawn: the mending gives a third of life back', p.life > lifeAt + p.maxLife() * 0.25,
+    `life ${lifeAt.toFixed(0)} -> ${p.life.toFixed(0)} of ${p.maxLife().toFixed(0)}`);
 }
 
 // ---------------------------------------------------------------- the census

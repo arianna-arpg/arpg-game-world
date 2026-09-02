@@ -3275,6 +3275,12 @@ export interface BuffEffect {
   /** Grant this many stacks per application instead of one (clamped to
    *  maxStacks) — how an imbuement loads its whole magazine in one press. */
   stacksOnApply?: number;
+  /** THE GAUGE's stack lane (engine/gauge.ts): stacks granted PER UNIT of
+   *  the pressing use's gauge POWER (rounded, at least 1 while any power
+   *  stands; clamped to maxStacks) — a half-full press wears half the
+   *  stacks, an overflow press more than the full. A gauge-less skill
+   *  reads power 1 (exactly `powerStacks`). Outranks stacksOnApply. */
+  powerStacks?: number;
   /** Recipient: default 'caster'; 'minions' = every living minion of the
    *  caster (the generic minion-war-cry seam — Convocation's mend). */
   affects?: 'caster' | 'minions';
@@ -5354,10 +5360,13 @@ export interface SkillInstance {
      *  main path) — the Unleash bank's rest window ENDS here, so a cast
      *  bar's own runtime never banks its own seals. */
     pressAt?: number;
-    /** THE GAUGE (engine/gauge.ts): the bank's points and the lockout's
-     *  remaining seconds. Transient — a fresh session starts empty. */
+    /** THE GAUGE (engine/gauge.ts): the bank's points, the lockout's
+     *  remaining seconds, and the last press's POWER (the partial/overflow
+     *  law — read by the execution's damage, counts and powerStacks
+     *  buffs). Transient — a fresh session starts empty. */
     gauge?: number;
     gaugeLock?: number;
+    gaugePower?: number;
     /** COMBO CHAIN cursor: the step the NEXT press casts (0 = base) and
      *  when the last press landed (the window clock). */
     comboIdx?: number;

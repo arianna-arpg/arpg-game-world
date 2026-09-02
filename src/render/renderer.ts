@@ -7222,7 +7222,7 @@ export class Renderer {
           const gh = (slot - 8) * gaugeFrac(inst, geff);
           ctx.fillStyle = gaugeLocked(inst) ? 'rgba(120,40,40,0.55)' : 'rgba(143,168,216,0.5)';
           ctx.fillRect(x + 4, by + slot - 4 - gh, slot - 8, gh);
-          if (gaugeReady(inst, geff)) {
+          if (gaugeReady(inst, geff, def.gauge)) {
             ctx.strokeStyle = '#f4f6ff';
             ctx.lineWidth = 1.5;
             ctx.strokeRect(x + 3, by + 3, slot - 6, slot - 6);

@@ -138,6 +138,12 @@ license), **Stormcrown** (80s). The Vault row `gem_skills_ultimates` carries
 every droppable ultimate art (census-pinned to the catalog, so a new art
 that forgets the row fails the probe).
 
+THE D4 ROSTER (the gauge's press modes — `docs/engine/gauge.md`): **Red
+Hour** (Berserker: overflow + hastening), **The Long Cold** (Sorcerer),
+**Rain of Knives** (Rogue: the partial press), **Litany of Dawn** (Cleric);
+Grave Tide gained the partial press. Each wears a Prime/Supreme-style
+upgrade tree on the skill-mode fabric.
+
 ## Dials (`ULT_CFG`)
 
 `paneSec` 1.15 · `holdSec` 0.65 · `enemyHoldSec` 0.45 · `throttleSec` 20 ·

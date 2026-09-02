@@ -3477,7 +3477,7 @@ export class Actor {
     // the note reads the fill ("12/30 souls") or the silence ("spent").
     if (inst.def.gauge) {
       const eff = this.gaugeEff(inst)!;
-      if (!gaugeReady(inst, eff)) return { note: gaugeNote(inst, inst.def.gauge, eff) };
+      if (!gaugeReady(inst, eff, inst.def.gauge)) return { note: gaugeNote(inst, inst.def.gauge, eff) };
     }
     for (const g of instanceGates(inst)) {
       if (g.charge && (this.charges.get(g.charge.id) ?? 0) < g.charge.amount) return g;

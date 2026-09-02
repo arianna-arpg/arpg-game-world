@@ -347,12 +347,27 @@ we verify changes.
   charges/10s beneath the standing `chargeRegen_<id>` investment, ticking
   only while a slotted skill SPENDS it when `regenNeedsSpender` asks —
   `Actor.spendsCharge`; spending is ordinary `chargeCost`; the Titan-Quest
-  Shade shape as one def row: `wisp`). THE PRICE FLOOR grew two shapes for
+  Shade shape as one def row: `wisp`). THE PRESS MODES: THE PARTIAL PRESS
+  (`partial` — fire from minFrac of need, spend the whole bank, POWER
+  ramps floorPower→1 by `gaugePowerOf`), THE OVERFLOW (`overflow` — spend
+  the whole bank at power PAST one, up to bankMult), THE HASTENING
+  (`cooldownPer` — while the skill's own clock runs, a banked point SHAVES
+  it instead of banking; clear, it banks — the two-phase art); power is
+  stamped at the press (`state.gaugePower`) and read in three lanes —
+  damage (into the press's dmgMult), counts (shots/strikes/summons) and
+  `BuffEffect.powerStacks` (stacks per unit of power) — a gauge-less skill
+  reads 1 by construction. THE PRICE FLOOR grew two shapes for
   ultimates (gauge ≥ minGaugeNeed | pool ≥ minPoolCost). Debuts
-  (data/ultimates.ts): Grave Tide (30 souls → the horde), the Reaper's
-  Toll (8 kills, no super mark — the kill-speed build-around), Hush of the
-  Wake (the whole wisp pool), Doom Bell / Last Rites (the low-life
-  license) / Stormcrown on cooldowns; THE LAB KIT (`ULT_QA.grantArts` →
+  (data/ultimates.ts): Grave Tide (30 souls → the horde; the partial
+  press from three), the Reaper's Toll (8 kills, no super mark — the
+  kill-speed build-around), Hush of the Wake (the whole wisp pool), Doom
+  Bell / Last Rites (the low-life license) / Stormcrown on cooldowns; THE
+  D4 ROSTER, each wearing a Prime/Supreme-style `SkillDef.tree` (the
+  skill-mode fabric's exact cover as ordinary modifier rows): Red Hour
+  (Berserker — overflow + hastening, wrath worn as powerStacks), The Long
+  Cold (Sorcerer — freeze, near-immunity, the shatter), Rain of Knives
+  (Rogue — the partial press on a storm), Litany of Dawn (Cleric — shafts,
+  then the mending); THE LAB KIT (`ULT_QA.grantArts` →
   `World.dealLabArts`, the Mireille gift lane minus the learn) deals them
   into a fresh bag on the lab branch — docs in `docs/engine/gauge.md`,
   probe `balance/probe_gauge.ts`),

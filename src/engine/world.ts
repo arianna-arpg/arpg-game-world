@@ -130,7 +130,7 @@ import { gateThroatAt } from './layoutRecipes';
 import { liquidOf } from './genkit';
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
 import { eyecatchElapsed, eyecatchHoldSec, ULT_CFG, ULT_QA, ultCooldownCap, ultGlobalGapSec, ultThrottleSec, type EyecatchState } from './ultimates';
-import { gaugeAdd, gaugeSpend, type GaugeFeedSpec } from './gauge';
+import { gaugeAdd, gaugeShaveSec, gaugeSpend, type GaugeFeedSpec } from './gauge';
 import {
   gatherSympathyRecipients, SYMPATHY_CFG, SYMPATHY_HOOKS, SYMPATHY_LINKS,
   sympathyRelationOf, sympathyStat,
@@ -31086,7 +31086,9 @@ export class World {
     // THE GAUGE FABRIC (engine/gauge.ts): THE PRESS PAYS — the bank spends
     // beside mana (a use is a use: an interrupted bar still spent its
     // souls) and the lockout arms. Readiness was the gate's business above.
-    if (def.gauge) gaugeSpend(inst, caster.gaugeEff(inst)!);
+    // The press's POWER (the partial/overflow law) rides into the use as a
+    // damage multiplier here and as a count/stack scale at execution.
+    const gPower = def.gauge ? gaugeSpend(inst, def.gauge, caster.gaugeEff(inst)!) : 1;
     // The honesty datum for resource-as-damage: constructs' payments are
     // ceremonial (999-mana pools), so their casts carry no paidCost.
     const paid = caster.construct ? undefined : cost;
@@ -31101,7 +31103,7 @@ export class World {
       this.stampSkillCooldown(caster, inst, def.cooldown);
     }
     const cc = this.consumeChargeCost(caster, inst);
-    const baseMult = cc.mult * roundMult;
+    const baseMult = cc.mult * roundMult * gPower;
 
     // CONCENTRATION (the precision cast): the held bar fills only while the
     // cursor rides the QUARRY resolved at press — no quarry, no cast (the
@@ -31408,6 +31410,11 @@ export class World {
     // dash IS an aoe skill for every stat query this use makes.
     const tags = skillContextTags(def, grantedTags(inst));
     let useMult = opts.dmgMult ?? 1;
+    // THE GAUGE's POWER (engine/gauge.ts): the press stamped what this use
+    // is worth — damage already rode in through dmgMult; counts (shots,
+    // strikes, summons) and powerStacks buffs scale here. 1 for every
+    // gauge-less skill by construction.
+    const gPow = def.gauge ? (inst.state?.gaugePower ?? 1) : 1;
     let targetInfo = opts.targetInfo ?? null;
     // THE GRAB BOUNDARY, melee half (engine/lite.ts): a grab SWING with no
     // full body in reach promotes the nearest opposing pool row first, so
@@ -31909,6 +31916,7 @@ export class World {
           // A wagon-fed corpse volley (Volatile Cinders): every extra body
           // eaten is one more flight — the pile rises together.
           + corpseFeast * CORPSE_CFG.batch.projectilesPerExtra;
+        if (gPow !== 1) count = Math.max(1, Math.round(count * gPow));
         // A rolled chance to fire ONE more — the random counterpart to the
         // flat projectileCount. Flows through both the nova and spread paths.
         const projChance = caster.sheet.get('projectileCountChance', tags, extra);
@@ -33155,8 +33163,8 @@ export class World {
           caster.reservedMana += reserve;
           caster.mana = Math.min(caster.mana, caster.availableMaxMana());
           caster.summonToggles.set(def.id, { inst, reserved: reserve });
-          const first = Math.min(slots,
-            d.count + Math.round(caster.sheet.get('summonCount', tags, extra)));
+          const first = Math.min(slots, Math.max(1, Math.round(
+            (d.count + Math.round(caster.sheet.get('summonCount', tags, extra))) * gPow)));
           // A sequencing gem ("scattered in sequence") holds on toggled
           // contracts too: the ON-fill emerges through the SAME grammar
           // the plain path uses below — first body now, the rest on the
@@ -33177,7 +33185,8 @@ export class World {
           }
           break;
         }
-        const total = d.count + Math.round(caster.sheet.get('summonCount', tags, extra));
+        const total = Math.max(1, Math.round(
+          (d.count + Math.round(caster.sheet.get('summonCount', tags, extra))) * gPow));
         // Where the bodies emerge: the default ring around the caster, or
         // boiling out of the ground at the CURSOR (Bombardment's portal —
         // the summonAtCursor stat converts any summon the same way).
@@ -33241,7 +33250,8 @@ export class World {
           ? this.clipShot(caster.pos, wantAt, caster.tier) : wantAt, 10);
         // (+ the VENT PRESS's spent rounds — Blowhole: every banked round is
         // one more column, the storm's own count shift.)
-        const strikes = rollCount(d.count, Math.round(caster.sheet.get('stormCount', tags, extra)) + ventRounds);
+        const strikes = Math.max(1, Math.round(
+          rollCount(d.count, Math.round(caster.sheet.get('stormCount', tags, extra)) + ventRounds) * gPow));
         // stormImmediate is a FRACTION: that share of the strikes crashes
         // down up-front (nearest enemies first via the sparkfield sort),
         // the rest keep the cadence. 1 = the old all-at-once flag.
@@ -38912,12 +38922,19 @@ export class World {
     caster: Actor, inst: SkillInstance, fx: BuffEffect,
     durScale: number, useMult = 1,
   ): void {
+    // THE GAUGE's stack lane (BuffEffect.powerStacks — engine/gauge.ts):
+    // stacks per unit of the pressing use's gauge power, at least one
+    // while any power stands. A gauge-less skill reads power 1.
+    const gPow = inst.def.gauge ? (inst.state?.gaugePower ?? 1) : 1;
+    const stacked = fx.powerStacks !== undefined
+      ? { ...fx, stacksOnApply: Math.max(1, Math.round(fx.powerStacks * gPow)) }
+      : fx;
     // POWER-SCALED (BuffEffect.powerScaled): the blessing's magnitude
     // rides the use's power — a brim release at 40% fill grants a
     // 40%-strength stride. Opt-in; ordinary buffs never wobble.
-    const scaled = fx.powerScaled && useMult !== 1
-      ? { ...fx, mods: fx.mods.map(m => ({ ...m, value: m.value * useMult })) }
-      : fx;
+    const scaled = stacked.powerScaled && useMult !== 1
+      ? { ...stacked, mods: stacked.mods.map(m => ({ ...m, value: m.value * useMult })) }
+      : stacked;
     // The granting skill's tags ride the gain EVENT (addBuff's 4th arg) so
     // tag-filtered sympathy links can hear it — the flask bond drinks only
     // what carries 'flask'.
@@ -40390,7 +40407,16 @@ export class World {
       if (gs?.feeds) {
         for (const spec of gs.feeds) {
           if (!this.tapFires(a, inst, spec, on, at, orbKind, victim)) continue;
-          gaugeAdd(inst, spec.amount, a.gaugeEff(inst)!);
+          const eff = a.gaugeEff(inst)!;
+          // THE HASTENING (GaugeSpec.cooldownPer): while the skill's own
+          // clock runs, the point hurries it instead of banking — the
+          // two-phase art (shave now, grow later).
+          const cd = a.cooldowns.get(inst.def.id) ?? 0;
+          if (gs.cooldownPer && cd > 0) {
+            a.cooldowns.set(inst.def.id, Math.max(0, cd - gaugeShaveSec(gs, eff, spec.amount)));
+            continue;
+          }
+          gaugeAdd(inst, spec.amount, eff);
         }
       }
     }

@@ -70,6 +70,46 @@ taps read it (charge taps too — a latent gap closed in passing).
   fill; full wears a bright rim; locked reads dark red. The greyed
   not-ready face stays underneath — fill = progress, grey = not yet.
 
+## The press modes
+
+Three ways a gauge may fire, all on the one bank:
+
+- **THE FULL PRESS** (default) — fire at `need`, spend `need`, power 1.
+- **THE PARTIAL PRESS** (`partial: { minFrac, floorPower }`) — fire from
+  `minFrac` of need (at least one whole point), spending the WHOLE bank at
+  **power** = `floorPower` at the floor ramping linearly to 1 at need
+  (`gaugePowerOf`). Grave Tide from three souls at a quarter strength;
+  Rain of Knives from five marks at 30%.
+- **THE OVERFLOW** (`overflow: true`, with `bankMult` > 1) — spend the whole
+  bank at power = fill/need PAST one: the effect that keeps growing while
+  you keep banking. Red Hour wears a triple purse as thirty stacks.
+- **THE HASTENING** (`cooldownPer`) — while THIS skill's cooldown runs,
+  every banked point SHAVES that many seconds off it INSTEAD of banking;
+  once clear, points bank as usual. The two-phase art: the resource hurries
+  the clock, then grows the blow.
+
+**Power** is stamped at the press (`SkillInstance.state.gaugePower`) and
+read by the execution in three lanes — damage (folded into the press's
+`dmgMult` beside charge spends), counts (projectiles, storm strikes,
+summons: `max(1, round(count × power))`), and buffs wearing
+`BuffEffect.powerStacks` (stacks per unit of power; the standing
+`powerScaled` lane scales magnitudes by the same number). A gauge-less
+skill reads power 1 everywhere by construction.
+
+## The upgrade trees
+
+Every D4-roster ultimate wears `SkillDef.tree` — the skill-mode fabric's
+exact-cover grammar (2 branches × 3 rungs + a neutral; rung 1 is the
+identity commitment, the first point seals the rival branch): the D4
+Prime/Supreme shape, authored as ordinary modifier rows (`gaugeNeed`,
+`gaugeGain`, `gaugeLockout`, `summonCount`, `stormCount`, `effectDuration`,
+`cooldownRecovery`, crit…) — no whitelist growth, every stat read sees them
+through `instanceInnateMods`. Grave Tide: the Unburied (endure) / the Grave
+Court (strike) / Soul Ledger. Red Hour: the Unbroken / the Bloodletter /
+Second Wind. The Long Cold: Deep Winter / the Shatter / Cold Snap. Rain of
+Knives: the Second Volley / the Poisoned Rain / the Light Hand. Litany of
+Dawn: Dawn's Mercy / Dawn's Wrath / First Light.
+
 ## The pool clock
 
 ```ts
@@ -100,6 +140,10 @@ the registry the moment the def exists.
 | **Doom Bell** | 60s | a 400-radius physical shockwave: stun, knockback, `empower` crowd scaling |
 | **Last Rites** | 75s + the low-life license (`gate.missing` life 50%) | mend 40%, 35% more damage / 6s, a stunning toll a breath later (`followUp`) — a reflex |
 | **Stormcrown** | 80s | 24 sky bolts across 300 units over four seconds, `sky: true` — friend, foe, or you |
+| **Red Hour** (Berserker — Wrath of the Berserker) | 90s + THE HASTENING (blows shave 1.5s while it rests) + THE OVERFLOW (12 wrath full, 36 brimming) | 8s of wrath worn as stacks: 4% damage / 2% swings / 1% feet / 1.5% less taken per unit — ten at full, thirty brimming |
+| **The Long Cold** (Sorcerer — Deep Freeze) | 80s | a 260-unit freezing burst, 80% of damage turned aside for 3s (a buff — never an `absorb` on a damaging delivery: the per-target loop would shield the victims too), then the shatter (`followUp`) |
+| **Rain of Knives** (Rogue — Rain of Arrows) | 20 marks (hits +1, kills +3), THE PARTIAL PRESS from five, 8s silence | 24 knives in a breath, count and bite scaling with the marks spent |
+| **Litany of Dawn** (Cleric — Heaven's Fury) | 70s | ten radiant shafts that weaken, then a third of every ally's life mended (`followUp` heal nova) |
 
 THE PRICE FLOOR (`docs/engine/ultimates.md`) grew two shapes for these:
 an ultimate carries at least ONE of cooldown ≥ `minCooldown`, gauge need ≥
