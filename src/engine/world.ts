@@ -22206,13 +22206,15 @@ export class World {
    *  through the real rack (learn = seat; cap and requirements stay the
    *  gates). The Mireille gift lane verbatim, minus the learn. No-op when
    *  the lever is down: main ships it false. */
-  dealLabArts(): void {
-    if (!ULT_QA.active || !ULT_QA.grantArts) return;
+  dealLabArts(force = false): number {
+    if (!force && !(ULT_QA.active && ULT_QA.grantArts)) return 0;
     const seat = this.localSeat;
     const m = seat.meta;
     let bumped = false;
+    let dealt = 0;
     for (const def of Object.values(SKILLS)) {
       if (!(def.ultimate || def.gauge) || def.noDrop) continue;
+      if (ULT_QA.kitExclude.includes(def.id)) continue; // the tab's exclusions
       // THE LAB HERO IS BUILT TO WIELD ITS KIT: the build's BASE attributes
       // rise to every dealt art's requirement — the learn gate and the
       // cast-time gate both read the DERIVED meta.attrs, which recalc folds
@@ -22222,9 +22224,36 @@ export class World {
         if ((m.baseAttrs[k] ?? 0) < (need ?? 0)) { m.baseAttrs[k] = need!; bumped = true; }
       }
       if (m.knownSkills.has(def.id) || findBagGem(m.items, 'skill', def.id)) continue;
-      this.grantSkillGemItem(seat, makeSkillGem(def, 1, 'magic'), true);
+      if (this.grantSkillGemItem(seat, makeSkillGem(def, 1, 'magic'), true)) dealt++;
     }
     if (bumped) this.recalcSeat(seat);
+    return dealt;
+  }
+
+  /** THE LAB TAB's hand (dev/tabs/ultlab.ts): fill every slotted gauge to
+   *  its need — ready at once — and return how many banks moved. */
+  devFillGauges(seat: Seat = this.localSeat): number {
+    let n = 0;
+    for (const inst of seat.actor.skills) {
+      if (!inst?.def.gauge) continue;
+      const eff = seat.actor.gaugeEff(inst)!;
+      (inst.state ??= {}).gauge = eff.need;
+      inst.state.gaugeLock = 0;
+      n++;
+    }
+    return n;
+  }
+
+  /** THE LAB TAB's hand: clear the running cooldown of every slotted skill
+   *  wearing the ultimate mark; returns how many clocks were cleared. */
+  devClearUltimateCooldowns(seat: Seat = this.localSeat): number {
+    let n = 0;
+    for (const inst of seat.actor.skills) {
+      if (!inst?.def.ultimate) continue;
+      if (seat.actor.cooldowns.delete(inst.def.id)) n++;
+      seat.actor.cooldownTotals.delete(inst.def.id);
+    }
+    return n;
   }
 
   /** Is the player resting by the town campfire? (Feature owned + in town + near

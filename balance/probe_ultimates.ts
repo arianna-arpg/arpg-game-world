@@ -40,9 +40,10 @@ import { vec, dist } from '../src/core/math';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
 import {
-  eyecatchAlive, eyecatchElapsed, eyecatchHoldSec, ULT_CFG, ULT_QA,
-  ultCooldownCap, ultThrottleSec, type EyecatchState,
+  applyLab, eyecatchAlive, eyecatchElapsed, eyecatchHoldSec, resetLab, ULT_CFG,
+  ULT_LAB_DEFAULTS, ULT_QA, ultCooldownCap, ultThrottleSec, type EyecatchState,
 } from '../src/engine/ultimates';
+import { findBagGem } from '../src/engine/gemitems';
 import { EYECATCH_STYLES } from '../src/render/vis/eyecatch';
 import { makeSkillInstance } from '../src/engine/skills';
 import { SKILLS } from '../src/data/skills';
@@ -327,6 +328,31 @@ const spawn = (w: World, id: string, lv: number, x: number, y: number): Actor =>
   ULT_QA.active = false;
   check('lever: standing down restores the shipped folds',
     ultCooldownCap() === Infinity && ultThrottleSec() === ULT_CFG.throttleSec);
+}
+
+// ---------------------------------------------------------------- the lab tab
+// The dev panel's door: applyLab edits, kitExclude gates the deal, resetLab
+// finds the shipped face whatever was touched.
+{
+  seedGlobalRandom(73);
+  const w = makeSimWorld('warrior', 73);
+  applyLab({ active: true, grantArts: true, cooldownCap: 7, kitExclude: ['red_hour', 'nonsense'] });
+  check('lab: applyLab edits the lever (cap 7, red_hour excluded)',
+    ULT_QA.active && ULT_QA.cooldownCap === 7 && ULT_QA.kitExclude.includes('red_hour'));
+  const dealt = w.dealLabArts();
+  const items = w.meta.items;
+  check('lab: the kit deals every droppable art but the excluded one',
+    dealt > 0 && !!findBagGem(items, 'skill', 'grave_tide') && !findBagGem(items, 'skill', 'red_hour'),
+    `dealt ${dealt}`);
+  check('lab: a second deal is a no-op (already carried)', w.dealLabArts() === 0);
+  check('lab: the kit builds the hero to wield it (base attributes rose)',
+    (w.localSeat.meta.baseAttrs.willpower ?? 0) >= 24 && (w.localSeat.meta.attrs.willpower ?? 0) >= 24);
+  resetLab();
+  check('lab: resetLab restores the shipped face whole',
+    ULT_QA.active === ULT_LAB_DEFAULTS.active && ULT_QA.cooldownCap === ULT_LAB_DEFAULTS.cooldownCap
+    && ULT_QA.kitExclude.length === 0 && ULT_QA.grantArts === ULT_LAB_DEFAULTS.grantArts);
+  check('lab: with the lever down a plain deal deals nothing, a FORCED deal still works',
+    w.dealLabArts() === 0 && w.dealLabArts(true) >= 1);
 }
 
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');

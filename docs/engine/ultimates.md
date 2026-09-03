@@ -79,11 +79,16 @@ ultimate: {
   the fold's answer inside `stampSkillCooldown` — the authored data is never
   edited, so THE PRICE FLOOR census holds in every regime) and the banner
   throttles fold to the eager `throttleSec`/`globalGapSec`. Wired to
-  `?ultqa[=0]` and `__game.ultqa(on?)`. Ships **OFF** (merged to main
-  2026-09-02); `?ultqa` opens the lab for a session — capped clocks, eager
-  panes, and the lab kit dealt into a fresh bag with the hero built to wield
-  it. The probe pins the shipped law with the lever down, then the lever
-  itself in its own rig.
+  THE LAB TAB — `dev/tabs/ultlab.ts` on the `?dev` panel (her ruling: the
+  lab lives inside the dev tooling, never a URL param of its own) — the
+  master switch and its dials, include/exclude boxes for every art the kit
+  deals (`ULT_QA.kitExclude`), "deal the kit now" into a live run, a live
+  pane-style select (`setUltStyle`), fill-every-gauge / clear-every-clock
+  hands, and Reset to the shipped face (`resetLab`); choices persist per
+  browser and re-apply when the panel mounts. `__game.ultqa(on?)` is the
+  console twin. Ships **OFF** (merged to main 2026-09-02). The probe pins
+  the shipped law with the lever reset, then the lever itself in its own
+  rig.
 - **TRANSIENT, WIRED, NEVER SAVED.** `World.eyecatch` is presentation state:
   a null field in headless worlds (zero sim cost), swept
   `expireSlackSec` after the pane ends, absent from every save. The co-op
