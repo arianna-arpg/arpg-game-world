@@ -317,8 +317,8 @@ we verify changes.
   payload kin wear the tag markless so scaling reaches the whole art),
   THE LAB LEVER (`ULT_QA` — QA builds cap the STAMPED cooldown + run an
   eager banner throttle for back-to-back iteration; `?ultqa[=0]` /
-  `__game.ultqa()`; the ultimates-lab branch ships it ON, main ships it
-  false, the probe pins both regimes), and the
+  `__game.ultqa()`; ships OFF — `?ultqa` opens the lab for a session; the
+  probe pins both regimes), and the
   wire ships the derived `ec` row (elapsed, not epochs — the tell-wire
   idiom). Debuts (data/ultimates.ts, Vault `gem_skills_ultimates`, each
   a COMPOSE of standing fabrics): the Hundred Partings (chrono stop +

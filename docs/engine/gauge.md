@@ -141,7 +141,7 @@ the registry the moment the def exists.
 | **Last Rites** | 75s + the low-life license (`gate.missing` life 50%) | mend 40%, 35% more damage / 6s, a stunning toll a breath later (`followUp`) — a reflex |
 | **Stormcrown** | 80s | 24 sky bolts across 300 units over four seconds, `sky: true` — friend, foe, or you |
 | **Red Hour** (Berserker — Wrath of the Berserker) | 90s + THE HASTENING (blows shave 1.5s while it rests) + THE OVERFLOW (12 wrath full, 36 brimming) | 8s of wrath worn as stacks: 4% damage / 2% swings / 1% feet / 1.5% less taken per unit — ten at full, thirty brimming |
-| **The Long Cold** (Sorcerer — Deep Freeze) | 80s | a 260-unit freezing burst, 80% of damage turned aside for 3s (a buff — never an `absorb` on a damaging delivery: the per-target loop would shield the victims too), then the shatter (`followUp`) |
+| **The Long Cold** (Sorcerer — Deep Freeze) | 80s | a 260-unit freezing burst, 80% of damage turned aside for 3s (a buff — an `absorb` on a damaging delivery shields the VICTIMS too, which is a lever in its own right: see the glass-shield follow-up), then the shatter (`followUp`) |
 | **Rain of Knives** (Rogue — Rain of Arrows) | 20 marks (hits +1, kills +3), THE PARTIAL PRESS from five, 8s silence | 24 knives in a breath, count and bite scaling with the marks spent |
 | **Litany of Dawn** (Cleric — Heaven's Fury) | 70s | ten radiant shafts that weaken, then a third of every ally's life mended (`followUp` heal nova) |
 
@@ -164,3 +164,10 @@ unblessed.
   cooldown art into a gauge art) — the ledger's adjudication session was
   live, so no new gem shipped this wave.
 - Save persistence of the bank (a deliberate transient today).
+- THE GLASS SHIELD (her 2026-09-02 ruling, unbuilt): the per-target effect
+  loop already grants `absorb` to whoever a delivery touches — a build lane,
+  not a footgun. The charter: an `affects` dial on absorb/ward (allies /
+  enemies / touched), a SHATTER payoff (a status or hit rider that bursts a
+  standing shield for damage scaled by its remaining points × duration —
+  the RUPTURE LAW's shape), and tree rungs / passives that grant enemy
+  shields and the shatter. Wants her word on the numbers and the seat.

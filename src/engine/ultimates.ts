@@ -127,9 +127,10 @@ export const ULT_CFG = {
  *  nearly at will. Mutable by design: `?ultqa=0` / `__game.ultqa(false)`
  *  restore the shipped pacing live; the probes pin the shipped law by
  *  setting `active` false themselves, then pin THIS lever in its own rig.
- *  LAB BRANCH DEFAULT: active — main must ship this false. */
+ *  SHIPS OFF (merged to main 2026-09-02): `?ultqa` / `__game.ultqa()` open
+ *  the lab for a session — capped clocks, eager panes, the lab kit. */
 export const ULT_QA = {
-  active: true,
+  active: false,
   /** THE LAB KIT: a fresh run's bag holds every droppable ultimate + gauge
    *  debut, unlearned — seat what you want to try (World.dealLabArts). */
   grantArts: true,

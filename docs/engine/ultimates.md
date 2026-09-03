@@ -79,9 +79,11 @@ ultimate: {
   the fold's answer inside `stampSkillCooldown` — the authored data is never
   edited, so THE PRICE FLOOR census holds in every regime) and the banner
   throttles fold to the eager `throttleSec`/`globalGapSec`. Wired to
-  `?ultqa[=0]` and `__game.ultqa(on?)`. The **ultimates-lab branch ships it
-  ON** for back-to-back iteration; main must ship it false. The probe pins
-  the shipped law with the lever down, then the lever itself in its own rig.
+  `?ultqa[=0]` and `__game.ultqa(on?)`. Ships **OFF** (merged to main
+  2026-09-02); `?ultqa` opens the lab for a session — capped clocks, eager
+  panes, and the lab kit dealt into a fresh bag with the hero built to wield
+  it. The probe pins the shipped law with the lever down, then the lever
+  itself in its own rig.
 - **TRANSIENT, WIRED, NEVER SAVED.** `World.eyecatch` is presentation state:
   a null field in headless worlds (zero sim cost), swept
   `expireSlackSec` after the pane ends, absent from every save. The co-op
