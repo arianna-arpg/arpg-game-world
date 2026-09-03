@@ -6483,6 +6483,41 @@ export const MONSTERS: Record<string, MonsterDef> = {
     invulnerable: true,
   },
 
+  // THE RESIDENTS (docs/design/town-growth.md v2 — data/boroughs.ts
+  // TOWN_RESIDENTS): the souls the Boroughs sent home, standing at their
+  // cottage doors in Lastlight's ward once the account's sheltered count
+  // reaches each family's row. Three bodies (a look each); a row names the
+  // body and gives it its NAME + its line at spawn (the recruiting officer's
+  // rename idiom). npcRole 'resident' = the nameplate + the speech bubble;
+  // the same passive+invulnerable scenery shape as every other townsfolk.
+  townsfolk_resident_matron: {
+    id: 'townsfolk_resident_matron', name: 'Resident',
+    color: '#d0b088', shape: 'circle', radius: 12, look: 'npc_keeper', npcRole: 'resident',
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [],
+    xp: 0,
+    passive: true,
+    invulnerable: true,
+  },
+  townsfolk_resident_crofter: {
+    id: 'townsfolk_resident_crofter', name: 'Resident',
+    color: '#c8a86e', shape: 'circle', radius: 13, look: 'npc_trader', npcRole: 'resident',
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [],
+    xp: 0,
+    passive: true,
+    invulnerable: true,
+  },
+  townsfolk_resident_scribe: {
+    id: 'townsfolk_resident_scribe', name: 'Resident',
+    color: '#a8a0c8', shape: 'circle', radius: 12, look: 'npc_scholar', npcRole: 'resident',
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [],
+    xp: 0,
+    passive: true,
+    invulnerable: true,
+  },
+
   // HARBORHOLD FOLK (data/harborholds.ts) — the port town's keepers, spawned
   // by the hold runtime only while the town stands OPEN (service rows gate
   // them by prosperity). Same passive+invulnerable scenery shape; the

@@ -52,6 +52,9 @@ import {
 import { sceneDue } from '../engine/scenes';
 import { dndCancel, dndCarried, registerDragSource, registerDropTarget } from './dnd';
 import { applyUiScale, UI_SCALE_CFG } from './uiScale';
+import { bindFolioKeys, FolioCore, FolioStrip, FOLIO_SHELVED_CLASS, installFolioStyles, type FolioLeafSpec } from './folio';
+import type { TownSiteId } from '../data/townBuild';
+import type { SuiteStation } from '../data/suites';
 import { RENDER_SCALE_CFG } from '../render/renderScale';
 import { CAMERA_MODES, cameraModeOf } from '../render/camera';
 import { FACTIONS, MONSTERS, defDensity, type MonsterDef } from '../data/monsters';
@@ -632,6 +635,13 @@ export class UI {
    *  docks to that seat's flank. No entry = the local hero, and solo play
    *  never writes one that matters (panelSeat falls back to the local seat). */
   private panelSeatIds = new Map<HTMLElement, string>();
+  /** THE FOLIO (ui/folio.ts): dwell dialogs that would overlap bind into ONE
+   *  tabbed book — the first opened holds the front, later ones arrive as
+   *  shelved tabs on its thumb index. The core keeps no open flag of its own:
+   *  every leaf enrolled below reads the panel's own `xOpen` and closes
+   *  through the panel's own close path. One dialog up is byte-identical. */
+  private readonly folio = new FolioCore(() => performance.now() / 1000);
+  private readonly folioStrip = new FolioStrip(this.folio);
   /** True while the couch JOIN overlay is up (main.ts owns the claim scan). */
   couchJoinOpen = false;
   /** The escape menu's MAIN view re-renderer, live only while the menu is up
@@ -765,6 +775,13 @@ export class UI {
     });
     this.installGearDnd();
     this.installRackDnd();
+
+    // THE FOLIO's enrollment: one row per dwell dialog (folioLeaf), the
+    // strip's sheet, and Tab / Shift+Tab as the keyboard walk of the hero's
+    // open book (suppressed only while such a book stands).
+    installFolioStyles();
+    this.enrollFolioLeaves();
+    bindFolioKeys(this.folio, l => l.owner() === this.getWorld().localSeat.id, () => this.folioStrip.update());
 
     // THE CLOSE GLYPH's wire (closeGlyphHtml): ONE delegated click per root,
     // so a rebuilt template keeps its glyph live. Owned panels close for
@@ -909,6 +926,143 @@ export class UI {
     return `<div class="panel-x-row"><button type="button" class="panel-x" data-panel-x title="${title}" aria-label="Close">✕</button></div>`;
   }
 
+  // --- THE FOLIO (ui/folio.ts) -----------------------------------------------
+
+  /** One leaf row: the panel root + its own open flag + its own close path.
+   *  bay/owner read the couch lens live (a guest's flank is its own bay),
+   *  rect is the drawn box (THE MEASURED LAW + the strip's seat), and
+   *  present() toggles ONLY the shelved class — the panel's `hidden` stays
+   *  the panel's. `extra` carries the per-station reads (engaged/range),
+   *  the arrival policy and the front refresh. */
+  private folioLeaf(id: string, el: HTMLElement, title: () => string, isOpen: () => boolean,
+    close: () => void, extra: Partial<FolioLeafSpec> = {}): FolioLeafSpec {
+    return {
+      id, title, isOpen, close,
+      present: (front) => el.classList.toggle(FOLIO_SHELVED_CLASS, !front),
+      bay: () => el.classList.contains('couch-left') ? 'left' : el.classList.contains('couch-right') ? 'right' : 'centre',
+      owner: () => this.panelSeatIds.get(el) ?? this.getWorld().localSeat.id,
+      rect: () => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 ? { left: r.left, top: r.top, width: r.width, height: r.height } : null;
+      },
+      ...extra,
+    };
+  }
+
+  /** The thirteen dwell dialogs. `engaged` is each station's own near-read
+   *  for the panel's seat (THE STANDING LAW — a master the hero walked away
+   *  from yields the front); `range` is the seat's distance to the station's
+   *  town site where one stands (THE NEARER LAW — a same-arrival tie fronts
+   *  the station the hero actually walked to); the pouch picker and the
+   *  calling arrive in FRONT (an explicit ask, a modal). Titles are the tab
+   *  labels. A new dialog is one row here + one adopt at its show path. */
+  private enrollFolioLeaves(): void {
+    const w = (): World => this.getWorld();
+    const seat = (el: HTMLElement): Seat => this.panelSeat(el);
+    const site = (el: HTMLElement, id: TownSiteId) => (): number | null => {
+      const p = w().townSite(id);
+      const at = seat(el).actor.pos;
+      return p ? Math.hypot(at.x - p.x, at.y - p.y) : null;
+    };
+    // A leaf coming to the front re-reads the bag: its verbs and cursor
+    // follow the FRONT station (sell under the counter, break under the
+    // bench, plain under the stone — THE SUITE's S6).
+    const fronted = (fn: () => void) => (): void => {
+      hideTooltip();
+      fn();
+      this.applyBreakChrome();
+      if (this.inventoryOpen) this.refreshInventory();
+    };
+    const enroll = (spec: FolioLeafSpec): void => this.folio.enroll(spec);
+    enroll(this.folioLeaf('vendor', this.vendorMenu, () => 'Vendors', () => this.vendorOpen, () => this.closeVendor(), {
+      engaged: () => w().nearAnyVendor(seat(this.vendorMenu)), range: site(this.vendorMenu, 'blacksmith'),
+      refresh: fronted(() => this.refreshVendor()) }));
+    enroll(this.folioLeaf('salvage', this.salvageMenu, () => 'Salvage', () => this.salvageOpen, () => this.closeSalvage(), {
+      engaged: () => w().nearSalvage(seat(this.salvageMenu)), range: site(this.salvageMenu, 'salvage'),
+      refresh: fronted(() => this.refreshSalvage()) }));
+    enroll(this.folioLeaf('font', this.fontMenu, () => 'Font', () => this.fontOpen, () => this.closeFont(), {
+      engaged: () => w().nearFont(seat(this.fontMenu)), range: site(this.fontMenu, 'font'),
+      refresh: fronted(() => this.refreshFont()) }));
+    enroll(this.folioLeaf('recall', this.recallMenu, () => 'Recall', () => this.recallOpen, () => this.closeRecall(), {
+      arrive: 'front', refresh: fronted(() => this.refreshRecall()) }));
+    enroll(this.folioLeaf('oracle', this.oracleMenu, () => 'Oracle', () => this.oracleOpen, () => this.closeOracle(), {
+      engaged: () => w().nearOracle(seat(this.oracleMenu)), range: site(this.oracleMenu, 'oracle'),
+      refresh: fronted(() => this.refreshOracle()) }));
+    enroll(this.folioLeaf('bestiary', this.bestiaryMenu, () => 'Bestiary', () => this.bestiaryOpen, () => this.closeBestiary(), {
+      engaged: () => w().nearTracker(seat(this.bestiaryMenu)), range: site(this.bestiaryMenu, 'tracker'),
+      refresh: fronted(() => this.refreshBestiary()) }));
+    enroll(this.folioLeaf('borough', this.boroughMenu, () => 'Borough', () => this.boroughOpen, () => this.closeBorough(), {
+      refresh: fronted(() => this.refreshBorough()) }));
+    enroll(this.folioLeaf('bounties', this.bountyMenu, () => 'Bounties', () => this.bountiesOpen, () => this.closeBounties(), {
+      engaged: () => w().nearBountyBoard(seat(this.bountyMenu), this.bountyBoardId), range: site(this.bountyMenu, 'bounty_board'),
+      refresh: fronted(() => this.refreshBounties()) }));
+    enroll(this.folioLeaf('caravan', this.caravanMenu, () => 'Caravan', () => this.caravanOpen, () => this.closeCaravan(), {
+      engaged: () => w().nearCaravan(seat(this.caravanMenu)), range: site(this.caravanMenu, 'caravan'),
+      refresh: fronted(() => this.refreshCaravan()) }));
+    enroll(this.folioLeaf('sail', this.sailMenu, () => 'Harbor', () => this.sailOpen, () => this.closeSail(), {
+      refresh: fronted(() => this.refreshSail()) }));
+    enroll(this.folioLeaf('hold', this.holdMenu, () => 'Hold', () => this.holdOpen, () => this.closeHold(), {
+      refresh: fronted(() => this.refreshHold()) }));
+    enroll(this.folioLeaf('merc', this.mercMenu, () => 'Mercenaries', () => this.mercOpen, () => this.closeMercMenu(), {
+      refresh: fronted(() => this.refreshMercMenu()) }));
+    enroll(this.folioLeaf('vocation', this.vocationMenu, () => 'A Calling', () => this.vocationOpen, () => this.closeVocationMenu(), {
+      arrive: 'front', refresh: fronted(() => this.refreshVocationMenu()) }));
+
+    // THE SUITE (data/suites.ts): a counter's dialog SUMMONS the station
+    // dialogs that stand genuinely unlocked in this zone. The world folds
+    // counters × members × "stands here" (World.suiteSummons); the UI only
+    // knows how to open each station for the seat at the counter.
+    const stationShow: Record<SuiteStation, (seatId: string) => void> = {
+      salvage: (s) => this.showSalvage(s),
+      oracle: (s) => this.showOracle(s),
+    };
+    this.folio.enrollSuite({
+      anchor: 'vendor',
+      members: (Object.keys(stationShow) as SuiteStation[]).map(id => ({
+        id,
+        stands: () => w().suiteSummons(seat(this.vendorMenu)).includes(id),
+        open: () => {
+          stationShow[id](seat(this.vendorMenu).id);
+          // The summoned station arms its verbs on the bag (the breaker's
+          // eye) before the folio shelves it — re-read the bag off the FRONT.
+          this.applyBreakChrome();
+          if (this.inventoryOpen) this.refreshInventory();
+        },
+      })),
+    });
+  }
+
+  /** Once per frame (main.ts): reconcile every book against its leaves' own
+   *  open flags — whatever path opened or closed them — and seat the strips. */
+  folioSync(): void {
+    this.folio.sync();
+    this.folioStrip.update();
+  }
+
+  /** Esc's dialog step: close the FRONT leaf of the hero's (or the named
+   *  seat's) most recently touched book, through that leaf's own close.
+   *  True when one closed — the fixed cascades stay as the belt beneath. */
+  folioCloseFront(seatId?: string): boolean {
+    const id = seatId ?? this.getWorld().localSeat.id;
+    const closed = this.folio.closeFront(l => l.owner() === id);
+    if (closed) this.folioStrip.update();
+    return closed;
+  }
+
+  /** Walk the hero's open book one tab (the menu twin of Tab / Shift+Tab). */
+  folioCycle(dir: 1 | -1): boolean {
+    const id = this.getWorld().localSeat.id;
+    const moved = this.folio.cycle(dir, l => l.owner() === id) !== null;
+    if (moved) this.folioStrip.update();
+    return moved;
+  }
+
+  /** Is a panel DRAWN — not shelved behind a folio tab? The bag's verbs and
+   *  the cursor dress read the front station, never a shelved one. */
+  private folioDrawn(el: HTMLElement): boolean {
+    return !el.classList.contains(FOLIO_SHELVED_CLASS);
+  }
+
   // --- THE COUCH LENS (data/couch.ts) ---------------------------------------
 
   /** Resolve a seat id to a LIVE local seat — a couch guest by id, else the
@@ -977,6 +1131,7 @@ export class UI {
     if (this.recallOpen && owned(this.recallMenu)) this.closeRecall();
     if (this.oracleOpen && owned(this.oracleMenu)) this.closeOracle();
     if (this.bestiaryOpen && owned(this.bestiaryMenu)) this.closeBestiary();
+    this.folio.sync();
   }
 
   /** The couch escape cascade for ONE seat: dismiss its topmost surface —
@@ -988,6 +1143,10 @@ export class UI {
     const mine = (el: HTMLElement): boolean =>
       (this.panelSeatIds.get(el) ?? w.localSeat.id) === seatId;
     const hostOwned = seatId === w.localSeat.id;
+    // THE FOLIO first: the seat's book closes its FRONT leaf — the one on
+    // screen — through that leaf's own close path (the fixed rows below stay
+    // as the belt for anything not enrolled).
+    if (this.folio.closeFront(l => l.owner() === seatId)) { this.folioStrip.update(); return true; }
     // The Caravan dialog is OWNED (showCaravan stamps the seat that lingered):
     // the guest who called the escort dismisses it with their own Ⓑ. Unowned
     // (solo, every hero-opened dialog) `mine` is the hero's — as it always was.
@@ -3436,6 +3595,7 @@ export class UI {
     this.salvageMenu.classList.remove('hidden');
     this.refreshSalvage();
     this.refreshInventory(); // re-render the bag with benchBreakMode's verbs armed
+    this.folio.adopt('salvage');
   }
 
   closeSalvage(): void {
@@ -3466,6 +3626,7 @@ export class UI {
     this.fontOpen = true;
     this.fontMenu.classList.remove('hidden');
     this.refreshFont();
+    this.folio.adopt('font');
   }
 
   closeFont(): void {
@@ -3491,6 +3652,7 @@ export class UI {
     this.recallReveals.clear();
     this.recallMenu.classList.remove('hidden');
     this.refreshRecall();
+    this.folio.adopt('recall');
   }
 
   closeRecall(): void {
@@ -3835,7 +3997,7 @@ export class UI {
    *  mode armed.) The INVENTORY half additionally demands both panels
    *  belong to the same couch seat — see salvageLaneFor. */
   private breakArmed(): boolean {
-    return this.salvageOpen && this.salvageTab === 'salvage' && this.benchBreakMode;
+    return this.salvageOpen && this.salvageTab === 'salvage' && this.benchBreakMode && this.folioDrawn(this.salvageMenu);
   }
 
   /** Which salvage lane is ARMED over this panel, if any: 'break' under the
@@ -3845,7 +4007,7 @@ export class UI {
    *  the bench wins a same-seat tie: its lane studies, the wheel only pays. */
   private salvageLaneFor(panel: HTMLElement): 'break' | 'sell' | null {
     if (this.breakArmed() && this.panelSeat(this.salvageMenu) === this.panelSeat(panel)) return 'break';
-    if (this.vendorOpen && this.scrapMode && this.panelSeat(this.vendorMenu) === this.panelSeat(panel)) return 'sell';
+    if (this.vendorOpen && this.scrapMode && this.folioDrawn(this.vendorMenu) && this.panelSeat(this.vendorMenu) === this.panelSeat(panel)) return 'sell';
     return null;
   }
 
@@ -4115,6 +4277,7 @@ export class UI {
     this.bestiaryOpen = true;
     this.bestiaryMenu.classList.remove('hidden');
     this.refreshBestiary();
+    this.folio.adopt('bestiary');
   }
 
   closeBestiary(): void {
@@ -4460,6 +4623,7 @@ export class UI {
     this.oracleOpen = true;
     this.oracleMenu.classList.remove('hidden');
     this.refreshOracle();
+    this.folio.adopt('oracle');
   }
 
   closeOracle(): void {
@@ -4566,6 +4730,7 @@ export class UI {
         }
       }, 500);
     }
+    this.folio.adopt('vendor');
   }
 
   closeVendor(): void {
@@ -4590,6 +4755,7 @@ export class UI {
     this.boroughOpen = true;
     this.boroughMenu.classList.remove('hidden');
     this.refreshBorough();
+    this.folio.adopt('borough');
   }
 
   closeBorough(): void {
@@ -6057,11 +6223,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  it docks to that seat's flank and THE ACTION LATCH routes its band pick to that
    *  seat's `caravanTo`. No id (solo, and every pre-couch call site) = the hero's. */
   showCaravan(seatId?: string): void {
-    this.hideAll();
+    // No hideAll() swap: a dialog already up keeps the screen and this one
+    // binds beside it as a tab (THE FOLIO, ui/folio.ts).
     this.ownPanel(this.caravanMenu, this.couchSeatFor(seatId));
     this.caravanOpen = true;
     this.caravanMenu.classList.remove('hidden');
     this.refreshCaravan();
+    this.folio.adopt('caravan');
   }
 
   closeCaravan(): void {
@@ -6073,10 +6241,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   /** The SAIL menu (a port's dock dwell): discovered ports + chart-a-course. */
   showSail(): void {
-    this.hideAll();
+    // No hideAll() swap: a dialog already up keeps the screen and this one
+    // binds beside it as a tab (THE FOLIO, ui/folio.ts).
     this.sailOpen = true;
     this.sailMenu.classList.remove('hidden');
     this.refreshSail();
+    this.folio.adopt('sail');
   }
 
   closeSail(): void {
@@ -6155,7 +6325,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   /** Open THE BOUNTY BOARD's postings panel (the board's dwell asked —
    *  docs/design/bounty-board.md M0). Couch-routed like every station. */
   showBounties(seatId?: string, boardId?: string): void {
-    this.hideAll();
+    // No hideAll() swap: a dialog already up keeps the screen and this one
+    // binds beside it as a tab (THE FOLIO, ui/folio.ts).
     this.ownPanel(this.bountyMenu, this.couchSeatFor(seatId));
     this.bountiesOpen = true;
     this.bountyBoardId = boardId ?? this.getWorld().bountyDwellBoardId;
@@ -6173,6 +6344,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         if (el) el.textContent = fmtRestock(v.countdown);
       }, 500);
     }
+    this.folio.adopt('bounties');
   }
 
   closeBounties(): void {
@@ -6283,10 +6455,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  standing, the patronage ladder, and the state action — muster a
    *  defense, or pay the restoration at the wreckage. */
   showHold(): void {
-    this.hideAll();
+    // No hideAll() swap: a dialog already up keeps the screen and this one
+    // binds beside it as a tab (THE FOLIO, ui/folio.ts).
     this.holdOpen = true;
     this.holdMenu.classList.remove('hidden');
     this.refreshHold();
+    this.folio.adopt('hold');
   }
 
   closeHold(): void {
@@ -6385,10 +6559,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   /** Open the MERCENARY OUTPOST menu (the captain's calm-parley dwell asked). */
   showMercMenu(): void {
-    this.hideAll();
+    // No hideAll() swap: a dialog already up keeps the screen and this one
+    // binds beside it as a tab (THE FOLIO, ui/folio.ts).
     this.mercOpen = true;
     this.mercMenu.classList.remove('hidden');
     this.refreshMercMenu();
+    this.folio.adopt('merc');
   }
 
   closeMercMenu(): void {
@@ -6510,7 +6686,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   /** Open the VOCATION CHOICE menu (the quartermaster's dwell requested it —
    *  a specialization is a deliberate pick, never a random dwell auto-accept). */
   showVocationMenu(): void {
-    this.hideAll();
+    // No hideAll() swap: a dialog already up keeps the screen and this one
+    // binds beside it as a tab (THE FOLIO, ui/folio.ts).
     this.vocationOpen = true;
     // An Ultimatum-style DECIDE-AT-LEISURE freeze: the 'menu:vocation'
     // timeflow surface (TIME_CFG.surfaces) holds the world while the offer
@@ -6518,6 +6695,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.getWorld().timeflow.holdSurface('menu:vocation');
     this.vocationMenu.classList.remove('hidden');
     this.refreshVocationMenu();
+    this.folio.adopt('vocation');
   }
 
   closeVocationMenu(): void {
@@ -8789,6 +8967,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     // Every menu-kind timeflow hold dies with its surface — hideAll is the
     // belt under every "all panels clear" path (run start, death, resets).
     this.getWorld().timeflow.releaseKind('menu');
+    this.folio.sync(); // every leaf closed — the books dissolve now, not next frame
     this.disarmRebind();
     hideTooltip();
   }

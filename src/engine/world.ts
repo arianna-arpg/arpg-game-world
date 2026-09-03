@@ -92,6 +92,7 @@ import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSele
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
 import { ATTRIBUTE_IDS, ATTRIBUTES, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { skyOf, START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
+import { SUITES, type SuiteDef, type SuiteStation } from '../data/suites';
 import { BEACON_CFG } from '../data/beacons';
 import { LEYLINE_CFG } from '../data/leyline';
 import { RIFT_CFG } from '../data/rifts';
@@ -128,7 +129,8 @@ import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { liquidOf } from './genkit';
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
-import { eyecatchElapsed, eyecatchHoldSec, ULT_CFG, type EyecatchState } from './ultimates';
+import { eyecatchElapsed, eyecatchHoldSec, ULT_CFG, ULT_QA, ultCooldownCap, ultGlobalGapSec, ultThrottleSec, type EyecatchState } from './ultimates';
+import { gaugeAdd, gaugeShaveSec, gaugeSpend, type GaugeFeedSpec } from './gauge';
 import {
   gatherSympathyRecipients, SYMPATHY_CFG, SYMPATHY_HOOKS, SYMPATHY_LINKS,
   sympathyRelationOf, sympathyStat,
@@ -155,7 +157,7 @@ import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, p
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
-import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, TRACKER_SITE, RECRUITER_SITE, BOUNTY_BOARD_SITE, FONT_SITE } from '../data/townBuild';
+import { expandedTown, townTier, townSiteAt, type TownSiteId } from '../data/townBuild';
 import {
   BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyChargePay, bountySourceRows, clonePosting, describeBountyPay, liveBountyBand, postingQuestDef, rollBountyPay,
   type BountyKindRow, type BountyTargetRef,
@@ -335,7 +337,7 @@ import type { BoroughSpec, ExtractDisperseSpec } from '../packages/encounters';
 import { gateOf } from '../packages/weighting';
 import { courtLord, courtLordForZone } from '../packages/courts';
 import type { ActiveEncounter, BoroughRuntime, VeilKnot } from './encounter';
-import { boroughVendorWeights } from '../data/boroughs';
+import { boroughVendorWeights, townResidentsHere, noteSoulsSheltered } from '../data/boroughs';
 import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarity';
 import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
 import type { OverlayView } from '../world/overlay';
@@ -380,7 +382,7 @@ import { gateMet } from '../meta/gates';
 // so a level gate authored anywhere in the catalog has a live signal BY
 // CONSTRUCTION (unlocks.ts → vendors.ts touches world only type-wise; no
 // runtime cycle).
-import { catalogLevelMilestones } from '../meta/unlocks';
+import { allUnlockables, catalogLevelMilestones, isUnlockOwned } from '../meta/unlocks';
 import {
   modeById, resurrectFee, stageOf, DEFAULT_MODE_ID, FADE_DEFAULTS,
   type CharacterModeDef, type ModeStageDef,
@@ -1961,6 +1963,7 @@ SYMPATHY_HOOKS.isNpc = a => !!a.defId && !!MONSTERS[a.defId]?.npcRole;
 export const LEDGER_HERO_RENOWNED = 'hero_renowned';
 
 const MIREILLE_RADIUS = 150;     // how close you must stand to Mireille
+const RESIDENT_RADIUS = 110;     // how close to a ward resident before they speak (townBuild residents)
 const MIREILLE_DWELL = 0.8;      // seconds lingering in radius before she heals
 const MIREILLE_COOLDOWN = 5;     // seconds before she'll heal again
 /** Her WELCOME GIFT: flask skill GEMS pressed into your hands on the first
@@ -3845,6 +3848,10 @@ export class World {
     // TOWN-BUILDING: swap the per-run town for its expanded form (account-gated
     // additions). Keyed off account.features (stable for the run) — a mid-run
     // purchase only takes effect next run, like every town feature.
+    // THE TOWN'S TIER (townBuild TOWN_TIERS) reads ONCE here — every town
+    // seat this World resolves (townSeat) rides this index, never a live
+    // count, so a threshold crossed mid-run never re-lays home between visits.
+    this.townTierIdx = townTier(account);
     this.zoneMap[START_ZONE] = expandedTown(account, this.zoneMap[START_ZONE]);
     // THE WANDERING HUB: roll where the Crossroads sits this run (a random
     // cardinal step from town) and re-deal its frontiers — the whole world
@@ -6384,6 +6391,7 @@ export class World {
     // THE ARRIVAL LATCH re-arms per zone: every station must see its disc
     // EMPTY once before its dwell may fire (stationDwellArmed).
     this.stationArmed.clear();
+    this.residentLines.clear();
     // A Sacrificial Font (always lit in town; a find elsewhere — never in a special arena).
     // The town seat is a REAL site (townBuild.ts FONT_SITE — shared with
     // nearFont's reach), not the old centre-plaza formula: the centre is
@@ -6391,7 +6399,7 @@ export class World {
     this.fonts = [];
     if (def.id === START_ZONE || (!def.special && o.kind !== 'waves' && o.kind !== 'safe' && rng.chance(0.3))) {
       const at = def.id === START_ZONE
-        ? vec(FONT_SITE.x, FONT_SITE.y)
+        ? this.townSeat('font')
         : (pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
           : this.farPoint(450, false, this.seededDraw()));
       this.fonts.push({ pos: this.clampPos(vec(at.x, at.y), 18) });
@@ -6408,7 +6416,7 @@ export class World {
     this.waypointPos = null;
     if (def.waypoint) {
       const at = def.id === START_ZONE
-        ? vec(this.arena.w / 2 - 90, this.arena.h / 2 - 40)
+        ? this.townSeat('waypoint')
         : (pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
           : this.farPoint(420, false, this.seededDraw()));
       this.waypointPos = this.clampPos(vec(at.x, at.y), 18);
@@ -6421,7 +6429,7 @@ export class World {
     // town raised for it (so the fixture + the actor line up).
     if (def.id === START_ZONE && featureEnabled(this.account, FEATURE.TARGET_DUMMY)) {
       const dummy = this.createMonster(FIXTURE_IDS.target_dummy, Math.max(1, this.player.level), 'enemy');
-      dummy.pos = this.clampPos(vec(TRAINING_YARD.x, TRAINING_YARD.y), dummy.radius);
+      dummy.pos = this.clampPos(this.townSeat('training_yard'), dummy.radius);
       this.actors.push(dummy);
       // THE TRAINING RACK: the color-coded siblings stand in a row east of
       // the post — one hard resistance each (watch a conversion change the
@@ -6432,7 +6440,7 @@ export class World {
       for (let i = 0; i < rack.length; i++) {
         const sib = this.createMonster(rack[i], Math.max(1, this.player.level), 'enemy');
         sib.pos = this.clampPos(
-          vec(TRAINING_YARD.x + 52 * (i + 1), TRAINING_YARD.y), sib.radius);
+          this.townSeat('training_yard', 52 * (i + 1), 0), sib.radius);
         this.actors.push(sib);
       }
       // THE GAUNTLET (the flight range's town twin): three plain dummies
@@ -6443,12 +6451,12 @@ export class World {
       for (let i = 0; i < 3; i++) {
         const g = this.createMonster(FIXTURE_IDS.target_dummy, Math.max(1, this.player.level), 'enemy');
         g.pos = this.clampPos(
-          vec(TRAINING_YARD.x + 340 + 130 * i, TRAINING_YARD.y), g.radius);
+          this.townSeat('training_yard', 340 + 130 * i, 0), g.radius);
         this.actors.push(g);
       }
       this.doodads.push(
-        { pos: this.clampPos(vec(TRAINING_YARD.x + 690, TRAINING_YARD.y - 16), 26), radius: 26, kind: 'rock' },
-        { pos: this.clampPos(vec(TRAINING_YARD.x + 690, TRAINING_YARD.y + 18), 26), radius: 26, kind: 'rock' },
+        { pos: this.clampPos(this.townSeat('training_yard', 690, -16), 26), radius: 26, kind: 'rock' },
+        { pos: this.clampPos(this.townSeat('training_yard', 690, 18), 26), radius: 26, kind: 'rock' },
       );
     }
     // THE TRACKER: the Bestiary's keeper camps at the west edge once his
@@ -6456,7 +6464,9 @@ export class World {
     // fixture line up at TRACKER_SITE).
     if (def.id === START_ZONE && featureEnabled(this.account, FEATURE.TRACKER)) {
       const t = this.createMonster(FIXTURE_IDS.townsfolk_tracker, 1, 'player');
-      t.pos = this.clampPos(vec(TRACKER_SITE.x + 26, TRACKER_SITE.y - 20), t.radius);
+      // South of his fire, facing it — clear of the camp's own rocks (the
+      // old north-east stand overlapped a rock and got shoved off its seat).
+      t.pos = this.clampPos(this.townSeat('tracker', 0, 34), t.radius);
       this.actors.push(t);
     }
     // THE RECRUITER'S TABLE (FEATURE.MERC_RECRUITER): the Vault's officer
@@ -6469,13 +6479,33 @@ export class World {
     if (def.id === START_ZONE && featureEnabled(this.account, FEATURE.MERC_RECRUITER)) {
       const officer = this.createMonster(FIXTURE_IDS.merc_captain, 1, 'player');
       officer.name = 'the Recruiting Officer';
-      officer.pos = this.clampPos(vec(RECRUITER_SITE.x + 24, RECRUITER_SITE.y - 18), officer.radius);
+      officer.pos = this.clampPos(this.townSeat('recruiter', 24, -18), officer.radius);
       this.actors.push(officer);
       this.doodads.push({
-        pos: this.clampPos(vec(RECRUITER_SITE.x - 20, RECRUITER_SITE.y + 14), 10),
+        pos: this.clampPos(this.townSeat('recruiter', -20, 14), 10),
         radius: 9, kind: 'merc_banner', rot: 0,
       });
       this.armLastlightRecruiter(officer, def.id);
+    }
+    // THE RESIDENTS (data/boroughs.ts TOWN_RESIDENTS): the families the
+    // Boroughs sent home stand at their cottage doors in the ward — every row
+    // whose gate the account holds AND whose cottage this tier raises. Named
+    // + given their line at the seat (the recruiting officer's rename idiom);
+    // nothing persists — the town re-lays from the account at every load.
+    if (def.id === START_ZONE) {
+      // `unlock` avenues resolve through the catalog (the gatework's closure
+      // shape — boroughs.ts stays a leaf and never imports the catalog).
+      const owned = (id: string): boolean => {
+        const u = allUnlockables().find(x => x.id === id);
+        return !!u && isUnlockOwned(this.account, u);
+      };
+      for (const { row, pos: at } of townResidentsHere(this.account, this.townTierIdx, owned)) {
+        const r = this.createMonster(row.def, 1, 'player');
+        r.name = row.name;
+        r.pos = this.clampPos(vec(at.x, at.y), r.radius);
+        this.actors.push(r);
+        this.residentLines.set(r.id, row.line);
+      }
     }
     this.text(vec(p.pos.x, p.pos.y - 46), def.name, def.theme.accent, 24);
     // If a warband is storming this ground as you arrive, you'll know it.
@@ -8364,6 +8394,14 @@ export class World {
       const souls = survivors.length * spec.refugees.populationPer;
       this.sim.boroughField?.addRefugees(souls);
       bumpLedger(this.ledger, spec.ledgerRefugees, souls);
+      // THE SHELTERED: the ACCOUNT counts them the moment they arrive (the
+      // quest-turn-in durability precedent) — Lastlight's residents
+      // (data/boroughs.ts TOWN_RESIDENTS) read this lifetime count, so a
+      // family that settles stays settled across runs.
+      if (this.metaProgressionActive()) {
+        noteSoulsSheltered(this.account, souls);
+        this.accountDirty = true;
+      }
       const xp = Math.round((spec.refugees.xpBase + spec.refugees.xpPerSurvivor * survivors.length) * e.scale.rewardMul);
       if (xp > 0) this.grantXp(xp);
       // The road out: dormant resolute walkers, wheeled by the world tick.
@@ -22162,13 +22200,40 @@ export class World {
     bumpLedger(this.ledger, MIREILLE_FILL_LEDGER);
   }
 
+  /** THE LAB KIT (ULT_QA.grantArts — engine/ultimates.ts): iteration builds
+   *  deal every droppable ultimate + gauge debut into the fresh bag at
+   *  first breath, UNLEARNED — the player seats what they want to try
+   *  through the real rack (learn = seat; cap and requirements stay the
+   *  gates). The Mireille gift lane verbatim, minus the learn. No-op when
+   *  the lever is down: main ships it false. */
+  dealLabArts(): void {
+    if (!ULT_QA.active || !ULT_QA.grantArts) return;
+    const seat = this.localSeat;
+    const m = seat.meta;
+    let bumped = false;
+    for (const def of Object.values(SKILLS)) {
+      if (!(def.ultimate || def.gauge) || def.noDrop) continue;
+      // THE LAB HERO IS BUILT TO WIELD ITS KIT: the build's BASE attributes
+      // rise to every dealt art's requirement — the learn gate and the
+      // cast-time gate both read the DERIVED meta.attrs, which recalc folds
+      // from these (a direct attrs write would not survive the next fold).
+      for (const [attr, need] of Object.entries(def.requirements ?? {})) {
+        const k = attr as keyof Attributes;
+        if ((m.baseAttrs[k] ?? 0) < (need ?? 0)) { m.baseAttrs[k] = need!; bumped = true; }
+      }
+      if (m.knownSkills.has(def.id) || findBagGem(m.items, 'skill', def.id)) continue;
+      this.grantSkillGemItem(seat, makeSkillGem(def, 1, 'magic'), true);
+    }
+    if (bumped) this.recalcSeat(seat);
+  }
+
   /** Is the player resting by the town campfire? (Feature owned + in town + near
    *  CAMPFIRE_SITE.) Drives the dwell-refresh and the renderer prompt. */
   nearCampfire(): boolean {
     return featureEnabled(this.account, FEATURE.CAMPFIRE)
       && this.zone.id === START_ZONE
-      && dist(this.player.pos, vec(CAMPFIRE_SITE.x, CAMPFIRE_SITE.y)) <= CAMPFIRE_RADIUS
-      && this.dwellReachable(this.player.pos, vec(CAMPFIRE_SITE.x, CAMPFIRE_SITE.y));
+      && dist(this.player.pos, this.townSeat('campfire')) <= CAMPFIRE_RADIUS
+      && this.dwellReachable(this.player.pos, this.townSeat('campfire'));
   }
 
   /** THE ARRIVAL LATCH (docs/design/town-growth.md T0): a station's dwell
@@ -22181,6 +22246,50 @@ export class World {
    *  lands (portals, resumes, sail landings, repositions). Step out once
    *  and the station serves as ever. Cleared per zone load. */
   private stationArmed = new Set<string>();
+
+  /** THE TOWN'S TIER — the size-ladder rung this World's Lastlight stands
+   *  on (townBuild TOWN_TIERS), read ONCE at construction. */
+  private townTierIdx = 0;
+  townTierIndex(): number { return this.townTierIdx; }
+
+  /** THE ONE READ for every town seat (docs/design/town-growth.md — the
+   *  one-truth site law): a town site's seat at this World's tier, plus an
+   *  offset in zone units. The fixture the tier raised, this dwell check,
+   *  the NPC spawn and the renderer's prompt all resolve through HERE, so
+   *  drawn == dwelt by construction. A site that does not exist at this
+   *  stage resolves to the arena's centre with a warning — every seat the
+   *  engine reads unconditionally (font, waypoint, the stations) is authored
+   *  at every rung, probe-pinned. */
+  townSeat(id: TownSiteId, dx = 0, dy = 0): Vec2 {
+    const p = townSiteAt(this.townTierIdx, id);
+    if (!p) {
+      console.warn(`[town] site '${id}' has no seat at tier ${this.townTierIdx}`);
+      return vec(this.arena.w / 2 + dx, this.arena.h / 2 + dy);
+    }
+    return vec(p.x + dx, p.y + dy);
+  }
+
+  /** A town site's seat, or null where the tier does not raise it. */
+  townSite(id: TownSiteId): Vec2 | null {
+    const p = townSiteAt(this.townTierIdx, id);
+    return p ? vec(p.x, p.y) : null;
+  }
+
+  /** THE RESIDENTS' LINES (data/boroughs.ts TOWN_RESIDENTS): what each
+   *  seated family says when the hero stands near — keyed by actor id at
+   *  the spawn, read by residentPrompt for the renderer's speech bubble. */
+  private residentLines = new Map<number, string>();
+
+  /** A resident's line while the local hero stands within reach (the
+   *  townsfolk prompt idiom — role-bound, the renderer never names a def). */
+  residentPrompt(a: Actor): string | null {
+    const line = this.residentLines.get(a.id);
+    if (!line || a.dead) return null;
+    if (dist(a.pos, this.player.pos) > RESIDENT_RADIUS) return null;
+    if (!this.dwellReachable(this.player.pos, a.pos)) return null;
+    return line;
+  }
+
   private stationDwellArmed(key: string, engaged: boolean): boolean {
     if (!engaged) { this.stationArmed.add(key); return false; }
     return this.stationArmed.has(key);
@@ -22209,7 +22318,7 @@ export class World {
   /** The campfire's prompt while the player rests near it (renderer), or null. */
   campfireHint(): { pos: Vec2; text: string } | null {
     if (!this.nearCampfire()) return null;
-    return { pos: vec(CAMPFIRE_SITE.x, CAMPFIRE_SITE.y), text: 'Linger to refresh the wilds.' };
+    return { pos: this.townSeat('campfire'), text: 'Linger to refresh the wilds.' };
   }
 
   // ------------------------------------------------------ salvage station ----
@@ -22221,12 +22330,17 @@ export class World {
     return featureEnabled(this.account, FEATURE.SALVAGE_STATION);
   }
 
-  /** At the breaker's bench? (Feature owned + in town + near SALVAGE_SITE.) */
+  /** THE BENCH STANDS: owned + raised in this zone (the town), proximity
+   *  aside — the suite's "genuinely unlocked" read (stationStands). */
+  hasSalvage(): boolean {
+    return this.salvageUnlocked() && this.zone.id === START_ZONE;
+  }
+
+  /** At the breaker's bench? (The bench stands + near SALVAGE_SITE.) */
   nearSalvage(seat: Seat = this.localSeat): boolean {
-    return this.salvageUnlocked()
-      && this.zone.id === START_ZONE
-      && dist(seat.actor.pos, vec(SALVAGE_SITE.x, SALVAGE_SITE.y)) <= SALVAGE_CFG.stationRadius
-      && this.dwellReachable(seat.actor.pos, vec(SALVAGE_SITE.x, SALVAGE_SITE.y));
+    return this.hasSalvage()
+      && dist(seat.actor.pos, this.townSeat('salvage')) <= SALVAGE_CFG.stationRadius
+      && this.dwellReachable(seat.actor.pos, this.townSeat('salvage'));
   }
 
   /** Linger at the bench → open the salvage/craft menu (flag → main loop).
@@ -22247,7 +22361,7 @@ export class World {
   /** The bench's prompt while the player is near (renderer), or null. */
   salvageHint(): { pos: Vec2; text: string } | null {
     if (!this.nearSalvage()) return null;
-    return { pos: vec(SALVAGE_SITE.x, SALVAGE_SITE.y), text: 'Linger to work the salvage bench.' };
+    return { pos: this.townSeat('salvage'), text: 'Linger to work the salvage bench.' };
   }
 
   // ------------------------------------------------------- the bounty board -
@@ -22277,7 +22391,7 @@ export class World {
   bountyBoardsHere(): { id: string; pos: Vec2 }[] {
     const out: { id: string; pos: Vec2 }[] = [];
     if (this.bountyBoardUnlocked() && this.zone.id === START_ZONE) {
-      out.push({ id: BOUNTY_BOARD_CFG.boardId, pos: vec(BOUNTY_BOARD_SITE.x, BOUNTY_BOARD_SITE.y) });
+      out.push({ id: BOUNTY_BOARD_CFG.boardId, pos: this.townSeat('bounty_board') });
     }
     if (this.zone.holdAnchor && this.bountyBoardRoster().some(b => b.id === this.zone.id)) {
       const d = this.doodads.find(x => x.kind === 'bounty_board');
@@ -23293,8 +23407,8 @@ export class World {
   nearTracker(seat: Seat = this.localSeat): boolean {
     return featureEnabled(this.account, FEATURE.TRACKER)
       && this.zone.id === START_ZONE
-      && dist(seat.actor.pos, vec(TRACKER_SITE.x, TRACKER_SITE.y)) <= SALVAGE_CFG.stationRadius
-      && this.dwellReachable(seat.actor.pos, vec(TRACKER_SITE.x, TRACKER_SITE.y));
+      && dist(seat.actor.pos, this.townSeat('tracker')) <= SALVAGE_CFG.stationRadius
+      && this.dwellReachable(seat.actor.pos, this.townSeat('tracker'));
   }
 
   /** Linger by the fire → open the BESTIARY (flag → main loop). One ask per
@@ -23312,17 +23426,21 @@ export class World {
   /** The camp's prompt while the player is near (renderer), or null. */
   trackerHint(): { pos: Vec2; text: string } | null {
     if (!this.nearTracker()) return null;
-    return { pos: vec(TRACKER_SITE.x, TRACKER_SITE.y), text: 'Linger to open the bestiary.' };
+    return { pos: this.townSeat('tracker'), text: 'Linger to open the bestiary.' };
   }
 
   // --------------------------------------------------------- oracle stone ----
 
   /** Among the standing stones? (Feature owned + in town + near ORACLE_SITE.) */
+  /** THE STONE STANDS: owned + raised in this zone, proximity aside. */
+  hasOracle(): boolean {
+    return featureEnabled(this.account, FEATURE.ORACLE_STONE) && this.zone.id === START_ZONE;
+  }
+
   nearOracle(seat: Seat = this.localSeat): boolean {
-    return featureEnabled(this.account, FEATURE.ORACLE_STONE)
-      && this.zone.id === START_ZONE
-      && dist(seat.actor.pos, vec(ORACLE_SITE.x, ORACLE_SITE.y)) <= SALVAGE_CFG.stationRadius
-      && this.dwellReachable(seat.actor.pos, vec(ORACLE_SITE.x, ORACLE_SITE.y));
+    return this.hasOracle()
+      && dist(seat.actor.pos, this.townSeat('oracle')) <= SALVAGE_CFG.stationRadius
+      && this.dwellReachable(seat.actor.pos, this.townSeat('oracle'));
   }
 
   private updateOracle(dt: number): void {
@@ -23337,7 +23455,7 @@ export class World {
 
   oracleHint(): { pos: Vec2; text: string } | null {
     if (!this.nearOracle()) return null;
-    return { pos: vec(ORACLE_SITE.x, ORACLE_SITE.y), text: 'Linger to commune with the stone.' };
+    return { pos: this.townSeat('oracle'), text: 'Linger to commune with the stone.' };
   }
 
   // --------------------------------------------------------------- vendors ---
@@ -23351,6 +23469,44 @@ export class World {
    *  anything → coarse essence, priced by quality (crafting.ts sell yields). */
   nearScrapVendor(seat: Seat = this.localSeat): boolean {
     return VENDORS.some(v => v.salvage?.(this) && v.near(this, seat));
+  }
+
+  // --- THE SUITE REACH (data/suites.ts) -------------------------------------
+  // A counter's dialog summons the station dialogs that STAND here (raised +
+  // genuinely unlocked), and their WORK is allowed from the counter through
+  // ONE predicate — stationReach — that every action gate reads. The dwell
+  // reads (near*) stay physical: a station still opens by its own linger.
+
+  /** Does a summonable station stand in this zone for this account? */
+  stationStands(id: SuiteStation): boolean {
+    return id === 'salvage' ? this.hasSalvage() : this.hasOracle();
+  }
+
+  /** Is the seat physically at the station (its own dwell read)? */
+  stationNear(id: SuiteStation, seat: Seat = this.localSeat): boolean {
+    return id === 'salvage' ? this.nearSalvage(seat) : this.nearOracle(seat);
+  }
+
+  /** The suites whose anchor counter this seat stands at. */
+  suitesAt(seat: Seat = this.localSeat): SuiteDef[] {
+    return SUITES.filter(s => VENDORS.some(v =>
+      (!s.counters || s.counters.includes(v.id)) && v.near(this, seat)));
+  }
+
+  /** The stations a seat at a counter may SUMMON: members of a suite the
+   *  counter anchors, that stand in this zone — in row order, deduplicated. */
+  suiteSummons(seat: Seat = this.localSeat): SuiteStation[] {
+    const out: SuiteStation[] = [];
+    for (const s of this.suitesAt(seat)) {
+      for (const m of s.members) if (this.stationStands(m) && !out.includes(m)) out.push(m);
+    }
+    return out;
+  }
+
+  /** THE REACH LAW: may this seat WORK the station now — at the station
+   *  itself, or at a counter whose suite summons it while it stands here. */
+  stationReach(id: SuiteStation, seat: Seat = this.localSeat): boolean {
+    return this.stationNear(id, seat) || this.suiteSummons(seat).includes(id);
   }
 
   /** Linger at a stocked counter → open the Vendor screen (flag → main).
@@ -23381,7 +23537,7 @@ export class World {
    *  (host-clamped); the reroll lands within the tiers the ITEM could
    *  legally roll, lifted toward their ceiling by the score. */
   rerollAffix(seat: Seat, uid: number, affixIdx: number, score: number): void {
-    if (!this.nearOracle(seat)) return;
+    if (!this.stationReach('oracle', seat)) return;
     const m = seat.meta;
     const wornSlot = Object.keys(m.equipped).find(k => m.equipped[k]?.uid === uid);
     const item = this.bagItem(seat, uid) ?? (wornSlot ? m.equipped[wornSlot] : undefined);
@@ -27798,7 +27954,12 @@ export class World {
   private stampSkillCooldown(caster: Actor, inst: SkillInstance, base: number): void {
     // The formula lives in skills.ts so the TOOLTIP waits on the same clock
     // it prints (skillCooldownSeconds — one resolver, two readers).
-    const cdSet = skillCooldownSeconds(caster, inst, base);
+    let cdSet = skillCooldownSeconds(caster, inst, base);
+    // THE LAB LEVER (ULT_QA, engine/ultimates.ts): iteration builds cap an
+    // ULTIMATE's stamped clock so the arts re-fire back-to-back — a ceiling
+    // on the fold's answer, never a rewrite of the authored price (THE
+    // PRICE FLOOR stays census-pinned; shipped builds cap at Infinity).
+    if (inst.def.ultimate) cdSet = Math.min(cdSet, ultCooldownCap());
     if (cdSet <= 0) return;
     caster.cooldowns.set(inst.def.id, cdSet);
     caster.cooldownTotals.set(inst.def.id, cdSet); // the HUD sweep's denominator
@@ -30922,6 +31083,12 @@ export class World {
 
     const cost = caster.skillCost(inst);
     caster.payCost(cost); // mana, then ES (Thought Siphon), then life
+    // THE GAUGE FABRIC (engine/gauge.ts): THE PRESS PAYS — the bank spends
+    // beside mana (a use is a use: an interrupted bar still spent its
+    // souls) and the lockout arms. Readiness was the gate's business above.
+    // The press's POWER (the partial/overflow law) rides into the use as a
+    // damage multiplier here and as a count/stack scale at execution.
+    const gPower = def.gauge ? gaugeSpend(inst, def.gauge, caster.gaugeEff(inst)!) : 1;
     // The honesty datum for resource-as-damage: constructs' payments are
     // ceremonial (999-mana pools), so their casts carry no paidCost.
     const paid = caster.construct ? undefined : cost;
@@ -30936,7 +31103,7 @@ export class World {
       this.stampSkillCooldown(caster, inst, def.cooldown);
     }
     const cc = this.consumeChargeCost(caster, inst);
-    const baseMult = cc.mult * roundMult;
+    const baseMult = cc.mult * roundMult * gPower;
 
     // CONCENTRATION (the precision cast): the held bar fills only while the
     // cursor rides the QUARRY resolved at press — no quarry, no cast (the
@@ -31160,8 +31327,10 @@ export class World {
     const spec = def.ultimate;
     if (!spec) return;
     const now = this.timeflow.age;
-    if (now - (this.ultFlashAt.get(caster.id) ?? -Infinity) < ULT_CFG.throttleSec) return;
-    if (now - this.ultFlashLastAt < ULT_CFG.globalGapSec) return;
+    // The windows fold through the lab lever (ULT_QA — iteration builds run
+    // the banner eagerly; shipped builds keep the rare-movie law).
+    if (now - (this.ultFlashAt.get(caster.id) ?? -Infinity) < ultThrottleSec()) return;
+    if (now - this.ultFlashLastAt < ultGlobalGapSec()) return;
     this.ultFlashAt.set(caster.id, now);
     this.ultFlashLastAt = now;
     const side: 'ally' | 'enemy' = caster.team === 'player' ? 'ally' : 'enemy';
@@ -31241,6 +31410,11 @@ export class World {
     // dash IS an aoe skill for every stat query this use makes.
     const tags = skillContextTags(def, grantedTags(inst));
     let useMult = opts.dmgMult ?? 1;
+    // THE GAUGE's POWER (engine/gauge.ts): the press stamped what this use
+    // is worth — damage already rode in through dmgMult; counts (shots,
+    // strikes, summons) and powerStacks buffs scale here. 1 for every
+    // gauge-less skill by construction.
+    const gPow = def.gauge ? (inst.state?.gaugePower ?? 1) : 1;
     let targetInfo = opts.targetInfo ?? null;
     // THE GRAB BOUNDARY, melee half (engine/lite.ts): a grab SWING with no
     // full body in reach promotes the nearest opposing pool row first, so
@@ -31742,6 +31916,7 @@ export class World {
           // A wagon-fed corpse volley (Volatile Cinders): every extra body
           // eaten is one more flight — the pile rises together.
           + corpseFeast * CORPSE_CFG.batch.projectilesPerExtra;
+        if (gPow !== 1) count = Math.max(1, Math.round(count * gPow));
         // A rolled chance to fire ONE more — the random counterpart to the
         // flat projectileCount. Flows through both the nova and spread paths.
         const projChance = caster.sheet.get('projectileCountChance', tags, extra);
@@ -32988,8 +33163,8 @@ export class World {
           caster.reservedMana += reserve;
           caster.mana = Math.min(caster.mana, caster.availableMaxMana());
           caster.summonToggles.set(def.id, { inst, reserved: reserve });
-          const first = Math.min(slots,
-            d.count + Math.round(caster.sheet.get('summonCount', tags, extra)));
+          const first = Math.min(slots, Math.max(1, Math.round(
+            (d.count + Math.round(caster.sheet.get('summonCount', tags, extra))) * gPow)));
           // A sequencing gem ("scattered in sequence") holds on toggled
           // contracts too: the ON-fill emerges through the SAME grammar
           // the plain path uses below — first body now, the rest on the
@@ -33010,7 +33185,8 @@ export class World {
           }
           break;
         }
-        const total = d.count + Math.round(caster.sheet.get('summonCount', tags, extra));
+        const total = Math.max(1, Math.round(
+          (d.count + Math.round(caster.sheet.get('summonCount', tags, extra))) * gPow));
         // Where the bodies emerge: the default ring around the caster, or
         // boiling out of the ground at the CURSOR (Bombardment's portal —
         // the summonAtCursor stat converts any summon the same way).
@@ -33074,7 +33250,8 @@ export class World {
           ? this.clipShot(caster.pos, wantAt, caster.tier) : wantAt, 10);
         // (+ the VENT PRESS's spent rounds — Blowhole: every banked round is
         // one more column, the storm's own count shift.)
-        const strikes = rollCount(d.count, Math.round(caster.sheet.get('stormCount', tags, extra)) + ventRounds);
+        const strikes = Math.max(1, Math.round(
+          rollCount(d.count, Math.round(caster.sheet.get('stormCount', tags, extra)) + ventRounds) * gPow));
         // stormImmediate is a FRACTION: that share of the strikes crashes
         // down up-front (nearest enemies first via the sparkfield sort),
         // the rest keep the cadence. 1 = the old all-at-once flag.
@@ -38745,12 +38922,19 @@ export class World {
     caster: Actor, inst: SkillInstance, fx: BuffEffect,
     durScale: number, useMult = 1,
   ): void {
+    // THE GAUGE's stack lane (BuffEffect.powerStacks — engine/gauge.ts):
+    // stacks per unit of the pressing use's gauge power, at least one
+    // while any power stands. A gauge-less skill reads power 1.
+    const gPow = inst.def.gauge ? (inst.state?.gaugePower ?? 1) : 1;
+    const stacked = fx.powerStacks !== undefined
+      ? { ...fx, stacksOnApply: Math.max(1, Math.round(fx.powerStacks * gPow)) }
+      : fx;
     // POWER-SCALED (BuffEffect.powerScaled): the blessing's magnitude
     // rides the use's power — a brim release at 40% fill grants a
     // 40%-strength stride. Opt-in; ordinary buffs never wobble.
-    const scaled = fx.powerScaled && useMult !== 1
-      ? { ...fx, mods: fx.mods.map(m => ({ ...m, value: m.value * useMult })) }
-      : fx;
+    const scaled = stacked.powerScaled && useMult !== 1
+      ? { ...stacked, mods: stacked.mods.map(m => ({ ...m, value: m.value * useMult })) }
+      : stacked;
     // The granting skill's tags ride the gain EVENT (addBuff's 4th arg) so
     // tag-filtered sympathy links can hear it — the flask bond drinks only
     // what carries 'flask'.
@@ -40186,8 +40370,9 @@ export class World {
     if (target.life <= 0 && !target.dead) {
       // Kill-fed taps + fragment sheds ride the killing HIT: support-granted
       // remnantDrop stats live in the skill's extra mods and are only
-      // visible from a skill-context query — this is that site.
-      this.tapCharges(caster, 'kill');
+      // visible from a skill-context query — this is that site. The victim
+      // rides along so elite-gated kill taps (and gauge feeds) can read it.
+      this.tapCharges(caster, 'kill', undefined, undefined, target);
       this.rollKillRemnants(caster, inst, target.pos);
       this.rollKillOrbs(caster, inst, target);
       // CAST-ON-KILL trigger gems ride the killing hit (chain depth from
@@ -40212,19 +40397,48 @@ export class World {
       // Steel's block-banked Riposte) merge with the skill's own — the
       // schema's promise, honored at the event taps too.
       for (const spec of instanceChargeGain(inst)) {
-        if (spec.on !== on) continue;
-        if (spec.whileToggled && !a.activeAuras.has(inst.def.id)
-          && !a.summonToggles.has(inst.def.id)) continue;
-        if (on === 'enemyDeath' && at && dist(a.pos, at) > (spec.radius ?? 360)) continue;
-        // Fount taps filter by orb kind (a Life Flask ignores mana orbs).
-        if (on === 'orbPickup' && spec.orbKind && spec.orbKind !== orbKind) continue;
-        // Elite-gated taps (Soul Harvest's boss lane): only a rare-or-better
-        // (or def-level boss) victim feeds the bank. No victim = no bank.
-        if (spec.eliteVictim && !(victim && this.isEliteVictim(victim))) continue;
-        if (spec.chance !== undefined && !chance(spec.chance)) continue;
+        if (!this.tapFires(a, inst, spec, on, at, orbKind, victim)) continue;
         a.gainCharge(spec.charge, spec.amount, spec.max, inst);
       }
+      // THE GAUGE FABRIC (engine/gauge.ts): the SAME events feed a slotted
+      // skill's own bank through the same filter chain — the Vaal-soul
+      // shape. Two gauge arts on one bar each drink the same kill.
+      const gs = inst.def.gauge;
+      if (gs?.feeds) {
+        for (const spec of gs.feeds) {
+          if (!this.tapFires(a, inst, spec, on, at, orbKind, victim)) continue;
+          const eff = a.gaugeEff(inst)!;
+          // THE HASTENING (GaugeSpec.cooldownPer): while the skill's own
+          // clock runs, the point hurries it instead of banking — the
+          // two-phase art (shave now, grow later).
+          const cd = a.cooldowns.get(inst.def.id) ?? 0;
+          if (gs.cooldownPer && cd > 0) {
+            a.cooldowns.set(inst.def.id, Math.max(0, cd - gaugeShaveSec(gs, eff, spec.amount)));
+            continue;
+          }
+          gaugeAdd(inst, spec.amount, eff);
+        }
+      }
     }
+  }
+
+  /** THE TAP PREDICATE — one filter chain for charge taps AND gauge feeds:
+   *  the trigger match, toggle gating, the death radius, the orb kind, the
+   *  elite victim, the chance roll (rolled last, so a filtered-out tap
+   *  never moves the stream). */
+  private tapFires(a: Actor, inst: SkillInstance, spec: GaugeFeedSpec,
+    on: GaugeFeedSpec['on'], at?: Vec2, orbKind?: string, victim?: Actor): boolean {
+    if (spec.on !== on) return false;
+    if (spec.whileToggled && !a.activeAuras.has(inst.def.id)
+      && !a.summonToggles.has(inst.def.id)) return false;
+    if (on === 'enemyDeath' && at && dist(a.pos, at) > (spec.radius ?? 360)) return false;
+    // Fount taps filter by orb kind (a Life Flask ignores mana orbs).
+    if (on === 'orbPickup' && spec.orbKind && spec.orbKind !== orbKind) return false;
+    // Elite-gated taps (Soul Harvest's boss lane): only a rare-or-better
+    // (or def-level boss) victim feeds the bank. No victim = no bank.
+    if (spec.eliteVictim && !(victim && this.isEliteVictim(victim))) return false;
+    if (spec.chance !== undefined && !chance(spec.chance)) return false;
+    return true;
   }
 
   /** The canonical ELITE predicate for victim-gated payloads: rare-or-better
@@ -42522,7 +42736,7 @@ export class World {
   /** CHISEL a socket at the bench — shares the crafted-slot budget with
    *  bench affixes (one craft per piece, Vault-widened). */
   craftSocket(seat: Seat, uid: number): void {
-    if (!this.nearSalvage(seat)) return;
+    if (!this.stationReach('salvage', seat)) return;
     const m = seat.meta;
     const wornSlot = Object.keys(m.equipped).find(k => m.equipped[k]?.uid === uid);
     const item = this.bagItem(seat, uid) ?? (wornSlot ? m.equipped[wornSlot] : undefined);
@@ -42598,7 +42812,7 @@ export class World {
    *  clients). Null when the wanted lane isn't actually at hand. */
   private salvageLane(seat: Seat, lane?: 'break' | 'sell'): 'break' | 'sell' | null {
     const want = lane ?? (this.nearSalvage(seat) ? 'break' : 'sell');
-    if (want === 'break') return this.nearSalvage(seat) ? 'break' : null;
+    if (want === 'break') return this.stationReach('salvage', seat) ? 'break' : null;
     return this.nearScrapVendor(seat) ? 'sell' : null;
   }
 
@@ -42780,7 +42994,7 @@ export class World {
    *  uniform across the whole unlocked span — expertise raises the ceiling,
    *  never guarantees it. */
   craftAffix(seat: Seat, uid: number, affixId: string, score = 0): void {
-    if (!this.nearSalvage(seat)) return;
+    if (!this.stationReach('salvage', seat)) return;
     const m = seat.meta;
     const wornSlot = Object.keys(m.equipped).find(k => m.equipped[k]?.uid === uid);
     const item = this.bagItem(seat, uid) ?? (wornSlot ? m.equipped[wornSlot] : undefined);

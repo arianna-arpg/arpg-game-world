@@ -23,6 +23,7 @@ import type { UltimateSpec } from './ultimates';
 import type { ThrongSourceRow, ThrongSpec } from './throng';
 import type { GrabHandoffSpec, GrabSpec } from './grab';
 import type { PossessSpec, ShiftSpec } from './possess';
+import type { GaugeSpec } from './gauge'; // THE GAUGE FABRIC — SkillDef.gauge
 import type { BirthEffect } from './clutch';
 import { veinMechanisms, veinMods, type SupportRollBase, type SupportRolled } from './supportbase';
 import type { PartSpec } from '../render/vis/parts';
@@ -3274,6 +3275,12 @@ export interface BuffEffect {
   /** Grant this many stacks per application instead of one (clamped to
    *  maxStacks) — how an imbuement loads its whole magazine in one press. */
   stacksOnApply?: number;
+  /** THE GAUGE's stack lane (engine/gauge.ts): stacks granted PER UNIT of
+   *  the pressing use's gauge POWER (rounded, at least 1 while any power
+   *  stands; clamped to maxStacks) — a half-full press wears half the
+   *  stacks, an overflow press more than the full. A gauge-less skill
+   *  reads power 1 (exactly `powerStacks`). Outranks stacksOnApply. */
+  powerStacks?: number;
   /** Recipient: default 'caster'; 'minions' = every living minion of the
    *  caster (the generic minion-war-cry seam — Convocation's mend). */
   affects?: 'caster' | 'minions';
@@ -4236,6 +4243,17 @@ export interface SkillDef {
    *  ChargeGainSpec — Soul Harvest gathers the nearby dead; Berserk's
    *  blows stoke Rage while the toggle burns). */
   chargeGain?: ChargeGainSpec[];
+
+  /** THE GAUGE (engine/gauge.ts — the Vaal-soul shape): this skill's OWN
+   *  bank, fed by the world's events through the charge-tap vocabulary
+   *  (kills, deaths near you, blows, orbs) and/or a regen clock; the press
+   *  SPENDS `need` and arms a lockout during which the bank takes nothing.
+   *  Unfilled = "not ready" through the one gate predicate (bar greys, AI
+   *  waits, press refuses). gaugeGain / gaugeNeed / gaugeLockout are the
+   *  ordinary, tag-scopable investment stats. Pairs with `ultimate` (a
+   *  super art priced in bodies instead of seconds) or stands alone (a
+   *  kill-speed build-around). */
+  gauge?: GaugeSpec;
 
   /** GLOBAL modifiers worn while the skill sits on the bar — the passive
    *  half of a flask (Life Flask: kills may shed life orbs) or of any
@@ -5342,6 +5360,13 @@ export interface SkillInstance {
      *  main path) — the Unleash bank's rest window ENDS here, so a cast
      *  bar's own runtime never banks its own seals. */
     pressAt?: number;
+    /** THE GAUGE (engine/gauge.ts): the bank's points, the lockout's
+     *  remaining seconds, and the last press's POWER (the partial/overflow
+     *  law — read by the execution's damage, counts and powerStacks
+     *  buffs). Transient — a fresh session starts empty. */
+    gauge?: number;
+    gaugeLock?: number;
+    gaugePower?: number;
     /** COMBO CHAIN cursor: the step the NEXT press casts (0 = base) and
      *  when the last press landed (the window clock). */
     comboIdx?: number;

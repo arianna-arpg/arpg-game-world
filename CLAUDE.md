@@ -297,7 +297,9 @@ we verify changes.
   skill as a SUPER ART — executing it flashes the pane whose AVATAR is the
   caster's OWN live body through the portrait fabric
   (render/vis/eyecatch.ts, an OPEN style registry `registerEyecatchStyle`
-  — 'sunder' slash cut-in / 'eclipse' iris; screen-anchored by the
+  — 'flank' fighting-game side-slice cut-in, THE DEFAULT: the world stays
+  in the shot performing the art / 'sunder' full-screen slash / 'eclipse'
+  iris; screen-anchored by the
   status-overlay exemption) and, solo policy allowing (the harvest rite's
   allowHold law — co-op/couch play it over a living world), HOLDS the
   world for the beat (kind 'ultimate', never 'menu'; a chrono skill's
@@ -309,7 +311,14 @@ we verify changes.
   own presentation), DRAWN == TIMED (the pane clock is `Timeflow.age`,
   the raw clock frozen only by a true pause — beginFrame now advances it
   between holds per its own documented contract; `eyecatchElapsed`/
-  `eyecatchAlive` the ONE fold for renderer + sweep + probes), and the
+  `eyecatchAlive` the ONE fold for renderer + sweep + probes), THE TAG
+  (the 'ultimate' SkillTag = the family's support/investment SCOPE: the
+  spec is the mark, the tag is the scope — census pins spec ⇒ tag, and
+  payload kin wear the tag markless so scaling reaches the whole art),
+  THE LAB LEVER (`ULT_QA` — QA builds cap the STAMPED cooldown + run an
+  eager banner throttle for back-to-back iteration; `?ultqa[=0]` /
+  `__game.ultqa()`; the ultimates-lab branch ships it ON, main ships it
+  false, the probe pins both regimes), and the
   wire ships the derived `ec` row (elapsed, not epochs — the tell-wire
   idiom). Debuts (data/ultimates.ts, Vault `gem_skills_ultimates`, each
   a COMPOSE of standing fabrics): the Hundred Partings (chrono stop +
@@ -320,6 +329,48 @@ we verify changes.
   folds; the pane's `avatarDefId` shows the form you are becoming) —
   dials in `ULT_CFG`, docs in `docs/engine/ultimates.md`, probe
   `balance/probe_ultimates.ts`),
+  `gauge.ts` (THE GAUGE FABRIC — skills that pay in the world's own
+  events; two resource shapes, one vocabulary: THE GAUGE (`SkillDef.gauge`
+  — a per-SKILL bank FED by the charge-tap vocabulary through the ONE
+  dispatcher `World.tapCharges` + the ONE filter chain `World.tapFires`
+  (kills, deaths near you, blows, orbs — `GaugeFeedSpec` = a ChargeGainSpec
+  minus its bank) and/or a regen clock, SPENT at the press (THE PRESS PAYS
+  — beside mana, an interrupted bar still paid), then SILENCED by a
+  lockout that takes nothing (the anti-chain law, aging on the owner's
+  own seconds); ONE READINESS — an unfilled gauge is "not ready" through
+  `Actor.unmetGate`, the same predicate a charge floor uses, so bar/AI/
+  press agree and the note reads the fill; THREE ORDINARY STATS
+  gaugeGain/gaugeNeed/gaugeLockout — base-1 multipliers registered by the
+  module, tag-scopable like any modifier; transient on
+  `SkillInstance.state`; the slot draws the bank rising as an ether meter)
+  and THE POOL (`ChargeDef.regen` — a per-ACTOR bank's BASELINE clock in
+  charges/10s beneath the standing `chargeRegen_<id>` investment, ticking
+  only while a slotted skill SPENDS it when `regenNeedsSpender` asks —
+  `Actor.spendsCharge`; spending is ordinary `chargeCost`; the Titan-Quest
+  Shade shape as one def row: `wisp`). THE PRESS MODES: THE PARTIAL PRESS
+  (`partial` — fire from minFrac of need, spend the whole bank, POWER
+  ramps floorPower→1 by `gaugePowerOf`), THE OVERFLOW (`overflow` — spend
+  the whole bank at power PAST one, up to bankMult), THE HASTENING
+  (`cooldownPer` — while the skill's own clock runs, a banked point SHAVES
+  it instead of banking; clear, it banks — the two-phase art); power is
+  stamped at the press (`state.gaugePower`) and read in three lanes —
+  damage (into the press's dmgMult), counts (shots/strikes/summons) and
+  `BuffEffect.powerStacks` (stacks per unit of power) — a gauge-less skill
+  reads 1 by construction. THE PRICE FLOOR grew two shapes for
+  ultimates (gauge ≥ minGaugeNeed | pool ≥ minPoolCost). Debuts
+  (data/ultimates.ts): Grave Tide (30 souls → the horde; the partial
+  press from three), the Reaper's Toll (8 kills, no super mark — the
+  kill-speed build-around), Hush of the Wake (the whole wisp pool), Doom
+  Bell / Last Rites (the low-life license) / Stormcrown on cooldowns; THE
+  D4 ROSTER, each wearing a Prime/Supreme-style `SkillDef.tree` (the
+  skill-mode fabric's exact cover as ordinary modifier rows): Red Hour
+  (Berserker — overflow + hastening, wrath worn as powerStacks), The Long
+  Cold (Sorcerer — freeze, near-immunity, the shatter), Rain of Knives
+  (Rogue — the partial press on a storm), Litany of Dawn (Cleric — shafts,
+  then the mending); THE LAB KIT (`ULT_QA.grantArts` →
+  `World.dealLabArts`, the Mireille gift lane minus the learn) deals them
+  into a fresh bag on the lab branch — docs in `docs/engine/gauge.md`,
+  probe `balance/probe_gauge.ts`),
   `throng.ts` + `cling.ts` (THE THRONG FABRIC — the swarm you GATHER, the
   Pikmin/Overlord playstyle as data: `SkillDef.throng` anchors a roster of
   sight-gated wild husks CLAIMED by walking through them, acquisition as
@@ -713,6 +764,35 @@ we verify changes.
   exported for composition and `healMassifWeave` guarantees one walkable
   weave — dials in `MASSIF_CFG`, docs in `docs/engine/massif.md`, probe
   `balance/probe_massif.ts`.
+  THE TOWN THAT GROWS (`data/townBuild.ts` — Lastlight as a size LADDER;
+  docs `docs/design/town-growth.md`, probe `balance/probe_towngrowth.ts`):
+  `TOWN_TIERS` (count-based on owned town-station features: hamlet →
+  village → town → township, read ONCE at World construction) × ONE site
+  table `TOWN_SITES` (every seat per rung — base buildings, the plaza's
+  waypoint, each station, the ward's cottages, the brook) behind ONE
+  resolver (`townSiteAt` / `World.townSeat`) that the fixture, the `near*`
+  dwell check, the NPC spawn and the renderer prompt ALL read (drawn ==
+  dwelt; no seat derives from the arena size — the bare `*_SITE` consts
+  are retired). Laws probe-pinned over every rung × every arrival side:
+  THE APRON LAW (no dwell disc holds an apron/portal/the waypoint), THE
+  ROAD LAW (portal → waypoint runs through no structure), THE QUARTER LAW
+  (a site keeps its compass quarter), disjoint footprints, THE CENTRE
+  CARVE (a fresh run's geometric entry is the exact centre and the
+  portal-clear cuts blocking props there — the plaza sits a fountain's
+  reach off it). THE SMITH'S YARD (bench → Brandt → stones → Font, west →
+  east, paved by THE FORGE WAY), THE INN SQUARE (`bounty_alcove` — the
+  board's unlock raises a roofed nook beside Mireille's door; legend `N`
+  = a board cell), THE BROOK (the random `river` retired for an authored
+  `course` stamp per rung — StampSpec `path`/`lay`/`spans`; the same row
+  with `lay: 'paved_way'` is a lane, and the town's TRAVELED WAYS are
+  courses resolved from sites), THE WARD (`data/boroughs.ts
+  TOWN_RESIDENTS`: families gated by the gatework on the ACCOUNT's
+  `souls_sheltered` — stamped at the refugee writer — standing at cottage
+  doors with a line through `World.residentPrompt`). THE STREAM LESSON:
+  every sim world loads the town at createPlayer and the town's spawns
+  draw from the GLOBAL stream, so a town layout change re-deals every
+  seeded rig downstream — a rig pins its deal with its own seeded span
+  AFTER the world stands (probe_pathpref's caldera, probe_persistence G).
   THE SETTLED BELT (`engine/settled.ts` + `data/settled.ts` — farmland +
   metropolis): the worked country as two recipes over the massif fabric —
   'fields' (hedgerow bodies + REAL portal roads that punch field-gates
@@ -1388,7 +1468,23 @@ we verify changes.
   docs in `docs/render/speech.md`; probe `balance/probe_speech.ts`.
   Tunables in `render/vis/visConfig.ts`; docs in `docs/render/README.md`.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
-  account / save / permadeath meta-layer.
+  account / save / permadeath meta-layer. THE FOLIO (`ui/folio.ts` — docs
+  `docs/ui/folio.md`, probe `balance/probe_folio.ts`): dwell dialogs that
+  would overlap bind into ONE tabbed book instead of painting over each
+  other — the first opened holds the front (THE MASTER LAW), later ones
+  arrive as shelved tabs on a thumb index seated on the front's measured
+  rect; a walked-away master yields (THE STANDING LAW), a same-arrival tie
+  fronts the nearer station (THE NEARER LAW), books never cross owners or
+  declared bays unless drawn rects truly overlap (THE MEASURED LAW),
+  companions never bind, Esc closes the FRONT leaf through its own close.
+  A new dialog enrolls with one `folioLeaf` row + one `folio.adopt` at its
+  show; the folio keeps no open flag of its own (the SELF-HEAL sync binds
+  and drops off each panel's own flag), so one dialog up is byte-identical.
+  THE SUITE (`data/suites.ts` + `World.stationReach`): a counter's dialog
+  SUMMONS the station dialogs that stand genuinely unlocked in the zone —
+  Brandt's counter gathers the bench + the stone as quiet tabs, their WORK
+  allowed from the counter through the ONE reach predicate every action
+  gate reads, closing with their anchor (one Esc leaves the workbench).
 - `launcher/` — the Electron desktop shell (plain CJS, type-checked via
   `tsconfig.launcher.json`): `main.cjs` (windows, git update flow + the
   packaged DIRECT UPDATE (GitHub-Releases download → silent install →

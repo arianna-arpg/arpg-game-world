@@ -9440,6 +9440,92 @@ function stampRiver(ctx: GenCtx): void {
   }
 }
 
+/**
+ * THE AUTHORED COURSE (StampSpec.path / lay / spans): a hand-laid polyline of
+ * ground for zones whose terrain is DATA — the town's brook, a paved lane
+ * between two seats. Where the rolled river derives its centre from the arena
+ * (and so moves the moment the arena grows), a course lays fused discs along
+ * exactly the points its row names, honoring the same gates the river does
+ * (portal clears, reservations, the inverse-forbid contract) so an authored
+ * brook still bends around a structure raised over it. A LIQUID course may
+ * carry `spans`: plank bridges laid ACROSS the water at those path fractions
+ * (the ravine's own span idiom — sound timber, never a trap). A WAY course
+ * (paved_way, road) rolls through wayRoller, so the wall-honesty law and the
+ * clearway sweep apply exactly as to every other traveled way.
+ */
+function stampCourse(ctx: GenCtx, spec: StampSpec): void {
+  const path = spec.path ?? [];
+  const lay = (spec.lay ?? 'water') as DoodadKind;
+  if (path.length < 2) {
+    console.warn(`[stamps] course stamp needs a path of ≥2 points (got ${path.length}) — skipped`);
+    return;
+  }
+  const { rng, arena } = ctx;
+  const [rLo, rHi] = spec.radius ?? [24, 30];
+  const isWay = !!doodadRule(lay).walkOnly;
+  const roll = isWay ? wayRoller(ctx) : null;
+  const dry = ruleIgnored(ctx, 'forbid') ? [] : forbiddersOf(ctx, lay);
+  // Sample the polyline at a step that keeps consecutive discs overlapping
+  // into ONE body (the river's 0.95 × r idiom), with a small lateral wobble
+  // so an authored line still reads as water, never a ruler.
+  const rMid = (rLo + rHi) / 2;
+  const step = rMid * 0.95;
+  const samples: Vec2[] = [];
+  for (let i = 0; i + 1 < path.length; i++) {
+    const a = path[i], b = path[i + 1];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len <= 0) continue;
+    const n = Math.max(1, Math.ceil(len / step));
+    for (let k = 0; k < n; k++) {
+      const f = k / n;
+      samples.push(vec(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f));
+    }
+  }
+  const last = path[path.length - 1];
+  samples.push(vec(last.x, last.y));
+  const placed: Doodad[] = [];
+  for (let i = 0; i < samples.length; i++) {
+    const s = samples[i];
+    const nx = samples[Math.min(i + 1, samples.length - 1)];
+    const px = samples[Math.max(i - 1, 0)];
+    const along = Math.atan2(nx.y - px.y, nx.x - px.x);
+    const perp = along + Math.PI / 2;
+    const wob = isWay ? 0 : rng.range(-0.25, 0.25) * rMid;
+    const p = vec(s.x + Math.cos(perp) * wob, s.y + Math.sin(perp) * wob);
+    const r = rng.range(rLo, rHi);
+    if (p.x < 0 || p.x > arena.w || p.y < 0 || p.y > arena.h) continue;
+    if (!isWay) {
+      if (dist(p, ctx.entry) < r + ENTRY_CLEAR * 0.7) continue;
+      if (ctx.exits.some(e => dist(p, e) < r + EXIT_CLEAR * 0.7)) continue;
+      if (inReserved(ctx, p, r)) continue; // the brook bends around a raised structure
+      if (dry.some(f => dist(p, f.pos) < r + f.radius)) continue;
+      const doo: Doodad = { pos: p, radius: r, kind: lay };
+      ctx.doodads.push(doo);
+      placed.push(doo);
+    } else {
+      roll!(p, r, lay);
+    }
+  }
+  // Spans across a liquid course: perpendicular plank lines at the named
+  // fractions of the LAID body (the ravine's laySpan idiom).
+  if (!isWay && placed.length >= 3) {
+    for (const f of spec.spans ?? []) {
+      const i = Math.max(1, Math.min(placed.length - 2, Math.round(f * (placed.length - 1))));
+      const at = placed[i].pos;
+      const along = Math.atan2(placed[i + 1].pos.y - placed[i - 1].pos.y, placed[i + 1].pos.x - placed[i - 1].pos.x);
+      const perp = along + Math.PI / 2;
+      const reach = placed[i].radius * 1.7;
+      for (let s = -reach; s <= reach; s += 18) {
+        ctx.doodads.push({
+          pos: vec(at.x + Math.cos(perp) * s, at.y + Math.sin(perp) * s),
+          radius: 24, kind: 'bridge', dir: perp,
+        });
+      }
+    }
+  }
+}
+registerStamp('course', (ctx, spec) => stampCourse(ctx, spec));
+
 /** THE SITE WALK GATE, ring half: is every sampled point of a stamp's ring on
  *  ground the walk field calls walkable? A convex layout carries NO walk field
  *  (plains, bridge-islands) and passes exactly as today; the maze/lattice

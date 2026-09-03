@@ -23,6 +23,7 @@ import {
 } from './skills';
 import { evalCurve, type CurveKind } from './curves';
 import { CHARGE_DEFS } from './charges';
+import { gaugeEffOf, gaugeNote, gaugeReady, gaugeTick, type GaugeEff } from './gauge'; // THE GAUGE FABRIC
 import type { TuneSpec } from './tuning';
 import type { SquishSpec } from './squish';
 import type { ClingSpec, ClingRide } from './cling';
@@ -2258,7 +2259,12 @@ export class Actor {
     if (rst.tick >= 1) {
       rst.tick -= 1;
       for (const [id, def] of Object.entries(CHARGE_DEFS)) {
-        const q = this.sheet.get('chargeRegen_' + id);
+        // THE POOL CLOCK (engine/gauge.ts, the per-actor shape): the def's
+        // own baseline ticks beneath the invested rate — but only while a
+        // slotted skill SPENDS the charge when the def asks for a spender
+        // (no ambient pips on every bar).
+        const base = def.regen && (!def.regenNeedsSpender || this.spendsCharge(id)) ? def.regen : 0;
+        const q = this.sheet.get('chargeRegen_' + id) + base;
         if (q <= 0) continue;
         const st = this.chargeState.get(id + ':regen') ?? { idle: 0, acc: 0, tick: 0 };
         this.chargeState.set(id + ':regen', st);
@@ -2268,6 +2274,15 @@ export class Actor {
           this.gainCharge(id, 1, def.baseCap ?? 0);
         }
       }
+    }
+    // THE GAUGE FABRIC (engine/gauge.ts): every slotted gauge ages its
+    // lockout and banks its regen on the OWNER's own seconds — a frozen
+    // caster's silence stands frozen. Skills with neither a regen clock
+    // nor a standing lockout cost nothing here.
+    for (const inst of this.skills) {
+      const gs = inst?.def.gauge;
+      if (!gs || (!gs.regen && !(inst!.state?.gaugeLock))) continue;
+      gaugeTick(inst!, gs, this.gaugeEff(inst!)!, dt);
     }
     // Per-second / per-distance / per-channel-second taps on equipped
     // skills (chargeGain, skill-innate AND support-grafted — the merged
@@ -3457,6 +3472,13 @@ export class Actor {
    *  every threshold holds. All actor-local, so the HUD, the AI, and the
    *  press agree — and the refusal can speak the gate's own `note`. */
   unmetGate(inst: SkillInstance): GateSpec | null {
+    // THE GAUGE (engine/gauge.ts): an unfilled bank is "not ready" exactly
+    // like a charge floor — the same predicate, so HUD, AI and press agree;
+    // the note reads the fill ("12/30 souls") or the silence ("spent").
+    if (inst.def.gauge) {
+      const eff = this.gaugeEff(inst)!;
+      if (!gaugeReady(inst, eff, inst.def.gauge)) return { note: gaugeNote(inst, inst.def.gauge, eff) };
+    }
     for (const g of instanceGates(inst)) {
       if (g.charge && (this.charges.get(g.charge.id) ?? 0) < g.charge.amount) return g;
       if (g.buff && !this.buffs.has(g.buff)) return g;
@@ -3505,6 +3527,30 @@ export class Actor {
   /** Are every gate's thresholds met? (unmetGate, as the yes/no.) */
   gatesMet(inst: SkillInstance): boolean {
     return this.unmetGate(inst) === null;
+  }
+
+  /** THE GAUGE FABRIC's effective terms for one instance — the three
+   *  investment stats (gaugeNeed / gaugeGain / gaugeLockout) folded with the
+   *  skill's own tag context, so "less Ultimate gauge required" is one
+   *  ordinary tag-scoped modifier. Null for skills wearing no gauge. */
+  gaugeEff(inst: SkillInstance): GaugeEff | null {
+    const spec = inst.def.gauge;
+    if (!spec) return null;
+    const tags = skillContextTags(inst.def);
+    const extra = instanceMods(inst);
+    return gaugeEffOf(spec,
+      this.sheet.get('gaugeNeed', tags, extra),
+      this.sheet.get('gaugeGain', tags, extra),
+      this.sheet.get('gaugeLockout', tags, extra));
+  }
+
+  /** Does any slotted skill SPEND this charge (innate chargeCost or a
+   *  socketed spender graft)? THE POOL CLOCK's spender gate. */
+  spendsCharge(id: string): boolean {
+    for (const inst of this.skills) {
+      if (inst && instanceChargeCost(inst)?.charge === id) return true;
+    }
+    return false;
   }
 
   /** THE PRIMED POUR's press test (pourPrime): may this instant pour,

@@ -43,6 +43,13 @@ export type SkillTag =
   // 'chrono' marks time-bending skills (SkillDef.chrono holds, stasis
   // appliers) — the gate for chronomancy-scoped supports and investment.
   | 'chrono'
+  // 'ultimate' marks the super arts (SkillDef.ultimate — engine/ultimates.ts)
+  // AND their payload kin (a follow-up collapse wears the tag so scaling
+  // reaches the whole art): the scope for ultimate-tuned supports and
+  // tag-filtered investment. THE SPEC IS THE MARK, THE TAG IS THE SCOPE —
+  // the census probe pins spec ⇒ tag; the tag alone is membership and pays
+  // no price floor.
+  | 'ultimate'
   // 'fissure' marks skills that TEAR CRACKS (GroundDelivery.fissure /
   // fissureTrail) — the gate for fissure-fanning supports, so they can
   // never socket into a skill with no crack to fan.

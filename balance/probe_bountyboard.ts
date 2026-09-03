@@ -100,7 +100,7 @@ import { HOLD_CLASSES, mintHoldState } from '../src/data/harborholds';
 import { harvestRowsFor } from '../src/data/harvest';
 import { coordDist } from '../src/world/coords';
 import { HARVEST_CFG, harvestSeqFor } from '../src/engine/harvest';
-import { BOUNTY_BOARD_SITE, expandedTown } from '../src/data/townBuild';
+import { expandedTown, townSiteAt } from '../src/data/townBuild';
 import { STRUCTURES } from '../src/data/structures';
 import { QUEST_CATEGORY_CAPS } from '../src/quests/types';
 import { START_ZONE, ZONES } from '../src/data/zones';
@@ -118,8 +118,10 @@ bootSimEngine();
 const SEED = 0xb0a4d;
 const openBoard = (w: World): void => { w.account.features.add(FEATURE.BOUNTY_BOARD); };
 const parkAtBoard = (w: World): void => {
-  w.player.pos.x = BOUNTY_BOARD_SITE.x;
-  w.player.pos.y = BOUNTY_BOARD_SITE.y;
+  // THE ONE READ (townBuild's site resolver through the World's own tier).
+  const at = w.townSeat('bounty_board');
+  w.player.pos.x = at.x;
+  w.player.pos.y = at.y;
 };
 const mkWorld = (): World => {
   const w: World = makeSimWorld('warrior', SEED);
@@ -142,15 +144,15 @@ const mkWorld = (): World => {
   const bare = makeAccount();
   const owned = makeAccount();
   owned.features.add(FEATURE.BOUNTY_BOARD);
-  const withoutFix = expandedTown(bare, base).fixtures?.some(f => f.structure === 'bounty_post') ?? false;
-  const withFix = expandedTown(owned, base).fixtures?.some(f => f.structure === 'bounty_post') ?? false;
-  check('A: the bounty_post fixture folds in exactly with the feature', !withoutFix && withFix);
+  const withoutFix = expandedTown(bare, base).fixtures?.some(f => f.structure === 'bounty_alcove') ?? false;
+  const withFix = expandedTown(owned, base).fixtures?.some(f => f.structure === 'bounty_alcove') ?? false;
+  check('A: the bounty_alcove fixture folds in exactly with the feature', !withoutFix && withFix);
+  const site0 = townSiteAt(0, 'bounty_board');
   check('A: the site sits inside the base town footprint',
-    BOUNTY_BOARD_SITE.x > 0 && BOUNTY_BOARD_SITE.x < base.size.w
-    && BOUNTY_BOARD_SITE.y > 0 && BOUNTY_BOARD_SITE.y < base.size.h);
-  check('A: the bounty_post structure resolves (board prop worn)',
-    !!STRUCTURES.bounty_post
-    && (STRUCTURES.bounty_post.props?.some(p => p.kind === 'bounty_board') ?? false));
+    !!site0 && site0.x > 0 && site0.x < base.size.w && site0.y > 0 && site0.y < base.size.h);
+  check('A: the bounty_alcove structure resolves (the board pinned to its wall — the N cell)',
+    !!STRUCTURES.bounty_alcove
+    && (STRUCTURES.bounty_alcove.plan?.some(row => row.includes('N')) ?? false));
   check('A: the catalog row stands (feat_bounty_board → the feature flag)',
     allUnlockables().some(u => u.id === 'feat_bounty_board'
       && u.kind === 'feature' && u.payload.flag === FEATURE.BOUNTY_BOARD));
@@ -899,8 +901,8 @@ seedGlobalRandom(0xf4ac);
     wF.ledger.fractures_sealed = (wF.ledger.fractures_sealed ?? 0) + 1;
     check('O2: the seal resolves the summons (the delta law)',
       BOUNTY_KINDS.summons.done(wF, fsm) === true);
-    wF.player.pos.x = BOUNTY_BOARD_SITE.x;
-    wF.player.pos.y = BOUNTY_BOARD_SITE.y;
+    wF.player.pos.x = wF.townSeat('bounty_board').x;
+    wF.player.pos.y = wF.townSeat('bounty_board').y;
     check('O2: the summons turns in at the board', wF.turnInBounty(fsm.id) === true);
   }
 }

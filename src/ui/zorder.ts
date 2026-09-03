@@ -36,6 +36,9 @@
 //                the injected stylesheet, so each panel also becomes its own
 //                stacking context and its internal z rows (drawer flaps,
 //                sticky heads, seal modals) stay panel-local by construction.
+//   folio      — THE FOLIO's thumb index (ui/folio.ts): the tab strip seated
+//                on a book's front leaf. Above every panel, so a neighbor's
+//                overlap can never bury the tabs; under the popups it serves.
 //   popup      — .choice-popup: JS-positioned deal floaters spawned over a
 //                panel's nodes.
 //   minigame   — the crafting minigame cover (ui/minigames.ts).
@@ -77,6 +80,7 @@ export const Z_LADDER = {
   world: 0,          // documentation-only: the #game canvas stays unpositioned
   crest: 10,         // renderer.ts — the crest overlay (word layer + HUD, scale < 1)
   panel: 40,         // every activatable .panel root (via the injected sheet)
+  folio: 50,         // ui/folio.ts — the thumb index (a TS-built root; reads the rung)
   popup: 60,         // .choice-popup floaters
   minigame: 900,     // ui/minigames.ts cover
   cover: 9000,       // ui/lobby.ts + ui/couchJoin.ts system covers

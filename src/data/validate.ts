@@ -48,6 +48,8 @@ import { NEMESIS_CFG } from '../meta/nemesis';
 import { GRUDGE_TIERS, NEMESIS_NAMES, NEMESIS_RANKS } from './nemesis';
 import { MONSTER_NAME_CFG, MONSTER_NAMES } from './monsterNames';
 import { RARITY_DEFS } from '../engine/rarity';
+import { TOWN_ADDITIONS, TOWN_SITES, TOWN_TIERS } from './townBuild';
+import { TOWN_RESIDENTS } from './boroughs';
 import {
   validateStamps, validateCompositions, compositionDefs, hasComposition,
   doodadRuleOf, doodadRuleKinds, hasDoodadRule, clusterDefs, formationDefs,
@@ -817,6 +819,36 @@ export function validateContent(): void {
   for (const z of Object.values(ZONES)) {
     for (const f of z.fixtures ?? []) {
       if (!STRUCTURES[f.structure]) warn(`zone ${z.id}: fixture names unknown structure '${f.structure}'`);
+    }
+  }
+  // THE TOWN THAT GROWS (data/townBuild.ts): the ladder is monotone, every
+  // site row spans the ladder, every structure a site or an addition raises
+  // resolves, every addition names a real site, and every resident names a
+  // real body + a real cottage (docs/design/town-growth.md).
+  {
+    const siteIds = new Set(TOWN_SITES.map(s => s.id));
+    for (let i = 1; i < TOWN_TIERS.length; i++) {
+      const a = TOWN_TIERS[i - 1], b = TOWN_TIERS[i];
+      if (!(b.stations > a.stations && b.w >= a.w && b.h >= a.h)) warn(`townBuild: TOWN_TIERS '${b.id}' must grow monotonically from '${a.id}'`);
+    }
+    for (const s of TOWN_SITES) {
+      if (s.tiers.length !== TOWN_TIERS.length) warn(`townBuild: site '${s.id}' authors ${s.tiers.length} tiers, the ladder has ${TOWN_TIERS.length}`);
+      if (s.structure && !STRUCTURES[s.structure]) warn(`townBuild: site '${s.id}' raises unknown structure '${s.structure}'`);
+      s.tiers.forEach((p, i) => {
+        const t = TOWN_TIERS[i];
+        if (p && t && (p.x < 0 || p.y < 0 || p.x > t.w || p.y > t.h)) warn(`townBuild: site '${s.id}' sits outside the '${t.id}' arena at tier ${i}`);
+      });
+    }
+    for (const add of TOWN_ADDITIONS) {
+      for (const f of add.fixtures) {
+        if (!STRUCTURES[f.structure]) warn(`townBuild: addition '${add.feature}' raises unknown structure '${f.structure}'`);
+        if (!siteIds.has(f.site)) warn(`townBuild: addition '${add.feature}' names unknown site '${f.site}'`);
+      }
+    }
+    for (const r of TOWN_RESIDENTS) {
+      if (!MONSTERS[r.def]) warn(`boroughs: resident '${r.id}' names unknown monster '${r.def}'`);
+      else if (MONSTERS[r.def].npcRole !== 'resident') warn(`boroughs: resident '${r.id}' body '${r.def}' must wear npcRole 'resident'`);
+      if (!siteIds.has(r.cottage)) warn(`boroughs: resident '${r.id}' names unknown cottage site '${r.cottage}'`);
     }
   }
 

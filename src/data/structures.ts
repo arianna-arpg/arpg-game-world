@@ -196,6 +196,9 @@ registerLegendChar('r', { doodad: { kind: 'rug', radius: 16 }, interior: true })
 // WAKE HERE — the spawn cell (CellSpec.spawn): plain floor that exports the
 // layout's spawn point. Any plan anywhere may claim where newcomers wake.
 registerLegendChar('S', { spawn: true, interior: true });
+// THE NOTICE BOARD — the bounty board as a plan character (the alcove pins
+// it to a wall; any plan anywhere may post a board the same way).
+registerLegendChar('N', { doodad: { kind: 'bounty_board', radius: 16 }, interior: true });
 
 // --- ROOF STYLES (registry) ----------------------------------------------------
 // How a roof rect renders (Batch D drawRoofs consumes): fill + edge + rest alpha.
@@ -641,21 +644,70 @@ export const STRUCTURES: Record<string, StructureDef> = {
     ],
   },
 
-  // THE BOUNTY BOARD's post: the board itself (the standing bounty_board
-  // doodad — painter + amber lamp already in doodadVisuals), a lantern to
-  // read by, a bench to wait on. Dwelling here opens the postings panel
-  // (the World reads proximity to BOUNTY_BOARD_SITE in townBuild.ts).
-  // THE REGISTER RIDER (charter walk 1): the look + siting are M0
-  // acceptance gauges — her in-browser walk blesses them.
-  bounty_post: {
-    id: 'bounty_post', halfW: 56, halfH: 46,
-    props: [
-      { kind: 'bounty_board', x: 0, y: -8, radius: 16 },
-      { kind: 'lantern_post', x: 36, y: 10, radius: 7 },
-      { kind: 'bench', x: -34, y: 18, radius: 10 },
+  // THE BOUNTY ALCOVE (docs/design/town-growth.md v2 — the board's unlock
+  // raises a LOCALE, not one post): a roofed reading nook beside the inn
+  // door — the board (the standing bounty_board doodad, painter + amber
+  // lamp) pinned to the back wall under a timber roof, a bench either side
+  // to wait on, lanterns flanking the open cobbled front. 'rooms', like the
+  // forge: the open front derives the nook UNSEALED, so the room veil never
+  // wraps a player reading the slate. Dwelling here opens the postings
+  // panel (the World reads proximity to the 'bounty_board' town site — the
+  // board cell sits one half-row above the site).
+  bounty_alcove: {
+    id: 'bounty_alcove', halfW: 91, halfH: 52, cellSize: 26,
+    plan: [
+      '#######',
+      '#..N..#',
+      '#b...b#',
+      '_L___L_',
     ],
-    breakables: [
-      { id: 'crate', x: 38, y: -32 },
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'timber',
+    floorStyle: 'flagstone', courtyardFloorStyle: 'cobble',
+    breakables: [{ id: 'crate', x: -70, y: 40 }],
+  },
+
+  // THE PLAZA SQUARE: the town's authored centre (the plaza fold) — the
+  // fountain, benches to sit by it, lanterns for the evening. The waypoint
+  // stands a step west of the fountain (townBuild TOWN_SITES 'waypoint'):
+  // arrival + the square, clear walking room between, nothing else claims
+  // the centre.
+  plaza_square: {
+    id: 'plaza_square', halfW: 130, halfH: 80,
+    props: [
+      { kind: 'fountain', x: 60, y: 0, radius: 38 },
+      { kind: 'bench', x: 60, y: -68, radius: 10 },
+      { kind: 'bench', x: 60, y: 68, radius: 10 },
+      { kind: 'lantern_post', x: 122, y: -46, radius: 7 },
+      { kind: 'lantern_post', x: 122, y: 46, radius: 7 },
+    ],
+  },
+
+  // THE MILL BANK: the brook's far side, from the village stage up — a
+  // windmill (the settled belt's live-sailed crown) and its bales, so the
+  // water at the town's edge reads as WORKED water, not a moat.
+  mill_bank: {
+    id: 'mill_bank', halfW: 70, halfH: 60,
+    props: [
+      { kind: 'windmill', x: 0, y: -6, radius: 30 },
+      { kind: 'hay_bale', x: -46, y: 34, radius: 13 },
+      { kind: 'hay_bale', x: 44, y: 30, radius: 12 },
+    ],
+  },
+
+  // THE TOWN GREEN: the ward's commons between the residents' cottages —
+  // lamps, bales, flowers (the settled belt's village-green vocabulary as a
+  // fixed fixture, so the ward reads as a neighbourhood the moment its
+  // ground stands, and the families arriving have somewhere to stand).
+  town_green: {
+    id: 'town_green', halfW: 90, halfH: 70,
+    props: [
+      { kind: 'street_lamp', x: -50, y: -30, radius: 10 },
+      { kind: 'street_lamp', x: 52, y: 26, radius: 10 },
+      { kind: 'hay_bale', x: 30, y: -44, radius: 13 },
+      { kind: 'flowers', x: -20, y: 30, radius: 18 },
+      { kind: 'flowers', x: 40, y: -10, radius: 16 },
+      { kind: 'bench', x: -60, y: 40, radius: 10 },
     ],
   },
 

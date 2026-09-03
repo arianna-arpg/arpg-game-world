@@ -51,6 +51,7 @@ import './data/glyphParts'; // side-effect: registers the shipped hand-drawn par
 import './data/commanders'; // side-effect: the tutorial factions (the Fathers) + the prologue's resolve seam
 import { updateAI } from './engine/ai';
 import { World, type Seat } from './engine/world';
+import { ULT_QA } from './engine/ultimates'; // THE LAB LEVER — ?ultqa / __game.ultqa
 import { sceneBegin, sceneCardAck, sceneDue, muTakeClassRequest } from './engine/scenes';
 import { MU_CFG, MU_SCENE_ID } from './data/mu';
 import { buildManifest, reconcileManifest, type ExpeditionManifest } from './packages/manifest';
@@ -256,6 +257,12 @@ const COOP_ALLY = COOP_PARAMS.has('coop') || COOP_HUMAN;
  *  refusals observed live. OFF (param absent) this is one always-false
  *  compare per frame — zero behavior change. */
 let crashTestAt = COOP_PARAMS.has('crashtest') ? performance.now() + 1000 : Infinity;
+/** `?ultqa[=0]` — THE LAB LEVER (engine/ultimates.ts ULT_QA): capped ultimate
+ *  cooldowns + the eager banner throttle, for back-to-back iteration on the
+ *  super arts. The lab branch ships the lever ON; `?ultqa=0` (or
+ *  `__game.ultqa(false)` mid-run) restores the authored pacing live. */
+const ULTQA_PARAM = COOP_PARAMS.get('ultqa');
+if (ULTQA_PARAM !== null) ULT_QA.active = ULTQA_PARAM !== '0' && ULTQA_PARAM !== 'off';
 
 // Host→client snapshot broadcast at a FIXED wire rate (decoupled from the host's
 // render FPS), only ever while real peers are connected — single-player/local-only
@@ -439,6 +446,9 @@ function startGame(
   // first breath. No-op until that first graduation — and placed BEFORE
   // persistRun so the baseline snapshot already carries them.
   world.dealVeteranFlasks();
+  // THE LAB KIT (ULT_QA.grantArts — engine/ultimates.ts): iteration builds
+  // deal the ultimate + gauge debuts into the fresh bag, unlearned.
+  world.dealLabArts();
   // THE SKILL GRAFT (meta/unlocks.ts kind 'graft'): the armed charge spends
   // HERE — where the run truly begins — before the baseline save, so the
   // snapshot carries the grafted gem from the first breath. A pick without
@@ -639,6 +649,8 @@ declare global {
       openLobby: () => void;
       leaveCoop: () => void;
       resetAccount: () => void;
+      /** THE LAB LEVER (ULT_QA): flip the ultimate iteration tune live. */
+      ultqa: (on?: boolean) => boolean;
       pad: () => PadState;
       padPointer: () => PadPointer;
       fakePad: (p: FakePad | null) => void;
@@ -687,6 +699,8 @@ window.__game = {
   applyZoneMsg: (z: ZoneMsg) => applyZone(world, z),
   openLobby, leaveCoop,
   resetAccount: () => { resetAccount(); location.reload(); },
+  // THE LAB LEVER: __game.ultqa(false) restores the shipped super-art pacing.
+  ultqa: (on = true) => { ULT_QA.active = on; return ULT_QA.active; },
   // Controller state + the hardware stand-in (tests: __game.fakePad({axes,buttons})).
   pad: () => pad, padPointer: () => padPointer,
   fakePad: (p) => { window.__fakePad = p; },
@@ -1010,6 +1024,10 @@ function handleLocalPanels(): void {
       if (!ui.escCascadeFor(world.localSeat.id)) ui.showEscapeMenu();
       return;
     }
+    // THE FOLIO (ui/folio.ts): a book closes its FRONT leaf first — the one
+    // on screen — through that leaf's own close; the fixed list below stays
+    // as the belt for any dialog not enrolled.
+    if (ui.folioCloseFront()) return;
     if (ui.caravanOpen) { ui.closeCaravan(); return; }
     if (ui.vendorOpen) { ui.closeVendor(); return; }
     if (ui.salvageOpen) { ui.closeSalvage(); return; }
@@ -1615,6 +1633,9 @@ function tick(now: number): void {
   // COUCH: the hero's pointer wakes only on surfaces that block THE HERO'S
   // hands (a guest's open bag must not flip P1 into menu mode); solo keeps
   // the classic any-surface gate byte-identically.
+  // THE FOLIO (ui/folio.ts): reconcile the books to every dialog's own open
+  // flag — whatever path opened or closed it — and seat the thumb indexes.
+  ui.folioSync();
   padPointer.update(dt,
     (couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || !running, nowSec);
   couchTick(dt, nowSec);

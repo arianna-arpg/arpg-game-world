@@ -67,6 +67,7 @@ export const UI_SCALE_SURFACES: ReadonlyArray<{ sel: string; mode: UiScaleMode }
   { sel: `.${UI_SCALE_CFG.markerClass}`, mode: 'zoom' },  // dynamic overlay roots that opted in
   { sel: '.tooltip', mode: 'scale' },                     // the hover card — placed at the cursor in viewport px (ui/tooltip.ts)
   { sel: '.choice-popup', mode: 'scale' },                // passive choice-node deals — placed over the node's rect (ui/panels.ts)
+  { sel: '.folio-strip', mode: 'scale' },                 // THE FOLIO's thumb index — seated at the front leaf's measured viewport rect (ui/folio.ts)
   { sel: '.dnd-ghost', mode: 'self' },                    // the drag ghost — composes its own scale into its translate (ui/dnd.ts)
 ];
 

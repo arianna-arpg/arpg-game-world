@@ -72,6 +72,7 @@ import { driftColor } from './vis/colorDrift';
 import { drawPortraitInto, portraitSubjectOf, portraitTile, type PortraitDefLike, type PortraitSubject } from './vis/portrait';
 import { EYECATCH_STYLES } from './vis/eyecatch';
 import { eyecatchElapsed, ULT_CFG, type EyecatchState } from '../engine/ultimates';
+import { gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'; // THE GAUGE's slot meter
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { drawRuneRing } from './vis/runeRing';
 import { registerVisCache, trimVisCaches } from './vis/caches';
@@ -5625,6 +5626,14 @@ export class Renderer {
       if (msg) this.queueSpeech(a, msg, '#d8b87a');
     }
 
+    // THE WARD'S RESIDENTS speak their line when you stand at their door —
+    // role-bound through world.residentPrompt() (data/boroughs.ts
+    // TOWN_RESIDENTS gives each family its words at the seat).
+    if (a.defId && MONSTERS[a.defId]?.npcRole === 'resident') {
+      const msg = world.residentPrompt(a);
+      if (msg) this.queueSpeech(a, msg, '#d8c8a8');
+    }
+
     // Any quest-giving NPC posts its offer above its head while you're near —
     // the id set derives from the QUESTS registry (quartermaster, a secret
     // vocation's shrine spirit, future field boards), never a hand list.
@@ -7203,6 +7212,21 @@ export class Renderer {
           ctx.fillStyle = 'rgba(0,0,0,0.65)';
           const frac = clamp(cd / cdTotal, 0, 1);
           ctx.fillRect(x + 4, by + 4, slot - 8, (slot - 8) * frac);
+        }
+        // THE GAUGE (engine/gauge.ts): the bank RISES up the slot as an
+        // ether meter — a full gauge wears a bright rim, a locked one reads
+        // dark (spent; gathering nothing) — the Vaal-soul purse at the
+        // button that spends it.
+        if (def.gauge && face === def) {
+          const geff = p.gaugeEff(inst)!;
+          const gh = (slot - 8) * gaugeFrac(inst, geff);
+          ctx.fillStyle = gaugeLocked(inst) ? 'rgba(120,40,40,0.55)' : 'rgba(143,168,216,0.5)';
+          ctx.fillRect(x + 4, by + slot - 4 - gh, slot - 8, gh);
+          if (gaugeReady(inst, geff, def.gauge)) {
+            ctx.strokeStyle = '#f4f6ff';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(x + 3, by + 3, slot - 6, slot - 6);
+          }
         }
         // USE-CHARGE pips (instanceUseCharges — a native bank OR a socketed
         // munition graft's: a CHAMBERED cast reads at the button exactly

@@ -62,6 +62,27 @@ export const EYECATCH_VIS = {
   allyEdge: '#f2f4ff',
   enemyEdge: '#ff5a4a',
   enemyWash: 'rgba(60,8,10,0.30)',
+  /** THE FLANK (the default style) — the fighting-game cut-in slice. The
+   *  world stays in the shot: only `wash` dims it, the slice owns `frac`
+   *  of the width, and the art's name runs UP the slice. */
+  flank: {
+    /** Slice width as a fraction of screen width (at its waist). */
+    frac: 0.27,
+    /** Inner-edge diagonal lean, as a fraction of screen height. */
+    skew: 0.09,
+    /** The light full-screen dim — the world stays visible performing. */
+    wash: 0.24,
+    /** The slice's own void opacity (near-solid: the card reads as a card). */
+    fill: 0.93,
+    /** Speed lines clipped inside the slice. */
+    lines: 16,
+    /** Avatar tile edge as a fraction of screen height, and center height. */
+    avatarFrac: 0.46,
+    avatarY: 0.40,
+    /** Rotated title px + its length budget, as fractions of screen height. */
+    titleFrac: 0.082,
+    titleBudget: 0.80,
+  },
 } as const;
 
 // --- easing ------------------------------------------------------------------
@@ -272,6 +293,128 @@ const eclipse: EyecatchPainter = (ctx, v) => {
   ctx.restore();
 };
 
+/** 'flank' — THE DEFAULT: the fighting-game cut-in. A skewed slice claims
+ *  the caster's side of the screen while the WORLD STAYS IN THE SHOT — the
+ *  art performs beside its own announcement, and only a light wash touches
+ *  the field. Ally slices enter from the left, enemy slices from the right
+ *  (the P1/P2 law); the name runs vertically along the slice's cut edge. */
+const flank: EyecatchPainter = (ctx, v) => {
+  const { w, h } = v;
+  const F = EYECATCH_VIS.flank;
+  const { env, tin, tout } = eyecatchEnv(v.t);
+  if (env <= 0) return;
+  const fromLeft = v.side === 'ally';
+  const edge = fromLeft ? EYECATCH_VIS.allyEdge : EYECATCH_VIS.enemyEdge;
+  /** THE MIRROR MAP: geometry is authored in the LEFT slice's frame and
+   *  every drawn x crosses this — the right slice is the same card
+   *  mirrored, while text and portrait still read forward (no scale(-1)
+   *  trickery, so nothing ever renders backwards). */
+  const mx = (x: number): number => fromLeft ? x : w - x;
+  const fw = w * F.frac;
+  const skew = h * F.skew;
+  // slide: off-edge → seated (backOut settles with a nudge) → shoved off
+  const sx = -(fw + skew) * ((1 - backOut(tin)) + (1 - tout));
+  const xTop = sx + fw + skew * 0.5;   // inner edge, top
+  const xBot = sx + fw - skew * 0.5;   // inner edge, bottom
+  const slicePath = (): void => {
+    ctx.beginPath();
+    ctx.moveTo(mx(sx - 8), -4);
+    ctx.lineTo(mx(xTop), -4);
+    ctx.lineTo(mx(xBot), h + 4);
+    ctx.lineTo(mx(sx - 8), h + 4);
+    ctx.closePath();
+  };
+
+  ctx.save();
+  // 1 · the light wash — the world dims to watch, but keeps performing
+  ctx.fillStyle = `rgba(8,10,16,${(F.wash * env).toFixed(3)})`;
+  ctx.fillRect(0, 0, w, h);
+  if (v.side === 'enemy') { ctx.fillStyle = EYECATCH_VIS.enemyWash; ctx.fillRect(0, 0, w, h); }
+
+  // 2 · the slice's void
+  slicePath();
+  const fill = ctx.createLinearGradient(mx(sx), 0, mx(sx + fw + skew), 0);
+  fill.addColorStop(0, `rgba(7,7,13,${(F.fill * env).toFixed(3)})`);
+  fill.addColorStop(1, `rgba(12,14,22,${(F.fill * 0.9 * env).toFixed(3)})`);
+  ctx.fillStyle = fill;
+  ctx.fill();
+
+  // 3 · the card's insides, clipped to the cut
+  ctx.save();
+  slicePath();
+  ctx.clip();
+  // speed lines, streaming toward the cut edge
+  const span = fw + skew + w * 0.15;
+  for (let i = 0; i < F.lines; i++) {
+    const seed = h01(i + 3);
+    const ly = (i + 0.5) / F.lines * h;
+    const len = fw * (0.25 + 0.45 * h01(i + 40));
+    const speed = EYECATCH_VIS.lineSpeed * 0.5 * (0.5 + seed);
+    const lx = sx - w * 0.05 + (((v.clock * speed + seed * span * 3) % span) + span) % span - len;
+    const x0 = mx(lx), x1 = mx(lx + len);
+    ctx.globalAlpha = (0.06 + 0.1 * h01(i + 80)) * env;
+    ctx.fillStyle = i % 4 === 0 ? v.tint : '#e8ecf8';
+    ctx.fillRect(Math.min(x0, x1), ly, Math.abs(x1 - x0), Math.max(1, h * 0.0022));
+  }
+  ctx.globalAlpha = 1;
+  // the avatar — the caster, large, slightly alive, glowing off the void
+  if (v.avatar) {
+    const size = h * F.avatarFrac * (1 + EYECATCH_VIS.avatarZoom * v.t);
+    const ax = mx(sx + fw * 0.52), ay = h * F.avatarY;
+    const glow = ctx.createRadialGradient(ax, ay, size * 0.1, ax, ay, size * 0.7);
+    glow.addColorStop(0, `rgba(255,255,255,${(0.14 * env).toFixed(3)})`);
+    glow.addColorStop(0.55, hexA(v.tint, 0.2 * env));
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(ax - size, ay - size, size * 2, size * 2);
+    ctx.globalAlpha = env;
+    ctx.drawImage(v.avatar, ax - size / 2, ay - size / 2, size, size);
+    ctx.globalAlpha = 1;
+  }
+  // the name, running along the cut (bottom-up on the left card, top-down
+  // on the right — the mirrored composition, nothing backwards)
+  ctx.save();
+  ctx.translate(mx(sx + fw - h * 0.048), h * 0.52);
+  ctx.rotate(fromLeft ? -Math.PI / 2 : Math.PI / 2);
+  const px = fitTitlePx(ctx, v.title, h * F.titleFrac, h * F.titleBudget);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = EYECATCH_VIS.font(px);
+  ctx.globalAlpha = env;
+  ctx.fillStyle = hexA(v.tint, 0.85);
+  ctx.fillText(v.title, px * 0.06, px * 0.06);
+  ctx.fillStyle = '#f4f6ff';
+  ctx.fillText(v.title, 0, 0);
+  ctx.restore();
+  // the small line, grounded at the card's foot
+  if (v.sub) {
+    ctx.font = EYECATCH_VIS.font(h * EYECATCH_VIS.subFrac, 600, false);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.globalAlpha = env;
+    ctx.fillStyle = 'rgba(220,226,244,0.85)';
+    ctx.fillText(v.sub, mx(sx + fw * 0.46), h * 0.955);
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore(); // the clip
+
+  // 4 · the cut's lips — tint band inside, side-coded hairline on the edge
+  ctx.beginPath();
+  ctx.moveTo(mx(xTop - h * 0.011), -4);
+  ctx.lineTo(mx(xBot - h * 0.011), h + 4);
+  ctx.lineWidth = h * 0.014;
+  ctx.strokeStyle = hexA(v.tint, 0.5 * env);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(mx(xTop), -4);
+  ctx.lineTo(mx(xBot), h + 4);
+  ctx.lineWidth = h * 0.004;
+  ctx.globalAlpha = env;
+  ctx.strokeStyle = edge;
+  ctx.stroke();
+  ctx.restore();
+};
+
 /** Accent hex → rgba at alpha (tolerates #rgb/#rrggbb; else passes through). */
 function hexA(hex: string, alpha: number): string {
   const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex);
@@ -285,6 +428,7 @@ function hexA(hex: string, alpha: number): string {
 /** THE OPEN REGISTRY — style id → painter. Data picks by id
  *  (UltimateSpec.style); unknown ids fall back to ULT_CFG.style upstream. */
 export const EYECATCH_STYLES: Record<string, EyecatchPainter> = {
+  flank,
   sunder,
   eclipse,
 };

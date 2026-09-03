@@ -33,6 +33,16 @@ export interface ChargeDef {
    *  (chargeRegen_<id>). Skill taps carry their own max; this is the
    *  bank's floor when nothing on the bar vouches for it. */
   baseCap?: number;
+  /** THE POOL CLOCK (the gauge fabric's per-actor shape — engine/gauge.ts):
+   *  BASELINE accrual in charges per 10s, the def's own tick with no
+   *  investment at all (a "Shade every four seconds" is `regen: 2.5`);
+   *  chargeRegen_<id> ADDS to it — the investable lane. Banks against
+   *  baseCap + chargeCap_<id> like every accrual. */
+  regen?: number;
+  /** The pool ticks ONLY while some slotted skill SPENDS this charge
+   *  (chargeCost, innate or socket-grafted): a resource exists because you
+   *  carry an art that drinks it — no ambient pips on every bar. */
+  regenNeedsSpender?: true;
   /** Where the HUD shows the bank. 'slot' pins the pips ONTO the hotbar
    *  slot of whichever slotted skill SPENDS this charge (founts ride
    *  their flask's icon — ammunition reads at the button that fires it),
@@ -55,6 +65,15 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
   },
   stealth: {
     label: 'Stealth', color: '#4a5a78',
+  },
+  // WISPS (the gauge fabric's POOL debut — docs/engine/gauge.md): the
+  // spirit-resource that regenerates on its own clock, one every four
+  // seconds, five held — spent whole by the Hush of the Wake. Only a bar
+  // carrying a wisp-spender banks them (regenNeedsSpender); chargeRegen_wisp
+  // / chargeCap_wisp are the investment lanes, free from the registry.
+  wisp: {
+    label: 'Wisps', color: '#8fa8d8',
+    baseCap: 5, regen: 2.5, regenNeedsSpender: true, hud: 'slot',
   },
 
   // VERSE (the skald's meter): banked one per sung verse — war_chant and
