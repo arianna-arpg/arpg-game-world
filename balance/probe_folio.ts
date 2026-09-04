@@ -29,7 +29,7 @@
 //   L. THE CYCLE — Tab order walks binding order and wraps both ways.
 //   M. THE CLOSE-ALL — every leaf of a book closes through its own path.
 //   N. THE DIALS — FOLIO_CFG stays sane; a doubled enrollment throws.
-//   O. THE ENROLLMENT CENSUS — ui/panels.ts enrolls exactly the thirteen
+//   O. THE ENROLLMENT CENSUS — ui/panels.ts enrolls exactly the thirteen (+ the two tree leaves, 2026-09-04)
 //      dwell dialogs, each show path adopts, none of the six former hideAll()
 //      swaps survives, the couch cascade closes the seat's front leaf first,
 //      and main.ts drives the per-frame sync + the Esc hook.
@@ -386,13 +386,24 @@ console.log('O. THE ENROLLMENT CENSUS');
   const main = readFileSync(resolve(process.cwd(), 'src/main.ts'), 'utf8');
   const EXPECTED = ['vendor', 'salvage', 'font', 'recall', 'oracle', 'bestiary', 'borough',
     'bounties', 'caravan', 'sail', 'hold', 'merc', 'vocation'];
+  // THE TREES (2026-09-04, her ask): the passive tree + the skill-tree pane
+  // enroll as player-panel leaves — explicit asks that arrive in front, no
+  // engagement read, no range — so both up at once tab into one book.
+  const TREES = ['passives', 'skilltree'];
+  const ALL = [...EXPECTED, ...TREES];
   const enrolled = [...panels.matchAll(/this\.folioLeaf\('([a-z_]+)'/g)].map(m => m[1]!);
   const adopted = [...panels.matchAll(/this\.folio\.adopt\('([a-z_]+)'\)/g)].map(m => m[1]!);
-  check('O1 the thirteen dwell dialogs enroll, once each',
-    EXPECTED.every(id => enrolled.filter(x => x === id).length === 1) && enrolled.length === EXPECTED.length,
+  check('O1 the thirteen dwell dialogs + the two trees enroll, once each',
+    ALL.every(id => enrolled.filter(x => x === id).length === 1) && enrolled.length === ALL.length,
     `enrolled: ${enrolled.join(',')}`);
   check('O2 every enrolled leaf adopts at its show path',
-    EXPECTED.every(id => adopted.includes(id)), `adopted: ${adopted.join(',')}`);
+    ALL.every(id => adopted.includes(id)), `adopted: ${adopted.join(',')}`);
+  check('O2b the trees arrive IN FRONT (explicit asks) with no station reads',
+    ["'passives'", "'skilltree'"].every(id => {
+      const i = panels.indexOf(`this.folioLeaf(${id}`);
+      const row = i < 0 ? '' : panels.slice(i, panels.indexOf('}));', i));
+      return row.includes("arrive: 'front'") && !row.includes('engaged:') && !row.includes('range:');
+    }));
   const showBody = (name: string): string => {
     const i = panels.indexOf(`\n  ${name}(`);
     const j = panels.indexOf('\n  }\n', i);

@@ -216,10 +216,23 @@ Authoring template (a fork with a sub-fork, a cross-link, a ranked utility):
       { id: 'b1', name: 'Beta One',  links: ['b'], mods: [ … ] },
     ] }
 
-**DIAL, hers:** the point budget. Four points at cap (Shape B) reads thin
-against a real graph — `SKILL_LEVEL_BANDS` is still the one array (Shape
-A's five, or a denser ladder, is one edit), and THE COVER LAW re-derives
-with it.
+**RULED (2026-09-04, her word): the point budget stays THIN by design.**
+Four points at cap against a growing graph is the intent — the old World
+of Warcraft talent-row shape: as the skill levels, more options open than
+the points can buy, and specializing is the whole point of customizing.
+`SKILL_LEVEL_BANDS` remains the one array should the ladder ever move,
+and THE COVER LAW re-derives with it — but the thinness is not a defect to
+tune away.
+
+**THE PANE COHERES (built 2026-09-04, her ask):** the skill-tree pane and
+the passive tree are FOLIO leaves (ui/folio.ts — the tabbed-book fabric
+the station dialogs use): both up at once bind into one book with a tab
+strip, each arriving IN FRONT (a key, a handle — explicit asks), the key
+of a shelved tree brings it forward, Esc closes the front leaf. THE REACH
+(`TREE_REACH_PX`, ui/panels.ts): on BOTH trees a hover anchors its card
+to the nearest node within reach, the anchored node rings up (the pad's
+synthetic hover included), and a click on empty ground within reach
+allocates that node — the card and the click always agree.
 
 ---
 

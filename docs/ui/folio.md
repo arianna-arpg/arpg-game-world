@@ -98,11 +98,24 @@ town site, `arrive: 'front'` when the player explicitly asked for it. The
 probe's census (`O`) pins that every enrolled leaf adopts and that no dialog
 swaps the screen with `hideAll()` at its show.
 
-The keyed panels — the bag, the sheet, the tree, the map — are **not**
-enrolled: they have their own homes (left, right, centred-full) and the
-bench's "the bag is the menu" pairing is a designed side-by-side. Enrolling
-them is one row each plus a `companions` list on the station leaves, once
-the Escape grammar for keyed panels ("clear them all") has been ruled.
+The keyed panels the bag, the sheet and the map are **not** enrolled: they
+have their own homes (left, right, full) and the bench's "the bag is the
+menu" pairing is a designed side-by-side. The two TREES are (below, ruled
+2026-09-04 — her ask): they share the centred berth with the stations and
+with each other, so overlap there is real; Esc on a tree closes that leaf
+(the front), not every keyed panel — the "clear them all" grammar stays
+the belt beneath for the un-enrolled panels.
+
+### Player panels enroll too (2026-09-04)
+
+The passive tree (`passives`) and the skill-tree pane (`skilltree`) are
+leaves as well — not stations: no engagement read, no range. Both share
+the centred berth, so opening one over the other binds them into one book;
+each declares `arrive: 'front'` (a key press or a handle click is an
+explicit ask), the passive tree's key brings a shelved tree forward instead
+of closing it, and the pane's tab names the skill it shows. Esc closes the
+front leaf through its own close, as for every leaf; a lone tree is a book
+of one — byte-identical to before, no strip.
 
 ## The suite (phase two)
 

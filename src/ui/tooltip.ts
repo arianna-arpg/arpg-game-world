@@ -54,6 +54,15 @@ export interface TooltipProximity {
   intervalMs?: number;
 }
 
+/** THE ANCHOR MARK: the element the box currently speaks for wears this
+ *  class while it does (removed on hide / re-anchor; a re-render's torn-out
+ *  anchor takes the class with it). Surfaces style it as the "this is what
+ *  you are pointing at" read — the passive tree and the skill-tree pane
+ *  ring their anchored node with it, which also gives the PAD POINTER's
+ *  synthetic hover a visible target (CSS :hover never fires for it) — and
+ *  THE REACH (panels.ts reachNode) resolves a click on empty ground to it. */
+export const TIP_ANCHOR_CLASS = 'tt-anchor';
+
 export interface TooltipOpts {
   proximity?: TooltipProximity;
   /** EXTENDED HOVER (opt-in per bind): dwell TIP_CFG.extendMs on one anchor
@@ -134,6 +143,7 @@ export function bindTooltips(
     disarmIntent();
     disarmExtend();
     if (!cur) return;
+    cur.classList.remove(TIP_ANCHOR_CLASS);
     cur = null;
     tip.classList.add('hidden');
   };
@@ -142,7 +152,9 @@ export function bindTooltips(
   const reveal = (el: HTMLElement, e: { clientX: number; clientY: number }): void => {
     if (el !== cur) {
       if (!render(el, false)) { hide(); return; }
+      cur?.classList.remove(TIP_ANCHOR_CLASS);
       cur = el;
+      el.classList.add(TIP_ANCHOR_CLASS);
       armExtend(el);
     }
     place(e);
@@ -181,7 +193,7 @@ export function bindTooltips(
     container.addEventListener('pointermove', (e) => {
       // A re-render tore the anchor out — release it so the scan re-picks the
       // rebuilt element (content refreshes from live data in the same beat).
-      if (cur && !cur.isConnected) { cur = null; tip.classList.add('hidden'); }
+      if (cur && !cur.isConnected) { cur.classList.remove(TIP_ANCHOR_CLASS); cur = null; tip.classList.add('hidden'); }
       // Direct hit wins outright — precision hovering stays precision.
       const direct = (e.target as HTMLElement).closest?.<HTMLElement>('[data-tip]');
       if (direct) { show(direct, e); return; }

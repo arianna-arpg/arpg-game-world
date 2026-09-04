@@ -120,7 +120,7 @@ import { objectiveRead, objectiveSeals, type ZoneDef } from '../data/zones';
 import { underSpanPolicyOf } from '../data/underspans';
 import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
-import { bindTooltips, hideTooltip, TIP_CFG, type TooltipContent } from './tooltip';
+import { bindTooltips, hideTooltip, TIP_ANCHOR_CLASS, TIP_CFG, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
 import { VENDORS, VENDOR_CFG, fmtRestock, type VendorDef } from '../data/vendors';
 import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
@@ -167,6 +167,12 @@ const HINT_BAR_ENABLED = false;
  *  sit this many px in from the panel's right edge. */
 const SATCHEL_RIGHT_PX = 46;
 const TREE_POPUP_ENABLED = true;
+
+/** THE REACH (both trees): how far (screen px) from a node's centre a hover
+ *  still anchors its card AND a click on empty ground still allocates it —
+ *  the same radius for both, so you always allocate what the card names.
+ *  Sized for a thumb on a pad, not a surgeon's mouse. DIAL. */
+const TREE_REACH_PX = 34;
 
 /** Item-category glyphs — bag tiles and the drag fabric's ghost chip share
  *  one vocabulary (a lifted thing looks like the tile it left). */
@@ -286,17 +292,22 @@ const gemTileFaceHtml = (item: ItemInstance): string => {
 
 /** The SCRAP-WHEEL cursor (vendor salvage mode): a gear glyph rendered into
  *  an SVG data-URI, crosshair fallback where custom cursors are refused. */
-const SCRAP_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><text x="2" y="20" font-size="19">⚙</text></svg>',
-)}") 13 13, crosshair`;
+/** The SALVAGE GLYPH DRESS (both cursors below): a yellow-white face over a
+ *  dark rim (paint-order puts the rim UNDER the fill), the cursor fabric's
+ *  read-anywhere discipline — the old bare black glyph vanished against the
+ *  panes it rides. One dial for both. */
+const SALVAGE_GLYPH_FILL = '#f4e6b0';
+const SALVAGE_GLYPH_RIM = '#2a2010';
+const salvageGlyphSvg = (glyph: string): string =>
+  `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><text x="3" y="21" font-size="19" fill="${SALVAGE_GLYPH_FILL}" stroke="${SALVAGE_GLYPH_RIM}" stroke-width="2.2" stroke-linejoin="round" paint-order="stroke">${glyph}</text></svg>`;
+
+const SCRAP_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(salvageGlyphSvg('⚙'))}") 14 14, crosshair`;
 
 /** The BREAKER'S-HAMMER cursor (the bench's BREAK mode, benchBreakMode): the
  *  scrap wheel's bench sibling — while armed it rides the salvage panel AND
  *  the inventory, where clicks break things for essence. Same sovereign
  *  data-URI idiom as SCRAP_CURSOR (never themed), crosshair fallback. */
-const BREAK_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><text x="2" y="20" font-size="19">⚒</text></svg>',
-)}") 13 13, crosshair`;
+const BREAK_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(salvageGlyphSvg('⚒'))}") 14 14, crosshair`;
 
 /** THE AUTO-ARM CHOICE — one seam, every salvage view: true (shipped) means
  *  arriving at the bench OR an open scrap counter ARMS its salvage mode and
@@ -746,10 +757,10 @@ export class UI {
     // so reading the tree never demands surgical hovering.
     bindTooltips(this.passiveTree,
       (el) => el.dataset.tip === 'pnode' ? this.passiveNodeTooltip(el.dataset.node!) : null,
-      { proximity: { selector: '.tree-node', radiusPx: 30, hysteresis: 0.35 } });
+      { proximity: { selector: '.tree-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 } });
     bindTooltips(this.skillTreePane,
       (el) => el.dataset.tip === 'stnode' ? this.skillTreeNodeTooltip(el.dataset.node!) : null,
-      { proximity: { selector: '.st-node', radiusPx: 30, hysteresis: 0.35 } });
+      { proximity: { selector: '.st-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 } });
     this.updateHintBar(); // replace the static index.html placeholder with live binds
 
     // THE GRIMOIRE BINDING GESTURE (ui/dnd.ts — the drag fabric's first
@@ -1018,6 +1029,18 @@ export class UI {
       refresh: fronted(() => this.refreshMercMenu()) }));
     enroll(this.folioLeaf('vocation', this.vocationMenu, () => 'A Calling', () => this.vocationOpen, () => this.closeVocationMenu(), {
       arrive: 'front', refresh: fronted(() => this.refreshVocationMenu()) }));
+    // THE TREES (2026-09-04): the passive tree and the skill-tree pane share
+    // the centred berth, so both up at once bind into ONE book instead of
+    // painting over each other — each an explicit ask (a key, a handle), so
+    // each ARRIVES IN FRONT; the tab names the skill. Player panels, not
+    // stations: no engagement read, no range — the master/front laws alone.
+    enroll(this.folioLeaf('passives', this.passiveTree, () => 'Passives', () => this.treeOpen,
+      () => { if (this.treeOpen) this.toggleTree(this.panelSeatIds.get(this.passiveTree)); }, {
+        arrive: 'front', refresh: () => { hideTooltip(); this.refreshTree(); } }));
+    enroll(this.folioLeaf('skilltree', this.skillTreePane,
+      () => (this.skillTreeSkillId && SKILLS[this.skillTreeSkillId]?.name) || 'Skill Tree',
+      () => this.skillTreePaneOpen, () => this.closeSkillTree(), {
+        arrive: 'front', refresh: () => { hideTooltip(); this.refreshSkillTree(); } }));
 
     // THE SUITE (data/suites.ts): a counter's dialog SUMMONS the station
     // dialogs that stand genuinely unlocked in this zone. The world folds
@@ -5656,6 +5679,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       this.refreshTree();
       return;
     }
+    // Open but SHELVED behind a book-mate (the skill-tree pane in front):
+    // the key brings it forward rather than closing it — the D-pad law.
+    if (this.treeOpen && this.folio.bookFor('passives')?.front !== 'passives' && this.folio.bookFor('passives')) {
+      this.folio.front('passives');
+      this.folioStrip.update();
+      return;
+    }
     this.treeOpen = !this.treeOpen;
     this.closeChoicePopup(); // a popup never outlives its panel
     this.passiveTree.classList.toggle('hidden', !this.treeOpen);
@@ -5663,6 +5693,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       this.ownPanel(this.passiveTree, seat);
       this.centerTreeOnStart();
       this.refreshTree();
+      this.folio.adopt('passives');
+      this.folioStrip.update();
     }
   }
 
@@ -5957,11 +5989,37 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     return `${(cx - vw / 2).toFixed(1)} ${(cy - vh / 2).toFixed(1)} ${vw.toFixed(1)} ${vh.toFixed(1)}`;
   }
 
+  /** THE REACH (both trees): resolve a click on EMPTY tree ground to the node
+   *  it meant — the node the hover card is anchored to (TIP_ANCHOR_CLASS:
+   *  drawn == allocated, the card and the click agree by construction),
+   *  else the nearest node within TREE_REACH_PX. A direct hit on a node
+   *  answers null: its own click handler already ran. The caller decides
+   *  what a non-allocatable resolve does (nothing — its card already says
+   *  why). Sized so a thumb on the pad, or a mouse a few pixels off a
+   *  small circle, still lands the allocation. */
+  private reachNode(svg: SVGSVGElement, selector: string, e: MouseEvent): SVGElement | null {
+    if ((e.target as Element).closest?.(selector)) return null;
+    const anchored = svg.querySelector<SVGElement>(`${selector}.${TIP_ANCHOR_CLASS}`);
+    if (anchored) return anchored;
+    let best: SVGElement | null = null;
+    let bd = TREE_REACH_PX;
+    for (const el of svg.querySelectorAll<SVGElement>(selector)) {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0) continue;
+      const d = Math.hypot(e.clientX - (r.x + r.width / 2), e.clientY - (r.y + r.height / 2));
+      if (d < bd) { bd = d; best = el; }
+    }
+    return best;
+  }
+
   /** Wire the tree's zoom buttons + wheel-zoom + drag-pan onto the freshly rendered
    *  SVG (listeners live on the re-created SVG, GC'd each refresh — no leak). A
    *  pointerdown ON a node is let through so the allocate click still fires; drags
    *  start only on empty space, and only on the pan buttons (LMB/MMB — never RMB,
-   *  the skill button). Gesture rules live in attachPanZoom. Mirrors wireMapControls. */
+   *  the skill button). Gesture rules live in attachPanZoom. Mirrors wireMapControls.
+   *  THE REACH rides the helper's real-click hook: a click on empty ground within
+   *  reach of an allocatable node allocates it (never in the editor — its clicks
+   *  select). */
   private wireTreeControls(): void {
     const svg = this.passiveTree.querySelector<SVGSVGElement>('#tree-svg');
     if (!svg) return;
@@ -5988,6 +6046,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       box: () => this.treeBox,
       apply,
       ignore: '.tree-node',
+      onClick: DEV.passiveTreeEditor ? undefined : (e) => {
+        const el = this.reachNode(svg, '.tree-node', e);
+        // The node's own handler does the allocating (choice deals included);
+        // a non-bubbling click can't re-enter this hook.
+        if (el?.classList.contains('available')) el.dispatchEvent(new MouseEvent('click', { bubbles: false }));
+      },
     });
   }
 
@@ -6198,6 +6262,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.skillTreePane.classList.remove('hidden');
     this.ownPanel(this.skillTreePane, seat);
     this.refreshSkillTree();
+    // THE FOLIO: bind (arrives in front), or — already bound and shelved
+    // behind the passive tree — come forward.
+    if (this.folio.adopt('skilltree') === 'noop') this.folio.front('skilltree');
+    this.folioStrip.update();
   }
 
   closeSkillTree(): void {
@@ -6403,6 +6471,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       box: () => this.stBox,
       apply,
       ignore: '.st-node',
+      onClick: (e) => {
+        // THE REACH: the same leeway the passive tree gives.
+        const el = this.reachNode(svg, '.st-node', e);
+        if (el?.classList.contains('available')) el.dispatchEvent(new MouseEvent('click', { bubbles: false }));
+      },
     });
   }
 

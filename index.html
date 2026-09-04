@@ -245,6 +245,12 @@
     #passive-tree svg { width: 100%; height: auto; display: block; }
     .tree-node.available { cursor: var(--cursor-point, pointer); }
     .tree-node.available:hover { stroke: #ffd700; stroke-width: 3; }
+    /* THE ANCHOR MARK (ui/tooltip.ts TIP_ANCHOR_CLASS): the node the hover
+       card names — and the one THE REACH allocates on a click nearby —
+       rings up whether the pointer sits on it or beside it (the pad's
+       synthetic hover included). An allocatable anchor rings gold. */
+    .tree-node.tt-anchor { stroke-width: 3; }
+    .tree-node.available.tt-anchor { stroke: #ffd700; stroke-width: 3.5; }
 
     /* THE SKILL-TREE PANE (skill-mode trees — one skill's tree drawn the
        passive tree's way; ui/panels.ts refreshSkillTree). */
@@ -255,6 +261,8 @@
     #skill-tree svg { width: 100%; height: auto; display: block; }
     #skill-tree .st-node.available { cursor: var(--cursor-point, pointer); }
     #skill-tree .st-node.available:hover { stroke: #ffd700; stroke-width: 3; }
+    #skill-tree .st-node.tt-anchor { stroke-width: 3; }
+    #skill-tree .st-node.available.tt-anchor { stroke: #ffd700; stroke-width: 3.5; }
     #skill-tree .st-label { font-size: 11px; pointer-events: none; }
 
     /* Passive REALM tabs (data/passiveRealms.ts — the tree's constellations) */
