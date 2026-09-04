@@ -113,8 +113,19 @@
       padding-right: 30px; /* THE CLOSE GLYPH's corner (closeGlyphHtml, .panel-x below) */
     }
     .panel h3 { margin: 10px 0 4px 0; font-size: 12px; color: var(--gold); }
-    /* THE PANEL MOVE (ui/panelmove.ts): a panel's ribbon is its drag handle. */
+    /* THE PANEL MOVE (ui/panelmove.ts): a panel's ribbon is its drag handle
+       while the layout is movable and the panel unlocked; THE LOCK glyph
+       seats left of the close glyph in its sticky row (else in the ribbon). */
     .panel-movable > h2 { cursor: var(--cursor-grab, grab); user-select: none; }
+    .panel-lock {
+      width: 28px; height: 28px; margin: -6px 2px 0 0; padding: 0; flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(20,20,30,0.85); color: var(--gold); border: 1px solid var(--panel-border);
+      border-radius: 50%; font-size: 13px; line-height: 1; cursor: var(--cursor-point, pointer);
+    }
+    .panel-lock.locked { color: var(--text-dim); }
+    .panel-lock:hover { border-color: var(--gold); background: #3a3a55; }
+    .panel > h2 > .panel-lock { float: right; margin: -4px 30px 0 6px; }
     /* THE CLOSE GLYPH (ui/panels.ts closeGlyphHtml): every closeable panel
        wears a small ✕ in its top-right corner — the mouse/touch twin of Esc.
        A zero-height STICKY row as the template's first child: it displaces

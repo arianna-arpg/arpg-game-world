@@ -132,6 +132,17 @@ stylesheet's, when that front was never moved) — `folioLeaf.present` hands
 it over for one microtask — so switching or closing a tab never teleports
 the book. The strip re-seats on every move.
 
+THE LAYOUT (`Settings.layout`, Options → Interface → Layout): the whole
+fabric is an OPT-IN — "Movable UI" is OFF by default (the classic fixed
+seats) and gates every drag and every lock glyph. While ON, a settled
+drag, a book handoff and a ribbon double-click persist the panel's seat as
+viewport fractions of its top-left (keyed by the root's id), a freshly-shown
+panel takes its remembered seat through the per-frame sync
+(`panelLayoutSync` inside `folioSync`), and each panel wears a 🔓/🔒 glyph
+left of its ✕ — a locked panel refuses the drag. OFF returns every shown
+panel to its stylesheet seat but keeps the remembered layout for the next
+ON; "Reset to default" clears seats and locks and re-homes every root.
+
 ## The suite (phase two)
 
 `src/data/suites.ts` declares **suites**: station dialogs that belong

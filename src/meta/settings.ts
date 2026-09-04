@@ -200,7 +200,22 @@ export interface Settings {
   pickupFeed: boolean;
   /** Seconds each pickup row stands (rails in PICKUP_FEED_CFG). */
   pickupFeedSec: number;
+  /** THE UI LAYOUT (ui/panelmove.ts): the movable-UI opt-in (OFF = the
+   *  classic fixed seats), every dragged panel's remembered seat as
+   *  viewport FRACTIONS of its top-left (window sizes differ between
+   *  sessions; the keep re-clamps on show), and the per-panel locks —
+   *  both keyed by the panel root's id. */
+  layout: UiLayoutOptions;
 }
+
+/** THE UI LAYOUT options (ui/panelmove.ts owns the mechanics). */
+export interface UiLayoutOptions {
+  movable: boolean;
+  seats: Record<string, { fx: number; fy: number }>;
+  locked: Record<string, boolean>;
+}
+
+export const DEFAULT_UI_LAYOUT: UiLayoutOptions = { movable: false, seats: {}, locked: {} };
 
 export type PoolBarsMode = 'smart' | 'recent' | 'always';
 
@@ -236,6 +251,8 @@ export interface SettingsSave {
   floatKinds?: Record<string, boolean>;
   pickupFeed?: boolean;
   pickupFeedSec?: number;
+  /** THE UI LAYOUT (additive — older saves simply lack it). */
+  layout?: { movable?: boolean; seats?: Record<string, unknown>; locked?: Record<string, unknown> };
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -363,6 +380,7 @@ export const makeSettings = (): Settings => ({
   floatKinds: {},
   pickupFeed: true,
   pickupFeedSec: PICKUP_FEED_CFG.defaultSec,
+  layout: { ...DEFAULT_UI_LAYOUT, seats: {}, locked: {} },
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
@@ -394,6 +412,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   floatKinds: { ...s.floatKinds },
   pickupFeed: s.pickupFeed,
   pickupFeedSec: s.pickupFeedSec,
+  layout: { movable: s.layout.movable, seats: { ...s.layout.seats }, locked: { ...s.layout.locked } },
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -404,6 +423,23 @@ const boolRecord = (r: Record<string, unknown> | undefined): Record<string, bool
   const out: Record<string, boolean> = {};
   if (r && typeof r === 'object') {
     for (const [k, v] of Object.entries(r)) if (typeof v === 'boolean') out[k] = v;
+  }
+  return out;
+};
+
+/** Keep only honest seats — finite viewport fractions inside a generous
+ *  window (a hand-edited save can't park a panel a mile off-screen; THE
+ *  KEEP re-clamps on show regardless). */
+const seatRecord = (r: Record<string, unknown> | undefined): Record<string, { fx: number; fy: number }> => {
+  const out: Record<string, { fx: number; fy: number }> = {};
+  if (r && typeof r === 'object') {
+    for (const [k, v] of Object.entries(r)) {
+      const seat = v as { fx?: unknown; fy?: unknown } | null;
+      if (seat && typeof seat.fx === 'number' && typeof seat.fy === 'number'
+        && Number.isFinite(seat.fx) && Number.isFinite(seat.fy)) {
+        out[k] = { fx: clamp(seat.fx, -0.5, 1.5), fy: clamp(seat.fy, -0.5, 1.5) };
+      }
+    }
   }
   return out;
 };
@@ -488,5 +524,12 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     pickupFeed: s.pickupFeed ?? true,
     pickupFeedSec: clamp(s.pickupFeedSec ?? PICKUP_FEED_CFG.defaultSec,
       PICKUP_FEED_CFG.secMin, PICKUP_FEED_CFG.secMax),
+    // THE UI LAYOUT (additive): the opt-in defaults OFF; seats keep only
+    // finite fractions; locks keep only honest booleans.
+    layout: {
+      movable: !!(s.layout?.movable ?? DEFAULT_UI_LAYOUT.movable),
+      seats: seatRecord(s.layout?.seats),
+      locked: boolRecord(s.layout?.locked),
+    },
   };
 }

@@ -1505,7 +1505,10 @@ we verify changes.
   MOVE (`ui/panelmove.ts`): every ribboned panel drags by its `h2` — the
   zoom law (screen px ÷ the .panel zoom), THE KEEP (never fully off
   screen), double-click resets, the couch dock wins, and a folio book
-  MOVES AS ONE (the new front takes the shelved front's seat).
+  MOVES AS ONE (the new front takes the shelved front's seat); THE LAYOUT
+  (`Settings.layout`, Options → Layout) is the OPT-IN — "Movable UI" OFF
+  by default, seats persist as viewport fractions + per-panel 🔓/🔒 locks,
+  a reset re-homes everything (docs/ui/folio.md).
 - `launcher/` — the Electron desktop shell (plain CJS, type-checked via
   `tsconfig.launcher.json`): `main.cjs` (windows, git update flow + the
   packaged DIRECT UPDATE (GitHub-Releases download → silent install →

@@ -129,7 +129,7 @@ import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
 import { treeGraph, treeLimbOfNode, treeLimbs, treeNodeRanks, treeSealedSet, treeSpentCount, TREE_LAYOUT_CFG, type TreeGraphNode } from '../engine/skilltree'; // THE SKILL-TREE PANE reads the one graph
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
-import { attachPanelMove, panelMoved, panelMoveReset, panelMoveTo, panelSeatOf } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels
+import { attachPanelMove, configurePanelLayout, panelLayoutRefresh, panelLayoutSync, panelMoved, panelMoveReset, panelMoveTo, panelSeatOf, persistPanelSeat, resetPanelLayout } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels; THE LAYOUT remembers
 import { MAP_CFG, MAP_LABEL_MODES } from './mapConfig';
 import { applyCursor, CURSOR_COLORS, CURSOR_STYLES } from '../core/cursor';
 import { AIM_TICK_STYLES } from '../render/vis/aimtick';
@@ -528,6 +528,8 @@ export class UI {
    *  panel root per skill ever opened this session, each with its own open
    *  flag and lens (zoom/pan over the graph's fitted box). */
   private skillTreePanes = new Map<string, SkillTreePane>();
+  /** THE PANEL MOVE's static roots (the skill-tree panes join at minting). */
+  private movableRoots: HTMLElement[] = [];
   /** THE BOOK MOVES AS ONE (folioLeaf.present): the seat a shelving or
    *  closing front hands to the leaf that takes its place — null seat = the
    *  stylesheet's; cleared on a microtask so only the same synchronous
@@ -817,12 +819,15 @@ export class UI {
     // draggable; a drag re-seats the folio strip on the moving front.
     // (Skill-tree panes attach at their minting; the escape menu, the
     // start menu and the full-screen cards deliberately stay put.)
-    for (const el of [this.charSheet, this.inventory, this.passiveTree, this.worldMap,
+    this.movableRoots = [this.charSheet, this.inventory, this.passiveTree, this.worldMap,
       this.vendorMenu, this.salvageMenu, this.fontMenu, this.recallMenu, this.oracleMenu,
       this.bestiaryMenu, this.boroughMenu, this.bountyMenu, this.caravanMenu, this.sailMenu,
-      this.holdMenu, this.mercMenu, this.vocationMenu]) {
-      attachPanelMove(el, { onMove: () => this.folioStrip.update() });
-    }
+      this.holdMenu, this.mercMenu, this.vocationMenu];
+    for (const el of this.movableRoots) attachPanelMove(el, { onMove: () => this.folioStrip.update() });
+    // THE LAYOUT (Settings.layout): the opt-in, the remembered seats and the
+    // locks live in settings; the fabric reads them live and saves through
+    // the same door every option uses. The per-frame sync rides folioSync.
+    configurePanelLayout({ get: () => this.getSettings().layout, save: () => this.saveSettings() });
 
     // THE CLOSE GLYPH's wire (closeGlyphHtml): ONE delegated click per root,
     // so a rebuilt template keeps its glyph live. Owned panels close for
@@ -996,6 +1001,7 @@ export class UI {
             if (from && from.el !== el) {
               if (from.seat) panelMoveTo(el, from.seat.left, from.seat.top);
               else if (panelMoved(el)) panelMoveReset(el);
+              persistPanelSeat(el); // the book's seat is a settled seat
             }
           }
         } else {
@@ -1116,7 +1122,13 @@ export class UI {
    *  open flags — whatever path opened or closed them — and seat the strips. */
   folioSync(): void {
     this.folio.sync();
+    panelLayoutSync(this.layoutRoots()); // THE LAYOUT's per-frame sync (seats freshly-shown panels, keeps the lock glyphs honest)
     this.folioStrip.update();
+  }
+
+  /** Every root THE PANEL MOVE governs: the static panels + the minted skill-tree panes. */
+  private layoutRoots(): HTMLElement[] {
+    return [...this.movableRoots, ...[...this.skillTreePanes.values()].map(p => p.el)];
   }
 
   /** Esc's dialog step: close the FRONT leaf of the hero's (or the named
@@ -8528,6 +8540,16 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
           value="${Math.round(s.pickupFeedSec * 10)}"
           title="How long each pickup row stands before it fades (a repeat grab refreshes its row's clock)."> <b id="val-pickupsec">${s.pickupFeedSec.toFixed(1)}s</b></span>
       </div>
+      <h1>Layout</h1>
+      <div class="rebind-row">
+        <span>Movable UI</span>
+        <button id="opt-uimove" title="ON: drag any panel by its top ribbon; a lock glyph beside each panel's ✕ pins it in place, and the layout is remembered across sessions. OFF: every panel stands at its classic seat, and your saved layout waits for the next ON. Double-click a ribbon to return that one panel to its default seat.">${s.layout.movable ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>UI Layout</span>
+        <span><button id="opt-uireset" title="Return every panel to its default seat and unlock them all; the remembered layout is cleared.">RESET TO DEFAULT</button>
+          <span style="color:var(--text-dim);font-size:11px;margin-left:8px">${Object.keys(s.layout.seats).length} moved · ${Object.keys(s.layout.locked).length} locked</span></span>
+      </div>
       <h1>Save Data</h1>
       <div class="acct-head">Your progress as one portable file: account, settings, and every character.
         Importing replaces what stands on this device, whole, then restarts the game.</div>
@@ -8799,6 +8821,22 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       const st = this.getSettings();
       st.pickupFeed = !st.pickupFeed;
       this.saveSettings();
+      this.renderOptions(root, onBack);
+    });
+    // THE LAYOUT (ui/panelmove.ts): the movable-UI opt-in + the reset.
+    // Flipping the toggle re-seats (ON) or returns (OFF) every shown panel
+    // at once; the reset clears seats + locks and re-homes every root.
+    root.querySelector<HTMLElement>('#opt-uimove')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      st.layout.movable = !st.layout.movable;
+      this.saveSettings();
+      panelLayoutRefresh(this.layoutRoots());
+      this.folioStrip.update();
+      this.renderOptions(root, onBack);
+    });
+    root.querySelector<HTMLElement>('#opt-uireset')?.addEventListener('click', () => {
+      resetPanelLayout(this.layoutRoots());
+      this.folioStrip.update();
       this.renderOptions(root, onBack);
     });
     root.querySelectorAll<HTMLElement>('[data-notice-ch]').forEach(btn => {
