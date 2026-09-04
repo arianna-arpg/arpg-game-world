@@ -1958,7 +1958,7 @@ export class Actor {
    *  stat (seared wounds halve it — a status is all it takes) and capped
    *  at the life CEILING (overdrive debt borrows the top of the pool).
    *  Returns what actually landed. */
-  healBy(amount: number): number {
+  healBy(amount: number, silent = false): number {
     if (amount <= 0 || this.dead) return 0;
     const before = this.life;
     // A LIFE SEAL (Mortis Seal) locks the top of the pool below even the
@@ -1971,9 +1971,14 @@ export class Actor {
     const landed = this.life - before;
     if (landed > 0) {
       SIM_TAP.current?.onHeal?.(this, landed);
-      // THE RECENCY LEDGER + the 'heal' trigger's event (any landed heal).
-      this.noteRecent('heal');
-      this.healedSince += landed;
+      // THE RECENCY LEDGER + the 'heal' trigger's event — for REAL heals
+      // only: passive regeneration pours silently (a body that never
+      // stops regenerating is not 'recently healed', and the heal trigger
+      // must never be a free metronome).
+      if (!silent) {
+        this.noteRecent('heal');
+        this.healedSince += landed;
+      }
     }
     return landed;
   }
@@ -3231,7 +3236,7 @@ export class Actor {
       const toEs = Math.min(1, Math.max(0, this.sheet.get('lifeRegenToEs')));
       // Life fills only to the CEILING (overdrive debt borrows from the
       // top) — and regeneration is HEALING: seared wounds slow it too.
-      this.healBy(regen * (1 - toEs) * dt);
+      this.healBy(regen * (1 - toEs) * dt, true);
       this.mana = Math.min(maxMana, this.mana + manaRegen * dt);
 
       // OVERDRIVE repayment: each lane melts its debt once the breather

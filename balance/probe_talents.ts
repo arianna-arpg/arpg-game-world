@@ -286,6 +286,13 @@ const swing = (w: World, p: Actor, at: { x: number; y: number }, secs = 1.2): bo
   p.healBy(10);
   step(w, 0.05);
   check('D8 a landed heal raises the heal event (Mending Ward) and stamps recentlyHealed', p.ward > 0 && p.recently('heal'), `ward ${p.ward.toFixed(1)}`);
+  // PASSIVE REGEN IS SILENT: a body ticking regeneration is not 'recently
+  // healed', and the heal trigger is never a free metronome.
+  step(w, 0.1, Math.ceil((RECENT_CFG.windowSec + 5) / 0.1));
+  p.ward = 0;
+  p.life = p.maxLife() * 0.5;
+  step(w, 0.1, 50);
+  check('D8b passive regeneration never stamps recentlyHealed nor raises the heal event', !p.recently('heal') && p.ward === 0 && p.life > p.maxLife() * 0.5, `life ${p.life.toFixed(1)}`);
 }
 {
   // 'miss' → Overpower worn, then spent by the next melee hit.

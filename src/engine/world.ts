@@ -2512,10 +2512,23 @@ interface WispScene {
 // installs the predicate once at load.
 VICTIM_HOOKS.isBoss = v => !!(v.defId && MONSTERS[v.defId]?.boss);
 
-/** The 'pulse' procs (ProcDef trigger 'pulse'), derived once from the
- *  registry on first use — the per-actor sweep walks only the ones the
- *  actor's sheet ARMS (StatSheet.armedFamily over their proc_ ids). */
-let PULSE_PROC_IDS: string[] | null = null;
+/** THE TRIGGER INDEX — every proc id (the WHOLE family, the only shape
+ *  StatSheet.armedFamily may be asked with: it caches one derived list per
+ *  prefix off the first caller's ids) and the ids per trigger, re-derived
+ *  when the registry GROWS (probes push rows at runtime — the length-key
+ *  idiom). rollOwnProcs and the pulse sweep ask the owner's sheet which
+ *  procs are ARMED and intersect with the trigger before walking the
+ *  registry, so a body with no grant for that trigger pays one cached
+ *  lookup per event. */
+let PROC_INDEX: { all: string[]; byTrigger: Record<string, Set<string>>; len: number } | null = null;
+function procIndex(): NonNullable<typeof PROC_INDEX> {
+  if (!PROC_INDEX || PROC_INDEX.len !== PROC_LIST.length) {
+    const byTrigger: Record<string, Set<string>> = {};
+    for (const pr of PROC_LIST) (byTrigger[pr.trigger] ??= new Set()).add(pr.id);
+    PROC_INDEX = { all: PROC_LIST.map(pr => pr.id), byTrigger, len: PROC_LIST.length };
+  }
+  return PROC_INDEX;
+}
 
 export class World {
   actors: Actor[] = [];
@@ -40721,10 +40734,10 @@ export class World {
     // PULSE BEATS — only the pulse procs this sheet arms (the armed-list
     // derivation is cached per source generation; an uninvested body pays
     // one cached lookup).
-    PULSE_PROC_IDS ??= PROC_LIST.filter(pr => pr.trigger === 'pulse').map(pr => pr.id);
-    if (PULSE_PROC_IDS.length) {
-      const armed = a.sheet.armedFamily('proc_', PULSE_PROC_IDS);
-      for (const id of armed) {
+    const pulses = procIndex().byTrigger['pulse'];
+    if (pulses?.size) {
+      for (const id of a.sheet.armedFamily('proc_', procIndex().all)) {
+        if (!pulses.has(id)) continue;
         const proc = PROCS[id];
         const every = proc.every ?? 0;
         if (every <= 0) continue;
@@ -41027,6 +41040,16 @@ export class World {
     },
   ): void {
     if (owner.dead) return;
+    // THE ARMED GUARD: nothing on this sheet (or the event's instance)
+    // grants any proc of this trigger — leave without walking the registry.
+    const idx = procIndex();
+    const want = idx.byTrigger[trigger];
+    if (!want?.size) return;
+    let any = false;
+    for (const id of owner.sheet.armedFamily('proc_', idx.all, opts?.extra)) {
+      if (want.has(id)) { any = true; break; }
+    }
+    if (!any) return;
     const depth = opts?.depth ?? 0;
     if (depth >= this.procDepthAllowed(owner)) return;
     for (const proc of PROC_LIST) {
