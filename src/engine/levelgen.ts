@@ -26,6 +26,7 @@ import type { GeyserSpec } from './geysers'; // authoredVents — the geyser fab
 import type { DebrisLook, DissolveSpec } from './dissolve'; // THE DISSOLUTION GRAMMAR — DoodadRule.dissolve (the break motion row) + Doodad.litterLook (the debris face)
 import { rockSurfaceOf, type RockFormSpec } from './rockForms';
 import type { AmbushSpec } from './actor';
+import type { PostSpec } from './brain'; // THE SPAWN SEAT's duty post (the authored-map fabric)
 import { Rng } from '../core/rng';
 import type { ExitRoadSpec, PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, WhereSpec, ZoneDef } from '../data/zones';
 import { STRUCTURES, legendCell, type CellSpec, type StructureDef } from '../data/structures';
@@ -782,6 +783,23 @@ export interface PlacedStructure {
   rooms?: PlacedRoom[];
 }
 
+/** A SPAWN SEAT — a def at a point, resolved AT GEN (deterministic per seed),
+ *  spawned raw by loadZone with the base population (memory-captured like
+ *  every resident). The pit-dweller lane (landmark spawns) and the
+ *  authored-map fabric (engine/authoredMaps.ts) both speak it; the tempers
+ *  are optional so the classic rows stay byte-identical: `rarity` promotes
+ *  through the real elite ladder, `post` (+ `facing`) stamps a DUTY POST
+ *  at the seat (brain.ts PostSpec — the theater's posted-folk idiom). */
+export interface SpawnSeat {
+  id: string;
+  pos: Vec2;
+  ambush?: AmbushSpec;
+  tier?: number;
+  rarity?: string;
+  post?: boolean | PostSpec;
+  facing?: number;
+}
+
 export interface GeneratedLayout {
   doodads: Doodad[];
   /** Set-piece centers (ruin interiors, camp yards) — where POIs live. */
@@ -823,7 +841,7 @@ export interface GeneratedLayout {
    *  seat on — recorded at gen so the materializer can seat the body on its
    *  own floor (a story-blind spawn on a butte top wears tier 0 and the mover
    *  contract snaps it off the rim). */
-  landmarkSpawns?: { id: string; pos: Vec2; ambush?: AmbushSpec; tier?: number }[];
+  landmarkSpawns?: SpawnSeat[];
   /** SECRET HOLLOWS (the hollows fabric, stampHollows): sealed pockets and
    *  through-wall passages hiding inside the wall mass behind brittle seams.
    *  The world consumes these (World.openHollow) — carve, reveal, memory. */
@@ -3116,7 +3134,7 @@ export interface GenCtx {
    *  materializes them inside the memory-tagging window (base population).
    *  Rows may carry an instance ambush arm (the penned herd) and an aloft
    *  row its STORY (`tier` — LandmarkDef.siteTier's sampled seat). */
-  landmarkSpawns?: { id: string; pos: Vec2; ambush?: AmbushSpec; tier?: number }[];
+  landmarkSpawns?: SpawnSeat[];
   /** A non-convex generator sets this; generateLayout passes it through to the
    *  returned GeneratedLayout.walk (the Phase-2 walkability seam). */
   walk?: WalkField;

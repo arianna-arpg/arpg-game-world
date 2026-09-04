@@ -289,6 +289,8 @@ import { delverMulAt } from '../world/strata';
 import { COURSE_FIELD_SALT, courseBiomeAt, courseMintHints, strewnInstancesNear, type CourseInstance, type CourseMintHints, type CourseSpec } from '../world/courses';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec, RegionKind } from '../world/regions';
 import { registerGenPin } from './genPins';
+import { authoredMapOf, authoredZoneSpec, definedSpec, sealAuthoredZone } from './authoredMaps'; // THE AUTHORED-MAP FABRIC
+import type { ZoneSpec } from './worldgen';
 
 /** THE GENERATION PINS this file forces by hand (engine/genPins.ts): ground
  *  the engine mints or grafts directly, named nowhere in the data. Declared
@@ -3123,6 +3125,10 @@ export class World {
    *  captured into memory when we leave it. zoneGenTagging gates the createMonster
    *  base-population flag. */
   private zoneMemory = new Map<string, ZoneMemory>();
+  /** THE ONE-SHOT FORGET (devRemintZone): the next zone leave writes no
+   *  memory and drops the standing one — the reload re-mints pristine
+   *  ground off the def (the Map Forge's edit loop). */
+  private forgetMemoryOnLeave = false;
   private currentZoneSeed = 0;
   private zoneGenTagging = false;
   /** Ordinal of seeded farPoint fallbacks taken this load (World.seededDraw's
@@ -6183,7 +6189,17 @@ export class World {
         m.ambushSpec = ls.ambush;
         this.armAmbush(m, ls.ambush);
       }
+      // THE SEAT'S TEMPERS (SpawnSeat — the authored-map fabric): a DUTY POST
+      // at the seat (the theater's posted-folk idiom) and a RARITY promotion
+      // through the real elite ladder. Classic rows carry neither.
+      if (ls.post) {
+        m.aiPost = vec(ls.pos.x, ls.pos.y);
+        m.postSpec = ls.post === true ? {} : ls.post;
+        if (ls.facing !== undefined) m.aiPostFacing = ls.facing;
+      }
       this.actors.push(m);
+      // SpawnSeat.rarity — the seat's promotion through the real elite ladder (authored maps).
+      if (ls.rarity && ls.rarity !== 'normal' && ls.rarity in RARITY_DEFS) this.promoteMonster(m, ls.rarity as MonsterRarity);
     }
     // BOUNTY WRITS: `count` of the zone's own bodies walk it as MARKED QUARRY —
     // named from the nemesis vocabulary, promoted, tagged, roaming with the
@@ -12410,6 +12426,96 @@ export class World {
     return def.id;
   }
 
+  // --- THE AUTHORED-MAP LANE (engine/authoredMaps.ts) --------------------------
+  /** THE ONE DIRECTED MINT for a hand-made map: place it beside `anchor` (the
+   *  zone underfoot by default, or the sane node nearest `target`) with the
+   *  map's own words as the spec — dress, exact size, recipe, objective,
+   *  pack/dress policies — under the caller's overrides, SEAL it (the pack
+   *  density, the cohort, the stripped rolls, the re-seated frontiers), chart
+   *  it, notarize the road and lift the anchor's veil. Idempotent on
+   *  `opts.id` (a standing zone of that id is returned as it stands). Null =
+   *  no such map. The quest lane composes the same words inside acceptQuest;
+   *  the bounty 'expedition' kind and the dev lanes call this. */
+  mintAuthoredZone(mapId: string, opts: {
+    id?: string;
+    anchor?: ZoneDef;
+    target?: MapCoord;
+    level?: number;
+    seed?: number;
+    /** Wire the road both ways (default true). */
+    linkBack?: boolean;
+    /** Mint DISCONNECTED (find-it) — connectFloatingZone wires it on approach. */
+    floating?: boolean;
+    forceWaypoint?: boolean;
+    wpExclusionRadius?: number;
+    /** Explicit ZoneSpec words that win over the map's own. */
+    spec?: Partial<ZoneSpec>;
+  } = {}): ZoneDef | null {
+    const map = authoredMapOf(mapId);
+    if (!map) return null;
+    if (opts.id && this.zoneMap[opts.id]) return this.zoneMap[opts.id];
+    const sane = (z: ZoneDef): boolean => !z.floating && !z.concealed && !isRoadlessGateHub(z) && z.caveDepth == null;
+    const here = this.zoneMap[this.zone.id];
+    const anchor = (opts.anchor && sane(opts.anchor) ? opts.anchor : null)
+      ?? (opts.target ? nearestNode(this.zoneMap, opts.target, undefined, undefined, sane) : null)
+      ?? (here && sane(here) ? here : this.surfaceAnchor());
+    const target = opts.target ?? { x: anchor.map.x + 3, y: anchor.map.y - 2 };
+    const floating = opts.floating ?? false;
+    const link = !floating && (opts.linkBack ?? true);
+    const seed = opts.seed ?? ((this.manifest.seed ^ hashStr(`authored:${opts.id ?? mapId}`)) >>> 0);
+    const def = placeZoneAt(target, anchor, this.zoneMap, this.nextGenId++, authoredZoneSpec(map, definedSpec({
+      id: opts.id,
+      level: opts.level ?? map.level ?? this.eventLevel(target),
+      seed, linkBack: link, floating,
+      forceWaypoint: opts.forceWaypoint, wpExclusionRadius: opts.wpExclusionRadius,
+      biomeFor: this.biomeFor,
+      ...(anchor.dimension ? { dimension: anchor.dimension } : {}),
+      ...opts.spec,
+    } as Partial<ZoneSpec>)));
+    sealAuthoredZone(def, map);
+    this.zoneMap[def.id] = def;
+    if (!floating) {
+      this.sim.onNodeCharted(def, this.simView());
+      if (link) this.notarizeRoad(anchor, def);
+      if (anchor.veiled) { anchor.veiled = false; this.refreshExitLabels(); }
+    }
+    return def;
+  }
+
+  /** DEV: mint a hand-made map beside the zone underfoot and WALK IN (the Map
+   *  Forge's "mint & walk"). The party lands on the map's entry marker (the
+   *  layout's spawnAt) or the geometric entry. Returns the zone id. */
+  devMintAuthored(mapId: string, opts?: { level?: number; seed?: number }): string | null {
+    const def = this.mintAuthoredZone(mapId, {
+      level: opts?.level ?? Math.max(1, this.player.level),
+      seed: opts?.seed ?? rollSeed(),
+    });
+    if (!def) return null;
+    this.loadZone(def.id);
+    this.landPartyAt(vec(this.player.pos.x, this.player.pos.y));
+    return def.id;
+  }
+
+  /** DEV: RE-MINT the zone underfoot from its def with NO memory — the Map
+   *  Forge's edit loop (the authored layout re-reads the live map registry,
+   *  so a saved edit shows on the next reload). The party keeps its spot,
+   *  clamped onto the new ground. */
+  devRemintZone(): boolean {
+    const id = this.zone.id;
+    if (!this.zoneMap[id] && !this.caveMap[id]) return false;
+    const keep = vec(this.player.pos.x, this.player.pos.y);
+    this.forgetMemoryOnLeave = true;
+    this.loadZone(id);
+    this.landPartyAt(keep);
+    return true;
+  }
+
+  /** DEV: is the zone underfoot an authored map (and which)? */
+  devAuthoredMapHere(): string | null {
+    const id = this.zone.layoutParams?.authored;
+    return typeof id === 'string' && authoredMapOf(id) ? id : null;
+  }
+
   /** DEV: find the nearest contiguous FIELD heat-map region, mint its mega-zone (or
    *  link to an existing one — mint-once), wire two-way roads, and travel there. For
    *  playtesting the Field expanse without hunting the map for one. */
@@ -16256,6 +16362,11 @@ export class World {
    *  SURFACE ground. CAVES are now captured (a left side area keeps its state). */
   private captureZoneMemory(): void {
     const z = this.zone;
+    if (this.forgetMemoryOnLeave) {
+      this.forgetMemoryOnLeave = false;
+      if (z) this.zoneMemory.delete(z.id);
+      return;
+    }
     const memo = this.zoneMemorySnapshot();
     if (!z || !memo) return; // same skip rules as ever (snapshot owns them)
     // CONCLAVE: leaving a zone with a live ritual. If ALL its cultists still stand,
@@ -26520,12 +26631,19 @@ export class World {
     // ruleset) instead of flat-locking to the player's level; an authored number wins.
     const lvl = q.zone.level === 'character' ? this.eventLevel(target) : q.zone.level;
     const zoneId = `quest_${q.id}`;
+    // THE AUTHORED LANE (engine/authoredMaps.ts): a quest naming a hand-made
+    // map spreads the map's own words FIRST — dress, exact size, recipe,
+    // objective, pack/dress policies — and the quest's explicit fields win
+    // over them (undefined fields defer to the map).
+    const amap = q.zone.map ? authoredMapOf(q.zone.map) : undefined;
+    if (q.zone.map && !amap) console.warn(`[quests] '${q.id}' names unregistered authored map '${q.zone.map}' — minting the tileset's own ground`);
     if (!this.zoneMap[zoneId]) {
-      const def = placeZoneAt(target, anchor, this.zoneMap, this.nextGenId++, {
-        id: zoneId, tileset: q.zone.tileset, level: lvl,
+      const over: ZoneSpec = {
+        id: zoneId, tileset: q.zone.tileset ?? amap?.tileset ?? 'field', level: lvl,
         objective: q.zone.objective, packsOverride: q.zone.packsOverride,
         // Quests carry a waypoint home by default; an arena can opt out (forceWaypoint:false).
-        forceWaypoint: q.zone.forceWaypoint ?? true, forceFrontiers: 1, noFactionWar: true,
+        // An authored map keeps the doors it drew (its exits), else the classic one frontier.
+        forceWaypoint: q.zone.forceWaypoint ?? true, forceFrontiers: amap ? (amap.exits?.length ?? 0) : 1, noFactionWar: true,
         // A set-piece arena forces its layout, ignores biome (special), seals waypoints.
         layoutType: q.zone.layoutType, wpExclusionRadius: q.zone.wpExclusionRadius, special: q.zone.special,
         // A floating quest mints DISCONNECTED (find-it); else force-connect as today.
@@ -26534,7 +26652,10 @@ export class World {
         nudgeDir: projectCoord({ x: 0, y: 0 }, q.zone.direction),
         seed: questSeed,
         biomeFor: this.biomeFor,
-      });
+      };
+      const def = placeZoneAt(target, anchor, this.zoneMap, this.nextGenId++,
+        amap ? authoredZoneSpec(amap, definedSpec(over)) : over);
+      if (amap) sealAuthoredZone(def, amap);
       this.zoneMap[zoneId] = def;
       // A FLOATING zone is off-graph until the player explores to it: defer charting
       // its territory to connectFloatingZone on approach (charting it now would corrupt

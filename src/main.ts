@@ -49,6 +49,8 @@ import './data/creeps'; // side-effect: registers the living creep kinds
 import './data/traversals'; // side-effect: registers the vertical-crossing kinds (sky launch/fall)
 import './data/glyphParts'; // side-effect: registers the shipped hand-drawn part kinds (the glyph roster)
 import './data/commanders'; // side-effect: the tutorial factions (the Fathers) + the prologue's resolve seam
+import './data/authoredMaps'; // side-effect: THE AUTHORED-MAP FABRIC's shipped maps (+ the 'authored' layout via engine/authoredMaps)
+import './data/bountyExpeditions'; // side-effect: the bounty board's 'expedition' kind (an authored map minted at the take)
 import { updateAI } from './engine/ai';
 import { World, type Seat } from './engine/world';
 import { applyLab, ULT_QA } from './engine/ultimates'; // THE LAB LEVER — the dev panel's Lab tab; __game.ultqa is its console twin
@@ -76,7 +78,9 @@ import { mountDevPanel } from './dev/panel';
 import { mountPassiveEditor } from './dev/passiveEditor';
 import { mountEntityForge } from './dev/entityForge';
 import { mountGlyphForge } from './dev/glyphForge';
+import { mountMapForge } from './dev/mapForge';
 import { loadWorkshopSync, reconcileWorkshopFromDisk } from './meta/workshop';
+import { loadAtlasSync, reconcileAtlasFromDisk } from './meta/atlas';
 import { perfSweep, type PerfSweepOpts, type PerfSweepReport } from './dev/perf';
 import {
   applyCredits, isClassUnlocked, LEDGER_ACCOUNT_DEATHS, META_CURRENCY_LABEL,
@@ -752,6 +756,9 @@ window.__game = {
 // localStorage mirror into the live registries BEFORE the content sweep, so
 // a custom def answers to the exact same boot lint as shipped content.
 loadWorkshopSync();
+// THE ATLAS (meta/atlas.ts): the Map Forge's authored maps, grafted the same
+// way — before the sweep, so a custom map answers to the same boot lint.
+loadAtlasSync();
 // Cross-check the data files; authoring mistakes warn instead of failing silently.
 validateContent();
 
@@ -777,6 +784,12 @@ if (DEV.entityForge) {
   mountEntityForge(ui, () => world);
   mountGlyphForge(ui, () => world);
 }
+// DEV: the Map Forge (config.ts DEV.mapForge) — start-menu button + full-screen
+// map editor; the dev panel's Maps tab rides it too. Mounts THIRD so its
+// start-menu hook chains behind the forges'. The `?dev` opt-in raises it as
+// well: the panel's Maps tab is its in-game door (the lab-tab ruling — the
+// tooling lives inside the dev panel, never behind a URL param of its own).
+if (DEV.mapForge || devPanelOptIn) mountMapForge(ui, () => world);
 
 // Boot: show the start menu immediately (built from the synchronous localStorage
 // loaders so it appears instantly), THEN reconcile against the disk files in the
@@ -795,6 +808,7 @@ void (async (): Promise<void> => {
   // re-run the content sweep so the adopted defs get linted too (rare — the
   // mirror matches the disk in steady state, so no double warnings normally).
   if (await reconcileWorkshopFromDisk()) validateContent();
+  if (await reconcileAtlasFromDisk()) validateContent();
   // SELF-HEAL: release merc engagements whose patron no longer exists anywhere
   // (a run save wiped without its death flow ever running).
   if (healMercEngagements(account, [c?.charId, ...account.roster.map(r => r.charId)]) > 0) {

@@ -1283,6 +1283,20 @@
       ],
       "port": 5141,
       "autoPort": false
+    },
+    {
+      "name": "arpg-dev-mapforge",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5294",
+        "--strictPort"
+      ],
+      "port": 5294,
+      "autoPort": false
     }
   ]
 }

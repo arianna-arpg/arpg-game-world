@@ -38,6 +38,8 @@ import { STATUS_DEFS } from '../engine/status';
 import { ZONES, OBJECTIVE_SEALS, type StampSpec, type StructureRoll } from './zones';
 import { POCKET_FORMS, DEFAULT_POCKET_FORM } from './pocketForms';
 import { TILESETS, pickTilesetForBiome, type BlendRoll } from './tilesets';
+import { authoredMapDefs, authoredMapOf, validateAuthoredMap } from '../engine/authoredMaps'; // THE AUTHORED-MAP FABRIC's lint
+import { QUESTS } from '../quests/defs';
 import { dimensionDef, dimensionIds } from '../world/dimensions';
 import { validateRadianceCond } from '../world/radiance';
 import { SPAN_CFG } from '../engine/spans';
@@ -941,6 +943,19 @@ export function validateContent(): void {
       for (const id of Object.keys(t.caveLayouts ?? {})) ref('layout', id);
     }
     for (const z of Object.values(ZONES)) ref('layout', z.layoutType);
+    // THE AUTHORED-MAP FABRIC (engine/authoredMaps.ts): every shipped map's
+    // own lint (registry refs, grid shape, seats inside, exit spacing) — a
+    // map that cannot mint as drawn warns at boot, not at a player's door.
+    for (const m of authoredMapDefs()) for (const line of validateAuthoredMap(m)) warn(`authored map '${m.id}': ${line}`);
+    // THE QUEST LANE: a quest names a tileset or an authored map (never
+    // neither); a map and a forced layoutType cannot both stand.
+    for (const q of Object.values(QUESTS)) {
+      const zq = q.zone;
+      if (zq.map && !authoredMapOf(zq.map)) warn(`quest ${q.id}: names unregistered authored map '${zq.map}'`);
+      if (zq.map && zq.layoutType) warn(`quest ${q.id}: names both an authored map and layoutType '${zq.layoutType}' — the map IS the recipe`);
+      if (!zq.map && !zq.tileset) warn(`quest ${q.id}: zone names neither a tileset nor an authored map`);
+      if (zq.tileset && !TILESETS[zq.tileset]) warn(`quest ${q.id}: unknown tileset '${zq.tileset}'`);
+    }
     // 4) COURSES (world/courses.ts) carry their own recipe pin, terminus rolls
     //    and layout knobs — every dimension's, the surface's rivers included.
     for (const dimId of dimensionIds()) {
@@ -1714,7 +1729,8 @@ export function validateContent(): void {
     if (!v.quest.steps.length) warn(`vocation ${v.id}: quest chain has no steps`);
     v.quest.steps.forEach((s, i) => {
       const src = `vocation ${v.id} step ${i + 1}`;
-      if (!TILESETS[s.zone.tileset]) warn(`${src}: unknown tileset '${s.zone.tileset}'`);
+      const tsId = s.zone.tileset ?? (s.zone.map ? authoredMapOf(s.zone.map)?.tileset : undefined);
+      if (!tsId || !TILESETS[tsId]) warn(`${src}: unknown tileset '${s.zone.tileset ?? '<none>'}'`);
       const o = s.zone.objective;
       if (o.kind === 'boss' && !MONSTERS[o.id]) warn(`${src}: boss '${o.id}' is not a monster`);
       if (o.kind === 'spawners' && !MONSTERS[o.spawnerId]) warn(`${src}: spawner '${o.spawnerId}' is not a monster`);

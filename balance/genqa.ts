@@ -80,6 +80,7 @@ import '../src/data/grove';
 import '../src/data/warfront';
 import '../src/data/scald';
 import '../src/data/compositions';
+import '../src/data/authoredMaps'; // THE AUTHORED-MAP FABRIC's shipped maps (+ the 'authored' layout)
 
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
@@ -106,6 +107,7 @@ import { BIOMES, isAquaticBiome } from '../src/world/biomes';
 import { CLIMATE_AXES } from '../src/world/climate';
 import { interiorRoleDefs } from '../src/engine/interiorGen';
 import { deadBaseFaceKinds } from './deadface_check';
+import { authoredMapDefs, authoredZoneDef, validateAuthoredMap } from '../src/engine/authoredMaps';
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -1083,6 +1085,19 @@ for (const c of compositionDefs()) {
     objective: { kind: 'clear' },
     exits: [], map: { x: 0, y: 0 },
   });
+}
+
+// --- 4b. Every AUTHORED MAP (engine/authoredMaps.ts) ------------------------------
+// The hand-made zones through the same net: the pure synthetic def
+// (authoredZoneDef — what placeZoneAt builds, minus the graph) under runCase's
+// own synthetic portals, so the stems + connectivity carve are judged against
+// ARBITRARY seats (the way home faces the anchor — a map never knows its
+// side). The lint is the registry half: a shipped map that cannot mint as
+// drawn fails here, not at a player's door.
+for (const m of authoredMapDefs()) {
+  const lint = validateAuthoredMap(m);
+  if (lint.length) results.push({ name: `authored:${m.id}:lint`, seeds: 0, doodads: 0, ms: 0, fails: lint.map(l => `authored map '${m.id}': ${l}`), warns: [] });
+  runCase(`authored:${m.id}`, authoredZoneDef(m, { id: `qa_authored_${m.id}`, level: 8 }));
 }
 
 // --- 5. EXIT SPACING — the worldgen graph layer's promise ---------------------

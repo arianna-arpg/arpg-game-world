@@ -37,6 +37,18 @@ export const DEV = {
    *  the def+look as source literals for hand-promotion into src/data.
    *  0 = off (no button, no tab, zero overhead). */
   entityForge: 0,
+  /** 1 = THE MAP FORGE (dev/mapForge.ts): a full-screen MAP EDITOR reachable
+   *  from the START MENU ("Map Forge" button) and the dev panel's Maps tab.
+   *  Paint a zone as a grid of registered region kinds, place doodads /
+   *  spawn seats / markers / plan structures / exits, set the zone sheet
+   *  (dress tileset, objective, level, policies, a bounty expedition block),
+   *  see the REAL generator's walk mask + reachability live, save to THE
+   *  ATLAS (meta/atlas.ts — 'custom_' maps grafted into the live registry,
+   *  hybrid-persisted), mint & walk it beside the hero, re-mint after every
+   *  edit, and export TS promotion literals (+ a ready QuestZoneSpec) for
+   *  src/data/authoredMaps.ts. Also mounts under the `?dev` opt-in.
+   *  0 = off (no button, no tab, zero overhead). */
+  mapForge: 0,
   /** 1 = PASSIVE-TREE EDITOR: with the tree open (P), click a node to SELECT it,
    *  drag to move it, click ANOTHER node (while one is selected) to add/remove the
    *  link between them, click the selected node to deselect, double-click empty

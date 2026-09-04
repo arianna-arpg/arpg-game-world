@@ -51,8 +51,17 @@ export const DEFAULT_QUEST_CATEGORY: QuestCategory = 'campaign';
 
 /** Describes the zone a quest spawns — a directional, biome-forced objective. */
 export interface QuestZoneSpec {
-  /** Tileset id → biome/theme/name pools (e.g. 'crypt' → grave biome). */
-  tileset: string;
+  /** Tileset id → biome/theme/name pools (e.g. 'crypt' → grave biome).
+   *  Required unless `map` names an authored map (whose dress tileset is
+   *  then the default). */
+  tileset?: string;
+  /** THE AUTHORED LANE (engine/authoredMaps.ts): mint this HAND-MADE MAP as
+   *  the quest's zone — its grid, doodads, spawns, markers, fixtures and
+   *  exits, at its exact size, under its own pack/dress policies. The
+   *  quest's explicit fields (objective, level, tileset…) win over the
+   *  map's; `layoutType` must stay unset (the map IS the recipe). The
+   *  Odyssey lane's set-piece door. */
+  map?: string;
   /** Cardinal direction from town the zone is placed toward. */
   direction: 'n' | 's' | 'e' | 'w';
   /** Cardinal steps from town (default 1). */

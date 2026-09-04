@@ -305,6 +305,12 @@ export interface BountyPosting {
    *  harvest fabric): credited at World.harvestSettle, readable anywhere,
    *  wipe-proof; re-entry re-plants the remainder (seedGatherNodes). */
   gather?: { count: number; claimed: number };
+  /** THE EXPEDITION's claim (data/bountyExpeditions.ts — the authored-map
+   *  fabric): the hand-made map this posting charters, the charted anchor
+   *  it is minted beside AT THE TAKE (the zone named by `zoneId` does not
+   *  exist until accept), the mint seed and the level the ground wears.
+   *  Persisted with the posting (the derived QuestDef reads the minted def). */
+  expedition?: { map: string; anchor: string; seed: number; level: number };
   /** THE ANSWER's claim (M2 K4): the source row + the target's stable key,
    *  with the card copy frozen at the arm (the census churns; the card must
    *  still read after the target moves or leaves) and `base` = the source's

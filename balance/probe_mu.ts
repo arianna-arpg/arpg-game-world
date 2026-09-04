@@ -373,7 +373,8 @@ check('C6: the unknown cowls are NAMELESS (no npcRole — no nameplate to leak)'
     const cull = QUESTS[revengeCullId(row.id)];
     const cmd = QUESTS[revengeCommanderId(row.id)];
     if (!cull || !cmd) { wired = false; continue; }
-    if (!TILESETS[cull.zone.tileset] || !TILESETS[cmd.zone.tileset]) wired = false;
+    // QuestZoneSpec.tileset is optional since the authored-map lane (a quest may name a map instead).
+    if (!TILESETS[cull.zone.tileset ?? ''] || !TILESETS[cmd.zone.tileset ?? '']) wired = false;
     if (cmd.zone.objective.kind !== 'boss' || cmd.zone.objective.id !== row.commander) wired = false;
     if (!(cull.zone.packsOverride?.table.length ?? 0)) wired = false;
     if (cull.offerAtLevel !== 15 || cmd.offerAtLevel !== 15) wired = false;

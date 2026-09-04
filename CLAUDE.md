@@ -649,6 +649,39 @@ we verify changes.
   debut = the ant trail at TRUE ant scale + the sand scorpion at
   `ratio: 1.6` — docs in `docs/engine/squish.md`, probe
   `balance/probe_squish.ts`).
+  THE AUTHORED-MAP FABRIC (engine/authoredMaps.ts — a HAND-MADE zone as
+  data; docs/engine/authored-maps.md, charter docs/design/map-editor.md,
+  probe balance/probe_authoredmaps.ts): an AuthoredMapDef is a char-grid
+  of REGISTERED REGION KINDS on the 30px lattice + off-lattice doodads,
+  SPAWN SEATS (a def at a point — count/spread, rarity through the real
+  ladder, ambush, a duty post + facing; the pit-dweller lane's
+  `SpawnSeat` row grew the tempers), markers (entry/boss/poi/camp/
+  garrison/breakable/npc), plan-structure fixtures and exit seats, under a
+  zone sheet (dress tileset, objective, level, sky, camera, pack/dress/
+  spoils/weave policies, an optional bounty EXPEDITION block). ONE
+  generator ('authored', pinned) rasterizes it (the fieldLayout idiom:
+  per-row region runs, THE ENTRY LAW re-keys a centre entry onto the entry
+  marker, THE STEMS clear + corridor every engine-seated portal, the belt
+  carve), draws ZERO rng; a map is named by `layoutParams.authored` and
+  resolved at GENERATION time (edit → re-enter → see it; a missing map
+  degrades to the scatter with one warning). ONE directed mint
+  `World.mintAuthoredZone` (authoredZoneSpec pins exact size/rect/recipe/
+  policies, sealAuthoredZone strips every tileset roll + zeroes pack
+  density + closes the cohort + re-seats frontiers; NEVER `special` — its
+  eventOwned stamp culls unclaimed ground at save) serves THREE LANES:
+  `QuestZoneSpec.map` (the Odyssey set-piece door — the quest's words win,
+  its silence defers; `tileset` optional now), the bounty board's
+  'expedition' kind (data/bountyExpeditions.ts — CHARTERS new ground at
+  the take through the world-act hook), and the dev lanes
+  (devMintAuthored / devRemintZone's one-shot memory forget /
+  devAuthoredMapHere; dev tab 'Maps'). THE ATLAS (meta/atlas.ts — the
+  Workshop's shape: slot 'atlas', the custom_ law, TS promotion literal +
+  a ready QuestZoneSpec snippet) stores editor maps; THE MAP FORGE
+  (dev/mapForge.ts, DEV.mapForge or `?dev`) is the editor — roster /
+  canvas (real painters, registry-derived palettes, ten tools) /
+  inspector, with THE GEN LAYER running the REAL generateLayout after
+  every edit so drawn == generated before a mint. Debuts
+  data/authoredMaps.ts: the Proving Yard, the Sunken Reliquary.
   THE CLUTCH FABRIC (engine/clutch.ts — bodies as PAYLOADS of blows): the
   generic `birth` SkillEffect mints REAL monsters/minions at a delivery's
   resolution point — ground targets, EVERY storm strike's ring (the
