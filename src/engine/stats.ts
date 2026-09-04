@@ -110,7 +110,18 @@ export type SkillTag =
   // tag-filtered investment find every anchor and never socket into a
   // skill with no roster to grow.
   | 'throng'
-  | 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
+  | 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos'
+  // THE VICTIM SCOPE (engine/victim.ts — the talent fabric, docs in
+  // docs/engine/talents.md): 'vs:<condition>' tags describe WHO a hit is
+  // against, the way the tags above describe what the action IS. They are
+  // never authored on a skill — the hit site folds the struck body's live
+  // state (registered victim conditions + every status it carries) into
+  // the query context, so "40% more damage against frozen enemies" or
+  // "+30% critical chance against low-life enemies" is an ordinary
+  // tag-filtered modifier on any surface: passive, gem, affix, buff.
+  // Null-cost by construction: the fold runs only when the attacker's
+  // sheet (or the striking instance) names a vs: tag at all.
+  | `vs:${string}`;
 
 export type DamageType = 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
 export const DAMAGE_TYPES: readonly DamageType[] = ['physical', 'fire', 'cold', 'lightning', 'chaos'];
@@ -227,7 +238,45 @@ export type ConditionId =
   // actor's recent-cast ring — recording (and these bits) wake only while
   // something on the actor references combos (Actor.comboWatch), so
   // non-combo builds never churn the mask.
-  | 'comboVaried' | 'comboRepeated';
+  | 'comboVaried' | 'comboRepeated'
+  // THE RECENCY LEDGER (engine/recency.ts — the talent fabric): "if you
+  // have X recently" as actor state. Each reads a per-actor seconds-since
+  // counter (Actor.since, stamped at the engine's own event seams) against
+  // RECENT_CFG's window, so the conditions expire on their own with no
+  // proc, no buff and no per-mod bookkeeping — the same bit-mask fold as
+  // every condition above. 'recentlyHit'/'recentlyCrit'/'recentlyKilled'
+  // are blows the actor LANDED; 'recentlyHurt' is a landed hit TAKEN
+  // (DoT ticks never count — a burn is not a blow); 'notHurtRecently' is
+  // its inverse (true from the first frame, the way "haven't been hit"
+  // reads in any fight you have not yet joined); 'recentlyBlocked' /
+  // 'recentlyEvaded' are the actor's own made block / evade;
+  // 'recentlyMoved' = a movement-tagged skill completed; 'recentlyHealed'
+  // = any heal landed on the actor.
+  | 'recentlyHit' | 'recentlyCrit' | 'recentlyKilled'
+  | 'recentlyHurt' | 'notHurtRecently'
+  | 'recentlyBlocked' | 'recentlyEvaded'
+  | 'recentlyMoved' | 'recentlyHealed';
+
+/** EVERY ConditionId, in the actor's BIT ORDER (Actor.refreshConditions
+ *  folds bit i ⇔ CONDITION_IDS[i]). One list, declared beside the union,
+ *  so the mask, the validator and the tooltips can never disagree on what
+ *  a condition is called — and a new condition is one union member plus
+ *  one row here, never a hand-numbered bit. */
+export const CONDITION_IDS: readonly ConditionId[] = [
+  'lowLife', 'fullLife', 'lowMana', 'fullMana',
+  'hasEs', 'fullEs', 'lowEs', 'guarding',
+  'poised', 'poiseBroken', 'esRecharging',
+  'stationary', 'moving',
+  'comboVaried', 'comboRepeated',
+  'recentlyHit', 'recentlyCrit', 'recentlyKilled',
+  'recentlyHurt', 'notHurtRecently',
+  'recentlyBlocked', 'recentlyEvaded',
+  'recentlyMoved', 'recentlyHealed',
+];
+
+export function isConditionId(id: string): id is ConditionId {
+  return (CONDITION_IDS as readonly string[]).includes(id);
+}
 
 export interface Modifier {
   stat: string;
@@ -244,6 +293,12 @@ export interface Modifier {
    *  per-frame floats (cache health) and never stat queries (no loops);
    *  every gauge is bounded by its own cap (maxStacks, chargeCap). */
   gauge?: string;
+  /** THE GAUGE GATE (with `gauge`): instead of SCALING by the live gauge,
+   *  the modifier applies at its full `value` only while the gauge stands
+   *  at or above this count — "at 5 fury charges, +30% critical multiplier"
+   *  is gaugeGateMod('critMulti','flat',0.3,'charge:fury',5). Below the
+   *  line the modifier is inert; the gauge's own cap bounds the ask. */
+  gaugeAt?: number;
   /** If present, the modifier only applies when the query context contains ALL of these tags. */
   tags?: SkillTag[];
   /** If present, the modifier only applies while the actor satisfies this condition. */
@@ -268,6 +323,22 @@ export function linkMod(stat: string, fromStat: string, ratio: number, tags?: Sk
  *  increased damage taken per stack of poison on you". */
 export function gaugeMod(stat: string, kind: ModKind, value: number, gauge: string, tags?: SkillTag[], when?: ConditionId): Modifier {
   return { stat, kind, value, gauge, tags, when };
+}
+
+/** GAUGE-GATED modifier: the full `value` applies only while the live gauge
+ *  reads at least `at` — gaugeGateMod('critMulti','flat',0.3,'charge:fury',5)
+ *  is "+30% critical strike multiplier while you have 5 or more fury
+ *  charges". The threshold twin of gaugeMod (which scales per unit). */
+export function gaugeGateMod(stat: string, kind: ModKind, value: number, gauge: string, at: number, tags?: SkillTag[], when?: ConditionId): Modifier {
+  return { stat, kind, value, gauge, gaugeAt: at, tags, when };
+}
+
+/** Does this modifier read the VICTIM SCOPE (any 'vs:' tag)? The one
+ *  predicate the hit site and the sheet's arming derivation share. */
+export function modReadsVictim(m: { tags?: readonly SkillTag[] }): boolean {
+  if (!m.tags) return false;
+  for (const t of m.tags) if (t.startsWith('vs:')) return true;
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -897,6 +968,20 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  directly) — attrition does full work ON PURPOSE: a body wearing this
    *  is sold to ailment builds, not walled off from everyone. 0 = uncapped. */
   hitCap:         { label: 'Per-Hit Damage Cap', base: 0, min: 0 },
+  // THE LAST GASP (engine/damage.ts landLifeDamage — the talent fabric's
+  // cheat-death lane, docs/engine/talents.md): a blow that would EMPTY the
+  // life pool instead leaves the bearer standing at lastGaspLife of max,
+  // at lastGasp chance, no more than once per lastGaspCooldown seconds.
+  // Three ordinary stats, so a keystone guarantees it, an affix rolls a
+  // chance at it, and any modifier can lengthen or shorten the clock. The
+  // gasp is an EVENT (ProcDef trigger 'lastGasp'): whatever should answer
+  // it — a ward, a burst, a flight — is data on the sheet. Only life-pool
+  // wounds through the two damage seams (hits, DoT ticks) can gasp; costs,
+  // sacrifices and scripted falls never do. Base 0: an unlock, never
+  // ambience.
+  lastGasp:       { label: 'Last Gasp Chance', base: 0, min: 0, max: 1, percent: true },
+  lastGaspLife:   { label: 'Last Gasp Life', base: 0.3, min: 0.01, max: 1, percent: true },
+  lastGaspCooldown: { label: 'Last Gasp Cooldown', base: 60, min: 1 },
 
   // Layered defenses
   /** Fraction of incoming damage paid from mana before life (capped 90%). */
@@ -1576,6 +1661,14 @@ export class StatSheet {
    *  mods are NOT visible here, exactly like whenRefs. */
   private taggedStats: Set<string> | null = null;
 
+  /** Whether any registered modifier reads the VICTIM SCOPE ('vs:' tags)
+   *  — see hasVsMods. Derived per source generation like taggedStats. */
+  private vsMods: boolean | null = null;
+
+  /** Which GAUGE ids any registered modifier reads (Modifier.gauge) — see
+   *  usesGauge. Derived per source generation like whenRefs. */
+  private gaugeRefs: Set<string> | null = null;
+
   /** THE ARMED LISTS — per generated stat FAMILY (see armedFamily), keyed by
    *  the family's prefix and derived lazily. Dropped by invalidate() beside
    *  the value cache: a derived list that outlived a departed source would
@@ -1631,6 +1724,8 @@ export class StatSheet {
     this.invalidate();
     this.whenRefs = null;
     this.taggedStats = null;
+    this.vsMods = null;
+    this.gaugeRefs = null;
   }
 
   removeSource(name: string): void {
@@ -1638,11 +1733,46 @@ export class StatSheet {
       this.invalidate();
       this.whenRefs = null;
       this.taggedStats = null;
+      this.vsMods = null;
+      this.gaugeRefs = null;
     }
   }
 
   /** Does any registered (sheet-level) modifier tag-filter `stat`? See
    *  taggedStats above — derived once per source generation. */
+  /** THE VICTIM SCOPE's arming read: does any registered modifier carry a
+   *  'vs:' tag? Derived once per source generation (the taggedStats idiom),
+   *  so the hit site pays nothing to ask on every uninvested body. Skill-
+   *  local `extra` mods are NOT visible here — the hit site scans those
+   *  itself (victimScopeArmed in engine/victim.ts). */
+  hasVsMods(): boolean {
+    if (this.vsMods === null) {
+      let any = false;
+      for (const mods of this.sources.values()) {
+        for (const m of mods) if (modReadsVictim(m)) { any = true; break; }
+        if (any) break;
+      }
+      this.vsMods = any;
+    }
+    return this.vsMods;
+  }
+
+  /** Does any registered modifier read this GAUGE (Modifier.gauge)? The
+   *  whenRefs idiom for the gauge axis — the world's derived-gauge sampler
+   *  (engine/gauges.ts) asks before paying for a spatial or pool read that
+   *  nothing on the sheet would consume. Skill-local `extra` mods are NOT
+   *  visible here (Actor.gaugeReferenced folds those in). */
+  usesGauge(id: string): boolean {
+    if (!this.gaugeRefs) {
+      const refs = new Set<string>();
+      for (const mods of this.sources.values()) {
+        for (const m of mods) if (m.gauge) refs.add(m.gauge);
+      }
+      this.gaugeRefs = refs;
+    }
+    return this.gaugeRefs.has(id);
+  }
+
   hasTaggedMods(stat: string): boolean {
     if (!this.taggedStats) {
       const s = new Set<string>();
@@ -1795,8 +1925,14 @@ export class StatSheet {
       let v = m.value;
       if (m.gauge) {
         const g = this.gauges.get(m.gauge) ?? 0;
-        if (g === 0) return;
-        v *= g;
+        // THE GAUGE GATE (Modifier.gaugeAt): a threshold, not a scale —
+        // the full value at or above the line, nothing below it.
+        if (m.gaugeAt !== undefined) {
+          if (g < m.gaugeAt) return;
+        } else {
+          if (g === 0) return;
+          v *= g;
+        }
       }
       switch (m.kind) {
         case 'flat': flat += v; break;

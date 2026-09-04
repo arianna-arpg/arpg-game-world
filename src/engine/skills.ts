@@ -3294,6 +3294,23 @@ export interface BuffEffect {
    *  have "the next X uses are imbued". NOTE: the granting skill's own tags
    *  must NOT match, or the grant press eats its first round. */
   consumeOnUse?: { tags?: SkillTag[] };
+  /** THE CONSUMABLE BUFF (the talent fabric, docs/engine/talents.md —
+   *  consumeOnUse generalized to every event the ledger stamps): each
+   *  matching event spends one stack, and the last stack ends the buff.
+   *  'use' = a completed real use (consumeOnUse's exact law); 'hit' /
+   *  'crit' / 'kill' = the bearer LANDS one; 'hurt' = the bearer TAKES a
+   *  landed hit; 'block' / 'evade' = the bearer makes one. `tags` gates on
+   *  the skill involved (ANY-match, like consumeOnUse); `skills` on its id.
+   *  Give the buff mods scoped to the same tags and you have "your next
+   *  two melee hits deal 50% more", "the next spell you cast is free", or
+   *  "after being struck, your next attack strikes twice" — each one buff.
+   *  The event spends AFTER the hit it empowered has resolved, so the
+   *  buff's own mods always reach the blow that consumes it. */
+  consumeOn?: {
+    on: 'use' | 'hit' | 'crit' | 'kill' | 'hurt' | 'block' | 'evade';
+    tags?: SkillTag[];
+    skills?: string[];
+  };
   /** NEXT-HIT RIDER: the bearer's next landed hit(s) carry a payload —
    *  one stack spent per landed hit. Because buffs land on ALLIES and
    *  MINIONS too (affects: 'minions' / targeted deliveries), "bless the

@@ -1256,6 +1256,113 @@ const SUFFIXES: AffixDef[] = [
     weight: 90,
     tags: ['mi_abyssal'],
   },
+  // --- THE TALENT FABRIC's debut lines (docs/engine/talents.md) -------------
+  // THE VICTIM SCOPE on gear: a 'vs:' tag on an ordinary line.
+  fam({
+    id: 'vs_lowlife', kind: 'suffix', themes: [MARTIAL, CASTER],
+    names: ['of Execution', 'of the Headsman', 'of the Finish'],
+    stat: 'damage', modKind: 'more', tags: ['vs:lowLife'],
+    top: 0.18, floor: 0.3, count: 4,
+    baseTags: ['weapon', 'ring', 'amulet', 'gloves'], weight: 45,
+  }),
+  fam({
+    id: 'vs_hardcc', kind: 'suffix', themes: [MARTIAL],
+    names: ['of the Opportunist', 'of the Sucker Punch'],
+    stat: 'damage', modKind: 'more', tags: ['vs:hardCC'],
+    top: 0.25, floor: 0.3, count: 3,
+    baseTags: ['weapon', 'gloves', 'ring'], weight: 35,
+  }),
+  fam({
+    id: 'vs_behind', kind: 'suffix', themes: [MARTIAL, RANGER],
+    names: ['of the Backstab', 'of the Knife'],
+    stat: 'critChance', tags: ['vs:behind'],
+    top: 0.2, floor: 0.3, count: 3,
+    baseTags: ['gloves', 'ring', 'boots'], weight: 30,
+  }),
+  // THE RECENCY LEDGER on gear: an ordinary `when`.
+  fam({
+    id: 'recent_kill_speed', kind: 'suffix',
+    names: ['of Momentum', 'of the Chase'],
+    stat: 'moveSpeed', modKind: 'increased', when: 'recentlyKilled',
+    top: 0.2, floor: 0.3, count: 4,
+    baseTags: ['boots', 'belt'], weight: 45,
+  }),
+  fam({
+    id: 'calm_regen', kind: 'suffix', themes: [SUSTAIN],
+    names: ['of Composure', 'of the Still Heart'],
+    stat: 'lifeRegenPct', when: 'notHurtRecently',
+    top: 0.04, floor: 0.25, count: 4,
+    baseTags: ['chest', 'belt', 'helmet'], weight: 40,
+  }),
+  // DERIVED GAUGES on gear: a `gauge` line.
+  fam({
+    id: 'missing_life_damage', kind: 'suffix', themes: [MARTIAL, CASTER],
+    names: ['of Desperation', 'of the Cornered'],
+    lines: [{ stat: 'damage', kind: 'increased', gauge: 'life:missing' }],
+    top: 0.03, floor: 0.34, count: 3,
+    baseTags: ['weapon', 'amulet', 'ring'], weight: 30,
+  }),
+  fam({
+    id: 'crowd_damage', kind: 'suffix', themes: [MARTIAL],
+    names: ['of the Throng', 'of the Press'],
+    lines: [{ stat: 'damage', kind: 'increased', gauge: 'foes:near' }],
+    top: 0.02, floor: 0.5, count: 2,
+    baseTags: ['weapon', 'gloves'], weight: 30,
+  }),
+  // THE LAST GASP on gear: a rolled chance at the reprieve.
+  fam({
+    id: 'last_gasp', kind: 'suffix', themes: [DEFENSE],
+    names: ['of the Last Breath', 'of the Reprieve'],
+    stat: 'lastGasp',
+    top: 0.5, floor: 0.3, count: 3,
+    baseTags: ['chest', 'belt', 'amulet'], weight: 20,
+  }),
+  // SHEET-LANE TRIGGERS on gear ('hurt' / 'condition' / 'pulse' / 'heal' /
+  // 'minionDeath' roll with no skill context): UNTAGGED lines, the 'surface'
+  // doctrine. The 'cast' trigger carries the cast's context, so Adrenaline
+  // scopes to movement arts like any hit proc.
+  fam({
+    id: 'proc_reprisal', kind: 'suffix', themes: [MARTIAL, DEFENSE],
+    names: ['of Reprisal', 'of the Answered Blow'],
+    stat: 'proc_reprisal',
+    top: 0.5, floor: 0.3, count: 3,
+    baseTags: ['chest', 'gloves', 'belt'], weight: 40,
+  }),
+  fam({
+    id: 'proc_desperate_ward', kind: 'suffix', themes: [DEFENSE],
+    names: ['of the Second Wind', 'of the Reserve'],
+    stat: 'proc_desperate_ward',
+    top: 0.6, floor: 0.35, count: 3,
+    baseTags: ['chest', 'helmet', 'amulet'], weight: 35,
+  }),
+  fam({
+    id: 'proc_adrenaline', kind: 'suffix',
+    names: ['of Adrenaline', 'of the Sprint'],
+    stat: 'proc_adrenaline', tags: ['movement'],
+    top: 0.6, floor: 0.35, count: 3,
+    baseTags: ['boots', 'belt'], weight: 40,
+  }),
+  fam({
+    id: 'proc_slow_burn', kind: 'suffix', themes: [MARTIAL],
+    names: ['of the Slow Burn', 'of the Ember'],
+    stat: 'proc_slow_burn',
+    top: 0.6, floor: 0.35, count: 3,
+    baseTags: ['ring', 'amulet', 'belt'], weight: 30,
+  }),
+  fam({
+    id: 'proc_mending_ward', kind: 'suffix', themes: [SUSTAIN],
+    names: ['of the Mending Ward', 'of the Salve'],
+    stat: 'proc_mending_ward',
+    top: 0.6, floor: 0.35, count: 3,
+    baseTags: ['chest', 'helmet', 'amulet'], weight: 30,
+  }),
+  fam({
+    id: 'proc_necrotic_feast', kind: 'suffix', themes: [SUMMONER],
+    names: ['of the Necrotic Feast', 'of the Carrion'],
+    stat: 'proc_necrotic_feast',
+    top: 0.6, floor: 0.35, count: 3,
+    baseTags: ['helmet', 'amulet', 'gloves'], weight: 30,
+  }),
   ...ATTRIBUTE_AFFIXES,
   ...RESIST_AFFIXES,
   ...PEN_AFFIXES,

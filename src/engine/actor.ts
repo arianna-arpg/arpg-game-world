@@ -8,9 +8,10 @@
 import { chance, vec, type Vec2 } from '../core/math';
 import {
   FULL_ES_FRAC, FULL_LIFE_FRAC, FULL_MANA_FRAC,
-  LOW_ES_FRAC, LOW_MANA_FRAC, StatSheet, attributeModifiers,
+  LOW_ES_FRAC, LOW_MANA_FRAC, StatSheet, attributeModifiers, CONDITION_IDS,
   type Attributes, type ConditionId, type DamageType, type Modifier, type SkillTag,
 } from './stats';
+import { RECENT_CONDITIONS, RECENT_KINDS, RECENT_NEVER, recentIndex, recentWindow, type RecentKind } from './recency'; // THE RECENCY LEDGER
 import { DEFENSE_CFG } from './defense';
 import { SIM_TAP } from './tap';
 import {
@@ -206,6 +207,17 @@ export const STANCE_PLANT_TIME = 1.0;
  *  bank's clock resumes; below it the bank reads MOVING and bleeds. DIAL. */
 export const BANK_STILL_GRACE = 0.15;
 export const STANCE_MOVE_WINDOW = 0.15;
+
+/** THE CONDITION BITS — bit i ⇔ CONDITION_IDS[i] (stats.ts), derived once so
+ *  the mask fold names conditions, never numbers. */
+const COND_BIT: Record<ConditionId, number> = Object.fromEntries(
+  CONDITION_IDS.map((id, i) => [id, 1 << i])) as Record<ConditionId, number>;
+
+/** THE RECENCY ROWS, pre-resolved for the per-frame fold: each recency
+ *  condition's bit, its counter index and its window (engine/recency.ts). */
+const RECENT_ROWS = RECENT_CONDITIONS.map(rc => ({
+  bit: COND_BIT[rc.id], idx: recentIndex(rc.kind), window: recentWindow(rc.kind), within: rc.within,
+}));
 /** Seconds a staggered wound takes to finish landing (staggerFrac /
  *  Mortis Seal) — the drain re-levels to clear on this schedule. */
 export const STAGGER_WINDOW = 3;
@@ -976,6 +988,30 @@ export class Actor {
   /** Seconds since last TAKING damage (GateSpec.recentDamage — the
    *  counter-blow's license; zeroed at both damage seams). */
   recentHurt = 999;
+  /** THE RECENCY LEDGER (engine/recency.ts): seconds since each event
+   *  kind last happened to this actor, indexed by RECENT_KINDS — ticked
+   *  in updateTimers, zeroed by noteRecent at the engine's own seams, read
+   *  by the recency conditions in refreshConditions. */
+  since: Float64Array = new Float64Array(RECENT_KINDS.length).fill(RECENT_NEVER);
+  /** TRANSIENT: conditions that flipped ON since the world last looked —
+   *  the 'condition' proc trigger's events (the expiredStatuses pattern;
+   *  drained by the world's per-actor sweep). */
+  condRose: ConditionId[] = [];
+  /** DERIVED GAUGES (engine/gauges.ts): the world's cadenced samples of
+   *  quantities this actor does not bank — published into the sheet's
+   *  gauge set by refreshConditions beside statuses and charges. */
+  derivedGauges: Map<string, number> | null = null;
+  /** Seconds until the next derived-gauge sample is due. */
+  gaugeSampleIn = 0;
+  /** THE LAST GASP's clock: seconds until the gasp may answer again
+   *  (engine/damage.ts landLifeDamage; ticked in updateTimers). */
+  lastGaspCd = 0;
+  /** TRANSIENT: the last gasp answered since the world last looked (the
+   *  esBroke pattern — consumed by the world's 'lastGasp' proc roll). */
+  gasped = false;
+  /** TRANSIENT: healing landed since the world last looked (the 'heal'
+   *  proc trigger's event; summed, consumed per frame). */
+  healedSince = 0;
   /** Idle wander heading — the world doesn't stand at attention. */
   wanderDir?: number;
   /** Patrol route (world points) marched between when no foe is in sight. */
@@ -1933,7 +1969,12 @@ export class Actor {
     this.life = Math.min(cap,
       this.life + amount * this.sheet.get('healTaken'));
     const landed = this.life - before;
-    if (landed > 0) SIM_TAP.current?.onHeal?.(this, landed);
+    if (landed > 0) {
+      SIM_TAP.current?.onHeal?.(this, landed);
+      // THE RECENCY LEDGER + the 'heal' trigger's event (any landed heal).
+      this.noteRecent('heal');
+      this.healedSince += landed;
+    }
     return landed;
   }
 
@@ -2121,6 +2162,49 @@ export class Actor {
     buff.stacks -= n;
     if (buff.stacks <= 0) this.buffs.delete(id);
     this.syncBuffSource(id);
+  }
+
+  /** THE CONSUMABLE BUFF's spend (BuffEffect.consumeOn — and consumeOnUse,
+   *  which reads as {on:'use'}): every buff waiting on this event whose tag
+   *  gate (ANY-match) and skill gate pass spends ONE stack; the last stack
+   *  ends the buff. Called by the world at the event seams AFTER the event
+   *  has resolved, so a buff's mods always reach the blow that spends it. */
+  spendBuffs(on: NonNullable<BuffEffect['consumeOn']>['on'], tags?: readonly SkillTag[], skillId?: string): void {
+    if (!this.buffs.size) return;
+    for (const [id, buff] of [...this.buffs]) {
+      const def = buff.def;
+      const c = def.consumeOn ?? (def.consumeOnUse ? { on: 'use' as const, tags: def.consumeOnUse.tags } : undefined);
+      if (!c || c.on !== on) continue;
+      if (c.tags && !c.tags.some(t => tags?.includes(t))) continue;
+      if (c.skills && (!skillId || !c.skills.includes(skillId))) continue;
+      this.consumeBuffStacks(id, 1);
+    }
+  }
+
+  /** THE RECENCY LEDGER's stamp: this event just happened to the actor. */
+  noteRecent(kind: RecentKind): void {
+    this.since[recentIndex(kind)] = 0;
+  }
+
+  /** Is this event kind inside its recency window right now? */
+  recently(kind: RecentKind): boolean {
+    return this.since[recentIndex(kind)] < recentWindow(kind);
+  }
+
+  /** Does anything on this actor READ this gauge id — the sheet (derived
+   *  once per source generation) or a slotted skill's innate/socketed mods
+   *  (a handful, scanned)? The derived-gauge sampler's gate. */
+  gaugeReferenced(id: string): boolean {
+    if (this.sheet.usesGauge(id)) return true;
+    for (const inst of this.skills) {
+      if (!inst) continue;
+      if (inst.def.innateMods?.some(m => m.gauge === id)) return true;
+      for (const sock of hostSockets(inst)) {
+        if (sock.def.mods.some(m => m.gauge === id)) return true;
+        if (sock.def.perLevel?.some(m => m.gauge === id)) return true;
+      }
+    }
+    return false;
   }
 
   // ------------------------------------------------------------- charges ---
@@ -2604,56 +2688,58 @@ export class Actor {
     const maxLife = this.maxLife();
     const maxMana = this.maxMana();
     const maxEs = this.maxEs();
+    // THE BIT ORDER is CONDITION_IDS (stats.ts): bit i ⇔ CONDITION_IDS[i],
+    // so the union, the mask and the validator share one list.
     let mask = 0;
-    if (this.life < maxLife * this.lowLifeLine()) mask |= 1;          // lowLife
-    if (this.life >= maxLife * FULL_LIFE_FRAC) mask |= 2;              // fullLife
-    if (maxMana > 0 && this.mana < maxMana * LOW_MANA_FRAC) mask |= 4; // lowMana
-    if (maxMana > 0 && this.mana >= maxMana * FULL_MANA_FRAC) mask |= 8; // fullMana
-    if (this.es > 0.5) mask |= 16;                                     // hasEs
-    if (maxEs > 0 && this.es >= maxEs * FULL_ES_FRAC) mask |= 32;      // fullEs
-    if (maxEs > 0 && this.es < maxEs * LOW_ES_FRAC) mask |= 64;        // lowEs
-    if (this.casting?.mode === 'guard') mask |= 128;                   // guarding
+    if (this.life < maxLife * this.lowLifeLine()) mask |= COND_BIT.lowLife;
+    if (this.life >= maxLife * FULL_LIFE_FRAC) mask |= COND_BIT.fullLife;
+    if (maxMana > 0 && this.mana < maxMana * LOW_MANA_FRAC) mask |= COND_BIT.lowMana;
+    if (maxMana > 0 && this.mana >= maxMana * FULL_MANA_FRAC) mask |= COND_BIT.fullMana;
+    if (this.es > 0.5) mask |= COND_BIT.hasEs;
+    if (maxEs > 0 && this.es >= maxEs * FULL_ES_FRAC) mask |= COND_BIT.fullEs;
+    if (maxEs > 0 && this.es < maxEs * LOW_ES_FRAC) mask |= COND_BIT.lowEs;
+    if (this.casting?.mode === 'guard') mask |= COND_BIT.guarding;
     // The break-bar stands: "while poised" mods hold (lapse on the break).
-    if (this.poise > 0.5 && !this.poiseBroken) mask |= 256;            // poised
+    if (this.poise > 0.5 && !this.poiseBroken) mask |= COND_BIT.poised;
     // ...and its inverse: the broken-and-recovering window is a stance of
     // its own (the berserker's "while your poise is broken" hook).
-    if (this.poiseBroken) mask |= 512;                                 // poiseBroken
+    if (this.poiseBroken) mask |= COND_BIT.poiseBroken;
     // The ES recharge is FLOWING — "while recharging" mods ride the stream.
-    if (this.esRecharging) mask |= 1024;                               // esRecharging
+    if (this.esRecharging) mask |= COND_BIT.esRecharging;
     // Planted vs on the move (Colossus Stance): the PLANT CLOCK accrues in
     // updateTimers (paused while an uncommitted cast bar runs — the
     // commitment precedes the press) and is zeroed by every deliberate
     // step. Between the two windows sits a NEUTRAL transition band —
     // neither bonus nor malus. 'moving' keeps reading raw idleFor: a
     // cast does not make you fleet-footed.
-    if (this.plantFor > STANCE_PLANT_TIME) mask |= 2048;               // stationary
-    else if (this.idleFor < STANCE_MOVE_WINDOW) mask |= 4096;          // moving
+    if (this.plantFor > STANCE_PLANT_TIME) mask |= COND_BIT.stationary;
+    else if (this.idleFor < STANCE_MOVE_WINDOW) mask |= COND_BIT.moving;
     // THE COMBO GRAMMAR's starter conditions — bits stamped at the record
     // site, held on the countdown, and read ONLY while comboWatch: an
     // unwatched actor's mask can never churn on cast history.
     if (this.comboWatch && this.comboCondLeft > 0) {
-      if (this.comboCondBits & 1) mask |= 8192;                        // comboVaried
-      if (this.comboCondBits & 2) mask |= 16384;                       // comboRepeated
+      if (this.comboCondBits & 1) mask |= COND_BIT.comboVaried;
+      if (this.comboCondBits & 2) mask |= COND_BIT.comboRepeated;
+    }
+    // THE RECENCY LEDGER (engine/recency.ts): each counter against its
+    // window — the seconds-since ticks in updateTimers, the seams stamp it.
+    for (const row of RECENT_ROWS) {
+      if ((this.since[row.idx] < row.window) === row.within) mask |= row.bit;
     }
     const sheetChanged = this.condSheet !== this.sheet;
     if (mask !== this.condMask || sheetChanged) {
+      // THE EDGE IS AN EVENT: every bit that just flipped ON is queued for
+      // the world's 'condition' proc sweep (a real state change, depth 0).
+      // The first fold (condMask -1) raises nothing — a body is born into
+      // its state, it does not "enter" it.
+      const rose = this.condMask === -1 ? 0 : (mask & ~this.condMask);
       this.condMask = mask;
       const active: ConditionId[] = [];
-      if (mask & 1) active.push('lowLife');
-      if (mask & 2) active.push('fullLife');
-      if (mask & 4) active.push('lowMana');
-      if (mask & 8) active.push('fullMana');
-      if (mask & 16) active.push('hasEs');
-      if (mask & 32) active.push('fullEs');
-      if (mask & 64) active.push('lowEs');
-      if (mask & 128) active.push('guarding');
-      if (mask & 256) active.push('poised');
-      if (mask & 512) active.push('poiseBroken');
-      if (mask & 1024) active.push('esRecharging');
-      if (mask & 2048) active.push('stationary');
-      if (mask & 4096) active.push('moving');
-      if (mask & 8192) active.push('comboVaried');
-      if (mask & 16384) active.push('comboRepeated');
+      for (let i = 0; i < CONDITION_IDS.length; i++) {
+        const bit = 1 << i;
+        if (mask & bit) active.push(CONDITION_IDS[i]);
+        if ((rose & bit) && this.condRose.length < 16) this.condRose.push(CONDITION_IDS[i]);
+      }
       this.sheet.setConditions(active);
     }
 
@@ -2704,6 +2790,15 @@ export class Actor {
         ha = Math.imul(ha ^ r.pips, 0x01000193); hb = (Math.imul(hb, 31) + r.pips) | 0;
       }
     }
+    // DERIVED GAUGES (engine/gauges.ts): the world's cadenced integer
+    // samples — published exactly like a bank, changing only on a sample.
+    if (this.derivedGauges) {
+      for (const [id, n] of this.derivedGauges) {
+        if (n <= 0) continue;
+        mixStr(id);
+        ha = Math.imul(ha ^ n, 0x01000193); hb = (Math.imul(hb, 31) + n) | 0;
+      }
+    }
     if (ha !== this.gaugeHashA || hb !== this.gaugeHashB || sheetChanged) {
       this.gaugeHashA = ha; this.gaugeHashB = hb;
       const gauges: [string, number][] = [];
@@ -2722,6 +2817,11 @@ export class Actor {
       if (this.reserves) {
         for (const [id, r] of this.reserves) {
           if (r.pips > 0) gauges.push(['reserve:' + id, r.pips]);
+        }
+      }
+      if (this.derivedGauges) {
+        for (const [id, n] of this.derivedGauges) {
+          if (n > 0) gauges.push([id, n]);
         }
       }
       this.sheet.setGauges(gauges);
@@ -2779,6 +2879,12 @@ export class Actor {
     // seconds since this actor last took damage; the world zeroes it at
     // both damage seams (hits and DoT alike).
     this.recentHurt = Math.min(999, this.recentHurt + dt);
+    // THE RECENCY LEDGER's counters and the last gasp's clock.
+    for (let i = 0; i < this.since.length; i++) {
+      if (this.since[i] < RECENT_NEVER) this.since[i] = Math.min(RECENT_NEVER, this.since[i] + dt);
+    }
+    if (this.lastGaspCd > 0) this.lastGaspCd = Math.max(0, this.lastGaspCd - dt);
+    if (this.gaugeSampleIn > 0) this.gaugeSampleIn -= dt;
     // Combo-condition freshness (comboVaried/comboRepeated): the window
     // decays here so the conditions expire even when no new cast lands.
     if (this.comboCondLeft > 0) this.comboCondLeft = Math.max(0, this.comboCondLeft - dt);

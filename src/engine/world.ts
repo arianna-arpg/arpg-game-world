@@ -13,7 +13,7 @@ import { DiscIndex } from './spatial';
 import { ActorGrid } from './actorGrid';
 import { erraticTurn, spinOffset, weaveOffset, weaveVel } from './flight';
 import { FOURTH_WALL_CFG, type ViewRect, fallbackRect, frameReflect, rectCenter } from './fourthwall';
-import { mod, type AttributeId, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
+import { mod, type AttributeId, type Attributes, type ConditionId, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, bankFracOf, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
 import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingState, type GainEvent, type MonsterPartDef, type Team } from './actor';
 import { EventBus } from './eventbus';
@@ -87,6 +87,8 @@ import { openRealms, realmOf, realmOpen, type PassiveRealmDef } from '../data/pa
 import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocationRootId, vocationStepKey, type VocationSiteFilter } from '../data/vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
 import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcCastSpec, type ProcDef } from '../data/procs';
+import { VICTIM_CONDITIONS, VICTIM_HOOKS, victimScopeArmed, victimTags } from './victim'; // THE VICTIM SCOPE
+import { DERIVED_GAUGES, GAUGE_CFG } from './gauges'; // DERIVED GAUGES
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
 import { COMBO_CFG, comboRepeatedNow, comboStat, comboVariedNow, matchComboRule, type ComboRuleDef } from './sequence';
 import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSelected } from './mimic';
@@ -2504,6 +2506,16 @@ interface WispScene {
   hosts: { slot: number; a: Actor }[];
   sweepAcc: number;
 }
+
+// THE VICTIM SCOPE's boss read (engine/victim.ts VICTIM_HOOKS): bosses are a
+// bestiary fact the engine module cannot import — the world, which can,
+// installs the predicate once at load.
+VICTIM_HOOKS.isBoss = v => !!(v.defId && MONSTERS[v.defId]?.boss);
+
+/** The 'pulse' procs (ProcDef trigger 'pulse'), derived once from the
+ *  registry on first use — the per-actor sweep walks only the ones the
+ *  actor's sheet ARMS (StatSheet.armedFamily over their proc_ ids). */
+let PULSE_PROC_IDS: string[] | null = null;
 
 export class World {
   actors: Actor[] = [];
@@ -34496,6 +34508,13 @@ export class World {
     // spends one round off every consumeOnUse buff (same predicate as
     // remnants — echo/pulse/repeat executions never eat a round).
     if (!opts.noRepeat && !opts.noCooldown) this.consumeAmmunition(caster, def);
+    // THE TALENT FABRIC's cast events (same REAL-use predicate): the
+    // recency stamp for movement arts, and the 'cast' proc trigger rolled
+    // with the cast's own context (tag-scoped grants work as on hits).
+    if (!opts.noRepeat && !opts.noCooldown) {
+      if (def.tags.includes('movement')) caster.noteRecent('move');
+      this.rollOwnProcs(caster, 'cast', { tags, extra, inst });
+    }
     // SELF-STACKS (instanceSelfStack): every completed REAL use feeds the
     // skill's OWN pile — mods that exist only inside this instance's fold
     // (the per-skill frenzy). Decay bleeds in Actor.updateTimers; echo
@@ -39123,7 +39142,12 @@ export class World {
         ? (b.affinityMult ?? 2) : 1;
       dmgMult *= b.ownerMult * aff;
     }
-    const packet: DamagePacket = rollSkillDamage(caster, inst, flatBonus);
+    // THE VICTIM SCOPE (engine/victim.ts): the struck body's live state
+    // rides the roll's context as 'vs:' tags — folded only when something
+    // the striker brings names one (null-cost for every uninvested body).
+    const vs = victimScopeArmed(caster.sheet, extra)
+      ? victimTags(target, caster, { time: this.time }) : undefined;
+    const packet: DamagePacket = rollSkillDamage(caster, inst, flatBonus, vs);
     if (dmgMult !== 1) {
       for (const t of Object.keys(packet.amounts) as (keyof typeof packet.amounts)[]) {
         packet.amounts[t]! *= dmgMult;
@@ -39175,7 +39199,13 @@ export class World {
         // their own 'evade' procs (global sheet — golden rule 3).
         const mend = target.sheet.get('lifeOnEvade');
         if (mend > 0) target.healBy(mend);
+        // THE RECENCY LEDGER + the consumable spend ('evade'), then the
+        // evader's own procs and the striker's 'miss' procs (the
+        // after-they-dodge opener — the refused body is its target).
+        target.noteRecent('evade');
+        target.spendBuffs('evade');
         this.rollOwnProcs(target, 'evade', { depth });
+        this.rollOwnProcs(caster, 'miss', { tags: packet.tags, extra, inst, target, depth });
         return; // an evaded attack applies nothing
       }
       if (result.blocked) {
@@ -39184,7 +39214,12 @@ export class World {
         if (depth === 0) this.tapCharges(target, 'block');
         const mend = target.sheet.get('lifeOnBlock');
         if (mend > 0) target.healBy(mend);
+        target.noteRecent('block');
+        target.spendBuffs('block');
         this.rollOwnProcs(target, 'block', { depth });
+        // The striker's 'foiled' procs: the blow was turned (the blocker
+        // is the target).
+        this.rollOwnProcs(caster, 'foiled', { tags: packet.tags, extra, inst, target, depth });
         // CAST-ON-BLOCK trigger gems: the made block is the event, aimed
         // back at whoever swung (passive block; guard blocks fire from
         // tryGuardBlock).
@@ -39214,6 +39249,17 @@ export class World {
         }
       }
       dealt = result.total;
+      if (dealt > 0) {
+        // THE RECENCY LEDGER (engine/recency.ts): the blow landed — both
+        // sides stamp it (DoT ticks never reach here: a burn is not a blow).
+        caster.noteRecent('hit');
+        target.noteRecent('hurt');
+        if (wasCrit) { caster.noteRecent('crit'); target.noteRecent('critHurt'); }
+        // 'hurt' procs — the victim's OWN sheet answers (sheet-only, golden
+        // rule 3); the striker is the proc's target, so a status, an arc
+        // or a shove lands on the hand that struck.
+        this.rollOwnProcs(target, 'hurt', { depth, target: caster, crit: wasCrit });
+      }
       // DAMAGE POOLS: the hit's rolled amounts feed any pool skills on the
       // attacker's bar (Venomous Aura sips chaos hits; Detonation, fire).
       if (dealt > 0) {
@@ -40304,6 +40350,8 @@ export class World {
         // arrested knockbacks; statusApply procs at status application).
         if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
         if (proc.crit && !wasCrit) continue;
+        if (proc.noCrit && wasCrit) continue;
+        if (proc.vs && !this.victimGate(proc.vs, target, caster)) continue;
         if (proc.rollTop !== undefined
           && !this.rollTopMet(caster, proc.rollTop, packet.rollT, tags, extra)) continue;
         if (!this.procGates(caster, proc, inst)) continue;
@@ -40343,6 +40391,8 @@ export class World {
           if (!proc.minionCarry) continue;
           if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
           if (proc.crit && !wasCrit) continue;
+          if (proc.noCrit && wasCrit) continue;
+          if (proc.vs && !this.victimGate(proc.vs, target, owner)) continue;
           if (proc.rollTop !== undefined
             && !this.rollTopMet(owner, proc.rollTop, packet.rollT, cTags, cExtra)) continue;
           if (!this.procGates(owner, proc, carryInst)) continue;
@@ -40403,6 +40453,15 @@ export class World {
       }
     }
 
+    // THE CONSUMABLE BUFFS (BuffEffect.consumeOn) spend AFTER the whole
+    // resolution — damage, ailments and procs have all read the buff that
+    // empowered this blow — and the kill stamps the ledger.
+    if (dealt > 0) {
+      caster.spendBuffs('hit', def.tags, def.id);
+      if (wasCrit) caster.spendBuffs('crit', def.tags, def.id);
+      if (lethal) { caster.noteRecent('kill'); caster.spendBuffs('kill', def.tags, def.id); }
+      target.spendBuffs('hurt');
+    }
     if (target.life <= 0 && !target.dead) {
       // Kill-fed taps + fragment sheds ride the killing HIT: support-granted
       // remnantDrop stats live in the skill's extra mods and are only
@@ -40605,6 +40664,94 @@ export class World {
     }
   }
 
+  /** THE VICTIM GATE (ProcDef.vs): every listed id must hold for `victim`
+   *  against `attacker` — a registered victim condition (engine/victim.ts)
+   *  or, failing that, a status the victim carries. */
+  private victimGate(ids: readonly string[], victim: Actor, attacker: Actor): boolean {
+    for (const id of ids) {
+      const def = VICTIM_CONDITIONS[id];
+      const holds = def
+        ? def.test(victim, attacker, { time: this.time })
+        : victim.statuses.some(st => st.id === id && st.stacks > 0);
+      if (!holds) return false;
+    }
+    return true;
+  }
+
+  /** THE TALENT FABRIC's per-actor sweep (docs/engine/talents.md), once per
+   *  frame after the actor's own tick:
+   *   - CONDITION EDGES (Actor.condRose, stamped by refreshConditions) →
+   *     'condition' procs, one event per flipped bit, depth 0;
+   *   - THE HEAL EVENT (Actor.healedSince) → 'heal' procs, once per frame
+   *     however many pours landed;
+   *   - THE LAST GASP (Actor.gasped, engine/damage.ts) → the fanfare and
+   *     the 'lastGasp' procs;
+   *   - PULSE BEATS: every pulse proc the sheet ARMS keeps its own metronome
+   *     on the owner's ICD clock — a beat rolls the chance, a missed beat is
+   *     missed (never banked);
+   *   - DERIVED GAUGES (engine/gauges.ts): at GAUGE_CFG.cadence, sample the
+   *     gauges something on this actor READS and publish them (refresh-
+   *     Conditions folds them into the sheet beside statuses and charges).
+   *  Every lane is null-cost until something on the actor names it. */
+  private sweepTalentEvents(a: Actor): void {
+    if (a.dead) {
+      if (a.condRose.length) a.condRose.length = 0;
+      a.healedSince = 0;
+      a.gasped = false;
+      return;
+    }
+    if (a.condRose.length) {
+      const rose = a.condRose;
+      a.condRose = [];
+      for (const c of rose) this.rollOwnProcs(a, 'condition', { condition: c });
+    }
+    if (a.healedSince > 0) {
+      a.healedSince = 0;
+      this.rollOwnProcs(a, 'heal');
+    }
+    if (a.gasped) {
+      a.gasped = false;
+      this.text(vec(a.pos.x, a.pos.y - a.radius - 12), 'LAST GASP!', '#ffd890', 15, 'combat');
+      this.flashes.push({
+        pos: vec(a.pos.x, a.pos.y), radius: a.radius + 22,
+        color: '#ffd890', life: 0.4, maxLife: 0.4,
+      });
+      this.rollOwnProcs(a, 'lastGasp');
+    }
+    // PULSE BEATS — only the pulse procs this sheet arms (the armed-list
+    // derivation is cached per source generation; an uninvested body pays
+    // one cached lookup).
+    PULSE_PROC_IDS ??= PROC_LIST.filter(pr => pr.trigger === 'pulse').map(pr => pr.id);
+    if (PULSE_PROC_IDS.length) {
+      const armed = a.sheet.armedFamily('proc_', PULSE_PROC_IDS);
+      for (const id of armed) {
+        const proc = PROCS[id];
+        const every = proc.every ?? 0;
+        if (every <= 0) continue;
+        const due = a.procReadyAt.get(proc.id) ?? 0;
+        if (this.time < due) continue;
+        a.procReadyAt.set(proc.id, this.time + every);
+        if (!this.procGates(a, proc, null)) continue;
+        const c = this.procChance(a, proc, 0);
+        if (c <= 0 || !chance(c)) continue;
+        this.executeProc(proc, a, null, null, 0);
+      }
+    }
+    // DERIVED GAUGES — cadenced, referenced-only.
+    if (a.gaugeSampleIn <= 0) {
+      a.gaugeSampleIn = GAUGE_CFG.cadence;
+      let map = a.derivedGauges;
+      for (const id in DERIVED_GAUGES) {
+        if (!a.gaugeReferenced(id)) {
+          if (map?.has(id)) map.delete(id);
+          continue;
+        }
+        const v = Math.max(0, Math.round(DERIVED_GAUGES[id].sample(a, this)));
+        (map ??= (a.derivedGauges = new Map())).set(id, v);
+      }
+    }
+  }
+
   /** ICD gate (ProcDef.icd): true when the proc may fire for this owner —
    *  and stamps the next-ready clock when it does. The hard frequency
    *  limit no amount of stacked proc-chance can beat. */
@@ -40622,6 +40769,19 @@ export class World {
    *    striking five targets never inflates a per-cast chance. */
   private procGates(owner: Actor, proc: ProcDef, inst: SkillInstance | null): boolean {
     if (proc.skills && (!inst || !proc.skills.includes(inst.def.id))) return false;
+    // THE TALENT FABRIC's owner gates (ProcDef.when/unless/requireBuff/
+    // requireStatus) and the def-level TAG LOCK (ProcDef.tags).
+    if (proc.when && !owner.sheet.hasCondition(proc.when)) return false;
+    if (proc.unless && owner.sheet.hasCondition(proc.unless)) return false;
+    if (proc.requireBuff !== undefined) {
+      const l = Array.isArray(proc.requireBuff) ? proc.requireBuff : [proc.requireBuff];
+      if (!l.some(b => owner.buffs.has(b))) return false;
+    }
+    if (proc.requireStatus !== undefined) {
+      const l = Array.isArray(proc.requireStatus) ? proc.requireStatus : [proc.requireStatus];
+      if (!owner.statuses.some(st => st.stacks > 0 && l.includes(st.id))) return false;
+    }
+    if (proc.tags && (!inst || !proc.tags.every(t => inst.def.tags.includes(t)))) return false;
     if (proc.oncePerCast) {
       if (owner.procFiredAt.get(proc.id) === this.time) return false;
       owner.procFiredAt.set(proc.id, this.time);
@@ -40858,7 +41018,13 @@ export class World {
    *  def pinned to one rung (ProcDef.bracket) only fires on its own. */
   rollOwnProcs(
     owner: Actor, trigger: ProcDef['trigger'],
-    opts?: { tags?: Set<SkillTag>; extra?: Modifier[]; inst?: SkillInstance; target?: Actor; depth?: number; bracket?: number },
+    opts?: {
+      tags?: Set<SkillTag>; extra?: Modifier[]; inst?: SkillInstance; target?: Actor; depth?: number; bracket?: number;
+      /** 'hurt': the incoming blow was critical (the crit / noCrit gates). */
+      crit?: boolean;
+      /** 'condition': the ConditionId that just flipped on. */
+      condition?: ConditionId;
+    },
   ): void {
     if (owner.dead) return;
     const depth = opts?.depth ?? 0;
@@ -40867,6 +41033,14 @@ export class World {
       if (proc.trigger !== trigger) continue;
       if (proc.bracket !== undefined && (opts?.bracket === undefined
         || !(Array.isArray(proc.bracket) ? proc.bracket : [proc.bracket]).includes(opts.bracket))) continue;
+      // THE TALENT FABRIC's gates: the condition edge must be the named
+      // one; crit / noCrit read the event's blow; `vs` reads the event's
+      // other body (the striker on 'hurt', the refuser on 'miss'/'foiled',
+      // the fallen on 'minionDeath').
+      if (proc.condition !== undefined && proc.condition !== opts?.condition) continue;
+      if (proc.crit && !opts?.crit) continue;
+      if (proc.noCrit && opts?.crit) continue;
+      if (proc.vs && (!opts?.target || !this.victimGate(proc.vs, opts.target, owner))) continue;
       if (!this.procGates(owner, proc, opts?.inst ?? null)) continue;
       const c = this.procChance(owner, proc, depth, opts?.tags, opts?.extra);
       if (c <= 0 || !chance(c)) continue;
@@ -41043,11 +41217,44 @@ export class World {
         break;
       }
       case 'cooldown': {
-        for (const [id, t] of caster.cooldowns) {
-          const left = t - fx.seconds;
+        // Every clock by default; `skills` / `tags` narrow it to the named
+        // arts (a bar instance answers the id — an unslotted clock has no
+        // tags and matches only an unfiltered effect); `exceptSelf` spares
+        // the skill whose use raised the trigger.
+        for (const [id, t] of [...caster.cooldowns]) {
+          if (fx.exceptSelf && inst && id === inst.def.id) continue;
+          if (fx.skills && !fx.skills.includes(id)) continue;
+          if (fx.tags) {
+            const bar = caster.skills.find(sk => sk?.def.id === id);
+            if (!bar || !fx.tags.every(tg => bar.def.tags.includes(tg))) continue;
+          }
+          const left = fx.reset ? 0 : t - (fx.seconds ?? 0) - t * (fx.fraction ?? 0);
           if (left <= 0) caster.cooldowns.delete(id);
           else caster.cooldowns.set(id, left);
         }
+        break;
+      }
+      // THE GRAMMAR'S ERASER: strip named buffs from the owner.
+      case 'removeBuff': {
+        const l = Array.isArray(fx.buff) ? fx.buff : [fx.buff];
+        for (const id of l) caster.removeBuff(id);
+        break;
+      }
+      // WARD on the owner — through gainWard (wardGain scales, wardDecay bounds).
+      case 'ward': {
+        const amount = (fx.flat ?? 0) + (fx.pctMaxLife ?? 0) * caster.maxLife();
+        if (amount > 0) caster.gainWard(amount);
+        break;
+      }
+      // CLEANSE the owner: named statuses, every hard CC, every damaging ailment.
+      case 'cleanse': {
+        const ids = new Set<string>(fx.statuses ?? []);
+        for (const st of caster.statuses) {
+          const sd = STATUS_DEFS[st.id];
+          if (!sd) continue;
+          if ((fx.hardCC && sd.hardCC) || (fx.afflictions && sd.dotType)) ids.add(st.id);
+        }
+        for (const id of ids) caster.endStatus(id);
         break;
       }
       // KINDLE: plant a registered lightwell where the trigger landed (the
@@ -41890,6 +42097,11 @@ export class World {
     // citizens), before the bounty ladder.
     this.clutchOnDeath(actor);
 
+    // 'minionDeath' procs: the KEEPER's sheet answers a fallen summon — the
+    // body is the target, so a birth or a burst seats where it fell.
+    if (!silent && actor.isMinion() && actor.owner && !actor.owner.dead) {
+      this.rollOwnProcs(actor.owner, 'minionDeath', { target: actor });
+    }
     // DEATH RITES (minionDeathHeal): the flock closes over the wound — the
     // deceased's kin heal a share of its life (+ flat). Duration lapses
     // reach here only when the raging-spirits lever counts them as deaths.
@@ -44355,6 +44567,11 @@ export class World {
       // chargeGain/buffGain triggers. Payload grants land as NEW events
       // (one link deeper) swept NEXT frame — chains propagate a link per
       // frame and die at the depth lid, never recurse.
+      // THE TALENT FABRIC's per-frame sweep (docs/engine/talents.md):
+      // condition edges, the heal event, the last gasp, pulse beats and the
+      // derived-gauge samples — each null-cost until something on the
+      // actor names it.
+      this.sweepTalentEvents(a);
       if (a.gainEvents.length) {
         const evs = a.gainEvents;
         a.gainEvents = [];

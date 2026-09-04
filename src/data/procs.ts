@@ -52,7 +52,7 @@
 // ---------------------------------------------------------------------------
 
 import { mod, STAT_DEFS } from '../engine/stats';
-import type { DamageType } from '../engine/stats';
+import type { ConditionId, DamageType, SkillTag } from '../engine/stats';
 import type { BuffEffect } from '../engine/skills';
 
 export type ProcEffect =
@@ -117,9 +117,21 @@ export type ProcEffect =
   /** FORTIFY: bank endurance on the proc's OWNER (Actor.gainEndurance —
    *  a 0-max sheet banks nothing; the pool is the investment). */
   | { type: 'fortify'; flat?: number; pctMaxLife?: number }
-  /** Tick every running cooldown on the proc's OWNER down by `seconds`
-   *  (the on-kill rhythm classic). */
-  | { type: 'cooldown'; seconds: number }
+  /** Tick the proc's OWNER's running cooldowns down by `seconds` and/or
+   *  `fraction` of what remains, or `reset` them outright (the on-kill
+   *  rhythm classic) — every clock by default, or only the skills named
+   *  by `skills` / carrying ALL of `tags`. `exceptSelf` spares the skill
+   *  whose use raised the trigger (the chrono skill's own rule). */
+  | { type: 'cooldown'; seconds?: number; fraction?: number; reset?: true; skills?: string[]; tags?: SkillTag[]; exceptSelf?: true }
+  /** Strip named buff(s) from the proc's OWNER — the grammar's eraser (a
+   *  non-crit ending the heating-up count). */
+  | { type: 'removeBuff'; buff: string | string[] }
+  /** Grant WARD to the proc's OWNER (through gainWard, so wardGain scales it
+   *  and wardDecay bounds it): flat and/or a fraction of maximum life. */
+  | { type: 'ward'; flat?: number; pctMaxLife?: number }
+  /** CLEANSE the proc's OWNER: named statuses, every hard CC, and/or every
+   *  damaging ailment — the freedom-on-event shape (a dispel, not a heal). */
+  | { type: 'cleanse'; statuses?: string[]; hardCC?: true; afflictions?: true }
   /** PLANTS a registered LIGHTWELL (data/lightwells.ts rows) where the
    *  trigger landed — at the struck/slain body, else at the owner. The
    *  well's own pool/decay row bounds the litter; outside a darkness
@@ -172,7 +184,55 @@ export interface ProcDef {
   trigger: 'hit' | 'kill' | 'collision' | 'statusApply'
     | 'block' | 'evade' | 'esBreak' | 'esRechargeStart' | 'esFilled'
     | 'poiseBreakDealt' | 'poiseBroken' | 'poiseBracket' | 'poiseRearmed'
-    | 'chargeGain' | 'buffGain' | 'orbPickup' | 'surface';
+    | 'chargeGain' | 'buffGain' | 'orbPickup' | 'surface'
+    // THE TALENT FABRIC's triggers (docs/engine/talents.md):
+    //   'hurt'         you TAKE a landed hit (sheet-only roll on the victim;
+    //                  `crit` gates on the blow being critical; the striker
+    //                  is the proc's target, so 'status'/'displace'/'arc'
+    //                  answer the hand that struck you). DoT ticks never.
+    //   'miss'         a hit of yours was EVADED by its victim (the
+    //                  after-they-dodge opener); 'foiled' — it was BLOCKED.
+    //   'cast'         you complete a REAL use of a skill (echoes, pulses
+    //                  and repeats never count; see `tags` / `skills`) —
+    //                  rolled with the cast's own context, so grant it
+    //                  tag-scoped like any hit proc.
+    //   'condition'    a ConditionId flips ON for you (see `condition`) —
+    //                  "when you drop to low life", "when your poise
+    //                  breaks", "when you have not been hit for a while".
+    //   'pulse'        every `every` seconds while the chance stat stands
+    //                  (the chance rolls per beat; a missed beat is missed).
+    //   'minionDeath'  a minion of yours dies (the fallen body is the
+    //                  target — 'birth'/'burst' seat where it fell).
+    //   'heal'         healing lands on you (any source; once per frame).
+    //   'lastGasp'     your last gasp answered (engine/damage.ts) — what
+    //                  the reprieve grants is this trigger's payload.
+    | 'hurt' | 'miss' | 'foiled' | 'cast' | 'condition' | 'pulse'
+    | 'minionDeath' | 'heal' | 'lastGasp';
+  /** 'condition' only: the ConditionId whose rising edge fires this proc. */
+  condition?: ConditionId;
+  /** 'pulse' only: the beat length, seconds. */
+  every?: number;
+  /** TAG LOCK ('cast', 'hit', 'kill', 'miss', 'foiled'): the skill involved
+   *  must carry ALL of these tags — a def-level scope, so "movement skills
+   *  grant…" holds whoever grants the chance and however it is scoped. */
+  tags?: SkillTag[];
+  /** OWNER GATES (any trigger): the proc rolls only while the owner
+   *  satisfies `when` / does NOT satisfy `unless` (ordinary ConditionIds
+   *  — "while on low life", "if you have killed recently"), and carries
+   *  one of `requireBuff` / `requireStatus` ("while Enraged"; the two-step
+   *  heating-up → hot-streak grammar is two procs and one buff). */
+  when?: ConditionId;
+  unless?: ConditionId;
+  requireBuff?: string | string[];
+  requireStatus?: string | string[];
+  /** NON-CRIT GATE (hit/kill/hurt): only NON-critical blows roll this proc
+   *  — the reset half of a "two crits in a row" grammar. */
+  noCrit?: true;
+  /** VICTIM GATES (hit/kill: the struck body; hurt: the striker; miss/
+   *  foiled: the body that refused the blow): every listed victim
+   *  condition (engine/victim.ts — a registered id or a status id) must
+   *  hold. "Your critical strikes against chilled enemies…" is one row. */
+  vs?: string[];
   /** statusApply only: fires when one of THESE statuses lands (omit = any). */
   status?: string | string[];
   /** chargeGain only: fires for THESE charge ids (omit = any charge). */
@@ -754,6 +814,164 @@ export const PROCS: Record<string, ProcDef> = {
     id: 'mi_bandit_caltrops', name: 'Snaresetter\'s Toll',
     color: '#a8905a', trigger: 'hit', oncePerCast: true, icd: 4,
     effect: { type: 'cast', cast: { skillId: 'caltrops', count: [1, 1], at: 'target' } },
+  },
+
+  // --- THE TALENT FABRIC's debut (docs/engine/talents.md) -------------------
+  // One row per new trigger / gate / effect, each the smallest WoW-talent or
+  // Ascension-enchant shape that needs it. Sheet-lane triggers ('hurt',
+  // 'condition', 'pulse', 'minionDeath', 'heal', 'lastGasp') roll with NO
+  // skill context — grant them from passives/affixes UNTAGGED (the 'surface'
+  // doctrine); 'cast' / 'miss' / 'foiled' carry the skill's context and take
+  // gems and tag-scoped grants like any hit proc.
+
+  // HOT STREAK — the two-crits-in-a-row grammar as three rows and one buff.
+  // Registry ORDER is the law here: hot_streak is declared BEFORE heating_up
+  // so a single crit can never light both — the first crit heats, the
+  // second (heating_up still worn at roll time) streaks, and the heat is
+  // SPENT by that same crit at the end of its resolution (consumeOn 'crit'),
+  // so the third crit starts the count afresh. A non-crit spell hit while
+  // heated loses the heat (heat_lost — the noCrit gate).
+  hot_streak: {
+    id: 'hot_streak', name: 'Hot Streak',
+    color: '#ff9a3a', trigger: 'hit', crit: true, tags: ['spell'],
+    requireBuff: 'heating_up', oncePerCast: true,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'hot_streak', duration: 10,
+        mods: [mod('damage', 'more', 0.5, ['spell']), mod('critChance', 'flat', 1, ['spell'])],
+        consumeOn: { on: 'hit', tags: ['spell'] },
+      },
+    },
+  },
+  heating_up: {
+    id: 'heating_up', name: 'Heating Up',
+    color: '#ffc46a', trigger: 'hit', crit: true, tags: ['spell'], oncePerCast: true,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'heating_up', duration: 6,
+        mods: [mod('castSpeed', 'increased', 0.1, ['spell'])],
+        consumeOn: { on: 'crit', tags: ['spell'] },
+      },
+    },
+  },
+  heat_lost: {
+    id: 'heat_lost', name: 'Heat Lost',
+    color: '#9ab0c8', trigger: 'hit', noCrit: true, tags: ['spell'],
+    requireBuff: 'heating_up', oncePerCast: true,
+    effect: { type: 'removeBuff', buff: 'heating_up' },
+  },
+
+  // OVERPOWER — the after-they-dodge opener ('miss'): the refused blow
+  // loads the next melee hit (a consumable buff spent by that hit).
+  overpower: {
+    id: 'overpower', name: 'Overpower',
+    color: '#e8c060', trigger: 'miss', tags: ['melee'],
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'overpower', duration: 5,
+        mods: [mod('critChance', 'flat', 0.5, ['melee']), mod('damage', 'more', 0.3, ['melee'])],
+        consumeOn: { on: 'hit', tags: ['melee'] },
+      },
+    },
+  },
+
+  // SHIELD LESSON — a turned blow ('foiled') steadies the striker's footing.
+  shield_lesson: {
+    id: 'shield_lesson', name: 'Shield Lesson',
+    color: '#8ab8d8', trigger: 'foiled', icd: 1,
+    effect: { type: 'restore', resource: 'poise', pctMax: 0.2 },
+  },
+
+  // REPRISAL — being struck ('hurt') loads the next melee hits to strike
+  // twice (the brutal_strike proc worn as a consumable buff, spent per hit).
+  reprisal: {
+    id: 'reprisal', name: 'Reprisal',
+    color: '#d8a060', trigger: 'hurt', icd: 1,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'reprisal', duration: 6, maxStacks: 3,
+        mods: [mod('proc_brutal_strike', 'flat', 1, ['melee'])],
+        consumeOn: { on: 'hit', tags: ['melee'] },
+      },
+    },
+  },
+
+  // DEEP FREEZE — a hit against a CHILLED body ('vs' gate) freezes it.
+  deep_freeze: {
+    id: 'deep_freeze', name: 'Deep Freeze',
+    color: '#bfe8ff', trigger: 'hit', vs: ['chill'], icd: 2,
+    effect: { type: 'status', status: 'frozen' },
+  },
+
+  // DESPERATE WARD — dropping to low life ('condition' edge) raises a ward.
+  desperate_ward: {
+    id: 'desperate_ward', name: 'Desperate Ward',
+    color: '#8ae0b8', trigger: 'condition', condition: 'lowLife', icd: 20,
+    effect: { type: 'ward', pctMaxLife: 0.3 },
+  },
+
+  // ADRENALINE — a completed movement art ('cast' + tag lock) quickens the
+  // hands for a few breaths.
+  adrenaline: {
+    id: 'adrenaline', name: 'Adrenaline',
+    color: '#ffd86a', trigger: 'cast', tags: ['movement'], icd: 2,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'adrenaline', duration: 4,
+        mods: [mod('attackSpeed', 'increased', 0.25), mod('castSpeed', 'increased', 0.25)],
+      },
+    },
+  },
+
+  // DESPERATE RESERVES — a spell cast while the tank runs dry ('cast' under
+  // the lowMana owner gate) claws mana back.
+  desperate_reserves: {
+    id: 'desperate_reserves', name: 'Desperate Reserves',
+    color: '#8fa8d8', trigger: 'cast', tags: ['spell'], when: 'lowMana', icd: 3,
+    effect: { type: 'restore', resource: 'mana', pctMax: 0.1 },
+  },
+
+  // SLOW BURN — a metronome ('pulse'): every beat, a fury charge.
+  slow_burn: {
+    id: 'slow_burn', name: 'Slow Burn',
+    color: '#ff8a4a', trigger: 'pulse', every: 5,
+    effect: { type: 'gainCharge', charge: 'fury', amount: 1, max: 5 },
+  },
+
+  // NECROTIC FEAST — the keeper feeds on a fallen summon ('minionDeath').
+  necrotic_feast: {
+    id: 'necrotic_feast', name: 'Necrotic Feast',
+    color: '#9a72c8', trigger: 'minionDeath',
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'necrotic_feast', duration: 8, maxStacks: 5,
+        mods: [mod('minionDamage', 'increased', 0.08), mod('damage', 'increased', 0.04)],
+      },
+    },
+  },
+
+  // MENDING WARD — being healed ('heal') leaves a little ward behind.
+  mending_ward: {
+    id: 'mending_ward', name: 'Mending Ward',
+    color: '#7ee0b8', trigger: 'heal', icd: 4,
+    effect: { type: 'ward', pctMaxLife: 0.05 },
+  },
+
+  // PHOENIX — the last gasp answered ('lastGasp') erupts in flame around
+  // the bearer (a baseline-scaled burst; golden rule 4).
+  phoenix: {
+    id: 'phoenix', name: 'Phoenix',
+    color: '#ff7a3a', trigger: 'lastGasp',
+    effect: { type: 'burst', damage: 'fire', base: 40, perLevel: 8, radius: 160 },
+  },
+
+  // UNBOUND — a hard CC landing on you ('condition' on the hurt edge is not
+  // it; this rides 'hurt' + requireStatus) shakes free of every hold, rarely.
+  unbound: {
+    id: 'unbound', name: 'Unbound',
+    color: '#e8e0ff', trigger: 'hurt', icd: 12,
+    requireStatus: ['stun', 'frozen'],
+    effect: { type: 'cleanse', hardCC: true },
   },
 };
 

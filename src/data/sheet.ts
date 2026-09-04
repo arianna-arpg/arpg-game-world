@@ -96,6 +96,8 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'endurance', 'enduranceDR', 'enduranceRegenPct', 'enduranceRegenDelay',
       // Ward & exotic soaks
       'wardDecay', 'wardGain', 'staggerFrac', 'staggerWindow', 'hitImmune', 'hitCap',
+      // The last gasp (the talent fabric's cheat-death lane)
+      'lastGasp', 'lastGaspLife', 'lastGaspCooldown',
       // Body & substance
       'weight', 'phasing',
       // The stat-trade dials
@@ -493,6 +495,9 @@ const STAT_BLURBS: Record<string, string> = {
   staggerWindow: 'How long a staggered wound takes to finish landing.',
   hitImmune: 'Incoming HITS are dodged outright; damage over time still ticks.',
   hitCap: 'A ceiling on the life damage any single hit may land; attrition still does full work.',
+  lastGasp: 'Chance that a blow which would empty your life leaves you standing instead, once per cooldown.',
+  lastGaspLife: 'The fraction of maximum life a last gasp leaves you with.',
+  lastGaspCooldown: 'Seconds before your last gasp may answer again.',
   weight: 'Mass. The heavy resist knockback and poise wear, and shove harder in the bargain; the light get shoved.',
   phasing: 'No body collision at all: you walk through others, and they through you. Substance, not stealth.',
   evasionToArmor: 'This fraction of your evasion is read again as armor: the swap\'s gain dial.',

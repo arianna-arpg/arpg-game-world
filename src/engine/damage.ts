@@ -109,10 +109,13 @@ type RangePick = (lo: number, hi: number) => number;
 interface DamageContext {
   extra: Modifier[];
   baseTags: Set<SkillTag>;
+  /** The victim-scope tags folded into baseTags (and into every per-type
+   *  context the fold builds), when the hit site supplied them. */
+  vsTags?: readonly SkillTag[];
   effectiveness: number;
 }
 
-function damageContext(caster: Actor, inst: SkillInstance): DamageContext {
+function damageContext(caster: Actor, inst: SkillInstance, vsTags?: readonly SkillTag[]): DamageContext {
   const extra = instanceMods(inst);
   // THE STANCE BROADCAST (the Guarded Casting lane): a cast fired through a
   // HELD GUARD folds the stance's own 'guarding'-scoped authored rows —
@@ -129,7 +132,13 @@ function damageContext(caster: Actor, inst: SkillInstance): DamageContext {
   }
   return {
     extra,
-    baseTags: skillContextTags(inst.def),
+    // THE VICTIM SCOPE (engine/victim.ts): the struck body's live state
+    // rides the roll's context as 'vs:' tags, so every read below — and
+    // every downstream read through packet.tags — can be scoped to the
+    // victim by an ordinary tag filter. Absent (previews, victim-blind
+    // rolls) the context is exactly the skill's own.
+    baseTags: skillContextTags(inst.def, vsTags as SkillTag[] | undefined),
+    vsTags,
     effectiveness: inst.def.addedEffectiveness ?? 1,
   };
 }
@@ -145,12 +154,13 @@ function foldSkillDamage(
   pick: RangePick, flatBonus?: Partial<Record<DamageType, number>>,
 ): Partial<Record<DamageType, number>> {
   const def = inst.def;
-  const { extra, baseTags, effectiveness } = ctx;
+  const { extra, baseTags, effectiveness, vsTags } = ctx;
   const amounts: Partial<Record<DamageType, number>> = {};
   for (const type of DAMAGE_TYPES) {
-    // Context for this damage type = skill tags + the type itself,
-    // so "increased fire damage" applies to the fire portion only.
-    const tags = skillContextTags(def, [type]);
+    // Context for this damage type = skill tags + the type itself (+ the
+    // victim scope when the hit site supplied it), so "increased fire
+    // damage" applies to the fire portion only.
+    const tags = skillContextTags(def, vsTags ? [type, ...vsTags] : [type]);
     let base = flatBonus?.[type] ?? 0;
     // MIN/MAX added (the D2 lane) stretches the roll's ends independently
     // — max-only investment is the wide-variance thunder, min-only the
@@ -215,9 +225,10 @@ function foldSkillDamage(
 export function rollSkillDamage(
   caster: Actor, inst: SkillInstance,
   flatBonus?: Partial<Record<DamageType, number>>,
+  vsTags?: readonly SkillTag[],
 ): DamagePacket {
   const def = inst.def;
-  const ctx = damageContext(caster, inst);
+  const ctx = damageContext(caster, inst, vsTags);
   const { extra, baseTags } = ctx;
 
   // LUCKY / UNLUCKY rolls: a made lucky roll doubles the dice and keeps
@@ -612,6 +623,36 @@ function plyEats(attacker: Actor, target: Actor, total: number, packet: DamagePa
   return true;
 }
 
+/**
+ * THE LAST GASP (the talent fabric's cheat-death lane — stats lastGasp /
+ * lastGaspLife / lastGaspCooldown, docs/engine/talents.md): the ONE seam a
+ * life-pool wound passes through on its way to zero. A blow that would empty
+ * the pool instead leaves the bearer at lastGaspLife of maximum, at lastGasp
+ * chance, no more than once per lastGaspCooldown seconds (Actor.lastGaspCd,
+ * ticked in updateTimers). The gasp raises a transient (Actor.gasped) the
+ * world turns into the 'lastGasp' proc trigger — what answers the gasp is
+ * data on the sheet. Both damage seams (hits, DoT ticks) land through here;
+ * costs, sacrifices and scripted falls never do — those are not wounds.
+ * Returns the life actually removed.
+ */
+export function landLifeDamage(target: Actor, total: number): number {
+  if (total <= 0) return 0;
+  if (total >= target.life && target.life > 0 && !target.dead && !target.invulnerable
+    && target.lastGaspCd <= 0) {
+    const gasp = target.sheet.get('lastGasp');
+    if (gasp > 0 && chance(gasp)) {
+      const stood = Math.max(1, target.maxLife() * target.sheet.get('lastGaspLife'));
+      const removed = Math.max(0, target.life - stood);
+      target.life = stood;
+      target.lastGaspCd = target.sheet.get('lastGaspCooldown');
+      target.gasped = true;
+      return removed;
+    }
+  }
+  target.life -= total;
+  return total;
+}
+
 /** Apply a rolled packet to a defender. Returns what actually landed. */
 export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): HitResult {
   const result = applyHitCore(attacker, target, packet);
@@ -701,7 +742,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
         return { evaded: false, immune: false, blocked: true, total: 0,
           crit: false, poiseBroke: out.poiseBroke, plyEaten: true };
       }
-      target.life -= leaked;
+      landLifeDamage(target, leaked);
       target.hitFlash = 0.1;
       target.hitFlashType = dominantTypeOf(packet.amounts);
       if (leaked > 0 && segHit !== undefined && segHit >= 0) {
@@ -766,7 +807,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
       crit: packet.crit, poiseBroke: out.poiseBroke, plyEaten: true,
     };
   }
-  target.life -= total;
+  landLifeDamage(target, total);
   target.hitFlash = 0.15;
   target.hitFlashType = dominantTypeOf(packet.amounts); // THE HIT TINT (engine/bodyVoices.ts): the blow's type colors the body's flash
   // SEGMENT FABRIC: the landed blow marks the struck body — the coil that
@@ -981,6 +1022,5 @@ function applyDotCore(target: Actor, amount: number, type?: DamageType): number 
     esBypass: target.sheet.get('esDotBypass', tags),
     delayOnDrainOnly: true,
   });
-  target.life -= total;
-  return total;
+  return landLifeDamage(target, total);
 }

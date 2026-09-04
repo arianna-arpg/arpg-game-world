@@ -642,6 +642,7 @@ export function compileItemMods(item: ItemInstance): Modifier[] {
     out.push({
       stat: line.stat, kind: line.kind, value,
       tags: line.tags, when: line.when, fromStat: line.fromStat, gauge: line.gauge,
+      gaugeAt: line.gaugeAt,
     });
   });
 
@@ -788,7 +789,7 @@ export interface ModCompareRow {
  *  conditional line must never fold into (or diff against) its unconditional
  *  cousin, and "+10 fire damage with melee skills" is not "+10 fire damage". */
 const modSig = (m: Modifier): string =>
-  [m.stat, m.kind, m.fromStat ?? '', m.gauge ?? '', m.when ?? '',
+  [m.stat, m.kind, m.fromStat ?? '', m.gauge ?? '', m.gaugeAt ?? '', m.when ?? '',
     [...(m.tags ?? [])].sort().join('+')].join('§');
 
 /** Fold one item's grants into per-identity totals, the way the stat sheet
@@ -800,7 +801,7 @@ function foldMods(mods: Modifier[]): Map<string, { line: ModLineDef; value: numb
     const b = out.get(k);
     if (!b) {
       out.set(k, {
-        line: { stat: m.stat, kind: m.kind, tags: m.tags, when: m.when, fromStat: m.fromStat, gauge: m.gauge },
+        line: { stat: m.stat, kind: m.kind, tags: m.tags, when: m.when, fromStat: m.fromStat, gauge: m.gauge, gaugeAt: m.gaugeAt },
         value: m.value,
       });
       continue;

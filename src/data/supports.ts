@@ -9,7 +9,7 @@
 // with skill points.
 // ---------------------------------------------------------------------------
 
-import { conversionStat, gaugeMod, mod, STAT_DEFS } from '../engine/stats';
+import { conversionStat, gaugeGateMod, gaugeMod, mod, STAT_DEFS } from '../engine/stats';
 import { AOE_SHAPE, PROJ_RETURN, GUARD_CAST_CFG, BAR_SLOTS, MAX_SUPPORT_LEVEL, slotGraftStat } from '../engine/skills';
 import type { SupportDef } from '../engine/skills';
 
@@ -5736,6 +5736,140 @@ export const SUPPORTS: Record<string, SupportDef> = {
     mods: [mod('tuneFavor', 'flat', 0.6)],
     perLevel: [mod('tuneFavor', 'flat', 0.1)],
     weight: 4, minDropLevel: 7,
+  },
+  // --- THE TALENT FABRIC's debut gems (docs/engine/talents.md) ----------------
+  // THE VICTIM SCOPE as gems: 'vs:' tags on ordinary mods, folded at the
+  // hit against the struck body — no new gem field anywhere. Every hit-read
+  // gem wears the 'strikes' floor (a never-hitting host has no victim).
+  executioners_edge: {
+    id: 'executioners_edge', name: "Executioner's Edge",
+    requiresMechanisms: ['strikes'],
+    description: 'This skill deals 30% more damage against low-life enemies.',
+    color: '#c85050', requiresTags: ['attack', 'spell'],
+    mods: [mod('damage', 'more', 0.3, ['vs:lowLife'])],
+    perLevel: [mod('damage', 'more', 0.04, ['vs:lowLife'])],
+    weight: 7, minDropLevel: 4,
+  },
+  shatterglass: {
+    id: 'shatterglass', name: 'Shatterglass',
+    requiresMechanisms: ['strikes'],
+    description: 'This skill has +25% critical strike chance against chilled enemies, and its'
+      + ' critical strikes against frozen enemies have +40% multiplier.',
+    color: '#bfe8ff', requiresTags: ['attack', 'spell'],
+    mods: [
+      mod('critChance', 'flat', 0.25, ['vs:chill']),
+      mod('critChance', 'flat', 0.25, ['vs:frozen']),
+      mod('critMulti', 'flat', 0.4, ['vs:frozen']),
+    ],
+    perLevel: [mod('critChance', 'flat', 0.04, ['vs:chill']), mod('critMulti', 'flat', 0.06, ['vs:frozen'])],
+    weight: 6, minDropLevel: 5,
+  },
+  opportunists_blade: {
+    id: 'opportunists_blade', name: "Opportunist's Blade",
+    requiresMechanisms: ['strikes'],
+    description: 'This skill deals 35% more damage and has +30% ailment chance against stunned,'
+      + ' frozen or otherwise held enemies.',
+    color: '#e0c060', requiresTags: ['attack', 'spell'],
+    mods: [mod('damage', 'more', 0.35, ['vs:hardCC']), mod('statusChance', 'flat', 0.3, ['vs:hardCC'])],
+    perLevel: [mod('damage', 'more', 0.04, ['vs:hardCC'])],
+    weight: 6, minDropLevel: 5,
+  },
+  assassins_angle: {
+    id: 'assassins_angle', name: "Assassin's Angle",
+    requiresMechanisms: ['strikes'],
+    description: 'Melee hits from this skill deal 40% more damage and have +15% critical strike'
+      + ' chance when they strike from behind.',
+    color: '#9a72c8', requiresTags: ['melee'],
+    mods: [mod('damage', 'more', 0.4, ['vs:behind']), mod('critChance', 'flat', 0.15, ['vs:behind'])],
+    perLevel: [mod('damage', 'more', 0.05, ['vs:behind'])],
+    weight: 6, minDropLevel: 4,
+  },
+  frostbite_grip: {
+    id: 'frostbite_grip', name: 'Frostbite Grip',
+    requiresMechanisms: ['strikes'],
+    description: 'Hits from this skill against chilled enemies have a 30% chance to call Deep'
+      + ' Freeze: the chill hardens into a freeze.',
+    color: '#d8f4ff', requiresTags: ['attack', 'spell'],
+    mods: [mod('proc_deep_freeze', 'flat', 0.3)],
+    perLevel: [mod('proc_deep_freeze', 'flat', 0.06)],
+    weight: 5, minDropLevel: 6,
+  },
+  // THE RECENCY LEDGER as gems: ordinary `when` conditions on instance mods.
+  hunters_momentum: {
+    id: 'hunters_momentum', name: "Hunter's Momentum",
+    description: 'If you have killed recently, this skill deals 20% more damage and you have 10%'
+      + ' increased movement speed.',
+    color: '#d8a060', requiresTags: ['attack', 'spell'],
+    mods: [mod('damage', 'more', 0.2, undefined, 'recentlyKilled'), mod('moveSpeed', 'increased', 0.1, undefined, 'recentlyKilled')],
+    perLevel: [mod('damage', 'more', 0.03, undefined, 'recentlyKilled')],
+    weight: 7, minDropLevel: 3,
+  },
+  steady_nerve: {
+    id: 'steady_nerve', name: 'Steady Nerve',
+    description: 'If you have not been hit recently, this skill deals 25% more damage.',
+    color: '#8fa8d8', requiresTags: ['attack', 'spell'],
+    mods: [mod('damage', 'more', 0.25, undefined, 'notHurtRecently')],
+    perLevel: [mod('damage', 'more', 0.03, undefined, 'notHurtRecently')],
+    weight: 7, minDropLevel: 3,
+  },
+  // DERIVED GAUGES as gems: gaugeMod over a quantity the world samples.
+  deaths_door: {
+    id: 'deaths_door', name: "Death's Door",
+    description: 'This skill deals 3% increased damage per 10% of your missing life.',
+    color: '#c85050', requiresTags: ['attack', 'spell'],
+    mods: [gaugeMod('damage', 'increased', 0.03, 'life:missing')],
+    perLevel: [gaugeMod('damage', 'increased', 0.005, 'life:missing')],
+    weight: 6, minDropLevel: 4,
+  },
+  crowd_favor: {
+    id: 'crowd_favor', name: 'Crowd Favor',
+    description: 'This skill deals 3% increased damage per nearby enemy (up to ten).',
+    color: '#e8924a', requiresTags: ['attack', 'spell'],
+    mods: [gaugeMod('damage', 'increased', 0.03, 'foes:near')],
+    perLevel: [gaugeMod('damage', 'increased', 0.005, 'foes:near')],
+    weight: 6, minDropLevel: 4,
+  },
+  // THE GAUGE GATE as a gem: a threshold, not a scale.
+  at_the_brink: {
+    id: 'at_the_brink', name: 'At the Brink',
+    description: 'While you hold five or more fury charges, this skill has +40% critical strike'
+      + ' multiplier.',
+    color: '#ff8a4a', requiresTags: ['attack', 'spell'],
+    mods: [gaugeGateMod('critMulti', 'flat', 0.4, 'charge:fury', 5)],
+    perLevel: [gaugeGateMod('critMulti', 'flat', 0.06, 'charge:fury', 5)],
+    weight: 5, minDropLevel: 6,
+  },
+  // CONTEXT TRIGGERS as gems ('cast' / 'miss' roll with the skill's context,
+  // so a socketed grant reaches them like any hit proc).
+  fevered_hands: {
+    id: 'fevered_hands', name: 'Fevered Hands',
+    requiresMechanisms: ['strikes'],
+    description: "Two critical strikes in a row with this skill light a Hot Streak: the next"
+      + ' spell hit is a guaranteed critical strike at 50% more damage. A non-critical hit'
+      + ' while heating up loses the heat.',
+    color: '#ff9a3a', requiresTags: ['spell'],
+    mods: [mod('proc_heating_up', 'flat', 1), mod('proc_hot_streak', 'flat', 1), mod('proc_heat_lost', 'flat', 1)],
+    perLevel: [],
+    weight: 5, minDropLevel: 6,
+  },
+  answered_dodge: {
+    id: 'answered_dodge', name: 'Answered Dodge',
+    requiresMechanisms: ['strikes'],
+    description: 'When an enemy evades this skill, Overpower loads your next melee hit: a'
+      + ' guaranteed-feeling +50% critical chance and 30% more damage.',
+    color: '#e8c060', requiresTags: ['melee'],
+    mods: [mod('proc_overpower', 'flat', 1)],
+    perLevel: [],
+    weight: 5, minDropLevel: 4,
+  },
+  desperate_measures: {
+    id: 'desperate_measures', name: 'Desperate Measures',
+    description: 'Casting this skill while on low mana has a 40% chance to restore 10% of your'
+      + ' maximum mana.',
+    color: '#8fa8d8', requiresTags: ['spell'],
+    mods: [mod('proc_desperate_reserves', 'flat', 0.4)],
+    perLevel: [mod('proc_desperate_reserves', 'flat', 0.08)],
+    weight: 6, minDropLevel: 3,
   },
 };
 

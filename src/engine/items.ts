@@ -53,6 +53,7 @@
 
 import { SKILL_RARITIES, type SkillRarity } from './skills';
 import { ATTRIBUTES, STAT_DEFS, type AttributeId, type ConditionId, type ModKind, type SkillTag } from './stats';
+import { RECENT_CONDITION_LABELS } from './recency';
 
 // ------------------------------------------------------------- rarities ----
 
@@ -161,6 +162,9 @@ export interface ModLineDef {
   /** 'link' lines: gain `value` of fromStat as stat (single-hop rule). */
   fromStat?: string;
   gauge?: string;
+  /** With `gauge`: THE GAUGE GATE (Modifier.gaugeAt) — the line applies at
+   *  full value only while the gauge stands at or above this count. */
+  gaugeAt?: number;
   /** This line re-uses the FIRST line's roll (an all-res block moves as one). */
   sharedRoll?: boolean;
   /** LOCAL SCOPE: the line modifies THIS ITEM's own stats (folded into the
@@ -616,6 +620,9 @@ const CONDITION_LABELS: Record<ConditionId, string> = {
   esRecharging: 'while energy shield is recharging',
   comboVaried: 'while your last three casts were all different skills',
   comboRepeated: 'while your last three casts repeated one skill',
+  // THE RECENCY LEDGER (engine/recency.ts) — the same words the ledger
+  // declares, so a tooltip and the validator agree.
+  ...RECENT_CONDITION_LABELS,
 };
 
 export function statLabel(stat: string): string {

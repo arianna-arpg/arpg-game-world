@@ -330,6 +330,35 @@ we verify changes.
   folds; the pane's `avatarDefId` shows the form you are becoming) —
   dials in `ULT_CFG`, docs in `docs/engine/ultimates.md`, probe
   `balance/probe_ultimates.ts`),
+  THE TALENT FABRIC (`engine/victim.ts` + `engine/recency.ts` +
+  `engine/gauges.ts` — WoW-talent / Ascension Random-Enchant mechanism
+  shapes as plain data on the surfaces that already exist; docs
+  `docs/engine/talents.md`, probe `balance/probe_talents.ts`): THE VICTIM
+  SCOPE — `'vs:<condition>'` tags on ordinary modifiers say WHO a hit is
+  against (registered victim conditions + every status the victim carries,
+  folded into the roll's context at `World.resolveHit` only when the striker
+  names one — `victimScopeArmed`; never authored on a skill; the packet
+  carries it downstream); THE RECENCY LEDGER — `recentlyKilled` /
+  `recentlyHurt` / `notHurtRecently` / … as ordinary ConditionIds over
+  per-actor seconds-since counters (`Actor.since`, stamped at the engine's
+  own seams, windows in `RECENT_CFG`; `CONDITION_IDS` is the ONE bit-order
+  list; a condition that flips ON is an EVENT — `Actor.condRose` → the
+  'condition' proc trigger); DERIVED GAUGES (`registerDerivedGauge` —
+  life:missing / foes:near / minions / …, cadenced, sampled only for actors
+  that READ them) + THE GAUGE GATE (`Modifier.gaugeAt` / `gaugeGateMod` —
+  a threshold, not a scale); PROC TRIGGERS 'hurt' / 'miss' / 'foiled' /
+  'cast' / 'condition' / 'pulse' / 'minionDeath' / 'heal' / 'lastGasp',
+  gates `when`/`unless`/`requireBuff`/`requireStatus`/`noCrit`/`vs`/
+  `tags`, effects targeted `cooldown` (skills/tags/reset) / `removeBuff` /
+  `ward` / `cleanse` (THE SHEET-LANE DOCTRINE: hurt/condition/pulse/
+  minionDeath/heal/lastGasp roll with no skill context — grant them
+  UNTAGGED from passives/affixes; registry ORDER is the law for grammars —
+  the hot-streak trio); CONSUMABLE BUFFS (`BuffEffect.consumeOn` — use/hit/
+  crit/kill/hurt/block/evade, spent AFTER the event resolved;
+  `consumeOnUse` reads as {on:'use'}); THE LAST GASP (`landLifeDamage` —
+  the ONE life-wound seam: `lastGasp` / `lastGaspLife` / `lastGaspCooldown`
+  stats, the gasp an event). Debut: 15 procs, 13 gems, 14 affix families,
+  THE OPPORTUNIST'S ROW (14 nodes off Prowess node_68).
   `gauge.ts` (THE GAUGE FABRIC — skills that pay in the world's own
   events; two resource shapes, one vocabulary: THE GAUGE (`SkillDef.gauge`
   — a per-SKILL bank FED by the charge-tap vocabulary through the ONE

@@ -26,7 +26,11 @@ import { ATTUNEMENT_LIST, TERRAFORM_LIST, MAX_ATTUNE_RADIUS } from './attunement
 import { PASSIVE_NODES, vocationGateNodeId } from './passives';
 import { CHOICE_GROUPS, validatePassiveChoices } from './passiveChoices';
 import { validatePassiveRealms } from './passiveRealms';
-import { DAMAGE_TYPES, ELEMENTAL_TYPES, STAT_DEFS, STAT_TRADES, type Modifier } from '../engine/stats';
+import { DAMAGE_TYPES, ELEMENTAL_TYPES, STAT_DEFS, STAT_TRADES, isConditionId, type Modifier } from '../engine/stats';
+import { victimConditionKnown } from '../engine/victim'; // THE VICTIM SCOPE
+import { DERIVED_GAUGES } from '../engine/gauges'; // DERIVED GAUGES
+import { UNIQUE_LIST } from './uniques';
+import { EPITAPH_LIST, VESTIGE_LIST } from './vestiges';
 import type { AIAction, BrainDef, BrainTuning, FlockSpec } from '../engine/brain';
 import { regionKind, PATH_CFG, SURVIVAL_RESOURCES } from '../world/regions';
 import { CHARGE_DEFS } from '../engine/charges';
@@ -1296,6 +1300,92 @@ export function validateContent(): void {
       if (!FOG_BANKS[p.effect.bank]) warn(`proc '${p.id}': vent names unregistered fog bank '${p.effect.bank}'`);
       if (!(p.effect.radius > 0) || !(p.effect.duration > 0)) warn(`proc '${p.id}': vent needs a positive radius and duration`);
     }
+  }
+
+  // THE TALENT FABRIC's proc hygiene (docs/engine/talents.md): every row
+  // that names a condition, a victim condition, a beat, a status or a skill
+  // must name a real one, and every gate must be one its trigger can ever
+  // open — a proc that can never fire is a silent lie on the sheet.
+  {
+    const CRIT_TRIGGERS = new Set(['hit', 'kill', 'hurt']);
+    const VS_TRIGGERS = new Set(['hit', 'kill', 'hurt', 'miss', 'foiled', 'minionDeath']);
+    const TAG_TRIGGERS = new Set(['hit', 'kill', 'cast', 'miss', 'foiled', 'collision', 'statusApply', 'poiseBreakDealt']);
+    const list = (v: string | string[] | undefined): string[] => v === undefined ? [] : Array.isArray(v) ? v : [v];
+    for (const p of Object.values(PROCS)) {
+      const at = `proc '${p.id}'`;
+      if (p.trigger === 'condition' && !p.condition) warn(`${at}: 'condition' trigger names no condition`);
+      if (p.condition && p.trigger !== 'condition') warn(`${at}: 'condition' is read only by the 'condition' trigger`);
+      if (p.condition && !isConditionId(p.condition)) warn(`${at}: unknown condition '${p.condition}'`);
+      if (p.trigger === 'pulse') {
+        if (!(p.every !== undefined && p.every > 0)) warn(`${at}: 'pulse' needs a positive 'every'`);
+        if (p.icd !== undefined) warn(`${at}: a pulse keeps its beat on the ICD clock — 'icd' is ignored`);
+        if (p.ppm !== undefined) warn(`${at}: a pulse rolls once per beat — 'ppm' is meaningless`);
+      } else if (p.every !== undefined) warn(`${at}: 'every' is read only by the 'pulse' trigger`);
+      if (p.when && !isConditionId(p.when)) warn(`${at}: unknown 'when' condition '${p.when}'`);
+      if (p.unless && !isConditionId(p.unless)) warn(`${at}: unknown 'unless' condition '${p.unless}'`);
+      if (p.when && p.unless && p.when === p.unless) warn(`${at}: 'when' and 'unless' name the same condition — never fires`);
+      if (p.crit && p.noCrit) warn(`${at}: 'crit' and 'noCrit' together — never fires`);
+      if (p.crit && !CRIT_TRIGGERS.has(p.trigger)) warn(`${at}: 'crit' gate on a trigger that carries no blow ('${p.trigger}') — never fires`);
+      if (p.noCrit && !CRIT_TRIGGERS.has(p.trigger)) warn(`${at}: 'noCrit' gate on a trigger that carries no blow ('${p.trigger}')`);
+      if (p.vs?.length && !VS_TRIGGERS.has(p.trigger)) warn(`${at}: 'vs' gate on a trigger with no other body ('${p.trigger}') — never fires`);
+      for (const id of p.vs ?? []) if (!victimConditionKnown(id)) warn(`${at}: unknown victim condition '${id}'`);
+      if (p.tags?.length && !TAG_TRIGGERS.has(p.trigger)) warn(`${at}: 'tags' lock on a trigger with no skill context ('${p.trigger}') — never fires`);
+      for (const st of list(p.requireStatus)) if (!STATUS_DEFS[st]) warn(`${at}: requireStatus names unknown status '${st}'`);
+      for (const sk of p.skills ?? []) if (!SKILLS[sk]) warn(`${at}: skill gate names unknown skill '${sk}'`);
+      const fx = p.effect;
+      if (fx.type === 'cooldown') {
+        if (!fx.reset && !(fx.seconds ?? 0) && !(fx.fraction ?? 0)) warn(`${at}: cooldown effect winds nothing (no seconds/fraction/reset)`);
+        for (const sk of fx.skills ?? []) if (!SKILLS[sk]) warn(`${at}: cooldown effect names unknown skill '${sk}'`);
+      }
+      if (fx.type === 'cleanse') {
+        if (!fx.statuses?.length && !fx.hardCC && !fx.afflictions) warn(`${at}: cleanse effect strips nothing`);
+        for (const st of fx.statuses ?? []) if (!STATUS_DEFS[st]) warn(`${at}: cleanse names unknown status '${st}'`);
+      }
+      if (fx.type === 'ward' && !(fx.flat ?? 0) && !(fx.pctMaxLife ?? 0)) warn(`${at}: ward effect grants nothing`);
+    }
+  }
+
+  // THE VICTIM SCOPE (engine/victim.ts) + THE GAUGE AXIS sweep: every
+  // 'vs:' tag on any modifier surface must name a registered victim
+  // condition or a status; a gauge id must be a bank namespace or a derived
+  // gauge; gaugeAt needs a gauge; and no SKILL may wear a vs: tag as its own
+  // identity (context, never identity).
+  {
+    const GAUGE_NS = ['status:', 'charge:', 'brim:', 'reserve:'];
+    const checkMods = (source: string, mods: readonly { stat: string; tags?: readonly string[]; gauge?: string; gaugeAt?: number }[] | undefined): void => {
+      for (const m of mods ?? []) {
+        for (const t of m.tags ?? []) {
+          if (!t.startsWith('vs:')) continue;
+          const id = t.slice(3);
+          if (!victimConditionKnown(id)) warn(`${source}: victim tag '${t}' names no registered victim condition or status`);
+        }
+        if (m.gaugeAt !== undefined && !m.gauge) warn(`${source}: gaugeAt without a gauge on stat '${m.stat}'`);
+        if (m.gauge && !GAUGE_NS.some(ns => m.gauge!.startsWith(ns)) && !DERIVED_GAUGES[m.gauge]) {
+          warn(`${source}: gauge '${m.gauge}' is neither a bank namespace nor a derived gauge`);
+        }
+      }
+    };
+    for (const def of Object.values(SKILLS)) {
+      if (def.tags.some(t => t.startsWith('vs:'))) warn(`skill '${def.id}': a vs: tag is context, never a skill's identity`);
+      checkMods(`skill ${def.id} equipMods`, def.equipMods);
+      checkMods(`skill ${def.id} innateMods`, def.innateMods);
+      for (const t of def.thresholds ?? []) checkMods(`skill ${def.id} threshold`, t.mods);
+      checkMods(`skill ${def.id} leveling`, def.leveling?.perLevel);
+    }
+    for (const sup of Object.values(SUPPORTS)) {
+      checkMods(`support ${sup.id}`, sup.mods);
+      checkMods(`support ${sup.id} perLevel`, sup.perLevel);
+    }
+    for (const n of Object.values(PASSIVE_NODES)) checkMods(`passive ${n.id}`, n.mods);
+    for (const g of Object.values(CHOICE_GROUPS)) {
+      for (const o of g.options) checkMods(`choice ${g.id}/${o.id}`, o.mods);
+    }
+    for (const a of ITEM_AFFIX_LIST) checkMods(`affix ${a.id}`, a.lines);
+    for (const u of UNIQUE_LIST) checkMods(`unique ${u.id}`, u.lines);
+    for (const v of VESTIGE_LIST) {
+      for (const [cat, lines] of Object.entries(v.effects)) checkMods(`vestige ${v.id}/${cat}`, lines);
+    }
+    for (const e of EPITAPH_LIST) checkMods(`epitaph ${e.id}`, e.effects);
   }
 
   // STRUCTURES: plans resolve their legend, generators exist (and a fixed-seed
