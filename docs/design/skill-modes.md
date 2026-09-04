@@ -170,6 +170,57 @@ are one-line edits forever (ruled: "The Sprinkler" stands today and may
 want to *"sound slightly more intimidating later"*; the mechanics beneath
 are the settled part).
 
+### THE GRAPH GRAMMAR (built 2026-09-04 — her ask: genuine branches with choices, not linear upgrades after the first pick)
+
+The 2×3+1 shape above is now the **sugar form** of a general grammar. A
+tree is a GRAPH (`SkillTreeSpec.nodes`; `src/engine/skilltree.ts` is THE
+ONE RESOLVER every read folds through): each node names its prerequisites
+(`links`, any-of — the passive tree's adjacency law; none = it hangs off
+the root and opens at the milestone), its rivals (`excludes` — the hard
+lock at NODE grain, symmetric by construction: spending one seals the
+other and everything only reachable through it), its `ranks` (a node that
+takes several points, each re-applying the payload — a rank persists as a
+repeated id in `treeNodes`, so saves/wire/sim carry it unchanged), an
+optional drawn `kind` (minor/major/keystone) and optional layout pins
+(`x`/`y`; absent = the derived radial layout — fork limbs fan the upper
+arc by subtree weight, lock-free nodes hang below, chains run as rays,
+sub-forks fan inside their limb's wedge).
+
+- **REACHABILITY IS THE LOCK.** Sealed = excluded by a spent node, or
+  reachable from the root only through one. Derived from spent ids, never
+  stored — the orphan-drop law survives untouched.
+- **THE LIMB.** A root child that forks names a limb; everything under it
+  belongs to that identity. Limbs are the tooltip's "· The Duelist", the
+  bar pip's commitment, the `skill@limb` census hosts (sugar trees keep
+  their branch ids, so the ledger's rows stand), and the NAME in refusal
+  words — "The Duelist's path is sealed" at every rung under a sealed
+  fork; a sub-fork seals by its own name ("Alpha Two's path is sealed").
+- **THE COVER LAW** replaces exact cover: walking any limb to its end plus
+  the lock-free ground must absorb every cap point (boot validation warns
+  when a tree strands points). A tree with MORE nodes than points is the
+  intent — that is the choice.
+- **The sugar fold is byte-identical** to the M1 fabric (rung chains off
+  the root, rung-1 forks, a lock-free neutral; refusal words and loader
+  verdicts pinned by probe_skillmodes N). The six authored trees stay in
+  the sugar form; new trees may use either, or both (the fold appends).
+
+Authoring template (a fork with a sub-fork, a cross-link, a ranked utility):
+
+    tree: { level: 5, nodes: [
+      { id: 'a',  name: 'The Alpha', excludes: ['b'], over: { … } },      // fork limb A (b's exclusion folds back)
+      { id: 'b',  name: 'The Beta',  over: { … } },                        // fork limb B
+      { id: 'u',  name: 'Economy',   ranks: 2, mods: [ … ] },              // lock-free, two ranks
+      { id: 'a1', name: 'Alpha One', links: ['a'], excludes: ['a2'], mods: [ … ] },
+      { id: 'a2', name: 'Alpha Two', links: ['a'], mods: [ … ] },
+      { id: 'a3', name: 'Alpha Cap', links: ['a1', 'a2'], kind: 'keystone', mods: [ … ] },
+      { id: 'b1', name: 'Beta One',  links: ['b'], mods: [ … ] },
+    ] }
+
+**DIAL, hers:** the point budget. Four points at cap (Shape B) reads thin
+against a real graph — `SKILL_LEVEL_BANDS` is still the one array (Shape
+A's five, or a denser ladder, is one edit), and THE COVER LAW re-derives
+with it.
+
 ---
 
 ## 4. The exclusivity principle + the ratified pair table
@@ -310,6 +361,21 @@ standing order are untouched (the drop INDEX counts mints, not levels).
   optional layer (**DIAL**).
 - **At a glance:** the bar icon wears a tiny branch pip (the beatPips look
   idiom); the tooltip's first line names the picked branch.
+- **THE PULL-OUT (built 2026-09-04):** the tree leaves the drawer row for
+  its own pane (`#skill-tree`, `openSkillTree` / `refreshSkillTree` in
+  ui/panels.ts), drawn the passive tree's way — SVG nodes and edges over
+  the graph's derived layout, zoom/pan through the shared gesture helper,
+  node cards through the shared tooltip (the payload in words, THE ONE
+  SPEND PREDICATE's words, what a node seals, after-any-of for
+  cross-links), a click on a lit node = the ordinary `pickTreeNode`
+  intent. Drawn == tested: spent nodes wear the skill's color, spendable
+  nodes a lit ring, sealed nodes the lock's grey with dashed edges and a
+  lock glyph, ranked nodes print have/ranks. The drawer row keeps a STRIP
+  (level bar with band ticks, points, the committed limb, a waiting pip
+  that lights the `⟡ Tree` handle gold, the Font's reset chip beside a
+  font); the milestone popup grew an "Open the tree" door. The pane is
+  owned by its opener's seat (the couch lens) and clears with the
+  ordinary panels on Esc.
 - **The Font screen:** recipe tabs (Merge / Convert / Reset), drop-zones,
   deterministic preview lines ("3× Firebolt (Magic) → 1× Firebolt (Rare),
   level 7 kept"), keeper's-mark refusals in its standing words.
@@ -368,6 +434,25 @@ standing order are untouched (the drop INDEX counts mints, not levels).
   DIAL-gated layer (`TREE_POPUP_ENABLED`, panels.ts) fed by the world's
   disciplined-calm sweep; the Font SCREEN (§7's tabs) stands as its own
   dwell-opened station panel.
+  **AS BUILT (THE GRAPH GRAMMAR + THE PANE, 2026-09-04):** `SkillTreeNode`
+  grew `links`/`excludes`/`ranks`/`x`/`y`/`kind`, `SkillTreeSpec` grew
+  `nodes` (the graph form) with `branches`/`neutral` optional (the sugar
+  form); `src/engine/skilltree.ts` is THE ONE RESOLVER (`treeGraph`
+  memoized per spec — the sugar fold, symmetric exclusion, BFS order,
+  limbs, the derived layout, `treeSealedSet`/`treeSealName`/
+  `treePrereqMissing`/`treeLimbs`/`treeNodeRanks`/`treeSpentCount`), and
+  every standing read rides it: `treeNodeOf`/`treeBranchOfNode`/
+  `treeSpentBranch` (the limb view), `treeNodeRefusal` (level seal → the
+  derived lock in the limb's name → the root-most missing prerequisite →
+  the budget; the M1 words byte-identical), `validTreeNodes` (orphans,
+  the rank cap, the lock transitively, the prerequisite chain, the budget
+  trim; a `quiet` option for the census), `pickTreeNode` (walked-to-full-
+  rank is the silent no-op), the census (`hostTreeNodes` walks a limb +
+  the lock-free ground + remaining ranks through the seam — sugar hosts
+  unchanged, the ledger stands), boot validation (the graph laws + THE
+  COVER LAW + derived-layout collisions). THE PANE per §7. Six authored
+  trees untouched in the sugar form; no catalog content authored — M2's
+  waves author the richer graphs.
 - **`SkillInstance` state:** spent-node ids, sparse-serialized (the
   `attunedForm` idiom: validated on load, orphaned picks drop with a
   console note). Branch = derived. Wallet counters ride the account/run
@@ -434,6 +519,13 @@ standing order are untouched (the drop INDEX counts mints, not levels).
   its debut reconcile, the monster-pin capability, the full wild_strike
   exemplar with per-rung A/B tables (§8's M1 as-built block carries the
   detail; ⚠ every number unblessed — the blessing pass owns them).
+- **THE GRAPH GRAMMAR + THE PANE — BUILT 2026-09-04** (her ask, the
+  same day: the tree as its own pull-out pane drawn like the passive
+  tree, over a grammar that can hold genuine branches). §3's graph
+  grammar + §7's pane + §8's as-built block; probe_skillmodes grew
+  section N (the sugar fold byte-identical, the graph form on a fixture,
+  the layout, the census walk). Content untouched: the six trees stay
+  2×3+1 in the sugar form — M2's waves author the graphs.
 - **M2 — the catalog, in waves.** The twelve pairs become trees; every
   rung earns its A/B row before numbers bless; coverage is curated forever
   (576 droppable skills). Effort: M per wave, measurement-shaped.

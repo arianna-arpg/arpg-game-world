@@ -425,6 +425,20 @@ we verify changes.
   wire fields; vocabulary law: comboChain EXECUTES, castCycle COUNTS,
   invokes BANKS, the grammar READS — docs in `docs/engine/combo.md`;
   probe `balance/probe_combo.ts`),
+  `skilltree.ts` (THE SKILL-TREE GRAPH — the skill-mode trees' ONE
+  resolver: `SkillTreeSpec.nodes` free graphs (`links` any-of
+  prerequisites, `excludes` = THE HARD LOCK at node grain, `ranks` =
+  repeated ids, `x`/`y` pins) with the settled 2×3+1 `branches` +
+  `neutral` shape folded as SUGAR (byte-identical M1 words); REACHABILITY
+  IS THE LOCK (derived from spent ids, never stored), THE LIMB (a forking
+  root child) names the `skill@limb` census hosts / the tooltip line /
+  the bar pip / the sealed path's refusal words, THE COVER LAW replaces
+  exact cover at boot validation, and the derived radial layout feeds
+  THE PULL-OUT — `ui/panels.ts openSkillTree`, one skill's tree drawn
+  the passive tree's way (SVG nodes + edges, zoom/pan, shared tooltips,
+  click-to-spend), opened from the Skills drawer's strip + the milestone
+  popup; charter `docs/design/skill-modes.md` §3/§7/§8, probe
+  `balance/probe_skillmodes.ts` N),
   `grab.ts` (THE GRAB FABRIC — sustained bodily control as ONE state pair:
   `Actor.gripping`/`heldBy`, verbs carry/drag/pin/swallow as `GrabSpec`
   presets on the `grabSeize` skill effect, throw-release via `grabThrow` +

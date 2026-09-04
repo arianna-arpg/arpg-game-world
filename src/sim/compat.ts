@@ -36,6 +36,8 @@
 
 import { MONSTERS } from '../data/monsters';
 import { SKILLS } from '../data/skills';
+import { MAX_SKILL_LEVEL, validTreeNodes } from '../engine/skills';
+import { treeLimbs, treeNodeRanks, treeRootChildren } from '../engine/skilltree'; // THE SKILL-TREE GRAPH — the limb axis
 import { SUPPORTS } from '../data/supports';
 import { PROCS } from '../data/procs';
 import { unreadPayloadRows } from '../data/graftReadSites';
@@ -177,14 +179,17 @@ const skillLookup = (id: string): SkillDef | undefined => SKILLS[id];
  *  shard bookkeeping): `skill|support`. */
 export const pairKey = (skill: string, support: string): string => `${skill}|${support}`;
 
-// --- THE BRANCH AXIS (skill-mode trees, M1) ---------------------------------
-// A moded skill enumerates BEYOND its bare row: one census host per branch
-// TERMINAL ALLOCATION — the full walked branch + the neutral, the exact
-// cover's deterministic end state — under the `skill@branch` ledger
-// convention (exactly two extra rows per moded skill). The probe lane
-// resolves a host id back to (base def, pinned treeNodes); gem levels stay
-// the standard probe levels (below-milestone allocations ride the sim's
-// hypothesis-lever doctrine — structure is grammar, budget is economy).
+// --- THE BRANCH AXIS (skill-mode trees, M1; THE GRAPH GRAMMAR 2026-09-04) --
+// A moded skill enumerates BEYOND its bare row: one census host per LIMB
+// TERMINAL ALLOCATION — the limb walked in order + the lock-free ground,
+// trimmed to the cap budget through the one validation seam (sugar trees:
+// the full walked branch + the neutral, exactly the M1 rows) — under the
+// `skill@branch` ledger convention (one extra row per limb; the settled
+// shape's two). Limbs come from engine/skilltree.ts (treeLimbs — a root
+// child that forks). The probe lane resolves a host id back to (base def,
+// pinned treeNodes); gem levels stay the standard probe levels (below-
+// milestone allocations ride the sim's hypothesis-lever doctrine —
+// structure is grammar, budget is economy).
 
 /** `skill@branch` — the census/ledger host id for a terminal allocation. */
 export const hostIdOf = (skillId: string, branchId?: string): string =>
@@ -211,23 +216,35 @@ export const hostDefOf = (hostId: string): SkillDef | undefined =>
 export function ledgerSkillIds(): Set<string> {
   const out = new Set(Object.keys(SKILLS));
   for (const s of Object.values(SKILLS)) {
-    for (const b of s.tree?.branches ?? []) out.add(hostIdOf(s.id, b.id));
+    for (const b of treeLimbs(s)) out.add(hostIdOf(s.id, b.id));
   }
   return out;
 }
 
-/** The terminal allocation a `skill@branch` host pins: the branch's rungs
- *  in order + the neutral (a legal spend order by construction). Plain
- *  ids — and unknown branches — answer undefined. */
+/** The terminal allocation a `skill@limb` host pins: the limb walked in
+ *  BFS order, then the lock-free ground (root children outside every
+ *  limb), then any ranked node's remaining ranks — trimmed to the cap
+ *  budget through THE ONE VALIDATION SEAM (quiet: the trim is by design;
+ *  a sub-fork inside the limb drops its rival there too). Sugar trees
+ *  answer exactly the M1 rows (rungs + the neutral). Plain ids — and
+ *  unknown limbs — answer undefined. */
 export function hostTreeNodes(hostId: string): string[] | undefined {
   const { skillId, branchId } = parseHostId(hostId);
   if (!branchId) return undefined;
   const def = SKILLS[skillId];
-  const branch = def?.tree?.branches.find(b => b.id === branchId);
-  if (!branch) return undefined;
-  const ids = branch.rungs.map(n => n.id);
-  if (def!.tree!.neutral) ids.push(def!.tree!.neutral.id);
-  return ids;
+  if (!def?.tree) return undefined;
+  const limbs = treeLimbs(def);
+  const limb = limbs.find(b => b.id === branchId);
+  if (!limb) return undefined;
+  const limbIds = new Set(limbs.flatMap(b => b.rungs.map(n => n.id)));
+  const ids = [
+    ...limb.rungs.map(n => n.id),
+    ...treeRootChildren(def).filter(id => !limbIds.has(id)),
+  ];
+  for (const id of [...ids]) {
+    for (let r = 1; r < treeNodeRanks(def, id); r++) ids.push(id);
+  }
+  return validTreeNodes(def, ids, MAX_SKILL_LEVEL, { quiet: true });
 }
 
 /** Refused-pair mechanical-affinity screen. Exclusion-tag refusals are
@@ -257,7 +274,7 @@ export function compatCensus(skillFilter = '', supportFilter = ''): CensusResult
   // the allocation deterministic — two extra hosts per moded skill).
   const skills = Object.values(SKILLS)
     .filter(s => !s.noDrop && (!skillFilter || s.id.includes(skillFilter)))
-    .flatMap(s => [s.id, ...(s.tree?.branches ?? []).map(b => hostIdOf(s.id, b.id))])
+    .flatMap(s => [s.id, ...treeLimbs(s).map(b => hostIdOf(s.id, b.id))])
     .sort();
   const supports = Object.keys(SUPPORTS)
     .filter(id => !supportFilter || id.includes(supportFilter)).sort();

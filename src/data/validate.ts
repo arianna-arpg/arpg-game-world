@@ -13,9 +13,10 @@ import { SUPPORTS } from './supports';
 import { spawnVeinOf } from '../engine/supportbase';
 import {
   CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf,
-  supportFits, supportFitsInst, treeNodeOf, SKILL_LEVEL_BANDS,
+  supportFits, supportFitsInst, treeNodeOf, validTreeNodes, bandPointsAt, MAX_SKILL_LEVEL,
   type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec,
 } from '../engine/skills';
+import { treeGraph, TREE_LAYOUT_CFG } from '../engine/skilltree'; // THE SKILL-TREE GRAPH — the fold the tree laws read
 import { GRAFT_READ_SITES, rowUnreadBy, supportCarriesRow, type GraftReadRow } from './graftReadSites';
 import { PROCS } from './procs';
 import { COMBO_RULES } from './combos';
@@ -2710,37 +2711,55 @@ export function validateContent(): void {
   }
   if (!MODE_BY_ID[DEFAULT_MODE_ID]) warn(`modes: default '${DEFAULT_MODE_ID}' missing from the registry`);
 
-  // THE SKILL-MODE TREES (M1 — docs/design/skill-modes.md §3/§8): every
-  // tree-wearing def obeys the exact-cover grammar (2 branches ×
-  // (bands − 1) rungs + one neutral; P = D + N), node ids stay unique,
-  // `over` stays on the audited whitelist AND lands on a delivery/aim/
-  // channel that can read it (a mis-aimed override resolves inert — warn
-  // here, never in a player's face), node mods name real stats, and
-  // grafts name live supports (the validatePassiveChoices warn-degrade
-  // idiom). Monster tree PINS resolve against the kit's own defs.
+  // THE SKILL-MODE TREES (docs/design/skill-modes.md §3/§8 — THE GRAPH
+  // GRAMMAR): every tree-wearing def folds through engine/skilltree.ts and
+  // obeys the graph laws — node ids unique, links/excludes resolve (never
+  // self), ranks whole and ≥ 1, layout pins paired, kinds known, every
+  // node reachable from the root (the lock aside), THE COVER LAW (the
+  // exact-cover law generalized: walking any limb to its end plus the
+  // lock-free ground must absorb every cap point — a tree that strands
+  // points is an authoring slip), derived positions not colliding (an
+  // authoring aid — a pin fixes it); `over` stays on the audited whitelist
+  // AND lands on a delivery/aim/channel that can read it (a mis-aimed
+  // override resolves inert — warn here, never in a player's face), node
+  // mods name real stats, and grafts name live supports (the
+  // validatePassiveChoices warn-degrade idiom). Monster tree PINS resolve
+  // against the kit's own defs.
   {
-    const rungsWanted = SKILL_LEVEL_BANDS.length - 1;
     const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
+    const KINDS = new Set(['minor', 'major', 'keystone']);
+    const budget = bandPointsAt(MAX_SKILL_LEVEL);
     for (const def of Object.values(SKILLS)) {
       const t = def.tree;
       if (!t) continue;
       const at = `skill ${def.id} tree`;
       if (t.level < 1) warn(`${at}: milestone level ${t.level} < 1`);
-      if (t.branches.length !== 2) warn(`${at}: ${t.branches.length} branches — the grammar wants 2`);
-      if (!t.neutral) warn(`${at}: no neutral node — the exact cover (P = D + N) wants one`);
-      const seen = new Set<string>();
-      const nodes: { n: (typeof t.branches)[number]['rungs'][number]; where: string }[] = [];
-      for (const b of t.branches) {
-        if (b.rungs.length !== rungsWanted) {
-          warn(`${at}/${b.id}: ${b.rungs.length} rungs — the exact cover wants ${rungsWanted}`);
+      const g = treeGraph(def);
+      if (!g || g.nodes.size === 0) { warn(`${at}: no nodes`); continue; }
+      for (const d of g.dupes) warn(`${at}: duplicate node id '${d}'`);
+      const raw = [
+        ...(t.branches ?? []).flatMap(b => b.rungs),
+        ...(t.neutral ? [t.neutral] : []),
+        ...(t.nodes ?? []),
+      ];
+      for (const n of raw) {
+        for (const l of n.links ?? []) {
+          if (l === n.id) warn(`${at}/${n.id}: links to itself`);
+          else if (!g.nodes.has(l)) warn(`${at}/${n.id}: links to unknown node '${l}'`);
         }
-        for (const n of b.rungs) nodes.push({ n, where: b.id });
-      }
-      if (t.neutral) nodes.push({ n: t.neutral, where: 'neutral' });
-      for (const { n, where } of nodes) {
-        if (seen.has(n.id)) warn(`${at}/${where}: duplicate node id '${n.id}'`);
-        seen.add(n.id);
+        for (const e of n.excludes ?? []) {
+          if (e === n.id) warn(`${at}/${n.id}: excludes itself`);
+          else if (!g.nodes.has(e)) warn(`${at}/${n.id}: excludes unknown node '${e}'`);
+        }
+        if (n.ranks !== undefined && (!Number.isInteger(n.ranks) || n.ranks < 1)) {
+          warn(`${at}/${n.id}: ranks ${n.ranks} — wants a whole number ≥ 1`);
+        }
+        if ((n.x === undefined) !== (n.y === undefined)) warn(`${at}/${n.id}: a layout pin wants both x and y`);
+        if (n.kind !== undefined && !KINDS.has(n.kind)) warn(`${at}/${n.id}: unknown kind '${n.kind}'`);
+        if (g.nodes.has(n.id) && !g.order.includes(n.id)) {
+          warn(`${at}/${n.id}: unreachable from the root — no link chain leads here`);
+        }
         for (const k of Object.keys(n.over ?? {})) {
           if (!OVER_KEYS.has(k)) warn(`${at}/${n.id}: over.${k} is off the audited whitelist`);
         }
@@ -2761,6 +2780,37 @@ export function validateContent(): void {
         }
         if (n.graft && !SUPPORTS[n.graft.support]) {
           warn(`${at}/${n.id}: grafts unknown support '${n.graft.support}' (grants silence)`);
+        }
+      }
+      // THE COVER LAW — each limb's terminal walk (the census's own: the
+      // limb in order + the lock-free ground + remaining ranks, through the
+      // one validation seam) must absorb the cap budget.
+      const limbIds = new Set(g.limbs.flatMap(b => b.rungs.map(n => n.id)));
+      const free = g.order.filter(id => !limbIds.has(id));
+      const walkOf = (ids: string[]): number => {
+        const all = [...ids];
+        for (const id of ids) for (let r = 1; r < (g.nodes.get(id)?.ranks ?? 1); r++) all.push(id);
+        return validTreeNodes(def, all, undefined, { quiet: true })?.length ?? 0;
+      };
+      if (g.limbs.length) {
+        for (const limb of g.limbs) {
+          const cover = walkOf([...limb.rungs.map(n => n.id), ...free]);
+          if (cover < budget) {
+            warn(`${at}/${limb.id}: walking this limb to its end leaves ${budget - cover} of ${budget} cap points with nowhere to go`);
+          }
+        }
+      } else if (walkOf(g.order) < budget) {
+        warn(`${at}: only ${walkOf(g.order)} spendable ranks for ${budget} cap points`);
+      }
+      // Derived-layout collisions (pins fix them).
+      const placed = g.order.map(id => g.nodes.get(id)!);
+      for (let i = 0; i < placed.length; i++) {
+        for (let j = i + 1; j < placed.length; j++) {
+          const a = placed[i], b = placed[j];
+          const minD = TREE_LAYOUT_CFG.radius[a.kind] + TREE_LAYOUT_CFG.radius[b.kind] + 6;
+          if (Math.hypot(a.x - b.x, a.y - b.y) < minD) {
+            warn(`${at}: nodes '${a.id}' and '${b.id}' overlap in the derived layout — pin one (x/y)`);
+          }
         }
       }
     }

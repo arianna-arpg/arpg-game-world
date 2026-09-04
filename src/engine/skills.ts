@@ -26,6 +26,7 @@ import type { PossessSpec, ShiftSpec } from './possess';
 import type { GaugeSpec } from './gauge'; // THE GAUGE FABRIC — SkillDef.gauge
 import type { BirthEffect } from './clutch';
 import { veinMechanisms, veinMods, type SupportRollBase, type SupportRolled } from './supportbase';
+import { treeGraph, treeLimbOfNode, treePrereqMissing, treeSealName, treeSealedSet, treeSpentCount } from './skilltree'; // THE SKILL-TREE GRAPH — the one resolver behind the tree reads below
 import type { PartSpec } from '../render/vis/parts';
 
 // --- Deliveries: how the skill reaches its targets -------------------------
@@ -4225,9 +4226,10 @@ export interface SkillDef {
    *  11 does something new" seam. Mechanic-warping stats welcome. */
   thresholds?: SkillThreshold[];
 
-  /** THE SKILL-MODE TREE (M0 seed — docs/design/skill-modes.md): mutually-
-   *  exclusive branches picked per INSTANCE at a level milestone (see
-   *  SkillTreeSpec). Unpicked = the def verbatim, by construction. */
+  /** THE SKILL-MODE TREE (docs/design/skill-modes.md — THE GRAPH GRAMMAR):
+   *  a per-instance graph of choices spent with Ability points at level
+   *  milestones (see SkillTreeSpec; engine/skilltree.ts folds it). Unpicked
+   *  = the def verbatim, by construction. */
   tree?: SkillTreeSpec;
 
   /** A DAMAGE POOL this skill banks and releases (see DamagePoolSpec —
@@ -4520,22 +4522,26 @@ export const DEFAULT_LEVELING: Modifier[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// THE SKILL-MODE TREES (docs/design/skill-modes.md — M1, the tree fabric):
-// a per-skill miniature tree of MUTUALLY-EXCLUSIVE branches, spent per
-// INSTANCE with Ability points (bandPointsAt — one per completed band).
-// The grammar: two branches × three rungs (rung order = the prerequisite
-// chain) + ONE neutral node, P = D + N exact cover; THE HARD BRANCH LOCK —
-// the first point into a branch seals the rival entirely (neutrals
-// exempt; branch DERIVED from spent nodes, never stored). Node payloads:
-// TYPED WHITELISTED `over` spec overrides + skill-local `mods` (folded in
-// instanceInnateMods — every stat read sees them free) + an optional
-// `graft` (the passive-choice hybrid: a support injected without a
-// socket, rebuilt at recalcSeat like every graft lane). Names are plain
-// DATA (renames are one-line edits forever). THE TRANSPARENCY LAW: an
-// unpicked instance is byte-identical to a def with no tree at all — the
-// resolvers below return the def's own objects untouched until a pick
-// exists. Un-choosing is the Sacrificial Font's reset ritual alone
-// (World.fontResetTree — full-tree, band-priced).
+// THE SKILL-MODE TREES (docs/design/skill-modes.md — M1, the tree fabric;
+// THE GRAPH GRAMMAR 2026-09-04): a per-skill miniature tree of choices,
+// spent per INSTANCE with Ability points (bandPointsAt — one per completed
+// band). The tree is a GRAPH (engine/skilltree.ts, THE ONE RESOLVER):
+// nodes wired by `links` (prerequisites, any-of) and `excludes` (THE HARD
+// LOCK at node grain — spending one seals its rivals and every path only
+// reachable through them), `ranks` for nodes that take several points,
+// derived-or-pinned layout for the pull-out pane; the settled 2×3+1
+// `branches` + `neutral` shape folds into it as authoring SUGAR (rung
+// chains off the root, rung-1 forks, a lock-free neutral) with the M1
+// semantics byte-identical. Lock state is DERIVED from spent nodes, never
+// stored. Node payloads: TYPED WHITELISTED `over` spec overrides +
+// skill-local `mods` (folded in instanceInnateMods — every stat read sees
+// them free) + an optional `graft` (the passive-choice hybrid: a support
+// injected without a socket, rebuilt at recalcSeat like every graft lane).
+// Names are plain DATA (renames are one-line edits forever). THE
+// TRANSPARENCY LAW: an unpicked instance is byte-identical to a def with no
+// tree at all — the resolvers below return the def's own objects untouched
+// until a pick exists. Un-choosing is the Sacrificial Font's reset ritual
+// alone (World.fontResetTree — full-tree, band-priced).
 //
 // THE M1 RESOLVED-VIEW AUDIT (every def.delivery / channel / aim /
 // castMode read in the cast path — adopted behind a view, or exempted
@@ -4577,6 +4583,9 @@ export const DEFAULT_LEVELING: Modifier[] = [
 //     no instance exists; picks are per-instance by design.
 // ---------------------------------------------------------------------------
 
+/** A node's drawn weight in the pane (its radius) — no gameplay meaning. */
+export type SkillTreeKind = 'minor' | 'major' | 'keystone';
+
 export interface SkillTreeNode {
   /** Node id — persisted on the instance (SkillInstance.treeNodes), so
    *  renaming an id orphans saved picks (they drop with a console note —
@@ -4584,6 +4593,27 @@ export interface SkillTreeNode {
   id: string;
   name: string;
   description?: string;
+  /** THE GRAPH GRAMMAR (2026-09-04 — engine/skilltree.ts): prerequisite
+   *  node ids, ANY one spent opens this node (the passive tree's adjacency
+   *  law); absent/empty = the node hangs off the ROOT and is spendable from
+   *  the milestone. Sugar-form rungs get their chain link folded in. */
+  links?: string[];
+  /** THE HARD LOCK at node grain: spending this node SEALS every listed
+   *  node — and everything reachable only through them — symmetric by
+   *  construction (naming the rival on one side is enough). Sugar-form
+   *  rung-1 nodes exclude each other; a graph-form tree may fork anywhere. */
+  excludes?: string[];
+  /** Points this node can take (default 1). Each rank re-applies the
+   *  payload (mods stack per rank; `over` fields are idempotent); a rank
+   *  persists as a repeated id in treeNodes. */
+  ranks?: number;
+  /** Layout pins in tree units (root at 0,0, y down) — absent = the derived
+   *  radial layout (TREE_LAYOUT_CFG). Pin both or neither. */
+  x?: number;
+  y?: number;
+  /** Drawn size in the pane (default: fork roots 'major', the last rung of
+   *  a sugar chain 'keystone', else 'minor'). */
+  kind?: SkillTreeKind;
   /** TYPED WHITELISTED spec overrides — grown ONLY alongside the audit
    *  table above; never add a field here without adopting its cast-path
    *  read sites. THE RE-PIN LAW (authoring): every rung re-pins EVERY
@@ -4612,13 +4642,16 @@ export interface SkillTreeNode {
   graft?: { support: string; level?: number };
 }
 
+/** A BRANCH — the sugar form's authored chain, and the shape every LIMB
+ *  view answers in (treeLimbs/treeBranchOfNode/treeSpentBranch: a
+ *  graph-form limb synthesizes one from its fork root — engine/skilltree.ts). */
 export interface SkillTreeBranch {
   id: string;
   name: string;
   description?: string;
   /** Rung rows in PREREQUISITE ORDER — rung 1 is the identity commitment
-   *  (placing it IS the lock), rungs 2–3 the deepenings; the exact-cover
-   *  grammar wants SKILL_LEVEL_BANDS.length − 1 of them per branch. */
+   *  (placing it IS the lock), the rest deepen it. For a limb view: the
+   *  limb's nodes in BFS order. */
   rungs: SkillTreeNode[];
 }
 
@@ -4628,77 +4661,65 @@ export interface SkillTreeSpec {
    *  +level gear). Authored per skill; SKILL_LEVEL_BANDS[0] is the
    *  settled convention. */
   level: number;
-  branches: SkillTreeBranch[];
-  /** The ONE identity-free utility node — pickable any time a point is
-   *  free, exempt from the hard lock and the rung chain; completes the
-   *  exact cover (P = D + N). */
+  /** THE GRAPH FORM: every node in one list, wired by `links`/`excludes`
+   *  (engine/skilltree.ts folds it; the pane draws it). */
+  nodes?: SkillTreeNode[];
+  /** THE SUGAR FORM (the settled 2×3+1 shape): each branch folds to a rung
+   *  chain off the root with the rung-1 nodes forking against each other;
+   *  may stand beside `nodes` (the fold appends the explicit list). */
+  branches?: SkillTreeBranch[];
+  /** The ONE identity-free utility node of the sugar form — a lock-free
+   *  root child, pickable any time a point is free. */
   neutral?: SkillTreeNode;
 }
 
-/** Find one tree node by id across every branch and the neutral
- *  (undefined = orphan). */
+/** Find one tree node by id anywhere on the graph (undefined = orphan). */
 export function treeNodeOf(def: SkillDef, nodeId: string): SkillTreeNode | undefined {
-  const t = def.tree;
-  if (!t) return undefined;
-  if (t.neutral?.id === nodeId) return t.neutral;
-  for (const b of t.branches) {
-    for (const n of b.rungs) if (n.id === nodeId) return n;
-  }
-  return undefined;
+  return treeGraph(def)?.nodes.get(nodeId)?.node;
 }
 
-/** The branch a node belongs to — undefined for the neutral (that absence
- *  IS the lock exemption) and for orphans. */
+/** The LIMB a node hangs under — undefined for lock-free ground (that
+ *  absence IS the lock exemption) and for orphans. */
 export function treeBranchOfNode(def: SkillDef, nodeId: string): SkillTreeBranch | undefined {
-  for (const b of def.tree?.branches ?? []) {
-    if (b.rungs.some(n => n.id === nodeId)) return b;
-  }
-  return undefined;
+  return treeLimbOfNode(def, nodeId);
 }
 
-/** The branch this instance is COMMITTED to — derived from spent nodes,
+/** The limb this instance is COMMITTED to — derived from spent nodes,
  *  never stored (the orphan-drop law handles authored renames free).
- *  Undefined until a branch node is spent (neutral-only spends commit
- *  nothing). */
+ *  Undefined until a limb node is spent (lock-free spends commit nothing). */
 export function treeSpentBranch(inst: SkillInstance): SkillTreeBranch | undefined {
   for (const id of inst.treeNodes ?? []) {
-    const b = treeBranchOfNode(inst.def, id);
+    const b = treeLimbOfNode(inst.def, id);
     if (b) return b;
   }
   return undefined;
 }
 
-/** Ability points SPENT on this instance (one per spent node). */
+/** Ability points SPENT on this instance (one per spent id — a rank counts). */
 export function treePointsSpent(inst: SkillInstance): number {
   return inst.treeNodes?.length ?? 0;
 }
 
 /** THE ONE SPEND PREDICATE (the swapRefusal idiom — engine gate and panel
- *  chips speak the same words): why this node cannot be spent right now,
- *  or null when it can. Already-spent nodes are the caller's no-op check
- *  (inst.treeNodes.includes), not a refusal. Order: the level seal, the
- *  hard lock, the rung chain, the point budget — so a sealed branch says
- *  "sealed" rather than "no point free". Field discipline (swapRefusal)
- *  stays the World's own gate on top. */
+ *  nodes speak the same words): why this node cannot be spent right now,
+ *  or null when it can. A node walked to its full rank is the caller's
+ *  no-op check (treeSpentCount vs treeNodeRanks), not a refusal. Order:
+ *  the level seal, the lock (treeSealedSet — direct exclusion or a sealed
+ *  path, named by treeSealName), the prerequisite chain, the point
+ *  budget — so a sealed path says "sealed" rather than "no point free".
+ *  Field discipline (swapRefusal) stays the World's own gate on top. */
 export function treeNodeRefusal(inst: SkillInstance, nodeId: string): string | null {
   const tree = inst.def.tree;
-  if (!tree) return 'no such path';
-  const node = treeNodeOf(inst.def, nodeId);
-  if (!node) return 'no such path';
+  const g = treeGraph(inst.def);
+  if (!tree || !g) return 'no such path';
+  if (!g.nodes.has(nodeId)) return 'no such path';
   if (inst.level < tree.level) return `the path opens at level ${tree.level}`;
-  const branch = treeBranchOfNode(inst.def, nodeId);
-  if (branch) {
-    const committed = treeSpentBranch(inst);
-    if (committed && committed.id !== branch.id) {
-      return `${branch.name}'s path is sealed`;
-    }
-    const idx = branch.rungs.findIndex(n => n.id === nodeId);
-    for (let i = 0; i < idx; i++) {
-      if (!inst.treeNodes?.includes(branch.rungs[i].id)) {
-        return `${branch.rungs[i].name} comes first`;
-      }
-    }
+  const spent = inst.treeNodes ?? [];
+  if (treeSealedSet(inst.def, spent).has(nodeId)) {
+    return `${treeSealName(inst.def, spent, nodeId)}'s path is sealed`;
   }
+  const missing = treePrereqMissing(inst.def, spent, nodeId);
+  if (missing) return `${missing} comes first`;
   if (treePointsSpent(inst) >= bandPointsAt(inst.level)) {
     const next = SKILL_LEVEL_BANDS.find(b => b > inst.level);
     return next !== undefined
@@ -4711,33 +4732,36 @@ export function treeNodeRefusal(inst: SkillInstance, nodeId: string): string | n
 /** THE ONE VALIDATION SEAM for every loader — the character save, the
  *  co-op wire and the sim's build minting alike (the attunedForm idiom:
  *  orphans and structure breaks drop with a console note, never a throw).
- *  Enforced in id order: orphan drop, the hard lock (the first
- *  branch-bearing id fixes the branch; rival-branch ids drop), the rung
- *  chain (a rung without its predecessors drops), and — when `level` is
- *  given — the point budget (bandPointsAt trims the tail). The sim's
- *  hypothesis lever passes no level: structure is grammar, budget is
- *  economy. */
+ *  Enforced in id order: orphan drop, the rank cap (a repeat past the
+ *  node's ranks drops), the lock (an id sealed by the kept set drops —
+ *  rival forks, and everything only reachable through them), the
+ *  prerequisite chain (a node none of whose links is kept drops), and —
+ *  when `level` is given — the point budget (bandPointsAt trims the
+ *  tail). The sim's hypothesis lever passes no level: structure is
+ *  grammar, budget is economy. `quiet` mutes the notes (the census's
+ *  terminal walks, which trim by design). */
 export function validTreeNodes(
-  def: SkillDef, ids: readonly string[], level?: number,
+  def: SkillDef, ids: readonly string[], level?: number, opts?: { quiet?: boolean },
 ): string[] | undefined {
-  const note = (id: string, why: string): void =>
-    console.warn(`[skill tree] '${def.id}': dropped pick '${id}' (${why})`);
+  const note = (id: string, why: string): void => {
+    if (!opts?.quiet) console.warn(`[skill tree] '${def.id}': dropped pick '${id}' (${why})`);
+  };
+  const g = treeGraph(def);
   const kept: string[] = [];
-  let branchId: string | undefined;
   for (const id of ids) {
-    const node = treeNodeOf(def, id);
-    if (!node) { note(id, 'no such node'); continue; }
-    if (kept.includes(id)) { note(id, 'duplicate'); continue; }
-    const b = treeBranchOfNode(def, id);
-    if (b) {
-      if (branchId !== undefined && b.id !== branchId) {
-        note(id, `rival branch — '${branchId}' holds the lock`); continue;
+    const gn = g?.nodes.get(id);
+    if (!gn) { note(id, 'no such node'); continue; }
+    const have = treeSpentCount(kept, id);
+    if (have >= gn.ranks) {
+      note(id, gn.ranks === 1 ? 'duplicate' : `beyond its ${gn.ranks} ranks`); continue;
+    }
+    if (have === 0) {
+      if (treeSealedSet(def, kept).has(id)) {
+        note(id, `rival path — sealed by the lock (${treeSealName(def, kept, id)})`); continue;
       }
-      const idx = b.rungs.findIndex(n => n.id === id);
-      if (b.rungs.slice(0, idx).some(n => !kept.includes(n.id))) {
+      if (treePrereqMissing(def, kept, id) !== null) {
         note(id, 'rung chain broken — a predecessor is missing'); continue;
       }
-      branchId = b.id;
     }
     kept.push(id);
   }
@@ -4750,8 +4774,9 @@ export function validTreeNodes(
 
 /** The folded spec overrides of every spent node (later spends win field
  *  by field; the channel sub-object merges likewise — rungs re-pin their
- *  identity, so order is authored moot). An unpicked instance answers
- *  undefined at the cost of one null check. */
+ *  identity, so order is authored moot; a repeated rank re-applies the
+ *  same fields, idempotent). An unpicked instance answers undefined at
+ *  the cost of one null check. */
 export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | undefined {
   const ids = inst.treeNodes;
   if (!ids || ids.length === 0) return undefined;
@@ -4771,8 +4796,10 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
 }
 
 /** Skill-local mods from every spent node — joined in instanceInnateMods
- *  (the one fold), so damage/cost/speed/preview reads all see them.
- *  Undefined until a mod-bearing node is spent (transparency: zero cost). */
+ *  (the one fold), so damage/cost/speed/preview reads all see them. A
+ *  rank is a repeated id, so a ranked node's mods stack per rank here
+ *  with no further machinery. Undefined until a mod-bearing node is spent
+ *  (transparency: zero cost). */
 export function instanceTreeMods(inst: SkillInstance): Modifier[] | undefined {
   const ids = inst.treeNodes;
   if (!ids || ids.length === 0) return undefined;

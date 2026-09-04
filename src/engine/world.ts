@@ -71,6 +71,7 @@ import { epitaphFor, VESTIGES } from '../data/vestiges';
 import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
+import { treeNodeRanks, treeSpentCount } from './skilltree'; // THE SKILL-TREE GRAPH — ranked spends (pickTreeNode)
 import { SKILL_LIST, SKILLS } from '../data/skills';
 import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, FIXTURE_IDS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
@@ -30429,11 +30430,12 @@ export class World {
 
   /** THE SKILL-MODE TREES (M1 — docs/design/skill-modes.md §3): SPEND one
    *  Ability point on a tree node. The gates, in order: the node must
-   *  exist on the def's own tree (untrusted ids no-op), an already-spent
-   *  node no-ops silently, then THE ONE SPEND PREDICATE (treeNodeRefusal:
-   *  the level seal on RAW inst.level, THE HARD BRANCH LOCK — the first
-   *  point into a branch seals the rival entirely, neutrals exempt — the
-   *  rung chain, and the bandPointsAt budget), then THE FIELD DISCIPLINE
+   *  exist on the def's own tree (untrusted ids no-op), a node walked to
+   *  its full rank no-ops silently, then THE ONE SPEND PREDICATE
+   *  (treeNodeRefusal: the level seal on RAW inst.level, THE HARD LOCK —
+   *  a spent node seals its rivals and every path only reachable through
+   *  them, derived by engine/skilltree.ts, never stored — the prerequisite
+   *  chain, and the bandPointsAt budget), then THE FIELD DISCIPLINE
    *  through the standing swapRefusal words (sanctuary waives — the
    *  workshop law). The spend APPENDS — un-choosing is the Font's reset
    *  ritual alone (fontResetTree), never a re-pick. recalcSeat re-derives
@@ -30445,7 +30447,9 @@ export class World {
     if (!inst?.def.tree) return;
     const node = treeNodeOf(inst.def, nodeId);
     if (!node) return;
-    if (inst.treeNodes?.includes(nodeId)) return; // already walked
+    // A RANKED node takes several points (repeated ids); walked to its
+    // full rank = the silent no-op a single-rank node always was.
+    if (treeSpentCount(inst.treeNodes, nodeId) >= treeNodeRanks(inst.def, nodeId)) return;
     const at = seat.actor.pos;
     const sealed = treeNodeRefusal(inst, nodeId);
     if (sealed) {
@@ -30458,7 +30462,10 @@ export class World {
     // A spent point may carry a graft — the derived lane rebuilds now.
     this.recalcSeat(seat);
     this.charDirty = true;
-    this.text(vec(at.x, at.y - 20), node.name, inst.def.color, 12);
+    const ranks = treeNodeRanks(inst.def, nodeId);
+    this.text(vec(at.x, at.y - 20),
+      ranks > 1 ? `${node.name} ${treeSpentCount(inst.treeNodes, nodeId)}/${ranks}` : node.name,
+      inst.def.color, 12);
   }
 
   /** THE LIFELINE RULE (borrowed unlife): a body conjured by a PLAYER-SIDE

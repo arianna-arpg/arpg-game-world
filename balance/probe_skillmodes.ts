@@ -2,12 +2,14 @@
 // ONE-OFF PROBE — THE SKILL-MODE TREES, M1 (docs/design/skill-modes.md §3/§8:
 // the tree fabric). Pins, in order:
 //   A. THE AUTHORED ROW + THE GRAMMAR CENSUS: wild_strike carries the full
-//      exemplar (2 branches × 3 rungs + the neutral — the exact-cover law
-//      P = D + N), rung 1 keeps M0's measured payloads, and EVERY def
-//      wearing a tree validates: the exact-cover grammar, unique node ids,
-//      `over` on the audited whitelist (arcDeg/spreadDeg/channel.ramp/
-//      channel.rampMove), node mods naming real stats, grafts naming live
-//      supports. A stray M2 row fails here, never in a player's face.
+//      exemplar (the settled 2 branches × 3 rungs + the neutral, in the
+//      SUGAR form), rung 1 keeps M0's measured payloads, and EVERY def
+//      wearing a tree folds through engine/skilltree.ts and validates:
+//      unique node ids, every node root-reachable, THE COVER LAW (every
+//      limb's terminal walk absorbs the cap points), `over` on the audited
+//      whitelist (arcDeg/spreadDeg/channel.ramp/channel.rampMove), node
+//      mods naming real stats, grafts naming live supports. A stray M2 row
+//      fails here, never in a player's face.
 //   B. THE LEVEL SEAL + THE FIELD DISCIPLINE: spends refuse below the
 //      milestone, land in sanctuary (the workshop law), and refuse under
 //      hot blood in the field through the standing swapRefusal words.
@@ -46,6 +48,17 @@
 //   L. THE CENSUS BRANCH AXIS: compatCensus enumerates `skill@branch`
 //      terminal hosts (exactly two per moded skill), hostTreeNodes answers
 //      the exact-cover allocation, parseHostId round-trips.
+//   M. THE GATHER'S STRIDE (ruled 2026-08-20): a Gathered Casting
+//      conversion's synthesized spec binds movement (slowed ≈ 0.5×).
+//   N. THE GRAPH GRAMMAR (2026-09-04, engine/skilltree.ts): the sugar fold
+//      keeps the M1 words/verdicts byte-identical (rung chains, rung-1
+//      forks, a lock-free neutral, limbs = the authored branches); the
+//      graph form on a probe-local fixture — any-of links, symmetric
+//      excludes, a sub-fork sealing by its own name, a cross-link opening
+//      either way, ranked nodes (repeated ids) through the spend
+//      predicate, the loader seam, the mods fold; the derived layout
+//      (deterministic, pin-overridable, collision-free across every
+//      authored tree); the census's terminal walk on a graph limb.
 // Run: npx tsx balance/probe_skillmodes.ts
 // ---------------------------------------------------------------------------
 
@@ -60,10 +73,15 @@ import { START_ZONE } from '../src/data/zones';
 import { STAT_DEFS } from '../src/engine/stats';
 import {
   bandPointsAt, instanceAim, instanceChannel, instanceDelivery, instanceMods,
+  instanceTreeMods, makeSkillInstance, MAX_SKILL_LEVEL,
   skillContextTags, SKILL_LEVEL_BANDS, treeNodeOf, treeNodeRefusal,
   treePickOpen, treePointsSpent, treeSpentBranch, validTreeNodes,
-  type SkillTreeSpec,
+  type SkillDef, type SkillTreeSpec,
 } from '../src/engine/skills';
+import {
+  treeGraph, treeLimbOfNode, treeLimbs, treeNodeRanks, treeSealedSet, treeSpentCount,
+  TREE_LAYOUT_CFG,
+} from '../src/engine/skilltree';
 import { serializeCharacter, rebuildSkill } from '../src/meta/character';
 import { serializeSeatMeta, applySeatMeta } from '../src/net/snapshot';
 import { compatCensus, hostIdOf, hostTreeNodes, ledgerSkillIds, parseHostId } from '../src/sim/compat';
@@ -93,8 +111,8 @@ const tree = WS.tree as SkillTreeSpec | undefined;
 check('A: wild_strike carries the M1 exemplar tree', !!tree);
 check('A: the pick opens at level 5 (the settled milestone)', tree?.level === 5);
 check('A: two branches × three rungs + the neutral (the exact cover)',
-  tree?.branches.length === 2
-  && tree?.branches.every(b => b.rungs.length === SKILL_LEVEL_BANDS.length - 1)
+  tree?.branches?.length === 2
+  && tree?.branches?.every(b => b.rungs.length === SKILL_LEVEL_BANDS.length - 1)
   && tree?.neutral?.id === NEUTRAL);
 const sprinkler = treeNodeOf(WS, 'ws_sprinkler');
 const duelist = treeNodeOf(WS, 'ws_duelist');
@@ -106,7 +124,10 @@ check('A: the deepening rungs RE-PIN their identity (the re-pin law)',
   && SPRINKLER.every(id => treeNodeOf(WS, id)?.over?.arcDeg === 30));
 
 // The grammar census: every tree-wearing def, hard-pinned (boot validation
-// warns; this gate FAILS).
+// warns; this gate FAILS) — THE GRAPH LAWS (engine/skilltree.ts): the fold
+// takes every wearer, ids unique, every node root-reachable, THE COVER LAW
+// (each limb's terminal walk + the lock-free ground absorbs the cap
+// budget), and the payload whitelist on every graph node.
 const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel']);
 const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
 let censusBad = '';
@@ -116,17 +137,23 @@ for (const def of Object.values(SKILLS)) {
   if (!t) continue;
   treeWearers++;
   if (t.level < 1) censusBad += ` ${def.id}:level<1`;
-  if (t.branches.length !== 2) censusBad += ` ${def.id}:branches!=2`;
-  if (!t.neutral) censusBad += ` ${def.id}:no-neutral`;
-  const seen = new Set<string>();
-  const all = [...t.branches.flatMap(b => b.rungs.map(n => ({ n, at: b.id }))),
-    ...(t.neutral ? [{ n: t.neutral, at: 'neutral' }] : [])];
-  for (const b of t.branches) {
-    if (b.rungs.length !== SKILL_LEVEL_BANDS.length - 1) censusBad += ` ${def.id}/${b.id}:rungs!=${SKILL_LEVEL_BANDS.length - 1}`;
+  const g = treeGraph(def);
+  if (!g || g.nodes.size === 0) { censusBad += ` ${def.id}:no-graph`; continue; }
+  for (const d of g.dupes) censusBad += ` ${def.id}/${d}:dup-node-id`;
+  if (g.order.length !== g.nodes.size) censusBad += ` ${def.id}:unreachable-nodes`;
+  const budget = bandPointsAt(MAX_SKILL_LEVEL);
+  const limbIds = new Set(g.limbs.flatMap(b => b.rungs.map(n => n.id)));
+  const free = g.order.filter(id => !limbIds.has(id));
+  const walkOf = (ids: string[]): number => {
+    const all = [...ids];
+    for (const id of ids) for (let r = 1; r < (g.nodes.get(id)?.ranks ?? 1); r++) all.push(id);
+    return validTreeNodes(def, all, undefined, { quiet: true })?.length ?? 0;
+  };
+  for (const limb of g.limbs) {
+    if (walkOf([...limb.rungs.map(n => n.id), ...free]) < budget) censusBad += ` ${def.id}/${limb.id}:strands-points`;
   }
-  for (const { n, at } of all) {
-    if (seen.has(n.id)) censusBad += ` ${def.id}/${n.id}:dup-node-id`;
-    seen.add(n.id);
+  for (const id of g.order) {
+    const n = g.nodes.get(id)!.node;
     for (const k of Object.keys(n.over ?? {})) {
       if (!OVER_KEYS.has(k)) censusBad += ` ${def.id}/${n.id}:over.${k}-off-whitelist`;
     }
@@ -137,10 +164,9 @@ for (const def of Object.values(SKILLS)) {
       if (!STAT_DEFS[m.stat]) censusBad += ` ${def.id}/${n.id}:mod-stat-${m.stat}-unknown`;
     }
     if (n.graft && !SUPPORTS[n.graft.support]) censusBad += ` ${def.id}/${n.id}:graft-${n.graft.support}-unknown`;
-    void at;
   }
 }
-check('A: the tree census — every wearer on the exact-cover grammar, whitelist clean',
+check('A: the tree census — every wearer folds clean under the graph laws, whitelist clean',
   censusBad === '', censusBad || `${treeWearers} wearer(s)`);
 
 // ------------------------- B. THE LEVEL SEAL + THE FIELD DISCIPLINE -------
@@ -740,6 +766,203 @@ inst.level = 10;
   check('M: THE GATHER\'S STRIDE — the synthesized spec binds the walk (slowed ≈ 0.5×, never free, never rooted)',
     ratio > 0.3 && ratio < 0.7,
     `held ${held.pxPerSec.toFixed(1)} px/s vs free ${free.pxPerSec.toFixed(1)} px/s = ${ratio.toFixed(2)}×`);
+}
+
+// ------------------------- N. THE GRAPH GRAMMAR (2026-09-04) --------------
+// engine/skilltree.ts — THE ONE RESOLVER behind every tree read: the sugar
+// fold (the settled 2×3+1 shape → rung chains, rung-1 forks, a lock-free
+// neutral, limbs = the authored branch objects) keeps the M1 words and
+// verdicts byte-identical; the GRAPH FORM (links any-of / excludes
+// symmetric / ranks / pins) is pinned on a probe-local fixture — a fork
+// with a sub-fork, a cross-link, a ranked utility — through the spend
+// predicate, the loader seam, the mods fold, the derived layout, and the
+// census's terminal walk.
+{
+  // N1. THE SUGAR FOLD — every authored wearer.
+  let foldBad = '';
+  let wearers = 0;
+  for (const def of Object.values(SKILLS)) {
+    const t = def.tree;
+    if (!t?.branches) continue;
+    wearers++;
+    const g = treeGraph(def)!;
+    const forks = t.branches.map(b => b.rungs[0].id);
+    const expectRoots = [...forks, ...(t.neutral ? [t.neutral.id] : [])];
+    if (JSON.stringify(g.rootChildren) !== JSON.stringify(expectRoots)) foldBad += ` ${def.id}:roots`;
+    for (const b of t.branches) {
+      b.rungs.forEach((n, k) => {
+        const gn = g.nodes.get(n.id);
+        if (!gn) { foldBad += ` ${def.id}/${n.id}:missing`; return; }
+        if (gn.node !== n) foldBad += ` ${def.id}/${n.id}:identity`;
+        const wantLinks = k === 0 ? [] : [b.rungs[k - 1].id];
+        if (JSON.stringify(gn.links) !== JSON.stringify(wantLinks)) foldBad += ` ${def.id}/${n.id}:links`;
+        const wantEx = k === 0 ? forks.filter(f => f !== n.id) : [];
+        if (JSON.stringify([...gn.excludes].sort()) !== JSON.stringify([...wantEx].sort())) foldBad += ` ${def.id}/${n.id}:excludes`;
+        if (gn.limbId !== b.id) foldBad += ` ${def.id}/${n.id}:limb`;
+        if (gn.depth !== k + 1) foldBad += ` ${def.id}/${n.id}:depth`;
+      });
+    }
+    if (t.neutral) {
+      const gn = g.nodes.get(t.neutral.id);
+      if (!gn || gn.links.length || gn.excludes.size || gn.limbId !== undefined) foldBad += ` ${def.id}/neutral:free`;
+    }
+    if (g.limbs.length !== t.branches.length || g.limbs.some((l, i) => l !== t.branches![i])) foldBad += ` ${def.id}:limbs-identity`;
+    if (treeLimbs(def) !== g.limbs) foldBad += ` ${def.id}:limbs-memo`;
+    if (g.dupes.length || g.order.length !== g.nodes.size) foldBad += ` ${def.id}:reach`;
+    if (g.box.w < TREE_LAYOUT_CFG.minBox.w || g.box.h < TREE_LAYOUT_CFG.minBox.h) foldBad += ` ${def.id}:box`;
+  }
+  check('N: THE SUGAR FOLD — every 2×3+1 wearer folds to rung chains, rung-1 forks, a lock-free neutral, limbs = the authored branches',
+    foldBad === '' && wearers >= 1, foldBad || `${wearers} wearer(s)`);
+  check('N: the fold is memoized per spec (one graph object per def)', treeGraph(WS) === treeGraph(WS));
+
+  // N2. THE M1 WORDS through the derived lock (bare instances — no world).
+  const fresh = (nodes: string[] = [], level = 20) => {
+    const i = makeSkillInstance(WS, level, 3);
+    if (nodes.length) i.treeNodes = nodes;
+    return i;
+  };
+  check('N: prerequisite words walk back to the ROOT-MOST unspent rung',
+    treeNodeRefusal(fresh(), 'ws_long_point') === 'The Duelist comes first'
+    && treeNodeRefusal(fresh(['ws_duelist']), 'ws_long_point') === 'The Firm Wrist comes first'
+    && treeNodeRefusal(fresh(['ws_duelist']), 'ws_firm_wrist') === null);
+  check('N: the lock names the sealed LIMB at every rung under it',
+    SPRINKLER.every(id => treeNodeRefusal(fresh(['ws_duelist']), id) === "The Sprinkler's path is sealed")
+    && DUELIST.every(id => treeNodeRefusal(fresh(['ws_sprinkler']), id) === "The Duelist's path is sealed"));
+  check('N: the neutral stays lock-free beside a committed limb; treeSealedSet = the rival limb, nothing else',
+    treeNodeRefusal(fresh(['ws_duelist']), NEUTRAL) === null
+    && JSON.stringify([...treeSealedSet(WS, ['ws_duelist'])].sort()) === JSON.stringify([...SPRINKLER].sort())
+    && treeSealedSet(WS, []).size === 0 && treeSealedSet(WS, [NEUTRAL]).size === 0);
+  check('N: the refusal order holds — seal before budget, budget words unchanged',
+    treeNodeRefusal(fresh([...DUELIST, NEUTRAL]), 'ws_sprinkler') === "The Sprinkler's path is sealed"
+    && treeNodeRefusal(fresh([...DUELIST], 15), NEUTRAL) === 'no Ability point free — the next comes at level 20'
+    && treeNodeRefusal(fresh([...DUELIST, NEUTRAL]), 'ws_economy') === 'every Ability point is spent');
+  const dup = countNotes(() => validTreeNodes(WS, ['ws_duelist', 'ws_duelist'], 20));
+  check('N: a repeat on a single-rank node drops as a duplicate through the seam',
+    JSON.stringify(dup) === JSON.stringify(['ws_duelist']) && noted === 1);
+
+  // N3. THE GRAPH FORM — the fixture: A/B fork limbs, A1/A2 a sub-fork under
+  // A, A3 cross-linked to both, U a lock-free two-rank utility.
+  const FIX: SkillDef = {
+    ...WS, id: 'probe_graph_fixture', name: 'Probe Fixture',
+    tree: {
+      level: 5,
+      nodes: [
+        { id: 'A', name: 'Alpha', excludes: ['B'], over: { arcDeg: 30, spreadDeg: 130 } },
+        { id: 'B', name: 'Beta', over: { arcDeg: 16, spreadDeg: 24 } },
+        { id: 'U', name: 'Utility', ranks: 2, mods: [{ stat: 'channelMobility', kind: 'flat', value: 0.05 }] },
+        { id: 'A1', name: 'Alpha One', links: ['A'], excludes: ['A2'], mods: [{ stat: 'attackSpeed', kind: 'increased', value: 0.1 }] },
+        { id: 'A2', name: 'Alpha Two', links: ['A'] },
+        { id: 'A3', name: 'Alpha Cap', links: ['A1', 'A2'], kind: 'keystone' },
+        { id: 'B1', name: 'Beta One', links: ['B'] },
+        { id: 'B2', name: 'Beta Two', links: ['B1'] },
+      ],
+    },
+  };
+  const g = treeGraph(FIX)!;
+  check('N: graph form — root children in authored order; A/B fork limbs, U lock-free; limbs inherit down',
+    JSON.stringify(g.rootChildren) === JSON.stringify(['A', 'B', 'U'])
+    && JSON.stringify(g.limbs.map(l => l.id)) === JSON.stringify(['A', 'B'])
+    && g.nodes.get('U')!.limbId === undefined && g.nodes.get('A3')!.limbId === 'A' && g.nodes.get('B2')!.limbId === 'B'
+    && treeLimbOfNode(FIX, 'A3')?.name === 'Alpha' && treeLimbOfNode(FIX, 'U') === undefined);
+  check('N: exclusion is symmetric by construction (B excludes A though only A named it; A2 excludes A1)',
+    g.nodes.get('B')!.excludes.has('A') && g.nodes.get('A2')!.excludes.has('A1'));
+  check('N: limb views synthesize from the fork root (BFS rungs; fork roots draw major, the cap keystone)',
+    g.limbs[0].name === 'Alpha'
+    && JSON.stringify(g.limbs[0].rungs.map(n => n.id)) === JSON.stringify(['A', 'A1', 'A2', 'A3'])
+    && g.nodes.get('A')!.kind === 'major' && g.nodes.get('A3')!.kind === 'keystone' && g.nodes.get('U')!.kind === 'minor');
+  const fx = (nodes: string[] = [], level = 20) => {
+    const i = makeSkillInstance(FIX, level, 3);
+    if (nodes.length) i.treeNodes = nodes;
+    return i;
+  };
+  check('N: a deep node walks its prerequisite chain back to the root-most gap',
+    treeNodeRefusal(fx(), 'A3') === 'Alpha comes first' && treeNodeRefusal(fx(['A']), 'A3') === 'Alpha One comes first');
+  check('N: spending a fork seals the rival limb TRANSITIVELY, in the limb\'s name',
+    treeNodeRefusal(fx(['A']), 'B') === "Beta's path is sealed"
+    && treeNodeRefusal(fx(['A']), 'B2') === "Beta's path is sealed"
+    && treeSealedSet(FIX, ['A']).size === 3);
+  check('N: a sub-fork seals by its OWN name — the limb stays open above it',
+    treeNodeRefusal(fx(['A', 'A1']), 'A2') === "Alpha Two's path is sealed"
+    && treeNodeRefusal(fx(['A', 'A1']), 'A3') === null
+    && treeSpentBranch(fx(['U'])) === undefined && treeSpentBranch(fx(['U', 'A']))?.id === 'A');
+  check('N: a cross-linked node opens through EITHER prerequisite',
+    treeNodeRefusal(fx(['A', 'A2']), 'A3') === null && treeNodeRefusal(fx(['A', 'A1']), 'A3') === null);
+  check('N: ranks — a ranked node takes its points one by one',
+    treeNodeRefusal(fx(['U']), 'U') === null && treeSpentCount(['U', 'U'], 'U') === 2
+    && treeNodeRanks(FIX, 'U') === 2 && treeNodeRanks(FIX, 'A') === 1 && treeNodeRanks(FIX, 'nope') === 1);
+  const overRank = countNotes(() => validTreeNodes(FIX, ['U', 'U', 'U'], 20));
+  const overNoted = noted;
+  const rivalDeep = countNotes(() => validTreeNodes(FIX, ['A', 'B', 'B1'], 20));
+  const rivalNoted = noted;
+  const cross = countNotes(() => validTreeNodes(FIX, ['A', 'A2', 'A3', 'U'], 20));
+  const crossNoted = noted;
+  const subfork = countNotes(() => validTreeNodes(FIX, ['A', 'A1', 'A2'], 20));
+  const subNoted = noted;
+  check('N: the loader seam — ranks cap repeats, the lock drops rivals transitively, cross-links pass, sub-forks refuse',
+    JSON.stringify(overRank) === JSON.stringify(['U', 'U']) && overNoted === 1
+    && JSON.stringify(rivalDeep) === JSON.stringify(['A']) && rivalNoted === 2
+    && JSON.stringify(cross) === JSON.stringify(['A', 'A2', 'A3', 'U']) && crossNoted === 0
+    && JSON.stringify(subfork) === JSON.stringify(['A', 'A1']) && subNoted === 1);
+  const quiet = countNotes(() => validTreeNodes(FIX, ['A', 'B'], 20, { quiet: true }));
+  check('N: the quiet option mutes the notes (the census walk\'s lane)', JSON.stringify(quiet) === JSON.stringify(['A']) && noted === 0);
+  const rankMods = instanceTreeMods(fx(['U', 'U']));
+  check('N: a ranked node\'s mods stack per rank through instanceTreeMods',
+    rankMods?.length === 2 && rankMods.every(m => m.stat === 'channelMobility' && m.value === 0.05));
+
+  // N4. THE DERIVED LAYOUT — pure, deterministic, pin-overridable.
+  const nA = g.nodes.get('A')!, nB = g.nodes.get('B')!, nU = g.nodes.get('U')!;
+  const nA1 = g.nodes.get('A1')!, nA2 = g.nodes.get('A2')!, nA3 = g.nodes.get('A3')!;
+  const ring = TREE_LAYOUT_CFG.ring;
+  check('N: forks fan the upper arc, the lock-free node hangs straight below, sub-forks split, every node on its depth ring',
+    nA.y < 0 && nB.y < 0 && nA.x < nB.x && nU.y > 0 && Math.abs(nU.x) < 1
+    && Math.abs(nA1.x - nA2.x) > 50
+    && Math.abs(Math.hypot(nA.x, nA.y) - ring) < 1 && Math.abs(Math.hypot(nA1.x, nA1.y) - 2 * ring) < 1
+    && Math.abs(Math.hypot(nA3.x, nA3.y) - 3 * ring) < 1);
+  const FIX2: SkillDef = { ...FIX, tree: JSON.parse(JSON.stringify(FIX.tree)) };
+  const g2 = treeGraph(FIX2)!;
+  check('N: the layout is deterministic across folds (a structural clone lands every node on the same dot)',
+    g2 !== g && g.order.every(id => g2.nodes.get(id)!.x === g.nodes.get(id)!.x && g2.nodes.get(id)!.y === g.nodes.get(id)!.y));
+  const pinnedSpec = JSON.parse(JSON.stringify(FIX.tree));
+  pinnedSpec.nodes.find((n: { id: string }) => n.id === 'B').x = 300;
+  pinnedSpec.nodes.find((n: { id: string }) => n.id === 'B').y = -50;
+  const g3 = treeGraph({ ...FIX, tree: pinnedSpec })!;
+  check('N: a pin overrides the derived dot and its children fan from the pinned bearing',
+    g3.nodes.get('B')!.x === 300 && g3.nodes.get('B')!.y === -50
+    && g3.nodes.get('B1')!.x > 200 && g3.nodes.get('A')!.x === nA.x);
+  let overlap = '';
+  for (const def of [...Object.values(SKILLS).filter(d => d.tree), FIX]) {
+    const gg = treeGraph(def)!;
+    const arr = gg.order.map(id => gg.nodes.get(id)!);
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        const minD = TREE_LAYOUT_CFG.radius[arr[i].kind] + TREE_LAYOUT_CFG.radius[arr[j].kind] + 6;
+        if (Math.hypot(arr[i].x - arr[j].x, arr[i].y - arr[j].y) < minD) overlap += ` ${def.id}:${arr[i].id}/${arr[j].id}`;
+      }
+    }
+  }
+  check('N: no derived-layout collisions across every authored tree + the fixture', overlap === '', overlap);
+
+  // N5. THE CENSUS WALK on a graph limb (the fixture stands in the registry
+  // for the read, then leaves) + a ranked round trip through the loader.
+  const reg = SKILLS as Record<string, SkillDef>;
+  reg[FIX.id] = FIX;
+  try {
+    check('N: the census walks a graph limb to its terminal through the seam — the sub-fork\'s rival dropped, the lock-free ground filling the budget',
+      JSON.stringify(hostTreeNodes(`${FIX.id}@A`)) === JSON.stringify(['A', 'A1', 'A3', 'U'])
+      && JSON.stringify(hostTreeNodes(`${FIX.id}@B`)) === JSON.stringify(['B', 'B1', 'B2', 'U'])
+      && hostTreeNodes(`${FIX.id}@U`) === undefined);
+    const ids = ledgerSkillIds();
+    check('N: the ledger universe carries the graph limbs as `skill@limb` hosts',
+      ids.has(`${FIX.id}@A`) && ids.has(`${FIX.id}@B`) && !ids.has(`${FIX.id}@U`));
+    const ranked = countNotes(() => rebuildSkill({
+      skillId: FIX.id, level: 20, rarity: 'common', sockets: [null], treeNodes: ['U', 'U', 'A', 'A1'],
+    }));
+    check('N: a ranked spend round-trips the loader whole (repeated ids = ranks)',
+      JSON.stringify(ranked?.treeNodes) === JSON.stringify(['U', 'U', 'A', 'A1']) && noted === 0);
+  } finally {
+    delete reg[FIX.id];
+  }
+  check('N: the fixture leaves the registry (the census forgets it)', !ledgerSkillIds().has(`${FIX.id}@A`));
 }
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);

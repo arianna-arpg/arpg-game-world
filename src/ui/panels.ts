@@ -127,6 +127,7 @@ import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
 import { oracleRerollCost } from '../data/essences';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
+import { treeGraph, treeLimbOfNode, treeLimbs, treeNodeRanks, treeSealedSet, treeSpentCount, TREE_LAYOUT_CFG, type TreeGraphNode } from '../engine/skilltree'; // THE SKILL-TREE PANE reads the one graph
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 import { MAP_CFG, MAP_LABEL_MODES } from './mapConfig';
 import { applyCursor, CURSOR_COLORS, CURSOR_STYLES } from '../core/cursor';
@@ -501,9 +502,15 @@ export class UI {
    *  left edge of the inventory — the whole build in one glance. Remembers
    *  its state across panel closes, satchel-style. */
   private buildFlapOpen = false;
-  /** Skill-mode tree panels the user has manually unfolded (a waiting
-   *  point holds a tree open regardless — the pip law). */
-  private skillTreeOpen = new Set<string>();
+  /** THE SKILL-TREE PANE (openSkillTree / refreshSkillTree): the one
+   *  skill it shows, its open flag, and its lens (zoom/pan over the graph's
+   *  fitted box) — the passive tree's trio, per pane. */
+  private skillTreePane = document.getElementById('skill-tree')!;
+  skillTreePaneOpen = false;
+  private skillTreeSkillId: string | null = null;
+  private stZoom = 1;
+  private stPan = { x: 0, y: 0 };
+  private stBox = { minX: -320, minY: -240, w: 640, h: 480 };
   // (The flap's TUTORIAL GLOW carries no UI state of its own — like the
   //  flask bag tiles', it reads LIVE off World.mireilleGiftLesson each
   //  render: glowing while the lesson pends and the drawer is closed,
@@ -740,6 +747,9 @@ export class UI {
     bindTooltips(this.passiveTree,
       (el) => el.dataset.tip === 'pnode' ? this.passiveNodeTooltip(el.dataset.node!) : null,
       { proximity: { selector: '.tree-node', radiusPx: 30, hysteresis: 0.35 } });
+    bindTooltips(this.skillTreePane,
+      (el) => el.dataset.tip === 'stnode' ? this.skillTreeNodeTooltip(el.dataset.node!) : null,
+      { proximity: { selector: '.st-node', radiusPx: 30, hysteresis: 0.35 } });
     this.updateHintBar(); // replace the static index.html placeholder with live binds
 
     // THE GRIMOIRE BINDING GESTURE (ui/dnd.ts — the drag fabric's first
@@ -791,6 +801,7 @@ export class UI {
       [this.charSheet, () => this.toggleCharSheet(this.panelSeatIds.get(this.charSheet))],
       [this.inventory, () => this.toggleInventory(this.panelSeatIds.get(this.inventory))],
       [this.passiveTree, () => this.toggleTree(this.panelSeatIds.get(this.passiveTree))],
+      [this.skillTreePane, () => this.closeSkillTree()],
       [this.worldMap, () => this.toggleMap()],
       [this.vendorMenu, () => this.closeVendor()],
       [this.salvageMenu, () => this.closeSalvage()],
@@ -866,7 +877,7 @@ export class UI {
     let gestureSeat: string | null = null;
     const couchOwnerOf = (t: EventTarget | null): string | null => {
       if (!(t instanceof Node)) return null;
-      for (const el of [this.charSheet, this.inventory, this.passiveTree, this.vendorMenu,
+      for (const el of [this.charSheet, this.inventory, this.passiveTree, this.skillTreePane, this.vendorMenu,
         this.salvageMenu, this.oracleMenu, this.bestiaryMenu, this.caravanMenu, this.recallMenu,
         this.bountyMenu]) {
         if (el.contains(t)) {
@@ -1099,6 +1110,7 @@ export class UI {
     return owned(this.charSheet, this.charSheetOpen)
       || owned(this.inventory, this.inventoryOpen)
       || owned(this.passiveTree, this.treeOpen)
+      || owned(this.skillTreePane, this.skillTreePaneOpen)
       || owned(this.worldMap, this.mapOpen)
       || owned(this.vendorMenu, this.vendorOpen)
       || owned(this.salvageMenu, this.salvageOpen)
@@ -1116,6 +1128,7 @@ export class UI {
     return owned(this.charSheet, this.charSheetOpen)
       || owned(this.inventory, this.inventoryOpen)
       || owned(this.passiveTree, this.treeOpen)
+      || owned(this.skillTreePane, this.skillTreePaneOpen)
       || owned(this.worldMap, this.mapOpen);
   }
   hideAllFor(seatId: string): void {
@@ -1124,6 +1137,7 @@ export class UI {
     if (this.charSheetOpen && owned(this.charSheet)) this.toggleCharSheet(seatId);
     if (this.inventoryOpen && owned(this.inventory)) this.toggleInventory(seatId);
     if (this.treeOpen && owned(this.passiveTree)) this.toggleTree(seatId);
+    if (this.skillTreePaneOpen && owned(this.skillTreePane)) this.closeSkillTree();
     if (this.mapOpen && owned(this.worldMap)) this.toggleMap();
     if (this.vendorOpen && owned(this.vendorMenu)) this.closeVendor();
     if (this.salvageOpen && owned(this.salvageMenu)) this.closeSalvage();
@@ -1643,7 +1657,7 @@ export class UI {
   /** Any ORDINARY panel open? (Dwell dialogs and the pause menu are tracked
    *  apart — the Escape cascade treats each class differently.) */
   anyPanelOpen(): boolean {
-    return this.charSheetOpen || this.treeOpen
+    return this.charSheetOpen || this.treeOpen || this.skillTreePaneOpen
       || this.mapOpen || this.inventoryOpen;
   }
 
@@ -2772,7 +2786,7 @@ export class UI {
       if (r.width < 8 || r.height < 8) return; // closed panes measure zero
       out.push({ x: r.left, y: r.top, w: r.width, h: r.height });
     };
-    for (const el of [this.charSheet, this.inventory, this.passiveTree,
+    for (const el of [this.charSheet, this.inventory, this.passiveTree, this.skillTreePane,
       this.worldMap, this.vendorMenu, this.salvageMenu, this.fontMenu,
       this.recallMenu, this.oracleMenu, this.bestiaryMenu, this.boroughMenu,
       this.bountyMenu, this.caravanMenu, this.sailMenu, this.holdMenu, this.mercMenu,
@@ -3087,6 +3101,7 @@ export class UI {
   }
 
   refreshInventory(): void {
+    this.refreshSkillTree(); // THE PULL-OUT follows the drawer's beat (a no-op when closed)
     if (!this.inventoryOpen) return;
     // (No mid-drag freeze: the fabric's gestures ride data attributes that
     // survive innerHTML rebuilds — a re-render mid-carry re-earns its marks
@@ -3954,7 +3969,7 @@ export class UI {
     const free = Math.max(0, bandPointsAt(inst.level) - spent.length);
     if (!free) return;
     const chip = (node: SkillTreeNode, branchName?: string): string => {
-      if (spent.includes(node.id) || treeNodeRefusal(inst, node.id) !== null) return '';
+      if (treeSpentCount(spent, node.id) >= treeNodeRanks(inst.def, node.id) || treeNodeRefusal(inst, node.id) !== null) return '';
       return `<button data-poppick="${node.id}" class="gem-chip"
         style="display:block;width:100%;margin:4px 0;padding:8px 10px;text-align:left;border-color:${inst.def.color}"
         title="${node.description ?? node.name}">
@@ -3962,10 +3977,12 @@ export class UI {
         ${node.description ? `<div style="font-size:10px;color:#a8a494">${node.description}</div>` : ''}
       </button>`;
     };
-    const chips = [
-      ...tree.branches.flatMap(b => b.rungs.map(n => chip(n, b.name))),
-      ...(tree.neutral ? [chip(tree.neutral, 'neutral')] : []),
-    ].join('');
+    const graph = treeGraph(inst.def)!;
+    const chips = graph.order.map(id => {
+      const gn = graph.nodes.get(id)!;
+      const limb = treeLimbOfNode(inst.def, id);
+      return chip(gn.node, limb ? limb.name : gn.links.length ? undefined : 'lock-free');
+    }).join('');
     if (!chips) return; // nothing spendable right now (sealed under the lock)
     const pop = document.createElement('div');
     pop.className = 'panel';
@@ -3976,9 +3993,10 @@ export class UI {
       <div style="font-size:11px;color:#a8a494;margin-bottom:6px">
         <b style="color:${inst.def.color}">${inst.def.name}</b> has grown into a choice
         (${spent.length}/${bandPointsAt(inst.level)} points placed).
-        ${treeSpentBranch(inst) ? '' : 'The first point into a branch SEALS the other path.'}</div>
+        ${treeSpentBranch(inst) || treeLimbs(inst.def).length < 2 ? '' : 'The first point into a limb SEALS its rivals.'}</div>
       ${chips}
       <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end">
+        <button data-popopen title="Open the whole tree — spend from there">⟡ Open the tree</button>
         <button data-poplater>Later (the drawer keeps the pip)</button>
       </div>`;
     document.body.appendChild(pop);
@@ -3990,6 +4008,10 @@ export class UI {
         if (this.inventoryOpen) this.refreshInventory();
       }));
     pop.querySelector<HTMLButtonElement>('[data-poplater]')?.addEventListener('click', () => this.closeTreePopup());
+    pop.querySelector<HTMLButtonElement>('[data-popopen]')?.addEventListener('click', () => {
+      this.closeTreePopup();
+      this.openSkillTree(skillId, seatId);
+    });
     pop.querySelector<HTMLButtonElement>('[data-panel-x]')?.addEventListener('click', () => this.closeTreePopup()); // the close glyph (closeGlyphHtml) = Later
   }
 
@@ -5444,14 +5466,12 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
           ${chips || `<span style="color:#8a8678">no arts captured: take a studied kind's blow</span>`}
         </div>`;
       }
-      // THE SKILL-MODE TREE PANEL (M1 — docs/design/skill-modes.md §7): a
-      // collapsible per-skill miniature tree. The level bar wears band
-      // tick-marks, a waiting-PIP marks an unspent Ability point (and
-      // auto-opens the tree), two branch columns fan from a root with the
-      // sealed side greyed in its refusal words, the neutral sits beneath.
-      // Every chip speaks THE ONE SPEND PREDICATE (treeNodeRefusal) plus
-      // the field discipline; the engine gate is World.pickTreeNode's —
-      // these chips only speak it. Chunky buttons: couch lens + pad law.
+      // THE SKILL-MODE TREE STRIP (docs/design/skill-modes.md §7): the tree
+      // itself lives in THE PULL-OUT (openSkillTree — drawn like the passive
+      // tree); this row is its handle: the level bar with band ticks, the
+      // point count, the committed limb, a waiting-PIP that lights the
+      // handle gold while a point is free, and the Font's reset ritual when
+      // a font stands near. Chunky buttons: couch lens + pad law.
       let modeRow = '';
       if (def.tree) {
         const tree = def.tree;
@@ -5459,74 +5479,23 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
         const spent = inst.treeNodes ?? [];
         const budget = bandPointsAt(inst.level);
         const free = Math.max(0, budget - spent.length);
-        const discipline = world.swapRefusal(seat, 'socket');
         const committed = treeSpentBranch(inst);
-        const expanded = open && (this.skillTreeOpen.has(def.id) || free > 0);
         const pip = free > 0
           ? `<span title="${free} Ability point${free === 1 ? '' : 's'} waiting" style="color:#ffd700">◉ ${free}</span>`
           : '';
-        // The LEVEL BAR: filled to inst.level, a tick at every band end —
-        // each completed band is a minted point (bandPointsAt).
-        const maxBand = SKILL_LEVEL_BANDS[SKILL_LEVEL_BANDS.length - 1];
-        const ticks = SKILL_LEVEL_BANDS.map(b => `
-          <span style="position:absolute;left:${(b / maxBand) * 100}%;top:-2px;width:1px;height:9px;
-            background:${inst.level >= b ? '#ffd700' : '#5a5668'}"></span>`).join('');
-        const levelBar = `
-          <span style="position:relative;display:inline-block;width:110px;height:5px;
-            background:#241d2e;border:1px solid #4a4458;border-radius:2px;vertical-align:middle;margin:0 6px">
-            <span style="position:absolute;left:0;top:0;height:100%;width:${Math.min(100, (inst.level / maxBand) * 100)}%;
-              background:${def.color};opacity:0.75"></span>${ticks}
-          </span>`;
-        // One chip per node — spent ◈ in the skill's color; spendable lit;
-        // refused greyed with the predicate's own words in the title.
-        const chip = (node: SkillTreeNode, wide = false): string => {
-          const isSpent = spent.includes(node.id);
-          const why = isSpent ? null : (treeNodeRefusal(inst, node.id) ?? discipline);
-          const dis = isSpent || !!why;
-          const title = `${node.description ?? node.name}${
-            isSpent ? ' — walked.' : why ? ` — ${why}.` : ' — spend a point here.'}`;
-          return `<button class="gem-chip" data-modepick="${def.id}:${node.id}"
-            style="display:block;width:${wide ? '100%' : 'auto'};margin:2px 0;text-align:left;
-              border-color:${isSpent ? def.color : why ? '#3a3444' : '#d8b86a'};
-              ${isSpent ? '' : why ? 'opacity:0.5;' : ''}"
-            ${dis ? 'disabled' : ''} title="${title}">${isSpent ? '◈ ' : ''}${node.name}</button>`;
-        };
-        // A branch column: name (sealed names grey), its rungs root-first.
-        const col = (b: (typeof tree.branches)[number]): string => {
-          const sealedBy = committed && committed.id !== b.id;
-          return `<div style="flex:1 1 0;min-width:0;${sealedBy ? 'opacity:0.55' : ''}">
-            <div style="color:${sealedBy ? '#6a6478' : def.color};font-size:10px;margin-bottom:1px"
-              title="${b.description ?? b.name}${sealedBy ? ` — ${b.name}'s path is sealed.` : ''}">
-              ${sealedBy ? '🔒 ' : ''}${b.name}</div>
-            ${b.rungs.map(n => chip(n, true)).join('')}
+        const resetChip = this.treeResetChipHtml(inst, seat);
+        modeRow = `
+          <div style="margin-top:3px;font-size:10px;color:#d8b86a;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+            <span>Tree:</span>
+            ${committed ? `<span style="color:${def.color}">${committed.name}</span>` : open ? '<span style="color:#8a8678">unchosen</span>' : ''}
+            ${this.treeLevelBarHtml(inst)}<span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span> ${pip}
+            ${open
+              ? `<button class="gem-chip" data-treeopen="${def.id}"
+                  style="border-color:${free > 0 ? '#ffd700' : '#d8b86a'};${free > 0 ? 'color:#ffd700;' : ''}"
+                  title="${free > 0 ? 'A point waits — open the tree to spend it' : 'Open this skill\'s tree'}">⟡ Tree</button>`
+              : `<span style="color:#6a6478">— the path opens at Lv ${tree.level}</span>`}
+            ${resetChip}
           </div>`;
-        };
-        // THE FONT'S RESET RITUAL (FONT_CFG.reset): unmake the whole tree,
-        // priced in the skill's current band — stands only beside a font.
-        const resetChip = (spent.length && world.nearFont()) ? (() => {
-          const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
-          const dd = abilityEssenceOfTier(cost.tier);
-          const afford = world.canAffordAbilityEssence(seat, cost);
-          return `<button class="gem-chip" data-fontreset="${def.id}" ${afford ? '' : 'disabled'}
-            title="Sacrificial Font: unmake ALL of this skill's spent points for ${cost.count}× ${dd.label} (the full-tree ritual — never node-wise).">
-            ↺ Reset (${this.abilityCostText(cost)})</button>`;
-        })() : '';
-        const header = `
-          <div style="font-size:10px;color:#d8b86a">
-            ${open ? `<button data-treeflap="${def.id}" ${free > 0 ? 'disabled' : ''}
-              title="${free > 0 ? 'A waiting point holds the tree open' : expanded ? 'Fold the tree away' : 'Open the tree'}"
-              style="background:none;border:none;color:#d8b86a;cursor:var(--cursor-point, pointer);padding:0;font-size:10px">
-              ${expanded ? '▾' : '▸'}</button>` : ''}
-            Tree: ${committed ? `<span style="color:${def.color}">${committed.name}</span>` : open ? 'unchosen' : ''}
-            ${levelBar}<span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span> ${pip}
-            ${open ? '' : `<span style="color:#6a6478">— the path opens at Lv ${tree.level}</span>`}
-          </div>`;
-        const body = expanded ? `
-          <div style="display:flex;gap:6px;margin-top:2px">${tree.branches.map(col).join('')}</div>
-          ${tree.neutral ? `<div style="margin-top:2px;font-size:10px;color:#8a8678">
-            neutral — lock-free: ${chip(tree.neutral)}</div>` : ''}
-          ${resetChip ? `<div style="margin-top:2px">${resetChip}</div>` : ''}` : '';
-        modeRow = `<div style="margin-top:3px">${header}${body}</div>`;
       }
       // Grafts riding THIS skill (chips mirror sockets; ✕ unbinds) + the
       // landing button while a lifted graft is looking for its carrier.
@@ -5635,14 +5604,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       world.requestMeta({ t: 'levelSupportSocket', skillId, socket: Number(sock) });
       refresh();
     }));
-    // THE FONT'S RESET RITUAL: unmake a skill's tree pick (band-priced).
-    // Tree fold/unfold (render-local state; the pip law wins while a
-    // point waits — the button disables itself then).
-    q<HTMLButtonElement>('button[data-treeflap]').forEach(btn => btn.addEventListener('click', () => {
-      const id = btn.dataset.treeflap!;
-      if (this.skillTreeOpen.has(id)) this.skillTreeOpen.delete(id); else this.skillTreeOpen.add(id);
-      refresh();
+    // THE PULL-OUT (skill-mode trees): the strip's handle opens this
+    // skill's tree pane, owned by the drawer's seat (the couch lens).
+    q<HTMLButtonElement>('button[data-treeopen]').forEach(btn => btn.addEventListener('click', () => {
+      this.openSkillTree(btn.dataset.treeopen!, this.panelSeatIds.get(container));
     }));
+    // THE FONT'S RESET RITUAL: unmake a skill's tree pick (band-priced).
     q<HTMLButtonElement>('button[data-fontreset]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'fontReset', skillId: btn.dataset.fontreset! }); refresh();
     }));
@@ -6200,6 +6167,295 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : ` — LOCKED until ${gateName ?? 'its class start node'} is allocated`);
     }
     return { title: node.name, description: node.description + attrText + choiceText, meta };
+  }
+
+  // ------------------------------------------------------- the skill tree pane
+  // THE PULL-OUT (skill-mode trees — docs/design/skill-modes.md §7, the pane
+  // of 2026-09-04): ONE learned skill's tree drawn the passive tree's way —
+  // an SVG of nodes and edges over the derived-or-pinned layout
+  // (engine/skilltree.ts), zoom/pan through the shared gesture helper, node
+  // cards through the shared tooltip, and a click on a lit node = the
+  // ordinary pickTreeNode intent (host-authoritative; the engine gate
+  // speaks the refusals). Opened from the Skills drawer's per-skill strip
+  // and the milestone popup; owned by its opener's seat (the couch lens).
+  // DRAWN == THE ONE SPEND PREDICATE: spent nodes wear the skill's color,
+  // spendable nodes a lit ring, SEALED nodes the lock's grey (dashed edges,
+  // refusal words on hover), locked nodes stay dark; ranked nodes print
+  // their have/ranks inside the circle.
+
+  /** Open the pane on one learned skill (a treeless or unknown skill is a
+   *  no-op). Re-aiming a standing pane at another skill resets the lens. */
+  openSkillTree(skillId: string, seatId?: string): void {
+    const seat = this.couchSeatFor(seatId);
+    const inst = seat.meta.knownSkills.get(skillId);
+    if (!inst?.def.tree) return;
+    if (!this.skillTreePaneOpen || this.skillTreeSkillId !== skillId) {
+      this.stZoom = 1;
+      this.stPan = { x: 0, y: 0 };
+    }
+    this.skillTreeSkillId = skillId;
+    this.skillTreePaneOpen = true;
+    this.skillTreePane.classList.remove('hidden');
+    this.ownPanel(this.skillTreePane, seat);
+    this.refreshSkillTree();
+  }
+
+  closeSkillTree(): void {
+    this.skillTreePaneOpen = false;
+    this.skillTreePane.classList.add('hidden');
+  }
+
+  /** The level bar every tree readout shares (the drawer strip + the pane):
+   *  filled to inst.level, a tick at every band end — each completed band
+   *  is a minted Ability point (bandPointsAt). */
+  private treeLevelBarHtml(inst: SkillInstance, width = 110): string {
+    const maxBand = SKILL_LEVEL_BANDS[SKILL_LEVEL_BANDS.length - 1];
+    const ticks = SKILL_LEVEL_BANDS.map(b => `
+      <span style="position:absolute;left:${(b / maxBand) * 100}%;top:-2px;width:1px;height:9px;
+        background:${inst.level >= b ? '#ffd700' : '#5a5668'}"></span>`).join('');
+    return `
+      <span style="position:relative;display:inline-block;width:${width}px;height:5px;
+        background:#241d2e;border:1px solid #4a4458;border-radius:2px;vertical-align:middle;margin:0 6px">
+        <span style="position:absolute;left:0;top:0;height:100%;width:${Math.min(100, (inst.level / maxBand) * 100)}%;
+          background:${inst.def.color};opacity:0.75"></span>${ticks}
+      </span>`;
+  }
+
+  /** THE FONT'S RESET RITUAL chip (FONT_CFG.reset): unmake the whole tree,
+   *  priced in the skill's current band — stands only beside a font. */
+  private treeResetChipHtml(inst: SkillInstance, seat: Seat): string {
+    const world = this.getWorld();
+    if (!inst.treeNodes?.length || !world.nearFont()) return '';
+    const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
+    const dd = abilityEssenceOfTier(cost.tier);
+    const afford = world.canAffordAbilityEssence(seat, cost);
+    return `<button class="gem-chip" data-fontreset="${inst.def.id}" ${afford ? '' : 'disabled'}
+      title="Sacrificial Font: unmake ALL of this skill's spent points for ${cost.count}× ${dd.label} (the full-tree ritual — never node-wise).">
+      ↺ Reset (${this.abilityCostText(cost)})</button>`;
+  }
+
+  refreshSkillTree(): void {
+    if (!this.skillTreePaneOpen) return;
+    const world = this.getWorld();
+    const seat = this.panelSeat(this.skillTreePane);
+    const inst = this.skillTreeSkillId ? seat.meta.knownSkills.get(this.skillTreeSkillId) : undefined;
+    const graph = inst ? treeGraph(inst.def) : undefined;
+    if (!inst || !graph) { this.closeSkillTree(); return; } // unlearned under the pane
+    const def = inst.def;
+    const tree = def.tree!;
+    const open = inst.level >= tree.level;
+    const spent = inst.treeNodes ?? [];
+    const budget = bandPointsAt(inst.level);
+    const free = Math.max(0, budget - spent.length);
+    const discipline = world.swapRefusal(seat, 'socket');
+    const committed = treeSpentBranch(inst);
+    const sealed = treeSealedSet(def, spent);
+    const limbs = treeLimbs(def);
+    const R = TREE_LAYOUT_CFG.radius;
+    this.stBox = graph.box;
+
+    // Node state through THE ONE SPEND PREDICATE (+ the field discipline).
+    type NodeState = 'spent' | 'open' | 'sealed' | 'locked';
+    const stateOf = (id: string): { state: NodeState; have: number; ranks: number } => {
+      const gn = graph.nodes.get(id)!;
+      const have = treeSpentCount(spent, id);
+      if (have >= gn.ranks) return { state: 'spent', have, ranks: gn.ranks };
+      const why = treeNodeRefusal(inst, id) ?? discipline;
+      if (why === null) return { state: 'open', have, ranks: gn.ranks };
+      return { state: sealed.has(id) ? 'sealed' : 'locked', have, ranks: gn.ranks };
+    };
+
+    // EDGES: every link (cross-links included); a root child hangs on a
+    // spoke from the root, which is always walked.
+    let edges = '';
+    for (const id of graph.order) {
+      const gn = graph.nodes.get(id)!;
+      const to = stateOf(id);
+      const ends: (TreeGraphNode | null)[] = gn.links.length
+        ? gn.links.map(l => graph.nodes.get(l) ?? null).filter(n => n !== null)
+        : [null];
+      for (const from of ends) {
+        const fromWalked = from ? treeSpentCount(spent, from.id) > 0 : true;
+        const lit = fromWalked && to.have > 0;
+        const reach = fromWalked && to.state === 'open';
+        const stroke = lit ? def.color : reach ? '#8a7a5a' : to.state === 'sealed' ? '#2e2a36' : '#3a3a52';
+        edges += `<line class="st-edge" x1="${from ? from.x : 0}" y1="${from ? from.y : 0}" x2="${gn.x}" y2="${gn.y}"
+          stroke="${stroke}" stroke-width="${lit ? 3 : 1.5}"${to.state === 'sealed' ? ' stroke-dasharray="4 4"' : ''}/>`;
+      }
+    }
+    // THE ROOT: the skill itself — always walked, dim below the milestone.
+    let circles = `<circle cx="0" cy="0" r="${R.root}" fill="${def.color}" stroke="#ffe9a0" stroke-width="2.5" opacity="${open ? 1 : 0.55}"/>
+      <text class="st-label" x="0" y="${R.root + 14}" text-anchor="middle" fill="#ffe9a0">${esc(def.name)}</text>`;
+    for (const id of graph.order) {
+      const gn = graph.nodes.get(id)!;
+      const st = stateOf(id);
+      const r = R[gn.kind];
+      const fill = st.have > 0 ? def.color
+        : st.state === 'open' ? '#2a2438'
+        : st.state === 'sealed' ? '#1a171f'
+        : '#221f2a';
+      const stroke = st.state === 'spent' ? '#ffe9a0'
+        : st.have > 0 ? '#e6d8ff'
+        : st.state === 'open' ? '#d8b86a'
+        : st.state === 'sealed' ? '#3a3444'
+        : '#4a4a5e';
+      const cls = `st-node${st.state === 'open' ? ' available' : ''}${st.have > 0 ? ' allocated' : ''}${st.state === 'sealed' ? ' sealed' : ''}`;
+      circles += `<circle class="${cls}" cx="${gn.x}" cy="${gn.y}" r="${r}" fill="${fill}" stroke="${stroke}"
+        stroke-width="${gn.kind === 'minor' ? 1.5 : 2.5}"${st.state === 'sealed' ? ' opacity="0.55"' : ''}
+        data-node="${id}" data-tip="stnode"/>`;
+      if (st.state === 'sealed') {
+        circles += `<text x="${gn.x}" y="${gn.y + r * 0.42}" text-anchor="middle" font-size="${Math.max(9, r * 1.1)}" fill="#6a6478" style="pointer-events:none">🔒</text>`;
+      } else if (gn.ranks > 1) {
+        circles += `<text x="${gn.x}" y="${gn.y + 3}" text-anchor="middle" font-size="8" font-weight="bold"
+          fill="${st.have > 0 ? '#0a0a0e' : '#8a8678'}" style="pointer-events:none">${st.have}/${gn.ranks}</text>`;
+      }
+      const labelFill = st.have > 0 ? '#ffffff' : st.state === 'open' ? '#e8dcc0' : '#6a6478';
+      circles += `<text class="st-label" x="${gn.x}" y="${gn.y + r + 12}" text-anchor="middle" fill="${labelFill}">${esc(gn.node.name)}</text>`;
+    }
+
+    const pip = free > 0
+      ? `<span style="color:#ffd700" title="${free} Ability point${free === 1 ? '' : 's'} waiting — click a lit node">◉ ${free} waiting</span>`
+      : '';
+    const resetChip = this.treeResetChipHtml(inst, seat);
+    const status = committed
+      ? `<span style="color:${def.color}" title="${esc(committed.description ?? committed.name)}">${esc(committed.name)}</span>`
+      : open
+        ? `<span style="color:#8a8678">no path chosen${limbs.length > 1 ? ' — the first point into a limb seals its rivals' : ''}</span>`
+        : `<span style="color:#6a6478">the path opens at Lv ${tree.level}</span>`;
+    const zPct = Math.round(this.stZoom * 100);
+    this.skillTreePane.innerHTML = `
+      ${this.closeGlyphHtml()}<h2 style="color:${def.color}">${esc(def.name)}
+        <span style="color:var(--gold);font-size:12px;letter-spacing:0">— skill tree</span>
+        <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal;text-transform:none;letter-spacing:0">
+          <span class="tree-zoom-grp">
+            <button class="tree-zoom" data-stz="out" title="zoom out">−</button>
+            <button class="tree-zoom" data-stz="reset" title="reset zoom">${zPct}%</button>
+            <button class="tree-zoom" data-stz="in" title="zoom in">＋</button>
+          </span></span></h2>
+      <div style="font-size:11px;color:#d8b86a;margin:-4px 0 6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span>Lv ${inst.level}</span>${this.treeLevelBarHtml(inst, 140)}
+        <span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span>${pip}
+        <span style="color:#5a5668">·</span>${status}
+        ${resetChip ? `<span style="margin-left:auto">${resetChip}</span>` : ''}
+      </div>
+      <svg viewBox="${this.skillTreeViewBox()}" id="st-svg"
+        style="cursor:var(--cursor-grab, grab);touch-action:none;background:#100e16;border:1px solid #2a2438;border-radius:5px">${edges}${circles}</svg>
+      <div style="font-size:10px;color:#6a6478;margin-top:5px">
+        ${open ? 'click a lit node to spend a point · scroll to zoom, drag to pan' : `no points yet — the tree opens at level ${tree.level}`}${
+          discipline ? ` · <span style="color:#a08a6a">${esc(discipline)}</span>` : ''}
+      </div>`;
+
+    // Clicks: a lit node spends through the ordinary intent; the drawer
+    // (when open) re-renders and cascades back into this pane.
+    this.skillTreePane.querySelectorAll<SVGCircleElement>('.st-node.available').forEach(el => {
+      el.addEventListener('click', () => {
+        world.requestMeta({ t: 'pickTreeNode', skillId: def.id, nodeId: el.dataset.node! });
+        if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree();
+      });
+    });
+    this.skillTreePane.querySelector<HTMLButtonElement>('button[data-fontreset]')?.addEventListener('click', () => {
+      world.requestMeta({ t: 'fontReset', skillId: def.id });
+      if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree();
+    });
+    this.wireSkillTreeControls();
+  }
+
+  /** The pane's viewBox from the graph's fitted box + the live zoom/pan,
+   *  pan-clamped so the window can't slide off the tree (mirrors
+   *  treeViewBox; shallower zoom — the trees are small). */
+  private skillTreeViewBox(): string {
+    const b = this.stBox;
+    const z = clamp(this.stZoom, 1, 4);
+    this.stZoom = z;
+    const vw = b.w / z, vh = b.h / z;
+    const maxPanX = Math.max(0, (b.w - vw) / 2), maxPanY = Math.max(0, (b.h - vh) / 2);
+    const px = clamp(this.stPan.x, -maxPanX, maxPanX);
+    const py = clamp(this.stPan.y, -maxPanY, maxPanY);
+    this.stPan.x = px; this.stPan.y = py;
+    const cx = b.minX + b.w / 2 + px, cy = b.minY + b.h / 2 + py;
+    return `${(cx - vw / 2).toFixed(1)} ${(cy - vh / 2).toFixed(1)} ${vw.toFixed(1)} ${vh.toFixed(1)}`;
+  }
+
+  /** Zoom buttons + wheel-zoom + drag-pan on the freshly rendered SVG
+   *  (mirrors wireTreeControls; gesture rules live in attachPanZoom). */
+  private wireSkillTreeControls(): void {
+    const svg = this.skillTreePane.querySelector<SVGSVGElement>('#st-svg');
+    if (!svg) return;
+    const apply = (): void => {
+      svg.setAttribute('viewBox', this.skillTreeViewBox());
+      const lbl = this.skillTreePane.querySelector<HTMLElement>('[data-stz="reset"]');
+      if (lbl) lbl.textContent = `${Math.round(this.stZoom * 100)}%`;
+    };
+    this.skillTreePane.querySelectorAll<HTMLButtonElement>('.tree-zoom').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tz = btn.dataset.stz;
+        if (tz === 'in') this.stZoom = clampZoom(this.stZoom * PANZOOM_DEFAULTS.buttonFactor);
+        else if (tz === 'out') this.stZoom = clampZoom(this.stZoom / PANZOOM_DEFAULTS.buttonFactor);
+        else { this.stZoom = 1; this.stPan = { x: 0, y: 0 }; }
+        apply();
+      });
+    });
+    attachPanZoom(svg, {
+      getZoom: () => this.stZoom,
+      setZoom: (z) => { this.stZoom = z; },
+      panBy: (dx, dy) => { this.stPan.x += dx; this.stPan.y += dy; },
+      box: () => this.stBox,
+      apply,
+      ignore: '.st-node',
+    });
+  }
+
+  /** Tooltip for a skill-tree node — the shared styled box, built from LIVE
+   *  state on each hover: the payload in words (overrides, mods, graft),
+   *  the node's standing through THE ONE SPEND PREDICATE, what it seals. */
+  private skillTreeNodeTooltip(nodeId: string): TooltipContent | null {
+    const seat = this.panelSeat(this.skillTreePane);
+    const inst = this.skillTreeSkillId ? seat.meta.knownSkills.get(this.skillTreeSkillId) : undefined;
+    const graph = inst ? treeGraph(inst.def) : undefined;
+    const gn = graph?.nodes.get(nodeId);
+    if (!inst || !graph || !gn) return null;
+    const node = gn.node;
+    const have = treeSpentCount(inst.treeNodes, nodeId);
+    const lines: string[] = [];
+    if (node.description) lines.push(node.description);
+    const over = node.over;
+    const pct = (v: number): string => `${Math.round(v * 100)}%`;
+    if (over?.arcDeg !== undefined) lines.push(`arc ${over.arcDeg}°`);
+    if (over?.spreadDeg !== undefined) lines.push(`spread ${over.spreadDeg}°`);
+    if (over?.channel?.ramp) lines.push(`held damage ramps +${pct(over.channel.ramp.per)}/s to +${pct(over.channel.ramp.max)}`);
+    if (over?.channel?.rampMove) lines.push(`held stride frees +${pct(over.channel.rampMove.per)}/s to +${pct(over.channel.rampMove.max)}`);
+    for (const mo of node.mods ?? []) lines.push(formatModLine(mo, mo.value));
+    if (node.graft) {
+      const s = SUPPORTS[node.graft.support];
+      lines.push(`grafts ${s?.name ?? node.graft.support} L${node.graft.level ?? 1} — socket-free`);
+    }
+    if (gn.ranks > 1) lines.push(`<span style="color:#8a8678">${gn.ranks} ranks — each point applies the payload again</span>`);
+    const limb = treeLimbOfNode(inst.def, nodeId);
+    const isLimbRoot = limb ? graph.limbRoots.get(limb.id) === nodeId : false;
+    const kindLabel = gn.kind === 'keystone' ? 'capstone'
+      : gn.kind === 'major' ? (isLimbRoot ? 'identity' : 'major')
+      : 'node';
+    let meta: string;
+    if (have >= gn.ranks) {
+      meta = gn.ranks > 1 ? `walked — ${have}/${gn.ranks} ranks` : 'walked';
+    } else {
+      const why = treeNodeRefusal(inst, nodeId) ?? this.getWorld().swapRefusal(seat, 'socket');
+      meta = why ? why
+        : have > 0 ? `${have}/${gn.ranks} ranks — click to deepen`
+        : gn.ranks > 1 ? `click to spend a point (${gn.ranks} ranks)` : 'click to spend a point';
+    }
+    if (gn.excludes.size) {
+      meta += `<br><span style="color:#a08a6a">seals: ${[...gn.excludes].map(e => graph.nodes.get(e)?.node.name ?? e).join(', ')}</span>`;
+    }
+    if (gn.links.length > 1) {
+      meta += `<br><span style="color:#8a8678">after any of: ${gn.links.map(l => graph.nodes.get(l)?.node.name ?? l).join(', ')}</span>`;
+    }
+    return {
+      title: `${node.name}${limb && limb.name !== node.name ? ` · ${limb.name}` : ''}`,
+      description: lines.join('<br>'),
+      meta: `${kindLabel} — ${meta}`,
+    };
   }
 
   // -------------------------------------------------------------- world map
@@ -8918,6 +9174,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     this.inventoryOpen = false;
     dndCancel(); // never strand a carried ghost on a closed panel
     this.inventory.classList.add('hidden');
+    this.skillTreePaneOpen = false;
+    this.skillTreePane.classList.add('hidden');
     this.salvageOpen = false;
     this.craftTargetUid = null;
     this.salvageMenu.classList.add('hidden');

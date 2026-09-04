@@ -396,7 +396,7 @@ const slay = (w: World, z: Actor): boolean => {
   for (const d of Object.values(SKILLS)) {
     if (!d.tree || !d.ultimate) continue;
     check(`tree census: ${d.id} obeys the exact cover (2 × 3 + neutral)`,
-      d.tree.branches.length === 2 && d.tree.branches.every(b => b.rungs.length === 3) && !!d.tree.neutral);
+      (d.tree.branches?.length ?? 0) === 2 && (d.tree.branches ?? []).every(b => b.rungs.length === 3) && !!d.tree.neutral);
   }
 }
 
