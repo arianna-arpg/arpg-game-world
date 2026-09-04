@@ -129,6 +129,7 @@ import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
 import { treeGraph, treeLimbOfNode, treeLimbs, treeNodeRanks, treeSealedSet, treeSpentCount, TREE_LAYOUT_CFG, type TreeGraphNode } from '../engine/skilltree'; // THE SKILL-TREE PANE reads the one graph
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
+import { attachPanelMove, panelMoved, panelMoveReset, panelMoveTo, panelSeatOf } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels
 import { MAP_CFG, MAP_LABEL_MODES } from './mapConfig';
 import { applyCursor, CURSOR_COLORS, CURSOR_STYLES } from '../core/cursor';
 import { AIM_TICK_STYLES } from '../render/vis/aimtick';
@@ -173,6 +174,16 @@ const TREE_POPUP_ENABLED = true;
  *  the same radius for both, so you always allocate what the card names.
  *  Sized for a thumb on a pad, not a surgeon's mouse. DIAL. */
 const TREE_REACH_PX = 34;
+
+/** ONE PANE PER SKILL (openSkillTree): a minted panel root + its lens. */
+interface SkillTreePane {
+  skillId: string;
+  el: HTMLElement;
+  open: boolean;
+  zoom: number;
+  pan: { x: number; y: number };
+  box: { minX: number; minY: number; w: number; h: number };
+}
 
 /** Item-category glyphs — bag tiles and the drag fabric's ghost chip share
  *  one vocabulary (a lifted thing looks like the tile it left). */
@@ -513,15 +524,15 @@ export class UI {
    *  left edge of the inventory — the whole build in one glance. Remembers
    *  its state across panel closes, satchel-style. */
   private buildFlapOpen = false;
-  /** THE SKILL-TREE PANE (openSkillTree / refreshSkillTree): the one
-   *  skill it shows, its open flag, and its lens (zoom/pan over the graph's
-   *  fitted box) — the passive tree's trio, per pane. */
-  private skillTreePane = document.getElementById('skill-tree')!;
-  skillTreePaneOpen = false;
-  private skillTreeSkillId: string | null = null;
-  private stZoom = 1;
-  private stPan = { x: 0, y: 0 };
-  private stBox = { minX: -320, minY: -240, w: 640, h: 480 };
+  /** THE SKILL-TREE PANES (openSkillTree / refreshSkillTree): one minted
+   *  panel root per skill ever opened this session, each with its own open
+   *  flag and lens (zoom/pan over the graph's fitted box). */
+  private skillTreePanes = new Map<string, SkillTreePane>();
+  /** THE BOOK MOVES AS ONE (folioLeaf.present): the seat a shelving or
+   *  closing front hands to the leaf that takes its place — null seat = the
+   *  stylesheet's; cleared on a microtask so only the same synchronous
+   *  fronting consumes it. */
+  private folioHandoff: { el: HTMLElement; seat: { left: number; top: number } | null } | null = null;
   // (The flap's TUTORIAL GLOW carries no UI state of its own — like the
   //  flask bag tiles', it reads LIVE off World.mireilleGiftLesson each
   //  render: glowing while the lesson pends and the drawer is closed,
@@ -758,9 +769,6 @@ export class UI {
     bindTooltips(this.passiveTree,
       (el) => el.dataset.tip === 'pnode' ? this.passiveNodeTooltip(el.dataset.node!) : null,
       { proximity: { selector: '.tree-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 } });
-    bindTooltips(this.skillTreePane,
-      (el) => el.dataset.tip === 'stnode' ? this.skillTreeNodeTooltip(el.dataset.node!) : null,
-      { proximity: { selector: '.st-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 } });
     this.updateHintBar(); // replace the static index.html placeholder with live binds
 
     // THE GRIMOIRE BINDING GESTURE (ui/dnd.ts — the drag fabric's first
@@ -804,6 +812,18 @@ export class UI {
     this.enrollFolioLeaves();
     bindFolioKeys(this.folio, l => l.owner() === this.getWorld().localSeat.id, () => this.folioStrip.update());
 
+    // THE PANEL MOVE (ui/panelmove.ts): every ribboned panel drags by its
+    // h2 — one attach per root, delegated, so rebuilt templates stay
+    // draggable; a drag re-seats the folio strip on the moving front.
+    // (Skill-tree panes attach at their minting; the escape menu, the
+    // start menu and the full-screen cards deliberately stay put.)
+    for (const el of [this.charSheet, this.inventory, this.passiveTree, this.worldMap,
+      this.vendorMenu, this.salvageMenu, this.fontMenu, this.recallMenu, this.oracleMenu,
+      this.bestiaryMenu, this.boroughMenu, this.bountyMenu, this.caravanMenu, this.sailMenu,
+      this.holdMenu, this.mercMenu, this.vocationMenu]) {
+      attachPanelMove(el, { onMove: () => this.folioStrip.update() });
+    }
+
     // THE CLOSE GLYPH's wire (closeGlyphHtml): ONE delegated click per root,
     // so a rebuilt template keeps its glyph live. Owned panels close for
     // their OWNER — the couch guest's ✕ closes the guest's bag: the toggle
@@ -812,7 +832,6 @@ export class UI {
       [this.charSheet, () => this.toggleCharSheet(this.panelSeatIds.get(this.charSheet))],
       [this.inventory, () => this.toggleInventory(this.panelSeatIds.get(this.inventory))],
       [this.passiveTree, () => this.toggleTree(this.panelSeatIds.get(this.passiveTree))],
-      [this.skillTreePane, () => this.closeSkillTree()],
       [this.worldMap, () => this.toggleMap()],
       [this.vendorMenu, () => this.closeVendor()],
       [this.salvageMenu, () => this.closeSalvage()],
@@ -888,7 +907,7 @@ export class UI {
     let gestureSeat: string | null = null;
     const couchOwnerOf = (t: EventTarget | null): string | null => {
       if (!(t instanceof Node)) return null;
-      for (const el of [this.charSheet, this.inventory, this.passiveTree, this.skillTreePane, this.vendorMenu,
+      for (const el of [this.charSheet, this.inventory, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el), this.vendorMenu,
         this.salvageMenu, this.oracleMenu, this.bestiaryMenu, this.caravanMenu, this.recallMenu,
         this.bountyMenu]) {
         if (el.contains(t)) {
@@ -960,7 +979,31 @@ export class UI {
     close: () => void, extra: Partial<FolioLeafSpec> = {}): FolioLeafSpec {
     return {
       id, title, isOpen, close,
-      present: (front) => el.classList.toggle(FOLIO_SHELVED_CLASS, !front),
+      present: (front) => {
+        // THE BOOK MOVES AS ONE (ui/panelmove.ts): a front that shelves
+        // (or a closed front the book is about to replace) hands its seat
+        // to the leaf that takes its place — the stylesheet's seat when it
+        // was never moved — so switching or closing a tab never teleports
+        // the book. The handoff lives for one microtask: only the same
+        // synchronous fronting consumes it.
+        if (front) {
+          el.classList.remove(FOLIO_SHELVED_CLASS);
+          if (!isOpen()) {
+            this.stashFolioSeat(el, panelSeatOf(el));
+          } else {
+            const from = this.folioHandoff;
+            this.folioHandoff = null;
+            if (from && from.el !== el) {
+              if (from.seat) panelMoveTo(el, from.seat.left, from.seat.top);
+              else if (panelMoved(el)) panelMoveReset(el);
+            }
+          }
+        } else {
+          const r = el.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) this.stashFolioSeat(el, panelMoved(el) ? { left: r.left, top: r.top } : null);
+          el.classList.add(FOLIO_SHELVED_CLASS);
+        }
+      },
       bay: () => el.classList.contains('couch-left') ? 'left' : el.classList.contains('couch-right') ? 'right' : 'centre',
       owner: () => this.panelSeatIds.get(el) ?? this.getWorld().localSeat.id,
       rect: () => {
@@ -969,6 +1012,11 @@ export class UI {
       },
       ...extra,
     };
+  }
+
+  private stashFolioSeat(el: HTMLElement, seat: { left: number; top: number } | null): void {
+    this.folioHandoff = { el, seat };
+    queueMicrotask(() => { if (this.folioHandoff?.el === el) this.folioHandoff = null; });
   }
 
   /** The thirteen dwell dialogs. `engaged` is each station's own near-read
@@ -1029,18 +1077,16 @@ export class UI {
       refresh: fronted(() => this.refreshMercMenu()) }));
     enroll(this.folioLeaf('vocation', this.vocationMenu, () => 'A Calling', () => this.vocationOpen, () => this.closeVocationMenu(), {
       arrive: 'front', refresh: fronted(() => this.refreshVocationMenu()) }));
-    // THE TREES (2026-09-04): the passive tree and the skill-tree pane share
-    // the centred berth, so both up at once bind into ONE book instead of
-    // painting over each other — each an explicit ask (a key, a handle), so
-    // each ARRIVES IN FRONT; the tab names the skill. Player panels, not
-    // stations: no engagement read, no range — the master/front laws alone.
+    // THE TREES (2026-09-04): the passive tree and every skill-tree pane
+    // share the centred berth, so any of them up at once bind into ONE book
+    // instead of painting over each other — each an explicit ask (a key, a
+    // handle), so each ARRIVES IN FRONT. Player panels, not stations: no
+    // engagement read, no range — the master/front laws alone. The passive
+    // tree enrolls here; each skill's pane enrolls at its minting
+    // (skillTreePaneFor — the tab names the skill).
     enroll(this.folioLeaf('passives', this.passiveTree, () => 'Passives', () => this.treeOpen,
       () => { if (this.treeOpen) this.toggleTree(this.panelSeatIds.get(this.passiveTree)); }, {
         arrive: 'front', refresh: () => { hideTooltip(); this.refreshTree(); } }));
-    enroll(this.folioLeaf('skilltree', this.skillTreePane,
-      () => (this.skillTreeSkillId && SKILLS[this.skillTreeSkillId]?.name) || 'Skill Tree',
-      () => this.skillTreePaneOpen, () => this.closeSkillTree(), {
-        arrive: 'front', refresh: () => { hideTooltip(); this.refreshSkillTree(); } }));
 
     // THE SUITE (data/suites.ts): a counter's dialog SUMMONS the station
     // dialogs that stand genuinely unlocked in this zone. The world folds
@@ -1117,6 +1163,7 @@ export class UI {
     this.panelSeatIds.set(el, seat.id);
     el.classList.toggle('couch-left', seat.couch?.side === 'left');
     el.classList.toggle('couch-right', seat.couch?.side === 'right');
+    if (seat.couch) panelMoveReset(el); // THE PANEL MOVE yields to the flank dock
   }
 
   /** Is a blocking surface up FOR THIS SEAT'S HANDS? Global surfaces (pause,
@@ -1133,7 +1180,7 @@ export class UI {
     return owned(this.charSheet, this.charSheetOpen)
       || owned(this.inventory, this.inventoryOpen)
       || owned(this.passiveTree, this.treeOpen)
-      || owned(this.skillTreePane, this.skillTreePaneOpen)
+      || this.openSkillTreePanes().some(p => owned(p.el, true))
       || owned(this.worldMap, this.mapOpen)
       || owned(this.vendorMenu, this.vendorOpen)
       || owned(this.salvageMenu, this.salvageOpen)
@@ -1151,7 +1198,7 @@ export class UI {
     return owned(this.charSheet, this.charSheetOpen)
       || owned(this.inventory, this.inventoryOpen)
       || owned(this.passiveTree, this.treeOpen)
-      || owned(this.skillTreePane, this.skillTreePaneOpen)
+      || this.openSkillTreePanes().some(p => owned(p.el, true))
       || owned(this.worldMap, this.mapOpen);
   }
   hideAllFor(seatId: string): void {
@@ -1160,7 +1207,7 @@ export class UI {
     if (this.charSheetOpen && owned(this.charSheet)) this.toggleCharSheet(seatId);
     if (this.inventoryOpen && owned(this.inventory)) this.toggleInventory(seatId);
     if (this.treeOpen && owned(this.passiveTree)) this.toggleTree(seatId);
-    if (this.skillTreePaneOpen && owned(this.skillTreePane)) this.closeSkillTree();
+    for (const p of this.openSkillTreePanes()) if (owned(p.el)) this.closeSkillTree(p.skillId);
     if (this.mapOpen && owned(this.worldMap)) this.toggleMap();
     if (this.vendorOpen && owned(this.vendorMenu)) this.closeVendor();
     if (this.salvageOpen && owned(this.salvageMenu)) this.closeSalvage();
@@ -1680,7 +1727,7 @@ export class UI {
   /** Any ORDINARY panel open? (Dwell dialogs and the pause menu are tracked
    *  apart — the Escape cascade treats each class differently.) */
   anyPanelOpen(): boolean {
-    return this.charSheetOpen || this.treeOpen || this.skillTreePaneOpen
+    return this.charSheetOpen || this.treeOpen || this.openSkillTreePanes().length > 0
       || this.mapOpen || this.inventoryOpen;
   }
 
@@ -2809,7 +2856,7 @@ export class UI {
       if (r.width < 8 || r.height < 8) return; // closed panes measure zero
       out.push({ x: r.left, y: r.top, w: r.width, h: r.height });
     };
-    for (const el of [this.charSheet, this.inventory, this.passiveTree, this.skillTreePane,
+    for (const el of [this.charSheet, this.inventory, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el),
       this.worldMap, this.vendorMenu, this.salvageMenu, this.fontMenu,
       this.recallMenu, this.oracleMenu, this.bestiaryMenu, this.boroughMenu,
       this.bountyMenu, this.caravanMenu, this.sailMenu, this.holdMenu, this.mercMenu,
@@ -6233,7 +6280,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     return { title: node.name, description: node.description + attrText + choiceText, meta };
   }
 
-  // ------------------------------------------------------- the skill tree pane
+  // ------------------------------------------------------ the skill tree panes
   // THE PULL-OUT (skill-mode trees — docs/design/skill-modes.md §7, the pane
   // of 2026-09-04): ONE learned skill's tree drawn the passive tree's way —
   // an SVG of nodes and edges over the derived-or-pinned layout
@@ -6246,31 +6293,74 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   // spendable nodes a lit ring, SEALED nodes the lock's grey (dashed edges,
   // refusal words on hover), locked nodes stay dark; ranked nodes print
   // their have/ranks inside the circle.
+  // ONE PANE PER SKILL (her ask, same day): each open skill's tree is its
+  // OWN panel root, minted on first open and kept for the session, each a
+  // folio leaf `skilltree:<id>` — so Wild Strike's tree, Grave Tide's tree
+  // and the passive tree all tab into one book instead of one pane
+  // re-aiming and the others closing.
 
-  /** Open the pane on one learned skill (a treeless or unknown skill is a
-   *  no-op). Re-aiming a standing pane at another skill resets the lens. */
+  /** Get-or-mint the pane for a skill: the root (class `panel skill-tree`),
+   *  its tooltips (THE REACH's proximity), its close glyph, its ribbon drag,
+   *  and its folio leaf — once per skill for the life of the document. */
+  private skillTreePaneFor(skillId: string): SkillTreePane {
+    const standing = this.skillTreePanes.get(skillId);
+    if (standing) return standing;
+    const el = document.createElement('div');
+    el.id = `skill-tree-${skillId}`;
+    el.className = 'panel skill-tree hidden';
+    document.body.appendChild(el);
+    const pane: SkillTreePane = {
+      skillId, el, open: false, zoom: 1, pan: { x: 0, y: 0 },
+      box: { minX: -280, minY: -210, w: 560, h: 420 },
+    };
+    this.skillTreePanes.set(skillId, pane);
+    bindTooltips(el,
+      (t) => t.dataset.tip === 'stnode' ? this.skillTreeNodeTooltip(skillId, t.dataset.node!) : null,
+      { proximity: { selector: '.st-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 } });
+    // THE CLOSE GLYPH (the panelClosers idiom, per minted root).
+    el.addEventListener('click', (e) => {
+      if ((e.target as Element).closest('[data-panel-x]')) this.closeSkillTree(skillId);
+    });
+    attachPanelMove(el, { onMove: () => this.folioStrip.update() });
+    this.folio.enroll(this.folioLeaf(`skilltree:${skillId}`, el,
+      () => SKILLS[skillId]?.name ?? 'Skill Tree',
+      () => pane.open, () => this.closeSkillTree(skillId), {
+        arrive: 'front', refresh: () => { hideTooltip(); this.refreshSkillTree(skillId); } }));
+    return pane;
+  }
+
+  private openSkillTreePanes(): SkillTreePane[] {
+    return [...this.skillTreePanes.values()].filter(p => p.open);
+  }
+
+  /** Open a skill's pane (a treeless or unknown skill is a no-op). Already
+   *  open and shelved behind a book-mate → it comes forward. */
   openSkillTree(skillId: string, seatId?: string): void {
     const seat = this.couchSeatFor(seatId);
     const inst = seat.meta.knownSkills.get(skillId);
     if (!inst?.def.tree) return;
-    if (!this.skillTreePaneOpen || this.skillTreeSkillId !== skillId) {
-      this.stZoom = 1;
-      this.stPan = { x: 0, y: 0 };
+    const pane = this.skillTreePaneFor(skillId);
+    if (!pane.open) {
+      pane.zoom = 1;
+      pane.pan = { x: 0, y: 0 };
     }
-    this.skillTreeSkillId = skillId;
-    this.skillTreePaneOpen = true;
-    this.skillTreePane.classList.remove('hidden');
-    this.ownPanel(this.skillTreePane, seat);
-    this.refreshSkillTree();
+    pane.open = true;
+    pane.el.classList.remove('hidden');
+    this.ownPanel(pane.el, seat);
+    this.refreshSkillTree(skillId);
     // THE FOLIO: bind (arrives in front), or — already bound and shelved
-    // behind the passive tree — come forward.
-    if (this.folio.adopt('skilltree') === 'noop') this.folio.front('skilltree');
+    // behind a book-mate — come forward.
+    if (this.folio.adopt(`skilltree:${skillId}`) === 'noop') this.folio.front(`skilltree:${skillId}`);
     this.folioStrip.update();
   }
 
-  closeSkillTree(): void {
-    this.skillTreePaneOpen = false;
-    this.skillTreePane.classList.add('hidden');
+  /** Close one skill's pane, or every open one (hideAll's lane). */
+  closeSkillTree(skillId?: string): void {
+    const panes = skillId ? [this.skillTreePanes.get(skillId)].filter((p): p is SkillTreePane => !!p) : this.openSkillTreePanes();
+    for (const pane of panes) {
+      pane.open = false;
+      pane.el.classList.add('hidden');
+    }
   }
 
   /** The level bar every tree readout shares (the drawer strip + the pane):
@@ -6302,13 +6392,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       ↺ Reset (${this.abilityCostText(cost)})</button>`;
   }
 
-  refreshSkillTree(): void {
-    if (!this.skillTreePaneOpen) return;
+  /** Re-render one skill's pane, or every open pane (the drawer's beat). */
+  refreshSkillTree(skillId?: string): void {
+    const panes = skillId ? [this.skillTreePanes.get(skillId)].filter((p): p is SkillTreePane => !!p && p.open) : this.openSkillTreePanes();
+    for (const pane of panes) this.renderSkillTreePane(pane);
+  }
+
+  private renderSkillTreePane(pane: SkillTreePane): void {
     const world = this.getWorld();
-    const seat = this.panelSeat(this.skillTreePane);
-    const inst = this.skillTreeSkillId ? seat.meta.knownSkills.get(this.skillTreeSkillId) : undefined;
+    const seat = this.panelSeat(pane.el);
+    const inst = seat.meta.knownSkills.get(pane.skillId);
     const graph = inst ? treeGraph(inst.def) : undefined;
-    if (!inst || !graph) { this.closeSkillTree(); return; } // unlearned under the pane
+    if (!inst || !graph) { this.closeSkillTree(pane.skillId); return; } // unlearned under the pane
     const def = inst.def;
     const tree = def.tree!;
     const open = inst.level >= tree.level;
@@ -6320,7 +6415,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const sealed = treeSealedSet(def, spent);
     const limbs = treeLimbs(def);
     const R = TREE_LAYOUT_CFG.radius;
-    this.stBox = graph.box;
+    pane.box = graph.box;
 
     // Node state through THE ONE SPEND PREDICATE (+ the field discipline).
     type NodeState = 'spent' | 'open' | 'sealed' | 'locked';
@@ -6390,8 +6485,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       : open
         ? `<span style="color:#8a8678">no path chosen${limbs.length > 1 ? ' — the first point into a limb seals its rivals' : ''}</span>`
         : `<span style="color:#6a6478">the path opens at Lv ${tree.level}</span>`;
-    const zPct = Math.round(this.stZoom * 100);
-    this.skillTreePane.innerHTML = `
+    const zPct = Math.round(pane.zoom * 100);
+    pane.el.innerHTML = `
       ${this.closeGlyphHtml()}<h2 style="color:${def.color}">${esc(def.name)}
         <span style="color:var(--gold);font-size:12px;letter-spacing:0">— skill tree</span>
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal;text-transform:none;letter-spacing:0">
@@ -6406,7 +6501,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         <span style="color:#5a5668">·</span>${status}
         ${resetChip ? `<span style="margin-left:auto">${resetChip}</span>` : ''}
       </div>
-      <svg viewBox="${this.skillTreeViewBox()}" id="st-svg"
+      <svg viewBox="${this.skillTreeViewBox(pane)}" class="st-svg"
         style="cursor:var(--cursor-grab, grab);touch-action:none;background:#100e16;border:1px solid #2a2438;border-radius:5px">${edges}${circles}</svg>
       <div style="font-size:10px;color:#6a6478;margin-top:5px">
         ${open ? 'click a lit node to spend a point · scroll to zoom, drag to pan' : `no points yet — the tree opens at level ${tree.level}`}${
@@ -6414,61 +6509,62 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       </div>`;
 
     // Clicks: a lit node spends through the ordinary intent; the drawer
-    // (when open) re-renders and cascades back into this pane.
-    this.skillTreePane.querySelectorAll<SVGCircleElement>('.st-node.available').forEach(el => {
+    // (when open) re-renders and cascades back into every open pane.
+    pane.el.querySelectorAll<SVGCircleElement>('.st-node.available').forEach(el => {
       el.addEventListener('click', () => {
         world.requestMeta({ t: 'pickTreeNode', skillId: def.id, nodeId: el.dataset.node! });
-        if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree();
+        if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
       });
     });
-    this.skillTreePane.querySelector<HTMLButtonElement>('button[data-fontreset]')?.addEventListener('click', () => {
+    pane.el.querySelector<HTMLButtonElement>('button[data-fontreset]')?.addEventListener('click', () => {
       world.requestMeta({ t: 'fontReset', skillId: def.id });
-      if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree();
+      if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
     });
-    this.wireSkillTreeControls();
+    this.wireSkillTreeControls(pane);
   }
 
-  /** The pane's viewBox from the graph's fitted box + the live zoom/pan,
+  /** A pane's viewBox from its graph's fitted box + its live zoom/pan,
    *  pan-clamped so the window can't slide off the tree (mirrors
    *  treeViewBox; shallower zoom — the trees are small). */
-  private skillTreeViewBox(): string {
-    const b = this.stBox;
-    const z = clamp(this.stZoom, 1, 4);
-    this.stZoom = z;
+  private skillTreeViewBox(pane: SkillTreePane): string {
+    const b = pane.box;
+    const z = clamp(pane.zoom, 1, 4);
+    pane.zoom = z;
     const vw = b.w / z, vh = b.h / z;
     const maxPanX = Math.max(0, (b.w - vw) / 2), maxPanY = Math.max(0, (b.h - vh) / 2);
-    const px = clamp(this.stPan.x, -maxPanX, maxPanX);
-    const py = clamp(this.stPan.y, -maxPanY, maxPanY);
-    this.stPan.x = px; this.stPan.y = py;
+    const px = clamp(pane.pan.x, -maxPanX, maxPanX);
+    const py = clamp(pane.pan.y, -maxPanY, maxPanY);
+    pane.pan.x = px; pane.pan.y = py;
     const cx = b.minX + b.w / 2 + px, cy = b.minY + b.h / 2 + py;
     return `${(cx - vw / 2).toFixed(1)} ${(cy - vh / 2).toFixed(1)} ${vw.toFixed(1)} ${vh.toFixed(1)}`;
   }
 
-  /** Zoom buttons + wheel-zoom + drag-pan on the freshly rendered SVG
-   *  (mirrors wireTreeControls; gesture rules live in attachPanZoom). */
-  private wireSkillTreeControls(): void {
-    const svg = this.skillTreePane.querySelector<SVGSVGElement>('#st-svg');
+  /** Zoom buttons + wheel-zoom + drag-pan on a pane's freshly rendered SVG
+   *  (mirrors wireTreeControls; gesture rules live in attachPanZoom). THE
+   *  REACH rides the helper's real-click hook. */
+  private wireSkillTreeControls(pane: SkillTreePane): void {
+    const svg = pane.el.querySelector<SVGSVGElement>('.st-svg');
     if (!svg) return;
     const apply = (): void => {
-      svg.setAttribute('viewBox', this.skillTreeViewBox());
-      const lbl = this.skillTreePane.querySelector<HTMLElement>('[data-stz="reset"]');
-      if (lbl) lbl.textContent = `${Math.round(this.stZoom * 100)}%`;
+      svg.setAttribute('viewBox', this.skillTreeViewBox(pane));
+      const lbl = pane.el.querySelector<HTMLElement>('[data-stz="reset"]');
+      if (lbl) lbl.textContent = `${Math.round(pane.zoom * 100)}%`;
     };
-    this.skillTreePane.querySelectorAll<HTMLButtonElement>('.tree-zoom').forEach(btn => {
+    pane.el.querySelectorAll<HTMLButtonElement>('.tree-zoom').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const tz = btn.dataset.stz;
-        if (tz === 'in') this.stZoom = clampZoom(this.stZoom * PANZOOM_DEFAULTS.buttonFactor);
-        else if (tz === 'out') this.stZoom = clampZoom(this.stZoom / PANZOOM_DEFAULTS.buttonFactor);
-        else { this.stZoom = 1; this.stPan = { x: 0, y: 0 }; }
+        if (tz === 'in') pane.zoom = clampZoom(pane.zoom * PANZOOM_DEFAULTS.buttonFactor);
+        else if (tz === 'out') pane.zoom = clampZoom(pane.zoom / PANZOOM_DEFAULTS.buttonFactor);
+        else { pane.zoom = 1; pane.pan = { x: 0, y: 0 }; }
         apply();
       });
     });
     attachPanZoom(svg, {
-      getZoom: () => this.stZoom,
-      setZoom: (z) => { this.stZoom = z; },
-      panBy: (dx, dy) => { this.stPan.x += dx; this.stPan.y += dy; },
-      box: () => this.stBox,
+      getZoom: () => pane.zoom,
+      setZoom: (z) => { pane.zoom = z; },
+      panBy: (dx, dy) => { pane.pan.x += dx; pane.pan.y += dy; },
+      box: () => pane.box,
       apply,
       ignore: '.st-node',
       onClick: (e) => {
@@ -6482,9 +6578,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   /** Tooltip for a skill-tree node — the shared styled box, built from LIVE
    *  state on each hover: the payload in words (overrides, mods, graft),
    *  the node's standing through THE ONE SPEND PREDICATE, what it seals. */
-  private skillTreeNodeTooltip(nodeId: string): TooltipContent | null {
-    const seat = this.panelSeat(this.skillTreePane);
-    const inst = this.skillTreeSkillId ? seat.meta.knownSkills.get(this.skillTreeSkillId) : undefined;
+  private skillTreeNodeTooltip(skillId: string, nodeId: string): TooltipContent | null {
+    const pane = this.skillTreePanes.get(skillId);
+    if (!pane) return null;
+    const seat = this.panelSeat(pane.el);
+    const inst = seat.meta.knownSkills.get(skillId);
     const graph = inst ? treeGraph(inst.def) : undefined;
     const gn = graph?.nodes.get(nodeId);
     if (!inst || !graph || !gn) return null;
@@ -9247,8 +9345,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     this.inventoryOpen = false;
     dndCancel(); // never strand a carried ghost on a closed panel
     this.inventory.classList.add('hidden');
-    this.skillTreePaneOpen = false;
-    this.skillTreePane.classList.add('hidden');
+    this.closeSkillTree();
     this.salvageOpen = false;
     this.craftTargetUid = null;
     this.salvageMenu.classList.add('hidden');

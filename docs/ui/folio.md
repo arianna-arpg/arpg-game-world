@@ -108,14 +108,29 @@ the belt beneath for the un-enrolled panels.
 
 ### Player panels enroll too (2026-09-04)
 
-The passive tree (`passives`) and the skill-tree pane (`skilltree`) are
-leaves as well — not stations: no engagement read, no range. Both share
-the centred berth, so opening one over the other binds them into one book;
-each declares `arrive: 'front'` (a key press or a handle click is an
-explicit ask), the passive tree's key brings a shelved tree forward instead
-of closing it, and the pane's tab names the skill it shows. Esc closes the
-front leaf through its own close, as for every leaf; a lone tree is a book
-of one — byte-identical to before, no strip.
+The passive tree (`passives`) and every skill-tree pane
+(`skilltree:<skillId>` — one panel root minted per skill on its first open,
+enrolled right there) are leaves as well — not stations: no engagement
+read, no range. All share the centred berth, so opening any over another
+binds them into one book (Passives | Wild Strike | Grave Tide…); each
+declares `arrive: 'front'` (a key press or a handle click is an explicit
+ask), the passive tree's key brings a shelved tree forward instead of
+closing it, and each pane's tab names its skill. Esc closes the front leaf
+through its own close, as for every leaf; a lone tree is a book of one —
+byte-identical to before, no strip.
+
+### Moving panels (ui/panelmove.ts, 2026-09-04)
+
+Every ribboned panel drags by its `h2` (`attachPanelMove` once per root,
+delegated — rebuilt templates stay draggable). THE ZOOM LAW converts
+screen px to the panel's own px (`.panel` rides CSS zoom); THE KEEP holds
+at least `keepPx` of the panel on screen and the ribbon never rises above
+the top edge; double-click the ribbon to return to the stylesheet's seat;
+the couch dock (a guest's flank) resets it. THE BOOK MOVES AS ONE: a leaf
+coming to the front takes the seat the previous front was drawn at (the
+stylesheet's, when that front was never moved) — `folioLeaf.present` hands
+it over for one microtask — so switching or closing a tab never teleports
+the book. The strip re-seats on every move.
 
 ## The suite (phase two)
 

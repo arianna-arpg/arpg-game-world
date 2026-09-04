@@ -386,20 +386,23 @@ console.log('O. THE ENROLLMENT CENSUS');
   const main = readFileSync(resolve(process.cwd(), 'src/main.ts'), 'utf8');
   const EXPECTED = ['vendor', 'salvage', 'font', 'recall', 'oracle', 'bestiary', 'borough',
     'bounties', 'caravan', 'sail', 'hold', 'merc', 'vocation'];
-  // THE TREES (2026-09-04, her ask): the passive tree + the skill-tree pane
-  // enroll as player-panel leaves — explicit asks that arrive in front, no
-  // engagement read, no range — so both up at once tab into one book.
-  const TREES = ['passives', 'skilltree'];
+  // THE TREES (2026-09-04, her ask): the passive tree enrolls as a static
+  // player-panel leaf and every skill-tree pane enrolls at its minting
+  // (`skilltree:<skillId>`) — explicit asks that arrive in front, no
+  // engagement read, no range — so any of them up at once tab into one book.
+  const TREES = ['passives'];
   const ALL = [...EXPECTED, ...TREES];
   const enrolled = [...panels.matchAll(/this\.folioLeaf\('([a-z_]+)'/g)].map(m => m[1]!);
   const adopted = [...panels.matchAll(/this\.folio\.adopt\('([a-z_]+)'\)/g)].map(m => m[1]!);
-  check('O1 the thirteen dwell dialogs + the two trees enroll, once each',
+  check('O1 the thirteen dwell dialogs + the passive tree enroll, once each',
     ALL.every(id => enrolled.filter(x => x === id).length === 1) && enrolled.length === ALL.length,
     `enrolled: ${enrolled.join(',')}`);
   check('O2 every enrolled leaf adopts at its show path',
     ALL.every(id => adopted.includes(id)), `adopted: ${adopted.join(',')}`);
+  check('O2c every skill-tree pane enrolls + adopts per skill at its minting (one leaf per open tree)',
+    panels.includes('this.folioLeaf(`skilltree:${skillId}`') && panels.includes('this.folio.adopt(`skilltree:${skillId}`)'));
   check('O2b the trees arrive IN FRONT (explicit asks) with no station reads',
-    ["'passives'", "'skilltree'"].every(id => {
+    ["'passives'", '`skilltree:${skillId}`'].every(id => {
       const i = panels.indexOf(`this.folioLeaf(${id}`);
       const row = i < 0 ? '' : panels.slice(i, panels.indexOf('}));', i));
       return row.includes("arrive: 'front'") && !row.includes('engaged:') && !row.includes('range:');

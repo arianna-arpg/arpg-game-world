@@ -113,6 +113,8 @@
       padding-right: 30px; /* THE CLOSE GLYPH's corner (closeGlyphHtml, .panel-x below) */
     }
     .panel h3 { margin: 10px 0 4px 0; font-size: 12px; color: var(--gold); }
+    /* THE PANEL MOVE (ui/panelmove.ts): a panel's ribbon is its drag handle. */
+    .panel-movable > h2 { cursor: var(--cursor-grab, grab); user-select: none; }
     /* THE CLOSE GLYPH (ui/panels.ts closeGlyphHtml): every closeable panel
        wears a small ✕ in its top-right corner — the mouse/touch twin of Esc.
        A zero-height STICKY row as the template's first child: it displaces
@@ -252,18 +254,19 @@
     .tree-node.tt-anchor { stroke-width: 3; }
     .tree-node.available.tt-anchor { stroke: #ffd700; stroke-width: 3.5; }
 
-    /* THE SKILL-TREE PANE (skill-mode trees — one skill's tree drawn the
-       passive tree's way; ui/panels.ts refreshSkillTree). */
-    #skill-tree {
+    /* THE SKILL-TREE PANES (skill-mode trees — one minted root per opened
+       skill, each its tree drawn the passive tree's way; ui/panels.ts
+       skillTreePaneFor / refreshSkillTree). */
+    .skill-tree {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: min(calc(82vh / var(--ui-scale)), 640px); max-width: calc(95vw / var(--ui-scale));
     }
-    #skill-tree svg { width: 100%; height: auto; display: block; }
-    #skill-tree .st-node.available { cursor: var(--cursor-point, pointer); }
-    #skill-tree .st-node.available:hover { stroke: #ffd700; stroke-width: 3; }
-    #skill-tree .st-node.tt-anchor { stroke-width: 3; }
-    #skill-tree .st-node.available.tt-anchor { stroke: #ffd700; stroke-width: 3.5; }
-    #skill-tree .st-label { font-size: 11px; pointer-events: none; }
+    .skill-tree svg { width: 100%; height: auto; display: block; }
+    .skill-tree .st-node.available { cursor: var(--cursor-point, pointer); }
+    .skill-tree .st-node.available:hover { stroke: #ffd700; stroke-width: 3; }
+    .skill-tree .st-node.tt-anchor { stroke-width: 3; }
+    .skill-tree .st-node.available.tt-anchor { stroke: #ffd700; stroke-width: 3.5; }
+    .skill-tree .st-label { font-size: 11px; pointer-events: none; }
 
     /* Passive REALM tabs (data/passiveRealms.ts — the tree's constellations) */
     .realm-tabs { display: flex; gap: 4px; margin-bottom: 6px; }
@@ -830,7 +833,6 @@
   <div id="char-sheet" class="panel hidden"></div>
   <div id="inventory" class="panel hidden"></div>
   <div id="passive-tree" class="panel hidden"></div>
-  <div id="skill-tree" class="panel hidden"></div>
   <div id="world-map" class="panel hidden"></div>
   <div id="caravan-menu" class="panel hidden"></div>
   <div id="sail-menu" class="panel hidden"></div>

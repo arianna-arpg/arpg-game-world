@@ -224,11 +224,16 @@ the points can buy, and specializing is the whole point of customizing.
 and THE COVER LAW re-derives with it — but the thinness is not a defect to
 tune away.
 
-**THE PANE COHERES (built 2026-09-04, her ask):** the skill-tree pane and
-the passive tree are FOLIO leaves (ui/folio.ts — the tabbed-book fabric
-the station dialogs use): both up at once bind into one book with a tab
-strip, each arriving IN FRONT (a key, a handle — explicit asks), the key
-of a shelved tree brings it forward, Esc closes the front leaf. THE REACH
+**THE PANE COHERES (built 2026-09-04, her ask):** every skill-tree pane
+(ONE PANE PER SKILL — a panel root minted on a skill's first open, kept
+for the session, a folio leaf `skilltree:<id>`) and the passive tree are
+FOLIO leaves (ui/folio.ts — the tabbed-book fabric the station dialogs
+use): any of them up at once bind into one book with a tab strip
+(Passives | Wild Strike | Grave Tide…), each arriving IN FRONT (a key, a
+handle — explicit asks), the key of a shelved tree brings it forward, Esc
+closes the front leaf. Every ribboned panel now DRAGS by its ribbon
+(ui/panelmove.ts — the zoom law, the keep, double-click resets, a book
+moves as one). THE REACH
 (`TREE_REACH_PX`, ui/panels.ts): on BOTH trees a hover anchors its card
 to the nearest node within reach, the anchored node rings up (the pad's
 synthetic hover included), and a click on empty ground within reach
