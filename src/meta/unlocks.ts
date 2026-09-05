@@ -255,13 +255,19 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     supportIds: ['stoneblood_conduit', 'bulwarks_tithe', 'warding_flesh'],
     unlock: { objectives: [{ classLevel: { classId: 'warrior', level: 15 } }],
       hint: 'Veterans of the Warrior\'s road tell of a way of standing that armies name like a wall.' } },
+  // THE ARCANIST (her retheme 2026-09-05): the bolt, the one bonded
+  // familiar, the drain — and the elemental golem contracts + the arcane
+  // bolts as its pool (the four golems were orphans; they are the
+  // Summoner's found companions now). The bone/chitin supports moved to
+  // the Necromancer and the Hivecaller.
   { classId: 'summoner',
-    blurb: 'The shepherd of monsters, with the Hive\'s swarm and the voice that commands it.',
-    skillIds: ['venom_bolt', 'summon_skeleton', 'summon_skeleton_archer',
-      'summon_swarmlings', 'command_assault', 'gather_cinderkin'],
-    supportIds: ['chitinous_brood', 'calcified_vigor', 'marrowbound_vigor', 'septic_bargain'],
+    blurb: 'The arcanist: consuming bolts, one bonded familiar, and the binding contracts of the elemental golems.',
+    skillIds: ['ruin', 'bind_familiar', 'essence_drain',
+      'command_assault', 'summon_fire_golem', 'summon_ice_golem', 'summon_stone_golem', 'summon_blood_golem',
+      'null_lance', 'arcane_missiles'],
+    supportIds: ['soul_tether', 'vital_bond', 'resonance', 'hardy_brood'],
     unlock: { chain: 'necromancer',
-      hint: 'The Necromancer raises what fell. A gentler shepherd asks the living to follow too.' } },
+      hint: 'The Necromancer raises what fell. A subtler art binds what never lived, and keeps only one.' } },
   { classId: 'swashbuckler',
     blurb: 'The duelist\'s stage: four blades\' worth of flourish, and the momentum to keep it rolling.',
     skillIds: ['surgical_strike', 'dash_strike', 'buckler_strike', 'wild_strike'],
@@ -293,8 +299,10 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     blurb: 'Death as a resource: the corpse-and-poison artisan, with the whole Harvest & Hordes gamut.',
     skillIds: ['poison_nova', 'raise_dead', 'despair',
       'reap', 'whirling_reap', 'summon_raging_spirit', 'spirit_pyre',
-      'summon_wraith', 'infernal_bombardment', 'archon_lance', 'sanguine_burst'],
-    supportIds: ['sweeping_blow', 'mana_feeder', 'enduring_bond'],
+      'summon_wraith', 'infernal_bombardment', 'archon_lance', 'sanguine_burst',
+      'venom_bolt', 'summon_skeleton', 'summon_skeleton_archer'],
+    supportIds: ['sweeping_blow', 'mana_feeder', 'enduring_bond',
+      'calcified_vigor', 'marrowbound_vigor', 'septic_bargain'],
     // HER OBJECTIVES (2026-09-05): the corpse run's own class — reclaim
     // enough of what death took from you, OR put enough of the risen back
     // down. Both counted, both ACCOUNT-DIRECT stamps (account.ts).
@@ -428,9 +436,9 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   { classId: 'hivecaller',
     blurb: 'The swarm is the weapon; you are only its will. A hive that reknits itself, a veil of biting motes, the quiet dead gathered glimmering, and one pointed word the whole chorus obeys.',
     skillIds: ['summon_swarmlings', 'raise_gnatveil', 'command_assault',
-      'beckon_palewisps', 'loose_marrowgrubs'],
+      'beckon_palewisps', 'loose_marrowgrubs', 'gather_cinderkin'],
     supportIds: ['broodclutch', 'vicious_brood', 'hiveborn',
-      'patient_brood', 'hidden_reserves', 'teeming_warrens'],
+      'patient_brood', 'hidden_reserves', 'teeming_warrens', 'chitinous_brood'],
     unlock: { objectives: [{ ledger: 'broodmothers_slain', label: 'kill a mother of broods' }],
       hint: 'Kill a mother of broods and listen: the humming does not stop. It waits to be told where to go.' } },
 

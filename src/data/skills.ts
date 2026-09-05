@@ -2134,6 +2134,30 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.15)] },
   },
 
+  // BIND FAMILIAR — the Summoner's opening companion (data/classes.ts; her
+  // retheme: one bonded familiar over any horde). The golems' persistent
+  // contract on an arcane body: mana reserved while the bond holds, a fallen
+  // familiar re-forms, ONE at a time on its own pool (a found golem may
+  // still stand beside it — the choice is the starter's, not a law).
+  bind_familiar: {
+    id: 'bind_familiar', name: 'Bind Familiar',
+    description: 'TOGGLE a binding: an arcane familiar takes shape at your side and STAYS —'
+      + ' mana is reserved while the bond holds, and if the familiar is unmade it re-forms'
+      + ' 5 seconds later. It keeps your pace and hurls motes of undoing from range. One'
+      + ' familiar at a time; recast to release it and reclaim the reserve.',
+    tags: ['spell', 'summon', 'minion', 'chaos', 'persistent'], color: '#b08ae8',
+    manaCost: 12, cooldown: 3, useTime: 0.8,
+    delivery: {
+      type: 'summon', monsterId: 'arcane_familiar',
+      count: 1, maxActive: 1, poolGroup: 'familiar',
+      persistent: { reserve: 24, respawnTime: 5, toggle: true },
+    },
+    effects: [],
+    requirements: { willpower: 12, intelligence: 10 },
+    ai: { range: 400, weight: 1, keepDistance: 300 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.15)] },
+  },
+
   // Duration minion that can be neither hit nor harmed: pure lifespan trade.
   conjure_wisp: {
     id: 'conjure_wisp', name: 'Conjure Wisp',

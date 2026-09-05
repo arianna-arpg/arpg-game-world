@@ -110,8 +110,8 @@ const tierOf = (id: string) => CLASS_TIER_BY_ID[id];
     tierRows.every(u => u.kind === 'classtier' && kitRungs(classById(u.payload.classId)).length > 0)
     && kitted.every(c => tierRows.some(u => u.kind === 'classtier' && u.payload.classId === c.id)),
     `${tierRows.length} rows over ${kitted.length} classes`);
-  check('ladder: her four wear the whole ladder (warrior, magician, rogue, necromancer)',
-    ['warrior', 'magician', 'rogue', 'necromancer'].every(cid =>
+  check('ladder: her four wear the whole ladder, and the Summoner mirrors it',
+    ['warrior', 'magician', 'rogue', 'necromancer', 'summoner'].every(cid =>
       CLASS_TIERS.every(t => tierRows.some(u => u.id === classTierId(cid, t.id)))));
   let seqOk = true, gateOk = true, payloadOk = true, doorOk = true;
   for (const c of kitted) {
@@ -364,6 +364,12 @@ const priv = (w: World): WorldPriv => w as unknown as WorldPriv;
   check('content: the grave shambler is bomber-brained ordnance (fuse + death blast, never recalled)',
     !!gs && gs.brain?.type === 'bomber' && (gs.explodeOnDeath ?? 0) > 0 && gs.noRecall === true && gs.xp === 0
     && SKILLS.shambler_horde.delivery.type === 'summon' && SKILLS.shambler_horde.delivery.monsterId === 'grave_shambler');
+  const fam = MONSTERS.arcane_familiar;
+  check('content: the Summoner wakes as the arcanist — Ruin, one bonded familiar, the drain',
+    classById('summoner').bar.slice(0, 3).join() === 'ruin,bind_familiar,essence_drain'
+    && !!fam && fam.xp === 0 && SKILLS.bind_familiar.delivery.type === 'summon'
+    && SKILLS.bind_familiar.delivery.monsterId === 'arcane_familiar' && !!SKILLS.bind_familiar.delivery.persistent
+    && SKILLS.bind_familiar.delivery.maxActive === 1);
   const bg = MONSTERS.bone_golem;
   check('content: the bone golem stands (look registered, golem contract, shared slot)',
     !!bg && !!LOOKS[bg.look ?? ''] && SKILLS.summon_bone_golem.delivery.type === 'summon'

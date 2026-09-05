@@ -626,17 +626,25 @@
     .unlock-card .uobj { position: relative; font-size: 10px; color: var(--text-dim); margin: 2px 0; padding: 2px 5px 3px; background: rgba(255,255,255,0.03); border-radius: 3px; overflow: hidden; }
     .unlock-card .uobj i { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--gold); }
     .unlock-card .uobj.met { color: var(--good, #7fd88f); }
-    /* THE OPENING CHOOSER (meta/classkit.ts): the class card's starter chips;
-       a slot with owned mastery alternates is a GROUP — the chosen chip
-       solid, the rest dashed and dim; Master grants wear ✦. */
+    /* THE OPENING CHOOSER (meta/classkit.ts): one chip per seat, always the
+       CHOSEN opening. A seat with owned mastery alternates wears the swap
+       badge (⇄) and opens THE SWAP LIST on click; Master grants wear ✦. */
     .kit-row { margin-top: 3px; }
-    .kit-chip { display: inline-block; padding: 1px 7px; margin: 1px 3px 1px 0; border: 1px solid; border-radius: 8px; font-size: 9px; cursor: var(--cursor-help, help); }
-    .kit-chip.pick { cursor: var(--cursor-point, pointer); }
-    .kit-chip.off { opacity: .45; border-style: dashed; }
+    .kit-chip { position: relative; display: inline-block; padding: 1px 7px; margin: 1px 3px 1px 0; border: 1px solid; border-radius: 8px; font-size: 9px; cursor: var(--cursor-help, help); }
+    .kit-chip.swap { cursor: var(--cursor-point, pointer); padding-right: 15px; }
+    .kit-chip.swap:hover { box-shadow: 0 0 6px rgba(200,168,75,0.35); }
     .kit-chip.grant::before { content: '✦ '; color: var(--gold); }
     .kit-chip small { font-size: 8px; opacity: .75; }
-    .kit-group { display: inline-block; padding: 1px 3px; margin: 1px 3px 1px 0; border: 1px dotted var(--panel-border); border-radius: 10px; }
-    .kit-group em { font-style: normal; font-size: 8px; color: var(--text-dim); margin: 0 2px; }
+    .kit-chip .kit-badge { position: absolute; top: -1px; right: 4px; font-size: 9px; font-weight: bold; color: var(--gold); }
+    /* THE SWAP LIST: body-mounted, above every panel; the current row marked. */
+    .kit-pop { position: fixed; z-index: 20000; min-width: 200px; max-width: 280px; padding: 6px; border-radius: 8px;
+      background: var(--panel-bg); border: 1px solid var(--gold); box-shadow: 0 8px 22px rgba(0,0,0,0.65); text-align: left; }
+    .kit-pop .kit-head { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin: 0 4px 5px; }
+    .kit-pop .kit-opt { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 4px 7px; margin: 1px 0;
+      border: 1px solid transparent; border-radius: 6px; font-size: 11px; cursor: var(--cursor-point, pointer); }
+    .kit-pop .kit-opt:hover { background: rgba(200,168,75,0.08); border-color: var(--panel-border); }
+    .kit-pop .kit-opt.on { border-color: var(--gold); background: rgba(200,168,75,0.06); }
+    .kit-pop .kit-opt small { font-size: 9px; color: var(--text-dim); white-space: nowrap; }
     .unlock-card .uinvest {
       height: 4px; border-radius: 2px; margin: 0 0 5px;
       background: rgba(255,255,255,0.06); overflow: hidden;

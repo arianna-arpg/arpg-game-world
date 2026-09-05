@@ -73,11 +73,19 @@ The debut, her four:
 | Magician | Firebolt ↔ Frostbolt | Frost Nova ↔ Shock Nova | Chain Lightning ↔ Fireball | + The Long Cold |
 | Rogue | Backstab ↔ Blowdart | Cloak ↔ Stealth | Shadow Step ↔ Closing Fang | + Rain of Knives |
 | Necromancer | Poison Nova ↔ Shambling Horde | Raise Dead ↔ Corpse Explosion | Despair ↔ Bone Golem | + Grave Tide |
+| Summoner | Ruin ↔ Unmaking Bolt | Bind Familiar ↔ Conjure Wisp | Essence Drain ↔ Convocation | + Hollow Star |
 
-Note: her example triad (Venom Bolt / Skeleton Warrior / Skeleton Archer)
-is the SUMMONER's bar; the Necromancer's real bar is Poison Nova / Raise
-Dead / Despair, so the rungs stand on that. The Summoner can wear the same
-ladder with four kit rows.
+THE ARCANIST (her retheme, same day): the dead belong to the Necromancer, so
+the Summoner became an arcane caster with ONE bonded familiar — quality over
+the Necromancer's quantity, the companion in the Tamer's vein. Bar: Ruin (the
+bolt) / Bind Familiar (`bind_familiar` → `arcane_familiar`: the golems'
+persistent contract on a targetable spirit that re-forms 5 s after it is
+unmade, one at a time on its own pool) / Essence Drain (the rot); attributes
+14/14/14 INT/WIS/WIS-start; the bundle pools the four elemental golem
+contracts and the arcane bolts (all orphans before), its bone/chitin supports
+moved to the Necromancer and the Hivecaller (with Venom Bolt and the skeleton
+summons); the vocation (Gravebinder) and its steps still wear the grave — a
+follow-up.
 
 Content the ladder minted: **Shambling Horde** (`shambler_horde`, retuned
 under its old id from a two-zombies wall no pool ever dropped): one grave
@@ -111,9 +119,12 @@ The ONE resolver every seat-seating seam reads:
   record); the card re-opens as it was left.
 
 Flow: the class card (Mu card / class screen) renders THE OPENING CHOOSER
-(`kitRowHtml` — a slot with owned alternates is a chip GROUP, the chosen
-solid, the rest dashed; Master grants wear ✦; every chip keeps the skill
-tooltip) → `onPick(def, mode, name, kitPicks)` → `startGame(…, kitPicks)`
+(`kitRowHtml` — one chip per seat, always the CHOSEN opening; a seat with
+owned alternates wears the swap badge ⇄ and a click opens THE SWAP LIST —
+`openKitPopover`, a body-mounted popover listing every option for that seat
+with the current one marked (her Risk-of-Rain read: one symbol, one list, any
+number of alternatives, no inline clutter); Master grants wear ✦; every chip
+and row keeps the skill tooltip) → `onPick(def, mode, name, kitPicks)` → `startGame(…, kitPicks)`
 remembers the picks and resolves them against the account →
 `World.createPlayer(def, { kit })` → `makePlayerSeat` mints the resolved
 bar at the kit tier. The engine never trusts a pick it did not resolve —

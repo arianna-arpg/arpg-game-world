@@ -1834,43 +1834,115 @@ export class UI {
   }
 
   /** THE OPENING CHOOSER (meta/classkit.ts kitChoicesFor): the class's
-   *  starting bar as chips. A slot whose MASTERY alternates the account owns
-   *  becomes a chip GROUP — click to choose, the pick is remembered per
-   *  class — and owned Master grants read as ✦ chips beside them. A class
-   *  with no rung owned renders exactly its base-bar chips: the chooser is
-   *  silent until there is a choice. Every chip keeps the cskill tooltip. */
+   *  starting bar as chips — one chip per seat, always the CHOSEN opening.
+   *  A seat whose MASTERY alternates the account owns wears a swap badge
+   *  (⇄) and opens THE SWAP LIST on click (openKitPopover — every option
+   *  for that seat, the current one marked; her Risk-of-Rain read: one
+   *  symbol, one list, no inline clutter, any number of alternatives);
+   *  owned Master grants read as ✦ chips beside them. A class with no rung
+   *  owned renders exactly its base-bar chips: the chooser is silent until
+   *  there is a choice. Every chip keeps the cskill tooltip. */
   private kitRowHtml(c: ClassDef): string {
     const { slots, grants } = kitChoicesFor(this.getAccount(), c);
     const picks = this.kitPicksFor(c);
-    const chip = (sid: string, on: boolean, pick?: { base: string }, grant = false): string => {
+    const chip = (sid: string, swap?: { base: string }, grant = false): string => {
       const d = SKILLS[sid];
       if (!d) return '';
       const rung = kitRungOf(c, sid);
-      return `<span class="kit-chip${on ? '' : ' off'}${grant ? ' grant' : ''}${pick ? ' pick' : ''}" data-tip="cskill" data-skill-id="${sid}"
-        ${pick ? `data-kit-base="${pick.base}" data-kit-pick="${sid}"` : ''}
-        style="border-color:${d.color};color:${d.color}">${d.name}${rung ? `<small> · ${rung.label}</small>` : ''}</span>`;
+      return `<span class="kit-chip${grant ? ' grant' : ''}${swap ? ' swap' : ''}" data-tip="cskill" data-skill-id="${sid}"
+        ${swap ? `data-kit-slot="${swap.base}"` : ''}
+        style="border-color:${d.color};color:${d.color}">${d.name}${rung ? `<small> · ${rung.label}</small>` : ''}${swap ? '<b class="kit-badge">⇄</b>' : ''}</span>`;
     };
     const rows = slots.map(s => {
       const want = picks[s.base];
       const picked = want && s.options.includes(want) ? want : s.base;
-      if (s.options.length === 1) return chip(s.base, true);
-      return `<span class="kit-group">${s.options.map(o => chip(o, o === picked, { base: s.base })).join('<em>or</em>')}</span>`;
+      return chip(picked, s.options.length > 1 ? { base: s.base } : undefined);
     });
-    const gifts = grants.map(g => chip(g.skill, true, undefined, true));
+    const gifts = grants.map(g => chip(g.skill, undefined, true));
     const html = [...rows, ...gifts].join('');
     return html ? `<div class="kit-row">${html}</div>` : '';
   }
 
-  /** Wire a card's chooser chips: a click picks (never bubbling into the
-   *  card's own pick) and re-renders through `rerender`. */
+  /** Wire a card's swappable chips: a click opens the seat's swap list
+   *  (never bubbling into the card's own pick); a pick in the list
+   *  re-renders through `rerender`. */
   private bindKitChips(root: HTMLElement, c: ClassDef, rerender: () => void): void {
-    root.querySelectorAll<HTMLElement>('[data-kit-pick]').forEach(el => {
+    root.querySelectorAll<HTMLElement>('[data-kit-slot]').forEach(el => {
       el.addEventListener('click', e => {
         e.stopPropagation();
-        this.kitPicksFor(c)[el.dataset.kitBase!] = el.dataset.kitPick!;
+        this.openKitPopover(el, c, el.dataset.kitSlot!, rerender);
+      });
+    });
+  }
+
+  /** THE SWAP LIST — one transient popover, body-mounted (fixed beside its
+   *  chip, clamped to the viewport, above every panel), listing every
+   *  option the account owns for one seat: the current one marked, each
+   *  row a cskill tooltip. A row click picks + re-renders; a click outside,
+   *  Escape, a scroll, or any re-render closes it. One at a time. */
+  private kitPop: { el: HTMLElement; off: () => void } | null = null;
+  private openKitPopover(anchor: HTMLElement, c: ClassDef, base: string, rerender: () => void): void {
+    this.closeKitPopover();
+    const slot = kitChoicesFor(this.getAccount(), c).slots.find(s => s.base === base);
+    if (!slot || slot.options.length < 2) return;
+    const picks = this.kitPicksFor(c);
+    const want = picks[base];
+    const picked = want && slot.options.includes(want) ? want : base;
+    const baseDef = SKILLS[base];
+    const pop = document.createElement('div');
+    pop.className = 'kit-pop';
+    pop.innerHTML = `<div class="kit-head">Opening · ${esc(baseDef?.name ?? base)}'s seat</div>`
+      + slot.options.map(sid => {
+        const d = SKILLS[sid];
+        if (!d) return '';
+        const rung = kitRungOf(c, sid);
+        const on = sid === picked;
+        return `<div class="kit-opt${on ? ' on' : ''}" data-kit-pick="${sid}" data-tip="cskill" data-skill-id="${sid}">
+          <span style="color:${d.color}">${d.name}</span>
+          <small>${rung ? esc(rung.label) : 'base'}${on ? ' · chosen' : ''}</small></div>`;
+      }).join('');
+    document.body.appendChild(pop);
+    // Seat it under the chip, kept on screen.
+    const r = anchor.getBoundingClientRect();
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    const x = Math.max(6, Math.min(window.innerWidth - pw - 6, r.left));
+    const y = r.bottom + 4 + ph > window.innerHeight - 6 ? Math.max(6, r.top - ph - 4) : r.bottom + 4;
+    pop.style.left = `${Math.round(x)}px`;
+    pop.style.top = `${Math.round(y)}px`;
+    bindTooltips(pop, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
+    pop.querySelectorAll<HTMLElement>('[data-kit-pick]').forEach(row => {
+      row.addEventListener('click', e => {
+        e.stopPropagation();
+        picks[base] = row.dataset.kitPick!;
+        this.closeKitPopover();
         rerender();
       });
     });
+    const onDown = (e: MouseEvent): void => { if (!pop.contains(e.target as Node)) this.closeKitPopover(); };
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') { e.stopPropagation(); this.closeKitPopover(); } };
+    const onScroll = (): void => this.closeKitPopover();
+    // Deferred so the opening click itself never counts as "outside".
+    window.setTimeout(() => {
+      document.addEventListener('mousedown', onDown, true);
+      document.addEventListener('keydown', onKey, true);
+      document.addEventListener('scroll', onScroll, true);
+    }, 0);
+    this.kitPop = {
+      el: pop,
+      off: () => {
+        document.removeEventListener('mousedown', onDown, true);
+        document.removeEventListener('keydown', onKey, true);
+        document.removeEventListener('scroll', onScroll, true);
+      },
+    };
+  }
+
+  private closeKitPopover(): void {
+    if (!this.kitPop) return;
+    this.kitPop.off();
+    this.kitPop.el.remove();
+    this.kitPop = null;
+    hideTooltip();
   }
 
   showMuClassCard(classId: string, onPick: (def: ClassDef, modeId?: string, name?: string, kitPicks?: Record<string, string>) => void): void {
@@ -1878,8 +1950,9 @@ export class UI {
     if (!def) return;
     const acc = this.getAccount();
     this.muCardOpen = true;
-    // THE OPENING CHOOSER: the base bar as chips, mastery alternates as
-    // pickable groups (meta/classkit.ts) — the card's one new choice.
+    this.closeKitPopover(); // a re-render seats fresh chips; a stale list must not float
+    // THE OPENING CHOOSER: the chosen opening per seat, a swap badge where
+    // the account owns alternates (meta/classkit.ts) — the card's one new choice.
     const chips = this.kitRowHtml(def);
     // The life-contract row (meta/modes.ts), compact: rendered only once a
     // second mode is unlocked — same registry, same full-roster refusal.
@@ -1971,6 +2044,7 @@ export class UI {
   }
 
   closeMuClassCard(): void {
+    this.closeKitPopover();
     this.muCardOpen = false;
     this.muCard.classList.add('hidden');
     this.muCard.innerHTML = '';
@@ -2010,6 +2084,7 @@ export class UI {
     const liveName = this.classSelect.querySelector<HTMLInputElement>('#char-name');
     if (liveName) this.pendingCharName = liveName.value;
     this.hideAll();
+    this.closeKitPopover();
     // THE WAY BACK (armed from the start menu's New Run; absent on co-op
     // rejoin offers): without it this screen was a one-way door — a player
     // who meant to resume a vessel or visit the Vault was soft-locked into
@@ -2096,8 +2171,9 @@ export class UI {
         <div class="cdesc" style="font-style:italic">“${hint}”</div>
         <div class="class-lock">🔒 Unclaimed: the world teaches what the Vault cannot sell.</div>
       </div>`;
-    // A dealt card wears THE OPENING CHOOSER (its base bar, mastery
-    // alternates as pickable groups); a teaser keeps the plain base chips.
+    // A dealt card wears THE OPENING CHOOSER (the chosen opening per seat,
+    // a swap badge where alternates are owned); a teaser keeps the plain
+    // base chips.
     const classCard = (c: ClassDef, note?: string): string => `
       <div class="class-card ${note ? 'locked' : ''}" data-id="${c.id}" data-locked="${!!note}"
         ${note ? 'style="opacity:.5"' : ''}>

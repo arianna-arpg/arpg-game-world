@@ -1618,9 +1618,11 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
   class_summoner: {
+    // The arcanist: the skull left with the dead (the Necromancer's staff
+    // keeps it); an orb-tipped staff and the binding runes.
     parts: [
       { kind: 'robe' },
-      { kind: 'staff', params: { skullTip: true } },
+      { kind: 'staff', params: { orb: 'glow' } },
       { kind: 'runes', params: { n: 3 } },
     ],
   },

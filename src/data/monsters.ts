@@ -7363,6 +7363,19 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   // Untargetable + invulnerable: a spirit ally enemies simply cannot touch.
   // It trades that safety for a short lifespan (set by its summon skill).
+  // THE ARCANE FAMILIAR — the Summoner's bonded companion (data/skills.ts
+  // bind_familiar): a targetable spirit that kites at range hurling motes of
+  // undoing, falls like any body, and re-forms through its contract. Minion-
+  // only (xp 0), never fielded wild.
+  arcane_familiar: {
+    id: 'arcane_familiar', name: 'Arcane Familiar',
+    color: '#b08ae8', shape: 'diamond', radius: 10, material: 'ethereal', look: 'spirit',
+    base: { life: 55, moveSpeed: 170, accuracy: 100, mana: 80, manaRegen: 8 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['unmaking_bolt'],
+    xp: 0,
+  },
+
   spirit_wisp: {
     id: 'spirit_wisp', name: 'Spirit Wisp',
     color: '#b8e8ff', shape: 'diamond', radius: 9, material: 'ethereal', look: 'spirit',

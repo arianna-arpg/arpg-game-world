@@ -100,7 +100,7 @@ on its row. The Vault renders the script through the `.runescript` class
 - **Mind line (Magician):** L10 → Sorcerer, Pyromancer · L15 → Cleric (the
   Will door) · **twenty own corpses reclaimed OR five undead bosses slain →
   Necromancer** (her objectives — the corpse run's own class) · Necromancer
-  chain → Summoner · Cleric chain → Ascetic · **Crowned slain → Tamer** ·
+  chain → Summoner (the arcanist: one bonded familiar) · Cleric chain → Ascetic · **Crowned slain → Tamer** ·
   **the Unmade slain → Chronomancer**
 - **Beyond the parity twelve:** **a brood-queen slain → Hivecaller**; the
   parity eight: Breaker chain → Wallwright · Brawler chain → Matador ·

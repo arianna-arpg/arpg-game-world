@@ -194,18 +194,32 @@ export const CLASSES: ClassDef[] = [
     startNode: 'for_start', // the unmoved wall → the Fortitude point
   },
   {
+    // THE ARCANIST (her retheme 2026-09-05): the dead belong to the
+    // Necromancer now. The Summoner is an arcane caster with ONE bonded
+    // familiar — quality over the Necromancer's quantity, the companion kept
+    // in the Tamer's vein (unmade, it re-forms; never a horde).
     id: 'summoner', name: 'Summoner',
     look: 'class_summoner',
-    description: 'Commands the dead and the elemental. Your minions run on the same skills monsters do, because they are monsters.',
-    color: '#b06bd4',
+    description: 'The arcanist\'s art: bolts of consuming twilight, one bonded familiar that keeps your pace and re-forms when unmade, and the withering drain for whatever it cannot catch. One companion, kept close, over any horde.',
+    color: '#b08ae8',
     attributes: {
       strength: 2, prowess: 2, fortitude: 0,
       dexterity: 2, finesse: 2, charisma: 2,
-      intelligence: 12, wisdom: 18, willpower: 12,
+      intelligence: 14, wisdom: 14, willpower: 14,
       vitality: 8,
     },
-    bar: ['venom_bolt', 'summon_skeleton', 'summon_skeleton_archer', null, null, null, null, null],
-    startNode: 'wis_start', // the shepherd's craft lives in Wisdom now
+    // Ruin (the bolt), Bind Familiar (the companion), Essence Drain (the rot).
+    bar: ['ruin', 'bind_familiar', 'essence_drain', null, null, null, null, null],
+    startNode: 'wis_start', // binding is Wisdom's craft
+    // THE MASTERY LADDER: the bolt becomes a mote of undoing, the one
+    // familiar a pair of untouchable wisps, the drain the host-mending
+    // Convocation; the Master wakes holding the Hollow Star.
+    kit: [
+      { tier: 'novice', replaces: 'ruin', skill: 'unmaking_bolt' },
+      { tier: 'adept', replaces: 'bind_familiar', skill: 'conjure_wisp' },
+      { tier: 'expert', replaces: 'essence_drain', skill: 'convocation' },
+      { tier: 'master', skill: 'hollow_star' },
+    ],
   },
   {
     id: 'swashbuckler', name: 'Swashbuckler',
