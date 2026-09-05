@@ -3717,8 +3717,9 @@ export class UI {
     // BAG_SORT_MODES: the buttons are DERIVED, a new mode is one data row),
     // the last-pressed mode lit gold with its direction badge; pressing it
     // again FLIPS the direction (press → the sortBag intent → re-pack). The
-    // hover line says what each order IS, so a glyph never has to explain
-    // itself; the ether/gold palette keeps the strip quiet beside the grid.
+    // hover names the mode and nothing more (her word: the name is enough —
+    // the badge says the direction, a press teaches the rest); the
+    // ether/gold palette keeps the strip quiet beside the grid.
     const bsState = this.bagSort;
     const sortStrip = `
           <div style="display:flex;gap:3px;align-items:center;margin-left:auto">
@@ -3726,8 +3727,7 @@ export class UI {
             ${BAG_SORT_MODES.map(s => {
               const on = bsState?.mode === s.id;
               const dir = on ? bsState!.dir : 'desc';
-              const tip = `${s.label} — ${s.title}${on ? ` · now ${dir === 'desc' ? 'descending' : 'ascending'}; press again to flip` : ''}`;
-              return `<button data-bag-sort="${esc(s.id)}" title="${esc(tip)}"
+              return `<button data-bag-sort="${esc(s.id)}" title="${esc(s.label)}"
                 style="position:relative;width:22px;height:20px;padding:0;font-size:12px;line-height:18px;
                 background:${on ? '#2e2538' : '#241d2e'};border:1px solid ${on ? 'var(--gold)' : '#4a3a5a'};border-radius:4px;
                 color:${on ? 'var(--gold)' : '#b8b0c8'};cursor:var(--cursor-point, pointer)">${s.icon}${on

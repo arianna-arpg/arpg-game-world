@@ -285,8 +285,8 @@ dashed rim once found nothing and cancelled; each cell now claims the gutter
 to its right and below (an invisible `::after` extension), so a seam resolves
 to the left / upper cell and never to nothing. THE BAG SORT
 (`engine/bagsort.ts`, the `sortBag` intent, the GLYPH STRIP on the Bag
-heading's own line — icons only, the hover line is the explanation; her
-ruling: top, not bottom, for clarity without clutter): `BAG_SORT_MODES` is
+heading's own line — icons only, the hover names the mode and nothing more;
+her ruling: top, not bottom, for clarity without clutter): `BAG_SORT_MODES` is
 an open registry of comparator rows, each with its glyph — Space ▦ (tightest
 pack: area, then height), Size ⇕ (tallest, then widest), Type ⚔ (the doll's
 own slot order, then skill gems, supports, memories, writs), Rarity ✦ (the
