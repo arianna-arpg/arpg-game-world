@@ -21,7 +21,7 @@ import {
   supportFitsInstOrCrew, supportMaxLevel, treeNodeRefusal, treeSpentBranch,
   type SkillDef, type SkillInstance, type SkillRarity, type SkillTreeNode, type SupportInstance,
 } from '../engine/skills';
-import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
+import { EQUIP_SLOTS, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
 import { findBagGem, gemInitials, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
 import { veinLines } from '../engine/supportbase';
 import {
@@ -29,10 +29,10 @@ import {
   memoryGroups, memoryKindOf, type MemoryKind, type MemoryRecallResult,
 } from '../engine/memories';
 import { GEM_DROP_CFG } from '../engine/loot';
-import { canPlaceAt, overlappingItems, swapBlockerFits } from '../engine/inventory';
+import { bagBoard, canPlaceAt, overlappingItems, swapBlockerFits } from '../engine/inventory';
 import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
-import { compareItemMods, describeItem, itemGridSize, type ModCompareRow } from '../engine/itemgen';
+import { compareItemMods, describeItem, itemGridSize, itemLevelReq, type ModCompareRow } from '../engine/itemgen';
 import { ITEM_BASES } from '../data/itembases';
 import {
   ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier, ESSENCES, ESSENCE_IDS,
@@ -1504,7 +1504,9 @@ export class UI {
     // the old index-drift re-resolve hack died with the index.
     registerDropTarget({
       kind: 'ground',
-      accepts: (p) => p.kind === 'gearItem',
+      // (a locked piece refuses the ground — the ghost's miss face says so
+      // before the engine's own refusal would)
+      accepts: (p) => p.kind === 'gearItem' && !this.payloadGear(p)?.locked,
       drop: (p) => {
         world().requestMeta({ t: 'dropItem', uid: Number(p.arg) });
         gearRefresh();
@@ -1515,7 +1517,7 @@ export class UI {
     // route — one authority, two gestures).
     registerDropTarget({
       kind: 'armFolk',
-      accepts: (p) => p.kind === 'gearItem',
+      accepts: (p) => p.kind === 'gearItem' && !this.payloadGear(p)?.locked, // a locked piece is never gifted
       drop: (p, arg) => {
         world().requestMeta({ t: 'armFolkItem', folkId: Number(arg), uid: Number(p.arg) });
         this.refreshBorough();
@@ -3188,7 +3190,7 @@ export class UI {
     const d = describeItem(item);
     const lines: string[] = [`<div style="color:#9a94a8;font-size:10px">${d.baseLine}</div>`];
     if (item.locked) {
-      lines.unshift('<div style="color:#c8a84b">🔒 Locked — salvage refuses it, sweeps skip it (hold right-click to unlock)</div>');
+      lines.unshift('<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (hold right-click to unlock)</div>');
     } else if (salv) {
       const breakLine = seat.meta.items.some(i => i.uid === item.uid)
         ? `<div style="color:#e8c87a;font-weight:bold">${salv === 'sell'
@@ -3231,10 +3233,19 @@ export class UI {
     } else if (this.compareTargets(item, seat).length) {
       compareHint = ' · <span style="color:#c8a84b">hold to compare</span>';
     }
+    // THE LEVEL LINE (her ask 2026-09-05): the requirement wears the attribute
+    // requirements' own two colours — green met, RED unmet with the hero's
+    // level beside it — so a refused equip explains itself before the press
+    // (the engine's equipItem gate reads the same itemLevelReq).
+    const req = itemLevelReq(item);
+    const heroLevel = this.getWorld().seatHero(seat).level;
+    const reqHtml = heroLevel >= req
+      ? `<span style="color:#6fc06f">Requires Level ${req}</span>`
+      : `<span style="color:#d05050">Requires Level ${req} — you are ${heroLevel}</span>`;
     return {
       title: `<span style="color:${d.color}">${d.epitaph ? `${d.epitaph.name}: ` : ''}${d.title}</span>`,
       description: lines.join(''),
-      meta: `${d.reqLine} · ${ITEM_RARITIES[item.rarity].label}${compareHint}`,
+      meta: `${reqHtml} · ${ITEM_RARITIES[item.rarity].label}${compareHint}`,
     };
   }
 
@@ -3251,7 +3262,7 @@ export class UI {
       MONSTERS[d]?.name ?? (d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : d);
     const lines: string[] = [];
     if (item.locked) {
-      lines.push('<div style="color:#c8a84b">🔒 Locked — sweeps skip it (hold right-click to unlock)</div>');
+      lines.push('<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (hold right-click to unlock)</div>');
     }
     lines.push(`<div style="color:#9a94a8;font-size:10px">${k.name} · <span style="color:${k.color}">×${units.length} held</span></div>`);
     if (k.facets) {
@@ -3323,7 +3334,7 @@ export class UI {
     const lines: string[] = [];
     const inBag = m.items.some(i => i.uid === item.uid);
     if (item.locked) {
-      lines.push('<div style="color:#c8a84b">🔒 Locked — salvage refuses it, sweeps skip it (hold right-click to unlock)</div>');
+      lines.push('<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (hold right-click to unlock)</div>');
     }
     const sp = skillGemPayloadOf(item);
     if (sp) {
@@ -3427,8 +3438,11 @@ export class UI {
     const invSeat = this.panelSeat(this.inventory);
     const m = invSeat.meta;
     const CELL = BAG_CELL_PX;
-    const W = ITEM_CFG.inventory.w;
-    const H = ITEM_CFG.inventory.h;
+    // THE BAG BOARD: the grid draws the board the engine places on (base +
+    // the account's expansions — engine/inventory.ts bagBoard, one read).
+    const board = bagBoard();
+    const W = board.w;
+    const H = board.h;
     // THE SALVAGE BASELINE: while a salvage host is armed for THIS panel's
     // seat — the bench's hammer (break) or a counter's scrap wheel (sell) —
     // bag tiles trade their lift for the lane's click, gem rows become its
@@ -3439,7 +3453,7 @@ export class UI {
     // THE KEEPER'S MARK: the 🔒 pip every locked thing wears, both modes.
     const lockPip = (locked: boolean | undefined): string => locked
       ? `<span style="position:absolute;top:0;right:1px;font-size:9px;line-height:10px;text-shadow:0 0 3px #000"
-          title="Locked: salvage refuses it, sweeps skip it (hold right-click to unlock)">🔒</span>`
+          title="Locked: it stays — no salvage, no drop, no sort (hold right-click to unlock)">🔒</span>`
       : '';
 
     // --- THE DOLL: the equipped figure as a BODY (the true-RPG read) -------
@@ -3632,9 +3646,6 @@ export class UI {
             </div>`;
           })()}
         </div>` : ''}`;
-    const pickupHint = this.getSettings().gearPickup === 'key'
-      ? `[${keyDisplay(this.getSettings().keybinds.pickup)}] grabs nearby gear`
-      : 'walk over gear to collect it';
     // THE BUILD DRAWER: the whole Skill Book, docked. A handle rides the
     // panel's left edge; the drawer POPS OUT beside the panel (absolute —
     // the gear layout never shifts an inch) with the full learned-skills
@@ -3749,20 +3760,10 @@ export class UI {
           <div data-bag-grid="1" style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
           <div style="margin-top:8px;color:#8a8678;font-size:10px">
             ${salv === 'break'
-              ? `⚒ <b style="color:#e8c87a">BREAKING</b>: click a piece to salvage it for essence ·
-                <b>hold right-click</b> locks 🔒 it (locked pieces refuse the hammer) ·
-                worn pieces are safe — drag or double-click them off the doll first ·
-                shift-click still drops to ground`
+              ? `⚒ <b style="color:#e8c87a">BREAKING</b>: click a piece to break it for essence · <b>hold right-click</b>: lock 🔒`
               : salv === 'sell'
-              ? `⚙ <b style="color:#e8c87a">SELLING</b>: click a piece to sell it for Coarse Essence ·
-                <b>hold right-click</b> locks 🔒 it (locked pieces refuse the wheel) ·
-                worn pieces are safe — drag or double-click them off the doll first ·
-                shift-click still drops to ground`
-              : `drag (or click to lift) any piece — the whole piece rides your hand and lands where its ghost sits:
-                bag ↔ doll ↔ the other slot, over another piece to swap, onto the world to drop it ·
-                right-click or double-click: equip / unequip (a pouch opens the Recall, a skill gem learns) ·
-                shift-click: drop to ground · hold right-click: lock 🔒 against salvage ·
-                the glyphs beside the Bag heading sort it (press the lit one again to flip the order) · ${pickupHint}`}
+              ? `⚙ <b style="color:#e8c87a">SELLING</b>: click a piece to sell it · <b>hold right-click</b>: lock 🔒`
+              : `<b>hold right-click</b>: lock 🔒`}
           </div>
         </div>
       </div>`;
@@ -3909,6 +3910,7 @@ export class UI {
       const uid = Number(el.dataset.itemUid);
       el.addEventListener('click', (e) => {
         if (!e.shiftKey) return; // plain clicks belong to the fabric's lift
+        if (seatMeta.items.find(i => i.uid === uid)?.locked) return; // the mark holds (the engine refuses too)
         world.requestMeta({ t: 'dropItem', uid });
         this.refreshInventory();
       });
@@ -3927,7 +3929,7 @@ export class UI {
       el.addEventListener('click', (e) => {
         if (!e.shiftKey) return; // plain click = the fabric's lift (or a drop)
         const worn = this.getWorld().meta.equipped[slot];
-        if (!worn) return;
+        if (!worn || worn.locked) return; // the mark holds a worn piece too
         world.requestMeta({ t: 'dropItem', uid: worn.uid });
         this.refreshInventory();
         this.refreshCharSheet();
@@ -4097,7 +4099,8 @@ export class UI {
       const other = swapBlockerFits(bag, item, x, y);
       return other ? { ...base, verdict: 'swap', with: other } : base;
     }
-    if (x < 0 || y < 0 || x + s.w > ITEM_CFG.inventory.w || y + s.h > ITEM_CFG.inventory.h) return base;
+    const board = bagBoard();
+    if (x < 0 || y < 0 || x + s.w > board.w || y + s.h > board.h) return base;
     const over = overlappingItems(bag, item, x, y);
     const tileBase = over.length === 1 ? ITEM_BASES[over[0].baseId] : undefined;
     const slot = SLOT_BY_ID[from];

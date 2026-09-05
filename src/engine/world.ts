@@ -43,7 +43,7 @@ import { birthCount, CLUTCH_CFG, ORPHAN_FRENZY, type BirthEffect } from './clutc
 import { mintSupportInstance, spawnVeinOf, SUPPORTBASE_CFG } from './supportbase';
 import { BOMBARD_CFG, type BombardSpec } from './bombard';
 import { evalCurve, type CurveKind } from './curves';
-import { autoPlace, placeAt, removeFromBag, swapBlockerFits } from './inventory';
+import { autoPlace, bagBoardFor, placeAt, removeFromBag, setBagBoardSource, swapBlockerFits, type BoardDims } from './inventory';
 import { bagSortMode, sortBagItems, type BagSortDir } from './bagsort';
 import {
   bagGemItems, findBagGem, freeCellCount, makeSkillGemItem, makeSupportGemItem,
@@ -3866,6 +3866,9 @@ export class World {
    *  tolerant default. */
   netVendorTradeOpen?: boolean;
   netVendorGemsOpen?: boolean;
+  /** THE BAG BOARD, mirrored: the host's shipped bag dims (a render-shell
+   *  client draws and tests the KEEPER's board, never its own account's). */
+  netBagBoard?: BoardDims;
   /** Seconds the player has lingered in Mireille's radius (proximity heal). */
   private mireilleDwell = 0;
   /** Cooldown before Mireille will heal again (persists across zones). */
@@ -3881,6 +3884,11 @@ export class World {
 
   constructor(account: Account, manifest: ExpeditionManifest) {
     this.account = account;
+    // THE BAG BOARD (engine/inventory.ts): the player bag's dims resolve
+    // through this one lazy read — a client mirrors the host's shipped
+    // dims (netBagBoard), everyone else folds the account's expansions —
+    // so every placement helper, the sort and the panel share one board.
+    setBagBoardSource(() => this.netBagBoard ?? bagBoardFor(this.account.features));
     this.manifest = manifest;
     this.sim = new WorldSim(manifest);
     // TOWN-BUILDING: swap the per-run town for its expanded form (account-gated
@@ -8656,6 +8664,8 @@ export class World {
   armFolkWithItem(folkId: number, uid: number, seat: Seat = this.localSeat): boolean {
     const found = this.boroughOf(folkId);
     if (!found) return false;
+    // THE KEEPER'S MARK HOLDS: a locked piece is never gifted away either.
+    if (this.bagItem(seat, uid)?.locked) { this.failNote(seat.actor, 'borough:' + folkId, 'that piece is locked'); return false; }
     const { e, spec } = found;
     if (spec.muster.armWindow === 'muster' && e.bo!.stage !== 'muster') return false;
     const folk = this.actorById(folkId);
@@ -43120,6 +43130,11 @@ export class World {
    *  A gem wrapper UNWRAPS as it falls (the ground speaks bare gems). */
   dropGearFromBag(seat: Seat, uid: number): void {
     const m = seat.meta;
+    // THE KEEPER'S MARK HOLDS (her ruling 2026-09-05: a lock LOCKS — no
+    // salvage, no drop, no sort; equip and unequip alone pass): a locked
+    // thing never leaves the hand, bag or worn, gem or gear.
+    const held = this.bagItem(seat, uid) ?? Object.values(m.equipped).find(i => i?.uid === uid);
+    if (held?.locked) { this.failNote(seat.actor, 'drop:' + uid, 'locked — hold right-click to unlock'); return; }
     if (this.bagItem(seat, uid)?.gem) { this.dropGemFromBag(seat, uid); return; }
     const fromSlot = this.wornSlotOf(seat, uid);
     let item: ItemInstance | undefined;

@@ -518,7 +518,7 @@ export const ITEM_CFG = {
   },
 
   /** Bag grid (the tetris board). */
-  inventory: { w: 12, h: 6 },
+  inventory: { w: 12, h: 8 },
   /** Manual pickup reach (the pickup keybind), world units. */
   pickupRadius: 70,
   /** Walk-over TOUCH radii (world units) — each ground drop's hitbox, by

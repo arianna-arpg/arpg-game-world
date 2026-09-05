@@ -22,7 +22,8 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { START_ZONE } from '../src/data/zones';
 import { rollItem, itemGridSize } from '../src/engine/itemgen';
-import { autoPlace, canPlaceAt, swapBlockerFits } from '../src/engine/inventory';
+import { autoPlace, bagBoardFor, bagHeight, canPlaceAt, registerBagExpansion, swapBlockerFits } from '../src/engine/inventory';
+import { ITEM_CFG } from '../src/engine/items';
 import { BAG_SORT_MODES, bagFootprint, bagKindRank, bagRarityRank, sortBagItems } from '../src/engine/bagsort';
 import { ITEM_BASES } from '../src/data/itembases';
 import type { ItemInstance, ItemRarity } from '../src/engine/items';
@@ -187,6 +188,75 @@ for (const mode of BAG_SORT_MODES) {
   } else {
     console.log('SKIP  veto: the base registry holds no 1×1 / 2×1 / 2×2 trio to stage the board');
   }
+}
+
+// --- THE KEEPER'S MARK HOLDS (her ruling: a lock LOCKS) ---------------------
+
+{
+  // A locked piece keeps its cell through EVERY mode and direction; the
+  // free pieces pack around it.
+  for (const mode of BAG_SORT_MODES) for (const dir of ['desc', 'asc'] as const) {
+    const bag = mixedBag();
+    const pinned = bag[Math.min(2, bag.length - 1)];
+    pinned.locked = true;
+    const at = { x: pinned.x!, y: pinned.y! };
+    const ok = sortBagItems(bag, mode.id, undefined, dir);
+    check(`lock: ${mode.id} ${dir} keeps the locked piece at ${at.x},${at.y} and packs whole around it`,
+      ok && pinned.x === at.x && pinned.y === at.y && overlaps(bag) === 0 && bag.every(i => i.x !== undefined));
+  }
+}
+
+{
+  // The drop refuses a locked thing, bag or worn — the piece stays where it is.
+  const w = makeSimWorld('warrior', 0x10c4);
+  w.loadZone(START_ZONE);
+  const m = w.localSeat.meta;
+  m.items.length = 0;
+  for (const i of mixedBag()) m.items.push(i);
+  const bagPiece = m.items[0];
+  bagPiece.locked = true;
+  const n = m.items.length;
+  w.dropGearFromBag(w.localSeat, bagPiece.uid);
+  check('lock: a locked bag piece refuses the drop (still in the bag)', m.items.length === n && m.items.includes(bagPiece));
+  delete bagPiece.locked;
+  w.dropGearFromBag(w.localSeat, bagPiece.uid);
+  check('lock: unlocked, the same piece drops', m.items.length === n - 1 && !m.items.includes(bagPiece));
+  // worn: wear a piece, lock it, try to drop it off the body
+  const wearable = m.items.find(i => { const b = ITEM_BASES[i.baseId]; return b && ['helmet', 'chest', 'gloves', 'boots', 'legs', 'belt', 'amulet', 'ring'].includes(b.category); });
+  if (wearable) {
+    w.applyAction(w.localSeat, { t: 'equipItem', uid: wearable.uid });
+    const slot = Object.keys(m.equipped).find(s => m.equipped[s]?.uid === wearable.uid);
+    if (slot) {
+      m.equipped[slot]!.locked = true;
+      w.dropGearFromBag(w.localSeat, wearable.uid);
+      check('lock: a locked WORN piece refuses the drop (still worn)', m.equipped[slot]?.uid === wearable.uid);
+    } else console.log('SKIP  lock worn: the piece did not equip (level gate) — the bag pin stands');
+  }
+}
+
+// --- THE BAG BOARD (the grid is derived, the expansion is a rung) ----------
+
+{
+  const base = { w: ITEM_CFG.inventory.w, h: ITEM_CFG.inventory.h };
+  const bare = bagBoardFor(new Set());
+  check('board: no expansions owned = the base', bare.w === base.w && bare.h === base.h);
+  registerBagExpansion({ feature: 'probe_bag_rows', rows: 2 });
+  const grown = bagBoardFor(new Set(['probe_bag_rows']));
+  check('board: an owned rung adds its rows', grown.w === base.w && grown.h === base.h + 2);
+  check('board: the rails hold', bagBoardFor(new Set(['probe_bag_rows'])).h <= 12);
+  // the World's installed source folds the ACCOUNT lazily — a feature gained
+  // mid-run grows the next placement's board without a re-install
+  const w = makeSimWorld('warrior', 0xb0a7d);
+  w.loadZone(START_ZONE);
+  const m = w.localSeat.meta;
+  m.items.length = 0;
+  const probe = mk(small);
+  check('board: before the rung, the row past the base is off the board', !canPlaceAt(m.items, probe, 0, base.h) && bagHeight() === base.h);
+  w.account.features.add('probe_bag_rows');
+  check('board: with the rung owned, the bag is two rows taller and the new row takes a piece',
+    bagHeight() === base.h + 2 && canPlaceAt(m.items, probe, 0, base.h) && autoPlace(m.items, probe) && probe.x !== undefined);
+  w.account.features.delete('probe_bag_rows');
+  check('board: the rung revoked, the board is the base again', bagHeight() === base.h);
 }
 
 // --- THE INTENT -----------------------------------------------------------

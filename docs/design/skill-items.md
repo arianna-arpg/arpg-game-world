@@ -305,7 +305,24 @@ hand's own arrangement proved possible). Its KEYS (`bagKindRank` /
 FRAMEWORK will speak (Vault-gated; chartered in its own session — a filter
 row is a sibling of a sort row, never a second sort). Probe
 `balance/probe_bagsort.ts` pins the swap verdicts, the sort, the direction
-and the veto.
+and the veto. THE KEEPER'S MARK HOLDS (her ruling 2026-09-05: a lock LOCKS):
+a locked piece refuses salvage, the drop (bag or worn, gem or gear — the
+engine's `dropGearFromBag` and the ground target both say no), the gift lane
+and every sort (`sortBagItems` pins it in its cell and packs the free pieces
+around it); equip, unequip and a hand-move alone pass, and the tooltip's lock
+line says exactly that. THE STRIP under the bag is one line now — `hold
+right-click: lock 🔒` (an armed lane adds its one verb) — because everything
+else teaches itself. THE LEVEL LINE: an item's `Requires Level N` wears the
+attribute requirements' two colours — green met, red unmet with the hero's
+level beside it — so a refused equip explains itself before the press. THE
+BAG BOARD (`engine/inventory.ts`): the grid is DERIVED, never a literal —
+`bagBoard()` is the one read every placement helper, the sort and the panel
+share, resolving base `ITEM_CFG.inventory` (now 12×8, the doll's own height)
+plus every owned rung of `BAG_CFG.expansions` (an open ladder keyed on
+account features, `registerBagExpansion` the door; it ships EMPTY — the
+Vault rung that sells rows is the chartered follow-on, with the rails
+`maxCols` 12 / `maxRows` 12); the World installs the account fold lazily, and
+the snapshot ships the keeper's dims so a client draws the host's board.
 
 **THE RECALL panel.** Units grouped by dropper def, one row each:
 

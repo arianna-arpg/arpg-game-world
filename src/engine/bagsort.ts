@@ -150,15 +150,21 @@ export function bagSortMode(id: string): BagSortMode | undefined {
 export function sortBagItems(bag: ItemInstance[], modeId: string, board?: BoardDims, dir: BagSortDir = 'desc'): boolean {
   const mode = bagSortMode(modeId);
   if (!mode) return false;
+  // THE KEEPER'S MARK PINS (her ruling 2026-09-05: a lock LOCKS — no
+  // salvage, no drop, no sort): locked pieces keep their cells and the
+  // free pieces pack around them; only the free pieces are ordered, moved,
+  // vetoed or reverted.
   const placed = bag.filter(i => i.x !== undefined && i.y !== undefined);
-  if (placed.length === 0) return false;
-  const before = placed.map(i => ({ i, x: i.x!, y: i.y! }));
+  const free = placed.filter(i => !i.locked);
+  if (free.length === 0) return false;
+  const before = free.map(i => ({ i, x: i.x!, y: i.y! }));
   const sign = dir === 'asc' ? -1 : 1;
-  const order = [...placed].sort((a, b) => sign * mode.compare(a, b) || a.uid - b.uid);
+  const order = [...free].sort((a, b) => sign * mode.compare(a, b) || a.uid - b.uid);
   const largestFirst = (a: ItemInstance, b: ItemInstance): number => byArea(a, b) || byHeight(a, b) || a.uid - b.uid;
-  /** One pack attempt over a cleared board: the pieces it could not seat. */
+  /** One pack attempt over a board cleared of the FREE pieces (the pinned
+   *  stay seated): the pieces it could not seat. */
   const attempt = (seq: readonly ItemInstance[]): ItemInstance[] => {
-    for (const i of placed) { delete i.x; delete i.y; }
+    for (const i of free) { delete i.x; delete i.y; }
     const unseated: ItemInstance[] = [];
     for (const i of seq) if (!autoPlace(bag, i, board)) unseated.push(i);
     return unseated;
@@ -168,7 +174,7 @@ export function sortBagItems(bag: ItemInstance[], modeId: string, board?: BoardD
   const fronted = [...vetoed].sort(largestFirst);
   const rest = order.filter(i => !vetoed.includes(i));
   if (attempt([...fronted, ...rest]).length === 0) return true;
-  if (attempt([...placed].sort(largestFirst)).length === 0) return true;
+  if (attempt([...free].sort(largestFirst)).length === 0) return true;
   for (const r of before) { r.i.x = r.x; r.i.y = r.y; }
   return false;
 }

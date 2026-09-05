@@ -19,6 +19,7 @@
 import { Actor, type ActorAdorn, type ActorShape, type Team,
   type CastingState, type ActiveAura, type ConstructState, type LeapState, type WormBody } from '../engine/actor';
 import type { AnnexSpec, Doodad, DoodadDoor, HollowSpec, PlacedStructure } from '../engine/levelgen';
+import { bagBoard } from '../engine/inventory';
 import type { HitShape } from '../engine/shapes';
 import type { TrackSpec } from '../engine/tracks';
 import type { TrapworkSpec } from '../engine/trapworks';
@@ -420,6 +421,10 @@ export interface StateSnapshot {
    *  host) reads as open. */
   vendorTradeOpen?: boolean;
   vendorGemsOpen?: boolean;
+  /** THE BAG BOARD, shipped: the keeper's bag dims (engine/inventory.ts
+   *  bagBoard — base + the host account's expansions), so a client draws
+   *  and tests the board the host places on. Absent (older host) = base. */
+  bagBoard?: { w: number; h: number };
   actors: ActorW[];
   projectiles: ProjW[];
   tethers: TetherW[];
@@ -715,6 +720,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     vendorCap: world.vendorLockCap(),
     vendorTradeOpen: world.vendorTradeRefusal() === null,
     vendorGemsOpen: world.vendorGemsOpen(),
+    bagBoard: bagBoard(),
     actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(actorToW),
     projectiles: world.projectiles.map(p => ({ p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age })),
     tethers: world.tethers.map(t => ({
@@ -1292,6 +1298,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     world.netVendorCap = snap.vendorCap;
     world.netVendorTradeOpen = snap.vendorTradeOpen;
     world.netVendorGemsOpen = snap.vendorGemsOpen;
+    world.netBagBoard = snap.bagBoard;
   }
 
   // The client's OWN hero arrives as a POOLED actor (in world.actors). Make

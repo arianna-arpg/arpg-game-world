@@ -13,8 +13,58 @@
 import { itemGridSize } from './itemgen';
 import { ITEM_CFG, type ItemInstance } from './items';
 
-export function bagWidth(): number { return ITEM_CFG.inventory.w; }
-export function bagHeight(): number { return ITEM_CFG.inventory.h; }
+// --- THE BAG BOARD (her ask 2026-09-05: the grid is DERIVED, never a literal)
+// The player bag's dims are ITEM_CFG.inventory (the base) plus every owned
+// EXPANSION (BAG_CFG.expansions — an open ladder keyed on account features;
+// it ships EMPTY: the Vault rung that sells rows is the chartered follow-on,
+// registerBagExpansion is its one door). bagWidth()/bagHeight() — the default
+// board every placement helper reads — resolve through ONE installed source
+// (the World installs its account's fold at construction, lazily read so a
+// mid-run purchase grows the bag on the next placement; a render-shell client
+// installs the host's SHIPPED dims), so every call site grows together and
+// the panel draws exactly the board the engine tests.
+
+/** One rung of bag growth: owning `feature` adds rows / cols to the base. */
+export interface BagExpansion { feature: string; rows?: number; cols?: number }
+
+export const BAG_CFG = {
+  /** The expansion ladder — open; registerBagExpansion appends/replaces by feature. */
+  expansions: [] as BagExpansion[],
+  /** Hard rails: the panel's width is the seam's (cols stay put for now); rows scroll. */
+  maxCols: 12,
+  maxRows: 12,
+};
+
+/** Register (or replace, by feature id) an expansion rung. */
+export function registerBagExpansion(def: BagExpansion): void {
+  const k = BAG_CFG.expansions.findIndex(e => e.feature === def.feature);
+  if (k >= 0) BAG_CFG.expansions[k] = def; else BAG_CFG.expansions.push(def);
+}
+
+/** The board an account's features earn: base + every owned rung, railed. Pure. */
+export function bagBoardFor(features: ReadonlySet<string> | undefined): BoardDims {
+  let w = ITEM_CFG.inventory.w, h = ITEM_CFG.inventory.h;
+  for (const e of BAG_CFG.expansions) {
+    if (!features?.has(e.feature)) continue;
+    w += e.cols ?? 0;
+    h += e.rows ?? 0;
+  }
+  return { w: Math.min(BAG_CFG.maxCols, w), h: Math.min(BAG_CFG.maxRows, h) };
+}
+
+let boardSource: (() => BoardDims) | null = null;
+
+/** Install the live board read (the World's account fold; a client's shipped
+ *  dims); null restores the bare base (headless rigs, the sim). */
+export function setBagBoardSource(fn: (() => BoardDims) | null): void { boardSource = fn; }
+
+/** THE ONE READ of the player bag's board. */
+export function bagBoard(): BoardDims {
+  return boardSource?.() ?? { w: ITEM_CFG.inventory.w, h: ITEM_CFG.inventory.h };
+}
+
+export function bagWidth(): number { return bagBoard().w; }
+export function bagHeight(): number { return bagBoard().h; }
 
 /** An alternate board's dims. Every placement helper takes one optionally —
  *  absent = the player bag (ITEM_CFG.inventory), so a vendor's counter
