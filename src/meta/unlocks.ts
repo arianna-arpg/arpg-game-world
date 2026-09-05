@@ -11,19 +11,30 @@
 //   THE MOOT LAW (UnlockBase.reqClasses) — a purchase whose worth depends on
 //   the class pool's depth (slot tiers) hides until the pool can fill it: no
 //   dead purchases, ever.
-//   THE DISCOVERY WEB (ClassBundleDef.discover) — non-starter classes are
-//   shrouded rumors until FOUND: played into (per-class level milestones),
-//   chained onto (own the parent class), or learned the hard way (the world's
-//   own ledger facts — seized by a grip, a trap sprung underfoot). Probe:
-//   balance/probe_unlocks.ts proves the web reachable + the laws honest.
+//   THE OBJECTIVE WEB (ClassBundleDef.unlock) — a class is never BOUGHT. It
+//   is EARNED: a shrouded card (written in the vestiges' runes, its hint the
+//   one plain line) carrying its OBJECTIVES — counted gatework avenues,
+//   any-of — and the world CLAIMS it for the account the moment one holds
+//   (settleClassUnlocks: mid-run sweep, the Vault, the deal, the run's end).
+//   Objectives stay runes until one is CLASS_WEB_CFG.revealFrac along.
+//   THE MASTERY LADDER (data/classTiers.ts) — what Mortal Essence buys
+//   instead: per class, Novice/Adept/Expert/Master rungs at class level
+//   10/30/60/100, in sequence, each an ALTERNATE OPENING (ClassDef.kit).
+//   Probe: balance/probe_unlocks.ts proves the web reachable + the laws
+//   honest; balance/probe_classmastery.ts the ladder, the kit, the runes.
 // ---------------------------------------------------------------------------
 
 import {
-  FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_CRAFTS_UNLOCKED, LEDGER_FLASK_LESSON,
-  LEDGER_GEMDROP_PREFIX, LEDGER_LEGENDARY_SKILL_DROP, LEDGER_VENDOR_BOUGHT,
-  LEDGER_ZONES_EXPLORED, classLevelLedgerKey, reachedLevelKey, type Account,
+  FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_CORPSES_RECLAIMED, LEDGER_CRAFTS_UNLOCKED,
+  LEDGER_FLASK_LESSON, LEDGER_GEMDROP_PREFIX, LEDGER_LEGENDARY_SKILL_DROP,
+  LEDGER_VENDOR_BOUGHT, LEDGER_ZONES_EXPLORED, STARTER_CLASSES, bossSlainKey,
+  classLevelLedgerKey, reachedLevelKey, type Account,
 } from './account';
-import { gateLevelNeeds, gateMet, gateRowLabel, gateRowMet, type GateRow } from './gates';
+import {
+  gateClassLevelNeeds, gateLevelNeeds, gateMet, gateRowLabel, gateRowMet, gateRowProgress,
+  type GateRow,
+} from './gates';
+import { CLASS_TIERS, CLASS_WEB_CFG, classTierId } from '../data/classTiers';
 import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
 import { VENDOR_CFG } from '../data/vendors';
 import { LEDGER_ESSENCE_TOUCHED } from '../data/essences';
@@ -34,7 +45,7 @@ import { LEDGER_SEIZED } from '../engine/grab';
 import { LEDGER_TRAP_SPRUNG } from '../engine/trapworks';
 import { LEDGER_MERC_MARKET_MET } from './mercs';
 import { IMMORTAL_CFG } from './modes';
-import { CLASSES } from '../data/classes';
+import { CLASSES, kitRungs } from '../data/classes';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { bestiaryKey } from '../data/bestiary';
@@ -83,14 +94,22 @@ interface UnlockBase {
    *  the player SEES the next rung and what roads open it. Default off:
    *  everything else keeps the discovery web's hidden-until-met law. */
   tease?: boolean;
+  /** THE EARNED LAW: this entry is never bought — the world CLAIMS it for
+   *  the account the moment its gates hold (settleClassUnlocks). Cost 0 by
+   *  construction, the pour refuses it, availableUnlocks omits it; the
+   *  Vault hangs it SHROUDED with its objectives, never with a button. */
+  earned?: boolean;
 }
 
 export type Unlockable =
   | (UnlockBase & { kind: 'slot'; payload: { slotCount: number } })
   | (UnlockBase & { kind: 'class'; payload: { classId: string; skillIds: string[]; supportIds: string[];
       /** The shrouded RUMOR line shown while the class is undiscovered
-       *  (never the name/cost — see ClassDiscoverSpec.hint). */
+       *  (never the name — see ClassUnlockSpec.hint). */
       hint?: string } })
+  // THE MASTERY LADDER (data/classTiers.ts): one rung of one class — owned
+  // by id (Account.unlockedClassTiers); its skills join the drop pool.
+  | (UnlockBase & { kind: 'classtier'; payload: { classId: string; tierId: string; skillIds: string[] } })
   | (UnlockBase & { kind: 'skill'; payload: { skillIds: string[] } })
   | (UnlockBase & { kind: 'support'; payload: { supportIds: string[] } })
   | (UnlockBase & { kind: 'feature'; requiresFeature?: string; payload: { flag: string } })
@@ -144,184 +163,187 @@ export function maxSlotCount(): number {
  *       VOCATION chain at the quartermaster (vocations key off the character's
  *       class — no extra wiring here).
  *  Adding a class to the game = one ClassDef + one entry here (plus,
- *  usually, a `discover` row — see THE DISCOVERY WEB above; a bundle
- *  without one is simply visible from the start). Gem-name lists in the
+ *  its `unlock` row — see THE OBJECTIVE WEB above; every non-starter
+ *  authors one). Gem-name lists in the
  *  Vault card are generated from the live registries, so renames never
  *  go stale. Starter classes (account.ts STARTER_CLASSES) need no bundle. */
-/** THE DISCOVERY WEB — how a class SURFACES in the Vault at all.
+/** THE OBJECTIVE WEB — how a class is EARNED.
  *
  *  "If someone doesn't know what they're looking for, they have to find
- *  what they're looking for first." A class bundle with a `discover` spec
- *  is INVISIBLE (a shrouded rumor card, hint only — never name or price)
- *  until its gate is met; only then does it become purchasable. The spec is
- *  pure authoring sugar: it COMPILES onto the same generic gates every
- *  unlock already rides (reqLedger / requiresUnlock), so the gate engine
- *  grew zero new switches. Three composable levers:
+ *  what they're looking for first." Every non-starter class hangs in the
+ *  Vault from the first day as a SHROUDED card: its name and body written
+ *  in the vestiges' runes (data/runescript.ts — a fixed cipher the items
+ *  themselves teach), its `hint` the one plain line, and beneath them its
+ *  OBJECTIVES — an ANY-OF group of gatework avenues (meta/gates.ts), the
+ *  counted forms welcome. The objectives are runes too until one of them
+ *  stands CLASS_WEB_CFG.revealFrac along; then they read plain, with
+ *  progress. Complete any one and the WORLD claims the class for the
+ *  account (settleClassUnlocks) — no coin ever changes hands for a class.
  *
- *    ledger   — world FACTS, ANDed. Two families:
- *               · play thresholds: classLevelLedgerKey('magician', 15) —
- *                 stamped by the level-up sweep for whatever class is being
- *                 PLAYED (account.ts CLASS_LEVEL_MILESTONES), so the
- *                 starting three branch into their kin by being lived in,
- *                 and any purchased class can gate deeper kin the same way;
- *               · hard lessons: any ledger key the world stamps —
- *                 LEDGER_SEIZED (a grip caught you → the Brawler),
- *                 LEDGER_TRAP_SPRUNG (the floor clicked under you → the
- *                 Trapper), 'crowned_killed', 'unmade_slain', … Learning by
- *                 doing — mostly by having it done to you.
- *    classes  — class bundle(s) that must be OWNED first (ids), for nested
- *               ladders: Magician L15 reveals the Necromancer; OWNING the
- *               Necromancer reveals the Summoner.
- *    hint     — the rumor line the shrouded card whispers. Point at the
- *               DEED, never the reward: the hint is a compass, not a
- *               catalog entry.
+ *    objectives — GateRow[]: play thresholds (`classLevel` — stamped by the
+ *                 XP sweep for whatever class is being PLAYED; authoring
+ *                 one here registers its milestone), counted deeds
+ *                 (`ledger` + `n`: LEDGER_CORPSES_RECLAIMED ×20,
+ *                 bossSlainKey('undead') ×5, LEDGER_ACCOUNT_DEATHS ×8),
+ *                 hard lessons (LEDGER_SEIZED, LEDGER_TRAP_SPRUNG,
+ *                 'crowned_killed'…: learning by having it done to you).
+ *    chain      — parent class(es): OWNING the parent is the card's
+ *                 STRUCTURAL door (the card hides entirely until then — the
+ *                 wall grows as the account grows), and PLAYING the parent
+ *                 to CLASS_WEB_CFG.chainPlayLevel is an objective (a chain
+ *                 that asked only ownership would cascade for free).
+ *    hint       — the compass. Point at the DEED, never the reward.
  *
- *  Absent `discover` = visible from the start (nothing forces mystery).
- *  Discovery is read live off the account ledger, so it survives every
- *  death by construction — and balance/probe_unlocks.ts walks the whole
- *  web each run to prove every class stays REACHABLE from the starters. */
-export interface ClassDiscoverSpec {
-  /** Account-ledger key(s) that must all be present (≥1). */
-  ledger?: string | string[];
-  /** Ledger COUNT thresholds (ANDed) — the counted-milestone form: "die
-   *  eight times" is a discovery too (compiles to reqLedgerCounts). */
-  ledgerCounts?: Record<string, number>;
-  /** Class id(s) whose bundles must be OWNED first. */
-  classes?: string | string[];
-  /** The shrouded rumor line shown while undiscovered. */
+ *  The spec COMPILES onto the same generic gates every unlock rides
+ *  (reqAnyOf / requiresUnlock) + the earned law; the gate engine grew no
+ *  class-shaped switch. Objectives read live off the account ledger (and,
+ *  mid-run, the merged view), so they survive every death by construction
+ *  — and balance/probe_unlocks.ts walks the whole web each run to prove
+ *  every class stays REACHABLE from the starters. */
+export interface ClassUnlockSpec {
+  /** THE OBJECTIVES — any ONE held claims the class. */
+  objectives?: readonly GateRow[];
+  /** THE CHAIN — parent class id(s): owned = the door, played = an objective. */
+  chain?: string | string[];
+  /** The shrouded card's one plain line. */
   hint: string;
 }
 
 export interface ClassBundleDef {
   classId: string;
-  cost: number;
   /** Flavor lead-in; the mechanical tail of the description is generated. */
   blurb: string;
   skillIds: string[];
   supportIds?: string[];
-  /** THE DISCOVERY WEB row (see above). Absent = visible from the start. */
-  discover?: ClassDiscoverSpec;
+  /** THE OBJECTIVE WEB row (see above) — every non-starter authors one. */
+  unlock: ClassUnlockSpec;
 }
 
 export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   // --- THE BLOOD LINE: the Warrior is the Strength branch — its road opens
   // the STR kin first, then the Prowess and Fortitude anchors; each anchor,
   // owned and lived in, opens its own deeper kin.
-  { classId: 'berserker', cost: 240,
+  { classId: 'berserker',
     blurb: 'Fury as a fighting style: heavy arcs, boiling blood, and the whole rage-fed Warpath.',
     skillIds: ['heavy_strike', 'whirlwind', 'dash',
       'berserk', 'bloodlust', 'soul_harvest', 'flame_imbuement', 'venom_ammunition', 'flame_blast'],
-    discover: { ledger: classLevelLedgerKey('warrior', 15),
+    unlock: { objectives: [{ classLevel: { classId: 'warrior', level: 15 } }],
       hint: 'Some come back from the Warrior\'s road changed: louder, redder, faster than the line can hold.' } },
   // --- THE MIND LINE: the Magician is the Intelligence branch — played deep,
   // it opens its own INT kin first, then the doors into its constituent
   // Wisdom and Willpower schools; those chain onward by OWNERSHIP.
-  { classId: 'sorcerer', cost: 150,
+  { classId: 'sorcerer',
     blurb: 'The scholar of annihilation steps forward, frost ward in hand.',
     skillIds: ['infernal_ray', 'storm_call', 'ice_shield'],
     supportIds: ['spark_discipline'],
-    discover: { ledger: classLevelLedgerKey('magician', 10),
+    unlock: { objectives: [{ classLevel: { classId: 'magician', level: 10 } }],
       hint: 'Past the tenth circle of the Magician\'s study, the elements stop answering one at a time.' } },
   // --- THE SHADOW LINE: the Rogue is the Dexterity branch — its road forks
   // into the ranged and dueling crafts first, the darker and louder arts
   // after; the field disciplines chain by ownership.
-  { classId: 'ranger', cost: 200,
+  { classId: 'ranger',
     blurb: 'Death from afar, and the field disciplines that perfect the shot.',
     skillIds: ['piercing_arrow', 'fan_of_blades', 'quickstep'],
     supportIds: ['perfect_draw', 'wandering_mark'],
-    discover: { ledger: classLevelLedgerKey('rogue', 10),
+    unlock: { objectives: [{ classLevel: { classId: 'rogue', level: 10 } }],
       hint: 'The alley teaches the knife. The treeline teaches something longer.' } },
-  { classId: 'guardian', cost: 300,
+  { classId: 'guardian',
     blurb: 'The unmoved wall, raised together with the Bulwark\'s wards, pacts, and reprisals.',
     skillIds: ['hammer_of_judgment', 'aegis_ward', 'rallying_howl',
       'iron_ward', 'magma_ward', 'transgression', 'pain_hounds', 'bristleback', 'soul_link',
       'stone_communion'],
     supportIds: ['stoneblood_conduit', 'bulwarks_tithe', 'warding_flesh'],
-    discover: { ledger: classLevelLedgerKey('warrior', 15),
+    unlock: { objectives: [{ classLevel: { classId: 'warrior', level: 15 } }],
       hint: 'Veterans of the Warrior\'s road tell of a way of standing that armies name like a wall.' } },
-  { classId: 'summoner', cost: 260,
+  { classId: 'summoner',
     blurb: 'The shepherd of monsters, with the Hive\'s swarm and the voice that commands it.',
     skillIds: ['venom_bolt', 'summon_skeleton', 'summon_skeleton_archer',
       'summon_swarmlings', 'command_assault', 'gather_cinderkin'],
     supportIds: ['chitinous_brood', 'calcified_vigor', 'marrowbound_vigor', 'septic_bargain'],
-    discover: { classes: 'necromancer',
+    unlock: { chain: 'necromancer',
       hint: 'The Necromancer raises what fell. A gentler shepherd asks the living to follow too.' } },
-  { classId: 'swashbuckler', cost: 240,
+  { classId: 'swashbuckler',
     blurb: 'The duelist\'s stage: four blades\' worth of flourish, and the momentum to keep it rolling.',
     skillIds: ['surgical_strike', 'dash_strike', 'buckler_strike', 'wild_strike'],
     supportIds: ['momentum'],
-    discover: { ledger: classLevelLedgerKey('rogue', 10),
+    unlock: { objectives: [{ classLevel: { classId: 'rogue', level: 10 } }],
       hint: 'Past the tenth quiet job, some knives start wanting an audience.' } },
-  { classId: 'juggernaut', cost: 320,
+  { classId: 'juggernaut',
     blurb: 'It hits, it takes hits, and it does not stop. Now it keeps the wake too: votive flames, a lit vigil, and the last word.',
     // Frenzy rides along: it left the Rogue's (starter) bar in the parity
     // pass, so this bundle is what keeps the fast fury-feeder droppable.
     skillIds: ['piledriver', 'reckoning', 'stone_skin', 'frenzy',
       'cindershell', 'deathwatch', 'requiem'],
     supportIds: ['kindled_wake', 'victors_tempo', 'abundant_harvest'],
-    discover: { classes: 'guardian',
+    unlock: { chain: 'guardian',
       hint: 'The wall, taught to walk forward.' } },
-  { classId: 'pyromancer', cost: 220,
+  { classId: 'pyromancer',
     blurb: 'Everything burns eventually; these are the words for "now".',
     skillIds: ['flame_arrow', 'ignite', 'pillar_of_flame'],
-    discover: { ledger: classLevelLedgerKey('magician', 10),
+    unlock: { objectives: [{ classLevel: { classId: 'magician', level: 10 } }],
       hint: 'Deep in the Magician\'s studies there is a chapter singed at every corner.' } },
-  { classId: 'assassin', cost: 320,
+  { classId: 'assassin',
     blurb: 'The quiet trade, with the Verdict\'s marks, dooms, and executions in its kit.',
     skillIds: ['rend', 'eviscerate', 'invisibility',
       'expose_weakness', 'word_of_doom', 'execution'],
     supportIds: ['exposure', 'bristling_riposte'],
-    discover: { ledger: classLevelLedgerKey('rogue', 15),
+    unlock: { objectives: [{ classLevel: { classId: 'rogue', level: 15 } }],
       hint: 'The Rogue\'s road forks in the dark. One branch keeps a ledger of names.' } },
-  { classId: 'necromancer', cost: 420,
+  { classId: 'necromancer',
     blurb: 'Death as a resource: the corpse-and-poison artisan, with the whole Harvest & Hordes gamut.',
     skillIds: ['poison_nova', 'raise_dead', 'despair',
       'reap', 'whirling_reap', 'summon_raging_spirit', 'spirit_pyre',
       'summon_wraith', 'infernal_bombardment', 'archon_lance', 'sanguine_burst'],
     supportIds: ['sweeping_blow', 'mana_feeder', 'enduring_bond'],
-    discover: { ledger: classLevelLedgerKey('magician', 15),
-      hint: 'The Magician\'s syllabus ends at a door marked WISDOM. What studies past it does not study alone.' } },
-  { classId: 'tamer', cost: 280,
+    // HER OBJECTIVES (2026-09-05): the corpse run's own class — reclaim
+    // enough of what death took from you, OR put enough of the risen back
+    // down. Both counted, both ACCOUNT-DIRECT stamps (account.ts).
+    unlock: { objectives: [
+      { ledger: LEDGER_CORPSES_RECLAIMED, n: 20, label: 'reclaim twenty of your own corpses' },
+      { ledger: bossSlainKey('undead'), n: 5, label: 'slay five bosses of the undead' },
+    ],
+      hint: 'Every corpse you leave on the field is a lesson someone can read. Read enough of your own, or put enough of the risen back down, and the lesson turns.' } },
+  { classId: 'tamer',
     blurb: 'The wild answers a steady gaze: stalk in unannounced, hold the claim, and fight beside the bond that downs but never dies.',
     skillIds: ['goad', 'tame_beast', 'stalk', 'command_assault'],
     supportIds: ['alphas_bond', 'pack_instinct', 'reciprocal_bond',
       'gentling_hand', 'beast_master'],
     // A HARD LESSON, not a syllabus: Crowned beasts roam the base wilds
     // (killHandlers stamps the same key the Warbands package reads).
-    discover: { ledger: 'crowned_killed',
+    unlock: { objectives: [{ ledger: 'crowned_killed', label: 'put down a Crowned beast' }],
       hint: 'Every pack answers to a crown. Put one down, and you will know the bond can be claimed.' } },
-  { classId: 'cleric', cost: 450,
+  { classId: 'cleric',
     blurb: 'The support archetype, played straight: Communion\'s mending arts and the Devout\'s sanctified arsenal, bundled with the one class built to carry them.',
     skillIds: ['sanctified_strike', 'mend', 'consecration', 'benediction',
       'greater_mending', 'communion', 'healing_rain', 'healing_stream', 'cleansing_light',
       'lifedrain', 'soul_volley', 'tree_of_life', 'font_of_renewal', 'summon_cleric', 'spirit_mender'],
     supportIds: ['intensive_care', 'mending_chain', 'overmend'],
-    discover: { ledger: classLevelLedgerKey('magician', 15),
+    unlock: { objectives: [{ classLevel: { classId: 'magician', level: 15 } }],
       hint: 'The Magician\'s syllabus ends at a second door, marked WILL. Behind it, someone is mending.' } },
 
   // --- The parity twelve (every star point now anchors three classes) -------
-  { classId: 'breaker', cost: 260,
+  { classId: 'breaker',
     blurb: 'The executioner\'s grammar: break the stance, quake the rout, pass The Verdict. The whole slam-and-sentence school rides along.',
     skillIds: ['sunder_maul', 'earthquake', 'verdict',
       'tolling_ruin', 'groundswell', 'faultbreak'],
     supportIds: ['concussive_blows'],
-    discover: { ledger: classLevelLedgerKey('warrior', 10),
+    unlock: { objectives: [{ classLevel: { classId: 'warrior', level: 10 } }],
       hint: 'Warriors who keep to the road learn where a stance carries its weight, and how to take it out.' } },
-  { classId: 'vanguard', cost: 240,
+  { classId: 'vanguard',
     blurb: 'First through the gap, shield still moving: the charges, thrusts, and leaps of the advancing line.',
     skillIds: ['charge', 'shockfront', 'marching_bulwark',
       'shield_charge', 'bastion_thrust', 'crushing_leap'],
     supportIds: ['phalanx'],
-    discover: { ledger: classLevelLedgerKey('warrior', 10),
+    unlock: { objectives: [{ classLevel: { classId: 'warrior', level: 10 } }],
       hint: 'March the Warrior\'s road far enough and the shield stops meaning "stay put".' } },
-  { classId: 'blademaster', cost: 300,
+  { classId: 'blademaster',
     blurb: 'The sword as a sentence, with the whole dueling school: the thousand cuts and the one perfect stroke.',
     skillIds: ['iai_strike', 'zanshin_cut', 'riposte',
       'thousand_cuts', 'sheathed_moon', 'perfect_strike', 'infinite_slashes'],
     supportIds: ['building_rhythm'],
-    discover: { classes: 'berserker',
+    unlock: { chain: 'berserker',
       hint: 'Fury, worn long enough, starts dreaming of one perfect stroke.' } },
-  { classId: 'brawler', cost: 240,
+  { classId: 'brawler',
     blurb: 'No blade, no apology: the pit\'s arithmetic, plus the carving rhythms that keep the fists warm.',
     skillIds: ['one_two', 'chain_pull', 'haymaker',
       'carve', 'deep_carve', 'bloodlust'],
@@ -329,25 +351,25 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     // THE user-named exemplar of learn-by-getting-wrecked: the grip kin
     // (wranglers, yoke-maulers, gulpers, planted maws) teach with their
     // hands — world.ts grabSeize stamps LEDGER_SEIZED when one catches YOU.
-    discover: { ledger: LEDGER_SEIZED,
+    unlock: { objectives: [{ ledger: LEDGER_SEIZED, label: 'be seized by a grip, and live' }],
       hint: 'Something out there will put its hands on you. Survive it, and you will know what hands are for.' } },
-  { classId: 'sentinel', cost: 280,
+  { classId: 'sentinel',
     blurb: 'Hitting it is the mistake: spikes, quills, bells, and every other way a wall bills its visitors.',
     skillIds: ['spiked_bulwark', 'bristleback', 'reprisal',
       'defiant_bulwark', 'tolling_bell', 'rearguard_aegis'],
     supportIds: ['answering_steel'],
     // A nested PLAY threshold on a non-starter: the Guardian must be owned,
     // dealt, and lived in — the web runs deeper than the starting three.
-    discover: { ledger: classLevelLedgerKey('guardian', 10),
+    unlock: { objectives: [{ classLevel: { classId: 'guardian', level: 10 } }],
       hint: 'Stand the Guardian\'s watch long enough to learn it: hitting you was always the mistake.' } },
-  { classId: 'lancer', cost: 280,
+  { classId: 'lancer',
     blurb: 'Steel left in every wound and called home through the crowd: the full impale ledger, javelin rain included.',
     skillIds: ['skewer', 'pinning_spear', 'spear_recall',
       'voltspear', 'blightspear', 'skyfall_volley', 'radiant_lance'],
     supportIds: ['skewering_blows', 'tripwire_web'],
-    discover: { classes: 'ranger',
+    unlock: { chain: 'ranger',
       hint: 'The Ranger\'s steel comes back as rumor. Somewhere, it comes back by hand.' } },
-  { classId: 'trapper', cost: 300,
+  { classId: 'trapper',
     blurb: 'The battlefield as a workshop: snares, mines, sentries, and the patience to let the ground do the arguing.',
     skillIds: ['caltrops', 'aftershock_snare', 'ballista_sentry',
       'cinderwhirl_trap', 'frost_trap', 'fire_mine', 'detonate_mines', 'lodestone'],
@@ -356,46 +378,46 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     // trapwork with your own feet (world.ts springTrapwork stamps it) —
     // the sunken ruins' toothed halls and the highland's boulder plates
     // are the world's own tutors.
-    discover: { ledger: LEDGER_TRAP_SPRUNG,
+    unlock: { objectives: [{ ledger: LEDGER_TRAP_SPRUNG, label: 'spring a trap with your own feet, and live' }],
       hint: 'The floor clicks before it kills. Step wrong once, and live, and the workshop is yours.' } },
-  { classId: 'warlord', cost: 320,
+  { classId: 'warlord',
     blurb: 'Presence as mechanics: the first Charisma class, with the horns, standards, and blessings of command.',
     skillIds: ['battle_standard', 'single_out', 'challenging_shout',
       'war_horn', 'trumpet_peal', 'blessing_of_might'],
     supportIds: ['provocation', 'clamor'],
     // The war-camps' own lesson (killHandlers stamps warlords_killed —
     // the same key that unlocks Demon Invasions): kill command, learn it.
-    discover: { ledger: 'warlords_killed',
+    unlock: { objectives: [{ ledger: 'warlords_killed', label: 'kill a warband\'s warlord' }],
       hint: 'Kill a thing that commands, and its voice goes looking for a new throat.' } },
-  { classId: 'skald', cost: 340,
+  { classId: 'skald',
     blurb: 'The battle keeps time whether it wants to or not: the whole hymnal, shrieks and squalls included.',
     skillIds: ['war_chant', 'dissonance', 'coda',
       'keening_shriek', 'gust_burst', 'aureole'],
     supportIds: ['held_note', 'countermelody'],
-    discover: { classes: 'warlord',
+    unlock: { chain: 'warlord',
       hint: 'Command, held long enough, starts keeping time.' } },
-  { classId: 'beguiler', cost: 320,
+  { classId: 'beguiler',
     blurb: 'Never be where the blow lands: doubles, decoys, quiet steps, and one whispered madness.',
     skillIds: ['decoy', 'shadow_clone', 'beguile',
       'cloudstep', 'quiet_step', 'mirage_archer'],
     supportIds: ['synchronicity', 'vessel_of_shadow'],
-    discover: { ledger: classLevelLedgerKey('rogue', 15),
+    unlock: { objectives: [{ classLevel: { classId: 'rogue', level: 15 } }],
       hint: 'Far down the Rogue\'s road: the best hiding place is someone else\'s certainty.' } },
-  { classId: 'chronomancer', cost: 380,
+  { classId: 'chronomancer',
     blurb: 'Time as a resource everyone else spends carelessly, up to and including stopping it outright.',
     skillIds: ['stasis_lock', 'torpor_field', 'time_dilation',
       'time_stop', 'warp', 'temporal_pad'],
     supportIds: ['lingering_moment', 'borrowed_haste'],
     // The Chronophage's spoils (quests/defs.ts stamps unmade_slain — the
     // same key the far Caravan tiers read): time-craft is TAKEN, not taught.
-    discover: { ledger: 'unmade_slain',
+    unlock: { objectives: [{ ledger: 'unmade_slain', label: 'slay the Chronophage' }],
       hint: 'The thing that eats time can die. What spills out can be studied.' } },
-  { classId: 'ascetic', cost: 300,
+  { classId: 'ascetic',
     blurb: 'Stillness pays cash: the practiced palm, the rooted stances, and the long breath between.',
     skillIds: ['mantra_strike', 'wellspring_stance', 'long_exhale',
       'grit_stance', 'surgewind', 'siphon_strike'],
     supportIds: ['colossus_stance', 'stillwater_discipline'],
-    discover: { classes: 'cleric',
+    unlock: { chain: 'cleric',
       hint: 'Past the Cleric\'s long watch waits a stiller discipline. Fury is a debt; stillness pays cash.' } },
 
   // --- Beyond the parity twelve: wisdom's fourth door -------------------------
@@ -403,62 +425,62 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   // Discovered the way a hive changes hands: kill a brood-queen
   // (killHandlers.ts broodmothers_slain — broodmothers roam the wilds and
   // crown the chitin country) and the humming does not stop; it waits.
-  { classId: 'hivecaller', cost: 300,
+  { classId: 'hivecaller',
     blurb: 'The swarm is the weapon; you are only its will. A hive that reknits itself, a veil of biting motes, the quiet dead gathered glimmering, and one pointed word the whole chorus obeys.',
     skillIds: ['summon_swarmlings', 'raise_gnatveil', 'command_assault',
       'beckon_palewisps', 'loose_marrowgrubs'],
     supportIds: ['broodclutch', 'vicious_brood', 'hiveborn',
       'patient_brood', 'hidden_reserves', 'teeming_warrens'],
-    discover: { ledger: 'broodmothers_slain',
+    unlock: { objectives: [{ ledger: 'broodmothers_slain', label: 'kill a mother of broods' }],
       hint: 'Kill a mother of broods and listen: the humming does not stop. It waits to be told where to go.' } },
 
   // --- THE PARITY EIGHT (class pass round two): every star point's fourth
   // door. Gate textures deliberately span the whole discovery vocabulary —
   // four ownership chains, two deep play-thresholds, one world fact, and
   // the debut of the COUNTED lever (the Flagellant is discovered by DYING).
-  { classId: 'wallwright', cost: 280,
+  { classId: 'wallwright',
     blurb: 'Architecture, weaponized: raise the rampart, breach through it, and swing the demolition arc that unbuilds whatever argues back.',
     skillIds: ['stone_rampart', 'toppling_stroke', 'shield_charge'],
-    discover: { classes: 'breaker',
+    unlock: { chain: 'breaker',
       hint: 'Whoever learns every way a wall can fall eventually owes the other trade an apprenticeship.' } },
-  { classId: 'matador', cost: 280,
+  { classId: 'matador',
     blurb: 'The duel as theatre: bait the charge, pass through the horns, schedule the third act.',
     skillIds: ['planted_banderilla', 'cape_feint', 'perfect_strike'],
-    discover: { classes: 'brawler',
+    unlock: { chain: 'brawler',
       hint: 'Past the pit there is a finer arena, where the crowd pays to watch a fighter never get hit at all.' } },
-  { classId: 'flagellant', cost: 300,
+  { classId: 'flagellant',
     blurb: 'Pain, notarized: a covenant that feeds on its keeper and repays exactly when the flesh runs short.',
     skillIds: ['ashen_vow', 'transgression', 'blood_mortgage'],
     // THE COUNTED DISCOVERY (ledgerCounts debut): the account's own deaths
     // are the syllabus — the same lifetime counter the Immortal reads.
-    discover: { ledgerCounts: { [LEDGER_ACCOUNT_DEATHS]: 8 },
+    unlock: { objectives: [{ ledger: LEDGER_ACCOUNT_DEATHS, n: 8, label: 'die eight times' }],
       hint: 'You have died enough times to notice: something in you keeps the receipts. An order exists that balances them.' } },
-  { classId: 'falconer', cost: 300,
+  { classId: 'falconer',
     blurb: 'The mark has wings and an opinion: one huntress, loosed to latch and hold the quarry open.',
     skillIds: ['cast_falcon', 'expose_weakness', 'cloudstep'],
-    discover: { ledger: classLevelLedgerKey('tamer', 10),
+    unlock: { objectives: [{ classLevel: { classId: 'tamer', level: 10 } }],
       hint: 'Walk far enough with a bond at your heel and something above starts keeping pace with you both.' } },
-  { classId: 'sharper', cost: 280,
+  { classId: 'sharper',
     blurb: 'Probability owes money: every suit rides every throw, the odds arrive pre-palmed, and nobody can prove anything.',
     skillIds: ['thrown_ace', 'stack_the_deck', 'quiet_step'],
-    discover: { classes: 'swashbuckler',
+    unlock: { chain: 'swashbuckler',
       hint: 'The duelist\'s stage has a back room. The games there are quicker, quieter, and the blades are shaped like cards.' } },
-  { classId: 'firebrand', cost: 300,
+  { classId: 'firebrand',
     blurb: 'The riot, delivered as a speech: the crowd does the fighting, and you were provably elsewhere.',
     skillIds: ['incite', 'trumpet_peal', 'harrowing_wail'],
-    discover: { classes: 'beguiler',
+    unlock: { chain: 'beguiler',
       hint: 'One whispered madness turns a mind. Somewhere there is a school for saying it to a square full of them.' } },
-  { classId: 'runeweaver', cost: 320,
+  { classId: 'runeweaver',
     blurb: 'Spells are sentences, runes are the words, patience is the grammar: the invocation bank made a calling.',
     skillIds: ['invocation', 'rune_of_power', 'warp'],
-    discover: { ledger: classLevelLedgerKey('magician', 20),
+    unlock: { objectives: [{ classLevel: { classId: 'magician', level: 20 } }],
       hint: 'At the twentieth circle the Magician\'s letters stop meaning and start DOING. Few study past the alphabet.' } },
-  { classId: 'resonator', cost: 300,
+  { classId: 'resonator',
     blurb: 'Everything rings if struck sincerely: leave the body humming a bright tone, then play the chord fortissimo.',
     skillIds: ['tuning_strike', 'shatterchord', 'purity_of_elements'],
     // The starfall lattices already sing when broken (killHandlers stamps
     // fallen_stars_broken) — whoever shattered one has heard the tone.
-    discover: { ledger: 'fallen_stars_broken',
+    unlock: { objectives: [{ ledger: 'fallen_stars_broken', label: 'break a fallen star' }],
       hint: 'Break a fallen star and listen to the lattice go: everything, struck sincerely, will tell you its note.' } },
 ];
 
@@ -473,26 +495,68 @@ function classBundleEntry(b: ClassBundleDef): Unlockable {
   const cls = CLASSES.find(c => c.id === b.classId);
   const name = cls?.name ?? b.classId;
   const sups = b.supportIds ?? [];
-  // THE DISCOVERY COMPILE: the authored spec becomes the same generic gates
-  // every unlock rides — ledger facts → reqLedger, ownership chains →
-  // requiresUnlock (bundle ids) — so isUnlockVisible/applyUnlock needed no
-  // new machinery to learn mystery.
-  const d = b.discover;
-  const chain = d?.classes === undefined ? []
-    : (Array.isArray(d.classes) ? d.classes : [d.classes]).map(classBundleId);
+  // THE OBJECTIVE COMPILE: the authored spec becomes the same generic gates
+  // every unlock rides — objectives → reqAnyOf (the family law: any ONE
+  // holds), a chain → requiresUnlock (the structural door) PLUS a played-
+  // to-level objective — under THE EARNED LAW (cost 0, claimed never
+  // bought), so isUnlockVisible/settleClassUnlocks needed no class-shaped
+  // machinery to learn the web.
+  const spec = b.unlock;
+  const chain = spec.chain === undefined ? [] : Array.isArray(spec.chain) ? spec.chain : [spec.chain];
+  const objectives: GateRow[] = [
+    ...chain.map((parent): GateRow => ({ classLevel: { classId: parent, level: CLASS_WEB_CFG.chainPlayLevel } })),
+    ...(spec.objectives ?? []),
+  ];
   return {
-    id: classBundleId(b.classId), kind: 'class', cost: b.cost,
-    ...(d?.ledger !== undefined ? { reqLedger: d.ledger } : {}),
-    ...(d?.ledgerCounts !== undefined ? { reqLedgerCounts: d.ledgerCounts } : {}),
-    ...(chain.length ? { requiresUnlock: chain } : {}),
+    id: classBundleId(b.classId), kind: 'class', cost: 0, earned: true,
+    reqAnyOf: objectives,
+    ...(chain.length ? { requiresUnlock: chain.map(classBundleId) } : {}),
     label: `Class: ${name}`,
     description: `${b.blurb} The ${name} joins the class roll at character select`
       + `, and once realized in a run, its Vocation chain opens.`
       + ` Gems added to the drop pool: ${gemNames(b.skillIds, SKILLS)}`
       + (sups.length ? ` · supports: ${gemNames(sups, SUPPORTS)}` : '') + '.',
-    payload: { classId: b.classId, skillIds: [...b.skillIds], supportIds: [...sups],
-      ...(d ? { hint: d.hint } : {}) },
+    payload: { classId: b.classId, skillIds: [...b.skillIds], supportIds: [...sups], hint: spec.hint },
   };
+}
+
+/** THE MASTERY LADDER's catalog rows: one per (class × rung) where the class
+ *  authors a kit row for that rung — nothing moot ever surfaces. Sequenced
+ *  strictly (each rung requires the previous rung THAT EXISTS for the
+ *  class) behind the class itself (non-starters: the earned bundle), and
+ *  unveiled by the rung's class level (a classLevel avenue — the milestone
+ *  derivation registers its stamp). Hidden until investable: no tease. */
+function classTierEntries(): Unlockable[] {
+  const out: Unlockable[] = [];
+  for (const c of CLASSES) {
+    const rows = kitRungs(c);
+    if (!rows.length) continue;
+    let prevId: string | undefined;
+    for (const t of CLASS_TIERS) {
+      const gifts = rows.filter(r => r.tier === t.id);
+      if (!gifts.length) continue;
+      const requires = [
+        ...(STARTER_CLASSES.includes(c.id) ? [] : [classBundleId(c.id)]),
+        ...(prevId ? [prevId] : []),
+      ];
+      const id = classTierId(c.id, t.id);
+      const gift = (g: { skill: string; replaces?: string }): string => g.replaces
+        ? `${SKILLS[g.skill]?.name ?? g.skill} may stand in for ${SKILLS[g.replaces]?.name ?? g.replaces}`
+        : `${SKILLS[g.skill]?.name ?? g.skill} stands on the bar from the first breath`;
+      out.push({
+        id, kind: 'classtier', cost: t.cost,
+        ...(requires.length ? { requiresUnlock: requires } : {}),
+        reqAnyOf: [{ classLevel: { classId: c.id, level: t.level } }],
+        label: `${t.label} ${c.name}`,
+        description: `Mastery of the ${c.name}, rung ${t.label} (a ${c.name} of level ${t.level} has walked this far).`
+          + ` An ALTERNATE OPENING for every ${c.name} you wake after: ${gifts.map(gift).join('; ')}`
+          + ` — chosen on the class card. ${gifts.length === 1 ? 'The gem joins' : 'The gems join'} the drop pool.`,
+        payload: { classId: c.id, tierId: t.id, skillIds: gifts.map(g => g.skill) },
+      });
+      prevId = id;
+    }
+  }
+  return out;
 }
 
 /** The Skill Graft's per-charge price (data beside its entry; retune freely). */
@@ -530,7 +594,10 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   })),
 
   // --- Class bundles: class + thematic gems + (once realized) its vocation ---
+  //     EARNED by objectives, never bought (THE OBJECTIVE WEB above).
   ...CLASS_BUNDLES.map(classBundleEntry),
+  // --- THE MASTERY LADDER: per-class rungs, the essence's new home ----------
+  ...classTierEntries(),
 
   // --- Skill drop bundles (tier-1 are starters; these add more to the pool) -
   { id: 'gem_skills_t2', kind: 'skill', cost: 75, reqLevel: 0, label: 'Skill Pool II',
@@ -1058,45 +1125,118 @@ export function classUnlockFor(classId: string): Unlockable | undefined {
   return CATALOG_BY_ID.get(classBundleId(classId));
 }
 
-/** Has the account DISCOVERED this class (its Vault entry surfaced, or it is
- *  already owned / a starter)? The read every teasing surface shares: an
- *  undiscovered class shows as a shrouded rumor — hint only, never name —
- *  and cannot be bought (applyUnlock rides the same visibility gate).
- *  Owned counts as discovered by definition, so accounts that bought a
- *  class before its discover row existed are never re-shrouded. */
-export function isClassDiscovered(a: Account, classId: string): boolean {
-  const u = classUnlockFor(classId);
-  if (!u) return true; // starters (and any classless id) have no mystery
-  return isUnlockOwned(a, u) || isUnlockVisible(a, u);
-}
-
-/** Class bundles the account has NOT yet discovered (unowned + gate unmet) —
- *  the Vault's rumor wall reads these for their payload.hint. */
-export function undiscoveredClassUnlocks(a: Account): Unlockable[] {
+/** THE SHROUDED WALL: every EARNED class entry the account does not own
+ *  whose structural door stands (chain parents owned) — the Vault's rumor
+ *  cards and the class screen's rumor teasers, INDEX-addressed by every UI
+ *  (the DOM never carries a class's name; the card is written in runes). */
+export function shroudedClassUnlocks(a: Account): Unlockable[] {
   return UNLOCK_CATALOG.filter(u =>
-    u.kind === 'class' && !isUnlockOwned(a, u) && !isUnlockVisible(a, u));
+    u.kind === 'class' && !!u.earned && !isUnlockOwned(a, u) && structuralPrereqsMet(a, u));
 }
 
-/** Every ledger requirement named by any class-discovery spec, as
- *  key → MINIMUM COUNT (presence keys need 1; counted keys their
- *  threshold). The dev tab's "stamp the world's lessons" lever and the
- *  probe's reachability walk both derive from this, so QA and invariants
- *  can never drift from the authored web. */
-export function discoveryLedgerNeeds(): Record<string, number> {
+/** One objective as a face reads it. */
+export interface ClassObjectiveRead { label: string; frac: number; met: boolean }
+export interface ClassUnlockRead {
+  rows: ClassObjectiveRead[];
+  /** THE REVEAL: any objective ≥ CLASS_WEB_CFG.revealFrac — the objectives
+   *  read plain (the name never does, until the class is claimed). */
+  revealed: boolean;
+  /** Every gate holds — the settle will claim it. */
+  met: boolean;
+}
+
+/** HOW FAR a shrouded class stands: each objective's spoken line, its
+ *  0..1 progress (gates.ts gateRowProgress) and whether it holds; plus the
+ *  reveal verdict. `view` substitutes a merged ledger (account + the live
+ *  run) for mid-run reads; the Vault reads the account alone. */
+export function classUnlockProgress(a: Account, u: Unlockable, view?: Readonly<Record<string, number>>): ClassUnlockRead {
+  const probe: Account = view ? { ...a, ledger: view } : a;
+  const owned = ownedUnlockById(probe);
+  const rows = (u.reqAnyOf ?? []).map(r => ({
+    label: gateRowLabel(r), frac: gateRowProgress(probe, r, owned), met: gateRowMet(probe, r, owned),
+  }));
+  const best = rows.reduce((m, r) => Math.max(m, r.frac), 0);
+  return { rows, revealed: rows.length > 0 && best >= CLASS_WEB_CFG.revealFrac, met: isUnlockVisible(probe, u) };
+}
+
+/** THE CLAIM — grant an EARNED entry outright: the world's own door, never
+ *  the pour's. Gates read through `view` (a merged ledger) when given;
+ *  the grant always lands on the real account. False = not earned, owned
+ *  already, or its gates still hold it shut. */
+export function claimClassUnlock(a: Account, u: Unlockable, view?: Readonly<Record<string, number>>): boolean {
+  if (!u.earned || isUnlockOwned(a, u)) return false;
+  const probe: Account = view ? { ...a, ledger: view } : a;
+  if (!isUnlockVisible(probe, u)) return false;
+  delete a.invested[u.id];
+  grantUnlock(a, u);
+  return true;
+}
+
+/** THE SETTLE — claim every earned entry whose gates hold, to a fixed point
+ *  (a claim may open a chained card whose objective already stands).
+ *  Idempotent and cheap (a few dozen rows): the live run's sweep, the Vault
+ *  render, the class deal and the run's end all call it. Returns what was
+ *  claimed, for the notices. Caller saves. */
+export function settleClassUnlocks(a: Account, view?: Readonly<Record<string, number>>): Unlockable[] {
+  const out: Unlockable[] = [];
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const u of UNLOCK_CATALOG) {
+      if (u.kind === 'class' && claimClassUnlock(a, u, view)) { out.push(u); grew = true; }
+    }
+  }
+  return out;
+}
+
+/** Every ledger key any class objective names, as key → the LARGEST count
+ *  asked (presence keys 1; play thresholds their milestone key at 1). The
+ *  dev tab's "stamp every objective" lever and the probe's reachability
+ *  walk both derive from this, so QA and invariants can never drift from
+ *  the authored web. */
+export function classObjectiveNeeds(): Record<string, number> {
   const needs: Record<string, number> = {};
-  for (const b of CLASS_BUNDLES) {
-    const d = b.discover;
-    if (!d) continue;
-    const l = d.ledger;
-    if (l !== undefined) for (const k of Array.isArray(l) ? l : [l]) needs[k] = Math.max(needs[k] ?? 0, 1);
-    for (const [k, n] of Object.entries(d.ledgerCounts ?? {})) needs[k] = Math.max(needs[k] ?? 0, n);
+  for (const u of UNLOCK_CATALOG) {
+    if (u.kind !== 'class' || !u.earned) continue;
+    for (const r of u.reqAnyOf ?? []) {
+      if (r.ledger !== undefined) needs[r.ledger] = Math.max(needs[r.ledger] ?? 0, r.n ?? 1);
+      if (r.classLevel !== undefined) {
+        const k = classLevelLedgerKey(r.classLevel.classId, r.classLevel.level);
+        needs[k] = Math.max(needs[k] ?? 0, 1);
+      }
+    }
   }
   return needs;
 }
 
-/** The keys alone (see discoveryLedgerNeeds). */
-export function discoveryLedgerKeys(): string[] {
-  return Object.keys(discoveryLedgerNeeds());
+/** The keys alone (see classObjectiveNeeds). */
+export function classObjectiveKeys(): string[] {
+  return Object.keys(classObjectiveNeeds());
+}
+
+/** THE CLASS-MILESTONE DERIVATION (the reached_level_15 lesson, per class):
+ *  every level the STATIC catalog asks of THIS class — objective
+ *  `classLevel` avenues (the web's play thresholds, the chains' played-
+ *  parent asks) and the mastery rungs — so the XP sweep stamps exactly
+ *  these beside CLASS_LEVEL_MILESTONES. Authoring a class-level gate
+ *  anywhere in the catalog registers its stamp BY CONSTRUCTION. */
+const classMilestoneCache = new Map<string, number[]>();
+export function catalogClassLevelMilestones(classId: string): number[] {
+  const hit = classMilestoneCache.get(classId);
+  if (hit) return hit;
+  const out = new Set<number>();
+  const RE = new RegExp(`^${classLevelLedgerKey(classId, 0).slice(0, -1)}(\\d+)$`);
+  for (const u of UNLOCK_CATALOG) {
+    for (const need of gateClassLevelNeeds(u.reqAnyOf)) if (need.classId === classId) out.add(need.level);
+    const keys = [
+      ...(u.reqLedger ? (Array.isArray(u.reqLedger) ? u.reqLedger : [u.reqLedger]) : []),
+      ...Object.keys(u.reqLedgerCounts ?? {}),
+    ];
+    for (const k of keys) { const m = RE.exec(k); if (m) out.add(Number(m[1])); }
+  }
+  const list = [...out].sort((x, y) => x - y);
+  classMilestoneCache.set(classId, list);
+  return list;
 }
 
 export function isUnlockOwned(a: Account, u: Unlockable): boolean {
@@ -1105,6 +1245,7 @@ export function isUnlockOwned(a: Account, u: Unlockable): boolean {
     // Owning the CLASS is the bundle's identity — gem overlap with old saves'
     // pool purchases never blocks the class itself from being purchasable.
     case 'class':   return a.unlockedClasses.has(u.payload.classId);
+    case 'classtier': return a.unlockedClassTiers.has(u.id);
     case 'skill':   return u.payload.skillIds.every(id => a.unlockedSkills.has(id));
     case 'support': return u.payload.supportIds.every(id => a.unlockedSupports.has(id));
     case 'feature': return a.features.has(u.payload.flag);
@@ -1323,7 +1464,8 @@ export function catalogLevelMilestones(): number[] {
  *  account pass folds its own dynamic stock (fallen-vessel resurrections)
  *  onto the shelf beside the static catalog. */
 export function availableUnlocks(a: Account): Unlockable[] {
-  return allUnlockables(a).filter(u => isUnlockVisible(a, u) && !isUnlockOwned(a, u));
+  // Earned entries are never STOCK (the shrouded wall shows them instead).
+  return allUnlockables(a).filter(u => !u.earned && isUnlockVisible(a, u) && !isUnlockOwned(a, u));
 }
 
 /** "This pour finished" — ownership for the permanent kinds, the state
@@ -1392,9 +1534,9 @@ export const VAULT_TABS: readonly VaultTabDef[] = [
     emptyNote: 'No vessel lies fallen. May it stay that way.',
   },
   {
-    id: 'classes', label: 'Classes', kinds: ['slot', 'class'], rumors: true,
-    blurb: 'The hand and the pool: Class Slots widen how many classes each deal offers, Class bundles deepen the pool the hand is dealt from. Rumors whisper at classes the world has not introduced yet.',
-    emptyNote: 'No class purchases are open right now; classes surface through deeds, levels, and hard lessons. The rumors below point at the deeds.',
+    id: 'classes', label: 'Classes', kinds: ['slot', 'class', 'classtier'], rumors: true,
+    blurb: 'The hand, the pool, and the ladder: Class Slots widen how many classes each deal offers; classes themselves are EARNED — the shrouded cards below carry their objectives, written in the vestiges\' runes; Mastery rungs (Novice → Master, at class level 10/30/60/100) open alternate openings for a class you have walked far.',
+    emptyNote: 'No class purchases are open right now. Classes are earned, never bought — the shrouded cards below carry the deeds; Mastery rungs surface once a class of yours has walked far enough.',
   },
   {
     id: 'gems', label: 'Memories', kinds: ['skill', 'support', 'graft'],
@@ -1421,7 +1563,7 @@ export const VAULT_TABS: readonly VaultTabDef[] = [
  *  (the cards' lowercase `ukind` tag, at shelf grain). Total by type: a new
  *  catalog kind fails the build here until it gets a name. */
 export const VAULT_KIND_LABELS: Record<UnlockKind, string> = {
-  slot: 'Class Slots', class: 'Classes', skill: 'Skill Pools',
+  slot: 'Class Slots', class: 'Classes', classtier: 'Mastery', skill: 'Skill Pools',
   support: 'Support Pools', feature: 'Town & Features', package: 'World Events',
   graft: 'Skill Grafts', resurrect: 'Fallen Vessel',
 };
@@ -1493,7 +1635,7 @@ export interface VaultShelfCensus {
 export function vaultShelfCensus(a: Account): VaultShelfCensus[] {
   const avail = availableUnlocks(a);
   const ownedAll = allUnlockables().filter(u => isUnlockOwned(a, u));
-  const rumorsAll = undiscoveredClassUnlocks(a);
+  const rumorsAll = shroudedClassUnlocks(a);
   return VAULT_TABS.map(t => {
     const stock = t.owned ? [] : avail.filter(u => vaultSeatOf(u.kind).id === t.id);
     const owned = t.owned ? ownedAll : ownedAll.filter(u => vaultSeatOf(u.kind).id === t.id);
@@ -1574,6 +1716,10 @@ function grantUnlock(a: Account, u: Unlockable): void {
       for (const id of u.payload.skillIds) a.unlockedSkills.add(id);
       for (const id of u.payload.supportIds) a.unlockedSupports.add(id);
       break;
+    case 'classtier':
+      a.unlockedClassTiers.add(u.id);
+      for (const id of u.payload.skillIds) a.unlockedSkills.add(id);
+      break;
     case 'skill':   for (const id of u.payload.skillIds) a.unlockedSkills.add(id); break;
     case 'support': for (const id of u.payload.supportIds) a.unlockedSupports.add(id); break;
     case 'feature': a.features.add(u.payload.flag); break;
@@ -1596,7 +1742,8 @@ function grantUnlock(a: Account, u: Unlockable): void {
  *  visibility gate — an invisible or owned entry takes nothing. Returns the
  *  units actually poured (0 = refused or nothing to pour). Caller saves. */
 export function investUnlock(a: Account, u: Unlockable, amount: number): number {
-  if (isUnlockOwned(a, u) || !isUnlockVisible(a, u)) return 0;
+  // THE EARNED LAW: no pour reaches an earned entry — the world claims it.
+  if (u.earned || isUnlockOwned(a, u) || !isUnlockVisible(a, u)) return 0;
   const rem = remainingCost(a, u);
   if (rem === 0) {
     // A retuned catalog left an investment at/over the new cost: settle it.
@@ -1624,7 +1771,7 @@ export function investUnlock(a: Account, u: Unlockable, amount: number): number 
  *  Success = the full remainder poured and the grant fired — NOT ownership,
  *  which a repeatable kind (the graft) never reports. */
 export function applyUnlock(a: Account, u: Unlockable): boolean {
-  if (isUnlockOwned(a, u) || !isUnlockVisible(a, u)) return false;
+  if (u.earned || isUnlockOwned(a, u) || !isUnlockVisible(a, u)) return false;
   const rem = remainingCost(a, u);
   if (a.credits < rem) return false;
   if (rem === 0) { investUnlock(a, u, 0); return true; } // the settle path granted

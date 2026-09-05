@@ -614,6 +614,29 @@
     /* THE INVESTMENT LANE — each card's poured-progress bar (rendered even
        at zero so a live pour can fill it without a re-render) + the pour's
        held-button glow. */
+    /* THE RUNESCRIPT (data/runescript.ts): shrouded class cards are written
+       in the vestiges' runes — ether ink (her palette: the between-lives
+       voice), a font stack that carries the Unicode Runic block. */
+    .runescript { font-family: 'Segoe UI Symbol', 'Noto Sans Runic', 'Junicode', serif; color: #8fa8d8; }
+    .unlock-card.ushroud { opacity: .8; }
+    .unlock-card.ushroud .ushroud-body { font-size: 10px; line-height: 1.35; margin: 0 0 6px; max-height: 4.1em; overflow: hidden; }
+    /* THE OBJECTIVES: one row each; revealed rows carry a hairline progress
+       fill (the invest bar's grain), met rows read in the good tint. */
+    .unlock-card .uobjs { margin: 0 0 6px; }
+    .unlock-card .uobj { position: relative; font-size: 10px; color: var(--text-dim); margin: 2px 0; padding: 2px 5px 3px; background: rgba(255,255,255,0.03); border-radius: 3px; overflow: hidden; }
+    .unlock-card .uobj i { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--gold); }
+    .unlock-card .uobj.met { color: var(--good, #7fd88f); }
+    /* THE OPENING CHOOSER (meta/classkit.ts): the class card's starter chips;
+       a slot with owned mastery alternates is a GROUP — the chosen chip
+       solid, the rest dashed and dim; Master grants wear ✦. */
+    .kit-row { margin-top: 3px; }
+    .kit-chip { display: inline-block; padding: 1px 7px; margin: 1px 3px 1px 0; border: 1px solid; border-radius: 8px; font-size: 9px; cursor: var(--cursor-help, help); }
+    .kit-chip.pick { cursor: var(--cursor-point, pointer); }
+    .kit-chip.off { opacity: .45; border-style: dashed; }
+    .kit-chip.grant::before { content: '✦ '; color: var(--gold); }
+    .kit-chip small { font-size: 8px; opacity: .75; }
+    .kit-group { display: inline-block; padding: 1px 3px; margin: 1px 3px 1px 0; border: 1px dotted var(--panel-border); border-radius: 10px; }
+    .kit-group em { font-style: normal; font-size: 8px; color: var(--text-dim); margin: 0 2px; }
     .unlock-card .uinvest {
       height: 4px; border-radius: 2px; margin: 0 0 5px;
       background: rgba(255,255,255,0.06); overflow: hidden;

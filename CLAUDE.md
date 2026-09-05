@@ -1397,6 +1397,42 @@ we verify changes.
   (III any-of level-15/vocation/quest) → Gem Counter → Reserved Wares →
   Standing Order (needs one ORDERABLE gem via gemdrop: prefix) — docs in
   `docs/meta/gatework.md`, probes `balance/probe_vendorlocker.ts` E/F.
+  THE OBJECTIVE WEB + THE MASTERY LADDER + THE RUNESCRIPT (her ruling
+  2026-09-05 — a class is EARNED, never bought): every non-starter class
+  hangs in the Vault SHROUDED from day one, its name/blurb written in the
+  vestiges' runes (`data/runescript.ts` — a fixed Elder-Futhark cipher,
+  26 letters + th/ng, lossless; THE ROSETTA LAW: each vestige carries the
+  `letter` it teaches and its glyph DERIVES from it) with its `hint` the
+  one plain line and its OBJECTIVES beneath — `ClassBundleDef.unlock`
+  (`ClassUnlockSpec`): an ANY-OF group of gatework avenues (`classLevel`
+  play thresholds — the new `GateRow` sugar; counted deeds `ledger`+`n`:
+  `LEDGER_CORPSES_RECLAIMED` ×20 or `bossSlainKey('undead')` ×5 → the
+  Necromancer, both ACCOUNT-DIRECT stamps; hard lessons; a `chain` = the
+  parent owned as the structural door + played to
+  `CLASS_WEB_CFG.chainPlayLevel`), compiled onto `reqAnyOf`/`requiresUnlock`
+  under THE EARNED LAW (`UnlockBase.earned`: cost 0, the pour refuses,
+  never stock). THE REVEAL: objectives read plain with progress once any
+  one stands `revealFrac` along (`gateRowProgress` → `classUnlockProgress`);
+  THE CLAIM: `settleClassUnlocks` (the live sweep every `sweepSec` against
+  `World.ledgerView()` — the merged account+run fold — plus the Vault, the
+  deal, the run's end) hands the class over, gems dropping from the next
+  kill. Mortal Essence buys MASTERY instead: `CLASS_TIERS`
+  (data/classTiers.ts — Novice/Adept/Expert/Master at class level
+  10/30/60/100) × `ClassDef.kit` rows (`replaces` alternates + the Master's
+  outright grant) mint `kind:'classtier'` rows (sequenced, behind the earned
+  class, unveiled by the derived class milestone —
+  `catalogClassLevelMilestones` joins the XP sweep; nothing moot surfaces);
+  THE OPENING (`meta/classkit.ts` — `kitChoicesFor`/`resolveClassKit`/
+  `rememberKitPicks`, `Account.unlockedClassTiers` + `kitPicks`) resolves
+  the wake's bar against OWNED rungs (the class card's chooser →
+  `startGame(…, kitPicks)` → `createPlayer({ kit })`; THE CAPSTONE LAW: a
+  Master grant may outreach the wake's attributes, cast-gated until the
+  build grows; `classOpeningSkills` feeds the class-skill lane). Debuts:
+  the four starters' ladders (Necromancer: Shambling Horde — the retuned
+  `shambler_horde`, one `grave_shambler` bomber per cast — / Corpse
+  Explosion / Bone Golem (`summon_bone_golem` + `bone_golem`) / Grave
+  Tide). Docs `docs/meta/discovery.md` + `docs/meta/class-mastery.md`;
+  probes `balance/probe_unlocks.ts` + `balance/probe_classmastery.ts`.
   THE WORN GRAFT (slot grafts — supports granted BY POSITION): the
   `slotgraft_<slot>_<gemId>` stat family (engine/skills.ts `slotGraftStat`,
   slot 1-based "Skill Slot N"; value = granted gem LEVEL, grantors SUM,

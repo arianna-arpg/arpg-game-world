@@ -77,7 +77,7 @@ import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, FIXTURE_IDS, MONSTER
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { updateScene, sceneInterceptFall, sceneNoteCast, type SceneRuntime } from './scenes';
-import { CLASSES, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
+import { CLASSES, classOpeningSkills, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
 import { coopScale } from '../data/coop';
 import type { CouchSeatTag } from '../data/couch';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
@@ -375,6 +375,7 @@ import {
   featureEnabled, isSkillUnlockedForDrop, isSupportUnlockedForDrop, FEATURE,
   STARTER_SKILLS, applyCredits, META_CURRENCY_LABEL,
   LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, CLASS_LEVEL_MILESTONES,
+  LEDGER_CORPSES_RECLAIMED,
   classLevelLedgerKey, gemDropKey, LEDGER_GEMDROP_TOTAL, LEDGER_VENDOR_BOUGHT,
   LEDGER_CRAFTS_UNLOCKED, LEDGER_LEGENDARY_SKILL_DROP, LEDGER_ZONES_EXPLORED,
   questDoneKey, reachedLevelKey,
@@ -387,7 +388,10 @@ import { gateMet } from '../meta/gates';
 // so a level gate authored anywhere in the catalog has a live signal BY
 // CONSTRUCTION (unlocks.ts → vendors.ts touches world only type-wise; no
 // runtime cycle).
-import { allUnlockables, catalogLevelMilestones, isUnlockOwned } from '../meta/unlocks';
+import {
+  allUnlockables, catalogClassLevelMilestones, catalogLevelMilestones, isUnlockOwned, settleClassUnlocks,
+} from '../meta/unlocks';
+import { CLASS_WEB_CFG } from '../data/classTiers';
 import {
   modeById, resurrectFee, stageOf, DEFAULT_MODE_ID, FADE_DEFAULTS,
   type CharacterModeDef, type ModeStageDef,
@@ -3921,7 +3925,12 @@ export class World {
   /** Build a fresh player-kind seat from a class at a position — the shared
    *  spine of both the local hero (createPlayer) and a co-op ally (addSeat).
    *  Input source is supplied by the caller (OS-driven, scripted, or remote). */
-  private makePlayerSeat(id: string, classDef: ClassDef, input: PlayerInputSource, pos: Vec2): Seat {
+  /** `kit` = the RESOLVED opening bar (meta/classkit.ts resolveClassKit —
+   *  the class's base bar with any owned MASTERY alternates standing in and
+   *  any owned grants seated); absent = the base bar. Always resolved
+   *  against the account by the caller, never trusted from a wire. */
+  private makePlayerSeat(id: string, classDef: ClassDef, input: PlayerInputSource, pos: Vec2,
+    kit?: readonly (string | null)[]): Seat {
     const p = new Actor(classDef.name, 'player', vec(pos.x, pos.y));
     p.color = classDef.color;
     p.radius = 15;
@@ -3955,23 +3964,29 @@ export class World {
     };
     // Class bar skills come pre-learned at the KIT tier — the ladder's floor
     // (1 socket), so the wild economy outdrops the cradle from the first find.
-    for (const sid of classDef.bar) {
-      if (sid && !meta.knownSkills.has(sid)) {
+    // THE OPENING: the resolved kit when one is handed in (an owned mastery
+    // alternate standing in for its base, a Master's grant seated), else
+    // the class's base bar — an unknown id in either is skipped, never a crash.
+    const bar = kit ?? classDef.bar;
+    for (const sid of bar) {
+      if (sid && SKILLS[sid] && !meta.knownSkills.has(sid)) {
         meta.knownSkills.set(sid, makeSkillGem(SKILLS[sid], 1, CLASS_KIT_RARITY));
       }
     }
-    p.skills = padBar(classDef.bar.map(sid => (sid ? meta.knownSkills.get(sid)! : null)));
+    p.skills = padBar(bar.map(sid => (sid ? meta.knownSkills.get(sid) ?? null : null)));
     const seat: Seat = { id, actor: p, meta, input, lastActedAt: -999, reviveDwellBy: new Map() };
     this.recalcSeat(seat);
     p.fillResources();
     return seat;
   }
 
-  createPlayer(classDef: ClassDef, opts?: { modeId?: string; charId?: string; name?: string }): void {
+  createPlayer(classDef: ClassDef, opts?: { modeId?: string; charId?: string; name?: string;
+    /** THE OPENING (meta/classkit.ts): the resolved kit bar — see makePlayerSeat. */
+    kit?: readonly (string | null)[] }): void {
     // The local seat is this client's own hero (camera + input anchor). Input is
     // a placeholder until main.ts wires the OS reader (Phase 4); single-player
     // reads it through the `player`/`meta` getters exactly as before.
-    this.localSeat = this.makePlayerSeat('p0', classDef, new NullInput(), vec(this.arena.w / 2, this.arena.h / 2));
+    this.localSeat = this.makePlayerSeat('p0', classDef, new NullInput(), vec(this.arena.w / 2, this.arena.h / 2), opts?.kit);
     // The LIFE-CONTRACT (meta/modes.ts): stamped at creation; a resumed save
     // overwrites it via applySavedCharacter (the save is the authority).
     if (opts?.modeId) this.localSeat.meta.modeId = opts.modeId;
@@ -4786,6 +4801,40 @@ export class World {
    *  vocation unlocks, uber trophies, craft lore)? An Undying character reads
    *  the account freely — town features, drop pools — but never feeds it. */
   metaProgressionActive(): boolean { return this.modeStageDef().metaProgression; }
+
+  /** THE MERGED VIEW: the account ledger with this run's live counters
+   *  folded on top — the SAME additive fold the run's end performs
+   *  (mergeLedger), taken early. THE OBJECTIVE WEB reads it mid-run so a
+   *  deed completes the moment it lands, not at the next death. Presence
+   *  keys read ≥ 1 either way; a COUNTED objective key must live in exactly
+   *  ONE ledger (account.ts: the deed keys are account-direct) or it would
+   *  double here. A fresh object each call — never a write surface. */
+  ledgerView(): Record<string, number> {
+    const view: Record<string, number> = { ...this.account.ledger };
+    mergeLedger(view, this.ledger);
+    return view;
+  }
+
+  /** THE CLAIM SWEEP (data/classTiers.ts CLASS_WEB_CFG.sweepSec): re-read the
+   *  objective web against the merged view and let the world CLAIM any class
+   *  whose deed now holds — its gems drop from the very next kill (the pool
+   *  reads the account live) and the notice feed says so. Meta-gated: a
+   *  sealed stage claims nothing. Cheap by construction (a few dozen rows,
+   *  every couple of seconds). */
+  private classClaimNextAt = 0;
+  private sweepClassClaims(): void {
+    if (this.time < this.classClaimNextAt) return;
+    this.classClaimNextAt = this.time + CLASS_WEB_CFG.sweepSec;
+    if (!this.metaProgressionActive()) return;
+    const got = settleClassUnlocks(this.account, this.ledgerView());
+    if (!got.length) return;
+    this.accountDirty = true;
+    for (const u of got) {
+      if (u.kind !== 'class') continue;
+      const name = CLASSES.find(c => c.id === u.payload.classId)?.name ?? u.payload.classId;
+      this.notice(`The world yields the ${name} — a new vessel answers at the next waking, and its arts may drop from here on.`, '#8fa8d8', 18, 'world');
+    }
+  }
 
   /** The corpse ring this character's zones SPAWN from — the interaction
    *  scope. Mortals share the account graveyard; the Undying see only their
@@ -21045,14 +21094,15 @@ export class World {
       if (mods) p.sheet.setSource('gear:' + slot.id, mods);
       else p.sheet.removeSource('gear:' + slot.id);
     }
-    // "+N to <Class> Skills": sum every classSkill_<id> stat whose class bar
-    // holds this skill — dynamic against the LIVE registry, so re-barring a
-    // class retunes every such affix with zero data edits. Written onto the
+    // "+N to <Class> Skills": sum every classSkill_<id> stat whose class can
+    // OPEN with this skill — its bar starters AND its mastery alternates
+    // (classOpeningSkills) — dynamic against the LIVE registry, so re-barring
+    // a class retunes every such affix with zero data edits. Written onto the
     // instance (bonusLevels) so effectiveSkillLevel needs no actor threading.
     for (const inst of m.knownSkills.values()) {
       let bonus = 0;
       for (const c of CLASSES) {
-        if (c.bar.includes(inst.def.id)) bonus += p.sheet.get(classSkillStat(c.id));
+        if (classOpeningSkills(c).includes(inst.def.id)) bonus += p.sheet.get(classSkillStat(c.id));
       }
       inst.bonusLevels = bonus;
     }
@@ -21238,12 +21288,17 @@ export class World {
         if (p.level >= ms && !this.ledger[key]) bumpLedger(this.ledger, key);
       }
     }
-    // PER-CLASS milestones — the DISCOVERY WEB's raw material (account.ts
-    // CLASS_LEVEL_MILESTONES → unlocks.ts ClassBundleDef.discover): playing a
-    // class deep is how the account learns that class's kin exist. Same
-    // once-per-run, account-seat, merge-on-death shape as the sweep above.
+    // PER-CLASS milestones — THE OBJECTIVE WEB's play thresholds and THE
+    // MASTERY LADDER's rungs (account.ts CLASS_LEVEL_MILESTONES → unlocks.ts
+    // ClassUnlockSpec objectives / CLASS_TIERS): playing a class deep is how
+    // the account earns that class's kin and its own mastery. The standing
+    // list PLUS every level the catalog asks of THIS class (the class-
+    // milestone derivation — authoring a classLevel gate registers its
+    // stamp). Same once-per-run, account-seat, merge-on-death shape as the
+    // sweep above.
     if (this.accountSeat(seat)) {
-      for (const ms of CLASS_LEVEL_MILESTONES) {
+      const levels = new Set([...CLASS_LEVEL_MILESTONES, ...catalogClassLevelMilestones(m.classDef.id)]);
+      for (const ms of levels) {
         const key = classLevelLedgerKey(m.classDef.id, ms);
         if (p.level >= ms && !this.ledger[key]) bumpLedger(this.ledger, key);
       }
@@ -26889,6 +26944,14 @@ export class World {
     for (const it of rec.loot.items) this.dropSavedLoot(c.pos, it);
     rec.loot.items = [];
     c.reclaimed = true;
+    // THE OBJECTIVE WEB's corpse deed (account.ts LEDGER_CORPSES_RECLAIMED):
+    // ACCOUNT-DIRECT, once per reclaimed corpse — the account is being
+    // written here anyway, and a counted deed must never double through a
+    // merge. Meta-gated like every account feed (the Undying feed nothing).
+    if (this.metaProgressionActive()) {
+      this.account.ledger[LEDGER_CORPSES_RECLAIMED] = (this.account.ledger[LEDGER_CORPSES_RECLAIMED] ?? 0) + 1;
+      this.accountDirty = true;
+    }
     this.text(vec(c.pos.x, c.pos.y - 24), 'You reclaim what death took.', '#d8b048', 16);
     this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 64, color: '#d8b048', life: 0.5, maxLife: 0.5 });
     if (own) this.charDirty = true; // the ring rides the character save
@@ -44255,6 +44318,8 @@ export class World {
     this.updateWebSettle();
     // THE OMENS: the world murmurs about what waits unfound (world/omens.ts).
     this.updateOmens();
+    // THE OBJECTIVE WEB: a class earned mid-run lands mid-run.
+    this.sweepClassClaims();
     this.drainMyceliaLedger();
     this.updateContagionInfection();
     this.reconcileDeepwinter();

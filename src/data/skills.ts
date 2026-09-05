@@ -2112,6 +2112,28 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.15)] },
   },
 
+  // THE BONE GOLEM — THE MASTERY LADDER's Expert Necromancer opening
+  // (data/classes.ts kit): the golem family's fourth body, raised from bone
+  // — the same binding contract as its kin, one shared golem slot.
+  summon_bone_golem: {
+    id: 'summon_bone_golem', name: 'Summon Bone Golem',
+    description: 'TOGGLE a binding contract: mana is reserved for the golem and stays locked'
+      + ' while the contract holds, even while it lies in a heap awaiting its 8 second'
+      + ' reknitting. A wall of jointed bone that shrugs off poison and shatters the ground'
+      + ' it stamps. Recast to dismiss and reclaim the reserve.',
+    tags: ['spell', 'summon', 'minion', 'persistent'], color: '#d8d0c0',
+    manaCost: 14, cooldown: 4, useTime: 1,
+    delivery: {
+      type: 'summon', monsterId: 'bone_golem',
+      count: 1, maxActive: 1, poolGroup: 'golem',
+      persistent: { reserve: 32, respawnTime: 8, toggle: true },
+    },
+    effects: [],
+    requirements: { willpower: 14 },
+    ai: { range: 400, weight: 1, keepDistance: 300 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.15)] },
+  },
+
   // Duration minion that can be neither hit nor harmed: pure lifespan trade.
   conjure_wisp: {
     id: 'conjure_wisp', name: 'Conjure Wisp',
@@ -10438,15 +10460,25 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ type: 'heal', amount: 6 }],
   },
 
+  // THE SHAMBLING HORDE — THE MASTERY LADDER's Novice Necromancer opening
+  // (data/classes.ts kit; her spec 2026-09-05: the corpse-blast worn as a
+  // walking body, no corpse required). Each cast raises ONE grave shambler
+  // that lurches at the nearest enemy and DETONATES on arrival — the bomber
+  // grammar (brain 'bomber' + explodeOnDeath, data/monsters.ts grave_shambler)
+  // on a zombie's mindless feet, spent in seconds. Slow, aggressive, brief,
+  // loud. (Retuned from the old two-zombies-for-25s wall — an orphan no pool
+  // ever dropped — under the same id.)
   shambler_horde: {
-    id: 'shambler_horde', name: 'Shambler Horde',
-    description: 'Raises 2 shambling zombies per cast, up to 8 at once, each lasting 25'
-      + ' seconds. Slow and numerous: the wall the rest of your necromancy stands behind.',
+    id: 'shambler_horde', name: 'Shambling Horde',
+    description: 'Raise a grave shambler at your side: a slow, mindless corpse that lurches at'
+      + ' the nearest enemy and BURSTS on arrival, dealing fire damage in a ring scaled by'
+      + ' its own unlife. It lasts 7 seconds whether or not it finds a mark; up to 6 may'
+      + ' shamble at once.',
     tags: ['spell', 'summon', 'minion', 'duration'], color: '#8aa868',
-    manaCost: 11, cooldown: 0, useTime: 0.7,
+    manaCost: 9, cooldown: 0.9, useTime: 0.55,
     delivery: {
-      type: 'summon', monsterId: 'zombie',
-      count: 2, maxActive: 8, duration: 25,
+      type: 'summon', monsterId: 'grave_shambler',
+      count: 1, maxActive: 6, duration: 7,
     },
     effects: [],
     requirements: { willpower: 14 },

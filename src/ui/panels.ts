@@ -92,11 +92,17 @@ import {
 } from '../meta/account';
 import {
   allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, INVEST_CFG, investedToward,
-  investUnlock, isClassDiscovered, isUnlockOwned, maxSlotCount, remainingCost,
-  resurrectUnlockId, sealedUnlocks, undiscoveredClassUnlocks, unlockCompleted,
+  investUnlock, isUnlockOwned, maxSlotCount, remainingCost,
+  resurrectUnlockId, sealedUnlocks, settleClassUnlocks, shroudedClassUnlocks, unlockCompleted,
+  classUnlockProgress,
   VAULT_KIND_LABELS, vaultKindOrder, vaultSeatOf, vaultShelfCensus, vaultStripVisible,
   type Unlockable,
 } from '../meta/unlocks';
+// THE RUNESCRIPT (data/runescript.ts): the shrouded class cards are written
+// in the vestiges' runes; THE OPENING CHOOSER (meta/classkit.ts): the class
+// card's mastery alternates.
+import { encipher } from '../data/runescript';
+import { kitChoicesFor, kitRungOf } from '../meta/classkit';
 import { MERC_CFG } from '../meta/mercs';
 import {
   ACTION_IDS, ACTION_LABELS, keyDisplay, PAD_ACTION_IDS, PAD_ACTION_LABELS,
@@ -431,7 +437,7 @@ export class UI {
    *  purchase whose ownership chain reveals new kin; menu navigation keeps
    *  the hand. `rumors` are the shrouded cards: hints of UNDISCOVERED
    *  classes, dealt into the leftover teaser slots — mystery with a compass,
-   *  never a name (the discovery web, meta/unlocks.ts). */
+   *  never a name (the objective web, meta/unlocks.ts). */
   private classRoster: {
     picks: ClassDef[];
     teasers: { def: ClassDef; reason: 'slots' | 'class' }[];
@@ -441,6 +447,11 @@ export class UI {
   /** The LIFE-CONTRACT selected on the class screen (meta/modes.ts). Sticky
    *  across menu navigation like the class hand; reset with it each new offer. */
   private pendingModeId: string = DEFAULT_MODE_ID;
+  /** THE OPENING CHOOSER's picks this offer (classId → base starter →
+   *  chosen skill), seeded from the account's remembered picks per class;
+   *  reset with the hand each new offer. Resolved against what the account
+   *  OWNS at the wake (main.ts startGame → meta/classkit.ts), never here. */
+  private pendingKitPicks: Record<string, Record<string, string>> = {};
   /** THE NAME typed on the class screen this offer. null = untouched (falls
    *  back to account.namePref); '' = explicitly Nameless. Survives the mode
    *  picker's re-renders; reset with the hand. */
@@ -1816,17 +1827,60 @@ export class UI {
   // becomes the sticky preference) and hands the pick to the shell — which
   // tears the provisional Mu world down and starts the run proper.
 
-  showMuClassCard(classId: string, onPick: (def: ClassDef, modeId?: string, name?: string) => void): void {
+  /** THE OPENING CHOOSER's picks for a class this offer — seeded once from
+   *  the account's remembered picks (meta/classkit.ts rememberKitPicks). */
+  private kitPicksFor(c: ClassDef): Record<string, string> {
+    return (this.pendingKitPicks[c.id] ??= { ...(this.getAccount().kitPicks[c.id] ?? {}) });
+  }
+
+  /** THE OPENING CHOOSER (meta/classkit.ts kitChoicesFor): the class's
+   *  starting bar as chips. A slot whose MASTERY alternates the account owns
+   *  becomes a chip GROUP — click to choose, the pick is remembered per
+   *  class — and owned Master grants read as ✦ chips beside them. A class
+   *  with no rung owned renders exactly its base-bar chips: the chooser is
+   *  silent until there is a choice. Every chip keeps the cskill tooltip. */
+  private kitRowHtml(c: ClassDef): string {
+    const { slots, grants } = kitChoicesFor(this.getAccount(), c);
+    const picks = this.kitPicksFor(c);
+    const chip = (sid: string, on: boolean, pick?: { base: string }, grant = false): string => {
+      const d = SKILLS[sid];
+      if (!d) return '';
+      const rung = kitRungOf(c, sid);
+      return `<span class="kit-chip${on ? '' : ' off'}${grant ? ' grant' : ''}${pick ? ' pick' : ''}" data-tip="cskill" data-skill-id="${sid}"
+        ${pick ? `data-kit-base="${pick.base}" data-kit-pick="${sid}"` : ''}
+        style="border-color:${d.color};color:${d.color}">${d.name}${rung ? `<small> · ${rung.label}</small>` : ''}</span>`;
+    };
+    const rows = slots.map(s => {
+      const want = picks[s.base];
+      const picked = want && s.options.includes(want) ? want : s.base;
+      if (s.options.length === 1) return chip(s.base, true);
+      return `<span class="kit-group">${s.options.map(o => chip(o, o === picked, { base: s.base })).join('<em>or</em>')}</span>`;
+    });
+    const gifts = grants.map(g => chip(g.skill, true, undefined, true));
+    const html = [...rows, ...gifts].join('');
+    return html ? `<div class="kit-row">${html}</div>` : '';
+  }
+
+  /** Wire a card's chooser chips: a click picks (never bubbling into the
+   *  card's own pick) and re-renders through `rerender`. */
+  private bindKitChips(root: HTMLElement, c: ClassDef, rerender: () => void): void {
+    root.querySelectorAll<HTMLElement>('[data-kit-pick]').forEach(el => {
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        this.kitPicksFor(c)[el.dataset.kitBase!] = el.dataset.kitPick!;
+        rerender();
+      });
+    });
+  }
+
+  showMuClassCard(classId: string, onPick: (def: ClassDef, modeId?: string, name?: string, kitPicks?: Record<string, string>) => void): void {
     const def = CLASSES.find(c => c.id === classId);
     if (!def) return;
     const acc = this.getAccount();
     this.muCardOpen = true;
-    const chips = def.bar.filter((s): s is string => !!s).map(sid => {
-      const d = SKILLS[sid];
-      return d ? `<span data-tip="cskill" data-skill-id="${sid}"
-        style="display:inline-block;padding:1px 7px;margin:1px 3px 1px 0;border:1px solid ${d.color};
-        border-radius:8px;font-size:9px;color:${d.color};cursor:var(--cursor-help, help)">${d.name}</span>` : '';
-    }).join('');
+    // THE OPENING CHOOSER: the base bar as chips, mastery alternates as
+    // pickable groups (meta/classkit.ts) — the card's one new choice.
+    const chips = this.kitRowHtml(def);
     // The life-contract row (meta/modes.ts), compact: rendered only once a
     // second mode is unlocked — same registry, same full-roster refusal.
     const modes = availableModes(acc);
@@ -1889,6 +1943,8 @@ export class UI {
         this.showMuClassCard(classId, onPick); // re-render keeps the typed name
       });
     });
+    // THE OPENING CHOOSER's chips re-render the card the same way.
+    this.bindKitChips(this.muCard, def, () => this.showMuClassCard(classId, onPick));
     const confirm = (): void => {
       // Belt to the disabled button: a full roster mode can't be sworn into.
       const md = modeById(this.pendingModeId);
@@ -1902,7 +1958,7 @@ export class UI {
         this.saveAccount();
       }
       this.closeMuClassCard();
-      onPick(def, this.pendingModeId, typed || undefined);
+      onPick(def, this.pendingModeId, typed || undefined, this.kitPicksFor(def));
     };
     document.getElementById('mu-wake')?.addEventListener('click', confirm);
     nameInput?.addEventListener('keydown', (e) => {
@@ -1926,6 +1982,7 @@ export class UI {
    *  Called when a run ends (death) — NOT on menu navigation. */
   resetClassRoster(): void {
     this.classRoster = null;
+    this.pendingKitPicks = {};
     this.pendingModeId = DEFAULT_MODE_ID;
     this.pendingCharName = null;   // back to the sticky account preference
   }
@@ -1945,7 +2002,7 @@ export class UI {
     this.oceanCache = null;
   }
 
-  showClassSelect(onPick: (def: ClassDef, modeId?: string, name?: string) => void, onBack?: () => void): void {
+  showClassSelect(onPick: (def: ClassDef, modeId?: string, name?: string, kitPicks?: Record<string, string>) => void, onBack?: () => void): void {
     // Whatever is in the name field RIGHT NOW survives every route back here
     // (mode picks, Vault detours, weight edits): the old input still exists
     // until the innerHTML rebuild below, so capture it first — belt to the
@@ -1965,13 +2022,11 @@ export class UI {
     // + purchased Class bundles). Class Slots set the HAND SIZE; Class unlocks
     // deepen the pool the hand is dealt from.
     const pool = CLASSES.filter(c => isClassUnlocked(acc, c.id));
-    // THE DISCOVERY SPLIT (meta/unlocks.ts): locked classes the account has
-    // DISCOVERED tease with their full face and exact Vault remedy; the
-    // undiscovered stay shrouded — a rumor card whispers the hint, never the
-    // name. "If you don't know what you're looking for, find it first."
-    const lockedClasses = CLASSES.filter(c => !isClassUnlocked(acc, c.id));
-    const discoveredLocked = lockedClasses.filter(c => isClassDiscovered(acc, c.id));
-    const undiscovered = lockedClasses.filter(c => !isClassDiscovered(acc, c.id));
+    // THE SHROUDED WALL (meta/unlocks.ts): every locked class is EARNED,
+    // never bought — the rumor cards below whisper their hints (the name
+    // stays the world's secret; the Vault's cards carry the objectives).
+    // "If you don't know what you're looking for, find it first."
+    const shrouded = shroudedClassUnlocks(acc);
     // Roguelike roll: shuffle the pool, surface the hand plus a few locked
     // TEASERS. Rolled ONCE per new-run offer + CACHED, so menu navigation
     // (Vault / Event Weights / Back) keeps the same offer; only a death
@@ -1979,7 +2034,7 @@ export class UI {
     // that changes the deal inputs (a Class Slot widens the hand, a Class
     // bundle deepens the pool — and may REVEAL chained kin), which re-deals
     // so the purchase shows.
-    const dealtFor = `${selectable}|${pool.map(c => c.id).join(',')}|${discoveredLocked.map(c => c.id).join(',')}`;
+    const dealtFor = `${selectable}|${pool.map(c => c.id).join(',')}|${shrouded.length}`;
     if (this.classRoster && this.classRoster.dealtFor !== dealtFor) {
       this.classRoster = null;
     }
@@ -1993,24 +2048,20 @@ export class UI {
       };
       const shuffled = shuffle([...pool]);
       const picks = shuffled.slice(0, Math.min(selectable, shuffled.length));
-      // Teasers, by WHAT unlocks them: pool classes beyond the hand first
-      // (more Class Slots surface those — and the moot law keeps the next
-      // slot tier purchasable exactly whenever such a teaser exists), then
-      // DISCOVERED locked classes (their Class bundle in the Vault does) —
-      // each card names its remedy. Leftover teaser slots deal RUMORS from
-      // the undiscovered (hint lines off their shrouded Vault entries).
+      // Teasers: pool classes beyond the hand (more Class Slots surface
+      // those — and the moot law keeps the next slot tier purchasable
+      // exactly whenever such a teaser exists), each naming its remedy.
+      // Leftover teaser slots deal RUMORS from the shrouded wall (hint
+      // lines off the earned-but-unclaimed Vault entries — never a name).
       // At the ladder's TOP (maxSlotCount, data-derived) there is no wider
       // hand to sell, so beyond-hand pool classes stop teasing — they simply
       // wait for the next deal. Never a dead lock, even at the cap.
       const slotsRemedy = selectable < maxSlotCount();
-      const teasers = [
-        ...(slotsRemedy ? shuffled.slice(picks.length).map(def => ({ def, reason: 'slots' as const })) : []),
-        ...shuffle([...discoveredLocked]).map(def => ({ def, reason: 'class' as const })),
-      ].slice(0, TEASER_COUNT);
-      const rumors = shuffle([...undiscovered])
+      const teasers = (slotsRemedy
+        ? shuffled.slice(picks.length).map(def => ({ def, reason: 'slots' as const })) : [])
+        .slice(0, TEASER_COUNT);
+      const rumors = shuffle([...shrouded])
         .slice(0, Math.max(0, TEASER_COUNT - teasers.length))
-        .map(c => classUnlockFor(c.id))
-        .filter((u): u is NonNullable<typeof u> => !!u)
         .map(u => (u.kind === 'class' ? u.payload.hint : undefined) ?? 'Something out there has not introduced itself yet.');
       this.classRoster = { picks, teasers, rumors, dealtFor };
     }
@@ -2032,19 +2083,21 @@ export class UI {
     const lockNote = (t: { def: ClassDef; reason: 'slots' | 'class' }): string => {
       if (t.reason === 'slots') return '🔒 Unlock more Class Slots in the Vault';
       const u = classUnlockFor(t.def.id);
-      return u ? `🔒 Locked: “${u.label}” in the Vault (${u.cost} ${META_CURRENCY_LABEL})`
+      return u ? `🔒 Earned, never bought: its card hangs shrouded in the Vault`
         : '🔒 Unlocked in the Vault';
     };
-    // A RUMOR card: an undiscovered class, shrouded. The hint is a compass
-    // toward the DEED; the identity stays the world's secret until earned
-    // (the discovery web, meta/unlocks.ts). Clicks route to the Vault like
-    // any locked card — its rumor wall repeats every whisper.
+    // A RUMOR card: a shrouded class. The hint is a compass toward the DEED;
+    // the identity stays the world's secret until earned (the objective web,
+    // meta/unlocks.ts). Clicks route to the Vault like any locked card — its
+    // shrouded wall carries the objectives, written in the vestiges' runes.
     const rumorCard = (hint: string): string => `
       <div class="class-card locked" data-locked="true" style="opacity:.45">
-        <div class="cname" style="color:var(--text-dim);letter-spacing:3px">? ? ?</div>
+        <div class="cname runescript" style="letter-spacing:3px">${encipher('unclaimed')}</div>
         <div class="cdesc" style="font-style:italic">“${hint}”</div>
-        <div class="class-lock">🔒 Undiscovered: the world teaches what the Vault cannot sell.</div>
+        <div class="class-lock">🔒 Unclaimed: the world teaches what the Vault cannot sell.</div>
       </div>`;
+    // A dealt card wears THE OPENING CHOOSER (its base bar, mastery
+    // alternates as pickable groups); a teaser keeps the plain base chips.
     const classCard = (c: ClassDef, note?: string): string => `
       <div class="class-card ${note ? 'locked' : ''}" data-id="${c.id}" data-locked="${!!note}"
         ${note ? 'style="opacity:.5"' : ''}>
@@ -2052,7 +2105,7 @@ export class UI {
         <div class="cdesc">${c.description}</div>
         <div class="cattrs">${ATTRIBUTE_IDS.filter(a => (c.attributes[a] ?? 0) > 0).map(a =>
           `${ATTRIBUTES[a].short} ${c.attributes[a]}`).join(' &nbsp; ')}</div>
-        ${skillChips(c)}
+        ${note ? skillChips(c) : this.kitRowHtml(c)}
         ${c.innateText ? `<div class="cskills">Innate: ${c.innateText}</div>` : ''}
         ${note ? `<div class="class-lock">${note}</div>` : ''}
       </div>`;
@@ -2102,12 +2155,13 @@ export class UI {
       </div>
       <div style="font-size:12px;color:var(--gold);margin-bottom:4px">
         Account Level ${acc.level} &nbsp;·&nbsp; ${acc.credits} ${META_CURRENCY_LABEL} &nbsp;·&nbsp;
-        hand of ${picks.length} &nbsp;·&nbsp; ${pool.length} of ${CLASSES.length} classes unlocked${undiscovered.length
-          ? ` &nbsp;·&nbsp; ${undiscovered.length} undiscovered` : ''} &nbsp;(re-deals each new run)</div>
+        hand of ${picks.length} &nbsp;·&nbsp; ${pool.length} of ${CLASSES.length} classes earned${shrouded.length
+          ? ` &nbsp;·&nbsp; ${shrouded.length} shrouded` : ''} &nbsp;(re-deals each new run)</div>
       <div class="subtitle">
-        A random hand is dealt each run from the classes your account has unlocked.
-        Class Slots widen the hand; Class unlocks (each bundling its thematic skills)
-        deepen the pool, and every class you realize opens its Vocation.
+        A random hand is dealt each run from the classes your account has earned.
+        Class Slots widen the hand; classes are EARNED through deeds — the Vault's shrouded
+        cards carry each one's objectives — and deepen the pool; Mastery rungs open a class's
+        alternate openings; every class you realize opens its Vocation.
         Classes are only starting points; the tree and every skill stay open to any build.
         Pick a class to begin; tune the world mix under Event Weights first if you like.
       </div>
@@ -2144,6 +2198,13 @@ export class UI {
         this.showClassSelect(onPick, onBack);
       });
     });
+    // THE OPENING CHOOSER's chips on each dealt card: a pick re-renders the
+    // screen (the hand is cached, so the deal holds) and never bubbles into
+    // the card's own pick below.
+    this.classSelect.querySelectorAll<HTMLElement>('.class-card[data-id]').forEach(card => {
+      const c = CLASSES.find(x => x.id === card.dataset.id);
+      if (c) this.bindKitChips(card, c, () => this.showClassSelect(onPick, onBack));
+    });
     this.classSelect.querySelectorAll<HTMLElement>('.class-card').forEach(el => {
       el.addEventListener('click', () => {
         if (el.dataset.locked === 'true') {
@@ -2167,7 +2228,8 @@ export class UI {
           this.saveAccount();
         }
         this.classSelect.classList.add('hidden');
-        onPick(CLASSES.find(c => c.id === el.dataset.id!)!, this.pendingModeId, typed || undefined);
+        const picked = CLASSES.find(c => c.id === el.dataset.id!)!;
+        onPick(picked, this.pendingModeId, typed || undefined, this.kitPicksFor(picked));
       });
     });
     document.getElementById('account-btn')!.addEventListener('click',
@@ -2228,6 +2290,13 @@ export class UI {
       if (b) this.vaultScroll[this.vaultTab || '_flat'] = b.scrollTop;
     };
     const render = (): void => {
+      // THE SETTLE (meta/unlocks.ts): any class whose deed completed since
+      // the last look is CLAIMED here — the Vault is where the world hands
+      // it over (a toast each), and the render below reads it Owned.
+      for (const u of settleClassUnlocks(acc)) {
+        this.saveAccount();
+        this.vaultToast(`The world yields ${u.label.replace(/^Class: /, 'the ')} — it joins the pool your hand is dealt from.`);
+      }
       // THE CENSUS (vaultShelfCensus): every shelf's stock/owned/rumors and
       // its mystery-law verdict in one read the strip, faces and floor share.
       const census = vaultShelfCensus(acc);
@@ -2302,26 +2371,42 @@ export class UI {
       // the next links of walked chains, roads printed on hover.
       const sealedRack = (rows: Unlockable[]): string => rows.length
         ? subHead('Sealed: earn the road, then buy') + grid(rows.map(sealedCardHtml).join('')) : '';
-      // THE RUMOR FOLD (discovery web, meta/unlocks.ts): classes the account
-      // has NOT yet discovered hang shrouded — the hint whispers at the
-      // deed, the name and price stay the world's secret until it is done.
+      // THE SHROUDED WALL (the objective web, meta/unlocks.ts): every class
+      // the world has not yet yielded hangs here WRITTEN IN THE VESTIGES'
+      // RUNES (data/runescript.ts) — its name, its blurb, and its
+      // OBJECTIVES, which read plain (with progress) only once any one of
+      // them stands a quarter along (CLASS_WEB_CFG.revealFrac); the hint
+      // rides the hover story in plain words, the compass. The name stays
+      // runes until the class is claimed — then the card is simply Owned.
       // The whole wall COLLAPSES to its one header line on a click (the
       // satchel idiom — vaultRumorsOpen), count kept on the face so a
-      // closed fold still says how many whispers wait. Hover-addressed by
-      // INDEX, not id: the catalog id spells the class name, and the DOM
-      // keeps the world's secrets too (index space = the ONE undiscovered
-      // list, which the census hands over whole).
+      // closed fold still says how many wait. Hover-addressed by INDEX, not
+      // id: the catalog id spells the class name, and the DOM keeps the
+      // world's secrets too (index space = the ONE shrouded list, which the
+      // census hands over whole).
+      const shroudCard = (u: Unlockable, i: number): string => {
+        if (u.kind !== 'class') return '';
+        const cls = CLASSES.find(c => c.id === u.payload.classId);
+        const read = classUnlockProgress(acc, u);
+        const blurb = (cls?.description ?? '').split(/(?<=[.!?])\s/)[0] ?? '';
+        const rows = read.rows.map(r => read.revealed
+          ? `<div class="uobj${r.met ? ' met' : ''}" title="${esc(r.label)}"><span>${r.met ? '✓' : '·'} ${esc(r.label)}</span><i style="width:${Math.round(r.frac * 100)}%"></i></div>`
+          : `<div class="uobj runescript">· ${encipher(r.label)}</div>`).join('');
+        return `
+            <div class="unlock-card ushroud" data-tip="rumor" data-rumor-i="${i}">
+              <div class="ukind">${VAULT_KIND_LABELS.class} · unclaimed</div>
+              <div class="uname runescript" style="letter-spacing:2px">${encipher(cls?.name ?? u.payload.classId)}</div>
+              <div class="ushroud-body runescript">${encipher(blurb)}</div>
+              <div class="uobjs">${rows}</div>
+              <button disabled>${read.revealed ? 'Earn it in the world' : 'Unclaimed'}</button>
+            </div>`;
+      };
       const rumorSection = (rows: Unlockable[]): string => {
         if (!rows.length) return '';
         const open = this.vaultRumorsOpen;
         return `<h3 class="vault-sub vault-fold" data-fold="rumors" title="${open
-            ? 'Fold the rumor wall away' : 'Hang the rumor wall back up'}"><span class="arr">${open ? '▾' : '▸'}</span>Rumors: classes not yet discovered (${rows.length})</h3>`
-          + (open ? grid(rows.map((_u, i) => `
-            <div class="unlock-card" style="opacity:.55" data-tip="rumor" data-rumor-i="${i}">
-              <div class="ukind">${VAULT_KIND_LABELS.class} · undiscovered</div>
-              <div class="uname" style="letter-spacing:3px">? ? ?</div>
-              <button disabled>Undiscovered</button>
-            </div>`).join('')) : '');
+            ? 'Fold the shrouded wall away' : 'Hang the shrouded wall back up'}"><span class="arr">${open ? '▾' : '▸'}</span>Shrouded: classes the world has not yet yielded (${rows.length})</h3>`
+          + (open ? grid(rows.map(shroudCard).join('')) : '');
       };
 
       let tabStrip = '', body = '';
@@ -2361,7 +2446,7 @@ export class UI {
           const shown = t.owned ? c.owned.length : stockN;
           const detail = t.owned
             ? `: ${c.owned.length} claimed`
-            : `: ${stockN} available${canBuy ? `, ${canBuy} affordable now` : ''}${sealedN ? `; ${sealedN} sealed` : ''}${rumorN ? `; ${rumorN} rumor${rumorN === 1 ? '' : 's'} shrouded` : ''}`;
+            : `: ${stockN} available${canBuy ? `, ${canBuy} affordable now` : ''}${sealedN ? `; ${sealedN} sealed` : ''}${rumorN ? `; ${rumorN} shrouded` : ''}`;
           return `<button class="book-tab${t.id === this.vaultTab ? ' active' : ''}"
             data-vtab="${t.id}" title="${esc(t.blurb + detail)}">${t.label}${shown > 0
               ? `<span class="cnt${canBuy > 0 ? ' now' : ''}">${shown}</span>` : ''}</button>`;
@@ -2660,15 +2745,25 @@ export class UI {
     };
   }
 
-  /** A shrouded rumor's hover whisper — hint only, indexed off the live
-   *  undiscovered list so the DOM never carries the class's name. */
+  /** A shrouded card's hover story — the hint in plain words (the one
+   *  compass), the objectives as the card shows them (runes until the
+   *  reveal, then plain with the count), and the runescript's own law.
+   *  Indexed off the live shrouded list so the DOM never carries the name. */
   private rumorTooltip(index: number): TooltipContent | null {
-    const u = undiscoveredClassUnlocks(this.getAccount())[index];
+    const acc = this.getAccount();
+    const u = shroudedClassUnlocks(acc)[index];
     if (!u || u.kind !== 'class') return null;
+    const cls = CLASSES.find(c => c.id === u.payload.classId);
+    const read = classUnlockProgress(acc, u);
+    const line = (r: { label: string; frac: number; met: boolean }): string => read.revealed
+      ? `<div style="color:${r.met ? 'var(--good, #7fd88f)' : 'var(--text-dim)'}">${r.met ? '✓' : '·'} ${esc(r.label)}${r.met ? '' : ` <span style="opacity:.7">(${Math.round(r.frac * 100)}%)</span>`}</div>`
+      : `<div class="runescript">· ${encipher(r.label)}</div>`;
     return {
-      title: '? ? ?',
-      description: `<i>“${u.payload.hint ?? 'The world has not introduced this one yet.'}”</i>`,
-      meta: `${VAULT_KIND_LABELS.class} · undiscovered: the world teaches what the Vault cannot sell`,
+      title: `<span class="runescript">${encipher(cls?.name ?? u.payload.classId)}</span>`,
+      description: `<i>“${esc(u.payload.hint ?? 'The world has not introduced this one yet.')}”</i>`
+        + `<div style="margin-top:6px"><b>Claimed by ANY of:</b>${read.rows.map(line).join('')}</div>`
+        + `<div style="margin-top:6px;font-size:10px;color:var(--text-dim)">Written in the vestiges' runes: every vestige you find teaches one letter of the script${read.revealed ? '' : ', and the deeds read plain once any one of them is a quarter done'}.</div>`,
+      meta: `${VAULT_KIND_LABELS.class} · unclaimed: the world teaches what the Vault cannot sell`,
       wide: true,
     };
   }

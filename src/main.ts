@@ -87,6 +87,11 @@ import {
   RUN_RECORD_SCHEMA,
   recordRun, renownForRun, runStanding, type Account, type RunRecord,
 } from './meta/account';
+// THE OBJECTIVE WEB (meta/unlocks.ts): the run's end settles any class a
+// merged deed now claims; THE OPENING (meta/classkit.ts): the class card's
+// kit picks resolve against the account HERE, never trusted from the card.
+import { settleClassUnlocks } from './meta/unlocks';
+import { rememberKitPicks, resolveClassKit } from './meta/classkit';
 import {
   loadAccount, loadAccountAsync, loadSettings, loadSettingsAsync,
   saveAccount, saveAccountDurable, saveSettings, resetAccount,
@@ -397,7 +402,7 @@ let pendingDeathScreen: { open: () => void } | null = null;
 
 function startGame(
   classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: string, name?: string,
-  graftSkillId?: string | null,
+  graftSkillId?: string | null, kitPicks?: Record<string, string>,
 ): void {
   couchReset(); // a new world seats no ghosts — guests re-join from the menu
   // THE PROLOGUE GATE (engine/scenes.ts), read FIRST — before a roster mode
@@ -438,7 +443,12 @@ function startGame(
   // passes a configured one; otherwise build it from the account's saved prefs.
   const m = manifest ?? buildManifest(account, rollSeed());
   world = adoptWorld(new World(account, Object.freeze(m)));
-  world.createPlayer(classDef, { modeId: mode.id, charId, name: charName });
+  // THE OPENING (meta/classkit.ts): the card's picks — remembered on the
+  // account for the next waking — resolve here against what the account
+  // actually OWNS (an unowned alternate falls back to its base; owned
+  // Master grants seat themselves): the engine wakes the resolved bar.
+  if (kitPicks) { rememberKitPicks(account, classDef, kitPicks); saveAccount(account); }
+  world.createPlayer(classDef, { modeId: mode.id, charId, name: charName, kit: resolveClassKit(account, classDef, kitPicks) });
   // A GRADUATED account (Mireille's flask lesson lived once, any character)
   // skips the re-walk: the flasks arrive learned, barred, and brimming at
   // first breath. No-op until that first graduation — and placed BEFORE
@@ -481,12 +491,12 @@ function startGame(
  *  pick between the class choice and the world's first breath — the
  *  deliberate selection rides into startGame and spends there; declining
  *  keeps the charge armed for a later run. */
-const startPicked = (d: ClassDef, modeId?: string, name?: string): void => {
+const startPicked = (d: ClassDef, modeId?: string, name?: string, kitPicks?: Record<string, string>): void => {
   if (account.skillGraft) {
-    ui.showSkillGraftPick(pick => startGame(d, undefined, modeId, name, pick));
+    ui.showSkillGraftPick(pick => startGame(d, undefined, modeId, name, pick, kitPicks));
     return;
   }
-  startGame(d, undefined, modeId, name);
+  startGame(d, undefined, modeId, name, undefined, kitPicks);
 };
 
 /** THE MU BOOT (data/mu.ts): stand a PROVISIONAL world up and drift into the
@@ -1975,6 +1985,10 @@ function hostTail(dt: number): void {
     // …) into the account ledger so package unlocks stick like credits do —
     // unless the dying stage is sealed outside the account loop (mode policy).
     if (stage.metaProgression) mergeLedger(account.ledger, world.ledger);
+    // THE OBJECTIVE WEB's belt: the live sweep claims mid-run, but a deed
+    // whose last count merged only now (a play milestone stamped this run)
+    // lands here — before the reckoning's Vault renders it Owned.
+    if (stage.metaProgression) settleClassUnlocks(account);
     // CORPSE RUN + the lifetime death tally: only an actual death (not a
     // forfeit) records a corpse or counts toward death-gated unlocks — both
     // captured BEFORE clearCharacter wipes the gems. A FALL already banked

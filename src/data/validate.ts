@@ -46,6 +46,7 @@ import { SPAN_CFG } from '../engine/spans';
 import { hasBlendField } from '../engine/blend';
 import { validatePassiveLayout } from './validatePassiveLayout';
 import { allUnlockables, CLASS_BUNDLES } from '../meta/unlocks';
+import { CLASS_TIER_BY_ID } from './classTiers';
 import { STARTER_CLASSES, STARTER_SKILLS, STARTER_SUPPORTS } from '../meta/account';
 import { skillMimicable } from '../engine/mimic';
 import { DEFAULT_MODE_ID, MODE_BY_ID, MODES } from '../meta/modes';
@@ -2644,6 +2645,37 @@ export function validateContent(): void {
         }
       }
     }
+    // THE MASTERY LADDER (ClassDef.kit — data/classTiers.ts): every rung row
+    // names a real rung; its skill exists and drops (never noDrop); a
+    // `replaces` names one of THIS class's own starters and is bindable by
+    // the class's spread (the same law as the bar); a grant may outreach it
+    // (THE CAPSTONE LAW — an ultimate on the bar is a promise the build
+    // grows into). Rung skills are unique across every rung and never open
+    // ANOTHER class (the kit-uniqueness law, extended: an alternate is this
+    // class's signature exactly as the base it stands in for).
+    const rungOwner = new Map<string, string>();
+    for (const c of CLASSES) {
+      for (const r of c.kit ?? []) {
+        if (!CLASS_TIER_BY_ID[r.tier]) warn(`class ${c.id}: kit rung '${r.tier}' is not a CLASS_TIERS id`);
+        const def = SKILLS[r.skill];
+        if (!def) { warn(`class ${c.id}: kit rung names unknown skill '${r.skill}'`); continue; }
+        if (def.noDrop) warn(`class ${c.id}: kit rung skill '${r.skill}' is an internal noDrop payload`);
+        const barOwner = kitOwner.get(r.skill);
+        if (barOwner) warn(`class ${c.id}: kit rung skill '${r.skill}' already OPENS ${barOwner} (kits must not overlap)`);
+        const prev = rungOwner.get(r.skill);
+        if (prev) warn(`class kits: rung skill '${r.skill}' is offered by BOTH ${prev} and ${c.id}`);
+        else rungOwner.set(r.skill, c.id);
+        if (r.replaces !== undefined) {
+          if (!c.bar.includes(r.replaces)) warn(`class ${c.id}: kit rung replaces '${r.replaces}', not one of its starters`);
+          for (const [attr, need] of Object.entries(def.requirements ?? {})) {
+            const have = c.attributes[attr as keyof typeof c.attributes] ?? 0;
+            if (have < (need ?? 0)) {
+              warn(`class ${c.id}: cannot bind its rung alternate '${r.skill}' (${attr} ${have} < ${need})`);
+            }
+          }
+        }
+      }
+    }
   }
 
   // THE POOL-ORPHAN NET (the Polyphony/Ostinato lesson): drops and vendor
@@ -2656,7 +2688,7 @@ export function validateContent(): void {
     const pooled = new Set<string>(STARTER_SKILLS);
     const pooledSup = new Set<string>(STARTER_SUPPORTS);
     for (const u of unlocks) {
-      if (u.kind === 'skill' || u.kind === 'class') for (const id of u.payload.skillIds) pooled.add(id);
+      if (u.kind === 'skill' || u.kind === 'class' || u.kind === 'classtier') for (const id of u.payload.skillIds) pooled.add(id);
       if (u.kind === 'support' || u.kind === 'class') for (const id of u.payload.supportIds) pooledSup.add(id);
     }
     // Two grades of orphan, each ONE summary line so the counts are watched

@@ -20,7 +20,8 @@
 
 import { vec, type Vec2 } from '../core/math';
 import { WORLD_DRIVES } from '../world/drives';
-import { FACTIONS, factionStance } from '../data/monsters';
+import { FACTIONS, MONSTERS, factionStance } from '../data/monsters';
+import { LEDGER_BOSS_SLAIN, bossSlainKey } from '../meta/account';
 import type { ZoneDef } from '../data/zones';
 import type { OverlayView } from '../world/overlay';
 import type { WorldSim } from '../world/sim';
@@ -199,6 +200,24 @@ registerKillHandler({
   run: ctx => {
     ctx.bumpLedger('crowned_killed');
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 40), 'A Crowned champion falls!', '#e64db4', 16);
+  },
+});
+
+// THE OBJECTIVE WEB's boss tally (meta/account.ts LEDGER_BOSS_SLAIN): a
+// credited kill of any BOSS-flagged kind (MonsterDef.boss — the marquee's
+// own classification, never the presentation-only bossBar) counts once for
+// all bosses and once under the body's LIVE faction (event/war spawns
+// re-flag it) — the Necromancer's "five bosses of the undead" reads the
+// latter. ACCOUNT-DIRECT (the bestiary stance, flushed): a deed must never
+// wait on a merge, nor double through one. Scene spawns (noBounty) teach
+// nothing here, as in the bestiary — a rewardless stage stays rewardless.
+registerKillHandler({
+  id: 'boss_slain_tally',
+  when: ctx => ctx.credit && !ctx.actor.noBounty && ctx.actor.team === 'enemy'
+    && !!ctx.actor.defId && !!MONSTERS[ctx.actor.defId]?.boss,
+  run: ctx => {
+    ctx.bumpAccountLedger(LEDGER_BOSS_SLAIN, 1, true);
+    if (ctx.actor.faction) ctx.bumpAccountLedger(bossSlainKey(ctx.actor.faction), 1, true);
   },
 });
 

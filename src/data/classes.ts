@@ -36,6 +36,29 @@ export interface ClassDef {
   bar: (string | null)[];
   /** The passive-tree node this class starts at (id in PASSIVE_NODES). */
   startNode: string;
+  /** THE MASTERY LADDER's gifts (data/classTiers.ts CLASS_TIERS): per rung,
+   *  the ALTERNATE OPENING it opens for this class — a `replaces` row lets
+   *  `skill` stand in for that base starter when the class wakes (the
+   *  player picks either on the class card), a row without `replaces`
+   *  GRANTS `skill` as an extra starter outright (the Master's gift).
+   *  Absent = the class sells no rungs (nothing moot ever surfaces). A rung
+   *  skill also joins the drop pool the moment its rung is owned. Laws
+   *  (validate.ts + probe_classmastery): rung skills are real, droppable,
+   *  never another class's opener, unique across every rung, and a
+   *  `replaces` skill is bindable by the class's own starting spread (a
+   *  GRANT may outreach it — THE CAPSTONE LAW: an ultimate on the bar is a
+   *  promise the build grows into, cast-gated until it does). */
+  kit?: readonly KitRungRow[];
+}
+
+/** One rung's gift for one class — see ClassDef.kit. */
+export interface KitRungRow {
+  /** A CLASS_TIERS id. */
+  tier: string;
+  /** The alternate skill the rung opens. */
+  skill: string;
+  /** The base starter it may stand in for; absent = granted outright. */
+  replaces?: string;
 }
 
 export const CLASSES: ClassDef[] = [
@@ -52,6 +75,15 @@ export const CLASSES: ClassDef[] = [
     },
     bar: ['cleave', 'shield_up', 'war_cry', null, null, null, null, null],
     startNode: 'str_start',
+    // THE MASTERY LADDER: the arc becomes a rhythm (Carve), the guard a
+    // fury (Berserk), the shout a satchel of iron (Grenado); the Master
+    // wakes with the Red Hour on the bar.
+    kit: [
+      { tier: 'novice', replaces: 'cleave', skill: 'carve' },
+      { tier: 'adept', replaces: 'shield_up', skill: 'berserk' },
+      { tier: 'expert', replaces: 'war_cry', skill: 'grenado' },
+      { tier: 'master', skill: 'red_hour' },
+    ],
   },
   {
     id: 'magician', name: 'Magician',
@@ -68,7 +100,16 @@ export const CLASSES: ClassDef[] = [
     // strength-flavored force wall — marched off to the Vanguard's kit;
     // the storm slot wants RANGE, so the ricochet, not the sputter).
     bar: ['firebolt', 'frost_nova', 'chain_lightning', null, null, null, null, null],
-    startNode: 'int_start', // elemental caster → the Intelligence point
+    startNode: 'int_start',
+    // THE MASTERY LADDER: the elements rotate one seat each — a cold bolt
+    // for the fire bolt, a lightning ring for the frost ring, a fire bloom
+    // for the chain; the Master wakes holding the Long Cold.
+    kit: [
+      { tier: 'novice', replaces: 'firebolt', skill: 'frostbolt' },
+      { tier: 'adept', replaces: 'frost_nova', skill: 'shock_nova' },
+      { tier: 'expert', replaces: 'chain_lightning', skill: 'fireball' },
+      { tier: 'master', skill: 'long_cold' },
+    ], // elemental caster → the Intelligence point
   },
   {
     id: 'rogue', name: 'Rogue',
@@ -85,7 +126,16 @@ export const CLASSES: ClassDef[] = [
     // sentence "no one saw it happen" (Frenzy was never the Rogue's word;
     // it lives on in the drop pool and the Juggernaut bundle).
     bar: ['backstab', 'cloak', 'shadow_step', null, null, null, null, null],
-    startNode: 'fin_start', // the unseen blade → the Finesse point
+    startNode: 'fin_start',
+    // THE MASTERY LADDER: the knife becomes a dart (Blowdart), the cloak a
+    // banked ambush (Stealth), the blink a lunge (Closing Fang); the Master
+    // wakes under a Rain of Knives.
+    kit: [
+      { tier: 'novice', replaces: 'backstab', skill: 'blowdart' },
+      { tier: 'adept', replaces: 'cloak', skill: 'stealth' },
+      { tier: 'expert', replaces: 'shadow_step', skill: 'closing_fang' },
+      { tier: 'master', skill: 'rain_of_knives' },
+    ], // the unseen blade → the Finesse point
   },
   {
     id: 'berserker', name: 'Berserker',
@@ -228,6 +278,15 @@ export const CLASSES: ClassDef[] = [
     },
     bar: ['poison_nova', 'raise_dead', 'despair', null, null, null, null, null],
     startNode: 'wis_start', // death-shepherding is Wisdom's craft, like the Summoner
+    // THE MASTERY LADDER: the venom ring becomes a Shambling Horde (walking
+    // bombs), the raising a Corpse Explosion, the curse a Bone Golem; the
+    // Master wakes with the Grave Tide already banking souls.
+    kit: [
+      { tier: 'novice', replaces: 'poison_nova', skill: 'shambler_horde' },
+      { tier: 'adept', replaces: 'raise_dead', skill: 'corpse_explosion' },
+      { tier: 'expert', replaces: 'despair', skill: 'summon_bone_golem' },
+      { tier: 'master', skill: 'grave_tide' },
+    ],
   },
   {
     id: 'cleric', name: 'Cleric',
@@ -643,6 +702,19 @@ export const CLASSES: ClassDef[] = [
 // (SkillInstance.bonusLevels); gear grants the stat like any other modifier.
 
 export const classSkillStat = (classId: string): string => `classSkill_${classId}`;
+
+/** A class's rung rows (empty when it sells none). */
+export const kitRungs = (c: ClassDef): readonly KitRungRow[] => c.kit ?? [];
+
+/** Every skill a class can OPEN with — its bar starters plus every rung
+ *  alternate. The class-skill lane (`classSkill_<id>` — "+N to <Class>
+ *  Skills") reads THIS, so an alternate opening is the class's skill
+ *  exactly as the base it stands in for. */
+export function classOpeningSkills(c: ClassDef): string[] {
+  const out: string[] = c.bar.filter((s): s is string => s !== null);
+  for (const r of kitRungs(c)) if (!out.includes(r.skill)) out.push(r.skill);
+  return out;
+}
 
 for (const c of CLASSES) {
   STAT_DEFS[classSkillStat(c.id)] = { label: `${c.name} Skill Levels`, base: 0 };

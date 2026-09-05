@@ -23,6 +23,7 @@
 
 import type { ItemCategory } from '../engine/items';
 import type { ConditionId, ModKind, SkillTag } from '../engine/stats';
+import { runeOf } from './runescript';
 
 /** One deterministic granted line (a Modifier with its value baked in). */
 export interface VestigeLine {
@@ -36,7 +37,13 @@ export interface VestigeLine {
 export interface VestigeDef {
   id: string;
   name: string;
-  /** Satchel/ground glyph. */
+  /** THE ROSETTA LAW (data/runescript.ts): the ONE letter (or digraph) of
+   *  the runescript this vestige TEACHES — it must occur in the vestige's
+   *  short name (the pre-comma half), and its drawn glyph DERIVES from it,
+   *  so the rune on the item IS the letter on the Vault's shrouded cards.
+   *  No two vestiges teach the same letter (distinguishable underfoot). */
+  letter: string;
+  /** Satchel/ground glyph — DERIVED from `letter` (never authored). */
   glyph: string;
   color: string;
   /** Drop weight within the vestige pool. */
@@ -45,9 +52,12 @@ export interface VestigeDef {
   effects: Partial<Record<ItemCategory | 'default', VestigeLine[]>>;
 }
 
-export const VESTIGE_LIST: VestigeDef[] = [
+/** An authored row — the glyph is derived, never written. */
+type VestigeRow = Omit<VestigeDef, 'glyph'>;
+
+const VESTIGE_ROWS: VestigeRow[] = [
   {
-    id: 'kessa', name: 'Kessa, Vestige of the Vein', glyph: 'ᚲ', color: '#d05050', weight: 100,
+    id: 'kessa', name: 'Kessa, Vestige of the Vein', letter: 'k', color: '#d05050', weight: 100,
     effects: {
       chest: [{ stat: 'life', kind: 'flat', value: 25 }],
       gloves: [{ stat: 'lifeOnHit', kind: 'flat', value: 2 }],
@@ -57,7 +67,7 @@ export const VESTIGE_LIST: VestigeDef[] = [
   },
   {
     // The flesh country's socketable: the iris that never closes.
-    id: 'orra', name: 'Orra, Vestige of the Iris', glyph: 'ᛟ', color: '#d8b04a', weight: 70,
+    id: 'orra', name: 'Orra, Vestige of the Iris', letter: 'o', color: '#d8b04a', weight: 70,
     effects: {
       helmet: [{ stat: 'detectionRange', kind: 'increased', value: 0.15 }],
       gloves: [{ stat: 'apply_beheld', kind: 'flat', value: 0.12 }],
@@ -66,7 +76,7 @@ export const VESTIGE_LIST: VestigeDef[] = [
     },
   },
   {
-    id: 'dur', name: 'Dur, Vestige of the Bulwark', glyph: 'ᛞ', color: '#c8b088', weight: 100,
+    id: 'dur', name: 'Dur, Vestige of the Bulwark', letter: 'd', color: '#c8b088', weight: 100,
     effects: {
       chest: [{ stat: 'armor', kind: 'flat', value: 60 }],
       belt: [{ stat: 'poise', kind: 'flat', value: 20 }],
@@ -74,7 +84,7 @@ export const VESTIGE_LIST: VestigeDef[] = [
     },
   },
   {
-    id: 'thal', name: 'Thal, Vestige of the Pyre', glyph: 'ᚦ', color: '#ff8a4a', weight: 90,
+    id: 'thal', name: 'Thal, Vestige of the Pyre', letter: 'th', color: '#ff8a4a', weight: 90,
     effects: {
       chest: [{ stat: 'fireRes', kind: 'flat', value: 0.12 }],
       gloves: [{ stat: 'addedFire', kind: 'flat', value: 3 }],
@@ -82,7 +92,7 @@ export const VESTIGE_LIST: VestigeDef[] = [
     },
   },
   {
-    id: 'morren', name: 'Morren, Vestige of the Tide', glyph: 'ᛗ', color: '#7ab8d8', weight: 80,
+    id: 'morren', name: 'Morren, Vestige of the Tide', letter: 'm', color: '#7ab8d8', weight: 80,
     effects: {
       chest: [{ stat: 'energyShield', kind: 'flat', value: 20 }],
       gloves: [{ stat: 'castSpeed', kind: 'increased', value: 0.05 }],
@@ -90,7 +100,7 @@ export const VESTIGE_LIST: VestigeDef[] = [
     },
   },
   {
-    id: 'sylph', name: 'Sylph, Vestige of the Gale', glyph: 'ᛋ', color: '#9ad8b8', weight: 75,
+    id: 'sylph', name: 'Sylph, Vestige of the Gale', letter: 's', color: '#9ad8b8', weight: 75,
     effects: {
       boots: [{ stat: 'moveSpeed', kind: 'increased', value: 0.07 }],
       gloves: [{ stat: 'attackSpeed', kind: 'increased', value: 0.05 }],
@@ -98,7 +108,7 @@ export const VESTIGE_LIST: VestigeDef[] = [
     },
   },
   {
-    id: 'aurel', name: 'Aurel, Vestige of the Dawn', glyph: 'ᚨ', color: '#ffd34d', weight: 55,
+    id: 'aurel', name: 'Aurel, Vestige of the Dawn', letter: 'a', color: '#ffd34d', weight: 55,
     effects: {
       gloves: [{ stat: 'critChance', kind: 'flat', value: 0.015 }],
       helmet: [{ stat: 'critMulti', kind: 'flat', value: 0.12 }],
@@ -106,7 +116,7 @@ export const VESTIGE_LIST: VestigeDef[] = [
     },
   },
   {
-    id: 'noct', name: 'Noct, Vestige of the Hollow', glyph: 'ᚾ', color: '#c45ae0', weight: 50,
+    id: 'noct', name: 'Noct, Vestige of the Hollow', letter: 'n', color: '#c45ae0', weight: 50,
     effects: {
       gloves: [{ stat: 'addedChaos', kind: 'flat', value: 4 }],
       helmet: [{ stat: 'minionDamage', kind: 'increased', value: 0.12 }],
@@ -114,7 +124,7 @@ export const VESTIGE_LIST: VestigeDef[] = [
     },
   },
   {
-    id: 'grim', name: 'Grim, Vestige of the Grave', glyph: 'ᚷ', color: '#8ec84e', weight: 45,
+    id: 'grim', name: 'Grim, Vestige of the Grave', letter: 'g', color: '#8ec84e', weight: 45,
     effects: {
       helmet: [{ stat: 'minionLife', kind: 'increased', value: 0.15 }],
       chest: [{ stat: 'minionDamage', kind: 'increased', value: 0.1 }],
@@ -131,7 +141,7 @@ export const VESTIGE_LIST: VestigeDef[] = [
   // worn. Every number a DIAL.
   {
     // SINTER — what a hot spring leaves behind: layer on layer, hardening.
-    id: 'sinter', name: 'Sinter, Vestige of the Crust', glyph: 'ᛊ', color: '#d8d0b8', weight: 60,
+    id: 'sinter', name: 'Sinter, Vestige of the Crust', letter: 'i', color: '#d8d0b8', weight: 60,
     effects: {
       chest: [{ stat: 'armor', kind: 'flat', value: 45 }, { stat: 'fireRes', kind: 'flat', value: 0.06 }],
       gloves: [{ stat: 'applyWet_scalded', kind: 'flat', value: 0.15 }],
@@ -141,7 +151,7 @@ export const VESTIGE_LIST: VestigeDef[] = [
   },
   {
     // TRAVERTINE — the terrace stone itself: banded, patient, load-bearing.
-    id: 'travertine', name: 'Travertine, Vestige of the Terrace', glyph: 'ᛏ', color: '#e8dcc0', weight: 55,
+    id: 'travertine', name: 'Travertine, Vestige of the Terrace', letter: 't', color: '#e8dcc0', weight: 55,
     effects: {
       chest: [{ stat: 'life', kind: 'flat', value: 18 }, { stat: 'poise', kind: 'flat', value: 22 }],
       helmet: [{ stat: 'insight', kind: 'flat', value: 18 }],
@@ -151,7 +161,7 @@ export const VESTIGE_LIST: VestigeDef[] = [
   },
   {
     // SULPHUR — the yellow rim of every pool: it stings what stands in it.
-    id: 'sulphur', name: 'Sulphur, Vestige of the Rim', glyph: 'ᛥ', color: '#e8d24a', weight: 50,
+    id: 'sulphur', name: 'Sulphur, Vestige of the Rim', letter: 'u', color: '#e8d24a', weight: 50,
     effects: {
       gloves: [{ stat: 'addedFire', kind: 'flat', value: 4 }],
       weapon: [{ stat: 'apply_scalded', kind: 'flat', value: 0.1 }],
@@ -161,7 +171,7 @@ export const VESTIGE_LIST: VestigeDef[] = [
   },
   {
     // VITRIOL — the acid the ground brews: it eats what armour is left.
-    id: 'vitriol', name: 'Vitriol, Vestige of the Brew', glyph: 'ᚹ', color: '#a8d05a', weight: 45,
+    id: 'vitriol', name: 'Vitriol, Vestige of the Brew', letter: 'v', color: '#a8d05a', weight: 45,
     effects: {
       gloves: [{ stat: 'addedChaos', kind: 'flat', value: 3 }],
       weapon: [{ stat: 'armorPen', kind: 'flat', value: 0.1 }],
@@ -170,7 +180,7 @@ export const VESTIGE_LIST: VestigeDef[] = [
     },
   },
   {
-    id: 'seraphiel', name: 'Seraphiel, Vestige of the Host', glyph: 'ᛋ', color: '#ffe9a8', weight: 42,
+    id: 'seraphiel', name: 'Seraphiel, Vestige of the Host', letter: 'e', color: '#ffe9a8', weight: 42,
     effects: {
       boots: [{ stat: 'moveSpeed', kind: 'increased', value: 0.06 }],
       helmet: [{ stat: 'apply_shock', kind: 'flat', value: 0.08 }],
@@ -179,6 +189,11 @@ export const VESTIGE_LIST: VestigeDef[] = [
     },
   },
 ];
+
+/** The registry, each row wearing the rune its letter derives (THE ROSETTA
+ *  LAW). An unknown letter renders the runescript's own 'unwritten' mark
+ *  ('؟') rather than a crash — the probe names the offending row. */
+export const VESTIGE_LIST: VestigeDef[] = VESTIGE_ROWS.map(v => ({ ...v, glyph: runeOf(v.letter) ?? '؟' }));
 
 export const VESTIGES: Record<string, VestigeDef> =
   Object.fromEntries(VESTIGE_LIST.map(v => [v.id, v]));

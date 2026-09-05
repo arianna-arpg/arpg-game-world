@@ -279,6 +279,23 @@ export const LEDGER_BOUNTY_DONE = 'bounty_done';
 export const LEDGER_BOUNTY_DONE_PREFIX = 'bounty_done:';
 export const bountyDoneKindKey = (kind: string): string => `${LEDGER_BOUNTY_DONE_PREFIX}${kind}`;
 
+// --- THE OBJECTIVE WEB's counted deeds (meta/unlocks.ts ClassUnlockSpec) --
+// ACCOUNT-DIRECT stamps (the bestiary/vocation durability stance): a class
+// claimed by a deed must never wait on a death-merge, and a counted deed must
+// never double-count through one — so these keys live ONLY on the account
+// ledger, each written at its ONE engine site through the kill facade's
+// bumpAccountLedger (metaProgression-gated) or its inline twin.
+/** Lifetime count of the player's OWN corpses reclaimed on a corpse run
+ *  (World.reclaimCorpse — the dwell that hands back what death took). */
+export const LEDGER_CORPSES_RECLAIMED = 'corpses_reclaimed';
+/** Lifetime credited kills of BOSS-flagged monsters (MonsterDef.boss), every
+ *  faction folded — plus ONE counter per faction under the prefix
+ *  (`boss_slain:undead`), stamped by engine/killHandlers.ts's core boss row
+ *  off the dying actor's LIVE faction (event/war spawns re-flag it). */
+export const LEDGER_BOSS_SLAIN = 'boss_slain';
+export const LEDGER_BOSS_SLAIN_PREFIX = 'boss_slain:';
+export const bossSlainKey = (faction: string): string => `${LEDGER_BOSS_SLAIN_PREFIX}${faction}`;
+
 /** First disk save slot the character ROSTER may use (0/1/2 are account /
  *  run-character / settings). Lives here (not modes.ts) so deserialization can
  *  sanity-check entries without a value import back into the modes registry. */
@@ -389,8 +406,17 @@ export interface Account {
    *  personal bests protected — see recordRun). */
   runRecords: RunRecord[];
   /** THE CLASS POOL: the character-select hand is dealt ONLY from this set
-   *  (starters + every purchased class bundle). Also gates the co-op lobby. */
+   *  (starters + every class the world has CLAIMED for the account through
+   *  its objectives — meta/unlocks.ts). Also gates the co-op lobby. */
   unlockedClasses: Set<string>;
+  /** THE MASTERY LADDER (data/classTiers.ts): owned rung ids (classTierId)
+   *  — each opens an alternate opening for its class at the wake. */
+  unlockedClassTiers: Set<string>;
+  /** THE REMEMBERED KIT (meta/classkit.ts): per class, the alternate last
+   *  chosen per base starter (baseSkillId → chosen skillId), so the class
+   *  card re-opens as it was left; a pick whose rung is no longer owned
+   *  falls back to the base at resolve. */
+  kitPicks: Record<string, Record<string, string>>;
   unlockedSkills: Set<string>;
   unlockedSupports: Set<string>;
   features: Set<string>;
@@ -448,6 +474,9 @@ export interface AccountSave {
   unlockedSupports: string[];
   features: string[];
   unlockedSlots: number[];
+  /** THE MASTERY LADDER + THE REMEMBERED KIT — optional so older saves load. */
+  unlockedClassTiers?: string[];
+  kitPicks?: Record<string, Record<string, string>>;
   // Content-package meta (all optional so older saves load with ?? defaults).
   packageUnlocks?: string[];
   packageDefaults?: Record<string, PackagePref>;
@@ -469,6 +498,8 @@ export function makeAccount(): Account {
     runRecords: [],
     skillGraft: false,
     unlockedClasses: new Set(STARTER_CLASSES),
+    unlockedClassTiers: new Set<string>(),
+    kitPicks: {},
     unlockedSkills: new Set(STARTER_SKILLS),
     unlockedSupports: new Set(STARTER_SUPPORTS),
     features: new Set<string>(),
@@ -494,6 +525,8 @@ export function serializeAccount(a: Account): AccountSave {
     runRecords: a.runRecords,
     skillGraft: a.skillGraft,
     unlockedClasses: [...a.unlockedClasses],
+    unlockedClassTiers: [...a.unlockedClassTiers],
+    kitPicks: a.kitPicks,
     unlockedSkills: [...a.unlockedSkills],
     unlockedSupports: [...a.unlockedSupports],
     features: [...a.features],
@@ -537,6 +570,13 @@ export function deserializeAccount(s: AccountSave): Account | null {
       .slice(-MAX_RUN_RECORDS),
     skillGraft: s.skillGraft === true,
     unlockedClasses: new Set([...STARTER_CLASSES, ...(s.unlockedClasses ?? [])]),
+    unlockedClassTiers: new Set<string>((s.unlockedClassTiers ?? []).filter(t => typeof t === 'string')),
+    // Strings only, per class per base — a malformed pick is dropped, never
+    // a wipe (the resolver falls back to the base kit regardless).
+    kitPicks: Object.fromEntries(Object.entries(s.kitPicks ?? {})
+      .filter(([, v]) => v && typeof v === 'object')
+      .map(([cls, v]) => [cls, Object.fromEntries(Object.entries(v)
+        .filter(([, sid]) => typeof sid === 'string'))] as const)),
     unlockedSkills: new Set([...STARTER_SKILLS, ...(s.unlockedSkills ?? [])]),
     unlockedSupports: new Set([...STARTER_SUPPORTS, ...(s.unlockedSupports ?? [])]),
     features: new Set(s.features ?? []),

@@ -2173,6 +2173,28 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // but it arrives in broods: the Hiveborn offering births one per corpse fed,
   // so the summoned-from-corpses dead read distinct from raised zombies at a
   // glance (legless silhouette, dragging smear).
+  // THE GRAVE SHAMBLER — the Shambling Horde's body (data/skills.ts
+  // shambler_horde): a zombie's mindless, heedless feet under the bomber's
+  // fuse. Minion-only ordnance (xp 0, noRecall — spent where it lands): it
+  // walks AT the nearest enemy, arms within reach, and bursts — the blast is
+  // explodeOnDeath × its own (minion-scaled) life, so the keeper's minion
+  // investment IS the payload. Never fielded wild: no faction, no table.
+  grave_shambler: {
+    id: 'grave_shambler', name: 'Grave Shambler',
+    color: '#7a9858', shape: 'circle', radius: 13, material: 'flesh', look: 'zombie',
+    base: { life: 40, moveSpeed: 108, accuracy: 60, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['claw'],
+    xp: 0,
+    detection: 1.4,
+    brain: {
+      type: 'bomber', fuseRange: 44, fuseTime: 0.5,
+      move: { pathing: 'none', hazards: 'heedless' },
+    },
+    explodeOnDeath: 2.2,
+    noRecall: true,
+  },
+
   zombie_crawler: {
     id: 'zombie_crawler', name: 'Crawling Zombie',
     color: '#71824e', shape: 'circle', radius: 12, look: 'zombie_crawler',
@@ -7294,6 +7316,19 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // A construct OF fire: the summoner's golem wades the caldera's pools
     // its keeper must walk around — minion build texture, pure data.
     immuneGround: ['lava', 'magma_core'],
+  },
+
+  // THE BONE GOLEM — the golem family's fourth body (data/skills.ts
+  // summon_bone_golem, the Necromancer's Expert opening): a jointed wall of
+  // bone that shrugs off poison and stamps the ground; the shared golem
+  // slot, the same contract. Minion-only (xp 0), never fielded wild.
+  bone_golem: {
+    id: 'bone_golem', name: 'Bone Golem',
+    color: '#d8d0c0', shape: 'octagon', radius: 18, material: 'bone', look: 'bone_colossus',
+    base: { life: 140, moveSpeed: 105, accuracy: 95, armor: 40, mana: 40, manaRegen: 4, poise: 60 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('damageTaken', 'more', -0.1)],
+    skills: ['ground_slam', 'claw'],
+    xp: 0,
   },
 
   ice_golem: {

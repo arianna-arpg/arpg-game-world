@@ -32,8 +32,9 @@
 
 import {
   LEDGER_QUESTS_COMPLETED, LEDGER_QUEST_DONE_PREFIX, LEDGER_VOCATION_PREFIX,
-  questDoneKey, reachedLevelKey, vocationUnlockKey, type Account,
+  classLevelLedgerKey, questDoneKey, reachedLevelKey, vocationUnlockKey, type Account,
 } from './account';
+import { CLASSES } from '../data/classes';
 
 /** One avenue. Exactly one of the WHAT fields should be set per row
  *  (ledger / ledgerPrefix / unlock / feature / level / vocation / quest);
@@ -54,6 +55,13 @@ export interface GateRow {
   /** Sugar: any character has REACHED this level — reads reachedLevelKey(n);
    *  the catalog derivation (gateLevelNeeds) guarantees the stamp exists. */
   level?: number;
+  /** Sugar: a character of THIS class has reached this level — reads
+   *  classLevelLedgerKey(classId, level) (the per-class play milestones,
+   *  stamped by the XP sweep for whatever class is being PLAYED; the catalog
+   *  derivation gateClassLevelNeeds registers the level, so authoring one
+   *  here IS registering its stamp). THE OBJECTIVE WEB's play thresholds
+   *  and THE MASTERY LADDER's rungs both speak it. */
+  classLevel?: { classId: string; level: number };
   /** Sugar: a vocation completed — true = ANY (prefix scan over
    *  LEDGER_VOCATION_PREFIX), or one specific vocation id. */
   vocation?: true | string;
@@ -84,6 +92,9 @@ export function gateRowMet(a: Account, row: GateRow, ownedUnlock: (id: string) =
   if (row.unlock !== undefined) return ownedUnlock(row.unlock);
   if (row.feature !== undefined) return a.features.has(row.feature);
   if (row.level !== undefined) return (a.ledger[reachedLevelKey(row.level)] ?? 0) >= 1;
+  if (row.classLevel !== undefined) {
+    return (a.ledger[classLevelLedgerKey(row.classLevel.classId, row.classLevel.level)] ?? 0) >= 1;
+  }
   if (row.vocation !== undefined) {
     return row.vocation === true
       ? ledgerPrefixHeld(a, LEDGER_VOCATION_PREFIX)
@@ -104,6 +115,10 @@ export function gateRowLabel(row: GateRow): string {
   if (row.label) return row.label;
   const n = row.n ?? 1;
   if (row.level !== undefined) return `reach level ${row.level}`;
+  if (row.classLevel !== undefined) {
+    const cls = CLASSES.find(c => c.id === row.classLevel!.classId);
+    return `reach level ${row.classLevel.level} as the ${cls?.name ?? row.classLevel.classId}`;
+  }
   if (row.vocation !== undefined) {
     return row.vocation === true ? 'complete a vocation' : `complete the ${row.vocation} vocation`;
   }
@@ -132,4 +147,53 @@ export function gateMet(
  *  their keys from THIS extraction, never from a hand-kept list. */
 export function gateLevelNeeds(rows: readonly GateRow[] | undefined): number[] {
   return (rows ?? []).map(r => r.level).filter((n): n is number => typeof n === 'number');
+}
+
+/** Every PER-CLASS level the given rows gate on — the class-milestone twin
+ *  of gateLevelNeeds (meta/unlocks.ts folds the catalog's needs into the
+ *  per-class stamp list the XP sweep reads). */
+export function gateClassLevelNeeds(rows: readonly GateRow[] | undefined): { classId: string; level: number }[] {
+  return (rows ?? []).map(r => r.classLevel).filter((c): c is { classId: string; level: number } => !!c);
+}
+
+/** The highest stamped milestone at or below `level` among ledger keys of
+ *  the shape `prefix<N>` — the progress read behind the two level sugars
+ *  (the sweep stamps every milestone ≤ the level reached, so the highest
+ *  stamped one IS how far the play went, at milestone grain). */
+function highestStampedLevel(a: Account, prefix: string, level: number): number {
+  let best = 0;
+  for (const k in a.ledger) {
+    if (!k.startsWith(prefix) || (a.ledger[k] ?? 0) < 1) continue;
+    const n = Number(k.slice(prefix.length));
+    if (Number.isInteger(n) && n <= level && n > best) best = n;
+  }
+  return best;
+}
+
+/** HOW FAR along one avenue the account stands, 0..1 (1 = held). The
+ *  counted forms read held/n; the level sugars read the highest stamped
+ *  milestone over the target (milestone grain — honest, never a guess);
+ *  the binary forms are 0 or 1. THE OBJECTIVE WEB's reveal rule
+ *  (meta/unlocks.ts classUnlockProgress) and its progress bars read this —
+ *  one fold, every kind. */
+export function gateRowProgress(a: Account, row: GateRow, ownedUnlock: (id: string) => boolean): number {
+  if (gateRowMet(a, row, ownedUnlock)) return 1;
+  const n = Math.max(1, row.n ?? 1);
+  const clamp = (v: number): number => Math.max(0, Math.min(1, v));
+  if (row.ledger !== undefined) return clamp((a.ledger[row.ledger] ?? 0) / n);
+  if (row.ledgerPrefix !== undefined) {
+    let best = 0;
+    for (const k in a.ledger) {
+      if (k.startsWith(row.ledgerPrefix)) best = Math.max(best, (a.ledger[k] ?? 0) / n);
+    }
+    return clamp(best);
+  }
+  if (row.level !== undefined) {
+    return clamp(highestStampedLevel(a, reachedLevelKey(0).slice(0, -1), row.level) / row.level);
+  }
+  if (row.classLevel !== undefined) {
+    const prefix = classLevelLedgerKey(row.classLevel.classId, 0).slice(0, -1);
+    return clamp(highestStampedLevel(a, prefix, row.classLevel.level) / row.classLevel.level);
+  }
+  return 0; // unlock / feature / vocation / quest: binary, and unmet here
 }

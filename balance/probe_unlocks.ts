@@ -1,16 +1,20 @@
 // ---------------------------------------------------------------------------
-// ONE-OFF PROBE — THE DISCOVERY WEB + THE MOOT LAW (meta/unlocks.ts):
-// non-starter classes are shrouded rumors until FOUND — played into
-// (per-class level milestones), chained onto (own the parent bundle), or
-// learned the hard way (world-fact ledgers: seized by a grip, a trap
-// sprung underfoot, a crown/warlord/the Unmade put down). The authored
-// spec COMPILES onto the same generic gates every unlock rides; the whole
-// web must stay REACHABLE from the starting three; class-slot tiers hide
-// while the pool can't fill the hand they sell (no dead purchases); the
-// buy gate refuses the undiscovered outright. Live half: the engine
-// stamps land — per-class milestones (grantSeatXp), the seize lesson
-// (grabSeize → LEDGER_SEIZED), the trap lesson (springTrapwork →
-// LEDGER_TRAP_SPRUNG) — for the LOCAL HERO only, all three.
+// ONE-OFF PROBE — THE OBJECTIVE WEB + THE MOOT LAW (meta/unlocks.ts):
+// a class is never BOUGHT — every non-starter hangs SHROUDED (written in the
+// vestiges' runes) carrying its OBJECTIVES: play thresholds (a class played
+// to a level), counted deeds (twenty own corpses reclaimed, five bosses of
+// the undead, eight deaths), hard lessons (seized by a grip, a trap sprung
+// underfoot, a crown/warlord/the Unmade put down), or a CHAIN (the parent
+// owned = the structural door, the parent played = the objective). The
+// authored spec COMPILES onto the same generic gates every unlock rides
+// (reqAnyOf / requiresUnlock) under THE EARNED LAW (cost 0; the pour refuses
+// it; the world CLAIMS it — settleClassUnlocks); the whole web must stay
+// REACHABLE from the starting three; objectives reveal at a quarter along;
+// class-slot tiers hide while the pool can't fill the hand they sell (no
+// dead purchases). Live half: the engine stamps land — per-class
+// milestones (grantSeatXp), the seize lesson (grabSeize → LEDGER_SEIZED),
+// the trap lesson (springTrapwork → LEDGER_TRAP_SPRUNG) — for the LOCAL
+// HERO only, all three. (The ladder, the kit and the runes: probe_classmastery.)
 // Run: npx tsx balance/probe_unlocks.ts
 // ---------------------------------------------------------------------------
 
@@ -18,15 +22,17 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import {
   CLASS_BUNDLES, SLOT_TIERS, UNLOCK_CATALOG, VAULT_SHELF_CFG, VAULT_TABS, allUnlockables,
-  applyUnlock, availableUnlocks, classBundleId, classUnlockFor, discoveryLedgerKeys,
-  isClassDiscovered, isUnlockOwned, isUnlockVisible, undiscoveredClassUnlocks, vaultKindOrder,
-  vaultSeatOf, vaultShelfCensus, vaultStripVisible,
+  applyUnlock, availableUnlocks, catalogClassLevelMilestones, classBundleId, classObjectiveKeys,
+  classUnlockFor, classUnlockProgress, investUnlock, isUnlockOwned, isUnlockVisible,
+  settleClassUnlocks, shroudedClassUnlocks, vaultKindOrder, vaultSeatOf, vaultShelfCensus,
+  vaultStripVisible,
 } from '../src/meta/unlocks';
 import {
-  CLASS_LEVEL_MILESTONES, FEATURE, LEDGER_CRAFTS_UNLOCKED, LEDGER_FLASK_LESSON,
-  LEDGER_LEGENDARY_SKILL_DROP, LEDGER_ZONES_EXPLORED, STARTER_CLASSES,
-  classLevelLedgerKey, makeAccount,
+  CLASS_LEVEL_MILESTONES, FEATURE, LEDGER_BOSS_SLAIN_PREFIX, LEDGER_CORPSES_RECLAIMED,
+  LEDGER_CRAFTS_UNLOCKED, LEDGER_FLASK_LESSON, LEDGER_LEGENDARY_SKILL_DROP, LEDGER_ZONES_EXPLORED,
+  STARTER_CLASSES, bossSlainKey, classLevelLedgerKey, makeAccount,
 } from '../src/meta/account';
+import { CLASS_WEB_CFG } from '../src/data/classTiers';
 import { CLASSES } from '../src/data/classes';
 import { LEDGER_SEIZED } from '../src/engine/grab';
 import { LEDGER_TRAP_SPRUNG, type PlacedTrapwork } from '../src/engine/trapworks';
@@ -38,10 +44,10 @@ const check = (name: string, ok: boolean, detail = ''): void => {
   if (!ok) failed++;
 };
 
-// The world facts the web may hang a hard lesson on, WITH their stamp homes —
-// a new fact key in a discover row must register its source here (this list
-// is the probe's map of who stamps what; an unknown key = a rumor that can
-// never resolve).
+// The world facts the web may hang an objective on, WITH their stamp homes —
+// a new fact key in an objective row must register its source here (this
+// list is the probe's map of who stamps what; an unknown key = a card that
+// can never resolve). The boss family is a PREFIX (one counter per faction).
 const WORLD_FACTS = new Set<string>([
   LEDGER_SEIZED,        // world.ts grabSeize (victim = local hero)
   LEDGER_TRAP_SPRUNG,   // world.ts springTrapwork (presser = local hero)
@@ -51,10 +57,14 @@ const WORLD_FACTS = new Set<string>([
   'broodmothers_slain', // engine/killHandlers.ts (any brood-queen kind put down)
   'fallen_stars_broken', // engine/killHandlers.ts (a starfall lattice shattered)
   'account_deaths',     // the death flow (LEDGER_ACCOUNT_DEATHS — dying is always earnable)
+  LEDGER_CORPSES_RECLAIMED, // world.ts reclaimCorpse (your own corpse, dwelt back — account-direct)
 ]);
+const isWorldFact = (k: string): boolean => WORLD_FACTS.has(k) || k.startsWith(LEDGER_BOSS_SLAIN_PREFIX); // killHandlers boss_slain_tally
 const MILESTONE_RE = /^class_(.+)_level_(\d+)$/;
 const classIds = new Set(CLASSES.map(c => c.id));
 const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
+const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
+  b.unlock.chain === undefined ? [] : Array.isArray(b.unlock.chain) ? b.unlock.chain : [b.unlock.chain];
 
 // --- 0) The registry weave --------------------------------------------------
 {
@@ -64,38 +74,42 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
     `${CLASS_BUNDLES.length} bundles / ${nonStarters.length} non-starters`);
   check('weave: no bundle sells a starter or a ghost class',
     CLASS_BUNDLES.every(b => classIds.has(b.classId) && !STARTER_CLASSES.includes(b.classId)));
-  check('weave: every bundle is SHROUDED (discover row + non-empty hint)',
-    CLASS_BUNDLES.every(b => !!b.discover && b.discover.hint.trim().length > 0));
-  check('weave: ownership chains name real bundled classes',
-    CLASS_BUNDLES.every(b => {
-      const cs = b.discover?.classes;
-      if (cs === undefined) return true;
-      return (Array.isArray(cs) ? cs : [cs]).every(id => bundleByClass.has(id));
-    }));
-  check('weave: every discovery ledger key is a real milestone or a mapped world fact',
-    discoveryLedgerKeys().every(k => {
-      const m = MILESTONE_RE.exec(k);
-      if (m) return classIds.has(m[1]) && CLASS_LEVEL_MILESTONES.includes(Number(m[2]));
-      return WORLD_FACTS.has(k);
-    }), discoveryLedgerKeys().join(', '));
-  check('weave: the compile carries the gates onto the catalog entry',
+  check('weave: every bundle authors its unlock spec with a non-empty hint',
+    CLASS_BUNDLES.every(b => !!b.unlock && b.unlock.hint.trim().length > 0));
+  check('weave: every bundle is EARNED (cost 0, the earned law) with at least one objective — nothing claims for free',
     CLASS_BUNDLES.every(b => {
       const u = classUnlockFor(b.classId);
-      if (!u) return false;
-      const wantLedger = b.discover?.ledger !== undefined;
-      const wantChain = b.discover?.classes !== undefined;
-      const chainIds = wantChain
-        ? (Array.isArray(b.discover!.classes) ? b.discover!.classes! : [b.discover!.classes!]).map(classBundleId)
-        : [];
-      const gotChain = u.requiresUnlock === undefined ? []
-        : Array.isArray(u.requiresUnlock) ? u.requiresUnlock : [u.requiresUnlock];
-      const wantCounts = b.discover?.ledgerCounts;
-      const countsOk = wantCounts === undefined ? u.reqLedgerCounts === undefined
-        : JSON.stringify(u.reqLedgerCounts) === JSON.stringify(wantCounts);
-      return (wantLedger === (u.reqLedger !== undefined)) && countsOk
-        && chainIds.length === gotChain.length && chainIds.every(id => gotChain.includes(id))
-        && (u.kind === 'class' && u.payload.hint === b.discover?.hint);
+      return !!u && u.earned === true && u.cost === 0 && (u.reqAnyOf?.length ?? 0) > 0;
     }));
+  check('weave: chains name real bundled classes',
+    CLASS_BUNDLES.every(b => chainOf(b).every(id => bundleByClass.has(id))));
+  check('weave: every objective key is a class milestone the sweep stamps, or a mapped world fact',
+    classObjectiveKeys().every(k => {
+      const m = MILESTONE_RE.exec(k);
+      if (m) {
+        return classIds.has(m[1])
+          && (CLASS_LEVEL_MILESTONES.includes(Number(m[2])) || catalogClassLevelMilestones(m[1]).includes(Number(m[2])));
+      }
+      return isWorldFact(k);
+    }), classObjectiveKeys().filter(k => !MILESTONE_RE.test(k) && !isWorldFact(k)).join(', '));
+  check('weave: the compile carries the spec onto the catalog entry (objectives → reqAnyOf, chain → the door + a played-parent ask)',
+    CLASS_BUNDLES.every(b => {
+      const u = classUnlockFor(b.classId);
+      if (!u || u.kind !== 'class') return false;
+      const chain = chainOf(b);
+      const gotDoor = u.requiresUnlock === undefined ? []
+        : Array.isArray(u.requiresUnlock) ? u.requiresUnlock : [u.requiresUnlock];
+      const doorOk = chain.length === gotDoor.length && chain.every(id => gotDoor.includes(classBundleId(id)));
+      const rows = u.reqAnyOf ?? [];
+      const chainRows = rows.slice(0, chain.length);
+      const chainOk = chainRows.every((r, i) => r.classLevel?.classId === chain[i] && r.classLevel?.level === CLASS_WEB_CFG.chainPlayLevel);
+      const rest = rows.slice(chain.length);
+      const restOk = JSON.stringify(rest) === JSON.stringify(b.unlock.objectives ?? []);
+      return doorOk && chainOk && restOk && u.payload.hint === b.unlock.hint;
+    }));
+  check('weave: the Necromancer asks her two deeds — twenty own corpses OR five undead bosses',
+    JSON.stringify((classUnlockFor('necromancer')!.reqAnyOf ?? []).map(r => [r.ledger, r.n]))
+      === JSON.stringify([[LEDGER_CORPSES_RECLAIMED, 20], [bossSlainKey('undead'), 5]]));
   check('weave: slot tiers each carry the MOOT LAW at their own count',
     SLOT_TIERS.every(t => {
       const u = UNLOCK_CATALOG.find(x => x.id === t.id);
@@ -116,18 +130,19 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
     grew = false;
     for (const b of CLASS_BUNDLES) {
       if (reachable.has(b.classId)) continue;
-      const d = b.discover;
-      const chainOk = d?.classes === undefined
-        || (Array.isArray(d.classes) ? d.classes : [d.classes]).every(id => reachable.has(id));
-      const keys = [
-        ...(d?.ledger === undefined ? [] : Array.isArray(d.ledger) ? d.ledger : [d.ledger]),
-        ...Object.keys(d?.ledgerCounts ?? {}), // counted keys accrue in play like any fact
-      ];
-      const ledgerOk = keys.every(k => {
-        const m = MILESTONE_RE.exec(k);
-        return m ? reachable.has(m[1]) : WORLD_FACTS.has(k); // a fact is earnable in the wild
+      const u = classUnlockFor(b.classId)!;
+      // The structural door: every chain parent claimed.
+      const doorOk = chainOf(b).every(id => reachable.has(id));
+      // ANY ONE objective satisfiable: a played class that is reachable, or a fact earnable in the wild.
+      const anyOk = (u.reqAnyOf ?? []).some(r => {
+        if (r.classLevel) return reachable.has(r.classLevel.classId);
+        if (r.ledger !== undefined) {
+          const m = MILESTONE_RE.exec(r.ledger);
+          return m ? reachable.has(m[1]) : isWorldFact(r.ledger);
+        }
+        return false;
       });
-      if (chainOk && ledgerOk) { reachable.add(b.classId); grew = true; }
+      if (doorOk && anyOk) { reachable.add(b.classId); grew = true; }
     }
   }
   const stranded = CLASSES.filter(c => !reachable.has(c.id)).map(c => c.id);
@@ -135,7 +150,7 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
     stranded.length === 0, stranded.length ? `stranded: ${stranded.join(', ')}` : `${reachable.size}/${CLASSES.length}`);
 }
 
-// --- 2) The account walk: mystery, discovery, the moot law, the refusal -----
+// --- 2) The account walk: the shroud, the reveal, the claim, the moot law ----
 {
   const a = makeAccount();
   a.credits = 100000;
@@ -145,74 +160,88 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
     .sort();
   const visibleSlotIds = (): string[] => availableUnlocks(a)
     .filter(u => u.kind === 'slot').map(u => u.id);
+  const shroudedIds = (): string[] => shroudedClassUnlocks(a).map(u => (u.kind === 'class' ? u.payload.classId : '')).sort();
+  const unchained = CLASS_BUNDLES.filter(b => chainOf(b).length === 0).map(b => b.classId).sort();
 
-  check('fresh: every non-starter is a rumor, none purchasable',
-    visibleClassIds().length === 0 && undiscoveredClassUnlocks(a).length === CLASS_BUNDLES.length);
-  check('fresh: NO slot tier surfaces over a 3-class pool (the old dead buy)',
-    visibleSlotIds().length === 0);
-  check('fresh: starters read as discovered', STARTER_CLASSES.every(id => isClassDiscovered(a, id)));
+  check('fresh: no class is ever STOCK (earned entries never stand for sale)', visibleClassIds().length === 0);
+  check('fresh: every unchained class hangs shrouded; chained cards wait behind their parent',
+    shroudedIds().join(',') === unchained.join(','), shroudedIds().join(','));
+  check('fresh: NO slot tier surfaces over a 3-class pool (the old dead buy)', visibleSlotIds().length === 0);
+  check('fresh: the settle claims nothing', settleClassUnlocks(a).length === 0 && a.unlockedClasses.size === STARTER_CLASSES.length);
 
-  // The undiscovered refuse the coin outright (visibility IS the buy gate).
+  // THE EARNED LAW: the pour never reaches a class.
   const ascetic = classUnlockFor('ascetic')!;
   const before = a.credits;
-  check('refusal: buying an undiscovered class fails and charges nothing',
-    !applyUnlock(a, ascetic) && a.credits === before && !a.unlockedClasses.has('ascetic'));
+  check('earned: buying a class fails and charges nothing (invest and apply alike)',
+    investUnlock(a, ascetic, 500) === 0 && !applyUnlock(a, ascetic) && a.credits === before && !a.unlockedClasses.has('ascetic'));
 
-  // Play the Magician to 10 → its INT kin surface, exactly those two.
+  // THE REVEAL: objectives read runes until one stands a quarter along.
+  const necro = classUnlockFor('necromancer')!;
+  const quarter = Math.ceil(20 * CLASS_WEB_CFG.revealFrac);
+  a.ledger[LEDGER_CORPSES_RECLAIMED] = quarter - 1;
+  check('reveal: just short of a quarter, the objectives stay shrouded (the progress still reads)',
+    !classUnlockProgress(a, necro).revealed && classUnlockProgress(a, necro).rows[0].frac > 0);
+  a.ledger[LEDGER_CORPSES_RECLAIMED] = quarter;
+  const read = classUnlockProgress(a, necro);
+  check('reveal: a quarter of ONE deed reveals every objective, plain, with progress',
+    read.revealed && read.rows.length === 2 && !read.met && read.rows[0].frac === quarter / 20 && read.rows[1].frac === 0);
+  check('reveal: the spoken lines are hers', read.rows.map(r => r.label).join(' | ')
+    === 'reclaim twenty of your own corpses | slay five bosses of the undead');
+  // Play thresholds read at milestone grain: the Magician at 5 is halfway to the Sorcerer's ten.
+  a.ledger[classLevelLedgerKey('magician', 5)] = 1;
+  check('reveal: a play threshold reads its highest stamped milestone over the ask',
+    classUnlockProgress(a, classUnlockFor('sorcerer')!).rows[0].frac === 0.5 && classUnlockProgress(a, classUnlockFor('sorcerer')!).revealed);
+
+  // THE CLAIM: Magician L10 → its INT kin are CLAIMED by the settle, gems and all.
   a.ledger[classLevelLedgerKey('magician', 10)] = 1;
-  check('discovery: Magician L10 reveals exactly its INT kin',
-    visibleClassIds().join(',') === 'pyromancer,sorcerer', visibleClassIds().join(','));
+  const got = settleClassUnlocks(a).map(u => (u.kind === 'class' ? u.payload.classId : '')).sort();
+  check('claim: Magician L10 yields exactly its INT kin (Pyromancer, Sorcerer)', got.join(',') === 'pyromancer,sorcerer', got.join(','));
+  check('claim: the claimed class is owned, its gems in the pool, its card off the wall',
+    a.unlockedClasses.has('sorcerer') && a.unlockedSkills.has('infernal_ray') && a.unlockedSupports.has('spark_discipline')
+    && !shroudedIds().includes('sorcerer'));
+  check('claim: the settle is idempotent', settleClassUnlocks(a).length === 0);
 
-  check('discovery: rumors and the visible never overlap',
-    undiscoveredClassUnlocks(a).every(u => u.kind === 'class' && !visibleClassIds().includes(u.payload.classId)));
-
-  // Buy one → the pool can fill a 4th slot → tier 4 surfaces (and only it).
-  check('buy: the Sorcerer joins the pool', applyUnlock(a, classUnlockFor('sorcerer')!)
-    && a.unlockedClasses.has('sorcerer'));
-  check('moot law: a 4-deep pool surfaces slot tier 4 alone',
-    visibleSlotIds().join(',') === 'slot_tier_4');
+  // THE MOOT LAW rides the new pool exactly as before.
+  check('moot law: a 5-deep pool surfaces slot tier 4 alone', visibleSlotIds().join(',') === 'slot_tier_4');
   check('buy: slot tier 4', applyUnlock(a, UNLOCK_CATALOG.find(u => u.id === 'slot_tier_4')!));
-  check('moot law: tier 5 stays HIDDEN while the pool is 4 (sequence owned, pool short)',
-    visibleSlotIds().length === 0);
-  check('buy: the Pyromancer deepens the pool to 5', applyUnlock(a, classUnlockFor('pyromancer')!));
-  check('moot law: tier 5 surfaces the moment the pool can fill it',
-    visibleSlotIds().join(',') === 'slot_tier_5');
+  check('moot law: tier 5 surfaces the moment the pool can fill it', visibleSlotIds().join(',') === 'slot_tier_5');
 
-  // Deeper study → the WIS/WIL doors; the Necromancer OWNED chains the Summoner.
-  a.ledger[classLevelLedgerKey('magician', 15)] = 1;
-  check('discovery: Magician L15 opens the Wisdom and Will doors',
-    visibleClassIds().includes('necromancer') && visibleClassIds().includes('cleric')
-    && !visibleClassIds().includes('summoner'));
-  check('buy: the Necromancer', applyUnlock(a, classUnlockFor('necromancer')!));
-  check('chain: OWNING the Necromancer reveals the Summoner (the nested ladder)',
-    visibleClassIds().includes('summoner') && isClassDiscovered(a, 'summoner'));
+  // THE CHAIN: the Necromancer's deed claims it; the Summoner's card APPEARS
+  // (the door) but claims only once the parent is PLAYED.
+  a.ledger[LEDGER_CORPSES_RECLAIMED] = 20;
+  check('claim: twenty corpses yield the Necromancer', settleClassUnlocks(a).some(u => u.id === necro.id) && a.unlockedClasses.has('necromancer'));
+  check('chain: the Summoner hangs shrouded now (the door opened), unclaimed',
+    shroudedIds().includes('summoner') && !a.unlockedClasses.has('summoner'));
+  check('chain: its one objective is the parent played to the chain level',
+    classUnlockProgress(a, classUnlockFor('summoner')!).rows.map(r => r.label).join() === `reach level ${CLASS_WEB_CFG.chainPlayLevel} as the Necromancer`);
+  a.ledger[classLevelLedgerKey('necromancer', CLASS_WEB_CFG.chainPlayLevel)] = 1;
+  check('chain: the parent played claims the Summoner', settleClassUnlocks(a).some(u => u.id === classUnlockFor('summoner')!.id));
 
-  // The hard lesson: a grip caught you once → the Brawler stops being a rumor.
+  // The hard lesson and the counted deed, claimed the same way.
   a.ledger[LEDGER_SEIZED] = 1;
-  check('hard lesson: seized_by_grip reveals the Brawler',
-    visibleClassIds().includes('brawler') && isClassDiscovered(a, 'brawler'));
-
-  // The COUNTED lever (ledgerCounts debut): the Flagellant is discovered by
-  // DYING — and presence alone is not enough, the tally must reach eight.
+  check('hard lesson: seized_by_grip claims the Brawler', settleClassUnlocks(a).some(u => u.id === classUnlockFor('brawler')!.id));
   a.ledger['account_deaths'] = 7;
-  check('counted: seven deaths keep the Flagellant shrouded',
-    !visibleClassIds().includes('flagellant') && !isClassDiscovered(a, 'flagellant'));
+  check('counted: seven deaths keep the Flagellant shrouded', settleClassUnlocks(a).length === 0 && shroudedIds().includes('flagellant'));
   a.ledger['account_deaths'] = 8;
-  check('counted: the eighth death reveals the Flagellant',
-    visibleClassIds().includes('flagellant') && isClassDiscovered(a, 'flagellant'));
+  check('counted: the eighth death claims the Flagellant', settleClassUnlocks(a).some(u => u.id === classUnlockFor('flagellant')!.id));
+
+  // THE MERGED VIEW: a run-ledger deed claims through the view, the account ledger untouched.
+  const view = { ...a.ledger, [classLevelLedgerKey('rogue', 10)]: 1 };
+  const viaView = settleClassUnlocks(a, view).map(u => (u.kind === 'class' ? u.payload.classId : '')).sort();
+  check('view: a merged ledger claims the Rogue\'s L10 kin without writing the account ledger',
+    viaView.join(',') === 'ranger,swashbuckler' && a.ledger[classLevelLedgerKey('rogue', 10)] === undefined, viaView.join(','));
 
   // No visible entry may ever carry an unmet reqClasses (the law, swept wide).
   check('moot law: nothing visible wants a deeper pool than the account holds',
     allUnlockables().filter(u => isUnlockVisible(a, u))
       .every(u => u.reqClasses === undefined || a.unlockedClasses.size >= u.reqClasses));
 
-  // Migration stance: a class OWNED before its discover row existed is
-  // discovered by definition — never re-shrouded, never a rumor.
+  // Migration stance: a class OWNED before its objectives existed is owned —
+  // never re-shrouded, never on the wall.
   const b = makeAccount();
   b.unlockedClasses.add('ascetic');
   check('migration: an owned class never re-shrouds',
-    isClassDiscovered(b, 'ascetic')
-    && undiscoveredClassUnlocks(b).every(u => u.kind === 'class' && u.payload.classId !== 'ascetic'));
+    isUnlockOwned(b, ascetic) && shroudedClassUnlocks(b).every(u => u.kind === 'class' && u.payload.classId !== 'ascetic'));
 }
 
 // --- 3) THE VAULT SHELVES: the store's organization as data -----------------
