@@ -142,6 +142,53 @@ for (const mode of BAG_SORT_MODES) {
   check('sort: an empty bag is inert', !sortBagItems([], 'space'));
 }
 
+{
+  // THE DIRECTION: 'asc' mirrors the order's face — Space leads with the
+  // smallest footprint, Rarity with the commonest — and still packs whole
+  // and deterministically.
+  const bag = mixedBag();
+  const n = bag.length;
+  const ok = sortBagItems(bag, 'space', undefined, 'asc');
+  const minArea = Math.min(...bag.map(i => bagFootprint(i).area));
+  check('sort space asc: lands whole and leads with the smallest footprint',
+    ok && overlaps(bag) === 0 && bag.length === n && bagFootprint(rowMajorFirst(bag)).area === minArea);
+  const once = layout(bag);
+  sortBagItems(bag, 'space', undefined, 'asc');
+  check('sort space asc: deterministic', layout(bag) === once);
+  const bag2 = mixedBag();
+  sortBagItems(bag2, 'rarity', undefined, 'asc');
+  const minR = Math.min(...bag2.map(bagRarityRank));
+  check('sort rarity asc: leads with the commonest', overlaps(bag2) === 0 && bagRarityRank(rowMajorFirst(bag2)) === minR);
+}
+
+{
+  // THE HOLES' VETO: an ascending pack that tetrises itself out (small
+  // pieces seated first leave no hole for the big one) is rescued by
+  // fronting the vetoed piece — never a dead press where the hand's own
+  // arrangement fit. Board 4×2: a 1×1, a 2×1 and a 2×2 (7 of 8 cells);
+  // strict asc seats the 1×1 at 0,0 and the 2×1 at 1,0 — the 2×2 finds no
+  // 2×2 hole — so the 2×2 fronts and everything lands.
+  const baseOfSize = (w: number, h: number): string | undefined =>
+    bases.find(b => { const s = sizeOf(b.id); return s.w === w && s.h === h; })?.id;
+  const b11 = baseOfSize(1, 1), b21 = baseOfSize(2, 1), b22 = baseOfSize(2, 2);
+  if (b11 && b21 && b22) {
+    const board = { w: 4, h: 2 };
+    const big = mk(b22, 0, 0), one = mk(b11, 2, 0), two = mk(b21, 2, 1);
+    const bag = [big, one, two];
+    const strictAscFails = (() => {
+      // the same order, hand-simulated: 1×1 at 0,0 · 2×1 at 1,0 · the 2×2 finds no hole
+      const probe = [mk(b11, 0, 0), mk(b21, 1, 0)];
+      return !canPlaceAt(probe, mk(b22), 0, 0) && !canPlaceAt(probe, mk(b22), 1, 0) && !canPlaceAt(probe, mk(b22), 2, 0);
+    })();
+    const ok = sortBagItems(bag, 'space', board, 'asc');
+    check('veto: the strict ascending order really cannot seat the 2×2 on a 4×2 board', strictAscFails);
+    check('veto: the sort still lands whole (the vetoed 2×2 fronted, the rest ascending)',
+      ok && overlaps(bag) === 0 && bag.every(i => i.x !== undefined) && bag.length === 3);
+  } else {
+    console.log('SKIP  veto: the base registry holds no 1×1 / 2×1 / 2×2 trio to stage the board');
+  }
+}
+
 // --- THE INTENT -----------------------------------------------------------
 
 {

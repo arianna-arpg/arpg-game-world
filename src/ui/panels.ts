@@ -30,7 +30,7 @@ import {
 } from '../engine/memories';
 import { GEM_DROP_CFG } from '../engine/loot';
 import { canPlaceAt, overlappingItems, swapBlockerFits } from '../engine/inventory';
-import { BAG_SORT_MODES } from '../engine/bagsort';
+import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, type ModCompareRow } from '../engine/itemgen';
 import { ITEM_BASES } from '../data/itembases';
@@ -719,6 +719,10 @@ export class UI {
      *  hold only ever LOCKS — the tap stays the fabric's click-lift. */
     pad: boolean;
   } | null = null;
+  /** THE BAG SORT's last press: the lit glyph and its direction — pressing
+   *  the lit mode again flips it. Panel state, never saved (the bag's cells
+   *  are the truth; this only says what the NEXT press will do). */
+  private bagSort: { mode: string; dir: BagSortDir } | null = null;
   /** THE FOLIO (ui/folio.ts): dwell dialogs that would overlap bind into ONE
    *  tabbed book — the first opened holds the front, later ones arrive as
    *  shelved tabs on its thumb index. The core keeps no open flag of its own:
@@ -3708,16 +3712,28 @@ export class UI {
           ${this.learnedListHtml()}
         </div>
       </div>` : '';
-    // THE BAG SORT (her ask 2026-09-05): one press re-packs the bag in a
-    // registered order (engine/bagsort.ts BAG_SORT_MODES — the buttons are
-    // DERIVED from the registry, so a new mode is one data row) through the
-    // sortBag intent; the hover line says what each order IS.
-    const sortRow = `
-          <div style="display:flex;gap:4px;align-items:center;margin-top:6px;font-size:10px;color:#8a8678">
-            <span style="margin-right:2px">sort</span>
-            ${BAG_SORT_MODES.map(s => `<button data-bag-sort="${esc(s.id)}" title="${esc(s.title)}"
-              style="font-size:10px;padding:2px 8px;background:#241d2e;border:1px solid #4a3a5a;border-radius:4px;
-              color:#d8d0c0;cursor:var(--cursor-point, pointer)">${esc(s.label)}</button>`).join('')}
+    // THE BAG SORT (her ask 2026-09-05): a strip of GLYPH buttons on the
+    // bag's own header line — one per registered mode (engine/bagsort.ts
+    // BAG_SORT_MODES: the buttons are DERIVED, a new mode is one data row),
+    // the last-pressed mode lit gold with its direction badge; pressing it
+    // again FLIPS the direction (press → the sortBag intent → re-pack). The
+    // hover line says what each order IS, so a glyph never has to explain
+    // itself; the ether/gold palette keeps the strip quiet beside the grid.
+    const bsState = this.bagSort;
+    const sortStrip = `
+          <div style="display:flex;gap:3px;align-items:center;margin-left:auto">
+            <span style="font-size:9px;color:#8a8678;letter-spacing:1px;text-transform:uppercase;margin-right:3px">sort</span>
+            ${BAG_SORT_MODES.map(s => {
+              const on = bsState?.mode === s.id;
+              const dir = on ? bsState!.dir : 'desc';
+              const tip = `${s.label} — ${s.title}${on ? ` · now ${dir === 'desc' ? 'descending' : 'ascending'}; press again to flip` : ''}`;
+              return `<button data-bag-sort="${esc(s.id)}" title="${esc(tip)}"
+                style="position:relative;width:22px;height:20px;padding:0;font-size:12px;line-height:18px;
+                background:${on ? '#2e2538' : '#241d2e'};border:1px solid ${on ? 'var(--gold)' : '#4a3a5a'};border-radius:4px;
+                color:${on ? 'var(--gold)' : '#b8b0c8'};cursor:var(--cursor-point, pointer)">${s.icon}${on
+                  ? `<span style="position:absolute;right:0;bottom:-3px;font-size:7px;line-height:8px;color:var(--gold)">${dir === 'desc' ? '▼' : '▲'}</span>`
+                  : ''}</button>`;
+            }).join('')}
           </div>`;
     const gearBody = `
       <div style="display:flex;gap:10px;align-items:flex-start">
@@ -3726,9 +3742,11 @@ export class UI {
           ${doll}
         </div>
         <div>
-          <h3>Bag <span style="color:#8a8678;font-weight:normal">(${m.items.length} item${m.items.length === 1 ? '' : 's'})</span></h3>
+          <div style="display:flex;align-items:center;gap:8px;width:${W * CELL}px">
+            <h3>Bag <span style="color:#8a8678;font-weight:normal">(${m.items.length} item${m.items.length === 1 ? '' : 's'})</span></h3>
+            ${sortStrip}
+          </div>
           <div data-bag-grid="1" style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
-          ${sortRow}
           <div style="margin-top:8px;color:#8a8678;font-size:10px">
             ${salv === 'break'
               ? `⚒ <b style="color:#e8c87a">BREAKING</b>: click a piece to salvage it for essence ·
@@ -3743,7 +3761,8 @@ export class UI {
               : `drag (or click to lift) any piece — the whole piece rides your hand and lands where its ghost sits:
                 bag ↔ doll ↔ the other slot, over another piece to swap, onto the world to drop it ·
                 right-click or double-click: equip / unequip (a pouch opens the Recall, a skill gem learns) ·
-                shift-click: drop to ground · hold right-click: lock 🔒 against salvage · ${pickupHint}`}
+                shift-click: drop to ground · hold right-click: lock 🔒 against salvage ·
+                the glyphs beside the Bag heading sort it (press the lit one again to flip the order) · ${pickupHint}`}
           </div>
         </div>
       </div>`;
@@ -3795,7 +3814,11 @@ export class UI {
     // latch stamps the owner during this dispatch, so a guest sorts the
     // GUEST's bag); a carry in flight rides along — it lifts by uid.
     q<HTMLButtonElement>('button[data-bag-sort]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'sortBag', mode: btn.dataset.bagSort! });
+      const mode = btn.dataset.bagSort!;
+      // A fresh mode opens on its natural face; the lit mode FLIPS.
+      const dir: BagSortDir = this.bagSort?.mode === mode ? (this.bagSort.dir === 'desc' ? 'asc' : 'desc') : 'desc';
+      this.bagSort = { mode, dir };
+      world.requestMeta({ t: 'sortBag', mode, dir });
       hideTooltip();
       this.refreshInventory();
     }));

@@ -44,7 +44,7 @@ import { mintSupportInstance, spawnVeinOf, SUPPORTBASE_CFG } from './supportbase
 import { BOMBARD_CFG, type BombardSpec } from './bombard';
 import { evalCurve, type CurveKind } from './curves';
 import { autoPlace, placeAt, removeFromBag, swapBlockerFits } from './inventory';
-import { bagSortMode, sortBagItems } from './bagsort';
+import { bagSortMode, sortBagItems, type BagSortDir } from './bagsort';
 import {
   bagGemItems, findBagGem, freeCellCount, makeSkillGemItem, makeSupportGemItem,
   rebuildAnyItem, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf,
@@ -1644,7 +1644,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'unequipItem': return isStr(a.slot)
       && ((a.x === undefined && a.y === undefined) || (isIdx(a.x) && isIdx(a.y)));
     case 'moveItem': return isIdx(a.uid) && isIdx(a.x) && isIdx(a.y);
-    case 'sortBag': return isStr(a.mode) && !!bagSortMode(a.mode);
+    case 'sortBag': return isStr(a.mode) && !!bagSortMode(a.mode) && (a.dir === undefined || a.dir === 'asc' || a.dir === 'desc');
     case 'dropItem': return isIdx(a.uid);
     case 'salvageItem': return isIdx(a.uid) && isLane(a.lane);
     case 'pickupItem': return true;
@@ -27430,7 +27430,7 @@ export class World {
       case 'equipItem': this.equipItem(seat, action.uid, action.slot); break;
       case 'unequipItem': this.unequipItem(seat, action.slot, action.x, action.y); break;
       case 'moveItem': this.moveBagItem(seat, action.uid, action.x, action.y); break;
-      case 'sortBag': this.sortBag(seat, action.mode); break;
+      case 'sortBag': this.sortBag(seat, action.mode, action.dir); break;
       case 'dropItem': this.dropGearFromBag(seat, action.uid); break;
       case 'pickupItem':
         // THE HARVEST CONSENT (engine/harvest.ts): the interact verb is
@@ -43086,8 +43086,8 @@ export class World {
    *  loses a piece). Pure bookkeeping: no station gate, works anywhere,
    *  persists with the save; the pieces themselves are untouched (locks,
    *  gems, pouches ride their tiles to the new cells). */
-  sortBag(seat: Seat, mode: string): void {
-    if (!sortBagItems(seat.meta.items, mode)) return;
+  sortBag(seat: Seat, mode: string, dir: BagSortDir = 'desc'): void {
+    if (!sortBagItems(seat.meta.items, mode, undefined, dir)) return;
     this.markMetaDirty(seat);
   }
 

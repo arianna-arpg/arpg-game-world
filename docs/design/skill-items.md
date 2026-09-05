@@ -284,16 +284,28 @@ cells are drawn 2px shy of their pitch, so a drop landed exactly on a cell's
 dashed rim once found nothing and cancelled; each cell now claims the gutter
 to its right and below (an invisible `::after` extension), so a seam resolves
 to the left / upper cell and never to nothing. THE BAG SORT
-(`engine/bagsort.ts`, the `sortBag` intent, the button row under the grid):
-`BAG_SORT_MODES` is an open registry of comparator rows — Space (tightest
-pack: area, then height), Size (tallest, then widest), Type (the doll's own
-slot order, then skill gems, supports, memories, writs), Rarity (the item
-ladder; skill gems by their own) — each re-packing first-fit on a fresh board
-ALL OR NOTHING (a failed pack reverts every position; a sort never loses a
-piece). Its KEYS (`bagKindRank` / `bagRarityRank` / `bagFootprint`) are the
-vocabulary THE ITEM FILTER FRAMEWORK will speak (Vault-gated; chartered in its
-own session — a filter row is a sibling of a sort row, never a second sort).
-Probe `balance/probe_bagsort.ts` pins the swap verdicts and the sort.
+(`engine/bagsort.ts`, the `sortBag` intent, the GLYPH STRIP on the Bag
+heading's own line — icons only, the hover line is the explanation; her
+ruling: top, not bottom, for clarity without clutter): `BAG_SORT_MODES` is
+an open registry of comparator rows, each with its glyph — Space ▦ (tightest
+pack: area, then height), Size ⇕ (tallest, then widest), Type ⚔ (the doll's
+own slot order, then skill gems, supports, memories, writs), Rarity ✦ (the
+item ladder; skill gems by their own) — each re-packing first-fit on a fresh
+board. THE DIRECTION: a press opens a mode on its natural face (descending —
+largest / rarest / the doll's first kind leads) and lights the glyph gold
+with a ▼; pressing the lit glyph again FLIPS it (▲, the mirror); the intent
+carries `dir`. THE HOLES' VETO: an order can tetris itself out (an ascending
+Space pack seats the small pieces first and may leave no hole a big one
+fits), so the sort tries the order as asked, then the vetoed pieces moved to
+the FRONT (largest first, the rest keeping the order), then the tightest pack
+outright — and only when even that fails does it revert every position
+(ALL OR NOTHING: a sort never loses a piece, and never dies on a press the
+hand's own arrangement proved possible). Its KEYS (`bagKindRank` /
+`bagRarityRank` / `bagFootprint`) are the vocabulary THE ITEM FILTER
+FRAMEWORK will speak (Vault-gated; chartered in its own session — a filter
+row is a sibling of a sort row, never a second sort). Probe
+`balance/probe_bagsort.ts` pins the swap verdicts, the sort, the direction
+and the veto.
 
 **THE RECALL panel.** Units grouped by dropper def, one row each:
 

@@ -25,10 +25,18 @@ import { EQUIP_SLOTS, ITEM_RARITY_IDS, type ItemInstance } from './items';
 import { SKILL_RARITIES } from './skills';
 import { ITEM_BASES } from '../data/itembases';
 
+/** 'desc' = the mode's natural face (largest / rarest / the doll's first kind
+ *  leads); 'asc' = the mirror. The panel flips it by pressing the lit mode
+ *  again; the intent carries it; ties fall to uid either way. */
+export type BagSortDir = 'asc' | 'desc';
+
 export interface BagSortMode {
   id: string;
   /** The button's word. */
   label: string;
+  /** The button's GLYPH — the bag's header strip is icon-only; the title is
+   *  the explanation, the glyph the handle. */
+  icon: string;
   /** The button's hover line — what the order IS, so the player can predict it. */
   title: string;
   /** Negative = a before b. Ties fall to uid (sortBagItems appends it), so
@@ -91,22 +99,22 @@ const chain = (...cmps: ((a: ItemInstance, b: ItemInstance) => number)[]) =>
 
 export const BAG_SORT_MODES: BagSortMode[] = [
   {
-    id: 'space', label: 'Space',
+    id: 'space', label: 'Space', icon: '▦',
     title: 'Tightest pack: the biggest pieces first (area, then height), the small ones fill the holes',
     compare: chain(byArea, byHeight, byWidth, byKind),
   },
   {
-    id: 'size', label: 'Size',
+    id: 'size', label: 'Size', icon: '⇕',
     title: 'By shape: the tallest pieces first, then the widest — same shapes land side by side',
     compare: chain(byHeight, byWidth, byKind, byRarity),
   },
   {
-    id: 'type', label: 'Type',
+    id: 'type', label: 'Type', icon: '⚔',
     title: 'By kind, in the doll\'s own order (helmet → boots, weapons), then skill gems, supports, memories, writs',
     compare: chain(byKind, byArea, byRarity),
   },
   {
-    id: 'rarity', label: 'Rarity',
+    id: 'rarity', label: 'Rarity', icon: '✦',
     title: 'The rarest first (unique → rare → magic → common; skill gems by their own ladder), then by kind',
     compare: chain(byRarity, byKind, byArea),
   },
@@ -124,24 +132,43 @@ export function bagSortMode(id: string): BagSortMode | undefined {
 
 // --- THE SORT ---------------------------------------------------------------
 
-/** Re-pack the bag's PLACED items in `mode`'s order, first-fit row-major on
- *  a fresh board. True when the pack landed; false — with every position
- *  exactly as it was — when the mode is unknown, the bag holds nothing
- *  placed, or any piece failed to fit (all or nothing: a sort never loses a
- *  piece). Unplaced items (none in a live bag; the sim's convenience) are
- *  neither moved nor counted. */
-export function sortBagItems(bag: ItemInstance[], modeId: string, board?: BoardDims): boolean {
+/** Re-pack the bag's PLACED items in `mode`'s order (`dir` 'asc' mirrors
+ *  it), first-fit row-major on a fresh board. True when the pack landed;
+ *  false — with every position exactly as it was — when the mode is
+ *  unknown, the bag holds nothing placed, or no pack fits (all or nothing:
+ *  a sort never loses a piece). Unplaced items (none in a live bag; the
+ *  sim's convenience) are neither moved nor counted.
+ *
+ *  THE HOLES' VETO: an order can tetris itself out — an ascending Space pack
+ *  seats the small pieces first and can leave no hole a big one fits (the
+ *  hand's own arrangement fit, so a dead press would be a lie). Three
+ *  attempts, deterministic: the order as asked; then the pieces the order
+ *  could not seat moved to the FRONT (largest first, the rest keeping the
+ *  order — the face bends only where the board vetoed it); then the
+ *  tightest pack of all (largest first outright). Only when even that fails
+ *  does the sort revert. */
+export function sortBagItems(bag: ItemInstance[], modeId: string, board?: BoardDims, dir: BagSortDir = 'desc'): boolean {
   const mode = bagSortMode(modeId);
   if (!mode) return false;
   const placed = bag.filter(i => i.x !== undefined && i.y !== undefined);
   if (placed.length === 0) return false;
   const before = placed.map(i => ({ i, x: i.x!, y: i.y! }));
-  const order = [...placed].sort((a, b) => mode.compare(a, b) || a.uid - b.uid);
-  for (const i of placed) { delete i.x; delete i.y; }
-  for (const i of order) {
-    if (autoPlace(bag, i, board)) continue;
-    for (const r of before) { r.i.x = r.x; r.i.y = r.y; }
-    return false;
-  }
-  return true;
+  const sign = dir === 'asc' ? -1 : 1;
+  const order = [...placed].sort((a, b) => sign * mode.compare(a, b) || a.uid - b.uid);
+  const largestFirst = (a: ItemInstance, b: ItemInstance): number => byArea(a, b) || byHeight(a, b) || a.uid - b.uid;
+  /** One pack attempt over a cleared board: the pieces it could not seat. */
+  const attempt = (seq: readonly ItemInstance[]): ItemInstance[] => {
+    for (const i of placed) { delete i.x; delete i.y; }
+    const unseated: ItemInstance[] = [];
+    for (const i of seq) if (!autoPlace(bag, i, board)) unseated.push(i);
+    return unseated;
+  };
+  const vetoed = attempt(order);
+  if (vetoed.length === 0) return true;
+  const fronted = [...vetoed].sort(largestFirst);
+  const rest = order.filter(i => !vetoed.includes(i));
+  if (attempt([...fronted, ...rest]).length === 0) return true;
+  if (attempt([...placed].sort(largestFirst)).length === 0) return true;
+  for (const r of before) { r.i.x = r.x; r.i.y = r.y; }
+  return false;
 }
