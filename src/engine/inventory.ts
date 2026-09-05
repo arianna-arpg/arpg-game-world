@@ -54,6 +54,26 @@ export function canPlaceAt(
   return overlappingItems(bag, item, x, y).length === 0;
 }
 
+/** THE SWAP TEST — the engine's single-blocker rule as ONE pure read: the
+ *  blocker a footprint at (x,y) would trade places with, or null when the
+ *  move is clean, blocked by more than one piece, off the board, or the
+ *  blocker would not fit the mover's vacated spot. moveBagItem swaps only
+ *  on this verdict and the bag's landing preview paints only this verdict —
+ *  drawn == tested. */
+export function swapBlockerFits(
+  bag: readonly ItemInstance[], item: ItemInstance, x: number, y: number, board?: BoardDims,
+): ItemInstance | null {
+  const s = itemGridSize(item);
+  const bw = board?.w ?? bagWidth(), bh = board?.h ?? bagHeight();
+  if (x < 0 || y < 0 || x + s.w > bw || y + s.h > bh || !placed(item)) return null;
+  const blockers = overlappingItems(bag, item, x, y);
+  if (blockers.length !== 1) return null;
+  const other = blockers[0];
+  const moved: ItemInstance = { ...item, x, y };
+  const rest = bag.filter(i => i.uid !== item.uid && i.uid !== other.uid);
+  return canPlaceAt([...rest, moved], other, item.x!, item.y!, board) ? other : null;
+}
+
 /** Place (or move) an item at a cell; false (untouched) when blocked. */
 export function placeAt(
   bag: ItemInstance[], item: ItemInstance, x: number, y: number, board?: BoardDims,

@@ -265,12 +265,21 @@ groups ("×3 — Goblin Brute · ×2 — Imp · …and 2 others"), newest marked
 RECALL panel — routed per couch seat by the action latch. THE HELD
 RIGHT-CLICK (her ruling 2026-09-05, `LOCK_HOLD_CFG` in `ui/panels.ts`):
 button 2 on any carried thing splits at one seam — a tap USES it when it
-carries a use verb (`bagUseVerb`: today only the pouch), a press held past
-the seam toggles the lock, with the tile's rim filling over exactly the seam
-(drawn == timed). Gear and gems have no use verb, so a tap on them does
-nothing — the lock alone moved to the hold. The pad pointer speaks only
-button 0, so on a pad the lock stays unreachable and the press remains the
-Recall's door (a pre-existing gap, named).
+carries a use verb (`bagUseVerb` — ONE table: a pouch opens the Recall, a
+bag piece EQUIPS (auto slot), a worn chip UNEQUIPS (first fit), a skill gem
+LEARNS into the first free seat; supports and writs have none), a press held
+past the seam toggles the lock, with the tile's rim filling over exactly the
+seam (drawn == timed). The double-click reads the same table, so the two
+gestures can never disagree. THE PAD: its pointer speaks only button 0
+(`PAD_POINTER_ID`), so a held Ⓐ on a tile is the pad's lock (the fabric then
+eats the trailing click — a fired hold never doubles as a lift), while the
+pad's tap stays the click-lift; a pouch's Recall still has no pad door (a
+named gap, not solved). THE FOOTPRINT GHOST + THE LANDING LAW (`ui/dnd.ts`
+levers, `installGearDnd`): a bag lift carries the WHOLE tile (cloned, bare),
+hanging from the grabbed cell; the piece lands its origin at hovered cell −
+grab, one resolver (`bagLanding`) answers accepts / drop / the painted
+footprint (gold clean, amber swap, red refused), and the swap verdict is the
+engine's own `swapBlockerFits` — drawn == tested.
 
 **THE RECALL panel.** Units grouped by dropper def, one row each:
 

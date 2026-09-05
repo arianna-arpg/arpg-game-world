@@ -15,6 +15,10 @@
 //                    Press-glide-release is therefore a genuine DRAG — the
 //                    panzoom surfaces (passive tree, world map) pan with it
 //                    and never know a pad exists
+//   • Ⓐ held still on a bag tile / worn chip past LOCK_HOLD_CFG's seam
+//                    LOCKS it (ui/panels.ts — the mouse's held right-click,
+//                    by the pad's one button); the fabric then eats the
+//                    trailing click, so a fired hold never doubles as a lift
 //   • aim stick ↑↓ → scrolls the scrollable under the ring; where nothing
 //                    scrolls it banks synthetic wheel notches instead, so
 //                    wheel-zoom surfaces (tree, map) zoom on the same stick
@@ -36,6 +40,13 @@
 import { PAD_CFG, PadState, PadTuning, synthEscape } from '../core/gamepad';
 import { hideTooltip } from './tooltip';
 import { Z_LADDER } from './zorder';
+
+/** The pad pointer's pointerId — every synthetic event it dispatches wears
+ *  this, so a panel can tell the pad's press from a mouse's (the held-Ⓐ
+ *  lock on a bag tile, ui/panels.ts LOCK_HOLD_CFG) without sniffing
+ *  pointerType, which stays 'mouse' so every hover/drag consumer treats the
+ *  ring exactly like the real thing. */
+export const PAD_POINTER_ID = 7;
 
 export class PadPointer {
   /** The pointer owns the pad this frame (menus up + pad recently active). */
@@ -164,7 +175,7 @@ export class PadPointer {
   }
 
   private pointerInit(buttons: number, related: Element | null = null): PointerEventInit {
-    return { ...this.mouseInit(buttons, related), pointerId: 7, pointerType: 'mouse', isPrimary: true };
+    return { ...this.mouseInit(buttons, related), pointerId: PAD_POINTER_ID, pointerType: 'mouse', isPrimary: true };
   }
 
   /** Move the synthetic hover from the current element to `next`, dispatching

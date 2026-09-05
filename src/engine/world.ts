@@ -43,7 +43,7 @@ import { birthCount, CLUTCH_CFG, ORPHAN_FRENZY, type BirthEffect } from './clutc
 import { mintSupportInstance, spawnVeinOf, SUPPORTBASE_CFG } from './supportbase';
 import { BOMBARD_CFG, type BombardSpec } from './bombard';
 import { evalCurve, type CurveKind } from './curves';
-import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
+import { autoPlace, placeAt, removeFromBag, swapBlockerFits } from './inventory';
 import {
   bagGemItems, findBagGem, freeCellCount, makeSkillGemItem, makeSupportGemItem,
   rebuildAnyItem, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf,
@@ -43084,9 +43084,11 @@ export class World {
     const item = this.bagItem(seat, uid);
     if (!item) return;
     if (placeAt(m.items, item, x, y)) { this.markMetaDirty(seat); return; }
-    const blockers = overlappingItems(m.items, item, x, y);
-    if (blockers.length !== 1 || item.x === undefined || item.y === undefined) return;
-    const other = blockers[0];
+    // THE SWAP TEST (inventory.ts swapBlockerFits — the one verdict the bag's
+    // landing preview paints): null = no swap; the placements below then
+    // succeed by construction (the revert stays as the belt).
+    const other = swapBlockerFits(m.items, item, x, y);
+    if (!other || item.x === undefined || item.y === undefined) return;
     const from = { x: item.x, y: item.y };
     const otherFrom = { x: other.x, y: other.y };
     delete other.x;

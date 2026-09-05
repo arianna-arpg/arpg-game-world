@@ -39,6 +39,21 @@
 // closes it). Panels that close mid-gesture call dndCancel() so a ghost
 // never outlives its surface.
 //
+// FOUR SMALL LEVERS beyond the chip ghost (the bag's FOOTPRINT GHOST is the
+// debut consumer — ui/panels.ts installGearDnd):
+//   • payload(arg, el, at) — `at` is the GRAB point (the press for a drag,
+//     the click for a lift), so a source can mint a ghost that hangs from
+//     where the hand took hold (DragPayload.ghostOffset / ghostBare);
+//   • body.dnd-kind-<kind> while a payload is up — kind-scoped CSS (bag
+//     tiles go pointer-transparent under a gear carry, so the cells beneath
+//     speak the landing);
+//   • a `dndend` CustomEvent on document at every landing or cancel — a
+//     panel's own preview paint (a landing footprint) clears on it without
+//     the fabric knowing what was drawn;
+//   • dndSwallowClick() — a gesture that resolved on the PRESS (the pad's
+//     held Ⓐ locking a tile) eats the trailing click, so it can never double
+//     as a lift.
+//
 // Headless-safe: listeners install lazily on first registration, behind a
 // `typeof document` guard — the sim's arena never touches this module, but
 // nothing here would explode if a future harness imported it.
@@ -68,6 +83,13 @@ export interface DragPayload {
   label: string;
   /** Optional rich ghost body (inline SVG glyphs etc.). */
   ghostHtml?: string;
+  /** Where the ghost hangs from the pointer (screen px, applied BEFORE the
+   *  UI-scale) — default DND_CFG.ghostOffset, a chip beside the hotspot. A
+   *  FOOTPRINT ghost passes the negative grab offset, so the thing stays
+   *  exactly where the hand took hold of it. */
+  ghostOffset?: { x: number; y: number };
+  /** Draw the ghost BARE (no chip chrome): the html IS the whole ghost. */
+  ghostBare?: boolean;
   data?: unknown;
 }
 
@@ -76,8 +98,10 @@ export interface DragSourceDef {
   kind: string;
   /** Mint the payload at lift time — return null to REFUSE (not liftable
    *  right now: wrong state, nothing to give). Refusal leaves the element's
-   *  ordinary click behavior untouched. */
-  payload(arg: string, el: HTMLElement): DragPayload | null;
+   *  ordinary click behavior untouched. `at` is the GRAB point in viewport
+   *  px (the press of a press-drag, the click of a click-lift) — a source
+   *  minting a footprint ghost reads the grabbed cell off it. */
+  payload(arg: string, el: HTMLElement, at?: { x: number; y: number }): DragPayload | null;
   /** Opt into the click-lift twin gesture (see header). */
   clickLift?: boolean;
 }
@@ -134,6 +158,13 @@ export function dndCarried(): DragPayload | null { return carried; }
  *  outlives its surface). Safe to call when nothing is up. */
 export function dndCancel(): void { drop(null); }
 
+/** Eat the NEXT click — armed until it lands or a fresh press resets it —
+ *  for a gesture that already resolved on the PRESS (the pad's held Ⓐ
+ *  locking a bag tile), so its trailing click can neither lift nor re-fire
+ *  a source verb. Unlike the post-drag swallow this never decays: a pad's
+ *  release may come seconds after its press. */
+export function dndSwallowClick(): void { swallowClick = true; }
+
 // --- the machinery -----------------------------------------------------------
 
 function parseAttr(el: Element | null, attr: string): { el: HTMLElement; kind: string; arg: string } | null {
@@ -166,9 +197,9 @@ function lift(payload: DragPayload, m: 'drag' | 'lift', x: number, y: number): v
   carried = payload;
   mode = m;
   hideTooltip(); // the hover card must never shadow the drop path
-  document.body.classList.add('dnd-active');
+  document.body.classList.add('dnd-active', `dnd-kind-${payload.kind}`);
   ghost = document.createElement('div');
-  ghost.className = 'dnd-ghost';
+  ghost.className = payload.ghostBare ? 'dnd-ghost bare' : 'dnd-ghost';
   if (payload.ghostHtml) ghost.innerHTML = payload.ghostHtml;
   else ghost.textContent = payload.label;
   document.body.appendChild(ghost);
@@ -181,8 +212,9 @@ function moveGhost(x: number, y: number): void {
   // The ghost owns its inline transform (a translate every move), which would
   // override any stylesheet transform — so the UI-scale dial composes HERE
   // ('self' mode; ui/uiScale.ts pins the origin so growth hangs off the cursor).
+  const off = carried?.ghostOffset ?? DND_CFG.ghostOffset;
   ghost.style.transform =
-    `translate(${x + DND_CFG.ghostOffset.x}px, ${y + DND_CFG.ghostOffset.y}px) scale(${uiScaleNow()})`;
+    `translate(${x + off.x}px, ${y + off.y}px) scale(${uiScaleNow()})`;
 }
 
 /** Sweep every visible target: accepting ones wear `.dnd-can`, and the
@@ -223,9 +255,13 @@ function drop(hit: { def: DropTargetDef; arg: string; el: HTMLElement } | null):
   hoverEl?.classList.remove('dnd-over');
   hoverEl = null;
   document.body.classList.remove('dnd-active');
+  if (p) document.body.classList.remove(`dnd-kind-${p.kind}`);
   for (const el of document.querySelectorAll<HTMLElement>('.dnd-can')) el.classList.remove('dnd-can');
   for (const el of document.querySelectorAll<HTMLElement>('.dnd-src')) el.classList.remove('dnd-src');
   if (p && hit) hit.def.drop(p, hit.arg, hit.el);
+  // The carry ended (landed or cancelled): consumers that painted their own
+  // preview clear it here — the fabric never learns what they drew.
+  if (p) document.dispatchEvent(new CustomEvent('dndend'));
 }
 
 function install(): void {
@@ -251,7 +287,7 @@ function install(): void {
       const dx = e.clientX - armed.x, dy = e.clientY - armed.y;
       if (dx * dx + dy * dy >= DND_CFG.threshold * DND_CFG.threshold) {
         const src = SOURCES.get(armed.kind)!;
-        const p = armed.el.isConnected ? src.payload(armed.arg, armed.el) : null;
+        const p = armed.el.isConnected ? src.payload(armed.arg, armed.el, { x: armed.x, y: armed.y }) : null;
         armed = null;
         if (p) lift(p, 'drag', e.clientX, e.clientY);
       }
@@ -303,7 +339,7 @@ function install(): void {
       const s = parseAttr(e.target as Element, 'data-drag');
       const src = s && SOURCES.get(s.kind);
       if (src?.clickLift && !ownedByInnerControl(e.target, s!.el)) {
-        const p = src.payload(s!.arg, s!.el);
+        const p = src.payload(s!.arg, s!.el, { x: e.clientX, y: e.clientY });
         if (p) lift(p, 'lift', e.clientX, e.clientY);
         // No swallow: the source's ordinary click verb (select, open) still runs.
       }

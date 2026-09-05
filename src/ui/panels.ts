@@ -29,7 +29,7 @@ import {
   memoryGroups, memoryKindOf, type MemoryKind, type MemoryRecallResult,
 } from '../engine/memories';
 import { GEM_DROP_CFG } from '../engine/loot';
-import { canPlaceAt, overlappingItems } from '../engine/inventory';
+import { canPlaceAt, overlappingItems, swapBlockerFits } from '../engine/inventory';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, type ModCompareRow } from '../engine/itemgen';
 import { ITEM_BASES } from '../data/itembases';
@@ -50,8 +50,9 @@ import {
   bestiaryThreshold, bestiaryTotals, spectreAttunable,
 } from '../data/bestiary';
 import { sceneDue } from '../engine/scenes';
-import { dndCancel, dndCarried, registerDragSource, registerDropTarget } from './dnd';
-import { applyUiScale, UI_SCALE_CFG } from './uiScale';
+import { dndCancel, dndCarried, dndSwallowClick, registerDragSource, registerDropTarget, type DragPayload } from './dnd';
+import { PAD_POINTER_ID } from './padpointer';
+import { applyUiScale, UI_SCALE_CFG, uiScaleNow } from './uiScale';
 import { bindFolioKeys, FolioCore, FolioStrip, FOLIO_SHELVED_CLASS, installFolioStyles, type FolioLeafSpec } from './folio';
 import type { TownSiteId } from '../data/townBuild';
 import type { SuiteStation } from '../data/suites';
@@ -346,6 +347,22 @@ const LOCK_HOLD_CFG = {
   /** Pointer travel (px) that cancels the hold. */
   slopPx: 6,
 };
+
+/** The bag grid's cell pitch (CSS px inside the zoomed panel) — the tiles,
+ *  the cells, the footprint ghost and the landing preview all lay out on it. */
+const BAG_CELL_PX = 34;
+
+/** THE LANDING LAW's verdict for a gear payload over one bag cell (bagLanding):
+ *  the piece's origin (hovered cell − grab cell), its footprint, where it
+ *  lifted from, and what landing there would DO — accepts, drop and the
+ *  painted preview all read this one record. */
+interface BagLanding {
+  verdict: 'place' | 'swap' | 'unequip' | 'swapEquip' | 'blocked';
+  x: number; y: number; w: number; h: number;
+  from: string;
+  /** The one piece a swap / swap-equip trades with. */
+  with?: ItemInstance;
+}
 
 /** Resistance rows display the EFFECTIVE (soft/hard-capped) value, with the
  *  raw overcap alongside when it exceeds the cap (shred insurance). The
@@ -697,6 +714,9 @@ export class UI {
   private lockHold: {
     uid: number; seatId: string | undefined; x: number; y: number;
     startedAt: number; fired: boolean; timer: number; off: () => void;
+    /** The pad pointer's Ⓐ (button 0) rather than a mouse's button 2: the
+     *  hold only ever LOCKS — the tap stays the fabric's click-lift. */
+    pad: boolean;
   } | null = null;
   /** THE FOLIO (ui/folio.ts): dwell dialogs that would overlap bind into ONE
    *  tabbed book — the first opened holds the front, later ones arrive as
@@ -1306,6 +1326,13 @@ export class UI {
     return d?.from ?? 'bag';
   }
 
+  /** The cell of the piece the hand took hold of (a bag lift; 0,0 off the
+   *  doll) — THE LANDING LAW's offset: origin = hovered cell − grab. */
+  private payloadGrab(p: { data?: unknown }): { x: number; y: number } {
+    const d = p.data as { grab?: { x: number; y: number } } | undefined;
+    return d?.grab ?? { x: 0, y: 0 };
+  }
+
   /** Resolve a gearItem payload's live item (bag or doll — never stale).
    *  Reads the INVENTORY PANEL's owner — gear gestures lift from that bag. */
   private payloadGear(p: { arg: string }): ItemInstance | undefined {
@@ -1339,24 +1366,41 @@ export class UI {
     registerDragSource({
       kind: 'gearItem',
       clickLift: true,
-      payload: (arg) => {
+      payload: (arg, el, at) => {
         const item = this.payloadGear({ arg });
         if (!item) return null;
-        const m = world().meta;
+        const m = this.panelSeat(this.inventory).meta;
         const from = Object.keys(m.equipped).find(s => m.equipped[s]?.uid === item.uid) ?? 'bag';
-        // THE RESIDENCE: a gem wrapper's ghost speaks its gem (skill color ◆).
-        if (item.gem) {
-          const color = gemTileColorOf(item);
+        // THE FOOTPRINT GHOST (her ask 2026-09-05): the WHOLE piece rides the
+        // hand, hanging from the cell it was taken hold of — a bag lift
+        // CLONES its own tile (drawn == the tile: gem face, sockets, count,
+        // the lock pip, nothing re-painted), a worn chip lifts the piece at
+        // its bag size grabbed at its first cell's centre. `grab` is THE
+        // LANDING LAW's other half: the origin lands at pointer-cell − grab
+        // (bagLanding), so the ghost sits exactly where the piece will.
+        const s = itemGridSize(item);
+        if (from === 'bag' && el.hasAttribute('data-bag-item')) {
+          const rect = el.getBoundingClientRect();
+          const px = at ?? { x: rect.left, y: rect.top };
+          // Measured, not assumed — honest under the UI-scale zoom.
+          const cellW = rect.width / s.w, cellH = rect.height / s.h;
+          const grab = {
+            x: Math.max(0, Math.min(s.w - 1, Math.floor((px.x - rect.left) / cellW))),
+            y: Math.max(0, Math.min(s.h - 1, Math.floor((px.y - rect.top) / cellH))),
+          };
           return {
-            kind: 'gearItem', arg, label: item.name, data: { from },
-            ghostHtml: `<span style="color:${color}">◆ ${item.name}</span>`,
+            kind: 'gearItem', arg, label: item.name, data: { from, grab },
+            ghostHtml: this.bagTileGhostHtml(el),
+            ghostOffset: { x: rect.left - px.x, y: rect.top - px.y },
+            ghostBare: true,
           };
         }
-        const cat = ITEM_BASES[item.baseId]?.category ?? 'ring';
-        const color = ITEM_RARITIES[item.rarity].color;
+        const half = (BAG_CELL_PX / 2) * uiScaleNow();
         return {
-          kind: 'gearItem', arg, label: item.name, data: { from },
-          ghostHtml: `<span style="color:${color}">${CATEGORY_GLYPHS[cat] ?? '?'} ${item.name}</span>`,
+          kind: 'gearItem', arg, label: item.name, data: { from, grab: { x: 0, y: 0 } },
+          ghostHtml: this.footprintFaceHtml(item, s),
+          ghostOffset: { x: -half, y: -half },
+          ghostBare: true,
         };
       },
     });
@@ -1379,61 +1423,37 @@ export class UI {
     // loose gems are bag tiles now and lift as ordinary gearItem payloads.)
 
     // TARGETS ----------------------------------------------------------------
-    // Empty bag cells: the payload's ORIGIN cell lands here (click-place
-    // parity — the lit cells teach the anchor rule live). Bag re-places may
-    // swap through ONE blocker (the engine's tetris rule); worn pieces must
-    // land clean — their blocker has no slot to retreat to.
+    // Bag cells — THE LANDING LAW: the cell under the ghost's GRABBED cell
+    // resolves the piece's origin (cell − grab), and ONE resolver
+    // (bagLanding) answers accepts, drop and the painted preview alike: a
+    // clean fit lands; a bag re-place may swap through ONE blocker that fits
+    // the vacated spot (the engine's own swapBlockerFits — drawn == tested);
+    // a worn piece lands clean, or trades with the one compatible piece its
+    // footprint covers (the swap-equip). The lit cells still teach live —
+    // each says "hover here and the piece lands".
     registerDropTarget({
       kind: 'bagCell',
-      accepts: (p, arg) => {
-        if (p.kind !== 'gearItem') return false;
-        const item = this.payloadGear(p);
-        if (!item) return false;
-        const [x, y] = arg.split(':').map(Number);
-        const bag = world().meta.items;
-        if (canPlaceAt(bag, item, x, y)) return true;
-        return this.payloadOrigin(p) === 'bag' && overlappingItems(bag, item, x, y).length === 1;
-      },
+      accepts: (p, arg) => this.bagLanding(p, arg).verdict !== 'blocked',
       drop: (p, arg) => {
-        const [x, y] = arg.split(':').map(Number);
+        const l = this.bagLanding(p, arg);
         const uid = Number(p.arg);
-        const from = this.payloadOrigin(p);
-        if (from === 'bag') world().requestMeta({ t: 'moveItem', uid, x, y });
-        else world().requestMeta({ t: 'unequipItem', slot: from, x, y });
+        if (l.verdict === 'place' || l.verdict === 'swap') world().requestMeta({ t: 'moveItem', uid, x: l.x, y: l.y });
+        else if (l.verdict === 'unequip') world().requestMeta({ t: 'unequipItem', slot: l.from, x: l.x, y: l.y });
+        else if (l.verdict === 'swapEquip' && l.with) world().requestMeta({ t: 'equipItem', uid: l.with.uid, slot: l.from });
+        else return;
         gearRefresh();
       },
     });
-    // Occupied tiles: a gear payload swaps with the tile's item (bag→bag
-    // through the engine's single-blocker rule at the tile's origin; worn→bag
-    // as a swap-equip when the tile's piece fits the vacated slot). A vestige
-    // payload takes the forgiving inlay.
+    // Occupied tiles: a VESTIGE payload takes the forgiving inlay. Gear
+    // payloads never reach a tile — under a gear carry the tiles are
+    // pointer-transparent (index.html body.dnd-kind-gearItem), so the cell
+    // beneath speaks THE LANDING LAW; a tile that somehow caught one refuses
+    // and the ghost's miss face says so — never a silent wrong landing.
     registerDropTarget({
       kind: 'gearTile',
-      accepts: (p, arg) => {
-        const uid = Number(arg);
-        if (p.kind === 'vestige') return !!this.findItem(uid)?.sockets?.length;
-        if (p.kind !== 'gearItem' || Number(p.arg) === uid) return false;
-        const from = this.payloadOrigin(p);
-        if (from === 'bag') return true;
-        const tile = this.findItem(uid);
-        const base = tile && ITEM_BASES[tile.baseId];
-        const slot = SLOT_BY_ID[from];
-        return !!(tile && base && slot && slot.accepts.includes(base.category));
-      },
+      accepts: (p, arg) => p.kind === 'vestige' && !!this.findItem(Number(arg))?.sockets?.length,
       drop: (p, arg, el) => {
-        const uid = Number(arg);
-        if (p.kind === 'vestige') { this.forgivingInlay(el, uid, p.arg); return; }
-        const from = this.payloadOrigin(p);
-        if (from === 'bag') {
-          const tile = this.findItem(uid);
-          if (tile?.x === undefined || tile.y === undefined) return;
-          world().requestMeta({ t: 'moveItem', uid: Number(p.arg), x: tile.x, y: tile.y });
-        } else {
-          // Worn piece onto a compatible bag item: wear THAT item in the
-          // vacated slot — the engine returns this one to the bag.
-          world().requestMeta({ t: 'equipItem', uid, slot: from });
-        }
-        gearRefresh();
+        if (p.kind === 'vestige') this.forgivingInlay(el, Number(arg), p.arg);
       },
     });
     // Doll slots: gear equips (or re-slots, worn→worn); a vestige takes the
@@ -1497,6 +1517,23 @@ export class UI {
         gearRefresh();
       },
     });
+
+    // THE LANDING PREVIEW: while a gear payload is up, the bag grid paints
+    // the resolved footprint under the pointer — gold lands clean, amber
+    // swaps (the piece it trades with rims amber too), red is refused (the
+    // ghost's miss face agrees). The cells beneath speak because the tiles
+    // are pointer-transparent for the carry; the fabric's `dndend` clears
+    // the paint, so a cancel never strands a painted promise. The pad's
+    // glide dispatches the same pointermove, so its ring paints the same.
+    document.addEventListener('pointermove', (e) => {
+      const p = dndCarried();
+      if (!p || p.kind !== 'gearItem') return;
+      const cell = e.target instanceof Element ? e.target.closest<HTMLElement>('[data-cell]') : null;
+      const grid = cell?.closest<HTMLElement>('[data-bag-grid]');
+      if (!cell || !grid) { this.clearBagLanding(); return; }
+      this.paintBagLanding(grid, this.bagLanding(p, cell.dataset.cell!));
+    }, true);
+    document.addEventListener('dndend', () => this.clearBagLanding());
   }
 
   /** THE RACK's drag fabric (skill-items charter M0 — the Build drawer's
@@ -3314,7 +3351,7 @@ export class UI {
         const dupe = m.knownSkills.has(sp.skillId);
         lines.push(`<div style="color:#c8a84b;font-size:10px;margin-top:3px">${dupe
           ? 'already learned — fodder for the Font, or a trade'
-          : 'drag onto a rack seat (SKILLS flap) to learn · double-click = first free seat'}</div>`);
+          : 'drag onto a rack seat (SKILLS flap) to learn · right-click or double-click = first free seat'}</div>`);
       }
       return {
         title: `<span style="color:${r.color}">${def.name}</span> <span style="color:#ffd700;font-size:11px">Lv ${sp.level}</span>`,
@@ -3384,7 +3421,7 @@ export class UI {
     const world = this.getWorld();
     const invSeat = this.panelSeat(this.inventory);
     const m = invSeat.meta;
-    const CELL = 34;
+    const CELL = BAG_CELL_PX;
     const W = ITEM_CFG.inventory.w;
     const H = ITEM_CFG.inventory.h;
     // THE SALVAGE BASELINE: while a salvage host is armed for THIS panel's
@@ -3678,7 +3715,7 @@ export class UI {
         </div>
         <div>
           <h3>Bag <span style="color:#8a8678;font-weight:normal">(${m.items.length} item${m.items.length === 1 ? '' : 's'})</span></h3>
-          <div style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
+          <div data-bag-grid="1" style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
           <div style="margin-top:8px;color:#8a8678;font-size:10px">
             ${salv === 'break'
               ? `⚒ <b style="color:#e8c87a">BREAKING</b>: click a piece to salvage it for essence ·
@@ -3690,10 +3727,10 @@ export class UI {
                 <b>hold right-click</b> locks 🔒 it (locked pieces refuse the wheel) ·
                 worn pieces are safe — drag or double-click them off the doll first ·
                 shift-click still drops to ground`
-              : `drag (or click to lift) any piece: bag ↔ doll ↔ the other slot,
-                onto another item to swap, onto the world to drop it ·
-                double-click: equip / unequip · shift-click: drop to ground ·
-                hold right-click: lock 🔒 against salvage · right-click a pouch: open the Recall · ${pickupHint}`}
+              : `drag (or click to lift) any piece — the whole piece rides your hand and lands where its ghost sits:
+                bag ↔ doll ↔ the other slot, over another piece to swap, onto the world to drop it ·
+                right-click or double-click: equip / unequip (a pouch opens the Recall, a skill gem learns) ·
+                shift-click: drop to ground · hold right-click: lock 🔒 against salvage · ${pickupHint}`}
           </div>
         </div>
       </div>`;
@@ -3774,15 +3811,22 @@ export class UI {
     // carry) runs first at document capture and stops propagation, so a
     // carry-cancel never starts a hold; dndCarried() is the belt to that
     // suspender.
+    // THE PAD'S LANE: the pad pointer speaks button 0 (Ⓐ — or whatever
+    // confirm is bound to; the ring's events are what we see, never the
+    // binding). Its press on a tile ARMS the same hold; the tap stays the
+    // fabric's click-lift, so the pad's hold only ever LOCKS — and a fired
+    // hold cancels the fabric's arming + eats the trailing click, so it can
+    // never double as a lift. (The pad has no second button here, so a
+    // pouch's Recall still has no pad door — named, not solved.)
     q<HTMLElement>('[data-lock-uid]').forEach(el => el.addEventListener('pointerdown', ev => {
-      if (ev.button !== 2 || dndCarried()) return;
+      const pad = ev.button === 0 && ev.pointerId === PAD_POINTER_ID;
+      if ((ev.button !== 2 && !pad) || dndCarried()) return;
       const uid = Number(el.dataset.lockUid);
       const it = seatMeta.items.find(i => i.uid === uid)
         ?? Object.values(seatMeta.equipped).find(i => i?.uid === uid);
       if (!it) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      this.beginLockHold(ev, uid, this.panelSeatIds.get(this.inventory));
+      if (!pad) { ev.preventDefault(); ev.stopPropagation(); }
+      this.beginLockHold(ev, uid, this.panelSeatIds.get(this.inventory), pad);
     }));
 
     // THE LOOSE LEVEL-UP: a support wrapper's corner + feeds the same
@@ -3812,8 +3856,10 @@ export class UI {
     }
 
     // CLICK VERBS on gear (the fast paths beside the drag):
-    //  · double-click a bag tile = equip (auto slot) — its mirror, double-
-    //    click a worn chip = unequip (first fit). One symmetry, zero aiming.
+    //  · double-click a bag tile = its USE (bagUseVerb: equip (auto slot) /
+    //    learn / open the Recall) — its mirror, double-click a worn chip =
+    //    unequip (first fit). One symmetry, zero aiming — and the right-TAP
+    //    reads the same table, so the two can never disagree.
     //  · shift-click either = drop to the ground (the drag-to-world twin).
     q<HTMLElement>('[data-bag-item]').forEach(el => {
       const uid = Number(el.dataset.itemUid);
@@ -3825,25 +3871,11 @@ export class UI {
       el.addEventListener('dblclick', () => {
         if (salv) return; // one verb under an armed lane — the click salvaged it
         const item = seatMeta.items.find(i => i.uid === uid);
-        // THE STONE (M2, §3b): the pouch's double-click opens THE RECALL,
-        // owned by this bag's seat (the couch lens carries through).
-        // (the right-TAP's twin — both resolve through bagUseVerb, so the
-        // two gestures can never disagree on what a use does).
+        // ONE USE TABLE (bagUseVerb): equip / learn / open the Recall — the
+        // right-TAP's twin, so the two gestures can never disagree on what a
+        // use does (the seat carries through: the couch lens).
         const use = item && this.bagUseVerb(item, this.panelSeatIds.get(this.inventory));
-        if (use) { use.run(); return; }
-        // THE RESIDENCE: a skill wrapper's double-click LEARNS into the
-        // first free seat (the gear equip's exact mirror — one symmetry).
-        if (item?.gem) {
-          if (item.gem.kind === 'skill') {
-            world.requestMeta({ t: 'learn', uid });
-            this.refreshInventory();
-            this.refreshCharSheet();
-          }
-          return; // supports have no slotless verb — drag them to a socket
-        }
-        world.requestMeta({ t: 'equipItem', uid });
-        this.refreshInventory();
-        this.refreshCharSheet();
+        if (use) use.run();
       });
     });
     q<HTMLElement>('[data-doll]').forEach(el => {
@@ -3857,10 +3889,11 @@ export class UI {
         this.refreshCharSheet();
       });
       el.addEventListener('dblclick', () => {
-        if (!this.getWorld().meta.equipped[slot]) return;
-        world.requestMeta({ t: 'unequipItem', slot });
-        this.refreshInventory();
-        this.refreshCharSheet(); // worn stats moved — keep the open sheet honest
+        // ONE USE TABLE: a worn chip's use is the unequip (first fit) — the
+        // right-TAP's twin, read off the bag panel's own seat.
+        const worn = this.panelSeat(this.inventory).meta.equipped[slot];
+        const use = worn && this.bagUseVerb(worn, this.panelSeatIds.get(this.inventory));
+        if (use) use.run();
       });
     });
   }
@@ -3873,8 +3906,23 @@ export class UI {
    *  Memory pouch opens THE RECALL (the double-click's twin — the two
    *  gestures may never disagree, so both resolve through this). */
   private bagUseVerb(item: ItemInstance, seatId: string | undefined): { label: string; run: () => void } | null {
+    const world = this.getWorld();
+    const seat = this.couchSeatFor(seatId);
+    const both = (): void => { this.refreshInventory(); this.refreshCharSheet(); };
     if (item.mem) return { label: 'open the Recall', run: () => this.showRecall(item.uid, seatId) };
-    return null;
+    if (item.writ) return null; // redeemed at the Forge face by tracing — never from the bag
+    if (item.gem) {
+      // THE RESIDENCE: a skill wrapper LEARNS into the first free seat (the
+      // gear equip's exact mirror); supports have no slotless verb — drag
+      // them to a socket.
+      if (item.gem.kind !== 'skill') return null;
+      return { label: 'learn', run: () => { world.requestMeta({ t: 'learn', uid: item.uid }); both(); } };
+    }
+    // GEAR (her ask 2026-09-05): a bag piece EQUIPS (auto slot); a worn piece
+    // UNEQUIPS (first fit) — the double-click's one symmetry, now the tap's.
+    const wornSlot = Object.keys(seat.meta.equipped).find(s => seat.meta.equipped[s]?.uid === item.uid);
+    if (wornSlot) return { label: 'unequip', run: () => { world.requestMeta({ t: 'unequipItem', slot: wornSlot }); both(); } };
+    return { label: 'equip', run: () => { world.requestMeta({ t: 'equipItem', uid: item.uid }); both(); } };
   }
 
   /** A carried thing by uid — bag OR doll — off the bag panel's own seat. */
@@ -3889,11 +3937,11 @@ export class UI {
    *  double-arms it; release listens on the WINDOW (the press-guard idiom:
    *  captures retarget, replaced tiles vanish, but every release path still
    *  runs through here). */
-  private beginLockHold(ev: PointerEvent, uid: number, seatId: string | undefined): void {
+  private beginLockHold(ev: PointerEvent, uid: number, seatId: string | undefined, pad = false): void {
     this.endLockHold();
     const hold = {
       uid, seatId, x: ev.clientX, y: ev.clientY,
-      startedAt: performance.now(), fired: false, timer: 0, off: (): void => {},
+      startedAt: performance.now(), fired: false, timer: 0, off: (): void => {}, pad,
     };
     const cancel = (): void => { if (this.lockHold === hold) this.endLockHold(); };
     const release = (e: PointerEvent): void => {
@@ -3903,7 +3951,8 @@ export class UI {
       const under = e.target instanceof Element ? e.target.closest<HTMLElement>('[data-lock-uid]') : null;
       const overSame = under?.dataset.lockUid === String(uid);
       this.endLockHold();
-      if (fired || !overSame) return;
+      // (the pad's tap is the fabric's click-lift, never a use)
+      if (fired || !overSame || hold.pad) return;
       const it = this.carriedByUid(uid);
       const verb = it && this.bagUseVerb(it, seatId);
       if (verb) { hideTooltip(); verb.run(); }
@@ -3940,6 +3989,10 @@ export class UI {
       world.uiActionSeatId = seatId ?? null;
       try { world.requestMeta({ t: 'salvageLock', uid, on: !it.locked }); }
       finally { world.uiActionSeatId = null; }
+      // THE PAD'S LANE: the press also armed the fabric's drag and owes it a
+      // click — a fired hold takes both back (no drag on a later glide, no
+      // lift on the release).
+      if (hold.pad) { dndCancel(); dndSwallowClick(); }
       hideTooltip();
       this.refreshInventory(); // re-paints the fired ring (paintLockHold) — lit until the release
       if (this.salvageOpen) this.refreshSalvage(); // sweep counts moved
@@ -3974,6 +4027,89 @@ export class UI {
     el.style.setProperty('--lock-hold-elapsed', `-${Math.round(performance.now() - hold.startedAt)}ms`);
     el.classList.add('lock-hold');
     el.classList.toggle('lock-hold-fired', hold.fired);
+  }
+
+  // --- THE LANDING LAW + THE FOOTPRINT GHOST (installGearDnd) ---------------
+
+  /** THE LANDING LAW's one resolver: a gear payload over bag cell `cx:cy`
+   *  lands its origin at (cell − grab), and the verdict is the engine's own —
+   *  'place' (clean fit), 'swap' (one blocker that fits the vacated spot:
+   *  swapBlockerFits, exactly moveBagItem's test), 'unequip' (a worn piece
+   *  landing clean), 'swapEquip' (a worn piece over exactly one piece the
+   *  vacated slot accepts — it wears that one, the engine returns this one
+   *  to the bag), or 'blocked'. accepts, drop and the preview all read THIS. */
+  private bagLanding(p: DragPayload, cellArg: string): BagLanding {
+    const [cx, cy] = cellArg.split(':').map(Number);
+    const grab = this.payloadGrab(p);
+    const x = cx - grab.x, y = cy - grab.y;
+    const from = this.payloadOrigin(p);
+    const item = p.kind === 'gearItem' ? this.payloadGear(p) : undefined;
+    if (!item) return { verdict: 'blocked', x, y, w: 1, h: 1, from };
+    const s = itemGridSize(item);
+    const base: BagLanding = { verdict: 'blocked', x, y, w: s.w, h: s.h, from };
+    const bag = this.panelSeat(this.inventory).meta.items;
+    if (canPlaceAt(bag, item, x, y)) return { ...base, verdict: from === 'bag' ? 'place' : 'unequip' };
+    if (from === 'bag') {
+      const other = swapBlockerFits(bag, item, x, y);
+      return other ? { ...base, verdict: 'swap', with: other } : base;
+    }
+    if (x < 0 || y < 0 || x + s.w > ITEM_CFG.inventory.w || y + s.h > ITEM_CFG.inventory.h) return base;
+    const over = overlappingItems(bag, item, x, y);
+    const tileBase = over.length === 1 ? ITEM_BASES[over[0].baseId] : undefined;
+    const slot = SLOT_BY_ID[from];
+    return tileBase && slot?.accepts.includes(tileBase.category) ? { ...base, verdict: 'swapEquip', with: over[0] } : base;
+  }
+
+  /** Paint the resolved footprint into the bag grid (one box, re-seated per
+   *  cell), and rim the piece a swap trades with. */
+  private paintBagLanding(grid: HTMLElement, l: BagLanding): void {
+    const CELL = BAG_CELL_PX;
+    let box = grid.querySelector<HTMLElement>('.bag-landing');
+    if (!box) { box = document.createElement('div'); grid.appendChild(box); }
+    const tone = l.verdict === 'blocked' ? 'blocked' : l.verdict === 'swap' || l.verdict === 'swapEquip' ? 'swap' : 'place';
+    box.className = `bag-landing ${tone}`;
+    box.style.left = `${l.x * CELL}px`;
+    box.style.top = `${l.y * CELL}px`;
+    box.style.width = `${l.w * CELL - 2}px`;
+    box.style.height = `${l.h * CELL - 2}px`;
+    grid.querySelectorAll<HTMLElement>('.bag-swap-with').forEach(el => el.classList.remove('bag-swap-with'));
+    if (l.with) grid.querySelector<HTMLElement>(`[data-bag-item][data-item-uid="${l.with.uid}"]`)?.classList.add('bag-swap-with');
+  }
+
+  private clearBagLanding(): void {
+    document.querySelectorAll<HTMLElement>('.bag-landing').forEach(el => el.remove());
+    document.querySelectorAll<HTMLElement>('.bag-swap-with').forEach(el => el.classList.remove('bag-swap-with'));
+  }
+
+  /** A bag tile's own face as the ghost: the tile CLONED (pixel-identical —
+   *  gem initials, sockets, the lock pip, the count badge), shorn of every
+   *  data-* hook, title and state class, and re-seated at 0,0 so nothing in
+   *  the ghost is a drop target, a drag source or a tooltip anchor. */
+  private bagTileGhostHtml(el: HTMLElement): string {
+    const c = el.cloneNode(true) as HTMLElement;
+    for (const n of [c, ...c.querySelectorAll<HTMLElement>('*')]) {
+      for (const a of [...n.attributes]) {
+        if (a.name.startsWith('data-') || a.name === 'id' || a.name === 'title') n.removeAttribute(a.name);
+      }
+      n.classList.remove('dnd-src', 'lock-hold', 'lock-hold-fired', 'tut-glow', 'memflash', 'bag-swap-with');
+    }
+    c.style.position = 'relative';
+    c.style.left = '0px';
+    c.style.top = '0px';
+    c.style.cursor = '';
+    return c.outerHTML;
+  }
+
+  /** A worn piece's footprint face (no tile to clone): its bag-size box in
+   *  its rarity's border with its category glyph — the plain tile's look. */
+  private footprintFaceHtml(item: ItemInstance, s: { w: number; h: number }): string {
+    const CELL = BAG_CELL_PX;
+    const color = ITEM_RARITIES[item.rarity].color;
+    const cat = ITEM_BASES[item.baseId]?.category ?? 'ring';
+    return `<div style="width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;border:2px solid ${color};
+      border-radius:3px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;
+      font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;${item.rarity === 'unique' ? `box-shadow:0 0 10px ${color};` : ''}">
+      ${CATEGORY_GLYPHS[cat] ?? '?'}</div>`;
   }
 
   /** The one socketVestige request path — native drag drops and click-to-lift
