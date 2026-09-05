@@ -261,8 +261,16 @@ carry no rarity until recalled — provenance speaks in the panel, not the
 frame). The tooltip is precision only: kind, total, the composition's top
 groups ("×3 — Goblin Brute · ×2 — Imp · …and 2 others"), newest marked.
 
-**The gesture.** Double-click (pad: press) opens THE RECALL panel — routed
-per couch seat by the action latch; right-click stays the lock.
+**The gesture.** Right-click (a TAP) or double-click (pad: press) opens THE
+RECALL panel — routed per couch seat by the action latch. THE HELD
+RIGHT-CLICK (her ruling 2026-09-05, `LOCK_HOLD_CFG` in `ui/panels.ts`):
+button 2 on any carried thing splits at one seam — a tap USES it when it
+carries a use verb (`bagUseVerb`: today only the pouch), a press held past
+the seam toggles the lock, with the tile's rim filling over exactly the seam
+(drawn == timed). Gear and gems have no use verb, so a tap on them does
+nothing — the lock alone moved to the hold. The pad pointer speaks only
+button 0, so on a pad the lock stays unreachable and the press remains the
+Recall's door (a pre-existing gap, named).
 
 **THE RECALL panel.** Units grouped by dropper def, one row each:
 
@@ -496,7 +504,9 @@ null forever), never re-implemented in UI.
 3. **No use-verb exists on bag items**, and right-click is spoken for (the
    lock). The cut needs a use gesture — double-click (unbound on
    non-equipment), a picker-on-click, or a hold — chosen with the pad
-   pointer in mind (**DIAL**).
+   pointer in mind (**DIAL**). *Ruled 2026-09-05: right-click is the use,
+   the lock moved to a HELD right-click (§3b, `LOCK_HOLD_CFG`); double-click
+   stays the pad's door.*
 4. **The bagfull refusals** at every gem-granting path (§1) — vendor buy,
    gift, unlearn, unsocket, Font auto-return, rescue hatch. Today those
    pushes cannot fail; tomorrow they can.

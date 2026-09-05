@@ -333,6 +333,20 @@ const BREAK_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(salvageGlyphS
  *  One word here settles all surfaces at once. */
 const SALVAGE_AUTO_ARM = true;
 
+/** THE HELD RIGHT-CLICK (her ruling 2026-09-05 — the skill-items charter's
+ *  pitfall 3 answered): button 2 on a bag tile / worn chip is a TAP or a
+ *  HOLD, split at one seam. A tap USES the thing when it carries a use verb
+ *  (bagUseVerb — a Memory pouch opens THE RECALL; gear and gems have none,
+ *  so a tap on them does nothing); a press held past the seam toggles THE
+ *  KEEPER'S MARK. Travel past the slop cancels both (a drag, not a hold).
+ *  The tile's ring fills over exactly holdMs — drawn == timed. */
+const LOCK_HOLD_CFG = {
+  /** The tap/hold seam, ms (the Vault's invest seam sits at 280). */
+  holdMs: 320,
+  /** Pointer travel (px) that cancels the hold. */
+  slopPx: 6,
+};
+
 /** Resistance rows display the EFFECTIVE (soft/hard-capped) value, with the
  *  raw overcap alongside when it exceeds the cap (shred insurance). The
  *  sheet's ORGANIZATION — which stats print where, and when — lives in
@@ -677,6 +691,13 @@ export class UI {
    *  docks to that seat's flank. No entry = the local hero, and solo play
    *  never writes one that matters (panelSeat falls back to the local seat). */
   private panelSeatIds = new Map<HTMLElement, string>();
+  /** THE HELD RIGHT-CLICK in flight on a bag tile / worn chip (beginLockHold),
+   *  or null. Panel-level, never tile-level: a re-render mid-hold replaces
+   *  the tile, and the hold must neither strand nor double-arm. */
+  private lockHold: {
+    uid: number; seatId: string | undefined; x: number; y: number;
+    startedAt: number; fired: boolean; timer: number; off: () => void;
+  } | null = null;
   /** THE FOLIO (ui/folio.ts): dwell dialogs that would overlap bind into ONE
    *  tabbed book — the first opened holds the front, later ones arrive as
    *  shelved tabs on its thumb index. The core keeps no open flag of its own:
@@ -3018,6 +3039,7 @@ export class UI {
     // the gift flasks glow as BAG TILES now, on the one face, and the
     // SKILLS flap + empty rack seats carry the gesture the rest of the way.)
     this.inventory.classList.toggle('hidden', !this.inventoryOpen);
+    if (!this.inventoryOpen) this.endLockHold(); // a hold never outlives its bag
     if (this.inventoryOpen) this.refreshInventory();
     else { dndCancel(); hideTooltip(); } // a ghost never outlives its surface
   }
@@ -3124,7 +3146,7 @@ export class UI {
     const d = describeItem(item);
     const lines: string[] = [`<div style="color:#9a94a8;font-size:10px">${d.baseLine}</div>`];
     if (item.locked) {
-      lines.unshift('<div style="color:#c8a84b">🔒 Locked — salvage refuses it, sweeps skip it (right-click to unlock)</div>');
+      lines.unshift('<div style="color:#c8a84b">🔒 Locked — salvage refuses it, sweeps skip it (hold right-click to unlock)</div>');
     } else if (salv) {
       const breakLine = seat.meta.items.some(i => i.uid === item.uid)
         ? `<div style="color:#e8c87a;font-weight:bold">${salv === 'sell'
@@ -3187,7 +3209,7 @@ export class UI {
       MONSTERS[d]?.name ?? (d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : d);
     const lines: string[] = [];
     if (item.locked) {
-      lines.push('<div style="color:#c8a84b">🔒 Locked — sweeps skip it (right-click to unlock)</div>');
+      lines.push('<div style="color:#c8a84b">🔒 Locked — sweeps skip it (hold right-click to unlock)</div>');
     }
     lines.push(`<div style="color:#9a94a8;font-size:10px">${k.name} · <span style="color:${k.color}">×${units.length} held</span></div>`);
     if (k.facets) {
@@ -3202,7 +3224,7 @@ export class UI {
       lines.push(`<div style="color:#5a5668;font-size:10px">…and ${rest} other ${rest === 1 ? 'kind' : 'kinds'}</div>`);
     }
     lines.push(`<div style="color:#8a8678;font-size:10px">newest: ${dropperName(units[units.length - 1].d)}</div>`);
-    lines.push('<div style="color:#c8a84b;font-size:10px;margin-top:3px">double-click to open the Recall · shift-click drops the stack whole</div>');
+    lines.push('<div style="color:#c8a84b;font-size:10px;margin-top:3px">right-click (or double-click) opens the Recall · hold right-click locks it · shift-click drops the stack whole</div>');
     return {
       title: `<span style="color:${k.color}">${k.name}</span>`,
       description: lines.join(''),
@@ -3259,7 +3281,7 @@ export class UI {
     const lines: string[] = [];
     const inBag = m.items.some(i => i.uid === item.uid);
     if (item.locked) {
-      lines.push('<div style="color:#c8a84b">🔒 Locked — salvage refuses it, sweeps skip it (right-click to unlock)</div>');
+      lines.push('<div style="color:#c8a84b">🔒 Locked — salvage refuses it, sweeps skip it (hold right-click to unlock)</div>');
     }
     const sp = skillGemPayloadOf(item);
     if (sp) {
@@ -3375,7 +3397,7 @@ export class UI {
     // THE KEEPER'S MARK: the 🔒 pip every locked thing wears, both modes.
     const lockPip = (locked: boolean | undefined): string => locked
       ? `<span style="position:absolute;top:0;right:1px;font-size:9px;line-height:10px;text-shadow:0 0 3px #000"
-          title="Locked: salvage refuses it, sweeps skip it (right-click to unlock)">🔒</span>`
+          title="Locked: salvage refuses it, sweeps skip it (hold right-click to unlock)">🔒</span>`
       : '';
 
     // --- THE DOLL: the equipped figure as a BODY (the true-RPG read) -------
@@ -3660,18 +3682,18 @@ export class UI {
           <div style="margin-top:8px;color:#8a8678;font-size:10px">
             ${salv === 'break'
               ? `⚒ <b style="color:#e8c87a">BREAKING</b>: click a piece to salvage it for essence ·
-                <b>right-click</b> locks 🔒 it (locked pieces refuse the hammer) ·
+                <b>hold right-click</b> locks 🔒 it (locked pieces refuse the hammer) ·
                 worn pieces are safe — drag or double-click them off the doll first ·
                 shift-click still drops to ground`
               : salv === 'sell'
               ? `⚙ <b style="color:#e8c87a">SELLING</b>: click a piece to sell it for Coarse Essence ·
-                <b>right-click</b> locks 🔒 it (locked pieces refuse the wheel) ·
+                <b>hold right-click</b> locks 🔒 it (locked pieces refuse the wheel) ·
                 worn pieces are safe — drag or double-click them off the doll first ·
                 shift-click still drops to ground`
               : `drag (or click to lift) any piece: bag ↔ doll ↔ the other slot,
                 onto another item to swap, onto the world to drop it ·
                 double-click: equip / unequip · shift-click: drop to ground ·
-                right-click: lock 🔒 against salvage · ${pickupHint}`}
+                hold right-click: lock 🔒 against salvage · right-click a pouch: open the Recall · ${pickupHint}`}
           </div>
         </div>
       </div>`;
@@ -3701,6 +3723,7 @@ export class UI {
     const buildEl = this.inventory.querySelector<HTMLElement>('.build-scroll');
     if (buildEl) buildEl.scrollTop = prevBuildScroll;
     this.wireInventory();
+    this.paintLockHold(); // a re-render mid-hold resumes the ring where the clock stands
     this.paintPortraitsIn(this.inventory); // the build flap's Spectre chip
     this.applyBreakChrome();
   }
@@ -3737,12 +3760,20 @@ export class UI {
 
     const salv = this.salvageLaneFor(this.inventory);
     const seatMeta = this.panelSeat(this.inventory).meta;
-    // THE KEEPER'S MARK: right-click (button-2 press) toggles the salvage
-    // lock on anything carried — bag tiles (gear AND gem wrappers), worn
-    // chips; hammer up or down. ONE uid address space (M1). The dnd
-    // fabric's own button-2 (cancel a carry) runs first at document capture
-    // and stops propagation, so a carry-cancel never doubles as a lock
-    // flip; dndCarried() is the belt to that suspender.
+    // THE KEEPER'S MARK, HELD (her ruling 2026-09-05): button 2 on anything
+    // carried — bag tiles (gear AND gem wrappers), worn chips; hammer up or
+    // down — is TWO verbs on one button, split by time (LOCK_HOLD_CFG):
+    //   · a TAP (released inside the seam, over the tile it pressed) USES
+    //     the thing when it carries a use verb — bagUseVerb: a Memory pouch
+    //     opens THE RECALL; gear and gems have none, so a tap does nothing;
+    //   · a HOLD past the seam toggles the salvage lock — the tile's ring
+    //     fills as the seam nears (drawn == timed, the clock IS the tell),
+    //     and the release after a fired hold is inert, so the lock never
+    //     doubles as a use.
+    // ONE uid address space (M1). The dnd fabric's own button-2 (cancel a
+    // carry) runs first at document capture and stops propagation, so a
+    // carry-cancel never starts a hold; dndCarried() is the belt to that
+    // suspender.
     q<HTMLElement>('[data-lock-uid]').forEach(el => el.addEventListener('pointerdown', ev => {
       if (ev.button !== 2 || dndCarried()) return;
       const uid = Number(el.dataset.lockUid);
@@ -3751,10 +3782,7 @@ export class UI {
       if (!it) return;
       ev.preventDefault();
       ev.stopPropagation();
-      world.requestMeta({ t: 'salvageLock', uid, on: !it.locked });
-      this.refreshInventory();
-      if (this.salvageOpen) this.refreshSalvage(); // sweep counts moved
-      if (this.vendorOpen) this.refreshVendor(); // a counter's cluster counts too
+      this.beginLockHold(ev, uid, this.panelSeatIds.get(this.inventory));
     }));
 
     // THE LOOSE LEVEL-UP: a support wrapper's corner + feeds the same
@@ -3799,10 +3827,10 @@ export class UI {
         const item = seatMeta.items.find(i => i.uid === uid);
         // THE STONE (M2, §3b): the pouch's double-click opens THE RECALL,
         // owned by this bag's seat (the couch lens carries through).
-        if (item?.mem) {
-          this.showRecall(uid, this.panelSeatIds.get(this.inventory));
-          return;
-        }
+        // (the right-TAP's twin — both resolve through bagUseVerb, so the
+        // two gestures can never disagree on what a use does).
+        const use = item && this.bagUseVerb(item, this.panelSeatIds.get(this.inventory));
+        if (use) { use.run(); return; }
         // THE RESIDENCE: a skill wrapper's double-click LEARNS into the
         // first free seat (the gear equip's exact mirror — one symmetry).
         if (item?.gem) {
@@ -3835,6 +3863,117 @@ export class UI {
         this.refreshCharSheet(); // worn stats moved — keep the open sheet honest
       });
     });
+  }
+
+  // --- THE HELD RIGHT-CLICK (LOCK_HOLD_CFG) ---------------------------------
+
+  /** THE USE VERB: what a right-TAP on a carried thing does, or null when it
+   *  has no use. ONE table — the next usable kind joins here, and the hold
+   *  gesture, the double-click and the tooltip words all read it. Today: a
+   *  Memory pouch opens THE RECALL (the double-click's twin — the two
+   *  gestures may never disagree, so both resolve through this). */
+  private bagUseVerb(item: ItemInstance, seatId: string | undefined): { label: string; run: () => void } | null {
+    if (item.mem) return { label: 'open the Recall', run: () => this.showRecall(item.uid, seatId) };
+    return null;
+  }
+
+  /** A carried thing by uid — bag OR doll — off the bag panel's own seat. */
+  private carriedByUid(uid: number): ItemInstance | undefined {
+    const m = this.panelSeat(this.inventory).meta;
+    return m.items.find(i => i.uid === uid) ?? Object.values(m.equipped).find(i => i?.uid === uid) ?? undefined;
+  }
+
+  /** Arm the held right-click on a tile: the TIMER is the lock, the release
+   *  before it is the use. State lives on the panel (not the tile) so a
+   *  re-render mid-hold — a pickup, a counter beat — neither strands nor
+   *  double-arms it; release listens on the WINDOW (the press-guard idiom:
+   *  captures retarget, replaced tiles vanish, but every release path still
+   *  runs through here). */
+  private beginLockHold(ev: PointerEvent, uid: number, seatId: string | undefined): void {
+    this.endLockHold();
+    const hold = {
+      uid, seatId, x: ev.clientX, y: ev.clientY,
+      startedAt: performance.now(), fired: false, timer: 0, off: (): void => {},
+    };
+    const cancel = (): void => { if (this.lockHold === hold) this.endLockHold(); };
+    const release = (e: PointerEvent): void => {
+      if (this.lockHold !== hold) return;
+      const fired = hold.fired;
+      // THE TAP: a release over the tile it pressed, inside the seam.
+      const under = e.target instanceof Element ? e.target.closest<HTMLElement>('[data-lock-uid]') : null;
+      const overSame = under?.dataset.lockUid === String(uid);
+      this.endLockHold();
+      if (fired || !overSame) return;
+      const it = this.carriedByUid(uid);
+      const verb = it && this.bagUseVerb(it, seatId);
+      if (verb) { hideTooltip(); verb.run(); }
+    };
+    const move = (e: PointerEvent): void => {
+      if (this.lockHold !== hold) return;
+      // A button-less move = the press ended outside the window (the press
+      // guard's self-heal); travel past the slop = a drag, not a hold —
+      // neither verb fires.
+      if (e.buttons === 0) { cancel(); return; }
+      const dx = e.clientX - hold.x, dy = e.clientY - hold.y;
+      if (dx * dx + dy * dy > LOCK_HOLD_CFG.slopPx * LOCK_HOLD_CFG.slopPx) cancel();
+    };
+    window.addEventListener('pointerup', release, { capture: true });
+    window.addEventListener('pointercancel', cancel, { capture: true });
+    window.addEventListener('pointermove', move, { capture: true });
+    window.addEventListener('blur', cancel);
+    hold.off = (): void => {
+      window.removeEventListener('pointerup', release, { capture: true });
+      window.removeEventListener('pointercancel', cancel, { capture: true });
+      window.removeEventListener('pointermove', move, { capture: true });
+      window.removeEventListener('blur', cancel);
+    };
+    hold.timer = window.setTimeout(() => {
+      if (this.lockHold !== hold) return;
+      hold.timer = 0;
+      hold.fired = true;
+      const it = this.carriedByUid(uid);
+      if (!it) { this.endLockHold(); return; }
+      // The timer fires OUTSIDE any dispatch, so THE COUCH ACTION LATCH
+      // (microtask-scoped) is empty here — stamp the bag's owner ourselves
+      // (a local-hero id finds no couch seat and routes as ever).
+      const world = this.getWorld();
+      world.uiActionSeatId = seatId ?? null;
+      try { world.requestMeta({ t: 'salvageLock', uid, on: !it.locked }); }
+      finally { world.uiActionSeatId = null; }
+      hideTooltip();
+      this.refreshInventory(); // re-paints the fired ring (paintLockHold) — lit until the release
+      if (this.salvageOpen) this.refreshSalvage(); // sweep counts moved
+      if (this.vendorOpen) this.refreshVendor(); // a counter's cluster counts too
+    }, LOCK_HOLD_CFG.holdMs);
+    this.lockHold = hold;
+    this.paintLockHold();
+  }
+
+  /** Tear the hold down: timer, window listeners, the tile's ring. */
+  private endLockHold(): void {
+    const hold = this.lockHold;
+    if (!hold) return;
+    this.lockHold = null;
+    if (hold.timer) window.clearTimeout(hold.timer);
+    hold.off();
+    this.inventory.querySelectorAll<HTMLElement>('.lock-hold').forEach(el => {
+      el.classList.remove('lock-hold', 'lock-hold-fired');
+    });
+  }
+
+  /** Dress the held tile: the class + the seam as CSS vars, the elapsed
+   *  carried as a NEGATIVE delay so a re-render mid-hold resumes the ring
+   *  where the clock stands (drawn == timed). Called at arm and after every
+   *  bag re-render. */
+  private paintLockHold(): void {
+    const hold = this.lockHold;
+    if (!hold) return;
+    const el = this.inventory.querySelector<HTMLElement>(`[data-lock-uid="${hold.uid}"]`);
+    if (!el) return;
+    el.style.setProperty('--lock-hold-ms', `${LOCK_HOLD_CFG.holdMs}ms`);
+    el.style.setProperty('--lock-hold-elapsed', `-${Math.round(performance.now() - hold.startedAt)}ms`);
+    el.classList.add('lock-hold');
+    el.classList.toggle('lock-hold-fired', hold.fired);
   }
 
   /** The one socketVestige request path — native drag drops and click-to-lift
@@ -4367,7 +4506,7 @@ export class UI {
             ${toggle}</button>
         </div>
         <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
-          ${teaches} <b>Right-click</b> anything carried to lock 🔒 it:
+          ${teaches} <b>Hold right-click</b> on anything carried to lock 🔒 it:
           locked things refuse ${tool}, and every sweep below skips them. Granted sparks sit out of sweeps.
         </div>
         <h3>Gear${keptNote(gearLocked)}</h3>

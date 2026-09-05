@@ -443,6 +443,24 @@
     [data-drop].dnd-over { outline: 2px solid var(--gold); outline-offset: 1px; background: rgba(200,168,75,0.12); }
     /* The element a payload lifted FROM — "this is what's in the air". */
     [data-drag].dnd-src { opacity: 0.55; outline: 2px dashed rgba(232,224,208,0.8); outline-offset: 1px; }
+    /* THE HELD RIGHT-CLICK (ui/panels.ts beginLockHold / LOCK_HOLD_CFG): a
+       bag tile's button-2 press fills a gold rim over exactly the tap/hold
+       seam — the same clock the lock flips on (drawn == timed; a re-render
+       mid-hold resumes at the elapsed mark through the negative delay).
+       Fired = the lock flipped: the rim holds lit until the release. Outline
+       + inset shadow only — the tiles are absolutely seated in the grid, so
+       no pseudo-element and no position of our own. */
+    [data-lock-uid].lock-hold {
+      animation: lock-hold-fill var(--lock-hold-ms, 320ms) linear var(--lock-hold-elapsed, 0ms) forwards;
+    }
+    [data-lock-uid].lock-hold-fired {
+      animation: none; outline: 2px solid var(--gold); outline-offset: 1px;
+      box-shadow: inset 0 0 0 3px rgba(200,168,75,0.45), 0 0 10px var(--gold);
+    }
+    @keyframes lock-hold-fill {
+      from { outline: 2px solid rgba(200,168,75,0); outline-offset: 1px; box-shadow: inset 0 0 0 0 rgba(200,168,75,0); }
+      to   { outline: 2px solid rgba(200,168,75,1); outline-offset: 1px; box-shadow: inset 0 0 0 3px rgba(200,168,75,0.45); }
+    }
     /* The world canvas takes drops (drag gear out = discard at your feet),
        but a full-viewport outline would be absurd — there, the ghost chip's
        lit/miss border IS the affordance. */
