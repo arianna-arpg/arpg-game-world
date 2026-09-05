@@ -30,6 +30,7 @@ import {
 } from '../engine/memories';
 import { GEM_DROP_CFG } from '../engine/loot';
 import { canPlaceAt, overlappingItems, swapBlockerFits } from '../engine/inventory';
+import { BAG_SORT_MODES } from '../engine/bagsort';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, type ModCompareRow } from '../engine/itemgen';
 import { ITEM_BASES } from '../data/itembases';
@@ -3707,6 +3708,17 @@ export class UI {
           ${this.learnedListHtml()}
         </div>
       </div>` : '';
+    // THE BAG SORT (her ask 2026-09-05): one press re-packs the bag in a
+    // registered order (engine/bagsort.ts BAG_SORT_MODES — the buttons are
+    // DERIVED from the registry, so a new mode is one data row) through the
+    // sortBag intent; the hover line says what each order IS.
+    const sortRow = `
+          <div style="display:flex;gap:4px;align-items:center;margin-top:6px;font-size:10px;color:#8a8678">
+            <span style="margin-right:2px">sort</span>
+            ${BAG_SORT_MODES.map(s => `<button data-bag-sort="${esc(s.id)}" title="${esc(s.title)}"
+              style="font-size:10px;padding:2px 8px;background:#241d2e;border:1px solid #4a3a5a;border-radius:4px;
+              color:#d8d0c0;cursor:var(--cursor-point, pointer)">${esc(s.label)}</button>`).join('')}
+          </div>`;
     const gearBody = `
       <div style="display:flex;gap:10px;align-items:flex-start">
         <div>
@@ -3716,6 +3728,7 @@ export class UI {
         <div>
           <h3>Bag <span style="color:#8a8678;font-weight:normal">(${m.items.length} item${m.items.length === 1 ? '' : 's'})</span></h3>
           <div data-bag-grid="1" style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
+          ${sortRow}
           <div style="margin-top:8px;color:#8a8678;font-size:10px">
             ${salv === 'break'
               ? `⚒ <b style="color:#e8c87a">BREAKING</b>: click a piece to salvage it for essence ·
@@ -3778,6 +3791,14 @@ export class UI {
       this.satchelOpen = !this.satchelOpen;
       this.refreshInventory();
     });
+    // THE BAG SORT: one press = one re-pack through the intent (the couch
+    // latch stamps the owner during this dispatch, so a guest sorts the
+    // GUEST's bag); a carry in flight rides along — it lifts by uid.
+    q<HTMLButtonElement>('button[data-bag-sort]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'sortBag', mode: btn.dataset.bagSort! });
+      hideTooltip();
+      this.refreshInventory();
+    }));
     // The Build drawer (its handle hangs on the panel edge):
     // toggle + — when open — the learned list's full management wiring.
     this.inventory.querySelector<HTMLButtonElement>('[data-buildflap]')?.addEventListener('click', () => {

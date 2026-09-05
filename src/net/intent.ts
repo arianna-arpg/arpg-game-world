@@ -109,6 +109,7 @@ export type MetaAction =
   | { t: 'equipItem'; uid: number; slot?: string }             // bag OR worn item → doll slot (auto-picks when omitted; worn→worn swaps through the vacated slot)
   | { t: 'unequipItem'; slot: string; x?: number; y?: number } // doll slot → bag (x/y: exact cell, fails blocked; omitted: first fit, fails full)
   | { t: 'moveItem'; uid: number; x: number; y: number }       // bag re-place (swap when exactly one blocker)
+  | { t: 'sortBag'; mode: string }                              // re-pack the bag by a registered sort mode (engine/bagsort.ts)
   | { t: 'dropItem'; uid: number }                             // bag OR worn item → ground
   | { t: 'pickupItem' }                                        // nearest ground gear within reach → bag
   // SALVAGE (dwell-gated, TWO LANES): 'break' at the bench pays the rarity's

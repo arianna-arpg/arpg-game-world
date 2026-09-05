@@ -279,7 +279,21 @@ levers, `installGearDnd`): a bag lift carries the WHOLE tile (cloned, bare),
 hanging from the grabbed cell; the piece lands its origin at hovered cell −
 grab, one resolver (`bagLanding`) answers accepts / drop / the painted
 footprint (gold clean, amber swap, red refused), and the swap verdict is the
-engine's own `swapBlockerFits` — drawn == tested.
+engine's own `swapBlockerFits` — drawn == tested. THE GUTTER LAW (index.html):
+cells are drawn 2px shy of their pitch, so a drop landed exactly on a cell's
+dashed rim once found nothing and cancelled; each cell now claims the gutter
+to its right and below (an invisible `::after` extension), so a seam resolves
+to the left / upper cell and never to nothing. THE BAG SORT
+(`engine/bagsort.ts`, the `sortBag` intent, the button row under the grid):
+`BAG_SORT_MODES` is an open registry of comparator rows — Space (tightest
+pack: area, then height), Size (tallest, then widest), Type (the doll's own
+slot order, then skill gems, supports, memories, writs), Rarity (the item
+ladder; skill gems by their own) — each re-packing first-fit on a fresh board
+ALL OR NOTHING (a failed pack reverts every position; a sort never loses a
+piece). Its KEYS (`bagKindRank` / `bagRarityRank` / `bagFootprint`) are the
+vocabulary THE ITEM FILTER FRAMEWORK will speak (Vault-gated; chartered in its
+own session — a filter row is a sibling of a sort row, never a second sort).
+Probe `balance/probe_bagsort.ts` pins the swap verdicts and the sort.
 
 **THE RECALL panel.** Units grouped by dropper def, one row each:
 

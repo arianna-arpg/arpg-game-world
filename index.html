@@ -477,6 +477,16 @@
     .bag-landing.swap { border: 2px solid #e0a050; background: rgba(224,160,80,0.22); }
     .bag-landing.blocked { border: 2px solid #c0453f; background: rgba(192,69,63,0.22); }
     [data-bag-item].bag-swap-with { outline: 2px solid #e0a050; outline-offset: 1px; }
+    /* THE GUTTER LAW (her ask 2026-09-05): cells are drawn 2px shy of their
+       pitch, so the dashed rims sit in a gutter no cell owned — a drop landed
+       exactly on that seam found nothing and cancelled, and the hand had to
+       move the piece twice. Each cell now claims the gutter to its RIGHT and
+       BELOW through an invisible extension (1px of its own border + the 2px
+       gap), so a seam resolves to the left / upper cell and never to nothing;
+       the last column's and row's extensions end exactly at the grid's edge.
+       Tiles sit above the cells in the DOM, so the extension never steals a
+       tile's own hit box. */
+    [data-cell]::after { content: ''; position: absolute; left: -1px; top: -1px; right: -3px; bottom: -3px; }
     /* The world canvas takes drops (drag gear out = discard at your feet),
        but a full-viewport outline would be absurd — there, the ghost chip's
        lit/miss border IS the affordance. */
