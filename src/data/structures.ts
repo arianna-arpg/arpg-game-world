@@ -84,7 +84,13 @@ export interface StructureDef {
   walls?: WallStrip[];
   props?: { kind: DoodadKind; x: number; y: number; radius?: number }[];
   breakables?: { id: string; x: number; y: number }[];
-  npcs?: { id: string; x: number; y: number }[];
+  npcs?: {
+    id: string; x: number; y: number;
+    /** THE SPOKEN SEAT (the inn wave): a line the body speaks while the hero
+     *  stands near — the residents' speech-bubble lane (World.residentPrompt,
+     *  read for npcRole 'resident' bodies) opened to ANY plan's seated folk. */
+    line?: string;
+  }[];
   /** Pre-inhabited: the level generator posts a guard pack of this faction at
    *  the footprint (reuses the walled-camp guard pattern in World.loadZone). */
   garrison?: string;
@@ -193,11 +199,25 @@ registerLegendChar('h', { doodad: { kind: 'hearth', radius: 13 }, interior: true
 registerLegendChar('s', { doodad: { kind: 'stool', radius: 9 }, interior: true });
 registerLegendChar('k', { doodad: { kind: 'shelf', radius: 13 }, interior: true });    // booKshelf
 registerLegendChar('r', { doodad: { kind: 'rug', radius: 16 }, interior: true });      // walkable decal
+// THE INN KIT — the inn wave (2026-09-05): a public house, a guest room, a
+// doorstep in nine more characters (kinds in engine/levelgen.ts, faces in
+// vis/paintersInn.ts). Chained cells of 'a' / 'y' read as one counter / one
+// rail run — the painters fill the cell's full width on purpose.
+registerLegendChar('t', { doodad: { kind: 'tavern_table', radius: 15 }, interior: true });
+registerLegendChar('c', { doodad: { kind: 'chair', radius: 9 }, interior: true });
+registerLegendChar('a', { doodad: { kind: 'bar_counter', radius: 14 }, interior: true }); // the Ale counter
+registerLegendChar('K', { doodad: { kind: 'keg', radius: 12 }, interior: true });
+registerLegendChar('j', { doodad: { kind: 'dresser', radius: 13 }, interior: true });     // drawers, in a J-shaped pull
+registerLegendChar('x', { doodad: { kind: 'linen_chest', radius: 11 }, interior: true }); // x marks the chest
+registerLegendChar('i', { doodad: { kind: 'candle_stand', radius: 8 }, interior: true }); // a candle, as drawn
+registerLegendChar('J', { doodad: { kind: 'coat_rack', radius: 9 }, interior: true });    // a hook
+registerLegendChar('u', { doodad: { kind: 'planter', radius: 12 }, courtyard: true });    // a flower box (open air)
+registerLegendChar('y', { doodad: { kind: 'rail_fence', radius: 13 }, courtyard: true }); // a rail run (open air)
 // WAKE HERE — the spawn cell (CellSpec.spawn): plain floor that exports the
 // layout's spawn point. Any plan anywhere may claim where newcomers wake.
 registerLegendChar('S', { spawn: true, interior: true });
-// THE NOTICE BOARD — the bounty board as a plan character (the alcove pins
-// it to a wall; any plan anywhere may post a board the same way).
+// THE NOTICE BOARD — the bounty board as a plan character (the board front
+// sets it into a rail; any plan anywhere may post a board the same way).
 registerLegendChar('N', { doodad: { kind: 'bounty_board', radius: 16 }, interior: true });
 
 // --- ROOF STYLES (registry) ----------------------------------------------------
@@ -595,22 +615,61 @@ export const STRUCTURES: Record<string, StructureDef> = {
     npcs: [{ id: 'townsfolk_smith', x: -10, y: 15 }],
   },
 
-  // The inn — the long hall as a PLAN: boarded floor, benches down the
-  // common room, the hearth-brazier, stores in the corner, a south door
-  // opening onto the town square.
+  // THE INN (the inn wave, 2026-09-05 — a public house, not a hall): the
+  // common room as a PLAN on the INN KIT. Mireille keeps her counter along
+  // the north wall with the kegs racked behind her and the shelves above;
+  // tables and chairs down the room, rugs where feet cross, the hearth on
+  // the east wall with its woodpile, benches and a coat rack by the door,
+  // two windows either side of it spilling the square's light in (and the
+  // room's out). The stair in the north-east corner dwells UP to the rooms
+  // above (data/sidezones.ts 'inn_stair' — the manor's climb, lived in). A
+  // patron at the west table speaks the stair (a structure npc's `line`).
+  // The door keeps the old plan's seat: bottom row, centre-right cell
+  // (+13, +halfH) — the town's door lanes and the probe both read it.
   inn: {
-    id: 'inn', halfW: 130, halfH: 78, cellSize: 26,
+    id: 'inn', halfW: 182, halfH: 104, cellSize: 26,
     plan: [
-      '##########',
-      '#z......B#',
-      '#.b....p.#',
-      '#........#',
-      '#.b....b.#',
-      '#####D####',
+      '##############',
+      '#KK...k..k.A.#',
+      '#aaaaa......f#',
+      '#....c.t.c..h#',
+      '#.t...r......#',
+      '#c.c..r.t.c..#',
+      '#p..b...i..Jb#',
+      '####W##D#W####',
     ],
+    legend: { A: { doodad: { kind: 'inn_stair', radius: 16 }, interior: true } },
     confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
-    npcs: [{ id: 'townsfolk_innkeep', x: -30, y: -30 }],
+    npcs: [
+      { id: 'townsfolk_innkeep', x: -91, y: -65 },
+      { id: 'townsfolk_patron', x: -91, y: 13, line: 'Rooms upstairs, if you want a bed that isn’t the ground. Mind the stair — it creaks.' },
+    ],
+  },
+
+  // THE ROOMS ABOVE — the inn's SECOND STOREY, the plan a minted floor-zone
+  // furnishes (data/sidezones.ts 'inn_stair' — never rolled on open ground):
+  // three guest rooms and a linen closet off a landing hall, every room a
+  // lived-in place on the INN KIT — a bed, a dresser or a chest, a rug, a
+  // candle, a washstand — behind its own door; the way back DOWN through
+  // the south doors to the descent portal. 'S' wakes arrivals at the head
+  // of the stair. A lodger on the landing bench speaks the house.
+  inn_upper: {
+    id: 'inn_upper', halfW: 240, halfH: 120, cellSize: 30,
+    plan: [
+      '################',
+      '#Zj.#.Zx#Z.i.#k#',
+      '#..i#w..#...j#x#',
+      '#.r.#.r.#.r.x#.#',
+      '##D###D###D###D#',
+      '#....r....r....#',
+      '#i.b......S.b.i#',
+      '#######DD#######',
+    ],
+    legend: { w: { doodad: { kind: 'washstand', radius: 10 }, interior: true } },
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
+    npcs: [{ id: 'townsfolk_lodger', x: -135, y: 45, line: 'Took the corner room. Quietest bed between here and the coast — and the roof holds.' }],
   },
 
   // A training yard: a fire, a weapon-rack rock or two — the dummy stands at the
@@ -644,27 +703,25 @@ export const STRUCTURES: Record<string, StructureDef> = {
     ],
   },
 
-  // THE BOUNTY ALCOVE (docs/design/town-growth.md v2 — the board's unlock
-  // raises a LOCALE, not one post): a roofed reading nook beside the inn
-  // door — the board (the standing bounty_board doodad, painter + amber
-  // lamp) pinned to the back wall under a timber roof, a bench either side
-  // to wait on, lanterns flanking the open cobbled front. 'rooms', like the
-  // forge: the open front derives the nook UNSEALED, so the room veil never
-  // wraps a player reading the slate. Dwelling here opens the postings
-  // panel (the World reads proximity to the 'bounty_board' town site — the
-  // board cell sits one half-row above the site).
-  bounty_alcove: {
-    id: 'bounty_alcove', halfW: 91, halfH: 52, cellSize: 26,
+  // THE BOARD FRONT (docs/design/town-growth.md v3 — her ruling 2026-09-05:
+  // a notice board OUT FRONT of the inn, not a nook): the board's unlock
+  // raises an OPEN-AIR locale on the square before Mireille's door — the
+  // notice board set into a rail run with a flower box either side of it,
+  // lanterns and benches flanking a cobbled apron, a crate at the corner.
+  // NO ROOF, on purpose: a roof hid the board and the alcove's side walls
+  // refused a flank read; out here the slate reads from every side (the
+  // rails stop feet, never the eye). Dwelling here opens the postings panel
+  // (the World reads proximity to the 'bounty_board' town site — the board
+  // cell sits one row above the site, inside the dwell's reach).
+  bounty_front: {
+    id: 'bounty_front', halfW: 91, halfH: 39, cellSize: 26,
     plan: [
-      '#######',
-      '#..N..#',
-      '#b...b#',
-      '_L___L_',
+      'yuyNyuy',
+      'L.b.b.L',
+      '_______',
     ],
-    confineVision: 'rooms',
-    roofs: 'auto', roofStyle: 'timber',
-    floorStyle: 'flagstone', courtyardFloorStyle: 'cobble',
-    breakables: [{ id: 'crate', x: -70, y: 40 }],
+    floorStyle: 'cobble', courtyardFloorStyle: 'cobble',
+    breakables: [{ id: 'crate', x: -76, y: 28 }],
   },
 
   // THE PLAZA SQUARE: the town's authored centre (the plaza fold) — the

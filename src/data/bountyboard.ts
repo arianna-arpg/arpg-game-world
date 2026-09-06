@@ -54,6 +54,17 @@ export const BOUNTY_BOARD_CFG = {
   offers: 5,
   /** The board's dwell (the salvage-bench register). */
   dwell: { radius: 120, sec: 0.9 },
+  /** THE COUNTER LAWS (her ruling 2026-09-05 — the board as a NOTICE BOARD,
+   *  not a menu): THE TEAR-OFF — accepting a posting CLOSES the board (the
+   *  writ is ripped from the slate and the reader turns for the road; a
+   *  refused take leaves the board open, the struck card repainted); THE
+   *  RETURN — dwelling at a board with a RESOLVED hand (done or failed)
+   *  TURNS IT IN FIRST (pay lands, the failed posting is handed back) and
+   *  only then re-opens the board, so the same linger collects and offers
+   *  the next work — one trip, the collect ruling made bodily; THE RECEIPT —
+   *  the re-opened board prints what the last turn-in paid for `receiptSec`
+   *  so the pay is READ, never only heard. Each a dial. */
+  counter: { closeOnAccept: true, dwellTurnIn: true, receiptSec: 30 },
   /** The Lastlight board's id — postings record their issuing board (THE
    *  PER-BOARD LAW). Regional boards mint their own ids (the kinship). */
   boardId: 'lastlight',

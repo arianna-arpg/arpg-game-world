@@ -6540,6 +6540,29 @@ export const MONSTERS: Record<string, MonsterDef> = {
     invulnerable: true,
   },
 
+  // THE INN'S FOLK (the inn wave — data/structures.ts inn / inn_upper seat
+  // them through the plan's npcs rows, each with a spoken `line`): a patron
+  // at the west table and a lodger on the landing above. The resident role
+  // = the nameplate + the speech bubble; the same scenery shape as the ward.
+  townsfolk_patron: {
+    id: 'townsfolk_patron', name: 'Patron',
+    color: '#b89a6a', shape: 'circle', radius: 12, look: 'npc_trader', npcRole: 'resident',
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [],
+    xp: 0,
+    passive: true,
+    invulnerable: true,
+  },
+  townsfolk_lodger: {
+    id: 'townsfolk_lodger', name: 'Lodger',
+    color: '#9aa8b8', shape: 'circle', radius: 12, look: 'npc_scholar', npcRole: 'resident',
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [],
+    xp: 0,
+    passive: true,
+    invulnerable: true,
+  },
+
   // HARBORHOLD FOLK (data/harborholds.ts) — the port town's keepers, spawned
   // by the hold runtime only while the town stands OPEN (service rows gate
   // them by prosperity). Same passive+invulnerable scenery shape; the

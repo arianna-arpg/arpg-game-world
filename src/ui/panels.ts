@@ -651,6 +651,11 @@ export class UI {
   /** Its live ticker (countdown in place; repaint when the slate turns). */
   private bountyTicker: number | null = null;
   private bountyFingerprint = '';
+  /** THE TEAR-OFF (BOUNTY_BOARD_CFG.counter.closeOnAccept): the posting the
+   *  player just reached for. The board closes the moment the world shows
+   *  it IN HAND (synchronous on the host; the next snapshot on a client) —
+   *  a refused take (hand full, a struck card) never closes anything. */
+  private bountyPendingTake: string | null = null;
   sailOpen = false;
   holdOpen = false;
   vocationOpen = false;
@@ -7262,6 +7267,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.ownPanel(this.bountyMenu, this.couchSeatFor(seatId));
     this.bountiesOpen = true;
     this.bountyBoardId = boardId ?? this.getWorld().bountyDwellBoardId;
+    this.bountyPendingTake = null; // a fresh open owes no earlier reach
     this.bountyMenu.classList.remove('hidden');
     this.refreshBounties();
     // The live ticker: countdown in place; full repaint when the slate or a
@@ -7290,6 +7296,20 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const world = this.getWorld();
     const v = world.bountyBoardView(this.bountyBoardId);
     this.bountyFingerprint = v.offers.map(o => o.id + (o.locked ? 'L' : '')).join('|') + '#' + v.hands.map(h => h.id + h.state).join('|');
+    // THE TEAR-OFF (BOUNTY_BOARD_CFG.counter.closeOnAccept): the reached-for
+    // posting now rides IN HAND — the writ is off the slate, the board
+    // closes, the reader turns for the road. A take the world refused
+    // (hand full, a struck card) leaves the board open on the repainted
+    // slate; a card that simply vanished (struck) drops the pending mark.
+    if (this.bountyPendingTake !== null) {
+      const id = this.bountyPendingTake;
+      if (v.hands.some(h => h.id === id)) {
+        this.bountyPendingTake = null;
+        if (BOUNTY_BOARD_CFG.counter.closeOnAccept) { this.closeBounties(); return; }
+      } else if (!v.offers.some(o => o.id === id)) {
+        this.bountyPendingTake = null;
+      }
+    }
     const accent = BOUNTY_BOARD_CFG.accent;
     const cap = QUEST_CATEGORY_CAPS.bounty ?? 1;
     const handFull = v.hands.length >= cap;
@@ -7340,6 +7360,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       + `<div class="desc" style="margin:-4px 0 8px 0;font-style:italic">Work posted from the living world — take one in hand, meet its ask, return to collect.</div>`
       + (lessonTake ? `<div class="bounty-lesson">Each card is one piece of work: the ask, and the pay, printed plainly. Take ONE in hand — the board holds the rest for whoever comes next.</div>` : '')
       + (lessonReturn ? `<div class="bounty-lesson">The writ rides with you now — the journal keeps its page, the map keeps the way. Meet the ask, then return here to collect.</div>` : '')
+      // THE RECEIPT (the counter laws): what the linger just settled, printed
+      // at the head of the re-opened board — the pay read, not only heard.
+      + (v.receipt ? `<div class="bounty-receipt" style="border-left:3px solid ${accent}">${v.receipt.failed
+        ? `Handed back: <b>${esc(v.receipt.title)}</b> — the failed posting is struck; no pay, no debt.`
+        : `Collected: <b>${esc(v.receipt.title)}</b> — paid ${esc(v.receipt.pay)}, laid at the board's feet.`}</div>` : '')
       + handsHtml
       + `<h3 style="margin:10px 0 4px 0">The slate (${v.offers.length}) · new postings <span data-bounty-countdown>${fmtRestock(v.countdown)}</span></h3>`
       + offersHtml
@@ -7352,6 +7377,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // guest-owned panel stamps uiActionSeatId) — no per-call seat plumbing.
     this.bountyMenu.querySelectorAll<HTMLButtonElement>('button[data-bounty-accept]').forEach(btn => {
       btn.addEventListener('click', () => {
+        // THE TEAR-OFF: mark the reach, ask the world, then let the repaint
+        // read the answer (in hand → the board closes; refused → it stands).
+        this.bountyPendingTake = btn.dataset.bountyAccept!;
         world.requestMeta({ t: 'bountyAccept', id: btn.dataset.bountyAccept! });
         this.refreshBounties();
       });

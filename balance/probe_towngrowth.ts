@@ -9,9 +9,10 @@
 //   C. THE APRON LAW — no dwell disc contains an arrival apron, a portal or
 //      the waypoint; from the village up no two dwell discs overlap.
 //   D. THE QUARTER LAW — a site keeps its compass quarter across the ladder.
-//   E. THE SMITH'S YARD + THE INN SQUARE — the crafting flow reads west →
-//      east through the forge; the alcove stands a stride from the inn door
-//      and outside its roof.
+//   E. THE SMITH'S YARD + THE INN FRONT — the crafting flow reads west →
+//      east through the forge, the Font a stride from the stones (THE
+//      MAGICAL PAIR); the board front stands out front of the inn door,
+//      wholly south of its wall, open air, dressed as a locale.
 //   F. THE FOOTPRINTS — no two raised structures overlap at any tier; the
 //      training line's bodies stand on open ground.
 //   G. THE BROOK — the authored course keeps clear of every seat and apron;
@@ -22,6 +23,9 @@
 //      step past its dial (drawn == dwelt).
 //   I. THE RESIDENTS — the ledger seats families at their doors once the
 //      ward stands; the stamp lands on the account; the line speaks near.
+//   J. THE INN'S FLOORS + THE INN KIT — the public house on the kit (a
+//      rule + a face + a brush + a plan char per piece), the stair up into
+//      the minted rooms above, the spoken seats (a plan npc's line).
 // Run: npx tsx balance/probe_towngrowth.ts   (exit 0 = all PASS)
 // ---------------------------------------------------------------------------
 
@@ -37,8 +41,13 @@ import {
   townSiteAt, townStationFeatures, townTier, type TownSiteId,
 } from '../src/data/townBuild';
 import { TOWN_RESIDENTS, noteSoulsSheltered, townResidentsHere } from '../src/data/boroughs';
-import { STRUCTURES } from '../src/data/structures';
+import { STRUCTURES, legendCell } from '../src/data/structures';
 import { MONSTERS } from '../src/data/monsters';
+import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
+import { PAINTERS } from '../src/render/vis/painters';
+import '../src/render/vis/paintersInn';
+import { doodadRuleOf } from '../src/engine/levelgen';
+import { sidezoneOf } from '../src/data/sidezones';
 import { SALVAGE_CFG } from '../src/data/essences';
 import { BOUNTY_BOARD_CFG } from '../src/data/bountyboard';
 import { LEYLINE_CFG } from '../src/data/leyline';
@@ -320,12 +329,13 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
   check('D: every site keeps its compass quarter across the ladder', kept);
 }
 
-// ------------------------------- E. THE SMITH'S YARD + THE INN SQUARE
+// ------------------------------- E. THE SMITH'S YARD + THE INN FRONT
 {
-  let flow = true, yard = true, alcove = true, outsideRoof = true, apart = true;
+  let flow = true, yard = true, pair = true, front = true, outsideRoof = true, apart = true, before = true;
   const YARD_REACH = 560; // DIAL: how far a crafting station may stand from the forge
+  const PAIR_STRIDE = 150; // DIAL: the Font within this of the stones (THE MAGICAL PAIR)
   const DOOR_STRIDE = 260; // DIAL: the board within this of Mireille's door
-  const inn = STRUCTURES.inn, alc = STRUCTURES.bounty_alcove;
+  const inn = STRUCTURES.inn, bf = STRUCTURES.bounty_front;
   for (let tier = 0; tier < TOWN_TIERS.length; tier++) {
     const forge = townSiteAt(tier, 'blacksmith')!, bench = townSiteAt(tier, 'salvage')!;
     const stones = townSiteAt(tier, 'oracle')!, font = townSiteAt(tier, 'font')!;
@@ -333,22 +343,41 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
     // most, and its north road runs where the yard would stand).
     if (tier >= 1 && !(bench.x < stones.x && stones.x < font.x)) flow = false;
     if (tier >= 1 && [bench, stones, font].some(p => d2(p, forge) > YARD_REACH)) yard = false;
+    // THE MAGICAL PAIR: the Font a stride from the stones at EVERY rung, the
+    // hamlet's corner past the inn included — and never inside their ring.
+    if (d2(font, stones) > PAIR_STRIDE || d2(font, stones) < STRUCTURES.oracle_site.halfW) { pair = false; console.log(`   tier ${tier}: Font ${d2(font, stones).toFixed(0)} from the stones`); }
     const innAt = townSiteAt(tier, 'inn')!, board = townSiteAt(tier, 'bounty_board')!;
     // house plan: the inn's door is the bottom row's centre-right cell.
     const door = { x: innAt.x + 13, y: innAt.y + inn.halfH };
-    if (d2(board, door) > DOOR_STRIDE) { alcove = false; console.log(`   tier ${tier}: board ${d2(board, door).toFixed(0)} from the inn door`); }
+    if (d2(board, door) > DOOR_STRIDE) { front = false; console.log(`   tier ${tier}: board ${d2(board, door).toFixed(0)} from the inn door`); }
     if (inRect(board, rectOf('inn', innAt))) outsideRoof = false;
-    if (rectsOverlap(rectOf('bounty_alcove', board), rectOf('inn', innAt))) apart = false;
+    if (rectsOverlap(rectOf('bounty_front', board), rectOf('inn', innAt))) apart = false;
+    // OUT FRONT: the whole front stands SOUTH of the inn's wall (before the
+    // door, between it and the square), never beside or behind the house.
+    if (board.y - bf.halfH < innAt.y + inn.halfH) before = false;
   }
   check('E: the crafting flow reads west → east (bench, stones, Font)', flow);
   check('E: every crafting station stands in the forge\'s yard', yard);
-  check('E: the alcove stands a stride from Mireille\'s door at every tier', alcove);
+  check('E: THE MAGICAL PAIR — the Font stands a stride from the stones at every tier', pair);
+  check('E: the board front stands a stride from Mireille\'s door at every tier', front);
   check('E: the board stands outside the inn\'s roof (her counter serves under it)', outsideRoof);
-  check('E: the alcove\'s footprint never touches the inn\'s', apart);
-  check('E: the alcove is a roofed nook with an open front (rooms — never wraps the reader)',
-    alc.confineVision === 'rooms' && alc.roofs === 'auto' && (alc.plan?.[alc.plan.length - 1].startsWith('_') ?? false));
-  check('E: the alcove pins its board to the back wall (the N cell under the roof)',
-    (alc.plan?.[1].includes('N') ?? false));
+  check('E: the front\'s footprint never touches the inn\'s', apart);
+  check('E: the front stands OUT FRONT — wholly south of the inn\'s wall, every tier', before);
+  check('E: the front is OPEN AIR — no roof, no confinement (nothing hides the slate)',
+    bf.roofs === undefined && bf.confineVision === undefined && !bf.plan!.some(row => row.includes('#')));
+  check('E: the front sets its board into the back rail (the N cell on the top row) with the apron open below',
+    bf.plan![0].includes('N') && /^_+$/.test(bf.plan![bf.plan!.length - 1]));
+  check('E: the front is dressed as a locale (rails, flower boxes, lanterns, benches)',
+    ['y', 'u', 'L', 'b'].every(ch => bf.plan!.some(row => row.includes(ch))));
+  // THE INN wears the kit: a counter run, the stair up, the hearth, tables.
+  check('E: the inn plan keeps its door seat (bottom row, centre-right cell = +13)',
+    inn.plan![inn.plan!.length - 1].indexOf('D') === inn.plan![0].length / 2);
+  check('E: the inn plan seats the stair up, a counter run, the hearth, tables and chairs',
+    inn.plan!.some(r => r.includes('A')) && inn.plan!.some(r => r.includes('aaa')) && inn.plan!.some(r => r.includes('h'))
+    && inn.plan!.some(r => r.includes('t')) && inn.plan!.some(r => r.includes('c'))
+    && inn.legend?.A?.doodad?.kind === 'inn_stair');
+  check('E: the inn confines by room, roofed and boarded (the interior fabric)',
+    inn.confineVision === 'rooms' && inn.roofs === 'auto' && inn.floorStyle === 'boards');
 }
 
 // --------------------------------------------------------- F. THE FOOTPRINTS
@@ -452,10 +481,16 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
   check('H: the officer stands at his corner (the stand the apron law measured)',
     !!officer && d2(officer.pos, w.townSeat('recruiter', OFFICER_STAND.x, OFFICER_STAND.y)) < 1);
   const board = w.doodads.filter(d => d.kind === 'bounty_board');
-  check('H: exactly one board stands, pinned to the alcove\'s wall a half-row above its seat',
+  check('H: exactly one board stands, set into the front\'s rail a row above its seat',
     board.length === 1 && d2(board[0].pos, w.townSeat('bounty_board')) < 30);
-  check('H: the boards-here census reads the alcove\'s seat',
+  check('H: the boards-here census reads the front\'s seat',
     w.bountyBoardsHere().some(b => b.id === BOUNTY_BOARD_CFG.boardId && d2(b.pos, w.townSeat('bounty_board')) < 1));
+  check('H: the front raised its locale (rails, flower boxes, lanterns, benches) and no roof over it',
+    w.doodads.some(d => d.kind === 'rail_fence' && d2(d.pos, w.townSeat('bounty_board')) < 120)
+    && w.doodads.some(d => d.kind === 'planter' && d2(d.pos, w.townSeat('bounty_board')) < 120)
+    && w.doodads.filter(d => d.kind === 'lantern_post' && d2(d.pos, w.townSeat('bounty_board')) < 120).length >= 2
+    && w.doodads.filter(d => d.kind === 'bench' && d2(d.pos, w.townSeat('bounty_board')) < 120).length >= 2
+    && !w.roofedStructureAt(w.townSeat('bounty_board')));
   check('H: every fixture the township authored was raised (structures resolve)',
     expandedTown(acct, ZONES[START_ZONE]).fixtures!.every(f => !!STRUCTURES[f.structure]));
   // THE BROOK, live: water + spans laid; no water disc inside any dwell disc.
@@ -474,16 +509,18 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
   // past its dial. (Park, ask; nobody dwells — the arrival latch is not in
   // play for a bare near* read.)
   const park = (x: number, y: number): void => { w.player.pos.x = x; w.player.pos.y = y; };
-  // Each verb is probed along an OPEN bearing from its seat (the alcove's
-  // board is read from its open front — its side walls honestly block a
-  // sight-reach from the flank, which is the roof/wall law, not a miss).
+  // Each verb is probed along an OPEN bearing from its seat (the Font's
+  // east now runs into the stones' ring, so it reads south toward the
+  // square; the board front is open air — it reads from EVERY bearing,
+  // and the flank read is pinned below).
   const verbs: { id: TownSiteId; near: () => boolean; dial: number; dir: { x: number; y: number } }[] = [
     { id: 'salvage', near: () => w.nearSalvage(), dial: SALVAGE_CFG.stationRadius, dir: { x: 1, y: 0 } },
-    { id: 'oracle', near: () => w.nearOracle(), dial: SALVAGE_CFG.stationRadius, dir: { x: 1, y: 0 } },
+    { id: 'oracle', near: () => w.nearOracle(), dial: SALVAGE_CFG.stationRadius, dir: { x: 0, y: 1 } },
     { id: 'tracker', near: () => w.nearTracker(), dial: SALVAGE_CFG.stationRadius, dir: { x: 1, y: 0 } },
     { id: 'campfire', near: () => w.nearCampfire(), dial: TOWN_SITES.find(s => s.id === 'campfire')!.dwell!, dir: { x: 1, y: 0 } },
     { id: 'bounty_board', near: () => w.nearBountyBoard(), dial: BOUNTY_BOARD_CFG.dwell.radius, dir: { x: 0, y: 1 } },
-    { id: 'font', near: () => w.nearFont(), dial: TOWN_SITES.find(s => s.id === 'font')!.press!, dir: { x: 1, y: 0 } },
+    { id: 'bounty_board', near: () => w.nearBountyBoard(), dial: BOUNTY_BOARD_CFG.dwell.radius, dir: { x: 1, y: 0 } },
+    { id: 'font', near: () => w.nearFont(), dial: TOWN_SITES.find(s => s.id === 'font')!.press!, dir: { x: 0, y: 1 } },
   ];
   for (const v of verbs) {
     const at = w.townSeat(v.id);
@@ -493,7 +530,7 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
     const past = v.near();
     park(at.x + v.dir.x * (v.dial - 8), at.y + v.dir.y * (v.dial - 8));
     const edge = v.near();
-    check(`H: ${v.id} answers at its seat, inside its dial, and refuses a step past it`,
+    check(`H: ${v.id} answers at its seat, inside its dial, and refuses a step past it (bearing ${v.dir.x},${v.dir.y})`,
       here && !past && edge, `${here}/${!past}/${edge}`);
   }
   // The caravan's counter is its body — seated by the structure at the site.
@@ -532,7 +569,10 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
   const acct = fullAccount();
   noteSoulsSheltered(acct, 999);
   const w = mkTownWorld(acct);
-  const residents = w.actors.filter(a => a.defId && MONSTERS[a.defId]?.npcRole === 'resident');
+  // (The inn's patron wears the resident ROLE too — the spoken-seat lane —
+  //  so the ward's census reads the families by NAME, never by role alone.)
+  const isFamily = (a: { name: string }): boolean => TOWN_RESIDENTS.some(r => r.name === a.name);
+  const residents = w.actors.filter(a => a.defId && MONSTERS[a.defId]?.npcRole === 'resident' && isFamily(a));
   check('I: every family stands in the township', residents.length === TOWN_RESIDENTS.length);
   check('I: each family wears its own name at its cottage door',
     TOWN_RESIDENTS.every(r => residents.some(a => a.name === r.name && d2(a.pos, townSiteAt(TOP, r.cottage)!) < 120)));
@@ -543,7 +583,83 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
   check('I: and says nothing across the square', w.residentPrompt(first) === null);
   const w0 = mkTownWorld(fullAccount());
   check('I: the same township with no souls sheltered seats no family',
-    !w0.actors.some(a => a.defId && MONSTERS[a.defId]?.npcRole === 'resident'));
+    !w0.actors.some(a => a.defId && MONSTERS[a.defId]?.npcRole === 'resident' && isFamily(a)));
+}
+
+// ------------------------------------- J. THE INN'S FLOORS + THE INN KIT
+// The inn wave (2026-09-05): the public house on the kit, the stair up into
+// the minted rooms above, the spoken seats, and the kit's own census — every
+// piece a rule + a face + a brush + a plan character, so any plan anywhere
+// may furnish with it.
+{
+  const KIT = ['tavern_table', 'chair', 'bar_counter', 'keg', 'dresser', 'linen_chest',
+    'candle_stand', 'washstand', 'coat_rack', 'planter'];
+  check('J: every INN KIT kind carries a collision rule (never the ground fallback)',
+    KIT.every(k => doodadRuleOf(k).overlap === 'solid' && doodadRuleOf(k).blocksMove === true), KIT.filter(k => doodadRuleOf(k).overlap !== 'solid').join(','));
+  check('J: every INN KIT kind wears a face, and every face names a real brush',
+    KIT.every(k => !!DOODAD_VISUALS[k] && !!PAINTERS[DOODAD_VISUALS[k].painter])
+    && DOODAD_VISUALS.bounty_board.painter === 'noticeBoard' && !!PAINTERS.noticeBoard
+    && DOODAD_VISUALS.inn_stair.painter === 'stairFlight');
+  check('J: the waist-high pieces stop feet, never the eye or the arrow (the counter, the candle, the flower box)',
+    ['bar_counter', 'candle_stand', 'planter'].every(k => doodadRuleOf(k).blocksShot === false));
+  check('J: the plan vocabulary grew the kit (t c a K j x i J u y all resolve to the kit\'s kinds)',
+    legendCell('t')?.doodad?.kind === 'tavern_table' && legendCell('c')?.doodad?.kind === 'chair'
+    && legendCell('a')?.doodad?.kind === 'bar_counter' && legendCell('K')?.doodad?.kind === 'keg'
+    && legendCell('j')?.doodad?.kind === 'dresser' && legendCell('x')?.doodad?.kind === 'linen_chest'
+    && legendCell('i')?.doodad?.kind === 'candle_stand' && legendCell('J')?.doodad?.kind === 'coat_rack'
+    && legendCell('u')?.doodad?.kind === 'planter' && legendCell('y')?.doodad?.kind === 'rail_fence');
+  check('J: the stair up is a registered sidezone mouth, dwelled only under the roof, ledgered',
+    !!sidezoneOf('inn_stair') && sidezoneOf('inn_stair')!.indoorsOnly === true
+    && sidezoneOf('inn_stair')!.ledgerOnEnter === 'inn_climbed' && doodadRuleOf('inn_stair').overlap === 'trigger');
+  // LIVE: the hamlet's inn — the kit on the boards, the stair in the corner,
+  // Mireille behind her counter, the patron speaking the stair.
+  const w = mkTownWorld(makeAccount());
+  const innAt = w.townSeat('inn');
+  const innRect = rectOf('inn', innAt);
+  const inInn = (d: { pos: { x: number; y: number } }): boolean => inRect(d.pos, innRect);
+  const kindsInInn = new Set(w.doodads.filter(inInn).map(d => d.kind));
+  check('J: the inn raised its furniture (counter run, kegs, tables, chairs, hearth, rugs, the stair)',
+    ['bar_counter', 'keg', 'tavern_table', 'chair', 'hearth', 'rug', 'coat_rack', 'candle_stand', 'inn_stair'].every(k => kindsInInn.has(k)),
+    [...kindsInInn].join(','));
+  check('J: the counter is a RUN (five chained cells)', w.doodads.filter(d => inInn(d) && d.kind === 'bar_counter').length === 5);
+  const stair = w.doodads.find(d => d.kind === 'inn_stair')!;
+  check('J: exactly one stair stands in the inn, under its roof',
+    w.doodads.filter(d => d.kind === 'inn_stair').length === 1 && !!w.roofedStructureAt(stair.pos));
+  const mireille = w.actors.find(a => a.defId === 'townsfolk_innkeep')!;
+  const counter = w.doodads.filter(d => inInn(d) && d.kind === 'bar_counter');
+  check('J: Mireille stands BEHIND her counter (north of the run, within a step of it)',
+    !!mireille && counter.every(c => c.pos.y > mireille.pos.y) && counter.some(c => d2(c.pos, mireille.pos) < 40));
+  w.player.pos.x = mireille.pos.x; w.player.pos.y = mireille.pos.y + 60;
+  check('J: her counter still serves across the run (the roof reach)', w.nearMireille());
+  const patron = w.actors.find(a => a.defId === 'townsfolk_patron')!;
+  check('J: THE SPOKEN SEAT — the patron stands in the inn and speaks the stair when the hero is near',
+    !!patron && inInn(patron) && (w.player.pos.x = patron.pos.x + 24, w.player.pos.y = patron.pos.y + 24, true)
+    && (w.residentPrompt(patron) ?? '').includes('stair'));
+  w.player.pos.x = patron.pos.x + 700; w.player.pos.y = patron.pos.y + 500;
+  check('J: and holds his tongue across the square', w.residentPrompt(patron) === null);
+  // THE ROOMS ABOVE: climb the stair.
+  w.player.pos.x = stair.pos.x; w.player.pos.y = stair.pos.y;
+  (w as unknown as { enterSidezone(cm: { pos: { x: number; y: number }; seed: number; kind: string }): void })
+    .enterSidezone({ pos: { x: stair.pos.x, y: stair.pos.y }, seed: 77, kind: 'inn_stair' });
+  check('J: the stair mints THE ROOMS ABOVE (a safe, sheltered, one-flight pocket)',
+    w.zone.id.startsWith('cave_inn_stair_') && String(w.zone.name).includes('Rooms Above')
+    && w.zone.objective?.kind === 'safe' && w.zone.caveDepth === 1 && w.zone.noDeeper === true, `${w.zone.id} · ${w.zone.name}`);
+  const up = new Map<string, number>();
+  for (const d of w.doodads) up.set(d.kind, (up.get(d.kind) ?? 0) + 1);
+  check('J: three guest rooms furnished (beds, dressers, chests, rugs, candles, a washstand, the linen shelf)',
+    (up.get('bed') ?? 0) === 3 && (up.get('dresser') ?? 0) >= 2 && (up.get('linen_chest') ?? 0) >= 3
+    && (up.get('rug') ?? 0) >= 5 && (up.get('candle_stand') ?? 0) >= 4 && (up.get('washstand') ?? 0) === 1 && (up.get('shelf') ?? 0) >= 1,
+    [...up.entries()].map(([k, n]) => `${k}:${n}`).join(','));
+  check('J: every guest room stands behind its own door (four doors onto the landing + the way down)',
+    (up.get('door') ?? 0) >= 5);
+  check('J: the top floor lays no further stair (the strip law)', !w.doodads.some(d => d.kind === 'inn_stair'));
+  const lodger = w.actors.find(a => a.defId === 'townsfolk_lodger')!;
+  check('J: the lodger keeps the landing and speaks the house',
+    !!lodger && (w.player.pos.x = lodger.pos.x + 20, w.player.pos.y = lodger.pos.y + 20, true)
+    && (w.residentPrompt(lodger) ?? '').includes('room'));
+  check('J: the way back down is banked (caveReturn = the inn, at the stair)',
+    w.caveReturn?.zoneId === START_ZONE && d2(w.caveReturn.pos, stair.pos) < 1);
+  check('J: the climb stamps the run ledger', (w.ledger.inn_climbed ?? 0) === 1);
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

@@ -49,7 +49,8 @@ lever; every number is unblessed. The probe is
 |---|---|---|
 | 1 | **Cluster the crafting utilities around Brandt** as one flow a player refining gear would actually walk, not scattered stations. | THE SMITH'S YARD (§1.3) |
 | 2 | **Lastlight as a town growing toward a city**, not a hamlet toward a villa: ground to explore, citizens taking up residence as Boroughs are cleared, new areas/functions as ACCOUNT progress grows. | THE SIZE LADDER to a township (§1.1) + THE WARD (§1.5) |
-| 3 | **The Bounty Board by Mireille's inn door**, its unlock raising a real LOCALE (an alcove), not one doodad. | THE INN SQUARE + `bounty_alcove` (§1.4) |
+| 3 | **The Bounty Board by Mireille's inn door**, its unlock raising a real LOCALE (an alcove), not one doodad. | THE INN SQUARE + `bounty_alcove` (§1.4) — **re-ruled 2026-09-05** to THE INN FRONT (`bounty_front`, open air, §1.4) |
+| 6 | *(2026-09-05)* **The board OUT FRONT of the inn, no roof** (a roof hid it); **the Font beside the runic stones** ("magical apparatus near each other"); **the inn given a second storey** of real living rooms, its ground floor redressed as an inn, the furniture reusable everywhere. | THE INN FRONT (§1.4) · THE MAGICAL PAIR (§1.3) · THE INN'S FLOORS + THE INN KIT (§1.8) |
 | 4 | **Beautify; eliminate or shrink the river**, consolidate it, bridge it — movement never hindered on a town errand. | THE BROOK (§1.6) |
 | 5 | The overall THEME/LOOK (a Divinity's Reach lean, scope-caveated) — **her collaboration session**. | card 1, §4 — not built |
 
@@ -121,17 +122,32 @@ forge and its stones keep a corner past the inn — the north road runs
 where the yard would be.) The future Steady-Hand trace station and the
 twin-anvils craft are Brandt's own counter — already in the yard.
 
-### 1.4 THE INN SQUARE — `bounty_alcove`
-The board's unlock now raises a LOCALE: a roofed reading nook beside
-Mireille's south door — the board pinned to the back wall under a timber
-roof (the new `N` legend char — any plan may post a board), a bench either
-side, lanterns flanking the open cobbled front, a crate. `'rooms'`
-confinement derives it UNSEALED (open front) so the room veil never wraps a
-player reading the slate; the board reads from the front by sight, and its
-side walls honestly refuse a flank read (the roof/wall law). THE INN WAY
-paves plaza → alcove front → inn door. Probe: the board stands within
-`DOOR_STRIDE` (260, DIAL) of the door at every rung, outside the inn's
-roof (her counter serves only under it), footprints disjoint.
+**THE MAGICAL PAIR (2026-09-05, her word — "magical apparatus near each
+other").** The Font stands a stride EAST of the stones at every rung
+(`PAIR_STRIDE` 150, DIAL; probe E), the hamlet's corner past the inn
+included (its stones and Font now share that corner; the hamlet's forge
+way runs straight to the bench). The Font's press disc overlaps the
+stones' dwell disc by law (a press may): both hints show side by side, and
+the two dialogs bind into ONE book at the folio — the crafting suite's
+shape, walked. The flow still reads bench → stones → Font west → east.
+
+### 1.4 THE INN FRONT — `bounty_front` (v3, re-ruled 2026-09-05)
+v2 raised a roofed reading nook (`bounty_alcove`) beside the door; her walk
+found the roof HID the board and made it less intuitive, and asked for a
+notice board OUT FRONT of the inn — a tavern's newsboard, minus any Wild
+West theme. The alcove is retired. The board's unlock now raises an
+OPEN-AIR locale on the square before Mireille's door: the notice board
+(a REAL board now — `noticeBoard` painter: two posts, a plank face, pinned
+writs, a rain cap; the harbor board wears the same face) set into a rail
+run with a flower box either side, lanterns and benches flanking a
+cobbled apron, a crate at the corner. No roof, no confinement: the slate
+reads from every side (rails stop feet, never the eye), and THE INN WAY
+paves plaza → the front's apron; THE DOOR LANE runs from the front's east
+end up to the door. The front stands SOUTH-WEST of the door, between it
+and the plaza, at every rung — quarter `ne`. Probe: within `DOOR_STRIDE`
+(260, DIAL) of the door, wholly south of the inn's wall, outside its roof,
+footprints disjoint, open air, dressed; live, the board reads from its
+apron AND its flank.
 
 ### 1.5 THE WARD — residents (data/boroughs.ts `TOWN_RESIDENTS`)
 Citizens take up residence as Boroughs are cleared. Every soul a held
@@ -195,6 +211,54 @@ at every rung — probe H0).
    the World's offset, verified live).
 10. **The tracker's old stand overlapped his own camp's rock** and was
     shoved off its seat at spawn; he stands south of the fire now.
+11. **A roof over a station HIDES it** (v3) — the alcove's timber roof
+    covered the very slate the player came to read, and its side walls
+    refused a flank read. Open-air locales for read-me stations; roofs for
+    counters that serve UNDER them (Mireille, Brandt).
+12. **A plan npc's line was wiped at the door** — `loadZone` cleared the
+    residents' line map AFTER the plan's npcs spawned; the clear now runs
+    before them (the spoken seat, §1.8).
+13. **THE FONT'S OPEN BEARING** — with the Font a stride east of the
+    stones, its old east probe-bearing ran into the ring (and, at the
+    village, the inn's wall); the drawn==dwelt sweep reads it SOUTH now.
+
+### 1.8 THE INN'S FLOORS + THE INN KIT (2026-09-05)
+**The inn redrawn** (`data/structures.ts inn`, 14×8 cells): Mireille's
+counter along the north wall (`bar_counter` chained — five cells read as
+one run) with kegs racked behind her and shelves above, tables and chairs
+down the common room, rugs, the hearth on the east wall with its
+woodpile, a candle stand, benches and a coat rack by the door, two
+windows either side of it (sight spills both ways). The door keeps its
+seat (bottom row, centre-right cell, +13). A PATRON at the west table
+speaks the stair.
+
+**The rooms above** (`data/sidezones.ts 'inn_stair'` → `structures.ts
+inn_upper`): the stair in the inn's north-east corner is a sidezone mouth
+(`indoorsOnly`, ledger `inn_climbed`) dwelling UP into a minted floor-zone
+— the manor's climb, lived in: three guest rooms and a linen closet off a
+landing hall, each room behind its own door with a bed, a dresser or a
+chest, a rug, a candle, a washstand; `S` wakes respawns at the head of the
+stair; the south doors lead to the way down; `noDeeper` closes the ladder
+(an inn has one storey above); `safe` asks nothing; the Verminfall's rats
+still find the boards. A LODGER on the landing bench speaks the house.
+Fixed seed — the same rooms forever.
+
+**THE INN KIT** — ten reusable furnishings, each a union entry + a
+`DOODAD_RULES` row + a `DOODAD_VISUALS` face + a brush in
+`render/vis/paintersInn.ts` + a global legend char, so ANY plan anywhere
+furnishes with one character: `t` tavern_table · `c` chair · `a`
+bar_counter · `K` keg · `j` dresser · `x` linen_chest · `i` candle_stand
+(a light) · `J` coat_rack · `u` planter · `y` rail_fence (the standing
+fence kind, now plan-placeable); `washstand` is a kind without a global
+char (local legends name it). Waist-high pieces (counter, candle, flower
+box) stop feet but never the eye or the arrow.
+
+**THE SPOKEN SEAT** — `StructureDef.npcs[].line`: a plan's seated body may
+carry a line; it rides the residents' bubble lane (`World.residentPrompt`
+reads npcRole `resident`). The ward's census reads families by NAME now,
+so a patron wearing the role never counts as a family. Probe:
+`probe_towngrowth` rig J (the kit census, the inn live, the climb, the
+lines).
 
 ## 4. DECISION CARDS (her word wanted — none of these are built)
 1. **THE LOOK / THEME.** Her collaboration session. The ground truth for
@@ -213,8 +277,12 @@ at every rung — probe H0).
    from the village up. Deleting one `brook` row per rung dries the town.
 4. **THE LADDER'S TOP.** Four rungs to a township; the sizes and the
    station counts (0/2/5/8) are DIALs.
-5. **THE ALCOVE'S ROOF.** Built roofed (a reading nook); an open-air
-   pergola is the same plan with the `.` cells made `_`.
+5. **THE ALCOVE'S ROOF.** RULED 2026-09-05: no roof — the alcove is
+   retired for THE INN FRONT (§1.4). Open cards from that wave: the front's
+   dressing (rails vs a hedgerow, a signpost, a second crate), whether the
+   hamlet's stones + Font should come round to the square (they keep the
+   corner past the inn today — the north road forbids the yard), a fourth
+   guest room or a bath, and the lodgers' rotation (one voice today).
 6. **WHAT ELSE THE WARD HOLDS.** The residents speak one line each. Open
    seams: a resident SERVICE (a ward vendor at 10 souls, a ward writ), the
    green as an event seat, per-rung dressing rows (card 6 of v1 — the
@@ -226,5 +294,9 @@ at every rung — probe H0).
   ladder, the site tables, the resolver at every read, the plaza fold,
   the apron/road/quarter/footprint laws probe-pinned, the smith's yard,
   the inn-square alcove, the brook + the `course` stamp, the ward.
+- **T1b — THE INN WAVE.** LANDED 2026-09-05: the alcove → THE INN FRONT
+  (open air), THE MAGICAL PAIR, the inn redrawn on THE INN KIT, THE ROOMS
+  ABOVE, THE SPOKEN SEAT — and, beside it, THE COUNTER LAWS on the board
+  itself (docs/design/bounty-board.md §3: tear-off, return, receipt).
 - **T2 — THE LOOK.** Her session (card 1) → per-rung dressing rows, the
   theme, a possible district rung.

@@ -110,3 +110,33 @@ blueprint-placeable via legend chars `Z h s k r`. All collide as drawn
 (`surface`, `orient: 'fixed'`); the rug is a walkable ground decal; the hearth
 carries a brazier-style `LightSpec` and stays a live painter (its flame reads
 the sim clock). Any plan anywhere can now furnish a home with five characters.
+
+## The Inn (the inn wave, 2026-09-05)
+
+THE INN KIT grows the home kit into a public house's furniture — the same
+four-part law per piece (union + `DOODAD_RULES` + `DOODAD_VISUALS` +
+`render/vis/paintersInn.ts`) and a global legend char each: `t`
+tavern_table, `c` chair, `a` bar_counter (chain cells for a run), `K` keg,
+`j` dresser, `x` linen_chest, `i` candle_stand (a small light), `J`
+coat_rack, `u` planter, `y` rail_fence; `washstand` takes a local char. All
+bake static; waist-high pieces (`blocksShot: false`) stop feet, never the
+eye or the arrow. Lastlight's inn (`structures.ts inn`) is the debut: the
+counter run with Mireille behind it, kegs and shelves, tables, the hearth,
+windows either side of the door, and a stair cell (`inn_stair`) in the
+corner.
+
+**Floors as pockets.** A hand-authored building climbs the way the manor
+does: the stair cell is a sidezone mouth (`data/sidezones.ts 'inn_stair'`,
+`indoorsOnly`) whose mint furnishes ONE plan structure (`inn_upper`: three
+guest rooms + a linen closet off a landing, each behind its own door) in a
+fixed-seed pocket — `safe`, sheltered by `caveDepth`, `noDeeper` (one
+storey above), the south doors onto the way down, `S` at the head of the
+stair for respawns. `confineVision: 'rooms'` confines the landing and each
+room in turn.
+
+**THE SPOKEN SEAT.** `StructureDef.npcs[].line` — a plan-seated body may
+carry a line; it threads `GenCtx.npcs` → `loadZone`, which keys it onto
+the body in the residents' line map (cleared per zone BEFORE the plan's
+npcs spawn), so `World.residentPrompt` speaks it for any npcRole
+`resident` body. The inn's patron speaks the stair; the lodger upstairs
+speaks the house. Probe: `balance/probe_towngrowth.ts` rig J.

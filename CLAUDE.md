@@ -857,9 +857,20 @@ we verify changes.
   CARVE (a fresh run's geometric entry is the exact centre and the
   portal-clear cuts blocking props there — the plaza sits a fountain's
   reach off it). THE SMITH'S YARD (bench → Brandt → stones → Font, west →
-  east, paved by THE FORGE WAY), THE INN SQUARE (`bounty_alcove` — the
-  board's unlock raises a roofed nook beside Mireille's door; legend `N`
-  = a board cell), THE BROOK (the random `river` retired for an authored
+  east, paved by THE FORGE WAY; THE MAGICAL PAIR — the Font a stride east
+  of the stones at every rung), THE INN FRONT (`bounty_front` — the
+  board's unlock raises an OPEN-AIR notice board on the square before
+  Mireille's door, re-ruled 2026-09-05 from the roofed alcove: a roof
+  hides a read-me station; legend `N` = a board cell, `noticeBoard` the
+  painter), THE INN'S FLOORS (the inn redrawn on THE INN KIT —
+  `t c a K j x i J u y` legend chars, `render/vis/paintersInn.ts` — with
+  a stair cell → `inn_stair` sidezone → the `inn_upper` plan of guest
+  rooms; THE SPOKEN SEAT `StructureDef.npcs[].line` rides the residents'
+  bubble lane; probe rig J), THE COUNTER LAWS on the board itself
+  (`BOUNTY_BOARD_CFG.counter`: THE TEAR-OFF closes the panel on a take,
+  THE RETURN turns a resolved hand in at the linger before the slate
+  re-opens, THE RECEIPT prints the pay — probe_bountyboard rig S), THE
+  BROOK (the random `river` retired for an authored
   `course` stamp per rung — StampSpec `path`/`lay`/`spans`; the same row
   with `lay: 'paved_way'` is a lane, and the town's TRAVELED WAYS are
   courses resolved from sites), THE WARD (`data/boroughs.ts

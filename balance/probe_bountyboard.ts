@@ -84,6 +84,8 @@
 // Run: npx tsx balance/probe_bountyboard.ts
 // ---------------------------------------------------------------------------
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { bootSimEngine, classById, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { resetActorIdCounter } from '../src/engine/actor';
@@ -144,15 +146,16 @@ const mkWorld = (): World => {
   const bare = makeAccount();
   const owned = makeAccount();
   owned.features.add(FEATURE.BOUNTY_BOARD);
-  const withoutFix = expandedTown(bare, base).fixtures?.some(f => f.structure === 'bounty_alcove') ?? false;
-  const withFix = expandedTown(owned, base).fixtures?.some(f => f.structure === 'bounty_alcove') ?? false;
-  check('A: the bounty_alcove fixture folds in exactly with the feature', !withoutFix && withFix);
+  const withoutFix = expandedTown(bare, base).fixtures?.some(f => f.structure === 'bounty_front') ?? false;
+  const withFix = expandedTown(owned, base).fixtures?.some(f => f.structure === 'bounty_front') ?? false;
+  check('A: the bounty_front fixture folds in exactly with the feature', !withoutFix && withFix);
   const site0 = townSiteAt(0, 'bounty_board');
   check('A: the site sits inside the base town footprint',
     !!site0 && site0.x > 0 && site0.x < base.size.w && site0.y > 0 && site0.y < base.size.h);
-  check('A: the bounty_alcove structure resolves (the board pinned to its wall — the N cell)',
-    !!STRUCTURES.bounty_alcove
-    && (STRUCTURES.bounty_alcove.plan?.some(row => row.includes('N')) ?? false));
+  check('A: the bounty_front structure resolves (the board set into its rail — the N cell; no roof over it)',
+    !!STRUCTURES.bounty_front
+    && (STRUCTURES.bounty_front.plan?.some(row => row.includes('N')) ?? false)
+    && STRUCTURES.bounty_front.roofs === undefined);
   check('A: the catalog row stands (feat_bounty_board → the feature flag)',
     allUnlockables().some(u => u.id === 'feat_bounty_board'
       && u.kind === 'feature' && u.payload.flag === FEATURE.BOUNTY_BOARD));
@@ -1162,6 +1165,92 @@ seedGlobalRandom(0x4145);
   check('R: the starter band governs Lastlight alone (the quay deals unbanded)',
     town2.length > 0 && town2.every(o => o.zoneId === 'crossroads')
     && quay2.length > 0 && quay2.some(o => o.zoneId !== 'crossroads'));
+}
+
+// ------------- S. THE COUNTER LAWS (her ruling 2026-09-05 — the board as
+// a NOTICE BOARD, not a menu: THE TEAR-OFF closes the panel on a take, THE
+// RETURN turns a resolved hand in at the linger BEFORE the slate re-opens,
+// THE RECEIPT prints what it paid — BOUNTY_BOARD_CFG.counter, each a dial.)
+seedGlobalRandom(0x5ea7);
+{
+  const C = BOUNTY_BOARD_CFG.counter;
+  check('S: the counter laws are dials (tear-off, return, receipt)',
+    C.closeOnAccept === true && C.dwellTurnIn === true && C.receiptSec > 0);
+  const wS = mkWorld();
+  let sOffer: BountyPosting | undefined;
+  for (let b = 0; b < 16 && !sOffer; b++) {
+    wS.time = b * wS.bountyBeatSeconds();
+    wS.armBountyBoard();
+    sOffer = wS.bountyOffers.find(p => p.kind === 'charge' && !!p.pay.essence?.length);
+  }
+  if (!sOffer) throw new Error('no essence charge dealt in 16 beats');
+  check('S: a charge in hand', wS.acceptBounty(sOffer.id) === true && wS.bountyHands.length === 1);
+  parkAtBoard(wS);
+  check('S: no hand resolves while the work stands (the pure read)', wS.resolvedHandsAt(BOUNTY_BOARD_CFG.boardId).length === 0);
+  check('S: the prompt invites the read while nothing is owed', wS.bountyBoardHint()?.text === 'Linger to read the postings.');
+  wS.completedObjectives.add(sOffer.zoneId);
+  check('S: the resolved read flips READY off the same done() the panel speaks',
+    wS.resolvedHandsAt(BOUNTY_BOARD_CFG.boardId).some(h => h.id === sOffer!.id && h.state === 'ready'));
+  check('S: the prompt now speaks THE RETURN', wS.bountyBoardHint()?.text === 'Linger to turn in the writ.');
+  // THE RETURN: linger at the board. The arrival latch wants the disc seen
+  // EMPTY once (step out, then back), then the dwell fires: the hand turns
+  // in FIRST (paid at the reader's feet, the hand freed, the slate
+  // re-dealt) and only then does the board ask to open.
+  const linger = (): void => {
+    const at = wS.townSeat('bounty_board');
+    wS.player.pos.x = at.x + 700; wS.player.pos.y = at.y + 400;
+    wS.update(1 / 30);
+    parkAtBoard(wS);
+    for (let i = 0; i < 90; i++) wS.update(1 / 30);
+  };
+  // (Read through a function: TS narrows a just-assigned property to its
+  //  literal and never widens it across the linger's calls.)
+  const asked = (): boolean => wS.bountyDwellRequested;
+  wS.bountyDwellRequested = false;
+  const drops0 = wS.drops.length;
+  const purse = (): number => Object.values(wS.meta.essences).reduce((a, b) => a + b, 0);
+  const purse0 = purse();
+  linger();
+  check('S: THE RETURN — the linger turned the hand in (freed, paid at the board\'s feet) and asked the board open',
+    // (The pay lands as packets at the reader's feet — and the lingering
+    //  reader stands on them, so by the check they are in the purse.)
+    wS.bountyHands.length === 0 && (wS.drops.length > drops0 || purse() > purse0) && asked(),
+    `hands=${wS.bountyHands.length} drops+${wS.drops.length - drops0} purse+${purse() - purse0} asked=${asked()}`);
+  check('S: the turn-in stamped the ledger through the ONE door', (wS.ledger[LEDGER_BOUNTY_DONE] ?? 0) === 1);
+  const vS = wS.bountyBoardView();
+  check('S: THE RECEIPT prints on the re-opened board (paid, titled)',
+    !!vS.receipt && vS.receipt.failed === false && vS.receipt.title.length > 0 && vS.receipt.pay.length > 0,
+    vS.receipt ? `${vS.receipt.title} · ${vS.receipt.pay}` : 'no receipt');
+  check('S: the slate re-dealt beneath it (the turn-in refresh)', vS.offers.length > 0);
+  check('S: a quay\'s board reads no Lastlight receipt (per board)', wS.bountyBoardView('elsewhere').receipt === undefined);
+  wS.time += C.receiptSec + 1;
+  check('S: the receipt ages out', wS.bountyBoardView().receipt === undefined);
+  // THE FAILED LANE resolves at the linger too: handed back, no pay, the
+  // receipt says so.
+  const sOffer2 = wS.bountyOffers.find(p => p.kind === 'charge') ?? wS.bountyOffers[0];
+  check('S: a second hand to fail', !!sOffer2 && wS.acceptBounty(sOffer2.id) === true);
+  const hand2 = wS.bountyHands.find(h => h.id === sOffer2!.id)!;
+  hand2.failed = true;
+  parkAtBoard(wS);
+  check('S: the prompt speaks the hand-back for a failed hand', wS.bountyBoardHint()?.text === 'Linger to hand the failed posting back.');
+  const drops1 = wS.drops.length, failed0 = wS.ledger.bounties_failed ?? 0;
+  wS.bountyDwellRequested = false;
+  linger();
+  const vF = wS.bountyBoardView();
+  check('S: the linger hands the failed posting back — no pay, the hand freed, the receipt says failed',
+    wS.bountyHands.length === 0 && wS.drops.length === drops1 && (wS.ledger.bounties_failed ?? 0) === failed0 + 1
+    && !!vF.receipt && vF.receipt.failed === true && asked());
+  // THE TEAR-OFF is the panel's law — pinned at its source (the folio
+  // probe's idiom): the accept marks the reach, and the repaint closes the
+  // board only on the IN-HAND read, never on a refusal.
+  const panels = readFileSync(resolve('src/ui/panels.ts'), 'utf8');
+  check('S: THE TEAR-OFF — the accept marks the reach and the repaint closes the board on the in-hand read',
+    panels.includes('this.bountyPendingTake = btn.dataset.bountyAccept!')
+    && /v\.hands\.some\(h => h\.id === id\)[\s\S]{0,160}closeOnAccept[\s\S]{0,60}this\.closeBounties\(\)/.test(panels));
+  check('S: a struck card drops the reach without closing (the refusal stays open)',
+    /!v\.offers\.some\(o => o\.id === id\)[\s\S]{0,80}bountyPendingTake = null/.test(panels));
+  check('S: a fresh open owes no earlier reach', /showBounties[\s\S]{0,400}bountyPendingTake = null/.test(panels));
+  check('S: the receipt is drawn at the head of the board', panels.includes('v.receipt') && panels.includes('bounty-receipt'));
 }
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);

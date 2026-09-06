@@ -261,6 +261,35 @@ unmet, posting annulled) — the `swapRefusal` idiom.
 **THE COUNTER LAW carries**: the board serves only reachable dwellers
 (`dwellReachable`), and browsing is always free — only ACCEPT is gated.
 
+**THE COUNTER LAWS (her ruling 2026-09-05 — the board as a NOTICE BOARD,
+not a menu; `BOUNTY_BOARD_CFG.counter`, each a dial; probe rig S).**
+- **THE TEAR-OFF** (`closeOnAccept`): accepting a posting CLOSES the
+  board — the writ is ripped from the slate and the reader turns for the
+  road. The panel marks the reach (`bountyPendingTake`) and closes only on
+  the world's IN-HAND read (synchronous on the host; the next snapshot on
+  a client); a refused take (hand full, a struck card) leaves the board
+  open on the repainted slate. The dwell gate is consumed by the fire, so
+  the board never re-opens under the same linger — step away, come back.
+- **THE RETURN** (`dwellTurnIn`): dwelling at a board with a RESOLVED hand
+  (done, or failed) TURNS IT IN FIRST — through the ONE turn-in door
+  (`applyAction` on the dwelling seat; a render-shell client ships the
+  intent), so the pay lanes, the shared stamps and the turn-in refresh all
+  arrive from standing law — and only then asks the board open on the
+  fresh slate: the same linger collects and offers the next work, one
+  trip (the quest giver's turn-ins-first order, made the board's own). The
+  prompt speaks it before the read ("Linger to turn in the writ." /
+  "…hand the failed posting back."), off the same `resolvedHandsAt` read
+  the panel's states use. The button turn-in stays for hands that resolve
+  while the panel is open.
+- **THE RECEIPT** (`receiptSec`): the re-opened board prints what the
+  last turn-in at THAT board paid (or that it took a failed posting back)
+  at its head for `receiptSec` — the pay READ at the slate, not only
+  heard as a notice. Transient (never saved, never wired): a client reads
+  its notice.
+- **THE RESIDENCE, re-ruled**: the alcove is retired for THE INN FRONT
+  (`data/structures.ts bounty_front`, `docs/design/town-growth.md` §1.4)
+  — open air, the board a real notice board (`noticeBoard` painter).
+
 ---
 
 ## 4. THE BEAT — offers on a lattice

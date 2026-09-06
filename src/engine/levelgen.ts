@@ -143,6 +143,18 @@ export type KnownDoodadKind =
   | 'stool'     // a three-legged seat by the fire
   | 'shelf'     // wall boards holding jars and small keepings
   | 'rug'       // a woven floor decal — walkable comfort underfoot
+  // THE INN KIT (the inn wave, 2026-09-05): the home kit grown into a public
+  // house's furniture — blueprint-placeable, reusable by any plan anywhere.
+  | 'tavern_table' // a round plank-top table with the evening's mugs on it
+  | 'chair'     // a seat with a back — pulled to a table, or left by the fire
+  | 'bar_counter' // one plank run of an ale counter (chain cells for the whole bar)
+  | 'keg'       // a cask racked on its side, tap at the head
+  | 'dresser'   // a chest of drawers hugging its wall, somebody's things folded on top
+  | 'linen_chest' // an iron-banded lidded chest at the foot of a bed
+  | 'candle_stand' // an iron floor stand and its one candle — small standing light
+  | 'washstand' // a basin and ewer on a round stand
+  | 'coat_rack' // a post hung with travelers' cloaks and a hat
+  | 'planter'   // a plank flower box — a doorstep's welcome
   | 'lava'      // blocks movement but NOT shots — molten, like a chasm
   | 'cave_entrance' // blocks nothing — a transition trigger into a cave sub-zone
   | 'ritual_pentagram' // blocks nothing — a Conclave ritual circle (walkable; cultists ring it)
@@ -809,7 +821,7 @@ export interface GeneratedLayout {
   /** Destructible clutter to spawn (barrels, crates) — monster ids. */
   breakables: { id: string; pos: Vec2 }[];
   /** Friendly scenery folk to spawn (the smith at her forge). */
-  npcs: { id: string; pos: Vec2 }[];
+  npcs: { id: string; pos: Vec2; line?: string }[];
   /** Pre-inhabited POIs: a faction guard pack posts at each footprint. */
   garrisons: { pos: Vec2; faction: string; size: [number, number] }[];
   /** Cave-mouth seeds, one per 'cave_entrance' doodad (same push order). */
@@ -2293,6 +2305,27 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   shelf:     { overlap: 'solid', blocksMove: true, spacing: 40,
     surface: { hw: 0.95, hh: 0.34, orient: 'fixed' } }, // a wall-hugging board (wide, shallow)
   rug:       { overlap: 'ground', walkOnly: true },
+  // THE INN KIT (the inn wave): the same law as the home kit — plan cells
+  // pin them, surfaces pin 'fixed' where the painter draws a slab, and the
+  // waist-high pieces (a counter, a candle, a flower box) stop feet but
+  // never the eye or the arrow. Any plan anywhere furnishes with them
+  // (data/structures.ts legend chars t c a K j x i J u).
+  tavern_table: { overlap: 'solid', blocksMove: true, spacing: 50, bodyScale: 0.9 },
+  chair:        { overlap: 'solid', blocksMove: true, spacing: 26, bodyScale: 0.7 },
+  bar_counter:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26,
+    surface: { hw: 1.0, hh: 0.42, orient: 'fixed' } }, // one plank run — consecutive cells read as one counter
+  keg:          { overlap: 'solid', blocksMove: true, spacing: 30,
+    surface: { hw: 0.9, hh: 0.55, orient: 'fixed' } }, // a cask on its side (long east-west)
+  dresser:      { overlap: 'solid', blocksMove: true, spacing: 40,
+    surface: { hw: 0.95, hh: 0.4, orient: 'fixed' } }, // wall-hugging (wide, shallow) like the shelf
+  linen_chest:  { overlap: 'solid', blocksMove: true, spacing: 30,
+    surface: { hw: 0.8, hh: 0.55, orient: 'fixed' } },
+  candle_stand: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26, bodyScale: 0.45 },
+  washstand:    { overlap: 'solid', blocksMove: true, spacing: 30, bodyScale: 0.75 },
+  coat_rack:    { overlap: 'solid', blocksMove: true, spacing: 30, bodyScale: 0.5 },
+  planter:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 40,
+    forbidOn: ['water', 'lava', 'chasm'],
+    surface: { hw: 1.0, hh: 0.5, orient: 'fixed' } }, // a plank box (wide, shallow)
   banner_post: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
   // The Mummers' camp kit (the mimicry troupe — data/compositions.ts
   // 'mummers_camp'): the standard flies like any banner; the practice
@@ -2989,7 +3022,7 @@ export interface GenCtx {
   pois: Vec2[];
   camps: Vec2[];
   breakables: { id: string; pos: Vec2 }[];
-  npcs: { id: string; pos: Vec2 }[];
+  npcs: { id: string; pos: Vec2; line?: string }[];
   garrisons: { pos: Vec2; faction: string; size: [number, number] }[];
   caveSeeds: number[];
   /** Structure footprints (camps, ruins): later stamps route around them. */
@@ -5513,7 +5546,7 @@ function placeStructure(ctx: GenCtx, s: StructureDef, at: Vec2): void {
     ctx.breakables.push({ id: b.id, pos: vec(at.x + b.x, at.y + b.y) });
   }
   for (const n of s.npcs ?? []) {
-    ctx.npcs.push({ id: n.id, pos: vec(at.x + n.x, at.y + n.y) });
+    ctx.npcs.push({ id: n.id, pos: vec(at.x + n.x, at.y + n.y), ...(n.line ? { line: n.line } : {}) });
   }
   // Pre-inhabited: a faction posts a guard pack at the structure's heart.
   if (s.garrison) {
@@ -6139,7 +6172,7 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     ctx.breakables.push({ id: b.id, pos: vec(center.x + b.x, center.y + b.y) });
   }
   for (const n of def.npcs ?? []) {
-    ctx.npcs.push({ id: n.id, pos: vec(center.x + n.x, center.y + n.y) });
+    ctx.npcs.push({ id: n.id, pos: vec(center.x + n.x, center.y + n.y), ...(n.line ? { line: n.line } : {}) });
   }
 
   // Door doodads: one per group, sized to span the breach.

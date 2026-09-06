@@ -117,6 +117,7 @@ import './vis/paintersGloam'; // side-effect: the Gloamwood kit's painters regis
 import './vis/paintersHallow'; // side-effect: the Hallow-country kit's painters register
 import './vis/paintersAether'; // side-effect: the Aetherial kit's painters register
 import './vis/paintersHome'; // side-effect: the hearth-and-bed kit's painters register
+import './vis/paintersInn'; // side-effect: THE INN KIT's painters register (the public house's furniture)
 import './vis/paintersSea'; // side-effect: the ship-deck kit + ghost hull register
 import './vis/paintersGarden'; // side-effect: the Garden kit's painters register
 import './vis/paintersGrove'; // side-effect: the Grove kit's painters register

@@ -146,20 +146,24 @@ export const TOWN_SITES: TownSiteDef[] = [
   //     (At the hamlet the yard cannot form — the north road runs through
   //      it — so the bench stands south of the forge and the stones keep a
   //      corner past the inn; each rung from the village up seats the flow.)
+  //     THE MAGICAL PAIR (her ruling 2026-09-05): the Font stands a stride
+  //     EAST of the stones at every rung — two apparatus of the same craft
+  //     side by side (its press disc overlaps the stones' dwell by law; both
+  //     hints show, and the two dialogs bind into one book at the folio).
   { id: 'salvage', quarter: 'w', dwell: 120,
     tiers: [{ x: 450, y: 480 }, { x: 460, y: 560 }, { x: 520, y: 640 }, { x: 600, y: 740 }] },
   { id: 'oracle', quarter: 'n', dwell: 120,
-    tiers: [{ x: 1210, y: 330 }, { x: 720, y: 390 }, { x: 870, y: 450 }, { x: 1040, y: 520 }] },
+    tiers: [{ x: 1230, y: 330 }, { x: 720, y: 390 }, { x: 870, y: 450 }, { x: 1040, y: 520 }] },
   { id: 'font', quarter: 'n', press: 150,
-    tiers: [{ x: 740, y: 400 }, { x: 920, y: 440 }, { x: 1090, y: 530 }, { x: 1200, y: 620 }] },
+    tiers: [{ x: 1170, y: 230 }, { x: 850, y: 410 }, { x: 1000, y: 470 }, { x: 1170, y: 540 }] },
 
-  // --- THE INN SQUARE: the bounty alcove beside Mireille's door (restock,
-  //     turn in, take the next writ — one stop), the caravan north of the
-  //     inn, the recruiter's corner beyond it. (At the hamlet the nook
-  //     stands WEST of the door — the east apron is too close; from the
-  //     village up it stands east, and the door lane rides its west side.)
-  { id: 'bounty_board', quarter: 'e', dwell: 120,
-    tiers: [{ x: 850, y: 470 }, { x: 1230, y: 520 }, { x: 1470, y: 600 }, { x: 1760, y: 680 }] },
+  // --- THE INN FRONT: the notice board OUT FRONT of Mireille's door (her
+  //     ruling 2026-09-05 — the board on the square before the inn, no roof
+  //     to hide it), south-west of the door between it and the plaza, so a
+  //     reader stands on the inn's step with the square at their back; the
+  //     caravan north of the inn, the recruiter's corner beyond it.
+  { id: 'bounty_board', quarter: 'ne', dwell: 120,
+    tiers: [{ x: 880, y: 470 }, { x: 1080, y: 520 }, { x: 1300, y: 590 }, { x: 1570, y: 660 }] },
   { id: 'caravan', quarter: 'ne', dwell: 160,
     tiers: [{ x: 1260, y: 140 }, { x: 1300, y: 110 }, { x: 1560, y: 130 }, { x: 1880, y: 150 }] },
   { id: 'recruiter', quarter: 'e', dwell: 160,
@@ -264,9 +268,10 @@ export const TOWN_ADDITIONS: TownAddition[] = [
   // The Salvage Station — the smith's yard: break your loot, then spend it
   // at Brandt's counter a few steps away.
   { feature: FEATURE.SALVAGE_STATION, fixtures: [{ structure: 'salvage_bench', site: 'salvage' }] },
-  // THE BOUNTY BOARD — its own ALCOVE beside the inn door (a roofed reading
-  // nook: the board, a lantern, benches — a locale, not one post).
-  { feature: FEATURE.BOUNTY_BOARD, fixtures: [{ structure: 'bounty_alcove', site: 'bounty_board' }] },
+  // THE BOUNTY BOARD — THE BOARD FRONT before the inn door (an open-air
+  // locale: the board in its rail, flower boxes, lanterns, benches — never
+  // a roof, so the slate reads from every side).
+  { feature: FEATURE.BOUNTY_BOARD, fixtures: [{ structure: 'bounty_front', site: 'bounty_board' }] },
   // The Tracker's camp — the west edge, half in the wilds.
   { feature: FEATURE.TRACKER, fixtures: [{ structure: 'wayside_camp', site: 'tracker' }] },
   // The Oracle Stone — the smith's yard, off the forge's open east face.
@@ -296,19 +301,20 @@ export const TOWN_WAYS: TownWay[] = [
   // Every way leaves the square from beside the WAYPOINT (the plaza's west
   // half) or east of the fountain — never through the fountain square, whose
   // props the clearway sweep would otherwise route out from under the lane.
-  // THE FORGE WAY is the crafting flow, walked: Font → stones → bench.
+  // THE FORGE WAY is the crafting flow, walked: Font → stones → bench (the
+  // Font and the stones a stride apart now — the way passes below both).
   { id: 'forge_way', lay: 'paved_way', from: 1,
-    points: [{ site: 'waypoint', dy: -70 }, { site: 'font', dy: 50 }, { site: 'oracle', dy: 76 }, { site: 'salvage', dx: 70 }] },
+    points: [{ site: 'waypoint', dy: -70 }, { site: 'font', dy: 60 }, { site: 'oracle', dy: 76 }, { site: 'salvage', dx: 70 }] },
+  // (The hamlet's Font stands with its stones past the inn — off any lane
+  //  from the square; its forge way runs straight to the bench.)
   { id: 'hamlet_forge_way', lay: 'paved_way', until: 0,
-    points: [{ site: 'waypoint', dy: -70 }, { site: 'font', dy: 50 }, { site: 'salvage', dx: 70 }] },
-  // THE INN WAY ends at the nook's open front (the reading stop); THE DOOR
-  // LANE runs up the nook's free side to Mireille's door.
+    points: [{ site: 'waypoint', dy: -70 }, { site: 'salvage', dx: 70 }] },
+  // THE INN WAY ends at the board front's open apron (the reading stop);
+  // THE DOOR LANE runs from the front's east end up to Mireille's door.
   { id: 'inn_way', lay: 'paved_way',
-    points: [{ site: 'plaza', dx: 175 }, { site: 'bounty_board', dy: 84 }] },
-  { id: 'door_way', lay: 'paved_way', from: 1,
-    points: [{ site: 'bounty_board', dx: -125, dy: 60 }, { site: 'inn', dx: 13, dy: 108 }] },
-  { id: 'hamlet_door_way', lay: 'paved_way', until: 0,
-    points: [{ site: 'bounty_board', dx: 125, dy: 60 }, { site: 'inn', dx: 13, dy: 108 }] },
+    points: [{ site: 'plaza', dx: 175 }, { site: 'bounty_board', dy: 66 }] },
+  { id: 'door_way', lay: 'paved_way',
+    points: [{ site: 'bounty_board', dx: 112, dy: 10 }, { site: 'inn', dx: 13, dy: 118 }] },
   { id: 'hearth_way', lay: 'paved_way',
     points: [{ site: 'waypoint', dy: 110 }, { site: 'campfire', dx: -40, dy: -40 }] },
 ];

@@ -3235,6 +3235,12 @@ export class World {
   bountyDwellSeatId = 'p0';
   /** Which board the dwell fired at (the panel scopes to it). */
   bountyDwellBoardId: string = BOUNTY_BOARD_CFG.boardId;
+  /** THE RECEIPT (BOUNTY_BOARD_CFG.counter): what the last turn-in at a
+   *  board paid — or that it took a failed posting back — stamped by
+   *  turnInBounty and printed by the re-opened board while fresh
+   *  (bountyBoardView.receipt). Transient by design: never saved, never
+   *  wired — a client reads its notice; the host's board reads the slip. */
+  bountyReceipt: { boardId: string; title: string; pay: string; failed: boolean; at: number } | null = null;
   /** ONE-SHOT: the Sacrificial Font dwell — the main loop opens the Font
    *  screen (Merge / Convert / Reset; docs/design/skill-modes.md §7). */
   fontDwellRequested = false;
@@ -5850,11 +5856,17 @@ export class World {
       c.pos = this.clampPos(vec(b.pos.x, b.pos.y), c.radius);
       this.actors.push(c);
     }
+    // The spoken seats re-learn per zone (a plan npc's line, a family's line
+    // — both keyed by the body minted below).
+    this.residentLines.clear();
     for (const n of layout.npcs) {
       // Mireille the Innkeep is ALWAYS present (she talks if her heal is locked).
       const c = this.createMonster(n.id, 1, 'player');
       c.pos = this.clampPos(vec(n.pos.x, n.pos.y), c.radius);
       this.actors.push(c);
+      // THE SPOKEN SEAT: a plan's npc row may carry a line — it rides the
+      // residents' bubble lane (residentPrompt reads npcRole 'resident').
+      if (n.line) this.residentLines.set(c.id, n.line);
     }
     // Where there's a smith, there's a stock — armed on THE BEAT LAW's
     // lattice (floor(time / restockSeconds)): the shelf is a pure function
@@ -6492,7 +6504,6 @@ export class World {
     // THE ARRIVAL LATCH re-arms per zone: every station must see its disc
     // EMPTY once before its dwell may fire (stationDwellArmed).
     this.stationArmed.clear();
-    this.residentLines.clear();
     // A Sacrificial Font (always lit in town; a find elsewhere — never in a special arena).
     // The town seat is a REAL site (townBuild.ts FONT_SITE — shared with
     // nearFont's reach), not the old centre-plaza formula: the centre is
@@ -22646,7 +22657,29 @@ export class World {
   bountyBoardHint(): { pos: Vec2; text: string } | null {
     const b = this.bountyBoardsHere().find(x => this.nearBountyBoard(this.localSeat, x.id));
     if (!b) return null;
+    // THE RETURN speaks before the read: a resolved hand at ITS board is
+    // what the linger will do first (drawn == done — the same predicate the
+    // dwell resolves through).
+    const owed = BOUNTY_BOARD_CFG.counter.dwellTurnIn ? this.resolvedHandsAt(b.id) : [];
+    if (owed.length) {
+      return { pos: b.pos, text: owed.every(h => h.state === 'failed') ? 'Linger to hand the failed posting back.' : 'Linger to turn in the writ.' };
+    }
     return { pos: b.pos, text: 'Linger to read the postings.' };
+  }
+
+  /** THE RESOLVED HANDS at a board: every held posting issued by `boardId`
+   *  that reads DONE or FAILED right now — the pure read THE RETURN (the
+   *  board's dwell), the prompt and the panel's states all share. */
+  resolvedHandsAt(boardId: string): { id: string; state: 'ready' | 'failed' }[] {
+    const out: { id: string; state: 'ready' | 'failed' }[] = [];
+    for (const p of this.bountyHands) {
+      if (p.boardId !== boardId) continue;
+      const row = BOUNTY_KINDS[p.kind];
+      if (!row) continue;
+      if (p.failed === true || (row.failed?.(this, p) ?? false)) out.push({ id: p.id, state: 'failed' });
+      else if (row.done(this, p)) out.push({ id: p.id, state: 'ready' });
+    }
+    return out;
   }
 
   /** THE BEAT's quantum — the board's OWN clock (never the vendor restock
@@ -23282,6 +23315,7 @@ export class World {
       bumpLedger(this.ledger, 'bounties_failed');
       this.notice('The board takes the failed posting back — no pay, no debt.', BOUNTY_BOARD_CFG.accent, 15, 'civic');
       this.charDirty = true;
+      this.bountyReceipt = { boardId: p.boardId, title: row.copy(this, p).title, pay: '', failed: true, at: this.time };
       // The fail lane resolves LIKE a turn-in (walk-1's ruling) — the
       // refresh rides both endings; only the resolving board re-deals.
       this.refreshBountySlate(p.boardId);
@@ -23299,6 +23333,9 @@ export class World {
     this.payBountyLanes(p, seat);
     this.bountyHands = this.bountyHands.filter(h => h.id !== id);
     this.charDirty = true;
+    // THE RECEIPT: the re-opened board prints what this paid (the counter
+    // laws — the pay is read at the slate, not only heard as a notice).
+    this.bountyReceipt = { boardId: p.boardId, title: row.copy(this, p).title, pay: describeBountyPay(p.pay), failed: false, at: this.time };
     // THE TURN-IN REFRESH: the collected hand re-deals ITS board's slate
     // — the same dwell pays the finished work and offers the fresh hand;
     // every other board's slate stands (the shared beat is the clock).
@@ -23416,7 +23453,14 @@ export class World {
      *  clock — 0 = postable now (the panel's button drives the standing
      *  postHoldWrits grammar). Absent off harborhold ground. */
     coastWrits?: { restSec: number };
+    /** THE RECEIPT (the counter laws): the last turn-in at THIS board while
+     *  it is still fresh — `pay` printed, or `failed` for a handed-back
+     *  posting. Absent once BOUNTY_BOARD_CFG.counter.receiptSec has run. */
+    receipt?: { title: string; pay: string; failed: boolean };
   } {
+    const slip = this.bountyReceipt;
+    const receipt = slip && slip.boardId === boardId && this.time - slip.at <= BOUNTY_BOARD_CFG.counter.receiptSec
+      ? { title: slip.title, pay: slip.pay, failed: slip.failed } : undefined;
     const face = (p: BountyPosting): { id: string; title: string; ask: string; pay: string; locked?: boolean } => {
       const c = BOUNTY_KINDS[p.kind]?.copy(this, p) ?? { title: p.id, ask: '' };
       return {
@@ -23430,6 +23474,7 @@ export class World {
     return {
       countdown: (this.bountyBeat() + 1) * this.bountyBeatSeconds() - this.time,
       ...(writs ? { coastWrits: writs } : {}),
+      ...(receipt ? { receipt } : {}),
       offers: this.bountyOffers.filter(o => o.boardId === boardId).map(face),
       hands: this.bountyHands.filter(h => h.boardId === boardId).map(p => {
         const row = BOUNTY_KINDS[p.kind];
@@ -23589,6 +23634,22 @@ export class World {
     // today: Lastlight's, or the quay's).
     const at = here.find(b => this.nearBountyBoard(ready!, b.id)) ?? here[0];
     if (!at) return;
+    // THE RETURN (BOUNTY_BOARD_CFG.counter.dwellTurnIn — the quest giver's
+    // turn-ins-first order, made the board's own): every RESOLVED hand this
+    // board issued turns in BEFORE the slate opens — the done work pays at
+    // the reader's feet, the failed posting is handed back — through the
+    // ONE turn-in door (the same intent the panel's button speaks, so the
+    // pay lanes, the stamps and the turn-in refresh all arrive from
+    // standing law). Host side applies to the DWELLING seat (a couch
+    // guest's writ pays into the guest's own bag); a render-shell client
+    // ships the intent and lets the snapshot move it.
+    if (BOUNTY_BOARD_CFG.counter.dwellTurnIn) {
+      for (const h of this.resolvedHandsAt(at.id)) {
+        const action: MetaAction = { t: 'bountyTurnIn', id: h.id };
+        if (this.clientActionHook) this.requestMeta(action);
+        else this.applyAction(ready!, action);
+      }
+    }
     if (!this.clientActionHook) this.armBountyBoard(at.id);
     this.bountyDwellRequested = true;
     this.bountyDwellSeatId = ready!.id;

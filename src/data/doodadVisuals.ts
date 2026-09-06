@@ -1360,6 +1360,58 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'rug', order: 45, bakeWhole: 'static',
     params: { weave: '#7a4a3a', border: '#caa85e', motif: '#3e4e5e' },
   },
+  // --- THE INN KIT (vis/paintersInn.ts): a public house's furniture -------
+  // The home kit's doctrine holds: ground footprints, time-free bakes, the
+  // light layer does the glowing. Warm inn wood throughout, one row each.
+  tavern_table: {
+    painter: 'tavernTable', order: 53, shadow: 0.45, bakeWhole: 'static',
+    params: { wood: '#6a5238', mug: '#9a948a', ale: '#b8842e', plate: '#c8bca0' },
+  },
+  chair: {
+    painter: 'chair', order: 53, shadow: 0.4, bakeWhole: 'static',
+    params: { wood: '#6a5438', cushion: '#7a4a3a' },
+  },
+  bar_counter: {
+    painter: 'barCounter', order: 54, shadow: 0.45, bakeWhole: 'static',
+    params: { wood: '#5c4630', top: '#7a6040', mug: '#9a948a', cloth: '#c8c0a8' },
+  },
+  keg: {
+    painter: 'keg', order: 53, shadow: 0.45, bakeWhole: 'static',
+    params: { wood: '#6a4e30', hoop: '#3a3632', tap: '#8a8070' },
+  },
+  dresser: {
+    painter: 'dresser', order: 54, shadow: 0.4, bakeWhole: 'static',
+    params: { wood: '#5c4630', knob: '#caa85e', cloth: '#a8b8c0' },
+  },
+  linen_chest: {
+    painter: 'linenChest', order: 53, shadow: 0.45, bakeWhole: 'static',
+    params: { wood: '#5a4028', band: '#3a3632', hasp: '#caa85e' },
+  },
+  // The candle IS the room's small lamp: a warm punch on the light layer,
+  // the painter's flame a static tell (one per corner, so no live cost).
+  candle_stand: {
+    painter: 'candleStand', order: 54, shadow: 0.3, bakeWhole: 'static',
+    params: { iron: '#3a3632', wax: '#e8dcc0', flame: '#ffd090' },
+    light: { radius: -4.5, color: '#ffd090', intensity: 0.28, flicker: 3.2 },
+  },
+  washstand: {
+    painter: 'washstand', order: 53, shadow: 0.4, bakeWhole: 'static',
+    params: { wood: '#6a5438', basin: '#d8d0c0', water: '#5a86a0', ewer: '#c8c0b0' },
+  },
+  coat_rack: {
+    painter: 'coatRack', order: 54, shadow: 0.35, bakeWhole: 'static',
+    params: { wood: '#4c3a28', cloak: '#3e4a5e', cloak2: '#5a3a30', hat: '#2e2418' },
+  },
+  planter: {
+    painter: 'planter', order: 52, shadow: 0.4, bakeWhole: 'static',
+    params: { wood: '#5c4630', soil: '#2c2218', leaf: '#4e6a34', bloom: '#d86a5a', bloom2: '#e8c04a' },
+  },
+  // THE INN'S STAIR (data/sidezones.ts 'inn_stair'): the manor's flight in
+  // the inn's warm wood, its destination named at the foot.
+  inn_stair: {
+    painter: 'stairFlight', order: 54, shadow: 0.4,
+    params: { wood: '#6a5238', dark: '#14100c', runner: '#7a4a3a', label: 'the rooms above' },
+  },
   // --- The apothecary kit (brew-yards): existing painters, new clothes ------
   // A glass still on its burner: the pot painter under a low warm flame —
   // the light is the burner; the brittle rule is the glass.
@@ -2372,10 +2424,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'signpost', order: 55, shadow: 0.4, longShadow: 1.4,
     light: { radius: 75, color: '#ffb464', intensity: 0.3, flicker: 2.4 },
   },
-  // THE BOUNTY BOARD (data/harborholds.ts service row): the plaza's writ
-  // board — parchment-warm reading light, the harbor board's own idiom.
+  // THE BOUNTY BOARD (Lastlight's inn front + data/harborholds.ts service
+  // row): a REAL notice board now (vis/paintersInn.ts noticeBoard — two
+  // posts, a plank face, pinned writs, a little rain cap) under the same
+  // parchment-warm reading light; the harbor board wears the identical face.
   bounty_board: {
-    painter: 'signpost', order: 55, shadow: 0.4, longShadow: 1.4,
+    painter: 'noticeBoard', order: 55, shadow: 0.4, longShadow: 1.4, bakeWhole: 'static',
+    params: { wood: '#5c4630', cap: '#3a2c1c', paper: '#e4d8b4', paper2: '#d4c49c', pin: '#c8402c' },
     light: { radius: 55, color: '#e8a84a', intensity: 0.22, flicker: 1.4 },
   },
   campfire: {
