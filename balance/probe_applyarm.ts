@@ -374,5 +374,37 @@ check('census: the family outgrew the loop it was written for',
     && owner.sheet.armedFamily('minionApply_', STATUS_IDS, instanceMods(cleave)).length === 0);
 }
 
+// ------------------------------------------------ F. CALLER REGISTRY CHANGES
+{
+  const sheet = new StatSheet();
+  sheet.setSource('registry-fixture', [
+    mod('proc_first', 'flat', 1), mod('proc_later', 'flat', 1),
+  ]);
+  const initial = ['first'];
+  check('F1: the initial registry arms its resident effect',
+    same(sheet.armedFamily('proc_', initial), ['first']));
+  const expanded = ['later', 'first'];
+  const armed = sheet.armedFamily('proc_', expanded);
+  check('F2: registry replacement includes late effects in caller order',
+    same(armed, expanded) && sheet.get('proc_later') > 0);
+  check('F3: unchanged registry queries retain their memo',
+    sheet.armedFamily('proc_', expanded) === armed);
+  check('F4: same-length replacement honors the new order',
+    same(sheet.armedFamily('proc_', ['first', 'later']), ['first', 'later']));
+  check('F5: a narrower caller cannot inherit another caller\'s effects',
+    same(sheet.armedFamily('proc_', ['later']), ['later']));
+  const growing = ['first'];
+  sheet.armedFamily('proc_', growing);
+  growing.push('later');
+  check('F6: in-place registry growth invalidates the memo',
+    same(sheet.armedFamily('proc_', growing), growing));
+  growing.pop();
+  check('F7: in-place registry shrinkage drops retired effects',
+    same(sheet.armedFamily('proc_', growing), growing));
+  check('F8: local extras merge into the current caller\'s registry',
+    same(sheet.armedFamily('proc_', ['extra', 'later'], [mod('proc_extra', 'flat', 1)]),
+      ['extra', 'later']));
+}
+
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);
 process.exit(failed === 0 ? 0 : 1);

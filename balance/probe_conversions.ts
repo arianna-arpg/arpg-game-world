@@ -16,7 +16,7 @@
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
-import { linkMod, mod, STAT_DEFS, STAT_TRADES } from '../src/engine/stats';
+import { linkMod, mod, StatSheet, STAT_DEFS, STAT_TRADES, type Modifier, type SkillTag } from '../src/engine/stats';
 import { UNIQUE_LIST } from '../src/data/uniques';
 
 let failed = 0;
@@ -138,6 +138,83 @@ seedGlobalRandom(0xc0de);
     `armor ${armorNow.toFixed(1)} (granted), thorns ${thornsNow.toFixed(1)} (baseline ${A0.toFixed(1)})`);
   p.sheet.setSource('probeLinks', []);
   p.sheet.setSource('probeBase', []);
+}
+
+// --- 3) Indexed sources agree with the unindexed skill-local fold ----------
+// The reference feeds all sources through `extra`, the standing linear path.
+// This catches dropped/reordered modifiers without duplicating stat math.
+{
+  const sheet = new StatSheet(), reference = new StatSheet();
+  const sources = new Map<string, Modifier[]>();
+  const put = (id: string, mods: Modifier[]): void => {
+    sources.set(id, mods); sheet.setSource(id, mods);
+  };
+  put('base', [mod('armor', 'flat', 40), mod('evasion', 'flat', 100),
+    mod('thorns', 'override', 12)]);
+  put('gear', [mod('armor', 'increased', 0.5, ['fire']),
+    { ...mod('armor', 'more', 0.2), gauge: 'charge:fury' },
+    mod('evasionToArmor', 'flat', 0.5), mod('evasionForgone', 'flat', 0.4),
+    linkMod('lifeRegen', 'armor', 0.1), linkMod('armor', 'lifeRegen', 0.5),
+    mod('thorns', 'override', 23, undefined, 'lowLife')]);
+  put('buff', [mod('thorns', 'override', 34),
+    { ...mod('armor', 'flat', 15), gauge: 'charge:fury', gaugeAt: 2 }]);
+  const stats = ['armor', 'evasion', 'lifeRegen', 'thorns', 'evasionToArmor', 'evasionForgone'];
+  let comparisons = 0, mismatches = 0;
+  const compare = (): void => {
+    for (const low of [false, true]) for (const gauge of [0, 2]) {
+      sheet.setConditions(low ? ['lowLife'] : []);
+      reference.setConditions(low ? ['lowLife'] : []);
+      sheet.setGauges([['charge:fury', gauge]]);
+      reference.setGauges([['charge:fury', gauge]]);
+      for (const tags of [undefined, new Set<SkillTag>(['fire'])]) {
+        for (const extra of [[], [mod('armor', 'flat', 7), mod('thorns', 'override', 45)]]) {
+          for (const base of [undefined, 13]) for (const stat of stats) {
+            const expected = reference.get(stat, tags, [...sources.values()].flat().concat(extra), base);
+            // Repeat to exercise both cached and uncached reads.
+            for (let repeat = 0; repeat < 2; repeat++) {
+              comparisons++;
+              if (!near(sheet.get(stat, tags, extra, base), expected)) mismatches++;
+            }
+          }
+        }
+      }
+    }
+  };
+  compare();
+  // Replacing a source must retain its original position for last-override wins.
+  put('base', [mod('armor', 'flat', 80), mod('thorns', 'override', 90)]);
+  compare();
+  sources.delete('buff'); sheet.removeSource('buff');
+  compare();
+  put('buff', [mod('thorns', 'override', 56)]);
+  sheet.setBase('armor', 17); reference.setBase('armor', 17);
+  compare();
+  check('indexed sources preserve layers, scopes, links, trades and mutation order',
+    mismatches === 0, `${comparisons} comparisons, ${mismatches} mismatches`);
+  check('source replacement preserves precedence; re-added sources win last',
+    sheet.get('thorns') === 56);
+}
+
+// --- 4) Work-count guard: unrelated sources are indexed once ---------------
+{
+  const sheet = new StatSheet();
+  let unrelatedReads = 0;
+  sheet.setSource('unrelated', Array.from({ length: 1000 }, (_, i): Modifier => ({
+    get stat() { unrelatedReads++; return `probe_unrelated_${i}`; },
+    kind: 'flat', value: 1,
+  })));
+  sheet.setSource('damage', [mod('damage', 'increased', 0.5, ['fire'])]);
+  const extra = [mod('damage', 'flat', 1)];
+  const fire = new Set<SkillTag>(['fire']);
+  sheet.get('damage', fire, extra); // pay for one source-index derivation
+  unrelatedReads = 0;
+  for (let i = 0; i < 100; i++) {
+    sheet.setConditions(i % 2 ? ['lowLife'] : []);
+    sheet.setGauges([['charge:fury', i % 3]]);
+    sheet.get('damage', fire, extra);
+  }
+  check('repeated skill-local reads and state changes never rescan unrelated sources',
+    unrelatedReads === 0, `${unrelatedReads} unrelated reads for 100 queries`);
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');
