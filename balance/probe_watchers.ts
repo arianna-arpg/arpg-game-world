@@ -70,10 +70,17 @@ const DT = 1 / 60;
 type SimWorld = ReturnType<typeof makeSimWorld>;
 // THE HOST LOOP VERBATIM: AI per actor, then the world tick (the sim runs
 // no brains on its own — the balance harness drives them explicitly).
-const tick = (w: SimWorld, sec: number, per?: (w: SimWorld) => void): void => {
+// `each` fires right after ONE body's brain ran and before the next body's
+// — the only seat from which a same-frame consequence (a callout landing
+// on kin) can be read before the kin's own turn rewrites it.
+const tick = (w: SimWorld, sec: number, per?: (w: SimWorld) => void,
+  each?: (a: Actor, w: SimWorld) => void): void => {
   for (let t = 0; t < sec; t += DT) {
     per?.(w);
-    for (const a of w.actors) updateAI(a, w, DT);
+    for (const a of w.actors) {
+      updateAI(a, w, DT);
+      each?.(a, w);
+    }
     w.update(DT);
   }
 };
@@ -397,10 +404,18 @@ MONSTERS.probe_din_striker = {
   hold();
   const rungsSeen: number[] = [];
   let kinAtShout = -1;
+  // THE SHOUT BEAT is read INSIDE the lock frame — after the eye's brain
+  // (the callout lands in it) and before the kin's own turn. One frame
+  // later is a DEAL-DEPENDENT read: the warned kin re-scans on the alert
+  // cadence, and whether its next scan still falls inside the lock frame
+  // is a function of its id-hash scan stagger — this rig read 0.600 on one
+  // town deal and 0.844 (the cap + one alert-fast own-eyes beat) on the
+  // next, byte-identical on Linux and Windows (2026-09-06).
   tick(w, 3.2, () => {
     hold();
     if (!rungsSeen.includes(eye.watchRung)) rungsSeen.push(eye.watchRung);
-    if (eye.aggroed && kinAtShout < 0) kinAtShout = kin.watchS;
+  }, a => {
+    if (a === eye && eye.aggroed && kinAtShout < 0) kinAtShout = kin.watchS;
   });
   check('e2e: the ladder climbed THROUGH its rungs (no teleport to locked)',
     rungsSeen.join(',').startsWith('0,1,2'), `saw [${rungsSeen.join(',')}]`);
@@ -408,11 +423,11 @@ MONSTERS.probe_din_striker = {
     eye.alertUntil > 0 && eye.watchAt !== undefined);
   check('e2e: the top rung LOCKED (aggro + the real target id)',
     eye.aggroed && eye.aiTargetId === prey.id);
-  check('e2e: the callout jumped the kin ladder to the search cap (never straight to lock)',
-    kinAtShout >= WATCH_CFG.rungs.search - 1e-6
-    && kinAtShout <= WATCH_CFG.rungs.search + 0.1
-    && kin.alertUntil > 0,
+  check('e2e: the callout jumped the kin ladder EXACTLY to the search cap (never straight to lock)',
+    Math.abs(kinAtShout - WATCH_CFG.rungs.search) <= 1e-6 && kin.alertUntil > 0,
     `kin at the shout beat: ${kinAtShout.toFixed(3)}`);
+  check('e2e: the warned kin closed its OWN lock (a shout names a place; its eyes found the prey)',
+    kin.aggroed && kin.aiTargetId === prey.id);
   // Back off: the prey vanishes; the lock breaks, the investigation runs
   // dry, the stand-down clears aggro and the meter drains to nothing.
   prey.pos = vec(4000, 4000);
