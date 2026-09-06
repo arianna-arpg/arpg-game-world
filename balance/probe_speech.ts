@@ -37,6 +37,16 @@
 //      front speaker home + the back one stacked ABOVE, a third frame of
 //      the same inputs a fixed point, the stick / damping / view wall /
 //      pane / crowd / order band / 'queue' clauses, and purity.
+//   J. THE TRANSIENT TELLING — engine/speech.ts (the fabric's WORLD half):
+//      the pure fold (a fresh approach begins the telling, the whole window
+//      stands wherever the hero walks, it disperses, the tongue is held for
+//      the cooldown on the world clock, standing there never re-tells, a
+//      stale memory forgets nearness, Infinity is the perpetual dial,
+//      purity, shipped dials) and THE LIVE INN through World.residentPrompt
+//      itself — the patron shows on approach, holds exactly its window, hides
+//      while the hero stays, stays hidden out-and-back inside the cooldown,
+//      tells again after it; a rostered guest rides the same clock; and
+//      Mireille's lesson prompt is EXEMPT (stands as long as the hero does).
 //
 //   npx tsx balance/probe_speech.ts
 
@@ -46,9 +56,15 @@ import {
   type SpeechRect, type SpeechTuning, type SpeechLayoutTuning,
   type SpeechSeat, type SpeechSeatMemory, type SpeechSeatResult,
 } from '../src/render/vis/speech';
-import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
+import { bootSimEngine, classById, makeSimWorld } from '../src/sim/arena';
 import { bumpLedger } from '../src/packages/ledger';
-import { LEDGER_HERO_RENOWNED, type World } from '../src/engine/world';
+import { LEDGER_HERO_RENOWNED, World } from '../src/engine/world';
+import { SPEECH_CFG, speechTell, speechWindowFor, type SpeechMemory } from '../src/engine/speech'; // rig J — THE TRANSIENT TELLING
+import { resetActorIdCounter } from '../src/engine/actor';
+import { buildManifest } from '../src/packages/manifest';
+import { makeAccount } from '../src/meta/account';
+import { CLASSES } from '../src/data/classes';
+import { START_ZONE } from '../src/data/zones';
 import { QUESTS } from '../src/quests/defs';
 import {
   roomVolume, veiledAtVolume,
@@ -572,6 +588,152 @@ console.log('I. THE LAYOUT LAW (layoutSpeechSeats — bubbles never cover one an
     && C.layout.reach.side > 0 && C.layout.stick >= 0 && C.layout.orderBand >= 0
     && C.layout.damping > 0 && C.layout.damping <= 1 && C.layout.settle >= 0
     && (C.layout.order === 'front' || C.layout.order === 'queue'));
+}
+
+// --- J. THE TRANSIENT TELLING (engine/speech.ts) ----------------------------
+console.log('J. THE TRANSIENT TELLING (speechTell — a fresh approach, a held window, a held tongue)');
+{
+  // THE PURE FOLD — one speaker, one clock, the window {hold 3 s, cooldown
+  // 10 s}: free again at t = 13 from a telling begun at t = 0.
+  const W = { holdSec: 3, cooldownSec: 10 };
+  const cfg: typeof SPEECH_CFG = {
+    window: { holdSec: 4, holdPerChar: 0.05, cooldownSec: 24 },
+    lanes: { seat: { cooldownSec: 12 } },
+    staleSec: 1,
+  };
+  const f1 = speechWindowFor('folk', 'x'.repeat(40), cfg);
+  const f2 = speechWindowFor('seat', 'x'.repeat(40), cfg);
+  check('J1 the window folds base ← lane, the hold grown by THE READING ALLOWANCE per character',
+    f1.holdSec === 6 && f1.cooldownSec === 24 && f2.holdSec === 6 && f2.cooldownSec === 12,
+    `${f1.holdSec}/${f1.cooldownSec} ${f2.holdSec}/${f2.cooldownSec}`);
+  check('J1b the fold never mutates the config it reads',
+    cfg.window.holdSec === 4 && cfg.lanes.seat?.cooldownSec === 12 && cfg.lanes.seat?.holdSec === undefined);
+
+  const r2 = speechTell(undefined, true, 0, W);
+  check('J2 THE FRESH APPROACH — the first near read begins the telling at once',
+    r2.telling && r2.mem.spokeAt === 0 && r2.mem.holdSec === 3 && r2.mem.near && r2.mem.readAt === 0);
+  const r2b = speechTell(undefined, false, 0, W);
+  check('J2b a far first read tells nothing and stamps no clock', !r2b.telling && r2b.mem.spokeAt === null);
+
+  const r3 = speechTell(r2.mem, false, 1, W);
+  check('J3 THE WHOLE TELLING — inside the window the line stands though the hero walked off', r3.telling);
+
+  const r4 = speechTell(speechTell(r2.mem, true, 2.5, W).mem, true, 3, W);
+  check('J4 at the window\'s end the line disperses — the hero still standing there earns nothing',
+    !r4.telling && r4.mem.spokeAt === 0);
+
+  let m = speechTell(r4.mem, false, 3.5, W).mem;   // out
+  const r5 = speechTell(m, true, 4, W);            // back in — an edge, inside the cooldown
+  check('J5 THE HELD TONGUE — stepping out and back in inside the cooldown earns nothing',
+    !r5.telling && r5.mem.spokeAt === 0);
+
+  m = r5.mem;
+  let told = false;
+  for (let t = 4.5; t <= 20; t += 0.5) { const s = speechTell(m, true, t, W); m = s.mem; told ||= s.telling; }
+  check('J6 standing there through the cooldown never re-tells (the level is not the edge)', !told && m.spokeAt === 0);
+
+  m = speechTell(m, false, 20.5, W).mem;
+  const r7 = speechTell(m, true, 21, W);
+  check('J7 a fresh approach after the cooldown tells again', r7.telling && r7.mem.spokeAt === 21 && r7.mem.holdSec === 3);
+
+  // The cooldown counts from the WINDOW's end on the world clock, whether
+  // or not the hero is there: begun at 0, hold 3, free at 13 exactly.
+  const gone = speechTell(speechTell(undefined, true, 0, W).mem, false, 0.5, W).mem;
+  const early = speechTell(gone, true, 12.99, W);
+  const onTime = speechTell(gone, true, 13, W);
+  check('J8 the cooldown runs from the window\'s end on the world clock, the hero away the while',
+    !early.telling && onTime.telling && onTime.mem.spokeAt === 13);
+
+  // THE STALE MEMORY: a speaker unread for longer than staleSec forgets the
+  // hero was near — the next near read is a fresh approach; a LIVE memory
+  // holds the level (no edge, no telling).
+  const nearLast: SpeechMemory = { spokeAt: null, holdSec: 0, near: true, readAt: 0 };
+  const stale = speechTell(nearLast, true, 5, W, 1);
+  const live = speechTell(nearLast, true, 0.5, W, 1);
+  check('J9 a stale memory forgets nearness (an unread speaker meets the next read as a fresh approach); a live one holds the level',
+    stale.telling && !live.telling);
+
+  const INF = { holdSec: Infinity, cooldownSec: 0 };
+  const inf = speechTell(speechTell(undefined, true, 0, INF).mem, false, 1e6, INF);
+  check('J10 holdSec Infinity is the old perpetual bubble as a dial (never disperses)', inf.telling);
+  const mute = speechTell(undefined, true, 0, { holdSec: 0, cooldownSec: 5 });
+  check('J10b a zero window tells nothing (the lane muted by data), the clock still stamped', !mute.telling && mute.mem.spokeAt === 0);
+
+  const before = JSON.stringify(r2.mem);
+  speechTell(r2.mem, false, 2, W); speechTell(r2.mem, true, 50, W);
+  check('J11 the fold never mutates the memory it is handed', JSON.stringify(r2.mem) === before);
+
+  check('J12 shipped SPEECH_CFG dials are sane (a real window, a real cooldown, a live memory, only known lanes)',
+    SPEECH_CFG.window.holdSec > 0 && SPEECH_CFG.window.holdPerChar >= 0 && SPEECH_CFG.window.cooldownSec > 0
+    && SPEECH_CFG.staleSec > 0
+    && Object.keys(SPEECH_CFG.lanes).every(k => k === 'seat' || k === 'folk' || k === 'resident'));
+
+  // THE LIVE INN — the real World, the real town, the patron's spoken seat,
+  // World.residentPrompt the read (the same read the renderer polls each
+  // frame): drawn == tested. Stood the way probe_towngrowth stands it.
+  bootSimEngine();
+  resetActorIdCounter();
+  const account = makeAccount();
+  for (const c of CLASSES) account.unlockedClasses.add(c.id);
+  const manifest = buildManifest(account, 0x5eec);
+  for (const p of manifest.packages) p.enabled = false;
+  const w = new World(account, Object.freeze(manifest));
+  w.createPlayer(classById('warrior'));
+  w.loadZone(START_ZONE);
+  const patron = w.actors.find(a => a.defId === 'townsfolk_patron');
+  check('J13 the inn seats the patron (the spoken seat)', !!patron);
+  if (patron) {
+    const DT = 1 / 30;
+    const beside = (a: { pos: { x: number; y: number }; tier?: number }): void => {
+      w.player.pos.x = a.pos.x + 24; w.player.pos.y = a.pos.y + 24; w.player.tier = a.tier ?? 0;
+    };
+    const away = (a: { pos: { x: number; y: number } }): void => { w.player.pos.x = a.pos.x + 700; w.player.pos.y = a.pos.y + 500; };
+    /** Step n frames, reading the prompt after each (the renderer's poll). */
+    const run = (a: World['actors'][number], n: number): { shown: number; first: number; last: number } => {
+      let shown = 0, first = -1, last = -1;
+      for (let i = 0; i < n; i++) {
+        w.update(DT);
+        if (w.residentPrompt(a)) { shown++; if (first < 0) first = i; last = i; }
+      }
+      return { shown, first, last };
+    };
+    beside(patron);
+    const line = w.residentPrompt(patron);
+    check('J14 a fresh approach begins the telling at once (the read is the poll)', !!line && line.includes('stair'), `"${line}"`);
+    const win = speechWindowFor('seat', line ?? '');
+    const frames = Math.round(win.holdSec / DT);
+    const a = run(patron, frames + 30);
+    check('J15 drawn == tested — the line stands its whole window with no gap, then disperses though the hero still stands there',
+      a.first === 0 && a.shown === a.last + 1 && Math.abs(a.shown - frames) <= 2 && a.shown < frames + 30,
+      `${a.shown} shown of ~${frames}, last at frame ${a.last}`);
+    away(patron); const b1 = run(patron, 30);
+    beside(patron); const b2 = run(patron, 30);
+    check('J16 THE HELD TONGUE — stepping out and back in inside the cooldown earns nothing', b1.shown === 0 && b2.shown === 0,
+      `${b1.shown}/${b2.shown}`);
+    away(patron); run(patron, Math.round(win.cooldownSec / DT));
+    beside(patron);
+    check('J17 a fresh approach after the cooldown tells again', !!w.residentPrompt(patron));
+    // Every lane rides the one clock: a rostered guest (the 'folk' lane).
+    const guest = w.actors.find(g => g.defId?.startsWith('folk_') && (beside(g), !!w.residentPrompt(g)));
+    check('J18 a rostered guest speaks on approach (the folk lane)', !!guest, `${guest?.name ?? '-'}`);
+    if (guest) {
+      const gl = w.residentPrompt(guest) ?? '';
+      const gw = speechWindowFor('folk', gl);
+      const g = run(guest, Math.round(gw.holdSec / DT) + 30);
+      check('J18b …stands its own window, then holds its tongue while the hero stays', g.first === 0 && g.shown === g.last + 1 && g.shown < g.last + 31,
+        `${g.shown} shown, last at ${g.last}`);
+    }
+    // THE LESSON EXEMPTION: Mireille's counter prompt (the welcome gift, then
+    // the flask lesson) is FUNCTIONAL — it stands as long as the hero does.
+    const mir = w.actors.find(x => x.defId === 'townsfolk_innkeep');
+    let stood = 0;
+    if (mir) {
+      w.player.pos.x = mir.pos.x; w.player.pos.y = mir.pos.y + 60; w.player.tier = 0;
+      for (let i = 0; i < 600; i++) { w.update(DT); if (w.innkeepPrompt()) stood++; }
+    }
+    check('J19 THE LESSON EXEMPTION — Mireille\'s prompt stands every frame of a 20 s stand (the counters never ride this clock)',
+      !!mir && stood === 600, `${stood}/600`);
+  }
 }
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} passed, ${fail} failed`);

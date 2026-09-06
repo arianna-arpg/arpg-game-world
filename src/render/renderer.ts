@@ -5805,9 +5805,13 @@ export class Renderer {
       if (msg) this.queueSpeech(a, msg, '#d8b87a');
     }
 
-    // THE WARD'S RESIDENTS speak their line when you stand at their door —
-    // role-bound through world.residentPrompt() (data/boroughs.ts
-    // TOWN_RESIDENTS gives each family its words at the seat).
+    // THE WARD'S RESIDENTS (and the inn's guests, and every spoken seat)
+    // speak their line when you come near — role-bound through
+    // world.residentPrompt() (data/boroughs.ts TOWN_RESIDENTS gives each
+    // family its words at the seat). WHEN they speak is the world's read:
+    // THE TRANSIENT TELLING (engine/speech.ts SPEECH_CFG — a fresh approach,
+    // a held window, a held tongue); this pass stays dumb and draws whatever
+    // the read returns, the utterance clock keyed to the line as ever.
     if (a.defId && MONSTERS[a.defId]?.npcRole === 'resident') {
       const msg = world.residentPrompt(a);
       if (msg) this.queueSpeech(a, msg, '#d8c8a8');

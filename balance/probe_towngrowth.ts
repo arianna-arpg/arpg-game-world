@@ -32,6 +32,7 @@
 import { bootSimEngine, classById } from '../src/sim/arena';
 import { resetActorIdCounter } from '../src/engine/actor';
 import { World } from '../src/engine/world';
+import { speechWindowFor } from '../src/engine/speech'; // THE TRANSIENT TELLING — a resident line's window (probe_speech rig J pins the clock)
 import { buildManifest } from '../src/packages/manifest';
 import { CLASSES } from '../src/data/classes';
 import { FEATURE, LEDGER_SOULS_SHELTERED, makeAccount, type Account } from '../src/meta/account';
@@ -703,8 +704,12 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
   const first = residents.find(a => a.name === TOWN_RESIDENTS[0].name)!;
   w.player.pos.x = first.pos.x + 30; w.player.pos.y = first.pos.y + 30;
   check('I: a family speaks its line when the hero stands at the door', w.residentPrompt(first) === TOWN_RESIDENTS[0].line);
+  // THE TRANSIENT TELLING (engine/speech.ts; probe_speech rig J pins the
+  // clock): the line stands its window wherever the hero walks, THEN holds
+  // its tongue — the read past the window, across the square, is null.
+  w.time += speechWindowFor('resident', TOWN_RESIDENTS[0].line).holdSec + 0.05;
   w.player.pos.x = first.pos.x + 600; w.player.pos.y = first.pos.y + 600;
-  check('I: and says nothing across the square', w.residentPrompt(first) === null);
+  check('I: and says nothing across the square once the telling has run its window', w.residentPrompt(first) === null);
   const w0 = mkTownWorld(fullAccount());
   check('I: the same township with no souls sheltered seats no family',
     !w0.actors.some(a => a.defId && MONSTERS[a.defId]?.npcRole === 'resident' && isFamily(a)));
@@ -785,8 +790,11 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
   check('J: THE SPOKEN SEAT — the patron stands in the inn and speaks the stair when the hero is near',
     !!patron && inInn(patron) && (w.player.pos.x = patron.pos.x + 24, w.player.pos.y = patron.pos.y + 24, true)
     && (w.residentPrompt(patron) ?? '').includes('stair'));
+  // THE TRANSIENT TELLING (engine/speech.ts; probe_speech rig J pins the
+  // clock): the telling stands its window, then the tongue is held.
+  w.time += speechWindowFor('seat', w.residentPrompt(patron) ?? '').holdSec + 0.05;
   w.player.pos.x = patron.pos.x + 700; w.player.pos.y = patron.pos.y + 500;
-  check('J: and holds his tongue across the square', w.residentPrompt(patron) === null);
+  check('J: and holds his tongue across the square once the telling has run its window', w.residentPrompt(patron) === null);
   // THE FOLK ROSTER (data/innfolk.ts) + THE HAUNT (engine/ai.ts): the inn's
   // company is rolled per day off the pools, named, lined, coloured, and
   // STROLLS between its furniture — passive still (scenery with legs).

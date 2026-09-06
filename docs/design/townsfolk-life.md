@@ -68,6 +68,33 @@ patron and the corner-room lodger stay fixed.
 - The theater fabric can restamp `aiPost` under a RadianceCond exactly as
   `watch_change` does — a haunt's `home` follows the post.
 
+### 1.4 THE TRANSIENT TELLING — `engine/speech.ts`, `SPEECH_CFG` (built 2026-09-06)
+A folk line is an UTTERANCE, not a caption. Before this the spoken seat's
+bubble stood as long as the hero stood in reach and popped in and out at
+the radius edge as they walked past. Now `World.residentPrompt` (the
+renderer's per-frame poll) answers through one pure fold, `speechTell`:
+a telling begins on A FRESH APPROACH (the nearness EDGE — within
+`RESIDENT_RADIUS` + `dwellReachable` under THE SAME-STORY LAW, not there at
+the last live read; standing there earns nothing), stands its WHOLE window
+wherever the hero walks (`holdSec` + THE READING ALLOWANCE `holdPerChar`
+per character — the words were said, the speaker finishes the sentence at
+your back; the renderer's same-view gate still conceals the drawn bubble
+when you leave the room), disperses, and THE HELD TONGUE runs
+`cooldownSec` on the WORLD clock — out-and-back-in inside it earns
+nothing. THE LANE IS THE OVERRIDE: every line arrives by its source lane
+(`seat` = a plan's spoken seat, `folk` = a rostered guest, `resident` = a
+ward family) and `SPEECH_CFG.lanes` overrides any dial per lane (the
+spoken seat's DIRECTIONS repeat sooner: cooldown 12 s against the 24 s
+base; `Infinity` = the old perpetual bubble as data). THE LESSON
+EXEMPTION: Mireille's counter prompt (the welcome gift, the flask lesson),
+the quest giver's, the caravanner's, the Bonewright's and the Delver's are
+FUNCTIONAL — they stand until acted on, and never ride this clock. The
+memory is a per-world map keyed by actor id, cleared with the lines at
+every zone load, never saved, never on the wire. Dials (hers to rule):
+`holdSec` 4, `holdPerChar` 0.05, `cooldownSec` 24, `lanes.seat.cooldownSec`
+12, `staleSec` 1. Docs `docs/render/speech.md`; probe `probe_speech` rig J
+(the fold + the live inn: the patron, a guest, Mireille's exempt prompt).
+
 ---
 
 ## 2. THE DECISION CARDS (her word wanted — none of these are built)
@@ -95,7 +122,10 @@ patron and the corner-room lodger stay fixed.
 5. **THE ROSTER'S TURN.** Per day (built) vs per visit vs per BEAT (the
    vendor's 300 s). A day is the honest one — the same face at the bar
    after a short errand.
-6. **TALK.** Multiple lines per body rotated on each approach; NPC-to-NPC
+6. **TALK.** THE CLOCK IS BUILT (§1.4 — a line is transient with a
+   cooldown; "on each approach" now has an exact meaning: the nearness
+   edge). Still open: multiple lines per body rotated on each approach
+   (the memory row already knows the approach count's seat); NPC-to-NPC
    chatter (two guests facing each other with bubbles) — the speech fabric
    already draws any body's bubble; a `talkTo` pairing is one idle rung.
 7. **THE WARD'S FAMILIES.** The residents (`TOWN_RESIDENTS`) could wear the
@@ -108,7 +138,8 @@ patron and the corner-room lodger stay fixed.
 - **L0 — landed:** the haunt + the roster (this document's §1).
 - **L1 — THE ROUTINE ROWS:** `FolkRow.routine` / `MonsterDef.routine` +
   the phase clock + the sleep conduct + the square by day (cards 1–4).
-- **L2 — THE TALK:** rotated lines, pairings (card 6); the ward wears it.
+- **L2 — THE TALK:** rotated lines, pairings (card 6) over THE TRANSIENT
+  TELLING's clock (§1.4, landed); the ward wears it.
 - **L3 — THE TOWN'S DAY:** market morning, the watch change (already in
   the theater), a festival row — event-lane compositions over L1.
 
@@ -129,3 +160,9 @@ patron and the corner-room lodger stay fixed.
 5. The sim's `World.update` does not run the AI — the runner drives it
    (`for (const a of world.actors) updateAI(a, world, dt)`); every probe
    that wants a stroll drives it the same way.
+6. THE PERPETUAL BUBBLE: `residentPrompt` answered the radius every frame,
+   so a spoken seat's line stood as long as the hero did and flickered at
+   the radius edge on a walk past. THE TRANSIENT TELLING (§1.4) closed it
+   at the WORLD seam — the renderer never learned a clock; the two probe
+   checks that read "says nothing across the square" now first let the
+   window run (the whole telling is the law, not the radius).

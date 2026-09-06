@@ -253,6 +253,7 @@ import {
   MOUNT_CFG, seatCount, seatPos, type MountSlotSpec,
 } from './mounts';
 import { resolveTell, TELL_CFG, tellSpecsOf } from './tells';
+import { speechTell, speechWindowFor, type SpeechLane, type SpeechMemory } from './speech'; // THE TRANSIENT TELLING — the speech fabric's world half (residentPrompt)
 import { PACK_CFG, foldPack } from './pack';
 import {
   drainHolds, makeReserve, pipsOf, RESERVE_CFG, regenHolds, reserveCostOf,
@@ -5878,6 +5879,7 @@ export class World {
     // The spoken seats re-learn per zone (a plan npc's line, a family's line
     // — both keyed by the body minted below).
     this.residentLines.clear();
+    this.speechMemory.clear(); // THE TRANSIENT TELLING: the clocks go with the lines (speechTell keeps no memory across a load)
     for (const n of layout.npcs) {
       // Mireille the Innkeep is ALWAYS present (she talks if her heal is locked).
       const c = this.createMonster(n.id, 1, 'player');
@@ -5889,8 +5891,9 @@ export class World {
         : this.clampPos(vec(n.pos.x, n.pos.y), c.radius);
       this.actors.push(c);
       // THE SPOKEN SEAT: a plan's npc row may carry a line — it rides the
-      // residents' bubble lane (residentPrompt reads npcRole 'resident').
-      if (n.line) this.residentLines.set(c.id, n.line);
+      // residents' bubble lane (residentPrompt reads npcRole 'resident') on
+      // the 'seat' lane of THE TRANSIENT TELLING (engine/speech.ts).
+      if (n.line) this.residentLines.set(c.id, { line: n.line, lane: 'seat' });
     }
     // THE FOLK SEATS (data/innfolk.ts): every seat a plan declared rolls its
     // guest on a seed of (zone, seat, DAY) — the same company through one
@@ -5917,7 +5920,7 @@ export class World {
       c.pos = c.tier >= 1 ? this.findFreeSpot(vec(fk.pos.x, fk.pos.y), c.radius, c.tier)
         : this.clampPos(vec(fk.pos.x, fk.pos.y), c.radius);
       this.actors.push(c);
-      if (roll.line) this.residentLines.set(c.id, roll.line);
+      if (roll.line) this.residentLines.set(c.id, { line: roll.line, lane: 'folk' }); // THE TRANSIENT TELLING's 'folk' lane (speechTell)
     }
     // Where there's a smith, there's a stock — armed on THE BEAT LAW's
     // lattice (floor(time / restockSeconds)): the shelf is a pure function
@@ -6667,7 +6670,7 @@ export class World {
         r.name = row.name;
         r.pos = this.clampPos(vec(at.x, at.y), r.radius);
         this.actors.push(r);
-        this.residentLines.set(r.id, row.line);
+        this.residentLines.set(r.id, { line: row.line, lane: 'resident' }); // THE TRANSIENT TELLING's 'resident' lane (speechTell)
       }
     }
     this.text(vec(p.pos.x, p.pos.y - 46), def.name, def.theme.accent, 24);
@@ -22619,19 +22622,43 @@ export class World {
     return best ? { pos: vec(best.pos.x, best.pos.y), tier: best.tier ?? 0, doodad: best } : null;
   }
 
-  /** THE RESIDENTS' LINES (data/boroughs.ts TOWN_RESIDENTS): what each
-   *  seated family says when the hero stands near — keyed by actor id at
-   *  the spawn, read by residentPrompt for the renderer's speech bubble. */
-  private residentLines = new Map<number, string>();
+  /** THE RESIDENTS' LINES: what each ward family (data/boroughs.ts
+   *  TOWN_RESIDENTS), rostered guest (data/innfolk.ts) and spoken seat
+   *  (StructureDef.npcs[].line) says when the hero comes near — keyed by
+   *  actor id at the spawn with the LANE it came by (engine/speech.ts
+   *  SpeechLane: the per-lane window dials), read by residentPrompt for the
+   *  renderer's speech bubble. */
+  private residentLines = new Map<number, { line: string; lane: SpeechLane }>();
+  /** THE TRANSIENT TELLING's memory (engine/speech.ts speechTell): one row
+   *  per speaker — when its telling began, the window it holds, whether the
+   *  hero was near at the last read. Transient by construction: cleared
+   *  with the lines at every zone load, never serialized, never on the
+   *  wire (a co-op client polls its own world through the same read). */
+  private speechMemory = new Map<number, SpeechMemory>();
 
-  /** A resident's line while the local hero stands within reach (the
-   *  townsfolk prompt idiom — role-bound, the renderer never names a def). */
+  /** A resident's line for the renderer's bubble — THE TRANSIENT TELLING
+   *  (engine/speech.ts, SPEECH_CFG): a FRESH APPROACH (the hero steps
+   *  within RESIDENT_RADIUS + dwellReachable under THE SAME-STORY LAW,
+   *  not having been there at the last live read) begins the telling; the
+   *  line then stands its whole window wherever the hero walks (the
+   *  renderer's same-view gate still decides whether the drawn bubble
+   *  shows), disperses, and the tongue is held for the lane's cooldown on
+   *  the WORLD clock — stepping out and back in inside it earns nothing,
+   *  standing there earns nothing. This read IS the poll (the renderer's
+   *  per-frame call, a probe's per-step call): it advances the speaker's
+   *  memory and answers; null outside the window. Role-bound — the
+   *  renderer never names a def. THE LESSON EXEMPTION: the counters'
+   *  prompts (innkeepPrompt — Mireille's flask lesson included —
+   *  questGiverPrompt, caravanPrompt, amalgamPrompt, delverPrompt) are
+   *  FUNCTIONAL, stand until acted on, and never ride this clock. */
   residentPrompt(a: Actor): string | null {
-    const line = this.residentLines.get(a.id);
-    if (!line || a.dead) return null;
-    if (dist(a.pos, this.player.pos) > RESIDENT_RADIUS) return null;
-    if (!this.dwellReachable(this.player.pos, a.pos, DWELL_CFG.reach, { from: this.player.tier ?? 0, to: a.tier ?? 0 })) return null;
-    return line;
+    const row = this.residentLines.get(a.id);
+    if (!row || a.dead) return null;
+    const near = dist(a.pos, this.player.pos) <= RESIDENT_RADIUS
+      && this.dwellReachable(this.player.pos, a.pos, DWELL_CFG.reach, { from: this.player.tier ?? 0, to: a.tier ?? 0 });
+    const step = speechTell(this.speechMemory.get(a.id), near, this.time, speechWindowFor(row.lane, row.line));
+    this.speechMemory.set(a.id, step.mem);
+    return step.telling ? row.line : null;
   }
 
   private stationDwellArmed(key: string, engaged: boolean): boolean {

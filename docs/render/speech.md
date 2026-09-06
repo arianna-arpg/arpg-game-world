@@ -8,7 +8,10 @@ Files: `src/render/vis/speech.ts` (the pure laws), `src/render/renderer.ts`
 (`queueSpeech` / `drawSpeeches` / the WORD LAYER), `VIS_CFG.speech`
 (`src/render/vis/visConfig.ts`), `MonsterDef.speech` (`src/data/monsters.ts`),
 `Settings.speechTyping` (`src/meta/settings.ts`).
-Probe: `balance/probe_speech.ts`.
+The fabric's WORLD half — *when* a folk line stands at all — is
+`src/engine/speech.ts` (`SPEECH_CFG`, THE TRANSIENT TELLING below), consumed
+by `World.residentPrompt`.
+Probe: `balance/probe_speech.ts` (rig J for the telling's clock).
 
 ## The defect this closed
 
@@ -132,6 +135,62 @@ zone swap. Probe rig I pins every clause headlessly: disjoint boxes at 20 px,
 tails aimed, the fixed point on a third frame, the stick, the damping's snap,
 the view wall, a pane, a crowd of six, the order band, `'queue'`, purity.
 
+## THE TRANSIENT TELLING (`engine/speech.ts` — the world's half)
+
+The render laws above say *how* a line is told. **When** a folk line stands
+at all is the world's read, not the renderer's: `World.residentPrompt`
+answers the renderer's per-frame poll through one pure fold, `speechTell`,
+over one config, `SPEECH_CFG`. Before it, a resident's bubble stood as long
+as the hero stood in reach and popped in and out at the radius edge as they
+walked past — a caption, not speech. Now a folk line is an **utterance**:
+
+- **THE FRESH APPROACH.** A telling begins only on the nearness **edge**:
+  the hero is within `RESIDENT_RADIUS` + `dwellReachable` (THE SAME-STORY
+  LAW's story argument included) *now* and was not at the last live read.
+  Standing there earns nothing — the level is not the edge. A memory older
+  than `staleSec` forgets nearness, so a speaker that went unread (off
+  screen, a teleport) meets its next read as a fresh approach, never a mute.
+- **THE WHOLE TELLING.** Once begun, the line stands its whole window
+  wherever the hero walks — the words were said; the speaker finishes the
+  sentence at your back. THE SAME-VIEW GATE above still decides whether the
+  *drawn* bubble shows (leave the room and it is concealed, as ever).
+- **THE WINDOW.** `holdSec` plus THE READING ALLOWANCE, `holdPerChar` per
+  character of the line, so a long line is never cut mid-telling. The
+  typewriter's pace is a render dial this module never reads; the allowance
+  is generous by design, and `Settings.speechTyping` OFF only leaves the
+  whole line standing a little longer. The window is stamped at the
+  telling's start: a dial retuned mid-telling changes the *next* telling.
+- **THE HELD TONGUE.** After the window the speaker is silent for
+  `cooldownSec` on the **world clock** — stepping out and back in inside it
+  earns nothing, and the cooldown runs whether or not the hero is there.
+- **THE LANE IS THE OVERRIDE.** Every resident line arrives by a lane —
+  `'seat'` (a plan's spoken seat: the patron, the lodger), `'folk'` (a
+  rostered guest), `'resident'` (a ward family) — and `SPEECH_CFG.lanes`
+  may override any dial per lane (a spoken seat's directions bear repeating
+  sooner than a guest's small talk). `holdSec: Infinity` on a lane is the
+  old perpetual bubble as data; a zero window mutes the lane.
+- **THE LESSON EXEMPTION.** The counters' prompts — `innkeepPrompt`
+  (Mireille's welcome gift and her flask lesson included), `questGiverPrompt`,
+  `caravanPrompt`, `amalgamPrompt`, `delverPrompt` — are *functional*: they
+  say what a station will do and stand until acted on. They never ride this
+  clock; only the resident lane does.
+- **TRANSIENT BY CONSTRUCTION.** The memory (`SpeechMemory`: when the
+  telling began, the window it holds, whether the hero was near at the last
+  read) is a per-world map keyed by actor id, cleared with the lines at every
+  zone load, never serialized, never on the wire — a co-op client polls its
+  own world through the same read. The renderer's utterance clock is
+  untouched: it keys on the line as ever, replays the typewriter from the
+  first glyph at each telling, and prunes itself the frame the read goes
+  null.
+
+Probe rig J pins the fold clause by clause (the edge, the whole window, the
+held tongue, the level, the stale memory, Infinity, purity, the shipped
+dials) and then the **live inn** through `residentPrompt` itself: the
+patron shows on approach, stands exactly its window, hides while the hero
+stays, stays hidden out-and-back inside the cooldown, tells again after it;
+a rostered guest rides the same clock; Mireille's prompt stands every frame
+of a twenty-second stand.
+
 ## The lever ladder (most specific wins)
 
 1. `Settings.speechTyping` — the player's master switch (Options → Visuals →
@@ -154,6 +213,11 @@ the view wall, a pane, a crowd of six, the order band, `'queue'`, purity.
   labels stay on the plain label lane on purpose.
 - **A new speaking kind** needs no renderer edit: give its def `npcRole`
   (existing behavior) and, if it wants its own voice, a `speech` block.
+- **A new folk line** rides THE TRANSIENT TELLING by construction: set it
+  into `residentLines` with its lane at the spawn (the three sites in
+  `loadZone`), or add a lane to `SpeechLane` + `SPEECH_CFG.lanes` for a new
+  source with its own window. A prompt that must *persist until acted on*
+  (a counter, a lesson) belongs on its own `*Prompt` method, exempt.
 - **Future**: per-line voices (`style` at the call site), off-screen
   speaker arrows, or a log of told lines all hang off the same queue.
 

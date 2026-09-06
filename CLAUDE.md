@@ -1633,6 +1633,18 @@ we verify changes.
   the veils decide WHETHER text shows (`labelRevealAt` at the speaker's
   feet: the same-view gate), never get to drown what they revealed —
   docs in `docs/render/speech.md`; probe `balance/probe_speech.ts`.
+  THE TRANSIENT TELLING (`engine/speech.ts` — the fabric's WORLD half,
+  `SPEECH_CFG`): a folk line is an UTTERANCE, not a caption — it begins on
+  A FRESH APPROACH (the nearness EDGE, never the level), stands its whole
+  window wherever the hero walks (`holdSec` + THE READING ALLOWANCE
+  `holdPerChar`), disperses, then THE HELD TONGUE runs `cooldownSec` on
+  the world clock (out-and-back-in earns nothing); per-LANE overrides
+  (seat / folk / resident — the line's source), `Infinity` the perpetual
+  dial; `speechTell` the ONE pure fold, `World.residentPrompt` its one
+  consumer (the read IS the poll; memory per world, never persisted, never
+  on the wire), the renderer dumb; the counters' prompts incl. Mireille's
+  flask lesson are EXEMPT by lane — docs `docs/render/speech.md` +
+  `docs/design/townsfolk-life.md` §1.4; probe rig J.
   Tunables in `render/vis/visConfig.ts`; docs in `docs/render/README.md`.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer. THE FOLIO (`ui/folio.ts` — docs
