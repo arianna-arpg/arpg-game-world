@@ -78,7 +78,7 @@ import { gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'; // THE GAU
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { drawRuneRing } from './vis/runeRing';
 import { registerVisCache, trimVisCaches } from './vis/caches';
-import { resolveSpeech, revealedChars, wrapSpeech, resolveNameTokens, dodgeSpeechBox, type SpeechStyle, type SpeechRect } from './vis/speech';
+import { resolveSpeech, revealedChars, wrapSpeech, resolveNameTokens, dodgeSpeechBox, layoutSpeechSeats, speechTailBase, type SpeechStyle, type SpeechRect, type SpeechSeatMemory } from './vis/speech';
 import { drawEdgeOverlay, qFrac, qChan } from './vis/overlays';
 import { canvasCap, canvasCapsReport } from './vis/canvasCaps';
 import { GroundRenderer } from './vis/ground';
@@ -3583,7 +3583,16 @@ export class Renderer {
      *  Text is pinned by the entry itself (replaced on change); font +
      *  maxWidth key the style, so a live tuning swap still re-wraps. */
     wrap?: { key: string; lines: string[]; flat: string; wMax: number };
+    /** THE LAYOUT LAW's memory (vis/speech.ts SpeechSeatMemory): last
+     *  frame's eased shift + target seat + dead-banded depth rank — the
+     *  stick and the damping read it. Carried across a re-wording,
+     *  dropped with the clock. Render-only, per client. */
+    seat?: SpeechSeatMemory;
   }>();
+  /** Wall-clock stamp of the last speech layout pass (ms) — the damping's
+   *  own dt: presentation smoothing rides real time, so a bubble still
+   *  settles while a menu hold freezes the sim clock the telling rides. */
+  private speechLayoutAtMs = 0;
 
   /** Queue one SPOKEN line above an actor's head — a wrapped bubble in the
    *  speaker's ink with the typewriter reveal. Tuning folds VIS_CFG.speech
@@ -3597,6 +3606,7 @@ export class Renderer {
   private drawSpeeches(world: World): void {
     if (!this.speeches.length) {
       if (this.speechClocks.size) this.speechClocks.clear();
+      this.speechLayoutAtMs = 0;
       return;
     }
     const { ctx } = this;
@@ -3628,13 +3638,25 @@ export class Renderer {
       }
       for (const u of bySeat.values()) panes.push(toWorldRect(u));
     }
-    const dodgeView: SpeechRect | null = panes.length ? (() => {
-      const e = VIS_CFG.speech.dodge.edge;
-      return {
-        x: wv.ox + e, y: wv.oy + e,
-        w: window.innerWidth / wv.z - e * 2, h: window.innerHeight / wv.z - e * 2,
-      };
-    })() : null;
+    // THE VIEW: the screen's world rect inside the edge inset — the dodge's
+    // slide room while panes stand, and THE LAYOUT LAW's view wall always
+    // (a bubble stays on screen).
+    const edge = VIS_CFG.speech.dodge.edge;
+    const view: SpeechRect = {
+      x: wv.ox + edge, y: wv.oy + edge,
+      w: window.innerWidth / wv.z - edge * 2, h: window.innerHeight / wv.z - edge * 2,
+    };
+    // PHASE 1 — MEASURE. Every bubble's tuning, gate, clock, wrap and HOME
+    // box (the wrap law's hang, pane-dodged) resolve before any draws, so
+    // the layout sees the frame's whole company at once.
+    type Row = {
+      s: { a: Actor; text: string; color: string };
+      t: ReturnType<typeof resolveSpeech>;
+      ck: { seat?: SpeechSeatMemory }; reveal: number;
+      lines: string[]; flat: string; shown: number; typing: boolean;
+      boxW: number; boxH: number; tipX: number; tipY: number; bx: number; by: number;
+    };
+    const rows: Row[] = [];
     ctx.save();
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -3649,7 +3671,10 @@ export class Renderer {
       const reveal = this.labelRevealAt(world, s.a.pos);
       let ck = this.speechClocks.get(s.a);
       if (!ck || ck.text !== s.text) {
-        ck = { text: s.text, startedAt: null };
+        // A re-wording keeps the speaker's SEAT (the layout's memory): the
+        // bubble changes its words in place instead of dropping home and
+        // re-stacking through its neighbours.
+        ck = { text: s.text, startedAt: null, seat: ck?.seat };
         this.speechClocks.set(s.a, ck);
       }
       if (reveal <= 0.02) { ck.startedAt = null; continue; }
@@ -3684,11 +3709,48 @@ export class Renderer {
       // THE PLACEMENT LAW: with panes open, the bubble (tail band included)
       // slides to clean ground; with none, bx/by === left/top by construction.
       let bx = left, by = top;
-      if (dodgeView) {
+      if (panes.length) {
         const p = dodgeSpeechBox({ x: left, y: top, w: boxW, h: boxH + t.tailH },
-          panes, dodgeView, VIS_CFG.speech.dodge.margin);
+          panes, view, VIS_CFG.speech.dodge.margin);
         bx = p.x; by = p.y;
       }
+      rows.push({ s, t, ck, reveal, lines, flat, shown, typing, boxW, boxH, tipX, tipY, bx, by });
+    }
+    // PHASE 2 — THE LAYOUT LAW (vis/speech.ts layoutSpeechSeats): bubbles
+    // that would cover one another stack above the front speaker's or
+    // nudge aside, inside the view, each remembering its seat (the stick)
+    // and easing toward a new one (the damping). One pure pass over the
+    // company; the memory lives on the clocks — render-only, per client.
+    if (rows.length > 0) {
+      const L = VIS_CFG.speech.layout;
+      // The damping's dt is the LARGER of the sim step and the wall clock:
+      // presentation smoothing rides real seconds, so a bubble still
+      // settles while a menu hold freezes the sim clock the telling rides —
+      // and a synchronous harness drive (__game.step) still eases per
+      // stepped frame, where the wall clock barely moves.
+      const nowMs = performance.now();
+      const wallDt = this.speechLayoutAtMs > 0 ? clamp((nowMs - this.speechLayoutAtMs) / 1000, 0, 0.1) : 0;
+      const dt = Math.max(this.frameDt, wallDt);
+      this.speechLayoutAtMs = nowMs;
+      const ease = L.damping >= 1 ? 1 : 1 - Math.pow(1 - L.damping, dt * 60);
+      const laid = layoutSpeechSeats(rows.map(r => ({
+        id: r.s.a.id, tipX: r.tipX, tipY: r.tipY,
+        x: r.bx, y: r.by, w: r.boxW, h: r.boxH, prev: r.ck.seat,
+      })), view, panes, L, ease);
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i], p = laid[i];
+        r.bx = p.x; r.by = p.y;
+        r.ck.seat = { dx: p.dx, dy: p.dy, tx: p.tx, ty: p.ty, rank: p.rank };
+      }
+      // Upper boxes draw FIRST: a stacked bubble's tail crosses the box
+      // beneath it on the way to its speaker, and the lower box painting
+      // later keeps its own words whole. (Disjoint boxes are order-blind.)
+      rows.sort((a, b) => a.by - b.by);
+    }
+    // PHASE 3 — DRAW.
+    for (const r of rows) {
+      const { s, t, reveal, lines, flat, shown, typing, boxW, boxH, tipX, tipY, bx, by } = r;
+      ctx.font = t.font;
       // ATTRIBUTION: while the speaker's tip stays below the (possibly slid)
       // box, the tail wedge stretches to it — who talks stays readable. Slid
       // past the speaker's row the wedge degenerates and a thin accent
@@ -3750,7 +3812,7 @@ export class Renderer {
     const bot = y + h;
     const r2 = Math.min(r, w / 2, h / 2);
     // Tail base, clamped off the rounded corners (future styles may aim it).
-    const tl = Math.max(x + r2, Math.min(tipX - tailW / 2, x + w - r2 - tailW));
+    const tl = speechTailBase(x, w, h, r, tipX, tailW);
     ctx.beginPath();
     ctx.moveTo(x + r2, y);
     ctx.lineTo(x + w - r2, y);

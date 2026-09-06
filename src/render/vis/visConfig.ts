@@ -293,8 +293,45 @@ export const VIS_CFG = {
     dodge: {
       /** Clearance kept between a slid bubble and any pane edge. */
       margin: 10,
-      /** The screen-edge inset a slid bubble must stay inside. */
+      /** The screen-edge inset a slid bubble must stay inside — THE VIEW
+       *  WALL the layout law below reads too (one inset, one screen). */
       edge: 8,
+    },
+    /** THE LAYOUT LAW (vis/speech.ts layoutSpeechSeats): bubbles never
+     *  cover ONE ANOTHER. Each frame the queued bubbles are laid out
+     *  BEFORE any draws — the front speaker's holds its home, the rest
+     *  stack ABOVE it (each tail still stretching to its own speaker) or
+     *  nudge aside, always inside the view (dodge.edge is the inset); a
+     *  bubble remembers its seat frame to frame (the stick) and eases
+     *  toward a new one (the damping), so strolling speakers never jitter
+     *  the company. A lone bubble in view is untouched by construction.
+     *  World px like every other speech dial; the memory lives on the
+     *  renderer's utterance clocks — render-only, per client. */
+    layout: {
+      /** Clearance kept between neighbouring bubbles. */
+      gap: 6,
+      /** How much dearer a sideways nudge is than a lift (>1 prefers the
+       *  stack; a box already nearly clear still slides the short way). */
+      lateralWeight: 2.5,
+      /** The farthest a bubble may be lifted / nudged from its home; past
+       *  it the least-covering seat inside the reach stands instead. */
+      reach: { up: 240, side: 220 },
+      /** Hysteresis: last frame's seat, still clean, holds unless a fresh
+       *  seat is nearer home by more than this. */
+      stick: 24,
+      /** The dead band on the speaker-depth ordering key: two speakers
+       *  within it keep last frame's stacking order (no flip-flop as one
+       *  strolls past the other). */
+      orderBand: 12,
+      /** Damping: the fraction of the remaining travel closed per 60 Hz
+       *  frame (1 = snap); a fresh bubble always seats at once. */
+      damping: 0.22,
+      /** Snap-to-seat threshold — ends the asymptote. */
+      settle: 0.5,
+      /** Stacking order: 'front' = the speaker nearest the screen's foot
+       *  holds home and those behind stack above (depth-honest);
+       *  'queue' = the first queued holds home. */
+      order: 'front' as 'front' | 'queue',
     },
   },
 

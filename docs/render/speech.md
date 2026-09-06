@@ -71,6 +71,67 @@ sentence stops (`. ! ? … :`) and a shorter one after clause breaks
 is **sim time** (`world.time`), so menu holds and time-stop freeze the
 telling with the world. A caret blinks on the arriving glyph.
 
+## THE PLACEMENT LAW (`dodgeSpeechBox`) + THE LAYOUT LAW (`layoutSpeechSeats`)
+
+Two pure placement rungs run over the **home** box the wrap law hangs
+(centred over the speaker, `lift` + `tailH` above the scalp), every frame,
+before any bubble draws. Both are render-only and per client: nothing they
+decide touches the world or the wire.
+
+**Panes** (`dodgeSpeechBox`, `VIS_CFG.speech.dodge`): a bubble whose ground an
+open DOM pane covers (inventory, the SKILLS drawer, a counter menu; the
+canvas hotbar joins while panes stand) slides to the nearest clean ground on
+a lattice of pane-edge exits, inside the screen's `edge` inset; with no pane
+open it is untouched by construction. This is the re-seating the inventory
+lesson box does beside the pane, applied to talk.
+
+**Each other** (`layoutSpeechSeats`, `VIS_CFG.speech.layout`): bubbles never
+cover one another. The frame's whole company is laid out at once:
+
+- **The order.** `order: 'front'` seats the deepest speaker first (largest
+  y, nearest the screen's foot), so its bubble holds home and the company
+  behind it stacks **above**: the stack reads as depth. The ordering key is
+  dead-banded (`orderBand`): a speaker keeps last frame's rank until its true
+  depth drifts past the band, so two strollers passing never flip who is on
+  top. `'queue'` seats in queue order instead.
+- **The lattice.** A later bubble tries its home, last frame's seat, and
+  every seat the placed boxes and panes offer: `gap` above any box, `gap`
+  beside any box, per axis, crossed (the pocket above one bubble and beside
+  another is a real seat), each clamped inside the view (**the view wall**:
+  a bubble stays on screen, `dodge.edge` the inset) and refused past `reach`.
+- **Nearest wins, the lift preferred.** Among clean candidates the least
+  displaced wins, with sideways travel priced at `lateralWeight`: a bubble
+  that must move stacks up; one already nearly clear slides the short way.
+  Home costs nothing: a lone bubble in view is untouched byte-identical.
+- **The stick.** Last frame's seat, if still clean, holds unless the fresh
+  best is nearer home by more than `stick` px: a stroll's pixel drift never
+  re-seats a settled bubble.
+- **The damping.** A remembered bubble eases toward a changed seat by
+  `damping` of the remaining travel per 60 Hz frame (on the larger of the
+  sim step and the wall clock, so it still settles under a menu hold and
+  still eases under a synchronous frame drive; `1` = snap) and snaps
+  inside `settle`; a fresh
+  bubble seats at once. Ground is reserved at the target, so later bubbles
+  avoid where earlier ones are heading; a brief brush while two ease past
+  each other is the damping's honest price.
+- **No clean seat.** When nothing inside `reach` is clean (a crowd against
+  the view's top) the least-covering candidate stands: a partial brush,
+  never a stack marching off screen.
+
+**The tail** is untouched by both rungs: the wedge always ends at the
+speaker's tip, its base clamped to the box (`speechTailBase`, which the
+renderer traces from and the probe reads, so drawn == tested), and a lifted
+bubble's tail stretches to its speaker across whatever stands between. Upper
+boxes draw **first**, so the box beneath a stacked bubble paints over the
+crossing tail and keeps its own words whole; disjoint boxes are order-blind.
+
+**Memory.** The only state is `SpeechSeatMemory` on the speaker's utterance
+clock (last shift, last target, last rank): carried across a re-wording so a
+bubble changes its words in place, dropped with the clock at silence or a
+zone swap. Probe rig I pins every clause headlessly: disjoint boxes at 20 px,
+tails aimed, the fixed point on a third frame, the stick, the damping's snap,
+the view wall, a pane, a crowd of six, the order band, `'queue'`, purity.
+
 ## The lever ladder (most specific wins)
 
 1. `Settings.speechTyping` — the player's master switch (Options → Visuals →

@@ -30,12 +30,21 @@
 //      pre-renown words until the run stamp and the {name} faces after,
 //      and the unknown-state main.ts feed (the blank name) degrades any
 //      stray token to the honest address.
+//   H. PLACEMENT LAW — dodgeSpeechBox: a bubble under an open pane slides to
+//      the nearest clean ground; unobstructed is untouched byte-identical.
+//   I. LAYOUT LAW — layoutSpeechSeats: bubbles never cover one another —
+//      two speakers 20 px apart resolve disjoint, tails still aimed, the
+//      front speaker home + the back one stacked ABOVE, a third frame of
+//      the same inputs a fixed point, the stick / damping / view wall /
+//      pane / crowd / order band / 'queue' clauses, and purity.
 //
 //   npx tsx balance/probe_speech.ts
 
 import {
   resolveSpeech, revealedChars, revealBudget, wrapSpeech, resolveNameTokens,
-  dodgeSpeechBox, type SpeechRect, type SpeechTuning,
+  dodgeSpeechBox, layoutSpeechSeats, speechTailBase,
+  type SpeechRect, type SpeechTuning, type SpeechLayoutTuning,
+  type SpeechSeat, type SpeechSeatMemory, type SpeechSeatResult,
 } from '../src/render/vis/speech';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { bumpLedger } from '../src/packages/ledger';
@@ -408,6 +417,161 @@ console.log('H. PLACEMENT LAW');
     && h8.x >= screen.x && h8.y >= screen.y
     && h8.x + bub.w <= screen.x + screen.w && h8.y + bub.h <= screen.y + screen.h,
     `→ (${Math.round(h8.x)},${Math.round(h8.y)})`);
+}
+
+// --- I. THE LAYOUT LAW (layoutSpeechSeats) ----------------------------------
+// Bubbles never cover ONE ANOTHER: two speakers 20 px apart resolve to
+// disjoint boxes (the gap held), every tail still leaves its box aimed at
+// its own speaker, the front speaker holds home while the one behind stacks
+// ABOVE, a lone in-view bubble is untouched byte-identical, the third frame
+// of unchanged inputs is a fixed point (stability), the stick swallows a
+// neighbour's drift, the damping eases a re-seat and snaps at the settle,
+// the view wall keeps a box on screen, a pane (fixed) is avoided, a crowd
+// of six resolves pairwise disjoint within reach, the order band keeps two
+// passing strollers from flip-flopping, 'queue' seats the first queued, the
+// tail base clamps inside the box, and the fold mutates nothing.
+console.log('I. THE LAYOUT LAW (layoutSpeechSeats — bubbles never cover one another)');
+{
+  const C = VIS_CFG.speech;
+  const L: SpeechLayoutTuning = { ...C.layout, reach: { ...C.layout.reach } };
+  const view: SpeechRect = { x: 0, y: 0, w: 1200, h: 700 };
+  const R = 14; // a townsfolk radius
+  // A seat the renderer's way: the box hangs centred over the tip, tailH
+  // above it, the tip `lift` above the scalp.
+  const seat = (id: number, sx: number, sy: number, prev?: SpeechSeatMemory,
+    w = 160, h = 48): SpeechSeat => {
+    const tipX = sx, tipY = sy - R - C.lift;
+    return { id, tipX, tipY, x: tipX - w / 2, y: tipY - C.tailH - h, w, h, prev };
+  };
+  const box = (r: SpeechSeatResult, s: SpeechSeat): SpeechRect => ({ x: r.x, y: r.y, w: s.w, h: s.h });
+  const apart = (a: SpeechRect, b: SpeechRect, gap: number): boolean =>
+    a.x + a.w + gap <= b.x || b.x + b.w + gap <= a.x
+    || a.y + a.h + gap <= b.y || b.y + b.h + gap <= a.y;
+  const allApart = (seats: SpeechSeat[], res: SpeechSeatResult[]): boolean => {
+    for (let i = 0; i < seats.length; i++) for (let j = i + 1; j < seats.length; j++) {
+      if (!apart(box(res[i], seats[i]), box(res[j], seats[j]), L.gap)) return false;
+    }
+    return true;
+  };
+  const tailAims = (r: SpeechSeatResult, s: SpeechSeat): boolean => {
+    const base = speechTailBase(r.x, s.w, s.h, C.cornerR, s.tipX, C.tailW);
+    return s.tipY > r.y + s.h + 1 && base >= r.x && base + C.tailW <= r.x + s.w;
+  };
+  const remember = (seats: SpeechSeat[], res: SpeechSeatResult[]): SpeechSeat[] =>
+    seats.map((s, i) => ({ ...s, prev: res[i] }));
+  const same = (a: SpeechSeatResult[], b: SpeechSeatResult[]): boolean =>
+    a.every((r, i) => r.x === b[i].x && r.y === b[i].y && r.dx === b[i].dx
+      && r.dy === b[i].dy && r.tx === b[i].tx && r.ty === b[i].ty);
+  const k = L.damping; // one 60 Hz frame's ease
+
+  const lone = [seat(1, 600, 400)];
+  const l1 = layoutSpeechSeats(lone, view, [], L, 1);
+  check('I1 a lone in-view bubble is untouched byte-identical',
+    l1[0].x === lone[0].x && l1[0].y === lone[0].y && l1[0].dx === 0 && l1[0].dy === 0);
+
+  // The pair, 20 px apart; #2 stands 4 px behind #1.
+  const pair = [seat(1, 600, 400), seat(2, 620, 396)];
+  const f1 = layoutSpeechSeats(pair, view, [], L, 1);
+  check('I2 two speakers 20 px apart resolve to DISJOINT boxes (the gap held)',
+    allApart(pair, f1), JSON.stringify(f1.map(r => [r.x, r.y])));
+  check('I3 both tails still leave their boxes aimed at their own speakers',
+    tailAims(f1[0], pair[0]) && tailAims(f1[1], pair[1]));
+  check('I4 the front speaker holds home; the one behind stacks ABOVE, no sideways travel',
+    f1[0].dx === 0 && f1[0].dy === 0 && f1[1].dy < 0 && f1[1].dx === 0,
+    `front (${f1[0].dx},${f1[0].dy}) back (${f1[1].dx},${f1[1].dy})`);
+  check('I5 the lifted box clears the front box by exactly the gap',
+    Math.abs((f1[0].y - (f1[1].y + pair[1].h)) - L.gap) < 1e-9);
+
+  const f2 = layoutSpeechSeats(remember(pair, f1), view, [], L, k);
+  const f3 = layoutSpeechSeats(remember(pair, f2), view, [], L, k);
+  check('I6 a third frame of the same inputs yields the same placement (a fixed point)',
+    same(f1, f2) && same(f2, f3));
+
+  // THE STICK: the front speaker steps down 5 px — the back bubble's old
+  // seat is still clean, so it holds; stick 0 would re-seat it.
+  const stepped = [seat(1, 600, 405, f2[0]), { ...pair[1], prev: f2[1] }];
+  const f4 = layoutSpeechSeats(stepped, view, [], L, k);
+  const f4loose = layoutSpeechSeats(stepped, view, [], { ...L, stick: 0 }, k);
+  check('I7 the stick holds a settled seat through a neighbour\'s 5 px step (stick 0 re-seats)',
+    f4[1].ty === f2[1].ty && f4loose[1].ty !== f2[1].ty && allApart(stepped, f4),
+    `stick ${f4[1].ty} vs loose ${f4loose[1].ty}`);
+
+  // THE DAMPING: the neighbour leaves — the lifted bubble eases home, then snaps.
+  const parted = [seat(1, 300, 400, f2[0]), { ...pair[1], prev: f2[1] }];
+  const g1 = layoutSpeechSeats(parted, view, [], L, k);
+  check('I8a with the neighbour gone the target is home and the shift eases part way',
+    g1[1].ty === 0 && g1[1].dy < 0 && g1[1].dy > f2[1].dy, `dy ${g1[1].dy} from ${f2[1].dy}`);
+  let cur = g1, frames = 1;
+  while (cur[1].dy !== 0 && frames < 120) {
+    cur = layoutSpeechSeats(remember(parted, cur), view, [], L, k); frames++;
+  }
+  check('I8b the ease converges and SNAPS exactly home inside the settle',
+    cur[1].dy === 0 && frames < 60, `${frames} frames`);
+  const snap = layoutSpeechSeats(parted, view, [], { ...L, damping: 1 }, 1);
+  check('I8c damping 1 is the snap', snap[1].dy === 0 && snap[1].dx === 0);
+
+  // THE VIEW WALL: a speaker at the screen's top.
+  const high = [seat(1, 600, 60)];
+  const v1 = layoutSpeechSeats(high, view, [], L, 1);
+  check('I9 a bubble that would hang above the screen is walled inside the view',
+    high[0].y < view.y && v1[0].y === view.y && v1[0].x === high[0].x);
+
+  // A FIXED obstacle (an open pane) is avoided like a neighbour.
+  const pane: SpeechRect = { x: 500, y: 250, w: 200, h: 120 };
+  const p1 = layoutSpeechSeats(lone, view, [pane], L, 1);
+  check('I10 a pane over the home is dodged (clear by the gap, lifted, within reach)',
+    apart(box(p1[0], lone[0]), pane, L.gap) && p1[0].dy < 0
+    && Math.abs(p1[0].dy) <= L.reach.up && Math.abs(p1[0].dx) <= L.reach.side,
+    `→ (${p1[0].dx},${p1[0].dy})`);
+
+  // THE CROWD: six speakers 30 px apart on one row.
+  const crowd = [1, 2, 3, 4, 5, 6].map(i => seat(i, 300 + 30 * i, 400));
+  const c1 = layoutSpeechSeats(crowd, view, [], L, 1);
+  check('I11a six speakers 30 px apart resolve pairwise disjoint', allApart(crowd, c1),
+    JSON.stringify(c1.map(r => [r.dx, r.dy])));
+  check('I11b every seat stays within reach of its speaker and inside the view',
+    c1.every((r, i) => Math.abs(r.dx) <= L.reach.side && Math.abs(r.dy) <= L.reach.up
+      && r.x >= view.x && r.y >= view.y
+      && r.x + crowd[i].w <= view.x + view.w && r.y + crowd[i].h <= view.y + view.h));
+  check('I11c every tail still aims at its own speaker', c1.every((r, i) => tailAims(r, crowd[i])));
+  check('I11d the crowd is a fixed point too',
+    same(c1, layoutSpeechSeats(remember(crowd, c1), view, [], L, k)));
+
+  // THE ORDER BAND: the back stroller steps 6 px forward (inside the band)
+  // — the stack holds; 24 px past — the deeper speaker takes home.
+  const drift = [{ ...pair[0], prev: f2[0] }, seat(2, 620, 402, f2[1])];
+  const d1 = layoutSpeechSeats(drift, view, [], L, k);
+  check('I12a inside the order band the stacking order holds (no flip-flop as strollers pass)',
+    d1[0].ty === 0 && d1[1].ty < 0, `${d1[0].ty} / ${d1[1].ty}`);
+  const crossed = [{ ...pair[0], prev: d1[0] }, seat(2, 620, 420, d1[1])];
+  const d2 = layoutSpeechSeats(crossed, view, [], L, k);
+  check('I12b past the band the deeper speaker takes home and the other lifts',
+    d2[1].ty === 0 && d2[0].ty < 0, `${d2[0].ty} / ${d2[1].ty}`);
+
+  // 'queue': the first queued holds home even standing behind.
+  const queued = [seat(1, 600, 396), seat(2, 620, 400)];
+  const q1 = layoutSpeechSeats(queued, view, [], { ...L, order: 'queue' }, 1);
+  const q2 = layoutSpeechSeats(queued, view, [], L, 1);
+  check('I13 order \'queue\' seats the first queued at home; \'front\' the deeper speaker',
+    q1[0].dy === 0 && q1[1].dy < 0 && q2[1].dy === 0 && q2[0].dy < 0);
+
+  const before = JSON.stringify([pair, view, L]);
+  const r1 = layoutSpeechSeats(pair, view, [], L, 1);
+  const r2 = layoutSpeechSeats(pair, view, [], L, 1);
+  check('I14 the fold is deterministic and mutates nothing it is handed',
+    JSON.stringify(r1) === JSON.stringify(r2) && JSON.stringify([pair, view, L]) === before);
+
+  const tb = speechTailBase(100, 160, 48, C.cornerR, 180, C.tailW);
+  check('I15a the tail base centres on the tip when the box allows', tb === 180 - C.tailW / 2);
+  const tbEdge = speechTailBase(100, 160, 48, C.cornerR, 500, C.tailW);
+  check('I15b past the box the base clamps off the rounded corner, inside the box',
+    tbEdge === 100 + 160 - C.cornerR - C.tailW);
+
+  check('I16 shipped layout dials are sane',
+    C.layout.gap >= 0 && C.layout.lateralWeight > 0 && C.layout.reach.up > 0
+    && C.layout.reach.side > 0 && C.layout.stick >= 0 && C.layout.orderBand >= 0
+    && C.layout.damping > 0 && C.layout.damping <= 1 && C.layout.settle >= 0
+    && (C.layout.order === 'front' || C.layout.order === 'queue'));
 }
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} passed, ${fail} failed`);
