@@ -77,6 +77,7 @@ import {
   landingTier, linkFlipTier, linkSpanOf, makeTierView, MAX_TIER,
   resolveTierCrossing, storyReachable, storyTable, tierElevOf, tierFloorAt,
   tierFloorOf, tierLinkOf, UNDER_TIER_LANES,
+  floorStoryOf, tierEnclosure, // (RIG S — THE ENCLOSURE LAW)
 } from '../src/engine/tiers';
 import { insideBounds } from '../src/world/shape';
 import { TILESETS } from '../src/data/tilesets';
@@ -2065,6 +2066,105 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
     + (flat.landmarkSpawns ?? []).filter(r => r.tier !== undefined).length;
   check('R4 the control: a dial-less lea mints ZERO tier fields (no stamp leaks to flat ground)',
     flatStamps === 0, `stamps=${flatStamps}`);
+}
+
+// --- RIG S: THE ENCLOSURE LAW (a body never leaves an ENCLOSED story) --------------
+// (engine/tiers.ts tierEnclosure + world.ts's push lane; docs/engine/tiers.md.)
+// The rim fall is OPEN country's toy — knock them off the butte. An ENCLOSED
+// stack (an under-layer's ceiling, a building's storey) has no rim to fall
+// off: the push lane's clamp holds the body at its story's edge exactly as it
+// holds feet, tier kept. Pinned live on the real mints:
+//   S0 the resolver (derived words, the explicit word winning both ways, the
+//      recipes' own stamps) + the floor read behind THE SPOILS STORY;
+//   S1 THE ROOTWAYS (the reported bug): a body in a root duct shoved at the
+//      duct's side toward surface-only ground stays in the duct at tier 1 —
+//      before the law the rim fall read the surface as a floor "beneath" and
+//      landed the runner on the street over its own tunnel;
+//   S2 THE BUTTE (the open case, unchanged): the same shove off a rim FALLS.
+{
+  check('S0a the enclosure word derives: under ⇒ enclosed, interior ⇒ enclosed, open country ⇒ open, no stack ⇒ open',
+    tierEnclosure({ kind: 'under', exposure: 'covered' }) === 'enclosed'
+    && tierEnclosure({ kind: 'over', exposure: 'open', interior: true }) === 'enclosed'
+    && tierEnclosure({ kind: 'over', exposure: 'open' }) === 'open'
+    && tierEnclosure(undefined) === 'open');
+  check('S0b the explicit word wins both ways',
+    tierEnclosure({ kind: 'over', exposure: 'open', enclosure: 'enclosed' }) === 'enclosed'
+    && tierEnclosure({ kind: 'under', exposure: 'covered', enclosure: 'open' }) === 'open');
+  const needlesDef = gen('qa_needles_s', 'needles', TILESETS.needles.layout, { ...TILESETS.needles.layoutParams }, 515001).def;
+  check('S0c the recipes\' own stamps: the needles stay OPEN (no word, derived); an under lane reads ENCLOSED',
+    !!needlesDef.tiers && needlesDef.tiers.enclosure === undefined && tierEnclosure(needlesDef.tiers) === 'open'
+    && tierEnclosure({ kind: 'under', exposure: 'covered', lane: 'roots' }) === 'enclosed');
+  check('S0d floorStoryOf — the lowest story a body could stand on the cell: ground/both-floor cells the ground\'s, a story-only cell its story\'s, a link its span\'s low end, a wall nobody\'s',
+    floorStoryOf('ground') === 0 && floorStoryOf('butte_span') === 0 && floorStoryOf('sewer_duct') === 0
+    && floorStoryOf('butte_top') === 1 && floorStoryOf('peak_terrace_2') === 2 && floorStoryOf('tier_ramp') === 0
+    && floorStoryOf('rampart') === 0 && floorStoryOf(undefined) === 0);
+
+  const w = makeSimWorld('warrior', 0x5ea11);
+  const p = w.player;
+  const settle = (n: number): void => { for (let i = 0; i < n; i++) w.update(1 / 30); };
+  type EdgeSeat = { x: number; y: number; dir: number };
+  /** A cell of `kind` with two cells of `beyond`-qualifying ground past one
+   *  of its four sides — the overshoot a shove reads. */
+  const findEdge = (kind: string, beyond: (k: string) => boolean): EdgeSeat | null => {
+    const pf = w.pathField(0);
+    if (!(pf instanceof GridWalkField)) return null;
+    const cs = pf.cell, cols = pf.cols, rows = pf.rows;
+    const at = (gx: number, gy: number): string => pf.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
+    for (let gy = 2; gy < rows - 2; gy++) {
+      for (let gx = 2; gx < cols - 2; gx++) {
+        if (at(gx, gy) !== kind) continue;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          if (!beyond(at(gx + dx, gy + dy)) || !beyond(at(gx + 2 * dx, gy + 2 * dy))) continue;
+          return { x: gx * cs + cs / 2, y: gy * cs + cs / 2, dir: Math.atan2(dy, dx) };
+        }
+      }
+    }
+    return null;
+  };
+  const surfaceOnly = (k: string): boolean => tierFloorAt(k, 0) && !tierFloorOf(k) && !tierLinkOf(k);
+  const shove = (seat: EdgeSeat): void => {
+    for (const a of w.actors) if (a !== p) a.dead = true;
+    settle(1);
+    p.pos = vec(seat.x, seat.y); p.tier = 1; p.onTierLink = false; p.push = null;
+    w.pushActor(p, seat.dir, 320);
+  };
+
+  let duct: EdgeSeat | null = null;
+  for (const [i, seed] of [505101, 505102, 505103, 505104, 505105, 505106].entries()) {
+    const zid = w.devMintTileset('stalkwood', 3 + i, 8, { seed });
+    if (!zid || w.zone.tiers?.lane !== 'roots') continue;
+    duct = findEdge('root_duct', surfaceOnly);
+    if (duct) break;
+  }
+  check('S1a the rig finds a rooted garden and a duct cell whose side opens onto surface-only ground', !!duct);
+  if (duct) {
+    check('S1b the rooted garden declares an ENCLOSED under-stack (the ceiling, derived — no word on the def)',
+      w.zone.tiers?.kind === 'under' && w.zone.tiers.enclosure === undefined && tierEnclosure(w.zone.tiers) === 'enclosed');
+    shove(duct);
+    settle(40);
+    const k = w.walk!.regionAt!(p.pos.x, p.pos.y);
+    check('S1c shoved at the duct\'s side, the runner STAYS in the roots: tier 1 kept, on the roots\' own floor, unstaggered — never surfaced through the ceiling',
+      p.tier === 1 && tierFloorAt(k, 1) && !p.push && !p.isStunned(), `tier ${p.tier} on ${k}`);
+  }
+
+  let rim: EdgeSeat | null = null;
+  for (const [i, seed] of [505201, 505202, 505203].entries()) {
+    const zid = w.devMintTileset('needles', 6 + i, 8, { seed, layoutType: 'needles' });
+    if (!zid) continue;
+    rim = findEdge('butte_top', surfaceOnly);
+    if (rim) break;
+  }
+  check('S2a the rig finds a butte rim over open valley floor', !!rim);
+  if (rim) {
+    check('S2b the needles declare OPEN country (the rim is a drop)', tierEnclosure(w.zone.tiers) === 'open' && w.zone.tiers?.exposure === 'open');
+    shove(rim);
+    settle(2);
+    const fell = p.tier === 0, staggered = p.isStunned();
+    settle(38);
+    const k = w.walk!.regionAt!(p.pos.x, p.pos.y);
+    check('S2c the same shove off the butte\'s rim FALLS (the open case, unchanged): tier 0, staggered, standing on the valley floor',
+      fell && staggered && p.tier === 0 && surfaceOnly(k), `tier ${p.tier} on ${k}`);
+  }
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);

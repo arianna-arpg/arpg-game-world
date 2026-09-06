@@ -875,7 +875,20 @@ we verify changes.
   owned stations at every town load at the fixed rung; THE SAME-STORY LAW
   on `dwellReachable` — no dwell crosses a story, the inn's door never
   swings from upstairs — docs/design/town-growth.md §1.9–1.10,
-  docs/engine/los-pathing.md), THE
+  docs/engine/los-pathing.md; THE INTERACTION SWEEP (2026-09-06): every
+  proximity act compares stories — dwells through `World.storyPair`,
+  pickups/orbs/corpses through THE SPOILS STORY (`GemDrop.tier`: the kill
+  path + the wounded purse set `World.spoilStory`, the context every
+  drop/orb helper clamps on and stamps, else settled from the floor's word
+  `floorStoryOf`; `pickupSeat` the one chokepoint), harvest arms, revives,
+  the throng's claim, the latch, the grab hand-off and the minion recall;
+  and THE ENCLOSURE LAW (`ZoneTiers.enclosure` → `tierEnclosure`,
+  engine/tiers.ts): 'under' layers and `interior` storeys derive ENCLOSED
+  — the rim fall never fires and a shove, leap, blink or recall clamps at
+  the story's edge through the mover's own view (the carry clamps pass
+  `{ mover }`, `teleportActor` takes a `story`) — buttes stay 'open';
+  probes probe_storey H, probe_tiers RIG S, probe_towngrowth H's door —
+  docs/engine/tiers.md), THE
   INN'S FLOORS on THE STOREY FABRIC (`engine/levelgen.ts` storey
   composite + `world/regions.ts` storey rows — `StructureDef.storeys`: a
   second char grid folded cell for cell over the ground plan into ONE

@@ -47,6 +47,8 @@ import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { PAINTERS } from '../src/render/vis/painters';
 import '../src/render/vis/paintersInn';
 import { doodadRuleOf } from '../src/engine/levelgen';
+import { tierFloorAt } from '../src/engine/tiers'; // (rig H — the door under the storey)
+import { transitReach } from '../src/data/transit';
 import { sidezoneOf } from '../src/data/sidezones';
 import { updateAI } from '../src/engine/ai';
 import { DAY_LENGTH } from '../src/world/daynight';
@@ -546,6 +548,50 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
     check('H: … and it stands again', w.nearBountyBoard());
     hero.tier = 1;
     check('H: THE SAME-STORY LAW — a hero on the storey over the board is not at the board', !w.nearBountyBoard() && w.bountyBoardHint() === null);
+    // … and the inn's DOOR (its own town, so the live dwell disturbs nothing
+    // here): the sweep's own gate is dwellReachable's story pair — a hero on
+    // the storey never swings the ground door beneath it; the ground hero does.
+    {
+      const wd = mkTownWorld(fullAccount(), 0x70d0);
+      const hd = wd.player;
+      const innSt = wd.structures.find(s => s.defId === 'inn')!;
+      const ics = innSt.cellSize;
+      const door = wd.doodads.find(d => d.door && d.pos.x > innSt.rect.x && d.pos.x < innSt.rect.x + innSt.rect.w
+        && Math.abs(d.pos.y - (innSt.rect.y + innSt.rect.h)) < ics);
+      const premise = !!door && !door.door!.open && (door.door!.mode === 'dwell' || door.door!.mode === 'both');
+      check('H: the door premise — the inn\'s ground door stands closed in dwell mode', premise, `mode=${door?.door?.mode} open=${String(door?.door?.open)}`);
+      if (door && premise) {
+        // The stand: one cell inside the door on the common room's floor —
+        // within the push's reach by construction.
+        const front = { x: door.pos.x, y: door.pos.y - ics };
+        check('H: THE SAME-STORY LAW at the door sweep\'s own gate — a story-1 hero over the door is refused, the ground hero admitted',
+          !wd.dwellReachable(front, door.pos, transitReach('door'), wd.storyPair({ tier: 1 }, door))
+          && wd.dwellReachable(front, door.pos, transitReach('door'), wd.storyPair({ tier: 0 }, door)));
+        const dwellAt = (tier: number, at: { x: number; y: number }): void => {
+          hd.pos.x = at.x; hd.pos.y = at.y; hd.tier = tier; hd.onTierLink = false; hd.push = null;
+          for (let i = 0; i < 30; i++) wd.update(1 / 30); // 1s: the idle grace + the door's 0.45s dwell
+        };
+        // The nearest clear story-1 stand to the door.
+        let stand: { x: number; y: number; d: number } | null = null;
+        for (let cy = 0; cy < STRUCTURES.inn.plan!.length; cy++) {
+          for (let cx = 0; cx < STRUCTURES.inn.plan![0].length; cx++) {
+            for (const [ox, oy] of [[0.5, 0.5], [0.25, 0.75], [0.75, 0.75], [0.5, 0.8]] as const) {
+              const x = innSt.rect.x + (cx + ox) * ics, y = innSt.rect.y + (cy + oy) * ics;
+              if (!tierFloorAt(wd.walk!.regionAt!(x, y), 1)) continue;
+              if (d2(wd.findFreeSpot({ x, y }, hd.radius, 1), { x, y }) > 1) continue;
+              const d = d2({ x, y }, door.pos);
+              if (!stand || d < stand.d) stand = { x, y, d };
+            }
+          }
+        }
+        if (stand) {
+          dwellAt(1, stand);
+          check('H: … live: a hero on the storey lingering as near the door as the story allows never swings it', !door.door!.open, `open=${String(door.door!.open)} at ${stand.d.toFixed(0)}px`);
+        }
+        dwellAt(0, front);
+        check('H: … live: the same dwell on the ground floor swings it (the sweep is alive, never vacuous)', door.door!.open === true, `open=${String(door.door!.open)}`);
+      }
+    }
     hero.tier = keep.tier;
     hero.pos.x = keep.x; hero.pos.y = keep.y;
   }

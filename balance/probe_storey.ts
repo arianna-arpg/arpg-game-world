@@ -22,6 +22,10 @@
 //   F. THE MAP — an interior stack is silent on the world map's tell + tint.
 //   G. THE DRAW (source pins) — the storey layer draws in the tier-veil slot,
 //      the culls read the stack, the room veil confines by story.
+//   H. THE ENCLOSURE LAW — a storey is ENCLOSED by derivation: a shove into a
+//      hanging wall or the outer wall holds AT the wall (tier kept, inside
+//      the footprint), and THE SPOILS STORY keeps a drop upstairs out of the
+//      hands beneath it (and the reverse).
 // Run: npx tsx balance/probe_storey.ts   (exit 0 = all PASS)
 // ---------------------------------------------------------------------------
 
@@ -31,7 +35,9 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { START_ZONE } from '../src/data/zones';
 import { STRUCTURES, legendCell } from '../src/data/structures';
 import { regionKind } from '../src/world/regions';
-import { linkSpanOf, tierElevOf, tierFloorAt, tierLinkOf } from '../src/engine/tiers';
+import { floorStoryOf, linkSpanOf, tierElevOf, tierEnclosure, tierFloorAt, tierLinkOf } from '../src/engine/tiers';
+import { VESTIGES } from '../src/data/vestiges';
+import type { GemDrop } from '../src/engine/world';
 import { doodadRuleOf } from '../src/engine/levelgen';
 import { tierMapTell, tierMapTint } from '../src/ui/panels';
 import { vec } from '../src/core/math';
@@ -218,6 +224,70 @@ const kindAt = (cx: number, cy: number): string => wf.regionAt!(inn.rect.x + cx 
     (renderer.match(/this\.inStack\(/g) ?? []).length >= 2 && renderer.includes('tierLinkOf(world.walk.regionAt(d.pos.x, d.pos.y))'));
   check('G4 the room veil confines by the hero\'s story (the storey\'s own ledger + archways)',
     veil.includes('st0?.storeys?.find(s => s.tier === tier)') && veil.includes('rooms: storey.rooms, doors: storey.doors'));
+}
+
+// ------------------------------------------------------ H. THE ENCLOSURE LAW
+// (engine/tiers.ts tierEnclosure + the world's push lane; docs/engine/tiers.md):
+// a building's storey is ENCLOSED by derivation — a shove never carries a
+// body off it. The rim fall that drops a butte-stander into the valley is a
+// wall here: the knockback clamps at the hanging wall / the outer wall
+// exactly as feet do, tier 1 kept, the body inside the footprint on the
+// story's own floor. And THE SAME-STORY LAW on spoils: a drop lying upstairs
+// is nobody's pickup downstairs, and the reverse.
+{
+  const p = w.player;
+  const settle = (n: number): void => { for (let i = 0; i < n; i++) w.update(1 / 30); };
+  check('H1 the interior stack resolves ENCLOSED by derivation (no word on the def); open country stays open; the explicit word wins both ways',
+    tierEnclosure(w.zone.tiers) === 'enclosed' && w.zone.tiers?.enclosure === undefined
+    && tierEnclosure({ kind: 'over', exposure: 'open' }) === 'open'
+    && tierEnclosure({ kind: 'under', exposure: 'covered' }) === 'enclosed'
+    && tierEnclosure({ kind: 'over', exposure: 'open', enclosure: 'enclosed' }) === 'enclosed'
+    && tierEnclosure({ kind: 'under', exposure: 'covered', enclosure: 'open' }) === 'open');
+  // A quiet inn: the folk stand aside (the shove must meet walls, not bodies).
+  for (const a of w.actors) if (a !== p) a.dead = true;
+  settle(1);
+  const inside = (): boolean => p.pos.x > inn.rect.x && p.pos.x < inn.rect.x + inn.rect.w && p.pos.y > inn.rect.y && p.pos.y < inn.rect.y + inn.rect.h;
+  const onStory = (): boolean => tierFloorAt(wf.regionAt!(p.pos.x, p.pos.y), 1);
+  // H2 — room 2's west partition (the hanging wall at column 4, C6's seat): a
+  // hard shove WEST from (5.5, 5.5). Before the law the rim fall read the
+  // partition's open ground floor as a landing and dropped the hero through it.
+  p.pos.x = inn.rect.x + 5.5 * cs; p.pos.y = inn.rect.y + 5.5 * cs; p.tier = 1; p.onTierLink = false; p.push = null;
+  w.pushActor(p, Math.PI, 320);
+  settle(40);
+  check('H2 a shove into a hanging wall holds AT the wall: tier 1 kept, inside the inn, on the story\'s floor — never through the boards',
+    p.tier === 1 && inside() && onStory() && p.pos.x > inn.rect.x + 5 * cs - 2 && !p.push && !p.isStunned(),
+    `tier ${p.tier} x ${(p.pos.x - inn.rect.x).toFixed(0)} on ${wf.regionAt!(p.pos.x, p.pos.y)}`);
+  // H3 — the outer wall: room 1 (2.5, 5.5), a shove SOUTH at the south wall
+  // (the ground's rampart stands on both floors) — held above it.
+  p.pos.x = inn.rect.x + 2.5 * cs; p.pos.y = inn.rect.y + 5.5 * cs; p.tier = 1; p.onTierLink = false; p.push = null;
+  w.pushActor(p, Math.PI / 2, 320);
+  settle(40);
+  check('H3 a shove into the outer wall holds inside the footprint on the story',
+    p.tier === 1 && inside() && onStory() && p.pos.y < inn.rect.y + 7 * cs && !p.push,
+    `tier ${p.tier} y ${(p.pos.y - inn.rect.y).toFixed(0)} on ${wf.regionAt!(p.pos.x, p.pos.y)}`);
+  // H4–H8 — THE SPOILS STORY: a vestige lying in the hall above (8.5, 2.5 —
+  // storey floor over the common room's open floor).
+  const vid = Object.keys(VESTIGES)[0];
+  const hx = inn.rect.x + 8.5 * cs, hy = inn.rect.y + 2.5 * cs;
+  check('H4 the seat under test is a both-floor cell (storey_floor) whose unstamped floor read is the ground\'s; a landing reads its story',
+    wf.regionAt!(hx, hy) === 'storey_floor' && floorStoryOf('storey_floor') === 0 && floorStoryOf('storey_landing') === 1);
+  const drop: GemDrop = { pos: vec(hx, hy), item: { kind: 'vestige', id: vid, count: 1 }, bob: 0, tier: 1 };
+  w.drops.push(drop);
+  p.pos.x = hx; p.pos.y = hy; p.tier = 0; p.onTierLink = false; p.push = null;
+  settle(3);
+  check('H5 a vestige lying UPSTAIRS is no pickup for the hero in the common room beneath it (same position, story 0)', w.drops.includes(drop));
+  p.tier = 1;
+  settle(3);
+  check('H6 … and the hero on the story takes it', !w.drops.includes(drop));
+  const drop2: GemDrop = { pos: vec(hx, hy), item: { kind: 'vestige', id: vid, count: 1 }, bob: 0 };
+  w.drops.push(drop2);
+  settle(3);
+  check('H7 an UNSTAMPED drop on a both-floor cell is the ground\'s (the sweep settles the floor\'s word): the story hero leaves it …',
+    w.drops.includes(drop2) && drop2.tier === 0, `tier ${String(drop2.tier)}`);
+  p.tier = 0;
+  settle(3);
+  check('H8 … and the ground hero takes it', !w.drops.includes(drop2));
+  p.pos.x = 100; p.pos.y = 100; p.tier = 0;
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

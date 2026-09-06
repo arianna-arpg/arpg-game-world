@@ -965,6 +965,18 @@ export interface ZoneTiers {
    *  the fights that happen are the honest ones: across rims and spans).
    *  Covered zones must never set it (a ceiling is not a vantage). */
   rimDuels?: boolean;
+  /** THE ENCLOSURE LAW (engine/tiers.ts tierEnclosure): may a body ever
+   *  LEAVE a story except through a crossing? 'open' = the rim is a drop —
+   *  a shove past it is THE RIM FALL (buttes, summits: knock-off is their
+   *  identity); 'enclosed' = the story's edge is a WALL to every carried
+   *  body exactly as it is to feet — the rim fall never fires, and a shove,
+   *  a leap or a blink clamps where willed movement would. Omit and the
+   *  word DERIVES: an 'under' layer has a ceiling (nothing falls UP out of
+   *  a tunnel — the sewer ducts, the rootways, the crypts), a building's
+   *  `interior` storey has walls; open country stays open. Orthogonal to
+   *  `exposure` (what the eye sees) by design — the inn draws every layer
+   *  and still confines. */
+  enclosure?: 'open' | 'enclosed';
   /** THE STOREY STACK (engine/storeys.ts): the layer is a BUILDING's floor
    *  above, not country — stamped by generateLayout when a plan structure
    *  raises a storey. The world map's stack tell and tint stay silent (a

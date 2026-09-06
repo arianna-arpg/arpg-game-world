@@ -128,7 +128,7 @@ import { deathVoiceOf, dominantTypeOf, hitVoiceOf, skillBaseTypeOf } from './bod
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
 import { canSquish, SQUISH_CFG, squishSpecOf } from './squish';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
-import { landingTier, laneLedgerOnDescend, linkFlipTier, makeTierNav, makeTierView, resolveTierCrossing, storyTable, tierElevOf, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
+import { floorStoryOf, landingTier, laneLedgerOnDescend, linkFlipTier, makeTierNav, makeTierView, resolveTierCrossing, storyTable, tierElevOf, tierEnclosed, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { liquidOf } from './genkit';
@@ -1462,6 +1462,14 @@ export interface GemDrop {
    *  it as soon as `grace` expires. */
   droppedBy?: string;
   dropperCleared?: boolean;
+  /** THE SPOILS STORY (the tier fabric's same-story law): the story this
+   *  drop lies on — stamped from the body that shed it (the kill path, a
+   *  shakedown, a discard), else derived at the sweep from the floor under
+   *  it (World.spoilStoryAt: a story-only cell is that story's, a both-floor
+   *  cell is the ground's). Only a seat on the SAME story may vacuum or
+   *  grab it — a hero upstairs never hoovers the common room's loot through
+   *  the boards, nor the valley the butte's cache. Flat zones read 0. */
+  tier?: number;
 }
 
 /** A resource orb on the ground — run it over and it POURS (ORB_DEFS is
@@ -1477,6 +1485,10 @@ export interface ResourceOrb {
   /** SIPHON orbs home to their owner and pour on arrival (nobody else can
    *  scoop them); cleared if the owner dies — the blood falls to the floor. */
   homeTo?: Actor;
+  /** THE SPOILS STORY (see GemDrop.tier): the story the orb lies on — only a
+   *  same-story seat scoops it; stamped by the shedder, else derived at the
+   *  sweep from the floor. */
+  tier?: number;
 }
 
 export type RemnantElement = 'fire' | 'cold' | 'lightning';
@@ -1510,6 +1522,10 @@ export interface Corpse {
    *  poses a fresh corpse off (laidAt, from); both runtime-only. */
   laidAt?: number;
   from?: Vec2;
+  /** THE SPOILS STORY (see GemDrop.tier): the story the body lies on —
+   *  corpse targeting and the drag answer only to a caster on the same
+   *  story. Stamped at death, else derived at the sweep. */
+  tier?: number;
 }
 
 /** What a skill's targeting spec resolved to. */
@@ -4790,7 +4806,7 @@ export class World {
       for (const ally of this.seats) {
         if (ally === seat || ally.actor.dead || ally.actor.downed) continue;
         const close = dist(ally.actor.pos, seat.actor.pos) <= REVIVE_RADIUS
-          && this.dwellReachable(ally.actor.pos, seat.actor.pos);
+          && this.dwellReachable(ally.actor.pos, seat.actor.pos, DWELL_CFG.reach, this.storyPair(ally.actor, seat.actor));
         if (close && this.seatIdle(ally)) {
           const t = (seat.reviveDwellBy.get(ally.id) ?? 0) + dt;
           seat.reviveDwellBy.set(ally.id, t);
@@ -7963,7 +7979,7 @@ export class World {
       if (!node || node.dead) { e.phase = 'closing'; return; } // paranoia — dormant nodes are invulnerable
       const engaged = !this.player.dead
         && dist(this.player.pos, e.pos) <= spec.arm.radius + this.player.radius
-        && this.dwellReachable(this.player.pos, e.pos, transitReach('extraction'));
+        && this.dwellReachable(this.player.pos, e.pos, transitReach('extraction'), this.storyPair(this.player));
       if (!engaged || !this.playerIdle()) { ex.dwellStart = 0; return; }
       if (ex.dwellStart === 0) {
         ex.dwellStart = this.time;
@@ -8379,7 +8395,7 @@ export class World {
       // fairness — no clock ever runs before the player could have seen it).
       if (!this.player.dead
         && dist(this.player.pos, e.pos) <= spec.muster.discoverRadius
-        && this.dwellReachable(this.player.pos, e.pos)) {
+        && this.dwellReachable(this.player.pos, e.pos, DWELL_CFG.reach, this.storyPair(this.player))) {
         this.startBoroughMuster(e);
       }
       return;
@@ -8597,7 +8613,7 @@ export class World {
     let nd = Infinity;
     for (const f of folk) {
       const d = dist(this.player.pos, f.pos);
-      if (d > radius + this.player.radius || !this.dwellReachable(this.player.pos, f.pos, reach)) {
+      if (d > radius + this.player.radius || !this.dwellReachable(this.player.pos, f.pos, reach, this.storyPair(this.player, f))) {
         bo.armDwellStart.delete(f.id);
         bo.armAsked.delete(f.id); // out of reach = the approach ended; re-ask next time
         continue;
@@ -13199,7 +13215,7 @@ export class World {
     if (!hf) return;
     if (this.huntFootprint && !this.player.dead && !this.player.downed) {
       if (dist(this.player.pos, this.huntFootprint.pos) <= 50 + this.player.radius
-        && this.dwellReachable(this.player.pos, this.huntFootprint.pos)) {
+        && this.dwellReachable(this.player.pos, this.huntFootprint.pos, DWELL_CFG.reach, this.storyPair(this.player))) {
         this.huntFootprintDwell += dt;
         if (this.huntFootprintDwell >= hf.surge().dwellSeconds) {
           this.huntFootprint = null;
@@ -14556,7 +14572,7 @@ export class World {
       this.amalgamPickDwell = [];
       const necro = this.actorById(site.necroId);
       if (necro && dist(necro.pos, this.player.pos) <= AMALGAM_RADIUS
-        && this.dwellReachable(this.player.pos, necro.pos, npcDwellReach('bonewright'))) {
+        && this.dwellReachable(this.player.pos, necro.pos, npcDwellReach('bonewright'), this.storyPair(this.player, necro))) {
         this.amalgamNecroDwell += dt;
         if (this.amalgamNecroDwell >= AMALGAM_DWELL) { this.amalgamNecroDwell = 0; this.acceptAmalgamHunt(); }
       } else this.amalgamNecroDwell = 0;
@@ -14566,7 +14582,7 @@ export class World {
       if (this.amalgamPickDwell.length !== spots.length) this.amalgamPickDwell = spots.map(() => 0);
       for (let i = 0; i < spots.length; i++) {
         if (dist(spots[i].pos, this.player.pos) <= AMALGAM_PICK_RADIUS
-          && this.dwellReachable(this.player.pos, spots[i].pos)) {
+          && this.dwellReachable(this.player.pos, spots[i].pos, DWELL_CFG.reach, this.storyPair(this.player))) {
           this.amalgamPickDwell[i] += dt;
           if (this.amalgamPickDwell[i] >= AMALGAM_PICK_DWELL) {
             this.amalgamPickDwell[i] = 0;
@@ -14647,15 +14663,15 @@ export class World {
     const lvl = Math.max(1, 1 + Math.floor(this.zone.level / 4));
     if (part.drop.skill && SKILLS[part.drop.skill]) {
       const inst = makeSkillGem(SKILLS[part.drop.skill], lvl, 'rare');
-      const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10);
+      const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10, undefined, this.spoilClamp());
       this.noteGemDrop(inst.def.id, inst.rarity); // a BUILT spoil is a genuine mint too — the drop index sees it
-      this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
+      this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2), tier: this.spoilStory });
       this.text(at, `${inst.def.name}!`, SKILL_RARITIES.rare.color, 15);
     }
     if (part.drop.support && SUPPORTS[part.drop.support]) {
-      const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10);
+      const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10, undefined, this.spoilClamp());
       this.noteGemDrop(part.drop.support);
-      this.drops.push({ pos, item: { kind: 'support', gem: mintSupportInstance(SUPPORTS[part.drop.support], 1) }, bob: rand(0, Math.PI * 2) });
+      this.drops.push({ pos, item: { kind: 'support', gem: mintSupportInstance(SUPPORTS[part.drop.support], 1) }, bob: rand(0, Math.PI * 2), tier: this.spoilStory });
       this.text(at, `${SUPPORTS[part.drop.support].name}!`, SUPPORTS[part.drop.support].color, 14);
     }
     for (let i = 0; i < (part.drop.gems ?? 0); i++) this.dropGemAt(at);
@@ -14975,7 +14991,7 @@ export class World {
     if (!this.descentSite || this.descentRun || this.descentSpent.has(this.zone.id)) return;
     if (this.player.dead || this.player.downed) { this.descentShaftDwell = 0; return; }
     if (dist(this.player.pos, this.descentSite.platform) <= transitRadius('descent_shaft', 72) && this.playerIdle()
-      && this.dwellReachable(this.player.pos, this.descentSite.platform, transitReach('descent_shaft'))) {
+      && this.dwellReachable(this.player.pos, this.descentSite.platform, transitReach('descent_shaft'), this.storyPair(this.player))) {
       this.descentShaftDwell += dt;
       if (this.descentShaftDwell >= transitDwell('descent_shaft')) { this.descentShaftDwell = 0; this.descend(); }
     } else this.descentShaftDwell = 0;
@@ -15089,7 +15105,7 @@ export class World {
     if (!site || this.descentRun) return false;
     return this.actors.some(a => a.id === site.delverId && !a.dead
       && dist(a.pos, seat.actor.pos) <= DELVER_RADIUS
-      && this.dwellReachable(seat.actor.pos, a.pos, npcDwellReach('delver')));
+      && this.dwellReachable(seat.actor.pos, a.pos, npcDwellReach('delver'), this.storyPair(seat.actor, a)));
   }
 
   /** THE PROVING LAW: the Delver's counter exists only AFTER this shaft's
@@ -16325,7 +16341,7 @@ export class World {
       ?? ((this.orbSpringBreath = !this.orbSpringBreath) ? 'life' : 'mana');
     if (!ORB_DEFS[kind]) return;
     for (let i = 0; i < Math.max(1, Math.round(eff.power)); i++) {
-      this.shedOrb(kind, vec(d.pos.x, d.pos.y), { scatter: Math.max(16, d.radius * 0.6) });
+      this.shedOrb(kind, vec(d.pos.x, d.pos.y), { scatter: Math.max(16, d.radius * 0.6), tier: d.tier });
     }
     this.flashes.push({
       pos: vec(d.pos.x, d.pos.y), radius: d.radius + 6,
@@ -21440,8 +21456,9 @@ export class World {
     if (!autoPlace(seat.meta.items, item)) {
       if (spill) {
         this.drops.push({
-          pos: this.clampPos(vec(seat.actor.pos.x + rand(-14, 14), seat.actor.pos.y + rand(-14, 14)), 10),
-          item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2),
+          pos: this.clampPos(vec(seat.actor.pos.x + rand(-14, 14), seat.actor.pos.y + rand(-14, 14)), 10, undefined,
+            seat.actor.tier >= 1 ? { tier: seat.actor.tier } : undefined),
+          item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2), tier: seat.actor.tier, // THE SPOILS STORY: at the seat's feet
         });
         this.text(seat.actor.pos, 'your pack is full — it falls at your feet', '#c08a68', 12);
         return null;
@@ -21886,8 +21903,8 @@ export class World {
     if (this.spoilsSealed()) return; // THE SPOILS LAW — spilled essence is minted wealth
     if (gain.count <= 0) return;
     const s = ESSENCE_SPILL_CFG.scatter;
-    const pos = this.clampPos(vec(at.x + rand(-s, s), at.y + rand(-s, s)), 10);
-    this.drops.push({ pos, item: { kind: 'essence', essence: gain.essence, count: gain.count }, bob: rand(0, Math.PI * 2) });
+    const pos = this.clampPos(vec(at.x + rand(-s, s), at.y + rand(-s, s)), 10, undefined, this.spoilClamp());
+    this.drops.push({ pos, item: { kind: 'essence', essence: gain.essence, count: gain.count }, bob: rand(0, Math.PI * 2), tier: this.spoilStory });
   }
 
   // --- ABILITY ESSENCES (data/essences.ts ABILITY_ESSENCES) ------------------
@@ -21935,8 +21952,8 @@ export class World {
     if (count <= 0) return;
     const def = abilityEssenceOfTier(tier);
     const s = ESSENCE_SPILL_CFG.scatter;
-    const pos = this.clampPos(vec(at.x + (rng() * 2 - 1) * s, at.y + (rng() * 2 - 1) * s), 10);
-    this.drops.push({ pos, item: { kind: 'abilityEssence', tier: def.tier, count }, bob: rng() * Math.PI * 2 });
+    const pos = this.clampPos(vec(at.x + (rng() * 2 - 1) * s, at.y + (rng() * 2 - 1) * s), 10, undefined, this.spoilClamp());
+    this.drops.push({ pos, item: { kind: 'abilityEssence', tier: def.tier, count }, bob: rng() * Math.PI * 2, tier: this.spoilStory });
     this.text(at, `${def.label}!`, def.color, 14, 'drop', FLOAT_CFG.dropNameSec);
   }
 
@@ -21983,7 +22000,10 @@ export class World {
     target.spillBank -= threshold;
     target.essenceSpilled++;
     target.lastEssenceSpillAt = this.time;
+    const prevSpoil = this.spoilStory;
+    this.spoilStory = target.tier; // THE SPOILS STORY: the trail lies on the bleeder's story
     this.dropEssenceAt(target.pos, rollSpillPacket(target.level, spill));
+    this.spoilStory = prevSpoil;
   }
 
   /** Is the seat's hero standing close enough to a Sacrificial Font to use it? */
@@ -23959,7 +23979,7 @@ export class World {
     if (!featureEnabled(this.account, FEATURE.CARAVAN)) return false;
     return this.actors.some(a => this.hasNpcRole(a, 'caravanner')
       && dist(a.pos, seat.actor.pos) <= CARAVAN_RADIUS
-      && this.dwellReachable(seat.actor.pos, a.pos, npcDwellReach('caravanner')));
+      && this.dwellReachable(seat.actor.pos, a.pos, npcDwellReach('caravanner'), this.storyPair(seat.actor, a)));
   }
 
   /** Is caravan band N selectable? band 0 (home) is always available with the base
@@ -24160,7 +24180,7 @@ export class World {
   private updateSail(dt: number): void {
     const dock = this.portDock();
     const engaged = !!dock && dist(this.player.pos, dock.pos) <= 110
-      && this.dwellReachable(this.player.pos, dock.pos);
+      && this.dwellReachable(this.player.pos, dock.pos, DWELL_CFG.reach, this.storyPair(this.player, dock));
     if (!this.sailGate.fire(engaged && this.canSail() && this.playerIdle(), engaged, dt, CARAVAN_DWELL)) return;
     this.enterSailing();
   }
@@ -24175,7 +24195,7 @@ export class World {
     if (!this.zone.port) return false;
     const board = this.doodads.find(d => d.kind === 'harbor_board');
     return !!board && dist(seat.actor.pos, board.pos) <= PORT_CFG.boardReach
-      && this.dwellReachable(seat.actor.pos, board.pos);
+      && this.dwellReachable(seat.actor.pos, board.pos, DWELL_CFG.reach, this.storyPair(seat.actor, board));
   }
 
   private updateHarborBoard(dt: number): void {
@@ -24583,7 +24603,7 @@ export class World {
     if (!this.zone.harborhold) return false;
     const horn = this.doodads.find(d => d.kind === 'muster_horn');
     return !!horn && dist(seat.actor.pos, horn.pos) <= HARBORHOLD_CFG.muster.radius
-      && this.dwellReachable(seat.actor.pos, horn.pos);
+      && this.dwellReachable(seat.actor.pos, horn.pos, DWELL_CFG.reach, this.storyPair(seat.actor, horn));
   }
 
   private updateMusterHorn(dt: number): void {
@@ -25843,7 +25863,7 @@ export class World {
     if (!post || post.captain.dead) return { near: false, why: 'No captain stands here.' };
     const cfg = MERC_CFG.outpost;
     const near = dist(post.captain.pos, seat.actor.pos) <= cfg.radius
-      && this.dwellReachable(seat.actor.pos, post.captain.pos, npcDwellReach('captain'));
+      && this.dwellReachable(seat.actor.pos, post.captain.pos, npcDwellReach('captain'), this.storyPair(seat.actor, post.captain));
     if (!near) return { near: false, why: 'Not within a captain’s hail.' };
     if (!this.objectiveDone) return { near, why: 'Settle this ground’s business first.' };
     const foeNear = this.actors.some(a =>
@@ -26478,7 +26498,7 @@ export class World {
     return this.actors.find(a =>
       (defId ? a.defId === defId && !a.dead : this.hasNpcRole(a, 'questgiver'))
       && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS
-      && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('questgiver'))) ?? null;
+      && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('questgiver'), this.storyPair(this.player, a))) ?? null;
   }
 
   /** ANY of these giver defIds standing near the player (quests may list
@@ -26515,7 +26535,7 @@ export class World {
   nearAnyQuestGiver(): boolean {
     return this.actors.some(a => !a.dead && a.defId && QUEST_GIVER_IDS.has(a.defId)
       && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS
-      && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('questgiver')));
+      && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('questgiver'), this.storyPair(this.player, a)));
   }
 
   /** Prompt text above a nearby quest giver, or null. ('{name}' resolves at
@@ -27118,7 +27138,7 @@ export class World {
     for (const c of this.playerCorpses) {
       if (c.reclaimed) { c.dwell = 0; continue; }
       if (dist(c.pos, this.player.pos) > CORPSE_RADIUS || !this.playerIdle() || !this.canReclaim(c)
-        || !this.dwellReachable(this.player.pos, c.pos)) {
+        || !this.dwellReachable(this.player.pos, c.pos, DWELL_CFG.reach, this.storyPair(this.player))) {
         c.dwell = 0;
         continue;
       }
@@ -27154,7 +27174,7 @@ export class World {
   /** Rebuild ONE saved loot item as its EXACT self and drop it (NOT dropGemAt,
    *  which rolls random). Unknown ids skip (same tolerance as character load). */
   private dropSavedLoot(at: Vec2, it: SavedLoot): void {
-    const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10);
+    const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10, undefined, this.spoilClamp());
     if (it.kind === 'gear') {
       // The EXACT worn item — same uid, same rolls; rebuildAnyItem
       // re-validates against live registries (a patched-out base simply
@@ -27963,11 +27983,17 @@ export class World {
   }
 
   /** Displace an actor with departure/arrival flashes. */
-  teleportActor(actor: Actor, dest: Vec2, color = '#b8c8ff', disp?: DisplacementPolicy): void {
+  teleportActor(actor: Actor, dest: Vec2, color = '#b8c8ff', disp?: DisplacementPolicy, story?: number): void {
     this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.6, color, life: 0.25, maxLife: 0.25 });
     // A flicker/blink may carry a DisplacementPolicy ({ignoreConfine}) to land past
     // walls + across the void; default (no disp) = nearest-walkable snap as before.
-    actor.pos = this.clampPos(vec(dest.x, dest.y), actor.radius, undefined, disp ? { disp } : undefined);
+    // `story` (the tier fabric's enclosure law): the STORY the arrival seats
+    // on — the body wears it and the snap confines against that story's own
+    // floor (a blink stays upstairs; a recalled minion joins its keeper's
+    // layer). Absent = the legacy base-grid snap, byte for byte.
+    if (story !== undefined) actor.tier = story;
+    actor.pos = this.clampPos(vec(dest.x, dest.y), actor.radius, undefined,
+      story !== undefined ? { ...(disp ? { disp } : {}), mover: actor } : disp ? { disp } : undefined);
     actor.dash = null;
     this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.8, color, life: 0.3, maxLife: 0.3 });
   }
@@ -27993,8 +28019,11 @@ export class World {
       const want = t.plural
         ? 1 + Math.max(0, Math.round(caster.sheet.get('corpseBatch', tags, extra)))
         : 1;
+      // THE SAME-STORY LAW: a corpse lying on another story is nobody's
+      // fuel from here (a stamped body's own story, else the floor's word).
       const haul = this.corpses
-        .filter(c => dist(caster.pos, c.pos) <= t.castRange && dist(aim, c.pos) < search)
+        .filter(c => (c.tier ?? this.spoilStoryAt(c.pos)) === caster.tier
+          && dist(caster.pos, c.pos) <= t.castRange && dist(aim, c.pos) < search)
         .sort((a, b) => dist(aim, a.pos) - dist(aim, b.pos))
         .slice(0, want);
       // Soulwalk-style fallback keeps FIRST CLAIM on a bare field: no corpse
@@ -28029,6 +28058,7 @@ export class World {
             pos: vec(victim.pos.x, victim.pos.y),
             defId: victim.defId!, level: victim.level,
             maxLife: victim.maxLife(), remaining: CORPSE_CFG.duration,
+            tier: victim.tier,
           };
           this.kill(victim); // a real death — Martyrdom and friends apply
           this.corpses.push(corpse);
@@ -28213,6 +28243,7 @@ export class World {
         const d = this.drops[i];
         if (d.droppedBy || d.grace) continue;
         if (!kinds.includes(d.item.kind)) continue;
+        if ((d.tier ??= this.spoilStoryAt(d.pos)) !== a.tier) continue; // its own story's shinies only
         if (dist(a.pos, d.pos) > reach) continue;
         (a.lootSack ??= []).push(d.item);
         this.drops.splice(i, 1);
@@ -28506,7 +28537,7 @@ export class World {
     for (const a of this.actors) {
       if (!a.companion || a.dead || !a.downed) continue;
       const tended = this.seats.some(s => !s.actor.dead && !s.actor.downed
-        && dist(s.actor.pos, a.pos) <= REVIVE_RADIUS && this.seatIdle(s));
+        && s.actor.tier === a.tier && dist(s.actor.pos, a.pos) <= REVIVE_RADIUS && this.seatIdle(s));
       a.companionReviveDwell = tended ? a.companionReviveDwell + dt : 0;
       if (a.companionReviveDwell >= REVIVE_DWELL) this.reviveCompanion(a);
     }
@@ -28592,18 +28623,22 @@ export class World {
    *  untouchable and (to unattuned eyes) unseen. Zone-leveled — claims
    *  re-mint at the claimer's level. */
   private mintThrongHusk(
-    monsterId: string, pos: Vec2, opts?: { pocketKey?: string; ttl?: number },
+    monsterId: string, pos: Vec2, opts?: { pocketKey?: string; ttl?: number; tier?: number },
   ): Actor | null {
     if (!MONSTERS[monsterId]) return null;
     const husk = this.createMonster(monsterId, Math.max(1, this.zone.level), 'enemy');
     husk.throngWild = monsterId;
+    // THE SAME-STORY LAW: a husk wears the story it condensed on (its
+    // minter's — a kill's victim, the keeper, a mote's body; pockets seed
+    // the ground) and seats on that story's own floor.
+    husk.tier = opts?.tier ?? 0;
     husk.passive = true;
     husk.untargetable = true;
     husk.invulnerable = true;
     husk.noBounty = true;
     if (opts?.pocketKey) husk.throngPocketKey = opts.pocketKey;
     if (opts?.ttl !== undefined) husk.throngExpiresAt = this.time + opts.ttl;
-    husk.pos = this.clampPos(vec(pos.x, pos.y), husk.radius);
+    husk.pos = this.clampPos(vec(pos.x, pos.y), husk.radius, undefined, { mover: husk });
     this.actors.push(husk);
     return husk;
   }
@@ -28620,7 +28655,8 @@ export class World {
     // bodies wear one classic minion's worth of scaling (engine/throng.ts).
     this.bakeMinionOwnerStats(body, keeper, inst, batchScaleOf(spec));
     body.fillResources();
-    body.pos = this.clampPos(vec(pos.x, pos.y), body.radius);
+    body.tier = keeper.tier; // the keeper's story (the summon law's sibling)
+    body.pos = this.clampPos(vec(pos.x, pos.y), body.radius, undefined, { mover: body });
     this.actors.push(body);
     return body;
   }
@@ -28874,16 +28910,21 @@ export class World {
   }
 
   /** A validated husk stand near `at` (walkable, out of solids). */
-  private throngStandNear(at: Vec2): Vec2 {
+  private throngStandNear(at: Vec2, tier = 0): Vec2 {
+    // The stand is judged on ITS story (the same-story law): the story's
+    // view for walkability, the story's own solids. tier 0 = the old read.
+    const walkAt = tier >= 1 && this.tierViews
+      ? this.tierViews[Math.min(tier, this.tierViews.length - 1)] ?? this.walk
+      : this.walk;
     for (let i = 0; i < 10; i++) {
       const ang = rand(0, Math.PI * 2);
       const d = rand(10, 42);
       const x = at.x + Math.cos(ang) * d, y = at.y + Math.sin(ang) * d;
-      if (this.walk && !this.walk.isWalkable(x, y)) continue;
-      if (this.pointInSolid(x, y, 8)) continue;
+      if (walkAt && !walkAt.isWalkable(x, y)) continue;
+      if (this.pointInSolid(x, y, 8, tier)) continue;
       return vec(x, y);
     }
-    return this.clampPos(vec(at.x, at.y), 8);
+    return this.clampPos(vec(at.x, at.y), 8, undefined, tier >= 1 ? { tier } : undefined);
   }
 
   /** Where a mote condenses (ThrongMoteRow.at). 'far' is an expedition:
@@ -28943,7 +28984,7 @@ export class World {
       if (!anchored) {
         const defId = m.defId;
         this.kill(m, true);
-        if (defId) this.mintThrongHusk(defId, m.pos, { ttl: THRONG_CFG.motes.ttl * 2 });
+        if (defId) this.mintThrongHusk(defId, m.pos, { ttl: THRONG_CFG.motes.ttl * 2, tier: m.tier });
       }
     }
     // THE LIVE REBAKE (1s cadence): standing bodies re-fold the owner's
@@ -28974,6 +29015,7 @@ export class World {
         if (roster < cap) {
           for (const a of [...this.actors]) {
             if (a.dead || a.throngWild !== spec.monsterId) continue;
+            if (a.tier !== keeper.tier) continue; // THE SAME-STORY LAW: a pluck is contact
             const reach = THRONG_CFG.collect.reach + keeper.radius + a.radius;
             if (dist(keeper.pos, a.pos) > reach) continue;
             this.claimThrongHusk(keeper, inst, a);
@@ -28999,8 +29041,8 @@ export class World {
               const n = this.throngYieldCount(keeper, inst, 1);
               for (let i = 0; i < n; i++) {
                 this.mintThrongHusk(spec.monsterId,
-                  i === 0 ? pos : this.throngStandNear(pos),
-                  { ttl: moteRow.ttl ?? THRONG_CFG.motes.ttl });
+                  i === 0 ? pos : this.throngStandNear(pos, keeper.tier),
+                  { ttl: moteRow.ttl ?? THRONG_CFG.motes.ttl, tier: keeper.tier });
               }
             }
           }
@@ -29037,9 +29079,9 @@ export class World {
               for (let i = 0; i < n; i++) {
                 const spot = trickleRow.at === 'ring'
                   ? this.throngMoteSpot(keeper, 'near') ?? this.throngStandNear(keeper.pos)
-                  : this.throngStandNear(keeper.pos);
+                  : this.throngStandNear(keeper.pos, keeper.tier);
                 this.mintThrongHusk(spec.monsterId, spot,
-                  { ttl: trickleRow.ttl ?? THRONG_CFG.motes.ttl });
+                  { ttl: trickleRow.ttl ?? THRONG_CFG.motes.ttl, tier: keeper.tier });
               }
             }
           }
@@ -29070,8 +29112,8 @@ export class World {
           st.throngCritAt = this.time + (row.icd ?? THRONG_CFG.critIcd);
           const n = this.throngYieldCount(lord, inst, 1);
           for (let i = 0; i < n; i++) {
-            this.mintThrongHusk(spec.monsterId, this.throngStandNear(target.pos),
-              { ttl: THRONG_CFG.motes.ttl });
+            this.mintThrongHusk(spec.monsterId, this.throngStandNear(target.pos, target.tier),
+              { ttl: THRONG_CFG.motes.ttl, tier: target.tier });
           }
         } else if (row.kind === 'gauge') {
           const fromMinion = caster !== lord;
@@ -29083,8 +29125,8 @@ export class World {
             const n = this.throngYieldCount(lord, inst,
               Math.round(rand(row.yield[0], row.yield[1])));
             for (let i = 0; i < n; i++) {
-              this.mintThrongHusk(spec.monsterId, this.throngStandNear(lord.pos),
-                { ttl: THRONG_CFG.motes.ttl });
+              this.mintThrongHusk(spec.monsterId, this.throngStandNear(lord.pos, lord.tier),
+                { ttl: THRONG_CFG.motes.ttl, tier: lord.tier });
             }
             this.text(vec(lord.pos.x, lord.pos.y - 18), 'the throng stirs',
               THRONG_CFG.joinColor, 12);
@@ -29107,8 +29149,8 @@ export class World {
         if (row.kind !== 'onKill' || !chance(row.chance)) continue;
         const n = this.throngYieldCount(lord, inst, 1);
         for (let i = 0; i < n; i++) {
-          this.mintThrongHusk(spec.monsterId, this.throngStandNear(victim.pos),
-            { ttl: THRONG_CFG.motes.ttl });
+          this.mintThrongHusk(spec.monsterId, this.throngStandNear(victim.pos, victim.tier),
+            { ttl: THRONG_CFG.motes.ttl, tier: victim.tier });
         }
       }
     }
@@ -29213,7 +29255,7 @@ export class World {
       const ang = rand(0, Math.PI * 2);
       this.mintThrongHusk(spec.monsterId, vec(
         this.player.pos.x + Math.cos(ang) * rand(50, 90),
-        this.player.pos.y + Math.sin(ang) * rand(50, 90)));
+        this.player.pos.y + Math.sin(ang) * rand(50, 90)), { tier: this.player.tier });
     }
     return true;
   }
@@ -30307,6 +30349,7 @@ export class World {
       if (this.time < a.clingCooldownUntil || isDormant(a)) continue;
       const v = a.aiTargetId !== undefined ? this.actorById(a.aiTargetId) : undefined;
       if (!v || !clingEligible(a, v)) continue;
+      if (v.tier !== a.tier) continue; // THE SAME-STORY LAW: a latch is contact — no rim-duel latch across a story
       const pad = a.cling.pad ?? CLING_CFG.attachPad;
       if (dist(a.pos, v.pos) > a.radius + v.radius + pad) continue;
       if (!seats) {
@@ -30591,6 +30634,7 @@ export class World {
       bestSpec: GrabSpec | null = null, bd = range;
     for (const r of this.actors) {
       if (r === from || r === v || r.dead) continue;
+      if (r.tier !== from.tier) continue; // THE SAME-STORY LAW: a catch is contact
       // Kin hands, foe catch: the receiver stands with the thrower and
       // against the victim (faction-honest — minion courts qualify).
       if (this.hostileTo(from, r) || !this.hostileTo(r, v)) continue;
@@ -33942,8 +33986,10 @@ export class World {
         // corners forgive, chasms still jump) — the cast itself never
         // refuses. A Shadow Step at a wall-cornered foe lands on YOUR side
         // of the foe instead of phasing through the masonry behind it.
+        // (THE STORY'S OWN CLAMP — the enclosure law: a blink lands on the
+        // caster's own story's floor, never through the boards beneath it.)
         dest = this.affordedDest(caster, inst,
-          this.clampPos(dest, caster.radius));
+          this.clampPos(dest, caster.radius, undefined, { mover: caster }));
         // Cloudborne: the vanish-point keeps a cloud where you left (the
         // arrival is already confined to standing ground — departure is
         // the honest half a blink can gift).
@@ -33971,7 +34017,7 @@ export class World {
           this.pendingBlinks.push({ actor: caster, dest, timer: d.delay, color: def.color, inst });
           this.flashes.push({ pos: vec(dest.x, dest.y), radius: caster.radius * 1.6, color: def.color, life: d.delay, maxLife: d.delay });
         } else {
-          this.teleportActor(caster, dest, def.color);
+          this.teleportActor(caster, dest, def.color, undefined, caster.tier);
           if (d.behindTarget && targetInfo?.actor) {
             caster.facing = angleTo(caster.pos, targetInfo.actor.pos);
           }
@@ -34006,9 +34052,15 @@ export class World {
         // point (a leap cast against a wall lands where it began, slam and
         // all), and the telegraph ring below draws at the TRUE landing by
         // construction (drawn == tested).
+        // THE STORY'S OWN CLAMP (the tier fabric's enclosure law): the arc
+        // ends where the caster's OWN story's floor ends — the mover
+        // contract every walker shares (a storey leap stops at the hanging
+        // wall, a duct leap at the duct's side; the valley is no landing
+        // for a body that never crossed). Flat zones and ground bodies walk
+        // the identical base-grid clamp.
         const dest = this.affordedDest(caster, inst, this.clampPos(vec(
           caster.pos.x + Math.cos(caster.facing) * dd,
-          caster.pos.y + Math.sin(caster.facing) * dd), caster.radius));
+          caster.pos.y + Math.sin(caster.facing) * dd), caster.radius, undefined, { mover: caster }));
         caster.leap = {
           from: vec(caster.pos.x, caster.pos.y), dest,
           total: d.airTime, timer: d.airTime,
@@ -34509,9 +34561,12 @@ export class World {
         mobile.forEach((m, i) => {
           const ang = (i / Math.max(1, mobile.length)) * Math.PI * 2;
           m.push = null; // an in-flight shove must not carry through the blink
+          // THE SUMMON'S STORY, re-called: the ring seats on the CASTER's
+          // layer (the spawn law's sibling — a court convoked upstairs
+          // stands upstairs), the arrival confined to that story's floor.
           this.teleportActor(m, vec(
             caster.pos.x + Math.cos(ang) * R,
-            caster.pos.y + Math.sin(ang) * R), def.color);
+            caster.pos.y + Math.sin(ang) * R), def.color, undefined, caster.tier);
         });
       }
       if (d.type === 'self' && fx.type === 'status') {
@@ -34742,8 +34797,9 @@ export class World {
         for (let ci = 0; ci < dug; ci++) {
           if (this.corpses.length >= CORPSE_CFG.max) this.corpses.shift();
           this.corpses.push({
-            pos: this.clampPos(vec(aim.x + rand(-spread, spread), aim.y + rand(-spread, spread)), 10),
+            pos: this.clampPos(vec(aim.x + rand(-spread, spread), aim.y + rand(-spread, spread)), 10, undefined, { mover: caster }),
             defId: fx.monsterId, level: this.zone.level,
+            tier: caster.tier, // THE SPOILS STORY: dug on the caster's own story
             maxLife: CORPSE_CFG.mint.life + this.zone.level * CORPSE_CFG.mint.lifePerLevel,
             remaining: CORPSE_CFG.duration,
           });
@@ -34761,6 +34817,7 @@ export class World {
         let gathered = 0;
         for (const c of this.corpses) {
           if (dist(aim, c.pos) > reach) continue;
+          if ((c.tier ?? this.spoilStoryAt(c.pos)) !== caster.tier) continue; // its own story's dead only
           const k = gathered++;
           const r = k === 0 ? 0 : 22 + 8 * Math.floor(k / 3);
           c.pos = this.clampPos(vec(aim.x + Math.cos(k * 2.1) * r, aim.y + Math.sin(k * 2.1) * r), 8);
@@ -39732,6 +39789,7 @@ export class World {
         this.drops.push({
           pos: vec(target.pos.x + rand(-20, 20), target.pos.y + rand(-20, 20)),
           item, bob: rand(0, Math.PI * 2),
+          tier: target.tier, // THE SPOILS STORY: shaken loose where the sack stands
         });
         }
       // THE WOUNDED PURSE (MonsterDef.essenceSpill): landed damage banks
@@ -39783,7 +39841,7 @@ export class World {
           for (const id of Object.keys(ORB_DEFS)) {
             const c = target.sheet.get(orbOnHurtStat(id)) * target.sheet.get('orbShedRate');
             if (c > 0 && chance(Math.min(0.5, c))) {
-              this.shedOrb(id, target.pos, { scatter: 24 });
+              this.shedOrb(id, target.pos, { scatter: 24, tier: target.tier });
             }
           }
         }
@@ -40652,7 +40710,7 @@ export class World {
       for (const id of Object.keys(ORB_DEFS)) {
         const c = caster.sheet.get(orbOnHitStat(id), tags, extra) * rate;
         if (c > 0 && chance(Math.min(0.5, c))) {
-          this.shedOrb(id, target.pos, { scatter: 18 });
+          this.shedOrb(id, target.pos, { scatter: 18, tier: target.tier });
         }
       }
     }
@@ -40962,7 +41020,7 @@ export class World {
         ? (base + grafted) * rate
         : grafted * globalRate;
       if (c > 0 && chance(Math.min(0.75, c))) {
-        this.shedOrb(id, victim.pos, { scatter: 26 });
+        this.shedOrb(id, victim.pos, { scatter: 26, tier: victim.tier });
       }
     }
   }
@@ -42661,6 +42719,13 @@ export class World {
       }
     }
     if (!silent && actor.team === 'enemy') {
+      // THE SPOILS STORY: everything minted below wears this body's story —
+      // the helpers clamp on it and stamp it (spoilStory, restored at the
+      // block's end), and the marks catch any literal push (stampSpoils):
+      // the loot, the purse, the sack, the orbs, the kill rows' bounties.
+      const spoilD0 = this.drops.length, spoilO0 = this.orbs.length;
+      const prevSpoil = this.spoilStory;
+      this.spoilStory = actor.tier;
       if (credit) {
         this.kills++;
         // THE WORLD'S MEMORY: grudges accrue to the name; a manifested
@@ -42739,9 +42804,12 @@ export class World {
           pos: vec(actor.pos.x, actor.pos.y),
           defId: actor.defId, level: actor.level,
           maxLife: actor.maxLife(), remaining: CORPSE_CFG.duration,
+          tier: actor.tier, // THE SPOILS STORY: the body lies where it died
         });
         if (this.corpses.length > CORPSE_CFG.max) this.corpses.shift();
       }
+      this.stampSpoils(spoilD0, spoilO0, actor.tier);
+      this.spoilStory = prevSpoil;
     }
     // THE DEATH VOICE (engine/bodyVoices.ts): a body dies as what it is made
     // of — flesh spatters, bone flecks, crystal sparkles, the ethereal wisps
@@ -42921,7 +42989,7 @@ export class World {
     // THE SPOILS LAW: sealed ground refuses the mint — except OWED pay
     // (a quest's payout is earned of the writ, not of this ground).
     if (!owed && this.spoilsSealed()) return;
-    const pos = this.clampPos(vec(at.x + rand(-20, 20), at.y + rand(-20, 20)), 10);
+    const pos = this.clampPos(vec(at.x + rand(-20, 20), at.y + rand(-20, 20)), 10, undefined, this.spoilClamp());
     // THE GEM FLOOR (charter §4): this ground's country may floor its own
     // gems into the mint — found in the scald before the account owns them.
     const floor = this.zoneGemFloor();
@@ -42930,7 +42998,7 @@ export class World {
       const bobF = Math.random(); // rand(0, 2π)'s own draw, raw — the seed site
       if (memoryFrom) { this.dropMemoryUnit(pos, at, memoryFrom, bobF, memoryKind); return; }
       this.noteGemDrop(inst.def.id, inst.rarity);
-      this.drops.push({ pos, item: { kind: 'skill', inst }, bob: bobF * Math.PI * 2 });
+      this.drops.push({ pos, item: { kind: 'skill', inst }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
       this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15,
         'drop', FLOAT_CFG.dropNameSec);
     };
@@ -42940,7 +43008,7 @@ export class World {
     const bobF = Math.random();
     if (memoryFrom) { this.dropMemoryUnit(pos, at, memoryFrom, bobF, memoryKind); return; }
     this.noteGemDrop(gemDef.id);
-    this.drops.push({ pos, item: { kind: 'support', gem: { def: gemDef, level: 1 } }, bob: bobF * Math.PI * 2 });
+    this.drops.push({ pos, item: { kind: 'support', gem: { def: gemDef, level: 1 } }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
     this.text(at, `${gemDef.name}!`, gemDef.color, 14, 'drop', FLOAT_CFG.dropNameSec);
   }
 
@@ -42952,7 +43020,7 @@ export class World {
    *  fabric draws jitter per call — parity is the law here). */
   private dropMemoryUnit(pos: Vec2, at: Vec2, dropperId: string, seedF: number, kind: MemoryKind): void {
     const unit: RoughMemoryUnit = { d: dropperId, s: (seedF * 4294967296) >>> 0 };
-    this.drops.push({ pos, item: { kind: 'gear', item: makeMemoryItem(kind, [unit]) }, bob: seedF * Math.PI * 2 });
+    this.drops.push({ pos, item: { kind: 'gear', item: makeMemoryItem(kind, [unit]) }, bob: seedF * Math.PI * 2, tier: this.spoilStory });
     this.text(at, `${MEMORY_KINDS[kind].name}!`, MEMORY_KINDS[kind].color, 14, 'drop', FLOAT_CFG.dropNameSec);
   }
 
@@ -43182,8 +43250,9 @@ export class World {
       this.text(p.pos, `dropped ${gem.def.name}`, gem.def.color, 13, 'pickup');
     }
     removeFromBag(m.items, uid);
-    const pos = this.clampPos(vec(p.pos.x + rand(-14, 14), p.pos.y + rand(-14, 14)), 10);
-    this.drops.push({ pos, item, bob: rand(0, Math.PI * 2), grace: DROP_PICKUP_GRACE, droppedBy: seat.id });
+    // THE SPOILS STORY: dropped at the seat's own feet, on its own story.
+    const pos = this.clampPos(vec(p.pos.x + rand(-14, 14), p.pos.y + rand(-14, 14)), 10, undefined, p.tier >= 1 ? { tier: p.tier } : undefined);
+    this.drops.push({ pos, item, bob: rand(0, Math.PI * 2), grace: DROP_PICKUP_GRACE, droppedBy: seat.id, tier: p.tier });
     this.markMetaDirty(seat);
     return item;
   }
@@ -43340,10 +43409,15 @@ export class World {
     // THE SPOILS LAW: minted gear refuses on sealed ground; a player's own
     // discards (droppedBy) and owed returns are movement and always land.
     if (!droppedBy && !owed && this.spoilsSealed()) return;
-    const pos = this.clampPos(vec(at.x + rand(-16, 16), at.y + rand(-16, 16)), 10);
+    // THE SPOILS STORY: a discard lands on its dropper's story, minted gear
+    // on the shedder's (the context) — the clamp confines on that story.
+    const dropper = droppedBy ? this.seats.find(s => s.id === droppedBy)?.actor : undefined;
+    const story = dropper ? dropper.tier : this.spoilStory;
+    const pos = this.clampPos(vec(at.x + rand(-16, 16), at.y + rand(-16, 16)), 10, undefined,
+      story !== undefined && story >= 1 ? { tier: story } : undefined);
     delete item.x;
     delete item.y;
-    const drop: GemDrop = { pos, item: { kind: 'gear', item }, bob: rand(0, Math.PI * 2) };
+    const drop: GemDrop = { pos, item: { kind: 'gear', item }, bob: rand(0, Math.PI * 2), tier: story };
     if (droppedBy) { drop.grace = DROP_PICKUP_GRACE; drop.droppedBy = droppedBy; }
     this.drops.push(drop);
     if (!droppedBy) {
@@ -43367,8 +43441,8 @@ export class World {
   dropVestigeAt(at: Vec2, id: string, count = 1): void {
     if (this.spoilsSealed()) return; // THE SPOILS LAW — vestiges are minted wealth
     if (!VESTIGES[id]) return;
-    const pos = this.clampPos(vec(at.x + rand(-14, 14), at.y + rand(-14, 14)), 10);
-    this.drops.push({ pos, item: { kind: 'vestige', id, count }, bob: rand(0, Math.PI * 2) });
+    const pos = this.clampPos(vec(at.x + rand(-14, 14), at.y + rand(-14, 14)), 10, undefined, this.spoilClamp());
+    this.drops.push({ pos, item: { kind: 'vestige', id, count }, bob: rand(0, Math.PI * 2), tier: this.spoilStory });
   }
 
   /** INLAY a vestige into a socket: consumes one from the satchel; whatever
@@ -43438,6 +43512,7 @@ export class World {
       if (d.item.kind !== 'gear') continue;
       if (d.grace !== undefined && d.grace > 0) continue;
       if (d.droppedBy === seat.id && !d.dropperCleared) continue;
+      if ((d.tier ??= this.spoilStoryAt(d.pos)) !== p.tier) continue; // THE SAME-STORY LAW
       const dd = dist(d.pos, p.pos);
       if (dd <= p.radius + ITEM_CFG.pickupRadius && dd < bestD) { bestD = dd; bestIdx = i; }
     }
@@ -44260,7 +44335,7 @@ export class World {
   nearChandler(seat: Seat = this.localSeat): boolean {
     const c = this.actors.find(a => this.hasNpcRole(a, 'chandler') && !a.dead);
     return !!c && dist(seat.actor.pos, c.pos) <= 96
-      && this.dwellReachable(seat.actor.pos, c.pos, npcDwellReach('chandler'));
+      && this.dwellReachable(seat.actor.pos, c.pos, npcDwellReach('chandler'), this.storyPair(seat.actor, c));
   }
 
   /** Buy one of the chandler's wares — buyVendorGem's exact contract on the
@@ -44931,7 +45006,7 @@ export class World {
           for (const id of Object.keys(ORB_DEFS)) {
             const c = a.sheet.get(orbTrickleStat(id));
             if (c > 0 && chance(Math.min(0.75, c))) {
-              this.shedOrb(id, a.pos, { scatter: ORB_TRICKLE.scatter });
+              this.shedOrb(id, a.pos, { scatter: ORB_TRICKLE.scatter, tier: a.tier });
             }
           }
         }
@@ -45658,7 +45733,15 @@ export class World {
         // overshoot, staggered. Off a butte that's the valley; off a summit
         // terrace it's the bench below — the mountain is descended one
         // shove at a time. Walking never drops (the rim is a wall to feet).
-        if (hit === 'wall' && a.tier >= 1 && this.walk && this.zone.tiers) {
+        // THE ENCLOSURE LAW (engine/tiers.ts tierEnclosure): an ENCLOSED
+        // stack — an under-layer's ceiling, a building's storey — has no
+        // rim to fall off: the clamp above already held the body at its
+        // story's edge exactly as it holds feet (the same view willed
+        // movement confines against), so nothing more happens — the inn's
+        // lodger shoved into a hanging wall stays upstairs, the duct runner
+        // shoved at the duct's side stays in the duct. Only OPEN country
+        // (buttes, summits — knock-off is the identity) reads on.
+        if (hit === 'wall' && a.tier >= 1 && this.walk && this.zone.tiers && !tierEnclosed(this.zone.tiers)) {
           const rawX = from.x + p.vx * dt, rawY = from.y + p.vy * dt;
           const kRaw = this.walk.regionAt?.(rawX, rawY);
           if (!tierFloorAt(kRaw, a.tier)) {
@@ -45810,6 +45893,7 @@ export class World {
     // Corpses decay
     for (let i = this.corpses.length - 1; i >= 0; i--) {
       this.corpses[i].remaining -= dt;
+      this.corpses[i].tier ??= this.spoilStoryAt(this.corpses[i].pos); // THE SPOILS STORY, settled once
       if (this.corpses[i].remaining <= 0) this.corpses.splice(i, 1);
     }
 
@@ -45855,6 +45939,7 @@ export class World {
     // attunes. Radius is data (LEYLINE_CFG.attuneRadius — the historical 70).
     if (!this.player.dead && !this.player.downed && this.waypointPos
       && !this.discoveredWaypoints.has(this.zone.id)
+      && this.player.tier === 0 // THE SAME-STORY LAW: the stone stands on the ground floor (placed on the base grid)
       && dist(this.player.pos, this.waypointPos) <= LEYLINE_CFG.attuneRadius) {
       if (this.waypointBesieged()) {
         if (this.time - this.wpRefusedAt > 2.5) {
@@ -45903,7 +45988,7 @@ export class World {
         // data/lonecrypt.ts): a riddle-sealed door never starts the dwell
         // either; its refusal rides the same float below.
         && !this.sidezoneSealHolds(cm.kind)
-        && this.dwellReachable(this.player.pos, cm.pos, transitReach(`sidezone:${cm.kind}`));
+        && this.dwellReachable(this.player.pos, cm.pos, transitReach(`sidezone:${cm.kind}`), this.storyPair(this.player, { tier: cm.mouthTier }));
       if (this.caveExitGrace) {
         if (!this.caveEntrances.some(onMouth)) this.caveExitGrace = false;
         this.caveDwellIdx = -1;
@@ -46028,7 +46113,7 @@ export class World {
             if (hero.dead || hero.downed || hero.push || !this.seatIdle(seat)) continue;
             const dd = dist(hero.pos, ld.pos);
             if (dd <= ld.radius + hero.radius + DOOR_REACH && dd < pullD
-              && this.dwellReachable(hero.pos, ld.pos, transitReach('door'))) { pullD = dd; puller = hero; }
+              && this.dwellReachable(hero.pos, ld.pos, transitReach('door'), this.storyPair(hero, ld))) { pullD = dd; puller = hero; }
           }
           if (!puller) { tw.pullStart = undefined; continue; }
           tw.pullStart ??= this.time;
@@ -46130,7 +46215,7 @@ export class World {
         for (const g of gates) {
           const d = dist(this.player.pos, g.pos);
           if (d <= transitRadius(`realm_gate:${g.kind}`, 32) + this.player.radius && d < bestGD
-            && this.dwellReachable(this.player.pos, g.pos, transitReach(`realm_gate:${g.kind}`))) { bestGD = d; onGate = g; }
+            && this.dwellReachable(this.player.pos, g.pos, transitReach(`realm_gate:${g.kind}`), this.storyPair(this.player))) { bestGD = d; onGate = g; }
         }
         if (onGate && this.playerIdle() && !this.player.push) {
           if (this.realmDwellKey !== onGate.key) {
@@ -46153,7 +46238,7 @@ export class World {
           for (const s of this.arenaWard.seals) {
             const d = dist(this.player.pos, s.pos);
             if (d <= transitRadius(`ward_seal:${s.kind}`, 30) + this.player.radius && d < sealD
-              && this.dwellReachable(this.player.pos, s.pos, transitReach(`ward_seal:${s.kind}`))) { sealD = d; onSeal = s; }
+              && this.dwellReachable(this.player.pos, s.pos, transitReach(`ward_seal:${s.kind}`), this.storyPair(this.player, s))) { sealD = d; onSeal = s; }
           }
           if (onSeal && this.playerIdle() && !this.player.push) {
             if (this.wardDwellSeal !== onSeal) { this.wardDwellSeal = onSeal; this.wardDwellStart = this.time; }
@@ -46174,7 +46259,7 @@ export class World {
         // discipline, hand-rolled for the ring).
         const keeper = this.holdfastKeeper();
         const nearKeeper = !!keeper && dist(this.player.pos, keeper.pos) <= transitRadius('holdfast', 78)
-          && this.dwellReachable(this.player.pos, keeper.pos, transitReach('holdfast'));
+          && this.dwellReachable(this.player.pos, keeper.pos, transitReach('holdfast'), this.storyPair(this.player, keeper));
         if (!nearKeeper) {
           this.holdfastDwellKey = ''; // stepped out of the ring → re-arm
         } else if (this.holdfastDwellKey !== 'done') {
@@ -46199,7 +46284,8 @@ export class World {
     if (!this.player.dead && !this.player.downed) {
       for (const e of this.encounters) {
         if (e.phase !== 'dormant' || e.def.extract) continue;
-        if (dist(this.player.pos, e.pos) <= this.player.radius + e.def.trigger.activateRadius) {
+        // (THE SAME-STORY LAW: an encounter seats on the ground floor — a storey walker over it never steps it open.)
+        if (this.player.tier === 0 && dist(this.player.pos, e.pos) <= this.player.radius + e.def.trigger.activateRadius) {
           this.openEncounter(e);
         }
       }
@@ -46209,6 +46295,7 @@ export class World {
     // to unleash the crawling fissure. No return; you keep playing as it crawls.
     if (!this.player.dead && !this.player.downed
       && this.fractureRun && this.fractureRun.phase === 'dormant'
+      && this.player.tier === 0 // THE SAME-STORY LAW: the fracture seats on the ground floor
       && dist(this.player.pos, this.fractureRun.origin) <= this.player.radius + 26) {
       this.triggerFracture();
     }
@@ -46227,7 +46314,7 @@ export class World {
         const d = dist(this.player.pos, e.pos);
         if (d > e.radius) continue;
         if (!this.dwellReachable(this.player.pos, e.pos,
-          transitReach(e.boundary ? `zone_exit:${e.boundary}` : 'zone_exit'))) continue;
+          transitReach(e.boundary ? `zone_exit:${e.boundary}` : 'zone_exit'), this.storyPair(this.player))) continue;
         if (this.isExitLocked(e)) { if (d < lockedD) { lockedD = d; lockedExit = e; } continue; }
         if (d < bestD) { bestD = d; onExit = e; }
       }
@@ -48645,7 +48732,17 @@ export class World {
     const back = Math.max(0, hit.d - LOS_CFG.clipBackoff);
     return this.clampPos(vec(
       caster.pos.x + (dest.x - caster.pos.x) * (back / len),
-      caster.pos.y + (dest.y - caster.pos.y) * (back / len)), caster.radius);
+      caster.pos.y + (dest.y - caster.pos.y) * (back / len)), caster.radius, undefined, { mover: caster });
+  }
+
+  /** THE SAME-STORY LAW's pair for dwellReachable (the tier fabric's
+   *  interaction sweep): the dweller's story and the object's (Actor.tier /
+   *  Doodad.tier). An object with no story field — a portal, an encounter
+   *  seat, a footprint, a player corpse — stands on the GROUND floor by
+   *  construction (every such fixture is placed on the base grid), so it
+   *  reads 0. Flat zones compare 0 with 0: byte-identical. */
+  storyPair(from: { tier?: number }, to?: { tier?: number } | null): { from: number; to: number } {
+    return { from: from.tier ?? 0, to: to?.tier ?? 0 };
   }
 
   /** THE DWELL-REACH RULE (data/transit.ts DWELL_CFG + per-row `reach` /
@@ -52504,7 +52601,7 @@ export class World {
       pb.timer -= dt;
       if (pb.timer <= 0) {
         this.pendingBlinks.splice(i, 1);
-        this.teleportActor(pb.actor, pb.dest, pb.color);
+        this.teleportActor(pb.actor, pb.dest, pb.color, undefined, pb.actor.tier);
         // Delayed blinks (Warp) erupt on arrival too.
         if (pb.inst) {
           this.moveBlast(pb.actor, pb.inst, pb.actor.pos);
@@ -52661,15 +52758,52 @@ export class World {
   /** The nearest LIVING, non-downed seat within `reach` of a point — the pickup
    *  claimant. Single-player resolves to the one seat; co-op is free-for-all
    *  first-come (whoever walks over it). The future trading seam slots in here. */
-  private pickupSeat(at: Vec2, reach: number, exclude?: string): Seat | undefined {
+  private pickupSeat(at: Vec2, reach: number, exclude?: string, story = 0): Seat | undefined {
     let best: Seat | undefined; let bestD = Infinity;
     for (const s of this.seats) {
       if (s.actor.dead || s.actor.downed) continue;
       if (exclude && s.id === exclude) continue;   // dropper can't reclaim yet
+      if (s.actor.tier !== story) continue;        // THE SAME-STORY LAW: its own story's hands only
       const d = dist(at, s.actor.pos);
       if (d <= s.actor.radius + reach && d < bestD) { bestD = d; best = s; }
     }
     return best;
+  }
+
+  /** THE SPOILS STORY's floor read for a thing lying at `at` with no
+   *  better witness (engine/tiers.ts floorStoryOf): the lowest story a body
+   *  could stand on that cell — a story-only cell is that story's, a
+   *  both-floor cell the ground's. Flat zones answer 0 without a read. */
+  spoilStoryAt(at: Vec2): number {
+    if (!this.zone.tiers || !this.walk?.regionAt) return 0;
+    return floorStoryOf(this.walk.regionAt(at.x, at.y));
+  }
+
+  /** THE SPOILS STAMP: every drop and orb minted since the marks (a body's
+   *  whole spoils pass — rollDrops, the elite spill, the purse burst, the
+   *  sack, the orbs, the kill rows) wears the shedding body's story, so the
+   *  helpers that mint them keep their position-only faces. Explicit stamps
+   *  (a discard's seat) are never overwritten. */
+  private stampSpoils(d0: number, o0: number, tier: number): void {
+    for (let i = d0; i < this.drops.length; i++) this.drops[i].tier ??= tier;
+    for (let i = o0; i < this.orbs.length; i++) this.orbs[i].tier ??= tier;
+  }
+
+  /** THE SPOILS STORY's CONTEXT: the story the current spoils pass sheds on
+   *  — set by the kill path around a body's whole spoils block and by the
+   *  wounded purse, read by every drop/orb helper so a packet CLAMPS on that
+   *  story's own floor (a butte kill's loot stays on the butte instead of
+   *  rolling off the base grid into the valley) and wears it. undefined =
+   *  no witness: the helper clamps on the base grid as ever and the sweep
+   *  reads the floor's word. Never persisted. */
+  private spoilStory: number | undefined = undefined;
+
+  /** The clamp options a spoils helper passes: the context's story view
+   *  (ClampOpts.tier) when a story is witnessed, else the legacy base-grid
+   *  clamp — byte-identical on the ground and in flat zones. */
+  private spoilClamp(): ClampOpts | undefined {
+    const s = this.spoilStory;
+    return s !== undefined && s >= 1 ? { tier: s } : undefined;
   }
 
   /** THE one orb spawn path: registry lookup, world cap, clamp, scatter.
@@ -52679,16 +52813,22 @@ export class World {
     scatter?: number; amount?: number; life?: number; homeTo?: Actor;
     /** false: keep the raw scatter point (siphon orbs fly home anyway). */
     clamp?: boolean;
+    /** THE SPOILS STORY: the shedder's story (a struck body's, a breakable's
+     *  own tier) — absent, the sweep reads the floor under the orb. */
+    tier?: number;
   }): void {
     const def = ORB_DEFS[kind];
     if (!def || this.orbs.length >= ORB_CAP) return;
     const s = opts?.scatter ?? 0;
     const p = vec(at.x + (s ? rand(-s, s) : 0), at.y + (s ? rand(-s, s) : 0));
+    const story = opts?.tier ?? this.spoilStory; // THE SPOILS STORY: the shedder's word, else the context's
     this.orbs.push({
-      pos: opts?.clamp === false ? p : this.clampPos(p, 8),
+      pos: opts?.clamp === false ? p
+        : this.clampPos(p, 8, undefined, story !== undefined && story >= 1 ? { tier: story } : undefined),
       kind, amount: opts?.amount ?? orbAmount(def, this.zone.level),
       bob: rand(0, Math.PI * 2), life: opts?.life ?? def.life ?? 12,
       homeTo: opts?.homeTo,
+      tier: story,
     });
     SIM_TAP.current?.onOrbShed?.(kind);
   }
@@ -52774,8 +52914,11 @@ export class World {
         continue;
       }
       // MAGNET kinds drift to the nearest living seat before the scoop —
-      // wakeflames are drawn to the living (def.magnet is the leash).
-      const seat = this.pickupSeat(orb.pos, Math.max(18, def.magnet ?? 0));
+      // wakeflames are drawn to the living (def.magnet is the leash). THE
+      // SAME-STORY LAW: only a seat on the orb's story (stamped by its
+      // shedder, else the floor's word) may draw or scoop it.
+      orb.tier ??= this.spoilStoryAt(orb.pos);
+      const seat = this.pickupSeat(orb.pos, Math.max(18, def.magnet ?? 0), undefined, orb.tier);
       if (!seat) continue;
       const p = seat.actor;
       if (dist(orb.pos, p.pos) > p.radius + 18) {
@@ -52793,6 +52936,9 @@ export class World {
     for (let i = this.drops.length - 1; i >= 0; i--) {
       const drop = this.drops[i];
       drop.bob += dt * 3;
+      // THE SPOILS STORY, settled once: the shedder's stamp, else the floor's
+      // word (World.spoilStoryAt) — every pickup below asks the same story.
+      drop.tier ??= this.spoilStoryAt(drop.pos);
       // A freshly player-dropped gem ticks down its grace before ANYONE can grab it.
       if (drop.grace !== undefined && drop.grace > 0) { drop.grace -= dt; continue; }
       // The DROPPER additionally can't reclaim it until they've stepped off it once
@@ -52807,7 +52953,7 @@ export class World {
       // vacuum ring; gear and gems sit tight to their shrunken sprites.
       // VESTIGES always vacuum — stackable satchel material, zero bag cost.
       if (drop.item.kind === 'vestige') {
-        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude);
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude, drop.tier);
         if (!seat) continue;
         this.grantVestige(seat, drop.item.id, drop.item.count);
         this.drops.splice(i, 1);
@@ -52816,7 +52962,7 @@ export class World {
       // ESSENCE always vacuums — currency underfoot, straight to the wallet
       // (grantEssence floats the gain, banks discovery, replicates the seat).
       if (drop.item.kind === 'essence') {
-        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude);
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude, drop.tier);
         if (!seat) continue;
         this.grantEssence(seat, { essence: drop.item.essence, count: drop.item.count });
         this.drops.splice(i, 1);
@@ -52824,7 +52970,7 @@ export class World {
       }
       // ABILITY ESSENCE packets vacuum the same way — skill food to the wallet.
       if (drop.item.kind === 'abilityEssence') {
-        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude);
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude, drop.tier);
         if (!seat) continue;
         this.grantAbilityEssence(seat, drop.item.tier, drop.item.count);
         this.drops.splice(i, 1);
@@ -52837,7 +52983,7 @@ export class World {
       // MERGES onto the seat's standing pouch tile of its KIND (no second
       // cell) or autoPlaces as the first pickup; a full bag leaves it lying.
       if (drop.item.kind === 'gear' && drop.item.item.mem) {
-        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gem, exclude);
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gem, exclude, drop.tier);
         if (!seat) continue;
         const item = drop.item.item;
         if (this.tryMergeMemoryItem(seat, item)) { this.drops.splice(i, 1); continue; }
@@ -52855,7 +53001,7 @@ export class World {
       // a deliberate press (pickupNearestGear); the key works in both modes.
       if (drop.item.kind === 'gear') {
         if (!this.gearVacuum) continue;
-        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gear, exclude);
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gear, exclude, drop.tier);
         if (!seat) continue;
         if (!autoPlace(seat.meta.items, drop.item.item)) {
           this.failNote(seat.actor, 'bagfull', 'inventory full');
@@ -52869,7 +53015,7 @@ export class World {
         this.drops.splice(i, 1);
         continue;
       }
-      const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gem, exclude);
+      const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gem, exclude, drop.tier);
       if (!seat) continue;
       const item = drop.item;
       // THE RESIDENCE: a vacuumed gem WRAPS into its 1×1 bag item — and for
@@ -55137,6 +55283,7 @@ export class World {
       for (let k = 0; k < this.harvestNodes.length; k++) {
         const n = this.harvestNodes[k];
         if (n.spent) continue;
+        if ((n.doodad.tier ?? 0) !== a.tier) continue; // THE SAME-STORY LAW: a node on another story never glints
         const g = dist(a.pos, n.pos);
         if (g <= HARVEST_CFG.armRadius + a.radius && g < best) { best = g; ix = k; }
       }
@@ -55467,7 +55614,7 @@ export class World {
     });
     if (br.text) this.text(vec(d.pos.x, d.pos.y - 14), br.text, color, 12);
     if (br.orbChance && chance(br.orbChance)) {
-      this.shedOrb(chance(0.5) ? 'life' : 'mana', d.pos);
+      this.shedOrb(chance(0.5) ? 'life' : 'mana', d.pos, { tier: d.tier });
     }
     if (br.gemChance && chance(br.gemChance)) this.dropGemAt(vec(d.pos.x, d.pos.y));
     // THE REMAINS (the quiet reclass): the wreck leaves its own pile — the
@@ -55562,6 +55709,7 @@ export class World {
           maxLife: CORPSE_CFG.mint.life + lvl * CORPSE_CFG.mint.lifePerLevel,
           remaining: CORPSE_CFG.duration,
           laidAt: this.time, from: vec(d.pos.x, d.pos.y), // M-SPILL: the body TUMBLES out of the host (no caption)
+          tier: d.tier, // THE SPOILS STORY: the wreck's own story
         });
       }
     }
@@ -56451,7 +56599,7 @@ export class World {
         if (s.charge >= opts.need) continue;
         const d = dist(this.player.pos, s.pos);
         if (d <= holdR && d < bd
-          && this.dwellReachable(this.player.pos, s.pos, transitReach(opts.transitKind))) { bd = d; held = s; }
+          && this.dwellReachable(this.player.pos, s.pos, transitReach(opts.transitKind), this.storyPair(this.player, s.doodad))) { bd = d; held = s; }
       }
     }
     let contested = false;
@@ -56954,7 +57102,7 @@ export class World {
           if (this.time - this.zoneEnteredAt < PROCESSION_CFG.entryGraceSec) { pr.dwellStart = 0; return; }
           const engaged = !this.player.dead
             && dist(this.player.pos, cart.pos) <= transitRadius('procession', 96)
-            && this.dwellReachable(this.player.pos, cart.pos, transitReach('procession'));
+            && this.dwellReachable(this.player.pos, cart.pos, transitReach('procession'), this.storyPair(this.player, cart));
           if (!engaged) { pr.dwellStart = 0; return; }
           if (pr.dwellStart === 0) pr.dwellStart = this.time;
           if (this.time - pr.dwellStart >= transitDwell('procession', 0.9)) {
