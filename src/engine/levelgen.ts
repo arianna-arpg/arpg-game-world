@@ -155,6 +155,8 @@ export type KnownDoodadKind =
   | 'washstand' // a basin and ewer on a round stand
   | 'coat_rack' // a post hung with travelers' cloaks and a hat
   | 'planter'   // a plank flower box — a doorstep's welcome
+  | 'wall_lantern' // a lantern on a bracket hung from a wall's outer face — light without a post to walk around
+  | 'stairway'  // THE STOREY FABRIC's drawn flight: a walk-over face laid over a storey_stair link (climbs toward `rot`)
   | 'lava'      // blocks movement but NOT shots — molten, like a chasm
   | 'cave_entrance' // blocks nothing — a transition trigger into a cave sub-zone
   | 'ritual_pentagram' // blocks nothing — a Conclave ritual circle (walkable; cultists ring it)
@@ -793,6 +795,28 @@ export interface PlacedStructure {
   /** The plan's derived room ledger (see PlacedRoom). Absent on legacy
    *  wall-strip structures. */
   rooms?: PlacedRoom[];
+  /** THE STOREY FABRIC (engine/storeys.ts): the floors ABOVE this plan, one
+   *  record per story — the storey's floor rects (the live floor the
+   *  renderer paints when the hero stands the story), its hanging-wall
+   *  rects (partitions standing on the room beneath), its own room ledger
+   *  + archways (the room veil confines by story), and the story index. */
+  storeys?: PlacedStorey[];
+}
+
+/** One story of a stacked plan structure (StructureDef.storeys[k-1]). */
+export interface PlacedStorey {
+  /** The story (Actor.tier / Doodad.tier) this record describes — 1 today. */
+  tier: number;
+  /** The story's floor (storey floor + landing + stair cells), merged rects. */
+  floors: { x: number; y: number; w: number; h: number }[];
+  /** Partitions hung on this story over the floor beneath (storey_wall
+   *  cells), merged rects — drawn as walls when the hero stands the story. */
+  walls: { x: number; y: number; w: number; h: number }[];
+  /** ARCHWAYS: the story's doorways — never a slab, always open; the room
+   *  ledger reads them as doors so a guest room stays a room. */
+  doors: PlacedDoor[];
+  /** The story's own room ledger (indices into `doors`). */
+  rooms?: PlacedRoom[];
 }
 
 /** A SPAWN SEAT — a def at a point, resolved AT GEN (deterministic per seed),
@@ -821,7 +845,10 @@ export interface GeneratedLayout {
   /** Destructible clutter to spawn (barrels, crates) — monster ids. */
   breakables: { id: string; pos: Vec2 }[];
   /** Friendly scenery folk to spawn (the smith at her forge). */
-  npcs: { id: string; pos: Vec2; line?: string }[];
+  npcs: { id: string; pos: Vec2; line?: string; tier?: number }[];
+  /** THE FOLK SEATS (StructureDef.folk): stands to roll a guest for at load
+   *  (data/innfolk.ts) — `key` is stable per structure + seat for the seed. */
+  folk?: { pool: string; pos: Vec2; tier?: number; chance?: number; key: string }[];
   /** Pre-inhabited POIs: a faction guard pack posts at each footprint. */
   garrisons: { pos: Vec2; faction: string; size: [number, number] }[];
   /** Cave-mouth seeds, one per 'cave_entrance' doodad (same push order). */
@@ -2309,9 +2336,18 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // pin them, surfaces pin 'fixed' where the painter draws a slab, and the
   // waist-high pieces (a counter, a candle, a flower box) stop feet but
   // never the eye or the arrow. Any plan anywhere furnishes with them
-  // (data/structures.ts legend chars t c a K j x i J u).
+  // (data/structures.ts legend chars t c a K j x i J u l). A CHAIR is
+  // walk-over DECOR (her word: a room full of pushed-back chairs must stay
+  // walkable — the rug's law, drawn under the bodies that cross it).
   tavern_table: { overlap: 'solid', blocksMove: true, spacing: 50, bodyScale: 0.9 },
-  chair:        { overlap: 'solid', blocksMove: true, spacing: 26, bodyScale: 0.7 },
+  chair:        { overlap: 'ground', walkOnly: true },
+  // A WALL LANTERN hangs from a wall's outer face — inert to feet (its
+  // bracket is above head height), a light and nothing else on the ground.
+  wall_lantern: { overlap: 'inert', spacing: 16 },
+  // THE STAIRWAY (engine/storeys.ts): the flight's drawn face over the
+  // storey_stair link cells — pure walk-over decor; the LINK REGION under
+  // it is the crossing, the painter only shows where the treads climb.
+  stairway:     { overlap: 'ground', walkOnly: true },
   bar_counter:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26,
     surface: { hw: 1.0, hh: 0.42, orient: 'fixed' } }, // one plank run — consecutive cells read as one counter
   keg:          { overlap: 'solid', blocksMove: true, spacing: 30,
@@ -3022,7 +3058,10 @@ export interface GenCtx {
   pois: Vec2[];
   camps: Vec2[];
   breakables: { id: string; pos: Vec2 }[];
-  npcs: { id: string; pos: Vec2; line?: string }[];
+  npcs: { id: string; pos: Vec2; line?: string; tier?: number }[];
+  /** THE FOLK SEATS (StructureDef.folk): stands to roll a guest for at load
+   *  (data/innfolk.ts) — `key` is stable per structure + seat for the seed. */
+  folk?: { pool: string; pos: Vec2; tier?: number; chance?: number; key: string }[];
   garrisons: { pos: Vec2; faction: string; size: [number, number] }[];
   caveSeeds: number[];
   /** Structure footprints (camps, ruins): later stamps route around them. */
@@ -3147,6 +3186,12 @@ export interface GenCtx {
   trapGeo?: TrapGeo;
   /** Plan structures raised so far (placeStructurePlan appends). */
   structures?: PlacedStructure[];
+  /** THE STOREY STACK (engine/storeys.ts): the tallest story any plan
+   *  structure raised in this layout — generateLayout stamps the zone's
+   *  `tiers` from it (an interior stack: the map stays silent, no pack
+   *  seats upstairs), so the mover, the veils and the AI all walk the
+   *  storey through the tier fabric's own doors. */
+  storeyLevels?: number;
   /** WAKE HERE: the last spawn cell a plan structure declared (CellSpec.spawn)
    *  — passed through to GeneratedLayout.spawnAt. */
   spawnAt?: Vec2;
@@ -5194,12 +5239,22 @@ export function generateLayout(
   // grid regrows to the generation span and every dormant piece gets its
   // face seated + carve recorded — nothing later may scatter a seal open.
   stampAnnexFaces(ctx, def);
+  // THE STOREY STACK (engine/storeys.ts): a plan structure raised a floor
+  // above — the zone declares the story so the tier fabric's every door
+  // opens (the mover's swap, the per-story fields, the veils). An INTERIOR
+  // stack: open exposure (the storey layer culls per building), the map
+  // stays silent, no ambient pack seats upstairs. A recipe that already
+  // stamped its own country keeps it (its levels stand at or above one).
+  if (ctx.storeyLevels && !def.tiers) {
+    def.tiers = { kind: 'over', exposure: 'open', levels: ctx.storeyLevels, packSplit: 0, interior: true };
+  }
   return {
     doodads: ctx.doodads, pois: ctx.pois, camps: ctx.camps,
     breakables: ctx.breakables, npcs: ctx.npcs,
     garrisons: ctx.garrisons, caveSeeds: ctx.caveSeeds,
     walk: ctx.walk, airPockets: ctx.airPockets,
     structures: ctx.structures,
+    folk: ctx.folk,
     spawnAt: ctx.spawnAt,
     pockets: ctx.pockets,
     landmarkSpawns: ctx.landmarkSpawns,
@@ -6115,6 +6170,101 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
   // below has verified the open-doors topology: the true invariant is "every
   // apron reachable once its doors open", not "while the castle is sealed".)
 
+  // THE STOREY COMPOSITE (engine/storeys.ts — THE STOREY FABRIC): each
+  // storey plan is read CELL FOR CELL over the ground plan and folded into
+  // ONE region kind per cell (the tier fabric's law: one cell, one row) —
+  // a storey floor over a ground floor is storey_floor (both floors), a
+  // storey floor over a ground wall is storey_deck, a storey wall over a
+  // ground floor is a HANGING WALL (storey_wall), a storey wall over a
+  // ground wall is the ground's own wall. The stair ('A' → storey_stair)
+  // and its landing ('^' → storey_landing) were painted by the ground pass
+  // and stand; the storey above them must read floor. Doodads and npcs on
+  // a storey plan are stamped with its story; 'D' cells are ARCHWAYS (the
+  // story's room ledger reads them as doors; no slab is ever raised).
+  const storeyRecords: PlacedStorey[] = [];
+  const storeyDoodads: Doodad[] = [];
+  const storeyNpcs: { id: string; pos: Vec2; tier: number }[] = [];
+  for (let si = 0; si < (def.storeys?.length ?? 0); si++) {
+    const sdef = def.storeys![si];
+    const tier = si + 1;
+    if (tier > 1) { console.warn(`[structures] '${def.id}': storey ${tier} skipped — the tier fabric keeps ONE elevated floor per cell today`); break; }
+    const groundAt = new Map<number, PlanCell>();
+    for (const c of cells) groundAt.set(c.cy * planW + c.cx, c);
+    const floorIdx = new Set<number>();
+    const wallIdx = new Set<number>();   // hanging walls painted (drawn as walls on the story)
+    const sealIdx = new Set<number>();   // every storey wall cell (the ledger's rim law)
+    const archCells: { cx: number; cy: number }[] = [];
+    for (let cy = 0; cy < sdef.plan.length; cy++) {
+      for (let cx = 0; cx < sdef.plan[cy].length; cx++) {
+        const ch = sdef.plan[cy][cx];
+        const spec = legendCell(ch, sdef.legend);
+        if (!spec) continue;
+        const key = cy * planW + cx;
+        const g = groundAt.get(key);
+        if (!g || cx >= planW || cy >= planH) {
+          console.warn(`[structures] '${def.id}': storey ${tier} cell (${cx},${cy}) '${ch}' stands over no ground cell — skipped`);
+          continue;
+        }
+        const r = cellRect(cx, cy);
+        const groundKind = g.spec.region;
+        const groundWall = !!groundKind && !g.spec.door && regionKind(groundKind)?.walkable === false
+          && regionKind(groundKind)?.tier === undefined; // a true ground wall (not the landing)
+        const floorish = !!(spec.interior || spec.courtyard || spec.doodad || spec.npc || spec.spawn || spec.slot || spec.breakable);
+        if (spec.door) {
+          // An ARCHWAY: the story's floor + a doorway record (no slab).
+          if (g.spec.door) { console.warn(`[structures] '${def.id}': storey ${tier} archway over a ground door at (${cx},${cy}) — skipped`); continue; }
+          if (!groundWall) grid.fillRegion(r.x0, r.y0, r.x1, r.y1, 'storey_floor');
+          else grid.fillRegion(r.x0, r.y0, r.x1, r.y1, 'storey_deck');
+          archCells.push({ cx, cy });
+          continue;
+        }
+        if (spec.region && !floorish) {
+          // A storey WALL. Over a ground wall it is the ground's wall
+          // (nothing to paint); over ground floor it HANGS.
+          sealIdx.add(key);
+          if (g.spec.door) continue; // the wall row above a ground door stays the door's
+          if (!groundWall) {
+            if (groundKind === 'storey_stair' || groundKind === 'storey_landing') {
+              console.warn(`[structures] '${def.id}': storey ${tier} wall over the stair/landing at (${cx},${cy}) — the flight needs floor above it`);
+              continue;
+            }
+            grid.fillRegion(r.x0, r.y0, r.x1, r.y1, 'storey_wall');
+            wallIdx.add(key);
+          }
+          continue;
+        }
+        if (!floorish) continue;
+        // A storey FLOOR cell.
+        if (groundKind === 'storey_stair' || groundKind === 'storey_landing') {
+          floorIdx.add(key); // the flight + its head are the story's floor already
+        } else if (g.spec.door) {
+          console.warn(`[structures] '${def.id}': storey ${tier} floor over a ground door at (${cx},${cy}) — skipped (a door cell repaints)`);
+          continue;
+        } else if (groundWall) {
+          grid.fillRegion(r.x0, r.y0, r.x1, r.y1, 'storey_deck');
+          floorIdx.add(key);
+        } else {
+          grid.fillRegion(r.x0, r.y0, r.x1, r.y1, 'storey_floor');
+          floorIdx.add(key);
+        }
+        const p = cellCenter(cx, cy);
+        if (spec.doodad) {
+          storeyDoodads.push({
+            pos: p, radius: spec.doodad.radius ?? cell * 0.55, kind: spec.doodad.kind, tier,
+            effect: spec.doodad.effect ? { ...spec.doodad.effect } : undefined,
+          });
+        }
+        if (spec.npc) storeyNpcs.push({ id: spec.npc, pos: p, tier });
+      }
+    }
+    // The ground plan's stair + landing cells belong to the story's floor
+    // whatever the storey plan drew over them (they were validated above).
+    for (const c of cells) {
+      if (c.spec.region === 'storey_stair' || c.spec.region === 'storey_landing') floorIdx.add(c.cy * planW + c.cx);
+    }
+    storeyRecords.push({ tier, floors: [], walls: [], doors: [], ...({ floorIdx, wallIdx, sealIdx, archCells } as object) } as PlacedStorey);
+  }
+
   const sid = `${def.id}#${ctx.structures?.length ?? 0}`;
   const placed: PlacedStructure = {
     id: sid, defId: def.id, rect, cellSize: cell,
@@ -6172,8 +6322,13 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     ctx.breakables.push({ id: b.id, pos: vec(center.x + b.x, center.y + b.y) });
   }
   for (const n of def.npcs ?? []) {
-    ctx.npcs.push({ id: n.id, pos: vec(center.x + n.x, center.y + n.y), ...(n.line ? { line: n.line } : {}) });
+    ctx.npcs.push({ id: n.id, pos: vec(center.x + n.x, center.y + n.y), ...(n.line ? { line: n.line } : {}), ...(n.tier ? { tier: n.tier } : {}) });
   }
+  // THE FOLK SEATS: recorded, never rolled here (generation draws nothing
+  // for them — the world rolls each seat on its own per-day seed).
+  (def.folk ?? []).forEach((fk, i) => {
+    (ctx.folk ??= []).push({ pool: fk.pool, pos: vec(center.x + fk.x, center.y + fk.y), ...(fk.tier ? { tier: fk.tier } : {}), ...(fk.chance !== undefined ? { chance: fk.chance } : {}), key: `${sid}:folk${i}` });
+  });
 
   // Door doodads: one per group, sized to span the breach.
   for (let gi = 0; gi < doorGroups.length; gi++) {
@@ -6250,7 +6405,8 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     const specAt = new Map<number, (typeof cells)[number]>();
     for (const c of cells) specAt.set(c.cy * planW + c.cx, c);
     const isMember = (c: (typeof cells)[number] | undefined): boolean =>
-      !!c && !!c.spec.interior && !c.spec.courtyard && !c.spec.door;
+      !!c && !!c.spec.interior && !c.spec.courtyard && !c.spec.door
+      && !(c.spec.region && regionKind(c.spec.region)?.walkable === false); // a closet under the stairs is no floor
     const doorGroupOf = new Map<number, number>();
     for (let gi = 0; gi < doorGroups.length; gi++) {
       for (const dc of doorGroups[gi].cells) doorGroupOf.set(dc.cy * planW + dc.cx, gi);
@@ -6310,6 +6466,123 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
         rects: mergeCells(cc => comp.has(cc.cy * planW + cc.cx)),
         doors: [...doorIdx], windows, enclosed,
       });
+    }
+  }
+
+  // THE STOREY LEDGER (engine/storeys.ts): each story's floor and hanging-wall
+  // rects (merged through the same cell merger), its archways as PlacedDoor
+  // records (open forever, never a doodad — the veil punches them, the
+  // ledger counts them), and its own room flood: a storey room's rim is a
+  // storey wall (hung or the ground's), the plan's edge, or an archway;
+  // the flight's cells and the landing are its floor.
+  if (storeyRecords.length) {
+    const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+    for (const rec of storeyRecords) {
+      const scratch = rec as unknown as { floorIdx: Set<number>; wallIdx: Set<number>; sealIdx: Set<number>; archCells: { cx: number; cy: number }[] };
+      const { floorIdx, wallIdx, sealIdx, archCells } = scratch;
+      rec.floors = mergeCells(c => floorIdx.has(c.cy * planW + c.cx));
+      rec.walls = mergeCells(c => wallIdx.has(c.cy * planW + c.cx));
+      // Archways: one PlacedDoor per cell (a doorway is one cell wide upstairs).
+      const archIdx = new Map<number, number>();
+      for (const ac of archCells) {
+        const r = cellRect(ac.cx, ac.cy);
+        // The arch's normal: toward whichever neighbor is NOT storey floor
+        // along the wall it pierces (a doorway on a room's south wall opens
+        // south); default south.
+        let n = vec(0, 1);
+        for (const [dx, dy] of STEPS) {
+          const nk = (ac.cy + dy) * planW + (ac.cx + dx);
+          if (floorIdx.has(nk)) { n = vec(-dx, -dy); }
+        }
+        const door: DoodadDoor = {
+          id: `${sid}:storey${rec.tier}:arch${rec.doors.length}`, mode: 'sealed', open: true,
+          cells: { x: r.x0, y: r.y0, w: r.x1 - r.x0, h: r.y1 - r.y0 },
+        };
+        archIdx.set(ac.cy * planW + ac.cx, rec.doors.length);
+        rec.doors.push({ door, pos: cellCenter(ac.cx, ac.cy), normal: n });
+      }
+      // The room flood over the story's floor cells.
+      const seen = new Set<number>();
+      for (const k0 of floorIdx) {
+        if (seen.has(k0)) continue;
+        const comp = new Set<number>();
+        const queue = [k0];
+        seen.add(k0);
+        while (queue.length) {
+          const k = queue.pop()!;
+          comp.add(k);
+          const cx = k % planW, cy = (k - cx) / planW;
+          for (const [dx, dy] of STEPS) {
+            const nx = cx + dx, ny = cy + dy;
+            if (nx < 0 || ny < 0 || nx >= planW || ny >= planH) continue;
+            const nk = ny * planW + nx;
+            if (!seen.has(nk) && floorIdx.has(nk)) { seen.add(nk); queue.push(nk); }
+          }
+        }
+        let enclosed = true;
+        const doorIdx = new Set<number>();
+        for (const k of comp) {
+          const cx = k % planW, cy = (k - cx) / planW;
+          for (const [dx, dy] of STEPS) {
+            const nx = cx + dx, ny = cy + dy;
+            const nk = ny * planW + nx;
+            if (comp.has(nk)) continue;
+            const ai = archIdx.get(nk);
+            if (ai !== undefined) { doorIdx.add(ai); continue; }
+            const inPlan = nx >= 0 && ny >= 0 && nx < planW && ny < planH;
+            if (!inPlan) continue; // the plan's edge is the building's outer wall
+            if (sealIdx.has(nk)) continue; // a storey wall seals (hung, or the ground's own wall/door row)
+            const g = cells.find(c => c.cx === nx && c.cy === ny);
+            const gk = g?.spec.region ? regionKind(g.spec.region) : undefined;
+            if (gk && gk.walkable === false && !g?.spec.door) continue; // the ground's wall seals both floors
+            enclosed = false; // storey floor meeting open air / a ground doorway
+          }
+        }
+        (rec.rooms ??= []).push({ rects: mergeCells(c => comp.has(c.cy * planW + c.cx)), doors: [...doorIdx], windows: [], enclosed });
+      }
+      delete (rec as unknown as { floorIdx?: unknown }).floorIdx;
+      delete (rec as unknown as { wallIdx?: unknown }).wallIdx;
+      delete (rec as unknown as { sealIdx?: unknown }).sealIdx;
+      delete (rec as unknown as { archCells?: unknown }).archCells;
+    }
+    placed.storeys = storeyRecords;
+    for (const d of storeyDoodads) ctx.doodads.push(d);
+    for (const n of storeyNpcs) ctx.npcs.push(n);
+    ctx.storeyLevels = Math.max(ctx.storeyLevels ?? 0, storeyRecords.length);
+    // THE STAIRWAY FACE: one walk-over 'stairway' doodad per connected run of
+    // storey_stair cells, sized to the run and turned to climb toward the
+    // landing it meets (the '^' cells at its head) — the drawn flight over
+    // the crossing the tier fabric walks.
+    const stairIdx = new Set<number>();
+    for (const c of cells) if (c.spec.region === 'storey_stair') stairIdx.add(c.cy * planW + c.cx);
+    const seenS = new Set<number>();
+    for (const k0 of stairIdx) {
+      if (seenS.has(k0)) continue;
+      const comp: number[] = [];
+      const queue = [k0];
+      seenS.add(k0);
+      while (queue.length) {
+        const k = queue.pop()!;
+        comp.push(k);
+        const cx = k % planW, cy = (k - cx) / planW;
+        for (const [dx, dy] of STEPS) {
+          const nk = (cy + dy) * planW + (cx + dx);
+          if (stairIdx.has(nk) && !seenS.has(nk)) { seenS.add(nk); queue.push(nk); }
+        }
+      }
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const k of comp) { const cx = k % planW, cy = (k - cx) / planW; x0 = Math.min(x0, cx); x1 = Math.max(x1, cx); y0 = Math.min(y0, cy); y1 = Math.max(y1, cy); }
+      const centre = vec(rect.x + (x0 + x1 + 1) / 2 * cell, rect.y + (y0 + y1 + 1) / 2 * cell);
+      let lx = 0, ly = 0, ln = 0;
+      for (const c of cells) {
+        if (c.spec.region !== 'storey_landing') continue;
+        const near = comp.some(k => { const cx = k % planW, cy = (k - cx) / planW; return Math.abs(cx - c.cx) + Math.abs(cy - c.cy) === 1; });
+        if (!near) continue;
+        const p = cellCenter(c.cx, c.cy);
+        lx += p.x; ly += p.y; ln++;
+      }
+      const rot = ln ? Math.atan2(ly / ln - centre.y, lx / ln - centre.x) : -Math.PI / 2;
+      ctx.doodads.push({ pos: centre, radius: Math.max(x1 - x0 + 1, y1 - y0 + 1) * cell / 2, kind: 'stairway', rot });
     }
   }
 

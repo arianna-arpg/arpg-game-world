@@ -48,6 +48,8 @@ import { PAINTERS } from '../src/render/vis/painters';
 import '../src/render/vis/paintersInn';
 import { doodadRuleOf } from '../src/engine/levelgen';
 import { sidezoneOf } from '../src/data/sidezones';
+import { updateAI } from '../src/engine/ai';
+import { DAY_LENGTH } from '../src/world/daynight';
 import { SALVAGE_CFG } from '../src/data/essences';
 import { BOUNTY_BOARD_CFG } from '../src/data/bountyboard';
 import { LEYLINE_CFG } from '../src/data/leyline';
@@ -369,13 +371,36 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
     bf.plan![0].includes('N') && /^_+$/.test(bf.plan![bf.plan!.length - 1]));
   check('E: the front is dressed as a locale (rails, flower boxes, lanterns, benches)',
     ['y', 'u', 'L', 'b'].every(ch => bf.plan!.some(row => row.includes(ch))));
-  // THE INN wears the kit: a counter run, the stair up, the hearth, tables.
+  // THE DOOR LANE LAW (her walk, 2026-09-05 — a post out front of the door
+  // made the inn a chore to enter): the door's approach column, from the
+  // wall down to the square, holds NOTHING of the front — not its rect, not
+  // a post; the inn lights its own step with wall lanterns (inert to feet).
+  const LANE_HALF = 40, LANE_DEPTH = 120; // DIALs: the column's half width + reach
+  let lane = true;
+  for (let tier = 0; tier < TOWN_TIERS.length; tier++) {
+    const innAt = townSiteAt(tier, 'inn')!, board = townSiteAt(tier, 'bounty_board')!;
+    const door = { x: innAt.x + 13, y: innAt.y + inn.halfH };
+    const col = { x0: door.x - LANE_HALF, y0: door.y, x1: door.x + LANE_HALF, y1: door.y + LANE_DEPTH };
+    if (rectsOverlap(rectOf('bounty_front', board), col)) { lane = false; console.log(`   tier ${tier}: the front stands in the door lane`); }
+  }
+  check('E: THE DOOR LANE LAW — the front never stands in the door\'s approach column, any tier', lane);
+  check('E: the front\'s east end (the door\'s side) is open ground — one lantern post, at the west end',
+    bf.plan![1].startsWith('L') && !bf.plan![1].endsWith('L') && bf.plan![1].endsWith('..'));
+  check('E: the inn hangs wall lanterns either side of its door (inert to feet, a light on the step)',
+    (inn.props ?? []).filter(p => p.kind === 'wall_lantern').length === 2
+    && (inn.props ?? []).filter(p => p.kind === 'wall_lantern').every(p => p.y > inn.halfH && Math.abs(p.x - 13) < 60 && Math.abs(p.x - 13) > 20)
+    && doodadRuleOf('wall_lantern').overlap === 'inert');
+  // THE INN wears the kit: a counter run, the stairway up, the hearth, tables
+  // — and its rooms above ride THE STOREY FABRIC (a storey plan, not a pocket).
   check('E: the inn plan keeps its door seat (bottom row, centre-right cell = +13)',
     inn.plan![inn.plan!.length - 1].indexOf('D') === inn.plan![0].length / 2);
-  check('E: the inn plan seats the stair up, a counter run, the hearth, tables and chairs',
-    inn.plan!.some(r => r.includes('A')) && inn.plan!.some(r => r.includes('aaa')) && inn.plan!.some(r => r.includes('h'))
-    && inn.plan!.some(r => r.includes('t')) && inn.plan!.some(r => r.includes('c'))
-    && inn.legend?.A?.doodad?.kind === 'inn_stair');
+  check('E: the inn plan seats the stairway ("AA" + its landing "^^"), a counter run, the hearth, tables and chairs',
+    inn.plan!.some(r => r.includes('AA')) && inn.plan!.some(r => r.includes('^^')) && inn.plan!.some(r => r.includes('aaa'))
+    && inn.plan!.some(r => r.includes('h')) && inn.plan!.some(r => r.includes('t')) && inn.plan!.some(r => r.includes('c'))
+    && legendCell('A')?.region === 'storey_stair' && legendCell('^')?.region === 'storey_landing');
+  check('E: the inn carries ONE storey plan of the ground plan\'s exact dimensions (the rooms above)',
+    inn.storeys?.length === 1 && inn.storeys[0].plan.length === inn.plan!.length
+    && inn.storeys[0].plan.every(r => r.length === inn.plan![0].length));
   check('E: the inn confines by room, roofed and boarded (the interior fabric)',
     inn.confineVision === 'rooms' && inn.roofs === 'auto' && inn.floorStyle === 'boards');
 }
@@ -488,7 +513,7 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
   check('H: the front raised its locale (rails, flower boxes, lanterns, benches) and no roof over it',
     w.doodads.some(d => d.kind === 'rail_fence' && d2(d.pos, w.townSeat('bounty_board')) < 120)
     && w.doodads.some(d => d.kind === 'planter' && d2(d.pos, w.townSeat('bounty_board')) < 120)
-    && w.doodads.filter(d => d.kind === 'lantern_post' && d2(d.pos, w.townSeat('bounty_board')) < 120).length >= 2
+    && w.doodads.filter(d => d.kind === 'lantern_post' && d2(d.pos, w.townSeat('bounty_board')) < 120).length === 1 // ONE post, west (the door lane law)
     && w.doodads.filter(d => d.kind === 'bench' && d2(d.pos, w.townSeat('bounty_board')) < 120).length >= 2
     && !w.roofedStructureAt(w.townSeat('bounty_board')));
   check('H: every fixture the township authored was raised (structures resolve)',
@@ -587,46 +612,56 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
 }
 
 // ------------------------------------- J. THE INN'S FLOORS + THE INN KIT
-// The inn wave (2026-09-05): the public house on the kit, the stair up into
-// the minted rooms above, the spoken seats, and the kit's own census — every
-// piece a rule + a face + a brush + a plan character, so any plan anywhere
-// may furnish with it.
+// The inn wave (2026-09-05): the public house on the kit, the rooms above on
+// THE STOREY FABRIC (the same map one story up — probe_storey.ts pins the
+// fabric's own laws; this rig pins the inn wearing it), the spoken seats,
+// and the kit's own census — every piece a rule + a face + a brush + a plan
+// character, so any plan anywhere may furnish with it.
 {
   const KIT = ['tavern_table', 'chair', 'bar_counter', 'keg', 'dresser', 'linen_chest',
-    'candle_stand', 'washstand', 'coat_rack', 'planter'];
-  check('J: every INN KIT kind carries a collision rule (never the ground fallback)',
-    KIT.every(k => doodadRuleOf(k).overlap === 'solid' && doodadRuleOf(k).blocksMove === true), KIT.filter(k => doodadRuleOf(k).overlap !== 'solid').join(','));
+    'candle_stand', 'washstand', 'coat_rack', 'planter', 'wall_lantern'];
+  const SOLID = KIT.filter(k => k !== 'chair' && k !== 'wall_lantern');
+  check('J: every standing INN KIT kind carries a collision rule (never the ground fallback)',
+    SOLID.every(k => doodadRuleOf(k).overlap === 'solid' && doodadRuleOf(k).blocksMove === true), SOLID.filter(k => doodadRuleOf(k).overlap !== 'solid').join(','));
+  check('J: a chair is walk-over decor (her word: a room of pushed-back chairs stays walkable), drawn under the bodies that cross it',
+    doodadRuleOf('chair').overlap === 'ground' && doodadRuleOf('chair').walkOnly === true
+    && (DOODAD_VISUALS.chair.order ?? 50) < 50 && (DOODAD_VISUALS.chair.order ?? 0) > (DOODAD_VISUALS.rug.order ?? 0));
   check('J: every INN KIT kind wears a face, and every face names a real brush',
     KIT.every(k => !!DOODAD_VISUALS[k] && !!PAINTERS[DOODAD_VISUALS[k].painter])
     && DOODAD_VISUALS.bounty_board.painter === 'noticeBoard' && !!PAINTERS.noticeBoard
-    && DOODAD_VISUALS.inn_stair.painter === 'stairFlight');
+    && DOODAD_VISUALS.stairway.painter === 'stairway' && !!PAINTERS.stairway && !!PAINTERS.wallLantern);
   check('J: the waist-high pieces stop feet, never the eye or the arrow (the counter, the candle, the flower box)',
     ['bar_counter', 'candle_stand', 'planter'].every(k => doodadRuleOf(k).blocksShot === false));
-  check('J: the plan vocabulary grew the kit (t c a K j x i J u y all resolve to the kit\'s kinds)',
+  check('J: the plan vocabulary grew the kit (t c a K j x i J u y l all resolve to the kit\'s kinds)',
     legendCell('t')?.doodad?.kind === 'tavern_table' && legendCell('c')?.doodad?.kind === 'chair'
     && legendCell('a')?.doodad?.kind === 'bar_counter' && legendCell('K')?.doodad?.kind === 'keg'
     && legendCell('j')?.doodad?.kind === 'dresser' && legendCell('x')?.doodad?.kind === 'linen_chest'
     && legendCell('i')?.doodad?.kind === 'candle_stand' && legendCell('J')?.doodad?.kind === 'coat_rack'
-    && legendCell('u')?.doodad?.kind === 'planter' && legendCell('y')?.doodad?.kind === 'rail_fence');
-  check('J: the stair up is a registered sidezone mouth, dwelled only under the roof, ledgered',
-    !!sidezoneOf('inn_stair') && sidezoneOf('inn_stair')!.indoorsOnly === true
-    && sidezoneOf('inn_stair')!.ledgerOnEnter === 'inn_climbed' && doodadRuleOf('inn_stair').overlap === 'trigger');
-  // LIVE: the hamlet's inn — the kit on the boards, the stair in the corner,
-  // Mireille behind her counter, the patron speaking the stair.
+    && legendCell('u')?.doodad?.kind === 'planter' && legendCell('y')?.doodad?.kind === 'rail_fence'
+    && legendCell('l')?.doodad?.kind === 'wall_lantern');
+  check('J: the stairway is a walk-over face (the crossing under it is the tier fabric\'s), never a pocket door',
+    doodadRuleOf('stairway').overlap === 'ground' && doodadRuleOf('stairway').walkOnly === true
+    && sidezoneOf('inn_stair') === undefined && !DOODAD_VISUALS.stairway.params?.label);
+  // LIVE: the hamlet's inn — the kit on the boards, the stairway in the
+  // corner, Mireille behind her counter, the patron speaking the stair.
   const w = mkTownWorld(makeAccount());
   const innAt = w.townSeat('inn');
   const innRect = rectOf('inn', innAt);
   const inInn = (d: { pos: { x: number; y: number } }): boolean => inRect(d.pos, innRect);
-  const kindsInInn = new Set(w.doodads.filter(inInn).map(d => d.kind));
-  check('J: the inn raised its furniture (counter run, kegs, tables, chairs, hearth, rugs, the stair)',
-    ['bar_counter', 'keg', 'tavern_table', 'chair', 'hearth', 'rug', 'coat_rack', 'candle_stand', 'inn_stair'].every(k => kindsInInn.has(k)),
+  const ground = w.doodads.filter(d => inInn(d) && (d.tier ?? 0) === 0);
+  const kindsInInn = new Set(ground.map(d => d.kind));
+  check('J: the inn raised its ground-floor furniture (counter run, kegs, tables, chairs, hearth, rugs, the stairway)',
+    ['bar_counter', 'keg', 'tavern_table', 'chair', 'hearth', 'rug', 'coat_rack', 'candle_stand', 'stairway'].every(k => kindsInInn.has(k)),
     [...kindsInInn].join(','));
-  check('J: the counter is a RUN (five chained cells)', w.doodads.filter(d => inInn(d) && d.kind === 'bar_counter').length === 5);
-  const stair = w.doodads.find(d => d.kind === 'inn_stair')!;
-  check('J: exactly one stair stands in the inn, under its roof',
-    w.doodads.filter(d => d.kind === 'inn_stair').length === 1 && !!w.roofedStructureAt(stair.pos));
+  check('J: the counter is a RUN (five chained cells)', ground.filter(d => d.kind === 'bar_counter').length === 5);
+  check('J: the wall lanterns hang OUTSIDE the south wall, either side of the door, off the floor',
+    w.doodads.filter(d => d.kind === 'wall_lantern' && d.pos.y > innAt.y + STRUCTURES.inn.halfH && Math.abs(d.pos.x - innAt.x) < 80).length === 2);
+  const stair = w.doodads.find(d => d.kind === 'stairway')!;
+  check('J: exactly one stairway stands in the inn, under its roof, climbing SOUTH to its landing',
+    w.doodads.filter(d => d.kind === 'stairway').length === 1 && !!w.roofedStructureAt(stair.pos)
+    && Math.abs((stair.rot ?? 0) - Math.PI / 2) < 0.01 && stair.radius >= 26);
   const mireille = w.actors.find(a => a.defId === 'townsfolk_innkeep')!;
-  const counter = w.doodads.filter(d => inInn(d) && d.kind === 'bar_counter');
+  const counter = ground.filter(d => d.kind === 'bar_counter');
   check('J: Mireille stands BEHIND her counter (north of the run, within a step of it)',
     !!mireille && counter.every(c => c.pos.y > mireille.pos.y) && counter.some(c => d2(c.pos, mireille.pos) < 40));
   w.player.pos.x = mireille.pos.x; w.player.pos.y = mireille.pos.y + 60;
@@ -637,29 +672,75 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
     && (w.residentPrompt(patron) ?? '').includes('stair'));
   w.player.pos.x = patron.pos.x + 700; w.player.pos.y = patron.pos.y + 500;
   check('J: and holds his tongue across the square', w.residentPrompt(patron) === null);
-  // THE ROOMS ABOVE: climb the stair.
-  w.player.pos.x = stair.pos.x; w.player.pos.y = stair.pos.y;
-  (w as unknown as { enterSidezone(cm: { pos: { x: number; y: number }; seed: number; kind: string }): void })
-    .enterSidezone({ pos: { x: stair.pos.x, y: stair.pos.y }, seed: 77, kind: 'inn_stair' });
-  check('J: the stair mints THE ROOMS ABOVE (a safe, sheltered, one-flight pocket)',
-    w.zone.id.startsWith('cave_inn_stair_') && String(w.zone.name).includes('Rooms Above')
-    && w.zone.objective?.kind === 'safe' && w.zone.caveDepth === 1 && w.zone.noDeeper === true, `${w.zone.id} · ${w.zone.name}`);
+  // THE FOLK ROSTER (data/innfolk.ts) + THE HAUNT (engine/ai.ts): the inn's
+  // company is rolled per day off the pools, named, lined, coloured, and
+  // STROLLS between its furniture — passive still (scenery with legs).
+  const folk = w.actors.filter(a => a.defId?.startsWith('folk_'));
+  check('J: the inn seats rostered guests (rolled off the folk pools, each a real def wearing a haunt)',
+    folk.length >= 2 && folk.every(a => inInn(a) && MONSTERS[a.defId!]?.passive === true && !!MONSTERS[a.defId!]?.brain?.behavior?.haunt),
+    folk.map(a => `${a.name}(${a.defId})`).join(', '));
+  check('J: every guest wears a rolled name and speaks a rolled line (the spoken seat)',
+    folk.every(a => a.name.length > 2) && folk.every(a => {
+      w.player.pos.x = a.pos.x + 18; w.player.pos.y = a.pos.y + 18; w.player.tier = a.tier;
+      return (w.residentPrompt(a) ?? '').length > 10;
+    }));
+  w.player.tier = 0; w.player.pos.x = 60; w.player.pos.y = 60;
+  const w2 = mkTownWorld(makeAccount());
+  const company = (x: World): string => x.actors.filter(a => a.defId?.startsWith('folk_')).map(a => `${a.name}|${a.defId}|${a.tier}`).join(',');
+  check('J: the same world on the same day seats the same company (seeded per seat + day)', company(w2) === company(w));
+  const w3 = mkTownWorld(makeAccount()); w3.time = DAY_LENGTH * 2 + 3; w3.loadZone(START_ZONE);
+  check('J: a new day deals new faces (the roll rides the day)', company(w3) !== company(w) || company(w3).length === 0);
+  // The stroll: sixty seconds under the AI drive — the patron and every guest
+  // move, linger at seats, stay in the inn, and keep their stories.
+  const strollers = [patron, ...folk];
+  const start = strollers.map(a => ({ x: a.pos.x, y: a.pos.y, tier: a.tier }));
+  let lingered = 0;
+  for (let i = 0; i < 30 * 60; i++) {
+    w.update(1 / 30);
+    for (const a of w.actors) updateAI(a, w, 1 / 30);
+    for (const a of strollers) if (a.hauntSeat?.until !== undefined) lingered++;
+  }
+  check('J: THE HAUNT — the patron and the guests stroll (every one moved, and lingered at a seat facing it)',
+    strollers.every((a, i) => Math.hypot(a.pos.x - start[i].x, a.pos.y - start[i].y) > 6) && lingered > 0,
+    strollers.map((a, i) => `${a.name}:${Math.hypot(a.pos.x - start[i].x, a.pos.y - start[i].y).toFixed(0)}`).join(' '));
+  check('J: THE STORY LAW — a stroller keeps its story and its roof (nobody wandered downstairs, upstairs, or out the door)',
+    strollers.every((a, i) => a.tier === start[i].tier && inInn(a)));
+  check('J: strolling scenery is still scenery (passive, invulnerable, untargeted by the count)',
+    strollers.every(a => a.passive && a.invulnerable));
+  // THE ROOMS ABOVE — the same map, one story up (probe_storey pins the
+  // fabric; here: the inn's storey stands, furnished, the lodger on it).
+  const innSt = w.structures.find(s => s.defId === 'inn')!;
+  const rec = innSt.storeys?.[0];
+  check('J: the inn stands ONE storey above on the tier fabric (the zone declares an interior stack)',
+    !!rec && rec.tier === 1 && w.zone.tiers?.interior === true && w.zone.tiers.levels === 1);
   const up = new Map<string, number>();
-  for (const d of w.doodads) up.set(d.kind, (up.get(d.kind) ?? 0) + 1);
-  check('J: three guest rooms furnished (beds, dressers, chests, rugs, candles, a washstand, the linen shelf)',
-    (up.get('bed') ?? 0) === 3 && (up.get('dresser') ?? 0) >= 2 && (up.get('linen_chest') ?? 0) >= 3
-    && (up.get('rug') ?? 0) >= 5 && (up.get('candle_stand') ?? 0) >= 4 && (up.get('washstand') ?? 0) === 1 && (up.get('shelf') ?? 0) >= 1,
+  for (const d of w.doodads) if (inInn(d) && (d.tier ?? 0) === 1) up.set(d.kind, (up.get(d.kind) ?? 0) + 1);
+  check('J: three guest rooms furnished a story up (beds, dressers, chests, rugs, candles, a washstand, a shelf) — every piece wearing tier 1',
+    (up.get('bed') ?? 0) === 3 && (up.get('dresser') ?? 0) >= 2 && (up.get('linen_chest') ?? 0) >= 2
+    && (up.get('rug') ?? 0) >= 4 && (up.get('candle_stand') ?? 0) >= 3 && (up.get('washstand') ?? 0) === 1 && (up.get('shelf') ?? 0) >= 1,
     [...up.entries()].map(([k, n]) => `${k}:${n}`).join(','));
-  check('J: every guest room stands behind its own door (four doors onto the landing + the way down)',
-    (up.get('door') ?? 0) >= 5);
-  check('J: the top floor lays no further stair (the strip law)', !w.doodads.some(d => d.kind === 'inn_stair'));
+  check('J: every guest room is a sealed room of its own behind an archway (three sealed + the hall)',
+    (rec?.rooms?.filter(r => r.enclosed).length ?? 0) >= 3 && (rec?.doors.length ?? 0) === 3);
   const lodger = w.actors.find(a => a.defId === 'townsfolk_lodger')!;
-  check('J: the lodger keeps the landing and speaks the house',
-    !!lodger && (w.player.pos.x = lodger.pos.x + 20, w.player.pos.y = lodger.pos.y + 20, true)
+  check('J: the lodger keeps the hall above (tier 1, on the storey\'s floor) and speaks the house',
+    !!lodger && lodger.tier === 1 && inInn(lodger)
+    && (w.player.pos.x = lodger.pos.x + 20, w.player.pos.y = lodger.pos.y + 20, w.player.tier = 1, true)
     && (w.residentPrompt(lodger) ?? '').includes('room'));
-  check('J: the way back down is banked (caveReturn = the inn, at the stair)',
-    w.caveReturn?.zoneId === START_ZONE && d2(w.caveReturn.pos, stair.pos) < 1);
-  check('J: the climb stamps the run ledger', (w.ledger.inn_climbed ?? 0) === 1);
+  w.player.tier = 0;
+  // THE CLIMB: walk onto the flight from its foot and off its head — the
+  // mover's own crossing law carries the hero up; back down the same way.
+  const p = w.player;
+  p.pos.x = stair.pos.x; p.pos.y = stair.pos.y - stair.radius - 18; p.tier = 0; p.onTierLink = false;
+  for (let i = 0; i < 60; i++) w.moveActor(p, 0, 1, 1 / 30);
+  check('J: walking up the stairway carries the hero to the rooms above (tier 1 at the landing)',
+    p.tier === 1 && w.walk?.regionAt?.(p.pos.x, p.pos.y) === 'storey_landing', `tier ${p.tier} on ${w.walk?.regionAt?.(p.pos.x, p.pos.y)}`);
+  for (let i = 0; i < 60; i++) w.moveActor(p, -1, 0, 1 / 30);
+  check('J: the hall above walks as the story\'s own floor', p.tier === 1 && w.walk?.regionAt?.(p.pos.x, p.pos.y) === 'storey_floor');
+  for (let i = 0; i < 60; i++) w.moveActor(p, 1, 0, 1 / 30);
+  for (let i = 0; i < 40; i++) w.moveActor(p, 0, -1, 1 / 30);
+  check('J: and walking back down the flight lands the hero on the common room\'s floor (tier 0)', p.tier === 0);
+  check('J: the inn no longer mints a pocket (no cave was entered, no ledger stamped)',
+    w.zone.id === START_ZONE && w.caveReturn === null && (w.ledger.inn_climbed ?? 0) === 0);
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

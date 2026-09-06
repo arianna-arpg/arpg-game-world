@@ -34,6 +34,7 @@ import '../data/merelake';
 import '../data/cistern';
 import '../data/lonecrypt';
 import '../data/grove';
+import '../data/innfolk'; // THE FOLK ROSTER — the inn's pools
 import '../data/theater'; // THE THEATER FABRIC's defaults (before warfront — kind priority is registration order)
 import '../data/warfront';
 import '../data/scald'; // the Scald Basin kit (pool rows, mineral furniture, the meld, its weather)

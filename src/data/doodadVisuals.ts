@@ -1367,8 +1367,11 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'tavernTable', order: 53, shadow: 0.45, bakeWhole: 'static',
     params: { wood: '#6a5238', mug: '#9a948a', ale: '#b8842e', plate: '#c8bca0' },
   },
+  // A chair is walk-over decor: drawn UNDER the bodies that cross it (order
+  // below the standing band, above the rug), no contact shadow to lie about
+  // a height it does not have for feet.
   chair: {
-    painter: 'chair', order: 53, shadow: 0.4, bakeWhole: 'static',
+    painter: 'chair', order: 47, shadow: 0.25, bakeWhole: 'static',
     params: { wood: '#6a5438', cushion: '#7a4a3a' },
   },
   bar_counter: {
@@ -1406,11 +1409,21 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'planter', order: 52, shadow: 0.4, bakeWhole: 'static',
     params: { wood: '#5c4630', soil: '#2c2218', leaf: '#4e6a34', bloom: '#d86a5a', bloom2: '#e8c04a' },
   },
-  // THE INN'S STAIR (data/sidezones.ts 'inn_stair'): the manor's flight in
-  // the inn's warm wood, its destination named at the foot.
-  inn_stair: {
-    painter: 'stairFlight', order: 54, shadow: 0.4,
-    params: { wood: '#6a5238', dark: '#14100c', runner: '#7a4a3a', label: 'the rooms above' },
+  // A WALL LANTERN (vis/paintersInn.ts): a bracket off the wall's outer
+  // face and the lantern hung from it — warm porch light, no post underfoot.
+  wall_lantern: {
+    painter: 'wallLantern', order: 56, shadow: 0.2, bakeWhole: 'static',
+    params: { iron: '#3a3632', glass: '#ffd898', flame: '#ffb050' },
+    light: { radius: 78, color: '#ffd898', intensity: 0.5, flicker: 4 },
+  },
+  // THE STAIRWAY (engine/storeys.ts — THE STOREY FABRIC): the flight's drawn
+  // face over a storey_stair crossing, climbing toward its `rot` — stringers,
+  // treads with worn nosings, newels at the foot, the banister along both
+  // sides. Walk-over (order under the bodies that climb it); no label — the
+  // stair shows where it goes by being a stair.
+  stairway: {
+    painter: 'stairway', order: 47, shadow: 0.3, bakeWhole: 'static',
+    params: { wood: '#6a5238', tread: '#7c6242', dark: '#2a1e14', rail: '#4c3a28' },
   },
   // --- The apothecary kit (brew-yards): existing painters, new clothes ------
   // A glass still on its burner: the pot painter under a low warm flame —

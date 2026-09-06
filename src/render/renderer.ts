@@ -33,6 +33,7 @@ import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
 import { tierLinkOf } from '../engine/tiers';
+import type { PlacedStructure } from '../engine/levelgen';
 import { stratumOf } from '../world/strata';
 import { VOYAGE_ZONE_ID } from '../world/voyage';
 import { blocksMovement, blocksProjectiles, doodadRuleOf, hitSurfaceOf, pitRegionOf, type Doodad } from '../engine/levelgen';
@@ -51,7 +52,8 @@ import { QUEST_GIVER_IDS } from '../quests/defs';
  *  and blob `grow` passes all overdraw past the disc — the pad keeps their
  *  edges from popping at the screen border. */
 const RENDER_CULL_PAD = 150;
-import { roofStyle } from '../data/structures';
+import { floorStyleOf, roofStyle } from '../data/structures';
+import { paintFloorRect } from './vis/floors';
 import { DEFAULT_KEYBINDS, keyDisplay, resolveBindTokens, type ActionId, type Settings } from '../meta/settings';
 import { HARVEST_SLOT_ACTIONS } from '../engine/harvest';
 import { UI_SCALE_CFG } from '../ui/uiScale';
@@ -584,6 +586,10 @@ export class Renderer {
     // THE ROOM VEIL resolves FIRST (state only — its sheet still composites
     // after the world pass): the sight veil mid-pass yields to a wrapped
     // frame, so the two darks never fight over one doorway.
+    // THE STOREY FABRIC (engine/storeys.ts): the stacked buildings standing
+    // in this zone, read once per frame for the story culls + the storey
+    // layer (empty everywhere a plan raised no floor above).
+    this.stacked = world.zone.tiers ? world.storeyedStructures() : [];
     this.roomVeil.update(world, this.frameDt);
 
     ctx.save();
@@ -621,6 +627,10 @@ export class Renderer {
     // under-layer's own furniture (a duct's webs, the smugglers' caches)
     // draws ON TOP of the tunnel floor it stands in.
     this.drawTierVeil(world, vw, vh);
+    // THE STOREY LAYER (engine/storeys.ts) sits in the same slot: the floor
+    // above and its hanging walls, painted live over the ground bake while
+    // the hero stands the story; the understair closets while below.
+    this.drawStoreyLayer(world);
     if (!VIS_ABLATE.has('doodads')) this.drawDoodads(world);
     // THE DISSOLUTION GRAMMAR (vis/dissolveLayer.ts): the flying fragments of
     // every live break — over the ground and the standing furniture, under
@@ -3184,12 +3194,23 @@ export class Renderer {
     // behind a ceiling (or under a street) — filter it out of the frame.
     // Open zones and flat zones pay nothing (hideTier stays null).
     const zt = world.zone.tiers;
-    const hideTier = zt?.exposure === 'covered'
-      ? ((world.player?.tier ?? 0) === 1 ? 0 : 1) : null;
+    const heroTier = world.player?.tier ?? 0;
+    const hideTier = zt?.exposure === 'covered' ? (heroTier === 1 ? 0 : 1) : null;
+    // THE STOREY CULL (engine/storeys.ts): inside a stacked building the
+    // other story's furniture stands behind a ceiling (or under the floor
+    // you walk) — only the hero's own story draws there; a piece on the
+    // crossing's cells (the stairway) shows to both floors.
+    const stacked = this.stacked.length > 0;
+    const keep = (d: Doodad): boolean => {
+      if (hideTier !== null && (d.tier ?? 0) === hideTier) return false;
+      if (stacked && (d.tier ?? 0) !== heroTier && this.inStack(d.pos)
+        && !(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(d.pos.x, d.pos.y)))) return false;
+      return true;
+    };
     for (const [kind, list] of this.culled) {
       groups.push({
         kind,
-        list: hideTier === null ? list : list.filter(d => (d.tier ?? 0) !== hideTier),
+        list: (hideTier === null && !stacked) ? list : list.filter(keep),
         def: DOODAD_VISUALS[kind],
       });
     }
@@ -3314,6 +3335,80 @@ export class Renderer {
    *  rows, viewport cells only — a few hundred rects, no bake to invalidate;
    *  carves self-heal by construction). On the street tier the under layer
    *  simply doesn't draw — the city keeps its face. */
+  /** THE STOREY LAYER (engine/storeys.ts — THE STOREY FABRIC): a stacked
+   *  building's floor above is the SAME cells one story up, so it cannot
+   *  bake — the ground chunks hold the room beneath. While the local hero
+   *  stands a story inside a stack, this pass paints that story's floor
+   *  (the structure's own floor style — one brush, both floors) and its
+   *  HANGING WALLS over the ground bake, under the doodad pass (the story's
+   *  furniture draws on top; the ground floor's was culled). Standing the
+   *  ground floor, it paints THE UNDERSTAIR — each landing's closet, so a
+   *  wall the mover honors is a cupboard the eye sees. Draw-free of state:
+   *  everything reads the placed records + the live region map. */
+  private drawStoreyLayer(world: World): void {
+    if (!this.stacked.length) return;
+    const ctx = this.ctx;
+    const hero = world.player;
+    if (!hero) return;
+    const hT = hero.tier ?? 0;
+    const wf = world.walk;
+    for (const st of this.stacked) {
+      const r0 = st.rect;
+      const inside = hero.pos.x > r0.x && hero.pos.x < r0.x + r0.w && hero.pos.y > r0.y && hero.pos.y < r0.y + r0.h;
+      if (hT === 0) {
+        // THE UNDERSTAIR: every landing cell is a closet downstairs.
+        if (!wf?.regionAt) continue;
+        const cs = (wf as { cell?: number; cellSize?: number }).cell ?? (wf as { cellSize?: number }).cellSize ?? 30;
+        const gx0 = Math.floor(r0.x / cs), gy0 = Math.floor(r0.y / cs);
+        const gx1 = Math.ceil((r0.x + r0.w) / cs), gy1 = Math.ceil((r0.y + r0.h) / cs);
+        const wood = shade(world.zone.theme.wall ?? '#6a5a44', -0.25);
+        for (let gy = gy0; gy < gy1; gy++) {
+          for (let gx = gx0; gx < gx1; gx++) {
+            if (wf.regionAt(gx * cs + cs / 2, gy * cs + cs / 2) !== 'storey_landing') continue;
+            const x = gx * cs, y = gy * cs;
+            ctx.fillStyle = wood;
+            ctx.fillRect(x, y, cs, cs);
+            ctx.strokeStyle = withAlpha(shade(wood, -0.4), 0.9);
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x + 1, y + 1, cs - 2, cs - 2);
+            // The cupboard's door seam + latch, on the face toward the room.
+            ctx.strokeStyle = withAlpha(shade(wood, 0.2), 0.5);
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x + cs / 2, y + cs * 0.15); ctx.lineTo(x + cs / 2, y + cs * 0.85); ctx.stroke();
+            ctx.fillStyle = withAlpha('#caa85e', 0.8);
+            ctx.beginPath(); ctx.arc(x + cs * 0.42, y + cs / 2, 1.6, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+        continue;
+      }
+      if (!inside) continue;
+      const rec = st.storeys?.find(s => s.tier === hT);
+      if (!rec) continue;
+      // 1. The floor above — the structure's own style, live.
+      const style = floorStyleOf(st.floorStyle) ?? floorStyleOf('boards');
+      if (style) {
+        for (const r of rec.floors) {
+          ctx.save();
+          ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+          paintFloorRect(ctx, r, style);
+          ctx.restore();
+        }
+      }
+      // 2. The hanging walls — the theme's wall tone, a dark inset edge and
+      // a lit top face so the partitions read as standing timber.
+      const wallCol = world.zone.theme.wall ?? '#6a5a44';
+      for (const r of rec.walls) {
+        ctx.fillStyle = wallCol;
+        ctx.fillRect(r.x, r.y, r.w, r.h);
+        ctx.strokeStyle = withAlpha(shade(wallCol, -0.45), 0.95);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+        ctx.fillStyle = withAlpha(shade(wallCol, 0.25), 0.55);
+        ctx.fillRect(r.x + 2, r.y + 2, r.w - 4, 3);
+      }
+    }
+  }
+
   private drawTierVeil(world: World, vw: number, vh: number): void {
     const tiers = world.zone.tiers;
     if (!tiers || tiers.exposure !== 'covered') return;
@@ -3698,6 +3793,17 @@ export class Renderer {
   /** THE ROOM VEIL (vis/roomVeil.ts): interior vision confinement — inside a
    *  confining structure, the world beyond the room veils dark. */
   private roomVeil = new RoomVeil();
+  /** THE STOREY FABRIC: this zone's stacked plan structures (per frame). */
+  private stacked: PlacedStructure[] = [];
+  /** Is a point inside a stacked building's footprint? (The story culls'
+   *  one read — a body or a piece outside every stack draws as ever.) */
+  private inStack(p: { x: number; y: number }): boolean {
+    for (const st of this.stacked) {
+      const r = st.rect;
+      if (p.x > r.x && p.x < r.x + r.w && p.y > r.y && p.y < r.y + r.h) return true;
+    }
+    return false;
+  }
 
   /** THE SIGHT VEIL (vis/sightVeil.ts): positional occlusion shadows — from
    *  the hero's eye, every sight-blocking body (trunks, boulders, rampart
@@ -4976,6 +5082,11 @@ export class Renderer {
     // stair mouth) — whoever stands in the doorway is seen from both sides.
     if (world.zone.tiers?.exposure === 'covered'
       && (a.tier ?? 0) !== (world.player?.tier ?? 0)
+      && !(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(a.pos.x, a.pos.y)))) return;
+    // THE STOREY CULL (engine/storeys.ts): a body on another story of a
+    // stacked building is behind its ceiling / under its floor — unseen
+    // (its nameplate and bubble with it); the crossing shows both.
+    if (this.stacked.length && (a.tier ?? 0) !== (world.player?.tier ?? 0) && this.inStack(a.pos)
       && !(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(a.pos.x, a.pos.y)))) return;
 
     // THE THRONG SIGHT GATE (engine/throng.ts): an unclaimed husk exists

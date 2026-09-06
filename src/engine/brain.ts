@@ -300,7 +300,48 @@ export interface BehaviorSpec {
    *  shiftable like every lever, so an aloft phase can wear heavy coupling
    *  and a grounded feeding window can shed it. */
   flock?: FlockSpec;
+  /** THE HAUNT (idle conduct — the living town's first lever): with no foe
+   *  in sight the body drifts between FURNITURE of the named kinds within
+   *  `reach` of its post (or its first-tick anchor), lingers at each for
+   *  `linger` seconds facing it, then picks another — a patron working the
+   *  bar, the tables and the hearth; a lodger between the bed and the
+   *  washstand; a scholar the shelves. Same-story seats only (the tier
+   *  fabric); walks the flow field (tables and walls are rounded, never
+   *  bumped); a solid seat is stood BESIDE, a walk-over seat (a chair, a
+   *  rug) stood ON. A PASSIVE body wearing a haunt keeps every scenery
+   *  exemption — untargeted, uncounted, unshoved — and merely strolls (THE
+   *  STROLLING SCENERY, ai.ts): townsfolk that live without becoming
+   *  combatants. Composable with a `post` (author reach ≤ its slack). */
+  haunt?: HauntSpec;
 }
+
+export interface HauntSpec {
+  /** Doodad kinds that count as seats (data — any furniture, any prop). */
+  kinds: string[];
+  /** How far from the post/anchor a seat may lie (default HAUNT_CFG.reach). */
+  reach?: number;
+  /** Seconds lingered at a seat, [lo, hi] (default HAUNT_CFG.linger). */
+  linger?: [number, number];
+  /** Walking pace as a fraction of full stride (default HAUNT_CFG.pace). */
+  pace?: number;
+  /** Chance per pick to stand still at the post instead (a rest between
+   *  seats; default HAUNT_CFG.restChance). */
+  restChance?: number;
+}
+
+/** The haunt's dials (HauntSpec fields override). */
+export const HAUNT_CFG = {
+  reach: 220,
+  linger: [6, 16] as [number, number],
+  pace: 0.5,
+  /** Arrived when within this (px) of the seat's stand. */
+  arrive: 10,
+  /** A walk that hasn't arrived in this long drops the seat (a blocked way). */
+  walkTimeout: 14,
+  restChance: 0.25,
+  /** How long a rest at the post lasts, [lo, hi] seconds. */
+  rest: [4, 10] as [number, number],
+};
 
 /** FLOCK STEERING as data — the classic boid triad plus the trajectory
  *  axes, worn per body (both parties must carry a spec to count as

@@ -90,7 +90,26 @@ export interface StructureDef {
      *  stands near — the residents' speech-bubble lane (World.residentPrompt,
      *  read for npcRole 'resident' bodies) opened to ANY plan's seated folk. */
     line?: string;
+    /** THE STOREY (engine/storeys.ts): seat the body on the k-th story of
+     *  this structure (Actor.tier) — a lodger in the rooms above. */
+    tier?: number;
   }[];
+  /** THE STOREY FABRIC (engine/storeys.ts): floors ABOVE the ground plan,
+   *  each a char-grid of the SAME dimensions read cell for cell over it —
+   *  '.' (and every furniture/door char) lays the story's floor over the
+   *  ground floor's, '#' hangs a wall there (a wall to the story, open
+   *  floor to the room beneath), 'D' opens an archway (a doorway the story's
+   *  room ledger reads as a door; never a slab). Doodads/npcs on a storey
+   *  plan are stamped with its tier. The stair ('A') and its landing ('^')
+   *  live on the GROUND plan; the storey above them reads floor. One story
+   *  today (the tier fabric owns one elevated floor per cell). */
+  storeys?: { plan: string[]; legend?: Record<string, CellSpec> }[];
+  /** THE FOLK SEATS (data/innfolk.ts — the folk roster): stands the world
+   *  ROLLS a guest for at every load — a body from the named pool wearing a
+   *  rolled name, colour and line, seeded per (zone, seat, DAY) so
+   *  the company holds through a day and turns at dawn. Offsets hang off
+   *  the plan's centre like npcs; `tier` seats the guest on a storey. */
+  folk?: { pool: string; x: number; y: number; tier?: number; chance?: number }[];
   /** Pre-inhabited: the level generator posts a guard pack of this faction at
    *  the footprint (reuses the walled-camp guard pattern in World.loadZone). */
   garrison?: string;
@@ -213,6 +232,15 @@ registerLegendChar('i', { doodad: { kind: 'candle_stand', radius: 8 }, interior:
 registerLegendChar('J', { doodad: { kind: 'coat_rack', radius: 9 }, interior: true });    // a hook
 registerLegendChar('u', { doodad: { kind: 'planter', radius: 12 }, courtyard: true });    // a flower box (open air)
 registerLegendChar('y', { doodad: { kind: 'rail_fence', radius: 13 }, courtyard: true }); // a rail run (open air)
+registerLegendChar('l', { doodad: { kind: 'wall_lantern', radius: 8 }, courtyard: true }); // a lantern hung on a wall (an apron cell)
+// THE STOREY FABRIC (engine/storeys.ts): 'A' = a STAIRWAY cell — the crossing
+// between the ground floor and the storey above (a storey_stair link; chain
+// cells for a wider/longer flight); '^' = the LANDING at the flight's head —
+// the storey's own floor and a closet UNDER the stairs downstairs (a tier-1-
+// only cell, the exit rule's honest far end). Both belong on the GROUND plan
+// (where you find the stair); the storey plan above them reads floor.
+registerLegendChar('A', { region: 'storey_stair', interior: true });
+registerLegendChar('^', { region: 'storey_landing', interior: true });
 // WAKE HERE — the spawn cell (CellSpec.spawn): plain floor that exports the
 // layout's spawn point. Any plan anywhere may claim where newcomers wake.
 registerLegendChar('S', { spawn: true, interior: true });
@@ -621,55 +649,67 @@ export const STRUCTURES: Record<string, StructureDef> = {
   // tables and chairs down the room, rugs where feet cross, the hearth on
   // the east wall with its woodpile, benches and a coat rack by the door,
   // two windows either side of it spilling the square's light in (and the
-  // room's out). The stair in the north-east corner dwells UP to the rooms
-  // above (data/sidezones.ts 'inn_stair' — the manor's climb, lived in). A
-  // patron at the west table speaks the stair (a structure npc's `line`).
+  // room's out), wall lanterns hung either side of the door outside.
+  // THE ROOMS ABOVE ride THE STOREY FABRIC (engine/storeys.ts — her ruling
+  // 2026-09-05: the SAME map, one story up, never a pocket zone): the
+  // stairway in the south-east corner ('AA' — a storey_stair crossing,
+  // walled on its west flank so the only ways onto it are its foot and its
+  // head) climbs SOUTH to the landing ('^^' — the storey's own floor, a
+  // closet under the stairs downstairs). The storey plan (`storeys[0]`)
+  // lays the floor above cell for cell: three guest rooms off a landing
+  // hall, each a lived-in place on the kit behind its own archway. A patron
+  // at the west table speaks the stair; a lodger keeps the hall above (a
+  // structure npc's `line`; `tier: 1` seats the body on the storey).
   // The door keeps the old plan's seat: bottom row, centre-right cell
   // (+13, +halfH) — the town's door lanes and the probe both read it.
   inn: {
     id: 'inn', halfW: 182, halfH: 104, cellSize: 26,
     plan: [
       '##############',
-      '#KK...k..k.A.#',
-      '#aaaaa......f#',
-      '#....c.t.c..h#',
-      '#.t...r......#',
-      '#c.c..r.t.c..#',
-      '#p..b...i..Jb#',
+      '#KKB..k..k..f#',
+      '#aaaaa......h#',
+      '#....c.t.c...#',
+      '#.t...r...#AA#',
+      '#c.c..r.t.#AA#',
+      '#p..b...iJ.^^#',
       '####W##D#W####',
     ],
-    legend: { A: { doodad: { kind: 'inn_stair', radius: 16 }, interior: true } },
+    storeys: [{
+      plan: [
+        '##############',
+        '#Zj.#.Zx#Z.j.#',
+        '#..i#w..#i..x#',
+        '#.r.#.r.#.r###',
+        '##D###D##D#AA#',
+        '#....r....#AA#',
+        '#i.b....kb...#',
+        '##############',
+      ],
+      legend: { w: { doodad: { kind: 'washstand', radius: 10 }, interior: true } },
+    }],
     confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
+    // THE WALL LANTERNS: hung on the south wall's outer face either side of
+    // the door (a step outside the wall line), so the doorstep is lit with
+    // nothing standing in the door lane.
+    props: [
+      { kind: 'wall_lantern', x: -24, y: 113, radius: 8 },
+      { kind: 'wall_lantern', x: 50, y: 113, radius: 8 },
+    ],
     npcs: [
       { id: 'townsfolk_innkeep', x: -91, y: -65 },
       { id: 'townsfolk_patron', x: -91, y: 13, line: 'Rooms upstairs, if you want a bed that isn’t the ground. Mind the stair — it creaks.' },
+      { id: 'townsfolk_lodger', x: 65, y: 65, tier: 1, line: 'Took the corner room. Quietest bed between here and the coast — and the roof holds.' },
     ],
-  },
-
-  // THE ROOMS ABOVE — the inn's SECOND STOREY, the plan a minted floor-zone
-  // furnishes (data/sidezones.ts 'inn_stair' — never rolled on open ground):
-  // three guest rooms and a linen closet off a landing hall, every room a
-  // lived-in place on the INN KIT — a bed, a dresser or a chest, a rug, a
-  // candle, a washstand — behind its own door; the way back DOWN through
-  // the south doors to the descent portal. 'S' wakes arrivals at the head
-  // of the stair. A lodger on the landing bench speaks the house.
-  inn_upper: {
-    id: 'inn_upper', halfW: 240, halfH: 120, cellSize: 30,
-    plan: [
-      '################',
-      '#Zj.#.Zx#Z.i.#k#',
-      '#..i#w..#...j#x#',
-      '#.r.#.r.#.r.x#.#',
-      '##D###D###D###D#',
-      '#....r....r....#',
-      '#i.b......S.b.i#',
-      '#######DD#######',
+    // THE FOLK SEATS (data/innfolk.ts): the common room's company and the
+    // lodgers above, rolled per day — three chairs downstairs, two beds up.
+    folk: [
+      { pool: 'inn_common', x: -65, y: 13, chance: 0.85 },
+      { pool: 'inn_common', x: 91, y: -13, chance: 0.75 },
+      { pool: 'inn_common', x: 26, y: 39, chance: 0.6 },
+      { pool: 'inn_rooms', x: -117, y: -39, tier: 1, chance: 0.7 },
+      { pool: 'inn_rooms', x: 91, y: -39, tier: 1, chance: 0.55 },
     ],
-    legend: { w: { doodad: { kind: 'washstand', radius: 10 }, interior: true } },
-    confineVision: 'rooms',
-    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
-    npcs: [{ id: 'townsfolk_lodger', x: -135, y: 45, line: 'Took the corner room. Quietest bed between here and the coast — and the roof holds.' }],
   },
 
   // A training yard: a fire, a weapon-rack rock or two — the dummy stands at the
@@ -715,9 +755,13 @@ export const STRUCTURES: Record<string, StructureDef> = {
   // cell sits one row above the site, inside the dwell's reach).
   bounty_front: {
     id: 'bounty_front', halfW: 91, halfH: 39, cellSize: 26,
+    // ONE lantern post, at the WEST end: the east end (the door's side)
+    // stays open ground, and the inn's own wall lanterns light that side —
+    // her walk found a post out front of the door made the inn a chore to
+    // enter (THE DOOR LANE LAW, probe_towngrowth rig E).
     plan: [
       'yuyNyuy',
-      'L.b.b.L',
+      'L.b.b..',
       '_______',
     ],
     floorStyle: 'cobble', courtyardFloorStyle: 'cobble',

@@ -960,6 +960,12 @@ export interface ZoneTiers {
    *  the fights that happen are the honest ones: across rims and spans).
    *  Covered zones must never set it (a ceiling is not a vantage). */
   rimDuels?: boolean;
+  /** THE STOREY STACK (engine/storeys.ts): the layer is a BUILDING's floor
+   *  above, not country — stamped by generateLayout when a plan structure
+   *  raises a storey. The world map's stack tell and tint stay silent (a
+   *  town with an inn is not a tiered zone to the map), and the pack
+   *  split never seats an ambient pack upstairs. */
+  interior?: true;
 }
 
 export interface ZoneDef {

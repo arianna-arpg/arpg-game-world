@@ -155,6 +155,7 @@ import '../data/arenas'; // side-effect: the ward-seal doodad rules register
 import '../data/sympathies'; // side-effect: the sympathy link registry fills
 import '../data/lightwells'; // side-effect: the ambient lightwell rows register
 import '../data/tracks'; // side-effect: the track rider + contact-doodad rows register
+import { rollFolk } from '../data/innfolk'; // THE FOLK ROSTER (registers the inn's pools on import)
 import '../data/trapworks'; // side-effect: the trapworks kit (riders + tells) registers
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
 import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, chordClearsNodes, footprintBars, roadBudgetOf, settleWeb, webDisturbance, WEB_CFG, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
@@ -359,7 +360,7 @@ import type { InvasionHost } from '../world/invasion';
 import { WEATHER_DEFS, WET_SKY, type WeatherFront, type WeatherStrike } from '../world/weather';
 import { eventFrontFor } from './eventWeather';
 import { WEATHER_DRESS_CFG, dressPlanFor, rollDressPieces } from './weatherDress';
-import { dayCycle, inPhases } from '../world/daynight';
+import { dayCycle, inPhases, DAY_LENGTH } from '../world/daynight';
 import { activeAnnexKey, clampToBounds, exitInside, hullOf, insideBounds, samplePoint, unionArea, type Bounds } from '../world/shape';
 import { distFromHome, traitsOf, isDeathAligned, factionTemper } from '../world/traits';
 import { extractionLookFor } from '../data/extraction';
@@ -5862,11 +5863,43 @@ export class World {
     for (const n of layout.npcs) {
       // Mireille the Innkeep is ALWAYS present (she talks if her heal is locked).
       const c = this.createMonster(n.id, 1, 'player');
-      c.pos = this.clampPos(vec(n.pos.x, n.pos.y), c.radius);
+      // THE STOREY (engine/storeys.ts): a body seated on a structure's floor
+      // above wears that story from its first tick — clamped on the story's
+      // own view so it never spawns inside a hanging wall.
+      c.tier = n.tier ?? 0;
+      c.pos = c.tier >= 1 ? this.findFreeSpot(vec(n.pos.x, n.pos.y), c.radius, c.tier)
+        : this.clampPos(vec(n.pos.x, n.pos.y), c.radius);
       this.actors.push(c);
       // THE SPOKEN SEAT: a plan's npc row may carry a line — it rides the
       // residents' bubble lane (residentPrompt reads npcRole 'resident').
       if (n.line) this.residentLines.set(c.id, n.line);
+    }
+    // THE FOLK SEATS (data/innfolk.ts): every seat a plan declared rolls its
+    // guest on a seed of (zone, seat, DAY) — the same company through one
+    // day, new faces at dawn; a seat's chance may leave it empty. The guest
+    // wears a rolled name, colour and line and its row's haunt.
+    const seated = new Set<string>(); // THE COMPANY LAW: no two seats deal the same guest in one house
+    for (const fk of layout.folk ?? []) {
+      const day = Math.floor(this.time / DAY_LENGTH);
+      let roll: ReturnType<typeof rollFolk> = null;
+      for (let salt = 0; salt < 4; salt++) {
+        // THE COMPANY IS THE DAY'S, NOT THE RUN'S: seeded off the ZONE's own seed
+        // (the manifest's would deal a different head-count per world, and every
+        // actor id after the town's bodies with it — the hermetic-world law).
+        const seed = (((def.seed ?? 0) * 0x9e3779b1) ^ hashStr(`folk:${def.id}:${fk.key}:${day}:${salt}`)) >>> 0;
+        roll = withSeededRandom(seed, () => (Math.random() < (fk.chance ?? 1) ? rollFolk(fk.pool, Math.random) : null));
+        if (!roll || !seated.has(roll.name)) break; // an empty seat stays empty; a repeated face re-deals
+      }
+      if (!roll) continue;
+      seated.add(roll.name);
+      const c = this.createMonster(roll.defId, 1, 'player');
+      c.name = roll.name;
+      c.color = roll.color;
+      c.tier = fk.tier ?? 0;
+      c.pos = c.tier >= 1 ? this.findFreeSpot(vec(fk.pos.x, fk.pos.y), c.radius, c.tier)
+        : this.clampPos(vec(fk.pos.x, fk.pos.y), c.radius);
+      this.actors.push(c);
+      if (roll.line) this.residentLines.set(c.id, roll.line);
     }
     // Where there's a smith, there's a stock — armed on THE BEAT LAW's
     // lattice (floor(time / restockSeconds)): the shelf is a pure function
@@ -50925,6 +50958,26 @@ export class World {
     return null;
   }
 
+  /** THE STOREY FABRIC (engine/storeys.ts): the plan structure whose stacked
+   *  footprint holds this point — the building whose floors above stand on
+   *  the tier fabric. Inside one, a body or a piece of furniture belongs to
+   *  ONE story (the renderer draws the hero's own; the crossing's cells show
+   *  both). Null on open ground and under storeyless roofs. */
+  storeyedStructureAt(pos: Vec2): PlacedStructure | null {
+    for (const st of this.structures) {
+      if (!st.storeys?.length) continue;
+      const r = st.rect;
+      if (pos.x > r.x && pos.x < r.x + r.w && pos.y > r.y && pos.y < r.y + r.h) return st;
+    }
+    return null;
+  }
+
+  /** Every stacked structure standing in this zone (the renderer's cull
+   *  reads the list once per frame; empty on the ordinary zone). */
+  storeyedStructures(): PlacedStructure[] {
+    return this.structures.filter(st => !!st.storeys?.length);
+  }
+
 
   /** Is this actor in SHADE — under a canopy crown, inside a roof, or in
    *  the night? (The desert's mercy; also any future heat hazard's.) */
@@ -53632,7 +53685,10 @@ export class World {
           // duct's surroundings) and HIGHER stories (the next terrace's
           // cliff) still stop it. tierElevOf answers null for true walls.
           const shotElev = tierElevOf(kId);
-          if (k?.blocksShot && !((p.tier ?? 0) >= 1 && shotElev !== null && shotElev <= (p.tier ?? 0))) {
+          // THE HANGING WALL (engine/storeys.ts): a story's partition stops
+          // the flights of its own story and above; the arrows under it fly.
+          const hung = k?.hangingFrom !== undefined && (p.tier ?? 0) >= k.hangingFrom;
+          if (hung || (k?.blocksShot && !((p.tier ?? 0) >= 1 && shotElev !== null && shotElev <= (p.tier ?? 0)))) {
           this.flashes.push({ pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') }); // THE ARROW'S END on a wall
             if (p.bounces && p.bounces > 0) {
               p.bounces--;
@@ -58721,7 +58777,11 @@ export class World {
     // engine's own hand moves it. Death, stun, dash and anchors still hold.
     // The carom motor is a volition lock too — the ball has no legs; the
     // stick feeds nothing while the ride holds (reflex flasks still fire).
-    if (a.dash || a.leap || a.caromRun || a.isStunned() || a.dead || a.anchored || (a.passive && !a.driven)) return true;
+    // THE STROLLING SCENERY (ai.ts updateHaunt): a passive body wearing a
+    // haunt has volition enough to drift between its seats — the lock lifts
+    // for it alone; every other passive body stands as ever.
+    if (a.dash || a.leap || a.caromRun || a.isStunned() || a.dead || a.anchored
+      || (a.passive && !a.driven && !(a.defId && MONSTERS[a.defId]?.brain?.behavior?.haunt))) return true;
     // SEALS & FORMS: a toggled form with moveFactor 0 ROOTS its bearer
     // (Stormbind plants you) — factors above 0 slow in moveActor instead.
     for (const au of a.activeAuras.values()) {

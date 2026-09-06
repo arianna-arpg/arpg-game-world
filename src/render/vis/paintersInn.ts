@@ -451,6 +451,107 @@ const noticeBoard: GroupPainter = (env, group, def) => {
   }
 };
 
+/** A WALL LANTERN — the bracket reaching off the wall's outer face (north
+ *  of the doodad: it hangs from the wall it is placed a step outside of),
+ *  the lantern's iron cage and warm glass at its end, and the glow pooled
+ *  on the ground beneath (the light layer carries the real reach). */
+const wallLantern: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { iron?: ColorSpec; glass?: ColorSpec; flame?: ColorSpec };
+  const { ctx, theme } = env;
+  const iron = resolveColor(p.iron, theme, '#3a3632');
+  const glass = resolveColor(p.glass, theme, '#ffd898');
+  const flame = resolveColor(p.flame, theme, '#ffb050');
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // The pool of light on the step.
+    ctx.fillStyle = withAlpha(glass, 0.16);
+    ctx.beginPath(); ctx.arc(0, r * 0.3, r * 1.6, 0, Math.PI * 2); ctx.fill();
+    // The bracket: an iron arm from the wall (north) with a small scroll.
+    ctx.strokeStyle = iron;
+    ctx.lineWidth = Math.max(1.5, r * 0.22);
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 1.7);
+    ctx.lineTo(0, -r * 0.35);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(-r * 0.22, -r * 0.45, r * 0.24, 0, Math.PI * 1.5);
+    ctx.stroke();
+    // The cage: a squared iron frame, the glass warm inside, the flame.
+    ctx.fillStyle = withAlpha(glass, 0.85);
+    ctx.fillRect(-r * 0.5, -r * 0.45, r, r * 0.9);
+    ctx.strokeStyle = iron;
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(-r * 0.5, -r * 0.45, r, r * 0.9);
+    ctx.beginPath(); ctx.moveTo(0, -r * 0.45); ctx.lineTo(0, r * 0.45); ctx.stroke();
+    ctx.fillStyle = flame;
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.16, r * 0.26, 0, 0, Math.PI * 2); ctx.fill();
+    // The cap.
+    ctx.fillStyle = iron;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.6, -r * 0.45); ctx.lineTo(0, -r * 0.72); ctx.lineTo(r * 0.6, -r * 0.45);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+};
+
+/** THE STAIRWAY — a flight climbing toward `rot` (the storey fabric's link
+ *  cells run under it): two stringers, treads whose nosings catch the light
+ *  and darken toward the top, newel posts at the foot, a banister along
+ *  both sides. The footprint is the doodad's disc squared — 2r wide, ~2.1r
+ *  long — so a 2×2-cell flight fills its cells. */
+const stairway: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { wood?: ColorSpec; tread?: ColorSpec; dark?: ColorSpec; rail?: ColorSpec };
+  const { ctx, theme } = env;
+  const wood = resolveColor(p.wood, theme, '#6a5238');
+  const tread = resolveColor(p.tread, theme, '#7c6242');
+  const dark = resolveColor(p.dark, theme, '#2a1e14');
+  const rail = resolveColor(p.rail, theme, '#4c3a28');
+  for (const o of group) {
+    const r = o.radius;
+    const hw = r * 0.96, hl = r * 1.04; // half width across the flight, half length along it
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // rot points UP the flight; the painter's +x is "up", so rotate to it.
+    ctx.rotate((o.rot ?? -Math.PI / 2));
+    // The stringers + the carriage: the whole slab in the wood, a darker
+    // shadow band gathering toward the top (the flight climbs out of view).
+    ctx.fillStyle = wood;
+    ctx.fillRect(-hl, -hw, hl * 2, hw * 2);
+    const g = ctx.createLinearGradient(-hl, 0, hl, 0);
+    g.addColorStop(0, withAlpha(dark, 0));
+    g.addColorStop(1, withAlpha(dark, 0.55));
+    ctx.fillStyle = g;
+    ctx.fillRect(-hl, -hw, hl * 2, hw * 2);
+    // Treads: bars across the flight, each with a lit nosing on its low side
+    // and a riser shadow on its high side.
+    const n = 7;
+    const step = (hl * 2) / n;
+    for (let i = 0; i < n; i++) {
+      const x0 = -hl + i * step;
+      const t = i / (n - 1);
+      ctx.fillStyle = shade(tread, -0.05 - t * 0.28);
+      ctx.fillRect(x0 + step * 0.08, -hw * 0.86, step * 0.84, hw * 1.72);
+      ctx.fillStyle = withAlpha(shade(tread, 0.28 - t * 0.2), 0.8);
+      ctx.fillRect(x0 + step * 0.08, -hw * 0.86, step * 0.16, hw * 1.72);
+      ctx.fillStyle = withAlpha(dark, 0.55);
+      ctx.fillRect(x0 + step * 0.86, -hw * 0.86, step * 0.14, hw * 1.72);
+    }
+    // Banisters along both sides, newel posts at the foot, a cap at the head.
+    ctx.strokeStyle = rail;
+    ctx.lineWidth = Math.max(2, r * 0.12);
+    ctx.beginPath(); ctx.moveTo(-hl, -hw * 0.92); ctx.lineTo(hl, -hw * 0.92); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-hl, hw * 0.92); ctx.lineTo(hl, hw * 0.92); ctx.stroke();
+    ctx.fillStyle = shade(rail, 0.15);
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.arc(-hl + r * 0.12, s * hw * 0.92, r * 0.16, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(hl - r * 0.1, s * hw * 0.92, r * 0.12, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+};
+
 PAINTERS.tavernTable = tavernTable;
 PAINTERS.chair = chair;
 PAINTERS.barCounter = barCounter;
@@ -462,3 +563,5 @@ PAINTERS.washstand = washstand;
 PAINTERS.coatRack = coatRack;
 PAINTERS.planter = planter;
 PAINTERS.noticeBoard = noticeBoard;
+PAINTERS.wallLantern = wallLantern;
+PAINTERS.stairway = stairway;

@@ -403,7 +403,7 @@ export function meetsRequirements(world: World, def: SkillDef, seat: Seat = worl
 export function tierMapTell(def: Pick<ZoneDef, 'tiers'>, revealed: boolean):
   { mark: 'open' | 'covered'; floors: number; tint: string } | null {
   const t = def.tiers;
-  if (!t || !revealed) return null;
+  if (!t || !revealed || t.interior) return null; // a building's storeys are not country
   const floors = 1 + Math.max(1, Math.min(Math.floor(t.levels ?? 1), 2));
   return t.exposure === 'open'
     ? { mark: 'open', floors, tint: '#b8a878' }
@@ -425,7 +425,7 @@ export function tierMapTell(def: Pick<ZoneDef, 'tiers'>, revealed: boolean):
  *  balance/probe_tiers.ts RIG M′. */
 export function tierMapTint(def: Pick<ZoneDef, 'tiers'>, revealed: boolean, fill: string): string {
   const t = def.tiers;
-  if (!t || !revealed) return fill;
+  if (!t || !revealed || t.interior) return fill; // a building's storeys are not country
   const cfg = VIS_CFG.mapTierTint;
   const stories = Math.max(1, Math.floor(t.levels ?? 1));
   const k = Math.min(cfg.max, stories * cfg.perStory);

@@ -186,7 +186,13 @@ archer's story-1 arrows rain down while story-0 answers die on the cliff
 — climb, span, or shove.
 
 ## The seam this opens (deliberate future work)
-Townhouse floors as covered tiers in one zone; a boulder-chute lane
+~~Townhouse floors as covered tiers in one zone~~ — LANDED as THE STOREY
+FABRIC (2026-09-06, `docs/engine/storeys.md`): a plan structure raises a
+floor above cell for cell (`StructureDef.storeys`), five storey rows fold
+both plans into one region per cell, `RegionKind.hangingFrom` gives the
+elevation law a wall that stands only from a story up, and the renderer
+culls + paints per building instead of per zone (`ZoneTiers.interior`).
+Lastlight's inn is the debut. Still open: a boulder-chute lane
 rolling DOWN the switchbacks; avalanche fronts that respect the benches
 (creep is tier-blind today — the one reason the pinnacle ships without
 landslide lanes).

@@ -1014,6 +1014,15 @@ export class Actor {
   healedSince = 0;
   /** Idle wander heading — the world doesn't stand at attention. */
   wanderDir?: number;
+  /** THE HAUNT (BehaviorSpec.haunt): the seat this body is walking to or
+   *  lingering at — the stand beside the piece, the piece's own centre to
+   *  face, when the walk began, and (once arrived) when the linger ends. */
+  hauntSeat?: { x: number; y: number; fx: number; fy: number; since: number; until?: number };
+  /** THE HAUNT'S OWN DIE (THE OFF-STREAM LAW): a per-body mulberry state
+   *  seeded off the actor id, so a stroller's picks never touch the global
+   *  stream — a seeded rig's staging elsewhere in the zone stands whatever
+   *  the inn's company is doing. */
+  hauntRng?: number;
   /** Patrol route (world points) marched between when no foe is in sight. */
   patrolRoute?: Vec2[];
   patrolIdx?: number;

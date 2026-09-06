@@ -203,11 +203,14 @@ export function castLen(bodyR: number, s = 1): number {
  *  extraction loop). Elevation rides along for THE ELEVATION LAW
  *  (engine/los.ts RayElev): a blocking row that is tier FLOOR occludes only
  *  eyes below its deck — a butte top goes clear the moment you stand on it. */
-const sightBlockCache = new Map<string, { b: boolean; e: number | null }>();
-function sightBlockOf(id: string): { b: boolean; e: number | null } {
+const sightBlockCache = new Map<string, { b: boolean; e: number | null; hf?: number }>();
+function sightBlockOf(id: string): { b: boolean; e: number | null; hf?: number } {
   let v = sightBlockCache.get(id);
   if (v === undefined) {
-    v = { b: !!regionKind(id)?.blocksSight, e: tierElevOf(id) };
+    const rk = regionKind(id);
+    // `hf` = THE HANGING WALL's story (engine/storeys.ts): solid to any eye
+    // standing at or above it, open air to the floor beneath.
+    v = { b: !!rk?.blocksSight, e: tierElevOf(id), ...(rk?.hangingFrom !== undefined ? { hf: rk.hangingFrom } : {}) };
     sightBlockCache.set(id, v);
   }
   return v;
@@ -444,7 +447,7 @@ export class SightVeil {
         // only as the roof yields. THE ELEVATION LAW: a blocking cell that
         // is tier FLOOR reads solid only to eyes below its deck.
         const sb = sightBlockOf(g.regionAt(wx, wy));
-        if ((sb.b && (sb.e === null || heroEye < sb.e)) || this.concealedAt(wx, wy)) {
+        if ((sb.b && (sb.e === null || heroEye < sb.e)) || (sb.hf !== undefined && this.heroT >= sb.hf) || this.concealedAt(wx, wy)) {
           solid[(cy - y0) * w + (cx - x0)] = 1;
         }
       }

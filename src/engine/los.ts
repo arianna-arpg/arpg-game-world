@@ -231,6 +231,16 @@ export function castRay(
     for (let s = step; s < limit; s += step) {
       const kId = env.walk.regionAt(from.x + dx * (s / len), from.y + dy * (s / len));
       const k = regionKind(kId);
+      // THE HANGING WALL (engine/storeys.ts): a story's partition stands only
+      // from its own story up — a ray at that height stops at it, the
+      // ground-floor eye beneath it sees clean across the room. The legacy
+      // flat read (no elev) is the ground floor's, so it never meets one.
+      if (k?.hangingFrom !== undefined && elev
+        && elev.from + (elev.to - elev.from) * (s / len) >= k.hangingFrom) {
+        const t = s / len;
+        if (t < bestT) { bestT = t; kind = 'region'; }
+        break;
+      }
       if (channel === 'shot' ? k?.blocksShot : k?.blocksSight) {
         // THE ELEVATION LAW: a blocking cell that is tier FLOOR stops only
         // rays below its deck (a butte top is open ground to its own story

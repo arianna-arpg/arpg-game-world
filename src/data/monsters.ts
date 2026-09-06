@@ -6544,23 +6544,30 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // them through the plan's npcs rows, each with a spoken `line`): a patron
   // at the west table and a lodger on the landing above. The resident role
   // = the nameplate + the speech bubble; the same scenery shape as the ward.
+  // THE STROLLING SCENERY (engine/ai.ts updateHaunt — BehaviorSpec.haunt):
+  // passive still (untargeted, uncounted, unshoved — never combatants), but
+  // with legs: each drifts between the furniture its haunt names, lingers
+  // facing it, moves on. The patron works the common room's bar, tables,
+  // benches and hearth; the lodger keeps to the rooms above.
   townsfolk_patron: {
     id: 'townsfolk_patron', name: 'Patron',
     color: '#b89a6a', shape: 'circle', radius: 12, look: 'npc_trader', npcRole: 'resident',
-    base: { life: 100, moveSpeed: 0, mana: 0 },
+    base: { life: 100, moveSpeed: 66, mana: 0 },
     skills: [],
     xp: 0,
     passive: true,
     invulnerable: true,
+    brain: { behavior: { haunt: { kinds: ['bar_counter', 'tavern_table', 'bench', 'hearth', 'chair', 'keg'], reach: 240, linger: [6, 16] } } },
   },
   townsfolk_lodger: {
     id: 'townsfolk_lodger', name: 'Lodger',
     color: '#9aa8b8', shape: 'circle', radius: 12, look: 'npc_scholar', npcRole: 'resident',
-    base: { life: 100, moveSpeed: 0, mana: 0 },
+    base: { life: 100, moveSpeed: 58, mana: 0 },
     skills: [],
     xp: 0,
     passive: true,
     invulnerable: true,
+    brain: { behavior: { haunt: { kinds: ['bed', 'washstand', 'dresser', 'linen_chest', 'bench', 'shelf', 'candle_stand'], reach: 260, linger: [8, 20] } } },
   },
 
   // HARBORHOLD FOLK (data/harborholds.ts) — the port town's keepers, spawned

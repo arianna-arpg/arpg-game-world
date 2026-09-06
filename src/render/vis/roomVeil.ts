@@ -53,9 +53,12 @@ export interface ConfineStructure {
   roofs: Rect[];
   rooms?: ConfineRoom[];
   doors: { pos: Pt; normal: Pt; door: { open?: boolean; broken?: boolean; cells?: Rect } }[];
+  /** THE STOREY FABRIC (engine/storeys.ts): the floors above, each with its
+   *  own room ledger + archways — the veil confines by the hero's STORY. */
+  storeys?: { tier: number; rooms?: ConfineRoom[]; doors: ConfineStructure['doors'] }[];
 }
 interface RoomView {
-  player: { pos: Pt };
+  player: { pos: Pt; tier?: number };
   roofedStructureAt(pos: Pt): ConfineStructure | null;
 }
 
@@ -130,7 +133,13 @@ export class RoomVeil {
     const cfg = VIS_CFG.roomVeil;
     let target = 0;
     if (cfg.enabled && !this.suspend) {
-      const st = world.roofedStructureAt(world.player.pos);
+      const st0 = world.roofedStructureAt(world.player.pos);
+      // THE STOREY (engine/storeys.ts): standing a floor above, the story's
+      // own ledger + archways are the rooms that confine — the ground
+      // floor's rooms are under the boards.
+      const tier = world.player.tier ?? 0;
+      const storey = tier >= 1 ? st0?.storeys?.find(s => s.tier === tier) : undefined;
+      const st = st0 && storey ? { ...st0, rooms: storey.rooms, doors: storey.doors } : st0;
       if (st?.confineVision === 'rooms') {
         // PER-ROOM confinement: only the ENCLOSED room the hero stands in
         // wraps (the PlacedRoom ledger) — an open-fronted lean-to never

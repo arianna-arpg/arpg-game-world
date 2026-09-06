@@ -125,14 +125,15 @@ counter run with Mireille behind it, kegs and shelves, tables, the hearth,
 windows either side of the door, and a stair cell (`inn_stair`) in the
 corner.
 
-**Floors as pockets.** A hand-authored building climbs the way the manor
-does: the stair cell is a sidezone mouth (`data/sidezones.ts 'inn_stair'`,
-`indoorsOnly`) whose mint furnishes ONE plan structure (`inn_upper`: three
-guest rooms + a linen closet off a landing, each behind its own door) in a
-fixed-seed pocket — `safe`, sheltered by `caveDepth`, `noDeeper` (one
-storey above), the south doors onto the way down, `S` at the head of the
-stair for respawns. `confineVision: 'rooms'` confines the landing and each
-room in turn.
+**Floors as STOREYS (re-ruled 2026-09-06 — `docs/engine/storeys.md`).**
+The inn's rooms above are the SAME map one story up on THE TIER FABRIC:
+`StructureDef.storeys[0]` is a second char grid read cell for cell over the
+ground plan; the stairway (`A` cells + a `^` landing on the ground plan)
+is a real crossing the mover walks; the story's walls HANG over the common
+room's open floor (`RegionKind.hangingFrom`); its guest rooms are sealed
+rooms behind ARCHWAYS the story's own room ledger reads, so
+`confineVision: 'rooms'` confines them by the hero's story. The one-commit
+sidezone pocket (`inn_stair` / `inn_upper`) is retired.
 
 **THE SPOKEN SEAT.** `StructureDef.npcs[].line` — a plan-seated body may
 carry a line; it threads `GenCtx.npcs` → `loadZone`, which keys it onto

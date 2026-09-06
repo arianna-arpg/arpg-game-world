@@ -162,8 +162,11 @@ export const TOWN_SITES: TownSiteDef[] = [
   //     to hide it), south-west of the door between it and the plaza, so a
   //     reader stands on the inn's step with the square at their back; the
   //     caravan north of the inn, the recruiter's corner beyond it.
+  //     THE DOOR LANE LAW (her walk, 2026-09-05): the whole front stands
+  //     WEST of the door's approach column — nothing of it, rail, post or
+  //     bench, ever stands between the door and the square (probe rig E).
   { id: 'bounty_board', quarter: 'ne', dwell: 120,
-    tiers: [{ x: 880, y: 470 }, { x: 1080, y: 520 }, { x: 1300, y: 590 }, { x: 1570, y: 660 }] },
+    tiers: [{ x: 830, y: 470 }, { x: 985, y: 520 }, { x: 1215, y: 590 }, { x: 1485, y: 660 }] },
   { id: 'caravan', quarter: 'ne', dwell: 160,
     tiers: [{ x: 1260, y: 140 }, { x: 1300, y: 110 }, { x: 1560, y: 130 }, { x: 1880, y: 150 }] },
   { id: 'recruiter', quarter: 'e', dwell: 160,
@@ -314,7 +317,7 @@ export const TOWN_WAYS: TownWay[] = [
   { id: 'inn_way', lay: 'paved_way',
     points: [{ site: 'plaza', dx: 175 }, { site: 'bounty_board', dy: 66 }] },
   { id: 'door_way', lay: 'paved_way',
-    points: [{ site: 'bounty_board', dx: 112, dy: 10 }, { site: 'inn', dx: 13, dy: 118 }] },
+    points: [{ site: 'bounty_board', dx: 108, dy: 6 }, { site: 'inn', dx: 13, dy: 118 }] },
   { id: 'hearth_way', lay: 'paved_way',
     points: [{ site: 'waypoint', dy: 110 }, { site: 'campfire', dx: -40, dy: -40 }] },
 ];

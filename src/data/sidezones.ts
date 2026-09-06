@@ -263,51 +263,6 @@ registerSidezone({
   }),
 });
 
-// --- THE INN'S ROOMS ABOVE (the inn wave, 2026-09-05) -------------------------
-// Lastlight's inn is BIGGER INSIDE THAN THE MAP too: the stair in its north-
-// east corner (the 'inn_stair' cell of the inn plan) dwells UP into a minted
-// floor-zone furnishing ONE plan structure (data/structures.ts inn_upper —
-// guest rooms off a landing) — the cellar's pattern turned vertical, the
-// manor's climb lived in rather than haunted. A fixed seed keeps the same
-// rooms forever; the town's warm theme carries up the stair; 'safe' asks
-// nothing (a sanctuary's upper floor is sanctuary); the Verminfall's small
-// lives still find the boards (authored fauna past the sanctuary gate, the
-// cellar's lane); noDeeper closes the ladder — an inn has one storey above.
-const INN_UPPER_THEME: ZoneDef['theme'] = {
-  floor: '#1c1611', grid: '#2a221a', border: '#5c503a',
-  obstacle: '#4a4030', obstacleEdge: '#6c5e44', accent: '#f0cf82',
-  wall: '#7a6440',
-  dayLight: 0.95, nightDark: 0.5, // lamplit boards — the windows keep the day
-  ground: {
-    palette: ['#191207', '#251c10', '#322717', '#3e3320', '#4a3f28'],
-    bias: 0.56, alpha: 0.5, speckles: 0.9,
-  },
-};
-
-registerDoodadRule('inn_stair', { overlap: 'trigger', spacing: 20 });
-
-registerSidezone({
-  kind: 'inn_stair',
-  dwell: 0.7,
-  indoorsOnly: true, // dwelled from the common room, never through the wall
-  ledgerOnEnter: 'inn_climbed',
-  mint: ({ parent, seed, id }) => ({
-    id, name: 'The Inn: the Rooms Above',
-    level: 0,
-    size: { w: 620, h: 420 },
-    theme: { ...INN_UPPER_THEME },
-    seed,                        // fixed floor — the house keeps its rooms
-    layout: [],                  // the plan is the content
-    fixtures: [{ structure: 'inn_upper', x: 310, y: 190 }],
-    objective: { kind: 'safe' },
-    fauna: [{ id: 'gutter_rat', chance: 0.3, count: [1, 1] }],
-    exits: [{ to: parent.id, side: 's' }],
-    map: { x: parent.map.x, y: parent.map.y }, // off-graph; type-required
-    caveDepth: (parent.caveDepth ?? 0) + 1,
-    noDeeper: true,
-  }),
-});
-
 // --- THE GLOAM MANOR'S FLOORS ------------------------------------------------
 // The haunted house is BIGGER INSIDE THAN THE MAP: the manor's ground floor
 // is real in-zone space (the gloam_manor structure, walk in the front door),

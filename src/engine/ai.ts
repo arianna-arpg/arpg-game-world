@@ -27,6 +27,7 @@ import {
   normalizeBrain, POST_CFG, registerAICondition, tuningOf,
   type AICtx, type BehaviorSpec, type BrainDef, type BrainTuning, type CommandState,
   type MoveSpec, type NormalizedBrain, type PackStrikeSpec, type PhaseCadence, type SkillPolicy,
+  HAUNT_CFG, type HauntSpec,
 } from './brain';
 import { erraticTurn, weaveVel } from './flight';
 import { PACK_CFG, nerveFromLife, nerveFromOdds, nerveFromProximity, packDriveOf } from './pack';
@@ -39,7 +40,8 @@ import { runAIActions } from './aiActions';
 import { nearestBody, segsHittable } from './segments';
 import { LOS_CFG } from './los';
 import { socketSpec, type SkillDef, type SkillInstance } from './skills';
-import { TIER_CFG } from './tiers';
+import { TIER_CFG, tierFloorAt } from './tiers';
+import { doodadRuleOf } from './levelgen';
 import type { World } from './world';
 import { PATH_CFG } from '../world/regions';
 
@@ -284,6 +286,117 @@ function updatePost(actor: Actor, world: World, dt: number): boolean {
   return true; // stands the watch — the idle tick is consumed
 }
 
+// === THE HAUNT (BehaviorSpec.haunt — furniture to drift between) ===============
+// The living town's first idle lever: a body with no foe in sight walks to a
+// seat — a piece of furniture of a kind its spec names, within reach of its
+// post — lingers there facing it, then picks another. Same story only (the
+// tier fabric), the flow field walked (moveToward: tables and walls are
+// rounded), a solid seat stood beside from the side the body arrives on, a
+// walk-over seat stood on. Passive bodies run ONLY this (the passive gate);
+// combat-capable ones reach it through the idle ladder like the wander.
+
+/** The haunt spec a PASSIVE body wears — read off its def (the merged
+ *  tuning never resolves for scenery; the brain's own row is the truth). */
+function hauntSpecOf(actor: Actor): HauntSpec | undefined {
+  const def = actor.defId ? MONSTERS[actor.defId] : undefined;
+  return def?.brain?.behavior?.haunt ?? undefined;
+}
+
+/** THE HAUNT'S DIE (THE OFF-STREAM LAW — core/rng.ts withSeededRandom's
+ *  doctrine, worn per body): a mulberry32 step on the actor's own state,
+ *  seeded off its id. The global die never moves for a stroll, so every
+ *  seeded rig's staging (a den's pairing sweep, a pack's social state)
+ *  stands byte-identical whether or not the inn is full. */
+function hauntRoll(actor: Actor): number {
+  let t = (actor.hauntRng ?? ((actor.id * 0x9e3779b1) ^ 0x5eed1e55)) >>> 0;
+  t = (t + 0x6d2b79f5) >>> 0;
+  actor.hauntRng = t;
+  let x = Math.imul(t ^ (t >>> 15), t | 1);
+  x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+  return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+}
+const hauntRange = (actor: Actor, lo: number, hi: number): number => lo + hauntRoll(actor) * (hi - lo);
+
+/** True while the haunt owns the tick (walking to a seat, or lingering). */
+function updateHaunt(actor: Actor, world: World, spec: HauntSpec, dt: number): boolean {
+  if (actor.anchored) return false;
+  const home = actor.aiPost ?? actor.aiAnchor;
+  if (!home) return false;
+  const now = world.time;
+  const seat = actor.hauntSeat;
+  if (seat) {
+    const d = dist(actor.pos, seat);
+    if (seat.until === undefined) {
+      // Still walking there.
+      if (d <= HAUNT_CFG.arrive) {
+        const [lo, hi] = spec.linger ?? HAUNT_CFG.linger;
+        seat.until = now + hauntRange(actor, lo, hi);
+        actor.facing = angleTo(actor.pos, vec(seat.fx, seat.fy));
+        return true;
+      }
+      if (now - seat.since > HAUNT_CFG.walkTimeout) { actor.hauntSeat = undefined; return true; } // a blocked way — try another
+      // THE STORY LAW: a haunt never takes a stair — a stand this story's
+      // field cannot reach is dropped, never elected across a crossing
+      // (moveToward's stair election is the hunter's, not the guest's).
+      const pf = world.pathField(actor.tier);
+      if (pf?.pathStep && !pf.isWalkable(seat.x, seat.y)) { actor.hauntSeat = undefined; return true; }
+      actor.facing = angleTo(actor.pos, seat);
+      moveToward(actor, world, seat, dt * (spec.pace ?? HAUNT_CFG.pace));
+      return true;
+    }
+    if (now < seat.until) {
+      // Lingering: face the piece (a drinker faces the bar, a reader the shelf).
+      if (Math.hypot(seat.fx - actor.pos.x, seat.fy - actor.pos.y) > 1) actor.facing = angleTo(actor.pos, vec(seat.fx, seat.fy));
+      return true;
+    }
+    actor.hauntSeat = undefined;
+  }
+  // Pick the next seat: a piece of a named kind within reach of home, on
+  // this body's story, never the one just left; sometimes a rest at home.
+  if (hauntRoll(actor) < (spec.restChance ?? HAUNT_CFG.restChance)) {
+    const [lo, hi] = HAUNT_CFG.rest;
+    actor.hauntSeat = { x: home.x, y: home.y, fx: home.x, fy: home.y, since: now, until: dist(actor.pos, home) <= HAUNT_CFG.arrive ? now + hauntRange(actor, lo, hi) : undefined };
+    return true;
+  }
+  const reach = spec.reach ?? HAUNT_CFG.reach;
+  const last = seat;
+  const cands = world.doodadsNear(home.x, home.y, reach).filter(o =>
+    spec.kinds.includes(o.kind) && (o.tier ?? 0) === (actor.tier ?? 0)
+    && dist(o.pos, home) <= reach && !(last && Math.hypot(o.pos.x - last.fx, o.pos.y - last.fy) < 2));
+  if (!cands.length) return false;
+  const piece = cands[Math.min(cands.length - 1, Math.floor(hauntRoll(actor) * cands.length))];
+  // The stand: beside a solid piece (on the side the body arrives from, a
+  // body's width out — or the far side, or a step nearer, whichever the
+  // story's floor actually holds), on a walk-over one.
+  let sx = piece.pos.x, sy = piece.pos.y;
+  if (doodadRuleOf(piece.kind).blocksMove) {
+    const ang = angleTo(piece.pos, actor.pos);
+    const off = piece.radius + actor.radius + 4;
+    const floorAt = (x: number, y: number): boolean => !world.walk?.regionAt || tierFloorAt(world.walk.regionAt(x, y), actor.tier ?? 0);
+    const tries: [number, number][] = [[ang, off], [ang + Math.PI, off], [ang + Math.PI / 2, off], [ang - Math.PI / 2, off], [ang, off * 0.6]];
+    let found = false;
+    for (const [a2, o2] of tries) {
+      const tx = piece.pos.x + Math.cos(a2) * o2, ty = piece.pos.y + Math.sin(a2) * o2;
+      if (floorAt(tx, ty)) { sx = tx; sy = ty; found = true; break; }
+    }
+    if (!found) return false; // no honest stand on this story — the seat is not for us
+  }
+  // THE NAV SNAP: the stand must be ground the story's FIELD walks (a point
+  // a body's width off a table can sit in a nav cell the table half-covers)
+  // — snap it onto the field, and refuse a snap that lands somewhere else
+  // (past a wall, in another room). This is what keeps moveToward honest:
+  // a fieldable stand is never mistaken for another story's ground, so the
+  // hunter's stair election never fires for a guest.
+  const pf = world.pathField(actor.tier);
+  if (pf?.snapToWalkable && !pf.isWalkable(sx, sy)) {
+    const q = pf.snapToWalkable(vec(sx, sy));
+    if (Math.hypot(q.x - piece.pos.x, q.y - piece.pos.y) > piece.radius + actor.radius * 2 + 30) return false;
+    sx = q.x; sy = q.y;
+  }
+  actor.hauntSeat = { x: sx, y: sy, fx: piece.pos.x, fy: piece.pos.y, since: now };
+  return true;
+}
+
 // === THE COMMAND FABRIC ========================================================
 // Orders are open, data-driven VERBS an actor can be put UNDER: `kind` names a
 // handler in this registry, and while the order stands the handler owns the
@@ -442,8 +555,18 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   if (actor.emergeUntil !== undefined && actor.emergeUntil > world.time) return;
   // A BURROWED body is underground — stepBurrow owns it until the eruption.
   if (actor.burrow) return;
-  // Scenery doesn't scheme: barrels, caches and townsfolk hold still.
-  if (actor.passive) return;
+  // Scenery doesn't scheme: barrels, caches and townsfolk hold still —
+  // unless the scenery wears a HAUNT (THE STROLLING SCENERY): then it keeps
+  // every exemption a passive body has (untargeted, uncounted, unshoved)
+  // and merely drifts between its seats. No other conduct runs.
+  if (actor.passive) {
+    const h = hauntSpecOf(actor);
+    if (h && !isDormant(actor)) {
+      actor.aiAnchor ??= vec(actor.pos.x, actor.pos.y); // home: where it was seated (the anchor stamp below never runs for scenery)
+      updateHaunt(actor, world, h, dt);
+    }
+    return;
+  }
   // DRIVEN actors (the caravan cart) are wheeled by an event tick, not a brain.
   if (actor.defId && MONSTERS[actor.defId]?.driven) return;
   // NEUTRAL-until-roused (Conclave cultists chanting in place, Migration herds ambling
@@ -844,6 +967,9 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       // fire on exactly the kinds that pack.
       if (updateCarrion(actor, world, dt)) return;
       if (squadIdle(actor, world, tuning, dt)) return;
+      // THE HAUNT (BehaviorSpec.haunt): furniture to drift between outranks
+      // the aimless wander — the body has somewhere to be.
+      if (tuning.behavior?.haunt && updateHaunt(actor, world, tuning.behavior.haunt, dt)) return;
       // Idle WANDER: the zone lives whether or not you're watching.
       if (!actor.isMinion()) {
         actor.aiTimer -= dt;

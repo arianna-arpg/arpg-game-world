@@ -232,26 +232,38 @@ windows either side of it (sight spills both ways). The door keeps its
 seat (bottom row, centre-right cell, +13). A PATRON at the west table
 speaks the stair.
 
-**The rooms above** (`data/sidezones.ts 'inn_stair'` → `structures.ts
-inn_upper`): the stair in the inn's north-east corner is a sidezone mouth
-(`indoorsOnly`, ledger `inn_climbed`) dwelling UP into a minted floor-zone
-— the manor's climb, lived in: three guest rooms and a linen closet off a
-landing hall, each room behind its own door with a bed, a dresser or a
-chest, a rug, a candle, a washstand; `S` wakes respawns at the head of the
-stair; the south doors lead to the way down; `noDeeper` closes the ladder
-(an inn has one storey above); `safe` asks nothing; the Verminfall's rats
-still find the boards. A LODGER on the landing bench speaks the house.
-Fixed seed — the same rooms forever.
+**The rooms above — RE-RULED 2026-09-06 onto THE STOREY FABRIC**
+(`docs/engine/storeys.md`; her word: "use the actual layering system …
+the same map but the player transitions to the z-layer above"). The
+sidezone pocket is retired. The inn's plan carries `storeys[0]`, a second
+grid read cell for cell over the ground floor: three guest rooms and a
+landing hall behind archways, every room on the kit (a bed, a dresser or
+a chest, a rug, a candle, a washstand, a shelf), the STAIRWAY (`AA` on the
+ground plan, walled on its west flank, climbing SOUTH to its landing `^^`
+— a closet under the stairs downstairs) a real tier crossing the mover
+walks; its drawn face is the new `stairway` doodad (bigger, no label —
+show, never tell). Upstairs the storey layer paints the floor and the
+hanging walls live; other-story bodies and furniture cull per building.
+THE INN'S FOLK stroll (THE HAUNT) and the company is ROSTERED per day
+(`data/innfolk.ts` — `docs/design/townsfolk-life.md`).
 
-**THE INN KIT** — ten reusable furnishings, each a union entry + a
+**The door lane (her walk):** the front stands wholly WEST of the door's
+approach column (THE DOOR LANE LAW, probe E), its east lantern post is
+gone, and the inn hangs WALL LANTERNS (a new inert kit piece, `wall_lantern`,
+legend `l`) either side of its door. CHAIRS are walk-over decor now (the
+rug's law) — a room of pushed-back chairs stays walkable.
+
+**THE INN KIT** — eleven reusable furnishings (+ the stairway face), each a union entry + a
 `DOODAD_RULES` row + a `DOODAD_VISUALS` face + a brush in
 `render/vis/paintersInn.ts` + a global legend char, so ANY plan anywhere
 furnishes with one character: `t` tavern_table · `c` chair · `a`
 bar_counter · `K` keg · `j` dresser · `x` linen_chest · `i` candle_stand
 (a light) · `J` coat_rack · `u` planter · `y` rail_fence (the standing
-fence kind, now plan-placeable); `washstand` is a kind without a global
-char (local legends name it). Waist-high pieces (counter, candle, flower
-box) stop feet but never the eye or the arrow.
+fence kind, now plan-placeable) · `l` wall_lantern (inert; a light hung
+on a wall's outer face) · `A`/`^` the stairway cell + its landing (THE
+STOREY FABRIC); `washstand` is a kind without a global char (local legends
+name it). Waist-high pieces (counter, candle, flower box) stop feet but
+never the eye or the arrow; a chair is walk-over decor.
 
 **THE SPOKEN SEAT** — `StructureDef.npcs[].line`: a plan's seated body may
 carry a line; it rides the residents' bubble lane (`World.residentPrompt`

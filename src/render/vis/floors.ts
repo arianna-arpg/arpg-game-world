@@ -45,8 +45,11 @@ function paintIfVisible(ctx: CanvasRenderingContext2D, r: Rect, style: FloorStyl
   ctx.restore();
 }
 
-/** One floor rect in world coords (caller has clipped + translated). */
-function paintFloorRect(ctx: CanvasRenderingContext2D, r: Rect, style: FloorStyle): void {
+/** One floor rect in world coords (caller has clipped + translated).
+ *  Exported for THE STOREY LAYER (renderer.drawStoreyLayer): the floor above
+ *  is painted LIVE over the ground bake in the same style, one rect at a
+ *  time, so an upstairs boards floor and a downstairs one are one brush. */
+export function paintFloorRect(ctx: CanvasRenderingContext2D, r: Rect, style: FloorStyle): void {
   const seed = ((r.x * 7 + r.y * 13) | 0) >>> 0;
   const unit = style.unit ?? 14;
   ctx.fillStyle = style.fill;

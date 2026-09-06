@@ -862,11 +862,27 @@ we verify changes.
   board's unlock raises an OPEN-AIR notice board on the square before
   Mireille's door, re-ruled 2026-09-05 from the roofed alcove: a roof
   hides a read-me station; legend `N` = a board cell, `noticeBoard` the
-  painter), THE INN'S FLOORS (the inn redrawn on THE INN KIT —
-  `t c a K j x i J u y` legend chars, `render/vis/paintersInn.ts` — with
-  a stair cell → `inn_stair` sidezone → the `inn_upper` plan of guest
-  rooms; THE SPOKEN SEAT `StructureDef.npcs[].line` rides the residents'
-  bubble lane; probe rig J), THE COUNTER LAWS on the board itself
+  painter; THE DOOR LANE LAW — nothing of the front stands in the door's
+  approach column, the inn lights its step with `wall_lantern`s), THE
+  INN'S FLOORS on THE STOREY FABRIC (`engine/levelgen.ts` storey
+  composite + `world/regions.ts` storey rows — `StructureDef.storeys`: a
+  second char grid folded cell for cell over the ground plan into ONE
+  region per cell (storey_floor = one cell two floors; storey_wall = THE
+  HANGING WALL via `RegionKind.hangingFrom`, read at the ray's height by
+  the elevation law; `A`/`^` = a real tier crossing + its landing); the
+  story's furniture/folk stamped `tier`; the story's own room ledger with
+  ARCHWAYS; `ZoneTiers.interior` stamps the zone a silent stack; the
+  renderer culls per building + paints THE STOREY LAYER live —
+  docs/engine/storeys.md, probe `balance/probe_storey.ts`; the inn's
+  `stairway` face is bigger and unlabelled), THE INN KIT
+  (`t c a K j x i J u y l` legend chars, `render/vis/paintersInn.ts`;
+  chairs are walk-over decor), THE HAUNT (`BehaviorSpec.haunt` — idle
+  conduct between named furniture; THE STROLLING SCENERY: a passive body
+  wearing one strolls and stays scenery) + THE FOLK ROSTER
+  (`data/innfolk.ts` pools → `StructureDef.folk` seats rolled per zone ×
+  seat × DAY off the zone's seed, the haunt on its own per-body die — THE
+  OFF-STREAM LAW; charter docs/design/townsfolk-life.md), THE SPOKEN
+  SEAT (`StructureDef.npcs[].line`; probe rig J), THE COUNTER LAWS on the board itself
   (`BOUNTY_BOARD_CFG.counter`: THE TEAR-OFF closes the panel on a take,
   THE RETURN turns a resolved hand in at the linger before the slate
   re-opens, THE RECEIPT prints the pay — probe_bountyboard rig S), THE

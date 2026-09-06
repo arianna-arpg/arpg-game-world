@@ -321,6 +321,14 @@ export interface RegionKind {
   /** Explicit link span override ([lo, hi]) for crossings whose derivation
    *  would lie (a future two-story ladder skipping a floor). */
   linkTiers?: [number, number];
+  /** THE HANGING WALL (engine/storeys.ts — THE STOREY FABRIC): this cell is
+   *  a WALL to every story at or above k and whatever its other fields say
+   *  to the stories beneath — a guest room's partition standing on the
+   *  common room's open floor. Movement needs no new read (a row without a
+   *  `tier` is already no floor to story k); sight and shots read it at
+   *  the ray's own height (THE ELEVATION LAW), so a story-1 eye stops at it
+   *  while the street-level eye under it sees clean across the room. */
+  hangingFrom?: number;
   /** What the SECOND layer looks like where a covered zone reveals it (the
    *  sewer view): drawn live by the tier veil for the local under-player.
    *  Open-exposure rows skip it — their ordinary visual serves both reads. */
@@ -1416,6 +1424,35 @@ registerRegion({ id: 'tor_mouth', walkable: true, blocks: false, label: 'the tor
     });
   }
 }
+
+// --- THE STOREY FABRIC ROWS (engine/storeys.ts — stacked rooms on the tier
+// fabric: a building's floor above is the SAME cell one story up) ---------
+// STOREY FLOOR: one cell, two floors — the common room below, the guest room
+// above (the bridge deck's law worn by a house). No visual: the ground bake
+// draws the room beneath; the storey layer draws the floor above live.
+registerRegion({ id: 'storey_floor', walkable: true, blocks: false, label: 'the floor above',
+  tier: 1 });
+// STOREY DECK: the story's floor over a ground-floor WALL (a balcony over a
+// porch, a room over a stair closet) — a true wall to the street, floor to
+// whoever stands the story.
+registerRegion({ id: 'storey_deck', walkable: false, blocks: true, label: 'the floor above',
+  blocksShot: true, blocksSight: true, tier: 1 });
+// STOREY WALL: a partition hung one story up — open floor to the room
+// beneath it, a wall to the story it stands on (THE HANGING WALL).
+registerRegion({ id: 'storey_wall', walkable: true, blocks: false, label: 'the wall above',
+  hangingFrom: 1 });
+// STOREY STAIR: the flight — THE crossing between the ground floor and the
+// story (walkable on both; the exit rule + the ladder toggle both serve it,
+// exactly as a ramp). Worked timber, never pavement (laid: 'built' keeps
+// the ground-sense from reading furniture into it).
+registerRegion({ id: 'storey_stair', walkable: true, blocks: false, laid: 'built', label: 'the stair',
+  tier: 1, tierLink: true });
+// STOREY LANDING: the head of the stair — the story's own floor and NOTHING
+// to the ground floor (a closet under the stairs: wall, shot-stop, sight-
+// stop). Tier-1-only ground is what makes the flight's far end honest: the
+// exit rule flips a climber the moment it steps off the top tread.
+registerRegion({ id: 'storey_landing', walkable: false, blocks: true, label: 'the landing',
+  blocksShot: true, blocksSight: true, tier: 1 });
 
 // --- THE HIGH BASTION (aether_bastion; kinds in data/massifs.ts) -------------
 // BASTION WALL: the Host's citadel curtain — glossy silver coursing under a

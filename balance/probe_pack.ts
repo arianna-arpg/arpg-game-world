@@ -628,7 +628,11 @@ console.log('\n=== H. the read-only law + determinism ===');
     for (let i = 0; i < 5; i++) at(spawn(ww, 'gnoll_prowler', 8), 40 + i * 25, 0);
     for (let i = 0; i < 8; i++) at(spawn(ww, 'sounder_boar', 8), -200 - i * 30, 60);
     tickLive(ww, 1.0);
-    return ww.actors.map(x =>
+    // The print is the PACK'S social state — the town's passive scenery
+    // (Lastlight's rostered inn guests, dealt per WORLD seed by the folk
+    // roster: data/innfolk.ts) carries none and is left out, since mkWorld
+    // seats each run under its own world seed by the hermetic-world law.
+    return ww.actors.filter(x => !x.passive).map(x =>
       `${x.defId}:${x.juvenile ? 1 : 0}:${x.bondHeld ? 1 : 0}:${x.wardCount}:${x.broodNear}:${x.aiNerve.toFixed(3)}`
     ).join('|') + '#' + drawnPairs(ww).join();
   };
