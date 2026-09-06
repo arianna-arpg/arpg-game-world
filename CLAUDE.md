@@ -909,7 +909,24 @@ we verify changes.
   (`data/innfolk.ts` pools → `StructureDef.folk` seats rolled per zone ×
   seat × DAY off the zone's seed, the haunt on its own per-body die — THE
   OFF-STREAM LAW; charter docs/design/townsfolk-life.md), THE SPOKEN
-  SEAT (`StructureDef.npcs[].line`; probe rig J), THE COUNTER LAWS on the board itself
+  SEAT (`StructureDef.npcs[].line`; probe rig J), THE SPEECH GRAMMAR
+  (`engine/speechGrammar.ts` + the corpus `data/speechGrammar.ts` — WHAT a
+  spoken body says, her "Rimworld levels of colony member discussion"
+  ruling 2026-09-06: TEMPLATES with SLOTS resolved off the world's own
+  state at the telling (`{other}`/`{doing}` = a named present body of the
+  same COMPANY and the haunt piece it faces, `{weather}`, `{lastEvent}` off
+  the notice feed's `newsLog`, `{monster}` off kill()'s credited `slainLog`,
+  `{from}` = `entryFrom`, `{phase}`, `{heroClass}`, `{town}`/`{zone}`,
+  `{hero}` = the renderer's renown-gated `{name}` token) in an open
+  registry with ROLE pools (`MonsterDef.speechRoles`, `FolkRow.roles`,
+  `TownResidentRow.roles`) + gates; THE DEAL hands every company-day
+  pairwise-DISJOINT decks on a local seeded stream (no two folk say one
+  line in a day), THE FIRST WORD keeps every authored line leading its
+  deck (round-robin claimed), THE ROTATION composes once per fresh
+  approach and stamps the line for its window; `World.speakerRows` +
+  `composeSpeakerLine`/`speechContext` the one consumer, `sid` on the
+  layout's npc/folk rows = the company; docs `docs/engine/speech-grammar.md`,
+  probe `balance/probe_speechgrammar.ts`), THE COUNTER LAWS on the board itself
   (`BOUNTY_BOARD_CFG.counter`: THE TEAR-OFF closes the panel on a take,
   THE RETURN turns a resolved hand in at the linger before the slate
   re-opens, THE RECEIPT prints the pay — probe_bountyboard rig S), THE
@@ -1644,7 +1661,9 @@ we verify changes.
   consumer (the read IS the poll; memory per world, never persisted, never
   on the wire), the renderer dumb; the counters' prompts incl. Mireille's
   flask lesson are EXEMPT by lane — docs `docs/render/speech.md` +
-  `docs/design/townsfolk-life.md` §1.4; probe rig J.
+  `docs/design/townsfolk-life.md` §1.4; probe rig J. WHAT is said is THE
+  SPEECH GRAMMAR (`engine/speechGrammar.ts` — see the town paragraph
+  above; docs `docs/engine/speech-grammar.md`).
   Tunables in `render/vis/visConfig.ts`; docs in `docs/render/README.md`.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer. THE FOLIO (`ui/folio.ts` — docs

@@ -667,6 +667,12 @@ export interface MonsterDef {
    *  for every line this body speaks through queueSpeech; absent = the
    *  fabric's defaults. Render-only flavor, never gameplay. */
   speech?: SpeechStyle;
+  /** THE SPEECH GRAMMAR (engine/speechGrammar.ts): the role pools this
+   *  kind draws its talk from when it stands as a spoken seat (a plan's
+   *  npcs row) — 'patron', 'lodger', 'resident', 'warden' … Rostered folk
+   *  carry theirs on FolkRow.roles instead. Absent = only its authored
+   *  line and the 'any' pool. */
+  speechRoles?: string[];
   /** THE CARRIED LAMP (the firefly fabric): this kind contributes a real
    *  light to the dynamic light layer — a mover, live-marched like the
    *  hero's lantern (render/vis/lights.ts). Same LightSpec as doodads:
@@ -6514,7 +6520,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // the same passive+invulnerable scenery shape as every other townsfolk.
   townsfolk_resident_matron: {
     id: 'townsfolk_resident_matron', name: 'Resident',
-    color: '#d0b088', shape: 'circle', radius: 12, look: 'npc_keeper', npcRole: 'resident',
+    color: '#d0b088', shape: 'circle', radius: 12, look: 'npc_keeper', npcRole: 'resident', speechRoles: ['resident'],
     base: { life: 100, moveSpeed: 0, mana: 0 },
     skills: [],
     xp: 0,
@@ -6523,7 +6529,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   townsfolk_resident_crofter: {
     id: 'townsfolk_resident_crofter', name: 'Resident',
-    color: '#c8a86e', shape: 'circle', radius: 13, look: 'npc_trader', npcRole: 'resident',
+    color: '#c8a86e', shape: 'circle', radius: 13, look: 'npc_trader', npcRole: 'resident', speechRoles: ['resident'],
     base: { life: 100, moveSpeed: 0, mana: 0 },
     skills: [],
     xp: 0,
@@ -6532,7 +6538,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   townsfolk_resident_scribe: {
     id: 'townsfolk_resident_scribe', name: 'Resident',
-    color: '#a8a0c8', shape: 'circle', radius: 12, look: 'npc_scholar', npcRole: 'resident',
+    color: '#a8a0c8', shape: 'circle', radius: 12, look: 'npc_scholar', npcRole: 'resident', speechRoles: ['resident'],
     base: { life: 100, moveSpeed: 0, mana: 0 },
     skills: [],
     xp: 0,
@@ -6551,7 +6557,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // benches and hearth; the lodger keeps to the rooms above.
   townsfolk_patron: {
     id: 'townsfolk_patron', name: 'Patron',
-    color: '#b89a6a', shape: 'circle', radius: 12, look: 'npc_trader', npcRole: 'resident',
+    color: '#b89a6a', shape: 'circle', radius: 12, look: 'npc_trader', npcRole: 'resident', speechRoles: ['patron'],
     base: { life: 100, moveSpeed: 66, mana: 0 },
     skills: [],
     xp: 0,
@@ -6561,7 +6567,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   townsfolk_lodger: {
     id: 'townsfolk_lodger', name: 'Lodger',
-    color: '#9aa8b8', shape: 'circle', radius: 12, look: 'npc_scholar', npcRole: 'resident',
+    color: '#9aa8b8', shape: 'circle', radius: 12, look: 'npc_scholar', npcRole: 'resident', speechRoles: ['lodger'],
     base: { life: 100, moveSpeed: 58, mana: 0 },
     skills: [],
     xp: 0,

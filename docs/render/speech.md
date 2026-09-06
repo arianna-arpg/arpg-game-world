@@ -191,6 +191,16 @@ stays, stays hidden out-and-back inside the cooldown, tells again after it;
 a rostered guest rides the same clock; Mireille's prompt stands every frame
 of a twenty-second stand.
 
+**WHAT is said** is the third half, THE SPEECH GRAMMAR
+(`engine/speechGrammar.ts` + the corpus `data/speechGrammar.ts`, docs
+`docs/engine/speech-grammar.md`): at the fresh approach the world composes
+the line ONCE — a template with slots off its own state (`{other}`,
+`{doing}`, `{weather}`, `{lastEvent}`, `{monster}` …) from a per-company-day
+deck — stamps it for the whole window, and this clock reads the line
+actually told. The renderer still draws whatever `residentPrompt` returns;
+`{hero}` arrives as the literal `{name}` token this file's address seam
+expands.
+
 ## The lever ladder (most specific wins)
 
 1. `Settings.speechTyping` — the player's master switch (Options → Visuals →

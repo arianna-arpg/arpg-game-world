@@ -858,10 +858,10 @@ export interface GeneratedLayout {
   /** Destructible clutter to spawn (barrels, crates) — monster ids. */
   breakables: { id: string; pos: Vec2 }[];
   /** Friendly scenery folk to spawn (the smith at her forge). */
-  npcs: { id: string; pos: Vec2; line?: string; tier?: number }[];
+  npcs: { id: string; pos: Vec2; line?: string; tier?: number; sid?: string }[];
   /** THE FOLK SEATS (StructureDef.folk): stands to roll a guest for at load
    *  (data/innfolk.ts) — `key` is stable per structure + seat for the seed. */
-  folk?: { pool: string; pos: Vec2; tier?: number; chance?: number; key: string }[];
+  folk?: { pool: string; pos: Vec2; tier?: number; chance?: number; key: string; sid?: string }[];
   /** Pre-inhabited POIs: a faction guard pack posts at each footprint. */
   garrisons: { pos: Vec2; faction: string; size: [number, number] }[];
   /** Cave-mouth seeds, one per 'cave_entrance' doodad (same push order). */
@@ -3071,10 +3071,10 @@ export interface GenCtx {
   pois: Vec2[];
   camps: Vec2[];
   breakables: { id: string; pos: Vec2 }[];
-  npcs: { id: string; pos: Vec2; line?: string; tier?: number }[];
+  npcs: { id: string; pos: Vec2; line?: string; tier?: number; sid?: string }[];
   /** THE FOLK SEATS (StructureDef.folk): stands to roll a guest for at load
    *  (data/innfolk.ts) — `key` is stable per structure + seat for the seed. */
-  folk?: { pool: string; pos: Vec2; tier?: number; chance?: number; key: string }[];
+  folk?: { pool: string; pos: Vec2; tier?: number; chance?: number; key: string; sid?: string }[];
   garrisons: { pos: Vec2; faction: string; size: [number, number] }[];
   caveSeeds: number[];
   /** Structure footprints (camps, ruins): later stamps route around them. */
@@ -5616,7 +5616,7 @@ function placeStructure(ctx: GenCtx, s: StructureDef, at: Vec2): void {
     ctx.breakables.push({ id: b.id, pos: vec(at.x + b.x, at.y + b.y) });
   }
   for (const n of s.npcs ?? []) {
-    ctx.npcs.push({ id: n.id, pos: vec(at.x + n.x, at.y + n.y), ...(n.line ? { line: n.line } : {}) });
+    ctx.npcs.push({ id: n.id, pos: vec(at.x + n.x, at.y + n.y), ...(n.line ? { line: n.line } : {}), sid: s.id }); // sid = THE SPEECH GRAMMAR's company
   }
   // Pre-inhabited: a faction posts a guard pack at the structure's heart.
   if (s.garrison) {
@@ -6345,12 +6345,12 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     ctx.breakables.push({ id: b.id, pos: vec(center.x + b.x, center.y + b.y) });
   }
   for (const n of def.npcs ?? []) {
-    ctx.npcs.push({ id: n.id, pos: vec(center.x + n.x, center.y + n.y), ...(n.line ? { line: n.line } : {}), ...(n.tier ? { tier: n.tier } : {}) });
+    ctx.npcs.push({ id: n.id, pos: vec(center.x + n.x, center.y + n.y), ...(n.line ? { line: n.line } : {}), ...(n.tier ? { tier: n.tier } : {}), sid }); // sid = THE SPEECH GRAMMAR's company
   }
   // THE FOLK SEATS: recorded, never rolled here (generation draws nothing
   // for them — the world rolls each seat on its own per-day seed).
   (def.folk ?? []).forEach((fk, i) => {
-    (ctx.folk ??= []).push({ pool: fk.pool, pos: vec(center.x + fk.x, center.y + fk.y), ...(fk.tier ? { tier: fk.tier } : {}), ...(fk.chance !== undefined ? { chance: fk.chance } : {}), key: `${sid}:folk${i}` });
+    (ctx.folk ??= []).push({ pool: fk.pool, pos: vec(center.x + fk.x, center.y + fk.y), ...(fk.tier ? { tier: fk.tier } : {}), ...(fk.chance !== undefined ? { chance: fk.chance } : {}), key: `${sid}:folk${i}`, sid }); // sid = THE SPEECH GRAMMAR's company
   });
 
   // Door doodads: one per group, sized to span the breach.
@@ -6570,7 +6570,7 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     }
     placed.storeys = storeyRecords;
     for (const d of storeyDoodads) ctx.doodads.push(d);
-    for (const n of storeyNpcs) ctx.npcs.push(n);
+    for (const n of storeyNpcs) ctx.npcs.push({ ...n, sid }); // sid = THE SPEECH GRAMMAR's company (the storey's folk keep the house's)
     ctx.storeyLevels = Math.max(ctx.storeyLevels ?? 0, storeyRecords.length);
     // THE STAIRWAY FACE: one walk-over 'stairway' doodad per connected run of
     // storey_stair cells, sized to the run and turned to climb toward the

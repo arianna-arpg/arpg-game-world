@@ -253,7 +253,9 @@ import {
   MOUNT_CFG, seatCount, seatPos, type MountSlotSpec,
 } from './mounts';
 import { resolveTell, TELL_CFG, tellSpecsOf } from './tells';
-import { speechTell, speechWindowFor, type SpeechLane, type SpeechMemory } from './speech'; // THE TRANSIENT TELLING — the speech fabric's world half (residentPrompt)
+import { speechTell, speechWindowFor, type SpeechMemory } from './speech'; // THE TRANSIENT TELLING — the speech fabric's world half (residentPrompt)
+import { SPEECH_GRAMMAR_CFG, composeSpeech, dealSpeechDecks, hauntPhrase, makeSpeakerRow, type SpeechContext, type SpeechSpeakerRow } from './speechGrammar'; // THE SPEECH GRAMMAR — what a spoken body says (residentPrompt composes through it)
+import '../data/speechGrammar'; // THE SPEECH GRAMMAR's corpus: registers the templates + haunt phrases on import
 import { PACK_CFG, foldPack } from './pack';
 import {
   drainHolds, makeReserve, pipsOf, RESERVE_CFG, regenHolds, reserveCostOf,
@@ -5878,8 +5880,9 @@ export class World {
     }
     // The spoken seats re-learn per zone (a plan npc's line, a family's line
     // — both keyed by the body minted below).
-    this.residentLines.clear();
+    this.speakerRows.clear(); // THE SPEECH GRAMMAR's rows go with them (the deck re-deals at the next telling)
     this.speechMemory.clear(); // THE TRANSIENT TELLING: the clocks go with the lines (speechTell keeps no memory across a load)
+    let npcSeat = 0; // THE SPEECH GRAMMAR's seat index — a stable speaker key per plan seat
     for (const n of layout.npcs) {
       // Mireille the Innkeep is ALWAYS present (she talks if her heal is locked).
       const c = this.createMonster(n.id, 1, 'player');
@@ -5893,7 +5896,18 @@ export class World {
       // THE SPOKEN SEAT: a plan's npc row may carry a line — it rides the
       // residents' bubble lane (residentPrompt reads npcRole 'resident') on
       // the 'seat' lane of THE TRANSIENT TELLING (engine/speech.ts).
-      if (n.line) this.residentLines.set(c.id, { line: n.line, lane: 'seat' });
+      // THE SPEECH GRAMMAR (engine/speechGrammar.ts) speaks through the same
+      // row: the seat's structure is its COMPANY, MonsterDef.speechRoles its
+      // pools, the authored line its FIRST WORD (a def-named body is not
+      // NAMED — it never fills '{other}').
+      const speechRoles = MONSTERS[n.id]?.speechRoles ?? [];
+      if (n.line || speechRoles.length) {
+        this.speakerRows.set(c.id, makeSpeakerRow(c.id, n.line ?? '', 'seat', {
+          key: `${n.sid ?? def.id}:seat${npcSeat}:${n.id}`, company: n.sid ?? `zone:${def.id}`, name: null,
+          roles: speechRoles, own: n.line ? [n.line] : [],
+        }));
+      }
+      npcSeat++;
     }
     // THE FOLK SEATS (data/innfolk.ts): every seat a plan declared rolls its
     // guest on a seed of (zone, seat, DAY) — the same company through one
@@ -5920,7 +5934,14 @@ export class World {
       c.pos = c.tier >= 1 ? this.findFreeSpot(vec(fk.pos.x, fk.pos.y), c.radius, c.tier)
         : this.clampPos(vec(fk.pos.x, fk.pos.y), c.radius);
       this.actors.push(c);
-      if (roll.line) this.residentLines.set(c.id, { line: roll.line, lane: 'folk' }); // THE TRANSIENT TELLING's 'folk' lane (speechTell)
+      // THE TRANSIENT TELLING's 'folk' lane (speechTell) + THE SPEECH GRAMMAR's
+      // speaker row: the rolled line is its FIRST WORD, the row's other lines
+      // follow, its roles are the row's (FolkRow.roles), its company the house
+      // that seated it, its rolled name the one '{other}' may speak.
+      this.speakerRows.set(c.id, makeSpeakerRow(c.id, roll.line, 'folk', {
+        key: fk.key, company: fk.sid ?? fk.key.replace(/:folk\d+$/, ''), name: roll.name,
+        roles: roll.row.roles ?? [], own: [roll.line, ...roll.row.lines.filter(l => l !== roll.line)].filter(l => !!l),
+      }));
     }
     // Where there's a smith, there's a stock — armed on THE BEAT LAW's
     // lattice (floor(time / restockSeconds)): the shelf is a pure function
@@ -6670,7 +6691,11 @@ export class World {
         r.name = row.name;
         r.pos = this.clampPos(vec(at.x, at.y), r.radius);
         this.actors.push(r);
-        this.residentLines.set(r.id, { line: row.line, lane: 'resident' }); // THE TRANSIENT TELLING's 'resident' lane (speechTell)
+        // THE TRANSIENT TELLING's 'resident' lane (speechTell) + THE SPEECH
+        // GRAMMAR's WARD company: every family is one named speaker.
+        this.speakerRows.set(r.id, makeSpeakerRow(r.id, row.line, 'resident', {
+          key: `ward:${row.id}`, company: 'ward', name: row.name, roles: row.roles ?? ['resident'], own: [row.line],
+        }));
       }
     }
     this.text(vec(p.pos.x, p.pos.y - 46), def.name, def.theme.accent, 24);
@@ -22628,13 +22653,19 @@ export class World {
    *  actor id at the spawn with the LANE it came by (engine/speech.ts
    *  SpeechLane: the per-lane window dials), read by residentPrompt for the
    *  renderer's speech bubble. */
-  private residentLines = new Map<number, { line: string; lane: SpeechLane }>();
+  private speakerRows = new Map<number, SpeechSpeakerRow>();
   /** THE TRANSIENT TELLING's memory (engine/speech.ts speechTell): one row
    *  per speaker — when its telling began, the window it holds, whether the
    *  hero was near at the last read. Transient by construction: cleared
    *  with the lines at every zone load, never serialized, never on the
    *  wire (a co-op client polls its own world through the same read). */
   private speechMemory = new Map<number, SpeechMemory>();
+  /** THE SPEECH GRAMMAR's gossip logs (engine/speechGrammar.ts): the newest
+   *  world news lines ('{lastEvent}' — stamped at notice()) and the hero's
+   *  credited kills ('{monster}' — stamped at kill()), each a short ring
+   *  with a window. Run-scoped, never saved, never on the wire. */
+  private newsLog: { text: string; at: number }[] = [];
+  private slainLog: { defId: string; at: number }[] = [];
 
   /** A resident's line for the renderer's bubble — THE TRANSIENT TELLING
    *  (engine/speech.ts, SPEECH_CFG): a FRESH APPROACH (the hero steps
@@ -22652,13 +22683,88 @@ export class World {
    *  questGiverPrompt, caravanPrompt, amalgamPrompt, delverPrompt) are
    *  FUNCTIONAL, stand until acted on, and never ride this clock. */
   residentPrompt(a: Actor): string | null {
-    const row = this.residentLines.get(a.id);
+    const row = this.speakerRows.get(a.id);
     if (!row || a.dead) return null;
     const near = dist(a.pos, this.player.pos) <= RESIDENT_RADIUS
       && this.dwellReachable(this.player.pos, a.pos, DWELL_CFG.reach, { from: this.player.tier ?? 0, to: a.tier ?? 0 });
-    const step = speechTell(this.speechMemory.get(a.id), near, this.time, speechWindowFor(row.lane, row.line));
+    const prev = this.speechMemory.get(a.id);
+    const step = speechTell(prev, near, this.time, speechWindowFor(row.lane, row.current ?? row.line));
+    // THE SPEECH GRAMMAR: a FRESH telling composes its line once (the deck's
+    // next resolvable entry — the authored line when nothing else can be
+    // said) and stamps it for the whole window, so no slot flickers
+    // mid-telling; the window then reads the line actually told.
+    if (step.telling && step.mem.spokeAt !== (prev?.spokeAt ?? null)) {
+      row.current = this.composeSpeakerLine(row) ?? row.line;
+      step.mem.holdSec = speechWindowFor(row.lane, row.current).holdSec;
+    }
     this.speechMemory.set(a.id, step.mem);
-    return step.telling ? row.line : null;
+    return step.telling ? (row.current ?? row.line) || null : null;
+  }
+
+  /** THE SPEECH GRAMMAR's telling for one speaker row: deal the company's
+   *  decks for today if the day turned (one seed per (zone seed, company,
+   *  day) — every row of the company deals the same decks by construction),
+   *  refresh who is PRESENT, then take the next resolvable entry from the
+   *  row's position. Null when the deck has nothing sayable right now. */
+  private composeSpeakerLine(row: SpeechSpeakerRow): string | null {
+    const day = Math.floor(this.time / DAY_LENGTH);
+    const zoneSeed = Math.imul(this.zone.seed ?? 0, 0x9e3779b1);
+    const company: SpeechSpeakerRow[] = [];
+    for (const r of this.speakerRows.values()) {
+      if (r.speaker.company !== row.speaker.company) continue;
+      const body = this.actorById(r.actorId);
+      r.speaker.present = !!body && !body.dead;
+      company.push(r);
+    }
+    if (row.dealtDay !== day) {
+      const seed = (zoneSeed ^ hashStr(`speech:${this.zone.id}:${row.speaker.company}:${day}`) ^ SPEECH_GRAMMAR_CFG.dealSalt) >>> 0;
+      const decks = dealSpeechDecks(company.map(r => r.speaker), seed);
+      for (const r of company) { r.deck = decks.get(r.speaker.key) ?? []; r.dealtDay = day; r.pos = 0; }
+    }
+    const seed = (zoneSeed ^ hashStr(`speech:${this.zone.id}:${row.speaker.key}:${day}`)) >>> 0;
+    const res = composeSpeech(row.speaker, company.map(r => r.speaker), row.deck, row.pos, this.speechContext(company), seed);
+    if (!res) return null;
+    row.pos = res.pos;
+    return res.text;
+  }
+
+  /** THE SPEECH GRAMMAR's view of the world (engine/speechGrammar.ts
+   *  SpeechContext): every field a pure read of standing state, null on
+   *  nothing (THE EMPTY WORLD). `doingOf` reads a company member's ARRIVED
+   *  haunt seat and names the piece at its centre — the same doodad the AI
+   *  faces, so the tell is true. */
+  private speechContext(company: readonly SpeechSpeakerRow[]): SpeechContext {
+    const news = this.newsLog.length ? this.newsLog[this.newsLog.length - 1] : null;
+    const slain = this.slainLog.length ? this.slainLog[this.slainLog.length - 1] : null;
+    const front = this.skyFront();
+    const from = this.entryFrom ? (this.zoneMap[this.entryFrom] ?? this.caveMap[this.entryFrom])?.name ?? null : null;
+    return {
+      day: Math.floor(this.time / DAY_LENGTH),
+      phase: dayCycle(this.time).phase,
+      town: this.zoneMap[START_ZONE]?.name ?? null,
+      zone: this.zone.name ?? null,
+      weather: front ? WEATHER_DEFS[front.kind]?.label ?? null : null,
+      lastEvent: news && this.time - news.at <= SPEECH_GRAMMAR_CFG.newsWindowSec ? news.text : null,
+      from,
+      heroClass: this.meta.classDef.name ?? null,
+      heroKnown: this.heroKnown(),
+      monster: slain && this.time - slain.at <= SPEECH_GRAMMAR_CFG.slainWindowSec ? MONSTERS[slain.defId]?.name ?? null : null,
+      doingOf: sp => {
+        const r = company.find(x => x.speaker.key === sp.key);
+        const body = r ? this.actorById(r.actorId) : undefined;
+        const seat = body?.hauntSeat;
+        if (!body || body.dead || !seat || seat.until === undefined) return null;
+        const piece = this.doodadsNear(seat.fx, seat.fy, 4).find(d => !d.gone && !d.felled && Math.abs(d.pos.x - seat.fx) < 1 && Math.abs(d.pos.y - seat.fy) < 1);
+        return piece ? hauntPhrase(piece.kind) : null;
+      },
+    };
+  }
+
+  /** THE SPEECH GRAMMAR's '{monster}' stamp: a credited kill the folk may
+   *  gossip about (kill() calls it for page-worthy enemy kinds). */
+  private noteSlain(defId: string): void {
+    this.slainLog.push({ defId, at: this.time });
+    while (this.slainLog.length > SPEECH_GRAMMAR_CFG.slainKeep) this.slainLog.shift();
   }
 
   private stationDwellArmed(key: string, engaged: boolean): boolean {
@@ -42575,6 +42681,9 @@ export class World {
     // side did the deed. Two warring factions thinning each other out pay
     // the watcher nothing — pick off the survivors instead.
     const credit = !killer || killer.team === 'player';
+    // THE SPEECH GRAMMAR's '{monster}' (engine/speechGrammar.ts): a credited
+    // kill of a page-worthy kind is what the town's folk gossip about.
+    if (credit && actor.team === 'enemy' && actor.defId && !actor.noBounty && bestiaryEligible(MONSTERS[actor.defId])) this.noteSlain(actor.defId);
 
     // THE CLUTCH's death seam (engine/clutch.ts): a fallen child restamps
     // its mother's live-litter tell; a fallen MOTHER's brood meets its
@@ -58988,6 +59097,10 @@ export class World {
    *  Channels: world (the catch-all) · events · war · civic. */
   notice(text: string, color?: string, size?: number, channel: string = 'world'): void {
     pushNotice(this.notices, { text, color, size, channel }, this.time);
+    // THE SPEECH GRAMMAR's '{lastEvent}': the newest news lines, kept past
+    // the feed's own prune so the folk can still gossip about them.
+    this.newsLog.push({ text, at: this.time });
+    while (this.newsLog.length > SPEECH_GRAMMAR_CFG.newsKeep) this.newsLog.shift();
   }
 
   /** THE CRY (show-don't-tell §3f, M-CRY): a combat cry is a `combat`-kinded
