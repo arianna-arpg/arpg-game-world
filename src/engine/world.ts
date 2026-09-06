@@ -24077,10 +24077,18 @@ export class World {
   /** THE HARBOR BOARD dwell (data/ports.ts): linger at a port's notice board
    *  to open the harbor menu — hearsay, passage down the lanes, charts. The
    *  Caravanner's consumed-latch discipline; the dock keeps casting off. */
+  /** At a port's HARBOR BOARD? ONE predicate: the dwell below engages on
+   *  it and THE MENU BAR's Harbor page (data/menu.ts) opens on it — drawn
+   *  == dwelt; the reach is PORT_CFG.boardReach. */
+  nearHarborBoard(seat: Seat = this.localSeat): boolean {
+    if (!this.zone.port) return false;
+    const board = this.doodads.find(d => d.kind === 'harbor_board');
+    return !!board && dist(seat.actor.pos, board.pos) <= PORT_CFG.boardReach
+      && this.dwellReachable(seat.actor.pos, board.pos);
+  }
+
   private updateHarborBoard(dt: number): void {
-    const board = this.zone.port ? this.doodads.find(d => d.kind === 'harbor_board') : undefined;
-    const engaged = !!board && dist(this.player.pos, board.pos) <= 96
-      && this.dwellReachable(this.player.pos, board.pos);
+    const engaged = this.nearHarborBoard();
     if (!this.harborGate.fire(engaged && this.playerIdle(), !!engaged, dt, CARAVAN_DWELL)) return;
     this.harborDwellRequested = true;
   }
@@ -24478,13 +24486,20 @@ export class World {
   /** The muster-horn dwell (the caravanner latch discipline): completes into
    *  the hold panel via the polled one-shot. Host-side only — panel actions
    *  route back through intents, so clients stay authoritative-clean. */
+  /** At a harborhold's MUSTER HORN? ONE predicate for the dwell below and
+   *  THE MENU BAR's Harborhold page (data/menu.ts) — drawn == dwelt. */
+  nearMusterHorn(seat: Seat = this.localSeat): boolean {
+    if (!this.zone.harborhold) return false;
+    const horn = this.doodads.find(d => d.kind === 'muster_horn');
+    return !!horn && dist(seat.actor.pos, horn.pos) <= HARBORHOLD_CFG.muster.radius
+      && this.dwellReachable(seat.actor.pos, horn.pos);
+  }
+
   private updateMusterHorn(dt: number): void {
     if (this.gameOver || this.clientActionHook || !this.zone.harborhold) return;
-    const horn = this.doodads.find(d => d.kind === 'muster_horn');
-    if (!horn) return;
+    if (!this.doodads.some(d => d.kind === 'muster_horn')) return; // nearMusterHorn reads the horn itself
     const M = HARBORHOLD_CFG.muster;
-    const engaged = dist(this.player.pos, horn.pos) <= M.radius
-      && this.dwellReachable(this.player.pos, horn.pos);
+    const engaged = this.nearMusterHorn();
     if (!this.holdGate.fire(engaged && this.playerIdle(), engaged, dt, M.dwellSec)) return;
     this.holdDwellRequested = true;
   }
@@ -25727,26 +25742,40 @@ export class World {
   /** The calm-parley dwell: fires the menu request ONCE per approach; backing
    *  off (or trouble arriving) re-arms it. Gates, in order: captain standing,
    *  in radius, zone objective settled, no live foe near, blades cold, idle. */
+  /** THE PARLEY GATE — is a captain within this seat's hail, and if so why
+   *  he won't talk yet (null = he will): the ground unsettled, company
+   *  about, blood still warm. ONE predicate: the outpost dwell below fires
+   *  on a null why and speaks the line otherwise; THE MENU BAR's
+   *  Mercenaries page (data/menu.ts) seals on the same words. */
+  mercParley(seat: Seat = this.localSeat): { near: boolean; why: string | null } {
+    const post = this.mercOutpost;
+    if (!post || post.captain.dead) return { near: false, why: 'No captain stands here.' };
+    const cfg = MERC_CFG.outpost;
+    const near = dist(post.captain.pos, seat.actor.pos) <= cfg.radius
+      && this.dwellReachable(seat.actor.pos, post.captain.pos, npcDwellReach('captain'));
+    if (!near) return { near: false, why: 'Not within a captain’s hail.' };
+    if (!this.objectiveDone) return { near, why: 'Settle this ground’s business first.' };
+    const foeNear = this.actors.some(a =>
+      a.team === 'enemy' && !a.dead && !a.passive && !a.untargetable
+      && dist(a.pos, seat.actor.pos) <= cfg.enemyRadius);
+    if (foeNear) return { near, why: 'Not with company like that about.' };
+    if (this.time - this.lastCombatAt < cfg.calmSec) return { near, why: 'Let the blood cool a moment.' };
+    return { near, why: null };
+  }
+
   private updateMercOutpost(dt: number): void {
     const post = this.mercOutpost;
     if (!post || post.captain.dead) return;
     if (this.player.dead || this.player.downed) { this.mercDwell = 0; return; }
     const cfg = MERC_CFG.outpost;
-    const near = dist(post.captain.pos, this.player.pos) <= cfg.radius
-      && this.dwellReachable(this.player.pos, post.captain.pos, npcDwellReach('captain'));
-    if (!near) { this.mercDwell = 0; this.mercDwellFired = false; return; }
-    const foeNear = this.actors.some(a =>
-      a.team === 'enemy' && !a.dead && !a.passive && !a.untargetable
-      && dist(a.pos, this.player.pos) <= cfg.enemyRadius);
-    const calm = this.time - this.lastCombatAt >= cfg.calmSec;
-    if (!this.objectiveDone || foeNear || !calm) {
+    const parley = this.mercParley();
+    if (!parley.near) { this.mercDwell = 0; this.mercDwellFired = false; return; }
+    if (parley.why !== null) {
       this.mercDwell = 0;
       // A quiet word about WHY the captain won't talk yet (throttled).
       if (this.time - this.mercHintAt > 6) {
         this.mercHintAt = this.time;
-        const why = !this.objectiveDone ? 'Settle this ground’s business first.'
-          : foeNear ? 'Not with company like that about.' : 'Let the blood cool a moment.';
-        this.text(vec(post.captain.pos.x, post.captain.pos.y - 34), why, '#c8b048', 12);
+        this.text(vec(post.captain.pos.x, post.captain.pos.y - 34), parley.why, '#c8b048', 12);
       }
       return;
     }

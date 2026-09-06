@@ -24,6 +24,7 @@ import { UI_SCALE_CFG } from '../ui/uiScale';
 import { RENDER_SCALE_CFG } from '../render/renderScale';
 import { CAMERA_CFG, CAMERA_MODES, type CameraModeId } from '../render/camera';
 import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
+import { MENU_ANCHORS, MENU_CFG, type MenuAnchorId } from '../ui/menuConfig';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
 
@@ -31,7 +32,8 @@ export type ActionId =
   | 'moveUp' | 'moveDown' | 'moveLeft' | 'moveRight'
   | 'skillSlot2' | 'skillSlot3' | 'skillSlot4' | 'skillSlot5' | 'skillSlot6' | 'skillSlot7'
   | 'metaModifier' | 'pickup'
-  | 'panelChar' | 'panelTree' | 'panelMap' | 'panelInv';
+  | 'panelChar' | 'panelTree' | 'panelMap' | 'panelInv'
+  | 'panelMenu';
 
 /** Pad-bindable actions: everything the keyboard binds, PLUS bar slots 0/1
  *  (fixed to LMB/RMB on mouse, free to live on any button on a pad). */
@@ -206,6 +208,16 @@ export interface Settings {
    *  sessions; the keep re-clamps on show), and the per-panel locks —
    *  both keyed by the panel root's id. */
   layout: UiLayoutOptions;
+  /** THE MENU BAR (ui/menubar.ts + ui/menuConfig.ts): the button's default
+   *  seat (an anchor id — a Movable-UI drag still wins) and THE DOCK opt-in
+   *  (every unlocked page as an icon tile beside the button). */
+  menuBar: MenuBarOptions;
+}
+
+/** THE MENU BAR options (ui/menuConfig.ts owns the dials + anchors). */
+export interface MenuBarOptions {
+  anchor: MenuAnchorId;
+  dock: boolean;
 }
 
 /** THE UI LAYOUT options (ui/panelmove.ts owns the mechanics). */
@@ -253,6 +265,8 @@ export interface SettingsSave {
   pickupFeedSec?: number;
   /** THE UI LAYOUT (additive — older saves simply lack it). */
   layout?: { movable?: boolean; seats?: Record<string, unknown>; locked?: Record<string, unknown> };
+  /** THE MENU BAR (additive). */
+  menuBar?: { anchor?: string; dock?: boolean };
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -263,6 +277,9 @@ export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
   // (The old Skill Book key retired — the build lives in the Inventory's
   // pop-out drawer now; one panel, one key.)
   panelChar: 'c', panelTree: 'p', panelMap: 'm', panelInv: 'i',
+  // THE MENU BAR (ui/menubar.ts): the tray of every page — Tab, the
+  // MMO habit; the folio's Tab walk wins while a book of tabs stands.
+  panelMenu: 'tab',
 };
 
 export const ACTION_IDS = Object.keys(DEFAULT_KEYBINDS) as ActionId[];
@@ -278,6 +295,7 @@ export const DEFAULT_PAD_BINDS: Record<PadActionId, string> = {
   skillSlot6: 'pad:rb', skillSlot7: 'pad:lb',
   metaModifier: 'pad:select', pickup: 'pad:r3',
   panelChar: 'pad:up', panelTree: 'pad:right', panelMap: 'pad:left', panelInv: 'pad:down',
+  panelMenu: 'pad:l3',
 };
 
 /** Rebind-UI order for the controller section: the bar first (incl. the two
@@ -301,7 +319,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   skillSlot5: 'Skill 6', skillSlot6: 'Skill 7', skillSlot7: 'Skill 8',
   metaModifier: 'Meta-Skill Modifier', pickup: 'Pick Up Item',
   panelChar: 'Character Sheet', panelTree: 'Passive Tree', panelMap: 'World Map',
-  panelInv: 'Inventory',
+  panelInv: 'Inventory', panelMenu: 'Menu',
 };
 
 /** Labels for the pad-only actions; everything else reuses ACTION_LABELS. */
@@ -381,6 +399,7 @@ export const makeSettings = (): Settings => ({
   pickupFeed: true,
   pickupFeedSec: PICKUP_FEED_CFG.defaultSec,
   layout: { ...DEFAULT_UI_LAYOUT, seats: {}, locked: {} },
+  menuBar: { anchor: MENU_CFG.anchorDefault, dock: MENU_CFG.dockDefault },
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
@@ -413,6 +432,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   pickupFeed: s.pickupFeed,
   pickupFeedSec: s.pickupFeedSec,
   layout: { movable: s.layout.movable, seats: { ...s.layout.seats }, locked: { ...s.layout.locked } },
+  menuBar: { ...s.menuBar },
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -530,6 +550,12 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
       movable: !!(s.layout?.movable ?? DEFAULT_UI_LAYOUT.movable),
       seats: seatRecord(s.layout?.seats),
       locked: boolRecord(s.layout?.locked),
+    },
+    // THE MENU BAR (additive): an unknown anchor (a renamed row) falls back
+    // to the registry default; the dock keeps only an honest boolean.
+    menuBar: {
+      anchor: MENU_ANCHORS.some(a => a.id === s.menuBar?.anchor) ? s.menuBar!.anchor as MenuAnchorId : MENU_CFG.anchorDefault,
+      dock: typeof s.menuBar?.dock === 'boolean' ? s.menuBar.dock : MENU_CFG.dockDefault,
     },
   };
 }

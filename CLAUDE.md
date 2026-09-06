@@ -1618,6 +1618,20 @@ we verify changes.
   (`Settings.layout`, Options → Layout) is the OPT-IN — "Movable UI" OFF
   by default, seats persist as viewport fractions + per-panel 🔓/🔒 locks,
   a reset re-homes everything (docs/ui/folio.md).
+  THE MENU BAR (`ui/menubar.ts` — docs `docs/ui/menu.md`, probe
+  `balance/probe_menubar.ts`): ONE Menu button on the HUD's edge (Tab /
+  L3, `panelMenu`) fanning a TRAY of every page as DATA rows
+  (`data/menu.ts` MenuEntryDef: icon · group · host VERB · bind · gatework
+  `gate` · `usable` read) folded by `engine/menu.ts` into hidden / sealed /
+  open — THE EXISTENCE LAW (an unowned page is ABSENT, gates over the merged
+  ledger) + THE REACH LAW (a station page seals on the SAME near-read its
+  dwell fires on: `nearHarborBoard` / `nearMusterHorn` / `mercParley` joined
+  the world for it); ATTENTION rows (pips: passive points, banked tree
+  points; lessons: Mireille's flasks → the inventory) roll up onto the
+  button — THE BUTTON IS THE TELL, the hero's "N passive points — press P"
+  line is retired; anchors `MENU_ANCHORS` (`bar` seats off the renderer's
+  published `hudClusterRects` — drawn == seated), THE DOCK opt-in, movable
+  by its grip under THE LAYOUT; glyphs are `ui/icons.ts` rows.
 - `launcher/` — the Electron desktop shell (plain CJS, type-checked via
   `tsconfig.launcher.json`): `main.cjs` (windows, git update flow + the
   packaged DIRECT UPDATE (GitHub-Releases download → silent install →

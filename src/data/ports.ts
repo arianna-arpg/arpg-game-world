@@ -26,6 +26,10 @@
 // ---------------------------------------------------------------------------
 
 export const PORT_CFG = {
+  /** THE HARBOR BOARD's reach (world units): the dwell engages inside it,
+   *  and THE MENU BAR's Harbor page opens on the SAME predicate
+   *  (World.nearHarborBoard) — drawn == dwelt. */
+  boardReach: 96,
   // (The nearest-neighbour lane router retired: lanes are THE SEA'S OWN now —
   //  world/seas.ts + SEA_CFG.lanes rung the coastal ring + haven spokes at
   //  system mint, exact by construction, no wet-chord heuristics.)

@@ -370,6 +370,17 @@ ui.disarmPadCapture = () => pad.disarmCapture();
 const padActiveNow = (): boolean => pad.activeRecently(performance.now() / 1000);
 renderer.getPadActive = padActiveNow;
 ui.getPadActive = padActiveNow;
+// THE MENU BAR's 'bar' anchor seats off the hero's DRAWN HUD cluster — the
+// rect the renderer published this frame (drawn == seated).
+ui.hudCluster = () => renderer.hudClusterRects.find(c => c.seatId === world.localSeat.id) ?? null;
+// Tab is the menu's default bind: keep the browser's focus walk from riding
+// the same press (a text field keeps its own Tab).
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') return;
+  const t = document.activeElement;
+  if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
+  e.preventDefault();
+});
 // THE HERO'S ADDRESS: '{name}' tokens in world-authored talk resolve against
 // the live hero at the same display seam as '{bind:…}' (Renderer.resolveText
 // → resolveNameTokens) — the closure reads the CURRENT world, so a new run's
@@ -1038,6 +1049,8 @@ function handleLocalPanels(): void {
     // COUCH: the hero's Esc walks ITS OWN cascade — a guest's open panels
     // are the guest's business (their Ⓑ walks theirs). Solo falls through
     // to the classic global cascade below, byte-identically.
+    // THE MENU BAR's tray folds first — it is the topmost, lightest surface.
+    if (ui.menuTrayClose()) return;
     if (couchActive()) {
       if (!ui.escCascadeFor(world.localSeat.id)) ui.showEscapeMenu();
       return;
@@ -1073,6 +1086,10 @@ function handleLocalPanels(): void {
   if (input.justPressed(kb.panelTree) || pad.justPressed(pb.panelTree)) ui.toggleTree();
   if (input.justPressed(kb.panelMap) || pad.justPressed(pb.panelMap)) ui.toggleMap();
   if (input.justPressed(kb.panelInv) || pad.justPressed(pb.panelInv)) ui.toggleInventory();
+  // THE MENU BAR's tray (ui/menubar.ts): the bind fans the pages. Its
+  // default key is Tab, which THE FOLIO also walks while a book of two or
+  // more leaves stands — the walk wins then (folioWalkArmed).
+  if ((input.justPressed(kb.panelMenu) || pad.justPressed(pb.panelMenu)) && !ui.folioWalkArmed()) ui.toggleMenu();
   // GEAR pickup — a META intent (host-validated, co-op-replicated), not raw
   // world poking; the open bag re-renders so the grab appears instantly.
   if (input.justPressed(kb.pickup) || pad.justPressed(pb.pickup)) {
@@ -1654,6 +1671,9 @@ function tick(now: number): void {
   // THE FOLIO (ui/folio.ts): reconcile the books to every dialog's own open
   // flag — whatever path opened or closed it — and seat the thumb indexes.
   ui.folioSync();
+  // THE MENU BAR (ui/menubar.ts): shown for a live run — never over the
+  // flow screens, never under the Mu hub's HUD veil.
+  ui.menuBarSync(dt, running && !world.scene?.hudVeil);
   padPointer.update(dt,
     (couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || !running, nowSec);
   couchTick(dt, nowSec);

@@ -200,6 +200,11 @@ export class Renderer {
    *  hand and the eye disagree. Rebuilt every drawHud; seatId names whose
    *  bar (the mouse serves only the local hero's). */
   hudSlotRects: { seatId: string; slot: number; x: number; y: number; w: number; h: number }[] = [];
+  /** THE HUD CLUSTER's drawn box per seat (orbs + bar + XP strip, CSS px) —
+   *  published each frame beside the slot rects so a DOM surface can seat
+   *  itself off the cluster the renderer actually drew (THE MENU BAR's
+   *  'bar' anchor, ui/menubar.ts — drawn == seated). */
+  hudClusterRects: { seatId: string; x: number; y: number; w: number; h: number }[] = [];
   /** virtual (uiW×uiH) → CSS-pixel factor for the current frame (render()). */
   private uiToCss = 1;
   /** The PAD's assisted aim (world point + soft-lock target id), fed by main
@@ -6965,6 +6970,7 @@ export class Renderer {
 
   private drawHud(world: World): void {
     this.hudSlotRects.length = 0; // THE PRESSABLE BAR's ledger — this frame's rects only
+    this.hudClusterRects.length = 0;
     // THE COUCH DISPATCH (data/couch.ts): solo draws the one classic centered
     // cluster — byte-identical. With guests seated, each local seat's cluster
     // anchors to its own flank (guest bars read pad glyphs, guest identity
@@ -7014,6 +7020,15 @@ export class Renderer {
     const lifeX = clamp(bx - orbGap - orbR, orbR + 8, w - orbR - 8);
     const manaX = clamp(bx + totalW + orbGap + orbR, orbR + 8, w - orbR - 8);
     const orbY = by + slot / 2;
+    // THE HUD CLUSTER's published box (CSS px): orb rim to orb rim, arc
+    // crown to the XP strip's foot — what THE MENU BAR's 'bar' anchor seats
+    // beside (drawn == seated).
+    {
+      const k = this.uiToCss;
+      const x0 = lifeX - orbR - 8, x1 = manaX + orbR + 8;
+      const y0 = orbY - orbR - 16, y1 = by + slot + 21;
+      this.hudClusterRects.push({ seatId: seat.id, x: x0 * k, y: y0 * k, w: (x1 - x0) * k, h: (y1 - y0) * k });
+    }
     this.drawOrb(lifeX, orbY, orbR, p.life / p.maxLife(), '#a82828', '#481010',
       `${Math.max(0, Math.ceil(p.life))}`, 'Life',
       // The blood mortgage: the borrowed ceiling shows as a reserved band.
@@ -7834,7 +7849,11 @@ export class Renderer {
     // inventory owns that bookkeeping; a tally here was clutter, and its hint
     // key had already drifted from the binds). Keys read live from settings.
     ctx.font = '12px Verdana';
-    if (m.passivePoints > 0) {
+    // THE HERO'S NUDGE IS RETIRED (2026-09-05, SHOW not TELL): unspent passive
+    // points show as THE MENU BAR's pip on the Passive Tree page (ui/menubar.ts
+    // menuPip — the tree's tile wears the count, the button rolls it up).
+    // A couch GUEST has no bar of their own, so the line still speaks to them.
+    if (m.passivePoints > 0 && !worldInfo) {
       ctx.fillStyle = '#ffd700';
       ctx.fillText(`${m.passivePoints} passive point${m.passivePoints > 1 ? 's' : ''} — press ${hintKey('panelTree')}`, x, hintY);
       hintY += 18;

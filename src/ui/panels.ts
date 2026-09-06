@@ -98,8 +98,15 @@ import {
   resurrectUnlockId, sealedUnlocks, settleClassUnlocks, shroudedClassUnlocks, unlockCompleted,
   classUnlockProgress,
   VAULT_KIND_LABELS, vaultKindOrder, vaultSeatOf, vaultShelfCensus, vaultStripVisible,
+  ownedUnlockById,
   type Unlockable,
 } from '../meta/unlocks';
+// THE MENU BAR (ui/menubar.ts): the HUD's Menu button + tray; its pages are
+// data/menu.ts rows (the side-effect import registers them before the bar
+// is built) folded by engine/menu.ts; menuVerbs() below is the host table.
+import { MenuBar, type CssRect, type MenuVerb } from './menubar';
+import { MENU_ANCHORS } from './menuConfig';
+import '../data/menu';
 // THE RUNESCRIPT (data/runescript.ts): the shrouded class cards are written
 // in the vestiges' runes; THE OPENING CHOOSER (meta/classkit.ts): the class
 // card's mastery alternates.
@@ -574,6 +581,12 @@ export class UI {
   private skillTreePanes = new Map<string, SkillTreePane>();
   /** THE PANEL MOVE's static roots (the skill-tree panes join at minting). */
   private movableRoots: HTMLElement[] = [];
+  /** THE MENU BAR (ui/menubar.ts) — built in the constructor, enrolled in
+   *  the movable roots, synced per frame by main.ts (menuBarSync). */
+  private menuBar: MenuBar;
+  /** The hero's DRAWN HUD cluster in CSS px (main.ts feeds the renderer's
+   *  published rect) — the bar's 'bar' anchor seats beside it. */
+  hudCluster?: () => CssRect | null;
   /** THE BOOK MOVES AS ONE (folioLeaf.present): the seat a shelving or
    *  closing front hands to the leaf that takes its place — null seat = the
    *  stylesheet's; cleared on a microtask so only the same synchronous
@@ -878,6 +891,22 @@ export class UI {
     this.enrollFolioLeaves();
     bindFolioKeys(this.folio, l => l.owner() === this.getWorld().localSeat.id, () => this.folioStrip.update());
 
+    // THE MENU BAR (ui/menubar.ts): the host table names how each page
+    // opens; the reads hand the fold the account, the world, the hero's
+    // seat and the catalog's ownership closure.
+    this.menuBar = new MenuBar({
+      verbs: this.menuVerbs(),
+      reads: () => {
+        const w = this.getWorld();
+        const account = this.getAccount();
+        return { account, world: w, seat: w.localSeat, ownedUnlock: ownedUnlockById(account) };
+      },
+      settings: () => this.getSettings(),
+      padActive: () => this.getPadActive?.() ?? false,
+      hudCluster: () => this.hudCluster?.() ?? null,
+      couchActive: () => this.getWorld().couchActive(),
+    });
+
     // THE PANEL MOVE (ui/panelmove.ts): every ribboned panel drags by its
     // h2 — one attach per root, delegated, so rebuilt templates stay
     // draggable; a drag re-seats the folio strip on the moving front.
@@ -886,7 +915,7 @@ export class UI {
     this.movableRoots = [this.charSheet, this.inventory, this.passiveTree, this.worldMap,
       this.vendorMenu, this.salvageMenu, this.fontMenu, this.recallMenu, this.oracleMenu,
       this.bestiaryMenu, this.boroughMenu, this.bountyMenu, this.caravanMenu, this.sailMenu,
-      this.holdMenu, this.mercMenu, this.vocationMenu];
+      this.holdMenu, this.mercMenu, this.vocationMenu, this.menuBar.root];
     for (const el of this.movableRoots) attachPanelMove(el, { onMove: () => this.folioStrip.update() });
     // THE LAYOUT (Settings.layout): the opt-in, the remembered seats and the
     // locks live in settings; the fabric reads them live and saves through
@@ -1182,6 +1211,70 @@ export class UI {
     });
   }
 
+  // --- THE MENU BAR (ui/menubar.ts) ----------------------------------------
+
+  /** The host table: verb id → how the page opens for a seat + its own open
+   *  flag (the fold's pageOpen read — a lesson glow on an open page has been
+   *  followed). One row per verb data/menu.ts names; toggles toggle (a menu
+   *  press on an open page closes it — the keyed grammar), dwell dialogs open
+   *  exactly as their dwell would. The probe's census pins every named verb
+   *  has a row here. */
+  private menuVerbs(): Record<string, MenuVerb> {
+    const w = (): World => this.getWorld();
+    return {
+      inventory: { open: id => this.toggleInventory(id), isOpen: () => this.inventoryOpen },
+      character: { open: id => this.toggleCharSheet(id), isOpen: () => this.charSheetOpen },
+      passives: { open: id => this.toggleTree(id), isOpen: () => this.treeOpen },
+      map: { open: () => this.openMapTab('map'), isOpen: () => this.mapOpen && this.mapTab === 'map' },
+      journal: { open: () => this.openMapTab('quests'), isOpen: () => this.mapOpen && this.mapTab === 'quests' },
+      vendor: { open: id => this.showVendor(id), isOpen: () => this.vendorOpen },
+      salvage: { open: id => this.showSalvage(id), isOpen: () => this.salvageOpen },
+      font: { open: id => this.showFont(id), isOpen: () => this.fontOpen },
+      oracle: { open: id => this.showOracle(id), isOpen: () => this.oracleOpen },
+      bestiary: { open: id => this.showBestiary(id), isOpen: () => this.bestiaryOpen },
+      bounties: {
+        // The board under the seat's feet, never the last dwell's.
+        open: id => {
+          const seat = this.couchSeatFor(id);
+          const b = w().bountyBoardsHere().find(x => w().nearBountyBoard(seat, x.id));
+          this.showBounties(id, b?.id);
+        },
+        isOpen: () => this.bountiesOpen,
+      },
+      caravan: { open: id => this.showCaravan(id), isOpen: () => this.caravanOpen },
+      harbor: { open: () => this.showSail(), isOpen: () => this.sailOpen },
+      hold: { open: () => this.showHold(), isOpen: () => this.holdOpen },
+      mercs: { open: () => this.showMercMenu(), isOpen: () => this.mercOpen },
+      pause: { open: () => this.showEscapeMenu(), isOpen: () => this.escapeMenuOpen },
+    };
+  }
+
+  /** Open the map panel on a tab — showing that tab already, close it (the
+   *  menu's toggle grammar); showing the other, switch. */
+  openMapTab(tab: 'map' | 'quests'): void {
+    if (this.mapOpen && this.mapTab === tab) { this.toggleMap(); return; }
+    this.mapTab = tab;
+    if (this.mapOpen) this.refreshMap(); else this.toggleMap();
+  }
+
+  /** The bind's toggle (main.ts handleLocalPanels). */
+  toggleMenu(): void { this.menuBar.toggleTray(); }
+  menuTrayOpen(): boolean { return this.menuBar.isTrayOpen(); }
+  /** Esc's first step: fold the tray. True = the press was consumed. */
+  menuTrayClose(): boolean {
+    if (!this.menuBar.isTrayOpen()) return false;
+    this.menuBar.closeTray();
+    return true;
+  }
+  /** Once per frame (main.ts): the bar's visibility, seat and cadenced fold. */
+  menuBarSync(dt: number, visible: boolean): void { this.menuBar.sync(dt, visible); }
+  /** Is THE FOLIO's Tab walk armed (the hero's book of two+ leaves stands)?
+   *  The menu's default bind is Tab; the walk wins while it is armed. */
+  folioWalkArmed(): boolean {
+    const hero = this.getWorld().localSeat.id;
+    return this.folio.anyBook(undefined, l => l.owner() === hero);
+  }
+
   /** Once per frame (main.ts): reconcile every book against its leaves' own
    *  open flags — whatever path opened or closed them — and seat the strips. */
   folioSync(): void {
@@ -1247,6 +1340,8 @@ export class UI {
    *  the per-player panels gate only the seat that owns them — one player's
    *  open bag must never flip the other's pad into pointer mode. */
   blockingFor(seatId: string): boolean {
+    // THE MENU BAR's tray is the hero's (its pad pointer wakes on it).
+    if (this.menuBar.isTrayOpen() && seatId === this.getWorld().localSeat.id) return true;
     if (this.escapeMenuOpen || this.minigameActive || this.couchJoinOpen
       || this.caravanOpen || this.mercOpen || this.sailOpen || this.holdOpen
       || this.vocationOpen || this.boroughOpen || this.muCardOpen
@@ -1831,7 +1926,7 @@ export class UI {
    *  switching habits (the pad flips to menu-pointer mode on this); new
    *  surfaces join here and every input layer follows for free. */
   uiBlocking(): boolean {
-    return this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive
+    return this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
       || this.couchJoinOpen || this.muCardOpen
       || this.caravanOpen || this.mercOpen || this.salvageOpen
       || this.oracleOpen || this.vendorOpen || this.sailOpen || this.holdOpen || this.vocationOpen
@@ -3127,6 +3222,7 @@ export class UI {
       if (r.width < 8 || r.height < 8) return; // closed panes measure zero
       out.push({ x: r.left, y: r.top, w: r.width, h: r.height });
     };
+    { const tray = this.menuBar.trayRect(); if (tray) out.push(tray); } // THE MENU BAR's tray while up (ui/menubar.ts)
     for (const el of [this.charSheet, this.inventory, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el),
       this.worldMap, this.vendorMenu, this.salvageMenu, this.fontMenu,
       this.recallMenu, this.oracleMenu, this.bestiaryMenu, this.boroughMenu,
@@ -9088,6 +9184,15 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <span><button id="opt-uireset" title="Return every panel to its default seat and unlock them all; the remembered layout is cleared.">RESET TO DEFAULT</button>
           <span style="color:var(--text-dim);font-size:11px;margin-left:8px">${Object.keys(s.layout.seats).length} moved · ${Object.keys(s.layout.locked).length} locked</span></span>
       </div>
+      <h1>Menu Bar</h1>
+      <div class="rebind-row">
+        <span>Menu Bar Seat</span>
+        <button id="opt-menuanchor" title="Where the Menu button stands by default. ${MENU_ANCHORS.map(a => `${a.label}: ${a.blurb}`).join(' ')} With Movable UI on, drag it by its grip anywhere; a dragged seat wins until the layout is reset.">${esc(MENU_ANCHORS.find(a => a.id === s.menuBar.anchor)?.label ?? s.menuBar.anchor)}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Page Icons</span>
+        <button id="opt-menudock" title="ON: every unlocked page stands as an icon tile beside the Menu button, greyed where it cannot be used from here. OFF: the one button, with the pages in its tray.">${s.menuBar.dock ? 'ON' : 'OFF'}</button>
+      </div>
       <h1>Save Data</h1>
       <div class="acct-head">Your progress as one portable file: account, settings, and every character.
         Importing replaces what stands on this device, whole, then restarts the game.</div>
@@ -9375,6 +9480,23 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     root.querySelector<HTMLElement>('#opt-uireset')?.addEventListener('click', () => {
       resetPanelLayout(this.layoutRoots());
       this.folioStrip.update();
+      this.renderOptions(root, onBack);
+    });
+    // THE MENU BAR (ui/menubar.ts): the anchor cycles the registry; the
+    // dock flips. Both re-fold the bar at once (the sync's invalidate).
+    root.querySelector<HTMLElement>('#opt-menuanchor')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      const i = MENU_ANCHORS.findIndex(a => a.id === st.menuBar.anchor);
+      st.menuBar.anchor = MENU_ANCHORS[(i + 1) % MENU_ANCHORS.length].id;
+      this.saveSettings();
+      this.menuBar.invalidate();
+      this.renderOptions(root, onBack);
+    });
+    root.querySelector<HTMLElement>('#opt-menudock')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      st.menuBar.dock = !st.menuBar.dock;
+      this.saveSettings();
+      this.menuBar.invalidate();
       this.renderOptions(root, onBack);
     });
     root.querySelectorAll<HTMLElement>('[data-notice-ch]').forEach(btn => {
@@ -9917,6 +10039,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
   }
 
   hideAll(): void {
+    this.menuBar.closeTray();
     this.charSheetOpen = false;
     this.inventoryOpen = false;
     dndCancel(); // never strand a carried ghost on a closed panel

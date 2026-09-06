@@ -1389,7 +1389,7 @@ function staticGateMet(a: Account, u: Unlockable): boolean {
 
 /** The catalog's own ownership predicate as a closure — what gates.ts
  *  `unlock` avenues resolve through (the fabric leaf never imports us). */
-function ownedUnlockById(a: Account): (id: string) => boolean {
+export function ownedUnlockById(a: Account): (id: string) => boolean {
   return id => {
     const dep = CATALOG_BY_ID.get(id);
     return !!dep && isUnlockOwned(a, dep);
