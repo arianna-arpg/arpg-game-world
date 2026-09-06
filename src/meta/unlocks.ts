@@ -557,8 +557,8 @@ function classTierEntries(): Unlockable[] {
         reqAnyOf: [{ classLevel: { classId: c.id, level: t.level } }],
         label: `${t.label} ${c.name}`,
         description: `Mastery of the ${c.name}, rung ${t.label} (a ${c.name} of level ${t.level} has walked this far).`
-          + ` An ALTERNATE OPENING for every ${c.name} you wake after: ${gifts.map(gift).join('; ')}`
-          + ` — chosen on the class card. ${gifts.length === 1 ? 'The gem joins' : 'The gems join'} the drop pool.`,
+          + ` An ALTERNATE OPENING for every ${c.name} you wake after, chosen on the class card: ${gifts.map(gift).join('; ')}.`
+          + ` ${gifts.length === 1 ? 'The gem joins' : 'The gems join'} the drop pool.`,
         payload: { classId: c.id, tierId: t.id, skillIds: gifts.map(g => g.skill) },
       });
       prevId = id;
@@ -584,7 +584,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     pay (docs/design/bounty-board.md). ---------------------------------
   { id: 'feat_bounty_board', kind: 'feature', cost: 0, reqLevel: 0,
     label: 'Bounty Board: Town',
-    description: 'A posting board raised in Lastlight, free for the claiming. Its slate refreshes on its own clock with work drawn from the living world — dwell to read the postings, take ONE in hand, and return to the board when the deed is done: the pay is printed on the card, and the next slate waits where you collect.',
+    description: 'A posting board raised in Lastlight, free for the claiming. Its slate refreshes on its own clock with work drawn from the living world. Dwell to read the postings, take ONE in hand, and return to the board when the deed is done: the pay is printed on the card, and the next slate waits where you collect.',
     payload: { flag: FEATURE.BOUNTY_BOARD } },
 
   // --- Class slots: a bigger HAND at character select, bought in sequence ----
@@ -758,7 +758,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   // kills, no super mark): the kill-speed build-around.
   { id: 'gem_skills_gauge', kind: 'skill', cost: 120, reqLevel: 4, label: 'Skill Pool: the Reaper\'s Toll',
     description: 'Reaper\'s Toll may drop. Every kill is a coin; the toll rings when the purse'
-      + ' is full — and the faster you kill, the more often it rings.',
+      + ' is full, and the faster you kill, the more often it rings.',
     payload: { skillIds: ['reapers_toll'] } },
 
   // --- Support drop bundles -------------------------------------------------
@@ -791,7 +791,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'Phantasmal Echo, Ancestral Call, Vessel of Shadow, Synchronicity may drop.',
     payload: { supportIds: ['phantasmal_echo', 'ancestral_call', 'vessel_of_shadow', 'synchronicity'] } },
   { id: 'sup_clutch', kind: 'support', cost: 150, reqLevel: 1, label: 'Support Pool: the Clutch',
-    description: 'Broodbearer and Teeming Vein may drop. Landings that bear — and a gem cut once at the vein, no two alike.',
+    description: 'Broodbearer and Teeming Vein may drop. Landings that bear, and a gem cut once at the vein, no two alike.',
     payload: { supportIds: ['broodbearer', 'teeming_vein'] } },
   // THE FOURTH WALL's gem side — the Scald's tuition idiom: the art first,
   // then the temper that turns every flight into the same game.
@@ -955,7 +955,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     requiresUnlock: i === 0 ? 'feat_bounty_board' : `feat_bounty_broader_${i}`,
     ...(i === 0 ? { reqLedger: 'bounty_done' } : {}),
     label: `Broader Postings ${['I', 'II', 'III'][i] ?? i + 1}`,
-    description: `The board deals ${rung.add} more posting${rung.add === 1 ? '' : 's'} every beat — more work to choose among, one hand at a time all the same.`,
+    description: `The board deals ${rung.add} more posting${rung.add === 1 ? '' : 's'} every beat: more work to choose among, one hand at a time all the same.`,
     payload: { flag: rung.flag },
   })),
   ...BOUNTY_BOARD_CFG.growth.farther.map((rung, i): Unlockable => ({
@@ -963,7 +963,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     requiresUnlock: i === 0 ? 'feat_bounty_board' : `feat_bounty_farther_${i}`,
     ...(i === 0 ? { reqLedger: 'bounty_done' } : {}),
     label: `Farther Postings ${['I', 'II', 'III'][i] ?? i + 1}`,
-    description: `The board's writs reach ${Math.round((rung.mul - 1) * 100)}% farther afield — deeper country, richer asks, longer walks home.`,
+    description: `The board's writs reach ${Math.round((rung.mul - 1) * 100)}% farther afield: deeper country, richer asks, longer walks home.`,
     payload: { flag: rung.flag },
   })),
   // THE POSTING PIN (her adjustment — the Reserved Wares kinship on the
@@ -975,7 +975,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     requiresUnlock: i === 0 ? 'feat_bounty_board' : `feat_bounty_lock_${i}`,
     ...(i === 0 ? { reqLedger: 'bounty_done' } : {}),
     label: `Reserved Postings ${['I', 'II', 'III'][i] ?? i + 1}`,
-    description: 'One reserve pin at the bounty board: a pinned posting holds its seat through every fresh deal until you take it or let it go — a dead ask still leaves (the pin holds the seat, never the truth).',
+    description: 'One reserve pin at the bounty board: a pinned posting holds its seat through every fresh deal until you take it or let it go. A dead ask still leaves: the pin holds the seat, never the truth.',
     payload: { flag: rung.flag },
   })),
 
@@ -1046,7 +1046,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
       + 'other, until its first death, which pays a reduced essence tithe and seals it OUTSIDE '
       + 'the mortal ledger. It wakes in town, build intact, carry lost; it persists across '
       + 'sessions in an account vessel; its corpses are visible only to itself, and its deeds '
-      + 'feed the account nothing. The character itself is never lost — but each later death '
+      + 'feed the account nothing. The character itself is never lost, but each later death '
       + 'FELLS the vessel, and only Mortal Essence from your mortal runs, poured at the Vault, '
       + 'calls it back.',
     payload: { flag: FEATURE.IMMORTAL } },
@@ -1119,7 +1119,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'skill_graft', kind: 'graft', cost: SKILL_GRAFT_COST,
     requiresUnlock: 'feat_unlock_all_gems',
     label: 'Skill Grafting',
-    description: 'Buy a SKILL GRAFT charge: at your next run\'s start, choose any skill your account has unlocked, and its Memory — at its plainest cut (level 1, common) — rides in beside your class\'s own kit, learned where your young hands can hold it, packed where they cannot. The charge arms and spends only when a run begins with a chosen skill; decline the pick and it simply carries on to a later run. Return here for another once it\'s spent — the shelf never empties: this is where a full Vault keeps growing.',
+    description: 'Buy a SKILL GRAFT charge: at your next run\'s start, choose any skill your account has unlocked, and its Memory, at its plainest cut (level 1, common), rides in beside your class\'s own kit, learned where your young hands can hold it, packed where they cannot. The charge arms and spends only when a run begins with a chosen skill; decline the pick and it simply carries on to a later run. Return here for another once it\'s spent. The shelf never empties: this is where a full Vault keeps growing.',
     payload: {} },
 ];
 
@@ -1279,9 +1279,9 @@ export const resurrectUnlockId = (charId: string): string => `resurrect_${charId
 function resurrectUnlockables(a: Account): Unlockable[] {
   return a.roster.filter(r => r.fallen).map(r => ({
     id: resurrectUnlockId(r.charId), kind: 'resurrect' as const,
-    label: `${r.name} — Level ${r.fallen!.level}`,
+    label: `${r.name} (Level ${r.fallen!.level})`,
     description: `An Immortal vessel, fallen. The covenant holds what death cannot keep: `
-      + `pour Mortal Essence from your mortal line to resurrect this character — partial `
+      + `pour Mortal Essence from your mortal line to resurrect this character. Partial `
       + `investment stays across runs, and when the full fee stands the vessel wakes in `
       + `Lastlight, exactly as it fell (its build whole; its carry went to its own corpse).`,
     cost: r.fallen!.fee,
@@ -1538,13 +1538,13 @@ export const VAULT_TABS: readonly VaultTabDef[] = [
     // invisible until a vessel actually lies fallen, so the store's first
     // face is also its rarest.
     id: 'fallen', label: 'Fallen', kinds: ['resurrect'],
-    blurb: 'Immortal vessels death has taken hold of. Pour Mortal Essence from your mortal runs to resurrect one — partial investment keeps across runs, and the vessel wakes in Lastlight the moment its full fee stands.',
+    blurb: 'Immortal vessels death has taken hold of. Pour Mortal Essence from your mortal runs to resurrect one. Partial investment keeps across runs, and the vessel wakes in Lastlight the moment its full fee stands.',
     emptyNote: 'No vessel lies fallen. May it stay that way.',
   },
   {
     id: 'classes', label: 'Classes', kinds: ['slot', 'class', 'classtier'], rumors: true,
-    blurb: 'The hand, the pool, and the ladder: Class Slots widen how many classes each deal offers; classes themselves are EARNED — the shrouded cards below carry their objectives, written in the vestiges\' runes; Mastery rungs (Novice → Master, at class level 10/30/60/100) open alternate openings for a class you have walked far.',
-    emptyNote: 'No class purchases are open right now. Classes are earned, never bought — the shrouded cards below carry the deeds; Mastery rungs surface once a class of yours has walked far enough.',
+    blurb: 'The hand, the pool, and the ladder: Class Slots widen how many classes each deal offers; classes themselves are EARNED, and the shrouded cards below carry their objectives, written in the vestiges\' runes; Mastery rungs (Novice → Master, at class level 10/30/60/100) open alternate openings for a class you have walked far.',
+    emptyNote: 'No class purchases are open right now. Classes are earned, never bought: the shrouded cards below carry the deeds, and Mastery rungs surface once a class of yours has walked far enough.',
   },
   {
     id: 'gems', label: 'Memories', kinds: ['skill', 'support', 'graft'],
@@ -1567,9 +1567,10 @@ export const VAULT_TABS: readonly VaultTabDef[] = [
   },
 ];
 
-/** Kind → display name for shelf sub-headers and the Owned tab's grouping
- *  (the cards' lowercase `ukind` tag, at shelf grain). Total by type: a new
- *  catalog kind fails the build here until it gets a name. */
+/** Kind → display name for the section headers over the cards (a card never
+ *  prints its own kind — the header says it) and the hover story's meta
+ *  line. Total by type: a new catalog kind fails the build here until it
+ *  gets a name. */
 export const VAULT_KIND_LABELS: Record<UnlockKind, string> = {
   slot: 'Class Slots', class: 'Classes', classtier: 'Mastery', skill: 'Skill Pools',
   support: 'Support Pools', feature: 'Town & Features', package: 'World Events',

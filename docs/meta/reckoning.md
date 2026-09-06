@@ -86,11 +86,13 @@ no double count.
 
 A Vault visit **opened while any Mortal Essence stands** is a reckoning:
 
-- the head names it, the footer reads **Seal & Continue**,
+- the head names it and carries THE REGISTER — *"N Mortal Essence will be
+  lost to Mu"* (the count re-renders as essence is assigned; the line
+  exists only while something stands unassigned, so an emptied pool says
+  nothing at all) — and the footer reads **Seal & Continue**,
 - leaving always raises the confirm — what this visit assigned (per-unlock,
   completed rungs starred), and what remains: *"N Mortal Essence remains
-  unassigned. It does not keep between runs — invest it now, or let it
-  pass."*
+  unassigned and will be lost to Mu. Invest it now, or let it pass."*
 - sealing (`sealReckoning`) zeroes the pool — lifetime totals and partial
   investments untouched — saves, and lands on whatever opened the visit
   (the death flow hands it the main menu).

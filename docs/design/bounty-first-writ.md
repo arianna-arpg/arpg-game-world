@@ -345,7 +345,7 @@ and **W0+W1+W2 fired at her go and LANDED together (2026-08-26).**
 W0 THE OPEN DOOR: the catalog row moved to `UNLOCK_CATALOG`'s head at
 cost 0, ungated (the tease's teaching job superseded); the free claim
 rides the standing click law (`applyUnlock`'s rem-0 settle path — the
-card face reads "Claim — free", enabled at an empty purse); THE DEATH
+card face reads "Claim · free", enabled at an empty purse); THE DEATH
 LESSON on the vault render (visit-scoped talk captured at open, stamped
 `bounty_lesson_prompted` once, dropping live at the claim; the row wears
 the gift-flask `tut-glow` until owned) and THE BOARD LESSON on the
@@ -375,7 +375,7 @@ truth (a fresh shelf holds exactly the free board row) and
 probe_reckoning's invest fixtures aim at real-cost rows. Every gate
 green (check clean, probe lane 157/157 with two named J6 flakes, smoke
 baseline unmoved) and the whole arc LIVE-WALKED in-browser: strip →
-Vault banner + glowing row + "Claim — free" → claim (zero essence
+Vault banner + glowing row + "Claim · free" → claim (zero essence
 moved, toast) → fresh run → dwell → take line + glowing accepts → the
 young slate (2 writs, both Crossroads, charge+cull, 8 Coarse each) →
 accept (lesson closes, return line) → turn-in pays → the band expires →

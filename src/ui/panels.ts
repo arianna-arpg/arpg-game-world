@@ -104,6 +104,7 @@ import {
 // in the vestiges' runes; THE OPENING CHOOSER (meta/classkit.ts): the class
 // card's mastery alternates.
 import { encipher } from '../data/runescript';
+import { MU_ZONE } from '../data/mu';
 import { kitChoicesFor, kitRungOf } from '../meta/classkit';
 import { MERC_CFG } from '../meta/mercs';
 import {
@@ -815,11 +816,12 @@ export class UI {
     // carry data-tip="cskill" exactly like the class screen's — tooltips are
     // bound PER PANEL ROOT, so the card needs its own delegation row.
     bindTooltips(this.muCard, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
-    // THE VAULT reads compact — kind, name, price — and keeps each unlock's
-    // full story in the shared tooltip behind a HOVER-INTENT dwell: the wall
-    // of text speaks only once the cursor has settled on a card (interest,
-    // then detail). Content resolves from the LIVE catalog by id each hover,
-    // so purchases and re-renders can never strand stale copy.
+    // THE VAULT reads compact — name and price on the card, the kind on the
+    // section header above it — and keeps each unlock's full story in the
+    // shared tooltip behind a HOVER-INTENT dwell: the wall of text speaks
+    // only once the cursor has settled on a card (interest, then detail).
+    // Content resolves from the LIVE catalog by id each hover, so purchases
+    // and re-renders can never strand stale copy.
     bindTooltips(this.accountScreen, (el) =>
       el.dataset.tip === 'unlock' ? this.unlockTooltip(el.dataset.unlockId!)
         : el.dataset.tip === 'sealedunlock' ? this.sealedUnlockTooltip(el.dataset.unlockId!)
@@ -2441,7 +2443,7 @@ export class UI {
       // it over (a toast each), and the render below reads it Owned.
       for (const u of settleClassUnlocks(acc)) {
         this.saveAccount();
-        this.vaultToast(`The world yields ${u.label.replace(/^Class: /, 'the ')} — it joins the pool your hand is dealt from.`);
+        this.vaultToast(`The world yields ${u.label.replace(/^Class: /, 'the ')}: it joins the pool your hand is dealt from.`);
       }
       // THE CENSUS (vaultShelfCensus): every shelf's stock/owned/rumors and
       // its mystery-law verdict in one read the strip, faces and floor share.
@@ -2463,9 +2465,14 @@ export class UI {
       const visible = census.filter(c => c.visible || (sealedBy.get(c.tab.id)?.length ?? 0) > 0);
       const strip = vaultStripVisible(acc, census);
 
-      // COMPACT BY DESIGN: kind, name, price — the description lives in the
+      // COMPACT BY DESIGN: name and price — the description lives in the
       // hover-intent tooltip (the accountScreen bind), so a shelf reads as a
-      // shelf, never a wall of text. availableUnlocks() already excludes
+      // shelf, never a wall of text. THE FACE LAW: a card never prints its
+      // own classification; the section it hangs under says that (the kind
+      // header of kindSections below, the tab face of a single-kind shelf,
+      // the Sealed / Shrouded / Owned headers for theirs), and the hover
+      // story's meta line keeps the kind + the level requirement for
+      // whoever asks. availableUnlocks() already excludes
       // owned + un-gated entries. THE INVESTMENT LANE: every card wears its
       // poured-progress bar (persistent across runs) and a HOLD-to-pour
       // button — partial progress is always real, so nothing on the shelf
@@ -2477,6 +2484,10 @@ export class UI {
       // THE DEATH LESSON's glow: while the board stands unowned, its row
       // wears the tutorial pulse (the gift-flask class — one lesson look).
       const lessonGlowId = !featureEnabled(acc, FEATURE.BOUNTY_BOARD) ? 'feat_bounty_board' : '';
+      // The button's hover names the two presses and nothing more — what a
+      // hold does past a click, the player sees the moment the bar fills.
+      const investTitle = (u: Unlockable, free: boolean): string =>
+        free ? 'Click to Claim' : `Hold to Invest · Click to ${buyVerb(u)}`;
       const cardHtml = (u: Unlockable): string => {
         const inv = investedToward(acc, u);
         const rem = remainingCost(acc, u);
@@ -2487,18 +2498,14 @@ export class UI {
         const pct = u.cost > 0 ? Math.round((inv / u.cost) * 100) : 0;
         return `
             <div class="unlock-card${u.id === lessonGlowId ? ' tut-glow' : ''}" data-tip="unlock" data-unlock-id="${u.id}">
-              <div class="ukind">${VAULT_KIND_LABELS[u.kind]}${u.reqLevel ? ` · req acct lv ${u.reqLevel}` : ''}</div>
               <div class="uname">${u.label}</div>
               <div class="uinvest"><i style="width:${pct}%"></i></div>
-              <button data-invest="${u.id}" ${(canPour || free) ? '' : 'disabled'}
-                title="${free ? 'This one costs nothing — click to claim it.'
-                  : `Click to ${buyVerb(u).toLowerCase()} outright when your essence covers it. Hold to INVEST a piece at a time — invested essence stays across runs, and the ${u.kind === 'resurrect' ? 'vessel rises' : 'unlock completes'} when the full cost stands.`}">${
-                free ? 'Claim — free' : inv > 0 ? `${buyVerb(u)} — ${rem} more` : `${buyVerb(u)} — ${u.cost}`}</button>
+              <button data-invest="${u.id}" ${(canPour || free) ? '' : 'disabled'} title="${investTitle(u, free)}">${
+                free ? 'Claim · free' : inv > 0 ? `${buyVerb(u)} · ${rem} more` : `${buyVerb(u)} · ${u.cost}`}</button>
             </div>`;
       };
       const ownedCardHtml = (u: Unlockable): string => `
             <div class="unlock-card uowned" data-tip="unlock" data-unlock-id="${u.id}">
-              <div class="ukind">${VAULT_KIND_LABELS[u.kind]}</div>
               <div class="uname">${u.label}</div>
               <button disabled>✓ Owned</button>
             </div>`;
@@ -2507,12 +2514,24 @@ export class UI {
       // avenues that open it live in the hover story, met roads checked.
       const sealedCardHtml = (u: Unlockable): string => `
             <div class="unlock-card usealed" style="opacity:.7" data-tip="sealedunlock" data-unlock-id="${u.id}">
-              <div class="ukind">${VAULT_KIND_LABELS[u.kind]} · sealed</div>
               <div class="uname">${u.label}</div>
               <button disabled>🔒 ${u.cost}</button>
             </div>`;
       const grid = (rows: string): string => `<div class="unlock-grid">${rows}</div>`;
       const subHead = (label: string): string => `<h3 class="vault-sub">${esc(label)}</h3>`;
+      // THE SECTION LAW (the face law's other half): classification is
+      // printed ONCE, as a kind header over the cards that share it — in
+      // shelf order (vaultKindOrder), empty kinds silent. The ONE grouping
+      // for the young store's wall, a multi-kind shelf's floor and the
+      // trophy case; a single-kind shelf skips it (the tab face already
+      // says it), and the Sealed / Shrouded / Owned-tail sections ARE their
+      // own classification, so they print none.
+      const kindSections = (rows: Unlockable[], card: (u: Unlockable) => string): string =>
+        vaultKindOrder()
+          .map(k => ({ k, kr: rows.filter(u => u.kind === k) }))
+          .filter(s => s.kr.length > 0)
+          .map(s => subHead(VAULT_KIND_LABELS[s.k]) + grid(s.kr.map(card).join('')))
+          .join('');
       // The SEALED rack — beneath the buyable stock, above the rumor wall:
       // the next links of walked chains, roads printed on hover.
       const sealedRack = (rows: Unlockable[]): string => rows.length
@@ -2540,7 +2559,6 @@ export class UI {
           : `<div class="uobj runescript">· ${encipher(r.label)}</div>`).join('');
         return `
             <div class="unlock-card ushroud" data-tip="rumor" data-rumor-i="${i}">
-              <div class="ukind">${VAULT_KIND_LABELS.class} · unclaimed</div>
               <div class="uname runescript" style="letter-spacing:2px">${encipher(cls?.name ?? u.payload.classId)}</div>
               <div class="ushroud-body runescript">${encipher(blurb)}</div>
               <div class="uobjs">${rows}</div>
@@ -2557,15 +2575,15 @@ export class UI {
 
       let tabStrip = '', body = '';
       if (!strip) {
-        // THE YOUNG STORE: no shelving earned yet — one flat wall of
-        // everything visible, in shelf order (the cards' kind tags speak
-        // for themselves), the sealed rack, the rumor fold, and whatever
-        // little is owned at the tail. The furniture arrives when the
-        // account outgrows this room.
+        // THE YOUNG STORE: no shelving earned yet — one wall of everything
+        // visible, its kinds as section headers in shelf order (the same
+        // headers the shelves will wear once the furniture arrives), the
+        // sealed rack, the rumor fold, and whatever little is owned at the
+        // tail. The furniture arrives when the account outgrows this room.
         this.vaultTab = '';
         const stock = visible.flatMap(c => c.stock);
         const ownedAll = census.find(c => c.tab.owned)?.owned ?? [];
-        body = stock.length ? grid(stock.map(cardHtml).join(''))
+        body = stock.length ? kindSections(stock, cardHtml)
           : `<div class="vault-empty">Nothing for sale right now; earn ${META_CURRENCY_LABEL} and milestones by playing.</div>`;
         body += sealedRack(sealed.map(s => s.u));
         body += rumorSection(census.flatMap(c => c.rumors));
@@ -2599,17 +2617,13 @@ export class UI {
         }).join('')}</div>`;
 
         // The active shelf's floor. Multi-kind shelves group under kind
-        // headers (VAULT_KIND_LABELS — the cards' ukind tag at shelf
-        // grain); single-kind shelves skip them, the face already says it.
+        // headers (kindSections — the section law); single-kind shelves
+        // skip them, the face already says it.
         if (tab.owned) {
           // THE TROPHY CASE: everything claimed, grouped by kind in shelf
           // order — browsed deliberately, never underfoot while shopping.
           // (Visible only once anything IS claimed, so never empty here.)
-          body = vaultKindOrder()
-            .map(k => ({ k, rows: row.owned.filter(u => u.kind === k) }))
-            .filter(s => s.rows.length > 0)
-            .map(s => subHead(VAULT_KIND_LABELS[s.k]) + grid(s.rows.map(ownedCardHtml).join('')))
-            .join('');
+          body = kindSections(row.owned, ownedCardHtml);
         } else {
           const rows = row.stock;
           const sealedRows = sealedBy.get(tab.id) ?? [];
@@ -2617,10 +2631,7 @@ export class UI {
             body = `<div class="vault-empty">${esc(tab.emptyNote
               ?? `Nothing here right now; earn more ${META_CURRENCY_LABEL} and milestones by playing.`)}</div>`;
           } else if ((tab.kinds?.length ?? 0) > 1) {
-            body = (tab.kinds ?? []).map(k => {
-              const kr = rows.filter(u => u.kind === k);
-              return kr.length ? subHead(VAULT_KIND_LABELS[k]) + grid(kr.map(cardHtml).join('')) : '';
-            }).join('');
+            body = kindSections(rows, cardHtml);
           } else {
             body = rows.length ? grid(rows.map(cardHtml).join('')) : '';
           }
@@ -2630,15 +2641,21 @@ export class UI {
       }
 
       const reckoning = creditsAtOpen > 0;
+      // THE REGISTER: what still stands unassigned, spoken as its fate —
+      // Mortal Essence never crosses between runs, and what the seal finds
+      // loose is lost to Mu (data/mu.ts names the place). Rendered only
+      // while something is LEFT to assign: an emptied pool says nothing at
+      // all. The live pour writes the count in place (updateFaces), and the
+      // settle's re-render drops the line the moment the pool runs dry.
+      const register = acc.credits > 0
+        ? ` &nbsp;·&nbsp; <span style="color:#e8b06a"><b id="vault-cred">${acc.credits}</b> ${META_CURRENCY_LABEL} will be lost to ${esc(MU_ZONE.name)}</span>`
+        : '';
       this.accountScreen.innerHTML = `
         <div class="vault-head">
           <h1>${reckoning ? 'The Reckoning: Assign Your Essence' : 'The Vault: Account Unlocks'}</h1>
           <div class="acct-head">Account Level <b>${acc.level}</b> &nbsp;·&nbsp;
-            <b id="vault-cred">${acc.credits}</b> ${META_CURRENCY_LABEL}${reckoning
-              ? ` <span style="color:#e8b06a;font-size:11px">— this run's harvest: what is not assigned does not keep</span>` : ''}
-            &nbsp;·&nbsp; ${acc.lifetimeCredits} lifetime
-            &nbsp;·&nbsp; <span style="color:var(--text-dim);font-size:11px">hold a card's button to invest · rest on it for its full story</span></div>
-          ${boardLessonTalk && !featureEnabled(acc, FEATURE.BOUNTY_BOARD) ? `<div class="vault-lesson">Every run ends here: what you carried home became ${META_CURRENCY_LABEL}, and ${META_CURRENCY_LABEL} buys the town's standing services — they persist, run after run.<br>The <b>Bounty Board</b> asks nothing. Claim it free, and Lastlight raises a posting board whose work pays the very essence this Vault spends.</div>` : ''}
+            <b>${acc.lifetimeCredits}</b> ${META_CURRENCY_LABEL} lifetime${register}</div>
+          ${boardLessonTalk && !featureEnabled(acc, FEATURE.BOUNTY_BOARD) ? `<div class="vault-lesson">Every run ends here: what you carried home became ${META_CURRENCY_LABEL}, and ${META_CURRENCY_LABEL} buys the town's standing services, which persist run after run.<br>The <b>Bounty Board</b> asks nothing. Claim it free, and Lastlight raises a posting board whose work pays the very essence this Vault spends.</div>` : ''}
           ${tabStrip}
         </div>
         <div class="vault-body">${body}</div>
@@ -2676,17 +2693,17 @@ export class UI {
         const id = btn.dataset.invest!;
         const findU = (): Unlockable | undefined => availableUnlocks(acc).find(x => x.id === id);
         const updateFaces = (u: Unlockable): void => {
-          btn.textContent = `${u.kind === 'resurrect' ? 'Resurrect' : 'Unlock'} — ${remainingCost(acc, u)} more`;
+          btn.textContent = `${buyVerb(u)} · ${remainingCost(acc, u)} more`;
           const bar = btn.parentElement?.querySelector<HTMLElement>('.uinvest i');
           if (bar && u.cost > 0) bar.style.width = `${Math.round((investedToward(acc, u) / u.cost) * 100)}%`;
           const cred = document.getElementById('vault-cred');
           if (cred) cred.textContent = String(acc.credits);
         };
         const doneToast = (u: Unlockable): string => u.kind === 'graft'
-          ? `⚔ ${u.label} — a charge awaits your next run's start`
+          ? `⚔ ${u.label}: a charge awaits your next run's start`
           : u.kind === 'resurrect'
-            ? `✦ ${u.label} — RISEN: the vessel wakes in Lastlight`
-            : `✦ ${u.label} — UNLOCKED`;
+            ? `✦ ${u.label} RISEN: the vessel wakes in Lastlight`
+            : `✦ ${u.label} UNLOCKED`;
         // "This pour finished": ownership for the permanent kinds, the state
         // change for the service kinds (unlockCompleted — the one predicate).
         const completed = (u: Unlockable): boolean => unlockCompleted(acc, u);
@@ -2758,7 +2775,7 @@ export class UI {
               // THE CLICK: unlock outright when the pool covers it; short,
               // point at the hold lane instead of quietly draining.
               if (!unlockOutright(u)) {
-                this.vaultToast(`${remainingCost(acc, u) - acc.credits} short — hold to invest what you carry`);
+                this.vaultToast(`${remainingCost(acc, u) - acc.credits} short: hold to invest what you carry`);
               }
               return;
             }
@@ -2802,7 +2819,7 @@ export class UI {
         const spent = [...visitLog.values()];
         const spentHtml = spent.length
           ? `<div class="seal-list">${spent.map(r =>
-              `<div>${r.done ? '✦' : '·'} ${esc(r.label)} — ${r.done ? 'UNLOCKED' : `+${r.put} invested`}</div>`).join('')}</div>`
+              `<div>${r.done ? '✦' : '·'} ${esc(r.label)}: ${r.done ? 'UNLOCKED' : `+${r.put} invested`}</div>`).join('')}</div>`
           : `<div class="seal-list" style="color:var(--text-dim)">Nothing assigned this reckoning.</div>`;
         const loose = acc.credits;
         const modal = document.createElement('div');
@@ -2812,12 +2829,12 @@ export class UI {
             <h2>Seal the Reckoning?</h2>
             ${spentHtml}
             ${loose > 0
-              ? `<div class="seal-warn"><b>${loose}</b> ${META_CURRENCY_LABEL} remains unassigned.
-                 It does <b>not</b> keep between runs — invest it now, or let it pass.</div>`
+              ? `<div class="seal-warn"><b>${loose}</b> ${META_CURRENCY_LABEL} remains unassigned
+                 and will be lost to ${esc(MU_ZONE.name)}. Invest it now, or let it pass.</div>`
               : `<div class="seal-ok">Every point assigned. The next run starts clean.</div>`}
             <div class="acct-btns">
               <button id="seal-back">Keep Assigning</button>
-              <button id="seal-go" class="danger">${loose > 0 ? 'Let It Pass — Seal' : 'Seal &amp; Continue'}</button>
+              <button id="seal-go" class="danger">${loose > 0 ? 'Let It Pass &amp; Seal' : 'Seal &amp; Continue'}</button>
             </div>
           </div>`;
         this.accountScreen.appendChild(modal);

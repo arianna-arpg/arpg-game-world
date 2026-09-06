@@ -511,9 +511,10 @@
     #account-screen h1 { color: var(--gold); font-size: 22px; letter-spacing: 2px; margin: 4px 0; }
     #account-screen .acct-head { color: var(--text); font-size: 13px; margin-bottom: 14px; }
     #account-screen .acct-head b { color: var(--gold); }
-    /* COMPACT SHELF: cards carry kind + name + price only (the description
-       lives in the hover-intent tooltip), so the grid packs by width — a
-       wider panel or scale flows more columns with no count hardcoded. */
+    /* COMPACT SHELF: cards carry name + price only (the kind rides the
+       section header above them, the description the hover-intent
+       tooltip), so the grid packs by width — a wider panel or scale flows
+       more columns with no count hardcoded. */
     .unlock-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; text-align: left; }
     .unlock-card {
       border: 1px solid var(--panel-border); border-radius: 6px; padding: 8px 10px;
