@@ -1628,12 +1628,17 @@ function staticallyArmed(stat: string): boolean {
 /** One family's derived ARMED LIST (see StatSheet.armedFamily) — the ordered
  *  ids and the same set for O(1) membership during the `extra` union. */
 interface ArmedFamily {
+  registry: readonly string[];
+  registryLength: number;
   ids: readonly string[];
   set: ReadonlySet<string>;
 }
 
 export class StatSheet {
   private sources = new Map<string, Modifier[]>();
+  /** Source-order buckets. State changes alter eligibility, not membership;
+   *  only source replacement/removal rebuilds this index. */
+  private modsByStat: Map<string, Modifier[]> | null = null;
   private baseOverrides = new Map<string, number>();
   private cache = new Map<string, number>();
   /** Active actor-state conditions (lowLife, fullEs...). */
@@ -1721,6 +1726,7 @@ export class StatSheet {
   /** Add or replace a named bundle of modifiers (e.g. 'class', 'buff:warcry'). */
   setSource(name: string, mods: Modifier[]): void {
     this.sources.set(name, mods);
+    this.modsByStat = null;
     this.invalidate();
     this.whenRefs = null;
     this.taggedStats = null;
@@ -1730,6 +1736,7 @@ export class StatSheet {
 
   removeSource(name: string): void {
     if (this.sources.delete(name)) {
+      this.modsByStat = null;
       this.invalidate();
       this.whenRefs = null;
       this.taggedStats = null;
@@ -1790,6 +1797,22 @@ export class StatSheet {
 
   getSourceMods(name: string): Modifier[] | undefined { return this.sources.get(name); }
 
+  /** Keep the exact Map/source-array order, including last-override wins.
+   *  Call setSource after editing a source, as required by the value cache. */
+  private sourceModsFor(stat: string): readonly Modifier[] | undefined {
+    if (!this.modsByStat) {
+      const index = new Map<string, Modifier[]>();
+      for (const mods of this.sources.values()) for (const m of mods) {
+        const id = m.stat;
+        let bucket = index.get(id);
+        if (!bucket) index.set(id, bucket = []);
+        bucket.push(m);
+      }
+      this.modsByStat = index;
+    }
+    return this.modsByStat.get(stat);
+  }
+
   /** Override a stat's base value (used by monster definitions). */
   setBase(stat: string, value: number): void {
     this.baseOverrides.set(stat, value);
@@ -1828,13 +1851,15 @@ export class StatSheet {
    * `extra` is scanned per call (O(instance mods) — a handful, against ~130
    * full resolutions) because a socketed gem can arm a status the sheet
    * itself never mentions; the sheet's own half derives once per generation.
+   * Treat `ids` as immutable: replace the array when changing membership or
+   * order. A length key also catches registries that grow/shrink in place.
    */
   armedFamily(
     prefix: string, ids: readonly string[], extra?: readonly Modifier[],
   ): readonly string[] {
     const fams = (this.armedFams ??= new Map());
     let fam = fams.get(prefix);
-    if (!fam) {
+    if (!fam || fam.registry !== ids || fam.registryLength !== ids.length) {
       const named = new Set<string>();
       for (const mods of this.sources.values()) {
         for (const m of mods) if (m.stat.startsWith(prefix)) named.add(m.stat);
@@ -1847,7 +1872,7 @@ export class StatSheet {
       }
       const list = ids.filter(id =>
         named.has(prefix + id) || staticallyArmed(prefix + id));
-      fam = { ids: list, set: new Set(list) };
+      fam = { registry: ids, registryLength: ids.length, ids: list, set: new Set(list) };
       fams.set(prefix, fam);
     }
     if (!extra || !extra.length) return fam.ids;
@@ -1944,7 +1969,8 @@ export class StatSheet {
           break;
       }
     };
-    for (const mods of this.sources.values()) for (const m of mods) apply(m);
+    const sourceMods = this.sourceModsFor(stat);
+    if (sourceMods) for (const m of sourceMods) apply(m);
     if (extra) for (const m of extra) apply(m);
 
     // STAT LINKS: each siphon adds ratio × the source's baseline into the

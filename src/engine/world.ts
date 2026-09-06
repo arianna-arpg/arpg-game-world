@@ -2521,9 +2521,9 @@ interface WispScene {
 // installs the predicate once at load.
 VICTIM_HOOKS.isBoss = v => !!(v.defId && MONSTERS[v.defId]?.boss);
 
-/** THE TRIGGER INDEX — every proc id (the WHOLE family, the only shape
- *  StatSheet.armedFamily may be asked with: it caches one derived list per
- *  prefix off the first caller's ids) and the ids per trigger, re-derived
+/** THE TRIGGER INDEX — every proc id (the WHOLE family, shared by both
+ *  callers to reuse StatSheet.armedFamily's registry-keyed memo) and the
+ *  ids per trigger, re-derived
  *  when the registry GROWS (probes push rows at runtime — the length-key
  *  idiom). rollOwnProcs and the pulse sweep ask the owner's sheet which
  *  procs are ARMED and intersect with the trigger before walking the
