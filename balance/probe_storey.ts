@@ -105,8 +105,8 @@ const kindAt = (cx: number, cy: number): string => wf.regionAt!(inn.rect.x + cx 
   check('B4 nothing of the ground floor wears the story (Mireille\'s counter, the hearth, the tables stay tier 0)',
     w.doodads.filter(d => ['bar_counter', 'hearth', 'tavern_table', 'keg'].includes(d.kind) && (d.tier ?? 0) !== 0).length === 0);
   const stairs = w.doodads.filter(d => d.kind === 'stairway');
-  check('B5 ONE stairway face stands on the flight, sized to its 2×2 cells, turned to climb toward its landing (south)',
-    stairs.length === 1 && stairs[0].radius === cs && Math.abs((stairs[0].rot ?? 0) - Math.PI / 2) < 0.01
+  check('B5 ONE stairway face stands on the flight, sized to its 2×2 cells, turned to climb toward its landing (NORTH — the foot by the door, the head at the hall)',
+    stairs.length === 1 && stairs[0].radius === cs && Math.abs((stairs[0].rot ?? 0) + Math.PI / 2) < 0.01
     && tierLinkOf(wf.regionAt!(stairs[0].pos.x, stairs[0].pos.y)));
   check('B6 the story\'s ledger: floor rects, hanging-wall rects, three archways (open, no slab), four rooms',
     rec.floors.length > 0 && rec.walls.length > 0 && rec.doors.length === 3 && rec.doors.every(d => d.door.open === true && d.door.mode === 'sealed')
@@ -120,7 +120,7 @@ const kindAt = (cx: number, cy: number): string => wf.regionAt!(inn.rect.x + cx 
     !!lodger && lodger.tier === 1 && tierFloorAt(wf.regionAt!(lodger.pos.x, lodger.pos.y), 1));
   check('B10 the ground-floor ledger leaves the landing\'s closet out of the common room (a non-walkable region is no member)',
     !!inn.rooms && inn.rooms.every(r => !r.rects.some(rc => {
-      const lx = inn.rect.x + 11.5 * cs, ly = inn.rect.y + 6.5 * cs; // the landing's west cell
+      const lx = inn.rect.x + 11.5 * cs, ly = inn.rect.y + 3.5 * cs; // the landing's west cell (north end of the flight)
       return lx > rc.x && lx < rc.x + rc.w && ly > rc.y && ly < rc.y + rc.h;
     })));
   check('B11 the stack is found by position (storeyedStructureAt) inside the inn and nowhere on the square',
@@ -133,31 +133,39 @@ const kindAt = (cx: number, cy: number): string => wf.regionAt!(inn.rect.x + cx 
   const stair = w.doodads.find(d => d.kind === 'stairway')!;
   const p = w.player;
   const step = (dx: number, dy: number, n: number): void => { for (let i = 0; i < n; i++) w.moveActor(p, dx, dy, 1 / 30); };
-  p.pos.x = stair.pos.x; p.pos.y = stair.pos.y - stair.radius - 18; p.tier = 0; p.onTierLink = false;
+  // THE FLIPPED FLIGHT (her word 2026-09-06): the foot is SOUTH of the run
+  // (by the door), the landing NORTH — the climb walks north.
+  p.pos.x = stair.pos.x; p.pos.y = stair.pos.y + stair.radius + 18; p.tier = 0; p.onTierLink = false;
   const footK = wf.regionAt!(p.pos.x, p.pos.y);
   check('C1 the flight\'s foot is ground-floor floor under a hanging wall (the stairwell\'s rim above)', footK === 'storey_wall');
-  step(0, 1, 60);
+  // The landing opens straight into the hall now, so the walk stops the
+  // moment the landing is underfoot (a fixed count would carry on north).
+  let onLanding = false;
+  for (let i = 0; i < 90 && !onLanding; i++) { step(0, -1, 1); onLanding = wf.regionAt!(p.pos.x, p.pos.y) === 'storey_landing'; }
   check('C2 walking up the flight carries the walker to the story: tier 1, standing on the landing',
-    p.tier === 1 && wf.regionAt!(p.pos.x, p.pos.y) === 'storey_landing', `tier ${p.tier} on ${wf.regionAt!(p.pos.x, p.pos.y)}`);
-  step(-1, 0, 60);
-  check('C3 the hall above is the story\'s floor — the walker keeps tier 1 on both-floor cells', p.tier === 1 && wf.regionAt!(p.pos.x, p.pos.y) === 'storey_floor');
-  // The flank: from the hall, east toward the flight's west side is a wall (both floors).
+    p.tier === 1 && onLanding, `tier ${p.tier} on ${wf.regionAt!(p.pos.x, p.pos.y)}`);
+  step(0, -1, 60);
+  check('C3 the hall above is the story\'s floor — from the landing the walker steps straight NORTH into the hall (no corridor of furniture between), keeping tier 1 on both-floor cells', p.tier === 1 && wf.regionAt!(p.pos.x, p.pos.y) === 'storey_floor');
+  // The flank: from the east room, east toward the flight's west side is a wall (both floors).
   p.pos.x = inn.rect.x + 9.5 * cs; p.pos.y = inn.rect.y + 5.5 * cs; p.tier = 1; p.onTierLink = false;
   step(1, 0, 60);
   check('C4 the flight\'s flank refuses a sideways step onto it (the stairwell wall stands on both floors)',
     p.tier === 1 && p.pos.x < inn.rect.x + 10 * cs + 2 && !tierLinkOf(wf.regionAt!(p.pos.x, p.pos.y)), `x ${p.pos.x.toFixed(0)} tier ${p.tier}`);
-  // Back down: to the landing, then north down the flight.
-  p.pos.x = inn.rect.x + 11.5 * cs; p.pos.y = inn.rect.y + 6.5 * cs; p.tier = 1; p.onTierLink = false;
-  step(0, -1, 45);
+  // Back down: to the landing, then south down the flight.
+  p.pos.x = inn.rect.x + 11.5 * cs; p.pos.y = inn.rect.y + 3.5 * cs; p.tier = 1; p.onTierLink = false;
+  step(0, 1, 45);
   check('C5 walking back down the flight lands on the common room\'s floor (tier 0)', p.tier === 0 && tierFloorAt(wf.regionAt!(p.pos.x, p.pos.y), 0), `tier ${p.tier} on ${wf.regionAt!(p.pos.x, p.pos.y)}`);
   // The mover confines a story-1 body against the hanging walls: a lodger
   // cannot walk through a partition, a ground walker under it can.
-  p.pos.x = inn.rect.x + 3.5 * cs; p.pos.y = inn.rect.y + 2.5 * cs; p.tier = 1; p.onTierLink = false;
-  step(1, 0, 60);
-  check('C6 a story-1 walker is held by a hanging wall (room 1\'s east partition)', p.tier === 1 && p.pos.x < inn.rect.x + 4 * cs + 2, `x ${p.pos.x.toFixed(0)}`);
-  p.pos.x = inn.rect.x + 3.5 * cs; p.pos.y = inn.rect.y + 2.5 * cs; p.tier = 0; p.onTierLink = false;
-  step(1, 0, 60);
-  check('C7 the same walk on the ground floor passes under it (open floor beneath the partition)', p.tier === 0 && p.pos.x > inn.rect.x + 5 * cs, `x ${p.pos.x.toFixed(0)}`);
+  // The rooms sit along the south wall now (rows 4–6): room 2's WEST
+  // partition hangs at column 4 over the common room's open floor (a
+  // walk-over chair sits under it — no solid on the ground walker's way).
+  p.pos.x = inn.rect.x + 5.5 * cs; p.pos.y = inn.rect.y + 5.5 * cs; p.tier = 1; p.onTierLink = false;
+  step(-1, 0, 60);
+  check('C6 a story-1 walker is held by a hanging wall (room 2\'s west partition)', p.tier === 1 && p.pos.x > inn.rect.x + 5 * cs - 2, `x ${p.pos.x.toFixed(0)}`);
+  p.pos.x = inn.rect.x + 5.5 * cs; p.pos.y = inn.rect.y + 5.5 * cs; p.tier = 0; p.onTierLink = false;
+  step(-1, 0, 60);
+  check('C7 the same walk on the ground floor passes under it (open floor beneath the partition)', p.tier === 0 && p.pos.x < inn.rect.x + 4 * cs, `x ${p.pos.x.toFixed(0)}`);
   p.tier = 0; p.pos.x = 100; p.pos.y = 100;
 }
 
@@ -165,22 +173,22 @@ const kindAt = (cx: number, cy: number): string => wf.regionAt!(inn.rect.x + cx 
 {
   // Two points in neighbouring guest rooms (room 1 and room 2), the hanging
   // wall at column 4 between them.
-  const a = vec(inn.rect.x + 2.5 * cs, inn.rect.y + 2.5 * cs), b = vec(inn.rect.x + 6.5 * cs, inn.rect.y + 2.5 * cs);
+  const a = vec(inn.rect.x + 2.5 * cs, inn.rect.y + 5.5 * cs), b = vec(inn.rect.x + 5.5 * cs, inn.rect.y + 5.5 * cs);
   check('D1 a story-1 eye stops at the hanging wall between two guest rooms', !w.lineOfSight(a, b, 1, 1));
   check('D2 the ground-floor eye under it sees clean across the common room', w.lineOfSight(a, b, 0, 0));
   check('D3 a story-1 shot stops at the hanging wall; the ground-floor shot flies under it',
     !w.lineOfFire(a, b, 1) && w.lineOfFire(a, b, 0));
   // Across the outer wall, both stories are blind (the ground's wall is everyone's).
-  const outside = vec(inn.rect.x - 40, inn.rect.y + 2.5 * cs);
+  const outside = vec(inn.rect.x - 40, inn.rect.y + 5.5 * cs);
   check('D4 the building\'s outer wall stops both stories', !w.lineOfSight(a, outside, 1, 0) && !w.lineOfSight(a, outside, 0, 0));
 }
 
 // ---------------------------------------------------- E. LAYER SOVEREIGNTY
 {
   // A story-1 solid standing over OPEN ground-floor floor: room 3's dresser
-  // (storey cell 11,1) stands over a bare cell of the common room — the one
+  // (storey cell 8,4) stands over a bare cell of the common room — the one
   // seat both stories can be asked about honestly.
-  const dx = inn.rect.x + 11.5 * cs, dy = inn.rect.y + 1.5 * cs;
+  const dx = inn.rect.x + 8.5 * cs, dy = inn.rect.y + 4.5 * cs;
   const bed = w.doodads.find(d => d.kind === 'dresser' && (d.tier ?? 0) === 1 && Math.hypot(d.pos.x - dx, d.pos.y - dy) < 2)!;
   check('E0 the seat under test is a storey dresser over bare floor', !!bed && doodadRuleOf(bed.kind).blocksMove === true
     && !w.doodads.some(o => (o.tier ?? 0) === 0 && doodadRuleOf(o.kind).blocksMove && Math.hypot(o.pos.x - dx, o.pos.y - dy) < 20));

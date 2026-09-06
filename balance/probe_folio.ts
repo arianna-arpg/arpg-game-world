@@ -545,9 +545,12 @@ console.log('Q. THE SUITE REACH (the real engine, in town)');
     new RegExp(`\\n  ${fn}\\([^)]*\\)[^{]*\\{\\n    if \\(!this\\.stationReach\\('${id}', seat\\)\\) return;`).test(src);
   check('Q8 the action gates read THE REACH LAW: craftSocket, craftAffix, rerollAffix',
     gate('craftSocket', 'salvage') && gate('craftAffix', 'salvage') && gate('rerollAffix', 'oracle'));
+  // (THE ANCHORED DWELL, 2026-09-06: the hint seats on the bench's anchor
+  //  piece but still GATES on the physical near-read — the reach law never
+  //  opens the prompt.)
   check('Q9 the break lane reads it too, while the dwell and the hint stay physical',
     src.includes("if (want === 'break') return this.stationReach('salvage', seat) ? 'break' : null;")
-    && src.includes('this.nearSalvage(s));') && src.includes('if (!this.nearSalvage()) return null;'));
+    && src.includes('this.nearSalvage(s));') && src.includes('if (!a || !this.nearSalvage()) return null;'));
 }
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} passed, ${fail} failed`);

@@ -38,9 +38,9 @@ new read at all — a row without `tier` is already no floor to story k.
 ## The plan (`data/structures.ts`)
 ```ts
 inn: {
-  plan: [ ... '#.t...r...#AA#', '#c.c..r.t.#AA#', '#p..b...iJ.^^#', ... ],   // the ground floor
-  storeys: [{ plan: [ ... '#Zj.#.Zx#Z.j.#', ... '##D###D##D#AA#', ... ] }],  // the floor above
-  npcs: [ ..., { id: 'townsfolk_lodger', x: 65, y: 65, tier: 1, line: '…' } ],
+  plan: [ ... '#....c.t.c.^^#', '#.t...r...#AA#', '#c.c..r.t.#AA#', '#p..b.i.J....#', ... ],   // the ground floor
+  storeys: [{ plan: [ ... '#....r.......#', '##D##D###D#..#', '#i.j#.i#j.#AA#', ... '#Zr.#rZ#Zr####', ... ] }],  // the floor above
+  npcs: [ ..., { id: 'townsfolk_lodger', x: 91, y: -39, tier: 1, line: '…' } ],
 }
 ```
 - `StructureDef.storeys[k-1]` is a char grid of the ground plan's exact
@@ -64,6 +64,12 @@ inn: {
   carry a walker honestly: the ladder toggle flips on entry, and THE EXIT
   RULE corrects it at either end — step off the head onto the landing and
   you are upstairs; back out at the foot and you never were.
+  THE INN'S FLIGHT (re-ruled 2026-09-06): the foot is at the SOUTH end by
+  the door, the landing at the NORTH end opens straight into the hall
+  along the north wall, and the rooms line the south — the first cut's
+  south landing opened into a furnished corridor and made the climb a
+  chore. A landing must open onto circulation, never onto a room's inside
+  (it would bypass the archway) nor onto furniture.
 - `D` on a storey plan is an **ARCHWAY**: the story's floor plus a
   `PlacedDoor` record (`mode: 'sealed', open: true`, its cells) — never a
   slab (a door slab repaints the grid, which would repaint the ground

@@ -508,6 +508,19 @@ export interface Doodad {
   pos: Vec2;
   radius: number;
   kind: DoodadKind;
+  /** THE STATION ANCHOR (data/structures.ts — a plan cell's `doodad.anchor` /
+   *  a prop's `anchor: true`): the id of the STRUCTURE this piece is the
+   *  counter of. Every dwell serving that structure's town site reads the
+   *  anchor's live position (World.stationAnchor) — never a coordinate — so
+   *  the dwell moves with the piece and is gone while the piece is (felled,
+   *  broken, unraised). Stamped at placement; never persisted (a re-entered
+   *  zone re-mints it from the plan). */
+  anchor?: string;
+  /** THE BARE WAY (StampSpec.bare on a course): this way disc wears no
+   *  wayside dress — layWaysideDress skips it as it skips an overgrown
+   *  stretch. The town's door lane (THE DOOR LANE LAW keeps it clear of
+   *  posts). Stamped at lay; never persisted. */
+  bare?: true;
   /** BRITTLE kinds: already popped this visit (guards stale spatial-index
    *  hits between the break and the splice). Runtime-only, never authored. */
   gone?: boolean;
@@ -5595,6 +5608,8 @@ function placeStructure(ctx: GenCtx, s: StructureDef, at: Vec2): void {
     ctx.doodads.push({
       pos: vec(at.x + prop.x, at.y + prop.y),
       radius: prop.radius ?? 12, kind: prop.kind,
+      ...(prop.anchor ? { anchor: s.id } : {}),
+      ...(prop.rot !== undefined ? { rot: prop.rot } : {}),
     });
   }
   for (const b of s.breakables ?? []) {
@@ -6252,6 +6267,8 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
           storeyDoodads.push({
             pos: p, radius: spec.doodad.radius ?? cell * 0.55, kind: spec.doodad.kind, tier,
             effect: spec.doodad.effect ? { ...spec.doodad.effect } : undefined,
+            ...(spec.doodad.anchor ? { anchor: def.id } : {}),
+            ...(spec.doodad.rot !== undefined ? { rot: spec.doodad.rot } : {}),
           });
         }
         if (spec.npc) storeyNpcs.push({ id: spec.npc, pos: p, tier });
@@ -6283,6 +6300,8 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
       ctx.doodads.push({
         pos: p, radius: c.spec.doodad.radius ?? cell * 0.55, kind: c.spec.doodad.kind,
         effect: c.spec.doodad.effect ? { ...c.spec.doodad.effect } : undefined,
+        ...(c.spec.doodad.anchor ? { anchor: def.id } : {}), // THE STATION ANCHOR
+        ...(c.spec.doodad.rot !== undefined ? { rot: c.spec.doodad.rot } : {}),
       });
     }
     // Window cells get a frame doodad (the arrow-slit sill dressing) oriented
@@ -6316,7 +6335,11 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
   // as they hang off `at` on a legacy def. (The plan conversion dropped these
   // silently — the smith vanished from her own forge.) Draw-free.
   for (const prop of def.props ?? []) {
-    ctx.doodads.push({ pos: vec(center.x + prop.x, center.y + prop.y), radius: prop.radius ?? 12, kind: prop.kind });
+    ctx.doodads.push({
+      pos: vec(center.x + prop.x, center.y + prop.y), radius: prop.radius ?? 12, kind: prop.kind,
+      ...(prop.anchor ? { anchor: def.id } : {}),
+      ...(prop.rot !== undefined ? { rot: prop.rot } : {}),
+    });
   }
   for (const b of def.breakables ?? []) {
     ctx.breakables.push({ id: b.id, pos: vec(center.x + b.x, center.y + b.y) });
@@ -6730,7 +6753,11 @@ export function structureDoodads(s: StructureDef, at: Vec2): Doodad[] {
     }
   }
   for (const prop of s.props ?? []) {
-    out.push({ pos: vec(at.x + prop.x, at.y + prop.y), radius: prop.radius ?? 12, kind: prop.kind });
+    out.push({
+      pos: vec(at.x + prop.x, at.y + prop.y), radius: prop.radius ?? 12, kind: prop.kind,
+      ...(prop.anchor ? { anchor: s.id } : {}),
+      ...(prop.rot !== undefined ? { rot: prop.rot } : {}),
+    });
   }
   return out;
 }
@@ -7625,6 +7652,7 @@ export function layWaysideDress(ctx: GenCtx, def: ZoneDef): void {
     if (total >= cap) return;
     if ((rowCount.get(row) ?? 0) >= (row.max ?? Infinity)) return;
     if (anchor.wild) return; // the wood won that stretch — its flora dresses it
+    if (anchor.bare) return; // THE BARE WAY (StampSpec.bare): no dress — the door lane
     const bodyR = bodyROf(row.kind, r);
     const p = vec(at.x + perp.x * side * (anchor.radius + bodyR + off),
       at.y + perp.y * side * (anchor.radius + bodyR + off));
@@ -9827,7 +9855,11 @@ function stampCourse(ctx: GenCtx, spec: StampSpec): void {
       ctx.doodads.push(doo);
       placed.push(doo);
     } else {
+      const n0 = ctx.doodads.length;
       roll!(p, r, lay);
+      // THE BARE WAY: the discs a `bare` course lays carry the mark the
+      // wayside pass reads (the door lane wears no lamps).
+      if (spec.bare) for (let j = n0; j < ctx.doodads.length; j++) if (ctx.doodads[j].kind === lay) ctx.doodads[j].bare = true;
     }
   }
   // Spans across a liquid course: perpendicular plank lines at the named

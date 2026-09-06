@@ -863,7 +863,19 @@ we verify changes.
   Mireille's door, re-ruled 2026-09-05 from the roofed alcove: a roof
   hides a read-me station; legend `N` = a board cell, `noticeBoard` the
   painter; THE DOOR LANE LAW — nothing of the front stands in the door's
-  approach column, the inn lights its step with `wall_lantern`s), THE
+  approach column, the inn lights its step with `wall_lantern`s; v4
+  2026-09-06: no post and no flower box on the front — the boxes stand
+  under the inn's windows, the board wears ONE wall lantern off its post
+  (`props[].rot`), and THE LAMPS ALONG THE WAYS ride the wayside fabric's
+  marker row `TOWN_WAYSIDE` with the door way `bare`), THE ANCHORED DWELL
+  (2026-09-06, her word: a dwell belongs to the OBJECT — a plan cell's or
+  prop's `anchor: true` stamps `Doodad.anchor`, `World.stationAnchor`
+  centres every station dwell + prompt on that live piece, a felled piece
+  takes its dwell down, no piece no dwell; THE STATION FOLD re-folds
+  owned stations at every town load at the fixed rung; THE SAME-STORY LAW
+  on `dwellReachable` — no dwell crosses a story, the inn's door never
+  swings from upstairs — docs/design/town-growth.md §1.9–1.10,
+  docs/engine/los-pathing.md), THE
   INN'S FLOORS on THE STOREY FABRIC (`engine/levelgen.ts` storey
   composite + `world/regions.ts` storey rows — `StructureDef.storeys`: a
   second char grid folded cell for cell over the ground plan into ONE
@@ -874,7 +886,9 @@ we verify changes.
   ARCHWAYS; `ZoneTiers.interior` stamps the zone a silent stack; the
   renderer culls per building + paints THE STOREY LAYER live —
   docs/engine/storeys.md, probe `balance/probe_storey.ts`; the inn's
-  `stairway` face is bigger and unlabelled), THE INN KIT
+  `stairway` face is bigger and unlabelled, and the flight climbs NORTH
+  from the door end onto a landing that opens straight into the hall —
+  2026-09-06), THE INN KIT
   (`t c a K j x i J u y l` legend chars, `render/vis/paintersInn.ts`;
   chairs are walk-over decor), THE HAUNT (`BehaviorSpec.haunt` — idle
   conduct between named furniture; THE STROLLING SCENERY: a passive body

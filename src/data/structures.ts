@@ -39,8 +39,14 @@ export interface CellSpec {
   interior?: boolean;
   /** Unroofed interior (courtyards): walkable floor, never roofed. */
   courtyard?: boolean;
-  /** Drop a doodad at the cell center (radius defaults to 0.55 × cellSize). */
-  doodad?: { kind: DoodadKind; radius?: number; effect?: DoodadEffect };
+  /** Drop a doodad at the cell center (radius defaults to 0.55 × cellSize).
+   *  `anchor` = THE STATION ANCHOR: this piece IS the structure's counter —
+   *  the placer stamps the placed doodad `anchor = <structure id>` and every
+   *  dwell serving the structure's town site reads THAT piece's live seat
+   *  (World.stationAnchor): move the piece and the dwell moves with it; fell
+   *  it, break it or leave it unraised and the dwell is not there. `rot` = a
+   *  drawn spin, radians (a wall lantern hung off a side post). */
+  doodad?: { kind: DoodadKind; radius?: number; effect?: DoodadEffect; anchor?: true; rot?: number };
   /** A DOOR cell: emits a door doodad + a PlacedDoor record. Dwell-openable,
    *  breakable (spawns a passive door-actor), or both; sealed = neither (a
    *  future lock/lever opens it via setDoorState). `lesson` names an ACCOUNT
@@ -82,7 +88,11 @@ export interface StructureDef {
   halfW: number;
   halfH: number;
   walls?: WallStrip[];
-  props?: { kind: DoodadKind; x: number; y: number; radius?: number }[];
+  /** Loose pieces at offsets from the centre. `anchor` marks THE STATION
+   *  ANCHOR (the same law as a plan cell's `doodad.anchor` — the bench slab,
+   *  the fire); `rot` a drawn spin in radians (the whole-bake blit turns the
+   *  sprite: a wall lantern's bracket reaching sideways to a post). */
+  props?: { kind: DoodadKind; x: number; y: number; radius?: number; anchor?: true; rot?: number }[];
   breakables?: { id: string; x: number; y: number }[];
   npcs?: {
     id: string; x: number; y: number;
@@ -246,7 +256,7 @@ registerLegendChar('^', { region: 'storey_landing', interior: true });
 registerLegendChar('S', { spawn: true, interior: true });
 // THE NOTICE BOARD — the bounty board as a plan character (the board front
 // sets it into a rail; any plan anywhere may post a board the same way).
-registerLegendChar('N', { doodad: { kind: 'bounty_board', radius: 16 }, interior: true });
+registerLegendChar('N', { doodad: { kind: 'bounty_board', radius: 16, anchor: true }, interior: true }); // the board IS the station (THE ANCHORED DWELL)
 
 // --- ROOF STYLES (registry) ----------------------------------------------------
 // How a roof rect renders (Batch D drawRoofs consumes): fill + edge + rest alpha.
@@ -656,10 +666,15 @@ export const STRUCTURES: Record<string, StructureDef> = {
   // walled on its west flank so the only ways onto it are its foot and its
   // head) climbs SOUTH to the landing ('^^' — the storey's own floor, a
   // closet under the stairs downstairs). The storey plan (`storeys[0]`)
-  // lays the floor above cell for cell: three guest rooms off a landing
-  // hall, each a lived-in place on the kit behind its own archway. A patron
-  // at the west table speaks the stair; a lodger keeps the hall above (a
-  // structure npc's `line`; `tier: 1` seats the body on the storey).
+  // lays the floor above cell for cell: a hall along the north wall with
+  // three guest rooms opening off it to the south, each a lived-in place on
+  // the kit behind its own archway. THE FLIGHT climbs NORTH from the common
+  // room's east end — its foot by the door under the story's wall, its head
+  // a landing that opens straight into the hall (her word 2026-09-06: the
+  // old south landing put the whole corridor's furniture between the top
+  // step and the rooms). A patron at the west table speaks the stair; a
+  // lodger keeps the hall above (a structure npc's `line`; `tier: 1` seats
+  // the body on the storey).
   // The door keeps the old plan's seat: bottom row, centre-right cell
   // (+13, +halfH) — the town's door lanes and the probe both read it.
   inn: {
@@ -668,21 +683,21 @@ export const STRUCTURES: Record<string, StructureDef> = {
       '##############',
       '#KKB..k..k..f#',
       '#aaaaa......h#',
-      '#....c.t.c...#',
+      '#....c.t.c.^^#',
       '#.t...r...#AA#',
       '#c.c..r.t.#AA#',
-      '#p..b...iJ.^^#',
+      '#p..b.i.J....#',
       '####W##D#W####',
     ],
     storeys: [{
       plan: [
         '##############',
-        '#Zj.#.Zx#Z.j.#',
-        '#..i#w..#i..x#',
-        '#.r.#.r.#.r###',
-        '##D###D##D#AA#',
-        '#....r....#AA#',
         '#i.b....kb...#',
+        '#....r.......#',
+        '##D##D###D#..#',
+        '#i.j#.i#j.#AA#',
+        '#w.x#.x#i.#AA#',
+        '#Zr.#rZ#Zr####',
         '##############',
       ],
       legend: { w: { doodad: { kind: 'washstand', radius: 10 }, interior: true } },
@@ -691,15 +706,20 @@ export const STRUCTURES: Record<string, StructureDef> = {
     roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
     // THE WALL LANTERNS: hung on the south wall's outer face either side of
     // the door (a step outside the wall line), so the doorstep is lit with
-    // nothing standing in the door lane.
+    // nothing standing in the door lane. THE FLOWER BOXES stand under the
+    // two windows (her word 2026-09-06: off the front's walkway, onto the
+    // sills' feet); the lanterns sit a stride nearer the door to give them
+    // room.
     props: [
-      { kind: 'wall_lantern', x: -24, y: 113, radius: 8 },
-      { kind: 'wall_lantern', x: 50, y: 113, radius: 8 },
+      { kind: 'wall_lantern', x: -18, y: 113, radius: 8 },
+      { kind: 'wall_lantern', x: 44, y: 113, radius: 8 },
+      { kind: 'planter', x: -66, y: 117, radius: 12 },
+      { kind: 'planter', x: 66, y: 117, radius: 12 },
     ],
     npcs: [
       { id: 'townsfolk_innkeep', x: -91, y: -65 },
       { id: 'townsfolk_patron', x: -91, y: 13, line: 'Rooms upstairs, if you want a bed that isn’t the ground. Mind the stair — it creaks.' },
-      { id: 'townsfolk_lodger', x: 65, y: 65, tier: 1, line: 'Took the corner room. Quietest bed between here and the coast — and the roof holds.' },
+      { id: 'townsfolk_lodger', x: 91, y: -39, tier: 1, line: 'Took the corner room. Quietest bed between here and the coast — and the roof holds.' },
     ],
     // THE FOLK SEATS (data/innfolk.ts): the common room's company and the
     // lodgers above, rolled per day — three chairs downstairs, two beds up.
@@ -707,8 +727,8 @@ export const STRUCTURES: Record<string, StructureDef> = {
       { pool: 'inn_common', x: -65, y: 13, chance: 0.85 },
       { pool: 'inn_common', x: 91, y: -13, chance: 0.75 },
       { pool: 'inn_common', x: 26, y: 39, chance: 0.6 },
-      { pool: 'inn_rooms', x: -117, y: -39, tier: 1, chance: 0.7 },
-      { pool: 'inn_rooms', x: 91, y: -39, tier: 1, chance: 0.55 },
+      { pool: 'inn_rooms', x: -117, y: 39, tier: 1, chance: 0.7 },
+      { pool: 'inn_rooms', x: 65, y: 39, tier: 1, chance: 0.55 },
     ],
   },
 
@@ -733,7 +753,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
   salvage_bench: {
     id: 'salvage_bench', halfW: 70, halfH: 58,
     props: [
-      { kind: 'rock', x: 0, y: -6, radius: 16 },   // the bench slab
+      { kind: 'rock', x: 0, y: -6, radius: 16, anchor: true },   // the bench slab — THE STATION ANCHOR (the dwell reads it)
       { kind: 'rock', x: -44, y: 22, radius: 9 },  // scrap heap
       { kind: 'rock', x: 46, y: 18, radius: 8 },   // scrap heap
     ],
@@ -746,25 +766,32 @@ export const STRUCTURES: Record<string, StructureDef> = {
   // THE BOARD FRONT (docs/design/town-growth.md v3 — her ruling 2026-09-05:
   // a notice board OUT FRONT of the inn, not a nook): the board's unlock
   // raises an OPEN-AIR locale on the square before Mireille's door — the
-  // notice board set into a rail run with a flower box either side of it,
-  // lanterns and benches flanking a cobbled apron, a crate at the corner.
+  // notice board set into a rail run with a lantern hung off its post,
+  // benches flanking a cobbled apron, a crate at the corner.
   // NO ROOF, on purpose: a roof hid the board and the alcove's side walls
   // refused a flank read; out here the slate reads from every side (the
   // rails stop feet, never the eye). Dwelling here opens the postings panel
-  // (the World reads proximity to the 'bounty_board' town site — the board
-  // cell sits one row above the site, inside the dwell's reach).
+  // (THE ANCHORED DWELL: the World reads proximity to the BOARD itself — the
+  // N cell is the station's anchor — never to the site's coordinate).
   bounty_front: {
     id: 'bounty_front', halfW: 91, halfH: 39, cellSize: 26,
-    // ONE lantern post, at the WEST end: the east end (the door's side)
-    // stays open ground, and the inn's own wall lanterns light that side —
-    // her walk found a post out front of the door made the inn a chore to
-    // enter (THE DOOR LANE LAW, probe_towngrowth rig E).
+    // NO POST and NO FLOWER BOX on the front (her word 2026-09-06): the
+    // boxes stand under the inn's windows, the square's lamps stand along
+    // THE TRAVELED WAYS (townBuild TOWN_LAMPS on TownWay.flank), and the
+    // board keeps its own dim light — ONE wall lantern hung off its east
+    // post (a prop with `rot`: the bracket turned west to reach the post).
+    // The rail run parts beside the board for it (the lantern is inert —
+    // a gap in the rail, not a gate). The door's side stays open ground,
+    // lit by the inn's own wall lanterns (THE DOOR LANE LAW, rig E).
     plan: [
-      'yuyNyuy',
-      'L.b.b..',
+      'yyyN.yy',
+      '..b.b..',
       '_______',
     ],
     floorStyle: 'cobble', courtyardFloorStyle: 'cobble',
+    props: [
+      { kind: 'wall_lantern', x: 24, y: -26, radius: 8, rot: -Math.PI / 2 },
+    ],
     breakables: [{ id: 'crate', x: -76, y: 28 }],
   },
 
@@ -822,7 +849,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
       { kind: 'tombstone', x: 28, y: 40, radius: 10 },
       { kind: 'tombstone', x: -28, y: 40, radius: 10 },
       { kind: 'tombstone', x: -44, y: -14, radius: 10 },
-      { kind: 'rock', x: 0, y: 0, radius: 13 }, // the altar slab
+      { kind: 'rock', x: 0, y: 0, radius: 13, anchor: true }, // the altar slab — THE STATION ANCHOR
     ],
   },
 
@@ -831,7 +858,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
   campfire_site: {
     id: 'campfire_site', halfW: 62, halfH: 62,
     props: [
-      { kind: 'campfire', x: 0, y: 0, radius: 18 },
+      { kind: 'campfire', x: 0, y: 0, radius: 18, anchor: true }, // THE STATION ANCHOR: the fire is the station
       { kind: 'rock', x: -42, y: 30, radius: 10 },
       { kind: 'rock', x: 44, y: 26, radius: 9 },
       { kind: 'rock', x: 6, y: -44, radius: 8 },
@@ -843,7 +870,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
   wayside_camp: {
     id: 'wayside_camp', halfW: 60, halfH: 60,
     props: [
-      { kind: 'campfire', x: 0, y: 0, radius: 14 },
+      { kind: 'campfire', x: 0, y: 0, radius: 14, anchor: true }, // THE STATION ANCHOR: the Tracker's fire
       { kind: 'rock', x: -40, y: -25, radius: 12 },
       { kind: 'rock', x: 38, y: -30, radius: 10 },
     ],

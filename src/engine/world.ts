@@ -162,7 +162,7 @@ import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, p
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
-import { expandedTown, townTier, townSiteAt, type TownSiteId } from '../data/townBuild';
+import { expandedTown, townTier, townSiteAt, townSiteStructure, townStationFeatures, type TownSiteId } from '../data/townBuild';
 import {
   BOUNTY_BOARD_CFG, BOUNTY_KINDS, bountyChargePay, bountySourceRows, clonePosting, describeBountyPay, liveBountyBand, postingQuestDef, rollBountyPay,
   type BountyKindRow, type BountyTargetRef,
@@ -3478,7 +3478,7 @@ export class World {
   /** Sacrificial Fonts: merge gems, convert Ability Essence, unmake tree
    *  picks (the M-ECON recipes — fontMergeSkill/fontConvertEssence/
    *  fontResetTree; the old gems→points lane died with the point economy). */
-  fonts: { pos: Vec2 }[] = [];
+  fonts: { pos: Vec2; tier?: number }[] = []; // `tier`: the story a Font stands on (THE SAME-STORY LAW; absent = the ground)
   /** Brandt's wares: skill gems (and, once unlocked, support gems) on a
    *  TIME-BASED restock — refreshed by the world clock, not by re-entering
    *  town. Priced in essence. Size + restock speed scale with account
@@ -3906,6 +3906,7 @@ export class World {
     // count, so a threshold crossed mid-run never re-lays home between visits.
     this.townTierIdx = townTier(account);
     this.zoneMap[START_ZONE] = expandedTown(account, this.zoneMap[START_ZONE]);
+    this.townStationKey = this.ownedTownStationsKey(); // THE STATION FOLD's baseline
     // THE WANDERING HUB: roll where the Crossroads sits this run (a random
     // cardinal step from town) and re-deal its frontiers — the whole world
     // past the town's one road is minted, so each run is a genuinely new map.
@@ -5184,6 +5185,7 @@ export class World {
     // FIRST VISIT (captured BEFORE visited.add below) — gates the once-per-zone Holdfast
     // roll: a fortified bonus exit is raised only the first time you stumble in uncharted.
     const firstVisit = !isCave && !this.visited.has(zoneId);
+    if (zoneId === START_ZONE) this.refoldTownStations(); // THE STATION FOLD
     const def = this.zoneMap[zoneId] ?? this.caveMap[zoneId];
     this.zone = def;
     // The zone's own entry beat: the renderer exempts LOAD-time population
@@ -21986,8 +21988,10 @@ export class World {
 
   /** Is the seat's hero standing close enough to a Sacrificial Font to use it? */
   nearFont(seat: Seat = this.localSeat): boolean {
+    // THE SAME-STORY LAW: the Font on the square serves no one standing a
+    // story above it (the inn's east rooms overlook it).
     return this.fonts.some(f => dist(f.pos, seat.actor.pos) <= 150
-      && this.dwellReachable(seat.actor.pos, f.pos));
+      && this.dwellReachable(seat.actor.pos, f.pos, DWELL_CFG.reach, { from: seat.actor.tier ?? 0, to: f.tier ?? 0 }));
   }
 
   /** Does this live actor's def declare the given open NPC role? Behavior
@@ -22002,7 +22006,7 @@ export class World {
     return this.actors.some(a =>
       this.hasNpcRole(a, 'vendor')
       && dist(a.pos, seat.actor.pos) <= 160
-      && this.dwellReachable(seat.actor.pos, a.pos, npcDwellReach('vendor')));
+      && this.dwellReachable(seat.actor.pos, a.pos, npcDwellReach('vendor'), { from: seat.actor.tier ?? 0, to: a.tier ?? 0 }));
   }
 
   /** The essence price on one of Brandt's wares: gems off the static tables,
@@ -22132,7 +22136,7 @@ export class World {
     return this.actors.find(a =>
       this.hasNpcRole(a, 'innkeep')
       && dist(a.pos, this.player.pos) <= MIREILLE_RADIUS
-      && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('innkeep'))) ?? null;
+      && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('innkeep'), { from: this.player.tier ?? 0, to: a.tier ?? 0 })) ?? null;
   }
 
   /** Is the player by Mireille? (Used by the renderer for her locked-talk box.) */
@@ -22507,10 +22511,11 @@ export class World {
   /** Is the player resting by the town campfire? (Feature owned + in town + near
    *  CAMPFIRE_SITE.) Drives the dwell-refresh and the renderer prompt. */
   nearCampfire(): boolean {
+    const a = this.stationAnchor('campfire'); // THE ANCHORED DWELL: the fire itself
     return featureEnabled(this.account, FEATURE.CAMPFIRE)
-      && this.zone.id === START_ZONE
-      && dist(this.player.pos, this.townSeat('campfire')) <= CAMPFIRE_RADIUS
-      && this.dwellReachable(this.player.pos, this.townSeat('campfire'));
+      && this.zone.id === START_ZONE && !!a
+      && dist(this.player.pos, a.pos) <= CAMPFIRE_RADIUS
+      && this.dwellReachable(this.player.pos, a.pos, DWELL_CFG.reach, { from: this.player.tier ?? 0, to: a.tier });
   }
 
   /** THE ARRIVAL LATCH (docs/design/town-growth.md T0): a station's dwell
@@ -22527,6 +22532,24 @@ export class World {
   /** THE TOWN'S TIER — the size-ladder rung this World's Lastlight stands
    *  on (townBuild TOWN_TIERS), read ONCE at construction. */
   private townTierIdx = 0;
+
+  /** THE STATION FOLD (2026-09-06): the town's OWNED additions fold into its
+   *  fixtures at construction (expandedTown) and again at every town LOAD
+   *  whose owned-station set differs from the last fold — at the SAME rung
+   *  (the ladder reads once per world; the fold never re-sizes home). A
+   *  station gained after this world stood raises its structure on the
+   *  next arrival, and THE ANCHORED DWELL reads that structure — never a
+   *  bare coordinate — so a station is usable exactly when it stands. */
+  private townStationKey = '';
+  private ownedTownStationsKey(): string {
+    return townStationFeatures().filter(f => this.account.features.has(f)).join('|');
+  }
+  private refoldTownStations(): void {
+    const key = this.ownedTownStationsKey();
+    if (key === this.townStationKey) return;
+    this.townStationKey = key;
+    this.zoneMap[START_ZONE].fixtures = expandedTown(this.account, ZONES[START_ZONE], this.townTierIdx).fixtures;
+  }
   townTierIndex(): number { return this.townTierIdx; }
 
   /** THE ONE READ for every town seat (docs/design/town-growth.md — the
@@ -22552,6 +22575,30 @@ export class World {
     return p ? vec(p.x, p.y) : null;
   }
 
+  /** THE ANCHORED DWELL (2026-09-06): a town station's dwell centre is the
+   *  PIECE that is the station — the board, the bench slab, the fire —
+   *  resolved LIVE from the doodads standing here (the placer stamps
+   *  `Doodad.anchor` with the structure id off a plan cell's / prop's
+   *  `anchor: true`; townSiteStructure names the structure a site raises),
+   *  never the site's coordinate. Move the piece and the dwell moves; fell
+   *  it, break it or leave it unraised and the dwell is simply not there.
+   *  Null outside the town, and when no anchor stands within
+   *  DWELL_CFG.anchorReach of the site's seat. The seat coordinate keeps
+   *  its other duties (spawns, the apron law, the ways) untouched. */
+  stationAnchor(site: TownSiteId): { pos: Vec2; tier: number; doodad: Doodad } | null {
+    if (this.zone.id !== START_ZONE) return null;
+    const seat = this.townSite(site);
+    const sid = townSiteStructure(site);
+    if (!seat || !sid) return null;
+    let best: Doodad | null = null, bd = Infinity;
+    for (const d of this.doodads) {
+      if (d.anchor !== sid || d.gone || d.felled) continue;
+      const dd = dist(d.pos, seat);
+      if (dd <= DWELL_CFG.anchorReach && dd < bd) { bd = dd; best = d; }
+    }
+    return best ? { pos: vec(best.pos.x, best.pos.y), tier: best.tier ?? 0, doodad: best } : null;
+  }
+
   /** THE RESIDENTS' LINES (data/boroughs.ts TOWN_RESIDENTS): what each
    *  seated family says when the hero stands near — keyed by actor id at
    *  the spawn, read by residentPrompt for the renderer's speech bubble. */
@@ -22563,7 +22610,7 @@ export class World {
     const line = this.residentLines.get(a.id);
     if (!line || a.dead) return null;
     if (dist(a.pos, this.player.pos) > RESIDENT_RADIUS) return null;
-    if (!this.dwellReachable(this.player.pos, a.pos)) return null;
+    if (!this.dwellReachable(this.player.pos, a.pos, DWELL_CFG.reach, { from: this.player.tier ?? 0, to: a.tier ?? 0 })) return null;
     return line;
   }
 
@@ -22594,8 +22641,9 @@ export class World {
 
   /** The campfire's prompt while the player rests near it (renderer), or null. */
   campfireHint(): { pos: Vec2; text: string } | null {
-    if (!this.nearCampfire()) return null;
-    return { pos: this.townSeat('campfire'), text: 'Linger to refresh the wilds.' };
+    const a = this.stationAnchor('campfire');
+    if (!a || !this.nearCampfire()) return null;
+    return { pos: a.pos, text: 'Linger to refresh the wilds.' };
   }
 
   // ------------------------------------------------------ salvage station ----
@@ -22615,9 +22663,10 @@ export class World {
 
   /** At the breaker's bench? (The bench stands + near SALVAGE_SITE.) */
   nearSalvage(seat: Seat = this.localSeat): boolean {
-    return this.hasSalvage()
-      && dist(seat.actor.pos, this.townSeat('salvage')) <= SALVAGE_CFG.stationRadius
-      && this.dwellReachable(seat.actor.pos, this.townSeat('salvage'));
+    const a = this.stationAnchor('salvage'); // THE ANCHORED DWELL: the bench slab
+    return this.hasSalvage() && !!a
+      && dist(seat.actor.pos, a.pos) <= SALVAGE_CFG.stationRadius
+      && this.dwellReachable(seat.actor.pos, a.pos, DWELL_CFG.reach, { from: seat.actor.tier ?? 0, to: a.tier });
   }
 
   /** Linger at the bench → open the salvage/craft menu (flag → main loop).
@@ -22637,8 +22686,9 @@ export class World {
 
   /** The bench's prompt while the player is near (renderer), or null. */
   salvageHint(): { pos: Vec2; text: string } | null {
-    if (!this.nearSalvage()) return null;
-    return { pos: this.townSeat('salvage'), text: 'Linger to work the salvage bench.' };
+    const a = this.stationAnchor('salvage');
+    if (!a || !this.nearSalvage()) return null;
+    return { pos: a.pos, text: 'Linger to work the salvage bench.' };
   }
 
   // ------------------------------------------------------- the bounty board -
@@ -22665,14 +22715,18 @@ export class World {
    *  zone with its counter position — Lastlight's site, or the quay's own
    *  planted `bounty_board` service doodad (the residence the harborhold
    *  service ladder seats). Board ids ARE home zone ids. */
-  bountyBoardsHere(): { id: string; pos: Vec2 }[] {
-    const out: { id: string; pos: Vec2 }[] = [];
+  bountyBoardsHere(): { id: string; pos: Vec2; tier: number }[] {
+    const out: { id: string; pos: Vec2; tier: number }[] = [];
     if (this.bountyBoardUnlocked() && this.zone.id === START_ZONE) {
-      out.push({ id: BOUNTY_BOARD_CFG.boardId, pos: this.townSeat('bounty_board') });
+      // THE ANCHORED DWELL: Lastlight's counter is the BOARD (the front's
+      // N cell wears the anchor) — its live seat, and no board while none
+      // stands.
+      const a = this.stationAnchor('bounty_board');
+      if (a) out.push({ id: BOUNTY_BOARD_CFG.boardId, pos: a.pos, tier: a.tier });
     }
     if (this.zone.holdAnchor && this.bountyBoardRoster().some(b => b.id === this.zone.id)) {
-      const d = this.doodads.find(x => x.kind === 'bounty_board');
-      if (d) out.push({ id: this.zone.id, pos: vec(d.pos.x, d.pos.y) });
+      const d = this.doodads.find(x => x.kind === 'bounty_board' && !x.gone && !x.felled);
+      if (d) out.push({ id: this.zone.id, pos: vec(d.pos.x, d.pos.y), tier: d.tier ?? 0 });
     }
     return out;
   }
@@ -22683,7 +22737,7 @@ export class World {
   nearBountyBoard(seat: Seat = this.localSeat, boardId?: string): boolean {
     return this.bountyBoardsHere().some(b => (boardId === undefined || b.id === boardId)
       && dist(seat.actor.pos, b.pos) <= BOUNTY_BOARD_CFG.dwell.radius
-      && this.dwellReachable(seat.actor.pos, b.pos));
+      && this.dwellReachable(seat.actor.pos, b.pos, DWELL_CFG.reach, { from: seat.actor.tier ?? 0, to: b.tier }));
   }
 
   /** The board's prompt while the player is near (renderer), or null. */
@@ -23732,10 +23786,11 @@ export class World {
 
   /** By the Tracker's fire? (Feature owned + in town + near TRACKER_SITE.) */
   nearTracker(seat: Seat = this.localSeat): boolean {
+    const a = this.stationAnchor('tracker'); // THE ANCHORED DWELL: the Tracker's fire
     return featureEnabled(this.account, FEATURE.TRACKER)
-      && this.zone.id === START_ZONE
-      && dist(seat.actor.pos, this.townSeat('tracker')) <= SALVAGE_CFG.stationRadius
-      && this.dwellReachable(seat.actor.pos, this.townSeat('tracker'));
+      && this.zone.id === START_ZONE && !!a
+      && dist(seat.actor.pos, a.pos) <= SALVAGE_CFG.stationRadius
+      && this.dwellReachable(seat.actor.pos, a.pos, DWELL_CFG.reach, { from: seat.actor.tier ?? 0, to: a.tier });
   }
 
   /** Linger by the fire → open the BESTIARY (flag → main loop). One ask per
@@ -23752,8 +23807,9 @@ export class World {
 
   /** The camp's prompt while the player is near (renderer), or null. */
   trackerHint(): { pos: Vec2; text: string } | null {
-    if (!this.nearTracker()) return null;
-    return { pos: this.townSeat('tracker'), text: 'Linger to open the bestiary.' };
+    const a = this.stationAnchor('tracker');
+    if (!a || !this.nearTracker()) return null;
+    return { pos: a.pos, text: 'Linger to open the bestiary.' };
   }
 
   // --------------------------------------------------------- oracle stone ----
@@ -23765,9 +23821,10 @@ export class World {
   }
 
   nearOracle(seat: Seat = this.localSeat): boolean {
-    return this.hasOracle()
-      && dist(seat.actor.pos, this.townSeat('oracle')) <= SALVAGE_CFG.stationRadius
-      && this.dwellReachable(seat.actor.pos, this.townSeat('oracle'));
+    const a = this.stationAnchor('oracle'); // THE ANCHORED DWELL: the altar slab
+    return this.hasOracle() && !!a
+      && dist(seat.actor.pos, a.pos) <= SALVAGE_CFG.stationRadius
+      && this.dwellReachable(seat.actor.pos, a.pos, DWELL_CFG.reach, { from: seat.actor.tier ?? 0, to: a.tier });
   }
 
   private updateOracle(dt: number): void {
@@ -23781,8 +23838,9 @@ export class World {
   }
 
   oracleHint(): { pos: Vec2; text: string } | null {
-    if (!this.nearOracle()) return null;
-    return { pos: this.townSeat('oracle'), text: 'Linger to commune with the stone.' };
+    const a = this.stationAnchor('oracle');
+    if (!a || !this.nearOracle()) return null;
+    return { pos: a.pos, text: 'Linger to commune with the stone.' };
   }
 
   // --------------------------------------------------------------- vendors ---
@@ -45913,8 +45971,10 @@ export class World {
             const dd = dist(hero.pos, d.pos);
             // Reach honors the 'door' transit row ('radius' today: a push is
             // contact — the plank itself is the occluder a ray would argue with).
+            // THE SAME-STORY LAW: a door swings only for a hero on ITS story
+            // (no pushing the inn's door open from the rooms above it).
             if (dd <= d.radius + hero.radius + DOOR_REACH && dd < doorD
-              && this.dwellReachable(hero.pos, d.pos, transitReach('door'))) { doorD = dd; onDoor = d; }
+              && this.dwellReachable(hero.pos, d.pos, transitReach('door'), { from: hero.tier ?? 0, to: d.tier ?? 0 })) { doorD = dd; onDoor = d; }
           }
         }
         if (onDoor?.door) {
@@ -48603,15 +48663,22 @@ export class World {
    *               in the open so a package's courtyard innkeep stays
    *               dwellable.
    *  Every dwell family and NPC counter asks THIS — one attention
-   *  discipline, tuned entirely from data. */
-  dwellReachable(from: Vec2, target: Vec2, reach: DwellReach = DWELL_CFG.reach): boolean {
+   *  discipline, tuned entirely from data. `story` = the two stories when
+   *  known (Actor.tier / Doodad.tier): THE SAME-STORY LAW refuses a dwell
+   *  across them whatever the mode, and a known pair also seats the ray. */
+  dwellReachable(from: Vec2, target: Vec2, reach: DwellReach = DWELL_CFG.reach,
+    story?: { from?: number; to?: number }): boolean {
+    // THE SAME-STORY LAW (the tier fabric, 2026-09-06): a dwell never
+    // crosses a story — the inn's door does not swing from the rooms above
+    // it, a ground-floor counter serves no one standing over it upstairs.
+    if (story && story.from !== undefined && story.to !== undefined && story.from !== story.to) return false;
     if (reach === 'radius') return true;
     if (reach === 'roof') {
       const home = this.roofedStructureAt(target);
       if (home) return this.roofedStructureAt(from) === home;
     }
     const hit = castRay(this, from, target, DWELL_CFG.sightChannel,
-      this.rayElev(from, target));
+      this.rayElev(from, target, story?.from, story?.to));
     return !hit || hit.d >= dist(from, target) - DWELL_CFG.sightSlack;
   }
 

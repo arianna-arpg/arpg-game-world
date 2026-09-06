@@ -216,6 +216,26 @@ lives in `data/transit.ts` (`DWELL_CFG` + per-row `reach`, per-npcRole
   to `sight`. Mireille's counter runs this: her care is served under the
   inn's roof, never dwelled through its wall (`npcReach.innkeep`).
 
+Two laws ride the same seam (2026-09-06):
+
+- **THE SAME-STORY LAW** — `dwellReachable(from, target, reach, story)`:
+  when both stories are known (`Actor.tier` / `Doodad.tier`) and differ,
+  every reach mode refuses before any ray is cast — the inn's door does
+  not swing from the rooms above it, a ground-floor counter serves no one
+  standing over it on the storey, a resident's line stays downstairs. A
+  known pair also seats the ray's elevation (`rayElev`) at the true
+  stories. Callers that know their stories pass them (the station dwells,
+  the door push, NPC counters, resident prompts); a caller that does not
+  keeps the positional read.
+- **THE ANCHORED DWELL** — a town station's dwell is centred on the PIECE
+  that is the station, never on a coordinate: a plan cell or prop marked
+  `anchor: true` is stamped `Doodad.anchor = <structure id>` at placement,
+  and `World.stationAnchor(site)` resolves the nearest such piece to the
+  site's seat within `DWELL_CFG.anchorReach`. Move the piece and the dwell
+  and its drawn prompt move; a felled or broken piece takes its dwell down
+  until it stands again; no piece, no dwell (`docs/design/town-growth.md`
+  §1.9 — the board, the bench slab, the altar slab, the two fires).
+
 ## Pathing (`World.pathField`)
 
 The zone's pathing authority: the walk grid where one exists (warrens,

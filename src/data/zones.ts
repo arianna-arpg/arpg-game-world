@@ -580,6 +580,11 @@ export interface StampSpec {
   /** course stamps over a liquid: plank spans laid ACROSS the course at these
    *  path fractions (0..1) — the bridge the way over the brook rides. */
   spans?: number[];
+  /** course stamps: a way that wears NO wayside dress (layoutParams.wayside —
+   *  engine/levelgen layWaysideDress — skips its discs as it skips an
+   *  overgrown stretch): the town's door lane, which THE DOOR LANE LAW keeps
+   *  bare of posts (data/townBuild.ts TownWay.bare). */
+  bare?: true;
 }
 
 /** A structure CHANCE a zone rolls at generation (merged from tileset + biome
