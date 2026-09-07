@@ -172,6 +172,8 @@ export const SIGHT_VEIL_GEO = {
    *  well under a wall cell's thickness so a thin wall's FAR face (a full
    *  cell away) never draws. */
   faceSlack: 1.5,
+  /** Open-side distance in world px for the shared wall-contact eye. */
+  faceOffset: 0.5,
   /** A DOODAD shadow's LENGTH scales with its CASTER, never the screen:
    *  the wedge ends castLen(bodyR, s) = clamp(r × castFarR, ≥ castFarFloor)
    *  × s world px past the body (still capped by the veil's own far).
@@ -634,13 +636,10 @@ export class SightVeil {
     const layers: { path: Path2D; alpha: number }[] = [];
 
     // True-wall shadows: one union path at the region strength (the facing
-    // test + on-plane clamp live in edgeShadowForEye — see faceSlack).
+    // test + shared contact eye live in wallShadowPath — see faceSlack).
     if (regionA > 0.02 && this.edges.length) {
       const path = new Path2D();
-      let n = 0;
-      for (const e of this.edges) {
-        n += edgeShadowForEye(path, e, px, py, far, ox, oy, k);
-      }
+      const n = wallShadowPath(path, this.edges, px, py, far, ox, oy, k);
       if (n) { layers.push({ path, alpha: regionA }); quads += n; }
     }
 
@@ -806,21 +805,46 @@ export function edgeShadowPath(sink: PathSink, ax: number, ay: number,
   return 1;
 }
 
-/** Draw one wall FACE for a given eye — the facing law in one place, shared
- *  by draw() and the probe. A face the eye is honestly behind is skipped;
- *  an eye ON the plane (within faceSlack: pressed-collision jitter, corner
- *  pockets where the perpendicular face reads dot 0.00) is clamped half a
- *  px onto the OPEN side for this face's geometry instead of dropped — the
- *  strict `dot <= 0` skip was a knife's edge that blinked whole wall
- *  shadows frame to frame at contact. The clamp also pins the far fan's
- *  sweep to the correct half-plane when collision leaves the eye a
- *  sub-pixel INSIDE the face line. */
+/** Build the wall union from one contact-adjusted eye. At joined faces,
+ *  independent normal nudges give their shared endpoint DIFFERENT bearing
+ *  angles and open a bright wedge through the corner. Resolve the nearby
+ *  axis-aligned face constraints together before casting either shadow.
+ *  Finite segment bounds keep distant collinear walls from moving the eye. */
+export function wallShadowPath(sink: PathSink, edges: readonly OccEdge[], px: number,
+  py: number, far: number, ox: number, oy: number, k: number): number {
+  const slack = SIGHT_VEIL_GEO.faceSlack, offset = SIGHT_VEIL_GEO.faceOffset;
+  let minX = -Infinity, maxX = Infinity, minY = -Infinity, maxY = Infinity;
+  for (const e of edges) {
+    const dot = e.nx * (px - e.ax) + e.ny * (py - e.ay);
+    if (dot <= -slack || dot >= offset) continue;
+    if (e.nx) {
+      if (py < Math.min(e.ay, e.by) - slack || py > Math.max(e.ay, e.by) + slack) continue;
+      if (e.nx > 0) minX = Math.max(minX, e.ax + offset);
+      else maxX = Math.min(maxX, e.ax - offset);
+    } else {
+      if (px < Math.min(e.ax, e.bx) - slack || px > Math.max(e.ax, e.bx) + slack) continue;
+      if (e.ny > 0) minY = Math.max(minY, e.ay + offset);
+      else maxY = Math.min(maxY, e.ay - offset);
+    }
+  }
+  // An impossible opposing pair (e.g. an eye inside a sealed seam) has no
+  // common open side; retain the per-face fallback on that axis. Resolution
+  // is independent of cache ordering and carries no previous-frame state.
+  if (minX <= maxX) px = Math.max(minX, Math.min(maxX, px));
+  if (minY <= maxY) py = Math.max(minY, Math.min(maxY, py));
+  let n = 0;
+  for (const e of edges) n += edgeShadowForEye(sink, e, px, py, far, ox, oy, k);
+  return n;
+}
+
+/** One face's facing law and on-plane fallback. The wall union resolves
+ *  contact at joined faces first; this also supports an isolated face. */
 export function edgeShadowForEye(sink: PathSink, e: OccEdge, px: number,
   py: number, far: number, ox: number, oy: number, k: number): number {
   const dot = e.nx * (px - e.ax) + e.ny * (py - e.ay);
   if (dot <= -SIGHT_VEIL_GEO.faceSlack) return 0;
-  if (dot < 0.5) {
-    const push = 0.5 - dot;
+  if (dot < SIGHT_VEIL_GEO.faceOffset) {
+    const push = SIGHT_VEIL_GEO.faceOffset - dot;
     px += e.nx * push; py += e.ny * push;
   }
   return edgeShadowPath(sink, e.ax, e.ay, e.bx, e.by, px, py, far, ox, oy, k);

@@ -140,6 +140,11 @@ EXACT polygons the sheet fills through the builders' structural PathSink):
   the open side instead of dropping the face — the old strict skips blinked
   whole wall shadows per corner passed and held a corner pocket's
   perpendicular quadrant lit (grid collision parks the eye at dot 0.00).
+  Joined faces resolve **one common eye** against nearby finite wall segments
+  before casting (`wallShadowPath`, `faceOffset` = 0.5 world px). Independent
+  per-face nudges gave a shared corner two different bearings, opening a
+  bright wedge through farmland massifs even with a stationary player. The
+  shared resolution is stateless and independent of edge-cache ordering.
   Rounding a FREE wall end still peels the far side open fast — that part
   is honest corner-peeking, not a pop.
 - **Interactables pierce** (`DoodadRule.veilPierce`, doors first): a

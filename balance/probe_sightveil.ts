@@ -27,7 +27,7 @@
 
 import {
   SightVeil, SIGHT_VEIL_GEO, castLen,
-  edgeShadowPath, edgeShadowForEye, discShadowPath, rectShadowPath,
+  edgeShadowPath, edgeShadowForEye, wallShadowPath, discShadowPath, rectShadowPath,
   type OccEdge, type PathSink, type SightView,
 } from '../src/render/vis/sightVeil';
 import { VIS_CFG } from '../src/render/vis/visConfig';
@@ -84,6 +84,45 @@ function chordEdgePoly(ax: number, ay: number, bx: number, by: number,
 }
 
 console.log('— A. wall-press: edge fan covers the deep field at every distance —');
+{
+  // Wheatlea Grange massif: two joined faces enclose an open southwest
+  // pocket. Independent per-face eye nudges left a bright northeast gap.
+  const rotate = (x: number, y: number, q: number): P => {
+    for (let i = 0; i < q; i++) { const old = x; x = -y; y = old; }
+    return { x, y };
+  };
+  for (let q = 0; q < 4; q++) {
+    const edges: OccEdge[] = [
+      { ax: -30, ay: 0, bx: 0, by: 0, nx: 0, ny: 1 },
+      { ax: 0, ay: 0, bx: 0, by: 30, nx: -1, ny: 0 },
+    ].map(e => {
+      const a = rotate(e.ax, e.ay, q), b = rotate(e.bx, e.by, q), n = rotate(e.nx, e.ny, q);
+      return { ax: a.x, ay: a.y, bx: b.x, by: b.y, nx: n.x, ny: n.y };
+    });
+    for (const d of [0.7, 0.1, 0.00001, 0, -0.00001]) {
+      const eye = rotate(-d, d, q), hidden = rotate(100, -100, q), open = rotate(-100, 100, q);
+      const sink = new CollectSink();
+      wallShadowPath(sink, edges, eye.x, eye.y, 1600, 0, 0, 1);
+      check(`joined corner stays closed, rotation ${q}, contact ${d}`,
+        inside(sink.polys, hidden.x, hidden.y) && !inside(sink.polys, open.x, open.y));
+      const reversed = new CollectSink();
+      wallShadowPath(reversed, [...edges].reverse(), eye.x, eye.y, 1600, 0, 0, 1);
+      check(`corner coverage survives cache reordering ${q}/${d}`,
+        inside(reversed.polys, hidden.x, hidden.y) && !inside(reversed.polys, open.x, open.y));
+    }
+  }
+  // A distant collinear face must not shift the eye across a nearer wall.
+  const local: OccEdge = { ax: -30, ay: 0, bx: 0, by: 0, nx: 0, ny: 1 };
+  const remote: OccEdge = { ax: 0, ay: 300, bx: 0, by: 330, nx: -1, ny: 0 };
+  const alone = new CollectSink(), together = new CollectSink();
+  wallShadowPath(alone, [local], -0.01, 0.01, 1600, 0, 0, 1);
+  wallShadowPath(together, [local, remote], -0.01, 0.01, 1600, 0, 0, 1);
+  check('a remote collinear edge cannot alter the local shadow geometry',
+    JSON.stringify(alone.polys[0]) === JSON.stringify(together.polys[0]));
+  const free = new CollectSink();
+  wallShadowPath(free, [local], 2, 0.01, 1600, 0, 0, 1);
+  check('the wall union preserves sight around a free end', !inside(free.polys, 100, -100));
+}
 {
   const FAR = 1600;
   // A 500px wall edge on y=0; deep-field grid strictly behind (+y).
@@ -579,7 +618,7 @@ console.log('— F. shadow polygons form a union across wall orientations —');
   let matches = true, samples = 0;
   for (const eye of [{ x: 150, y: 150 }, { x: 151, y: 150 }, { x: 149, y: 151 }]) {
     const sink = new CollectSink();
-    for (const e of edges) edgeShadowForEye(sink, e, eye.x, eye.y, 1600, 0, 0, 1);
+    wallShadowPath(sink, edges, eye.x, eye.y, 1600, 0, 0, 1);
     for (let y = 460; y <= 650; y += 10) for (let x = 430; x <= 650; x += 10) {
       samples++;
       if (inside(sink.polys, x, y) !== sink.polys.some(p => inside([p], x, y))) matches = false;
