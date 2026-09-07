@@ -108,6 +108,10 @@ inn: {
   before the gate the crowd shoulder still threw its push (the reported
   "invisible wall"). Every body-vs-body and body-vs-hazard seam now reads
   one predicate; `probe_storey` I stands the lodger in the hero's footprint.
+- **THE INVESTIGATION CROSSES** (`docs/engine/tiers.md`): a lure in the hall
+  above draws a common-room hunter UP the flight instead of under the boards
+  (the goal carries its story), and a noise in the common room walks a
+  story-1 investigator DOWN before its mark can clear — `probe_storey` J.
 - The ground ledger's `isMember` leaves a non-walkable region cell (the
   landing's closet) out of the common room.
 

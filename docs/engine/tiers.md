@@ -92,11 +92,38 @@ stateless adapter, one per story, built at zone load from
   it). Sight, sound and scent are NOT bodies and keep their own laws (the
   elevation ray, the noise ring, the scent trail, resonance lures). `hitAll`
   sky hazards stay tier-agnostic by the world-authored law. Objects with no
-  story field read 0; flat zones compare 0 with 0. THE ROSTER is pinned:
-  `probe_tiers` RIG T censuses every named seam for the gate (a new
-  proximity seam joins the roster or is named gateless) and drives the live
-  law on a real bridge deck and a real duct; `probe_storey` I stands the
-  lodger in the hero's footprint.
+  story field read 0; flat zones compare 0 with 0. THE DERIVED CENSUS (her
+  word: the roster must be derived, never a hand list): `probe_tiers` RIG T
+  finds every seam by SHAPE — any World method that iterates bodies (the
+  actor grid, the actor/seat lists, the lite pool) and tests geometry
+  against them — and requires each to carry the gate or to name its
+  exemption in the source: `// SOVEREIGNTY: <reason>` from a closed
+  vocabulary (`sky` the world-authored hitAll law, `sound`/`scent` cross
+  stories and the walk crosses after them, `sight` the eye's law,
+  `targeting` rides hostility, `census`/`seat`/`self` touch nobody). A new
+  proximity seam is found the day it is written: gated, marked, or named
+  gateless by the probe. The live law rides a real bridge deck and a real
+  duct (RIG T) and the lodger in the hero's footprint (`probe_storey` I).
+- **Investigation — THE INVESTIGATION CROSSES** (2026-09-06, her ruling):
+  a lure or a noise on another story MAY reach a body there — it makes the
+  body AWARE, and the body then walks to the crossing and investigates; it
+  never teleports (no `teleportActor` lane is lure- or noise-driven). The
+  law is A GOAL CARRIES ITS STORY: `moveToward` reads `tier` on its goal and
+  `World.tierLinkToward(a, goal, goalTier)` elects a crossing even on ground
+  the walker's own floor also owns (a deck over the valley, a hall over the
+  common room — where the flat read walked the body to the spot beneath and
+  called it arrived); the alert mark (`Actor.alertTier` beside `alertFrom`,
+  stamped by the noise ring, the scent print `TrailPoint.tier`, the struck
+  stone, the blow's author, the target, the last-seen mark
+  `aiLastSeenTier`), the lure (`setLure(..., tier)`), a prey or a shiny goal
+  and the chase kernel's `goal.tier` all stamp the story they know, and every
+  arrival test asks the story, never the flat distance. Multi-story: a known
+  goal story prefers a crossing whose span touches it. Pinned: `probe_tiers`
+  RIG U (a butte-top hunter walks its ramp DOWN to a valley lure and to a
+  valley alert mark, clearing it only there; every step a stride) and
+  `probe_storey` J (a common-room hunter lured to the hall over its head
+  takes the flight UP; a story-1 investigator walks DOWN to a common-room
+  noise).
 - **Combat**: same-tier ONLY, enforced at the ONE hostility gate
   (targeting, swings, threat, projectiles all agree) — except under RIM
   DUELS (below). Flights carry their caster's story and sail over any

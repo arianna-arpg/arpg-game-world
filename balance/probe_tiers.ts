@@ -2198,14 +2198,43 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
     const n = next.exec(text);
     return text.slice(m.index, n ? n.index : text.length);
   };
-  const GATE = /sameStory\(|\.tier !== |\.tier \?\? 0\) !== |\) !== a\.tier|\.tier === (?:tier|sourceTier|story)\b|pool\.story\[i\] !==|tier >= 1 &&|z\.tier \?\?= /;
-  const ROSTER = ['separateActors', 'sweepBodySlam', 'updateSquish', 'attuneCrystal', 'effectHeatWash', 'effectStatusWash',
-    'effectOrbSpring', 'isEffectTarget', 'pressingFoeNear', 'updateAuras', 'healAlliesInArea', 'applyHealChained', 'isBurstTarget',
-    'ruptureStatus', 'springAmbush', 'tryTame', 'updateTrapworks', 'updateTracks', 'zoneVictims', 'updateZoneDomain', 'updateTethers',
-    'updateEnemyTethers', 'liteBiteVictim', 'liteCarve', 'liteProjectileSweep', 'windAt', 'groundFallEligible', 'tickChannelSupports',
-    'updateConstructs', 'updatePendingBursts', 'updateProjectiles', 'updateZones', 'updateLightwells', 'strikeSurfaces', 'rampageCrush', 'updateLooters', 'pickupSeat'];
-  const gateless = ROSTER.filter(n => { const b = methodBody(src, n); return !b || !GATE.test(b); });
-  check('T0a THE SOVEREIGNTY ROSTER — every proximity seam in world.ts carries the gate', gateless.length === 0, gateless.join(', ') || `${ROSTER.length} seams`);
+  // THE DERIVED CENSUS (her word 2026-09-06: the roster must be derived,
+  // never a hand list): a SEAM is any World method that ITERATES bodies
+  // (the actor grid, the actor/seat lists, the lite pool) AND TESTS
+  // GEOMETRY against them. Every seam either carries the gate (sameStory /
+  // storyPair / hostileTo / a tier compare / the pool's story column / a
+  // strike story) or names its exemption in the source — `// SOVEREIGNTY:
+  // <reason>` from the closed vocabulary below (sound and scent cross
+  // stories and the walk crosses after them; sight is the eye's law; sky
+  // is the world-authored hitAll law; targeting rides hostility; census,
+  // seat and self touch nobody). A new proximity seam is found by SHAPE
+  // the day it is written: gated, marked, or named here as gateless.
+  const ITER = /this\.actorsNear\(|for \(const \w+ of this\.actors\)|this\.actors\.(?:some|filter|find|forEach)\(|for \(const \w+ of (?:bodies|actors|cand|near|alive|pool)\)|for \(const \w+ of this\.seats\)|this\.seats\.(?:some|find|filter)\(|for \(const \w+ of this\.enemiesOf\(|pool\.forEach(?:In|Along)\(|i < pool\.used|for \(const \w+ of this\.localHumanSeats\(\)\)/;
+  const GEO = /\bdist\(|inAoe(?:Body)?\(|shapeContains\(|Math\.hypot\(|zoneHas\(|bankCovers|sourceCover|\.reachable\(|projTouches|trapTriggerHit\(|contains\(|dx \* dx \+ dy \* dy/;
+  const GATE = /sameStory\(|storyPair\(|hostileTo\(|\.tier !== |\.tier === |tier \?\? 0\) !== |tier \?\? 0\) === |!== a\.tier|pool\.story\[|strikeTier|sourceTier|z\.tier \?\?= |tier >= 1 &&|from: \w+(?:\.actor)?\.tier|windAt\(\w+\.pos, \w+\.tier\)|drop\.tier|orb\.tier|, \w+\.tier\)/;
+  const REASONS = new Set(['sky', 'sound', 'scent', 'sight', 'targeting', 'census', 'seat', 'self']);
+  const MARK = /\/\/ SOVEREIGNTY: (\w+)/;
+  const lines = src.split('\n');
+  const heads: [number, string][] = [];
+  const headRe = /^  (?:private |protected |public |readonly |static |async )*([A-Za-z_]\w*)\s*(?:<[^>]*>)?\(/;
+  for (let i = 0; i < lines.length; i++) { const m = headRe.exec(lines[i]); if (m && !/^(if|for|while|switch|return|const|let)$/.test(m[1])) heads.push([i, m[1]]); }
+  const tally = { gated: 0, exempt: 0 }; const ungated: string[] = []; const badReason: string[] = [];
+  const byReason = new Map<string, number>();
+  for (let k = 0; k < heads.length; k++) {
+    const [a, name] = heads[k]; const b = heads[k + 1]?.[0] ?? lines.length;
+    const body = lines.slice(a, b).join('\n');
+    if (!ITER.test(body) || !GEO.test(body)) continue;
+    const mark = MARK.exec(body)?.[1];
+    if (mark) { tally.exempt++; byReason.set(mark, (byReason.get(mark) ?? 0) + 1); if (!REASONS.has(mark)) badReason.push(`${name}:${mark}`); }
+    else if (GATE.test(body)) tally.gated++;
+    else ungated.push(name);
+  }
+  check('T0a THE DERIVED CENSUS — every proximity seam in world.ts is gated or names its exemption',
+    ungated.length === 0 && tally.gated + tally.exempt >= 90,
+    ungated.length ? 'GATELESS: ' + ungated.join(', ') : `gated ${tally.gated}, exempt ${tally.exempt} (${[...byReason].map(([r, n]) => `${r} ${n}`).join(', ')})`);
+  check('T0a′ every exemption speaks the closed vocabulary (sky/sound/scent/sight/targeting/census/seat/self)', badReason.length === 0, badReason.join(', '));
+  check('T0a″ the census still sees the seams it was born from (a regex that goes blind fails loud)',
+    ['separateActors', 'sweepBodySlam', 'sweepHazardSurface', 'updateSquish', 'updateTrapworks', 'liteCarve'].every(n => { const b = methodBody(src, n); return !!b && ITER.test(b) && GEO.test(b) && GATE.test(b); }));
   const aiSrc = readFileSync(resolve('src/engine/ai.ts'), 'utf8');
   check('T0b the AI\'s flock and spacing neighbours are its own story\'s', (aiSrc.match(/b\.tier !== actor\.tier/g) ?? []).length >= 2);
   check('T0c the membranes gate their occupants and the lite pool carries its story column',
@@ -2287,6 +2316,127 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
   }
   check('T2 the rig finds a duct under the street (one cell, two floors: the street above, the roots beneath)', !!duct);
   if (duct) runPair('T2', duct, 0, 1);
+}
+
+// --- RIG U: THE INVESTIGATION CROSSES (lures and noise across stories) ---------------
+// Her ruling 2026-09-06: a lure or a noise on another story MAY reach an
+// entity there — it makes it aware, and it then WALKS to the crossing and
+// investigates; it never teleports. The law: A GOAL CARRIES ITS STORY
+// (moveToward / tierLinkToward read `tier` on the goal; the alert mark, the
+// lure, the print, the prey, the quarry stamp the story they know), and an
+// arrival asks the story, never the flat distance. Pinned live on the
+// needles: a butte-top hunter drawn by a VALLEY lure walks its ramp down and
+// mills at the standoff on the valley (U1); an ALERT mark on the valley does
+// the same and clears only there (U2); a valley hunter lured ONTO a deck
+// over its head climbs instead of standing beneath it, "arrived" (U3); every
+// walk is a run of strides, never a leap of cells (U4).
+{
+  const w = makeSimWorld('warrior', 0x1a0e5);
+  seedGlobalRandom(0x1a0e5);
+  const p = w.player;
+  const dd = (a: { x: number; y: number }, b: { x: number; y: number }): number => Math.hypot(a.x - b.x, a.y - b.y);
+  type Pt = { x: number; y: number };
+  const findSpots = (): { top: Pt; deck: Pt | null; valley: Pt } | null => {
+    const pf = w.pathField(0);
+    if (!(pf instanceof GridWalkField)) return null;
+    const cs = pf.cell, cols = pf.cols, rows = pf.rows;
+    const at = (gx: number, gy: number): string => pf.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
+    const c = (gx: number, gy: number): Pt => ({ x: gx * cs + cs / 2, y: gy * cs + cs / 2 });
+    let top: Pt | null = null, deck: Pt | null = null;
+    for (let gy = 2; gy < rows - 2 && !top; gy++) for (let gx = 2; gx < cols - 2; gx++) if (at(gx, gy) === 'butte_top') { top = c(gx, gy); break; }
+    for (let gy = 2; gy < rows - 2 && !deck; gy++) for (let gx = 2; gx < cols - 2; gx++) if (at(gx, gy) === 'butte_span') { deck = c(gx, gy); break; }
+    if (!top) return null;
+    // The valley seat (RIG J's standoff): open ground 8–14 cells from the top with no story floor within 4 cells.
+    let valley: Pt | null = null, best = Infinity;
+    const tgx = Math.floor(top.x / cs), tgy = Math.floor(top.y / cs);
+    for (let gy = 2; gy < rows - 2; gy++) for (let gx = 2; gx < cols - 2; gx++) {
+      const k = at(gx, gy);
+      if (tierFloorOf(k) || tierLinkOf(k) || !pf.isWalkable(gx * cs + cs / 2, gy * cs + cs / 2)) continue;
+      const dc = Math.hypot(gx - tgx, gy - tgy);
+      if (dc < 8 || dc > 14) continue;
+      let clear = true;
+      for (let oy = -4; oy <= 4 && clear; oy++) for (let ox = -4; ox <= 4; ox++) if (tierFloorOf(at(gx + ox, gy + oy))) { clear = false; break; }
+      if (!clear) continue;
+      const score = Math.abs(dc - 11);
+      if (score < best) { best = score; valley = c(gx, gy); }
+    }
+    return valley ? { top, deck, valley } : null;
+  };
+  let spots: ReturnType<typeof findSpots> = null;
+  // Deals are tried until one strings a rope span (the both-floor deck U3
+  // needs); a top + valley alone serves U1/U2 if none does.
+  let fallback: ReturnType<typeof findSpots> = null;
+  for (const [i, seed] of [505501, 505502, 505503, 505504, 505505, 505506, 505507, 505508].entries()) {
+    if (!w.devMintTileset('needles', 2 + (i % 4), 8, { seed, layoutType: 'needles' })) continue;
+    const s = findSpots();
+    if (!s) continue;
+    if (s.deck) { spots = s; break; }
+    fallback ??= s;
+  }
+  if (!spots && fallback) {
+    // Re-mint the fallback deal so the world stands on it.
+    w.devMintTileset('needles', 2, 8, { seed: 505501, layoutType: 'needles' });
+    spots = findSpots();
+  }
+  check('U0 the rig finds a butte top and a valley seat (and a deck when the deal strung one)', !!spots, spots ? `deck ${spots.deck ? 'yes' : 'no'}` : 'none');
+  if (spots) {
+    const { top, deck, valley } = spots;
+    for (const a of w.actors) if (a !== p) a.dead = true; // a quiet stage
+    w.update(1 / 30);
+    p.pos = vec(valley.x, valley.y); p.tier = 0; p.untargetable = true; // the hunter must stay IDLE
+    const hunter = (at: Pt, tier: number): Actor => {
+      const m = w.createMonster('skeleton_warrior', 8, 'enemy');
+      m.pos = vec(at.x, at.y); m.tier = tier; m.onTierLink = false; m.aiTargetId = undefined;
+      w.actors.push(m);
+      return m;
+    };
+    /** Drive until `done` or the cap; report the largest single step (a
+     *  stride ≈ speed/30 — a teleport is a leap of cells). */
+    const drive = (m: Actor, done: () => boolean, cap = 1500): { ticks: number; maxStep: number } => {
+      let maxStep = 0, ticks = 0;
+      for (; ticks < cap && !done(); ticks++) {
+        const px = m.pos.x, py = m.pos.y;
+        for (const a of w.actors) updateAI(a, w, 1 / 30);
+        w.update(1 / 30);
+        maxStep = Math.max(maxStep, Math.hypot(m.pos.x - px, m.pos.y - py));
+      }
+      return { ticks, maxStep };
+    };
+    const STRIDE = 40;
+    {
+      const m = hunter(top, 1);
+      w.setLure('qa_valley', vec(valley.x, valley.y), 4000, 1, 30, 999, 0);
+      const r = drive(m, () => m.tier === 0 && dd(m.pos, valley) <= 54);
+      check('U1 a butte-top hunter drawn by a valley lure walks its ramp DOWN and mills at the standoff on the valley (tier 1 → 0)',
+        m.tier === 0 && dd(m.pos, valley) <= 54, `tier ${m.tier} dist ${dd(m.pos, valley).toFixed(0)} ticks ${r.ticks}`);
+      check('U4a … every step of that walk is a stride, never a teleport', r.maxStep <= STRIDE, `max step ${r.maxStep.toFixed(1)}px`);
+      w.setLure('qa_valley', vec(valley.x, valley.y), 1, 1, 30, 0.001, 0);
+      m.dead = true; w.update(1 / 30);
+    }
+    {
+      const m = hunter(top, 1);
+      m.alertFrom = vec(valley.x, valley.y); m.alertTier = 0; m.alertUntil = w.time + 60;
+      let clearedOn: number | null = null;
+      const r = drive(m, () => { if (!m.alertFrom && clearedOn === null) clearedOn = m.tier; return clearedOn !== null; });
+      check('U2 an alert mark on the valley walks the butte-top investigator DOWN; the mark clears ON the valley, never from above it',
+        clearedOn === 0 && dd(m.pos, valley) <= 44, `cleared on tier ${String(clearedOn)} dist ${dd(m.pos, valley).toFixed(0)} ticks ${r.ticks}`);
+      check('U4b … stride-wise', r.maxStep <= STRIDE, `max step ${r.maxStep.toFixed(1)}px`);
+      m.dead = true; w.update(1 / 30);
+    }
+    if (deck) {
+      const m = hunter(deck, 0); // beneath the deck, on the valley floor
+      w.setLure('qa_deck', vec(deck.x, deck.y), 4000, 1, 30, 999, 1);
+      const r = drive(m, () => m.tier === 1 && dd(m.pos, deck) <= 54);
+      check('U3 a valley hunter beneath a deck, lured ONTO the deck, climbs to it (tier 0 → 1) instead of standing under it, "arrived"',
+        m.tier === 1 && dd(m.pos, deck) <= 54, `tier ${m.tier} dist ${dd(m.pos, deck).toFixed(0)} ticks ${r.ticks}`);
+      check('U4c … stride-wise', r.maxStep <= STRIDE, `max step ${r.maxStep.toFixed(1)}px`);
+      w.setLure('qa_deck', vec(deck.x, deck.y), 1, 1, 30, 0.001, 1);
+      m.dead = true; w.update(1 / 30);
+    } else {
+      console.log('U3 skipped — no rope span strung in these deals (the climb is the same election U1 walked)');
+    }
+    p.untargetable = false;
+  }
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);

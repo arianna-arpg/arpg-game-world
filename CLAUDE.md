@@ -901,9 +901,21 @@ we verify changes.
   vents (`PlacedVent.tier`), creep (`CreepSource.tier`), fog
   (`FogBank.tier`), lightwells, the collapse crumble, the gale
   (`windAt(pos, tier)`), and the lite pool's `story` column); sight,
-  sound and scent keep their own laws; THE ROSTER is a probe-pinned
-  census (probe_tiers RIG T + live deck/duct rigs, probe_storey I) —
-  docs/engine/tiers.md), THE
+  sound and scent keep their own laws; THE DERIVED CENSUS (her word: the
+  roster is derived, never a hand list): probe_tiers RIG T finds every
+  seam by SHAPE — a World method that iterates bodies and tests geometry
+  — and requires the gate or a source marker `// SOVEREIGNTY: <reason>`
+  from a closed vocabulary (sky/sound/scent/sight/targeting/census/seat/
+  self), so a new proximity seam is gated, marked, or named gateless the
+  day it is written (live: deck/duct statue rigs, probe_storey I); and
+  THE INVESTIGATION CROSSES (her ruling 2026-09-06): a lure or noise on
+  another story makes a body aware and it WALKS to the crossing, never
+  teleports — A GOAL CARRIES ITS STORY (`moveToward` reads `goal.tier`,
+  `tierLinkToward(a, goal, goalTier)` elects a crossing even on both-
+  floor ground; `Actor.alertTier`/`watchTier`/`aiLastSeenTier`,
+  `TrailPoint.tier`, `setLure(..., tier)`, `noiseAt(..., tier)`, the
+  kernel `goal.tier`; arrivals ask the story) — probes probe_tiers RIG U,
+  probe_storey J — docs/engine/tiers.md), THE
   INN'S FLOORS on THE STOREY FABRIC (`engine/levelgen.ts` storey
   composite + `world/regions.ts` storey rows — `StructureDef.storeys`: a
   second char grid folded cell for cell over the ground plan into ONE

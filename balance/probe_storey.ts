@@ -42,6 +42,7 @@ import { floorStoryOf, linkSpanOf, tierElevOf, tierEnclosure, tierFloorAt, tierL
 import { VESTIGES } from '../src/data/vestiges';
 import type { GemDrop } from '../src/engine/world';
 import { doodadRuleOf } from '../src/engine/levelgen';
+import { updateAI } from '../src/engine/ai'; // (J — the investigation crosses)
 import { tierMapTell, tierMapTint } from '../src/ui/panels';
 import { vec } from '../src/core/math';
 
@@ -325,6 +326,59 @@ const kindAt = (cx: number, cy: number): string => wf.regionAt!(inn.rect.x + cx 
     off(p) >= (p.radius + lodger.radius) * 0.8, `${off(p).toFixed(1)}px`);
   lodger.dead = true;
   p.pos.x = 100; p.pos.y = 100; p.tier = 0;
+}
+
+// --------------------------------------- J. THE INVESTIGATION CROSSES (the inn)
+// A lure or a noise on another story makes a body AWARE; it then walks to the
+// crossing and investigates — never a teleport (her ruling 2026-09-06). The
+// inn's hall is one cell, two floors: before A GOAL CARRIED ITS STORY the flat
+// read fielded a common-room hunter straight to the spot under the hall's
+// lure and called it arrived. Now it takes the flight.
+{
+  const p = w.player;
+  for (const a of w.actors) if (a !== p) a.dead = true;
+  w.update(1 / 30);
+  p.pos.x = 100; p.pos.y = 100; p.tier = 0; p.untargetable = true; // the hunter must stay IDLE
+  const hall = { x: inn.rect.x + 8.5 * cs, y: inn.rect.y + 2.5 * cs };     // the hall above (storey_floor)
+  const room = { x: inn.rect.x + 8.5 * cs, y: inn.rect.y + 2.5 * cs };     // the same cell, the common room beneath
+  const dd = (a: { x: number; y: number }, b: { x: number; y: number }): number => Math.hypot(a.x - b.x, a.y - b.y);
+  const hunter = (at: { x: number; y: number }, tier: number) => {
+    const m = w.createMonster('skeleton_warrior', 8, 'enemy');
+    m.pos = vec(at.x, at.y); m.tier = tier; m.onTierLink = false; m.aiTargetId = undefined;
+    w.actors.push(m);
+    return m;
+  };
+  const drive = (m: { pos: { x: number; y: number } }, done: () => boolean, cap = 1200): { ticks: number; maxStep: number } => {
+    let maxStep = 0, ticks = 0;
+    for (; ticks < cap && !done(); ticks++) {
+      const px = m.pos.x, py = m.pos.y;
+      for (const a of w.actors) updateAI(a, w, 1 / 30);
+      w.update(1 / 30);
+      maxStep = Math.max(maxStep, Math.hypot(m.pos.x - px, m.pos.y - py));
+    }
+    return { ticks, maxStep };
+  };
+  {
+    const m = hunter(room, 0);
+    w.setLure('qa_hall', vec(hall.x, hall.y), 4000, 1, 30, 999, 1);
+    const r = drive(m, () => m.tier === 1 && dd(m.pos, hall) <= 54);
+    check('J1 a common-room hunter lured to the hall directly OVER its head takes the flight up (tier 0 → 1) instead of standing beneath, "arrived"',
+      m.tier === 1 && dd(m.pos, hall) <= 54, `tier ${m.tier} dist ${dd(m.pos, hall).toFixed(0)} ticks ${r.ticks}`);
+    check('J2 … every step a stride, never a teleport', r.maxStep <= 40, `max step ${r.maxStep.toFixed(1)}px`);
+    w.setLure('qa_hall', vec(hall.x, hall.y), 1, 1, 30, 0.001, 1);
+    m.dead = true; w.update(1 / 30);
+  }
+  {
+    const m = hunter(hall, 1);
+    m.alertFrom = vec(room.x, room.y); m.alertTier = 0; m.alertUntil = w.time + 60;
+    let clearedOn: number | null = null;
+    const r = drive(m, () => { if (!m.alertFrom && clearedOn === null) clearedOn = m.tier; return clearedOn !== null; });
+    check('J3 a noise in the common room walks the lodger-story investigator DOWN the flight; the mark clears on the ground floor, never from the boards above it',
+      clearedOn === 0 && dd(m.pos, room) <= 44, `cleared on tier ${String(clearedOn)} dist ${dd(m.pos, room).toFixed(0)} ticks ${r.ticks}`);
+    check('J4 … stride-wise', r.maxStep <= 40, `max step ${r.maxStep.toFixed(1)}px`);
+    m.dead = true; w.update(1 / 30);
+  }
+  p.untargetable = false;
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

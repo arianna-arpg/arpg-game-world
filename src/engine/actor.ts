@@ -663,6 +663,8 @@ export class Actor {
   aiTargetId?: number;
   /** Where the locked target was last seen (perception-memory investigation). */
   aiLastSeen?: Vec2;
+  /** The story the quarry stood on when last seen (rides the stale-spot stalk). */
+  aiLastSeenTier?: number;
   /** World time the locked target was last actually SEEN (line of sight) —
    *  a held lock survives blindness for the chase-memory window (the hunter
    *  rounds the corner after you), then the thread snaps. */
@@ -909,6 +911,15 @@ export class Actor {
    *  stalking toward `alertFrom` — where the blow came from. */
   alertUntil = 0;
   alertFrom: Vec2 | null = null;
+  /** THE INVESTIGATION CROSSES (the tier fabric): the STORY the alert mark
+   *  lies on — the blow's author's, the noise's, the print's, the target's.
+   *  A body on another story walks to the crossing first (moveToward's
+   *  stair election reads the goal's story), and the arrival test asks the
+   *  story, never the flat distance — a deck body over a valley noise is
+   *  not "there". undefined = its own story (the legacy read). */
+  alertTier?: number;
+  /** The story of `watchAt` (the watch fabric's stimulus mark). */
+  watchTier?: number;
   /** Per-proc internal-cooldown clocks (world time each proc is next
    *  ready) — the hard frequency limit under stacked chance (ProcDef.icd). */
   procReadyAt = new Map<string, number>();

@@ -860,9 +860,14 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       if (tuning.move?.shroud) setShroud(actor, true);
       // ALERTED but blind: stalk toward where the blow came from, searching.
       if (world.time < actor.alertUntil && actor.alertFrom && !actor.isMinion()) {
-        if (dist(actor.pos, actor.alertFrom) > 40) {
+        // THE INVESTIGATION CROSSES: a mark on another story is not "here"
+        // at any flat distance — walk the crossing first (the goal carries
+        // its story; the stair election reads it).
+        const there = dist(actor.pos, actor.alertFrom) <= 40
+          && (actor.alertTier === undefined || actor.alertTier === actor.tier);
+        if (!there) {
           actor.facing = angleTo(actor.pos, actor.alertFrom);
-          moveToward(actor, world, actor.alertFrom, dt);
+          moveToward(actor, world, { x: actor.alertFrom.x, y: actor.alertFrom.y, tier: actor.alertTier }, dt);
         } else {
           actor.alertFrom = null; // arrived — nothing here; back to the watch
         }
@@ -931,9 +936,11 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       // of stacking onto it.
       if (!actor.isMinion()) {
         const lure = world.lureFor(actor);
-        if (lure && dist(actor.pos, lure.pos) > lure.standoff) {
+        // (A lure on another story is never within standoff — the drawn
+        // body walks the crossing first: the investigation-crosses law.)
+        if (lure && (dist(actor.pos, lure.pos) > lure.standoff || (lure.tier !== undefined && lure.tier !== actor.tier))) {
           actor.facing = angleTo(actor.pos, lure.pos);
-          moveToward(actor, world, lure.pos, dt * lure.pace);
+          moveToward(actor, world, { x: lure.pos.x, y: lure.pos.y, tier: lure.tier }, dt * lure.pace);
           return;
         }
       }
@@ -945,10 +952,13 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       const seek = tuning.behavior?.seek;
       if (seek && !actor.isMinion()) {
         const range = seek.range ?? BEHAVIOR_CFG.seekRange;
-        const goal = seek.what === 'prey'
-          ? world.seekPrey(actor, range)?.pos
+        const prey = seek.what === 'prey' ? world.seekPrey(actor, range) : null;
+        const goal: { x: number; y: number; tier?: number } | null = seek.what === 'prey'
+          ? (prey ? { x: prey.pos.x, y: prey.pos.y, tier: prey.tier } : null)
           : world.seekLoot(actor, range);
-        if (goal && dist(actor.pos, goal) > 40) {
+        // (The goal carries its story: prey or a shiny on another story is
+        // never "reached" flat — the seeker walks the crossing.)
+        if (goal && (dist(actor.pos, goal) > 40 || (goal.tier !== undefined && goal.tier !== actor.tier))) {
           actor.facing = angleTo(actor.pos, goal);
           moveToward(actor, world, goal, dt * (seek.pace ?? 0.55));
           return;
@@ -1674,6 +1684,7 @@ function acquireTarget(
             actor.aiLosSeenAt = world.time;
             if (actor.aiLastSeen) { actor.aiLastSeen.x = e.pos.x; actor.aiLastSeen.y = e.pos.y; }
             else actor.aiLastSeen = vec(e.pos.x, e.pos.y);
+            actor.aiLastSeenTier = e.tier;
           }
           if (tuning.target?.relentless) actor.aggroed = true;
           actor.lastProgress = undefined;
@@ -1788,6 +1799,7 @@ function acquireTarget(
       actor.alertUntil = Math.max(actor.alertUntil,
         world.time + (w.searchSec ?? WATCH_CFG.searchSec) * alertScale(actor));
       actor.alertFrom = vec(target.pos.x, target.pos.y);
+      actor.alertTier = target.tier;
     }
     actor.watchRung = rung;
     if (v >= 1) {
@@ -1848,7 +1860,7 @@ function acquireTarget(
           if (a.dead || a === actor || a.team !== actor.team || a.passive || a.construct) continue;
           if (dist(a.pos, actor.pos) > shout) continue;
           a.alertUntil = Math.max(a.alertUntil, world.time + 5 * alertScale(a));
-          a.alertFrom ??= vec(target.pos.x, target.pos.y);
+          if (!a.alertFrom) { a.alertFrom = vec(target.pos.x, target.pos.y); a.alertTier = target.tier; }
           // THE WATCH FABRIC: a warned watcher's ladder JUMPS to the search
           // rung (capped — a shout names a place, never a prey; its own
           // senses must close the lock) and its climb runs alert-fast.
@@ -1867,6 +1879,7 @@ function acquireTarget(
     if (!losGated || world.losCached(actor, target)) {
       actor.aiLosSeenAt = world.time;
       actor.aiLastSeen = vec(target.pos.x, target.pos.y);
+      actor.aiLastSeenTier = target.tier;
     }
   } else if (actor.aiTargetId !== undefined) {
     // LOST the lock: with perception memory, stalk the last-seen position
@@ -1876,6 +1889,7 @@ function acquireTarget(
     if (memory > 0 && actor.aiLastSeen && !actor.isMinion()) {
       actor.alertUntil = Math.max(actor.alertUntil, world.time + memory);
       actor.alertFrom = vec(actor.aiLastSeen.x, actor.aiLastSeen.y);
+      actor.alertTier = actor.aiLastSeenTier;
     }
   }
   // Cadence bookkeeping for the fast path above: mirror the FINAL lock as a
@@ -2477,7 +2491,7 @@ function flockSteer(
   return { x: ux, y: uy };
 }
 
-function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt: number): void {
+function moveToward(actor: Actor, world: World, to: { x: number; y: number; tier?: number }, dt: number): void {
   // Steer toward the next cell along the zone's walkable flow-field instead
   // of straight at the target — around warren walls AND plains cliff pockets
   // alike (World.pathField lazily rakes a nav grid over a convex zone's
@@ -2497,9 +2511,17 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt
       // Standing ON a link already, steer STRAIGHT at the true goal: the
       // strip is its own way through, and a flow-field step would only aim
       // back at the seat it stands on.
+      // A GOAL CARRIES ITS STORY (THE INVESTIGATION CROSSES): a goal stamped
+      // with another story elects the crossing even on ground this story's
+      // floor also owns — the deck over the valley, the hall over the common
+      // room — where the flat read would walk the body to the spot beneath
+      // (or above) the goal and call it arrived. A lure, a noise, a print,
+      // a prey, a quarry: each stamps the story it knows; a bare point
+      // keeps the old read.
+      const away = to.tier !== undefined && to.tier !== actor.tier;
       let aim: { x: number; y: number } | null = to;
-      if (world.zone.tiers && !pf.isWalkable(to.x, to.y)) {
-        aim = actor.onTierLink ? null : (world.tierLinkToward(actor, to) ?? to);
+      if (world.zone.tiers && (away || !pf.isWalkable(to.x, to.y))) {
+        aim = actor.onTierLink ? null : (world.tierLinkToward(actor, to, away ? to.tier : undefined) ?? to);
       }
       if (aim) {
         // ANY-ANGLE shortcut, PRICED (the wayfaring fabric): beeline while the
@@ -2936,7 +2958,10 @@ export interface KernelCtx {
    *  free) — runKernel zeroes the movement dt. */
   paused: boolean;
   /** The point to close on — the target, or the surround slot when drilled. */
-  goal: Vec2;
+  /** The steering goal — it CARRIES the target's story (the investigation-
+   *  crosses law): a quarry on a both-floor cell over or under the hunter
+   *  elects the crossing instead of the spot beneath it. */
+  goal: Vec2 & { tier?: number };
   pick(): SkillInstance | null;
   cast(inst: SkillInstance): void;
 }
@@ -2950,7 +2975,7 @@ function makeCtx(
 ): KernelCtx {
   const spec = tuning.move ?? { style: 'approach' };
   const beh = tuning.behavior;
-  let goal: Vec2;
+  let goal: Vec2 & { tier?: number };
   if (engaged && beh?.encircle && !target.passive) {
     // THE ENGAGEMENT RING (BehaviorSpec.encircle): claim a bite bearing —
     // the first `front` take their approach, later arrivals wrap the widest
@@ -2981,6 +3006,7 @@ function makeCtx(
     // length of a colossus to its head. Plain targets: the head, as ever.
     goal = segsHittable(target) ? nearestBody(target, actor.pos).pos : target.pos;
   }
+  goal = { x: goal.x, y: goal.y, tier: target.tier }; // the goal carries its story
   return {
     a: actor, world, target, d, dt, spec, tuning, norm, noCast, paused, goal,
     pick: () => {
