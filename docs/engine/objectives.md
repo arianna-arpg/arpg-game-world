@@ -98,14 +98,20 @@ for every hold-the-ground fixture family:
   predicate is `objectiveCountable` — the SAME one the cull's scoreboard
   runs, so "contested" and "who counts" can never disagree (dormant sleepers
   count on purpose: ground with a sleeper on it is not cleared ground).
+  The enemy must also reach the fixture on its story, using the shared dwell
+  reach law. Solid walls and other floors cannot exert invisible pressure.
+  `ContestSpec.reach` overrides this: `'radius'` deliberately allows pressure
+  through cover, while retaining the same-story requirement. Hero attendance
+  likewise uses the actor's actual story and the fixture's story.
 - A CROWD (`drainAt`+) DRAINS banked progress (`drainPerSec`), attended or
   not — walk away from pressed ground and the wilds smother the work back
   down (the spire's own lure feeds this loop by design). Charges floor at 0;
   nothing ever resets.
-- The drive STAMPS its frame read (`holdRead` — the watch fabric's idiom):
+- The drive STAMPS each fixture's frame read (`holdRead`):
   `spireView`/`riftsView`/`pyresView`/`digsView` re-speak the exact scalars
-  the drive tested, so the HUD line, the chevron label and the charge logic
-  are one truth (drawn == tested).
+  for the attended fixture, or the nearest unfinished one when unattended.
+  A distant fixture draining cannot label the local building fixture overrun.
+  A spire contested at zero charge includes its stall warning on the HUD.
 - Per-zone override: `ObjectiveTuning.contest` re-dials any knob, or `false`
   waives the law for an authored uncontested stand. Kinds that hold no
   ground ignore it.

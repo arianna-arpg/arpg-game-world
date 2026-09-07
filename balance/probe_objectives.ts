@@ -89,6 +89,7 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { withSeededRandom } from '../src/core/rng';
 import { updateAI } from '../src/engine/ai';
 import { vec } from '../src/core/math';
+import { GridWalkField } from '../src/world/gridWalk';
 import type { Actor } from '../src/engine/actor';
 import {
   OBJECTIVE_SEALS, OBJECTIVE_READS, objectiveEarnsChest, objectiveRead, objectiveSeals,
@@ -1809,6 +1810,85 @@ withSeededRandom(0x0bec7a, () => {
       leaveToHome();
     }
   }
+});
+
+// Isolated geometry rig: use the real objective driver, fixed actors and
+// masonry, so AI movement cannot accidentally clear a stalled objective.
+withSeededRandom(0xc017e57, () => {
+  const w = makeSimWorld('warrior', 771004) as any;
+  const grid = new GridWalkField(600, 600, 30);
+  grid.fillRect(0, 0, 599, 599, true);
+  grid.fillRect(270, 0, 299, 599, false);
+  w.walk = grid;
+  w.doodads = [];
+  w.markDoodadsChanged();
+  const foe = w.createMonster('zombie', 3, 'enemy') as Actor;
+  foe.pos = vec(315, 225);
+  w.actors = [w.player, foe];
+  w.player.pos = vec(195, 225);
+  const fixture = (x: number, y: number, charge = 0) => ({
+    pos: vec(x, y), charge, recoup: 0, pourAt: 0,
+    doodad: { pos: vec(x, y), radius: 13, kind: PYRE_CFG.kind as string },
+  });
+  const pyre = fixture(225, 225);
+  w.pyres = [fixture(90, 90, 5), fixture(90, 450, 5), pyre];
+  w.zone = { ...w.zone, id: 'probe_hold_reach', objective: { kind: 'pyres', kindleSec: 5 } };
+  w.objectiveDone = false;
+  w.updateObjective(1);
+  check('HR1 an enemy behind a solid wall cannot stall the last pyre', pyre.charge === 1);
+  for (let i = 0; i < 4; i++) w.updateObjective(1);
+  check('HR2 the final pyre really lights and completes with that enemy still alive',
+    pyre.doodad.kind === PYRE_CFG.kindLit && w.objectiveDone && !foe.dead);
+
+  w.objectiveDone = false;
+  w.zone.objective = { kind: 'beacon', chargeSec: 22, reinforce: false };
+  const spire = fixture(225, 225);
+  w.spires = [spire];
+  foe.pos = vec(225, 255);
+  w.updateObjective(1);
+  check('HR3 a visible enemy on the same ground still stalls from zero',
+    spire.charge === 0 && w.spireView()?.contested);
+  check('HR4 the zero-charge spire explains its stall on the HUD',
+    String(w.objectiveText()).includes('contested'));
+
+  foe.tier = 1;
+  w.updateObjective(1);
+  check('HR5 a monster on a different story cannot contest this fixture', spire.charge > 0);
+  foe.tier = 0;
+  foe.pos = vec(315, 225);
+  spire.charge = 0;
+  w.zone.objective.contest = { reach: 'radius' };
+  w.updateObjective(1);
+  check('HR6 an authored radius-only contest deliberately retains through-wall pressure',
+    spire.charge === 0 && w.spireView()?.contested);
+
+  // A remote banked fixture may drain, but the displayed local fixture is
+  // building. Global OR-ed flags used to label this safe stand OVERRUN.
+  w.zone.objective = { kind: 'pyres', kindleSec: 5 };
+  const nearby = fixture(150, 225), remote = fixture(450, 225, 2);
+  w.pyres = [nearby, remote];
+  w.player.pos = vec(150, 195);
+  w.actors = [w.player];
+  for (let i = 0; i < 4; i++) {
+    const m = w.createMonster('zombie', 3, 'enemy') as Actor;
+    m.pos = vec(420 + i * 15, 255); w.actors.push(m);
+  }
+  w.updateObjective(1);
+  check('HR7 pressure drains the remote fixture while the local pyre builds',
+    remote.charge < 2 && nearby.charge === 1);
+  check('HR8 the local fixture HUD never borrows a distant overrun warning',
+    !w.pyresView()?.draining && !String(w.objectiveText()).includes('OVERRUN'));
+  const hidden = fixture(315, 225), attended = fixture(165, 225);
+  w.pyres = [hidden, attended];
+  w.actors = [w.player];
+  w.player.pos = vec(255, 225);
+  w.updateObjective(1);
+  check('HR9 the view follows the reachable held pyre, not the closer one behind a wall',
+    hidden.charge === 0 && attended.charge === 1 && w.pyresView()?.pos === attended.pos
+    && w.pyresView()?.frac === 0.2);
+  w.player.tier = 1;
+  w.updateObjective(1);
+  check('HR10 attendance cannot charge a fixture on a different story', attended.charge === 1);
 });
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURES`);
