@@ -985,6 +985,12 @@ withSeededRandom(0x0bec7a, () => {
     {
       const zid = stage(787878, 33, { kind: 'clear', adopt: true });
       check('U8a the widow-maker guest seats', ff.devIgnite(w.devOverlayView(), zid) === true);
+      // Isolate the survival contract from incidental lairs in the minted
+      // layout. Adoption precedence is covered separately; stamp this live
+      // guest through the real resolver before exercising its load/end path.
+      const stamp = maybeAdoptObjective(w.zoneMap[zid], bare, world);
+      check('U8a the survival fixture adopts the standing package', stamp?.kind === 'package');
+      if (stamp) w.zoneMap[zid].objective = stamp;
       w.loadZone(zid);
       const run = w.fractureView();
       w.player.pos = w.clampPos(vec(run.origin.x, run.origin.y), w.player.radius);

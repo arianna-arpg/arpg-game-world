@@ -91,7 +91,7 @@
 import { VIS_ABLATE, VIS_CFG } from './visConfig';
 import type { Doodad } from '../../engine/levelgen';
 import { doodadRuleOf, sightShadowFrac, hitSurfaceOf } from '../../engine/levelgen';
-import { LOS_CFG } from '../../engine/los';
+import { castGridRay, LOS_CFG } from '../../engine/los';
 import { tierElevOf } from '../../engine/tiers';
 import { GridWalkField } from '../../world/gridWalk';
 import { regionKind } from '../../world/regions';
@@ -547,26 +547,16 @@ export class SightVeil {
       }
     }
     if (this.regionF > f && this.gridRef) {
-      // Half-cell march, start cell excused — the castRay grid idiom. The
-      // hull law joins the march exactly as it joins the extraction; THE
-      // ELEVATION LAW lerps the ray's height eye → target (castRay's rule).
+      // One cell-crossing resolver with the gameplay ray: corner slivers,
+      // hanging walls and lerped elevations cannot drift between consumers.
       const g = this.gridRef;
       const len = Math.sqrt(len2);
-      const step = g.cellSize / 2;
-      const limit = Math.min(len, this.radius);
       const eye = LOS_CFG.elev.eye;
       const hFrom = this.heroT + eye;
       const hTo = (targetElev ?? (tierElevOf(g.regionAt(pos.x, pos.y)) ?? 0)) + eye;
-      for (let s = step; s < limit; s += step) {
-        const t = s / len;
-        const wx = px + qx * t, wy = py + qy * t;
-        const sb = sightBlockOf(g.regionAt(wx, wy));
-        if ((sb.b && (sb.e === null || hFrom + (hTo - hFrom) * t < sb.e))
-          || this.concealedAt(wx, wy)) {
-          f = this.regionF;
-          break;
-        }
-      }
+      if (castGridRay(g, { x: px, y: py }, pos, 'sight', { from: hFrom, to: hTo },
+        Math.min(1, this.radius / len),
+        this.concealed.length ? (x, y) => this.concealedAt(x, y) : undefined) !== null) f = this.regionF;
     }
     // The interactable reveals thin the answer exactly as they thin the
     // sheet (drawn==tested at the door's threshold).
@@ -778,6 +768,13 @@ function farArc(sink: PathSink, px: number, py: number, thFrom: number,
 export function edgeShadowPath(sink: PathSink, ax: number, ay: number,
   bx2: number, by2: number, px: number, py: number, far: number,
   ox: number, oy: number, k: number): number {
+  // All subpaths in a nonzero fill must wind the SAME way. Oppositely
+  // oriented wall faces used to cancel in their overlap, cutting moving
+  // bright holes through hidden ground. Match the disc builder's winding;
+  // rect shadows delegate here, so mixed body buckets obey the same union.
+  if ((ax - px) * (by2 - py) - (ay - py) * (bx2 - px) > 0) {
+    const x = ax, y = ay; ax = bx2; ay = by2; bx2 = x; by2 = y;
+  }
   const dax = ax - px, day = ay - py;
   const dbx = bx2 - px, dby = by2 - py;
   const el = Math.hypot(bx2 - ax, by2 - ay);
