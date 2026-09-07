@@ -146,7 +146,11 @@ import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
 import { treeGraph, treeLimbOfNode, treeLimbs, treeNodeRanks, treeSealedSet, treeSpentCount, TREE_LAYOUT_CFG, type TreeGraphNode } from '../engine/skilltree'; // THE SKILL-TREE PANE reads the one graph
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 import { attachPanelMove, configurePanelLayout, panelLayoutRefresh, panelLayoutSync, panelMoved, panelMoveReset, panelMoveTo, panelSeatOf, persistPanelSeat, resetPanelLayout } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels; THE LAYOUT remembers
-import { MAP_CFG, MAP_LABEL_MODES } from './mapConfig';
+import { ATLAS_LAYER_CHIPS, MAP_CFG, MAP_CHART_MODES, MAP_LABEL_MODES } from './mapConfig';
+import { atlasChart, type AtlasChartInput } from './atlasPaint';
+import { ATLAS_CFG, climateWords, featuresAt, featuresInRect } from '../world/atlas';
+import { climateAt } from '../world/climate';
+import { elevationAt, riverPathsInRect } from '../world/relief';
 import { applyCursor, CURSOR_COLORS, CURSOR_STYLES } from '../core/cursor';
 import { AIM_TICK_STYLES } from '../render/vis/aimtick';
 
@@ -697,6 +701,8 @@ export class UI {
    *  pure per seed, so the O(map-area) sweep only reruns when charting GROWS
    *  the visible box, not on every 0.5s map refresh. */
   private oceanCache: { key: string; svg: string } | null = null;
+  /** The painted chart's build-tick timer (0 = none pending). */
+  private chartTimer = 0;
   /** The zone the cursor is over (transient) and the zone CLICKED to pin (sticky,
    *  so you can move the cursor away to read a long list). The info box shows the
    *  pinned zone, else the hovered zone, else the zone you stand in. Both reset on
@@ -7837,6 +7843,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const dim = this.mapDimension;
     const inDim = (z: ZoneDef): boolean => (z.dimension ?? 'surface') === dim;
     const zones = Object.values(world.zoneMap).filter(inDim);
+    // THE PAINTED CHART (Settings.mapChart): the atlas raster stands in for the
+    // flat biome wash, and roads wear a halo so they read on any ground.
+    const painted = this.getSettings().mapChart === 'painted';
     const STUB_DIR = { n: { x: 0, y: -42 }, s: { x: 0, y: 42 }, e: { x: 46, y: 0 }, w: { x: -46, y: 0 } };
 
     // Roads between zones (each connection drawn once). Routes out of
@@ -7901,6 +7910,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : (BIOMES[z.biome ?? '']?.enclave && !BIOMES[b.biome ?? '']?.enclave)
             ? BIOMES[z.biome ?? '']?.enclave : undefined;
         const enAccent = enGate ? boundaryGateOf(enGate.gate)?.accent : undefined;
+        if (painted) edges += `<line x1="${za.x}" y1="${za.y}" x2="${bb.x}" y2="${bb.y}" stroke="#0b0b12" stroke-width="4.4" stroke-opacity="0.5"/>`;
         edges += `<line x1="${za.x}" y1="${za.y}" x2="${bb.x}" y2="${bb.y}"
           stroke="${enAccent && known ? enAccent : known ? '#5a5a72' : '#2c2c3a'}" stroke-width="${enAccent && known ? 2.6 : 2}"
           ${known ? '' : 'stroke-dasharray="4 5"'}${enAccent && known ? ' stroke-opacity="0.75"' : ''}/>`;
@@ -8075,7 +8085,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // must not drift over the underworld tab.
     const known = zones.filter(z => visited.has(z.id) && (z.dimension ?? 'surface') === dim);
     const allLayers = world.sim.mapLayers(known, dim);
-    const layers = allLayers.filter(l => !this.mapLayersOff.has(l.id));
+    // The painted chart IS the biome layer: the flat wash + its river threads
+    // stand down under it (their chip too); the atlas chips take their place.
+    const chipLayers = painted ? allLayers.filter(l => l.id !== 'biomefield') : allLayers;
+    const layers = chipLayers.filter(l => !this.mapLayersOff.has(l.id));
     // WASH INTENSITY (Settings.mapWash — rails in MAP_CFG.wash): every overlay
     // WASH rides one alpha-slope filter, so the territory gradient can be
     // dimmed for a clean chart or CRANKED to read a warfront's exact reach
@@ -8094,7 +8107,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // AND the imposed OCEAN biome in one wash (the sea is a biome, not an
     // overlay stacked on a land heat-map).
     let ocean = '';
-    if (dim !== 'surface') {
+    let chartOver = '';
+    if (painted) {
+      const chart = this.paintedChart(world, dim, zones);
+      ocean = chart.image;
+      chartOver = chart.over;
+    } else if (dim !== 'surface') {
       const xs0 = zones.filter(z => world.visible(z)).map(z => z.map.x);
       const ys0 = zones.filter(z => world.visible(z)).map(z => z.map.y);
       if (xs0.length) {
@@ -8202,9 +8220,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       ${this.mapTabsHtml()}
       <div style="font-size:11px;color:#9ab0c8;margin:-4px 0 6px 0">${world.sim.hudLine(world.zone, world.time)}
         <span style="color:#6a6a78"> · scroll to zoom, drag to pan · hover a zone, click to pin</span></div>
-      ${this.mapLayerChipsHtml(allLayers)}
+      ${this.mapLayerChipsHtml(chipLayers, painted ? ATLAS_LAYER_CHIPS : [])}
+      <div id="map-here" style="font-size:10px;color:#8a8678;margin:-3px 0 5px 0;min-height:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
       <div class="map-body">
-        <svg id="world-map-svg" viewBox="${this.mapViewBox()}" style="cursor:var(--cursor-grab, grab);touch-action:none"><g pointer-events="none">${ocean}${simUnder}${edges}${stubs}</g>${nodes}<g pointer-events="none">${markers}${simOver}${cards}</g></svg>
+        <svg id="world-map-svg" viewBox="${this.mapViewBox()}" style="cursor:var(--cursor-grab, grab);touch-action:none"><g pointer-events="none">${ocean}${simUnder}${edges}${stubs}</g>${nodes}<g pointer-events="none">${markers}${simOver}${chartOver}${cards}</g></svg>
         <aside id="map-aside">${this.zoneBoxHtml(world)}</aside>
       </div>`;
     // Unchanged since the last write? Keep the standing SVG + its wiring.
@@ -8219,6 +8238,124 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     });
     this.wireMapControls();
     this.wireMapTabs();
+  }
+
+  /** THE PAINTED CHART (ui/atlasPaint.ts + world/atlas.ts): the terrain
+   *  raster under the node graph — ONE pointer-transparent <image> — and the
+   *  feature name labels for the over-group. Progressive: while a new chart
+   *  builds, the last finished one stands and a short timer keeps the job
+   *  ticking between the panel's own half-second refreshes. The reveal set
+   *  is the VISIBLE node graph (the wash's envelope law): nothing paints
+   *  beyond knowledge, and a veiled forechart mint stays unbetrayed. */
+  private paintedChart(world: World, dim: string, zones: ZoneDef[]): { image: string; over: string } {
+    const reveal: { x: number; y: number }[] = [];
+    for (const z of zones) {
+      if (!world.visible(z)) continue;
+      reveal.push(z.map);
+      for (const b of z.berths ?? []) reveal.push(b);
+    }
+    if (!reveal.length) return { image: '', over: '' };
+    const pad = ATLAS_CFG.reveal.radius + ATLAS_CFG.reveal.feather + 60;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of reveal) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    // The box snaps to a lattice so a rim node grows it in steps; the key
+    // carries the visible set itself, so a chart never stands stale.
+    const snap = 160;
+    const box = {
+      minX: Math.floor((minX - pad) / snap) * snap, minY: Math.floor((minY - pad) / snap) * snap,
+      maxX: Math.ceil((maxX + pad) / snap) * snap, maxY: Math.ceil((maxY + pad) / snap) * snap,
+    };
+    // THE ZOOM WINDOW (ATLAS_CFG.raster): zoomed in past the threshold, paint
+    // the VIEW with a margin at full resolution instead of the whole charted
+    // country — a close look stays crisp however far the chart has grown.
+    // The window snaps to a coarse lattice so small pans re-use the raster.
+    if (this.mapZoom >= ATLAS_CFG.raster.zoomWindowFrom && this.mapBox.w > 1) {
+      const side = Math.max(this.mapBox.w, this.mapBox.h) / this.mapZoom;
+      const cx = this.mapBox.minX + this.mapBox.w / 2 + this.mapPan.x;
+      const cy = this.mapBox.minY + this.mapBox.h / 2 + this.mapPan.y;
+      const half = side * 0.5 * ATLAS_CFG.raster.zoomWindowPad;
+      const snapW = Math.max(40, Math.round(side * 0.25 / 40) * 40);
+      box.minX = Math.max(box.minX, Math.floor((cx - half) / snapW) * snapW);
+      box.minY = Math.max(box.minY, Math.floor((cy - half) / snapW) * snapW);
+      box.maxX = Math.min(box.maxX, Math.ceil((cx + half) / snapW) * snapW);
+      box.maxY = Math.min(box.maxY, Math.ceil((cy + half) / snapW) * snapW);
+    }
+    const seed = world.sim.biomeField.fieldSeed;
+    const surface = dim === 'surface';
+    let sig = 0;
+    for (const p of reveal) sig = (Math.imul(sig ^ (p.x | 0), 0x9e3779b1) + (p.y | 0)) | 0;
+    const off = (id: string): boolean => this.mapLayersOff.has(id);
+    const layers = { relief: !off('atlas:relief'), rivers: !off('atlas:rivers'), features: !off('atlas:features'), glyphs: !off('atlas:glyphs') };
+    const key = [dim, seed, box.minX, box.minY, box.maxX, box.maxY, reveal.length, sig >>> 0,
+      +layers.relief, +layers.rivers, +layers.features, +layers.glyphs,
+      surface ? world.sim.biomeField.warpSignature() : ''].join('|');
+    const min = { x: box.minX, y: box.minY }, max = { x: box.maxX, y: box.maxY };
+    const inp: AtlasChartInput = {
+      key, box, seed, reveal, layers,
+      biomeAt: surface ? (c) => world.sim.biomeField.composedBiome(c).biome : (c) => world.dimensionBiomeAtMap(dim, c),
+      elevAt: surface ? (c) => elevationAt(c, seed) : null,
+      kindAt: surface ? (c) => world.continentAtMap(c).kind : () => 'land',
+      rivers: surface && layers.rivers ? riverPathsInRect(min, max, seed) : [],
+      features: surface && layers.features ? featuresInRect(min, max, seed) : [],
+    };
+    const out = atlasChart(inp);
+    if (out.building && !this.chartTimer) {
+      this.chartTimer = window.setTimeout(() => { this.chartTimer = 0; this.refreshMap(); }, 45);
+    }
+    const image = out.href
+      ? '<image href="' + out.href + '" x="' + out.x.toFixed(1) + '" y="' + out.y.toFixed(1)
+        + '" width="' + out.w.toFixed(1) + '" height="' + out.h.toFixed(1) + '" preserveAspectRatio="none"/>'
+      : '';
+    let over = '';
+    for (const l of out.labels) {
+      over += '<text x="' + l.x.toFixed(1) + '" y="' + l.y.toFixed(1) + '" text-anchor="middle" font-size="' + ATLAS_CFG.labels.font
+        + '" font-style="italic" fill="' + l.color + '" stroke="#0b0b12" stroke-width="2.4" paint-order="stroke" stroke-linejoin="round">'
+        + esc(l.text) + '</text>';
+    }
+    return { image, over };
+  }
+
+  /** THE CURSOR READ (#map-here): the ground under the pointer, from the same
+   *  fields the chart paints — biome, elevation, the climate bands' own words,
+   *  and any feature within reach. Fog-honest: only near visible nodes. */
+  private updateMapHere(svg: SVGSVGElement, e: PointerEvent | null): void {
+    const el = this.worldMap.querySelector<HTMLElement>('#map-here');
+    if (!el) return;
+    if (!e) { el.textContent = ''; return; }
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return;
+    const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+    const c = { x: pt.x, y: pt.y };
+    const world = this.getWorld();
+    const dim = this.mapDimension;
+    let near = Infinity;
+    for (const z of Object.values(world.zoneMap)) {
+      if ((z.dimension ?? 'surface') !== dim || !world.visible(z)) continue;
+      const d = Math.hypot(z.map.x - c.x, z.map.y - c.y);
+      if (d < near) near = d;
+    }
+    if (near > ATLAS_CFG.reveal.radius + ATLAS_CFG.reveal.feather) { el.textContent = 'uncharted ground'; return; }
+    const parts: string[] = [];
+    if (dim === 'surface') {
+      const seed = world.sim.biomeField.fieldSeed;
+      const biome = world.sim.biomeField.composedBiome(c).biome;
+      parts.push(BIOMES[biome]?.label ?? biome);
+      if (world.continentAtMap(c).kind !== 'ocean') {
+        const cl = climateAt(c, seed);
+        parts.push('elevation ' + cl.elevation.toFixed(2));
+        parts.push(...climateWords(cl));
+      }
+      for (const h of featuresAt(c, seed)) parts.push(h.def.icon + ' ' + h.feature.name + ' (' + h.def.label + ')');
+    } else {
+      const biome = world.dimensionBiomeAtMap(dim, c);
+      parts.push(BIOMES[biome]?.label ?? biome);
+    }
+    el.textContent = 'here: ' + parts.join(' · ');
   }
 
   /** The Map | Quests tab row (shared by both views of the world-map panel). */
@@ -8278,8 +8415,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  tagged mapLayers: a new overlay's layer gets its chip with zero edits
    *  here. The point is ATTRIBUTION — with weather/territory silenceable, a
    *  drifting front can never read as "the biome heat map changed". */
-  private mapLayerChipsHtml(allLayers: { id: string; label: string; under: string; over: string }[]): string {
-    const shown = allLayers.filter(l => l.under || l.over || this.mapLayersOff.has(l.id));
+  private mapLayerChipsHtml(allLayers: { id: string; label: string; under: string; over: string }[], extra: { id: string; label: string }[] = []): string {
+    const shown: { id: string; label: string }[] = [...allLayers.filter(l => l.under || l.over || this.mapLayersOff.has(l.id)), ...extra];
     if (!shown.length) return '';
     const chips = shown.map(l => {
       const off = this.mapLayersOff.has(l.id);
@@ -8494,6 +8631,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       svg.setAttribute('viewBox', this.mapViewBox());
       const lbl = this.worldMap.querySelector<HTMLElement>('[data-mz="reset"]');
       if (lbl) lbl.textContent = `${Math.round(this.mapZoom * 100)}%`;
+      // THE ZOOM WINDOW kicks the painter at once (a close look re-renders its
+      // window without waiting for the half-second refresh); the tick chain
+      // then carries the build to the end on its own clock.
+      if (this.getSettings().mapChart === 'painted' && !this.chartTimer) {
+        this.chartTimer = window.setTimeout(() => { this.chartTimer = 0; this.refreshMap(); }, 60);
+      }
     };
     this.worldMap.querySelectorAll<HTMLButtonElement>('.map-zoom').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -8528,6 +8671,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // pin, if set, takes precedence inside boxZoneId, so hovering elsewhere
       // while pinned leaves the box alone; the card still follows the cursor).
       onIdleMove: (e) => {
+        this.updateMapHere(svg, e);
         const zid = zoneAt(e);
         if (zid !== this.hoveredZone) {
           hoverCard(this.hoveredZone, false);
@@ -8537,6 +8681,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         }
       },
       onLeave: () => {
+        this.updateMapHere(svg, null);
         if (this.hoveredZone !== null) {
           hoverCard(this.hoveredZone, false);
           this.hoveredZone = null;
@@ -9090,6 +9235,12 @@ AUTO: watches your live frame rate and steps down/up so the game holds smooth ev
 Fixed %: pins the buffer at that share of the window">${s.renderScale === 'auto' ? 'AUTO' : `${Math.round((s.renderScale as number) * 100)}%`}</button>
       </div>
       <div class="rebind-row">
+        <span>Map Chart</span>
+        <button id="opt-mapchart" title="How the world map draws the land:
+${MAP_CHART_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}
+Layer chips on the map toggle relief, rivers, features and dressing separately.">${(MAP_CHART_MODES.find(m => m.id === s.mapChart) ?? MAP_CHART_MODES[0]).name}</button>
+      </div>
+      <div class="rebind-row">
         <span>Map Zone Names</span>
         <button id="opt-maplabels" title="How the world map wears its name cards:
 ${MAP_LABEL_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}
@@ -9335,6 +9486,15 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       st.mapLabels = MAP_LABEL_MODES[(i + 1) % MAP_LABEL_MODES.length].id;
       this.saveSettings();
       this.refreshMap(); // live behind the menu if the map is open (no-op otherwise)
+      this.renderOptions(root, onBack);
+    });
+    // THE CHART STYLE: the painted atlas or the classic flat wash (ui/mapConfig.ts).
+    root.querySelector<HTMLElement>('#opt-mapchart')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      const i = MAP_CHART_MODES.findIndex(m => m.id === st.mapChart);
+      st.mapChart = MAP_CHART_MODES[(i + 1) % MAP_CHART_MODES.length].id;
+      this.saveSettings();
+      this.refreshMap();
       this.renderOptions(root, onBack);
     });
     // REAWAKEN AFTER QUIT: where a relaunched save wakes (meta/worldstate.ts).

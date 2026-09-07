@@ -1094,6 +1094,36 @@ we verify changes.
   (`riverPathsInRect`, COURSE_FIELD_SALT the shared derivation). Dials in
   `RELIEF_CFG`; docs in `docs/engine/relief.md`; probe
   `balance/probe_relief.ts`.
+  THE ATLAS FABRIC (`world/atlas.ts` + `data/atlasFeatures.ts` +
+  `ui/atlasPaint.ts` — the world map as SHOWN ground and MAP FEATURES as
+  data zones INHERIT): THE CHART paints the foreordained fields as a relief
+  map (`atlasShade` = THE PIXEL LAW: hillshade lit from the north-west,
+  hypsometric lift, snowline/alpine rock, a chamfered sea shelf, contour
+  bands, paper grain; rivers as tapered threads, lake basins, biome
+  DRESSING glyphs from `ATLAS_GLYPHS`, feature marks + labels) as ONE
+  progressively built pointer-transparent `<image>` under the node graph
+  (the interactivity contract untouched), gated by THE VEIL (paints only
+  around VISIBLE nodes — the wash's envelope law as a soft edge) and THE
+  SEAM WARP (presentation-only wobble on the biome sample so Voronoi seams
+  read organic); `Settings.mapChart` 'painted' | 'classic', atlas layer
+  chips (Relief/Rivers/Features/Dressing), THE CURSOR READ (`#map-here` —
+  biome · elevation · the climate bands' own words · features in reach).
+  THE FEATURES: `registerMapFeature` kind rows — how instances are FOUND
+  (`peaks` local maxima of the elevation axis / `strewn` lattice deals
+  with climate gates / `lakes` at a traced river's inland end), how far
+  they REACH, what a zone within reach INHERITS (`FeatureInherit`:
+  landmark + composition rolls, layoutParams, a harvest bounty, a relief
+  lift) and what the pane READS; debut peak/lode/lake. THE LAWS: DRAWN ==
+  INHERITED (one finder), THE SEED IS THE PLAN (no rng), THE INSTALLED
+  TRUTH (`setAtlasSeed` at sim boot beside `setReliefSeed`), THE FRONTIER
+  LAW (only random-frontier surface mints inherit — worldgen's placeZoneAt
+  folds `featuresAt` into `ZoneDef.geo.features` + `geo.relief` and appends
+  the rolls AFTER the zone's own, so every feature-less mint is
+  byte-identical), and readers read the DEF (levelgen's 'elevation' gen
+  field lifts/domes by `geo.relief`, `World.bootHarvest` rolls the bounty
+  after the zone's own draws, the pane names the features). Dials in
+  `ATLAS_CFG`; docs `docs/engine/atlas.md` + charter
+  `docs/design/world-atlas.md`; probe `balance/probe_atlas.ts`.
   THE HARBORHOLD FABRIC (`data/harborholds.ts` + `world/harborholds.ts` —
   mainland ports as BESIEGED RESIDENCES): every sea spot's HOLD ANCHOR
   wears the walled town (`harborhold_*` compositions → plan structures

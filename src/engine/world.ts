@@ -210,6 +210,7 @@ import type { WalkField, PathProfile } from '../world/walk';
 import { GridWalkField, WALK_CFG } from '../world/gridWalk';
 import { regionKind, survivalResource, survivalEaseStat, survivalBandMeter, SURVIVAL_EASE_CAP, doodadGroundIds, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec, type SurvivalResourceDef } from '../world/regions';
 import { continentAt, continentSeedFrom, type ContinentInfo } from '../world/continents';
+import { featureHarvestOf } from '../world/atlas';
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, veilSpecOf, type VeilPatch } from './veil';
 import { registerDoodadFamily, doodadFamilyBits, doodadFamilyIndex, doodadFamilyEpoch, doodadFamilyCount } from './doodadFamilies';
@@ -37747,8 +37748,14 @@ export class World {
     const rng = new Rng((this.currentZoneSeed ^ HARVEST_CFG.salt) >>> 0);
     // Fixed stream shape (the fog-bank law): the stand roll and the count
     // draw before any placement, hit or miss alike.
-    const stands = rng.next() < HARVEST_CFG.chance;
-    const n = rng.int(HARVEST_CFG.count[0], HARVEST_CFG.count[1]);
+    const rolled = rng.next() < HARVEST_CFG.chance;
+    const base = rng.int(HARVEST_CFG.count[0], HARVEST_CFG.count[1]);
+    // THE HARVEST BOUNTY (world/atlas.ts): ground on a lode ALWAYS stands
+    // nodes and stands more of them — the bonus draw lands AFTER the zone's
+    // own two draws, so every feature-less zone's stream is byte-identical.
+    const bounty = featureHarvestOf(def.geo?.features);
+    const stands = rolled || !!bounty?.always;
+    const n = base + (bounty ? rng.int(bounty.bonus[0], bounty.bonus[1]) : 0);
     if (!stands) return;
     const spent = memory?.harvestSpent;
     for (let i = 0; i < n; i++) {
