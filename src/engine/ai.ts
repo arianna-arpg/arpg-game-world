@@ -2406,7 +2406,7 @@ function flockSteer(
   const kin = fl.kin ?? 'def';
   let n = 0, cx = 0, cy = 0, ax = 0, ay = 0, sx = 0, sy = 0;
   for (const b of world.actorsNear(actor.pos.x, actor.pos.y, R, flockScratch)) {
-    if (b === actor || b.dead || b.team !== actor.team || !b.aiFlock) continue;
+    if (b === actor || b.dead || b.team !== actor.team || b.tier !== actor.tier || !b.aiFlock) continue; // (its own story's flock — the sovereignty gate)
     if (kin === 'def' ? b.defId !== actor.defId
       : kin === 'squad' ? (actor.squadId === undefined || b.squadId !== actor.squadId)
       : b.faction !== actor.faction) continue;
@@ -2532,7 +2532,7 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt
     // Only packmates within `room` can matter — a spatial-grid query, not a
     // world sweep (every moving band member paid O(actors) here per frame).
     for (const b of world.actorsNear(actor.pos.x, actor.pos.y, room, spacingScratch)) {
-      if (b === actor || b.dead || b.team !== actor.team || b.passive || b.construct) continue;
+      if (b === actor || b.dead || b.team !== actor.team || b.tier !== actor.tier || b.passive || b.construct) continue; // (its own story's spacing — the sovereignty gate)
       const bd = dist(actor.pos, b.pos);
       if (bd < nd) { nd = bd; nx = actor.pos.x - b.pos.x; ny = actor.pos.y - b.pos.y; }
     }

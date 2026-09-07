@@ -887,7 +887,22 @@ we verify changes.
   — the rim fall never fires and a shove, leap, blink or recall clamps at
   the story's edge through the mover's own view (the carry clamps pass
   `{ mover }`, `teleportActor` takes a `story`) — buttes stay 'open';
-  probes probe_storey H, probe_tiers RIG S, probe_towngrowth H's door —
+  probes probe_storey H, probe_tiers RIG S, probe_towngrowth H's door;
+  and THE SOVEREIGNTY GATE (`sameStory(a, b)`, engine/tiers.ts —
+  2026-09-06, her "invisible wall": a culled other-story body shouldering
+  the hero): bodies on different stories share a screen, never a TOUCH —
+  ONE predicate at every body-vs-body and body-vs-hazard seam (the crowd
+  shoulder + its own-story nudge clamps, the bowling lane, the tread, the
+  flock/spacing, auras, heals, doodad effects, the crystal wash, rupture,
+  death bursts/blooms (`DeathBurst.tier`), tether bands, constructs,
+  channel supports, domes, the skill FIELDS (`Zone.tier` settled at the
+  first tick), `pressingFoeNear`, ambush packs, taming, trapworks
+  (`PlacedTrapwork.tier`), tracks (`PlacedTrack.tier` → `strikeTier`),
+  vents (`PlacedVent.tier`), creep (`CreepSource.tier`), fog
+  (`FogBank.tier`), lightwells, the collapse crumble, the gale
+  (`windAt(pos, tier)`), and the lite pool's `story` column); sight,
+  sound and scent keep their own laws; THE ROSTER is a probe-pinned
+  census (probe_tiers RIG T + live deck/duct rigs, probe_storey I) —
   docs/engine/tiers.md), THE
   INN'S FLOORS on THE STOREY FABRIC (`engine/levelgen.ts` storey
   composite + `world/regions.ts` storey rows — `StructureDef.storeys`: a

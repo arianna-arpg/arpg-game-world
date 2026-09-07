@@ -53,6 +53,8 @@ import '../src/data/lairs';
 import '../src/data/merelake';
 
 import { Rng } from '../src/core/rng';
+import { readFileSync } from 'node:fs'; // (RIG T — THE SOVEREIGNTY ROSTER's source census)
+import { resolve } from 'node:path';
 import { mixHex, vec } from '../src/core/math';
 import { severedBandGoal, updateAI, type KernelCtx } from '../src/engine/ai';
 import type { Actor } from '../src/engine/actor';
@@ -630,6 +632,10 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
 // the reactive aiTierGoal lane provably silent throughout.
 {
   const w = makeSimWorld('warrior', 0x71e21);
+  // THE STREAM LAW (re-pinned 2026-09-06): this rig deals its OWN hand — the
+  // sovereignty gate's spacing skip changed how many draws the earlier rigs'
+  // AI ticks spend, and J's mints rode the shared stream they left behind.
+  seedGlobalRandom(0x71e21);
   const hyp = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
     Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -2165,6 +2171,122 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
     check('S2c the same shove off the butte\'s rim FALLS (the open case, unchanged): tier 0, staggered, standing on the valley floor',
       fell && staggered && p.tier === 0 && surfaceOnly(k), `tier ${p.tier} on ${k}`);
   }
+}
+
+// --- RIG T: LAYER SOVEREIGNTY, THE BODIES (the sovereignty gate) -------------------
+// Arianna's report: an entity on ANOTHER story moved or body-blocked the
+// hero on hers — an "invisible wall" (inside a stack or a covered layer the
+// other story's bodies are culled from the draw, so the shoulder they threw
+// had no visible thrower). The law: bodies on different stories share a
+// screen, never a touch — ONE predicate (engine/tiers.ts sameStory) at every
+// body-vs-body and body-vs-hazard seam. Pinned two ways:
+//   T0 THE ROSTER — every seam that reaches bodies by proximity carries the
+//      gate (a source census over the named methods: a new seam joins the
+//      roster, or the census names it as gateless).
+//   T1/T2 THE LIVE LAW on the real mints — a bridge deck over the valley
+//      (needles) and a duct under the street (rootways): a statue on the
+//      other story standing in the hero's exact footprint never moves the
+//      hero, a hard shove through it lands no slam; the same-story CONTROL
+//      still parts the pair (the gate is alive, not dead).
+{
+  const src = readFileSync(resolve('src/engine/world.ts'), 'utf8');
+  const methodBody = (text: string, name: string): string => {
+    const head = new RegExp(`^  (?:private |protected |public |readonly |static |async )*${name}\\s*(?:<[^>]*>)?\\(`, 'm');
+    const m = head.exec(text); if (!m) return '';
+    const next = /^  (?:private |protected |public |readonly |static |async )*[A-Za-z_]\w*\s*(?:<[^>]*>)?\(/gm;
+    next.lastIndex = m.index + 1;
+    const n = next.exec(text);
+    return text.slice(m.index, n ? n.index : text.length);
+  };
+  const GATE = /sameStory\(|\.tier !== |\.tier \?\? 0\) !== |\) !== a\.tier|\.tier === (?:tier|sourceTier|story)\b|pool\.story\[i\] !==|tier >= 1 &&|z\.tier \?\?= /;
+  const ROSTER = ['separateActors', 'sweepBodySlam', 'updateSquish', 'attuneCrystal', 'effectHeatWash', 'effectStatusWash',
+    'effectOrbSpring', 'isEffectTarget', 'pressingFoeNear', 'updateAuras', 'healAlliesInArea', 'applyHealChained', 'isBurstTarget',
+    'ruptureStatus', 'springAmbush', 'tryTame', 'updateTrapworks', 'updateTracks', 'zoneVictims', 'updateZoneDomain', 'updateTethers',
+    'updateEnemyTethers', 'liteBiteVictim', 'liteCarve', 'liteProjectileSweep', 'windAt', 'groundFallEligible', 'tickChannelSupports',
+    'updateConstructs', 'updatePendingBursts', 'updateProjectiles', 'updateZones', 'updateLightwells', 'strikeSurfaces', 'rampageCrush', 'updateLooters', 'pickupSeat'];
+  const gateless = ROSTER.filter(n => { const b = methodBody(src, n); return !b || !GATE.test(b); });
+  check('T0a THE SOVEREIGNTY ROSTER — every proximity seam in world.ts carries the gate', gateless.length === 0, gateless.join(', ') || `${ROSTER.length} seams`);
+  const aiSrc = readFileSync(resolve('src/engine/ai.ts'), 'utf8');
+  check('T0b the AI\'s flock and spacing neighbours are its own story\'s', (aiSrc.match(/b\.tier !== actor\.tier/g) ?? []).length >= 2);
+  check('T0c the membranes gate their occupants and the lite pool carries its story column',
+    /\(a\.tier \?\? 0\) !== \(s\.tier \?\? 0\)/.test(readFileSync(resolve('src/engine/creep.ts'), 'utf8'))
+    && /\(a\.tier \?\? 0\) !== \(b\.tier \?\? 0\)/.test(readFileSync(resolve('src/engine/fog.ts'), 'utf8'))
+    && /readonly story: Uint8Array/.test(readFileSync(resolve('src/engine/lite.ts'), 'utf8')));
+
+  const w = makeSimWorld('warrior', 0x50e11);
+  const p = w.player;
+  const settle = (n: number): void => { for (let i = 0; i < n; i++) w.update(1 / 30); };
+  /** The first cell of `kind`, with the AXIS the strip runs along (a deck, a
+   *  ramp, a duct is one cell wide: a body of the hero's radius is pinned to
+   *  its centre line, so the control's offset must run ALONG it). */
+  type Cell = { x: number; y: number; ax: number; ay: number };
+  const findCell = (kind: string): Cell | null => {
+    const pf = w.pathField(0);
+    if (!(pf instanceof GridWalkField)) return null;
+    const cs = pf.cell;
+    const at = (gx: number, gy: number): string => pf.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
+    for (let gy = 2; gy < pf.rows - 2; gy++) for (let gx = 2; gx < pf.cols - 2; gx++) {
+      if (at(gx, gy) !== kind) continue;
+      const alongX = at(gx + 1, gy) === kind || at(gx - 1, gy) === kind;
+      return { x: gx * cs + cs / 2, y: gy * cs + cs / 2, ax: alongX ? 1 : 0, ay: alongX ? 0 : 1 };
+    }
+    return null;
+  };
+  /** The statue: a planted, passive body on `tier` at `at` — a failure of the
+   *  gate shows as the HERO moving, never the statue. */
+  const statue = (at: { x: number; y: number }, tier: number): Actor => {
+    for (const a of w.actors) if (a !== p) a.dead = true;
+    settle(1);
+    const m = w.createMonster('skeleton_warrior', 8, 'enemy');
+    m.pos = vec(at.x, at.y); m.tier = tier; m.anchored = true; m.passive = true;
+    w.actors.push(m); // (createMonster mints; the caller seats — the lite promote's own idiom)
+    return m;
+  };
+  // The stand is a hand's breadth (2px) INSIDE the statue's footprint, never
+  // dead on it: the shoulder pass has no angle to push along for coincident
+  // bodies (its d > 0.01 guard), so an exact overlap would pass the negative
+  // for the wrong reason and fail the control for no reason.
+  const stand = (at: Cell, tier: number): void => {
+    p.pos = vec(at.x + 2 * at.ax, at.y + 2 * at.ay); p.tier = tier; p.onTierLink = false; p.push = null;
+  };
+  const off = (a: { pos: { x: number; y: number } }, at: { x: number; y: number }): number => Math.hypot(a.pos.x - at.x, a.pos.y - at.y);
+  const runPair = (tag: string, at: Cell, statueTier: number, heroTier: number): void => {
+    const m = statue(at, statueTier);
+    stand(at, heroTier);
+    settle(20);
+    check(`${tag}a a statue on the OTHER story, in the hero's footprint, moves the hero not one pixel (no shoulder across a story)`,
+      Math.abs(off(p, at) - 2) < 0.5 && off(m, at) < 0.5, `hero ${off(p, at).toFixed(1)}px statue ${off(m, at).toFixed(1)}px`);
+    const life0 = m.life;
+    w.pushActor(p, 0, 320);
+    settle(30);
+    check(`${tag}b a hard shove through it lands no slam: the statue keeps its life and its seat`, m.life === life0 && off(m, at) < 0.5 && !p.push);
+    stand(at, statueTier);
+    settle(20);
+    check(`${tag}c the same-story control: the hero standing in a same-story body's footprint is shouldered clear (the gate is alive)`,
+      off(p, at) >= (p.radius + m.radius) * 0.8, `${off(p, at).toFixed(1)}px`);
+    m.dead = true;
+  };
+
+  // A both-floor cell over the valley: a rope span's deck first (strung only
+  // between summits within reach — some deals string none), else a ramp's
+  // tread (a link is floor on both its span's stories).
+  let span: Cell | null = null;
+  for (const [i, seed] of [505301, 505302, 505303, 505304, 505305, 505306].entries()) {
+    if (!w.devMintTileset('needles', 2 + i, 8, { seed, layoutType: 'needles' })) continue;
+    span = findCell('butte_span') ?? findCell('tier_ramp');
+    if (span) break;
+  }
+  check('T1 the rig finds a both-floor cell over the valley (a span\'s deck or a ramp\'s tread)', !!span);
+  if (span) runPair('T1', span, 1, 0);
+
+  let duct: Cell | null = null;
+  for (const [i, seed] of [505401, 505402, 505403, 505404, 505405, 505406].entries()) {
+    if (!w.devMintTileset('stalkwood', 3 + i, 8, { seed }) || w.zone.tiers?.lane !== 'roots') continue;
+    duct = findCell('root_duct');
+    if (duct) break;
+  }
+  check('T2 the rig finds a duct under the street (one cell, two floors: the street above, the roots beneath)', !!duct);
+  if (duct) runPair('T2', duct, 0, 1);
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);

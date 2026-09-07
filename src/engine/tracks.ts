@@ -335,6 +335,11 @@ export interface PlacedTrack {
   /** Lane AABB inflated by the widest rider's reach — the threat scan's and
    *  the render cull's quick reject. */
   bound: { x0: number; y0: number; x1: number; y1: number };
+  /** The STORY the lane runs on (the tier fabric): authored ways lie on the
+   *  ground (0) unless a builder seats them on a bench. The contact sweep
+   *  strikes only bodies on this story (THE SOVEREIGNTY GATE) — a sweeper
+   *  arm on the street never clips the duct runner beneath it. */
+  tier?: number;
   /** Live armed state (seeded from spec.armed; flipped by setTracksArmed).
    *  The ONE gate the sweep, the threat scan, and the track layer all read. */
   armed: boolean;

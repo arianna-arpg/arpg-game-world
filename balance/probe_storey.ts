@@ -26,6 +26,9 @@
 //      hanging wall or the outer wall holds AT the wall (tier kept, inside
 //      the footprint), and THE SPOILS STORY keeps a drop upstairs out of the
 //      hands beneath it (and the reverse).
+//   I. LAYER SOVEREIGNTY, THE BODIES — the lodger standing in the hall above,
+//      in the hero's exact footprint on the common room's floor, moves nobody
+//      (no shoulder, no slam across a story); the same-story control parts them.
 // Run: npx tsx balance/probe_storey.ts   (exit 0 = all PASS)
 // ---------------------------------------------------------------------------
 
@@ -287,6 +290,40 @@ const kindAt = (cx: number, cy: number): string => wf.regionAt!(inn.rect.x + cx 
   p.tier = 0;
   settle(3);
   check('H8 … and the ground hero takes it', !w.drops.includes(drop2));
+  p.pos.x = 100; p.pos.y = 100; p.tier = 0;
+}
+
+// ------------------------------------------- I. LAYER SOVEREIGNTY, THE BODIES
+// (engine/tiers.ts sameStory — the sovereignty gate at the crowd shoulder and
+// the bowling lane): the lodger strolling in the hall above stands in the
+// hero's exact footprint on the common room's floor and moves NOBODY — the
+// reported "invisible wall" was this shoulder, thrown by a body the storey
+// cull had hidden. The same-story control still parts them.
+{
+  const p = w.player;
+  const settle = (n: number): void => { for (let i = 0; i < n; i++) w.update(1 / 30); };
+  for (const a of w.actors) if (a !== p) a.dead = true;
+  settle(1);
+  const hx = inn.rect.x + 8.5 * cs, hy = inn.rect.y + 2.5 * cs; // the hall above / the common room beneath
+  const lodger = w.createMonster('townsfolk_lodger', 1, 'enemy');
+  lodger.tier = 1; lodger.pos = vec(hx, hy); lodger.anchored = true; lodger.passive = true;
+  w.actors.push(lodger); // (createMonster mints; the caller seats)
+  const off = (a: { pos: { x: number; y: number } }): number => Math.hypot(a.pos.x - hx, a.pos.y - hy);
+  // The stand is a hand's breadth (2px) inside the footprint, never dead on
+  // it: coincident bodies give the shoulder pass no angle (its d > 0.01 guard).
+  p.pos.x = hx + 2; p.pos.y = hy; p.tier = 0; p.onTierLink = false; p.push = null;
+  settle(20);
+  check('I1 a body on the story above, standing in the hero\'s footprint, moves the hero not one pixel (no shoulder across a story)',
+    Math.abs(off(p) - 2) < 0.5 && off(lodger) < 0.5, `hero ${off(p).toFixed(1)}px lodger ${off(lodger).toFixed(1)}px`);
+  const life0 = lodger.life;
+  w.pushActor(p, 0, 320); // a hard shove THROUGH the footprint
+  settle(30);
+  check('I2 a shove through it lands no slam: the body above keeps its life and its seat', lodger.life === life0 && off(lodger) < 0.5 && !p.push);
+  p.pos.x = hx + 2; p.pos.y = hy; p.tier = 1; p.onTierLink = false; p.push = null;
+  settle(20);
+  check('I3 the same-story control: the hero standing in a same-story body\'s footprint is shouldered clear (the gate is alive, not dead)',
+    off(p) >= (p.radius + lodger.radius) * 0.8, `${off(p).toFixed(1)}px`);
+  lodger.dead = true;
   p.pos.x = 100; p.pos.y = 100; p.tier = 0;
 }
 

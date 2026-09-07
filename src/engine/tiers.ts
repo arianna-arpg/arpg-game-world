@@ -251,6 +251,23 @@ export function tierEnclosed(tiers: ZoneTiers | undefined): boolean {
   return tierEnclosure(tiers) === 'enclosed';
 }
 
+// --- THE SOVEREIGNTY GATE ------------------------------------------------------
+// May these two bodies (or a body and a fixture) TOUCH? Same story only.
+// The ONE predicate every body-vs-body and body-vs-hazard seam reads — the
+// crowd shoulder, the bowling lane, the tread, the flock, auras, heals,
+// washes, bursts, bands, traps, tracks, vents, creep, fog, the lite pool's
+// bites, the skill fields: a lodger strolling above the common room
+// shoulders nobody beneath the boards, a valley pack under a bridge deck
+// never body-blocks the deck walker, a story-1 field heals no one on the
+// ground. Sight, sound and scent are NOT bodies and keep their own laws
+// (the elevation ray, the noise ring, the scent trail). Objects with no
+// story field read 0; flat zones compare 0 with 0 — byte-identical.
+// Probe: balance/probe_tiers.ts RIG T (the roster of gated seams).
+
+export function sameStory(a: { tier?: number }, b: { tier?: number }): boolean {
+  return (a.tier ?? 0) === (b.tier ?? 0);
+}
+
 /** The narrow face of GridWalkField the mover contract consults — the tier
  *  view implements it over the SAME grid with the tier predicate. */
 export interface WalkView {

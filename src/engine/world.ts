@@ -128,7 +128,7 @@ import { deathVoiceOf, dominantTypeOf, hitVoiceOf, skillBaseTypeOf } from './bod
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
 import { canSquish, SQUISH_CFG, squishSpecOf } from './squish';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
-import { floorStoryOf, landingTier, laneLedgerOnDescend, linkFlipTier, makeTierNav, makeTierView, resolveTierCrossing, storyTable, tierElevOf, tierEnclosed, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
+import { floorStoryOf, landingTier, laneLedgerOnDescend, linkFlipTier, makeTierNav, makeTierView, resolveTierCrossing, sameStory, storyTable, tierElevOf, tierEnclosed, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { liquidOf } from './genkit';
@@ -496,6 +496,7 @@ export interface DeathBurst {
   mode: DeathBurstMode;
   pos: Vec2;                 // copy of the death spot (mutates while orbiting)
   team: Team;               // the dead actor's team (the burst hits the OTHER team)
+  tier?: number;            // the dead actor's STORY (the sovereignty gate: the blast keeps to it; absent = the ground)
   dmg: number;              // baked maxLife×frac at death (the sheet is gone later)
   radius: number;
   type: DamageType;
@@ -1115,6 +1116,12 @@ export type AoeShape = number;
 interface Zone {
   pos: Vec2; radius: number;
   caster: Actor; inst: SkillInstance; color: string;
+  /** THE FIELD'S STORY (the sovereignty gate): the story the ground lies on
+   *  — stamped from the caster at the field's first tick (updateZones), so
+   *  a field laid upstairs keeps to the story it was laid on even after its
+   *  caster walks down; victims, allies, the domain and passing flights all
+   *  read it. hitAll sky hazards stay tier-agnostic (the world-authored law). */
+  tier?: number;
   delay: number;            // telegraph countdown; explodes at 0
   exploded: boolean;
   linger: number;           // remaining linger time after explosion
@@ -11327,7 +11334,7 @@ export class World {
     if (b.t > 0) return;
     a.burrow = undefined;
     a.untargetable = false;
-    this.burstDamage(vec(a.pos.x, a.pos.y), b.emergeRadius, a.maxLife() * b.damageFrac, 'physical', b.color, a.team);
+    this.burstDamage(vec(a.pos.x, a.pos.y), b.emergeRadius, a.maxLife() * b.damageFrac, 'physical', b.color, a.team, a.tier);
     this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: b.emergeRadius + 14, color: b.color, life: 0.4, maxLife: 0.4 });
     this.text(vec(a.pos.x, a.pos.y - 24), 'ERUPTION!', '#e8c86a', 14);
   }
@@ -15336,12 +15343,12 @@ export class World {
    *  grants and, for steam, its sight occlusion (FogBankDef.occludesSight →
    *  World.opaqueAt → castRay). An unregistered bank id warns and plants
    *  nothing; a boundless arena (no fog field) plants nothing. */
-  plantVent(fx: { bank: string; radius: number; duration: number }, at: Vec2, aoeScale: number, durScale: number): FogBank | null {
+  plantVent(fx: { bank: string; radius: number; duration: number }, at: Vec2, aoeScale: number, durScale: number, tier = 0): FogBank | null {
     const def = FOG_BANKS[fx.bank];
     if (!def) { console.warn(`[vent] unregistered fog bank '${fx.bank}'`); return null; }
     const fog = this.fogEnsure();
     if (!fog) return null;
-    const bank = fog.plantBank(def, at, fx.radius * Math.sqrt(Math.max(0.01, aoeScale)), fx.duration * Math.max(0.1, durScale));
+    const bank = fog.plantBank(def, at, fx.radius * Math.sqrt(Math.max(0.01, aoeScale)), fx.duration * Math.max(0.1, durScale), tier); // the bank wears its caster's story
     this.flashes.push({ pos: vec(at.x, at.y), radius: bank.reach * 0.6, color: def.color ?? '#eef6f8', life: 0.35, maxLife: 0.35 });
     return bank;
   }
@@ -15397,6 +15404,7 @@ export class World {
         for (const s of this.seats) {
           const a = s.actor;
           if (!a || a.dead || a.downed) continue;
+          if (a.tier !== (d.tier ?? 0)) continue; // the well lights its own story (the sovereignty gate)
           const cur = a.survival?.get('light');
           if (cur === undefined) continue;
           const within = def.burst.on === 'touch'
@@ -15420,6 +15428,7 @@ export class World {
       for (const s of this.seats) {
         const a = s.actor;
         if (!a || a.dead || a.downed) continue;
+        if (a.tier !== (d.tier ?? 0)) continue; // the well lights its own story (the sovereignty gate)
         if (dist(a.pos, d.pos) > reach) continue;
         residents++;
         // FEED — only a meter that exists and wants: an absent map is
@@ -16025,8 +16034,9 @@ export class World {
    *  'owner' = the effect SERVES the actor whose id it carries (a terraform
    *  growth fighting for its planter) — it reaches that owner's enemies.
    *  Shared by every effect so a new one (the Thicket-heal) reuses the scan. */
-  private isEffectTarget(x: Actor, eff: DoodadEffect): boolean {
+  private isEffectTarget(x: Actor, eff: DoodadEffect, d: Doodad): boolean {
     if (x.dead || x.downed || x.passive || x.construct) return false;
+    if (!sameStory(x, d)) return false; // the sovereignty gate: a fixture reaches its own story
     if (eff.target === 'owner') {
       const owner = this.actors.find(a => a.id === eff.ownerId && !a.dead);
       if (!owner) return false;
@@ -16059,7 +16069,7 @@ export class World {
    *  the sapling fights for its Greenwarden). Physical, mitigated like any typed
    *  source; power stamped at growth from the TerraformDef (base + perLevel). */
   private effectGrowthLash(d: Doodad, eff: DoodadEffect): void {
-    const victim = this.nearestInReach(d.pos, eff.radius, x => this.isEffectTarget(x, eff));
+    const victim = this.nearestInReach(d.pos, eff.radius, x => this.isEffectTarget(x, eff, d));
     if (!victim) return;
     if (!chance(eff.chance)) return;
     const taken = mitigateTyped(victim, { physical: eff.power });
@@ -16082,7 +16092,7 @@ export class World {
    *  the rule's own fuel line: brambles burn. */
   private effectThicketHeal(d: Doodad, eff: DoodadEffect): void {
     const kin = this.nearestInReach(d.pos, eff.radius,
-      x => this.isEffectTarget(x, eff) && x.life < x.maxLife());
+      x => this.isEffectTarget(x, eff, d) && x.life < x.maxLife());
     if (!kin) return;
     if (!chance(eff.chance)) return;
     // Rule-row effects are authored once for every level — fold the zone in
@@ -16100,7 +16110,7 @@ export class World {
    *  the shared target scan, so it never hits its own kin). Chance-gated, so not
    *  every doodad nor every chance fires: an ambient hazard, not a true enemy. */
   private effectTentacleSwing(d: Doodad, eff: DoodadEffect): void {
-    const victim = this.nearestInReach(d.pos, eff.radius, x => this.isEffectTarget(x, eff));
+    const victim = this.nearestInReach(d.pos, eff.radius, x => this.isEffectTarget(x, eff, d));
     if (!victim) return;                 // only when a target is actually in reach
     if (!chance(eff.chance)) return;     // …and not even then, every time
     const taken = eff.power * (1 - resistValue(victim, 'chaos')) * victim.sheet.get('damageTaken');
@@ -16120,7 +16130,7 @@ export class World {
    *  actor — the doodad lane's half of the grab vocabulary (the killable
    *  half is the vor_maw monster and its tongue_reel skill). */
   private effectMawReel(d: Doodad, eff: DoodadEffect): void {
-    const victim = this.nearestInReach(d.pos, eff.radius, x => this.isEffectTarget(x, eff));
+    const victim = this.nearestInReach(d.pos, eff.radius, x => this.isEffectTarget(x, eff, d));
     if (!victim || !chance(eff.chance)) return;
     const gap = dist(victim.pos, d.pos);
     const lip = d.radius + victim.radius + 6;
@@ -16146,7 +16156,7 @@ export class World {
    *  energy (a claustrophobic ruin trap). Chance-gated; a quick radial flash tells.
    *  Mirrors the tentacle swing but reads as an ancient hazard, not a creature. */
   private effectDescentTrap(d: Doodad, eff: DoodadEffect): void {
-    const victim = this.nearestInReach(d.pos, eff.radius, x => this.isEffectTarget(x, eff));
+    const victim = this.nearestInReach(d.pos, eff.radius, x => this.isEffectTarget(x, eff, d));
     if (!victim || !chance(eff.chance)) return;
     const taken = (eff.power + this.zone.level * 0.8) * (1 - resistValue(victim, 'chaos')) * victim.sheet.get('damageTaken');
     victim.life -= taken;
@@ -16173,7 +16183,7 @@ export class World {
     this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: len, color: col, life: 0.32, maxLife: 0.32, beam: true, facing: dir });
     const dmg = eff.power + this.zone.level * 1.2;
     for (const a of this.actors) {
-      if (!this.isEffectTarget(a, eff)) continue;
+      if (!this.isEffectTarget(a, eff, d)) continue;
       const rx = a.pos.x - d.pos.x, ry = a.pos.y - d.pos.y;
       const t = rx * ex + ry * ey;                 // distance along the ray
       if (t < 0 || t > len) continue;
@@ -16298,6 +16308,7 @@ export class World {
     const col = eff.color ?? '#ff8a3a';
     for (const a of this.actorsNear(d.pos.x, d.pos.y, d.radius + eff.radius, this.heatWashScratch)) {
       if (a.dead || a.flying || a.construct || a.invulnerable) continue;
+      if (!sameStory(a, d)) continue; // the sovereignty gate: the pool's own story
       if (a.habitat?.kind === d.kind || a.immuneGround?.includes(d.kind)) continue;
       const dd = dist(a.pos, d.pos);
       if (dd <= d.radius || dd > d.radius + eff.radius) continue;
@@ -16334,6 +16345,7 @@ export class World {
     const col = eff.color ?? sdef?.color ?? '#dceafc';
     for (const a of this.actorsNear(d.pos.x, d.pos.y, d.radius + eff.radius, this.statusWashScratch)) {
       if (a.dead || a.construct || a.invulnerable) continue;
+      if (!sameStory(a, d)) continue; // the sovereignty gate
       if (dist(a.pos, d.pos) > d.radius + eff.radius) continue;
       if (!chance(eff.chance)) continue;
       a.applyStatus(sid, 0, want / Math.max(0.01, sdef?.duration ?? want), d.kind);
@@ -16361,6 +16373,7 @@ export class World {
     let anyNear = false;
     for (const a of this.actorsNear(d.pos.x, d.pos.y, d.radius + eff.radius, this.orbSpringScratch)) {
       if (a.dead || a.construct) continue;
+      if (!sameStory(a, d)) continue; // the sovereignty gate
       if (dist(a.pos, d.pos) > d.radius + eff.radius) continue;
       anyNear = true; break;
     }
@@ -21624,11 +21637,12 @@ export class World {
    *  threat, and refuses nothing (structural, never a name list). ONE scan
    *  for every calm-gated dwell: the field discipline's swap gate and the
    *  harvest rite's arming gate read the same truth. */
-  private pressingFoeNear(at: Vec2): boolean {
+  private pressingFoeNear(at: Vec2, tier = 0): boolean {
     const r = SWAP_DISCIPLINE_CFG.foeRadius;
     if (r <= 0) return false;
     return this.actors.some(a =>
       a.team === 'enemy' && !a.dead && !a.passive && !a.untargetable
+      && a.tier === tier // the sovereignty gate: a foe on another story presses nobody
       && (a.skills.some(s => s) || (a.defId ? !!MONSTERS[a.defId]?.spawner : false))
       && dist(a.pos, at) <= r);
   }
@@ -21637,7 +21651,7 @@ export class World {
     const cfg = SWAP_DISCIPLINE_CFG;
     if (cfg.sanctuaryWaives && this.zone.objective?.kind === 'safe') return null;
     if (this.time - this.lastCombatAt < cfg.calmSec) return 'the blood is still hot';
-    if (this.pressingFoeNear(seat.actor.pos)) return 'foes press too near';
+    if (this.pressingFoeNear(seat.actor.pos, seat.actor.tier)) return 'foes press too near';
     if (kind === 'unlearn' && skillId) {
       const hero = this.seatHero(seat);
       if (cfg.unlearnOffCooldown && hero.cooldowns.has(skillId)) return 'its clock still turns';
@@ -23023,7 +23037,7 @@ export class World {
       this.notice('The hand is not steady yet — let the blood cool.', BOUNTY_BOARD_CFG.accent, 13, 'civic');
       return false;
     }
-    if (this.pressingFoeNear(seat.actor.pos)) return false;
+    if (this.pressingFoeNear(seat.actor.pos, seat.actor.tier)) return false;
     const complexity = it.writ.complexity ?? (it.writ as { tier?: number }).tier ?? 1;
     const shape = traceShapeForCategory(it.writ.category, complexity);
     const band = traceBandFor(complexity, pad ? 'pad' : 'mouse');
@@ -28577,7 +28591,7 @@ export class World {
         this.companionCapOf(inst) > 1 ? 'every bond is held' : 'the bond holds one already');
       return;
     }
-    if (!mdef || target.owner || target.companion || target.team === caster.team
+    if (!mdef || target.owner || target.companion || target.team === caster.team || !sameStory(target, caster)
       || mdef.boss || (target.rarity && target.rarity !== 'normal' && !(fx.allowRares || tm.allowRares))
       // Belt to targeting's taxonomy gate — future callers may not route
       // through resolveTargeting.
@@ -29708,6 +29722,7 @@ export class World {
     let pressed = false, creditOwner = 0, latchIdx = -1, latchD = Infinity;
     pool.forEachIn(v.pos.x, v.pos.y, v.radius + this.liteMaxR + LITE_CFG.contact.pad, 0, i => {
       if (pool.team[i] === vTeam) return;
+      if (pool.story[i] !== v.tier) return; // the pool's own story (the sovereignty gate)
       const k = kinds[pool.kind[i]];
       if (!k) return;
       const dx = pool.x[i] - v.pos.x, dy = pool.y[i] - v.pos.y;
@@ -29822,6 +29837,7 @@ export class World {
   private liteCarve(
     striker: Actor | null, at: Vec2, reach: number,
     test?: (pos: Vec2, radius: number) => boolean,
+    story: number | null = striker ? striker.tier : null,
   ): void {
     const pool = this.lite;
     if (!pool.liveCount) return;
@@ -29837,6 +29853,7 @@ export class World {
     for (let i = 0; i < pool.used; i++) {
       if (!pool.alive[i]) continue;
       if (carveTeam >= 0 && pool.team[i] !== carveTeam) continue;
+      if (story !== null && pool.story[i] !== story) continue; // the strike's story (null = the world-authored hitAll law)
       const dx = pool.x[i] - at.x, dy = pool.y[i] - at.y;
       if (dx * dx + dy * dy > rr) continue;
       const k = kinds[pool.kind[i]];
@@ -29910,6 +29927,7 @@ export class World {
     const rend = p.caster ? Math.max(0, Math.floor(p.caster.sheet.get('plyRend'))) : 0;
     pool.forEachAlong(x0, y0, p.pos.x, p.pos.y, this.liteMaxR + p.radius + 2, i => {
       if (pool.team[i] !== carveTeam) return;
+      if (pool.story[i] !== (p.tier ?? 0)) return; // the flight's story (the sovereignty gate)
       const k = kinds[pool.kind[i]];
       if (!k) return;
       const bx = pool.x[i], by = pool.y[i];
@@ -29955,7 +29973,8 @@ export class World {
     } else {
       body = this.createMonster(k.defId, Math.max(1, this.zone.level),
         pool.team[i] === 1 ? 'player' : 'enemy');
-      body.pos = this.clampPos(pos, body.radius);
+      body.tier = pool.story[i]; // the row's story rides the promotion
+      body.pos = this.clampPos(pos, body.radius, undefined, { mover: body });
       this.actors.push(body);
     }
     if (body.pliesMax > 0) body.plies = Math.max(1, body.pliesMax - spent);
@@ -30021,7 +30040,7 @@ export class World {
       const k = this.liteKinds[kindIdx];
       const spent = a.pliesMax > 0 ? Math.max(0, a.pliesMax - a.plies) : 0;
       if (pool.spawn(kindIdx, a.pos.x, a.pos.y, 1, a.owner.id,
-        Math.max(1, k.plies0 - spent)) < 0) continue;
+        Math.max(1, k.plies0 - spent), -1, a.tier) < 0) continue; // the row keeps its keeper's story
       this.kill(a, true);
     }
     for (let i = 0; i < pool.used; i++) {
@@ -32170,7 +32189,7 @@ export class World {
         caster.pools.set(def.pool.id, 0);
         const radius = rel.radius * caster.sheet.get('aoeRadius', tags, extra);
         this.burstDamage(vec(caster.pos.x, caster.pos.y), radius,
-          banked * (rel.ratio ?? 1), def.pool.damageType, def.color, caster.team);
+          banked * (rel.ratio ?? 1), def.pool.damageType, def.color, caster.team, caster.tier);
       }
       return true;
     }
@@ -33149,7 +33168,7 @@ export class World {
           // A PLANTED STEAM BANK goes where you point it (the 'vent' effect —
           // the fog fabric): reach with area, life with effectDuration.
           if (fx.type === 'vent') {
-            this.plantVent(fx, at, aoeScale, caster.sheet.get('effectDuration', tags, extra));
+            this.plantVent(fx, at, aoeScale, caster.sheet.get('effectDuration', tags, extra), caster.tier);
             continue;
           }
           if (fx.type === 'conjure') {
@@ -34763,7 +34782,7 @@ export class World {
       // skill resolved (ground deliveries plant at the target, above) — a
       // self-cast veils the caster's own feet, a leap's vent its departure.
       if (fx.type === 'vent' && d.type !== 'ground') {
-        this.plantVent(fx, origin, aoeScale, durScale);
+        this.plantVent(fx, origin, aoeScale, durScale, caster.tier);
       }
       // A POURED SWARM (engine/lite.ts): pool bodies stand at the
       // resolution point — the nest's vent, the shepherd's call. A
@@ -34977,7 +34996,7 @@ export class World {
           }
           if (!['totem', 'sentry', 'pylon'].includes(t.construct.kind)) continue;
           this.burstDamage(vec(t.pos.x, t.pos.y), fx.radius,
-            t.maxLife() * fx.fraction, 'physical', def.color, caster.team);
+            t.maxLife() * fx.fraction, 'physical', def.color, caster.team, caster.tier);
           this.kill(t, true);
           blown++;
         }
@@ -35612,7 +35631,7 @@ export class World {
       if (this.tethers.some(t => t.a === a || t.b === a)) continue; // one band each
       let best: Actor | null = null, bd = td.radius ?? 320;
       for (const b of this.actors) {
-        if (b === a || b.dead || b.defId !== a.defId) continue;
+        if (b === a || b.dead || b.defId !== a.defId || !sameStory(a, b)) continue; // (a band is strung on one story)
         if (this.tethers.some(t => t.a === b || t.b === b)) continue;
         const d = dist(a.pos, b.pos);
         if (d < bd) { bd = d; best = b; }
@@ -35697,6 +35716,7 @@ export class World {
       if (!hasDamage && !hasHeal) continue;
       for (const e of this.actors) {
         if (e.dead) continue;
+        if (!sameStory(e, t.owner)) continue; // the band lies on its owner's story (the sovereignty gate)
         // SEGMENT FABRIC: the band bites whichever hittable body crosses it
         // (plain monsters: the classic point-segment test, byte-identical).
         // THE BAND LAW rides INSIDE the predicate, so the wall test runs at
@@ -35706,7 +35726,7 @@ export class World {
           pointSegDist(bp.x, bp.y, t.ax, t.ay, t.bx, t.by) <= t.width + br
           && this.tetherSees(t, e, bp, seg));
         if (!touch) continue;
-        if (hasDamage && damageTick && this.isBurstTarget(e, t.owner.team)) {
+        if (hasDamage && damageTick && this.isBurstTarget(e, t.owner.team, t.owner.tier)) {
           const tick: Partial<Record<DamageType, number>> = {};
           for (const [k, v] of Object.entries(t.amounts)) tick[k as DamageType] = (v ?? 0) * TETHER_TICK;
           const taken = mitigateTyped(e, tick);
@@ -36595,7 +36615,7 @@ export class World {
         skillContextTags(inst.def), instanceMods(inst));
       if (impact > 0) {
         this.burstDamage(vec(minion.pos.x, minion.pos.y), 70,
-          minion.maxLife() * impact, 'physical', inst.def.color, caster.team);
+          minion.maxLife() * impact, 'physical', inst.def.color, caster.team, caster.tier);
       }
     }
     // LIFE-CYCLE RITES (owner stats, queried with the SUMMON skill's
@@ -37296,7 +37316,7 @@ export class World {
       if (vd) {
         const tint = DAMAGE_COLOR[vd.damageType ?? 'lightning'];
         this.burstDamage(vec(bearer.pos.x, bearer.pos.y), vd.radius,
-          due * vd.perPoint, vd.damageType ?? 'lightning', tint, bearer.team);
+          due * vd.perPoint, vd.damageType ?? 'lightning', tint, bearer.team, bearer.tier);
         this.flashes.push({
           pos: vec(bearer.pos.x, bearer.pos.y), radius: vd.radius,
           color: tint, life: 0.35, maxLife: 0.35,
@@ -37483,7 +37503,7 @@ export class World {
     // the delivery's exact geometry — every verb that plays the surfaces
     // (melee arcs, novas, splash, zone pulses, ownerless blasts) mows the
     // crowd automatically, present and future alike.
-    this.liteCarve(striker, at, reach, test);
+    this.liteCarve(striker, at, reach, test, story);
   }
 
   /** A resonant stone TOLLS (DoodadRule.resonance): lure ping at the stone +
@@ -37556,6 +37576,7 @@ export class World {
       const scale = washFor * (1 + Math.max(0, favor)) / Math.max(0.01, sdef?.duration ?? washFor);
       for (const x of this.actorsNear(a.pos.x, a.pos.y, a.radius + radius + 64, this.attuneScratch)) {
         if (x === a || x.dead || x.downed || x.construct || x.passive) continue;
+        if (!sameStory(x, a)) continue; // the sovereignty gate
         if (dist(x.pos, a.pos) - x.radius > a.radius + radius) continue;
         if (favor > 0 && striker && this.hostileTo(striker, x)) continue;
         x.applyStatus(attunedStatus(tone), 0, scale, 'attunement');
@@ -38384,6 +38405,7 @@ export class World {
       if (b.untargetable || b.invulnerable) continue;
       if (isDormant(b)) continue;
       if (!!a.flying !== !!b.flying) continue;
+      if (!sameStory(a, b)) continue; // the sovereignty gate: no slam across a story
       if (a.sheet.get('phasing') > 0 || b.sheet.get('phasing') > 0) continue;
       if (dist(a.pos, b.pos) > a.radius + b.radius) continue;
       const arrested = b.effectiveWeight() >= moverW * MASS_CFG.slam.arrestRatio;
@@ -39135,7 +39157,7 @@ export class World {
       let next: Actor | null = null; let worst = 0.999;
       for (const a of this.actors) {
         if (a.dead || a.untargetable || a.construct || visited.has(a)) continue;
-        if (a.team !== caster.team) continue;
+        if (a.team !== caster.team || !sameStory(a, from)) continue; // (the sovereignty gate: the chain hops its own story)
         if (dist(from.pos, a.pos) > 220) continue;
         const frac = a.life / Math.max(1, a.maxLife());
         if (frac < worst) { worst = frac; next = a; }
@@ -39225,7 +39247,7 @@ export class World {
     const fxs = inst.def.effects.filter(fx => fx.type === 'heal' || fx.type === 'cleanse');
     if (!fxs.length) return;
     for (const a of this.actors) {
-      if (a.dead || a.untargetable || a.construct || a.team !== caster.team) continue;
+      if (a.dead || a.untargetable || a.construct || a.team !== caster.team || !sameStory(a, caster)) continue; // (the sovereignty gate)
       if (once?.has(a.id)) continue;
       if (!accepts(a)) continue;
       let touched = false;
@@ -39277,9 +39299,9 @@ export class World {
    *  damageTaken, and the shield-soak chain) — never true damage, so the player can dress
    *  resistances/armor against it. State is pre-baked (pos/dmg/team) so it works after the
    *  source actor is gone; the colour IS the damage-type tell (DAMAGE_COLOR). */
-  private burstDamage(pos: Vec2, radius: number, dmg: number, type: DamageType, color: string, sourceTeam: Team): void {
+  private burstDamage(pos: Vec2, radius: number, dmg: number, type: DamageType, color: string, sourceTeam: Team, sourceTier = 0): void {
     for (const e of this.actors) {
-      if (!this.isBurstTarget(e, sourceTeam)) continue;
+      if (!this.isBurstTarget(e, sourceTeam, sourceTier)) continue;
       if (dist(pos, e.pos) - e.radius > radius) continue;
       const out: { clamped?: boolean } = {};
       const taken = mitigateTyped(e, { [type]: dmg }, { out });
@@ -39331,7 +39353,7 @@ export class World {
     const escapeCap = STAT_DEFS.moveSpeed.base * 0.75;
     this.deathBursts.push({
       phase: 'gather', mode: cfg.mode,
-      pos: vec(a.pos.x, a.pos.y), team: a.team,
+      pos: vec(a.pos.x, a.pos.y), team: a.team, tier: a.tier,
       dmg: a.maxLife() * cfg.damageFrac,
       radius: cfg.radius ?? (45 + a.radius * 2),
       type, color: cfg.color ?? DAMAGE_COLOR[type],
@@ -39360,15 +39382,17 @@ export class World {
    *  downed/revivable co-op body (matches the !downed convention in enemiesOf/targetsFor and
    *  the homing picker nearestSeatPos), and not untargetable/invulnerable. Shared by the
    *  contact test and the blast so the orb HOMES, STICKS, and DAMAGES the exact same set. */
-  private isBurstTarget(e: Actor, sourceTeam: Team): boolean {
-    return !e.dead && !e.downed && e.team !== sourceTeam && !e.untargetable && !e.invulnerable;
+  private isBurstTarget(e: Actor, sourceTeam: Team, sourceTier = 0): boolean {
+    // `sourceTier`: the blast's own story (the sovereignty gate) — a burst
+    // on the deck scorches no valley body beneath it.
+    return !e.dead && !e.downed && e.team !== sourceTeam && e.tier === sourceTier && !e.untargetable && !e.invulnerable;
   }
 
   /** Does a contact orb's small body (radius `body`) touch a valid blast target at `pos`?
    *  Wall contact is handled separately by the caller via clampPos. */
-  private burstContact(pos: Vec2, sourceTeam: Team, body: number): boolean {
+  private burstContact(pos: Vec2, sourceTeam: Team, sourceTier: number, body: number): boolean {
     for (const e of this.actors) {
-      if (!this.isBurstTarget(e, sourceTeam)) continue;
+      if (!this.isBurstTarget(e, sourceTeam, sourceTier)) continue;
       if (dist(pos, e.pos) <= body + e.radius) return true;
     }
     return false;
@@ -39384,7 +39408,7 @@ export class World {
         if (b.t < b.coalesce) continue;
         // The coalesce completes — a bright implosion pop.
         this.flashes.push({ pos: vec(b.pos.x, b.pos.y), radius: b.radius * 0.4, color: b.color, life: 0.35, maxLife: 0.35 });
-        if (b.mode === 'implode') { this.burstDamage(b.pos, b.radius, b.dmg, b.type, b.color, b.team); this.deathBursts.splice(i, 1); }
+        if (b.mode === 'implode') { this.burstDamage(b.pos, b.radius, b.dmg, b.type, b.color, b.team, b.tier); this.deathBursts.splice(i, 1); }
         else { b.phase = 'orb'; b.t = 0; const t0 = this.nearestSeatPos(b.pos); b.dir = t0 ? angleTo(b.pos, t0) : 0; }
         continue;
       }
@@ -39403,7 +39427,7 @@ export class World {
           // Swept-confine from the current pos so a wall STOPS the orb at its edge (no tunnel).
           const next = this.clampPos(want, 8, b.pos);
           // Arrested by a wall/doodad/bound (next ≠ want) OR touching a target = contact.
-          if (dist(next, want) > 0.5 || this.burstContact(next, b.team, b.contactRadius)) {
+          if (dist(next, want) > 0.5 || this.burstContact(next, b.team, b.tier ?? 0, b.contactRadius)) {
             b.stuck = true; b.life = Math.min(b.life, b.contactFuse); // freeze + brief flare, then blast
           }
           b.pos = next;
@@ -39414,7 +39438,7 @@ export class World {
         if (b.trail.length > 3) b.trail.pop();
       }
       b.arming = b.stuck || b.life <= b.armAt; // a stuck contact orb blinks at once; else the final ~25%
-      if (b.life <= 0) { this.burstDamage(b.pos, b.radius, b.dmg, b.type, b.color, b.team); this.deathBursts.splice(i, 1); }
+      if (b.life <= 0) { this.burstDamage(b.pos, b.radius, b.dmg, b.type, b.color, b.team, b.tier); this.deathBursts.splice(i, 1); }
     }
   }
 
@@ -39545,7 +39569,7 @@ export class World {
     this.emergeBody(a, { spec: spec?.emerge ?? (spec?.visible ? { motion: 'stir' } : undefined) });
     if (spec?.pack) {
       for (const k of this.actors) {
-        if (k === a || k.dead || !k.ambushArmed || k.team !== a.team) continue;
+        if (k === a || k.dead || !k.ambushArmed || k.team !== a.team || !sameStory(k, a)) continue; // (the sovereignty gate)
         if (dist(a.pos, k.pos) <= spec.pack) this.springAmbush(k, true);
       }
     }
@@ -41792,7 +41816,7 @@ export class World {
         const spot = fx.at === 'self' || !target ? caster.pos : target.pos;
         this.pendingBursts.push({
           at: vec(spot.x, spot.y), when: this.time + fx.delay,
-          owner: caster, fx, color: proc.color, depth: depth + 1,
+          owner: caster, fx, color: proc.color, depth: depth + 1, tier: caster.tier,
         });
         this.flashes.push({
           pos: vec(spot.x, spot.y), radius: fx.radius,
@@ -41868,7 +41892,7 @@ export class World {
       case 'vent': {
         const at = target ? target.pos : caster.pos;
         this.plantVent({ bank: fx.bank, radius: fx.radius, duration: fx.duration },
-          vec(at.x, at.y), 1, caster.sheet.get('effectDuration'));
+          vec(at.x, at.y), 1, caster.sheet.get('effectDuration'), caster.tier);
         break;
       }
       // THE CAST PAYLOAD (the signature lane, data/procs.ts): play a
@@ -42075,6 +42099,8 @@ export class World {
    *  is the burst's chain depth (its consequences fire one link deeper). */
   private pendingBursts: {
     at: Vec2; when: number; owner: Actor; color: string; depth: number;
+    /** The bloom's story (the sovereignty gate) — its owner's at the ask. */
+    tier: number;
     fx: Extract<ProcDef['effect'], { type: 'delayedBurst' }>;
   }[] = [];
 
@@ -42092,6 +42118,7 @@ export class World {
       this.flashes.push({ pos: vec(b.at.x, b.at.y), radius: b.fx.radius, color: b.color, life: 0.3, maxLife: 0.3 });
       for (const a of this.actors) {
         if (a.dead || a.untargetable) continue;
+        if (a.tier !== b.tier) continue; // the bloom keeps to its story (the sovereignty gate)
         if (dist(b.at, a.pos) - a.radius > b.fx.radius) continue;
         if (a.team === b.owner.team) {
           if (b.fx.healAllies) {
@@ -42192,7 +42219,7 @@ export class World {
     const radius = 90;
     this.flashes.push({ pos: vec(victim.pos.x, victim.pos.y), radius, color: '#b06bd4', life: 0.3, maxLife: 0.3 });
     for (const e of this.actors) {
-      if (e.dead || e.team !== victim.team || e.untargetable) continue;
+      if (e.dead || e.team !== victim.team || e.untargetable || !sameStory(e, victim)) continue; // (the sovereignty gate)
       if (dist(victim.pos, e.pos) - e.radius > radius) continue;
       let amount = s.rupture! * e.sheet.get('damageTaken');
       amount *= 1 - resistValue(e, type);
@@ -45643,7 +45670,7 @@ export class World {
           if (vc.ventTrailDist >= ventSpec.spacing) {
             vc.ventTrailDist = 0;
             this.plantVent({ bank: ventSpec.bank, radius: ventSpec.radius, duration: ventSpec.duration },
-              vec(a.pos.x, a.pos.y), 1, 1);
+              vec(a.pos.x, a.pos.y), 1, 1, a.tier);
           }
         }
         const trail = (a as Actor & { dashTrailSpec?: DropZoneSpec }).dashTrailSpec;
@@ -47334,6 +47361,7 @@ export class World {
     const eligible: Actor[] = [];
     for (const a of this.actors) {
       if (a.dead || a.flying || this.levitating(a) || a.leap || a.dash || a.caromRun) continue;
+      if (a.tier !== 0) continue; // the ground dissolves under GROUND feet (the sovereignty gate)
       if (a === this.player && (this.traversal || this.pendingRespawn)) continue;
       eligible.push(a);
     }
@@ -47916,7 +47944,7 @@ export class World {
           if (st.castInst.def.targeting?.target === 'ally') {
             let sick: Actor | null = null; let worst = 0.92;
             for (const a of this.actors) {
-              if (a.dead || a.construct || a.untargetable || a.team !== c.team) continue;
+              if (a.dead || a.construct || a.untargetable || a.team !== c.team || !sameStory(a, c)) continue; // (the sovereignty gate)
               if (dist(c.pos, a.pos) > st.range) continue;
               const frac = a.life / Math.max(1, a.maxLife());
               if (frac < worst) { worst = frac; sick = a; }
@@ -48326,7 +48354,7 @@ export class World {
         const allyMods = aura.allyMods ?? aura.spec.allyMods;
         if (allyMods) {
           for (const a of this.actors) {
-            if (a.dead || a.team !== bearer.team) continue;
+            if (a.dead || a.team !== bearer.team || !sameStory(a, bearer)) continue; // (the sovereignty gate)
             if (!inAoe(bearer.pos, aura.radius, aura.shape, bearer.facing, a.pos, a.radius)) continue;
             inside.add(a.id);
             if (!aura.affected.has(a.id)) a.sheet.setSource(sourceName, allyMods);
@@ -48386,7 +48414,7 @@ export class World {
             const heal = aura.spec.pulse.healAllies;
             if (heal) {
               for (const a of this.actors) {
-                if (a.dead || a.team !== bearer.team) continue;
+                if (a.dead || a.team !== bearer.team || !sameStory(a, bearer)) continue; // (the sovereignty gate)
                 if (!inAoe(bearer.pos, aura.radius, aura.shape, bearer.facing, a.pos, a.radius)) continue;
                 const base = heal.base === 'maxLife' ? a.maxLife()
                   : heal.base === 'maxMana' ? a.maxMana()
@@ -48490,7 +48518,7 @@ export class World {
         if (!field) continue;
         const reach = cs.reach ? rand(cs.reach[0], cs.reach[1]) : undefined;
         field.addSource(def, a.pos.x, a.pos.y,
-          { boundTo: a, bornFrac: cs.bornFrac ?? 0.12, ...(reach !== undefined ? { reach } : {}) });
+          { boundTo: a, bornFrac: cs.bornFrac ?? 0.12, tier: a.tier, ...(reach !== undefined ? { reach } : {}) });
         if (cs.cadence) a.creepPumpAt = this.time + rand(...(cs.cadence.opening ?? cs.cadence.every));
         continue;
       }
@@ -49327,7 +49355,7 @@ export class World {
       }
       let windStr = 0;
       if (!warmed && zw && zw.strength >= WINDCHILL_CFG.leeMinWind) {
-        const felt = this.windAt(a.pos);
+        const felt = this.windAt(a.pos, a.tier);
         if (!felt) warmed = true; // becalmed in a lee — the rock is your wall
         else windStr = felt.strength;
       }
@@ -49731,7 +49759,7 @@ export class World {
       }
       if (!cand) continue;
       this.sweepHazardSurface(v.pos.x, v.pos.y, { kind: 'circle', r: cls.columnR }, 0,
-        columnPayload(v.cls), v.gate, undefined, cand);
+        columnPayload(v.cls), v.gate, undefined, cand, v.tier ?? 0);
     }
   }
 
@@ -50263,6 +50291,7 @@ export class World {
         if (who === 'enemy' && a.team === 'player') continue;
         if (t.factions && (!a.faction || !t.factions.includes(a.faction))) continue;
         if (t.notFactions && a.faction && t.notFactions.includes(a.faction)) continue;
+        if (a.tier !== (tw.tier ?? 0)) continue; // the plate lies on its own story (the sovereignty gate)
         if (!trapTriggerHit(t, a.pos.x, a.pos.y, a.radius)) continue;
         this.springTrapwork(tw, a);
         break;
@@ -50465,6 +50494,7 @@ export class World {
       let cand: Actor[] | null = null;
       for (const a of this.actors) {
         if (a.dead) continue;
+        if (a.tier !== (tr.tier ?? 0)) continue; // the lane's own story (the sovereignty gate)
         if (a.pos.x < tr.bound.x0 - a.radius || a.pos.x > tr.bound.x1 + a.radius
           || a.pos.y < tr.bound.y0 - a.radius || a.pos.y > tr.bound.y1 + a.radius) continue;
         (cand ??= []).push(a);
@@ -50548,7 +50578,7 @@ export class World {
             : trackPose(tr, this.time - beatDt + (k / steps) * beatDt, r.phase, r.def);
           if (sub.pending) continue; // a release/rest edge inside the beat
           const shape = riderSurface(r.def, sub);
-          this.sweepHazardSurface(sub.x, sub.y, shape, sub.dir, r.def.payload, r.icdUntil, owner, cand);
+          this.sweepHazardSurface(sub.x, sub.y, shape, sub.dir, r.def.payload, r.icdUntil, owner, cand, tr.tier ?? 0);
         }
       }
     }
@@ -51210,9 +51240,12 @@ export class World {
   /** The wind FELT at a point: the zone wind unless something anchored and
    *  solid stands UPWIND within shelter reach — a rock, a wall, a trunk is
    *  a windbreak you can deliberately hide behind. */
-  windAt(pos: Vec2): { x: number; y: number; strength: number } | null {
+  windAt(pos: Vec2, tier = 0): { x: number; y: number; strength: number } | null {
     const w = this.zoneWind();
     if (!w) return null;
+    // UNDER A CEILING (the enclosure law): a body on an enclosed under-
+    // layer's story feels no gale — the street's wind is not the duct's.
+    if (tier >= 1 && this.zone.tiers?.kind === 'under' && tierEnclosed(this.zone.tiers)) return null;
     // INDOORS: a roof owns its sky — no gale under it (courtyards stay open).
     if (this.underRoofAt(pos)) return null;
     const px = pos.x - w.nx * WIND_CFG.shelterReach;
@@ -52391,7 +52424,7 @@ export class World {
       if (mend > 0) {
         const hp = a.sheet.get('healPower', tags, extra);
         for (const ally of this.actors) {
-          if (ally.dead || ally.team !== a.team || ally === a) continue;
+          if (ally.dead || ally.team !== a.team || ally === a || !sameStory(ally, a)) continue; // (the sovereignty gate)
           if (dist(a.pos, ally.pos) > 160) continue;
           ally.healBy(mend * hp * dt);
         }
@@ -53275,7 +53308,7 @@ export class World {
         a.pools.set(id, banked - drain);
         const radius = pl.release.radius * a.sheet.get('aoeRadius', tags, extra);
         for (const e of this.actors) {
-          if (!this.isBurstTarget(e, a.team)) continue;
+          if (!this.isBurstTarget(e, a.team, a.tier)) continue;
           if (dist(a.pos, e.pos) - e.radius > radius) continue;
           const taken = mitigateTyped(e, { [pl.damageType]: drain });
           if (taken > 0) {
@@ -54206,6 +54239,7 @@ export class World {
           const c = d.construct;
           if (!c || c.kind !== 'dome' || d.dead) continue;
           if (d.team === p.caster.team) continue;
+          if (d.tier !== (p.tier ?? 0)) continue; // the dome stands on its own story (the sovereignty gate)
           if (dist(p.pos, d.pos) > (c.domeRadius ?? 100)) continue;
           // TORPOR (mode 'slow'): the bubble STALLS the shot instead of
           // eating it — re-stamped per frame, no flash spam, keep scanning.
@@ -54499,7 +54533,7 @@ export class World {
           skillContextTags(p.inst.def), instanceMods(p.inst));
         if (suf > 0) {
           for (const z of this.zones) {
-            if (!z.exploded || z.linger <= 0 || z.caster.team !== p.caster.team) continue;
+            if (!z.exploded || z.linger <= 0 || z.caster.team !== p.caster.team || (z.tier ?? z.caster.tier) !== (p.tier ?? 0)) continue;
             if (z.inst.def.id === p.inst.def.id) continue; // no self-loops
             if (dist(p.pos, z.pos) > z.radius + p.radius) continue;
             p.suffuse = {
@@ -54516,7 +54550,7 @@ export class World {
       // hazardous ground INHERITS the element for the rest of its flight.
       if (!dead && p.conductive && !p.conductElem) {
         for (const z of this.zones) {
-          if (!z.exploded || z.caster.team !== p.caster.team) continue;
+          if (!z.exploded || z.caster.team !== p.caster.team || (z.tier ?? z.caster.tier) !== (p.tier ?? 0)) continue;
           if (dist(p.pos, z.pos) > z.radius + p.radius) continue;
           const elem = (['fire', 'cold', 'lightning'] as const)
             .find(e => z.inst.def.tags.includes(e));
@@ -54729,6 +54763,7 @@ export class World {
     {
       let releasing: Map<string, typeof this.zones> | null = null;
       for (const z of this.zones) {
+        z.tier ??= z.caster.tier; // THE FIELD'S STORY, settled once
         if (!z.armed) continue;
         const holding = !z.caster.dead && z.caster.casting?.mode === 'channel'
           && z.caster.casting.inst.def.id === z.inst.def.id;
@@ -55144,7 +55179,7 @@ export class World {
             const hp = z.caster.sheet.get('healPower',
               skillContextTags(z.inst.def), instanceMods(z.inst));
             for (const ally of this.actors) {
-              if (ally.dead || ally.team !== z.caster.team) continue;
+              if (ally.dead || ally.team !== z.caster.team || ally.tier !== (z.tier ?? z.caster.tier)) continue; // (the field's story)
               if (!this.zoneHas(z, ally.pos, ally.radius)) continue;
               const got = ally.healBy(z.healTick * hp);
               if (got > 0.5) this.text(ally.pos, '+' + Math.round(got), '#8ae0a8', 10);
@@ -55241,6 +55276,7 @@ export class World {
     const inside = new Set<Actor>();
     for (const a of this.actors) {
       if (a.dead || a.untargetable || a.construct) continue;
+      if (a.tier !== (z.tier ?? z.caster.tier)) continue; // the field's story (the sovereignty gate)
       // Allies wear allyMods; the CASTER'S minions layer minionMods on top
       // (Oblation of Flesh blesses the horde, not the bystanders).
       let mods = a.team === z.caster.team ? z.domain!.allyMods : z.domain!.enemyMods;
@@ -55300,10 +55336,14 @@ export class World {
       }
       return all;
     }
-    const out = this.enemiesOf(z.caster);
+    // THE FIELD'S STORY (the sovereignty gate): the ground reaches only
+    // bodies on the story it lies on — a field upstairs scorches nobody in
+    // the common room beneath the boards.
+    const story = z.tier ?? z.caster.tier;
+    const out = this.enemiesOf(z.caster).filter(v => v.tier === story);
     if (z.curseAllies) {
       for (const a of this.actors) {
-        if (a.dead || a.team !== z.caster.team || a.untargetable) continue;
+        if (a.dead || a.team !== z.caster.team || a.untargetable || a.tier !== story) continue;
         if (chance(0.5)) out.push(a);
       }
     }
@@ -55348,7 +55388,7 @@ export class World {
       // PLANTED — the gale must not walk a sleeping garrison across the
       // map before the player ever finds it. Rousing restores physics.
       if (a.dead || a.downed || a.anchored || a.construct || a.leap || a.passive || isDormant(a)) continue;
-      const gale = this.windAt(a.pos);
+      const gale = this.windAt(a.pos, a.tier);
       if (!gale) continue; // sheltered or becalmed
       const push = WIND_CFG.pushPerSec * dt / Math.max(0.4, a.effectiveWeight());
       if (push <= 0.001) continue;
@@ -55434,7 +55474,7 @@ export class World {
         this.harvestDwell.delete(seat.id);
         continue;
       }
-      if (this.pressingFoeNear(a.pos)) {
+      if (this.pressingFoeNear(a.pos, a.tier)) {
         this.harvestDwell.delete(seat.id);
         continue;
       }
@@ -56448,6 +56488,13 @@ export class World {
       for (const b of cand) {
         if (b.gridSeq <= a.gridSeq) continue; // each pair once, sweep order
         if (b.dead || b.downed || flat(b) || b.leap) continue;
+        // THE SOVEREIGNTY GATE (engine/tiers.ts sameStory): bodies on
+        // different stories share a screen, never a shoulder — the lodger
+        // strolling above the common room walks through nobody beneath the
+        // boards, and the valley pack under a bridge deck body-blocks no
+        // deck walker. (The reported "invisible wall": a culled other-story
+        // body shouldering the hero.) Flat zones compare 0 with 0.
+        if (!sameStory(a, b)) continue;
         const d = dist(a.pos, b.pos);
         const minD = a.radius + b.radius;
         if (d < minD && d > 0.01) {
@@ -56518,13 +56565,15 @@ export class World {
             const fx = a.pos.x, fy = a.pos.y;
             a.pos.x -= Math.cos(ang) * overlap * aShare;
             a.pos.y -= Math.sin(ang) * overlap * aShare;
-            a.pos = this.clampPos(a.pos, a.radius, vec(fx, fy));
+            // (The shove confines against the body's OWN story — a crowd
+            // never nudges a storey walker through a hanging wall.)
+            a.pos = this.clampPos(a.pos, a.radius, vec(fx, fy), { mover: a });
           }
           if (!bFixed && aShare < 1) {
             const fx = b.pos.x, fy = b.pos.y;
             b.pos.x += Math.cos(ang) * overlap * (1 - aShare);
             b.pos.y += Math.sin(ang) * overlap * (1 - aShare);
-            b.pos = this.clampPos(b.pos, b.radius, vec(fx, fy));
+            b.pos = this.clampPos(b.pos, b.radius, vec(fx, fy), { mover: b });
           }
         }
       }
@@ -56553,6 +56602,7 @@ export class World {
       // One query covers the whole animal: the head plus the worm's file.
       const span = v.worm ? v.worm.length * v.worm.spacing + v.radius : v.radius;
       for (const t of this.actorsNear(v.pos.x, v.pos.y, span + 64, this.squishScratch)) {
+        if (!sameStory(t, v)) continue; // the sovereignty gate: the boot on the deck treads no valley bug
         if (!canSquish(t, v, spec)) continue;
         const tread = t.radius * SQUISH_CFG.treadFrac;
         let hit = dist(t.pos, v.pos) <= tread + v.radius;
@@ -59273,7 +59323,7 @@ export class World {
     // (windAt's shelter probe) becalms you entirely. Applies to EVERYONE
     // that walks, monsters included; sails feel it too, doubly.
     let windScale = 1;
-    const gale = this.windAt(a.pos);
+    const gale = this.windAt(a.pos, a.tier);
     if (gale) {
       const dot = (dx / len) * gale.x + (dy / len) * gale.y;
       windScale = clamp(

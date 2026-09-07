@@ -102,6 +102,12 @@ inn: {
   shedder or settled from the floor — a storey floor cell is the GROUND's
   unless stamped), a corpse upstairs is no fuel from below, and a summon or
   recall seats on its caster's story.
+- **THE SOVEREIGNTY GATE** (`sameStory`, `docs/engine/tiers.md`): the lodger
+  strolling in the hall above stands in the hero's exact footprint on the
+  common room's floor and moves NOBODY — the storey cull hides the body, and
+  before the gate the crowd shoulder still threw its push (the reported
+  "invisible wall"). Every body-vs-body and body-vs-hazard seam now reads
+  one predicate; `probe_storey` I stands the lodger in the hero's footprint.
 - The ground ledger's `isMember` leaves a non-walkable region cell (the
   landing's closet) out of the common room.
 

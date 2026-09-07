@@ -62,6 +62,41 @@ stateless adapter, one per story, built at zone load from
   and bodies wear their minter's story), the cling latch, the grab hand-off
   and the minion recall all compare `tier` where both are known. Flat zones
   compare 0 with 0 — byte-identical by construction.
+- **Sovereignty — THE SOVEREIGNTY GATE** (`sameStory(a, b)`, engine/tiers.ts,
+  2026-09-06): bodies on different stories share a screen, never a TOUCH.
+  Her report — an entity on another story moving or body-blocking the hero
+  on hers, an "invisible wall" (inside a stack or a covered layer the other
+  story's bodies are culled from the draw, so the shoulder they threw had no
+  visible thrower) — was the crowd shoulder (`separateActors`) reading
+  position alone. ONE predicate now sits at every body-vs-body and
+  body-vs-hazard seam: the shoulder (and its nudges confine on each body's
+  OWN story view — a crowd never pushes a storey walker through a hanging
+  wall), the bowling lane, the tread, the flock and its spacing (ai.ts),
+  auras, area and chain heals, the doodad effects (heat/status/orb washes,
+  lashes, beams, reels — `isEffectTarget` takes the fixture), the crystal
+  wash, rupture splash, death bursts and blooms (`DeathBurst.tier`,
+  `isBurstTarget`'s story), tether bands (strung and biting on one story),
+  constructs' ally buffs, channel supports, projectile domes, the skill
+  FIELDS (`Zone.tier`, THE FIELD'S STORY settled at the first tick — a field
+  laid upstairs keeps to it after its caster walks down; victims, allies,
+  the domain and passing flights read it), the field discipline's
+  `pressingFoeNear`, ambush packs, taming, trapworks plates
+  (`PlacedTrapwork.tier`), track riders (`PlacedTrack.tier` → the hazard
+  sweep's `strikeTier`), geyser columns (`PlacedVent.tier`), creep membranes
+  (`CreepSource.tier` — a heart's skin grows on the heart's story) and fog
+  banks (`FogBank.tier` — a conjured bank wears its caster's), lightwells,
+  the collapse's crumble (ground feet only), the gale (`windAt(pos, tier)` —
+  no wind under an enclosed ceiling), and the LITE POOL (`LitePool.story`, a
+  column: pours seat the ground, a demoted throng body keeps its keeper's
+  story, a promotion hands it back; bites, carves and flight sweeps compare
+  it). Sight, sound and scent are NOT bodies and keep their own laws (the
+  elevation ray, the noise ring, the scent trail, resonance lures). `hitAll`
+  sky hazards stay tier-agnostic by the world-authored law. Objects with no
+  story field read 0; flat zones compare 0 with 0. THE ROSTER is pinned:
+  `probe_tiers` RIG T censuses every named seam for the gate (a new
+  proximity seam joins the roster or is named gateless) and drives the live
+  law on a real bridge deck and a real duct; `probe_storey` I stands the
+  lodger in the hero's footprint.
 - **Combat**: same-tier ONLY, enforced at the ONE hostility gate
   (targeting, swings, threat, projectiles all agree) — except under RIM
   DUELS (below). Flights carry their caster's story and sail over any

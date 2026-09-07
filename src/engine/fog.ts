@@ -51,6 +51,9 @@ export interface FogActorLike {
   untargetable?: boolean;
   construct?: unknown;
   faction?: string;
+  /** The body's story (the tier fabric) — a bank touches only bodies on ITS
+   *  story (THE SOVEREIGNTY GATE, engine/tiers.ts sameStory). */
+  tier?: number;
   applyStatus(id: string, dps: number, magnitude: number, source: string): void;
 }
 
@@ -231,6 +234,10 @@ export interface FogBank {
   def: FogBankDef;
   /** The heart. */
   pos: { x: number; y: number };
+  /** The STORY the bank rolls on (the tier fabric): zone weather and pocket
+   *  banks lie on the ground (0); a conjured bank wears its caster's story.
+   *  Occupancy grants read only bodies on this story. */
+  tier?: number;
   heading: number;
   reach: number;
   driftSpeed: number;
@@ -325,7 +332,7 @@ export class FogField {
    *  steam bank barely moves), and the bank is MORTAL — it dissipates at
    *  life's end and leaves. No anchor scoring: a cast puts steam where the
    *  cast resolved. */
-  plantBank(def: FogBankDef, at: { x: number; y: number }, reach: number, life: number): FogBank {
+  plantBank(def: FogBankDef, at: { x: number; y: number }, reach: number, life: number, tier = 0): FogBank {
     const d = FOG_CFG.def;
     const pos = {
       x: Math.min(this.w - 8, Math.max(8, at.x)),
@@ -350,6 +357,7 @@ export class FogField {
       driftSpeed: this.rng.range(...(def.drift ?? d.drift)),
       age: 0,
       life: Math.max(1, life),
+      tier,
       fade: 0,
       tangent: null,
       skyBorn: false,
@@ -580,6 +588,7 @@ export class FogField {
       if (a.dead || a.untargetable || a.construct) continue;
       for (const b of this.banks) {
         if (!b.def.grants?.length || b.fade <= 0.05) continue;
+        if ((a.tier ?? 0) !== (b.tier ?? 0)) continue; // its own story's occupants (the sovereignty gate)
         const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y;
         const broad = b.bound + a.radius;
         if (dx * dx + dy * dy > broad * broad) continue;
