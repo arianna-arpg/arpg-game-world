@@ -2419,7 +2419,10 @@ interface ZoneMemory {
  *  is THE RECOUP's owed bank (ghost seconds banked while an ATTENDED stand
  *  was contested) — transient like `pourAt`, never saved: the debt is a
  *  live-siege courtesy, not a ledger. */
-interface HoldFixture { pos: Vec2; charge: number; doodad: Doodad; pourAt: number; recoup: number }
+interface HoldFixture {
+  pos: Vec2; charge: number; doodad: Doodad; pourAt: number; recoup: number;
+  holdRead?: { contested: boolean; draining: boolean; recouping: boolean };
+}
 
 /** One RESOURCE-HARVEST node standing in the zone (engine/harvest.ts — the
  *  fixture discipline: placed at load on a salted stream, spent flags ride
@@ -3687,10 +3690,9 @@ export class World {
   /** The spire operation's reinforcement clock (BEACON_CFG.reinforce) —
    *  transient, re-armed per load. */
   private spireReinforceAt = 0;
-  /** The contest drive's last frame read (the stamp idiom — views re-speak
-   *  the exact scalars the drive tested; one row suffices, since a zone
-   *  runs exactly one objective). */
-  private holdRead = { contested: false, draining: false, recouping: false };
+  /** The fixture actually attended this frame; each fixture stamps its own
+   *  holdRead so pressure on another stone cannot mislabel this stand. */
+  private heldFixture: HoldFixture | null = null;
   /** Attune-refusal float throttle (the besieged waypoint's brush). */
   private wpRefusedAt = -1e9;
   /** The zone's live PROCESSION (escort objective): the caravan cart, its
@@ -5362,7 +5364,7 @@ export class World {
     this.occDisturbs.length = 0;
     this.spireReinforceAt = 0;
     this.wpRefusedAt = -1e9;
-    this.holdRead = { contested: false, draining: false, recouping: false };
+    this.heldFixture = null;
     this.procession = null; // the escort re-stages below (state rides Zone Memory)
     this.offering = null;   // the hungering altar re-stages below (fed count rides Zone Memory)
     this.cull = null;       // the cull re-stamps below (tally + ask ride Zone Memory)
@@ -47011,12 +47013,15 @@ export class World {
       const d = dist(this.player.pos, s.pos);
       if (d < bd) { bd = d; pick = s; }
     }
+    if (this.heldFixture && fixtures.includes(this.heldFixture) && this.heldFixture.charge < need) {
+      pick = this.heldFixture;
+    }
     return {
       pos: pick.pos,
       frac: need > 0 ? clamp(pick.charge / need, 0, 1) : 1,
       done: this.objectiveDone, filled, count: fixtures.length,
-      contested: this.holdRead.contested, draining: this.holdRead.draining,
-      recouping: this.holdRead.recouping,
+      contested: pick.holdRead?.contested ?? false, draining: pick.holdRead?.draining ?? false,
+      recouping: pick.holdRead?.recouping ?? false,
     };
   }
 
@@ -57090,13 +57095,14 @@ export class World {
   /** Live counted enemies inside a contest ring — the SAME predicate the
    *  cull's scoreboard runs (objectiveCountable), so "contested" and
    *  "counting" can never disagree about who counts. Dormant sleepers
-   *  count on purpose: ground with a sleeper on it is not cleared ground. */
-  private contestPressers(pos: Vec2, radius: number, tier = 0): number {
-    // `tier`: the fixture's story (the sovereignty gate) — a crowd on the
-    // deck over a valley stone presses nothing.
+   *  count on purpose, but must reach this fixture on its own story. A
+   *  sleeper behind masonry cannot hold ground on the other side. */
+  private contestPressers(s: HoldFixture, contest: ContestSpec): number {
     let n = 0;
+    const contestReach = contest.reach ?? DWELL_CFG.reach;
     for (const a of this.actors) {
-      if (!a.dead && a.tier === tier && this.objectiveCountable(a) && dist(a.pos, pos) <= radius) n++;
+      if (!a.dead && sameStory(a, s.doodad) && dist(a.pos, s.pos) <= contest.radius && this.objectiveCountable(a)
+        && this.dwellReachable(a.pos, s.pos, contestReach, this.storyPair(a, s.doodad))) n++;
     }
     return n;
   }
@@ -57131,17 +57137,22 @@ export class World {
         if (s.charge >= opts.need) continue;
         const d = dist(this.player.pos, s.pos);
         if (d <= holdR && d < bd
-          && this.dwellReachable(this.player.pos, s.pos, transitReach(opts.transitKind), this.storyPair(this.player, s.doodad))) { bd = d; held = s; }
+          && this.dwellReachable(this.player.pos, s.pos, transitReach(opts.transitKind),
+            this.storyPair(this.player, s.doodad))) { bd = d; held = s; }
       }
     }
     let contested = false;
     let draining = false;
     let recouping = false;
     let filled: HoldFixture | null = null;
+    this.heldFixture = held;
     for (const s of opts.fixtures) {
+      const holdRead: NonNullable<HoldFixture['holdRead']> =
+        s.holdRead ??= { contested: false, draining: false, recouping: false };
+      holdRead.contested = holdRead.draining = holdRead.recouping = false;
       if (s.charge >= opts.need) continue;
       if (s !== held && s.charge <= 0) continue; // dormant, unattended — nothing to defend
-      const pressers = opts.contest ? this.contestPressers(s.pos, opts.contest.radius, s.doodad.tier ?? 0) : 0;
+      const pressers = opts.contest ? this.contestPressers(s, opts.contest) : 0;
       if (opts.contest && pressers >= opts.contest.drainAt) {
         // THE SMOTHER: a crowd drains banked work, attended or not.
         const preSmother = s.charge;
@@ -57152,12 +57163,12 @@ export class World {
         if (rec && s === held) {
           s.recoup = Math.min(recCap, s.recoup + dt + (preSmother - s.charge) * rec.drainRefund);
         }
-        draining = true;
+        draining = holdRead.draining = true;
         continue;
       }
       if (s !== held) continue; // banked, unattended, uncrowded: it keeps
       if (opts.contest && pressers >= opts.contest.stallAt) {
-        contested = true; // held ground, but not CLEARED ground — the stall
+        contested = holdRead.contested = true; // held, but not cleared
         // THE RECOUP's ghost clock: the stand banks the second it would
         // have built had the ground been clear.
         if (rec) s.recoup = Math.min(recCap, s.recoup + dt);
@@ -57172,7 +57183,7 @@ export class World {
         const extra = Math.min(s.recoup, dt * (rec.boost - 1));
         s.recoup -= extra;
         build += extra;
-        if (extra > 0) recouping = true;
+        if (extra > 0) recouping = holdRead.recouping = true;
       }
       s.charge = Math.min(opts.need, s.charge + build);
       if (was <= 0 && s.charge > 0 && opts.stirText) {
@@ -57189,9 +57200,7 @@ export class World {
         opts.onFill?.(s);
       }
     }
-    // THE STAMP (the watch fabric's idiom): views re-speak exactly what the
-    // drive tested this frame — chevron and charge logic can never disagree.
-    this.holdRead = { contested, draining, recouping };
+    // Per-fixture stamps feed the view; the return summarizes the operation.
     return { filled, contested, draining, recouping };
   }
 
@@ -59434,7 +59443,7 @@ export class World {
         if (v.count > 1) return `Attune the waystones — ${v.charged}/${v.count}${mark}`;
         return v.frac > 0
           ? `Charge the survey spire — ${Math.round(v.frac * 100)}%${mark}`
-          : 'Find the survey spire and hold your ground beside it';
+          : `Find the survey spire and hold your ground beside it${mark}`;
       }
       case 'leyline': {
         const v = this.leylineView();

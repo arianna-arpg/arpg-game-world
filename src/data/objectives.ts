@@ -24,6 +24,7 @@ import { lairRows } from '../engine/lairs';
 import { landmarkOf, type GeneratedLayout } from '../engine/levelgen';
 import { sidezoneOf } from './sidezones';
 import type { ObjectiveSpec, ZoneDef } from './zones';
+import type { DwellReach } from './transit';
 
 /** THE CONTEST LAW — one contested-presence discipline for every hold-the-
  *  ground objective fixture (survey spires, rift seals, pyre kindlings, dig
@@ -37,6 +38,10 @@ import type { ObjectiveSpec, ZoneDef } from './zones';
 export interface ContestSpec {
   /** Contest ring radius (world units) around the fixture. */
   radius: number;
+  /** How an enemy reaches the fixture to contest it (same-story only).
+   *  Defaults to the dwell reach law: walls shelter held ground. 'radius'
+   *  explicitly allows pressure through cover for an authored encounter. */
+  reach?: DwellReach;
   /** Live counted enemies at/above this STALL the work (progress freezes). */
   stallAt: number;
   /** …at/above this the crowd DRAINS banked progress (attended or not). */
