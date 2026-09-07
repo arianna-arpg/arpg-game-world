@@ -27,8 +27,9 @@
 //     A ray STARTING inside a blocking disc counts as blocked at t=0 — the
 //     veil rule (under an unbroken crown you are blind both ways) preserved
 //     from the original lineOfSight sweep.
-//   - Grid cells are ray-marched at half-cell steps from the FIRST step (the
-//     start cell never self-blocks), matching the projectile masonry sweep.
+//   - Grid rays visit each crossed cell at its exact entry/exit. Thin corner
+//     crossings cannot fall between samples; a diagonal pair of walls seals
+//     its zero-width seam. A ray on an exposed face can look along/out of it.
 //
 // World wraps this as lineOfSight / lineOfFire / clipShot; every consumer
 // (deliveries, AI perception, aim assist, channel grips) goes through those.
@@ -177,8 +178,107 @@ export const LOS_CFG = {
   elev: { eye: 0.62, doodadBand: 1 },
 };
 
+/** First grid blocker as a segment fraction, or null. Shared by gameplay
+ *  rays and the visual veil's point queries. `opaqueCell` adds render-only
+ *  roof coverage at CELL CENTRES, matching the veil's edge extraction.
+ *  DDA visits only crossed cells: O(crossings), independent of corner depth.
+ *  The forward cell owns the origin; entering a wall blocks at zero while
+ *  leaving its face is clear. An isolated tangent does not cross a solid,
+ *  but two blocking side cells seal a diagonal pinch. */
+export function castGridRay(
+  grid: GridWalkField, from: { x: number; y: number }, to: { x: number; y: number },
+  channel: OccChannel, elev?: RayElev, maxT = 1,
+  opaqueCell?: (x: number, y: number) => boolean,
+): number | null {
+  const dx = to.x - from.x, dy = to.y - from.y;
+  const limit = Math.min(1, maxT);
+  if (limit <= 0 || (dx === 0 && dy === 0)) return null;
+  const cs = grid.cellSize;
+  const sx = Math.sign(dx), sy = Math.sign(dy);
+  let cx = Math.floor(from.x / cs), cy = Math.floor(from.y / cs);
+  const onX = from.x === cx * cs, onY = from.y === cy * cs;
+  if (sx < 0 && onX) cx--;
+  if (sy < 0 && onY) cy--;
+  let tx = sx ? ((cx + (sx > 0 ? 1 : 0)) * cs - from.x) / dx : Infinity;
+  let ty = sy ? ((cy + (sy > 0 ? 1 : 0)) * cs - from.y) / dy : Infinity;
+  const dtx = sx ? cs / Math.abs(dx) : Infinity;
+  const dty = sy ? cs / Math.abs(dy) : Infinity;
+  const dh = elev ? elev.to - elev.from : 0;
+  const cellHit = (x: number, y: number, enter: number, exit: number): number | null => {
+    const wx = (x + 0.5) * cs, wy = (y + 0.5) * cs;
+    if (opaqueCell?.(wx, wy)) return enter;
+    const id = grid.regionAt(wx, wy), k = regionKind(id);
+    let hit: number | null = null;
+    const h0 = elev ? elev.from + dh * enter : 0;
+    const h1 = elev ? elev.from + dh * exit : 0;
+    if (k?.hangingFrom !== undefined && elev) {
+      if (h0 >= k.hangingFrom) hit = enter;
+      else if (h1 > k.hangingFrom) hit = (k.hangingFrom - elev.from) / dh;
+    }
+    if (channel === 'shot' ? k?.blocksShot : k?.blocksSight) {
+      const deck = elev ? tierElevOf(id) : null;
+      if (deck === null || h0 < deck) return enter;
+      if (h1 < deck) {
+        const crossing = (deck - elev!.from) / dh;
+        hit = hit === null ? crossing : Math.min(hit, crossing);
+      }
+    }
+    return hit;
+  };
+  const bandsAt = (x: number, y: number): [number, number][] => {
+    const wx = (x + 0.5) * cs, wy = (y + 0.5) * cs;
+    if (opaqueCell?.(wx, wy)) return [[-Infinity, Infinity]];
+    const id = grid.regionAt(wx, wy), k = regionKind(id);
+    const bands: [number, number][] = [];
+    if (k?.hangingFrom !== undefined && elev) bands.push([k.hangingFrom, Infinity]);
+    if (channel === 'shot' ? k?.blocksShot : k?.blocksSight)
+      bands.push([-Infinity, (elev ? tierElevOf(id) : null) ?? Infinity]);
+    return bands;
+  };
+  const hitAt = (x: number, y: number, enter: number, exit: number): number | null => {
+    // A ray exactly ALONG a lattice line is blocked only when both sides
+    // are solid. This avoids choosing sight by grid-floor rounding at a face.
+    const alongX = !sx && onX, alongY = !sy && onY;
+    if (!alongX && !alongY) return cellHit(x, y, enter, exit);
+    // Intersect HEIGHT bands, not just first-hit times: a deck on one side
+    // and a partition above it on the other never close the same air.
+    let best: number | null = null;
+    const h0 = elev ? elev.from + dh * enter : 0;
+    const h1 = elev ? elev.from + dh * exit : 0;
+    const other = bandsAt(x - (alongX ? 1 : 0), y - (alongY ? 1 : 0));
+    for (const a of bandsAt(x, y)) for (const b of other) {
+      const lo = Math.max(a[0], b[0]), hi = Math.min(a[1], b[1]);
+      if (lo >= hi) continue;
+      let hit: number | null = null;
+      if (h0 >= lo && h0 < hi) hit = enter;
+      else if (dh > 0 && h0 < lo && h1 > lo) hit = (lo - elev!.from) / dh;
+      else if (dh < 0 && h0 >= hi && h1 < hi) hit = (hi - elev!.from) / dh;
+      if (hit !== null) best = best === null ? hit : Math.min(best, hit);
+    }
+    return best;
+  };
+  let enter = 0;
+  while (enter < limit) {
+    const exit = Math.min(tx, ty, limit);
+    const hit = hitAt(cx, cy, enter, exit);
+    if (hit !== null) return hit;
+    if (exit >= limit) break;
+    // Arithmetic tolerance only: never inflate a wall or erase a positive
+    // sliver. Exact ties examine BOTH side cells before entering the diagonal.
+    if (sx && sy && Math.abs(tx - ty) <= Number.EPSILON * 8 * Math.max(1, Math.abs(tx), Math.abs(ty))) {
+      const a = cellHit(cx + sx, cy, exit, exit);
+      const b = cellHit(cx, cy + sy, exit, exit);
+      if (a !== null && b !== null) return exit;
+      cx += sx; cy += sy; tx += dtx; ty += dty;
+    } else if (tx < ty) { cx += sx; tx += dtx; }
+    else { cy += sy; ty += dty; }
+    enter = exit;
+  }
+  return null;
+}
+
 /** First blocker along from→to on the given channel, or null when clear.
- *  Doodad hits are exact ray/circle entries; grid hits are half-cell samples. */
+ *  Doodad surfaces and grid-cell entries are tested geometrically. */
 export function castRay(
   env: OccEnv,
   from: { x: number; y: number }, to: { x: number; y: number },
@@ -224,36 +324,10 @@ export function castRay(
     }
   }
 
-  // --- grid cells (half-cell ray-march; start cell never self-blocks) -------
+  // --- grid cells (the same traversal the visual visibility query uses) ---
   if (env.walk instanceof GridWalkField) {
-    const step = (env.walk.cellSize ?? 30) / 2;
-    const limit = Math.min(len, bestT === Infinity ? len : bestT * len);
-    for (let s = step; s < limit; s += step) {
-      const kId = env.walk.regionAt(from.x + dx * (s / len), from.y + dy * (s / len));
-      const k = regionKind(kId);
-      // THE HANGING WALL (engine/storeys.ts): a story's partition stands only
-      // from its own story up — a ray at that height stops at it, the
-      // ground-floor eye beneath it sees clean across the room. The legacy
-      // flat read (no elev) is the ground floor's, so it never meets one.
-      if (k?.hangingFrom !== undefined && elev
-        && elev.from + (elev.to - elev.from) * (s / len) >= k.hangingFrom) {
-        const t = s / len;
-        if (t < bestT) { bestT = t; kind = 'region'; }
-        break;
-      }
-      if (channel === 'shot' ? k?.blocksShot : k?.blocksSight) {
-        // THE ELEVATION LAW: a blocking cell that is tier FLOOR stops only
-        // rays below its deck (a butte top is open ground to its own story
-        // and to any line that clears the lip); true walls stop everything.
-        if (elev) {
-          const e = tierElevOf(kId);
-          if (e !== null && elev.from + (elev.to - elev.from) * (s / len) >= e) continue;
-        }
-        const t = s / len;
-        if (t < bestT) { bestT = t; kind = 'region'; }
-        break;
-      }
-    }
+    const t = castGridRay(env.walk, from, to, channel, elev, Math.min(1, bestT));
+    if (t !== null && t < bestT) { bestT = t; kind = 'region'; }
   }
 
   if (bestT === Infinity) return null;

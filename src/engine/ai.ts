@@ -830,6 +830,10 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // would drag them off their master's flank. An ORDERED quarry is exempt
   // from both leashes: the commander explicitly sent them.
   if (!target || (actor.isMinion() && !ordered && best > (actor.guardMode ? 260 : 700))) {
+    // Losing sight does not order a dismount. The combat kernel holds a
+    // rider in its saddle; idle wandering/owner heeling must do the same.
+    // Explicit movement and dismount actions still go through the mover.
+    if (actor.mountId !== undefined) return;
     // THE THRONG'S LOOSE RING (engine/throng.ts): a gathered body heels to
     // its own stable seat on a slow orbit around the keeper, with a tight
     // arrive tolerance — the cloud trails as a CLOUD, never a conga dot.

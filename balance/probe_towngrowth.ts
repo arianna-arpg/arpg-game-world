@@ -845,10 +845,18 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
   check('J: every guest room is a sealed room of its own behind an archway (three sealed + the hall)',
     (rec?.rooms?.filter(r => r.enclosed).length ?? 0) >= 3 && (rec?.doors.length ?? 0) === 3);
   const lodger = w.actors.find(a => a.defId === 'townsfolk_lodger')!;
+  // Meet at the resident's walkable seat: after strolling, an arbitrary
+  // diagonal offset can put the player inside an upstairs partition.
   check('J: the lodger keeps the hall above (tier 1, on the storey\'s floor) and speaks the house',
     !!lodger && lodger.tier === 1 && inInn(lodger)
-    && (w.player.pos.x = lodger.pos.x + 20, w.player.pos.y = lodger.pos.y + 20, w.player.tier = 1, true)
+    && (w.player.pos.x = lodger.pos.x, w.player.pos.y = lodger.pos.y, w.player.tier = 1, true)
     && (w.residentPrompt(lodger) ?? '').includes('room'));
+  if (lodger) {
+    w.player.tier = 0;
+    check('J: sharing a map position across stories does not grant resident speech',
+      w.residentPrompt(lodger) === null);
+    w.player.tier = 1;
+  }
   w.player.tier = 0;
   // THE CLIMB: walk onto the flight from its foot and off its head — the
   // mover's own crossing law carries the hero up; back down the same way.

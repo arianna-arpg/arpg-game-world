@@ -34,6 +34,8 @@ import { VIS_CFG } from '../src/render/vis/visConfig';
 import { sightShadowFrac, type Doodad } from '../src/engine/levelgen';
 import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
+import { castRay, LOS_CFG } from '../src/engine/los';
+import { rayShapeT } from '../src/engine/shapes';
 
 let pass = 0, fail = 0;
 function check(name: string, ok: boolean, detail = ''): void {
@@ -565,6 +567,120 @@ console.log('— B4. THE HULL LAW: a standing roof seals its doorways from outsi
     check('standing roof: the doorway wedge is sealed', Math.abs(throughDoor - rF) < 1e-9, `${throughDoor}`);
     check('standing roof: the field beyond stays hidden', Math.abs(beyond - rF) < 1e-9);
     check('standing roof: the street before the door stays clear', outside < 0.01, `${outside}`);
+  }
+}
+
+console.log('— F. shadow polygons form a union across wall orientations —');
+{
+  const edges: OccEdge[] = [
+    { ax: 300, ay: 0, bx: 300, by: 360, nx: -1, ny: 0 },
+    { ax: 390, ay: 420, bx: 690, by: 420, nx: 0, ny: -1 },
+  ];
+  let matches = true, samples = 0;
+  for (const eye of [{ x: 150, y: 150 }, { x: 151, y: 150 }, { x: 149, y: 151 }]) {
+    const sink = new CollectSink();
+    for (const e of edges) edgeShadowForEye(sink, e, eye.x, eye.y, 1600, 0, 0, 1);
+    for (let y = 460; y <= 650; y += 10) for (let x = 430; x <= 650; x += 10) {
+      samples++;
+      if (inside(sink.polys, x, y) !== sink.polys.some(p => inside([p], x, y))) matches = false;
+    }
+  }
+  check('overlap never cancels while the eye moves by a pixel', matches, `${samples} samples`);
+  // Edge order is authoring detail. Both orders must also union with the
+  // disc/rect builders, which share the same strength bucket at runtime.
+  const sink = new CollectSink();
+  edgeShadowPath(sink, 300, 0, 300, 360, 150, 150, 1600, 0, 0, 1);
+  edgeShadowPath(sink, 300, 360, 300, 0, 150, 150, 1600, 0, 0, 1);
+  discShadowPath(sink, 360, 360, 35, 1, 150, 150, 1600, 0, 0, 1);
+  rectShadowPath(sink, { x: 400, y: 400, hw: 20, hh: 35, rot: 0.3,
+    boundR: Math.hypot(20, 35), s: 1 }, 150, 150, 1600, 0, 0, 1);
+  check('reversed edges, slabs and discs add coverage in the same fill',
+    sink.polys.every(p => inside([p], 500, 500)) && inside(sink.polys, 500, 500));
+}
+
+console.log('— G. grid rays and visual queries cannot skip corner slivers —');
+{
+  const grid = new GridWalkField(300, 300, 30);
+  grid.fillRect(0, 0, 299, 299, true);
+  grid.fillRect(90, 90, 119, 119, false);
+  const env = { walk: grid, doodadsAt: () => [] };
+  // Independent slab-intersection oracle, including origins INSIDE the wall.
+  // Unlike the DDA this does no grid traversal. Avoid tangencies here: their
+  // explicit face/pinch policy is tested separately below.
+  const points: P[] = [];
+  for (const r of [7, 57, 97]) for (let i = 0; i < 16; i++) {
+    const a = (i + 0.17) * Math.PI / 8;
+    points.push({ x: 105 + r * Math.cos(a), y: 105 + r * Math.sin(a) });
+  }
+  let oracleMatches = true, oracleSamples = 0;
+  for (const from of points) for (const to of points) {
+    if (from === to) continue;
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const expected = rayShapeT({ kind: 'rect', hw: 15, hh: 15 }, 105, 105, from.x, from.y, dx, dy);
+    const hit = castRay(env, from, to, 'sight');
+    oracleSamples++;
+    if ((expected === null) !== (hit === null)
+      || (expected !== null && hit !== null && Math.abs(hit.d - expected * Math.hypot(dx, dy)) > 1e-8)) oracleMatches = false;
+  }
+  check('grid traversal agrees with independent slab geometry in every direction',
+    oracleMatches, `${oracleSamples} rays`);
+  let blocked = true, clipped = true, visual = true;
+  for (const depth of [0.01, 0.1, 0.5, 1, 3]) {
+    const from = { x: 80, y: 100 + depth }, to = { x: 110, y: 70 + depth };
+    for (const channel of ['sight', 'shot'] as const) {
+      const hit = castRay(env, from, to, channel);
+      blocked &&= !!hit && !!castRay(env, to, from, channel);
+      clipped &&= !!hit && Math.abs(hit.x - 90) < 1e-8;
+    }
+    const veil = new SightVeil();
+    veil.update({ player: { pos: from }, walk: grid, zone: {},
+      doodads: [], doodadsNear: () => [], doodadRev: 0 }, 0, 600, 600);
+    visual &&= veil.occludedAt(to) === VIS_CFG.sightVeil.regionStrength;
+  }
+  check('every positive corner crossing blocks in both directions and channels', blocked);
+  check('clipping lands at the first wall face, not the next sample', clipped);
+  check('the visual query sees the same thin wall crossings', visual);
+  check('a short ray into a wall cannot fit between samples',
+    castRay(env, { x: 89, y: 105 }, { x: 91, y: 105 }, 'sight')?.x === 90);
+  check('rounding the free corner opens a real clear line',
+    castRay(env, { x: 80, y: 99 }, { x: 110, y: 69 }, 'sight') === null);
+  check('pressing the wall permits outward and along-face sight',
+    castRay(env, { x: 90, y: 105 }, { x: 60, y: 105 }, 'sight') === null
+    && castRay(env, { x: 90, y: 95 }, { x: 90, y: 115 }, 'sight') === null);
+  check('pressing the wall never grants inward sight',
+    castRay(env, { x: 90, y: 105 }, { x: 110, y: 105 }, 'sight')?.d === 0);
+
+  grid.fillRect(90, 90, 119, 119, true);
+  grid.fillRect(90, 60, 119, 89, false);
+  grid.fillRect(60, 90, 89, 119, false);
+  check('two diagonal walls seal their zero-width seam',
+    castRay(env, { x: 75, y: 75 }, { x: 105, y: 105 }, 'sight') !== null);
+  grid.fillRect(60, 90, 89, 119, true);
+  check('one isolated corner touch is not a sealed diagonal doorway',
+    castRay(env, { x: 75, y: 75 }, { x: 105, y: 105 }, 'sight') === null);
+
+  grid.fillRect(0, 0, 299, 299, true);
+  grid.fillRegion(90, 90, 119, 119, 'storey_wall');
+  const from = { x: 60, y: 105 }, to = { x: 150, y: 105 };
+  for (const tier of [0, 1]) {
+    const veil = new SightVeil();
+    veil.update({ player: { pos: from, tier }, walk: grid, zone: {},
+      doodads: [], doodadsNear: () => [], doodadRev: 0 }, 0, 600, 600);
+    const eye = tier + LOS_CFG.elev.eye;
+    check(`hanging wall: ray and visual query agree on story ${tier}`,
+      (castRay(env, from, to, 'sight', { from: eye, to: eye }) !== null) === (tier === 1)
+      && (veil.occludedAt(to, tier) > 0) === (tier === 1));
+  }
+  const near = { x: 80, y: 105 }, far = { x: 130, y: 105 };
+  check('rising sight meets a hanging wall within the cell at its story boundary',
+    Math.abs((castRay(env, near, far, 'sight', { from: 0.5, to: 1.5 })?.x ?? 0) - 105) < 1e-8);
+  grid.fillRegion(90, 90, 119, 119, 'storey_deck');
+  check('descending sight meets a deck within the cell at its story boundary',
+    Math.abs((castRay(env, near, far, 'sight', { from: 1.5, to: 0.5 })?.x ?? 0) - 105) < 1e-8);
+  grid.fillRegion(90, 60, 119, 89, 'storey_wall');
+  for (const elev of [{ from: 0.5, to: 1.5 }, { from: 1.5, to: 0.5 }]) {
+    check(`adjacent height bands do not invent a wall along their shared face (${elev.from})`,
+      castRay(env, { x: 95, y: 90 }, { x: 115, y: 90 }, 'sight', elev) === null);
   }
 }
 

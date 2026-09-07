@@ -71,6 +71,8 @@ import {
 import { applyBuild } from '../src/sim/builds'; // (RIG Q — bar-learned casts through useSkill)
 import { lairRows } from '../src/engine/lairs'; // (RIG R — the underLane intent census)
 import { castRay, LOS_CFG } from '../src/engine/los';
+import { makeSkillInstance } from '../src/engine/skills';
+import { SKILLS } from '../src/data/skills';
 import { SightVeil } from '../src/render/vis/sightVeil';
 import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
@@ -2437,6 +2439,52 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
     }
     p.untargetable = false;
   }
+}
+
+// --- RIG V: actual projectile flight agrees with the firing ray ------------
+{
+  const w = makeSimWorld('sorcerer', 0x105c);
+  const grid = new GridWalkField(300, 300, 30);
+  grid.fillRect(0, 0, 299, 299, true);
+  w.walk = grid;
+  w.zone.tiers = { kind: 'over', exposure: 'covered', levels: 1 };
+  const inst = makeSkillInstance(SKILLS.firebolt, 1);
+  const fly = (from: { x: number; y: number }, to: { x: number; y: number },
+    tier = 0, bounces = 0, phase = false) => {
+    w.projectiles = [];
+    w.player.tier = tier;
+    w.player.pos = vec(from.x, from.y);
+    w.spawnProjectile(w.player, inst, vec(from.x, from.y), Math.atan2(to.y - from.y, to.x - from.x));
+    const p = w.projectiles[0];
+    p.bounces = bounces;
+    p.phase = phase;
+    const clear = w.lineOfFire(from, to, tier);
+    // Isolate one flight frame from unrelated world updates; launch and
+    // collision are the real engine paths, with a chosen traveled distance.
+    (w as unknown as { updateProjectiles(dt: number): void }).updateProjectiles(
+      Math.hypot(to.x - from.x, to.y - from.y) / p.speed);
+    return { p, clear, alive: w.projectiles.includes(p) };
+  };
+  grid.fillRect(90, 90, 119, 119, false);
+  const a = vec(80, 100.1), b = vec(110, 70.1);
+  const corner = fly(a, b);
+  check('V1 a live flight cannot skip a thin corner that blocks its firing ray',
+    !corner.clear && !corner.alive && Math.abs(corner.p.pos.x - 90) < 1e-8);
+  const free = fly(vec(80, 99), vec(110, 69));
+  check('V2 a flight around the free corner stays alive', free.clear && free.alive);
+  const phase = fly(a, b, 0, 0, true);
+  check('V3 a phasing flight still passes through a blocking corner', phase.alive);
+  const short = fly(vec(89, 105), vec(91, 105));
+  check('V4 a short flight ends at the wall face', !short.alive && short.p.pos.x === 90);
+  grid.fillRegion(90, 90, 119, 119, 'storey_wall');
+  const low = fly(vec(80, 105), vec(130, 105), 0);
+  const high = fly(vec(80, 105), vec(130, 105), 1);
+  check('V5 a hanging partition admits ground flight and stops upstairs flight',
+    low.clear && low.alive && !high.clear && !high.alive && high.p.pos.x === 90);
+  const bank = fly(vec(80, 100), vec(100, 110), 1, 1);
+  check('V6 an upstairs bounce reflects only the blocked axis and stays outside the partition',
+    bank.alive && bank.p.bounces === 0 && bank.p.pos.x < 90
+    && Math.cos(bank.p.dir) < 0 && Math.sin(bank.p.dir) > 0);
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);

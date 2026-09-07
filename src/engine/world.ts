@@ -279,7 +279,7 @@ import { buildZoneSpans, type SpanField } from './spans';
 import { buildZoneFlux, CONJURE_CFG, ConjuredGround, FLUX_CFG, type ConjureGrant, type FluxField } from './flux';
 import { CONJURE_RIDERS } from '../data/conjury';
 import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
-import { affordTravel, castRay, LOS_CFG, type RayElev } from './los';
+import { affordTravel, castGridRay, castRay, LOS_CFG, type RayElev } from './los';
 import { coordDist, type MapCoord } from '../world/coords';
 import { FORECHART_CFG, forechartSource, zonesWithin } from '../world/forechart';
 import { OMEN_CFG, collectOmens, omenLine, omenReach, type Omen } from '../world/omens';
@@ -54399,50 +54399,38 @@ export class World {
           }
         }
       }
-      // Grid MASONRY blocks flight: SWEEP prev→pos at half-cell steps over the
-      // blocksShot region rows (a fast arrow at low fps outruns one cell — a
-      // point sample would tunnel castle walls). The default is FALSE — a
-      // region is a chasm-like (shots sail over ledges/water/tallgrass) unless
-      // its RegionKind opts in: rampart masonry AND the TRUE WALLS (wall/
-      // flesh_wall/fungal_wall — why would an arrow fly through a mountain
-      // pass's wall?). Windows/parapets pass — the arrow-slit works.
+      // Grid masonry uses the same exact traversal as lineOfFire: fast
+      // flights and thin corner crossings cannot fall between samples.
+      // Region flags, deck heights and hanging partitions share one law.
       if (!dead && !p.phase && this.walk instanceof GridWalkField) {
         const sdx = p.pos.x - prev.x, sdy = p.pos.y - prev.y;
-        const slen = Math.hypot(sdx, sdy);
-        const step = (this.walk.cellSize ?? 30) / 2;
-        const n = Math.max(1, Math.ceil(slen / step));
-        for (let i = 1; i <= n; i++) {
-          const sx = prev.x + sdx * (i / n), sy = prev.y + sdy * (i / n);
-          const kId = this.walk.regionAt(sx, sy);
-          const k = regionKind(kId);
-          // Elevated flights cross deck-height air: any floor AT OR BELOW
-          // the flight's own story (a butte top, a span, a lower terrace) is
-          // open ground under the arrow, never a wall — while true earth (a
-          // duct's surroundings) and HIGHER stories (the next terrace's
-          // cliff) still stop it. tierElevOf answers null for true walls.
-          const shotElev = tierElevOf(kId);
-          // THE HANGING WALL (engine/storeys.ts): a story's partition stops
-          // the flights of its own story and above; the arrows under it fly.
-          const hung = k?.hangingFrom !== undefined && (p.tier ?? 0) >= k.hangingFrom;
-          if (hung || (k?.blocksShot && !((p.tier ?? 0) >= 1 && shotElev !== null && shotElev <= (p.tier ?? 0)))) {
-          this.flashes.push({ pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') }); // THE ARROW'S END on a wall
-            if (p.bounces && p.bounces > 0) {
-              p.bounces--;
-              // Axis reflection: whichever component walked into the wall
-              // flips (probe one step ahead per axis from the safe point).
-              const px = prev.x + sdx * ((i - 1) / n), py = prev.y + sdy * ((i - 1) / n);
-              const blockedX = regionKind(this.walk.regionAt(px + Math.sign(sdx) * step, py))?.blocksShot;
-              const blockedY = regionKind(this.walk.regionAt(px, py + Math.sign(sdy) * step))?.blocksShot;
-              const dx = Math.cos(p.guideDir), dy = Math.sin(p.guideDir);
-              p.guideDir = p.dir = Math.atan2(blockedY || !blockedX ? -dy : dy,
-                blockedX || !blockedY ? -dx : dx);
-              p.pos.x = px; p.pos.y = py;
-              p.anchor.x = px; p.anchor.y = py;
-            } else {
-              dead = true;
-              SIM_TAP.current?.onOccluded?.('proj');
-            }
-            break;
+        const elev = this.shotElev(prev, p.tier ?? 0);
+        const hitT = castGridRay(this.walk, prev, p.pos, 'shot', elev);
+        if (hitT !== null) {
+          const sx = prev.x + sdx * hitT, sy = prev.y + sdy * hitT;
+          this.flashes.push({ pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') });
+          if (p.bounces && p.bounces > 0) {
+            p.bounces--;
+            // Back off by at most half a cell, then test the two axes with
+            // the same height-aware ray. A hanging partition can bank a shot
+            // upstairs while leaving ground-floor flight untouched.
+            const step = this.walk.cellSize / 2;
+            const safeT = Math.max(0, hitT - 1 / Math.max(1, Math.ceil(Math.hypot(sdx, sdy) / step)));
+            const safe = vec(prev.x + sdx * safeT, prev.y + sdy * safeT);
+            const blockedX = castGridRay(this.walk, safe,
+              vec(safe.x + Math.sign(sdx) * step, safe.y), 'shot', elev) !== null;
+            const blockedY = castGridRay(this.walk, safe,
+              vec(safe.x, safe.y + Math.sign(sdy) * step), 'shot', elev) !== null;
+            const dx = Math.cos(p.guideDir), dy = Math.sin(p.guideDir);
+            p.guideDir = p.dir = Math.atan2(blockedY || !blockedX ? -dy : dy,
+              blockedX || !blockedY ? -dx : dx);
+            p.pos.x = safe.x; p.pos.y = safe.y;
+            p.anchor.x = safe.x; p.anchor.y = safe.y;
+          } else {
+            // End effects belong at the struck face, not beyond the wall.
+            p.pos.x = sx; p.pos.y = sy;
+            dead = true;
+            SIM_TAP.current?.onOccluded?.('proj');
           }
         }
       }

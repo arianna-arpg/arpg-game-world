@@ -366,6 +366,25 @@ MONSTERS.probe_walker = {
     orphans.length === 0, orphans.map(o => o.defId).join(','));
 }
 
+// Idle movement must obey the same saddle hold as the combat kernel.
+// A pinned wander intention makes the old accidental dismount deterministic.
+{
+  const w = makeSimWorld('summoner', 0x2802);
+  w.player.untargetable = true;
+  const m = spawn(w, 'probe_walker');
+  const r = spawn(w, 'probe_crewman');
+  r.pos = vec(w.player.pos.x + 200, w.player.pos.y);
+  m.pos = vec(r.pos.x, r.pos.y);
+  check('idle: the rider seats before losing its quarry', w.mountSeatRider(r, m));
+  r.wanderDir = 0;
+  r.aiTimer = 10;
+  updateAI(r, w, DT);
+  check('idle: a targetless rider keeps its saddle despite a pending wander',
+    r.aiTargetId === undefined && r.mountId === m.id && m.riderIds?.includes(r.id) === true);
+  w.moveActor(r, 1, 0, DT);
+  check('idle: an explicit step still dismounts', r.mountId === undefined);
+}
+
 // --- 9) Determinism (the same seed writes the same cavalry) -----------------
 {
   const script = (seed: number): string => {

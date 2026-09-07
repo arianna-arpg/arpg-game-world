@@ -16,6 +16,22 @@ World wraps it: `lineOfSight` (eyes), `lineOfFire` (effects), `clipShot`
 (first-blocker clip, pulled back `LOS_CFG.clipBackoff`), `losCached`
 (TTL-memoized perception rays). All thresholds live in `LOS_CFG`.
 
+Grid crossings are resolved by `castGridRay`, shared with projectile flight
+and the sight veil's point queries. It visits every crossed cell at its exact entry and exit,
+including a sub-pixel corner slice or a segment shorter than half a cell.
+The previous 15px sample spacing could skip those crossings and report a
+wall as clear. Clipping now lands on the wall face rather than a later sample.
+Projectile end effects land at that face too, and bounce direction checks
+honor the same deck heights and hanging partitions as the incoming flight.
+
+The corner policy is geometric: entering a solid blocks immediately; looking
+out of, or along, an exposed face remains clear. Two diagonal walls seal
+their zero-width seam; touching one isolated corner does not manufacture a
+wall across otherwise open ground. Floor elevation and hanging-wall bands
+are evaluated over the whole crossed interval, so a sloping sight ray can
+meet a story boundary inside a cell. This changes the geometry test, not
+the authored blocking flags or the skill's phasing/travel policy.
+
 The terrain promise, everywhere the ray is asked:
 
 - **True walls** (`wall`/`rampart`/`flesh_wall`/`fungal_wall` regions; rock,
@@ -106,7 +122,11 @@ EXACT polygons the sheet fills through the builders' structural PathSink):
 - **Union is absolute**: every strength layer is punched out of the sheet
   before it paints (ascending weak → strong), so overlap wears exactly the
   strongest shadow — never a stacked double-dark band where trunk wedges
-  cross wall shadows.
+  cross wall shadows. Every polygon also winds in the same direction, across
+  wall orientations, slabs and discs. Opposite winding previously cancelled
+  overlapping paths in Canvas's nonzero fill, cutting moving bright holes
+  behind two opaque walls. The shared edge builder normalizes winding before
+  the union is filled; no extra render passes or smoothing delay are needed.
 - **The occluder cap never bites on screen**: bodies whose whole shadow
   lies past the veil radius are culled per frame (drawn and tested alike),
   so `VIS_CFG.sightVeil.maxOccluders` is a pathological backstop. When the
@@ -142,6 +162,12 @@ EXACT polygons the sheet fills through the builders' structural PathSink):
   bright lid floating over its own shadow (0 restores the old
   skyline-stays-lit doctrine). Light-layer glows still shine through by
   doctrine: unseen is not unlit.
+
+The grid query also includes hanging partitions on the actor's story, using
+the same `castGridRay` band test as gameplay. Previously the wall could draw
+a shadow while `occludedAt` still reported its far side visible. Roof-only
+coverage is passed as a cell-centre predicate, matching the rasterized roof
+hull used to extract visual edges; it never enters the gameplay ray.
 
 ## The skill lever
 
