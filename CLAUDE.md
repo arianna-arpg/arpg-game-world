@@ -1121,7 +1121,22 @@ we verify changes.
   the rolls AFTER the zone's own, so every feature-less mint is
   byte-identical), and readers read the DEF (levelgen's 'elevation' gen
   field lifts/domes by `geo.relief`, `World.bootHarvest` rolls the bounty
-  after the zone's own draws, the pane names the features). Dials in
+  after the zone's own draws, the pane names the features). THE KNOWLEDGE
+  LAW (her ruling 2026-09-08 — the visible map is the player's knowledge
+  alone): every graph mint is born VEILED (`ZoneSpec.veiled`, stamped at
+  placeZoneAt) and lifts only by a knowledge act — entry, the STRUCTURAL
+  one-ring preview in `World.visible` (a mint beside walked ground is seen
+  the moment it exists), a survey, an omen, an accepted quest, a won siege,
+  a sighted port — so no distant event redraws the map; the chart, THE VEIL
+  CLIP on every overlay wash and the map's fit read KNOWN ground alone.
+  THE DEV LENS (`ui/mapLens.ts`, the `?dev` Atlas tab: omniscient chart +
+  cursor read) is the render-only development view — never world state.
+  THE STANDING CHART: the panel's html carries no transient state (viewBox,
+  zoom %, hover, side box, rasters, labels are synced IN PLACE by
+  `syncMapLive`/`syncAtlas`), the painter keeps an LRU of finished rasters
+  (the BASE always stands; a zoom WINDOW overlays it), and the side box
+  reads a zone's ground row (elevation · climate words) off its baked
+  `geo.climate`. Dials in
   `ATLAS_CFG`; docs `docs/engine/atlas.md` + charter
   `docs/design/world-atlas.md`; probe `balance/probe_atlas.ts`.
   THE HARBORHOLD FABRIC (`data/harborholds.ts` + `world/harborholds.ts` —

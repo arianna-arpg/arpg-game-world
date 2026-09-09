@@ -20,6 +20,12 @@
 //      THE BYTE-IDENTITY LAW (a feature-less frontier mint with the fabric
 //      installed equals the same mint with it uninstalled, byte for byte).
 //
+//   D. THE KNOWLEDGE LAW — every graph mint is born veiled and unseen; a mint
+//      beside walked ground is seen at once (structural); a knowledge act
+//      lifts it for good; `veiled: false` opts out; and over a lived world
+//      every zone the chart shows is walked, beside walked ground, or
+//      surveyed (THE KNOWLEDGE INVARIANT).
+//
 //   npx tsx balance/probe_atlas.ts [-- --verbose]
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
@@ -36,7 +42,7 @@ import { RELIEF_CFG, elevationAt, riverPathsInRect, setReliefSeed } from '../src
 import { placeZoneAt } from '../src/engine/worldgen';
 import { HARVEST_CFG } from '../src/engine/harvest';
 import { harvestRowsFor } from '../src/data/harvest';
-import { START_ZONE, ZONES, type ZoneDef } from '../src/data/zones';
+import { HUB_ZONE, START_ZONE, ZONES, type ZoneDef } from '../src/data/zones';
 import type { World } from '../src/engine/world';
 
 const VERBOSE = process.argv.includes('--verbose');
@@ -234,6 +240,40 @@ seedGlobalRandom(0xa71a5);
     check('C11 THE BYTE-IDENTITY LAW — a feature-less mint is identical with the fabric installed or not',
       JSON.stringify(a) === JSON.stringify(b) && a.geo?.features === undefined);
   }
+}
+
+// --- RIG D: the knowledge law ---------------------------------------------------------
+{
+  const w: World = makeSimWorld('warrior', 0xa71a509);
+  const nextId = (): number => (w as unknown as { nextGenId: number }).nextGenId++;
+  const town = ZONES[START_ZONE].map;
+  // A directed mint far from anything walked: born veiled, unseen.
+  const evt = placeZoneAt(w.pullToLand({ x: town.x + 2600, y: town.y + 1900 }), null, w.zoneMap, nextId(), {
+    tileset: 'grassland', level: 4, seed: 0x5ea0c1, noBackEdge: true, noWeave: true,
+  } as never);
+  check('D1 THE KNOWLEDGE LAW — a directed mint is born veiled', evt.veiled === true);
+  check('D2 … and stands unseen on the chart', !w.visible(evt));
+  (evt.exits as { to: string; side: string }[]).push({ to: w.zone.id, side: 'n' });
+  check('D3 a mint beside walked ground is seen at once (the one-ring preview, structural)', w.visible(evt));
+  evt.exits.pop();
+  check('D4 … and unseen again once nothing walked stands beside it', !w.visible(evt));
+  evt.veiled = false; w.surveyed.add(evt.id);
+  check('D5 a knowledge act lifts the veil for good', w.visible(evt));
+  const known = placeZoneAt(w.pullToLand({ x: town.x - 2600, y: town.y + 1700 }), null, w.zoneMap, nextId(), {
+    tileset: 'grassland', level: 4, seed: 0x5ea0c2, noBackEdge: true, noWeave: true, veiled: false,
+  } as never);
+  check('D6 `veiled: false` opts a mint out', known.veiled === undefined && w.visible(known));
+  // THE KNOWLEDGE INVARIANT over a lived world: after the forechart has swept,
+  // every MINTED zone the chart shows is walked, beside walked ground, or surveyed.
+  w.loadZone(HUB_ZONE);
+  for (let i = 0; i < 300; i++) w.update(0.25);
+  const all = Object.values(w.zoneMap);
+  const shown = all.filter(z => w.visible(z));
+  const knownBy = (z: ZoneDef): boolean => w.visited.has(z.id) || w.surveyed.has(z.id)
+    || z.exits.some(e => e.to !== '?' && w.visited.has(e.to));
+  const leaks = shown.filter(z => !ZONES[z.id] && z.id !== evt.id && z.id !== known.id && !knownBy(z));
+  check('D7 THE KNOWLEDGE INVARIANT — every shown minted zone is walked, beside walked ground, or surveyed',
+    leaks.length === 0, `${shown.length} shown of ${all.length}; leaks: ${leaks.slice(0, 4).map(z => z.id).join(', ') || 'none'}`);
 }
 
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASS');

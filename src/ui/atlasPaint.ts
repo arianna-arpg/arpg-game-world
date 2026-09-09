@@ -1,25 +1,28 @@
 // ---------------------------------------------------------------------------
-// THE ATLAS PAINTER — the world-map CHART as one progressively built raster.
+// THE ATLAS PAINTER — the world-map CHART as progressively built rasters.
 //
 // The browser half of the atlas fabric (world/atlas.ts holds every law: the
 // shading, the finders, the dials). Given the panel's sampling closures and
 // the visible-node set, it samples the foreordained fields on a pixel
 // lattice, shades every pixel through atlasShade (hillshade, snowline, sea
-// shelf), draws contour bands, the paper grain and the VEIL (a soft alpha
+// shelf), draws contour bands, the paper grain and THE VEIL (a soft alpha
 // mask around visible nodes — nothing beyond knowledge paints), then lays
 // the vector dressing on top of the same canvas: lake basins, the rivers as
 // tapered threads, biome dressing glyphs (a registry — one painter per
 // glyph id) and the feature marks. Names come back as label rows the panel
 // prints as crisp SVG text.
 //
-// THE PROGRESSIVE LAW: a chart is a JOB with a key (seed, dimension, box,
-// layers, the visible set). Each call advances the current job by a time
-// budget and returns the last FINISHED raster — so a growing map never
-// hitches the frame, and the old chart stands until the new one is whole.
-// One finished raster + one job in flight is all the memory it ever holds.
+// THE PROGRESSIVE LAW: a raster is a JOB with a key (dimension, box, layers,
+// the visible set, the lens). Each call advances the one job in flight by a
+// time budget; FINISHED rasters live in a small LRU cache keyed by that key,
+// so a raster asked for again (the base chart after a zoomed look, a window
+// panned back into) returns at once. Jobs run in the order they are asked
+// for — the panel asks for the BASE (the whole charted country) before the
+// zoom WINDOW, so the base is always the first thing to exist and the
+// window only ever refines it.
 //
-// THE INTERACTIVITY CONTRACT (ui/mapConfig.ts) is untouched: the raster is
-// ONE pointer-transparent <image> under the node graph; labels ride the
+// THE INTERACTIVITY CONTRACT (ui/mapConfig.ts) is untouched: rasters are
+// pointer-transparent <image>s under the node graph; labels ride the
 // pointer-transparent over-group like every other badge.
 // ---------------------------------------------------------------------------
 
@@ -32,7 +35,7 @@ import { hash01 } from '../engine/hash';
 export type TerrainKind = 'land' | 'ocean' | 'bridge';
 
 export interface AtlasChartInput {
-  /** Cache identity — a new key starts a new job (the old raster stands meanwhile). */
+  /** Cache identity — a new key starts a new job (finished rasters stay cached). */
   key: string;
   /** Node-space rect to paint. */
   box: { minX: number; minY: number; maxX: number; maxY: number };
@@ -42,6 +45,8 @@ export interface AtlasChartInput {
   kindAt: (c: MapCoord) => TerrainKind;
   /** Visible node coords — THE VEIL paints around these alone. */
   reveal: readonly MapCoord[];
+  /** THE DEV LENS: paint the whole box with no veil at all. */
+  noVeil?: boolean;
   rivers: readonly MapCoord[][];
   features: readonly MapFeature[];
   layers: { relief: boolean; rivers: boolean; features: boolean; glyphs: boolean };
@@ -51,12 +56,21 @@ export interface AtlasChartInput {
 
 export interface AtlasLabel { x: number; y: number; text: string; color: string; kind: string }
 
-export interface AtlasChartOut {
-  /** The finished raster as a data URL ('' until one has ever finished) + its world rect. */
+/** One finished raster: a data URL + its world rect + the labels it earned. */
+export interface AtlasRaster {
+  key: string;
   href: string;
   x: number; y: number; w: number; h: number;
   labels: AtlasLabel[];
-  /** A job is in flight — the caller should tick again soon. */
+  /** Build cost (ms of painter time) and the raster side (px) — the dev tab's read. */
+  ms: number;
+  px: number;
+}
+
+export interface AtlasChartOut {
+  /** The finished raster for THIS key, or null while it builds (or waits its turn). */
+  raster: AtlasRaster | null;
+  /** Something is still building — the caller should tick again soon. */
   building: boolean;
   /** 0..1 of the in-flight job (1 when idle). */
   progress: number;
@@ -207,18 +221,20 @@ interface Job {
   s: number; cols: number; rows: number;
   elev: Float32Array; bio: Uint16Array; kind: Uint8Array; shore: Float32Array;
   biomes: string[]; biomeIdx: Map<string, number>;
-  rmask: Float32Array; rgw: number; rgh: number; rcell: number;
+  rmask: Float32Array | null; rgw: number; rgh: number; rcell: number;
   phase: 'sample' | 'shore' | 'shade' | 'vector' | 'encode' | 'done';
   row: number;
   canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; img: ImageData;
   labels: AtlasLabel[];
-  sampled: number; total: number;
+  spentMs: number;
 }
 
 let current: Job | null = null;
-let done: { key: string; out: AtlasChartOut } | null = null;
+/** Finished rasters, least-recently-used first (Map insertion order). */
+const cache = new Map<string, AtlasRaster>();
 
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
+const smooth01 = (t: number): number => { const c = clamp(t, 0, 1); return c * c * (3 - 2 * c); };
 
 function smoothNoise(x: number, y: number, cell: number, seed: number): number {
   const gx = x / cell, gy = y / cell;
@@ -240,7 +256,6 @@ function seamCoord(c: MapCoord, seed: number): MapCoord {
     y: c.y + (smoothNoise(c.x, c.y, S.cell, seed ^ 0x77bb) - 0.5) * 2 * S.warp,
   };
 }
-const smooth01 = (t: number): number => { const c = clamp(t, 0, 1); return c * c * (3 - 2 * c); };
 
 function startJob(inp: AtlasChartInput): Job {
   const C = ATLAS_CFG.raster;
@@ -252,22 +267,26 @@ function startJob(inp: AtlasChartInput): Job {
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d')!;
-  // THE VEIL MASK — a coarse lattice stamped by every visible node.
+  // THE VEIL MASK — a coarse lattice stamped by every visible node; the dev
+  // lens (noVeil) skips it and every read returns 1.
   const rcell = ATLAS_CFG.reveal.cell;
   const rgw = Math.ceil(bw / rcell) + 2, rgh = Math.ceil(bh / rcell) + 2;
-  const rmask = new Float32Array(rgw * rgh);
-  const R0 = ATLAS_CFG.reveal.radius, R1 = R0 + ATLAS_CFG.reveal.feather;
-  const rc = Math.ceil(R1 / rcell);
-  for (const p of inp.reveal) {
-    const gx = (p.x - inp.box.minX) / rcell, gy = (p.y - inp.box.minY) / rcell;
-    const cx = Math.round(gx), cy = Math.round(gy);
-    for (let y = Math.max(0, cy - rc); y <= Math.min(rgh - 1, cy + rc); y++) {
-      for (let x = Math.max(0, cx - rc); x <= Math.min(rgw - 1, cx + rc); x++) {
-        const d = Math.hypot((x - gx) * rcell, (y - gy) * rcell);
-        if (d >= R1) continue;
-        const v = 1 - smooth01((d - R0) / (R1 - R0));
-        const i = y * rgw + x;
-        if (v > rmask[i]) rmask[i] = v;
+  let rmask: Float32Array | null = null;
+  if (!inp.noVeil) {
+    rmask = new Float32Array(rgw * rgh);
+    const R0 = ATLAS_CFG.reveal.radius, R1 = R0 + ATLAS_CFG.reveal.feather;
+    const rc = Math.ceil(R1 / rcell);
+    for (const p of inp.reveal) {
+      const gx = (p.x - inp.box.minX) / rcell, gy = (p.y - inp.box.minY) / rcell;
+      const cx = Math.round(gx), cy = Math.round(gy);
+      for (let y = Math.max(0, cy - rc); y <= Math.min(rgh - 1, cy + rc); y++) {
+        for (let x = Math.max(0, cx - rc); x <= Math.min(rgw - 1, cx + rc); x++) {
+          const d = Math.hypot((x - gx) * rcell, (y - gy) * rcell);
+          if (d >= R1) continue;
+          const v = 1 - smooth01((d - R0) / (R1 - R0));
+          const i = y * rgw + x;
+          if (v > rmask[i]) rmask[i] = v;
+        }
       }
     }
   }
@@ -278,11 +297,12 @@ function startJob(inp: AtlasChartInput): Job {
     biomes: ['__none'], biomeIdx: new Map([['__none', 0]]),
     rmask, rgw, rgh, rcell,
     phase: 'sample', row: 0, canvas, ctx, img: ctx.createImageData(W, H), labels: [],
-    sampled: 0, total: cols * rows,
+    spentMs: 0,
   };
 }
 
 function revealAt(j: Job, ux: number, uy: number): number {
+  if (!j.rmask) return 1;
   const gx = (ux - j.inp.box.minX) / j.rcell, gy = (uy - j.inp.box.minY) / j.rcell;
   const x0 = Math.floor(gx), y0 = Math.floor(gy);
   if (x0 < 0 || y0 < 0 || x0 >= j.rgw - 1 || y0 >= j.rgh - 1) return 0;
@@ -311,7 +331,6 @@ function samplePhase(j: Job, deadline: number): void {
       j.kind[i] = kind === 'land' ? 1 : kind === 'ocean' ? 2 : 3;
       j.elev[i] = inp.elevAt ? inp.elevAt(coord) : 0.5;
     }
-    j.sampled = (j.row + 1) * cols;
     if (performance.now() > deadline) { j.row++; return; }
   }
   j.phase = 'shore'; j.row = 0;
@@ -325,7 +344,6 @@ function shorePhase(j: Job): void {
   const d = j.shore;
   const INF = 1e9;
   for (let i = 0; i < n; i++) d[i] = INF;
-  // Seeds: every water cell touching land (and vice versa) is distance 0.5.
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const i = r * cols + c, k = kind[i];
@@ -471,7 +489,7 @@ function drawRivers(j: Job): void {
 }
 
 function drawGlyphs(j: Job): void {
-  const { ctx, inp, cols, rows, s } = j;
+  const { ctx, inp, cols, rows } = j;
   const G = ATLAS_CFG.glyphs;
   // One lattice for every biome: the site's biome picks the spec, the spec's
   // own spacing thins the deal by probability. Spacing never drops below the
@@ -507,7 +525,6 @@ function drawGlyphs(j: Job): void {
       ctx.restore();
     }
   }
-  void s;
 }
 
 function drawFeatures(j: Job, lakesOnly: boolean): void {
@@ -543,24 +560,45 @@ function vectorPhase(j: Job): void {
   j.phase = 'encode';
 }
 
-function finish(j: Job): AtlasChartOut {
+function finish(j: Job): AtlasRaster {
   const href = j.canvas.toDataURL('image/png');
   return {
-    href, x: j.inp.box.minX, y: j.inp.box.minY, w: j.W / j.ppu, h: j.H / j.ppu,
-    labels: j.labels, building: false, progress: 1,
+    key: j.key, href, x: j.inp.box.minX, y: j.inp.box.minY, w: j.W / j.ppu, h: j.H / j.ppu,
+    labels: j.labels, ms: Math.round(j.spentMs), px: Math.max(j.W, j.H),
   };
 }
 
-/** Advance (or start) the chart for `inp` within `budgetMs`, and return the
- *  last FINISHED raster (possibly an older key's — the panel keeps showing it
- *  until the new one is whole). */
-export function atlasChart(inp: AtlasChartInput, budgetMs: number = ATLAS_CFG.raster.budgetMs): AtlasChartOut {
-  if (done && done.key === inp.key && !(current && current.key === inp.key)) {
-    return done.out;
+function remember(r: AtlasRaster): void {
+  cache.delete(r.key);
+  cache.set(r.key, r);
+  const cap = ATLAS_CFG.raster.cacheEntries;
+  while (cache.size > cap) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
   }
-  if (!current || current.key !== inp.key) current = startJob(inp);
+}
+
+/** The finished raster for `inp.key` if it exists (touching it as recent),
+ *  else advance — or start — the one job in flight within `budgetMs`. A
+ *  key whose job must wait behind another returns null + building, so the
+ *  caller keeps ticking; the order callers ask in is the order jobs run. */
+export function atlasChart(inp: AtlasChartInput, budgetMs: number = ATLAS_CFG.raster.budgetMs): AtlasChartOut {
+  const hit = cache.get(inp.key);
+  if (hit) {
+    cache.delete(inp.key);
+    cache.set(inp.key, hit);
+    return { raster: hit, building: current !== null, progress: 1 };
+  }
+  if (current && current.key !== inp.key) {
+    // Another raster is building — this one waits its turn (the caller asks
+    // for the base before the window, so the base always wins the lane).
+    return { raster: null, building: true, progress: 0 };
+  }
+  if (!current) current = startJob(inp);
   const j = current;
-  const deadline = performance.now() + budgetMs;
+  const t0 = performance.now();
+  const deadline = t0 + budgetMs;
   while (performance.now() <= deadline && j.phase !== 'done') {
     switch (j.phase) {
       case 'sample': samplePhase(j, deadline); break;
@@ -568,22 +606,43 @@ export function atlasChart(inp: AtlasChartInput, budgetMs: number = ATLAS_CFG.ra
       case 'shade': shadePhase(j, deadline); break;
       case 'vector': vectorPhase(j); break;
       case 'encode': {
-        done = { key: j.key, out: finish(j) };
+        j.spentMs += performance.now() - t0;
+        const r = finish(j);
+        remember(r);
         j.phase = 'done';
         current = null;
-        return done.out;
+        return { raster: r, building: false, progress: 1 };
       }
     }
   }
+  j.spentMs += performance.now() - t0;
   const progress = j.phase === 'sample' ? 0.35 * (j.row / j.rows)
     : j.phase === 'shore' ? 0.35
       : j.phase === 'shade' ? 0.35 + 0.55 * (j.row / j.H) : 0.95;
-  if (done) return { ...done.out, building: true, progress };
-  return { href: '', x: 0, y: 0, w: 0, h: 0, labels: [], building: true, progress };
+  return { raster: null, building: true, progress };
+}
+
+/** A finished raster by key, without touching a job (the panel's in-place
+ *  sync reads the last good raster while a fresh one builds). */
+export function atlasRaster(key: string): AtlasRaster | null { return cache.get(key) ?? null; }
+
+/** Drop a job in flight for a raster nobody asks for any more (the view left
+ *  its window), so the wanted one starts at once. */
+export function atlasKeep(keys: readonly string[]): void {
+  if (current && !keys.includes(current.key)) current = null;
 }
 
 /** Whether a job is in flight (the panel schedules its next tick on it). */
 export function atlasChartBusy(): boolean { return current !== null; }
 
-/** Forget every raster (a run boundary; tests). */
-export function atlasChartReset(): void { current = null; done = null; }
+/** Forget every raster (a run boundary; the dev tab's rebuild; tests). */
+export function atlasChartReset(): void { current = null; cache.clear(); }
+
+/** The dev tab's read: cached rasters (key · px · build ms) + the job in flight. */
+export function atlasStats(): { cached: { key: string; px: number; ms: number }[]; building: string | null; progress: number } {
+  const cached = Array.from(cache.values()).map(r => ({ key: r.key, px: r.px, ms: r.ms }));
+  if (!current) return { cached, building: null, progress: 1 };
+  const j = current;
+  const progress = j.phase === 'sample' ? 0.35 * (j.row / j.rows) : j.phase === 'shore' ? 0.35 : j.phase === 'shade' ? 0.35 + 0.55 * (j.row / j.H) : 0.95;
+  return { cached, building: j.key, progress };
+}

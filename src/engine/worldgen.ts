@@ -240,6 +240,13 @@ export interface ZoneSpec {
   /** Mint a PORT: a harbor on the shore where a frontier met open OCEAN —
    *  coastal tileset forced, a guaranteed coast landmark, def.port set. */
   port?: boolean;
+  /** THE KNOWLEDGE LAW (docs/engine/atlas.md): every graph mint is born
+   *  VEILED — off the chart until the player finds it (entry, the one-ring
+   *  preview off walked ground, a survey, an omen, an accepted quest, a won
+   *  siege, a sighted port) — so no distant event's mint ever redraws the
+   *  map by itself. `false` opts a mint out: ground the player stands on
+   *  the moment it exists. */
+  veiled?: boolean;
   /** The DIMENSION this zone belongs to (inherited from its source at mint).
    *  Baked BEFORE the weave so the road graph never crosses dimensions. */
   dimension?: string;
@@ -1598,6 +1605,9 @@ export function placeZoneAt(
     exits,
     map,
     waypoint: wpBlocked ? false : wpCand,
+    // THE KNOWLEDGE LAW: born veiled (ZoneSpec.veiled above); World.visible
+    // and the knowledge acts lift it.
+    ...(spec.veiled === false ? {} : { veiled: true }),
     ...(spec.wpExclusionRadius ? { wpExclusionRadius: spec.wpExclusionRadius } : {}),
     // A SPECIAL arena ignores the biome and locks out overlay events (eventOwned).
     ...(spec.special ? { special: true, eventOwned: true } : {}),

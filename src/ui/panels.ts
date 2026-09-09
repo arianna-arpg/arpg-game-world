@@ -147,7 +147,8 @@ import { treeGraph, treeLimbOfNode, treeLimbs, treeNodeRanks, treeSealedSet, tre
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 import { attachPanelMove, configurePanelLayout, panelLayoutRefresh, panelLayoutSync, panelMoved, panelMoveReset, panelMoveTo, panelSeatOf, persistPanelSeat, resetPanelLayout } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels; THE LAYOUT remembers
 import { ATLAS_LAYER_CHIPS, MAP_CFG, MAP_CHART_MODES, MAP_LABEL_MODES } from './mapConfig';
-import { atlasChart, type AtlasChartInput } from './atlasPaint';
+import { atlasChart, atlasKeep, atlasRaster, type AtlasChartInput, type AtlasRaster } from './atlasPaint';
+import { MAP_LENS } from './mapLens';
 import { ATLAS_CFG, climateWords, featuresAt, featuresInRect } from '../world/atlas';
 import { climateAt } from '../world/climate';
 import { elevationAt, riverPathsInRect } from '../world/relief';
@@ -703,6 +704,12 @@ export class UI {
   private oceanCache: { key: string; svg: string } | null = null;
   /** The painted chart's build-tick timer (0 = none pending). */
   private chartTimer = 0;
+  /** The last label markup the atlas layer printed (the in-place sync compares). */
+  private atlasLabelsHtml = '';
+  /** The raster keys the atlas layer shows (base / zoom window). */
+  private atlasShown = { base: '', window: '' };
+  /** The side box's last text (the in-place sync compares; a rebuild resets it). */
+  private asideHtml = '';
   /** The zone the cursor is over (transient) and the zone CLICKED to pin (sticky,
    *  so you can move the cursor away to read a long list). The info box shows the
    *  pinned zone, else the hovered zone, else the zone you stand in. Both reset on
@@ -7846,6 +7853,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // THE PAINTED CHART (Settings.mapChart): the atlas raster stands in for the
     // flat biome wash, and roads wear a halo so they read on any ground.
     const painted = this.getSettings().mapChart === 'painted';
+    // THE KNOWLEDGE LAW's one read for the chart (World.visible: walked, beside
+    // walked ground, surveyed, told, heard of) — or THE DEV LENS, which sees all.
+    const lens = MAP_LENS;
+    const seen = (z: ZoneDef): boolean => lens.omniscient || world.visible(z);
     const STUB_DIR = { n: { x: 0, y: -42 }, s: { x: 0, y: 42 }, e: { x: 46, y: 0 }, w: { x: -46, y: 0 } };
 
     // Roads between zones (each connection drawn once). Routes out of
@@ -7886,7 +7897,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         // BOTH ends must be visible: a road drawn into a veiled node would
         // leak the forechart's ahead-minted ground (a line to blank map is a
         // coordinate spoiler). Fully-fogged pairs never drew anyway.
-        if (!world.visible(z) || !world.visible(b)) continue;
+        if (!seen(z) || !seen(b)) continue;
         const key = z.id < e.to ? z.id + '|' + e.to : e.to + '|' + z.id;
         if (drawn.has(key)) continue;
         drawn.add(key);
@@ -7922,7 +7933,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         if (!b || !inDim(b)) continue;
         // Same veil law as the roads: a lane to a veiled harbor is the
         // HARBOR's knowledge (the Sail menu lists it), never the map's.
-        if (!world.visible(z) || !world.visible(b)) continue;
+        if (!seen(z) || !seen(b)) continue;
         const key = 'sea:' + (z.id < to ? z.id + '|' + to : to + '|' + z.id);
         if (drawn.has(key)) continue;
         drawn.add(key);
@@ -7944,7 +7955,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       for (const u of z.underways ?? []) {
         const b = world.zoneMap[u.to];
         if (!b || !inDim(b)) continue;
-        if (!world.visible(z) || !world.visible(b)) continue;
+        if (!seen(z) || !seen(b)) continue;
         const key = 'ug:' + (z.id < u.to ? z.id + '|' + u.to : u.to + '|' + z.id);
         if (drawn.has(key)) continue;
         drawn.add(key);
@@ -7970,13 +7981,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     let nodes = '';
     let cards = '';
     for (const z of zones) {
-      if (!world.visible(z)) continue; // fog policy (gentle now; dynamic later)
+      if (!seen(z)) continue; // THE KNOWLEDGE LAW (World.visible) — or the dev lens
       const known = visited.has(z.id);
       // RECON INTEL (world.surveyed — a survey spire's pulse): ground you know
       // OF but haven't walked. Reads like charted terrain (real name, biome,
       // level) at a scouting remove — washed fill, a dashed rim in the
       // spire's tint — so the flare visibly buys you the lay of the land.
-      const scouted = !known && world.surveyed.has(z.id);
+      const scouted = !known && (world.surveyed.has(z.id) || lens.omniscient);
       const current = world.zone.id === z.id;
       const wp = world.discoveredWaypoints.has(z.id);
       const canTravel = wp && !current;
@@ -8067,7 +8078,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       const C = MAP_CFG.card;
       const cw = Math.max(name.length * C.charW, (showSub ? sub.length : 0) * C.subCharW) + C.padX * 2;
       cards += `<g class="zone-card" data-zl="${z.id}"${fixed ? ' data-fixed="1"' : ''}
-        ${fixed || this.hoveredZone === z.id ? '' : 'display="none"'} pointer-events="none">
+        ${fixed ? '' : 'display="none"'} pointer-events="none">
         ${backdrop ? `<rect x="${(z.map.x - cw / 2).toFixed(1)}" y="${z.map.y + C.top}" width="${cw.toFixed(1)}"
           height="${showSub ? C.hWithSub : C.h}" rx="${C.rx}" fill="${C.fill}"
           stroke="${kd?.ring?.color ?? C.stroke}" stroke-width="1"/>` : ''}
@@ -8107,14 +8118,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // AND the imposed OCEAN biome in one wash (the sea is a biome, not an
     // overlay stacked on a land heat-map).
     let ocean = '';
-    let chartOver = '';
-    if (painted) {
-      const chart = this.paintedChart(world, dim, zones);
-      ocean = chart.image;
-      chartOver = chart.over;
-    } else if (dim !== 'surface') {
-      const xs0 = zones.filter(z => world.visible(z)).map(z => z.map.x);
-      const ys0 = zones.filter(z => world.visible(z)).map(z => z.map.y);
+    // The painted chart rides the ATLAS LAYER (synced in place by syncAtlas —
+    // never part of this html); the classic non-surface wash stays here.
+    if (!painted && dim !== 'surface') {
+      const xs0 = zones.filter(z => seen(z)).map(z => z.map.x);
+      const ys0 = zones.filter(z => seen(z)).map(z => z.map.y);
       if (xs0.length) {
         const pad = 320;
         const spanW = Math.max(...xs0) - Math.min(...xs0) + pad * 2;
@@ -8183,20 +8191,32 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
     // The map grows as frontiers are charted — fit the view to the VISIBLE graph
     // (the fog policy). Margins run a little wide so drifting fronts have room.
-    const shown = zones.filter(z => world.visible(z));
+    const shown = zones.filter(z => seen(z));
     const xs = (shown.length ? shown : zones).map(z => z.map.x);
     const ys = (shown.length ? shown : zones).map(z => z.map.y);
     // Overlay MAP EXTENTS: a layer painting past the charted rim (Deepwinter's
     // territory marching in from the unknown cold) stretches the fit so the
     // front is on screen from ignition day — the situational-awareness read.
     // Rides `layers`, so toggling the layer chip off un-stretches the view too.
-    for (const l of layers) for (const p of l.extent) { xs.push(p.x); ys.push(p.y); }
+    // THE KNOWLEDGE LAW: a front's far reach is not the player's knowledge —
+    // the stretch is a dev-lens read now.
+    if (lens.omniscient) for (const l of layers) for (const p of l.extent) { xs.push(p.x); ys.push(p.y); }
     const minX = Math.min(...xs) - 95, maxX = Math.max(...xs) + 95;
     const minY = Math.min(...ys) - 80, maxY = Math.max(...ys) + 85;
     // Store the fitted box; the live zoom/pan are applied ON TOP (the map grows
     // with the world, so zooming keeps the fixed-size labels legible).
     this.mapBox = { minX, minY, w: maxX - minX, h: maxY - minY };
-    const zPct = Math.round(this.mapZoom * 100);
+    // THE VEIL CLIP: every overlay wash (weather, territory, the classic biome
+    // wash) is clipped to the known envelope — the same discs the painter's
+    // veil uses — unless the dev lens is omniscient.
+    const veilR = ATLAS_CFG.reveal.radius + ATLAS_CFG.reveal.feather;
+    let veilClip = '';
+    if (!lens.omniscient) {
+      for (const z of shown) {
+        veilClip += `<circle cx="${z.map.x}" cy="${z.map.y}" r="${veilR}"/>`;
+        for (const b of z.berths ?? []) veilClip += `<circle cx="${b.x}" cy="${b.y}" r="${veilR}"/>`;
+      }
+    }
 
     // Preserve the side-box scroll across the wholesale rebuild — else the 0.5s
     // auto-refresh snaps a pinned, scrolled list back to the top twice a second.
@@ -8213,7 +8233,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal">
           <span class="map-zoom-grp">
             <button class="map-zoom" data-mz="out" title="zoom out">−</button>
-            <button class="map-zoom" data-mz="reset" title="reset zoom">${zPct}%</button>
+            <button class="map-zoom" data-mz="reset" title="reset zoom">100%</button>
             <button class="map-zoom" data-mz="in" title="zoom in">＋</button>
           </span>
           &nbsp; ${visited.size} charted · <span style="color:#5ad8d8">◆</span> = travel</span></h2>
@@ -8221,15 +8241,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       <div style="font-size:11px;color:#9ab0c8;margin:-4px 0 6px 0">${world.sim.hudLine(world.zone, world.time)}
         <span style="color:#6a6a78"> · scroll to zoom, drag to pan · hover a zone, click to pin</span></div>
       ${this.mapLayerChipsHtml(chipLayers, painted ? ATLAS_LAYER_CHIPS : [])}
-      <div id="map-here" style="font-size:10px;color:#8a8678;margin:-3px 0 5px 0;min-height:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+      ${lens.cursorRead ? '<div id="map-here" style="font-size:10px;color:#8a8678;margin:-3px 0 5px 0;height:13px;line-height:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>' : ''}
       <div class="map-body">
-        <svg id="world-map-svg" viewBox="${this.mapViewBox()}" style="cursor:var(--cursor-grab, grab);touch-action:none"><g pointer-events="none">${ocean}${simUnder}${edges}${stubs}</g>${nodes}<g pointer-events="none">${markers}${simOver}${chartOver}${cards}</g></svg>
-        <aside id="map-aside">${this.zoneBoxHtml(world)}</aside>
+        <svg id="world-map-svg" viewBox="0 0 100 100" style="cursor:var(--cursor-grab, grab);touch-action:none"><g id="atlas-layer" pointer-events="none"><image id="atlas-base" preserveAspectRatio="none" display="none"/><image id="atlas-window" preserveAspectRatio="none" display="none"/></g>${veilClip ? `<defs><clipPath id="map-veil-clip">${veilClip}</clipPath></defs>` : ''}<g pointer-events="none"${veilClip ? ' clip-path="url(#map-veil-clip)"' : ''}>${ocean}${simUnder}</g><g pointer-events="none">${edges}${stubs}</g>${nodes}<g pointer-events="none">${markers}${simOver}</g><g id="atlas-labels" pointer-events="none"></g><g pointer-events="none">${cards}</g></svg>
+        <aside id="map-aside"></aside>
       </div>`;
-    // Unchanged since the last write? Keep the standing SVG + its wiring.
-    if (!this.setPanelHtml(this.worldMap, html)) return;
-    const aside = this.worldMap.querySelector<HTMLElement>('#map-aside');
-    if (aside) aside.scrollTop = prevAsideScroll;
+    // THE STANDING CHART: the html above carries NO transient state — no
+    // viewBox, no zoom %, no hover, no side-box text, no raster — so it
+    // changes only when the KNOWN graph does. Everything live is synced IN
+    // PLACE on the standing SVG by syncMapLive, rebuilt or not.
+    const rebuilt = this.setPanelHtml(this.worldMap, html);
+    this.syncMapLive(world, prevAsideScroll);
+    if (!rebuilt) return;
 
     this.worldMap.querySelectorAll<SVGElement>('.wp-node').forEach(el => {
       el.addEventListener('click', () => {
@@ -8240,21 +8263,56 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.wireMapTabs();
   }
 
-  /** THE PAINTED CHART (ui/atlasPaint.ts + world/atlas.ts): the terrain
-   *  raster under the node graph — ONE pointer-transparent <image> — and the
-   *  feature name labels for the over-group. Progressive: while a new chart
-   *  builds, the last finished one stands and a short timer keeps the job
-   *  ticking between the panel's own half-second refreshes. The reveal set
-   *  is the VISIBLE node graph (the wash's envelope law): nothing paints
-   *  beyond knowledge, and a veiled forechart mint stays unbetrayed. */
-  private paintedChart(world: World, dim: string, zones: ZoneDef[]): { image: string; over: string } {
+  /** THE STANDING CHART's live sync — everything the map's html deliberately
+   *  leaves out, applied IN PLACE on the standing SVG: the viewBox (zoom +
+   *  pan), the zoom label, the hovered name card, the side box's text and the
+   *  atlas rasters. Runs after every refresh, rebuilt or not — so a hover, a
+   *  zoom, a pan or a chart tick never rebuilds the node graph. */
+  private syncMapLive(world: World, asideScroll: number): void {
+    const svg = this.worldMap.querySelector<SVGSVGElement>('#world-map-svg');
+    if (!svg) return;
+    svg.setAttribute('viewBox', this.mapViewBox());
+    const lbl = this.worldMap.querySelector<HTMLElement>('[data-mz="reset"]');
+    if (lbl) lbl.textContent = `${Math.round(this.mapZoom * 100)}%`;
+    this.showZoneCard(svg, this.hoveredZone, true);
+    const aside = this.worldMap.querySelector<HTMLElement>('#map-aside');
+    if (aside) {
+      const next = this.zoneBoxHtml(world);
+      if (aside.childElementCount === 0 || next !== this.asideHtml) {
+        this.asideHtml = next;
+        aside.innerHTML = next;
+        aside.scrollTop = asideScroll;
+      }
+    }
+    this.syncAtlas(svg);
+  }
+
+  /** Flip a hover-revealed name card in place. Fixed cards (towns, the pin,
+   *  always-mode, you-are-here) carry data-fixed and never flip. */
+  private showZoneCard(svg: SVGSVGElement, zid: string | null, show: boolean): void {
+    if (!zid) return;
+    const card = svg.querySelector<SVGGElement>(`.zone-card[data-zl="${zid}"]:not([data-fixed])`);
+    if (!card) return;
+    if (show) card.removeAttribute('display');
+    else card.setAttribute('display', 'none');
+  }
+
+  /** THE ATLAS INPUTS: the BASE chart (the whole known country) and, zoomed
+   *  past the threshold, the zoom WINDOW (the view with a margin) — both keyed
+   *  on the dimension, the box, the layer chips, the known set and the lens,
+   *  so a raster asked for again comes straight back from the painter's
+   *  cache. The known set is THE KNOWLEDGE LAW's read (World.visible) unless
+   *  the dev lens is omniscient. */
+  private atlasInputs(world: World, dim: string): { base: AtlasChartInput; window: AtlasChartInput | null } | null {
+    const lens = MAP_LENS;
     const reveal: { x: number; y: number }[] = [];
-    for (const z of zones) {
-      if (!world.visible(z)) continue;
+    for (const z of Object.values(world.zoneMap)) {
+      if ((z.dimension ?? 'surface') !== dim) continue;
+      if (!lens.omniscient && !world.visible(z)) continue;
       reveal.push(z.map);
       for (const b of z.berths ?? []) reveal.push(b);
     }
-    if (!reveal.length) return { image: '', over: '' };
+    if (!reveal.length) return null;
     const pad = ATLAS_CFG.reveal.radius + ATLAS_CFG.reveal.feather + 60;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const p of reveal) {
@@ -8263,66 +8321,124 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       if (p.y < minY) minY = p.y;
       if (p.y > maxY) maxY = p.y;
     }
-    // The box snaps to a lattice so a rim node grows it in steps; the key
-    // carries the visible set itself, so a chart never stands stale.
     const snap = 160;
-    const box = {
+    const full = {
       minX: Math.floor((minX - pad) / snap) * snap, minY: Math.floor((minY - pad) / snap) * snap,
       maxX: Math.ceil((maxX + pad) / snap) * snap, maxY: Math.ceil((maxY + pad) / snap) * snap,
     };
-    // THE ZOOM WINDOW (ATLAS_CFG.raster): zoomed in past the threshold, paint
-    // the VIEW with a margin at full resolution instead of the whole charted
-    // country — a close look stays crisp however far the chart has grown.
-    // The window snaps to a coarse lattice so small pans re-use the raster.
-    if (this.mapZoom >= ATLAS_CFG.raster.zoomWindowFrom && this.mapBox.w > 1) {
-      const side = Math.max(this.mapBox.w, this.mapBox.h) / this.mapZoom;
-      const cx = this.mapBox.minX + this.mapBox.w / 2 + this.mapPan.x;
-      const cy = this.mapBox.minY + this.mapBox.h / 2 + this.mapPan.y;
-      const half = side * 0.5 * ATLAS_CFG.raster.zoomWindowPad;
-      const snapW = Math.max(40, Math.round(side * 0.25 / 40) * 40);
-      box.minX = Math.max(box.minX, Math.floor((cx - half) / snapW) * snapW);
-      box.minY = Math.max(box.minY, Math.floor((cy - half) / snapW) * snapW);
-      box.maxX = Math.min(box.maxX, Math.ceil((cx + half) / snapW) * snapW);
-      box.maxY = Math.min(box.maxY, Math.ceil((cy + half) / snapW) * snapW);
-    }
     const seed = world.sim.biomeField.fieldSeed;
     const surface = dim === 'surface';
     let sig = 0;
     for (const p of reveal) sig = (Math.imul(sig ^ (p.x | 0), 0x9e3779b1) + (p.y | 0)) | 0;
     const off = (id: string): boolean => this.mapLayersOff.has(id);
     const layers = { relief: !off('atlas:relief'), rivers: !off('atlas:rivers'), features: !off('atlas:features'), glyphs: !off('atlas:glyphs') };
-    const key = [dim, seed, box.minX, box.minY, box.maxX, box.maxY, reveal.length, sig >>> 0,
-      +layers.relief, +layers.rivers, +layers.features, +layers.glyphs,
-      surface ? world.sim.biomeField.warpSignature() : ''].join('|');
-    const min = { x: box.minX, y: box.minY }, max = { x: box.maxX, y: box.maxY };
-    const inp: AtlasChartInput = {
-      key, box, seed, reveal, layers,
-      biomeAt: surface ? (c) => world.sim.biomeField.composedBiome(c).biome : (c) => world.dimensionBiomeAtMap(dim, c),
-      elevAt: surface ? (c) => elevationAt(c, seed) : null,
-      kindAt: surface ? (c) => world.continentAtMap(c).kind : () => 'land',
-      rivers: surface && layers.rivers ? riverPathsInRect(min, max, seed) : [],
-      features: surface && layers.features ? featuresInRect(min, max, seed) : [],
+    const tag = [dim, seed, reveal.length, sig >>> 0, +layers.relief, +layers.rivers, +layers.features, +layers.glyphs,
+      lens.omniscient ? 'all' : 'veil', surface ? world.sim.biomeField.warpSignature() : ''].join('|');
+    const make = (box: AtlasChartInput['box'], lane: string): AtlasChartInput => {
+      const min = { x: box.minX, y: box.minY }, max = { x: box.maxX, y: box.maxY };
+      return {
+        key: `${lane}|${box.minX},${box.minY},${box.maxX},${box.maxY}|${tag}`,
+        box, seed, reveal, layers, noVeil: lens.omniscient,
+        biomeAt: surface ? (c) => world.sim.biomeField.composedBiome(c).biome : (c) => world.dimensionBiomeAtMap(dim, c),
+        elevAt: surface ? (c) => elevationAt(c, seed) : null,
+        kindAt: surface ? (c) => world.continentAtMap(c).kind : () => 'land',
+        rivers: surface && layers.rivers ? riverPathsInRect(min, max, seed) : [],
+        features: surface && layers.features ? featuresInRect(min, max, seed) : [],
+      };
     };
-    const out = atlasChart(inp);
-    if (out.building && !this.chartTimer) {
-      this.chartTimer = window.setTimeout(() => { this.chartTimer = 0; this.refreshMap(); }, 45);
+    // THE ZOOM WINDOW (ATLAS_CFG.raster): zoomed in past the threshold, the
+    // view with a margin renders at full resolution OVER the base; the window
+    // snaps to a coarse lattice so small pans re-use its raster.
+    let window: AtlasChartInput | null = null;
+    if (this.mapZoom >= ATLAS_CFG.raster.zoomWindowFrom && this.mapBox.w > 1) {
+      const side = Math.max(this.mapBox.w, this.mapBox.h) / this.mapZoom;
+      const cx = this.mapBox.minX + this.mapBox.w / 2 + this.mapPan.x;
+      const cy = this.mapBox.minY + this.mapBox.h / 2 + this.mapPan.y;
+      const half = side * 0.5 * ATLAS_CFG.raster.zoomWindowPad;
+      const snapW = Math.max(40, Math.round(side * 0.25 / 40) * 40);
+      const wb = {
+        minX: Math.max(full.minX, Math.floor((cx - half) / snapW) * snapW),
+        minY: Math.max(full.minY, Math.floor((cy - half) / snapW) * snapW),
+        maxX: Math.min(full.maxX, Math.ceil((cx + half) / snapW) * snapW),
+        maxY: Math.min(full.maxY, Math.ceil((cy + half) / snapW) * snapW),
+      };
+      if (wb.maxX - wb.minX > 40 && wb.maxY - wb.minY > 40) window = make(wb, 'window');
     }
-    const image = out.href
-      ? '<image href="' + out.href + '" x="' + out.x.toFixed(1) + '" y="' + out.y.toFixed(1)
-        + '" width="' + out.w.toFixed(1) + '" height="' + out.h.toFixed(1) + '" preserveAspectRatio="none"/>'
-      : '';
-    let over = '';
-    for (const l of out.labels) {
-      over += '<text x="' + l.x.toFixed(1) + '" y="' + l.y.toFixed(1) + '" text-anchor="middle" font-size="' + ATLAS_CFG.labels.font
-        + '" font-style="italic" fill="' + l.color + '" stroke="#0b0b12" stroke-width="2.4" paint-order="stroke" stroke-linejoin="round">'
-        + esc(l.text) + '</text>';
-    }
-    return { image, over };
+    return { base: make(full, 'base'), window };
   }
 
-  /** THE CURSOR READ (#map-here): the ground under the pointer, from the same
-   *  fields the chart paints — biome, elevation, the climate bands' own words,
-   *  and any feature within reach. Fog-honest: only near visible nodes. */
+  /** THE ATLAS LAYER, synced in place: the BASE raster (the whole known
+   *  country) always stands; the zoom WINDOW overlays it crisp when zoomed
+   *  in — while a window builds, the last one stays where it still helps and
+   *  the base covers the rest, so panning never shows blank ground. Labels
+   *  print from the base (the complete set). A build in flight schedules its
+   *  own next tick — nothing here ever rebuilds the panel's html. */
+  private syncAtlas(svg: SVGSVGElement): void {
+    const base = svg.querySelector<SVGImageElement>('#atlas-base');
+    const win = svg.querySelector<SVGImageElement>('#atlas-window');
+    const labels = svg.querySelector<SVGGElement>('#atlas-labels');
+    if (!base || !win || !labels) return;
+    const world = this.getWorld();
+    const painted = this.getSettings().mapChart === 'painted';
+    const inputs = painted ? this.atlasInputs(world, this.mapDimension) : null;
+    if (!inputs) {
+      base.setAttribute('display', 'none');
+      win.setAttribute('display', 'none');
+      if (this.atlasLabelsHtml) { labels.innerHTML = ''; this.atlasLabelsHtml = ''; }
+      this.atlasShown = { base: '', window: '' };
+      return;
+    }
+    // A job for a raster nobody wants any more (a window the view has left)
+    // is dropped, so the wanted one starts at once.
+    atlasKeep(inputs.window ? [inputs.base.key, inputs.window.key] : [inputs.base.key]);
+    const place = (el: SVGImageElement, r: AtlasRaster): void => {
+      if (el.getAttribute('href') !== r.href) el.setAttribute('href', r.href);
+      el.setAttribute('x', r.x.toFixed(1)); el.setAttribute('y', r.y.toFixed(1));
+      el.setAttribute('width', r.w.toFixed(1)); el.setAttribute('height', r.h.toFixed(1));
+      el.removeAttribute('display');
+    };
+    let building = false;
+    const b = atlasChart(inputs.base);
+    building ||= b.building;
+    const baseR = b.raster ?? (this.atlasShown.base ? atlasRaster(this.atlasShown.base) : null);
+    if (baseR) { place(base, baseR); this.atlasShown.base = baseR.key; }
+    if (inputs.window) {
+      const w = atlasChart(inputs.window);
+      building ||= w.building;
+      const winR = w.raster ?? (this.atlasShown.window ? atlasRaster(this.atlasShown.window) : null);
+      if (winR) { place(win, winR); this.atlasShown.window = winR.key; }
+      else win.setAttribute('display', 'none');
+    } else {
+      win.setAttribute('display', 'none');
+      this.atlasShown.window = '';
+    }
+    let html = '';
+    if (baseR) {
+      for (const l of baseR.labels) {
+        html += `<text x="${l.x.toFixed(1)}" y="${l.y.toFixed(1)}" text-anchor="middle" font-size="${ATLAS_CFG.labels.font}"`
+          + ` font-style="italic" fill="${l.color}" stroke="#0b0b12" stroke-width="2.4" paint-order="stroke" stroke-linejoin="round">${esc(l.text)}</text>`;
+      }
+    }
+    if (html !== this.atlasLabelsHtml) { labels.innerHTML = html; this.atlasLabelsHtml = html; }
+    if (building) this.scheduleAtlasTick();
+  }
+
+  /** One painter tick (45 ms): advance the job in flight and re-sync the
+   *  standing SVG's atlas layer; re-arms itself while a build is in flight. */
+  private scheduleAtlasTick(): void {
+    if (this.chartTimer) return;
+    this.chartTimer = window.setTimeout(() => {
+      this.chartTimer = 0;
+      if (!this.mapOpen) return;
+      const svg = this.worldMap.querySelector<SVGSVGElement>('#world-map-svg');
+      if (svg) this.syncAtlas(svg);
+    }, 45);
+  }
+
+  /** THE CURSOR READ (#map-here — THE DEV LENS only): the ground under the
+   *  pointer, from the same fields the chart paints — biome, elevation, the
+   *  climate bands' own words, and any feature within reach. The honest
+   *  chart carries the same read per ZONE in the side box (the ground row). */
   private updateMapHere(svg: SVGSVGElement, e: PointerEvent | null): void {
     const el = this.worldMap.querySelector<HTMLElement>('#map-here');
     if (!el) return;
@@ -8333,13 +8449,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const c = { x: pt.x, y: pt.y };
     const world = this.getWorld();
     const dim = this.mapDimension;
-    let near = Infinity;
-    for (const z of Object.values(world.zoneMap)) {
-      if ((z.dimension ?? 'surface') !== dim || !world.visible(z)) continue;
-      const d = Math.hypot(z.map.x - c.x, z.map.y - c.y);
-      if (d < near) near = d;
-    }
-    if (near > ATLAS_CFG.reveal.radius + ATLAS_CFG.reveal.feather) { el.textContent = 'uncharted ground'; return; }
     const parts: string[] = [];
     if (dim === 'surface') {
       const seed = world.sim.biomeField.fieldSeed;
@@ -8491,7 +8600,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // RECON parity with the chart: a surveyed zone shows its real name and
     // identity here too — the old visited-only gate said '???' in the box
     // while the map plainly printed the name beside it.
-    const scouted = !charted && world.surveyed.has(zoneId);
+    const scouted = !charted && (world.surveyed.has(zoneId) || MAP_LENS.omniscient);
     const revealed = (charted || scouted) && !!zone;
     const name = revealed ? zone!.name : '???';
     const pinned = this.pinnedZone === zoneId;
@@ -8592,7 +8701,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  hover/pan/scroll). Called from the hover/pin handlers. */
   private renderZoneBox(): void {
     const aside = this.worldMap.querySelector<HTMLElement>('#map-aside');
-    if (aside) aside.innerHTML = this.zoneBoxHtml(this.getWorld());
+    if (!aside) return;
+    const html = this.zoneBoxHtml(this.getWorld());
+    this.asideHtml = html;
+    aside.innerHTML = html;
   }
 
   /** Compute the world-map viewBox from the fitted box + the live zoom/pan,
@@ -8631,12 +8743,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       svg.setAttribute('viewBox', this.mapViewBox());
       const lbl = this.worldMap.querySelector<HTMLElement>('[data-mz="reset"]');
       if (lbl) lbl.textContent = `${Math.round(this.mapZoom * 100)}%`;
-      // THE ZOOM WINDOW kicks the painter at once (a close look re-renders its
-      // window without waiting for the half-second refresh); the tick chain
-      // then carries the build to the end on its own clock.
-      if (this.getSettings().mapChart === 'painted' && !this.chartTimer) {
-        this.chartTimer = window.setTimeout(() => { this.chartTimer = 0; this.refreshMap(); }, 60);
-      }
+      // A zoom or pan re-aims the ATLAS LAYER in place (the zoom window) —
+      // never a rebuild: the standing SVG stays exactly as it stands.
+      this.syncAtlas(svg);
     };
     this.worldMap.querySelectorAll<HTMLButtonElement>('.map-zoom').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -8653,13 +8762,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // Flip a hover-revealed name card in place (no rebuild — a rebuild would
     // reset zoom/pan). Fixed cards (towns, the pin, always-mode, you-are-here)
     // carry data-fixed and never flip.
-    const hoverCard = (zid: string | null, show: boolean): void => {
-      if (!zid) return;
-      const card = svg.querySelector<SVGGElement>(`.zone-card[data-zl="${zid}"]:not([data-fixed])`);
-      if (!card) return;
-      if (show) card.removeAttribute('display');
-      else card.setAttribute('display', 'none');
-    };
+    const hoverCard = (zid: string | null, show: boolean): void => this.showZoneCard(svg, zid, show);
     attachPanZoom(svg, {
       getZoom: () => this.mapZoom,
       setZoom: (z) => { this.mapZoom = z; },
@@ -8671,7 +8774,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // pin, if set, takes precedence inside boxZoneId, so hovering elsewhere
       // while pinned leaves the box alone; the card still follows the cursor).
       onIdleMove: (e) => {
-        this.updateMapHere(svg, e);
+        if (MAP_LENS.cursorRead) this.updateMapHere(svg, e);
         const zid = zoneAt(e);
         if (zid !== this.hoveredZone) {
           hoverCard(this.hoveredZone, false);
@@ -8681,7 +8784,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         }
       },
       onLeave: () => {
-        this.updateMapHere(svg, null);
+        if (MAP_LENS.cursorRead) this.updateMapHere(svg, null);
         if (this.hoveredZone !== null) {
           hoverCard(this.hoveredZone, false);
           this.hoveredZone = null;

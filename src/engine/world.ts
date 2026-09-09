@@ -26702,11 +26702,19 @@ export class World {
   visible(z: ZoneDef): boolean {
     // Concealed ground (an Incursion landing) is hidden from the map AND its
     // auto-fit until the player approaches/enters it — so a far blight stays
-    // obscured and never zooms the map out. VEILED ground (the forechart's
-    // ahead-minted halo, world/forechart.ts) is hidden the same way until
-    // FOUND — entry, adjacency to visited ground, a survey pulse, or an omen
-    // reveal lift it. Everything else is on the map (gentle).
-    return !z.concealed && !z.veiled;
+    // obscured and never zooms the map out.
+    // THE KNOWLEDGE LAW (docs/engine/atlas.md): the chart is the player's
+    // knowledge alone. EVERY graph mint is born VEILED (worldgen placeZoneAt,
+    // ZoneSpec.veiled) and lifts only by a knowledge act — entry, the one-ring
+    // preview off WALKED ground (structural here, so a mint beside you is
+    // seen the moment it exists; the forechart's invariant pass clears the
+    // flag for good), a survey pulse, an omen reveal, an accepted quest, a
+    // won siege, a sighted port. A distant event's mint stays unknown until
+    // the world tells you of it.
+    if (z.concealed) return false;
+    if (!z.veiled) return true;
+    for (const e of z.exits) if (e.to !== '?' && this.visited.has(e.to)) return true;
+    return false;
   }
 
   /** Is the player by the quartermaster? (Renderer prompt box.) */
@@ -27118,6 +27126,9 @@ export class World {
       // notarizes every wire-in as a deed.)
       if (!q.zone.floating) {
         this.notarizeRoad(anchor, def);
+        // THE KNOWLEDGE LAW: an accepted quest's ground is TOLD ground — named
+        // on the chart the way its anchor is (born veiled like every mint).
+        def.veiled = false;
         // The quest TELLS you the way ("head south") — the anchor it wired
         // to is named knowledge now. A veiled halo anchor would swallow the
         // drawn road (both ends must be visible), leaving the quest node

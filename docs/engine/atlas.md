@@ -1,9 +1,10 @@
 # THE ATLAS FABRIC — the world map as shown ground, and the features zones inherit
 
-**Status: v1 built 2026-09-07 on the `worldmap-atlas` branch.** Every number is
+**Status: v1 built 2026-09-07, v1.1 (THE KNOWLEDGE LAW, THE DEV LENS, THE
+STANDING CHART) 2026-09-08, on the `worldmap-atlas` branch.** Every number is
 a DIAL (unblessed). Charter with the open forks: `docs/design/world-atlas.md`.
 Probe: `npx tsx balance/probe_atlas.ts` (fast lane). Live-walked on
-`arpg-dev-worldmap` (:5289, the worktree's own dev server).
+`arpg-dev-worldmap` (:5289, the worktree's own dev server; `?dev` for the lens).
 
 The map used to *tell*: a 40×40 lattice of faint biome rectangles under a node
 graph, river threads on top. The atlas *shows*: the same foreordained fields
@@ -11,7 +12,7 @@ graph, river threads on top. The atlas *shows*: the same foreordained fields
 chart, and the notable places on those fields — summits, lodes, lake basins —
 computed whole from the seed, drawn on the chart, and **inherited by the zones
 minted on them**. One seed, one finder, two consumers: what the map draws is
-what the world grows.
+what the world grows. And the chart is **the player's knowledge alone**.
 
 ## The pieces
 
@@ -20,82 +21,129 @@ what the world grows.
 | THE CHART's laws | `world/atlas.ts` (`ATLAS_CFG`, `atlasShade`, `contourBand`, `climateWords`) | the pixel law + every dial, pure and node-safe |
 | THE FEATURES | `world/atlas.ts` (`registerMapFeature`, `featuresInRect`, `featuresAt`, `foldFeatureHits`, `featureHarvestOf`) | the kind registry, the finders, the mint fold |
 | THE DATA | `data/atlasFeatures.ts` (`ATLAS_GLYPHS`, the three kind rows) | which glyph a biome wears; peak / lode / lake |
-| THE PAINTER | `ui/atlasPaint.ts` (`atlasChart`, `registerGlyphPainter`) | the progressive raster + the vector dressing |
-| THE PANEL | `ui/panels.ts` (`paintedChart`, `updateMapHere`) | the `<image>` under the graph, labels, chips, the cursor read |
+| THE PAINTER | `ui/atlasPaint.ts` (`atlasChart`, `atlasRaster`, `atlasKeep`, `atlasStats`, `registerGlyphPainter`) | progressive rasters, an LRU of finished ones |
+| THE PANEL | `ui/panels.ts` (`syncMapLive`, `syncAtlas`, `atlasInputs`, `showZoneCard`, `updateMapHere`) | THE STANDING CHART: everything live synced in place |
+| THE KNOWLEDGE LAW | `engine/worldgen.ts` (`ZoneSpec.veiled`, placeZoneAt) + `engine/world.ts` (`visible`) | every mint born veiled; visibility = knowledge |
+| THE DEV LENS | `ui/mapLens.ts` + `dev/tabs/atlas.ts` | the omniscient, render-only development view |
 | THE MINT | `engine/worldgen.ts` (placeZoneAt) | folds `featuresAt(target)` into `ZoneDef.geo` + the roll lists |
 | THE READERS | `engine/levelgen.ts` ('elevation' gen field), `engine/world.ts` (`bootHarvest`), the zone pane | read the def, never the registry |
 | THE SEED | `world/sim.ts` (`setAtlasSeed` beside `setReliefSeed`) | the one installed truth |
 
-## The chart
+## THE KNOWLEDGE LAW (her ruling 2026-09-08)
 
-`ui/atlasPaint.ts` builds ONE raster per (dimension, box, layers, visible
-set, warp signature) key and hands the panel a data URL placed as a single
-pointer-transparent `<image>` in node units under the node graph — the
-interactivity contract (`ui/mapConfig.ts`) is untouched: only zone geometry
-answers the cursor, labels ride the over-group like every badge.
+> The visible world map is due to the player and the player's knowledge
+> alone. Occasions occur well outside the scope of visibility; the player
+> knows of them by running into them, seeing them directly, or hearing a
+> rumor.
 
-**The pipeline** (each phase budgeted by `ATLAS_CFG.raster.budgetMs`; the
-old raster stands until the new one is whole — the progressive law):
+- **Every graph mint is born VEILED.** `placeZoneAt` stamps `veiled: true`
+  on every def unless the spec says `veiled: false` (ground the player stands
+  on the moment it exists). A distant event's mint — a crusade hold, a demon
+  epicenter, a caravan's far end — no longer pops onto the chart or
+  stretches its fit. Old saves keep their unveiled zones (grandfathered).
+- **A knowledge act lifts the veil, nothing else does:** entry (`loadZone`
+  lifts underfoot and its ring), the one-ring preview off WALKED ground
+  (`World.visible` is STRUCTURAL about it — a mint beside you is seen the
+  moment it exists; the forechart's invariant pass then clears the flag for
+  good), a survey pulse, an omen reveal (the world's rumor), an accepted
+  quest (its ground and its anchor are TOLD), a won siege, a sighted port, a
+  floating zone met on approach. `World.visible(z)` is the ONE fog seam:
+  `!concealed && (!veiled || beside walked ground)`.
+- **The chart reads known ground alone.** The painter's reveal set, the
+  node graph, the roads (both ends), the map's fit, and — through THE VEIL
+  CLIP (`#map-veil-clip`, the same discs the painter's veil uses) — every
+  overlay wash (weather, territory, the classic biome wash) draw only
+  around known nodes. A front's far extent no longer stretches the fit.
+  Markers with `fog: 'always'` (a quest target the giver named) still
+  pierce, by their own design.
+- **Probe pins:** D1–D7 — a directed mint is born veiled and unseen; beside
+  walked ground it is seen at once; a knowledge act lifts it; `veiled:
+  false` opts out; and over a lived sim world THE KNOWLEDGE INVARIANT holds
+  (every shown minted zone is walked, beside walked ground, or surveyed —
+  7 shown of 251 in the rig).
 
-1. **Sample** the fields on a pixel lattice (`raster.lattice` px): biome
-   (the sim's *composed* field — warps honored with attribution, as the old
-   wash did), terrain kind (land / ocean / bridge) and elevation. Ground
-   beyond THE VEIL is never sampled.
-2. **Shore**: a chamfer distance transform over the lattice — every water
-   cell knows its distance to land (the shelf), every land cell to water.
-3. **Shade** every pixel through `atlasShade` — THE PIXEL LAW:
-   - flat land keeps its biome's `mapColor` **exactly** (probe B1);
-   - hillshade from the elevation gradient, lit from the north-west
-     (`shade.light`, `shade.gain`, `shade.ambient`, `shade.maxLift`) — a
-     face turned to the light lifts, one turned away sinks;
-   - a hypsometric lift (`hypso.gain`) — highlands read high at any zoom,
-     exactly 1.0 at elevation 0.5;
-   - alpine rock then snow above `alpine.from` / `snow.from`;
-   - the sea deepens off its shelf (`sea.shelf`, `sea.shallow` → `sea.deep`)
-     with a foam fringe at the coast;
-   - contour bands (`contour.interval`, darkened by `contour.alpha`), paper
-     grain, and THE CRISP EDGE — where the lattice's 2×2 neighbourhood
-     disagrees on biome or terrain, the pixel asks the fields exactly.
-4. **Vector dressing** on the same canvas: lake basins first, then the
-   rivers as tapered threads (`rivers.width` spring → mouth, smoothed
-   through segment midpoints), then biome DRESSING glyphs (`ATLAS_GLYPHS`
-   per biome → a registered painter; one shared lattice, each biome's
-   spacing thinning it by probability; never denser than
-   `glyphs.minSpacingPx`), then the feature marks. Names come back as label
-   rows the panel prints as italic SVG text with a dark halo.
-5. **Encode** to a PNG data URL.
+## THE DEV LENS (`ui/mapLens.ts`, the `?dev` Atlas tab)
 
-**THE VEIL.** A coarse mask (`reveal.cell`) is stamped by every *visible*
-node (plus berths): full within `reveal.radius`, fading over
-`reveal.feather`, void beyond. This is the old wash's envelope law as a soft
-edge, and it keeps the forechart honest — terrain is seed truth, never node
-positions, so a veiled ahead-minted zone is never betrayed by the ground it
-stands on. The mask also gates every river segment, glyph, mark and label.
+The all-revealing view is exactly as valuable for development as the honest
+one is for play, so it lives as a LENS the map renders through — never as
+world state (nothing it shows is stamped on a def, saved, or sent over the
+wire; the world's veils stay put — the probe of that is the tab's own read:
+"346 veiled" while every node is drawn).
 
-**THE SEAM WARP** (`seams`): the biome/terrain *sample* reads a coordinate
-wandered by a smooth noise (±`warp` units) so Voronoi seams and coastlines
-bend organically instead of ruling straight. Presentation only — below node
-grain; rivers, features and elevation read the true coordinate, and every
-mint samples the true field.
+- **Omniscient chart:** every minted node drawn and named (concealed and
+  veiled alike, scouted-style), the whole terrain painted with no veil,
+  washes unclipped, far overlay extents back in the fit.
+- **Cursor read:** a fixed-height strip under the layer chips prints the
+  ground under the pointer — biome · elevation · the climate bands' own
+  words · features in reach (`updateMapHere`). Off by default: the honest
+  chart carries the same read per ZONE in the side box (below).
+- **Verbs + the read:** rebuild the chart (drop every cached raster), reset
+  the lens; zones minted / shown / veiled / walked / surveyed, the cached
+  rasters (px · build ms), the job in flight. Persisted per browser
+  (localStorage, the ultimates-lab idiom); the shipped page never reads the
+  key, so the lens ships OFF by construction.
 
-**THE ZOOM WINDOW** (`raster.zoomWindowFrom`, `zoomWindowPad`): zoomed past
-the threshold, the painter renders the *view* (with a margin) at full
-resolution instead of the whole charted country, snapped coarsely so small
-pans re-use the raster; zoom and pan kick the painter at once.
+## THE STANDING CHART (the panel's performance law)
 
-**Non-surface dimensions** paint their own biome palette
-(`World.dimensionBiomeAtMap`) flat — no relief, no rivers, no features.
+The map panel used to rebuild its whole html — and so its SVG — whenever
+anything in that html changed: the hovered zone, the zoom %, the viewBox,
+the side box's text, the chart raster. Each rebuild re-parsed a ~1 MB data
+URL and re-drew every node, and a hover flickered the UI twice. Now:
 
-**Chips + settings.** `Settings.mapChart` (`MAP_CHART_MODES`: 'painted' |
-'classic'; Options → Map Chart) — classic is the pre-atlas wash, kept for QA
-and taste. Under 'painted' the biome-field layer's wash and river threads
-stand down (their chip too) and the atlas chips take their place: Relief,
-Rivers, Features, Dressing (`ATLAS_LAYER_CHIPS`, ids `atlas:*`).
+- **The html carries NO transient state.** No viewBox, no zoom %, no hover
+  card state, no side-box text, no raster, no labels. It changes only when
+  the KNOWN graph does (a charted zone, a layer chip, a pin, the current
+  zone). `setPanelHtml` is a string compare; a changed string is the only
+  rebuild.
+- **Everything live is synced IN PLACE** by `syncMapLive` after every
+  refresh, rebuilt or not: the viewBox and zoom label, the hovered card
+  (`showZoneCard`), the side box (`zoneBoxHtml`, replaced only when its text
+  differs — scroll preserved), and the atlas layer.
+- **The atlas layer** is two pointer-transparent `<image>`s inside the SVG
+  (`#atlas-base`, `#atlas-window`) plus a `#atlas-labels` group. `syncAtlas`
+  asks the painter for the BASE raster (the whole known country) and, zoomed
+  past `raster.zoomWindowFrom`, the zoom WINDOW (the view × `zoomWindowPad`,
+  snapped coarsely); it sets `href`/rect attributes only when they differ.
+  The base always stands; while a window builds, the last window stays where
+  it still helps and the base covers the rest — panning never shows blank
+  ground. Zoom and pan call `syncAtlas` directly (never a refresh); a build in
+  flight re-arms its own 45 ms tick (`scheduleAtlasTick`).
+- **The painter** (`atlasPaint.ts`) keeps an LRU of finished rasters
+  (`raster.cacheEntries`, keyed by dimension · box · layers · known set ·
+  lens · warps); one job builds at a time, in the order asked (base before
+  window); `atlasKeep` drops a job for a raster nobody wants any more.
+  Progressive phases: sample the lattice (fogged ground never sampled) →
+  chamfer shore distances → shade every pixel (`atlasShade`, THE CRISP
+  EDGE re-sampling only where the 2×2 lattice disagrees, contour bands,
+  grain, the veil alpha) → vector dressing (lakes, rivers, glyphs, marks)
+  → encode. `atlasStats` is the dev tab's read.
 
-**THE CURSOR READ** (`#map-here`): the ground under the pointer, from the
-same fields the chart paints — biome · elevation · the climate bands' own
-words (`climateWords`: the band that claims the value hardest, ties to the
-narrowest) · any feature within reach. Fog-honest: only near visible nodes.
+## The chart (the look)
+
+`atlasShade` — THE PIXEL LAW (probe B): flat land keeps its biome's
+`mapColor` **exactly**; hillshade from the elevation gradient lit from the
+north-west (`shade`); a hypsometric lift (`hypso`, exactly 1.0 at 0.5);
+alpine rock then snow above `alpine.from` / `snow.from`; the sea deepens off
+its shelf (`sea`) with a foam fringe; contour bands (`contour`); paper grain.
+THE SEAM WARP (`seams`) wanders the biome/terrain *sample* by a smooth noise
+so Voronoi seams and coastlines bend organically — presentation only, below
+node grain. THE VEIL (`reveal`): full within `radius` of a known node, fading
+over `feather`, void beyond. Rivers as tapered threads; lake basins; biome
+DRESSING glyphs (`ATLAS_GLYPHS` → registered painters, one shared lattice,
+never denser than `glyphs.minSpacingPx`); feature marks + italic labels.
+Non-surface dimensions paint their own palette flat.
+
+**Chips + settings.** `Settings.mapChart` ('painted' | 'classic'; Options →
+Map Chart). Under 'painted' the biome-field layer's wash and river threads
+stand down and the atlas chips take their place: Relief, Rivers, Features,
+Dressing (`ATLAS_LAYER_CHIPS`).
+
+**THE GROUND ROW.** The side box shows a zone's lay of the land as a
+condition row — `⛰ elevation 0.81 · mild · dry — the lay of the land` — from
+the def's baked `geo.climate` (authored ground samples the field once);
+`climateWords` picks per axis the band that claims the value hardest, ties
+to the narrowest. Registered as a zone-info source in `world/atlas.ts`, so
+the panel needed no edit; the features it stands on follow as rows.
 
 ## The features
 
@@ -113,7 +161,8 @@ A kind is one `MapFeatureKindDef` row (`registerMapFeature`, data in
 Instances are `MapFeature { id: '<kind>:<a>_<b>', seat, name, size, value }`;
 the id encodes the finder cell (lattice kinds) or the rounded seat (lakes),
 so a def's baked ids re-resolve to their names on any later read
-(`featureNameOf`).
+(`featureNameOf`). Features follow THE VEIL: a mark or label draws only
+where the chart is known (the painter gates both on the reveal mask).
 
 **Debut rows** — peak (summit: `lone_mountain` roll + a relief lift of
 0.16 / dome 0.3), lode (ore country, elevation ≥ 0.5: harvest `always` +
@@ -149,17 +198,28 @@ the zone pane names each feature with its kind's `read` line.
 - **A biome's dressing**: one `ATLAS_GLYPHS` row (glyph id, spacing, size).
 - **A glyph painter**: `registerGlyphPainter(id, fn)` in `ui/atlasPaint.ts`.
 - **A chart dial**: `ATLAS_CFG`.
+- **A knowledge act** (a new way the player learns of ground): lift
+  `z.veiled` and add to `world.surveyed` at the act — never on a mint.
+
+## QA notes
+
+- The run save is mirrored in the browser's localStorage AND the dev server's
+  `saves/` (disk-first at boot; the page writes the run back on unload via a
+  beacon). To reset a QA world: unload the page first (navigate away), THEN
+  copy the save files in, then load — a copy made while the page stands is
+  overwritten the moment it navigates.
+- The Browser pane's rAF may not tick; drive `__game.ui.refreshMap()` from
+  the console to advance a chart build there.
 
 ## Known gaps (see the charter's forks)
 
-- Features are macro truth like the biome wash: no survey is needed to see
-  a summit inside the veil. Whether summits/lodes should be *found* (a
-  survey, a walk) is her call.
+- Features are macro truth like the biome wash inside the veil; whether a
+  lode should be *found* (a survey, a walk) rather than seen is her call.
 - Lakes are rare (a traced river seldom dies inland under the coastal
   falloff) — a dial question on `RELIEF_CFG` as much as on the finder.
 - The lode grants MORE of the country's own harvest rows; a dedicated ore
-  family (a new `HarvestNodeDef` admitted by feature) is charted, not built.
+  family is charted, not built.
 - Directed mints (quests) do not inherit — by law; an opt-in flag is a
   one-line fork.
-- No world editor yet: the chart is a read surface plus the cursor read.
-  Planting a feature by hand is the charter's M2.
+- The player-side world editor (planting a feature as an act) is charted,
+  not built; the dev half (the lens) is.

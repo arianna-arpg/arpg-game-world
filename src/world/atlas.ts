@@ -47,7 +47,7 @@ import type { MapCoord } from './coords';
 import type { CompositionRoll, LandmarkRoll } from '../data/zones';
 import { BIOMES } from './biomes';
 import { continentAt, continentSeedFrom } from './continents';
-import { CLIMATE_BANDS, climateAxisAt } from './climate';
+import { CLIMATE_BANDS, climateAt, climateAxisAt } from './climate';
 import { presenceMul } from '../engine/presence';
 import { RELIEF_CFG, elevationAt, riverPathsInRect } from './relief';
 import { hash01 } from '../engine/hash';
@@ -65,11 +65,13 @@ export const ATLAS_CFG = {
      *  VIEW (× `zoomWindowPad` margin) at full resolution instead of the whole
      *  charted country, so a close look stays crisp however far the chart
      *  has grown; the window snaps coarsely so small pans re-use the raster. */
-    zoomWindowFrom: 1.6, zoomWindowPad: 1.5 },
-  /** THE VEIL: ground within `radius` of a visible node paints in full, fades
-   *  over `feather`, and is void beyond — the wash's envelope law as a soft
-   *  edge. `cell` is the coarse mask lattice (node units). */
-  reveal: { radius: 300, feather: 280, cell: 40 },
+    zoomWindowFrom: 1.6, zoomWindowPad: 1.5,
+    /** Finished rasters kept (LRU): the base chart + a few zoom windows. */
+    cacheEntries: 8 },
+  /** THE VEIL: ground within `radius` of a KNOWN node paints in full, fades
+   *  over `feather`, and is void beyond — THE KNOWLEDGE LAW's soft edge (the
+   *  same discs clip every overlay wash). `cell` is the mask lattice. */
+  reveal: { radius: 240, feather: 240, cell: 40 },
   /** HILLSHADE: the light vector (from the north-west, above), the slope →
    *  normal gain (elevation is ~0.3 across a 1000-unit ridge, so slopes are
    *  ~1e-3 per unit — the gain lifts them to a visible tilt), the ambient
@@ -520,11 +522,24 @@ export function climateWords(cl: Record<string, number>, axes: readonly string[]
 // def, never re-runs the world.
 registerZoneInfoSource((world, zoneId) => {
   const z = world.zoneMap[zoneId];
-  const ids = z?.geo?.features;
-  if (!ids?.length) return [];
+  if (!z) return [];
   if (!world.visited.has(zoneId) && !world.surveyed.has(zoneId)) return [];
   const seed = world.sim.biomeField.fieldSeed;
-  const rows = [];
+  const rows: { kind: 'condition'; icon: string; color?: string; label: string; detail?: string; z?: number }[] = [];
+  // THE GROUND ROW: the lay of the land from the def's own baked climate —
+  // elevation and the climate bands' words (no live sampling, nothing to
+  // flicker: the side box is the honest chart's one ground read).
+  // Authored ground (the town, the crossroads) bakes no climate — sample the
+  // field once here, the same read a mint would have baked.
+  const cl = z.geo?.climate ?? ((z.dimension ?? 'surface') === 'surface' ? climateAt(z.map, seed) : undefined);
+  if (cl && cl.elevation !== undefined) {
+    rows.push({
+      kind: 'condition', icon: '⛰', color: '#b8b4a8',
+      label: `elevation ${cl.elevation.toFixed(2)} · ${climateWords(cl).join(' · ')}`,
+      detail: 'the lay of the land', z: 6,
+    });
+  }
+  const ids = z.geo?.features ?? [];
   for (const id of ids) {
     const def = featureKindOfId(id);
     if (!def) continue;
