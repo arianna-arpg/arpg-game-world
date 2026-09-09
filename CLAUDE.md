@@ -111,6 +111,12 @@ checks, the balance harness's smoke suite, and the generation QA sweep are how
 we verify changes.
 
 ## Layout
+- Living uniques: `engine/itemchoices.ts`, `engine/bequests.ts`, and
+  `engine/fieldgrants.ts` add saved weighted item alternatives, attributable
+  follower inheritance, and modifier-granted movement trails/terrain refuges/
+  throng substitutions. Data in `src/data/uniques/living.ts`; design and
+  extension contract in `docs/design/living-uniques.md`; regression rig
+  `balance/probe_livinguniques.ts`.
 - `src/engine/` — systems: `world.ts` (core loop, `useSkill`), `stats.ts`
   (layered modifier engine), `damage.ts`, `status.ts`, `skills.ts` (skill
   schema), `actor.ts` (one entity model for player/monsters/minions),

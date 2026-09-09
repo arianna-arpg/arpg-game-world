@@ -279,6 +279,8 @@ export interface UniqueDef {
   name: string;
   baseId: string;
   lines: RangedLineDef[];
+  /** Independently rolled, persistent families of alternative modifier lines. */
+  choices?: import('./itemchoices').UniqueChoiceGroup[];
   flavor?: string;
   /** Weight among the uniques of the same base (boss tables can force ids). */
   weight: number;
@@ -374,6 +376,7 @@ export interface ItemInstance {
   uniqueId?: string;
   /** 0..1 per unique line (present iff uniqueId). */
   uniqueRolls?: number[];
+  uniqueChoices?: Record<string, import('./itemchoices').UniqueChoiceRoll>;
   /** THE RESIDENCE ON THE ITEM (THE LEGEND FABRIC — skillgrant_<id>): the
    *  socketed supports + tree picks of every skill THIS item grants, keyed
    *  by skill id — written back by World.recalcSeat from the live granted

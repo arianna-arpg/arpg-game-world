@@ -43,6 +43,7 @@ import { comboStat } from '../engine/sequence';
 import { mod } from '../engine/stats';
 import { procPowerStat, procStat, registerProc, type ProcDef } from './procs';
 import { EMERGENT_PROCS, EMERGENT_UNIQUES } from './uniques/emergent';
+import { borrowedRefugeLine, GLEANER_CHOICES, LIVING_UNIQUES } from './uniques/living';
 
 // ---------------------------------------------------------------------------
 // THE LEGEND PROCS — triggers authored beside the legends that wear them,
@@ -464,6 +465,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
       { stat: 'apply_winded', kind: 'flat', range: [0.12, 0.2] },
       { stat: 'damageVs_winded', kind: 'flat', range: [0.15, 0.25] },
       { stat: 'evasion', kind: 'flat', range: [40, 70] },
+      borrowedRefugeLine,
     ],
   },
   // THE GLEANER'S CROWN — the throng fabric's FIND LEVERS as a legend: one
@@ -473,6 +475,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   // farming crown; the minion lines keep the harvest standing once claimed.
   {
     id: 'gleaners_crown', name: "The Gleaner's Crown", baseId: 'helmet_armor_es', weight: 65,
+    choices: GLEANER_CHOICES,
     minIlvl: 8,
     flavor: 'A kingdom is picked up one pair of hands at a time.',
     lines: [
@@ -598,6 +601,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
 ];
 
 UNIQUE_LIST.push(...EMERGENT_UNIQUES);
+UNIQUE_LIST.push(...LIVING_UNIQUES);
 
 export const UNIQUES: Record<string, UniqueDef> =
   Object.fromEntries(UNIQUE_LIST.map(u => [u.id, u]));

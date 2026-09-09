@@ -2140,7 +2140,11 @@ export class Actor {
   }
 
   /** Apply an attribute spread as the 'attributes' modifier source. */
+  attributeValues?: Attributes;
+  bequestSignature?: string;
+  pocketGrantSignature?: string;
   setAttributes(attrs: Attributes): void {
+    this.attributeValues = { ...attrs };
     this.sheet.setSource('attributes', attributeModifiers(attrs));
   }
 

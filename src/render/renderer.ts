@@ -1144,10 +1144,11 @@ export class Renderer {
    *  with rising bubbles inside (the "you can breathe here" indicator). Deterministic
    *  per-pocket phase (no per-frame RNG), faded so they read as gentle ambient bubbles. */
   private drawAirPockets(world: World): void {
-    if (!world.airPockets.length) return;
+    const pockets = [...world.airPockets, ...world.grantedPocketsFor(world.player)];
+    if (!pockets.length) return;
     const { ctx } = this;
     const t = world.time;
-    for (const p of world.airPockets) {
+    for (const p of pockets) {
       ctx.save();
       // Round wash (a breath of surface light) over the grid cells.
       const g = ctx.createRadialGradient(p.x, p.y, p.r * 0.2, p.x, p.y, p.r);
@@ -1155,7 +1156,7 @@ export class Renderer {
       g.addColorStop(1, 'rgba(42,106,138,0)');
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 0.3; ctx.strokeStyle = '#7fd0e8'; ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.3; ctx.strokeStyle = 'color' in p && typeof p.color === 'string' ? p.color : '#7fd0e8'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.stroke();
       // Rising bubbles — deterministic per (pocket, index), sine-fading as they rise.
       ctx.fillStyle = '#cfeefa';
