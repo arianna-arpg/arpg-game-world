@@ -1311,6 +1311,36 @@
       ],
       "port": 5140,
       "autoPort": false
+    },
+    {
+      "name": "arpg-dev-worldmap",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "D:/Games/Claude/arpg-worldmap",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5289",
+        "--strictPort"
+      ],
+      "port": 5289,
+      "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa90",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5141",
+        "--strictPort"
+      ],
+      "port": 5141,
+      "autoPort": false
     }
   ]
 }
