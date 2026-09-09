@@ -51,9 +51,10 @@
 // types from here, itemgen.ts composes both; same layering as skills.ts).
 // ---------------------------------------------------------------------------
 
-import { SKILL_RARITIES, type SkillRarity } from './skills';
+import { SKILL_RARITIES, SKILLGRANT_PREFIX, type SkillRarity } from './skills';
 import { ATTRIBUTES, STAT_DEFS, type AttributeId, type ConditionId, type ModKind, type SkillTag } from './stats';
 import { RECENT_CONDITION_LABELS } from './recency';
+import { DERIVED_GAUGES } from './gauges';
 
 // ------------------------------------------------------------- rarities ----
 
@@ -373,6 +374,13 @@ export interface ItemInstance {
   uniqueId?: string;
   /** 0..1 per unique line (present iff uniqueId). */
   uniqueRolls?: number[];
+  /** THE RESIDENCE ON THE ITEM (THE LEGEND FABRIC — skillgrant_<id>): the
+   *  socketed supports + tree picks of every skill THIS item grants, keyed
+   *  by skill id — written back by World.recalcSeat from the live granted
+   *  instance (every socket/tree mutation recalcs), read when the instance
+   *  is minted afresh (equip, load, the wire). Pure JSON like every field
+   *  here; a skill or support that left the registry drops tolerantly. */
+  grantState?: Record<string, GrantedSkillState>;
   /** SOCKETS: one entry per socket — a VESTIGE id, or null while empty.
    *  Rolled at mint (whites richest: ITEM_CFG.sockets) or chiseled at the
    *  bench (craftedSockets tracks those against the crafted-slot budget).
@@ -408,6 +416,15 @@ export interface ItemInstance {
    *  `tier` folds in tolerantly at every read). Never stacks; 1×1 by its
    *  base's own grid. */
   writ?: { category: ItemCategory; complexity: number };
+}
+
+/** One granted skill's persisted residence (ItemInstance.grantState): the
+ *  saved-socket rows (meta/character.ts's SavedSocket shape, spelled here
+ *  so the engine owns it) and the skill-mode tree picks. Level is NEVER
+ *  stored — it is the grant stat's fold. */
+export interface GrantedSkillState {
+  sockets: ({ supportId: string; level: number; locked?: boolean; rolled?: Record<string, string> } | null)[];
+  treeNodes?: string[];
 }
 
 /** THE COMPLEXITY READ (the steady hand): a base's class — authored, or
@@ -623,7 +640,19 @@ const CONDITION_LABELS: Record<ConditionId, string> = {
   // THE RECENCY LEDGER (engine/recency.ts) — the same words the ledger
   // declares, so a tooltip and the validator agree.
   ...RECENT_CONDITION_LABELS,
+  // THE STRIDE (THE LEGEND FABRIC): armed by walking the sheet's reach,
+  // spent by the next landed blow.
+  strided: 'on your next blow after striding',
 };
+
+/** The words a gauge id reads in a line: status stacks, banked charges, or
+ *  a registered derived gauge's own label. */
+function gaugeLabel(id: string): string {
+  if (id.startsWith('status:')) return `per stack of ${id.slice('status:'.length)}`;
+  if (id.startsWith('charge:')) return `per ${id.slice('charge:'.length)} charge`;
+  const derived = DERIVED_GAUGES[id];
+  return derived ? derived.label : `per ${id}`;
+}
 
 export function statLabel(stat: string): string {
   // Attribute grants (+12 Strength) are legal mod lines with no STAT_DEFS
@@ -648,6 +677,11 @@ export function formatStatValue(stat: string, kind: ModKind, v: number): string 
 export function formatModLine(line: ModLineDef, v: number): string {
   let core: string;
   const label = statLabel(line.stat);
+  // THE GRANTED SKILL reads as a grant, never as "+1 Granted Skill": the
+  // registered label carries the skill's name after the family's prefix.
+  if (line.stat.startsWith(SKILLGRANT_PREFIX) && line.kind === 'flat') {
+    return `Grants Level ${Math.max(1, Math.floor(v))} ${label.replace(/^Granted Skill: /, '')}`;
+  }
   switch (line.kind) {
     case 'flat':
       core = `${v >= 0 ? '+' : '−'}${formatStatValue(line.stat, 'flat', Math.abs(v))} ${label}`;
@@ -667,7 +701,24 @@ export function formatModLine(line: ModLineDef, v: number): string {
   }
   if (line.tags && line.tags.length) core += ` with ${line.tags.join(' ')} skills`;
   if (line.when) core += ` ${CONDITION_LABELS[line.when]}`;
-  if (line.gauge) core += ` per ${line.gauge.replace('status:', 'stack of ')}`;
+  if (line.gauge) {
+    // THE GAUGE GATE reads as a threshold ("at 5 fury charges"), the
+    // scaling gauge as a rate ("per second standing still").
+    core += line.gaugeAt !== undefined
+      ? ` at ${line.gaugeAt} ${gaugeLabel(line.gauge).replace(/^per /, '')}`
+      : ` ${gaugeLabel(line.gauge)}`;
+  }
   if (line.local) core += ITEM_CFG.localLineSuffix;
   return core;
+}
+
+/** THE SPOKEN LINE (RangedLineDef.text): '{v}' prints the raw rolled value,
+ *  '{v%}' prints it as a percentage, '{v0}' as a whole number — so an
+ *  authored sentence never has to hand-format what the roller already
+ *  knows how to say. */
+export function speakLineText(text: string, stat: string, kind: ModKind, v: number): string {
+  return text
+    .replace(/\{v%\}/g, formatStatValue(stat, 'increased', v))
+    .replace(/\{v0\}/g, String(Math.round(v)))
+    .replace(/\{v\}/g, formatStatValue(stat, kind, v));
 }

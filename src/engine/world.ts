@@ -33,6 +33,7 @@ import {
   type SkillRarity,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
   BAR_SLOTS, MAX_SUPPORT_LEVEL, parseSlotGraftStat, SLOTGRAFT_PREFIX, SWAP_DISCIPLINE_CFG,
+  BLOOM_CFG, GRANT_CFG, parseSkillGrantStat, skillGrantStat, SKILLGRANT_PREFIX,
   type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GroundCascadeSpec, type GroundPulseSpec, type GuardBashSpec,
   type LitePourEffect,
   type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect,
@@ -47,6 +48,7 @@ import { autoPlace, bagBoardFor, placeAt, removeFromBag, setBagBoardSource, swap
 import { bagSortMode, sortBagItems, type BagSortDir } from './bagsort';
 import {
   bagGemItems, findBagGem, freeCellCount, makeSkillGemItem, makeSupportGemItem,
+  packGrantState, restoreGrantState,
   rebuildAnyItem, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf,
   supportOfGemItem, writeBackSupportGem,
 } from './gemitems';
@@ -87,7 +89,7 @@ import { CHOICE_GROUPS, PASSIVE_CHOICE_CFG, choiceDealSpent, choiceLockReason, c
 import { openRealms, realmOf, realmOpen, type PassiveRealmDef } from '../data/passiveRealms';
 import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocationRootId, vocationStepKey, type VocationSiteFilter } from '../data/vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
-import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcCastSpec, type ProcDef } from '../data/procs';
+import { PROC_LIST, PROCS, procStat, procPowerStat, scaleProcEffect, PROC_RIDER_LIST, procRiderStat, type ProcCastSpec, type ProcDef } from '../data/procs';
 import { VICTIM_CONDITIONS, VICTIM_HOOKS, victimScopeArmed, victimTags } from './victim'; // THE VICTIM SCOPE
 import { DERIVED_GAUGES, GAUGE_CFG } from './gauges'; // DERIVED GAUGES
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
@@ -1830,6 +1832,30 @@ export interface Seat {
    *  reasons and empty seats. DERIVED state, rebuilt every recalc,
    *  never saved. */
   wornGrafts?: WornGraftRow[];
+  /** THE GRANTED LEDGER (skillgrant_* stats → recalcSeat — THE LEGEND
+   *  FABRIC, docs/engine/legends.md): every skill this seat's gear and
+   *  passives GRANT, with its live instance, folded level, source and bar
+   *  seat — the panels' one read path. DERIVED, rebuilt every recalc,
+   *  never saved. */
+  grantedSkills?: GrantedSkillRow[];
+  /** The granted instances themselves, keyed by skill id — IDENTITY-STABLE
+   *  across recalcs (cooldowns, gauge banks and sockets live on the
+   *  instance), minted at first grant, dropped when the grant leaves.
+   *  Never the learned book: a grant is worn, not owned. */
+  grantedInsts?: Map<string, SkillInstance>;
+}
+
+/** One granted skill as derived at recalc (THE LEGEND FABRIC). */
+export interface GrantedSkillRow {
+  def: SkillDef;
+  level: number;
+  inst: SkillInstance;
+  /** Who grants it — the first worn piece carrying the stat, else the passives. */
+  source: string;
+  /** The item whose grantState hosts the sockets (absent = passive-only grant). */
+  hostUid?: number;
+  /** Bar seat (0-based) the instance sits on; -1 while unseated (bar full). */
+  slot: number;
 }
 
 /** One worn slot-graft as derived at recalc: which bar seat, which gem at
@@ -4103,7 +4129,12 @@ export class World {
     const hero = this.seatHero(seat);
     hero.name = meta.name;   // the save's name is the actor's name
     hero.level = level;
-    hero.skills = padBar(bar.map(id => (id ? meta.knownSkills.get(id) ?? null : null)));
+    // A fresh build wears fresh grants: the granted lane re-derives from
+    // the adopted gear (seatSkillById mints the bar's granted ids on
+    // demand; the recalc below folds their true levels onto them).
+    seat.grantedInsts = undefined;
+    seat.grantedSkills = undefined;
+    hero.skills = padBar(bar.map(id => (id ? this.seatSkillById(seat, id) : null)));
     this.recalcSeat(seat);
     hero.fillResources();
     this.markMetaDirty(seat);
@@ -21241,12 +21272,90 @@ export class World {
       if (mods) p.sheet.setSource('gear:' + slot.id, mods);
       else p.sheet.removeSource('gear:' + slot.id);
     }
+    // THE GRANTED SKILL (skillgrant_<id> — engine/skills.ts; THE LEGEND
+    // FABRIC, docs/engine/legends.md): modifier sources GRANT whole skills.
+    // Candidates come from the same prefix scan the worn graft runs below
+    // (zero cost when the family is absent); each id folds through the ONE
+    // stat engine (grantors SUM, floored, clamped to the skill's own max;
+    // below 1 grants nothing), and the seat keeps ONE identity-stable
+    // SkillInstance per granted id (Seat.grantedInsts — never the learned
+    // book: a grant is worn, not owned). THE RESIDENCE ON THE ITEM: the
+    // first worn piece carrying the stat HOSTS the instance's sockets and
+    // tree picks (ItemInstance.grantState) — written back here from the
+    // live instance every recalc (every socket/tree mutation recalcs), so
+    // a later equip, load or wire mints the same stones back. THE
+    // SEATING: a fresh grant takes the first empty bar seat (the rack law —
+    // unseated is unusable; GRANT_CFG.autoSeat); a grant that LEAVES comes
+    // off the bar, its toggles shut, its instance dropped.
+    {
+      const grantStats = new Set<string>();
+      const scanGrants = (mods: readonly Modifier[] | undefined): void => {
+        if (!mods) return;
+        for (const gm of mods) if (gm.stat.startsWith(SKILLGRANT_PREFIX)) grantStats.add(gm.stat);
+      };
+      scanGrants(m.classDef.innate);
+      scanGrants(passiveMods);
+      for (const mods of gearSheetMods.values()) scanGrants(mods);
+      const prevInsts = seat.grantedInsts;
+      const keep = new Map<string, SkillInstance>();
+      const rows: GrantedSkillRow[] = [];
+      for (const stat of grantStats) {
+        const skillId = parseSkillGrantStat(stat);
+        const def = skillId ? SKILLS[skillId] : undefined;
+        if (!skillId || !def) continue; // registry-tolerant: a retired skill grants silence
+        const level = Math.min(skillMaxLevel(def), Math.floor(p.sheet.get(stat)));
+        if (level < 1) continue;
+        // THE HOST: the first worn piece whose compiled lines carry the stat.
+        let host: ItemInstance | undefined;
+        for (const slot of EQUIP_SLOTS) {
+          const worn = m.equipped[slot.id];
+          if (worn && gearSheetMods.get(slot.id)?.some(gm => gm.stat === stat)) { host = worn; break; }
+        }
+        let inst = prevInsts?.get(skillId);
+        if (inst) {
+          inst.level = level;
+        } else {
+          inst = makeSkillInstance(def, level, GRANT_CFG.sockets);
+          const state = host?.grantState?.[skillId];
+          if (state) restoreGrantState(inst, state);
+        }
+        inst.grantedBy = host?.name ?? 'your passives';
+        keep.set(skillId, inst);
+        if (host) (host.grantState ??= {})[skillId] = packGrantState(inst);
+        rows.push({ def, level, inst, source: inst.grantedBy, hostUid: host?.uid, slot: p.skills.indexOf(inst) });
+      }
+      // Grants that LEFT: off the bar, workings shut, the instance dropped.
+      if (prevInsts) {
+        for (const [id, inst] of prevInsts) {
+          if (keep.has(id)) continue;
+          for (let i = 0; i < p.skills.length; i++) if (p.skills[i] === inst) p.skills[i] = null;
+          if (p.activeAuras.has(id)) this.deactivateAura(p, id);
+          if (p.summonToggles.has(id)) this.dismissSummonToggle(p, id);
+        }
+      }
+      if (GRANT_CFG.autoSeat) {
+        for (const row of rows) {
+          if (row.slot >= 0) continue;
+          const free = p.skills.indexOf(null);
+          if (free < 0) break;
+          p.skills[free] = row.inst;
+          row.slot = free;
+        }
+      }
+      seat.grantedInsts = keep.size ? keep : undefined;
+      seat.grantedSkills = rows.length ? rows.sort((a, b) => a.def.name.localeCompare(b.def.name)) : undefined;
+    }
+    // Every instance the seat WIELDS — the learned book plus the granted
+    // lane — for the per-instance derivations below (bonus levels, tree
+    // grafts, worn grafts all reach a granted skill exactly as a learned one).
+    const wielded = (): SkillInstance[] => seat.grantedInsts
+      ? [...m.knownSkills.values(), ...seat.grantedInsts.values()] : [...m.knownSkills.values()];
     // "+N to <Class> Skills": sum every classSkill_<id> stat whose class can
     // OPEN with this skill — its bar starters AND its mastery alternates
     // (classOpeningSkills) — dynamic against the LIVE registry, so re-barring
     // a class retunes every such affix with zero data edits. Written onto the
     // instance (bonusLevels) so effectiveSkillLevel needs no actor threading.
-    for (const inst of m.knownSkills.values()) {
+    for (const inst of wielded()) {
       let bonus = 0;
       for (const c of CLASSES) {
         if (classOpeningSkills(c).includes(inst.def.id)) bonus += p.sheet.get(classSkillStat(c.id));
@@ -21256,7 +21365,7 @@ export class World {
     // GRAFTS: rebuild every instance's mutator lane from the bound sources —
     // derived state exactly like bonusLevels above. A binding whose source
     // was never earned (or whose skill left the book) simply injects nothing.
-    for (const inst of m.knownSkills.values()) inst.grafts = undefined;
+    for (const inst of wielded()) inst.grafts = undefined;
     for (const s of graftSourcesOf(m.allocated, m.choices, PASSIVE_NODES)) {
       const skillId = m.grafts[s.key];
       if (!skillId) continue;
@@ -21270,7 +21379,7 @@ export class World {
     // Font reset re-derives it away). Authored per-skill, so fit is the
     // AUTHOR's warrant (boot validation warns); the no-second-copy law
     // still yields to a socketed or earlier-grafted twin.
-    for (const inst of m.knownSkills.values()) {
+    for (const inst of wielded()) {
       for (const nid of inst.treeNodes ?? []) {
         const g = treeNodeOf(inst.def, nid)?.graft;
         const def = g ? SUPPORTS[g.support] : undefined;
@@ -21704,7 +21813,13 @@ export class World {
     const m = seat.meta;
     const p = seat.actor;
     const inst = m.knownSkills.get(skillId);
-    if (!inst) return false;
+    if (!inst) {
+      // A GRANTED skill is worn, not owned: there is no gem to mint back.
+      if (seat.grantedInsts?.has(skillId)) {
+        this.failNote(p, skillId + ':granted', 'granted by your gear — take the piece off instead');
+      }
+      return false;
+    }
     // The overdrive debt lock cannot be laundered through unlearning: a
     // mortgaged toggle refuses to leave the bar until the pool is whole.
     {
@@ -27400,6 +27515,11 @@ export class World {
   levelUpSkill(skillId: string, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
     const inst = m.knownSkills.get(skillId);
+    // A GRANTED skill's level is the legend's roll — essence buys nothing.
+    if (!inst && seat.grantedInsts?.has(skillId)) {
+      this.failNote(seat.actor, skillId + ':granted', 'its level is the gear\'s to give');
+      return false;
+    }
     if (!inst || inst.level >= skillMaxLevel(inst.def)) return false;
     if (!this.spendAbilityEssence(seat, skillLevelAbilityCost(inst.level + 1), 'abilvl:' + skillId)) return false;
     inst.level++;
@@ -27463,7 +27583,9 @@ export class World {
     const m = seat.meta;
     const item = this.bagItem(seat, uid);
     const gem = item ? supportOfGemItem(item) : null;
-    const inst = m.knownSkills.get(skillId);
+    // A GRANTED skill sockets like a learned one — the stone lands on the
+    // granting item's residence at the recalc below (THE LEGEND FABRIC).
+    const inst = m.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId);
     if (!gem || !inst || !supportFitsInstOrCrew(gem.def, inst, this.summonCrewSkills(inst), gem.rolled)) return false;
     const free = inst.sockets.indexOf(null);
     if (free === -1) return false;
@@ -27488,7 +27610,7 @@ export class World {
    *  charter's mutate-last law). */
   unsocketSupport(skillId: string, socketIndex: number, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
-    const inst = m.knownSkills.get(skillId);
+    const inst = m.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId);
     const gem = inst?.sockets[socketIndex];
     if (!inst || !gem) return false;
     // THE FIELD DISCIPLINE: prying a stone out mid-melee is the same surgery.
@@ -27659,7 +27781,8 @@ export class World {
       this.rebindWornGrafts(seat, [prev]);
       return true;
     }
-    const inst = seat.meta.knownSkills.get(skillId);
+    // Learned or GRANTED (THE LEGEND FABRIC): both bind by id.
+    const inst = this.seatSkillById(seat, skillId);
     if (!inst) return false;
     const already = prev?.def.id === skillId;
     for (let i = 0; i < p.skills.length; i++) {
@@ -31090,7 +31213,8 @@ export class World {
    *  requestMeta intent lane, so a co-op client's panel works untrusted
    *  like every meta mutation. */
   pickTreeNode(skillId: string, nodeId: string, seat: Seat = this.localSeat): void {
-    const inst = seat.meta.knownSkills.get(skillId);
+    // A granted skill's picks ride its item's residence (the recalc below writes them back).
+    const inst = seat.meta.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId);
     if (!inst?.def.tree) return;
     const node = treeNodeOf(inst.def, nodeId);
     if (!node) return;
@@ -35164,7 +35288,9 @@ export class World {
     // with the cast's own context (tag-scoped grants work as on hits).
     if (!opts.noRepeat && !opts.noCooldown) {
       if (def.tags.includes('movement')) caster.noteRecent('move');
-      this.rollOwnProcs(caster, 'cast', { tags, extra, inst });
+      // The cast's own aim rides along, so a 'cast' proc's payload (the
+      // trigger-on-spell legends) lands where the spell was pointed.
+      this.rollOwnProcs(caster, 'cast', { tags, extra, inst, aim });
     }
     // SELF-STACKS (instanceSelfStack): every completed REAL use feeds the
     // skill's OWN pile — mods that exist only inside this instance's fold
@@ -36636,6 +36762,16 @@ export class World {
       caster.sheet.get('minionExplodeDeath', tags, extra));
     minion.explodeOnLowLife = caster.sheet.get('minionExplodeLowLife', tags, extra);
     minion.undyingTime = caster.sheet.get('minionUndying', tags, extra);
+    // THE BLOOM (minionBloom — THE LEGEND FABRIC, Gravebloom): the owner's
+    // timer stamps the body at its emergence; the 'blooming' marker wears
+    // the countdown so the ripening reads on the body before it bursts.
+    {
+      const bloom = caster.sheet.get('minionBloom', tags, extra);
+      if (bloom > 0) {
+        minion.bloomIn = bloom;
+        minion.applyStatus('blooming', 0, bloom / (STATUS_DEFS.blooming?.duration || 1), 'bloom');
+      }
+    }
     if (d.duration) {
       minion.lifespan = d.duration * caster.sheet.get('effectDuration', tags, extra);
     }
@@ -41027,6 +41163,8 @@ export class World {
         if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
         if (proc.crit && !wasCrit) continue;
         if (proc.noCrit && wasCrit) continue;
+        // THE BLOW'S TYPE GATE (ProcDef.hitType): what actually struck.
+        if (proc.hitType && dominantTypeOf(packet.amounts) !== proc.hitType) continue;
         if (proc.vs && !this.victimGate(proc.vs, target, caster)) continue;
         if (proc.rollTop !== undefined
           && !this.rollTopMet(caster, proc.rollTop, packet.rollT, tags, extra)) continue;
@@ -41068,6 +41206,7 @@ export class World {
           if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
           if (proc.crit && !wasCrit) continue;
           if (proc.noCrit && wasCrit) continue;
+          if (proc.hitType && dominantTypeOf(packet.amounts) !== proc.hitType) continue;
           if (proc.vs && !this.victimGate(proc.vs, target, owner)) continue;
           if (proc.rollTop !== undefined
             && !this.rollTopMet(owner, proc.rollTop, packet.rollT, cTags, cExtra)) continue;
@@ -41136,6 +41275,15 @@ export class World {
       caster.spendBuffs('hit', def.tags, def.id);
       if (wasCrit) caster.spendBuffs('crit', def.tags, def.id);
       if (lethal) { caster.noteRecent('kill'); caster.spendBuffs('kill', def.tags, def.id); }
+      // THE STRIDE's spend (THE LEGEND FABRIC): a real blow that landed
+      // while 'strided' held marks the walk spent — the reset lands at the
+      // caster's next timer tick, so every contact of this frame's swing
+      // read the same stride. Chained consequences (procs, echoes at
+      // depth) never spend it: the stride pays the hand, not the echo.
+      if (depth === 0 && caster.strideDist > 0 && !caster.strideSpent && caster.conditionHolds('strided')) {
+        caster.strideSpent = true;
+        this.text(vec(caster.pos.x, caster.pos.y - caster.radius - 10), 'STRIDE!', '#9ad0ff', 12, 'combat');
+      }
       target.spendBuffs('hurt');
     }
     if (target.life <= 0 && !target.dead) {
@@ -41700,6 +41848,8 @@ export class World {
       crit?: boolean;
       /** 'condition': the ConditionId that just flipped on. */
       condition?: ConditionId;
+      /** 'cast': where the cast was pointed — a 'cast' payload's landing. */
+      aim?: Vec2;
     },
   ): void {
     if (owner.dead) return;
@@ -41731,7 +41881,7 @@ export class World {
       const c = this.procChance(owner, proc, depth, opts?.tags, opts?.extra);
       if (c <= 0 || !chance(c)) continue;
       if (!this.procReady(owner, proc)) continue;
-      this.executeProc(proc, owner, opts?.inst ?? null, opts?.target ?? null, depth);
+      this.executeProc(proc, owner, opts?.inst ?? null, opts?.target ?? null, depth, opts?.aim);
     }
   }
 
@@ -41788,10 +41938,15 @@ export class World {
     this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: target.radius + 14, color: sdef.color ?? '#e04858', life: 0.2, maxLife: 0.2 });
   }
 
-  private executeProc(proc: ProcDef, caster: Actor, inst: SkillInstance | null, target: Actor | null, depth = 0): void {
+  private executeProc(proc: ProcDef, caster: Actor, inst: SkillInstance | null, target: Actor | null, depth = 0, aim?: Vec2): void {
     const at = target ?? caster;
     this.text(vec(at.pos.x, at.pos.y - 14), proc.name + '!', proc.color, 12);
-    const fx = proc.effect;
+    // THE PROC POWER (procPower_<id>, base 1 — the magnitude dial beside
+    // the chance): folded once here onto the effect's numbers, read with
+    // the event's own context so a skill-scoped grant scopes like the chance.
+    const pw = caster.sheet.get(procPowerStat(proc.id),
+      inst ? skillContextTags(inst.def) : undefined, inst ? instanceMods(inst) : undefined);
+    const fx = scaleProcEffect(proc.effect, pw);
     switch (fx.type) {
       case 'gainCharge': {
         caster.gainCharge(fx.charge, fx.amount, fx.max, inst ?? undefined, depth + 1);
@@ -41970,7 +42125,7 @@ export class World {
       // catalog skill from the proc's site — the rider grammar's payload
       // as a first-class effect, one depth deeper like every consequence.
       case 'cast':
-        this.castProcPayload(caster, inst, target, depth + 1, fx.cast);
+        this.castProcPayload(caster, inst, target, depth + 1, fx.cast, aim);
         break;
       case 'extraHit':
         if (!inst || !target) break;
@@ -42102,37 +42257,50 @@ export class World {
    *  times. Returns whether anything actually fired. */
   private castProcPayload(
     caster: Actor, inst: SkillInstance | null, target: Actor | null,
-    depth: number, cast: ProcCastSpec,
+    depth: number, cast: ProcCastSpec, aim?: Vec2,
   ): boolean {
     const skill = SKILLS[cast.skillId];
     if (!skill) return false;
-    const site = cast.at === 'self' || !target ? caster : target;
-    const origin = vec(site.pos.x, site.pos.y);
+    // THE SITE: a struck body anchors the payload; with no body, an AIMED
+    // event (a 'cast' trigger's own aim) lands the payload where the
+    // caster pointed; else the caster's feet. 'self' always means the feet.
+    const anchored = cast.at !== 'self' && target ? target : null;
+    const origin = anchored ? vec(anchored.pos.x, anchored.pos.y)
+      : cast.at !== 'self' && aim ? vec(aim.x, aim.y) : vec(caster.pos.x, caster.pos.y);
     const n = randInt(cast.count[0], cast.count[1]);
     if (n <= 0) return false;
-    const level = inst ? effectiveSkillLevel(inst)
-      : Math.max(1, Math.round(caster.level / 2));
+    // THE OWN-COPY LAW (ProcCastSpec.own): the caster's HELD instance —
+    // learned, granted or kit — plays with its level, sockets, grafts and
+    // picks; otherwise a plain synthetic at the event's level.
+    const held = cast.own ? this.heldSkillInst(caster, cast.skillId) : null;
+    const level = held ? effectiveSkillLevel(held)
+      : inst ? effectiveSkillLevel(inst)
+        : Math.max(1, Math.round(caster.level / 2));
+    const payload = (): SkillInstance => held ?? makeSkillInstance(skill, level);
     const mult = cast.mult ?? 1;
     if (skill.delivery.type === 'projectile') {
-      const bearing = target && target !== caster
-        ? angleTo(caster.pos, target.pos) : caster.facing;
+      const bearing = target && target !== caster ? angleTo(caster.pos, target.pos)
+        : aim ? angleTo(caster.pos, aim) : caster.facing;
+      // Sprays leave the STRUCK body (hit-locked against it, flying
+      // outward); an aimed or self payload leaves the caster's own hand
+      // along the bearing, so a triggered bolt flies where the spell went.
+      const from = anchored ? origin : vec(caster.pos.x, caster.pos.y);
       const phase = rand(0, Math.PI * 2);
-      const fan = typeof cast.spread === 'number' ? cast.spread : undefined;
+      const fan = typeof cast.spread === 'number' ? cast.spread : anchored ? undefined : 0;
       for (let i = 0; i < n; i++) {
         const dir = fan === undefined
           ? phase + (i / n) * Math.PI * 2
           : bearing + (n === 1 ? 0 : (i / (n - 1) - 0.5) * fan * Math.PI / 180);
-        this.spawnProjectile(caster, makeSkillInstance(skill, level), origin, dir,
-          { depth, mult });
-        if (target) {
-          this.projectiles[this.projectiles.length - 1].hits.set(target.id, Infinity);
+        this.spawnProjectile(caster, payload(), from, dir, { depth, mult });
+        if (anchored) {
+          this.projectiles[this.projectiles.length - 1].hits.set(anchored.id, Infinity);
         }
       }
     } else {
       for (let i = 0; i < n; i++) {
         // targetInfo anchors CENTERED deliveries (novas, instants) at
         // the proc's site — without it they would bloom on the caster.
-        this.executeSkill(caster, makeSkillInstance(skill, level), origin, {
+        this.executeSkill(caster, payload(), origin, {
           targetInfo: { pos: vec(origin.x, origin.y) },
           dmgMult: mult, noCooldown: true, noRepeat: true,
           noFollowUp: true, keepFacing: true,
@@ -42140,6 +42308,52 @@ export class World {
       }
     }
     return true;
+  }
+
+  /** THE HELD COPY: the instance of `skillId` this actor actually wields —
+   *  its bar first (monsters' kits, the player's seated skills), then the
+   *  seat's learned book and granted lane. Null when it holds none. */
+  private heldSkillInst(actor: Actor, skillId: string): SkillInstance | null {
+    for (const s of actor.skills) if (s?.def.id === skillId) return s;
+    const seat = this.seatOf(actor);
+    if (!seat) return null;
+    return seat.meta.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId) ?? null;
+  }
+
+  /** THE ONE LOOKUP for "the skill this seat holds under this id": the
+   *  learned book first, then the granted lane (THE LEGEND FABRIC) —
+   *  minting a granted instance ON DEMAND when the seat's worn gear
+   *  carries the grant but no recalc has folded it yet (the bar restore
+   *  on load and on the wire resolve ids BEFORE the first recalc, which
+   *  then folds the true level onto this same instance). Null when the
+   *  seat holds no such skill. */
+  seatSkillById(seat: Seat, skillId: string): SkillInstance | null {
+    const known = seat.meta.knownSkills.get(skillId);
+    if (known) return known;
+    const held = seat.grantedInsts?.get(skillId);
+    if (held) return held;
+    const def = SKILLS[skillId];
+    if (!def) return null;
+    const stat = skillGrantStat(skillId);
+    let host: ItemInstance | undefined;
+    let level = 0;
+    for (const slot of EQUIP_SLOTS) {
+      const worn = seat.meta.equipped[slot.id];
+      if (!worn) continue;
+      for (const gm of compileItemMods(worn)) {
+        if (gm.stat !== stat || gm.kind !== 'flat') continue;
+        level += gm.value;
+        host ??= worn;
+      }
+    }
+    level = Math.min(skillMaxLevel(def), Math.floor(level));
+    if (!host || level < 1) return null;
+    const inst = makeSkillInstance(def, level, GRANT_CFG.sockets);
+    const state = host.grantState?.[skillId];
+    if (state) restoreGrantState(inst, state);
+    inst.grantedBy = host.name;
+    (seat.grantedInsts ??= new Map()).set(skillId, inst);
+    return inst;
   }
 
   /** Fire every registered rider hosted on this proc that the caster has
@@ -45199,6 +45413,30 @@ export class World {
             this.kill(a);
             continue;
           }
+        }
+      }
+      // THE BLOOM (Actor.bloomIn — THE LEGEND FABRIC, Gravebloom): the
+      // ripened minion detonates for its OWNER's live bloom power as a
+      // fraction of ITS max life (BLOOM_CFG's type — explodeActor's
+      // mitigated, owner-team burst lane), then ends as an EXPIRY:
+      // contracts released, the expiry-is-death lever deciding the rites,
+      // so a bloom never double-fires a death explosion. Life investment
+      // IS the bomb; the marker status counted the seconds down.
+      if (a.bloomIn > 0 && !a.dead) {
+        a.bloomIn -= dt;
+        if (a.bloomIn <= 0) {
+          a.bloomIn = 0;
+          const owner = a.owner;
+          const power = owner && !owner.dead
+            ? owner.sheet.get('minionBloomPower',
+              a.summonInst ? skillContextTags(a.summonInst.def) : undefined,
+              a.summonInst ? instanceMods(a.summonInst) : undefined)
+            : 0;
+          this.text(vec(a.pos.x, a.pos.y - a.radius - 8), 'BLOOM', BLOOM_CFG.color, 12);
+          if (power > 0) this.explodeActor(a, power, { type: BLOOM_CFG.type, color: BLOOM_CFG.color });
+          this.releaseContract(a, true);
+          this.kill(a, !a.expiryTriggersDeath);
+          continue;
         }
       }
       // Duration-based minions expire naturally (and may respawn if persistent).
@@ -59469,6 +59707,12 @@ export class World {
     // still confine it: it floats, it doesn't phase.
     const disp = (this.devNoclip && a === this.player) || a.flying ? NOCLIP_DISP
       : this.levitating(a) ? LEVITATE_DISP : undefined;
+    // THE STRIDE's odometer (strideReach — THE LEGEND FABRIC): the distance
+    // a willed step ACTUALLY covered (post-clamp — a wall walks nothing),
+    // banked only while the sheet arms a reach, so an unarmed walker pays
+    // one cached read and never accrues.
+    const striding = a.sheet.get('strideReach') > 0;
+    const sx = a.pos.x, sy = a.pos.y;
     if (traction >= 0.999) {
       // Solid ground: instant control, exactly as ever.
       a.vel.x = (dx / len) * speed;
@@ -59484,5 +59728,6 @@ export class World {
       a.vel.y += ((dy / len) * speed - a.vel.y) * blend;
       this.steppedClamp(a, vec(a.pos.x + a.vel.x * dt, a.pos.y + a.vel.y * dt), a.pos, disp);
     }
+    if (striding) a.strideDist += Math.hypot(a.pos.x - sx, a.pos.y - sy);
   }
 }

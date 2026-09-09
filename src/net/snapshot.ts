@@ -392,8 +392,11 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
   m.essences = { ...emptyEssences(), ...(w.ess ?? {}) };
   m.abilityEssences = { ...emptyAbilityEssences(), ...(w.abil ?? {}) };
   m.vestiges = { ...(w.vest ?? {}) };
-  // Rebuild the action bar from slot ids → the (just-rehydrated) learned instances.
-  seat.actor.skills = w.bar.map(id => (id ? (known.get(id) ?? null) : null));
+  // Rebuild the action bar from slot ids → the (just-rehydrated) learned
+  // instances, or the GRANTED lane (seatSkillById mints a worn grant on
+  // demand off the rehydrated gear — THE LEGEND FABRIC), so the client's
+  // bar seats a granted skill exactly where the host's does.
+  seat.actor.skills = w.bar.map(id => (id ? world.seatSkillById(seat, id) : null));
   world.recalcSeat(seat);            // derive attrs + the full stat sheet from the build
 }
 

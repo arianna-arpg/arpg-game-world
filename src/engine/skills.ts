@@ -291,6 +291,50 @@ export function parseSlotGraftStat(stat: string): { slot: number; gemId: string 
   return { slot: slot1 - 1, gemId: m[2] };
 }
 
+/** THE GRANTED SKILL (THE LEGEND FABRIC — docs/engine/legends.md): the
+ *  `skillgrant_<skillId>` stat family. The folded value IS the granted
+ *  skill's LEVEL (grantors SUM through the ordinary stat engine, floored,
+ *  clamped to the skill's own max at the fold; below 1 grants nothing).
+ *  ANY modifier source may write one — a unique line ("Grants Level 2
+ *  Firebolt"), a rolled affix, a vestige word, a passive node — and
+ *  World.recalcSeat derives a REAL SkillInstance onto the seat (never into
+ *  the learned book: the residence stays the player's own): bindable on
+ *  the bar like any learned skill, socketable (THE RESIDENCE ON THE ITEM:
+ *  its sockets + tree picks persist on the FIRST granting item's
+ *  `grantState`, so unequip → re-equip keeps the stones), free of the
+ *  learn gate's attribute asks (the item's own level is the gate), never
+ *  unlearned into a gem and never leveled with essence (the item's roll is
+ *  the level). The slot-graft family's exact shape, aimed at skills. */
+export const SKILLGRANT_PREFIX = 'skillgrant_';
+
+/** Stat id granting skill `skillId`; the folded value is its level. */
+export function skillGrantStat(skillId: string): string {
+  return `${SKILLGRANT_PREFIX}${skillId}`;
+}
+
+/** Parse a skill-grant stat id → the skill id it names (null off-family). */
+export function parseSkillGrantStat(stat: string): string | null {
+  return stat.startsWith(SKILLGRANT_PREFIX) ? stat.slice(SKILLGRANT_PREFIX.length) : null;
+}
+
+/** THE GRANT's dials (never literals at the fold sites). */
+export const GRANT_CFG = {
+  /** Sockets a granted instance carries (the Magic cut's count — a gift,
+   *  not a find; the worn-graft lane adds seats on top by position). */
+  sockets: 2,
+  /** A newly granted skill SEATS ITSELF on the first empty bar seat (the
+   *  rack law: unseated is unusable). Off = it waits in the Granted strip. */
+  autoSeat: true,
+};
+
+/** THE BLOOM's nature (minionBloom / minionBloomPower — Gravebloom): the
+ *  ripened minion's burst rides explodeActor's mitigated lane in THIS type
+ *  and tint. One dial, never a literal at the sweep. */
+export const BLOOM_CFG = {
+  type: 'chaos' as DamageType,
+  color: '#9ad66a',
+};
+
 // --- THE FIELD DISCIPLINE — loadout surgery is a camp habit ----------------
 
 /** Skill UNLEARNING and support SOCKET/UNSOCKET stay free — but in the
@@ -5386,6 +5430,13 @@ export interface SkillInstance {
    *  value is minted — zero salvage essence, zero font offerings — so the
    *  softlock rescue hatch can never become a currency loop. */
   granted?: boolean;
+  /** THE GRANTED SKILL (skillgrant_<id> — THE LEGEND FABRIC): DERIVED,
+   *  never saved. Set on an instance World.recalcSeat minted from a worn
+   *  grant; the value names its source for the panels ("granted by The
+   *  Cindervigil"). Such an instance lives on the SEAT (Seat.grantedInsts),
+   *  never in the learned book: no unlearn, no essence leveling, no learn
+   *  gate — its level is the grant's fold, its sockets ride the item. */
+  grantedBy?: string;
   /** THE KEEPER'S MARK (salvageLock intent): a locked carried gem refuses
    *  salvage on BOTH lanes and every salvageBulk sweep passes it by. */
   locked?: boolean;

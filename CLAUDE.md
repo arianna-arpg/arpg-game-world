@@ -1531,6 +1531,49 @@ we verify changes.
   Explosion / Bone Golem (`summon_bone_golem` + `bone_golem`) / Grave
   Tide). Docs `docs/meta/discovery.md` + `docs/meta/class-mastery.md`;
   probes `balance/probe_unlocks.ts` + `balance/probe_classmastery.ts`.
+  THE LEGEND FABRIC (2026-09-08, her ruling: a unique is a BUILD, never a
+  stat pool — docs/engine/legends.md, probe `balance/probe_legends.ts`):
+  THE GRANTED SKILL — the `skillgrant_<skillId>` stat family
+  (engine/skills.ts `skillGrantStat`; value = the skill's LEVEL, grantors
+  SUM, clamped to the skill's own max; one registered stat per catalog
+  skill at the data/skills.ts tail) folds at `World.recalcSeat` into ONE
+  identity-stable SkillInstance per id on `Seat.grantedInsts` — never the
+  learned book (WORN, NOT OWNED: no unlearn, no essence leveling, no learn
+  gate); bindable, castable, socketable, with THE RESIDENCE ON THE ITEM
+  (`ItemInstance.grantState` — sockets + tree picks written back every
+  recalc onto the first granting piece, `packGrantState`/
+  `restoreGrantState`), THE SEATING (`GRANT_CFG.autoSeat` takes the first
+  empty seat; a full bar leaves the Granted strip's chip a drag source onto
+  EMPTY seats only), THE ONE LOOKUP (`World.seatSkillById` — book, then
+  the granted lane, minting a worn grant on demand off the gear so a saved
+  or wired bar seats it where it stood) and the ledger `Seat.grantedSkills`
+  the panels read; class bonus levels, tree grafts and worn grafts iterate
+  the WIELDED set (learned + granted). THE OPEN DOOR — `registerProc`
+  (data/procs.ts) registers a legend's trigger beside the item
+  (`LEGEND_PROCS` in data/uniques.ts), with THE PROC POWER
+  (`procPower_<id>`, base 1 — the magnitude dial beside the chance, folded
+  once by `scaleProcEffect`), THE OWN-COPY LAW (`ProcCastSpec.own` — the
+  payload plays the caster's HELD instance: level, sockets, tree; opt-in),
+  THE BLOW'S TYPE GATE (`ProcDef.hitType` on the packet's dominant rolled
+  type) and the 'cast' trigger's carried AIM. ACCUMULATORS AS PLAIN STATE:
+  THE STRIDE (`strideReach` + the `'strided'` ConditionId over
+  `Actor.strideDist`, banked post-clamp by moveActor only while armed,
+  spent by a depth-0 landed blow at the next timer tick), THE ROOTED RAMP
+  (the `'still'` derived gauge, `GAUGE_CFG.stillCap`), THE BLOOM
+  (`minionBloom`/`minionBloomPower` → `Actor.bloomIn` + the `blooming`
+  marker; the lifespan sweep detonates through explodeActor in
+  `BLOOM_CFG.type` and ends the body as an expiry), THE EXTRA LANE
+  (`extraAs_<type>` — additive beside conversion, folded once at
+  applyConversion). THE SPOKEN LINE (`speakLineText`: `{v}`/`{v%}`/`{v0}`).
+  THE DEFINING LAW: the probe refuses a legend whose every line an affix
+  could roll. Roster: Wanderer's Wake (the stride), The Emberbrand (grants
+  Firebolt + The Rekindling), Gravebloom (the bloom), Stormcall (the
+  answer, chance + power), The Unmoved (+ the rooted ramp), Bloodletter's
+  Girdle (the letting), Fleetfeather (the second refusal), The Miser's Loop
+  (the whisper), Titan's Grasp (melee MORE, slower), the Halo (the count),
+  The Hollow Sovereign (less taken while the shield holds) and THE
+  CINDERVIGIL — the flagship (two granted skills, the spell-cast trigger
+  firing the granted copy, the extra lane).
   THE WORN GRAFT (slot grafts — supports granted BY POSITION): the
   `slotgraft_<slot>_<gemId>` stat family (engine/skills.ts `slotGraftStat`,
   slot 1-based "Skill Slot N"; value = granted gem LEVEL, grantors SUM,

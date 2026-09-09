@@ -1686,10 +1686,26 @@ export class UI {
     // unlearn gates and refuses with its own words). A duplicate pre-dims
     // the affordance; the engine stays the authority. Reordering is
     // UNGATED — choosing a seat is play, not surgery (the skills.ts ruling).
+    // An UNSEATED granted skill (THE LEGEND FABRIC — the Granted strip's
+    // chip) lifts as its own payload and binds onto an EMPTY seat only: a
+    // grant never evicts a learned sitter (the rack law keeps the hand).
+    registerDragSource({
+      kind: 'rackGrant',
+      clickLift: true,
+      payload: (arg) => {
+        const row = this.panelSeat(this.inventory).grantedSkills?.find(r => r.def.id === arg);
+        if (!row || row.slot >= 0) return null;
+        return {
+          kind: 'rackGrant', arg, label: row.def.name, data: { defId: row.def.id },
+          ghostHtml: `<span style="color:${row.def.color}">◆ ${row.def.name}</span>`,
+        };
+      },
+    });
     registerDropTarget({
       kind: 'rackSeat',
       accepts: (pl, arg) => {
         if (pl.kind === 'rackSeat') return pl.arg !== arg;
+        if (pl.kind === 'rackGrant') return !heroOf().skills[Number(arg)];
         const item = payloadSkillGem(pl);
         if (!item || item.gem?.kind !== 'skill') return false;
         return !this.panelSeat(this.inventory).meta.knownSkills.has(item.gem.skillId);
@@ -1697,6 +1713,8 @@ export class UI {
       drop: (pl, arg) => {
         if (pl.kind === 'rackSeat') {
           this.getWorld().requestMeta({ t: 'swapSkillSlots', a: Number(pl.arg), b: Number(arg) });
+        } else if (pl.kind === 'rackGrant') {
+          this.getWorld().requestMeta({ t: 'bindSkill', slot: Number(arg), skillId: pl.arg });
         } else {
           this.getWorld().requestMeta({ t: 'learn', uid: Number(pl.arg), slot: Number(arg) });
         }
@@ -1726,7 +1744,8 @@ export class UI {
         const item = seat.meta.items.find(i => i.uid === Number(pl.arg));
         if (item?.gem?.kind !== 'support') return false;
         const sup = SUPPORTS[item.gem.supportId];
-        const inst = seat.meta.knownSkills.get(skillId);
+        // A GRANTED skill sockets like a learned one (THE LEGEND FABRIC).
+        const inst = seat.meta.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId);
         if (!sup || !inst || !inst.sockets.includes(null)) return false;
         // THE GATE READS THE CUT (the support base): this copy's own roll
         // decides the fit — a workable cut sockets, a hitless host refuses.
@@ -1847,7 +1866,8 @@ export class UI {
 
   private skillTooltip(id: string, extended = false): TooltipContent | null {
     const seat = this.panelSeat(this.inventory);
-    const inst = seat.meta.knownSkills.get(id);
+    // Learned or GRANTED (THE LEGEND FABRIC): the granted lane speaks its source.
+    const inst = seat.meta.knownSkills.get(id) ?? seat.grantedInsts?.get(id);
     if (!inst) return null;
     const d = inst.def;
     const preview = previewSkill(seat.actor, inst);
@@ -1855,10 +1875,11 @@ export class UI {
     // The tooltip's FIRST LINE names the picked branch (skill-mode trees,
     // §7 — at-a-glance identity beside the bar pip).
     const branch = treeSpentBranch(inst);
+    const granted = inst.grantedBy ? ` · granted by ${inst.grantedBy}` : '';
     return {
       title: `${d.name} — Lv ${inst.level}${branch ? ` · ${branch.name}` : ''}`,
       description: d.description + this.previewRowsHtml(preview.rows, extended),
-      meta: d.tags.join(' · ') + (charge ? ` · ${charge}` : ''),
+      meta: d.tags.join(' · ') + (charge ? ` · ${charge}` : '') + granted,
       wide: extended && preview.hasDetail,
     };
   }
@@ -6010,11 +6031,27 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
 Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. ${word}.">
         ✦ ${r.def.name} <b>L${r.level}</b> → Slot ${r.slot + 1}${live ? '' : ' — dormant'}</span>`;
     }).join('');
-    const graftBank = (graftSources.length || wornRows.length) ? `
+    // THE GRANTED LEDGER (engine/world.ts GrantedSkillRow — THE LEGEND
+    // FABRIC): every skill the seat's gear/passives GRANT, with its level,
+    // its source and whether it sits on the bar. A seated grant is a
+    // read-only chip (the rack tile carries the skill); an UNSEATED one is
+    // a drag source — drop it on an empty rack seat to bind it (the rack
+    // law: unseated is unusable; the bar filled before the grant arrived).
+    const grantRows = seat.grantedSkills ?? [];
+    const grantChips = grantRows.map(r => {
+      const seated = r.slot >= 0;
+      return `<span class="gem-chip graft-chip"${seated ? '' : ` data-drag="rackGrant:${r.def.id}"`}
+        style="border-color:${r.def.color}${seated ? '' : ';opacity:0.78;cursor:var(--cursor-point, pointer)'}"
+        title="${r.def.description}
+Granted by ${r.source} at Level ${r.level}: cast it like any learned skill; its sockets live on that piece. ${seated ? 'Seated on the bar.' : 'UNSEATED: drag it onto an empty rack seat to bind it.'}">
+        ◆ ${r.def.name} <b>L${r.level}</b> ← ${r.source}${seated ? '' : ' — unseated'}</span>`;
+    }).join('');
+    const graftBank = (graftSources.length || wornRows.length || grantRows.length) ? `
       <div class="graft-bank">
         ${graftSources.length ? `<span style="color:#b8a2e8;font-size:10px">Grafts${this.liftedGraftKey ? ' (click a skill to bind)' : ''}:</span>
         ${bankChips}` : ''}
         ${wornRows.length ? `<span style="color:#b8a2e8;font-size:10px">Worn:</span> ${wornChips}` : ''}
+        ${grantRows.length ? `<span style="color:#e8a860;font-size:10px">Granted:</span> ${grantChips}` : ''}
       </div>` : '';
     // MIREILLE'S LESSON at SEAT grain: while the one 'learn' step pends,
     // every EMPTY rack seat glows as the landing (teachSeat below) — the
@@ -6060,9 +6097,12 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
           background:#241d2e;padding:3px 5px;overflow:hidden;cursor:var(--cursor-point, pointer)">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <span style="font-size:8px;color:var(--gold)">${label}</span>
-          <button data-rackunbind="${slot}" title="Unlearn ${sd.name} — it returns to your pack as its Memory"
+          ${seated.grantedBy
+            ? `<span title="Granted by ${seated.grantedBy} — take the piece off to unseat it; there is no gem to unlearn"
+                style="font-size:9px;color:#e8a860;padding:0 1px;line-height:1">◆</span>`
+            : `<button data-rackunbind="${slot}" title="Unlearn ${sd.name} — it returns to your pack as its Memory"
             style="background:none;border:none;color:#6a6478;cursor:var(--cursor-point, pointer);
-              font-size:9px;padding:0 1px;line-height:1">✕</button>
+              font-size:9px;padding:0 1px;line-height:1">✕</button>`}
         </div>
         <div style="display:flex;align-items:center;gap:4px">
           <span style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;
@@ -6089,7 +6129,10 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
     // THE FIELD DISCIPLINE, spoken at the button (the engine gate's words):
     // unsocket shares one verdict; unlearn adds its per-skill clock below.
     const unsocketWhy = world.swapRefusal(seat, 'unsocket');
-    const rows = [...m.knownSkills.values()].map(inst => {
+    // The book lists what the seat WIELDS: the learned residence plus the
+    // GRANTED lane (THE LEGEND FABRIC) — a granted row sockets and picks
+    // its tree like any other, but carries no level-up and no unlearn.
+    const rows = [...m.knownSkills.values(), ...(seat.grantedInsts?.values() ?? [])].map(inst => {
       const def = inst.def;
       const maxLv = skillMaxLevel(def);
       // Mark gems that BOARD THE CREW (forwarded into the minions' own
@@ -6234,11 +6277,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           </div>
           <div class="tags">${def.tags.join(' · ')}</div>
           <div class="bind-btns">
-            ${this.abilityLevelBtn(`data-levelup="${def.id}"`, inst.level, inst.level >= maxLv)}
+            ${inst.grantedBy
+              ? `<span style="font-size:10px;color:#e8a860" title="Its level is the gear's to give; there is no gem to unlearn — take the piece off instead.">◆ granted by ${inst.grantedBy}</span>`
+              : `${this.abilityLevelBtn(`data-levelup="${def.id}"`, inst.level, inst.level >= maxLv)}
             ${(() => {
               const why = world.swapRefusal(seat, 'unlearn', def.id);
               return `<button data-unlearn="${def.id}" ${why ? `disabled title="${why}"` : ''}>Unlearn${why ? ` (${why})` : ''}</button>`;
-            })()}
+            })()}`}
           </div>
           <div class="sockets">${sockets}</div>
           ${graftRow}

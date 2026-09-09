@@ -33,7 +33,7 @@ import {
   type SkillInstance, type SupportInstance,
 } from './skills';
 import type {
-  GemPayload, GemSocketRow, ItemInstance, ItemRarity,
+  GemPayload, GemSocketRow, GrantedSkillState, ItemInstance, ItemRarity,
   SkillGemPayload, SupportGemPayload,
 } from './items';
 import { bagHeight, bagWidth } from './inventory';
@@ -116,6 +116,38 @@ export function packSupportGemPayload(gem: SupportInstance): SupportGemPayload {
     kind: 'support', supportId: gem.def.id, level: gem.level,
     ...(gem.rolled ? { rolled: { ...gem.rolled } } : {}),
   };
+}
+
+// THE RESIDENCE ON THE ITEM (THE LEGEND FABRIC — ItemInstance.grantState):
+// a skill GRANTED by a worn legend keeps its sockets and tree picks on the
+// granting item, packed in the gem wrapper's own socket-row shape. Level is
+// never stored — the grant stat's fold IS the level.
+
+/** Pack a granted instance's residence for its host item. */
+export function packGrantState(inst: SkillInstance): GrantedSkillState {
+  return {
+    sockets: inst.sockets.map(packSocketRow),
+    ...(inst.treeNodes?.length ? { treeNodes: [...inst.treeNodes] } : {}),
+  };
+}
+
+/** Mint a packed residence back onto a freshly granted instance
+ *  (tolerant, the unpack law: a retired support empties its socket, an
+ *  orphaned pick drops; the instance's own socket count bounds the rows). */
+export function restoreGrantState(inst: SkillInstance, state: GrantedSkillState): void {
+  const rows = state.sockets ?? [];
+  inst.sockets = inst.sockets.map((_, i) => {
+    const row = rows[i];
+    const sd = row ? SUPPORTS[row.supportId] : undefined;
+    return row && sd
+      ? ({
+        def: sd, level: row.level,
+        ...(row.locked ? { locked: true } : {}),
+        ...(row.rolled ? { rolled: { ...row.rolled } } : {}),
+      } as SupportInstance)
+      : null;
+  });
+  if (state.treeNodes?.length) inst.treeNodes = validTreeNodes(inst.def, state.treeNodes, inst.level);
 }
 
 /** Wrap a live skill instance into its 1×1 bag item (no cell yet — the

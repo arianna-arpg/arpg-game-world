@@ -14,33 +14,129 @@
 // damageVs_/minionApply_<status> families, negative ranges (downsides),
 // and LOCAL scope (`local: true` — the line scales THIS item's own stats,
 // displays "… on this item", and is priced hot because of it).
-// Gameplay-warping uniques (procs, skill grants) get their hooks the day
-// those lines are registered as stats/registries — no new item machinery.
+//
+// THE LEGEND FABRIC (docs/engine/legends.md — her ruling 2026-09-08: a
+// unique is a BUILD, never a stat pool): every legend wears at least one
+// SIGNATURE line no rolled affix can produce (THE DEFINING LAW, pinned by
+// balance/probe_legends.ts), drawn from the grammar the engine now speaks:
+//  · GRANTED SKILLS — skillGrantStat(id) at a rolled LEVEL ("Grants Level 2
+//    Firebolt"): a real, bindable, socketable instance on the wearer's seat
+//    whose stones live on the item (engine/skills.ts SKILLGRANT_PREFIX).
+//  · TRIGGERS — a proc authored BESIDE the legend (LEGEND_PROCS below,
+//    registered through data/procs.ts registerProc) whose chance is the
+//    proc_<id> line and whose magnitude is the procPower_<id> line; a
+//    'cast' payload with `own` fires the wearer's OWN copy of a skill
+//    (level, sockets, tree — the granted one), and hitType gates a blow
+//    on what actually struck.
+//  · ACCUMULATORS as plain state — THE STRIDE (strideReach + the 'strided'
+//    condition), THE ROOTED RAMP (the 'still' gauge), THE BLOOM
+//    (minionBloom / minionBloomPower), THE EXTRA LANE (extraAs_<type>).
+//  · the standing levers — slot grafts, combos, conversions, sympathy,
+//    lowLifeLine, reflex, throng finds, the din — each a legend's whole
+//    argument.
+// Spoken lines use `text` with {v} (raw), {v%} (percent) and {v0} (whole).
 // ---------------------------------------------------------------------------
 
 import type { UniqueDef } from '../engine/items';
-import { slotGraftStat } from '../engine/skills';
+import { skillGrantStat, slotGraftStat } from '../engine/skills';
 import { comboStat } from '../engine/sequence';
-import { procStat } from './procs';
+import { mod } from '../engine/stats';
+import { procPowerStat, procStat, registerProc, type ProcDef } from './procs';
+
+// ---------------------------------------------------------------------------
+// THE LEGEND PROCS — triggers authored beside the legends that wear them,
+// registered through the proc registry's open door (registerProc): the same
+// rate disciplines, depth law, chance cap, luck multiplier and power dial as
+// every row in data/procs.ts. Only a legend line grants their chance, so a
+// build without the piece never rolls them (the armed guard).
+// ---------------------------------------------------------------------------
+export const LEGEND_PROCS: ProcDef[] = [
+  // THE REKINDLING (The Emberbrand): setting a body Burning looses the
+  // wearer's OWN Firebolt at it — the granted copy, level, sockets and all
+  // (the own-copy law) — from the hand ('self'), so the bolt flies AT the
+  // burning victim. The icd paces a burn-spam build to a bolt a second.
+  {
+    id: 'emberbrand_rekindle', name: 'The Rekindling', color: '#ff8a3a',
+    trigger: 'statusApply', status: 'burn', icd: 1.0,
+    effect: { type: 'cast', cast: { skillId: 'firebolt', count: [1, 1], at: 'self', own: true } },
+  },
+  // STORMCALL'S ANSWER (Stormcall): a blow whose DOMINANT rolled type is
+  // lightning (conversions honored — ProcDef.hitType) calls one bolt down
+  // on its victim: the stormcall_strike payload played AT the struck body.
+  {
+    id: 'stormcall_answer', name: 'Stormcall', color: '#c8e8ff',
+    trigger: 'hit', hitType: 'lightning', icd: 0.5, oncePerCast: true,
+    effect: { type: 'cast', cast: { skillId: 'stormcall_strike', count: [1, 1], at: 'target' } },
+  },
+  // THE LETTING (Bloodletter's Girdle): a BLEEDING body slain by your blow
+  // bursts — the killing skill's damage re-rolled around the corpse.
+  {
+    id: 'bloodletting', name: 'The Letting', color: '#d04a4a',
+    trigger: 'kill', vs: ['bleed'], oncePerCast: true,
+    effect: { type: 'explosion', damageScale: 0.9, radius: 85 },
+  },
+  // THE SECOND REFUSAL (Fleetfeather Treads): a made evade becomes flight.
+  {
+    id: 'fleetfeather_refusal', name: 'Second Refusal', color: '#8ad0ff',
+    trigger: 'evade', icd: 2,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'fleetfeather_refusal', duration: 3,
+        mods: [mod('moveSpeed', 'increased', 0.25), mod('attackSpeed', 'increased', 0.15)],
+      },
+    },
+  },
+  // THE WHISPER (The Miser's Loop): running dry halves every waiting clock.
+  {
+    id: 'misers_whisper', name: "The Miser's Whisper", color: '#7aa0e8',
+    trigger: 'condition', condition: 'lowMana', icd: 10,
+    effect: { type: 'cooldown', fraction: 0.5 },
+  },
+  // THE VIGIL'S ANSWER (The Cindervigil): every REAL spell cast also looses
+  // the wearer's Pyroclast Bolt — the GRANTED copy (own) — at the spell's
+  // own mark (the aimed 'cast' payload). Payload casts never re-roll the
+  // trigger (they pass as echoes), so the vigil can never answer itself.
+  {
+    id: 'cindervigil_answer', name: "The Vigil's Answer", color: '#ffb060',
+    trigger: 'cast', tags: ['spell'], icd: 0.8,
+    effect: { type: 'cast', cast: { skillId: 'pyroclast_bolt', count: [1, 1], own: true } },
+  },
+];
+for (const def of LEGEND_PROCS) registerProc(def);
 
 export const UNIQUE_LIST: UniqueDef[] = [
+  // WANDERER'S WAKE — THE STRIDE (engine/stats.ts 'strided'): walk the
+  // reach and the next blow you land strides — priced as increased damage
+  // AND a flat physical kick, both reading the one condition; the landing
+  // spends the walk at the end of its frame (every contact of one swing
+  // sees it). A lower reach is the better roll, so the line is pinned
+  // (tierScale 0) — depth must never lengthen the road.
   {
     id: 'wanderers_wake', name: "Wanderer's Wake", baseId: 'boots_evasion', weight: 100,
     flavor: 'The road never asked her name; it simply made room.',
     lines: [
+      { stat: 'strideReach', kind: 'flat', range: [560, 400], tierScale: 0,
+        text: 'After walking {v0} paces, your next blow STRIDES' },
+      { stat: 'damage', kind: 'increased', range: [0.45, 0.65], when: 'strided' },
+      { stat: 'addedPhysical', kind: 'flat', range: [8, 14], when: 'strided' },
       { stat: 'moveSpeed', kind: 'increased', range: [0.12, 0.18] },
       // LOCAL — the boots themselves are slippery; sized for one item.
       { stat: 'evasion', kind: 'increased', range: [0.25, 0.4], local: true },
-      { stat: 'insight', kind: 'flat', range: [20, 35] },
-      { stat: 'damage', kind: 'increased', range: [0.08, 0.12], when: 'moving' },
     ],
   },
+  // THE EMBERBRAND — THE REKINDLING: the ring GRANTS Firebolt (a level that
+  // deepens with the tier — the leveling law on a granted skill) and every
+  // burn you lay has a chance to loose that very bolt at its victim (the
+  // own-copy law: the granted instance's level and sockets ride the
+  // trigger). A burn build owns a free second cannon.
   {
     id: 'emberbrand', name: 'The Emberbrand', baseId: 'ring_ruby', weight: 100,
     flavor: 'It remembers every fire it has started.',
     lines: [
+      { stat: skillGrantStat('firebolt'), kind: 'flat', range: [1, 2], tierScale: 0.3 },
+      { stat: procStat('emberbrand_rekindle'), kind: 'flat', range: [0.35, 0.5],
+        text: '{v%} chance to loose your Firebolt at an enemy you set Burning' },
       { stat: 'addedFire', kind: 'flat', range: [4, 7] },
-      { stat: 'apply_burn', kind: 'flat', range: [0.12, 0.2] },
       { stat: 'damageVs_burn', kind: 'flat', range: [0.1, 0.18] },
       { stat: 'fireRes', kind: 'flat', range: [0.1, 0.15] },
     ],
@@ -110,26 +206,45 @@ export const UNIQUE_LIST: UniqueDef[] = [
       { stat: 'castSpeed', kind: 'increased', range: [0.04, 0.07] },
     ],
   },
+  // GRAVEBLOOM — THE BLOOM (engine minionBloom / minionBloomPower): every
+  // minion you raise ripens on a timer and BURSTS in chaos for a share of
+  // its own maximum life, then dies — so life investment IS the bomb, and
+  // the bigger-bodied contracts are the fattest charges. A shorter fuse
+  // is the better roll (pinned); the marker status counts the seconds
+  // down on the body.
   {
     id: 'gravebloom', name: 'Gravebloom', baseId: 'helmet_es', weight: 100,
     flavor: 'What you plant in sorrow you may harvest in service.',
     lines: [
-      { stat: 'minionDamage', kind: 'increased', range: [0.2, 0.3] },
-      { stat: 'minionLife', kind: 'increased', range: [0.2, 0.3] },
-      { stat: 'minionRegen', kind: 'flat', range: [2, 4] },
+      { stat: 'minionBloom', kind: 'flat', range: [8, 5], tierScale: 0,
+        text: 'Your minions BLOOM {v0} seconds after they emerge: they burst, and they die' },
+      { stat: 'minionBloomPower', kind: 'flat', range: [0.4, 0.6],
+        text: "The bloom deals {v%} of the minion's maximum life as chaos damage around it" },
+      { stat: 'minionLife', kind: 'increased', range: [0.3, 0.45] },
       { stat: 'minionApply_poison', kind: 'flat', range: [0.1, 0.18] },
     ],
   },
+  // BLOODLETTER'S GIRDLE — THE LETTING: a bleeding body you slay BURSTS
+  // for the killing blow's damage around it (the 'kill' trigger's victim
+  // gate reads the wound), the burst's magnitude a rolled POWER line (the
+  // proc's second dial) beside the pinned certainty. The bleed build's
+  // chain reaction.
   {
     id: 'bloodletters_girdle', name: "Bloodletter's Girdle", baseId: 'belt_poise', weight: 100,
     flavor: 'Cinched tight, so nothing spills that was not meant to.',
     lines: [
+      { stat: procStat('bloodletting'), kind: 'flat', range: [1, 1], tierScale: 0,
+        text: 'Bleeding enemies you slay BURST, wounding everything around them' },
+      { stat: procPowerStat('bloodletting'), kind: 'flat', range: [0.15, 0.4],
+        text: 'The burst strikes for {v%} more damage' },
+      { stat: 'apply_bleed', kind: 'flat', range: [0.15, 0.25] },
       { stat: 'poise', kind: 'flat', range: [30, 50] },
       { stat: 'life', kind: 'flat', range: [25, 40] },
-      { stat: 'apply_bleed', kind: 'flat', range: [0.15, 0.25] },
-      { stat: 'damageVs_bleed', kind: 'flat', range: [0.1, 0.2] },
     ],
   },
+  // THE HOLLOW SOVEREIGN — the energy-shield pact: a crown's worth of
+  // local shield, and the body that agreed to leave takes LESS while the
+  // shield holds (the hasEs condition — the ES-first build's own armor).
   {
     id: 'hollow_sovereign', name: 'The Hollow Sovereign', baseId: 'chest_es', weight: 80,
     minIlvl: 9,
@@ -138,19 +253,28 @@ export const UNIQUE_LIST: UniqueDef[] = [
       // LOCAL — a 40-60% window is one-item pricing; global it would dwarf
       // every affix in the game.
       { stat: 'energyShield', kind: 'increased', range: [0.4, 0.6], local: true },
+      { stat: 'damageTaken', kind: 'more', range: [-0.12, -0.08], when: 'hasEs' },
       { stat: 'esRechargeRate', kind: 'increased', range: [0.2, 0.3] },
       { stat: 'mana', kind: 'flat', range: [30, 50] },
       // The bargain — a real downside line (negative range, scales too).
       { stat: 'life', kind: 'increased', range: [-0.15, -0.1], tierScale: 0 },
     ],
   },
+  // STORMCALL — THE ANSWER: a blow of lightning (the DOMINANT rolled type,
+  // conversions honored — so The Tuning Fork's part-lightning qualifies
+  // when it wins the roll) has a rolled chance to call a bolt down on its
+  // victim, and a rolled POWER makes the bolt bite harder. The bolt wears
+  // the wearer's whole lightning investment like any cast.
   {
     id: 'stormcall', name: 'Stormcall', baseId: 'amulet_opal', weight: 100,
     flavor: 'Wear it high on the chest, where the thunder can find it.',
     lines: [
+      { stat: procStat('stormcall_answer'), kind: 'flat', range: [0.12, 0.2],
+        text: '{v%} chance for a blow of lightning to call a bolt down on its victim' },
+      { stat: procPowerStat('stormcall_answer'), kind: 'flat', range: [0.2, 0.5],
+        text: 'The called bolt strikes for {v%} more damage' },
       { stat: 'addedLightning', kind: 'flat', range: [5, 9] },
       { stat: 'apply_shock', kind: 'flat', range: [0.15, 0.22] },
-      { stat: 'castSpeed', kind: 'increased', range: [0.08, 0.12] },
       { stat: 'lightningRes', kind: 'flat', range: [0.15, 0.25] },
     ],
   },
@@ -166,33 +290,47 @@ export const UNIQUE_LIST: UniqueDef[] = [
       { stat: 'lifeRegen', kind: 'flat', range: [2, 4] },
     ],
   },
+  // FLEETFEATHER TREADS — THE SECOND REFUSAL: the bird that refused to be
+  // caught twice. A made evade has a rolled chance to become flight (a
+  // real buff off the 'evade' trigger — the dodge wardrobe's tempo).
   {
     id: 'fleetfeather', name: 'Fleetfeather Treads', baseId: 'boots_armor_evasion', weight: 110,
     flavor: 'Stitched from a bird that refused to be caught twice.',
     lines: [
+      { stat: procStat('fleetfeather_refusal'), kind: 'flat', range: [0.5, 0.8],
+        text: '{v%} chance when you evade to take flight: 25% increased movement speed and 15% increased attack speed for 3 seconds' },
       { stat: 'moveSpeed', kind: 'increased', range: [0.1, 0.15] },
       { stat: 'attackSpeed', kind: 'increased', range: [0.08, 0.12] },
       { stat: 'evasion', kind: 'flat', range: [60, 100] },
     ],
   },
+  // THE MISER'S LOOP — THE WHISPER: spend it all, and every cooldown you
+  // are waiting on halves the moment you run dry (the 'condition' trigger
+  // on lowMana's rising edge, paced by its own clock) — the dump-and-reset
+  // rhythm the low-mana damage line already paid for.
   {
     id: 'misers_loop', name: "The Miser's Loop", baseId: 'ring_lapis', weight: 100,
     flavor: 'Spend it all, it whispers. See what happens.',
     lines: [
+      { stat: procStat('misers_whisper'), kind: 'flat', range: [1, 1], tierScale: 0,
+        text: 'Running low on mana halves every cooldown you are waiting on, once per 10 seconds' },
+      { stat: 'damage', kind: 'increased', range: [0.15, 0.2], when: 'lowMana' },
       { stat: 'mana', kind: 'increased', range: [0.25, 0.4] },
       { stat: 'manaRegen', kind: 'flat', range: [2, 3.5] },
       { stat: 'cooldownRecovery', kind: 'increased', range: [0.08, 0.12] },
-      { stat: 'damage', kind: 'increased', range: [0.15, 0.2], when: 'lowMana' },
     ],
   },
+  // TITAN'S GRASP — THE ONE BLOW: melee strikes MORE (a true multiplier,
+  // not another increase) and the hands swing slower for it — the heavy
+  // build's trade, priced whole (the downside pinned).
   {
     id: 'titans_grasp', name: "Titan's Grasp", baseId: 'gloves_armor', weight: 100,
     flavor: 'The mountain does not strike quickly. It strikes once.',
     lines: [
+      { stat: 'damage', kind: 'more', range: [0.15, 0.22], tags: ['melee'] },
+      { stat: 'attackSpeed', kind: 'increased', range: [-0.15, -0.1], tierScale: 0 },
       { stat: 'addedPhysical', kind: 'flat', range: [4, 8] },
-      { stat: 'damage', kind: 'increased', range: [0.15, 0.25], tags: ['melee'] },
       { stat: 'strength', kind: 'flat', range: [8, 14] },
-      { stat: 'accuracy', kind: 'flat', range: [60, 100] },
     ],
   },
   // --- The Aetherial's relics (the Ascent's own prizes) ----------------------
@@ -209,16 +347,19 @@ export const UNIQUE_LIST: UniqueDef[] = [
       { stat: 'damage', kind: 'increased', range: [0.08, 0.12], when: 'moving' },
     ],
   },
-  // THE HALO OF THE NINTH CHOIR: the aureole-caster's crown — the Host's
-  // arithmetic of light: every shock on the ledger pays you back.
+  // THE HALO OF THE NINTH CHOIR — THE COUNT: the aureole-caster's crown.
+  // Eight choirs sing; the ninth keeps count — lightning damage climbs per
+  // enemy near you (the foes:near derived gauge), so the storm caster who
+  // wades in is the one the Host rewards.
   {
     id: 'halo_ninth_choir', name: 'Halo of the Ninth Choir', baseId: 'helmet_es', weight: 65,
     minIlvl: 12,
     flavor: 'Eight choirs sing. The ninth keeps count.',
     lines: [
       { stat: 'energyShield', kind: 'increased', range: [0.3, 0.5], local: true },
+      { stat: 'damage', kind: 'increased', range: [0.02, 0.03], gauge: 'foes:near', tags: ['lightning'],
+        text: 'Lightning skills deal {v%} increased damage for each enemy near you: the ninth keeps count' },
       { stat: 'castSpeed', kind: 'increased', range: [0.08, 0.12] },
-      { stat: 'damage', kind: 'increased', range: [0.15, 0.25], tags: ['lightning'] },
       { stat: 'apply_shock', kind: 'flat', range: [0.1, 0.15] },
       { stat: 'lightningRes', kind: 'flat', range: [0.1, 0.15] },
     ],
@@ -252,7 +393,9 @@ export const UNIQUE_LIST: UniqueDef[] = [
   // footwork anywhere on the doll becomes plate (the golden rule reads the
   // pre-forgo baseline, so nothing is lost to the order of grants); beside
   // the Ledger's net-positive echo and the Lattice's bargain below, this is
-  // the fabric's third texture: total. Stone is slow — a real downside line.
+  // the fabric's third texture: total. And THE ROOTED RAMP: the stone that
+  // abstains hits harder the longer it stands (the 'still' derived gauge,
+  // capped at GAUGE_CFG.stillCap seconds). Stone is slow — a real downside.
   {
     id: 'the_unmoved', name: 'The Unmoved', baseId: 'chest_armor_evasion', weight: 65,
     minIlvl: 9,
@@ -260,6 +403,8 @@ export const UNIQUE_LIST: UniqueDef[] = [
     lines: [
       { stat: 'evasionToArmor', kind: 'flat', range: [0.85, 1.0] },
       { stat: 'evasionForgone', kind: 'flat', range: [1, 1], tierScale: 0 },
+      { stat: 'damage', kind: 'more', range: [0.04, 0.06], gauge: 'still',
+        text: '{v%} more damage for every second you stand still, up to five' },
       { stat: 'armor', kind: 'increased', range: [0.3, 0.45], local: true },
       { stat: 'moveSpeed', kind: 'increased', range: [-0.06, -0.04] },
     ],
@@ -422,6 +567,30 @@ export const UNIQUE_LIST: UniqueDef[] = [
       { stat: 'esForgone', kind: 'flat', range: [0.35, 0.5] },
       { stat: 'poise', kind: 'increased', range: [0.2, 0.3] },
       { stat: 'armor', kind: 'increased', range: [0.3, 0.45], local: true },
+    ],
+  },
+  // --- THE LEGEND FABRIC's flagship ------------------------------------------
+  // THE CINDERVIGIL — the whole grammar on one helm (the Dusk Vigil's
+  // shape): two GRANTED skills (Firebolt at a level that deepens with the
+  // tier; Pyroclast Bolt pinned at one), a TRIGGER that fires the granted
+  // bolt at every real spell's mark (the own-copy law: its sockets, its
+  // tree picks ride), THE EXTRA LANE, spell damage, life on kill and mana
+  // regeneration. Wear it and a build exists that did not before — the
+  // item IS the kit, and the player builds around it.
+  {
+    id: 'cindervigil', name: 'The Cindervigil', baseId: 'helmet_es', weight: 55,
+    minIlvl: 12,
+    flavor: 'Keep the watch, and the watch keeps you.',
+    lines: [
+      { stat: skillGrantStat('firebolt'), kind: 'flat', range: [1, 2], tierScale: 0.3 },
+      { stat: skillGrantStat('pyroclast_bolt'), kind: 'flat', range: [1, 1], tierScale: 0 },
+      { stat: procStat('cindervigil_answer'), kind: 'flat', range: [1, 1], tierScale: 0,
+        text: 'Casting a spell also looses your Pyroclast Bolt at its mark' },
+      { stat: 'extraAs_fire', kind: 'flat', range: [0.3, 0.5],
+        text: 'Gain {v%} of damage as extra fire damage' },
+      { stat: 'damage', kind: 'increased', range: [0.25, 0.4], tags: ['spell'] },
+      { stat: 'lifeOnKill', kind: 'flat', range: [5, 10] },
+      { stat: 'manaRegen', kind: 'increased', range: [0.25, 0.25], tierScale: 0 },
     ],
   },
 ];

@@ -255,7 +255,14 @@ export type ConditionId =
   | 'recentlyHit' | 'recentlyCrit' | 'recentlyKilled'
   | 'recentlyHurt' | 'notHurtRecently'
   | 'recentlyBlocked' | 'recentlyEvaded'
-  | 'recentlyMoved' | 'recentlyHealed';
+  | 'recentlyMoved' | 'recentlyHealed'
+  // THE STRIDE (THE LEGEND FABRIC — docs/engine/legends.md): the willed
+  // distance walked since the last striding blow (Actor.strideDist, fed by
+  // moveActor) has reached the sheet's `strideReach` (0 = the lane is off).
+  // A landed damaging blow while it holds SPENDS the stride at the end of
+  // its frame — "after walking N units, your next blow…" as a condition
+  // ordinary modifiers read with `when`.
+  | 'strided';
 
 /** EVERY ConditionId, in the actor's BIT ORDER (Actor.refreshConditions
  *  folds bit i ⇔ CONDITION_IDS[i]). One list, declared beside the union,
@@ -272,6 +279,7 @@ export const CONDITION_IDS: readonly ConditionId[] = [
   'recentlyHurt', 'notHurtRecently',
   'recentlyBlocked', 'recentlyEvaded',
   'recentlyMoved', 'recentlyHealed',
+  'strided',
 ];
 
 export function isConditionId(id: string): id is ConditionId {
@@ -376,6 +384,10 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  UNCONDITIONED by the condition mask — it IS the mask's input — so
    *  keep line mods unconditional. */
   lowLifeLine:    { label: 'Low-Life Threshold', base: LOW_LIFE_FRAC, min: 0, max: 0.9, percent: true },
+  /** THE STRIDE (THE LEGEND FABRIC): world units of willed walking that
+   *  arm the 'strided' condition; 0 = off. A grantor sets the reach, the
+   *  condition reads it, the next landed blow spends it. */
+  strideReach:    { label: 'Stride Reach', base: 0, min: 0 },
 
   // Mobility & action speed
   moveSpeed:      { label: 'Movement Speed', base: 200, min: 30 },
@@ -1396,6 +1408,15 @@ export const STAT_DEFS: Record<string, StatDef> = {
   minionExplodeDeath:   { label: 'Minion Death Explosion', base: 0, percent: true },
   /** Same, but the minion detonates itself upon reaching low life (0 = off). */
   minionExplodeLowLife: { label: 'Minion Low-Life Detonation', base: 0, percent: true },
+  /** THE BLOOM (THE LEGEND FABRIC — Gravebloom): seconds after a minion
+   *  EMERGES at which it detonates and dies (0 = never). Stamped at the
+   *  summon from the owner's sheet (Actor.bloomIn), worn as the 'blooming'
+   *  marker so the ripening reads; the burst is minionBloomPower. */
+  minionBloom:      { label: 'Minion Bloom Timer', base: 0, min: 0 },
+  /** Fraction of the blooming minion's max life dealt as the bloom's
+   *  damage (MINION_BLOOM_CFG.type) around it — life investment IS the
+   *  bomb. 0 = a bloom that only ends the body. */
+  minionBloomPower: { label: 'Minion Bloom Power', base: 0, min: 0, percent: true },
   /** Extra summons per cast. */
   summonCount:    { label: 'Additional Summons per Cast', base: 0 },
   /** >0: minions EMERGE AT THE CURSOR instead of beside their summoner
@@ -1579,6 +1600,17 @@ for (const from of DAMAGE_TYPES) {
 export function conversionStat(from: DamageType, to: DamageType): string {
   return `convert_${from}_${to}`;
 }
+
+// THE EXTRA LANE (THE LEGEND FABRIC — docs/engine/legends.md): extraAs_<type>
+// = a fraction of ALL damage dealt GAINED as extra <type> — ADDITIVE beside
+// conversion (no source loses anything), folded once at applyConversion off
+// the post-conversion total so several extras never compound on each
+// other. "Gain 30% of damage as extra fire damage" is one flat line.
+for (const t of DAMAGE_TYPES) {
+  const cap = t[0].toUpperCase() + t.slice(1);
+  STAT_DEFS[`extraAs_${t}`] = { label: `Damage Gained as Extra ${cap}`, base: 0, min: 0, percent: true };
+}
+export function extraAsStat(to: DamageType): string { return `extraAs_${to}`; }
 
 // MIN/MAX added damage (the D2 lane): addedMin_<type> raises only the
 // bottom of the roll, addedMax_<type> only the top — so "+30 to maximum

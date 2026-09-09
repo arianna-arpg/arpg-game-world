@@ -1338,6 +1338,15 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     mods: [mod('damage', 'increased', 0.14), mod('moveSpeed', 'increased', 0.08), mod('castSpeed', 'increased', 0.08)],
   },
 
+  // THE BLOOM (minionBloom — THE LEGEND FABRIC, Gravebloom): a pure MARKER
+  // worn by a minion whose timer is ripening (World.spawnMinion stamps it
+  // for exactly the bloom's seconds), so the countdown reads on the body
+  // and the nameplate before the burst. No mods by design — the mechanism
+  // is Actor.bloomIn; this is the honest tell. Cleansing it changes nothing.
+  blooming: {
+    label: 'Blooming', color: '#9ad66a', duration: 1,
+  },
+
   // THE CONTAGION's strain marks (packages/contagionStrains.ts — Movement II
   // of the differentiation pass): worn by every body the plague takes in an
   // infected zone (the Plaguebound court always; a fated share of the zone's
