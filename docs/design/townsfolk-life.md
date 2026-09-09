@@ -68,6 +68,108 @@ patron and the corner-room lodger stay fixed.
 - The theater fabric can restamp `aiPost` under a RadianceCond exactly as
   `watch_change` does — a haunt's `home` follows the post.
 
+### 1.4 THE TRANSIENT TELLING — `engine/speech.ts`, `SPEECH_CFG` (built 2026-09-06)
+A folk line is an UTTERANCE, not a caption. Before this the spoken seat's
+bubble stood as long as the hero stood in reach and popped in and out at
+the radius edge as they walked past. Now `World.residentPrompt` (the
+renderer's per-frame poll) answers through one pure fold, `speechTell`:
+a telling begins on A FRESH APPROACH (the nearness EDGE — within
+`RESIDENT_RADIUS` + `dwellReachable` under THE SAME-STORY LAW, not there at
+the last live read; standing there earns nothing), stands its WHOLE window
+wherever the hero walks (`holdSec` + THE READING ALLOWANCE `holdPerChar`
+per character — the words were said, the speaker finishes the sentence at
+your back; the renderer's same-view gate still conceals the drawn bubble
+when you leave the room), disperses, and THE HELD TONGUE runs
+`cooldownSec` on the WORLD clock — out-and-back-in inside it earns
+nothing. THE LANE IS THE OVERRIDE: every line arrives by its source lane
+(`seat` = a plan's spoken seat, `folk` = a rostered guest, `resident` = a
+ward family) and `SPEECH_CFG.lanes` overrides any dial per lane (the
+spoken seat's DIRECTIONS repeat sooner: cooldown 12 s against the 24 s
+base; `Infinity` = the old perpetual bubble as data). THE LESSON
+EXEMPTION: Mireille's counter prompt (the welcome gift, the flask lesson),
+the quest giver's, the caravanner's, the Bonewright's and the Delver's are
+FUNCTIONAL — they stand until acted on, and never ride this clock. The
+memory is a per-world map keyed by actor id, cleared with the lines at
+every zone load, never saved, never on the wire. Dials (hers to rule):
+`holdSec` 4, `holdPerChar` 0.05, `cooldownSec` 24, `lanes.seat.cooldownSec`
+12, `staleSec` 1. Docs `docs/render/speech.md`; probe `probe_speech` rig J
+(the fold + the live inn: the patron, a guest, Mireille's exempt prompt).
+
+### 1.5 THE SPEECH GRAMMAR — `engine/speechGrammar.ts`, `data/speechGrammar.ts` (built 2026-09-06)
+Her ruling, 2026-09-06: *"Rimworld levels of colony member discussion"* —
+the folk should talk about the world and about EACH OTHER, varied and
+generative, never the same three fixed lines. Card 6 TALK is the ruling;
+this section is the design she gets to read before it is judged.
+
+**THE SHAPE.** A folk line is a TEMPLATE with SLOTS resolved from the
+world's own state at the moment it is told. Templates are rows in an open
+registry (`registerSpeechTemplates`): `text` with `{slot}` tokens, a ROLE
+pool (`roles: ['patron','traveler']` — `'any'` fits every speaker), a
+`weight`, and optional GATES (`phase: ['night']`, `sky: 'clear'|'front'`).
+Slots are RESOLVERS in a second open registry (`registerSpeechSlot`), each
+a pure read of a narrow `SpeechContext` that returns a phrase or null; a
+template with an unresolvable slot is SKIPPED, never thrown. The debut
+slots: `{name}` the speaker, `{other}` another NAMED body of the same
+company that is actually present, `{doing}` that body's current haunt
+piece ("Corran Vale's been at the keg all evening" — read off the SAME
+`hauntSeat` the AI walks, so the tell is true), `{phase}` (dawn / midday /
+dusk / night), `{weather}` (the standing front's label), `{lastEvent}` (the
+newest line of THE NOTICE FEED, kept on a short world log), `{from}` (the
+zone the hero arrived from — `World.entryFrom`), `{heroClass}`, `{town}`
+(Lastlight), `{zone}`, `{monster}` (a kind the hero put down recently —
+a credited kill log with a window), and `{hero}` (the hero's address,
+renown-gated, expanding at the renderer's own `{name}` seam).
+
+**THE LAWS.**
+- **THE SPEAKER IS A ROW.** Every spoken body — a plan's spoken seat, a
+  rostered guest, a ward family — registers ONE speaker row at the spawn:
+  a stable KEY (the seat's key — zone + structure + seat), a COMPANY (the
+  house it belongs to: the inn's placed structure id, or `ward`), its
+  ROLES (`FolkRow.roles` / `MonsterDef.speechRoles`; a family is a
+  `resident`), whether it is NAMED (a rolled or family name; the patron's
+  def-name "Patron" is not a name and never fills `{other}`), and its OWN
+  lines. The lane law of §1.4 stands unchanged beneath it.
+- **THE DEAL.** Once per (zone seed, company, DAY) the grammar deals each
+  speaker a DECK: a seeded weighted shuffle of every template its roles
+  admit, walked once, each template handed to the eligible speaker with
+  the shortest deck. Decks are PAIRWISE DISJOINT by construction, so no two
+  folk in one company can say the same line the same day; the next dawn
+  re-deals. The stream is a local mulberry seeded off the zone (THE
+  OFF-STREAM LAW) — `Math.random` never moves.
+- **THE FIRST WORD.** A body's AUTHORED lines (`FolkRow.lines`, the seat's
+  `line`, the family's `line`) are kept whole as slotless templates of its
+  own and LEAD its deck, so the first approach of every day still says what
+  it always said — the patron's directions, the family's greeting — and
+  the chatter rotates behind it. An authored line already claimed by an
+  earlier body of the company (two drovers share a row's lines) yields to
+  the next.
+- **THE ROTATION.** A telling begins on THE FRESH APPROACH (§1.4); each
+  telling takes the next RESOLVABLE entry from the deck position on
+  (skipped entries stay dealt — the sky may open them later), and the
+  composed line is stamped for the whole window so a slot never flickers
+  mid-telling. Deterministic per (zone, seat, day, approach index) under
+  equal world state.
+- **THE COMPANY LAW, SPOKEN.** `{other}` names only a NAMED, LIVING, PRESENT
+  body of the same company (never the speaker); `{doing}` reads that body's
+  arrived haunt piece through the same doodad the AI faces, or skips.
+- **THE EMPTY WORLD.** Every resolver answers null on nothing (no front, no
+  news, no arrival, no kills), and a template that needs it is skipped —
+  a fresh run's first inn talks in slotless templates and grows worldly
+  as the world happens.
+- **TRANSIENT BY CONSTRUCTION.** Decks, positions and stamped lines are
+  per-world speaker rows cleared with the lines at every zone load; nothing
+  is saved, nothing crosses the wire (a client polls its own world).
+
+Dials (`SPEECH_GRAMMAR_CFG`): `slainWindowSec` 480 (two days of "recent"),
+`newsKeep` 8, `slainKeep` 8. The corpus (`data/speechGrammar.ts`) ships
+dozens of templates per role — patron / lodger / merchant / warden /
+pilgrim / resident / mercenary / camper / traveler / visitor / any — and
+the HAUNT PHRASES table (`bar_counter` → "at the bar", `keg` → "at the
+keg"; a piece with no row reads "by the <piece>"). Docs
+`docs/engine/speech-grammar.md`; probe `probe_speechgrammar` (the registry
+census, the empty world, the disjoint deal, determinism, the live inn's
+rotation + company law, present-only `{other}`, no `Math.random`).
+
 ---
 
 ## 2. THE DECISION CARDS (her word wanted — none of these are built)
@@ -95,9 +197,16 @@ patron and the corner-room lodger stay fixed.
 5. **THE ROSTER'S TURN.** Per day (built) vs per visit vs per BEAT (the
    vendor's 300 s). A day is the honest one — the same face at the bar
    after a short errand.
-6. **TALK.** Multiple lines per body rotated on each approach; NPC-to-NPC
-   chatter (two guests facing each other with bubbles) — the speech fabric
-   already draws any body's bubble; a `talkTo` pairing is one idle rung.
+6. **TALK.** RULED 2026-09-06 ("Rimworld levels of colony member
+   discussion") and BUILT (§1.5 — THE SPEECH GRAMMAR: templates with slots
+   off the world's own state, a disjoint per-company-day deal, the first
+   word authored, the rest rotating on each fresh approach over §1.4's
+   clock). Owed her: every slot's phrase form, the corpus itself (dozens per
+   role — hers to cut and add), `slainWindowSec` 480, `newsKeep` /
+   `slainKeep` 8, the FIRST WORD law (an authored line leads every day) and
+   whether a `{hero}` address should wait on renown. Still open: NPC-to-NPC
+   chatter (two guests facing each other with bubbles — a `talkTo` pairing
+   is one idle rung; `{other}` already knows who is in the room).
 7. **THE WARD'S FAMILIES.** The residents (`TOWN_RESIDENTS`) could wear the
    same lever (a haunt on their doorstep flowers and the green's benches).
 8. **MIREILLE.** The innkeep behind her counter could haunt the counter's
@@ -108,7 +217,9 @@ patron and the corner-room lodger stay fixed.
 - **L0 — landed:** the haunt + the roster (this document's §1).
 - **L1 — THE ROUTINE ROWS:** `FolkRow.routine` / `MonsterDef.routine` +
   the phase clock + the sleep conduct + the square by day (cards 1–4).
-- **L2 — THE TALK:** rotated lines, pairings (card 6); the ward wears it.
+- **L2 — THE TALK:** LANDED as THE SPEECH GRAMMAR (§1.5) — rotated,
+  generative lines over THE TRANSIENT TELLING's clock (§1.4); the ward
+  wears it. Pairings (NPC-to-NPC chatter) remain the open rung.
 - **L3 — THE TOWN'S DAY:** market morning, the watch change (already in
   the theater), a festival row — event-lane compositions over L1.
 
@@ -129,3 +240,9 @@ patron and the corner-room lodger stay fixed.
 5. The sim's `World.update` does not run the AI — the runner drives it
    (`for (const a of world.actors) updateAI(a, world, dt)`); every probe
    that wants a stroll drives it the same way.
+6. THE PERPETUAL BUBBLE: `residentPrompt` answered the radius every frame,
+   so a spoken seat's line stood as long as the hero did and flickered at
+   the radius edge on a walk past. THE TRANSIENT TELLING (§1.4) closed it
+   at the WORLD seam — the renderer never learned a clock; the two probe
+   checks that read "says nothing across the square" now first let the
+   window run (the whole telling is the law, not the radius).

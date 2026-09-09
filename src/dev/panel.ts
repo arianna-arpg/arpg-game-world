@@ -37,6 +37,7 @@ import { dissolveTab } from './tabs/dissolve'; // THE DISSOLUTION GRAMMAR's gaug
 import { emergeTab } from './tabs/emerge'; // THE EMERGENCE GRAMMAR's gauge lever (M-EMERGE)
 import { ultlabTab } from './tabs/ultlab'; // THE ULTIMATES LAB — the ULT_QA lever's one door
 import { mapsTab } from './tabs/maps'; // THE MAP FORGE's in-game seat (authored maps: mint & walk, re-mint, edit)
+import { atlasTab } from './tabs/atlas'; // THE DEV LENS — the world map through development eyes (omniscient chart, cursor read)
 
 /** What the shell hands every tab at build time. */
 export interface DevTabCtx {
@@ -58,7 +59,7 @@ export interface DevTabDef {
 }
 
 /** THE TAB REGISTRY — order is display order. */
-const DEV_TABS: DevTabDef[] = [gemsTab, itemsTab, eventsTab, locationTab, accountTab, throngTab, comboTab, grabTab, liteTab, possessTab, entityTab, holdsTab, perfTab, watchTab, geysersTab, dissolveTab, emergeTab, ultlabTab, mapsTab];
+const DEV_TABS: DevTabDef[] = [gemsTab, itemsTab, eventsTab, locationTab, accountTab, throngTab, comboTab, grabTab, liteTab, possessTab, entityTab, holdsTab, perfTab, watchTab, geysersTab, dissolveTab, emergeTab, ultlabTab, mapsTab, atlasTab];
 
 let mounted = false;
 

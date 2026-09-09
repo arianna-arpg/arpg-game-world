@@ -276,7 +276,52 @@ export interface ProcDef {
   /** This proc RIDES MINION HITS: it rolls on the minion's OWNER, read
    *  through the summoning skill's sockets/tags (golden rule 6). */
   minionCarry?: true;
+  /** THE BLOW'S TYPE GATE (hit/kill — THE LEGEND FABRIC): the landed
+   *  packet's DOMINANT rolled damage type must be this one (conversions
+   *  honored — the attunement fabric's own read: what actually struck).
+   *  "Lightning damage has a chance to call a storm" is one row. */
+  hitType?: DamageType;
   effect: ProcEffect;
+}
+
+/** THE PROC POWER stat family (`procPower_<id>`, base 1): every proc has
+ *  TWO dials — proc_<id> is the CHANCE, procPower_<id> the MAGNITUDE of
+ *  what fires. Folded once at execution (scaleProcEffect) onto the
+ *  effect's damage scales, burst bases, status magnitudes, pours,
+ *  restores, wards, shove force and cast multipliers; count/duration
+ *  shapes (buff, summon, birth, cooldown, cleanse, kindle, vent, fortify,
+ *  gainCharge) are structural and stay as authored. A legend can thus
+ *  ROLL both "how often" and "how hard" as two ordinary lines. */
+export function procPowerStat(id: string): string {
+  return 'procPower_' + id;
+}
+
+/** THE MAGNITUDE FOLD: the effect at power `pw` (1 = as authored — the
+ *  same object, no copy). Pure data; the executor reads the result. */
+export function scaleProcEffect(fx: ProcEffect, pw: number): ProcEffect {
+  if (pw === 1 || !(pw > 0)) return fx;
+  switch (fx.type) {
+    case 'extraHit': case 'collisionDamage':
+      return { ...fx, damageScale: fx.damageScale * pw };
+    case 'explosion': return { ...fx, damageScale: fx.damageScale * pw };
+    case 'arc': return { ...fx, damageScale: fx.damageScale * pw };
+    case 'displace': return { ...fx, force: fx.force * pw };
+    case 'status': return { ...fx, magnitude: (fx.magnitude ?? 1) * pw };
+    case 'heal': return { ...fx, flat: fx.flat === undefined ? undefined : fx.flat * pw,
+      pctMax: fx.pctMax === undefined ? undefined : fx.pctMax * pw };
+    case 'restore': return { ...fx, flat: fx.flat === undefined ? undefined : fx.flat * pw,
+      pctMax: fx.pctMax === undefined ? undefined : fx.pctMax * pw };
+    case 'burst': return { ...fx, base: fx.base * pw, perLevel: fx.perLevel * pw };
+    case 'delayedBurst': return {
+      ...fx,
+      damage: fx.damage ? { ...fx.damage, base: fx.damage.base * pw, perLevel: fx.damage.perLevel * pw } : undefined,
+      healAllies: fx.healAllies ? { base: fx.healAllies.base * pw, perLevel: fx.healAllies.perLevel * pw } : undefined,
+    };
+    case 'ward': return { ...fx, flat: fx.flat === undefined ? undefined : fx.flat * pw,
+      pctMaxLife: fx.pctMaxLife === undefined ? undefined : fx.pctMaxLife * pw };
+    case 'cast': return { ...fx, cast: { ...fx.cast, mult: (fx.cast.mult ?? 1) * pw } };
+    default: return fx;
+  }
 }
 
 export const PROCS: Record<string, ProcDef> = {
@@ -982,6 +1027,32 @@ export function procStat(id: string): string {
   return 'proc_' + id;
 }
 
+/** Register a proc's two display stats (the chance, the power). */
+function registerProcStats(def: ProcDef): void {
+  STAT_DEFS[procStat(def.id)] = {
+    label: `Chance to trigger ${def.name}`, base: 0, min: 0, percent: true,
+  };
+  STAT_DEFS[procPowerStat(def.id)] = {
+    label: `${def.name} Power`, base: 1, min: 0, percent: true,
+  };
+}
+
+/** THE OPEN DOOR: register a proc from OUTSIDE this file — a legend's own
+ *  trigger authored beside the item that wears it (UniqueDef.procs), a
+ *  package's event proc. Joins PROCS, the live PROC_LIST (World's
+ *  by-trigger index re-derives on its length) and both stat rows, exactly
+ *  as a row declared above; a duplicate id is refused with a warning (the
+ *  first registration wins — the census stays honest). */
+export function registerProc(def: ProcDef): void {
+  if (PROCS[def.id]) {
+    if (PROCS[def.id] !== def) console.warn(`[procs] duplicate proc id '${def.id}' — the first registration stands`);
+    return;
+  }
+  PROCS[def.id] = def;
+  PROC_LIST.push(def);
+  registerProcStats(def);
+}
+
 // ---------------------------------------------------------------------------
 // PROC RIDERS — payloads bolted onto EXISTING procs from outside.
 //
@@ -1016,6 +1087,14 @@ export interface ProcCastSpec {
   spread?: 'ring' | number;
   at?: 'target' | 'self';
   mult?: number;
+  /** THE OWN-COPY LAW (THE LEGEND FABRIC): when the caster HOLDS this
+   *  skill — learned, granted by a worn legend, or in a monster's kit —
+   *  the payload plays THAT instance (its level, sockets, grafts and tree
+   *  picks), not a plain synthetic copy: "Trigger Ember Fusillade on
+   *  casting a spell" fires the fusillade you built. Absent a held copy
+   *  the synthetic plays as ever. Opt-in, so standing riders keep their
+   *  authored pacing byte-identical. */
+  own?: true;
 }
 
 export interface ProcRiderDef {
@@ -1055,9 +1134,7 @@ export function procRiderStat(id: string): string {
 // Register every proc's chance stat with a DISPLAY identity (label +
 // percent), so any surface that prints a Modifier — item affixes, the
 // sheet, tooltips — renders "28% Chance to trigger Brutal Strike" instead
-// of a raw stat id and a naked fraction. New procs join automatically.
-for (const def of PROC_LIST) {
-  STAT_DEFS[procStat(def.id)] = {
-    label: `Chance to trigger ${def.name}`, base: 0, min: 0, percent: true,
-  };
-}
+// of a raw stat id and a naked fraction — and its POWER twin
+// (procPower_<id>, base 1). New procs join automatically; procs
+// registered from outside (registerProc) mint theirs at registration.
+for (const def of PROC_LIST) registerProcStats(def);

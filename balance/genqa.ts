@@ -624,6 +624,7 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
       return false;
     };
     let minGap = Infinity;
+    let seamWitness: [Doodad, Doodad] | undefined;
     for (let i = 0; i < discs.length; i++) {
       for (let j = i + 1; j < discs.length; j++) {
         if (find(i) === find(j)) continue;
@@ -636,9 +637,25 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
         if (bridgedAcross(a, b, len, gap)) continue;
         if (seamRefused(a, b, len, gap)) continue;
         minGap = gap;
+        seamWitness = [a, b];
       }
     }
     if (minGap < FUSE_SLIVER) warns.push(`${name}: ${kind} bodies ${minGap.toFixed(0)}px apart (guard split or fuse miss)`);
+    if (VERBOSE && seamWitness) {
+      const [a, b] = seamWitness;
+      const len = Math.hypot(b.pos.x - a.pos.x, b.pos.y - a.pos.y);
+      const t = (a.radius + minGap / 2) / len;
+      const at = { x: a.pos.x + (b.pos.x - a.pos.x) * t, y: a.pos.y + (b.pos.y - a.pos.y) * t };
+      // An observation only: nearby guards help explain the witness but do
+      // not excuse it or weaken the contiguity warning.
+      console.log('seam witness ' + JSON.stringify({ name, kind, gap: minGap, at,
+        bodies: seamWitness.map(d => ({ at: d.pos, radius: d.radius })),
+        portalDistance: Math.min(...[entry, ...exits].map(p => Math.hypot(at.x - p.x, at.y - p.y))),
+        nearby: doodads.filter(d => d.kind !== kind && Math.hypot(at.x - d.pos.x, at.y - d.pos.y) < d.radius + 90)
+          .filter(d => { const r = doodadRuleOf(d.kind); return r.blocksMove || r.clearway || r.forbidOn?.includes(kind); })
+          .map(d => ({ kind: d.kind, at: d.pos, radius: d.radius })),
+      }));
+    }
   }
 }
 

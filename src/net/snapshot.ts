@@ -26,7 +26,7 @@ import type { TrackSpec } from '../engine/tracks';
 import type { TrapworkSpec } from '../engine/trapworks';
 import { eyecatchElapsed } from '../engine/ultimates';
 import type { PartSpec } from '../render/vis/parts';
-import type { ZoneTheme } from '../data/zones';
+import type { ZoneDef, ZoneTheme } from '../data/zones';
 import { hullOf, type ZoneShape } from '../world/shape';
 import { GridWalkField, type PackedWalk } from '../world/gridWalk';
 import { emptyAbilityEssences, emptyEssences } from '../engine/world';
@@ -393,8 +393,11 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
   m.essences = { ...emptyEssences(), ...(w.ess ?? {}) };
   m.abilityEssences = { ...emptyAbilityEssences(), ...(w.abil ?? {}) };
   m.vestiges = { ...(w.vest ?? {}) };
-  // Rebuild the action bar from slot ids → the (just-rehydrated) learned instances.
-  seat.actor.skills = w.bar.map(id => (id ? (known.get(id) ?? null) : null));
+  // Rebuild the action bar from slot ids → the (just-rehydrated) learned
+  // instances, or the GRANTED lane (seatSkillById mints a worn grant on
+  // demand off the rehydrated gear — THE LEGEND FABRIC), so the client's
+  // bar seats a granted skill exactly where the host's does.
+  seat.actor.skills = w.bar.map(id => (id ? world.seatSkillById(seat, id) : null));
   world.recalcSeat(seat);            // derive attrs + the full stat sheet from the build
 }
 
@@ -1389,6 +1392,8 @@ export interface ZoneMsg {
   zoneId: string; name: string; level: number;
   /** Baked regional identity for the current locale, optional on old peers. */
   journey?: CourseJourney;
+  /** Host-resolved geographic context; never sample the client's world field. */
+  geo?: ZoneDef['geo'];
   /** The zone's DIMENSION ('surface' omitted) — the client's map tab, dimension
    *  seals, and any dimension-scoped rendering read the same plane the host is
    *  in (a client in hell must not paint surface weather over it). */
@@ -1439,6 +1444,7 @@ export function serializeZone(world: World): ZoneMsg {
   return {
     zoneId: world.zone.id, name: world.zone.name, level: world.zone.level,
     ...(world.zone.journey ? { journey: { ...world.zone.journey } } : {}),
+    ...(world.zone.geo ? { geo: structuredClone(world.zone.geo) } : {}),
     dimension: world.zone.dimension,
     arena: {
       w: world.arena.w, h: world.arena.h, shape: world.arena.shape,
@@ -1486,6 +1492,8 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   world.zone.level = msg.level;
   if (msg.journey) world.zone.journey = { ...msg.journey };
   else delete world.zone.journey; // leaving a route clears the previous stage
+  if (msg.geo) world.zone.geo = structuredClone(msg.geo);
+  else delete world.zone.geo; // old peers and plain zones clear stale atlas context
   world.zone.dimension = msg.dimension;
   world.doodads = msg.doodads.map(d => ({
     pos: { x: d.p[0], y: d.p[1] }, radius: d.r, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow, annex: d.annex, wild: d.wild, fall: d.fall,

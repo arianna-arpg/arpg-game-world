@@ -36,6 +36,9 @@ export const GAUGE_CFG = {
   nearCap: 10,
   /** Cap on the living-minion count. */
   minionCap: 20,
+  /** Cap on 'still' — whole seconds stood still (THE ROOTED RAMP: a
+   *  per-second gauge mod ramps to its full worth here). */
+  stillCap: 5,
 };
 
 /** What a sampler may see of the world — a narrow view so the registry
@@ -117,4 +120,12 @@ registerDerivedGauge('afflictions', {
 registerDerivedGauge('buffs', {
   label: 'per buff on you',
   sample: a => a.buffs.size,
+});
+// THE ROOTED RAMP (THE LEGEND FABRIC — The Unmoved): whole seconds this
+// body has stood still (Actor.idleFor — zeroed by every willed step, dash,
+// leap and live shove), capped so a per-second gauge mod is bounded by
+// construction ("N% more damage per second standing still, up to 5").
+registerDerivedGauge('still', {
+  label: `per second standing still (up to ${GAUGE_CFG.stillCap})`,
+  sample: a => Math.max(0, Math.min(GAUGE_CFG.stillCap, Math.floor(a.idleFor))),
 });

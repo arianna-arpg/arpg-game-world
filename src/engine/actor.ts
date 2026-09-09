@@ -663,6 +663,8 @@ export class Actor {
   aiTargetId?: number;
   /** Where the locked target was last seen (perception-memory investigation). */
   aiLastSeen?: Vec2;
+  /** The story the quarry stood on when last seen (rides the stale-spot stalk). */
+  aiLastSeenTier?: number;
   /** World time the locked target was last actually SEEN (line of sight) —
    *  a held lock survives blindness for the chase-memory window (the hunter
    *  rounds the corner after you), then the thread snaps. */
@@ -909,6 +911,15 @@ export class Actor {
    *  stalking toward `alertFrom` — where the blow came from. */
   alertUntil = 0;
   alertFrom: Vec2 | null = null;
+  /** THE INVESTIGATION CROSSES (the tier fabric): the STORY the alert mark
+   *  lies on — the blow's author's, the noise's, the print's, the target's.
+   *  A body on another story walks to the crossing first (moveToward's
+   *  stair election reads the goal's story), and the arrival test asks the
+   *  story, never the flat distance — a deck body over a valley noise is
+   *  not "there". undefined = its own story (the legacy read). */
+  alertTier?: number;
+  /** The story of `watchAt` (the watch fabric's stimulus mark). */
+  watchTier?: number;
   /** Per-proc internal-cooldown clocks (world time each proc is next
    *  ready) — the hard frequency limit under stacked chance (ProcDef.icd). */
   procReadyAt = new Map<string, number>();
@@ -1382,6 +1393,17 @@ export class Actor {
   // Values are the fraction of the minion's max life dealt as fire damage.
   explodeOnDeath = 0;
   explodeOnLowLife = 0;
+  /** THE BLOOM (minionBloom — THE LEGEND FABRIC): seconds until this
+   *  minion detonates and dies; 0 = never. Stamped at the summon, ticked
+   *  in the world's lifespan sweep. */
+  bloomIn = 0;
+  /** THE STRIDE (strideReach — THE LEGEND FABRIC): willed distance walked
+   *  since the last striding blow (world units; moveActor feeds it only
+   *  while the sheet arms a reach). `strideSpent` marks a landed blow that
+   *  read the condition — the reset lands at the next timer tick, so every
+   *  contact of one frame's swing sees the same stride. */
+  strideDist = 0;
+  strideSpent = false;
   /** Telegraphed coalesce-burst config (from MonsterDef.deathBurst) — an enemy's death
    *  gathers into a spore/orb before detonating, so the player can escape. */
   deathBurst?: DeathBurstDef;
@@ -2697,6 +2719,13 @@ export class Actor {
    *  vignette — so lines may diverge per ACTOR, never per SYSTEM. */
   lowLifeLine(): number { return this.sheet.get('lowLifeLine'); }
 
+  /** Does this condition hold on the LAST folded mask? The one read for
+   *  engine seams that consume a condition (the stride's spend) — the same
+   *  bits the sheet's `when` modifiers test, so a seam and a roll agree. */
+  conditionHolds(id: ConditionId): boolean {
+    return this.condMask !== -1 && (this.condMask & COND_BIT[id]) !== 0;
+  }
+
   /** Recompute the actor-state conditions conditional modifiers test. */
   private refreshConditions(): void {
     const maxLife = this.maxLife();
@@ -2728,6 +2757,13 @@ export class Actor {
     // cast does not make you fleet-footed.
     if (this.plantFor > STANCE_PLANT_TIME) mask |= COND_BIT.stationary;
     else if (this.idleFor < STANCE_MOVE_WINDOW) mask |= COND_BIT.moving;
+    // THE STRIDE (THE LEGEND FABRIC): the walked distance against the
+    // sheet's reach — the accumulator only moves while a reach is armed
+    // (moveActor's gate), so an unarmed body never reads the stat here.
+    if (this.strideDist > 0) {
+      const reach = this.sheet.get('strideReach');
+      if (reach > 0 && this.strideDist >= reach) mask |= COND_BIT.strided;
+    }
     // THE COMBO GRAMMAR's starter conditions — bits stamped at the record
     // site, held on the countdown, and read ONLY while comboWatch: an
     // unwatched actor's mask can never churn on cast history.
@@ -2888,6 +2924,10 @@ export class Actor {
    *  stretched by the very slow-motion it causes. Callers outside the
    *  timeflow bend omit it (defaults to dt). */
   updateTimers(dt: number, chronoDt = dt): Partial<Record<DamageType | 'untyped', number>> | null {
+    // THE STRIDE's spend (a landed blow read 'strided' last frame): the
+    // reset lands here, BEFORE the mask refolds, so one swing's contacts
+    // all saw the stride and the next frame starts the walk afresh.
+    if (this.strideSpent) { this.strideDist = 0; this.strideSpent = false; }
     this.refreshConditions();
     // The RECENT-WOUND clock (GateSpec.recentDamage — Reprisal's license):
     // seconds since this actor last took damage; the world zeroes it at

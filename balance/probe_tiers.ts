@@ -53,6 +53,8 @@ import '../src/data/lairs';
 import '../src/data/merelake';
 
 import { Rng } from '../src/core/rng';
+import { readFileSync } from 'node:fs'; // (RIG T — THE SOVEREIGNTY ROSTER's source census)
+import { resolve } from 'node:path';
 import { mixHex, vec } from '../src/core/math';
 import { severedBandGoal, updateAI, type KernelCtx } from '../src/engine/ai';
 import type { Actor } from '../src/engine/actor';
@@ -79,6 +81,7 @@ import {
   landingTier, linkFlipTier, linkSpanOf, makeTierView, MAX_TIER,
   resolveTierCrossing, storyReachable, storyTable, tierElevOf, tierFloorAt,
   tierFloorOf, tierLinkOf, UNDER_TIER_LANES,
+  floorStoryOf, tierEnclosure, // (RIG S — THE ENCLOSURE LAW)
 } from '../src/engine/tiers';
 import { insideBounds } from '../src/world/shape';
 import { TILESETS } from '../src/data/tilesets';
@@ -631,6 +634,10 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
 // the reactive aiTierGoal lane provably silent throughout.
 {
   const w = makeSimWorld('warrior', 0x71e21);
+  // THE STREAM LAW (re-pinned 2026-09-06): this rig deals its OWN hand — the
+  // sovereignty gate's spacing skip changed how many draws the earlier rigs'
+  // AI ticks spend, and J's mints rode the shared stream they left behind.
+  seedGlobalRandom(0x71e21);
   const hyp = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
     Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -2069,7 +2076,372 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
     flatStamps === 0, `stamps=${flatStamps}`);
 }
 
-// --- RIG S: actual projectile flight agrees with the firing ray ------------
+// --- RIG S: THE ENCLOSURE LAW (a body never leaves an ENCLOSED story) --------------
+// (engine/tiers.ts tierEnclosure + world.ts's push lane; docs/engine/tiers.md.)
+// The rim fall is OPEN country's toy — knock them off the butte. An ENCLOSED
+// stack (an under-layer's ceiling, a building's storey) has no rim to fall
+// off: the push lane's clamp holds the body at its story's edge exactly as it
+// holds feet, tier kept. Pinned live on the real mints:
+//   S0 the resolver (derived words, the explicit word winning both ways, the
+//      recipes' own stamps) + the floor read behind THE SPOILS STORY;
+//   S1 THE ROOTWAYS (the reported bug): a body in a root duct shoved at the
+//      duct's side toward surface-only ground stays in the duct at tier 1 —
+//      before the law the rim fall read the surface as a floor "beneath" and
+//      landed the runner on the street over its own tunnel;
+//   S2 THE BUTTE (the open case, unchanged): the same shove off a rim FALLS.
+{
+  check('S0a the enclosure word derives: under ⇒ enclosed, interior ⇒ enclosed, open country ⇒ open, no stack ⇒ open',
+    tierEnclosure({ kind: 'under', exposure: 'covered' }) === 'enclosed'
+    && tierEnclosure({ kind: 'over', exposure: 'open', interior: true }) === 'enclosed'
+    && tierEnclosure({ kind: 'over', exposure: 'open' }) === 'open'
+    && tierEnclosure(undefined) === 'open');
+  check('S0b the explicit word wins both ways',
+    tierEnclosure({ kind: 'over', exposure: 'open', enclosure: 'enclosed' }) === 'enclosed'
+    && tierEnclosure({ kind: 'under', exposure: 'covered', enclosure: 'open' }) === 'open');
+  const needlesDef = gen('qa_needles_s', 'needles', TILESETS.needles.layout, { ...TILESETS.needles.layoutParams }, 515001).def;
+  check('S0c the recipes\' own stamps: the needles stay OPEN (no word, derived); an under lane reads ENCLOSED',
+    !!needlesDef.tiers && needlesDef.tiers.enclosure === undefined && tierEnclosure(needlesDef.tiers) === 'open'
+    && tierEnclosure({ kind: 'under', exposure: 'covered', lane: 'roots' }) === 'enclosed');
+  check('S0d floorStoryOf — the lowest story a body could stand on the cell: ground/both-floor cells the ground\'s, a story-only cell its story\'s, a link its span\'s low end, a wall nobody\'s',
+    floorStoryOf('ground') === 0 && floorStoryOf('butte_span') === 0 && floorStoryOf('sewer_duct') === 0
+    && floorStoryOf('butte_top') === 1 && floorStoryOf('peak_terrace_2') === 2 && floorStoryOf('tier_ramp') === 0
+    && floorStoryOf('rampart') === 0 && floorStoryOf(undefined) === 0);
+
+  const w = makeSimWorld('warrior', 0x5ea11);
+  const p = w.player;
+  const settle = (n: number): void => { for (let i = 0; i < n; i++) w.update(1 / 30); };
+  type EdgeSeat = { x: number; y: number; dir: number };
+  /** A cell of `kind` with two cells of `beyond`-qualifying ground past one
+   *  of its four sides — the overshoot a shove reads. */
+  const findEdge = (kind: string, beyond: (k: string) => boolean): EdgeSeat | null => {
+    const pf = w.pathField(0);
+    if (!(pf instanceof GridWalkField)) return null;
+    const cs = pf.cell, cols = pf.cols, rows = pf.rows;
+    const at = (gx: number, gy: number): string => pf.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
+    for (let gy = 2; gy < rows - 2; gy++) {
+      for (let gx = 2; gx < cols - 2; gx++) {
+        if (at(gx, gy) !== kind) continue;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          if (!beyond(at(gx + dx, gy + dy)) || !beyond(at(gx + 2 * dx, gy + 2 * dy))) continue;
+          return { x: gx * cs + cs / 2, y: gy * cs + cs / 2, dir: Math.atan2(dy, dx) };
+        }
+      }
+    }
+    return null;
+  };
+  const surfaceOnly = (k: string): boolean => tierFloorAt(k, 0) && !tierFloorOf(k) && !tierLinkOf(k);
+  const shove = (seat: EdgeSeat): void => {
+    for (const a of w.actors) if (a !== p) a.dead = true;
+    settle(1);
+    p.pos = vec(seat.x, seat.y); p.tier = 1; p.onTierLink = false; p.push = null;
+    w.pushActor(p, seat.dir, 320);
+  };
+
+  let duct: EdgeSeat | null = null;
+  for (const [i, seed] of [505101, 505102, 505103, 505104, 505105, 505106].entries()) {
+    const zid = w.devMintTileset('stalkwood', 3 + i, 8, { seed });
+    if (!zid || w.zone.tiers?.lane !== 'roots') continue;
+    duct = findEdge('root_duct', surfaceOnly);
+    if (duct) break;
+  }
+  check('S1a the rig finds a rooted garden and a duct cell whose side opens onto surface-only ground', !!duct);
+  if (duct) {
+    check('S1b the rooted garden declares an ENCLOSED under-stack (the ceiling, derived — no word on the def)',
+      w.zone.tiers?.kind === 'under' && w.zone.tiers.enclosure === undefined && tierEnclosure(w.zone.tiers) === 'enclosed');
+    shove(duct);
+    settle(40);
+    const k = w.walk!.regionAt!(p.pos.x, p.pos.y);
+    check('S1c shoved at the duct\'s side, the runner STAYS in the roots: tier 1 kept, on the roots\' own floor, unstaggered — never surfaced through the ceiling',
+      p.tier === 1 && tierFloorAt(k, 1) && !p.push && !p.isStunned(), `tier ${p.tier} on ${k}`);
+  }
+
+  let rim: EdgeSeat | null = null;
+  for (const [i, seed] of [505201, 505202, 505203].entries()) {
+    const zid = w.devMintTileset('needles', 6 + i, 8, { seed, layoutType: 'needles' });
+    if (!zid) continue;
+    rim = findEdge('butte_top', surfaceOnly);
+    if (rim) break;
+  }
+  check('S2a the rig finds a butte rim over open valley floor', !!rim);
+  if (rim) {
+    check('S2b the needles declare OPEN country (the rim is a drop)', tierEnclosure(w.zone.tiers) === 'open' && w.zone.tiers?.exposure === 'open');
+    shove(rim);
+    settle(2);
+    const fell = p.tier === 0, staggered = p.isStunned();
+    settle(38);
+    const k = w.walk!.regionAt!(p.pos.x, p.pos.y);
+    check('S2c the same shove off the butte\'s rim FALLS (the open case, unchanged): tier 0, staggered, standing on the valley floor',
+      fell && staggered && p.tier === 0 && surfaceOnly(k), `tier ${p.tier} on ${k}`);
+  }
+}
+
+// --- RIG T: LAYER SOVEREIGNTY, THE BODIES (the sovereignty gate) -------------------
+// Arianna's report: an entity on ANOTHER story moved or body-blocked the
+// hero on hers — an "invisible wall" (inside a stack or a covered layer the
+// other story's bodies are culled from the draw, so the shoulder they threw
+// had no visible thrower). The law: bodies on different stories share a
+// screen, never a touch — ONE predicate (engine/tiers.ts sameStory) at every
+// body-vs-body and body-vs-hazard seam. Pinned two ways:
+//   T0 THE ROSTER — every seam that reaches bodies by proximity carries the
+//      gate (a source census over the named methods: a new seam joins the
+//      roster, or the census names it as gateless).
+//   T1/T2 THE LIVE LAW on the real mints — a bridge deck over the valley
+//      (needles) and a duct under the street (rootways): a statue on the
+//      other story standing in the hero's exact footprint never moves the
+//      hero, a hard shove through it lands no slam; the same-story CONTROL
+//      still parts the pair (the gate is alive, not dead).
+{
+  const src = readFileSync(resolve('src/engine/world.ts'), 'utf8');
+  const methodBody = (text: string, name: string): string => {
+    const head = new RegExp(`^  (?:private |protected |public |readonly |static |async )*${name}\\s*(?:<[^>]*>)?\\(`, 'm');
+    const m = head.exec(text); if (!m) return '';
+    const next = /^  (?:private |protected |public |readonly |static |async )*[A-Za-z_]\w*\s*(?:<[^>]*>)?\(/gm;
+    next.lastIndex = m.index + 1;
+    const n = next.exec(text);
+    return text.slice(m.index, n ? n.index : text.length);
+  };
+  // THE DERIVED CENSUS (her word 2026-09-06: the roster must be derived,
+  // never a hand list): a SEAM is any World method that ITERATES bodies
+  // (the actor grid, the actor/seat lists, the lite pool) AND TESTS
+  // GEOMETRY against them. Every seam either carries the gate (sameStory /
+  // storyPair / hostileTo / a tier compare / the pool's story column / a
+  // strike story) or names its exemption in the source — `// SOVEREIGNTY:
+  // <reason>` from the closed vocabulary below (sound and scent cross
+  // stories and the walk crosses after them; sight is the eye's law; sky
+  // is the world-authored hitAll law; targeting rides hostility; census,
+  // seat and self touch nobody). A new proximity seam is found by SHAPE
+  // the day it is written: gated, marked, or named here as gateless.
+  const ITER = /this\.actorsNear\(|for \(const \w+ of this\.actors\)|this\.actors\.(?:some|filter|find|forEach)\(|for \(const \w+ of (?:bodies|actors|cand|near|alive|pool)\)|for \(const \w+ of this\.seats\)|this\.seats\.(?:some|find|filter)\(|for \(const \w+ of this\.enemiesOf\(|pool\.forEach(?:In|Along)\(|i < pool\.used|for \(const \w+ of this\.localHumanSeats\(\)\)/;
+  const GEO = /\bdist\(|inAoe(?:Body)?\(|shapeContains\(|Math\.hypot\(|zoneHas\(|bankCovers|sourceCover|\.reachable\(|projTouches|trapTriggerHit\(|contains\(|dx \* dx \+ dy \* dy/;
+  const GATE = /sameStory\(|storyPair\(|hostileTo\(|\.tier !== |\.tier === |tier \?\? 0\) !== |tier \?\? 0\) === |!== a\.tier|pool\.story\[|strikeTier|sourceTier|z\.tier \?\?= |tier >= 1 &&|from: \w+(?:\.actor)?\.tier|windAt\(\w+\.pos, \w+\.tier\)|drop\.tier|orb\.tier|, \w+\.tier\)/;
+  const REASONS = new Set(['sky', 'sound', 'scent', 'sight', 'targeting', 'census', 'seat', 'self']);
+  const MARK = /\/\/ SOVEREIGNTY: (\w+)/;
+  const lines = src.split('\n');
+  const heads: [number, string][] = [];
+  const headRe = /^  (?:private |protected |public |readonly |static |async )*([A-Za-z_]\w*)\s*(?:<[^>]*>)?\(/;
+  for (let i = 0; i < lines.length; i++) { const m = headRe.exec(lines[i]); if (m && !/^(if|for|while|switch|return|const|let)$/.test(m[1])) heads.push([i, m[1]]); }
+  const tally = { gated: 0, exempt: 0 }; const ungated: string[] = []; const badReason: string[] = [];
+  const byReason = new Map<string, number>();
+  for (let k = 0; k < heads.length; k++) {
+    const [a, name] = heads[k]; const b = heads[k + 1]?.[0] ?? lines.length;
+    const body = lines.slice(a, b).join('\n');
+    if (!ITER.test(body) || !GEO.test(body)) continue;
+    const mark = MARK.exec(body)?.[1];
+    if (mark) { tally.exempt++; byReason.set(mark, (byReason.get(mark) ?? 0) + 1); if (!REASONS.has(mark)) badReason.push(`${name}:${mark}`); }
+    else if (GATE.test(body)) tally.gated++;
+    else ungated.push(name);
+  }
+  check('T0a THE DERIVED CENSUS — every proximity seam in world.ts is gated or names its exemption',
+    ungated.length === 0 && tally.gated + tally.exempt >= 90,
+    ungated.length ? 'GATELESS: ' + ungated.join(', ') : `gated ${tally.gated}, exempt ${tally.exempt} (${[...byReason].map(([r, n]) => `${r} ${n}`).join(', ')})`);
+  check('T0a′ every exemption speaks the closed vocabulary (sky/sound/scent/sight/targeting/census/seat/self)', badReason.length === 0, badReason.join(', '));
+  check('T0a″ the census still sees the seams it was born from (a regex that goes blind fails loud)',
+    ['separateActors', 'sweepBodySlam', 'sweepHazardSurface', 'updateSquish', 'updateTrapworks', 'liteCarve'].every(n => { const b = methodBody(src, n); return !!b && ITER.test(b) && GEO.test(b) && GATE.test(b); }));
+  const aiSrc = readFileSync(resolve('src/engine/ai.ts'), 'utf8');
+  check('T0b the AI\'s flock and spacing neighbours are its own story\'s', (aiSrc.match(/b\.tier !== actor\.tier/g) ?? []).length >= 2);
+  check('T0c the membranes gate their occupants and the lite pool carries its story column',
+    /\(a\.tier \?\? 0\) !== \(s\.tier \?\? 0\)/.test(readFileSync(resolve('src/engine/creep.ts'), 'utf8'))
+    && /\(a\.tier \?\? 0\) !== \(b\.tier \?\? 0\)/.test(readFileSync(resolve('src/engine/fog.ts'), 'utf8'))
+    && /readonly story: Uint8Array/.test(readFileSync(resolve('src/engine/lite.ts'), 'utf8')));
+
+  const w = makeSimWorld('warrior', 0x50e11);
+  const p = w.player;
+  const settle = (n: number): void => { for (let i = 0; i < n; i++) w.update(1 / 30); };
+  /** The first cell of `kind`, with the AXIS the strip runs along (a deck, a
+   *  ramp, a duct is one cell wide: a body of the hero's radius is pinned to
+   *  its centre line, so the control's offset must run ALONG it). */
+  type Cell = { x: number; y: number; ax: number; ay: number };
+  const findCell = (kind: string): Cell | null => {
+    const pf = w.pathField(0);
+    if (!(pf instanceof GridWalkField)) return null;
+    const cs = pf.cell;
+    const at = (gx: number, gy: number): string => pf.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
+    for (let gy = 2; gy < pf.rows - 2; gy++) for (let gx = 2; gx < pf.cols - 2; gx++) {
+      if (at(gx, gy) !== kind) continue;
+      const alongX = at(gx + 1, gy) === kind || at(gx - 1, gy) === kind;
+      return { x: gx * cs + cs / 2, y: gy * cs + cs / 2, ax: alongX ? 1 : 0, ay: alongX ? 0 : 1 };
+    }
+    return null;
+  };
+  /** The statue: a planted, passive body on `tier` at `at` — a failure of the
+   *  gate shows as the HERO moving, never the statue. */
+  const statue = (at: { x: number; y: number }, tier: number): Actor => {
+    for (const a of w.actors) if (a !== p) a.dead = true;
+    settle(1);
+    const m = w.createMonster('skeleton_warrior', 8, 'enemy');
+    m.pos = vec(at.x, at.y); m.tier = tier; m.anchored = true; m.passive = true;
+    w.actors.push(m); // (createMonster mints; the caller seats — the lite promote's own idiom)
+    return m;
+  };
+  // The stand is a hand's breadth (2px) INSIDE the statue's footprint, never
+  // dead on it: the shoulder pass has no angle to push along for coincident
+  // bodies (its d > 0.01 guard), so an exact overlap would pass the negative
+  // for the wrong reason and fail the control for no reason.
+  const stand = (at: Cell, tier: number): void => {
+    p.pos = vec(at.x + 2 * at.ax, at.y + 2 * at.ay); p.tier = tier; p.onTierLink = false; p.push = null;
+  };
+  const off = (a: { pos: { x: number; y: number } }, at: { x: number; y: number }): number => Math.hypot(a.pos.x - at.x, a.pos.y - at.y);
+  const runPair = (tag: string, at: Cell, statueTier: number, heroTier: number): void => {
+    const m = statue(at, statueTier);
+    stand(at, heroTier);
+    settle(20);
+    check(`${tag}a a statue on the OTHER story, in the hero's footprint, moves the hero not one pixel (no shoulder across a story)`,
+      Math.abs(off(p, at) - 2) < 0.5 && off(m, at) < 0.5, `hero ${off(p, at).toFixed(1)}px statue ${off(m, at).toFixed(1)}px`);
+    const life0 = m.life;
+    w.pushActor(p, 0, 320);
+    settle(30);
+    check(`${tag}b a hard shove through it lands no slam: the statue keeps its life and its seat`, m.life === life0 && off(m, at) < 0.5 && !p.push);
+    stand(at, statueTier);
+    settle(20);
+    check(`${tag}c the same-story control: the hero standing in a same-story body's footprint is shouldered clear (the gate is alive)`,
+      off(p, at) >= (p.radius + m.radius) * 0.8, `${off(p, at).toFixed(1)}px`);
+    m.dead = true;
+  };
+
+  // A both-floor cell over the valley: a rope span's deck first (strung only
+  // between summits within reach — some deals string none), else a ramp's
+  // tread (a link is floor on both its span's stories).
+  let span: Cell | null = null;
+  for (const [i, seed] of [505301, 505302, 505303, 505304, 505305, 505306].entries()) {
+    if (!w.devMintTileset('needles', 2 + i, 8, { seed, layoutType: 'needles' })) continue;
+    span = findCell('butte_span') ?? findCell('tier_ramp');
+    if (span) break;
+  }
+  check('T1 the rig finds a both-floor cell over the valley (a span\'s deck or a ramp\'s tread)', !!span);
+  if (span) runPair('T1', span, 1, 0);
+
+  let duct: Cell | null = null;
+  for (const [i, seed] of [505401, 505402, 505403, 505404, 505405, 505406].entries()) {
+    if (!w.devMintTileset('stalkwood', 3 + i, 8, { seed }) || w.zone.tiers?.lane !== 'roots') continue;
+    duct = findCell('root_duct');
+    if (duct) break;
+  }
+  check('T2 the rig finds a duct under the street (one cell, two floors: the street above, the roots beneath)', !!duct);
+  if (duct) runPair('T2', duct, 0, 1);
+}
+
+// --- RIG U: THE INVESTIGATION CROSSES (lures and noise across stories) ---------------
+// Her ruling 2026-09-06: a lure or a noise on another story MAY reach an
+// entity there — it makes it aware, and it then WALKS to the crossing and
+// investigates; it never teleports. The law: A GOAL CARRIES ITS STORY
+// (moveToward / tierLinkToward read `tier` on the goal; the alert mark, the
+// lure, the print, the prey, the quarry stamp the story they know), and an
+// arrival asks the story, never the flat distance. Pinned live on the
+// needles: a butte-top hunter drawn by a VALLEY lure walks its ramp down and
+// mills at the standoff on the valley (U1); an ALERT mark on the valley does
+// the same and clears only there (U2); a valley hunter lured ONTO a deck
+// over its head climbs instead of standing beneath it, "arrived" (U3); every
+// walk is a run of strides, never a leap of cells (U4).
+{
+  const w = makeSimWorld('warrior', 0x1a0e5);
+  seedGlobalRandom(0x1a0e5);
+  const p = w.player;
+  const dd = (a: { x: number; y: number }, b: { x: number; y: number }): number => Math.hypot(a.x - b.x, a.y - b.y);
+  type Pt = { x: number; y: number };
+  const findSpots = (): { top: Pt; deck: Pt | null; valley: Pt } | null => {
+    const pf = w.pathField(0);
+    if (!(pf instanceof GridWalkField)) return null;
+    const cs = pf.cell, cols = pf.cols, rows = pf.rows;
+    const at = (gx: number, gy: number): string => pf.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
+    const c = (gx: number, gy: number): Pt => ({ x: gx * cs + cs / 2, y: gy * cs + cs / 2 });
+    let top: Pt | null = null, deck: Pt | null = null;
+    for (let gy = 2; gy < rows - 2 && !top; gy++) for (let gx = 2; gx < cols - 2; gx++) if (at(gx, gy) === 'butte_top') { top = c(gx, gy); break; }
+    for (let gy = 2; gy < rows - 2 && !deck; gy++) for (let gx = 2; gx < cols - 2; gx++) if (at(gx, gy) === 'butte_span') { deck = c(gx, gy); break; }
+    if (!top) return null;
+    // The valley seat (RIG J's standoff): open ground 8–14 cells from the top with no story floor within 4 cells.
+    let valley: Pt | null = null, best = Infinity;
+    const tgx = Math.floor(top.x / cs), tgy = Math.floor(top.y / cs);
+    for (let gy = 2; gy < rows - 2; gy++) for (let gx = 2; gx < cols - 2; gx++) {
+      const k = at(gx, gy);
+      if (tierFloorOf(k) || tierLinkOf(k) || !pf.isWalkable(gx * cs + cs / 2, gy * cs + cs / 2)) continue;
+      const dc = Math.hypot(gx - tgx, gy - tgy);
+      if (dc < 8 || dc > 14) continue;
+      let clear = true;
+      for (let oy = -4; oy <= 4 && clear; oy++) for (let ox = -4; ox <= 4; ox++) if (tierFloorOf(at(gx + ox, gy + oy))) { clear = false; break; }
+      if (!clear) continue;
+      const score = Math.abs(dc - 11);
+      if (score < best) { best = score; valley = c(gx, gy); }
+    }
+    return valley ? { top, deck, valley } : null;
+  };
+  let spots: ReturnType<typeof findSpots> = null;
+  // Deals are tried until one strings a rope span (the both-floor deck U3
+  // needs); a top + valley alone serves U1/U2 if none does.
+  let fallback: ReturnType<typeof findSpots> = null;
+  for (const [i, seed] of [505501, 505502, 505503, 505504, 505505, 505506, 505507, 505508].entries()) {
+    if (!w.devMintTileset('needles', 2 + (i % 4), 8, { seed, layoutType: 'needles' })) continue;
+    const s = findSpots();
+    if (!s) continue;
+    if (s.deck) { spots = s; break; }
+    fallback ??= s;
+  }
+  if (!spots && fallback) {
+    // Re-mint the fallback deal so the world stands on it.
+    w.devMintTileset('needles', 2, 8, { seed: 505501, layoutType: 'needles' });
+    spots = findSpots();
+  }
+  check('U0 the rig finds a butte top and a valley seat (and a deck when the deal strung one)', !!spots, spots ? `deck ${spots.deck ? 'yes' : 'no'}` : 'none');
+  if (spots) {
+    const { top, deck, valley } = spots;
+    for (const a of w.actors) if (a !== p) a.dead = true; // a quiet stage
+    w.update(1 / 30);
+    p.pos = vec(valley.x, valley.y); p.tier = 0; p.untargetable = true; // the hunter must stay IDLE
+    const hunter = (at: Pt, tier: number): Actor => {
+      const m = w.createMonster('skeleton_warrior', 8, 'enemy');
+      m.pos = vec(at.x, at.y); m.tier = tier; m.onTierLink = false; m.aiTargetId = undefined;
+      w.actors.push(m);
+      return m;
+    };
+    /** Drive until `done` or the cap; report the largest single step (a
+     *  stride ≈ speed/30 — a teleport is a leap of cells). */
+    const drive = (m: Actor, done: () => boolean, cap = 1500): { ticks: number; maxStep: number } => {
+      let maxStep = 0, ticks = 0;
+      for (; ticks < cap && !done(); ticks++) {
+        const px = m.pos.x, py = m.pos.y;
+        for (const a of w.actors) updateAI(a, w, 1 / 30);
+        w.update(1 / 30);
+        maxStep = Math.max(maxStep, Math.hypot(m.pos.x - px, m.pos.y - py));
+      }
+      return { ticks, maxStep };
+    };
+    const STRIDE = 40;
+    {
+      const m = hunter(top, 1);
+      w.setLure('qa_valley', vec(valley.x, valley.y), 4000, 1, 30, 999, 0);
+      const r = drive(m, () => m.tier === 0 && dd(m.pos, valley) <= 54);
+      check('U1 a butte-top hunter drawn by a valley lure walks its ramp DOWN and mills at the standoff on the valley (tier 1 → 0)',
+        m.tier === 0 && dd(m.pos, valley) <= 54, `tier ${m.tier} dist ${dd(m.pos, valley).toFixed(0)} ticks ${r.ticks}`);
+      check('U4a … every step of that walk is a stride, never a teleport', r.maxStep <= STRIDE, `max step ${r.maxStep.toFixed(1)}px`);
+      w.setLure('qa_valley', vec(valley.x, valley.y), 1, 1, 30, 0.001, 0);
+      m.dead = true; w.update(1 / 30);
+    }
+    {
+      const m = hunter(top, 1);
+      m.alertFrom = vec(valley.x, valley.y); m.alertTier = 0; m.alertUntil = w.time + 60;
+      let clearedOn: number | null = null;
+      const r = drive(m, () => { if (!m.alertFrom && clearedOn === null) clearedOn = m.tier; return clearedOn !== null; });
+      check('U2 an alert mark on the valley walks the butte-top investigator DOWN; the mark clears ON the valley, never from above it',
+        clearedOn === 0 && dd(m.pos, valley) <= 44, `cleared on tier ${String(clearedOn)} dist ${dd(m.pos, valley).toFixed(0)} ticks ${r.ticks}`);
+      check('U4b … stride-wise', r.maxStep <= STRIDE, `max step ${r.maxStep.toFixed(1)}px`);
+      m.dead = true; w.update(1 / 30);
+    }
+    if (deck) {
+      const m = hunter(deck, 0); // beneath the deck, on the valley floor
+      w.setLure('qa_deck', vec(deck.x, deck.y), 4000, 1, 30, 999, 1);
+      const r = drive(m, () => m.tier === 1 && dd(m.pos, deck) <= 54);
+      check('U3 a valley hunter beneath a deck, lured ONTO the deck, climbs to it (tier 0 → 1) instead of standing under it, "arrived"',
+        m.tier === 1 && dd(m.pos, deck) <= 54, `tier ${m.tier} dist ${dd(m.pos, deck).toFixed(0)} ticks ${r.ticks}`);
+      check('U4c … stride-wise', r.maxStep <= STRIDE, `max step ${r.maxStep.toFixed(1)}px`);
+      w.setLure('qa_deck', vec(deck.x, deck.y), 1, 1, 30, 0.001, 1);
+      m.dead = true; w.update(1 / 30);
+    } else {
+      console.log('U3 skipped — no rope span strung in these deals (the climb is the same election U1 walked)');
+    }
+    p.untargetable = false;
+  }
+}
+
+// --- RIG V: actual projectile flight agrees with the firing ray ------------
 {
   const w = makeSimWorld('sorcerer', 0x105c);
   const grid = new GridWalkField(300, 300, 30);
@@ -2096,21 +2468,21 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
   grid.fillRect(90, 90, 119, 119, false);
   const a = vec(80, 100.1), b = vec(110, 70.1);
   const corner = fly(a, b);
-  check('S1 a live flight cannot skip a thin corner that blocks its firing ray',
+  check('V1 a live flight cannot skip a thin corner that blocks its firing ray',
     !corner.clear && !corner.alive && Math.abs(corner.p.pos.x - 90) < 1e-8);
   const free = fly(vec(80, 99), vec(110, 69));
-  check('S2 a flight around the free corner stays alive', free.clear && free.alive);
+  check('V2 a flight around the free corner stays alive', free.clear && free.alive);
   const phase = fly(a, b, 0, 0, true);
-  check('S3 a phasing flight still passes through a blocking corner', phase.alive);
+  check('V3 a phasing flight still passes through a blocking corner', phase.alive);
   const short = fly(vec(89, 105), vec(91, 105));
-  check('S4 a short flight ends at the wall face', !short.alive && short.p.pos.x === 90);
+  check('V4 a short flight ends at the wall face', !short.alive && short.p.pos.x === 90);
   grid.fillRegion(90, 90, 119, 119, 'storey_wall');
   const low = fly(vec(80, 105), vec(130, 105), 0);
   const high = fly(vec(80, 105), vec(130, 105), 1);
-  check('S5 a hanging partition admits ground flight and stops upstairs flight',
+  check('V5 a hanging partition admits ground flight and stops upstairs flight',
     low.clear && low.alive && !high.clear && !high.alive && high.p.pos.x === 90);
   const bank = fly(vec(80, 100), vec(100, 110), 1, 1);
-  check('S6 an upstairs bounce reflects only the blocked axis and stays outside the partition',
+  check('V6 an upstairs bounce reflects only the blocked axis and stays outside the partition',
     bank.alive && bank.p.bounces === 0 && bank.p.pos.x < 90
     && Math.cos(bank.p.dir) < 0 && Math.sin(bank.p.dir) > 0);
 }

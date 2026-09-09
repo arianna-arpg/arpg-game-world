@@ -33,6 +33,7 @@
 
 import { FEATURE, type Account } from '../meta/account';
 import type { StampSpec, ZoneDef } from './zones';
+import type { WaysideSpec } from '../engine/levelgen';
 
 export interface Pt { x: number; y: number }
 
@@ -225,6 +226,18 @@ export function townSiteAt(tier: number, id: TownSiteId): Pt | null {
   return p ? { x: p.x, y: p.y } : null;
 }
 
+/** THE STATION'S STRUCTURE: what the town raises at a site — its own
+ *  building, or the addition a feature raises there (TOWN_ADDITIONS). THE
+ *  ANCHORED DWELL's key: World.stationAnchor finds a site's counter by the
+ *  structure id its anchor piece wears (a plan cell's / prop's `anchor`).
+ *  Null for a site nothing is raised at (the waypoint, the training line). */
+export function townSiteStructure(id: TownSiteId): string | null {
+  const own = townSiteDef(id).structure;
+  if (own) return own;
+  for (const a of TOWN_ADDITIONS) for (const f of a.fixtures) if (f.site === id) return f.structure;
+  return null;
+}
+
 /** The town-station features: every TOWN_ADDITIONS row's flag (the count the
  *  ladder reads — derived, never a second list). */
 export function townStationFeatures(): string[] {
@@ -298,7 +311,24 @@ export interface TownWay {
   from?: number;
   until?: number;
   points: { site: TownSiteId; dx?: number; dy?: number }[];
+  /** A way that wears NO wayside dress (StampSpec.bare): the door lane —
+   *  THE DOOR LANE LAW keeps the door's column bare of posts (rig E); the
+   *  inn's own wall lanterns light it. */
+  bare?: true;
 }
+
+/** THE LAMPS ALONG THE WAYS (her word 2026-09-06: "lampposts in line with
+ *  the town's paths", never on the board's front): the town's traveled ways
+ *  wear THE WAYSIDE fabric (engine/levelgen layWaysideDress —
+ *  layoutParams.wayside, folded onto the town def by expandedTown) with ONE
+ *  marker row: a lamppost every stride, sides alternating, a step off the
+ *  pavement's rim. The pass honors every placement gate (structure rects,
+ *  portal aprons, standing blockers, never on any way) and draws from its
+ *  own seeded stream, so a lit lane re-deals nothing downstream. */
+export const TOWN_WAYSIDE: WaysideSpec = {
+  rows: [{ kind: 'lantern_post', radius: [10, 10], every: 170 }],
+  offset: [14, 16],
+};
 
 export const TOWN_WAYS: TownWay[] = [
   // Every way leaves the square from beside the WAYPOINT (the plaza's west
@@ -316,7 +346,7 @@ export const TOWN_WAYS: TownWay[] = [
   // THE DOOR LANE runs from the front's east end up to Mireille's door.
   { id: 'inn_way', lay: 'paved_way',
     points: [{ site: 'plaza', dx: 175 }, { site: 'bounty_board', dy: 66 }] },
-  { id: 'door_way', lay: 'paved_way',
+  { id: 'door_way', lay: 'paved_way', bare: true,
     points: [{ site: 'bounty_board', dx: 108, dy: 6 }, { site: 'inn', dx: 13, dy: 118 }] },
   { id: 'hearth_way', lay: 'paved_way',
     points: [{ site: 'waypoint', dy: 110 }, { site: 'campfire', dx: -40, dy: -40 }] },
@@ -356,7 +386,7 @@ export function townLayoutFor(tier: number, base: StampSpec[]): StampSpec[] {
       if (!p) { path.length = 0; break; }
       path.push({ x: p.x + (pt.dx ?? 0), y: p.y + (pt.dy ?? 0) });
     }
-    if (path.length >= 2) rows.push({ kind: 'course', count: [1, 1], path, radius: [16, 20], lay: w.lay });
+    if (path.length >= 2) rows.push({ kind: 'course', count: [1, 1], path, radius: [16, 20], lay: w.lay, ...(w.bare ? { bare: true as const } : {}) });
   }
   return rows;
 }
@@ -364,8 +394,7 @@ export function townLayoutFor(tier: number, base: StampSpec[]): StampSpec[] {
 /** Build the per-run town def for the account's tier: the tier's size, the
  *  town's own fixtures at their tier seats, every owned addition's fixtures
  *  at THEIR sites, and the tier's layout. Returns a NEW def. */
-export function expandedTown(account: Account, base: ZoneDef): ZoneDef {
-  const tier = townTier(account);
+export function expandedTown(account: Account, base: ZoneDef, tier = townTier(account)): ZoneDef {
   const t = TOWN_TIERS[tier];
   let fixtures = townBaseFixtures(tier);
   for (const add of TOWN_ADDITIONS) {
@@ -376,5 +405,9 @@ export function expandedTown(account: Account, base: ZoneDef): ZoneDef {
       fixtures = [...fixtures, { structure: f.structure, x: p.x + (f.dx ?? 0), y: p.y + (f.dy ?? 0) }];
     }
   }
-  return { ...base, size: { w: t.w, h: t.h }, fixtures, layout: townLayoutFor(tier, base.layout) };
+  return {
+    ...base, size: { w: t.w, h: t.h }, fixtures, layout: townLayoutFor(tier, base.layout),
+    // THE LAMPS ALONG THE WAYS: the town's lanes wear the wayside marker row.
+    layoutParams: { ...(base.layoutParams ?? {}), wayside: TOWN_WAYSIDE },
+  };
 }

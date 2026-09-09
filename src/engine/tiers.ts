@@ -174,6 +174,23 @@ export function tierElevOf(kindId: string | undefined): number | null {
   return rk.walkable ? 0 : null;
 }
 
+/** THE SPOILS STORY's floor read: the LOWEST story a body could stand on
+ *  this cell — what a thing lying here with no better witness must belong
+ *  to. A walkable cell is the ground's (a bridge deck, a storey floor, a
+ *  duct under a street: one cell, two floors — the ground claims the
+ *  unstamped); a story-only cell (a butte top, a landing, a duct under a
+ *  block) is that story's; a link answers its span's low end; a true wall
+ *  is nobody's floor and reads as ground. Drops, orbs and corpses minted
+ *  with no actor at hand derive their story from this at the sweep
+ *  (World.spoilStoryAt); the kill path STAMPS the dying body's own. */
+export function floorStoryOf(kindId: string | undefined): number {
+  const rk = kindId ? regionKind(kindId) : undefined;
+  if (!rk) return 0;
+  if (rk.walkable) return 0;
+  if (rk.tierLink) return linkSpanOf(rk)[0];
+  return Math.max(0, rk.tier ?? 0);
+}
+
 /** Is this region a crossing between tiers? */
 export function tierLinkOf(kindId: string | undefined): boolean {
   const rk = kindId ? regionKind(kindId) : undefined;
@@ -203,6 +220,52 @@ export function linkFlipTier(kindId: string | undefined, tier: number): number {
 export function landingTier(kindId: string | undefined, current: number): number {
   if (tierFloorAt(kindId, current)) return current;
   return tierElevOf(kindId) ?? current;
+}
+
+// --- THE ENCLOSURE LAW ---------------------------------------------------------
+// May a body ever LEAVE a story except through a crossing? An OPEN stack
+// (buttes, the switchback summits) makes the rim a DROP: a shove past it
+// is THE RIM FALL (world.ts, the push lane) — knock-off is the country's
+// identity. An ENCLOSED stack makes the story's edge a WALL to every
+// carried body exactly as it is to feet: the rim fall never fires, and a
+// shove, a leap or a blink clamps against the story's own view where willed
+// movement would — the confine is the same walk field, no bespoke list.
+// The word DERIVES unless the zone speaks it (ZoneTiers.enclosure): an
+// 'under' layer has a ceiling — nothing falls UP out of a tunnel (the
+// sewer ducts, the rootways, the crypts, the cistern, the hollow tors) —
+// and a building's `interior` storey has walls (the inn: a knockback into a
+// hanging wall or over the plan's edge lands you nowhere but where you
+// stood). A body never changes story except through a real crossing — a
+// link cell + the exit rule / the ladder toggle — or the open rim fall.
+// Flat zones never ask (the callers short-circuit on `zone.tiers`).
+
+/** The resolved enclosure word for a zone's stack. */
+export function tierEnclosure(tiers: ZoneTiers | undefined): 'open' | 'enclosed' {
+  if (!tiers) return 'open';
+  if (tiers.enclosure) return tiers.enclosure;
+  return tiers.kind === 'under' || tiers.interior ? 'enclosed' : 'open';
+}
+
+/** Sugar: is the stack enclosed (no rim fall, carries clamp at the edge)? */
+export function tierEnclosed(tiers: ZoneTiers | undefined): boolean {
+  return tierEnclosure(tiers) === 'enclosed';
+}
+
+// --- THE SOVEREIGNTY GATE ------------------------------------------------------
+// May these two bodies (or a body and a fixture) TOUCH? Same story only.
+// The ONE predicate every body-vs-body and body-vs-hazard seam reads — the
+// crowd shoulder, the bowling lane, the tread, the flock, auras, heals,
+// washes, bursts, bands, traps, tracks, vents, creep, fog, the lite pool's
+// bites, the skill fields: a lodger strolling above the common room
+// shoulders nobody beneath the boards, a valley pack under a bridge deck
+// never body-blocks the deck walker, a story-1 field heals no one on the
+// ground. Sight, sound and scent are NOT bodies and keep their own laws
+// (the elevation ray, the noise ring, the scent trail). Objects with no
+// story field read 0; flat zones compare 0 with 0 — byte-identical.
+// Probe: balance/probe_tiers.ts RIG T (the roster of gated seams).
+
+export function sameStory(a: { tier?: number }, b: { tier?: number }): boolean {
+  return (a.tier ?? 0) === (b.tier ?? 0);
 }
 
 /** The narrow face of GridWalkField the mover contract consults — the tier

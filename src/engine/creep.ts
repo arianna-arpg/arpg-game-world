@@ -78,6 +78,9 @@ export interface CreepActorLike {
   construct?: unknown;
   flying?: boolean;
   faction?: string;
+  /** The body's story (the tier fabric) — a membrane touches only bodies on
+   *  ITS story (THE SOVEREIGNTY GATE, engine/tiers.ts sameStory). */
+  tier?: number;
   applyStatus(id: string, dps: number, magnitude: number, source: string): void;
 }
 
@@ -1000,6 +1003,10 @@ export interface FrontRun {
 export interface CreepSource {
   def: CreepDef;
   pos: { x: number; y: number };
+  /** The STORY the membrane lies on (the tier fabric): a heart planted on a
+   *  bench grows its skin on the bench; pockets and blights seed the ground
+   *  (0). Occupancy — grants, drag, drown — reads only bodies on this story. */
+  tier?: number;
   /** Full-grown mean rim distance. */
   maxReach: number;
   /** Live front distance — grows, holds, recoils. THE size. */
@@ -1113,7 +1120,7 @@ export class CreepField {
     def: CreepDef,
     x: number,
     y: number,
-    opts?: { reach?: number; bornFrac?: number; boundTo?: { dead: boolean } | null; ambient?: boolean },
+    opts?: { reach?: number; bornFrac?: number; boundTo?: { dead: boolean } | null; ambient?: boolean; tier?: number },
   ): CreepSource | null {
     if (this.sources.length >= CREEP_CFG.maxSources) return null;
     // Hearts keep inside the arena — a package planting at the very lip
@@ -1139,6 +1146,7 @@ export class CreepField {
     const src: CreepSource = {
       def,
       pos: { x, y },
+      tier: opts?.tier ?? 0,
       maxReach,
       cur: Math.max(born * maxReach, born > 0 ? CREEP_CFG.minReach : 0.01),
       state: born >= 1 ? 'hold' : 'grow',
@@ -1730,6 +1738,8 @@ export class CreepField {
     opts?: {
       reach?: number; bornFrac?: number; boundTo?: { dead: boolean } | null;
       announce?: { text: string; color?: string };
+      /** The story the growth lies on (CreepSource.tier). */
+      tier?: number;
     },
   ): number {
     let grew = 0;
@@ -1752,6 +1762,7 @@ export class CreepField {
         ...(opts?.reach !== undefined ? { reach: opts.reach } : {}),
         ...(opts?.bornFrac !== undefined ? { bornFrac: opts.bornFrac } : {}),
         boundTo: opts?.boundTo ?? null,
+        ...(opts?.tier !== undefined ? { tier: opts.tier } : {}),
       });
       if (planted) {
         grew++;
@@ -2089,6 +2100,7 @@ export class CreepField {
       const floor = s.def.hitFloor ?? CREEP_CFG.hitFloor;
       for (const a of actors) {
         if (a.dead || a.untargetable || a.construct || a.flying) continue;
+        if ((a.tier ?? 0) !== (s.tier ?? 0)) continue; // its own story's occupants (the sovereignty gate)
         if (this.sourceCover(s, a.pos.x, a.pos.y, a.radius * 0.5) < floor) continue;
         if (fs.drag && !(fs.drag.notFactions && a.faction && fs.drag.notFactions.includes(a.faction))) {
           this.terrain!.drag(a, run.dx * fs.drag.accel * dt, run.dy * fs.drag.accel * dt);
@@ -2112,6 +2124,7 @@ export class CreepField {
       for (const s of this.sources) {
         const grants = s.def.grants;
         if (!grants?.length) continue;
+        if ((a.tier ?? 0) !== (s.tier ?? 0)) continue; // its own story's occupants (the sovereignty gate)
         const floor = s.def.hitFloor ?? CREEP_CFG.hitFloor;
         if (this.sourceCover(s, a.pos.x, a.pos.y, a.radius * 0.5) < floor) continue;
         for (const g of grants) {

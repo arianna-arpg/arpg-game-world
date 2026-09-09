@@ -63,6 +63,8 @@ import { POCKET_FORMS } from '../data/pocketForms';
 import { setClimateOrigin } from './climate';
 import { installCapitalPole } from './civics';
 import { setReliefSeed } from './relief';
+import { setAtlasSeed } from './atlas';
+import '../data/atlasFeatures';
 import { dimensionPackageTempo, dimensionDef, dimensionIds } from './dimensions';
 import { validateCourses } from './courses';
 import { LevelField, validateLevelField } from './levelField';
@@ -344,6 +346,10 @@ export class WorldSim {
     // elevation field every other sampler reads — installed here because
     // course-instance seeds are hash descendants that cannot recover it.
     setReliefSeed(seed);
+    // THE ATLAS SEED (world/atlas.ts): the feature finders and the painted
+    // chart read the same field seed — installed beside the relief seed,
+    // under the same law (one installed truth, host and clients agree).
+    setAtlasSeed(seed);
     this.incursionField = new IncursionField(new Rng((seed ^ 0x1ec0) >>> 0));
     // Build the package→world routing from the manifest, and instantiate any
     // NET-NEW package overlays (migrated features route pressure into the shared

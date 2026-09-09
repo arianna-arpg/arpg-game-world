@@ -146,7 +146,12 @@ import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
 import { treeGraph, treeLimbOfNode, treeLimbs, treeNodeRanks, treeSealedSet, treeSpentCount, TREE_LAYOUT_CFG, type TreeGraphNode } from '../engine/skilltree'; // THE SKILL-TREE PANE reads the one graph
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 import { attachPanelMove, configurePanelLayout, panelLayoutRefresh, panelLayoutSync, panelMoved, panelMoveReset, panelMoveTo, panelSeatOf, persistPanelSeat, resetPanelLayout } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels; THE LAYOUT remembers
-import { MAP_CFG, MAP_LABEL_MODES } from './mapConfig';
+import { ATLAS_LAYER_CHIPS, MAP_CFG, MAP_CHART_MODES, MAP_LABEL_MODES } from './mapConfig';
+import { atlasChart, atlasKeep, atlasRaster, type AtlasChartInput, type AtlasRaster } from './atlasPaint';
+import { MAP_LENS } from './mapLens';
+import { ATLAS_CFG, climateWords, featuresAt, featuresInRect } from '../world/atlas';
+import { climateAt } from '../world/climate';
+import { elevationAt, riverPathsInRect } from '../world/relief';
 import { applyCursor, CURSOR_COLORS, CURSOR_STYLES } from '../core/cursor';
 import { AIM_TICK_STYLES } from '../render/vis/aimtick';
 
@@ -697,6 +702,14 @@ export class UI {
    *  pure per seed, so the O(map-area) sweep only reruns when charting GROWS
    *  the visible box, not on every 0.5s map refresh. */
   private oceanCache: { key: string; svg: string } | null = null;
+  /** The painted chart's build-tick timer (0 = none pending). */
+  private chartTimer = 0;
+  /** The last label markup the atlas layer printed (the in-place sync compares). */
+  private atlasLabelsHtml = '';
+  /** The raster keys the atlas layer shows (base / zoom window). */
+  private atlasShown = { base: '', window: '' };
+  /** The side box's last text (the in-place sync compares; a rebuild resets it). */
+  private asideHtml = '';
   /** The zone the cursor is over (transient) and the zone CLICKED to pin (sticky,
    *  so you can move the cursor away to read a long list). The info box shows the
    *  pinned zone, else the hovered zone, else the zone you stand in. Both reset on
@@ -1686,10 +1699,26 @@ export class UI {
     // unlearn gates and refuses with its own words). A duplicate pre-dims
     // the affordance; the engine stays the authority. Reordering is
     // UNGATED — choosing a seat is play, not surgery (the skills.ts ruling).
+    // An UNSEATED granted skill (THE LEGEND FABRIC — the Granted strip's
+    // chip) lifts as its own payload and binds onto an EMPTY seat only: a
+    // grant never evicts a learned sitter (the rack law keeps the hand).
+    registerDragSource({
+      kind: 'rackGrant',
+      clickLift: true,
+      payload: (arg) => {
+        const row = this.panelSeat(this.inventory).grantedSkills?.find(r => r.def.id === arg);
+        if (!row || row.slot >= 0) return null;
+        return {
+          kind: 'rackGrant', arg, label: row.def.name, data: { defId: row.def.id },
+          ghostHtml: `<span style="color:${row.def.color}">◆ ${row.def.name}</span>`,
+        };
+      },
+    });
     registerDropTarget({
       kind: 'rackSeat',
       accepts: (pl, arg) => {
         if (pl.kind === 'rackSeat') return pl.arg !== arg;
+        if (pl.kind === 'rackGrant') return !heroOf().skills[Number(arg)];
         const item = payloadSkillGem(pl);
         if (!item || item.gem?.kind !== 'skill') return false;
         return !this.panelSeat(this.inventory).meta.knownSkills.has(item.gem.skillId);
@@ -1697,6 +1726,8 @@ export class UI {
       drop: (pl, arg) => {
         if (pl.kind === 'rackSeat') {
           this.getWorld().requestMeta({ t: 'swapSkillSlots', a: Number(pl.arg), b: Number(arg) });
+        } else if (pl.kind === 'rackGrant') {
+          this.getWorld().requestMeta({ t: 'bindSkill', slot: Number(arg), skillId: pl.arg });
         } else {
           this.getWorld().requestMeta({ t: 'learn', uid: Number(pl.arg), slot: Number(arg) });
         }
@@ -1726,7 +1757,8 @@ export class UI {
         const item = seat.meta.items.find(i => i.uid === Number(pl.arg));
         if (item?.gem?.kind !== 'support') return false;
         const sup = SUPPORTS[item.gem.supportId];
-        const inst = seat.meta.knownSkills.get(skillId);
+        // A GRANTED skill sockets like a learned one (THE LEGEND FABRIC).
+        const inst = seat.meta.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId);
         if (!sup || !inst || !inst.sockets.includes(null)) return false;
         // THE GATE READS THE CUT (the support base): this copy's own roll
         // decides the fit — a workable cut sockets, a hitless host refuses.
@@ -1847,7 +1879,8 @@ export class UI {
 
   private skillTooltip(id: string, extended = false): TooltipContent | null {
     const seat = this.panelSeat(this.inventory);
-    const inst = seat.meta.knownSkills.get(id);
+    // Learned or GRANTED (THE LEGEND FABRIC): the granted lane speaks its source.
+    const inst = seat.meta.knownSkills.get(id) ?? seat.grantedInsts?.get(id);
     if (!inst) return null;
     const d = inst.def;
     const preview = previewSkill(seat.actor, inst);
@@ -1855,10 +1888,11 @@ export class UI {
     // The tooltip's FIRST LINE names the picked branch (skill-mode trees,
     // §7 — at-a-glance identity beside the bar pip).
     const branch = treeSpentBranch(inst);
+    const granted = inst.grantedBy ? ` · granted by ${inst.grantedBy}` : '';
     return {
       title: `${d.name} — Lv ${inst.level}${branch ? ` · ${branch.name}` : ''}`,
       description: d.description + this.previewRowsHtml(preview.rows, extended),
-      meta: d.tags.join(' · ') + (charge ? ` · ${charge}` : ''),
+      meta: d.tags.join(' · ') + (charge ? ` · ${charge}` : '') + granted,
       wide: extended && preview.hasDetail,
     };
   }
@@ -6010,11 +6044,27 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
 Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. ${word}.">
         ✦ ${r.def.name} <b>L${r.level}</b> → Slot ${r.slot + 1}${live ? '' : ' — dormant'}</span>`;
     }).join('');
-    const graftBank = (graftSources.length || wornRows.length) ? `
+    // THE GRANTED LEDGER (engine/world.ts GrantedSkillRow — THE LEGEND
+    // FABRIC): every skill the seat's gear/passives GRANT, with its level,
+    // its source and whether it sits on the bar. A seated grant is a
+    // read-only chip (the rack tile carries the skill); an UNSEATED one is
+    // a drag source — drop it on an empty rack seat to bind it (the rack
+    // law: unseated is unusable; the bar filled before the grant arrived).
+    const grantRows = seat.grantedSkills ?? [];
+    const grantChips = grantRows.map(r => {
+      const seated = r.slot >= 0;
+      return `<span class="gem-chip graft-chip"${seated ? '' : ` data-drag="rackGrant:${r.def.id}"`}
+        style="border-color:${r.def.color}${seated ? '' : ';opacity:0.78;cursor:var(--cursor-point, pointer)'}"
+        title="${r.def.description}
+Granted by ${r.source} at Level ${r.level}: cast it like any learned skill; its sockets live on that piece. ${seated ? 'Seated on the bar.' : 'UNSEATED: drag it onto an empty rack seat to bind it.'}">
+        ◆ ${r.def.name} <b>L${r.level}</b> ← ${r.source}${seated ? '' : ' — unseated'}</span>`;
+    }).join('');
+    const graftBank = (graftSources.length || wornRows.length || grantRows.length) ? `
       <div class="graft-bank">
         ${graftSources.length ? `<span style="color:#b8a2e8;font-size:10px">Grafts${this.liftedGraftKey ? ' (click a skill to bind)' : ''}:</span>
         ${bankChips}` : ''}
         ${wornRows.length ? `<span style="color:#b8a2e8;font-size:10px">Worn:</span> ${wornChips}` : ''}
+        ${grantRows.length ? `<span style="color:#e8a860;font-size:10px">Granted:</span> ${grantChips}` : ''}
       </div>` : '';
     // MIREILLE'S LESSON at SEAT grain: while the one 'learn' step pends,
     // every EMPTY rack seat glows as the landing (teachSeat below) — the
@@ -6060,9 +6110,12 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
           background:#241d2e;padding:3px 5px;overflow:hidden;cursor:var(--cursor-point, pointer)">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <span style="font-size:8px;color:var(--gold)">${label}</span>
-          <button data-rackunbind="${slot}" title="Unlearn ${sd.name} — it returns to your pack as its Memory"
+          ${seated.grantedBy
+            ? `<span title="Granted by ${seated.grantedBy} — take the piece off to unseat it; there is no gem to unlearn"
+                style="font-size:9px;color:#e8a860;padding:0 1px;line-height:1">◆</span>`
+            : `<button data-rackunbind="${slot}" title="Unlearn ${sd.name} — it returns to your pack as its Memory"
             style="background:none;border:none;color:#6a6478;cursor:var(--cursor-point, pointer);
-              font-size:9px;padding:0 1px;line-height:1">✕</button>
+              font-size:9px;padding:0 1px;line-height:1">✕</button>`}
         </div>
         <div style="display:flex;align-items:center;gap:4px">
           <span style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;
@@ -6089,7 +6142,10 @@ Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. 
     // THE FIELD DISCIPLINE, spoken at the button (the engine gate's words):
     // unsocket shares one verdict; unlearn adds its per-skill clock below.
     const unsocketWhy = world.swapRefusal(seat, 'unsocket');
-    const rows = [...m.knownSkills.values()].map(inst => {
+    // The book lists what the seat WIELDS: the learned residence plus the
+    // GRANTED lane (THE LEGEND FABRIC) — a granted row sockets and picks
+    // its tree like any other, but carries no level-up and no unlearn.
+    const rows = [...m.knownSkills.values(), ...(seat.grantedInsts?.values() ?? [])].map(inst => {
       const def = inst.def;
       const maxLv = skillMaxLevel(def);
       // Mark gems that BOARD THE CREW (forwarded into the minions' own
@@ -6234,11 +6290,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           </div>
           <div class="tags">${def.tags.join(' · ')}</div>
           <div class="bind-btns">
-            ${this.abilityLevelBtn(`data-levelup="${def.id}"`, inst.level, inst.level >= maxLv)}
+            ${inst.grantedBy
+              ? `<span style="font-size:10px;color:#e8a860" title="Its level is the gear's to give; there is no gem to unlearn — take the piece off instead.">◆ granted by ${inst.grantedBy}</span>`
+              : `${this.abilityLevelBtn(`data-levelup="${def.id}"`, inst.level, inst.level >= maxLv)}
             ${(() => {
               const why = world.swapRefusal(seat, 'unlearn', def.id);
               return `<button data-unlearn="${def.id}" ${why ? `disabled title="${why}"` : ''}>Unlearn${why ? ` (${why})` : ''}</button>`;
-            })()}
+            })()}`}
           </div>
           <div class="sockets">${sockets}</div>
           ${graftRow}
@@ -7837,6 +7895,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const dim = this.mapDimension;
     const inDim = (z: ZoneDef): boolean => (z.dimension ?? 'surface') === dim;
     const zones = Object.values(world.zoneMap).filter(inDim);
+    // THE PAINTED CHART (Settings.mapChart): the atlas raster stands in for the
+    // flat biome wash, and roads wear a halo so they read on any ground.
+    const painted = this.getSettings().mapChart === 'painted';
+    // THE KNOWLEDGE LAW's one read for the chart (World.visible: walked, beside
+    // walked ground, surveyed, told, heard of) — or THE DEV LENS, which sees all.
+    const lens = MAP_LENS;
+    const seen = (z: ZoneDef): boolean => lens.omniscient || world.visible(z);
     const STUB_DIR = { n: { x: 0, y: -42 }, s: { x: 0, y: 42 }, e: { x: 46, y: 0 }, w: { x: -46, y: 0 } };
 
     // Roads between zones (each connection drawn once). Routes out of
@@ -7877,7 +7942,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         // BOTH ends must be visible: a road drawn into a veiled node would
         // leak the forechart's ahead-minted ground (a line to blank map is a
         // coordinate spoiler). Fully-fogged pairs never drew anyway.
-        if (!world.visible(z) || !world.visible(b)) continue;
+        if (!seen(z) || !seen(b)) continue;
         const key = z.id < e.to ? z.id + '|' + e.to : e.to + '|' + z.id;
         if (drawn.has(key)) continue;
         drawn.add(key);
@@ -7901,6 +7966,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : (BIOMES[z.biome ?? '']?.enclave && !BIOMES[b.biome ?? '']?.enclave)
             ? BIOMES[z.biome ?? '']?.enclave : undefined;
         const enAccent = enGate ? boundaryGateOf(enGate.gate)?.accent : undefined;
+        if (painted) edges += `<line x1="${za.x}" y1="${za.y}" x2="${bb.x}" y2="${bb.y}" stroke="#0b0b12" stroke-width="4.4" stroke-opacity="0.5"/>`;
         edges += `<line x1="${za.x}" y1="${za.y}" x2="${bb.x}" y2="${bb.y}"
           stroke="${enAccent && known ? enAccent : known ? '#5a5a72' : '#2c2c3a'}" stroke-width="${enAccent && known ? 2.6 : 2}"
           ${known ? '' : 'stroke-dasharray="4 5"'}${enAccent && known ? ' stroke-opacity="0.75"' : ''}/>`;
@@ -7912,7 +7978,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         if (!b || !inDim(b)) continue;
         // Same veil law as the roads: a lane to a veiled harbor is the
         // HARBOR's knowledge (the Sail menu lists it), never the map's.
-        if (!world.visible(z) || !world.visible(b)) continue;
+        if (!seen(z) || !seen(b)) continue;
         const key = 'sea:' + (z.id < to ? z.id + '|' + to : to + '|' + z.id);
         if (drawn.has(key)) continue;
         drawn.add(key);
@@ -7934,7 +8000,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       for (const u of z.underways ?? []) {
         const b = world.zoneMap[u.to];
         if (!b || !inDim(b)) continue;
-        if (!world.visible(z) || !world.visible(b)) continue;
+        if (!seen(z) || !seen(b)) continue;
         const key = 'ug:' + (z.id < u.to ? z.id + '|' + u.to : u.to + '|' + z.id);
         if (drawn.has(key)) continue;
         drawn.add(key);
@@ -7960,13 +8026,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     let nodes = '';
     let cards = '';
     for (const z of zones) {
-      if (!world.visible(z)) continue; // fog policy (gentle now; dynamic later)
+      if (!seen(z)) continue; // THE KNOWLEDGE LAW (World.visible) — or the dev lens
       const known = visited.has(z.id);
       // RECON INTEL (world.surveyed — a survey spire's pulse): ground you know
       // OF but haven't walked. Reads like charted terrain (real name, biome,
       // level) at a scouting remove — washed fill, a dashed rim in the
       // spire's tint — so the flare visibly buys you the lay of the land.
-      const scouted = !known && world.surveyed.has(z.id);
+      const scouted = !known && (world.surveyed.has(z.id) || lens.omniscient);
       const current = world.zone.id === z.id;
       const wp = world.discoveredWaypoints.has(z.id);
       const canTravel = wp && !current;
@@ -8057,7 +8123,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       const C = MAP_CFG.card;
       const cw = Math.max(name.length * C.charW, (showSub ? sub.length : 0) * C.subCharW) + C.padX * 2;
       cards += `<g class="zone-card" data-zl="${z.id}"${fixed ? ' data-fixed="1"' : ''}
-        ${fixed || this.hoveredZone === z.id ? '' : 'display="none"'} pointer-events="none">
+        ${fixed ? '' : 'display="none"'} pointer-events="none">
         ${backdrop ? `<rect x="${(z.map.x - cw / 2).toFixed(1)}" y="${z.map.y + C.top}" width="${cw.toFixed(1)}"
           height="${showSub ? C.hWithSub : C.h}" rx="${C.rx}" fill="${C.fill}"
           stroke="${kd?.ring?.color ?? C.stroke}" stroke-width="1"/>` : ''}
@@ -8075,7 +8141,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // must not drift over the underworld tab.
     const known = zones.filter(z => visited.has(z.id) && (z.dimension ?? 'surface') === dim);
     const allLayers = world.sim.mapLayers(known, dim);
-    const layers = allLayers.filter(l => !this.mapLayersOff.has(l.id));
+    // The painted chart IS the biome layer: the flat wash + its river threads
+    // stand down under it (their chip too); the atlas chips take their place.
+    const chipLayers = painted ? allLayers.filter(l => l.id !== 'biomefield') : allLayers;
+    const layers = chipLayers.filter(l => !this.mapLayersOff.has(l.id));
     // WASH INTENSITY (Settings.mapWash — rails in MAP_CFG.wash): every overlay
     // WASH rides one alpha-slope filter, so the territory gradient can be
     // dimmed for a clean chart or CRANKED to read a warfront's exact reach
@@ -8094,9 +8163,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // AND the imposed OCEAN biome in one wash (the sea is a biome, not an
     // overlay stacked on a land heat-map).
     let ocean = '';
-    if (dim !== 'surface') {
-      const xs0 = zones.filter(z => world.visible(z)).map(z => z.map.x);
-      const ys0 = zones.filter(z => world.visible(z)).map(z => z.map.y);
+    // The painted chart rides the ATLAS LAYER (synced in place by syncAtlas —
+    // never part of this html); the classic non-surface wash stays here.
+    if (!painted && dim !== 'surface') {
+      const xs0 = zones.filter(z => seen(z)).map(z => z.map.x);
+      const ys0 = zones.filter(z => seen(z)).map(z => z.map.y);
       if (xs0.length) {
         const pad = 320;
         const spanW = Math.max(...xs0) - Math.min(...xs0) + pad * 2;
@@ -8165,20 +8236,32 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
     // The map grows as frontiers are charted — fit the view to the VISIBLE graph
     // (the fog policy). Margins run a little wide so drifting fronts have room.
-    const shown = zones.filter(z => world.visible(z));
+    const shown = zones.filter(z => seen(z));
     const xs = (shown.length ? shown : zones).map(z => z.map.x);
     const ys = (shown.length ? shown : zones).map(z => z.map.y);
     // Overlay MAP EXTENTS: a layer painting past the charted rim (Deepwinter's
     // territory marching in from the unknown cold) stretches the fit so the
     // front is on screen from ignition day — the situational-awareness read.
     // Rides `layers`, so toggling the layer chip off un-stretches the view too.
-    for (const l of layers) for (const p of l.extent) { xs.push(p.x); ys.push(p.y); }
+    // THE KNOWLEDGE LAW: a front's far reach is not the player's knowledge —
+    // the stretch is a dev-lens read now.
+    if (lens.omniscient) for (const l of layers) for (const p of l.extent) { xs.push(p.x); ys.push(p.y); }
     const minX = Math.min(...xs) - 95, maxX = Math.max(...xs) + 95;
     const minY = Math.min(...ys) - 80, maxY = Math.max(...ys) + 85;
     // Store the fitted box; the live zoom/pan are applied ON TOP (the map grows
     // with the world, so zooming keeps the fixed-size labels legible).
     this.mapBox = { minX, minY, w: maxX - minX, h: maxY - minY };
-    const zPct = Math.round(this.mapZoom * 100);
+    // THE VEIL CLIP: every overlay wash (weather, territory, the classic biome
+    // wash) is clipped to the known envelope — the same discs the painter's
+    // veil uses — unless the dev lens is omniscient.
+    const veilR = ATLAS_CFG.reveal.radius + ATLAS_CFG.reveal.feather;
+    let veilClip = '';
+    if (!lens.omniscient) {
+      for (const z of shown) {
+        veilClip += `<circle cx="${z.map.x}" cy="${z.map.y}" r="${veilR}"/>`;
+        for (const b of z.berths ?? []) veilClip += `<circle cx="${b.x}" cy="${b.y}" r="${veilR}"/>`;
+      }
+    }
 
     // Preserve the side-box scroll across the wholesale rebuild — else the 0.5s
     // auto-refresh snaps a pinned, scrolled list back to the top twice a second.
@@ -8195,22 +8278,26 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal">
           <span class="map-zoom-grp">
             <button class="map-zoom" data-mz="out" title="zoom out">−</button>
-            <button class="map-zoom" data-mz="reset" title="reset zoom">${zPct}%</button>
+            <button class="map-zoom" data-mz="reset" title="reset zoom">100%</button>
             <button class="map-zoom" data-mz="in" title="zoom in">＋</button>
           </span>
           &nbsp; ${visited.size} charted · <span style="color:#5ad8d8">◆</span> = travel</span></h2>
       ${this.mapTabsHtml()}
       <div style="font-size:11px;color:#9ab0c8;margin:-4px 0 6px 0">${world.sim.hudLine(world.zone, world.time)}
         <span style="color:#6a6a78"> · scroll to zoom, drag to pan · hover a zone, click to pin</span></div>
-      ${this.mapLayerChipsHtml(allLayers)}
+      ${this.mapLayerChipsHtml(chipLayers, painted ? ATLAS_LAYER_CHIPS : [])}
+      ${lens.cursorRead ? '<div id="map-here" style="font-size:10px;color:#8a8678;margin:-3px 0 5px 0;height:13px;line-height:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>' : ''}
       <div class="map-body">
-        <svg id="world-map-svg" viewBox="${this.mapViewBox()}" style="cursor:var(--cursor-grab, grab);touch-action:none"><g pointer-events="none">${ocean}${simUnder}${edges}${stubs}</g>${nodes}<g pointer-events="none">${markers}${simOver}${cards}</g></svg>
-        <aside id="map-aside">${this.zoneBoxHtml(world)}</aside>
+        <svg id="world-map-svg" viewBox="0 0 100 100" style="cursor:var(--cursor-grab, grab);touch-action:none"><g id="atlas-layer" pointer-events="none"><image id="atlas-base" preserveAspectRatio="none" display="none"/><image id="atlas-window" preserveAspectRatio="none" display="none"/></g>${veilClip ? `<defs><clipPath id="map-veil-clip">${veilClip}</clipPath></defs>` : ''}<g pointer-events="none"${veilClip ? ' clip-path="url(#map-veil-clip)"' : ''}>${ocean}${simUnder}</g><g pointer-events="none">${edges}${stubs}</g>${nodes}<g pointer-events="none">${markers}${simOver}</g><g id="atlas-labels" pointer-events="none"></g><g pointer-events="none">${cards}</g></svg>
+        <aside id="map-aside"></aside>
       </div>`;
-    // Unchanged since the last write? Keep the standing SVG + its wiring.
-    if (!this.setPanelHtml(this.worldMap, html)) return;
-    const aside = this.worldMap.querySelector<HTMLElement>('#map-aside');
-    if (aside) aside.scrollTop = prevAsideScroll;
+    // THE STANDING CHART: the html above carries NO transient state — no
+    // viewBox, no zoom %, no hover, no side-box text, no raster — so it
+    // changes only when the KNOWN graph does. Everything live is synced IN
+    // PLACE on the standing SVG by syncMapLive, rebuilt or not.
+    const rebuilt = this.setPanelHtml(this.worldMap, html);
+    this.syncMapLive(world, prevAsideScroll);
+    if (!rebuilt) return;
 
     this.worldMap.querySelectorAll<SVGElement>('.wp-node').forEach(el => {
       el.addEventListener('click', () => {
@@ -8219,6 +8306,210 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     });
     this.wireMapControls();
     this.wireMapTabs();
+  }
+
+  /** THE STANDING CHART's live sync — everything the map's html deliberately
+   *  leaves out, applied IN PLACE on the standing SVG: the viewBox (zoom +
+   *  pan), the zoom label, the hovered name card, the side box's text and the
+   *  atlas rasters. Runs after every refresh, rebuilt or not — so a hover, a
+   *  zoom, a pan or a chart tick never rebuilds the node graph. */
+  private syncMapLive(world: World, asideScroll: number): void {
+    const svg = this.worldMap.querySelector<SVGSVGElement>('#world-map-svg');
+    if (!svg) return;
+    svg.setAttribute('viewBox', this.mapViewBox());
+    const lbl = this.worldMap.querySelector<HTMLElement>('[data-mz="reset"]');
+    if (lbl) lbl.textContent = `${Math.round(this.mapZoom * 100)}%`;
+    this.showZoneCard(svg, this.hoveredZone, true);
+    const aside = this.worldMap.querySelector<HTMLElement>('#map-aside');
+    if (aside) {
+      const next = this.zoneBoxHtml(world);
+      if (aside.childElementCount === 0 || next !== this.asideHtml) {
+        this.asideHtml = next;
+        aside.innerHTML = next;
+        aside.scrollTop = asideScroll;
+      }
+    }
+    this.syncAtlas(svg);
+  }
+
+  /** Flip a hover-revealed name card in place. Fixed cards (towns, the pin,
+   *  always-mode, you-are-here) carry data-fixed and never flip. */
+  private showZoneCard(svg: SVGSVGElement, zid: string | null, show: boolean): void {
+    if (!zid) return;
+    const card = svg.querySelector<SVGGElement>(`.zone-card[data-zl="${zid}"]:not([data-fixed])`);
+    if (!card) return;
+    if (show) card.removeAttribute('display');
+    else card.setAttribute('display', 'none');
+  }
+
+  /** THE ATLAS INPUTS: the BASE chart (the whole known country) and, zoomed
+   *  past the threshold, the zoom WINDOW (the view with a margin) — both keyed
+   *  on the dimension, the box, the layer chips, the known set and the lens,
+   *  so a raster asked for again comes straight back from the painter's
+   *  cache. The known set is THE KNOWLEDGE LAW's read (World.visible) unless
+   *  the dev lens is omniscient. */
+  private atlasInputs(world: World, dim: string): { base: AtlasChartInput; window: AtlasChartInput | null } | null {
+    const lens = MAP_LENS;
+    const reveal: { x: number; y: number }[] = [];
+    for (const z of Object.values(world.zoneMap)) {
+      if ((z.dimension ?? 'surface') !== dim) continue;
+      if (!lens.omniscient && !world.visible(z)) continue;
+      reveal.push(z.map);
+      for (const b of z.berths ?? []) reveal.push(b);
+    }
+    if (!reveal.length) return null;
+    const pad = ATLAS_CFG.reveal.radius + ATLAS_CFG.reveal.feather + 60;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of reveal) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    const snap = 160;
+    const full = {
+      minX: Math.floor((minX - pad) / snap) * snap, minY: Math.floor((minY - pad) / snap) * snap,
+      maxX: Math.ceil((maxX + pad) / snap) * snap, maxY: Math.ceil((maxY + pad) / snap) * snap,
+    };
+    const seed = world.sim.biomeField.fieldSeed;
+    const surface = dim === 'surface';
+    let sig = 0;
+    for (const p of reveal) sig = (Math.imul(sig ^ (p.x | 0), 0x9e3779b1) + (p.y | 0)) | 0;
+    const off = (id: string): boolean => this.mapLayersOff.has(id);
+    const layers = { relief: !off('atlas:relief'), rivers: !off('atlas:rivers'), features: !off('atlas:features'), glyphs: !off('atlas:glyphs') };
+    const tag = [dim, seed, reveal.length, sig >>> 0, +layers.relief, +layers.rivers, +layers.features, +layers.glyphs,
+      lens.omniscient ? 'all' : 'veil', surface ? world.sim.biomeField.warpSignature() : ''].join('|');
+    const make = (box: AtlasChartInput['box'], lane: string): AtlasChartInput => {
+      const min = { x: box.minX, y: box.minY }, max = { x: box.maxX, y: box.maxY };
+      return {
+        key: `${lane}|${box.minX},${box.minY},${box.maxX},${box.maxY}|${tag}`,
+        box, seed, reveal, layers, noVeil: lens.omniscient,
+        biomeAt: surface ? (c) => world.sim.biomeField.composedBiome(c).biome : (c) => world.dimensionBiomeAtMap(dim, c),
+        elevAt: surface ? (c) => elevationAt(c, seed) : null,
+        kindAt: surface ? (c) => world.continentAtMap(c).kind : () => 'land',
+        rivers: surface && layers.rivers ? riverPathsInRect(min, max, seed) : [],
+        features: surface && layers.features ? featuresInRect(min, max, seed) : [],
+      };
+    };
+    // THE ZOOM WINDOW (ATLAS_CFG.raster): zoomed in past the threshold, the
+    // view with a margin renders at full resolution OVER the base; the window
+    // snaps to a coarse lattice so small pans re-use its raster.
+    let window: AtlasChartInput | null = null;
+    if (this.mapZoom >= ATLAS_CFG.raster.zoomWindowFrom && this.mapBox.w > 1) {
+      const side = Math.max(this.mapBox.w, this.mapBox.h) / this.mapZoom;
+      const cx = this.mapBox.minX + this.mapBox.w / 2 + this.mapPan.x;
+      const cy = this.mapBox.minY + this.mapBox.h / 2 + this.mapPan.y;
+      const half = side * 0.5 * ATLAS_CFG.raster.zoomWindowPad;
+      const snapW = Math.max(40, Math.round(side * 0.25 / 40) * 40);
+      const wb = {
+        minX: Math.max(full.minX, Math.floor((cx - half) / snapW) * snapW),
+        minY: Math.max(full.minY, Math.floor((cy - half) / snapW) * snapW),
+        maxX: Math.min(full.maxX, Math.ceil((cx + half) / snapW) * snapW),
+        maxY: Math.min(full.maxY, Math.ceil((cy + half) / snapW) * snapW),
+      };
+      if (wb.maxX - wb.minX > 40 && wb.maxY - wb.minY > 40) window = make(wb, 'window');
+    }
+    return { base: make(full, 'base'), window };
+  }
+
+  /** THE ATLAS LAYER, synced in place: the BASE raster (the whole known
+   *  country) always stands; the zoom WINDOW overlays it crisp when zoomed
+   *  in — while a window builds, the last one stays where it still helps and
+   *  the base covers the rest, so panning never shows blank ground. Labels
+   *  print from the base (the complete set). A build in flight schedules its
+   *  own next tick — nothing here ever rebuilds the panel's html. */
+  private syncAtlas(svg: SVGSVGElement): void {
+    const base = svg.querySelector<SVGImageElement>('#atlas-base');
+    const win = svg.querySelector<SVGImageElement>('#atlas-window');
+    const labels = svg.querySelector<SVGGElement>('#atlas-labels');
+    if (!base || !win || !labels) return;
+    const world = this.getWorld();
+    const painted = this.getSettings().mapChart === 'painted';
+    const inputs = painted ? this.atlasInputs(world, this.mapDimension) : null;
+    if (!inputs) {
+      base.setAttribute('display', 'none');
+      win.setAttribute('display', 'none');
+      if (this.atlasLabelsHtml) { labels.innerHTML = ''; this.atlasLabelsHtml = ''; }
+      this.atlasShown = { base: '', window: '' };
+      return;
+    }
+    // A job for a raster nobody wants any more (a window the view has left)
+    // is dropped, so the wanted one starts at once.
+    atlasKeep(inputs.window ? [inputs.base.key, inputs.window.key] : [inputs.base.key]);
+    const place = (el: SVGImageElement, r: AtlasRaster): void => {
+      if (el.getAttribute('href') !== r.href) el.setAttribute('href', r.href);
+      el.setAttribute('x', r.x.toFixed(1)); el.setAttribute('y', r.y.toFixed(1));
+      el.setAttribute('width', r.w.toFixed(1)); el.setAttribute('height', r.h.toFixed(1));
+      el.removeAttribute('display');
+    };
+    let building = false;
+    const b = atlasChart(inputs.base);
+    building ||= b.building;
+    const baseR = b.raster ?? (this.atlasShown.base ? atlasRaster(this.atlasShown.base) : null);
+    if (baseR) { place(base, baseR); this.atlasShown.base = baseR.key; }
+    if (inputs.window) {
+      const w = atlasChart(inputs.window);
+      building ||= w.building;
+      const winR = w.raster ?? (this.atlasShown.window ? atlasRaster(this.atlasShown.window) : null);
+      if (winR) { place(win, winR); this.atlasShown.window = winR.key; }
+      else win.setAttribute('display', 'none');
+    } else {
+      win.setAttribute('display', 'none');
+      this.atlasShown.window = '';
+    }
+    let html = '';
+    if (baseR) {
+      for (const l of baseR.labels) {
+        html += `<text x="${l.x.toFixed(1)}" y="${l.y.toFixed(1)}" text-anchor="middle" font-size="${ATLAS_CFG.labels.font}"`
+          + ` font-style="italic" fill="${l.color}" stroke="#0b0b12" stroke-width="2.4" paint-order="stroke" stroke-linejoin="round">${esc(l.text)}</text>`;
+      }
+    }
+    if (html !== this.atlasLabelsHtml) { labels.innerHTML = html; this.atlasLabelsHtml = html; }
+    if (building) this.scheduleAtlasTick();
+  }
+
+  /** One painter tick (45 ms): advance the job in flight and re-sync the
+   *  standing SVG's atlas layer; re-arms itself while a build is in flight. */
+  private scheduleAtlasTick(): void {
+    if (this.chartTimer) return;
+    this.chartTimer = window.setTimeout(() => {
+      this.chartTimer = 0;
+      if (!this.mapOpen) return;
+      const svg = this.worldMap.querySelector<SVGSVGElement>('#world-map-svg');
+      if (svg) this.syncAtlas(svg);
+    }, 45);
+  }
+
+  /** THE CURSOR READ (#map-here — THE DEV LENS only): the ground under the
+   *  pointer, from the same fields the chart paints — biome, elevation, the
+   *  climate bands' own words, and any feature within reach. The honest
+   *  chart carries the same read per ZONE in the side box (the ground row). */
+  private updateMapHere(svg: SVGSVGElement, e: PointerEvent | null): void {
+    const el = this.worldMap.querySelector<HTMLElement>('#map-here');
+    if (!el) return;
+    if (!e) { el.textContent = ''; return; }
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return;
+    const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+    const c = { x: pt.x, y: pt.y };
+    const world = this.getWorld();
+    const dim = this.mapDimension;
+    const parts: string[] = [];
+    if (dim === 'surface') {
+      const seed = world.sim.biomeField.fieldSeed;
+      const biome = world.sim.biomeField.composedBiome(c).biome;
+      parts.push(BIOMES[biome]?.label ?? biome);
+      if (world.continentAtMap(c).kind !== 'ocean') {
+        const cl = climateAt(c, seed);
+        parts.push('elevation ' + cl.elevation.toFixed(2));
+        parts.push(...climateWords(cl));
+      }
+      for (const h of featuresAt(c, seed)) parts.push(h.def.icon + ' ' + h.feature.name + ' (' + h.def.label + ')');
+    } else {
+      const biome = world.dimensionBiomeAtMap(dim, c);
+      parts.push(BIOMES[biome]?.label ?? biome);
+    }
+    el.textContent = 'here: ' + parts.join(' · ');
   }
 
   /** The Map | Quests tab row (shared by both views of the world-map panel). */
@@ -8278,8 +8569,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  tagged mapLayers: a new overlay's layer gets its chip with zero edits
    *  here. The point is ATTRIBUTION — with weather/territory silenceable, a
    *  drifting front can never read as "the biome heat map changed". */
-  private mapLayerChipsHtml(allLayers: { id: string; label: string; under: string; over: string }[]): string {
-    const shown = allLayers.filter(l => l.under || l.over || this.mapLayersOff.has(l.id));
+  private mapLayerChipsHtml(allLayers: { id: string; label: string; under: string; over: string }[], extra: { id: string; label: string }[] = []): string {
+    const shown: { id: string; label: string }[] = [...allLayers.filter(l => l.under || l.over || this.mapLayersOff.has(l.id)), ...extra];
     if (!shown.length) return '';
     const chips = shown.map(l => {
       const off = this.mapLayersOff.has(l.id);
@@ -8354,7 +8645,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // RECON parity with the chart: a surveyed zone shows its real name and
     // identity here too — the old visited-only gate said '???' in the box
     // while the map plainly printed the name beside it.
-    const scouted = !charted && world.surveyed.has(zoneId);
+    const scouted = !charted && (world.surveyed.has(zoneId) || MAP_LENS.omniscient);
     const revealed = (charted || scouted) && !!zone;
     const name = revealed ? zone!.name : '???';
     const pinned = this.pinnedZone === zoneId;
@@ -8455,7 +8746,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  hover/pan/scroll). Called from the hover/pin handlers. */
   private renderZoneBox(): void {
     const aside = this.worldMap.querySelector<HTMLElement>('#map-aside');
-    if (aside) aside.innerHTML = this.zoneBoxHtml(this.getWorld());
+    if (!aside) return;
+    const html = this.zoneBoxHtml(this.getWorld());
+    this.asideHtml = html;
+    aside.innerHTML = html;
   }
 
   /** Compute the world-map viewBox from the fitted box + the live zoom/pan,
@@ -8494,6 +8788,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       svg.setAttribute('viewBox', this.mapViewBox());
       const lbl = this.worldMap.querySelector<HTMLElement>('[data-mz="reset"]');
       if (lbl) lbl.textContent = `${Math.round(this.mapZoom * 100)}%`;
+      // A zoom or pan re-aims the ATLAS LAYER in place (the zoom window) —
+      // never a rebuild: the standing SVG stays exactly as it stands.
+      this.syncAtlas(svg);
     };
     this.worldMap.querySelectorAll<HTMLButtonElement>('.map-zoom').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -8510,13 +8807,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // Flip a hover-revealed name card in place (no rebuild — a rebuild would
     // reset zoom/pan). Fixed cards (towns, the pin, always-mode, you-are-here)
     // carry data-fixed and never flip.
-    const hoverCard = (zid: string | null, show: boolean): void => {
-      if (!zid) return;
-      const card = svg.querySelector<SVGGElement>(`.zone-card[data-zl="${zid}"]:not([data-fixed])`);
-      if (!card) return;
-      if (show) card.removeAttribute('display');
-      else card.setAttribute('display', 'none');
-    };
+    const hoverCard = (zid: string | null, show: boolean): void => this.showZoneCard(svg, zid, show);
     attachPanZoom(svg, {
       getZoom: () => this.mapZoom,
       setZoom: (z) => { this.mapZoom = z; },
@@ -8528,6 +8819,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // pin, if set, takes precedence inside boxZoneId, so hovering elsewhere
       // while pinned leaves the box alone; the card still follows the cursor).
       onIdleMove: (e) => {
+        if (MAP_LENS.cursorRead) this.updateMapHere(svg, e);
         const zid = zoneAt(e);
         if (zid !== this.hoveredZone) {
           hoverCard(this.hoveredZone, false);
@@ -8537,6 +8829,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         }
       },
       onLeave: () => {
+        if (MAP_LENS.cursorRead) this.updateMapHere(svg, null);
         if (this.hoveredZone !== null) {
           hoverCard(this.hoveredZone, false);
           this.hoveredZone = null;
@@ -9090,6 +9383,12 @@ AUTO: watches your live frame rate and steps down/up so the game holds smooth ev
 Fixed %: pins the buffer at that share of the window">${s.renderScale === 'auto' ? 'AUTO' : `${Math.round((s.renderScale as number) * 100)}%`}</button>
       </div>
       <div class="rebind-row">
+        <span>Map Chart</span>
+        <button id="opt-mapchart" title="How the world map draws the land:
+${MAP_CHART_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}
+Layer chips on the map toggle relief, rivers, features and dressing separately.">${(MAP_CHART_MODES.find(m => m.id === s.mapChart) ?? MAP_CHART_MODES[0]).name}</button>
+      </div>
+      <div class="rebind-row">
         <span>Map Zone Names</span>
         <button id="opt-maplabels" title="How the world map wears its name cards:
 ${MAP_LABEL_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}
@@ -9335,6 +9634,15 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       st.mapLabels = MAP_LABEL_MODES[(i + 1) % MAP_LABEL_MODES.length].id;
       this.saveSettings();
       this.refreshMap(); // live behind the menu if the map is open (no-op otherwise)
+      this.renderOptions(root, onBack);
+    });
+    // THE CHART STYLE: the painted atlas or the classic flat wash (ui/mapConfig.ts).
+    root.querySelector<HTMLElement>('#opt-mapchart')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      const i = MAP_CHART_MODES.findIndex(m => m.id === st.mapChart);
+      st.mapChart = MAP_CHART_MODES[(i + 1) % MAP_CHART_MODES.length].id;
+      this.saveSettings();
+      this.refreshMap();
       this.renderOptions(root, onBack);
     });
     // REAWAKEN AFTER QUIT: where a relaunched save wakes (meta/worldstate.ts).

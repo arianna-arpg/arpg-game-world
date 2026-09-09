@@ -16,8 +16,10 @@
  * distinctive token here either, and so is reported UNATTRIBUTABLE rather
  * than silently passing.
  *
- * THE LAW: every staged hunk is reported with its file + hunk header, INCLUDING
- * hunks that yield no tokens at all. Silence is never a verdict.
+ * THE LAW: every new staged hunk is reported with its file + hunk header,
+ * INCLUDING hunks that yield no tokens. During merges, the independently
+ * reconstructed parent tree is attributed to its commits; every resolution
+ * and additional edit still needs session ownership. Silence is no verdict.
  *
  *   node scripts/ownership-gate.mjs --allow .claude/ownership.local.txt
  *
@@ -29,8 +31,8 @@
  * does not type-check it. Keep it dependency-free plain ESM like its siblings.
  */
 
-import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { stagedOwnershipDiff } from './ownership-diff.mjs';
 
 const USAGE = `THE OWNERSHIP GATE — refuse a commit carrying a co-session's hunks.
 
@@ -38,6 +40,11 @@ const USAGE = `THE OWNERSHIP GATE — refuse a commit carrying a co-session's hu
 
 Declares what THIS session owns; every staged hunk that cannot be attributed to
 that declaration is reported and gates the commit.
+
+During a two-parent merge, committed inheritance is attributed to its parent
+commits. The gate reconstructs their automatic merge and checks every staged
+resolution and extra edit against it. Unresolved entries and conflict markers
+refuse the check. No arbitrary baseline or force option is accepted.
 
 Ownership sources (repeatable, all merged):
   --allow <path>          declaration file (see FORMAT below)
@@ -235,13 +242,10 @@ function globToRe(pattern) {
 
 function gitDiffCached() {
   try {
-    return execFileSync('git', [
-      '-c', 'core.quotePath=false',
-      'diff', '--cached', '-U0', '--no-color', '--no-ext-diff',
-    ], { encoding: 'utf8', maxBuffer: 512 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+    return stagedOwnershipDiff();
   } catch (err) {
     const detail = err?.stderr?.toString().trim() || err?.message || String(err);
-    fail(`git diff --cached failed: ${detail}`);
+    fail(`staged ownership comparison failed: ${detail}`);
   }
 }
 
@@ -432,7 +436,8 @@ function main() {
   const ignoredTokens = new Set(declared.ignore);
   const ownsFile = (path) => ownedFileRes.some((re) => re.test(path));
 
-  const files = parseDiff(gitDiffCached());
+  const { diff, provenance } = gitDiffCached();
+  const files = parseDiff(diff);
   const report = [];
   let gateCount = 0;
   let foreignTokenCount = 0;
@@ -498,6 +503,7 @@ function main() {
   if (opts.json) {
     console.log(JSON.stringify({
       protocol: 'ownership-gate/v1',
+      provenance,
       strict: opts.strict,
       minLen: opts.minLen,
       declared,
@@ -509,23 +515,27 @@ function main() {
     process.exit(gateCount === 0 ? 0 : 1);
   }
 
-  printReport(report, { opts, declared, gateCount, foreignTokenCount });
+  printReport(report, { opts, declared, gateCount, foreignTokenCount, provenance });
   process.exit(gateCount === 0 ? 0 : 1);
 }
 
-function printReport(report, { opts, declared, gateCount, foreignTokenCount }) {
+function printReport(report, { opts, declared, gateCount, foreignTokenCount, provenance }) {
   const totalHunks = report.reduce((n, f) => n + f.entries.length, 0);
 
   console.log('# Ownership gate — staged diff');
+  if (provenance) {
+    console.log(`Parent inheritance: ${provenance.parents.join(' + ')} → tree ${provenance.tree}`);
+    console.log(`${provenance.changedPaths.length} parent-merge paths; staged resolutions and additional edits are checked below.`);
+  }
   console.log();
   console.log(`- Declared: ${declared.files.length} owned file pattern(s), ${declared.tokens.length} owned token(s)` +
     (declared.ignore.length ? `, ${declared.ignore.length} ignored` : ''));
   if (opts.allow.length) console.log(`- Declaration: ${opts.allow.map((p) => `\`${p}\``).join(', ')}`);
-  console.log(`- Staged: ${report.length} file(s), ${totalHunks} hunk(s)` + (opts.strict ? ' — STRICT (mixed hunks gate)' : ''));
+  console.log(`- ${provenance ? 'Resolutions/additional edits' : 'Staged'}: ${report.length} file(s), ${totalHunks} hunk(s)` + (opts.strict ? ' — STRICT (mixed hunks gate)' : ''));
   console.log();
 
   if (!report.length) {
-    console.log('Nothing staged — nothing to attribute.');
+    console.log(provenance ? 'Staged tree matches the parent merge; no resolutions or additional edits.' : 'Nothing staged — nothing to attribute.');
     console.log();
     console.log('PASS — no staged hunk is foreign.');
     return;
@@ -558,7 +568,7 @@ function printReport(report, { opts, declared, gateCount, foreignTokenCount }) {
   }
 
   if (gateCount === 0) {
-    console.log(`PASS — all ${totalHunks} staged hunk(s) attributed to this session.`);
+    console.log(`PASS — all ${totalHunks} ${provenance ? 'resolution/additional' : 'staged'} hunk(s) attributed to this session.`);
     return;
   }
 

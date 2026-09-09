@@ -291,6 +291,10 @@ export interface GeyserBanding {
 export interface PlacedVent {
   pos: Vec2;
   cls: GeyserClassId;
+  /** The STORY the vent mouth opens on (the tier fabric): the basin's vents
+   *  breathe on the ground (0). The column strikes only bodies on this story
+   *  (THE SOVEREIGNTY GATE). */
+  tier?: number;
   /** Band index into GeyserField.bands. Every vent has one: shared vents
    *  by the stripe partition, greats + authored one-offs each a private
    *  anchor band of their own. */

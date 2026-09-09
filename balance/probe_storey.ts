@@ -22,6 +22,13 @@
 //   F. THE MAP — an interior stack is silent on the world map's tell + tint.
 //   G. THE DRAW (source pins) — the storey layer draws in the tier-veil slot,
 //      the culls read the stack, the room veil confines by story.
+//   H. THE ENCLOSURE LAW — a storey is ENCLOSED by derivation: a shove into a
+//      hanging wall or the outer wall holds AT the wall (tier kept, inside
+//      the footprint), and THE SPOILS STORY keeps a drop upstairs out of the
+//      hands beneath it (and the reverse).
+//   I. LAYER SOVEREIGNTY, THE BODIES — the lodger standing in the hall above,
+//      in the hero's exact footprint on the common room's floor, moves nobody
+//      (no shoulder, no slam across a story); the same-story control parts them.
 // Run: npx tsx balance/probe_storey.ts   (exit 0 = all PASS)
 // ---------------------------------------------------------------------------
 
@@ -31,8 +38,11 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { START_ZONE } from '../src/data/zones';
 import { STRUCTURES, legendCell } from '../src/data/structures';
 import { regionKind } from '../src/world/regions';
-import { linkSpanOf, tierElevOf, tierFloorAt, tierLinkOf } from '../src/engine/tiers';
+import { floorStoryOf, linkSpanOf, tierElevOf, tierEnclosure, tierFloorAt, tierLinkOf } from '../src/engine/tiers';
+import { VESTIGES } from '../src/data/vestiges';
+import type { GemDrop } from '../src/engine/world';
 import { doodadRuleOf } from '../src/engine/levelgen';
+import { updateAI } from '../src/engine/ai'; // (J — the investigation crosses)
 import { tierMapTell, tierMapTint } from '../src/ui/panels';
 import { vec } from '../src/core/math';
 
@@ -105,8 +115,8 @@ const kindAt = (cx: number, cy: number): string => wf.regionAt!(inn.rect.x + cx 
   check('B4 nothing of the ground floor wears the story (Mireille\'s counter, the hearth, the tables stay tier 0)',
     w.doodads.filter(d => ['bar_counter', 'hearth', 'tavern_table', 'keg'].includes(d.kind) && (d.tier ?? 0) !== 0).length === 0);
   const stairs = w.doodads.filter(d => d.kind === 'stairway');
-  check('B5 ONE stairway face stands on the flight, sized to its 2×2 cells, turned to climb toward its landing (south)',
-    stairs.length === 1 && stairs[0].radius === cs && Math.abs((stairs[0].rot ?? 0) - Math.PI / 2) < 0.01
+  check('B5 ONE stairway face stands on the flight, sized to its 2×2 cells, turned to climb toward its landing (NORTH — the foot by the door, the head at the hall)',
+    stairs.length === 1 && stairs[0].radius === cs && Math.abs((stairs[0].rot ?? 0) + Math.PI / 2) < 0.01
     && tierLinkOf(wf.regionAt!(stairs[0].pos.x, stairs[0].pos.y)));
   check('B6 the story\'s ledger: floor rects, hanging-wall rects, three archways (open, no slab), four rooms',
     rec.floors.length > 0 && rec.walls.length > 0 && rec.doors.length === 3 && rec.doors.every(d => d.door.open === true && d.door.mode === 'sealed')
@@ -120,7 +130,7 @@ const kindAt = (cx: number, cy: number): string => wf.regionAt!(inn.rect.x + cx 
     !!lodger && lodger.tier === 1 && tierFloorAt(wf.regionAt!(lodger.pos.x, lodger.pos.y), 1));
   check('B10 the ground-floor ledger leaves the landing\'s closet out of the common room (a non-walkable region is no member)',
     !!inn.rooms && inn.rooms.every(r => !r.rects.some(rc => {
-      const lx = inn.rect.x + 11.5 * cs, ly = inn.rect.y + 6.5 * cs; // the landing's west cell
+      const lx = inn.rect.x + 11.5 * cs, ly = inn.rect.y + 3.5 * cs; // the landing's west cell (north end of the flight)
       return lx > rc.x && lx < rc.x + rc.w && ly > rc.y && ly < rc.y + rc.h;
     })));
   check('B11 the stack is found by position (storeyedStructureAt) inside the inn and nowhere on the square',
@@ -133,31 +143,39 @@ const kindAt = (cx: number, cy: number): string => wf.regionAt!(inn.rect.x + cx 
   const stair = w.doodads.find(d => d.kind === 'stairway')!;
   const p = w.player;
   const step = (dx: number, dy: number, n: number): void => { for (let i = 0; i < n; i++) w.moveActor(p, dx, dy, 1 / 30); };
-  p.pos.x = stair.pos.x; p.pos.y = stair.pos.y - stair.radius - 18; p.tier = 0; p.onTierLink = false;
+  // THE FLIPPED FLIGHT (her word 2026-09-06): the foot is SOUTH of the run
+  // (by the door), the landing NORTH — the climb walks north.
+  p.pos.x = stair.pos.x; p.pos.y = stair.pos.y + stair.radius + 18; p.tier = 0; p.onTierLink = false;
   const footK = wf.regionAt!(p.pos.x, p.pos.y);
   check('C1 the flight\'s foot is ground-floor floor under a hanging wall (the stairwell\'s rim above)', footK === 'storey_wall');
-  step(0, 1, 60);
+  // The landing opens straight into the hall now, so the walk stops the
+  // moment the landing is underfoot (a fixed count would carry on north).
+  let onLanding = false;
+  for (let i = 0; i < 90 && !onLanding; i++) { step(0, -1, 1); onLanding = wf.regionAt!(p.pos.x, p.pos.y) === 'storey_landing'; }
   check('C2 walking up the flight carries the walker to the story: tier 1, standing on the landing',
-    p.tier === 1 && wf.regionAt!(p.pos.x, p.pos.y) === 'storey_landing', `tier ${p.tier} on ${wf.regionAt!(p.pos.x, p.pos.y)}`);
-  step(-1, 0, 60);
-  check('C3 the hall above is the story\'s floor — the walker keeps tier 1 on both-floor cells', p.tier === 1 && wf.regionAt!(p.pos.x, p.pos.y) === 'storey_floor');
-  // The flank: from the hall, east toward the flight's west side is a wall (both floors).
+    p.tier === 1 && onLanding, `tier ${p.tier} on ${wf.regionAt!(p.pos.x, p.pos.y)}`);
+  step(0, -1, 60);
+  check('C3 the hall above is the story\'s floor — from the landing the walker steps straight NORTH into the hall (no corridor of furniture between), keeping tier 1 on both-floor cells', p.tier === 1 && wf.regionAt!(p.pos.x, p.pos.y) === 'storey_floor');
+  // The flank: from the east room, east toward the flight's west side is a wall (both floors).
   p.pos.x = inn.rect.x + 9.5 * cs; p.pos.y = inn.rect.y + 5.5 * cs; p.tier = 1; p.onTierLink = false;
   step(1, 0, 60);
   check('C4 the flight\'s flank refuses a sideways step onto it (the stairwell wall stands on both floors)',
     p.tier === 1 && p.pos.x < inn.rect.x + 10 * cs + 2 && !tierLinkOf(wf.regionAt!(p.pos.x, p.pos.y)), `x ${p.pos.x.toFixed(0)} tier ${p.tier}`);
-  // Back down: to the landing, then north down the flight.
-  p.pos.x = inn.rect.x + 11.5 * cs; p.pos.y = inn.rect.y + 6.5 * cs; p.tier = 1; p.onTierLink = false;
-  step(0, -1, 45);
+  // Back down: to the landing, then south down the flight.
+  p.pos.x = inn.rect.x + 11.5 * cs; p.pos.y = inn.rect.y + 3.5 * cs; p.tier = 1; p.onTierLink = false;
+  step(0, 1, 45);
   check('C5 walking back down the flight lands on the common room\'s floor (tier 0)', p.tier === 0 && tierFloorAt(wf.regionAt!(p.pos.x, p.pos.y), 0), `tier ${p.tier} on ${wf.regionAt!(p.pos.x, p.pos.y)}`);
   // The mover confines a story-1 body against the hanging walls: a lodger
   // cannot walk through a partition, a ground walker under it can.
-  p.pos.x = inn.rect.x + 3.5 * cs; p.pos.y = inn.rect.y + 2.5 * cs; p.tier = 1; p.onTierLink = false;
-  step(1, 0, 60);
-  check('C6 a story-1 walker is held by a hanging wall (room 1\'s east partition)', p.tier === 1 && p.pos.x < inn.rect.x + 4 * cs + 2, `x ${p.pos.x.toFixed(0)}`);
-  p.pos.x = inn.rect.x + 3.5 * cs; p.pos.y = inn.rect.y + 2.5 * cs; p.tier = 0; p.onTierLink = false;
-  step(1, 0, 60);
-  check('C7 the same walk on the ground floor passes under it (open floor beneath the partition)', p.tier === 0 && p.pos.x > inn.rect.x + 5 * cs, `x ${p.pos.x.toFixed(0)}`);
+  // The rooms sit along the south wall now (rows 4–6): room 2's WEST
+  // partition hangs at column 4 over the common room's open floor (a
+  // walk-over chair sits under it — no solid on the ground walker's way).
+  p.pos.x = inn.rect.x + 5.5 * cs; p.pos.y = inn.rect.y + 5.5 * cs; p.tier = 1; p.onTierLink = false;
+  step(-1, 0, 60);
+  check('C6 a story-1 walker is held by a hanging wall (room 2\'s west partition)', p.tier === 1 && p.pos.x > inn.rect.x + 5 * cs - 2, `x ${p.pos.x.toFixed(0)}`);
+  p.pos.x = inn.rect.x + 5.5 * cs; p.pos.y = inn.rect.y + 5.5 * cs; p.tier = 0; p.onTierLink = false;
+  step(-1, 0, 60);
+  check('C7 the same walk on the ground floor passes under it (open floor beneath the partition)', p.tier === 0 && p.pos.x < inn.rect.x + 4 * cs, `x ${p.pos.x.toFixed(0)}`);
   p.tier = 0; p.pos.x = 100; p.pos.y = 100;
 }
 
@@ -165,22 +183,22 @@ const kindAt = (cx: number, cy: number): string => wf.regionAt!(inn.rect.x + cx 
 {
   // Two points in neighbouring guest rooms (room 1 and room 2), the hanging
   // wall at column 4 between them.
-  const a = vec(inn.rect.x + 2.5 * cs, inn.rect.y + 2.5 * cs), b = vec(inn.rect.x + 6.5 * cs, inn.rect.y + 2.5 * cs);
+  const a = vec(inn.rect.x + 2.5 * cs, inn.rect.y + 5.5 * cs), b = vec(inn.rect.x + 5.5 * cs, inn.rect.y + 5.5 * cs);
   check('D1 a story-1 eye stops at the hanging wall between two guest rooms', !w.lineOfSight(a, b, 1, 1));
   check('D2 the ground-floor eye under it sees clean across the common room', w.lineOfSight(a, b, 0, 0));
   check('D3 a story-1 shot stops at the hanging wall; the ground-floor shot flies under it',
     !w.lineOfFire(a, b, 1) && w.lineOfFire(a, b, 0));
   // Across the outer wall, both stories are blind (the ground's wall is everyone's).
-  const outside = vec(inn.rect.x - 40, inn.rect.y + 2.5 * cs);
+  const outside = vec(inn.rect.x - 40, inn.rect.y + 5.5 * cs);
   check('D4 the building\'s outer wall stops both stories', !w.lineOfSight(a, outside, 1, 0) && !w.lineOfSight(a, outside, 0, 0));
 }
 
 // ---------------------------------------------------- E. LAYER SOVEREIGNTY
 {
   // A story-1 solid standing over OPEN ground-floor floor: room 3's dresser
-  // (storey cell 11,1) stands over a bare cell of the common room — the one
+  // (storey cell 8,4) stands over a bare cell of the common room — the one
   // seat both stories can be asked about honestly.
-  const dx = inn.rect.x + 11.5 * cs, dy = inn.rect.y + 1.5 * cs;
+  const dx = inn.rect.x + 8.5 * cs, dy = inn.rect.y + 4.5 * cs;
   const bed = w.doodads.find(d => d.kind === 'dresser' && (d.tier ?? 0) === 1 && Math.hypot(d.pos.x - dx, d.pos.y - dy) < 2)!;
   check('E0 the seat under test is a storey dresser over bare floor', !!bed && doodadRuleOf(bed.kind).blocksMove === true
     && !w.doodads.some(o => (o.tier ?? 0) === 0 && doodadRuleOf(o.kind).blocksMove && Math.hypot(o.pos.x - dx, o.pos.y - dy) < 20));
@@ -210,6 +228,157 @@ const kindAt = (cx: number, cy: number): string => wf.regionAt!(inn.rect.x + cx 
     (renderer.match(/this\.inStack\(/g) ?? []).length >= 2 && renderer.includes('tierLinkOf(world.walk.regionAt(d.pos.x, d.pos.y))'));
   check('G4 the room veil confines by the hero\'s story (the storey\'s own ledger + archways)',
     veil.includes('st0?.storeys?.find(s => s.tier === tier)') && veil.includes('rooms: storey.rooms, doors: storey.doors'));
+}
+
+// ------------------------------------------------------ H. THE ENCLOSURE LAW
+// (engine/tiers.ts tierEnclosure + the world's push lane; docs/engine/tiers.md):
+// a building's storey is ENCLOSED by derivation — a shove never carries a
+// body off it. The rim fall that drops a butte-stander into the valley is a
+// wall here: the knockback clamps at the hanging wall / the outer wall
+// exactly as feet do, tier 1 kept, the body inside the footprint on the
+// story's own floor. And THE SAME-STORY LAW on spoils: a drop lying upstairs
+// is nobody's pickup downstairs, and the reverse.
+{
+  const p = w.player;
+  const settle = (n: number): void => { for (let i = 0; i < n; i++) w.update(1 / 30); };
+  check('H1 the interior stack resolves ENCLOSED by derivation (no word on the def); open country stays open; the explicit word wins both ways',
+    tierEnclosure(w.zone.tiers) === 'enclosed' && w.zone.tiers?.enclosure === undefined
+    && tierEnclosure({ kind: 'over', exposure: 'open' }) === 'open'
+    && tierEnclosure({ kind: 'under', exposure: 'covered' }) === 'enclosed'
+    && tierEnclosure({ kind: 'over', exposure: 'open', enclosure: 'enclosed' }) === 'enclosed'
+    && tierEnclosure({ kind: 'under', exposure: 'covered', enclosure: 'open' }) === 'open');
+  // A quiet inn: the folk stand aside (the shove must meet walls, not bodies).
+  for (const a of w.actors) if (a !== p) a.dead = true;
+  settle(1);
+  const inside = (): boolean => p.pos.x > inn.rect.x && p.pos.x < inn.rect.x + inn.rect.w && p.pos.y > inn.rect.y && p.pos.y < inn.rect.y + inn.rect.h;
+  const onStory = (): boolean => tierFloorAt(wf.regionAt!(p.pos.x, p.pos.y), 1);
+  // H2 — room 2's west partition (the hanging wall at column 4, C6's seat): a
+  // hard shove WEST from (5.5, 5.5). Before the law the rim fall read the
+  // partition's open ground floor as a landing and dropped the hero through it.
+  p.pos.x = inn.rect.x + 5.5 * cs; p.pos.y = inn.rect.y + 5.5 * cs; p.tier = 1; p.onTierLink = false; p.push = null;
+  w.pushActor(p, Math.PI, 320);
+  settle(40);
+  check('H2 a shove into a hanging wall holds AT the wall: tier 1 kept, inside the inn, on the story\'s floor — never through the boards',
+    p.tier === 1 && inside() && onStory() && p.pos.x > inn.rect.x + 5 * cs - 2 && !p.push && !p.isStunned(),
+    `tier ${p.tier} x ${(p.pos.x - inn.rect.x).toFixed(0)} on ${wf.regionAt!(p.pos.x, p.pos.y)}`);
+  // H3 — the outer wall: room 1 (2.5, 5.5), a shove SOUTH at the south wall
+  // (the ground's rampart stands on both floors) — held above it.
+  p.pos.x = inn.rect.x + 2.5 * cs; p.pos.y = inn.rect.y + 5.5 * cs; p.tier = 1; p.onTierLink = false; p.push = null;
+  w.pushActor(p, Math.PI / 2, 320);
+  settle(40);
+  check('H3 a shove into the outer wall holds inside the footprint on the story',
+    p.tier === 1 && inside() && onStory() && p.pos.y < inn.rect.y + 7 * cs && !p.push,
+    `tier ${p.tier} y ${(p.pos.y - inn.rect.y).toFixed(0)} on ${wf.regionAt!(p.pos.x, p.pos.y)}`);
+  // H4–H8 — THE SPOILS STORY: a vestige lying in the hall above (8.5, 2.5 —
+  // storey floor over the common room's open floor).
+  const vid = Object.keys(VESTIGES)[0];
+  const hx = inn.rect.x + 8.5 * cs, hy = inn.rect.y + 2.5 * cs;
+  check('H4 the seat under test is a both-floor cell (storey_floor) whose unstamped floor read is the ground\'s; a landing reads its story',
+    wf.regionAt!(hx, hy) === 'storey_floor' && floorStoryOf('storey_floor') === 0 && floorStoryOf('storey_landing') === 1);
+  const drop: GemDrop = { pos: vec(hx, hy), item: { kind: 'vestige', id: vid, count: 1 }, bob: 0, tier: 1 };
+  w.drops.push(drop);
+  p.pos.x = hx; p.pos.y = hy; p.tier = 0; p.onTierLink = false; p.push = null;
+  settle(3);
+  check('H5 a vestige lying UPSTAIRS is no pickup for the hero in the common room beneath it (same position, story 0)', w.drops.includes(drop));
+  p.tier = 1;
+  settle(3);
+  check('H6 … and the hero on the story takes it', !w.drops.includes(drop));
+  const drop2: GemDrop = { pos: vec(hx, hy), item: { kind: 'vestige', id: vid, count: 1 }, bob: 0 };
+  w.drops.push(drop2);
+  settle(3);
+  check('H7 an UNSTAMPED drop on a both-floor cell is the ground\'s (the sweep settles the floor\'s word): the story hero leaves it …',
+    w.drops.includes(drop2) && drop2.tier === 0, `tier ${String(drop2.tier)}`);
+  p.tier = 0;
+  settle(3);
+  check('H8 … and the ground hero takes it', !w.drops.includes(drop2));
+  p.pos.x = 100; p.pos.y = 100; p.tier = 0;
+}
+
+// ------------------------------------------- I. LAYER SOVEREIGNTY, THE BODIES
+// (engine/tiers.ts sameStory — the sovereignty gate at the crowd shoulder and
+// the bowling lane): the lodger strolling in the hall above stands in the
+// hero's exact footprint on the common room's floor and moves NOBODY — the
+// reported "invisible wall" was this shoulder, thrown by a body the storey
+// cull had hidden. The same-story control still parts them.
+{
+  const p = w.player;
+  const settle = (n: number): void => { for (let i = 0; i < n; i++) w.update(1 / 30); };
+  for (const a of w.actors) if (a !== p) a.dead = true;
+  settle(1);
+  const hx = inn.rect.x + 8.5 * cs, hy = inn.rect.y + 2.5 * cs; // the hall above / the common room beneath
+  const lodger = w.createMonster('townsfolk_lodger', 1, 'enemy');
+  lodger.tier = 1; lodger.pos = vec(hx, hy); lodger.anchored = true; lodger.passive = true;
+  w.actors.push(lodger); // (createMonster mints; the caller seats)
+  const off = (a: { pos: { x: number; y: number } }): number => Math.hypot(a.pos.x - hx, a.pos.y - hy);
+  // The stand is a hand's breadth (2px) inside the footprint, never dead on
+  // it: coincident bodies give the shoulder pass no angle (its d > 0.01 guard).
+  p.pos.x = hx + 2; p.pos.y = hy; p.tier = 0; p.onTierLink = false; p.push = null;
+  settle(20);
+  check('I1 a body on the story above, standing in the hero\'s footprint, moves the hero not one pixel (no shoulder across a story)',
+    Math.abs(off(p) - 2) < 0.5 && off(lodger) < 0.5, `hero ${off(p).toFixed(1)}px lodger ${off(lodger).toFixed(1)}px`);
+  const life0 = lodger.life;
+  w.pushActor(p, 0, 320); // a hard shove THROUGH the footprint
+  settle(30);
+  check('I2 a shove through it lands no slam: the body above keeps its life and its seat', lodger.life === life0 && off(lodger) < 0.5 && !p.push);
+  p.pos.x = hx + 2; p.pos.y = hy; p.tier = 1; p.onTierLink = false; p.push = null;
+  settle(20);
+  check('I3 the same-story control: the hero standing in a same-story body\'s footprint is shouldered clear (the gate is alive, not dead)',
+    off(p) >= (p.radius + lodger.radius) * 0.8, `${off(p).toFixed(1)}px`);
+  lodger.dead = true;
+  p.pos.x = 100; p.pos.y = 100; p.tier = 0;
+}
+
+// --------------------------------------- J. THE INVESTIGATION CROSSES (the inn)
+// A lure or a noise on another story makes a body AWARE; it then walks to the
+// crossing and investigates — never a teleport (her ruling 2026-09-06). The
+// inn's hall is one cell, two floors: before A GOAL CARRIED ITS STORY the flat
+// read fielded a common-room hunter straight to the spot under the hall's
+// lure and called it arrived. Now it takes the flight.
+{
+  const p = w.player;
+  for (const a of w.actors) if (a !== p) a.dead = true;
+  w.update(1 / 30);
+  p.pos.x = 100; p.pos.y = 100; p.tier = 0; p.untargetable = true; // the hunter must stay IDLE
+  const hall = { x: inn.rect.x + 8.5 * cs, y: inn.rect.y + 2.5 * cs };     // the hall above (storey_floor)
+  const room = { x: inn.rect.x + 8.5 * cs, y: inn.rect.y + 2.5 * cs };     // the same cell, the common room beneath
+  const dd = (a: { x: number; y: number }, b: { x: number; y: number }): number => Math.hypot(a.x - b.x, a.y - b.y);
+  const hunter = (at: { x: number; y: number }, tier: number) => {
+    const m = w.createMonster('skeleton_warrior', 8, 'enemy');
+    m.pos = vec(at.x, at.y); m.tier = tier; m.onTierLink = false; m.aiTargetId = undefined;
+    w.actors.push(m);
+    return m;
+  };
+  const drive = (m: { pos: { x: number; y: number } }, done: () => boolean, cap = 1200): { ticks: number; maxStep: number } => {
+    let maxStep = 0, ticks = 0;
+    for (; ticks < cap && !done(); ticks++) {
+      const px = m.pos.x, py = m.pos.y;
+      for (const a of w.actors) updateAI(a, w, 1 / 30);
+      w.update(1 / 30);
+      maxStep = Math.max(maxStep, Math.hypot(m.pos.x - px, m.pos.y - py));
+    }
+    return { ticks, maxStep };
+  };
+  {
+    const m = hunter(room, 0);
+    w.setLure('qa_hall', vec(hall.x, hall.y), 4000, 1, 30, 999, 1);
+    const r = drive(m, () => m.tier === 1 && dd(m.pos, hall) <= 54);
+    check('J1 a common-room hunter lured to the hall directly OVER its head takes the flight up (tier 0 → 1) instead of standing beneath, "arrived"',
+      m.tier === 1 && dd(m.pos, hall) <= 54, `tier ${m.tier} dist ${dd(m.pos, hall).toFixed(0)} ticks ${r.ticks}`);
+    check('J2 … every step a stride, never a teleport', r.maxStep <= 40, `max step ${r.maxStep.toFixed(1)}px`);
+    w.setLure('qa_hall', vec(hall.x, hall.y), 1, 1, 30, 0.001, 1);
+    m.dead = true; w.update(1 / 30);
+  }
+  {
+    const m = hunter(hall, 1);
+    m.alertFrom = vec(room.x, room.y); m.alertTier = 0; m.alertUntil = w.time + 60;
+    let clearedOn: number | null = null;
+    const r = drive(m, () => { if (!m.alertFrom && clearedOn === null) clearedOn = m.tier; return clearedOn !== null; });
+    check('J3 a noise in the common room walks the lodger-story investigator DOWN the flight; the mark clears on the ground floor, never from the boards above it',
+      clearedOn === 0 && dd(m.pos, room) <= 44, `cleared on tier ${String(clearedOn)} dist ${dd(m.pos, room).toFixed(0)} ticks ${r.ticks}`);
+    check('J4 … stride-wise', r.maxStep <= 40, `max step ${r.maxStep.toFixed(1)}px`);
+    m.dead = true; w.update(1 / 30);
+  }
+  p.untargetable = false;
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

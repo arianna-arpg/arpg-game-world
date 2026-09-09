@@ -47,7 +47,16 @@ export type DwellReach = 'radius' | 'sight' | 'roof';
  *  game (transit families here, NPC counters and town sites in world.ts).
  *  A dwell is an act of attention: it should only build toward an object the
  *  player can honestly attend to — never through the inn's wall, never
- *  through a house into the cellar. Tune HERE, never inline. */
+ *  through a house into the cellar. Tune HERE, never inline.
+ *  THE SAME-STORY LAW (the tier fabric, 2026-09-06): a dwell never crosses
+ *  a story — when the hero's story and the object's are both known and
+ *  differ, every reach mode refuses (World.dwellReachable's `story`): the
+ *  inn's door does not swing from the rooms above it, a ground-floor
+ *  counter serves no one standing over it on the storey.
+ *  THE ANCHORED DWELL (2026-09-06): a town station's dwell is centred on the
+ *  PIECE that is the station (World.stationAnchor — the board, the bench
+ *  slab, the fire; `anchor: true` on a plan cell or prop), never on the
+ *  site's coordinate. `anchorReach` below is its one dial. */
 export const DWELL_CFG = {
   /** The family default when a row/role pins nothing. */
   reach: 'sight' as DwellReach,
@@ -61,6 +70,13 @@ export const DWELL_CFG = {
    *  reached — the object's own frame (a counter lip, the hatch stone, a
    *  bench slab) never hides the object it belongs to. */
   sightSlack: 20,
+  /** THE ANCHORED DWELL: how far from a town site's seat its station ANCHOR
+   *  (the placed piece marked `anchor` — the board, the bench slab, the
+   *  fire) may stand and still be the site's counter. World.stationAnchor
+   *  resolves a dwell's centre to THAT piece's live position: move the
+   *  piece, the dwell follows; fell it and the dwell is gone until it
+   *  stands again. A structure's own footprint fits inside this. */
+  anchorReach: 200,
   /** Per-npcRole reach overrides for the NPC/site dwells that tune outside
    *  the transit rows. The innkeep serves UNDER HER ROOF — you dwell her
    *  counter from inside the inn, never through its wall. THE COUNTER LAW

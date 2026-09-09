@@ -863,7 +863,59 @@ we verify changes.
   Mireille's door, re-ruled 2026-09-05 from the roofed alcove: a roof
   hides a read-me station; legend `N` = a board cell, `noticeBoard` the
   painter; THE DOOR LANE LAW — nothing of the front stands in the door's
-  approach column, the inn lights its step with `wall_lantern`s), THE
+  approach column, the inn lights its step with `wall_lantern`s; v4
+  2026-09-06: no post and no flower box on the front — the boxes stand
+  under the inn's windows, the board wears ONE wall lantern off its post
+  (`props[].rot`), and THE LAMPS ALONG THE WAYS ride the wayside fabric's
+  marker row `TOWN_WAYSIDE` with the door way `bare`), THE ANCHORED DWELL
+  (2026-09-06, her word: a dwell belongs to the OBJECT — a plan cell's or
+  prop's `anchor: true` stamps `Doodad.anchor`, `World.stationAnchor`
+  centres every station dwell + prompt on that live piece, a felled piece
+  takes its dwell down, no piece no dwell; THE STATION FOLD re-folds
+  owned stations at every town load at the fixed rung; THE SAME-STORY LAW
+  on `dwellReachable` — no dwell crosses a story, the inn's door never
+  swings from upstairs — docs/design/town-growth.md §1.9–1.10,
+  docs/engine/los-pathing.md; THE INTERACTION SWEEP (2026-09-06): every
+  proximity act compares stories — dwells through `World.storyPair`,
+  pickups/orbs/corpses through THE SPOILS STORY (`GemDrop.tier`: the kill
+  path + the wounded purse set `World.spoilStory`, the context every
+  drop/orb helper clamps on and stamps, else settled from the floor's word
+  `floorStoryOf`; `pickupSeat` the one chokepoint), harvest arms, revives,
+  the throng's claim, the latch, the grab hand-off and the minion recall;
+  and THE ENCLOSURE LAW (`ZoneTiers.enclosure` → `tierEnclosure`,
+  engine/tiers.ts): 'under' layers and `interior` storeys derive ENCLOSED
+  — the rim fall never fires and a shove, leap, blink or recall clamps at
+  the story's edge through the mover's own view (the carry clamps pass
+  `{ mover }`, `teleportActor` takes a `story`) — buttes stay 'open';
+  probes probe_storey H, probe_tiers RIG S, probe_towngrowth H's door;
+  and THE SOVEREIGNTY GATE (`sameStory(a, b)`, engine/tiers.ts —
+  2026-09-06, her "invisible wall": a culled other-story body shouldering
+  the hero): bodies on different stories share a screen, never a TOUCH —
+  ONE predicate at every body-vs-body and body-vs-hazard seam (the crowd
+  shoulder + its own-story nudge clamps, the bowling lane, the tread, the
+  flock/spacing, auras, heals, doodad effects, the crystal wash, rupture,
+  death bursts/blooms (`DeathBurst.tier`), tether bands, constructs,
+  channel supports, domes, the skill FIELDS (`Zone.tier` settled at the
+  first tick), `pressingFoeNear`, ambush packs, taming, trapworks
+  (`PlacedTrapwork.tier`), tracks (`PlacedTrack.tier` → `strikeTier`),
+  vents (`PlacedVent.tier`), creep (`CreepSource.tier`), fog
+  (`FogBank.tier`), lightwells, the collapse crumble, the gale
+  (`windAt(pos, tier)`), and the lite pool's `story` column); sight,
+  sound and scent keep their own laws; THE DERIVED CENSUS (her word: the
+  roster is derived, never a hand list): probe_tiers RIG T finds every
+  seam by SHAPE — a World method that iterates bodies and tests geometry
+  — and requires the gate or a source marker `// SOVEREIGNTY: <reason>`
+  from a closed vocabulary (sky/sound/scent/sight/targeting/census/seat/
+  self), so a new proximity seam is gated, marked, or named gateless the
+  day it is written (live: deck/duct statue rigs, probe_storey I); and
+  THE INVESTIGATION CROSSES (her ruling 2026-09-06): a lure or noise on
+  another story makes a body aware and it WALKS to the crossing, never
+  teleports — A GOAL CARRIES ITS STORY (`moveToward` reads `goal.tier`,
+  `tierLinkToward(a, goal, goalTier)` elects a crossing even on both-
+  floor ground; `Actor.alertTier`/`watchTier`/`aiLastSeenTier`,
+  `TrailPoint.tier`, `setLure(..., tier)`, `noiseAt(..., tier)`, the
+  kernel `goal.tier`; arrivals ask the story) — probes probe_tiers RIG U,
+  probe_storey J — docs/engine/tiers.md), THE
   INN'S FLOORS on THE STOREY FABRIC (`engine/levelgen.ts` storey
   composite + `world/regions.ts` storey rows — `StructureDef.storeys`: a
   second char grid folded cell for cell over the ground plan into ONE
@@ -874,7 +926,9 @@ we verify changes.
   ARCHWAYS; `ZoneTiers.interior` stamps the zone a silent stack; the
   renderer culls per building + paints THE STOREY LAYER live —
   docs/engine/storeys.md, probe `balance/probe_storey.ts`; the inn's
-  `stairway` face is bigger and unlabelled), THE INN KIT
+  `stairway` face is bigger and unlabelled, and the flight climbs NORTH
+  from the door end onto a landing that opens straight into the hall —
+  2026-09-06), THE INN KIT
   (`t c a K j x i J u y l` legend chars, `render/vis/paintersInn.ts`;
   chairs are walk-over decor), THE HAUNT (`BehaviorSpec.haunt` — idle
   conduct between named furniture; THE STROLLING SCENERY: a passive body
@@ -882,7 +936,24 @@ we verify changes.
   (`data/innfolk.ts` pools → `StructureDef.folk` seats rolled per zone ×
   seat × DAY off the zone's seed, the haunt on its own per-body die — THE
   OFF-STREAM LAW; charter docs/design/townsfolk-life.md), THE SPOKEN
-  SEAT (`StructureDef.npcs[].line`; probe rig J), THE COUNTER LAWS on the board itself
+  SEAT (`StructureDef.npcs[].line`; probe rig J), THE SPEECH GRAMMAR
+  (`engine/speechGrammar.ts` + the corpus `data/speechGrammar.ts` — WHAT a
+  spoken body says, her "Rimworld levels of colony member discussion"
+  ruling 2026-09-06: TEMPLATES with SLOTS resolved off the world's own
+  state at the telling (`{other}`/`{doing}` = a named present body of the
+  same COMPANY and the haunt piece it faces, `{weather}`, `{lastEvent}` off
+  the notice feed's `newsLog`, `{monster}` off kill()'s credited `slainLog`,
+  `{from}` = `entryFrom`, `{phase}`, `{heroClass}`, `{town}`/`{zone}`,
+  `{hero}` = the renderer's renown-gated `{name}` token) in an open
+  registry with ROLE pools (`MonsterDef.speechRoles`, `FolkRow.roles`,
+  `TownResidentRow.roles`) + gates; THE DEAL hands every company-day
+  pairwise-DISJOINT decks on a local seeded stream (no two folk say one
+  line in a day), THE FIRST WORD keeps every authored line leading its
+  deck (round-robin claimed), THE ROTATION composes once per fresh
+  approach and stamps the line for its window; `World.speakerRows` +
+  `composeSpeakerLine`/`speechContext` the one consumer, `sid` on the
+  layout's npc/folk rows = the company; docs `docs/engine/speech-grammar.md`,
+  probe `balance/probe_speechgrammar.ts`), THE COUNTER LAWS on the board itself
   (`BOUNTY_BOARD_CFG.counter`: THE TEAR-OFF closes the panel on a take,
   THE RETURN turns a resolved hand in at the linger before the slate
   re-opens, THE RECEIPT prints the pay — probe_bountyboard rig S), THE
@@ -1023,6 +1094,51 @@ we verify changes.
   (`riverPathsInRect`, COURSE_FIELD_SALT the shared derivation). Dials in
   `RELIEF_CFG`; docs in `docs/engine/relief.md`; probe
   `balance/probe_relief.ts`.
+  THE ATLAS FABRIC (`world/atlas.ts` + `data/atlasFeatures.ts` +
+  `ui/atlasPaint.ts` — the world map as SHOWN ground and MAP FEATURES as
+  data zones INHERIT): THE CHART paints the foreordained fields as a relief
+  map (`atlasShade` = THE PIXEL LAW: hillshade lit from the north-west,
+  hypsometric lift, snowline/alpine rock, a chamfered sea shelf, contour
+  bands, paper grain; rivers as tapered threads, lake basins, biome
+  DRESSING glyphs from `ATLAS_GLYPHS`, feature marks + labels) as ONE
+  progressively built pointer-transparent `<image>` under the node graph
+  (the interactivity contract untouched), gated by THE VEIL (paints only
+  around VISIBLE nodes — the wash's envelope law as a soft edge) and THE
+  SEAM WARP (presentation-only wobble on the biome sample so Voronoi seams
+  read organic); `Settings.mapChart` 'painted' | 'classic', atlas layer
+  chips (Relief/Rivers/Features/Dressing), THE CURSOR READ (`#map-here` —
+  biome · elevation · the climate bands' own words · features in reach).
+  THE FEATURES: `registerMapFeature` kind rows — how instances are FOUND
+  (`peaks` local maxima of the elevation axis / `strewn` lattice deals
+  with climate gates / `lakes` at a traced river's inland end), how far
+  they REACH, what a zone within reach INHERITS (`FeatureInherit`:
+  landmark + composition rolls, layoutParams, a harvest bounty, a relief
+  lift) and what the pane READS; debut peak/lode/lake. THE LAWS: DRAWN ==
+  INHERITED (one finder), THE SEED IS THE PLAN (no rng), THE INSTALLED
+  TRUTH (`setAtlasSeed` at sim boot beside `setReliefSeed`), THE FRONTIER
+  LAW (only random-frontier surface mints inherit — worldgen's placeZoneAt
+  folds `featuresAt` into `ZoneDef.geo.features` + `geo.relief` and appends
+  the rolls AFTER the zone's own, so every feature-less mint is
+  byte-identical), and readers read the DEF (levelgen's 'elevation' gen
+  field lifts/domes by `geo.relief`, `World.bootHarvest` rolls the bounty
+  after the zone's own draws, the pane names the features). THE KNOWLEDGE
+  LAW (her ruling 2026-09-08 — the visible map is the player's knowledge
+  alone): every graph mint is born VEILED (`ZoneSpec.veiled`, stamped at
+  placeZoneAt) and lifts only by a knowledge act — entry, the STRUCTURAL
+  one-ring preview in `World.visible` (a mint beside walked ground is seen
+  the moment it exists), a survey, an omen, an accepted quest, a won siege,
+  a sighted port — so no distant event redraws the map; the chart, THE VEIL
+  CLIP on every overlay wash and the map's fit read KNOWN ground alone.
+  THE DEV LENS (`ui/mapLens.ts`, the `?dev` Atlas tab: omniscient chart +
+  cursor read) is the render-only development view — never world state.
+  THE STANDING CHART: the panel's html carries no transient state (viewBox,
+  zoom %, hover, side box, rasters, labels are synced IN PLACE by
+  `syncMapLive`/`syncAtlas`), the painter keeps an LRU of finished rasters
+  (the BASE always stands; a zoom WINDOW overlays it), and the side box
+  reads a zone's ground row (elevation · climate words) off its baked
+  `geo.climate`. Dials in
+  `ATLAS_CFG`; docs `docs/engine/atlas.md` + charter
+  `docs/design/world-atlas.md`; probe `balance/probe_atlas.ts`.
   THE HARBORHOLD FABRIC (`data/harborholds.ts` + `world/harborholds.ts` —
   mainland ports as BESIEGED RESIDENCES): every sea spot's HOLD ANCHOR
   wears the walled town (`harborhold_*` compositions → plan structures
@@ -1460,6 +1576,49 @@ we verify changes.
   Explosion / Bone Golem (`summon_bone_golem` + `bone_golem`) / Grave
   Tide). Docs `docs/meta/discovery.md` + `docs/meta/class-mastery.md`;
   probes `balance/probe_unlocks.ts` + `balance/probe_classmastery.ts`.
+  THE LEGEND FABRIC (2026-09-08, her ruling: a unique is a BUILD, never a
+  stat pool — docs/engine/legends.md, probe `balance/probe_legends.ts`):
+  THE GRANTED SKILL — the `skillgrant_<skillId>` stat family
+  (engine/skills.ts `skillGrantStat`; value = the skill's LEVEL, grantors
+  SUM, clamped to the skill's own max; one registered stat per catalog
+  skill at the data/skills.ts tail) folds at `World.recalcSeat` into ONE
+  identity-stable SkillInstance per id on `Seat.grantedInsts` — never the
+  learned book (WORN, NOT OWNED: no unlearn, no essence leveling, no learn
+  gate); bindable, castable, socketable, with THE RESIDENCE ON THE ITEM
+  (`ItemInstance.grantState` — sockets + tree picks written back every
+  recalc onto the first granting piece, `packGrantState`/
+  `restoreGrantState`), THE SEATING (`GRANT_CFG.autoSeat` takes the first
+  empty seat; a full bar leaves the Granted strip's chip a drag source onto
+  EMPTY seats only), THE ONE LOOKUP (`World.seatSkillById` — book, then
+  the granted lane, minting a worn grant on demand off the gear so a saved
+  or wired bar seats it where it stood) and the ledger `Seat.grantedSkills`
+  the panels read; class bonus levels, tree grafts and worn grafts iterate
+  the WIELDED set (learned + granted). THE OPEN DOOR — `registerProc`
+  (data/procs.ts) registers a legend's trigger beside the item
+  (`LEGEND_PROCS` in data/uniques.ts), with THE PROC POWER
+  (`procPower_<id>`, base 1 — the magnitude dial beside the chance, folded
+  once by `scaleProcEffect`), THE OWN-COPY LAW (`ProcCastSpec.own` — the
+  payload plays the caster's HELD instance: level, sockets, tree; opt-in),
+  THE BLOW'S TYPE GATE (`ProcDef.hitType` on the packet's dominant rolled
+  type) and the 'cast' trigger's carried AIM. ACCUMULATORS AS PLAIN STATE:
+  THE STRIDE (`strideReach` + the `'strided'` ConditionId over
+  `Actor.strideDist`, banked post-clamp by moveActor only while armed,
+  spent by a depth-0 landed blow at the next timer tick), THE ROOTED RAMP
+  (the `'still'` derived gauge, `GAUGE_CFG.stillCap`), THE BLOOM
+  (`minionBloom`/`minionBloomPower` → `Actor.bloomIn` + the `blooming`
+  marker; the lifespan sweep detonates through explodeActor in
+  `BLOOM_CFG.type` and ends the body as an expiry), THE EXTRA LANE
+  (`extraAs_<type>` — additive beside conversion, folded once at
+  applyConversion). THE SPOKEN LINE (`speakLineText`: `{v}`/`{v%}`/`{v0}`).
+  THE DEFINING LAW: the probe refuses a legend whose every line an affix
+  could roll. Roster: Wanderer's Wake (the stride), The Emberbrand (grants
+  Firebolt + The Rekindling), Gravebloom (the bloom), Stormcall (the
+  answer, chance + power), The Unmoved (+ the rooted ramp), Bloodletter's
+  Girdle (the letting), Fleetfeather (the second refusal), The Miser's Loop
+  (the whisper), Titan's Grasp (melee MORE, slower), the Halo (the count),
+  The Hollow Sovereign (less taken while the shield holds) and THE
+  CINDERVIGIL — the flagship (two granted skills, the spell-cast trigger
+  firing the granted copy, the extra lane).
   THE WORN GRAFT (slot grafts — supports granted BY POSITION): the
   `slotgraft_<slot>_<gemId>` stat family (engine/skills.ts `slotGraftStat`,
   slot 1-based "Skill Slot N"; value = granted gem LEVEL, grantors SUM,
@@ -1606,6 +1765,20 @@ we verify changes.
   the veils decide WHETHER text shows (`labelRevealAt` at the speaker's
   feet: the same-view gate), never get to drown what they revealed —
   docs in `docs/render/speech.md`; probe `balance/probe_speech.ts`.
+  THE TRANSIENT TELLING (`engine/speech.ts` — the fabric's WORLD half,
+  `SPEECH_CFG`): a folk line is an UTTERANCE, not a caption — it begins on
+  A FRESH APPROACH (the nearness EDGE, never the level), stands its whole
+  window wherever the hero walks (`holdSec` + THE READING ALLOWANCE
+  `holdPerChar`), disperses, then THE HELD TONGUE runs `cooldownSec` on
+  the world clock (out-and-back-in earns nothing); per-LANE overrides
+  (seat / folk / resident — the line's source), `Infinity` the perpetual
+  dial; `speechTell` the ONE pure fold, `World.residentPrompt` its one
+  consumer (the read IS the poll; memory per world, never persisted, never
+  on the wire), the renderer dumb; the counters' prompts incl. Mireille's
+  flask lesson are EXEMPT by lane — docs `docs/render/speech.md` +
+  `docs/design/townsfolk-life.md` §1.4; probe rig J. WHAT is said is THE
+  SPEECH GRAMMAR (`engine/speechGrammar.ts` — see the town paragraph
+  above; docs `docs/engine/speech-grammar.md`).
   Tunables in `render/vis/visConfig.ts`; docs in `docs/render/README.md`.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer. THE FOLIO (`ui/folio.ts` — docs
@@ -1717,6 +1890,16 @@ hunk with its file + hunk header and one verdict — `OWNED-FILE`, `OWNED`,
 `--own-token` declare inline without a file, `--strict` also gates MIXED
 hunks, `--ignore-token` quiets noise, `--json` is machine-readable; `--help`
 carries the declaration format and the rest of the dials.
+
+**Merges:** during a two-parent merge, the gate reconstructs the automatic merge
+from `HEAD` and `MERGE_HEAD`. It attributes that baseline to the parent commits,
+then checks every staged conflict resolution and additional edit against it.
+Declare ownership of those departures, not of incoming committed work. The
+report names both parents and the baseline tree. Unresolved index entries,
+leftover conflict markers, unsupported multi-parent merges and reconstruction
+errors refuse the check; there is no arbitrary baseline or force option.
+The reconstruction may need write access to Git's object directory. Gate
+regressions run with `node --test scripts/test-ownership-gate.mjs`.
 
 **4. When it fires, re-stage at finer grain — NEVER force.**
 

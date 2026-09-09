@@ -456,6 +456,12 @@ export class LitePool {
   /** The row's pour-pocket index (the regrowth law's attribution; -1 =
    *  belongs to no pocket — owned rows, dev pours, skill pours). */
   readonly pocket: Int16Array;
+  /** THE SOVEREIGNTY GATE's column (engine/tiers.ts sameStory): the STORY a
+   *  row lives on — pours seat the ground (0), a demoted throng body keeps
+   *  its keeper's story, a promotion hands it back. Bites, carves and
+   *  flight sweeps compare it with the other body's tier: a vermin tide in
+   *  the street never nips the duct runner beneath it. */
+  readonly story: Uint8Array;
   readonly alive: Uint8Array;
 
   used = 0;
@@ -485,6 +491,7 @@ export class LitePool {
     this.owner = new Int32Array(cap);
     this.seat = new Uint32Array(cap);
     this.pocket = new Int16Array(cap);
+    this.story = new Uint8Array(cap);
     this.alive = new Uint8Array(cap);
     this.freeList = new Int32Array(cap);
     this.nexts = new Int32Array(cap);
@@ -509,7 +516,7 @@ export class LitePool {
    *  gracefully — never overwrite a live body). */
   spawn(
     kindIdx: number, x: number, y: number, team: 0 | 1, owner: number,
-    plies: number, pocket = -1,
+    plies: number, pocket = -1, story = 0,
   ): number {
     let i: number;
     if (this.freeTop > 0) i = this.freeList[--this.freeTop];
@@ -525,6 +532,7 @@ export class LitePool {
     this.owner[i] = owner;
     this.seat[i] = liteSeatHash(i, this.spawnSalt);
     this.pocket[i] = pocket;
+    this.story[i] = story;
     this.phase[i] = ((this.seat[i] & 0xfff) / 0xfff) * Math.PI * 2;
     this.alive[i] = 1;
     this.liveCount++;

@@ -32,6 +32,7 @@
 import { bootSimEngine, classById } from '../src/sim/arena';
 import { resetActorIdCounter } from '../src/engine/actor';
 import { World } from '../src/engine/world';
+import { speechWindowFor } from '../src/engine/speech'; // THE TRANSIENT TELLING — a resident line's window (probe_speech rig J pins the clock)
 import { buildManifest } from '../src/packages/manifest';
 import { CLASSES } from '../src/data/classes';
 import { FEATURE, LEDGER_SOULS_SHELTERED, makeAccount, type Account } from '../src/meta/account';
@@ -47,6 +48,8 @@ import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { PAINTERS } from '../src/render/vis/painters';
 import '../src/render/vis/paintersInn';
 import { doodadRuleOf } from '../src/engine/levelgen';
+import { tierFloorAt } from '../src/engine/tiers'; // (rig H — the door under the storey)
+import { transitReach } from '../src/data/transit';
 import { sidezoneOf } from '../src/data/sidezones';
 import { updateAI } from '../src/engine/ai';
 import { DAY_LENGTH } from '../src/world/daynight';
@@ -369,8 +372,10 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
     bf.roofs === undefined && bf.confineVision === undefined && !bf.plan!.some(row => row.includes('#')));
   check('E: the front sets its board into the back rail (the N cell on the top row) with the apron open below',
     bf.plan![0].includes('N') && /^_+$/.test(bf.plan![bf.plan!.length - 1]));
-  check('E: the front is dressed as a locale (rails, flower boxes, lanterns, benches)',
-    ['y', 'u', 'L', 'b'].every(ch => bf.plan!.some(row => row.includes(ch))));
+  check('E: the front is dressed as a locale (rails, benches; ONE wall lantern hung off the board\'s post — no post, no flower box: those stand under the inn\'s windows, her word 2026-09-06)',
+    ['y', 'b'].every(ch => bf.plan!.some(row => row.includes(ch))) && !bf.plan!.some(row => /[uL]/.test(row))
+    && (bf.props ?? []).filter(p => p.kind === 'wall_lantern').length === 1
+    && (bf.props ?? []).some(p => p.kind === 'wall_lantern' && Math.abs(p.x) > 16 && Math.abs(p.x) < 34 && Math.abs((p.rot ?? 0) + Math.PI / 2) < 0.01));
   // THE DOOR LANE LAW (her walk, 2026-09-05 — a post out front of the door
   // made the inn a chore to enter): the door's approach column, from the
   // wall down to the square, holds NOTHING of the front — not its rect, not
@@ -384,8 +389,8 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
     if (rectsOverlap(rectOf('bounty_front', board), col)) { lane = false; console.log(`   tier ${tier}: the front stands in the door lane`); }
   }
   check('E: THE DOOR LANE LAW — the front never stands in the door\'s approach column, any tier', lane);
-  check('E: the front\'s east end (the door\'s side) is open ground — one lantern post, at the west end',
-    bf.plan![1].startsWith('L') && !bf.plan![1].endsWith('L') && bf.plan![1].endsWith('..'));
+  check('E: the front\'s east end (the door\'s side) is open ground — and no post stands anywhere on the front (the lamps stand along the ways)',
+    !bf.plan!.some(row => row.includes('L')) && bf.plan![1].endsWith('..'));
   check('E: the inn hangs wall lanterns either side of its door (inert to feet, a light on the step)',
     (inn.props ?? []).filter(p => p.kind === 'wall_lantern').length === 2
     && (inn.props ?? []).filter(p => p.kind === 'wall_lantern').every(p => p.y > inn.halfH && Math.abs(p.x - 13) < 60 && Math.abs(p.x - 13) > 20)
@@ -508,14 +513,106 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
   const board = w.doodads.filter(d => d.kind === 'bounty_board');
   check('H: exactly one board stands, set into the front\'s rail a row above its seat',
     board.length === 1 && d2(board[0].pos, w.townSeat('bounty_board')) < 30);
-  check('H: the boards-here census reads the front\'s seat',
-    w.bountyBoardsHere().some(b => b.id === BOUNTY_BOARD_CFG.boardId && d2(b.pos, w.townSeat('bounty_board')) < 1));
-  check('H: the front raised its locale (rails, flower boxes, lanterns, benches) and no roof over it',
+  check('H: THE ANCHORED DWELL — the boards-here census reads the BOARD itself (its anchor piece), never the site\'s coordinate',
+    w.bountyBoardsHere().some(b => b.id === BOUNTY_BOARD_CFG.boardId && d2(b.pos, board[0].pos) < 1)
+    && w.stationAnchor('bounty_board')?.doodad === board[0] && board[0].anchor === 'bounty_front');
+  check('H: the front raised its locale (rails, the board\'s own wall lantern, benches) — no post, no flower box, no roof over it',
     w.doodads.some(d => d.kind === 'rail_fence' && d2(d.pos, w.townSeat('bounty_board')) < 120)
-    && w.doodads.some(d => d.kind === 'planter' && d2(d.pos, w.townSeat('bounty_board')) < 120)
-    && w.doodads.filter(d => d.kind === 'lantern_post' && d2(d.pos, w.townSeat('bounty_board')) < 120).length === 1 // ONE post, west (the door lane law)
+    && !w.doodads.some(d => d.kind === 'planter' && inRect(d.pos, rectOf('bounty_front', w.townSeat('bounty_board'))))
+    && !w.doodads.some(d => d.kind === 'lantern_post' && inRect(d.pos, rectOf('bounty_front', w.townSeat('bounty_board'))))
+    && w.doodads.filter(d => d.kind === 'wall_lantern' && d2(d.pos, board[0].pos) < 40 && Math.abs((d.rot ?? 0) + Math.PI / 2) < 0.01).length === 1
     && w.doodads.filter(d => d.kind === 'bench' && d2(d.pos, w.townSeat('bounty_board')) < 120).length >= 2
     && !w.roofedStructureAt(w.townSeat('bounty_board')));
+  // THE ANCHORED DWELL, live: the dwell is the BOARD's — it follows the
+  // piece and is gone while the piece is down — and THE SAME-STORY LAW
+  // keeps a storey walker over it out of reach. (Her word 2026-09-06: the
+  // dwell belongs to the object, so a felled object takes its dwell down.)
+  {
+    const hero = w.player;
+    const keep = { x: hero.pos.x, y: hero.pos.y, tier: hero.tier };
+    const bd = board[0];
+    const home = { x: bd.pos.x, y: bd.pos.y };
+    hero.pos.x = bd.pos.x; hero.pos.y = bd.pos.y + 30; hero.tier = 0;
+    const hintAt = (): { x: number; y: number } => w.bountyBoardHint()?.pos ?? { x: -1e9, y: -1e9 };
+    check('H: THE ANCHORED DWELL — at the board the dwell answers and the prompt seats ON the board',
+      w.nearBountyBoard() && d2(hintAt(), bd.pos) < 1);
+    bd.pos.x -= 150;
+    const gone = !w.nearBountyBoard();
+    hero.pos.x = bd.pos.x;
+    check('H: THE ANCHORED DWELL — move the board and the dwell moves with it (the old stand falls out of the dial, the new one answers, the prompt follows)',
+      gone && w.nearBountyBoard() && d2(hintAt(), bd.pos) < 1);
+    bd.pos.x = home.x; hero.pos.x = home.x;
+    bd.felled = { at: 0, wake: 1 };
+    check('H: THE ANCHORED DWELL — a felled board is no board (no census, no dwell, no prompt) until it stands again',
+      w.bountyBoardsHere().length === 0 && !w.nearBountyBoard() && w.bountyBoardHint() === null);
+    delete bd.felled;
+    check('H: … and it stands again', w.nearBountyBoard());
+    hero.tier = 1;
+    check('H: THE SAME-STORY LAW — a hero on the storey over the board is not at the board', !w.nearBountyBoard() && w.bountyBoardHint() === null);
+    // … and the inn's DOOR (its own town, so the live dwell disturbs nothing
+    // here): the sweep's own gate is dwellReachable's story pair — a hero on
+    // the storey never swings the ground door beneath it; the ground hero does.
+    {
+      const wd = mkTownWorld(fullAccount(), 0x70d0);
+      const hd = wd.player;
+      const innSt = wd.structures.find(s => s.defId === 'inn')!;
+      const ics = innSt.cellSize;
+      const door = wd.doodads.find(d => d.door && d.pos.x > innSt.rect.x && d.pos.x < innSt.rect.x + innSt.rect.w
+        && Math.abs(d.pos.y - (innSt.rect.y + innSt.rect.h)) < ics);
+      const premise = !!door && !door.door!.open && (door.door!.mode === 'dwell' || door.door!.mode === 'both');
+      check('H: the door premise — the inn\'s ground door stands closed in dwell mode', premise, `mode=${door?.door?.mode} open=${String(door?.door?.open)}`);
+      if (door && premise) {
+        // The stand: one cell inside the door on the common room's floor —
+        // within the push's reach by construction.
+        const front = { x: door.pos.x, y: door.pos.y - ics };
+        check('H: THE SAME-STORY LAW at the door sweep\'s own gate — a story-1 hero over the door is refused, the ground hero admitted',
+          !wd.dwellReachable(front, door.pos, transitReach('door'), wd.storyPair({ tier: 1 }, door))
+          && wd.dwellReachable(front, door.pos, transitReach('door'), wd.storyPair({ tier: 0 }, door)));
+        const dwellAt = (tier: number, at: { x: number; y: number }): void => {
+          hd.pos.x = at.x; hd.pos.y = at.y; hd.tier = tier; hd.onTierLink = false; hd.push = null;
+          for (let i = 0; i < 30; i++) wd.update(1 / 30); // 1s: the idle grace + the door's 0.45s dwell
+        };
+        // The nearest clear story-1 stand to the door.
+        let stand: { x: number; y: number; d: number } | null = null;
+        for (let cy = 0; cy < STRUCTURES.inn.plan!.length; cy++) {
+          for (let cx = 0; cx < STRUCTURES.inn.plan![0].length; cx++) {
+            for (const [ox, oy] of [[0.5, 0.5], [0.25, 0.75], [0.75, 0.75], [0.5, 0.8]] as const) {
+              const x = innSt.rect.x + (cx + ox) * ics, y = innSt.rect.y + (cy + oy) * ics;
+              if (!tierFloorAt(wd.walk!.regionAt!(x, y), 1)) continue;
+              if (d2(wd.findFreeSpot({ x, y }, hd.radius, 1), { x, y }) > 1) continue;
+              const d = d2({ x, y }, door.pos);
+              if (!stand || d < stand.d) stand = { x, y, d };
+            }
+          }
+        }
+        if (stand) {
+          dwellAt(1, stand);
+          check('H: … live: a hero on the storey lingering as near the door as the story allows never swings it', !door.door!.open, `open=${String(door.door!.open)} at ${stand.d.toFixed(0)}px`);
+        }
+        dwellAt(0, front);
+        check('H: … live: the same dwell on the ground floor swings it (the sweep is alive, never vacuous)', door.door!.open === true, `open=${String(door.door!.open)}`);
+      }
+    }
+    hero.tier = keep.tier;
+    hero.pos.x = keep.x; hero.pos.y = keep.y;
+  }
+  // THE LAMPS ALONG THE WAYS at the top rung: the wayside fabric lights the
+  // long lanes (the hamlet's short ones seat one — rig J), each lamp a
+  // stride off the pavement, never on it, none on the front, none in the
+  // door lane (THE DOOR LANE LAW — the door way is bare).
+  {
+    const lanes = w.doodads.filter(d => d.kind === 'paved_way');
+    const lamps = w.doodads.filter(d => d.kind === 'lantern_post');
+    const offLane = (l: { pos: { x: number; y: number } }): number => Math.min(...lanes.map(p => d2(l.pos, p.pos) - p.radius));
+    const wayLamps = lamps.filter(l => offLane(l) < 40);
+    const innAt = w.townSeat('inn');
+    const doorAt = { x: innAt.x + 13, y: innAt.y + STRUCTURES.inn.halfH };
+    check('H: THE LAMPS ALONG THE WAYS — the township\'s lanes wear their lamps (at least six beside the pavement, each a stride off it, none on the front, none in the door lane)',
+      wayLamps.length >= 6 && wayLamps.every(l => offLane(l) >= l.radius)
+      && !lamps.some(l => inRect(l.pos, rectOf('bounty_front', w.townSeat('bounty_board'))))
+      && !lamps.some(l => Math.abs(l.pos.x - doorAt.x) < 40 && l.pos.y >= doorAt.y && l.pos.y <= doorAt.y + 120),
+      `${wayLamps.length} lamp(s) beside lanes of ${lamps.length}`);
+  }
   check('H: every fixture the township authored was raised (structures resolve)',
     expandedTown(acct, ZONES[START_ZONE]).fixtures!.every(f => !!STRUCTURES[f.structure]));
   // THE BROOK, live: water + spans laid; no water disc inside any dwell disc.
@@ -548,7 +645,10 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
     { id: 'font', near: () => w.nearFont(), dial: TOWN_SITES.find(s => s.id === 'font')!.press!, dir: { x: 0, y: 1 } },
   ];
   for (const v of verbs) {
-    const at = w.townSeat(v.id);
+    // THE ANCHORED DWELL (2026-09-06): a station's dial is centred on its
+    // ANCHOR piece (the board, the slab, the fire) where one stands — the
+    // seat's coordinate otherwise.
+    const at = w.stationAnchor(v.id)?.pos ?? w.townSeat(v.id);
     park(at.x, at.y);
     const here = v.near();
     park(at.x + v.dir.x * (v.dial + 8), at.y + v.dir.y * (v.dial + 8));
@@ -604,8 +704,12 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
   const first = residents.find(a => a.name === TOWN_RESIDENTS[0].name)!;
   w.player.pos.x = first.pos.x + 30; w.player.pos.y = first.pos.y + 30;
   check('I: a family speaks its line when the hero stands at the door', w.residentPrompt(first) === TOWN_RESIDENTS[0].line);
+  // THE TRANSIENT TELLING (engine/speech.ts; probe_speech rig J pins the
+  // clock): the line stands its window wherever the hero walks, THEN holds
+  // its tongue — the read past the window, across the square, is null.
+  w.time += speechWindowFor('resident', TOWN_RESIDENTS[0].line).holdSec + 0.05;
   w.player.pos.x = first.pos.x + 600; w.player.pos.y = first.pos.y + 600;
-  check('I: and says nothing across the square', w.residentPrompt(first) === null);
+  check('I: and says nothing across the square once the telling has run its window', w.residentPrompt(first) === null);
   const w0 = mkTownWorld(fullAccount());
   check('I: the same township with no souls sheltered seats no family',
     !w0.actors.some(a => a.defId && MONSTERS[a.defId]?.npcRole === 'resident' && isFamily(a)));
@@ -656,10 +760,26 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
   check('J: the counter is a RUN (five chained cells)', ground.filter(d => d.kind === 'bar_counter').length === 5);
   check('J: the wall lanterns hang OUTSIDE the south wall, either side of the door, off the floor',
     w.doodads.filter(d => d.kind === 'wall_lantern' && d.pos.y > innAt.y + STRUCTURES.inn.halfH && Math.abs(d.pos.x - innAt.x) < 80).length === 2);
+  check('J: THE FLOWER BOXES stand under the inn\'s two windows, outside the south wall (off the front\'s walkway — her word 2026-09-06)',
+    w.doodads.filter(d => d.kind === 'planter' && d.pos.y > innAt.y + STRUCTURES.inn.halfH && Math.abs(Math.abs(d.pos.x - innAt.x) - 66) < 2).length === 2
+    && !w.doodads.some(d => d.kind === 'planter' && inRect(d.pos, rectOf('bounty_front', w.townSeat('bounty_board')))));
   const stair = w.doodads.find(d => d.kind === 'stairway')!;
-  check('J: exactly one stairway stands in the inn, under its roof, climbing SOUTH to its landing',
+  check('J: exactly one stairway stands in the inn, under its roof, climbing NORTH to its landing (the foot by the door, the head at the hall — her word 2026-09-06)',
     w.doodads.filter(d => d.kind === 'stairway').length === 1 && !!w.roofedStructureAt(stair.pos)
-    && Math.abs((stair.rot ?? 0) - Math.PI / 2) < 0.01 && stair.radius >= 26);
+    && Math.abs((stair.rot ?? 0) + Math.PI / 2) < 0.01 && stair.radius >= 26);
+  // THE LAMPS ALONG THE WAYS (her word 2026-09-06): lampposts stand beside
+  // the paved lanes — a stride off the pavement, never on it, none on the
+  // board's front, none in the door lane (THE DOOR LANE LAW).
+  const lanes = w.doodads.filter(d => d.kind === 'paved_way');
+  const lamps = w.doodads.filter(d => d.kind === 'lantern_post');
+  const offLane = (l: { pos: { x: number; y: number } }): number => Math.min(...lanes.map(p => d2(l.pos, p.pos) - p.radius));
+  const wayLamps = lamps.filter(l => offLane(l) < 40);
+  const doorAt = { x: innAt.x + 13, y: innAt.y + STRUCTURES.inn.halfH };
+  check('J: THE LAMPS ALONG THE WAYS — the hamlet\'s short lanes seat at least one lamppost beside the pavement (a stride off it, never on it), none on the board\'s front, none in the door lane',
+    wayLamps.length >= 1 && wayLamps.every(l => offLane(l) >= l.radius)
+    && !lamps.some(l => inRect(l.pos, rectOf('bounty_front', w.townSeat('bounty_board'))))
+    && !lamps.some(l => Math.abs(l.pos.x - doorAt.x) < 40 && l.pos.y >= doorAt.y && l.pos.y <= doorAt.y + 120),
+    `${wayLamps.length} lamp(s) beside lanes of ${lamps.length}`);
   const mireille = w.actors.find(a => a.defId === 'townsfolk_innkeep')!;
   const counter = ground.filter(d => d.kind === 'bar_counter');
   check('J: Mireille stands BEHIND her counter (north of the run, within a step of it)',
@@ -670,8 +790,11 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
   check('J: THE SPOKEN SEAT — the patron stands in the inn and speaks the stair when the hero is near',
     !!patron && inInn(patron) && (w.player.pos.x = patron.pos.x + 24, w.player.pos.y = patron.pos.y + 24, true)
     && (w.residentPrompt(patron) ?? '').includes('stair'));
+  // THE TRANSIENT TELLING (engine/speech.ts; probe_speech rig J pins the
+  // clock): the telling stands its window, then the tongue is held.
+  w.time += speechWindowFor('seat', w.residentPrompt(patron) ?? '').holdSec + 0.05;
   w.player.pos.x = patron.pos.x + 700; w.player.pos.y = patron.pos.y + 500;
-  check('J: and holds his tongue across the square', w.residentPrompt(patron) === null);
+  check('J: and holds his tongue across the square once the telling has run its window', w.residentPrompt(patron) === null);
   // THE FOLK ROSTER (data/innfolk.ts) + THE HAUNT (engine/ai.ts): the inn's
   // company is rolled per day off the pools, named, lined, coloured, and
   // STROLLS between its furniture — passive still (scenery with legs).
@@ -729,23 +852,30 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
     && (w.player.pos.x = lodger.pos.x, w.player.pos.y = lodger.pos.y, w.player.tier = 1, true)
     && (w.residentPrompt(lodger) ?? '').includes('room'));
   if (lodger) {
+    // Main's speech window intentionally lets an already-started utterance
+    // finish after the hero moves away. Test a NEW telling across stories,
+    // after that window and its cooldown, rather than cancelling old speech.
+    const window = speechWindowFor('seat', w.residentPrompt(lodger) ?? '');
+    w.time += window.holdSec + window.cooldownSec + 0.05;
     w.player.tier = 0;
-    check('J: sharing a map position across stories does not grant resident speech',
+    check('J: sharing a map position across stories does not start fresh resident speech',
       w.residentPrompt(lodger) === null);
     w.player.tier = 1;
   }
   w.player.tier = 0;
   // THE CLIMB: walk onto the flight from its foot and off its head — the
   // mover's own crossing law carries the hero up; back down the same way.
+  // THE FLIPPED FLIGHT (her word 2026-09-06): the foot is SOUTH of the run
+  // (by the door), the landing NORTH, opening straight into the hall.
   const p = w.player;
-  p.pos.x = stair.pos.x; p.pos.y = stair.pos.y - stair.radius - 18; p.tier = 0; p.onTierLink = false;
-  for (let i = 0; i < 60; i++) w.moveActor(p, 0, 1, 1 / 30);
+  p.pos.x = stair.pos.x; p.pos.y = stair.pos.y + stair.radius + 18; p.tier = 0; p.onTierLink = false;
+  let landed = false;
+  for (let i = 0; i < 90 && !landed; i++) { w.moveActor(p, 0, -1, 1 / 30); landed = w.walk?.regionAt?.(p.pos.x, p.pos.y) === 'storey_landing'; }
   check('J: walking up the stairway carries the hero to the rooms above (tier 1 at the landing)',
-    p.tier === 1 && w.walk?.regionAt?.(p.pos.x, p.pos.y) === 'storey_landing', `tier ${p.tier} on ${w.walk?.regionAt?.(p.pos.x, p.pos.y)}`);
-  for (let i = 0; i < 60; i++) w.moveActor(p, -1, 0, 1 / 30);
-  check('J: the hall above walks as the story\'s own floor', p.tier === 1 && w.walk?.regionAt?.(p.pos.x, p.pos.y) === 'storey_floor');
-  for (let i = 0; i < 60; i++) w.moveActor(p, 1, 0, 1 / 30);
+    p.tier === 1 && landed, `tier ${p.tier} on ${w.walk?.regionAt?.(p.pos.x, p.pos.y)}`);
   for (let i = 0; i < 40; i++) w.moveActor(p, 0, -1, 1 / 30);
+  check('J: the hall above walks as the story\'s own floor (straight north off the landing — no furniture between the top step and the rooms)', p.tier === 1 && w.walk?.regionAt?.(p.pos.x, p.pos.y) === 'storey_floor');
+  for (let i = 0; i < 120; i++) w.moveActor(p, 0, 1, 1 / 30);
   check('J: and walking back down the flight lands the hero on the common room\'s floor (tier 0)', p.tier === 0);
   check('J: the inn no longer mints a pocket (no cave was entered, no ledger stamped)',
     w.zone.id === START_ZONE && w.caveReturn === null && (w.ledger.inn_climbed ?? 0) === 0);

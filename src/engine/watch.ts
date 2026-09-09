@@ -324,7 +324,10 @@ export function senseReach(
 // --- the trail fabric --------------------------------------------------------
 
 /** One scent print: where, and when it was laid. */
-export interface TrailPoint { x: number; y: number; t: number }
+/** One print. `tier` = the story the foot stood on (the investigation-
+ *  crosses law): a scent walker on another story walks the crossing
+ *  before it can stand on the print. */
+export interface TrailPoint { x: number; y: number; t: number; tier?: number }
 
 /** The trail carrier view (players wear one when scent watchers stand). */
 export interface TrailBody {
@@ -333,9 +336,9 @@ export interface TrailBody {
 }
 
 /** Lay a print into the ring buffer (oldest overwritten past max). */
-export function layTrailPoint(a: TrailBody, x: number, y: number, t: number): void {
+export function layTrailPoint(a: TrailBody, x: number, y: number, t: number, tier = 0): void {
   if (!a.trail) { a.trail = []; a.trailIdx = 0; }
-  const p = { x, y, t };
+  const p: TrailPoint = { x, y, t, tier };
   if (a.trail.length < WATCH_CFG.trail.max) a.trail.push(p);
   else {
     a.trail[a.trailIdx] = p;

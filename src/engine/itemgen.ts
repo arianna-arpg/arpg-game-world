@@ -26,7 +26,7 @@ import { epitaphFor, VESTIGES, type VestigeLine } from '../data/vestiges';
 import {
   DEFENSE_KINDS, DEFENSE_LABEL_BY_STAT, ITEM_CFG, ITEM_RARITIES, ITEM_RARITY_IDS,
   baseBonusFor, defenseBudget, formatModLine, formatStatValue, lerpRange,
-  levelReqForTier, roundStatValue, slotsForCategory, socketCap, statLabel,
+  levelReqForTier, roundStatValue, slotsForCategory, socketCap, speakLineText, statLabel,
   tierForIlvl, tieredBaseName,
   type AffixDef, type AffixKind, type AffixRollState, type AffixTierDef,
   type ItemBaseDef, type ItemCategory, type ItemInstance, type ItemRarity,
@@ -744,7 +744,7 @@ export function describeItem(item: ItemInstance): ItemDescription {
     const u = UNIQUES[item.uniqueId];
     u?.lines.forEach((line, i) => {
       const v = rangedLineValue(line, item.uniqueRolls?.[i] ?? 0.5, item.tier, ITEM_CFG.uniqueTierScale);
-      d.unique.push(line.text ? line.text.replace('{v}', String(v)) : formatModLine(line, v));
+      d.unique.push(line.text ? speakLineText(line.text, line.stat, line.kind, v) : formatModLine(line, v));
     });
     d.flavor = u?.flavor;
   }
@@ -888,7 +888,7 @@ export function rebuildItem(saved: ItemInstance): ItemInstance | null {
 
 /** Stats minted at runtime by other registries (status families, conversion
  *  lanes) — absent from STAT_DEFS at module load yet perfectly valid. */
-const GENERATED_STAT = /^(apply|damageVs|minionApply|popPower|dotLeech|convert|addedMin|addedMax|proc|classSkill|sympathy)_/;
+const GENERATED_STAT = /^(apply|damageVs|minionApply|popPower|dotLeech|convert|extraAs|addedMin|addedMax|proc|procPower|classSkill|sympathy|skillgrant)_/;
 
 /** THE acceptance contract for stat names in the item pipeline: real
  *  STAT_DEFS entries, attribute ids, and the runtime-minted families above

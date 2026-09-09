@@ -28,6 +28,102 @@ stateless adapter, one per story, built at zone load from
   FALL — land on the HIGHEST floor standing beneath the overshoot,
   staggered ('over the edge!'): knock them off the butte, or send them
   down the mountain one terrace at a time.
+- **Enclosure — THE ENCLOSURE LAW** (`ZoneTiers.enclosure` → `tierEnclosure`,
+  2026-09-06): may a body ever LEAVE a story except through a crossing?
+  `'open'` = the rim is a drop (the rim fall above — buttes, summits: knock-off
+  is their identity). `'enclosed'` = the story's edge is a WALL to every
+  carried body exactly as it is to feet: the rim fall never fires, and a
+  shove, a leap, a blink or a recall clamps against the story's OWN view where
+  willed movement would (the carry clamps pass `{ mover }`, `teleportActor`
+  takes a `story`) — the confine is the same walk field, never a bespoke list.
+  The word DERIVES unless the zone speaks it: an `'under'` layer has a ceiling
+  (nothing falls UP out of a tunnel — the sewer ducts, the rootways, the
+  crypts, the cistern, the hollow tors) and a building's `interior` storey has
+  walls (the inn: a knockback into a hanging wall or over the plan's edge lands
+  you nowhere but where you stood). Orthogonal to `exposure` (what the eye
+  sees): the inn draws every layer and still confines. A body never changes
+  story except through a real crossing — a link cell + the exit rule / the
+  ladder toggle — or the open rim fall. Probes: `probe_storey` H (the hanging
+  wall, the outer wall), `probe_tiers` RIG S (the rootways keep their runner;
+  the butte still drops its stander).
+- **Interaction — THE SAME-STORY LAW** (2026-09-06, THE INTERACTION SWEEP):
+  no act of attention crosses a story. Dwells (`World.dwellReachable`'s
+  `story` pair, folded by `World.storyPair` — stations, counters, doors,
+  portals, sidezone mouths, gates, seals, boards, horns, docks, corpses,
+  revives, the Font, the harvest arm, the waypoint's brush), pickups (THE
+  SPOILS STORY: `GemDrop.tier` / `ResourceOrb.tier` / `Corpse.tier` — the
+  kill path and the wounded purse set `World.spoilStory`, the context every
+  drop/orb helper CLAMPS on (a butte kill's loot stays on the butte instead
+  of rolling off the base grid) and stamps; a discard wears its seat's; the
+  rest settle once at the sweep from the floor's word, `floorStoryOf`: a
+  story-only cell is that story's, a both-floor cell the ground's;
+  `pickupSeat` is the ONE chokepoint, looters and the pickup key read the
+  same stamp), corpse targeting and the drag, the throng's husk claim (husks
+  and bodies wear their minter's story), the cling latch, the grab hand-off
+  and the minion recall all compare `tier` where both are known. Flat zones
+  compare 0 with 0 — byte-identical by construction.
+- **Sovereignty — THE SOVEREIGNTY GATE** (`sameStory(a, b)`, engine/tiers.ts,
+  2026-09-06): bodies on different stories share a screen, never a TOUCH.
+  Her report — an entity on another story moving or body-blocking the hero
+  on hers, an "invisible wall" (inside a stack or a covered layer the other
+  story's bodies are culled from the draw, so the shoulder they threw had no
+  visible thrower) — was the crowd shoulder (`separateActors`) reading
+  position alone. ONE predicate now sits at every body-vs-body and
+  body-vs-hazard seam: the shoulder (and its nudges confine on each body's
+  OWN story view — a crowd never pushes a storey walker through a hanging
+  wall), the bowling lane, the tread, the flock and its spacing (ai.ts),
+  auras, area and chain heals, the doodad effects (heat/status/orb washes,
+  lashes, beams, reels — `isEffectTarget` takes the fixture), the crystal
+  wash, rupture splash, death bursts and blooms (`DeathBurst.tier`,
+  `isBurstTarget`'s story), tether bands (strung and biting on one story),
+  constructs' ally buffs, channel supports, projectile domes, the skill
+  FIELDS (`Zone.tier`, THE FIELD'S STORY settled at the first tick — a field
+  laid upstairs keeps to it after its caster walks down; victims, allies,
+  the domain and passing flights read it), the field discipline's
+  `pressingFoeNear`, ambush packs, taming, trapworks plates
+  (`PlacedTrapwork.tier`), track riders (`PlacedTrack.tier` → the hazard
+  sweep's `strikeTier`), geyser columns (`PlacedVent.tier`), creep membranes
+  (`CreepSource.tier` — a heart's skin grows on the heart's story) and fog
+  banks (`FogBank.tier` — a conjured bank wears its caster's), lightwells,
+  the collapse's crumble (ground feet only), the gale (`windAt(pos, tier)` —
+  no wind under an enclosed ceiling), and the LITE POOL (`LitePool.story`, a
+  column: pours seat the ground, a demoted throng body keeps its keeper's
+  story, a promotion hands it back; bites, carves and flight sweeps compare
+  it). Sight, sound and scent are NOT bodies and keep their own laws (the
+  elevation ray, the noise ring, the scent trail, resonance lures). `hitAll`
+  sky hazards stay tier-agnostic by the world-authored law. Objects with no
+  story field read 0; flat zones compare 0 with 0. THE DERIVED CENSUS (her
+  word: the roster must be derived, never a hand list): `probe_tiers` RIG T
+  finds every seam by SHAPE — any World method that iterates bodies (the
+  actor grid, the actor/seat lists, the lite pool) and tests geometry
+  against them — and requires each to carry the gate or to name its
+  exemption in the source: `// SOVEREIGNTY: <reason>` from a closed
+  vocabulary (`sky` the world-authored hitAll law, `sound`/`scent` cross
+  stories and the walk crosses after them, `sight` the eye's law,
+  `targeting` rides hostility, `census`/`seat`/`self` touch nobody). A new
+  proximity seam is found the day it is written: gated, marked, or named
+  gateless by the probe. The live law rides a real bridge deck and a real
+  duct (RIG T) and the lodger in the hero's footprint (`probe_storey` I).
+- **Investigation — THE INVESTIGATION CROSSES** (2026-09-06, her ruling):
+  a lure or a noise on another story MAY reach a body there — it makes the
+  body AWARE, and the body then walks to the crossing and investigates; it
+  never teleports (no `teleportActor` lane is lure- or noise-driven). The
+  law is A GOAL CARRIES ITS STORY: `moveToward` reads `tier` on its goal and
+  `World.tierLinkToward(a, goal, goalTier)` elects a crossing even on ground
+  the walker's own floor also owns (a deck over the valley, a hall over the
+  common room — where the flat read walked the body to the spot beneath and
+  called it arrived); the alert mark (`Actor.alertTier` beside `alertFrom`,
+  stamped by the noise ring, the scent print `TrailPoint.tier`, the struck
+  stone, the blow's author, the target, the last-seen mark
+  `aiLastSeenTier`), the lure (`setLure(..., tier)`), a prey or a shiny goal
+  and the chase kernel's `goal.tier` all stamp the story they know, and every
+  arrival test asks the story, never the flat distance. Multi-story: a known
+  goal story prefers a crossing whose span touches it. Pinned: `probe_tiers`
+  RIG U (a butte-top hunter walks its ramp DOWN to a valley lure and to a
+  valley alert mark, clearing it only there; every step a stride) and
+  `probe_storey` J (a common-room hunter lured to the hall over its head
+  takes the flight UP; a story-1 investigator walks DOWN to a common-room
+  noise).
 - **Combat**: same-tier ONLY, enforced at the ONE hostility gate
   (targeting, swings, threat, projectiles all agree) — except under RIM
   DUELS (below). Flights carry their caster's story and sail over any
@@ -205,5 +301,6 @@ the pinnacle gale debut, in the Population law above.)
 
 Probe: `balance/probe_tiers.ts` (family rows + span derivation, the
 crossing law across arbitrary spans, all three carves, per-story orphan
-BFS, THE ASCENT LAW — entry → summit on foot — and determinism). genqa
-sweeps needles + tiered warrens + the pinnacle automatically.
+BFS, THE ASCENT LAW — entry → summit on foot — determinism, and RIG S: THE
+ENCLOSURE LAW on the real mints). genqa sweeps needles + tiered warrens +
+the pinnacle automatically.

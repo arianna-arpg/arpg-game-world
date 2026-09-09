@@ -203,6 +203,11 @@ export interface TrapworkSpec {
 export interface PlacedTrapwork {
   spec: TrapworkSpec;
   id: string;
+  /** The STORY the trigger lies on (the tier fabric): generated plates seat
+   *  the ground (0); a bench-laid plate wears its bench. Only feet on this
+   *  story press it (THE SOVEREIGNTY GATE) — a storey walker over a
+   *  ground plate springs nothing. */
+  tier?: number;
   state: 'armed' | 'sprung';
   /** When a sprung rearming trigger re-arms (Infinity = single-use). */
   rearmAt: number;

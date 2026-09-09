@@ -79,7 +79,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
     used: [
       // Resistance ceilings & incoming-hit texture
       'fireResMax', 'coldResMax', 'lightningResMax', 'chaosResMax',
-      'damageTaken', 'critAvoid', 'ailmentResist', 'afflictionExpiry', 'lowLifeLine',
+      'damageTaken', 'critAvoid', 'ailmentResist', 'afflictionExpiry', 'lowLifeLine', 'strideReach',
       // Block & guard
       'blockPower', 'blockValue', 'guardStrength', 'guardParry', 'guardParryPower',
       'guardAegis', 'domeDeflects',
@@ -200,7 +200,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'minionPlies', 'minionLifePlyTrade', 'minionLifePlyEcho', 'throngPockets', 'throngYield',
       'minionDetectionRange', 'minionDecayRate', 'minionRespawnTime', 'minionUndying',
       'minionGuard', 'minionDeathHeal', 'minionDeathHealFlat', 'minionExpiryIsDeath',
-      'minionExplodeDeath', 'minionExplodeLowLife',
+      'minionExplodeDeath', 'minionExplodeLowLife', 'minionBloom', 'minionBloomPower',
       'summonCount', 'summonSequence', 'summonAtCursor', 'summonImpact', 'summonMend',
       'sacrificeMinions', 'targetMinionFallback', 'corpseBatch', 'offeringShare',
       'commandDiscipline',
@@ -240,6 +240,7 @@ export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
   { prefix: 'damageVs_', cat: 'offense', blurb: 'Increased damage per stack of this status already on the target.' },
   { prefix: 'popPower_', cat: 'offense', blurb: 'Scales the burst a reapplication detonates from this status.' },
   { prefix: 'convert_', cat: 'offense', blurb: 'A fraction of one damage type dealt as another instead: conversion, not addition.' },
+  { prefix: 'extraAs_', cat: 'offense', blurb: 'A fraction of ALL damage you deal gained as extra damage of this type, on top: addition, never conversion.' },
   { prefix: 'addedMin_', cat: 'offense', blurb: 'Raises only the BOTTOM of this damage roll: a steadier floor.' },
   { prefix: 'addedMax_', cat: 'offense', blurb: 'Raises only the TOP of this damage roll: a taller ceiling.' },
   { prefix: 'dotLeech_', cat: 'sustain', blurb: 'A fraction of this ailment\'s ticking damage flows back to you as life.' },
@@ -255,6 +256,8 @@ export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
   { prefix: 'combo_', cat: 'skills', blurb: 'Equips this cast-pattern grammar: complete its pattern with your recent casts and its payoff fires.' },
   { prefix: 'classSkill_', cat: 'skills', blurb: 'Levels added to every skill gem of this class\'s school.' },
   { prefix: 'slotgraft_', cat: 'skills', blurb: 'A support granted by what you wear, riding whichever skill you bind to that bar slot; dormant when the gem does not fit the skill seated there.' },
+  { prefix: 'skillgrant_', cat: 'skills', blurb: 'A skill granted by what you wear, at this level: bind it to a bar seat and cast it like any learned skill; its sockets live on the granting item.' },
+  { prefix: 'procPower_', cat: 'skills', blurb: 'Scales how HARD this triggered effect lands (its chance is the proc line beside it).' },
   { prefix: 'remnantDrop_', cat: 'skills', blurb: 'Chance your casts shed this remnant, empowering the next cast of its school.' },
   { prefix: 'minionApply_', cat: 'minions', blurb: 'Your minions\' hits may inflict this status.' },
   { prefix: 'sympathy_', cat: 'minions', blurb: 'Your gains echo along this bond to kin: flasks, orbs, charges, heals.' },
@@ -371,6 +374,7 @@ const STAT_BLURBS: Record<string, string> = {
   manaRegen: 'Flat mana restored every second.',
   manaRegenPct: 'A fraction of your MAXIMUM mana restored every second, on top of flat regeneration.',
   lowLifeLine: 'The life fraction below which you count as on low life. Raising it wakes low-life gear, passives, and the blood vignette sooner.',
+  strideReach: 'Paces of willed walking that arm your STRIDE: the next blow you land afterward reads every "after striding" line, then the walk begins again. Zero means no stride.',
 
   // Mobility & action speed
   moveSpeed: 'How fast you travel.',
@@ -707,6 +711,8 @@ const STAT_BLURBS: Record<string, string> = {
   minionExpiryIsDeath: 'A minion\'s duration lapsing counts as a DEATH: every on-death effect fires.',
   minionExplodeDeath: 'Your minions detonate on death for a fraction of their life.',
   minionExplodeLowLife: 'Your minions detonate THEMSELVES upon reaching low life.',
+  minionBloom: 'Seconds after emerging at which your minions BLOOM: they burst and die. Zero means they never do.',
+  minionBloomPower: 'The bloom\'s burst, as a fraction of the minion\'s maximum life dealt as chaos damage around it. Life investment is the bomb.',
   summonCount: 'Extra summons per cast.',
   summonSequence: 'Extra summons emerge one after another instead of all at once.',
   summonAtCursor: 'Minions emerge at your cursor instead of beside you.',

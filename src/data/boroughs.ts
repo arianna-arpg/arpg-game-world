@@ -20,6 +20,7 @@ import { VENDOR_ITEM_CFG } from './essences';
 import { LEDGER_SOULS_SHELTERED, type Account } from '../meta/account';
 import { gateMet, type GateRow } from '../meta/gates';
 import { townSiteAt, type TownSiteId } from './townBuild';
+import type { SpeechRole } from '../engine/speechGrammar'; // THE SPEECH GRAMMAR's role pools (TownResidentRow.roles)
 
 export const POPULATION_CFG = {
   /** Lastlight's founding souls (Brandt, Mireille, Aldric, Weslan, Soraya,
@@ -89,8 +90,11 @@ export interface TownResidentRow {
   at?: { x: number; y: number };
   /** ANY held avenue seats the family (gates.ts GateRow — the family law). */
   gate: GateRow[];
-  /** The line they speak when the hero stands near (the speech fabric). */
+  /** The line they speak when the hero stands near (the speech fabric —
+   *  THE SPEECH GRAMMAR keeps it as the family's FIRST WORD each day). */
   line: string;
+  /** THE SPEECH GRAMMAR's role pools (default ['resident']). */
+  roles?: SpeechRole[];
 }
 
 /** The doorstep of a house_small (7×5 cells of 26: the door is row 4, col 3

@@ -508,6 +508,19 @@ export interface Doodad {
   pos: Vec2;
   radius: number;
   kind: DoodadKind;
+  /** THE STATION ANCHOR (data/structures.ts — a plan cell's `doodad.anchor` /
+   *  a prop's `anchor: true`): the id of the STRUCTURE this piece is the
+   *  counter of. Every dwell serving that structure's town site reads the
+   *  anchor's live position (World.stationAnchor) — never a coordinate — so
+   *  the dwell moves with the piece and is gone while the piece is (felled,
+   *  broken, unraised). Stamped at placement; never persisted (a re-entered
+   *  zone re-mints it from the plan). */
+  anchor?: string;
+  /** THE BARE WAY (StampSpec.bare on a course): this way disc wears no
+   *  wayside dress — layWaysideDress skips it as it skips an overgrown
+   *  stretch. The town's door lane (THE DOOR LANE LAW keeps it clear of
+   *  posts). Stamped at lay; never persisted. */
+  bare?: true;
   /** BRITTLE kinds: already popped this visit (guards stale spatial-index
    *  hits between the break and the splice). Runtime-only, never authored. */
   gone?: boolean;
@@ -845,10 +858,10 @@ export interface GeneratedLayout {
   /** Destructible clutter to spawn (barrels, crates) — monster ids. */
   breakables: { id: string; pos: Vec2 }[];
   /** Friendly scenery folk to spawn (the smith at her forge). */
-  npcs: { id: string; pos: Vec2; line?: string; tier?: number }[];
+  npcs: { id: string; pos: Vec2; line?: string; tier?: number; sid?: string }[];
   /** THE FOLK SEATS (StructureDef.folk): stands to roll a guest for at load
    *  (data/innfolk.ts) — `key` is stable per structure + seat for the seed. */
-  folk?: { pool: string; pos: Vec2; tier?: number; chance?: number; key: string }[];
+  folk?: { pool: string; pos: Vec2; tier?: number; chance?: number; key: string; sid?: string }[];
   /** Pre-inhabited POIs: a faction guard pack posts at each footprint. */
   garrisons: { pos: Vec2; faction: string; size: [number, number] }[];
   /** Cave-mouth seeds, one per 'cave_entrance' doodad (same push order). */
@@ -3058,10 +3071,10 @@ export interface GenCtx {
   pois: Vec2[];
   camps: Vec2[];
   breakables: { id: string; pos: Vec2 }[];
-  npcs: { id: string; pos: Vec2; line?: string; tier?: number }[];
+  npcs: { id: string; pos: Vec2; line?: string; tier?: number; sid?: string }[];
   /** THE FOLK SEATS (StructureDef.folk): stands to roll a guest for at load
    *  (data/innfolk.ts) — `key` is stable per structure + seat for the seed. */
-  folk?: { pool: string; pos: Vec2; tier?: number; chance?: number; key: string }[];
+  folk?: { pool: string; pos: Vec2; tier?: number; chance?: number; key: string; sid?: string }[];
   garrisons: { pos: Vec2; faction: string; size: [number, number] }[];
   caveSeeds: number[];
   /** Structure footprints (camps, ruins): later stamps route around them. */
@@ -3401,7 +3414,14 @@ registerGenField('shore', (ctx, params) => {
 registerGenField('elevation', (ctx, params) => {
   const scale = typeof params.scale === 'number' ? Math.max(60, params.scale) : 760;
   const octaves = Math.max(1, Math.min(4, typeof params.octaves === 'number' ? Math.round(params.octaves) : 2));
-  const dome = typeof params.dome === 'number' ? Math.max(-1, Math.min(1, params.dome)) : 0;
+  // THE RELIEF LIFT (world/atlas.ts, baked as geo.relief at the mint): a
+  // zone under a summit raises its whole height field and domes it toward
+  // its heart, so high-ground stamps find the heights they ask for. Absent
+  // = byte-identical (lift 0, the row's own dome).
+  const relief = ctx.geo?.relief;
+  const dome0 = typeof params.dome === 'number' ? Math.max(-1, Math.min(1, params.dome)) : 0;
+  const dome = Math.max(-1, Math.min(1, dome0 + (relief?.dome ?? 0)));
+  const lift = relief?.lift ?? 0;
   const seed = genFieldSeed(ctx, (typeof params.seed === 'number' ? params.seed : 0) ^ 0xe1e7);
   const cx = ctx.arena.w / 2, cy = ctx.arena.h / 2;
   return (x, y) => {
@@ -3411,6 +3431,7 @@ registerGenField('elevation', (ctx, params) => {
       total += amp; amp *= 0.55; sc *= 0.5;
     }
     v /= total;
+    v += lift;
     if (dome) {
       const rim = Math.max(Math.abs(x - cx) / Math.max(1, cx), Math.abs(y - cy) / Math.max(1, cy));
       v += dome * (0.5 - rim);
@@ -5595,13 +5616,15 @@ function placeStructure(ctx: GenCtx, s: StructureDef, at: Vec2): void {
     ctx.doodads.push({
       pos: vec(at.x + prop.x, at.y + prop.y),
       radius: prop.radius ?? 12, kind: prop.kind,
+      ...(prop.anchor ? { anchor: s.id } : {}),
+      ...(prop.rot !== undefined ? { rot: prop.rot } : {}),
     });
   }
   for (const b of s.breakables ?? []) {
     ctx.breakables.push({ id: b.id, pos: vec(at.x + b.x, at.y + b.y) });
   }
   for (const n of s.npcs ?? []) {
-    ctx.npcs.push({ id: n.id, pos: vec(at.x + n.x, at.y + n.y), ...(n.line ? { line: n.line } : {}) });
+    ctx.npcs.push({ id: n.id, pos: vec(at.x + n.x, at.y + n.y), ...(n.line ? { line: n.line } : {}), sid: s.id }); // sid = THE SPEECH GRAMMAR's company
   }
   // Pre-inhabited: a faction posts a guard pack at the structure's heart.
   if (s.garrison) {
@@ -6252,6 +6275,8 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
           storeyDoodads.push({
             pos: p, radius: spec.doodad.radius ?? cell * 0.55, kind: spec.doodad.kind, tier,
             effect: spec.doodad.effect ? { ...spec.doodad.effect } : undefined,
+            ...(spec.doodad.anchor ? { anchor: def.id } : {}),
+            ...(spec.doodad.rot !== undefined ? { rot: spec.doodad.rot } : {}),
           });
         }
         if (spec.npc) storeyNpcs.push({ id: spec.npc, pos: p, tier });
@@ -6283,6 +6308,8 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
       ctx.doodads.push({
         pos: p, radius: c.spec.doodad.radius ?? cell * 0.55, kind: c.spec.doodad.kind,
         effect: c.spec.doodad.effect ? { ...c.spec.doodad.effect } : undefined,
+        ...(c.spec.doodad.anchor ? { anchor: def.id } : {}), // THE STATION ANCHOR
+        ...(c.spec.doodad.rot !== undefined ? { rot: c.spec.doodad.rot } : {}),
       });
     }
     // Window cells get a frame doodad (the arrow-slit sill dressing) oriented
@@ -6316,18 +6343,22 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
   // as they hang off `at` on a legacy def. (The plan conversion dropped these
   // silently — the smith vanished from her own forge.) Draw-free.
   for (const prop of def.props ?? []) {
-    ctx.doodads.push({ pos: vec(center.x + prop.x, center.y + prop.y), radius: prop.radius ?? 12, kind: prop.kind });
+    ctx.doodads.push({
+      pos: vec(center.x + prop.x, center.y + prop.y), radius: prop.radius ?? 12, kind: prop.kind,
+      ...(prop.anchor ? { anchor: def.id } : {}),
+      ...(prop.rot !== undefined ? { rot: prop.rot } : {}),
+    });
   }
   for (const b of def.breakables ?? []) {
     ctx.breakables.push({ id: b.id, pos: vec(center.x + b.x, center.y + b.y) });
   }
   for (const n of def.npcs ?? []) {
-    ctx.npcs.push({ id: n.id, pos: vec(center.x + n.x, center.y + n.y), ...(n.line ? { line: n.line } : {}), ...(n.tier ? { tier: n.tier } : {}) });
+    ctx.npcs.push({ id: n.id, pos: vec(center.x + n.x, center.y + n.y), ...(n.line ? { line: n.line } : {}), ...(n.tier ? { tier: n.tier } : {}), sid }); // sid = THE SPEECH GRAMMAR's company
   }
   // THE FOLK SEATS: recorded, never rolled here (generation draws nothing
   // for them — the world rolls each seat on its own per-day seed).
   (def.folk ?? []).forEach((fk, i) => {
-    (ctx.folk ??= []).push({ pool: fk.pool, pos: vec(center.x + fk.x, center.y + fk.y), ...(fk.tier ? { tier: fk.tier } : {}), ...(fk.chance !== undefined ? { chance: fk.chance } : {}), key: `${sid}:folk${i}` });
+    (ctx.folk ??= []).push({ pool: fk.pool, pos: vec(center.x + fk.x, center.y + fk.y), ...(fk.tier ? { tier: fk.tier } : {}), ...(fk.chance !== undefined ? { chance: fk.chance } : {}), key: `${sid}:folk${i}`, sid }); // sid = THE SPEECH GRAMMAR's company
   });
 
   // Door doodads: one per group, sized to span the breach.
@@ -6547,7 +6578,7 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     }
     placed.storeys = storeyRecords;
     for (const d of storeyDoodads) ctx.doodads.push(d);
-    for (const n of storeyNpcs) ctx.npcs.push(n);
+    for (const n of storeyNpcs) ctx.npcs.push({ ...n, sid }); // sid = THE SPEECH GRAMMAR's company (the storey's folk keep the house's)
     ctx.storeyLevels = Math.max(ctx.storeyLevels ?? 0, storeyRecords.length);
     // THE STAIRWAY FACE: one walk-over 'stairway' doodad per connected run of
     // storey_stair cells, sized to the run and turned to climb toward the
@@ -6730,7 +6761,11 @@ export function structureDoodads(s: StructureDef, at: Vec2): Doodad[] {
     }
   }
   for (const prop of s.props ?? []) {
-    out.push({ pos: vec(at.x + prop.x, at.y + prop.y), radius: prop.radius ?? 12, kind: prop.kind });
+    out.push({
+      pos: vec(at.x + prop.x, at.y + prop.y), radius: prop.radius ?? 12, kind: prop.kind,
+      ...(prop.anchor ? { anchor: s.id } : {}),
+      ...(prop.rot !== undefined ? { rot: prop.rot } : {}),
+    });
   }
   return out;
 }
@@ -7625,6 +7660,7 @@ export function layWaysideDress(ctx: GenCtx, def: ZoneDef): void {
     if (total >= cap) return;
     if ((rowCount.get(row) ?? 0) >= (row.max ?? Infinity)) return;
     if (anchor.wild) return; // the wood won that stretch — its flora dresses it
+    if (anchor.bare) return; // THE BARE WAY (StampSpec.bare): no dress — the door lane
     const bodyR = bodyROf(row.kind, r);
     const p = vec(at.x + perp.x * side * (anchor.radius + bodyR + off),
       at.y + perp.y * side * (anchor.radius + bodyR + off));
@@ -9600,14 +9636,13 @@ function fuseGroundBodies(ctx: GenCtx): void {
         // body so the weld's discs genuinely overlap both rims.
         const span = dist(a.pos, b.pos);
         const dir = vec((b.pos.x - a.pos.x) / (span || 1), (b.pos.y - a.pos.y) / (span || 1));
-        let welded = false;
+        let welded = false, interrupted = false;
         for (let s = a.radius - cell; s <= span - b.radius + cell; s += cell * 0.9) {
           const px = a.pos.x + dir.x * s, py = a.pos.y + dir.y * s;
           const c = vec(
             (Math.floor(px / cell) + 0.5) * cell,
             (Math.floor(py / cell) + 0.5) * cell);
-          if (cellGuarded(ctx, c, cr, kind, false)) continue;
-          if (floods(c)) continue;
+          if (cellGuarded(ctx, c, cr, kind, false) || floods(c)) { interrupted = true; continue; }
           if (fuseSeen.has(c.x + ',' + c.y)) { welded = true; continue; }
           ctx.doodads.push({
             pos: c, radius: cr, kind,
@@ -9616,7 +9651,9 @@ function fuseGroundBodies(ctx: GenCtx): void {
           fuseSeen.add(c.x + ',' + c.y);
           welded = true;
         }
-        if (welded) parent[ri] = rj;
+        // A partial seam is not a connection. Claiming it suppresses later
+        // candidate joins that could actually connect around the guard.
+        if (welded && !interrupted) parent[ri] = rj;
       }
     }
   }
@@ -9827,7 +9864,11 @@ function stampCourse(ctx: GenCtx, spec: StampSpec): void {
       ctx.doodads.push(doo);
       placed.push(doo);
     } else {
+      const n0 = ctx.doodads.length;
       roll!(p, r, lay);
+      // THE BARE WAY: the discs a `bare` course lays carry the mark the
+      // wayside pass reads (the door lane wears no lamps).
+      if (spec.bare) for (let j = n0; j < ctx.doodads.length; j++) if (ctx.doodads[j].kind === lay) ctx.doodads[j].bare = true;
     }
   }
   // Spans across a liquid course: perpendicular plank lines at the named

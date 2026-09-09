@@ -190,6 +190,12 @@ rules. That larger guarantee must be designed and tested separately.
 
 ## Next implementation targets
 
+The atlas update is integrated with these journeys. See
+[atlas contracts](atlas-contracts.md) for retained geographic provenance,
+save/co-op behavior, the distinction between influence and a guaranteed
+destination, and the proposed ownership/placement contract for discovered
+authored expeditions.
+
 First, add a traceable regional connection/locale-intent contract. Then extend the
 existing room graph with registered connection strategies and check them against
 realized navigation, including object collisions. Mixed districts follow that

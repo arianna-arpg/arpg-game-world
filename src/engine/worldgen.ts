@@ -25,6 +25,7 @@ import { blendMean, composeBlendLayout, mergeBlendPacks } from './blend';
 import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
 import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, PORT_MINT, biomeSpacing, isAquaticBiome } from '../world/biomes';
+import { atlasSeedInstalled, bakeAtlasContext, featuresAt, foldFeatureHits } from '../world/atlas';
 import { fieldCoreRect } from '../world/fieldRegion';
 import { dimensionDef, dimensionsEnteredBy, isRoadlessGateHub } from '../world/dimensions';
 import { zoneKindOf } from '../data/zoneKinds';
@@ -239,6 +240,13 @@ export interface ZoneSpec {
   /** Mint a PORT: a harbor on the shore where a frontier met open OCEAN —
    *  coastal tileset forced, a guaranteed coast landmark, def.port set. */
   port?: boolean;
+  /** THE KNOWLEDGE LAW (docs/engine/atlas.md): every graph mint is born
+   *  VEILED — off the chart until the player finds it (entry, the one-ring
+   *  preview off walked ground, a survey, an omen, an accepted quest, a won
+   *  siege, a sighted port) — so no distant event's mint ever redraws the
+   *  map by itself. `false` opts a mint out: ground the player stands on
+   *  the moment it exists. */
+  veiled?: boolean;
   /** The DIMENSION this zone belongs to (inherited from its source at mint).
    *  Baked BEFORE the weave so the road graph never crosses dimensions. */
   dimension?: string;
@@ -1474,7 +1482,7 @@ export function placeZoneAt(
   // lair fold reads it, so deep-country natives can claim the heart of a
   // biome and refuse its border (the roost law).
   const climate = spec.climateFor?.(target, spec.dimension);
-  const geo = (spec.biomeDepthFor || climate)
+  const geo0 = (spec.biomeDepthFor || climate)
     ? {
       ...(spec.biomeDepthFor ? { biomeDepth: Math.max(0, Math.min(1, spec.biomeDepthFor(target))) } : {}),
       ...(climate ? {
@@ -1482,6 +1490,23 @@ export function placeZoneAt(
       } : {}),
     }
     : undefined;
+  // THE ATLAS FEATURES (world/atlas.ts): a RANDOM-FRONTIER surface mint that
+  // stands within reach of a summit / lode / lake basin INHERITS it — the ids
+  // and a relief lift baked onto geo (the def carries the truth, like
+  // climate), its landmark + composition rolls appended AFTER the zone's
+  // own (tail draws: every feature-less mint's stream is untouched), its
+  // recipe knobs merged below the mint spec's. Directed mints and other
+  // dimensions never look (the frontier law); no installed seed = no hits.
+  const atlasSeed = atlasSeedInstalled();
+  const featureHits = spec.fieldBiome && (spec.dimension ?? 'surface') === 'surface'
+    ? featuresAt(target) : [];
+  const featureFold = featureHits.length ? foldFeatureHits(featureHits) : null;
+  const atlasContext = featureFold && atlasSeed !== null
+    ? bakeAtlasContext(target, atlasSeed, featureHits) : undefined;
+  const geo = featureFold?.ids.length
+    ? { ...(geo0 ?? {}), features: featureFold.ids, atlas: atlasContext,
+      ...(featureFold.relief ? { relief: featureFold.relief } : {}) }
+    : geo0;
   // STRUCTURE ROLLS: merge the tileset's chances with the biome's (both pure
   // data). Baked onto the def so revisits/co-op replay the same rolls, and so
   // the bastion layout resolves its candidate pool from the zone itself. Special
@@ -1496,6 +1521,7 @@ export function placeZoneAt(
     // A port ALWAYS gets its shoreline (the harbor's reason to exist).
     ...(spec.port ? [{ landmark: PORT_COAST, chance: 1 }] : []),
     ...(onCourse?.landmarks ?? []),
+    ...(featureFold?.landmarks ?? []),
     // THE LAIR FABRIC (engine/lairs.ts): natives that claim this biome at
     // this level seat their lair rolls beside the authored ones — pure
     // predicate here; the chance draws in generateLayout's landmark loop
@@ -1515,9 +1541,10 @@ export function placeZoneAt(
     // A course TERMINUS bakes its reward rolls onto the def like any other
     // roll source (revisits/co-op replay them — the same discipline).
     ...(onCourse?.compositions ?? []),
+    ...(featureFold?.compositions ?? []),
   ];
   // (GEO hoisted above the roll merges — the lair fold reads it there.)
-  // Layout knobs, spec ▷ course ▷ variant ▷ tileset ▷ biome (most-specific
+  // Layout knobs, spec ▷ atlas ▷ course/stage ▷ variant ▷ tileset ▷ biome (most-specific
   // wins) — baked so revisits/co-op replay the same recipe tweaks. A course
   // slots UNDER the spec (a directed mint may still override the artery's
   // orientation); the rolled FACE slots between its tileset and the course
@@ -1527,6 +1554,7 @@ export function placeZoneAt(
     ...tileset.layoutParams,
     ...variantLayoutParams,
     ...onCourse?.layoutParams,
+    ...featureFold?.layoutParams,
     ...spec.layoutParams,
   };
   // WAYPOINT VETO: no waypoint may spawn within an existing exclusion zone's radius
@@ -1583,6 +1611,9 @@ export function placeZoneAt(
     exits,
     map,
     waypoint: wpBlocked ? false : wpCand,
+    // THE KNOWLEDGE LAW: born veiled (ZoneSpec.veiled above); World.visible
+    // and the knowledge acts lift it.
+    ...(spec.veiled === false ? {} : { veiled: true }),
     ...(spec.wpExclusionRadius ? { wpExclusionRadius: spec.wpExclusionRadius } : {}),
     // A SPECIAL arena ignores the biome and locks out overlay events (eventOwned).
     ...(spec.special ? { special: true, eventOwned: true } : {}),

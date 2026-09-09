@@ -8,8 +8,8 @@
 // No engine changes required.
 // ---------------------------------------------------------------------------
 
-import { mod, linkMod } from '../engine/stats';
-import type { SkillDef } from '../engine/skills';
+import { mod, linkMod, STAT_DEFS } from '../engine/stats';
+import { skillGrantStat, type SkillDef } from '../engine/skills';
 import { ULTIMATE_SKILLS } from './ultimates';
 
 export const SKILLS: Record<string, SkillDef> = {
@@ -1087,6 +1087,30 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
     noDrop: true,
     ai: { range: 240, weight: 2, keepDistance: 160 },
+  },
+
+  // STORMCALL'S ANSWER (THE LEGEND FABRIC — data/uniques.ts Stormcall): the
+  // one bolt the amulet calls down where lightning has just bitten. A
+  // component payload (noDrop) played through the proc lane AT the struck
+  // body; it wears the caster's whole lightning investment like any cast,
+  // and its own shock rides the sheet's apply_ family on top.
+  stormcall_strike: {
+    id: 'stormcall_strike', name: 'Stormcall',
+    description: 'A single bolt from a clear sky strikes where lightning last bit, with a 30%'
+      + ' chance to SHOCK. A component payload: the Stormcall amulet calls it.',
+    tags: ['spell', 'lightning', 'aoe', 'storm'], color: '#c8e8ff',
+    manaCost: 0, cooldown: 0, useTime: 0.3,
+    baseDamage: { lightning: [14, 30] },
+    delivery: {
+      type: 'storm', count: [1, 1], interval: 0, areaRadius: 8, hitRadius: 58,
+      castRange: 900, occlusion: 'free',
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'shock', chance: 0.3 },
+    ],
+    noDrop: true,
+    ai: { range: 400, weight: 1 },
   },
 
   // FULMINATE — the high-roller's signature bolt: dice a chasm wide, and
@@ -16167,3 +16191,13 @@ for (const def of Object.values(SKILLS)) {
 }
 
 export const SKILL_LIST: SkillDef[] = Object.values(SKILLS);
+
+// THE GRANTED SKILL stat family (engine/skills.ts skillGrantStat — THE
+// LEGEND FABRIC, docs/engine/legends.md): one registered stat per catalog
+// skill, labeled with the skill's name, so a legend's "Grants Level N X"
+// line validates, prints ("Grants Level 2 Firebolt") and folds like any
+// other stat — the slot-graft registration's exact pattern (supports.ts
+// tail). A skill that leaves the catalog leaves the family with it.
+for (const def of SKILL_LIST) {
+  STAT_DEFS[skillGrantStat(def.id)] = { label: `Granted Skill: ${def.name}`, base: 0, min: 0 };
+}

@@ -131,7 +131,7 @@ stones' dwell disc by law (a press may): both hints show side by side, and
 the two dialogs bind into ONE book at the folio — the crafting suite's
 shape, walked. The flow still reads bench → stones → Font west → east.
 
-### 1.4 THE INN FRONT — `bounty_front` (v3, re-ruled 2026-09-05)
+### 1.4 THE INN FRONT — `bounty_front` (v4, re-ruled 2026-09-06)
 v2 raised a roofed reading nook (`bounty_alcove`) beside the door; her walk
 found the roof HID the board and made it less intuitive, and asked for a
 notice board OUT FRONT of the inn — a tavern's newsboard, minus any Wild
@@ -139,8 +139,13 @@ West theme. The alcove is retired. The board's unlock now raises an
 OPEN-AIR locale on the square before Mireille's door: the notice board
 (a REAL board now — `noticeBoard` painter: two posts, a plank face, pinned
 writs, a rain cap; the harbor board wears the same face) set into a rail
-run with a flower box either side, lanterns and benches flanking a
-cobbled apron, a crate at the corner. No roof, no confinement: the slate
+run, benches flanking a cobbled apron, a crate at the corner. v4 (her
+walk, 2026-09-06): NO flower box and NO post on the front — the boxes
+stand under the inn's two windows (inn props), the lamps stand along THE
+TRAVELED WAYS (§1.10), and the board keeps its own dim light: one
+`wall_lantern` hung off its east post (a prop with `rot`, the bracket
+turned west to the post; the rail parts beside it — the lantern is inert,
+a gap, not a gate). No roof, no confinement: the slate
 reads from every side (rails stop feet, never the eye), and THE INN WAY
 paves plaza → the front's apron; THE DOOR LANE runs from the front's east
 end up to the door. The front stands SOUTH-WEST of the door, between it
@@ -221,6 +226,19 @@ at every rung — probe H0).
 13. **THE FONT'S OPEN BEARING** — with the Font a stride east of the
     stones, its old east probe-bearing ran into the ring (and, at the
     village, the inn's wall); the drawn==dwelt sweep reads it SOUTH now.
+14. **THE PHANTOM DWELL** (v4) — the town folded its owned stations ONCE at
+    World construction; a feature gained after (the probes' `openBoard`,
+    any grant after the world stood) raised no structure, and the
+    seat-coordinate dwell answered over bare ground. THE STATION FOLD +
+    THE ANCHORED DWELL closed it: no piece, no dwell (§1.9).
+15. **ONE BESIDE-LANE** (v4) — the lamps along the ways were first cut as
+    a course `flank` before the wayside pass (`layoutParams.wayside`) was
+    found; the cut was retired the same hour. Grep for the fabric before
+    laying a sibling.
+16. **A STATION'S DIAL IS ITS ANCHOR'S** (v4) — the drawn==dwelt sweep
+    (rig H's step-past-the-dial check) measured every dial from the
+    seat; with the board a cell north of its seat the dial's far edge
+    moved with it. The sweep centres on `stationAnchor` where one stands.
 
 ### 1.8 THE INN'S FLOORS + THE INN KIT (2026-09-05)
 **The inn redrawn** (`data/structures.ts inn`, 14×8 cells): Mireille's
@@ -236,11 +254,16 @@ speaks the stair.
 (`docs/engine/storeys.md`; her word: "use the actual layering system …
 the same map but the player transitions to the z-layer above"). The
 sidezone pocket is retired. The inn's plan carries `storeys[0]`, a second
-grid read cell for cell over the ground floor: three guest rooms and a
-landing hall behind archways, every room on the kit (a bed, a dresser or
-a chest, a rug, a candle, a washstand, a shelf), the STAIRWAY (`AA` on the
-ground plan, walled on its west flank, climbing SOUTH to its landing `^^`
-— a closet under the stairs downstairs) a real tier crossing the mover
+grid read cell for cell over the ground floor: a hall along the north
+wall with three guest rooms opening off it to the south behind archways,
+every room on the kit (a bed, a dresser or a chest, a rug, a candle, a
+washstand, a shelf), the STAIRWAY (`AA` on the ground plan, walled on its
+west flank, climbing NORTH to its landing `^^` — a closet under the stairs
+downstairs; re-ruled 2026-09-06: the foot by the door at the common room's
+east end under the story's wall, the landing at the north end opening
+STRAIGHT into the hall — the first cut's south landing put the whole
+corridor's furniture between the top step and the rooms) a real tier
+crossing the mover
 walks; its drawn face is the new `stairway` doodad (bigger, no label —
 show, never tell). Upstairs the storey layer paints the floor and the
 hanging walls live; other-story bodies and furniture cull per building.
@@ -248,9 +271,10 @@ THE INN'S FOLK stroll (THE HAUNT) and the company is ROSTERED per day
 (`data/innfolk.ts` — `docs/design/townsfolk-life.md`).
 
 **The door lane (her walk):** the front stands wholly WEST of the door's
-approach column (THE DOOR LANE LAW, probe E), its east lantern post is
-gone, and the inn hangs WALL LANTERNS (a new inert kit piece, `wall_lantern`,
-legend `l`) either side of its door. CHAIRS are walk-over decor now (the
+approach column (THE DOOR LANE LAW, probe E), its lantern posts are gone
+(the last one and both flower boxes with it, 2026-09-06 — §1.4 v4), and
+the inn hangs WALL LANTERNS (a new inert kit piece, `wall_lantern`, legend
+`l`) either side of its door, with the flower boxes under its windows. CHAIRS are walk-over decor now (the
 rug's law) — a room of pushed-back chairs stays walkable.
 
 **THE INN KIT** — eleven reusable furnishings (+ the stairway face), each a union entry + a
@@ -271,6 +295,54 @@ reads npcRole `resident`). The ward's census reads families by NAME now,
 so a patron wearing the role never counts as a family. Probe:
 `probe_towngrowth` rig J (the kit census, the inn live, the climb, the
 lines).
+
+### 1.9 THE ANCHORED DWELL + THE STATION FOLD (2026-09-06)
+Her word: *"make the dwell central to where the Board is, so that the
+dwell is attached to the object rather than a coordinate … if we were to
+ever make the Board destructible the dwell would absolve itself."* Built
+as ONE resolver for every doodad-anchored station: a plan cell or prop
+carries `anchor: true` (the board's `N`, the bench slab, the altar slab,
+the two fires) and the placer stamps the placed doodad
+`anchor = <structure id>`; `World.stationAnchor(site)` finds the nearest
+such piece to the site's seat within `DWELL_CFG.anchorReach` (200) — the
+structure a site raises is `townSiteStructure` (its own building or the
+addition a feature raises there) — and every dwell predicate + hint
+(`nearBountyBoard`/`bountyBoardsHere`, `nearSalvage`, `nearCampfire`,
+`nearTracker`, `nearOracle` and their hints) reads THAT piece's live
+position. Move the piece and the dwell and the drawn prompt move with it;
+a felled or broken piece takes its dwell down until it stands again; no
+piece → no dwell. THE PHANTOM DWELL this replaced (pitfall 14): the seat
+coordinate answered over bare ground. THE STATION FOLD: the town's owned
+additions fold into its fixtures at construction AND again at every town
+load whose owned-station set changed, at the SAME rung (the ladder still
+reads once), so a station gained after the world stood raises its
+structure on the next arrival — usable exactly when it stands. THE
+SAME-STORY LAW rides the same seam (`dwellReachable`'s `story`): a dwell
+never crosses a story — the inn's door does not swing from the rooms
+above it, a ground-floor counter serves no one standing over it. NPC
+counters read the body (they always did) plus the story now. Probe: rig H
+(the census reads the board; the dwell follows a moved board; a felled
+board is no board; the storey walker is out of reach; every station's
+dial centred on its anchor) + probe_bountyboard rig D through the fold.
+
+### 1.10 THE LAMPS ALONG THE WAYS (2026-09-06)
+Her word: *"setting lampposts in line with Lastlight's path would look
+much nicer"*. The town's traveled ways wear THE WAYSIDE fabric
+(`engine/levelgen layWaysideDress`, `layoutParams.wayside` — the
+beside-lane the coherence fabric already carried) through ONE marker
+row, `TOWN_WAYSIDE` (a `lantern_post` every 170 px, sides alternating,
+14–16 px off the pavement's rim), folded onto the town def by
+`expandedTown`. Every seat honors the pass's gates (portal aprons,
+structure rects, standing blockers, never on any way, the arena rim) on
+the pass's own seeded stream, so the count grows with the rung (one in
+the hamlet's short lanes, nine in the township's) and nothing downstream
+re-deals. THE DOOR WAY IS BARE (`TownWay.bare` → `StampSpec.bare` → the
+discs' `bare` mark the pass skips like an overgrown stretch): THE DOOR
+LANE LAW keeps the door's column clear of posts; the inn's wall lanterns
+light it. Probe: rig J (the hamlet seats ≥ 1 beside the pavement) + rig H
+(the township ≥ 6; none on the front, none in the door lane). A first cut
+re-implemented this as a course `flank` before finding the wayside pass —
+retired the same hour (pitfall 15).
 
 ## 4. DECISION CARDS (her word wanted — none of these are built)
 1. **THE LOOK / THEME.** Her collaboration session. The ground truth for

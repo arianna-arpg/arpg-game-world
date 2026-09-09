@@ -14,6 +14,7 @@
 // ---------------------------------------------------------------------------
 
 import { dominantTypeOf } from './bodyVoices'; // THE HIT TINT — the landing stamps the blow's type
+import { extraAsStat } from './stats'; // THE EXTRA LANE — damage gained as extra <type>
 import { chance, clamp, rand } from '../core/math';
 import {
   DAMAGE_TYPES, addedDamageStat, conversionStat,
@@ -88,6 +89,22 @@ export function applyConversion(
     if (remaining < 1) {
       if (remaining <= 0.0001) delete amounts[from];
       else amounts[from] = amt * remaining;
+    }
+  }
+  // THE EXTRA LANE (extraAs_<type>, stats.ts — THE LEGEND FABRIC): "gain
+  // X% of damage as extra <type>", ADDITIVE beside conversion (no source
+  // loses anything), read once off the post-conversion total so several
+  // extras never feed each other. Null-cost until a sheet names one: the
+  // armed-family derivation caches per source generation.
+  const extras = caster.sheet.armedFamily('extraAs_', DAMAGE_TYPES, extra);
+  if (extras.length) {
+    let total = 0;
+    for (const t of DAMAGE_TYPES) total += amounts[t] ?? 0;
+    if (total > 0) {
+      for (const to of extras as readonly DamageType[]) {
+        const frac = caster.sheet.get(extraAsStat(to), tags, extra);
+        if (frac > 0) amounts[to] = (amounts[to] ?? 0) + total * frac;
+      }
     }
   }
 }

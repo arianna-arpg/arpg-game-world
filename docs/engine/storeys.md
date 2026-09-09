@@ -38,9 +38,9 @@ new read at all — a row without `tier` is already no floor to story k.
 ## The plan (`data/structures.ts`)
 ```ts
 inn: {
-  plan: [ ... '#.t...r...#AA#', '#c.c..r.t.#AA#', '#p..b...iJ.^^#', ... ],   // the ground floor
-  storeys: [{ plan: [ ... '#Zj.#.Zx#Z.j.#', ... '##D###D##D#AA#', ... ] }],  // the floor above
-  npcs: [ ..., { id: 'townsfolk_lodger', x: 65, y: 65, tier: 1, line: '…' } ],
+  plan: [ ... '#....c.t.c.^^#', '#.t...r...#AA#', '#c.c..r.t.#AA#', '#p..b.i.J....#', ... ],   // the ground floor
+  storeys: [{ plan: [ ... '#....r.......#', '##D##D###D#..#', '#i.j#.i#j.#AA#', ... '#Zr.#rZ#Zr####', ... ] }],  // the floor above
+  npcs: [ ..., { id: 'townsfolk_lodger', x: 91, y: -39, tier: 1, line: '…' } ],
 }
 ```
 - `StructureDef.storeys[k-1]` is a char grid of the ground plan's exact
@@ -64,6 +64,12 @@ inn: {
   carry a walker honestly: the ladder toggle flips on entry, and THE EXIT
   RULE corrects it at either end — step off the head onto the landing and
   you are upstairs; back out at the foot and you never were.
+  THE INN'S FLIGHT (re-ruled 2026-09-06): the foot is at the SOUTH end by
+  the door, the landing at the NORTH end opens straight into the hall
+  along the north wall, and the rooms line the south — the first cut's
+  south landing opened into a furnished corridor and made the climb a
+  chore. A landing must open onto circulation, never onto a room's inside
+  (it would bypass the archway) nor onto furniture.
 - `D` on a storey plan is an **ARCHWAY**: the story's floor plus a
   `PlacedDoor` record (`mode: 'sealed', open: true`, its cells) — never a
   slab (a door slab repaints the grid, which would repaint the ground
@@ -82,7 +88,30 @@ inn: {
   'over', exposure: 'open', levels, packSplit: 0, interior: true }` when a
   plan raised a storey and no recipe stamped its own country. `interior`
   keeps the world map's stack tell and tint silent (a town with an inn is
-  not a tiered zone to the map) and seats no ambient pack upstairs.
+  not a tiered zone to the map), seats no ambient pack upstairs, and makes
+  the stack ENCLOSED by derivation (THE ENCLOSURE LAW, `docs/engine/tiers.md`
+  — `tierEnclosure`): a building has walls, so a shove, a leap or a blink
+  clamps at the hanging wall / the outer wall exactly as feet do, tier kept —
+  the rim fall that drops a butte-stander never fires under a roof (a
+  knockback into a partition used to land the lodger in the common room).
+- **THE SAME-STORY LAW** (2026-09-06, THE INTERACTION SWEEP): nothing crosses
+  a story but the flight. The inn's door swings for no one upstairs
+  (`dwellReachable`'s story pair — every station, counter, board and
+  resident prompt reads it), a drop lying in the hall above is no pickup in
+  the common room beneath (THE SPOILS STORY: `GemDrop.tier`, stamped by the
+  shedder or settled from the floor — a storey floor cell is the GROUND's
+  unless stamped), a corpse upstairs is no fuel from below, and a summon or
+  recall seats on its caster's story.
+- **THE SOVEREIGNTY GATE** (`sameStory`, `docs/engine/tiers.md`): the lodger
+  strolling in the hall above stands in the hero's exact footprint on the
+  common room's floor and moves NOBODY — the storey cull hides the body, and
+  before the gate the crowd shoulder still threw its push (the reported
+  "invisible wall"). Every body-vs-body and body-vs-hazard seam now reads
+  one predicate; `probe_storey` I stands the lodger in the hero's footprint.
+- **THE INVESTIGATION CROSSES** (`docs/engine/tiers.md`): a lure in the hall
+  above draws a common-room hunter UP the flight instead of under the boards
+  (the goal carries its story), and a noise in the common room walks a
+  story-1 investigator DOWN before its mark can clear — `probe_storey` J.
 - The ground ledger's `isMember` leaves a non-walkable region cell (the
   landing's closet) out of the common room.
 
@@ -116,8 +145,13 @@ along the hall, the flank refused, back down; a story-1 walker held by a
 hanging wall while the ground walker passes under it) · D the elevation law
 at a hanging wall for eyes and shots, the outer wall for both · E layer
 sovereignty (a story-1 dresser is no solid to the room beneath) · F the
-silent map · G the draw pins. `probe_towngrowth` rig J pins the inn wearing
-it; `probe_tiers` stands untouched.
+silent map · G the draw pins · H THE ENCLOSURE LAW + THE SPOILS STORY (a
+shove into the hanging wall / the outer wall keeps tier 1 inside the
+footprint; a drop upstairs is nobody's pickup beneath and the reverse; an
+unstamped drop on a both-floor cell is the ground's). `probe_towngrowth`
+rig J pins the inn wearing it and rig H the door that never swings from
+upstairs (nor the board); `probe_tiers` RIG S pins the open rim beside the
+enclosed roots.
 
 ## Limits + the seam this opens
 - ONE elevated floor per cell (the tier fabric's `tier` is a single number

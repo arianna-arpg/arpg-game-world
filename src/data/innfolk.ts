@@ -31,8 +31,13 @@ export interface FolkRow {
   /** The look (data/looks.ts npc_* rows) and the colours it may wear. */
   look: string;
   colors: string[];
-  /** Lines the body may speak (one rolled per seating — the spoken seat). */
+  /** Lines the body may speak (one rolled per seating — the spoken seat;
+   *  THE SPEECH GRAMMAR keeps every one as the body's own slotless
+   *  templates, the rolled one its FIRST WORD). */
   lines: string[];
+  /** THE SPEECH GRAMMAR's role pools this row draws its talk from
+   *  (data/speechGrammar.ts — 'patron', 'traveler', 'merchant' …). */
+  roles?: string[];
   /** Where it drifts (BehaviorSpec.haunt — the furniture it keeps to). */
   haunt: HauntSpec;
   /** Walking pace (default FOLK_CFG.moveSpeed). */
@@ -62,6 +67,7 @@ export function registerFolkPool(id: string, rows: FolkRow[]): void {
     const def: MonsterDef = {
       id: defId, name: r.names[0] ?? 'Guest',
       color: r.colors[0] ?? '#b0a090', shape: 'circle', radius: r.radius ?? FOLK_CFG.radius, look: r.look, npcRole: 'resident',
+      ...(r.roles ? { speechRoles: r.roles } : {}),
       base: { life: 100, moveSpeed: r.moveSpeed ?? FOLK_CFG.moveSpeed, mana: 0 },
       skills: [],
       xp: 0,
@@ -106,38 +112,38 @@ const COMMON: HauntSpec = { kinds: ['bar_counter', 'tavern_table', 'bench', 'hea
 const ROOMS: HauntSpec = { kinds: ['bed', 'washstand', 'dresser', 'linen_chest', 'shelf', 'candle_stand', 'bench'], reach: 260, linger: [8, 20] };
 
 registerFolkPool('inn_common', [
-  { id: 'drover', weight: 3, look: 'npc_trader', colors: ['#b89a6a', '#8a7a52', '#a08860'],
+  { id: 'drover', weight: 3, roles: ['patron', 'traveler'], look: 'npc_trader', colors: ['#b89a6a', '#8a7a52', '#a08860'],
     names: ['Corran Vale', 'Old Hesk', 'Wenna Tull', 'Bryce Adair'],
     lines: [
       'Drove forty head down from the fells. Lost two to the dark. Mireille poured for the rest of us.',
       'The road past the crossroads is quieter than it was. That worries me more than the noise did.',
       'If you see a fold with the gate torn off, that one was mine.',
     ], haunt: COMMON },
-  { id: 'tinker', weight: 2, look: 'npc_smith', colors: ['#8a8a7a', '#6a7a8a'],
+  { id: 'tinker', weight: 2, roles: ['patron', 'merchant'], look: 'npc_smith', colors: ['#8a8a7a', '#6a7a8a'],
     names: ['Pim Sallow', 'Juna Wick', 'Fennick'],
     lines: [
       'Kettles mended, pots patched. The ones that come back from the wilds need it most.',
       'Brandt won’t touch a pot. Says the bench is for steel. So I sit here.',
     ], haunt: COMMON },
-  { id: 'pilgrim', weight: 2, look: 'npc_scholar', colors: ['#c8c0b0', '#a8a090'],
+  { id: 'pilgrim', weight: 2, roles: ['patron', 'pilgrim'], look: 'npc_scholar', colors: ['#c8c0b0', '#a8a090'],
     names: ['Sister Aude', 'Brother Talen', 'Mothwyn'],
     lines: [
       'Walking to every waypoint before I die. Yours burns warm.',
       'The Font drank a gem from me once. I still dream the colour.',
     ], haunt: COMMON },
-  { id: 'courier', weight: 2, look: 'npc_trader', colors: ['#6a8a9a', '#5a7a6a'],
+  { id: 'courier', weight: 2, roles: ['patron', 'traveler'], look: 'npc_trader', colors: ['#6a8a9a', '#5a7a6a'],
     names: ['Tamsin Reed', 'Dace', 'Orrin Fell'],
     lines: [
       'Three writs in my satchel and none of them mine. The board out front pays better.',
       'I run the caravan road. Ask me where it isn’t safe, not where it is.',
     ], haunt: COMMON },
-  { id: 'warden', weight: 2, look: 'npc_captain', colors: ['#8a6a5a', '#7a5a4a'],
+  { id: 'warden', weight: 2, roles: ['patron', 'warden'], look: 'npc_captain', colors: ['#8a6a5a', '#7a5a4a'],
     names: ['Halvard', 'Berrin Stane', 'Marta Coyle'],
     lines: [
       'Off the wall till dawn. The first ale is the only one that tastes of anything.',
       'Something walked the brook last night. Big. Didn’t cross. I counted the spans twice.',
     ], haunt: COMMON },
-  { id: 'gambler', weight: 1, look: 'npc_keeper', colors: ['#9a6a8a', '#7a5a8a'],
+  { id: 'gambler', weight: 1, roles: ['patron'], look: 'npc_keeper', colors: ['#9a6a8a', '#7a5a8a'],
     names: ['Sly Kettering', 'Vinca Doule'],
     lines: [
       'Dice on the table, coin in the boot. Sit, if you have either.',
@@ -146,25 +152,25 @@ registerFolkPool('inn_common', [
 ]);
 
 registerFolkPool('inn_rooms', [
-  { id: 'scholar', weight: 2, look: 'npc_scholar', colors: ['#9aa8b8', '#8898a8'],
+  { id: 'scholar', weight: 2, roles: ['lodger', 'visitor'], look: 'npc_scholar', colors: ['#9aa8b8', '#8898a8'],
     names: ['Idris Maw', 'Perenna Voss', 'Lorcan Bede'],
     lines: [
       'Took the corner room for the light. The scratching in the walls keeps me company.',
       'I copy the runes off the vestiges. Mireille thinks I am mad. She is not wrong.',
     ], haunt: ROOMS },
-  { id: 'merchant', weight: 2, look: 'npc_trader', colors: ['#c8a058', '#b09048'],
+  { id: 'merchant', weight: 2, roles: ['lodger', 'merchant'], look: 'npc_trader', colors: ['#c8a058', '#b09048'],
     names: ['Aldous Pring', 'Sabra Keel'],
     lines: [
       'Selling nothing till the caravan comes. A bed and a locked chest will do till then.',
       'Every room in this house creaks in a different key. I have learned all three.',
     ], haunt: ROOMS },
-  { id: 'midwife', weight: 1, look: 'npc_keeper', colors: ['#c8b8a8', '#a89888'],
+  { id: 'midwife', weight: 1, roles: ['lodger', 'visitor'], look: 'npc_keeper', colors: ['#c8b8a8', '#a89888'],
     names: ['Goody Marrow', 'Elsbet Crane'],
     lines: [
       'Two births in the ward this month. The town is deciding to live.',
       'Wash your hands before you touch anyone here. I mean it kindly.',
     ], haunt: ROOMS },
-  { id: 'veteran', weight: 2, look: 'npc_captain', colors: ['#6a6a5a', '#5a5a4a'],
+  { id: 'veteran', weight: 2, roles: ['lodger', 'mercenary'], look: 'npc_captain', colors: ['#6a6a5a', '#5a5a4a'],
     names: ['Cadoc', 'Rusk Anselm', 'Old Tebbe'],
     lines: [
       'Slept under a roof three nights running. I keep waking to check the door.',

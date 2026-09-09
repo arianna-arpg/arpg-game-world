@@ -16,6 +16,7 @@
 
 import type { MonsterRarity } from '../engine/rarity';
 import type { CourseJourney } from '../world/courseStages';
+import type { AtlasContext } from '../world/atlas';
 import type { ItemRarity } from '../engine/items';
 import type { PresenceSpec } from '../engine/presence';
 import type { ZoneFogSpec } from '../engine/fog';
@@ -581,6 +582,11 @@ export interface StampSpec {
   /** course stamps over a liquid: plank spans laid ACROSS the course at these
    *  path fractions (0..1) — the bridge the way over the brook rides. */
   spans?: number[];
+  /** course stamps: a way that wears NO wayside dress (layoutParams.wayside —
+   *  engine/levelgen layWaysideDress — skips its discs as it skips an
+   *  overgrown stretch): the town's door lane, which THE DOOR LANE LAW keeps
+   *  bare of posts (data/townBuild.ts TownWay.bare). */
+  bare?: true;
 }
 
 /** A structure CHANCE a zone rolls at generation (merged from tileset + biome
@@ -961,6 +967,18 @@ export interface ZoneTiers {
    *  the fights that happen are the honest ones: across rims and spans).
    *  Covered zones must never set it (a ceiling is not a vantage). */
   rimDuels?: boolean;
+  /** THE ENCLOSURE LAW (engine/tiers.ts tierEnclosure): may a body ever
+   *  LEAVE a story except through a crossing? 'open' = the rim is a drop —
+   *  a shove past it is THE RIM FALL (buttes, summits: knock-off is their
+   *  identity); 'enclosed' = the story's edge is a WALL to every carried
+   *  body exactly as it is to feet — the rim fall never fires, and a shove,
+   *  a leap or a blink clamps where willed movement would. Omit and the
+   *  word DERIVES: an 'under' layer has a ceiling (nothing falls UP out of
+   *  a tunnel — the sewer ducts, the rootways, the crypts), a building's
+   *  `interior` storey has walls; open country stays open. Orthogonal to
+   *  `exposure` (what the eye sees) by design — the inn draws every layer
+   *  and still confines. */
+  enclosure?: 'open' | 'enclosed';
   /** THE STOREY STACK (engine/storeys.ts): the layer is a BUILDING's floor
    *  above, not country — stamped by generateLayout when a plan structure
    *  raises a storey. The world map's stack tell and tint stay silent (a
@@ -1093,9 +1111,20 @@ export interface ZoneDef {
    *  climate axes sampled at the minted coordinate (world/climate.ts —
    *  temperature/moisture/wildness/…), so generators, UI, and future systems
    *  can read the zone's weather without re-deriving the field. */
-  geo?: { biomeDepth?: number; climate?: Record<string, number> };
-  /** World-route identity baked at mint alongside its resolved layout knobs.
-   * Discovery order, later map settling and registry edits cannot restage it. */
+  geo?: {
+    biomeDepth?: number;
+    climate?: Record<string, number>;
+    /** THE ATLAS FEATURES this ground inherited at the mint (world/atlas.ts
+     *  ids — 'peak:3_-2'): the pane names them, the harvest boot reads
+     *  their bounty; a random-frontier surface mint alone bakes them. */
+    features?: string[];
+    /** Resolved atlas identity and bounty. Older saves have only feature ids. */
+    atlas?: AtlasContext;
+    /** THE RELIEF LIFT folded from those features — levelgen's 'elevation'
+     *  gen field raises + domes the zone's own height field by it. */
+    relief?: { lift?: number; dome?: number };
+  };
+  /** World-route identity and exploration stage, baked at mint. */
   journey?: CourseJourney;
   /** THE BLEND (engine/blend.ts): this zone interleaves a partner tileset's
    *  theme + kit + packs by a weight field — resolved at mint (from

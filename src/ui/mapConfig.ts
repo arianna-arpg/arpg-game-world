@@ -31,6 +31,28 @@
 
 export type MapLabelMode = 'hover' | 'always';
 
+/** THE CHART STYLE (Settings.mapChart): 'painted' = THE ATLAS (world/atlas.ts
+ *  + ui/atlasPaint.ts — the relief chart raster under the node graph:
+ *  hillshade, snowlines, sea shelves, rivers, lake basins, biome dressing
+ *  and the feature marks); 'classic' = the flat biome heat-map wash with
+ *  river threads (the pre-atlas chart, kept for QA and taste). */
+export type MapChartMode = 'painted' | 'classic';
+
+export interface MapChartModeDef { id: MapChartMode; name: string; blurb: string }
+
+export const MAP_CHART_MODES: MapChartModeDef[] = [
+  { id: 'painted', name: 'PAINTED', blurb: 'the atlas: shaded relief, rivers, lakes, summits and lodes drawn as the land they are' },
+  { id: 'classic', name: 'CLASSIC', blurb: 'the flat biome wash with river threads (lighter; the older chart)' },
+];
+
+/** The atlas's own layer chips (toggled beside the overlay layers). */
+export const ATLAS_LAYER_CHIPS: { id: string; label: string }[] = [
+  { id: 'atlas:relief', label: 'Relief' },
+  { id: 'atlas:rivers', label: 'Rivers' },
+  { id: 'atlas:features', label: 'Features' },
+  { id: 'atlas:glyphs', label: 'Dressing' },
+];
+
 export interface MapLabelModeDef {
   id: MapLabelMode;
   /** Options-button face. */
@@ -53,6 +75,8 @@ export const MAP_LABEL_MODES: MapLabelModeDef[] = [
 export const MAP_CFG = {
   /** Default name-card mode (Settings.mapLabels persists the player's pick). */
   labelMode: 'hover' as MapLabelMode,
+  /** Default chart style (Settings.mapChart persists the player's pick). */
+  chart: 'painted' as MapChartMode,
   /** WASH INTENSITY (Settings.mapWash persists the pick): one multiplier on
    *  every overlay layer's territory/weather WASH opacity — an feFuncA alpha
    *  slope over the under-layers, so badges/sigils stay crisp while the
