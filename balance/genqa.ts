@@ -55,6 +55,8 @@
 // registered layout generator, and every composition FORCED at chance 1.
 //
 // Usage: npm run genqa [-- --seeds 3 --filter mire --verbose]
+// Terrain exploration: --exploration balance/reports/exploration.json
+// Optional --route-slack 4 --narrow-clearance 2 (grid cells).
 // ---------------------------------------------------------------------------
 
 // Side-effect registries — the same set main.ts and the sim arena load; a
@@ -108,6 +110,8 @@ import { CLIMATE_AXES } from '../src/world/climate';
 import { interiorRoleDefs } from '../src/engine/interiorGen';
 import { deadBaseFaceKinds } from './deadface_check';
 import { authoredMapDefs, authoredZoneDef, validateAuthoredMap } from '../src/engine/authoredMaps';
+import { ExplorationReport } from './explorationreport';
+import { EXPLORATION_CFG } from './layoutmetrics';
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -117,6 +121,21 @@ const flag = (name: string): string | undefined => {
 const SEEDS = Number(flag('seeds') ?? 3);
 const FILTER = flag('filter');
 const VERBOSE = args.includes('--verbose');
+// Optional terrain observations share the exact authored matrix and seeds.
+const explorationPath = flag('exploration');
+if (args.includes('--exploration') && (!explorationPath || explorationPath.startsWith('--'))) {
+  throw new Error('--exploration requires an output JSON path');
+}
+const explorationDial = (name: string, fallback: number): number => {
+  if (!args.includes(`--${name}`)) return fallback;
+  const value = Number(flag(name));
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`--${name} requires a nonnegative integer`);
+  return value;
+};
+const exploration = explorationPath ? new ExplorationReport({
+  routeSlackCells: explorationDial('route-slack', EXPLORATION_CFG.routeSlackCells),
+  narrowClearanceCells: explorationDial('narrow-clearance', EXPLORATION_CFG.narrowClearanceCells),
+}) : undefined;
 
 // Portal-clear constants mirrored from levelgen (not exported on purpose —
 // the harness asserts the OBSERVABLE promise, not the internals).
@@ -658,8 +677,10 @@ function runCase(name: string, def: ZoneDef): void {
         if (got < min) fails.push(`${name} seed ${seed}: promised door '${k}' ×${min}, placed ${got}`);
       }
       checkLayout(`${name} seed ${seed}`, layout, d, arena, entry, exits, fails, warns);
+      exploration?.record(name, d, entry, exits, layout);
     } catch (e) {
       fails.push(`${name} seed ${seed}: THREW ${(e as Error).message}`);
+      exploration?.failed(name, d, e);
     }
   }
   // DEAD-ROW LINT (warn): an authored row naming a habitat-bearing kind that
@@ -1203,4 +1224,8 @@ for (const r of results) {
 const slow = results.filter(r => r.ms > 400);
 for (const r of slow) console.log(`warn: ${r.name} slow (${r.ms.toFixed(0)}ms/seed)`);
 console.log(`\ngenqa: ${results.length} cases × ${SEEDS} seeds — ${failTotal} fail(s), ${warnTotal + slow.length} warn(s)`);
+if (exploration && explorationPath) {
+  exploration.write(explorationPath, { failures: failTotal, warnings: warnTotal + slow.length });
+  console.log(`Exploration report: ${explorationPath}`);
+}
 process.exit(failTotal ? 2 : 0);
