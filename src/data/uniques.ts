@@ -42,6 +42,7 @@ import { skillGrantStat, slotGraftStat } from '../engine/skills';
 import { comboStat } from '../engine/sequence';
 import { mod } from '../engine/stats';
 import { procPowerStat, procStat, registerProc, type ProcDef } from './procs';
+import { EMERGENT_PROCS, EMERGENT_UNIQUES } from './uniques/emergent';
 
 // ---------------------------------------------------------------------------
 // THE LEGEND PROCS — triggers authored beside the legends that wear them,
@@ -102,6 +103,7 @@ export const LEGEND_PROCS: ProcDef[] = [
     effect: { type: 'cast', cast: { skillId: 'pyroclast_bolt', count: [1, 1], own: true } },
   },
 ];
+LEGEND_PROCS.push(...EMERGENT_PROCS);
 for (const def of LEGEND_PROCS) registerProc(def);
 
 export const UNIQUE_LIST: UniqueDef[] = [
@@ -594,6 +596,8 @@ export const UNIQUE_LIST: UniqueDef[] = [
     ],
   },
 ];
+
+UNIQUE_LIST.push(...EMERGENT_UNIQUES);
 
 export const UNIQUES: Record<string, UniqueDef> =
   Object.fromEntries(UNIQUE_LIST.map(u => [u.id, u]));
