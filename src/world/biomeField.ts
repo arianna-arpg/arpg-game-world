@@ -150,6 +150,20 @@ export class BiomeField implements WorldOverlay {
     return { under, over };
   }
 
+  /** The COMPOSED biome (warps honored, with attribution) for the painted
+   *  chart — presentation only, exactly like renderMap; the mint path keeps
+   *  sampleBiome (the base field). */
+  composedBiome(coord: MapCoord): { biome: string; warped: boolean } {
+    const s = this.compose(coord);
+    return { biome: s.biome, warped: s.warped !== null };
+  }
+
+  /** A cheap identity of the live warp set (id + strength): the chart's
+   *  cache key moves only when a warp is pushed, released or fades. */
+  warpSignature(): string {
+    return this.modifiers.map(m => m.id + ':' + m.strength.toFixed(2)).join(',');
+  }
+
   /** KEYED warp (replace-or-push): the ONE way ground turns. An owner re-pushes
    *  its modifier as its event shifts (idempotent by id) and the warp sweep
    *  re-asserts it while the event lives — a push always REVIVES a mid-fade

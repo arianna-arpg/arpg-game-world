@@ -212,6 +212,7 @@ import type { WalkField, PathProfile } from '../world/walk';
 import { GridWalkField, WALK_CFG } from '../world/gridWalk';
 import { regionKind, survivalResource, survivalEaseStat, survivalBandMeter, SURVIVAL_EASE_CAP, doodadGroundIds, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec, type SurvivalResourceDef } from '../world/regions';
 import { continentAt, continentSeedFrom, type ContinentInfo } from '../world/continents';
+import { featureHarvestOf } from '../world/atlas';
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, veilSpecOf, type VeilPatch } from './veil';
 import { registerDoodadFamily, doodadFamilyBits, doodadFamilyIndex, doodadFamilyEpoch, doodadFamilyCount } from './doodadFamilies';
@@ -26816,11 +26817,19 @@ export class World {
   visible(z: ZoneDef): boolean {
     // Concealed ground (an Incursion landing) is hidden from the map AND its
     // auto-fit until the player approaches/enters it — so a far blight stays
-    // obscured and never zooms the map out. VEILED ground (the forechart's
-    // ahead-minted halo, world/forechart.ts) is hidden the same way until
-    // FOUND — entry, adjacency to visited ground, a survey pulse, or an omen
-    // reveal lift it. Everything else is on the map (gentle).
-    return !z.concealed && !z.veiled;
+    // obscured and never zooms the map out.
+    // THE KNOWLEDGE LAW (docs/engine/atlas.md): the chart is the player's
+    // knowledge alone. EVERY graph mint is born VEILED (worldgen placeZoneAt,
+    // ZoneSpec.veiled) and lifts only by a knowledge act — entry, the one-ring
+    // preview off WALKED ground (structural here, so a mint beside you is
+    // seen the moment it exists; the forechart's invariant pass clears the
+    // flag for good), a survey pulse, an omen reveal, an accepted quest, a
+    // won siege, a sighted port. A distant event's mint stays unknown until
+    // the world tells you of it.
+    if (z.concealed) return false;
+    if (!z.veiled) return true;
+    for (const e of z.exits) if (e.to !== '?' && this.visited.has(e.to)) return true;
+    return false;
   }
 
   /** Is the player by the quartermaster? (Renderer prompt box.) */
@@ -27232,6 +27241,9 @@ export class World {
       // notarizes every wire-in as a deed.)
       if (!q.zone.floating) {
         this.notarizeRoad(anchor, def);
+        // THE KNOWLEDGE LAW: an accepted quest's ground is TOLD ground — named
+        // on the chart the way its anchor is (born veiled like every mint).
+        def.veiled = false;
         // The quest TELLS you the way ("head south") — the anchor it wired
         // to is named knowledge now. A veiled halo anchor would swallow the
         // drawn road (both ends must be visible), leaving the quest node
@@ -37883,8 +37895,14 @@ export class World {
     const rng = new Rng((this.currentZoneSeed ^ HARVEST_CFG.salt) >>> 0);
     // Fixed stream shape (the fog-bank law): the stand roll and the count
     // draw before any placement, hit or miss alike.
-    const stands = rng.next() < HARVEST_CFG.chance;
-    const n = rng.int(HARVEST_CFG.count[0], HARVEST_CFG.count[1]);
+    const rolled = rng.next() < HARVEST_CFG.chance;
+    const base = rng.int(HARVEST_CFG.count[0], HARVEST_CFG.count[1]);
+    // THE HARVEST BOUNTY (world/atlas.ts): ground on a lode ALWAYS stands
+    // nodes and stands more of them — the bonus draw lands AFTER the zone's
+    // own two draws, so every feature-less zone's stream is byte-identical.
+    const bounty = featureHarvestOf(def.geo?.features);
+    const stands = rolled || !!bounty?.always;
+    const n = base + (bounty ? rng.int(bounty.bonus[0], bounty.bonus[1]) : 0);
     if (!stands) return;
     const spent = memory?.harvestSpent;
     for (let i = 0; i < n; i++) {

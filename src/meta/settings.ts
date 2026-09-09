@@ -19,7 +19,7 @@ import { PAD_CFG, AIM_ASSIST_MODES, padDisplay, type AimAssistMode } from '../co
 import { NOTICE_CFG, NOTICE_ANCHORS, PICKUP_FEED_CFG, type NoticeAnchorId } from '../world/bulletins';
 import { CURSOR_STYLES, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../core/cursor';
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK, type AimTickOptions } from '../render/vis/aimtick';
-import { MAP_CFG, MAP_LABEL_MODES, type MapLabelMode } from '../ui/mapConfig';
+import { MAP_CFG, MAP_LABEL_MODES, type MapLabelMode, MAP_CHART_MODES, type MapChartMode } from '../ui/mapConfig';
 import { UI_SCALE_CFG } from '../ui/uiScale';
 import { RENDER_SCALE_CFG } from '../render/renderScale';
 import { CAMERA_CFG, CAMERA_MODES, type CameraModeId } from '../render/camera';
@@ -153,6 +153,10 @@ export interface Settings {
    *  (the QA dial that ships), dim it for a cleaner chart. Badges, sigils
    *  and markers never scale — only the washes. */
   mapWash: number;
+  /** WORLD-MAP CHART STYLE (ui/mapConfig.ts MAP_CHART_MODES): 'painted' =
+   *  the atlas relief chart under the node graph; 'classic' = the flat
+   *  biome wash + river threads (the pre-atlas look, kept for QA + taste). */
+  mapChart: MapChartMode;
   /** THE UI SCALE DIAL (ui/uiScale.ts): one multiplier that grows every
    *  reading surface together — DOM panels/tooltips/popups via the fabric
    *  stylesheet, the canvas HUD via the renderer's scaled sub-pass. The
@@ -253,6 +257,7 @@ export interface SettingsSave {
   improvisedStrike?: boolean;
   mapLabels?: MapLabelMode;
   mapWash?: number;
+  mapChart?: MapChartMode;
   uiScale?: number;
   cameraMode?: CameraModeId;
   renderScale?: number | 'auto';
@@ -388,6 +393,7 @@ export const makeSettings = (): Settings => ({
   improvisedStrike: true,
   mapLabels: MAP_CFG.labelMode,
   mapWash: MAP_CFG.wash.default,
+  mapChart: MAP_CFG.chart,
   uiScale: UI_SCALE_CFG.default,
   cameraMode: CAMERA_CFG.default,
   renderScale: 'auto',
@@ -421,6 +427,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   improvisedStrike: s.improvisedStrike,
   mapLabels: s.mapLabels,
   mapWash: s.mapWash,
+  mapChart: s.mapChart,
   uiScale: s.uiScale,
   cameraMode: s.cameraMode,
   renderScale: s.renderScale,
@@ -520,6 +527,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     mapLabels: MAP_LABEL_MODES.some(m => m.id === s.mapLabels) ? s.mapLabels! : MAP_CFG.labelMode,
     // Re-clamped into the wash rails (a hand-edited save can't blind the map).
     mapWash: clamp(s.mapWash ?? MAP_CFG.wash.default, MAP_CFG.wash.min, MAP_CFG.wash.max),
+    mapChart: MAP_CHART_MODES.some(m => m.id === s.mapChart) ? (s.mapChart as MapChartMode) : MAP_CFG.chart,
     // Re-clamped into the fabric's rails, like every numeric option.
     uiScale: clamp(s.uiScale ?? UI_SCALE_CFG.default, UI_SCALE_CFG.min, UI_SCALE_CFG.max),
     // Unknown values (a renamed mode, a pre-dial save) fall back to the

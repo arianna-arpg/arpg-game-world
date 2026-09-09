@@ -1109,7 +1109,17 @@ export interface ZoneDef {
    *  climate axes sampled at the minted coordinate (world/climate.ts —
    *  temperature/moisture/wildness/…), so generators, UI, and future systems
    *  can read the zone's weather without re-deriving the field. */
-  geo?: { biomeDepth?: number; climate?: Record<string, number> };
+  geo?: {
+    biomeDepth?: number;
+    climate?: Record<string, number>;
+    /** THE ATLAS FEATURES this ground inherited at the mint (world/atlas.ts
+     *  ids — 'peak:3_-2'): the pane names them, the harvest boot reads
+     *  their bounty; a random-frontier surface mint alone bakes them. */
+    features?: string[];
+    /** THE RELIEF LIFT folded from those features — levelgen's 'elevation'
+     *  gen field raises + domes the zone's own height field by it. */
+    relief?: { lift?: number; dome?: number };
+  };
   /** THE BLEND (engine/blend.ts): this zone interleaves a partner tileset's
    *  theme + kit + packs by a weight field — resolved at mint (from
    *  TilesetDef.blend or authored by the mint), DURABLE like theme/layout

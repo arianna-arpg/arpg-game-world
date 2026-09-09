@@ -3414,7 +3414,14 @@ registerGenField('shore', (ctx, params) => {
 registerGenField('elevation', (ctx, params) => {
   const scale = typeof params.scale === 'number' ? Math.max(60, params.scale) : 760;
   const octaves = Math.max(1, Math.min(4, typeof params.octaves === 'number' ? Math.round(params.octaves) : 2));
-  const dome = typeof params.dome === 'number' ? Math.max(-1, Math.min(1, params.dome)) : 0;
+  // THE RELIEF LIFT (world/atlas.ts, baked as geo.relief at the mint): a
+  // zone under a summit raises its whole height field and domes it toward
+  // its heart, so high-ground stamps find the heights they ask for. Absent
+  // = byte-identical (lift 0, the row's own dome).
+  const relief = ctx.geo?.relief;
+  const dome0 = typeof params.dome === 'number' ? Math.max(-1, Math.min(1, params.dome)) : 0;
+  const dome = Math.max(-1, Math.min(1, dome0 + (relief?.dome ?? 0)));
+  const lift = relief?.lift ?? 0;
   const seed = genFieldSeed(ctx, (typeof params.seed === 'number' ? params.seed : 0) ^ 0xe1e7);
   const cx = ctx.arena.w / 2, cy = ctx.arena.h / 2;
   return (x, y) => {
@@ -3424,6 +3431,7 @@ registerGenField('elevation', (ctx, params) => {
       total += amp; amp *= 0.55; sc *= 0.5;
     }
     v /= total;
+    v += lift;
     if (dome) {
       const rim = Math.max(Math.abs(x - cx) / Math.max(1, cx), Math.abs(y - cy) / Math.max(1, cy));
       v += dome * (0.5 - rim);
