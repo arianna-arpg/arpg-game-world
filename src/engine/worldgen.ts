@@ -29,6 +29,7 @@ import { escarpmentAt, escarpmentRoad, ESCARPMENT_CFG } from '../world/escarpmen
 import { orientEscarpment } from './escarpmentGen';
 import { atlasDestinationAt, compileLocale, localeProgram, localeSeed, type AtlasDestination, type LocalePlan } from '../world/locales';
 import { LOCALE_LAYOUT } from './localeGen';
+import { expandExplorationSize, pickExplorationLocale } from '../world/zoneVariety';
 import { atlasSeedInstalled, bakeAtlasContext, featuresAt, foldFeatureHits } from '../world/atlas';
 import { fieldCoreRect } from '../world/fieldRegion';
 import { dimensionDef, dimensionsEnteredBy, isRoadlessGateHub } from '../world/dimensions';
@@ -1176,12 +1177,13 @@ export function placeZoneAt(
       }
       const seed = localeSeed(destinationSeed + '/' + hit.feature.id + '/' + program.version);
       locale = compileLocale(program, seed);
+      const localeSize = locale.size ?? program.size;
       destination = { feature: hit.feature.id, name: hit.feature.name, seed: destinationSeed,
         seat: { ...hit.feature.seat }, program: program.id };
       target = { ...hit.feature.seat };
       spec = { ...spec, id, seed, name: hit.feature.name, shape: 'rect', layoutType: LOCALE_LAYOUT,
         objective: spec.objective ?? { kind: 'clear' }, noFactionWar: true,
-        sizeBand: { w: [program.size.w, program.size.w], h: [program.size.h, program.size.h] },
+        sizeBand: { w: [localeSize.w, localeSize.w], h: [localeSize.h, localeSize.h] },
         layoutParams: { ...spec.layoutParams, riverSides: hit.feature.riverSides } };
     }
   }
@@ -1190,8 +1192,9 @@ export function placeZoneAt(
     if (!locale) {
       const program = localeProgram(ESCARPMENT_CFG.footLocale)!;
       locale = compileLocale(program, spec.seed ?? localeSeed(destinationSeed + '/foot/' + genIndex));
+      const localeSize = locale.size ?? program.size;
       spec = { ...spec, seed: locale.seed, layoutType: LOCALE_LAYOUT, shape: 'rect', noFactionWar: true,
-        sizeBand: { w: [program.size.w, program.size.w], h: [program.size.h, program.size.h] } };
+        sizeBand: { w: [localeSize.w, localeSize.w], h: [localeSize.h, localeSize.h] } };
     }
     locale = orientEscarpment(locale, scarp.highSide);
     if (scarp.blockedSide) locale.terrain = { background: locale.terrain?.background ?? 'wall',
@@ -1489,7 +1492,7 @@ export function placeZoneAt(
   // sizeBand spec (a pocket form's deliberate hollow) swaps the bands under
   // the SAME two draws — spec-less mints keep every stream byte-identical.
   const rolledShape = genRng.chance(tileset.ellipseChance ?? 0) ? 'ellipse' as const : 'rect' as const;
-  const shape = spec.shape ?? rolledShape;
+  let shape = spec.shape ?? rolledShape;
   const aspect = genRng.pick([1, 1, 0.64, 1.55, 0.78, 1.32]);
   const bandW = spec.sizeBand?.w ?? tileset.sizeW;
   const bandH = spec.sizeBand?.h ?? tileset.sizeH;
@@ -1498,6 +1501,19 @@ export function placeZoneAt(
     w: Math.round(baseW),
     h: Math.round(clamp(baseW * aspect, bandH[0], bandH[1] * (spec.sizeBand ? 1 : SPECLESS_H_STRETCH))),
   };
+  const ordinary = geographyEligible && !locale && !spec.sizeBand && !spec.shape && !spec.noWeave
+    && !spec.objective && !onCourse && !tileset.forceLayout && !tileset.boundless && !isAquaticBiome(zoneBiome);
+  if (ordinary) {
+    Object.assign(size, expandExplorationSize(size, 'surface'));
+    const varietySeed = spec.seed ?? localeSeed(`${destinationSeed}/${id}/${target.x}/${target.y}`);
+    const selected = pickExplorationLocale(zoneBiome, varietySeed);
+    const program = selected ? localeProgram(selected) : undefined;
+    if (program) {
+      locale = compileLocale(program, varietySeed);
+      Object.assign(size, locale.size ?? program.size);
+      shape = 'rect';
+    }
+  }
   // COURSE CONTINUATION: a zone on a throughline GUARANTEES a way onward along
   // it (up- and downstream) — a 1-frontier roll on the wrong side must never
   // dead-end the artery. Appended after the size roll so the 'at' pick spaces
@@ -1522,8 +1538,9 @@ export function placeZoneAt(
   // from allowedLayouts. Pins branch BEFORE the roll, so the rng stream
   // shifts only for pinned mints — every existing mint's draw order is
   // untouched (the cave-mint forceLayout contract, mirrored).
-  const layoutType = spec.layoutType ?? onCourse?.forceLayout ?? onCourse?.spec.forceLayout ?? tileset.forceLayout
+  const rolledLayout = spec.layoutType ?? onCourse?.forceLayout ?? onCourse?.spec.forceLayout ?? tileset.forceLayout
     ?? pickLayout(biome, target, genRng, spec.biomeFor);
+  const layoutType = locale ? LOCALE_LAYOUT : rolledLayout;
   // generateLayout degrades an unregistered layout id to 'plains' silently —
   // say so at mint, where the authoring slip (a quest def's layoutType typo)
   // is one hop away. Biome allowedLayouts are boot-validated; this covers the
@@ -1954,8 +1971,9 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   const faceRolled = tilesetId === undefined;
   const ts = TILESETS[faceRolled ? pickCaveFace(depth, anchor, faceRng) : tilesetId] ?? TILESETS['cavern'];
   const rng = new Rng(entranceSeed);
-  const w = Math.round(rng.range(ts.sizeW[0], ts.sizeW[1]));
-  const h = Math.round(rng.range(ts.sizeH[0], ts.sizeH[1]));
+  const rolledSize = { w: Math.round(rng.range(ts.sizeW[0], ts.sizeW[1])), h: Math.round(rng.range(ts.sizeH[0], ts.sizeH[1])) };
+  const { w, h } = faceRolled && !opts?.layoutType && !opts?.noDeeper && !ts.forceLayout && !ts.boundless
+    ? expandExplorationSize(rolledSize, 'cave') : rolledSize;
   // A cave is the natural home for the non-convex layouts — deterministic per
   // entrance seed, so revisits + co-op clients regenerate identically. (Caves
   // never persist to the save; this is pure-gen flavour.) The DESCENT abyss is

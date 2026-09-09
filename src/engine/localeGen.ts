@@ -6,21 +6,48 @@ import { vec, dist, type Vec2 } from '../core/math';
 import { compileLocale, localeProgram, localeSeed, type LocalePlan } from '../world/locales';
 import { GridWalkField } from '../world/gridWalk';
 import { registerLayout, type GenCtx } from './levelgen';
+import type { LocaleFragment } from '../world/localeFragments';
 
 export interface LocaleReport {
   program: string; variant: string;
-  districts: { id: string; builder: string; center: Vec2 }[];
+  districts: { id: string; builder: string; center: Vec2; choice?: string; fragment?: string }[];
   connections: { from: string; to: string; role: string; points: Vec2[] }[];
   crossings: Vec2[];
 }
 export interface DistrictBuild {
   grid: GridWalkField; rng: Rng; center: Vec2;
   w: number; h: number; params: Record<string, number>; region?: string;
+  fragment?: LocaleFragment;
 }
 export type DistrictBuilder = (ctx: DistrictBuild) => void;
 const BUILDERS: Record<string, DistrictBuilder> = {};
 export function registerDistrictBuilder(id: string, builder: DistrictBuilder): void { BUILDERS[id] = builder; }
 export const hasDistrictBuilder = (id: string): boolean => !!BUILDERS[id];
+
+registerDistrictBuilder('fragment', ({ grid, center: c, w, h, fragment }) => {
+  if (!fragment) throw new Error('fragment district requires baked terrain');
+  const left = c.x - w / 2, top = c.y - h / 2;
+  const rows = fragment.cells.length, cols = fragment.cells[0].length;
+  // Sample onto the common lattice once. Painting scaled cells as overlapping
+  // rectangles can erase narrow authored doorways at fractional boundaries.
+  for (let y = Math.ceil((top - 15) / 30) * 30 + 15; y < top + h; y += 30) {
+    for (let x = Math.ceil((left - 15) / 30) * 30 + 15; x < left + w; x += 30) {
+      const region = fragment.cells[Math.min(rows - 1, Math.floor((y - top) / h * rows))][Math.min(cols - 1, Math.floor((x - left) / w * cols))];
+      grid.fillRegion(x - 14, y - 14, x + 14, y + 14, region);
+    }
+  }
+});
+
+registerDistrictBuilder('terraces', ({ grid, center: c, w, h, params }) => {
+  const shelves = Math.round(Math.max(3, Math.min(7, params.shelves ?? 4)));
+  const step = h / shelves, half = Math.max(60, step * 0.32);
+  for (let i = 0; i < shelves; i++) {
+    const y = c.y - h / 2 + step * (i + 0.5);
+    grid.fillRect(c.x - w * 0.44, y - half, c.x + w * 0.44, y + half);
+    if (i) for (const sign of [-1, 1]) grid.carveCorridor(c.x + sign * w * 0.3, y - step, c.x + sign * w * 0.3, y, 65);
+  }
+  grid.carveCorridor(c.x, c.y - h * 0.4, c.x, c.y + h * 0.4, 60);
+});
 
 registerDistrictBuilder('open', ({ grid, rng, center: c, w, h, params }) => {
   // Elliptical core with overlapping lobes: an irregular open district.
@@ -105,9 +132,10 @@ function generateLocale(ctx: GenCtx, plan: LocalePlan, riverSides?: string[]): v
     const w = d.size[0] * ctx.arena.w, h = d.size[1] * ctx.arena.h;
     const builder = BUILDERS[d.builder];
     if (!builder) throw new Error(`locale ${plan.program}/${d.id}: unknown district builder ${d.builder}`);
-    builder({ grid, center: c, w, h, params: d.params ?? {}, region: d.region, rng: new Rng(localeSeed(`${plan.seed}/${d.id}`)) });
+    builder({ grid, center: c, w, h, params: d.params ?? {}, region: d.region, fragment: d.fragment, rng: new Rng(localeSeed(`${plan.seed}/${d.id}`)) });
     centers.set(d.id, c); rects.set(d.id, { x: c.x - w / 2, y: c.y - h / 2, w, h });
-    report.districts.push({ id: d.id, builder: d.builder, center: c });
+    report.districts.push({ id: d.id, builder: d.builder, center: c,
+      ...(d.choice ? { choice: d.choice } : {}), ...(d.fragment ? { fragment: d.fragment.id } : {}) });
   }
   if (plan.river) {
     const { width, bend, region } = plan.river;
@@ -147,13 +175,18 @@ function generateLocale(ctx: GenCtx, plan: LocalePlan, riverSides?: string[]): v
       }
     }
   };
-  const socket = (id: string, port?: string): Vec2 => {
-    const d = plan.districts.find(d => d.id === id)!, p = port ? d.ports?.[port] : undefined;
+  const socket = (id: string, port?: string, toward?: Vec2): Vec2 => {
+    const d = plan.districts.find(d => d.id === id)!;
     const c = centers.get(id)!;
-    return p ? vec(c.x + (p[0] - 0.5) * d.size[0] * ctx.arena.w, c.y + (p[1] - 0.5) * d.size[1] * ctx.arena.h) : c;
+    const toWorld = (p: [number, number]) => vec(c.x + (p[0] - 0.5) * d.size[0] * ctx.arena.w, c.y + (p[1] - 0.5) * d.size[1] * ctx.arena.h);
+    if (port && d.ports?.[port]) return toWorld(d.ports[port]);
+    if (d.fragment && toward) return Object.values(d.ports ?? d.fragment.ports).map(toWorld).sort((a, b) => dist(a, toward) - dist(b, toward))[0] ?? c;
+    return c;
   };
   for (const link of plan.links) {
-    const points = [socket(link.from, link.fromPort), ...(link.via ?? []).map(p => vec(p[0] * ctx.arena.w, p[1] * ctx.arena.h)), socket(link.to, link.toPort)];
+    const via = (link.via ?? []).map(p => vec(p[0] * ctx.arena.w, p[1] * ctx.arena.h));
+    const points = [socket(link.from, link.fromPort, via[0] ?? centers.get(link.to)), ...via,
+      socket(link.to, link.toPort, via[via.length - 1] ?? centers.get(link.from))];
     connect(points, link.width);
     report.connections.push({ from: link.from, to: link.to, role: link.role, points });
   }
@@ -165,7 +198,9 @@ function generateLocale(ctx: GenCtx, plan: LocalePlan, riverSides?: string[]): v
     const sides = [{ side: 'n' as const, d: p.y }, { side: 's' as const, d: ctx.arena.h - p.y },
       { side: 'w' as const, d: p.x }, { side: 'e' as const, d: ctx.arena.w - p.x }];
     const row = plan.approaches?.[sides.sort((a, b) => a.d - b.d)[0].side];
-    connect([p, ...(row?.via ?? []).map(v => vec(v[0] * ctx.arena.w, v[1] * ctx.arena.h)), row ? centers.get(row.district)! : fallback], 150);
+    const via = (row?.via ?? []).map(v => vec(v[0] * ctx.arena.w, v[1] * ctx.arena.h));
+    const id = row?.district ?? [...centers].find(([, c]) => c === fallback)![0];
+    connect([p, ...via, socket(id, undefined, via[via.length - 1] ?? p)], 150);
   };
   approach(ctx.entry, entryCenter);
   for (const exit of ctx.exits) {
@@ -182,7 +217,7 @@ function generateLocale(ctx: GenCtx, plan: LocalePlan, riverSides?: string[]): v
       ctx.doodads.push({ pos: { ...center }, kind: 'cave_entrance', radius: 24 });
       ctx.caveSeeds.push(localeSeed(`${plan.seed}/${d.id}/cave`));
     }
-    if (ctx.lite) continue;
+    if (ctx.lite || d.fragment) continue; // authored narrow passages keep their clearance
     for (const row of d.dress ?? []) {
       const count = rng.int(...row.count);
       for (let i = 0; i < count; i++) for (let attempt = 0; attempt < 16; attempt++) {

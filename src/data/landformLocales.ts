@@ -5,7 +5,7 @@ const d = (id: string, builder: string, at: [number, number], size: [number, num
   dress: [{ kind: builder === 'open' ? 'tree' : 'rock', count: [4, 9], radius: [20, 34] }], ...extra,
 });
 const register = (id: string, label: string, variants: LocaleVariant[], w = 2400, h = 2100) =>
-  registerLocaleProgram({ id, label, version: 1, size: { w, h }, variants });
+  registerLocaleProgram({ id, label, version: 1, size: { w, h }, sizeScale: [1.05, 1.3], variants });
 
 // Standing water: different basin footprints and route plans, composed by one builder.
 for (const row of [

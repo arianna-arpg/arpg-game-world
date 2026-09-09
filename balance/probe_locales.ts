@@ -11,6 +11,12 @@ import { placeZoneAt, settleWeb, type ZoneSpec } from '../src/engine/worldgen';
 import { serializeZone, applyZone } from '../src/net/snapshot';
 import { sanitizeWorldZones } from '../src/meta/worldstate';
 import type { ZoneDef } from '../src/data/zones';
+import { LOCALE_FRAGMENTS } from '../src/data/localeFragments';
+import { transformFragment, validateLocaleFragment } from '../src/world/localeFragments';
+import { extractTerrainFragment, type AuthoredMapDef } from '../src/engine/authoredMaps';
+import { explorationLocalePools, pickExplorationLocale, expandExplorationSize, ZONE_VARIETY } from '../src/world/zoneVariety';
+import { BIOMES } from '../src/world/biomes';
+import { UNDER_SPANS, registerUnderSpan } from '../src/data/underspans';
 
 const world = makeSimWorld('warrior', 0xa71a501);
 const theme = world.zone.theme;
@@ -30,7 +36,7 @@ for (const program of localePrograms()) {
     const locale = compileLocale(program, seed, variant.id);
     assert.deepEqual(compileLocale(program, seed, variant.id), locale);
     for (const riverSides of (locale.river ? [['w', 'e'], ['n', 's']] : [['w', 'e']])) {
-      const def: ZoneDef = { id: 'qa_locale', name: program.label, level: 5, size: program.size,
+      const def: ZoneDef = { id: 'qa_locale', name: program.label, level: 5, size: locale.size ?? program.size,
         theme, locale, layoutType: 'districts', layoutParams: { riverSides }, layout: [],
         seed, objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 } };
       const entry = { x: 120, y: def.size.h / 2 }, exits = [{ x: def.size.w - 120, y: def.size.h / 2 }, { x: def.size.w / 2, y: 120 }];
@@ -60,6 +66,70 @@ for (const program of localePrograms()) {
 }
 assert.equal(shapes.size, localePrograms().flatMap(p => p.variants).reduce((n, v) => n + (v.river ? 8 : 4), 0), 'different route graphs, orientations and seeds produce different terrain');
 console.log('PASS locale programs validate, diversify geometry, preserve waterways and replay reachable routes and caves');
+
+const refs = { region: (id: string) => !!regionKind(id), walkable: (id: string) => !!regionKind(id)?.walkable };
+for (const fragment of Object.values(LOCALE_FRAGMENTS)) {
+  assert.deepEqual(validateLocaleFragment(fragment, refs), []);
+  assert.deepEqual(transformFragment(fragment, 4, false), fragment);
+  assert.deepEqual(transformFragment(transformFragment(fragment, 0, true), 0, true), fragment);
+  for (const mirror of [false, true]) for (const turns of [0, 1, 2, 3]) for (const side of [1500, 3600]) {
+    const transformed = transformFragment(fragment, turns, mirror);
+    assert.deepEqual(validateLocaleFragment(transformed, refs), []);
+    const program = { id: 'qa_fragments', version: 1, label: 'Fragment test', size: { w: side, h: side }, variants: [{
+      id: 'connections', weight: 1, entrance: 'entry', goal: 'piece', districts: [
+        { id: 'entry', builder: 'open', at: [0.2, 0.2] as [number, number], size: [0.28, 0.28] as [number, number] },
+        { id: 'piece', builder: 'fragment', at: [0.65, 0.65] as [number, number], size: [0.30, 0.30] as [number, number], fragment: transformed },
+      ], links: [{ from: 'entry', to: 'piece', role: 'main' as const, width: 120 }],
+    }] };
+    assert.deepEqual(validateLocaleProgram(program, { ...refs, builder: hasDistrictBuilder }), []);
+    const locale = compileLocale(program, 71), entry = { x: 100, y: side / 2 };
+    const exits = [{ x: side - 100, y: side / 2 }, { x: side / 2, y: 100 }, { x: side / 2, y: side - 100 }];
+    const def: ZoneDef = { ...structuredClone(world.zone), id: 'qa_fragment', size: program.size, layout: [],
+      layoutType: 'districts', locale, seed: 71, exits: [], objective: { kind: 'clear' }, shape: 'rect' };
+    delete def.landmarks; delete def.compositions; delete def.structures;
+    const gen = generateLayout(def, def.size, new Rng(71), entry, exits);
+    for (const p of [...exits, ...gen.localeReport!.districts.map(d => d.center)]) assert.ok(gen.walk!.reachable!(entry, p), `${fragment.id}/${turns}/${mirror}/${side}`);
+  }
+}
+const source: AuthoredMapDef = { id: 'qa_source', name: 'Crop', tileset: 'meadow', cols: 9, rows: 9,
+  grid: Array.from({ length: 9 }, () => '.........'), legend: { '.': { region: 'water' } } };
+const crop = extractTerrainFragment(source, 'qa_crop', { x: 1, y: 1, w: 7, h: 7 }, { entry: [0.5, 0.5] });
+assert.equal(crop.cells[0][0], 'water', 'crop resolves the source map legend');
+assert.deepEqual(crop.source, { map: 'qa_source', x: 1, y: 1, w: 7, h: 7 });
+source.grid[1] = '#########';
+assert.equal(crop.cells[0][0], 'water', 'source edits cannot mutate a baked fragment');
+assert.throws(() => extractTerrainFragment(source, 'bad', { x: 5, y: 1, w: 7, h: 7 }, {}), /escapes/);
+console.log('PASS authored terrain extraction, all fragment transforms and minimum-size doorway connectivity');
+
+for (const pool of explorationLocalePools()) {
+  assert.ok(pool.biomes.every(b => BIOMES[b]), `${pool.id}: live biome references`);
+  const counts = new Map<string, number>();
+  for (let seed = 0; seed < 1000; seed++) {
+    const choice = pickExplorationLocale(pool.biomes[0], seed) ?? 'fallback';
+    counts.set(choice, (counts.get(choice) ?? 0) + 1);
+  }
+  assert.ok(counts.get('fallback')! > 500 && counts.get('fallback')! < 700, 'traditional layouts remain the majority');
+  for (const row of pool.locales) assert.ok(counts.get(row.program)! > 120, 'every registered locale reaches exploration');
+}
+assert.equal(pickExplorationLocale('ocean', 73), undefined);
+assert.deepEqual(expandExplorationSize({ w: 2000, h: 1500 }, 'surface'), { w: 2240, h: 1680 });
+assert.deepEqual(expandExplorationSize({ w: 2000, h: 1500 }, 'cave'), { w: 2240, h: 1680 });
+assert.deepEqual(expandExplorationSize({ w: 7000, h: 5900 }, 'surface'), { w: 7000, h: ZONE_VARIETY.maxExpandedAxis });
+const varied = localeProgram('woodland_paths')!, plans = Array.from({ length: 100 }, (_, i) => compileLocale(varied, i));
+assert.ok(new Set(plans.map(p => p.size!.w)).size > 80, 'size is continuous and seed-dependent');
+assert.ok(plans.every(p => p.size!.w >= varied.size.w * varied.sizeScale![0] && p.size!.w <= varied.size.w * varied.sizeScale![1]));
+assert.ok(plans.every(p => p.districts.every(d => !d.choices) && p.links.every(l => l.chance === undefined)), 'choices and shortcuts are baked');
+const fragmentPlans = plans.filter(p => p.districts.some(d => d.fragment));
+assert.ok(fragmentPlans.length > 80);
+const baked = structuredClone(fragmentPlans[0]);
+const copyProgram = structuredClone(varied);
+copyProgram.variants[0].districts[1].choices![0].fragment!.cells[0][0] = 'water';
+assert.deepEqual(fragmentPlans[0], baked, 'saved plans do not depend on mutable authored content');
+const badShortcut = structuredClone(varied);
+badShortcut.variants[0].links[0].chance = 0.5;
+badShortcut.variants[0].links[1].chance = 0.5;
+assert.ok(validateLocaleProgram(badShortcut).some(e => e.includes('disconnected')));
+console.log('PASS exploration weights, size policy, independently baked choices and guaranteed route graph');
 
 const fieldSeed = world.sim.biomeField.fieldSeed, origin = world.zone.map;
 const min = { x: origin.x - 40000, y: origin.y - 40000 }, max = { x: origin.x + 40000, y: origin.y + 40000 };
@@ -147,3 +217,50 @@ applyZone(client, packet);
 assert.equal(client.zone.locale, undefined);
 assert.equal(client.zone.destination, undefined);
 console.log('PASS real zone boot, saved plans, co-op isolation and legacy message clearing');
+
+let mixed: ZoneDef | undefined, fallback = 0;
+for (let i = 0; i < 100; i++) {
+  const at = { x: 200000 + i * 700, y: 210000 };
+  const mint: ZoneSpec = { fieldBiome: true, biomeFor: () => 'forest', seed: 22000 + i, level: 8, forceFrontiers: 2 };
+  const generated = placeZoneAt(at, null, {}, 80000 + i, mint);
+  if (generated.destination || generated.geo?.escarpment) continue;
+  if (generated.locale) {
+    assert.ok(['woodland_paths', 'ruin_quarters'].includes(generated.locale.program));
+    assert.deepEqual(generated.size, generated.locale.size);
+    assert.equal(generated.layoutType, 'districts');
+    if (generated.locale.districts.some(d => d.fragment)) mixed = generated;
+  } else {
+    const pinned = placeZoneAt(at, null, {}, 80000 + i, { ...mint, layoutType: 'plains' });
+    assert.deepEqual(generated.size, expandExplorationSize(pinned.size, 'surface'), 'ordinary fallback actually uses larger dimensions');
+    assert.equal(pinned.locale, undefined, 'explicit layouts remain authoritative');
+    fallback++;
+  }
+}
+assert.ok(mixed && fallback > 10, 'real world mint produces mixed locales and traditional layouts');
+world.zoneMap[mixed.id] = mixed;
+const oldPolicy = UNDER_SPANS[mixed.biome!];
+try {
+  registerUnderSpan({ biome: mixed.biome!, chance: 1, reach: [1, 1], radius: 200, fresh: 0, exitless: 0,
+    mouth: 'rootway_mouth', heldKind: 'rootheld' });
+  const neighbor: ZoneDef = { ...structuredClone(mixed), id: 'qa_mixed_neighbor', map: { x: mixed.map.x + 50, y: mixed.map.y } };
+  world.zoneMap[neighbor.id] = neighbor;
+  (world as unknown as { underSpanPass(z: ZoneDef): void }).underSpanPass(mixed);
+  assert.equal(mixed.underways?.[0].to, neighbor.id, 'mixed locale can initiate its biome underground network');
+  assert.equal(neighbor.underways?.[0].to, mixed.id);
+} finally {
+  if (oldPolicy) UNDER_SPANS[mixed.biome!] = oldPolicy;
+  else delete UNDER_SPANS[mixed.biome!];
+}
+world.loadZone(mixed.id);
+const mouths = (world as unknown as { caveEntrances: { pos: { x: number; y: number }; underSpan?: string }[] }).caveEntrances.filter(c => c.underSpan);
+assert.equal(mouths.length, 1, 'underground link has a real entrance');
+assert.ok(world.walk!.reachable!(world.player.pos, mouths[0].pos), 'underground entrance is reachable in the mixed terrain');
+const mixedPacket = serializeZone(world);
+applyZone(client, mixedPacket);
+assert.deepEqual(client.zone.locale, mixed.locale);
+const serverFragment = mixed.locale!.districts.find(d => d.fragment)!.fragment!;
+const clientFragment = client.zone.locale!.districts.find(d => d.fragment)!.fragment!;
+assert.notEqual(clientFragment.cells, serverFragment.cells);
+const mixedState = JSON.parse(JSON.stringify(world.serializeWorldState()));
+assert.deepEqual(sanitizeWorldZones(mixedState.zones, new Set())![mixed.id].locale, mixed.locale);
+console.log('PASS ordinary exploration mints larger mixed locales, preserves fallback layouts and carries fragments through save/co-op');

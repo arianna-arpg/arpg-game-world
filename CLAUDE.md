@@ -1157,6 +1157,12 @@ we verify changes.
   trails on the saved world clock. The map's 100% scope is fixed by
   `MAP_CFG.viewport.startSide`; growth unlocks zoom-out. Contracts and dials:
   `docs/worldgen/landforms.md`; probe `balance/probe_landforms.ts`.
+  MIXED EXPLORATION (`data/explorationLocales.ts`, `world/zoneVariety.ts`):
+  biome-weighted district programs alongside ordinary layouts, independent
+  district choices and optional shortcuts, larger rolled sizes, and terrain
+  fragments extracted from authored maps with rotated sockets and source
+  attribution. Resolved cells/choices/sizes persist in locale plans. Docs:
+  `docs/worldgen/locale-composition.md`; probe `balance/probe_locales.ts`.
   THE HARBORHOLD FABRIC (`data/harborholds.ts` + `world/harborholds.ts` —
   mainland ports as BESIEGED RESIDENCES): every sea spot's HOLD ANCHOR
   wears the walled town (`harborhold_*` compositions → plan structures

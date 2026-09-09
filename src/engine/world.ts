@@ -9171,7 +9171,7 @@ export class World {
   private underSpanPass(seat: ZoneDef): void {
     const pol = underSpanPolicyOf(seat.biome ?? '');
     if (!pol) return; // absent == identical: no stream is even created
-    if (seat.locale || seat.underways?.length || seat.field || seat.pocket || seat.floating
+    if ((seat.locale && !seat.locale.underways) || seat.underways?.length || seat.field || seat.pocket || seat.floating
       || seat.concealed || seat.kind || seat.caveDepth != null || seat.special
       || seat.port || seat.holdAnchor || seat.objective.kind === 'safe') return;
     const rng = new Rng(hashStr(`ugspan:${this.manifest.seed}:${seat.id}`));

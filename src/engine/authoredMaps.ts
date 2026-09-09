@@ -40,6 +40,7 @@
 // ---------------------------------------------------------------------------
 
 import { vec, type Vec2 } from '../core/math';
+import type { LocaleFragment } from '../world/localeFragments';
 import {
   ensureGrid, layoutParam, raiseStructure, registerLayout, scatterDecoration,
   hasDoodadRule, structureMaxFootprint, type GenCtx,
@@ -301,6 +302,16 @@ export function mapCellRegion(map: AuthoredMapDef, ch: string): string {
 export function mapCharAt(map: AuthoredMapDef, cx: number, cy: number): string {
   if (cx < 0 || cy < 0 || cx >= map.cols || cy >= map.rows) return ' ';
   return map.grid[cy]?.[cx] ?? ' ';
+}
+
+/** Terrain-only extraction: receiving districts/biomes supply props and encounters. */
+export function extractTerrainFragment(map: AuthoredMapDef, id: string,
+  crop: { x: number; y: number; w: number; h: number }, ports: LocaleFragment['ports']): LocaleFragment {
+  if (![crop.x, crop.y, crop.w, crop.h].every(Number.isSafeInteger) || crop.x < 0 || crop.y < 0
+    || crop.w < 1 || crop.h < 1 || crop.x + crop.w > map.cols || crop.y + crop.h > map.rows) throw new Error('terrain fragment crop escapes authored map');
+  return { id, source: { map: map.id, ...crop }, ports: structuredClone(ports),
+    cells: Array.from({ length: crop.h }, (_, y) => Array.from({ length: crop.w }, (_, x) =>
+      mapCellRegion(map, mapCharAt(map, crop.x + x, crop.y + y)))) };
 }
 
 /** Is the cell WALKABLE by its region's own word? */

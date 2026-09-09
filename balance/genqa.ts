@@ -115,6 +115,7 @@ import { authoredMapDefs, authoredZoneDef, validateAuthoredMap } from '../src/en
 import { ExplorationReport } from './explorationreport';
 import { EXPLORATION_CFG } from './layoutmetrics';
 import { localePrograms, localeProgram, validateLocaleProgram } from '../src/world/locales';
+import { explorationLocalePools } from '../src/world/zoneVariety';
 import { hasDistrictBuilder } from '../src/engine/localeGen';
 import { mapFeatureKinds } from '../src/world/atlas';
 import { validateCourseStages } from '../src/world/courseStages';
@@ -744,6 +745,7 @@ const layoutSources = [
   ...Object.values(MELDS).map(m => ({ source: `meld ${m.id}`, specs: m.rows as StampSpec[] })),
 ];
 const registryErrors = [
+  ...explorationLocalePools().flatMap(p => p.biomes.filter(b => !BIOMES[b]).map(b => `exploration pool ${p.id}: unknown biome ${b}`)),
   ...localePrograms().flatMap(p => validateLocaleProgram(p, { builder: hasDistrictBuilder, doodad: hasDoodadRule, region: id => !!regionKind(id), walkable: id => !!regionKind(id)?.walkable }).map(e => 'locale ' + p.id + ': ' + e)),
   ...mapFeatureKinds().filter(f => f.destination && !localeProgram(f.destination.locale)).map(f => 'atlas destination ' + f.id + ': unknown locale ' + f.destination!.locale),
   ...dimensionIds().flatMap(dim => (dimensionDef(dim).courses ?? []).flatMap(c =>
@@ -879,11 +881,12 @@ for (const id of layoutIds()) {
 }
 
 // Every locale route graph, both river orientations, with choices rolled per QA seed.
-for (const p of localePrograms()) for (const v of p.variants) for (const sides of [['w', 'e'], ['n', 's']]) {
-  runCase('locale:' + p.id + '/' + v.id + '/' + sides.join(''), {
-    id: 'qa_locale_' + p.id, name: p.label, level: 8, size: p.size,
+for (const p of localePrograms()) for (const v of p.variants) for (const sides of [['w', 'e'], ['n', 's']]) for (const scale of p.sizeScale ?? [1]) {
+  runCase('locale:' + p.id + '/' + v.id + '/' + sides.join('') + '/' + scale, {
+    id: 'qa_locale_' + p.id, name: p.label, level: 8, size: { w: Math.round(p.size.w * scale), h: Math.round(p.size.h * scale) },
     theme: { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' },
     layout: [], layoutType: 'districts', layoutParams: { locale: p.id, localeVariant: v.id, riverSides: sides },
+    ...(p.underways ? { landmarks: [{ landmark: 'rootway_mouth', chance: 1 }] } : {}),
     objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
   });
 }

@@ -3,6 +3,7 @@ import '../engine/escarpmentGen';
 // A new site family is a program + a map-feature row, not a new generator.
 import '../engine/localeGen';
 import './landformLocales';
+import './explorationLocales';
 import { registerLocaleProgram, type LocaleDistrict } from '../world/locales';
 import { registerRegion, regionKind } from '../world/regions';
 
