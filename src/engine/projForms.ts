@@ -29,6 +29,7 @@ import type { ProjectileShape } from './skills';
 /** Drawn-form factors (× radius unless noted). The renderer's shape cases
  *  and the collision tests below read the SAME numbers. */
 export const PROJ_FORM_GEO = {
+  vortex: { arms: 3, turns: 1.4, spinRate: 9, stroke: 0.1, samples: 24 },
   /** Tumbling hammer square: half-extent + tumble rate (rad/s of age). */
   square: { half: 0.8, tumbleRate: 6 },
   /** Long thin bolt along the travel axis. */

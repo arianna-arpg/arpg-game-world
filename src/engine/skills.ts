@@ -43,6 +43,7 @@ export type CountSpec = number | [number, number];
  *  ProjectileDelivery.hitForm: 'circle' opts a skill back to the classic
  *  radius disc. */
 export type ProjectileShape =
+  | 'vortex' // a spinning wind disc; its entire visible wash is the hit surface
   | 'circle' | 'square' | 'line' | 'triangle' | 'octagon'
   | 'bar'    // a wide front perpendicular to travel (beams, force walls)
   | 'arc'    // a crescent opening backward (Frost Pulse)
@@ -5397,6 +5398,8 @@ export function rollSkillRarity(roll: number): SkillRarity {
 
 /** A skill as OWNED by an actor: definition + level + socketed supports. */
 export interface SkillInstance {
+  /** Transient payload provenance: deferred/non-projectile proc hits keep their depth. */
+  procChainDepth?: number;
   def: SkillDef;
   level: number;
   sockets: (SupportInstance | null)[];

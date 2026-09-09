@@ -6775,6 +6775,24 @@ export class Renderer {
       // drift. Animated forms clock on p.age (sim time, deterministic, on
       // the co-op wire), never wall-clock.
       switch (p.shape) {
+        case 'vortex': {
+          const g = PROJ_FORM_GEO.vortex;
+          ctx.globalAlpha *= 0.3;
+          ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha /= 0.3;
+          ctx.strokeStyle = p.color; ctx.lineWidth = r * g.stroke;
+          ctx.rotate(p.age * g.spinRate);
+          for (let arm = 0; arm < g.arms; arm++) {
+            ctx.beginPath();
+            for (let i = 0; i <= g.samples; i++) {
+              const t = i / g.samples, a = arm * Math.PI * 2 / g.arms + t * g.turns * Math.PI * 2;
+              const rr = r * (1 - g.stroke / 2) * t;
+              if (!i) ctx.moveTo(0, 0); else ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+            }
+            ctx.stroke();
+          }
+          break;
+        }
         case 'square': {
           const g = PROJ_FORM_GEO.square;
           ctx.rotate(p.dir + p.age * g.tumbleRate); // tumbling hammer feel

@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_reactiveuniques.ts', status: 'green', tier: 'fast', why: 'Incoming damage conversion, immediate status relay, typed retaliation, reduced minion bonds, distinct randomized support fingers, and periodic twisters' },
   { probe: 'probe_livinguniques.ts', status: 'green', tier: 'fast', why: 'Persistent item choices, traveling damage fields, replenishing worn vanguards, nonrecursive attribute bequests, throng substitutions and personal terrain refuges' },
   { probe: 'probe_abilityecon.ts', status: 'green', tier: 'fast', why: 'THE SKILL-MODE ECONOMY (M-ECON) — every derivation off SKILL_LEVEL_BANDS (soft cap, tier registry, half-open band edges, points per completion, lossy convert), the Ability-Essence feed through real intents (wrong-tier refusals, exact debits, cap + supportMul), the font\'s three recipes (merge: highest-kept/socket-return/keeper\'s-mark/determinism; convert edges; band-priced reset), DROP-AT-1 + the zone floors + tier gradient + the drop floater, the spoils seal on the new mint, and the wallet\'s save + wire round trips incl. the points-era grandfather' },
   { probe: 'probe_aether_countries.ts', status: 'green', tier: 'fast', why: 'the Aetherial pass — the Galestream course, its gate anchor, the course-only biome law and realm-pool tileset resolution' },

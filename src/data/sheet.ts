@@ -235,6 +235,8 @@ export const SHEET_VITALS: string[] = ['life', 'mana', 'moveSpeed'];
  *  The blurb serves any id of the family the tooltip meets. */
 export interface SheetFamilySeat { prefix: string; cat: string; blurb: string }
 export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
+  { prefix: 'takenAs_', cat: 'defense', blurb: 'Changes incoming hit damage before armor and resistance. Simultaneous routes never convert twice or create extra damage.' },
+  { prefix: 'relayStatus_', cat: 'defense', blurb: 'Redirects the named incoming status to a nearby enemy. Without a recipient, it lands normally.' },
   { prefix: 'apply_', cat: 'offense', blurb: 'Chance your hits inflict this status.' },
   { prefix: 'applyWet_', cat: 'offense', blurb: 'Chance your hits inflict this status on a WET target — wading, swimming, soaked or rain-drenched — and nothing at all on a dry one.' },
   { prefix: 'damageVs_', cat: 'offense', blurb: 'Increased damage per stack of this status already on the target.' },

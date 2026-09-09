@@ -3,7 +3,9 @@ import type { ItemInstance, RangedLineDef, UniqueDef } from './items';
 
 export interface UniqueChoiceGroup {
   id: string;
-  options: { id: string; weight: number; lines: RangedLineDef[] }[];
+  /** Groups sharing this key sample exclusive identities without replacement. */
+  uniqueBy?: string;
+  options: { id: string; weight: number; lines: RangedLineDef[]; exclusiveKey?: string }[];
 }
 export interface UniqueChoiceRoll { id: string; rolls: number[] }
 
@@ -11,11 +13,14 @@ export interface UniqueChoiceRoll { id: string; rolls: number[] }
 export function rollUniqueChoices(def: UniqueDef, rng: () => number, magnitude = rng): Record<string, UniqueChoiceRoll> | undefined {
   if (!def.choices?.length) return undefined;
   const result: Record<string, UniqueChoiceRoll> = {};
+  const usedChoices = new Set<string>();
   for (const group of def.choices) {
-    const pool = group.options.filter(o => o.weight > 0 && Number.isFinite(o.weight));
+    const pool = group.options.filter(o => o.weight > 0 && Number.isFinite(o.weight)
+      && (!group.uniqueBy || !o.exclusiveKey || !usedChoices.has(`${group.uniqueBy}:${o.exclusiveKey}`)));
     if (!pool.length) continue;
     let roll = rng() * pool.reduce((n, o) => n + o.weight, 0);
     const option = pool.find(o => (roll -= o.weight) < 0) ?? pool[pool.length - 1];
+    if (group.uniqueBy && option.exclusiveKey) usedChoices.add(`${group.uniqueBy}:${option.exclusiveKey}`);
     const rolls = option.lines.map(() => magnitude());
     for (let i = 1; i < rolls.length; i++) if (option.lines[i].sharedRoll) rolls[i] = rolls[0];
     result[group.id] = { id: option.id, rolls };
@@ -28,12 +33,15 @@ export function rollUniqueChoices(def: UniqueDef, rng: () => number, magnitude =
 export function resolveUniqueChoices(item: ItemInstance, def: UniqueDef): Record<string, UniqueChoiceRoll> | undefined {
   if (!def.choices?.length) return undefined;
   const result: Record<string, UniqueChoiceRoll> = {};
+  const usedChoices = new Set<string>();
   for (const group of def.choices) {
     let seed = item.uid ^ Math.imul(item.ilvl, 0x9e3779b9);
     for (const c of `${def.id}:${group.id}`) seed = Math.imul(seed ^ c.charCodeAt(0), 16777619);
     const rng = new Rng(seed);
     const stored = item.uniqueChoices?.[group.id];
-    const option = stored && group.options.find(o => o.id === stored.id);
+    const available = (o: UniqueChoiceGroup['options'][number]): boolean => !group.uniqueBy || !o.exclusiveKey
+      || !usedChoices.has(`${group.uniqueBy}:${o.exclusiveKey}`);
+    const option = stored && group.options.find(o => o.id === stored.id && available(o));
     if (option) {
       const rolls = option.lines.map((_, i) => {
         const value = stored.rolls?.[i];
@@ -42,9 +50,11 @@ export function resolveUniqueChoices(item: ItemInstance, def: UniqueDef): Record
       for (let i = 1; i < rolls.length; i++) if (option.lines[i].sharedRoll) rolls[i] = rolls[0];
       result[group.id] = { id: option.id, rolls };
     } else {
-      const fallback = rollUniqueChoices({ ...def, choices: [group] }, () => rng.next())?.[group.id];
+      const fallback = rollUniqueChoices({ ...def, choices: [{ ...group, options: group.options.filter(available) }] }, () => rng.next())?.[group.id];
       if (fallback) result[group.id] = fallback;
     }
+    const chosen = option ?? group.options.find(o => o.id === result[group.id]?.id);
+    if (group.uniqueBy && chosen?.exclusiveKey) usedChoices.add(`${group.uniqueBy}:${chosen.exclusiveKey}`);
   }
   return result;
 }

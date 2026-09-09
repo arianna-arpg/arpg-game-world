@@ -240,6 +240,7 @@ import {
   CLING_CFG, clingBurrowed, clingEligible, clingSeatPos, clingSeatsOf, gnawTags,
 } from './cling';
 import { syncAttributeBequests } from './bequests';
+import { STATUS_RELAYS, STATUS_RELAY_IDS, relayStatusStat } from './reception';
 import { TRAIL_GRANTS, POCKET_GRANTS, pocketGrantStat, trailGrantStat, placeGrantedPockets,
   POCKET_GRANT_IDS, TRAIL_GRANT_IDS, substituteThrongKind, type GrantedPocket, type TrailMemory } from './fieldgrants';
 import {
@@ -21201,6 +21202,7 @@ export class World {
    *  flesh that earned it, never to a borrowed one. */
   recalcSeat(seat: Seat): void {
     const p = this.seatHero(seat);
+    p.statusRelay = this.relayStatus;
     const m = seat.meta;
 
     // Effective attributes = class base + everything granted by the tree.
@@ -27996,6 +27998,7 @@ export class World {
   createMonster(defId: string, level: number, team: Team, owner?: Actor): Actor {
     const def: MonsterDef = MONSTERS[defId];
     const a = new Actor(def.name, team, vec(0, 0));
+    a.statusRelay = this.relayStatus;
     a.defId = defId;
     // THE GUN CENSUS: a bombard-wearing mint re-keys updateBombardment's
     // presence flag the same frame — the one signal a push can't carry.
@@ -28910,6 +28913,25 @@ export class World {
   }
 
   // Modifier-granted fields: no item IDs, no persistent changes to terrain.
+  private relayStatus: NonNullable<Actor['statusRelay']> = (owner, args) => {
+    if (owner.dead || owner.downed) return false;
+    for (const id of owner.sheet.armedFamily('relayStatus_', STATUS_RELAY_IDS)) {
+      const relay = STATUS_RELAYS[id];
+      if (relay.status !== args[0] || owner.sheet.get(relayStatusStat(id)) <= 0) continue;
+      let nearest: Actor | undefined, reach = relay.radius;
+      for (const enemy of this.enemiesOf(owner)) {
+        if (!sameStory(owner, enemy) || enemy.dead || enemy.untargetable || enemy.invulnerable || enemy.passive) continue;
+        const d = dist(owner.pos, enemy.pos);
+        if (d < reach) { reach = d; nearest = enemy; }
+      }
+      if (!nearest) continue; // No recipient: the original application lands normally.
+      nearest.applyStatus(args[0], args[1], args[2], owner.name,
+        { ...args[4], casterId: owner.id, relayed: true });
+      return true;
+    }
+    return false;
+  };
+
   private grantedPocketZone = '';
   /** Authoritative drawn circles on a replica; absence means local simulation. */
   syncedGrantedPockets?: Record<number, GrantedPocket[]>;
@@ -39968,6 +39990,7 @@ export class World {
     forceDamage = false,
     fromFuse = false,
   ): void {
+    depth = Math.max(depth, inst.procChainDepth ?? 0);
     const def = inst.def;
     // THE FUSE (FuseSpec — innate or a socketed Time Fuse): the wound
     // BANKS instead of biting. The whole resolution — damage, statuses,
@@ -40196,6 +40219,9 @@ export class World {
         }
       }
       dealt = result.total;
+      if (result.receivedAmounts) this.rollOwnProcs(target, 'struck', {
+        depth, target: caster, crit: wasCrit, receivedAmounts: result.receivedAmounts,
+      });
       if (dealt > 0) {
         // THE RECENCY LEDGER (engine/recency.ts): the blow landed — both
         // sides stamp it (DoT ticks never reach here: a burn is not a blow).
@@ -40205,7 +40231,7 @@ export class World {
         // 'hurt' procs — the victim's OWN sheet answers (sheet-only, golden
         // rule 3); the striker is the proc's target, so a status, an arc
         // or a shove lands on the hand that struck.
-        this.rollOwnProcs(target, 'hurt', { depth, target: caster, crit: wasCrit });
+        this.rollOwnProcs(target, 'hurt', { depth, target: caster, crit: wasCrit, receivedAmounts: result.receivedAmounts });
       }
       // DAMAGE POOLS: the hit's rolled amounts feed any pool skills on the
       // attacker's bar (Venomous Aura sips chaos hits; Detonation, fire).
@@ -41988,6 +42014,7 @@ export class World {
       tags?: Set<SkillTag>; extra?: Modifier[]; inst?: SkillInstance; target?: Actor; depth?: number; bracket?: number;
       /** 'hurt': the incoming blow was critical (the crit / noCrit gates). */
       crit?: boolean;
+      receivedAmounts?: Partial<Record<DamageType, number>>;
       /** 'condition': the ConditionId that just flipped on. */
       condition?: ConditionId;
       /** 'cast': where the cast was pointed — a 'cast' payload's landing. */
@@ -42016,6 +42043,7 @@ export class World {
       // other body (the striker on 'hurt', the refuser on 'miss'/'foiled',
       // the fallen on 'minionDeath').
       if (proc.condition !== undefined && proc.condition !== opts?.condition) continue;
+      if (proc.receivedTypes && !proc.receivedTypes.some(t => (opts?.receivedAmounts?.[t] ?? 0) > 0)) continue;
       if (proc.crit && !opts?.crit) continue;
       if (proc.noCrit && opts?.crit) continue;
       if (proc.vs && (!opts?.target || !this.victimGate(proc.vs, opts.target, owner))) continue;
@@ -42418,7 +42446,7 @@ export class World {
     const level = held ? effectiveSkillLevel(held)
       : inst ? effectiveSkillLevel(inst)
         : Math.max(1, Math.round(caster.level / 2));
-    const payload = (): SkillInstance => held ?? makeSkillInstance(skill, level);
+    const payload = (): SkillInstance => held ?? { ...makeSkillInstance(skill, level), procChainDepth: depth };
     const mult = cast.mult ?? 1;
     if (skill.delivery.type === 'projectile') {
       const bearing = target && target !== caster ? angleTo(caster.pos, target.pos)
@@ -45539,6 +45567,7 @@ export class World {
       // until an ally revives it. (life is 0; skipping avoids re-entering kill.)
       if (a.downed) continue;
       this.syncPocketGrants(a);
+      a.statusRelay ??= this.relayStatus;
       this.updateGrantedTrails(a);
       if (a.owner || a.bequestSignature) {
         const anchor = a.summonInst;
