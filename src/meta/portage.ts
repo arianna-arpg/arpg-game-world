@@ -39,13 +39,14 @@
 // /__save endpoints verbatim, so neither server implementation changes.
 // ---------------------------------------------------------------------------
 
+import { isCurrentCharacterSave } from './saveCompatibility';
 import {
   deserializeAccount, serializeAccount, ROSTER_SLOT_BASE,
   type AccountSave,
 } from './account';
 import { deserializeSettings, serializeSettings, type SettingsSave } from './settings';
 import {
-  CHAR_SCHEMA_VERSION, CHAR_SLOT, charKeyFor,
+  CHAR_SLOT, charKeyFor,
   loadCharacterAsync, loadRosterSave, type CharacterSave,
 } from './character';
 import {
@@ -156,7 +157,7 @@ export function planSaveImport(text: string): SaveImportVerdict {
     if (slot !== CHAR_SLOT && slot < ROSTER_SLOT_BASE) {
       return { ok: false, why: `Character slot ${slot} is reserved ground — not a character slot.` };
     }
-    if (!payload || typeof payload !== 'object' || (payload as CharacterSave).schemaVersion !== CHAR_SCHEMA_VERSION) {
+    if (!isCurrentCharacterSave(payload)) {
       return { ok: false, why: `The character in slot ${slot} does not match this version's save format.` };
     }
     // Only slots the incoming account CLAIMS are written — an unclaimed

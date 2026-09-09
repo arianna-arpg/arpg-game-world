@@ -3,7 +3,6 @@
 import { hash01 } from '../engine/hash';
 import { climateAxisAt, registerClimateInvalidation } from './climate';
 import { continentAt, continentSeedFrom } from './continents';
-import { geographyVersion } from './geography';
 import type { Dir, MapCoord } from './coords';
 
 export const ESCARPMENT_CFG = {
@@ -51,7 +50,6 @@ function scarpCell(gx: number, gy: number, seed: number): Escarpment | null {
   return out;
 }
 export function escarpmentsInRect(min: MapCoord, max: MapCoord, seed: number): Escarpment[] {
-  if (geographyVersion(seed) < 2) return [];
   const c = ESCARPMENT_CFG, pad = c.length[1] / 2 + c.reach;
   const out: Escarpment[] = [];
   for (let y = Math.floor((min.y - pad) / c.span); y <= Math.floor((max.y + pad) / c.span); y++) {

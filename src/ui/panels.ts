@@ -9958,6 +9958,13 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     if (!this.startMenu.classList.contains('hidden') && this.startHandlers && !this.startMenuBack) this.renderStartMenu();
   }
 
+  /** Refresh a boot/update notice without opening or leaving any screen. */
+  setStartMenuNotice(notice: string | undefined): void {
+    if (!this.startHandlers || !notice) return;
+    this.startHandlers.notice = notice;
+    if (!this.startMenu.classList.contains('hidden') && !this.startMenuBack) this.renderStartMenu();
+  }
+
   /** The launch screen: New Run / Continue Run / Immortal Vessels / Vault /
    *  Chronicle / Options / Exit (+ Co-op). Subscreens render into the pane. */
   showStartMenu(

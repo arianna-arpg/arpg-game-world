@@ -56,7 +56,7 @@ import { FEATURE, makeAccount } from '../src/meta/account';
 import { freeRosterSlot, mintCharId, modeById } from '../src/meta/modes';
 import { loadAccount, saveAccount } from '../src/meta/persistence';
 import {
-  applySavedCharacter, characterBody, loadCharacter, loadRosterSave,
+  CHAR_SCHEMA_VERSION, applySavedCharacter, characterBody, loadCharacter, loadRosterSave,
   persistRun, persistRunDurable, serializeCharacter,
   type CharacterSave,
 } from '../src/meta/character';
@@ -119,7 +119,7 @@ check('A3: the baseline save LANDED in the roster slot', !!baselineRaw, `key=${s
 let baseline: CharacterSave | null = null;
 try { baseline = baselineRaw ? JSON.parse(baselineRaw) as CharacterSave : null; } catch { /* unparseable */ }
 check('A4: the baseline body parses and carries the covenant',
-  !!baseline && baseline.schemaVersion === 1 && baseline.modeId === 'immortal'
+  !!baseline && baseline.schemaVersion === CHAR_SCHEMA_VERSION && baseline.modeId === 'immortal'
   && baseline.charId === charId && !!baseline.world,
   baseline ? `modeId=${baseline.modeId}` : 'unparseable');
 
@@ -258,7 +258,7 @@ void (async (): Promise<void> => {
   check('E1: the mortal baseline lands in the shared Continue slot', !!contRaw);
   const cont = loadCharacter();
   check('E2: loadCharacter round-trips it',
-    !!cont && cont.schemaVersion === 1 && (cont.modeId ?? 'mortal') === 'mortal');
+    !!cont && cont.schemaVersion === CHAR_SCHEMA_VERSION && (cont.modeId ?? 'mortal') === 'mortal');
 
   // === RIG F — THE UNDERGROUND EXACT RESUME (recheck #319) ===================
   console.log('--- RIG F: the underground exact resume (the cave ladder) ---');

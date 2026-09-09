@@ -1,6 +1,7 @@
 # Geographic adventure: cliffs, region size, and node density
 
-New expeditions use geography version 2. The atlas and ordinary surface
+All expeditions use the current geography rules. Breaking updates reset saved
+runs through the [save compatibility policy](../engine/save-compatibility.md). The atlas and ordinary surface
 exploration share finite escarpments: the wall drawn on the map blocks roads,
 its central gap admits a crossing, and nearby zones inherit an oriented terrain
 contract. Biome regions independently roll a radius multiplier; region area
@@ -97,12 +98,11 @@ Whole-world counts also depend on climate, water, routes, and biome boundaries.
 
 ## Versioning and extension
 
-`buildManifest` stamps `geographyVersion: 2` for new expeditions.
-Unversioned/legacy saves reconcile to version 1: original biome ownership,
-original depth and frontier steps, and no newly imposed escarpments.
-`WorldSim` installs the run's version before constructing its biome field.
-This locks the algorithm choice, not a snapshot of all future biome registry
-edits. Future incompatible geography changes require a version/migration plan.
+Saved runs do not choose an older geography algorithm. The current update
+bumps the central run revision and discards incompatible characters/worlds.
+Account progression is retained unless an update also bumps the account
+revision. Future incompatible generation or builder changes should use this
+reset policy instead of growing parallel legacy implementations.
 
 Tune `ESCARPMENT_CFG` for frequency, elevation/rise, segment lengths, pass
 width, influence reach, rim width, and the associated locale/river vocabulary.
@@ -113,12 +113,12 @@ radius range without changing occurrence weight or node spacing.
 
 ## Verification
 
-`balance/probe_geography.ts` covers version replay, real region acreage,
+`balance/probe_geography.ts` covers deterministic geography, real region acreage,
 controlled node density, segment/pass road tests, all four sealed rims,
 all four ascent orientations across three seeds, winding route length,
 fall-region policy, cave presence, real pass discovery/reconnection, dimension
 isolation, and save/co-op preservation. It is enrolled in the fast probe gate.
-The atlas probe includes version-2 line features and checks reach beyond their
+The atlas probe includes cliff line features and checks reach beyond their
 finite endpoints. Generation QA enumerates both new locale programs.
 
 The underground-span growth fixture retains its hundred-node floor and now

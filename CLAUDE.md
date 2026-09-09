@@ -1837,6 +1837,14 @@ we verify changes.
 Some data files are very large (`src/data/skills.ts`, `src/engine/world.ts`).
 Prefer targeted `grep` over reading whole files.
 
+## Save compatibility during prototype development
+- Accounts and saved runs are disposable. Prefer deliberate resets over keeping
+  legacy gameplay/generation code solely to preserve old saves.
+- `SAVE_COMPATIBILITY` in `src/meta/saveCompatibility.ts` is the central policy:
+  bump `run` for incompatible character/world changes; bump `account` to reset
+  progression and all characters. Compatible updates leave both unchanged.
+  Update the player-facing reason. See `docs/engine/save-compatibility.md`.
+
 ## Commit convention
 - After a meaningful change, run `npx tsc --noEmit` (or `npm run build`) and make
   sure it is clean **before** committing.

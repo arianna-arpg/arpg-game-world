@@ -17,6 +17,7 @@
 // injected (by reference) into the World and UI. It is never re-loaded mid-run.
 // ---------------------------------------------------------------------------
 
+import { SAVE_COMPATIBILITY } from './saveCompatibility';
 import type { CraftLore } from '../engine/crafting';
 import { CLASSES } from '../data/classes';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
@@ -30,7 +31,7 @@ import { MERC_SCHEMA, type MercRosterEntry } from './mercs';
 // Same one-directional stance (nemesis.ts only type-imports Account).
 import { NEMESIS_SCHEMA, type SagaRecord } from './nemesis';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = SAVE_COMPATIBILITY.account;
 
 /** The classes every account starts with — always in the character-select roll.
  *  Every OTHER class enters the roll pool through its Vault class bundle
@@ -462,6 +463,7 @@ export interface Account {
 /** Serializable form (Sets → arrays) written to localStorage. */
 export interface AccountSave {
   schemaVersion: number;
+  runVersion?: number;
   credits: number;
   lifetimeCredits: number;
   level: number;
@@ -520,6 +522,7 @@ export function makeAccount(): Account {
 export function serializeAccount(a: Account): AccountSave {
   return {
     schemaVersion: SCHEMA_VERSION,
+    runVersion: SAVE_COMPATIBILITY.run,
     credits: a.credits, lifetimeCredits: a.lifetimeCredits, level: a.level,
     invested: a.invested,
     runRecords: a.runRecords,
@@ -593,7 +596,7 @@ export function deserializeAccount(s: AccountSave): Account | null {
     // THE FALLEN stamp (the resurrection covenant) heals FAIL-OPEN: a stamp
     // whose fee is not a positive finite number is shed — corrupt data may
     // never brick a vessel behind an unpayable or NaN debt.
-    roster: (s.roster ?? [])
+    roster: (s.runVersion === SAVE_COMPATIBILITY.run ? s.roster ?? [] : [])
       .filter(r =>
         typeof r?.charId === 'string' && r.charId.length > 0
         && typeof r.modeId === 'string'

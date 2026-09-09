@@ -8,6 +8,7 @@
 // loop one second after boot, to drill the whole path.
 // ---------------------------------------------------------------------------
 
+import { saveResetNotice } from './meta/saveCompatibility';
 import { Input } from './core/input';
 import { PAD_CFG, PadState, connectedPadIndices, padIdAt, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
 import { COUCH_CFG } from './data/couch';
@@ -825,6 +826,7 @@ void (async (): Promise<void> => {
   Object.assign(settings, s);
   applyUiScale(settings.uiScale);             // the disk save may carry a different dial
   ui.setContinueSave(c);                       // disk save wins (re-renders the menu)
+  ui.setStartMenuNotice(saveResetNotice());
   // Workshop disk reconcile: the save file is the cross-session authority
   // (another machine, a cleared browser profile). When it changed anything,
   // re-run the content sweep so the adopted defs get linted too (rare — the

@@ -27,7 +27,6 @@ import type { Dir, MapCoord } from '../world/coords';
 import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, PORT_MINT, biomeSpacing, isAquaticBiome } from '../world/biomes';
 import { escarpmentAt, escarpmentRoad, ESCARPMENT_CFG } from '../world/escarpments';
 import { orientEscarpment } from './escarpmentGen';
-import { geographyVersion } from '../world/geography';
 import { atlasDestinationAt, compileLocale, localeProgram, localeSeed, type AtlasDestination, type LocalePlan } from '../world/locales';
 import { LOCALE_LAYOUT } from './localeGen';
 import { atlasSeedInstalled, bakeAtlasContext, featuresAt, foldFeatureHits } from '../world/atlas';
@@ -1817,7 +1816,7 @@ export function escarpmentConnection(a: Pick<ZoneDef, 'map' | 'geo' | 'dimension
 /** Frontier previews, discovery and minting share the same biome-scaled step. */
 export function biomeFrontierTarget(source: Pick<ZoneDef, 'map' | 'dimension'>, side: Dir, biomeFor?: (c: MapCoord) => string): MapCoord {
   const base = projectCoord(source.map, side), seed = atlasSeedInstalled();
-  if (!biomeFor || seed === null || geographyVersion(seed) < 2 || (source.dimension ?? 'surface') !== 'surface') return base;
+  if (!biomeFor || seed === null || (source.dimension ?? 'surface') !== 'surface') return base;
   const scale = Math.max(0.65, Math.min(2, biomeSpacing(biomeFor(base)) / 70));
   return projectCoord(source.map, side, scale);
 }

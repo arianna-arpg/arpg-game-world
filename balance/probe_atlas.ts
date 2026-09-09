@@ -36,7 +36,6 @@ import {
   mapFeatureKind, mapFeatureKinds, setAtlasSeed, type MapFeature, type RGB,
 } from '../src/world/atlas';
 import { BIOMES, OCEAN_BIOME } from '../src/world/biomes';
-import { installGeography } from '../src/world/geography';
 import { climateAt, setClimateOrigin } from '../src/world/climate';
 import { continentAt, continentSeedFrom } from '../src/world/continents';
 import { RELIEF_CFG, elevationAt, riverPathsInRect, setReliefSeed } from '../src/world/relief';
@@ -71,7 +70,6 @@ seedGlobalRandom(0xa71a5);
   const peakFloor = peakDef.find.kind === 'peaks' ? peakDef.find.minElevation : 0;
   const lodeFloor = lodeDef.find.kind === 'strewn' ? (lodeDef.find.gates?.find(g => g.axis === 'elevation')?.min ?? 0) : 0;
   for (const seed of SEEDS) {
-    installGeography(seed, 2);
     setReliefSeed(seed);
     setAtlasSeed(seed);
     const feats = featuresInRect(MIN, MAX, seed);

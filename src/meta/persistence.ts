@@ -9,6 +9,7 @@
 // wrong — wipe-on-mismatch, no migration. Saving never throws.
 // ---------------------------------------------------------------------------
 
+import { SAVE_COMPATIBILITY, noteSaveReset } from './saveCompatibility';
 import {
   deserializeAccount, makeAccount, serializeAccount,
   type Account, type AccountSave,
@@ -127,12 +128,22 @@ export function loadAccount(): Account {
 
 /** Disk-first account load (used once at boot); warms the localStorage cache. */
 export async function loadAccountAsync(): Promise<Account> {
-  const data = await diskGet<AccountSave>(ACCOUNT_SLOT);
-  if (data) {
-    const acc = deserializeAccount(data);
-    if (acc) { try { window.localStorage.setItem(KEY, JSON.stringify(serializeAccount(acc))); } catch { /* ignore */ } return acc; }
+  const disk = await diskGet<AccountSave>(ACCOUNT_SLOT);
+  let data = disk;
+  if (data === null) {
+    try { data = JSON.parse(window.localStorage.getItem(KEY) ?? 'null') as AccountSave | null; } catch { /* ignore */ }
   }
-  return loadAccount();
+  let acc: Account | null = null;
+  try { if (data) acc = deserializeAccount(data); } catch { /* corrupt account */ }
+  const accountReset = !!data && typeof data.schemaVersion === 'number' && data.schemaVersion !== SAVE_COMPATIBILITY.account;
+  const runReset = !!acc && data?.runVersion !== SAVE_COMPATIBILITY.run;
+  if (accountReset) noteSaveReset('account');
+  else if (runReset && (data?.roster?.length ?? 0) > 0) noteSaveReset('run');
+  const fresh = acc ?? makeAccount();
+  const body = JSON.stringify(serializeAccount(fresh));
+  try { window.localStorage.setItem(KEY, body); } catch { /* ignore */ }
+  if (disk !== null && (accountReset || runReset)) diskPut(ACCOUNT_SLOT, body);
+  return fresh;
 }
 
 export function saveAccount(a: Account): void {

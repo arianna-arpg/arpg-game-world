@@ -18,7 +18,6 @@
 // never pulls in ZoneDef. Mirrors the one-way-leaf discipline of traits.ts.
 // ---------------------------------------------------------------------------
 
-import { geographyVersion } from './geography';
 import { continentAt, continentSeedFrom } from './continents';
 import { CLIMATE_CFG, climateAt, climateAffinity, registerClimateInvalidation, validateClimateSpecs, type ClimateSpec } from './climate';
 import { presenceMul, type LevelEnvelope } from '../engine/presence';
@@ -1597,53 +1596,19 @@ export function regionWinner(coord: MapCoord, seed: number): { biome: string; gx
   return { ...best, depth: Number.isFinite(other) ? Math.max(0, 1 - Math.sqrt(best.score / Math.max(other, 1e-9))) : 1 };
 }
 
-/** The biome at a map coordinate; legacy fields retain the original Voronoi. */
+/** The current biome at a map coordinate, with the ocean mask authoritative. */
 export function biomeAt(coord: MapCoord, fieldSeed: number): string {
   // THE LANDMASS LAYER SITS ABOVE THE LAND LATTICE: open sea is its own
   // contiguous biome, not an overlay — so every sampler of "what is HERE"
   // (map wash, Field flood-fills, mint decisions, event anchors) agrees the
   // sea is sea. Land and bridges fall through to the land lattice below.
   if (continentAt(coord, continentSeedFrom(fieldSeed)).kind === 'ocean') return OCEAN_BIOME;
-  if (geographyVersion(fieldSeed) >= 2) return regionWinner(coord, fieldSeed).biome;
-  const span = BIOME_FIELD_CFG.cellSpan, jit = BIOME_FIELD_CFG.jitter;
-  const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
-  let bd = Infinity, bestGx = cx, bestGy = cy, bestPx = coord.x, bestPy = coord.y;
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      const gx = cx + dx, gy = cy + dy;
-      const h = hashCell(gx, gy, fieldSeed);
-      const px = (gx + 0.5 + (((h & 0xffff) / 0xffff) - 0.5) * jit) * span;
-      const py = (gy + 0.5 + ((((h >>> 16) & 0xffff) / 0xffff) - 0.5) * jit) * span;
-      const d = (px - coord.x) ** 2 + (py - coord.y) ** 2;
-      if (d < bd) { bd = d; bestGx = gx; bestGy = gy; bestPx = px; bestPy = py; }
-    }
-  }
-  return fieldBiomePick(BIOME_FIELD, bestGx, bestGy, { x: bestPx, y: bestPy }, fieldSeed);
+  return regionWinner(coord, fieldSeed).biome;
 }
 
-/** How DEEP into its biome region a coordinate sits: 1 at the region's (jittered)
- *  Voronoi seed/center, →0 at the boundary with a neighbouring region. The same 3×3
- *  search as biomeAt (the winning seed's squared distance, normalized by half a cell).
- *  Pure + deterministic. Drives the marine "edge=shallows / center=deep sea" gradient. */
+/** Local interior depth relative to nearby different biomes; same-biome cells merge. */
 export function biomeDepth(coord: MapCoord, fieldSeed: number): number {
-  if (geographyVersion(fieldSeed) >= 2) {
-    const region = regionWinner(coord, fieldSeed);
-    return region.depth; // boundaries between SAME-biome cells do not reset its interior
-  }
-  const span = BIOME_FIELD_CFG.cellSpan, jit = BIOME_FIELD_CFG.jitter;
-  const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
-  let bd = Infinity;
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      const gx = cx + dx, gy = cy + dy;
-      const h = hashCell(gx, gy, fieldSeed);
-      const px = (gx + 0.5 + (((h & 0xffff) / 0xffff) - 0.5) * jit) * span;
-      const py = (gy + 0.5 + ((((h >>> 16) & 0xffff) / 0xffff) - 0.5) * jit) * span;
-      const d = (px - coord.x) ** 2 + (py - coord.y) ** 2;
-      if (d < bd) bd = d;
-    }
-  }
-  return Math.max(0, Math.min(1, 1 - Math.sqrt(bd) / (span * 0.5)));
+  return regionWinner(coord, fieldSeed).depth;
 }
 
 /** Deterministic 0..1 noise at a coordinate — the dither a BiomeField modifier

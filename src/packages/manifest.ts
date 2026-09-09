@@ -10,7 +10,6 @@
 // so a removed/renamed package never invalidates a live character.
 // ---------------------------------------------------------------------------
 
-import { GEOGRAPHY_VERSION } from '../world/geography';
 import type { Account } from '../meta/account';
 import { PACKAGES, PACKAGE_BY_ID } from './registry';
 import { isConfigured } from './registry';
@@ -28,8 +27,6 @@ export interface ManifestEntry {
 
 export interface ExpeditionManifest {
   schemaVersion: number;
-  /** Missing on legacy saves: retain their established geography. */
-  geographyVersion?: number;
   seed: number;
   packages: ManifestEntry[];
   /** The run-locked GLOBAL event-frequency crank (see packages/frequency.ts).
@@ -95,7 +92,6 @@ export function buildManifest(account: Account, seed: number): ExpeditionManifes
   return {
     schemaVersion: MANIFEST_SCHEMA_VERSION,
     seed: seed >>> 0,
-    geographyVersion: GEOGRAPHY_VERSION,
     packages: manifestPackages(account).map(p => entryFor(p, account)),
     frequency: clampFrequency(account.frequencyProfile),
   };
@@ -108,7 +104,7 @@ export function buildManifest(account: Account, seed: number): ExpeditionManifes
 export function reconcileManifest(raw: unknown, account: Account, fallbackSeed: number): ExpeditionManifest {
   const r = raw as Partial<ExpeditionManifest> | null | undefined;
   if (!r || typeof r !== 'object' || !Array.isArray(r.packages)) {
-    return { ...buildManifest(account, (r && typeof r.seed === 'number') ? r.seed : fallbackSeed), geographyVersion: 1 };
+    return buildManifest(account, (r && typeof r.seed === 'number') ? r.seed : fallbackSeed);
   }
   const packages: ManifestEntry[] = [];
   for (const e of r.packages) {
@@ -126,7 +122,6 @@ export function reconcileManifest(raw: unknown, account: Account, fallbackSeed: 
     schemaVersion: MANIFEST_SCHEMA_VERSION,
     seed: (typeof r.seed === 'number' ? r.seed : fallbackSeed) >>> 0,
     packages,
-    geographyVersion: r.geographyVersion === GEOGRAPHY_VERSION ? GEOGRAPHY_VERSION : 1,
     frequency: clampFrequency(r.frequency),
   };
 }

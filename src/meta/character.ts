@@ -9,6 +9,7 @@
 // No migration: a schema bump just makes old saves unresumable (→ class select).
 // ---------------------------------------------------------------------------
 
+import { SAVE_COMPATIBILITY, isCurrentCharacterSave, noteSaveReset } from './saveCompatibility';
 import { CLASSES } from '../data/classes';
 import { PASSIVE_NODES } from '../data/passives';
 import { sanitizeChoices, sanitizeGrafts } from '../data/passiveChoices';
@@ -33,7 +34,7 @@ import type { WorldStateSave } from './worldstate';
 import type { MercSnapshot } from './mercs';
 import type { Account } from './account';
 
-export const CHAR_SCHEMA_VERSION = 1;
+export const CHAR_SCHEMA_VERSION = SAVE_COMPATIBILITY.run;
 const CHAR_KEY = 'arpg_character_v1';
 export const CHAR_SLOT = 1; // disk save slot (saves/save_1.json; exported for meta/portage.ts)
 
@@ -64,6 +65,7 @@ interface SavedSkill {
 }
 export interface CharacterSave {
   schemaVersion: number;
+  accountVersion: number;
   classId: string;
   /** THE NAME (Naming/Nemesis): player-given, or the class name when unnamed.
    *  Optional → pre-naming saves load named for their class. */
@@ -204,6 +206,7 @@ export function serializeCharacter(world: World): CharacterSave {
   const keptZones = new Set(ws.zones.map(z => z.id));
   return {
     schemaVersion: CHAR_SCHEMA_VERSION,
+    accountVersion: SAVE_COMPATIBILITY.account,
     classId: m.classDef.id,
     name: m.name,
     baseAttrs: { ...m.baseAttrs },
@@ -409,8 +412,9 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
 }
 
 /** Rebuild meta from a save and graft it onto an already-created World/player.
- *  Returns false only if the class id is gone (run is unresumable). */
+ *  Returns false for an incompatible save or a removed class (unresumable). */
 export function applySavedCharacter(world: World, save: CharacterSave): boolean {
+  if (!isCurrentCharacterSave(save)) return false;
   const built = rebuildSavedMeta(save);
   if (!built) return false;
   world.ledger = { ...(save.ledger ?? {}) }; // restore per-run trigger counters
@@ -452,28 +456,34 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
   return true;
 }
 
+function cachedCharacter(slot: number): CharacterSave | null {
+  try { return JSON.parse(window.localStorage.getItem(charKeyFor(slot)) ?? 'null') as CharacterSave | null; }
+  catch { return null; }
+}
 export function loadCharacter(): CharacterSave | null {
-  let raw: string | null = null;
-  try { raw = window.localStorage.getItem(CHAR_KEY); } catch { return null; }
-  if (!raw) return null;
-  try {
-    const data = JSON.parse(raw) as CharacterSave;
-    return data && data.schemaVersion === CHAR_SCHEMA_VERSION ? data : null;
-  } catch {
-    return null;
-  }
+  const data = cachedCharacter(CHAR_SLOT);
+  return isCurrentCharacterSave(data) ? data : null;
 }
 
-/** Disk-first character load (used once at boot); warms the localStorage cache.
- *  A wiped slot is stored as '{}' (no schemaVersion) → rejected → no Continue. */
-export async function loadCharacterAsync(): Promise<CharacterSave | null> {
-  const data = await diskGet<CharacterSave>(CHAR_SLOT);
-  if (data && data.schemaVersion === CHAR_SCHEMA_VERSION) {
-    try { window.localStorage.setItem(CHAR_KEY, JSON.stringify(data)); } catch { /* ignore */ }
+/** One authority choice for every character slot: an existing disk tombstone
+ *  or incompatible save must never resurrect a newer-looking cached mirror. */
+async function loadCharacterSlot(slot: number): Promise<CharacterSave | null> {
+  const disk = await diskGet<CharacterSave>(slot);
+  const data = disk !== null ? disk : cachedCharacter(slot);
+  if (isCurrentCharacterSave(data)) {
+    try { window.localStorage.setItem(charKeyFor(slot), JSON.stringify(data)); } catch { /* ignore */ }
     return data;
   }
-  return loadCharacter();
+  if (data && typeof data.schemaVersion === 'number') {
+    noteSaveReset(data.accountVersion !== undefined && data.accountVersion !== SAVE_COMPATIBILITY.account ? 'account' : 'run');
+    // Only overwrite a disk copy we actually read. An unavailable endpoint
+    // must not schedule a wipe against an unseen save on that endpoint.
+    if (disk !== null) diskPut(slot, '{}');
+  }
+  try { window.localStorage.removeItem(charKeyFor(slot)); } catch { /* ignore */ }
+  return null;
 }
+export const loadCharacterAsync = (): Promise<CharacterSave | null> => loadCharacterSlot(CHAR_SLOT);
 
 /** The localStorage mirror key for a character slot (the shared run slot keeps
  *  its historical key; roster slots suffix theirs). Exported for meta/portage.ts. */
@@ -608,19 +618,7 @@ export function clearCharacter(): void {
 
 /** Load a roster character's save from its slot: disk-first (the authority),
  *  localStorage mirror as the static-host fallback. Null = empty/corrupt. */
-export async function loadRosterSave(slot: number): Promise<CharacterSave | null> {
-  const data = await diskGet<CharacterSave>(slot);
-  if (data && data.schemaVersion === CHAR_SCHEMA_VERSION) {
-    try { window.localStorage.setItem(charKeyFor(slot), JSON.stringify(data)); } catch { /* ignore */ }
-    return data;
-  }
-  try {
-    const raw = window.localStorage.getItem(charKeyFor(slot));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as CharacterSave;
-    return parsed && parsed.schemaVersion === CHAR_SCHEMA_VERSION ? parsed : null;
-  } catch { return null; }
-}
+export const loadRosterSave = (slot: number): Promise<CharacterSave | null> => loadCharacterSlot(slot);
 
 /** Durably empty a roster slot (vessel deletion — a deliberate roster action). */
 export function wipeRosterSlot(slot: number): void {
@@ -677,6 +675,7 @@ export function serializeCouchGuest(
   const hero = world.seatHero(seat);
   return {
     schemaVersion: CHAR_SCHEMA_VERSION,
+    accountVersion: SAVE_COMPATIBILITY.account,
     classId: m.classDef.id,
     name: m.name,
     baseAttrs: { ...m.baseAttrs },
