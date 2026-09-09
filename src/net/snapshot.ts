@@ -1392,6 +1392,8 @@ export interface ZoneMsg {
   zoneId: string; name: string; level: number;
   /** Baked regional identity for the current locale, optional on old peers. */
   journey?: CourseJourney;
+  locale?: ZoneDef['locale'];
+  destination?: ZoneDef['destination'];
   /** Host-resolved geographic context; never sample the client's world field. */
   geo?: ZoneDef['geo'];
   /** The zone's DIMENSION ('surface' omitted) — the client's map tab, dimension
@@ -1443,6 +1445,8 @@ export interface ZoneMsg {
 export function serializeZone(world: World): ZoneMsg {
   return {
     zoneId: world.zone.id, name: world.zone.name, level: world.zone.level,
+    ...(world.zone.locale ? { locale: structuredClone(world.zone.locale) } : {}),
+    ...(world.zone.destination ? { destination: structuredClone(world.zone.destination) } : {}),
     ...(world.zone.journey ? { journey: { ...world.zone.journey } } : {}),
     ...(world.zone.geo ? { geo: structuredClone(world.zone.geo) } : {}),
     dimension: world.zone.dimension,
@@ -1490,6 +1494,10 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   world.zone.theme = msg.theme;
   world.zone.name = msg.name;
   world.zone.level = msg.level;
+  if (msg.locale) world.zone.locale = structuredClone(msg.locale);
+  else delete world.zone.locale;
+  if (msg.destination) world.zone.destination = structuredClone(msg.destination);
+  else delete world.zone.destination;
   if (msg.journey) world.zone.journey = { ...msg.journey };
   else delete world.zone.journey; // leaving a route clears the previous stage
   if (msg.geo) world.zone.geo = structuredClone(msg.geo);

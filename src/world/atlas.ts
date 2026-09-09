@@ -127,7 +127,8 @@ export type FeatureFinder =
    *  the sea, not at the reach bound — dies in a basin; the basin is the
    *  feature, sized by the run that fed it (`radius` over runs from
    *  `minRun` points up to the reach bound). */
-  | { kind: 'lakes'; minRun: number; radius: [number, number] };
+  | { kind: 'lakes'; minRun: number; radius: [number, number] }
+  | { kind: 'river-sites'; minRun: number; progress: [number, number]; chance: number; salt: number };
 
 /** What a zone minted within a kind's reach INHERITS at the mint. */
 export interface FeatureInherit {
@@ -165,6 +166,8 @@ export interface MapFeatureKindDef {
   /** The pane's second line ('high ground — the summit stands in this country'). */
   read: string;
   inherit?: FeatureInherit;
+  /** One explorable destination at the seat, claimed by nearby frontier travel. */
+  destination?: { locale: string };
 }
 
 export interface MapFeature {
@@ -178,6 +181,8 @@ export interface MapFeature {
   size: number;
   /** Finder scalar — a summit's elevation, a lake's radius, a lode's elevation. */
   value: number;
+  /** Local crossing orientation from the same river shown on the atlas. */
+  riverSides?: [string, string];
 }
 
 export interface MapFeatureHit { feature: MapFeature; dist: number; def: MapFeatureKindDef }
@@ -226,6 +231,13 @@ const ORDER: string[] = [];
 
 export function registerMapFeature(def: MapFeatureKindDef, overwrite = false): void {
   if (!overwrite && KINDS[def.id]) return;
+  const finder = def.find;
+  if (finder.kind === 'river-sites' && (!Number.isInteger(finder.minRun) || finder.minRun < 3
+    || !Number.isFinite(finder.chance) || finder.chance < 0 || finder.chance > 1
+    || !Number.isSafeInteger(finder.salt) || !finder.progress.every(n => Number.isFinite(n) && n >= 0 && n <= 1)
+    || finder.progress[0] > finder.progress[1] || !Number.isFinite(def.reach) || def.reach <= 0)) {
+    throw new Error(`atlas destination ${def.id}: invalid river-sites finder`);
+  }
   // BakedMapFeature records keep existing zones stable; future field queries
   // must see an edited finder's seats/names instead of its old cached results.
   if (KINDS[def.id]) memo.clear();
@@ -295,7 +307,7 @@ function mk(def: MapFeatureKindDef, a: number, b: number, seat: MapCoord, value:
 /** One lattice cell's feature (memoized) — THE finder both halves share. */
 function cellFeature(def: MapFeatureKindDef, gx: number, gy: number, seed: number): MapFeature | null {
   const f = def.find;
-  if (f.kind === 'lakes') return null;
+  if (f.kind === 'lakes' || f.kind === 'river-sites') return null;
   const key = `${def.id}|${seed}|${gx}|${gy}`;
   const hit = memo.get(key);
   if (hit !== undefined) return hit;
@@ -322,6 +334,30 @@ function cellFeature(def: MapFeatureKindDef, gx: number, gy: number, seed: numbe
   }
   if (memo.size >= MEMO_CAP) memo.clear();
   memo.set(key, out);
+  return out;
+}
+
+function riverSitesInRect(def: MapFeatureKindDef, min: MapCoord, max: MapCoord, seed: number): MapFeature[] {
+  const f = def.find;
+  if (f.kind !== 'river-sites') return [];
+  const out: MapFeature[] = [], seen = new Set<string>();
+  // Ask for whole paths through the padded rectangle. Site selection reads
+  // the path's spring, never the query window or discovery order.
+  for (const pts of riverPathsInRect({ x: min.x - def.reach, y: min.y - def.reach },
+    { x: max.x + def.reach, y: max.y + def.reach }, seed)) {
+    if (pts.length < f.minRun) continue;
+    const spring = pts[0], a = Math.round(spring.x), b = Math.round(spring.y);
+    if (hash01(a, b, (seed ^ f.salt) >>> 0) >= f.chance) continue;
+    const t = f.progress[0] + (f.progress[1] - f.progress[0]) * hash01(b, a, (seed ^ f.salt ^ 0x73a1) >>> 0);
+    const i = Math.max(1, Math.min(pts.length - 2, Math.floor(t * (pts.length - 1))));
+    const seat = pts[i];
+    if (seat.x < min.x - def.reach || seat.x > max.x + def.reach || seat.y < min.y - def.reach || seat.y > max.y + def.reach
+      || continentAt(seat, continentSeedFrom(seed)).kind !== 'land') continue;
+    const feature = mk(def, a, b, { ...seat }, t, seed);
+    const dx = pts[i + 1].x - pts[i - 1].x, dy = pts[i + 1].y - pts[i - 1].y;
+    feature.riverSides = Math.abs(dx) >= Math.abs(dy) ? ['w', 'e'] : ['n', 's'];
+    if (!seen.has(feature.id)) { seen.add(feature.id); out.push(feature); }
+  }
   return out;
 }
 
@@ -353,6 +389,7 @@ export function featuresInRect(min: MapCoord, max: MapCoord, seed: number | null
     const def = KINDS[id];
     const f = def.find;
     if (f.kind === 'lakes') { out.push(...lakesInRect(def, min, max, seed)); continue; }
+    if (f.kind === 'river-sites') { out.push(...riverSitesInRect(def, min, max, seed)); continue; }
     const pad = def.reach + f.span;
     const c0x = Math.floor((min.x - pad) / f.span), c1x = Math.floor((max.x + pad) / f.span);
     const c0y = Math.floor((min.y - pad) / f.span), c1y = Math.floor((max.y + pad) / f.span);
@@ -377,7 +414,9 @@ export function featuresAt(coord: MapCoord, seed: number | null = atlasSeed): Ma
     const f = def.find;
     const r = def.reach;
     const cands: MapFeature[] = [];
-    if (f.kind === 'lakes') {
+    if (f.kind === 'river-sites') {
+      cands.push(...riverSitesInRect(def, coord, coord, seed));
+    } else if (f.kind === 'lakes') {
       cands.push(...lakesInRect(def, { x: coord.x - r, y: coord.y - r }, { x: coord.x + r, y: coord.y + r }, seed));
     } else {
       const c0x = Math.floor((coord.x - r - f.span) / f.span), c1x = Math.floor((coord.x + r + f.span) / f.span);

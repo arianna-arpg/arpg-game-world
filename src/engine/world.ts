@@ -8,6 +8,7 @@
 // modifiers flow into every stat query for that use.
 // ---------------------------------------------------------------------------
 
+import { atlasDestinationAt } from '../world/locales';
 import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, randInt, vec, type Vec2 } from '../core/math';
 import { DiscIndex } from './spatial';
 import { ActorGrid } from './actorGrid';
@@ -9021,7 +9022,9 @@ export class World {
       return source;
     }
     // Field regions are a SURFACE feature — a dimensioned source never joins one.
-    const ext = source.dimension ? null : fieldRegionAt(target, seed);
+    const atlasDestination = (source.dimension ?? 'surface') === 'surface'
+      ? atlasDestinationAt(target, source.destination?.feature) : undefined;
+    const ext = source.dimension || atlasDestination ? null : fieldRegionAt(target, seed);
     if (ext) {
       // A frontier that still lands in our OWN region (a concave blob edge) is redundant —
       // return source so eagerChartNeighbors drops it (never mint a twin of our own region).
@@ -9071,7 +9074,7 @@ export class World {
         return river;
       }
     }
-    if (EAGER_WORLD_WEB) {
+    if (!atlasDestination && EAGER_WORLD_WEB) {
       const near = this.nearestLinkable(target, source, exitDef.side);
       if (near) { this.linkBackTo(near, source); return near; }
     }
@@ -9084,7 +9087,7 @@ export class World {
     // (quests/events) never pass here — the story always mints; and a
     // ROADLESS GATE HUB's fan is exempt too (its arms are the realm's
     // authored front door — a dropped arm could never be re-linked, ever).
-    if (!ext && !this.roadlessGateHub(source) && this.mintGroundTaken(target, source)) return source;
+    if (!atlasDestination && !ext && !this.roadlessGateHub(source) && this.mintGroundTaken(target, source)) return source;
     // Mint at the computed target. A Field source projects from the boundary (placeZoneAt
     // takes an explicit target); a normal source uses generateZone's node-step projection.
     // A non-surface source samples ITS OWN dimension's biome palette (hell grows hell).
@@ -9108,7 +9111,8 @@ export class World {
           { tileset: exitDef.tileset, biomeFor, levelFor: this.levelFor, biomeDepthFor: depthFor, climateFor: this.climateFor, fieldBiome: true, dimension: source.dimension })
         : generateZone(source, exitDef, this.zoneMap, this.nextGenId++, biomeFor, this.levelFor, depthFor, this.climateFor,
           this.courseMintFor(source.dimension));
-    this.fieldifyZone(gen, ext);
+    if (this.zoneMap[gen.id] === gen) return gen; // an atlas destination already charted by another approach
+    if (!gen.locale) this.fieldifyZone(gen, ext);
     if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
     if (this.mintVeil) gen.veiled = true; // a forechart sweep mints AHEAD of the walker
     this.zoneMap[gen.id] = gen;
@@ -9157,7 +9161,7 @@ export class World {
   private underSpanPass(seat: ZoneDef): void {
     const pol = underSpanPolicyOf(seat.biome ?? '');
     if (!pol) return; // absent == identical: no stream is even created
-    if (seat.underways?.length || seat.field || seat.pocket || seat.floating
+    if (seat.locale || seat.underways?.length || seat.field || seat.pocket || seat.floating
       || seat.concealed || seat.kind || seat.caveDepth != null || seat.special
       || seat.port || seat.holdAnchor || seat.objective.kind === 'safe') return;
     const rng = new Rng(hashStr(`ugspan:${this.manifest.seed}:${seat.id}`));
@@ -10192,7 +10196,7 @@ export class World {
    *  `ext` is the region already computed at the frontier target (reused for consistency
    *  with the mint-once key); a directed mint recomputes from the minted node. */
   private fieldifyZone(def: ZoneDef, ext: FieldExtent | null): void {
-    if (def.biome !== FIELD_BIOME) return;
+    if (def.locale || def.biome !== FIELD_BIOME) return;
     const seed = this.sim.biomeField.fieldSeed;
     const e = ext ?? fieldRegionAt(def.map, seed);
     if (!e) return;

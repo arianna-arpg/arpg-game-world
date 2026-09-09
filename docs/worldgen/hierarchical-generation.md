@@ -230,3 +230,8 @@ Type checks, the stage probe, existing relief and soul-river probes, and balance
 smoke passed. Balance smoke also reported one provisional magician time-to-kill
 tuning flag; it is not a generation failure. Playtesting at the intended camera
 scale remains necessary before treating the new stage parameters as final tuning.
+
+The next layer is implemented in [District locales and atlas destinations](district-locales.md):
+versioned locale programs combine open ground, courts, caverns, and stone arches
+on one grid, with river crossings and attributed routes. Atlas river sites now
+claim stable, explorable destinations through the ordinary frontier path.

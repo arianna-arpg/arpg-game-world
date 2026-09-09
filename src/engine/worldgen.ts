@@ -25,6 +25,8 @@ import { blendMean, composeBlendLayout, mergeBlendPacks } from './blend';
 import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
 import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, PORT_MINT, biomeSpacing, isAquaticBiome } from '../world/biomes';
+import { atlasDestinationAt, compileLocale, localeProgram, localeSeed, type AtlasDestination, type LocalePlan } from '../world/locales';
+import { LOCALE_LAYOUT } from './localeGen';
 import { atlasSeedInstalled, bakeAtlasContext, featuresAt, foldFeatureHits } from '../world/atlas';
 import { fieldCoreRect } from '../world/fieldRegion';
 import { dimensionDef, dimensionsEnteredBy, isRoadlessGateHub } from '../world/dimensions';
@@ -526,7 +528,7 @@ export function insideFieldFootprint(pt: MapCoord, zoneMap: Record<string, ZoneD
  *  (berths carry the drawn edges) — so a blob that minted around authored
  *  ground can slide its node off the squatter instead of deadlocking. */
 export function settleMovable(z: ZoneDef): boolean {
-  return z.objective.kind !== 'safe' && !z.port && !z.holdAnchor
+  return !z.destination && z.objective.kind !== 'safe' && !z.port && !z.holdAnchor
     && z.caveDepth == null && !zoneKindOf(z)?.staticExits && !isRoadlessGateHub(z);
 }
 
@@ -1143,6 +1145,41 @@ export function placeZoneAt(
   target: MapCoord, anchor: ZoneDef | null,
   zoneMap: Record<string, ZoneDef>, genIndex: number, spec: ZoneSpec,
 ): ZoneDef {
+  // Atlas destinations are claimed only by ordinary surface exploration.
+  // A canonical feature id reconnects later approaches to the existing node.
+  let destination: AtlasDestination | undefined, locale: LocalePlan | undefined;
+  const destinationSeed = atlasSeedInstalled();
+  if (destinationSeed !== null && spec.fieldBiome && (spec.dimension ?? 'surface') === 'surface'
+    && !spec.id && !spec.layoutType && !spec.special && !spec.port && !spec.pocket && !spec.floating && !spec.kind && !spec.noWeave) {
+    const hit = atlasDestinationAt(target, anchor?.destination?.feature);
+    if (hit) {
+      const program = localeProgram(hit.def.destination!.locale)!;
+      const id = 'gen_atlas_' + destinationSeed + '_' + hit.feature.id;
+      const existing = zoneMap[id];
+      if (existing) {
+        if (anchor && anchor.id !== id && (anchor.dimension ?? 'surface') === 'surface' && !spec.noBackEdge) {
+          const side = sideToward(existing.map, anchor.map);
+          if (!existing.exits.some(e => e.to === anchor.id)) existing.exits.push({ to: anchor.id, side,
+            at: spacedExitAt(existing, side), notarized: true });
+          if (spec.linkBack && !isRoadlessGateHub(anchor) && !anchor.exits.some(e => e.to === id)) {
+            const back = OPP_DIR[side];
+            anchor.exits.push({ to: id, side: back, at: spacedExitAt(anchor, back), notarized: true });
+          }
+          pokeWeb();
+        }
+        return existing;
+      }
+      const seed = localeSeed(destinationSeed + '/' + hit.feature.id + '/' + program.version);
+      locale = compileLocale(program, seed);
+      destination = { feature: hit.feature.id, name: hit.feature.name, seed: destinationSeed,
+        seat: { ...hit.feature.seat }, program: program.id };
+      target = { ...hit.feature.seat };
+      spec = { ...spec, id, seed, name: hit.feature.name, shape: 'rect', layoutType: LOCALE_LAYOUT,
+        objective: spec.objective ?? { kind: 'clear' }, noFactionWar: true,
+        sizeBand: { w: [program.size.w, program.size.w], h: [program.size.h, program.size.h] },
+        layoutParams: { ...spec.layoutParams, riverSides: hit.feature.riverSides } };
+    }
+  }
   // Anchor pick (null = directed mints: quests, events, soundings): PREFER a
   // node whose chord home stays DRY (the dry-road law's soft half — the
   // connectFloatingZone idiom); fall back to the plain nearest when no dry
@@ -1390,6 +1427,8 @@ export function placeZoneAt(
     }
   }
 
+  if (destination) Object.assign(map, destination.seat); // atlas seat is immutable geography
+
   // Back-edge to the anchor (reachability is the back-edge's job — UNCONDITIONAL,
   // bypassing the degree cap), then 1-2 fresh frontiers so it can grow its own edges.
   // A FLOATING zone skips the back-edge (it mints disconnected, wired in later by
@@ -1511,11 +1550,11 @@ export function placeZoneAt(
   // data). Baked onto the def so revisits/co-op replay the same rolls, and so
   // the bastion layout resolves its candidate pool from the zone itself. Special
   // arenas skip them (a boss arena owns its own furniture).
-  const structureRolls = spec.special ? [] : [
+  const structureRolls = spec.special || locale ? [] : [
     ...(tileset.structures ?? []),
     ...(biome ? BIOMES[biome]?.structures ?? [] : []),
   ];
-  const landmarkRolls = spec.special ? [] : [
+  const landmarkRolls = spec.special || locale ? [] : [
     ...(tileset.landmarks ?? []),
     ...(biome ? BIOMES[biome]?.landmarks ?? [] : []),
     // A port ALWAYS gets its shoreline (the harbor's reason to exist).
@@ -1535,7 +1574,7 @@ export function placeZoneAt(
   ];
   // COMPOSITION ROLLS: the whole-zone coordinated bundles, same merge + bake
   // discipline as structures/landmarks (special arenas skip them too).
-  const compositionRolls = spec.special ? [] : [
+  const compositionRolls = spec.special || locale ? [] : [
     ...(tileset.compositions ?? []),
     ...(biome ? BIOMES[biome]?.compositions ?? [] : []),
     // A course TERMINUS bakes its reward rolls onto the def like any other
@@ -1583,6 +1622,7 @@ export function placeZoneAt(
   const camera = spec.camera ?? tileset.camera;
   const def: ZoneDef = {
     id, name, level,
+    ...(locale ? { locale, destination } : {}),
     size,
     shape, biome,
     // MINT PROVENANCE (the face-voice seam): the resolved face this ground
@@ -1594,7 +1634,7 @@ export function placeZoneAt(
     ...(isAquaticBiome(biome) ? { aquatic: true } : {}),
     theme: spec.special ? SPECIAL_ARENA_THEME
       : variantTheme ? { ...tileset.theme, ...variantTheme } : tileset.theme,
-    layout,
+    layout: locale ? [] : layout,
     ...(layoutType !== 'plains' ? { layoutType } : {}),
     objective: objectiveFinal,
     // The biome's puzzle repertoire + ambient scenery-actors ride the def
@@ -1606,7 +1646,7 @@ export function placeZoneAt(
     // never did, so every authored surface budget (the downs' tor caches,
     // the warrens' squats + stairwells) was silently inert. stampHollows
     // runs LAST in generateLayout, so the bake shifts no earlier draw.
-    ...(tileset.hollows ? { hollows: tileset.hollows } : {}),
+    ...(!locale && tileset.hollows ? { hollows: tileset.hollows } : {}),
     packs: spec.packsOverride ?? tileset.packs,
     exits,
     map,
@@ -1642,11 +1682,11 @@ export function placeZoneAt(
   // THE BLEND (engine/blend.ts): resolve a declared partner onto the def —
   // layout rows tagged, pack tables merged — off the def seed's dedicated
   // sub-stream (blendless mints keep every draw byte-identical).
-  applyBlend(def, tileset, variantName, spec.blend, !spec.packsOverride);
+  if (!locale) applyBlend(def, tileset, variantName, spec.blend, !spec.packsOverride);
   // THE ANNEX ROLL (the growing zone): dormant secret chains onto the def,
   // whole from its seed on their own salted stream — annex-less tilesets
   // burn zero draws (the blend law).
-  applyAnnexes(def, tileset);
+  if (!locale) applyAnnexes(def, tileset);
   // THE SETTLING (WEB_CFG.settle): when this mint could not fully clear its
   // neighbours — a directed quest dropped into saturated ring-1, twenty
   // anti-crowd pushes spent — the NEIGHBOURHOOD gives way instead of two

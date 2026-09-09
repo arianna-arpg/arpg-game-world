@@ -1126,6 +1126,9 @@ export interface ZoneDef {
   };
   /** World-route identity and exploration stage, baked at mint. */
   journey?: CourseJourney;
+  /** Saved exploration plan and stable atlas ownership. */
+  locale?: import('../world/locales').LocalePlan;
+  destination?: import('../world/locales').AtlasDestination;
   /** THE BLEND (engine/blend.ts): this zone interleaves a partner tileset's
    *  theme + kit + packs by a weight field — resolved at mint (from
    *  TilesetDef.blend or authored by the mint), DURABLE like theme/layout

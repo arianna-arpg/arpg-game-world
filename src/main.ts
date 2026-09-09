@@ -49,6 +49,7 @@ import './data/creeps'; // side-effect: registers the living creep kinds
 import './data/traversals'; // side-effect: registers the vertical-crossing kinds (sky launch/fall)
 import './data/glyphParts'; // side-effect: registers the shipped hand-drawn part kinds (the glyph roster)
 import './data/commanders'; // side-effect: the tutorial factions (the Fathers) + the prologue's resolve seam
+import './data/locales';
 import './data/authoredMaps'; // side-effect: THE AUTHORED-MAP FABRIC's shipped maps (+ the 'authored' layout via engine/authoredMaps)
 import './data/bountyExpeditions'; // side-effect: the bounty board's 'expedition' kind (an authored map minted at the take)
 import { updateAI } from './engine/ai';

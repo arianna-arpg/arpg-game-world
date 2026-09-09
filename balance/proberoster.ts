@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_locales.ts', status: 'green', tier: 'fast', why: 'District routes, river crossings, atlas destination identity, real boot, durable saves and co-op' },
   { probe: 'probe_groundjoins.ts', status: 'green', tier: 'fast', why: 'A blocked partial ground weld must not suppress a later valid join; real connected-body witness, solid exclusion and determinism' },
   { probe: 'probe_atlasinheritance.ts', status: 'green', tier: 'fast', why: 'Atlas provenance, river-stage composition, durable harvest and labels, knowledge gates, real save/restore and co-op geography' },
   { probe: 'probe_coursestages.ts', status: 'green', tier: 'fast', why: 'Hierarchical journeys: geographic stage boundaries, legacy opt-out, discovery-order independence, real mint precedence, save/network identity with stale-label clearing, additive discoveries and realized river crossing/island differences' },

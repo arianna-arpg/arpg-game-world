@@ -27,6 +27,21 @@
 
 import { registerMapFeature } from '../world/atlas';
 
+registerMapFeature({
+  id: 'river_citadel', label: 'river citadel', glyph: 'tower', icon: '♜', color: '#d7c39a',
+  find: { kind: 'river-sites', minRun: 8, progress: [0.3, 0.65], chance: 0.38, salt: 0xc17ade1 },
+  reach: 180, size: 58, destination: { locale: 'river_fortress' },
+  names: { first: ['Broken', 'Iron', 'Drowned', 'Silent', 'Hollow'], second: ['Watch', 'Gate', 'Bastion', 'Crown'] },
+  read: 'a fortress on the river — approach its walls, seek a crossing, or explore the grotto beyond',
+});
+registerMapFeature({
+  id: 'river_arches', label: 'sundered arches', glyph: 'ruin', icon: '◈', color: '#b7c6bc',
+  find: { kind: 'river-sites', minRun: 8, progress: [0.25, 0.7], chance: 0.35, salt: 0xa2c4e5 },
+  reach: 170, size: 64, destination: { locale: 'sundered_arches' },
+  names: { first: ['Sundered', 'Pale', 'Weeping', 'Forgotten', 'Storm'], second: ['Arches', 'Pillars', 'Sanctuary', 'Steps'] },
+  read: 'a river through broken stone — branching trails lead to a sanctuary, an overlook, and a deep grotto',
+});
+
 export interface ChartGlyphSpec {
   /** Glyph painter id (ui/atlasPaint.ts registry). */
   glyph: string;

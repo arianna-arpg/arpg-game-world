@@ -917,6 +917,7 @@ export interface GeneratedLayout {
    *  ask when the recipe names one — World.loadZone spawns the boss there
    *  instead of a far point (the vent cauldron seats its maw IN the vent). */
   bossSeat?: Vec2;
+  localeReport?: import('./localeGen').LocaleReport;
   /** SEALED ANNEX FACES (the growing zone — Secrets Movement II): one row
    *  per dormant BoundsPiece the mint rolled, seated by stampAnnexFaces.
    *  The world consumes these (World.annexReveal) — carve, furnish, memory. */
@@ -3191,6 +3192,7 @@ export interface GenCtx {
    *  engine/ventcauldron.ts) names the seat and the ask stands on it.
    *  Surfaced on GeneratedLayout.bossSeat; absent = the far-point law. */
   bossSeat?: Vec2;
+  localeReport?: import('./localeGen').LocaleReport;
   /** ROOM/CORRIDOR TRUTH a recipe RECORDED for the trapworks gen pass
    *  (interiorGen's layInteriorTrapworks, seated via registerTrapPass): set by
    *  roomsLayout — pure bookkeeping of geometry already drawn, zero rng — and
@@ -5285,6 +5287,7 @@ export function generateLayout(
     trapworks: ctx.trapworks,
     authoredVents: ctx.authoredVents,
     bossSeat: ctx.bossSeat,
+    localeReport: ctx.localeReport,
   };
 }
 

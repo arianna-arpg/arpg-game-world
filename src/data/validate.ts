@@ -64,6 +64,9 @@ import {
   hasLandmark, hasLandmarkBuilder, landmarkDefs, hasLayout, layoutIds,
 } from '../engine/levelgen';
 import { genPins, type GenRegistry } from '../engine/genPins';
+import { localePrograms, localeProgram, validateLocaleProgram } from '../world/locales';
+import { hasDistrictBuilder } from '../engine/localeGen';
+import { mapFeatureKinds } from '../world/atlas';
 import { validateCourseStages } from '../world/courseStages';
 import { lairRows } from '../engine/lairs';
 import { interiorRoleDefs, TRAP_ARCHETYPES } from '../engine/interiorGen';
@@ -127,6 +130,8 @@ const ADOPTIVE_ONLY_KINDS = ['lair', 'package', 'venture'] as const;
 export function validateContent(): void {
   const warn = (msg: string): void => console.warn(`[content] ${msg}`);
   validatePassiveLayout(warn);
+  for (const error of localePrograms().flatMap(p => validateLocaleProgram(p, { builder: hasDistrictBuilder, doodad: hasDoodadRule, region: id => !!regionKind(id)?.walkable }).map(e => 'locale ' + p.id + ': ' + e))) warn(error);
+  for (const error of mapFeatureKinds().filter(f => f.destination && !localeProgram(f.destination.locale)).map(f => 'atlas destination ' + f.id + ': unknown locale ' + f.destination!.locale)) warn(error);
 
   // THE COMBO GRAMMAR (data/combos.ts, engine/sequence.ts): every rule must
   // carry exactly ONE pattern kind, sane pacing, and an OWNER-scoped payoff
