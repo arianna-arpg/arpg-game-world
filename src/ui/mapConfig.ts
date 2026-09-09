@@ -73,6 +73,8 @@ export const MAP_LABEL_MODES: MapLabelModeDef[] = [
 ];
 
 export const MAP_CFG = {
+  /** Node units across the starting viewport; 100% always means this scope. */
+  viewport: { startSide: 520 },
   /** Default name-card mode (Settings.mapLabels persists the player's pick). */
   labelMode: 'hover' as MapLabelMode,
   /** Default chart style (Settings.mapChart persists the player's pick). */

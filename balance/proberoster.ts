@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_landforms.ts', status: 'green', tier: 'fast', why: 'Atlas water/terrain destinations, recurring geographic activity, connected lava trails, cleanup and fixed world-map scale' },
   { probe: 'probe_savecompatibility.ts', status: 'green', tier: 'fast', why: 'Update reset revisions, account/run scope, disk authority, cache fallback and import gates' },
   { probe: 'probe_geography.ts', status: 'green', tier: 'fast', why: 'Variable region sizes, biome density, atlas cliffs, blocked edges, switchbacks and saved terrain' },
   { probe: 'probe_locales.ts', status: 'green', tier: 'fast', why: 'District routes, river crossings, atlas destination identity, real boot, durable saves and co-op' },

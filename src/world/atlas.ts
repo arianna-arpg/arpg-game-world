@@ -130,7 +130,9 @@ export type FeatureFinder =
    *  `minRun` points up to the reach bound). */
   | { kind: 'lakes'; minRun: number; radius: [number, number] }
   | { kind: 'scarps' }
-  | { kind: 'river-sites'; minRun: number; progress: [number, number]; chance: number; salt: number };
+  | { kind: 'river-sites'; minRun: number; progress: [number, number]; chance: number; salt: number;
+      /** Place along arc length instead of snapping to a traced vertex. */
+      interpolate?: boolean };
 
 /** What a zone minted within a kind's reach INHERITS at the mint. */
 export interface FeatureInherit {
@@ -170,6 +172,8 @@ export interface MapFeatureKindDef {
   inherit?: FeatureInherit;
   /** One explorable destination at the seat, claimed by nearby frontier travel. */
   destination?: { locale: string; reach?: number };
+  /** Registered recurring natural activity, evaluated on the saved world clock. */
+  activity?: string;
 }
 
 export interface MapFeature {
@@ -360,11 +364,24 @@ function riverSitesInRect(def: MapFeatureKindDef, min: MapCoord, max: MapCoord, 
     if (hash01(a, b, (seed ^ f.salt) >>> 0) >= f.chance) continue;
     const t = f.progress[0] + (f.progress[1] - f.progress[0]) * hash01(b, a, (seed ^ f.salt ^ 0x73a1) >>> 0);
     const i = Math.max(1, Math.min(pts.length - 2, Math.floor(t * (pts.length - 1))));
-    const seat = pts[i];
+    let seat = pts[i], tangentA = pts[i - 1], tangentB = pts[i + 1];
+    if (f.interpolate) {
+      const lengths = pts.slice(1).map((p, j) => Math.hypot(p.x - pts[j].x, p.y - pts[j].y));
+      let remaining = t * lengths.reduce((a, b) => a + b, 0);
+      for (let j = 0; j < lengths.length; j++) {
+        if (remaining <= lengths[j] || j === lengths.length - 1) {
+          const u = lengths[j] > 0 ? Math.min(1, remaining / lengths[j]) : 0;
+          tangentA = pts[j]; tangentB = pts[j + 1];
+          seat = { x: tangentA.x + (tangentB.x - tangentA.x) * u, y: tangentA.y + (tangentB.y - tangentA.y) * u };
+          break;
+        }
+        remaining -= lengths[j];
+      }
+    }
     if (seat.x < min.x - def.reach || seat.x > max.x + def.reach || seat.y < min.y - def.reach || seat.y > max.y + def.reach
       || continentAt(seat, continentSeedFrom(seed)).kind !== 'land') continue;
     const feature = mk(def, a, b, { ...seat }, t, seed);
-    const dx = pts[i + 1].x - pts[i - 1].x, dy = pts[i + 1].y - pts[i - 1].y;
+    const dx = tangentB.x - tangentA.x, dy = tangentB.y - tangentA.y;
     feature.riverSides = Math.abs(dx) >= Math.abs(dy) ? ['w', 'e'] : ['n', 's'];
     if (!seen.has(feature.id)) { seen.add(feature.id); out.push(feature); }
   }
@@ -392,11 +409,12 @@ function lakesInRect(def: MapFeatureKindDef, min: MapCoord, max: MapCoord, seed:
 
 /** Every feature whose seat could matter to a rect (padded by each kind's
  *  reach) — the chart's draw query. Pure; [] without an installed seed. */
-export function featuresInRect(min: MapCoord, max: MapCoord, seed: number | null = atlasSeed): MapFeature[] {
+export function featuresInRect(min: MapCoord, max: MapCoord, seed: number | null = atlasSeed, kinds: readonly string[] = ORDER): MapFeature[] {
   if (seed === null) return [];
   const out: MapFeature[] = [];
-  for (const id of ORDER) {
+  for (const id of kinds) {
     const def = KINDS[id];
+    if (!def) continue;
     const f = def.find;
     if (f.kind === 'lakes') { out.push(...lakesInRect(def, min, max, seed)); continue; }
     if (f.kind === 'river-sites') { out.push(...riverSitesInRect(def, min, max, seed)); continue; }

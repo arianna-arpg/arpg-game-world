@@ -2,6 +2,7 @@ import '../engine/escarpmentGen';
 // Atlas destinations share builders, terrain rules and connection grammar.
 // A new site family is a program + a map-feature row, not a new generator.
 import '../engine/localeGen';
+import './landformLocales';
 import { registerLocaleProgram, type LocaleDistrict } from '../world/locales';
 import { registerRegion, regionKind } from '../world/regions';
 

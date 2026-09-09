@@ -110,6 +110,16 @@ export function rollDressPieces(
       }
       if (!clear || !ok(x, y, r, row)) continue;
       out.push({ row, x, y, r, rot: rng.range(0, Math.PI * 2) });
+      if (row.trail) {
+        let px = x, py = y, angle = out[out.length - 1].rot;
+        for (let j = 1; j < row.trail.pieces && out.length < WEATHER_DRESS_CFG.maxPieces; j++) {
+          angle += rng.range(-row.trail.turn, row.trail.turn);
+          px += Math.cos(angle) * r * 2 * row.trail.step;
+          py += Math.sin(angle) * r * 2 * row.trail.step;
+          if (px - r < inset || px + r > bounds.w - inset || py - r < inset || py + r > bounds.h - inset || !ok(px, py, r, row)) break;
+          out.push({ row, x: px, y: py, r, rot: angle });
+        }
+      }
       placed++;
     }
   }

@@ -76,6 +76,7 @@ export const WEATHER_FX: Partial<Record<WeatherKind, WeatherFxDef>> = {
   storm:     { form: 'streak', count: 130, vel: [-320, 760], len: 20, alpha: 0.45, color: '#a8b8f0', fadeIn: 0.6 },
   fog:       { form: 'bank', count: 9, vel: [18, 2], size: 220, alpha: 0.16, fadeIn: 9 },
   ashfall:   { form: 'flake', count: 60, vel: [-24, 46], size: 2.2, alpha: 0.5, color: '#c8a88a', fadeIn: 6 },
+  volcanic_eruption: { form: 'flake', count: 85, vel: [-34, 60], size: 2.8, alpha: 0.6, color: '#d5a17b', fadeIn: 3 },
   bloodmoon: { form: 'mote', count: 34, vel: [6, -14], size: 1.8, alpha: 0.45, color: '#e86a72', fadeIn: 12 },
   snow:      { form: 'flake', count: 85, vel: [-26, 58], size: 2.5, alpha: 0.6, color: '#eef6ff', fadeIn: 7 },
   // The gale carries no water and no grit — just the air itself made

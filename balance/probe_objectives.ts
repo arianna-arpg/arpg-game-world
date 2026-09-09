@@ -1108,7 +1108,10 @@ withSeededRandom(0x0bec7a, () => {
       // onto lair-claimed ground, the resident beat the guest, U13's lesson
       // once more. 818185 mints bare cull ground, proven through this rig's
       // own run at its own span position.)
-      const zid = stage(818185, 39, { kind: 'clear', adopt: true });
+      // Landform destinations shift the world stream: 818185 now seats a
+      // resident, which correctly outranks the guest. 818186 exercises bare
+      // cull ground again, retaining the same adoption and hand-back checks.
+      const zid = stage(818186, 39, { kind: 'clear', adopt: true });
       check('U11a the hand-back guest seats', ff.devIgnite(w.devOverlayView(), zid) === true);
       w.loadZone(zid);
       check('U11b adopted at load', w.zone.objective.kind === 'package');

@@ -73,12 +73,16 @@ const forceAllBiomes = (dials: { chance: number; reach: [number, number]; radius
   }
 };
 
-function grow(seed: number, rounds: number, geographyGrowth?: number[]): World {
+function grow(seed: number, rounds: number, geographyGrowth?: number[], coverage = 0): World {
   seedGlobalRandom(seed);
   const w = makeSimWorld('warrior', seed);
   w.loadZone(HUB_ZONE);
   const chart = w as unknown as { chartNeighborsOf(z: ZoneDef): void };
-  for (let r = 0; r < rounds; r++) {
+  // Named destinations consolidate approaches into one node, so coverage
+  // takes a variable number of batches. Keep a bounded walk and the same
+  // 100-node floor; the caller still rejects ANY stalled expansion batch.
+  for (let r = 0; r < (coverage ? Math.max(rounds, 32) : rounds); r++) {
+    if (r >= rounds && surfaceZones(w).length >= coverage) break;
     const batch = Object.values(w.zoneMap).filter(z =>
       (z.dimension ?? 'surface') === 'surface' && z.caveDepth == null && !z.pocket
       && z.objective.kind !== 'safe' && !z.floating && !zoneKindOf(z)?.staticExits
@@ -136,7 +140,7 @@ console.log('\n=== THE SPANNING UNDERGROWTH QA ===');
   // Variable biome spacing changes nodes per batch. Keep the hundred-node
   // coverage floor and additionally require progress on EVERY expansion.
   const geographyGrowth: number[] = [];
-  const w = grow(0x7d1100, 9, geographyGrowth);
+  const w = grow(0x7d1100, 9, geographyGrowth, 100);
   const zones = surfaceZones(w);
   const eligible = zones.filter(z => z.id.startsWith('gen_') && !z.kind && !z.field && !z.pocket
     && !z.floating && !z.concealed && !z.special && z.objective.kind !== 'safe' && UNDER_SPANS[z.biome ?? '']);

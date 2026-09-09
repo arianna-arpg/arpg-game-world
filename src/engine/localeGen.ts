@@ -15,7 +15,7 @@ export interface LocaleReport {
 }
 export interface DistrictBuild {
   grid: GridWalkField; rng: Rng; center: Vec2;
-  w: number; h: number; params: Record<string, number>;
+  w: number; h: number; params: Record<string, number>; region?: string;
 }
 export type DistrictBuilder = (ctx: DistrictBuild) => void;
 const BUILDERS: Record<string, DistrictBuilder> = {};
@@ -73,6 +73,21 @@ registerDistrictBuilder('arches', ctx => {
   }
 });
 
+// A material-neutral basin: its bank and optional island are walkable;
+// shared links cut the approaches after the water is laid.
+registerDistrictBuilder('basin', ({ grid, center: c, w, h, params, region }) => {
+  const bank = Math.max(0.06, Math.min(0.3, params.bank ?? 0.14));
+  const island = Math.max(0, Math.min(0.3, params.island ?? 0));
+  for (let y = c.y - h / 2; y <= c.y + h / 2; y += grid.cell) {
+    for (let x = c.x - w / 2; x <= c.x + w / 2; x += grid.cell) {
+      const r = Math.hypot((x - c.x) / (w / 2), (y - c.y) / (h / 2));
+      if (r <= 1) grid.fillRegion(x, y, x + grid.cell, y + grid.cell,
+        r < 1 - bank && r > island ? region ?? 'water' : 'ground');
+    }
+  }
+  grid.fillDisc(c.x, c.y, Math.max(70, Math.min(w, h) * island / 2), 'ground');
+});
+
 function pointDistance(p: Vec2, a: Vec2, b: Vec2): number {
   const dx = b.x - a.x, dy = b.y - a.y;
   const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
@@ -90,7 +105,7 @@ function generateLocale(ctx: GenCtx, plan: LocalePlan, riverSides?: string[]): v
     const w = d.size[0] * ctx.arena.w, h = d.size[1] * ctx.arena.h;
     const builder = BUILDERS[d.builder];
     if (!builder) throw new Error(`locale ${plan.program}/${d.id}: unknown district builder ${d.builder}`);
-    builder({ grid, center: c, w, h, params: d.params ?? {}, rng: new Rng(localeSeed(`${plan.seed}/${d.id}`)) });
+    builder({ grid, center: c, w, h, params: d.params ?? {}, region: d.region, rng: new Rng(localeSeed(`${plan.seed}/${d.id}`)) });
     centers.set(d.id, c); rects.set(d.id, { x: c.x - w / 2, y: c.y - h / 2, w, h });
     report.districts.push({ id: d.id, builder: d.builder, center: c });
   }

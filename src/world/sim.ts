@@ -65,6 +65,8 @@ import { installCapitalPole } from './civics';
 import { setReliefSeed } from './relief';
 import { setAtlasSeed } from './atlas';
 import '../data/atlasFeatures';
+import '../data/featureActivities';
+import { FeatureActivityField } from './featureActivity';
 import { dimensionPackageTempo, dimensionDef, dimensionIds } from './dimensions';
 import { validateCourses } from './courses';
 import { LevelField, validateLevelField } from './levelField';
@@ -428,7 +430,8 @@ export class WorldSim {
     // and FAILS the build where this only warns.
     const badPkg = validatePackages(packageLookups());
     if (badPkg.length) console.warn('[packages] def validation problems:', badPkg);
-    this.overlays = [this.biomeField, this.weather, this.faction, this.warlord, this.invasion, this.incursionField, ...extra];
+    this.overlays = [this.biomeField, this.weather, this.faction, this.warlord, this.invasion, this.incursionField,
+      new FeatureActivityField(this.biomeField.fieldSeed), ...extra];
     // Cache the demon-invasion overlay (if the package is in this run's manifest)
     // so the engine can reach it without scanning the overlay list every tick.
     // Cached fields hold the SURFACE instance (legacy consumers); per-dimension

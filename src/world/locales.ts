@@ -14,6 +14,8 @@ export interface LocaleDistrict {
   size: [number, number];
   jitter?: number;
   params?: Record<string, number>;
+  /** Registered fill material for builders that carve basins or channels. */
+  region?: string;
   dress?: { kind: DoodadKind; count: [number, number]; radius: [number, number] }[];
   cave?: boolean;
   /** Named connection sockets within the district footprint. */
@@ -110,6 +112,7 @@ export function validateLocaleProgram(def: LocaleProgram, refs?: { builder?: (id
     if (ids.size !== v.districts.length || !ids.has(v.entrance) || !ids.has(v.goal)) errors.push(`${v.id}: invalid district identities/endpoints`);
     if (v.districts.length < 2 || v.districts.length > 12 || v.links.length > 24) errors.push(`${v.id}: district/link budget exceeded`);
     for (const d of v.districts) {
+      if (d.region && refs?.region && !refs.region(d.region)) errors.push(`${v.id}/${d.id}: unknown district region ${d.region}`);
       if (refs?.builder && !refs.builder(d.builder)) errors.push(`${v.id}/${d.id}: unknown builder ${d.builder}`);
       if (!d.id || !d.builder || Object.values(d.params ?? {}).some(n => !Number.isFinite(n))) errors.push(`${v.id}/${d.id}: invalid builder parameters`);
       if (Object.values(d.ports ?? {}).some(p => !p.every(n => Number.isFinite(n) && n >= 0 && n <= 1))) errors.push(`${v.id}/${d.id}: invalid ports`);

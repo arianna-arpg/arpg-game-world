@@ -66,6 +66,9 @@ export interface WeatherStrike {
  *  (Doodad.evap) when it passes. Rows are pure data; the machinery is the
  *  weather-dress fabric (engine/weatherDress.ts + World.updateWeatherDress). */
 export interface WeatherDressRow {
+  /** Connected pieces per seed site; useful for temporary flows and drifts.
+   * step is a fraction of the diameter, so adjacent pieces overlap. */
+  trail?: { pieces: number; step: number; turn: number };
   /** Registered doodad kind (validated at boot — doodadVisuals row required). */
   doodad: string;
   /** Pieces planted at full intensity (scaled down toward count[0] when faint). */
@@ -453,6 +456,11 @@ export function validateWeather(
       }
     }
     for (const row of def.dress?.rows ?? []) {
+      if (row.trail && (!Number.isInteger(row.trail.pieces) || row.trail.pieces < 2 || row.trail.pieces > 22
+        || !Number.isFinite(row.trail.step) || row.trail.step <= 0 || row.trail.step > 1
+        || !Number.isFinite(row.trail.turn) || row.trail.turn < 0 || row.trail.turn > Math.PI)) {
+        bad.push(`weather '${kind}': invalid dress trail`);
+      }
       if (hasDoodad && !hasDoodad(row.doodad)) {
         bad.push(`weather '${kind}': dress row names unregistered doodad kind '${row.doodad}'`);
       }

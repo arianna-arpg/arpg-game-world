@@ -27,6 +27,7 @@
 
 import { ESCARPMENT_CFG } from '../world/escarpments';
 import { registerMapFeature } from '../world/atlas';
+import './landformFeatures';
 
 registerMapFeature({
   id: 'river_citadel', label: 'river citadel', glyph: 'tower', icon: '♜', color: '#d7c39a',
@@ -145,6 +146,7 @@ registerMapFeature({
 
 registerMapFeature({
   id: 'lake', label: 'lake basin', glyph: 'lake', icon: '◉', color: '#5fa6d9',
+  destination: { locale: 'lake_shores' },
   find: { kind: 'lakes', minRun: 6, radius: [34, 70] },
   reach: 200,
   names: {

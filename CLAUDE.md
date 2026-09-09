@@ -1150,6 +1150,13 @@ we verify changes.
   `geo.climate`. Dials in
   `ATLAS_CFG`; docs `docs/engine/atlas.md` + charter
   `docs/design/world-atlas.md`; probe `balance/probe_atlas.ts`.
+  Landform destinations (`data/landformFeatures.ts`, `data/landformLocales.ts`)
+  extend the atlas with ponds/lakes/tarns, river reaches, valleys/hills/canyons
+  and calderas. Registered feature activity cycles (`world/featureActivity.ts`,
+  `data/featureActivities.ts`) put recurring eruptions, ash and temporary lava
+  trails on the saved world clock. The map's 100% scope is fixed by
+  `MAP_CFG.viewport.startSide`; growth unlocks zoom-out. Contracts and dials:
+  `docs/worldgen/landforms.md`; probe `balance/probe_landforms.ts`.
   THE HARBORHOLD FABRIC (`data/harborholds.ts` + `world/harborholds.ts` —
   mainland ports as BESIEGED RESIDENCES): every sea spot's HOLD ANCHOR
   wears the walled town (`harborhold_*` compositions → plan structures

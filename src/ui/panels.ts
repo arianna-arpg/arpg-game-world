@@ -147,6 +147,7 @@ import { treeGraph, treeLimbOfNode, treeLimbs, treeNodeRanks, treeSealedSet, tre
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 import { attachPanelMove, configurePanelLayout, panelLayoutRefresh, panelLayoutSync, panelMoved, panelMoveReset, panelMoveTo, panelSeatOf, persistPanelSeat, resetPanelLayout } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels; THE LAYOUT remembers
 import { ATLAS_LAYER_CHIPS, MAP_CFG, MAP_CHART_MODES, MAP_LABEL_MODES } from './mapConfig';
+import { mapViewport, mapZoomLimits, mapZoomLabel } from './mapViewport';
 import { atlasChart, atlasKeep, atlasRaster, type AtlasChartInput, type AtlasRaster } from './atlasPaint';
 import { MAP_LENS } from './mapLens';
 import { ATLAS_CFG, climateWords, featuresAt, featuresInRect } from '../world/atlas';
@@ -698,6 +699,7 @@ export class UI {
   /** The fitted map box (set each refreshMap) so the wheel/drag handlers can
    *  recompute the viewBox without a full re-render. */
   private mapBox = { minX: 0, minY: 0, w: 1, h: 1 };
+  private mapBoxDimension: string | null = null;
   /** Cached ocean-wash SVG keyed on the sampled box — the landmass field is
    *  pure per seed, so the O(map-area) sweep only reruns when charting GROWS
    *  the visible box, not on every 0.5s map refresh. */
@@ -2268,6 +2270,8 @@ export class UI {
    *  tab, or a pin aimed at the old world's zone ids (ids recur across worlds,
    *  so a stale pin can point at a real-but-never-visited zone). */
   resetRunView(): void {
+    this.mapBox = { minX: 0, minY: 0, w: 1, h: 1 };
+    this.mapBoxDimension = null;
     this.mapZoom = 1;
     this.mapPan = { x: 0, y: 0 };
     this.mapTab = 'map';
@@ -8250,7 +8254,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const minY = Math.min(...ys) - 80, maxY = Math.max(...ys) + 85;
     // Store the fitted box; the live zoom/pan are applied ON TOP (the map grows
     // with the world, so zooming keeps the fixed-size labels legible).
-    this.mapBox = { minX, minY, w: maxX - minX, h: maxY - minY };
+    const nextBox = { minX, minY, w: maxX - minX, h: maxY - minY };
+    if (this.mapBox.w > 1 && this.mapBoxDimension === dim) {
+      this.mapPan.x += this.mapBox.minX + this.mapBox.w / 2 - (nextBox.minX + nextBox.w / 2);
+      this.mapPan.y += this.mapBox.minY + this.mapBox.h / 2 - (nextBox.minY + nextBox.h / 2);
+    } else this.mapPan = { x: 0, y: 0 };
+    this.mapBox = nextBox;
+    this.mapBoxDimension = dim;
     // THE VEIL CLIP: every overlay wash (weather, territory, the classic biome
     // wash) is clipped to the known envelope — the same discs the painter's
     // veil uses — unless the dev lens is omniscient.
@@ -8318,7 +8328,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!svg) return;
     svg.setAttribute('viewBox', this.mapViewBox());
     const lbl = this.worldMap.querySelector<HTMLElement>('[data-mz="reset"]');
-    if (lbl) lbl.textContent = `${Math.round(this.mapZoom * 100)}%`;
+    if (lbl) lbl.textContent = mapZoomLabel(this.mapZoom);
     this.showZoneCard(svg, this.hoveredZone, true);
     const aside = this.worldMap.querySelector<HTMLElement>('#map-aside');
     if (aside) {
@@ -8395,8 +8405,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // view with a margin renders at full resolution OVER the base; the window
     // snaps to a coarse lattice so small pans re-use its raster.
     let window: AtlasChartInput | null = null;
-    if (this.mapZoom >= ATLAS_CFG.raster.zoomWindowFrom && this.mapBox.w > 1) {
-      const side = Math.max(this.mapBox.w, this.mapBox.h) / this.mapZoom;
+    const viewSide = MAP_CFG.viewport.startSide / this.mapZoom;
+    if (Math.max(this.mapBox.w, this.mapBox.h) / viewSide >= ATLAS_CFG.raster.zoomWindowFrom && this.mapBox.w > 1) {
+      const side = viewSide;
       const cx = this.mapBox.minX + this.mapBox.w / 2 + this.mapPan.x;
       const cy = this.mapBox.minY + this.mapBox.h / 2 + this.mapPan.y;
       const half = side * 0.5 * ATLAS_CFG.raster.zoomWindowPad;
@@ -8755,23 +8766,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   /** Compute the world-map viewBox from the fitted box + the live zoom/pan,
    *  clamping the pan so the window can't slide off the charted graph. */
   private mapViewBox(): string {
-    const b = this.mapBox;
-    const z = clamp(this.mapZoom, 1, 6);
-    this.mapZoom = z;
-    // The map SVG is a FIXED square (#world-map .map-body svg, index.html), so we build
-    // a SQUARE viewBox too — the longer of the two node-bounds axes becomes the side. The
-    // world then maps 1:1 into the box with NO letterboxing and pan clamping stays exact,
-    // and the whole charted graph is always visible at zoom 1 however lopsided it is (a
-    // far-off Crusade stronghold / Caravan zone just shrinks the rest to fit, never
-    // stretches the panel). Centre the square on the bounds centre.
-    const side = Math.max(b.w, b.h);
-    const vw = side / z, vh = side / z;
-    const maxPanX = Math.max(0, (side - vw) / 2), maxPanY = Math.max(0, (side - vh) / 2);
-    const px = clamp(this.mapPan.x, -maxPanX, maxPanX);
-    const py = clamp(this.mapPan.y, -maxPanY, maxPanY);
-    this.mapPan.x = px; this.mapPan.y = py;
-    const cx = b.minX + b.w / 2 + px, cy = b.minY + b.h / 2 + py;
-    return `${(cx - vw / 2).toFixed(1)} ${(cy - vh / 2).toFixed(1)} ${vw.toFixed(1)} ${vh.toFixed(1)}`;
+    const view = mapViewport(this.mapBox, this.mapZoom, this.mapPan);
+    this.mapZoom = view.zoom; this.mapPan = view.pan;
+    return `${(view.cx - view.side / 2).toFixed(1)} ${(view.cy - view.side / 2).toFixed(1)} ${view.side.toFixed(1)} ${view.side.toFixed(1)}`;
   }
 
   /** Wire the map's zoom buttons + wheel-zoom + drag-pan onto the freshly
@@ -8787,7 +8784,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const apply = (): void => {
       svg.setAttribute('viewBox', this.mapViewBox());
       const lbl = this.worldMap.querySelector<HTMLElement>('[data-mz="reset"]');
-      if (lbl) lbl.textContent = `${Math.round(this.mapZoom * 100)}%`;
+      if (lbl) lbl.textContent = mapZoomLabel(this.mapZoom);
       // A zoom or pan re-aims the ATLAS LAYER in place (the zoom window) —
       // never a rebuild: the standing SVG stays exactly as it stands.
       this.syncAtlas(svg);
@@ -8796,8 +8793,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const mz = btn.dataset.mz;
-        if (mz === 'in') this.mapZoom = clampZoom(this.mapZoom * PANZOOM_DEFAULTS.buttonFactor);
-        else if (mz === 'out') this.mapZoom = clampZoom(this.mapZoom / PANZOOM_DEFAULTS.buttonFactor);
+        const cfg = { ...PANZOOM_DEFAULTS, ...mapZoomLimits(this.mapBox) };
+        if (mz === 'in') this.mapZoom = clampZoom(this.mapZoom * PANZOOM_DEFAULTS.buttonFactor, cfg);
+        else if (mz === 'out') this.mapZoom = clampZoom(this.mapZoom / PANZOOM_DEFAULTS.buttonFactor, cfg);
         else { this.mapZoom = 1; this.mapPan = { x: 0, y: 0 }; }
         apply();
       });
@@ -8812,7 +8810,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       getZoom: () => this.mapZoom,
       setZoom: (z) => { this.mapZoom = z; },
       panBy: (dx, dy) => { this.mapPan.x += dx; this.mapPan.y += dy; },
-      box: () => this.mapBox,
+      box: () => ({ w: MAP_CFG.viewport.startSide, h: MAP_CFG.viewport.startSide }),
       apply,
       ignore: '.wp-node', // let waypoint travel-clicks through
       // HOVER preview — raise the zone's name card and update the side box (a
@@ -8848,7 +8846,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         this.refreshMap();
       },
       onDragState: (d) => { this.mapDragging = d; },
-    });
+    }, { ...PANZOOM_DEFAULTS, minZoom: Number.MIN_VALUE, maxZoom: 1 });
 
     // UNPIN via the box's "unpin" affordance (delegated on the aside, which is
     // recreated each refresh so the listener GC's with it — no leak).
