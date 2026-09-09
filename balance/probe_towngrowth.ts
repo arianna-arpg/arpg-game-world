@@ -852,8 +852,13 @@ function mkTownWorld(account: Account, seed = 0x70a1): World {
     && (w.player.pos.x = lodger.pos.x, w.player.pos.y = lodger.pos.y, w.player.tier = 1, true)
     && (w.residentPrompt(lodger) ?? '').includes('room'));
   if (lodger) {
+    // Main's speech window intentionally lets an already-started utterance
+    // finish after the hero moves away. Test a NEW telling across stories,
+    // after that window and its cooldown, rather than cancelling old speech.
+    const window = speechWindowFor('seat', w.residentPrompt(lodger) ?? '');
+    w.time += window.holdSec + window.cooldownSec + 0.05;
     w.player.tier = 0;
-    check('J: sharing a map position across stories does not grant resident speech',
+    check('J: sharing a map position across stories does not start fresh resident speech',
       w.residentPrompt(lodger) === null);
     w.player.tier = 1;
   }

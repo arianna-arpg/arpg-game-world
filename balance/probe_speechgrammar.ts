@@ -261,7 +261,20 @@ function mkWorld(account: Account, seed = SEED): World {
   return w;
 }
 type Body = World['actors'][number];
-const beside = (w: World, a: Body): void => { w.player.pos.x = a.pos.x + 24; w.player.pos.y = a.pos.y + 24; w.player.tier = a.tier ?? 0; };
+const beside = (w: World, a: Body): void => {
+  const tier = a.tier ?? 0, floor = w.pathField(tier);
+  // The fixed (+24,+24) offset put the upstairs lodger's visitor INSIDE
+  // storey_wall. Approach from real floor with a clear line; exact rays
+  // correctly refuse a conversation begun inside masonry.
+  for (const [dx, dy] of [[24, 24], [-24, 24], [24, -24], [-24, -24], [0, 24], [0, -24], [24, 0], [-24, 0]]) {
+    const pos = { x: a.pos.x + dx, y: a.pos.y + dy };
+    if (floor && !floor.isWalkable(pos.x, pos.y)) continue;
+    if (!w.dwellReachable(pos, a.pos, undefined, { from: tier, to: tier })) continue;
+    w.player.pos.x = pos.x; w.player.pos.y = pos.y; w.player.tier = tier;
+    return;
+  }
+  throw new Error(`No reachable approach to speaker ${a.defId} on story ${tier}`);
+};
 const away = (w: World): void => { w.player.pos.x = -4000; w.player.pos.y = -4000; };
 /** A generous gap: the longest window + the longest cooldown + the stale gap. */
 const GAP = SPEECH_CFG.window.holdSec + SPEECH_CFG.window.holdPerChar * 240 + SPEECH_CFG.window.cooldownSec + 2;
