@@ -11,6 +11,8 @@
 import { mod, linkMod, STAT_DEFS } from '../engine/stats';
 import { skillGrantStat, type SkillDef } from '../engine/skills';
 import { ULTIMATE_SKILLS } from './ultimates';
+import { LIVING_SKILLS } from './livingSkills';
+import { REACTIVE_SKILLS } from './reactiveSkills';
 
 export const SKILLS: Record<string, SkillDef> = {
 
@@ -16156,6 +16158,8 @@ export const SKILLS: Record<string, SkillDef> = {
   // record so every catalog consumer and the capability folds below treat
   // them as ordinary rows.
   ...ULTIMATE_SKILLS,
+  ...LIVING_SKILLS,
+  ...REACTIVE_SKILLS,
 };
 
 // THE CONSTRUCT CAPABILITY FOLD: every construct-delivery skill IS

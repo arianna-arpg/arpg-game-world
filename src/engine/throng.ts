@@ -167,6 +167,8 @@ export interface ThrongSpec {
    *  like any minion. Worn anchors (WORN_THRONGS) sit off the bar, so no
    *  held sweep ever conducts them — the drive is their only voice. */
   untamed?: { huntRadius?: number };
+  /** Conjured rosters may disappear with their grant instead of becoming finds. */
+  release?: 'wild' | 'dismiss';
 }
 
 // --- Config -----------------------------------------------------------------
@@ -311,6 +313,9 @@ export function throngSkillSalt(skillId: string): number {
 // the wearer, join innately underfoot, and hunt on their own drive.
 
 export interface WornThrongDef {
+  /** Direct replenishment supports passive vanguards; omitted keeps ring finds. */
+  at?: ThrongTrickleRow['at'];
+  release?: ThrongSpec['release'];
   /** Registry key; the granting stat is `wornThrong_<id>`. */
   id: string;
   /** Display name — the stat label and the synthetic anchor's name. */
@@ -392,7 +397,9 @@ export function wornThrongCap(def: WornThrongDef, rank: number): number {
 export function buildWornThrongDef(def: WornThrongDef, rank: number): SkillDef {
   return {
     id: wornThrongSkillId(def.id), name: def.name,
-    description: `${def.name}: dormant kin condense nearby and join you underfoot — untamed, they hunt on their own.`,
+    description: def.at === 'roster'
+      ? `${def.name}: bound kin replenish on a timer and hunt alongside you.`
+      : `${def.name}: dormant kin condense nearby and join you underfoot — untamed, they hunt on their own.`,
     tags: ['minion', 'throng'], color: def.color,
     manaCost: 0, cooldown: 0, useTime: 0,
     delivery: { type: 'melee', range: 42, arcDeg: 80 },
@@ -402,12 +409,13 @@ export function buildWornThrongDef(def: WornThrongDef, rank: number): SkillDef {
       monsterId: def.monsterId,
       cap: wornThrongCap(def, rank),
       sources: [{
-        kind: 'trickle', at: 'ring',
+        kind: 'trickle', at: def.at ?? 'ring',
         everySec: wornThrongPeriod(def, rank),
         count: wornThrongCount(def, rank),
         ttl: wornThrongTtl(def, rank),
       }],
       batch: def.batch,
+      release: def.release,
       untamed: { huntRadius: def.huntRadius },
     },
   };

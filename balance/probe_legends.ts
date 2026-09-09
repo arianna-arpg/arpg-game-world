@@ -44,6 +44,7 @@ import { PROCS, PROC_LIST, procPowerStat, procStat, scaleProcEffect } from '../s
 import { compileItemMods, describeItem, isKnownItemStat, rollItem } from '../src/engine/itemgen';
 import type { ModLineDef } from '../src/engine/items';
 import { sheetFamilyOf } from '../src/data/sheet';
+import { uniqueDefinitionLines } from '../src/engine/itemchoices';
 import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
 
 let failed = 0;
@@ -97,7 +98,7 @@ const isSignature = (l: ModLineDef): boolean =>
   const signatures: string[] = [];
   for (const u of UNIQUE_LIST) {
     let sig = 0;
-    for (const l of u.lines) {
+    for (const l of uniqueDefinitionLines(u)) {
       if (!isKnownItemStat(l.stat)) unknown.push(`${u.id}:${l.stat}`);
       if (l.stat.startsWith('skillgrant_') && !SKILLS[l.stat.slice('skillgrant_'.length)]) badGrant.push(`${u.id}:${l.stat}`);
       if (l.stat.startsWith('proc_') && !PROCS[l.stat.slice('proc_'.length)]) badProc.push(`${u.id}:${l.stat}`);

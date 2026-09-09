@@ -261,9 +261,10 @@ export function serializeCharacter(world: World): CharacterSave {
         if (a.dead || a.owner !== hero || !a.defId) continue;
         if (!a.sourceSkillId?.startsWith('__throng:')) continue;
         const skillId = a.sourceSkillId.slice('__throng:'.length);
-        const row = rows.get(skillId);
+        const morphKey = `${skillId}:${a.defId}`;
+        const row = rows.get(morphKey);
         if (row) { row.count++; row.level = Math.max(row.level, a.level); }
-        else rows.set(skillId, { skillId, defId: a.defId, level: a.level, count: 1 });
+        else rows.set(morphKey, { skillId, defId: a.defId, level: a.level, count: 1 });
       }
       // THE LITE TIER (engine/lite.ts): a lite-tier anchor's pool rows join
       // its count — the roster resumes at full strength either way.
@@ -274,9 +275,10 @@ export function serializeCharacter(world: World): CharacterSave {
         if (kindIdx < 0) continue;
         const n = world.lite.countOwned(hero.id, kindIdx);
         if (!n) continue;
-        const row = rows.get(s!.def.id);
+        const morphKey = `${s!.def.id}:${spec.monsterId}`;
+        const row = rows.get(morphKey);
         if (row) row.count += n;
-        else rows.set(s!.def.id, { skillId: s!.def.id, defId: spec.monsterId, level: hero.level, count: n });
+        else rows.set(morphKey, { skillId: s!.def.id, defId: spec.monsterId, level: hero.level, count: n });
       }
       return [...rows.values()];
     })(),

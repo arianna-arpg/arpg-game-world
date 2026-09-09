@@ -41,6 +41,7 @@ import type { PartSpec } from '../render/vis/parts';
 import type { LightSpec } from '../render/vis/painters'; // the carried lamp's spec (Actor.carriedLamp)
 import type { TellDress, TellSpec } from './tells';
 import type { PackAggregate } from './pack';
+import { STATUS_RELAY_IDS } from './reception';
 import type { TrailPoint, WatchFanMode, WatchSpec } from './watch';
 
 /** One entry of Actor.gainEvents — a gain that landed this frame. The proc
@@ -2140,7 +2141,11 @@ export class Actor {
   }
 
   /** Apply an attribute spread as the 'attributes' modifier source. */
+  attributeValues?: Attributes;
+  bequestSignature?: string;
+  pocketGrantSignature?: string;
   setAttributes(attrs: Attributes): void {
+    this.attributeValues = { ...attrs };
     this.sheet.setSource('attributes', attributeModifiers(attrs));
   }
 
@@ -2513,10 +2518,15 @@ export class Actor {
     this.sheet.setSource('buff:' + id, mods);
   }
 
+  /** World-owned interception before any status effects land. */
+  statusRelay?: (target: Actor, args: Parameters<Actor['applyStatus']>) => boolean;
+
   applyStatus(
     id: string, dps: number, durationScale: number, sourceName: string,
     opts?: {
       propagates?: boolean; rupture?: number; ruptureType?: ActiveStatus['ruptureType'];
+      /** A relayed application cannot bounce between reflectors. */
+      relayed?: boolean;
       /** Applier-side bonus to the stacking cap (the ailmentStacks stat). */
       stacksBonus?: number;
       /** The applier's actor id (brood attribution and kin). */
@@ -2536,6 +2546,8 @@ export class Actor {
   ): void {
     const def = STATUS_DEFS[id];
     if (!def) return;
+    if (!opts?.relayed && this.statusRelay && this.sheet.armedFamily('relayStatus_', STATUS_RELAY_IDS).length
+      && this.statusRelay(this, [id, dps, durationScale, sourceName, opts])) return;
     // POISE holds the line: while the break-bar stands, incoming HARD CC
     // may be shrugged outright (the poiseCcAvoid stat). One gate for every
     // stun path — hit effects, pulls, chill's freeze buildup alike.

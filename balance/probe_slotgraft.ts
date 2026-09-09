@@ -166,8 +166,15 @@ w.recalcSeat(seat);
 
 // --------------------------------------------------- G. THE ROTE HAND
 const rote = rollItem({ ilvl: 20, uniqueId: 'rote_hand' });
+// Pin a legal pair of randomized fingers so the live/unfit socket contract
+// remains deterministic; the reactive-uniques rig covers the roll distribution.
+if (rote) rote.uniqueChoices = {
+  finger_1: { id: '1:multistrike', rolls: [1] },
+  finger_2: { id: '3:splitting', rolls: [1] },
+  finger_3: { id: 'bare', rolls: [] }, finger_4: { id: 'bare', rolls: [] },
+};
 const roteMods = rote ? compileItemMods(rote) : [];
-check('G: the legend carries both fixed graft lines at whole levels',
+check('G: the legend carries both chosen graft lines at whole levels',
   roteMods.some(m2 => m2.stat === slotGraftStat(1, 'multistrike') && m2.value === 1)
   && roteMods.some(m2 => m2.stat === slotGraftStat(3, 'splitting') && m2.value === 1));
 check('G: the unique speaks its own line',

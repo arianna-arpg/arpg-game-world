@@ -42,6 +42,9 @@ import { skillGrantStat, slotGraftStat } from '../engine/skills';
 import { comboStat } from '../engine/sequence';
 import { mod } from '../engine/stats';
 import { procPowerStat, procStat, registerProc, type ProcDef } from './procs';
+import { EMERGENT_PROCS, EMERGENT_UNIQUES } from './uniques/emergent';
+import { borrowedRefugeLine, GLEANER_CHOICES, LIVING_UNIQUES } from './uniques/living';
+import { ROTE_CHOICES, CUP_MINION_LINES, LATTICE_LINES, GALEWRIGHT_LINES, REACTIVE_PROCS, REACTIVE_UNIQUES } from './uniques/reactive';
 
 // ---------------------------------------------------------------------------
 // THE LEGEND PROCS — triggers authored beside the legends that wear them,
@@ -102,6 +105,8 @@ export const LEGEND_PROCS: ProcDef[] = [
     effect: { type: 'cast', cast: { skillId: 'pyroclast_bolt', count: [1, 1], own: true } },
   },
 ];
+LEGEND_PROCS.push(...EMERGENT_PROCS);
+LEGEND_PROCS.push(...REACTIVE_PROCS);
 for (const def of LEGEND_PROCS) registerProc(def);
 
 export const UNIQUE_LIST: UniqueDef[] = [
@@ -365,22 +370,18 @@ export const UNIQUE_LIST: UniqueDef[] = [
     ],
   },
   // THE ROTE HAND — the WORN GRAFT fabric's debut legend (slotgraft_<slot>_
-  // <gem>: the glove grants the support; the PLAYER aims it by choosing what
-  // to bind in that bar seat). Two deliberately different-fitting grafts —
-  // Multistrike wants melee on the primary, Splitting wants a projectile on
-  // Skill Slot 3 — so on most builds ONE line is live and the other sits
-  // honestly dormant in the book: the item that teaches the fabric's honesty
-  // by being worn. Ranges pin whole levels (tierScale 0): a granted gem's
-  // level is a promise, never a decimal.
+  // <gem>): ROTE_CHOICES rolls up to four different support "rings", each
+  // bound to a random bar seat. The player aims the finger by choosing what
+  // to bind there; the ordinary socket gate keeps incompatible grafts dormant.
   {
     id: 'rote_hand', name: 'The Rote Hand', baseId: 'gloves_evasion', weight: 70,
     minIlvl: 8,
-    flavor: 'Every finger remembers.',
+    flavor: 'Four little vows, each wound around a finger.',
+    choices: ROTE_CHOICES,
     lines: [
-      { stat: slotGraftStat(1, 'multistrike'), kind: 'flat', range: [1, 1], tierScale: 0,
-        text: 'The skill in Skill Slot 1 is granted Level {v} Multistrike' },
-      { stat: slotGraftStat(3, 'splitting'), kind: 'flat', range: [1, 1], tierScale: 0,
-        text: 'The skill in Skill Slot 3 is granted Level {v} Splitting' },
+      // Repurpose the retired fixed-graft seats; old speed/evasion rolls keep their indices.
+      { stat: 'castSpeed', kind: 'increased', range: [0.04, 0.07] },
+      { stat: 'mana', kind: 'flat', range: [10, 20] },
       { stat: 'attackSpeed', kind: 'increased', range: [0.06, 0.1] },
       { stat: 'evasion', kind: 'increased', range: [0.2, 0.3], local: true },
     ],
@@ -428,6 +429,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
         text: 'The skill in Skill Slot 2 is granted Level {v} Battering Ram' },
       { stat: 'shoveAuthority', kind: 'flat', range: [0.15, 0.25] },
       { stat: 'impactDamage', kind: 'flat', range: [0.2, 0.3] },
+      ...GALEWRIGHT_LINES,
     ],
   },
   // SQUALLSTEP WINDTREWS — the proc registry's signature lane worn as a
@@ -462,6 +464,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
       { stat: 'apply_winded', kind: 'flat', range: [0.12, 0.2] },
       { stat: 'damageVs_winded', kind: 'flat', range: [0.15, 0.25] },
       { stat: 'evasion', kind: 'flat', range: [40, 70] },
+      borrowedRefugeLine,
     ],
   },
   // THE GLEANER'S CROWN — the throng fabric's FIND LEVERS as a legend: one
@@ -471,6 +474,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   // farming crown; the minion lines keep the harvest standing once claimed.
   {
     id: 'gleaners_crown', name: "The Gleaner's Crown", baseId: 'helmet_armor_es', weight: 65,
+    choices: GLEANER_CHOICES,
     minIlvl: 8,
     flavor: 'A kingdom is picked up one pair of hands at a time.',
     lines: [
@@ -517,8 +521,8 @@ export const UNIQUE_LIST: UniqueDef[] = [
   // THE SHARED CUP — the sympathy fabric's tamed BOND as a legend: the
   // keeper's pours and orb scoops REPLAY on the bonded companion, potency
   // rolled (the fabric multiplies the echo by the stat's value), so one
-  // flask waters the whole hunt. Without a companion both lines sit
-  // honestly dormant — the Rote Hand's law: the item teaches by being worn.
+  // flask waters the whole hunt. CUP_MINION_LINES gives the non-companion
+  // roster its own weaker channel without duplicating the companion echo.
   {
     id: 'shared_cup', name: 'The Shared Cup', baseId: 'ring_coral', weight: 70,
     minIlvl: 6,
@@ -532,6 +536,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
         text: 'Orbs you scoop echo to your bonded companion at {v}× strength' },
       { stat: 'healPower', kind: 'increased', range: [0.1, 0.15] },
       { stat: 'life', kind: 'flat', range: [20, 30] },
+      ...CUP_MINION_LINES,
     ],
   },
   // ROUNDELAY — a combo grammar granted by jewelry (the same combo_<id>
@@ -567,6 +572,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
       { stat: 'esForgone', kind: 'flat', range: [0.35, 0.5] },
       { stat: 'poise', kind: 'increased', range: [0.2, 0.3] },
       { stat: 'armor', kind: 'increased', range: [0.3, 0.45], local: true },
+      ...LATTICE_LINES,
     ],
   },
   // --- THE LEGEND FABRIC's flagship ------------------------------------------
@@ -594,6 +600,10 @@ export const UNIQUE_LIST: UniqueDef[] = [
     ],
   },
 ];
+
+UNIQUE_LIST.push(...EMERGENT_UNIQUES);
+UNIQUE_LIST.push(...LIVING_UNIQUES);
+UNIQUE_LIST.push(...REACTIVE_UNIQUES);
 
 export const UNIQUES: Record<string, UniqueDef> =
   Object.fromEntries(UNIQUE_LIST.map(u => [u.id, u]));

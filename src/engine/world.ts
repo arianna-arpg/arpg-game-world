@@ -242,6 +242,10 @@ import {
 import {
   CLING_CFG, clingBurrowed, clingEligible, clingSeatPos, clingSeatsOf, gnawTags,
 } from './cling';
+import { syncAttributeBequests } from './bequests';
+import { STATUS_RELAYS, STATUS_RELAY_IDS, relayStatusStat } from './reception';
+import { TRAIL_GRANTS, POCKET_GRANTS, pocketGrantStat, trailGrantStat, placeGrantedPockets,
+  POCKET_GRANT_IDS, TRAIL_GRANT_IDS, substituteThrongKind, type GrantedPocket, type TrailMemory } from './fieldgrants';
 import {
   LITE_CFG, LitePool, liteNoise, liteRingOffset, liteSeatHash, resolveLiteKind,
   type LiteCond, type LiteKind, type LitePocket, type LiteRegenSpec, type LiteSwarmRow,
@@ -5560,6 +5564,9 @@ export class World {
     this.tierCrossings.length = 0; // the chase ledger is zone-local
     this.tierNavs.clear(); this.tierSeats = null; // per-story fields die with their zone
     this.airPockets = layout.airPockets ?? []; // underwater: circular bubbles for the renderer
+    this.grantedPocketCache.clear();
+    this.grantedTrailMemory.clear();
+    this.syncedGrantedPockets = undefined;
     this.structures = layout.structures ?? []; // plan structures (rects/roofs/doors/slots)
     // A PORT's DOCK: planted on the oceanward arena edge (the coast landmark's
     // liquid pools that side too, since both read the same bearing convention).
@@ -21203,6 +21210,7 @@ export class World {
    *  flesh that earned it, never to a borrowed one. */
   recalcSeat(seat: Seat): void {
     const p = this.seatHero(seat);
+    p.statusRelay = this.relayStatus;
     const m = seat.meta;
 
     // Effective attributes = class base + everything granted by the tree.
@@ -27998,6 +28006,7 @@ export class World {
   createMonster(defId: string, level: number, team: Team, owner?: Actor): Actor {
     const def: MonsterDef = MONSTERS[defId];
     const a = new Actor(def.name, team, vec(0, 0));
+    a.statusRelay = this.relayStatus;
     a.defId = defId;
     // THE GUN CENSUS: a bombard-wearing mint re-keys updateBombardment's
     // presence flag the same frame — the one signal a push can't carry.
@@ -28911,6 +28920,118 @@ export class World {
     this.charDirty = true;
   }
 
+  // Modifier-granted fields: no item IDs, no persistent changes to terrain.
+  private relayStatus: NonNullable<Actor['statusRelay']> = (owner, args) => {
+    if (owner.dead || owner.downed) return false;
+    for (const id of owner.sheet.armedFamily('relayStatus_', STATUS_RELAY_IDS)) {
+      const relay = STATUS_RELAYS[id];
+      if (relay.status !== args[0] || owner.sheet.get(relayStatusStat(id)) <= 0) continue;
+      let nearest: Actor | undefined, reach = relay.radius;
+      for (const enemy of this.enemiesOf(owner)) {
+        if (!sameStory(owner, enemy) || enemy.dead || enemy.untargetable || enemy.invulnerable || enemy.passive) continue;
+        const d = dist(owner.pos, enemy.pos);
+        if (d < reach) { reach = d; nearest = enemy; }
+      }
+      if (!nearest) continue; // No recipient: the original application lands normally.
+      nearest.applyStatus(args[0], args[1], args[2], owner.name,
+        { ...args[4], casterId: owner.id, relayed: true });
+      return true;
+    }
+    return false;
+  };
+
+  private grantedPocketZone = '';
+  /** Authoritative drawn circles on a replica; absence means local simulation. */
+  syncedGrantedPockets?: Record<number, GrantedPocket[]>;
+  private grantedPocketCache = new Map<string, GrantedPocket[]>();
+  private grantedTrailMemory = new Map<number, Map<string, TrailMemory>>();
+
+  grantedPocketsFor(a: Actor): GrantedPocket[] {
+    if (this.syncedGrantedPockets) return this.syncedGrantedPockets[a.id] ?? [];
+    const zoneKey = `${this.zone.id}:${this.currentZoneSeed}`;
+    if (this.grantedPocketZone !== zoneKey) {
+      this.grantedPocketZone = zoneKey;
+      this.grantedPocketCache.clear();
+    }
+    const out: GrantedPocket[] = [];
+    for (const def of Object.values(POCKET_GRANTS)) {
+      if (a.dead || a.downed || a.sheet.get(pocketGrantStat(def.id)) <= 0) continue;
+      const key = `${def.id}:${a.tier}`;
+      let pockets = this.grantedPocketCache.get(key);
+      if (!pockets) {
+        const walk = a.tier >= 1 && this.tierViews ? this.tierViews[a.tier] ?? this.walk : this.walk;
+        pockets = placeGrantedPockets(def, this.currentZoneSeed, a.tier, this.arena.w, this.arena.h, (x, y) => {
+          if (x < 0 || y < 0 || x > this.arena.w || y > this.arena.h) return false;
+          if (walk && !walk.isWalkable(x, y)) return false;
+          if (this.walk?.regionAt && !tierFloorAt(this.walk.regionAt(x, y), a.tier)) return false;
+          return !this.pointInSolid(x, y, 4, a.tier);
+        });
+        this.grantedPocketCache.set(key, pockets);
+      }
+      out.push(...pockets);
+    }
+    return out;
+  }
+
+  private insideGrantedPocket(a: Actor, id: string, pockets = this.grantedPocketsFor(a)): boolean {
+    return pockets.some(p => p.grantId === id && p.tier === a.tier
+      && Math.hypot(p.x - a.pos.x, p.y - a.pos.y) <= p.r);
+  }
+
+  private inGrantedRefuge(a: Actor, resource: string): boolean {
+    return Object.values(POCKET_GRANTS).some(def => def.resource === resource
+      && a.sheet.get(pocketGrantStat(def.id)) > 0 && this.insideGrantedPocket(a, def.id));
+  }
+
+  private syncPocketGrants(a: Actor): void {
+    const armed = a.sheet.armedFamily('pocketGrant_', POCKET_GRANT_IDS);
+    if (!armed.length && !a.pocketGrantSignature) return;
+    const mods: Modifier[] = [];
+    const states: string[] = [];
+    let pockets: GrantedPocket[] | undefined;
+    for (const id of armed) {
+      const def = POCKET_GRANTS[id];
+      if (a.sheet.get(pocketGrantStat(def.id)) <= 0) continue;
+      pockets ??= this.grantedPocketsFor(a);
+      const natural = a.tier === 0 && this.walk?.regionAt?.(a.pos.x, a.pos.y) === def.regionId;
+      const inside = !a.leap && !a.flying && (natural || this.insideGrantedPocket(a, def.id, pockets));
+      states.push(`${def.id}:${inside ? 1 : 0}`);
+      mods.push(...(inside ? def.inside : def.outside));
+    }
+    const signature = states.join('|');
+    if ((a.pocketGrantSignature ?? '') === signature) return;
+    a.pocketGrantSignature = signature || undefined;
+    if (mods.length) a.sheet.setSource('pocket-grants', mods);
+    else a.sheet.removeSource('pocket-grants');
+  }
+
+  private updateGrantedTrails(a: Actor): void {
+    let memory = this.grantedTrailMemory.get(a.id);
+    if (!memory && !a.sheet.armedFamily('trailGrant_', TRAIL_GRANT_IDS).length) return;
+    for (const def of Object.values(TRAIL_GRANTS)) {
+      const power = a.sheet.get(trailGrantStat(def.id));
+      const skill = SKILLS[def.skillId];
+      if (power <= 0 || !skill || a.untargetable) { memory?.delete(def.id); continue; }
+      if (!memory) this.grantedTrailMemory.set(a.id, memory = new Map());
+      let trail = memory.get(def.id);
+      if (!trail || trail.tier !== a.tier) {
+        trail = { x: a.pos.x, y: a.pos.y, tier: a.tier, odo: 0, inst: makeSkillInstance(skill, Math.max(1, a.level)) };
+        memory.set(def.id, trail);
+        continue;
+      }
+      trail.inst.level = Math.max(1, a.level);
+      trail.odo += Math.hypot(a.pos.x - trail.x, a.pos.y - trail.y);
+      trail.x = a.pos.x; trail.y = a.pos.y;
+      if (trail.odo < def.everyDist) continue;
+      trail.odo = 0;
+      if (this.zones.filter(z => z.caster === a && z.inst.def.id === def.skillId).length >= def.maxPatches) continue;
+      this.mintTrailPatch(a, trail.inst, { ...def.patch,
+        radius: def.patch.radius * a.sheet.get('aoeRadius', skillContextTags(skill)),
+        damageScale: (def.patch.damageScale ?? 1) * power }, a.pos, a.facing);
+    }
+    if (memory && !memory.size) this.grantedTrailMemory.delete(a.id);
+  }
+
   // ------------------------------------------------------------- the throng --
   // THE THRONG FABRIC (engine/throng.ts + docs/engine/throng.md): the swarm
   // you GATHER. Specs/config/pure math live in the module; these executors
@@ -28953,11 +29074,11 @@ export class World {
    *  untouchable and (to unattuned eyes) unseen. Zone-leveled — claims
    *  re-mint at the claimer's level. */
   private mintThrongHusk(
-    monsterId: string, pos: Vec2, opts?: { pocketKey?: string; ttl?: number; tier?: number },
+    monsterId: string, pos: Vec2, opts?: { pocketKey?: string; ttl?: number; tier?: number; affinity?: string },
   ): Actor | null {
     if (!MONSTERS[monsterId]) return null;
     const husk = this.createMonster(monsterId, Math.max(1, this.zone.level), 'enemy');
-    husk.throngWild = monsterId;
+    husk.throngWild = opts?.affinity ?? monsterId;
     // THE SAME-STORY LAW: a husk wears the story it condensed on (its
     // minter's — a kill's victim, the keeper, a mote's body; pockets seed
     // the ground) and seats on that story's own floor.
@@ -28973,10 +29094,21 @@ export class World {
     return husk;
   }
 
+  /** A found body may change its KIND while retaining its original affinity.
+   * The affinity already rides the wire as throngWild, so sight, collection,
+   * orders, cap and batch investment continue to belong to the host skill. */
+  private mintThrongFind(keeper: Actor, inst: SkillInstance, pos: Vec2,
+    opts?: { pocketKey?: string; ttl?: number; tier?: number }, rng: () => number = Math.random): Actor | null {
+    const original = inst.def.throng!.monsterId;
+    const kind = substituteThrongKind(original, keeper, inst, rng,
+      stat => keeper.sheet.get(stat, skillContextTags(inst.def), instanceMods(inst)));
+    return this.mintThrongHusk(kind, pos, { ...opts, affinity: original });
+  }
+
   /** The one throng-body mint (claims and save-restores share it). */
-  private mintThrongBody(keeper: Actor, inst: SkillInstance, pos: Vec2, level: number): Actor {
+  private mintThrongBody(keeper: Actor, inst: SkillInstance, pos: Vec2, level: number, bodyKind?: string): Actor {
     const spec = inst.def.throng!;
-    const body = this.createMonster(spec.monsterId, Math.max(1, level), keeper.team, keeper);
+    const body = this.createMonster(bodyKind ?? spec.monsterId, Math.max(1, level), keeper.team, keeper);
     body.noBounty = true;
     body.sourceSkillId = throngMarkerOf(inst.def.id);
     body.summonInst = inst;
@@ -28995,13 +29127,14 @@ export class World {
    *  quietly, a REAL roster body stands in its place, and a pocket seat's
    *  key is remembered run-long so the world genuinely runs dry. */
   private claimThrongHusk(keeper: Actor, inst: SkillInstance, husk: Actor): void {
+    const bodyKind = husk.defId;
     if (husk.throngPocketKey) this.throngClaimed.add(husk.throngPocketKey);
     husk.throngWild = undefined;
     const at = vec(husk.pos.x, husk.pos.y);
     let radius = husk.radius;
     this.kill(husk, true);
     const spec = inst.def.throng!;
-    if (spec.tier === 'lite') {
+    if (spec.tier === 'lite' && bodyKind === spec.monsterId) {
       // THE LITE TIER (engine/lite.ts): the claim joins the POOL — a row,
       // not a minion. Promotion mints the real body when a boundary asks.
       const kindIdx = this.liteKindOf(spec.monsterId);
@@ -29009,7 +29142,7 @@ export class World {
         this.lite.spawn(kindIdx, at.x, at.y, 1, keeper.id, this.liteKinds[kindIdx].plies0);
       }
     } else {
-      const body = this.mintThrongBody(keeper, inst, at, keeper.level);
+      const body = this.mintThrongBody(keeper, inst, at, keeper.level, bodyKind);
       at.x = body.pos.x; at.y = body.pos.y;
       radius = body.radius;
     }
@@ -29037,12 +29170,12 @@ export class World {
           ? this.wornThrongAnchorsOf(keeper).find(a => a.inst.def.id === row.skillId)?.inst
           : undefined);
       if (!inst || !MONSTERS[row.defId]) continue;
-      const n = Math.min(row.count, this.throngCapOf(keeper, inst));
+      const n = Math.max(0, Math.min(row.count, this.throngCapOf(keeper, inst) - this.throngRosterCount(keeper, inst)));
       // A lite-tier roster resumes as POOL ROWS (fresh plies — wear does
       // not persist across a save, matching a classic roster's full-life
       // re-field). Classic rosters mint real bodies exactly as before.
       const spec = inst.def.throng!;
-      if (spec.tier === 'lite') {
+      if (spec.tier === 'lite' && row.defId === spec.monsterId) {
         const kindIdx = this.liteKindOf(spec.monsterId);
         if (kindIdx < 0) continue;
         for (let i = 0; i < n; i++) {
@@ -29058,7 +29191,7 @@ export class World {
         const ang = rand(0, Math.PI * 2);
         this.mintThrongBody(keeper, inst, vec(
           keeper.pos.x + Math.cos(ang) * rand(30, 70),
-          keeper.pos.y + Math.sin(ang) * rand(30, 70)), Math.max(1, row.level));
+          keeper.pos.y + Math.sin(ang) * rand(30, 70)), Math.max(1, row.level), row.defId);
       }
     }
   }
@@ -29175,19 +29308,24 @@ export class World {
    *  change COUNTS, never maps. */
   private mintThrongPocket(
     rng: Rng, pois: Vec2[], skillId: string, row: Extract<ThrongSourceRow, { kind: 'pocket' }>,
-    pocket: number, has: boolean, monsterId: string, yieldMul: number,
+    pocket: number, has: boolean, monsterId: string, yieldMul: number, keeper: Actor, inst: SkillInstance,
   ): void {
     const heart = this.interactSpot(pois, rng, THRONG_CFG.pocket.reach, THRONG_CFG.pocket.portalClear);
     const fork = new Rng((((this.currentZoneSeed ^ THRONG_CFG.salt) ^ throngSkillSalt(skillId))
       + Math.imul(pocket + 1, 0x9e3779b9)) >>> 0);
     const cluster = Math.max(1, Math.round(fork.int(row.cluster[0], row.cluster[1]) * yieldMul));
+    // One decision for the whole pocket, on a SEPARATE stream. Neither
+    // transmutation nor its absence can move the pocket hearts or seats.
+    const morphRng = new Rng(this.currentZoneSeed ^ throngSkillSalt(`${skillId}:${pocket}:morph`));
+    const kind = substituteThrongKind(monsterId, keeper, inst, () => morphRng.next(),
+      stat => keeper.sheet.get(stat, skillContextTags(inst.def), instanceMods(inst)));
     for (let s = 0; s < cluster; s++) {
       const ang = fork.range(0, Math.PI * 2);
       const d = fork.range(6, THRONG_CFG.pocket.scatter);
       const key = throngPocketKey(this.zone.id, skillId, pocket, s);
       if (!has || this.throngClaimed.has(key)) continue;
-      this.mintThrongHusk(monsterId, vec(
-        heart.x + Math.cos(ang) * d, heart.y + Math.sin(ang) * d), { pocketKey: key });
+      this.mintThrongHusk(kind, vec(
+        heart.x + Math.cos(ang) * d, heart.y + Math.sin(ang) * d), { pocketKey: key, affinity: monsterId });
     }
   }
 
@@ -29228,13 +29366,13 @@ export class World {
         if (!firstRow) { firstRow = row; firstHas = has; }
         const n = rng.int(row.perZone[0], row.perZone[1]);
         for (let p = 0; p < n; p++, pocket++) {
-          this.mintThrongPocket(rng, pois, skillId, row, pocket, has, spec.monsterId, yieldMul);
+          this.mintThrongPocket(rng, pois, skillId, row, pocket, has, spec.monsterId, yieldMul, keeper, inst);
         }
       }
       if (firstRow) {
         const bonus = Math.max(0, Math.round(keeper.sheet.get('throngPockets', tags, extra)));
         for (let p = 0; p < bonus; p++, pocket++) {
-          this.mintThrongPocket(rng, pois, skillId, firstRow, pocket, firstHas, spec.monsterId, yieldMul);
+          this.mintThrongPocket(rng, pois, skillId, firstRow, pocket, firstHas, spec.monsterId, yieldMul, keeper, inst);
         }
       }
     }
@@ -29314,8 +29452,10 @@ export class World {
         || this.wornThrongAnchored(m.owner, m.sourceSkillId);
       if (!anchored) {
         const defId = m.defId;
+        const releasedSpec = m.summonInst?.def.throng;
         this.kill(m, true);
-        if (defId) this.mintThrongHusk(defId, m.pos, { ttl: THRONG_CFG.motes.ttl * 2, tier: m.tier });
+        if (defId && releasedSpec?.release !== 'dismiss') this.mintThrongHusk(defId, m.pos,
+          { ttl: THRONG_CFG.motes.ttl * 2, tier: m.tier, affinity: releasedSpec?.monsterId });
       }
     }
     // THE LIVE REBAKE (1s cadence): standing bodies re-fold the owner's
@@ -29371,7 +29511,7 @@ export class World {
               // at yield 1), the rest scattered beside it.
               const n = this.throngYieldCount(keeper, inst, 1);
               for (let i = 0; i < n; i++) {
-                this.mintThrongHusk(spec.monsterId,
+                this.mintThrongFind(keeper, inst,
                   i === 0 ? pos : this.throngStandNear(pos, keeper.tier),
                   { ttl: moteRow.ttl ?? THRONG_CFG.motes.ttl, tier: keeper.tier });
               }
@@ -29411,7 +29551,7 @@ export class World {
                 const spot = trickleRow.at === 'ring'
                   ? this.throngMoteSpot(keeper, 'near') ?? this.throngStandNear(keeper.pos)
                   : this.throngStandNear(keeper.pos, keeper.tier);
-                this.mintThrongHusk(spec.monsterId, spot,
+                this.mintThrongFind(keeper, inst, spot,
                   { ttl: trickleRow.ttl ?? THRONG_CFG.motes.ttl, tier: keeper.tier });
               }
             }
@@ -29443,7 +29583,7 @@ export class World {
           st.throngCritAt = this.time + (row.icd ?? THRONG_CFG.critIcd);
           const n = this.throngYieldCount(lord, inst, 1);
           for (let i = 0; i < n; i++) {
-            this.mintThrongHusk(spec.monsterId, this.throngStandNear(target.pos, target.tier),
+            this.mintThrongFind(lord, inst, this.throngStandNear(target.pos, target.tier),
               { ttl: THRONG_CFG.motes.ttl, tier: target.tier });
           }
         } else if (row.kind === 'gauge') {
@@ -29456,7 +29596,7 @@ export class World {
             const n = this.throngYieldCount(lord, inst,
               Math.round(rand(row.yield[0], row.yield[1])));
             for (let i = 0; i < n; i++) {
-              this.mintThrongHusk(spec.monsterId, this.throngStandNear(lord.pos, lord.tier),
+              this.mintThrongFind(lord, inst, this.throngStandNear(lord.pos, lord.tier),
                 { ttl: THRONG_CFG.motes.ttl, tier: lord.tier });
             }
             this.text(vec(lord.pos.x, lord.pos.y - 18), 'the throng stirs',
@@ -29480,7 +29620,7 @@ export class World {
         if (row.kind !== 'onKill' || !chance(row.chance)) continue;
         const n = this.throngYieldCount(lord, inst, 1);
         for (let i = 0; i < n; i++) {
-          this.mintThrongHusk(spec.monsterId, this.throngStandNear(victim.pos, victim.tier),
+          this.mintThrongFind(lord, inst, this.throngStandNear(victim.pos, victim.tier),
             { ttl: THRONG_CFG.motes.ttl, tier: victim.tier });
         }
       }
@@ -29582,9 +29722,10 @@ export class World {
   devThrongPocketHere(skillId: string, n = 4): boolean {
     const spec = SKILLS[skillId]?.throng;
     if (!spec) return false;
+    const inst = this.player.skills.find(s => s?.def.id === skillId) ?? makeSkillInstance(SKILLS[skillId], 1);
     for (let i = 0; i < n; i++) {
       const ang = rand(0, Math.PI * 2);
-      this.mintThrongHusk(spec.monsterId, vec(
+      this.mintThrongFind(this.player, inst, vec(
         this.player.pos.x + Math.cos(ang) * rand(50, 90),
         this.player.pos.y + Math.sin(ang) * rand(50, 90)), { tier: this.player.tier });
     }
@@ -30221,6 +30362,7 @@ export class World {
       const inst = a.owner.skills.find(s => s && throngMarkerOf(s.def.id) === a.sourceSkillId);
       const spec = inst?.def.throng;
       if (!spec || spec.tier !== 'lite') continue;
+      if (a.defId !== spec.monsterId) continue; // Substitutions keep their body kind and original anchor.
       if (a.clingTo || a.heldBy !== undefined || a.gripping || a.casting) continue;
       if (a.aiCommand || a.aiTargetId !== undefined) continue;
       if (a.statuses.length > 0) continue;
@@ -36667,6 +36809,7 @@ export class World {
       if (carry > 0) ownerMods.push(mod('apply_' + sid, 'flat', carry * s));
     }
     minion.sheet.setSource('owner', ownerMods);
+    syncAttributeBequests(minion, scale, tags, extra);
     // Meat Shield: guarded minions keep a short leash and fight defensively.
     minion.guardMode = caster.sheet.get('minionGuard', tags, extra) > 0;
     // THE PLY FABRIC's owner levers (minionPlies + the calcified trade
@@ -39102,6 +39245,7 @@ export class World {
     const hold = linger ?? spec.duration;
     this.zones.push({
       pos: vec(at.x, at.y), radius: spec.radius * (dso?.from ?? 1),
+      tier: a.tier, // Trail patches retain their emission story when the caster changes floors.
       caster: a, inst, color: inst.def.color,
       delay: 0, exploded: true,
       linger: hold, linger0: hold,
@@ -39854,6 +39998,7 @@ export class World {
     forceDamage = false,
     fromFuse = false,
   ): void {
+    depth = Math.max(depth, inst.procChainDepth ?? 0);
     const def = inst.def;
     // THE FUSE (FuseSpec — innate or a socketed Time Fuse): the wound
     // BANKS instead of biting. The whole resolution — damage, statuses,
@@ -40082,6 +40227,9 @@ export class World {
         }
       }
       dealt = result.total;
+      if (result.receivedAmounts) this.rollOwnProcs(target, 'struck', {
+        depth, target: caster, crit: wasCrit, receivedAmounts: result.receivedAmounts,
+      });
       if (dealt > 0) {
         // THE RECENCY LEDGER (engine/recency.ts): the blow landed — both
         // sides stamp it (DoT ticks never reach here: a burn is not a blow).
@@ -40091,7 +40239,7 @@ export class World {
         // 'hurt' procs — the victim's OWN sheet answers (sheet-only, golden
         // rule 3); the striker is the proc's target, so a status, an arc
         // or a shove lands on the hand that struck.
-        this.rollOwnProcs(target, 'hurt', { depth, target: caster, crit: wasCrit });
+        this.rollOwnProcs(target, 'hurt', { depth, target: caster, crit: wasCrit, receivedAmounts: result.receivedAmounts });
       }
       // DAMAGE POOLS: the hit's rolled amounts feed any pool skills on the
       // attacker's bar (Venomous Aura sips chaos hits; Detonation, fire).
@@ -41874,6 +42022,7 @@ export class World {
       tags?: Set<SkillTag>; extra?: Modifier[]; inst?: SkillInstance; target?: Actor; depth?: number; bracket?: number;
       /** 'hurt': the incoming blow was critical (the crit / noCrit gates). */
       crit?: boolean;
+      receivedAmounts?: Partial<Record<DamageType, number>>;
       /** 'condition': the ConditionId that just flipped on. */
       condition?: ConditionId;
       /** 'cast': where the cast was pointed — a 'cast' payload's landing. */
@@ -41902,6 +42051,7 @@ export class World {
       // other body (the striker on 'hurt', the refuser on 'miss'/'foiled',
       // the fallen on 'minionDeath').
       if (proc.condition !== undefined && proc.condition !== opts?.condition) continue;
+      if (proc.receivedTypes && !proc.receivedTypes.some(t => (opts?.receivedAmounts?.[t] ?? 0) > 0)) continue;
       if (proc.crit && !opts?.crit) continue;
       if (proc.noCrit && opts?.crit) continue;
       if (proc.vs && (!opts?.target || !this.victimGate(proc.vs, opts.target, owner))) continue;
@@ -42304,7 +42454,7 @@ export class World {
     const level = held ? effectiveSkillLevel(held)
       : inst ? effectiveSkillLevel(inst)
         : Math.max(1, Math.round(caster.level / 2));
-    const payload = (): SkillInstance => held ?? makeSkillInstance(skill, level);
+    const payload = (): SkillInstance => held ?? { ...makeSkillInstance(skill, level), procChainDepth: depth };
     const mult = cast.mult ?? 1;
     if (skill.delivery.type === 'projectile') {
       const bearing = target && target !== caster ? angleTo(caster.pos, target.pos)
@@ -45411,6 +45561,10 @@ export class World {
     this.updateMinionMeta(dt);
     this.updateThrong(dt); // THE THRONG's source/collection sweep (engine/throng.ts)
     this.updateLite(dt);   // THE LITE TIER's batched sweep (engine/lite.ts)
+    for (const id of this.grantedTrailMemory.keys()) {
+      const actor = this.actorById(id);
+      if (!actor || actor.dead) this.grantedTrailMemory.delete(id);
+    }
     if (this.lockHint > 0) this.lockHint -= dt;
 
     // Actors: timers, DoT, dash movement, lifespans.
@@ -45420,6 +45574,14 @@ export class World {
       // A downed co-op seat is frozen: no timers, DoT, regen, casting or movement
       // until an ally revives it. (life is 0; skipping avoids re-entering kill.)
       if (a.downed) continue;
+      this.syncPocketGrants(a);
+      a.statusRelay ??= this.relayStatus;
+      this.updateGrantedTrails(a);
+      if (a.owner || a.bequestSignature) {
+        const anchor = a.summonInst;
+        syncAttributeBequests(a, anchor?.def.throng ? batchScaleOf(anchor.def.throng) : 1,
+          anchor ? skillContextTags(anchor.def) : undefined, anchor ? instanceMods(anchor) : undefined);
+      }
       // THE TIMEFLOW BEND (engine/timeflow.ts): each body lives at its own
       // rate. A fully held one (stasis, a chronomancer's stop) suspends
       // WHOLESALE — everything this loop body does: timers, DoTs, casting,
@@ -51836,7 +51998,7 @@ export class World {
     // A FILL-polarity resource routes to the mirror: the row's `drain` FEEDS
     // the meter toward its bad end (the seam a sulphur-shallows row will
     // wear — no shipped row uses it yet).
-    if (def.survival && this.seatOf(a)) {
+    if (def.survival && this.seatOf(a) && !this.inGrantedRefuge(a, def.survival.resource)) {
       drained.add(def.survival.resource);
       if (survivalResource(def.survival.resource)?.polarity === 'fill') {
         this.feedSurvival(a, def.survival.resource, def.survival.drain * dt);

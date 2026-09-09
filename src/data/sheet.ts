@@ -235,6 +235,8 @@ export const SHEET_VITALS: string[] = ['life', 'mana', 'moveSpeed'];
  *  The blurb serves any id of the family the tooltip meets. */
 export interface SheetFamilySeat { prefix: string; cat: string; blurb: string }
 export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
+  { prefix: 'takenAs_', cat: 'defense', blurb: 'Changes incoming hit damage before armor and resistance. Simultaneous routes never convert twice or create extra damage.' },
+  { prefix: 'relayStatus_', cat: 'defense', blurb: 'Redirects the named incoming status to a nearby enemy. Without a recipient, it lands normally.' },
   { prefix: 'apply_', cat: 'offense', blurb: 'Chance your hits inflict this status.' },
   { prefix: 'applyWet_', cat: 'offense', blurb: 'Chance your hits inflict this status on a WET target — wading, swimming, soaked or rain-drenched — and nothing at all on a dry one.' },
   { prefix: 'damageVs_', cat: 'offense', blurb: 'Increased damage per stack of this status already on the target.' },
@@ -258,10 +260,14 @@ export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
   { prefix: 'slotgraft_', cat: 'skills', blurb: 'A support granted by what you wear, riding whichever skill you bind to that bar slot; dormant when the gem does not fit the skill seated there.' },
   { prefix: 'skillgrant_', cat: 'skills', blurb: 'A skill granted by what you wear, at this level: bind it to a bar seat and cast it like any learned skill; its sockets live on the granting item.' },
   { prefix: 'procPower_', cat: 'skills', blurb: 'Scales how HARD this triggered effect lands (its chance is the proc line beside it).' },
+  { prefix: 'trailGrant_', cat: 'skills', blurb: 'Moving leaves a registered short-lived ground effect. Its power scales through your ordinary skill stats.' },
+  { prefix: 'pocketGrant_', cat: 'defense', blurb: 'Reveals temporary terrain refuges while granted, with different benefits inside and outside.' },
+  { prefix: 'throngMorph_', cat: 'minions', blurb: 'Chance a found throng body changes kind while keeping its original skill roster, commands and scaling.' },
+  { prefix: 'bequest_', cat: 'minions', blurb: 'Shares a portion of your original attribute benefits with eligible owned bodies, without recursive inheritance.' },
   { prefix: 'remnantDrop_', cat: 'skills', blurb: 'Chance your casts shed this remnant, empowering the next cast of its school.' },
   { prefix: 'minionApply_', cat: 'minions', blurb: 'Your minions\' hits may inflict this status.' },
   { prefix: 'sympathy_', cat: 'minions', blurb: 'Your gains echo along this bond to kin: flasks, orbs, charges, heals.' },
-  { prefix: 'wornThrong_', cat: 'minions', blurb: 'A worn brood: dormant kin condense around you, join when you walk over them, and hunt on their own. Deeper ranks quicken the clock, thicken each clutch, and raise the cap.' },
+  { prefix: 'wornThrong_', cat: 'minions', blurb: 'A worn brood: kin replenish directly or gather nearby to be claimed, according to their source. Deeper ranks improve the clock and roster using that brood’s configured scaling.' },
   { prefix: 'attune_', cat: 'misc', blurb: 'Attunement to this tone.' },
   { prefix: 'terraform_', cat: 'misc', blurb: 'Multiplies how fast this ground grows for its bearer.' },
   { prefix: 'terraformFx_', cat: 'misc', blurb: 'Arms this ground\'s authored combat effect.' },

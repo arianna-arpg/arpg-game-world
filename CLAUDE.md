@@ -111,6 +111,17 @@ checks, the balance harness's smoke suite, and the generation QA sweep are how
 we verify changes.
 
 ## Layout
+- Reactive uniques: `engine/reception.ts` supplies defender hit conversion and
+  status relays; typed `struck` procs and distinct saved finger choices reuse
+  the ordinary proc/item systems. Data in `src/data/uniques/reactive.ts` and
+  `src/data/reactiveSkills.ts`; extension contract and checks in
+  `docs/design/reactive-uniques.md` and `balance/probe_reactiveuniques.ts`.
+- Living uniques: `engine/itemchoices.ts`, `engine/bequests.ts`, and
+  `engine/fieldgrants.ts` add saved weighted item alternatives, attributable
+  follower inheritance, and modifier-granted movement trails/terrain refuges/
+  throng substitutions. Data in `src/data/uniques/living.ts`; design and
+  extension contract in `docs/design/living-uniques.md`; regression rig
+  `balance/probe_livinguniques.ts`.
 - `src/engine/` — systems: `world.ts` (core loop, `useSkill`), `stats.ts`
   (layered modifier engine), `damage.ts`, `status.ts`, `skills.ts` (skill
   schema), `actor.ts` (one entity model for player/monsters/minions),
@@ -1632,8 +1643,9 @@ we verify changes.
   itemaffixes.ts) generates one "of the Nth Finger" suffix per (wild gem ×
   `BAR_SLOTS`) under a TOTAL-mass budget weighted by each gem's own drop
   share — weight-0 gems are structurally unrollable, so ITEM-EXCLUSIVE
-  supports ride the same family via unique lines (The Rote Hand is the
-  teaching debut: one line live, one honestly dormant on most builds).
+  supports ride the same family via unique lines. The Rote Hand now rolls
+  one to four distinct support grafts across random skill slots; unsupported
+  combinations stay honestly dormant (see `docs/design/reactive-uniques.md`).
   Derived, never saved; census-invisible (bare sim instances wear no
   gear) — docs in `docs/engine/slotgrafts.md`, probe
   `balance/probe_slotgraft.ts`.

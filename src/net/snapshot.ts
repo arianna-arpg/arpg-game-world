@@ -403,6 +403,8 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
 
 /** The full render-state replace a client draws each frame. */
 export interface StateSnapshot {
+  /** Per-owner terrain grants: replicas draw exactly the host's circles. */
+  grantedPockets?: { owner: number; pockets: import('../engine/fieldgrants').GrantedPocket[] }[];
   tick: number;
   time: number;
   zoneId: string;
@@ -718,6 +720,11 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
 
   return {
     tick, time: world.time, zoneId: world.zone.id,
+    grantedPockets: (() => {
+      const rows = world.seats.map(s => ({ owner: s.actor.id, pockets: world.grantedPocketsFor(s.actor) }))
+        .filter(r => r.pockets.length);
+      return rows.length ? rows : undefined;
+    })(),
     arena: { w: world.arena.w, h: world.arena.h },
     seats, seatMeta,
     vendor: world.vendorStock.map(e => vendorEntryW(e, world)), vendorRestockAt: world.vendorRestockAt,
@@ -995,6 +1002,9 @@ function applyNetEvap(world: World, rows: readonly EvapW[] | undefined): void {
  *  When `prev` + `alpha` (0..1) are given, actor POSITIONS/facing are interpolated
  *  prev→snap for smooth motion between 20 Hz snapshots (everything else uses snap). */
 export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSnapshot | null, alpha = 1): void {
+  if (!world.appliedZoneId || snap.zoneId === world.appliedZoneId) {
+    world.syncedGrantedPockets = Object.fromEntries((snap.grantedPockets ?? []).map(r => [r.owner, r.pockets]));
+  }
   // The shared clock interpolates exactly like actor positions do: every
   // time-driven read on the client — painter sway, projectile form phase,
   // TRACK RIDER POSES (trackPose is a pure function of this clock) — glides

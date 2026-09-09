@@ -15,6 +15,7 @@
 
 import { dominantTypeOf } from './bodyVoices'; // THE HIT TINT — the landing stamps the blow's type
 import { extraAsStat } from './stats'; // THE EXTRA LANE — damage gained as extra <type>
+import { receiveDamageAs } from './reception';
 import { chance, clamp, rand } from '../core/math';
 import {
   DAMAGE_TYPES, addedDamageStat, conversionStat,
@@ -334,6 +335,8 @@ export function skillDamageBands(
 }
 
 export interface HitResult {
+  /** Incoming composition after defender conversion, before resistances/pools. */
+  receivedAmounts?: Partial<Record<DamageType, number>>;
   evaded: boolean;
   immune: boolean;
   /** Met by the passive blockChance stat — the guard ate the wound up to
@@ -395,7 +398,7 @@ export interface MitigateOpts {
   extra?: Modifier[];
   /** Out-params: poiseBroke when this bundle broke the victim's poise;
    *  clamped when the victim's hitCap flattened the life cut. */
-  out?: { poiseBroke?: boolean; clamped?: boolean };
+  out?: { poiseBroke?: boolean; clamped?: boolean; receivedAmounts?: Partial<Record<DamageType, number>> };
 }
 
 /**
@@ -428,6 +431,8 @@ function mitigateWound(
   target: Actor, amounts: Partial<Record<DamageType, number>>,
   opts?: MitigateOpts,
 ): number {
+  amounts = receiveDamageAs(target, amounts);
+  if (opts?.out) opts.out.receivedAmounts = amounts;
   const pen = opts?.attacker
     ? { attacker: opts.attacker, tags: opts.tags, extra: opts.extra } : undefined;
   let total = 0;
@@ -809,7 +814,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
     }
   }
 
-  const out: { poiseBroke?: boolean; clamped?: boolean } = {};
+  const out: NonNullable<MitigateOpts['out']> = {};
   const total = mitigateTyped(target, packet.amounts,
     { attacker, tags: packet.tags, extra: packet.extra, out });
   // THE PLY GATE (plyEats above): runs AFTER mitigation so poise still
@@ -822,6 +827,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
     return {
       evaded: false, immune: false, blocked: false, total: 0,
       crit: packet.crit, poiseBroke: out.poiseBroke, plyEaten: true,
+      receivedAmounts: out.receivedAmounts,
     };
   }
   landLifeDamage(target, total);
@@ -892,6 +898,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   return {
     evaded: false, immune: false, blocked: false, total, crit: packet.crit,
     poiseBroke: out.poiseBroke, culled, clamped: out.clamped,
+    receivedAmounts: out.receivedAmounts,
   };
 }
 

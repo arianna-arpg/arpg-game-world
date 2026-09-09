@@ -207,7 +207,11 @@ export interface ProcDef {
     //   'lastGasp'     your last gasp answered (engine/damage.ts) — what
     //                  the reprieve grants is this trigger's payload.
     | 'hurt' | 'miss' | 'foiled' | 'cast' | 'condition' | 'pulse'
-    | 'minionDeath' | 'heal' | 'lastGasp';
+    | 'minionDeath' | 'heal' | 'lastGasp'
+    /** A non-evaded/non-blocked hit connects, including shield absorption. */
+    | 'struck';
+  /** Incoming types AFTER defender conversion, BEFORE resistance and pools. */
+  receivedTypes?: DamageType[];
   /** 'condition' only: the ConditionId whose rising edge fires this proc. */
   condition?: ConditionId;
   /** 'pulse' only: the beat length, seconds. */

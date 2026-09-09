@@ -33,6 +33,7 @@ import {
   type ModLineDef, type RangedLineDef, type UniqueDef,
 } from './items';
 import { STAT_DEFS, isAttributeId, type Modifier } from './stats';
+import { rollUniqueChoices, resolveUniqueChoices, rolledUniqueLines, uniqueDefinitionLines } from './itemchoices';
 
 type RngFn = () => number;
 
@@ -402,6 +403,7 @@ export function rollItem(opts: RollItemOpts): ItemInstance | null {
   if (unique) {
     item.uniqueId = unique.id;
     item.uniqueRolls = rollLineSet(unique.lines.length, rng);
+    if (unique.choices?.length) item.uniqueChoices = rollUniqueChoices(unique, rng);
     for (let i = 1; i < unique.lines.length; i++) {
       if (unique.lines[i].sharedRoll) item.uniqueRolls[i] = item.uniqueRolls[0];
     }
@@ -524,6 +526,7 @@ export function forgeItem(opts: ForgeItemOpts): ItemInstance | null {
   if (unique) {
     item.uniqueId = unique.id;
     item.uniqueRolls = rollSet(unique.lines.length);
+    if (unique.choices?.length) item.uniqueChoices = rollUniqueChoices(unique, rng, roll);
     for (let i = 1; i < unique.lines.length; i++) {
       if (unique.lines[i].sharedRoll) item.uniqueRolls[i] = item.uniqueRolls[0];
     }
@@ -577,9 +580,10 @@ function eachItemLine(
     });
   }
   if (item.uniqueId) {
-    UNIQUES[item.uniqueId]?.lines.forEach((line, i) => {
-      visit(line, rangedLineValue(line, item.uniqueRolls?.[i] ?? 0.5, item.tier, ITEM_CFG.uniqueTierScale));
-    });
+    const unique = UNIQUES[item.uniqueId];
+    if (unique) for (const { line, roll } of rolledUniqueLines(item, unique)) {
+      visit(line, rangedLineValue(line, roll, item.tier, ITEM_CFG.uniqueTierScale));
+    }
   }
 }
 
@@ -742,8 +746,8 @@ export function describeItem(item: ItemInstance): ItemDescription {
   }
   if (item.uniqueId) {
     const u = UNIQUES[item.uniqueId];
-    u?.lines.forEach((line, i) => {
-      const v = rangedLineValue(line, item.uniqueRolls?.[i] ?? 0.5, item.tier, ITEM_CFG.uniqueTierScale);
+    if (u) rolledUniqueLines(item, u).forEach(({ line, roll }) => {
+      const v = rangedLineValue(line, roll, item.tier, ITEM_CFG.uniqueTierScale);
       d.unique.push(line.text ? speakLineText(line.text, line.stat, line.kind, v) : formatModLine(line, v));
     });
     d.flavor = u?.flavor;
@@ -881,6 +885,7 @@ export function rebuildItem(saved: ItemInstance): ItemInstance | null {
     if (item.sockets.length === 0) delete item.sockets;
   }
   bumpItemUidFloor(item.uid);
+  if (item.uniqueId) item.uniqueChoices = resolveUniqueChoices(item, UNIQUES[item.uniqueId]);
   return item;
 }
 
@@ -940,7 +945,7 @@ function ensureValidated(): void {
   }
   for (const u of UNIQUE_LIST) {
     if (!ITEM_BASES[u.baseId]) warn(`unique '${u.id}' pinned to unknown base '${u.baseId}'`);
-    for (const line of u.lines) {
+    for (const line of uniqueDefinitionLines(u)) {
       lintLocal(`unique '${u.id}'`, line);
       if (isAttributeId(line.stat)) {
         if (line.kind !== 'flat' && line.kind !== 'increased') {
