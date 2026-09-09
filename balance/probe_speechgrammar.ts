@@ -47,6 +47,7 @@ import {
   type SpeechContext, type SpeechDeckEntry, type SpeechSpeaker, type SpeechSpeakerRow, type SpeechTemplate,
 } from '../src/engine/speechGrammar';
 import { SPEECH_TEMPLATES } from '../src/data/speechGrammar';
+import { seedGlobalRandom } from '../src/sim/rng';
 import { Rng } from '../src/core/rng';
 import { bootSimEngine, classById } from '../src/sim/arena';
 import { World } from '../src/engine/world';
@@ -251,6 +252,8 @@ const fullCtx = (over: Partial<SpeechContext> = {}): SpeechContext => ({
 bootSimEngine();
 const SEED = 0x5eec;
 function mkWorld(account: Account, seed = SEED): World {
+  // The inn simulation also consumes the engine die, not just the manifest seed.
+  seedGlobalRandom(seed);
   resetActorIdCounter();
   for (const c of CLASSES) account.unlockedClasses.add(c.id);
   const manifest = buildManifest(account, seed);

@@ -18,6 +18,7 @@
 // never pulls in ZoneDef. Mirrors the one-way-leaf discipline of traits.ts.
 // ---------------------------------------------------------------------------
 
+import { geographyVersion } from './geography';
 import { continentAt, continentSeedFrom } from './continents';
 import { CLIMATE_CFG, climateAt, climateAffinity, registerClimateInvalidation, validateClimateSpecs, type ClimateSpec } from './climate';
 import { presenceMul, type LevelEnvelope } from '../engine/presence';
@@ -51,6 +52,8 @@ export interface BiomeInfo {
    *  (open desert/tundra); smaller = a TIGHTER interwoven web (dense grove/marsh).
    *  Omitted = DEFAULT_NODE_SEP. The user's "forest tight, desert spacious" lever. */
   spacing?: number;
+  /** Relative region radius range, independent of node spacing and occurrence weight. */
+  regionScale?: [number, number];
   /** THE ROAD BUDGET — total charted roads a zone of this biome may hold (the
    *  per-biome face of worldgen.MAX_DEGREE, read through roadBudgetOf by EVERY
    *  road-former: the weave, the proximity linker, the frontier-resolution
@@ -199,7 +202,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // walls themselves cuttable — and the forest recipe is its rarer OPEN face,
   // grown in jungle wood and sealed near-shut at the region's heart. The
   // tightest node web in the game: the green packs against itself.
-  jungle: { patronFaction: 'junglekin', mapColor: '#1f7a42', label: 'Jungle', spacing: 54,
+  jungle: { patronFaction: 'junglekin', mapColor: '#1f7a42', label: 'Jungle', spacing: 54, regionScale: [0.7, 1.35],
     climate: { temperature: 'warm', moisture: 'wet' },
     // THE PRESS: one extra road past the world cap — with the game's tightest
     // spacing, the deep green reads as a TANGLE (ways in every direction,
@@ -423,7 +426,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // blisters), all running the 'dunefield' recipe. The WIDEST spacing in the
   // game: its zones are the biggest surface arenas, and committing to the
   // crossing is the point — the map itself asks whether you want the heat.
-  desert: { patronFaction: 'gnoll',  mapColor: '#c9a86a', label: 'Desert', spacing: 124,
+  desert: { patronFaction: 'gnoll',  mapColor: '#c9a86a', label: 'Desert', spacing: 124, regionScale: [1.15, 1.8],
     climate: { temperature: 'warm', moisture: 'dry' },
     meld: 'desert_meld',
     allowedLayouts: { dunefield: 4, plains: 1 },
@@ -543,7 +546,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // is load-bearing across saves, tables and the biome field — but every
   // player-facing read says what the place IS. (The WORD 'Highlands' now
   // belongs to the butte country below.)
-  highland: { patronFaction: 'beastkin',  mapColor: '#8a8f6a', label: 'Mountains', spacing: 88,
+  highland: { patronFaction: 'beastkin',  mapColor: '#8a8f6a', label: 'Mountains', spacing: 88, regionScale: [0.85, 1.55],
     meld: 'mountain_meld',
     // ELEVATION-claimed (the relief fabric): the ranges stand where the land
     // actually RISES — ridge spines on the elevation axis — instead of
@@ -1348,6 +1351,7 @@ registerBiomeFloor({ biome: 'farmland', discs: [{ anchor: 'origin', r: 520 }, { 
  *  instead of shallow isles/coast (the user's "deep into the biome → deep sea"). */
 export const BIOME_FIELD_CFG = {
   cellSpan: 260, jitter: 0.45, renderCell: 52, deepThreshold: 0.5,
+  regionScale: { default: [0.75, 1.3] as readonly [number, number], min: 0.6, max: 1.8, search: 3 },
   /** HILLSHADE on the map wash (the relief fabric made visible): each land
    *  cell tilts light/dark by the elevation gradient (lit from the NW) plus
    *  a peak brightening above `peakFrom` — ridge chains and river valleys
@@ -1564,16 +1568,43 @@ export function fieldBiomePick(
   return picked;
 }
 
-/** The biome at a node-space coordinate — a jittered Voronoi over the seeded
- *  regions (3×3 lattice neighbourhood, nearest seed point wins), each cell's
- *  biome rolled from weight × climate affinity at its site. Pure + identical
- *  for a fixed (coord, fieldSeed). */
+/** Multiplicatively weighted Voronoi: every seed retains its own center,
+ * while radius variation makes curved borders and uneven areas. The bounded
+ * winner search is exact: nearest-site distance/scale <= 1.71 spans; an
+ * outside seed is at least 3.275 spans away / maxScale 1.8 > 1.81 spans.
+ * Depth compares the nearest DIFFERENT biome in this bounded neighborhood;
+ * it saturates at one when no opposing biome is nearby. */
+export function regionWinner(coord: MapCoord, seed: number): { biome: string; gx: number; gy: number; scale: number; score: number; depth: number } {
+  const span = BIOME_FIELD_CFG.cellSpan, cfg = BIOME_FIELD_CFG.regionScale;
+  const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
+  let best = { biome: 'grove', gx: cx, gy: cy, scale: 1, score: Infinity };
+  let other = Infinity;
+  for (let dx = -cfg.search; dx <= cfg.search; dx++) for (let dy = -cfg.search; dy <= cfg.search; dy++) {
+    const gx = cx + dx, gy = cy + dy, h = hashCell(gx, gy, seed);
+    const x = (gx + 0.5 + ((h & 0xffff) / 0xffff - 0.5) * BIOME_FIELD_CFG.jitter) * span;
+    const y = (gy + 0.5 + ((h >>> 16) / 0xffff - 0.5) * BIOME_FIELD_CFG.jitter) * span;
+    const distance = (x - coord.x) ** 2 + (y - coord.y) ** 2;
+    if (distance / (cfg.max ** 2) >= other) continue;
+    const biome = fieldBiomePick(BIOME_FIELD, gx, gy, { x, y }, seed);
+    const band = BIOMES[biome]?.regionScale ?? cfg.default;
+    const scale = Math.max(cfg.min, Math.min(cfg.max, band[0] + (band[1] - band[0]) * hashCell(gx, gy, seed ^ 0x72ad1) / 0x100000000));
+    const score = distance / (scale * scale);
+    if (score < best.score) {
+      if (biome !== best.biome) other = best.score;
+      best = { biome, gx, gy, scale, score };
+    } else if (biome !== best.biome && score < other) other = score;
+  }
+  return { ...best, depth: Number.isFinite(other) ? Math.max(0, 1 - Math.sqrt(best.score / Math.max(other, 1e-9))) : 1 };
+}
+
+/** The biome at a map coordinate; legacy fields retain the original Voronoi. */
 export function biomeAt(coord: MapCoord, fieldSeed: number): string {
   // THE LANDMASS LAYER SITS ABOVE THE LAND LATTICE: open sea is its own
   // contiguous biome, not an overlay — so every sampler of "what is HERE"
   // (map wash, Field flood-fills, mint decisions, event anchors) agrees the
   // sea is sea. Land and bridges fall through to the land lattice below.
   if (continentAt(coord, continentSeedFrom(fieldSeed)).kind === 'ocean') return OCEAN_BIOME;
+  if (geographyVersion(fieldSeed) >= 2) return regionWinner(coord, fieldSeed).biome;
   const span = BIOME_FIELD_CFG.cellSpan, jit = BIOME_FIELD_CFG.jitter;
   const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
   let bd = Infinity, bestGx = cx, bestGy = cy, bestPx = coord.x, bestPy = coord.y;
@@ -1595,6 +1626,10 @@ export function biomeAt(coord: MapCoord, fieldSeed: number): string {
  *  search as biomeAt (the winning seed's squared distance, normalized by half a cell).
  *  Pure + deterministic. Drives the marine "edge=shallows / center=deep sea" gradient. */
 export function biomeDepth(coord: MapCoord, fieldSeed: number): number {
+  if (geographyVersion(fieldSeed) >= 2) {
+    const region = regionWinner(coord, fieldSeed);
+    return region.depth; // boundaries between SAME-biome cells do not reset its interior
+  }
   const span = BIOME_FIELD_CFG.cellSpan, jit = BIOME_FIELD_CFG.jitter;
   const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
   let bd = Infinity;
@@ -1623,6 +1658,7 @@ export function fieldNoise(x: number, y: number, seed: number): number {
 export function validateBiomeField(): string[] {
   return [
     ...BIOME_FIELD.filter(s => !BIOMES[s.biome]).map(s => s.biome),
+    ...Object.entries(BIOMES).filter(([, b]) => b.regionScale && (!b.regionScale.every(n => Number.isFinite(n) && n >= BIOME_FIELD_CFG.regionScale.min && n <= BIOME_FIELD_CFG.regionScale.max) || b.regionScale[0] > b.regionScale[1])).map(([id]) => id + ': invalid regionScale'),
     // Band tables walk the same check (an unknown biome in a band would
     // silently pick nothing), plus their stratum axis must be registered.
     ...BIOME_FIELD_BANDS.flatMap(b => [

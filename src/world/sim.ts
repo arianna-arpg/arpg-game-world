@@ -8,6 +8,7 @@
 // here reaches back into World, so the dependency only ever points one way.
 // ---------------------------------------------------------------------------
 
+import { installGeography } from './geography';
 import { Rng } from '../core/rng';
 import { FACTIONS, MONSTERS } from '../data/monsters';
 import type { PackTableEntry, ZoneDef } from '../data/zones';
@@ -328,6 +329,7 @@ export class WorldSim {
     this.weather = new WeatherField(new Rng((seed ^ 0x5eed) >>> 0));
     this.invasion = new InvasionField(this.faction, new Rng((seed ^ 0x1a5e) >>> 0));
     this.warlord = new WarlordField(this.faction);
+    installGeography(seed, manifest.geographyVersion ?? 1);
     this.biomeField = new BiomeField(seed);
     // Difficulty heat-map: distinct salt so danger noise is independent of biome
     // regions; centered on the town's CANONICAL map coord (static, never the moved

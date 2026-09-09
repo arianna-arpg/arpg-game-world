@@ -73,7 +73,7 @@ const forceAllBiomes = (dials: { chance: number; reach: [number, number]; radius
   }
 };
 
-function grow(seed: number, rounds: number): World {
+function grow(seed: number, rounds: number, geographyGrowth?: number[]): World {
   seedGlobalRandom(seed);
   const w = makeSimWorld('warrior', seed);
   w.loadZone(HUB_ZONE);
@@ -84,6 +84,7 @@ function grow(seed: number, rounds: number): World {
       && z.objective.kind !== 'safe' && !z.floating && !zoneKindOf(z)?.staticExits
       && z.exits.some(e => e.to === '?'));
     for (const z of batch) chart.chartNeighborsOf(z);
+    geographyGrowth?.push(surfaceZones(w).length);
   }
   return w;
 }
@@ -132,7 +133,10 @@ console.log('\n=== THE SPANNING UNDERGROWTH QA ===');
 // ------------------------------------------------ B. EVERYWHERE-THIN (forced extreme)
 {
   forceAllBiomes({ chance: 1, reach: [1, 1], radius: 160, fresh: 0, exitless: 0 });
-  const w = grow(0x7d1100, 8);
+  // Variable biome spacing changes nodes per batch. Keep the hundred-node
+  // coverage floor and additionally require progress on EVERY expansion.
+  const geographyGrowth: number[] = [];
+  const w = grow(0x7d1100, 9, geographyGrowth);
   const zones = surfaceZones(w);
   const eligible = zones.filter(z => z.id.startsWith('gen_') && !z.kind && !z.field && !z.pocket
     && !z.floating && !z.concealed && !z.special && z.objective.kind !== 'safe' && UNDER_SPANS[z.biome ?? '']);
@@ -143,7 +147,7 @@ console.log('\n=== THE SPANNING UNDERGROWTH QA ===');
   check('B: the link fabric adds NO nodes (fresh 0 mints nothing)',
     zones.every(z => !z.id.startsWith('ugspan_')), `${zones.length} zones`);
   check('B: the world still GROWS under the thin web (no promise starvation)',
-    zones.length >= 100, `${zones.length} zones`);
+    zones.length >= 100 && geographyGrowth.every((n, i) => i === 0 || n > geographyGrowth[i - 1]), `${zones.length} zones; batches ${geographyGrowth.join(' → ')}`);
   // Every span is exactly 2 members at reach [1,1].
   const bySpan = new Map<string, Set<string>>();
   for (const z of zones) {

@@ -81,6 +81,7 @@ function pointDistance(p: Vec2, a: Vec2, b: Vec2): number {
 function generateLocale(ctx: GenCtx, plan: LocalePlan, riverSides?: string[]): void {
   const grid = new GridWalkField(ctx.arena.w, ctx.arena.h, 30);
   ctx.walk = grid; ctx.gridEnsured = true;
+  if (plan.terrain) grid.fillRegion(0, 0, ctx.arena.w, ctx.arena.h, plan.terrain.background);
   const report: LocaleReport = { program: plan.program, variant: plan.id, districts: [], connections: [], crossings: [] };
   const centers = new Map<string, Vec2>();
   const rects = new Map<string, { x: number; y: number; w: number; h: number }>();
@@ -131,17 +132,30 @@ function generateLocale(ctx: GenCtx, plan: LocalePlan, riverSides?: string[]): v
       }
     }
   };
+  const socket = (id: string, port?: string): Vec2 => {
+    const d = plan.districts.find(d => d.id === id)!, p = port ? d.ports?.[port] : undefined;
+    const c = centers.get(id)!;
+    return p ? vec(c.x + (p[0] - 0.5) * d.size[0] * ctx.arena.w, c.y + (p[1] - 0.5) * d.size[1] * ctx.arena.h) : c;
+  };
   for (const link of plan.links) {
-    const points = [centers.get(link.from)!, ...(link.via ?? []).map(p => vec(p[0] * ctx.arena.w, p[1] * ctx.arena.h)), centers.get(link.to)!];
+    const points = [socket(link.from, link.fromPort), ...(link.via ?? []).map(p => vec(p[0] * ctx.arena.w, p[1] * ctx.arena.h)), socket(link.to, link.toPort)];
     connect(points, link.width);
     report.connections.push({ from: link.from, to: link.to, role: link.role, points });
   }
   // External portals always attach to the closest district; entry attaches
   // to the authored approach. The interior plan is independent of discovery order.
-  connect([ctx.entry, centers.get(plan.entrance)!], 150);
+  const externalCenters = plan.districts.filter(d => d.external !== false).map(d => centers.get(d.id)!);
+  const entryCenter = plan.portalMode === 'nearest' ? [...externalCenters].sort((a, b) => dist(a, ctx.entry) - dist(b, ctx.entry))[0] : centers.get(plan.entrance)!;
+  const approach = (p: Vec2, fallback: Vec2): void => {
+    const sides = [{ side: 'n' as const, d: p.y }, { side: 's' as const, d: ctx.arena.h - p.y },
+      { side: 'w' as const, d: p.x }, { side: 'e' as const, d: ctx.arena.w - p.x }];
+    const row = plan.approaches?.[sides.sort((a, b) => a.d - b.d)[0].side];
+    connect([p, ...(row?.via ?? []).map(v => vec(v[0] * ctx.arena.w, v[1] * ctx.arena.h)), row ? centers.get(row.district)! : fallback], 150);
+  };
+  approach(ctx.entry, entryCenter);
   for (const exit of ctx.exits) {
-    const closest = [...centers.values()].sort((a, b) => dist(a, exit) - dist(b, exit))[0];
-    connect([exit, closest], 150);
+    const closest = [...externalCenters].sort((a, b) => dist(a, exit) - dist(b, exit))[0];
+    approach(exit, closest);
   }
   ctx.pois.push(...centers.values());
   ctx.bossSeat = centers.get(plan.goal);
@@ -168,6 +182,11 @@ function generateLocale(ctx: GenCtx, plan: LocalePlan, riverSides?: string[]): v
     }
   }
   for (const p of centers.values()) if (!grid.reachable(ctx.entry, p)) throw new Error(`locale ${plan.program}: disconnected required district`);
+  if (plan.terrain?.rim) {
+    const { side, width, region } = plan.terrain.rim;
+    const w = ctx.arena.w, h = ctx.arena.h;
+    grid.fillRegion(side === 'e' ? w - width : 0, side === 's' ? h - width : 0, side === 'w' ? width : w, side === 'n' ? width : h, region);
+  }
   ctx.localeReport = report;
 }
 

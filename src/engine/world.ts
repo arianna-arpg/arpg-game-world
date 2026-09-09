@@ -8,6 +8,8 @@
 // modifiers flow into every stat query for that use.
 // ---------------------------------------------------------------------------
 
+import { escarpmentRoad } from '../world/escarpments';
+import { biomeFrontierTarget, escarpmentConnection } from './worldgen';
 import { atlasDestinationAt } from '../world/locales';
 import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, randInt, vec, type Vec2 } from '../core/math';
 import { DiscIndex } from './spatial';
@@ -8969,7 +8971,8 @@ export class World {
     // region and mint a duplicate Field zone. Non-Field sources project the usual node step.
     const target = source.field
       ? this.fieldFrontierTarget(source.field, exitDef.side, exitDef.at ?? 0.5)
-      : projectCoord(source.map, exitDef.side);
+      : biomeFrontierTarget(source, exitDef.side, this.biomeFor);
+    if ((source.dimension ?? 'surface') === 'surface' && (source.geo?.escarpment?.blockedSide === exitDef.side || !escarpmentRoad(source.map, target, seed))) return source;
     // THE LAND ENDS: a frontier reaching into OCEAN mints a PORT on the shore
     // instead of a zone at sea — travel onward is by sail (the Sail menu at
     // the dock). A port's own seaward frontiers never mint (the sea is the
@@ -9023,7 +9026,7 @@ export class World {
     }
     // Field regions are a SURFACE feature — a dimensioned source never joins one.
     const atlasDestination = (source.dimension ?? 'surface') === 'surface'
-      ? atlasDestinationAt(target, source.destination?.feature) : undefined;
+      ? atlasDestinationAt(target, source.destination?.feature, source.map) : undefined;
     const ext = source.dimension || atlasDestination ? null : fieldRegionAt(target, seed);
     if (ext) {
       // A frontier that still lands in our OWN region (a concave blob edge) is redundant —
@@ -9599,6 +9602,7 @@ export class World {
       if (d >= bd) continue;
       // THE DRY-ROAD LAW: a candidate across the water is no neighbour —
       // the web walks, it never swims (the far shore is a voyage away).
+      if (!escarpmentConnection(source, z)) continue;
       if (!source.dimension && this.roadIsWet(source.map, z.map)) continue;
       // THE FOOTPRINT LAW: a link whose chord cuts across a Field expanse's
       // core rect is a shortcut over the meadow — refused (spokes exempt:
@@ -10784,7 +10788,7 @@ export class World {
       // is EXACTLY the level the zone will carry, letting the player read an exit as
       // "safe ahead" vs "deadly — reroute" before committing. Host computes it; the
       // label string streams to clients verbatim (they never re-mint).
-      const lv = this.levelFor(projectCoord(this.zone.map, e.side));
+      const lv = this.levelFor(biomeFrontierTarget(this.zone, e.side, this.biomeFor));
       return {
         pos, radius: PORTAL_RADIUS, to: '?', defIndex,
         label: `Uncharted · Lv ${lv}`,
@@ -10862,7 +10866,7 @@ export class World {
     const from = this.zone.biome;
     let to: string | undefined;
     if (e.to === '?') {
-      const c = projectCoord(this.zone.map, e.side);
+      const c = biomeFrontierTarget(this.zone, e.side, this.biomeFor);
       to = this.zone.dimension ? this.dimensionBiomeFor(this.zone.dimension)(c) : this.biomeFor(c);
     } else {
       to = (this.zoneMap[e.to] ?? this.caveMap[e.to])?.biome;
@@ -10890,7 +10894,7 @@ export class World {
     let to: string | undefined;
     let toFace: string | undefined;
     if (e.to === '?') {
-      const c = projectCoord(this.zone.map, e.side);
+      const c = biomeFrontierTarget(this.zone, e.side, this.biomeFor);
       to = this.zone.dimension ? this.dimensionBiomeFor(this.zone.dimension)(c) : this.biomeFor(c);
     } else {
       const n = this.zoneMap[e.to] ?? this.caveMap[e.to];

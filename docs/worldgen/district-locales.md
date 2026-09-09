@@ -7,7 +7,8 @@ into separate rooms or changing the whole zone to one silhouette.
 
 ## Shipped content
 
-`src/data/locales.ts` registers two versioned programs:
+`src/data/locales.ts` registers versioned programs (including the geographic additions described in
+[Geographic adventure](geographic-adventure.md)):
 
 - **River fortress:** an encircled keep with a backwater flank and grotto, or a
   divided stronghold with two courts and a cavern bypass.
@@ -63,8 +64,8 @@ finder is independent of the program: future non-river finders can use the
 same destination contract.
 
 `registerDistrictBuilder` in `src/engine/localeGen.ts` is the extension point
-for new geometry algorithms. Built-ins are `open`, `court`, `cavern`, and
-`arches`. Builders receive their footprint, common grid, parameters, and a
+for new geometry algorithms. Built-ins are `open`, `court`, `cavern`, `arches`,
+and `switchback`. Builders receive their footprint, common grid, parameters, and a
 district-specific random stream. Connections and river crossings are resolved
 centrally. Local dressing stays clear of routes, portals, district centers,
 and other props. Cave mouths carry real cave seeds and use existing travel.

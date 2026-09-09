@@ -1112,6 +1112,7 @@ export interface ZoneDef {
    *  temperature/moisture/wildness/…), so generators, UI, and future systems
    *  can read the zone's weather without re-deriving the field. */
   geo?: {
+    escarpment?: import('../world/escarpments').EscarpmentContext;
     biomeDepth?: number;
     climate?: Record<string, number>;
     /** THE ATLAS FEATURES this ground inherited at the mint (world/atlas.ts

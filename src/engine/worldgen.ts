@@ -25,6 +25,9 @@ import { blendMean, composeBlendLayout, mergeBlendPacks } from './blend';
 import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
 import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, PORT_MINT, biomeSpacing, isAquaticBiome } from '../world/biomes';
+import { escarpmentAt, escarpmentRoad, ESCARPMENT_CFG } from '../world/escarpments';
+import { orientEscarpment } from './escarpmentGen';
+import { geographyVersion } from '../world/geography';
 import { atlasDestinationAt, compileLocale, localeProgram, localeSeed, type AtlasDestination, type LocalePlan } from '../world/locales';
 import { LOCALE_LAYOUT } from './localeGen';
 import { atlasSeedInstalled, bakeAtlasContext, featuresAt, foldFeatureHits } from '../world/atlas';
@@ -528,7 +531,7 @@ export function insideFieldFootprint(pt: MapCoord, zoneMap: Record<string, ZoneD
  *  (berths carry the drawn edges) — so a blob that minted around authored
  *  ground can slide its node off the squatter instead of deadlocking. */
 export function settleMovable(z: ZoneDef): boolean {
-  return !z.destination && z.objective.kind !== 'safe' && !z.port && !z.holdAnchor
+  return !z.geo?.escarpment && !z.destination && z.objective.kind !== 'safe' && !z.port && !z.holdAnchor
     && z.caveDepth == null && !zoneKindOf(z)?.staticExits && !isRoadlessGateHub(z);
 }
 
@@ -707,7 +710,7 @@ export function settleWeb(
         if (e.to === '?' || e.crossDim) continue;
         const dest = e.to === extra?.id ? extra : zoneMap[e.to];
         if (!dest || (dest.dimension ?? 'surface') !== (z.dimension ?? 'surface')) continue;
-        if (!routeOk(z.map, dest.map)) { ok = false; break; }
+        if (!escarpmentConnection(z, dest) || !routeOk(z.map, dest.map)) { ok = false; break; }
         // The FOOTPRINT LAW survives the drift too: a settled node whose
         // road chord now cuts an expanse rect (its endpoint slid out of the
         // exempting interior, or the line swung across a corner) reverts —
@@ -884,7 +887,7 @@ function weaveConnections(fresh: ZoneDef, zoneMap: Record<string, ZoneDef>, rng:
     .map(z => ({ z, d: Math.hypot(z.map.x - fresh.map.x, z.map.y - fresh.map.y) }))
     .filter(c => c.d <= WEAVE_RADIUS)
     .filter(c =>
-      routeOk(fresh.map, c.z.map) &&            // …and never a land road over open OCEAN (an island
+      escarpmentConnection(fresh, c.z) && routeOk(fresh.map, c.z.map) &&            // …and never a land road over open OCEAN (an island
                                                // is reached by SAIL; its searoutes draw the crossing)
       !fresh.exits.some(e => e.to === c.z.id) && // no duplicate (fresh -> z)
       !c.z.exits.some(e => e.to === fresh.id))   // no duplicate (z -> fresh)
@@ -1149,14 +1152,17 @@ export function placeZoneAt(
   // A canonical feature id reconnects later approaches to the existing node.
   let destination: AtlasDestination | undefined, locale: LocalePlan | undefined;
   const destinationSeed = atlasSeedInstalled();
+  const geographyEligible = spec.fieldBiome && (spec.dimension ?? 'surface') === 'surface' && !spec.id && !spec.layoutType && !spec.special && !spec.port && !spec.pocket && !spec.floating && !spec.kind;
+  if (geographyEligible && anchor && destinationSeed !== null && !escarpmentRoad(anchor.map, target, destinationSeed)) return anchor;
   if (destinationSeed !== null && spec.fieldBiome && (spec.dimension ?? 'surface') === 'surface'
     && !spec.id && !spec.layoutType && !spec.special && !spec.port && !spec.pocket && !spec.floating && !spec.kind && !spec.noWeave) {
-    const hit = atlasDestinationAt(target, anchor?.destination?.feature);
+    const hit = atlasDestinationAt(target, anchor?.destination?.feature, anchor?.map);
     if (hit) {
       const program = localeProgram(hit.def.destination!.locale)!;
       const id = 'gen_atlas_' + destinationSeed + '_' + hit.feature.id;
       const existing = zoneMap[id];
       if (existing) {
+        if (anchor && !spec.noBackEdge && !escarpmentConnection(anchor, existing)) return anchor;
         if (anchor && anchor.id !== id && (anchor.dimension ?? 'surface') === 'surface' && !spec.noBackEdge) {
           const side = sideToward(existing.map, anchor.map);
           if (!existing.exits.some(e => e.to === anchor.id)) existing.exits.push({ to: anchor.id, side,
@@ -1180,6 +1186,18 @@ export function placeZoneAt(
         layoutParams: { ...spec.layoutParams, riverSides: hit.feature.riverSides } };
     }
   }
+  const scarp = geographyEligible && destinationSeed !== null ? escarpmentAt(target, destinationSeed) : undefined;
+  if (scarp) {
+    if (!locale) {
+      const program = localeProgram(ESCARPMENT_CFG.footLocale)!;
+      locale = compileLocale(program, spec.seed ?? localeSeed(destinationSeed + '/foot/' + genIndex));
+      spec = { ...spec, seed: locale.seed, layoutType: LOCALE_LAYOUT, shape: 'rect', noFactionWar: true,
+        sizeBand: { w: [program.size.w, program.size.w], h: [program.size.h, program.size.h] } };
+    }
+    locale = orientEscarpment(locale, scarp.highSide);
+    if (scarp.blockedSide) locale.terrain = { background: locale.terrain?.background ?? 'wall',
+      rim: { side: scarp.blockedSide, width: ESCARPMENT_CFG.rimWidth, region: 'cliff_face' } };
+  }
   // Anchor pick (null = directed mints: quests, events, soundings): PREFER a
   // node whose chord home stays DRY (the dry-road law's soft half — the
   // connectFloatingZone idiom); fall back to the plain nearest when no dry
@@ -1189,6 +1207,7 @@ export function placeZoneAt(
   const src = anchor
     ?? nearestNode(zoneMap, target, undefined, spec.dimension, (z) => routeOk(target, z.map))
     ?? nearestNode(zoneMap, target, undefined, spec.dimension); // town always exists ⇒ non-null in practice
+  if (scarp?.blockedSide && src && !spec.noBackEdge && sideToward(target, src.map) === scarp.blockedSide) return src;
   const srcMap = src?.map ?? target;
   const rng = new Rng(spec.seed ?? rollSeed());
   // THE IDENTITY SUB-STREAM: an EXPLICITLY seeded mint resolves the zone's
@@ -1427,6 +1446,7 @@ export function placeZoneAt(
     }
   }
 
+  if (scarp) Object.assign(map, target); // the local cliff contract samples this exact location
   if (destination) Object.assign(map, destination.seat); // atlas seat is immutable geography
 
   // Back-edge to the anchor (reachability is the back-edge's job — UNCONDITIONAL,
@@ -1521,8 +1541,9 @@ export function placeZoneAt(
   // lair fold reads it, so deep-country natives can claim the heart of a
   // biome and refuse its border (the roost law).
   const climate = spec.climateFor?.(target, spec.dimension);
-  const geo0 = (spec.biomeDepthFor || climate)
+  const geo0 = (spec.biomeDepthFor || climate || scarp)
     ? {
+      ...(scarp ? { escarpment: scarp } : {}),
       ...(spec.biomeDepthFor ? { biomeDepth: Math.max(0, Math.min(1, spec.biomeDepthFor(target))) } : {}),
       ...(climate ? {
         climate: Object.fromEntries(Object.entries(climate).map(([k, v]) => [k, Math.round(v * 100) / 100])),
@@ -1679,6 +1700,14 @@ export function placeZoneAt(
     ...(sky ? { sky } : {}),
     ...(camera ? { camera } : {}),
   };
+  if (scarp?.blockedSide) {
+    // No frontier may promise a crossing through the impassable face.
+    def.exits = def.exits.filter(e => e.side !== scarp.blockedSide);
+  }
+  // Existing river geography remains material inside a cliff locale.
+  if (scarp && locale && onCourse && !locale.river) locale.river = {
+    ...ESCARPMENT_CFG.river,
+  };
   // THE BLEND (engine/blend.ts): resolve a declared partner onto the def —
   // layout rows tagged, pack tables merged — off the def seed's dedicated
   // sub-stream (blendless mints keep every draw byte-identical).
@@ -1707,6 +1736,7 @@ export function placeZoneAt(
   // The settle may have shifted THIS mint across its anchor's dominant axis:
   // re-face the back-edge so the portal stands on the honest wall (the
   // reciprocal below derives from the fresh side).
+  if (scarp && src && !spec.noBackEdge && !escarpmentConnection(def, src)) return src;
   if (backEdge.length && src) backEdge[0].side = sideToward(map, srcMap);
   // Directed placements (quests) link the reciprocal road on the anchor here;
   // the frontier path leaves linkBack false (travelThrough mutates its '?' exit).
@@ -1776,8 +1806,23 @@ export function connectFloatingZone(fresh: ZoneDef, zoneMap: Record<string, Zone
   weaveConnections(fresh, zoneMap, rng);
 }
 
-/** Generate the zone behind a frontier portal of `source` — a thin wrapper over
- *  placeZoneAt, preserving the frontier semantics byte-for-byte. */
+/** Shared surface barrier test, including each zone's baked cliff face. */
+export function escarpmentConnection(a: Pick<ZoneDef, 'map' | 'geo' | 'dimension'>, b: Pick<ZoneDef, 'map' | 'geo' | 'dimension'>): boolean {
+  if ((a.dimension ?? 'surface') !== 'surface' || (b.dimension ?? 'surface') !== 'surface') return true;
+  if (a.geo?.escarpment?.blockedSide === sideToward(a.map, b.map) || b.geo?.escarpment?.blockedSide === sideToward(b.map, a.map)) return false;
+  const seed = atlasSeedInstalled();
+  return seed === null || escarpmentRoad(a.map, b.map, seed);
+}
+
+/** Frontier previews, discovery and minting share the same biome-scaled step. */
+export function biomeFrontierTarget(source: Pick<ZoneDef, 'map' | 'dimension'>, side: Dir, biomeFor?: (c: MapCoord) => string): MapCoord {
+  const base = projectCoord(source.map, side), seed = atlasSeedInstalled();
+  if (!biomeFor || seed === null || geographyVersion(seed) < 2 || (source.dimension ?? 'surface') !== 'surface') return base;
+  const scale = Math.max(0.65, Math.min(2, biomeSpacing(biomeFor(base)) / 70));
+  return projectCoord(source.map, side, scale);
+}
+
+/** Generate the zone behind a frontier portal through the shared mint. */
 export function generateZone(
   source: ZoneDef, exitDef: ZoneExitDef,
   zoneMap: Record<string, ZoneDef>, genIndex: number,
@@ -1787,7 +1832,7 @@ export function generateZone(
   climateFor?: (c: MapCoord, dimension?: string) => Record<string, number>,
   courseFor?: (c: MapCoord) => CourseMintHints | null,
 ): ZoneDef {
-  const target = projectCoord(source.map, exitDef.side);
+  const target = biomeFrontierTarget(source, exitDef.side, biomeFor);
   // fieldBiome: this is a RANDOM frontier — let the heat maps decide. biomeFor picks
   // the tileset/biome (depth-aware for marine → deep-sea at a region's heart); levelFor
   // sets the level from the difficulty field at `target` (the same coord placeExit previews).

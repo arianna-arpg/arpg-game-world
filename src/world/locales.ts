@@ -1,6 +1,8 @@
 // Declarative local exploration plans. Pure data + deterministic compilation;
 // builders live in engine/localeGen and authored programs in data/locales.
-import { featuresAt } from './atlas';
+import { escarpmentPassesCrossed } from './escarpments';
+import type { MapCoord } from './coords';
+import { atlasSeedInstalled, featuresAt } from './atlas';
 import { Rng } from '../core/rng';
 import type { DoodadKind } from '../engine/levelgen';
 
@@ -14,9 +16,13 @@ export interface LocaleDistrict {
   params?: Record<string, number>;
   dress?: { kind: DoodadKind; count: [number, number]; radius: [number, number] }[];
   cave?: boolean;
+  /** Named connection sockets within the district footprint. */
+  ports?: Record<string, [number, number]>;
+  external?: boolean;
 }
 export interface LocaleLink {
   from: string; to: string;
+  fromPort?: string; toPort?: string;
   role: 'main' | 'flank' | 'discovery';
   width: number;
   via?: [number, number][];
@@ -26,7 +32,10 @@ export interface LocaleVariant {
   districts: LocaleDistrict[];
   links: LocaleLink[];
   entrance: string;
+  portalMode?: 'entrance' | 'nearest';
+  approaches?: Partial<Record<'n' | 's' | 'e' | 'w', { district: string; via?: [number, number][] }>>;
   goal: string;
+  terrain?: { background: string; rim?: { side: 'n' | 's' | 'e' | 'w'; width: number; region: string } };
   river?: { width: [number, number]; bend: [number, number]; region: string; crossing: string };
 }
 export interface LocaleProgram {
@@ -55,9 +64,17 @@ export function registerLocaleProgram(def: LocaleProgram, makeDefault = false): 
 export const localeProgram = (id?: string): LocaleProgram | undefined => PROGRAMS[id ?? defaultProgram ?? ''];
 export const localePrograms = (): LocaleProgram[] => Object.values(PROGRAMS);
 /** One deterministic winner when destination catchments overlap. */
-export function atlasDestinationAt(at: { x: number; y: number }, excludeFeature?: string) {
-  return featuresAt(at).filter(h => h.def.destination && localeProgram(h.def.destination.locale)
-    && h.feature.id !== excludeFeature).sort((a, b) => a.dist - b.dist || a.feature.id.localeCompare(b.feature.id))[0];
+export function atlasDestinationAt(at: MapCoord, excludeFeature?: string, from?: MapCoord) {
+  const seed = atlasSeedInstalled(), hits = featuresAt(at), crossedPasses = new Set<string>();
+  if (from && seed !== null) for (const scarp of escarpmentPassesCrossed(from, at, seed)) {
+    // A long biome-scaled step must enter the climb, not jump over it.
+    for (const hit of featuresAt(scarp.seat, seed)) if (hit.feature.scarp?.id === scarp.id && hit.feature.id !== excludeFeature) {
+      crossedPasses.add(hit.feature.id);
+      hits.push({ ...hit, dist: 0 });
+    }
+  }
+  return hits.filter(h => h.def.destination && localeProgram(h.def.destination.locale)
+    && h.feature.id !== excludeFeature && (h.def.destination.reach === undefined || crossedPasses.has(h.feature.id) || Math.hypot(at.x - h.feature.seat.x, at.y - h.feature.seat.y) <= h.def.destination.reach)).sort((a, b) => a.dist - b.dist || a.feature.id.localeCompare(b.feature.id))[0];
 }
 export function localeSeed(text: string): number {
   let h = 2166136261;
@@ -82,7 +99,7 @@ export function compileLocale(def: LocaleProgram, seed: number, variantId?: stri
     ...(river ? { river: { ...river, width: rng.range(...river.width), bend: rng.range(...river.bend) } } : {}) };
 }
 
-export function validateLocaleProgram(def: LocaleProgram, refs?: { builder?: (id: string) => boolean; doodad?: (id: string) => boolean; region?: (id: string) => boolean }): string[] {
+export function validateLocaleProgram(def: LocaleProgram, refs?: { builder?: (id: string) => boolean; doodad?: (id: string) => boolean; region?: (id: string) => boolean; walkable?: (id: string) => boolean }): string[] {
   const errors: string[] = [];
   if (!def.id || !Number.isSafeInteger(def.version) || def.version < 1) errors.push('id and positive integer version required');
   if (![def.size.w, def.size.h].every(n => Number.isFinite(n) && n >= 900 && n <= 4800)) errors.push('size must be 900..4800');
@@ -95,6 +112,7 @@ export function validateLocaleProgram(def: LocaleProgram, refs?: { builder?: (id
     for (const d of v.districts) {
       if (refs?.builder && !refs.builder(d.builder)) errors.push(`${v.id}/${d.id}: unknown builder ${d.builder}`);
       if (!d.id || !d.builder || Object.values(d.params ?? {}).some(n => !Number.isFinite(n))) errors.push(`${v.id}/${d.id}: invalid builder parameters`);
+      if (Object.values(d.ports ?? {}).some(p => !p.every(n => Number.isFinite(n) && n >= 0 && n <= 1))) errors.push(`${v.id}/${d.id}: invalid ports`);
       const j = d.jitter ?? 0;
       if (!Number.isFinite(j) || j < 0 || j > 0.08 || !d.at.every(Number.isFinite)
         || !d.size.every(n => Number.isFinite(n) && n >= 0.12 && n <= 0.85)
@@ -105,7 +123,12 @@ export function validateLocaleProgram(def: LocaleProgram, refs?: { builder?: (id
           || !r.radius.every(n => Number.isFinite(n) && n > 0 && n <= 90) || r.radius[0] > r.radius[1]) errors.push(`${v.id}/${d.id}: invalid dressing budget`);
       }
     }
+    for (const approach of Object.values(v.approaches ?? {})) if (!ids.has(approach.district) || approach.via?.some(p => !p.every(n => Number.isFinite(n) && n >= 0.02 && n <= 0.98))) errors.push(`${v.id}: invalid approach`);
+    if (!v.districts.some(d => d.external !== false)) errors.push(`${v.id}: no external portal district`);
+    if (v.terrain?.rim && (!['n', 's', 'e', 'w'].includes(v.terrain.rim.side) || !Number.isFinite(v.terrain.rim.width) || v.terrain.rim.width < 30 || v.terrain.rim.width > 180)) errors.push(`${v.id}: invalid terrain rim`);
+    if (v.terrain && refs?.region && (!refs.region(v.terrain.background) || (v.terrain.rim && !refs.region(v.terrain.rim.region)))) errors.push(`${v.id}: unknown terrain region`);
     for (const l of v.links) {
+      if ((l.fromPort && !v.districts.find(d => d.id === l.from)?.ports?.[l.fromPort]) || (l.toPort && !v.districts.find(d => d.id === l.to)?.ports?.[l.toPort])) errors.push(`${v.id}: unknown connection port`);
       if (!ids.has(l.from) || !ids.has(l.to) || l.from === l.to || !Number.isFinite(l.width) || l.width < 90 || l.width > 240
         || l.via?.some(p => !p.every(n => Number.isFinite(n) && n >= 0.04 && n <= 0.96))) errors.push(`${v.id}: invalid connection ${l.from}/${l.to}`);
     }
@@ -115,6 +138,7 @@ export function validateLocaleProgram(def: LocaleProgram, refs?: { builder?: (id
       if (reached.has(l.to)) reached.add(l.from);
     }
     if ([...ids].some(id => !reached.has(id))) errors.push(`${v.id}: disconnected district`);
+    if (v.river && refs?.walkable && (!refs.walkable(v.river.region) || !refs.walkable(v.river.crossing))) errors.push(`${v.id}: unwalkable river/crossing region`);
     if (v.river && refs?.region && (!refs.region(v.river.region) || !refs.region(v.river.crossing))) errors.push(`${v.id}: unknown or unwalkable river/crossing region`);
     if (v.river && (![...v.river.width, ...v.river.bend].every(Number.isFinite) || v.river.width[0] < 60
       || v.river.width[0] > v.river.width[1] || v.river.width[1] > 280 || v.river.bend[0] > v.river.bend[1]

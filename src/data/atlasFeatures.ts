@@ -25,6 +25,7 @@
 // Colours omitted default to a darkened biome tint.
 // ---------------------------------------------------------------------------
 
+import { ESCARPMENT_CFG } from '../world/escarpments';
 import { registerMapFeature } from '../world/atlas';
 
 registerMapFeature({
@@ -40,6 +41,14 @@ registerMapFeature({
   reach: 170, size: 64, destination: { locale: 'sundered_arches' },
   names: { first: ['Sundered', 'Pale', 'Weeping', 'Forgotten', 'Storm'], second: ['Arches', 'Pillars', 'Sanctuary', 'Steps'] },
   read: 'a river through broken stone — branching trails lead to a sanctuary, an overlook, and a deep grotto',
+});
+
+registerMapFeature({
+  id: 'scarp', label: 'escarpment', glyph: 'summit', icon: '⛰', color: '#d5c9af', find: { kind: 'scarps' },
+  reach: ESCARPMENT_CFG.reach, size: 46,
+  destination: { locale: ESCARPMENT_CFG.ascentLocale, reach: ESCARPMENT_CFG.passHalfWidth },
+  names: { first: ['Broken', 'Windworn', 'Black', 'Pale', 'Storm'], second: ['Stair', 'Escarpment', 'Climb', 'Wall'] },
+  read: 'a cliff wall — follow its foot to the pass, then climb the broken ledges',
 });
 
 export interface ChartGlyphSpec {

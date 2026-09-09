@@ -36,6 +36,7 @@ import {
   mapFeatureKind, mapFeatureKinds, setAtlasSeed, type MapFeature, type RGB,
 } from '../src/world/atlas';
 import { BIOMES, OCEAN_BIOME } from '../src/world/biomes';
+import { installGeography } from '../src/world/geography';
 import { climateAt, setClimateOrigin } from '../src/world/climate';
 import { continentAt, continentSeedFrom } from '../src/world/continents';
 import { RELIEF_CFG, elevationAt, riverPathsInRect, setReliefSeed } from '../src/world/relief';
@@ -70,6 +71,7 @@ seedGlobalRandom(0xa71a5);
   const peakFloor = peakDef.find.kind === 'peaks' ? peakDef.find.minElevation : 0;
   const lodeFloor = lodeDef.find.kind === 'strewn' ? (lodeDef.find.gates?.find(g => g.axis === 'elevation')?.min ?? 0) : 0;
   for (const seed of SEEDS) {
+    installGeography(seed, 2);
     setReliefSeed(seed);
     setAtlasSeed(seed);
     const feats = featuresInRect(MIN, MAX, seed);
@@ -100,7 +102,7 @@ seedGlobalRandom(0xa71a5);
       if (f.kind === 'lake' && !inland.has(`${Math.round(f.seat.x)}_${Math.round(f.seat.y)}`)) lakesOk = false;
       if (!f.name.startsWith('the ') || featureNameOf(f.id, seed) !== f.name) namesOk = false;
       if (!featuresAt(f.seat, seed).some(h => h.feature.id === f.id && h.dist < 1e-6)) atSeat = false;
-      if (featuresAt({ x: f.seat.x + def.reach + 1, y: f.seat.y }, seed).some(h => h.feature.id === f.id)) pastReach = false;
+      if (featuresAt({ x: (f.scarp ? Math.max(f.scarp.a.x, f.scarp.b.x) : f.seat.x) + def.reach + 1, y: f.seat.y }, seed).some(h => h.feature.id === f.id)) pastReach = false;
     }
     for (let i = 0; i < peaks.length; i++) {
       for (let k = i + 1; k < peaks.length; k++) {

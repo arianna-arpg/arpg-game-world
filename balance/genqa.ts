@@ -744,7 +744,7 @@ const layoutSources = [
   ...Object.values(MELDS).map(m => ({ source: `meld ${m.id}`, specs: m.rows as StampSpec[] })),
 ];
 const registryErrors = [
-  ...localePrograms().flatMap(p => validateLocaleProgram(p, { builder: hasDistrictBuilder, doodad: hasDoodadRule, region: id => !!regionKind(id)?.walkable }).map(e => 'locale ' + p.id + ': ' + e)),
+  ...localePrograms().flatMap(p => validateLocaleProgram(p, { builder: hasDistrictBuilder, doodad: hasDoodadRule, region: id => !!regionKind(id), walkable: id => !!regionKind(id)?.walkable }).map(e => 'locale ' + p.id + ': ' + e)),
   ...mapFeatureKinds().filter(f => f.destination && !localeProgram(f.destination.locale)).map(f => 'atlas destination ' + f.id + ': unknown locale ' + f.destination!.locale),
   ...dimensionIds().flatMap(dim => (dimensionDef(dim).courses ?? []).flatMap(c =>
     validateCourseStages(c.stages, { layout: hasLayout, composition: hasComposition, landmark: hasLandmark,

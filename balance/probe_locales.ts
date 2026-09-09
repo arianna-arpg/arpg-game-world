@@ -19,7 +19,7 @@ assert.throws(() => registerMapFeature({ ...mapFeatureKind('river_citadel')!, id
 const shapes = new Set<string>();
 for (const program of localePrograms()) {
   assert.deepEqual(validateLocaleProgram(program, { builder: hasDistrictBuilder, doodad: hasDoodadRule,
-    region: id => !!regionKind(id)?.walkable }), []);
+    region: id => !!regionKind(id), walkable: id => !!regionKind(id)?.walkable }), []);
   const invalid = structuredClone(program);
   invalid.variants[0].links = [];
   assert.ok(validateLocaleProgram(invalid).some(e => e.includes('disconnected')));
@@ -29,7 +29,7 @@ for (const program of localePrograms()) {
   for (const variant of program.variants) for (const seed of [17, 3000026, 90011, 81933]) {
     const locale = compileLocale(program, seed, variant.id);
     assert.deepEqual(compileLocale(program, seed, variant.id), locale);
-    for (const riverSides of [['w', 'e'], ['n', 's']]) {
+    for (const riverSides of (locale.river ? [['w', 'e'], ['n', 's']] : [['w', 'e']])) {
       const def: ZoneDef = { id: 'qa_locale', name: program.label, level: 5, size: program.size,
         theme, locale, layoutType: 'districts', layoutParams: { riverSides }, layout: [],
         seed, objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 } };
@@ -42,15 +42,15 @@ for (const program of localePrograms()) {
       assert.equal(caves.length, locale.districts.filter(d => d.cave).length);
       assert.equal(caves.length, generated.caveSeeds.length);
       for (const cave of caves) assert.ok(grid.reachable!(entry, cave.pos));
-      assert.ok(generated.localeReport!.crossings.length > 0, 'routes cross the actual water');
-      assert.ok(generated.localeReport!.crossings.some(p => grid.regionAt!(p.x, p.y) === locale.river!.crossing), 'crossing terrain survives final passes');
+      if (locale.river) assert.ok(generated.localeReport!.crossings.length > 0, 'routes cross the actual water');
+      if (locale.river) assert.ok(generated.localeReport!.crossings.some(p => grid.regionAt!(p.x, p.y) === locale.river!.crossing), 'crossing terrain survives final passes');
       let water = 0;
       const mask: string[] = [];
       for (let y = 15; y < def.size.h; y += 30) for (let x = 15; x < def.size.w; x += 30) {
         const kind = grid.regionAt!(x, y); mask.push(kind);
-        if (kind === locale.river!.region) water++;
+        if (kind === locale.river?.region) water++;
       }
-      assert.ok(water > 40, 'river remains actual water outside the crossings');
+      if (locale.river) assert.ok(water > 40, 'river remains actual water outside the crossings');
       shapes.add(mask.join(','));
       const replay = generateLayout(JSON.parse(JSON.stringify(def)), def.size, new Rng(seed), entry, exits);
       assert.deepEqual(replay.localeReport, generated.localeReport);
@@ -58,7 +58,7 @@ for (const program of localePrograms()) {
     }
   }
 }
-assert.equal(shapes.size, 24, 'different route graphs, orientations and seeds produce different terrain');
+assert.equal(shapes.size, localePrograms().flatMap(p => p.variants).reduce((n, v) => n + (v.river ? 8 : 4), 0), 'different route graphs, orientations and seeds produce different terrain');
 console.log('PASS locale programs validate, diversify geometry, preserve waterways and replay reachable routes and caves');
 
 const fieldSeed = world.sim.biomeField.fieldSeed, origin = world.zone.map;

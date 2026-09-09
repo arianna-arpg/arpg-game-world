@@ -43,6 +43,7 @@
 // no DOM — every finder and the shading law run under node for the probe.
 // ---------------------------------------------------------------------------
 
+import { escarpmentsInRect, scarpDistance, type Escarpment } from './escarpments';
 import type { MapCoord } from './coords';
 import type { CompositionRoll, LandmarkRoll } from '../data/zones';
 import { BIOMES } from './biomes';
@@ -128,6 +129,7 @@ export type FeatureFinder =
    *  feature, sized by the run that fed it (`radius` over runs from
    *  `minRun` points up to the reach bound). */
   | { kind: 'lakes'; minRun: number; radius: [number, number] }
+  | { kind: 'scarps' }
   | { kind: 'river-sites'; minRun: number; progress: [number, number]; chance: number; salt: number };
 
 /** What a zone minted within a kind's reach INHERITS at the mint. */
@@ -167,7 +169,7 @@ export interface MapFeatureKindDef {
   read: string;
   inherit?: FeatureInherit;
   /** One explorable destination at the seat, claimed by nearby frontier travel. */
-  destination?: { locale: string };
+  destination?: { locale: string; reach?: number };
 }
 
 export interface MapFeature {
@@ -183,6 +185,7 @@ export interface MapFeature {
   value: number;
   /** Local crossing orientation from the same river shown on the atlas. */
   riverSides?: [string, string];
+  scarp?: Escarpment;
 }
 
 export interface MapFeatureHit { feature: MapFeature; dist: number; def: MapFeatureKindDef }
@@ -307,7 +310,7 @@ function mk(def: MapFeatureKindDef, a: number, b: number, seat: MapCoord, value:
 /** One lattice cell's feature (memoized) — THE finder both halves share. */
 function cellFeature(def: MapFeatureKindDef, gx: number, gy: number, seed: number): MapFeature | null {
   const f = def.find;
-  if (f.kind === 'lakes' || f.kind === 'river-sites') return null;
+  if (f.kind === 'lakes' || f.kind === 'river-sites' || f.kind === 'scarps') return null;
   const key = `${def.id}|${seed}|${gx}|${gy}`;
   const hit = memo.get(key);
   if (hit !== undefined) return hit;
@@ -335,6 +338,13 @@ function cellFeature(def: MapFeatureKindDef, gx: number, gy: number, seed: numbe
   if (memo.size >= MEMO_CAP) memo.clear();
   memo.set(key, out);
   return out;
+}
+
+function scarpFeaturesInRect(def: MapFeatureKindDef, min: MapCoord, max: MapCoord, seed: number): MapFeature[] {
+  return escarpmentsInRect(min, max, seed).map(s => {
+    const [a, b] = s.id.split(':')[1].split('_').map(Number);
+    return { ...mk(def, a, b, s.seat, 1, seed), scarp: s };
+  });
 }
 
 function riverSitesInRect(def: MapFeatureKindDef, min: MapCoord, max: MapCoord, seed: number): MapFeature[] {
@@ -390,6 +400,7 @@ export function featuresInRect(min: MapCoord, max: MapCoord, seed: number | null
     const f = def.find;
     if (f.kind === 'lakes') { out.push(...lakesInRect(def, min, max, seed)); continue; }
     if (f.kind === 'river-sites') { out.push(...riverSitesInRect(def, min, max, seed)); continue; }
+    if (f.kind === 'scarps') { out.push(...scarpFeaturesInRect(def, min, max, seed)); continue; }
     const pad = def.reach + f.span;
     const c0x = Math.floor((min.x - pad) / f.span), c1x = Math.floor((max.x + pad) / f.span);
     const c0y = Math.floor((min.y - pad) / f.span), c1y = Math.floor((max.y + pad) / f.span);
@@ -414,7 +425,9 @@ export function featuresAt(coord: MapCoord, seed: number | null = atlasSeed): Ma
     const f = def.find;
     const r = def.reach;
     const cands: MapFeature[] = [];
-    if (f.kind === 'river-sites') {
+    if (f.kind === 'scarps') {
+      cands.push(...scarpFeaturesInRect(def, coord, coord, seed));
+    } else if (f.kind === 'river-sites') {
       cands.push(...riverSitesInRect(def, coord, coord, seed));
     } else if (f.kind === 'lakes') {
       cands.push(...lakesInRect(def, { x: coord.x - r, y: coord.y - r }, { x: coord.x + r, y: coord.y + r }, seed));
@@ -427,7 +440,7 @@ export function featuresAt(coord: MapCoord, seed: number | null = atlasSeed): Ma
       }
     }
     for (const feat of cands) {
-      const dist = Math.hypot(feat.seat.x - coord.x, feat.seat.y - coord.y);
+      const dist = feat.scarp ? scarpDistance(coord, feat.scarp) : Math.hypot(feat.seat.x - coord.x, feat.seat.y - coord.y);
       if (dist <= r) hits.push({ feature: feat, dist, def });
     }
   }

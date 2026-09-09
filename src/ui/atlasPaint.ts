@@ -527,6 +527,31 @@ function drawGlyphs(j: Job): void {
   }
 }
 
+function drawEscarpment(j: Job, feat: MapFeature): void {
+  const s = feat.scarp;
+  if (!s) return;
+  const tangent = { x: -s.normal.y, y: s.normal.x };
+  const length = Math.hypot(s.a.x - s.seat.x, s.a.y - s.seat.y);
+  const { ctx } = j;
+  ctx.save(); ctx.lineCap = 'butt';
+  for (const sign of [-1, 1]) for (let distance = s.passHalfWidth; distance < length; distance += 24) {
+    const end = Math.min(length, distance + 24);
+    const a = { x: s.seat.x + tangent.x * distance * sign, y: s.seat.y + tangent.y * distance * sign };
+    const b = { x: s.seat.x + tangent.x * end * sign, y: s.seat.y + tangent.y * end * sign };
+    const rev = revealAt(j, (a.x + b.x) / 2, (a.y + b.y) / 2);
+    if (rev < ATLAS_CFG.features.minReveal) continue;
+    ctx.globalAlpha = Math.min(1, rev * 1.4);
+    const [ax, ay] = toPx(j, a), [bx, by] = toPx(j, b);
+    ctx.strokeStyle = '#1b2029'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = '#d4c5a3'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = '#81735f'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax - s.normal.x * 6, ay - s.normal.y * 6); ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawFeatures(j: Job, lakesOnly: boolean): void {
   const { ctx, inp } = j;
   const F = ATLAS_CFG.features;
@@ -535,6 +560,7 @@ function drawFeatures(j: Job, lakesOnly: boolean): void {
     if (!def) continue;
     const isLake = def.glyph === 'lake';
     if (lakesOnly !== isLake) continue;
+    if (feat.scarp) drawEscarpment(j, feat);
     const rev = revealAt(j, feat.seat.x, feat.seat.y);
     if (rev < F.minReveal) continue;
     const paint = GLYPHS[def.glyph];

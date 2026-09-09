@@ -1,3 +1,4 @@
+import '../engine/escarpmentGen';
 // Atlas destinations share builders, terrain rules and connection grammar.
 // A new site family is a program + a map-feature row, not a new generator.
 import '../engine/localeGen';
@@ -66,3 +67,26 @@ registerLocaleProgram({
     ],
   }],
 });
+
+
+registerLocaleProgram({ id: 'cliff_ascent', version: 1, label: 'Cliff ascent', size: { w: 2400, h: 2700 }, variants: [{
+  id: 'broken_stair', weight: 1, portalMode: 'nearest', entrance: 'lower_ledge', goal: 'summit',
+  approaches: { n: { district: 'summit' }, s: { district: 'lower_ledge' },
+    w: { district: 'lower_ledge', via: [[0.04, 0.93]] }, e: { district: 'lower_ledge', via: [[0.96, 0.93]] } }, terrain: { background: 'cliff_drop' },
+  districts: [district('lower_ledge', 'open', [0.22, 0.84], [0.3, 0.2]),
+    { id: 'ascent', builder: 'switchback', at: [0.5, 0.5], size: [0.72, 0.58], external: false,
+      params: { pathWidth: 110, turns: 5 }, ports: { lower: [0.12, 0.88], upper: [0.88, 0.12] } },
+    district('summit', 'court', [0.78, 0.15], [0.28, 0.18]),
+    district('shelter', 'cavern', [0.17, 0.19], [0.22, 0.24], true)],
+  links: [{ from: 'lower_ledge', to: 'ascent', toPort: 'lower', role: 'main', width: 110 },
+    { from: 'ascent', fromPort: 'upper', to: 'summit', role: 'main', width: 110 },
+    { from: 'summit', to: 'shelter', role: 'discovery', width: 100 }],
+}] });
+registerLocaleProgram({ id: 'cliff_foothills', version: 1, label: 'Cliff foothills', size: { w: 2400, h: 2100 }, variants: [{
+  id: 'beneath_the_wall', weight: 1, entrance: 'foothills', goal: 'overlook', terrain: { background: 'wall' },
+  districts: [district('foothills', 'open', [0.28, 0.7], [0.42, 0.4]),
+    district('overlook', 'open', [0.72, 0.36], [0.36, 0.36]),
+    district('hollow', 'cavern', [0.25, 0.26], [0.28, 0.3], true)],
+  links: [{ from: 'foothills', to: 'overlook', role: 'main', width: 150 },
+    { from: 'foothills', to: 'hollow', role: 'discovery', width: 110 }],
+}] });

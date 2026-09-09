@@ -278,8 +278,10 @@ console.log('\n--- D. the world mint ---');
   check('D18 exactly one gravecaller (the objective\'s, no duplicate seat)', w.actors.filter(a => a.defId === 'gravecaller' && !a.dead).length === 1);
   check('D19 the reliquary\'s R cells are rampart in the live zone', (w.walk as GridWalkField).regionAt(15, 15) === 'rampart');
   check('D20 the party lands on the reliquary\'s entry', near(w.player.pos, { x: 660, y: 900 }, 40));
-  const archers = w.actors.filter(a => a.defId === 'skeleton_archer' && !a.dead);
-  check('D21 the shrine archers stand posted', archers.length === 2 && archers.every(a => a.aiPost && a.postSpec));
+  // Ambient theater patrols may also contain archers. Count the authored
+  // population by its engine attribution, then verify both exact shrine posts.
+  const archers = w.actors.filter(a => a.fromZoneGen && a.defId === 'skeleton_archer' && !a.dead);
+  check('D21 the shrine archers stand posted', archers.length === 2 && [465, 765].every(x => archers.some(a => a.aiPost && a.postSpec && near(a.aiPost, { x, y: 495 }, 1) && near(a.pos, a.aiPost, 1))));
   check('D22 the zone\'s fauna is closed (authored cohort, no biome wildlife table)', Array.isArray(w.zone.fauna) && w.zone.fauna.length === 0 && w.zone.cohort === 'authored');
 }
 
