@@ -18,6 +18,7 @@
 
 import { Actor, type ActorAdorn, type ActorShape, type Team,
   type CastingState, type ActiveAura, type ConstructState, type LeapState, type WormBody } from '../engine/actor';
+import type { CourseJourney } from '../world/courseStages';
 import type { AnnexSpec, Doodad, DoodadDoor, HollowSpec, PlacedStructure } from '../engine/levelgen';
 import { bagBoard } from '../engine/inventory';
 import type { HitShape } from '../engine/shapes';
@@ -1386,6 +1387,8 @@ export interface ExitW {
 }
 export interface ZoneMsg {
   zoneId: string; name: string; level: number;
+  /** Baked regional identity for the current locale, optional on old peers. */
+  journey?: CourseJourney;
   /** The zone's DIMENSION ('surface' omitted) — the client's map tab, dimension
    *  seals, and any dimension-scoped rendering read the same plane the host is
    *  in (a client in hell must not paint surface weather over it). */
@@ -1435,6 +1438,7 @@ export interface ZoneMsg {
 export function serializeZone(world: World): ZoneMsg {
   return {
     zoneId: world.zone.id, name: world.zone.name, level: world.zone.level,
+    ...(world.zone.journey ? { journey: { ...world.zone.journey } } : {}),
     dimension: world.zone.dimension,
     arena: {
       w: world.arena.w, h: world.arena.h, shape: world.arena.shape,
@@ -1480,6 +1484,8 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   world.zone.theme = msg.theme;
   world.zone.name = msg.name;
   world.zone.level = msg.level;
+  if (msg.journey) world.zone.journey = { ...msg.journey };
+  else delete world.zone.journey; // leaving a route clears the previous stage
   world.zone.dimension = msg.dimension;
   world.doodads = msg.doodads.map(d => ({
     pos: { x: d.p[0], y: d.p[1] }, radius: d.r, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow, annex: d.annex, wild: d.wild, fall: d.fall,

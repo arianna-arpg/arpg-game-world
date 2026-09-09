@@ -15,6 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import type { MonsterRarity } from '../engine/rarity';
+import type { CourseJourney } from '../world/courseStages';
 import type { ItemRarity } from '../engine/items';
 import type { PresenceSpec } from '../engine/presence';
 import type { ZoneFogSpec } from '../engine/fog';
@@ -1093,6 +1094,9 @@ export interface ZoneDef {
    *  temperature/moisture/wildness/…), so generators, UI, and future systems
    *  can read the zone's weather without re-deriving the field. */
   geo?: { biomeDepth?: number; climate?: Record<string, number> };
+  /** World-route identity baked at mint alongside its resolved layout knobs.
+   * Discovery order, later map settling and registry edits cannot restage it. */
+  journey?: CourseJourney;
   /** THE BLEND (engine/blend.ts): this zone interleaves a partner tileset's
    *  theme + kit + packs by a weight field — resolved at mint (from
    *  TilesetDef.blend or authored by the mint), DURABLE like theme/layout

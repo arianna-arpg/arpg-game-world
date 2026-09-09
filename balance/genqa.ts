@@ -83,6 +83,7 @@ import '../src/data/warfront';
 import '../src/data/scald';
 import '../src/data/compositions';
 import '../src/data/authoredMaps'; // THE AUTHORED-MAP FABRIC's shipped maps (+ the 'authored' layout)
+import '../src/world/relief'; // registers surface courses and their journey stages
 
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
@@ -112,6 +113,9 @@ import { deadBaseFaceKinds } from './deadface_check';
 import { authoredMapDefs, authoredZoneDef, validateAuthoredMap } from '../src/engine/authoredMaps';
 import { ExplorationReport } from './explorationreport';
 import { EXPLORATION_CFG } from './layoutmetrics';
+import { validateCourseStages } from '../src/world/courseStages';
+import { hasLayout, hasComposition, hasLandmark } from '../src/engine/levelgen';
+import { liquidIds } from '../src/engine/genkit';
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -719,6 +723,10 @@ const layoutSources = [
   ...Object.values(MELDS).map(m => ({ source: `meld ${m.id}`, specs: m.rows as StampSpec[] })),
 ];
 const registryErrors = [
+  ...dimensionIds().flatMap(dim => (dimensionDef(dim).courses ?? []).flatMap(c =>
+    validateCourseStages(c.stages, { layout: hasLayout, composition: hasComposition, landmark: hasLandmark,
+      liquid: id => liquidIds().includes(id) })
+      .map(e => `course ${dim}/${c.id}: ${e}`))),
   ...validateStamps(layoutSources),
   // Composition-local invariants: at→site refs, when-gate keys, site bands.
   ...validateCompositions(id => id in CLIMATE_AXES),
@@ -847,7 +855,42 @@ for (const id of layoutIds()) {
   }
 }
 
-// --- 3b. Interior layouts at CAVE scale ---------------------------------------
+// --- 3b. Regional journey stages ---------------------------------------------
+// Journey stages consume the SAME local carvers and biome knobs. Sweep every
+// authored stage at normal/small scales, across each compatible biome's dials.
+// The dedicated probe covers geometric stage selection and the real mint fold.
+for (const dim of dimensionIds()) for (const course of dimensionDef(dim).courses ?? []) {
+  for (const stage of course.stages ?? []) {
+    const recipes = stage.forceLayout || course.forceLayout
+      ? [stage.forceLayout ?? course.forceLayout!]
+      : Object.keys(BIOMES[course.biome]?.allowedLayouts ?? { plains: 1 });
+    for (const recipe of recipes) {
+      const contexts = Object.entries(BIOMES).filter(([id, b]) =>
+        course.paints === false ? recipe in (b.allowedLayouts ?? {}) : id === course.biome);
+      for (const [biome, b] of contexts.length ? contexts : [['plain', undefined] as const]) {
+        const ts = Object.values(TILESETS).find(t => t.biome === biome) ?? TILESETS.meadow;
+        for (const small of [false, true]) {
+          const label = `course:${dim}/${course.id}/${stage.id}@${biome}${small ? ':small' : ''}`;
+          runCase(label, {
+            id: label, name: label, level: 8, biome,
+            size: small ? { w: 1200, h: 900 } : { w: 2400, h: 1800 },
+            theme: ts.theme, layout: [...(ts.common ?? []), ...ts.layout],
+            layoutType: recipe,
+            layoutParams: { ...b?.layoutParams, ...ts.layoutParams, ...course.layoutParams,
+              ...stage.layoutParams, riverSides: small ? ['n', 's'] : ['w', 'e'] },
+            compositions: [...(stage.compositions ?? []),
+              ...(stage.span[1] === 1 ? course.terminus?.compositions ?? [] : [])],
+            landmarks: [...(stage.landmarks ?? []),
+              ...(stage.span[1] === 1 ? course.terminus?.landmarks ?? [] : [])],
+            objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+          });
+        }
+      }
+    }
+  }
+}
+
+// --- 3c. Interior layouts at CAVE scale ---------------------------------------
 // mintCave rolls dungeon/labyrinth from caveLayouts at cavern arena sizes
 // (~1200×900) — far smaller than group 3's representative def. Rooms, portal
 // chambers, and door mouths must all still fit and connect down there.

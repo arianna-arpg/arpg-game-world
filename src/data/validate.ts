@@ -64,6 +64,7 @@ import {
   hasLandmark, hasLandmarkBuilder, landmarkDefs, hasLayout, layoutIds,
 } from '../engine/levelgen';
 import { genPins, type GenRegistry } from '../engine/genPins';
+import { validateCourseStages } from '../world/courseStages';
 import { lairRows } from '../engine/lairs';
 import { interiorRoleDefs, TRAP_ARCHETYPES } from '../engine/interiorGen';
 import { hasCommandKind } from '../engine/ai';
@@ -867,6 +868,8 @@ export function validateContent(): void {
   // read these from tileset/biome/zone data that nothing else covers.
   const liquids = new Set(liquidIds());
   const paramSources: { source: string; params?: Record<string, unknown> }[] = [
+    ...dimensionIds().flatMap(dim => (dimensionDef(dim).courses ?? []).flatMap(c =>
+      (c.stages ?? []).map(s => ({ source: `course ${dim}/${c.id}/${s.id}`, params: s.layoutParams })))),
     ...Object.values(TILESETS).map(t => ({ source: `tileset ${t.id}`, params: t.layoutParams })),
     ...Object.entries(BIOMES).map(([id, b]) => ({ source: `biome ${id}`, params: b.layoutParams })),
     ...Object.values(ZONES).map(z => ({ source: `zone ${z.id}`, params: z.layoutParams })),
@@ -961,6 +964,14 @@ export function validateContent(): void {
     //    and layout knobs — every dimension's, the surface's rivers included.
     for (const dimId of dimensionIds()) {
       for (const c of dimensionDef(dimId).courses ?? []) {
+        for (const error of validateCourseStages(c.stages, { layout: hasLayout, composition: hasComposition, landmark: hasLandmark })) {
+          warn(`course ${dimId}/${c.id}: ${error}`);
+        }
+        for (const stage of c.stages ?? []) {
+          ref('layout', stage.forceLayout);
+          for (const r of stage.compositions ?? []) ref('composition', r.composition);
+          for (const r of stage.landmarks ?? []) ref('landmark', r.landmark);
+        }
         ref('layout', c.forceLayout);
         for (const r of c.terminus?.landmarks ?? []) ref('landmark', r.landmark);
         for (const r of c.terminus?.compositions ?? []) ref('composition', r.composition);

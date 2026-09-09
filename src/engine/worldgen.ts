@@ -1456,7 +1456,7 @@ export function placeZoneAt(
   // from allowedLayouts. Pins branch BEFORE the roll, so the rng stream
   // shifts only for pinned mints — every existing mint's draw order is
   // untouched (the cave-mint forceLayout contract, mirrored).
-  const layoutType = spec.layoutType ?? onCourse?.spec.forceLayout ?? tileset.forceLayout
+  const layoutType = spec.layoutType ?? onCourse?.forceLayout ?? onCourse?.spec.forceLayout ?? tileset.forceLayout
     ?? pickLayout(biome, target, genRng, spec.biomeFor);
   // generateLayout degrades an unregistered layout id to 'plains' silently —
   // say so at mint, where the authoring slip (a quest def's layoutType typo)
@@ -1595,6 +1595,7 @@ export function placeZoneAt(
     ...(landmarkRolls.length ? { landmarks: landmarkRolls } : {}),
     ...(compositionRolls.length ? { compositions: compositionRolls } : {}),
     ...(geo ? { geo } : {}),
+    ...(onCourse?.journey ? { journey: onCourse.journey } : {}),
     // AQUATIC (the coherence fabric): open-seabed biomes stamp the flag so
     // habitat-bearing flora places freely and the default gravel exit-road
     // stands down — durable on the def, one classifier (isAquaticBiome).

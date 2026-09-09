@@ -25,6 +25,7 @@ import type { Dir, MapCoord } from './coords';
 import { OPP_DIR } from './coords';
 import { BIOMES, fieldNoise } from './biomes';
 import { registerZoneInfoSource } from './zoneInfo';
+import { courseStageAt, courseJourney, validateCourseStages, type CourseStage, type CourseJourney } from './courseStages';
 
 /** What waits at a course's FAR END — guaranteed rolls on zones minted inside
  *  the terminus radius (chance is still honored, so authored data can keep a
@@ -132,6 +133,9 @@ export interface CourseSpec {
   /** Layout knobs stamped onto every zone minted ON the course (merged between
    *  tileset and spec — how the intra-zone recipe learns it rides the artery). */
   layoutParams?: Record<string, unknown>;
+  /** A world route becomes a sequence of places. Chosen by normalized arc,
+   * merged over course defaults, below the directed mint's overrides. */
+  stages?: CourseStage[];
   /** The far-end reward rolls (see CourseTerminus). */
   terminus?: CourseTerminus;
 }
@@ -140,6 +144,10 @@ export interface CourseSpec {
  *  through ZoneSpec.courseFor (the same closure idiom as biomeFor). */
 export interface CourseMintHints {
   spec: CourseSpec;
+  /** Optional stage recipe pin; the course's ordinary forceLayout is fallback. */
+  forceLayout?: string;
+  /** Only staged courses add durable journey identity (legacy courses inert). */
+  journey?: CourseJourney;
   /** Cardinal sides the course CONTINUES toward from this coordinate (up- and
    *  downstream, ends clipped) — worldgen guarantees an exit on each so the
    *  throughline can always be followed, never dead-ends on a bad frontier roll. */
@@ -456,17 +464,26 @@ export function courseMintHints(
   const end = pts[pts.length - 1];
   const terminus = Math.hypot(coord.x - end.x, coord.y - end.y)
     <= (spec.terminus?.radius ?? COURSE_DEFAULTS.terminusRadius);
+  const stage = courseStageAt(spec.stages, hit.t);
+  const stageCompositions = stage?.compositions;
+  const stageLandmarks = stage?.landmarks;
   return {
     spec,
+    ...(stage?.forceLayout ? { forceLayout: stage.forceLayout } : {}),
+    ...(spec.stages?.length ? { journey: courseJourney(spec, anchor, seed, hit.t, stage) } : {}),
     continueSides,
     terminus,
     // The recipe's orientation: carve the liquid spine upstream-edge →
     // downstream-edge so consecutive course zones read as ONE river.
-    layoutParams: { ...spec.layoutParams, riverSides: [up, down] },
+    layoutParams: { ...spec.layoutParams, ...stage?.layoutParams, riverSides: [up, down] },
     centerPull: { x: hit.qx - coord.x, y: hit.qy - coord.y },
     hug: spec.hug ?? COURSE_DEFAULTS.hug,
-    ...(terminus && spec.terminus?.compositions ? { compositions: spec.terminus.compositions } : {}),
-    ...(terminus && spec.terminus?.landmarks ? { landmarks: spec.terminus.landmarks } : {}),
+    ...(stageCompositions?.length ? { compositions: [...stageCompositions,
+      ...(terminus ? spec.terminus?.compositions ?? [] : [])] }
+      : terminus && spec.terminus?.compositions ? { compositions: spec.terminus.compositions } : {}),
+    ...(stageLandmarks?.length ? { landmarks: [...stageLandmarks,
+      ...(terminus ? spec.terminus?.landmarks ?? [] : [])] }
+      : terminus && spec.terminus?.landmarks ? { landmarks: spec.terminus.landmarks } : {}),
   };
 }
 
@@ -479,6 +496,7 @@ export function validateCourses(
   const bad: string[] = [];
   for (const d of dims) {
     for (const c of d.courses ?? []) {
+      for (const e of validateCourseStages(c.stages)) bad.push(`${d.id}/${c.id}: ${e}`);
       if (!BIOMES[c.biome]) bad.push(`${d.id}/${c.id}: ${c.biome}`);
       // A traced course whose tracer never registered would silently produce
       // EMPTY polylines everywhere — a whole river network stillborn.
@@ -494,6 +512,12 @@ export function validateCourses(
 // wearing it MEANS the course painted this zone.
 registerZoneInfoSource((world, zoneId) => {
   const z = world.zoneMap[zoneId];
+  if (z?.journey) return [{
+    kind: 'modifier' as const, icon: '↝',
+    color: z.biome ? BIOMES[z.biome]?.mapColor : undefined,
+    label: z.journey.label ?? z.journey.course,
+    detail: z.journey.stageLabel ?? 'A route through this country',
+  }];
   if (!z?.dimension || !z.biome) return [];
   const spec = world.courseSpecsFor(z.dimension).find(c => c.biome === z.biome);
   if (!spec) return [];

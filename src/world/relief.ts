@@ -37,6 +37,7 @@ import {
   strewnInstancesInRect, type CourseSpec,
 } from './courses';
 import { registerDimensionCourse } from './dimensions';
+import { RIVER_JOURNEY_STAGES } from './courseStages';
 
 export const RELIEF_CFG = {
   /** The springs deal (mirrored into SURFACE_RIVERS.strew): lattice span,
@@ -135,6 +136,7 @@ export const SURFACE_RIVERS: CourseSpec = {
   hug: RELIEF_CFG.river.hug,
   seedSalt: 0x8b1e2,
   label: 'the river',
+  stages: RIVER_JOURNEY_STAGES,
   layoutParams: { riverLiquid: 'water', causeways: [1, 2], isles: [0, 1] },
 };
 

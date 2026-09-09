@@ -4,6 +4,11 @@ The aim is a wider vocabulary of player decisions: where to go, what to risk,
 what to investigate, how to approach a fight, and when to return. A seed changing
 the wall outline is insufficient evidence of a different expedition.
 
+The follow-up [hierarchical generation charter](hierarchical-generation.md)
+connects this local diversity to world geography, regional journeys and the zone
+network. Its first gameplay increment adds geographically selected course stages
+and three live river stages; the broader route-strategy work below remains planned.
+
 ## Repository and integration state
 
 This work starts on `codex/generation-diversity`, based on `codex/system-audit`
