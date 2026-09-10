@@ -1,3 +1,4 @@
+import { UNDEAD_COURT_MINIONS } from './necromancerCourts';
 import type { MonsterDef } from './monsters';
 import { mod } from '../engine/stats';
 const mage = (id: string, name: string, color: string, skill: string): MonsterDef => ({
@@ -6,6 +7,7 @@ const mage = (id: string, name: string, color: string, skill: string): MonsterDe
   skills: [skill], xp: 0,
 });
 export const NECROMANCER_MINIONS: Record<string, MonsterDef> = {
+  ...UNDEAD_COURT_MINIONS,
   skeletal_pyromancer: mage('skeletal_pyromancer', 'Skeletal Pyromancer', '#ed985a', 'skeletal_fire_bolt'),
   skeletal_cryomancer: mage('skeletal_cryomancer', 'Skeletal Cryomancer', '#8bd6ed', 'skeletal_cold_bolt'),
   skeletal_stormcaller: mage('skeletal_stormcaller', 'Skeletal Stormcaller', '#c5b6fa', 'skeletal_lightning_bolt'),

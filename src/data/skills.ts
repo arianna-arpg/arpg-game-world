@@ -2022,6 +2022,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // ======================= Summoning =======================================
 
   summon_skeleton: {
+    tree: NECROMANCER_TREES.summon_skeleton,
     id: 'summon_skeleton', name: 'Summon Skeleton Warrior',
     description: 'Raise a skeletal warrior to fight beside you; up to 4 may serve at once, and'
       + ' their strength scales with your minion stats. The slot\'s meta-action, Attack!,'
@@ -2085,6 +2086,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // Weighted-pool summoning: each spawn rolls the pool independently.
   raise_dead: {
+    tree: NECROMANCER_TREES.raise_dead,
     id: 'raise_dead', name: 'Raise Dead',
     description: 'Drag a servant from the grave: a skeleton warrior or a zombie, an even chance'
       + ' of either, up to 5 raised at once. The slot\'s meta-action, Attack!, orders an'
@@ -7785,6 +7787,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   summon_raging_spirit: {
+    tree: NECROMANCER_TREES.summon_raging_spirit,
     id: 'summon_raging_spirit', name: 'Summon Raging Spirit',
     description: 'Summon a shrieking skull of flame that rushes your foes for 5 seconds, then'
       + ' gutters out. Up to 20 can rage at once; only cast speed keeps the swarm near its cap.',
@@ -7826,6 +7829,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   summon_wraith: {
+    tree: NECROMANCER_TREES.summon_wraith,
     id: 'summon_wraith', name: 'Summon Wraith',
     description: 'Summons a decay wraith, up to 6 at once. No timer governs it: 4 seconds after'
       + ' rising it begins to rot, draining 4% of its life per second at an ever-compounding'

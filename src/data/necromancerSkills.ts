@@ -1,3 +1,4 @@
+import { UNDEAD_COURT_SKILLS } from './necromancerCourts';
 import type { SkillDef, AuraSpec } from '../engine/skills';
 import { mod, type DamageType } from '../engine/stats';
 import { NECROMANCER_TREES, SKELETAL_MAGE_POOL } from './necromancerTrees';
@@ -15,6 +16,7 @@ const aura = (id: string, name: string, spec: AuraSpec): SkillDef => ({
   delivery: { type: 'aura', mode: 'toggle', aura: spec }, effects: [],
 });
 export const NECROMANCER_SKILLS: Record<string, SkillDef> = {
+  ...UNDEAD_COURT_SKILLS,
   summon_skeleton_mage: {
     id: 'summon_skeleton_mage', name: 'Summon Skeleton Mage',
     description: 'Raise two random elemental mages, up to four. Their tree can fuse them into one Lich or teach elemental specialists their own schools of magic.',

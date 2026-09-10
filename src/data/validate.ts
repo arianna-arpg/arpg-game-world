@@ -2089,6 +2089,14 @@ export function validateContent(): void {
           if (shape && (!Number.isInteger(shape.maxActive) || shape.maxActive < 1 || ![shape.size, shape.life, shape.damage, act.lifespan ?? 0].every(v => Number.isFinite(v) && v > 0))) warn(src + ": invalid inherited death summon");
         }
       }
+      if (d.placeAt && (![d.placeAt.range ?? 420, d.placeAt.scatter ?? 60].every(v => Number.isFinite(v) && v >= 0)
+        || !['caster', 'cursor'].includes(d.placeAt.at))) warn(src + ': invalid summon placeAt');
+      if (d.devour) {
+        const v = d.devour;
+        if (!Number.isFinite(v.interval) || v.interval <= 0 || !Number.isInteger(v.maxStacks ?? 5) || (v.maxStacks ?? 5) < 1
+          || ![v.radius ?? 220, v.heal ?? 0, v.duration ?? 15].every(x => Number.isFinite(x) && x >= 0)
+          || (v.mods ?? []).some(m => !STAT_DEFS[m.stat] || !Number.isFinite(m.value))) warn(src + ': invalid summon devour');
+      }
       if (d.shell) {
         const s = d.shell;
         if (!SKILLS[s.strikeSkill]) warn(`${src}: unknown shell strike '${s.strikeSkill}'`);
@@ -2915,7 +2923,7 @@ export function validateContent(): void {
   // against the kit's own defs.
   {
     const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags']);
-    const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath']);
+    const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
     const budget = bandPointsAt(MAX_SKILL_LEVEL);

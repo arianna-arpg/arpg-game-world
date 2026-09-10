@@ -42,6 +42,10 @@ Changing the investment budget is a separate balance decision, not hidden here.
 | Bone Golem | Osseous Might: fighting golems; grow a cohort, a giant commander aura bearer, a sweeping bruiser, or a hybrid. | Keeper's Bulwark: defensive guard, rapid reconstruction, mending, taunts and the close-bound Bone Stand. | Fitted Joints: life and movement |
 | Skeleton Archer | Rattling Bows: physical cohorts, piercing arrows, and Rain of Bones with combined cooldown/area/damage/bleed investment or baseline multishot. | Unstrung Sorcery: replace bows with random elemental bolt casters. The trunk preserves base population; Volatile Souls adds one body and one slot. Invest in volatile criticals or narrow the pool to selected elements. | Remembered Training: damage |
 | Skeleton Mage (new) | Lich Ascendant: fuse the batch into one larger Fireball caster; learn heavy area spells, grow its frame, or command allies. | Grave Academy: a faster cohort of elemental specialists, with cold/chaos and fire/lightning curricula. Each learned spell belongs only to its matching element. | Grave Studies: damage and haste |
+| Skeleton Warrior | Grave Phalanx: taunting shield sentinels, inherited Thorns, armor banners, relief auras and bounded death heirs. | Ossuary Duelists: twin-cut pursuers, bleeding strikes, culling, lunges and paired summons. | Tempered Bones: life and damage |
+| Raise Dead | Grave Levy: temporary random skeleton/zombie ranks, larger drafts, stench, poison and true-death expiry payoffs. | Flesh Assembly: one claw-and-slam abomination; consume other skills' minions for temporary strength, build a refuge or invest in its death. | Gravecraft: life and damage |
+| Raging Spirit | Frenzied Embers: brief fire-biting swarms, pursuit, a burning halo, ailments and expiry explosions. | Vigil Flames: targetable stationary sentries placed at the cursor; improve duration, durability, population or piercing, multiple bolts and Ignite. | Kindled Will: damage |
+| Wraith | Hexwoven Shades: ranged chaos casters, learned Despair, curse investment, a resistance veil and slower decay. | Soul Reavers: paired scythe fighters, lunges, area, culling, leech and death healing. Both trunks retain exponential decay. | Unspent Echo: life and damage |
 
 Archer-derived mages cast one elemental bolt each. The separate Mage skill earns
 its own identity through elemental lessons and innate cryomancer Ice Spears; the Lich starts with an explosive Fireball.
@@ -110,6 +114,27 @@ Existing saved golem paths are repaired against the new prerequisites; removed
 invalid picks return their points. The tree budget and four-rank neutral passives
 are unchanged. Shambling Horde is unchanged.
 
+## Undead courts batch
+
+These four additional trees live in `src/data/necromancerCourts.ts`; the shared
+15-node builder lives in `src/data/skillTreeBuilder.ts`. Registered skills and
+minion forms are ordinary data entries. Existing allocations and the first four
+trees are unchanged. The comparison branch is `codex/necromancer-undead-courts`.
+
+Last Watch heirs use the same nonrecursive offspring contract as lesser golems,
+with a separate four-heir cap. Levy expiry only becomes a true death when a node
+explicitly enables it; replacement and respec remain silent. Feasting Mass eats
+minions from other skill instances, attributes the sacrifice to its eater, and
+gains bounded, expiring damage stacks. Nearby auras from separate bodies stack.
+Vigil Flames preserve the shared Raging Spirit pool and expire normally; their
+cursor placement and no-recall body make location a deliberate choice.
+
+The remaining Necromancer queue is Poison Nova, Despair, Reap, Whirling Reap,
+Spirit Pyre, Infernal Bombardment, Archon Lance, Sanguine Burst, Venom Bolt,
+Corpse Explosion and Grave Tide. Continue in coherent batches before moving to
+other classes; retain two distinct trunk identities, mixable descendants and a
+four-rank neutral passive. Balance values still need playtesting.
+
 ## Shared implementation contract
 
 `SummonDelivery` now exposes reusable summon shaping data:
@@ -136,6 +161,11 @@ are unchanged. Shambling Horde is unchanged.
 - `escort.distance` changes a body's movement goal to its owner's flank while
   retaining ordinary skill selection, cast gates, collision and recall.
 - `shell` attaches a summoned body as a directional guard with configurable life/size scaling, coverage, regeneration, reform threshold and strike kit. It reads the shared shell absorption and regrowth systems.
+- `devour` configures the existing consumption clock, target radius, healing,
+  temporary stack modifiers and stack cap. Sacrifices retain the eating body as
+  their source. Aura damage deaths likewise retain their actual bearer.
+- `placeAt` configures cursor/caster placement, cast range and scatter. A
+  stationary, `noRecall` monster form supplies sentry behavior independently.
 - `replenish.interval` remains a free, bar-seated birth clock using normal spawn,
   cap, ownership, lifecycle and explosion attribution. Full pools never churn.
 
@@ -171,6 +201,10 @@ new Commanded Dead trunk. The preserved branch retains the old save interpretati
   real mage births, Rain of Bones AI, commander aura, cohort reservations,
   Bone Stand coverage/retaliation/size, death-heir caps and cleanup, baseline
   multishot, per-element lessons and actual AI casts, plus save repair.
+- `npm run probe -- necromancercourts`: all 32 new leaf paths, live crew/support
+  census agreement, save round trips, sentinel guards and heirs, duelists, levy
+  caps and expiry, attributed devouring and aura deaths, placed sentry AI,
+  curses, melee reavers and finite decay.
 - `npm run probe`: the full fast regression gate.
 - `npm run sim -- run --suite smoke`: baseline combat scenarios.
 - Production build plus Electron tree interaction and screenshot inspection.

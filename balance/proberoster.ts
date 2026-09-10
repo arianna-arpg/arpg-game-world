@@ -62,6 +62,7 @@ export type ProbeRow =
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_necromancertrees.ts', status: 'green', tier: 'fast', why: 'Shambling Horde paths, passive replenishment, caps, lifespan, cleanup, support scaling, attribution and tree persistence' },
+  { probe: 'probe_necromancercourts.ts', status: 'green', tier: 'fast', why: 'Four undead court trees, full-path births, defensive and assault kits, decay, placed sentries, devouring and death attribution' },
   { probe: 'probe_nestednecromancer.ts', status: 'green', tier: 'fast', why: 'Binary mutator topology, mixed routes, elemental pools, taught crew skills, commander/escort auras and summon persistence' },
   { probe: 'probe_atlasbudget.ts', status: 'green', tier: 'fast', why: 'Bounded atlas allocations, progressive pixel equality, input cache isolation, async cancellation and image lifetime' },
   { probe: 'probe_complexes.ts', status: 'green', tier: 'fast', why: 'Persistent segmented landmarks, real traversal, protected stage graphs, co-op and overlapping cavern tiers' },

@@ -1,5 +1,7 @@
-import type { SkillTreeNode, SkillTreeSpec, SummonDelivery } from '../engine/skills';
-import { mod, type Modifier } from '../engine/stats';
+import { tree, n, life, damage, cap, count, haste, speed, size, dr, body, kit, aura, element } from './skillTreeBuilder';
+import { UNDEAD_COURT_TREES } from './necromancerCourts';
+import type { SkillTreeSpec, SummonDelivery } from '../engine/skills';
+import { mod } from '../engine/stats';
 
 export const SKELETAL_MAGE_POOL: NonNullable<SummonDelivery['pool']> = [
   { id: 'skeletal_pyromancer', weight: 1, tags: ['fire'] },
@@ -7,38 +9,9 @@ export const SKELETAL_MAGE_POOL: NonNullable<SummonDelivery['pool']> = [
   { id: 'skeletal_stormcaller', weight: 1, tags: ['lightning'] },
   { id: 'skeletal_venomancer', weight: 1, tags: ['chaos'] },
 ];
-type Node = Omit<SkillTreeNode, 'links' | 'excludes' | 'x' | 'y'>;
-type Limb = [Node, [Node, Node, Node], [Node, Node, Node]];
-/** Shared binary anatomy: only trunks exclude. Descendants add to the chosen
- * identity, so sibling routes can be mixed without last-pick-wins overrides. */
-function tree(left: Limb, right: Limb, passive: Node): SkillTreeSpec {
-  const nodes: SkillTreeNode[] = [{ ...passive, ranks: 4, description: passive.description + ' Bonuses apply per rank; up to 4 ranks.', x: 0, y: 150 }];
-  for (const [side, limb, other] of [[-1, left, right], [1, right, left]] as const) {
-    nodes.push({ ...limb[0], kind: 'keystone', excludes: [other[0].id], x: side * 170, y: -50 });
-    [limb[1], limb[2]].forEach(([fork, ...leaves], i) => {
-      const y = i === 0 ? -230 : 170;
-      nodes.push({ ...fork, links: [limb[0].id], kind: 'major', x: side * 370, y });
-      leaves.forEach((leaf, j) => nodes.push({ ...leaf, links: [fork.id],
-        x: side * 570, y: y + (j === 0 ? -85 : 85) }));
-    });
-  }
-  return { level: 5, nodes };
-}
-const n = (id: string, name: string, description: string, mods?: Modifier[], over?: Node['over']): Node => ({ id, name, description, mods, over });
-const life = (v: number) => mod('minionLife', 'increased', v);
-const damage = (v: number) => mod('minionDamage', 'increased', v);
-const cap = (v: number) => mod('minionMaxCount', 'flat', v);
-const count = (v: number) => mod('summonCount', 'flat', v);
-const haste = (v: number) => mod('minionHaste', 'increased', v);
-const speed = (v: number) => mod('minionMoveSpeed', 'increased', v);
-const size = (v: number) => mod('minionSize', 'increased', v);
-const dr = (v: number) => mod('minionDamageTaken', 'more', -v);
-const body = (...crewMods: Modifier[]): Node['over'] => ({ summon: { crewMods } });
-const kit = (...crewSkills: string[]): Node['over'] => ({ summon: { crewSkills } });
-const aura = (...crewAuras: string[]): Node['over'] => ({ summon: { crewAuras } });
-const element = (id: string): Node['over'] => ({ summon: { selectPool: [id] } });
 
 export const NECROMANCER_TREES: Record<string, SkillTreeSpec> = {
+  ...UNDEAD_COURT_TREES,
   shambler_horde: tree([
     n('wandering_dead', 'Wandering Dead', 'Replace casting with a free shambler every 3 seconds while seated, up to 4. They follow until foes appear and rush to burst. They never expire. 35% less life; 60% faster movement.',
       [mod('minionLife', 'more', -0.35), speed(0.6)], { tags: { remove: ['duration'] }, summon: { count: 1, maxActive: 4, duration: 0, replenish: { interval: 3 } } }),

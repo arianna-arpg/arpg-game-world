@@ -49018,7 +49018,8 @@ export class World {
               if (aura.spec.siphonFraction) {
                 bearer.healBy(amount * aura.spec.siphonFraction);
               }
-              if (e.life <= 0 && !e.dead) this.kill(e);
+              // Aura deaths retain their bearer, including summoned halo carriers.
+              if (e.life <= 0 && !e.dead) this.kill(e, false, bearer);
             }
           }
         }
@@ -53367,7 +53368,7 @@ export class World {
         color: '#b04868', life: 0.3, maxLife: 0.3,
       });
       this.text(eater.pos, 'devours', '#b04868', 11);
-      this.kill(meal); // a REAL death — Martyrdom, contracts, Deadwake apply
+      this.kill(meal, false, eater); // devour is an attributed REAL death — Martyrdom, contracts, Deadwake apply
     }
   }
 
