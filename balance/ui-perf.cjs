@@ -30,6 +30,27 @@ app.whenReady().then(async () => {
     const ready=!!document.querySelector('#atlas-base')?.getAttribute('href');
     const svg=document.querySelector('#world-map-svg'), events=[];
     const original=svg;
+    // A live overlay changes on every refresh even while the hero stands still.
+    // Inspect immediately AND on animation frames: handler timing alone missed
+    // the empty terrain between a DOM rebuild and the deferred painter tick.
+    const world=__game.world(), oldHud=world.sim.hudLine, oldLayers=world.sim.mapLayers;
+    const originalBase=document.querySelector('#atlas-base');
+    const originalNode=svg.querySelector('[data-zone]'), originalZoom=document.querySelector('[data-mz="reset"]');
+    let blankFrames=0, replacedCharts=0, staleOverlays=0;
+    try {
+     for(let n=0;n<8;n++){
+      world.sim.hudLine=()=> 'Visual stability '+n;
+      world.sim.mapLayers=function(...args){return [...oldLayers.apply(this,args),{id:'qa-live',label:'QA',under:'<circle id="qa-live" cx="'+n+'" cy="0" r="1"/>',over:''}]};
+      ui.refreshMap();
+      const check=()=>{const b=document.querySelector('#atlas-base');if(!b?.getAttribute('href')||b.getAttribute('display')==='none')blankFrames++;if(document.querySelector('#world-map-svg')!==original||b!==originalBase)replacedCharts++;};
+      if(document.querySelector('#qa-live')?.getAttribute('cx')!==String(n))staleOverlays++;
+      check();await new Promise(requestAnimationFrame);check();await new Promise(r=>setTimeout(r,60));
+     }
+    } finally {world.sim.hudLine=oldHud;world.sim.mapLayers=oldLayers;}
+    const stableControls=originalNode===svg.querySelector('[data-zone]')&&originalZoom===document.querySelector('[data-mz="reset"]');
+    // A changing chip list must not duplicate listeners on surviving controls.
+    let togglesOnce=true;
+    for(let n=0;n<4;n++){ui.refreshMap();document.querySelector('[data-mlayer="atlas:relief"]').click();togglesOnce&&=ui.mapLayersOff.has('atlas:relief')===(n%2===0);}
     for(let i=0;i<24;i++){const t=performance.now();document.querySelector('#world-map-svg').dispatchEvent(new WheelEvent('wheel',{deltaY:i%8<4?100:-100,bubbles:true,cancelable:true}));events.push(performance.now()-t);await new Promise(r=>setTimeout(r,20));}
     await new Promise(r=>setTimeout(r,800));
     const bounds=el=>{const r=el.getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height}};
@@ -42,20 +63,32 @@ app.whenReady().then(async () => {
     dragSvg.dispatchEvent(new PointerEvent('pointercancel',{pointerId:71,pointerType:'touch',buttons:0,bubbles:true}));
     const dragReleased=!ui.mapDragging;
     const picture=new Image();if(ready){picture.src=document.querySelector('#atlas-base').getAttribute('href');await picture.decode();}
-    const result={width:innerWidth,height:innerHeight,openMs:+openMs.toFixed(1),readyMs:+readyMs.toFixed(1),eventP95:+events[22].toFixed(1),ready,dragMoved,dragReleased,image:[picture.width,picture.height],stableSvg:original===document.querySelector('#world-map-svg'),panel:bounds(document.querySelector('#world-map')),chart:bounds(document.querySelector('#world-map-svg')),timings};return result;
+    const result={width:innerWidth,height:innerHeight,openMs:+openMs.toFixed(1),readyMs:+readyMs.toFixed(1),eventP95:+events[22].toFixed(1),ready,blankFrames,replacedCharts,staleOverlays,stableControls,togglesOnce,dragMoved,dragReleased,image:[picture.width,picture.height],stableSvg:original===document.querySelector('#world-map-svg'),panel:bounds(document.querySelector('#world-map')),chart:bounds(document.querySelector('#world-map-svg')),timings};
+    const style=__game.settings().mapChart;__game.settings().mapChart='classic';ui.refreshMap();
+    result.styleCleared=!document.querySelector('#atlas-base').getAttribute('href')&&!document.querySelector('#atlas-labels').childElementCount;
+    __game.settings().mapChart=style;ui.refreshMap();
+    const dimension=ui.mapDimension,hadHell=world.discoveredDimensions.has('hell');world.discoveredDimensions.add('hell');ui.mapDimension='hell';ui.refreshMap();
+    result.dimensionCleared=!document.querySelector('#atlas-base').getAttribute('href')&&!document.querySelector('#atlas-labels').childElementCount;
+    ui.mapDimension=dimension;if(!hadHell)world.discoveredDimensions.delete('hell');ui.refreshMap();
+    const restoreStart=performance.now();while(!document.querySelector('#atlas-base')?.getAttribute('href')&&performance.now()-restoreStart<${limits.maxReadyMs})await new Promise(r=>setTimeout(r,25));
+    result.restored=!!document.querySelector('#atlas-base')?.getAttribute('href');return result;
    })()`);
    out.scenarios.push(row); console.log(JSON.stringify(row));
    fs.writeFileSync(path.join(dir,`ui-map-${label}-${width}.png`),(await win.webContents.capturePage()).toPNG());
-   const menus=await win.webContents.executeJavaScript(`(()=>{const ui=__game.ui,rows=[];for(const method of ['toggleInventory','toggleCharSheet','toggleTree']){ui.hideAll();const t=performance.now();ui[method]();const ms=performance.now()-t;const panels=[...document.querySelectorAll('.panel:not(.hidden)')].map(el=>{const r=el.getBoundingClientRect();return{id:el.id,width:r.width,height:r.height,left:r.left,top:r.top}});rows.push({method,ms,panels})}ui.hideAll();return rows})()`);
+   const menus=await win.webContents.executeJavaScript(`(async()=>{const ui=__game.ui,rows=[];for(const method of ['toggleInventory','toggleCharSheet','toggleTree']){ui.hideAll();const t=performance.now();ui[method]();const ms=performance.now()-t;const roots=[...document.querySelectorAll('.panel:not(.hidden)')],anchors=roots.map(el=>el.querySelector('h2'));let unstableFrames=0;const end=performance.now()+650;while(performance.now()<end){await new Promise(requestAnimationFrame);if(roots.some((el,i)=>!el.isConnected||el.classList.contains('hidden')||el.querySelector('h2')!==anchors[i]))unstableFrames++;}const panels=roots.map(el=>{const r=el.getBoundingClientRect();return{id:el.id,width:r.width,height:r.height,left:r.left,top:r.top}});rows.push({method,ms,unstableFrames,panels})}ui.hideAll();return rows})()`);
    row.menus=menus;
   }
   fs.writeFileSync(path.join(dir, `ui-perf-${label}.json`), JSON.stringify(out,null,2));
   assert.ok(out.scenarios.every(s=>s.ready), 'base chart finishes');
+  assert.ok(out.scenarios.every(s=>s.blankFrames===0&&s.replacedCharts===0&&s.stableSvg), 'live refreshes keep the visible chart mounted without blank frames');
+  assert.ok(out.scenarios.every(s=>s.staleOverlays===0&&s.stableControls&&s.togglesOnce), 'live overlays update while controls stay mounted and fire once');
+  assert.ok(out.scenarios.every(s=>s.styleCleared&&s.dimensionCleared&&s.restored), 'incompatible views clear immediately and the surface chart restores');
   assert.ok(out.scenarios.every(s=>s.eventP95<limits.maxInputP95Ms*cpu), 'map input meets the main-thread allowance');
   assert.ok(out.scenarios.every(s=>s.dragMoved&&s.dragReleased), 'touch pan and cancel stay usable');
   assert.ok(out.scenarios.every(s=>Math.max(...s.image)<=limits.maxRasterPx), 'decoded images respect the memory cap');
   assert.ok(out.scenarios.every(s=>Math.min(s.chart.w,s.chart.h)>=limits.minChartSide), 'small-screen chart remains useful');
   assert.ok(out.scenarios.every(s=>s.panel.x>=-1&&s.panel.y>=-1&&s.panel.x+s.panel.w<=s.width+1&&s.panel.y+s.panel.h<=s.height+1), 'map panel stays on screen');
   assert.ok(out.scenarios.every(s=>s.menus.every(m=>m.panels.every(p=>p.left>=-1&&p.top>=-1&&p.left+p.width<=s.width+1&&p.top+p.height<=s.height+1))), 'inventory, character and passive panels stay on screen');
+  assert.ok(out.scenarios.every(s=>s.menus.every(m=>m.unstableFrames===0)), 'idle inventory, character and passive panels remain mounted through auto-refresh');
  } finally { win.destroy(); server.server.close(); app.quit(); }
 }).catch(e=>{console.error(e?.stack??String(e));app.exit(1)});

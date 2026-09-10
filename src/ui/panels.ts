@@ -712,6 +712,7 @@ export class UI {
   private atlasInputsMemo = new AtlasInputCache<AtlasChartInput>();
   private atlasInteractionUntil = 0;
   private atlasContext = '';
+  private atlasWorld: World | null = null;
   /** The last label markup the atlas layer printed (the in-place sync compares). */
   private atlasLabelsHtml = '';
   /** The raster keys the atlas layer shows (base / zoom window). */
@@ -743,7 +744,7 @@ export class UI {
   /** Last markup written per live-refreshed panel (setPanelHtml): an UNCHANGED
    *  rebuild is skipped whole — no teardown under the cursor, no tooltip
    *  anchor torn mid-read, no listener re-wiring, no GC churn, twice a second. */
-  private panelHtml = new WeakMap<HTMLElement, string>();
+  private panelHtml = new WeakMap<Element, string>();
   /** THE COUCH LENS (data/couch.ts): per-player panels remember which LOCAL
    *  seat opened them — the refresh renders THAT seat's data and the panel
    *  docks to that seat's flank. No entry = the local hero, and solo play
@@ -1065,7 +1066,7 @@ export class UI {
    *  standing DOM (hover states, tooltip anchors, wired listeners) instead
    *  of tearing it out under the cursor. Returns whether the DOM was
    *  (re)built, so callers re-wire handlers exactly when new nodes exist. */
-  private setPanelHtml(el: HTMLElement, html: string): boolean {
+  private setPanelHtml(el: Element, html: string): boolean {
     if (this.panelHtml.get(el) === html && el.childElementCount > 0) return false;
     this.panelHtml.set(el, html);
     el.innerHTML = html;
@@ -8291,8 +8292,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       }
     }
 
-    // Preserve the side-box scroll across the wholesale rebuild — else the 0.5s
-    // auto-refresh snaps a pinned, scrolled list back to the top twice a second.
+    // Preserve side-box scroll when its live contents change.
     const prevAsideScroll = this.worldMap.querySelector<HTMLElement>('#map-aside')?.scrollTop ?? 0;
     // The SVG ASSEMBLY enforces the interactivity contract STRUCTURALLY: every
     // layer but the nodes rides a pointer-events:none group (under: ocean/
@@ -8309,31 +8309,51 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
             <button class="map-zoom" data-mz="reset" title="reset zoom">100%</button>
             <button class="map-zoom" data-mz="in" title="zoom in">＋</button>
           </span>
-          &nbsp; ${visited.size} charted · <span style="color:#5ad8d8">◆</span> = travel</span></h2>
-      ${this.mapTabsHtml()}
-      <div style="font-size:11px;color:#9ab0c8;margin:-4px 0 6px 0">${world.sim.hudLine(world.zone, world.time)}
+          &nbsp; <span id="map-charted"></span> charted · <span style="color:#5ad8d8">◆</span> = travel</span></h2>
+      <div id="map-tabs"></div>
+      <div style="font-size:11px;color:#9ab0c8;margin:-4px 0 6px 0"><span id="map-status"></span>
         <span style="color:#6a6a78"> · scroll to zoom, drag to pan · hover a zone, click to pin</span></div>
-      ${this.mapLayerChipsHtml(chipLayers, painted ? ATLAS_LAYER_CHIPS : [])}
-      ${lens.cursorRead ? '<div id="map-here" style="font-size:10px;color:#8a8678;margin:-3px 0 5px 0;height:13px;line-height:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>' : ''}
+      <div id="map-chips"></div>
+      <div id="map-here" style="font-size:10px;color:#8a8678;margin:-3px 0 5px 0;height:13px;line-height:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" hidden></div>
       <div class="map-body">
-        <svg id="world-map-svg" viewBox="0 0 100 100" style="cursor:var(--cursor-grab, grab);touch-action:none"><g id="atlas-layer" pointer-events="none"><image id="atlas-base" preserveAspectRatio="none" display="none"/><image id="atlas-window" preserveAspectRatio="none" display="none"/></g>${veilClip ? `<defs><clipPath id="map-veil-clip">${veilClip}</clipPath></defs>` : ''}<g pointer-events="none"${veilClip ? ' clip-path="url(#map-veil-clip)"' : ''}>${ocean}${simUnder}</g><g pointer-events="none">${edges}${stubs}</g>${nodes}<g pointer-events="none">${markers}${simOver}</g><g id="atlas-labels" pointer-events="none"></g><g pointer-events="none">${cards}</g></svg>
+        <svg id="world-map-svg" viewBox="0 0 100 100" style="cursor:var(--cursor-grab, grab);touch-action:none"><g id="atlas-layer" pointer-events="none"><image id="atlas-base" preserveAspectRatio="none" display="none"/><image id="atlas-window" preserveAspectRatio="none" display="none"/></g><defs><clipPath id="map-veil-clip"></clipPath></defs><g id="map-under" pointer-events="none"></g><g id="map-links" pointer-events="none"></g><g id="map-nodes"></g><g id="map-over" pointer-events="none"></g><g id="atlas-labels" pointer-events="none"></g><g id="map-cards" pointer-events="none"></g></svg>
         <aside id="map-aside"></aside>
       </div>`;
-    // THE STANDING CHART: the html above carries NO transient state — no
-    // viewBox, no zoom %, no hover, no side-box text, no raster — so it
-    // changes only when the KNOWN graph does. Everything live is synced IN
-    // PLACE on the standing SVG by syncMapLive, rebuilt or not.
+    // Keep the shell, SVG, decoded terrain and controls mounted. Live weather,
+    // clock text, pins and graph growth update only their own sections; none
+    // may tear down the chart and wait for a deferred tick to put it back.
     const rebuilt = this.setPanelHtml(this.worldMap, html);
-    this.syncMapLive(world, prevAsideScroll);
-    if (!rebuilt) return;
-
-    this.worldMap.querySelectorAll<SVGElement>('.wp-node').forEach(el => {
-      el.addEventListener('click', () => {
-        if (world.travelToWaypoint(el.dataset.wp!)) this.refreshMap();
+    if (rebuilt) this.atlasLabelsHtml = '';
+    const section = (id: string, markup: string): boolean =>
+      this.setPanelHtml(this.worldMap.querySelector(`#${id}`)!, markup);
+    const text = (id: string, value: string): void => {
+      const el = this.worldMap.querySelector(`#${id}`)!;
+      if (el.textContent !== value) el.textContent = value;
+    };
+    text('map-charted', String(visited.size));
+    text('map-status', world.sim.hudLine(world.zone, world.time));
+    this.worldMap.querySelector<HTMLElement>('#map-here')!.hidden = !lens.cursorRead;
+    if (section('map-tabs', this.mapTabsHtml())) this.wireMapTabs(this.worldMap.querySelector('#map-tabs')!);
+    if (section('map-chips', this.mapLayerChipsHtml(chipLayers, painted ? ATLAS_LAYER_CHIPS : []))) {
+      this.wireMapTabs(this.worldMap.querySelector('#map-chips')!);
+    }
+    section('map-veil-clip', veilClip);
+    const under = this.worldMap.querySelector('#map-under')!;
+    if (veilClip) under.setAttribute('clip-path', 'url(#map-veil-clip)');
+    else under.removeAttribute('clip-path');
+    section('map-under', ocean + simUnder);
+    section('map-links', edges + stubs);
+    section('map-over', markers + simOver);
+    section('map-cards', cards);
+    if (section('map-nodes', nodes)) {
+      this.worldMap.querySelectorAll<SVGElement>('.wp-node').forEach(el => {
+        el.addEventListener('click', () => {
+          if (this.getWorld().travelToWaypoint(el.dataset.wp!)) this.refreshMap();
+        });
       });
-    });
-    this.wireMapControls();
-    this.wireMapTabs();
+    }
+    this.syncMapLive(world, prevAsideScroll);
+    if (rebuilt) this.wireMapControls();
   }
 
   /** THE STANDING CHART's live sync — everything the map's html deliberately
@@ -8344,6 +8364,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   private syncMapLive(world: World, asideScroll: number): void {
     const svg = this.worldMap.querySelector<SVGSVGElement>('#world-map-svg');
     if (!svg) return;
+    this.resetAtlasContext(svg, world);
     svg.setAttribute('viewBox', this.mapViewBox());
     const lbl = this.worldMap.querySelector<HTMLElement>('[data-mz="reset"]');
     if (lbl) lbl.textContent = mapZoomLabel(this.mapZoom);
@@ -8456,11 +8477,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!base || !win || !labels) return;
     const world = this.getWorld();
     const painted = this.getSettings().mapChart === 'painted';
-    const atlasContext = `${this.mapDimension}/${world.sim.biomeField.fieldSeed}/${MAP_LENS.omniscient}`;
-    if (atlasContext !== this.atlasContext) {
-      this.atlasContext = atlasContext; this.atlasShown = { base: '', window: '' };
-      base.removeAttribute('href'); win.removeAttribute('href');
-    }
+    this.resetAtlasContext(svg, world);
     const inputs = painted ? this.atlasInputs(world, this.mapDimension) : null;
     if (!inputs) {
       base.setAttribute('display', 'none');
@@ -8508,6 +8525,19 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     }
     if (html !== this.atlasLabelsHtml) { labels.innerHTML = html; this.atlasLabelsHtml = html; }
     if (building) this.scheduleAtlasTick();
+  }
+
+  /** Incompatible views clear immediately, before the deferred painter runs.
+   *  Ordinary refreshes preserve the displayed pixels and labels. */
+  private resetAtlasContext(svg: SVGSVGElement, world: World): void {
+    const context = `${this.mapDimension}/${world.sim.biomeField.fieldSeed}/${MAP_LENS.omniscient}/${this.getSettings().mapChart}/${atlasRevision()}`;
+    if (this.atlasWorld === world && this.atlasContext === context) return;
+    this.atlasWorld = world; this.atlasContext = context;
+    this.atlasShown = { base: '', window: '' }; this.atlasLabelsHtml = '';
+    for (const el of svg.querySelectorAll('#atlas-base, #atlas-window')) {
+      el.removeAttribute('href'); el.setAttribute('display', 'none');
+    }
+    svg.querySelector('#atlas-labels')!.replaceChildren();
   }
 
   /** One bounded painter tick: advance the job in flight and re-sync the
@@ -8574,14 +8604,14 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     return `<div class="book-tabs" style="margin:2px 0 6px 0">${tab('map', 'Map')}${tab('quests', 'Quests')}${dims}</div>`;
   }
 
-  private wireMapTabs(): void {
-    this.worldMap.querySelectorAll<HTMLButtonElement>('.book-tab[data-mtab]').forEach(btn => {
+  private wireMapTabs(root: ParentNode = this.worldMap): void {
+    root.querySelectorAll<HTMLButtonElement>('.book-tab[data-mtab]').forEach(btn => {
       btn.addEventListener('click', () => { this.mapTab = btn.dataset.mtab as 'map' | 'quests'; this.refreshMap(); });
     });
-    this.worldMap.querySelectorAll<HTMLButtonElement>('.book-tab[data-mdim]').forEach(btn => {
+    root.querySelectorAll<HTMLButtonElement>('.book-tab[data-mdim]').forEach(btn => {
       btn.addEventListener('click', () => { this.mapDimension = btn.dataset.mdim!; this.refreshMap(); });
     });
-    this.worldMap.querySelectorAll<HTMLButtonElement>('button[data-mlayer]').forEach(btn => {
+    root.querySelectorAll<HTMLButtonElement>('button[data-mlayer]').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = btn.dataset.mlayer!;
         if (this.mapLayersOff.has(id)) this.mapLayersOff.delete(id); else this.mapLayersOff.add(id);
@@ -8591,7 +8621,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // THE WASH SLIDER: live-tune the standing SVG's filter slope (no rebuild
     // under the pointer — the auto-refresh holds while dragging), persist on
     // release. The filter is always mounted, so every input lands instantly.
-    const washEl = this.worldMap.querySelector<HTMLInputElement>('#map-wash-mul');
+    const washEl = root.querySelector<HTMLInputElement>('#map-wash-mul');
     if (washEl) {
       washEl.addEventListener('pointerdown', () => { this.mapWashDragging = true; });
       washEl.addEventListener('input', () => {
@@ -8803,9 +8833,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     return `${(view.cx - view.side / 2).toFixed(1)} ${(view.cy - view.side / 2).toFixed(1)} ${view.side.toFixed(1)} ${view.side.toFixed(1)}`;
   }
 
-  /** Wire the map's zoom buttons + wheel-zoom + drag-pan onto the freshly
-   *  rendered SVG. All listeners live ON THE SVG (re-created each refresh, so the
-   *  old ones are GC'd — no leak), and pointer-capture keeps a drag alive off the
+  /** Wire the map's zoom buttons + wheel-zoom + drag-pan once per mounted
+   *  shell. All gesture listeners live ON THE SVG, and pointer-capture keeps a drag alive off the
    *  edge, so we never attach a leaky window-level listener. Gesture rules
    *  (pan buttons, chord/capture-loss self-healing) live in attachPanZoom —
    *  the self-healing is what guarantees mapDragging always returns to false,
@@ -8881,8 +8910,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       onDragState: (d) => { this.mapDragging = d; },
     }, { ...PANZOOM_DEFAULTS, minZoom: Number.MIN_VALUE, maxZoom: 1 });
 
-    // UNPIN via the box's "unpin" affordance (delegated on the aside, which is
-    // recreated each refresh so the listener GC's with it — no leak).
+    // UNPIN via the box's "unpin" affordance (delegated once on the aside,
+    // retained with the map shell).
     const aside = this.worldMap.querySelector<HTMLElement>('#map-aside');
     aside?.addEventListener('click', (e) => {
       if ((e.target as Element).closest('[data-unpin]')) { this.pinnedZone = null; this.refreshMap(); }

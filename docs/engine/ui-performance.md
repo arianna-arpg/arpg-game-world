@@ -40,6 +40,29 @@ Add `--cpu=4` to exercise a slower CPU. Gates live in
 The offscreen UI harness measures handler/painter work, not phone GPU performance.
 Run timing comparisons without simultaneous builds or other performance tests.
 
+### Visual stability regression
+
+Live map status and weather used to replace the entire panel, including its
+decoded terrain images. Deferring the painter then left a blank chart between
+that refresh and the next painter tick. The map now retains its shell, SVG,
+terrain, labels and controls, updating only changed sections. Clock text and
+moving overlays cannot unmount the chart. Dimension, world, chart-style and
+atlas-reset boundaries clear incompatible terrain immediately. Returning from
+the quest page also restores the atlas labels onto the new map shell.
+
+The UI harness now changes status and overlay content repeatedly, sampling
+immediately and on animation frames for missing terrain and replaced chart
+nodes. It also checks overlay freshness, retained controls, single-fire layer
+toggles, chart-style/dimension clearing and restoration, and idle inventory,
+character-sheet and passive-tree stability across the auto-refresh interval.
+These checks gate alongside input latency and small-screen bounds.
+
+The September 10 reproduction caught 15–16 empty-chart samples out of 16 per
+viewport before the fix. Afterward all three viewports retained their charts,
+with zero missing-image samples at normal and four-times CPU throttling. The
+idle panel checks also passed. These are DOM/frame lifecycle checks in Chromium,
+not a guarantee against every graphics-driver or device-specific artifact.
+
 `npm run probe -- atlasbudget` checks bounded allocations, cache ownership,
 sparse reveal, identical pixels across work budgets, fog preservation, skipped
 hidden painters, asynchronous cancellation, and image URL lifetime.
