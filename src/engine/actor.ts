@@ -26,6 +26,8 @@ import { evalCurve, type CurveKind } from './curves';
 import { CHARGE_DEFS } from './charges';
 import { gaugeEffOf, gaugeNote, gaugeReady, gaugeTick, type GaugeEff } from './gauge'; // THE GAUGE FABRIC
 import type { TuneSpec } from './tuning';
+import { replenishingDelivery } from './replenishment';
+import { instanceDelivery } from './skills'; // summon-tree reservation preview
 import type { SquishSpec } from './squish';
 import type { ClingSpec, ClingRide } from './cling';
 import type { CreepSource } from './creep';
@@ -3504,6 +3506,7 @@ export class Actor {
    * costToLife moves the mana portion onto life; costToMana the reverse.
    */
   skillCost(inst: SkillInstance): { mana: number; life: number } {
+    if (replenishingDelivery(inst)) return { mana: 0, life: 0 };
     const tags = skillContextTags(inst.def);
     const extra = instanceMods(inst);
     // Flat adders (Mana Feeder's teeth on cheap skills) and pool-scaled
@@ -3813,6 +3816,7 @@ export class Actor {
   }
 
   canUse(inst: SkillInstance): boolean {
+    if (replenishingDelivery(inst)) return false;
     if (this.tagsForbidden(inst)) return false;
     // HOLD COMBOS: a held cast (guard / channel / charge / overcharge) is
     // not "busy" for everything —
@@ -3925,7 +3929,7 @@ export class Actor {
     // Persistent summons must also be able to afford their reservation,
     // unless casting will evict an existing contract anyway. Toggled
     // contracts price the WHOLE slot block (reserve × effective maxActive).
-    const d = inst.def.delivery;
+    const d = instanceDelivery(inst); // summon-tree cap must price the real reservation
     if (d.type === 'summon' && d.persistent) {
       const tags2 = skillContextTags(inst.def);
       const extra2 = instanceMods(inst);

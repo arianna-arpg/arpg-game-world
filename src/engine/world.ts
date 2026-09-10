@@ -13,6 +13,7 @@ import { biomeFrontierTarget, escarpmentConnection } from './worldgen';
 import { atlasDestinationAt } from '../world/locales';
 import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, randInt, vec, type Vec2 } from '../core/math';
 import { DiscIndex } from './spatial';
+import { ReplenishmentClocks, replenishingDelivery, replenishShape } from './replenishment';
 import { ActorGrid } from './actorGrid';
 import { erraticTurn, spinOffset, weaveOffset, weaveVel } from './flight';
 import { FOURTH_WALL_CFG, type ViewRect, fallbackRect, frameReflect, rectCenter } from './fourthwall';
@@ -22011,6 +22012,7 @@ export class World {
     if (why) { this.failNote(p, skillId + ':fontreset', why); return false; }
     const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
     if (!this.spendAbilityEssence(seat, cost, 'fontreset:' + skillId)) return false;
+    this.clearSummonTreeBodies(p, inst);
     inst.treeNodes = undefined;
     // The refund is FULL-TREE by law (never node-wise — partial refunds
     // breed prerequisite paradoxes); the derived graft lane unmakes with it.
@@ -31399,6 +31401,7 @@ export class World {
     }
     const why = this.swapRefusal(seat, 'socket');
     if (why) { this.failNote(seat.actor, skillId + ':treepick', why); return; }
+    if (node.over?.summon) this.clearSummonTreeBodies(seat.actor, inst);
     inst.treeNodes = [...(inst.treeNodes ?? []), nodeId];
     // A spent point may carry a graft — the derived lane rebuilds now.
     this.recalcSeat(seat);
@@ -31516,6 +31519,10 @@ export class World {
    * answer only to seats, so AI re-presses can never thrash a toggle.
    */
   useSkill(caster: Actor, inst: SkillInstance, aim: Vec2, seatPress = false): boolean {
+    if (replenishingDelivery(inst)) {
+      if (seatPress) this.failNote(caster, inst.def.id + ':replenish', 'replenishes while on your bar');
+      return false;
+    }
     this.markSeatActed(caster); // a cast/attack interrupts THAT seat's dwell
     // HELD FAST (the grab fabric): a body in someone's grip cannot cast —
     // except the reflex lane (flasks are never locked out) — and every
@@ -32373,6 +32380,8 @@ export class World {
       ventRounds?: number;
     } = {},
   ): boolean {
+    // Replenishment is a birth clock, never an echo/trigger/proc cast.
+    if (replenishingDelivery(inst)) return false;
     const def = inst.def;
     const extra = instanceMods(inst);
     SIM_TAP.current?.onCast?.(caster, inst, !!opts.noRepeat);
@@ -36842,10 +36851,9 @@ export class World {
   ): Actor | null {
     // SOVEREIGNTY: seat — the summon's story is stamped and clamped (the derived census, probe_tiers RIG T).
     // A support's summon graft (Vessel of Shadow) supplies the delivery when
-    // the host skill's own isn't a summon. (Skill-mode audit: summon fields
-    // are off the M1 whitelist — the summon_skeleton/flame_totem waves
-    // adopt this read behind the view when they land.)
-    const d = overrides?.delivery ?? inst.def.delivery;
+    // the host skill's own isn't a summon. Summon-tree fields, including
+    // replenishment lifespan and cap, use the same resolved view as casts.
+    const d = overrides?.delivery ?? instanceDelivery(inst);
     if (d.type !== 'summon') return null;
     const tags = skillContextTags(inst.def);
     const extra = instanceMods(inst);
@@ -39663,10 +39671,11 @@ export class World {
    * dealing a fraction of its max life as fire damage to nearby enemies.
    */
   explodeActor(minion: Actor, fraction: number, opts?: { type?: DamageType; color?: string }): void {
-    const dmg = minion.maxLife() * fraction;
-    const radius = 45 + minion.radius * 2;
+    // The sourceActor carries minion damage, conversion and kill credit.
     const type = opts?.type ?? 'fire';
-    this.burstDamage(vec(minion.pos.x, minion.pos.y), radius, dmg, type, opts?.color ?? DAMAGE_COLOR[type], minion.team);
+    const dmg = minion.maxLife() * fraction * minion.sheet.get('damage', new Set<SkillTag>(['aoe', type]));
+    const radius = 45 + minion.radius * 2;
+    this.burstDamage(vec(minion.pos.x, minion.pos.y), radius, dmg, type, opts?.color ?? DAMAGE_COLOR[type], minion.team, minion.tier, minion);
   }
 
   /** Direct radial BLAST (the shared payload for explodeActor + the death-burst detonations).
@@ -39675,21 +39684,28 @@ export class World {
    *  damageTaken, and the shield-soak chain) — never true damage, so the player can dress
    *  resistances/armor against it. State is pre-baked (pos/dmg/team) so it works after the
    *  source actor is gone; the colour IS the damage-type tell (DAMAGE_COLOR). */
-  private burstDamage(pos: Vec2, radius: number, dmg: number, type: DamageType, color: string, sourceTeam: Team, sourceTier = 0): void {
+  private burstDamage(pos: Vec2, radius: number, dmg: number, type: DamageType, color: string, sourceTeam: Team, sourceTier = 0, sourceActor?: Actor): void {
     for (const e of this.actors) {
       if (!this.isBurstTarget(e, sourceTeam, sourceTier)) continue;
+      if (sourceActor && !this.hostileTo(sourceActor, e)) continue;
       if (dist(pos, e.pos) - e.radius > radius) continue;
       const out: { clamped?: boolean } = {};
-      const taken = mitigateTyped(e, { [type]: dmg }, { out });
-      e.life -= taken;
-      e.hitFlash = 0.15;
-      e.hitFlashType = type;
+      const packet: DamagePacket = { amounts: { [type]: dmg }, crit: false,
+        tags: new Set<SkillTag>(['aoe', type]), sourceName: sourceActor?.summonInst?.def.name ?? sourceActor?.name ?? 'Explosion' };
+      if (sourceActor) applyConversion(sourceActor, packet.amounts, packet.tags);
+      const result = sourceActor ? applyHit(sourceActor, e, packet) : undefined;
+      const taken = result ? result.total : mitigateTyped(e, packet.amounts, { out });
+      if (!sourceActor) {
+        e.life -= taken;
+        e.hitFlash = 0.15;
+        e.hitFlashType = type;
+      }
       this.text(e.pos, Math.round(taken).toString(), color, 14);
       // The burst lane prints its own number, so it carries its own capped
       // read — this is the resolveHit-bypassing path the cap must still
       // speak on (cast honesty holds on every lane that prints).
-      if (out.clamped) this.text(vec(e.pos.x, e.pos.y - 20), 'capped', '#9ab0c8', 12);
-      if (e.life <= 0 && !e.dead) this.kill(e);
+      if (out.clamped || result?.clamped) this.text(vec(e.pos.x, e.pos.y - 20), 'capped', '#9ab0c8', 12);
+      if (e.life <= 0 && !e.dead) this.kill(e, false, sourceActor);
     }
     this.flashes.push({ pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35 });
     // THE MALLET, ownerless: a baked blast rings EVERY side's bells and
@@ -46508,6 +46524,7 @@ export class World {
     this.updatePendingSummons(dt);
     this.updatePendingRespawns(dt);
     this.updateSummonContracts();
+    this.updateReplenishment(dt);
     this.updatePendingBlinks(dt);
     this.checkMinionDetonations();
     this.separateActors();
@@ -53342,7 +53359,7 @@ export class World {
     for (const a of this.actors) {
       if (a.dead || !a.summonToggles.size) continue;
       for (const [id, t] of a.summonToggles) {
-        const d = t.inst.def.delivery;
+        const d = instanceDelivery(t.inst); // summon-tree cap also prices contracts
         if (d.type !== 'summon' || !d.persistent) continue;
         const tags = skillContextTags(t.inst.def);
         const extra = instanceMods(t.inst);
@@ -53384,6 +53401,52 @@ export class World {
           });
         }
       }
+    }
+  }
+
+  private replenishment = new ReplenishmentClocks();
+
+  /** Tree identity changes retire the old births silently, so permanent
+   *  bodies cannot survive resetting into a temporary-body branch. */
+  private clearSummonTreeBodies(caster: Actor, inst: SkillInstance): void {
+    if (inst.def.delivery.type !== 'summon' || !inst.def.tree) return;
+    this.replenishment.forget(caster, inst);
+    for (const body of [...this.actors]) if (!body.dead && body.owner === caster && body.summonInst === inst) {
+      this.releaseContract(body, false);
+      this.kill(body, true);
+    }
+    this.pendingSummons = this.pendingSummons.filter(p => p.caster !== caster || p.inst !== inst);
+    this.pendingRespawns = this.pendingRespawns.filter(p => p.caster !== caster || p.inst !== inst);
+  }
+
+  /** Replenish only bar-seated skills, using the ordinary owned-minion birth.
+   *  No cast state, payment, cooldown, replacement kill or catch-up volley. */
+  private updateReplenishment(dt: number): void {
+    for (const caster of [...this.actors]) {
+      if (caster.dead || caster.downed || !caster.skills.some(inst => inst && replenishingDelivery(inst))) {
+        this.replenishment.forget(caster);
+        continue;
+      }
+      const entries: { inst: SkillInstance; interval: number; room: number; count: number }[] = [];
+      for (const inst of new Set(caster.skills)) {
+        if (!inst) continue;
+        const d = replenishingDelivery(inst);
+        if (!d || d.persistent || d.decay || d.waves || d.fromCorpse
+          || !Number.isFinite(d.replenish!.interval) || d.replenish!.interval <= 0
+          || instanceTargeting(inst)?.target === 'corpse'
+          || caster.isStunned() || caster.tagsForbidden(inst) || this.castReqRefusal(caster, inst)) continue;
+        const shape = replenishShape(caster, inst, d);
+        const alive = d.poolGroup ? this.minionsOfGroup(caster, d.poolGroup) : this.minionsOfSkill(caster, inst.def.id);
+        entries.push({ inst, interval: shape.interval, count: shape.count, room: shape.cap - alive.length });
+      }
+      this.replenishment.update(caster, entries, dt * this.timeflow.actorScale(caster), (inst, count) => {
+        // Earlier batches this tick may have filled a shared pool. Re-read
+        // its room at birth so two replenishing skills never evict each other.
+        const d = replenishingDelivery(inst)!;
+        const alive = d.poolGroup ? this.minionsOfGroup(caster, d.poolGroup) : this.minionsOfSkill(caster, inst.def.id);
+        const room = replenishShape(caster, inst, d).cap - alive.length;
+        for (let n = 0; n < Math.min(count, room); n++) this.spawnMinion(caster, inst);
+      });
     }
   }
 
@@ -54005,6 +54068,7 @@ export class World {
    *  (rule 3), the cast-time gate applies unless a permit rides beside
    *  the trigger (rule 2), and cooldown/cost must clear (rule 5). */
   private triggerEligible(owner: Actor, inst: SkillInstance): boolean {
+    if (replenishingDelivery(inst)) return false;
     const def = inst.def;
     if (def.channel || def.castMode === 'guard'
       || def.delivery.type === 'aura' || def.delivery.type === 'dash'

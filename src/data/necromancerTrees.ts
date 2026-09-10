@@ -1,0 +1,46 @@
+import type { SkillTreeSpec } from '../engine/skills';
+import { mod } from '../engine/stats';
+
+/** Necromancer tree batches. Every payload uses shared summon/stat grammar. */
+export const NECROMANCER_TREES: Record<string, SkillTreeSpec> = {
+  shambler_horde: {
+    level: 5,
+    nodes: [
+      { id: 'wandering_dead', name: 'Wandering Dead', kind: 'keystone',
+        description: 'While on your bar, freely raise one shambler every 3 seconds, up to 4. They follow you until they see a foe, then rush in and burst. They never expire. Replaces manual casting; 35% less minion life.',
+        excludes: ['grave_rush', 'corpse_engine'], x: -195, y: -65,
+        over: { summon: { count: 1, maxActive: 4, duration: 0, replenish: { interval: 3 } } },
+        mods: [mod('minionLife', 'more', -0.35), mod('minionMoveSpeed', 'increased', 0.6)] },
+      { id: 'restless_graves', name: 'Restless Graves', links: ['wandering_dead'], x: -325, y: -130,
+        description: 'Replenish 25% sooner. A full horde never replaces its waiting dead.',
+        mods: [mod('minionRespawnTime', 'more', -0.25)] },
+      { id: 'gathering_dead', name: 'Gathering Dead', links: ['wandering_dead'], ranks: 2, x: -325, y: 0,
+        description: 'Two more shamblers may wait in the horde per rank.',
+        mods: [mod('minionMaxCount', 'flat', 2)] },
+      { id: 'grave_rush', name: 'Grave Rush', kind: 'major',
+        description: 'Raise two fast shamblers per cast, up to 8. They expire after 4 seconds. 20% less minion life and 35% more mana cost.',
+        excludes: ['corpse_engine'], x: 0, y: -195,
+        over: { summon: { count: 2, maxActive: 8, duration: 4 } },
+        mods: [mod('minionMoveSpeed', 'increased', 0.85), mod('minionLife', 'more', -0.2), mod('manaCost', 'more', 0.35)] },
+      { id: 'press_the_attack', name: 'Press the Attack', links: ['grave_rush'], x: -65, y: -325,
+        description: 'Cast 20% faster and recover the cooldown 20% faster.',
+        mods: [mod('castSpeed', 'increased', 0.2), mod('cooldownRecovery', 'increased', 0.2)] },
+      { id: 'funeral_charge', name: 'Funeral Charge', links: ['grave_rush'], x: 65, y: -325,
+        description: 'Raise one additional shambler per cast, with two more active slots. 20% more mana cost.',
+        mods: [mod('summonCount', 'flat', 1), mod('minionMaxCount', 'flat', 2), mod('manaCost', 'more', 0.2)] },
+      { id: 'corpse_engine', name: 'Corpse Engine', kind: 'major', x: 195, y: -65,
+        description: 'Raise one heavy corpse per cast, up to 2, lasting 14 seconds. 80% more minion life feeds its death blast; 20% slower movement and 40% more mana cost.',
+        over: { summon: { count: 1, maxActive: 2, duration: 14 } },
+        mods: [mod('minionLife', 'more', 0.8), mod('minionMoveSpeed', 'more', -0.2), mod('manaCost', 'more', 0.4)] },
+      { id: 'packed_flesh', name: 'Packed Flesh', links: ['corpse_engine'], ranks: 2, x: 325, y: -130,
+        description: '25% increased minion life per rank: a tougher body and a heavier blast.',
+        mods: [mod('minionLife', 'increased', 0.25)] },
+      { id: 'relentless_engine', name: 'Relentless Engine', links: ['corpse_engine'], x: 325, y: 0,
+        description: '35% increased minion movement speed helps the heavy corpse reach its mark.',
+        mods: [mod('minionMoveSpeed', 'increased', 0.35)] },
+      { id: 'stitched_flesh', name: 'Stitched Flesh', ranks: 2, x: 0, y: 130,
+        description: '15% increased minion life per rank. Open to every path.',
+        mods: [mod('minionLife', 'increased', 0.15)] },
+    ],
+  },
+};

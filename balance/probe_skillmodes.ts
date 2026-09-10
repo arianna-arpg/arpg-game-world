@@ -128,7 +128,8 @@ check('A: the deepening rungs RE-PIN their identity (the re-pin law)',
 // takes every wearer, ids unique, every node root-reachable, THE COVER LAW
 // (each limb's terminal walk + the lock-free ground absorbs the cap
 // budget), and the payload whitelist on every graph node.
-const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel']);
+const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon']);
+const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish']);
 const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
 let censusBad = '';
 let treeWearers = 0;
@@ -162,6 +163,9 @@ for (const def of Object.values(SKILLS)) {
     }
     for (const m of n.mods ?? []) {
       if (!STAT_DEFS[m.stat]) censusBad += ` ${def.id}/${n.id}:mod-stat-${m.stat}-unknown`;
+    }
+    for (const k of Object.keys(n.over?.summon ?? {})) {
+      if (!SUMMON_KEYS.has(k)) censusBad += ` ${def.id}/${n.id}:over.summon.${k}-off-whitelist`;
     }
     if (n.graft && !SUPPORTS[n.graft.support]) censusBad += ` ${def.id}/${n.id}:graft-${n.graft.support}-unknown`;
   }

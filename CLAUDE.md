@@ -111,6 +111,12 @@ checks, the balance harness's smoke suite, and the generation QA sweep are how
 we verify changes.
 
 ## Layout
+- Necromancer tree batches: `data/necromancerTrees.ts` starts with Shambling
+  Horde's three identities. `engine/replenishment.ts` provides bar-seated,
+  bounded passive summon clocks; `over.summon` resolves count/cap/lifespan
+  through the ordinary delivery view. Exploding actors carry hit and kill
+  credit through their source. Contract and next batches:
+  `docs/design/necromancer-skill-trees.md`; probe `balance/probe_necromancertrees.ts`.
 - Reactive uniques: `engine/reception.ts` supplies defender hit conversion and
   status relays; typed `struck` procs and distinct saved finger choices reuse
   the ordinary proc/item systems. Data in `src/data/uniques/reactive.ts` and

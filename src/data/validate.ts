@@ -2071,6 +2071,10 @@ export function validateContent(): void {
   // sentence AND a respawn appointment. Skills and summon-grafting supports
   // both carry a SummonDelivery, so both are swept.
   const checkSummonContract = (src: string, d: Delivery | undefined): void => {
+    if (d?.type === 'summon' && d.replenish) {
+      if (!Number.isFinite(d.replenish.interval) || d.replenish.interval <= 0) warn(`${src}: replenish.interval must be finite and positive`);
+      if (d.persistent || d.decay || d.waves || d.fromCorpse) warn(`${src}: replenishment cannot combine with contracts, decay, waves or corpse sourcing`);
+    }
     if (d && d.type === 'summon' && d.decay && d.persistent) {
       warn(`${src}: summon carries BOTH decay and persistent (mutually exclusive — drop one)`);
     }
@@ -2880,7 +2884,8 @@ export function validateContent(): void {
   // validatePassiveChoices warn-degrade idiom). Monster tree PINS resolve
   // against the kit's own defs.
   {
-    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel']);
+    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon']);
+    const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
     const budget = bandPointsAt(MAX_SKILL_LEVEL);
@@ -2919,6 +2924,17 @@ export function validateContent(): void {
         }
         for (const k of Object.keys(n.over?.channel ?? {})) {
           if (!OVER_CHANNEL_KEYS.has(k)) warn(`${at}/${n.id}: over.channel.${k} is off the audited whitelist`);
+        }
+        const summonTree = n.over?.summon;
+        if (summonTree) {
+          for (const k of Object.keys(summonTree)) if (!SUMMON_KEYS.has(k)) warn(`${at}/${n.id}: summon.${k} is off the audited whitelist`);
+          if (def.delivery.type !== 'summon') warn(`${at}/${n.id}: summon overrides require a summon delivery`);
+          else checkSummonContract(`${at}/${n.id}`, { ...def.delivery, ...summonTree });
+          for (const k of ['count', 'maxActive', 'duration'] as const) {
+            const v = summonTree[k];
+            if (v !== undefined && (!Number.isFinite(v) || v < (k === 'duration' ? 0 : 1)
+              || (k !== 'duration' && !Number.isInteger(v)))) warn(`${at}/${n.id}: invalid summon.${k}`);
+          }
         }
         if (n.over?.arcDeg !== undefined && def.delivery.type !== 'cone' && def.delivery.type !== 'melee') {
           warn(`${at}/${n.id}: over.arcDeg on a '${def.delivery.type}' delivery — resolves inert`);

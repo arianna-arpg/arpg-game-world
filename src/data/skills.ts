@@ -13,6 +13,7 @@ import { skillGrantStat, type SkillDef } from '../engine/skills';
 import { ULTIMATE_SKILLS } from './ultimates';
 import { LIVING_SKILLS } from './livingSkills';
 import { REACTIVE_SKILLS } from './reactiveSkills';
+import { NECROMANCER_TREES } from './necromancerTrees';
 
 export const SKILLS: Record<string, SkillDef> = {
 
@@ -10520,10 +10521,11 @@ export const SKILLS: Record<string, SkillDef> = {
   // ever dropped — under the same id.)
   shambler_horde: {
     id: 'shambler_horde', name: 'Shambling Horde',
+    tree: NECROMANCER_TREES.shambler_horde,
     description: 'Raise a grave shambler at your side: a slow, mindless corpse that lurches at'
       + ' the nearest enemy and BURSTS on arrival, dealing fire damage in a ring scaled by'
-      + ' its own unlife. It lasts 7 seconds whether or not it finds a mark; up to 6 may'
-      + ' shamble at once.',
+      + ' its own unlife and minion damage. Its tree can turn it into a replenishing horde,'
+      + ' a rushing pack, or a heavy corpse engine.',
     tags: ['spell', 'summon', 'minion', 'duration'], color: '#8aa868',
     manaCost: 9, cooldown: 0.9, useTime: 0.55,
     delivery: {

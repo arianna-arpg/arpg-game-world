@@ -432,6 +432,7 @@ export function instanceAim(inst: SkillInstance): AimSpec | undefined {
 export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
   const d = inst.def.delivery;
   const over = instanceTreeOver(inst);
+  if (over?.summon && d.type === 'summon') return { ...d, ...over.summon };
   if (over?.arcDeg !== undefined && (d.type === 'cone' || d.type === 'melee')) {
     return { ...d, arcDeg: over.arcDeg };
   }
@@ -1782,6 +1783,11 @@ export interface SelfDelivery {
 
 export interface SummonDelivery {
   type: 'summon';
+  /** Passive replenishment while seated on a living actor's bar. Free births,
+   *  no casts/cast events; interval scales with minionRespawnTime. The ordinary
+   *  count and cap modifiers apply, but a full pool never evicts a body.
+   *  Incompatible with corpse targeting, contracts, decay and cast waves. */
+  replenish?: { interval: number };
   /** Fixed minion type — or use `pool` for weighted random selection. */
   monsterId?: string;
   /** Weighted pool, re-rolled per spawn (and per respawn). */
@@ -4610,6 +4616,12 @@ export const DEFAULT_LEVELING: Modifier[] = [
 // with its reason; the whitelist below may only grow alongside this
 // table):
 //   ADOPTED (the view is the read):
+//   · SUMMON TREE (Necromancer batch 1): count/maxActive/duration/replenish
+//     flow through executeSkill + spawnMinion (including pending births),
+//     Actor.canUse's contract reservation, updateSummonContracts and
+//     previewSkill. replenishingDelivery reads the same view for manual,
+//     trigger and execute gates and Actor.skillCost. Death-contract fields,
+//     pool/crew identity and placement are NOT overridden in this batch.
 //   · executeSkill body            — world.ts `const d = instanceDelivery(inst)`,
 //     ONE binding (M0); zone-payload re-entries pass it via overrides.delivery.
 //   · useSkill channel start       — world.ts `instanceChannel(inst)` feeds the
@@ -4637,7 +4649,7 @@ export const DEFAULT_LEVELING: Modifier[] = [
 //     modify fields WITHIN a delivery, never the kind of thing a skill is.
 //     castMode joins the whitelist only with its own audited adoption (the
 //     heavy_strike Flurry wave).
-//   · non-whitelisted FIELD reads (summon counts, dash width/phase, aura
+//   · non-whitelisted FIELD reads (summon pool/crew identity, dash width/phase, aura
 //     spec, pierce/forks/fire, ground pulse/cascade, delivery.range) — each
 //     is a named M2 road; its adopting wave moves its read sites behind the
 //     sibling views (instanceSummon/instanceCascadePlan/… already seam most).
@@ -4682,6 +4694,10 @@ export interface SkillTreeNode {
    *  field of its branch identity — including values equal to today's
    *  base — so the branch survives a rescale moving the base row. */
   over?: {
+    /** Summon-tree adoption: execute/spawn, pending summons, previews and
+     *  replenishment read instanceDelivery. Other summon fields stay fixed.
+     *  duration: 0 explicitly removes the birth's expiry clock. */
+    summon?: Partial<Pick<SummonDelivery, 'count' | 'maxActive' | 'duration' | 'replenish'>>;
     /** delivery.arcDeg replacement (cone/melee deliveries only). */
     arcDeg?: number;
     /** aim.random.spreadDeg replacement (random-sector aims only). */
@@ -4851,6 +4867,8 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
         ...out, ...over,
         ...(out.channel || over.channel
           ? { channel: { ...out.channel, ...over.channel } } : {}),
+        ...(out.summon || over.summon
+          ? { summon: { ...out.summon, ...over.summon } } : {}),
       }
       : over;
   }

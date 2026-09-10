@@ -29,6 +29,7 @@
 // ---------------------------------------------------------------------------
 
 import type { Actor } from './actor';
+import { replenishingDelivery, replenishShape } from './replenishment';
 import { skillDamageBands } from './damage';
 import {
   instanceDelivery, instanceMods, skillContextTags, skillCooldownSeconds, socketSpec,
@@ -122,6 +123,7 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   }
 
   // ---- cost & cadence -----------------------------------------------------
+  const replenishing = replenishingDelivery(inst);
   const cost = caster.skillCost(inst);
   if (cost.mana > 0 || cost.life > 0) {
     const parts: string[] = [];
@@ -129,13 +131,13 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     if (cost.life > 0) parts.push(`${cost.life} life`);
     push('cost', 'Cost', parts.join(' + '));
   }
-  if (def.useTime > 0) {
+  if (def.useTime > 0 && !replenishing) {
     const speed = caster.speedFactor(inst);
     push('castTime', tags.has('attack') ? 'Attack time' : 'Cast time',
       secs(def.useTime / Math.max(0.01, speed)), 'headline',
       Math.abs(speed - 1) > 0.005 ? `base ${secs(def.useTime)}` : undefined);
   }
-  if (def.cooldown > 0) {
+  if (def.cooldown > 0 && !replenishing) {
     const cd = skillCooldownSeconds(caster, inst);
     push('cooldown', 'Cooldown', secs(cd), 'headline',
       Math.abs(cd - def.cooldown) > 0.005 ? `base ${secs(def.cooldown)}` : undefined);
@@ -216,11 +218,15 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
       Math.abs(durScale - 1) > 0.005 ? `base ${secs(fx.duration)}` : undefined);
   }
   if (d.type === 'summon') {
-    const cap = Math.max(1, Math.round(get('minionMaxCount') || d.maxActive));
+    const shape = replenishShape(caster, inst, d);
+    const cap = shape.cap;
     push('minionCap', 'Minions at once', String(cap), 'headline',
       cap !== d.maxActive ? `base ${d.maxActive}` : undefined);
-    const per = d.count + Math.round(get('summonCount'));
-    if (per !== 1) push('minionPer', 'Summoned per cast', String(per), 'detail');
+    const per = shape.count;
+    if (replenishing) {
+      push('replenish', 'Passive replenishment', `${per} every ${secs(shape.interval)}`, 'headline', 'free while on your bar; pauses at the cap');
+    } else if (per !== 1) push('minionPer', 'Summoned per cast', String(per), 'detail');
+    push('minionDuration', 'Minion lifespan', d.duration ? secs(d.duration * durScale) : 'Until destroyed', 'detail');
     const plies = Math.round(get('minionPlies'));
     if (plies > 0) push('minionPlies', 'Minion plies', `+${plies}`, 'detail',
       'each ply eats one landed blow whole');

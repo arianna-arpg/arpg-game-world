@@ -8,6 +8,7 @@
 
 import { clamp, mixHex } from '../core/math';
 import { tellPortraitDress } from '../engine/tells';
+import { replenishingDelivery } from '../engine/replenishment';
 import { DEV, GAME_TITLE } from '../config';
 import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
@@ -1897,7 +1898,8 @@ export class UI {
     const granted = inst.grantedBy ? ` · granted by ${inst.grantedBy}` : '';
     return {
       title: `${d.name} — Lv ${inst.level}${branch ? ` · ${branch.name}` : ''}`,
-      description: d.description + this.previewRowsHtml(preview.rows, extended),
+      description: (replenishingDelivery(inst) ? branch?.description ?? d.description : d.description)
+        + this.previewRowsHtml(preview.rows, extended),
       meta: d.tags.join(' · ') + (charge ? ` · ${charge}` : '') + granted,
       wide: extended && preview.hasDetail,
     };
@@ -6293,8 +6295,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
             ${nextThresh ? `<span style="font-size:9px;color:#6a6478;margin-left:4px">Lv ${nextThresh.level}: ${nextThresh.label}</span>` : ''}
             ${this.rarityTagHtml(inst)}${rackSeatTag}
             <span style="color:#8a8678;font-weight:normal;font-size:10px">
-              ${this.costText(p.skillCost(inst))}${def.cooldown
-                ? `, ${this.cdText(skillCooldownSeconds(p, inst))} cd` : ''}</span>
+              ${replenishingDelivery(inst) ? 'Passive · replenishes while seated' : `${this.costText(p.skillCost(inst))}${def.cooldown
+                ? `, ${this.cdText(skillCooldownSeconds(p, inst))} cd` : ''}`}</span>
           </div>
           <div class="tags">${def.tags.join(' · ')}</div>
           <div class="bind-btns">
@@ -7280,6 +7282,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const lines: string[] = [];
     if (node.description) lines.push(node.description);
     const over = node.over;
+    const summonTree = over?.summon;
+    if (summonTree?.count !== undefined) lines.push(`${summonTree.count} summoned per birth`);
+    if (summonTree?.maxActive !== undefined) lines.push(`base active cap ${summonTree.maxActive}`);
+    if (summonTree?.duration !== undefined) lines.push(summonTree.duration ? `base lifespan ${summonTree.duration}s` : 'no lifespan limit');
+    if (summonTree?.replenish) lines.push(`passively replenishes every ${summonTree.replenish.interval}s; replaces casting`);
     const pct = (v: number): string => `${Math.round(v * 100)}%`;
     if (over?.arcDeg !== undefined) lines.push(`arc ${over.arcDeg}°`);
     if (over?.spreadDeg !== undefined) lines.push(`spread ${over.spreadDeg}°`);
