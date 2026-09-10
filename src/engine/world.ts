@@ -4510,7 +4510,7 @@ export class World {
     if (target.team !== 'enemy' || target.dead) return;
     const why = possessRefusal(target, spec);
     if (why) { this.failNote(caster, inst.def.id + ':possess', why); return; }
-    const tags = skillContextTags(inst.def, grantedTags(inst));
+    const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
     const durMul = caster.sheet.get('possessDuration', tags, extra);
     const powBonus = caster.sheet.get('possessPower', tags, extra);
@@ -4547,7 +4547,7 @@ export class World {
     form.noBounty = true;   // a projection pays no bounty however it ends
     form.pos = this.clampPos(vec(caster.pos.x, caster.pos.y), form.radius);
     this.actors.push(form);
-    const tags = skillContextTags(inst.def, grantedTags(inst));
+    const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
     const powBonus = caster.sheet.get('possessPower', tags, extra);
     const durMul = caster.sheet.get('possessDuration', tags, extra);
@@ -28356,7 +28356,7 @@ export class World {
       // corpse sought, no corpse needed; the cast targets the aim point
       // like any plain summon (the summon branch reads the form).
       if (grimoireForm(inst)) return { pos: vec(aim.x, aim.y) };
-      const tags = skillContextTags(inst.def);
+      const tags = skillContextTags(inst);
       const extra = instanceMods(inst);
       // THE WAGON: a plural spec loads up to 1 + corpseBatch bodies nearest
       // the mark in one find. Single-appetite skills keep the classic one.
@@ -28736,7 +28736,7 @@ export class World {
    *  Null when nothing on the slot banks seals — the lane stays free. */
   unleashSealsOf(caster: Actor, inst: SkillInstance): { count: number; max: number } | null {
     const max = Math.round(caster.sheet.get('unleashMax',
-      skillContextTags(inst.def), instanceMods(inst)));
+      skillContextTags(inst), instanceMods(inst)));
     if (max <= 0) return null;
     // Mid-cast the bank FREEZES at the press (the HUD shows exactly what
     // the release will spend — the bar banks nothing).
@@ -29075,7 +29075,7 @@ export class World {
     const spec = inst.def.throng;
     if (!spec) return 0;
     return Math.max(1, Math.round(keeper.sheet.get(
-      'minionMaxCount', skillContextTags(inst.def), instanceMods(inst), spec.cap)));
+      'minionMaxCount', skillContextTags(inst), instanceMods(inst), spec.cap)));
   }
 
   /** Mint one unclaimed HUSK: a planted scenery-body of the throng kind,
@@ -29109,7 +29109,7 @@ export class World {
     opts?: { pocketKey?: string; ttl?: number; tier?: number }, rng: () => number = Math.random): Actor | null {
     const original = inst.def.throng!.monsterId;
     const kind = substituteThrongKind(original, keeper, inst, rng,
-      stat => keeper.sheet.get(stat, skillContextTags(inst.def), instanceMods(inst)));
+      stat => keeper.sheet.get(stat, skillContextTags(inst), instanceMods(inst)));
     return this.mintThrongHusk(kind, pos, { ...opts, affinity: original });
   }
 
@@ -29306,7 +29306,7 @@ export class World {
    *  fraction a body. */
   private throngYieldCount(keeper: Actor, inst: SkillInstance, base: number): number {
     return Math.max(1, Math.round(base * keeper.sheet.get(
-      'throngYield', skillContextTags(inst.def), instanceMods(inst))));
+      'throngYield', skillContextTags(inst), instanceMods(inst))));
   }
 
   /** One pocket's mint: the HEART draws from the anchor's main salted
@@ -29326,7 +29326,7 @@ export class World {
     // transmutation nor its absence can move the pocket hearts or seats.
     const morphRng = new Rng(this.currentZoneSeed ^ throngSkillSalt(`${skillId}:${pocket}:morph`));
     const kind = substituteThrongKind(monsterId, keeper, inst, () => morphRng.next(),
-      stat => keeper.sheet.get(stat, skillContextTags(inst.def), instanceMods(inst)));
+      stat => keeper.sheet.get(stat, skillContextTags(inst), instanceMods(inst)));
     for (let s = 0; s < cluster; s++) {
       const ang = fork.range(0, Math.PI * 2);
       const d = fork.range(6, THRONG_CFG.pocket.scatter);
@@ -29361,7 +29361,7 @@ export class World {
     if (!anchors.size) return;
     for (const skillId of [...anchors.keys()].sort()) {
       const { inst, spec, keeper } = anchors.get(skillId)!;
-      const tags = skillContextTags(inst.def);
+      const tags = skillContextTags(inst);
       const extra = instanceMods(inst);
       const yieldMul = keeper.sheet.get('throngYield', tags, extra);
       const rng = new Rng(((this.currentZoneSeed ^ THRONG_CFG.salt) ^ throngSkillSalt(skillId)) >>> 0);
@@ -31231,7 +31231,7 @@ export class World {
       if (caster === this.player) this.failNote(caster, inst.def.id + ':slip', 'it slips the grip');
       return false;
     }
-    const grip = caster.sheet.get('gripPower', skillContextTags(inst.def), instanceMods(inst));
+    const grip = caster.sheet.get('gripPower', skillContextTags(inst), instanceMods(inst));
     const why = grabRefusal(caster, victim, spec, grip);
     if (why) {
       if (caster === this.player) this.failNote(caster, inst.def.id + ':grab', why);
@@ -31401,7 +31401,7 @@ export class World {
     }
     const why = this.swapRefusal(seat, 'socket');
     if (why) { this.failNote(seat.actor, skillId + ':treepick', why); return; }
-    if (node.over?.summon) this.clearSummonTreeBodies(seat.actor, inst);
+    if (inst.def.delivery.type === 'summon') this.clearSummonTreeBodies(seat.actor, inst);
     inst.treeNodes = [...(inst.treeNodes ?? []), nodeId];
     // A spent point may carry a graft — the derived lane rebuilds now.
     this.recalcSeat(seat);
@@ -32394,7 +32394,7 @@ export class World {
     }
     // Tags granted by socketed supports count here too: a Dive-Bombed
     // dash IS an aoe skill for every stat query this use makes.
-    const tags = skillContextTags(def, grantedTags(inst));
+    const tags = skillContextTags(inst, grantedTags(inst));
     let useMult = opts.dmgMult ?? 1;
     // THE GAUGE's POWER (engine/gauge.ts): the press stamped what this use
     // is worth — damage already rode in through dmgMult; counts (shots,
@@ -35916,7 +35916,7 @@ export class World {
       && ((t.a === a && t.b === b) || (t.a === b && t.b === a))));
     const extra = instanceMods(inst);
     const type: DamageType = spec.damageType ?? 'physical';
-    const tags = skillContextTags(inst.def, [type]);
+    const tags = skillContextTags(inst, [type]);
     const amounts: Partial<Record<DamageType, number>> = {};
     // Beam damage and width are INVESTABLE: damage × tetherDamage for the
     // dps, aoeRadius × tetherWidth for the band (yes, Widening fits a wire).
@@ -36144,7 +36144,7 @@ export class World {
     branches: number, fan = 0,
   ): void {
     const fz = d.fissure!;
-    const tags = skillContextTags(inst.def, grantedTags(inst));
+    const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
     const aoeScale = caster.sheet.get('aoeRadius', tags, extra);
     const durScale = caster.sheet.get('effectDuration', tags, extra);
@@ -36602,7 +36602,7 @@ export class World {
     const inst = minion.summonInst;
     if (scheduleRespawn && owner && !owner.dead && inst
       && inst.def.delivery.type === 'summon' && inst.def.delivery.persistent) {
-      const tags = skillContextTags(inst.def);
+      const tags = skillContextTags(inst);
       const extra = instanceMods(inst);
       const timer = inst.def.delivery.persistent.respawnTime
         * owner.sheet.get('minionRespawnTime', tags, extra);
@@ -36709,6 +36709,14 @@ export class World {
         }
       }
       this.forwardSummonSockets(inst, a.skills);
+      const d = instanceDelivery(inst);
+      if (d.type === 'summon') for (const id of d.crewAuras ?? []) {
+        const sk = a.skills.find(s => s?.def.id === id);
+        if (!sk || sk.def.delivery.type !== 'aura') continue;
+        this.deactivateAura(a, id);
+        this.activateAura(a, sk, sk.def.delivery,
+          a.sheet.get('aoeRadius', skillContextTags(sk), instanceMods(sk)));
+      }
     }
   }
 
@@ -36721,8 +36729,9 @@ export class World {
    * crew-hop audit.
    */
   summonCrewSkills(inst: SkillInstance): SummonCrew {
+    const resolved = instanceDelivery(inst);
     const d: SummonDelivery | undefined =
-      inst.def.delivery.type === 'summon' ? inst.def.delivery : instanceSummon(inst);
+      resolved.type === 'summon' ? resolved : instanceSummon(inst);
     return summonCrewOf(d, id => MONSTERS[id], id => SKILLS[id]);
   }
 
@@ -36740,7 +36749,7 @@ export class World {
    *  investment. Base body stats and minionSize are never scaled: the
    *  divisor tempers the investment, not the creature. */
   bakeMinionOwnerStats(minion: Actor, caster: Actor, inst: SkillInstance, scale = 1): void {
-    const tags = skillContextTags(inst.def);
+    const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
     const size = caster.sheet.get('minionSize', tags, extra);
     minion.radius = Math.max(5, minion.radius * size);
@@ -36855,7 +36864,7 @@ export class World {
     // replenishment lifespan and cap, use the same resolved view as casts.
     const d = overrides?.delivery ?? instanceDelivery(inst);
     if (d.type !== 'summon') return null;
-    const tags = skillContextTags(inst.def);
+    const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
 
     const maxActive = Math.max(1, Math.round(
@@ -36909,6 +36918,13 @@ export class World {
     minion.sourceSkillId = inst.def.id;
     minion.sourcePoolGroup = d.poolGroup;
     minion.summonInst = inst;
+    minion.summonEscort = d.escort;
+    for (const sid of [...(d.crewSkills ?? []), ...(d.crewAuras ?? [])]) {
+      if (SKILLS[sid] && !minion.skills.some(s => s?.def.id === sid)) {
+        minion.skills.push(makeSkillInstance(SKILLS[sid], 1 + Math.floor(minion.level / 4), 0));
+      }
+    }
+    if (d.crewMods?.length) minion.sheet.setSource('summon:crew', d.crewMods);
     // SUPPORT FORWARDING: the summon's own gems board what the minion
     // CASTS — forwarded before ownerMods so both lanes (crew sockets,
     // sheet source) are live for the minion's whole life. Corpse-raised
@@ -36973,6 +36989,11 @@ export class World {
       : this.clampPos(vec(
         caster.pos.x + Math.cos(ang) * 50, caster.pos.y + Math.sin(ang) * 50), minion.radius, undefined, { mover: minion });
     this.actors.push(minion);
+    for (const sid of d.crewAuras ?? []) {
+      const auraInst = minion.skills.find(s => s?.def.id === sid);
+      if (auraInst?.def.delivery.type === 'aura') this.activateAura(minion, auraInst, auraInst.def.delivery,
+        minion.sheet.get('aoeRadius', skillContextTags(auraInst), instanceMods(auraInst)));
+    }
     // Tethers: summons may trail a band to their master or web into their
     // pack, exactly like constructs (one vocabulary, both spawn kinds).
     this.attachObjectTethers(minion, inst, caster);
@@ -36981,7 +37002,7 @@ export class World {
     // inverse Martyrdom: the entrance is the first attack).
     {
       const impact = caster.sheet.get('summonImpact',
-        skillContextTags(inst.def), instanceMods(inst));
+        skillContextTags(inst), instanceMods(inst));
       if (impact > 0) {
         this.burstDamage(vec(minion.pos.x, minion.pos.y), 70,
           minion.maxLife() * impact, 'physical', inst.def.color, caster.team, caster.tier);
@@ -36992,7 +37013,7 @@ export class World {
     // expiry-counts-as-death lever, and the arrival MEND — summonImpact's
     // twin, the entrance as balm instead of blast.
     {
-      const tags2 = skillContextTags(inst.def);
+      const tags2 = skillContextTags(inst);
       const extra2 = instanceMods(inst);
       minion.deathHealPct = caster.sheet.get('minionDeathHeal', tags2, extra2);
       minion.deathHealFlat = caster.sheet.get('minionDeathHealFlat', tags2, extra2);
@@ -37050,7 +37071,7 @@ export class World {
       minion.activeAuras.set(inst.def.id + ':legion', {
         inst, spec: s.def.minionAura,
         radius: s.def.minionAura.radius
-          * caster.sheet.get('aoeRadius', skillContextTags(inst.def), instanceMods(inst)),
+          * caster.sheet.get('aoeRadius', skillContextTags(inst), instanceMods(inst)),
         shape: 0,
         remaining: Infinity, reserved: 0, pulseTimer: 0,
         affected: new Set(),
@@ -37538,7 +37559,7 @@ export class World {
       this.failNote(caster, inst.def.id + ':lane', 'already overdriven');
       return;
     }
-    const tags = skillContextTags(inst.def);
+    const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
     // DURATION AURAS (auraDuration graft): the aura burns for a span and
     // COSTS its mana (paid by the press) instead of reserving — capped by
@@ -38428,7 +38449,7 @@ export class World {
 
   private spawnAftershocks(caster: Actor, inst: SkillInstance, at: Vec2, radius: number, shape: AoeShape, depth = 0): void {
     if (depth > 0) return; // aftershocks don't scatter further
-    const tags = skillContextTags(inst.def);
+    const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
     const scatter = Math.round(caster.sheet.get('aoeScatter', tags, extra));
     for (let i = 0; i < scatter; i++) {
@@ -38456,7 +38477,7 @@ export class World {
     const owner = victim.owner;
     if (owner && !owner.dead && owner.isGuarding() && dist(owner.pos, victim.pos) <= 240) {
       const inst = owner.casting!.inst;
-      if (owner.sheet.get('guardAegis', skillContextTags(inst.def), instanceMods(inst)) > 0) {
+      if (owner.sheet.get('guardAegis', skillContextTags(inst), instanceMods(inst)) > 0) {
         return owner;
       }
     }
@@ -38632,7 +38653,7 @@ export class World {
     // The bashPower stat is the investable lever on the payload — Reckless
     // Rampart cranks it in trade against the guard itself.
     const power = a.sheet.get('bashPower',
-      skillContextTags(inst.def, grantedTags(inst)), instanceMods(inst));
+      skillContextTags(inst, grantedTags(inst)), instanceMods(inst));
     const flat: Partial<Record<DamageType, number>> =
       { [elem ?? 'physical']: payloadShield * bash.mult * power };
     for (const e of this.enemiesOf(a)) {
@@ -39194,7 +39215,7 @@ export class World {
   }
 
   private dropLingerField(caster: Actor, inst: SkillInstance, at: Vec2, useMult = 1): void {
-    const tags = skillContextTags(inst.def, grantedTags(inst));
+    const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
     const fieldSecs = caster.sheet.get('lingerField', tags, extra);
     const healField = socketSpec(inst, 'healField');
@@ -39284,7 +39305,7 @@ export class World {
    *  keeps paying at both. The two scales SUM at a departure: a build
    *  carrying both erupts once, harder. */
   private moveBlast(caster: Actor, inst: SkillInstance, at: Vec2, phase: 'depart' | 'arrive' = 'arrive'): void {
-    const tags = skillContextTags(inst.def, grantedTags(inst));
+    const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
     const scale = caster.sheet.get('moveExplode', tags, extra)
       + (phase === 'depart' ? caster.sheet.get('departSplash', tags, extra) : 0);
@@ -39383,7 +39404,7 @@ export class World {
     chargesSpent: number,
     critMult?: number,
   ): void {
-    const tags = skillContextTags(inst.def);
+    const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
     const maxPool = fx.resource === 'life' ? target.maxLife()
       : fx.resource === 'mana' ? target.availableMaxMana() : target.maxEs();
@@ -39437,7 +39458,7 @@ export class World {
       const inst = a.skills.find(s => s?.def.id === b.skillId);
       if (!inst) continue;
       const durScale = a.sheet.get('effectDuration',
-        skillContextTags(inst.def), instanceMods(inst));
+        skillContextTags(inst), instanceMods(inst));
       const pourCrit = this.critMendMult(a, inst, a.pos);
       for (const fx of inst.def.effects) {
         if (fx.type === 'restoreOverTime') {
@@ -39461,7 +39482,7 @@ export class World {
    *  the whole mend by the standard critical multiplier. One roll per
    *  pour/mend (streams roll at the pour, never per sip). */
   private critMendMult(caster: Actor, inst: SkillInstance, at?: Vec2): number {
-    const tags = skillContextTags(inst.def, grantedTags(inst));
+    const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
     if (!chance(caster.sheet.get('critChance', tags, extra))) return 1;
     const mult = caster.sheet.get('critMulti', tags, extra);
@@ -39474,7 +39495,7 @@ export class World {
     fx: { amount?: number; pctMax?: number }, mult = 1, quiet = false,
   ): number {
     if (target.dead) return 0;
-    const tags = skillContextTags(inst.def, grantedTags(inst));
+    const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
     const raw = ((fx.amount ?? 0) + (fx.pctMax ?? 0) * target.maxLife())
       * caster.sheet.get('healPower', tags, extra) * mult
@@ -39531,7 +39552,7 @@ export class World {
     fx: { amount?: number; pctMax?: number; chain?: number }, mult = 1, quiet = false,
   ): void {
     this.applyHeal(caster, inst, target, fx, mult, quiet);
-    const tags = skillContextTags(inst.def, grantedTags(inst));
+    const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
     let hops = (fx.chain ?? 0) + Math.round(caster.sheet.get('chainCount', tags, extra));
     const visited = new Set<Actor>([target]);
@@ -40000,7 +40021,7 @@ export class World {
       }
       // OFFERING SHARE (Communal Rites): a fraction of the minions'
       // blessing also dresses the officiant — same buff, scaled values.
-      const tags = skillContextTags(inst.def, grantedTags(inst));
+      const tags = skillContextTags(inst, grantedTags(inst));
       const share = caster.sheet.get('offeringShare', tags, instanceMods(inst));
       if (share > 0) {
         caster.addBuff({
@@ -40030,7 +40051,7 @@ export class World {
     if (!fromFuse) {
       const fuse = instanceFuse(inst);
       if (fuse) {
-        const fTags = skillContextTags(def, grantedTags(inst));
+        const fTags = skillContextTags(inst, grantedTags(inst));
         this.pendingFuses.push({
           kind: 'hit',
           due: this.time + fuse.delay
@@ -40166,7 +40187,7 @@ export class World {
     let afflictionCarry = 0;
     {
       const f = Math.min(1, Math.max(0,
-        caster.sheet.get('hitToAffliction', skillContextTags(def, grantedTags(inst)), extra)));
+        caster.sheet.get('hitToAffliction', skillContextTags(inst, grantedTags(inst)), extra)));
       if (f > 0) {
         let forgone = 0;
         for (const t of Object.keys(packet.amounts) as (keyof typeof packet.amounts)[]) {
@@ -40175,7 +40196,7 @@ export class World {
           forgone += cut;
         }
         afflictionCarry = forgone
-          * caster.sheet.get('afflictionYield', skillContextTags(def, grantedTags(inst)), extra);
+          * caster.sheet.get('afflictionYield', skillContextTags(inst, grantedTags(inst)), extra);
       }
     }
     // Guard stance: a raised shield in the threat's direction eats the
@@ -41572,7 +41593,7 @@ export class World {
    *  stay ungated: short-lived buff fuel, not a banked economy). */
   private rollKillOrbs(caster: Actor, inst: SkillInstance, victim: Actor): void {
     if (caster.construct || victim.noBounty || this.orbs.length >= ORB_CAP) return;
-    const tags = skillContextTags(inst.def, grantedTags(inst));
+    const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
     const rate = caster.sheet.get('orbShedRate', tags, extra);
     // THE GRANTED SHED (orbShedGraft — Abundant Harvest's mechanism
@@ -41602,7 +41623,7 @@ export class World {
    *  rolled with the slaying skill's context so tag-filtered grants work). */
   private rollKillRemnants(caster: Actor, inst: SkillInstance, at: Vec2): void {
     if (caster.construct || this.remnants.length >= 14) return;
-    const tags = skillContextTags(inst.def, grantedTags(inst));
+    const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
     for (const kind of Object.values(REMNANT_KINDS)) {
       const c = caster.sheet.get(remnantDropStat(kind.id), tags, extra);
@@ -41624,7 +41645,7 @@ export class World {
     if (target.dead) return;
     // Skill-local mods (the Crushing Impact gem is this stat's ONLY grantor)
     // are visible solely through the extra param — same query as hit procs.
-    const tags = skillContextTags(inst.def);
+    const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
     for (const proc of PROC_LIST) {
       if (proc.trigger !== 'collision') continue;
@@ -41952,7 +41973,7 @@ export class World {
     for (const inst of holder.skills) {
       if (!inst || (inst.sockets.length === 0 && !inst.def.innateMods)) continue;
       p = Math.max(p, holder.sheet.get(stat,
-        skillContextTags(inst.def, grantedTags(inst)), instanceMods(inst)));
+        skillContextTags(inst, grantedTags(inst)), instanceMods(inst)));
     }
     return p;
   }
@@ -42145,7 +42166,7 @@ export class World {
     // the chance): folded once here onto the effect's numbers, read with
     // the event's own context so a skill-scoped grant scopes like the chance.
     const pw = caster.sheet.get(procPowerStat(proc.id),
-      inst ? skillContextTags(inst.def) : undefined, inst ? instanceMods(inst) : undefined);
+      inst ? skillContextTags(inst) : undefined, inst ? instanceMods(inst) : undefined);
     const fx = scaleProcEffect(proc.effect, pw);
     switch (fx.type) {
       case 'gainCharge': {
@@ -42154,7 +42175,7 @@ export class World {
       }
       case 'buff':
         caster.addBuff(fx.buff, caster.sheet.get('effectDuration',
-          inst ? skillContextTags(inst.def) : undefined,
+          inst ? skillContextTags(inst) : undefined,
           inst ? instanceMods(inst) : undefined), depth + 1);
         break;
       // Applies a status to the STRUCK target — DoT power from the status's
@@ -42164,12 +42185,12 @@ export class World {
         if (!target || target.dead) break;
         const sdef = STATUS_DEFS[fx.status];
         if (!sdef) break;
-        const tags = inst ? skillContextTags(inst.def) : undefined;
+        const tags = inst ? skillContextTags(inst) : undefined;
         const extra = inst ? instanceMods(inst) : undefined;
         const dps = sdef.dotType
           ? baselineStatusDps(fx.status, this.zone.level) * (fx.magnitude ?? 1)
             * caster.sheet.get('statusMagnitude',
-              sdef.dotType && inst ? skillContextTags(inst.def, [sdef.dotType]) : tags, extra)
+              sdef.dotType && inst ? skillContextTags(inst, [sdef.dotType]) : tags, extra)
           : 0;
         this.notePopFx(target, fx.status);
         target.applyStatus(fx.status, dps,
@@ -42421,7 +42442,7 @@ export class World {
           this.forwardSummonSockets(inst, forged.skills);
         }
         forged.lifespan = fx.duration * owner.sheet.get('effectDuration',
-          inst ? skillContextTags(inst.def) : undefined,
+          inst ? skillContextTags(inst) : undefined,
           inst ? instanceMods(inst) : undefined);
         forged.pos = this.clampPos(vec(
           target.pos.x + rand(-30, 30), target.pos.y + rand(-30, 30)), forged.radius);
@@ -42564,7 +42585,7 @@ export class World {
     target: Actor | null, depth: number,
   ): void {
     if (!PROC_RIDER_LIST.length || caster.dead) return;
-    const tags = inst ? skillContextTags(inst.def) : undefined;
+    const tags = inst ? skillContextTags(inst) : undefined;
     const extra = inst ? instanceMods(inst) : undefined;
     for (const rider of PROC_RIDER_LIST) {
       const hosts = Array.isArray(rider.proc) ? rider.proc : [rider.proc];
@@ -46255,7 +46276,7 @@ export class World {
             if (dBash) {
               this.guardBash(a, inst, dBash, BASH_CFG.poollessShield
                 * a.sheet.get('guardStrength',
-                  skillContextTags(inst.def, grantedTags(inst)), instanceMods(inst)));
+                  skillContextTags(inst, grantedTags(inst)), instanceMods(inst)));
             }
           }
         }
@@ -49526,7 +49547,7 @@ export class World {
     const d = inst.def.delivery as { type: string; occlusion?: 'blocked' | 'free' };
     const base = d.occlusion ?? LOS_CFG.delivery[d.type] ?? 'free';
     if (base === 'free') return 'free';
-    return caster.sheet.get('phasing', skillContextTags(inst.def, grantedTags(inst)),
+    return caster.sheet.get('phasing', skillContextTags(inst, grantedTags(inst)),
       instanceMods(inst)) > 0 ? 'free' : base;
   }
 
@@ -53644,7 +53665,7 @@ export class World {
       const left = a.cooldowns.get(inst.def.id);
       if (left === undefined) continue;
       const s = a.sheet.get(orbRefundStat(kind),
-        skillContextTags(inst.def, grantedTags(inst)), instanceMods(inst));
+        skillContextTags(inst, grantedTags(inst)), instanceMods(inst));
       if (s <= 0) continue;
       const next = left - s;
       if (next <= 0) a.cooldowns.delete(inst.def.id);
@@ -54010,7 +54031,7 @@ export class World {
       const st = (inst.state ??= {});
       if (st.triggerOff) continue;
       if (this.time < (st.trigReadyAt ?? 0)) continue;
-      const tags = skillContextTags(inst.def, grantedTags(inst));
+      const tags = skillContextTags(inst, grantedTags(inst));
       const extra = instanceMods(inst);
       // damageTaken: this gem's bank must be full (filled at the hit site;
       // an unfired full bank keeps its place in the rotation for the next
@@ -59826,13 +59847,13 @@ export class World {
    *  castMove data plus the caster's castMobility stat, capped at 1. */
   private castMoveFactor(a: Actor, inst: SkillInstance): number {
     return Math.min(1, (inst.def.castMove ?? 0)
-      + a.sheet.get('castMobility', skillContextTags(inst.def), instanceMods(inst)));
+      + a.sheet.get('castMobility', skillContextTags(inst), instanceMods(inst)));
   }
 
   /** The channelMobility stat for a held channel (flat bonus to the move
    *  factor — 'immobile' starts at 0, 'slowed' at its data factor). */
   private channelMobility(a: Actor, inst: SkillInstance): number {
-    return a.sheet.get('channelMobility', skillContextTags(inst.def), instanceMods(inst));
+    return a.sheet.get('channelMobility', skillContextTags(inst), instanceMods(inst));
   }
 
   moveActor(a: Actor, dx: number, dy: number, dt: number): void {

@@ -798,6 +798,25 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // decided); no lock reads 0. Costs one branch on the untargeted roster.
   actor.aiFoeCastSec = target ? castRemaining(target) : 0;
 
+  // Owner-bound bodyguard: ordinary collision-aware movement and skill casts,
+  // but the keeper's flank owns the movement goal even when foes retreat.
+  if (actor.summonEscort && actor.owner) {
+    const bearing = target ? angleTo(actor.owner.pos, target.pos) : actor.owner.facing;
+    const reach = actor.summonEscort.distance;
+    const post = vec(actor.owner.pos.x + Math.cos(bearing) * reach,
+      actor.owner.pos.y + Math.sin(bearing) * reach);
+    if (dist(actor.pos, post) > 12) {
+      if (updateRecall(actor, world, dt)) return;
+      actor.facing = angleTo(actor.pos, post);
+      moveToward(actor, world, post, dt);
+    } else actor.lastProgress = undefined; // holding the post is not being stuck
+    if (target) {
+      const inst = pickSkill(actor, world, best, tuning, target);
+      if (inst) useOn(actor, world, inst, target, tuning);
+    }
+    return;
+  }
+
   // LEASH (TargetSpec.leash): guardians give up the marathon. Beyond the
   // tether they drop the lock and walk home (with hysteresis, so the edge
   // reads as straining at the chain, not flip-flop) — mending en route when

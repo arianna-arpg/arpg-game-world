@@ -11,7 +11,7 @@ export function replenishingDelivery(inst: SkillInstance): SummonDelivery | unde
 /** One set of live numbers for simulation and preview; modifiers use the
  *  authored base, including multiplicative cap investment. */
 export function replenishShape(actor: Actor, inst: SkillInstance, d: SummonDelivery) {
-  const tags = skillContextTags(inst.def), extra = instanceMods(inst);
+  const tags = skillContextTags(inst), extra = instanceMods(inst);
   return {
     cap: Math.max(1, Math.round(actor.sheet.get('minionMaxCount', tags, extra, d.maxActive))),
     count: Math.max(1, d.count + Math.round(actor.sheet.get('summonCount', tags, extra))),

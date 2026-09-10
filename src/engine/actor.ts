@@ -1695,6 +1695,7 @@ export class Actor {
   sourceSkillId?: string;
   /** The summoning instance, kept for persistent respawns. */
   summonInst?: SkillInstance;
+  summonEscort?: { distance: number };
   /** Max mana this minion's contract reserves on its owner. */
   manaReserved = 0;
   /** Total max mana locked out by persistent minions and toggled auras. */
@@ -2120,7 +2121,7 @@ export class Actor {
   stanceRead(): { tags: ReadonlySet<SkillTag>; extra: Modifier[] } | null {
     if (!this.isChanneling()) return null;
     const inst = this.casting!.inst;
-    return { tags: skillContextTags(inst.def), extra: instanceMods(inst) };
+    return { tags: skillContextTags(inst), extra: instanceMods(inst) };
   }
 
   canAct(): boolean {
@@ -2265,7 +2266,7 @@ export class Actor {
     // + the charge-scoped chargeCap_<id> family (which reaches every
     // path, including skill-less orb pours and passive accrual).
     const cap = Math.max(0, Math.round(max + this.sheet.get('chargeCap',
-      inst ? skillContextTags(inst.def) : undefined,
+      inst ? skillContextTags(inst) : undefined,
       inst ? instanceMods(inst) : undefined)
       + this.sheet.get('chargeCap_' + charge)));
     const cur = this.charges.get(charge) ?? 0;
@@ -2307,7 +2308,7 @@ export class Actor {
     }
     if (base <= 0) base = CHARGE_DEFS[charge]?.baseCap ?? 0;
     return Math.max(0, Math.round(base + this.sheet.get('chargeCap',
-      inst ? skillContextTags(inst.def) : undefined,
+      inst ? skillContextTags(inst) : undefined,
       inst ? instanceMods(inst) : undefined)
       + this.sheet.get('chargeCap_' + charge)));
   }
@@ -2472,7 +2473,7 @@ export class Actor {
         || this.activeAuras.has(inst.def.id)
         || this.summonToggles.has(inst.def.id);
       if (!engaged) continue;
-      const tags = skillContextTags(inst.def);
+      const tags = skillContextTags(inst);
       const extra = instanceMods(inst);
       const rate = this.sheet.get('conduitRate', tags, extra);
       const eff = this.sheet.get('conduitEfficiency', tags, extra);
@@ -2974,7 +2975,7 @@ export class Actor {
         const inst = this.skills.find(s => s?.def.id === id);
         if (inst) {
           rate = this.sheet.get('cooldownRecovery',
-            skillContextTags(inst.def), instanceMods(inst));
+            skillContextTags(inst), instanceMods(inst));
         }
       }
       const left = t - dt * rate;
@@ -3470,7 +3471,7 @@ export class Actor {
     const uc = instanceUseCharges(inst); // graft-aware: a chambered cast banks too
     if (!uc) return 0;
     return Math.max(1, Math.round(uc.max + this.sheet.get('skillCharges',
-      skillContextTags(inst.def), instanceMods(inst))));
+      skillContextTags(inst), instanceMods(inst))));
   }
 
   /** Spend one use-charge (the press's pacing cost — see useSkill). */
@@ -3483,7 +3484,7 @@ export class Actor {
    *  'reload'-tagged skills ALSO ride the reloadSpeed stat — the racking
    *  hand speeds up on top of whichever base speed applies. */
   speedFactor(inst: SkillInstance): number {
-    const tags = skillContextTags(inst.def);
+    const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
     const base = tags.has('attack') ? this.sheet.get('attackSpeed', tags, extra)
       : this.sheet.get('castSpeed', tags, extra);
@@ -3507,7 +3508,7 @@ export class Actor {
    */
   skillCost(inst: SkillInstance): { mana: number; life: number } {
     if (replenishingDelivery(inst)) return { mana: 0, life: 0 };
-    const tags = skillContextTags(inst.def);
+    const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
     // Flat adders (Mana Feeder's teeth on cheap skills) and pool-scaled
     // costs (Archmage: ceil(pct × max)) join the BASE, so the multiplier
@@ -3670,7 +3671,7 @@ export class Actor {
       // unless the `thirstless` stat waives it (the drink-for-the-rider
       // lane: supports, passives and statuses all reach it per-skill).
       if (g.missing && this.sheet.get('thirstless',
-        skillContextTags(inst.def), instanceMods(inst)) <= 0) {
+        skillContextTags(inst), instanceMods(inst)) <= 0) {
         const maxOf = (kind: 'life' | 'mana' | 'es'): number =>
           kind === 'life' ? this.maxLife()
           : kind === 'mana' ? this.availableMaxMana() : this.maxEs();
@@ -3711,7 +3712,7 @@ export class Actor {
   gaugeEff(inst: SkillInstance): GaugeEff | null {
     const spec = inst.def.gauge;
     if (!spec) return null;
-    const tags = skillContextTags(inst.def);
+    const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
     return gaugeEffOf(spec,
       this.sheet.get('gaugeNeed', tags, extra),
@@ -3741,7 +3742,7 @@ export class Actor {
     if (!inst.def.effects.some(e => e.type === 'restoreOverTime')) return false;
     if (this.skillUseTime(inst) > 0.001) return false; // the bank rides the instant press only
     const cap = Math.floor(this.sheet.get('pourPrime',
-      skillContextTags(inst.def), instanceMods(inst)));
+      skillContextTags(inst), instanceMods(inst)));
     if (cap <= 0 || this.primedPours.length >= cap) return false;
     const full = (kind: 'life' | 'mana' | 'es'): boolean =>
       (kind === 'life' ? this.maxLife() - this.life
@@ -3765,7 +3766,7 @@ export class Actor {
     for (const s of this.statuses) {
       const forbids = STATUS_DEFS[s.id]?.forbidsTags;
       if (!forbids) continue;
-      for (const t of forbids) if (inst.def.tags.includes(t)) return true;
+      for (const t of forbids) if (skillContextTags(inst).has(t)) return true;
     }
     return false;
   }
@@ -3931,7 +3932,7 @@ export class Actor {
     // contracts price the WHOLE slot block (reserve × effective maxActive).
     const d = instanceDelivery(inst); // summon-tree cap must price the real reservation
     if (d.type === 'summon' && d.persistent) {
-      const tags2 = skillContextTags(inst.def);
+      const tags2 = skillContextTags(inst);
       const extra2 = instanceMods(inst);
       const slots = d.persistent.toggle
         ? Math.max(1, Math.round(this.sheet.get('minionMaxCount', tags2, extra2, d.maxActive)))

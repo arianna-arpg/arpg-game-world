@@ -12,7 +12,7 @@ import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
 import { spawnVeinOf } from '../engine/supportbase';
 import {
-  CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf,
+  CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf, instanceDelivery,
   supportFits, supportFitsInst, treeNodeOf, validTreeNodes, bandPointsAt, MAX_SKILL_LEVEL,
   type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec,
 } from '../engine/skills';
@@ -2071,6 +2071,16 @@ export function validateContent(): void {
   // sentence AND a respawn appointment. Skills and summon-grafting supports
   // both carry a SummonDelivery, so both are swept.
   const checkSummonContract = (src: string, d: Delivery | undefined): void => {
+    if (d?.type === 'summon') {
+      for (const id of [d.monsterId, ...(d.pool ?? []).map(p => p.id)]) {
+        if (id && !MONSTERS[id]) warn(`${src}: unknown summon monster '${id}'`);
+      }
+      for (const p of d.pool ?? []) if (!Number.isFinite(p.weight) || p.weight <= 0) warn(`${src}: invalid summon weight`);
+      for (const id of d.crewSkills ?? []) if (!SKILLS[id]) warn(`${src}: unknown crew skill '${id}'`);
+      for (const id of d.crewAuras ?? []) if (SKILLS[id]?.delivery.type !== 'aura') warn(`${src}: crew aura '${id}' is not an aura skill`);
+      for (const m of d.crewMods ?? []) if (!STAT_DEFS[m.stat] || !Number.isFinite(m.value)) warn(`${src}: invalid crew modifier '${m.stat}'`);
+      if (d.escort && (!Number.isFinite(d.escort.distance) || d.escort.distance < 0)) warn(`${src}: invalid escort distance`);
+    }
     if (d?.type === 'summon' && d.replenish) {
       if (!Number.isFinite(d.replenish.interval) || d.replenish.interval <= 0) warn(`${src}: replenish.interval must be finite and positive`);
       if (d.persistent || d.decay || d.waves || d.fromCorpse) warn(`${src}: replenishment cannot combine with contracts, decay, waves or corpse sourcing`);
@@ -2884,8 +2894,8 @@ export function validateContent(): void {
   // validatePassiveChoices warn-degrade idiom). Monster tree PINS resolve
   // against the kit's own defs.
   {
-    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon']);
-    const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish']);
+    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags']);
+    const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
     const budget = bandPointsAt(MAX_SKILL_LEVEL);
@@ -2925,7 +2935,22 @@ export function validateContent(): void {
         for (const k of Object.keys(n.over?.channel ?? {})) {
           if (!OVER_CHANNEL_KEYS.has(k)) warn(`${at}/${n.id}: over.channel.${k} is off the audited whitelist`);
         }
+        if (n.over?.tags?.add?.some(t => n.over?.tags?.remove?.includes(t))) warn(`${at}/${n.id}: the same host tag is both added and removed`);
         const summonTree = n.over?.summon;
+        if (summonTree?.selectPool) {
+          const prior = makeSkillInstance(def, 20, 0);
+          const chain: string[] = [], seen = new Set<string>();
+          let parent = g.nodes.get(n.id)?.links[0];
+          while (parent && !seen.has(parent)) {
+            seen.add(parent); chain.unshift(parent); parent = g.nodes.get(parent)?.links[0];
+          }
+          prior.treeNodes = chain;
+          const d = instanceDelivery(prior);
+          if (!summonTree.selectPool.length || d.type !== 'summon' || !d.pool
+            || summonTree.selectPool.some(id => !d.pool!.some(p => p.id === id))) {
+            warn(`${at}/${n.id}: selection must name members of the inherited summon pool`);
+          }
+        }
         if (summonTree) {
           for (const k of Object.keys(summonTree)) if (!SUMMON_KEYS.has(k)) warn(`${at}/${n.id}: summon.${k} is off the audited whitelist`);
           if (def.delivery.type !== 'summon') warn(`${at}/${n.id}: summon overrides require a summon delivery`);

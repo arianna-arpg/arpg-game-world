@@ -36,7 +36,7 @@
 
 import { MONSTERS } from '../data/monsters';
 import { SKILLS } from '../data/skills';
-import { MAX_SKILL_LEVEL, validTreeNodes } from '../engine/skills';
+import { MAX_SKILL_LEVEL, validTreeNodes, instanceDelivery } from '../engine/skills';
 import { treeLimbs, treeNodeRanks, treeRootChildren } from '../engine/skilltree'; // THE SKILL-TREE GRAPH — the limb axis
 import { SUPPORTS } from '../data/supports';
 import { PROCS } from '../data/procs';
@@ -292,7 +292,8 @@ export function compatCensus(skillFilter = '', supportFilter = ''): CensusResult
       const inst = makeSkillInstance(def, 1, 3);
       const pinned = hostTreeNodes(skillId);
       if (pinned) inst.treeNodes = pinned;
-      const crew = summonCrewOf(def.delivery.type === 'summon' ? def.delivery : undefined,
+      const resolved = instanceDelivery(inst);
+      const crew = summonCrewOf(resolved.type === 'summon' ? resolved : undefined,
         id => MONSTERS[id], id => SKILLS[id]);
       const host = supportFitsInst(sup, inst);
       const viaCrew = !host && crewSkillsServed(sup, inst, crew) !== null;
@@ -2163,7 +2164,8 @@ export function explainFit(def: SkillDef, sup: SupportDef, treeNodes?: string[])
     present: mechanismHolds(m, inst),
   }));
 
-  const crewOf = summonCrewOf(def.delivery.type === 'summon' ? def.delivery : undefined,
+  const resolvedCrewDelivery = instanceDelivery(inst);
+  const crewOf = summonCrewOf(resolvedCrewDelivery.type === 'summon' ? resolvedCrewDelivery : undefined,
     id => MONSTERS[id], id => SKILLS[id]);
   let crew: FitExplain['crew'] = { kind: 'none' };
   let crewFits = false;

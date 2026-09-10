@@ -45,16 +45,16 @@ try {
     inst.level = 20; w.pickTreeNode(inst.def.id, 'wandering_dead');
     check('passive identity spends through the real tree action', inst.treeNodes?.join() === 'wandering_dead');
     check('all rival identities are locked', !!treeNodeRefusal(inst, 'grave_rush') && !!treeNodeRefusal(inst, 'corpse_engine'));
-    w.pickTreeNode(inst.def.id, 'gathering_dead'); w.pickTreeNode(inst.def.id, 'gathering_dead');
+    w.pickTreeNode(inst.def.id, 'gathering_dead'); w.pickTreeNode(inst.def.id, 'patient_dead');
     w.pickTreeNode(inst.def.id, 'restless_graves');
-    check('ranked investment and cadence fill four points', inst.treeNodes?.length === 4 && !!treeNodeRefusal(inst, 'stitched_flesh'));
+    check('nested investment and cadence fill four points', inst.treeNodes?.length === 4 && !!treeNodeRefusal(inst, 'stitched_flesh'));
     const d = instanceDelivery(inst);
     check('authored base never mutates', SKILLS.shambler_horde.delivery.type === 'summon'
       && SKILLS.shambler_horde.delivery.maxActive === 6 && SKILLS.shambler_horde.delivery.duration === 7);
     check('full passive allocation has 8 slots and a 2.25-second beat', d.type === 'summon'
       && replenishShape(w.player, inst, d).cap === 8 && replenishShape(w.player, inst, d).interval === 2.25);
     const loaded = rebuildSkill({ skillId: inst.def.id, level: 20, rarity: 'common', sockets: [], treeNodes: inst.treeNodes });
-    check('save rebuild preserves ranks and delivery', !!loaded && loaded.treeNodes?.join() === inst.treeNodes?.join()
+    check('save rebuild preserves nodes and delivery', !!loaded && loaded.treeNodes?.join() === inst.treeNodes?.join()
       && JSON.stringify(instanceDelivery(loaded)) === JSON.stringify(d));
     check('hostile saved picks cannot cross branches', validTreeNodes(inst.def,
       ['wandering_dead', 'grave_rush', 'corpse_engine'], 20, { quiet: true })?.join() === 'wandering_dead');
@@ -124,13 +124,13 @@ try {
     check('ordinary summon-count support increases a replenishment batch', crew(w).length >= 3);
   }
   for (const path of ['grave_rush', 'corpse_engine']) {
-    const { w, p, inst } = setup([path]);
+    const { w, p, inst } = setup(['commanded_dead', path]);
     p.mana = p.availableMaxMana();
     check(`${path}: active cast remains available`, w.useSkill(p, inst, p.pos, true));
     step(w, 0.8);
     const bodies = crew(w);
     check(`${path}: cast reaches resolved count and lifespan`, bodies.length === (path === 'grave_rush' ? 2 : 1)
-      && bodies.every(a => a.lifespan > (path === 'grave_rush' ? 3 : 13)));
+      && bodies.every(a => a.lifespan > (path === 'grave_rush' ? 3 : 6)));
     if (path === 'grave_rush') { step(w, 4.2); check('rush bodies retain their finite expiry', crew(w).length === 0); }
   }
   {

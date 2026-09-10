@@ -300,7 +300,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     skillIds: ['poison_nova', 'raise_dead', 'despair',
       'reap', 'whirling_reap', 'summon_raging_spirit', 'spirit_pyre',
       'summon_wraith', 'infernal_bombardment', 'archon_lance', 'sanguine_burst',
-      'venom_bolt', 'summon_skeleton', 'summon_skeleton_archer'],
+      'venom_bolt', 'summon_skeleton', 'summon_skeleton_archer', 'summon_skeleton_mage'],
     supportIds: ['sweeping_blow', 'mana_feeder', 'enduring_bond',
       'calcified_vigor', 'marrowbound_vigor', 'septic_bargain'],
     // HER OBJECTIVES (2026-09-05): the corpse run's own class — reclaim

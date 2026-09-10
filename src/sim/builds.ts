@@ -19,7 +19,7 @@ import { choiceLockReason, graftSourcesOf } from '../data/passiveChoices';
 import { MAIN_REALM, realmOf } from '../data/passiveRealms';
 import {
   SKILL_RARITIES, makeSkillInstance, summonCrewOf, supportFitsInstOrCrew, skillMaxLevel,
-  validTreeNodes,
+  validTreeNodes, instanceDelivery,
   type SkillInstance, type SkillRarity, type SupportInstance,
 } from '../engine/skills';
 import { SLOT_BY_ID } from '../engine/items';
@@ -87,7 +87,8 @@ function mintSkill(spec: BuildSkillSpec, warnings: string[]): SkillInstance | nu
     // 'fissure' aboard that same Cleave. Neither is a probe irregularity.
     // NOTE the lane router also means a force-socketed misfit is genuinely
     // INERT now (host reads skip it), matching game-reachable states.
-    const crew = summonCrewOf(def.delivery.type === 'summon' ? def.delivery : undefined,
+    const resolved = instanceDelivery(inst);
+    const crew = summonCrewOf(resolved.type === 'summon' ? resolved : undefined,
       id => MONSTERS[id], id => SKILLS[id]);
     if (!supportFitsInstOrCrew(sdef, inst, crew)) {
       warnings.push(`support '${s.id}' does not fit '${spec.id}' (tag rules) — socketed anyway, but the lane router leaves it inert`);

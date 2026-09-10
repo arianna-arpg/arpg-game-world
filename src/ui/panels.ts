@@ -9,6 +9,7 @@
 import { clamp, mixHex } from '../core/math';
 import { tellPortraitDress } from '../engine/tells';
 import { replenishingDelivery } from '../engine/replenishment';
+import { instanceBaseTags } from '../engine/skills';
 import { DEV, GAME_TITLE } from '../config';
 import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
@@ -1898,9 +1899,9 @@ export class UI {
     const granted = inst.grantedBy ? ` · granted by ${inst.grantedBy}` : '';
     return {
       title: `${d.name} — Lv ${inst.level}${branch ? ` · ${branch.name}` : ''}`,
-      description: (replenishingDelivery(inst) ? branch?.description ?? d.description : d.description)
+      description: (branch?.description ?? d.description)
         + this.previewRowsHtml(preview.rows, extended),
-      meta: d.tags.join(' · ') + (charge ? ` · ${charge}` : '') + granted,
+      meta: instanceBaseTags(inst).join(' · ') + (charge ? ` · ${charge}` : '') + granted,
       wide: extended && preview.hasDetail,
     };
   }
@@ -6298,7 +6299,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
               ${replenishingDelivery(inst) ? 'Passive · replenishes while seated' : `${this.costText(p.skillCost(inst))}${def.cooldown
                 ? `, ${this.cdText(skillCooldownSeconds(p, inst))} cd` : ''}`}</span>
           </div>
-          <div class="tags">${def.tags.join(' · ')}</div>
+          <div class="tags">${instanceBaseTags(inst).join(' · ')}</div>
           <div class="bind-btns">
             ${inst.grantedBy
               ? `<span style="font-size:10px;color:#e8a860" title="Its level is the gear's to give; there is no gem to unlearn — take the piece off instead.">◆ granted by ${inst.grantedBy}</span>`
@@ -7107,6 +7108,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const limbs = treeLimbs(def);
     const R = TREE_LAYOUT_CFG.radius;
     pane.box = graph.box;
+    // Fit the graph's proportions to the viewport: broad branching trees need
+    // a broad pane, while small trees retain the familiar compact window.
+    const paneWidth = Math.min(1100, Math.max(640, graph.box.w));
+    pane.el.style.width = `min(calc(72vh / var(--ui-scale) * ${(graph.box.w / graph.box.h).toFixed(3)}), ${paneWidth}px)`;
 
     // Node state through THE ONE SPEND PREDICATE (+ the field discipline).
     type NodeState = 'spent' | 'open' | 'sealed' | 'locked';

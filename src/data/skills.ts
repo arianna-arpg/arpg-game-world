@@ -14,8 +14,10 @@ import { ULTIMATE_SKILLS } from './ultimates';
 import { LIVING_SKILLS } from './livingSkills';
 import { REACTIVE_SKILLS } from './reactiveSkills';
 import { NECROMANCER_TREES } from './necromancerTrees';
+import { NECROMANCER_SKILLS } from './necromancerSkills';
 
 export const SKILLS: Record<string, SkillDef> = {
+  ...NECROMANCER_SKILLS,
 
   // ======================= Mimicry (the blue-mage lane) ====================
   // THE SLOT and its cycle payload (engine/mimic.ts — capture is the
@@ -2035,6 +2037,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   
   summon_skeleton_archer: {
+    tree: NECROMANCER_TREES.summon_skeleton_archer,
     id: 'summon_skeleton_archer', name: 'Summon Skeleton Archer',
     description: 'Call up a skeletal archer to shoot for you; up to 2 may serve at once, and'
       + ' their strength scales with your minion stats.',
@@ -2143,6 +2146,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // (data/classes.ts kit): the golem family's fourth body, raised from bone
   // — the same binding contract as its kin, one shared golem slot.
   summon_bone_golem: {
+    tree: NECROMANCER_TREES.summon_bone_golem,
     id: 'summon_bone_golem', name: 'Summon Bone Golem',
     description: 'TOGGLE a binding contract: mana is reserved for the golem and stays locked'
       + ' while the contract holds, even while it lies in a heap awaiting its 8 second'

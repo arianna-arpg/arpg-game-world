@@ -15,6 +15,7 @@ import type { BrainTuning, PhaseDef } from '../engine/brain';
 import type { CurveKind } from '../engine/curves';
 import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
 import { ULTIMATE_FORMS } from './ultimates';
+import { NECROMANCER_MINIONS } from './necromancerMinions';
 import { registerAIAction } from '../engine/aiActions';
 import { FluxPhase } from '../engine/flux';
 import type { TuneSpec } from '../engine/tuning';
@@ -2144,6 +2145,7 @@ const wingCycle = (opts: {
 //   the_long_yoke, candelabrum_hulk, mireback_tusker.
 // ===========================================================================
 export const MONSTERS: Record<string, MonsterDef> = {
+  ...NECROMANCER_MINIONS,
 
   zombie: {
     id: 'zombie', name: 'Shambling Zombie',

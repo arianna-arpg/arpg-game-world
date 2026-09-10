@@ -155,7 +155,7 @@ function damageContext(caster: Actor, inst: SkillInstance, vsTags?: readonly Ski
     // every downstream read through packet.tags — can be scoped to the
     // victim by an ordinary tag filter. Absent (previews, victim-blind
     // rolls) the context is exactly the skill's own.
-    baseTags: skillContextTags(inst.def, vsTags as SkillTag[] | undefined),
+    baseTags: skillContextTags(inst, vsTags as SkillTag[] | undefined),
     vsTags,
     effectiveness: inst.def.addedEffectiveness ?? 1,
   };
@@ -178,7 +178,7 @@ function foldSkillDamage(
     // Context for this damage type = skill tags + the type itself (+ the
     // victim scope when the hit site supplied it), so "increased fire
     // damage" applies to the fire portion only.
-    const tags = skillContextTags(def, vsTags ? [type, ...vsTags] : [type]);
+    const tags = skillContextTags(inst, vsTags ? [type, ...vsTags] : [type]);
     let base = flatBonus?.[type] ?? 0;
     // MIN/MAX added (the D2 lane) stretches the roll's ends independently
     // — max-only investment is the wide-variance thunder, min-only the

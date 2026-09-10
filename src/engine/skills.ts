@@ -232,7 +232,7 @@ export function hostSockets(inst: SkillInstance): SupportInstance[] {
   // grafts with no further edits. Slot order: sockets first, grafts after.
   const sockets = socketsWithGrafts(inst);
   const admitted: boolean[] = new Array(sockets.length).fill(false);
-  const pool = [...inst.def.tags];
+  const pool = instanceBaseTags(inst);
   let grew = true;
   while (grew) {
     grew = false;
@@ -432,7 +432,19 @@ export function instanceAim(inst: SkillInstance): AimSpec | undefined {
 export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
   const d = inst.def.delivery;
   const over = instanceTreeOver(inst);
-  if (over?.summon && d.type === 'summon') return { ...d, ...over.summon };
+  if (d.type === 'summon' && (over?.summon || d.selectPool?.length)) {
+    const summonOver = over?.summon ?? {};
+    const resolved = { ...d, ...summonOver };
+    resolved.crewSkills = union(d.crewSkills, summonOver.crewSkills);
+    resolved.crewAuras = union(d.crewAuras, summonOver.crewAuras);
+    resolved.crewMods = [...(d.crewMods ?? []), ...(summonOver.crewMods ?? [])];
+    if (summonOver.pool) delete resolved.monsterId;
+    if (summonOver.monsterId) delete resolved.pool;
+    if (resolved.selectPool?.length && resolved.pool) {
+      resolved.pool = resolved.pool.filter(p => resolved.selectPool!.includes(p.id));
+    }
+    return resolved;
+  }
   if (over?.arcDeg !== undefined && (d.type === 'cone' || d.type === 'melee')) {
     return { ...d, arcDeg: over.arcDeg };
   }
@@ -1791,7 +1803,17 @@ export interface SummonDelivery {
   /** Fixed minion type — or use `pool` for weighted random selection. */
   monsterId?: string;
   /** Weighted pool, re-rolled per spawn (and per respawn). */
-  pool?: { id: string; weight: number }[];
+  pool?: { id: string; weight: number; tags?: SkillTag[] }[];
+  /** Selections union across tree nodes; restrict the pool to these kinds. */
+  selectPool?: string[];
+  /** Additional native kit. Unioned across nodes, installed before support fit. */
+  crewSkills?: string[];
+  /** Aura skill ids activated freely at birth, on the crew's own instance. */
+  crewAuras?: string[];
+  /** Body-local investment, additive across nodes (ordinary tagged stats). */
+  crewMods?: Modifier[];
+  /** Stay this far ahead of the owner, attacking from that post without pursuit. */
+  escort?: { distance: number };
   /** The minion type comes from the consumed corpse (Raise Spectre, Revive).
    *  Requires `targeting: { target: 'corpse' }` on the skill. */
   fromCorpse?: boolean;
@@ -3137,7 +3159,7 @@ export function poolReadOf(
   const pl = inst.def.pool;
   if (!pl) return null;
   const cap = pl.cap * caster.sheet.get('poolCap',
-    skillContextTags(inst.def), instanceMods(inst));
+    skillContextTags(inst), instanceMods(inst));
   return {
     spec: pl,
     banked: caster.pools.get(pl.id) ?? 0,
@@ -4695,9 +4717,12 @@ export interface SkillTreeNode {
    *  base — so the branch survives a rescale moving the base row. */
   over?: {
     /** Summon-tree adoption: execute/spawn, pending summons, previews and
-     *  replenishment read instanceDelivery. Other summon fields stay fixed.
+     *  replenishment and crew fit read instanceDelivery. Kits and selections union.
      *  duration: 0 explicitly removes the birth's expiry clock. */
-    summon?: Partial<Pick<SummonDelivery, 'count' | 'maxActive' | 'duration' | 'replenish'>>;
+    summon?: Partial<Pick<SummonDelivery, 'count' | 'maxActive' | 'duration' | 'replenish'
+      | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort'>>;
+    /** Host tag changes. Crew skills retain their own attack/spell tags. */
+    tags?: { add?: SkillTag[]; remove?: SkillTag[] };
     /** delivery.arcDeg replacement (cone/melee deliveries only). */
     arcDeg?: number;
     /** aim.random.spreadDeg replacement (random-sector aims only). */
@@ -4859,7 +4884,7 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
   const ids = inst.treeNodes;
   if (!ids || ids.length === 0) return undefined;
   let out: SkillTreeNode['over'] | undefined;
-  for (const id of ids) {
+  for (const id of [...new Set(ids)]) {
     const over = treeNodeOf(inst.def, id)?.over;
     if (!over) continue;
     out = out
@@ -4868,11 +4893,33 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
         ...(out.channel || over.channel
           ? { channel: { ...out.channel, ...over.channel } } : {}),
         ...(out.summon || over.summon
-          ? { summon: { ...out.summon, ...over.summon } } : {}),
+          ? { summon: { ...out.summon, ...over.summon,
+            selectPool: union(out.summon?.selectPool, over.summon?.selectPool),
+            crewSkills: union(out.summon?.crewSkills, over.summon?.crewSkills),
+            crewAuras: union(out.summon?.crewAuras, over.summon?.crewAuras),
+            crewMods: [...(out.summon?.crewMods ?? []), ...(over.summon?.crewMods ?? [])],
+          } } : {}),
+        ...(out.tags || over.tags ? { tags: {
+          add: union(out.tags?.add, over.tags?.add), remove: union(out.tags?.remove, over.tags?.remove),
+        } } : {}),
       }
       : over;
   }
   return out;
+}
+
+function union<T extends string>(a?: T[], b?: T[]): T[] | undefined {
+  return a || b ? [...new Set([...(a ?? []), ...(b ?? [])])].sort() : undefined;
+}
+
+/** Resolved host identity, before support grants; never mutates catalog tags. */
+export function instanceBaseTags(inst: SkillInstance): SkillTag[] {
+  const delta = instanceTreeOver(inst)?.tags;
+  const tags = new Set(inst.def.tags.filter(t => !delta?.remove?.includes(t)));
+  for (const t of delta?.add ?? []) tags.add(t);
+  const d = instanceDelivery(inst);
+  if (d.type === 'summon') for (const p of d.pool ?? []) for (const t of p.tags ?? []) tags.add(t);
+  return [...tags];
 }
 
 /** Skill-local mods from every spent node — joined in instanceInnateMods
@@ -5993,7 +6040,7 @@ export function supportMechanismsFit(sup: SupportDef, inst: SkillInstance): bool
  * up and Alacrity — which demands 'cooldown' — fits beside it.
  */
 export function supportFitsInst(sup: SupportDef, inst: SkillInstance, rolled?: SupportRolled): boolean {
-  if (!supportFitsTags(sup, [...inst.def.tags, ...grantedTags(inst)])) return false;
+  if (!supportFitsTags(sup, [...instanceBaseTags(inst), ...grantedTags(inst)])) return false;
   if (!supportMechanismsFit(sup, inst)) return false;
   // THE GATE READS THE CUT (the support base — her Card-D ruling): a
   // chassis gem's resolved rows add their own demands — refuse ONLY a cut
@@ -6043,6 +6090,7 @@ export function summonCrewOf(
     seen.add(skillId);
     out.push(def);
   };
+  for (const sid of [...(d.crewSkills ?? []), ...(d.crewAuras ?? [])]) add(sid);
   for (const mid of ids) {
     const mdef = monster(mid);
     if (!mdef) continue;
@@ -6237,8 +6285,8 @@ export function instanceMods(inst: SkillInstance): Modifier[] {
 }
 
 /** Damage + status tags a skill's context query should include. */
-export function skillContextTags(def: SkillDef, extra?: SkillTag[]): Set<SkillTag> {
-  const s = new Set<SkillTag>(def.tags);
+export function skillContextTags(def: SkillDef | SkillInstance, extra?: SkillTag[]): Set<SkillTag> {
+  const s = new Set<SkillTag>('def' in def ? instanceBaseTags(def) : def.tags);
   if (extra) for (const t of extra) s.add(t);
   return s;
 }
@@ -6258,7 +6306,7 @@ export function skillCooldownSeconds(
   caster: { sheet: { get(stat: string, tags?: Set<SkillTag>, extra?: Modifier[]): number } },
   inst: SkillInstance, base = inst.def.cooldown,
 ): number {
-  const tags = skillContextTags(inst.def);
+  const tags = skillContextTags(inst);
   const extra = instanceMods(inst);
   const cdBase = base + caster.sheet.get('addedCooldown', tags, extra);
   if (cdBase <= 0) return 0;
