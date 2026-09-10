@@ -30,6 +30,7 @@ import { orientEscarpment } from './escarpmentGen';
 import { atlasDestinationAt, compileLocale, localeProgram, localeSeed, type AtlasDestination, type LocalePlan } from '../world/locales';
 import { LOCALE_LAYOUT } from './localeGen';
 import { expandExplorationSize, pickExplorationLocale } from '../world/zoneVariety';
+import { materializeComplex } from './landmarkComplexGen';
 import { atlasSeedInstalled, bakeAtlasContext, featuresAt, foldFeatureHits } from '../world/atlas';
 import { fieldCoreRect } from '../world/fieldRegion';
 import { dimensionDef, dimensionsEnteredBy, isRoadlessGateHub } from '../world/dimensions';
@@ -1179,12 +1180,14 @@ export function placeZoneAt(
       locale = compileLocale(program, seed);
       const localeSize = locale.size ?? program.size;
       destination = { feature: hit.feature.id, name: hit.feature.name, seed: destinationSeed,
-        seat: { ...hit.feature.seat }, program: program.id };
+        seat: { ...hit.feature.seat }, program: program.id,
+        ...(hit.def.destination!.complex ? { complex: hit.def.destination!.complex } : {}) };
       target = { ...hit.feature.seat };
       spec = { ...spec, id, seed, name: hit.feature.name, shape: 'rect', layoutType: LOCALE_LAYOUT,
         objective: spec.objective ?? { kind: 'clear' }, noFactionWar: true,
         sizeBand: { w: [localeSize.w, localeSize.w], h: [localeSize.h, localeSize.h] },
         layoutParams: { ...spec.layoutParams, riverSides: hit.feature.riverSides } };
+      if (destination.complex) spec = { ...spec, forceFrontiers: 1, noWeave: true };
     }
   }
   const scarp = geographyEligible && destinationSeed !== null ? escarpmentAt(target, destinationSeed) : undefined;
@@ -1781,6 +1784,7 @@ export function placeZoneAt(
     // A noWeave mint (the FIELD expanse) links by its own hub law instead.
     if (!spec.noWeave) weaveConnections(def, zoneMap, rng);
   }
+  if (destination?.complex) materializeComplex(def, zoneMap, destination.complex);
   return def;
 }
 

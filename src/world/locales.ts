@@ -55,6 +55,8 @@ export interface LocaleVariant {
   portalMode?: 'entrance' | 'nearest';
   approaches?: Partial<Record<'n' | 's' | 'e' | 'w', { district: string; via?: [number, number][] }>>;
   goal: string;
+  /** Registered covered-layer generator, resolved with this variant. */
+  underTier?: string;
   terrain?: { background: string; rim?: { side: 'n' | 's' | 'e' | 'w'; width: number; region: string } };
   river?: { width: [number, number]; bend: [number, number]; region: string; crossing: string };
 }
@@ -78,6 +80,7 @@ export interface AtlasDestination {
   feature: string; name: string;
   seed: number; seat: { x: number; y: number };
   program: string;
+  complex?: string;
 }
 const PROGRAMS: Record<string, LocaleProgram> = {};
 let defaultProgram: string | undefined;

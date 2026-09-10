@@ -32,7 +32,7 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import type { ZoneDef } from '../src/data/zones';
 import { HUB_ZONE } from '../src/data/zones';
-import { WEB_CFG, settleWeb, settleMovable, webDisturbance, pokeWeb, chordClearsNodes, footprintBars, insideFieldFootprint } from '../src/engine/worldgen';
+import { WEB_CFG, settleWeb, settleMovable, webDisturbance, pokeWeb, chordClearsNodes, footprintBars, insideFieldFootprint, escarpmentConnection } from '../src/engine/worldgen';
 import { fieldCoreRect } from '../src/world/fieldRegion';
 import { OCEAN_BIOME } from '../src/world/biomes';
 import { zoneKindOf } from '../src/data/zoneKinds';
@@ -50,12 +50,24 @@ w.loadZone(HUB_ZONE);
 const priv = w as unknown as {
   chartNeighborsOf(z: ZoneDef): void;
   biomeFor(pt: { x: number; y: number }): string;
+  landRoute(a: { x: number; y: number }, b: { x: number; y: number }): boolean;
   updateWebSettle(): void;
   webSettleNextAt: number;
   time: number;
 };
 const canStand = (z: ZoneDef, pt: { x: number; y: number }): boolean =>
   (z.dimension ? true : priv.biomeFor(pt) !== OCEAN_BIOME);
+// Manufacture spacing defects, while preserving the independent geography
+// contracts. Shoving a shoreline hold across water can strand its road; the
+// settlement guard correctly refuses to heal spacing by breaking that road.
+const canShove = (z: ZoneDef, map: ZoneDef['map']): boolean => {
+  if (!settleMovable(z) || z.field || !canStand(z, map) || insideFieldFootprint(map, w.zoneMap, z.id)) return false;
+  return z.exits.every(e => {
+    const dest = w.zoneMap[e.to];
+    return !dest || e.crossDim || (dest.dimension ?? 'surface') !== (z.dimension ?? 'surface')
+      || (escarpmentConnection({ ...z, map }, dest) && priv.landRoute(map, dest.map) && !footprintBars(map, dest.map, w.zoneMap));
+  });
+};
 
 // Grow a real chart (the same frontier resolution travel + the halo ride).
 for (let r = 0; r < 12; r++) {
@@ -90,7 +102,7 @@ for (let i = 0; i < 8; i++) if (settleWeb(w.zoneMap, null, { canStand }) === 0) 
   // Manufacture a deterministic scatter of violations, snapshot, settle,
   // restore, settle again: the two runs must land every zone byte-equal
   // (the hash scan cannot depend on Map iteration luck).
-  const pool = surface().filter(z => !z.pocket && z.objective.kind !== 'safe' && !z.floating);
+  const pool = surface().filter(z => !z.pocket && settleMovable(z) && !z.field && !z.floating);
   let h = 0xbeef;
   const disturbed: ZoneDef[] = [];
   for (let k = 0; k < pool.length && disturbed.length < 10; k++) {
@@ -105,7 +117,9 @@ for (let i = 0; i < 8; i++) if (settleWeb(w.zoneMap, null, { canStand }) === 0) 
     }
     if (!best || bd < 1) continue;
     const ux = (best.map.x - z.map.x) / bd, uy = (best.map.y - z.map.y) / bd;
-    z.map.x += ux * Math.max(0, bd - 16); z.map.y += uy * Math.max(0, bd - 16);
+    const proposed = { x: z.map.x + ux * Math.max(0, bd - 16), y: z.map.y + uy * Math.max(0, bd - 16) };
+    if (!canShove(z, proposed)) continue;
+    Object.assign(z.map, proposed);
     disturbed.push(z);
   }
   const snap = new Map(surface().map(z => [z.id, { x: z.map.x, y: z.map.y }] as const));
@@ -179,7 +193,9 @@ for (let i = 0; i < 8; i++) if (settleWeb(w.zoneMap, null, { canStand }) === 0) 
     }
     if (!best) continue;
     const ux = (best.map.x - z.map.x) / bd, uy = (best.map.y - z.map.y) / bd;
-    z.map.x += ux * Math.max(0, bd - 14); z.map.y += uy * Math.max(0, bd - 14);
+    const proposed = { x: z.map.x + ux * Math.max(0, bd - 14), y: z.map.y + uy * Math.max(0, bd - 14) };
+    if (!canShove(z, proposed)) continue;
+    Object.assign(z.map, proposed);
     shoved.push(z);
   }
   const before = new Map(surface().map(z => [z.id, { x: z.map.x, y: z.map.y }] as const));

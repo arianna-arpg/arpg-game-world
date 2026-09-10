@@ -662,7 +662,8 @@ export interface ZoneExitDef {
   lock?: string;
   /** Off-axis portal placement OVERRIDE (normalized 0..1 arena fractions), decoupled
    *  from `side` so a non-cardinal locale still draws a sane map road from `side`.
-   *  Absent (the norm) = the cardinal side+at placement. (Data seam; phase-2 use.) */
+   *  Absent (the norm) = the cardinal side+at placement. Shared by entry, layout,
+   *  and live portals through World.placeExit. */
   posFrac?: { fx: number; fy: number };
   /** A DECLARED cross-dimension road (a dimension gate's way home). Dimensions are
    *  sealed world-states: every mint/link guard refuses an exit whose destination
@@ -1129,6 +1130,8 @@ export interface ZoneDef {
   journey?: CourseJourney;
   /** Saved exploration plan and stable atlas ownership. */
   locale?: import('../world/locales').LocalePlan;
+  /** Membership in a persistent, connected landmark region. */
+  complex?: import('../world/landmarkComplexes').ComplexMembership;
   destination?: import('../world/locales').AtlasDestination;
   /** THE BLEND (engine/blend.ts): this zone interleaves a partner tileset's
    *  theme + kit + packs by a weight field — resolved at mint (from

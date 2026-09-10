@@ -54,6 +54,11 @@ export interface ZoneKindDef {
 }
 
 export const ZONE_KINDS: Record<string, ZoneKindDef> = {
+  landmark_section: {
+    id: 'landmark_section', label: 'Landmark interior', keepLevel: true,
+    staticExits: true, ring: { color: '#b8aa87' },
+    glyph: { char: '⌘', color: '#e0d0ad' },
+  },
   town: {
     id: 'town',
     label: 'Town',

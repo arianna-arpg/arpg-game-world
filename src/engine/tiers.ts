@@ -723,6 +723,10 @@ export interface UnderTierSpec {
   wells?: [number, number];
   /** Duct corridor half-width (default TIER_CFG.ductHalfW). */
   ductHalfW?: number;
+  /** Optional connected chambers around joined wells; the base floor is preserved cell by cell. */
+  chamberRadius?: [number, number];
+  /** Preserve each surface cell while boring, including walls at a corridor's edges. */
+  preserveSurface?: boolean;
   /** HUD label for the under story ("the drains", "the roots"). */
   label: string;
   /** ZoneTiers.packSplit default (layoutParam 'tierPackSplit' outranks). */
@@ -879,7 +883,14 @@ export function carveUnderTier(ctx: GenCtx, def: ZoneDef, grid: GridWalkField, l
   // elbow, else skip the pair (an orphan duct is worse than none).
   const ductable = (k: string | undefined): boolean =>
     !!k && (underWall[k] !== undefined
+      || (!!spec.preserveSurface && Object.values(underWall).includes(k))
       || (!!regionKind(k)?.walkable && !spec.forbid?.includes(k)));
+  const paintCell = (x: number, y: number): void => {
+    const k = grid.regionAt(x, y);
+    if (!ductable(k)) return;
+    const paint = Object.values(underWall).includes(k) ? k : underWall[k] ?? spec.duct;
+    grid.fillRegion(x - cs * 0.45, y - cs * 0.45, x + cs * 0.45, y + cs * 0.45, paint);
+  };
   const legClear = (a: Vec2, b: Vec2): boolean => {
     const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / cs));
     for (let s = 0; s <= steps; s++) {
@@ -892,6 +903,12 @@ export function carveUnderTier(ctx: GenCtx, def: ZoneDef, grid: GridWalkField, l
     const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (cs * 0.5)));
     for (let s = 0; s <= steps; s++) {
       const x = a.x + (b.x - a.x) * (s / steps), y = a.y + (b.y - a.y) * (s / steps);
+      if (spec.preserveSurface) {
+        for (let cy = Math.floor((y - ductHalfW) / cs) * cs + cs / 2; cy < y + ductHalfW; cy += cs)
+          for (let cx = Math.floor((x - ductHalfW) / cs) * cs + cs / 2; cx < x + ductHalfW; cx += cs)
+            paintCell(cx, cy);
+        continue;
+      }
       const k = grid.regionAt?.(x, y);
       const paint = k && underWall[k] ? underWall[k] : spec.duct;
       grid.fillRegion(x - ductHalfW, y - ductHalfW, x + ductHalfW, y + ductHalfW, paint);
@@ -912,6 +929,17 @@ export function carveUnderTier(ctx: GenCtx, def: ZoneDef, grid: GridWalkField, l
     if (!wellDir.has(i)) wellDir.set(i, Math.atan2(elbow.y - b.y, elbow.x - b.x));
   }
   if (!joined) return;
+  if (spec.chamberRadius) {
+    for (const i of wellDir.keys()) {
+      const p = wells[i], r = ctx.rng.range(...spec.chamberRadius);
+      for (let y = Math.floor((p.y - r) / cs) * cs + cs / 2; y < p.y + r; y += cs) {
+        for (let x = Math.floor((p.x - r) / cs) * cs + cs / 2; x < p.x + r; x += cs) {
+          if (Math.hypot(x - p.x, y - p.y) > r || !seatInArena(def, ctx.arena, vec(x, y))) continue;
+          paintCell(x, y);
+        }
+      }
+    }
+  }
   // Wells LAST (over the duct ends): the crossings stand on both layers —
   // and each joined well wears its STAIR PROP, rotated INTO the tunnel it
   // starts (a stairway facing north into an east-running duct would lie).

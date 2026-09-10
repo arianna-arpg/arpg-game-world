@@ -246,5 +246,6 @@ registerLayout(LOCALE_LAYOUT, (ctx, def) => {
   const program = localeProgram(typeof def.layoutParams?.locale === 'string' ? def.layoutParams.locale : undefined);
   const plan = def.locale ?? (program ? compileLocale(program, def.seed ?? 1, typeof def.layoutParams?.localeVariant === 'string' ? def.layoutParams.localeVariant : undefined) : undefined);
   if (!plan) throw new Error('district layout requires a registered locale program');
+  if (plan.underTier) def.layoutParams = { ...def.layoutParams, underTier: plan.underTier };
   generateLocale(ctx, plan, def.layoutParams?.riverSides as string[] | undefined);
 });

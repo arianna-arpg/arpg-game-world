@@ -4,6 +4,8 @@ import '../engine/escarpmentGen';
 import '../engine/localeGen';
 import './landformLocales';
 import './explorationLocales';
+import './complexLocales';
+import './landmarkComplexes';
 import { registerLocaleProgram, type LocaleDistrict } from '../world/locales';
 import { registerRegion, regionKind } from '../world/regions';
 

@@ -9140,6 +9140,9 @@ export class World {
     // (sim.onNodeCharted): surface mints feed the surface systems, hell mints
     // feed hell's own overlay instances. Parallel world-states, one graph.
     this.sim.onNodeCharted(gen, this.simView());
+    if (gen.complex?.root === gen.id) for (const member of Object.values(this.zoneMap)) {
+      if (member.id !== gen.id && member.complex?.root === gen.id) this.sim.onNodeCharted(member, this.simView());
+    }
     // THE ROOTED WEB (data/underspans.ts): an ORGANIC mint in a spanned biome
     // may seed an under-zone reaching other nodes — rolled on a private
     // position-hash stream, so unspanned biomes stay byte-identical and the
@@ -10775,7 +10778,10 @@ export class World {
       : vec(w - inset, clamp(h * t, inset, h - inset));
     // On an ellipse zone, pull the rect-edge portal onto the reachable rim. On a FIELD
     // zone, snap it onto the heat-map blob's edge in this direction (the expanse corners).
-    const pos = (this.zone.field && this.fieldExitPos(e)) || exitInside(edge, this.arena);
+    const posFrac = e.posFrac;
+    const pos = posFrac && Number.isFinite(posFrac.fx) && Number.isFinite(posFrac.fy)
+      ? exitInside(vec(clamp(w * posFrac.fx, inset, w - inset), clamp(h * posFrac.fy, inset, h - inset)), this.arena)
+      : (this.zone.field && this.fieldExitPos(e)) || exitInside(edge, this.arena);
     // BOUNDARY GATE: does this edge cross an enclave biome's boundary? Rides
     // the same prediction seam as the level preview below — an unminted
     // frontier already knows what looms behind it. Streams to clients like

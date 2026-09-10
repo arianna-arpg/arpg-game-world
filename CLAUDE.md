@@ -1163,6 +1163,12 @@ we verify changes.
   fragments extracted from authored maps with rotated sockets and source
   attribution. Resolved cells/choices/sizes persist in locale plans. Docs:
   `docs/worldgen/locale-composition.md`; probe `balance/probe_locales.ts`.
+  LANDMARK REGIONS (`world/landmarkComplexes.ts`, `data/landmarkComplexes.ts`):
+  atlas landmarks expand into saved, connected stage graphs with mixed locale
+  programs, interior gate landings, theme/sky changes, and sealed inner roads.
+  Fortresses, lost cities, and highland caverns are registered content. Cavern
+  locales select an under-tier lane with surface-preserving tunnels and chambers.
+  Docs: `docs/worldgen/landmark-regions.md`; probe `balance/probe_complexes.ts`.
   THE HARBORHOLD FABRIC (`data/harborholds.ts` + `world/harborholds.ts` —
   mainland ports as BESIEGED RESIDENCES): every sea spot's HOLD ANCHOR
   wears the walled town (`harborhold_*` compositions → plan structures

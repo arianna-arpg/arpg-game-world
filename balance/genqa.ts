@@ -116,6 +116,8 @@ import { ExplorationReport } from './explorationreport';
 import { EXPLORATION_CFG } from './layoutmetrics';
 import { localePrograms, localeProgram, validateLocaleProgram } from '../src/world/locales';
 import { explorationLocalePools } from '../src/world/zoneVariety';
+import { landmarkComplexes, landmarkComplex, validateLandmarkComplex } from '../src/world/landmarkComplexes';
+import { UNDER_TIER_LANES } from '../src/engine/tiers';
 import { hasDistrictBuilder } from '../src/engine/localeGen';
 import { mapFeatureKinds } from '../src/world/atlas';
 import { validateCourseStages } from '../src/world/courseStages';
@@ -745,6 +747,11 @@ const layoutSources = [
   ...Object.values(MELDS).map(m => ({ source: `meld ${m.id}`, specs: m.rows as StampSpec[] })),
 ];
 const registryErrors = [
+  ...landmarkComplexes().flatMap(c => validateLandmarkComplex(c).map(e => `complex ${c.id}: ${e}`)),
+  ...localePrograms().flatMap(p => p.variants.filter(v => v.underTier && !UNDER_TIER_LANES[v.underTier]).map(v => `locale ${p.id}/${v.id}: unknown under-tier lane`)),
+  ...mapFeatureKinds().filter(f => f.destination?.complex && (!landmarkComplex(f.destination.complex)
+    || landmarkComplex(f.destination.complex).stages.find(s => s.id === landmarkComplex(f.destination!.complex!).entrance)?.locale !== f.destination.locale))
+    .map(f => `atlas complex ${f.id}: invalid entrance`),
   ...explorationLocalePools().flatMap(p => p.biomes.filter(b => !BIOMES[b]).map(b => `exploration pool ${p.id}: unknown biome ${b}`)),
   ...localePrograms().flatMap(p => validateLocaleProgram(p, { builder: hasDistrictBuilder, doodad: hasDoodadRule, region: id => !!regionKind(id), walkable: id => !!regionKind(id)?.walkable }).map(e => 'locale ' + p.id + ': ' + e)),
   ...mapFeatureKinds().filter(f => f.destination && !localeProgram(f.destination.locale)).map(f => 'atlas destination ' + f.id + ': unknown locale ' + f.destination!.locale),

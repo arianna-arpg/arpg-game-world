@@ -171,7 +171,7 @@ export interface MapFeatureKindDef {
   read: string;
   inherit?: FeatureInherit;
   /** One explorable destination at the seat, claimed by nearby frontier travel. */
-  destination?: { locale: string; reach?: number };
+  destination?: { locale: string; reach?: number; complex?: string };
   /** Registered recurring natural activity, evaluated on the saved world clock. */
   activity?: string;
 }

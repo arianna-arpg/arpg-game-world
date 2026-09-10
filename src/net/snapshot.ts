@@ -1403,6 +1403,7 @@ export interface ZoneMsg {
   /** Baked regional identity for the current locale, optional on old peers. */
   journey?: CourseJourney;
   locale?: ZoneDef['locale'];
+  complex?: ZoneDef['complex'];
   destination?: ZoneDef['destination'];
   /** Host-resolved geographic context; never sample the client's world field. */
   geo?: ZoneDef['geo'];
@@ -1456,6 +1457,7 @@ export function serializeZone(world: World): ZoneMsg {
   return {
     zoneId: world.zone.id, name: world.zone.name, level: world.zone.level,
     ...(world.zone.locale ? { locale: structuredClone(world.zone.locale) } : {}),
+    ...(world.zone.complex ? { complex: { ...world.zone.complex } } : {}),
     ...(world.zone.destination ? { destination: structuredClone(world.zone.destination) } : {}),
     ...(world.zone.journey ? { journey: { ...world.zone.journey } } : {}),
     ...(world.zone.geo ? { geo: structuredClone(world.zone.geo) } : {}),
@@ -1506,6 +1508,8 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   world.zone.level = msg.level;
   if (msg.locale) world.zone.locale = structuredClone(msg.locale);
   else delete world.zone.locale;
+  if (msg.complex) world.zone.complex = { ...msg.complex };
+  else delete world.zone.complex;
   if (msg.destination) world.zone.destination = structuredClone(msg.destination);
   else delete world.zone.destination;
   if (msg.journey) world.zone.journey = { ...msg.journey };
