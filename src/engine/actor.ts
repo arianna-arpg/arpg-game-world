@@ -27,7 +27,7 @@ import { CHARGE_DEFS } from './charges';
 import { gaugeEffOf, gaugeNote, gaugeReady, gaugeTick, type GaugeEff } from './gauge'; // THE GAUGE FABRIC
 import type { TuneSpec } from './tuning';
 import { replenishingDelivery } from './replenishment';
-import { instanceDelivery } from './skills'; // summon-tree reservation preview
+import { instanceDelivery, type SummonShellSpec } from './skills'; // summon-tree reservation preview
 import type { SquishSpec } from './squish';
 import type { ClingSpec, ClingRide } from './cling';
 import type { CreepSource } from './creep';
@@ -1525,6 +1525,7 @@ export class Actor {
     broken: boolean;
     color: string;
     fromAura?: string;
+    reformFraction?: number;
     breathe?: { period: number; minFrac?: number; curve?: CurveKind };
   };
   /** TURN SPEED (rad/s): the per-frame facing clamp. 0 = instant (players). */
@@ -1696,6 +1697,8 @@ export class Actor {
   /** The summoning instance, kept for persistent respawns. */
   summonInst?: SkillInstance;
   summonEscort?: { distance: number };
+  summonShell?: SummonShellSpec;
+  summonShells?: Set<Actor>; // attached defenders; absent on ordinary actors
   /** Max mana this minion's contract reserves on its owner. */
   manaReserved = 0;
   /** Total max mana locked out by persistent minions and toggled auras. */

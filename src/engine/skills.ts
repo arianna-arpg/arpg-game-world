@@ -1793,6 +1793,19 @@ export interface SelfDelivery {
   type: 'self';           // applies effects to the caster only
 }
 
+/** A summoned body worn as a directional, regenerating defensive layer.
+ * Its own kit becomes the strike skill plus taught crew arts. It protects its
+ * owner through the ordinary shell absorption path, without replacing other shells. */
+export interface SummonShellSpec {
+  lifeFraction: number;
+  arcDeg: number;
+  regenDelay: number;
+  regenFraction: number;
+  reformFraction: number;
+  strikeSkill: string;
+  strikeInterval: number;
+}
+
 export interface SummonDelivery {
   type: 'summon';
   /** Passive replenishment while seated on a living actor's bar. Free births,
@@ -1814,6 +1827,7 @@ export interface SummonDelivery {
   crewMods?: Modifier[];
   /** Stay this far ahead of the owner, attacking from that post without pursuit. */
   escort?: { distance: number };
+  shell?: SummonShellSpec;
   /** The minion type comes from the consumed corpse (Raise Spectre, Revive).
    *  Requires `targeting: { target: 'corpse' }` on the skill. */
   fromCorpse?: boolean;
@@ -4720,7 +4734,7 @@ export interface SkillTreeNode {
      *  replenishment and crew fit read instanceDelivery. Kits and selections union.
      *  duration: 0 explicitly removes the birth's expiry clock. */
     summon?: Partial<Pick<SummonDelivery, 'count' | 'maxActive' | 'duration' | 'replenish'
-      | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort'>>;
+      | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell'>>;
     /** Host tag changes. Crew skills retain their own attack/spell tags. */
     tags?: { add?: SkillTag[]; remove?: SkillTag[] };
     /** delivery.arcDeg replacement (cone/melee deliveries only). */
@@ -6091,6 +6105,7 @@ export function summonCrewOf(
     out.push(def);
   };
   for (const sid of [...(d.crewSkills ?? []), ...(d.crewAuras ?? [])]) add(sid);
+  if (d.shell) { add(d.shell.strikeSkill); return out.length ? out : null; }
   for (const mid of ids) {
     const mdef = monster(mid);
     if (!mdef) continue;

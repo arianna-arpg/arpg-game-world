@@ -12,7 +12,7 @@ type Limb = [Node, [Node, Node, Node], [Node, Node, Node]];
 /** Shared binary anatomy: only trunks exclude. Descendants add to the chosen
  * identity, so sibling routes can be mixed without last-pick-wins overrides. */
 function tree(left: Limb, right: Limb, passive: Node): SkillTreeSpec {
-  const nodes: SkillTreeNode[] = [{ ...passive, x: 0, y: 150 }];
+  const nodes: SkillTreeNode[] = [{ ...passive, ranks: 4, description: passive.description + ' Bonuses apply per rank; up to 4 ranks.', x: 0, y: 150 }];
   for (const [side, limb, other] of [[-1, left, right], [1, right, left]] as const) {
     nodes.push({ ...limb[0], kind: 'keystone', excludes: [other[0].id], x: side * 170, y: -50 });
     [limb[1], limb[2]].forEach(([fork, ...leaves], i) => {
@@ -69,7 +69,7 @@ export const NECROMANCER_TREES: Record<string, SkillTreeSpec> = {
   ], [
     n('keepers_bulwark', "Keeper's Bulwark", 'A defensive golem: 50% increased life, 20% less damage, and a shorter combat leash.', [life(0.5), mod('minionDamage', 'more', -0.2), mod('minionGuard', 'flat', 1)]),
     [n('close_guard', 'Close Guard', '75% faster movement and 20% increased size keep the golem beside the fight.', [speed(0.75), size(0.2)]),
-      n('bone_stand', 'Bone Stand', 'Shadow a post 45 units ahead of your keeper, lashing out without pursuing foes. A 115-radius aegis grants nearby allies 20% damage reduction.', undefined, { summon: { escort: { distance: 45 }, crewAuras: ['ossuary_aegis'], crewSkills: ['marrow_sweep'] } }),
+      n('bone_stand', 'Bone Stand', 'The golem becomes a shell attached to you, covering 300 degrees around your facing. Absorb damage up to 60% of its life, scaled by guard strength. It lashes out with Marrow Sweep. When broken, protection and strikes stop; after 4 seconds it regenerates 20% per second and reforms at 40%.', undefined, { tags: { add: ['guard'] }, summon: { shell: { lifeFraction: 0.6, arcDeg: 300, regenDelay: 4, regenFraction: 0.2, reformFraction: 0.4, strikeSkill: 'marrow_sweep', strikeInterval: 2 } } }),
       n('warding_reach', 'Warding Reach', 'Learn a 160-radius Warding Sweep that taunts enemies for 2 seconds, every 6 seconds.', undefined, kit('warding_sweep'))],
     [n('renewing_frame', 'Renewing Frame', 'Re-form 30% sooner and regenerate 5 life each second.', [mod('minionRespawnTime', 'more', -0.3), mod('minionRegen', 'flat', 5)]),
       n('sheltering_bones', 'Sheltering Bones', 'Bear a 180-radius mending aura that heals nearby allies for 2% of maximum life every second.', undefined, aura('ossuary_mending')),

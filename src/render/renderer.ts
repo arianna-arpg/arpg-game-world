@@ -5097,7 +5097,43 @@ export class Renderer {
     ctx.fillText(a === world.player ? `${label} — struggle!` : label, a.pos.x, gy - 3);
   }
 
+  /** An attached summon leaves the keeper visible inside its breakable shell.
+   * Arc, pool and break state are the same values used by damage absorption. */
+  private drawSummonShell(a: Actor): void {
+    const sg = a.shellGuard;
+    if (!sg) return;
+    const ctx = this.ctx, arc = sg.arcDeg * Math.PI / 180;
+    const r = Math.max(25, a.radius + 8), start = a.facing - arc / 2;
+    const frac = Math.max(0, sg.pool / sg.max);
+    ctx.save(); ctx.translate(a.pos.x, a.pos.y);
+    ctx.strokeStyle = sg.color;
+    ctx.globalAlpha = sg.broken ? 0.3 : 0.35 + 0.4 * frac;
+    ctx.lineWidth = sg.broken ? 2 : 4;
+    if (sg.broken) ctx.setLineDash([4, 7]);
+    ctx.beginPath(); ctx.arc(0, 0, r, start, start + arc); ctx.stroke();
+    // Jointed segments suggest the golem wrapped around the caster; the empty
+    // wedge remains legible, and cracked segments show the vulnerable period.
+    const segments = Math.max(3, Math.round(arc * 2));
+    for (let i = 0; i <= segments; i++) {
+      const angle = start + arc * i / segments;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * (r - 5), Math.sin(angle) * (r - 5));
+      ctx.lineTo(Math.cos(angle) * (r + 5), Math.sin(angle) * (r + 5)); ctx.stroke();
+    }
+    if (a.casting && !sg.broken) {
+      const facing = Math.atan2(a.casting.aim.y - a.pos.y, a.casting.aim.x - a.pos.x);
+      ctx.globalAlpha = 0.8; ctx.lineWidth = 5;
+      for (const offset of [-0.25, 0.25]) {
+        const angle = facing + offset;
+        ctx.beginPath(); ctx.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
+        ctx.lineTo(Math.cos(angle) * (r + 24), Math.sin(angle) * (r + 24)); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   private drawActor(a: Actor, world: World): void {
+    if (a.summonShell) { this.drawSummonShell(a); return; }
     const { ctx } = this;
     const { x, y } = a.pos;
 

@@ -105,6 +105,8 @@ export interface ActorW {
   ep?: PartSpec[];
   rarity?: string;
   defId?: string;
+  ss?: Actor['summonShell'];
+  sg?: Actor['shellGuard'];
   faction?: string;
   /** THE BOSS BAR row, host-computed (World.bossBarInfo — clients have no
    *  brain to derive pips from): [pips, lit, highlight]. Present only while
@@ -597,6 +599,7 @@ function actorToW(a: Actor): ActorW {
   if (a.extraParts?.length) w.ep = a.extraParts;
   if (a.rarity) w.rarity = a.rarity;
   if (a.defId) w.defId = a.defId;
+  if (a.summonShell) { w.ss = { ...a.summonShell }; if (a.shellGuard) w.sg = { ...a.shellGuard }; }
   if (a.faction) w.faction = a.faction;
   // THE BOSS BAR row rides the wire host-computed (clients have no brain
   // to derive pips from, and the policy must not fork): see BOSS_BAR_OF.
@@ -1116,6 +1119,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.aims = aw.aims !== false; // absent = aims (older hosts, ordinary bodies)
     a.wane = aw.wn ?? 0;
     a.owner = aw.mn ? MINION_OWNER : undefined;
+    a.summonShell = aw.ss;
+    a.shellGuard = aw.sg ? { ...aw.sg } : undefined;
     a.kind = aw.seat ? 'player' : undefined;
     a.adorn = aw.adorn;
     a.material = aw.mat;

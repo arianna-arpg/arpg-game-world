@@ -800,6 +800,18 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
 
   // Owner-bound bodyguard: ordinary collision-aware movement and skill casts,
   // but the keeper's flank owns the movement goal even when foes retreat.
+  if (actor.summonShell && actor.owner) {
+    actor.pos = { ...actor.owner.pos }; actor.tier = actor.owner.tier;
+    if (actor.owner.dead || actor.owner.downed || actor.shellGuard?.broken) return;
+    if (target) {
+      const inst = pickSkill(actor, world, dist(actor.pos, target.pos), tuning, target);
+      if (inst) {
+        useOn(actor, world, inst, target, tuning);
+        actor.aiCooldown = Math.max(actor.aiCooldown, actor.summonShell.strikeInterval);
+      }
+    }
+    return;
+  }
   if (actor.summonEscort && actor.owner) {
     const bearing = target ? angleTo(actor.owner.pos, target.pos) : actor.owner.facing;
     const reach = actor.summonEscort.distance;

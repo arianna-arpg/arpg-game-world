@@ -2075,6 +2075,12 @@ export function validateContent(): void {
       for (const id of [d.monsterId, ...(d.pool ?? []).map(p => p.id)]) {
         if (id && !MONSTERS[id]) warn(`${src}: unknown summon monster '${id}'`);
       }
+      if (d.shell) {
+        const s = d.shell;
+        if (!SKILLS[s.strikeSkill]) warn(`${src}: unknown shell strike '${s.strikeSkill}'`);
+        if (![s.lifeFraction, s.arcDeg, s.regenFraction, s.reformFraction, s.strikeInterval].every(v => Number.isFinite(v) && v > 0)
+          || !Number.isFinite(s.regenDelay) || s.regenDelay < 0 || s.arcDeg > 360 || s.reformFraction > 1) warn(`${src}: invalid summon shell shape`);
+      }
       for (const p of d.pool ?? []) if (!Number.isFinite(p.weight) || p.weight <= 0) warn(`${src}: invalid summon weight`);
       for (const id of d.crewSkills ?? []) if (!SKILLS[id]) warn(`${src}: unknown crew skill '${id}'`);
       for (const id of d.crewAuras ?? []) if (SKILLS[id]?.delivery.type !== 'aura') warn(`${src}: crew aura '${id}' is not an aura skill`);
@@ -2895,7 +2901,7 @@ export function validateContent(): void {
   // against the kit's own defs.
   {
     const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags']);
-    const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort']);
+    const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
     const budget = bandPointsAt(MAX_SKILL_LEVEL);

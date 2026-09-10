@@ -23,9 +23,10 @@ Every tree contains 15 investment nodes, separate from the skill's visual root:
 Only the two trunks exclude one another. Every descendant requires its parent;
 siblings have no exclusion. Shared authoring helpers assign the graph and layout,
 while the existing graph engine controls legality, spending, display and save repair.
-All nodes in this batch cost one point and have one rank.
+Every node costs one point. Each generic passive has four ranks; branch nodes have one.
 
 The existing four-point budget remains: one point at skill levels 5, 10, 15 and 20.
+All four points may go into the generic passive, preserving the base form while stacking its bonuses. Passive ranks also mix freely with branches.
 A complete route costs three points. The fourth buys its sibling leaf, the other
 middle route, or the generic passive. Both middle routes plus a leaf also fit.
 Cross-middle element selections require five points and therefore cannot both be
@@ -46,10 +47,23 @@ its own identity through learned area spells; the Lich starts with all four bolt
 The new skill belongs to the Necromancer discovery pool and enters drops at level 5.
 Values are an initial tuning pass, not a claim of final balance.
 
-Bone Stand follows a post 45 units ahead of its owner, uses normal pathing and
-collision, and attacks from that post without chasing distant foes. Its 115-radius
-aegis reduces nearby allies' damage taken by 20%. It remains a targetable, mortal
-golem. Golem contract slots retain their normal mana reservations and respawn delay.
+Bone Stand now turns the golem into a shell attached to the caster. It covers
+300 degrees around the caster's facing, leaving a 60-degree rear opening. The
+pool absorbs raw hit damage up to 60% of the golem's maximum life times the
+caster's guard strength; excess damage on the breaking blow continues normally.
+The shell replaces the free body and its usual kit with Marrow Sweep plus any
+taught crew arts. Strikes use the ordinary minion pipeline and supports, with a
+minimum 2-second interval and each art's own cooldown. Breaking the shell stops
+both protection and strikes. After 4 quiet seconds it regenerates 20% of its
+capacity per second and reforms at 40%. Damage over time follows its ordinary
+path rather than consuming this hit-absorption pool.
+
+The attached body cannot be targeted separately, does not collide with its keeper,
+and follows the keeper's position and floor. Its segmented arc shows both coverage
+and depletion; broken segments become dashed. The same visual state crosses the
+co-op snapshot. Existing anatomical/aura shells retain their own independent pools.
+Unseating, dismissal, owner death or tree reset cannot leave its protection behind.
+Golem contract slots retain their normal mana reservations and respawn delay.
 Command auras from separate bodies stack through the ordinary aura system; cohort
 investment therefore offers a deliberate reservation-for-coverage/power trade.
 
@@ -68,6 +82,7 @@ investment therefore offers a deliberate reservation-for-coverage/power trade.
   spell elements or deliveries such as Rain of Bones' `storm` tag.
 - `escort.distance` changes a body's movement goal to its owner's flank while
   retaining ordinary skill selection, cast gates, collision and recall.
+- `shell` attaches a summoned body as a directional guard with configurable life scaling, coverage, regeneration, reform threshold and strike kit. It reads the shared shell absorption and regrowth systems.
 - `replenish.interval` remains a free, bar-seated birth clock using normal spawn,
   cap, ownership, lifecycle and explosion attribution. Full pools never churn.
 

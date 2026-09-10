@@ -224,6 +224,8 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     push('minionKinds', 'Summoned forms', kinds.map(id => MONSTERS[id]?.name ?? id).join(', '), 'headline');
     const taught = [...(d.crewSkills ?? []), ...(d.crewAuras ?? [])];
     if (taught.length) push('minionArts', 'Additional minion arts', taught.map(id => SKILLS[id]?.name ?? id).join(', '), 'headline');
+    if (d.shell) push('minionShell', 'Attached shell', d.shell.arcDeg + '° coverage', 'headline',
+      Math.round(d.shell.lifeFraction * 100) + '% of minion life × guard strength; reforms after breaking');
     if (d.escort) push('minionEscort', 'Formation', 'Shadows the keeper', 'headline', 'attacks from its guard post; does not pursue');
     const shape = replenishShape(caster, inst, d);
     const cap = shape.cap;

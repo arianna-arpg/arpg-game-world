@@ -36919,7 +36919,14 @@ export class World {
     minion.sourcePoolGroup = d.poolGroup;
     minion.summonInst = inst;
     minion.summonEscort = d.escort;
-    for (const sid of [...(d.crewSkills ?? []), ...(d.crewAuras ?? [])]) {
+    minion.summonShell = d.shell;
+    if (d.shell) {
+      (caster.summonShells ??= new Set()).add(minion);
+      minion.skills = []; // a worn shell strikes through its declared kit
+      minion.untargetable = true;
+      minion.invulnerable = true; // blows reach its shell pool via the keeper
+    }
+    for (const sid of [...(d.shell ? [d.shell.strikeSkill] : []), ...(d.crewSkills ?? []), ...(d.crewAuras ?? [])]) {
       if (SKILLS[sid] && !minion.skills.some(s => s?.def.id === sid)) {
         minion.skills.push(makeSkillInstance(SKILLS[sid], 1 + Math.floor(minion.level / 4), 0));
       }
@@ -36933,6 +36940,13 @@ export class World {
     // The owner-investment fold — ONE seam shared with throng claims
     // (which pass the batch scale); a summon wears it whole.
     this.bakeMinionOwnerStats(minion, caster, inst);
+    if (d.shell) {
+      const s = d.shell;
+      const max = Math.max(1, minion.maxLife() * s.lifeFraction * caster.sheet.get('guardStrength', tags, extra));
+      minion.shellGuard = { side: 'front', arcDeg: s.arcDeg, max, pool: max,
+        regenDelay: s.regenDelay, regenRate: max * s.regenFraction,
+        reformFraction: s.reformFraction, lastHitAt: -999, broken: false, color: inst.def.color };
+    }
     // RAMPED SUMMONS: a channel's held ramp (Spirit Pyre's quadratic climb)
     // or a charge-up's gather mints HOTTER bodies — clamped so channel
     // double-dips can't launder into a standing army.
@@ -36988,6 +37002,7 @@ export class World {
       ? this.clampPos(vec(overrides.pos.x, overrides.pos.y), minion.radius, undefined, { mover: minion })
       : this.clampPos(vec(
         caster.pos.x + Math.cos(ang) * 50, caster.pos.y + Math.sin(ang) * 50), minion.radius, undefined, { mover: minion });
+    if (minion.summonShell) { minion.pos = { ...caster.pos }; minion.facing = caster.facing; }
     this.actors.push(minion);
     for (const sid of d.crewAuras ?? []) {
       const auraInst = minion.skills.find(s => s?.def.id === sid);
@@ -38497,7 +38512,19 @@ export class World {
    *  leaks only its overflow through as a reduced packet. Returns true when
    *  the hit was fully absorbed. */
   private tryShellBlock(victim: Actor, threatPos: Vec2, packet: DamagePacket): boolean {
-    const sg = victim.shellGuard;
+    if (this.tryShellPool(victim, threatPos, packet, victim.shellGuard)) return true;
+    // Worn summons contribute separate pools in birth order; neither their
+    // depletion nor removal can overwrite an anatomical or aura shell.
+    for (const body of victim.summonShells ?? []) {
+      if (body.dead || !this.actors.includes(body)) { victim.summonShells?.delete(body); continue; }
+      if (!body.summonShell || body.owner !== victim || body.dead || body.downed || victim.dead || victim.downed) continue;
+      if (!body.summonInst || !victim.skills.includes(body.summonInst)) continue;
+      if (this.tryShellPool(victim, threatPos, packet, body.shellGuard)) return true;
+    }
+    return false;
+  }
+
+  private tryShellPool(victim: Actor, threatPos: Vec2, packet: DamagePacket, sg: Actor['shellGuard']): boolean {
     if (!sg || sg.broken || sg.pool <= 0) return false;
     if (sg.side !== 'all') {
       const center = victim.facing + (sg.side === 'rear' ? Math.PI : 0);
@@ -43265,6 +43292,7 @@ export class World {
     }
 
     actor.dead = true;
+    if (actor.summonShell) actor.owner?.summonShells?.delete(actor);
     SIM_TAP.current?.onDeath?.(actor, killer);
     // A dying bearer's auras vanish (and release their reservations).
     for (const id of [...actor.activeAuras.keys()]) this.deactivateAura(actor, id);
@@ -45957,7 +45985,7 @@ export class World {
       const sg = a.shellGuard;
       if (sg && !a.dead && sg.pool < sg.max && this.time - sg.lastHitAt >= sg.regenDelay) {
         sg.pool = Math.min(sg.max, sg.pool + sg.regenRate * dt);
-        if (sg.broken && sg.pool >= sg.max * 0.4) {
+        if (sg.broken && sg.pool >= sg.max * (sg.reformFraction ?? 0.4)) {
           sg.broken = false;
           this.text(vec(a.pos.x, a.pos.y - 20), 'shell regrows', '#c8d8a0', 12);
         }
@@ -46498,6 +46526,7 @@ export class World {
     // Second actor-grid epoch: the actor loop above integrated casting steps,
     // knockback, dashes and slippery momentum — the post-actor systems
     // (zones, auras, projectiles, separation, heat bands) query fresh bodies.
+    this.updateSummonShells();
     this.actorGridRev++;
 
     this.updateTempGrounds(dt);
@@ -46572,6 +46601,7 @@ export class World {
     // frame tears its rider from the saddle this frame, and the remaining
     // riders' seats still win the frame.
     this.updateMounts();
+    this.updateSummonShells();
     // THE POSSESSION SEAM sweep rides behind the grabs (engine/possess.ts):
     // the ride clock + the husk ladder — a hold landed on the husk THIS
     // frame is seen this frame.
@@ -53425,6 +53455,17 @@ export class World {
     }
   }
 
+  /** Attached bodies occupy their owner's position and story, even through
+   * teleports or pushes. They never shoulder their keeper or block a corridor. */
+  private updateSummonShells(): void {
+    for (const body of this.actors) {
+      if (!body.summonShell || body.dead || !body.owner) continue;
+      body.pos = { ...body.owner.pos }; body.tier = body.owner.tier;
+      body.facing = body.owner.facing; body.facingPrev = body.owner.facing;
+      if (body.owner.dead || body.owner.downed || body.shellGuard?.broken) body.casting = null;
+    }
+  }
+
   private replenishment = new ReplenishmentClocks();
 
   /** Tree identity changes retire the old births silently, so permanent
@@ -57077,7 +57118,7 @@ export class World {
 
   private separateActors(): void {
     // Flat constructs are floor markings — you walk OVER them, not into them.
-    const flat = (a: Actor): boolean => !!a.construct
+    const flat = (a: Actor): boolean => !!a.summonShell || !!a.construct
       && (a.construct.kind === 'pad' || a.construct.kind === 'gate'
         || a.construct.kind === 'trap' || a.construct.kind === 'mine'
         // Hover/strike echoes are GHOSTS glued to their owner — a solid one

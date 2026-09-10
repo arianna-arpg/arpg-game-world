@@ -12,6 +12,7 @@ import { updateAI } from '../src/engine/ai';
 import { mod, STAT_DEFS } from '../src/engine/stats';
 import { SIM_TAP } from '../src/engine/tap';
 import { rebuildSkill } from '../src/meta/character';
+import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import type { World } from '../src/engine/world';
 let failed = 0;
 function check(label: string, ok: boolean) { console.log(`${ok ? 'PASS' : 'FAIL'} ${label}`); if (!ok) failed++; }
@@ -40,6 +41,18 @@ try {
   for (const id of Object.keys(NECROMANCER_TREES)) {
     const nodes = [...treeGraph(SKILLS[id])!.nodes.values()].map(n => n.node);
     const trunks = nodes.filter(n => n.excludes?.length);
+    const passive = nodes.find(n => !n.links?.length && !n.excludes?.length)!;
+    const plain = setup(id), invested = setup(id, Array(4).fill(passive.id));
+    check(id + ': four passive ranks retain the base delivery and tags', invested.inst.treeNodes?.length === 4
+      && instanceDelivery(invested.inst) === invested.inst.def.delivery
+      && instanceBaseTags(invested.inst).join() === instanceBaseTags(plain.inst).join());
+    const m = passive.mods![0];
+    check(id + ': passive ranks actually strengthen the skill', invested.p.sheet.get(m.stat, skillContextTags(invested.inst), instanceMods(invested.inst))
+      > plain.p.sheet.get(m.stat, skillContextTags(plain.inst), instanceMods(plain.inst)));
+    const loaded = rebuildSkill({ skillId: id, level: 20, rarity: 'common', sockets: [], treeNodes: invested.inst.treeNodes });
+    check(id + ': four passive ranks survive saving', loaded?.treeNodes?.length === 4);
+    const mix = setup(id, [passive.id, passive.id, trunks[0].id, nodes.find(n => n.links?.includes(trunks[0].id))!.id]);
+    check(id + ': passive ranks freely mix with a trunk and branch', mix.inst.treeNodes?.length === 4);
     check(`${id}: 15 nodes and exactly two exclusive trunks`, nodes.length === 15 && trunks.length === 2);
     for (const trunk of trunks) {
       const mids = nodes.filter(n => n.links?.includes(trunk.id));
@@ -116,26 +129,50 @@ try {
   }
   {
     const { w, p, inst } = setup('summon_bone_golem', ['keepers_bulwark', 'close_guard', 'bone_stand']);
-    const base = p.sheet.get('damageTaken'); cast(w, inst); step(w, 0.5);
-    const golem = crew(w, inst)[0];
-    check('Stand carries a live protective aura', !!golem.summonEscort && p.sheet.get('damageTaken') < base);
-    step(w, 2, true);
-    const parked = { ...golem.pos }; let heldPost = true;
-    for (let i = 0; i < 720; i++) {
-      step(w, 1 / 60, true);
-      if (Math.hypot(golem.pos.x - parked.x, golem.pos.y - parked.y) > 1) heldPost = false;
-    }
-    check('a parked Stand does not repeatedly recall as though stuck', heldPost);
-    const foe = w.createMonster('zombie', 1, 'enemy'); foe.pos = { x: p.pos.x + 400, y: p.pos.y }; foe.invulnerable = true; foe.sheet.setSource('stationary', [mod('moveSpeed', 'more', -1)]); w.actors.push(foe);
-    step(w, 5, true);
-    check('Stand holds keeper rather than pursuing distant enemies', Math.hypot(golem.pos.x - p.pos.x, golem.pos.y - p.pos.y) < 90);
-    foe.pos = { x: p.pos.x + 100, y: p.pos.y }; let lashes = 0;
-    SIM_TAP.current = { onCast: a => { if (a === golem) lashes++; } }; step(w, 4, true); SIM_TAP.current = null;
-    check('Stand lashes out through ordinary casts', lashes > 0);
+    cast(w, inst); step(w, 0.5);
+    const golem = crew(w, inst)[0], shell = golem.shellGuard!;
+    check('Stand is an attached shell with a separate absorption pool', !!golem.summonShell && shell.max > 0 && !golem.activeAuras.has('ossuary_aegis'));
+    const foe = w.createMonster('zombie', 1, 'enemy');
+    foe.pos = { x: p.pos.x + 400, y: p.pos.y }; foe.invulnerable = true;
+    foe.sheet.setSource('stationary', [mod('moveSpeed', 'more', -1), mod('critChance', 'more', -1)]); w.actors.push(foe);
+    p.facing = 0;
+    const hit = makeSkillInstance({ ...SKILLS.skeletal_grave_thunder, id: 'probe_shell_hit',
+      manaCost: 0, cooldown: 0, useTime: 0, tags: ['spell', 'aoe', 'physical'], baseDamage: { physical: [20, 20] },
+      delivery: { type: 'nova', radius: 600 } }, 1, 0);
+    const strike = () => { foe.casting = null; foe.useLock = 0; foe.cooldowns.clear(); w.useSkill(foe, hit, p.pos); };
+    const life = p.life, pool = shell.pool;
+    strike(); check('front hit consumes the shell instead of keeper life', shell.pool < pool && p.life === life);
+    foe.pos = { x: p.pos.x, y: p.pos.y + 100 }; const sidePool = shell.pool;
+    strike(); check('shell covers side angles too', shell.pool < sidePool && p.life === life);
+    foe.pos = { x: p.pos.x - 100, y: p.pos.y }; const rearPool = shell.pool;
+    strike(); check('rear opening lets damage through without spending shell', p.life < life && shell.pool === rearPool);
+    p.fillResources(); foe.pos = { x: p.pos.x + 100, y: p.pos.y };
+    shell.pool = 1; const beforeBreak = p.life;
+    strike(); check('breaking blow spends only remaining shell and leaks overflow', shell.broken && shell.pool === 0 && p.life < beforeBreak);
+    let lashes = 0; SIM_TAP.current = { onCast: a => { if (a === golem) lashes++; } };
+    step(w, 3, true);
+    check('broken shell offers no strikes or premature regeneration', lashes === 0 && shell.broken && shell.pool === 0);
+    step(w, 3.2, true);
+    check('shell knits after its delay and reforms at its threshold', !shell.broken && shell.pool >= shell.max * 0.4);
+    step(w, 6, true); SIM_TAP.current = null;
+    check('reformed shell strikes nearby foes through its owned skill', lashes > 0 && golem.skills.some(k => k?.def.id === 'marrow_sweep'));
+    const keeperPos = { ...p.pos }; step(w, 1, true);
+    check('attached shell never shoulders its keeper', p.pos.x === keeperPos.x && p.pos.y === keeperPos.y && golem.pos.x === p.pos.x && golem.pos.y === p.pos.y);
+    w.teleportActor(p, { x: p.pos.x + 200, y: p.pos.y + 150 }); step(w, 0.1);
+    check('attached shell follows teleports exactly', golem.pos.x === p.pos.x && golem.pos.y === p.pos.y && golem.tier === p.tier);
+    const snap = serializeSnapshot(w, 1), replica = makeSimWorld('necromancer', 0xb0ae);
+    applySnapshot(replica, snap);
+    const mirror = replica.actors.find(a => a.summonShell);
+    check('co-op snapshot carries shell coverage and break state', !!mirror?.summonShell && mirror.shellGuard?.pool === shell.pool && mirror.shellGuard?.arcDeg === 300);
+    // Other shell sources retain independent pools; the worn golem must never
+    // replace an existing aura or remove it during a respec.
+    p.shellGuard = { ...shell, max: 10, pool: 10, broken: false, side: 'all', fromAura: 'probe_other' };
+    const other = p.shellGuard;
     w.fonts.push({ pos: { ...p.pos } }); w.meta.abilityEssences.ability4 = 999; p.casting = null;
-    w.fontResetTree(inst.def.id); step(w, 1.5);
-    check('respec removes old protective aura and escort', golem.dead && !crew(w, inst).some(a => a.summonEscort) && Math.abs(p.sheet.get('damageTaken') - base) < 0.001);
+    w.fontResetTree(inst.def.id); step(w, 0.2);
+    check('respec retires attached body while preserving other shell sources', golem.dead && !crew(w, inst).some(a => a.summonShell) && p.shellGuard === other);
   }
+
   for (const [root, path, leaf] of [['lich_ascendant', 'fused_intellect', 'winter_crown'], ['grave_academy', 'winter_curriculum', 'plague_curriculum']]) {
     const { w, inst } = setup('summon_skeleton_mage', [root, path, leaf]); cast(w, inst);
     const bodies = crew(w, inst), lich = root === 'lich_ascendant';
