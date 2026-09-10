@@ -14,6 +14,7 @@
 //  - storm deliveries (scattered strikes, immediate or sequenced)
 // ---------------------------------------------------------------------------
 
+import type { AIAction } from './brain';
 import type { AttributeId, DamageType, Modifier, SkillTag } from './stats';
 import { STATUS_DEFS, tuneAilmentChance } from './status';
 import type { CurveKind } from './curves';
@@ -437,6 +438,9 @@ export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
     const resolved = { ...d, ...summonOver };
     resolved.crewSkills = union(d.crewSkills, summonOver.crewSkills);
     resolved.crewAuras = union(d.crewAuras, summonOver.crewAuras);
+    resolved.crewRules = [...(d.crewRules ?? []), ...(summonOver.crewRules ?? [])];
+    resolved.crewInherit = [...(d.crewInherit ?? []), ...(summonOver.crewInherit ?? [])];
+    resolved.crewOnDeath = [...(d.crewOnDeath ?? []), ...(summonOver.crewOnDeath ?? [])];
     resolved.crewMods = [...(d.crewMods ?? []), ...(summonOver.crewMods ?? [])];
     if (summonOver.pool) delete resolved.monsterId;
     if (summonOver.monsterId) delete resolved.pool;
@@ -1798,6 +1802,8 @@ export interface SelfDelivery {
  * owner through the ordinary shell absorption path, without replacing other shells. */
 export interface SummonShellSpec {
   lifeFraction: number;
+  /** Capacity scales by minionSize raised to this power; angular coverage stays fixed. */
+  sizeScaling?: number;
   arcDeg: number;
   regenDelay: number;
   regenFraction: number;
@@ -1825,6 +1831,12 @@ export interface SummonDelivery {
   crewAuras?: string[];
   /** Body-local investment, additive across nodes (ordinary tagged stats). */
   crewMods?: Modifier[];
+  /** Per-form lessons; replacements and additions share the runtime/census resolver. */
+  crewRules?: { monsterIds: string[]; skills?: string[]; replace?: { from: string; to: string }[] }[];
+  /** Single-hop owner stat grants, evaluated once at birth with the summon context. */
+  crewInherit?: { stat: string; fromStat: string; ratio: number; offset?: number; kind: 'flat' | 'more'; tags?: SkillTag[] }[];
+  /** Authored death choreography; silent retirement never fires these actions. */
+  crewOnDeath?: AIAction[];
   /** Stay this far ahead of the owner, attacking from that post without pursuit. */
   escort?: { distance: number };
   shell?: SummonShellSpec;
@@ -4301,6 +4313,7 @@ export interface SkillDef {
   /** Hints for monster / minion AI when this skill is on their bar. */
   ai?: {
     range: number;        // try to use within this distance
+    rangeStat?: string;   // optional multiplicative reach stat, e.g. aoeRadius
     weight: number;       // relative pick priority
     keepDistance?: number;// preferred standoff distance (casters kite)
     /** CHARGE DISCIPLINE — a SOFT minimum (px): inside this distance the
@@ -4734,7 +4747,7 @@ export interface SkillTreeNode {
      *  replenishment and crew fit read instanceDelivery. Kits and selections union.
      *  duration: 0 explicitly removes the birth's expiry clock. */
     summon?: Partial<Pick<SummonDelivery, 'count' | 'maxActive' | 'duration' | 'replenish'
-      | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell'>>;
+      | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell' | 'crewRules' | 'crewInherit' | 'crewOnDeath'>>;
     /** Host tag changes. Crew skills retain their own attack/spell tags. */
     tags?: { add?: SkillTag[]; remove?: SkillTag[] };
     /** delivery.arcDeg replacement (cone/melee deliveries only). */
@@ -4911,6 +4924,9 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
             selectPool: union(out.summon?.selectPool, over.summon?.selectPool),
             crewSkills: union(out.summon?.crewSkills, over.summon?.crewSkills),
             crewAuras: union(out.summon?.crewAuras, over.summon?.crewAuras),
+            crewRules: [...(out.summon?.crewRules ?? []), ...(over.summon?.crewRules ?? [])],
+            crewInherit: [...(out.summon?.crewInherit ?? []), ...(over.summon?.crewInherit ?? [])],
+            crewOnDeath: [...(out.summon?.crewOnDeath ?? []), ...(over.summon?.crewOnDeath ?? [])],
             crewMods: [...(out.summon?.crewMods ?? []), ...(over.summon?.crewMods ?? [])],
           } } : {}),
         ...(out.tags || over.tags ? { tags: {
@@ -6076,6 +6092,15 @@ export function supportFitsInst(sup: SupportDef, inst: SkillInstance, rolled?: S
  *  (World.summonCrewSkills); this type keeps the engine helpers pure. */
 export type SummonCrew = SkillDef[] | 'unknowable' | null;
 
+/** Resolve per-form lessons without chaining replacements. */
+export function summonKitIds(d: SummonDelivery, monsterId: string, native: string[]): string[] {
+  let ids = d.shell ? [d.shell.strikeSkill] : [...native];
+  const rules = (d.crewRules ?? []).filter(r => r.monsterIds.includes(monsterId));
+  // Replacements only read the original kit: ordering cannot build replacement chains.
+  ids = ids.map(id => rules.flatMap(r => r.replace ?? []).reverse().find(r => r.from === id)?.to ?? id);
+  return [...new Set([...ids, ...(d.crewSkills ?? []), ...(d.crewAuras ?? []), ...rules.flatMap(r => r.skills ?? [])])];
+}
+
 /**
  * Resolve a summon delivery's knowable crew — the pure core behind
  * World.summonCrewSkills (instance-aware) and the validator's crew-hop
@@ -6104,13 +6129,10 @@ export function summonCrewOf(
     seen.add(skillId);
     out.push(def);
   };
-  for (const sid of [...(d.crewSkills ?? []), ...(d.crewAuras ?? [])]) add(sid);
-  if (d.shell) { add(d.shell.strikeSkill); return out.length ? out : null; }
   for (const mid of ids) {
     const mdef = monster(mid);
     if (!mdef) continue;
-    for (const sid of mdef.skills) add(sid);
-    for (const g of mdef.grants ?? []) add(g.skill);
+    for (const sid of summonKitIds(d, mid, [...mdef.skills, ...(mdef.grants ?? []).flatMap(g => g.skill ? [g.skill] : [])])) add(sid);
   }
   return out.length ? out : null;
 }

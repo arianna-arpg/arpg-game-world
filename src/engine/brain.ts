@@ -948,7 +948,7 @@ export type AIAction =
   /** Raise minions/adds in a ring around self (or the spawn anchor). `tag`
    *  marks them (ward gates + goto tagCleared read it); `lifespan` for
    *  waves that expire. */
-  | { do: 'summon'; monster: string; count?: number; ring?: number; at?: 'self' | 'anchor'; tag?: string; lifespan?: number; rarity?: MonsterRarity; announce?: string }
+  | { do: 'summon'; monster: string; count?: number; ring?: number; at?: 'self' | 'anchor'; tag?: string; lifespan?: number; rarity?: MonsterRarity; announce?: string; inheritSummon?: { maxActive: number; size: number; life: number; damage: number } }
   /** BURROW: if standing on a doodad of `kinds`, submerge and travel
    *  underground to the qualifying patch nearest the target, then ERUPT
    *  (telegraphed emergence AoE = maxLife × damageFrac). The counterplay

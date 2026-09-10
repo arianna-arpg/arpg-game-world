@@ -327,7 +327,8 @@ bootSimEngine();
   // A DIRECT-hit burn applier (melee/nova/target) — projectile flights
   // would need stepped frames to land their status.
   const burnSkill = Object.values(SKILLS).find(s =>
-    ['melee', 'nova', 'target'].includes(s.delivery.type)
+    // Raw executeSkill fixtures have no resolved target lock (unlike useSkill).
+    !s.targeting && ['melee', 'nova', 'target'].includes(s.delivery.type)
     && s.effects.some(e => e.type === 'status' && e.status === 'burn' && (e.magnitude ?? 0) > 0))!;
   const cm = hero.sheet.get('critMulti');
   const mk = (crit: boolean): number => {
@@ -408,7 +409,8 @@ withSeededRandom(H_SEED, () => {
   const world = makeSimWorld('warrior', 7);
   const hero = world.player;
   const burnSkill = Object.values(SKILLS).find(s =>
-    ['melee', 'nova', 'target'].includes(s.delivery.type)
+    // Raw executeSkill fixtures have no resolved target lock (unlike useSkill).
+    !s.targeting && ['melee', 'nova', 'target'].includes(s.delivery.type)
     && s.effects.some(e => e.type === 'status' && e.status === 'burn' && (e.magnitude ?? 0) > 0))!;
   const dotless = Object.values(SKILLS).find(s =>
     s.delivery.type === 'melee' && s.tags.includes('attack')
@@ -951,7 +953,8 @@ withSeededRandom(H_SEED, () => {
   const world = makeSimWorld('warrior', 7);
   const hero = world.player;
   const cdHost = Object.values(SKILLS).find(s =>
-    s.cooldown >= 2 && s.cooldown <= 6 && s.manaCost <= 10
+    // This rest-clock fixture presses at empty ground; it needs no enemy lock.
+    !s.targeting && s.cooldown >= 2 && s.cooldown <= 6 && s.manaCost <= 10
     && (s.tags.includes('attack') || s.tags.includes('spell')))!;
   const inst = makeSkillInstance(cdHost, 1, 3);
   inst.sockets[0] = { def: SUPPORTS.deep_reserves, level: 1 };

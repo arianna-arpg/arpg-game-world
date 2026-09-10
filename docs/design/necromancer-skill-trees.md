@@ -4,7 +4,8 @@
 
 The first pass remains on branch `codex/necromancer-shambling-tree`, commit
 `de48c303` (Add Shambling Horde skill paths and passive replenishment).
-This iteration lives on `codex/necromancer-nested-mutators`.
+The nested-tree checkpoint is `3a71461c` on `codex/necromancer-nested-mutators`.
+The elemental lessons and golem refinements live on `codex/necromancer-elemental-lessons`.
 Compare those branches to recover either the original design or its implementation.
 
 The first pass had three exclusive Shambling Horde identities and ranked side
@@ -39,18 +40,18 @@ Changing the investment budget is a separate balance decision, not hidden here.
 |---|---|---|---|
 | Shambling Horde | Wandering Dead: free, bar-seated replenishment; permanent waiting corpses. Specialize cadence, detection, batches, capacity or durability. | Commanded Dead: cast packs; combine brief fast rushes with fewer heavy bodies, or develop expiry explosions and larger batches. | Stitched Flesh: life |
 | Bone Golem | Osseous Might: fighting golems; grow a cohort, a giant commander aura bearer, a sweeping bruiser, or a hybrid. | Keeper's Bulwark: defensive guard, rapid reconstruction, mending, taunts and the close-bound Bone Stand. | Fitted Joints: life and movement |
-| Skeleton Archer | Rattling Bows: physical cohorts, piercing arrows, and Rain of Bones with cooldown/area or damage/bleed investment. | Unstrung Sorcery: replace bows with random elemental bolt casters. Invest in population/volatile criticals, keep all four kinds, or narrow the pool to selected elements. | Remembered Training: damage |
-| Skeleton Mage (new) | Lich Ascendant: fuse the batch into one larger four-element caster; learn area spells, grow its frame, or command allies. | Grave Academy: a cohort with Cinder Rain, then combinable winter, thunder and plague curricula. | Grave Studies: damage and haste |
+| Skeleton Archer | Rattling Bows: physical cohorts, piercing arrows, and Rain of Bones with combined cooldown/area/damage/bleed investment or baseline multishot. | Unstrung Sorcery: replace bows with random elemental bolt casters. The trunk preserves base population; Volatile Souls adds one body and one slot. Invest in volatile criticals or narrow the pool to selected elements. | Remembered Training: damage |
+| Skeleton Mage (new) | Lich Ascendant: fuse the batch into one larger Fireball caster; learn heavy area spells, grow its frame, or command allies. | Grave Academy: a faster cohort of elemental specialists, with cold/chaos and fire/lightning curricula. Each learned spell belongs only to its matching element. | Grave Studies: damage and haste |
 
 Archer-derived mages cast one elemental bolt each. The separate Mage skill earns
-its own identity through learned area spells; the Lich starts with all four bolts.
+its own identity through elemental lessons and innate cryomancer Ice Spears; the Lich starts with an explosive Fireball.
 The new skill belongs to the Necromancer discovery pool and enters drops at level 5.
 Values are an initial tuning pass, not a claim of final balance.
 
 Bone Stand now turns the golem into a shell attached to the caster. It covers
 300 degrees around the caster's facing, leaving a 60-degree rear opening. The
 pool absorbs raw hit damage up to 60% of the golem's maximum life times the
-caster's guard strength; excess damage on the breaking blow continues normally.
+caster's guard strength and minion size; excess damage on the breaking blow continues normally.
 The shell replaces the free body and its usual kit with Marrow Sweep plus any
 taught crew arts. Strikes use the ordinary minion pipeline and supports, with a
 minimum 2-second interval and each art's own cooldown. Breaking the shell stops
@@ -67,6 +68,48 @@ Golem contract slots retain their normal mana reservations and respawn delay.
 Command auras from separate bodies stack through the ordinary aura system; cohort
 investment therefore offers a deliberate reservation-for-coverage/power trade.
 
+## Elemental lessons and golem refinements
+
+- Archer rain endpoints are now Drumming Rain (all four former rain bonuses,
+  with a real 30% bleed-on-hit modifier) and Forked Quivers (+1 attack projectile).
+  Forked Quivers retains the old Cruel Rain node ID for saved allocations.
+- Drilled Bones is the golem middle node, allowing its cooldown recovery to
+  combine with Great Bones → Marrow Bruiser within four points. Bone Cohort
+  grants one extra body/slot with 20% less life. Assembled Legion is the other
+  leaf: true death, including sacrifice, leaves two lesser golems.
+- Lesser golems retain the original keeper, source instance, supports and owner
+  investment. Their body is half size, with 35% life and 45% damage. Their base
+  duration is 8 seconds, scaled by effect duration. A separate six-heir cap never
+  evicts an adult or blocks its respawn. Heirs do not reserve mana, divide or
+  schedule persistent respawns. Dismissal, respec and unseating retire them too.
+- Close Guard grants 20% size and 8 Thorns plus 50% of the keeper's Thorns.
+  An ordinary golem retaliates when struck; an attached shell retaliates only
+  when it actually absorbs damage. Rear-gap hits still receive any Thorns the
+  keeper owns, but do not trigger the golem's splinters. Retaliation kills name
+  the retaliating body as their source.
+- Close Guard maps minion size into the body's area-radius stat at birth. It
+  scales Warding Sweep and Marrow Sweep's reach, including their AI cast range.
+  Bone Stand also multiplies its absorption capacity by size. Angular coverage
+  remains 300 degrees; size enlarges the frame and reach, not the rear opening.
+- Warding Reach carries the 75% movement bonus and teaches a 160-base-radius
+  sweep: 2-second taunt, modest outward shove, and half-strength 3-second bleed,
+  every 6 seconds. An attached shell taunts toward its protected keeper.
+- The Lich begins with modest, repeatable explosive Fireballs, then chooses
+  Cinder Rain, Winter Ring, Grave Thunder, Ossuary Command and/or empowered
+  Plague Ring. Its host elemental tags follow the chosen repertoire.
+- Grave Academy adds 20% haste; it does not teach universal area spells. The
+  cold/chaos middle grants 40% more damage and 40% faster recovery. Its leaves
+  upgrade only cryomancers' innate two-shard Ice Spear into a five-shard spear
+  that always chills, or teach only venomancers Essence Drain (6-second base
+  cooldown). The fire/lightning middle grants 35% increased damage and 50%
+  faster recovery. Its leaves teach only pyromancers Ignite or only stormcallers
+  Chain Lightning (both 5-second base cooldowns). The middle uses damage rather
+  than area radius because these spells do not all have an area delivery.
+
+Existing saved golem paths are repaired against the new prerequisites; removed
+invalid picks return their points. The tree budget and four-rank neutral passives
+are unchanged. Shambling Horde is unchanged.
+
 ## Shared implementation contract
 
 `SummonDelivery` now exposes reusable summon shaping data:
@@ -78,11 +121,21 @@ investment therefore offers a deliberate reservation-for-coverage/power trade.
 - `crewSkills` and `crewAuras` union across nodes. Native and taught skills are
   installed before support forwarding. Auras use ordinary aura activation and
   are refreshed when the summon's socket configuration changes.
+- `crewRules` selects monster IDs and adds or replaces their native skills.
+  One resolver serves births and the support census; base replacements may be
+  upgraded by tree replacements. Author only one tree replacement per native
+  skill on any simultaneously reachable path. Replacements never chain.
+- `crewInherit` grants body-local modifiers from an owner stat using a ratio and
+  optional offset, evaluated once at birth with the summon context. It is a
+  single-hop grant, not a recursive stat link.
+- `crewOnDeath` joins the existing brain death-action execution. The summon
+  action's `inheritSummon` option mints bounded temporary heirs through the
+  normal owned spawn path, with configurable size/life/damage scales.
 - `crewMods` adds body-local stat modifiers; tags can scope them to particular
   spell elements or deliveries such as Rain of Bones' `storm` tag.
 - `escort.distance` changes a body's movement goal to its owner's flank while
   retaining ordinary skill selection, cast gates, collision and recall.
-- `shell` attaches a summoned body as a directional guard with configurable life scaling, coverage, regeneration, reform threshold and strike kit. It reads the shared shell absorption and regrowth systems.
+- `shell` attaches a summoned body as a directional guard with configurable life/size scaling, coverage, regeneration, reform threshold and strike kit. It reads the shared shell absorption and regrowth systems.
 - `replenish.interval` remains a free, bar-seated birth clock using normal spawn,
   cap, ownership, lifecycle and explosion attribution. Full pools never churn.
 
@@ -116,7 +169,8 @@ new Commanded Dead trunk. The preserved branch retains the old save interpretati
   attribution, caps, respec, shared pools and save behavior.
 - `npm run probe -- nestednecromancer`: binary anatomy, mixed routes, pool order,
   real mage births, Rain of Bones AI, commander aura, cohort reservations,
-  Bone Stand positioning/attacks, respec cleanup and both new Mage identities.
+  Bone Stand coverage/retaliation/size, death-heir caps and cleanup, baseline
+  multishot, per-element lessons and actual AI casts, plus save repair.
 - `npm run probe`: the full fast regression gate.
 - `npm run sim -- run --suite smoke`: baseline combat scenarios.
 - Production build plus Electron tree interaction and screenshot inspection.

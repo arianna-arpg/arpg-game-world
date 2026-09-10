@@ -2054,6 +2054,7 @@ export function validateContent(): void {
   // ZERO while statuses still ride. The roll's presence proves intent; make
   // the dead gate loud. (Learned from the cage that cooked for nothing.)
   for (const s of Object.values(SKILLS)) {
+    if (s.ai?.rangeStat && !STAT_DEFS[s.ai.rangeStat]) warn(`skill ${s.id}: unknown AI rangeStat`);
     if (s.delivery.type === 'construct' && s.baseDamage
       && !s.effects.some(e => e.type === 'damage')) {
       warn(`skill ${s.id}: construct carries baseDamage but no 'damage' effect — grafted construct-fx hits resolve for ZERO (add the effect or drop the roll)`);
@@ -2075,11 +2076,24 @@ export function validateContent(): void {
       for (const id of [d.monsterId, ...(d.pool ?? []).map(p => p.id)]) {
         if (id && !MONSTERS[id]) warn(`${src}: unknown summon monster '${id}'`);
       }
+      for (const r of d.crewRules ?? []) {
+        if (!r.monsterIds.length || r.monsterIds.some(id => !MONSTERS[id])) warn(src + ": invalid crewRules forms");
+        for (const id of [...(r.skills ?? []), ...(r.replace ?? []).flatMap(x => [x.from, x.to])]) if (!SKILLS[id]) warn(src + ": unknown crewRules skill " + id);
+      }
+      for (const g of d.crewInherit ?? []) if (!STAT_DEFS[g.stat] || !STAT_DEFS[g.fromStat]
+        || !Number.isFinite(g.ratio) || !Number.isFinite(g.offset ?? 0) || !['flat', 'more'].includes(g.kind)) warn(src + ": invalid crewInherit grant");
+      for (const act of d.crewOnDeath ?? []) {
+        if (act.do === 'summon') {
+          if (!MONSTERS[act.monster] || !Number.isInteger(act.count ?? 1) || (act.count ?? 1) < 1) warn(src + ": invalid crewOnDeath summon");
+          const shape = act.inheritSummon;
+          if (shape && (!Number.isInteger(shape.maxActive) || shape.maxActive < 1 || ![shape.size, shape.life, shape.damage, act.lifespan ?? 0].every(v => Number.isFinite(v) && v > 0))) warn(src + ": invalid inherited death summon");
+        }
+      }
       if (d.shell) {
         const s = d.shell;
         if (!SKILLS[s.strikeSkill]) warn(`${src}: unknown shell strike '${s.strikeSkill}'`);
         if (![s.lifeFraction, s.arcDeg, s.regenFraction, s.reformFraction, s.strikeInterval].every(v => Number.isFinite(v) && v > 0)
-          || !Number.isFinite(s.regenDelay) || s.regenDelay < 0 || s.arcDeg > 360 || s.reformFraction > 1) warn(`${src}: invalid summon shell shape`);
+          || !Number.isFinite(s.regenDelay) || s.regenDelay < 0 || s.arcDeg > 360 || s.reformFraction > 1 || !Number.isFinite(s.sizeScaling ?? 0) || (s.sizeScaling ?? 0) < 0) warn(`${src}: invalid summon shell shape`);
       }
       for (const p of d.pool ?? []) if (!Number.isFinite(p.weight) || p.weight <= 0) warn(`${src}: invalid summon weight`);
       for (const id of d.crewSkills ?? []) if (!SKILLS[id]) warn(`${src}: unknown crew skill '${id}'`);
@@ -2901,7 +2915,7 @@ export function validateContent(): void {
   // against the kit's own defs.
   {
     const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags']);
-    const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell']);
+    const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
     const budget = bandPointsAt(MAX_SKILL_LEVEL);

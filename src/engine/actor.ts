@@ -1697,6 +1697,8 @@ export class Actor {
   /** The summoning instance, kept for persistent respawns. */
   summonInst?: SkillInstance;
   summonEscort?: { distance: number };
+  summonOffspring?: boolean; // temporary heirs do not occupy or respawn contract slots
+  summonDeathActions?: import('./brain').AIAction[];
   summonShell?: SummonShellSpec;
   summonShells?: Set<Actor>; // attached defenders; absent on ordinary actors
   /** Max mana this minion's contract reserves on its owner. */

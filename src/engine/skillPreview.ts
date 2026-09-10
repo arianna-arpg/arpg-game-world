@@ -28,6 +28,7 @@
 // render them their own way without re-deriving anything.
 // ---------------------------------------------------------------------------
 
+import { summonKitIds } from './skills';
 import type { Actor } from './actor';
 import { MONSTERS } from '../data/monsters';
 import { SKILLS } from '../data/skills';
@@ -224,8 +225,15 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     push('minionKinds', 'Summoned forms', kinds.map(id => MONSTERS[id]?.name ?? id).join(', '), 'headline');
     const taught = [...(d.crewSkills ?? []), ...(d.crewAuras ?? [])];
     if (taught.length) push('minionArts', 'Additional minion arts', taught.map(id => SKILLS[id]?.name ?? id).join(', '), 'headline');
+    for (const mid of kinds) {
+      const rules = (d.crewRules ?? []).filter(r => r.monsterIds.includes(mid));
+      const resolved = summonKitIds(d, mid, MONSTERS[mid]?.skills ?? []);
+      const arts = [...new Set(rules.flatMap(r => [...(r.skills ?? []), ...(r.replace ?? []).map(x => x.to)]))].filter(id => resolved.includes(id));
+      if (arts.length) push('crewRules_' + mid, MONSTERS[mid]?.name ?? mid,
+        arts.map(id => SKILLS[id]?.name ?? id).join(', '), 'detail');
+    }
     if (d.shell) push('minionShell', 'Attached shell', d.shell.arcDeg + '° coverage', 'headline',
-      Math.round(d.shell.lifeFraction * 100) + '% of minion life × guard strength; reforms after breaking');
+      Math.round(d.shell.lifeFraction * 100) + '% of minion life × guard strength' + (d.shell.sizeScaling ? ' × minion size' : '') + '; reforms after breaking');
     if (d.escort) push('minionEscort', 'Formation', 'Shadows the keeper', 'headline', 'attacks from its guard post; does not pursue');
     const shape = replenishShape(caster, inst, d);
     const cap = shape.cap;

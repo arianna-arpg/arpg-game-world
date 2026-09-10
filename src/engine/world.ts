@@ -8,6 +8,7 @@
 // modifiers flow into every stat query for that use.
 // ---------------------------------------------------------------------------
 
+import { summonKitIds } from './skills';
 import { escarpmentRoad } from '../world/escarpments';
 import { biomeFrontierTarget, escarpmentConnection } from './worldgen';
 import { atlasDestinationAt } from '../world/locales';
@@ -34111,7 +34112,7 @@ export class World {
             caster.sheet.get('minionMaxCount', tags, extra, d.maxActive)));
           const standing = (d.poolGroup
             ? this.minionsOfGroup(caster, d.poolGroup)
-            : this.minionsOfSkill(caster, inst.def.id)).length;
+            : this.minionsOfSkill(caster, inst.def.id)).filter(a => !a.summonOffspring).length;
           const raise = Math.max(1, Math.min(haul.length, rosterCap - standing));
           for (let ri = 0; ri < raise; ri++) {
             const corpse = haul[ri];
@@ -36600,7 +36601,7 @@ export class World {
       minion.manaReserved = 0;
     }
     const inst = minion.summonInst;
-    if (scheduleRespawn && owner && !owner.dead && inst
+    if (scheduleRespawn && !minion.summonOffspring && owner && !owner.dead && inst
       && inst.def.delivery.type === 'summon' && inst.def.delivery.persistent) {
       const tags = skillContextTags(inst);
       const extra = instanceMods(inst);
@@ -36854,9 +36855,27 @@ export class World {
     }
   }
 
+  /** Owned, bounded heirs through the ordinary summon mint. The dead body supplies
+   * the origin, while its keeper and source skill retain investment and attribution. */
+  spawnSummonOffspring(parent: Actor, act: Extract<import('./brain').AIAction, { do: 'summon' }>): void {
+    const owner = parent.owner, inst = parent.summonInst, shape = act.inheritSummon;
+    if (!owner || owner.dead || !inst || !shape || parent.summonOffspring) return;
+    const d = instanceDelivery(inst);
+    if (d.type !== 'summon' || !owner.skills.includes(inst)) return;
+    const count = Math.max(0, Math.round(act.count ?? 1));
+    const base = rand(0, Math.PI * 2);
+    for (let i = 0; i < count; i++) {
+      const angle = base + i / Math.max(1, count) * Math.PI * 2;
+      this.spawnMinion(owner, inst, { monsterId: act.monster, offspring: shape,
+        delivery: { ...d, persistent: undefined, poolGroup: undefined, crewOnDeath: undefined,
+          duration: act.lifespan ?? 8, shell: undefined },
+        pos: vec(parent.pos.x + Math.cos(angle) * (act.ring ?? 28), parent.pos.y + Math.sin(angle) * (act.ring ?? 28)) });
+    }
+  }
+
   private spawnMinion(
     caster: Actor, inst: SkillInstance,
-    overrides?: { monsterId?: string; pos?: Vec2; delivery?: SummonDelivery; dmgMult?: number },
+    overrides?: { monsterId?: string; pos?: Vec2; delivery?: SummonDelivery; dmgMult?: number; offspring?: { maxActive: number; size: number; life: number; damage: number } },
   ): Actor | null {
     // SOVEREIGNTY: seat — the summon's story is stamped and clamped (the derived census, probe_tiers RIG T).
     // A support's summon graft (Vessel of Shadow) supplies the delivery when
@@ -36873,6 +36892,12 @@ export class World {
     const existing = d.poolGroup
       ? this.minionsOfGroup(caster, d.poolGroup)
       : this.minionsOfSkill(caster, inst.def.id);
+    if (overrides?.offspring) {
+      if (this.minionsOfSkill(caster, inst.def.id).filter(a => a.summonOffspring).length >= overrides.offspring.maxActive) return null;
+      existing.length = 0; // heirs never evict their parent contract or one another
+    } else {
+      for (let i = existing.length - 1; i >= 0; i--) if (existing[i].summonOffspring) existing.splice(i, 1);
+    }
     while (existing.length >= maxActive) {
       const oldest = existing.shift();
       if (oldest) {
@@ -36918,6 +36943,12 @@ export class World {
     minion.sourceSkillId = inst.def.id;
     minion.sourcePoolGroup = d.poolGroup;
     minion.summonInst = inst;
+    minion.summonOffspring = !!overrides?.offspring;
+    minion.summonDeathActions = d.crewOnDeath;
+    if (overrides?.offspring) {
+      minion.radius *= overrides.offspring.size;
+      minion.sheet.setSource('summon:offspring', [mod('life', 'more', overrides.offspring.life - 1), mod('damage', 'more', overrides.offspring.damage - 1)]);
+    }
     minion.summonEscort = d.escort;
     minion.summonShell = d.shell;
     if (d.shell) {
@@ -36926,12 +36957,16 @@ export class World {
       minion.untargetable = true;
       minion.invulnerable = true; // blows reach its shell pool via the keeper
     }
-    for (const sid of [...(d.shell ? [d.shell.strikeSkill] : []), ...(d.crewSkills ?? []), ...(d.crewAuras ?? [])]) {
+    const crewIds = summonKitIds(d, typeId, minion.skills.flatMap(s => s ? [s.def.id] : []));
+    minion.skills = minion.skills.filter(s => !s || crewIds.includes(s.def.id));
+    for (const sid of crewIds) {
       if (SKILLS[sid] && !minion.skills.some(s => s?.def.id === sid)) {
         minion.skills.push(makeSkillInstance(SKILLS[sid], 1 + Math.floor(minion.level / 4), 0));
       }
     }
     if (d.crewMods?.length) minion.sheet.setSource('summon:crew', d.crewMods);
+    if (d.crewInherit?.length) minion.sheet.setSource('summon:inherit', d.crewInherit.map(g =>
+      mod(g.stat, g.kind, caster.sheet.get(g.fromStat, tags, extra) * g.ratio + (g.offset ?? 0), g.tags)));
     // SUPPORT FORWARDING: the summon's own gems board what the minion
     // CASTS — forwarded before ownerMods so both lanes (crew sockets,
     // sheet source) are live for the minion's whole life. Corpse-raised
@@ -36942,7 +36977,7 @@ export class World {
     this.bakeMinionOwnerStats(minion, caster, inst);
     if (d.shell) {
       const s = d.shell;
-      const max = Math.max(1, minion.maxLife() * s.lifeFraction * caster.sheet.get('guardStrength', tags, extra));
+      const max = Math.max(1, minion.maxLife() * s.lifeFraction * caster.sheet.get('guardStrength', tags, extra) * Math.pow(caster.sheet.get('minionSize', tags, extra), s.sizeScaling ?? 0));
       minion.shellGuard = { side: 'front', arcDeg: s.arcDeg, max, pool: max,
         regenDelay: s.regenDelay, regenRate: max * s.regenFraction,
         reformFraction: s.reformFraction, lastHitAt: -999, broken: false, color: inst.def.color };
@@ -38511,7 +38546,7 @@ export class World {
    *  and knockback with it, like a guard); the blow that breaks the shell
    *  leaks only its overflow through as a reduced packet. Returns true when
    *  the hit was fully absorbed. */
-  private tryShellBlock(victim: Actor, threatPos: Vec2, packet: DamagePacket): boolean {
+  private tryShellBlock(victim: Actor, threatPos: Vec2, packet: DamagePacket, attacker?: Actor): boolean {
     if (this.tryShellPool(victim, threatPos, packet, victim.shellGuard)) return true;
     // Worn summons contribute separate pools in birth order; neither their
     // depletion nor removal can overwrite an anatomical or aura shell.
@@ -38519,7 +38554,10 @@ export class World {
       if (body.dead || !this.actors.includes(body)) { victim.summonShells?.delete(body); continue; }
       if (!body.summonShell || body.owner !== victim || body.dead || body.downed || victim.dead || victim.downed) continue;
       if (!body.summonInst || !victim.skills.includes(body.summonInst)) continue;
-      if (this.tryShellPool(victim, threatPos, packet, body.shellGuard)) return true;
+      const before = body.shellGuard?.pool ?? 0;
+      const blocked = this.tryShellPool(victim, threatPos, packet, body.shellGuard);
+      if (attacker && (body.shellGuard?.pool ?? 0) < before) this.applyThorns(body, attacker);
+      if (blocked) return true;
     }
     return false;
   }
@@ -39711,7 +39749,8 @@ export class World {
     attacker.hitFlash = 0.1;
     attacker.hitFlashType = undefined; // raw thorns — the flash reads white
     this.text(attacker.pos, Math.round(dealt).toString(), '#d88a50', 11);
-    if (attacker.life <= 0 && !attacker.dead) this.kill(attacker);
+    // applyThorns credits the defender, including an attached summon.
+    if (attacker.life <= 0 && !attacker.dead) this.kill(attacker, false, victim);
   }
 
   /**
@@ -40232,7 +40271,7 @@ export class World {
     if (raw > 0 && this.tryGuardBlock(target, caster, caster.pos, raw)) return;
     // SHELL GUARD (worn anatomy / the rear-guard toggle): the directional
     // absorb eats what its arc covers; a breaking blow leaks its overflow.
-    if (raw > 0 && this.tryShellBlock(target, caster.pos, packet)) return;
+    if (raw > 0 && this.tryShellBlock(target, caster.pos, packet, caster)) return;
 
     const hasDamage = forceDamage || def.effects.some(e => e.type === 'damage');
     let dealt = 0;
@@ -41051,7 +41090,7 @@ export class World {
             propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
             rupture, ruptureType,
             stacksBonus: stacksBonusFor(fx.status),
-            casterId: caster.id,
+            casterId: fx.status === 'taunted' && caster.summonShell && caster.owner ? caster.owner.id : caster.id,
             brood: instanceBrood(inst),
             leech: caster.sheet.get('dotLeech_' + fx.status, tags, extra) || undefined,
             popBonus: caster.sheet.get('popPower_' + fx.status, tags, extra) || undefined,
@@ -43301,9 +43340,9 @@ export class World {
     this.onSquadDeath(actor);
     // DEATH RATTLE (BrainDef.onDeath): the corpse authors its last beats —
     // vengeance summons, reward bursts, the arena's restoration.
-    if (actor.brain) {
-      const rattle = normalizeBrain(actor.brain).onDeath;
-      if (rattle) runAIActions(this, actor, rattle, null, { allowDead: true });
+    if (actor.brain || actor.summonDeathActions) {
+      const rattle = [...(actor.brain ? normalizeBrain(actor.brain).onDeath ?? [] : []), ...(!silent ? actor.summonDeathActions ?? [] : [])];
+      if (rattle.length) runAIActions(this, actor, rattle, null, { allowDead: true });
     }
     // ANY player seat (the local hero OR a co-op ally) routes through the
     // downed/run-end seam — not just the local one — so allies can be downed
@@ -53432,7 +53471,7 @@ export class World {
         }
         const alive = (d.poolGroup
           ? this.minionsOfGroup(a, d.poolGroup)
-          : this.minionsOfSkill(a, id)).length;
+          : this.minionsOfSkill(a, id)).filter(a => !a.summonOffspring).length;
         let queued = 0;
         for (const pr of this.pendingRespawns) {
           if (pr.caster === a && pr.inst.def.id === id) queued++;
@@ -53499,14 +53538,15 @@ export class World {
           || caster.isStunned() || caster.tagsForbidden(inst) || this.castReqRefusal(caster, inst)) continue;
         const shape = replenishShape(caster, inst, d);
         const alive = d.poolGroup ? this.minionsOfGroup(caster, d.poolGroup) : this.minionsOfSkill(caster, inst.def.id);
-        entries.push({ inst, interval: shape.interval, count: shape.count, room: shape.cap - alive.length });
+        const capacityBodies = alive.filter(a => !a.summonOffspring);
+        entries.push({ inst, interval: shape.interval, count: shape.count, room: shape.cap - capacityBodies.length });
       }
       this.replenishment.update(caster, entries, dt * this.timeflow.actorScale(caster), (inst, count) => {
         // Earlier batches this tick may have filled a shared pool. Re-read
         // its room at birth so two replenishing skills never evict each other.
         const d = replenishingDelivery(inst)!;
         const alive = d.poolGroup ? this.minionsOfGroup(caster, d.poolGroup) : this.minionsOfSkill(caster, inst.def.id);
-        const room = replenishShape(caster, inst, d).cap - alive.length;
+        const room = replenishShape(caster, inst, d).cap - alive.filter(a => !a.summonOffspring).length;
         for (let n = 0; n < Math.min(count, room); n++) this.spawnMinion(caster, inst);
       });
     }

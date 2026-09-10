@@ -133,6 +133,7 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
 
   summon: (world, actor, act) => {
     if (act.do !== 'summon') return;
+    if (act.inheritSummon) { world.spawnSummonOffspring(actor, act); return; }
     const count = act.count ?? 1;
     const ring = act.ring ?? 140;
     const base = rand(0, Math.PI * 2);

@@ -39,7 +39,7 @@ import { isThrongBody, throngHeelOffset } from './throng';
 import { runAIActions } from './aiActions';
 import { nearestBody, segsHittable } from './segments';
 import { LOS_CFG } from './los';
-import { socketSpec, type SkillDef, type SkillInstance } from './skills';
+import { skillContextTags, instanceMods, socketSpec, type SkillDef, type SkillInstance } from './skills';
 import { TIER_CFG, tierFloorAt } from './tiers';
 import { doodadRuleOf } from './levelgen';
 import type { World } from './world';
@@ -1999,9 +1999,13 @@ export function claimBurst(prey: Actor, now: number, sec?: number): void {
   (prey.aiBurstClaims ??= []).push(now + (sec ?? BEHAVIOR_CFG.packTempo.claimSec));
 }
 
-/** Weighted / priority / rotation pick among usable skills (in range, off
- *  cooldown, affordable), honoring openers, combos, reserves, and the
- *  commander's support range. */
+/** Opt-in reach scaling keeps the AI hint aligned with an invested delivery. */
+function skillAIRange(actor: Actor, inst: SkillInstance): number {
+  const ai = inst.def.ai;
+  if (!ai) return 0;
+  return ai.range * (ai.rangeStat ? actor.sheet.get(ai.rangeStat, skillContextTags(inst), instanceMods(inst)) : 1);
+}
+
 function pickSkill(
   actor: Actor, world: World, best: number, tuning: BrainTuning,
   target?: Actor,
@@ -2019,9 +2023,9 @@ function pickSkill(
   const rangeOf = (s: SkillInstance): number => {
     if (policy.supportRange) {
       const support = s.def.tags.includes('buff') || s.def.delivery.type === 'summon';
-      if (support) return Math.max(s.def.ai!.range, policy.supportRange);
+      if (support) return Math.max(skillAIRange(actor, s), policy.supportRange);
     }
-    return s.def.ai!.range;
+    return skillAIRange(actor, s);
   };
   // HOLD FIRE without a firing line (occlusion): skills whose delivery a
   // wall would eat are unusable while the line is blocked — the caster
@@ -2262,7 +2266,7 @@ function tryReserves(actor: Actor, world: World, tuning: BrainTuning): boolean {
         return true;
       }
       if (lastTarget && !lastTarget.dead
-        && dist(actor.pos, lastTarget.pos) <= inst.def.ai.range) {
+        && dist(actor.pos, lastTarget.pos) <= skillAIRange(actor, inst)) {
         useOn(actor, world, inst, lastTarget, tuning);
         return true;
       }
@@ -2694,7 +2698,7 @@ function standoff(actor: Actor): { keep: number; desired: number } {
   for (const s of actor.skills) {
     if (!s?.def.ai) continue;
     keep = Math.max(keep, s.def.ai.keepDistance ?? 0);
-    minRange = Math.min(minRange, s.def.ai.range);
+    minRange = Math.min(minRange, skillAIRange(actor, s));
   }
   if (minRange === Infinity) minRange = 40;
   return { keep, desired: keep > 0 ? keep : Math.max(20, minRange * 0.8) };
@@ -2707,7 +2711,7 @@ function standoff(actor: Actor): { keep: number; desired: number } {
 function kitReach(actor: Actor): number {
   let reach = 0;
   for (const s of actor.skills) {
-    if (s?.def.ai) reach = Math.max(reach, s.def.ai.range);
+    if (s?.def.ai) reach = Math.max(reach, skillAIRange(actor, s));
   }
   return reach;
 }
