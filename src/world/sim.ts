@@ -792,10 +792,12 @@ export class WorldSim {
    *  overlays of the VIEWED dimension paint — the surface tab shows surface
    *  weather/territory/biomes; a hell tab shows hell's own instances (its
    *  demon rings), never the surface fronts drifting over the underworld. */
-  mapLayers(nodes: ZoneDef[], dimension = 'surface'): { id: string; label: string; under: string; over: string; extent: ReadonlyArray<{ x: number; y: number }> }[] {
+  mapLayers(nodes: ZoneDef[], dimension = 'surface', hiddenLayers?: ReadonlySet<string>): { id: string; label: string; under: string; over: string; extent: ReadonlyArray<{ x: number; y: number }> }[] {
     return this.overlays
       .filter(o => (o.dimension ?? 'surface') === dimension)
       .map(o => {
+        // Preserve toggle metadata without constructing discarded SVG or extents.
+        if (hiddenLayers?.has(o.id)) return { id: o.id, label: o.mapLabel ?? o.id, under: '', over: '', extent: [] };
         const l = o.renderMap(nodes);
         // extent: coords the fitted map view must also enclose (a territory
         // painting past the charted rim) — rides the layer so the toggle

@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_atlasbudget.ts', status: 'green', tier: 'fast', why: 'Bounded atlas allocations, progressive pixel equality, input cache isolation, async cancellation and image lifetime' },
   { probe: 'probe_complexes.ts', status: 'green', tier: 'fast', why: 'Persistent segmented landmarks, real traversal, protected stage graphs, co-op and overlapping cavern tiers' },
   { probe: 'probe_landforms.ts', status: 'green', tier: 'fast', why: 'Atlas water/terrain destinations, recurring geographic activity, connected lava trails, cleanup and fixed world-map scale' },
   { probe: 'probe_savecompatibility.ts', status: 'green', tier: 'fast', why: 'Update reset revisions, account/run scope, disk authority, cache fallback and import gates' },

@@ -1,0 +1,6 @@
+{
+  "maxInputP95Ms": 8,
+  "maxReadyMs": 10000,
+  "maxRasterPx": 720,
+  "minChartSide": 160
+}

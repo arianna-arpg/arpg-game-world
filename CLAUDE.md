@@ -1169,6 +1169,11 @@ we verify changes.
   Fortresses, lost cities, and highland caverns are registered content. Cavern
   locales select an under-tier lane with surface-preserving tunnels and chambers.
   Docs: `docs/worldgen/landmark-regions.md`; probe `balance/probe_complexes.ts`.
+  UI PERFORMANCE (`ui/atlasBudget.ts`, `ui/atlasInputCache.ts`): bounded,
+  cooperative atlas painting, asynchronous images, cached geographic inputs,
+  and hidden-layer work elision. `npm run perf:ui` profiles map gestures and
+  common panels at desktop/phone sizes; `-- --cpu=4` exercises slower CPUs.
+  Docs: `docs/engine/ui-performance.md`; probe `balance/probe_atlasbudget.ts`.
   THE HARBORHOLD FABRIC (`data/harborholds.ts` + `world/harborholds.ts` —
   mainland ports as BESIEGED RESIDENCES): every sea spot's HOLD ANCHOR
   wears the walled town (`harborhold_*` compositions → plan structures

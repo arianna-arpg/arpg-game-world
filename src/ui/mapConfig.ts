@@ -73,6 +73,9 @@ export const MAP_LABEL_MODES: MapLabelModeDef[] = [
 ];
 
 export const MAP_CFG = {
+  /** Shared atlas work allowance, outside pointer handlers. Detail waits for a
+   * quiet gesture; the standing image follows the viewport immediately. */
+  mapPerformance: { tickMs: 16, interactionDelayMs: 100, previewMaxPx: 240, baseMaxPx: 480 },
   /** Node units across the starting viewport; 100% always means this scope. */
   viewport: { startSide: 520 },
   /** Default name-card mode (Settings.mapLabels persists the player's pick). */

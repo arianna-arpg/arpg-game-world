@@ -260,6 +260,7 @@
     #passive-tree {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: min(calc(92vh / var(--ui-scale)), 760px); max-width: calc(95vw / var(--ui-scale));
+      max-height: calc(94dvh / var(--ui-scale)); overflow-y: auto;
     }
     #passive-tree svg { width: 100%; height: auto; display: block; }
     .tree-node.available { cursor: var(--cursor-point, pointer); }
@@ -372,6 +373,19 @@
     #map-aside .zi-txt { flex: 1 1 auto; min-width: 0; }
     #map-aside .zi-detail { color: var(--text-dim); }
     #map-aside .zi-empty { color: var(--text-dim); font-style: italic; margin-top: 6px; }
+    /* Keep the chart useful on phones: details flow below it in portrait,
+       while short landscape screens use their width and scroll the panel. */
+    @media (max-width: 600px) {
+      #world-map { width: calc(96vw / var(--ui-scale)); max-height: calc(94dvh / var(--ui-scale)); overflow-y: auto; }
+      #world-map .map-body { flex-direction: column; align-items: stretch; }
+      #world-map .map-body svg { flex: none; width: 100%; max-height: calc(52dvh / var(--ui-scale)); }
+      #map-aside { flex: none; width: auto; max-height: calc(22dvh / var(--ui-scale)); border-left: 0; border-top: 1px solid var(--panel-border); padding: 8px 0 0; }
+    }
+    @media (max-height: 600px) and (min-width: 601px) {
+      #world-map { width: min(calc(96vw / var(--ui-scale)), 1040px); max-height: calc(94dvh / var(--ui-scale)); overflow-y: auto; }
+      #world-map .map-body svg { height: calc(52dvh / var(--ui-scale)); aspect-ratio: auto; }
+      #map-aside { max-height: calc(52dvh / var(--ui-scale)); }
+    }
     .map-zoom-grp, .tree-zoom-grp { display: inline-flex; gap: 2px; vertical-align: middle; }
     .map-zoom, .tree-zoom {
       background: #2a2a3e; color: var(--gold); border: 1px solid var(--panel-border);

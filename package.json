@@ -26,6 +26,7 @@
     "smoke": "electron . --smoke-test=game",
     "smoke:launcher": "electron . --smoke-test=launcher",
     "perf": "electron . --perf-test",
+    "perf:ui": "electron balance/ui-perf.cjs",
     "icon": "node scripts/make-icon.mjs",
     "dist": "npm run build && node scripts/make-build-info.mjs && electron-builder --win --publish never",
     "dist:linux": "npm run build && node scripts/make-build-info.mjs && electron-builder --linux --publish never",

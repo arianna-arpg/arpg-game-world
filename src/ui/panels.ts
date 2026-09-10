@@ -148,7 +148,8 @@ import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 import { attachPanelMove, configurePanelLayout, panelLayoutRefresh, panelLayoutSync, panelMoved, panelMoveReset, panelMoveTo, panelSeatOf, persistPanelSeat, resetPanelLayout } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels; THE LAYOUT remembers
 import { ATLAS_LAYER_CHIPS, MAP_CFG, MAP_CHART_MODES, MAP_LABEL_MODES } from './mapConfig';
 import { mapViewport, mapZoomLimits, mapZoomLabel } from './mapViewport';
-import { atlasChart, atlasKeep, atlasRaster, type AtlasChartInput, type AtlasRaster } from './atlasPaint';
+import { atlasChart, atlasKeep, atlasRaster, atlasRevision, type AtlasChartInput, type AtlasRaster } from './atlasPaint';
+import { AtlasInputCache } from './atlasInputCache';
 import { MAP_LENS } from './mapLens';
 import { ATLAS_CFG, climateWords, featuresAt, featuresInRect } from '../world/atlas';
 import { climateAt } from '../world/climate';
@@ -706,6 +707,9 @@ export class UI {
   private oceanCache: { key: string; svg: string } | null = null;
   /** The painted chart's build-tick timer (0 = none pending). */
   private chartTimer = 0;
+  private atlasInputsMemo = new AtlasInputCache<AtlasChartInput>();
+  private atlasInteractionUntil = 0;
+  private atlasContext = '';
   /** The last label markup the atlas layer printed (the in-place sync compares). */
   private atlasLabelsHtml = '';
   /** The raster keys the atlas layer shows (base / zoom window). */
@@ -8144,7 +8148,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // never seed it — see chartFrontier), so its fronts/territory/biome wash
     // must not drift over the underworld tab.
     const known = zones.filter(z => visited.has(z.id) && (z.dimension ?? 'surface') === dim);
-    const allLayers = world.sim.mapLayers(known, dim);
+    const hiddenLayers = new Set(this.mapLayersOff);
+    if (painted) hiddenLayers.add('biomefield');
+    const allLayers = world.sim.mapLayers(known, dim, hiddenLayers);
     // The painted chart IS the biome layer: the flat wash + its river threads
     // stand down under it (their chip too); the atlas chips take their place.
     const chipLayers = painted ? allLayers.filter(l => l.id !== 'biomefield') : allLayers;
@@ -8339,7 +8345,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         aside.scrollTop = asideScroll;
       }
     }
-    this.syncAtlas(svg);
+    this.scheduleAtlasTick();
   }
 
   /** Flip a hover-revealed name card in place. Fixed cards (towns, the pin,
@@ -8358,14 +8364,14 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  so a raster asked for again comes straight back from the painter's
    *  cache. The known set is THE KNOWLEDGE LAW's read (World.visible) unless
    *  the dev lens is omniscient. */
-  private atlasInputs(world: World, dim: string): { base: AtlasChartInput; window: AtlasChartInput | null } | null {
+  private atlasInputs(world: World, dim: string): { preview: AtlasChartInput; base: AtlasChartInput; window: AtlasChartInput | null } | null {
     const lens = MAP_LENS;
     const reveal: { x: number; y: number }[] = [];
     for (const z of Object.values(world.zoneMap)) {
       if ((z.dimension ?? 'surface') !== dim) continue;
       if (!lens.omniscient && !world.visible(z)) continue;
-      reveal.push(z.map);
-      for (const b of z.berths ?? []) reveal.push(b);
+      reveal.push({ ...z.map });
+      for (const b of z.berths ?? []) reveal.push({ ...b });
     }
     if (!reveal.length) return null;
     const pad = ATLAS_CFG.reveal.radius + ATLAS_CFG.reveal.feather + 60;
@@ -8383,23 +8389,25 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     };
     const seed = world.sim.biomeField.fieldSeed;
     const surface = dim === 'surface';
-    let sig = 0;
-    for (const p of reveal) sig = (Math.imul(sig ^ (p.x | 0), 0x9e3779b1) + (p.y | 0)) | 0;
+    const sig = reveal.map(p => `${p.x},${p.y}`).join(';');
     const off = (id: string): boolean => this.mapLayersOff.has(id);
     const layers = { relief: !off('atlas:relief'), rivers: !off('atlas:rivers'), features: !off('atlas:features'), glyphs: !off('atlas:glyphs') };
-    const tag = [dim, seed, reveal.length, sig >>> 0, +layers.relief, +layers.rivers, +layers.features, +layers.glyphs,
+    const tag = [dim, seed, atlasRevision(), reveal.length, sig, +layers.relief, +layers.rivers, +layers.features, +layers.glyphs,
       lens.omniscient ? 'all' : 'veil', surface ? world.sim.biomeField.warpSignature() : ''].join('|');
     const make = (box: AtlasChartInput['box'], lane: string): AtlasChartInput => {
       const min = { x: box.minX, y: box.minY }, max = { x: box.maxX, y: box.maxY };
-      return {
-        key: `${lane}|${box.minX},${box.minY},${box.maxX},${box.maxY}|${tag}`,
+      const maxPx = lane === 'preview' ? MAP_CFG.mapPerformance.previewMaxPx
+        : lane === 'base' ? MAP_CFG.mapPerformance.baseMaxPx : ATLAS_CFG.raster.maxPx;
+      const key = `${lane}/${maxPx}|${box.minX},${box.minY},${box.maxX},${box.maxY}|${tag}`;
+      return this.atlasInputsMemo.get(world, key, () => ({
+        key, maxPx,
         box, seed, reveal, layers, noVeil: lens.omniscient,
         biomeAt: surface ? (c) => world.sim.biomeField.composedBiome(c).biome : (c) => world.dimensionBiomeAtMap(dim, c),
         elevAt: surface ? (c) => elevationAt(c, seed) : null,
         kindAt: surface ? (c) => world.continentAtMap(c).kind : () => 'land',
         rivers: surface && layers.rivers ? riverPathsInRect(min, max, seed) : [],
         features: surface && layers.features ? featuresInRect(min, max, seed) : [],
-      };
+      }));
     };
     // THE ZOOM WINDOW (ATLAS_CFG.raster): zoomed in past the threshold, the
     // view with a margin renders at full resolution OVER the base; the window
@@ -8420,7 +8428,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       };
       if (wb.maxX - wb.minX > 40 && wb.maxY - wb.minY > 40) window = make(wb, 'window');
     }
-    return { base: make(full, 'base'), window };
+    return { preview: make(full, 'preview'), base: make(full, 'base'), window };
   }
 
   /** THE ATLAS LAYER, synced in place: the BASE raster (the whole known
@@ -8436,6 +8444,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!base || !win || !labels) return;
     const world = this.getWorld();
     const painted = this.getSettings().mapChart === 'painted';
+    const atlasContext = `${this.mapDimension}/${world.sim.biomeField.fieldSeed}/${MAP_LENS.omniscient}`;
+    if (atlasContext !== this.atlasContext) {
+      this.atlasContext = atlasContext; this.atlasShown = { base: '', window: '' };
+      base.removeAttribute('href'); win.removeAttribute('href');
+    }
     const inputs = painted ? this.atlasInputs(world, this.mapDimension) : null;
     if (!inputs) {
       base.setAttribute('display', 'none');
@@ -8446,7 +8459,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     }
     // A job for a raster nobody wants any more (a window the view has left)
     // is dropped, so the wanted one starts at once.
-    atlasKeep(inputs.window ? [inputs.base.key, inputs.window.key] : [inputs.base.key]);
+    atlasKeep(inputs.window ? [inputs.preview.key, inputs.base.key, inputs.window.key] : [inputs.preview.key, inputs.base.key]);
     const place = (el: SVGImageElement, r: AtlasRaster): void => {
       if (el.getAttribute('href') !== r.href) el.setAttribute('href', r.href);
       el.setAttribute('x', r.x.toFixed(1)); el.setAttribute('y', r.y.toFixed(1));
@@ -8454,12 +8467,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       el.removeAttribute('display');
     };
     let building = false;
-    const b = atlasChart(inputs.base);
+    const started = performance.now();
+    const preview = atlasChart(inputs.preview, ATLAS_CFG.raster.budgetMs);
+    const baseBudget = ATLAS_CFG.raster.budgetMs - (performance.now() - started);
+    const b = preview.raster && baseBudget > 0 ? atlasChart(inputs.base, baseBudget)
+      : { raster: atlasRaster(inputs.base.key), building: true };
+    building ||= preview.building;
     building ||= b.building;
-    const baseR = b.raster ?? (this.atlasShown.base ? atlasRaster(this.atlasShown.base) : null);
+    const baseR = b.raster ?? preview.raster ?? (this.atlasShown.base ? atlasRaster(this.atlasShown.base) : null);
     if (baseR) { place(base, baseR); this.atlasShown.base = baseR.key; }
     if (inputs.window) {
-      const w = atlasChart(inputs.window);
+      const remaining = ATLAS_CFG.raster.budgetMs - (performance.now() - started);
+      const w = remaining > 0 ? atlasChart(inputs.window, remaining) : { raster: atlasRaster(inputs.window.key), building: true };
       building ||= w.building;
       const winR = w.raster ?? (this.atlasShown.window ? atlasRaster(this.atlasShown.window) : null);
       if (winR) { place(win, winR); this.atlasShown.window = winR.key; }
@@ -8479,16 +8498,17 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (building) this.scheduleAtlasTick();
   }
 
-  /** One painter tick (45 ms): advance the job in flight and re-sync the
+  /** One bounded painter tick: advance the job in flight and re-sync the
    *  standing SVG's atlas layer; re-arms itself while a build is in flight. */
   private scheduleAtlasTick(): void {
     if (this.chartTimer) return;
     this.chartTimer = window.setTimeout(() => {
       this.chartTimer = 0;
-      if (!this.mapOpen) return;
+      if (!this.mapOpen || this.mapTab !== 'map' || document.hidden) return;
+      if (performance.now() < this.atlasInteractionUntil) { this.scheduleAtlasTick(); return; }
       const svg = this.worldMap.querySelector<SVGSVGElement>('#world-map-svg');
       if (svg) this.syncAtlas(svg);
-    }, 45);
+    }, MAP_CFG.mapPerformance.tickMs);
   }
 
   /** THE CURSOR READ (#map-here — THE DEV LENS only): the ground under the
@@ -8787,7 +8807,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       if (lbl) lbl.textContent = mapZoomLabel(this.mapZoom);
       // A zoom or pan re-aims the ATLAS LAYER in place (the zoom window) —
       // never a rebuild: the standing SVG stays exactly as it stands.
-      this.syncAtlas(svg);
+      this.atlasInteractionUntil = performance.now() + MAP_CFG.mapPerformance.interactionDelayMs;
+      this.scheduleAtlasTick();
     };
     this.worldMap.querySelectorAll<HTMLButtonElement>('.map-zoom').forEach(btn => {
       btn.addEventListener('click', (e) => {

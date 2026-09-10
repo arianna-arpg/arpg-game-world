@@ -61,7 +61,7 @@ export const ATLAS_CFG = {
    *  the new one builds), the image opacity over the panel ground, and the
    *  px-per-node-unit clamps (a tiny early map never over-samples; a huge
    *  late one coarsens instead of growing without bound). */
-  raster: { maxPx: 720, lattice: 2, budgetMs: 22, opacity: 0.94, minPxPerUnit: 0.05, maxPxPerUnit: 0.6,
+  raster: { maxPx: 720, lattice: 2, budgetMs: 4, opacity: 0.94, maxPxPerUnit: 0.6,
     /** THE ZOOM WINDOW: zoomed past `zoomWindowFrom`, the painter renders the
      *  VIEW (× `zoomWindowPad` margin) at full resolution instead of the whole
      *  charted country, so a close look stays crisp however far the chart

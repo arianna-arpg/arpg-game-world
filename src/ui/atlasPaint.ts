@@ -31,12 +31,15 @@ import { ATLAS_GLYPHS, type ChartGlyphSpec } from '../data/atlasFeatures';
 import { BIOMES } from '../world/biomes';
 import type { MapCoord } from '../world/coords';
 import { hash01 } from '../engine/hash';
+import { atlasBudget, AtlasRevealIndex } from './atlasBudget';
 
 export type TerrainKind = 'land' | 'ocean' | 'bridge';
 
 export interface AtlasChartInput {
   /** Cache identity — a new key starts a new job (finished rasters stay cached). */
   key: string;
+  /** Optional coarse overview; zoom windows keep the full raster allowance. */
+  maxPx?: number;
   /** Node-space rect to paint. */
   box: { minX: number; minY: number; maxX: number; maxY: number };
   biomeAt: (c: MapCoord) => string;
@@ -56,7 +59,7 @@ export interface AtlasChartInput {
 
 export interface AtlasLabel { x: number; y: number; text: string; color: string; kind: string }
 
-/** One finished raster: a data URL + its world rect + the labels it earned. */
+/** One finished raster: an object URL + its world rect + the labels it earned. */
 export interface AtlasRaster {
   key: string;
   href: string;
@@ -222,8 +225,11 @@ interface Job {
   elev: Float32Array; bio: Uint16Array; kind: Uint8Array; shore: Float32Array;
   biomes: string[]; biomeIdx: Map<string, number>;
   rmask: Float32Array | null; rgw: number; rgh: number; rcell: number;
-  phase: 'sample' | 'shore' | 'shade' | 'vector' | 'encode' | 'done';
+  revealIndex?: AtlasRevealIndex;
+  phase: 'reveal' | 'sample' | 'shore' | 'shade' | 'vector' | 'encode' | 'encoding' | 'done';
+  work?: Generator<void>;
   row: number;
+  col: number;
   canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; img: ImageData;
   labels: AtlasLabel[];
   spentMs: number;
@@ -232,6 +238,8 @@ interface Job {
 let current: Job | null = null;
 /** Finished rasters, least-recently-used first (Map insertion order). */
 const cache = new Map<string, AtlasRaster>();
+let revision = 0;
+export const atlasRevision = (): number => revision;
 
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
 const smooth01 = (t: number): number => { const c = clamp(t, 0, 1); return c * c * (3 - 2 * c); };
@@ -260,8 +268,8 @@ function seamCoord(c: MapCoord, seed: number): MapCoord {
 function startJob(inp: AtlasChartInput): Job {
   const C = ATLAS_CFG.raster;
   const bw = Math.max(1, inp.box.maxX - inp.box.minX), bh = Math.max(1, inp.box.maxY - inp.box.minY);
-  const ppu = clamp(C.maxPx / Math.max(bw, bh), C.minPxPerUnit, C.maxPxPerUnit);
-  const W = Math.max(8, Math.ceil(bw * ppu)), H = Math.max(8, Math.ceil(bh * ppu));
+  const { ppu, W, H, rcell } = atlasBudget(bw, bh,
+    { ...C, maxPx: Math.max(8, Math.min(C.maxPx, inp.maxPx ?? C.maxPx)) }, ATLAS_CFG.reveal.cell);
   const s = C.lattice;
   const cols = Math.ceil(W / s) + 2, rows = Math.ceil(H / s) + 2;
   const canvas = document.createElement('canvas');
@@ -269,11 +277,25 @@ function startJob(inp: AtlasChartInput): Job {
   const ctx = canvas.getContext('2d')!;
   // THE VEIL MASK — a coarse lattice stamped by every visible node; the dev
   // lens (noVeil) skips it and every read returns 1.
-  const rcell = ATLAS_CFG.reveal.cell;
   const rgw = Math.ceil(bw / rcell) + 2, rgh = Math.ceil(bh / rcell) + 2;
-  let rmask: Float32Array | null = null;
-  if (!inp.noVeil) {
-    rmask = new Float32Array(rgw * rgh);
+  const revealIndex = !inp.noVeil && rcell > ATLAS_CFG.reveal.cell
+    ? new AtlasRevealIndex(ATLAS_CFG.reveal.radius, ATLAS_CFG.reveal.feather) : undefined;
+  const rmask = inp.noVeil || revealIndex ? null : new Float32Array(rgw * rgh);
+  return {
+    key: inp.key, inp, W, H, ppu, upc: s / ppu, s, cols, rows,
+    elev: new Float32Array(cols * rows), bio: new Uint16Array(cols * rows), kind: new Uint8Array(cols * rows),
+    shore: new Float32Array(cols * rows),
+    biomes: ['__none'], biomeIdx: new Map([['__none', 0]]),
+    rmask, rgw, rgh, rcell, revealIndex,
+    phase: 'reveal', row: 0, col: 0, canvas, ctx, img: ctx.createImageData(W, H), labels: [],
+    spentMs: 0,
+  };
+}
+
+function* revealPhase(j: Job): Generator<void> {
+  const { inp, rmask, rcell, rgw, rgh } = j;
+  if (j.revealIndex) for (const p of inp.reveal) { j.revealIndex.add(p); yield; }
+  if (rmask) {
     const R0 = ATLAS_CFG.reveal.radius, R1 = R0 + ATLAS_CFG.reveal.feather;
     const rc = Math.ceil(R1 / rcell);
     for (const p of inp.reveal) {
@@ -288,20 +310,14 @@ function startJob(inp: AtlasChartInput): Job {
           if (v > rmask[i]) rmask[i] = v;
         }
       }
+      yield;
     }
   }
-  return {
-    key: inp.key, inp, W, H, ppu, upc: s / ppu, s, cols, rows,
-    elev: new Float32Array(cols * rows), bio: new Uint16Array(cols * rows), kind: new Uint8Array(cols * rows),
-    shore: new Float32Array(cols * rows),
-    biomes: ['__none'], biomeIdx: new Map([['__none', 0]]),
-    rmask, rgw, rgh, rcell,
-    phase: 'sample', row: 0, canvas, ctx, img: ctx.createImageData(W, H), labels: [],
-    spentMs: 0,
-  };
+  j.phase = 'sample';
 }
 
 function revealAt(j: Job, ux: number, uy: number): number {
+  if (j.revealIndex) return j.revealIndex.at(ux, uy);
   if (!j.rmask) return 1;
   const gx = (ux - j.inp.box.minX) / j.rcell, gy = (uy - j.inp.box.minY) / j.rcell;
   const x0 = Math.floor(gx), y0 = Math.floor(gy);
@@ -316,7 +332,9 @@ function samplePhase(j: Job, deadline: number): void {
   const { inp, cols, rows, upc } = j;
   for (; j.row < rows; j.row++) {
     const uy = inp.box.minY + j.row * upc;
-    for (let c = 0; c < cols; c++) {
+    for (; j.col < cols; j.col++) {
+      const c = j.col;
+      if ((c & 31) === 0 && performance.now() > deadline) return;
       const ux = inp.box.minX + c * upc;
       const i = j.row * cols + c;
       // Fogged ground is never sampled — the veil is a real saving on a big chart.
@@ -331,25 +349,25 @@ function samplePhase(j: Job, deadline: number): void {
       j.kind[i] = kind === 'land' ? 1 : kind === 'ocean' ? 2 : 3;
       j.elev[i] = inp.elevAt ? inp.elevAt(coord) : 0.5;
     }
-    if (performance.now() > deadline) { j.row++; return; }
+    j.col = 0;
   }
   j.phase = 'shore'; j.row = 0;
 }
 
 /** Chamfer distance (cells) to the other kind — shallows off every shore
  *  and a coast band on the land, from the sampled lattice alone. */
-function shorePhase(j: Job): void {
+function* shorePhase(j: Job): Generator<void> {
   const { cols, rows, kind } = j;
   const n = cols * rows;
   const d = j.shore;
   const INF = 1e9;
-  for (let i = 0; i < n; i++) d[i] = INF;
+  d.fill(INF);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const i = r * cols + c, k = kind[i];
       if (!k) continue;
       const water = k === 2;
-      const nb = [i - 1, i + 1, i - cols, i + cols];
+      const nb = [c > 0 ? i - 1 : -1, c < cols - 1 ? i + 1 : -1, i - cols, i + cols];
       for (const q of nb) {
         if (q < 0 || q >= n) continue;
         const kq = kind[q];
@@ -357,6 +375,7 @@ function shorePhase(j: Job): void {
         if ((kq === 2) !== water) { d[i] = 0.5; break; }
       }
     }
+    yield;
   }
   const D1 = 1, D2 = Math.SQRT2;
   for (let r = 1; r < rows; r++) {
@@ -369,6 +388,7 @@ function shorePhase(j: Job): void {
       if (c < cols - 1) { const ur = d[i - cols + 1] + D2; if (ur < v) v = ur; }
       d[i] = v;
     }
+    yield;
   }
   for (let r = rows - 2; r >= 0; r--) {
     for (let c = cols - 1; c >= 0; c--) {
@@ -380,6 +400,7 @@ function shorePhase(j: Job): void {
       if (c > 0) { const dl = d[i + cols - 1] + D2; if (dl < v) v = dl; }
       d[i] = v;
     }
+    yield;
   }
   for (let i = 0; i < n; i++) d[i] = d[i] >= INF ? Infinity : d[i] * j.upc;
   j.phase = 'shade'; j.row = 0;
@@ -404,7 +425,9 @@ function shadePhase(j: Job, deadline: number): void {
     const py = j.row;
     const fr = py / s, rn = Math.round(fr);
     const uy = inp.box.minY + py / j.ppu;
-    for (let px = 0; px < W; px++) {
+    for (; j.col < W; j.col++) {
+      const px = j.col;
+      if ((px & 31) === 0 && performance.now() > deadline) return;
       const o = (py * W + px) * 4;
       const fc = px / s, cn = Math.round(fc);
       const ci = clamp(rn, 0, rows - 1) * cols + clamp(cn, 0, cols - 1);
@@ -446,7 +469,7 @@ function shadePhase(j: Job, deadline: number): void {
       data[o] = Math.min(255, rgb[0] * f); data[o + 1] = Math.min(255, rgb[1] * f); data[o + 2] = Math.min(255, rgb[2] * f);
       data[o + 3] = Math.round(rev * opacity * 255);
     }
-    if (performance.now() > deadline) { j.row++; return; }
+    j.col = 0;
   }
   j.phase = 'vector'; j.row = 0;
 }
@@ -455,7 +478,7 @@ function toPx(j: Job, c: MapCoord): [number, number] {
   return [(c.x - j.inp.box.minX) * j.ppu, (c.y - j.inp.box.minY) * j.ppu];
 }
 
-function drawRivers(j: Job): void {
+function* drawRivers(j: Job): Generator<void> {
   const { ctx, inp } = j;
   const C = ATLAS_CFG.rivers;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -483,12 +506,13 @@ function drawRivers(j: Job): void {
           ctx.moveTo(ax, ay); ctx.lineTo((ax + bx) / 2, (ay + by) / 2);
         }
         ctx.stroke();
+        yield;
       }
     }
   }
 }
 
-function drawGlyphs(j: Job): void {
+function* drawGlyphs(j: Job): Generator<void> {
   const { ctx, inp, cols, rows } = j;
   const G = ATLAS_CFG.glyphs;
   // One lattice for every biome: the site's biome picks the spec, the spec's
@@ -524,6 +548,7 @@ function drawGlyphs(j: Job): void {
       paint(ctx, (ux - inp.box.minX) * j.ppu, (uy - inp.box.minY) * j.ppu, size, color, hash01(gx * 11, gy * 13, inp.seed));
       ctx.restore();
     }
+    yield;
   }
 }
 
@@ -552,10 +577,11 @@ function drawEscarpment(j: Job, feat: MapFeature): void {
   ctx.restore();
 }
 
-function drawFeatures(j: Job, lakesOnly: boolean): void {
+function* drawFeatures(j: Job, lakesOnly: boolean): Generator<void> {
   const { ctx, inp } = j;
   const F = ATLAS_CFG.features;
   for (const feat of inp.features) {
+    yield;
     const def = mapFeatureKind(feat.kind);
     if (!def) continue;
     const isLake = def.glyph === 'lake';
@@ -577,17 +603,17 @@ function drawFeatures(j: Job, lakesOnly: boolean): void {
   }
 }
 
-function vectorPhase(j: Job): void {
+function* vectorPhase(j: Job): Generator<void> {
   j.ctx.putImageData(j.img, 0, 0);
-  if (j.inp.layers.features) drawFeatures(j, true);
-  if (j.inp.layers.rivers) drawRivers(j);
-  if (j.inp.layers.glyphs) drawGlyphs(j);
-  if (j.inp.layers.features) drawFeatures(j, false);
+  yield;
+  if (j.inp.layers.features) yield* drawFeatures(j, true);
+  if (j.inp.layers.rivers) yield* drawRivers(j);
+  if (j.inp.layers.glyphs) yield* drawGlyphs(j);
+  if (j.inp.layers.features) yield* drawFeatures(j, false);
   j.phase = 'encode';
 }
 
-function finish(j: Job): AtlasRaster {
-  const href = j.canvas.toDataURL('image/png');
+function finish(j: Job, href: string): AtlasRaster {
   return {
     key: j.key, href, x: j.inp.box.minX, y: j.inp.box.minY, w: j.W / j.ppu, h: j.H / j.ppu,
     labels: j.labels, ms: Math.round(j.spentMs), px: Math.max(j.W, j.H),
@@ -601,6 +627,7 @@ function remember(r: AtlasRaster): void {
   while (cache.size > cap) {
     const oldest = cache.keys().next().value;
     if (oldest === undefined) break;
+    URL.revokeObjectURL(cache.get(oldest)!.href);
     cache.delete(oldest);
   }
 }
@@ -623,26 +650,35 @@ export function atlasChart(inp: AtlasChartInput, budgetMs: number = ATLAS_CFG.ra
   }
   if (!current) current = startJob(inp);
   const j = current;
+  if (j.phase === 'encoding') return { raster: null, building: true, progress: 0.99 };
   const t0 = performance.now();
   const deadline = t0 + budgetMs;
   while (performance.now() <= deadline && j.phase !== 'done') {
     switch (j.phase) {
+      case 'reveal':
+      case 'shore':
+      case 'vector': {
+        j.work ??= j.phase === 'reveal' ? revealPhase(j) : j.phase === 'shore' ? shorePhase(j) : vectorPhase(j);
+        if (j.work.next().done) j.work = undefined;
+        break;
+      }
       case 'sample': samplePhase(j, deadline); break;
-      case 'shore': shorePhase(j); break;
       case 'shade': shadePhase(j, deadline); break;
-      case 'vector': vectorPhase(j); break;
       case 'encode': {
         j.spentMs += performance.now() - t0;
-        const r = finish(j);
-        remember(r);
-        j.phase = 'done';
-        current = null;
-        return { raster: r, building: false, progress: 1 };
+        j.phase = 'encoding';
+        j.canvas.toBlob(blob => {
+          // A canceled build must never publish into another world or view.
+          if (current !== j) return;
+          const href = blob ? URL.createObjectURL(blob) : j.canvas.toDataURL('image/png');
+          remember(finish(j, href)); j.phase = 'done'; current = null;
+        }, 'image/png');
+        return { raster: null, building: true, progress: 0.99 };
       }
     }
   }
   j.spentMs += performance.now() - t0;
-  const progress = j.phase === 'sample' ? 0.35 * (j.row / j.rows)
+  const progress = j.phase === 'reveal' ? 0 : j.phase === 'sample' ? 0.35 * (j.row / j.rows)
     : j.phase === 'shore' ? 0.35
       : j.phase === 'shade' ? 0.35 + 0.55 * (j.row / j.H) : 0.95;
   return { raster: null, building: true, progress };
@@ -662,13 +698,18 @@ export function atlasKeep(keys: readonly string[]): void {
 export function atlasChartBusy(): boolean { return current !== null; }
 
 /** Forget every raster (a run boundary; the dev tab's rebuild; tests). */
-export function atlasChartReset(): void { current = null; cache.clear(); }
+export function atlasChartReset(): void {
+  revision++;
+  current = null;
+  for (const r of cache.values()) URL.revokeObjectURL(r.href);
+  cache.clear();
+}
 
 /** The dev tab's read: cached rasters (key · px · build ms) + the job in flight. */
 export function atlasStats(): { cached: { key: string; px: number; ms: number }[]; building: string | null; progress: number } {
   const cached = Array.from(cache.values()).map(r => ({ key: r.key, px: r.px, ms: r.ms }));
   if (!current) return { cached, building: null, progress: 1 };
   const j = current;
-  const progress = j.phase === 'sample' ? 0.35 * (j.row / j.rows) : j.phase === 'shore' ? 0.35 : j.phase === 'shade' ? 0.35 + 0.55 * (j.row / j.H) : 0.95;
+  const progress = j.phase === 'reveal' ? 0 : j.phase === 'sample' ? 0.35 * (j.row / j.rows) : j.phase === 'shore' ? 0.35 : j.phase === 'shade' ? 0.35 + 0.55 * (j.row / j.H) : 0.95;
   return { cached, building: j.key, progress };
 }
