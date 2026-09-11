@@ -1880,6 +1880,11 @@ we verify changes.
   (committed defaults) deep-merged with `launcher.config.local.json`
   (gitignored, machine-local) — never hardcode window/port/repo values.
 - Entry point: `index.html` → `src/main.ts`.
+- Opening progression and item readability: `PROGRESSION` owns the starting
+  passive budget (zero; first point on level-up); `render/itemIcons.ts` shares
+  inventory/drop glyphs and support stars, and `engine/bagsort.ts` groups
+  duplicates in adjacent blocks when space permits. Extension notes:
+  `docs/design/item-readability.md`; probe `balance/probe_itemreadability.ts`.
 
 Some data files are very large (`src/data/skills.ts`, `src/engine/world.ts`).
 Prefer targeted `grep` over reading whole files.

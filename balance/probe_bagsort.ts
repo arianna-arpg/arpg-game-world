@@ -24,7 +24,7 @@ import { START_ZONE } from '../src/data/zones';
 import { rollItem, itemGridSize } from '../src/engine/itemgen';
 import { autoPlace, bagBoardFor, bagHeight, canPlaceAt, registerBagExpansion, swapBlockerFits } from '../src/engine/inventory';
 import { ITEM_CFG } from '../src/engine/items';
-import { BAG_SORT_MODES, bagFootprint, bagKindRank, bagRarityRank, sortBagItems } from '../src/engine/bagsort';
+import { BAG_SORT_MODES, bagContentKey, bagFootprint, bagKindRank, bagRarityRank, sortBagItems } from '../src/engine/bagsort';
 import { ITEM_BASES } from '../src/data/itembases';
 import type { ItemInstance, ItemRarity } from '../src/engine/items';
 
@@ -260,6 +260,76 @@ for (const mode of BAG_SORT_MODES) {
 }
 
 // --- THE INTENT -----------------------------------------------------------
+
+// Interleaved acquisition must not split duplicates in ANY mode/direction.
+// Different levels, rarities and rolled chassis are deliberately mixed in.
+for (const mode of BAG_SORT_MODES) for (const dir of ['asc', 'desc'] as const) {
+  const bag: ItemInstance[] = [];
+  const board = { w: 12, h: 6 };
+  for (let n = 0; n < 5; n++) {
+    const skill = mk('skill_gem');
+    skill.gem = { kind: 'skill', skillId: 'cleave', level: 1, rarity: 'common', sockets: [null] };
+    const other = mk('skill_gem');
+    other.gem = { kind: 'skill', skillId: n % 2 ? 'cleave' : 'fireball', level: 2, rarity: 'magic', sockets: [null] };
+    const support = mk('support_gem');
+    support.gem = { kind: 'support', supportId: 'chassis', level: 1, rolled: n % 2 ? { b: 'y', a: 'x' } : { a: 'x', b: 'y' } };
+    const otherSupport = mk('support_gem');
+    otherSupport.gem = { kind: 'support', supportId: 'chassis', level: 1, rolled: { a: 'z', b: 'y' } };
+    const gear = mk(small);
+    for (const item of [skill, other, support, otherSupport, gear]) autoPlace(bag, item, board);
+  }
+  check(`duplicates ${mode.id} ${dir}: sort fits`, sortBagItems(bag, mode.id, board, dir));
+  const rows = [...bag].sort((a, b) => a.y! - b.y! || a.x! - b.x!);
+  const seen = new Set<string>();
+  let previous = '', contiguous = true;
+  for (const item of rows) {
+    const key = bagContentKey(item);
+    if (key !== previous && seen.has(key)) contiguous = false;
+    seen.add(key); previous = key;
+  }
+  check(`duplicates ${mode.id} ${dir}: identical gear, skills and rolled supports are adjacent`, contiguous);
+  const once = layout(bag);
+  sortBagItems(bag, mode.id, board, dir);
+  check(`duplicates ${mode.id} ${dir}: repeat is stable and every item survives`,
+    layout(bag) === once && bag.length === 25 && overlaps(bag) === 0);
+}
+
+{
+  const a = mk('support_gem', 0, 0), b = mk('support_gem', 1, 0);
+  a.gem = { kind: 'support', supportId: 'chassis', level: 1, rolled: { a: 'x', b: 'y' } };
+  b.gem = { kind: 'support', supportId: 'chassis', level: 1, rolled: { b: 'y', a: 'x' } };
+  b.locked = true;
+  check('content identity ignores uid, position, lock and object insertion order', bagContentKey(a) === bagContentKey(b));
+  b.gem.rolled!.a = 'z';
+  check('content identity preserves differing gameplay rolls', bagContentKey(a) !== bagContentKey(b));
+}
+
+for (const mode of BAG_SORT_MODES) for (const dir of ['asc', 'desc'] as const) {
+  // Isolated one-cell holes above tall equipment used to split five Cleaves
+  // even though a full row was free below. The locked gem must stay pinned.
+  const bag: ItemInstance[] = [];
+  const board = { w: 12, h: 6 };
+  const pin = mk('support_gem', 2, 0);
+  pin.gem = { kind: 'support', supportId: 'pinned', level: 1 };
+  pin.locked = true; bag.push(pin);
+  for (const cat of ['helmet', 'chest', 'legs', 'boots', 'ring']) {
+    autoPlace(bag, mk(bases.find(b => b.category === cat)!.id), board);
+  }
+  const copies: ItemInstance[] = [];
+  for (let n = 0; n < 5; n++) {
+    const gem = mk('skill_gem');
+    gem.gem = { kind: 'skill', skillId: 'cleave', level: 1, rarity: 'common', sockets: [null] };
+    copies.push(gem); autoPlace(bag, gem, board);
+    const other = mk('skill_gem');
+    other.gem = { kind: 'skill', skillId: 'fireball', level: 1, rarity: 'magic', sockets: [null] };
+    autoPlace(bag, other, board);
+  }
+  check(`blocks ${mode.id} ${dir}: mixed bag fits`, sortBagItems(bag, mode.id, board, dir));
+  const xs = copies.map(i => i.x!).sort((a, b) => a - b);
+  check(`blocks ${mode.id} ${dir}: five Cleaves sit side by side despite equipment holes`,
+    copies.every(i => i.y === copies[0].y) && xs.every((x, n) => x === xs[0] + n));
+  check(`blocks ${mode.id} ${dir}: pin stays and items never overlap`, pin.x === 2 && pin.y === 0 && overlaps(bag) === 0);
+}
 
 {
   const w = makeSimWorld('warrior', 0xba6);

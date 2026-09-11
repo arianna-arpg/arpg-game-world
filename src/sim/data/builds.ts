@@ -8,7 +8,7 @@
 // GEM_LEVEL_AT so "a level-10 kit" means the same thing across builds.
 // ---------------------------------------------------------------------------
 
-import { CLASSES } from '../../data/classes';
+import { CLASSES, PROGRESSION } from '../../data/classes';
 import { PASSIVE_ADJACENCY, classStartNode } from '../../data/passives';
 import type { BuildEntry, BuildSpec } from '../types';
 
@@ -44,7 +44,7 @@ export function greedyPassives(classId: string, points: number): string[] {
 }
 
 /** A class's live starting bar, translated into a BuildSpec at a level, with
- *  a level's worth of nearby passives spent (1/level — PROGRESSION's rate). */
+ *  the level-earned budget spent nearby, derived from PROGRESSION. */
 export function starterBuild(classId: string, level: number): BuildSpec {
   const cls = CLASSES.find(c => c.id === classId);
   if (!cls) throw new Error(`sim builds: unknown class '${classId}'`);
@@ -56,7 +56,7 @@ export function starterBuild(classId: string, level: number): BuildSpec {
     classId,
     level,
     skills,
-    passives: greedyPassives(classId, level),
+    passives: greedyPassives(classId, PROGRESSION.passivePointsAtLevel(level)),
   };
 }
 
@@ -124,7 +124,7 @@ const archerSummoner = (id: string, supports?: { id: string; level?: number }[])
   id, label: `Skeleton-archer summoner @ L10 (${supports ? 'Resonance + Splitting forwarded' : 'bare'})`,
   classId: 'summoner', level: 10,
   skills: [{ id: 'summon_skeleton_archer', level: gemLevelAt(10), supports }],
-  passives: greedyPassives('summoner', 10),
+  passives: greedyPassives('summoner', PROGRESSION.passivePointsAtLevel(10)),
 });
 BUILDS['summoner_archers_l10'] = archerSummoner('summoner_archers_l10');
 BUILDS['summoner_conjurer_l10'] = archerSummoner('summoner_conjurer_l10',
@@ -138,7 +138,7 @@ const warriorSummoner = (id: string, supports?: { id: string; level?: number }[]
   id, label: `Skeleton-warrior summoner @ L10 (${supports ? 'Resonance + Faultfinder + Tectonic Echoes forwarded' : 'bare'})`,
   classId: 'summoner', level: 10,
   skills: [{ id: 'summon_skeleton', level: gemLevelAt(10), supports }],
-  passives: greedyPassives('summoner', 10),
+  passives: greedyPassives('summoner', PROGRESSION.passivePointsAtLevel(10)),
 });
 BUILDS['summoner_warriors_l10'] = warriorSummoner('summoner_warriors_l10');
 BUILDS['summoner_faultfinder_l10'] = warriorSummoner('summoner_faultfinder_l10',
@@ -259,7 +259,7 @@ BUILDS['ironbell_rot_l12'] = {
     id: 'venom_bolt', level: gemLevelAt(12),
     supports: [{ id: 'poison_chance', level: 1 }, { id: 'putrefaction', level: 1 }],
   }],
-  passives: greedyPassives('magician', 12),
+  passives: greedyPassives('magician', PROGRESSION.passivePointsAtLevel(12)),
 };
 BUILDS['ironbell_burst_l12'] = {
   id: 'ironbell_burst_l12', label: 'Loaded-dice nuker vs the Iron Bell @ L12',
@@ -268,7 +268,7 @@ BUILDS['ironbell_burst_l12'] = {
     id: 'fulminate', level: gemLevelAt(12),
     supports: [{ id: 'loaded_dice', level: 1 }],
   }],
-  passives: greedyPassives('magician', 12),
+  passives: greedyPassives('magician', PROGRESSION.passivePointsAtLevel(12)),
 };
 
 // FORTUNE-FABRIC PROBES (rollTop gates / proc riders / damageSpread): the

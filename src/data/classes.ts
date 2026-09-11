@@ -751,10 +751,16 @@ export const CLASS_CFG = {
 // --- Shared progression rules ----------------------------------------------
 
 export const PROGRESSION = {
+  /** Unspent points at creation; the class starting node is granted separately. */
+  startingPassivePoints: 0,
   /** Passive points: spent on the passive tree (attributes live there).
    *  The level-up beat grants ONLY this — skill/support levels are fed by
    *  Ability Essences (data/essences.ts; the skill-point lane retired). */
   passivePointsPerLevel: 1,
+  /** Spendable level-earned budget, excluding quest rewards and the free root. */
+  passivePointsAtLevel(level: number): number {
+    return this.startingPassivePoints + Math.max(0, level - 1) * this.passivePointsPerLevel;
+  },
   lifePerLevel: 4,
   manaPerLevel: 4,
   xpForLevel(level: number): number {

@@ -2,7 +2,8 @@
 // THE BAG SORT — re-packing the tetris bag by a registered ORDER, as data.
 //
 // A BagSortMode is one comparator row. The sort re-orders the bag's placed
-// items by it, then first-fit re-packs them row-major on a fresh board
+// items by it, then re-packs them row-major, preferring adjacent blocks for
+// identical content before falling back to first-fit on a fresh board
 // (autoPlace — the ONE placement law, so a sorted bag obeys exactly the cell
 // law the hand does), ALL OR NOTHING: a pack that fails for any piece (a
 // fresh order can tetris worse than the hand did) reverts every position, so
@@ -19,7 +20,7 @@
 // registerStamp override idiom: same id replaces in place).
 // ---------------------------------------------------------------------------
 
-import { autoPlace, type BoardDims } from './inventory';
+import { autoPlace, bagBoard, canPlaceAt, placeAt, type BoardDims } from './inventory';
 import { itemGridSize } from './itemgen';
 import { EQUIP_SLOTS, ITEM_RARITY_IDS, type ItemInstance } from './items';
 import { SKILL_RARITIES } from './skills';
@@ -27,7 +28,7 @@ import { ITEM_BASES } from '../data/itembases';
 
 /** 'desc' = the mode's natural face (largest / rarest / the doll's first kind
  *  leads); 'asc' = the mirror. The panel flips it by pressing the lit mode
- *  again; the intent carries it; ties fall to uid either way. */
+ *  again; the intent carries it; ties group identical content before uid. */
 export type BagSortDir = 'asc' | 'desc';
 
 export interface BagSortMode {
@@ -39,7 +40,7 @@ export interface BagSortMode {
   icon: string;
   /** The button's hover line — what the order IS, so the player can predict it. */
   title: string;
-  /** Negative = a before b. Ties fall to uid (sortBagItems appends it), so
+  /** Negative = a before b. Ties group content, then uid (sortBagItems appends them), so
    *  every mode is deterministic by construction. */
   compare(a: ItemInstance, b: ItemInstance): number;
 }
@@ -87,6 +88,31 @@ export function bagFootprint(i: ItemInstance): { w: number; h: number; area: num
   return { w: s.w, h: s.h, area: s.w * s.h };
 }
 
+/** Stable across object insertion order (saved payloads can arrive through
+ *  different paths). Arrays retain their order: sockets are positional. */
+function canonicalContent(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalContent).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const row = value as Record<string, unknown>;
+    return `{${Object.keys(row).filter(k => row[k] !== undefined).sort()
+      .map(k => `${JSON.stringify(k)}:${canonicalContent(row[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
+/** Identity excludes residence and the keeper's mark, but retains every
+ *  gameplay roll, socket, level and tree choice. Duplicate gear/gems stay
+ *  together even when acquired at different times. */
+export function bagContentKey(item: ItemInstance): string {
+  const { uid, x, y, locked, ...content } = item;
+  return canonicalContent(content);
+}
+
+const contentId = (i: ItemInstance): string => i.gem
+  ? `${i.gem.kind}:${i.gem.kind === 'skill' ? i.gem.skillId : i.gem.supportId}`
+  : i.baseId;
+const compareText = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
+
 // --- THE MODES --------------------------------------------------------------
 
 const byArea = (a: ItemInstance, b: ItemInstance): number => bagFootprint(b).area - bagFootprint(a).area;
@@ -133,7 +159,7 @@ export function bagSortMode(id: string): BagSortMode | undefined {
 // --- THE SORT ---------------------------------------------------------------
 
 /** Re-pack the bag's PLACED items in `mode`'s order (`dir` 'asc' mirrors
- *  it), first-fit row-major on a fresh board. True when the pack landed;
+ *  it), preferring adjacent duplicate blocks with first-fit fallback. True when the pack landed;
  *  false — with every position exactly as it was — when the mode is
  *  unknown, the bag holds nothing placed, or no pack fits (all or nothing:
  *  a sort never loses a piece). Unplaced items (none in a live bag; the
@@ -159,22 +185,59 @@ export function sortBagItems(bag: ItemInstance[], modeId: string, board?: BoardD
   if (free.length === 0) return false;
   const before = free.map(i => ({ i, x: i.x!, y: i.y! }));
   const sign = dir === 'asc' ? -1 : 1;
-  const order = [...free].sort((a, b) => sign * mode.compare(a, b) || a.uid - b.uid);
-  const largestFirst = (a: ItemInstance, b: ItemInstance): number => byArea(a, b) || byHeight(a, b) || a.uid - b.uid;
+  // Compute once per sort, never serialize cargo on every comparator call.
+  const keys = new Map(free.map(i => [i, bagContentKey(i)]));
+  const byContent = (a: ItemInstance, b: ItemInstance): number =>
+    compareText(contentId(a), contentId(b)) || byRarity(a, b)
+    || (b.gem?.level ?? b.tier) - (a.gem?.level ?? a.tier)
+    || compareText(keys.get(a)!, keys.get(b)!);
+  const order = [...free].sort((a, b) => sign * (mode.compare(a, b) || byContent(a, b)) || a.uid - b.uid);
+  const largestFirst = (a: ItemInstance, b: ItemInstance): number =>
+    byArea(a, b) || byHeight(a, b) || byWidth(a, b) || byKind(a, b) || byContent(a, b) || a.uid - b.uid;
   /** One pack attempt over a board cleared of the FREE pieces (the pinned
    *  stay seated): the pieces it could not seat. */
-  const attempt = (seq: readonly ItemInstance[]): ItemInstance[] => {
+  const dims = board ?? bagBoard();
+  // A tied run should LOOK grouped too: first-fit alone scatters 1x1 gems
+  // into unrelated holes above tall gear. Prefer one adjacent block, widest
+  // first, then fold onto more rows. Pins remain ordinary occupied cells.
+  const placeGroup = (group: readonly ItemInstance[]): boolean => {
+    const { w, h } = itemGridSize(group[0]);
+    for (let cols = Math.min(group.length, Math.floor(dims.w / w)); cols >= 1; cols--) {
+      const rows = Math.ceil(group.length / cols);
+      for (let y = 0; y <= dims.h - rows * h; y++) for (let x = 0; x <= dims.w - cols * w; x++) {
+        if (!group.every((i, n) => canPlaceAt(bag, i, x + n % cols * w, y + Math.floor(n / cols) * h, dims))) continue;
+        group.forEach((i, n) => placeAt(bag, i, x + n % cols * w, y + Math.floor(n / cols) * h, dims));
+        return true;
+      }
+    }
+    return false;
+  };
+  const attempt = (seq: readonly ItemInstance[], grouped = true): ItemInstance[] => {
     for (const i of free) { delete i.x; delete i.y; }
     const unseated: ItemInstance[] = [];
-    for (const i of seq) if (!autoPlace(bag, i, board)) unseated.push(i);
+    for (let start = 0; start < seq.length;) {
+      let end = start + 1;
+      if (grouped) while (end < seq.length && keys.get(seq[end]) === keys.get(seq[start])) end++;
+      const group = seq.slice(start, end);
+      if (group.length === 1 || !placeGroup(group)) {
+        for (const i of group) if (!autoPlace(bag, i, dims)) unseated.push(i);
+      }
+      start = end;
+    }
     return unseated;
   };
-  const vetoed = attempt(order);
+  // If adjacent blocks cost the last usable holes, the ordinary tight pack
+  // gets its chance before promoting oversized pieces. Never sacrifice fit.
+  const tryOrder = (seq: readonly ItemInstance[]): ItemInstance[] => {
+    const missed = attempt(seq);
+    return missed.length ? attempt(seq, false) : missed;
+  };
+  const vetoed = tryOrder(order);
   if (vetoed.length === 0) return true;
   const fronted = [...vetoed].sort(largestFirst);
   const rest = order.filter(i => !vetoed.includes(i));
-  if (attempt([...fronted, ...rest]).length === 0) return true;
-  if (attempt([...free].sort(largestFirst)).length === 0) return true;
+  if (tryOrder([...fronted, ...rest]).length === 0) return true;
+  if (tryOrder([...free].sort(largestFirst)).length === 0) return true;
   for (const r of before) { r.i.x = r.x; r.i.y = r.y; }
   return false;
 }

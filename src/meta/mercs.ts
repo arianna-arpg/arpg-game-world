@@ -189,10 +189,10 @@ export const MERC_CFG = {
     /** Highest gem level the build fields at target level L. */
     gemLevelCap: (level: number): number => Math.max(1, Math.ceil(level / 5) + 1),
     /** Passive-tree allocation budget a level-L character would hold (the
-     *  creation point + per-level earn; quest points deliberately excluded —
+     *  starting budget + per-level earn; quest points deliberately excluded —
      *  "expected", not "maximal"). */
     passiveBudget: (level: number): number =>
-      1 + Math.max(0, level - 1) * PROGRESSION.passivePointsPerLevel,
+      PROGRESSION.passivePointsAtLevel(level),
     /** Worn gear above its own level requirement sits out of the engagement. */
     respectGearLevelReq: true,
   },

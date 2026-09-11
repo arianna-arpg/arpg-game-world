@@ -13,6 +13,7 @@ import { STARTER_CLASSES } from '../../meta/account';
 import type { MonsterRarity } from '../../engine/rarity';
 import type { PilotSpec, ScenarioDef } from '../types';
 import { greedyPassives } from './builds';
+import { PROGRESSION } from '../../data/classes';
 
 /** How a human plays the class, derived from its OWN bar: a spell-led kit
  *  kites at range, an attack-led kit closes in. Re-bar a class and its sim
@@ -416,7 +417,7 @@ for (const mode of [
       classId: 'swashbuckler', level: 20,
       skills: [{ id: 'wild_strike', level: 20, treeNodes: mode.nodes }],
       bar: ['wild_strike'],
-      passives: greedyPassives('swashbuckler', 20),
+      passives: greedyPassives('swashbuckler', PROGRESSION.passivePointsAtLevel(20)),
     },
     pilot: { kind: 'brawler' },
     waves: [{ monsters: [{ id: 'target_dummy', level: 1, count: mode.dummies }], distance: 70 }],

@@ -129,7 +129,7 @@ function auditPassives(classId: string, picks: string[], level: number, warnings
   if (stranded.length) {
     warnings.push(`passives not connected to '${start}': ${stranded.join(', ')} (simulated anyway)`);
   }
-  const budget = level * PROGRESSION.passivePointsPerLevel + 1; // +1: the creation freebie
+  const budget = PROGRESSION.passivePointsAtLevel(level) + 1; // +1: the free class root
   // Only nodes billing the MAIN pool count against the passive budget —
   // realm-currency nodes spend their own wallet, and realm roots are free.
   const spent = [...allocated].filter(id => {
@@ -247,7 +247,7 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
     attrs: { ...classDef.attributes, ...(spec.attributes ?? {}) } as PlayerMeta['attrs'], // recomputed by recalcPlayer
     xp: 0,
     xpNeeded: PROGRESSION.xpForLevel(spec.level),
-    passivePoints: Math.max(0, spec.level * PROGRESSION.passivePointsPerLevel + 1 - allocated.size - extraPicks),
+    passivePoints: Math.max(0, PROGRESSION.passivePointsAtLevel(spec.level) + 1 - allocated.size - extraPicks),
     allocated,
     choices,
     realmPoints: {},

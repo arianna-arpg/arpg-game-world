@@ -33,6 +33,7 @@ import {
 import { GEM_DROP_CFG } from '../engine/loot';
 import { bagBoard, canPlaceAt, overlappingItems, swapBlockerFits } from '../engine/inventory';
 import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
+import { CATEGORY_GLYPHS, SUPPORT_BADGE } from '../render/itemIcons';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, itemLevelReq, type ModCompareRow } from '../engine/itemgen';
 import { ITEM_BASES } from '../data/itembases';
@@ -293,11 +294,6 @@ const dollSilhouetteSvg = (cell: number, cols: number, rows: number): string => 
   </svg>`;
 };
 
-const CATEGORY_GLYPHS: Record<string, string> = {
-  helmet: '⛑', chest: '🛡', gloves: '🧤', boots: '👢', legs: '👖', belt: '➰',
-  ring: '💍', amulet: '📿', weapon: '⚔', offhand: '🛡', quiver: '🏹',
-};
-
 // --- THE RESIDENCE (skill-items M1): gem-tile look helpers -----------------
 
 /** A gem wrapper tile's border color: the skill's own rarity ladder, or the
@@ -323,7 +319,10 @@ const gemTileFaceHtml = (item: ItemInstance): string => {
   return `<span style="display:flex;align-items:center;justify-content:center;
       width:22px;height:22px;border-radius:3px;background:${color};opacity:0.9;
       color:#0a0a0e;font-weight:bold;font-size:9px;font-family:Verdana">${gemInitials(def.name)}</span>
-    <span style="position:absolute;bottom:0;left:2px;font-size:8px;line-height:9px;color:#e8dcc8;text-shadow:0 0 2px #000">${lvl}</span>`;
+    <span style="position:absolute;bottom:0;left:2px;font-size:8px;line-height:9px;color:#e8dcc8;text-shadow:0 0 2px #000">${lvl}</span>
+    ${gp ? `<span title="Support Memory" aria-label="Support Memory" style="position:absolute;top:0;left:0;
+      font-size:10px;line-height:11px;padding:0 1px;border-radius:2px;
+      color:${SUPPORT_BADGE.color};background:${SUPPORT_BADGE.background};pointer-events:none">${SUPPORT_BADGE.glyph}</span>` : ''}`;
 };
 
 /** The SCRAP-WHEEL cursor (vendor salvage mode): a gear glyph rendered into

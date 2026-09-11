@@ -4028,7 +4028,7 @@ export class World {
       attrs: { ...classDef.attributes },
       xp: 0,
       xpNeeded: PROGRESSION.xpForLevel(1),
-      passivePoints: 1,
+      passivePoints: PROGRESSION.startingPassivePoints,
       allocated: new Set([classStartNode(classDef.id)]),
       choices: {},
       realmPoints: {},

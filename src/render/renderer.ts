@@ -8,6 +8,8 @@ import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
 import { bandPointsAt, instanceChannel, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treePointsSpent, treeSpentBranch } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
+import { gemInitials } from '../engine/gemitems';
+import { itemGlyphForBase, SUPPORT_BADGE } from './itemIcons';
 import { VESTIGES } from '../data/vestiges';
 import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
 import { STATUS_DEFS, type StatusDef } from '../engine/status';
@@ -6338,10 +6340,9 @@ export class Renderer {
     }
   }
 
-  /** Gems on the ground: bobbing diamonds — skill gems wear a rarity ring.
-   *  GEAR draws bigger in its rarity color and floats a NAME LABEL (the
-   *  ARPG ground-read: what dropped, from across the room). The client
-   *  render-shell only carries {name, rarity}, so gear touches nothing else. */
+  /** World drops use the inventory's category glyphs / gem initials and
+   *  support badge. Rarity outlines, bobbing and gear name labels remain;
+   *  co-op shells carry the base id and gem name needed by the same reads. */
   private drawDrops(world: World): void {
     const { ctx } = this;
     const D = VIS_CFG.drops; // every size below is a lever, never a literal
@@ -6388,15 +6389,19 @@ export class Renderer {
         const half = unique ? D.gearUniqueHalf : D.gearHalf;
         ctx.save();
         ctx.translate(d.pos.x, y);
-        ctx.rotate(Math.PI / 4);
         ctx.shadowColor = rc.color;
         ctx.shadowBlur = unique ? D.glowUnique : D.glow;
-        ctx.fillStyle = '#23202a';
+        ctx.fillStyle = D.tileBackground;
         ctx.fillRect(-half, -half, half * 2, half * 2);
         ctx.shadowBlur = 0;
         ctx.strokeStyle = rc.color;
         ctx.lineWidth = D.outlineWidth;
         ctx.strokeRect(-half, -half, half * 2, half * 2);
+        ctx.font = `${D.gearGlyphFont}px Verdana`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = rc.color;
+        ctx.fillText(itemGlyphForBase(item.item.baseId), 0, 0);
         ctx.restore();
         // The floating label — dark pill + rarity-colored name.
         ctx.font = `bold ${D.labelFont}px Verdana`;
@@ -6413,22 +6418,32 @@ export class Renderer {
       const half = item.kind === 'support' ? D.supportHalf : D.skillHalf;
       ctx.save();
       ctx.translate(d.pos.x, y);
-      ctx.rotate(Math.PI / 4);
       ctx.shadowColor = fill;
       ctx.shadowBlur = D.glow;
-      ctx.fillStyle = fill;
+      ctx.fillStyle = D.tileBackground;
       ctx.fillRect(-half, -half, half * 2, half * 2);
       ctx.shadowBlur = 0;
-      if (item.kind === 'skill') {
-        // The rarity ring is the tell from across the screen.
-        const rc = SKILL_RARITIES[item.inst.rarity ?? 'common'].color;
-        ctx.strokeStyle = rc;
-        ctx.lineWidth = D.ringWidth;
-        ctx.strokeRect(-half - D.ringPad, -half - D.ringPad, (half + D.ringPad) * 2, (half + D.ringPad) * 2);
-      }
-      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-      ctx.lineWidth = D.edgeWidth;
+      ctx.strokeStyle = item.kind === 'skill'
+        ? SKILL_RARITIES[item.inst.rarity ?? 'common'].color : fill;
+      ctx.lineWidth = D.ringWidth;
       ctx.strokeRect(-half, -half, half * 2, half * 2);
+      ctx.fillStyle = fill;
+      ctx.fillRect(-half + D.ringPad, -half + D.ringPad, (half - D.ringPad) * 2, (half - D.ringPad) * 2);
+      ctx.font = `bold ${D.gemFont}px Verdana`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = D.gemTextColor;
+      ctx.fillText(gemInitials(item.kind === 'support' ? item.gem.def.name : item.inst.def.name), 0, 0);
+      if (item.kind === 'support') {
+        const corner = -half + D.badgeInset;
+        ctx.fillStyle = SUPPORT_BADGE.background;
+        ctx.fillRect(corner, corner, D.supportBadgeFont, D.supportBadgeFont);
+        ctx.font = `${D.supportBadgeFont}px Verdana`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = SUPPORT_BADGE.color;
+        ctx.fillText(SUPPORT_BADGE.glyph, corner, corner);
+      }
       ctx.restore();
     }
   }

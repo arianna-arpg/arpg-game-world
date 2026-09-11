@@ -169,7 +169,7 @@ export interface CastW {
 export interface ProjW { p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
 /** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; }
-export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; vid?: string; eid?: string; tid?: number; cnt?: number; }
+export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; vid?: string; eid?: string; tid?: number; cnt?: number; }
 /** kind is an ORB_DEFS registry id — the client renders from the registry. */
 export interface OrbW { p: Vec2W; bob: number; life: number; kind: string; }
 export interface TextW { p: Vec2W; life: number; maxLife: number; size: number; color: string; text: string;
@@ -751,7 +751,10 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
         : d.item.inst.def.color,
       rarity: d.item.kind === 'skill' ? (d.item.inst.rarity ?? 'common')
         : d.item.kind === 'gear' ? d.item.item.rarity : undefined,
-      name: d.item.kind === 'gear' ? d.item.item.name : undefined,
+      name: d.item.kind === 'gear' ? d.item.item.name
+        : d.item.kind === 'skill' ? d.item.inst.def.name
+        : d.item.kind === 'support' ? d.item.gem.def.name : undefined,
+      baseId: d.item.kind === 'gear' ? d.item.item.baseId : undefined,
       vid: d.item.kind === 'vestige' ? d.item.id : undefined,
       eid: d.item.kind === 'essence' ? d.item.essence : undefined,
       tid: d.item.kind === 'abilityEssence' ? d.item.tier : undefined,
@@ -1261,17 +1264,17 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.drops = snap.drops.map(d => ({
     pos: { x: d.p[0], y: d.p[1] }, bob: d.bob,
     item: d.kind === 'support'
-      ? { kind: 'support', gem: { def: { color: d.color }, level: 1 } }
+      ? { kind: 'support', gem: { def: { color: d.color, name: d.name ?? '?' }, level: 1 } }
       : d.kind === 'gear'
-        // Render-shell gear: name + rarity is all the client draws (label/icon).
-        ? { kind: 'gear', item: { name: d.name ?? '?', rarity: (d.rarity ?? 'common') } }
+        // Render-shell gear: base identity resolves the shared inventory glyph.
+        ? { kind: 'gear', item: { name: d.name ?? '?', rarity: (d.rarity ?? 'common'), baseId: d.baseId ?? '' } }
         : d.kind === 'vestige'
           ? { kind: 'vestige', id: d.vid ?? '', count: 1 }
           : d.kind === 'essence'
             ? { kind: 'essence', essence: d.eid ?? 'coarse', count: d.cnt ?? 1 }
             : d.kind === 'abilityEssence'
               ? { kind: 'abilityEssence', tier: d.tid ?? 1, count: d.cnt ?? 1 }
-              : { kind: 'skill', inst: { def: { color: d.color }, rarity: d.rarity ?? 'common' } },
+              : { kind: 'skill', inst: { def: { color: d.color, name: d.name ?? '?' }, rarity: d.rarity ?? 'common' } },
   })) as unknown as World['drops'];
   world.orbs = snap.orbs.map(o => ({ pos: { x: o.p[0], y: o.p[1] }, bob: o.bob, life: o.life, kind: o.kind, amount: 0 })) as unknown as World['orbs'];
   world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k })) as unknown as World['texts'];
