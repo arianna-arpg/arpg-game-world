@@ -24,6 +24,10 @@ The Hivecaller/Ranger/Guardian batch is in `src/data/frontierStarterTrees.ts`,
 with its contract and shared absorb scaling in
 `docs/design/frontier-starting-skill-trees.md`.
 
+Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
+`loottables.ts`; `docs/design/container-loot.md` documents the context rules,
+Memory Essence economy, visual grammar and regression probe.
+
 ## Commands
 - `npm install` — first-time setup (also run automatically by the .bat launchers).
 - `npm run dev` — Vite dev server at http://localhost:5173 (browser dev mode, `Play Game.bat`).

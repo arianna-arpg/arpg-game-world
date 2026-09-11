@@ -2212,6 +2212,10 @@ export const LOOKS: Record<string, LookDef> = {
   },
   // An UNOPENED chest, gold-bound, its seam leaking the light of whatever
   // waits inside — the event-box lineage (strongboxes to come) starts here.
+  memory_cache: {
+    parts: [{ kind: 'memoryCache', color: '#89b5cf' }],
+    shadowScale: 1.1,
+  },
   gem_cache: {
     parts: [
       { kind: 'chest', scale: 1.05, params: { straps: 2, glow: 0.7 } },

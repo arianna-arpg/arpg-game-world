@@ -138,7 +138,8 @@ const look = { monster: (id: string) => !!MONSTERS[id], biome: (id: string) => !
       for (const r of resolveLootTable(tableId, { ilvl: 20, rng })) {
         if (r.kind === 'gem') gems++;
         else if (r.kind === 'vestige') vestiges += r.count;
-        else { items++; if (r.item.rarity === 'unique') uniques++; }
+        else if (r.kind === 'item') { items++; if (r.item.rarity === 'unique') uniques++; }
+        else throw new Error(`Unexpected currency in boss table: ${r.kind}`);
       }
     }
     return { items: items / N, gems: gems / N, vestiges: vestiges / N, uniqueFrac: items ? uniques / items : 0 };

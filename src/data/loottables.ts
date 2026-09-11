@@ -10,6 +10,44 @@
 import type { LootTableDef } from '../engine/loot';
 
 const TABLE_LIST: LootTableDef[] = [
+  // Container families share nested bonuses and the same mint primitives as foes.
+  { id: 'container_curios', rolls: [{ count: 1, entries: [
+    { weight: 35, kind: 'gem' }, { weight: 25, kind: 'memory' },
+    { weight: 25, kind: 'essence' }, { weight: 15, kind: 'vestige' },
+  ] }] },
+  { id: 'chest_traveller', rolls: [
+    { count: 1, entries: [{ weight: 1, kind: 'item' }] },
+    { count: 1, entries: [{ weight: 1, kind: 'table', table: 'container_curios' }] },
+  ] },
+  { id: 'chest_armory', rolls: [
+    { count: [1, 2], entries: [{ weight: 1, kind: 'item' }] },
+    { count: 1, entries: [{ weight: 3, kind: 'essence' }, { weight: 1, kind: 'gem' }] },
+  ] },
+  { id: 'chest_reliquary', rolls: [
+    { count: 1, entries: [{ weight: 4, kind: 'memory' }, { weight: 1, kind: 'memory', memoryKind: 'preformed' }] },
+    { count: 1, entries: [{ weight: 2, kind: 'vestige' }, { weight: 3, kind: 'item', category: 'amulet' }, { weight: 2, kind: 'gem' }] },
+  ] },
+  { id: 'chest_forager', rolls: [
+    { count: 1, entries: [{ weight: 1, kind: 'item', category: 'belt' }, { weight: 1, kind: 'item', category: 'boots' }] },
+    { count: 1, entries: [{ weight: 2, kind: 'essence', mul: 1.5 }, { weight: 1, kind: 'memory' }, { weight: 1, kind: 'gem' }] },
+  ] },
+  { id: 'chest_jewels', rolls: [
+    { count: 1, entries: [{ weight: 1, kind: 'item', category: 'ring' }, { weight: 1, kind: 'item', category: 'amulet' }] },
+    { count: 1, entries: [{ weight: 1, kind: 'table', table: 'container_curios' }] },
+  ] },
+  // Cache identity: one concentrated packet (4–6), plus one distinct find.
+  { id: 'cache_memory', rolls: [
+    { count: 1, entries: [{ weight: 1, kind: 'memoryEssence', count: [4, 6] }] },
+    { count: 1, entries: [
+      { weight: 55, kind: 'memory' }, { weight: 10, kind: 'memory', memoryKind: 'preformed' },
+      { weight: 15, kind: 'gem' }, { weight: 15, kind: 'essence' }, { weight: 5, kind: 'vestige' },
+    ] },
+  ] },
+  { id: 'cache_faceted', rolls: [
+    { count: 1, entries: [{ weight: 1, kind: 'memoryEssence', count: [4, 6] }] },
+    { count: 1, entries: [{ weight: 45, kind: 'memory', memoryKind: 'preformed' }, { weight: 35, kind: 'memory' }, { weight: 20, kind: 'vestige' }] },
+  ] },
+
   // The baseline gear droplet: one item at zone ilvl, config-weighted rarity.
   {
     id: 'world_gear',

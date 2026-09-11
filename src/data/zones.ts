@@ -1335,6 +1335,9 @@ export interface ZoneDef {
    *  tables, per-monster hoards). Set at mint (a Holdfast pocket's earned haul,
    *  a future gilded event's field); serializes with the graph. */
   bounty?: number;
+  /** Container-specific table overrides and modifier tags; persist with the zone. */
+  containerLoot?: Partial<Record<import('./containerloot').ContainerKind, string>>;
+  containerLootTags?: string[];
   /** THE SPOILS LAW — what this ground may MINT. 'none' seals every ground
    *  mint at the drop primitives (kill gems/gear/vestiges, boss tables, wave
    *  + objective + event payouts, breakables, essence sheds) while XP and

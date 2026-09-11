@@ -199,7 +199,7 @@ export interface LootBandReport {
   ilvl: number;
   n: number;
   /** Mean results per resolve, split by kind. */
-  perResolve: { items: number; gems: number; vestiges: number };
+  perResolve: { items: number; gems: number; vestiges: number; memoryEssence: number; essence: number };
   itemRarities: Record<string, number>;
   itemCategories: Record<string, number>;
   uniques: Record<string, number>;
@@ -219,7 +219,7 @@ export function auditLoot(opts: { tableId?: string; ilvls?: number[]; n?: number
   const bands: LootBandReport[] = [];
   for (const ilvl of ilvls) {
     const rng = mulberry32(deriveSeed(ECONOMY_CFG.seed ^ 0x100f, ilvl));
-    let items = 0, gems = 0, vestiges = 0;
+    let items = 0, gems = 0, vestiges = 0, memoryEssence = 0, essence = 0;
     const itemRarities: Record<string, number> = {};
     const itemCategories: Record<string, number> = {};
     const uniques: Record<string, number> = {};
@@ -235,6 +235,10 @@ export function auditLoot(opts: { tableId?: string; ilvls?: number[]; n?: number
           if (r.item.uniqueId) uniques[r.item.uniqueId] = (uniques[r.item.uniqueId] ?? 0) + 1;
         } else if (r.kind === 'gem') {
           gems++;
+        } else if (r.kind === 'memoryEssence') {
+          memoryEssence += r.count;
+        } else if (r.kind === 'essence') {
+          essence += r.gain.count;
         } else {
           vestiges += r.count;
           vestigeIds[r.id] = (vestigeIds[r.id] ?? 0) + r.count;
@@ -244,7 +248,7 @@ export function auditLoot(opts: { tableId?: string; ilvls?: number[]; n?: number
     const r3 = (x: number): number => Math.round((x / n) * 1000) / 1000;
     bands.push({
       ilvl, n,
-      perResolve: { items: r3(items), gems: r3(gems), vestiges: r3(vestiges) },
+      perResolve: { items: r3(items), gems: r3(gems), vestiges: r3(vestiges), memoryEssence: r3(memoryEssence), essence: r3(essence) },
       itemRarities, itemCategories, uniques, vestiges: vestigeIds,
     });
   }

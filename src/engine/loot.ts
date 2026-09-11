@@ -14,6 +14,8 @@
 // from the identical tables tomorrow).
 // ---------------------------------------------------------------------------
 
+import { rollMemoryEssenceTier, rollSpillPacket, type EssenceCost } from '../data/essences';
+import { makeMemoryItem, type MemoryKind } from './memories';
 import { LOOT_TABLES } from '../data/loottables';
 import { MI_CFG } from '../data/infrequents';
 import { VESTIGE_LIST } from '../data/vestiges';
@@ -40,6 +42,9 @@ export type LootEntry =
   | { weight: number; kind: 'unique'; uniqueId?: string; category?: ItemCategory; ilvlBonus?: number }
   /** A VESTIGE bundle (id omitted = weighted pick from the registry). */
   | { weight: number; kind: 'vestige'; id?: string; count?: number | [number, number] }
+  | { weight: number; kind: 'memory'; memoryKind?: MemoryKind; sourceId?: string; count?: number | [number, number] }
+  | { weight: number; kind: 'memoryEssence'; count: number | [number, number] }
+  | { weight: number; kind: 'essence'; mul?: number }
   | { weight: number; kind: 'table'; table: string };
 
 export interface LootRoll {
@@ -56,10 +61,14 @@ export interface LootTableDef {
 export type LootResult =
   | { kind: 'item'; item: ItemInstance }
   | { kind: 'gem' }
-  | { kind: 'vestige'; id: string; count: number };
+  | { kind: 'vestige'; id: string; count: number }
+  | { kind: 'memoryEssence'; tier: number; count: number }
+  | { kind: 'essence'; gain: EssenceCost };
 
 export interface LootCtx {
   ilvl: number;
+  /** Provenance sealed into Memory units; never invents a monster reward. */
+  sourceId?: string;
   rng?: () => number;
   /** MONSTER INFREQUENT theme of the source kill (data/infrequents.ts):
    *  unconstrained item pulls may swap into the theme's base pool at
@@ -228,6 +237,20 @@ function resolveEntry(entry: LootEntry, ctx: LootCtx, depth: number, out: LootRe
       return;
     case 'gem':
       out.push({ kind: 'gem' });
+      return;
+    case 'memory': {
+      const units = Array.from({ length: Math.max(0, drawCount(entry.count ?? 1, rng)) },
+        () => ({ d: entry.sourceId ?? ctx.sourceId ?? 'found', s: (rng() * 4294967296) >>> 0 }));
+      if (units.length) out.push({ kind: 'item', item: makeMemoryItem(entry.memoryKind ?? 'rough', units) });
+      return;
+    }
+    case 'memoryEssence': {
+      const tier = rollMemoryEssenceTier(ctx.ilvl, rng);
+      if (tier !== null) out.push({ kind: 'memoryEssence', tier, count: drawCount(entry.count, rng) });
+      return;
+    }
+    case 'essence':
+      out.push({ kind: 'essence', gain: rollSpillPacket(ctx.ilvl, { mul: entry.mul }, rng) });
       return;
     case 'item': {
       // An UNCONSTRAINED pull from a themed kill may become an infrequent —

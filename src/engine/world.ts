@@ -8,6 +8,9 @@
 // modifiers flow into every stat query for that use.
 // ---------------------------------------------------------------------------
 
+import { selectContainerLoot } from '../data/containerloot';
+import { rollMemoryEssenceTier } from '../data/essences';
+import type { LootResult } from './loot';
 import { fontStandsIn } from './fontPlacement';
 import { refugeDeparture, type RefugeDeparture } from './refugeDeparture';
 import { skillAbsorbAmount } from './absorb';
@@ -66,7 +69,7 @@ import {
   supportOfGemItem, writeBackSupportGem,
 } from './gemitems';
 import {
-  MEMORY_CFG, MEMORY_KIND_IDS, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE,
+  MEMORY_FOUND_SOURCES, MEMORY_CFG, MEMORY_KIND_IDS, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE,
   facetRng, findMemoryItem, makeMemoryItem, memoryFacetAttrs, memoryGroups,
   memoryKindOf, memoryUnitsOf, mergeMemory, pickSeeded, rollSeededRarity,
   type MemoryKind, type MemoryRecallResult, type MemoryRecallViewData,
@@ -466,7 +469,7 @@ export interface Chest {
   maxLock: number;
   /** THE THEMED CACHE (PocketSpec.cacheRarity → ZoneDef.cacheRarity): the
    *  lid also yields one rolled GEAR piece at exactly this rarity — a tinted
-   *  toll's promised answer (pristine gate → a unique). Absent = gems only. */
+   *  toll's promised answer (pristine gate → a unique). Absent = the selected container list. */
   rarity?: ItemRarity;
 }
 
@@ -19777,9 +19780,7 @@ export class World {
       const pay = (tableId: string): void => {
         for (const res of resolveLootTable(tableId, { ilvl: this.zone.level })) {
           const p = this.clampPos(vec(at.x + rand(-26, 26), at.y + rand(-26, 26)), 10);
-          if (res.kind === 'gem') this.dropGemAt(p, undefined, true);
-          else if (res.kind === 'vestige') this.dropVestigeAt(p, res.id, res.count);
-          else this.dropGearAt(p, res.item, undefined, true);
+          this.mintLootResult(p, res, true);
         }
       };
       pay(cfg.reward.purseTable);
@@ -22345,19 +22346,8 @@ export class World {
     const cfg = ABILITY_ESSENCE_CFG;
     const rng = this.abilityDropRng ??= new Rng((this.manifest.seed ^ hashStr('abilitytrickle')) >>> 0);
     if (!rng.chance(cfg.killChance * bounty)) return;
-    const lvl = this.zone.level;
-    let top = -1;
-    for (let i = 0; i < cfg.floors.length && i < ABILITY_ESSENCES.length; i++) {
-      if (lvl >= cfg.floors[i]) top = i;
-    }
-    if (top < 0) return; // ground below every floor mints nothing
-    let total = 0;
-    const weights: number[] = [];
-    for (let i = 0; i <= top; i++) { weights[i] = Math.pow(cfg.deeperBias, i); total += weights[i]; }
-    let r = rng.next() * total;
-    let tierIdx = top;
-    for (let i = 0; i <= top; i++) { r -= weights[i]; if (r <= 0) { tierIdx = i; break; } }
-    this.dropAbilityEssenceAt(at, tierIdx + 1, rng.int(cfg.count[0], cfg.count[1]), () => rng.next());
+    const tier = rollMemoryEssenceTier(this.zone.level, () => rng.next());
+    if (tier !== null) this.dropAbilityEssenceAt(at, tier, rng.int(cfg.count[0], cfg.count[1]), () => rng.next());
   }
 
   /** Bank landed damage toward a spill bearer's next shed (MonsterDef
@@ -38650,9 +38640,7 @@ export class World {
     if (rw?.table && !this.spoilsSealed()) {
       for (const res of resolveLootTable(rw.table, { ilvl: this.zone.level })) {
         const at = this.clampPos(vec(run.at.x + rand(-30, 30), run.at.y + rand(-30, 30)), 10);
-        if (res.kind === 'gem') this.dropGemAt(at);
-        else if (res.kind === 'vestige') this.dropVestigeAt(at, res.id, res.count);
-        else this.dropGearAt(at, res.item);
+        this.mintLootResult(at, res);
       }
     }
     if (rw?.washFor) {
@@ -43090,9 +43078,7 @@ export class World {
         const kdef = actor.defId ? MONSTERS[actor.defId] : undefined;
         const miTheme = kdef?.infrequentTheme ?? (actor.defId ? MONSTER_THEMES[actor.defId] : undefined);
         for (const res of resolveLootTable(tableId, { ilvl: this.zone.level, miTheme })) {
-          if (res.kind === 'gem') this.dropGemAt(at);
-          else if (res.kind === 'vestige') this.dropVestigeAt(at, res.id, res.count);
-          else this.dropGearAt(at, res.item);
+          this.mintLootResult(at, res);
         }
       },
       text: (at, msg, color, size) => this.text(at, msg, color, size),
@@ -44225,7 +44211,7 @@ export class World {
       // wide and the facet decides (drawn == rolled, both ways).
       const lean = facets ? { rung: 'wide' as const, kit: [] } : this.memoryLeanOf(def, pool);
       const name = def?.name
-        ?? (g.d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : g.d);
+        ?? (g.d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : MEMORY_FOUND_SOURCES[g.d] ?? g.d);
       return {
         d: g.d, name, count: g.count, rung: lean.rung,
         kit: lean.kit.map(s => ({ id: s.id, name: s.name, color: s.color, mult: MEMORY_CFG.kitMult })),
@@ -45399,12 +45385,30 @@ export class World {
     return this.zone.spoils === 'none';
   }
 
+  /** Every loot-table consumer shares currency, gem and item delivery. */
+  private mintLootResult(at: Vec2, result: LootResult, owed = false): void {
+    switch (result.kind) {
+      case 'gem': this.dropGemAt(at, undefined, owed); break;
+      case 'item': this.dropGearAt(at, result.item, undefined, owed); break;
+      case 'vestige': this.dropVestigeAt(at, result.id, result.count); break;
+      case 'essence': this.dropEssenceAt(at, result.gain); break;
+      case 'memoryEssence': this.dropAbilityEssenceAt(at, result.tier, result.count); break;
+    }
+  }
+
   private rollDrops(actor: Actor): void {
     // THE SPOILS LAW: sealed ground mints nothing — no tables, no gem
     // trickle, no vestige shed (XP + orbs were already paid upstream in
     // kill(); the primitives below each re-check, this is the cheap out).
     if (this.spoilsSealed()) return;
     const def = actor.defId ? MONSTERS[actor.defId] : undefined;
+    if (def?.containerLoot) {
+      const table = def.loot ?? selectContainerLoot(def.containerLoot, this.zone);
+      for (const result of resolveLootTable(table, { ilvl: this.zone.level, sourceId: actor.defId })) {
+        this.mintLootResult(actor.pos, result);
+      }
+      return; // the declared container recipe replaces all ordinary kill trickles
+    }
     // RICH GROUND: the zone's BOUNTY lever (ZoneDef.bounty, default 1) scales
     // the kill-path CHANCE gates — never the guaranteed paths (boss tables,
     // per-monster hoards, elite bonus rolls). A Holdfast pocket's earned haul,
@@ -45459,9 +45463,7 @@ export class World {
     const miTheme = def?.infrequentTheme ?? (actor.defId ? MONSTER_THEMES[actor.defId] : undefined);
     for (const t of tables) {
       for (const res of resolveLootTable(t, { ilvl: this.zone.level, miTheme })) {
-        if (res.kind === 'gem') this.dropGemAt(actor.pos);
-        else if (res.kind === 'vestige') this.dropVestigeAt(actor.pos, res.id, res.count);
-        else this.dropGearAt(actor.pos, res.item);
+        this.mintLootResult(actor.pos, res);
       }
     }
     // VESTIGES shed on their own low chance — the socket economy's trickle.
@@ -52461,14 +52463,18 @@ export class World {
     }
   }
 
-  /** Burst a chest open: gems and a swig of resources. */
+  /** Burst a chest open: one contextual loot list and a swig of resources. */
   private openChest(c: Chest): void {
+    if (c.opened) return;
     c.opened = true;
     c.openedAt = this.time; // M-SPILL: the lid swings (the renderer's own clock read)
-    this.dropGemAt(c.pos);
-    this.dropGemAt(c.pos);
+    if (!this.spoilsSealed()) {
+      for (const result of resolveLootTable(selectContainerLoot('chest', this.zone), { ilvl: this.zone.level, sourceId: 'chest' })) {
+        this.mintLootResult(c.pos, result);
+      }
+    }
     // THE THEMED CACHE (Chest.rarity — a tinted toll's promise): one rolled
-    // GEAR piece at exactly that rarity, on top of the ordinary gem pay.
+    // GEAR piece at exactly that rarity, on top of the ordinary container pay.
     // Spoils-sealed ground still seals it (dropGearAt rides the same law).
     if (c.rarity) {
       const item = rollItem({ ilvl: Math.max(1, this.zone.level), rarityWeights: { [c.rarity]: 1 } });

@@ -28,7 +28,7 @@ import { EQUIP_SLOTS, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, ty
 import { findBagGem, gemInitials, packSkillGemPayload, packSupportGemPayload, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
 import { veinLines } from '../engine/supportbase';
 import {
-  MEMORY_CFG, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE, memoryFacets,
+  MEMORY_FOUND_SOURCES, MEMORY_CFG, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE, memoryFacets,
   memoryGroups, memoryKindOf, type MemoryKind, type MemoryRecallResult,
 } from '../engine/memories';
 import { GEM_DROP_CFG } from '../engine/loot';
@@ -3483,7 +3483,7 @@ export class UI {
     const k = MEMORY_KINDS[kind];
     const groups = memoryGroups(units);
     const dropperName = (d: string): string =>
-      MONSTERS[d]?.name ?? (d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : d);
+      MONSTERS[d]?.name ?? (d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : MEMORY_FOUND_SOURCES[d] ?? d);
     const lines: string[] = [];
     if (item.locked) {
       lines.push('<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (hold right-click to unlock)</div>');

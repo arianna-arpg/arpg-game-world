@@ -324,7 +324,7 @@ export const ABILITY_ESSENCE_CFG = {
   floors: [1, 6, 11, 16] as readonly number[],
   /** Kill-path drop chance per credited kill (the killGemChance idiom;
    *  scaled by the kill-path bounty exactly as gems are). */
-  killChance: 0.03,
+  killChance: 0.02, // caches are the concentrated source; kills retain a modest trickle
   /** Whole essences per drop packet [min, max]. */
   count: [1, 2] as readonly [number, number],
   /** THE TIER GRADIENT: among the tiers the ground's level clears, each
@@ -355,6 +355,17 @@ export const ABILITY_ESSENCE_CFG = {
     deepWaives: true,
   },
 } as const;
+
+/** Shared floor/gradient roll for enemy trickles and loot-table packets. */
+export function rollMemoryEssenceTier(level: number, rng: () => number = Math.random): number | null {
+  const cfg = ABILITY_ESSENCE_CFG;
+  const eligible = cfg.floors.map((floor, i) => ({ tier: i + 1, weight: level >= floor ? Math.pow(cfg.deeperBias, i) : 0 }));
+  const total = eligible.reduce((sum, row) => sum + row.weight, 0);
+  if (total <= 0) return null;
+  let roll = rng() * total;
+  for (const row of eligible) { if (!row.weight) continue; roll -= row.weight; if (roll <= 0) return row.tier; }
+  return eligible.filter(row => row.weight > 0).at(-1)!.tier;
+}
 
 /** The Ability-Essence cost to raise a SKILL to `targetLevel` — THE cost
  *  policy, one function (the retired tint curve's shape carried over:

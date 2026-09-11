@@ -12,6 +12,7 @@
 // Add a painter only for a genuinely new LIMB of vocabulary.
 // ---------------------------------------------------------------------------
 
+import { drawMemoryCache } from './containers';
 import { adjust, hash01, mix, shade, withAlpha } from './color';
 import { materialOf, rampOf, type Ramp } from './materials';
 
@@ -3940,6 +3941,10 @@ const stitchSeams: PartPainter = (ctx, r, spec, pal) => {
  *  the light that leaks through it), iron straps with rivets, a hasp lock
  *  waiting at the facing end. The strongboxes to come ride params: straps,
  *  lock, glow / glowColor. */
+const memoryCache: PartPainter = (ctx, r, spec, pal) => {
+  place(ctx, r, spec, (c, R) => drawMemoryCache(c, R, spec.color ?? pal.glow));
+};
+
 const chest: PartPainter = (ctx, r, spec, pal) => {
   const wood = rampFor(spec, pal, 'wood');
   const iron = rampFor(spec, pal, 'metal');
@@ -5543,7 +5548,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   mawRing, lure, sporeVents, mossPatch, veinweb, polyps, slimeTrail,
   sailfin, warhorn, drape,
   stakeRow, totemPost,
-  crystalGrowths, roots, stitchSeams, bell, beatPips, chest,
+  crystalGrowths, roots, stitchSeams, bell, beatPips, chest, memoryCache,
   collar, harness, saddlebags, muzzle,
   floatingShards,
   shroudWrap, carrionFlies,

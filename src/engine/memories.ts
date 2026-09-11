@@ -111,6 +111,8 @@ export const ROUGH_MEMORY_BASE = MEMORY_KINDS.rough.base;
  *  banner lane's facet choice is untouched (the facet never read the
  *  dropper). */
 export const MEMORY_TRADED_PROVENANCE = 'traded';
+/** Non-creature provenance remains explicit without forging a monster identity. */
+export const MEMORY_FOUND_SOURCES: Record<string, string> = { chest: 'Chest', found: 'Found in the world' };
 
 /** Every dial of the Memory economy. ALL NUMBERS ARE DIALS (unblessed —
  *  her standing word: numbers bless through playthroughs). Strings are

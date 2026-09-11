@@ -1096,7 +1096,7 @@ const probeSlideProof = (w: number, h: number, rocks: number[], sockets: number[
           ? { k: 'item', b: res.item.baseId, r: res.item.rarity, u: res.item.uniqueId,
             a: res.item.affixes.map(a => [a.id, a.tier]) }
           : res.kind === 'vestige' ? { k: 'vestige', id: res.id, n: res.count }
-            : { k: 'gem' });
+            : res.kind === 'gem' ? { k: 'gem' } : res);
       }
     }
     return JSON.stringify(out);
@@ -1108,7 +1108,8 @@ const probeSlideProof = (w: number, h: number, rocks: number[], sockets: number[
       for (const res of resolveLootTable(t, { ilvl: 8, rng })) {
         if (res.kind === 'item') { items++; if (!ITEM_BASES[res.item.baseId]) badBase++; }
         else if (res.kind === 'gem') gems++;
-        else { vests += res.count; if (!VESTIGE_LIST.some(v => v.id === res.id)) badVest++; }
+        else if (res.kind === 'vestige') { vests += res.count; if (!VESTIGE_LIST.some(v => v.id === res.id)) badVest++; }
+        else throw new Error(`Unexpected currency in riddle table: ${res.kind}`);
       }
     }
     check(`pour fabric: '${t}' pays real goods through the real roller`,

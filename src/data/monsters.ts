@@ -545,6 +545,8 @@ export interface MonsterDef {
    *  DROP_CFG defaults (boss table for bosses, chance-gated world table
    *  otherwise) — set this to give a monster its own hoard. */
   loot?: string;
+  /** Resolve the zone-aware container pool instead of ordinary kill trickles. */
+  containerLoot?: import('./containerloot').ContainerKind;
   /** MONSTER-INFREQUENT theme (mi_<theme> base pool). Wins over the
    *  data/infrequents.ts MONSTER_THEMES registry when both name this def. */
   infrequentTheme?: string;
@@ -6756,15 +6758,16 @@ export const MONSTERS: Record<string, MonsterDef> = {
     invulnerable: true,
   },
 
-  // A point of interest, not a foe: crack it open for a guaranteed gem.
+  // A point of interest: crack it for Memory Essence and a mixed cache reward.
   gem_cache: {
     id: 'gem_cache', name: 'Gem Cache',
-    color: '#c8a84b', shape: 'square', radius: 13, material: 'crystal', look: 'gem_cache',
+    color: '#89b5cf', shape: 'square', radius: 13, material: 'crystal', look: 'memory_cache',
     base: { life: 50, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
     skills: [],
     xp: 5,
     passive: true,
-    drops: 1,
+    drops: 0,
+    containerLoot: 'gemCache',
   },
 
   // A trader's cart: mortal and MOBILE — the heart of the PROCESSION objective

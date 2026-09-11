@@ -3,6 +3,7 @@
 // every visual reads its color/shape from the data definitions.
 // ---------------------------------------------------------------------------
 
+import { drawTreasureChest } from './vis/containers';
 import { destinationLabelVisible } from './vis/destinationLabels';
 import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
@@ -4056,50 +4057,15 @@ export class Renderer {
     }
   }
 
-  /** Chests: trimmed boxes — locked, picking, or sprung open. */
+  /** Chests use the material grammar; chains, seam light and lid motion carry state. */
   private drawChests(world: World): void {
-    const { ctx } = this;
     for (const c of world.chests) {
-      const { x, y } = c.pos;
-      ctx.fillStyle = c.opened ? '#5a4426' : '#7a5c32';
-      ctx.strokeStyle = '#e8c87a';
-      ctx.lineWidth = 2;
-      ctx.fillRect(x - 14, y - 10, 28, 20);
-      ctx.strokeRect(x - 14, y - 10, 28, 20);
-      // Lid — M-SPILL: it SWINGS on open (lifts and thins over chestLid.seconds
-      // off c.openedAt, the engine's clock), then sits open; no caption.
-      const lidAge = c.opened && c.openedAt !== undefined ? world.time - c.openedAt : Infinity;
-      const lu = Math.max(0, Math.min(1, lidAge / VIS_CFG.chestLid.seconds));
-      const lidH = c.opened ? 8 - 4 * lu : 8;
-      const lidLift = c.opened ? Math.sin(Math.PI * lu) * VIS_CFG.chestLid.lift : 0;
-      ctx.fillStyle = c.opened ? '#46351e' : '#8a6a3a';
-      ctx.fillRect(x - 14, y - 10 - lidLift, 28, lidH);
-      if (!c.opened) {
-        if (c.kind === 'objective' && !world.objectiveDone) {
-          // chained until the zone yields
-          ctx.strokeStyle = '#9a9aa2';
-          ctx.lineWidth = 2.5;
-          ctx.beginPath();
-          ctx.moveTo(x - 16, y - 6); ctx.lineTo(x + 16, y + 6);
-          ctx.moveTo(x - 16, y + 6); ctx.lineTo(x + 16, y - 6);
-          ctx.stroke();
-          ctx.textAlign = 'center';
-          ctx.font = '9px Verdana';
-          ctx.fillStyle = '#9a9aa2';
-          ctx.fillText('sealed by the objective', x, y + 24);
-        } else if (c.kind === 'timed') {
-          // lockpick progress ring (the shared transit ring, 'lockpick' style)
-          this.drawProgressRing(x, y, 1 - c.lockTime / c.maxLock, 'lockpick');
-          ctx.textAlign = 'center';
-          ctx.font = '9px Verdana';
-          ctx.fillStyle = '#c8a85a';
-          ctx.fillText('hold the ground', x, y + 24);
-        } else {
-          ctx.textAlign = 'center';
-          ctx.font = '9px Verdana';
-          ctx.fillStyle = '#e8c87a';
-          ctx.fillText('unsealed!', x, y + 24);
-        }
+      const age = c.openedAt === undefined ? Infinity : world.time - c.openedAt;
+      const u = Math.max(0, Math.min(1, age / VIS_CFG.chestLid.seconds));
+      drawTreasureChest(this.ctx, c.pos.x, c.pos.y, c.opened, 1-Math.pow(1-u,3),
+        c.kind === 'objective' && !world.objectiveDone, world.time);
+      if (!c.opened && c.kind === 'timed' && c.maxLock > 0) {
+        this.drawProgressRing(c.pos.x, c.pos.y, 1-c.lockTime/c.maxLock, 'lockpick');
       }
     }
   }
