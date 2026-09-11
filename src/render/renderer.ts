@@ -3,6 +3,7 @@
 // every visual reads its color/shape from the data definitions.
 // ---------------------------------------------------------------------------
 
+import { destinationLabelVisible } from './vis/destinationLabels';
 import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
@@ -3334,6 +3335,18 @@ export class Renderer {
       font: opts?.font ?? 'bold 11px Verdana', stroke: opts?.stroke ?? true });
   }
 
+  /** Destination names share hover behavior; generic station states use their art. */
+  private queueDestinationLabel(key: object, anchor: Vec2, x: number, y: number,
+    text: string, color: string, radius: number, font = 'bold 12px Verdana'): void {
+    const mode = this.getSettings?.().destinationLabels ?? 'near';
+    const aim = this.padAim ?? (this.hudMouse.x >= 0 ? this.toWorld(this.hudMouse) : null);
+    const caption = { x, y };
+    if (destinationLabelVisible(mode, aim, anchor, caption, radius)
+      || this.couchAims.some(a => destinationLabelVisible(mode, a, anchor, caption, radius))) {
+      this.queueLabelAt(key, anchor, x, y, text, color, { font });
+    }
+  }
+
   /** THE TIER VEIL (engine/tiers.ts, 'covered' exposure): while the local
    *  hero stands on the UNDER layer, everything above is a ceiling — dim the
    *  scene, then paint the duct web live from the region map (tierVisual
@@ -4370,8 +4383,7 @@ export class Renderer {
       // half-dimmed ghost), and one the world still conceals stays concealed
       // to the last glyph (labelRevealAt, the legibility knee).
       const label = locked ? `${e.label} — sealed` : e.label;
-      this.queueLabelAt(e, e.pos, e.pos.x, e.pos.y + e.radius + 20, label, accent,
-        { font: 'bold 12px Verdana' });
+      this.queueDestinationLabel(e, e.pos, e.pos.x, e.pos.y + e.radius + 20, label, accent, e.radius);
       if (locked) {
         // A simple padlock glyph over the disc.
         ctx.strokeStyle = '#9a9aa2';
@@ -4398,8 +4410,7 @@ export class Renderer {
     // under the arch — so the ascendant gate reads as "an exit to the
     // Firmament", never anonymous decor. The doodad painter keeps the art.
     for (const g of world.dimGatesView()) {
-      this.queueLabelAt(g, g.pos, g.pos.x, g.pos.y + g.radius + 20, g.label, g.accent,
-        { font: 'bold 12px Verdana' });
+      this.queueDestinationLabel(g, g.pos, g.pos.x, g.pos.y + g.radius + 20, g.label, g.accent, g.radius);
     }
     // Dwell progress rings — every "linger to act" family (exit portals, cave
     // mouths, realm gates, doors, toll keepers, descent platforms, …) feeds ONE
@@ -6451,9 +6462,8 @@ export class Renderer {
         ctx.beginPath(); ctx.ellipse(0, -v.height / 2, v.radius * 0.65, v.height * 0.8, 0, turn, turn + Math.PI / 2); ctx.stroke();
       }
       ctx.globalAlpha = 1;
-      ctx.fillStyle = cfg.color;
-      ctx.font = 'bold 11px Verdana'; ctx.textAlign = 'center';
-      ctx.fillText(p.label, 0, -v.height / 2 - v.labelLift);
+      this.queueDestinationLabel(p, p.pos, p.pos.x, p.pos.y - v.height / 2 - v.labelLift,
+        p.label, cfg.color, v.radius, 'bold 11px Verdana');
       if (p.frac > 0) {
         ctx.beginPath(); ctx.arc(0, 0, v.radius + 8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p.frac); ctx.stroke();
       }

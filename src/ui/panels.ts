@@ -9401,6 +9401,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       </div>`;
     const interfaceTabHead = `
       <div class="rebind-row">
+        <span>Destination labels</span>
+        <button id="opt-destinationLabels" title="Near cursor reveals travel destinations when the mouse or controller reticle is near the passage. Always visible keeps destination names on screen.">${s.destinationLabels === 'always' ? 'ALWAYS VISIBLE' : 'NEAR CURSOR'}</button>
+      </div>
+      <div class="rebind-row">
         <span>Tooltip detail</span>
         <button id="opt-tooltipDetail" title="Compact keeps the short card. Full includes skill breakdowns and equipment comparisons from the moment a card opens. Neither expands while you read.">${s.tooltipDetail === 'full' ? 'FULL' : 'COMPACT'}</button>
       </div>
@@ -9866,6 +9870,12 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.getSettings().uiScale = v / 100;
       applyUiScale(v / 100);
     }, v => `${v}%`);
+    root.querySelector<HTMLElement>('#opt-destinationLabels')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      st.destinationLabels = st.destinationLabels === 'always' ? 'near' : 'always';
+      this.saveSettings();
+      this.renderOptions(root, onBack);
+    });
     root.querySelector<HTMLElement>('#opt-tooltipDetail')?.addEventListener('click', () => {
       const st = this.getSettings();
       st.tooltipDetail = st.tooltipDetail === 'full' ? 'compact' : 'full';

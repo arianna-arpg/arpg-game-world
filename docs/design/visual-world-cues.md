@@ -30,3 +30,11 @@ co-op snapshot. The body uses the existing sprite baker and emits no light.
 Checks: `probe_visualcues` covers placement, dwell, reward-free departure and
 co-op transfer; `probe_effectvoice` covers the painter registry. A production
 desktop check should also view the climb/dive at several points in its life.
+
+Specific travel destinations remain named. **Options → Interface → Destination
+labels** defaults to **Near cursor** (also the controller reticle, including
+couch guests); **Always visible** keeps those names prominent. Old settings
+without a preference receive the new default. Exits, realm gates and town
+portals use `queueDestinationLabel`, with generous marker/caption padding in
+`render/vis/destinationLabels.ts`. Both modes still honor the world layer's
+concealment; hovering cannot reveal a destination hidden behind a roof or veil.
