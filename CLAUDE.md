@@ -15,6 +15,12 @@ arts and forms are in `necromancerSkills.ts` / `necromancerMinions.ts`. The
 current binary mutator anatomy, comparison checkpoint and summon grammar are
 documented in `docs/design/necromancer-skill-trees.md`.
 
+Fresh-account starting trees live in `src/data/starterSkillTrees.ts`. Their
+shared temporary buff mutations (`SkillTreeNode.buffs` / `instanceEffects`),
+three-class scope and next batches are documented in
+`docs/design/class-starting-skill-trees.md`; `balance/probe_startertrees.ts`
+covers the complete opening bars.
+
 ## Commands
 - `npm install` — first-time setup (also run automatically by the .bat launchers).
 - `npm run dev` — Vite dev server at http://localhost:5173 (browser dev mode, `Play Game.bat`).

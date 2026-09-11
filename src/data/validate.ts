@@ -2958,6 +2958,29 @@ export function validateContent(): void {
         if (g.nodes.has(n.id) && !g.order.includes(n.id)) {
           warn(`${at}/${n.id}: unreachable from the root — no link chain leads here`);
         }
+        for (const patch of n.buffs ?? []) {
+          const buffAt = `${at}/${n.id} buff ${patch.id}`;
+          const allowed = ['id', 'mods', 'duration', 'affects', 'radius', 'clearOnHit', 'consumeOn', 'nextHit'];
+          for (const key of Object.keys(patch)) if (!allowed.includes(key)) warn(`${buffAt}: unknown field ${key}`);
+          if (!patch.id) warn(`${buffAt}: requires an id`);
+          if (patch.duration !== undefined && (!Number.isFinite(patch.duration) || patch.duration <= 0)) warn(`${buffAt}: duration must be positive`);
+          if (patch.radius !== undefined && (!Number.isFinite(patch.radius) || patch.radius < 0)) warn(`${buffAt}: radius must be nonnegative`);
+          if (patch.affects === 'allies' && patch.radius === undefined) warn(`${buffAt}: allied blessing must declare its radius`);
+          for (const m of patch.mods ?? []) if (!STAT_DEFS[m.stat] || !Number.isFinite(m.value)) warn(`${buffAt}: invalid modifier ${m.stat}`);
+          // Every prerequisite route must supply the buff before an append-only
+          // patch. ANY-parent graphs cannot rely on a buff from just one route.
+          const supplied = (id: string, seen = new Set<string>()): boolean => {
+            if (seen.has(id)) return false;
+            const node = g.nodes.get(id);
+            if (node?.node.buffs?.some(p => p.id === patch.id && p.duration !== undefined)) return true;
+            const next = new Set(seen).add(id);
+            return !!node?.links.length && node.links.every(parent => supplied(parent, next));
+          };
+          if (patch.duration === undefined && !def.effects.some(fx => fx.type === 'buff' && fx.id === patch.id)
+            && !(g.nodes.get(n.id)?.links.length && g.nodes.get(n.id)!.links.every(id => supplied(id)))) {
+            warn(`${buffAt}: append patch has no buff on every prerequisite route`);
+          }
+        }
         for (const k of Object.keys(n.over ?? {})) {
           if (!OVER_KEYS.has(k)) warn(`${at}/${n.id}: over.${k} is off the audited whitelist`);
         }

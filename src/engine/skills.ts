@@ -3384,7 +3384,9 @@ export interface BuffEffect {
   powerStacks?: number;
   /** Recipient: default 'caster'; 'minions' = every living minion of the
    *  caster (the generic minion-war-cry seam — Convocation's mend). */
-  affects?: 'caster' | 'minions';
+  affects?: 'caster' | 'minions' | 'allies';
+  /** Nearby allies include the caster; same team and story, no constructs. */
+  radius?: number;
   /** ALL stacks are stripped when the bearer takes a LANDED hit (DoT ticks
    *  never wipe) — Tempo-style fragility as a buff's cost. */
   clearOnHit?: true;
@@ -4710,6 +4712,11 @@ export const DEFAULT_LEVELING: Modifier[] = [
 /** A node's drawn weight in the pane (its radius) — no gameplay meaning. */
 export type SkillTreeKind = 'minor' | 'major' | 'keystone';
 
+/** Buff tree patches append modifiers to an existing buff, or create one when
+ * duration is provided. Scalar identity fields belong on exclusive trunks. */
+export type TreeBuffPatch = { id: string } & Partial<Pick<BuffEffect,
+  'mods' | 'duration' | 'affects' | 'radius' | 'clearOnHit' | 'consumeOn' | 'nextHit'>>;
+
 export interface SkillTreeNode {
   /** Node id — persisted on the instance (SkillInstance.treeNodes), so
    *  renaming an id orphans saved picks (they drop with a console note —
@@ -4738,6 +4745,8 @@ export interface SkillTreeNode {
   /** Drawn size in the pane (default: fork roots 'major', the last rung of
    *  a sugar chain 'keystone', else 'minor'). */
   kind?: SkillTreeKind;
+  /** Temporary buff payloads; modifiers append per rank, scalars replace. */
+  buffs?: TreeBuffPatch[];
   /** TYPED WHITELISTED spec overrides — grown ONLY alongside the audit
    *  table above; never add a field here without adopting its cast-path
    *  read sites. THE RE-PIN LAW (authoring): every rung re-pins EVERY
@@ -4937,6 +4946,26 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
       : over;
   }
   return out;
+}
+
+/** The resolved effect view preserves native order and references when plain.
+ * Buff modifiers accumulate per invested rank; identity fields replace only
+ * their matching buff. No authored definition or modifier array is mutated. */
+export function instanceEffects(inst: SkillInstance): SkillEffect[] {
+  if (!inst.treeNodes?.length) return inst.def.effects;
+  let out: SkillEffect[] | undefined;
+  for (const id of inst.treeNodes) {
+    for (const patch of treeNodeOf(inst.def, id)?.buffs ?? []) {
+      out ??= [...inst.def.effects];
+      const index = out.findIndex(fx => fx.type === 'buff' && fx.id === patch.id);
+      const prior = index >= 0 ? out[index] as BuffEffect : undefined;
+      if (!prior && patch.duration === undefined) continue;
+      const buff: BuffEffect = { type: 'buff', duration: 0, ...prior, ...patch,
+        mods: [...(prior?.mods ?? []), ...(patch.mods ?? [])] };
+      if (index >= 0) out[index] = buff; else out.push(buff);
+    }
+  }
+  return out ?? inst.def.effects;
 }
 
 function union<T extends string>(a?: T[], b?: T[]): T[] | undefined {

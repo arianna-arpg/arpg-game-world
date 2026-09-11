@@ -1,3 +1,4 @@
+import { STARTER_SKILL_TREES } from './starterSkillTrees';
 import { NECROMANCER_SACRAMENTS } from './necromancerSacraments';
 import { NECROMANCER_RITES } from './necromancerRites';
 // ---------------------------------------------------------------------------
@@ -122,6 +123,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // ======================= Warrior / melee =================================
 
   cleave: {
+    tree: STARTER_SKILL_TREES.cleave,
     id: 'cleave', name: 'Cleave',
     description: 'A wide melee swing that deals physical damage to every enemy in the arc in'
       + ' front of you.',
@@ -237,6 +239,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   war_cry: {
+    tree: STARTER_SKILL_TREES.war_cry,
     id: 'war_cry', name: 'War Cry',
     description: 'Bellow a war cry: 40% increased damage and 15% increased attack speed for 6'
       + ' seconds.',
@@ -570,6 +573,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // ======================= Fire ============================================
 
   firebolt: {
+    tree: STARTER_SKILL_TREES.firebolt,
     id: 'firebolt', name: 'Firebolt',
     description: 'Loose an orb of flame: a projectile dealing fire damage, with a 12% chance to'
       + ' set the victim burning.',
@@ -1034,6 +1038,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   frost_nova: {
+    tree: STARTER_SKILL_TREES.frost_nova,
     id: 'frost_nova', name: 'Frost Nova',
     description: 'Rime bursts outward in a nova around you, dealing cold damage and CHILLING'
       + ' everything it catches.',
@@ -2982,6 +2987,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   shadow_step: {
+    tree: STARTER_SKILL_TREES.shadow_step,
     id: 'shadow_step', name: 'Shadow Step',
     description: 'Melt into shadow and reappear directly BEHIND a targeted enemy, blade already turning.',
     tags: ['movement'], color: '#6a6a8a',
@@ -3015,6 +3021,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   cloak: {
+    tree: STARTER_SKILL_TREES.cloak,
     id: 'cloak', name: 'Cloak',
     description: 'Wrap yourself in obscuring shadow for 8 seconds: enemies must come 65% closer'
       + ' to notice you, and you move 10% faster.',
@@ -3907,6 +3914,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // channeling — a shield that fights back is one socket away.
 
   shield_up: {
+    tree: STARTER_SKILL_TREES.shield_up,
     id: 'shield_up', name: 'Shield Up',
     description: 'Raise a frontal guard with its own health: hits and projectiles from the'
       + ' facing arc break against it instead of you, while you move at 40% speed and turn'
@@ -4554,6 +4562,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   backstab: {
+    tree: STARTER_SKILL_TREES.backstab,
     id: 'backstab', name: 'Backstab',
     description: 'A precise melee thrust that deals 150% more damage from behind the target,'
       + ' with a 35% chance to open a bleed. Pairs viciously with Shadow Step.',
@@ -4643,6 +4652,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   chain_lightning: {
+    tree: STARTER_SKILL_TREES.chain_lightning,
     id: 'chain_lightning', name: 'Chain Lightning',
     description: 'A bolt that leaps to the nearest unstruck enemy on every hit, chaining 3'
       + ' times innately with a 30% chance to shock each victim. Chain supports stack on top of'

@@ -28,6 +28,7 @@
 // render them their own way without re-deriving anything.
 // ---------------------------------------------------------------------------
 
+import { instanceEffects } from './skills';
 import { costWard } from './costward';
 import { summonKitIds } from './skills';
 import type { Actor } from './actor';
@@ -192,7 +193,7 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   const bonusChance = get('statusChance');
   const durScale = get('effectDuration');
   const seen = new Set<string>();
-  for (const fx of def.effects) {
+  for (const fx of instanceEffects(inst)) {
     if (fx.type !== 'status') continue;
     seen.add(fx.status);
     const sdef = STATUS_DEFS[fx.status];
@@ -219,8 +220,10 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   }
 
   // ---- buff / minion shape -------------------------------------------------
-  for (const fx of def.effects) {
+  for (const fx of instanceEffects(inst)) {
     if (fx.type !== 'buff' || !fx.duration) continue;
+    if (fx.affects === 'allies') push('buffRadius_' + fx.id, 'Ally blessing radius',
+      String(Math.round((fx.radius ?? 0) * get('aoeRadius'))), 'detail', 'same team and story; granted when cast');
     push(`buff_${fx.id}`, 'Effect duration', secs(fx.duration * durScale), 'detail',
       Math.abs(durScale - 1) > 0.005 ? `base ${secs(fx.duration)}` : undefined);
   }

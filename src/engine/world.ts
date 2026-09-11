@@ -8,6 +8,7 @@
 // modifiers flow into every stat query for that use.
 // ---------------------------------------------------------------------------
 
+import { instanceEffects } from './skills';
 import { costWard } from './costward';
 import { summonKitIds } from './skills';
 import { escarpmentRoad } from '../world/escarpments';
@@ -33332,7 +33333,7 @@ export class World {
           // use opens (a two-lane sip) shares it — rolled lazily at the
           // first pour so pourless mends never consult the dice.
           let pourCrit: number | undefined;
-          for (const fx of def.effects) {
+          for (const fx of instanceEffects(inst)) {
             if (fx.type === 'heal') this.applyHealChained(caster, inst, friendly, fx, useMult);
             else if (fx.type === 'cleanse') this.cleanseActor(friendly, fx.count ?? 2);
             else if (fx.type === 'absorb') {
@@ -33528,7 +33529,7 @@ export class World {
         // CONJURED CLOUD lands at the GROUND TARGET (the generic effect
         // executor's origin is the caster — Shatterstep departure
         // semantics; a CALLED cloud goes where you point it).
-        for (const fx of def.effects) {
+        for (const fx of instanceEffects(inst)) {
           // A KINDLED LIGHT goes where you point it too (the lightwell
           // fabric): pool scales with effectDuration, reach with area.
           if (fx.type === 'kindle') {
@@ -34061,7 +34062,7 @@ export class World {
           const mtWalk = caster.sheet.get('moveTrail', tags, extra);
           if (mtWalk > 0) {
             let dur = 0;
-            for (const fx of def.effects) {
+            for (const fx of instanceEffects(inst)) {
               if (fx.type === 'buff' && fx.duration) dur = Math.max(dur, fx.duration);
               else if (fx.type === 'status') {
                 dur = Math.max(dur, STATUS_DEFS[fx.status]?.duration ?? 0);
@@ -34797,7 +34798,7 @@ export class World {
     // opens (the two-lane flask sip) shares it — rolled lazily at the
     // first pour so non-drinking casts never consult the dice.
     let pourCrit: number | undefined;
-    for (const fx of def.effects) {
+    for (const fx of instanceEffects(inst)) {
       if (fx.type === 'buff') {
         // THE FUSE defers the worn payload too — the blessing that lands
         // when the powder burns down (delayed buffs). The routing itself
@@ -39554,7 +39555,7 @@ export class World {
       const durScale = a.sheet.get('effectDuration',
         skillContextTags(inst), instanceMods(inst));
       const pourCrit = this.critMendMult(a, inst, a.pos);
-      for (const fx of inst.def.effects) {
+      for (const fx of instanceEffects(inst)) {
         if (fx.type === 'restoreOverTime') {
           this.startRestoreStream(a, a, inst, fx, b.chargesSpent, pourCrit);
         } else if (fx.type === 'buff') {
@@ -40108,10 +40109,18 @@ export class World {
     // The granting skill's tags ride the gain EVENT (addBuff's 4th arg) so
     // tag-filtered sympathy links can hear it — the flask bond drinks only
     // what carries 'flask'.
-    if (fx.affects === 'minions') {
+    if (fx.affects === 'allies') {
+      const buffRadius = (fx.radius ?? 0) * caster.sheet.get('aoeRadius', skillContextTags(inst), instanceMods(inst));
+      for (const ally of this.actors) {
+        if (ally.team === caster.team && !ally.dead && !ally.downed && !ally.construct
+          && ally.tier === caster.tier && dist(ally.pos, caster.pos) <= buffRadius + ally.radius) {
+          this.grantTreeBuff(caster, ally, inst, scaled, durScale);
+        }
+      }
+    } else if (fx.affects === 'minions') {
       for (const m of this.actors) {
         if (m.owner === caster && !m.dead && m.isMinion() && !m.construct) {
-          m.addBuff(scaled, durScale, 0, inst.def.tags);
+          this.grantTreeBuff(caster, m, inst, scaled, durScale);
         }
       }
       // OFFERING SHARE (Communal Rites): a fraction of the minions'
@@ -40119,13 +40128,13 @@ export class World {
       const tags = skillContextTags(inst, grantedTags(inst));
       const share = caster.sheet.get('offeringShare', tags, instanceMods(inst));
       if (share > 0) {
-        caster.addBuff({
+        this.grantTreeBuff(caster, caster, inst, {
           ...scaled, id: scaled.id + '_shared', affects: 'caster',
           mods: scaled.mods.map(m => ({ ...m, value: m.value * share })),
-        }, durScale, 0, inst.def.tags);
+        }, durScale);
       }
     } else {
-      caster.addBuff(scaled, durScale, 0, inst.def.tags);
+      this.grantTreeBuff(caster, caster, inst, scaled, durScale);
     }
   }
 
@@ -41008,7 +41017,7 @@ export class World {
         });
       }
     }
-    for (const fx of def.effects) {
+    for (const fx of instanceEffects(inst)) {
       if (fx.type === 'heal') {
         // Ally-resolving deliveries (blessing novas, curseAllies edges)
         // carry their mend here; hostile targets are never healed. The
@@ -41023,7 +41032,7 @@ export class World {
         // delivery lands the buff on the RESOLVED ally — next-hit riders
         // arm a minion's blow, and a bond-marked buff TIES the caster to
         // this one ally (one bond per caster; newest wins).
-        target.addBuff(fx, durScale, 0, inst.def.tags);
+        this.grantTreeBuff(caster, target, inst, fx, durScale);
         if (fx.bond) caster.bond = { targetId: target.id, buffId: fx.id };
       } else if (fx.type === 'rupture') {
         // THE RUPTURE (THE RUPTURE LAW — StatusDef.bank): spend a fraction
@@ -53541,9 +53550,31 @@ export class World {
   }
 
   private replenishment = new ReplenishmentClocks();
+  private treeBuffSources = new WeakMap<BuffEffect, { caster: Actor; inst: SkillInstance }>();
+
+  /** Per-application identity lets respec retire only this caster's blessing,
+   * including allied recipients, without stripping another caster's refresh. */
+  private grantTreeBuff(caster: Actor, target: Actor, inst: SkillInstance, fx: BuffEffect, durScale: number): void {
+    if (!inst.treeNodes?.some(id => treeNodeOf(inst.def, id)?.buffs?.length)) {
+      target.addBuff(fx, durScale, 0, inst.def.tags);
+      return;
+    }
+    const tagged = { ...fx };
+    this.treeBuffSources.set(tagged, { caster, inst });
+    target.addBuff(tagged, durScale, 0, [...skillContextTags(inst)]);
+  }
 
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
+    for (const actor of this.actors) for (const [id, buff] of actor.buffs) {
+      const source = this.treeBuffSources.get(buff.def);
+      if (source?.caster === caster && source.inst === inst) actor.removeBuff(id);
+    }
+    this.pendingFuses = this.pendingFuses.filter(f => f.caster !== caster || f.inst !== inst);
+    // Held casts can snapshot guard pools and derived grafts. Changing the
+    // allocation retires that stance without paying a release attack.
+    if (caster.casting?.inst === inst) caster.casting = null;
+    if (caster.shellGuard?.fromAura === inst.def.id) caster.shellGuard = undefined;
     // Tree fields snapshot radius, timing and reservations: retire them before
     // changing their instance so old powers cannot survive a new allocation.
     for (let i = this.zones.length - 1; i >= 0; i--) {
@@ -55421,7 +55452,7 @@ export class World {
         // end (range spent, wall, the body that stopped it), never at the
         // hand. Cast-time deliveries pour in executeSkill's chain instead.
         if (!p.caster.dead) {
-          for (const fx of p.inst.def.effects) {
+          for (const fx of instanceEffects(p.inst)) {
             if (fx.type === 'litePour') this.litePourAt(p.caster, fx, p.pos);
             // A PLANTED LURE on a flight: the false light stands where the
             // flight ENDED (the litePour hook's twin — bait you can throw).
