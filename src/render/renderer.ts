@@ -6519,10 +6519,7 @@ export class Renderer {
         ctx.fill();
       }
       ctx.globalAlpha = 1;
-      ctx.textAlign = 'center';
-      ctx.font = '10px Verdana';
-      ctx.fillStyle = '#b06bd4';
-      ctx.fillText('Sacrificial Font', x, y + 32);
+      // The font speaks through its violet flame, carved glyphs and falling motes.
     }
   }
 
@@ -6628,13 +6625,7 @@ export class Renderer {
     ctx.arc(wp.x, wp.y, 12, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
-    // The caption rides the word layer now (queueLabelAt) — same words,
-    // same seat, but revealed by what covers the stone like every other
-    // world-anchored line (the label law), instead of leaking through
-    // walls as inline ink.
-    this.queueLabelAt(wp, wp, wp.x, wp.y + 36,
-      besieged ? 'severed waypoint' : attuned ? 'waypoint' : 'dormant waypoint',
-      color, { font: '10px Verdana' });
+    // The waypoint's lit ring, broken arcs and siphon tether carry its state.
   }
 
   /** Resource orbs: little glowing droplets of life / mana / shield. */
@@ -8133,10 +8124,6 @@ export class Renderer {
         ctx.fillStyle = '#e8c87a';
         ctx.fillText(rep, x, hintY);
         hintY += 18;
-      }
-      if (world.nearFont()) {
-        ctx.fillStyle = '#b06bd4';
-        ctx.fillText(`Sacrificial Font — merge gems, convert essence, unmake choices (${this.actionKey('panelInv')})`, x, hintY);
       }
     }
   }

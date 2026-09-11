@@ -2753,9 +2753,8 @@ function refugeStep(actor: Actor, world: World, dt: number): boolean {
   const goal = actor.refugeGoal;
   if (!goal) return false;
   if (dist(actor.pos, vec(goal.x, goal.y)) <= Math.max(16, goal.r * 0.6)) {
-    // THE EFFECT VOICE: the row may name its exit's painter (fx —
-    // 'scramble' for the treed climbs); unset keeps the classic flash.
-    world.slipAway(actor, `${actor.name} ${r.text ?? 'slips away!'}`, undefined, r.fx);
+    // The refuge's motion carries the visible body into cover; no narration.
+    world.fleeIntoRefuge(actor, vec(goal.x, goal.y));
     return true;
   }
   actor.facing = angleTo(actor.pos, vec(goal.x, goal.y));

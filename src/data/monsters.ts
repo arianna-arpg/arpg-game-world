@@ -851,11 +851,11 @@ export interface MonsterDef {
    *  makes FOR the nearest doodad of `kind` instead of merely running, and
    *  SLIPS AWAY on reaching it — removed, no corpse, no credit (the frog
    *  dives, the burrower goes to ground). `seek` caps the search (default
-   *  900); `text` is the vanish line ("dives!"). `fx` names the exit's
+   *  900). `fx` names the exit's
    *  EFFECT VOICE (render/vis/effectVoice.ts — 'scramble' is the treed
-   *  climb's leaf-flick); unset keeps the classic soft flash. Ambient
+   *  climb's leaf-flick); unset follows the refuge kind's motion. Ambient
    *  texture, any body. */
-  refuge?: { kind: string; seek?: number; text?: string; fx?: string };
+  refuge?: { kind: string; seek?: number; fx?: string };
   /** TERRAIN-BOUND: this creature exists ONLY on matching ground. Spawn
    *  placement relocates it onto a doodad of `kind` with radius >= minRadius
    *  (no such doodad in the zone = the body simply isn't spawned), and it is
@@ -9999,7 +9999,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 0.08,
     drops: 0,
     scaleVariance: [0.7, 1.1],
-    refuge: { kind: 'brush', text: 'squeezes away under the brush!', fx: 'scramble' },
+    refuge: { kind: 'brush', fx: 'scramble' },
     brain: {
       type: 'basic',
       morale: { skittish: { radius: 130, duration: [1.2, 2.2] } },
@@ -12365,7 +12365,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.1, drops: 0,
     scaleVariance: [0.85, 1.1],
-    refuge: { kind: 'tree', text: 'darts up the tree!', fx: 'scramble' },
+    refuge: { kind: 'tree', fx: 'scramble' },
     brain: {
       type: 'basic',
       morale: { skittish: { radius: 150, duration: [1.4, 2.4] } },
@@ -12416,7 +12416,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.15, drops: 0,
     scaleVariance: [0.8, 1.2],
-    refuge: { kind: 'water', text: 'dives!', fx: 'plunge' },
+    refuge: { kind: 'water', fx: 'plunge' },
     brain: {
       type: 'basic',
       morale: { skittish: { radius: 130, duration: [1.0, 1.8] } },
@@ -19815,7 +19815,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
     flier: true, levitates: true,
     detection: 0.2, drops: 0,
-    refuge: { kind: 'tree', text: 'vanishes into the canopy!', fx: 'scramble' },
+    refuge: { kind: 'tree', fx: 'scramble' },
     scaleVariance: [0.9, 1.15],
     brain: {
       type: 'basic',
@@ -19835,7 +19835,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: [], xp: 2, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.3, drops: 0,
     looter: { reach: 32 },
-    refuge: { kind: 'tree', text: 'swings away into the roots!', fx: 'scramble' },
+    refuge: { kind: 'tree', fx: 'scramble' },
     scaleVariance: [0.85, 1.15],
     brain: {
       type: 'basic',
@@ -22332,7 +22332,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 0.15, drops: 0,
     scaleVariance: [0.8, 1.2],
     immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
-    refuge: { kind: 'prism_pool', text: 'slips under!', fx: 'plunge' },
+    refuge: { kind: 'prism_pool', fx: 'plunge' },
     brain: {
       type: 'basic',
       morale: { skittish: { radius: 120, duration: [1.0, 1.8] } },

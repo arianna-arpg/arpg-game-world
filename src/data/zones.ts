@@ -1148,6 +1148,8 @@ export interface ZoneDef {
    *  chart-a-course landfalls). Frontiers never mint past a port into open
    *  ocean; the sea itself is the road. */
   port?: boolean;
+  /** Override the shared settlement-only Sacrificial Font placement rule. */
+  font?: boolean;
   /** THE SEA this port serves (world/seas.ts Sea.id) — baked at mint so the
    *  sail menu, zone-info, and lane law read the sea without re-filling.
    *  Islands carry their hosting sea too. Absent on legacy free-docked

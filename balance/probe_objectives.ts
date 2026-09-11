@@ -111,6 +111,7 @@ import { POCKET_FORMS } from '../src/data/pocketForms'; // RIG X: the delve pool
 import { VOCATIONS } from '../src/data/vocations';       // RIG X: the authored gauntlet
 import type { ZoneExit } from '../src/engine/world';     // RIG X: the travel-gate face
 import { BEACON_CFG } from '../src/data/beacons';
+import { LEYLINE_CFG } from '../src/data/leyline';
 import { RIFT_CFG } from '../src/data/rifts';
 import { PYRE_CFG } from '../src/data/pyres';
 import { DIG_CFG } from '../src/data/digsites';
@@ -372,9 +373,11 @@ withSeededRandom(0x0bec7a, () => {
     const wp = w.waypointPos;
     w.player.pos = vec(wp.x + 10, wp.y);
     step(0.4);
-    check('D4 the brush REFUSES a severed stone (and says why)',
+    check('D4 the brush refuses a severed stone with a visual pulse',
       !(w.discoveredWaypoints as Set<string>).has(zid)
-      && (w.texts as { text: string }[]).some(t => t.text.includes('severed')));
+      && (w.flashes as { pos: { x: number; y: number }; color: string; life: number }[])
+        .some(f => f.pos.x === wp.x && f.pos.y === wp.y && f.color === LEYLINE_CFG.beam && f.life > 0)
+      && !(w.texts as { text: string }[]).some(t => t.text.includes('severed')));
     if (siphon) w.kill(siphon, false, w.player);
     step(0.4);
     check('D5 the kill frees the stone (objective banks, predicate lifts)',

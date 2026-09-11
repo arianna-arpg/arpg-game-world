@@ -16,6 +16,7 @@
 // they simply don't draw on a client. The HOST always sees full fidelity.
 // ---------------------------------------------------------------------------
 
+import type { RefugeDeparture } from '../engine/refugeDeparture';
 import { replenishingDelivery } from '../engine/replenishment';
 import { Actor, type ActorAdorn, type ActorShape, type Team,
   type CastingState, type ActiveAura, type ConstructState, type LeapState, type WormBody } from '../engine/actor';
@@ -191,7 +192,7 @@ export interface PickupW { s: string; l: string; c: string; n: number; born: num
  *  identical to the pre-wire client. Other flash costumes (beam, haze, arc,
  *  shapes) remain deliberately unshipped — MVP fidelity, renderer-guarded. */
 export interface FlashW { p: Vec2W; radius: number; color: string; life: number; maxLife: number;
-  fx?: string; bolt?: boolean; meteor?: boolean; }
+  fx?: string; bolt?: boolean; meteor?: boolean; departure?: RefugeDeparture; }
 /** A death-burst telegraph (coalesce gather → tracking orb). RENDER-ONLY: the client
  *  never simulates these (homing is host-authoritative via nearestSeatPos over the seats);
  *  it just draws the host's state so the remote seat gets the same escape window. Carries
@@ -770,7 +771,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     no: world.notices.map(n => ({ text: n.text, color: n.color, size: n.size, ch: n.channel, born: n.bornAt })),
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
     flashes: world.flashes.map(f => ({ p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
-      fx: f.fx, bolt: f.bolt || undefined, meteor: f.meteor || undefined })),
+      fx: f.fx, departure: f.departure, bolt: f.bolt || undefined, meteor: f.meteor || undefined })),
     ec: world.eyecatch
       && eyecatchElapsed(world.eyecatch, world.timeflow.age) < world.eyecatch.paneSec
       ? {
@@ -1287,7 +1288,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.notices = (snap.no ?? []).map(n => ({ text: n.text, color: n.color, size: n.size, channel: n.ch, bornAt: n.born }));
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
   world.flashes = snap.flashes.map(f => ({ pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
-    fx: f.fx, bolt: f.bolt, meteor: f.meteor })) as unknown as World['flashes'];
+    fx: f.fx, departure: f.departure, bolt: f.bolt, meteor: f.meteor })) as unknown as World['flashes'];
   // THE EYECATCH — re-stamped against the CLIENT's own raw clock (elapsed →
   // local t0); an absent row clears the pane with the host's (engine/ultimates.ts).
   world.eyecatch = snap.ec ? {

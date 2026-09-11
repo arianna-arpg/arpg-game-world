@@ -8,6 +8,8 @@
 // modifiers flow into every stat query for that use.
 // ---------------------------------------------------------------------------
 
+import { fontStandsIn } from './fontPlacement';
+import { refugeDeparture, type RefugeDeparture } from './refugeDeparture';
 import { instanceEffects } from './skills';
 import { costWard } from './costward';
 import { summonKitIds } from './skills';
@@ -1384,6 +1386,7 @@ export interface EmergeRecord {
 }
 
 interface Flash {
+  departure?: RefugeDeparture;
   pos: Vec2; radius: number; color: string; life: number; maxLife: number;
   arc?: { facing: number; arcRad: number };
   shape?: AoeShape; facing?: number;
@@ -6654,12 +6657,12 @@ export class World {
     // THE ARRIVAL LATCH re-arms per zone: every station must see its disc
     // EMPTY once before its dwell may fire (stationDwellArmed).
     this.stationArmed.clear();
-    // A Sacrificial Font (always lit in town; a find elsewhere — never in a special arena).
+    // Sacrificial Font placement follows the shared settlement service policy.
     // The town seat is a REAL site (townBuild.ts FONT_SITE — shared with
     // nearFont's reach), not the old centre-plaza formula: the centre is
     // the waypoint + bounty board's working ground.
     this.fonts = [];
-    if (def.id === START_ZONE || (!def.special && o.kind !== 'waves' && o.kind !== 'safe' && rng.chance(0.3))) {
+    if (fontStandsIn(def)) {
       const at = def.id === START_ZONE
         ? this.townSeat('font')
         : (pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
@@ -13286,7 +13289,18 @@ export class World {
     // squirrel's 'scramble' leaf-flick); every unkeyed departure keeps the
     // classic soft flash — the honored generic (absent == identical).
     this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: 60, color, life: 0.5, maxLife: 0.5, fx });
-    this.text(vec(actor.pos.x, actor.pos.y - 30), text, color, 14);
+    if (text) this.text(vec(actor.pos.x, actor.pos.y - 30), text, color, 14);
+  }
+
+  /** A refuge departure preserves the body's appearance briefly, without
+   * keeping a target alive or emitting narration, deaths, XP or loot. */
+  fleeIntoRefuge(actor: Actor, target: Vec2): void {
+    const { cue, duration } = refugeDeparture(actor, target);
+    this.despawnPartsOf(actor);
+    const i = this.actors.indexOf(actor);
+    if (i >= 0) this.actors.splice(i, 1);
+    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: 60,
+      color: actor.color, life: duration, maxLife: duration, fx: 'refuge', departure: cue });
   }
 
   /** The Hunt beast begins a flee — a bulletin so the player knows to give chase
@@ -46907,13 +46921,11 @@ export class World {
       if (this.waypointBesieged()) {
         if (this.time - this.wpRefusedAt > 2.5) {
           this.wpRefusedAt = this.time;
-          this.text(vec(this.waypointPos.x, this.waypointPos.y - 30),
-            'the waypoint is severed — its power bleeds to the siphon', LEYLINE_CFG.beam, 14);
+          this.flashes.push({ pos: vec(this.waypointPos.x, this.waypointPos.y),
+            radius: LEYLINE_CFG.attuneRadius * 0.5, color: LEYLINE_CFG.beam, life: 0.5, maxLife: 0.5 });
         }
       } else {
         this.discoveredWaypoints.add(this.zone.id);
-        this.text(vec(this.waypointPos.x, this.waypointPos.y - 30),
-          'waypoint attuned — travel from the map (M)', '#5ad8d8', 14);
         this.flashes.push({
           pos: vec(this.waypointPos.x, this.waypointPos.y),
           radius: 50, color: '#5ad8d8', life: 0.5, maxLife: 0.5,
@@ -58038,8 +58050,6 @@ export class World {
         if (!this.actors.some(a => !a.dead && a.tag === 'ley_siphon')) {
           if (this.waypointPos) {
             this.flashes.push({ pos: vec(this.waypointPos.x, this.waypointPos.y), radius: 160, color: LEYLINE_CFG.accent, life: 0.9, maxLife: 0.9 });
-            this.text(vec(this.waypointPos.x, this.waypointPos.y - 40),
-              'the leyline reattaches — the waypoint hums awake', LEYLINE_CFG.accent, 14);
           }
           this.completeObjective('The siphon is broken — the waypoint is freed!');
         }

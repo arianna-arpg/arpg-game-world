@@ -35,10 +35,13 @@
 
 import { VIS_CFG } from './visConfig';
 import { shade, withAlpha } from './color';
+import type { RefugeDeparture } from '../../engine/refugeDeparture';
+import { drawRefugeDeparture } from './refugeDeparture';
 
 /** The narrow read surface a voice painter gets — structurally satisfied by
  *  the engine's Flash rows (world.ts) without importing the engine. */
 export interface EffectVoiceFlash {
+  departure?: RefugeDeparture;
   pos: { x: number; y: number };
   radius: number;
   color: string;
@@ -56,6 +59,13 @@ export type EffectVoicePainter = (
 ) => void;
 
 const EFFECT_VOICES: Record<string, EffectVoicePainter> = {};
+
+registerEffectVoice('refuge', (ctx, f, t) => {
+  if (!f.departure) return;
+  const cue = f.departure;
+  if (cue.fx !== 'refuge') drawEffectVoice(ctx, cue.fx, { ...f, pos: cue.target }, t);
+  drawRefugeDeparture(ctx, f.pos, cue, 1 - t);
+});
 
 /** Register (or re-skin) a voice. Open by design — a package can bring its
  *  own moment without touching this file. */

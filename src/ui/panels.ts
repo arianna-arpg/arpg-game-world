@@ -3874,7 +3874,6 @@ export class UI {
     // panel's left edge; the drawer POPS OUT beside the panel (absolute —
     // the gear layout never shifts an inch) with the full learned-skills
     // management view. State persists like the satchel's.
-    const wf = this.getWorld().nearFont();
     // MIREILLE'S LESSON, read from its one source of truth (the world):
     // while the one 'learn' step pends the carried flask BAG TILES glow
     // (the per-item glow above), the flap handle glows while the drawer is
@@ -3908,29 +3907,9 @@ export class UI {
           ${m.passivePoints > 0 ? `<span>${m.passivePoints}</span>` : ''}
         </button>
       </div>`;
-    // THE FONT'S CONVERT STRIP (FONT_CFG.convertUp/Down): tier up/down per
-    // rung, wallet-gated — stands only beside a Sacrificial Font.
-    const convertStrip = wf ? `
-      <div style="flex:0 0 auto;font-size:10px;color:#b06bd4;margin-bottom:6px;
-        border-bottom:1px solid var(--panel-border);padding-bottom:5px">
-        FONT · convert essence:
-        ${ABILITY_ESSENCES.slice(0, -1).map((lo, i) => {
-          const hi = ABILITY_ESSENCES[i + 1];
-          const canUp = (m.abilityEssences[lo.id] ?? 0) >= FONT_CFG.convertUp;
-          const canDown = (m.abilityEssences[hi.id] ?? 0) >= 1;
-          return `
-            <button data-fontconv="${lo.tier}:up" ${canUp ? '' : 'disabled'}
-              title="${FONT_CFG.convertUp}× ${lo.label} → 1× ${hi.label}">
-              ${FONT_CFG.convertUp}<span style="color:${lo.color}">${lo.glyph}</span>→<span style="color:${hi.color}">${hi.glyph}</span></button>
-            <button data-fontconv="${hi.tier}:down" ${canDown ? '' : 'disabled'}
-              title="1× ${hi.label} → ${FONT_CFG.convertDown}× ${lo.label}">
-              1<span style="color:${hi.color}">${hi.glyph}</span>→${FONT_CFG.convertDown}<span style="color:${lo.color}">${lo.glyph}</span></button>`;
-        }).join('')}
-      </div>` : '';
     const drawer = this.buildFlapOpen ? `
         ${this.closeGlyphHtml()}<h2>📖 Skills</h2>
-        <div class="build-wallet-header">${walletChips}${wf ? '<span>FONT NEARBY</span>' : ''}</div>
-        ${convertStrip}
+        <div class="build-wallet-header">${walletChips}</div>
         <div class="build-scroll" style="flex:1 1 auto;overflow-y:auto;font-size:12px;padding-right:4px">
           ${this.learnedListHtml()}
         </div>` : '';
@@ -4046,13 +4025,6 @@ export class UI {
     });
     if (this.buildFlapOpen) {
       this.wireLearnedList(this.buildPanel, () => this.refreshInventory());
-      // THE FONT'S CONVERT STRIP (drawer chrome, outside the learned list).
-      this.buildPanel.querySelectorAll<HTMLButtonElement>('button[data-fontconv]').forEach(btn =>
-        btn.addEventListener('click', () => {
-          const [tier, dir] = btn.dataset.fontconv!.split(':');
-          this.getWorld().requestMeta({ t: 'fontConvert', tier: Number(tier), dir: dir as 'up' | 'down' });
-          this.refreshInventory();
-        }));
     }
 
     const salv = this.salvageLaneFor(this.inventory);
@@ -6262,7 +6234,6 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
         const pip = free > 0
           ? `<span title="${free} Ability point${free === 1 ? '' : 's'} waiting" style="color:#ffd700">◉ ${free}</span>`
           : '';
-        const resetChip = this.treeResetChipHtml(inst, seat);
         modeRow = `
           <div style="margin-top:3px;font-size:10px;color:#d8b86a;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
             <span>Tree:</span>
@@ -6273,7 +6244,6 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
                   style="border-color:${free > 0 ? '#ffd700' : '#d8b86a'};${free > 0 ? 'color:#ffd700;' : ''}"
                   title="${free > 0 ? 'A point waits — open the tree to spend it' : 'Open this skill\'s tree'}">⟡ Tree</button>`
               : `<span style="color:#6a6478">— the path opens at Lv ${tree.level}</span>`}
-            ${resetChip}
           </div>`;
       }
       // Grafts riding THIS skill (chips mirror sockets; ✕ unbinds) + the
@@ -6389,10 +6359,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // skill's tree pane, owned by the drawer's seat (the couch lens).
     q<HTMLButtonElement>('button[data-treeopen]').forEach(btn => btn.addEventListener('click', () => {
       this.openSkillTree(btn.dataset.treeopen!, this.panelSeatIds.get(container));
-    }));
-    // THE FONT'S RESET RITUAL: unmake a skill's tree pick (band-priced).
-    q<HTMLButtonElement>('button[data-fontreset]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'fontReset', skillId: btn.dataset.fontreset! }); refresh();
     }));
     q<HTMLButtonElement>('button[data-unsocket]').forEach(btn => btn.addEventListener('click', () => {
       const [skillId, sock] = btn.dataset.unsocket!.split(':');
@@ -7092,19 +7058,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       </span>`;
   }
 
-  /** THE FONT'S RESET RITUAL chip (FONT_CFG.reset): unmake the whole tree,
-   *  priced in the skill's current band — stands only beside a font. */
-  private treeResetChipHtml(inst: SkillInstance, seat: Seat): string {
-    const world = this.getWorld();
-    if (!inst.treeNodes?.length || !world.nearFont()) return '';
-    const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
-    const dd = abilityEssenceOfTier(cost.tier);
-    const afford = world.canAffordAbilityEssence(seat, cost);
-    return `<button class="gem-chip" data-fontreset="${inst.def.id}" ${afford ? '' : 'disabled'}
-      title="Sacrificial Font: unmake ALL of this skill's spent points for ${cost.count}× ${dd.label} (the full-tree ritual — never node-wise).">
-      ↺ Reset (${this.abilityCostText(cost)})</button>`;
-  }
-
   /** Re-render one skill's pane, or every open pane (the drawer's beat). */
   refreshSkillTree(skillId?: string): void {
     const panes = skillId ? [this.skillTreePanes.get(skillId)].filter((p): p is SkillTreePane => !!p && p.open) : this.openSkillTreePanes();
@@ -7196,7 +7149,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const pip = free > 0
       ? `<span style="color:#ffd700" title="${free} Ability point${free === 1 ? '' : 's'} waiting — click a lit node">◉ ${free} waiting</span>`
       : '';
-    const resetChip = this.treeResetChipHtml(inst, seat);
     const status = committed
       ? `<span style="color:${def.color}" title="${esc(committed.description ?? committed.name)}">${esc(committed.name)}</span>`
       : open
@@ -7216,7 +7168,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         <span>Lv ${inst.level}</span>${this.treeLevelBarHtml(inst, 140)}
         <span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span>${pip}
         <span style="color:#5a5668">·</span>${status}
-        ${resetChip ? `<span style="margin-left:auto">${resetChip}</span>` : ''}
       </div>
       <svg viewBox="${this.skillTreeViewBox(pane)}" class="st-svg"
         style="cursor:var(--cursor-grab, grab);touch-action:none;background:#100e16;border:1px solid #2a2438;border-radius:5px">${edges}${circles}</svg>
@@ -7232,10 +7183,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         world.requestMeta({ t: 'pickTreeNode', skillId: def.id, nodeId: el.dataset.node! });
         if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
       });
-    });
-    pane.el.querySelector<HTMLButtonElement>('button[data-fontreset]')?.addEventListener('click', () => {
-      world.requestMeta({ t: 'fontReset', skillId: def.id });
-      if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
     });
     this.wireSkillTreeControls(pane);
   }
