@@ -698,6 +698,13 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   if (target.sheet.get('hitImmune') > 0) {
     return { evaded: true, immune: false, blocked: false, total: 0, crit: false };
   }
+  // Area avoidance is bounded and resolves before plies/status payloads.
+  // A connected area hit still lands in full; single-target hits and DoTs
+  // never consult this lane. Zero avoids consuming a random draw.
+  const areaAvoidance = packet.tags.has('aoe') ? target.sheet.get('areaAvoidance') : 0;
+  if (areaAvoidance > 0 && chance(areaAvoidance)) {
+    return { evaded: true, immune: false, blocked: false, total: 0, crit: false };
+  }
   // Attacks can be evaded; spells always connect. Evasion runs on ENTROPY,
   // not independent rolls: each attack adds its chance-to-hit to the
   // victim's accumulator and only a crossing of 1 lands (then pays 1 back).

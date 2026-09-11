@@ -234,6 +234,13 @@ in cling.ts assumes the victim outweighs the rider. Misdirection-by-carry
 
 ## Balance doctrine
 
+Throng anchors now inherit the shared `SkillDef.minionCombat` small-army
+profile: reduced threat/target priority, bounded area-hit avoidance, and faster
+movement under explicit orders. Command: Assault's Recall meta disengages the
+court. Durability-invested or wounded gnats retain full actor state rather than
+losing armor or life history in the pool. Measurements, configuration, limits
+and integration dependency: [Small-army combat](../design/throng-combat.md).
+
 - **THE BATCH RULE**: `bakeMinionOwnerStats(minion, caster, inst, scale)` is
   now THE ONE owner-investment fold (spawnMinion passes 1; throng claims
   pass `1/batch`). Every owner CONTRIBUTION — damage/life/haste/regen

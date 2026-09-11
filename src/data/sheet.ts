@@ -96,6 +96,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'endurance', 'enduranceDR', 'enduranceRegenPct', 'enduranceRegenDelay',
       // Ward & exotic soaks
       'wardDecay', 'wardGain', 'staggerFrac', 'staggerWindow', 'hitImmune', 'hitCap',
+      'areaAvoidance',
       // The last gasp (the talent fabric's cheat-death lane)
       'lastGasp', 'lastGaspLife', 'lastGaspCooldown',
       // Body & substance
@@ -197,6 +198,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
     core: [],
     used: [
       'minionDamage', 'minionLife', 'minionMaxCount', 'minionDamageTaken',
+      'minionThreat', 'minionAreaAvoidance',
       'minionSize', 'minionMoveSpeed', 'minionHaste', 'minionRegen', 'minionRegenPct', 'minionRegenRate',
       'minionPlies', 'minionLifePlyTrade', 'minionLifePlyEcho', 'throngPockets', 'throngYield',
       'minionDetectionRange', 'minionDecayRate', 'minionRespawnTime', 'minionUndying',
@@ -220,7 +222,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
     label: 'Misc',
     blurb: 'Movement, presence, fortune, and anything else your build touches.',
     core: [],
-    used: ['traction', 'detectability', 'noiseOnHit', 'threatGen', 'invisible', 'luck'],
+    used: ['traction', 'detectability', 'noiseOnHit', 'threatGen', 'targetPriority', 'invisible', 'luck'],
   },
 };
 
@@ -702,6 +704,8 @@ const STAT_BLURBS: Record<string, string> = {
   minionLife: 'Scales the life of everything you summon.',
   minionMaxCount: 'Additional maximum minions.',
   minionDamageTaken: 'Multiplies the damage your minions receive.',
+  minionThreat: 'Multiplies your minions’ threat generation and enemy targeting priority. Even a quiet minion can be attacked.',
+  minionAreaAvoidance: 'Adds a chance for minions to avoid area hits, including their armor wear and on-hit effects. Capped at 85%; damage over time still applies.',
   minionSize: 'How large your minions grow.',
   minionMoveSpeed: 'How fast your minions travel.',
   minionHaste: 'Speeds everything your minions do.',
@@ -751,6 +755,8 @@ const STAT_BLURBS: Record<string, string> = {
   detectability: 'How far away enemies notice you: the stealth stat.',
   noiseOnHit: 'Your blows, and your spent shots wherever they land, RING. Every watcher within this radius hears the bang and comes to look. A sound names a place, never a prey.',
   threatGen: 'How loudly your damage registers on the victim\'s ledger: loud styles goad monsters onto themselves.',
+  targetPriority: 'Weights enemy target preferences. Lower values attract less attention without making you untargetable; taunts still take priority.',
+  areaAvoidance: 'Chance to avoid an area hit before armor wear and on-hit effects. Capped at 85%; direct hits and damage over time remain dangerous.',
   invisible: 'Enemies cannot see or deliberately target you, but areas and stray shots still connect.',
   luck: 'Every proc roll\'s chance is scaled by your luck: fortune as a stat, curseable both ways.',
 };

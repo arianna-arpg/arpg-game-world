@@ -21,9 +21,10 @@ Hivecall remains a toggle contract: each body reserves mana and reknits after
 its normal delay. Capacity is not free reservation capacity. Gnatveil retains
 its native wandering motes; each trunk grafts a distinct additional source.
 Its increased life, damage and speed investments use the existing throng batch
-rules. Protective plies are discrete investments. The separate throng combat
-pass addresses baseline viability; players should not need a defensive tree
-route merely to make an unmodified swarm work.
+rules. Protective plies are discrete investments. The shared combat profile,
+recall command, and lossless armor handling are documented in `throng-combat.md`. Baseline
+viability is independent of tree investment. Purchased plies use full actor
+state, with the processing cost described there.
 
 Command: Assault keeps its six-second order. Duration investment in the new
 blessings changes those blessings, not the underlying order clock. Each
