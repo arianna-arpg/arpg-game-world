@@ -24,6 +24,7 @@
 //   honest; balance/probe_classmastery.ts the ladder, the kit, the runes.
 // ---------------------------------------------------------------------------
 
+import { CLASS_DEEDS } from '../data/classdeeds';
 import {
   FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_CORPSES_RECLAIMED, LEDGER_CRAFTS_UNLOCKED,
   LEDGER_FLASK_LESSON, LEDGER_GEMDROP_PREFIX, LEDGER_LEGENDARY_SKILL_DROP,
@@ -180,19 +181,10 @@ export function maxSlotCount(): number {
  *  progress. Complete any one and the WORLD claims the class for the
  *  account (settleClassUnlocks) — no coin ever changes hands for a class.
  *
- *    objectives — GateRow[]: play thresholds (`classLevel` — stamped by the
- *                 XP sweep for whatever class is being PLAYED; authoring
- *                 one here registers its milestone), counted deeds
- *                 (`ledger` + `n`: LEDGER_CORPSES_RECLAIMED ×20,
- *                 bossSlainKey('undead') ×5, LEDGER_ACCOUNT_DEATHS ×8),
- *                 hard lessons (LEDGER_SEIZED, LEDGER_TRAP_SPRUNG,
- *                 'crowned_killed'…: learning by having it done to you).
- *    chain      — parent class(es): OWNING the parent is the card's
- *                 STRUCTURAL door (the card hides entirely until then — the
- *                 wall grows as the account grows), and PLAYING the parent
- *                 to CLASS_WEB_CFG.chainPlayLevel is an objective (a chain
- *                 that asked only ownership would cascade for free).
- *    hint       — the compass. Point at the DEED, never the reward.
+ *    objectives — GateRow[] of gameplay deeds. Any one earns the class.
+ *    chain      — parent ownership opens this branch of the rumor wall.
+ *                 No implicit level requirement: each branch authors deeds.
+ *    hint       — a plain explanation, visible even while the name is runes.
  *
  *  The spec COMPILES onto the same generic gates every unlock rides
  *  (reqAnyOf / requiresUnlock) + the earned law; the gate engine grew no
@@ -203,7 +195,7 @@ export function maxSlotCount(): number {
 export interface ClassUnlockSpec {
   /** THE OBJECTIVES — any ONE held claims the class. */
   objectives?: readonly GateRow[];
-  /** THE CHAIN — parent class id(s): owned = the door, played = an objective. */
+  /** THE CHAIN — parent class id(s): ownership opens the branch; explicit deeds earn it. */
   chain?: string | string[];
   /** The shrouded card's one plain line. */
   hint: string;
@@ -227,8 +219,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     blurb: 'Fury as a fighting style: heavy arcs, boiling blood, and the whole rage-fed Warpath.',
     skillIds: ['heavy_strike', 'whirlwind', 'dash',
       'berserk', 'bloodlust', 'soul_harvest', 'flame_imbuement', 'venom_ammunition', 'flame_blast'],
-    unlock: { objectives: [{ classLevel: { classId: 'warrior', level: 15 } }],
-      hint: 'Some come back from the Warrior\'s road changed: louder, redder, faster than the line can hold.' } },
+    unlock: { ...CLASS_DEEDS.berserker } },
   // --- THE MIND LINE: the Magician is the Intelligence branch — played deep,
   // it opens its own INT kin first, then the doors into its constituent
   // Wisdom and Willpower schools; those chain onward by OWNERSHIP.
@@ -236,8 +227,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     blurb: 'The scholar of annihilation steps forward, frost ward in hand.',
     skillIds: ['infernal_ray', 'storm_call', 'ice_shield'],
     supportIds: ['spark_discipline'],
-    unlock: { objectives: [{ classLevel: { classId: 'magician', level: 10 } }],
-      hint: 'Past the tenth circle of the Magician\'s study, the elements stop answering one at a time.' } },
+    unlock: { ...CLASS_DEEDS.sorcerer } },
   // --- THE SHADOW LINE: the Rogue is the Dexterity branch — its road forks
   // into the ranged and dueling crafts first, the darker and louder arts
   // after; the field disciplines chain by ownership.
@@ -245,16 +235,14 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     blurb: 'Death from afar, and the field disciplines that perfect the shot.',
     skillIds: ['piercing_arrow', 'fan_of_blades', 'quickstep'],
     supportIds: ['perfect_draw', 'wandering_mark'],
-    unlock: { objectives: [{ classLevel: { classId: 'rogue', level: 10 } }],
-      hint: 'The alley teaches the knife. The treeline teaches something longer.' } },
+    unlock: { ...CLASS_DEEDS.ranger } },
   { classId: 'guardian',
     blurb: 'The unmoved wall, raised together with the Bulwark\'s wards, pacts, and reprisals.',
     skillIds: ['hammer_of_judgment', 'aegis_ward', 'rallying_howl',
       'iron_ward', 'magma_ward', 'transgression', 'pain_hounds', 'bristleback', 'soul_link',
       'stone_communion'],
     supportIds: ['stoneblood_conduit', 'bulwarks_tithe', 'warding_flesh'],
-    unlock: { objectives: [{ classLevel: { classId: 'warrior', level: 15 } }],
-      hint: 'Veterans of the Warrior\'s road tell of a way of standing that armies name like a wall.' } },
+    unlock: { ...CLASS_DEEDS.guardian } },
   // THE ARCANIST (her retheme 2026-09-05): the bolt, the one bonded
   // familiar, the drain — and the elemental golem contracts + the arcane
   // bolts as its pool (the four golems were orphans; they are the
@@ -266,14 +254,12 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
       'command_assault', 'summon_fire_golem', 'summon_ice_golem', 'summon_stone_golem', 'summon_blood_golem',
       'null_lance', 'arcane_missiles'],
     supportIds: ['soul_tether', 'vital_bond', 'resonance', 'hardy_brood'],
-    unlock: { chain: 'necromancer',
-      hint: 'The Necromancer raises what fell. A subtler art binds what never lived, and keeps only one.' } },
+    unlock: { chain: 'necromancer', ...CLASS_DEEDS.summoner } },
   { classId: 'swashbuckler',
     blurb: 'The duelist\'s stage: four blades\' worth of flourish, and the momentum to keep it rolling.',
     skillIds: ['surgical_strike', 'dash_strike', 'buckler_strike', 'wild_strike'],
     supportIds: ['momentum'],
-    unlock: { objectives: [{ classLevel: { classId: 'rogue', level: 10 } }],
-      hint: 'Past the tenth quiet job, some knives start wanting an audience.' } },
+    unlock: { ...CLASS_DEEDS.swashbuckler } },
   { classId: 'juggernaut',
     blurb: 'It hits, it takes hits, and it does not stop. Now it keeps the wake too: votive flames, a lit vigil, and the last word.',
     // Frenzy rides along: it left the Rogue's (starter) bar in the parity
@@ -281,20 +267,17 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     skillIds: ['piledriver', 'reckoning', 'stone_skin', 'frenzy',
       'cindershell', 'deathwatch', 'requiem'],
     supportIds: ['kindled_wake', 'victors_tempo', 'abundant_harvest'],
-    unlock: { chain: 'guardian',
-      hint: 'The wall, taught to walk forward.' } },
+    unlock: { chain: 'guardian', ...CLASS_DEEDS.juggernaut } },
   { classId: 'pyromancer',
     blurb: 'Everything burns eventually; these are the words for "now".',
     skillIds: ['flame_arrow', 'ignite', 'pillar_of_flame'],
-    unlock: { objectives: [{ classLevel: { classId: 'magician', level: 10 } }],
-      hint: 'Deep in the Magician\'s studies there is a chapter singed at every corner.' } },
+    unlock: { ...CLASS_DEEDS.pyromancer } },
   { classId: 'assassin',
     blurb: 'The quiet trade, with the Verdict\'s marks, dooms, and executions in its kit.',
     skillIds: ['rend', 'eviscerate', 'invisibility',
       'expose_weakness', 'word_of_doom', 'execution'],
     supportIds: ['exposure', 'bristling_riposte'],
-    unlock: { objectives: [{ classLevel: { classId: 'rogue', level: 15 } }],
-      hint: 'The Rogue\'s road forks in the dark. One branch keeps a ledger of names.' } },
+    unlock: { ...CLASS_DEEDS.assassin } },
   { classId: 'necromancer',
     blurb: 'Death as a resource: the corpse-and-poison artisan, with the whole Harvest & Hordes gamut.',
     skillIds: ['poison_nova', 'raise_dead', 'despair',
@@ -326,8 +309,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
       'greater_mending', 'communion', 'healing_rain', 'healing_stream', 'cleansing_light',
       'lifedrain', 'soul_volley', 'tree_of_life', 'font_of_renewal', 'summon_cleric', 'spirit_mender'],
     supportIds: ['intensive_care', 'mending_chain', 'overmend'],
-    unlock: { objectives: [{ classLevel: { classId: 'magician', level: 15 } }],
-      hint: 'The Magician\'s syllabus ends at a second door, marked WILL. Behind it, someone is mending.' } },
+    unlock: { ...CLASS_DEEDS.cleric } },
 
   // --- The parity twelve (every star point now anchors three classes) -------
   { classId: 'breaker',
@@ -335,22 +317,19 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     skillIds: ['sunder_maul', 'earthquake', 'verdict',
       'tolling_ruin', 'groundswell', 'faultbreak'],
     supportIds: ['concussive_blows'],
-    unlock: { objectives: [{ classLevel: { classId: 'warrior', level: 10 } }],
-      hint: 'Warriors who keep to the road learn where a stance carries its weight, and how to take it out.' } },
+    unlock: { ...CLASS_DEEDS.breaker } },
   { classId: 'vanguard',
     blurb: 'First through the gap, shield still moving: the charges, thrusts, and leaps of the advancing line.',
     skillIds: ['charge', 'shockfront', 'marching_bulwark',
       'shield_charge', 'bastion_thrust', 'crushing_leap'],
     supportIds: ['phalanx'],
-    unlock: { objectives: [{ classLevel: { classId: 'warrior', level: 10 } }],
-      hint: 'March the Warrior\'s road far enough and the shield stops meaning "stay put".' } },
+    unlock: { ...CLASS_DEEDS.vanguard } },
   { classId: 'blademaster',
     blurb: 'The sword as a sentence, with the whole dueling school: the thousand cuts and the one perfect stroke.',
     skillIds: ['iai_strike', 'zanshin_cut', 'riposte',
       'thousand_cuts', 'sheathed_moon', 'perfect_strike', 'infinite_slashes'],
     supportIds: ['building_rhythm'],
-    unlock: { chain: 'berserker',
-      hint: 'Fury, worn long enough, starts dreaming of one perfect stroke.' } },
+    unlock: { chain: 'berserker', ...CLASS_DEEDS.blademaster } },
   { classId: 'brawler',
     blurb: 'No blade, no apology: the pit\'s arithmetic, plus the carving rhythms that keep the fists warm.',
     skillIds: ['one_two', 'chain_pull', 'haymaker',
@@ -366,17 +345,13 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     skillIds: ['spiked_bulwark', 'bristleback', 'reprisal',
       'defiant_bulwark', 'tolling_bell', 'rearguard_aegis'],
     supportIds: ['answering_steel'],
-    // A nested PLAY threshold on a non-starter: the Guardian must be owned,
-    // dealt, and lived in — the web runs deeper than the starting three.
-    unlock: { objectives: [{ classLevel: { classId: 'guardian', level: 10 } }],
-      hint: 'Stand the Guardian\'s watch long enough to learn it: hitting you was always the mistake.' } },
+    unlock: { chain: 'guardian', ...CLASS_DEEDS.sentinel } },
   { classId: 'lancer',
     blurb: 'Steel left in every wound and called home through the crowd: the full impale ledger, javelin rain included.',
     skillIds: ['skewer', 'pinning_spear', 'spear_recall',
       'voltspear', 'blightspear', 'skyfall_volley', 'radiant_lance'],
     supportIds: ['skewering_blows', 'tripwire_web'],
-    unlock: { chain: 'ranger',
-      hint: 'The Ranger\'s steel comes back as rumor. Somewhere, it comes back by hand.' } },
+    unlock: { chain: 'ranger', ...CLASS_DEEDS.lancer } },
   { classId: 'trapper',
     blurb: 'The battlefield as a workshop: snares, mines, sentries, and the patience to let the ground do the arguing.',
     skillIds: ['caltrops', 'aftershock_snare', 'ballista_sentry',
@@ -402,15 +377,13 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     skillIds: ['war_chant', 'dissonance', 'coda',
       'keening_shriek', 'gust_burst', 'aureole'],
     supportIds: ['held_note', 'countermelody'],
-    unlock: { chain: 'warlord',
-      hint: 'Command, held long enough, starts keeping time.' } },
+    unlock: { chain: 'warlord', ...CLASS_DEEDS.skald } },
   { classId: 'beguiler',
     blurb: 'Never be where the blow lands: doubles, decoys, quiet steps, and one whispered madness.',
     skillIds: ['decoy', 'shadow_clone', 'beguile',
       'cloudstep', 'quiet_step', 'mirage_archer'],
     supportIds: ['synchronicity', 'vessel_of_shadow'],
-    unlock: { objectives: [{ classLevel: { classId: 'rogue', level: 15 } }],
-      hint: 'Far down the Rogue\'s road: the best hiding place is someone else\'s certainty.' } },
+    unlock: { ...CLASS_DEEDS.beguiler } },
   { classId: 'chronomancer',
     blurb: 'Time as a resource everyone else spends carelessly, up to and including stopping it outright.',
     skillIds: ['stasis_lock', 'torpor_field', 'time_dilation',
@@ -425,8 +398,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     skillIds: ['mantra_strike', 'wellspring_stance', 'long_exhale',
       'grit_stance', 'surgewind', 'siphon_strike'],
     supportIds: ['colossus_stance', 'stillwater_discipline'],
-    unlock: { chain: 'cleric',
-      hint: 'Past the Cleric\'s long watch waits a stiller discipline. Fury is a debt; stillness pays cash.' } },
+    unlock: { chain: 'cleric', ...CLASS_DEEDS.ascetic } },
 
   // --- Beyond the parity twelve: wisdom's fourth door -------------------------
   // THE HIVECALLER — the swarm-shepherd (the throng fabric's own class).
@@ -444,18 +416,16 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
 
   // --- THE PARITY EIGHT (class pass round two): every star point's fourth
   // door. Gate textures deliberately span the whole discovery vocabulary —
-  // four ownership chains, two deep play-thresholds, one world fact, and
+  // ownership branches, combat deeds, world facts, and
   // the debut of the COUNTED lever (the Flagellant is discovered by DYING).
   { classId: 'wallwright',
     blurb: 'Architecture, weaponized: raise the rampart, breach through it, and swing the demolition arc that unbuilds whatever argues back.',
     skillIds: ['stone_rampart', 'toppling_stroke', 'shield_charge'],
-    unlock: { chain: 'breaker',
-      hint: 'Whoever learns every way a wall can fall eventually owes the other trade an apprenticeship.' } },
+    unlock: { chain: 'breaker', ...CLASS_DEEDS.wallwright } },
   { classId: 'matador',
     blurb: 'The duel as theatre: bait the charge, pass through the horns, schedule the third act.',
     skillIds: ['planted_banderilla', 'cape_feint', 'perfect_strike'],
-    unlock: { chain: 'brawler',
-      hint: 'Past the pit there is a finer arena, where the crowd pays to watch a fighter never get hit at all.' } },
+    unlock: { chain: 'brawler', ...CLASS_DEEDS.matador } },
   { classId: 'flagellant',
     blurb: 'Pain, notarized: a covenant that feeds on its keeper and repays exactly when the flesh runs short.',
     skillIds: ['ashen_vow', 'transgression', 'blood_mortgage'],
@@ -466,23 +436,19 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   { classId: 'falconer',
     blurb: 'The mark has wings and an opinion: one huntress, loosed to latch and hold the quarry open.',
     skillIds: ['cast_falcon', 'expose_weakness', 'cloudstep'],
-    unlock: { objectives: [{ classLevel: { classId: 'tamer', level: 10 } }],
-      hint: 'Walk far enough with a bond at your heel and something above starts keeping pace with you both.' } },
+    unlock: { chain: 'tamer', ...CLASS_DEEDS.falconer } },
   { classId: 'sharper',
     blurb: 'Probability owes money: every suit rides every throw, the odds arrive pre-palmed, and nobody can prove anything.',
     skillIds: ['thrown_ace', 'stack_the_deck', 'quiet_step'],
-    unlock: { chain: 'swashbuckler',
-      hint: 'The duelist\'s stage has a back room. The games there are quicker, quieter, and the blades are shaped like cards.' } },
+    unlock: { chain: 'swashbuckler', ...CLASS_DEEDS.sharper } },
   { classId: 'firebrand',
     blurb: 'The riot, delivered as a speech: the crowd does the fighting, and you were provably elsewhere.',
     skillIds: ['incite', 'trumpet_peal', 'harrowing_wail'],
-    unlock: { chain: 'beguiler',
-      hint: 'One whispered madness turns a mind. Somewhere there is a school for saying it to a square full of them.' } },
+    unlock: { chain: 'beguiler', ...CLASS_DEEDS.firebrand } },
   { classId: 'runeweaver',
     blurb: 'Spells are sentences, runes are the words, patience is the grammar: the invocation bank made a calling.',
     skillIds: ['invocation', 'rune_of_power', 'warp'],
-    unlock: { objectives: [{ classLevel: { classId: 'magician', level: 20 } }],
-      hint: 'At the twentieth circle the Magician\'s letters stop meaning and start DOING. Few study past the alphabet.' } },
+    unlock: { ...CLASS_DEEDS.runeweaver } },
   { classId: 'resonator',
     blurb: 'Everything rings if struck sincerely: leave the body humming a bright tone, then play the chord fortissimo.',
     skillIds: ['tuning_strike', 'shatterchord', 'purity_of_elements'],
@@ -503,16 +469,11 @@ function classBundleEntry(b: ClassBundleDef): Unlockable {
   const cls = CLASSES.find(c => c.id === b.classId);
   const name = cls?.name ?? b.classId;
   const sups = b.supportIds ?? [];
-  // THE OBJECTIVE COMPILE: the authored spec becomes the same generic gates
-  // every unlock rides — objectives → reqAnyOf (the family law: any ONE
-  // holds), a chain → requiresUnlock (the structural door) PLUS a played-
-  // to-level objective — under THE EARNED LAW (cost 0, claimed never
-  // bought), so isUnlockVisible/settleClassUnlocks needed no class-shaped
-  // machinery to learn the web.
+  // Deeds compile to ordinary gates. Chains control visibility/ownership;
+  // class-level requirements are reserved for the mastery ladder below.
   const spec = b.unlock;
   const chain = spec.chain === undefined ? [] : Array.isArray(spec.chain) ? spec.chain : [spec.chain];
   const objectives: GateRow[] = [
-    ...chain.map((parent): GateRow => ({ classLevel: { classId: parent, level: CLASS_WEB_CFG.chainPlayLevel } })),
     ...(spec.objectives ?? []),
   ];
   return {
@@ -1224,8 +1185,7 @@ export function classObjectiveKeys(): string[] {
 
 /** THE CLASS-MILESTONE DERIVATION (the reached_level_15 lesson, per class):
  *  every level the STATIC catalog asks of THIS class — objective
- *  `classLevel` avenues (the web's play thresholds, the chains' played-
- *  parent asks) and the mastery rungs — so the XP sweep stamps exactly
+ *  `classLevel` avenues (currently the mastery rungs) — so the XP sweep stamps exactly
  *  these beside CLASS_LEVEL_MILESTONES. Authoring a class-level gate
  *  anywhere in the catalog registers its stamp BY CONSTRUCTION. */
 const classMilestoneCache = new Map<string, number[]>();

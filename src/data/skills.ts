@@ -3281,7 +3281,7 @@ export const SKILLS: Record<string, SkillDef> = {
       + ' commands it to ATTACK. Unlearning breaks the bond (relearn and it returns downed,'
       + ' owed a revival); release it for good at the Tracker.',
     tags: ['spell', 'minion', 'duration', 'companion'], color: '#a8c87a',
-    manaCost: 30, cooldown: 6, useTime: 0,
+    manaCost: 12, cooldown: 6, useTime: 0,
     targeting: { target: 'enemy', castRange: 320, requiresMonsterTags: ['beast'] },
     concentration: { time: 2.4, onBreak: 'drain', drainRate: 1.25 },
     delivery: { type: 'target' },
@@ -3508,7 +3508,7 @@ export const SKILLS: Record<string, SkillDef> = {
     description: 'Hurl a spectral hammer that orbits you in an ever-widening spiral, striking'
       + ' everything in its path again and again: each hit has a 20% chance to stun.',
     tags: ['spell', 'projectile', 'physical', 'duration'], color: '#e8c878',
-    manaCost: 15, cooldown: 2, useTime: 0.8,
+    manaCost: 8, cooldown: 2, useTime: 0.8,
     baseDamage: { physical: [14, 22] },
     delivery: {
       type: 'projectile', speed: 260, radius: 16, range: 2200,
@@ -4033,7 +4033,7 @@ export const SKILLS: Record<string, SkillDef> = {
       + ' to you, and whatever still swings at your allies lands softer. Instant, and usable'
       + ' from behind a raised guard.',
     tags: ['warcry', 'aoe', 'duration', 'instant'], color: '#e0763a',
-    manaCost: 12, cooldown: 10, useTime: 0,
+    manaCost: 8, cooldown: 10, useTime: 0,
     usableWhileGuarding: true,
     delivery: { type: 'nova', radius: 240, affects: 'enemies' },
     effects: [{ type: 'status', status: 'taunted', chance: 1 }],
@@ -4212,7 +4212,7 @@ export const SKILLS: Record<string, SkillDef> = {
       + ' more poise damage, and the SUNDERED it inflicts lasts 50% longer. Pairs with The'
       + ' Verdict, the execute that spends a broken stance.',
     tags: ['attack', 'melee', 'physical'], color: '#c8a058',
-    manaCost: 9, cooldown: 3, useTime: 0.7,
+    manaCost: 6, cooldown: 3, useTime: 0.7,
     baseDamage: { physical: [14, 24] },
     innateMods: [mod('poiseDamage', 'more', 1.5), mod('sunderDuration', 'increased', 0.5)],
     delivery: { type: 'melee', range: 100, arcDeg: 90 },
@@ -4229,7 +4229,7 @@ export const SKILLS: Record<string, SkillDef> = {
       + ' then pass sentence; longer Sundered duration widens the window. Enemies carry this'
       + ' verdict too.',
     tags: ['attack', 'melee', 'physical'], color: '#e84a3a',
-    manaCost: 14, cooldown: 8, useTime: 0.55,
+    manaCost: 10, cooldown: 8, useTime: 0.55,
     baseDamage: { physical: [20, 34] },
     targeting: { target: 'enemy', requiresStatus: 'sundered', castRange: 110 },
     poiseReap: { mult: 1.5 },
@@ -4480,7 +4480,7 @@ export const SKILLS: Record<string, SkillDef> = {
       + ' seconds, consumed before every other defense, and the WARDED status granting armor'
       + ' while it holds. A heal cast before the hit lands.',
     tags: ['spell', 'buff', 'aoe', 'duration'], color: '#d8e8f8',
-    manaCost: 25, cooldown: 12, useTime: 0.6,
+    manaCost: 16, cooldown: 12, useTime: 0.6,
     delivery: { type: 'nova', radius: 200, affects: 'allies' },
     effects: [
       { type: 'absorb', amount: 45, duration: 8 },
@@ -4594,7 +4594,7 @@ export const SKILLS: Record<string, SkillDef> = {
     description: 'BLESSING: you and every ally around you gain 25% increased damage and 15%'
       + ' increased movement speed for 6 seconds. Minions count as allies and rally with you.',
     tags: ['warcry', 'buff', 'aoe', 'duration'], color: '#e8a040',
-    manaCost: 15, cooldown: 9, useTime: 0.5,
+    manaCost: 10, cooldown: 9, useTime: 0.5,
     delivery: { type: 'nova', radius: 220, affects: 'allies' },
     effects: [{ type: 'status', status: 'rally', chance: 1 }],
     requirements: { strength: 10, fortitude: 12 },
@@ -4981,7 +4981,7 @@ export const SKILLS: Record<string, SkillDef> = {
       + ' again, 2.4 times as hard and a quarter wider. The lesson never changes: leave where'
       + ' you were.',
     tags: ['attack', 'melee', 'aoe', 'physical', 'pulse'], color: '#b89058',
-    manaCost: 15, cooldown: 5, useTime: 0.8,
+    manaCost: 12, cooldown: 5, useTime: 0.8,
     baseDamage: { physical: [12, 19] },
     delivery: {
       type: 'ground', radius: 110, castRange: 40,
@@ -11875,16 +11875,17 @@ export const SKILLS: Record<string, SkillDef> = {
   battle_standard: {
     id: 'battle_standard', name: 'Battle Standard',
     description: 'Plant the colors: a standing banner grants allies fighting beneath it 12%'
-      + ' increased damage and 5% increased movement speed for as long as the cloth flies, up'
+      + ' increased damage, 5% increased movement speed, and 8 retaliation damage against each'
+      + ' attacker that hits them. These benefits last as long as the cloth flies, up'
       + ' to 16 seconds. Enemies can cut it down early. The line holds where the banner does.',
     tags: ['spell', 'totem', 'aura', 'duration', 'warcry'], color: '#e0b060',
-    manaCost: 20, cooldown: 10, useTime: 0.6,
+    manaCost: 12, cooldown: 10, useTime: 0.6,
     delivery: {
       type: 'construct', kind: 'pylon', aims: false,
       range: 0, duration: 16, maxActive: 1, life: 70, placeRange: 240,
       aura: {
         radius: 180,
-        allyMods: [mod('damage', 'increased', 0.12), mod('moveSpeed', 'increased', 0.05)],
+        allyMods: [mod('damage', 'increased', 0.12), mod('moveSpeed', 'increased', 0.05), mod('thorns', 'flat', 8)],
       },
     },
     effects: [],
@@ -11904,7 +11905,7 @@ export const SKILLS: Record<string, SkillDef> = {
       + ' exposed, its health readable by the whole warband. The call is loud by design,'
       + ' generating 50% more threat.',
     tags: ['warcry', 'targeted', 'duration'], color: '#e8c04a',
-    manaCost: 10, cooldown: 8, useTime: 0.3,
+    manaCost: 6, cooldown: 8, useTime: 0.3,
     targeting: { target: 'enemy', castRange: 480 },
     innateMods: [mod('threatGen', 'more', 0.5)],
     delivery: { type: 'target' },

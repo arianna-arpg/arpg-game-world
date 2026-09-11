@@ -1,3 +1,4 @@
+import { deedKey } from '../src/engine/deeds';
 // ---------------------------------------------------------------------------
 // ONE-OFF PROBE — THE MASTERY LADDER + THE OPENING + THE RUNESCRIPT
 // (data/classTiers.ts · data/classes.ts ClassDef.kit · meta/classkit.ts ·
@@ -162,8 +163,8 @@ const tierOf = (id: string) => CLASS_TIER_BY_ID[id];
   // THE CLASS-MILESTONE DERIVATION: the rungs' levels register their stamps.
   check('derivation: every kitted class\'s catalog milestones include each rung level',
     kitted.every(c => CLASS_TIERS.every(t => catalogClassLevelMilestones(c.id).includes(t.level))));
-  check('derivation: a chained parent\'s played-to level registers on the PARENT',
-    catalogClassLevelMilestones('necromancer').includes(CLASS_WEB_CFG.chainPlayLevel));
+  check('derivation: Necromancer retains its Novice mastery milestone',
+    catalogClassLevelMilestones('necromancer').includes(CLASS_TIERS[0].level));
 }
 
 // --- D) THE VAULT walk: rungs surface only when investable; classes never pour ----
@@ -327,11 +328,11 @@ const priv = (w: World): WorldPriv => w as unknown as WorldPriv;
     acc.unlockedClasses.has('necromancer') && acc.unlockedSkills.has('raise_dead'));
   check('live: the claim speaks on the notice feed', w.notices.some(n => n.text.includes('Necromancer')));
   check('live: the sweep booked the account save', w.accountDirty);
-  // The merged view: a play milestone stamped THIS run (run ledger only) claims through the view.
-  w.ledger[classLevelLedgerKey('necromancer', 10)] = 1;
+  // The merged view: a deed supplied in THIS run (run ledger only) claims through the view.
+  w.ledger[deedKey('companion_kills')] = 30;
   w.update(CLASS_WEB_CFG.sweepSec + 0.5);
-  check('live: a run-ledger milestone claims the chained Summoner through the merged view (account ledger untouched)',
-    acc.unlockedClasses.has('summoner') && acc.ledger[classLevelLedgerKey('necromancer', 10)] === undefined);
+  check('live: a run-ledger deed claims the chained Summoner through the merged view (account ledger untouched)',
+    acc.unlockedClasses.has('summoner') && acc.ledger[deedKey('companion_kills')] === undefined);
   check('live: the shrouded card\'s progress read agrees with the view', classUnlockProgress(acc, classUnlockFor('summoner')!, w.ledgerView()).met);
 }
 {

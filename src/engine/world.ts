@@ -8,6 +8,8 @@
 // modifiers flow into every stat query for that use.
 // ---------------------------------------------------------------------------
 
+import { DeedTracker, type DeedEvent } from './deeds';
+import { COMBAT_DEEDS, DEED_CFG } from '../data/classdeeds';
 import { selectContainerLoot } from '../data/containerloot';
 import { rollMemoryEssenceTier } from '../data/essences';
 import type { LootResult } from './loot';
@@ -4101,6 +4103,7 @@ export class World {
       this.localSeat.meta.name = opts.name.trim();
       this.localSeat.actor.name = this.localSeat.meta.name;
     }
+    this.bindCombatDeeds();
     this.seats = [this.localSeat];
     this.indexSeats();
     this.actors.push(this.localSeat.actor);
@@ -4933,6 +4936,44 @@ export class World {
    *  reads the account live) and the notice feed says so. Meta-gated: a
    *  sealed stage claims nothing. Cheap by construction (a few dozen rows,
    *  every couple of seconds). */
+  private readonly combatDeeds = new DeedTracker(COMBAT_DEEDS);
+  private deedActor: Actor | null = null;
+  private bindCombatDeeds(): void {
+    if (this.deedActor === this.player) return;
+    if (this.deedActor) this.deedActor.onLifeHealed = undefined;
+    this.combatDeeds.reset();
+    const hero = this.deedActor = this.player;
+    // Observe immediately, before another hit can change the wound budget.
+    hero.onLifeHealed = (amount, silent) => {
+      if (hero !== this.player || !this.metaProgressionActive()) return;
+      const mended = this.combatDeeds.heal(amount);
+      if (!silent && mended > 0) this.recordDeed({ kind: 'heal', value: mended });
+      if (this.combatDeeds.recovered(hero.life, hero.maxLife(), DEED_CFG.crisisRecover)) this.recordDeed({ kind: 'crisis' });
+    };
+  }
+  private recordDeed(event: DeedEvent): void {
+    if (this.metaProgressionActive() && this.combatDeeds.record(this.account.ledger, event)) this.accountDirty = true;
+  }
+  private deedEnemy(a: Actor): boolean {
+    return a.team === 'enemy' && !a.passive && !a.noBounty && !a.invulnerable;
+  }
+  private deedOwned(a: Actor): boolean {
+    if (a === this.player) return true;
+    const seen = new Set<Actor>();
+    while (!seen.has(a)) {
+      if (a === this.player) return true;
+      seen.add(a);
+      if (!a.owner) return false;
+      a = a.owner;
+    }
+    return false;
+  }
+  private updateDeedRecovery(): void {
+    this.bindCombatDeeds();
+    const p = this.player;
+    if (!this.metaProgressionActive() || p.dead || p.downed) { this.combatDeeds.reset(); return; }
+    if (this.combatDeeds.recovered(p.life, p.maxLife(), DEED_CFG.crisisRecover)) this.recordDeed({ kind: 'crisis' });
+  }
   private classClaimNextAt = 0;
   private sweepClassClaims(): void {
     if (this.time < this.classClaimNextAt) return;
@@ -5259,6 +5300,7 @@ export class World {
    * visit (constructs, drops, and corpses stay behind).
    */
   loadZone(zoneId: string, from?: string): void {
+    this.combatDeeds.reset();
     // THE POSSESSION SEAM: transit unwinds every embodiment FIRST — a
     // borrowed body belongs to its zone (it stays, staggered, with its
     // pack), a form disperses and re-presses cheap on the far side, and
@@ -30318,7 +30360,11 @@ export class World {
     v.hitFlash = 0.15;
     v.hitFlashType = domType;
     if (taken > 0.5) this.text(v.pos, Math.round(taken).toString(), DAMAGE_COLOR[domType], 11);
-    if (v.life <= 0 && !v.dead) this.kill(v, false, credit);
+    if (v.life <= 0 && !v.dead) {
+      // Pooled companions carry their keeper as kill credit, not an Actor body.
+      if (credit === this.player && this.deedEnemy(v)) this.recordDeed({ kind: 'kill', flags: ['companion'] });
+      this.kill(v, false, credit);
+    }
   }
 
   /** THE CARVE (damage in): the strike-surface seam and the projectile
@@ -32607,6 +32653,11 @@ export class World {
     // Tags granted by socketed supports count here too: a Dive-Bombed
     // dash IS an aoe skill for every stat query this use makes.
     const tags = skillContextTags(inst, grantedTags(inst));
+    if (caster === this.player && !opts.noRepeat && !opts.noCooldown && !opts.fromFuse
+      && (tags.has('spell') || tags.has('warcry')) && this.metaProgressionActive()
+      && this.actors.some(a => !a.dead && this.deedEnemy(a) && sameStory(a, caster) && dist(a.pos, caster.pos) <= DEED_CFG.combatRadius)) {
+      this.recordDeed({ kind: 'cast', tags: [...tags], keys: [def.id] });
+    }
     let useMult = opts.dmgMult ?? 1;
     // THE GAUGE's POWER (engine/gauge.ts): the press stamped what this use
     // is worth — damage already rode in through dmgMult; counts (shots,
@@ -38837,6 +38888,10 @@ export class World {
     const arc = (spec.arcDeg * Math.PI / 180) * Math.sqrt(guardian.sheet.get('aoeRadius', tags, extra));
     if (Math.abs(angleDiff(guardian.facing, angleTo(guardian.pos, threatPos))) > arc / 2) return false;
 
+    if (guardian === this.player && this.deedEnemy(attacker) && rawDamage > 0) {
+      this.recordDeed({ kind: 'block', value: rawDamage });
+    }
+
     // PARRY: a block inside the opening window costs nothing and ripostes.
     // The window comes from the skill's own spec OR from the guardParry
     // stat (the Perfect Timing support grafts it onto any guard skill).
@@ -38860,7 +38915,7 @@ export class World {
         pos: vec(attacker.pos.x, attacker.pos.y), radius: attacker.radius + 10,
         color: '#ffd700', life: 0.25, maxLife: 0.25,
       });
-      if (attacker.life <= 0 && !attacker.dead) this.kill(attacker);
+      if (attacker.life <= 0 && !attacker.dead) this.kill(attacker, false, guardian);
       // A parry IS a block — the finest one; block taps, procs and
       // trigger gems all answer it.
       this.tapCharges(guardian, 'block');
@@ -40531,8 +40586,30 @@ export class World {
     let wasCrit = false;
 
     if (hasDamage) {
+      if (target === this.player) this.bindCombatDeeds();
+      const deedLifeBefore = target.life;
+      const deedHidden = caster === this.player && (caster.sheet.get('invisible') > 0 || caster.sheet.get('detectability') < 1);
+      const deedPanicked = caster === this.player && target.isPanicked();
       const result = applyHit(caster, target, packet);
       wasCrit = result.crit;
+      if (this.metaProgressionActive()) {
+        if (target === this.player && this.deedEnemy(caster)) {
+          if (result.evaded) this.recordDeed({ kind: 'evade' });
+          if (result.blocked && (result.blockedAmount ?? 0) > 0) this.recordDeed({ kind: 'block', value: result.blockedAmount });
+          const lost = this.combatDeeds.hurt(deedLifeBefore, target.life, target.maxLife(), DEED_CFG.crisisEnter);
+          if (lost > 0) this.recordDeed({ kind: 'hurt', value: lost });
+        }
+        if (deedLifeBefore > 0 && this.deedEnemy(target) && this.deedOwned(caster)) {
+          // A living target can recover its poise; a killing break ends the attempt.
+          if (result.poiseBroke && target.life > 0) this.recordDeed({ kind: 'poise', subject: target });
+          if (caster === this.player && result.total > 0 && !result.blocked && !result.immune && !result.evaded) {
+            const elements = ['fire', 'cold', 'lightning'].filter(t => (result.receivedAmounts ?? packet.amounts)[t as DamageType]! > 0);
+            this.recordDeed({ kind: 'hit', tags: [...packet.tags], distance: dist(caster.pos, target.pos), keys: elements,
+              flags: [...elements, ...(wasCrit ? ['crit'] : []), ...(target.life <= 0 ? ['lethal'] : []),
+                ...(deedHidden ? ['hidden'] : []), ...(deedPanicked ? ['panicked'] : [])] });
+          }
+        }
+      }
       if (result.evaded) {
         this.cry(target.pos, 'evade', '#9ab0c8', 12, 'blur', target.radius, target.facing); // the body's trailing ghosts
         // The evader's rewards: the deterministic lifeOnEvade floor plus
@@ -40566,7 +40643,7 @@ export class World {
         this.rollTriggers(target, 'block', { aim: vec(caster.pos.x, caster.pos.y) });
         // A seeping block leaks its excess through (result.total) — the guard
         // law's chip can finish a wounded blocker.
-        if (target.life <= 0 && !target.dead) this.kill(target);
+        if (target.life <= 0 && !target.dead) this.kill(target, false, caster);
         return; // a passively blocked hit applies nothing either
       }
       if (result.immune) {
@@ -43380,6 +43457,10 @@ export class World {
     // A DOWNED co-op seat is already out of the fight — stray AoE/DoT must not
     // re-enter the death path (which would fire onPlayerDown twice).
     if (actor.downed) return;
+    if (actor === this.player) this.combatDeeds.reset();
+    if (!silent && this.deedEnemy(actor) && killer && killer !== this.player && this.deedOwned(killer)) {
+      this.recordDeed({ kind: 'kill', flags: ['companion'] });
+    }
     // THE ANSWERING WALL BREAKS (guardBash beyond the stance, 2026-07-22):
     // a construct minted by a bash-carrying working answers when it DIES —
     // and a broken wall answers HARDEST: violent deaths pay the whole
@@ -45617,6 +45698,7 @@ export class World {
     // THE OMENS: the world murmurs about what waits unfound (world/omens.ts).
     this.updateOmens();
     // THE OBJECTIVE WEB: a class earned mid-run lands mid-run.
+    this.updateDeedRecovery();
     this.sweepClassClaims();
     this.drainMyceliaLedger();
     this.updateContagionInfection();

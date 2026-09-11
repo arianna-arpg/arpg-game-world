@@ -54,10 +54,6 @@ export const CLASS_WEB_CFG = {
    *  objectives — and only the objectives — read plain, with progress. The
    *  name stays runes until the class is claimed. */
   revealFrac: 0.25,
-  /** THE CHAIN: a class that hangs off a PARENT class (owning the parent is
-   *  its structural door) asks the parent be PLAYED to this level — a
-   *  chain that asked only ownership would cascade for free. */
-  chainPlayLevel: 10,
   /** THE SWEEP: how often (world seconds) a live run re-reads the objective
    *  web against the merged ledger view, so a class claimed mid-run lands
    *  the moment its deed completes (its gems drop from the next kill). */

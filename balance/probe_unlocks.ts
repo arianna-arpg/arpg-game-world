@@ -1,3 +1,5 @@
+import { COMBAT_DEEDS, CLASS_DEEDS } from '../src/data/classdeeds';
+import { deedKey } from '../src/engine/deeds';
 // ---------------------------------------------------------------------------
 // ONE-OFF PROBE — THE OBJECTIVE WEB + THE MOOT LAW (meta/unlocks.ts):
 // a class is never BOUGHT — every non-starter hangs SHROUDED (written in the
@@ -49,6 +51,7 @@ const check = (name: string, ok: boolean, detail = ''): void => {
 // list is the probe's map of who stamps what; an unknown key = a card that
 // can never resolve). The boss family is a PREFIX (one counter per faction).
 const WORLD_FACTS = new Set<string>([
+  ...COMBAT_DEEDS.map(d => deedKey(d.id)),
   LEDGER_SEIZED,        // world.ts grabSeize (victim = local hero)
   LEDGER_TRAP_SPRUNG,   // world.ts springTrapwork (presser = local hero)
   'crowned_killed',     // engine/killHandlers.ts (Crowned rare put down)
@@ -92,7 +95,7 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
       }
       return isWorldFact(k);
     }), classObjectiveKeys().filter(k => !MILESTONE_RE.test(k) && !isWorldFact(k)).join(', '));
-  check('weave: the compile carries the spec onto the catalog entry (objectives → reqAnyOf, chain → the door + a played-parent ask)',
+  check('weave: the compile carries the spec onto the catalog entry (objectives → reqAnyOf, chain → the door; no class-level discovery objectives)',
     CLASS_BUNDLES.every(b => {
       const u = classUnlockFor(b.classId);
       if (!u || u.kind !== 'class') return false;
@@ -101,11 +104,8 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
         : Array.isArray(u.requiresUnlock) ? u.requiresUnlock : [u.requiresUnlock];
       const doorOk = chain.length === gotDoor.length && chain.every(id => gotDoor.includes(classBundleId(id)));
       const rows = u.reqAnyOf ?? [];
-      const chainRows = rows.slice(0, chain.length);
-      const chainOk = chainRows.every((r, i) => r.classLevel?.classId === chain[i] && r.classLevel?.level === CLASS_WEB_CFG.chainPlayLevel);
-      const rest = rows.slice(chain.length);
-      const restOk = JSON.stringify(rest) === JSON.stringify(b.unlock.objectives ?? []);
-      return doorOk && chainOk && restOk && u.payload.hint === b.unlock.hint;
+      const rowsOk = JSON.stringify(rows) === JSON.stringify(b.unlock.objectives ?? []);
+      return doorOk && rowsOk && rows.every(r => !r.classLevel) && u.payload.hint === b.unlock.hint;
     }));
   check('weave: the Necromancer asks her two deeds — twenty own corpses OR five undead bosses',
     JSON.stringify((classUnlockFor('necromancer')!.reqAnyOf ?? []).map(r => [r.ledger, r.n]))
@@ -187,15 +187,16 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
     read.revealed && read.rows.length === 2 && !read.met && read.rows[0].frac === quarter / 20 && read.rows[1].frac === 0);
   check('reveal: the spoken lines are hers', read.rows.map(r => r.label).join(' | ')
     === 'reclaim twenty of your own corpses | slay five bosses of the undead');
-  // Play thresholds read at milestone grain: the Magician at 5 is halfway to the Sorcerer's ten.
-  a.ledger[classLevelLedgerKey('magician', 5)] = 1;
-  check('reveal: a play threshold reads its highest stamped milestone over the ask',
-    classUnlockProgress(a, classUnlockFor('sorcerer')!).rows[0].frac === 0.5 && classUnlockProgress(a, classUnlockFor('sorcerer')!).revealed);
-
-  // THE CLAIM: Magician L10 → its INT kin are CLAIMED by the settle, gems and all.
+  // Levels stay mastery-only; discovery reads attributable deeds instead.
   a.ledger[classLevelLedgerKey('magician', 10)] = 1;
+  check('discovery: level milestones alone claim no new classes', settleClassUnlocks(a).length === 0);
+  a.ledger[deedKey('elements_landed')] = 1;
+  check('reveal: one of three elements reveals the Sorcerer objective',
+    classUnlockProgress(a, classUnlockFor('sorcerer')!).rows[0].frac === 1 / 3 && classUnlockProgress(a, classUnlockFor('sorcerer')!).revealed);
+  a.ledger[deedKey('elements_landed')] = 3;
+  a.ledger[deedKey('fire_hits')] = 80;
   const got = settleClassUnlocks(a).map(u => (u.kind === 'class' ? u.payload.classId : '')).sort();
-  check('claim: Magician L10 yields exactly its INT kin (Pyromancer, Sorcerer)', got.join(',') === 'pyromancer,sorcerer', got.join(','));
+  check('claim: elemental practice yields Sorcerer and Pyromancer', got.join(',') === 'pyromancer,sorcerer', got.join(','));
   check('claim: the claimed class is owned, its gems in the pool, its card off the wall',
     a.unlockedClasses.has('sorcerer') && a.unlockedSkills.has('infernal_ray') && a.unlockedSupports.has('spark_discipline')
     && !shroudedIds().includes('sorcerer'));
@@ -207,15 +208,15 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
   check('moot law: tier 5 surfaces the moment the pool can fill it', visibleSlotIds().join(',') === 'slot_tier_5');
 
   // THE CHAIN: the Necromancer's deed claims it; the Summoner's card APPEARS
-  // (the door) but claims only once the parent is PLAYED.
+  // (the door) but claims only once the companion deed is met.
   a.ledger[LEDGER_CORPSES_RECLAIMED] = 20;
   check('claim: twenty corpses yield the Necromancer', settleClassUnlocks(a).some(u => u.id === necro.id) && a.unlockedClasses.has('necromancer'));
   check('chain: the Summoner hangs shrouded now (the door opened), unclaimed',
     shroudedIds().includes('summoner') && !a.unlockedClasses.has('summoner'));
-  check('chain: its one objective is the parent played to the chain level',
-    classUnlockProgress(a, classUnlockFor('summoner')!).rows.map(r => r.label).join() === `reach level ${CLASS_WEB_CFG.chainPlayLevel} as the Necromancer`);
-  a.ledger[classLevelLedgerKey('necromancer', CLASS_WEB_CFG.chainPlayLevel)] = 1;
-  check('chain: the parent played claims the Summoner', settleClassUnlocks(a).some(u => u.id === classUnlockFor('summoner')!.id));
+  check('chain: its objective is companion kills, never a parent level',
+    classUnlockProgress(a, classUnlockFor('summoner')!).rows[0].label === CLASS_DEEDS.summoner.objectives[0].label);
+  a.ledger[deedKey('companion_kills')] = 30;
+  check('chain: thirty companion kills claim the Summoner', settleClassUnlocks(a).some(u => u.id === classUnlockFor('summoner')!.id));
 
   // The hard lesson and the counted deed, claimed the same way.
   a.ledger[LEDGER_SEIZED] = 1;
@@ -226,10 +227,10 @@ const chainOf = (b: (typeof CLASS_BUNDLES)[number]): string[] =>
   check('counted: the eighth death claims the Flagellant', settleClassUnlocks(a).some(u => u.id === classUnlockFor('flagellant')!.id));
 
   // THE MERGED VIEW: a run-ledger deed claims through the view, the account ledger untouched.
-  const view = { ...a.ledger, [classLevelLedgerKey('rogue', 10)]: 1 };
+  const view = { ...a.ledger, [deedKey('distant_projectile_hits')]: 60, [deedKey('evades')]: 25 };
   const viaView = settleClassUnlocks(a, view).map(u => (u.kind === 'class' ? u.payload.classId : '')).sort();
-  check('view: a merged ledger claims the Rogue\'s L10 kin without writing the account ledger',
-    viaView.join(',') === 'ranger,swashbuckler' && a.ledger[classLevelLedgerKey('rogue', 10)] === undefined, viaView.join(','));
+  check('view: a merged ledger claims deeds without rewriting the account ledger',
+    viaView.join(',') === 'ranger,swashbuckler' && a.ledger[deedKey('evades')] === undefined, viaView.join(','));
 
   // No visible entry may ever carry an unmet reqClasses (the law, swept wide).
   check('moot law: nothing visible wants a deeper pool than the account holds',

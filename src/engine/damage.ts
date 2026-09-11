@@ -342,6 +342,8 @@ export interface HitResult {
   /** Met by the passive blockChance stat — the guard ate the wound up to
    *  its VALUE; `total` carries whatever seeped past (0 = blocked cold). */
   blocked: boolean;
+  /** Actual mitigated wound stopped by the passive guard, excluding seep. */
+  blockedAmount?: number;
   total: number;
   crit: boolean;
   /** THE PLY FABRIC ate this hit whole — one ply tore, no life moved
@@ -768,7 +770,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
       if (plyEats(attacker, target, leaked, packet)) {
         target.hitFlash = 0.12;
         target.hitFlashType = dominantTypeOf(packet.amounts);
-        return { evaded: false, immune: false, blocked: true, total: 0,
+        return { evaded: false, immune: false, blocked: true, blockedAmount: stopped, total: 0,
           crit: false, poiseBroke: out.poiseBroke, plyEaten: true };
       }
       landLifeDamage(target, leaked);
@@ -778,10 +780,10 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
         stampSegFlash(target, segHit);
         if (feedWound(target, segHit, leaked)) (target.segTears ??= []).push(segHit);
       }
-      return { evaded: false, immune: false, blocked: true, total: leaked,
+      return { evaded: false, immune: false, blocked: true, blockedAmount: stopped, total: leaked,
         crit: false, poiseBroke: out.poiseBroke, clamped: out.clamped };
     }
-    return { evaded: false, immune: false, blocked: true, total: 0, crit: false };
+    return { evaded: false, immune: false, blocked: true, blockedAmount: stopped, total: 0, crit: false };
   }
 
   // CRIT AVOIDANCE (victim-side): a made roll downgrades the crit to a

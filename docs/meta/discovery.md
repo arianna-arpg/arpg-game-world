@@ -49,19 +49,18 @@ the drop pool reads the account live), at the Vault's render, at the class
 deal, and at the run's end. No coin ever changes hands for a class.
 
 The spec compiles onto the catalog's generic gates (`objectives` → `reqAnyOf`,
-`chain` → `requiresUnlock` + a played-parent objective) under **THE EARNED
+`chain` → `requiresUnlock`) under **THE EARNED
 LAW** (`UnlockBase.earned`: cost 0, the pour refuses it, `availableUnlocks`
 omits it), so `isUnlockVisible` / `settleClassUnlocks` learned the web for
 free.
 
-Three composable levers:
+Composable discovery levers (class-level gates now belong only to mastery):
 
 | lever | meaning | example |
 |---|---|---|
-| `objectives` (play threshold) | `{ classLevel: { classId, level } }` — reach level *m* playing class *c*; stamped by `grantSeatXp` for whatever class is being played (`CLASS_LEVEL_MILESTONES` ∪ THE CLASS-MILESTONE DERIVATION — authoring the gate registers its stamp) | Magician L10 → Sorcerer, Pyromancer |
 | `objectives` (counted deed) | `{ ledger, n, label }` — any world fact, at a count; progress reads held/n | twenty own corpses reclaimed OR five undead bosses → Necromancer; eight deaths → Flagellant |
 | `objectives` (hard lesson) | `{ ledger, label }` at n = 1 — learned by having it done to you | `seized_by_grip` → Brawler; `trap_sprung` → Trapper; `crowned_killed` → Tamer; `warlords_killed` → Warlord; `unmade_slain` → Chronomancer |
-| `chain` | parent class(es): OWNING the parent is the card's structural door (the card hides entirely until then — the wall grows as the account grows), PLAYING it to `CLASS_WEB_CFG.chainPlayLevel` is the objective (a chain that asked only ownership would cascade for free) | Necromancer → Summoner |
+| `chain` | parent ownership opens the branch; the authored gameplay deed earns the class | Necromancer owned + 30 companion kills → Summoner |
 | `hint` | the plain compass line | — |
 
 ### THE REVEAL
@@ -89,26 +88,19 @@ are simply unwritten on any item; a new vestige teaching one is one `letter`
 on its row. The Vault renders the script through the `.runescript` class
 (ether ink, a font stack carrying the Unicode Runic block).
 
-### The authored web (v2)
+### The authored web (v3)
 
-- **Blood line (Warrior):** L10 → Breaker, Vanguard · L15 → Berserker,
-  Guardian · Berserker chain → Blademaster · Guardian chain → Juggernaut ·
-  Guardian *played* L10 → Sentinel · **seized by a grip → Brawler**
-- **Shadow line (Rogue):** L10 → Ranger, Swashbuckler · L15 → Assassin,
-  Beguiler · Ranger chain → Lancer · **sprang a trap → Trapper** ·
-  **warlord slain → Warlord** · Warlord chain → Skald
-- **Mind line (Magician):** L10 → Sorcerer, Pyromancer · L15 → Cleric (the
-  Will door) · **twenty own corpses reclaimed OR five undead bosses slain →
-  Necromancer** (her objectives — the corpse run's own class) · Necromancer
-  chain → Summoner (the arcanist: one bonded familiar) · Cleric chain → Ascetic · **Crowned slain → Tamer** ·
-  **the Unmade slain → Chronomancer**
-- **Beyond the parity twelve:** **a brood-queen slain → Hivecaller**; the
-  parity eight: Breaker chain → Wallwright · Brawler chain → Matador ·
-  **eight account deaths → Flagellant** · Tamer played L10 → Falconer ·
-  Swashbuckler chain → Sharper · Beguiler chain → Firebrand · Magician
-  played L20 → Runeweaver · **a fallen star broken → Resonator**
+All 33 non-starters are earned through gameplay. Nine existing world deeds
+remain; 24 former level/played-parent recipes now read combat facts.
+`data/classdeeds.ts` holds these recipes and their explicit hints.
+[Class deeds](class-deeds.md) documents the full table, tracking boundaries,
+starter resource pass, and extension contract. Class levels 10/30/60/100
+still unlock individual class mastery and skill swaps.
 
-A chain asks the parent be played to `chainPlayLevel` = 10.
+Parent ownership reveals deeper branches. Every branch also requires a deed;
+progress earned before its parent was discovered counts. Previously owned
+classes stay owned, even when their new deed is unfinished. No historic
+combat counts are invented from old level milestones.
 
 ### The deeds' stamps (meta/account.ts)
 
@@ -128,7 +120,7 @@ handlers' counters, the per-class milestones. THE MERGED VIEW
 (`World.ledgerView`) lets the live sweep read them mid-run; a counted key
 must live in exactly one ledger or it would double there.
 
-Adding a deed = one exported key + one stamp at the moment it happens + one
+Adding a world deed = one exported key + one stamp at the moment it happens + one
 objective row naming it. The probe's `WORLD_FACTS` map must also learn the
 key (it documents who stamps what — an unknown key is a card that can never
 resolve).

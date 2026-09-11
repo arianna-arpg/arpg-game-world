@@ -1994,6 +1994,10 @@ export class Actor {
     return Math.max(DEFENSE_CFG.weight.min, w);
   }
 
+  /** Optional runtime observer of actual landed healing, including silent
+   * regeneration. Used for ordered wound attribution; never serialized. */
+  onLifeHealed?: (amount: number, silent: boolean) => void;
+
   /** THE one gate every life heal flows through: scaled by the healTaken
    *  stat (seared wounds halve it — a status is all it takes) and capped
    *  at the life CEILING (overdrive debt borrows the top of the pool).
@@ -2011,6 +2015,7 @@ export class Actor {
     const landed = this.life - before;
     if (landed > 0) {
       SIM_TAP.current?.onHeal?.(this, landed);
+      this.onLifeHealed?.(landed, silent);
       // THE RECENCY LEDGER + the 'heal' trigger's event — for REAL heals
       // only: passive regeneration pours silently (a body that never
       // stops regenerating is not 'recently healed', and the heal trigger

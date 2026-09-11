@@ -28,6 +28,11 @@ Chest and gem-cache lists live in `src/data/containerloot.ts` and the existing
 `loottables.ts`; `docs/design/container-loot.md` documents the context rules,
 Memory Essence economy, visual grammar and regression probe.
 
+Class discovery combat recipes live in `src/data/classdeeds.ts`, with reusable
+ledger aggregation in `src/engine/deeds.ts`. `docs/meta/class-deeds.md` covers
+account attribution, encounter streaks, hints, and the starting-kit cost pass.
+Class levels remain the mastery/skill-swap ladder.
+
 ## Commands
 - `npm install` — first-time setup (also run automatically by the .bat launchers).
 - `npm run dev` — Vite dev server at http://localhost:5173 (browser dev mode, `Play Game.bat`).
