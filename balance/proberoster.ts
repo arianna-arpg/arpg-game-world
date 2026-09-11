@@ -62,6 +62,7 @@ export type ProbeRow =
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_itemreadability.ts', status: 'green', tier: 'fast', why: 'Earned first passive point and attention; compact equipment silhouettes, gemstone shapes and co-op ground-drop rendering parity' },
+  { probe: 'probe_frontierstartertrees.ts', status: 'green', tier: 'fast', why: 'Hivecaller, Ranger and Guardian opening trees; source grafts, pooled command participation, minion blessings, absorb power and all terminal routes' },
   { probe: 'probe_startertrees.ts', status: 'green', tier: 'fast', why: 'Nine opening skill trees, buff mutation recipients and consumption, source-specific respec cleanup, real casts and save round trips' },
   { probe: 'probe_necromancersacraments.ts', status: 'green', tier: 'fast', why: 'Necromancer blood and pyre trees, paid-resource wards, and saved edge-triggered horde toggles' },
   { probe: 'probe_necromancerrites.ts', status: 'green', tier: 'fast', why: 'Plague and scythe binary trees, real return/propagation/curse fields/waves, derived support identity, save repair and respec cleanup' },

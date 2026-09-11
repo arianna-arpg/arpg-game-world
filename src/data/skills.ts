@@ -1,3 +1,4 @@
+import { FRONTIER_STARTER_TREES } from './frontierStarterTrees';
 import { STARTER_SKILL_TREES } from './starterSkillTrees';
 import { NECROMANCER_SACRAMENTS } from './necromancerSacraments';
 import { NECROMANCER_RITES } from './necromancerRites';
@@ -3501,6 +3502,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // ======================= Trajectory showcases ============================
 
   hammer_of_judgment: {
+    tree: FRONTIER_STARTER_TREES.hammer_of_judgment,
     id: 'hammer_of_judgment', name: 'Hammer of Judgment',
     description: 'Hurl a spectral hammer that orbits you in an ever-widening spiral, striking'
       + ' everything in its path again and again: each hit has a 20% chance to stun.',
@@ -3827,6 +3829,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // ======================= Ranger / projectile attacks =====================
 
   piercing_arrow: {
+    tree: FRONTIER_STARTER_TREES.piercing_arrow,
     id: 'piercing_arrow', name: 'Piercing Arrow',
     description: 'Loose an arrow that punches straight through the pack, piercing up to 3'
       + ' enemies along its flight.',
@@ -3840,6 +3843,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   fan_of_blades: {
+    tree: FRONTIER_STARTER_TREES.fan_of_blades,
     id: 'fan_of_blades', name: 'Fan of Blades',
     description: 'Fling a fan of 5 knives in a wide arc in front of you; each blade strikes the'
       + ' first enemy in its path.',
@@ -3868,6 +3872,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   quickstep: {
+    tree: FRONTIER_STARTER_TREES.quickstep,
     id: 'quickstep', name: 'Quickstep',
     description: 'Quick feet for 4 seconds: 30% increased movement speed and evasion, and 15%'
       + ' increased attack and cast speed.',
@@ -4468,6 +4473,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   aegis_ward: {
+    tree: FRONTIER_STARTER_TREES.aegis_ward,
     id: 'aegis_ward', name: 'Aegis Ward',
     description: 'Bless yourself and nearby allies: each gains a 45-point absorb shield for 8'
       + ' seconds, consumed before every other defense, and the WARDED status granting armor'
@@ -4582,6 +4588,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   rallying_howl: {
+    tree: FRONTIER_STARTER_TREES.rallying_howl,
     id: 'rallying_howl', name: 'Rallying Howl',
     description: 'BLESSING: you and every ally around you gain 25% increased damage and 15%'
       + ' increased movement speed for 6 seconds. Minions count as allies and rally with you.',
@@ -5732,6 +5739,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   raise_gnatveil: {
+    tree: FRONTIER_STARTER_TREES.raise_gnatveil,
     id: 'raise_gnatveil', name: 'Raise the Gnatveil',
     description: 'Gnats condense out of the air every 6–10 seconds, sometimes at your heels,'
       + ' sometimes a walk away, and evaporate if left unclaimed; gather up to 24. Each is'
@@ -5788,6 +5796,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   summon_swarmlings: {
+    tree: FRONTIER_STARTER_TREES.summon_swarmlings,
     id: 'summon_swarmlings', name: 'Hivecall',
     description: 'TOGGLE a hive contract: mana stays reserved while up to 5 swarmlings scurry'
       + ' for you, and each reknits itself 4 seconds after it falls. SHIFT-press the slot to'
@@ -6026,6 +6035,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // The COMMAND (also the summons' meta payload): the horde goes where you
   // point — the inverse Bombardment (#39). Equippable on its own, too.
   command_assault: {
+    tree: FRONTIER_STARTER_TREES.command_assault,
     id: 'command_assault', name: 'Command: Assault',
     description: 'Order every minion to assault: for 6 seconds they drop their own fights and'
       + ' converge on your mark, and aiming at a single foe pins the whole court on that one.',

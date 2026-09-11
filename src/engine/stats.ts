@@ -834,6 +834,8 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  bursts) — the healer's damage stat. Tag-filtered like damage, so
    *  "increased healing with channelled skills" is a modifier away. */
   healPower:      { label: 'Healing Power', base: 1, min: 0 },
+  /** Scales explicit absorb effects at their granting skill, not resource-payment rewards. */
+  absorbPower:    { label: 'Absorb Power', base: 1, min: 0 },
   /** Fraction of OVERHEAL (healing past full) hardened into an absorption
    *  shield on the target — the support player's answer to topped bars. */
   overheal:       { label: 'Overheal to Ward', base: 0, min: 0 },

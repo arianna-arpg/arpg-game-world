@@ -120,7 +120,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       // On-block / on-evade
       'lifeOnBlock', 'lifeOnEvade',
       // Wound recovery & healing economy
-      'recuperate', 'recuperateTime', 'healPower', 'healTaken', 'overheal',
+      'recuperate', 'recuperateTime', 'healPower', 'absorbPower', 'healTaken', 'overheal',
       'restorePower', 'restorePctMax', 'vampiricShare', 'bondShare', 'guardMend',
       // Resource plumbing
       'esToMana', 'conduitRate', 'conduitEfficiency', 'costToLife', 'costToMana',
@@ -537,6 +537,7 @@ const STAT_BLURBS: Record<string, string> = {
   lifeOnEvade: 'Flat life gained when you evade an attack.',
   recuperate: 'A fraction of every wound that lands on life flows back as healing over a few seconds, if you survive it.',
   recuperateTime: 'How long a recuperating wound takes to half-close.',
+  absorbPower: 'Multiplies the shields granted by explicit skill absorb effects. Payment wards and overheal rewards use their own formulas.',
   healPower: 'Multiplies the healing you GIVE: the healer\'s damage stat.',
   healTaken: 'Multiplies the life healing you RECEIVE, from any source.',
   overheal: 'A fraction of healing past full hardens into a ward on the target.',

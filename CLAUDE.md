@@ -20,6 +20,9 @@ shared temporary buff mutations (`SkillTreeNode.buffs` / `instanceEffects`),
 three-class scope and next batches are documented in
 `docs/design/class-starting-skill-trees.md`; `balance/probe_startertrees.ts`
 covers the complete opening bars.
+The Hivecaller/Ranger/Guardian batch is in `src/data/frontierStarterTrees.ts`,
+with its contract and shared absorb scaling in
+`docs/design/frontier-starting-skill-trees.md`.
 
 ## Commands
 - `npm install` — first-time setup (also run automatically by the .bat launchers).

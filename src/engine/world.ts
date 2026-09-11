@@ -8,6 +8,7 @@
 // modifiers flow into every stat query for that use.
 // ---------------------------------------------------------------------------
 
+import { skillAbsorbAmount } from './absorb';
 import { instanceEffects } from './skills';
 import { costWard } from './costward';
 import { summonKitIds } from './skills';
@@ -30461,6 +30462,25 @@ export class World {
     return body;
   }
 
+  /** An ordinary command reaches pooled minions too. Promotion is the same
+   * interaction boundary used by a conducted cast; each row keeps its owner
+   * and anchor. Host-scoped meta commands must not recruit another skill. */
+  private promoteCommandThrong(caster: Actor, inst: SkillInstance, affects: string, radius?: number): void {
+    if (affects === 'squad') return;
+    for (const keeper of [...this.actors]) {
+      if (keeper.dead || (keeper !== caster && !keeper.ownedBy(caster))) continue;
+      for (const anchor of keeper.skills) {
+        const spec = anchor?.def.throng;
+        if (!anchor || spec?.tier !== 'lite' || (inst.hostSkillId && anchor.def.id !== inst.hostSkillId)) continue;
+        const kindIdx = this.liteKindOf(spec.monsterId);
+        if (kindIdx < 0) continue;
+        this.litePromoteNearest(caster.pos, {
+          within: radius ?? Infinity, max: this.lite.used, owner: keeper.id, kindIdx,
+        });
+      }
+    }
+  }
+
   /** Promote the nearest matching rows to `at` (the conducted-order and
    *  grab boundaries). Filters: owner, kind, opposing team — pass what the
    *  boundary knows. */
@@ -30515,7 +30535,7 @@ export class World {
       if (a.defId !== spec.monsterId) continue; // Substitutions keep their body kind and original anchor.
       if (a.clingTo || a.heldBy !== undefined || a.gripping || a.casting) continue;
       if (a.aiCommand || a.aiTargetId !== undefined) continue;
-      if (a.statuses.length > 0) continue;
+      if (a.statuses.length > 0 || a.buffs.size > 0) continue;
       const kindIdx = this.liteKindOf(spec.monsterId);
       if (kindIdx < 0) continue;
       const k = this.liteKinds[kindIdx];
@@ -33473,7 +33493,7 @@ export class World {
             if (fx.type === 'heal') this.applyHealChained(caster, inst, friendly, fx, useMult);
             else if (fx.type === 'cleanse') this.cleanseActor(friendly, fx.count ?? 2);
             else if (fx.type === 'absorb') {
-              this.grantAbsorb(friendly, fx.amount,
+              this.grantAbsorb(friendly, skillAbsorbAmount(caster, inst, fx.amount),
                 fx.duration * caster.sheet.get('effectDuration', tags, extra));
             } else if (fx.type === 'restore') this.applyRestore(friendly, fx, { tags: def.tags });
             else if (fx.type === 'ward') {
@@ -35080,6 +35100,7 @@ export class World {
           console.warn(`[commandMinions] unknown command kind '${kind}' on ${def.id}`);
         } else {
           const affects = fx.affects ?? 'minions';
+          this.promoteCommandThrong(caster, inst, affects, fx.radius);
           const until = this.time + (fx.duration ?? COMMAND_CFG.duration);
           const mark = vec(aim.x, aim.y);
           // Point AT a foe and the order PINS it — focus fire, not geography.
@@ -35233,7 +35254,7 @@ export class World {
         caster.applyStatus(fx.status, 0, durScale, def.name);
       }
       if (d.type === 'self' && fx.type === 'absorb') {
-        this.grantAbsorb(caster, fx.amount, fx.duration * durScale);
+        this.grantAbsorb(caster, skillAbsorbAmount(caster, inst, fx.amount), fx.duration * durScale);
       }
       if (d.type === 'self' && fx.type === 'restore') {
         this.applyRestore(caster, fx, { tags: def.tags });
@@ -41323,7 +41344,7 @@ export class World {
           if (fx.stun) target.applyStatus('stun', 0, fx.stun * durScale, def.name);
         }
       } else if (fx.type === 'absorb') {
-        this.grantAbsorb(target, fx.amount, fx.duration * durScale);
+        this.grantAbsorb(target, skillAbsorbAmount(caster, inst, fx.amount), fx.duration * durScale);
       } else if (fx.type === 'restore') {
         this.applyRestore(target, fx, { tags: def.tags });
       } else if (fx.type === 'ward') {
