@@ -390,11 +390,11 @@ console.log('O. THE ENROLLMENT CENSUS');
   // player-panel leaf and every skill-tree pane enrolls at its minting
   // (`skilltree:<skillId>`) — explicit asks that arrive in front, no
   // engagement read, no range — so any of them up at once tab into one book.
-  const TREES = ['passives'];
+  const TREES = ['skills', 'passives'];
   const ALL = [...EXPECTED, ...TREES];
   const enrolled = [...panels.matchAll(/this\.folioLeaf\('([a-z_]+)'/g)].map(m => m[1]!);
   const adopted = [...panels.matchAll(/this\.folio\.adopt\('([a-z_]+)'\)/g)].map(m => m[1]!);
-  check('O1 the thirteen dwell dialogs + the passive tree enroll, once each',
+  check('O1 the thirteen dwell dialogs + Skills and Passives enroll, once each',
     ALL.every(id => enrolled.filter(x => x === id).length === 1) && enrolled.length === ALL.length,
     `enrolled: ${enrolled.join(',')}`);
   check('O2 every enrolled leaf adopts at its show path',

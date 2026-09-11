@@ -1,3 +1,4 @@
+import { BUILD_PANEL_CFG, buildPanelSeat } from './buildPanels';
 // ---------------------------------------------------------------------------
 // DOM panels: class selection, character sheet, skill book (unlock / level /
 // socket support gems), passive tree, death screen.
@@ -141,7 +142,7 @@ import { objectiveRead, objectiveSeals, type ZoneDef } from '../data/zones';
 import { underSpanPolicyOf } from '../data/underspans';
 import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
-import { bindTooltips, hideTooltip, TIP_ANCHOR_CLASS, TIP_CFG, type TooltipContent } from './tooltip';
+import { bindTooltips, installTooltipHints, hideTooltip, TIP_ANCHOR_CLASS, TIP_CFG, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
 import { VENDORS, VENDOR_CFG, fmtRestock, type VendorDef } from '../data/vendors';
 import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
@@ -443,6 +444,7 @@ export class UI {
   private classSelect = document.getElementById('class-select')!;
   private charSheet = document.getElementById('char-sheet')!;
   private inventory = document.getElementById('inventory')!;
+  private buildPanel = document.getElementById('skills-panel')!;
   private passiveTree = document.getElementById('passive-tree')!;
   private worldMap = document.getElementById('world-map')!;
   private caravanMenu = document.getElementById('caravan-menu')!;
@@ -825,6 +827,7 @@ export class UI {
     /** Tear down a co-op session and return to the menu. */
     private onLeaveCoop: () => void = () => { /* default no-op */ },
   ) {
+    installTooltipHints();
     this.portalButton = new PortalButton(this.getWorld, this.getSettings);
     window.addEventListener('pointermove', ev => { this.itemHoldPointer = { x: ev.clientX, y: ev.clientY }; });
     // Tooltips: bound ONCE on the stable panel containers (delegation survives
@@ -836,7 +839,7 @@ export class UI {
     // Item tips everywhere grow the ON-SWAP comparison on a dwell (extend);
     // the extended flag only ever reaches itemTooltip — other cards have no
     // deeper form and simply re-serve themselves.
-    bindTooltips(this.inventory, (el, ext) =>
+    for (const root of [this.inventory, this.buildPanel]) bindTooltips(root, (el, ext) =>
       el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.inventory), this.salvageLaneFor(this.inventory))
         : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!, ext)
         : el.dataset.tip === 'vestige' ? this.vestigeTooltip(el.dataset.vestigeId!) : null,
@@ -935,7 +938,7 @@ export class UI {
     // draggable; a drag re-seats the folio strip on the moving front.
     // (Skill-tree panes attach at their minting; the escape menu, the
     // start menu and the full-screen cards deliberately stay put.)
-    this.movableRoots = [this.charSheet, this.inventory, this.passiveTree, this.worldMap,
+    this.movableRoots = [this.charSheet, this.inventory, this.buildPanel, this.passiveTree, this.worldMap,
       this.vendorMenu, this.salvageMenu, this.fontMenu, this.recallMenu, this.oracleMenu,
       this.bestiaryMenu, this.boroughMenu, this.bountyMenu, this.caravanMenu, this.sailMenu,
       this.holdMenu, this.mercMenu, this.vocationMenu, this.menuBar.root];
@@ -952,6 +955,7 @@ export class UI {
     const panelClosers: Array<[HTMLElement, () => void]> = [
       [this.charSheet, () => this.toggleCharSheet(this.panelSeatIds.get(this.charSheet))],
       [this.inventory, () => this.toggleInventory(this.panelSeatIds.get(this.inventory))],
+      [this.buildPanel, () => this.closeBuildPanel()],
       [this.passiveTree, () => this.toggleTree(this.panelSeatIds.get(this.passiveTree))],
       [this.worldMap, () => this.toggleMap()],
       [this.vendorMenu, () => this.closeVendor()],
@@ -1028,7 +1032,7 @@ export class UI {
     let gestureSeat: string | null = null;
     const couchOwnerOf = (t: EventTarget | null): string | null => {
       if (!(t instanceof Node)) return null;
-      for (const el of [this.charSheet, this.inventory, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el), this.vendorMenu,
+      for (const el of [this.charSheet, this.inventory, this.buildPanel, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el), this.vendorMenu,
         this.salvageMenu, this.oracleMenu, this.bestiaryMenu, this.caravanMenu, this.recallMenu,
         this.bountyMenu]) {
         if (el.contains(t)) {
@@ -1086,6 +1090,49 @@ export class UI {
    *  plain close. */
   private closeGlyphHtml(title = 'Close (Esc)'): string {
     return `<div class="panel-x-row"><button type="button" class="panel-x" data-panel-x title="${title}" aria-label="Close">✕</button></div>`;
+  }
+
+  /** Inventory-side player pages share the same folio, including skill trees. */
+  private buildPanelBay(el: HTMLElement): string {
+    if (this.inventoryOpen && this.panelSeat(el).id === this.panelSeat(this.inventory).id) return 'build';
+    return el.classList.contains('couch-left') ? 'left' : el.classList.contains('couch-right') ? 'right' : 'centre';
+  }
+
+  private toggleBuildPanel(): void {
+    if (this.buildFlapOpen && this.folio.bookFor('skills')?.front !== 'skills') {
+      if (this.folio.front('skills')) { this.folioStrip.update(); return; }
+    }
+    this.buildFlapOpen = !this.buildFlapOpen;
+    hideTooltip();
+    this.refreshInventory();
+    if (this.buildFlapOpen) this.folio.adopt('skills');
+    this.folioStrip.update();
+  }
+
+  private closeBuildPanel(): void {
+    this.buildFlapOpen = false;
+    hideTooltip();
+    if (this.inventoryOpen) this.refreshInventory();
+    else this.syncBuildPanels();
+  }
+
+  /** Default seats follow the measured inventory edge. Saved custom positions win. */
+  private syncBuildPanels(): void {
+    this.buildPanel.classList.toggle('hidden', !this.inventoryOpen || !this.buildFlapOpen);
+    this.inventory.querySelector('[data-passiveflap]')?.setAttribute('aria-expanded', String(this.treeOpen));
+    const inv = this.inventory.getBoundingClientRect();
+    const scale = uiScaleNow();
+    for (const el of [this.buildPanel, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el)]) {
+      const dock = this.inventoryOpen && this.panelSeat(el).id === this.panelSeat(this.inventory).id;
+      el.classList.toggle('build-docked', dock);
+      if (!dock) continue;
+      if (!this.getSettings().layout.movable && panelMoved(el)) panelMoveReset(el);
+      const at = buildPanelSeat(inv, window.innerWidth, scale, this.inventory.classList.contains('couch-left'),
+        el === this.buildPanel ? BUILD_PANEL_CFG.skillsWidth : BUILD_PANEL_CFG.passivesWidth);
+      el.style.setProperty('--build-left', `${at.left}px`);
+      el.style.setProperty('--build-top', `${at.top}px`);
+      el.style.setProperty('--build-width', `${at.width}px`);
+    }
   }
 
   // --- THE FOLIO (ui/folio.ts) -----------------------------------------------
@@ -1206,9 +1253,12 @@ export class UI {
     // engagement read, no range — the master/front laws alone. The passive
     // tree enrolls here; each skill's pane enrolls at its minting
     // (skillTreePaneFor — the tab names the skill).
+    enroll(this.folioLeaf('skills', this.buildPanel, () => 'Skills',
+      () => this.inventoryOpen && this.buildFlapOpen, () => this.closeBuildPanel(), {
+        arrive: 'front', bay: () => this.buildPanelBay(this.buildPanel), refresh: () => this.refreshInventory() }));
     enroll(this.folioLeaf('passives', this.passiveTree, () => 'Passives', () => this.treeOpen,
       () => { if (this.treeOpen) this.toggleTree(this.panelSeatIds.get(this.passiveTree)); }, {
-        arrive: 'front', refresh: () => { hideTooltip(); this.refreshTree(); } }));
+        arrive: 'front', bay: () => this.buildPanelBay(this.passiveTree), refresh: () => { hideTooltip(); this.refreshTree(); } }));
 
     // THE SUITE (data/suites.ts): a counter's dialog SUMMONS the station
     // dialogs that stand genuinely unlocked in this zone. The world folds
@@ -1308,6 +1358,7 @@ export class UI {
   /** Once per frame (main.ts): reconcile every book against its leaves' own
    *  open flags — whatever path opened or closed them — and seat the strips. */
   folioSync(): void {
+    this.syncBuildPanels();
     this.folio.sync();
     panelLayoutSync(this.layoutRoots()); // THE LAYOUT's per-frame sync (seats freshly-shown panels, keeps the lock glyphs honest)
     this.folioStrip.update();
@@ -3256,7 +3307,8 @@ export class UI {
     this.inventory.classList.toggle('hidden', !this.inventoryOpen);
     if (!this.inventoryOpen) this.endLockHold(); // a hold never outlives its bag
     if (this.inventoryOpen) this.refreshInventory();
-    else { dndCancel(); hideTooltip(); } // a ghost never outlives its surface
+    this.syncBuildPanels();
+    if (!this.inventoryOpen) { dndCancel(); hideTooltip(); } // a ghost never outlives its surface
   }
 
   /** THE OBSTRUCTION CENSUS — the CSS-pixel rects of every open DOM pane
@@ -3277,7 +3329,7 @@ export class UI {
       out.push({ x: r.left, y: r.top, w: r.width, h: r.height });
     };
     { const tray = this.menuBar.trayRect(); if (tray) out.push(tray); } // THE MENU BAR's tray while up (ui/menubar.ts)
-    for (const el of [this.charSheet, this.inventory, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el),
+    for (const el of [this.charSheet, this.inventory, this.buildPanel, this.passiveTree, ...[...this.skillTreePanes.values()].map(p => p.el),
       this.worldMap, this.vendorMenu, this.salvageMenu, this.fontMenu,
       this.recallMenu, this.oracleMenu, this.bestiaryMenu, this.boroughMenu,
       this.bountyMenu, this.caravanMenu, this.sailMenu, this.holdMenu, this.mercMenu,
@@ -3842,23 +3894,20 @@ export class UI {
     // rightward instead of clipping off-screen; the classic centered (and
     // couch-right) panel keeps its leftward pop. The drawer docks with its
     // opener wherever the opener sits.
-    const drawerFlank = this.inventory.classList.contains('couch-left') ? 'right' : 'left';
-    const flankCss = drawerFlank === 'left'
-      ? 'left:-27px;border-right:none;border-radius:6px 0 0 6px'
-      : 'right:-27px;border-left:none;border-radius:0 6px 6px 0';
+    const walletChips = ABILITY_ESSENCES.map(d =>
+      `<span class="build-essence" style="color:${d.color}" title="${d.label}: ${m.abilityEssences[d.id] ?? 0}">${d.glyph} ${m.abilityEssences[d.id] ?? 0}</span>`).join('');
     const drawerHandle = `
-      <button data-buildflap class="${flapGlow ? 'tut-glow' : ''}"
-        title="Your learned skills: the whole build, full management"
-        style="position:absolute;top:56px;writing-mode:vertical-rl;text-orientation:mixed;
-        padding:12px 4px;font-size:11px;letter-spacing:1px;background:#241d2e;color:#c8a8ff;
-        border:1px solid #4a3a5a;${flankCss};cursor:var(--cursor-point, pointer);z-index:4">
-        📖 SKILLS ${(this.buildFlapOpen ? drawerFlank === 'left' : drawerFlank === 'right') ? '▸' : '◂'}</button>`;
-    // The header's readout is the Ability wallet (nonzero tiers as glyph
-    // chips — the pts counter retired with the point economy; DIAL).
-    const walletChips = ABILITY_ESSENCES
-      .filter(d => (m.abilityEssences[d.id] ?? 0) > 0)
-      .map(d => `<span style="color:${d.color}" title="${d.label}">${m.abilityEssences[d.id]}${d.glyph}</span>`)
-      .join(' ');
+      <div class="build-ribbons ${this.inventory.classList.contains('couch-left') ? 'build-ribbons-right' : ''}"
+        style="--build-rail:${BUILD_PANEL_CFG.railWidth}px">
+        <button data-buildflap class="build-ribbon ${flapGlow ? 'tut-glow' : ''}"
+          aria-expanded="${this.buildFlapOpen}" aria-controls="skills-panel" title="Manage your learned skills and Memory Essences">
+          <span class="build-ribbon-label">📖 SKILLS</span><span class="build-wallet">${walletChips}</span>
+        </button>
+        <button data-passiveflap class="build-ribbon" aria-expanded="${this.treeOpen}" aria-controls="passive-tree" title="Open your passive tree">
+          <span class="build-ribbon-label">✧ PASSIVES</span>
+          ${m.passivePoints > 0 ? `<span>${m.passivePoints}</span>` : ''}
+        </button>
+      </div>`;
     // THE FONT'S CONVERT STRIP (FONT_CFG.convertUp/Down): tier up/down per
     // rung, wallet-gated — stands only beside a Sacrificial Font.
     const convertStrip = wf ? `
@@ -3879,22 +3928,12 @@ export class UI {
         }).join('')}
       </div>` : '';
     const drawer = this.buildFlapOpen ? `
-      <div data-build-drawer style="position:absolute;${drawerFlank === 'left'
-        ? 'right:100%;margin-right:2px;border-radius:6px 0 0 6px;box-shadow:-6px 5px 22px rgba(0,0,0,0.6)'
-        : 'left:100%;margin-left:2px;border-radius:0 6px 6px 0;box-shadow:6px 5px 22px rgba(0,0,0,0.6)'};top:0;width:360px;
-        max-height:calc(100vh - 220px);display:flex;flex-direction:column;z-index:3;
-        background:var(--panel-bg);border:1px solid var(--panel-border);padding:10px 12px">
-        <div style="flex:0 0 auto;color:var(--gold);font-size:12px;letter-spacing:1.2px;text-transform:uppercase;
-          border-bottom:1px solid var(--panel-border);padding-bottom:5px;margin-bottom:6px">
-          📖 Skills ${walletChips ? `— ${walletChips}` : ''}
-          <span style="float:right;color:#b06bd4;font-size:10px;letter-spacing:0">
-            ${wf ? 'FONT NEARBY' : ''}</span>
-        </div>
+        ${this.closeGlyphHtml()}<h2>📖 Skills</h2>
+        <div class="build-wallet-header">${walletChips}${wf ? '<span>FONT NEARBY</span>' : ''}</div>
         ${convertStrip}
         <div class="build-scroll" style="flex:1 1 auto;overflow-y:auto;font-size:12px;padding-right:4px">
           ${this.learnedListHtml()}
-        </div>
-      </div>` : '';
+        </div>` : '';
     // THE BAG SORT (her ask 2026-09-05): a strip of GLYPH buttons on the
     // bag's own header line — one per registered mode (engine/bagsort.ts
     // BAG_SORT_MODES: the buttons are DERIVED, a new mode is one data row),
@@ -3949,7 +3988,7 @@ export class UI {
     // hangs OUTSIDE it); the inner wrapper does, and the drawer's own list
     // keeps its offset too.
     const prevScroll = this.inventory.querySelector<HTMLElement>('.inv-scroll')?.scrollTop ?? 0;
-    const prevBuildScroll = this.inventory.querySelector<HTMLElement>('.build-scroll')?.scrollTop ?? 0;
+    const prevBuildScroll = this.buildPanel.querySelector<HTMLElement>('.build-scroll')?.scrollTop ?? 0;
     // THE ANCHORED FRAME: the scroll wrapper holds the GEAR tab's height
     // (derived from the doll itself) on EVERY tab, clamped to the viewport —
     // an empty gem tab no longer collapses the pane, so the Build flap and
@@ -3958,15 +3997,18 @@ export class UI {
     // overflow-y would otherwise compute overflow-x to auto and grow a
     // phantom horizontal bar under the fold.
     const frameMin = Math.ceil(dollRowsFor(EQUIP_SLOTS.filter(s => s.enabled && DOLL_SEATS[s.id])) * 34) + 48;
-    this.inventory.innerHTML = `${drawer}${drawerHandle}${satchel}${this.closeGlyphHtml()}<h2>Inventory</h2>
+    this.buildPanel.innerHTML = drawer;
+    this.panelSeatIds.set(this.buildPanel, this.panelSeat(this.inventory).id);
+    this.syncBuildPanels();
+    this.inventory.innerHTML = `${drawerHandle}${satchel}${this.closeGlyphHtml()}<h2>Inventory</h2>
       <div class="inv-scroll" style="min-height:min(${frameMin}px, calc(100vh - 240px));max-height:calc(100vh - 240px);overflow-y:auto;overflow-x:hidden">${body}</div>`;
     const scrollEl = this.inventory.querySelector<HTMLElement>('.inv-scroll');
     if (scrollEl) scrollEl.scrollTop = prevScroll;
-    const buildEl = this.inventory.querySelector<HTMLElement>('.build-scroll');
+    const buildEl = this.buildPanel.querySelector<HTMLElement>('.build-scroll');
     if (buildEl) buildEl.scrollTop = prevBuildScroll;
     this.wireInventory();
     this.paintLockHold(); // a re-render mid-hold resumes the ring where the clock stands
-    this.paintPortraitsIn(this.inventory); // the build flap's Spectre chip
+    this.paintPortraitsIn(this.buildPanel); // the build flap's Spectre chip
     this.applyBreakChrome();
   }
 
@@ -3997,14 +4039,15 @@ export class UI {
     }));
     // The Build drawer (its handle hangs on the panel edge):
     // toggle + — when open — the learned list's full management wiring.
-    this.inventory.querySelector<HTMLButtonElement>('[data-buildflap]')?.addEventListener('click', () => {
-      this.buildFlapOpen = !this.buildFlapOpen;
+    this.inventory.querySelector<HTMLButtonElement>('[data-buildflap]')?.addEventListener('click', () => this.toggleBuildPanel());
+    this.inventory.querySelector<HTMLButtonElement>('[data-passiveflap]')?.addEventListener('click', () => {
+      this.toggleTree(this.panelSeat(this.inventory).id);
       this.refreshInventory();
     });
     if (this.buildFlapOpen) {
-      this.wireLearnedList(this.inventory, () => this.refreshInventory());
+      this.wireLearnedList(this.buildPanel, () => this.refreshInventory());
       // THE FONT'S CONVERT STRIP (drawer chrome, outside the learned list).
-      this.inventory.querySelectorAll<HTMLButtonElement>('button[data-fontconv]').forEach(btn =>
+      this.buildPanel.querySelectorAll<HTMLButtonElement>('button[data-fontconv]').forEach(btn =>
         btn.addEventListener('click', () => {
           const [tier, dir] = btn.dataset.fontconv!.split(':');
           this.getWorld().requestMeta({ t: 'fontConvert', tier: Number(tier), dir: dir as 'up' | 'down' });
@@ -6082,7 +6125,7 @@ Granted by ${r.source} at Level ${r.level}: cast it like any learned skill; its 
         const teachSeat = lessonSkills.length > 0;
         return `<div data-drop="rackSeat:${slot}" class="${teachSeat ? 'tut-glow' : ''}"
           title="Empty seat ${label} — drag a skill here to bind it"
-          style="height:46px;border:1px dashed #4a4458;border-radius:5px;background:#1c1626;
+          style="height:${BUILD_PANEL_CFG.rackSeatHeight}px;border:1px dashed #4a4458;border-radius:5px;background:#1c1626;
             display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px">
           <span style="font-size:9px;color:#8a8678">${label}</span>
           <span style="font-size:12px;color:#3f3950;line-height:1">◇</span>
@@ -6093,16 +6136,16 @@ Granted by ${r.source} at Level ${r.level}: cast it like any learned skill; its 
       // color swatch + initials the canvas bar prints, at seat scale.
       return `<div data-drag="rackSeat:${slot}" data-drop="rackSeat:${slot}"
         data-tip="skill" data-skill-id="${sd.id}"
-        style="position:relative;height:46px;border:1px solid ${sd.color};border-radius:5px;
+        style="--unlearn-size:${BUILD_PANEL_CFG.unlearnSize}px;position:relative;height:${BUILD_PANEL_CFG.rackSeatHeight}px;border:1px solid ${sd.color};border-radius:5px;
           background:#241d2e;padding:3px 5px;overflow:hidden;cursor:var(--cursor-point, pointer)">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <span style="font-size:8px;color:var(--gold)">${label}</span>
           ${seated.grantedBy
             ? `<span title="Granted by ${seated.grantedBy} — take the piece off to unseat it; there is no gem to unlearn"
                 style="font-size:9px;color:#e8a860;padding:0 1px;line-height:1">◆</span>`
-            : `<button data-rackunbind="${slot}" title="Unlearn ${sd.name} — it returns to your pack as its Memory"
-            style="background:none;border:none;color:#6a6478;cursor:var(--cursor-point, pointer);
-              font-size:9px;padding:0 1px;line-height:1">✕</button>`}
+            : `<button data-rackunbind="${slot}" class="rack-unlearn" aria-label="Unlearn ${sd.name}"
+              title="Unlearn ${sd.name} — it returns to your pack as its Memory"
+              style="--unlearn-size:${BUILD_PANEL_CFG.unlearnSize}px">✕</button>`}
         </div>
         <div style="display:flex;align-items:center;gap:4px">
           <span style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;
@@ -6408,6 +6451,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       this.ownPanel(this.passiveTree, seat);
       this.centerTreeOnStart();
       this.refreshTree();
+      this.syncBuildPanels();
       this.folio.adopt('passives');
       this.folioStrip.update();
     }
@@ -6598,7 +6642,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.passiveTree.innerHTML = `
       ${realmTabs}
       ${this.closeGlyphHtml()}<h2>${activeRealm && this.treeRealm !== MAIN_REALM ? activeRealm.label : 'Passive Tree'} — ${poolChip}${vocChips}
-        <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal">
+        <span class="build-tree-tools">
           <input id="tree-search" class="tree-search" type="text" placeholder="search nodes…"
             value="${esc(this.treeSearch)}" title="Matches node names, descriptions, and granted lines — hits glow, the rest dims.">
           <span id="tree-search-n" class="tree-search-n"></span>
@@ -6993,7 +7037,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.folio.enroll(this.folioLeaf(`skilltree:${skillId}`, el,
       () => SKILLS[skillId]?.name ?? 'Skill Tree',
       () => pane.open, () => this.closeSkillTree(skillId), {
-        arrive: 'front', refresh: () => { hideTooltip(); this.refreshSkillTree(skillId); } }));
+        arrive: 'front', bay: () => this.buildPanelBay(el), refresh: () => { hideTooltip(); this.refreshSkillTree(skillId); } }));
     return pane;
   }
 
@@ -7018,6 +7062,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.refreshSkillTree(skillId);
     // THE FOLIO: bind (arrives in front), or — already bound and shelved
     // behind a book-mate — come forward.
+    this.syncBuildPanels();
     if (this.folio.adopt(`skilltree:${skillId}`) === 'noop') this.folio.front(`skilltree:${skillId}`);
     this.folioStrip.update();
   }
@@ -10397,6 +10442,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     this.inventoryOpen = false;
     dndCancel(); // never strand a carried ghost on a closed panel
     this.inventory.classList.add('hidden');
+    this.buildPanel.classList.add('hidden');
     this.closeSkillTree();
     this.salvageOpen = false;
     this.craftTargetUid = null;

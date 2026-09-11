@@ -16,6 +16,37 @@
 // mouse and the pad pointer alike (both speak pointermove).
 // ---------------------------------------------------------------------------
 
+const TIP_TARGET = '[data-tip], [data-ui-hint]';
+const tooltipRoots = new WeakSet<HTMLElement>();
+let activeTooltipOwner: object | null = null;
+const hintEscape = (s: string): string => s.replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+
+/** Native control hints use the same card as rich tips, including on a pad. */
+export function installTooltipHints(root: HTMLElement = document.body): void {
+  const convert = (el: Element): void => {
+    const title = el.getAttribute('title');
+    if (title === null) return;
+    if (title) {
+      el.setAttribute('data-ui-hint', title);
+      if (el.matches('button, input, select') && !el.hasAttribute('aria-label')) el.setAttribute('aria-label', title);
+    } else el.removeAttribute('data-ui-hint');
+    el.removeAttribute('title');
+  };
+  const scan = (el: Element): void => {
+    convert(el);
+    el.querySelectorAll('[title]').forEach(convert);
+  };
+  scan(root);
+  new MutationObserver(records => {
+    for (const r of records) {
+      if (r.type === 'attributes') convert(r.target as Element);
+      else r.addedNodes.forEach(n => { if (n instanceof Element) scan(n); });
+    }
+  }).observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['title'] });
+  bindTooltips(root, () => null);
+}
+
 export interface TooltipContent {
   title?: string;
   description: string;
@@ -84,6 +115,9 @@ export function bindTooltips(
   opts?: TooltipOpts,
 ): void {
   const tip = document.getElementById('tooltip')!;
+  const owner = {};
+  tooltipRoots.add(container);
+  const ownsEvent = (e: Event): boolean => e.composedPath().find(n => n instanceof HTMLElement && tooltipRoots.has(n)) === container;
   let cur: HTMLElement | null = null;
   let extendTimer: number | null = null;
   /** Last cursor point — the extend re-render must re-clamp the grown box
@@ -102,7 +136,9 @@ export function bindTooltips(
   };
 
   const render = (el: HTMLElement, extended: boolean): boolean => {
-    const c = getContent(el, extended);
+    const hint = el.dataset.uiHint;
+    const c = el.dataset.tip ? getContent(el, extended)
+      : hint ? { description: hintEscape(hint).replace(/\n/g, '<br>') } : getContent(el, extended);
     if (!c) return false;
     tip.innerHTML =
       `${c.title ? `<div class="tt-title">${c.title}</div>` : ''}` +
@@ -112,6 +148,7 @@ export function bindTooltips(
     // card rattling around an oversized box.
     tip.classList.toggle('tt-wide', !!c.wide);
     tip.classList.remove('hidden');
+    activeTooltipOwner = owner;
     return true;
   };
 
@@ -145,12 +182,12 @@ export function bindTooltips(
     if (!cur) return;
     cur.classList.remove(TIP_ANCHOR_CLASS);
     cur = null;
-    tip.classList.add('hidden');
+    if (activeTooltipOwner === owner) { tip.classList.add('hidden'); activeTooltipOwner = null; }
   };
 
   /** Actually raise the box on an anchor (the pre-intent show). */
   const reveal = (el: HTMLElement, e: { clientX: number; clientY: number }): void => {
-    if (el !== cur) {
+    if (el !== cur || activeTooltipOwner !== owner) {
       if (!render(el, false)) { hide(); return; }
       cur?.classList.remove(TIP_ANCHOR_CLASS);
       cur = el;
@@ -191,11 +228,12 @@ export function bindTooltips(
   if (prox) {
     let lastScan = 0;
     container.addEventListener('pointermove', (e) => {
+      if (!ownsEvent(e)) return;
       // A re-render tore the anchor out — release it so the scan re-picks the
       // rebuilt element (content refreshes from live data in the same beat).
-      if (cur && !cur.isConnected) { cur.classList.remove(TIP_ANCHOR_CLASS); cur = null; tip.classList.add('hidden'); }
+      if (cur && !cur.isConnected) hide();
       // Direct hit wins outright — precision hovering stays precision.
-      const direct = (e.target as HTMLElement).closest?.<HTMLElement>('[data-tip]');
+      const direct = (e.target as HTMLElement).closest?.<HTMLElement>(TIP_TARGET);
       if (direct) { show(direct, e); return; }
       const now = performance.now();
       if (now - lastScan < (prox.intervalMs ?? 40)) {
@@ -222,7 +260,8 @@ export function bindTooltips(
 
   // ---- CLASSIC MODE: delegated hover, exactly as every panel expects ------
   container.addEventListener('mouseover', (e) => {
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-tip]');
+    if (!ownsEvent(e)) return;
+    const el = (e.target as HTMLElement).closest<HTMLElement>(TIP_TARGET);
     if (!el) {
       // The cursor is over plain panel area. Normally mouseout already hid the
       // box — but a panel re-render (the 0.5s char-sheet refresh, a co-op meta
@@ -235,6 +274,7 @@ export function bindTooltips(
     show(el, e);
   });
   container.addEventListener('mousemove', (e) => {
+    if (!ownsEvent(e)) return;
     // Track the point even pre-reveal: a pending intent must rise where the
     // cursor actually SETTLED, not where it first crossed the anchor's edge.
     lastPt = { clientX: e.clientX, clientY: e.clientY };
@@ -245,6 +285,7 @@ export function bindTooltips(
     place(e);
   });
   container.addEventListener('mouseout', (e) => {
+    if (!ownsEvent(e)) return;
     const to = e.relatedTarget as HTMLElement | null;
     if (cur && (!to || !cur.contains(to))) hide();
     // A pending intent dies with the exit too — leaving the CONTAINER fires
@@ -255,5 +296,6 @@ export function bindTooltips(
 }
 
 export function hideTooltip(): void {
+  activeTooltipOwner = null;
   document.getElementById('tooltip')?.classList.add('hidden');
 }

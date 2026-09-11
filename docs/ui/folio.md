@@ -119,6 +119,34 @@ closing it, and each pane's tab names its skill. Esc closes the front leaf
 through its own close, as for every leaf; a lone tree is a book of one —
 byte-identical to before, no strip.
 
+### Inventory build pages (2026-09-11)
+
+The inventory's Skills and Passives ribbons open adjacent player pages. Skills
+is a stable `skills-panel` root and a `skills` folio leaf, so it joins Passives
+and individual skill trees in the same top-tab book. Closing the inventory also
+hides Skills; reopening remembers whether that drawer was open. Closing a
+shelved page through the book closes that page without promoting it instead.
+
+`ui/buildPanels.ts` owns ribbon width, page widths, screen margins and the
+unlearn target size. The default page seats follow the inventory's measured
+edge beyond the ribbon, flip for a left couch seat, and clamp into small
+viewports. Saved movable positions still take precedence. The Skills ribbon
+shows all registered Memory Essence tiers, including zero balances, using the
+inventory owner's wallet. Its rack reserves a 24-pixel unlearn corner; the
+remaining tile uses the ordinary drag fabric.
+
+`installTooltipHints` in `ui/tooltip.ts` translates native `title` hints to the
+shared gold-bordered card, including dynamically rebuilt controls. Rich
+`data-tip` content retains its own resolver; a nested control's hint wins over
+the parent skill. Hint text is escaped, and native titles are removed so a
+second browser tooltip cannot cover the card.
+
+Verify with `npm run check`, `npm run probe -- folio`, and, after a production
+build, `npx electron balance/build-panels-ui.cjs`. The desktop check uses its
+own save/profile folders under ignored `balance/reports/` and checks ribbon
+balances, panel bounds, folio switching, tooltip priority, unlearning, and
+dragging from the rest of a skill tile.
+
 ### Moving panels (ui/panelmove.ts, 2026-09-04)
 
 Every ribboned panel drags by its `h2` (`attachPanelMove` once per root,

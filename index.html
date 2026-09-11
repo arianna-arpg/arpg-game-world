@@ -165,6 +165,31 @@
     #inventory {
       top: 56px; right: 16px; width: 660px; max-width: calc(94vw / var(--ui-scale)); font-size: 12px;
     }
+    .build-ribbons { position:absolute; top:56px; right:100%; width:var(--build-rail);
+      display:flex; flex-direction:column; gap:4px; }
+    .build-ribbons-right { right:auto; left:100%; }
+    .build-ribbon { width:100%; padding:10px 3px; background:#241d2e; color:#c8a8ff;
+      border:1px solid #4a3a5a; border-radius:6px 0 0 6px; cursor:var(--cursor-point, pointer);
+      display:flex; flex-direction:column; align-items:center; gap:8px; font-size:11px; }
+    .build-ribbons-right .build-ribbon { border-radius:0 6px 6px 0; }
+    .build-ribbon:hover, .build-ribbon[aria-expanded="true"] { border-color:var(--gold); }
+    .build-ribbon-label { writing-mode:vertical-rl; letter-spacing:1px; }
+    .build-wallet { display:flex; flex-direction:column; gap:4px; font-size:10px; }
+    .build-essence { white-space:nowrap; font-variant-numeric:tabular-nums; }
+    .build-wallet-header { display:flex; flex-wrap:wrap; gap:8px; font-size:11px; margin-bottom:8px; }
+    #skills-panel { width:360px; display:flex; flex-direction:column;
+      max-height:calc((100vh - 140px) / var(--ui-scale)); padding:10px 12px; }
+    :is(#skills-panel, #passive-tree, .skill-tree).build-docked { left:var(--build-left); right:auto; top:var(--build-top);
+      width:var(--build-width); transform:none; }
+    .panel.build-docked.couch-left, .panel.build-docked.couch-right { left:var(--build-left) !important;
+      right:auto !important; max-width:calc((100vw - 16px) / var(--ui-scale)) !important; }
+    .rack-unlearn { position:absolute; right:0; top:0; width:var(--unlearn-size); height:var(--unlearn-size);
+      padding:0; display:flex; align-items:center; justify-content:center; border:0; border-radius:0 4px 0 4px;
+      background:rgba(20,16,28,.8); color:#b9aec9; font-size:11px; cursor:var(--cursor-point, pointer); }
+    .rack-unlearn:hover, .rack-unlearn:focus-visible { background:#493047; color:#fff; outline:1px solid var(--gold); outline-offset:-1px; }
+    [data-drag^="rackSeat:"] > div:first-child { padding-right:var(--unlearn-size); min-height:20px; }
+    .build-tree-tools { display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin-top:6px;
+      color:#8a8678; font-size:11px; font-weight:normal; letter-spacing:normal; text-transform:none; }
     .skill-entry {
       border: 1px solid var(--panel-border); border-radius: 4px;
       padding: 8px; margin-bottom: 6px; cursor: var(--cursor-default, default);
@@ -940,6 +965,7 @@
   <div id="char-sheet" class="panel hidden"></div>
   <div id="inventory" class="panel hidden"></div>
   <div id="passive-tree" class="panel hidden"></div>
+  <div id="skills-panel" class="panel hidden" data-build-drawer></div>
   <div id="world-map" class="panel hidden"></div>
   <div id="caravan-menu" class="panel hidden"></div>
   <div id="sail-menu" class="panel hidden"></div>
