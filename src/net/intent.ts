@@ -58,6 +58,7 @@ export class NullInput implements PlayerInputSource {
  *  Addresses are by index/id (never object refs — those don't cross the wire);
  *  the host resolves them inside the target seat's meta. */
 export type MetaAction =
+  | { t: 'townPortal' }
   // THE RESIDENCE (skill-items M1): loose gems are 1×1 bag ITEMS — every
   // loose-gem intent addresses the wrapper by uid (the gear address space);
   // learn seats (learned = seated; slot omitted = first free), unlearn

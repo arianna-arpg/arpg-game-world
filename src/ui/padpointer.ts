@@ -51,6 +51,7 @@ export const PAD_POINTER_ID = 7;
 export class PadPointer {
   /** The pointer owns the pad this frame (menus up + pad recently active). */
   active = false;
+  position(): { x: number; y: number } { return { x: this.x, y: this.y }; }
   private x = window.innerWidth / 2;
   private y = window.innerHeight / 2;
   private ring: HTMLDivElement;

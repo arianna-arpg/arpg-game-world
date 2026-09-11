@@ -437,6 +437,7 @@ export interface StateSnapshot {
   projectiles: ProjW[];
   tethers: TetherW[];
   drops: DropW[];
+  townPortalViews?: import('../engine/townportal').TownPortalView[];
   orbs: OrbW[];
   texts: TextW[];
   /** THE NOTICE FEED + PICKUP FEED (world/bulletins.ts) — absent from older
@@ -741,6 +742,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       ax: Math.round(t.ax), ay: Math.round(t.ay), bx: Math.round(t.bx), by: Math.round(t.by),
       c: t.color, w: t.width,
     })),
+    townPortalViews: world.townPortalViews(),
     drops: world.drops.map(d => ({
       p: v2(d.pos), bob: d.bob, kind: d.item.kind,
       color: d.item.kind === 'support' ? d.item.gem.def.color
@@ -1261,6 +1263,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.tethers = (snap.tethers ?? []).map(t => ({
     ax: t.ax, ay: t.ay, bx: t.bx, by: t.by, color: t.c, width: t.w,
   })) as unknown as World['tethers'];
+  world.townPortalClientViews = snap.townPortalViews ?? [];
   world.drops = snap.drops.map(d => ({
     pos: { x: d.p[0], y: d.p[1] }, bob: d.bob,
     item: d.kind === 'support'

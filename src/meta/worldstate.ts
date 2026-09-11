@@ -4,7 +4,7 @@
 // A CharacterSave carries the BUILD; this schema carries the WORLD the build
 // was standing in: the minted zone graph (every ZoneDef is pure JSON by
 // design), discovery (visited ground + attuned waypoints), the world clock
-// (day/night phase + zone-memory TTLs stay honest), quests, the TTL'd zone
+// (day/night phase and optional zone expiry stay honest), quests, persistent zone
 // memory (cleared stays cleared; a half-fought zone keeps its bloodied
 // survivors), the player's exact spot, and an open per-overlay snapshot bag
 // (world/overlay.ts snapshot()/restore() — each field opts in on its own).
@@ -134,6 +134,7 @@ export interface SavedEnemyMemo {
 
 /** One zone's TTL'd memory (the engine's ZoneMemory, keyed for an array). */
 export interface SavedZoneMemory {
+  contents?: import('../engine/zonecontents').ZoneContents;
   zoneId: string;
   seed: number;
   savedAt: number;
@@ -281,6 +282,8 @@ export interface SavedPlayerSpot {
 }
 
 export interface WorldStateSave {
+  townPortals?: import('../engine/townportal').TownPortal[];
+  townPortalDestination?: string;
   schemaVersion: number;
   /** Every on-graph zone, verbatim (ZoneDefs are pure JSON by design; the
    *  transient exitBoundaries annotation is stripped at write). */

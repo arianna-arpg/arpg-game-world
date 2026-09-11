@@ -17,6 +17,7 @@ const S = 'fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="
 
 /** id → inner SVG markup (24×24 viewBox). */
 export const MENU_ICONS: Record<string, string> = {
+  portal: `<g ${S}><ellipse cx="12" cy="11" rx="6" ry="9"/><path d="M4 21h16M10 7l4 4-4 4"/></g>`,
   /** The MENU glyph itself: three bars — the universal "menu". */
   menu: `<g ${S}><path d="M4 7h16M4 12h16M4 17h16"/></g>`,
   /** A pack with a flap and a buckle strap. */

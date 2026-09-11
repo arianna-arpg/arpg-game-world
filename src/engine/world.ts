@@ -24,6 +24,9 @@ import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingSt
 import { EventBus } from './eventbus';
 import { Party } from './party';
 import { NullInput, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
+import { ZONE_MEMORY_CFG, captureZoneContents, restoreZoneContents, savedZoneContents, type ZoneContents } from './zonecontents';
+import { TOWN_PORTAL_CFG } from '../data/townportals';
+import { readTownPortals, type TownPortal, type TownPortalView } from './townportal';
 import { applyConversion, applyDot, applyHit, mitigateTyped, resistValue, rollSkillDamage, type DamagePacket } from './damage';
 import { SEG_CFG, bodyWhere, nearestBody, noteBodyHit, reachTo, segR, segsHittable, stampSegFlash, tickSegFlash, woundCount, type SegBody } from './segments';
 import { DEFENSE_CFG } from './defense';
@@ -1673,6 +1676,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'forgeBegin': return typeof a.writUid === 'number' && isStr(a.baseId) && typeof a.pad === 'boolean';
     case 'forgeCancel': return true;
     case 'holdMuster': return true;  // the standing zone's harborhold — no payload
+    case 'townPortal': return true;
     case 'holdRestore': return true; // ditto (price re-derived host-side from data)
     // THE PATRON'S HOLD: vendor is a registry id, index an untrusted shelf
     // position; the commission's gem is null (release) or a kind+id pair.
@@ -1973,7 +1977,6 @@ export const PARTY_LAND_CFG = {
 // ENCOUNTER_CFG — packages/encounters.ts — so the framework tunes as data.)
 const EVENT_SPACING = 240;       // min gap between co-occurring world-event centers (legibility)
 const FRACTURE_FOE_CAP = 24;     // max living fracture-spewed foes (perf + clearability)
-const ZONE_MEMORY_TTL = 600;     // seconds of GAME TIME a left zone is remembered (10 min)
 // (Dwell seconds + stand-on radii + progress-ring styles for every transit
 // family — zone exits, sidezone mouths, realm gates, doors, toll keepers,
 // descent platforms, ward seals — live in the TRANSIT registry now:
@@ -2346,12 +2349,13 @@ interface ZoneEnemyMemo {
   aiAwakened?: 1;
 }
 
-/** What a left zone remembers, per run, for ZONE_MEMORY_TTL game-seconds: the
+/** What a left zone remembers, per run, under ZONE_MEMORY_CFG: the
  *  layout SEED (identical terrain on return) + the living base-population enemies
  *  (cleared stays cleared; a half-fought zone keeps its survivors). Objective
  *  completion is remembered SEPARATELY + run-long via completedObjectives, so the
  *  Campfire can wipe this without un-clearing a zone. */
 interface ZoneMemory {
+  contents?: ZoneContents;
   seed: number;
   enemies: ZoneEnemyMemo[];
   savedAt: number;
@@ -3194,16 +3198,22 @@ export class World {
   /** Reusable hidden caster for environmental hazards (lava orbs) — like demonCaster. */
   private hazardCaster: Actor | null = null;
   /** ZONE MEMORY: per-run, in-memory remembrance so re-entering a zone within
-   *  ZONE_MEMORY_TTL keeps its layout (seed) + surviving base enemies — crossing
+   *  ZONE_MEMORY_CFG keeps its layout (seed) + surviving base enemies — crossing
    *  a boundary never punishes you. Cleared by the Campfire; objective-clears live
    *  separately in completedObjectives. currentZoneSeed = the live zone's seed,
    *  captured into memory when we leave it. zoneGenTagging gates the createMonster
    *  base-population flag. */
   private zoneMemory = new Map<string, ZoneMemory>();
+  townPortals: TownPortal[] = [];
+  townPortalDestination: string | undefined;
+  townPortalClientViews: TownPortalView[] | null = null;
+  private townPortalDwell = new Map<string, number>();
+  private townPortalArrival = new Set<string>();
   /** THE ONE-SHOT FORGET (devRemintZone): the next zone leave writes no
    *  memory and drops the standing one — the reload re-mints pristine
    *  ground off the def (the Map Forge's edit loop). */
   private forgetMemoryOnLeave = false;
+  private adoptedZonePending = false;
   private currentZoneSeed = 0;
   private zoneGenTagging = false;
   /** Ordinal of seeded farPoint fallbacks taken this load (World.seededDraw's
@@ -5932,6 +5942,7 @@ export class World {
     // The blueprint's furniture: destructible clutter and friendly folk.
     for (const b of layout.breakables) {
       const c = this.createMonster(b.id, Math.max(1, def.level), 'enemy');
+      c.fromZoneGen = true; // furniture is part of the persistent population
       c.pos = this.clampPos(vec(b.pos.x, b.pos.y), c.radius);
       this.actors.push(c);
     }
@@ -6521,7 +6532,7 @@ export class World {
     // TTL: drop its base population so re-entry never re-stocks a one-time cave (the
     // objective is already done; exits are already open). Surface zones still refresh.
     if (isCave && this.objectiveDone) {
-      this.actors = this.actors.filter(a => !(a.fromZoneGen && a.team === 'enemy'));
+      this.actors = this.actors.filter(a => !(a.fromZoneGen && a.team === 'enemy' && !(a.defId && MONSTERS[a.defId]?.passive)));
     }
 
     // Leftover points of interest hold treasure, shrines, and altars. (A SPECIAL
@@ -6556,9 +6567,10 @@ export class World {
       const caches = (rng.chance(0.5) ? 1 : 0) + (rng.chance(0.15) ? 1 : 0);
       for (let i = 0; i < caches; i++) {
         const c = this.createMonster(FIXTURE_IDS.gem_cache, def.level, 'enemy');
+        c.fromZoneGen = true;
         const at = this.interactSpot(pois, rng, 600, INTERACT_PLACE_CFG.portalClear);
         c.pos = this.clampPos(vec(at.x, at.y), c.radius);
-        this.actors.push(c);
+        if (!memory?.contents) this.actors.push(c);
       }
       if (rng.chance(0.65)) {
         const sdef = rng.pick(SHRINES);
@@ -6614,9 +6626,10 @@ export class World {
         const n = rng.int(pform.caches[0], pform.caches[1]);
         for (let i = 0; i < n; i++) {
           const c = this.createMonster(FIXTURE_IDS.gem_cache, def.level, 'enemy');
+          c.fromZoneGen = true;
           const at = this.interactSpot(pois, rng, 520, INTERACT_PLACE_CFG.portalClear);
           c.pos = this.clampPos(vec(at.x, at.y), c.radius);
-          this.actors.push(c);
+          if (!memory?.contents) this.actors.push(c);
         }
       }
       if (pform.chest && !this.completedObjectives.has(def.id)
@@ -6632,6 +6645,8 @@ export class World {
         });
       }
     }
+
+    if (memory?.contents) restoreZoneContents(this, memory.contents);
 
     // THE ARRIVAL LATCH re-arms per zone: every station must see its disc
     // EMPTY once before its dwell may fire (stationDwellArmed).
@@ -16498,7 +16513,7 @@ export class World {
   // --- ZONE MEMORY: "crossing a zone boundary never punishes you" -------------
   //
   // Default-on remembrance: a zone you leave keeps its layout (seed) + surviving
-  // base enemies for ZONE_MEMORY_TTL game-seconds, so re-entering finds it as you
+  // base enemies until an explicit reset by default, so re-entering finds it as you
   // left it (cleared stays cleared; a half-fought zone keeps its survivors).
   // Objective completion is remembered SEPARATELY + run-long (completedObjectives,
   // applied on entry), so the Campfire's refresh can forget enemies/terrain
@@ -16509,7 +16524,7 @@ export class World {
   /** Is this zone's memory still within the TTL (game time)? */
   private zoneMemoryFresh(zoneId: string): boolean {
     const m = this.zoneMemory.get(zoneId);
-    return !!m && this.time - m.savedAt < ZONE_MEMORY_TTL;
+    return !!m && this.time - m.savedAt < ZONE_MEMORY_CFG.ttl;
   }
 
   /** PURE capture of the CURRENT zone's memory (seed + living base enemies +
@@ -16519,14 +16534,14 @@ export class World {
    *  captureZoneMemory. */
   private zoneMemorySnapshot(): ZoneMemory | null {
     const z = this.zone;
-    // Skip town (safe), the streamed abyss (boundless), and unvisited SURFACE
+    // Remember towns by policy; skip the streamed abyss and unvisited SURFACE
     // ground (caves never chart, so they bypass the visited gate). WAVES zones
     // are remembered like everything else now: the counter + mid-wave survivors
     // ride the memo (wave/waveActive below; spawnWave flags its bodies
     // fromZoneGen), so the old double-fight hazard — remembered camp enemies
     // stacked on a reset counter — cannot arise: nothing about the fight resets
     // while the memory lives.
-    if (!z || z.boundless || z.objective.kind === 'safe'
+    if (!z || z.boundless || (z.objective.kind === 'safe' && !ZONE_MEMORY_CFG.rememberSafeZones)
       || (!this.inCave && !this.visited.has(z.id))) return null;
     const enemies: ZoneEnemyMemo[] = [];
     for (const a of this.actors) {
@@ -16565,6 +16580,7 @@ export class World {
     }
     return {
       seed: this.currentZoneSeed, enemies, savedAt: this.time, doorState,
+      contents: captureZoneContents(this),
       ...(this.openedHollows.size ? { hollows: [...this.openedHollows] } : {}),
       ...(this.annexOpen.size ? { annexOpen: [...this.annexOpen] } : {}),
       // Objective-progress riders, per kind: the wave gauntlet's position, the
@@ -16603,9 +16619,12 @@ export class World {
   }
 
   /** Snapshot the zone we're LEAVING: its layout seed + the living base-population
-   *  enemies (fromZoneGen). Skips town (safe), the boundless abyss, and unvisited
+   *  enemies (fromZoneGen). Skips the boundless abyss and unvisited
    *  SURFACE ground. CAVES are now captured (a left side area keeps its state). */
   private captureZoneMemory(): void {
+    // A just-adopted save owns the memories. The bootstrap scene must not
+    // overwrite its row on the first resume load.
+    if (this.adoptedZonePending) { this.adoptedZonePending = false; return; }
     const z = this.zone;
     if (this.forgetMemoryOnLeave) {
       this.forgetMemoryOnLeave = false;
@@ -16656,11 +16675,117 @@ export class World {
     }
   }
 
+  /** Shared refusal for the button, menu, input and the authoritative cast. */
+  townPortalRefusal(seat: Seat = this.localSeat): string | null {
+    const a = seat.actor;
+    if (a.dead || a.downed || seat.merc) return 'Cannot open a portal now.';
+    if (this.traversal || this.scene?.hudVeil || a.heldBy !== undefined) return 'Finish the current action first.';
+    if (this.zone.objective.kind === 'safe') return 'Use your return portal to leave town.';
+    if (this.zone.boundless || this.zone.townPortals === false) return 'Town portals are sealed here.';
+    const target = this.zoneMap[this.townPortalDestination ?? TOWN_PORTAL_CFG.destination];
+    if (!target || target.objective.kind !== 'safe') return 'No safe portal destination is configured.';
+    if (!this.clientActionHook && !this.zoneMap[this.zone.id]) {
+      const ladder = this.caveReturn ? [...this.caveStack, this.caveReturn] : [];
+      if (!ladder.length || ladder.some(r => !r.kind || !sidezoneOf(r.kind) || !Number.isFinite(r.seed))) {
+        return 'This passage has no stable return route.';
+      }
+    }
+    return null;
+  }
+
+  castTownPortal(seat: Seat = this.localSeat): boolean {
+    const reason = this.townPortalRefusal(seat);
+    if (reason) { this.text(seat.actor.pos, reason, TOWN_PORTAL_CFG.color, 13); return false; }
+    if (seat.actor.casting) return false;
+    return this.useSkill(seat.actor, makeSkillGem(SKILLS[TOWN_PORTAL_CFG.skillId], 1, 'common'), seat.actor.pos, true);
+  }
+
+  /** Invoked by the utility skill's effect, after its ordinary cast completes. */
+  private openTownPortal(seat: Seat): void {
+    if (this.townPortalRefusal(seat)) return;
+    const origin = this.serializeWorldState().player;
+    if (!origin) return;
+    delete origin.vitals; // travelling never rolls back healing, costs or damage
+    const at = seat.actor.pos;
+    if (origin.cave) { origin.cave.x = at.x; origin.cave.y = at.y; }
+    else { origin.x = at.x; origin.y = at.y; }
+    const sourcePos = this.findFreeSpot(vec(at.x + TOWN_PORTAL_CFG.spawnOffset, at.y), 18, seat.actor.tier ?? 0);
+    this.townPortals = this.townPortals.filter(p => p.owner !== seat.id);
+    this.townPortals.push({ owner: seat.id, origin, originTier: seat.actor.tier ?? 0, sourcePos,
+      sourceEntryFrom: this.entryFrom ?? undefined, sourceSeed: this.currentZoneSeed, destination: this.townPortalDestination ?? TOWN_PORTAL_CFG.destination, returning: false });
+    this.townPortalDwell.delete(seat.id);
+    this.townPortalArrival.delete(seat.id);
+    this.text(sourcePos, 'Town Portal', TOWN_PORTAL_CFG.color, 14);
+  }
+
+  townPortalViews(): TownPortalView[] {
+    if (this.townPortalClientViews) return this.townPortalClientViews;
+    return this.townPortals.flatMap(p => {
+      const source = p.origin.cave?.zoneId ?? p.origin.zoneId;
+      const visible = p.returning ? this.zone.id === p.destination : this.zone.id === source;
+      const pos = p.returning ? p.destinationPos : p.sourcePos;
+      if (!visible || !pos) return [];
+      const target = p.returning ? source : p.destination;
+      return [{ pos, tier: p.returning ? 0 : p.originTier, owner: p.owner,
+        label: `${p.returning ? 'Return to' : 'Travel to'} ${(this.zoneMap[target] ?? this.caveMap[target])?.name ?? 'your expedition'}`,
+        frac: Math.min(1, (this.townPortalDwell.get(p.owner) ?? 0) / TOWN_PORTAL_CFG.dwellSeconds) }];
+    });
+  }
+
+  private updateTownPortals(dt: number): boolean {
+    if (this.clientActionHook || this.traversal) return false;
+    for (const view of this.townPortalViews()) {
+      const seat = this.seats.find(s => s.id === view.owner);
+      const p = this.townPortals.find(p => p.owner === view.owner);
+      if (!seat || !p) continue;
+      const a = seat.actor;
+      const near = dist(a.pos, view.pos) <= TOWN_PORTAL_CFG.reach;
+      if (!near) this.townPortalArrival.delete(seat.id);
+      if (!near || a.dead || a.downed || a.push || a.casting || !this.seatIdle(seat)
+        || this.townPortalArrival.has(seat.id)
+        || !this.dwellReachable(a.pos, view.pos, 'sight', { from: a.tier ?? 0, to: view.tier })) {
+        this.townPortalDwell.delete(seat.id); continue;
+      }
+      const dwell = (this.townPortalDwell.get(seat.id) ?? 0) + dt;
+      this.townPortalDwell.set(seat.id, dwell);
+      if (dwell < TOWN_PORTAL_CFG.dwellSeconds) continue;
+      this.townPortalDwell.clear();
+      if (p.returning) {
+        const source = p.origin.cave?.zoneId ?? p.origin.zoneId;
+        if (this.zoneMemory.get(source)?.seed !== p.sourceSeed) {
+          this.townPortals = this.townPortals.filter(q => q !== p);
+          this.notice('The old return passage has faded.', TOWN_PORTAL_CFG.color, 14, 'world');
+          continue;
+        }
+        if (TOWN_PORTAL_CFG.consumeOnReturn) this.townPortals = this.townPortals.filter(q => q !== p);
+        else p.returning = false;
+        this.resumeSpawn('exact', p.origin, p.sourceEntryFrom);
+        const spot = p.origin.cave ?? p.origin;
+        if (this.zone.id === source) this.landPartyAt(vec(spot.x, spot.y), { tier: p.originTier });
+      } else {
+        this.loadZone(p.destination);
+        const anchor = this.waypointPos ?? this.player.pos;
+        p.destinationPos = this.findFreeSpot(vec(anchor.x + TOWN_PORTAL_CFG.arrivalOffset.x,
+          anchor.y + TOWN_PORTAL_CFG.arrivalOffset.y), 18, 0);
+        p.returning = true;
+        this.landPartyAt(p.destinationPos);
+      }
+      this.townPortalArrival.add(seat.id); // step clear before another dwell
+      return true;
+    }
+    return false;
+  }
+
   /** The Campfire's rest (player agency): forget every zone's layout + enemies so
    *  the world repopulates fresh on next entry. Objective-clears persist, so
-   *  cleared zones stay UNLOCKED — only the enemies + terrain refresh. */
+   *  cleared zones stay UNLOCKED — enemies, containers and terrain refresh; town doors remain open. */
   refreshZones(): void {
-    this.zoneMemory.clear();
+    this.townPortals = [];
+    this.townPortalDwell.clear();
+    if (this.zone.objective.kind !== 'safe') this.forgetMemoryOnLeave = true;
+    for (const id of this.zoneMemory.keys()) {
+      if ((this.zoneMap[id] ?? this.caveMap[id])?.objective.kind !== 'safe') this.zoneMemory.delete(id);
+    }
     this.notice('You bank the campfire — the wilds stir anew.', '#ffb84a', 16, 'world');
     this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 120, color: '#ff9a3a', life: 0.7, maxLife: 0.7 });
   }
@@ -16903,6 +17028,7 @@ export class World {
     // with the session. The writer audit's one finding, folded.)
     const memoRowOf = (zoneId: string, m: ZoneMemory): SavedZoneMemory => ({
       zoneId, seed: m.seed, savedAt: m.savedAt,
+      ...(m.contents ? { contents: structuredClone(m.contents) } : {}),
       enemies: m.enemies.map(e => ({ ...e })),
       ...(m.doorState ? { doorState: { ...m.doorState } } : {}),
       ...(m.hollows ? { hollows: [...m.hollows] } : {}),
@@ -16936,7 +17062,7 @@ export class World {
     for (const [zid, m] of this.zoneMemory) {
       if (zid === this.zone.id) continue; // superseded by the live capture below
       if (!kept.has(zid) && !zid.startsWith('cave_')) continue;
-      if (this.time - m.savedAt >= ZONE_MEMORY_TTL) continue; // spent — drop the weight
+      if (this.time - m.savedAt >= ZONE_MEMORY_CFG.ttl) continue;
       let row = prevMemRows?.get(zid);
       if (row === undefined || row.src !== m) {
         this.memorySaveRowDerives++;
@@ -16992,6 +17118,8 @@ export class World {
       surveyed: [...this.surveyed].filter(id => kept.has(id)),
       discoveredWaypoints: [...this.discoveredWaypoints].filter(id => kept.has(id)),
       memory,
+      townPortals: structuredClone(this.townPortals),
+      townPortalDestination: this.townPortalDestination,
       quests: {
         active: this.activeQuests.map(q => ({ ...q })),
         completed: [...this.completedQuests],
@@ -17106,13 +17234,18 @@ export class World {
     // list (restoreZoneEnemies already skips them — one tolerance point);
     // rarity re-validates against the live registry.
     this.zoneMemory.clear();
+    this.townPortals = readTownPortals(ws.townPortals);
+    this.townPortalDwell.clear();
+    this.townPortalArrival.clear();
+    for (const p of this.townPortals) this.townPortalArrival.add(p.owner);
+    this.townPortalDestination = typeof ws.townPortalDestination === 'string' ? ws.townPortalDestination : undefined;
     for (const raw of ws.memory ?? []) {
       const m = raw as SavedZoneMemory | null;
       if (!m || typeof m.zoneId !== 'string' || !Array.isArray(m.enemies)) continue;
       if (!healed[m.zoneId] && !m.zoneId.startsWith('cave_')) continue;
       if (typeof m.seed !== 'number' || !Number.isFinite(m.seed)
         || typeof m.savedAt !== 'number' || !Number.isFinite(m.savedAt)) continue;
-      if (this.time - m.savedAt >= ZONE_MEMORY_TTL) continue;
+      if (this.time - m.savedAt >= ZONE_MEMORY_CFG.ttl) continue;
       const enemies: ZoneEnemyMemo[] = [];
       for (const e of m.enemies) {
         const memo = sanitizeEnemyMemo(e);
@@ -17141,6 +17274,7 @@ export class World {
       const procMemo = sanitizeProcessionMemo(m.procession);
       this.zoneMemory.set(m.zoneId, {
         seed: m.seed, savedAt: m.savedAt, enemies,
+        contents: savedZoneContents(m.contents),
         ...(doors ? { doorState } : {}),
         ...(hollows.length ? { hollows } : {}),
         ...(annexOpen.length ? { annexOpen } : {}),
@@ -17242,6 +17376,7 @@ export class World {
     const restored = this.sim.restoreOverlays(ws.overlays);
     this.sim.pruneOverlayZones(id => !!healed[id]);
     this.sim.reseedGraph(Object.values(healed), this.simView(), restored);
+    this.adoptedZonePending = true;
     return true;
   }
 
@@ -17263,11 +17398,11 @@ export class World {
    *  'town' (and every unresolvable spot — a scrubbed zone, a corrupt coord)
    *  wakes in Lastlight. ALWAYS loads a zone, so the post-adopt world is
    *  consistent either way. */
-  resumeSpawn(policy: ResumeSpawn, spot: SavedPlayerSpot | undefined | null): void {
+  resumeSpawn(policy: ResumeSpawn, spot: SavedPlayerSpot | undefined | null, from?: string): void {
     const exact = policy === 'exact' && spot && this.zoneMap[spot.zoneId]
       && Number.isFinite(spot.x) && Number.isFinite(spot.y) ? spot : null;
     if (!exact) { this.loadZone(START_ZONE); return; }
-    this.loadZone(exact.zoneId);
+    this.loadZone(exact.zoneId, from);
     // THE UNDERGROUND LADDER — descend strictly AFTER the anchor load: any
     // surface load nulls caveReturn and empties caveStack by law, so the
     // ladder must stand up on top of the loaded anchor, never before it.
@@ -27918,6 +28053,7 @@ export class World {
   applyAction(seat: Seat, action: MetaAction): void {
     if (!isValidMetaAction(action)) return;
     switch (action.t) {
+      case 'townPortal': this.castTownPortal(seat); break;
       case 'learn': this.learnSkill(action.uid, seat, action.slot); break;
       case 'unlearn': this.unlearnSkill(action.skillId, seat, action.x, action.y); break;
       case 'attuneSpectre': this.attuneSpectre(action.skillId, action.formId, seat); break;
@@ -35132,6 +35268,10 @@ export class World {
       // resolved (ground deliveries plant at the target, in the case block).
       if (fx.type === 'kindle' && d.type !== 'ground') {
         this.plantKindle(caster, fx.kind, origin, aoeScale, durScale);
+      }
+      if (fx.type === 'townPortal') {
+        const seat = this.seats.find(s => s.actor === caster);
+        if (seat) this.openTownPortal(seat);
       }
       // A PLANTED STEAM BANK from any non-ground delivery stands where the
       // skill resolved (ground deliveries plant at the target, above) — a
@@ -46710,6 +46850,8 @@ export class World {
     // screen, and downed/dead co-op allies so they can still be revived / linger).
     this.actors = this.actors.filter(a => !a.dead || a.isPlayerKind());
 
+    if (this.updateTownPortals(dt)) return; // travel ends this old-zone frame
+
     // Waypoint attunement: brush against it once and it's yours for the run.
     // A BESIEGED stone (the 'leyline' objective — waypointBesieged, the one
     // predicate) REFUSES the brush while its siphon drinks: the refusal
@@ -52231,6 +52373,7 @@ export class World {
           if (c.mimic) {
             // It was never a chest.
             const m = this.createMonster(FIXTURE_IDS.mimic, Math.max(1, this.zone.level), 'enemy');
+            m.fromZoneGen = true; // a revealed chest cannot respawn on a return trip
             m.pos = this.clampPos(vec(c.pos.x, c.pos.y), m.radius);
             this.actors.push(m);
             this.emergeBody(m, { host: true }); // THE EMERGENCE GRAMMAR: it was never a chest — the mimic BURSTS OUT of it (no caption)

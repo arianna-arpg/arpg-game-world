@@ -57,6 +57,12 @@ registerMenuEntry({
   id: 'journal', label: 'Journal', icon: 'journal', group: 'hero', verb: 'journal', order: 4,
   blurb: 'Active and completed quests, the writs you carry.',
 });
+registerMenuEntry({
+  id: 'townPortal', label: 'Town Portal', icon: 'portal', group: 'hero', verb: 'townPortal', bind: 'townPortal', order: 5,
+  usable: r => !r.world.townPortalRefusal(r.seat),
+  sealedHint: r => r.world.townPortalRefusal(r.seat) ?? '',
+  blurb: 'Open a passage to town. Linger at it to travel, and use its other end to return.',
+});
 
 // --- the stations (exist by unlock, open at the station) ---------------------
 

@@ -24,7 +24,7 @@ import {
   type SkillDef, type SkillInstance, type SkillRarity, type SkillTreeNode, type SupportInstance,
 } from '../engine/skills';
 import { EQUIP_SLOTS, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
-import { findBagGem, gemInitials, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
+import { findBagGem, gemInitials, packSkillGemPayload, packSupportGemPayload, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
 import { veinLines } from '../engine/supportbase';
 import {
   MEMORY_CFG, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE, memoryFacets,
@@ -34,6 +34,8 @@ import { GEM_DROP_CFG } from '../engine/loot';
 import { bagBoard, canPlaceAt, overlappingItems, swapBlockerFits } from '../engine/inventory';
 import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
 import { CATEGORY_GLYPHS, SUPPORT_BADGE } from '../render/itemIcons';
+import { PortalButton } from './portalbutton';
+import { ItemHoldController, type ItemHoldTarget } from './itemhold';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, itemLevelReq, type ModCompareRow } from '../engine/itemgen';
 import { ITEM_BASES } from '../data/itembases';
@@ -118,7 +120,7 @@ import { MU_ZONE } from '../data/mu';
 import { kitChoicesFor, kitRungOf } from '../meta/classkit';
 import { MERC_CFG } from '../meta/mercs';
 import {
-  ACTION_IDS, ACTION_LABELS, keyDisplay, PAD_ACTION_IDS, PAD_ACTION_LABELS,
+  ACTION_IDS, ACTION_LABELS, bindingContextsOverlap, keyDisplay, PAD_ACTION_IDS, PAD_ACTION_LABELS,
   type ActionId, type PadActionId, type Settings,
 } from '../meta/settings';
 import { PAD_CFG, padDisplay, AIM_ASSIST_MODES, connectedPadIndices } from '../core/gamepad';
@@ -358,12 +360,7 @@ const SALVAGE_AUTO_ARM = true;
  *  so a tap on them does nothing); a press held past the seam toggles THE
  *  KEEPER'S MARK. Travel past the slop cancels both (a drag, not a hold).
  *  The tile's ring fills over exactly holdMs — drawn == timed. */
-const LOCK_HOLD_CFG = {
-  /** The tap/hold seam, ms (the Vault's invest seam sits at 280). */
-  holdMs: 320,
-  /** Pointer travel (px) that cancels the hold. */
-  slopPx: 6,
-};
+
 
 /** The bag grid's cell pitch (CSS px inside the zoomed panel) — the tiles,
  *  the cells, the footprint ghost and the landing preview all lay out on it. */
@@ -442,6 +439,7 @@ export function tierMapTint(def: Pick<ZoneDef, 'tiers'>, revealed: boolean, fill
 }
 
 export class UI {
+  private portalButton: PortalButton;
   private classSelect = document.getElementById('class-select')!;
   private charSheet = document.getElementById('char-sheet')!;
   private inventory = document.getElementById('inventory')!;
@@ -752,13 +750,15 @@ export class UI {
   /** THE HELD RIGHT-CLICK in flight on a bag tile / worn chip (beginLockHold),
    *  or null. Panel-level, never tile-level: a re-render mid-hold replaces
    *  the tile, and the hold must neither strand nor double-arm. */
-  private lockHold: {
-    uid: number; seatId: string | undefined; x: number; y: number;
-    startedAt: number; fired: boolean; timer: number; off: () => void;
-    /** The pad pointer's Ⓐ (button 0) rather than a mouse's button 2: the
-     *  hold only ever LOCKS — the tap stays the fabric's click-lift. */
-    pad: boolean;
-  } | null = null;
+  private itemHold = new ItemHoldController(pad => {
+    if (pad) { dndCancel(); dndSwallowClick(); }
+    hideTooltip();
+    if (this.inventoryOpen) this.refreshInventory();
+    if (this.salvageOpen) this.refreshSalvage();
+    if (this.vendorOpen) this.refreshVendor();
+  });
+  private itemHoldKeyDown = false;
+  private itemHoldPointer = { x: 0, y: 0 };
   /** THE BAG SORT's last press: the lit glyph and its direction — pressing
    *  the lit mode again flips it. Panel state, never saved (the bag's cells
    *  are the truth; this only says what the NEXT press will do). */
@@ -825,6 +825,8 @@ export class UI {
     /** Tear down a co-op session and return to the menu. */
     private onLeaveCoop: () => void = () => { /* default no-op */ },
   ) {
+    this.portalButton = new PortalButton(this.getWorld, this.getSettings);
+    window.addEventListener('pointermove', ev => { this.itemHoldPointer = { x: ev.clientX, y: ev.clientY }; });
     // Tooltips: bound ONCE on the stable panel containers (delegation survives
     // their innerHTML re-renders); content is read from live data each hover.
     bindTooltips(this.charSheet, (el) =>
@@ -1244,6 +1246,10 @@ export class UI {
     const w = (): World => this.getWorld();
     return {
       inventory: { open: id => this.toggleInventory(id), isOpen: () => this.inventoryOpen },
+      townPortal: { open: id => {
+        const world = w(), previous = world.uiActionSeatId; world.uiActionSeatId = id ?? null;
+        try { world.requestMeta({ t: 'townPortal' }); } finally { world.uiActionSeatId = previous; }
+      }, isOpen: () => false },
       character: { open: id => this.toggleCharSheet(id), isOpen: () => this.charSheetOpen },
       passives: { open: id => this.toggleTree(id), isOpen: () => this.treeOpen },
       map: { open: () => this.openMapTab('map'), isOpen: () => this.mapOpen && this.mapTab === 'map' },
@@ -1288,7 +1294,10 @@ export class UI {
     return true;
   }
   /** Once per frame (main.ts): the bar's visibility, seat and cadenced fold. */
-  menuBarSync(dt: number, visible: boolean): void { this.menuBar.sync(dt, visible); }
+  menuBarSync(dt: number, visible: boolean): void {
+    this.menuBar.sync(dt, visible);
+    this.portalButton.sync(visible && !this.uiBlocking());
+  }
   /** Is THE FOLIO's Tab walk armed (the hero's book of two+ leaves stands)?
    *  The menu's default bind is Tab; the walk wins while it is armed. */
   folioWalkArmed(): boolean {
@@ -4027,7 +4036,8 @@ export class UI {
     // never double as a lift. (The pad has no second button here, so a
     // pouch's Recall still has no pad door — named, not solved.)
     q<HTMLElement>('[data-lock-uid]').forEach(el => el.addEventListener('pointerdown', ev => {
-      const pad = ev.button === 0 && ev.pointerId === PAD_POINTER_ID;
+      const pad = ev.button === 0 && ev.pointerId === PAD_POINTER_ID
+        && this.getSettings().padBinds.itemLock === PAD_CFG.pointer.confirm;
       if ((ev.button !== 2 && !pad) || dndCarried()) return;
       const uid = Number(el.dataset.lockUid);
       const it = seatMeta.items.find(i => i.uid === uid)
@@ -4146,96 +4156,63 @@ export class UI {
    *  double-arms it; release listens on the WINDOW (the press-guard idiom:
    *  captures retarget, replaced tiles vanish, but every release path still
    *  runs through here). */
+  private lockTarget(uid: number, seatId: string | undefined): ItemHoldTarget {
+    return {
+      element: () => this.inventory.querySelector<HTMLElement>('[data-lock-uid="' + uid + '"]'),
+      toggle: () => {
+        const it = this.carriedByUid(uid); if (!it) return;
+        const world = this.getWorld(), previous = world.uiActionSeatId;
+        world.uiActionSeatId = seatId ?? null;
+        try { world.requestMeta({ t: 'salvageLock', uid, on: !it.locked }); }
+        finally { world.uiActionSeatId = previous; }
+      },
+      tap: () => { const it = this.carriedByUid(uid); if (it) this.bagUseVerb(it, seatId)?.run(); },
+    };
+  }
+  private vendorHoldTarget(el: HTMLElement): ItemHoldTarget | null {
+    const address = el.dataset.vhold!;
+    const [vid, idx] = address.split(':');
+    const vendor = VENDORS.find(v => v.id === vid), world = this.getWorld();
+    const entry = vendor?.stock(world)[Number(idx)];
+    if (!vendor || !entry) return null;
+    const seatId = this.panelSeatIds.get(this.vendorMenu);
+    // Semantic identity survives network rehydration. Any changed shelf or
+    // restock cancels, so a shifted slot never acts on another ware.
+    const shelfKey = (): string => JSON.stringify([world.vendorRestockAt,
+      vendor.stock(world).map(e => e.kind === 'item' ? e.item
+        : e.kind === 'skill' ? packSkillGemPayload(e.inst) : packSupportGemPayload(e.gem))]);
+    const key = shelfKey();
+    return {
+      element: () => shelfKey() === key
+        ? this.vendorMenu.querySelector<HTMLElement>('[data-vhold="' + address + '"]') : null,
+      toggle: () => {
+        if (shelfKey() !== key) return;
+        const index = Number(idx), current = vendor.stock(world)[index]; if (!current) return;
+        const previous = world.uiActionSeatId; world.uiActionSeatId = seatId ?? null;
+        try { world.requestMeta({ t: 'vendorLock', vendor: vid, index,
+          on: !world.vendorEntryHold(world.vendorHoldKey(vendor), current) }); }
+        finally { world.uiActionSeatId = previous; }
+      },
+    };
+  }
   private beginLockHold(ev: PointerEvent, uid: number, seatId: string | undefined, pad = false): void {
-    this.endLockHold();
-    const hold = {
-      uid, seatId, x: ev.clientX, y: ev.clientY,
-      startedAt: performance.now(), fired: false, timer: 0, off: (): void => {}, pad,
-    };
-    const cancel = (): void => { if (this.lockHold === hold) this.endLockHold(); };
-    const release = (e: PointerEvent): void => {
-      if (this.lockHold !== hold) return;
-      const fired = hold.fired;
-      // THE TAP: a release over the tile it pressed, inside the seam.
-      const under = e.target instanceof Element ? e.target.closest<HTMLElement>('[data-lock-uid]') : null;
-      const overSame = under?.dataset.lockUid === String(uid);
-      this.endLockHold();
-      // (the pad's tap is the fabric's click-lift, never a use)
-      if (fired || !overSame || hold.pad) return;
-      const it = this.carriedByUid(uid);
-      const verb = it && this.bagUseVerb(it, seatId);
-      if (verb) { hideTooltip(); verb.run(); }
-    };
-    const move = (e: PointerEvent): void => {
-      if (this.lockHold !== hold) return;
-      // A button-less move = the press ended outside the window (the press
-      // guard's self-heal); travel past the slop = a drag, not a hold —
-      // neither verb fires.
-      if (e.buttons === 0) { cancel(); return; }
-      const dx = e.clientX - hold.x, dy = e.clientY - hold.y;
-      if (dx * dx + dy * dy > LOCK_HOLD_CFG.slopPx * LOCK_HOLD_CFG.slopPx) cancel();
-    };
-    window.addEventListener('pointerup', release, { capture: true });
-    window.addEventListener('pointercancel', cancel, { capture: true });
-    window.addEventListener('pointermove', move, { capture: true });
-    window.addEventListener('blur', cancel);
-    hold.off = (): void => {
-      window.removeEventListener('pointerup', release, { capture: true });
-      window.removeEventListener('pointercancel', cancel, { capture: true });
-      window.removeEventListener('pointermove', move, { capture: true });
-      window.removeEventListener('blur', cancel);
-    };
-    hold.timer = window.setTimeout(() => {
-      if (this.lockHold !== hold) return;
-      hold.timer = 0;
-      hold.fired = true;
-      const it = this.carriedByUid(uid);
-      if (!it) { this.endLockHold(); return; }
-      // The timer fires OUTSIDE any dispatch, so THE COUCH ACTION LATCH
-      // (microtask-scoped) is empty here — stamp the bag's owner ourselves
-      // (a local-hero id finds no couch seat and routes as ever).
-      const world = this.getWorld();
-      world.uiActionSeatId = seatId ?? null;
-      try { world.requestMeta({ t: 'salvageLock', uid, on: !it.locked }); }
-      finally { world.uiActionSeatId = null; }
-      // THE PAD'S LANE: the press also armed the fabric's drag and owes it a
-      // click — a fired hold takes both back (no drag on a later glide, no
-      // lift on the release).
-      if (hold.pad) { dndCancel(); dndSwallowClick(); }
-      hideTooltip();
-      this.refreshInventory(); // re-paints the fired ring (paintLockHold) — lit until the release
-      if (this.salvageOpen) this.refreshSalvage(); // sweep counts moved
-      if (this.vendorOpen) this.refreshVendor(); // a counter's cluster counts too
-    }, LOCK_HOLD_CFG.holdMs);
-    this.lockHold = hold;
-    this.paintLockHold();
+    this.itemHold.begin(this.lockTarget(uid, seatId), ev.clientX, ev.clientY, pad);
   }
+  private endLockHold(): void { this.itemHold.end(); }
+  private paintLockHold(): void { this.itemHold.paint(); }
 
-  /** Tear the hold down: timer, window listeners, the tile's ring. */
-  private endLockHold(): void {
-    const hold = this.lockHold;
-    if (!hold) return;
-    this.lockHold = null;
-    if (hold.timer) window.clearTimeout(hold.timer);
-    hold.off();
-    this.inventory.querySelectorAll<HTMLElement>('.lock-hold').forEach(el => {
-      el.classList.remove('lock-hold', 'lock-hold-fired');
-    });
-  }
-
-  /** Dress the held tile: the class + the seam as CSS vars, the elapsed
-   *  carried as a NEGATIVE delay so a re-render mid-hold resumes the ring
-   *  where the clock stands (drawn == timed). Called at arm and after every
-   *  bag re-render. */
-  private paintLockHold(): void {
-    const hold = this.lockHold;
-    if (!hold) return;
-    const el = this.inventory.querySelector<HTMLElement>(`[data-lock-uid="${hold.uid}"]`);
+  /** Bindable held key/button, sharing the right-click timer. CSS pixels. */
+  itemLockInput(down: boolean, point = this.itemHoldPointer): void {
+    if (down === this.itemHoldKeyDown) return;
+    this.itemHoldKeyDown = down;
+    if (!down) { this.itemHold.end(); return; }
+    if (dndCarried() || this.escapeMenuOpen || this.armedRebind || !this.uiBlocking()) return;
+    if (document.activeElement?.matches('input,textarea,[contenteditable="true"]')) return;
+    const el = document.elementFromPoint(point.x, point.y)?.closest<HTMLElement>('[data-lock-uid],[data-vhold]');
     if (!el) return;
-    el.style.setProperty('--lock-hold-ms', `${LOCK_HOLD_CFG.holdMs}ms`);
-    el.style.setProperty('--lock-hold-elapsed', `-${Math.round(performance.now() - hold.startedAt)}ms`);
-    el.classList.add('lock-hold');
-    el.classList.toggle('lock-hold-fired', hold.fired);
+    const target = el.dataset.vhold ? this.vendorHoldTarget(el)
+      : this.lockTarget(Number(el.dataset.lockUid), this.panelSeatIds.get(this.inventory));
+    if (target) this.itemHold.begin(target, point.x, point.y, false, true);
   }
 
   // --- THE LANDING LAW + THE FOOTPRINT GHOST (installGearDnd) ---------------
@@ -5702,7 +5679,7 @@ export class UI {
       // whole shelf packs into the grid through the bag's own cell law —
       // gear by footprint, Memory pouches and gem finds as 1×1 tiles, side
       // by side. Hover for the full story; click the glass to buy, the
-      // corner pip reserves. (The gems tab, its seal, and the list rows
+      // held right-click reserves. (The gems tab, its seal, and the list rows
       // retired with the fold.)
       const waresGrid = ((): string => {
         const CELL = 34;
@@ -5723,10 +5700,11 @@ export class UI {
           const heldRow = canLock ? world.vendorEntryHold(holdKey, e) : undefined;
           const atCap = !heldRow && lockedCount >= lockCap;
           const canBuy = afford && !tradeRefusal && !entryLock;
+          const holdAttr = canLock && (heldRow || !atCap) ? `data-vhold="${v.id}:${idx}"` : "";
           const lockPip = canLock && (lockCap > 0 || heldRow)
-            ? `<button data-vlock="${v.id}:${idx}" ${atCap ? 'disabled' : ''} title="${lockTitleFor(heldRow, atCap)}"
+            ? `<span title="${lockTitleFor(heldRow, atCap)}"
                 style="position:absolute;top:-1px;right:-1px;z-index:2;font-size:9px;line-height:1;padding:1px 2px;
-                background:#141019cc;border:1px solid ${heldRow ? v.accent : '#3a3644'};border-radius:0 3px 0 3px;cursor:var(--cursor-point, pointer)">${heldRow ? '🔒' : '🔓'}</button>`
+                background:#141019cc;border:1px solid ${heldRow ? v.accent : '#3a3644'};border-radius:0 3px 0 3px;cursor:var(--cursor-point, pointer)">${heldRow ? '🔒' : '🔓'}</span>`
             : '';
           const badge = heldRow
             ? `<div style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:8px;color:${heldRow.commission ? '#7fe0d8' : v.accent}">${heldRow.commission ? 'ORDER' : 'RESERVED'}</div>`
@@ -5742,13 +5720,13 @@ export class UI {
             const at = pack.gemCells.get(idx);
             if (!at) {
               overflowRows += `
-                <div class="skill-entry" style="border-left:3px solid ${col}" data-tip="vgem" data-vgem="${v.id}:${idx}">
+                <div ${holdAttr} class="skill-entry" style="position:relative;border-left:3px solid ${col}" data-tip="vgem" data-vgem="${v.id}:${idx}">
                   <div class="name" style="color:${col}">${name}</div>
                   <div class="bind-btns"><button data-vbuy="${v.id}:${idx}" ${canBuy ? '' : 'disabled'}>Buy (${priceHtml})</button></div>
                 </div>`;
               return;
             }
-            tiles += `<div data-tip="vgem" data-vgem="${v.id}:${idx}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
+            tiles += `<div ${holdAttr} data-tip="vgem" data-vgem="${v.id}:${idx}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
               style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
               width:${CELL - 2}px;height:${CELL - 2}px;background:#1c1626;
               border:2px solid ${heldRow ? v.accent : col};border-radius:3px;cursor:${canBuy ? 'var(--cursor-point, pointer)' : 'var(--cursor-default, default)'};box-sizing:border-box;
@@ -5765,7 +5743,7 @@ export class UI {
             // The glass genuinely overflowed (the probe should have caught
             // content outgrowing it) — list the piece honestly below.
             overflowRows += `
-              <div class="skill-entry" style="border-left:3px solid ${ITEM_RARITIES[i.rarity].color}" data-tip="item" data-item-uid="${i.uid}">
+              <div ${holdAttr} class="skill-entry" style="position:relative;border-left:3px solid ${ITEM_RARITIES[i.rarity].color}" data-tip="item" data-item-uid="${i.uid}">
                 <div class="name" style="color:${ITEM_RARITIES[i.rarity].color}">${i.name} <span style="color:#9a94a8;font-size:10px">ilvl ${i.ilvl}</span></div>
                 <div class="bind-btns"><button data-vbuy="${v.id}:${idx}" ${canBuy ? '' : 'disabled'}>Buy (${priceHtml})</button></div>
               </div>`;
@@ -5784,7 +5762,7 @@ export class UI {
               <span style="position:absolute;bottom:1px;right:1px;font-size:9px;line-height:10px;padding:0 2px;
                 background:#241d2e;border:1px solid ${mk.color};border-radius:3px;color:#e8e0f8">${i.mem!.length}</span>`
             : (CATEGORY_GLYPHS[cat] ?? '?');
-          tiles += `<div data-tip="item" data-item-uid="${i.uid}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
+          tiles += `<div ${holdAttr} data-tip="item" data-item-uid="${i.uid}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
             title="${entryLock ? esc(entryLock) : tradeRefusal ? esc(tradeRefusal) : afford ? `Buy: ${esc(i.name)}` : 'Not enough essence'}"
             style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
             width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:${mk ? '#1c1626' : '#221e2c'};
@@ -5797,7 +5775,7 @@ export class UI {
         return `
           <div style="position:relative;width:${b.w * CELL}px;height:${b.h * CELL}px;margin-top:2px">${cells}${tiles}</div>
           ${overflowRows}${empty}
-          <div style="margin-top:4px;color:#8a8678;font-size:10px">hover a ware for its full story · click it to buy${canLock && lockCap > 0 ? ' · the corner pip reserves it' : ''}</div>`;
+          <div style="margin-top:4px;color:#8a8678;font-size:10px">hover a ware for its full story · click it to buy${canLock && lockCap > 0 ? ' · hold right-click (or your Lock binding) to reserve / release' : ''}</div>`;
       })();
 
       // THE STANDING ORDER strip (feature-gated; the Vault sells discovery,
@@ -5936,18 +5914,16 @@ export class UI {
     // THE PATRON'S HOLD: the toggle reads the row's CURRENT held state and
     // asks for the flip — the world validates capacity/nearness (host-side
     // in co-op; the client's optimistic repaint self-heals off the snapshot).
-    // stopPropagation: a glass tile's corner pip sits INSIDE its buy surface —
-    // the reserve click must never fall through into a purchase.
-    q<HTMLButtonElement>('button[data-vlock]').forEach(btn => btn.addEventListener('click', ev => {
-      ev.stopPropagation();
-      const [vid, idx] = btn.dataset.vlock!.split(':');
-      const vendor = VENDORS.find(x => x.id === vid);
-      if (!vendor) return;
-      const entry = vendor.stock(world)[Number(idx)];
-      const on = !(entry && world.vendorEntryHold(world.vendorHoldKey(vendor), entry));
-      world.requestMeta({ t: 'vendorLock', vendor: vid, index: Number(idx), on });
-      refresh();
+    // The shared hold consumes controller clicks after firing.
+    q<HTMLElement>('[data-vhold]').forEach(el => el.addEventListener('pointerdown', ev => {
+      const pad = ev.button === 0 && ev.pointerId === PAD_POINTER_ID
+        && this.getSettings().padBinds.itemLock === PAD_CFG.pointer.confirm;
+      if ((ev.button !== 2 && !pad) || dndCarried()) return;
+      const target = this.vendorHoldTarget(el); if (!target) return;
+      if (!pad) { ev.preventDefault(); ev.stopPropagation(); }
+      this.itemHold.begin(target, ev.clientX, ev.clientY, pad);
     }));
+    this.paintLockHold();
     q<HTMLButtonElement>('button[data-vcomm-open]').forEach(btn => btn.addEventListener('click', () => {
       this.vendorCommOpen = btn.dataset.vcommOpen!;
       this.vendorCommQuery = '';
@@ -9950,7 +9926,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
             // SWAP-ON-CONFLICT, the keyboard map's rule — scoped to the pad
             // map (the two maps are separate universes; a key and a button
             // never collide).
-            const other = PAD_ACTION_IDS.find(a => a !== action && binds[a] === code);
+            const other = PAD_ACTION_IDS.find(a => a !== action && bindingContextsOverlap(a, action) && binds[a] === code);
             if (other) binds[other] = binds[action];
             binds[action] = code;
             this.saveSettings();
@@ -9985,7 +9961,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
             // duplicate leaves the second action unreachable (bind the char
             // sheet to B and the skill book can never open again). The action
             // that held the key inherits this row's old key instead.
-            const other = ACTION_IDS.find(a => a !== action && binds[a] === nk);
+            const other = ACTION_IDS.find(a => a !== action && bindingContextsOverlap(a, action) && binds[a] === nk);
             if (other) binds[other] = binds[action];
             binds[action] = nk;
             this.saveSettings();

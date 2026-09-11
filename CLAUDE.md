@@ -116,6 +116,13 @@ checks, the balance harness's smoke suite, and the generation QA sweep are how
 we verify changes.
 
 ## Layout
+- Town portals: `data/townportals.ts` configures the scroll-free utility skill,
+  destination and HUD button; `engine/townportal.ts` carries saved round trips.
+  `engine/zonecontents.ts` extends run-long zone memory to spent containers and
+  uncollected loot, including safe-town doors. Campfire refresh clears expedition
+  memories and portals. Contract: `docs/engine/town-portals.md`; regression:
+  `balance/probe_townportal.ts`. Inventory locks and vendor reservations share
+  the bindable hold gesture in `ui/itemhold.ts`.
 - Necromancer tree batches: `data/necromancerTrees.ts` starts with Shambling
   Horde's three identities. `engine/replenishment.ts` provides bar-seated,
   bounded passive summon clocks; `over.summon` resolves count/cap/lifespan

@@ -62,6 +62,7 @@ import {
 } from '../src/meta/character';
 import { buildManifest, reconcileManifest } from '../src/packages/manifest';
 import { resolveResumeSpawn } from '../src/meta/worldstate';
+import { ZONE_MEMORY_CFG } from '../src/engine/zonecontents';
 import { World } from '../src/engine/world';
 import { placeZoneAt } from '../src/engine/worldgen';
 import { zoneKindOf } from '../src/data/zoneKinds';
@@ -748,6 +749,8 @@ void (async (): Promise<void> => {
   }).zoneMemory.get(visitG[0]);
   check('H6f: puzzlesDone survives the round trip (the writer fix)',
     !!adoptMemo?.puzzlesDone?.includes('probe_riddle'));
+  const originalTtl = ZONE_MEMORY_CFG.ttl;
+  ZONE_MEMORY_CFG.ttl = 600; // explicitly exercise the optional finite policy
   // H7 — THE TTL CLASS: age every stored memory past the 600s TTL (the world
   // clock only ever advances). Expiry is a MEMBERSHIP delta, not a derive —
   // rows drop from the walk without paying the serializer.
@@ -760,6 +763,7 @@ void (async (): Promise<void> => {
   check('H7b: expiry derives nothing — membership is not derivation',
     mDerives() === dH7, `${mDerives() - dH7} derives`);
   check('H7c: the post-expiry bytes == a forced full re-derive', !!jH7 && jH7 === forcedMemJson());
+  ZONE_MEMORY_CFG.ttl = originalTtl;
   // H8 — THE AGE-BUCKET BACKSTOP + THE CAMPFIRE: regrow two rows, cross the
   // shared zonesMemoMaxAgeSec boundary WITHOUT expiring them (599 < TTL) —
   // every stored row must re-derive (the insurance window against a future
@@ -777,8 +781,9 @@ void (async (): Promise<void> => {
   check('H8b: the bucket-flip bytes == a forced full re-derive', !!jH8 && jH8 === forcedMemJson());
   worldG.refreshZones(); // the campfire: zoneMemory.clear()
   const wsH8c = worldG.serializeWorldState();
-  check('H8c: the campfire clear empties the section to the live capture alone',
-    (wsH8c.memory ?? []).length === 1
+  check('H8c: campfire retains only the live capture and safe-town memories',
+    (wsH8c.memory ?? []).every(m => m.zoneId === worldG.zone.id || worldG.zoneMap[m.zoneId]?.objective.kind === 'safe')
+    && (wsH8c.memory ?? []).some(m => m.zoneId === worldG.zone.id)
     && memJsonOf(wsH8c) === forcedMemJson());
   // H9 — THE SEAM ITSELF (the B3 idiom): a recognizable valid json handed to
   // the accessor must land VERBATIM in the body — proof the second splice

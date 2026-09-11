@@ -989,6 +989,8 @@ export interface ZoneTiers {
 }
 
 export interface ZoneDef {
+  /** Explicitly seal player-created town travel for authored encounters. */
+  townPortals?: boolean;
   id: string;
   name: string;
   /** Monster level for everything spawned here (waves may ramp beyond it). */

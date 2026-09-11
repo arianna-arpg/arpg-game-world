@@ -33,7 +33,7 @@ export type ActionId =
   | 'skillSlot2' | 'skillSlot3' | 'skillSlot4' | 'skillSlot5' | 'skillSlot6' | 'skillSlot7'
   | 'metaModifier' | 'pickup'
   | 'panelChar' | 'panelTree' | 'panelMap' | 'panelInv'
-  | 'panelMenu';
+  | 'panelMenu' | 'townPortal' | 'itemLock';
 
 /** Pad-bindable actions: everything the keyboard binds, PLUS bar slots 0/1
  *  (fixed to LMB/RMB on mouse, free to live on any button on a pad). */
@@ -285,9 +285,17 @@ export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
   // THE MENU BAR (ui/menubar.ts): the tray of every page — Tab, the
   // MMO habit; the folio's Tab walk wins while a book of tabs stands.
   panelMenu: 'tab',
+  townPortal: 't', itemLock: 'l',
 };
 
 export const ACTION_IDS = Object.keys(DEFAULT_KEYBINDS) as ActionId[];
+
+/** Menu holds may share combat controls, but not panel/pickup controls
+ *  which remain active while browsing. */
+export function bindingContextsOverlap(a: string, b: string): boolean {
+  const other = a === 'itemLock' ? b : b === 'itemLock' ? a : null;
+  return !other || !/^(skillSlot\d+|moveUp|moveDown|moveLeft|moveRight|townPortal)$/.test(other);
+}
 
 /** Default controller layout. The left stick IS movement (an axis, not a
  *  bind), which frees the D-pad for the four panels; the movement actions
@@ -301,6 +309,7 @@ export const DEFAULT_PAD_BINDS: Record<PadActionId, string> = {
   metaModifier: 'pad:select', pickup: 'pad:r3',
   panelChar: 'pad:up', panelTree: 'pad:right', panelMap: 'pad:left', panelInv: 'pad:down',
   panelMenu: 'pad:l3',
+  townPortal: '', itemLock: 'pad:a',
 };
 
 /** Rebind-UI order for the controller section: the bar first (incl. the two
@@ -325,6 +334,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   metaModifier: 'Meta-Skill Modifier', pickup: 'Pick Up Item',
   panelChar: 'Character Sheet', panelTree: 'Passive Tree', panelMap: 'World Map',
   panelInv: 'Inventory', panelMenu: 'Menu',
+  townPortal: 'Town Portal', itemLock: 'Hold to Lock / Reserve (menus)',
 };
 
 /** Labels for the pad-only actions; everything else reuses ACTION_LABELS. */

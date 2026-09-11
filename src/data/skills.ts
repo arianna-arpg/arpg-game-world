@@ -10,6 +10,7 @@
 
 import { mod, linkMod, STAT_DEFS } from '../engine/stats';
 import { skillGrantStat, type SkillDef } from '../engine/skills';
+import { TOWN_PORTAL_SKILL } from './townportals';
 import { ULTIMATE_SKILLS } from './ultimates';
 import { LIVING_SKILLS } from './livingSkills';
 import { REACTIVE_SKILLS } from './reactiveSkills';
@@ -17,6 +18,7 @@ import { NECROMANCER_TREES } from './necromancerTrees';
 import { NECROMANCER_SKILLS } from './necromancerSkills';
 
 export const SKILLS: Record<string, SkillDef> = {
+  town_portal: TOWN_PORTAL_SKILL,
   ...NECROMANCER_SKILLS,
 
   // ======================= Mimicry (the blue-mage lane) ====================

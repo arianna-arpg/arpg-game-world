@@ -1082,6 +1082,9 @@ function handleLocalPanels(): void {
     return;
   }
   if (ui.escapeMenuOpen) return;
+  if (!ui.blockingFor(world.localSeat.id) && (input.justPressed(kb.townPortal) || (!padPointer.active && pad.justPressed(settings.padBinds.townPortal)))) {
+    world.requestMeta({ t: 'townPortal' });
+  }
   // Panel toggles answer to key OR pad bind — and the pad ones deliberately
   // stay live in pointer mode (the D-pad flips panels while browsing them).
   const pb = settings.padBinds;
@@ -1432,6 +1435,7 @@ function handleCouchPanels(): void {
   for (const g of couchGuests.values()) {
     const seat = world.seats.find(s => s.id === g.seatId);
     if (!seat || seat.actor.dead || seat.actor.downed) continue;
+    if (!g.pointer.active && g.gpad.justPressed(pb.townPortal)) world.applyAction(seat, { t: 'townPortal' });
     if (g.gpad.justPressed(pb.panelChar)) ui.toggleCharSheet(g.seatId);
     if (g.gpad.justPressed(pb.panelTree)) ui.toggleTree(g.seatId);
     if (g.gpad.justPressed(pb.panelMap)) ui.toggleMap();
@@ -1680,6 +1684,11 @@ function tick(now: number): void {
   padPointer.update(dt,
     (couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || !running, nowSec);
   couchTick(dt, nowSec);
+  const lockPad = [...couchGuests.values()].find(g => g.pointer.active && g.gpad.isDown(settings.padBinds.itemLock));
+  const boundLockPad = settings.padBinds.itemLock !== PAD_CFG.pointer.confirm;
+  ui.itemLockInput(running && (input.keys.has(settings.keybinds.itemLock)
+    || (boundLockPad && (padPointer.active && pad.isDown(settings.padBinds.itemLock) || !!lockPad))),
+    lockPad?.pointer.position() ?? (padPointer.active ? padPointer.position() : undefined));
   if (pad.justPressed(PAD_CFG.escapeButton)) synthEscape();
 
   if (running) {

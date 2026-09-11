@@ -3739,6 +3739,9 @@ export interface KindleEffect {
   kind: string;
 }
 
+/** Utility travel uses the same cast pipeline as every other skill. */
+export interface TownPortalEffect { type: 'townPortal' }
+
 /** PLANTS A FOG BANK (engine/fog.ts — the scald kit's STEAM family; the
  *  lightwell-planting effect's sibling aimed at the fog fabric): a
  *  REGISTERED FogBankDef kind stood up at the resolution point — ground
@@ -4104,7 +4107,7 @@ export type SkillEffect =
   | MinionCastEffect | PayLedgerEffect
   | SpreadStatusEffect | SiphonStatusEffect | TransfuseStatusEffect
   | RecallImpalesEffect | TameEffect | WhistleCompanionEffect
-  | RestoreSkillChargesEffect | ConjureEffect | KindleEffect | ThrongDirectEffect
+  | RestoreSkillChargesEffect | ConjureEffect | KindleEffect | TownPortalEffect | ThrongDirectEffect
   | GrabSeizeEffect | GrabThrowEffect | MimicSelectEffect
   | PossessEffect | PossessEndEffect | ShapeshiftEffect | LitePourEffect
   | LureEffect | VentEffect | RuptureEffect | BirthEffect;

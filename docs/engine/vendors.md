@@ -177,8 +177,15 @@ VENDOR_CFG.tabs.default`, a `VendorTabSpec[]`):
   arrays to the identical glass, and DISPLAY-only (a shelf item owns no bag
   cell; the buyer's `autoPlace` writes the real one). Tiles wear the bag's
   own dress (footprints, rarity borders, category glyph, the full item
-  tooltip), click-to-buy when affordable, and a corner RESERVE pip
-  (stopPropagation — a reserve never falls through into a purchase). A
+  tooltip), click-to-buy when affordable, and a passive corner lock indicator.
+  Hold right-click on the whole ware to reserve or release it, using the same
+  `ItemHoldController` and `ITEM_HOLD_CFG` timer/slop as inventory locks.
+  The configurable `itemLock` action defaults to L on keyboard and hold A in
+  controller pointer mode. Short mouse taps do not reserve; moving or closing
+  the surface cancels; a completed controller hold consumes the purchase click.
+  Reservation capacity and proximity still validate through `vendorLock`.
+  Shelf identity is checked across the hold, including network rehydration, so
+  a restock or purchase cannot silently retarget it. A
   reserved tile wears the accent border + badge and rides restocks by the
   overlay law. THE CAPACITY LAW: the probe derives the worst case (widest
   ladder × largest base footprint) and fails the build before content can

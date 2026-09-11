@@ -10,6 +10,7 @@ import { bandPointsAt, instanceChannel, instanceChargeCost, instanceDelivery, in
 import { ITEM_RARITIES } from '../engine/items';
 import { gemInitials } from '../engine/gemitems';
 import { itemGlyphForBase, SUPPORT_BADGE } from './itemIcons';
+import { TOWN_PORTAL_CFG } from '../data/townportals';
 import { VESTIGES } from '../data/vestiges';
 import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
 import { STATUS_DEFS, type StatusDef } from '../engine/status';
@@ -706,6 +707,7 @@ export class Renderer {
     this.drawCorpses(world);
     this.drawPlayerCorpses(world);
     this.drawMovementMarkers(world);
+    this.drawTownPortals(world);
     this.drawDrops(world);
     this.drawResourceOrbs(world);
     this.drawRemnants(world);
@@ -6443,6 +6445,34 @@ export class Renderer {
         ctx.textBaseline = 'top';
         ctx.fillStyle = SUPPORT_BADGE.color;
         ctx.fillText(SUPPORT_BADGE.glyph, corner, corner);
+      }
+      ctx.restore();
+    }
+  }
+
+  private drawTownPortals(world: World): void {
+    const ctx = this.ctx, cfg = TOWN_PORTAL_CFG, v = cfg.visual;
+    for (const p of world.townPortalViews()) {
+      ctx.save();
+      ctx.translate(p.pos.x, p.pos.y);
+      ctx.strokeStyle = cfg.color;
+      ctx.lineWidth = v.lineWidth;
+      ctx.shadowColor = cfg.color;
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = 'rgba(16,35,68,0.8)';
+      ctx.beginPath(); ctx.ellipse(0, -v.height / 2, v.radius, v.height, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.65;
+      for (let n = 0; n < 3; n++) {
+        const turn = world.time * 1.4 + n * Math.PI * 2 / 3;
+        ctx.beginPath(); ctx.ellipse(0, -v.height / 2, v.radius * 0.65, v.height * 0.8, 0, turn, turn + Math.PI / 2); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = cfg.color;
+      ctx.font = 'bold 11px Verdana'; ctx.textAlign = 'center';
+      ctx.fillText(p.label, 0, -v.height / 2 - v.labelLift);
+      if (p.frac > 0) {
+        ctx.beginPath(); ctx.arc(0, 0, v.radius + 8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p.frac); ctx.stroke();
       }
       ctx.restore();
     }
