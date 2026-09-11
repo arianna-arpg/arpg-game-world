@@ -1,3 +1,6 @@
+import { STARTER_SKILL_TREES } from './starterSkillTrees';
+import { NECROMANCER_SACRAMENTS } from './necromancerSacraments';
+import { NECROMANCER_RITES } from './necromancerRites';
 // ---------------------------------------------------------------------------
 // THE SKILL CATALOG.
 //
@@ -122,6 +125,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // ======================= Warrior / melee =================================
 
   cleave: {
+    tree: STARTER_SKILL_TREES.cleave,
     id: 'cleave', name: 'Cleave',
     description: 'A wide melee swing that deals physical damage to every enemy in the arc in'
       + ' front of you.',
@@ -237,6 +241,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   war_cry: {
+    tree: STARTER_SKILL_TREES.war_cry,
     id: 'war_cry', name: 'War Cry',
     description: 'Bellow a war cry: 40% increased damage and 15% increased attack speed for 6'
       + ' seconds.',
@@ -570,6 +575,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // ======================= Fire ============================================
 
   firebolt: {
+    tree: STARTER_SKILL_TREES.firebolt,
     id: 'firebolt', name: 'Firebolt',
     description: 'Loose an orb of flame: a projectile dealing fire damage, with a 12% chance to'
       + ' set the victim burning.',
@@ -1034,6 +1040,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   frost_nova: {
+    tree: STARTER_SKILL_TREES.frost_nova,
     id: 'frost_nova', name: 'Frost Nova',
     description: 'Rime bursts outward in a nova around you, dealing cold damage and CHILLING'
       + ' everything it catches.',
@@ -1425,6 +1432,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // slips between rays one breath and eats one the next, while at melee
   // reach nothing escapes. The Necromancer's signature.
   poison_nova: {
+    tree: NECROMANCER_RITES.poison_nova,
     id: 'poison_nova', name: 'Poison Nova',
     description: 'Exhales a ring of 24 slow venom bolts; every enemy struck is left with a'
       + ' strong POISON lasting 11 seconds. The ring settles a little differently with every'
@@ -2446,6 +2454,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // exists for Hex Blast detonations and Malfeasance ruptures to scale from.
 
   despair: {
+    tree: NECROMANCER_RITES.despair,
     id: 'despair', name: 'Despair',
     description: 'CURSE: enemies in the area lose 25% of all resistances for 7 seconds.',
     tags: ['spell', 'curse', 'aoe', 'chaos', 'duration'], color: '#8a68b8',
@@ -2980,6 +2989,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   shadow_step: {
+    tree: STARTER_SKILL_TREES.shadow_step,
     id: 'shadow_step', name: 'Shadow Step',
     description: 'Melt into shadow and reappear directly BEHIND a targeted enemy, blade already turning.',
     tags: ['movement'], color: '#6a6a8a',
@@ -3013,6 +3023,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   cloak: {
+    tree: STARTER_SKILL_TREES.cloak,
     id: 'cloak', name: 'Cloak',
     description: 'Wrap yourself in obscuring shadow for 8 seconds: enemies must come 65% closer'
       + ' to notice you, and you move 10% faster.',
@@ -3120,6 +3131,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // enemies, or minions — the foundation for combo-based play.
 
   corpse_explosion: {
+    tree: NECROMANCER_SACRAMENTS.corpse_explosion,
     id: 'corpse_explosion', name: 'Corpse Explosion',
     description: 'Detonate a targeted corpse: fire damage in an area around it, plus 15% of the'
       + ' corpse\'s maximum life added to the blast. 11% chance to burn whatever it catches.',
@@ -3904,6 +3916,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // channeling — a shield that fights back is one socket away.
 
   shield_up: {
+    tree: STARTER_SKILL_TREES.shield_up,
     id: 'shield_up', name: 'Shield Up',
     description: 'Raise a frontal guard with its own health: hits and projectiles from the'
       + ' facing arc break against it instead of you, while you move at 40% speed and turn'
@@ -4551,6 +4564,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   backstab: {
+    tree: STARTER_SKILL_TREES.backstab,
     id: 'backstab', name: 'Backstab',
     description: 'A precise melee thrust that deals 150% more damage from behind the target,'
       + ' with a 35% chance to open a bleed. Pairs viciously with Shadow Step.',
@@ -4640,6 +4654,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   chain_lightning: {
+    tree: STARTER_SKILL_TREES.chain_lightning,
     id: 'chain_lightning', name: 'Chain Lightning',
     description: 'A bolt that leaps to the nearest unstruck enemy on every hit, chaining 3'
       + ' times innately with a 30% chance to shock each victim. Chain supports stack on top of'
@@ -7755,6 +7770,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   reap: {
+    tree: NECROMANCER_RITES.reap,
     id: 'reap', name: 'Reap',
     description: 'Swing the scythe and let go: a crescent of shear leaves your hands and'
       + ' travels forward, dealing physical and chaos damage to each foe it passes through'
@@ -7775,6 +7791,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // Pure composition: a full turn played as an aim-sequence figure — with
   // Sweeping Blow socketed, it becomes a six-way radial wave burst.
   whirling_reap: {
+    tree: NECROMANCER_RITES.whirling_reap,
     id: 'whirling_reap', name: 'Whirling Reap',
     description: 'One press, one full turn: six melee arcs walk the blade all the way around'
       + ' you, striking everything in the circle with physical damage.',
@@ -7808,6 +7825,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // The channel twin: pulses mint spirits whose damage RAMPS quadratically
   // with the hold (the spawn-time dmgMult rides spawnMinion's ramp source).
   spirit_pyre: {
+    tree: NECROMANCER_SACRAMENTS.spirit_pyre,
     id: 'spirit_pyre', name: 'Spirit Pyre',
     description: 'CHANNELED: the pyre pours out raging spirits on a steady beat while the'
       + ' button is held, and the longer it burns the hotter each newborn skull, ramping'
@@ -7892,6 +7910,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   sanguine_burst: {
+    tree: NECROMANCER_SACRAMENTS.sanguine_burst,
     id: 'sanguine_burst', name: 'Sanguine Burst',
     description: 'Opens your veins for a nova of blood around you: the cast costs life, 4% of'
       + ' your maximum on top of its base price, and 90% of the life paid is added as physical'

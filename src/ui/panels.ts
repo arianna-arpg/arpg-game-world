@@ -6272,7 +6272,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
             ${nextThresh ? `<span style="font-size:9px;color:#6a6478;margin-left:4px">Lv ${nextThresh.level}: ${nextThresh.label}</span>` : ''}
             ${this.rarityTagHtml(inst)}${rackSeatTag}
             <span style="color:#8a8678;font-weight:normal;font-size:10px">
-              ${replenishingDelivery(inst) ? 'Passive · replenishes while seated' : `${this.costText(p.skillCost(inst))}${def.cooldown
+              ${replenishingDelivery(inst) ? (replenishingDelivery(inst)?.replenish?.toggle ? (inst.replenishmentPaused ? 'Toggle · paused' : 'Toggle · replenishing') : 'Passive · replenishes while seated') : `${this.costText(p.skillCost(inst))}${def.cooldown
                 ? `, ${this.cdText(skillCooldownSeconds(p, inst))} cd` : ''}`}</span>
           </div>
           <div class="tags">${instanceBaseTags(inst).join(' · ')}</div>
@@ -7267,13 +7267,16 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (summonTree?.count !== undefined) lines.push(`${summonTree.count} summoned per birth`);
     if (summonTree?.maxActive !== undefined) lines.push(`base active cap ${summonTree.maxActive}`);
     if (summonTree?.duration !== undefined) lines.push(summonTree.duration ? `base lifespan ${summonTree.duration}s` : 'no lifespan limit');
-    if (summonTree?.replenish) lines.push(`passively replenishes every ${summonTree.replenish.interval}s; replaces casting`);
+    if (summonTree?.replenish) lines.push(`replenishes every ${summonTree.replenish.interval}s; ${summonTree.replenish.toggle ? 'toggle future births on/off; existing bodies remain' : 'replaces casting'}`);
     const pct = (v: number): string => `${Math.round(v * 100)}%`;
     if (over?.arcDeg !== undefined) lines.push(`arc ${over.arcDeg}°`);
     if (over?.spreadDeg !== undefined) lines.push(`spread ${over.spreadDeg}°`);
     if (over?.channel?.ramp) lines.push(`held damage ramps +${pct(over.channel.ramp.per)}/s to +${pct(over.channel.ramp.max)}`);
     if (over?.channel?.rampMove) lines.push(`held stride frees +${pct(over.channel.rampMove.per)}/s to +${pct(over.channel.rampMove.max)}`);
     for (const mo of node.mods ?? []) lines.push(formatModLine(mo, mo.value));
+    for (const patch of node.buffs ?? []) {
+      for (const mo of patch.mods ?? []) lines.push('While blessed: ' + formatModLine(mo, mo.value));
+    }
     if (node.graft) {
       const s = SUPPORTS[node.graft.support];
       lines.push(`grafts ${s?.name ?? node.graft.support} L${node.graft.level ?? 1} — socket-free`);

@@ -8,13 +8,15 @@
 // modifiers flow into every stat query for that use.
 // ---------------------------------------------------------------------------
 
+import { instanceEffects } from './skills';
+import { costWard } from './costward';
 import { summonKitIds } from './skills';
 import { escarpmentRoad } from '../world/escarpments';
 import { biomeFrontierTarget, escarpmentConnection } from './worldgen';
 import { atlasDestinationAt } from '../world/locales';
 import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, randInt, vec, type Vec2 } from '../core/math';
 import { DiscIndex } from './spatial';
-import { ReplenishmentClocks, replenishingDelivery, replenishShape } from './replenishment';
+import { ReplenishmentClocks, replenishingDelivery, replenishShape, replenishmentActive } from './replenishment';
 import { ActorGrid } from './actorGrid';
 import { erraticTurn, spinOffset, weaveOffset, weaveVel } from './flight';
 import { FOURTH_WALL_CFG, type ViewRect, fallbackRect, frameReflect, rectCenter } from './fourthwall';
@@ -4726,7 +4728,8 @@ export class World {
           }
           continue;
         }
-        const toggle = (inst.def.delivery.type === 'aura' && inst.def.delivery.mode === 'toggle')
+        const toggle = !!replenishingDelivery(inst)?.replenish?.toggle
+          || (inst.def.delivery.type === 'aura' && inst.def.delivery.mode === 'toggle')
           || (inst.def.delivery.type === 'ground' && !!inst.def.delivery.strobe)
           || instanceTrigger(inst) !== undefined
           || socketSpec(inst, 'curseOnHit') !== undefined;
@@ -22149,7 +22152,9 @@ export class World {
     const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
     if (!this.spendAbilityEssence(seat, cost, 'fontreset:' + skillId)) return false;
     this.clearSummonTreeBodies(p, inst);
+    this.clearTreeFields(p, inst);
     inst.treeNodes = undefined;
+    delete inst.replenishmentPaused;
     // The refund is FULL-TREE by law (never node-wise — partial refunds
     // breed prerequisite paradoxes); the derived graft lane unmakes with it.
     this.recalcSeat(seat);
@@ -31539,6 +31544,7 @@ export class World {
     const why = this.swapRefusal(seat, 'socket');
     if (why) { this.failNote(seat.actor, skillId + ':treepick', why); return; }
     if (inst.def.delivery.type === 'summon') this.clearSummonTreeBodies(seat.actor, inst);
+    this.clearTreeFields(seat.actor, inst);
     inst.treeNodes = [...(inst.treeNodes ?? []), nodeId];
     // A spent point may carry a graft — the derived lane rebuilds now.
     this.recalcSeat(seat);
@@ -31657,6 +31663,17 @@ export class World {
    */
   useSkill(caster: Actor, inst: SkillInstance, aim: Vec2, seatPress = false): boolean {
     if (replenishingDelivery(inst)) {
+      if (seatPress && replenishingDelivery(inst)?.replenish?.toggle
+        && !caster.dead && !caster.downed && caster.skills.includes(inst)) {
+        if (inst.replenishmentPaused) delete inst.replenishmentPaused;
+        else inst.replenishmentPaused = true;
+        this.replenishment.forget(caster, inst);
+        const replenishmentSeat = this.seatOf(caster);
+        if (replenishmentSeat) this.markMetaDirty(replenishmentSeat);
+        this.charDirty = true;
+        this.text(vec(caster.pos.x, caster.pos.y - 20), inst.replenishmentPaused ? 'replenishment paused' : 'replenishment enabled', inst.def.color, 13);
+        return true;
+      }
       if (seatPress) this.failNote(caster, inst.def.id + ':replenish', 'replenishes while on your bar');
       return false;
     }
@@ -31943,7 +31960,7 @@ export class World {
         this.failNote(caster, def.id + ':reserve', 'mana locked');
         return false;
       }
-      caster.payCost(caster.skillCost(inst));
+      this.paySkillCost(caster, inst, caster.skillCost(inst));
       caster.reservedMana += reserve;
       // First beat lands almost at once — the toggle should feel alive.
       caster.strobes.set(def.id, { inst, timer: 0.05, reserved: reserve });
@@ -31977,7 +31994,7 @@ export class World {
           this.failNote(caster, def.id + ':reserve', 'mana locked');
           return false;
         }
-        caster.payCost(caster.skillCost(inst));
+        this.paySkillCost(caster, inst, caster.skillCost(inst));
         caster.reservedMana += reserve;
         caster.hexToggles.set(def.id, { inst, reserved: reserve });
         this.text(caster.pos, 'hex drawn', def.color, 11, 'combat');
@@ -32012,7 +32029,7 @@ export class World {
       // own, and a reflex must never clobber the cast already on the spine.
       if (!caster.construct && totemable && !pierced
         && caster.sheet.get('castAsTotem', skillContextTags(def), instanceMods(inst)) > 0) {
-        caster.payCost(caster.skillCost(inst));
+        this.paySkillCost(caster, inst, caster.skillCost(inst));
         caster.facing = angleTo(caster.pos, aim);
         // THE DETRIMENT: planting inherits the spell's cast bar × the
         // totemPlaceTime stat (base DOUBLE, investable down) — a real,
@@ -32133,7 +32150,7 @@ export class World {
     // location, independent of the caster (constructs exempt: no nesting).
     if (mode === 'channel' && chan && !caster.construct
       && caster.sheet.get('channelPersist', skillContextTags(def), instanceMods(inst)) > 0) {
-      caster.payCost(caster.skillCost(inst));
+      this.paySkillCost(caster, inst, caster.skillCost(inst));
       caster.facing = angleTo(caster.pos, aim);
       caster.casting = {
         inst, mode: 'cast', aim: vec(aim.x, aim.y),
@@ -32203,7 +32220,7 @@ export class World {
     }
 
     const cost = caster.skillCost(inst);
-    caster.payCost(cost); // mana, then ES (Thought Siphon), then life
+    this.paySkillCost(caster, inst, cost); // mana, then ES (Thought Siphon), then life
     // THE GAUGE FABRIC (engine/gauge.ts): THE PRESS PAYS — the bank spends
     // beside mana (a use is a use: an interrupted bar still spent its
     // souls) and the lockout arms. Readiness was the gate's business above.
@@ -33452,7 +33469,7 @@ export class World {
           // use opens (a two-lane sip) shares it — rolled lazily at the
           // first pour so pourless mends never consult the dice.
           let pourCrit: number | undefined;
-          for (const fx of def.effects) {
+          for (const fx of instanceEffects(inst)) {
             if (fx.type === 'heal') this.applyHealChained(caster, inst, friendly, fx, useMult);
             else if (fx.type === 'cleanse') this.cleanseActor(friendly, fx.count ?? 2);
             else if (fx.type === 'absorb') {
@@ -33648,7 +33665,7 @@ export class World {
         // CONJURED CLOUD lands at the GROUND TARGET (the generic effect
         // executor's origin is the caster — Shatterstep departure
         // semantics; a CALLED cloud goes where you point it).
-        for (const fx of def.effects) {
+        for (const fx of instanceEffects(inst)) {
           // A KINDLED LIGHT goes where you point it too (the lightwell
           // fabric): pool scales with effectDuration, reach with area.
           if (fx.type === 'kindle') {
@@ -34181,7 +34198,7 @@ export class World {
           const mtWalk = caster.sheet.get('moveTrail', tags, extra);
           if (mtWalk > 0) {
             let dur = 0;
-            for (const fx of def.effects) {
+            for (const fx of instanceEffects(inst)) {
               if (fx.type === 'buff' && fx.duration) dur = Math.max(dur, fx.duration);
               else if (fx.type === 'status') {
                 dur = Math.max(dur, STATUS_DEFS[fx.status]?.duration ?? 0);
@@ -34917,7 +34934,7 @@ export class World {
     // opens (the two-lane flask sip) shares it — rolled lazily at the
     // first pour so non-drinking casts never consult the dice.
     let pourCrit: number | undefined;
-    for (const fx of def.effects) {
+    for (const fx of instanceEffects(inst)) {
       if (fx.type === 'buff') {
         // THE FUSE defers the worn payload too — the blessing that lands
         // when the powder burns down (delayed buffs). The routing itself
@@ -39527,6 +39544,19 @@ export class World {
     this.strikeSurfaces(caster, at, radius);
   }
 
+  /** Every real payment lane shares this award, including channel/wave bills.
+   * Free execution has no payment, so echoes cannot mint a second shield. */
+  private paySkillCost(caster: Actor, inst: SkillInstance, cost: { mana: number; life: number }): void {
+    const paid = {
+      mana: Math.max(0, Math.min(caster.mana, cost.mana)),
+      life: caster.overdrive.life && caster.life <= cost.life ? 0 : Math.max(0, cost.life),
+    };
+    caster.payCost(cost);
+    if (caster.construct) return; // synthetic casting pools are not resources
+    const ward = costWard(caster, inst, paid);
+    if (ward.amount > 0 && ward.duration > 0) this.grantAbsorb(caster, ward.amount, ward.duration);
+  }
+
   /** Grant an absorption shield (take the larger pool, refresh the clock). */
   private grantAbsorb(target: Actor, amount: number, duration: number): void {
     target.absorb = Math.max(target.absorb, amount);
@@ -39665,7 +39695,7 @@ export class World {
       const durScale = a.sheet.get('effectDuration',
         skillContextTags(inst), instanceMods(inst));
       const pourCrit = this.critMendMult(a, inst, a.pos);
-      for (const fx of inst.def.effects) {
+      for (const fx of instanceEffects(inst)) {
         if (fx.type === 'restoreOverTime') {
           this.startRestoreStream(a, a, inst, fx, b.chargesSpent, pourCrit);
         } else if (fx.type === 'buff') {
@@ -40219,10 +40249,18 @@ export class World {
     // The granting skill's tags ride the gain EVENT (addBuff's 4th arg) so
     // tag-filtered sympathy links can hear it — the flask bond drinks only
     // what carries 'flask'.
-    if (fx.affects === 'minions') {
+    if (fx.affects === 'allies') {
+      const buffRadius = (fx.radius ?? 0) * caster.sheet.get('aoeRadius', skillContextTags(inst), instanceMods(inst));
+      for (const ally of this.actors) {
+        if (ally.team === caster.team && !ally.dead && !ally.downed && !ally.construct
+          && ally.tier === caster.tier && dist(ally.pos, caster.pos) <= buffRadius + ally.radius) {
+          this.grantTreeBuff(caster, ally, inst, scaled, durScale);
+        }
+      }
+    } else if (fx.affects === 'minions') {
       for (const m of this.actors) {
         if (m.owner === caster && !m.dead && m.isMinion() && !m.construct) {
-          m.addBuff(scaled, durScale, 0, inst.def.tags);
+          this.grantTreeBuff(caster, m, inst, scaled, durScale);
         }
       }
       // OFFERING SHARE (Communal Rites): a fraction of the minions'
@@ -40230,13 +40268,13 @@ export class World {
       const tags = skillContextTags(inst, grantedTags(inst));
       const share = caster.sheet.get('offeringShare', tags, instanceMods(inst));
       if (share > 0) {
-        caster.addBuff({
+        this.grantTreeBuff(caster, caster, inst, {
           ...scaled, id: scaled.id + '_shared', affects: 'caster',
           mods: scaled.mods.map(m => ({ ...m, value: m.value * share })),
-        }, durScale, 0, inst.def.tags);
+        }, durScale);
       }
     } else {
-      caster.addBuff(scaled, durScale, 0, inst.def.tags);
+      this.grantTreeBuff(caster, caster, inst, scaled, durScale);
     }
   }
 
@@ -41119,7 +41157,7 @@ export class World {
         });
       }
     }
-    for (const fx of def.effects) {
+    for (const fx of instanceEffects(inst)) {
       if (fx.type === 'heal') {
         // Ally-resolving deliveries (blessing novas, curseAllies edges)
         // carry their mend here; hostile targets are never healed. The
@@ -41134,7 +41172,7 @@ export class World {
         // delivery lands the buff on the RESOLVED ally — next-hit riders
         // arm a minion's blow, and a bond-marked buff TIES the caster to
         // this one ally (one bond per caster; newest wins).
-        target.addBuff(fx, durScale, 0, inst.def.tags);
+        this.grantTreeBuff(caster, target, inst, fx, durScale);
         if (fx.bond) caster.bond = { targetId: target.id, buffId: fx.id };
       } else if (fx.type === 'rupture') {
         // THE RUPTURE (THE RUPTURE LAW — StatusDef.bank): spend a fraction
@@ -41165,6 +41203,13 @@ export class World {
           const dps = Math.max(derived, floor) * potencyFor(fx.status) * hexDmg
             / Math.max(0.5, durScale);
           const sdef = STATUS_DEFS[fx.status];
+          // durationOverride: a FIXED clock (Flash Freeze's unscalable
+          // freeze) — expressed as a scale on the def's base duration so
+          // applyStatus needs no new path. Linked hexes stretch it.
+          const fxScale = (fx.durationOverride !== undefined
+            ? fx.durationOverride / (STATUS_DEFS[fx.status]?.duration || 1)
+            : durScale) * hexDur;
+          const afflictionSpan = (sdef?.duration ?? 0) * fxScale;
           // Rupture supports bake the eventual detonation at application.
           let rupture: number | undefined;
           let ruptureType: DamageType | undefined;
@@ -41173,7 +41218,7 @@ export class World {
           // into the ARMED PAYLOAD — and the doomDot stat lets a share of
           // that keg TICK as chaos while the fuse runs (Lingering Doom).
           if (sdef?.cullsAtLethal && dps > 0) {
-            rupture = dps * sdef.duration * durScale;
+            rupture = dps * afflictionSpan;
             ruptureType = 'chaos';
             dpsOut = rupture * caster.sheet.get('doomDot', tags, extra);
           } else if (sdef?.dotType && dps > 0) {
@@ -41182,13 +41227,13 @@ export class World {
             // 0.5 = half burns, half banks — a dial, not a flag).
             const bombFrac = caster.sheet.get('igniteToBomb', tags, extra);
             if (fx.status === 'burn' && bombFrac > 0) {
-              rupture = dps * sdef.duration * durScale * bombFrac;
+              rupture = dps * afflictionSpan * bombFrac;
               ruptureType = 'fire';
               dpsOut = dps * (1 - bombFrac);
             } else {
               const r = caster.sheet.get('dotRupture', tags, extra);
               if (r > 0) {
-                rupture = dps * sdef.duration * durScale * r;
+                rupture = dps * afflictionSpan * r;
                 ruptureType = sdef.dotType;
               }
             }
@@ -41217,12 +41262,6 @@ export class World {
               this.cry(target.pos, 'crit affliction!', '#ffd24a', 12, 'wink');
             }
           }
-          // durationOverride: a FIXED clock (Flash Freeze's unscalable
-          // freeze) — expressed as a scale on the def's base duration so
-          // applyStatus needs no new path. Linked hexes stretch it.
-          const fxScale = (fx.durationOverride !== undefined
-            ? fx.durationOverride / (STATUS_DEFS[fx.status]?.duration || 1)
-            : durScale) * hexDur;
           this.notePopFx(target, fx.status);
           target.applyStatus(fx.status, dpsOut, fxScale, caster.name, {
             // Propagation is a CHANCE rolled once at application (1 = the
@@ -42942,7 +42981,7 @@ export class World {
       e.hitFlash = 0.15;
       e.hitFlashType = type;
       this.text(e.pos, Math.round(amount).toString(), '#b06bd4', 12);
-      if (e.life <= 0 && !e.dead) this.kill(e);
+      if (e.life <= 0 && !e.dead) this.kill(e, false, s.casterId === undefined ? undefined : this.actorById(s.casterId));
     }
   }
 
@@ -43382,6 +43421,7 @@ export class World {
         }
       }
     }
+    const propagatingAfflictions = silent ? [] : actor.statuses.filter(s => s.propagates && s.dps > 0);
     // ARMED RUPTURES fire on DEATH as well as expiry (Doombrand's "whichever
     // comes first"; a Living Bomb pops with its host) — the keg never rots
     // in the corpse. Statuses are cleared as they blow so loops can't form.
@@ -43582,14 +43622,17 @@ export class World {
     // Contagion: propagating DoTs jump to the victim's nearby allies,
     // chaining across every further death.
     if (!silent) {
-      for (const s of actor.statuses) {
-        if (!s.propagates || s.dps <= 0) continue;
+      for (const s of propagatingAfflictions) {
         let spread = 0;
         for (const e of this.actors) {
           if (e.dead || e === actor || e.team !== actor.team || e.untargetable) continue;
           if (dist(actor.pos, e.pos) > 170 || spread >= 6) continue;
-          e.applyStatus(s.id, s.dps, 1, s.sourceName,
-            { propagates: true, rupture: s.rupture, ruptureType: s.ruptureType });
+          // Propagated afflictions retain their original applier and payload;
+          // the new carrier must not steal kill credit, healing or brood ownership.
+          const span = s.total ?? STATUS_DEFS[s.id]?.duration ?? 1;
+          e.applyStatus(s.id, s.dps, span / (STATUS_DEFS[s.id]?.duration || 1), s.sourceName,
+            { propagates: true, rupture: s.rupture, ruptureType: s.ruptureType,
+              casterId: s.casterId, leech: s.leech, brood: s.brood, power: s.power });
           spread++;
         }
         if (spread > 0) {
@@ -52502,7 +52545,7 @@ export class World {
             this.pendingSummons.splice(i, 1);
             continue;
           }
-          ps.caster.payCost(ps.costPer);
+          this.paySkillCost(ps.caster, ps.inst, ps.costPer);
         }
         // Waves re-aim at the caster's LIVE cursor (the Barrage salvo rule),
         // LEASHED to the placement range; sequential trickles keep the
@@ -52985,7 +53028,7 @@ export class World {
             cs.held = false;
             return;
           }
-          a.payCost(cost);
+          this.paySkillCost(a, cs.inst, cost);
           // ERRATIC CADENCE (ChannelSpec.intervalJitter): each fired beat
           // reschedules the next on its own fresh die — stutters and
           // lulls around the same average drumbeat.
@@ -53084,7 +53127,7 @@ export class World {
               if (per > 0 && !a.canAfford(cost)) {
                 cs.elapsed = cs.total;
               } else {
-                if (per > 0) a.payCost(cost);
+                if (per > 0) this.paySkillCost(a, cs.inst, cost);
                 cs.stage = (cs.stage ?? 0) + 1;
                 cs.sinceStage = 0;
                 cs.elapsed = 0;
@@ -53650,6 +53693,40 @@ export class World {
   }
 
   private replenishment = new ReplenishmentClocks();
+  private treeBuffSources = new WeakMap<BuffEffect, { caster: Actor; inst: SkillInstance }>();
+
+  /** Per-application identity lets respec retire only this caster's blessing,
+   * including allied recipients, without stripping another caster's refresh. */
+  private grantTreeBuff(caster: Actor, target: Actor, inst: SkillInstance, fx: BuffEffect, durScale: number): void {
+    if (!inst.treeNodes?.some(id => treeNodeOf(inst.def, id)?.buffs?.length)) {
+      target.addBuff(fx, durScale, 0, inst.def.tags);
+      return;
+    }
+    const tagged = { ...fx };
+    this.treeBuffSources.set(tagged, { caster, inst });
+    target.addBuff(tagged, durScale, 0, [...skillContextTags(inst)]);
+  }
+
+  /** Retire fields that captured the previous allocation. */
+  private clearTreeFields(caster: Actor, inst: SkillInstance): void {
+    for (const actor of this.actors) for (const [id, buff] of actor.buffs) {
+      const source = this.treeBuffSources.get(buff.def);
+      if (source?.caster === caster && source.inst === inst) actor.removeBuff(id);
+    }
+    this.pendingFuses = this.pendingFuses.filter(f => f.caster !== caster || f.inst !== inst);
+    // Held casts can snapshot guard pools and derived grafts. Changing the
+    // allocation retires that stance without paying a release attack.
+    if (caster.casting?.inst === inst) caster.casting = null;
+    if (caster.shellGuard?.fromAura === inst.def.id) caster.shellGuard = undefined;
+    // Tree fields snapshot radius, timing and reservations: retire them before
+    // changing their instance so old powers cannot survive a new allocation.
+    for (let i = this.zones.length - 1; i >= 0; i--) {
+      const z = this.zones[i];
+      if (z.caster !== caster || z.inst !== inst) continue;
+      this.expireZone(z);
+      this.zones.splice(i, 1);
+    }
+  }
 
   /** Tree identity changes retire the old births silently, so permanent
    *  bodies cannot survive resetting into a temporary-body branch. */
@@ -53676,7 +53753,7 @@ export class World {
       for (const inst of new Set(caster.skills)) {
         if (!inst) continue;
         const d = replenishingDelivery(inst);
-        if (!d || d.persistent || d.decay || d.waves || d.fromCorpse
+        if (!d || !replenishmentActive(inst) || d.persistent || d.decay || d.waves || d.fromCorpse
           || !Number.isFinite(d.replenish!.interval) || d.replenish!.interval <= 0
           || instanceTargeting(inst)?.target === 'corpse'
           || caster.isStunned() || caster.tagsForbidden(inst) || this.castReqRefusal(caster, inst)) continue;
@@ -54286,7 +54363,7 @@ export class World {
       if (kind === 'damageTaken' || kind === 'statusApply') st.trigAccum = 0;
       st.trigDepth = depth + 1;
       const cost = owner.skillCost(inst);
-      owner.payCost({ mana: cost.mana * TRIGGER_CFG.costMult, life: cost.life * TRIGGER_CFG.costMult });
+      this.paySkillCost(owner, inst, { mana: cost.mana * TRIGGER_CFG.costMult, life: cost.life * TRIGGER_CFG.costMult });
       const aim = ctx.aim ?? owner.aimPos ?? vec(
         owner.pos.x + Math.cos(owner.facing) * 140,
         owner.pos.y + Math.sin(owner.facing) * 140);
@@ -55518,7 +55595,7 @@ export class World {
         // end (range spent, wall, the body that stopped it), never at the
         // hand. Cast-time deliveries pour in executeSkill's chain instead.
         if (!p.caster.dead) {
-          for (const fx of p.inst.def.effects) {
+          for (const fx of instanceEffects(p.inst)) {
             if (fx.type === 'litePour') this.litePourAt(p.caster, fx, p.pos);
             // A PLANTED LURE on a flight: the false light stands where the
             // flight ENDED (the litePour hook's twin — bait you can throw).

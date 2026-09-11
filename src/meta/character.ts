@@ -9,6 +9,7 @@
 // No migration: a schema bump just makes old saves unresumable (→ class select).
 // ---------------------------------------------------------------------------
 
+import { replenishingDelivery } from '../engine/replenishment';
 import { SAVE_COMPATIBILITY, isCurrentCharacterSave, noteSaveReset } from './saveCompatibility';
 import { CLASSES } from '../data/classes';
 import { PASSIVE_NODES } from '../data/passives';
@@ -62,6 +63,7 @@ interface SavedSkill {
    *  Optional → older saves load unchanged; validated on load — an id no
    *  longer on the def's tree drops with a console note. */
   treeNodes?: string[];
+  replenishmentPaused?: true;
 }
 export interface CharacterSave {
   schemaVersion: number;
@@ -178,6 +180,7 @@ const saveSkill = (i: SkillInstance): SavedSkill => ({
   ...(i.granted ? { granted: true } : {}),
   ...(i.attunedForm ? { attunedForm: i.attunedForm } : {}),
   ...(i.treeNodes?.length ? { treeNodes: [...i.treeNodes] } : {}),
+  ...(i.replenishmentPaused ? { replenishmentPaused: true as const } : {}),
   ...(i.locked ? { locked: true } : {}),
 });
 
@@ -319,6 +322,7 @@ export function rebuildSkill(s: SavedSkill): SkillInstance | null {
   // trim) drop with a console note — the attunedForm law. An M0-era save's
   // single rung-1 pick loads as a 1-point spend, costless by construction.
   if (s.treeNodes?.length) inst.treeNodes = validTreeNodes(def, s.treeNodes, s.level);
+  if (s.replenishmentPaused === true && replenishingDelivery(inst)?.replenish?.toggle) inst.replenishmentPaused = true;
   if (s.locked) inst.locked = true; // the keeper's mark (salvageLock) survives
   inst.sockets = s.sockets.map(sock => {
     if (!sock) return null;

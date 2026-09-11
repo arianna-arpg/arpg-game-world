@@ -138,6 +138,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       // Costs
       'manaCost', 'addedManaCost', 'addedLifeCost', 'addedCooldown',
       'costDamage_mana', 'costDamage_life',
+      'costWard_mana', 'costWard_life', 'costWardDuration', 'costWardCap',
       // THE GAUGE FABRIC (engine/gauge.ts): the bank's terms
       'gaugeGain', 'gaugeNeed', 'gaugeLockout',
       // Use-charges & ammunition
@@ -566,6 +567,10 @@ const STAT_BLURBS: Record<string, string> = {
   addedCooldown: 'Flat seconds added to a skill\'s cooldown, still reducible by recovery.',
   costDamage_mana: 'Flat damage per point of mana actually paid on the cast.',
   costDamage_life: 'Flat damage per point of life actually paid on the cast.',
+  costWard_mana: 'Absorb granted per mana actually paid. Borrowed mana and energy-shield substitutes grant none. Strongest shield wins.',
+  costWard_life: 'Absorb granted per life actually paid. Borrowed life grants none. Strongest shield wins.',
+  costWardDuration: 'Payment shield lifetime in seconds, multiplied by effect duration. Repeated payments refresh the clock.',
+  costWardCap: 'Maximum payment shield as a fraction of maximum life. Each payment replaces a smaller pool instead of adding to it.',
   chargeCap: 'Additional maximum stacks for the charges your skills bank.',
   runeCap: 'How long an invocation sequence may grow.',
   comboWindow: 'Multiplies every combo grammar\'s timing window: patterns stay open longer.',
