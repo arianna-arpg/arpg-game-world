@@ -16,6 +16,7 @@
 // they simply don't draw on a client. The HOST always sees full fidelity.
 // ---------------------------------------------------------------------------
 
+import { replenishingDelivery } from '../engine/replenishment';
 import { Actor, type ActorAdorn, type ActorShape, type Team,
   type CastingState, type ActiveAura, type ConstructState, type LeapState, type WormBody } from '../engine/actor';
 import type { CourseJourney } from '../world/courseStages';
@@ -232,7 +233,7 @@ export interface SupportInstW { id: string; lvl: number; lk?: 1; }
  *  when unpicked (the sparse idiom); the client rehydrates through
  *  validTreeNodes so its tooltip/pip/panel read the same truth the host
  *  spends (orphans from a version-skewed host drop with a note). */
-export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; tn?: string[]; }
+export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; tn?: string[]; rp?: 1; }
 /** The client OWN-seat build: enough to render the char-sheet / skill-book / tree
  *  and re-derive the stat sheet (recalcSeat) on the client. */
 export interface SeatMetaW {
@@ -275,6 +276,7 @@ const skillInstW = (s: SkillInstance): SkillInstW => ({
   g: s.granted || undefined,
   lk: s.locked ? 1 : undefined,
   tn: s.treeNodes?.length ? [...s.treeNodes] : undefined,
+  rp: s.replenishmentPaused ? 1 : undefined,
 });
 
 /** Host: serialize one seat's build/progression for its owning client.
@@ -325,6 +327,7 @@ const rehydrateSkill = (w: SkillInstW): SkillInstance | null => {
   // Untrusted wire → the one validation seam (structure + budget), so the
   // client's panels can never render a state the host would refuse.
   if (w.tn?.length) inst.treeNodes = validTreeNodes(def, w.tn, w.lvl);
+  if (w.rp === 1 && replenishingDelivery(inst)?.replenish?.toggle) inst.replenishmentPaused = true;
   return inst;
 };
 

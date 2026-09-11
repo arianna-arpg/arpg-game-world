@@ -2111,6 +2111,7 @@ export function validateContent(): void {
     }
     if (d?.type === 'summon' && d.replenish) {
       if (!Number.isFinite(d.replenish.interval) || d.replenish.interval <= 0) warn(`${src}: replenish.interval must be finite and positive`);
+      if (d.replenish.toggle !== undefined && typeof d.replenish.toggle !== 'boolean') warn(`${src}: replenish.toggle must be boolean`);
       if (d.persistent || d.decay || d.waves || d.fromCorpse) warn(`${src}: replenishment cannot combine with contracts, decay, waves or corpse sourcing`);
     }
     if (d && d.type === 'summon' && d.decay && d.persistent) {

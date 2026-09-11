@@ -38,7 +38,7 @@ Changing the investment budget is a separate balance decision, not hidden here.
 
 | Skill | First trunk | Second trunk | Generic passive |
 |---|---|---|---|
-| Shambling Horde | Wandering Dead: free, bar-seated replenishment; permanent waiting corpses. Specialize cadence, detection, batches, capacity or durability. | Commanded Dead: cast packs; combine brief fast rushes with fewer heavy bodies, or develop expiry explosions and larger batches. | Stitched Flesh: life |
+| Shambling Horde | Wandering Dead: toggleable free, bar-seated replenishment; permanent waiting corpses. Specialize cadence, detection, batches, capacity or durability. | Commanded Dead: cast packs; combine brief fast rushes with fewer heavy bodies, or develop expiry explosions and larger batches. | Stitched Flesh: life |
 | Bone Golem | Osseous Might: fighting golems; grow a cohort, a giant commander aura bearer, a sweeping bruiser, or a hybrid. | Keeper's Bulwark: defensive guard, rapid reconstruction, mending, taunts and the close-bound Bone Stand. | Fitted Joints: life and movement |
 | Skeleton Archer | Rattling Bows: physical cohorts, piercing arrows, and Rain of Bones with combined cooldown/area/damage/bleed investment or baseline multishot. | Unstrung Sorcery: replace bows with random elemental bolt casters. The trunk preserves base population; Volatile Souls adds one body and one slot. Invest in volatile criticals or narrow the pool to selected elements. | Remembered Training: damage |
 | Skeleton Mage (new) | Lich Ascendant: fuse the batch into one larger Fireball caster; learn heavy area spells, grow its frame, or command allies. | Grave Academy: a faster cohort of elemental specialists, with cold/chaos and fire/lightning curricula. Each learned spell belongs only to its matching element. | Grave Studies: damage and haste |
@@ -50,6 +50,9 @@ Changing the investment budget is a separate balance decision, not hidden here.
 | Despair | Worn Grief: toggle a following curse haze with a mana reservation; develop coverage, potent curses or timed ruptures. | Profane Ground: place one renewing curse patch; specialize its residence, potency or violent sentences. | Patient Words: duration and radius |
 | Reap | Grave Procession: carry a longer-lived crescent as you move; specialize width, shove, hit recovery or execution. | Echoes of Reaping: rolls free phantom sweeps after casts; specialize bleeding chains or frequent, heavy and critical strokes. | Practiced Reaping: damage |
 | Whirling Reap | Bloodwheel: close six-stroke bleeding and life leech, with stacked wounds, ruptures or recovery. | Unbound Wheel: throw six traveling crescent waves; develop reach, width, knockback or heavy executions. | Balanced Grip: damage and accuracy |
+| Corpse Explosion | Funeral Pyre: lingering fields, corpse batches, spreading burns and ruptures. | Living Offerings: sacrifice minions when corpses run short; develop faster rites, crawling remains, larger offerings or hit recovery. | Mortuary Practice: damage |
+| Spirit Pyre | Running Wildfire: mobile, short-lived swarms with fast linear ramp, larger batches, spreading burns and expiry explosions. | Banked Pyre: gradually rooted channel, larger skulls, stronger quadratic ramp, mana-paid absorb, halos and heavier expiry explosions. | Pyre Tending: minion damage |
+| Sanguine Burst | Hemorrhagic Rite: spreading bleeds, greater magnitude, stacked wounds, rupture and recovery. | Crimson Carapace: life-paid absorb; develop capacity, duration, a repelling pulse or more expensive empowered payments. | Blood Discipline: damage |
 
 Archer-derived mages cast one elemental bolt each. The separate Mage skill earns
 its own identity through elemental lessons and innate cryomancer Ice Spears; the Lich starts with an explosive Fireball.
@@ -133,11 +136,50 @@ gains bounded, expiring damage stacks. Nearby auras from separate bodies stack.
 Vigil Flames preserve the shared Raging Spirit pool and expire normally; their
 cursor placement and no-recall body make location a deliberate choice.
 
-The remaining Necromancer queue is Spirit Pyre, Infernal Bombardment,
-Archon Lance, Sanguine Burst, Venom Bolt,
-Corpse Explosion and Grave Tide. Continue in coherent batches before moving to
+The remaining Necromancer queue is Infernal Bombardment, Archon Lance,
+Venom Bolt and Grave Tide. Continue in coherent batches before moving to
 other classes; retain two distinct trunk identities, mixable descendants and a
 four-rank neutral passive. Balance values still need playtesting.
+
+## Blood and pyre batch
+
+Trees live in `src/data/necromancerSacraments.ts`, using the shared binary builder.
+They preserve all unpicked deliveries and allow four neutral ranks.
+
+Wandering Dead now authors `replenish.toggle: true`. It starts enabled, preserving
+existing builds. A deliberate press pauses only future births; existing bodies
+continue following, fighting and exploding normally. A second press starts a
+fresh interval. Held buttons, AI use and triggered/free execution cannot thrash
+its state or bypass the birth rate. The instance's `replenishmentPaused` preference
+survives character saves, multiplayer metadata and reseating. Respec clears it.
+The toggle works while casting or disabled; ordinary birth eligibility still
+checks stun, skill requirements and forbidden tags. Non-toggle replenishment
+retains its previous passive-only behavior. HUD highlighting and previews read
+the same resolved toggle state.
+
+`engine/costward.ts` introduces resource-paid absorb through ordinary stats:
+`costWard_mana` and `costWard_life` set absorb per point actually paid;
+`costWardDuration` defaults to 3 seconds, scaled by effect duration;
+`costWardCap` defaults to 30% of maximum life. Skill-local tree modifiers,
+supports, global modifiers and tag restrictions use the normal stat resolver.
+All World payment sites share `paySkillCost`: first presses, channel pulses,
+later waves, charged stages and paid triggers. Mana substituted by energy
+shield, borrowed resources, constructs' synthetic pools and unpaid echoes
+produce no corresponding award. Both lanes sum before the cap. Converted costs
+award through the resource they actually charge. The strongest existing absorb
+pool wins and the longer clock remains; repeated payments do not accumulate
+unbounded shields. Paying earns the ward immediately, including interrupted
+casts; it then expires through the existing absorb clock. Already earned wards
+are temporary payment rewards, not persistent tree fields.
+
+Funeral Pyre reuses the lingering-field mechanism: 80 base radius, 40% skill
+damage every 0.5 seconds. Its field does not repeat the corpse-life fuel bonus.
+Living Offerings uses the shared corpse batch/sacrifice path; Crawling Remains
+reuses Hiveborn's bounded, 12-second crawler cohort and global minion scaling.
+Spirit Pyre keeps ordinary paid channel pulses and the existing shared spirit
+pool: holding at capacity replaces older skulls through normal summon behavior.
+Its stride and newborn damage curves are resolved by `instanceChannel`; taught
+halos and crew ailment modifiers use the existing summon pipeline.
 
 ## Plague and scythe batch
 
@@ -243,6 +285,9 @@ new Commanded Dead trunk. The preserved branch retains the old save interpretati
   save repair, real returning projectiles, poison spread/healing/rupture clocks,
   curse reservation and relocation, reset cleanup, follow-up casts and six
   traveling waves.
+- `npm run probe -- necromancersacraments`: all 24 leaf routes, neutral ranks,
+  saved and replicated edge-only horde toggles, paid ward caps/expiry/absorption,
+  channel payments, conversion, borrowing, ES substitution, fields and sacrifices.
 - `npm run probe`: the full fast regression gate.
 - `npm run sim -- run --suite smoke`: baseline combat scenarios.
 - Production build plus Electron tree interaction and screenshot inspection.

@@ -8,6 +8,12 @@ export function replenishingDelivery(inst: SkillInstance): SummonDelivery | unde
   return d.type === 'summon' && d.replenish ? d : undefined;
 }
 
+/** Toggle preference is separate from transient birth clocks. */
+export function replenishmentActive(inst: SkillInstance): boolean {
+  const d = replenishingDelivery(inst);
+  return !!d && (!d.replenish?.toggle || !inst.replenishmentPaused);
+}
+
 /** One set of live numbers for simulation and preview; modifiers use the
  *  authored base, including multiplicative cap investment. */
 export function replenishShape(actor: Actor, inst: SkillInstance, d: SummonDelivery) {

@@ -1,3 +1,4 @@
+import { NECROMANCER_SACRAMENTS } from './necromancerSacraments';
 import { NECROMANCER_RITES } from './necromancerRites';
 // ---------------------------------------------------------------------------
 // THE SKILL CATALOG.
@@ -3121,6 +3122,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // enemies, or minions — the foundation for combo-based play.
 
   corpse_explosion: {
+    tree: NECROMANCER_SACRAMENTS.corpse_explosion,
     id: 'corpse_explosion', name: 'Corpse Explosion',
     description: 'Detonate a targeted corpse: fire damage in an area around it, plus 15% of the'
       + ' corpse\'s maximum life added to the blast. 11% chance to burn whatever it catches.',
@@ -7811,6 +7813,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // The channel twin: pulses mint spirits whose damage RAMPS quadratically
   // with the hold (the spawn-time dmgMult rides spawnMinion's ramp source).
   spirit_pyre: {
+    tree: NECROMANCER_SACRAMENTS.spirit_pyre,
     id: 'spirit_pyre', name: 'Spirit Pyre',
     description: 'CHANNELED: the pyre pours out raging spirits on a steady beat while the'
       + ' button is held, and the longer it burns the hotter each newborn skull, ramping'
@@ -7895,6 +7898,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   sanguine_burst: {
+    tree: NECROMANCER_SACRAMENTS.sanguine_burst,
     id: 'sanguine_burst', name: 'Sanguine Burst',
     description: 'Opens your veins for a nova of blood around you: the cast costs life, 4% of'
       + ' your maximum on top of its base price, and 90% of the life paid is added as physical'

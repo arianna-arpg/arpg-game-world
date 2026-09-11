@@ -8,13 +8,14 @@
 // modifiers flow into every stat query for that use.
 // ---------------------------------------------------------------------------
 
+import { costWard } from './costward';
 import { summonKitIds } from './skills';
 import { escarpmentRoad } from '../world/escarpments';
 import { biomeFrontierTarget, escarpmentConnection } from './worldgen';
 import { atlasDestinationAt } from '../world/locales';
 import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, randInt, vec, type Vec2 } from '../core/math';
 import { DiscIndex } from './spatial';
-import { ReplenishmentClocks, replenishingDelivery, replenishShape } from './replenishment';
+import { ReplenishmentClocks, replenishingDelivery, replenishShape, replenishmentActive } from './replenishment';
 import { ActorGrid } from './actorGrid';
 import { erraticTurn, spinOffset, weaveOffset, weaveVel } from './flight';
 import { FOURTH_WALL_CFG, type ViewRect, fallbackRect, frameReflect, rectCenter } from './fourthwall';
@@ -4716,7 +4717,8 @@ export class World {
           }
           continue;
         }
-        const toggle = (inst.def.delivery.type === 'aura' && inst.def.delivery.mode === 'toggle')
+        const toggle = !!replenishingDelivery(inst)?.replenish?.toggle
+          || (inst.def.delivery.type === 'aura' && inst.def.delivery.mode === 'toggle')
           || (inst.def.delivery.type === 'ground' && !!inst.def.delivery.strobe)
           || instanceTrigger(inst) !== undefined
           || socketSpec(inst, 'curseOnHit') !== undefined;
@@ -22016,6 +22018,7 @@ export class World {
     this.clearSummonTreeBodies(p, inst);
     this.clearTreeFields(p, inst);
     inst.treeNodes = undefined;
+    delete inst.replenishmentPaused;
     // The refund is FULL-TREE by law (never node-wise — partial refunds
     // breed prerequisite paradoxes); the derived graft lane unmakes with it.
     this.recalcSeat(seat);
@@ -31523,6 +31526,17 @@ export class World {
    */
   useSkill(caster: Actor, inst: SkillInstance, aim: Vec2, seatPress = false): boolean {
     if (replenishingDelivery(inst)) {
+      if (seatPress && replenishingDelivery(inst)?.replenish?.toggle
+        && !caster.dead && !caster.downed && caster.skills.includes(inst)) {
+        if (inst.replenishmentPaused) delete inst.replenishmentPaused;
+        else inst.replenishmentPaused = true;
+        this.replenishment.forget(caster, inst);
+        const replenishmentSeat = this.seatOf(caster);
+        if (replenishmentSeat) this.markMetaDirty(replenishmentSeat);
+        this.charDirty = true;
+        this.text(vec(caster.pos.x, caster.pos.y - 20), inst.replenishmentPaused ? 'replenishment paused' : 'replenishment enabled', inst.def.color, 13);
+        return true;
+      }
       if (seatPress) this.failNote(caster, inst.def.id + ':replenish', 'replenishes while on your bar');
       return false;
     }
@@ -31809,7 +31823,7 @@ export class World {
         this.failNote(caster, def.id + ':reserve', 'mana locked');
         return false;
       }
-      caster.payCost(caster.skillCost(inst));
+      this.paySkillCost(caster, inst, caster.skillCost(inst));
       caster.reservedMana += reserve;
       // First beat lands almost at once — the toggle should feel alive.
       caster.strobes.set(def.id, { inst, timer: 0.05, reserved: reserve });
@@ -31843,7 +31857,7 @@ export class World {
           this.failNote(caster, def.id + ':reserve', 'mana locked');
           return false;
         }
-        caster.payCost(caster.skillCost(inst));
+        this.paySkillCost(caster, inst, caster.skillCost(inst));
         caster.reservedMana += reserve;
         caster.hexToggles.set(def.id, { inst, reserved: reserve });
         this.text(caster.pos, 'hex drawn', def.color, 11, 'combat');
@@ -31878,7 +31892,7 @@ export class World {
       // own, and a reflex must never clobber the cast already on the spine.
       if (!caster.construct && totemable && !pierced
         && caster.sheet.get('castAsTotem', skillContextTags(def), instanceMods(inst)) > 0) {
-        caster.payCost(caster.skillCost(inst));
+        this.paySkillCost(caster, inst, caster.skillCost(inst));
         caster.facing = angleTo(caster.pos, aim);
         // THE DETRIMENT: planting inherits the spell's cast bar × the
         // totemPlaceTime stat (base DOUBLE, investable down) — a real,
@@ -31999,7 +32013,7 @@ export class World {
     // location, independent of the caster (constructs exempt: no nesting).
     if (mode === 'channel' && chan && !caster.construct
       && caster.sheet.get('channelPersist', skillContextTags(def), instanceMods(inst)) > 0) {
-      caster.payCost(caster.skillCost(inst));
+      this.paySkillCost(caster, inst, caster.skillCost(inst));
       caster.facing = angleTo(caster.pos, aim);
       caster.casting = {
         inst, mode: 'cast', aim: vec(aim.x, aim.y),
@@ -32069,7 +32083,7 @@ export class World {
     }
 
     const cost = caster.skillCost(inst);
-    caster.payCost(cost); // mana, then ES (Thought Siphon), then life
+    this.paySkillCost(caster, inst, cost); // mana, then ES (Thought Siphon), then life
     // THE GAUGE FABRIC (engine/gauge.ts): THE PRESS PAYS — the bank spends
     // beside mana (a use is a use: an interrupted bar still spent its
     // souls) and the lockout arms. Readiness was the gate's business above.
@@ -39387,6 +39401,19 @@ export class World {
     // THE MALLET: the movement eruption is a blast — dive-bomb your bell.
     this.frontSplash(caster, inst, at, radius);
     this.strikeSurfaces(caster, at, radius);
+  }
+
+  /** Every real payment lane shares this award, including channel/wave bills.
+   * Free execution has no payment, so echoes cannot mint a second shield. */
+  private paySkillCost(caster: Actor, inst: SkillInstance, cost: { mana: number; life: number }): void {
+    const paid = {
+      mana: Math.max(0, Math.min(caster.mana, cost.mana)),
+      life: caster.overdrive.life && caster.life <= cost.life ? 0 : Math.max(0, cost.life),
+    };
+    caster.payCost(cost);
+    if (caster.construct) return; // synthetic casting pools are not resources
+    const ward = costWard(caster, inst, paid);
+    if (ward.amount > 0 && ward.duration > 0) this.grantAbsorb(caster, ward.amount, ward.duration);
   }
 
   /** Grant an absorption shield (take the larger pool, refresh the clock). */
@@ -52366,7 +52393,7 @@ export class World {
             this.pendingSummons.splice(i, 1);
             continue;
           }
-          ps.caster.payCost(ps.costPer);
+          this.paySkillCost(ps.caster, ps.inst, ps.costPer);
         }
         // Waves re-aim at the caster's LIVE cursor (the Barrage salvo rule),
         // LEASHED to the placement range; sequential trickles keep the
@@ -52849,7 +52876,7 @@ export class World {
             cs.held = false;
             return;
           }
-          a.payCost(cost);
+          this.paySkillCost(a, cs.inst, cost);
           // ERRATIC CADENCE (ChannelSpec.intervalJitter): each fired beat
           // reschedules the next on its own fresh die — stutters and
           // lulls around the same average drumbeat.
@@ -52948,7 +52975,7 @@ export class World {
               if (per > 0 && !a.canAfford(cost)) {
                 cs.elapsed = cs.total;
               } else {
-                if (per > 0) a.payCost(cost);
+                if (per > 0) this.paySkillCost(a, cs.inst, cost);
                 cs.stage = (cs.stage ?? 0) + 1;
                 cs.sinceStage = 0;
                 cs.elapsed = 0;
@@ -53552,7 +53579,7 @@ export class World {
       for (const inst of new Set(caster.skills)) {
         if (!inst) continue;
         const d = replenishingDelivery(inst);
-        if (!d || d.persistent || d.decay || d.waves || d.fromCorpse
+        if (!d || !replenishmentActive(inst) || d.persistent || d.decay || d.waves || d.fromCorpse
           || !Number.isFinite(d.replenish!.interval) || d.replenish!.interval <= 0
           || instanceTargeting(inst)?.target === 'corpse'
           || caster.isStunned() || caster.tagsForbidden(inst) || this.castReqRefusal(caster, inst)) continue;
@@ -54162,7 +54189,7 @@ export class World {
       if (kind === 'damageTaken' || kind === 'statusApply') st.trigAccum = 0;
       st.trigDepth = depth + 1;
       const cost = owner.skillCost(inst);
-      owner.payCost({ mana: cost.mana * TRIGGER_CFG.costMult, life: cost.life * TRIGGER_CFG.costMult });
+      this.paySkillCost(owner, inst, { mana: cost.mana * TRIGGER_CFG.costMult, life: cost.life * TRIGGER_CFG.costMult });
       const aim = ctx.aim ?? owner.aimPos ?? vec(
         owner.pos.x + Math.cos(owner.facing) * 140,
         owner.pos.y + Math.sin(owner.facing) * 140);

@@ -1326,6 +1326,11 @@ export const STAT_DEFS: Record<string, StatDef> = {
   // it converts like everything else. One stat per payable lane.
   costDamage_mana:{ label: 'Damage per Mana Spent', base: 0, min: 0 },
   costDamage_life:{ label: 'Damage per Life Spent', base: 0, min: 0 },
+  // Payment wards: strongest absorb pool wins; no additive stockpiling.
+  costWard_mana:  { label: 'Absorb per Mana Paid', base: 0, min: 0 },
+  costWard_life:  { label: 'Absorb per Life Paid', base: 0, min: 0 },
+  costWardDuration: { label: 'Payment Ward Duration', base: 3, min: 0 },
+  costWardCap:    { label: 'Payment Ward Maximum Life Cap', base: 0.3, min: 0, max: 1, percent: true },
 
   // Sustain
   /** VAMPIRIC EMBRACE (transferred leech): this fraction of your landed

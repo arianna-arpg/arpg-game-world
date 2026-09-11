@@ -3,6 +3,7 @@
 // every visual reads its color/shape from the data definitions.
 // ---------------------------------------------------------------------------
 
+import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
@@ -7402,6 +7403,7 @@ export class Renderer {
       const runningOn = inst ? (
         p.activeAuras.has(inst.def.id)
         || p.summonToggles.has(inst.def.id)
+        || replenishmentActive(inst)
         || p.strobes.has(inst.def.id)
         || p.hexToggles.has(inst.def.id)
         // ARMED trigger gems (the "Cast on X" family): the slot itself is

@@ -28,6 +28,7 @@
 // render them their own way without re-deriving anything.
 // ---------------------------------------------------------------------------
 
+import { costWard } from './costward';
 import { summonKitIds } from './skills';
 import type { Actor } from './actor';
 import { MONSTERS } from '../data/monsters';
@@ -128,6 +129,9 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   // ---- cost & cadence -----------------------------------------------------
   const replenishing = replenishingDelivery(inst);
   const cost = caster.skillCost(inst);
+  const ward = costWard(caster, inst, cost);
+  if (ward.amount > 0 && ward.duration > 0) push('costWard', 'Payment shield',
+    `${Math.round(ward.amount)} absorb for ${secs(ward.duration)}`, 'headline', 'when paid from life/mana; excludes debt and energy shield; strongest pool wins');
   if (cost.mana > 0 || cost.life > 0) {
     const parts: string[] = [];
     if (cost.mana > 0) parts.push(`${cost.mana} mana`);
@@ -241,6 +245,7 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
       cap !== d.maxActive ? `base ${d.maxActive}` : undefined);
     const per = shape.count;
     if (replenishing) {
+      if (d.replenish?.toggle) push('replenishmentToggle', 'Birth toggle', inst.replenishmentPaused ? 'Paused' : 'On', 'headline', 'press to pause or resume future births; existing bodies remain');
       push('replenish', 'Passive replenishment', `${per} every ${secs(shape.interval)}`, 'headline', 'free while on your bar; pauses at the cap');
     } else if (per !== 1) push('minionPer', 'Summoned per cast', String(per), 'detail');
     push('minionDuration', 'Minion lifespan', d.duration ? secs(d.duration * durScale) : 'Until destroyed', 'detail');

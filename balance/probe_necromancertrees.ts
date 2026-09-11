@@ -65,7 +65,7 @@ try {
     SIM_TAP.current = { onCast: () => casts++ };
     const mana = p.mana;
     check('manual and trigger execution cannot bypass the passive rate', !p.canUse(inst)
-      && !w.useSkill(p, inst, p.pos, true) && !w.executeSkill(p, inst, p.pos));
+      && !w.useSkill(p, inst, p.pos, false) && !w.executeSkill(p, inst, p.pos));
     step(w, 2.9); check('first birth waits its interval', crew(w).length === 0);
     step(w, 0.2); check('one free birth, no cast event or use lock', crew(w).length === 1 && casts === 0 && p.mana >= mana && !p.casting);
     step(w, 9.2); check('horde gradually reaches its cap', crew(w).length === 4);

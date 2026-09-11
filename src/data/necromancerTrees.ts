@@ -13,8 +13,8 @@ export const SKELETAL_MAGE_POOL: NonNullable<SummonDelivery['pool']> = [
 export const NECROMANCER_TREES: Record<string, SkillTreeSpec> = {
   ...UNDEAD_COURT_TREES,
   shambler_horde: tree([
-    n('wandering_dead', 'Wandering Dead', 'Replace casting with a free shambler every 3 seconds while seated, up to 4. They follow until foes appear and rush to burst. They never expire. 35% less life; 60% faster movement.',
-      [mod('minionLife', 'more', -0.35), speed(0.6)], { tags: { remove: ['duration'] }, summon: { count: 1, maxActive: 4, duration: 0, replenish: { interval: 3 } } }),
+    n('wandering_dead', 'Wandering Dead', 'Toggle free births: one shambler every 3 seconds while seated, up to 4. Starts enabled; press to pause future births without dismissing existing bodies. They follow until foes appear and rush to burst. They never expire. 35% less life; 60% faster movement.',
+      [mod('minionLife', 'more', -0.35), speed(0.6)], { tags: { remove: ['duration'] }, summon: { count: 1, maxActive: 4, duration: 0, replenish: { interval: 3, toggle: true } } }),
     [n('restless_graves', 'Restless Graves', 'Replenish 25% sooner.', [mod('minionRespawnTime', 'more', -0.25)]),
       n('grave_tide', 'Grave Tide', 'Replenish two at a time, with two additional horde slots.', [count(1), cap(2)]),
       n('hungry_dead', 'Hungry Dead', 'Detect foes 50% farther away and move 40% faster.', [mod('minionDetectionRange', 'increased', 0.5), speed(0.4)])],

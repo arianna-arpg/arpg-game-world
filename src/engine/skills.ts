@@ -1817,8 +1817,9 @@ export interface SummonDelivery {
   /** Passive replenishment while seated on a living actor's bar. Free births,
    *  no casts/cast events; interval scales with minionRespawnTime. The ordinary
    *  count and cap modifiers apply, but a full pool never evicts a body.
+   *  replenish.toggle allows deliberate presses to pause future births; starts on.
    *  Incompatible with corpse targeting, contracts, decay and cast waves. */
-  replenish?: { interval: number };
+  replenish?: { interval: number; toggle?: boolean };
   /** Fixed minion type — or use `pool` for weighted random selection. */
   monsterId?: string;
   /** Weighted pool, re-rolled per spawn (and per respawn). */
@@ -5524,6 +5525,8 @@ export interface SkillInstance {
    *  Sparse-serialized with the character (the attunedForm idiom):
    *  validated on load, orphaned ids drop with a console note. */
   treeNodes?: string[];
+  /** Saved player preference; absent means replenishment starts enabled. */
+  replenishmentPaused?: true;
   /** GRANTED: a reacquired class-starter spark. Worth NOTHING everywhere
    *  value is minted — zero salvage essence, zero font offerings — so the
    *  softlock rescue hatch can never become a currency loop. */
