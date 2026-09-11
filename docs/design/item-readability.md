@@ -10,12 +10,15 @@ The passive menu pip and HUD hint continue to read the actual unspent balance.
 
 Inventory supports carry a top-left star. The upper-right lock and bottom
 level controls retain their own space. `src/render/itemIcons.ts` holds the
-shared category glyphs and support badge colors/symbol. Inventory tiles and
-world drops use that vocabulary; memories and vestiges use their existing
-registries, and gems retain their definition-colored face and name initials.
-World-drop tile sizes, text sizes, outlines, glow and bobbing are tunable in
-`VIS_CFG.drops`. Gear keeps its rarity-colored name label. Co-op snapshots
-carry the gear base id and gem name needed to render the same appearance.
+inventory category glyphs and support badge colors/symbol. Ground equipment
+uses compact, rarity-tinted silhouettes from the extensible category registry
+in `src/render/groundItems.ts`, without inventory tiles. Skills and supports
+use small framed diamonds; supports have a hollow core. Neither has initials
+or corner badges on the ground. Bare essence glyphs and counts stay distinct
+from the framed gemstone shapes; memories and vestiges retain registry sigils.
+World-drop sizes, edges, glow and bobbing are tunable in `VIS_CFG.drops`.
+Gear keeps its rarity-colored name label. Co-op snapshots carry the base and
+rarity needed to draw the same ground symbols.
 
 All bag sort modes retain their primary ordering. Ties group by content id,
 rarity and level, then the complete saved content. Content identity excludes

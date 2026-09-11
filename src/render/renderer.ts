@@ -8,8 +8,7 @@ import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
 import { bandPointsAt, instanceChannel, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treePointsSpent, treeSpentBranch } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
-import { gemInitials } from '../engine/gemitems';
-import { itemGlyphForBase, SUPPORT_BADGE } from './itemIcons';
+import { drawGroundItem } from './groundItems';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
 import { VESTIGES } from '../data/vestiges';
 import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
@@ -6393,17 +6392,7 @@ export class Renderer {
         ctx.translate(d.pos.x, y);
         ctx.shadowColor = rc.color;
         ctx.shadowBlur = unique ? D.glowUnique : D.glow;
-        ctx.fillStyle = D.tileBackground;
-        ctx.fillRect(-half, -half, half * 2, half * 2);
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = rc.color;
-        ctx.lineWidth = D.outlineWidth;
-        ctx.strokeRect(-half, -half, half * 2, half * 2);
-        ctx.font = `${D.gearGlyphFont}px Verdana`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = rc.color;
-        ctx.fillText(itemGlyphForBase(item.item.baseId), 0, 0);
+        drawGroundItem(ctx, item.item.baseId, half, rc.color, D.symbolEdgeColor, D.outlineWidth);
         ctx.restore();
         // The floating label — dark pill + rarity-colored name.
         ctx.font = `bold ${D.labelFont}px Verdana`;
@@ -6420,31 +6409,24 @@ export class Renderer {
       const half = item.kind === 'support' ? D.supportHalf : D.skillHalf;
       ctx.save();
       ctx.translate(d.pos.x, y);
+      ctx.rotate(Math.PI / 4);
       ctx.shadowColor = fill;
       ctx.shadowBlur = D.glow;
-      ctx.fillStyle = D.tileBackground;
+      ctx.fillStyle = fill;
       ctx.fillRect(-half, -half, half * 2, half * 2);
       ctx.shadowBlur = 0;
+      // Framed gemstones remain distinct from the bare currency glyphs.
       ctx.strokeStyle = item.kind === 'skill'
         ? SKILL_RARITIES[item.inst.rarity ?? 'common'].color : fill;
       ctx.lineWidth = D.ringWidth;
+      ctx.strokeRect(-half - D.ringPad, -half - D.ringPad, (half + D.ringPad) * 2, (half + D.ringPad) * 2);
+      ctx.strokeStyle = D.gemEdgeColor;
+      ctx.lineWidth = D.edgeWidth;
       ctx.strokeRect(-half, -half, half * 2, half * 2);
-      ctx.fillStyle = fill;
-      ctx.fillRect(-half + D.ringPad, -half + D.ringPad, (half - D.ringPad) * 2, (half - D.ringPad) * 2);
-      ctx.font = `bold ${D.gemFont}px Verdana`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = D.gemTextColor;
-      ctx.fillText(gemInitials(item.kind === 'support' ? item.gem.def.name : item.inst.def.name), 0, 0);
       if (item.kind === 'support') {
-        const corner = -half + D.badgeInset;
-        ctx.fillStyle = SUPPORT_BADGE.background;
-        ctx.fillRect(corner, corner, D.supportBadgeFont, D.supportBadgeFont);
-        ctx.font = `${D.supportBadgeFont}px Verdana`;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillStyle = SUPPORT_BADGE.color;
-        ctx.fillText(SUPPORT_BADGE.glyph, corner, corner);
+        // A small hollow core distinguishes supports without a UI badge.
+        ctx.fillStyle = D.symbolEdgeColor;
+        ctx.fillRect(-D.supportCoreHalf, -D.supportCoreHalf, D.supportCoreHalf * 2, D.supportCoreHalf * 2);
       }
       ctx.restore();
     }

@@ -342,22 +342,20 @@ export const VIS_CFG = {
    *  Touch hitboxes are the engine's ITEM_CFG.pickupTouch; keep the two
    *  roughly in step so what looks grabbable is grabbable. */
   drops: {
-    /** Inventory-style tile half-sizes in world pixels. */
-    gearHalf: 13,
-    gearUniqueHalf: 16,
-    skillHalf: 12,
-    supportHalf: 12,
-    gearGlyphFont: 19,
-    gemFont: 9,
-    supportBadgeFont: 10,
-    badgeInset: 1,
-    tileBackground: '#23202a',
-    gemTextColor: '#0a0a0e',
-    /** Rarity/definition outline and the inset around the colored gem face. */
+    /** Compact symbol radii; approximately the original diamond footprint. */
+    gearHalf: 8,
+    gearUniqueHalf: 10,
+    skillHalf: 5.5,
+    supportHalf: 4.5,
+    supportCoreHalf: 1.8,
+    symbolEdgeColor: '#17131f',
+    gemEdgeColor: 'rgba(255,255,255,0.7)',
+    /** Gem rarity/definition ring, separated from the colored core. */
     ringPad: 2,
-    ringWidth: 2,
-    /** Gear rarity outline stroke. */
-    outlineWidth: 2,
+    ringWidth: 1.2,
+    edgeWidth: 0.8,
+    /** Equipment silhouette edge, with no rectangular tile behind it. */
+    outlineWidth: 1.5,
     /** Glow (shadowBlur) reach: gems/gear, and the unique flare. */
     glow: 9,
     glowUnique: 14,

@@ -1,8 +1,8 @@
 import { ITEM_BASES } from '../data/itembases';
 import { MEMORY_KINDS } from '../engine/memories';
 
-/** Shared item vocabulary for DOM inventory tiles and Canvas world drops.
- *  Categories are open registry keys: extending this table updates both views. */
+/** Inventory glyph vocabulary, keyed by the open equipment categories.
+ *  Compact world silhouettes live in groundItems.ts. */
 export const CATEGORY_GLYPHS: Record<string, string> = {
   helmet: '⛑', chest: '🛡', gloves: '🧤', boots: '👢', legs: '👖', belt: '➰',
   ring: '💍', amulet: '📿', weapon: '⚔', offhand: '🛡', quiver: '🏹', gem: '◇',
