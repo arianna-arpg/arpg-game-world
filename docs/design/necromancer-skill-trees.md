@@ -46,6 +46,10 @@ Changing the investment budget is a separate balance decision, not hidden here.
 | Raise Dead | Grave Levy: temporary random skeleton/zombie ranks, larger drafts, stench, poison and true-death expiry payoffs. | Flesh Assembly: one claw-and-slam abomination; consume other skills' minions for temporary strength, build a refuge or invest in its death. | Gravecraft: life and damage |
 | Raging Spirit | Frenzied Embers: brief fire-biting swarms, pursuit, a burning halo, ailments and expiry explosions. | Vigil Flames: targetable stationary sentries placed at the cursor; improve duration, durability, population or piercing, multiple bolts and Ignite. | Kindled Will: damage |
 | Wraith | Hexwoven Shades: ranged chaos casters, learned Despair, curse investment, a resistance veil and slower decay. | Soul Reavers: paired scythe fighters, lunges, area, culling, leech and death healing. Both trunks retain exponential decay. | Unspent Echo: life and damage |
+| Poison Nova | Plague Lineage: poison spreads through deaths; invest in magnitude, stack caps, poison healing, critical afflictions or ruptures. | Returning Venom: the ring flies back to its casting point; invest in count, speed, penetration, piercing or physical return shards. | Venomous Studies: poison magnitude |
+| Despair | Worn Grief: toggle a following curse haze with a mana reservation; develop coverage, potent curses or timed ruptures. | Profane Ground: place one renewing curse patch; specialize its residence, potency or violent sentences. | Patient Words: duration and radius |
+| Reap | Grave Procession: carry a longer-lived crescent as you move; specialize width, shove, hit recovery or execution. | Echoes of Reaping: rolls free phantom sweeps after casts; specialize bleeding chains or frequent, heavy and critical strokes. | Practiced Reaping: damage |
+| Whirling Reap | Bloodwheel: close six-stroke bleeding and life leech, with stacked wounds, ruptures or recovery. | Unbound Wheel: throw six traveling crescent waves; develop reach, width, knockback or heavy executions. | Balanced Grip: damage and accuracy |
 
 Archer-derived mages cast one elemental bolt each. The separate Mage skill earns
 its own identity through elemental lessons and innate cryomancer Ice Spears; the Lich starts with an explosive Fireball.
@@ -129,11 +133,41 @@ gains bounded, expiring damage stacks. Nearby auras from separate bodies stack.
 Vigil Flames preserve the shared Raging Spirit pool and expire normally; their
 cursor placement and no-recall body make location a deliberate choice.
 
-The remaining Necromancer queue is Poison Nova, Despair, Reap, Whirling Reap,
-Spirit Pyre, Infernal Bombardment, Archon Lance, Sanguine Burst, Venom Bolt,
+The remaining Necromancer queue is Spirit Pyre, Infernal Bombardment,
+Archon Lance, Sanguine Burst, Venom Bolt,
 Corpse Explosion and Grave Tide. Continue in coherent batches before moving to
 other classes; retain two distinct trunk identities, mixable descendants and a
 four-rank neutral passive. Balance values still need playtesting.
+
+## Plague and scythe batch
+
+The four player rites live in `src/data/necromancerRites.ts`, using the same
+binary builder and four-point budget. Tree-granted supports reuse the ordinary
+graft lane: no socket is spent, real socket copies deduplicate, granted tags
+participate in support admission, and save/load rebuilds the granted powers.
+A player's real sockets retain their normal precedence when two supports select
+a competing identity. Unbound Wheel gains the actual duration support tag.
+
+Poison Nova retains its fixed 11-second poison clock. Ruptures bank damage
+against the actual authored clock, including fixed duration overrides. Poison
+and bleed spreading retain the original caster, clock, healing and brood data.
+A death can both rupture and spread the affliction; consuming the armed status
+must not erase its spreading clause. Rupture kills retain their applier.
+
+Despair's fields reapply its curse; the damage scale describes its latent roll,
+not a new direct-hit effect. With a rupture node, the first application starts
+a fixed fuse. Further applications feed the detonation without restarting that
+fuse; death can detonate it early. The following haze reserves 25% maximum mana,
+while the ground patch is exclusive and recasting relocates it. Any tree pick
+or reset retires that instance's existing fields and refunds their reservations,
+so captured radius, timers and old modes cannot survive a new allocation.
+
+Carried Reap stays with its caster, whereas the unbound wheel projects six
+outward waves. Crescents retain their single-hit-per-enemy rule; extra duration
+extends their presence or travel rather than turning them into repeated hits.
+Reap's phantom uses the existing follow-up skill and inheritance contract.
+Return shards are the existing short-range physical Shrapnel skill, not a second
+Poison Nova. These are initial tuning values for in-game iteration.
 
 ## Shared implementation contract
 
@@ -205,6 +239,10 @@ new Commanded Dead trunk. The preserved branch retains the old save interpretati
   census agreement, save round trips, sentinel guards and heirs, duelists, levy
   caps and expiry, attributed devouring and aura deaths, placed sentry AI,
   curses, melee reavers and finite decay.
+- `npm run probe -- necromancerrites`: all 32 new leaf paths, neutral ranks,
+  save repair, real returning projectiles, poison spread/healing/rupture clocks,
+  curse reservation and relocation, reset cleanup, follow-up casts and six
+  traveling waves.
 - `npm run probe`: the full fast regression gate.
 - `npm run sim -- run --suite smoke`: baseline combat scenarios.
 - Production build plus Electron tree interaction and screenshot inspection.

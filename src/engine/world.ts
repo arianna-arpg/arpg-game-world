@@ -22014,6 +22014,7 @@ export class World {
     const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
     if (!this.spendAbilityEssence(seat, cost, 'fontreset:' + skillId)) return false;
     this.clearSummonTreeBodies(p, inst);
+    this.clearTreeFields(p, inst);
     inst.treeNodes = undefined;
     // The refund is FULL-TREE by law (never node-wise — partial refunds
     // breed prerequisite paradoxes); the derived graft lane unmakes with it.
@@ -31403,6 +31404,7 @@ export class World {
     const why = this.swapRefusal(seat, 'socket');
     if (why) { this.failNote(seat.actor, skillId + ':treepick', why); return; }
     if (inst.def.delivery.type === 'summon') this.clearSummonTreeBodies(seat.actor, inst);
+    this.clearTreeFields(seat.actor, inst);
     inst.treeNodes = [...(inst.treeNodes ?? []), nodeId];
     // A spent point may carry a graft — the derived lane rebuilds now.
     this.recalcSeat(seat);
@@ -41025,6 +41027,13 @@ export class World {
           const dps = Math.max(derived, floor) * potencyFor(fx.status) * hexDmg
             / Math.max(0.5, durScale);
           const sdef = STATUS_DEFS[fx.status];
+          // durationOverride: a FIXED clock (Flash Freeze's unscalable
+          // freeze) — expressed as a scale on the def's base duration so
+          // applyStatus needs no new path. Linked hexes stretch it.
+          const fxScale = (fx.durationOverride !== undefined
+            ? fx.durationOverride / (STATUS_DEFS[fx.status]?.duration || 1)
+            : durScale) * hexDur;
+          const afflictionSpan = (sdef?.duration ?? 0) * fxScale;
           // Rupture supports bake the eventual detonation at application.
           let rupture: number | undefined;
           let ruptureType: DamageType | undefined;
@@ -41033,7 +41042,7 @@ export class World {
           // into the ARMED PAYLOAD — and the doomDot stat lets a share of
           // that keg TICK as chaos while the fuse runs (Lingering Doom).
           if (sdef?.cullsAtLethal && dps > 0) {
-            rupture = dps * sdef.duration * durScale;
+            rupture = dps * afflictionSpan;
             ruptureType = 'chaos';
             dpsOut = rupture * caster.sheet.get('doomDot', tags, extra);
           } else if (sdef?.dotType && dps > 0) {
@@ -41042,13 +41051,13 @@ export class World {
             // 0.5 = half burns, half banks — a dial, not a flag).
             const bombFrac = caster.sheet.get('igniteToBomb', tags, extra);
             if (fx.status === 'burn' && bombFrac > 0) {
-              rupture = dps * sdef.duration * durScale * bombFrac;
+              rupture = dps * afflictionSpan * bombFrac;
               ruptureType = 'fire';
               dpsOut = dps * (1 - bombFrac);
             } else {
               const r = caster.sheet.get('dotRupture', tags, extra);
               if (r > 0) {
-                rupture = dps * sdef.duration * durScale * r;
+                rupture = dps * afflictionSpan * r;
                 ruptureType = sdef.dotType;
               }
             }
@@ -41077,12 +41086,6 @@ export class World {
               this.cry(target.pos, 'crit affliction!', '#ffd24a', 12, 'wink');
             }
           }
-          // durationOverride: a FIXED clock (Flash Freeze's unscalable
-          // freeze) — expressed as a scale on the def's base duration so
-          // applyStatus needs no new path. Linked hexes stretch it.
-          const fxScale = (fx.durationOverride !== undefined
-            ? fx.durationOverride / (STATUS_DEFS[fx.status]?.duration || 1)
-            : durScale) * hexDur;
           this.notePopFx(target, fx.status);
           target.applyStatus(fx.status, dpsOut, fxScale, caster.name, {
             // Propagation is a CHANCE rolled once at application (1 = the
@@ -42802,7 +42805,7 @@ export class World {
       e.hitFlash = 0.15;
       e.hitFlashType = type;
       this.text(e.pos, Math.round(amount).toString(), '#b06bd4', 12);
-      if (e.life <= 0 && !e.dead) this.kill(e);
+      if (e.life <= 0 && !e.dead) this.kill(e, false, s.casterId === undefined ? undefined : this.actorById(s.casterId));
     }
   }
 
@@ -43242,6 +43245,7 @@ export class World {
         }
       }
     }
+    const propagatingAfflictions = silent ? [] : actor.statuses.filter(s => s.propagates && s.dps > 0);
     // ARMED RUPTURES fire on DEATH as well as expiry (Doombrand's "whichever
     // comes first"; a Living Bomb pops with its host) — the keg never rots
     // in the corpse. Statuses are cleared as they blow so loops can't form.
@@ -43442,14 +43446,17 @@ export class World {
     // Contagion: propagating DoTs jump to the victim's nearby allies,
     // chaining across every further death.
     if (!silent) {
-      for (const s of actor.statuses) {
-        if (!s.propagates || s.dps <= 0) continue;
+      for (const s of propagatingAfflictions) {
         let spread = 0;
         for (const e of this.actors) {
           if (e.dead || e === actor || e.team !== actor.team || e.untargetable) continue;
           if (dist(actor.pos, e.pos) > 170 || spread >= 6) continue;
-          e.applyStatus(s.id, s.dps, 1, s.sourceName,
-            { propagates: true, rupture: s.rupture, ruptureType: s.ruptureType });
+          // Propagated afflictions retain their original applier and payload;
+          // the new carrier must not steal kill credit, healing or brood ownership.
+          const span = s.total ?? STATUS_DEFS[s.id]?.duration ?? 1;
+          e.applyStatus(s.id, s.dps, span / (STATUS_DEFS[s.id]?.duration || 1), s.sourceName,
+            { propagates: true, rupture: s.rupture, ruptureType: s.ruptureType,
+              casterId: s.casterId, leech: s.leech, brood: s.brood, power: s.power });
           spread++;
         }
         if (spread > 0) {
@@ -53507,6 +53514,18 @@ export class World {
   }
 
   private replenishment = new ReplenishmentClocks();
+
+  /** Retire fields that captured the previous allocation. */
+  private clearTreeFields(caster: Actor, inst: SkillInstance): void {
+    // Tree fields snapshot radius, timing and reservations: retire them before
+    // changing their instance so old powers cannot survive a new allocation.
+    for (let i = this.zones.length - 1; i >= 0; i--) {
+      const z = this.zones[i];
+      if (z.caster !== caster || z.inst !== inst) continue;
+      this.expireZone(z);
+      this.zones.splice(i, 1);
+    }
+  }
 
   /** Tree identity changes retire the old births silently, so permanent
    *  bodies cannot survive resetting into a temporary-body branch. */

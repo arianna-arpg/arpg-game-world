@@ -1,3 +1,4 @@
+import { NECROMANCER_RITES } from './necromancerRites';
 // ---------------------------------------------------------------------------
 // THE SKILL CATALOG.
 //
@@ -1423,6 +1424,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // slips between rays one breath and eats one the next, while at melee
   // reach nothing escapes. The Necromancer's signature.
   poison_nova: {
+    tree: NECROMANCER_RITES.poison_nova,
     id: 'poison_nova', name: 'Poison Nova',
     description: 'Exhales a ring of 24 slow venom bolts; every enemy struck is left with a'
       + ' strong POISON lasting 11 seconds. The ring settles a little differently with every'
@@ -2444,6 +2446,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // exists for Hex Blast detonations and Malfeasance ruptures to scale from.
 
   despair: {
+    tree: NECROMANCER_RITES.despair,
     id: 'despair', name: 'Despair',
     description: 'CURSE: enemies in the area lose 25% of all resistances for 7 seconds.',
     tags: ['spell', 'curse', 'aoe', 'chaos', 'duration'], color: '#8a68b8',
@@ -7753,6 +7756,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   reap: {
+    tree: NECROMANCER_RITES.reap,
     id: 'reap', name: 'Reap',
     description: 'Swing the scythe and let go: a crescent of shear leaves your hands and'
       + ' travels forward, dealing physical and chaos damage to each foe it passes through'
@@ -7773,6 +7777,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // Pure composition: a full turn played as an aim-sequence figure — with
   // Sweeping Blow socketed, it becomes a six-way radial wave burst.
   whirling_reap: {
+    tree: NECROMANCER_RITES.whirling_reap,
     id: 'whirling_reap', name: 'Whirling Reap',
     description: 'One press, one full turn: six melee arcs walk the blade all the way around'
       + ' you, striking everything in the circle with physical damage.',

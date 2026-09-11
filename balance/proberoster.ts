@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_necromancerrites.ts', status: 'green', tier: 'fast', why: 'Plague and scythe binary trees, real return/propagation/curse fields/waves, derived support identity, save repair and respec cleanup' },
   { probe: 'probe_necromancertrees.ts', status: 'green', tier: 'fast', why: 'Shambling Horde paths, passive replenishment, caps, lifespan, cleanup, support scaling, attribution and tree persistence' },
   { probe: 'probe_necromancercourts.ts', status: 'green', tier: 'fast', why: 'Four undead court trees, full-path births, defensive and assault kits, decay, placed sentries, devouring and death attribution' },
   { probe: 'probe_nestednecromancer.ts', status: 'green', tier: 'fast', why: 'Binary mutator topology, mixed routes, elemental pools, taught crew skills, commander/escort auras and summon persistence' },
