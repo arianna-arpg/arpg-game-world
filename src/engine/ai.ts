@@ -36,6 +36,7 @@ import {
   watchRiseAmount, watchRungOf, watchValueOf,
 } from './watch';
 import { isThrongBody, throngHeelOffset } from './throng';
+import { minionCommandSpeed } from './minionCombat';
 import { runAIActions } from './aiActions';
 import { nearestBody, segsHittable } from './segments';
 import { LOS_CFG } from './los';
@@ -492,6 +493,23 @@ registerCommandKind({
       return 'consumed';
     }
     return 'done';
+  },
+});
+
+// minionCombat recall: keep following the issuer, even with prey beside us.
+// Cancel the committed swing, but do not refund its cooldown or resources.
+registerCommandKind({
+  id: 'recall',
+  step(actor, world, cmd, dt) {
+    const keeper = cmd.issuerId !== undefined ? world.actorById(cmd.issuerId) : actor.owner;
+    if (!keeper || keeper.dead || keeper.downed) return 'done';
+    actor.casting = null;
+    actor.aiTargetId = undefined;
+    throngHeelOffset(actor, world.time, THRONG_HEEL_OFF);
+    const goal = { x: keeper.pos.x + THRONG_HEEL_OFF.x,
+      y: keeper.pos.y + THRONG_HEEL_OFF.y, tier: keeper.tier };
+    if (dist(actor.pos, goal) > 24) moveToward(actor, world, goal, dt);
+    return 'consumed';
   },
 });
 
@@ -1577,16 +1595,17 @@ function scoreTarget(
   prefer: NonNullable<import('./brain').TargetSpec['prefer']>,
   actor: Actor, e: Actor, d: number,
 ): number {
+  const targetPriority = e.sheet.get('targetPriority');
   switch (prefer) {
-    case 'nearest': return 1 / (d + 24);
-    case 'farthest': return d + 1;
-    case 'highestThreat': return (actor.threat.get(e.id) ?? 0) + 1 / (d + 24);
-    case 'lowestLife': return (1 - e.life / Math.max(1, e.maxLife())) + 0.05 / (d + 24);
-    case 'highestLife': return e.life / Math.max(1, e.maxLife()) + 0.05 / (d + 24);
+    case 'nearest': return targetPriority / (d + 24);
+    case 'farthest': return targetPriority * (d + 1);
+    case 'highestThreat': return (actor.threat.get(e.id) ?? 0) + targetPriority / (d + 24);
+    case 'lowestLife': return targetPriority * ((1 - e.life / Math.max(1, e.maxLife())) + 0.05 / (d + 24));
+    case 'highestLife': return targetPriority * (e.life / Math.max(1, e.maxLife()) + 0.05 / (d + 24));
     case 'random': {
       // Stable per-pair pseudo-random: preference without per-tick thrash.
       const h = Math.sin(actor.id * 374761.393 + e.id * 668265.263) * 43758.5453;
-      return 0.1 + (h - Math.floor(h));
+      return targetPriority * (0.1 + (h - Math.floor(h)));
     }
   }
 }
@@ -2434,7 +2453,7 @@ function steerMove(actor: Actor, world: World, dx: number, dy: number, dt: numbe
       else return; // rim-pinned: stand, don't step off
     }
   }
-  world.moveActor(actor, dx, dy, dt);
+  world.moveActor(actor, dx, dy, dt * minionCommandSpeed(actor, world.time));
 }
 
 /** THE FLOCK STEER — the classic boid triad (separation / cohesion /

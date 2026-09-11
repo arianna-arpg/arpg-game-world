@@ -20,6 +20,9 @@ shared temporary buff mutations (`SkillTreeNode.buffs` / `instanceEffects`),
 three-class scope and next batches are documented in
 `docs/design/class-starting-skill-trees.md`; `balance/probe_startertrees.ts`
 covers the complete opening bars.
+The Hivecaller/Ranger/Guardian batch is in `src/data/frontierStarterTrees.ts`,
+with its contract and shared absorb scaling in
+`docs/design/frontier-starting-skill-trees.md`.
 
 ## Commands
 - `npm install` — first-time setup (also run automatically by the .bat launchers).
@@ -437,6 +440,8 @@ we verify changes.
   into a fresh bag on the lab branch — docs in `docs/engine/gauge.md`,
   probe `balance/probe_gauge.ts`),
   `throng.ts` + `cling.ts` (THE THRONG FABRIC — the swarm you GATHER, the
+  shared `minionCombat.ts` survival/handling profile and Command: Recall are
+  measured in `balance/probe_throngcombat.ts`; contract: `docs/design/throng-combat.md` —
   Pikmin/Overlord playstyle as data: `SkillDef.throng` anchors a roster of
   sight-gated wild husks CLAIMED by walking through them, acquisition as
   open `ThrongSourceRow`s (finite pockets / timed motes / crit + kill

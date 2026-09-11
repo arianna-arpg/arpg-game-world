@@ -10,6 +10,7 @@
 
 import { fontStandsIn } from './fontPlacement';
 import { refugeDeparture, type RefugeDeparture } from './refugeDeparture';
+import { skillAbsorbAmount } from './absorb';
 import { instanceEffects } from './skills';
 import { costWard } from './costward';
 import { summonKitIds } from './skills';
@@ -242,6 +243,7 @@ import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTrigg
 import { bootOccSites, driveOccSites, OCC_CFG, reviveOccSite, seedOccClockMarks, wakeRousedResidents, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
 import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun } from './puzzles';
+import { minionCombatOf, MINION_COMBAT } from './minionCombat';
 import {
   batchScaleOf, buildWornThrongDef, isThrongBody, THRONG_CFG, throngMarkerOf,
   throngPocketKey, throngSkillSalt, throngSpecsOn, WORN_THRONGS,
@@ -29298,7 +29300,7 @@ export class World {
     let radius = husk.radius;
     this.kill(husk, true);
     const spec = inst.def.throng!;
-    if (spec.tier === 'lite' && bodyKind === spec.monsterId) {
+    if (spec.tier === 'lite' && bodyKind === spec.monsterId && !this.minionNeedsFullDurability(keeper, inst)) {
       // THE LITE TIER (engine/lite.ts): the claim joins the POOL — a row,
       // not a minion. Promotion mints the real body when a boundary asks.
       const kindIdx = this.liteKindOf(spec.monsterId);
@@ -29339,7 +29341,7 @@ export class World {
       // not persist across a save, matching a classic roster's full-life
       // re-field). Classic rosters mint real bodies exactly as before.
       const spec = inst.def.throng!;
-      if (spec.tier === 'lite' && row.defId === spec.monsterId) {
+      if (spec.tier === 'lite' && row.defId === spec.monsterId && !this.minionNeedsFullDurability(keeper, inst)) {
         const kindIdx = this.liteKindOf(spec.monsterId);
         if (kindIdx < 0) continue;
         for (let i = 0; i < n; i++) {
@@ -29429,6 +29431,8 @@ export class World {
     }
     if (!prey.length) return;
     for (const b of bodies) {
+      // minionCombat: a keeper's recall or focus order outranks self-hunting.
+      if (b.aiCommand && b.aiCommand.until > this.time && !b.aiCommand.autonomous) continue;
       let best: Actor | null = null;
       let bd = Infinity;
       for (const e of prey) {
@@ -29439,6 +29443,7 @@ export class World {
       const cmd: CommandState = {
         kind: 'assault', pos: vec(best.pos.x, best.pos.y), until,
         radius: THRONG_CFG.direct.radius, issuerId: keeper.id, targetId: best.id,
+        autonomous: true, // minionCombat: subordinate to the keeper's next order
       };
       issueCommand(b, cmd);
     }
@@ -29638,6 +29643,12 @@ export class World {
         ...throngSpecsOn(keeper.skills), ...this.wornThrongAnchorsOf(keeper),
       ]) {
         if (rebake) {
+          if (spec.tier === 'lite' && this.minionNeedsFullDurability(keeper, inst)) {
+            const kindIdx = this.liteKindOf(spec.monsterId);
+            if (kindIdx >= 0) this.litePromoteNearest(keeper.pos, {
+              within: Infinity, max: this.lite.used, owner: keeper.id, kindIdx,
+            });
+          }
           for (const b of this.throngBodiesOf(keeper, inst.def.id)) {
             this.bakeMinionOwnerStats(b, keeper, inst, batchScaleOf(spec));
           }
@@ -30328,6 +30339,7 @@ export class World {
     striker: Actor | null, at: Vec2, reach: number,
     test?: (pos: Vec2, radius: number) => boolean,
     story: number | null = striker ? striker.tier : null,
+    minionCombatArea = true,
   ): void {
     const pool = this.lite;
     if (!pool.liveCount) return;
@@ -30339,6 +30351,7 @@ export class World {
     // striker's untagged fold (skill-scoped grants ride the real ply gate;
     // the pool reads the global lane). Invariant per carve.
     const tears = 1 + (striker ? Math.max(0, Math.floor(striker.sheet.get('plyRend'))) : 0);
+    let areaAvoidance: Map<number, number> | undefined;
     let torn = 0, fx = 0, cx = 0, cy = 0;
     for (let i = 0; i < pool.used; i++) {
       if (!pool.alive[i]) continue;
@@ -30352,6 +30365,19 @@ export class World {
       this.liteVec.y = pool.y[i];
       if (test) { if (!test(this.liteVec, k.radius)) continue; }
       else if (Math.sqrt(dx * dx + dy * dy) - k.radius > reach) continue;
+      // Owned pooled bodies share their anchor's area protection. Ordinary
+      // projectile sweeps and non-area melee still carve without this roll.
+      if (minionCombatArea && pool.owner[i]) {
+        const key = pool.owner[i] * 256 + pool.kind[i];
+        let avoid = areaAvoidance?.get(key);
+        if (avoid === undefined) {
+          const keeper = this.actorById(pool.owner[i]);
+          const anchor = keeper?.skills.find(s => s?.def.throng?.monsterId === k.defId);
+          avoid = keeper && anchor ? this.minionAreaAvoidanceOf(keeper, anchor) : 0;
+          (areaAvoidance ??= new Map()).set(key, avoid);
+        }
+        if (avoid > 0 && chance(avoid)) continue;
+      }
       // Any carve is a DISTURBANCE — the regrowth law's quiet clock stamps
       // whether the body tore or died (the collective noticed either way).
       this.litePocketDisturb(pool.pocket[i]);
@@ -30475,6 +30501,25 @@ export class World {
     return body;
   }
 
+  /** An ordinary command reaches pooled minions too. Promotion is the same
+   * interaction boundary used by a conducted cast; each row keeps its owner
+   * and anchor. Host-scoped meta commands must not recruit another skill. */
+  private promoteCommandThrong(caster: Actor, inst: SkillInstance, affects: string, radius?: number): void {
+    if (affects === 'squad') return;
+    for (const keeper of [...this.actors]) {
+      if (keeper.dead || (keeper !== caster && !keeper.ownedBy(caster))) continue;
+      for (const anchor of keeper.skills) {
+        const spec = anchor?.def.throng;
+        if (!anchor || spec?.tier !== 'lite' || (inst.hostSkillId && anchor.def.id !== inst.hostSkillId)) continue;
+        const kindIdx = this.liteKindOf(spec.monsterId);
+        if (kindIdx < 0) continue;
+        this.litePromoteNearest(caster.pos, {
+          within: radius ?? Infinity, max: this.lite.used, owner: keeper.id, kindIdx,
+        });
+      }
+    }
+  }
+
   /** Promote the nearest matching rows to `at` (the conducted-order and
    *  grab boundaries). Filters: owner, kind, opposing team — pass what the
    *  boundary knows. */
@@ -30527,9 +30572,14 @@ export class World {
       const spec = inst?.def.throng;
       if (!spec || spec.tier !== 'lite') continue;
       if (a.defId !== spec.monsterId) continue; // Substitutions keep their body kind and original anchor.
+      // minionCombat: the pool has no life pool or owner-derived ply budget.
+      // Invested/wounded bodies retain their full actor state instead of
+      // losing bought armor or silently recovering it on a round trip.
+      if (this.minionNeedsFullDurability(a.owner, inst)
+        || a.plies < a.pliesMax || a.life < a.maxLife()) continue;
       if (a.clingTo || a.heldBy !== undefined || a.gripping || a.casting) continue;
       if (a.aiCommand || a.aiTargetId !== undefined) continue;
-      if (a.statuses.length > 0) continue;
+      if (a.statuses.length > 0 || a.buffs.size > 0) continue;
       const kindIdx = this.liteKindOf(spec.monsterId);
       if (kindIdx < 0) continue;
       const k = this.liteKinds[kindIdx];
@@ -30940,8 +30990,9 @@ export class World {
         const cmd = a.aiCommand;
         // A fresh order pointing AWAY from the ridden victim peels the
         // rider off (the direct channel re-throws your own riders).
-        const redirected = cmd !== undefined && cmd.targetId !== ride.id
-          && dist(cmd.pos, v?.pos ?? cmd.pos) > (cmd.radius ?? COMMAND_CFG.markRadius);
+        const redirected = cmd !== undefined && (cmd.kind === 'recall' // minionCombat: recall always dismounts
+          || (cmd.targetId !== ride.id
+            && dist(cmd.pos, v?.pos ?? cmd.pos) > (cmd.radius ?? COMMAND_CFG.markRadius)));
         if (!v || v.dead || redirected) {
           this.clingRelease(a);
           continue;
@@ -31615,7 +31666,10 @@ export class World {
     let inst = caster.metaInsts.get(key);
     if (!inst || inst.level !== effectiveSkillLevel(host)) {
       inst = makeSkillInstance(SKILLS[skillId], effectiveSkillLevel(host));
-      inst.hostSkillId = host.def.id;
+      // minionCombat: a command's meta inherits its whole-court scope.
+      // Summon-hosted meta payloads still name their own roster anchor.
+      inst.hostSkillId = host.def.effects.some(e => e.type === 'commandMinions')
+        ? undefined : host.def.id;
       caster.metaInsts.set(key, inst);
     }
     return inst;
@@ -33378,7 +33432,8 @@ export class World {
           this.frontSplash(caster, inst, caster.pos, reach);
           this.strikeSurfaces(caster, caster.pos, reach, (p, r) =>
             dist(caster.pos, p) - r <= reach
-            && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2);
+            && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2,
+            undefined, undefined, skillContextTags(inst).has('aoe')); // minionCombat area classification
         }
         break;
       }
@@ -33487,7 +33542,7 @@ export class World {
             if (fx.type === 'heal') this.applyHealChained(caster, inst, friendly, fx, useMult);
             else if (fx.type === 'cleanse') this.cleanseActor(friendly, fx.count ?? 2);
             else if (fx.type === 'absorb') {
-              this.grantAbsorb(friendly, fx.amount,
+              this.grantAbsorb(friendly, skillAbsorbAmount(caster, inst, fx.amount),
                 fx.duration * caster.sheet.get('effectDuration', tags, extra));
             } else if (fx.type === 'restore') this.applyRestore(friendly, fx, { tags: def.tags });
             else if (fx.type === 'ward') {
@@ -35094,6 +35149,7 @@ export class World {
           console.warn(`[commandMinions] unknown command kind '${kind}' on ${def.id}`);
         } else {
           const affects = fx.affects ?? 'minions';
+          this.promoteCommandThrong(caster, inst, affects, fx.radius);
           const until = this.time + (fx.duration ?? COMMAND_CFG.duration);
           const mark = vec(aim.x, aim.y);
           // Point AT a foe and the order PINS it — focus fire, not geography.
@@ -35247,7 +35303,7 @@ export class World {
         caster.applyStatus(fx.status, 0, durScale, def.name);
       }
       if (d.type === 'self' && fx.type === 'absorb') {
-        this.grantAbsorb(caster, fx.amount, fx.duration * durScale);
+        this.grantAbsorb(caster, skillAbsorbAmount(caster, inst, fx.amount), fx.duration * durScale);
       }
       if (d.type === 'self' && fx.type === 'restore') {
         this.applyRestore(caster, fx, { tags: def.tags });
@@ -36907,12 +36963,19 @@ export class World {
     return summonCrewOf(d, id => MONSTERS[id], id => SKILLS[id]);
   }
 
-  /**
-   * Spawn one minion for a summon skill, honoring the cap (with %-more/fewer
-   * modifiers applied to the skill's own base) and baking the owner's
-   * minion-shaping stats — size, speed, damage, life, explosion payloads,
-   * lifespan, and mana reservation — into the minion at birth.
-   */
+  /** minionCombat: reuse full actors whenever a grant needs their complete
+   * durability model. The ordinary owner bake remains the sole ply fold. */
+  private minionNeedsFullDurability(caster: Actor, inst: SkillInstance): boolean {
+    const tags = skillContextTags(inst), extra = instanceMods(inst);
+    return MINION_COMBAT.actorDurabilityStats.some(stat => caster.sheet.get(stat, tags, extra) > 0);
+  }
+
+  private minionAreaAvoidanceOf(caster: Actor, inst: SkillInstance): number {
+    return Math.max(0, Math.min(MINION_COMBAT.maxAreaAvoidance,
+      (minionCombatOf(inst.def).areaAvoidance ?? 0)
+      + caster.sheet.get('minionAreaAvoidance', skillContextTags(inst), instanceMods(inst))));
+  }
+
   /** Fold the OWNER's minion-stat investment onto a freshly minted body —
    *  THE ONE INHERITANCE SEAM (spawnMinion and throng claims share it).
    *  `scale` tempers every owner CONTRIBUTION (damage/life/haste/regen/
@@ -36923,6 +36986,15 @@ export class World {
   bakeMinionOwnerStats(minion: Actor, caster: Actor, inst: SkillInstance, scale = 1): void {
     const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
+    const minionCombat = minionCombatOf(inst.def);
+    const minionThreat = Math.max(MINION_COMBAT.minThreat,
+      (minionCombat.threat ?? 1) * caster.sheet.get('minionThreat', tags, extra));
+    // Survival fractions are per body, like minionPlies; never batch-divided.
+    minion.sheet.setSource('minionCombat', [
+      mod('threatGen', 'more', minionThreat - 1),
+      mod('targetPriority', 'more', minionThreat - 1),
+      mod('areaAvoidance', 'flat', this.minionAreaAvoidanceOf(caster, inst)),
+    ]);
     const size = caster.sheet.get('minionSize', tags, extra);
     minion.radius = Math.max(5, minion.radius * size);
     const haste = caster.sheet.get('minionHaste', tags, extra);
@@ -38073,6 +38145,7 @@ export class World {
     test?: (pos: Vec2, radius: number) => boolean,
     struck?: Set<number>,
     strikeTier?: number,
+    minionCombatArea = true,
   ): void {
     // THE LAYER SOVEREIGNTY GATE (the tier fabric): a strike happens ON a
     // story — the striker's own, or the flight's, passed as `strikeTier` —
@@ -38116,7 +38189,7 @@ export class World {
     // the delivery's exact geometry — every verb that plays the surfaces
     // (melee arcs, novas, splash, zone pulses, ownerless blasts) mows the
     // crowd automatically, present and future alike.
-    this.liteCarve(striker, at, reach, test, story);
+    this.liteCarve(striker, at, reach, test, story, minionCombatArea);
   }
 
   /** A resonant stone TOLLS (DoodadRule.resonance): lure ping at the stone +
@@ -41337,7 +41410,7 @@ export class World {
           if (fx.stun) target.applyStatus('stun', 0, fx.stun * durScale, def.name);
         }
       } else if (fx.type === 'absorb') {
-        this.grantAbsorb(target, fx.amount, fx.duration * durScale);
+        this.grantAbsorb(target, skillAbsorbAmount(caster, inst, fx.amount), fx.duration * durScale);
       } else if (fx.type === 'restore') {
         this.applyRestore(target, fx, { tags: def.tags });
       } else if (fx.type === 'ward') {

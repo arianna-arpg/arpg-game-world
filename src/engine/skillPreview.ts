@@ -28,6 +28,7 @@
 // render them their own way without re-deriving anything.
 // ---------------------------------------------------------------------------
 
+import { skillAbsorbAmount } from './absorb';
 import { instanceEffects } from './skills';
 import { costWard } from './costward';
 import { summonKitIds } from './skills';
@@ -221,6 +222,8 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
 
   // ---- buff / minion shape -------------------------------------------------
   for (const fx of instanceEffects(inst)) {
+    if (fx.type === 'absorb') push('absorb', 'Absorb shield',
+      Math.round(skillAbsorbAmount(caster, inst, fx.amount)) + ' for ' + secs(fx.duration * durScale), 'headline');
     if (fx.type !== 'buff' || !fx.duration) continue;
     if (fx.affects === 'allies') push('buffRadius_' + fx.id, 'Ally blessing radius',
       String(Math.round((fx.radius ?? 0) * get('aoeRadius'))), 'detail', 'same team and story; granted when cast');

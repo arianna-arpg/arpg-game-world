@@ -834,6 +834,8 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  bursts) — the healer's damage stat. Tag-filtered like damage, so
    *  "increased healing with channelled skills" is a modifier away. */
   healPower:      { label: 'Healing Power', base: 1, min: 0 },
+  /** Scales explicit absorb effects at their granting skill, not resource-payment rewards. */
+  absorbPower:    { label: 'Absorb Power', base: 1, min: 0 },
   /** Fraction of OVERHEAL (healing past full) hardened into an absorption
    *  shield on the target — the support player's answer to topped bars. */
   overheal:       { label: 'Overheal to Ward', base: 0, min: 0 },
@@ -1485,6 +1487,12 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  brains — and grafted event swarms — read the chart, so this is an
    *  attention lever, never a damage one. */
   threatGen:      { label: 'Threat Generation', base: 1, min: 0 },
+  /** Weight in spatial target preferences; a low priority still permits targeting. */
+  targetPriority: { label: 'Enemy Target Priority', base: 1, min: 0.01 },
+  /** Area HIT avoidance protects plies and on-hit effects too; DoTs remain live. */
+  areaAvoidance: { label: 'Area Hit Avoidance', base: 0, min: 0, max: 0.85, percent: true },
+  minionThreat: { label: 'Minion Threat', base: 1, min: 0.01 },
+  minionAreaAvoidance: { label: 'Minion Area Hit Avoidance', base: 0, min: 0, max: 0.85, percent: true },
   /** > 0: constructs this actor spawns TAUNT (Actor.taunt decoys) — the
    *  Beckoning gem's lane (spawnConstruct reads it per-skill). */
   constructTaunt: { label: 'Constructs Taunt', base: 0 },
