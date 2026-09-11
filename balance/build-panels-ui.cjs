@@ -25,6 +25,23 @@ app.whenReady().then(async () => {
   assert.equal(await js(`document.querySelectorAll('#skills-panel [title]').length`),0);
   await js(`(()=>{const b=document.querySelector('[data-tip="skill"]'),r=b.getBoundingClientRect();b.dispatchEvent(new MouseEvent('mouseover',{bubbles:true,clientX:r.x+2,clientY:r.y+30}));})()`);
   assert(!(await js(`document.querySelector('#tooltip').classList.contains('hidden')`)));
+  // Cards must keep their content and dimensions past the former 550ms expansion.
+  await js(`window.__steadyAnchor=[...document.querySelectorAll('#skills-panel [data-tip="skill"]')].find(e=>__game.ui.skillTooltip(e.dataset.skillId,true)?.wide); if(!__steadyAnchor)throw Error('Fixture needs a skill with detail rows'); __steadyAnchor.dispatchEvent(new MouseEvent('mouseover',{bubbles:true,clientX:600,clientY:400})); void 0`);
+  const card = () => js(`(()=>{const t=document.querySelector('#tooltip'),r=t.getBoundingClientRect();return {html:t.innerHTML,w:r.width,h:r.height,wide:t.classList.contains('tt-wide')}})()`);
+  const compact = await card();
+  await wait(1100); assert.deepEqual(await card(), compact);
+  assert.equal(compact.wide,false);
+  // The same card moved toward screen edges must not shrink to available space.
+  for(const x of [1580,20,1400,600]) {
+   await js(`__steadyAnchor.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,clientX:${x},clientY:400})); void 0`);
+   await wait(30); assert.deepEqual(await card(),compact);
+   assert(await js(`(()=>{const r=document.querySelector('#tooltip').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})()`));
+  }
+  // Full is explicit and complete at first reveal, then just as steady.
+  await js(`__game.settings().tooltipDetail='full'; __steadyAnchor.dispatchEvent(new MouseEvent('mouseout',{bubbles:true}));__steadyAnchor.dispatchEvent(new MouseEvent('mouseover',{bubbles:true,clientX:600,clientY:400})); void 0`);
+  const full = await card(); assert.notEqual(full.html,compact.html); assert.equal(full.wide,true);
+  await wait(1100); assert.deepEqual(await card(),full);
+  await js(`__game.settings().tooltipDetail='compact'; void 0`);
   await js(`document.querySelector('[data-passiveflap]').click(); void 0`); await wait(100);
   console.log('BOOK',await js(`__game.ui.folio.bookFor('passives')`));
   assert.equal(await js(`__game.ui.folio.bookFor('passives').front`),'passives');

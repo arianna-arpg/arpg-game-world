@@ -19,6 +19,9 @@
 const TIP_TARGET = '[data-tip], [data-ui-hint]';
 const tooltipRoots = new WeakSet<HTMLElement>();
 let activeTooltipOwner: object | null = null;
+let tooltipDetail: () => 'compact' | 'full' = () => 'compact';
+/** Read the preference only when a new card opens, so a displayed card stays steady. */
+export function configureTooltipDetail(read: typeof tooltipDetail): void { tooltipDetail = read; }
 const hintEscape = (s: string): string => s.replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
@@ -61,10 +64,6 @@ export interface TooltipContent {
 export const TIP_CFG = {
   /** Cursor→box gap when placing (px). */
   pad: 14,
-  /** EXTENDED HOVER: dwell this long on one anchor and the box re-asks its
-   *  content with extended=true — the deeper card (gear comparison). Binds
-   *  opt in via TooltipOpts.extend. */
-  extendMs: 550,
   /** HOVER INTENT: the standard "after a moment" reveal — binds that opt in
    *  (TooltipOpts.delayMs) keep the box DOWN until the cursor has settled on
    *  one anchor this long, so compact card walls (the Vault) stay quiet under
@@ -96,10 +95,8 @@ export const TIP_ANCHOR_CLASS = 'tt-anchor';
 
 export interface TooltipOpts {
   proximity?: TooltipProximity;
-  /** EXTENDED HOVER (opt-in per bind): dwell TIP_CFG.extendMs on one anchor
-   *  and getContent re-runs with extended=true, growing the box in place —
-   *  leave and return to reset to the compact card. Content that has no
-   *  deeper form simply returns the same card. */
+  /** This surface offers a full-detail card. Choose compact/full at reveal
+   *  from the saved preference; elapsed hover time never changes the card. */
   extend?: boolean;
   /** HOVER INTENT (opt-in per bind): the box only appears after the cursor
    *  has RESTED on an anchor this long (ms — pass TIP_CFG.intentMs for the
@@ -119,9 +116,7 @@ export function bindTooltips(
   tooltipRoots.add(container);
   const ownsEvent = (e: Event): boolean => e.composedPath().find(n => n instanceof HTMLElement && tooltipRoots.has(n)) === container;
   let cur: HTMLElement | null = null;
-  let extendTimer: number | null = null;
-  /** Last cursor point — the extend re-render must re-clamp the grown box
-   *  without waiting for the next mouse event. */
+  /** Last cursor point for delayed initial reveals. */
   let lastPt = { clientX: 0, clientY: 0 };
 
   const place = (e: { clientX: number; clientY: number }): void => {
@@ -152,10 +147,6 @@ export function bindTooltips(
     return true;
   };
 
-  const disarmExtend = (): void => {
-    if (extendTimer !== null) { window.clearTimeout(extendTimer); extendTimer = null; }
-  };
-
   // ---- HOVER INTENT (opts.delayMs): the not-yet-shown anchor + its clock ---
   let pendingEl: HTMLElement | null = null;
   let intentTimer: number | null = null;
@@ -164,21 +155,8 @@ export function bindTooltips(
     pendingEl = null;
   };
 
-  const armExtend = (el: HTMLElement): void => {
-    disarmExtend();
-    if (!opts?.extend) return;
-    extendTimer = window.setTimeout(() => {
-      extendTimer = null;
-      // Still dwelling on the same, still-attached anchor? Grow in place.
-      if (cur !== el || !el.isConnected) return;
-      render(el, true);
-      place(lastPt); // the grown box must re-clamp into the viewport
-    }, TIP_CFG.extendMs);
-  };
-
   const hide = (): void => {
     disarmIntent();
-    disarmExtend();
     if (!cur) return;
     cur.classList.remove(TIP_ANCHOR_CLASS);
     cur = null;
@@ -188,11 +166,10 @@ export function bindTooltips(
   /** Actually raise the box on an anchor (the pre-intent show). */
   const reveal = (el: HTMLElement, e: { clientX: number; clientY: number }): void => {
     if (el !== cur || activeTooltipOwner !== owner) {
-      if (!render(el, false)) { hide(); return; }
+      if (!render(el, !!opts?.extend && tooltipDetail() === 'full')) { hide(); return; }
       cur?.classList.remove(TIP_ANCHOR_CLASS);
       cur = el;
       el.classList.add(TIP_ANCHOR_CLASS);
-      armExtend(el);
     }
     place(e);
   };

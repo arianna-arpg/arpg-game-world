@@ -142,7 +142,7 @@ import { objectiveRead, objectiveSeals, type ZoneDef } from '../data/zones';
 import { underSpanPolicyOf } from '../data/underspans';
 import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
-import { bindTooltips, installTooltipHints, hideTooltip, TIP_ANCHOR_CLASS, TIP_CFG, type TooltipContent } from './tooltip';
+import { bindTooltips, configureTooltipDetail, installTooltipHints, hideTooltip, TIP_ANCHOR_CLASS, TIP_CFG, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
 import { VENDORS, VENDOR_CFG, fmtRestock, type VendorDef } from '../data/vendors';
 import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
@@ -827,6 +827,7 @@ export class UI {
     /** Tear down a co-op session and return to the menu. */
     private onLeaveCoop: () => void = () => { /* default no-op */ },
   ) {
+    configureTooltipDetail(() => this.getSettings().tooltipDetail);
     installTooltipHints();
     this.portalButton = new PortalButton(this.getWorld, this.getSettings);
     window.addEventListener('pointermove', ev => { this.itemHoldPointer = { x: ev.clientX, y: ev.clientY }; });
@@ -836,9 +837,8 @@ export class UI {
       el.dataset.tip === 'class' ? this.classTooltip()
         : el.dataset.tip === 'stat' ? this.statTooltip(el.dataset.statId!)
         : el.dataset.tip === 'attr' ? this.attrTooltip(el.dataset.attrId as AttributeId) : null);
-    // Item tips everywhere grow the ON-SWAP comparison on a dwell (extend);
-    // the extended flag only ever reaches itemTooltip — other cards have no
-    // deeper form and simply re-serve themselves.
+    // The saved tooltipDetail preference chooses compact or full at reveal.
+    // Items offer on-swap comparisons; skills offer a full stat breakdown.
     for (const root of [this.inventory, this.buildPanel]) bindTooltips(root, (el, ext) =>
       el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.inventory), this.salvageLaneFor(this.inventory))
         : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!, ext)
@@ -1889,8 +1889,8 @@ export class UI {
    *  THIS build, read off the live sheet through the engine's own resolvers.
    *  The authored line says what the skill IS; these rows say what it does
    *  in your hands, so nobody has to reconcile a static tooltip against a
-   *  character sheet. Detail rows wait for the dwell — the same hover-intent
-   *  the Vault uses for its full story. */
+   *  character sheet. The tooltipDetail preference chooses the detail rows
+   *  before the card appears, keeping its text and shape steady. */
   private previewRowsHtml(rows: PreviewRow[], extended: boolean): string {
     const shown = rows.filter(r => extended || r.group === 'headline');
     if (!shown.length) return '';
@@ -1904,7 +1904,7 @@ export class UI {
     return `<div style="margin-top:6px;padding-top:5px;border-top:1px solid #3a3448;font-size:11px">
       ${shown.map(line).join('')}
       ${!extended && hasDetail
-        ? '<div style="color:#6a6478;font-size:10px;margin-top:3px">keep resting for the full breakdown</div>'
+        ? '<div style="color:#6a6478;font-size:10px;margin-top:3px">Full breakdown available in Options</div>'
         : ''}
     </div>`;
   }
@@ -3399,7 +3399,7 @@ export class UI {
 
   /** Rich item card — every line derives live from the instance's rolls, so
    *  a data retune re-prices the tooltip the same instant it re-prices play.
-   *  DWELLING (extended hover) grows the card with the ON-SWAP comparison.
+   *  Full tooltipDetail includes the ON-SWAP comparison from the first frame.
    *  `salv` (the armed salvage lane, passed by the INVENTORY binder only):
    *  the hover overlay leads with what the hammer would pay — or the wheel,
    *  on the sell lane — or why the tool refuses (locked / worn). The
@@ -3448,14 +3448,14 @@ export class UI {
       if (d.epitaph.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic">${d.epitaph.flavor}</div>`);
     }
     if (d.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic;margin-top:4px">${d.flavor}</div>`);
-    // Extended dwell: grow with the ON-SWAP comparison; the compact card
-    // advertises the dwell whenever a comparison exists to grow into.
+    // Full tooltipDetail includes the comparison immediately; the compact
+    // card points to the preference without promising a timed expansion.
     let compareHint = '';
     if (extended) {
       const cmp = this.compareHtml(item, seat);
       if (cmp) lines.push(cmp);
     } else if (this.compareTargets(item, seat).length) {
-      compareHint = ' · <span style="color:#c8a84b">hold to compare</span>';
+      compareHint = ' · <span style="color:#c8a84b">full comparison in Options</span>';
     }
     // THE LEVEL LINE (her ask 2026-09-05): the requirement wears the attribute
     // requirements' own two colours — green met, RED unmet with the hero's
@@ -9454,6 +9454,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       </div>`;
     const interfaceTabHead = `
       <div class="rebind-row">
+        <span>Tooltip detail</span>
+        <button id="opt-tooltipDetail" title="Compact keeps the short card. Full includes skill breakdowns and equipment comparisons from the moment a card opens. Neither expands while you read.">${s.tooltipDetail === 'full' ? 'FULL' : 'COMPACT'}</button>
+      </div>
+      <div class="rebind-row">
         <span>UI Scale</span>
         <span class="pad-opt"><input type="range" id="opt-uiscale" min="${Math.round(UI_SCALE_CFG.min * 100)}" max="${Math.round(UI_SCALE_CFG.max * 100)}" step="${Math.round(UI_SCALE_CFG.step * 100)}"
           value="${Math.round(s.uiScale * 100)}"
@@ -9915,6 +9919,12 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.getSettings().uiScale = v / 100;
       applyUiScale(v / 100);
     }, v => `${v}%`);
+    root.querySelector<HTMLElement>('#opt-tooltipDetail')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      st.tooltipDetail = st.tooltipDetail === 'full' ? 'compact' : 'full';
+      this.saveSettings();
+      this.renderOptions(root, onBack);
+    });
     // CAMERA MODE: cycle the frame registry (render/camera.ts) — hero-locked
     // vs the classic zone frame. The renderer reads Settings live, so the
     // battlefield behind the menu re-frames next frame (the honest preview).

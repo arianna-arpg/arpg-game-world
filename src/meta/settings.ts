@@ -164,6 +164,8 @@ export interface Settings {
    *  one should need a magnifier to read their own life orb. Rails live in
    *  UI_SCALE_CFG; world-anchored text deliberately does not ride it. */
   uiScale: number;
+  /** Tooltip cards choose their detail at reveal and never expand on a timer. */
+  tooltipDetail: 'compact' | 'full';
   /** THE CAMERA MODE (render/camera.ts registry): 'hero' locks the view to
    *  your hero everywhere — zone edges simply reveal the void frame — while
    *  'zone' is the classic frame that never leaves the zone. A ZoneDef.camera
@@ -259,6 +261,7 @@ export interface SettingsSave {
   mapWash?: number;
   mapChart?: MapChartMode;
   uiScale?: number;
+  tooltipDetail?: 'compact' | 'full';
   cameraMode?: CameraModeId;
   renderScale?: number | 'auto';
   veilDarkness?: number;
@@ -405,6 +408,7 @@ export const makeSettings = (): Settings => ({
   mapWash: MAP_CFG.wash.default,
   mapChart: MAP_CFG.chart,
   uiScale: UI_SCALE_CFG.default,
+  tooltipDetail: 'compact',
   cameraMode: CAMERA_CFG.default,
   renderScale: 'auto',
   veilDarkness: 1,
@@ -439,6 +443,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   mapWash: s.mapWash,
   mapChart: s.mapChart,
   uiScale: s.uiScale,
+  tooltipDetail: s.tooltipDetail,
   cameraMode: s.cameraMode,
   renderScale: s.renderScale,
   veilDarkness: s.veilDarkness,
@@ -540,6 +545,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     mapChart: MAP_CHART_MODES.some(m => m.id === s.mapChart) ? (s.mapChart as MapChartMode) : MAP_CFG.chart,
     // Re-clamped into the fabric's rails, like every numeric option.
     uiScale: clamp(s.uiScale ?? UI_SCALE_CFG.default, UI_SCALE_CFG.min, UI_SCALE_CFG.max),
+    tooltipDetail: s.tooltipDetail === 'full' ? 'full' : 'compact',
     // Unknown values (a renamed mode, a pre-dial save) fall back to the
     // registry default — currently the hero-locked frame.
     cameraMode: CAMERA_MODES.some(m => m.id === s.cameraMode) ? s.cameraMode! : CAMERA_CFG.default,

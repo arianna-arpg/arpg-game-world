@@ -141,11 +141,18 @@ shared gold-bordered card, including dynamically rebuilt controls. Rich
 the parent skill. Hint text is escaped, and native titles are removed so a
 second browser tooltip cannot cover the card.
 
+Tooltip detail defaults to **Compact**. Options → Interface → Tooltip detail
+can select **Full** for computed skill breakdowns and equipment comparisons.
+The choice is saved and read when a card opens; no hover timer expands an
+already displayed card. Tooltip width is intrinsic and capped to the scaled
+viewport, so following the pointer near an edge does not reflow its text.
+
 Verify with `npm run check`, `npm run probe -- folio`, and, after a production
 build, `npx electron balance/build-panels-ui.cjs`. The desktop check uses its
 own save/profile folders under ignored `balance/reports/` and checks ribbon
 balances, panel bounds, folio switching, tooltip priority, unlearning, and
-dragging from the rest of a skill tile.
+dragging from the rest of a skill tile, and stable compact/full tooltip sizing
+over time and near screen edges.
 
 ### Moving panels (ui/panelmove.ts, 2026-09-04)
 
