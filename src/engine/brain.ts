@@ -1170,6 +1170,8 @@ export interface BrainTuning {
  *  feet, canUse gates fresh casts). */
 export interface CommandState {
   kind: string;
+  /** minionCombat: self-hunting orders yield to an unexpired explicit command. */
+  autonomous?: boolean;
   /** THE MARK: where the order points. */
   pos: Vec2;
   /** World-clock expiry — no order outlives its moment. */

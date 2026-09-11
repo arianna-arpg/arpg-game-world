@@ -13,6 +13,7 @@ import { NECROMANCER_RITES } from './necromancerRites';
 
 import { mod, linkMod, STAT_DEFS } from '../engine/stats';
 import { skillGrantStat, type SkillDef } from '../engine/skills';
+import { SMALL_ARMY_COMBAT, MINION_COMBAT } from '../engine/minionCombat';
 import { TOWN_PORTAL_SKILL } from './townportals';
 import { ULTIMATE_SKILLS } from './ultimates';
 import { LIVING_SKILLS } from './livingSkills';
@@ -5791,8 +5792,10 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'summon_swarmlings', name: 'Hivecall',
     description: 'TOGGLE a hive contract: mana stays reserved while up to 5 swarmlings scurry'
       + ' for you, and each reknits itself 4 seconds after it falls. SHIFT-press the slot to'
-      + ' ENRAGE the horde into a pressed wave of speed and spite.',
+      + ' ENRAGE the horde into a pressed wave of speed and spite. Small bodies draw less'
+      + ' attention, avoid 75% of area hits, and hurry under orders.',
     tags: ['spell', 'summon', 'minion', 'duration'], color: '#b8d060',
+    minionCombat: SMALL_ARMY_COMBAT,
     manaCost: 12, cooldown: 3, useTime: 0.8,
     delivery: {
       type: 'summon', monsterId: 'swarmling',
@@ -6028,14 +6031,26 @@ export const SKILLS: Record<string, SkillDef> = {
   command_assault: {
     id: 'command_assault', name: 'Command: Assault',
     description: 'Order every minion to assault: for 6 seconds they drop their own fights and'
-      + ' converge on your mark, and aiming at a single foe pins the whole court on that one.',
+      + ' converge on your mark, and aiming at a single foe pins the whole court on that one.'
+      + ' SHIFT-press to recall the court to your side.',
     tags: ['spell', 'minion', 'instant'], color: '#d0a858',
     manaCost: 6, cooldown: 5, useTime: 0,
     delivery: { type: 'self' },
     effects: [{ type: 'commandMinions', duration: 6 }],
+    meta: { skillId: 'command_recall', label: 'Recall' },
     requirements: { willpower: 12 },
     ai: { range: 500, weight: 1 },
     leveling: { perLevel: [mod('cooldownRecovery', 'increased', 0.08)] },
+  },
+
+  command_recall: {
+    id: 'command_recall', name: 'Command: Recall', noDrop: true,
+    description: 'Break off attacks and return to your side for 6 seconds. Riders detach;'
+      + ' the court follows you until a fresh order sends it back into battle.',
+    tags: ['spell', 'minion', 'instant'], color: '#9fe08a',
+    manaCost: 0, cooldown: 1, useTime: 0,
+    delivery: { type: 'self' },
+    effects: [{ type: 'commandMinions', command: 'recall', duration: MINION_COMBAT.recallSec }],
   },
 
   // The ENEMY side of the same lever (the obedience fabric's proof): the

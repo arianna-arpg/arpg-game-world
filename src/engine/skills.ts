@@ -4538,6 +4538,8 @@ export interface SkillDef {
    *  Sources, cap, batch-normalization all ride the spec. The collection
    *  IS the mechanic — see docs/engine/throng.md. */
   throng?: ThrongSpec;
+  /** Per-body handling and survival, shared by ordinary summons and throngs. */
+  minionCombat?: import('./minionCombat').MinionCombatSpec;
 
   /** A PREREQUISITE gate this skill demands before it can fire — a charge
    *  floor, a worn buff, a resource threshold, a held guard, a running

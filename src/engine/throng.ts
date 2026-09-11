@@ -313,6 +313,8 @@ export function throngSkillSalt(skillId: string): number {
 // the wearer, join innately underfoot, and hunt on their own drive.
 
 export interface WornThrongDef {
+  /** Same per-body combat profile as a bar anchor; {} opts out of army defaults. */
+  minionCombat?: import('./minionCombat').MinionCombatSpec;
   /** Direct replenishment supports passive vanguards; omitted keeps ring finds. */
   at?: ThrongTrickleRow['at'];
   release?: ThrongSpec['release'];
@@ -405,6 +407,7 @@ export function buildWornThrongDef(def: WornThrongDef, rank: number): SkillDef {
     delivery: { type: 'melee', range: 42, arcDeg: 80 },
     effects: [],
     noDrop: true,
+    minionCombat: def.minionCombat,
     throng: {
       monsterId: def.monsterId,
       cap: wornThrongCap(def, rank),

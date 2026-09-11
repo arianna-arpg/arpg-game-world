@@ -437,6 +437,8 @@ we verify changes.
   into a fresh bag on the lab branch — docs in `docs/engine/gauge.md`,
   probe `balance/probe_gauge.ts`),
   `throng.ts` + `cling.ts` (THE THRONG FABRIC — the swarm you GATHER, the
+  shared `minionCombat.ts` survival/handling profile and Command: Recall are
+  measured in `balance/probe_throngcombat.ts`; contract: `docs/design/throng-combat.md` —
   Pikmin/Overlord playstyle as data: `SkillDef.throng` anchors a roster of
   sight-gated wild husks CLAIMED by walking through them, acquisition as
   open `ThrongSourceRow`s (finite pockets / timed motes / crit + kill
