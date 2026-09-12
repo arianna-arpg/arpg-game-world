@@ -65,17 +65,22 @@ export const HARVEST_CFG = {
   nodeRadius: 13,
   portalClear: 110,
   /** THE CONSENT DIAL: how a rite BEGINS at an armable node (calm ground,
-   *  in armRadius). 'press' (default) — standing there OFFERS the rite and
-   *  the interact verb (the pickup bind, the contextual-verb idiom) begins
-   *  it: a one-shot commitment is a deliberate press, and nobody is
-   *  auto-committed (or solo-frozen) for pausing beside a node to read a
-   *  tooltip. 'dwell' — the commission's letter: standing armSec begins it
-   *  outright, no press. ⚠ the 'press' default is the pass's own lean —
-   *  her word flips one string. */
-  consent: 'press' as 'press' | 'dwell',
+   *  in armRadius). 'dwell' (her word, 2026-09-11 — the commission's
+   *  letter): standing armSec begins it outright, the node's own ring
+   *  filling as the linger builds, the way every other dwell in the game
+   *  begins. 'press' (the pass's original lean): standing there OFFERS the
+   *  rite and the interact verb (the pickup bind) begins it. */
+  consent: 'dwell' as 'press' | 'dwell',
   /** THE ARMING REACH + the 'dwell' mode's linger. */
   armRadius: 72,
   armSec: 0.9,
+  /** THE RITE'S OWN FOE REACH (her ruling 2026-09-11): a dwell at a node
+   *  refuses only foes GENUINELY near — the harvester already stands within
+   *  armRadius, so the refusal disc is a few body lengths, never the field
+   *  discipline's wide calm (SWAP_DISCIPLINE_CFG.foeRadius, 480). The scan
+   *  itself is the discipline's (pressingFoeNear: armed, targetable, same
+   *  story); only the radius is the rite's. */
+  foeRadius: 190,
   /** THE SYMBOL ALPHABET: bar-slot indices. Slots 2–5 are keys 1/2/3/4 on
    *  keyboard and Ⓐ/Ⓑ/Ⓧ/Ⓨ on pad — bound by default on both devices, so
    *  a sequence is always enterable. (Slots 0/1 stay out: on keyboard they

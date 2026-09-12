@@ -25,6 +25,10 @@
 //      (serializeWorldState → fresh world → adoptWorldState) cannot
 //      re-arm a shattered node.
 //   H. THE SEALS: spoils-'none' ground and sanctuaries stand NO nodes.
+//   I. THE PRESS-MODE LETTER: the original consent, one config word away —
+//      the linger alone never arms; the offer stands and the press begins it.
+//   J. THE RITE'S OWN FOE REACH (her ruling 2026-09-11): a foe a field away
+//      no longer holds a node shut; one genuinely near still does.
 // Run: npx tsx balance/probe_harvest.ts
 // ---------------------------------------------------------------------------
 
@@ -39,6 +43,7 @@ import {
 import { HARVEST_HUSK_KIND, HARVEST_NODES } from '../src/data/harvest';
 import { walletMortalValue, type EssenceId } from '../src/data/essences';
 import { CLASSES } from '../src/data/classes';
+import { SWAP_DISCIPLINE_CFG } from '../src/engine/skills';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -174,10 +179,13 @@ W.actors.push(foe);
 banishFoes(w);
 standAt(nodesA[0]);
 w.update(0.1); w.update(0.1);
-check('C0: standing calm at a node stands the OFFER (the consent ask)',
-  w.harvestView()?.nodes[0]?.offered === true);
-w.applyAction(w.localSeat, { t: 'pickupItem' });
-check('C1: the consent press begins the rite for the standing seat',
+// THE CONSENT DIAL reads 'dwell' (her word 2026-09-11): no offer stands —
+// the linger itself begins the rite, the node's arm ring filling meanwhile.
+check('C0: standing calm at a node BUILDS the arm (no press offer — the ring fills)',
+  HARVEST_CFG.consent === 'dwell' && w.harvestView()?.nodes[0]?.offered === false
+  && (w.harvestView()?.nodes[0]?.armFrac ?? 0) > 0 && W.harvestSessions.length === 0);
+dwell(10);
+check('C1: armSec of standing begins the rite for the standing seat',
   W.harvestSessions.length === 1 && W.harvestSessions[0].seatId === 'p0');
 const rite = W.harvestSessions[0];
 check('C2: the rite deals the seeded sequence (the arm reveals, never rolls)',
@@ -221,8 +229,7 @@ check('C14: the released world breathes again', w.time > tAfter);
 // ============================================================ D. the expiry
 banishFoes(w);
 standAt(nodesA[1]);
-w.update(0.1); w.update(0.1);
-w.applyAction(w.localSeat, { t: 'pickupItem' });
+dwell(12);
 check('D1: the second node arms in turn', W.harvestSessions.length === 1);
 const rite1 = W.harvestSessions[0];
 const seq1 = rite1.seq.slice();
@@ -248,8 +255,7 @@ check('D5: …and matches the pure fold at the banked tally',
 w.timeflow.allowHold = () => false;              // main.ts's co-op wiring
 banishFoes(w);
 standAt(nodesA[2]);
-w.update(0.1); w.update(0.1);
-w.applyAction(w.localSeat, { t: 'pickupItem' });
+dwell(12);
 check('E1: the rite arms in co-op too', W.harvestSessions.length === 1);
 const rite2 = W.harvestSessions[0];
 check('E2: …but the world does NOT freeze (the solo-only policy refused)',
@@ -324,7 +330,7 @@ banishFoes(w);
 standAt({ x: W.harvestNodes[0].pos.x, y: W.harvestNodes[0].pos.y });
 dwell(20);
 w.applyAction(w.localSeat, { t: 'pickupItem' });
-check('G2: a spent node never re-arms (no offer stands, the press finds nothing)',
+check('G2: a spent node never re-arms (the linger builds nothing, the press finds nothing)',
   W.harvestSessions.length === 0);
 
 // The FULL save pipeline: capture (leave) → serialize → a fresh world adopts
@@ -346,19 +352,26 @@ w3.applyAction(w3.localSeat, { t: 'pickupItem' });
 check('G4: …and the adopted world\'s press finds nothing either',
   W3.harvestSessions.length === 0);
 
-// ================================================ I. the dwell-mode letter
-// The commission's own consent ('dwell'): standing armSec begins the rite
-// with no press — one config word away (HARVEST_CFG.consent). The world
-// stands in zone B, whose nodes were walked past but never armed.
-(HARVEST_CFG as { consent: string }).consent = 'dwell';
-banishFoes(w);
-standAt({ x: W.harvestNodes[0].pos.x, y: W.harvestNodes[0].pos.y });
-dwell();
-check('I1: dwell consent arms with no press (the letter, one word away)',
-  W.harvestSessions.length === 1);
-check('I2: …and the solo hold engages as ever',
-  w.timeflow.worldScale() === 0);
-(HARVEST_CFG as { consent: string }).consent = 'press';
+// ================================================ I. the press-mode letter
+// The pass's original consent ('press', one config word away —
+// HARVEST_CFG.consent): the linger alone never arms; an OFFER stands and the
+// interact verb begins the rite. A fresh world keeps zone A's nodes unspent.
+{
+  const w4 = makeSimWorld(CLASSES[0].id, SEED) as World;
+  const W4 = w4 as unknown as WInternals;
+  w4.loadZone('cave_probeharvest_a');
+  (HARVEST_CFG as { consent: string }).consent = 'press';
+  banishFoes(w4);
+  w4.player.pos.x = W4.harvestNodes[0].pos.x + 20;
+  w4.player.pos.y = W4.harvestNodes[0].pos.y;
+  for (let i = 0; i < 12; i++) w4.update(0.1);
+  check('I1: under press consent the linger alone never arms — the OFFER stands',
+    W4.harvestSessions.length === 0 && w4.harvestView()?.nodes[0]?.offered === true);
+  w4.applyAction(w4.localSeat, { t: 'pickupItem' });
+  check('I2: …and the interact press begins the rite, the solo hold engaging as ever',
+    W4.harvestSessions.length === 1 && w4.timeflow.worldScale() === 0);
+  (HARVEST_CFG as { consent: string }).consent = 'dwell';
+}
 
 // =========================================================== H. the seals
 w.loadZone('cave_probeharvest_sealed', 'cave_probeharvest_b');
@@ -369,6 +382,35 @@ check('H1: spoils-sealed ground stands NO nodes (a sealed reward is a trap)',
 w.loadZone('cave_probeharvest_safe', 'cave_probeharvest_sealed');
 check('H2: sanctuaries stand NO nodes (rest is rest)',
   w.harvestView() === null);
+
+// ==================================================== J. the rite's foe reach
+// THE RITE'S OWN FOE REACH (HARVEST_CFG.foeRadius, her ruling 2026-09-11): a
+// kit-bearing foe a field away — inside the discipline's wide calm disc but
+// outside the rite's own — no longer holds a node shut; one genuinely near
+// still does. The fresh world w2 keeps its three nodes unspent.
+{
+  const nodes2 = W2.harvestNodes.map(n => ({ x: n.pos.x, y: n.pos.y }));
+  const standAt2 = (n: { x: number; y: number }): void => { w2.player.pos.x = n.x + 20; w2.player.pos.y = n.y; };
+  const dwell2 = (ticks: number): void => { for (let i = 0; i < ticks; i++) w2.update(0.1); };
+  const far = W2.createMonster('pit_mauler', PROBE_LEVEL, 'enemy');
+  W2.actors.push(far);
+  banishFoes(w2);
+  check('J0: the rite\'s reach is a few body lengths, well inside the discipline\'s calm disc',
+    HARVEST_CFG.foeRadius > 0 && HARVEST_CFG.foeRadius < SWAP_DISCIPLINE_CFG.foeRadius);
+  // A foe between the two radii: the old law refused, the rite's own admits.
+  const mid = (HARVEST_CFG.foeRadius + SWAP_DISCIPLINE_CFG.foeRadius) / 2;
+  far.pos.x = nodes2[0].x + mid; far.pos.y = nodes2[0].y;
+  standAt2(nodes2[0]);
+  dwell2(12);
+  check('J1: a foe a field away no longer holds the node shut (the linger arms)',
+    W2.harvestSessions.length === 1 && W2.harvestSessions[0].ix === 0, `sessions=${W2.harvestSessions.length}`);
+  for (let i = 0; i < 60 && W2.harvestSessions.length; i++) w2.update(0.4); // burn the window out
+  // A foe genuinely near the next node: still refused.
+  far.pos.x = nodes2[1].x + HARVEST_CFG.foeRadius * 0.6; far.pos.y = nodes2[1].y;
+  standAt2(nodes2[1]);
+  dwell2(12);
+  check('J2: a foe genuinely near still holds the node shut', W2.harvestSessions.length === 0);
+}
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

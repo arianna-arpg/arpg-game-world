@@ -22050,8 +22050,8 @@ export class World {
    *  threat, and refuses nothing (structural, never a name list). ONE scan
    *  for every calm-gated dwell: the field discipline's swap gate and the
    *  harvest rite's arming gate read the same truth. */
-  private pressingFoeNear(at: Vec2, tier = 0): boolean {
-    const r = SWAP_DISCIPLINE_CFG.foeRadius;
+  private pressingFoeNear(at: Vec2, tier = 0, radius = SWAP_DISCIPLINE_CFG.foeRadius): boolean {
+    const r = radius;
     if (r <= 0) return false;
     return this.actors.some(a =>
       a.team === 'enemy' && !a.dead && !a.passive && !a.untargetable
@@ -56684,7 +56684,11 @@ export class World {
         this.harvestDwell.delete(seat.id);
         continue;
       }
-      if (this.pressingFoeNear(a.pos, a.tier)) {
+      // THE RITE'S OWN FOE REACH (HARVEST_CFG.foeRadius, her ruling
+      // 2026-09-11): the discipline's scan at the rite's radius — a foe a
+      // field away no longer holds the node shut on a harvester already
+      // standing at it.
+      if (this.pressingFoeNear(a.pos, a.tier, HARVEST_CFG.foeRadius)) {
         this.harvestDwell.delete(seat.id);
         continue;
       }
