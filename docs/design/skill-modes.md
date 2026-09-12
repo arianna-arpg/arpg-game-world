@@ -448,10 +448,16 @@ standing order are untouched (the drop INDEX counts mints, not levels).
   banked +10 open cost_only twins / −14 blind-drift retirements),
   `sweep skills --modes`, the smoke rows re-pinned at gem-20 terminals
   (baseline untouched — the transparency law holds at macro grain),
-  probe_skillmodes grown to 66 checks (A–L). The milestone popup is a
-  DIAL-gated layer (`TREE_POPUP_ENABLED`, panels.ts) fed by the world's
-  disciplined-calm sweep; the Font SCREEN (§7's tabs) stands as its own
-  dwell-opened station panel.
+  probe_skillmodes grown to 66 checks (A–L). The milestone popup is an
+  OPT-IN layer (`Settings.treePrompt`, Options → Interface → Ability point
+  prompt — OFF since 2026-09-11, her law: show, don't tell) fed by the
+  world's disciplined-calm sweep; THE AWAKENING IS SHOWN instead: the bar
+  slot's gold pip BLOOMS (a ring breathing out of the corner for
+  `VIS_CFG.treeTell.bloomSec`, off `SkillInstance.state.treeAwokeAt`) and
+  keeps breathing while the point waits, a gold ring flashes out of the
+  hero at the band, and the drawer's pip + the Menu button's roll-up keep
+  the standing truth — no floater, no words. The Font SCREEN (§7's tabs)
+  stands as its own dwell-opened station panel.
   **AS BUILT (THE GRAPH GRAMMAR + THE PANE, 2026-09-04):** `SkillTreeNode`
   grew `links`/`excludes`/`ranks`/`x`/`y`/`kind`, `SkillTreeSpec` grew
   `nodes` (the graph form) with `branches`/`neutral` optional (the sugar
@@ -560,7 +566,8 @@ Per-step essence counts per band · tier drop floors/rates · Font ratio
 ladder (merge + convert rungs) · reset price row · vendor tier-per-rung
 table · the drawer handle's replacement readout · tier naming (I–IV
 working; adjectives open for a naming pass) · the M1 override whitelist ·
-popup layer on/off.
+popup layer on/off (now `Settings.treePrompt`, OFF) · the awakening's
+bloom dials (`VIS_CFG.treeTell`).
 
 ## Appendix — the ruling log (2026-08-15, one day, waves 1–3)
 

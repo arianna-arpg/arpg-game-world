@@ -5590,6 +5590,11 @@ export interface SkillInstance {
      *  main path) — the Unleash bank's rest window ENDS here, so a cast
      *  bar's own runtime never banks its own seals. */
     pressAt?: number;
+    /** THE AWAKENING (skill-mode trees): world seconds when this skill last
+     *  completed a level band and minted an Ability point — the bar slot's
+     *  pip BLOOMS for VIS_CFG.treeTell.bloomSec after it (the shown tell;
+     *  the popup is opt-in). Transient. */
+    treeAwokeAt?: number;
     /** THE GAUGE (engine/gauge.ts): the bank's points, the lockout's
      *  remaining seconds, and the last press's POWER (the partial/overflow
      *  law — read by the execution's damage, counts and powerStacks

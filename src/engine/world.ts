@@ -3340,7 +3340,8 @@ export class World {
    *  bank a pip per (seat, skill); the sweep offers ONE popup at the next
    *  DISCIPLINED CALM (the swapRefusal predicate — never mid-combat) and
    *  consumes the row. The drawer's waiting-pip stays the derived truth;
-   *  the popup is a courtesy layer (panels' TREE_POPUP_ENABLED dial). */
+   *  the popup is a courtesy layer, OPT-IN (Settings.treePrompt — OFF by
+   *  default since 2026-09-11: the slot's bloom + the pips are the tell). */
   treePopupRequested = false;
   treePopupSeatId = 'p0';
   treePopupSkillId = '';
@@ -27769,8 +27770,16 @@ export class World {
         queue.push(skillId);
         this.pendingTreePips.set(seat.id, queue);
       }
-      this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 32),
-        `${inst.def.name}: an Ability point awakens`, '#d8b86a', 12);
+      // THE AWAKENING, SHOWN (her law, 2026-09-11 — no words): the bar
+      // slot's pip BLOOMS (renderer reads inst.state.treeAwokeAt) and a
+      // gold ring breathes out of the hero; the drawer's pip and the Menu
+      // button's roll-up keep the standing truth. The chooser popup is
+      // opt-in (Settings.treePrompt).
+      (inst.state ??= {}).treeAwokeAt = this.time;
+      this.flashes.push({
+        pos: vec(seat.actor.pos.x, seat.actor.pos.y), radius: seat.actor.radius + 14,
+        color: '#d8b86a', life: 0.9, maxLife: 0.9,
+      });
     }
     this.charDirty = true;
     return true;

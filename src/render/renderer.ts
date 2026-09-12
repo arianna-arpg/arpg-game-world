@@ -7553,12 +7553,30 @@ export class Renderer {
         if (def.tree && inst.level >= def.tree.level) {
           const px2 = x + slot - 8, py2 = by + slot - 8;
           if (treePointsSpent(inst) < bandPointsAt(inst.level)) {
+            // THE AWAKENING, SHOWN (2026-09-11, her law): a freshly minted
+            // point BLOOMS — a gold ring breathing out of the corner for
+            // bloomSec (inst.state.treeAwokeAt, stamped at the band) — and
+            // the waiting dot keeps BREATHING until it is spent, so the eye
+            // finds the milestone without a word (the chooser popup is
+            // opt-in, Settings.treePrompt). Dials: VIS_CFG.treeTell.
+            const tell = VIS_CFG.treeTell;
+            const awoke = inst.state?.treeAwokeAt;
+            const since = awoke === undefined ? Infinity : world.time - awoke;
+            if (since >= 0 && since < tell.bloomSec) {
+              const u = since / tell.bloomSec;
+              ctx.beginPath();
+              ctx.arc(px2, py2, 3 + tell.bloomReach * u, 0, Math.PI * 2);
+              ctx.strokeStyle = `rgba(255,215,0,${((1 - u) * 0.9).toFixed(3)})`;
+              ctx.lineWidth = 2.2 - 1.4 * u;
+              ctx.stroke();
+            }
+            const breath = 1 + tell.breathe * Math.sin(world.time * Math.PI * 2 * tell.breatheHz);
             ctx.beginPath();
-            ctx.arc(px2, py2, 3.2, 0, Math.PI * 2);
+            ctx.arc(px2, py2, 3.2 * breath, 0, Math.PI * 2);
             ctx.fillStyle = 'rgba(8,8,12,0.85)';
             ctx.fill();
             ctx.beginPath();
-            ctx.arc(px2, py2, 2.2, 0, Math.PI * 2);
+            ctx.arc(px2, py2, 2.2 * breath, 0, Math.PI * 2);
             ctx.fillStyle = '#ffd700';
             ctx.fill();
           } else if (treeSpentBranch(inst)) {

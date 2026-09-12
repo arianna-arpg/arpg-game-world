@@ -174,6 +174,12 @@ export interface Settings {
    *  the sweep that spares the bag until last, or the classic
    *  one-at-a-time cascade. */
   escapeCloses: EscapeCloseMode;
+  /** THE ABILITY POINT PROMPT (skill-mode trees): ON opens the chooser
+   *  popup when a skill mints an Ability point (at the next calm moment);
+   *  OFF (the default since 2026-09-11) leaves the tell to the shown signals
+   *  — the bar slot's blooming pip, the SKILLS drawer's pip, the Menu
+   *  button's roll-up — and the drawer or the tree spends it. */
+  treePrompt: boolean;
   /** THE CAMERA MODE (render/camera.ts registry): 'hero' locks the view to
    *  your hero everywhere — zone edges simply reveal the void frame — while
    *  'zone' is the classic frame that never leaves the zone. A ZoneDef.camera
@@ -272,6 +278,7 @@ export interface SettingsSave {
   tooltipDetail?: 'compact' | 'full';
   destinationLabels?: 'near' | 'always';
   escapeCloses?: EscapeCloseMode;
+  treePrompt?: boolean;
   cameraMode?: CameraModeId;
   renderScale?: number | 'auto';
   veilDarkness?: number;
@@ -421,6 +428,7 @@ export const makeSettings = (): Settings => ({
   tooltipDetail: 'compact',
   destinationLabels: 'near',
   escapeCloses: ESCAPE_CFG.default,
+  treePrompt: false,
   cameraMode: CAMERA_CFG.default,
   renderScale: 'auto',
   veilDarkness: 1,
@@ -458,6 +466,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   tooltipDetail: s.tooltipDetail,
   destinationLabels: s.destinationLabels,
   escapeCloses: s.escapeCloses,
+  treePrompt: s.treePrompt,
   cameraMode: s.cameraMode,
   renderScale: s.renderScale,
   veilDarkness: s.veilDarkness,
@@ -563,6 +572,8 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     destinationLabels: s.destinationLabels === 'always' ? 'always' : 'near',
     // Unknown values (a renamed mode, a pre-dial save) fall back to the registry default.
     escapeCloses: ESCAPE_MODES.some(m => m.id === s.escapeCloses) ? s.escapeCloses! : ESCAPE_CFG.default,
+    // The chooser popup is opt-in: a pre-dial save reads OFF (the shown tells stand regardless).
+    treePrompt: s.treePrompt === true,
     // Unknown values (a renamed mode, a pre-dial save) fall back to the
     // registry default — currently the hero-locked frame.
     cameraMode: CAMERA_MODES.some(m => m.id === s.cameraMode) ? s.cameraMode! : CAMERA_CFG.default,

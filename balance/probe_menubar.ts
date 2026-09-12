@@ -248,6 +248,15 @@ console.log('D. SETTINGS');
     eBack?.escapeCloses === 'step'
     && deserializeSettings(eBad)?.escapeCloses === ESCAPE_CFG.default
     && deserializeSettings(eOld)?.escapeCloses === ESCAPE_CFG.default);
+  // THE ABILITY POINT PROMPT (2026-09-11, her law — show, don't tell): the
+  // chooser popup is opt-in; a pre-dial save reads OFF; the choice round-trips.
+  const t = makeSettings();
+  const tOld = serializeSettings(t);
+  delete tOld.treePrompt;
+  t.treePrompt = true;
+  check('D9 the Ability point prompt defaults OFF, an older save reads OFF, and ON round-trips',
+    makeSettings().treePrompt === false && deserializeSettings(tOld)?.treePrompt === false
+    && deserializeSettings(serializeSettings(t))?.treePrompt === true);
 }
 
 // --- E. THE CENSUS ---------------------------------------------------------------

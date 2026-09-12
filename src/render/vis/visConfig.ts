@@ -18,6 +18,15 @@ export const VIS_CFG = {
    *  ambience already darkens the world; this veil tracks the bill. */
   gloamVignette: { base: 0.35, perMeterLost: 0.65 },
 
+  /** THE AWAKENING'S TELL (renderer, the bar slot's branch pip — skill-mode
+   *  trees; her law 2026-09-11: show, don't tell): a skill that completes a
+   *  level band and mints an Ability point BLOOMS at its slot — a gold ring
+   *  breathing out of the pip's corner for `bloomSec`, reaching `bloomReach`
+   *  px — and the waiting dot breathes (`breathe` = radius swing fraction at
+   *  `breatheHz`) until the point is spent. The chooser popup is opt-in
+   *  (Settings.treePrompt); these are the tell that stands regardless. */
+  treeTell: { bloomSec: 1.6, bloomReach: 16, breathe: 0.18, breatheHz: 0.7 },
+
   /** THE TIER TINT (ui/panels.ts tierMapTint — the world map's stacked-ground
    *  SHADE, the tier tell's color half): a revealed tiered zone's node disc
    *  mixes toward a pole by its story count — 'over' stacks climb toward the

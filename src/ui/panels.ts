@@ -189,15 +189,13 @@ export interface RunReckoning {
  *  (updateHintBar). Flip true to restore the standing crib sheet. */
 const HINT_BAR_ENABLED = false;
 
-/** THE MILESTONE POPUP layer (skill-mode trees, M1 — §7, DIAL): a banked
- *  Ability point offers its popup at the next disciplined calm (the world
- *  queues; updateTreePips fires the request — never mid-combat). Off = the
- *  drawer's waiting-pip stays the only messenger. */
 /** THE CLOSE GLYPH keeps the inventory's top-right corner (closeGlyphHtml),
  *  so the essence satchel button — and the drop-down hanging under it —
  *  sit this many px in from the panel's right edge. */
 const SATCHEL_RIGHT_PX = 46;
-const TREE_POPUP_ENABLED = true;
+// (THE MILESTONE POPUP's dial moved to Settings.treePrompt — 2026-09-11,
+// OFF by default; the world's disciplined-calm sweep still queues the
+// offer, showTreePopup answers only for a player who asked.)
 
 /** THE REACH (both trees): how far (screen px) from a node's centre a hover
  *  still anchors its card AND a click on empty ground still allocates it —
@@ -4808,7 +4806,8 @@ export class UI {
   // (skill-mode trees M1 — §7, the Calling precedent): offered by the world's
   // updateTreePips sweep at a DISCIPLINED CALM only, one skill per offer.
   // Chips speak THE ONE SPEND PREDICATE; "Later" dismisses — the drawer's
-  // waiting-pip keeps the truth either way. DIAL: TREE_POPUP_ENABLED.
+  // waiting-pip keeps the truth either way. DIAL: Settings.treePrompt
+  // (Options → Interface → Ability point prompt), OFF by default.
 
   private treePopup: HTMLDivElement | null = null;
 
@@ -4818,7 +4817,10 @@ export class UI {
   }
 
   showTreePopup(seatId: string, skillId: string): void {
-    if (!TREE_POPUP_ENABLED || this.treePopup) return;
+    // OPT-IN since 2026-09-11 (her law — show, don't tell): the shown tells
+    // stand regardless (the slot's blooming pip, the drawer's pip, the Menu
+    // button's roll-up); the chooser opens only for a player who asked.
+    if (!this.getSettings().treePrompt || this.treePopup) return;
     const world = this.getWorld();
     const seat = this.couchSeatFor(seatId);
     const inst = seat.meta.knownSkills.get(skillId);
@@ -9570,6 +9572,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 ${ESCAPE_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}">${escapeModeOf(s.escapeCloses).name}</button>
       </div>
       <div class="rebind-row">
+        <span>Ability point prompt</span>
+        <button id="opt-treeprompt" title="When a skill completes a level band and mints an Ability point. OFF: the bar slot's gold pip blooms and keeps breathing, the SKILLS drawer and the Menu button wear the pip, and you spend it from the drawer or the tree whenever you like. ON: the chooser popup also opens at the next calm moment.">${s.treePrompt ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
         <span>UI Scale</span>
         <span class="pad-opt"><input type="range" id="opt-uiscale" min="${Math.round(UI_SCALE_CFG.min * 100)}" max="${Math.round(UI_SCALE_CFG.max * 100)}" step="${Math.round(UI_SCALE_CFG.step * 100)}"
           value="${Math.round(s.uiScale * 100)}"
@@ -10049,6 +10055,14 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       const st = this.getSettings();
       const i = ESCAPE_MODES.findIndex(m => m.id === st.escapeCloses);
       st.escapeCloses = ESCAPE_MODES[(i + 1) % ESCAPE_MODES.length]!.id;
+      this.saveSettings();
+      this.renderOptions(root, onBack);
+    });
+    // THE ABILITY POINT PROMPT: the chooser popup is opt-in — the shown
+    // tells (the slot's bloom, the pips) carry the milestone either way.
+    root.querySelector<HTMLElement>('#opt-treeprompt')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      st.treePrompt = !st.treePrompt;
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
