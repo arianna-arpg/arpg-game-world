@@ -22,8 +22,8 @@
 //
 // THE RESOLVE SEAM (the open-record idiom): this module assigns
 // PROLOGUE_SCENE.resolve — sceneBegin hands the runtime the returned def, so
-// the clash/assault/reckoning rows swap per faction while the id, ledger,
-// card stages and the Mu tail stay the base def's. Anything that never
+// journey, cards and war stages swap per faction while the id, ledger,
+// mechanical lessons and Mu tail stay shared. Anything that never
 // imports this module (a bare sim boot) simply walks the goblin default.
 //
 // Registry rows on open records (MONSTERS / SKILLS / LOOKS — the data/mu.ts
@@ -36,7 +36,7 @@ import { SKILLS } from './skills';
 import type { SkillDef } from '../engine/skills';
 import { LOOKS } from './looks';
 import { mod, type DamageType } from '../engine/stats';
-import { PROLOGUE_SCENE, type SceneDef, type SceneStage, type SceneWaveRow } from './scenes';
+import { PROLOGUE_SCENE, type SceneDef, type SceneStage, type SceneWaveRow, type SceneCardStage } from './scenes';
 import { bumpLedger } from '../packages/ledger';
 import { Rng } from '../core/rng';
 import type { World } from '../engine/world';
@@ -557,7 +557,7 @@ export function prologueForFaction(row: TutorialFactionRow): SceneDef {
   const journey = row.journey;
   const stages: SceneStage[] = PROLOGUE_SCENE.stages.map(s => {
     if (s.kind === 'card') {
-      const card = s as import('./scenes').SceneCardStage;
+      const card = s as SceneCardStage;
       if (!card.fallCard) return { ...card, card: journey.intro };
       return {
         ...card,
