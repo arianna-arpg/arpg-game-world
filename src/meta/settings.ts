@@ -26,6 +26,7 @@ import { CAMERA_CFG, CAMERA_MODES, type CameraModeId } from '../render/camera';
 import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
 import { MENU_ANCHORS, MENU_CFG, type MenuAnchorId } from '../ui/menuConfig';
 import { ESCAPE_CFG, ESCAPE_MODES, type EscapeCloseMode } from '../ui/escapeConfig';
+import { PORTAL_ANCHORS, PORTAL_BUTTON_CFG, type PortalAnchorId } from '../ui/portalConfig';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
 
@@ -232,12 +233,20 @@ export interface Settings {
    *  seat (an anchor id — a Movable-UI drag still wins) and THE DOCK opt-in
    *  (every unlocked page as an icon tile beside the button). */
   menuBar: MenuBarOptions;
+  /** THE TOWN PORTAL BUTTON (ui/portalbutton.ts + ui/portalConfig.ts): its
+   *  seat — over the Menu button (the default) or the classic corner. */
+  portalButton: PortalButtonOptions;
 }
 
 /** THE MENU BAR options (ui/menuConfig.ts owns the dials + anchors). */
 export interface MenuBarOptions {
   anchor: MenuAnchorId;
   dock: boolean;
+}
+
+/** THE TOWN PORTAL BUTTON options (ui/portalConfig.ts owns the registry). */
+export interface PortalButtonOptions {
+  anchor: PortalAnchorId;
 }
 
 /** THE UI LAYOUT options (ui/panelmove.ts owns the mechanics). */
@@ -292,6 +301,8 @@ export interface SettingsSave {
   layout?: { movable?: boolean; seats?: Record<string, unknown>; locked?: Record<string, unknown> };
   /** THE MENU BAR (additive). */
   menuBar?: { anchor?: string; dock?: boolean };
+  /** THE TOWN PORTAL BUTTON (additive). */
+  portalButton?: { anchor?: string };
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -440,6 +451,7 @@ export const makeSettings = (): Settings => ({
   pickupFeedSec: PICKUP_FEED_CFG.defaultSec,
   layout: { ...DEFAULT_UI_LAYOUT, seats: {}, locked: {} },
   menuBar: { anchor: MENU_CFG.anchorDefault, dock: MENU_CFG.dockDefault },
+  portalButton: { anchor: PORTAL_BUTTON_CFG.anchorDefault },
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
@@ -478,6 +490,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   pickupFeedSec: s.pickupFeedSec,
   layout: { movable: s.layout.movable, seats: { ...s.layout.seats }, locked: { ...s.layout.locked } },
   menuBar: { ...s.menuBar },
+  portalButton: { ...s.portalButton },
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -608,6 +621,11 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     menuBar: {
       anchor: MENU_ANCHORS.some(a => a.id === s.menuBar?.anchor) ? s.menuBar!.anchor as MenuAnchorId : MENU_CFG.anchorDefault,
       dock: typeof s.menuBar?.dock === 'boolean' ? s.menuBar.dock : MENU_CFG.dockDefault,
+    },
+    // THE TOWN PORTAL BUTTON (additive): an unknown anchor (a renamed row,
+    // a pre-dial save) falls back to the registry default.
+    portalButton: {
+      anchor: PORTAL_ANCHORS.some(a => a.id === s.portalButton?.anchor) ? s.portalButton!.anchor as PortalAnchorId : PORTAL_BUTTON_CFG.anchorDefault,
     },
   };
 }

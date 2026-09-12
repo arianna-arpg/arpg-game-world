@@ -8,7 +8,14 @@ are configurable in Options (the menu remains accessible without assigning a
 dedicated button).
 
 `TOWN_PORTAL_CFG` owns the default destination, casting and dwell times, reach,
-placement offsets, appearance, HUD button position and return-consumption policy.
+placement offsets, appearance, the HUD button's size and corner offsets, and
+return-consumption policy. The button's SEAT is the player's
+(`Settings.portalButton.anchor` over `ui/portalConfig.ts` `PORTAL_ANCHORS`,
+Options → Interface → Menu Bar → Town Portal Button; 2026-09-11): `menu`, the
+default, stacks it over the Menu button's live rect every sync — drawn ==
+seated, so a dragged or re-anchored Menu carries it — and `right` is the
+classic corner above the mana orb; with no bar drawn the button falls back to
+the corner. A new seat is one registry row.
 `World.townPortalDestination` is a saved per-run override and must resolve to a
 safe zone. The shipped destination is Lastlight. A `ZoneDef.townPortals: false`
 seals an authored zone; streamed boundless zones and off-graph passages without

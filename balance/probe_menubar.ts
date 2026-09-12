@@ -52,6 +52,7 @@ import {
 import { MENU_ICONS } from '../src/ui/icons';
 import { MENU_ANCHORS, MENU_CFG } from '../src/ui/menuConfig';
 import { ESCAPE_CFG, ESCAPE_MODES, escapeModeOf } from '../src/ui/escapeConfig';
+import { PORTAL_ANCHORS, PORTAL_BUTTON_CFG } from '../src/ui/portalConfig';
 import {
   ACTION_IDS, ACTION_LABELS, DEFAULT_KEYBINDS, DEFAULT_PAD_BINDS, PAD_ACTION_IDS,
   deserializeSettings, makeSettings, serializeSettings,
@@ -257,6 +258,23 @@ console.log('D. SETTINGS');
   check('D9 the Ability point prompt defaults OFF, an older save reads OFF, and ON round-trips',
     makeSettings().treePrompt === false && deserializeSettings(tOld)?.treePrompt === false
     && deserializeSettings(serializeSettings(t))?.treePrompt === true);
+  // THE TOWN PORTAL BUTTON's seat (ui/portalConfig.ts, 2026-09-11): a
+  // registry the Options row cycles — unique ids, a real default, the
+  // choice round-trips, garbage and older saves read the default.
+  const p = makeSettings();
+  check('D10 PORTAL_ANCHORS: unique ids, a real default, and the setting defaults from the dial',
+    new Set(PORTAL_ANCHORS.map(a => a.id)).size === PORTAL_ANCHORS.length
+    && PORTAL_ANCHORS.some(a => a.id === PORTAL_BUTTON_CFG.anchorDefault)
+    && p.portalButton.anchor === PORTAL_BUTTON_CFG.anchorDefault);
+  p.portalButton.anchor = 'right';
+  const pBad = serializeSettings(p);
+  pBad.portalButton = { anchor: 'nowhere' };
+  const pOld = serializeSettings(p);
+  delete pOld.portalButton;
+  check('D11 the portal anchor round-trips; garbage and older saves read the default',
+    deserializeSettings(serializeSettings(p))?.portalButton.anchor === 'right'
+    && deserializeSettings(pBad)?.portalButton.anchor === PORTAL_BUTTON_CFG.anchorDefault
+    && deserializeSettings(pOld)?.portalButton.anchor === PORTAL_BUTTON_CFG.anchorDefault);
 }
 
 // --- E. THE CENSUS ---------------------------------------------------------------

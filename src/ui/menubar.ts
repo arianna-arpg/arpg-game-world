@@ -207,6 +207,15 @@ export class MenuBar {
     this.paint();
   }
 
+  /** The glyph button's drawn box (screen px) while the bar stands — the
+   *  Town Portal button's 'menu' anchor seats off it every sync (drawn ==
+   *  seated: a dragged or re-anchored Menu carries the portal with it). */
+  buttonRect(): CssRect | null {
+    if (this.root.classList.contains('hidden')) return null;
+    const r = this.btn.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
+  }
+
   /** The tray's drawn box while up (the speech fabric's obstruction census). */
   trayRect(): CssRect | null {
     if (!this.trayOpen) return null;

@@ -112,6 +112,7 @@ import {
 // is built) folded by engine/menu.ts; menuVerbs() below is the host table.
 import { MenuBar, type CssRect, type MenuVerb } from './menubar';
 import { MENU_ANCHORS } from './menuConfig';
+import { PORTAL_ANCHORS } from './portalConfig';
 import '../data/menu';
 // THE RUNESCRIPT (data/runescript.ts): the shrouded class cards are written
 // in the vestiges' runes; THE OPENING CHOOSER (meta/classkit.ts): the class
@@ -835,7 +836,7 @@ export class UI {
   ) {
     configureTooltipDetail(() => this.getSettings().tooltipDetail);
     installTooltipHints();
-    this.portalButton = new PortalButton(this.getWorld, this.getSettings);
+    this.portalButton = new PortalButton(this.getWorld, this.getSettings, () => this.menuBar.buttonRect());
     window.addEventListener('pointermove', ev => { this.itemHoldPointer = { x: ev.clientX, y: ev.clientY }; });
     // Tooltips: bound ONCE on the stable panel containers (delegation survives
     // their innerHTML re-renders); content is read from live data each hover.
@@ -9732,6 +9733,10 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <span>Page Icons</span>
         <button id="opt-menudock" title="ON: every unlocked page stands as an icon tile beside the Menu button, greyed where it cannot be used from here. OFF: the one button, with the pages in its tray.">${s.menuBar.dock ? 'ON' : 'OFF'}</button>
       </div>
+      <div class="rebind-row">
+        <span>Town Portal Button</span>
+        <button id="opt-portalanchor" title="Where the Town Portal button stands. ${PORTAL_ANCHORS.map(a => `${a.label}: ${a.blurb}`).join(' ')}">${esc(PORTAL_ANCHORS.find(a => a.id === s.portalButton.anchor)?.label ?? s.portalButton.anchor)}</button>
+      </div>
       <h1>Save Data</h1>
       <div class="acct-head">Your progress as one portable file: account, settings, and every character.
         Importing replaces what stands on this device, whole, then restarts the game.</div>
@@ -10045,6 +10050,15 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       st.menuBar.dock = !st.menuBar.dock;
       this.saveSettings();
       this.menuBar.invalidate();
+      this.renderOptions(root, onBack);
+    });
+    // THE TOWN PORTAL BUTTON (ui/portalbutton.ts): the anchor cycles the
+    // registry; the button re-seats on its next sync.
+    root.querySelector<HTMLElement>('#opt-portalanchor')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      const i = PORTAL_ANCHORS.findIndex(a => a.id === st.portalButton.anchor);
+      st.portalButton.anchor = PORTAL_ANCHORS[(i + 1) % PORTAL_ANCHORS.length].id;
+      this.saveSettings();
       this.renderOptions(root, onBack);
     });
     root.querySelectorAll<HTMLElement>('[data-notice-ch]').forEach(btn => {
