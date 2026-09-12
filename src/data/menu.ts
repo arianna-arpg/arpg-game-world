@@ -8,7 +8,9 @@
 // adding a tell = one attention row. Nothing in the bar names a page.
 //
 // THE THREE STATES, by example:
-//   inventory — no gate, no usable read: always open (the keyed panels).
+//   inventory — no gate; its one usable read is THE PANEL SEAL
+//               (World.panelSealed — a playing scene may hold a hero page
+//               shut, the Mu hub's lever): open everywhere else.
 //   bestiary  — gate {feature: TRACKER}: HIDDEN until the Vault's tracker
 //               is owned; then SEALED until the seat lingers at his fire
 //               (nearTracker — the SAME near-read the dwell fires on, so the
@@ -35,27 +37,40 @@ registerMenuGroup({ id: 'hero', label: 'Character', order: 0 });
 registerMenuGroup({ id: 'town', label: 'Stations', order: 1 });
 registerMenuGroup({ id: 'system', label: 'System', order: 2 });
 
-// --- the hero's pages (always exist, always open) ----------------------------
+// --- the hero's pages (always exist; open unless a scene seals one) ---------
+
+/** THE PANEL SEAL's read for a hero page: sealed exactly while the playing
+ *  scene lists it (World.panelSealed — the same predicate the keyed toggles
+ *  refuse through), the seal's own line as the hint. */
+const sealed = (id: string): Pick<Parameters<typeof registerMenuEntry>[0], 'usable' | 'sealedHint'> => ({
+  usable: (r: MenuReads) => r.world.panelSealed(id) === null,
+  sealedHint: (r: MenuReads) => r.world.panelSealed(id) ?? '',
+});
 
 registerMenuEntry({
   id: 'inventory', label: 'Inventory', icon: 'bag', group: 'hero', verb: 'inventory', bind: 'panelInv', order: 0,
   blurb: 'Your pack, your worn gear, the SKILLS rack and the essence satchel.',
+  ...sealed('inventory'),
 });
 registerMenuEntry({
   id: 'character', label: 'Character', icon: 'sheet', group: 'hero', verb: 'character', bind: 'panelChar', order: 1,
   blurb: 'Attributes, defenses, offense — the sheet every modifier folds into.',
+  ...sealed('character'),
 });
 registerMenuEntry({
   id: 'passives', label: 'Passive Tree', icon: 'tree', group: 'hero', verb: 'passives', bind: 'panelTree', order: 2,
   blurb: 'Spend passive points on the constellation.',
+  ...sealed('passives'),
 });
 registerMenuEntry({
   id: 'map', label: 'World Map', icon: 'map', group: 'hero', verb: 'map', bind: 'panelMap', order: 3,
   blurb: 'The charted world — roads, waypoints, the ground still veiled.',
+  ...sealed('map'),
 });
 registerMenuEntry({
   id: 'journal', label: 'Journal', icon: 'journal', group: 'hero', verb: 'journal', order: 4,
   blurb: 'Active and completed quests, the writs you carry.',
+  ...sealed('journal'),
 });
 registerMenuEntry({
   id: 'townPortal', label: 'Town Portal', icon: 'portal', group: 'hero', verb: 'townPortal', bind: 'townPortal', order: 5,

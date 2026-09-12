@@ -100,6 +100,15 @@ check('B2: guarded whole — invulnerable, untargetable, vitals full',
 check('B3: kitless — every bar slot stripped', p.skills.every(s => s === null));
 check('B4: THE HUD VEIL is up', w.scene?.hudVeil === true);
 check('B5: the prompt speaks the hub', w.scene?.prompt === MU_CFG.prompt);
+// THE PANEL SEAL (her lever, 2026-09-11): the hub's listed hero pages read
+// sealed through the ONE predicate the toggles and the tray share — the
+// seal's own line as the why — and nothing unlisted does.
+const sealIds = MU_CFG.sealPanels.ids as readonly string[];
+check('B6: THE PANEL SEAL holds the listed pages shut with the hub\'s line, and nothing else',
+  sealIds.length > 0 && sealIds.every(id => w.panelSealed(id) === MU_CFG.sealPanels.line)
+  && w.panelSealed('zz_unlisted') === null
+  && (sealIds.includes('character') || w.panelSealed('character') === null));
+check('B6b: the seal names the bag (the provisional class beneath the wisp is no build to unlearn)', sealIds.includes('inventory'));
 
 // === C) THE HAND LAW =========================================================
 const apps = apparitionsOf(w);

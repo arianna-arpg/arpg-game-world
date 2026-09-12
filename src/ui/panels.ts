@@ -3230,6 +3230,7 @@ export class UI {
 
   toggleCharSheet(seatId?: string): void {
     const seat = this.couchSeatFor(seatId);
+    if (!this.charSheetOpen && this.pageSealed('character', seat)) return;
     // Open for ANOTHER local seat → take ownership (re-dock + re-render) —
     // the couch's one-instance contention rule, visible and predictable.
     if (this.charSheetOpen && this.panelSeat(this.charSheet) !== seat) {
@@ -3386,8 +3387,22 @@ export class UI {
       <span style="color:#8a8678;font-size:10px">· ${inst.sockets.length} socket${inst.sockets.length > 1 ? 's' : ''}</span>`;
   }
 
+  /** THE PANEL SEAL's refusal at the press (World.panelSealed — a playing
+   *  scene may hold a hero page shut; the Mu hub's lever): a sealed page
+   *  stays shut and the seat hears why, one quiet line at the hero's feet
+   *  in the seal's own ink (the menu tray shows the same words on its
+   *  greyed tile). Opening paths only — a page already up always closes. */
+  private pageSealed(id: string, seat: Seat): boolean {
+    const w = this.getWorld();
+    const line = w.panelSealed(id);
+    if (line === null) return false;
+    w.text(seat.actor.pos, line, w.scene?.panelSeal?.ink ?? '#fff', 11);
+    return true;
+  }
+
   toggleInventory(seatId?: string): void {
     const seat = this.couchSeatFor(seatId);
+    if (!this.inventoryOpen && this.pageSealed('inventory', seat)) return;
     // Open for ANOTHER local seat → take ownership (the couch contention rule).
     if (this.inventoryOpen && this.panelSeat(this.inventory) !== seat) {
       this.ownPanel(this.inventory, seat);
@@ -6516,6 +6531,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   toggleTree(seatId?: string): void {
     const seat = this.couchSeatFor(seatId);
+    if (!this.treeOpen && this.pageSealed('passives', seat)) return;
     // Open for ANOTHER local seat → take ownership (the couch contention rule).
     if (this.treeOpen && this.panelSeat(this.passiveTree) !== seat) {
       this.ownPanel(this.passiveTree, seat);
@@ -7441,6 +7457,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   // -------------------------------------------------------------- world map
 
   toggleMap(): void {
+    // The map's page id follows the tab it would open on (the journal is
+    // its own menu row) — THE PANEL SEAL reads the same ids the tray does.
+    if (!this.mapOpen && this.pageSealed(this.mapTab === 'quests' ? 'journal' : 'map', this.getWorld().localSeat)) return;
     this.mapOpen = !this.mapOpen;
     this.worldMap.classList.toggle('hidden', !this.mapOpen);
     // The hover/pin selection is per-viewing — start each open on the current zone.

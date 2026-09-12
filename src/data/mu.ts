@@ -49,11 +49,14 @@ export const MU_ZONE: SceneZoneSpec = {
   boundless: true,
 };
 
+/** The wisp's pale ether ink — the body, and every word the hub speaks at it. */
+const WISP_INK = '#bcd4e8';
+
 export const MU_CFG = {
   /** The player-as-spirit body worn while Mu holds the seat: the raw 'spirit'
    *  look (a burning mote in a halo, trailing wisps), pale ether ink, small.
    *  Nothing restores it — the pick builds a whole new world. */
-  wisp: { look: 'spirit', color: '#bcd4e8', radius: 10 },
+  wisp: { look: 'spirit', color: WISP_INK, radius: 10 },
   /** The provisional class a Mu boot seats under the wisp (invisible — the
    *  wisp strips the kit; also the auto-class a virgin account's first Begin
    *  walks the tutorial as). */
@@ -88,6 +91,14 @@ export const MU_CFG = {
   veiledLine: 'This vessel does not stir — not this waking.',
   /** A faint cowl's non-answer. */
   faintLine: 'A shape not yet earned.',
+  /** THE PANEL SEAL (her lever, 2026-09-11): hero pages (menu-entry ids,
+   *  data/menu.ts — 'inventory', 'character', 'passives', 'map', 'journal')
+   *  the hub keeps SHUT while the wisp stands. A spirit carries no pack, and
+   *  the provisional class beneath the wisp is not a build to be read or
+   *  unlearned. `line` is the refusal the press hears (floated at the hero's
+   *  feet in `ink`) and the tray's sealed hint. An empty list opens every
+   *  page as in a run. */
+  sealPanels: { ids: ['inventory'], line: 'A spirit carries nothing between lives.', ink: WISP_INK },
 } as const;
 
 /** The standalone hub scene — the veteran lane (New Run, run's end). The

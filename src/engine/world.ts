@@ -21813,6 +21813,16 @@ export class World {
     return this.reqShortfall(skillId, seat) === undefined;
   }
 
+  /** THE PANEL SEAL (engine/scenes.ts SceneRuntime.panelSeal — the Mu hub's
+   *  lever, data/mu.ts MU_CFG.sealPanels): the refusal line when a hero
+   *  page (a menu-entry id, data/menu.ts) is held shut by the scene playing
+   *  now; null = it opens. ONE read for the keyed toggles, the pad, the
+   *  tray's greyed tile and its hint. */
+  panelSealed(id: string): string | null {
+    const seal = this.scene?.panelSeal;
+    return seal?.ids.has(id) ? seal.line : null;
+  }
+
   /** THE CAST-TIME REQUIREMENT GATE (backlog #90): the learn gate's attribute
    *  law, held for as long as the build WIELDS the gem — respec the tree or
    *  shed the +attribute gear that carried a skill's requirements and the gem

@@ -7,7 +7,10 @@ and every station dialog the account has unlocked — each an iconed,
 selectable row with its live key beside it. Pages that do not exist for this
 account yet are **not there**. Pages that exist but cannot be used from
 where the hero stands are **greyed**, unselectable, with the reason in their
-tooltip. A page with something unspent on it wears a **pip**; a live lesson
+tooltip — the hero's own pages included when a playing scene seals one
+(THE PANEL SEAL, `World.panelSealed`: the Mu hub keeps the bag shut, the
+seal's line as the why; the keyed toggles refuse through the same read).
+A page with something unspent on it wears a **pip**; a live lesson
 makes the next click **glow**; both roll up onto the button while the tray
 is closed, so the button itself is the tell. The old "3 passive points —
 press P" line is gone: the tree's tile carries the count.

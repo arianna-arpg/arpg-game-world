@@ -101,6 +101,11 @@ export interface SceneRuntime {
    *  plays — a spirit carries no life, no flasks, no bar. The scene's own
    *  channels (bar/prompt/card) keep drawing. Cleared on stage advance. */
   hudVeil: boolean;
+  /** THE PANEL SEAL (the Mu stage — MU_CFG.sealPanels, her lever): hero
+   *  pages the shell keeps SHUT while this stage plays (menu-entry ids,
+   *  data/menu.ts) and the refusal line the press hears. Null = nothing
+   *  sealed. Cleared on stage advance like the veil. */
+  panelSeal: { ids: ReadonlySet<string>; line: string; ink: string } | null;
   /** Pending story card (the DOM layer shows it; ack via sceneCardAck). */
   card: SceneCardSpec | null;
   cardAck: boolean;
@@ -217,7 +222,7 @@ export function sceneBegin(w: World, id: string): boolean {
   w.scene = {
     def: eff, zoneId: zid, stageIx: 0, stageT: 0, begun: false, state: {},
     fell: false, casts: 0, bar: null, prompt: null, barAt: 'top',
-    focus: null, mark: null, hudVeil: false, card: null, cardAck: false,
+    focus: null, mark: null, hudVeil: false, panelSeal: null, card: null, cardAck: false,
     fadeTarget: 1, fallBeat: false, landed: false, eventKey: `scene:${id}`,
   };
   // Born under black — the first card owns the reveal.
@@ -416,6 +421,7 @@ export function updateScene(w: World, dt: number): void {
     sc.prompt = null;
     sc.mark = null;
     sc.hudVeil = false;
+    sc.panelSeal = null;
     sc.landed = false;
   }
 }
@@ -470,6 +476,7 @@ export function sceneInterceptFall(w: World, a: Actor): boolean {
     sc.mark = null;
     sc.focus = null;
     sc.hudVeil = false;
+    sc.panelSeal = null;
     sc.fallBeat = true;
     sc.landed = true;
     return true;
@@ -966,6 +973,10 @@ registerSceneStage('mu', {
     sc.focus = null;
     sc.mark = null;
     sc.hudVeil = true;
+    // THE PANEL SEAL: the hub's listed hero pages stay shut while the wisp
+    // stands (World.panelSealed is the one read the toggles + tray share).
+    sc.panelSeal = MU_CFG.sealPanels.ids.length
+      ? { ids: new Set<string>(MU_CFG.sealPanels.ids), line: MU_CFG.sealPanels.line, ink: MU_CFG.sealPanels.ink } : null;
     sc.barAt = 'hero';
     // THE GROUND — two roads in, one place: the standalone hub scene IS this
     // zone already (sceneBegin minted it); the prologue arrives from its own
