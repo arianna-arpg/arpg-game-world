@@ -61,6 +61,8 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_bashcontact.ts', status: 'green', tier: 'fast', why: 'Shield bash damage, control effects and attribution share guard/immunity and deferred-fuse resolution' },
+  { probe: 'probe_pactsteelstartertrees.ts', status: 'green', tier: 'fast', why: 'Summoner/Juggernaut/Pyromancer opening trees: all 72 routes, passive identity, composable branches, Fury spenders, companion AI, moving and carried fields, expiry bursts, saves and network rebuilds' },
   { probe: 'probe_wardenbalance.ts', status: 'green', tier: 'fast', why: 'AI bash warning timing, committed facing, shield-pressure and interruption counterplay, player exemption, Warden damage and doctrine level gates' },
   { probe: 'probe_groundlookup.ts', status: 'green', tier: 'fast', why: 'Direct ground membership preserves live registry behavior without per-doodad region enumeration' },
   { probe: 'probe_canopypresence.ts', status: 'green', tier: 'fast', why: 'Local canopy reveal, smooth distance falloff, disconnected proximity, composite isolation and aim-assist concealment' },

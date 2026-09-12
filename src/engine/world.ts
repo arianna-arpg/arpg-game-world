@@ -3976,7 +3976,7 @@ export class World {
     due: number; caster: Actor; inst: SkillInstance;
   } & (
     | { kind: 'hit'; targetId: number; mult: number; depth: number;
-        flat?: Partial<Record<DamageType, number>>; force: boolean }
+        flat?: Partial<Record<DamageType, number>>; force: boolean; hitEffects?: SkillEffect[] }
     | { kind: 'buff'; fx: BuffEffect; durScale: number; mult: number }
   ))[] = [];
 
@@ -22323,6 +22323,7 @@ export class World {
     if (why) { this.failNote(p, skillId + ':fontreset', why); return false; }
     const cost: AbilityCost = { tier: essenceTierForLevel(inst.level), count: FONT_CFG.reset.count };
     if (!this.spendAbilityEssence(seat, cost, 'fontreset:' + skillId)) return false;
+    this.dismissSummonToggle(p, inst.def.id);
     this.clearSummonTreeBodies(p, inst);
     this.clearTreeFields(p, inst);
     inst.treeNodes = undefined;
@@ -39347,16 +39348,17 @@ export class World {
       skillContextTags(inst, grantedTags(inst)), instanceMods(inst));
     const flat: Partial<Record<DamageType, number>> =
       { [elem ?? 'physical']: payloadShield * bash.mult * power };
+    // The bash contact is one hit: a shield/dodge refuses its control as
+    // well as its damage, and a fuse carries the whole payload together.
+    const hitEffects: SkillEffect[] = [];
+    if (bash.knockback) hitEffects.push({ type: 'knockback', strength: bash.knockback });
+    if (bash.stunChance) hitEffects.push({ type: 'status', status: 'stun', chance: bash.stunChance });
     for (const e of this.enemiesOf(a)) {
       if (!sameStory(a, e)) continue; // a bash is a touch (the sovereignty gate)
       if (dist(a.pos, e.pos) - e.radius > reach) continue;
       if (!fullCircle
         && Math.abs(angleDiff(a.facing, angleTo(a.pos, e.pos))) > arcRad / 2) continue;
-      this.resolveHit(a, inst, e, 1, 0, flat, true);
-      if (bash.knockback) this.pushActor(e, angleTo(a.pos, e.pos), bash.knockback);
-      if (bash.stunChance && chance(bash.stunChance)) {
-        e.applyStatus('stun', 0, 1, inst.def.name);
-      }
+      this.resolveHit(a, inst, e, 1, 0, flat, true, false, hitEffects);
     }
     this.flashes.push({
       pos: vec(a.pos.x, a.pos.y), radius: reach, color: inst.def.color,
@@ -40755,6 +40757,7 @@ export class World {
     flatBonus?: Partial<Record<DamageType, number>>,
     forceDamage = false,
     fromFuse = false,
+    hitEffects?: SkillEffect[],
   ): void {
     depth = Math.max(depth, inst.procChainDepth ?? 0);
     const def = inst.def;
@@ -40772,7 +40775,7 @@ export class World {
           due: this.time + fuse.delay
             * caster.sheet.get('fuseDelay', fTags, instanceMods(inst)),
           caster, inst, targetId: target.id,
-          mult: dmgMult, depth, flat: flatBonus, force: forceDamage,
+          mult: dmgMult, depth, flat: flatBonus, force: forceDamage, hitEffects,
         });
         this.text(vec(target.pos.x, target.pos.y - target.radius - 8),
           fuse.tell ?? '…', def.color, 11);
@@ -41652,7 +41655,10 @@ export class World {
         });
       }
     }
-    for (const fx of instanceEffects(inst)) {
+    // Delivery-specific hitEffects share every refusal, scaling and
+    // attribution rule with authored effects, including delayed fuses.
+    const effects = instanceEffects(inst);
+    for (const fx of hitEffects?.length ? [...effects, ...hitEffects] : effects) {
       if (fx.type === 'heal') {
         // Ally-resolving deliveries (blessing novas, curseAllies edges)
         // carry their mend here; hostile targets are never healed. The
@@ -41763,6 +41769,7 @@ export class World {
             // old always-spreads flag).
             propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
             rupture, ruptureType,
+            ruptureRadius: rupture !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
             stacksBonus: stacksBonusFor(fx.status),
             casterId: fx.status === 'taunted' && caster.summonShell && caster.owner ? caster.owner.id : caster.id,
             brood: instanceBrood(inst),
@@ -41996,6 +42003,7 @@ export class World {
           brood: instanceBrood(inst),
           leech: caster.sheet.get('dotLeech_' + sid, tags, extra) || undefined,
           rupture: armed, ruptureType: armedType,
+          ruptureRadius: armed !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
           popBonus: caster.sheet.get('popPower_' + sid, tags, extra) || undefined,
         });
         // Stat-granted applications trigger statusApply procs too.
@@ -42418,7 +42426,7 @@ export class World {
     const n = Math.max(1, s.stacks);
     for (let i = 0; i < n; i++) {
       to.applyStatus(s.id, s.dps * (o?.strengthScale ?? 1), durScale, sourceName,
-        { casterId: s.casterId, rupture: s.rupture, ruptureType: s.ruptureType });
+        { casterId: s.casterId, rupture: s.rupture, ruptureType: s.ruptureType, ruptureRadius: s.ruptureRadius });
     }
   }
 
@@ -43464,7 +43472,7 @@ export class World {
 
   private ruptureStatus(victim: Actor, s: ActiveStatus): void {
     const type: DamageType = s.ruptureType ?? 'chaos';
-    const radius = 90;
+    const radius = s.ruptureRadius ?? 90;
     this.flashes.push({ pos: vec(victim.pos.x, victim.pos.y), radius, color: '#b06bd4', life: 0.3, maxLife: 0.3 });
     for (const e of this.actors) {
       if (e.dead || e.team !== victim.team || e.untargetable || !sameStory(e, victim)) continue; // (the sovereignty gate)
@@ -54091,7 +54099,7 @@ export class World {
           color: pf.inst.def.color, life: 0.3, maxLife: 0.3,
         });
         this.resolveHit(pf.caster, pf.inst, target,
-          pf.mult * fPow, pf.depth, pf.flat, pf.force, true);
+          pf.mult * fPow, pf.depth, pf.flat, pf.force, true, pf.hitEffects);
       } else {
         this.flashes.push({
           pos: vec(pf.caster.pos.x, pf.caster.pos.y), radius: pf.caster.radius + 12,
@@ -54377,6 +54385,9 @@ export class World {
     this.pendingFuses = this.pendingFuses.filter(f => f.caster !== caster || f.inst !== inst);
     // Scheduled repeats capture the old tree just as delayed fields do.
     this.pendingRepeats = this.pendingRepeats.filter(r => r.caster !== caster || r.inst !== inst);
+    // Flights and their carried ground can outlive the allocation too.
+    this.projectiles = this.projectiles.filter(p => p.caster !== caster || p.inst !== inst);
+    for (const p of this.projectiles) if (p.caster === caster && p.suffuse?.inst === inst) delete p.suffuse;
     // Held casts can snapshot guard pools and derived grafts. Changing the
     // allocation retires that stance without paying a release attack.
     if (caster.casting?.inst === inst) caster.casting = null;

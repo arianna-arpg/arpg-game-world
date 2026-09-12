@@ -92,9 +92,13 @@ export const CURSOR_COLORS: ReadonlyArray<{ label: string; css: string }> = [
   { label: 'Glimmer Blue', css: '#00adf5' },
 ];
 
-export const DEFAULT_CURSOR_OPTIONS: CursorOptions = { style: 'wisp', color: '#c8a84b' };
-
 export const CURSOR_MOTION_CFG = { enabled: true, delaySec: 2.5, minDelaySec: 0.5, maxDelaySec: 10, periodSec: 3.2, frames: 24 };
+
+// Fresh settings and loaded settings carry the same complete cursor defaults.
+export const DEFAULT_CURSOR_OPTIONS: CursorOptions = {
+  style: 'wisp', color: '#c8a84b',
+  idleMotion: CURSOR_MOTION_CFG.enabled, idleDelaySec: CURSOR_MOTION_CFG.delaySec,
+};
 
 /** One validation path for disk settings, live controls, and preview data. */
 export function normalizeCursorOptions(opts?: Partial<CursorOptions>): CursorOptions {

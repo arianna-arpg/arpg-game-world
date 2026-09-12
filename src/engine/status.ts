@@ -1815,6 +1815,8 @@ export interface ActiveStatus {
   /** Damage dealt in an area when the status EXPIRES (rupture supports). */
   rupture?: number;
   ruptureType?: DamageType;
+  /** Application-time area radius; legacy/manual statuses retain 90. */
+  ruptureRadius?: number;
   /** WEAK SPOT band on the victim's health bar, as fractions of max life
    *  (stamped at application from StatusDef.weakSpot). */
   window?: { lo: number; hi: number };

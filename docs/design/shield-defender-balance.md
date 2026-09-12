@@ -65,6 +65,14 @@ means level one. This is independent of skill grants and spawn presence.
 
 ## Verification
 
+The bash contact's knockback and stun now enter the ordinary hit-effects
+pipeline together with its damage. Guard/shell interception, passive block,
+evasion and immunity refuse the complete hit. A fuse delays all components;
+there is no early shove or stun. These effects use the normal status and
+knockback modifiers, resistance rules, mass handling and source attribution.
+`balance/probe_bashcontact.ts` covers these contracts, including raising a
+shield during the fuse and a caster dying before its delayed hit arrives.
+
 `balance/probe_wardenbalance.ts` exercises the real guard pipeline at 30/60/120
 Hz, fixed warning duration, planted/committed facing, flanking, dynamic arming,
 shield break, stun cancellation, player and possession exemptions, body tells,

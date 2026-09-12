@@ -452,6 +452,7 @@ export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
   if (over?.arcDeg !== undefined && (d.type === 'cone' || d.type === 'melee')) {
     return { ...d, arcDeg: over.arcDeg };
   }
+  if (d.type === 'ground' && over?.ground) return { ...d, ...over.ground };
   return d;
 }
 
@@ -3207,7 +3208,7 @@ export function instanceGates(inst: SkillInstance): GateSpec[] {
  *  one spender economy per use. */
 export function instanceChargeCost(inst: SkillInstance): SkillDef['chargeCost'] {
   for (const s of hostSockets(inst)) if (s.def.chargeCost) return s.def.chargeCost;
-  return inst.def.chargeCost;
+  return instanceTreeOver(inst)?.chargeCost ?? inst.def.chargeCost;
 }
 
 /** THE POOL BANK READ (DamagePoolSpec): the one resolved view of a pool
@@ -4802,6 +4803,12 @@ export interface SkillTreeNode {
    *  field of its branch identity — including values equal to today's
    *  base — so the branch survives a rescale moving the base row. */
   over?: {
+    /** One complete tree spender contract, below socket spender precedence.
+     * Gate, payment, damage, repeats, projectile counts and UI use instanceChargeCost. */
+    chargeCost?: NonNullable<SkillDef['chargeCost']>;
+    /** Ground minting reads instanceDelivery; follow tracks the caster's center
+     * after activation, retaining the original ring geometry and lifetime. */
+    ground?: { follow: true };
     /** Summon-tree adoption: execute/spawn, pending summons, previews and
      *  replenishment and crew fit read instanceDelivery. Kits and selections union.
      *  duration: 0 explicitly removes the birth's expiry clock. */

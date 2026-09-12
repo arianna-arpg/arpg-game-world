@@ -2937,7 +2937,7 @@ export function validateContent(): void {
   // validatePassiveChoices warn-degrade idiom). Monster tree PINS resolve
   // against the kit's own defs.
   {
-    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags']);
+    const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground']);
     const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
@@ -3000,6 +3000,23 @@ export function validateContent(): void {
         }
         for (const k of Object.keys(n.over?.channel ?? {})) {
           if (!OVER_CHANNEL_KEYS.has(k)) warn(`${at}/${n.id}: over.channel.${k} is off the audited whitelist`);
+        }
+        const treeChargeCost = n.over?.chargeCost;
+        if (treeChargeCost) {
+          const keys = ['charge', 'amount', 'minimum', 'damagePerCharge', 'projectilesPerCharge', 'repeatsPerCharge', 'optional'];
+          for (const k of Object.keys(treeChargeCost)) if (!keys.includes(k)) warn(`${at}/${n.id}: unknown chargeCost.${k}`);
+          if (!CHARGE_DEFS[treeChargeCost.charge]) warn(`${at}/${n.id}: unknown chargeCost charge`);
+          if (treeChargeCost.amount !== 'all' && (!Number.isInteger(treeChargeCost.amount) || treeChargeCost.amount < 1)) warn(`${at}/${n.id}: chargeCost amount must be 'all' or a positive integer`);
+          for (const k of ['minimum', 'damagePerCharge', 'projectilesPerCharge', 'repeatsPerCharge'] as const) {
+            const v = treeChargeCost[k];
+            if (v !== undefined && (!Number.isFinite(v) || v < 0)) warn(`${at}/${n.id}: invalid chargeCost.${k}`);
+          }
+          if (treeChargeCost.optional !== undefined && typeof treeChargeCost.optional !== 'boolean') warn(`${at}/${n.id}: chargeCost.optional must be boolean`);
+        }
+        if (n.over?.ground) {
+          if (def.delivery.type !== 'ground') warn(`${at}/${n.id}: ground override requires ground delivery`);
+          for (const k of Object.keys(n.over.ground)) if (k !== 'follow') warn(`${at}/${n.id}: unknown ground.${k}`);
+          if (n.over.ground.follow !== true) warn(`${at}/${n.id}: ground.follow must be true`);
         }
         if (n.over?.tags?.add?.some(t => n.over?.tags?.remove?.includes(t))) warn(`${at}/${n.id}: the same host tag is both added and removed`);
         const summonTree = n.over?.summon;
